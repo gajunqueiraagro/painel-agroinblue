@@ -14,6 +14,8 @@ import { useSeriePorFazenda } from '@/hooks/useSeriePorFazenda';
 import { useHistoricoIndicador, type HistoricoIndicadorKey } from '@/hooks/useHistoricoIndicador';
 import { useStatusPilaresLote, type StatusFazenda } from '@/hooks/useStatusPilaresLote';
 import { useSaldosPorConta } from '@/hooks/useSaldosPorConta';
+import { ehContaDeCaixa } from '@/lib/financeiro/tipoConta';
+import { ROTULO_GRUPO_CONTA, grupoDaConta } from '@/lib/financeiro/gruposDeConta';
 import { useProdutivoPorFazenda } from '@/hooks/useProdutivoPorFazenda';
 import {
   makeRealizadoSource, makeRealizadoSourceEntrada, agregaPorSubcentroGenerico,
@@ -741,15 +743,21 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
   /* ── PR-HOME-PRODUTIVO-FAZENDA-01 — produtivo por fazenda no mes selecionado ── */
   const { data: produtivoPorFazenda } = useProdutivoPorFazenda(clienteAtual?.id, anoNum, mesNum, isPeriodo);
 
-  const ROTULO_TIPO_CONTA: Record<string, string> = {
-    cc: 'Conta corrente', inv: 'Investimento', cartao: 'Cartão',
-  };
 
   /* Conta zerada nao aparece; grupo inteiro zerado nao aparece nem como rotulo
      ('cartao' cai nesse caso em todos os clientes hoje). O hook devolve tudo —
      esconder e decisao da tela. */
   const gruposConta = useMemo(() => {
-    const comSaldo = (saldosPorConta ?? []).filter(c => c.saldo !== 0);
+    /**
+     * ⚠ A PERMUTA FICA FORA DOS DOIS LADOS — PR-AGRI-BARTER-PERMUTA-SEPARADA. O bloco "em
+     * conta" soma as contas e COMPARA com o saldo do Caixa, acusando diferença acima de R$ 1.
+     * Tirar a permuta só do Caixa faria este alarme disparar por desenho, todo mês, numa tela
+     * que existe para avisar de erro real. As duas pontas usam a mesma régua: `ehContaDeCaixa`.
+     * ⚠ ELA NÃO SOME DO SISTEMA — some DESTE bloco, que é sobre dinheiro em banco. O extrato
+     * da permuta é a tela dela, na camada 3 do barter.
+     */
+    const comSaldo = (saldosPorConta ?? [])
+      .filter(c => c.saldo !== 0 && ehContaDeCaixa(c.tipo_conta));
     const out: { tipo: string; rotulo: string; subtotal: number; contas: typeof comSaldo }[] = [];
     for (const c of comSaldo) {
       const tipo = c.tipo_conta ?? '—';
@@ -757,7 +765,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
       if (!g) {
         /* Tipo fora da lista oficial entra com o valor CRU: inventar rotulo
            esconderia um tipo novo do plano de contas. */
-        g = { tipo, rotulo: ROTULO_TIPO_CONTA[tipo] ?? tipo, subtotal: 0, contas: [] };
+        /* ⚠ O RÓTULO VEM DE `gruposDeConta`, a régua que o resto do sistema usa. Este bloco
+           tinha um mapa próprio com três tipos, e ele já não conhecia `caixa` nem `outro`. */
+        g = { tipo, rotulo: ROTULO_GRUPO_CONTA[grupoDaConta(tipo)] ?? tipo, subtotal: 0, contas: [] };
         out.push(g);
       }
       g.contas.push(c);

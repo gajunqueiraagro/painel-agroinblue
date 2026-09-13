@@ -21,6 +21,7 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { ehContaDeCaixa } from '@/lib/financeiro/tipoConta';
 
 interface UseSaldoCaixaMensalArgs {
   clienteId: string | null | undefined;
@@ -51,11 +52,29 @@ async function fetchSaldoCaixaJanela(
     }
   }
 
+  /**
+   * ⚠ A CONTA DE PERMUTA NÃO ENTRA NO CAIXA — PR-AGRI-BARTER-PERMUTA-SEPARADA. Ela registra o
+   * que se deve e se tem a receber em grão com a cooperativa; somá-la aqui faria o saldo do
+   * banco crescer com valor que não está em banco nenhum. A régua é `ehContaDeCaixa`, uma só
+   * para todo o front.
+   * ⚠ A LISTA DE EXCLUSÃO VEM DO CADASTRO, não do saldo: a tabela de saldos guarda
+   * `conta_bancaria_id` e não sabe o tipo. São os ids que se buscam, e só eles.
+   * ⚠ MEDIDO EM 13/09/2026: zero contas de permuta no Proto — então hoje esta consulta volta
+   * vazia e nada muda. Ela existe para o dia em que a primeira for criada, que é o dia em que
+   * o número silenciosamente mudaria.
+   */
+  const { data: contasFora } = await supabase
+    .from('financeiro_contas_bancarias')
+    .select('id, tipo_conta')
+    .eq('cliente_id', clienteId);
+  const idsForaDoCaixa = new Set(
+    (contasFora ?? []).filter(c => !ehContaDeCaixa(c.tipo_conta)).map(c => c.id));
+
   // Single query agregada — soma todas as contas do cliente por ano_mes
   // RLS já filtra por cliente_id; cancelado/conciliacao não se aplicam aqui.
   const { data, error } = await supabase
     .from('financeiro_saldos_bancarios_v2')
-    .select('ano_mes, saldo_final')
+    .select('ano_mes, saldo_final, conta_bancaria_id')
     .eq('cliente_id', clienteId)
     .in('ano_mes', alvos);
 
@@ -65,6 +84,7 @@ async function fetchSaldoCaixaJanela(
   const mapa = new Map<string, number>();
   for (const row of data ?? []) {
     if (!row.ano_mes || row.saldo_final == null) continue;
+    if (row.conta_bancaria_id && idsForaDoCaixa.has(row.conta_bancaria_id)) continue;
     const v = Number(row.saldo_final);
     if (!Number.isFinite(v)) continue;
     mapa.set(row.ano_mes, (mapa.get(row.ano_mes) ?? 0) + v);

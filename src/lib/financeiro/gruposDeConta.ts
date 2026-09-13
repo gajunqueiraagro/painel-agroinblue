@@ -24,13 +24,18 @@
  * porque uma faixa só continua parecendo uma lista.
  * ⚠ `caixa` E `outro` FICAM: `caixa` está no vocabulário do produto e ainda não tem conta;
  * `outro` é o destino honesto do tipo que não se reconhece.
+ * ⚠ `permuta` ENTROU NO AGRI-BARTER-03A e ganha grupo PRÓPRIO — PR-AGRI-BARTER-PERMUTA-SEPARADA.
+ * Sem esta linha ela cairia em `outro` e apareceria sob "Outros": separada do banco, que é o
+ * essencial, mas com um nome que não diz o que ela é. Ela fica DEPOIS dos três tipos de
+ * dinheiro, porque não é dinheiro — é o que se deve e se tem a receber em grão.
  */
 export const ORDEM_GRUPO_CONTA: Record<string, number> = {
   cc: 0,
   inv: 1,
   cartao: 2,
-  caixa: 3,
-  outro: 4,
+  permuta: 3,
+  caixa: 4,
+  outro: 5,
 };
 
 /** O rótulo que o operador lê — o mesmo das faixas da tabela de saldos. */
@@ -38,6 +43,7 @@ export const ROTULO_GRUPO_CONTA: Record<string, string> = {
   cc: 'Conta corrente',
   inv: 'Investimentos',
   cartao: 'Cartão',
+  permuta: 'Permuta',
   caixa: 'Caixa',
   outro: 'Outros',
 };
