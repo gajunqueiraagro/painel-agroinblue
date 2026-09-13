@@ -55,6 +55,28 @@ import {
 /** Os dois lados do negócio. A pecuária ainda não tem DRE — ver a nota no seletor. */
 type Atividade = 'lavoura' | 'pecuaria';
 
+/**
+ * A COR DE UM NÚMERO DA CASCATA — PR-AGRI-DRE-UX-15.
+ *
+ * ⚠ TRÊS RÉGUAS DIFERENTES, e a ordem entre elas é o que importa:
+ *  1. traço é ausência e some em cinza, antes de qualquer outra cor;
+ *  2. no RESULTADO a cor vem do SINAL — é a única linha em que o número pode ser negativo,
+ *     e é a pergunta que a tela responde ("a cultura fechou no azul?");
+ *  3. nas demais, a cor vem da LINHA, não do sinal: entrada em verde, saída em vermelho. Na
+ *     cascata o valor sai sempre positivo e a direção é da linha, então pintar por sinal
+ *     deixaria a coluna inteira verde e esconderia o que é gasto.
+ */
+function corDoNumero(
+  ordem: number, valor: number | null, traco: boolean, rotulo: string,
+): string | undefined {
+  if (traco) return 'text-muted-foreground';
+  if (ordem === LINHA.resultadoCaixa) {
+    return (valor ?? 0) < 0 ? 'text-destructive' : 'text-success';
+  }
+  if (ordem === LINHA.receitaBruta || ordem === LINHA.receitaLiquida) return 'text-success';
+  return ehLinhaSaida(rotulo) ? 'text-destructive' : undefined;
+}
+
 function MetricCard({ rotulo, valor, cor }: { rotulo: string; valor: string; cor?: string }) {
   return (
     <div className="rounded-md border bg-card px-3 py-2">
@@ -428,16 +450,22 @@ export function AgriDreCulturaTab() {
                     const rateio = ehLinhaRateio(ordem);
                     const resultado = ordem === LINHA.resultadoCaixa;
                     const rotulo = m.rotulos.get(ordem) ?? '';
-                    const saida = ehLinhaSaida(rotulo);
                     return (
                       <tr key={ordem} className={cn(
                         subtotal && 'border-t',
-                        /* ⚠ A FAIXA VERDE DO RESULTADO ATRAVESSA TODAS AS COLUNAS, Total
-                           incluído: quebrar a cor no Total sugeriria que ele é outra coisa. */
-                        resultado && 'bg-success/10',
+                        /* ⚠ A FAIXA DO RESULTADO ATRAVESSA A LINHA INTEIRA, Total incluído:
+                           quebrar a cor no Total sugeriria que ele é outra coisa, e era isso
+                           que o card cinza fazia — deixava um retalho no fim da faixa.
+                           ⚠ E ELA É NEUTRA, NÃO VERDE, por causa do número: nesta linha o valor
+                           é verde ou vermelho conforme o sinal, e verde sobre verde sumiria
+                           justamente na cultura que fechou no azul. Fundo neutro, número
+                           colorido — cada um diz uma coisa. */
+                        resultado && 'bg-muted',
                       )}>
                         <td className={cn('sticky left-0 z-10 px-2 py-0.5 text-left leading-tight',
-                          resultado ? 'bg-success/10' : 'bg-card',
+                          /* Opaca nos dois casos: a coluna gruda à esquerda e as linhas
+                             passariam por baixo do rótulo se o fundo fosse translúcido. */
+                          resultado ? 'bg-muted' : 'bg-card',
                           subtotal && 'font-bold')}>
                           <span className="inline-flex items-center gap-1">
                             {rotulo}
@@ -461,15 +489,15 @@ export function AgriDreCulturaTab() {
                               c === COL_TOTAL && !resultado && 'bg-muted/40',
                               c === COL_NAO_APROPRIADO && !resultado && 'bg-muted/20',
                               subtotal && 'font-bold',
-                              traco ? 'text-muted-foreground'
-                                /* ⚠ VERMELHO É PARA SAÍDA, não para negativo: na cascata o valor
-                                   sai positivo e a direção vem da linha. Pintar pelo sinal
-                                   deixaria a coluna inteira preta e esconderia o que é gasto. */
-                                : saida ? 'text-destructive' : undefined)}>
+                              corDoNumero(ordem, valor, traco, rotulo))}>
                               {traco ? '—' : abre ? (
                                 <button type="button"
                                   onClick={() => setDrill({ cultura: c, ordem })}
-                                  className="rounded px-0.5 underline decoration-dotted underline-offset-2 hover:bg-muted/60">
+                                  /* ⚠ O CLICÁVEL SE ANUNCIA NO HOVER, não o tempo todo: o
+                                     tracejado fixo embaixo de cada número riscava a matriz
+                                     inteira e competia com os próprios valores, que são o que
+                                     se veio ler. */
+                                  className="rounded px-0.5 underline-offset-2 hover:bg-muted/60 hover:underline">
                                   {formatMoeda(valor)}
                                 </button>
                               ) : formatMoeda(valor)}
@@ -524,7 +552,11 @@ export function AgriDreCulturaTab() {
                                 {traco ? '—' : abre ? (
                                   <button type="button"
                                     onClick={() => setDrill({ cultura: c, ordem })}
-                                    className="rounded px-0.5 underline decoration-dotted underline-offset-2 hover:bg-muted/60">
+                                    /* ⚠ O CLICÁVEL SE ANUNCIA NO HOVER, não o tempo todo: o
+                                     tracejado fixo embaixo de cada número riscava a matriz
+                                     inteira e competia com os próprios valores, que são o que
+                                     se veio ler. */
+                                  className="rounded px-0.5 underline-offset-2 hover:bg-muted/60 hover:underline">
                                     {formatMoeda(valor)}
                                   </button>
                                 ) : formatMoeda(valor)}
