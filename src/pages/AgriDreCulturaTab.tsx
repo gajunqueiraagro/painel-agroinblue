@@ -527,9 +527,13 @@ export function AgriDreCulturaTab() {
           onClose={() => setDrill(null)}>
 
           {/* ── 1. DIRETO: o que alguém marcou com a cultura ── */}
+          {/* ⚠ CADA SEÇÃO É UMA COLUNA COM ALTURA PRÓPRIA. Só o Investimento tem as duas
+              (direto + rateado); nas outras linhas existe uma só, e ela fica com o painel
+              inteiro. Com as duas, `flex-1` reparte o que sobra e cada uma rola a SUA lista —
+              o cabeçalho de cada seção continua visível enquanto se rola a outra. */}
           {GRUPO_DA_LINHA[drill.ordem] != null && (
-            <div className="mb-3">
-              <div className="mb-1 flex items-baseline justify-between gap-2 border-b pb-1">
+            <div className="mb-3 flex min-h-0 flex-1 flex-col">
+              <div className="mb-1 flex shrink-0 items-baseline justify-between gap-2 border-b pb-1">
                 <span className="text-[11px] font-bold uppercase tracking-wide text-foreground">
                   Direto da cultura
                 </span>
@@ -547,8 +551,8 @@ export function AgriDreCulturaTab() {
 
           {/* ── 2. RATEADO: o pool comum, pelo valor cheio, com o peso dito ── */}
           {itensDoPool.length > 0 && (
-            <div>
-              <div className="mb-1 flex items-baseline justify-between gap-2 border-b pb-1">
+            <div className="flex min-h-0 flex-1 flex-col">
+              <div className="mb-1 flex shrink-0 items-baseline justify-between gap-2 border-b pb-1">
                 <span className="text-[11px] font-bold uppercase tracking-wide text-foreground">
                   Rateado por área
                 </span>
@@ -564,7 +568,7 @@ export function AgriDreCulturaTab() {
                   R$ 5,9 milhões de pool dentro de uma célula de R$ 5,1 milhões e conclui que a
                   tela está somando errado. O que ele vê é o pool INTEIRO; o que a cultura
                   recebe é a fração dita ao lado. */}
-              <p className="mb-1.5 rounded bg-muted/60 px-2 py-1 text-[9px] leading-snug text-muted-foreground">
+              <p className="mb-1.5 shrink-0 rounded bg-muted/60 px-2 py-1 text-[9px] leading-snug text-muted-foreground">
                 Valores do pool comum, inteiros — a cultura recebe{' '}
                 {pesoDoDrill != null ? `${formatNum(pesoDoDrill * 100, 1)}%` : 'a fração'} dele por área.
                 {drill.ordem === LINHA.rateioAdmin && poolAdmin.porAno.length > 0 && (

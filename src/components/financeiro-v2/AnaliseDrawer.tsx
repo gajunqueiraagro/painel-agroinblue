@@ -53,7 +53,15 @@ export function AnaliseDrawer({ titulo, subtitulo, corAccent = '#1e3a5f', total,
           <button type="button" onClick={onClose} className="text-[13px] leading-none px-1.5 py-0.5 rounded text-muted-foreground hover:bg-muted shrink-0" aria-label="Fechar">✕</button>
         </div>
 
-        <div className="flex-1 overflow-auto">{children}</div>
+        {/* ⚠ COLUNA, NÃO SÓ SCROLLER — e os dois ao mesmo tempo, de propósito. Quem usa o
+            padrão novo (`DrillDownEconomico`) declara `flex-1 min-h-0` e leva a rolagem para
+            DENTRO da lista: aí o conteúdo nunca excede esta caixa e o `overflow-auto` daqui
+            fica inerte. Quem ainda entrega um bloco alto e cru (Maiores compromissos,
+            Organização de pagamentos) continua rolando aqui, como sempre rolou — tirar o
+            `overflow` desta linha deixaria essas duas telas sem rolagem nenhuma.
+            ⚠ `min-h-0` É OBRIGATÓRIO: sem ele um filho flex não encolhe abaixo do conteúdo, a
+            caixa cresce, e a rolagem escapa para o container errado — a armadilha da casa. */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-auto">{children}</div>
 
         <div className="flex items-center justify-between gap-2 px-3 py-2 border-t-2 bg-[#1e3a5f]/[0.05]" style={{ borderTopColor: corAccent }}>
           <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{totalLabel}</span>

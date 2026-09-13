@@ -78,9 +78,13 @@ export function DrillDownEconomico<T extends ItemDrill>({ itens, raiz, niveis, o
   const segmentos = [raiz, ...caminho];
 
   return (
-    <div className="space-y-1.5">
+    /* ⚠ A ROLAGEM DESCE UM NÍVEL — é a mesma regra do cabeçalho da matriz do DRE (A21). Até
+       aqui o caminho, o resumo e a tabela moravam juntos no scroller do drawer, e rolar a
+       lista levava embora o breadcrumb que diz ONDE se está: o operador via números sem saber
+       de que centro eram. Agora o bloco de cima é irmão da lista, não conteúdo dela. */
+    <div className="flex min-h-0 flex-1 flex-col gap-1.5">
       {/* ── CAMINHO — cada segmento sobe até ele; a seta sobe um degrau ── */}
-      <div className="flex items-center gap-1 border-b pb-1 text-[10px]">
+      <div className="flex shrink-0 items-center gap-1 border-b pb-1 text-[10px]">
         {caminho.length > 0 && (
           <button type="button" title="Voltar um nível"
             className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -111,6 +115,10 @@ export function DrillDownEconomico<T extends ItemDrill>({ itens, raiz, niveis, o
         </span>
       </div>
 
+      {/* ⚠ ESTE É O SCROLLPORT, e é o único desta área: `flex-1` para ficar com a altura que
+          sobra e `min-h-0` para poder encolher — sem o segundo, ele cresce com a lista e
+          devolve a rolagem ao drawer, que é exatamente o defeito que se está corrigindo. */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
       {nivelAtual ? (
         <table className="w-full border-collapse text-[10px]">
           <thead>
@@ -162,6 +170,7 @@ export function DrillDownEconomico<T extends ItemDrill>({ itens, raiz, niveis, o
           onAbrir={onAbrirLancamento}
         />
       )}
+      </div>
     </div>
   );
 }
