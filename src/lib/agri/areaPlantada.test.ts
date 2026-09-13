@@ -14,7 +14,7 @@ import {
 } from './areaPlantada';
 
 const base: AreaPlantadaForm = {
-  id: null, cultura: 'amendoim', status: 'plantada', areaHa: '96,4',
+  id: null, cultura: 'amendoim', variedade: '', status: 'plantada', areaHa: '96,4',
   dataPlantio: '', dataColheitaPrevista: '',
 };
 
@@ -256,5 +256,38 @@ describe('o estado da área — AGRI-AREA-ABERTURA-01', () => {
     expect(AVISO_ABERTURA).toContain('investimento de formação de área');
     expect(AVISO_ABERTURA).toContain('não vira custo da safra');
     expect(AVISO_ABERTURA).toContain('Plantada');
+  });
+});
+
+/**
+ * A VARIEDADE NA ÁREA — AGRI-AREA-CAMPO-VARIEDADE.
+ *
+ * ⚠ Ela existe para o caso real do NJ: amendoim OL3 (75 ha) e amendoim BRS 421 (16 ha) no
+ * mesmo Ind 01, na 25/26. A chave do banco é
+ * `UNIQUE NULLS NOT DISTINCT (safra, pasto, cultura, variedade)`.
+ */
+describe('a variedade', () => {
+  it('vai para o payload como texto, sem espaço sobrando', () => {
+    const v = validarAreaPlantada({ ...base, variedade: '  OL3  ' });
+    expect(v.ok).toBe(true);
+    expect(v.payload?.variedade).toBe('OL3');
+  });
+
+  it('⚠ EM BRANCO VIRA NULL, nunca string vazia: é o nulo que a chave compara', () => {
+    expect(validarAreaPlantada({ ...base, variedade: '' }).payload?.variedade).toBeNull();
+    expect(validarAreaPlantada({ ...base, variedade: '   ' }).payload?.variedade).toBeNull();
+  });
+
+  it('⚠ EM ABERTURA A VARIEDADE SAI, como o plantio e a colheita', () => {
+    /* A área que ainda não plantou não tem cultivar escolhido — e o que a tela esconde não
+       pode continuar sendo gravado por baixo. */
+    const v = validarAreaPlantada({ ...base, status: 'abertura', variedade: 'OL3' });
+    expect(v.ok).toBe(true);
+    expect(v.payload?.variedade).toBeNull();
+    expect(v.payload?.data_plantio).toBeNull();
+  });
+
+  it('ela é opcional: a área salva sem variedade nenhuma', () => {
+    expect(validarAreaPlantada({ ...base, variedade: '' }).ok).toBe(true);
   });
 });

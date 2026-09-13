@@ -48,7 +48,8 @@ interface Props {
    troca para "Plantada" num clique e ganha os campos de volta. O contrário — nascer plantada
    — é o que hoje pede plantio de uma área que ainda não existe no chão. */
 const linhaVazia = (): AreaPlantadaForm => ({
-  id: null, cultura: '', status: 'abertura', areaHa: '', dataPlantio: '', dataColheitaPrevista: '',
+  id: null, cultura: '', variedade: '', status: 'abertura', areaHa: '',
+  dataPlantio: '', dataColheitaPrevista: '',
 });
 
 export function AreaPlantadaPanel({ clienteId, pastoId, pastoNome, areaProdutivaHa, anoMes, somenteLeitura }: Props) {
@@ -95,6 +96,7 @@ export function AreaPlantadaPanel({ clienteId, pastoId, pastoNome, areaProdutiva
       ? areas.map(a => ({
           id: a.id,
           cultura: a.cultura,
+          variedade: a.variedade ?? '',
           status: a.status || STATUS_AREA_PADRAO,
           areaHa: String(a.area_plantada_ha).replace('.', ','),
           dataPlantio: a.data_plantio ?? '',
@@ -252,7 +254,10 @@ export function AreaPlantadaPanel({ clienteId, pastoId, pastoNome, areaProdutiva
            */
           <div key={l.id ?? `nova-${idx}`}
             className={cn(
-              'grid grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1fr)_auto] items-end gap-2 rounded-md border bg-card px-2 py-1.5',
+              /* ⚠ A VARIEDADE ENTRA COMO COLUNA PRÓPRIA, e as frações das outras não mudaram:
+                 a linha ficou com uma coluna a mais, não com as antigas espremidas de tamanhos
+                 diferentes. É a mesma lei de estabilidade da tabela de cargas. */
+              'grid grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,0.7fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_auto] items-end gap-2 rounded-md border bg-card px-2 py-1.5',
               emAbertura && 'border-dashed border-violet-500 dark:border-violet-400',
             )}>
             <div>
@@ -266,6 +271,17 @@ export function AreaPlantadaPanel({ clienteId, pastoId, pastoNome, areaProdutiva
                 </SelectContent>
               </Select>
             </div>
+            {/* ⚠ EM ABERTURA A VARIEDADE SOME, como o plantio e a colheita: a área que ainda
+                não plantou não tem cultivar escolhido, e o campo que insiste faz inventar. */}
+            {emAbertura ? <div /> : (
+              <div>
+                <Label className="text-[10px]">Variedade</Label>
+                <Input value={l.variedade} onChange={e => editar(idx, 'variedade', e.target.value)}
+                  placeholder="OL3, BRS 421…" disabled={somenteLeitura}
+                  title="Opcional. Duas variedades da mesma cultura podem dividir o mesmo pasto."
+                  className="mt-0.5 h-8 text-[12px]" />
+              </div>
+            )}
             <div>
               <Label className="text-[10px]">Área (ha) <span className="text-destructive">*</span></Label>
               <Input value={l.areaHa} onChange={e => editar(idx, 'areaHa', e.target.value)}

@@ -70,6 +70,18 @@ export interface AreaPlantadaForm {
   /** Vazio numa linha nova que ainda não foi gravada. */
   id: string | null;
   cultura: string;
+  /**
+   * A VARIEDADE — AGRI-AREA-CAMPO-VARIEDADE.
+   *
+   * ⚠ OPCIONAL, E É O BANCO QUE GUARDA A REGRA: a chave é
+   * `UNIQUE NULLS NOT DISTINCT (safra, pasto, cultura, variedade)`, então dois "amendoim sem
+   * variedade" no mesmo pasto colidem e dois com variedades diferentes passam. O front não
+   * repete essa conta — ele traduz a recusa.
+   * ⚠ TEXTO LIVRE: não existe lista de variedades no repo (procurado; só há a menção num
+   * comentário de `AGRI-AREA-ABERTURA-01`). Inventar um enum aqui fixaria em código os
+   * cultivares que o produtor compra por safra.
+   */
+  variedade: string;
   /** 'abertura' | 'plantada' — AGRI-AREA-ABERTURA-01. */
   status: string;
   /** Texto digitado, em pt-BR ("96,4"). */
@@ -81,6 +93,7 @@ export interface AreaPlantadaForm {
 /** O que vai ao banco depois de validado. */
 export interface AreaPlantadaPayload {
   cultura: string;
+  variedade: string | null;
   status: string;
   area_plantada_ha: number;
   data_plantio: string | null;
@@ -135,6 +148,9 @@ export function validarAreaPlantada(form: AreaPlantadaForm, areaDoPastoHa?: numb
    * gravando por baixo: "a definir" é ausência declarada, não um valor guardado fora de vista.
    */
   const emAbertura = ehAbertura(form.status);
+  /* ⚠ EM ABERTURA A VARIEDADE SAI DO PAYLOAD, como as datas: o P5 não plantou, e o cultivar
+     escolhido é justamente uma das coisas que ainda não existem. O que a tela esconde ela não
+     pode continuar gravando por baixo. */
   const plantio = emAbertura ? null : ((form.dataPlantio || '').trim() || null);
   const colheita = emAbertura ? null : ((form.dataColheitaPrevista || '').trim() || null);
   /* Mesma regra do cadastro de safra: fim antes do início é engano de digitação, e uma data
@@ -147,6 +163,9 @@ export function validarAreaPlantada(form: AreaPlantadaForm, areaDoPastoHa?: numb
     ok: true,
     payload: {
       cultura,
+      /* Branco vira NULL, e o `NULLS NOT DISTINCT` da chave faz dois nulos colidirem — que é
+         exatamente o bloqueio que se quer para duas linhas da mesma cultura sem variedade. */
+      variedade: emAbertura ? null : ((form.variedade || '').trim() || null),
       /* O estado desconhecido cai no default do banco, nunca num terceiro valor: o CHECK só
          admite dois, e inventar um terceiro seria trocar um erro de tela por um 23514. */
       status: emAbertura ? 'abertura' : STATUS_AREA_PADRAO,

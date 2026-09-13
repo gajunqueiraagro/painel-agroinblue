@@ -18,6 +18,8 @@ export interface AreaPlantadaRow {
   safra_id: string;
   pasto_id: string;
   cultura: string;
+  /** O cultivar — `null` quando não informado. Faz parte da chave única da área. */
+  variedade: string | null;
   /** 'abertura' | 'plantada' — AGRI-AREA-ABERTURA-01. NOT NULL no banco, default 'plantada'. */
   status: string;
   area_plantada_ha: number;
@@ -27,7 +29,7 @@ export interface AreaPlantadaRow {
   observacoes: string | null;
 }
 
-const COLS = 'id, safra_id, pasto_id, cultura, status, area_plantada_ha, data_plantio, data_colheita_prevista, data_colheita_real, observacoes';
+const COLS = 'id, safra_id, pasto_id, cultura, variedade, status, area_plantada_ha, data_plantio, data_colheita_prevista, data_colheita_real, observacoes';
 
 /** A safra de lavoura como o seletor do painel a lê. */
 export interface SafraLavoura {
@@ -141,9 +143,17 @@ export function useAreaPlantada(safraId: string | null, pastoId: string | null) 
             ...payload, cliente_id: clienteId, safra_id: safraId, pasto_id: pastoId,
           });
       if (error) {
-        /* 23505 = a UNIQUE (safra, pasto, cultura). Em vez do texto do Postgres, o fato. */
+        /**
+         * ⚠ 23505 É A CHAVE ÚNICA, e ela MUDOU: passou a incluir a variedade, com
+         * `NULLS NOT DISTINCT`. A mensagem tem de dizer o que fazer — sem variedade, a colisão
+         * é entre duas linhas da mesma cultura, e a saída é informar o cultivar; COM variedade,
+         * a colisão é com uma linha que já tem esse mesmo cultivar, e aí é outra conversa.
+         * ⚠ O FRONT NÃO REFAZ A REGRA: quem decide é a constraint. Aqui só se traduz a recusa.
+         */
         const msg = error.code === '23505'
-          ? `Já existe uma área de ${l.cultura} neste pasto nesta safra.`
+          ? (l.variedade || '').trim()
+            ? `Já existe ${l.cultura} da variedade "${l.variedade.trim()}" neste pasto nesta safra.`
+            : `Já existe uma área de ${l.cultura} neste pasto nesta safra — informe a variedade para distinguir as duas.`
           : error.message;
         return { ok: false, erro: msg };
       }
