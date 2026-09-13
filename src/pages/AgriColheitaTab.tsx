@@ -21,16 +21,28 @@ import { labelDaCultura } from '@/lib/agri/areaPlantada';
 import { useSafrasLavoura, useTalhoesDaSafra } from '@/hooks/useAreaPlantada';
 import { useColheita } from '@/hooks/useColheita';
 import { CargasDaArea } from '@/components/agri/CargasDaArea';
+import { AnaliseProducaoModal } from '@/components/agri/AnaliseProducaoModal';
 import {
   LIMITE_AFLATOXINA, totaisColheita, unidadeDaCultura, type CargaForm,
 } from '@/lib/agri/colheita';
 
-/** Um número do consolidado. Sempre no mesmo lugar, mesmo quando é zero (A23). */
-function Metrica({ rotulo, valor, sufixo, destaque }: {
-  rotulo: string; valor: string; sufixo?: string; destaque?: boolean;
+/**
+ * Um número do consolidado. Sempre no mesmo lugar, mesmo quando é zero (A23).
+ *
+ * ⚠ SÓ A PRODUTIVIDADE ABRE DETALHE, e por isso o clique é opcional: um card que não leva a
+ * lugar nenhum não deve ter cursor de mão. Sem `onAbrir`, ele continua exatamente como era.
+ */
+function Metrica({ rotulo, valor, sufixo, destaque, onAbrir }: {
+  rotulo: string; valor: string; sufixo?: string; destaque?: boolean; onAbrir?: () => void;
 }) {
   return (
-    <div className="rounded-md border bg-card px-2.5 py-1.5">
+    <div onClick={onAbrir}
+      onKeyDown={onAbrir ? e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onAbrir(); } } : undefined}
+      tabIndex={onAbrir ? 0 : undefined}
+      role={onAbrir ? 'button' : undefined}
+      title={onAbrir ? 'Abrir a análise de produção da safra' : undefined}
+      className={cn('rounded-md border bg-card px-2.5 py-1.5',
+        onAbrir && 'cursor-pointer transition-colors hover:border-primary hover:bg-accent/40')}>
       <div className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">{rotulo}</div>
       <div className={cn('mt-0.5 tabular-nums leading-none',
         destaque ? 'text-[16px] font-medium text-foreground' : 'text-[13px] text-foreground')}>
@@ -46,6 +58,7 @@ export function AgriColheitaTab() {
   const { safras } = useSafrasLavoura(clienteId);
   const [safraId, setSafraId] = useState('');
   const [talhaoId, setTalhaoId] = useState('');
+  const [analiseAberta, setAnaliseAberta] = useState(false);
 
   /* A safra mais recente abre por padrão — a lista vem em ordem cronológica crescente. */
   useEffect(() => {
@@ -161,7 +174,8 @@ export function AgriColheitaTab() {
               diferença é o refugo inteiro da safra. */}
           <Metrica rotulo="Produtividade"
             valor={totais.produtividade != null ? formatNum(totais.produtividade, 2) : '—'}
-            sufixo={totais.produtividade != null ? `${unidade.unidadeProdutividade} líquida` : undefined} />
+            sufixo={totais.produtividade != null ? `${unidade.unidadeProdutividade} líquida` : undefined}
+            onAbrir={() => setAnaliseAberta(true)} />
         </div>
         {/* ⚠ A FAIXA VEM DO ppb DE CADA CARGA, e o grão de roça fica FORA das duas: ele já é
             refugo, e somá-lo a qualquer faixa faria o lote bom parecer maior do que a
@@ -197,6 +211,23 @@ export function AgriColheitaTab() {
           </span>
         </div>
       </div>
+
+      {/* ⚠ O PAINEL LÊ O MESMO `totais` DA FAIXA ACIMA — não um segundo cálculo. Se algum dia
+          divergirem, é porque alguém somou de novo em algum lugar.
+          ⚠ A ÁREA É A REAL CADASTRADA (60,6 e não 61): é ela que divide as duas
+          produtividades, e arredondar aqui mudaria o índice na terceira casa. */}
+      <AnaliseProducaoModal
+        aberto={analiseAberta}
+        onFechar={() => setAnaliseAberta(false)}
+        totais={totais}
+        cultura={umaCulturaSo ? culturasNaSafra[0] : null}
+        areaHa={umaCulturaSo ? areaDaSafra : null}
+        safraRotulo={safraLabel?.codigo || safraLabel?.nome || ''}
+        avisoCulturas={!umaCulturaSo && culturasNaSafra.length > 1
+          ? 'Esta safra tem mais de uma cultura. Os pesos somam; as produtividades não —'
+            + ' sacas de amendoim por hectare não se misturam com toneladas de mandioca.'
+          : undefined}
+      />
 
       {/* ── ROLA: as cargas do talhão ── */}
       {talhao ? (

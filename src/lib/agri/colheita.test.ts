@@ -303,3 +303,45 @@ describe('a secagem da carga', () => {
     expect(totaisColheita([carga()], 'amendoim', 60.6).valorSecagem).toBe(0);
   });
 });
+
+/**
+ * A CADEIA DE PRODUÇÃO — AGRI-COLHEITA-ANALISE-10.
+ *
+ * ⚠ Os números são os da safra real do Gabriel, conferidos contra o mock: 227.500 kg verdes,
+ * 7.746,65 sacas boas, 603,70 de roça, 60,6 ha.
+ */
+describe('a cadeia do que arrancou ao que aproveitou', () => {
+  const safra = [carga({
+    pesoVerdeKg: '227500', pesoSecoKg: '193666', sacasBoas: '7746,65',
+    graoRocaSacas: '603,70', aflatoxinaPpb: '12',
+  })];
+  const t = totaisColheita(safra, 'amendoim', 60.6);
+
+  it('o verde vira sacas só para leitura: 227.500 kg são 9.100 sc', () => {
+    expect(t.verdeEmSacas).toBe(9100);
+  });
+
+  it('o final é boas mais roça: 8.350,35 sc', () => {
+    expect(t.sacasFinais).toBeCloseTo(8350.35, 2);
+  });
+
+  it('⚠ DUAS PRODUTIVIDADES, e a final é sempre MAIOR que a líquida', () => {
+    expect(t.produtividade).toBeCloseTo(127.83, 2);
+    expect(t.produtividadeFinal).toBeCloseTo(137.79, 2);
+    expect(t.produtividadeFinal).toBeGreaterThan(t.produtividade ?? 0);
+  });
+
+  it('⚠ MANDIOCA NÃO TEM SACA: as duas conversões somem em vez de virar zero', () => {
+    const m = totaisColheita([carga({ pesoVerdeKg: '10000', pesoSecoKg: '9000' })], 'mandioca', 3);
+    expect(m.verdeEmSacas).toBeNull();
+    expect(m.produtividadeFinal).toBeNull();
+    /* A de tonelada por hectare continua existindo — é a unidade dela. */
+    expect(m.produtividade).toBeCloseTo(3, 2);
+  });
+
+  it('sem área não há nenhuma das duas', () => {
+    const s = totaisColheita(safra, 'amendoim', null);
+    expect(s.produtividade).toBeNull();
+    expect(s.produtividadeFinal).toBeNull();
+  });
+});

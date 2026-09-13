@@ -284,8 +284,20 @@ export interface TotaisColheita {
   graoRocaKg: number;
   /** 1 − seco/verde, em pontos percentuais. `null` enquanto a cooperativa não devolveu o seco. */
   quebraPct: number | null;
-  /** sacas/ha (ou t/ha). `null` sem base ou sem área. */
+  /**
+   * sacas/ha (ou t/ha) das SACAS BOAS. `null` sem base ou sem área.
+   *
+   * ⚠ É A LÍQUIDA, e a tela tem de dizer isso: a FINAL inclui o grão de roça e é maior. A
+   * diferença entre as duas é o refugo inteiro da safra, e confundi-las faz o talhão parecer
+   * pior do que foi — ou melhor, dependendo de qual se comparou.
+   */
   produtividade: number | null;
+  /** Sacas boas + grão de roça: o que de fato saiu do talhão e a cooperativa aceitou. */
+  sacasFinais: number;
+  /** sacas finais/ha. `null` sem área — e sempre >= a líquida. */
+  produtividadeFinal: number | null;
+  /** O verde convertido em sacas — "o que arrancou", antes da secagem. `null` sem saca. */
+  verdeEmSacas: number | null;
   /** Quantas cargas ainda esperam o peso seco. */
   aguardandoSeco: number;
   /** A separação que a cooperativa faz, derivada do ppb de cada carga. */
@@ -349,10 +361,13 @@ export function totaisColheita(
    * talhões pelo verde premia quem colheu mais úmido.
    */
   const { kgPorSaca } = unidadeDaCultura(cultura);
+  const sacasFinais = arred(sacasBoas + graoRocaSacas);
   let produtividade: number | null = null;
+  let produtividadeFinal: number | null = null;
   if (areaHa && areaHa > 0) {
     if (kgPorSaca && sacasBoas > 0) produtividade = arred(sacasBoas / areaHa);
     else if (!kgPorSaca && secoKg > 0) produtividade = arred(secoKg / 1000 / areaHa);
+    if (kgPorSaca && sacasFinais > 0) produtividadeFinal = arred(sacasFinais / areaHa);
   }
 
   return {
@@ -364,5 +379,10 @@ export function totaisColheita(
     sacasAcimaLimite: arred(sacasAcimaLimite),
     sacasSemClasse: arred(sacasSemClasse),
     valorSecagem: arred(valorSecagem),
+    sacasFinais,
+    produtividadeFinal,
+    /* ⚠ CONVERSÃO SÓ DE LEITURA: o verde em sacas é o "o que arrancou" da cadeia, e não existe
+       no romaneio — a cooperativa pesa verde em quilo. Ele não se grava em lugar nenhum. */
+    verdeEmSacas: kgPorSaca && verdeKg > 0 ? arred(verdeKg / kgPorSaca) : null,
   };
 }
