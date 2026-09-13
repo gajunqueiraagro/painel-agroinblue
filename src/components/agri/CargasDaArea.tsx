@@ -232,6 +232,12 @@ export function CargasDaArea({
                 <td className="whitespace-nowrap px-1.5 py-[1px] tabular-nums">{dataBR(l.data_colheita)}</td>
                 <td className="whitespace-nowrap px-1.5 py-[1px] tabular-nums">{(l.hora_chegada ?? '').slice(0, 5) || '—'}</td>
                 <td className="px-1.5 py-[1px]">{l.ticket_balanca || '—'}</td>
+                {/* ⚠ A NF FALTAVA AQUI, e era o bug do cabeçalho deslocado: no PR-SORT-01 a
+                    coluna entrou no cabeçalho e não na linha, então o `<thead>` tinha onze
+                    células e o `<tbody>` dez — cada rótulo caía uma coluna adiante e "Roça"
+                    aparecia sobre os botões de ação. Os dados sempre estiveram certos; o que
+                    estava errado era a contagem. */}
+                <td className="px-1.5 py-[1px]">{l.nf_produtor || '—'}</td>
                 <td className="px-1.5 py-[1px] text-right tabular-nums">{l.peso_verde_kg != null ? formatNum(l.peso_verde_kg, 2) : '—'}</td>
                 <td className="px-1.5 py-[1px] text-right tabular-nums">{l.peso_seco_kg != null ? formatNum(l.peso_seco_kg, 2) : '—'}</td>
                 <td className="px-1.5 py-[1px] text-right tabular-nums">{l.umidade_pct != null ? formatNum(l.umidade_pct, 2) : '—'}</td>
@@ -284,7 +290,10 @@ export function CargasDaArea({
               e o fundo tem de ser opaco pelo mesmo motivo. */}
           <tfoot>
             <tr>
-              <td className={cn(TFOOT, 'text-left font-semibold uppercase tracking-wide text-muted-foreground')} colSpan={3}>
+              {/* ⚠ `colSpan` ACOMPANHA O CABEÇALHO: são quatro colunas de identificação antes
+                  do primeiro número (data, hora, ticket, NF). Um `colSpan` desatualizado
+                  desalinha o total inteiro — o mesmo erro de contagem, no rodapé. */}
+              <td className={cn(TFOOT, 'text-left font-semibold uppercase tracking-wide text-muted-foreground')} colSpan={4}>
                 Total do talhão
               </td>
               <td className={cn(TFOOT, 'text-right')}>{formatNum(totaisDoTalhao.verdeKg, 2)}</td>
