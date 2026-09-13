@@ -156,10 +156,13 @@ export function AnaliseProducaoModal({
             </div>
             <table className="w-full border-collapse overflow-hidden rounded-md border text-[10px]">
               <thead>
-                <tr className="bg-primary text-primary-foreground">
-                  <th className="px-2 py-1 text-left text-[9px] font-semibold uppercase tracking-wide">Faixa</th>
-                  <th className="px-2 py-1 text-right text-[9px] font-semibold uppercase tracking-wide">Sacas</th>
-                  <th className="px-2 py-1 text-right text-[9px] font-semibold uppercase tracking-wide">%</th>
+                {/* ⚠ CABEÇALHO E TOTAL NO MESMO TOM: são as duas bordas da tabela e se lêem
+                    como um par — o azul num e o cinza no outro faziam parecer duas tabelas
+                    coladas. `bg-muted` nos dois, e o que distingue o total é o negrito. */}
+                <tr className="bg-muted">
+                  <th className="px-2 py-1 text-left text-[9px] font-semibold tracking-wide">Faixa</th>
+                  <th className="px-2 py-1 text-right text-[9px] font-semibold tracking-wide">Sacas</th>
+                  <th className="px-2 py-1 text-right text-[9px] font-semibold tracking-wide">%</th>
                 </tr>
               </thead>
               <tbody>
@@ -187,7 +190,7 @@ export function AnaliseProducaoModal({
                     </td>
                   </tr>
                 )}
-                <tr className="border-t bg-muted/60 font-bold">
+                <tr className="border-t bg-muted font-bold">
                   <td className="px-2 py-1">Total</td>
                   <td className="px-2 py-1 text-right tabular-nums">{formatNum(totais.sacasFinais, 2)}</td>
                   <td className="px-2 py-1 text-right tabular-nums">100,0%</td>

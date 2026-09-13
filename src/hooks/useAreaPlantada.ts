@@ -247,6 +247,14 @@ export interface TalhaoDaSafra {
   pastoNome: string;
   /** A fazenda do pasto — o cabeçalho do modal a imprime. `null` quando o pasto não a tem. */
   fazendaNome: string | null;
+  /**
+   * A sigla da fazenda — "PUR", "BG", "3M".
+   *
+   * ⚠ VEM DA COLUNA `codigo`, NÃO DE TRÊS LETRAS DO NOME. Medido no Proto: a coluna existe e
+   * está preenchida em todas as fazendas, e é a sigla que o produtor usa. Derivar do nome daria
+   * "Faz" para toda "Faz. Alguma coisa" — o prefixo é igual em quase todas.
+   */
+  fazendaCodigo: string | null;
 }
 
 /**
@@ -279,6 +287,7 @@ export function useTalhoesDaSafra(clienteId: string | null | undefined, safraId:
       const nomes = new Map<string, string>();
       const fazendaDoPasto = new Map<string, string | null>();
       const fazendas = new Map<string, string>();
+      const codigos = new Map<string, string | null>();
       if (ids.length > 0) {
         const { data: ps } = await db.from('pastos').select('id, nome, fazenda_id').in('id', ids);
         const pastos = (ps ?? []) as Array<{ id: string; nome: string; fazenda_id: string | null }>;
@@ -299,6 +308,7 @@ export function useTalhoesDaSafra(clienteId: string | null | undefined, safraId:
           /* Sem nome de pasto o talhão continua existindo — e a carga precisa cair nele. */
           pastoNome: nomes.get(l.pasto_id) ?? '—',
           fazendaNome: fazendas.get(fazendaDoPasto.get(l.pasto_id) ?? '') ?? null,
+          fazendaCodigo: codigos.get(fazendaDoPasto.get(l.pasto_id) ?? '') ?? null,
         }))
         .sort((a, b) => a.cultura.localeCompare(b.cultura, 'pt-BR')
           || a.pastoNome.localeCompare(b.pastoNome, 'pt-BR')));

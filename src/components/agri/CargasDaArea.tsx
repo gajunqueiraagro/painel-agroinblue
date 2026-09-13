@@ -86,13 +86,19 @@ const COLUNAS_BASE: ReadonlyArray<ColunaOrdenavel<ColheitaRow, string> & { h: st
 ];
 
 /**
- * ⚠ A COLUNA TALHÃO É A PRIMEIRA, E SEMPRE — decisão do Gabriel. Mesmo com um talhão só ela
+ * ⚠ A FAZENDA VEM ANTES DO TALHÃO, e o código curto ("PUR", "BG") sai da coluna `codigo` das
+ * fazendas — não das três primeiras letras do nome, que dariam "Faz" para quase todas.
+ * ⚠ A COLUNA TALHÃO É A PRIMEIRA DEPOIS DELA, E SEMPRE — decisão do Gabriel. Mesmo com um talhão só ela
  * fica: uma coluna que aparece e some conforme a seleção obriga o operador a reaprender a
  * tabela a cada troca, e a lista deixa de se ler igual de um dia para o outro (A23).
  * ⚠ ELA ORDENA PELO NOME DO PASTO, que é o que se vê — não pelo id, que ninguém lê. Ordenar
  * por ela agrupa a cultura visualmente em "Todos os talhões".
  */
-const colunasCom = (nomePorId: Map<string, string>) => ([
+const colunasCom = (nomePorId: Map<string, string>, fazPorId: Map<string, string>) => ([
+  {
+    coluna: 'fazenda', h: 'Faz', tipo: 'texto' as const,
+    valor: (l: ColheitaRow) => fazPorId.get(l.safra_area_id) ?? '',
+  },
   {
     coluna: 'talhao', h: 'Talhão', tipo: 'texto' as const,
     valor: (l: ColheitaRow) => nomePorId.get(l.safra_area_id) ?? '',
@@ -108,11 +114,21 @@ const colunasCom = (nomePorId: Map<string, string>) => ([
  * ⚠ O FUNDO PRECISA SER OPACO porque o cabeçalho gruda: translúcido, as linhas passariam por
  * baixo do nome da coluna. `bg-primary` é sólido.
  */
-const TH = 'sticky top-0 z-10 bg-primary px-1.5 py-1 text-[9px] font-semibold uppercase'
-  + ' tracking-wide text-primary-foreground hover:bg-primary-foreground/10';
+/**
+ * ⚠ `hover:brightness-110`, NUNCA `hover:bg-…`: uma classe de background no hover SUBSTITUI o
+ * `bg-primary` em vez de se somar a ele — o `primary-foreground/10` que estava aqui pintava o
+ * `<th>` de branco a 10% sobre o card, e o cabeçalho inteiro clareava a ponto de sumir. Filtro
+ * clareia o azul mantendo o azul.
+ * ⚠ SEM `uppercase`: "Primeira maiúscula, resto minúsculo" (decisão do Gabriel) — e o rótulo
+ * já vem escrito assim em `COLUNAS`, então a classe é que sobrava.
+ */
+const TH = 'sticky top-0 z-10 bg-primary px-1 py-0.5 text-[9px] font-semibold'
+  + ' text-primary-foreground transition-[filter] hover:brightness-110';
 
 /** O rodapé de totais: mesmo fundo do cabeçalho, para as duas bordas da lista se lerem juntas. */
-const TFOOT = 'sticky bottom-0 z-10 bg-primary px-1.5 py-1 text-[10px] font-bold tabular-nums'
+/** ⚠ O RÓTULO NO MESMO TOM DOS NÚMEROS: ele era `text-muted-foreground` sobre azul — escuro
+ *  demais, mais apagado que os valores que deveria apresentar. */
+const TFOOT = 'sticky bottom-0 z-10 bg-primary px-1 py-0.5 text-[9px] font-bold tabular-nums'
   + ' text-primary-foreground';
 
 /** O talhão como esta lista precisa conhecê-lo. */
@@ -122,6 +138,7 @@ export interface TalhaoDaLista {
   area_plantada_ha: number;
   pastoNome: string;
   fazendaNome?: string | null;
+  fazendaCodigo?: string | null;
 }
 
 export function CargasDaArea({
@@ -172,7 +189,9 @@ export function CargasDaArea({
   const areasParaEscolha = talhoesDaCultura ?? talhoes;
   const nomePorId = useMemo(
     () => new Map(talhoes.map(t => [t.id, t.pastoNome])), [talhoes]);
-  const COLUNAS = useMemo(() => colunasCom(nomePorId), [nomePorId]);
+  const fazPorId = useMemo(
+    () => new Map(talhoes.map(t => [t.id, t.fazendaCodigo || ''])), [talhoes]);
+  const COLUNAS = useMemo(() => colunasCom(nomePorId, fazPorId), [nomePorId, fazPorId]);
   /* A área do recorte: um talhão, ou a soma dos da cultura em "Todos". */
   const areaDoRecorte = useMemo(
     () => talhoes.reduce((acc, t) => acc + t.area_plantada_ha, 0), [talhoes]);
@@ -276,6 +295,9 @@ export function CargasDaArea({
 
       {/* ── ROLA: só as linhas ── */}
       <div className="min-h-0 flex-1 overflow-auto rounded-md border">
+        {/* ⚠ UM TAMANHO SÓ, DECLARADO NA TABELA: as células não repetem `text-[…]`, senão duas
+            classes arbitrárias disputam por ordem no CSS e não por especificidade — a lição do
+            `TD` da Central. Aqui tudo é 10px. */}
         <table className="w-full border-collapse text-[10px]">
           <thead>
             <tr>
@@ -295,25 +317,26 @@ export function CargasDaArea({
             )}
             {ordenadas.map(l => (
               <tr key={l.id} className="border-t border-slate-100 odd:bg-[#1e3a5f]/[0.03]">
-                <td className="whitespace-nowrap px-1.5 py-[1px]">{nomePorId.get(l.safra_area_id) ?? '—'}</td>
-                <td className="whitespace-nowrap px-1.5 py-[1px] tabular-nums">{dataBR(l.data_colheita)}</td>
-                <td className="whitespace-nowrap px-1.5 py-[1px] tabular-nums">{(l.hora_chegada ?? '').slice(0, 5) || '—'}</td>
-                <td className="px-1.5 py-[1px]">{l.ticket_balanca || '—'}</td>
+                <td className="whitespace-nowrap px-1 py-0">{fazPorId.get(l.safra_area_id) || '—'}</td>
+                <td className="whitespace-nowrap px-1 py-0">{nomePorId.get(l.safra_area_id) ?? '—'}</td>
+                <td className="whitespace-nowrap px-1 py-0 tabular-nums">{dataBR(l.data_colheita)}</td>
+                <td className="whitespace-nowrap px-1 py-0 tabular-nums">{(l.hora_chegada ?? '').slice(0, 5) || '—'}</td>
+                <td className="px-1 py-0">{l.ticket_balanca || '—'}</td>
                 {/* ⚠ A NF FALTAVA AQUI, e era o bug do cabeçalho deslocado: no PR-SORT-01 a
                     coluna entrou no cabeçalho e não na linha, então o `<thead>` tinha onze
                     células e o `<tbody>` dez — cada rótulo caía uma coluna adiante e "Roça"
                     aparecia sobre os botões de ação. Os dados sempre estiveram certos; o que
                     estava errado era a contagem. */}
-                <td className="px-1.5 py-[1px]">{l.nf_produtor || '—'}</td>
-                <td className="px-1.5 py-[1px] text-right tabular-nums">{l.peso_verde_kg != null ? formatNum(l.peso_verde_kg, 2) : '—'}</td>
-                <td className="px-1.5 py-[1px] text-right tabular-nums">{l.peso_seco_kg != null ? formatNum(l.peso_seco_kg, 2) : '—'}</td>
-                <td className="px-1.5 py-[1px] text-right tabular-nums">{l.umidade_pct != null ? formatNum(l.umidade_pct, 2) : '—'}</td>
+                <td className="px-1 py-0">{l.nf_produtor || '—'}</td>
+                <td className="px-1 py-0 text-right tabular-nums">{l.peso_verde_kg != null ? formatNum(l.peso_verde_kg, 2) : '—'}</td>
+                <td className="px-1 py-0 text-right tabular-nums">{l.peso_seco_kg != null ? formatNum(l.peso_seco_kg, 2) : '—'}</td>
+                <td className="px-1 py-0 text-right tabular-nums">{l.umidade_pct != null ? formatNum(l.umidade_pct, 2) : '—'}</td>
                 {/* ⚠ A COR SAI DE `faixaAflatoxina`, o MESMO corte que o consolidado usa — nunca
                     de um `> 20` escrito aqui. No dia em que a cooperativa mudar o limite, a
                     célula e o total têm de mudar juntos, senão a lista pinta de verde a carga
                     que o rodapé conta como fora de faixa.
                     ⚠ SEM LAUDO CONTINUA CINZA: ausência não é aprovação. */}
-                <td className={cn('px-1.5 py-[1px] text-right tabular-nums',
+                <td className={cn('px-1 py-0 text-right tabular-nums',
                   faixaAflatoxina(l.aflatoxina_ppb) === 'ate' ? 'text-success'
                     : faixaAflatoxina(l.aflatoxina_ppb) === 'acima' ? 'text-destructive'
                       : 'text-muted-foreground')}>
@@ -322,16 +345,16 @@ export function CargasDaArea({
                 {/* ⚠ SACA INTEIRA NA CÉLULA, DECIMAL NO BANCO — é o que a Casul faz, e é o que
                     faz o consolidado fechar: cada carga se lê arredondada, o total soma o valor
                     cheio. Somar os arredondados perderia centésimos a cada linha. */}
-                <td className="px-1.5 py-[1px] text-right tabular-nums" title={l.sacas_boas != null ? `${formatNum(l.sacas_boas, 2)} sc` : undefined}>{l.sacas_boas != null ? formatNum(l.sacas_boas, 0) : '—'}</td>
+                <td className="px-1 py-0 text-right tabular-nums" title={l.sacas_boas != null ? `${formatNum(l.sacas_boas, 2)} sc` : undefined}>{l.sacas_boas != null ? formatNum(l.sacas_boas, 0) : '—'}</td>
                 {/* ⚠ ROÇA É SEMPRE VERMELHO: ela é refugo, e o vermelho aqui não julga uma
                     faixa — diz o que aquele grão é. Vale onde ele aparecer, na lista e no
                     consolidado. */}
-                <td className={cn('px-1.5 py-[1px] text-right tabular-nums',
+                <td className={cn('px-1 py-0 text-right tabular-nums',
                   l.grao_roca_sacas ? 'text-destructive' : 'text-muted-foreground')}
                   title={l.grao_roca_sacas != null ? `${formatNum(l.grao_roca_sacas, 2)} sc` : undefined}>
                   {l.grao_roca_sacas != null ? formatNum(l.grao_roca_sacas, 0) : '—'}
                 </td>
-                <td className="whitespace-nowrap px-1.5 py-[1px] text-right">
+                <td className="whitespace-nowrap px-1 py-0 text-right">
                   <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground"
                     disabled={somenteLeitura} title="Editar esta carga"
                     /* A carga abre com os valores salvos — inclusive o talhão dela, que agora
@@ -359,12 +382,12 @@ export function CargasDaArea({
           <tfoot>
             <tr>
               {/* ⚠ `colSpan` ACOMPANHA O CABEÇALHO: são CINCO colunas de identificação antes
-                  do primeiro número (talhão, data, hora, ticket, NF). Um `colSpan`
+                  do primeiro número (fazenda, talhão, data, hora, ticket, NF). Um `colSpan`
                   desatualizado desalinha o total inteiro — foi o defeito do FIX-CABECALHO, e
                   a coluna nova o traria de volta.
                   ⚠ TALHÃO NÃO SOMA: nome não soma, e por isso ele entra no `colSpan` do rótulo
                   em vez de ganhar uma célula de total vazia. */}
-              <td className={cn(TFOOT, 'text-left font-semibold uppercase tracking-wide text-muted-foreground')} colSpan={5}>
+              <td className={cn(TFOOT, 'text-left font-semibold')} colSpan={6}>
                 {rotuloTotal ?? 'Total do talhão'}
               </td>
               <td className={cn(TFOOT, 'text-right')}>{formatNum(totaisDoTalhao.verdeKg, 2)}</td>
