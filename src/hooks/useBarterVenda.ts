@@ -85,6 +85,47 @@ export interface VendaPayload {
   deducao: { valor: number; descricao: string | null };
 }
 
+/**
+ * A LINHA DE `agri_oc_partes` COMO ELA VAI AO BANCO — PR-AGRI-BARTER-FIX-INCLUSO-NULL.
+ *
+ * ⚠ ESTE TIPO EXISTE PARA O COMPILADOR COBRAR A CHAVE, e nasceu de um defeito real: as duas
+ * partes eram objetos soltos com conjuntos de chaves DIFERENTES — a receita sem
+ * `incluso_no_total`, a dedução com. Num insert em LOTE, o PostgREST monta a lista de colunas
+ * pela UNIÃO das chaves de todos os objetos e manda NULL para quem não tem a sua; o default da
+ * coluna não é consultado. A receita chegava com `incluso_no_total = null` numa coluna
+ * NOT NULL, e a venda inteira era recusada.
+ * ⚠ E POR ISSO O CAMPO NÃO É OPCIONAL AQUI. Com todos os campos obrigatórios, o array é
+ * homogêneo POR CONSTRUÇÃO e a união de chaves é sempre a mesma lista. Um comentário pedindo
+ * cuidado seria esquecido no próximo campo novo; o tipo não esquece.
+ * ⚠ MEDIDO NO PROTO em 13/09/2026, em transação revertida: chave OMITIDA grava com o default
+ * `true`; chave presente com NULL é RECUSADA com "null value in column "incluso_no_total" of
+ * relation "agri_oc_partes" violates not-null constraint" — a mensagem exata da tela.
+ */
+interface EntregaPayload {
+  cliente_id: string;
+  operacao_id: string;
+  classe_aflatoxina: string;
+  sacas: number;
+  preco_saca: number;
+  valor: number;
+  colheita_id: string | null;
+}
+
+interface PartePayload {
+  cliente_id: string;
+  operacao_id: string;
+  natureza: string;
+  descricao: string | null;
+  valor: number;
+  plano_conta_id: string | null;
+  macro_custo: string | null;
+  grupo_custo: string | null;
+  centro_custo: string | null;
+  subcentro: string | null;
+  /** NUNCA nulo: a coluna é NOT NULL, e null explícito ignora o default. */
+  incluso_no_total: boolean;
+}
+
 const COLS_OP = 'id, cultura, safra_id, data_operacao, tipo_precificacao, valor_bruto,'
   + ' descontos, valor_liquido, status_comercial, observacoes';
 const COLS_ENT = 'id, operacao_id, classe_aflatoxina, sacas, preco_saca, valor';
@@ -199,14 +240,23 @@ export function useBarterVenda(
       .select('id').eq('operacao_id', operacaoId);
     const idsEntAntigas = ((entAntigas ?? []) as Array<{ id: string }>).map(e => e.id);
     if (p.entregas.length > 0) {
-      const { error } = await db.from('agri_oc_entregas').insert(
-        p.entregas.map(e => ({
-          ...e, cliente_id: clienteId, operacao_id: operacaoId,
-          /* ⚠ NULO DE PROPÓSITO: a venda é por classe, e as sacas de uma classe vêm de várias
-             cargas (dez na 23/24). Apontar para uma delas seria inventar o vínculo. */
-          colheita_id: null,
-        })),
-      );
+      /* ⚠ TIPADO PELO MESMO MOTIVO DAS PARTES: num insert em lote o PostgREST usa a UNIÃO
+         das chaves e manda NULL para o objeto que não tem a sua. Aqui as linhas saem todas de
+         um `map` e já eram homogêneas — o tipo garante que continuem quando alguém acrescentar
+         um campo condicional. */
+      const linhas: EntregaPayload[] = p.entregas.map(e => ({
+        cliente_id: clienteId,
+        operacao_id: operacaoId,
+        classe_aflatoxina: e.classe_aflatoxina,
+        sacas: e.sacas,
+        preco_saca: e.preco_saca,
+        valor: e.valor,
+        /* ⚠ NULO DE PROPÓSITO: a venda é por classe, e as sacas de uma classe vêm de várias
+           cargas (dez na 23/24). Apontar para uma delas seria inventar o vínculo. E `null`
+           aqui é legítimo — a coluna ACEITA nulo. */
+        colheita_id: null,
+      }));
+      const { error } = await db.from('agri_oc_entregas').insert(linhas);
       if (error) return { ok: false, erro: `Entregas: ${error.message}` };
     }
     if (idsEntAntigas.length > 0) {
@@ -238,7 +288,17 @@ export function useBarterVenda(
      * número do DRE não bate com o líquido que esta tela mostra, e quem conferir vê na hora.
      * Um erro que aparece é dívida; um que se esconde é defeito.
      */
-    const novasPartes: Array<Record<string, unknown>> = [{
+    /**
+     * ⚠ AS DUAS PARTES TÊM A MESMA FORMA, e é isso que as faz caber num insert em lote. A
+     * dedução não tem plano de contas próprio hoje — os quatro níveis vão `null`, e `null`
+     * numa coluna que ACEITA nulo é a verdade ("não classificado"), não o problema. O problema
+     * era a chave AUSENTE numa coluna NOT NULL.
+     * ⚠ DENTRO DO TOTAL as duas: com a receita em bruto, a dedução é um componente VIVO da
+     * operação, não um lembrete do que já foi abatido. Quem somar as partes soma por natureza —
+     * receita positiva, imposto/desconto/frete negativos —, que é o sinal que a fatia D dará ao
+     * lançamento. Nada lê esta coluna hoje; ela fica declarando a intenção.
+     */
+    const novasPartes: PartePayload[] = [{
       cliente_id: clienteId, operacao_id: operacaoId,
       natureza: NATUREZA_RECEITA,
       descricao: `Venda ${p.cultura}`,
@@ -248,18 +308,22 @@ export function useBarterVenda(
       grupo_custo: p.receita.grupo_custo,
       centro_custo: p.receita.centro_custo,
       subcentro: p.receita.subcentro,
+      incluso_no_total: true,
     }];
+    /* ⚠ PARTE DE VALOR ZERO NÃO SE GRAVA. Sem Senar, a linha de imposto não existe — uma parte
+       de R$ 0,00 apareceria em toda leitura futura sem dizer nada, e o DRE ganharia um
+       lançamento de zero quando a fatia D materializar as deduções. */
     if (p.deducao.valor > 0) {
       novasPartes.push({
         cliente_id: clienteId, operacao_id: operacaoId,
         natureza: NATUREZA_DEDUCAO,
         descricao: p.deducao.descricao,
         valor: p.deducao.valor,
-        /* ⚠ DENTRO DO TOTAL agora: com a receita em bruto, a dedução é um componente VIVO da
-           operação, não um lembrete do que já foi abatido. Quem somar as partes soma por
-           natureza — receita positiva, imposto/desconto/frete negativos —, que é exatamente o
-           sinal que a fatia D terá de dar ao lançamento. Nada lê esta coluna hoje; ela fica
-           declarando a intenção para quem escrever o primeiro leitor. */
+        plano_conta_id: null,
+        macro_custo: null,
+        grupo_custo: null,
+        centro_custo: null,
+        subcentro: null,
         incluso_no_total: true,
       });
     }
