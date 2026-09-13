@@ -25,14 +25,20 @@ export function AnaliseDrawer({ titulo, subtitulo, corAccent = '#1e3a5f', total,
   }, [onClose]);
 
   return (
-    // ⚠ O RESPIRO É NO INVÓLUCRO, não no painel: com `padding` aqui, o `h-full` do painel passa
-    // a medir a altura JÁ DESCONTADA, e ele encolhe em vez de vazar. Um `margin` no painel
-    // deixaria o `h-full` medindo a tela inteira e empurraria o rodapé do TOTAL para fora.
-    <div className="fixed inset-0 z-50 flex justify-end p-3" onClick={onClose}>
+    // ⚠ O PAINEL ANCORA NELE MESMO, NÃO NO PADDING DE UM PAI. A primeira tentativa deu o
+    // respiro com `p-3` no invólucro e `h-full` no painel: topo e base ficaram, a DIREITA
+    // continuou colada na janela. O recuo que se vê agora é do próprio painel — `inset-y-3`
+    // e `right-3` —, e por isso não depende de ninguém acima dele na árvore.
+    // ⚠ A ALTURA VEM DO PAR `top`/`bottom`, nunca de `h-full`: com `h-full` mais margem, o
+    // painel mediria a TELA INTEIRA e o rodapé do TOTAL sairia por baixo. Com os dois lados
+    // ancorados, a altura já nasce descontada, e o `flex-1 overflow-auto` do miolo é o que
+    // mantém cabeçalho e rodapé visíveis com o conteúdo rolando entre eles.
+    <div className="fixed inset-0 z-50" onClick={onClose}>
       <div className="absolute inset-0 bg-black/20" />
       {/* Solto das bordas, o painel deixa de ser um recorte da tela e vira uma peça — por isso
-          borda e canto nos quatro lados, no lugar da `border-l` de quando ele colava. */}
-      <div className="relative h-full w-[560px] max-w-[92vw] bg-white border rounded-md shadow-2xl flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+          borda e canto nos quatro lados, no lugar da `border-l` de quando ele colava.
+          O `max-w` guarda o mesmo recuo dos dois lados em tela estreita. */}
+      <div className="fixed inset-y-3 right-3 w-[560px] max-w-[calc(100vw-1.5rem)] bg-white border rounded-md shadow-2xl flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
         {/* Faixa superior de identidade (accent contextual, detalhe). */}
         <div className="h-[3px] shrink-0" style={{ background: corAccent }} />
         <div className="flex items-start justify-between gap-2 px-3 py-2 border-b bg-[#1e3a5f]/[0.04]">
