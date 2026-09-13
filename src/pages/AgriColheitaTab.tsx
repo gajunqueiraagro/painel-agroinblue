@@ -89,6 +89,7 @@ export function AgriColheitaTab() {
   const totais = useMemo(() => {
     const comoForm = linhas.map(l => ({
       id: l.id, dataColheita: l.data_colheita ?? '', ticketBalanca: '', nfProdutor: '', filial: '',
+      horaChegada: '',
       pesoVerdeKg: String(l.peso_verde_kg ?? ''), pesoSecoKg: String(l.peso_seco_kg ?? ''),
       umidadePct: '', aflatoxinaPpb: l.aflatoxina_ppb == null ? '' : String(l.aflatoxina_ppb),
       sacasBoas: String(l.sacas_boas ?? ''), graoRocaSacas: String(l.grao_roca_sacas ?? ''),
@@ -193,6 +194,8 @@ export function AgriColheitaTab() {
           safraAreaId={talhao.id}
           cultura={talhao.cultura}
           areaHa={talhao.area_plantada_ha}
+          pastoNome={talhao.pastoNome}
+          fazendaNome={talhao.fazendaNome}
           linhas={doTalhao}
           salvarCarga={salvarCarga}
           excluirCarga={excluirCarga}

@@ -1,5 +1,5 @@
 /**
- * AS CARGAS DE UM TALHÃO — AGRI-COLHEITA-TELA-01.
+ * AS CARGAS DE UM TALHÃO — AGRI-COLHEITA-TELA-01, em modal desde o MODAL-04.
  *
  * ⚠ UM BLOCO, DOIS LUGARES: a tela de Produção › Lançar › Agricultura e o painel de área do
  * cadastro montam ESTE componente. Escrever a lista duas vezes deixaria as duas livres para
@@ -7,25 +7,24 @@
  * ⚠ O HOOK VEM DE FORA, de propósito. Na tela de Produção o consolidado da safra e a lista do
  * talhão têm de ser a MESMA leitura: com o hook aqui dentro seriam duas consultas e dois
  * estados, e salvar uma carga mudaria a lista sem mudar o total logo acima dela.
- * ⚠ CABEÇALHO E FORM FIXOS, SÓ AS LINHAS ROLAM (A21). A rolagem está no container da tabela,
- * não na página: é o mesmo arranjo do drill do DRE, e pelo mesmo motivo — quem confere uma
- * carga precisa do nome da coluna à vista.
+ * ⚠ A LISTA SÓ MOSTRA O RESUMO DA CARGA. Os treze campos moram no modal; o form inline que
+ * havia aqui empurrava a lista para fora da tela toda vez que se ia lançar — e é a lista o
+ * que se veio conferir.
+ * ⚠ CABEÇALHO FIXO, SÓ AS LINHAS ROLAM (A21). A rolagem está no container da tabela, não na
+ * página: quem confere uma carga precisa do nome da coluna à vista.
  */
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { DatePicker } from '@/components/ui/date-picker';
-import { Plus, Trash2, Pencil, Save, X } from 'lucide-react';
+import { Plus, Trash2, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { formatNum } from '@/lib/calculos/formatters';
-import { labelDaCultura } from '@/lib/agri/areaPlantada';
-import {
-  LIMITE_AFLATOXINA, cargaVazia, validarCarga, sacasDoPeso, quebraKg, unidadeDaCultura,
-  type CargaForm,
-} from '@/lib/agri/colheita';
 import { parseNumericValue } from '@/lib/calculos/abate';
+import { labelDaCultura } from '@/lib/agri/areaPlantada';
+import { CargaModal } from '@/components/agri/CargaModal';
+import {
+  cargaVazia, validarCarga, sacasDoPeso, unidadeDaCultura, type CargaForm,
+} from '@/lib/agri/colheita';
 import type { ColheitaRow, useColheita } from '@/hooks/useColheita';
 
 /** A linha do banco vira campo de texto — vírgula decimal, porque é o que se digita. */
@@ -34,6 +33,8 @@ const texto = (v: number | null): string => (v == null ? '' : String(v).replace(
 const doBanco = (r: ColheitaRow): CargaForm => ({
   id: r.id,
   dataColheita: r.data_colheita ?? '',
+  /* `time` do Postgres vem "14:55:00"; o campo de hora do navegador quer "14:55". */
+  horaChegada: (r.hora_chegada ?? '').slice(0, 5),
   ticketBalanca: r.ticket_balanca ?? '',
   nfProdutor: r.nf_produtor ?? '',
   filial: r.filial ?? '',
@@ -50,7 +51,7 @@ const doBanco = (r: ColheitaRow): CargaForm => ({
 
 /** O cabeçalho da lista, na ordem em que a cooperativa lê o romaneio. */
 const COLUNAS = [
-  { h: 'Data', a: 'text-left' }, { h: 'Ticket', a: 'text-left' }, { h: 'NF', a: 'text-left' },
+  { h: 'Data', a: 'text-left' }, { h: 'Hora', a: 'text-left' }, { h: 'Ticket', a: 'text-left' },
   { h: 'Verde (kg)', a: 'text-right' }, { h: 'Seco (kg)', a: 'text-right' },
   { h: 'Umid. %', a: 'text-right' }, { h: 'Afla. ppb', a: 'text-right' },
   { h: 'Sacas boas', a: 'text-right' }, { h: 'Roça (sc)', a: 'text-right' },
@@ -60,36 +61,23 @@ const COLUNAS = [
 const TH = 'sticky top-0 z-10 bg-[#f1f3f5] shadow-[inset_0_-1px_0_#e2e8f0] px-1.5 py-1'
   + ' text-[9px] font-semibold uppercase tracking-wide text-[#1e3a5f]';
 
-function Campo({ rotulo, valor, onChange, numerico, obrigatorio, dica }: {
-  rotulo: string; valor: string; onChange: (v: string) => void;
-  numerico?: boolean; obrigatorio?: boolean; dica?: string;
-}) {
-  return (
-    <div>
-      <Label className="text-[10px]">
-        {rotulo}{obrigatorio && <span className="text-destructive"> *</span>}
-      </Label>
-      <Input value={valor} onChange={e => onChange(e.target.value)} title={dica}
-        inputMode={numerico ? 'decimal' : undefined}
-        className={cn('mt-0.5 h-7 text-[11px]', numerico && 'text-right font-mono')} />
-    </div>
-  );
-}
-
 export function CargasDaArea({
-  clienteId, safraAreaId, cultura, areaHa, linhas, salvarCarga, excluirCarga, somenteLeitura,
+  clienteId, safraAreaId, cultura, areaHa, pastoNome, fazendaNome,
+  linhas, salvarCarga, excluirCarga, somenteLeitura,
 }: {
   clienteId: string | null | undefined;
   safraAreaId: string;
   cultura: string;
   areaHa: number;
+  pastoNome?: string;
+  fazendaNome?: string | null;
   /** Só as cargas DESTE talhão — quem filtra é quem chama, que é dono da leitura. */
   linhas: readonly ColheitaRow[];
   salvarCarga: ReturnType<typeof useColheita>['salvarCarga'];
   excluirCarga: ReturnType<typeof useColheita>['excluirCarga'];
   somenteLeitura?: boolean;
 }) {
-  /** `null` = nenhum form aberto. */
+  /** `null` = modal fechado. */
   const [form, setForm] = useState<CargaForm | null>(null);
   const [salvando, setSalvando] = useState(false);
   /**
@@ -101,8 +89,6 @@ export function CargasDaArea({
    */
   const [aMao, setAMao] = useState<Set<keyof CargaForm>>(new Set());
   const temSaca = unidadeDaCultura(cultura).kgPorSaca != null;
-
-  /* Texto pt-BR de volta para a tela: é assim que o resto dos campos se lê. */
   const comoTexto = (v: number | null) => (v == null ? '' : String(v).replace('.', ','));
 
   const editar = (campo: keyof CargaForm, valor: string) => {
@@ -123,13 +109,6 @@ export function CargasDaArea({
       setAMao(prev => new Set(prev).add(campo));
     }
   };
-
-  /** Informativa e só leitura: o que a secagem tirou desta carga. */
-  const quebraDaCarga = form
-    ? quebraKg(
-      form.pesoVerdeKg.trim() ? parseNumericValue(form.pesoVerdeKg) : null,
-      form.pesoSecoKg.trim() ? parseNumericValue(form.pesoSecoKg) : null)
-    : null;
 
   const gravar = async () => {
     if (!form || !clienteId) return;
@@ -155,94 +134,30 @@ export function CargasDaArea({
     if (form?.id === l.id) setForm(null);
   };
 
+  const dataBR = (iso: string | null) => (iso && iso.length >= 10
+    ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(2, 4)}` : '—');
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {/* ── FIXO: ação e form ── */}
-      <div className="shrink-0">
-        <div className="mb-1 flex items-center gap-2">
-          <span className="text-[11px] font-bold text-foreground">{labelDaCultura(cultura)}</span>
-          <span className="text-[10px] tabular-nums text-muted-foreground">
-            {formatNum(areaHa, 2)} ha · {linhas.length} {linhas.length === 1 ? 'carga' : 'cargas'}
-          </span>
-          <div className="flex-1" />
-          <Button variant="outline" size="sm" className="h-7 gap-1 text-[11px]"
-            disabled={somenteLeitura || !!form}
-            onClick={() => { setAMao(new Set()); setForm(cargaVazia()); }}>
-            <Plus className="h-3 w-3" /> Nova carga
-          </Button>
-        </div>
-
-        {form && (
-          /* ⚠ GRADE, NÃO PILHA: são treze campos, e um embaixo do outro eles empurrariam a
-             lista para fora da tela — que é a coisa que se veio conferir. */
-          <div className="mb-2 rounded-md border bg-muted/20 p-2">
-            <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 md:grid-cols-4">
-              <div>
-                <Label className="text-[10px]">Data <span className="text-destructive">*</span></Label>
-                <DatePicker value={form.dataColheita} onChange={v => editar('dataColheita', v)}
-                  size="compact" className="mt-0.5" />
-              </div>
-              <Campo rotulo="Ticket balança" valor={form.ticketBalanca} onChange={v => editar('ticketBalanca', v)} />
-              <Campo rotulo="NF produtor" valor={form.nfProdutor} onChange={v => editar('nfProdutor', v)} />
-              <Campo rotulo="Filial" valor={form.filial} onChange={v => editar('filial', v)} />
-
-              <Campo rotulo="Peso verde (kg)" valor={form.pesoVerdeKg} numerico
-                dica="O que embarcou na fazenda." onChange={v => editar('pesoVerdeKg', v)} />
-              <Campo rotulo="Peso seco (kg)" valor={form.pesoSecoKg} numerico
-                dica="O que a cooperativa devolveu depois de secar — chega dias depois, e fica em branco até chegar."
-                onChange={v => editar('pesoSecoKg', v)} />
-              <Campo rotulo="Umidade (%)" valor={form.umidadePct} numerico onChange={v => editar('umidadePct', v)} />
-              <Campo rotulo="Aflatoxina (ppb)" valor={form.aflatoxinaPpb} numerico
-                dica={`O corte da cooperativa é ${LIMITE_AFLATOXINA} ppb — o número entra aqui como veio do laudo.`}
-                onChange={v => editar('aflatoxinaPpb', v)} />
-
-              <Campo rotulo="Grão de roça (kg)" valor={form.graoRocaKg} numerico onChange={v => editar('graoRocaKg', v)} />
-              <Campo rotulo="Sacas boas" valor={form.sacasBoas} numerico
-                dica={temSaca
-                  ? 'Calculado do peso seco — pode ser corrigido, e a correção não se desfaz.'
-                  : `${labelDaCultura(cultura)} não se mede em sacas.`}
-                onChange={v => editar('sacasBoas', v)} />
-              <Campo rotulo="Grão de roça (sc)" valor={form.graoRocaSacas} numerico
-                dica={temSaca ? 'Calculado do grão de roça em quilos — pode ser corrigido.' : undefined}
-                onChange={v => editar('graoRocaSacas', v)} />
-              <div>
-                {/* ⚠ SÓ LEITURA, E SEM CAMPO NO BANCO: a quebra é a subtração dos dois pesos.
-                    Guardá-la criaria um terceiro número que pode discordar dos dois que a
-                    balança mediu. */}
-                <Label className="text-[10px]">Quebra (kg)</Label>
-                <div className="mt-0.5 flex h-7 items-center justify-end rounded-md border border-dashed bg-muted/30 px-2 font-mono text-[11px] tabular-nums text-muted-foreground">
-                  {quebraDaCarga != null ? formatNum(quebraDaCarga, 2) : '—'}
-                </div>
-              </div>
-              <Campo rotulo="Renda líquida (%)" valor={form.rendaLiquidaPct} numerico onChange={v => editar('rendaLiquidaPct', v)} />
-
-              <div className="col-span-2 md:col-span-4">
-                <Label className="text-[10px]">Observações</Label>
-                <Input value={form.observacoes} onChange={e => editar('observacoes', e.target.value)}
-                  className="mt-0.5 h-7 text-[11px]" />
-              </div>
-            </div>
-            <div className="mt-2 flex items-center gap-2">
-              <div className="flex-1" />
-              <Button variant="ghost" size="sm" className="h-7 gap-1 text-[11px]"
-                disabled={salvando} onClick={() => setForm(null)}>
-                <X className="h-3 w-3" /> Cancelar
-              </Button>
-              <Button size="sm" className="h-7 gap-1 text-[11px]" disabled={salvando} onClick={gravar}>
-                <Save className="h-3 w-3" /> {salvando ? 'Salvando…' : 'Salvar carga'}
-              </Button>
-            </div>
-          </div>
-        )}
+      {/* ── FIXO: identidade do talhão e a ação ── */}
+      <div className="mb-1 flex shrink-0 items-center gap-2">
+        <span className="text-[11px] font-bold text-foreground">{labelDaCultura(cultura)}</span>
+        <span className="text-[10px] tabular-nums text-muted-foreground">
+          {formatNum(areaHa, 2)} ha · {linhas.length} {linhas.length === 1 ? 'carga' : 'cargas'}
+        </span>
+        <div className="flex-1" />
+        <Button variant="outline" size="sm" className="h-7 gap-1 text-[11px]"
+          disabled={somenteLeitura}
+          onClick={() => { setAMao(new Set()); setForm(cargaVazia()); }}>
+          <Plus className="h-3 w-3" /> Nova carga
+        </Button>
       </div>
 
       {/* ── ROLA: só as linhas ── */}
       <div className="min-h-0 flex-1 overflow-auto rounded-md border">
         <table className="w-full border-collapse text-[10px]">
           <thead>
-            <tr>
-              {COLUNAS.map(c => <th key={c.h} className={cn(TH, c.a)}>{c.h}</th>)}
-            </tr>
+            <tr>{COLUNAS.map(c => <th key={c.h} className={cn(TH, c.a)}>{c.h}</th>)}</tr>
           </thead>
           <tbody>
             {linhas.length === 0 && (
@@ -252,11 +167,9 @@ export function CargasDaArea({
             )}
             {linhas.map(l => (
               <tr key={l.id} className="border-t border-slate-100 odd:bg-[#1e3a5f]/[0.03]">
-                <td className="whitespace-nowrap px-1.5 py-1 tabular-nums">
-                  {l.data_colheita ? l.data_colheita.slice(8, 10) + '/' + l.data_colheita.slice(5, 7) + '/' + l.data_colheita.slice(2, 4) : '—'}
-                </td>
+                <td className="whitespace-nowrap px-1.5 py-1 tabular-nums">{dataBR(l.data_colheita)}</td>
+                <td className="whitespace-nowrap px-1.5 py-1 tabular-nums">{(l.hora_chegada ?? '').slice(0, 5) || '—'}</td>
                 <td className="px-1.5 py-1">{l.ticket_balanca || '—'}</td>
-                <td className="px-1.5 py-1">{l.nf_produtor || '—'}</td>
                 <td className="px-1.5 py-1 text-right tabular-nums">{l.peso_verde_kg != null ? formatNum(l.peso_verde_kg, 2) : '—'}</td>
                 <td className="px-1.5 py-1 text-right tabular-nums">{l.peso_seco_kg != null ? formatNum(l.peso_seco_kg, 2) : '—'}</td>
                 <td className="px-1.5 py-1 text-right tabular-nums">{l.umidade_pct != null ? formatNum(l.umidade_pct, 2) : '—'}</td>
@@ -291,6 +204,20 @@ export function CargasDaArea({
           </tbody>
         </table>
       </div>
+
+      {/* ⚠ O MODAL É IRMÃO DA LISTA, nunca filho de uma linha: assim editar e criar são o
+          mesmo componente, e fechar não desmonta a tabela por baixo. */}
+      <CargaModal
+        aberto={!!form}
+        form={form}
+        cultura={cultura}
+        talhaoRotulo={`${pastoNome ?? '—'} · ${formatNum(areaHa, 2)} ha`}
+        fazendaNome={fazendaNome ?? null}
+        salvando={salvando}
+        onChange={editar}
+        onFechar={() => setForm(null)}
+        onSalvar={() => { void gravar(); }}
+      />
     </div>
   );
 }

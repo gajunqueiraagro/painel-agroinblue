@@ -97,10 +97,26 @@ export function quebraKg(verdeKg: number | null, secoKg: number | null): number 
   return Math.round((verdeKg - secoKg) * 100) / 100;
 }
 
+/**
+ * O CAMINHO INVERSO — quantos quilos há em N sacas (AGRI-COLHEITA-MODAL-04).
+ *
+ * ⚠ SERVE SÓ À ENTRADA, e a distinção é a que evita um segundo peso no sistema: o operador
+ * escolhe em que unidade DIGITA, e o banco guarda quilo sempre. Gravar a saca como peso faria
+ * a mesma carga ter dois números de origem — o da balança e o da conversão — e nenhum jeito de
+ * saber qual é o do papel.
+ */
+export function pesoDasSacas(sacas: number | null, cultura: string | null | undefined): number | null {
+  const { kgPorSaca } = unidadeDaCultura(cultura);
+  if (!kgPorSaca || sacas == null || !(sacas > 0)) return null;
+  return Math.round(sacas * kgPorSaca * 100) / 100;
+}
+
 /** Uma carga, como a tela a edita — tudo texto, porque campo é texto. */
 export interface CargaForm {
   id: string | null;
   dataColheita: string;
+  /** `HH:MM` — hora em que o caminhão chegou à balança. AGRI-COLHEITA-02. */
+  horaChegada: string;
   ticketBalanca: string;
   nfProdutor: string;
   filial: string;
@@ -117,6 +133,7 @@ export interface CargaForm {
 
 export interface CargaPayload {
   data_colheita: string;
+  hora_chegada: string | null;
   ticket_balanca: string | null;
   nf_produtor: string | null;
   filial: string | null;
@@ -138,7 +155,7 @@ export interface ValidacaoCarga {
 }
 
 export const cargaVazia = (): CargaForm => ({
-  id: null, dataColheita: '', ticketBalanca: '', nfProdutor: '', filial: '',
+  id: null, dataColheita: '', horaChegada: '', ticketBalanca: '', nfProdutor: '', filial: '',
   pesoVerdeKg: '', pesoSecoKg: '', umidadePct: '', aflatoxinaPpb: '', sacasBoas: '',
   graoRocaSacas: '', graoRocaKg: '', rendaLiquidaPct: '', observacoes: '',
 });
@@ -196,6 +213,8 @@ export function validarCarga(form: CargaForm): ValidacaoCarga {
     ok: true,
     payload: {
       data_colheita: data,
+      /* ⚠ BRANCO É NULO, não '00:00': meia-noite é uma hora, ausência não é. */
+      hora_chegada: form.horaChegada.trim() || null,
       ticket_balanca: form.ticketBalanca.trim() || null,
       nf_produtor: form.nfProdutor.trim() || null,
       filial: form.filial.trim() || null,

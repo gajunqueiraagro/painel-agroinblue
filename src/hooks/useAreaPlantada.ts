@@ -245,6 +245,8 @@ export interface TalhaoDaSafra {
   status: string;
   area_plantada_ha: number;
   pastoNome: string;
+  /** A fazenda do pasto — o cabeçalho do modal a imprime. `null` quando o pasto não a tem. */
+  fazendaNome: string | null;
 }
 
 /**
@@ -275,9 +277,17 @@ export function useTalhoesDaSafra(clienteId: string | null | undefined, safraId:
       }>;
       const ids = Array.from(new Set(linhas.map(l => l.pasto_id).filter(Boolean)));
       const nomes = new Map<string, string>();
+      const fazendaDoPasto = new Map<string, string | null>();
+      const fazendas = new Map<string, string>();
       if (ids.length > 0) {
-        const { data: ps } = await db.from('pastos').select('id, nome').in('id', ids);
-        for (const p of (ps ?? []) as Array<{ id: string; nome: string }>) nomes.set(p.id, p.nome);
+        const { data: ps } = await db.from('pastos').select('id, nome, fazenda_id').in('id', ids);
+        const pastos = (ps ?? []) as Array<{ id: string; nome: string; fazenda_id: string | null }>;
+        for (const p of pastos) { nomes.set(p.id, p.nome); fazendaDoPasto.set(p.id, p.fazenda_id); }
+        const fids = Array.from(new Set(pastos.map(p => p.fazenda_id).filter(Boolean))) as string[];
+        if (fids.length > 0) {
+          const { data: fs } = await db.from('fazendas').select('id, nome').in('id', fids);
+          for (const f of (fs ?? []) as Array<{ id: string; nome: string }>) fazendas.set(f.id, f.nome);
+        }
       }
       if (!vivo) return;
       setTalhoes(linhas
@@ -288,6 +298,7 @@ export function useTalhoesDaSafra(clienteId: string | null | undefined, safraId:
           area_plantada_ha: Number(l.area_plantada_ha) || 0,
           /* Sem nome de pasto o talhão continua existindo — e a carga precisa cair nele. */
           pastoNome: nomes.get(l.pasto_id) ?? '—',
+          fazendaNome: fazendas.get(fazendaDoPasto.get(l.pasto_id) ?? '') ?? null,
         }))
         .sort((a, b) => a.cultura.localeCompare(b.cultura, 'pt-BR')
           || a.pastoNome.localeCompare(b.pastoNome, 'pt-BR')));
