@@ -13,6 +13,8 @@
  * ⚠ MEDIDO EM 13/09/2026: com a trava, a lista tem 53 contas — as de agricultura, saída, que
  * compõem o DRE. Sem `somenteCompoeDre` seriam 55; as duas a mais não entram em resultado
  * nenhum, e um custo que não compõe o DRE não é custo de safra.
+ * ⚠ A DATA DA NF É A COMPETÊNCIA DO CUSTO — AGRI-BARTER-04. Sem ela o materializador usava
+ * `current_date`, e os insumos de abril de 2025 caíam no resultado de setembro de 2026.
  * ⚠ A SAFRA É DO INSUMO, e o form diz isso por escrito: ela costuma ser DIFERENTE da do grão,
  * porque o barter atravessa safras. É a razão de o contrato não ter safra.
  */
@@ -28,6 +30,7 @@ import { Save } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { parseMoeda } from '@/lib/calculos/numeroBR';
 import { UNIDADES_INSUMO, unidadeConhecida } from '@/lib/agri/unidades';
+import { DatePicker } from '@/components/ui/date-picker';
 import type { ClassificacaoItem } from '@/hooks/useFinanceiroV2';
 import type { InsumoPayload, BarterInsumo } from '@/hooks/useBarterInsumos';
 
@@ -48,6 +51,7 @@ export function BarterInsumoModal({
 }) {
   const [produto, setProduto] = useState('');
   const [nf, setNf] = useState('');
+  const [dataNf, setDataNf] = useState('');
   const [quantidade, setQuantidade] = useState('');
   const [unidade, setUnidade] = useState('');
   const [valor, setValor] = useState<number | null>(null);
@@ -61,6 +65,7 @@ export function BarterInsumoModal({
     if (!aberto) return;
     setProduto(insumo?.produto ?? '');
     setNf(insumo?.nf_numero ?? '');
+    setDataNf(insumo?.data_recebimento ?? '');
     setQuantidade(insumo?.quantidade != null ? String(insumo.quantidade).replace('.', ',') : '');
     /* ⚠ TRIM NA LEITURA: a unidade gravada como texto livre pode ter espaço em volta, e
        " kg " não casaria com o item "kg" da lista — o campo abriria vazio sobre um dado que
@@ -79,6 +84,7 @@ export function BarterInsumoModal({
     onSalvar({
       produto: produto.trim(),
       nf_numero: nf.trim() || null,
+      data_recebimento: dataNf || null,
       quantidade: quantidade.trim() ? parseMoeda(quantidade) : null,
       unidade: unidade.trim() || null,
       valor: valor ?? 0,
@@ -104,7 +110,7 @@ export function BarterInsumoModal({
         </div>
 
         <div className="space-y-2 p-4">
-          <div className="grid grid-cols-[2fr_1fr] gap-2">
+          <div className="grid grid-cols-[2fr_1fr_1.1fr] gap-2">
             <div>
               <Label className="text-[10px]">Produto <span className="text-destructive">*</span></Label>
               <Input value={produto} onChange={e => setProduto(e.target.value)}
@@ -114,6 +120,13 @@ export function BarterInsumoModal({
               <Label className="text-[10px]">NF</Label>
               <Input value={nf} onChange={e => setNf(e.target.value)}
                 className={cn('mt-0.5 h-8 text-[12px]', FOCO)} />
+            </div>
+            <div>
+              {/* ⚠ AO LADO DA NF PORQUE É A DATA DELA, e é ela que vira a competência do custo
+                  no DRE — não a data em que alguém clicar em materializar. Vazio não perde a
+                  competência: o banco cai na data de abertura do contrato. */}
+              <Label className="text-[10px]">Data da NF</Label>
+              <DatePicker value={dataNf} onChange={v => setDataNf(v ?? '')} className="mt-0.5" />
             </div>
           </div>
 

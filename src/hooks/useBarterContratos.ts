@@ -16,6 +16,17 @@ export interface BarterContrato {
   nome: string;
   descricao: string | null;
   status: string;
+  /**
+   * A CULTURA DO BARTER — AGRI-BARTER-04.
+   *
+   * ⚠ O CONTRATO DECLARA A CULTURA PORQUE O INSUMO NÃO SABE. A venda diz "amendoim"; a semente
+   * e o adubo chegam sem dizer para que lavoura vão, e sem esta coluna os 26 lançamentos de
+   * insumo caíam em "Não apropriado" no DRE por cultura, com a receita sozinha do outro lado.
+   * ⚠ E NÃO É A SAFRA VOLTANDO PELA PORTA DOS FUNDOS: o contrato continua sem safra, porque ele
+   * atravessa safras. Cultura e safra são perguntas diferentes — o barter é de amendoim do
+   * começo ao fim, mas o insumo entra numa safra e o grão sai na seguinte.
+   */
+  cultura: string | null;
   data_abertura: string;
   parceiro_fornecedor_id: string;
   conta_permuta_id: string | null;
@@ -36,7 +47,7 @@ export interface AberturaContrato {
   conta_criada?: boolean;
 }
 
-const COLS = 'id, nome, descricao, status, data_abertura, parceiro_fornecedor_id,'
+const COLS = 'id, nome, descricao, status, cultura, data_abertura, parceiro_fornecedor_id,'
   + ' conta_permuta_id, fazenda_id';
 
 export function useBarterContratos(clienteId: string | null | undefined) {
@@ -92,13 +103,23 @@ export function useBarterContratos(clienteId: string | null | undefined) {
    */
   const abrir = async (
     parceiroFornecedorId: string, nome: string,
-    fazendaId: string | null, descricao: string | null,
+    fazendaId: string | null, descricao: string | null, cultura: string | null,
   ): Promise<{ ok: boolean; erro?: string; abertura?: AberturaContrato }> => {
+    /**
+     * ⚠ A CULTURA VAI NA PRÓPRIA RPC — AGRI-BARTER-04. Ela ganhou um 5º parâmetro
+     * `p_cultura` e grava na mesma transação que cria a conta de permuta e o contrato. Um
+     * `update` depois, que foi como isto nasceu, abria a janela de o contrato existir sem
+     * cultura caso a segunda viagem falhasse — e contrato sem cultura é o insumo caindo em
+     * "Não apropriado" no DRE.
+     * ⚠ E A ASSINATURA DE QUATRO FOI DROPADA no banco: chamar com quatro argumentos nomeados
+     * hoje não acha função nenhuma. Por isso a cultura não é opcional aqui.
+     */
     const { data: r, error } = await (supabase as any).rpc('agri_barter_abrir_contrato', {
       p_parceiro_fornecedor_id: parceiroFornecedorId,
       p_nome: nome,
       p_fazenda_id: fazendaId,
       p_descricao: descricao,
+      p_cultura: cultura,
     });
     if (error) return { ok: false, erro: error.message };
     await queryClient.invalidateQueries({ queryKey: chave });

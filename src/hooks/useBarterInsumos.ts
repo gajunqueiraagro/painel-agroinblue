@@ -19,6 +19,16 @@ export interface BarterInsumo {
   safra_id: string | null;
   produto: string;
   nf_numero: string | null;
+  /**
+   * A DATA DA NOTA — AGRI-BARTER-04.
+   *
+   * ⚠ É ELA QUE VIRA A COMPETÊNCIA NO DRE. O materializador usava `current_date`: os 26 insumos
+   * de abril de 2025 entravam no resultado com a data do dia em que alguém clicou em
+   * materializar — um custo saindo do ano que o gerou e caindo num que não teve nada com ele.
+   * ⚠ NULO TEM PADRÃO, e ele mora no banco: `coalesce(data_recebimento, contrato.data_abertura)`.
+   * Insumo sem data não perde a competência, só herda a do contrato.
+   */
+  data_recebimento: string | null;
   quantidade: number | null;
   unidade: string | null;
   valor: number;
@@ -31,6 +41,7 @@ export interface InsumoPayload {
   safra_id: string | null;
   produto: string;
   nf_numero: string | null;
+  data_recebimento: string | null;
   quantidade: number | null;
   unidade: string | null;
   valor: number;
@@ -38,8 +49,8 @@ export interface InsumoPayload {
   observacoes: string | null;
 }
 
-const COLS = 'id, contrato_barter_id, safra_id, produto, nf_numero, quantidade, unidade,'
-  + ' valor, plano_conta_id, financeiro_lancamento_id, observacoes';
+const COLS = 'id, contrato_barter_id, safra_id, produto, nf_numero, data_recebimento,'
+  + ' quantidade, unidade, valor, plano_conta_id, financeiro_lancamento_id, observacoes';
 
 export function useBarterInsumos(clienteId: string | null | undefined, contratoId: string | null) {
   const queryClient = useQueryClient();

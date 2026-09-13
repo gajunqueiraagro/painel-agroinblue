@@ -34,6 +34,8 @@ import { useBarterMaterializacao, useExtratoPermuta } from '@/hooks/useBarterMat
 import { BarterMaterializarCard } from '@/components/agri/BarterMaterializarCard';
 import { BarterListaModal, BarterResumoCard } from '@/components/agri/BarterListaModal';
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
+import { CULTURAS_LANCAMENTO } from '@/lib/agri/rateioLancamento';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFinanceiroV2 } from '@/hooks/useFinanceiroV2';
 import { useSafrasLavoura } from '@/hooks/useAreaPlantada';
 import { formatNum } from '@/lib/calculos/formatters';
@@ -64,6 +66,7 @@ export function AgriBarterTab() {
      `(id, nome)` no mesmo gesto, e é esse nome que a mensagem da conta de permuta usa. */
   const [parceiroNome, setParceiroNome] = useState('');
   const [nome, setNome] = useState('');
+  const [cultura, setCultura] = useState('');
   const [descricao, setDescricao] = useState('');
   const [salvando, setSalvando] = useState(false);
 
@@ -204,9 +207,14 @@ export function AgriBarterTab() {
   const criar = async () => {
     if (!parceiroId) { toast.error('Escolha o parceiro do contrato.'); return; }
     if (!nome.trim()) { toast.error('Dê um nome ao contrato.'); return; }
+    /* ⚠ A CULTURA É OBRIGATÓRIA, e não por capricho: sem ela os insumos vão ao DRE por cultura
+       SEM cultura e caem em "Não apropriado" — o custo some da lavoura que o gerou. Foi
+       exatamente o que aconteceu com o contrato 23/24 antes do AGRI-BARTER-04. */
+    if (!cultura) { toast.error('Escolha a cultura do barter.'); return; }
     setSalvando(true);
     try {
-      const r = await abrir(parceiroId, nome.trim(), fazendaAtual?.id ?? null, descricao.trim() || null);
+      const r = await abrir(parceiroId, nome.trim(), fazendaAtual?.id ?? null,
+        descricao.trim() || null, cultura);
       if (!r.ok) { toast.error(r.erro ?? 'Não foi possível abrir o contrato.'); return; }
       /* ⚠ A MENSAGEM SEGUE `conta_criada`, que agora diz a verdade (AGRI-BARTER-03C): anunciar
          "conta criada" ao reusar a do parceiro faria o operador procurar uma segunda conta que
@@ -216,7 +224,7 @@ export function AgriBarterTab() {
         ? `Contrato aberto. A conta "Permuta · ${parceiro}" foi criada.`
         : `Contrato aberto na conta de permuta que já existia com ${parceiro}.`);
       setNovoAberto(false);
-      setParceiroId(''); setParceiroNome(''); setNome(''); setDescricao('');
+      setParceiroId(''); setParceiroNome(''); setNome(''); setCultura(''); setDescricao('');
       if (r.abertura?.contrato_id) setAbertoId(r.abertura.contrato_id);
     } finally {
       setSalvando(false);
@@ -234,8 +242,12 @@ export function AgriBarterTab() {
           </Button>
           <div className="min-w-0">
             <h2 className="text-lg font-bold leading-tight text-foreground">{contrato.nome}</h2>
+            {/* ⚠ A CULTURA APARECE AQUI, na linha que já existe, e não num sexto card: ela é
+                identidade do contrato ("o barter do amendoim"), não número a conferir. E o "—"
+                quando falta é informação — foi assim que o 23/24 passou meses sem ela. */}
             <p className="text-xs text-muted-foreground">
-              {contrato.parceiroNome} · aberto em {dataBR(contrato.data_abertura)}
+              {contrato.parceiroNome} · {contrato.cultura ? labelDaCultura(contrato.cultura) : '—'}
+              {' · aberto em '}{dataBR(contrato.data_abertura)}
             </p>
           </div>
           <div className="flex-1" />
@@ -558,6 +570,28 @@ export function AgriBarterTab() {
               <Label className="text-[10px]">Nome do contrato <span className="text-destructive">*</span></Label>
               <Input value={nome} onChange={e => setNome(e.target.value)}
                 placeholder="Barter Amendoim 25/26" className="mt-0.5 h-8 text-[12px]" />
+            </div>
+            <div>
+              {/* ⚠ A LISTA É `CULTURAS_LANCAMENTO`, a mesma do `LancamentoV2Dialog` e do cadastro
+                  de área — e NÃO `useCulturasDaSafra`, que o briefing sugeriu. Aquele hook pede
+                  um `safraId`, e o contrato de barter NÃO TEM SAFRA por desenho: ele atravessa
+                  safras, o insumo entra numa e o grão sai na seguinte. Sem safra não há como
+                  perguntar "o que foi plantado nela"; o que se reusa é o catálogo canônico. */}
+              <Label className="text-[10px]">Cultura <span className="text-destructive">*</span></Label>
+              <Select value={cultura} onValueChange={setCultura}>
+                <SelectTrigger className="mt-0.5 h-8 text-[12px]">
+                  <SelectValue placeholder="O que este barter negocia" />
+                </SelectTrigger>
+                <SelectContent>
+                  {CULTURAS_LANCAMENTO.map(c => (
+                    <SelectItem key={c.valor} value={c.valor} className="text-[12px]">{c.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
+                A receita e os insumos herdam esta cultura no resultado — é ela que põe o custo
+                da semente na mesma coluna da venda do grão, sem ratear.
+              </p>
             </div>
             <div>
               <Label className="text-[10px]">Descrição</Label>
