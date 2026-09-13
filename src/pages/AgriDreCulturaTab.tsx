@@ -28,6 +28,7 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Label } from '@/components/ui/label';
 import { AlertTriangle, Sprout, Calculator } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -198,6 +199,72 @@ export function AgriDreCulturaTab() {
   const totalDoPool = itensDoPool.reduce((s, it) => s + Math.abs(it.mov), 0);
   const totalRateado = (valorDaCelula ?? 0) - totalDireto;
   const pesoDoDrill = drill ? pesoDaCultura(m, drill.cultura) : null;
+
+  /**
+   * AS DUAS SEÇÕES DO DRAWER, como valores — PR-AGRI-DRE-DRILL-13.
+   *
+   * ⚠ ELAS SÃO USADAS EM DOIS ARRANJOS e por isso saíram do JSX do drawer: sozinha, a seção
+   * ocupa o painel inteiro; juntas, cada uma vira o conteúdo de uma aba. Escrevê-las duas
+   * vezes deixaria os dois arranjos livres para divergir — e o que diverge em silêncio neste
+   * repo é sempre a segunda cópia.
+   */
+  const secaoDireta = drill && GRUPO_DA_LINHA[drill.ordem] != null ? (
+
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="mb-1 flex shrink-0 items-baseline justify-between gap-2 border-b pb-1">
+              <span className="text-[11px] font-bold uppercase tracking-wide text-foreground">
+                Direto da cultura
+              </span>
+              <span className="text-[11px] tabular-nums text-muted-foreground">
+                {formatMoeda(totalDireto)} · {itensDiretos.length} lançamento{itensDiretos.length === 1 ? '' : 's'}
+              </span>
+            </div>
+            <DrillDownEconomico
+              itens={itensDiretos}
+              raiz={GRUPO_DA_LINHA[drill.ordem] ?? ''}
+              niveis={NIVEIS_DRILL.slice(2)}
+              onAbrirLancamento={(id) => { void abrirLancamento(id); }} />
+          </div>
+  ) : null;
+
+  const secaoRateada = drill && itensDoPool.length > 0 ? (
+
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="mb-1 flex shrink-0 items-baseline justify-between gap-2 border-b pb-1">
+              <span className="text-[11px] font-bold uppercase tracking-wide text-foreground">
+                Rateado por área
+              </span>
+              <span className="text-[11px] tabular-nums text-muted-foreground">
+                {formatMoeda(totalRateado)}
+                {pesoDoDrill != null && m.areaTotal != null && (
+                  <> · {formatNum(pesoDoDrill * 100, 1)}% da área
+                    ({formatNum(m.areaPorCultura.get(drill.cultura) ?? 0, 1)} de {formatNum(m.areaTotal, 1)} ha)</>
+                )}
+              </span>
+            </div>
+            {/* ⚠ A NOTA É FIXA E FICA NO TOPO DA LISTA, não num rodapé: sem ela o operador lê
+                R$ 5,9 milhões de pool dentro de uma célula de R$ 5,1 milhões e conclui que a
+                tela está somando errado. O que ele vê é o pool INTEIRO; o que a cultura
+                recebe é a fração dita ao lado. */}
+            <p className="mb-1.5 shrink-0 rounded bg-muted/60 px-2 py-1 text-[9px] leading-snug text-muted-foreground">
+              Valores do pool comum, inteiros — a cultura recebe{' '}
+              {pesoDoDrill != null ? `${formatNum(pesoDoDrill * 100, 1)}%` : 'a fração'} dele por área.
+              {drill.ordem === LINHA.rateioAdmin && poolAdmin.porAno.length > 0 && (
+                <> O administrativo entra antes pelo percentual declarado de cada ano:{' '}
+                  {poolAdmin.porAno.map(a => `${a.ano} ${a.percentual != null ? `${formatNum(a.percentual, 0)}%` : '— não declarado'}`).join(' · ')}.</>
+              )}
+              {' '}Pool listado: {formatMoeda(totalDoPool)} em {itensDoPool.length} lançamento{itensDoPool.length === 1 ? '' : 's'}.
+            </p>
+            <DrillDownEconomico
+              itens={itensDoPool}
+              raiz={drill.ordem === LINHA.rateioAdmin ? 'Administrativo da janela' : 'Pool comum sem cultura'}
+              /* Com mais de um grupo no pool, o grupo volta a ser um degrau — senão centros de
+                 custo de juros e de insumo apareceriam lado a lado sem dizer de onde vêm. */
+              niveis={(POOL_DA_LINHA[drill.ordem]?.length ?? 2) > 1 || drill.ordem === LINHA.rateioAdmin
+                ? NIVEIS_DRILL.slice(1) : NIVEIS_DRILL.slice(2)}
+              onAbrirLancamento={(id) => { void abrirLancamento(id); }} />
+          </div>
+  ) : null;
 
   return (
     <div className="w-full space-y-3 p-4 pb-20 animate-fade-in">
@@ -526,67 +593,34 @@ export function AgriDreCulturaTab() {
           totalLabel="TOTAL DA CÉLULA"
           onClose={() => setDrill(null)}>
 
-          {/* ── 1. DIRETO: o que alguém marcou com a cultura ── */}
-          {/* ⚠ CADA SEÇÃO É UMA COLUNA COM ALTURA PRÓPRIA. Só o Investimento tem as duas
-              (direto + rateado); nas outras linhas existe uma só, e ela fica com o painel
-              inteiro. Com as duas, `flex-1` reparte o que sobra e cada uma rola a SUA lista —
-              o cabeçalho de cada seção continua visível enquanto se rola a outra. */}
-          {GRUPO_DA_LINHA[drill.ordem] != null && (
-            <div className="mb-3 flex min-h-0 flex-1 flex-col">
-              <div className="mb-1 flex shrink-0 items-baseline justify-between gap-2 border-b pb-1">
-                <span className="text-[11px] font-bold uppercase tracking-wide text-foreground">
-                  Direto da cultura
-                </span>
-                <span className="text-[11px] tabular-nums text-muted-foreground">
-                  {formatMoeda(totalDireto)} · {itensDiretos.length} lançamento{itensDiretos.length === 1 ? '' : 's'}
-                </span>
-              </div>
-              <DrillDownEconomico
-                itens={itensDiretos}
-                raiz={GRUPO_DA_LINHA[drill.ordem] ?? ''}
-                niveis={NIVEIS_DRILL.slice(2)}
-                onAbrirLancamento={(id) => { void abrirLancamento(id); }} />
-            </div>
-          )}
-
-          {/* ── 2. RATEADO: o pool comum, pelo valor cheio, com o peso dito ── */}
-          {itensDoPool.length > 0 && (
-            <div className="flex min-h-0 flex-1 flex-col">
-              <div className="mb-1 flex shrink-0 items-baseline justify-between gap-2 border-b pb-1">
-                <span className="text-[11px] font-bold uppercase tracking-wide text-foreground">
-                  Rateado por área
-                </span>
-                <span className="text-[11px] tabular-nums text-muted-foreground">
-                  {formatMoeda(totalRateado)}
-                  {pesoDoDrill != null && m.areaTotal != null && (
-                    <> · {formatNum(pesoDoDrill * 100, 1)}% da área
-                      ({formatNum(m.areaPorCultura.get(drill.cultura) ?? 0, 1)} de {formatNum(m.areaTotal, 1)} ha)</>
-                  )}
-                </span>
-              </div>
-              {/* ⚠ A NOTA É FIXA E FICA NO TOPO DA LISTA, não num rodapé: sem ela o operador lê
-                  R$ 5,9 milhões de pool dentro de uma célula de R$ 5,1 milhões e conclui que a
-                  tela está somando errado. O que ele vê é o pool INTEIRO; o que a cultura
-                  recebe é a fração dita ao lado. */}
-              <p className="mb-1.5 shrink-0 rounded bg-muted/60 px-2 py-1 text-[9px] leading-snug text-muted-foreground">
-                Valores do pool comum, inteiros — a cultura recebe{' '}
-                {pesoDoDrill != null ? `${formatNum(pesoDoDrill * 100, 1)}%` : 'a fração'} dele por área.
-                {drill.ordem === LINHA.rateioAdmin && poolAdmin.porAno.length > 0 && (
-                  <> O administrativo entra antes pelo percentual declarado de cada ano:{' '}
-                    {poolAdmin.porAno.map(a => `${a.ano} ${a.percentual != null ? `${formatNum(a.percentual, 0)}%` : '— não declarado'}`).join(' · ')}.</>
-                )}
-                {' '}Pool listado: {formatMoeda(totalDoPool)} em {itensDoPool.length} lançamento{itensDoPool.length === 1 ? '' : 's'}.
-              </p>
-              <DrillDownEconomico
-                itens={itensDoPool}
-                raiz={drill.ordem === LINHA.rateioAdmin ? 'Administrativo da janela' : 'Pool comum sem cultura'}
-                /* Com mais de um grupo no pool, o grupo volta a ser um degrau — senão centros de
-                   custo de juros e de insumo apareceriam lado a lado sem dizer de onde vêm. */
-                niveis={(POOL_DA_LINHA[drill.ordem]?.length ?? 2) > 1 || drill.ordem === LINHA.rateioAdmin
-                  ? NIVEIS_DRILL.slice(1) : NIVEIS_DRILL.slice(2)}
-                onAbrirLancamento={(id) => { void abrirLancamento(id); }} />
-            </div>
-          )}
+          {/* ⚠ ABA SÓ QUANDO HÁ AS DUAS. Uma aba solitária é um rótulo que não decide nada, e
+              custa a altura de uma linha que a lista quer. Hoje só o Investimento tem direto e
+              rateado; nas demais células a seção única entra direto, como sempre entrou.
+              ⚠ ABRE NA DIRETA porque ela é o gasto que alguém marcou naquela cultura — o
+              rateado é estimativa por área, e estimativa não é o que se confere primeiro.
+              ⚠ TROCAR DE ABA RECOMEÇA A NAVEGAÇÃO, e é de graça: o Radix desmonta o conteúdo
+              inativo, então o caminho que o `DrillDownEconomico` guarda no state dele se perde
+              junto. Previsível e sem estado a sincronizar — voltar para a aba devolve a raiz,
+              não um degrau esquecido de minutos atrás. */}
+          {secaoDireta && secaoRateada ? (
+            <Tabs defaultValue="direta" className="flex min-h-0 flex-1 flex-col">
+              <TabsList className="mb-1 grid h-7 w-full shrink-0 grid-cols-2">
+                <TabsTrigger value="direta" className="text-[10px]">
+                  Direto da cultura · {formatMoeda(totalDireto)}
+                </TabsTrigger>
+                <TabsTrigger value="rateada" className="text-[10px]">
+                  Rateado por área · {formatMoeda(totalRateado)}
+                </TabsTrigger>
+              </TabsList>
+              {/* `mt-0` cancela a margem padrão do primitivo: aqui quem dá o respiro é a aba. */}
+              <TabsContent value="direta" className="mt-0 flex min-h-0 flex-1 flex-col">
+                {secaoDireta}
+              </TabsContent>
+              <TabsContent value="rateada" className="mt-0 flex min-h-0 flex-1 flex-col">
+                {secaoRateada}
+              </TabsContent>
+            </Tabs>
+          ) : (secaoDireta ?? secaoRateada)}
         </AnaliseDrawer>
       )}
 
