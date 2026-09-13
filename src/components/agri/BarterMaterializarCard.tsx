@@ -20,10 +20,11 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Undo2, PlayCircle, CheckCircle2 } from 'lucide-react';
+import { Undo2, PlayCircle, CheckCircle2, List } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import type { LinhaExtrato } from '@/hooks/useBarterMaterializacao';
+import { BarterListaModal, BarterResumoCard } from '@/components/agri/BarterListaModal';
 
 const TH = 'sticky top-0 z-10 bg-primary px-1.5 py-1 text-[9px] font-semibold'
   + ' text-primary-foreground';
@@ -46,6 +47,7 @@ export function BarterMaterializarCard({
   onEstornar: () => void;
 }) {
   const [confirmar, setConfirmar] = useState<'materializar' | 'estornar' | null>(null);
+  const [verExtrato, setVerExtrato] = useState(false);
 
   /**
    * ⚠ O MOTIVO É A FONTE ÚNICA de `disabled`, do `title` e da dica ao lado — regra da OC. Três
@@ -57,35 +59,47 @@ export function BarterMaterializarCard({
         : null;
 
   return (
-    <div className="flex min-h-0 flex-[1] flex-col overflow-hidden rounded-md border">
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b bg-muted/40 px-2 py-1.5">
-        <div className="text-[11px] font-bold uppercase tracking-wide">Materializar</div>
-        {/* ⚠ O ESTADO EM PALAVRAS, não só pelo botão que aparece: "28 lançamentos no DRE" é a
-            resposta à pergunta que o operador tem — já foi? quanto? */}
-        <div className="text-[10px] text-muted-foreground">
-          {materializados > 0
-            ? `${materializados} ${materializados === 1 ? 'lançamento' : 'lançamentos'} no DRE`
-            : 'nada materializado ainda'}
-          {pendentes > 0 && materializados > 0 && ` · ${pendentes} a gerar`}
-        </div>
-        <div className="flex-1" />
-        {motivo && <span className="text-[10px] text-muted-foreground">{motivo}</span>}
-        {materializados > 0 && (
-          <Button size="sm" variant="outline" className="h-6 gap-1 px-1.5 text-[10px]"
-            disabled={ocupado} onClick={() => setConfirmar('estornar')}>
-            <Undo2 className="h-3 w-3" /> Estornar
-          </Button>
-        )}
+    <>
+      {/* ⚠ O MESMO CARTÃO DOS OUTROS DOIS, e de propósito: as três pernas do contrato viram
+          três cartões iguais numa linha. Um deles com painel e os outros com resumo faria o
+          olho procurar a diferença onde não há. */}
+      <BarterResumoCard
+        titulo="Materializar"
+        estado={materializados > 0
+          ? `${materializados} ${materializados === 1 ? 'lançamento' : 'lançamentos'} no DRE`
+            + (pendentes > 0 ? ` · ${pendentes} a gerar` : '')
+          : 'nada materializado ainda'}>
+        <Button size="sm" variant="outline" className="h-6 gap-1 px-1.5 text-[10px]"
+          onClick={() => setVerExtrato(true)}>
+          <List className="h-3 w-3" /> Ver extrato
+        </Button>
         <Button size="sm" className="h-6 gap-1 px-1.5 text-[10px]"
           disabled={ocupado || !!motivo} title={motivo ?? 'Gerar os lançamentos no DRE'}
           onClick={() => setConfirmar('materializar')}>
           <PlayCircle className="h-3 w-3" />
           {materializados > 0 ? 'Materializar o resto' : 'Materializar'}
         </Button>
-      </div>
+        {materializados > 0 && (
+          <Button size="sm" variant="outline" className="h-6 gap-1 px-1.5 text-[10px]"
+            disabled={ocupado} onClick={() => setConfirmar('estornar')}>
+            <Undo2 className="h-3 w-3" /> Estornar
+          </Button>
+        )}
+        {/* ⚠ O MOTIVO FICA ESCRITO, e ocupa linha própria para não empurrar os botões: regra
+            da OC — botão cinza sem explicação faz procurar o defeito no lugar errado. */}
+        {motivo && (
+          <span className="w-full text-[9px] leading-tight text-muted-foreground">{motivo}</span>
+        )}
+      </BarterResumoCard>
 
-      {/* ── O EXTRATO DA PERMUTA ── */}
-      <div className="min-h-0 flex-1 overflow-auto px-2">
+      {/* ── O EXTRATO DA PERMUTA, em modal ── */}
+      <BarterListaModal
+        aberto={verExtrato}
+        titulo="Extrato da conta de permuta"
+        subtitulo="O que se deve e o que se tem com o parceiro. Entra no resultado, não no caixa."
+        rodapeEsquerda={contaPermutaNome ?? 'Sem conta de permuta'}
+        rodapeDireita={formatMoeda(saldo)}
+        onFechar={() => setVerExtrato(false)}>
         <table className="w-full table-fixed border-collapse text-[10px] leading-tight">
           <colgroup>
             {['14%', '46%', '20%', '20%'].map((w, i) => <col key={i} style={{ width: w }} />)}
@@ -122,13 +136,7 @@ export function BarterMaterializarCard({
             ))}
           </tbody>
         </table>
-      </div>
-
-      <div className="flex shrink-0 items-center justify-between gap-2 border-t bg-primary px-2 py-1
-        text-[10px] font-semibold text-primary-foreground">
-        <span className="truncate">{contaPermutaNome ?? 'Sem conta de permuta'}</span>
-        <span className="tabular-nums">{formatMoeda(saldo)}</span>
-      </div>
+      </BarterListaModal>
 
       {/* ── A CONFERÊNCIA ── */}
       <Dialog open={confirmar !== null} onOpenChange={o => { if (!o) setConfirmar(null); }}>
@@ -181,6 +189,6 @@ export function BarterMaterializarCard({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 }

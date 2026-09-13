@@ -19,7 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { Plus, ArrowLeft, Handshake, Save, Pencil, Trash2, Lock } from 'lucide-react';
+import { Plus, ArrowLeft, Handshake, Save, Pencil, Trash2, Lock, List } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { formatMoeda } from '@/lib/calculos/formatters';
@@ -32,6 +32,7 @@ import { BarterVendaModal } from '@/components/agri/BarterVendaModal';
 import { labelDaClasse, saldoDoContrato } from '@/lib/agri/barterVenda';
 import { useBarterMaterializacao, useExtratoPermuta } from '@/hooks/useBarterMaterializacao';
 import { BarterMaterializarCard } from '@/components/agri/BarterMaterializarCard';
+import { BarterListaModal, BarterResumoCard } from '@/components/agri/BarterListaModal';
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
 import { useFinanceiroV2 } from '@/hooks/useFinanceiroV2';
 import { useSafrasLavoura } from '@/hooks/useAreaPlantada';
@@ -168,6 +169,8 @@ export function AgriBarterTab() {
   const { materializar, estornar } = useBarterMaterializacao(abertoId, contrato?.conta_permuta_id ?? null);
   const { linhas: extrato, saldo: saldoPermuta } = useExtratoPermuta(contrato?.conta_permuta_id ?? null);
   const [ocupado, setOcupado] = useState(false);
+  const [verInsumos, setVerInsumos] = useState(false);
+  const [verVendas, setVerVendas] = useState(false);
 
   /**
    * ⚠ A CONTA É A MESMA DA RPC, e por isso conta PARTE e INSUMO juntos, ignorando valor zero:
@@ -255,185 +258,202 @@ export function AgriBarterTab() {
           <Metrica rotulo="Saldo" valor={formatMoeda(balanco.saldo)} nota={balanco.rotulo} destaque />
         </div>
 
-        {/* ⚠ AS DUAS PERNAS FICAM COM O DOBRO DA ALTURA DO EXTRATO (`flex-[2]` contra
-            `flex-[1]`), e o número não é estética: sem um `flex` explícito no card de baixo, o
-            extrato cresceria com os 28 lançamentos e empurraria a página inteira a rolar — e aí
-            os cabeçalhos fixos das duas colunas de cima sairiam da tela, que é exatamente o que
-            o A21 existe para impedir. */}
-        <div className="grid min-h-0 flex-[2] gap-2 md:grid-cols-2">
-          {/* ── RECEBI (fatia B) ─────────────────────────────────────────────────────────
-              ⚠ O CABEÇALHO E O TOTAL FICAM; SÓ O CORPO ROLA (A21). O `min-h-0` na coluna é o
-              que dá altura ao scrollport interno — sem ele o `sticky` das células sobe junto
-              com a página, que é o erro já cometido duas vezes na casa. */}
-          <div className="flex min-h-0 flex-col overflow-hidden rounded-md border">
-            <div className="flex shrink-0 items-center gap-2 border-b bg-muted/40 px-2 py-1">
-              <div className="text-[11px] font-bold uppercase tracking-wide">Recebi (insumos)</div>
-              <div className="flex-1" />
-              <Button size="sm" variant="outline" className="h-6 gap-1 px-1.5 text-[10px]"
-                onClick={() => { setInsumoAberto(null); setModalInsumo(true); }}>
-                <Plus className="h-3 w-3" /> Adicionar insumo
-              </Button>
-            </div>
-            <div className="min-h-0 flex-1 overflow-auto">
-              <table className="w-full table-fixed border-collapse text-[10px] leading-tight">
-                <colgroup>
-                  {['30%', '13%', '17%', '15%', '17%', '8%'].map((w, i) => <col key={i} style={{ width: w }} />)}
-                </colgroup>
-                <thead>
-                  <tr>
-                    <th className={cn(TH, 'text-left')}>Produto</th>
-                    <th className={cn(TH, 'text-left')}>NF</th>
-                    <th className={cn(TH, 'text-right')}>Quantidade</th>
-                    <th className={cn(TH, 'text-left')}>Safra</th>
-                    <th className={cn(TH, 'text-right')}>Valor</th>
-                    <th className={cn(TH, 'text-right')} />
-                  </tr>
-                </thead>
-                <tbody>
-                  {insumos.length === 0 && (
-                    <tr><td colSpan={6} className="px-2 py-6 text-center text-[10px] text-muted-foreground">
-                      Nenhum insumo lançado. O que a cooperativa entregou entra aqui.
-                    </td></tr>
-                  )}
-                  {insumos.map(i => (
-                    <tr key={i.id} className="border-t border-slate-100 odd:bg-[#1e3a5f]/[0.03]">
-                      <td className="truncate px-1.5 py-0.5" title={i.produto}>{i.produto}</td>
-                      <td className="truncate px-1.5 py-0.5 text-muted-foreground">{i.nf_numero ?? '—'}</td>
-                      <td className="whitespace-nowrap px-1.5 py-0.5 text-right tabular-nums">
-                        {i.quantidade == null ? '—'
-                          : `${formatNum(i.quantidade, 2)}${i.unidade ? ` ${i.unidade}` : ''}`}
-                      </td>
-                      <td className="truncate px-1.5 py-0.5 text-muted-foreground">
-                        {i.safra_id ? (nomeDaSafra.get(i.safra_id) ?? '—') : '—'}
-                      </td>
-                      <td className="whitespace-nowrap px-1.5 py-0.5 text-right tabular-nums">{formatMoeda(i.valor)}</td>
-                      {/* ⚠ OS BOTÕES FICAM SEMPRE NO LUGAR, mesmo travados (lei de estabilidade
-                          visual). Materializado troca o par por um cadeado que DIZ o motivo —
-                          não some, não desloca a coluna. */}
-                      <td className="px-1 py-0.5 text-right">
-                        {materializado(i) ? (
-                          <span className="inline-flex h-5 w-5 items-center justify-center text-muted-foreground"
-                            title="Insumo já materializado no DRE. Estorne o contrato para editar ou excluir.">
-                            <Lock className="h-3 w-3" />
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-0.5">
-                            <button type="button" title="Editar insumo"
-                              className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                              onClick={() => { setInsumoAberto(i); setModalInsumo(true); }}>
-                              <Pencil className="h-3 w-3" />
-                            </button>
-                            <button type="button" title="Excluir insumo"
-                              className="rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                              onClick={() => void removerInsumo(i)}>
-                              <Trash2 className="h-3 w-3" />
-                            </button>
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {/* ⚠ O TOTAL FORA DA TABELA, não em `tfoot`: com `border-collapse` o `sticky` não
-                gruda em `<tfoot>` nem em `<tr>`, só na célula — e aqui a régua fica mais
-                simples do lado de fora do scrollport, onde não há o que grudar. */}
-            <div className="flex shrink-0 items-center justify-between border-t bg-primary px-2 py-1
-              text-[10px] font-semibold text-primary-foreground">
-              <span>Total recebido</span>
-              <span className="tabular-nums">{formatMoeda(totalInsumos)}</span>
-            </div>
-          </div>
+        {/* ⚠ AS TRÊS LISTAS SAÍRAM DA TELA E VIRARAM MODAL — PR-AGRI-BARTER-RESUMO-MODAL.
+            Com 26 insumos, uma venda e 28 lançamentos, três listas empilhadas ocupavam a tela
+            inteira e ainda rolavam por dentro. O que fica é o resumo; o detalhe abre no clique.
+            ⚠ E OS CARDS DE TOPO É QUE SÃO O RESUMO BOM: recebido, entregue e saldo já estão lá
+            em cima. Estes três cartões não repetem o dinheiro — só dizem quantos e dão as
+            ações. Repetir o número gastaria a altura que este PR existe para economizar. */}
+        <div className="grid shrink-0 grid-cols-1 gap-1.5 md:grid-cols-3">
+          <BarterResumoCard titulo="Recebi (insumos)"
+            estado={insumos.length === 0 ? 'nenhum insumo lançado'
+              : `${insumos.length} ${insumos.length === 1 ? 'insumo' : 'insumos'} do parceiro`}>
+            <Button size="sm" variant="outline" className="h-6 gap-1 px-1.5 text-[10px]"
+              onClick={() => setVerInsumos(true)}>
+              <List className="h-3 w-3" /> Ver insumos
+            </Button>
+            <Button size="sm" variant="outline" className="h-6 gap-1 px-1.5 text-[10px]"
+              onClick={() => { setInsumoAberto(null); setModalInsumo(true); }}>
+              <Plus className="h-3 w-3" /> Adicionar
+            </Button>
+          </BarterResumoCard>
 
-          {/* ── ENTREGUEI (fatia C) ─────────────────────────────────────────────────────
-              Mesmo chassi da coluna do RECEBI: cabeçalho e total fixos, só o corpo rola. */}
-          <div className="flex min-h-0 flex-col overflow-hidden rounded-md border">
-            <div className="flex shrink-0 items-center gap-2 border-b bg-muted/40 px-2 py-1">
-              <div className="text-[11px] font-bold uppercase tracking-wide">Entreguei (grão)</div>
-              <div className="flex-1" />
-              <Button size="sm" variant="outline" className="h-6 gap-1 px-1.5 text-[10px]"
-                onClick={() => { setVendaAberta(null); setModalVenda(true); }}>
-                <Plus className="h-3 w-3" /> Lançar venda
-              </Button>
-            </div>
-            <div className="min-h-0 flex-1 overflow-auto">
-              <table className="w-full table-fixed border-collapse text-[10px] leading-tight">
-                <colgroup>
-                  {['24%', '14%', '30%', '24%', '8%'].map((w, i) => <col key={i} style={{ width: w }} />)}
-                </colgroup>
-                <thead>
-                  <tr>
-                    <th className={cn(TH, 'text-left')}>Cultura</th>
-                    <th className={cn(TH, 'text-left')}>Data</th>
-                    <th className={cn(TH, 'text-left')}>Classes vendidas</th>
-                    <th className={cn(TH, 'text-right')}>Líquido</th>
-                    <th className={cn(TH, 'text-right')} />
-                  </tr>
-                </thead>
-                <tbody>
-                  {vendas.length === 0 && (
-                    <tr><td colSpan={5} className="px-2 py-6 text-center text-[10px] text-muted-foreground">
-                      Nenhuma venda lançada. O grão que foi para o parceiro entra aqui.
-                    </td></tr>
-                  )}
-                  {vendas.map(v => (
-                    <tr key={v.id} className="border-t border-slate-100 odd:bg-[#1e3a5f]/[0.03]">
-                      <td className="truncate px-1.5 py-0.5">{labelDaCultura(v.cultura)}</td>
-                      <td className="whitespace-nowrap px-1.5 py-0.5 tabular-nums">{dataBR(v.data_operacao)}</td>
-                      {/* ⚠ AS CLASSES POR EXTENSO, não a contagem: "2 classes" obrigaria a abrir
-                          a venda para saber se o lote bom foi vendido. */}
-                      <td className="truncate px-1.5 py-0.5 text-muted-foreground"
-                        title={v.entregas.map(e => labelDaClasse(e.classe_aflatoxina)).join(' · ')}>
-                        {v.entregas.length === 0 ? '—'
-                          : v.entregas.map(e => labelDaClasse(e.classe_aflatoxina)).join(' · ')}
-                      </td>
-                      <td className="whitespace-nowrap px-1.5 py-0.5 text-right tabular-nums">
-                        {formatMoeda(v.valor_liquido ?? 0)}
-                      </td>
-                      <td className="px-1 py-0.5 text-right">
-                        {materializada(v) ? (
-                          <span className="inline-flex h-5 w-5 items-center justify-center text-muted-foreground"
-                            title="Venda já materializada no DRE. Estorne o contrato para editar ou excluir.">
-                            <Lock className="h-3 w-3" />
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-0.5">
-                            <button type="button" title="Editar venda"
-                              className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                              onClick={() => { setVendaAberta(v); setModalVenda(true); }}>
-                              <Pencil className="h-3 w-3" />
-                            </button>
-                            <button type="button" title="Excluir venda"
-                              className="rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                              onClick={() => void removerVenda(v)}>
-                              <Trash2 className="h-3 w-3" />
-                            </button>
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="flex shrink-0 items-center justify-between border-t bg-primary px-2 py-1
-              text-[10px] font-semibold text-primary-foreground">
-              <span>Total entregue</span>
-              <span className="tabular-nums">{formatMoeda(totalEntregue)}</span>
-            </div>
-          </div>
+          <BarterResumoCard titulo="Entreguei (grão)"
+            estado={vendas.length === 0 ? 'nenhuma venda lançada'
+              : `${vendas.length} ${vendas.length === 1 ? 'venda' : 'vendas'} de grão`}>
+            <Button size="sm" variant="outline" className="h-6 gap-1 px-1.5 text-[10px]"
+              onClick={() => setVerVendas(true)}>
+              <List className="h-3 w-3" /> Ver vendas
+            </Button>
+            <Button size="sm" variant="outline" className="h-6 gap-1 px-1.5 text-[10px]"
+              onClick={() => { setVendaAberta(null); setModalVenda(true); }}>
+              <Plus className="h-3 w-3" /> Lançar venda
+            </Button>
+          </BarterResumoCard>
+
+          <BarterMaterializarCard
+            contaPermutaNome={contrato.contaPermutaNome}
+            pendentes={pendentes}
+            materializados={materializados}
+            linhas={extrato}
+            saldo={saldoPermuta}
+            ocupado={ocupado}
+            onMaterializar={() => void rodar('materializar')}
+            onEstornar={() => void rodar('estornar')}
+          />
         </div>
-        <BarterMaterializarCard
-          contaPermutaNome={contrato.contaPermutaNome}
-          pendentes={pendentes}
-          materializados={materializados}
-          linhas={extrato}
-          saldo={saldoPermuta}
-          ocupado={ocupado}
-          onMaterializar={() => void rodar('materializar')}
-          onEstornar={() => void rodar('estornar')}
-        />
+
+        {/* ── AS TRÊS LISTAS, agora em modal ── */}
+        <BarterListaModal
+          aberto={verInsumos}
+          titulo="Insumos recebidos"
+          subtitulo="O que a cooperativa entregou — a perna de custo do barter."
+          acao={(
+            <Button size="sm" variant="outline"
+              className="h-7 gap-1 border-white/40 bg-transparent px-2 text-[10px] text-primary-foreground hover:bg-white/10 hover:text-white"
+              onClick={() => { setInsumoAberto(null); setModalInsumo(true); }}>
+              <Plus className="h-3 w-3" /> Adicionar insumo
+            </Button>
+          )}
+          rodapeEsquerda="Total recebido"
+          rodapeDireita={formatMoeda(totalInsumos)}
+          onFechar={() => setVerInsumos(false)}>
+        <table className="w-full table-fixed border-collapse text-[10px] leading-tight">
+          <colgroup>
+            {['30%', '13%', '17%', '15%', '17%', '8%'].map((w, i) => <col key={i} style={{ width: w }} />)}
+          </colgroup>
+          <thead>
+            <tr>
+              <th className={cn(TH, 'text-left')}>Produto</th>
+              <th className={cn(TH, 'text-left')}>NF</th>
+              <th className={cn(TH, 'text-right')}>Quantidade</th>
+              <th className={cn(TH, 'text-left')}>Safra</th>
+              <th className={cn(TH, 'text-right')}>Valor</th>
+              <th className={cn(TH, 'text-right')} />
+            </tr>
+          </thead>
+          <tbody>
+            {insumos.length === 0 && (
+              <tr><td colSpan={6} className="px-2 py-6 text-center text-[10px] text-muted-foreground">
+                Nenhum insumo lançado. O que a cooperativa entregou entra aqui.
+              </td></tr>
+            )}
+            {insumos.map(i => (
+              <tr key={i.id} className="border-t border-slate-100 odd:bg-[#1e3a5f]/[0.03]">
+                <td className="truncate px-1.5 py-0.5" title={i.produto}>{i.produto}</td>
+                <td className="truncate px-1.5 py-0.5 text-muted-foreground">{i.nf_numero ?? '—'}</td>
+                <td className="whitespace-nowrap px-1.5 py-0.5 text-right tabular-nums">
+                  {i.quantidade == null ? '—'
+                    : `${formatNum(i.quantidade, 2)}${i.unidade ? ` ${i.unidade}` : ''}`}
+                </td>
+                <td className="truncate px-1.5 py-0.5 text-muted-foreground">
+                  {i.safra_id ? (nomeDaSafra.get(i.safra_id) ?? '—') : '—'}
+                </td>
+                <td className="whitespace-nowrap px-1.5 py-0.5 text-right tabular-nums">{formatMoeda(i.valor)}</td>
+                {/* ⚠ OS BOTÕES FICAM SEMPRE NO LUGAR, mesmo travados (lei de estabilidade
+                    visual). Materializado troca o par por um cadeado que DIZ o motivo —
+                    não some, não desloca a coluna. */}
+                <td className="px-1 py-0.5 text-right">
+                  {materializado(i) ? (
+                    <span className="inline-flex h-5 w-5 items-center justify-center text-muted-foreground"
+                      title="Insumo já materializado no DRE. Estorne o contrato para editar ou excluir.">
+                      <Lock className="h-3 w-3" />
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-0.5">
+                      <button type="button" title="Editar insumo"
+                        className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                        onClick={() => { setInsumoAberto(i); setModalInsumo(true); }}>
+                        <Pencil className="h-3 w-3" />
+                      </button>
+                      <button type="button" title="Excluir insumo"
+                        className="rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                        onClick={() => void removerInsumo(i)}>
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        </BarterListaModal>
+
+        <BarterListaModal
+          aberto={verVendas}
+          titulo="Vendas de grão"
+          subtitulo="O que foi entregue ao parceiro, por classe de qualidade."
+          acao={(
+            <Button size="sm" variant="outline"
+              className="h-7 gap-1 border-white/40 bg-transparent px-2 text-[10px] text-primary-foreground hover:bg-white/10 hover:text-white"
+              onClick={() => { setVendaAberta(null); setModalVenda(true); }}>
+              <Plus className="h-3 w-3" /> Lançar venda
+            </Button>
+          )}
+          rodapeEsquerda="Total entregue (líquido)"
+          rodapeDireita={formatMoeda(totalEntregue)}
+          onFechar={() => setVerVendas(false)}>
+        <table className="w-full table-fixed border-collapse text-[10px] leading-tight">
+          <colgroup>
+            {['24%', '14%', '30%', '24%', '8%'].map((w, i) => <col key={i} style={{ width: w }} />)}
+          </colgroup>
+          <thead>
+            <tr>
+              <th className={cn(TH, 'text-left')}>Cultura</th>
+              <th className={cn(TH, 'text-left')}>Data</th>
+              <th className={cn(TH, 'text-left')}>Classes vendidas</th>
+              <th className={cn(TH, 'text-right')}>Líquido</th>
+              <th className={cn(TH, 'text-right')} />
+            </tr>
+          </thead>
+          <tbody>
+            {vendas.length === 0 && (
+              <tr><td colSpan={5} className="px-2 py-6 text-center text-[10px] text-muted-foreground">
+                Nenhuma venda lançada. O grão que foi para o parceiro entra aqui.
+              </td></tr>
+            )}
+            {vendas.map(v => (
+              <tr key={v.id} className="border-t border-slate-100 odd:bg-[#1e3a5f]/[0.03]">
+                <td className="truncate px-1.5 py-0.5">{labelDaCultura(v.cultura)}</td>
+                <td className="whitespace-nowrap px-1.5 py-0.5 tabular-nums">{dataBR(v.data_operacao)}</td>
+                {/* ⚠ AS CLASSES POR EXTENSO, não a contagem: "2 classes" obrigaria a abrir
+                    a venda para saber se o lote bom foi vendido. */}
+                <td className="truncate px-1.5 py-0.5 text-muted-foreground"
+                  title={v.entregas.map(e => labelDaClasse(e.classe_aflatoxina)).join(' · ')}>
+                  {v.entregas.length === 0 ? '—'
+                    : v.entregas.map(e => labelDaClasse(e.classe_aflatoxina)).join(' · ')}
+                </td>
+                <td className="whitespace-nowrap px-1.5 py-0.5 text-right tabular-nums">
+                  {formatMoeda(v.valor_liquido ?? 0)}
+                </td>
+                <td className="px-1 py-0.5 text-right">
+                  {materializada(v) ? (
+                    <span className="inline-flex h-5 w-5 items-center justify-center text-muted-foreground"
+                      title="Venda já materializada no DRE. Estorne o contrato para editar ou excluir.">
+                      <Lock className="h-3 w-3" />
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-0.5">
+                      <button type="button" title="Editar venda"
+                        className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                        onClick={() => { setVendaAberta(v); setModalVenda(true); }}>
+                        <Pencil className="h-3 w-3" />
+                      </button>
+                      <button type="button" title="Excluir venda"
+                        className="rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                        onClick={() => void removerVenda(v)}>
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        </BarterListaModal>
+
 
         <BarterVendaModal
           aberto={modalVenda}

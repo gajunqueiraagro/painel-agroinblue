@@ -9,7 +9,11 @@
  * ⚠ NÃO HÁ RPC PARA GRAVAR A VENDA, e isso tem consequência: cabeçalho, entregas e partes são
  * três viagens ao PostgREST, sem transação. Se a segunda falhar, sobra cabeçalho sem linha — e
  * por isso o gravador SEMPRE reporta o erro real em vez de dizer "salvo". A atomicidade é
- * dívida declarada, não descuido; vira RPC quando a fatia D encostar no motor.
+ * dívida declarada, não descuido — e ela CONTINUA ABERTA: a fatia D veio, mexeu no motor de
+ * materializar e não encostou na gravação. Ela já cobrou uma vez (13/09/2026): a venda de
+ * 12.374,35 sc gravou cabeçalho e entrega, as partes falharam, e sobrou operação sem parte no
+ * Proto. Salvar por cima corrigiu, porque o gravador substitui as filhas — mas quem descobriu
+ * foi o operador, na tela.
  *
  * ⚠ A CONTRAPARTE VEM DO CONTRATO, NÃO DA TELA. `contraparte_fornecedor_id` é NOT NULL e o
  * parceiro do barter já está decidido na abertura; perguntar de novo abriria espaço para uma
@@ -275,18 +279,14 @@ export function useBarterVenda(
      * um líquido gravado de uma vez esconde para sempre o segundo. Quem lê o DRE não tem como
      * perguntar "quanto foi de Senar?" a um número que já veio abatido.
      *
-     * ⚠⚠ PENDÊNCIA BLOQUEANTE DA FATIA D — LEIA ANTES DE MEXER AQUI.
-     * `agri_barter_materializar_contrato` (medida no Proto em 13/09/2026) varre SOMENTE
-     * `natureza='receita_venda'`. As naturezas `imposto`, `desconto` e `frete` NÃO têm laço
-     * nenhum na função. Enquanto for assim, a materialização leva o BRUTO ao DRE e a dedução
-     * não vira lançamento: a receita do barter sai SUPERESTIMADA pelo valor do imposto —
-     * R$ 660.134,80 onde entraram R$ 650.232,78, com o Senar de R$ 9.902,02 sem lançamento.
-     * A fatia D DEVE ensinar o motor a materializar as partes de `imposto`, `desconto` e
-     * `frete` como SAÍDA (`sinal = '-1'`, `tipo_operacao = '2-Saídas'`) na mesma conta de
-     * permuta, e o estorno a desfazê-las junto.
-     * ⚠ E A DIFERENÇA É VISÍVEL, NÃO SILENCIOSA — foi o que tornou a escolha aceitável: o
-     * número do DRE não bate com o líquido que esta tela mostra, e quem conferir vê na hora.
-     * Um erro que aparece é dívida; um que se esconde é defeito.
+     * ⚠ E O MOTOR LÊ AS DUAS. `agri_barter_materializar_contrato` varre TODAS as partes da OC e
+     * decide o sinal pela natureza: `receita_venda` entra ('1' / 1-Entradas),
+     * `imposto`/`desconto`/`frete` saem ('-1' / 2-Saídas). É o que faz o bruto aqui ser
+     * correto — a dedução vira saída no DRE e o resultado fecha no líquido.
+     * ⚠ QUEM MEXER NA NATUREZA MEXE NOS DOIS LADOS: gravar uma natureza que o laço não nomeia
+     * faria a parte virar saída pelo `else`, que é o padrão seguro, mas com a descrição
+     * genérica. As quatro conhecidas têm nome próprio na função (migration
+     * 20260928120000_agri_barter_03d_materializar_imposto.sql).
      */
     /**
      * ⚠ AS DUAS PARTES TÊM A MESMA FORMA, e é isso que as faz caber num insert em lote. A
@@ -295,8 +295,8 @@ export function useBarterVenda(
      * era a chave AUSENTE numa coluna NOT NULL.
      * ⚠ DENTRO DO TOTAL as duas: com a receita em bruto, a dedução é um componente VIVO da
      * operação, não um lembrete do que já foi abatido. Quem somar as partes soma por natureza —
-     * receita positiva, imposto/desconto/frete negativos —, que é o sinal que a fatia D dará ao
-     * lançamento. Nada lê esta coluna hoje; ela fica declarando a intenção.
+     * receita positiva, imposto/desconto/frete negativos —, que é o sinal que o materializador
+     * dá ao lançamento. Nada lê esta coluna hoje; ela fica declarando a intenção.
      */
     const novasPartes: PartePayload[] = [{
       cliente_id: clienteId, operacao_id: operacaoId,
@@ -312,7 +312,7 @@ export function useBarterVenda(
     }];
     /* ⚠ PARTE DE VALOR ZERO NÃO SE GRAVA. Sem Senar, a linha de imposto não existe — uma parte
        de R$ 0,00 apareceria em toda leitura futura sem dizer nada, e o DRE ganharia um
-       lançamento de zero quando a fatia D materializar as deduções. */
+       lançamento de zero no DRE, já que o materializador leva as deduções como saída. */
     if (p.deducao.valor > 0) {
       novasPartes.push({
         cliente_id: clienteId, operacao_id: operacaoId,
