@@ -9,7 +9,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   montarMatriz, valorDe, resultadoPorHa, percentualCustoDireto, montanteRateado,
-  houveRateio, exibeTraco, LINHA, COL_TOTAL, COL_COMPARTILHADO, ORDENS_CASCATA,
+  houveRateio, exibeTraco, LINHA, COL_TOTAL, COL_COMPARTILHADO, COL_NAO_APROPRIADO,
+  ORDENS_CASCATA, bucketDaLinha, celulaTemDrill, ehLinhaRateio, ehLinhaSaida,
   type CelulaDre,
 } from './dreCultura';
 
@@ -179,5 +180,72 @@ describe('as ordens da cascata', () => {
     expect(ORDENS_CASCATA).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
     expect(ORDENS_CASCATA).not.toContain(LINHA.investimento);
     expect(ORDENS_CASCATA).not.toContain(LINHA.depreciacao);
+  });
+});
+
+/**
+ * O DRILL — PR-AGRI-DRE-UX-03.
+ *
+ * ⚠ O BUCKET É ESPELHO DE SQL, e é por isso que ele tem teste próprio: o `case` vive na
+ * `fn_dre_agricola_por_safra` e o front o repete para montar a lista que abre ao clicar na
+ * célula. No dia em que a RPC mudar a regra, é aqui que a divergência aparece — e não na
+ * conferência de um total pelo operador.
+ */
+describe('o bucket do lançamento', () => {
+  const plantadas = ['amendoim', 'mandioca'];
+
+  it('cultura plantada cai na coluna dela', () => {
+    expect(bucketDaLinha('amendoim', 'Custo Variável Agricultura', plantadas)).toBe('amendoim');
+  });
+
+  it('custo comum sem cultura vira compartilhado — ele rateia', () => {
+    expect(bucketDaLinha(null, 'Custo Fixo Agricultura', plantadas)).toBe(COL_COMPARTILHADO);
+  });
+
+  it('⚠ receita sem cultura NÃO rateia: vai para "não apropriado"', () => {
+    expect(bucketDaLinha(null, 'Receita Agrícola', plantadas)).toBe(COL_NAO_APROPRIADO);
+    expect(bucketDaLinha('', 'Deduções Agricultura', plantadas)).toBe(COL_NAO_APROPRIADO);
+  });
+
+  it('⚠ cultura NÃO plantada nesta safra é erro de marcação, não coluna nova', () => {
+    expect(bucketDaLinha('soja', 'Custo Variável Agricultura', plantadas)).toBe(COL_NAO_APROPRIADO);
+    expect(bucketDaLinha('soja', 'Receita Agrícola', plantadas)).toBe(COL_NAO_APROPRIADO);
+  });
+});
+
+describe('o que abre e o que não abre', () => {
+  it('as linhas com grupo abrem; subtotal e resultado, não', () => {
+    expect(celulaTemDrill(LINHA.custoVariavel, 'amendoim')).toBe(true);
+    expect(celulaTemDrill(LINHA.receitaLiquida, 'amendoim')).toBe(false);
+    expect(celulaTemDrill(LINHA.resultadoCaixa, 'amendoim')).toBe(false);
+    expect(celulaTemDrill(LINHA.depreciacao, 'amendoim')).toBe(false);
+  });
+
+  it('⚠ RATEIO NÃO ABRE — o valor é estimado por área, não tem lançamento por trás', () => {
+    expect(celulaTemDrill(LINHA.rateioCompartilhado, 'amendoim')).toBe(false);
+    expect(celulaTemDrill(LINHA.rateioAdmin, 'amendoim')).toBe(false);
+    expect(ehLinhaRateio(LINHA.rateioCompartilhado)).toBe(true);
+    expect(ehLinhaRateio(LINHA.custoFixo)).toBe(false);
+  });
+
+  it('a coluna Total não abre: ela é soma de colunas, não de lançamentos', () => {
+    expect(celulaTemDrill(LINHA.custoVariavel, COL_TOTAL)).toBe(false);
+  });
+
+  it('saída se reconhece pelo rótulo da própria RPC', () => {
+    expect(ehLinhaSaida('(-) Custo variável direto')).toBe(true);
+    expect(ehLinhaSaida('Receita bruta')).toBe(false);
+    expect(ehLinhaSaida('= Resultado de caixa')).toBe(false);
+    expect(ehLinhaSaida(undefined)).toBe(false);
+  });
+});
+
+describe('a coluna "não apropriado"', () => {
+  it('só existe quando carrega valor', () => {
+    const com = montarMatriz([cel(COL_NAO_APROPRIADO, LINHA.receitaBruta, 2783271.02)]);
+    expect(com.temNaoApropriado).toBe(true);
+    expect(com.culturas).not.toContain(COL_NAO_APROPRIADO);
+    const sem = montarMatriz([cel(COL_NAO_APROPRIADO, LINHA.receitaBruta, 0)]);
+    expect(sem.temNaoApropriado).toBe(false);
   });
 });
