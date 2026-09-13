@@ -26,7 +26,11 @@ import { formatMoeda } from '@/lib/calculos/formatters';
 import { useBarterContratos, type ContratoNaLista } from '@/hooks/useBarterContratos';
 import { FornecedorSelect } from '@/components/shared/FornecedorSelect';
 import { useBarterInsumos, type BarterInsumo, type InsumoPayload } from '@/hooks/useBarterInsumos';
+import { useBarterVenda, type BarterVenda, type VendaPayload } from '@/hooks/useBarterVenda';
 import { BarterInsumoModal } from '@/components/agri/BarterInsumoModal';
+import { BarterVendaModal } from '@/components/agri/BarterVendaModal';
+import { labelDaClasse, saldoDoContrato } from '@/lib/agri/barterVenda';
+import { labelDaCultura } from '@/lib/agri/areaPlantada';
 import { useFinanceiroV2 } from '@/hooks/useFinanceiroV2';
 import { useSafrasLavoura } from '@/hooks/useAreaPlantada';
 import { formatNum } from '@/lib/calculos/formatters';
@@ -128,6 +132,46 @@ export function AgriBarterTab() {
     toast.success('Insumo excluído.');
   };
 
+  /* ── A PERNA ENTREGUEI (fatia C) ── */
+  /* ⚠ REUSA O `contrato` DE CIMA, não uma segunda busca: duas leituras do mesmo contrato
+     poderiam divergir por um render e a venda nasceria apontando para outro parceiro. */
+  const {
+    vendas, salvar: salvarVenda, excluir: excluirVenda, totalEntregue, materializada,
+  } = useBarterVenda(
+    clienteId, abertoId,
+    contrato?.fazenda_id ?? null,
+    contrato?.parceiro_fornecedor_id ?? null,
+  );
+  const [vendaAberta, setVendaAberta] = useState<BarterVenda | null>(null);
+  const [modalVenda, setModalVenda] = useState(false);
+  const [salvandoVenda, setSalvandoVenda] = useState(false);
+
+  const gravarVenda = async (payload: VendaPayload) => {
+    if (!payload.safra_id) { toast.error('Escolha a safra do grão.'); return; }
+    if (!payload.cultura) { toast.error('Escolha a cultura vendida.'); return; }
+    if (!(payload.valor_bruto > 0)) { toast.error('Lance ao menos uma classe com sacas e preço.'); return; }
+    setSalvandoVenda(true);
+    try {
+      const r = await salvarVenda(vendaAberta?.id ?? null, payload);
+      if (!r.ok) { toast.error(r.erro ?? 'Não foi possível salvar a venda.'); return; }
+      toast.success(vendaAberta ? 'Venda atualizada.' : 'Venda lançada.');
+      setModalVenda(false); setVendaAberta(null);
+    } finally {
+      setSalvandoVenda(false);
+    }
+  };
+
+  const removerVenda = async (v: BarterVenda) => {
+    if (materializada(v)) { toast.error('Estorne o contrato antes de excluir esta venda.'); return; }
+    const r = await excluirVenda(v);
+    if (!r.ok) { toast.error(r.erro ?? 'Não foi possível excluir a venda.'); return; }
+    toast.success('Venda excluída.');
+  };
+
+  /* ⚠ AGORA O SALDO FECHA, e é o LÍQUIDO que entra dos dois lados: o Senar fica com a
+     cooperativa e nunca chega ao produtor. */
+  const balanco = saldoDoContrato(totalEntregue, totalInsumos);
+
   const criar = async () => {
     if (!parceiroId) { toast.error('Escolha o parceiro do contrato.'); return; }
     if (!nome.trim()) { toast.error('Dê um nome ao contrato.'); return; }
@@ -171,19 +215,18 @@ export function AgriBarterTab() {
           </span>
         </div>
 
-        <div className="grid shrink-0 grid-cols-2 gap-1.5 md:grid-cols-4">
+        <div className="grid shrink-0 grid-cols-2 gap-1.5 md:grid-cols-5">
           <Metrica rotulo="Parceiro" valor={contrato.parceiroNome} />
           {/* ⚠ O NOME DA CONTA, NUNCA O ID: sem UUID na tela, e o nome já é único por parceiro
               (índice `uq_conta_permuta_por_parceiro`). */}
           <Metrica rotulo="Conta de permuta" valor={contrato.contaPermutaNome ?? '—'} />
-          {/* ⚠ O NÚMERO É PARCIAL E DIZ ISSO. A perna do grão é a fatia C: enquanto ela não
-              existe, "entregue" é zero DE VERDADE — nada foi entregue neste sistema —, e o
-              saldo negativo é a leitura correta do contrato, não um defeito de tela. */}
           <Metrica rotulo="Recebido (insumos)" valor={formatMoeda(totalInsumos)}
             nota={`${insumos.length} ${insumos.length === 1 ? 'insumo' : 'insumos'}`} />
-          <Metrica rotulo="Saldo" valor={formatMoeda(-totalInsumos)}
-            nota={totalInsumos > 0 ? 'deve ao parceiro · entregue (fatia C) − recebido' : 'entregue − recebido'}
-            destaque />
+          <Metrica rotulo="Entregue (grão)" valor={formatMoeda(totalEntregue)}
+            nota={`${vendas.length} ${vendas.length === 1 ? 'venda' : 'vendas'} · líquido`} />
+          {/* ⚠ O RÓTULO É A METADE ÚTIL DO NÚMERO. "−390.000" não diz de que lado o produtor
+              está; "deve ao parceiro" diz. O sinal sozinho já custou leitura errada em tela. */}
+          <Metrica rotulo="Saldo" valor={formatMoeda(balanco.saldo)} nota={balanco.rotulo} destaque />
         </div>
 
         <div className="grid min-h-0 flex-1 gap-2 md:grid-cols-2">
@@ -272,11 +315,108 @@ export function AgriBarterTab() {
             </div>
           </div>
 
-          <AindaNao titulo="Entreguei (grão)"
-            descricao="A venda do grão, ligada às cargas da colheita por classe de aflatoxina e preço por saca. Entra na fatia C." />
+          {/* ── ENTREGUEI (fatia C) ─────────────────────────────────────────────────────
+              Mesmo chassi da coluna do RECEBI: cabeçalho e total fixos, só o corpo rola. */}
+          <div className="flex min-h-0 flex-col overflow-hidden rounded-md border">
+            <div className="flex shrink-0 items-center gap-2 border-b bg-muted/40 px-2 py-1">
+              <div className="text-[11px] font-bold uppercase tracking-wide">Entreguei (grão)</div>
+              <div className="flex-1" />
+              <Button size="sm" variant="outline" className="h-6 gap-1 px-1.5 text-[10px]"
+                onClick={() => { setVendaAberta(null); setModalVenda(true); }}>
+                <Plus className="h-3 w-3" /> Lançar venda
+              </Button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-auto">
+              <table className="w-full table-fixed border-collapse text-[10px] leading-tight">
+                <colgroup>
+                  {['24%', '14%', '30%', '24%', '8%'].map((w, i) => <col key={i} style={{ width: w }} />)}
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th className={cn(TH, 'text-left')}>Cultura</th>
+                    <th className={cn(TH, 'text-left')}>Data</th>
+                    <th className={cn(TH, 'text-left')}>Classes vendidas</th>
+                    <th className={cn(TH, 'text-right')}>Líquido</th>
+                    <th className={cn(TH, 'text-right')} />
+                  </tr>
+                </thead>
+                <tbody>
+                  {vendas.length === 0 && (
+                    <tr><td colSpan={5} className="px-2 py-6 text-center text-[10px] text-muted-foreground">
+                      Nenhuma venda lançada. O grão que foi para o parceiro entra aqui.
+                    </td></tr>
+                  )}
+                  {vendas.map(v => (
+                    <tr key={v.id} className="border-t border-slate-100 odd:bg-[#1e3a5f]/[0.03]">
+                      <td className="truncate px-1.5 py-0.5">{labelDaCultura(v.cultura)}</td>
+                      <td className="whitespace-nowrap px-1.5 py-0.5 tabular-nums">{dataBR(v.data_operacao)}</td>
+                      {/* ⚠ AS CLASSES POR EXTENSO, não a contagem: "2 classes" obrigaria a abrir
+                          a venda para saber se o lote bom foi vendido. */}
+                      <td className="truncate px-1.5 py-0.5 text-muted-foreground"
+                        title={v.entregas.map(e => labelDaClasse(e.classe_aflatoxina)).join(' · ')}>
+                        {v.entregas.length === 0 ? '—'
+                          : v.entregas.map(e => labelDaClasse(e.classe_aflatoxina)).join(' · ')}
+                      </td>
+                      <td className="whitespace-nowrap px-1.5 py-0.5 text-right tabular-nums">
+                        {formatMoeda(v.valor_liquido ?? 0)}
+                      </td>
+                      <td className="px-1 py-0.5 text-right">
+                        {materializada(v) ? (
+                          <span className="inline-flex h-5 w-5 items-center justify-center text-muted-foreground"
+                            title="Venda já materializada no DRE. Estorne o contrato para editar ou excluir.">
+                            <Lock className="h-3 w-3" />
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-0.5">
+                            <button type="button" title="Editar venda"
+                              className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                              onClick={() => { setVendaAberta(v); setModalVenda(true); }}>
+                              <Pencil className="h-3 w-3" />
+                            </button>
+                            <button type="button" title="Excluir venda"
+                              className="rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                              onClick={() => void removerVenda(v)}>
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex shrink-0 items-center justify-between border-t bg-primary px-2 py-1
+              text-[10px] font-semibold text-primary-foreground">
+              <span>Total entregue</span>
+              <span className="tabular-nums">{formatMoeda(totalEntregue)}</span>
+            </div>
+          </div>
         </div>
+        {/* ⚠⚠ PENDÊNCIA BLOQUEANTE DA FATIA D, escrita no ponto onde ela será cobrada.
+            A RPC `agri_barter_materializar_contrato` JÁ EXISTE no banco (medida em 13/09/2026)
+            e ainda não tem botão — a fatia D é quem a liga. O laço dela varre SOMENTE
+            `natureza='receita_venda'` e os insumos: `imposto`, `desconto` e `frete` não têm
+            laço nenhum. Como a parte de receita grava o BRUTO (decisão do Gabriel), ligar o
+            botão sem ensinar o motor levaria a receita cheia ao DRE e deixaria o Senar de fora.
+            A fatia D tem de materializar essas três naturezas como SAÍDA na conta de permuta,
+            e o estorno tem de desfazê-las junto.
+            ⚠ O TEXTO DIZ ISSO AO OPERADOR, não só ao programador: enquanto o botão não existe,
+            quem conferir o DRE contra esta tela vê a diferença — e é essa visibilidade que
+            torna a dívida aceitável. */}
         <AindaNao titulo="Materializar"
-          descricao="Gerar os lançamentos no DRE — receita da venda e custo do insumo, na conta de permuta, sem tocar no caixa — e o estorno que desfaz. Entra na fatia D." />
+          descricao="Gerar os lançamentos no DRE — receita da venda e custo do insumo, na conta de permuta, sem tocar no caixa — e o estorno que desfaz. Entra na fatia D. Atenção: a receita vai ao DRE pelo valor BRUTO; a dedução (Senar) fica registrada na venda e só virará lançamento quando a fatia D ensinar o motor a materializá-la. Até lá, o resultado do barter fica maior que o líquido desta tela, pelo valor da dedução." />
+
+        <BarterVendaModal
+          aberto={modalVenda}
+          venda={vendaAberta}
+          clienteId={clienteId}
+          safras={safras}
+          classificacoes={fin.classificacoes}
+          salvando={salvandoVenda}
+          onFechar={() => { setModalVenda(false); setVendaAberta(null); }}
+          onSalvar={p => void gravarVenda(p)}
+        />
 
         <BarterInsumoModal
           aberto={modalInsumo}
