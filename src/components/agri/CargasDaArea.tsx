@@ -19,7 +19,9 @@ import { Plus, Trash2, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { formatNum } from '@/lib/calculos/formatters';
-import { parseNumericValue } from '@/lib/calculos/abate';
+/* ⚠ `parseMoeda`, como no validador: a derivação lê o MESMO texto que a gravação vai ler.
+   Com dois parsers, "26.560" viraria 1.062 sacas num lugar e 1 no outro. */
+import { parseMoeda } from '@/lib/calculos/numeroBR';
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
 import { CargaModal } from '@/components/agri/CargaModal';
 import {
@@ -98,10 +100,10 @@ export function CargasDaArea({
       /* ⚠ A DERIVAÇÃO É SÓ DO PESO PARA A SACA, nunca o contrário: o peso é o que a balança
          mediu, e recalcular o peso a partir da saca inventaria quilo que ninguém pesou. */
       if (temSaca && campo === 'pesoSecoKg' && !aMao.has('sacasBoas')) {
-        novo.sacasBoas = comoTexto(sacasDoPeso(parseNumericValue(valor), cultura));
+        novo.sacasBoas = comoTexto(sacasDoPeso(parseMoeda(valor), cultura));
       }
       if (temSaca && campo === 'graoRocaKg' && !aMao.has('graoRocaSacas')) {
-        novo.graoRocaSacas = comoTexto(sacasDoPeso(parseNumericValue(valor), cultura));
+        novo.graoRocaSacas = comoTexto(sacasDoPeso(parseMoeda(valor), cultura));
       }
       return novo;
     });

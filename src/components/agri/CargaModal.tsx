@@ -23,7 +23,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Save } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatNum } from '@/lib/calculos/formatters';
-import { parseNumericValue } from '@/lib/calculos/abate';
+import { CampoNumero } from '@/components/ui/campo-moeda';
+import { parseMoeda } from '@/lib/calculos/numeroBR';
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
 import { LancamentoModalEnvelope } from '@/components/lancamento/LancamentoModalEnvelope';
 import {
@@ -34,21 +35,32 @@ import {
 /** As duas unidades em que o operador pode digitar um peso. */
 type Unidade = 'kg' | 'sc';
 
-const num = (t: string): number | null => (t.trim() ? parseNumericValue(t) : null);
+/* ⚠ O MESMO PARSER DA REGRA (`parseMoeda`): o resumo lateral tem de ler "26.560" igual ao
+   validador, senão a lateral mostra 26,56 enquanto a gravação salva 26.560. */
+const num = (t: string): number | null => (t.trim() ? parseMoeda(t) : null);
 const comoTexto = (v: number | null) => (v == null ? '' : String(v).replace('.', ','));
 
-function Campo({ rotulo, valor, onChange, numerico, obrigatorio, dica, tipo }: {
+/**
+ * ⚠ `numerico` NÃO É SÓ ALINHAMENTO: ele troca o `<Input>` cru pelo `CampoNumero`, que formata
+ * em pt-BR ao sair do campo e usa o parser que sabe distinguir milhar de decimal. Era um
+ * `<Input>` com `inputMode="decimal"` — o teclado certo e o parse errado.
+ */
+function Campo({ rotulo, valor, onChange, numerico, casas = 2, obrigatorio, dica, tipo }: {
   rotulo: string; valor: string; onChange: (v: string) => void;
-  numerico?: boolean; obrigatorio?: boolean; dica?: string; tipo?: string;
+  numerico?: boolean; casas?: number; obrigatorio?: boolean; dica?: string; tipo?: string;
 }) {
   return (
     <div>
       <Label className="text-[10px]">
         {rotulo}{obrigatorio && <span className="text-destructive"> *</span>}
       </Label>
-      <Input value={valor} onChange={e => onChange(e.target.value)} title={dica} type={tipo}
-        inputMode={numerico ? 'decimal' : undefined}
-        className={cn('mt-0.5 h-8 text-[12px]', numerico && 'text-right font-mono')} />
+      {numerico ? (
+        <CampoNumero valor={valor} onChange={onChange} casas={casas} title={dica}
+          className="mt-0.5 h-8 text-right font-mono text-[12px]" />
+      ) : (
+        <Input value={valor} onChange={e => onChange(e.target.value)} title={dica} type={tipo}
+          className="mt-0.5 h-8 text-[12px]" />
+      )}
     </div>
   );
 }
@@ -93,7 +105,9 @@ function CampoPeso({ rotulo, valorKg, onChangeKg, cultura, dica }: {
           </div>
         )}
       </div>
-      <Input value={visivel} onChange={e => digitou(e.target.value)} inputMode="decimal" title={dica}
+      {/* ⚠ A CHAVE É A UNIDADE: trocar de kg para sc refaz o texto a partir do quilo guardado,
+          e sem `key` o `CampoNumero` manteria na tela o número da unidade anterior. */}
+      <CampoNumero key={unidade} valor={visivel} onChange={digitou} casas={2} title={dica}
         className="mt-0.5 h-8 text-right font-mono text-[12px]" />
       {/* A outra unidade fica escrita embaixo: conferir o romaneio não deve exigir trocar o toggle. */}
       <div className="mt-0.5 text-right text-[9px] text-muted-foreground">

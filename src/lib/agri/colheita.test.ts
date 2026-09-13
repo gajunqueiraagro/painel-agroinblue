@@ -220,3 +220,51 @@ describe('a quebra da carga', () => {
     expect(quebraKg(null, 22222.70)).toBeNull();
   });
 });
+
+/**
+ * O PARSE DO QUE SE DIGITA — AGRI-COLHEITA-FIX-05.
+ *
+ * ⚠ ESTE BLOCO NASCEU DE UMA CARGA QUE NÃO SALVAVA. "26.560" era lido como 26,56, a quebra
+ * dava −22.655,92 e a tela recusava dizendo que o seco era maior que o verde. O parser do
+ * abate trata ponto sem vírgula como decimal (`'5.000'` → 5, está no CLAUDE.md); o do dinheiro
+ * olha quantos dígitos vêm depois. Para peso de balança, só o segundo acerta.
+ */
+describe('o número que o operador digita', () => {
+  const verde = (t: string) => validarCarga(carga({ pesoVerdeKg: t })).payload?.peso_verde_kg;
+
+  it('⚠ "26.560" É VINTE E SEIS MIL, não 26,56 — o defeito que travava a carga', () => {
+    expect(verde('26.560')).toBe(26560);
+  });
+
+  it('as três formas de digitar o mesmo peso chegam ao mesmo número', () => {
+    expect(verde('26560')).toBe(26560);
+    expect(verde('26.560')).toBe(26560);
+    expect(verde('26560,00')).toBe(26560);
+    expect(verde('26.560,00')).toBe(26560);
+  });
+
+  it('uma ou duas casas depois do ponto continuam sendo decimal', () => {
+    expect(verde('26,5')).toBe(26.5);
+    expect(verde('26.5')).toBe(26.5);
+    expect(verde('26.56')).toBe(26.56);
+  });
+
+  it('a carga real volta a passar: verde 26.560 e seco 22.682,48', () => {
+    const v = validarCarga(carga({ pesoVerdeKg: '26.560', pesoSecoKg: '22.682,48' }));
+    expect(v.ok).toBe(true);
+    expect(quebraKg(v.payload?.peso_verde_kg ?? null, v.payload?.peso_seco_kg ?? null)).toBe(3877.52);
+  });
+
+  it('⚠ E O BLOQUEIO CONTINUA DE PÉ quando o seco é MESMO maior que o verde', () => {
+    expect(validarCarga(carga({ pesoVerdeKg: '22.000', pesoSecoKg: '26.560' })).ok).toBe(false);
+  });
+});
+
+describe('o sinal de menos', () => {
+  it('⚠ "-1" É RECUSADO, não convertido em 1 — o parser do dinheiro come o sinal', () => {
+    /* `parseMoeda` limpa tudo que não é dígito/ponto/vírgula. Sem preservar o sinal, a tela
+       "corrigia" o operador em silêncio: pior que recusar. */
+    expect(validarCarga(carga({ aflatoxinaPpb: '-1' })).ok).toBe(false);
+    expect(validarCarga(carga({ pesoVerdeKg: '-26.560' })).ok).toBe(false);
+  });
+});

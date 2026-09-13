@@ -10,7 +10,7 @@
  * própria. O que esta camada sabe é quanto saiu do talhão, quanto voltou seco e em que classe.
  * ⚠ SÓ REGRA PURA: nada de React nem de Supabase.
  */
-import { parseNumericValue } from '@/lib/calculos/abate';
+import { parseMoeda } from '@/lib/calculos/numeroBR';
 
 /**
  * O CORTE DE CLASSE DA COOPERATIVA, em ppb.
@@ -160,15 +160,38 @@ export const cargaVazia = (): CargaForm => ({
   graoRocaSacas: '', graoRocaKg: '', rendaLiquidaPct: '', observacoes: '',
 });
 
-/** Texto do campo para número, ou `null` quando o operador não preencheu. */
-const num = (t: string): number | null => (t.trim() ? parseNumericValue(t) : null);
+/**
+ * Texto do campo para número, ou `null` quando o operador não preencheu.
+ *
+ * ⚠ `parseMoeda`, NUNCA `parseNumericValue` — e a diferença custou uma carga que não salvava.
+ * O parser do abate trata ponto sem vírgula como DECIMAL (`'5.000'` → 5, está no CLAUDE.md),
+ * regra boa para peso de boi e péssima para peso de balança: "26.560" virava 26,56, a quebra
+ * dava −22.655,92 e a tela recusava a carga dizendo que o seco era maior que o verde.
+ * `parseMoeda` decide pelo número de dígitos depois do ponto — 1 ou 2 é decimal, 3 é milhar.
+ * ⚠ E ELE É O PARSER DO DINHEIRO, de propósito: um só lugar no sistema decide o que é milhar.
+ */
+const num = (t: string): number | null => {
+  const texto = t.trim();
+  if (!texto) return null;
+  const n = parseMoeda(texto);
+  if (n == null) return null;
+  /**
+   * ⚠ O SINAL SE PRESERVA AQUI, e não é preciosismo: `parseMoeda` limpa tudo que não é dígito,
+   * ponto ou vírgula — inclusive o menos. Descoberto pelo teste ao trocar de parser: "-1" de
+   * aflatoxina virava 1 e passava na validação, ou seja, o sistema CORRIGIA em silêncio o que
+   * devia recusar. Inverter o número do operador é pior que recusá-lo.
+   * ⚠ A CORREÇÃO É LOCAL, de propósito: `parseMoeda` tem doze consumidores de dinheiro, e
+   * mudar o sinal lá dentro é outro PR, com outra homologação.
+   */
+  return texto.startsWith('-') ? -n : n;
+};
 
 /**
  * ⚠ UM OBJETO SÓ, NÃO UNIÃO DISCRIMINADA — pelo mesmo motivo medido em `areaPlantada.ts`:
  * com `strict: false` o TypeScript não estreita a união pelo `if (!v.ok)`, e a união criaria
  * mais uma entrada de baseline.
- * ⚠ `parseNumericValue`, NUNCA `Number()`: "5.000" e "1.234,5" são o que o operador digita, e
- * `Number('5.000')` devolve 5.
+ * ⚠ O PARSE É O DO DINHEIRO (`parseMoeda`): "5.000" e "1.234,5" são o que o operador digita, e
+ * `Number('5.000')` devolve 5. Ver a nota em `num`.
  */
 export function validarCarga(form: CargaForm): ValidacaoCarga {
   const data = (form.dataColheita || '').trim();
