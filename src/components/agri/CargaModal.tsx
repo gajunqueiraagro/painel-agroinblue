@@ -36,6 +36,14 @@ import {
 /** As duas unidades em que o operador pode digitar um peso. */
 type Unidade = 'kg' | 'sc';
 
+/**
+ * ⚠ FOCO FINO, SEM O HALO DE 4px. O `Input` da casa traz `ring-2` com `ring-offset-2`: dois
+ * pixels de anel mais dois de folga, um halo azul grosso que num formulário de treze campos
+ * densos vira a coisa mais visível da tela. A COR continua a do sistema (`ring-ring`) — o que
+ * muda é a espessura, e só aqui dentro.
+ */
+const FOCO = 'focus-visible:ring-1 focus-visible:ring-offset-0 focus:ring-1 focus:ring-offset-0';
+
 /* ⚠ O MESMO PARSER DA REGRA (`parseMoeda`): o resumo lateral tem de ler "26.560" igual ao
    validador, senão a lateral mostra 26,56 enquanto a gravação salva 26.560. */
 const num = (t: string): number | null => (t.trim() ? parseMoeda(t) : null);
@@ -57,10 +65,10 @@ function Campo({ rotulo, valor, onChange, numerico, casas = 2, obrigatorio, dica
       </Label>
       {numerico ? (
         <CampoNumero valor={valor} onChange={onChange} casas={casas} title={dica}
-          className="mt-0.5 h-8 text-right font-mono text-[12px]" />
+          className={cn('mt-0.5 h-8 text-right font-mono text-[12px]', FOCO)} />
       ) : (
         <Input value={valor} onChange={e => onChange(e.target.value)} title={dica} type={tipo}
-          className="mt-0.5 h-8 text-[12px]" />
+          className={cn('mt-0.5 h-8 text-[12px]', FOCO)} />
       )}
     </div>
   );
@@ -109,12 +117,32 @@ function CampoPeso({ rotulo, valorKg, onChangeKg, cultura, dica }: {
       {/* ⚠ A CHAVE É A UNIDADE: trocar de kg para sc refaz o texto a partir do quilo guardado,
           e sem `key` o `CampoNumero` manteria na tela o número da unidade anterior. */}
       <CampoNumero key={unidade} valor={visivel} onChange={digitou} casas={2} title={dica}
-        className="mt-0.5 h-8 text-right font-mono text-[12px]" />
+        className={cn('mt-0.5 h-8 text-right font-mono text-[12px]', FOCO)} />
       {/* A outra unidade fica escrita embaixo: conferir o romaneio não deve exigir trocar o toggle. */}
       <div className="mt-0.5 text-right text-[9px] text-muted-foreground">
         {emSaca
           ? (valorKg.trim() ? `${formatNum(num(valorKg) ?? 0, 2)} kg` : '—')
           : (temSaca && valorKg.trim() ? `${formatNum(sacasDoPeso(num(valorKg), cultura) ?? 0, 2)} sc` : ' ')}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Um número que a tela CALCULA — moldura tracejada, sem caixa de digitação.
+ *
+ * ⚠ A BORDA TRACEJADA É O AVISO de que aquilo não se digita: um campo derivado com cara de
+ * `<input>` convida a corrigir o que o sistema deduziu, e a correção não teria onde ser
+ * gravada — nem a quebra de secagem nem a de transporte têm coluna no banco.
+ */
+function Derivado({ rotulo, valor, cor }: { rotulo: string; valor: number | null; cor?: string }) {
+  return (
+    <div>
+      <Label className="text-[10px]">{rotulo}</Label>
+      <div className={cn('mt-0.5 flex h-8 items-center justify-end rounded-md border border-dashed',
+        'bg-muted/30 px-2 font-mono text-[12px] tabular-nums',
+        valor == null ? 'text-muted-foreground' : cor)}>
+        {valor != null ? formatNum(valor, 2) : '—'}
       </div>
     </div>
   );
@@ -169,6 +197,8 @@ export function CargaModal({
   const seco = num(form.pesoSecoKg);
   const ppb = num(form.aflatoxinaPpb);
   const quebra = quebraKg(verde, seco);
+  /* A MESMA função das duas: quanto se perdeu entre duas pesagens. Ver a nota em `quebraKg`. */
+  const quebraTransporte = quebraKg(num(form.pesoFazendaKg), verde);
   const faixa = faixaAflatoxina(ppb);
   const traco = (v: number | null, casas = 2, sufixo = '') =>
     (v == null ? '—' : `${formatNum(v, casas)}${sufixo}`);
@@ -220,11 +250,15 @@ export function CargaModal({
                 <div className="px-3 pb-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
                   Peso
                 </div>
+                {/* ⚠ OS TRÊS PESOS EM ORDEM DE TEMPO, com as perdas entre eles: é a mesma
+                    história da cadeia da análise de produção, do tamanho do resumo. */}
+                <Par rotulo="Na fazenda" valor={traco(num(form.pesoFazendaKg), 2, ' kg')} />
+                <Par rotulo="Quebra transporte" valor={traco(quebraTransporte, 2, ' kg')} />
                 <Par rotulo="Verde" valor={traco(verde, 2, ' kg')} forte />
                 <Par rotulo="Seco" valor={traco(seco, 2, ' kg')} forte />
                 {/* ⚠ A QUEBRA SÓ APARECE COM OS DOIS PESOS: enquanto o seco não voltou da
                     cooperativa ela não é zero — ainda não aconteceu. */}
-                <Par rotulo="Quebra" valor={traco(quebra, 2, ' kg')} />
+                <Par rotulo="Quebra secagem" valor={traco(quebra, 2, ' kg')} />
                 <Par rotulo="Umidade" valor={traco(num(form.umidadePct), 2, '%')} />
               </div>
               <div className="py-1">
@@ -260,7 +294,7 @@ export function CargaModal({
                 ⚠ `rounded-none` NA LISTA e fundo transparente: o `bg-muted` arredondado do
                 padrão é o que fazia duas abas parecerem a mesma coisa. */}
             <TabsList className="h-auto w-full shrink-0 justify-start gap-1 rounded-none border-b bg-transparent p-0">
-              {([['cadastro', 'Cadastro'], ['producao', 'Produção'], ['classificacao', 'Classificação']] as const)
+              {([['cadastro', 'Saída'], ['producao', 'Recebimento'], ['classificacao', 'Classificação']] as const)
                 .map(([valor, rotulo]) => (
                   <TabsTrigger key={valor} value={valor}
                     className="-mb-px rounded-b-none rounded-t-md border border-transparent px-3 py-1.5 text-[11px]
@@ -275,8 +309,11 @@ export function CargaModal({
             {/* ⚠ `data-[state=…]` NO DISPLAY, nunca `flex` solto: o Radix deixa o painel
                 inativo no fluxo com `hidden`, e `.flex` sobrescreve `[hidden]{display:none}`.
                 Foi o defeito do drawer do DRE, medido e corrigido no PR-DRILL-14. */}
+            {/* ⚠ O CORPO GANHA FUNDO E BORDA: sem eles a aba ativa e o conteúdo eram a mesma
+                cor, e a "pasta" não se via — o que distingue a aba aberta é justamente ela ser
+                a continuação do card. */}
             <TabsContent value="cadastro"
-              className="mt-2 flex-col gap-2 data-[state=active]:flex data-[state=inactive]:hidden">
+              className="mt-0 flex-col gap-2 rounded-b-md rounded-tr-md border bg-card p-2.5 data-[state=active]:flex data-[state=inactive]:hidden">
               {/* ⚠ O TALHÃO É CAMPO DA CARGA, não do contexto — e era a peça que faltava para
                   corrigir um lançamento errado sem apagá-lo. Mudar aqui troca o
                   `safra_area_id`: a carga sai de um talhão e entra no outro, e os dois
@@ -284,7 +321,7 @@ export function CargaModal({
               <div>
                 <Label className="text-[10px]">Talhão <span className="text-destructive">*</span></Label>
                 <Select value={areaId} onValueChange={onAreaChange}>
-                  <SelectTrigger className="mt-0.5 h-8 text-[12px]">
+                  <SelectTrigger className={cn('mt-0.5 h-8 text-[12px]', FOCO)}>
                     <SelectValue placeholder="Escolha o talhão desta carga" />
                   </SelectTrigger>
                   <SelectContent>
@@ -297,7 +334,11 @@ export function CargaModal({
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              {/* ⚠ LARGURA PELO CONTEÚDO, NÃO PELA TELA (A18): data e hora cabem em cinco
+                  caracteres, e um campo de data ocupando meia linha faz o formulário parecer
+                  vazio e obriga a rolar por nada. As frações da grade são o tamanho do que
+                  entra em cada campo. */}
+              <div className="grid grid-cols-[1.6fr_1fr_0.8fr_1.2fr] gap-2">
                 <div>
                   <Label className="text-[10px]">Data <span className="text-destructive">*</span></Label>
                   <DatePicker value={form.dataColheita} onChange={v => onChange('dataColheita', v)}
@@ -307,11 +348,19 @@ export function CargaModal({
                     `type="date"` e `<select>`, e não existe componente de hora na casa. Um
                     campo de texto livre aceitaria "14h55" e "2:55 pm", que o Postgres recusa
                     em `time`. Fica o nativo, com a dívida anotada: PR-UI-TIMEPICKER. */}
-                <Campo rotulo="Hora de chegada" valor={form.horaChegada} tipo="time"
-                  dica="A hora que o romaneio registra na balança da cooperativa."
+                <Campo rotulo="Hora" valor={form.horaChegada} tipo="time"
+                  dica="A hora que o romaneio registra na balança."
                   onChange={v => onChange('horaChegada', v)} />
+                {/* ⚠ O PESO DA FAZENDA É O PRIMEIRO DOS TRÊS, e é o único que se sabe AQUI —
+                    os outros dois a cooperativa devolve depois. Guardá-lo é o que torna a
+                    quebra de transporte mensurável. */}
+                <div className="col-span-2">
+                  <CampoPeso rotulo="Peso na fazenda" valorKg={form.pesoFazendaKg} cultura={cultura}
+                    dica="O que a balança da fazenda ou do posto pesou na saída."
+                    onChangeKg={v => onChange('pesoFazendaKg', v)} />
+                </div>
               </div>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-[1fr_1fr_1.2fr] gap-2">
                 <Campo rotulo="Ticket balança" valor={form.ticketBalanca} onChange={v => onChange('ticketBalanca', v)} />
                 <Campo rotulo="NF produtor" valor={form.nfProdutor} onChange={v => onChange('nfProdutor', v)} />
                 <Campo rotulo="Filial" valor={form.filial} onChange={v => onChange('filial', v)} />
@@ -319,43 +368,41 @@ export function CargaModal({
               <div>
                 <Label className="text-[10px]">Observações</Label>
                 <Input value={form.observacoes} onChange={e => onChange('observacoes', e.target.value)}
-                  className="mt-0.5 h-8 text-[12px]" />
+                  className={cn('mt-0.5 h-8 text-[12px]', FOCO)} />
               </div>
             </TabsContent>
 
             <TabsContent value="producao"
-              className="mt-2 flex-col gap-2 data-[state=active]:flex data-[state=inactive]:hidden">
+              className="mt-0 flex-col gap-2 rounded-b-md rounded-tr-md border bg-card p-2.5 data-[state=active]:flex data-[state=inactive]:hidden">
               <div className="grid grid-cols-2 gap-2">
-                <CampoPeso rotulo="Peso verde" valorKg={form.pesoVerdeKg} cultura={cultura}
-                  dica="O que embarcou na fazenda." onChangeKg={v => onChange('pesoVerdeKg', v)} />
+                <CampoPeso rotulo="Peso verde (Casul)" valorKg={form.pesoVerdeKg} cultura={cultura}
+                  dica="O que a cooperativa reconheceu na chegada." onChangeKg={v => onChange('pesoVerdeKg', v)} />
                 <CampoPeso rotulo="Peso seco" valorKg={form.pesoSecoKg} cultura={cultura}
                   dica="O que a cooperativa devolveu depois de secar — fica em branco até chegar."
                   onChangeKg={v => onChange('pesoSecoKg', v)} />
               </div>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-[0.8fr_1fr_1fr_1fr] gap-2">
                 <Campo rotulo="Umidade (%)" valor={form.umidadePct} numerico onChange={v => onChange('umidadePct', v)} />
                 <Campo rotulo="Sacas boas" valor={form.sacasBoas} numerico
                   dica="Calculado do peso seco — pode ser corrigido, e a correção não se desfaz."
                   onChange={v => onChange('sacasBoas', v)} />
-                <div>
-                  <Label className="text-[10px]">Quebra (kg)</Label>
-                  <div className="mt-0.5 flex h-8 items-center justify-end rounded-md border border-dashed bg-muted/30 px-2 font-mono text-[12px] tabular-nums text-muted-foreground">
-                    {quebra != null ? formatNum(quebra, 2) : '—'}
-                  </div>
-                </div>
+                {/* ⚠ A QUEBRA DE TRANSPORTE PODE SER NEGATIVA, e isso NÃO é erro: a cooperativa
+                    às vezes reconhece MAIS peso do que a balança da fazenda mediu. O sinal
+                    aparece; nada é bloqueado por causa dele. */}
+                <Derivado rotulo="Quebra transporte (kg)" valor={quebraTransporte}
+                  cor={quebraTransporte != null && quebraTransporte < 0 ? 'text-success' : 'text-destructive'} />
+                <Derivado rotulo="Quebra secagem (kg)" valor={quebra} cor="text-destructive" />
               </div>
             </TabsContent>
 
             <TabsContent value="classificacao"
-              className="mt-2 flex-col gap-2 data-[state=active]:flex data-[state=inactive]:hidden">
-              <div className="grid grid-cols-2 gap-2">
+              className="mt-0 flex-col gap-2 rounded-b-md rounded-tr-md border bg-card p-2.5 data-[state=active]:flex data-[state=inactive]:hidden">
+              <div className="grid grid-cols-4 gap-2">
                 <Campo rotulo="Aflatoxina (ppb)" valor={form.aflatoxinaPpb} numerico
                   dica={`O corte da cooperativa é ${LIMITE_AFLATOXINA} ppb — o número entra como veio do laudo.`}
                   onChange={v => onChange('aflatoxinaPpb', v)} />
                 <Campo rotulo="Renda líquida (%)" valor={form.rendaLiquidaPct} numerico
                   onChange={v => onChange('rendaLiquidaPct', v)} />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
                 <Campo rotulo="Grão de roça (kg)" valor={form.graoRocaKg} numerico
                   onChange={v => onChange('graoRocaKg', v)} />
                 <Campo rotulo="Grão de roça (sc)" valor={form.graoRocaSacas} numerico
@@ -369,7 +416,7 @@ export function CargaModal({
                   ⚠ SÃO DOIS CAMPOS DIGITADOS, nenhum derivado do outro: a taxa é o quanto a
                   cooperativa cobra e o valor é o que aquela carga pagou. Multiplicar um pelo
                   outro criaria um terceiro número que o papel não tem. */}
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-[1fr_1.2fr_2fr] gap-2">
                 <Campo rotulo="Taxa de secagem" valor={form.taxaSecagem} numerico
                   dica="Como a cooperativa cobra — R$ por saca ou percentual, do romaneio."
                   onChange={v => onChange('taxaSecagem', v)} />
@@ -382,8 +429,9 @@ export function CargaModal({
                   <Label className="text-[10px]">Valor da secagem</Label>
                   <CampoMoeda valor={num(form.valorSecagem)}
                     onChange={n => onChange('valorSecagem', n == null ? '' : String(n))}
-                    className="mt-0.5 h-8 text-right font-mono text-[12px]" />
+                    className={cn('mt-0.5 h-8 text-right font-mono text-[12px]', FOCO)} />
                 </div>
+                <div />
               </div>
               {/* ⚠ PREÇO NÃO ENTRA, e não é esquecimento: `agri_colheita` não tem coluna de
                   preço nenhuma (conferido no banco). Preço é venda de grão, frente própria —

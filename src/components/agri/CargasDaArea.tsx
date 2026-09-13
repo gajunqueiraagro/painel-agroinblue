@@ -47,6 +47,7 @@ const doBanco = (r: ColheitaRow): CargaForm => ({
   dataColheita: r.data_colheita ?? '',
   /* `time` do Postgres vem "14:55:00"; o campo de hora do navegador quer "14:55". */
   horaChegada: (r.hora_chegada ?? '').slice(0, 5),
+  pesoFazendaKg: texto(r.peso_fazenda_kg),
   ticketBalanca: r.ticket_balanca ?? '',
   nfProdutor: r.nf_produtor ?? '',
   filial: r.filial ?? '',
@@ -126,9 +127,14 @@ const TH = 'sticky top-0 z-10 bg-primary px-1 py-0.5 text-[9px] font-semibold'
   + ' text-primary-foreground transition-[filter] hover:brightness-110';
 
 /** O rodapé de totais: mesmo fundo do cabeçalho, para as duas bordas da lista se lerem juntas. */
-/** ⚠ O RÓTULO NO MESMO TOM DOS NÚMEROS: ele era `text-muted-foreground` sobre azul — escuro
- *  demais, mais apagado que os valores que deveria apresentar. */
-const TFOOT = 'sticky bottom-0 z-10 bg-primary px-1 py-0.5 text-[9px] font-bold tabular-nums'
+/**
+ * ⚠ O RÓTULO NO MESMO TOM DOS NÚMEROS: ele era `text-muted-foreground` sobre azul — escuro
+ * demais, mais apagado que os valores que deveria apresentar.
+ * ⚠ E NUNCA MENOR QUE OS DADOS. Ele estava em 9px contra os 10px do corpo: o total, que é o
+ * fecho da leitura, saía como nota de rodapé. Agora são 11px — um passo acima da linha, o
+ * bastante para fechar a tabela sem competir com ela.
+ */
+const TFOOT = 'sticky bottom-0 z-10 bg-primary px-1 py-0.5 text-[11px] font-bold tabular-nums'
   + ' text-primary-foreground';
 
 /** O talhão como esta lista precisa conhecê-lo. */
@@ -298,7 +304,10 @@ export function CargasDaArea({
         {/* ⚠ UM TAMANHO SÓ, DECLARADO NA TABELA: as células não repetem `text-[…]`, senão duas
             classes arbitrárias disputam por ordem no CSS e não por especificidade — a lição do
             `TD` da Central. Aqui tudo é 10px. */}
-        <table className="w-full border-collapse text-[10px]">
+        {/* ⚠ `leading-tight` NA TABELA, junto do tamanho: a altura da linha vinha da
+            entrelinha padrão, não do padding — que já estava em zero. Um lugar só governa os
+            dois, e nenhuma célula repete tamanho (a lição do `TD` da Central). */}
+        <table className="w-full border-collapse text-[10px] leading-tight">
           <thead>
             <tr>
               {COLUNAS.map(c => (

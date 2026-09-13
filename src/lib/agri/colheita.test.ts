@@ -345,3 +345,33 @@ describe('a cadeia do que arrancou ao que aproveitou', () => {
     expect(s.produtividadeFinal).toBeNull();
   });
 });
+
+/**
+ * A QUEBRA DE TRANSPORTE — AGRI-COLHEITA-04 / MODAL-FLUXO-14.
+ *
+ * ⚠ São três pesos da mesma carga, e a MESMA função mede as duas perdas: fazenda → verde é o
+ * transporte, verde → seco é a secagem.
+ */
+describe('os três pesos da carga', () => {
+  it('o peso da fazenda entra no payload como os outros', () => {
+    const v = validarCarga(carga({ pesoFazendaKg: '27.160', pesoVerdeKg: '26.560' }));
+    expect(v.ok).toBe(true);
+    expect(v.payload?.peso_fazenda_kg).toBe(27160);
+  });
+
+  it('a quebra de transporte é fazenda menos verde', () => {
+    expect(quebraKg(27160, 26560)).toBe(600);
+  });
+
+  it('⚠ ELA PODE SER NEGATIVA, e não é erro: a cooperativa às vezes reconhece MAIS', () => {
+    expect(quebraKg(26000, 26560)).toBe(-560);
+  });
+
+  it('sem o peso da fazenda não há quebra de transporte — e não é zero', () => {
+    expect(quebraKg(null, 26560)).toBeNull();
+  });
+
+  it('negativo DIGITADO continua recusado — o que se aceita é o resultado, não a entrada', () => {
+    expect(validarCarga(carga({ pesoFazendaKg: '-27.160' })).ok).toBe(false);
+  });
+});

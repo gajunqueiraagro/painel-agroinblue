@@ -87,7 +87,15 @@ export function sacasDoPeso(pesoKg: number | null, cultura: string | null | unde
 }
 
 /**
- * A QUEBRA DA CARGA, em quilos — o que a secagem tirou.
+ * A QUEBRA DA CARGA, em quilos — o que a secagem tirou, ou o que o transporte comeu.
+ *
+ * ⚠ A MESMA FUNÇÃO SERVE ÀS DUAS, e é de propósito: `quebraKg(fazenda, verde)` é a de
+ * transporte e `quebraKg(verde, seco)` é a de secagem. São a mesma pergunta — quanto se perdeu
+ * entre duas pesagens — e uma segunda função com outro nome as deixaria livres para divergir
+ * no arredondamento.
+ * ⚠ ELA PODE SER NEGATIVA na de transporte, e isso NÃO é erro: a cooperativa às vezes
+ * reconhece MAIS peso do que a balança da fazenda mediu. Recusar o negativo aqui esconderia
+ * um ganho real do produtor.
  *
  * ⚠ SÓ EXISTE COM OS DOIS PESOS. Enquanto o seco não voltou da cooperativa, a quebra não é
  * zero: ela ainda não aconteceu, e um "0 kg" ali leria como "não houve perda".
@@ -117,6 +125,14 @@ export interface CargaForm {
   dataColheita: string;
   /** `HH:MM` — hora em que o caminhão chegou à balança. AGRI-COLHEITA-02. */
   horaChegada: string;
+  /**
+   * O PESO QUE SAIU DA BALANÇA DA FAZENDA — AGRI-COLHEITA-04.
+   *
+   * ⚠ TERCEIRO PESO DA MESMA CARGA, e nenhum deriva do outro: fazenda (saída), verde
+   * (chegada na cooperativa) e seco (depois de secar). A diferença fazenda → verde é a QUEBRA
+   * DE TRANSPORTE, que ninguém media; verde → seco é a de secagem, que a tela já mostra.
+   */
+  pesoFazendaKg: string;
   ticketBalanca: string;
   nfProdutor: string;
   filial: string;
@@ -146,6 +162,7 @@ export interface CargaForm {
 export interface CargaPayload {
   data_colheita: string;
   hora_chegada: string | null;
+  peso_fazenda_kg: number | null;
   ticket_balanca: string | null;
   nf_produtor: string | null;
   filial: string | null;
@@ -169,7 +186,8 @@ export interface ValidacaoCarga {
 }
 
 export const cargaVazia = (): CargaForm => ({
-  id: null, dataColheita: '', horaChegada: '', ticketBalanca: '', nfProdutor: '', filial: '',
+  id: null, dataColheita: '', horaChegada: '', pesoFazendaKg: '',
+  ticketBalanca: '', nfProdutor: '', filial: '',
   pesoVerdeKg: '', pesoSecoKg: '', umidadePct: '', aflatoxinaPpb: '', sacasBoas: '',
   graoRocaSacas: '', graoRocaKg: '', rendaLiquidaPct: '', taxaSecagem: '', valorSecagem: '',
   observacoes: '',
@@ -212,6 +230,7 @@ export function validarCarga(form: CargaForm): ValidacaoCarga {
   const data = (form.dataColheita || '').trim();
   if (!data) return { ok: false, erro: 'Informe a data da colheita.' };
 
+  const pesoFazenda = num(form.pesoFazendaKg);
   const verde = num(form.pesoVerdeKg);
   const seco = num(form.pesoSecoKg);
   const umidade = num(form.umidadePct);
@@ -224,7 +243,7 @@ export function validarCarga(form: CargaForm): ValidacaoCarga {
   const valorSecagem = num(form.valorSecagem);
 
   const naoNegativos: ReadonlyArray<readonly [string, number | null]> = [
-    ['peso verde', verde], ['peso seco', seco], ['a umidade', umidade],
+    ['o peso da fazenda', pesoFazenda], ['peso verde', verde], ['peso seco', seco], ['a umidade', umidade],
     ['a aflatoxina', aflatoxina], ['as sacas boas', sacasBoas],
     ['o grão de roça em sacas', rocaSacas], ['o grão de roça em quilos', rocaKg],
     ['a renda líquida', renda],
@@ -256,6 +275,7 @@ export function validarCarga(form: CargaForm): ValidacaoCarga {
       data_colheita: data,
       /* ⚠ BRANCO É NULO, não '00:00': meia-noite é uma hora, ausência não é. */
       hora_chegada: form.horaChegada.trim() || null,
+      peso_fazenda_kg: pesoFazenda,
       ticket_balanca: form.ticketBalanca.trim() || null,
       nf_produtor: form.nfProdutor.trim() || null,
       filial: form.filial.trim() || null,
