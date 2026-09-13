@@ -29,6 +29,25 @@ export interface PlanoSubcentroSelectProps {
    * ignorância. O filtro não esconde nada: "Mostrar todos" continua ali.
    */
   escopoNegocio?: string;
+  /**
+   * O escopo é TRAVA, não sugestão — PR-AGRI-BARTER-FIX-INSUMO-FORM.
+   *
+   * ⚠ NASCEU DE UM DEFEITO MEDIDO. Sem isto, "mostrar todos" derruba o filtro de tipo E o de
+   * escopo de uma vez, e o convite a clicar é PERMANENTE: `ocultosPorTipo` conta só a
+   * divergência de tipo, então com escopo restrito ele acusa dezenas de "ocultos" o tempo
+   * todo. O insumo de barter viu "Dividendos Despesas Pessoais" por essa porta — e classificar
+   * adubo como dividendo tira o custo do DRE da safra.
+   * ⚠ OPT-IN: sem a prop, o comportamento é o de sempre, e os outros chamadores não mudam.
+   */
+  escopoObrigatorio?: boolean;
+  /**
+   * Só contas que COMPÕEM o DRE.
+   *
+   * ⚠ `undefined` NÃO PASSA, e é de propósito: as combinações que o hook sintetiza a partir de
+   * lançamentos legados não têm linha no plano e não sabem se compõem. Classificar um custo
+   * novo com uma delas é herdar a dúvida.
+   */
+  somenteCompoeDre?: boolean;
   search: string;                                                  // busca CONTROLADA (o caller é dono)
   onSearchChange: (s: string) => void;
   label?: string;
@@ -43,6 +62,7 @@ export interface PlanoSubcentroSelectProps {
 
 export function PlanoSubcentroSelect({
   value, onChange, onSelected, classificacoes, tipoOperacao, escopoNegocio,
+  escopoObrigatorio = false, somenteCompoeDre = false,
   search, onSearchChange, label, triggerClassName, size = 'default', contentClassName, itemClassName, tabIndex, disabled,
 }: PlanoSubcentroSelectProps) {
   const [open, setOpen] = useState(false);
@@ -91,14 +111,25 @@ export function PlanoSubcentroSelect({
 
   /** Subcentros filtered by tipo_operacao then by search text.
    *  Uses the selected tipoOperacao directly – each type has its own subtree. */
+  const combinaDre = (c: ClassificacaoItem) => !somenteCompoeDre || c.compoe_dre === true;
+
+  /**
+   * ⚠ O `mostrarTodos` SOLTA O TIPO, NUNCA A TRAVA. Quando o caller marcou `escopoObrigatorio`
+   * ou `somenteCompoeDre`, essas duas condições valem também com a porta aberta — do contrário
+   * a porta não seria um atalho de busca, seria um jeito de burlar a regra sem querer.
+   */
   const filtered = useMemo(() => {
     const unique = Array.from(classMap.values());
-    const byTipo = mostrarTodos ? unique : unique.filter((c) => combinaTipo(c) && combinaEscopo(c));
+    const trava = (c: ClassificacaoItem) =>
+      (!escopoObrigatorio || combinaEscopo(c)) && combinaDre(c);
+    const byTipo = mostrarTodos
+      ? unique.filter(trava)
+      : unique.filter((c) => combinaTipo(c) && combinaEscopo(c) && combinaDre(c));
     if (!search.trim()) return byTipo;
     const term = search.toLowerCase();
     return byTipo.filter(c => c.subcentro.toLowerCase().includes(term));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [classMap, search, tipoOperacao, escopoNegocio, mostrarTodos]);
+  }, [classMap, search, tipoOperacao, escopoNegocio, escopoObrigatorio, somenteCompoeDre, mostrarTodos]);
 
   /**
    * Quantos a busca ACHOU do outro lado da árvore, e que o filtro escondeu.
@@ -111,9 +142,13 @@ export function PlanoSubcentroSelect({
     if (mostrarTodos || !tipoOperacao) return 0;
     const term = search.trim().toLowerCase();
     return Array.from(classMap.values()).filter(c =>
-      !combinaTipo(c) && (!term || c.subcentro.toLowerCase().includes(term))).length;
+      /* ⚠ CONTA DENTRO DA TRAVA. Contar fora dela anunciava "83 do outro lado ocultos" para
+         quem só podia escolher entre 53 — e o número, sendo sempre alto, fazia do convite a
+         clicar um traço permanente da tela em vez de uma resposta à busca. */
+      (!escopoObrigatorio || combinaEscopo(c)) && combinaDre(c)
+      && !combinaTipo(c) && (!term || c.subcentro.toLowerCase().includes(term))).length;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [classMap, search, tipoOperacao, mostrarTodos]);
+  }, [classMap, search, tipoOperacao, escopoNegocio, escopoObrigatorio, somenteCompoeDre, mostrarTodos]);
 
   const handleSelect = (sub: string) => {
     onChange(sub);

@@ -300,6 +300,8 @@ export function BarterVendaModal({
             classificacoes={classificacoes}
             tipoOperacao="1-Entradas"
             escopoNegocio="agricultura"
+            escopoObrigatorio
+            somenteCompoeDre
             search={busca}
             onSearchChange={setBusca}
           />

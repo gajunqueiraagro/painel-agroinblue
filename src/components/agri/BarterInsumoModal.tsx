@@ -5,9 +5,14 @@
  * `LancamentoV2Dialog` no PR-U2c-1D e usada por dez telas). Ele trabalha com o SUBCENTRO em
  * texto e devolve a linha inteira do plano no `onSelected` — e é dela que sai o
  * `plano_conta_id`, que é o que `agri_oc_insumos` guarda.
- * ⚠ `escopoNegocio='agricultura'` E `tipoOperacao='2-Saídas'`: o plano passou de 137 para 206
- * subcentros, e sem o pré-filtro "semente" devolveria pecuária junto. O insumo do barter é
- * sempre custo — nunca entrada.
+ * ⚠ `escopoNegocio='agricultura'` + `tipoOperacao='2-Saídas'` + `escopoObrigatorio` +
+ * `somenteCompoeDre`: as duas primeiras sempre funcionaram; as duas últimas nasceram de um
+ * defeito de tela. O escape "mostrar todos" do seletor soltava o tipo E o escopo de uma vez, e
+ * por ali entrava "Dividendos Despesas Pessoais" — `administrativo`, `compoe_dre = false`.
+ * Classificar adubo como dividendo tira o custo do DRE da safra e infla o resultado.
+ * ⚠ MEDIDO EM 13/09/2026: com a trava, a lista tem 53 contas — as de agricultura, saída, que
+ * compõem o DRE. Sem `somenteCompoeDre` seriam 55; as duas a mais não entram em resultado
+ * nenhum, e um custo que não compõe o DRE não é custo de safra.
  * ⚠ A SAFRA É DO INSUMO, e o form diz isso por escrito: ela costuma ser DIFERENTE da do grão,
  * porque o barter atravessa safras. É a razão de o contrato não ter safra.
  */
@@ -22,6 +27,7 @@ import { PlanoSubcentroSelect } from '@/components/shared/PlanoSubcentroSelect';
 import { Save } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { parseMoeda } from '@/lib/calculos/numeroBR';
+import { UNIDADES_INSUMO, unidadeConhecida } from '@/lib/agri/unidades';
 import type { ClassificacaoItem } from '@/hooks/useFinanceiroV2';
 import type { InsumoPayload, BarterInsumo } from '@/hooks/useBarterInsumos';
 
@@ -56,7 +62,10 @@ export function BarterInsumoModal({
     setProduto(insumo?.produto ?? '');
     setNf(insumo?.nf_numero ?? '');
     setQuantidade(insumo?.quantidade != null ? String(insumo.quantidade).replace('.', ',') : '');
-    setUnidade(insumo?.unidade ?? '');
+    /* ⚠ TRIM NA LEITURA: a unidade gravada como texto livre pode ter espaço em volta, e
+       " kg " não casaria com o item "kg" da lista — o campo abriria vazio sobre um dado que
+       existe. */
+    setUnidade((insumo?.unidade ?? '').trim());
     setValor(insumo?.valor ?? null);
     setSafraId(insumo?.safra_id ?? '');
     setPlanoId(insumo?.plano_conta_id ?? null);
@@ -116,8 +125,25 @@ export function BarterInsumoModal({
             </div>
             <div>
               <Label className="text-[10px]">Unidade</Label>
-              <Input value={unidade} onChange={e => setUnidade(e.target.value)}
-                placeholder="sc, kg, L" className={cn('mt-0.5 h-8 text-[12px]', FOCO)} />
+              <Select value={unidade} onValueChange={setUnidade}>
+                <SelectTrigger className={cn('mt-0.5 h-8 text-[12px]', FOCO)}>
+                  <SelectValue placeholder="—" />
+                </SelectTrigger>
+                <SelectContent>
+                  {UNIDADES_INSUMO.map(u => (
+                    <SelectItem key={u.valor} value={u.valor} className="text-[12px]">{u.label}</SelectItem>
+                  ))}
+                  {/* ⚠ O VALOR LEGADO CONTINUA NA LISTA, e só ele. Um insumo gravado com "Ton"
+                      antes do catálogo abriria com o campo VAZIO e diria "salvo" apagando a
+                      unidade que tinha — perda silenciosa num gesto que era só conferir. Ele
+                      aparece uma vez, marcado, e sai quando o operador escolher a canônica. */}
+                  {unidade && !unidadeConhecida(unidade) && (
+                    <SelectItem value={unidade} className="text-[12px]">
+                      {unidade} (fora do catálogo)
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label className="text-[10px]">Valor <span className="text-destructive">*</span></Label>
@@ -155,6 +181,8 @@ export function BarterInsumoModal({
               classificacoes={classificacoes}
               tipoOperacao="2-Saídas"
               escopoNegocio="agricultura"
+              escopoObrigatorio
+              somenteCompoeDre
               search={busca}
               onSearchChange={setBusca}
             />
