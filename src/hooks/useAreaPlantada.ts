@@ -294,8 +294,15 @@ export function useTalhoesDaSafra(clienteId: string | null | undefined, safraId:
         for (const p of pastos) { nomes.set(p.id, p.nome); fazendaDoPasto.set(p.id, p.fazenda_id); }
         const fids = Array.from(new Set(pastos.map(p => p.fazenda_id).filter(Boolean))) as string[];
         if (fids.length > 0) {
-          const { data: fs } = await db.from('fazendas').select('id, nome').in('id', fids);
-          for (const f of (fs ?? []) as Array<{ id: string; nome: string }>) fazendas.set(f.id, f.nome);
+          /* ⚠ `codigo` NO `select`, e não só no tipo: o mapa `codigos` existia vazio desde o
+             POLISH-13 porque a coluna nunca foi pedida — o TSC não acusa (o builder é `as any`)
+             e a tela mostrava "—" com o dado inteiro no banco. Pedir a coluna é o conserto;
+             conferir o `select` depois de editar é a lição. */
+          const { data: fs } = await db.from('fazendas').select('id, nome, codigo').in('id', fids);
+          for (const f of (fs ?? []) as Array<{ id: string; nome: string; codigo: string | null }>) {
+            fazendas.set(f.id, f.nome);
+            codigos.set(f.id, f.codigo);
+          }
         }
       }
       if (!vivo) return;
