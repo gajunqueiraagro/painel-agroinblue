@@ -19,7 +19,15 @@ export interface LancamentoLinha {
   doc: string;
   mov: number;
 }
-const diaBR = (iso: string) => (iso.length >= 10 ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '—');
+/**
+ * ⚠ O ANO VEM DA PRÓPRIA DATA, dois dígitos, e nunca do relógio: no drill do rateio
+ * administrativo a lista atravessa a virada do ano (a janela da safra vai de julho a junho), e
+ * "15/01" sem ano faz duas linhas de anos diferentes parecerem a mesma. Deduzir o ano do "hoje"
+ * acertaria em janeiro e mentiria em julho.
+ */
+const dataBR = (iso: string) => (iso.length >= 10
+  ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(2, 4)}`
+  : '—');
 /* Alinhamento e campo de ordenação por coluna. O `campo` é o que liga o cabeçalho à régua de
    `drillEconomico`: sem ele o cabeçalho seria decorativo, com ele o clique tem para onde ir. */
 const COLS: { h: string; align: string; campo: CampoOrdemLanc; centro?: true }[] = [
@@ -87,13 +95,15 @@ export function TabelaLancamentosCompacta({
             className={`border-t border-slate-100 odd:bg-[#1e3a5f]/[0.03] hover:bg-[#1e3a5f]/[0.06]${onAbrir ? ' cursor-pointer' : ''}`}
             title={onAbrir ? 'Abrir o lançamento para corrigir' : undefined}
             onClick={onAbrir ? () => onAbrir(it.id) : undefined}>
-            <td className={`px-1.5 py-1 whitespace-nowrap tabular-nums ${SEP}`}>{diaBR(it.data)}</td>
+            {/* Data e Doc em 9px: são as duas colunas de referência, não de leitura — cabem
+                menores e devolvem largura para descrição e favorecido, que é o que se lê. */}
+            <td className={`px-1.5 py-1 whitespace-nowrap tabular-nums text-[9px] ${SEP}`}>{dataBR(it.data)}</td>
             <td className={`px-1.5 py-1 max-w-[140px] truncate ${SEP}`} title={it.produto || '—'}>{it.produto || '—'}</td>
             <td className={`px-1.5 py-1 max-w-[120px] truncate ${SEP}`} title={it.fornecedor || '—'}>{it.fornecedor || '—'}</td>
             {mostrarCentro && (
               <td className={`px-1.5 py-1 max-w-[100px] truncate text-muted-foreground ${SEP}`} title={it.centro || '—'}>{it.centro || '—'}</td>
             )}
-            <td className={`px-1.5 py-1 max-w-[80px] truncate text-center text-muted-foreground ${SEP}`} title={it.doc || '—'}>{it.doc || '—'}</td>
+            <td className={`px-1.5 py-1 max-w-[80px] truncate text-center text-[9px] text-muted-foreground ${SEP}`} title={it.doc || '—'}>{it.doc || '—'}</td>
             <td className="px-1.5 py-1 text-right tabular-nums whitespace-nowrap">{formatMoeda(Math.abs(it.mov))}</td>
           </tr>
         ))}

@@ -25,9 +25,14 @@ export function AnaliseDrawer({ titulo, subtitulo, corAccent = '#1e3a5f', total,
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end" onClick={onClose}>
+    // ⚠ O RESPIRO É NO INVÓLUCRO, não no painel: com `padding` aqui, o `h-full` do painel passa
+    // a medir a altura JÁ DESCONTADA, e ele encolhe em vez de vazar. Um `margin` no painel
+    // deixaria o `h-full` medindo a tela inteira e empurraria o rodapé do TOTAL para fora.
+    <div className="fixed inset-0 z-50 flex justify-end p-3" onClick={onClose}>
       <div className="absolute inset-0 bg-black/20" />
-      <div className="relative h-full w-[560px] max-w-[92vw] bg-white border-l shadow-xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+      {/* Solto das bordas, o painel deixa de ser um recorte da tela e vira uma peça — por isso
+          borda e canto nos quatro lados, no lugar da `border-l` de quando ele colava. */}
+      <div className="relative h-full w-[560px] max-w-[92vw] bg-white border rounded-md shadow-2xl flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
         {/* Faixa superior de identidade (accent contextual, detalhe). */}
         <div className="h-[3px] shrink-0" style={{ background: corAccent }} />
         <div className="flex items-start justify-between gap-2 px-3 py-2 border-b bg-[#1e3a5f]/[0.04]">

@@ -514,7 +514,11 @@ export function AgriDreCulturaTab() {
           seção única mostraria uma fração do número clicado. */}
       {drill && (
         <AnaliseDrawer
-          titulo={`${tituloColuna(drill.cultura)} · ${m.rotulos.get(drill.ordem) ?? ''}`}
+          /* ⚠ A SAFRA ENTRA NO TÍTULO porque o drawer sobrevive a uma troca de contexto na
+             cabeça do operador: ele abre o detalhe, vai conferir a nota fiscal, volta — e o
+             número só quer dizer alguma coisa junto do período a que pertence. */
+          titulo={`${tituloColuna(drill.cultura)} · ${m.rotulos.get(drill.ordem) ?? ''}`
+            + (safraAtual ? ` · Safra ${safraAtual.codigo || safraAtual.nome}` : '')}
           subtitulo={pesoDoDrill != null && totalRateado > 0.005
             ? `direto + rateado por área · ${formatNum(pesoDoDrill * 100, 1)}% da área da safra`
             : `${GRUPO_DA_LINHA[drill.ordem] ?? ''} · ${itensDiretos.length} lançamento${itensDiretos.length === 1 ? '' : 's'}`}
@@ -560,7 +564,7 @@ export function AgriDreCulturaTab() {
                   R$ 5,9 milhões de pool dentro de uma célula de R$ 5,1 milhões e conclui que a
                   tela está somando errado. O que ele vê é o pool INTEIRO; o que a cultura
                   recebe é a fração dita ao lado. */}
-              <p className="mb-1.5 rounded bg-muted/60 px-2 py-1 text-[10px] leading-snug text-muted-foreground">
+              <p className="mb-1.5 rounded bg-muted/60 px-2 py-1 text-[9px] leading-snug text-muted-foreground">
                 Valores do pool comum, inteiros — a cultura recebe{' '}
                 {pesoDoDrill != null ? `${formatNum(pesoDoDrill * 100, 1)}%` : 'a fração'} dele por área.
                 {drill.ordem === LINHA.rateioAdmin && poolAdmin.porAno.length > 0 && (
@@ -595,7 +599,13 @@ export function AgriDreCulturaTab() {
              banco e a lista do drill é lida do PostgREST. Atualizar só uma deixaria a célula
              dizendo um número e o detalhe dela outro — na mesma tela, ao mesmo tempo. */
           if (ok && id) {
+            /* ⚠ AS TRÊS FONTES, e nenhuma sobra: a matriz vem da RPC, a lista das seções
+               diretas vem da query da safra, e a seção rateada do administrativo vem de uma
+               query PRÓPRIA — o lançamento administrativo tem `safra_id` nulo e não está na
+               da safra. Recarregar duas das três é o pior dos mundos: a célula muda e o
+               detalhe dela não, na mesma tela aberta. */
             await recarregarLancamentos();
+            await poolAdmin.recarregar();
             await recarregarDre();
           }
           return ok;

@@ -20,7 +20,7 @@
  * "nenhum lançamento" para R$ 190 mil rateados. São 1.318 linhas na janela contra 413 — uma
  * consulta, não treze — e o critério fica idêntico ao do SQL, letra por letra.
  */
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { paginarTudo } from '@/lib/financeiro/paginarTudo';
 import { useNomesDeFornecedores } from '@/hooks/useNomesDeFornecedores';
@@ -55,9 +55,11 @@ export function usePoolAdministrativo(
   ate: string | null | undefined,
 ) {
   const ativo = !!clienteId && !!de && !!ate;
+  const queryClient = useQueryClient();
+  const chave = ['dre-agri-pool-admin', clienteId ?? '', de ?? '', ate ?? ''];
 
   const { data: lancamentos } = useQuery({
-    queryKey: ['dre-agri-pool-admin', clienteId ?? '', de ?? '', ate ?? ''],
+    queryKey: chave,
     enabled: ativo,
     queryFn: async (): Promise<LancamentoDaSafra[]> => paginarTudo<LancamentoDaSafra>(
       async (inicio, tamanho) => {
@@ -117,9 +119,19 @@ export function usePoolAdministrativo(
     porAno.push({ ano, total, percentual: pct, contribui: total * ((pct ?? 0) / 100) });
   }
 
+  /**
+   * ⚠ ESTE POOL PRECISA DE RECARGA PRÓPRIA, e é o defeito que o PR-DRILL-07 pagou: salvar no
+   * modal recarregava a safra e a RPC, mas o administrativo tem `safra_id` NULO — ele não está
+   * na query da safra, e a lista do drawer continuava com o texto antigo até um F5. A célula
+   * do DRE já mostrava o valor novo, o que é pior que não atualizar nada: a mesma tela dizia
+   * duas coisas.
+   */
+  const recarregar = () => queryClient.invalidateQueries({ queryKey: chave });
+
   return {
     lancamentos: lancamentos ?? [],
     fornecedores,
+    recarregar,
     porAno,
     totalDoPool: porAno.reduce((s, a) => s + a.total, 0),
     carregando: ativo && !lancamentos,
