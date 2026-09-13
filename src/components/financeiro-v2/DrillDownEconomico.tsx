@@ -19,7 +19,7 @@
 import { useMemo, useState } from 'react';
 import { ArrowLeft, ChevronRight, ArrowDown, ArrowUp } from 'lucide-react';
 import { formatMoeda } from '@/lib/calculos/formatters';
-import { TabelaLancamentosCompacta } from '@/components/financeiro-v2/TabelaLancamentosCompacta';
+import { TabelaLancamentosCompacta, TH_FIXO } from '@/components/financeiro-v2/TabelaLancamentosCompacta';
 import {
   agruparPorNivel, ordenarNos, ordenarLancamentos, semNivel, ROTULO_NIVEL,
   type ItemDrill, type NivelDrill, type CampoOrdem, type CampoOrdemLanc, type Direcao,
@@ -34,6 +34,7 @@ interface Props<T extends ItemDrill> {
   niveis: readonly NivelDrill[];
   onAbrirLancamento?: (id: string) => void;
 }
+
 
 export function DrillDownEconomico<T extends ItemDrill>({ itens, raiz, niveis, onAbrirLancamento }: Props<T>) {
   /** O caminho descido: um valor escolhido por degrau. `[]` = na raiz. */
@@ -112,12 +113,12 @@ export function DrillDownEconomico<T extends ItemDrill>({ itens, raiz, niveis, o
 
       {nivelAtual ? (
         <table className="w-full border-collapse text-[10px]">
-          <thead className="sticky top-0 bg-[#1e3a5f]/[0.06]">
+          <thead>
             <tr>
               {([['nome', ROTULO_NIVEL[nivelAtual], 'text-left'], ['valor', 'Valor', 'text-right']] as const).map(
                 ([campo, rotulo, align], i) => (
                   <th key={campo}
-                    className={`cursor-pointer select-none px-1.5 py-1 text-[8px] font-semibold uppercase text-[#1e3a5f] ${align}${i === 0 ? ' border-r border-slate-100' : ''}`}
+                    className={`${TH_FIXO} cursor-pointer select-none px-1.5 py-1 text-[8px] font-semibold uppercase text-[#1e3a5f] ${align}${i === 0 ? ' border-r border-slate-100' : ''}`}
                     title={`Ordenar por ${rotulo}`}
                     onClick={() => trocarOrdemNo(campo)}>
                     <span className={`inline-flex items-center gap-0.5 ${align === 'text-right' ? 'flex-row-reverse' : ''}`}>

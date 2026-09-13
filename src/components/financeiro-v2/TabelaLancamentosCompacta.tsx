@@ -39,6 +39,20 @@ const COLS: { h: string; align: string; campo: CampoOrdemLanc; centro?: true }[]
   { h: 'Valor', align: 'text-right', campo: 'mov' },
 ];
 const SEP = 'border-r border-slate-100';
+/**
+ * ⚠ O `sticky` VAI NO `th`, NUNCA NO `thead` — e é a razão de o cabeçalho subir junto com a
+ * lista até aqui. Com `border-collapse: collapse`, que estas tabelas usam, o navegador não
+ * gruda `thead` nem `tr`: só a CÉLULA. O `sticky` estava escrito no lugar certo em teoria e no
+ * lugar errado para esta tabela, e por isso não havia nada a "ligar" — havia o que mover.
+ * ⚠ O FUNDO PRECISA SER OPACO. `bg-[#1e3a5f]/[0.06]` é translúcido: grudado, ele deixaria as
+ * linhas passarem por baixo do nome da coluna. `#f1f3f5` é a MESMA cor que aquele 6% produz
+ * sobre o branco do painel — muda a opacidade, não o tom.
+ * ⚠ A BORDA DE BAIXO É `box-shadow`, não `border`: borda colapsada pertence à tabela, não à
+ * célula, e fica para trás quando a célula gruda — o cabeçalho viajaria sem a linha que o
+ * separa do corpo.
+ */
+export const TH_FIXO = 'sticky top-0 z-10 bg-[#f1f3f5] shadow-[inset_0_-1px_0_#e2e8f0]';
+
 
 /**
  * ⚠ `onAbrir` É OPCIONAL POR NECESSIDADE, NÃO POR CONVENIÊNCIA — e a distinção importa, porque
@@ -67,13 +81,13 @@ export function TabelaLancamentosCompacta({
   const ordenavel = !!onOrdenar && !!ordem;
   return (
     <table className="w-full border-collapse text-[10px]">
-      <thead className="sticky top-0 bg-[#1e3a5f]/[0.06]">
+      <thead>
         <tr>
           {cols.map((c, i) => {
             const ativo = ordenavel && ordem.campo === c.campo;
             return (
               <th key={c.h}
-                className={`px-1.5 py-1 font-semibold uppercase text-[8px] text-[#1e3a5f] ${c.align}`
+                className={`${TH_FIXO} px-1.5 py-1 font-semibold uppercase text-[8px] text-[#1e3a5f] ${c.align}`
                   + `${i < cols.length - 1 ? ` ${SEP}` : ''}${ordenavel ? ' cursor-pointer select-none' : ''}`}
                 title={ordenavel ? `Ordenar por ${c.h}` : undefined}
                 onClick={ordenavel ? () => onOrdenar(c.campo) : undefined}>
