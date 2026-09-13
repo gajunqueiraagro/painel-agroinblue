@@ -37,11 +37,14 @@ export function ColheitaPanel({ clienteId, areas, somenteLeitura }: Props) {
            acima dele, e uma lista sem teto empurraria o formulário de plantio para fora da
            vista. Na tela de Produção o mesmo componente ocupa o que sobra da página. */
         <div key={area.id} className="flex max-h-[320px] min-h-0 flex-col">
+          {/* ⚠ AQUI É SEMPRE UM TALHÃO — o do cadastro que está aberto. A lista aceita vários
+              desde o PR-POR-CULTURA-11 (a tela de Produção usa "Todos os talhões"); no
+              cadastro a pergunta continua sendo a de um pasto só. */}
           <CargasDaArea
             clienteId={clienteId}
-            safraAreaId={area.id}
+            talhoes={[{ id: area.id, cultura: area.cultura, area_plantada_ha: area.area_plantada_ha, pastoNome: '—' }]}
+            talhaoDestino={{ id: area.id, cultura: area.cultura, area_plantada_ha: area.area_plantada_ha, pastoNome: '—' }}
             cultura={area.cultura}
-            areaHa={area.area_plantada_ha}
             linhas={linhas.filter(l => l.safra_area_id === area.id)}
             salvarCarga={salvarCarga}
             excluirCarga={excluirCarga}

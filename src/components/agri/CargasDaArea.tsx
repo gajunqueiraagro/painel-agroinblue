@@ -72,7 +72,7 @@ const doBanco = (r: ColheitaRow): CargaForm => ({
  * ISO (`yyyy-mm-dd`) e `HH:MM`, onde a ordem alfabética É a cronológica, sem construir mil
  * `Date` a cada render.
  */
-const COLUNAS: ReadonlyArray<ColunaOrdenavel<ColheitaRow, string> & { h: string; direita?: boolean }> = [
+const COLUNAS_BASE: ReadonlyArray<ColunaOrdenavel<ColheitaRow, string> & { h: string; direita?: boolean }> = [
   { coluna: 'data', h: 'Data', tipo: 'data', valor: l => l.data_colheita },
   { coluna: 'hora', h: 'Hora', tipo: 'data', valor: l => l.hora_chegada },
   { coluna: 'ticket', h: 'Ticket', tipo: 'texto', valor: l => l.ticket_balanca },
@@ -84,6 +84,21 @@ const COLUNAS: ReadonlyArray<ColunaOrdenavel<ColheitaRow, string> & { h: string;
   { coluna: 'sacas', h: 'Sacas boas', tipo: 'numero', direita: true, valor: l => l.sacas_boas },
   { coluna: 'roca', h: 'Roça (sc)', tipo: 'numero', direita: true, valor: l => l.grao_roca_sacas },
 ];
+
+/**
+ * ⚠ A COLUNA TALHÃO É A PRIMEIRA, E SEMPRE — decisão do Gabriel. Mesmo com um talhão só ela
+ * fica: uma coluna que aparece e some conforme a seleção obriga o operador a reaprender a
+ * tabela a cada troca, e a lista deixa de se ler igual de um dia para o outro (A23).
+ * ⚠ ELA ORDENA PELO NOME DO PASTO, que é o que se vê — não pelo id, que ninguém lê. Ordenar
+ * por ela agrupa a cultura visualmente em "Todos os talhões".
+ */
+const colunasCom = (nomePorId: Map<string, string>) => ([
+  {
+    coluna: 'talhao', h: 'Talhão', tipo: 'texto' as const,
+    valor: (l: ColheitaRow) => nomePorId.get(l.safra_area_id) ?? '',
+  },
+  ...COLUNAS_BASE,
+]);
 
 /**
  * ⚠ CABEÇALHO ESCURO, COMO O DA CENTRAL DE OPERAÇÕES — `bg-primary` com
@@ -100,18 +115,40 @@ const TH = 'sticky top-0 z-10 bg-primary px-1.5 py-1 text-[9px] font-semibold up
 const TFOOT = 'sticky bottom-0 z-10 bg-primary px-1.5 py-1 text-[10px] font-bold tabular-nums'
   + ' text-primary-foreground';
 
+/** O talhão como esta lista precisa conhecê-lo. */
+export interface TalhaoDaLista {
+  id: string;
+  cultura: string;
+  area_plantada_ha: number;
+  pastoNome: string;
+  fazendaNome?: string | null;
+}
+
 export function CargasDaArea({
-  clienteId, safraAreaId, cultura, areaHa, pastoNome, fazendaNome, safraRotulo,
-  linhas, salvarCarga, excluirCarga, somenteLeitura,
+  clienteId, talhoes, talhaoDestino, cultura, safraRotulo,
+  linhas, salvarCarga, excluirCarga, somenteLeitura, rotuloTotal,
 }: {
   clienteId: string | null | undefined;
-  safraAreaId: string;
+  /**
+   * ⚠ UM OU VÁRIOS — PR-POR-CULTURA-11. Com "Todos os talhões" a lista mostra as cargas da
+   * cultura inteira, e a coluna Talhão é o que diz de qual pasto veio cada uma. Manter a
+   * assinatura de um talhão só obrigaria a montar N listas empilhadas, cada uma com seu
+   * cabeçalho — e a ordenação por data deixaria de existir entre elas.
+   */
+  talhoes: readonly TalhaoDaLista[];
+  /**
+   * Onde uma carga NOVA cai. `null` em "Todos os talhões" — e aí não há como lançar.
+   *
+   * ⚠ O BOTÃO DESLIGA COM O MOTIVO ESCRITO AO LADO, a regra da OC: a FK da carga aponta para
+   * UM talhão, e escolher "o primeiro" gravaria no pasto errado sem avisar. Editar continua
+   * funcionando em "Todos" — a carga gravada já sabe de onde é.
+   */
+  talhaoDestino: TalhaoDaLista | null;
   cultura: string;
-  areaHa: number;
-  pastoNome?: string;
-  fazendaNome?: string | null;
   safraRotulo?: string;
-  /** Só as cargas DESTE talhão — quem filtra é quem chama, que é dono da leitura. */
+  /** "Total do talhão" ou "Total da cultura", conforme o recorte. */
+  rotuloTotal?: string;
+  /** Só as cargas DO RECORTE — quem filtra é quem chama, que é dono da leitura. */
   linhas: readonly ColheitaRow[];
   salvarCarga: ReturnType<typeof useColheita>['salvarCarga'];
   excluirCarga: ReturnType<typeof useColheita>['excluirCarga'];
@@ -121,6 +158,12 @@ export function CargasDaArea({
   const [form, setForm] = useState<CargaForm | null>(null);
   const [salvando, setSalvando] = useState(false);
   const temSaca = unidadeDaCultura(cultura).kgPorSaca != null;
+  const nomePorId = useMemo(
+    () => new Map(talhoes.map(t => [t.id, t.pastoNome])), [talhoes]);
+  const COLUNAS = useMemo(() => colunasCom(nomePorId), [nomePorId]);
+  /* A área do recorte: um talhão, ou a soma dos da cultura em "Todos". */
+  const areaDoRecorte = useMemo(
+    () => talhoes.reduce((acc, t) => acc + t.area_plantada_ha, 0), [talhoes]);
   const comoTexto = (v: number | null) => (v == null ? '' : String(v).replace('.', ','));
 
   /**
@@ -153,13 +196,19 @@ export function CargasDaArea({
 
   const gravar = async () => {
     if (!form || !clienteId) return;
+    /* ⚠ EDITAR SABE DE ONDE É; CRIAR PRECISA DO DESTINO. A carga gravada carrega o próprio
+       `safra_area_id`, então editar funciona mesmo em "Todos"; criar sem destino, não. */
+    const destino = form.id
+      ? (linhas.find(l => l.id === form.id)?.safra_area_id ?? talhaoDestino?.id)
+      : talhaoDestino?.id;
+    if (!destino) { toast.error('Escolha um talhão antes de lançar a carga.'); return; }
     const v = validarCarga(form);
     /* ⚠ O ERRO APARECE, SEMPRE. Botão que diz "salvo" sem gravar é o pior defeito que esta
        tela poderia ter: o romaneio é documento, e o operador não tem como desconfiar. */
     if (!v.ok || !v.payload) { toast.error(v.erro ?? 'Carga inválida.'); return; }
     setSalvando(true);
     try {
-      const r = await salvarCarga(safraAreaId, form.id, v.payload, clienteId);
+      const r = await salvarCarga(destino, form.id, v.payload, clienteId);
       if (!r.ok) { toast.error(r.erro ?? 'Não foi possível salvar a carga.'); return; }
       toast.success(form.id ? 'Carga atualizada.' : 'Carga lançada.');
       setForm(null);
@@ -182,7 +231,8 @@ export function CargasDaArea({
    * com o papel.
    */
   const totaisDoTalhao = useMemo(
-    () => totaisColheita(linhas.map(doBanco), cultura, areaHa), [linhas, cultura, areaHa]);
+    () => totaisColheita(linhas.map(doBanco), cultura, areaDoRecorte),
+    [linhas, cultura, areaDoRecorte]);
 
   /* ⚠ SÓ EXIBIÇÃO: o `tfoot` continua somando `linhas`, não `ordenadas` — soma não muda com a
      ordem, e ligá-la à lista ordenada sugeriria que muda. */
@@ -198,11 +248,22 @@ export function CargasDaArea({
       <div className="mb-1 flex shrink-0 items-center gap-2">
         <span className="text-[11px] font-bold text-foreground">{labelDaCultura(cultura)}</span>
         <span className="text-[10px] tabular-nums text-muted-foreground">
-          {formatNum(areaHa, 2)} ha · {linhas.length} {linhas.length === 1 ? 'carga' : 'cargas'}
+          {formatNum(areaDoRecorte, 2)} ha
+          {talhoes.length > 1 && ` · ${talhoes.length} talhões`}
+          {' · '}{linhas.length} {linhas.length === 1 ? 'carga' : 'cargas'}
         </span>
         <div className="flex-1" />
+        {/* ⚠ O MOTIVO FICA ESCRITO AO LADO, não só no `title`: é a regra da OC, e aqui ela
+            resolve um impasse real — a FK da carga aponta para UM talhão, e em "Todos" não há
+            qual escolher. Botão apagado sem explicação lê como defeito. */}
+        {!talhaoDestino && !somenteLeitura && (
+          <span className="text-[10px] text-muted-foreground">
+            escolha um talhão para lançar
+          </span>
+        )}
         <Button variant="outline" size="sm" className="h-7 gap-1 text-[11px]"
-          disabled={somenteLeitura}
+          disabled={somenteLeitura || !talhaoDestino}
+          title={talhaoDestino ? undefined : 'Em "Todos os talhões" não há onde gravar a carga.'}
           onClick={() => setForm(cargaVazia())}>
           <Plus className="h-3 w-3" /> Nova carga
         </Button>
@@ -229,6 +290,7 @@ export function CargasDaArea({
             )}
             {ordenadas.map(l => (
               <tr key={l.id} className="border-t border-slate-100 odd:bg-[#1e3a5f]/[0.03]">
+                <td className="whitespace-nowrap px-1.5 py-[1px]">{nomePorId.get(l.safra_area_id) ?? '—'}</td>
                 <td className="whitespace-nowrap px-1.5 py-[1px] tabular-nums">{dataBR(l.data_colheita)}</td>
                 <td className="whitespace-nowrap px-1.5 py-[1px] tabular-nums">{(l.hora_chegada ?? '').slice(0, 5) || '—'}</td>
                 <td className="px-1.5 py-[1px]">{l.ticket_balanca || '—'}</td>
@@ -290,11 +352,14 @@ export function CargasDaArea({
               e o fundo tem de ser opaco pelo mesmo motivo. */}
           <tfoot>
             <tr>
-              {/* ⚠ `colSpan` ACOMPANHA O CABEÇALHO: são quatro colunas de identificação antes
-                  do primeiro número (data, hora, ticket, NF). Um `colSpan` desatualizado
-                  desalinha o total inteiro — o mesmo erro de contagem, no rodapé. */}
-              <td className={cn(TFOOT, 'text-left font-semibold uppercase tracking-wide text-muted-foreground')} colSpan={4}>
-                Total do talhão
+              {/* ⚠ `colSpan` ACOMPANHA O CABEÇALHO: são CINCO colunas de identificação antes
+                  do primeiro número (talhão, data, hora, ticket, NF). Um `colSpan`
+                  desatualizado desalinha o total inteiro — foi o defeito do FIX-CABECALHO, e
+                  a coluna nova o traria de volta.
+                  ⚠ TALHÃO NÃO SOMA: nome não soma, e por isso ele entra no `colSpan` do rótulo
+                  em vez de ganhar uma célula de total vazia. */}
+              <td className={cn(TFOOT, 'text-left font-semibold uppercase tracking-wide text-muted-foreground')} colSpan={5}>
+                {rotuloTotal ?? 'Total do talhão'}
               </td>
               <td className={cn(TFOOT, 'text-right')}>{formatNum(totaisDoTalhao.verdeKg, 2)}</td>
               <td className={cn(TFOOT, 'text-right')}>
@@ -316,9 +381,11 @@ export function CargasDaArea({
         aberto={!!form}
         form={form}
         cultura={cultura}
-        talhaoRotulo={`${pastoNome ?? '—'} · ${formatNum(areaHa, 2)} ha`}
+        talhaoRotulo={talhaoDestino
+          ? `${talhaoDestino.pastoNome} · ${formatNum(talhaoDestino.area_plantada_ha, 2)} ha`
+          : (nomePorId.get(linhas.find(l => l.id === form?.id)?.safra_area_id ?? '') ?? '—')}
         safraRotulo={safraRotulo ?? ''}
-        fazendaNome={fazendaNome ?? null}
+        fazendaNome={talhaoDestino?.fazendaNome ?? talhoes[0]?.fazendaNome ?? null}
         salvando={salvando}
         onChange={editar}
         onFechar={() => setForm(null)}

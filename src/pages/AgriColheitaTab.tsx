@@ -27,6 +27,13 @@ import {
 } from '@/lib/agri/colheita';
 
 /**
+ * ⚠ SENTINELA, NÃO STRING VAZIA: `''` é o que o `Select` usa para "nada escolhido", e os dois
+ * estados são diferentes — "ainda não escolhi" abre vazio, "todos" agrega. Um valor nomeado
+ * também impede que um id de talhão chamado "todos" colida algum dia.
+ */
+const TODOS = '__todos__';
+
+/**
  * Um número do consolidado. Sempre no mesmo lugar, mesmo quando é zero (A23).
  *
  * ⚠ SÓ A PRODUTIVIDADE ABRE DETALHE, e por isso o clique é opcional: um card que não leva a
@@ -57,7 +64,9 @@ export function AgriColheitaTab() {
   const clienteId = clienteAtual?.id ?? null;
   const { safras } = useSafrasLavoura(clienteId);
   const [safraId, setSafraId] = useState('');
-  const [talhaoId, setTalhaoId] = useState('');
+  const [culturaSel, setCulturaSel] = useState('');
+  /** `TODOS` agrega os talhões da cultura; qualquer outro valor é o id de um talhão. */
+  const [talhaoId, setTalhaoId] = useState(TODOS);
   const [analiseAberta, setAnaliseAberta] = useState(false);
 
   /* A safra mais recente abre por padrão — a lista vem em ordem cronológica crescente. */
@@ -67,11 +76,30 @@ export function AgriColheitaTab() {
 
   const { talhoes } = useTalhoesDaSafra(clienteId, safraId || null);
 
-  /* Trocar de safra invalida o talhão escolhido: ele pertencia à safra anterior. */
+  /**
+   * AS CULTURAS DA SAFRA — o nível do meio do seletor.
+   *
+   * ⚠ MULTI-TALHÃO POR CULTURA É O CASO COMUM, não a exceção: medido no Proto, só a 23/24 tem
+   * talhão único; 24/25 e 25/26 têm dois de amendoim, a 26/27 tem três. Escolher cultura e
+   * depois talhão é a ordem em que o produtor pensa — ele colhe amendoim, não "Ind 02".
+   */
+  const culturasDaSafra = useMemo(
+    () => Array.from(new Set(talhoes.map(t => t.cultura))).sort((a, b) => a.localeCompare(b, 'pt-BR')),
+    [talhoes]);
+
+  /* Trocar de safra invalida a cultura escolhida: ela pode não existir na nova. */
   useEffect(() => {
-    if (talhoes.length === 0) { setTalhaoId(''); return; }
-    if (!talhoes.some(t => t.id === talhaoId)) setTalhaoId(talhoes[0].id);
-  }, [talhoes, talhaoId]);
+    if (culturasDaSafra.length === 0) { setCulturaSel(''); return; }
+    if (!culturasDaSafra.includes(culturaSel)) setCulturaSel(culturasDaSafra[0]);
+  }, [culturasDaSafra, culturaSel]);
+
+  const talhoesDaCultura = useMemo(
+    () => talhoes.filter(t => t.cultura === culturaSel), [talhoes, culturaSel]);
+
+  /* Trocar de cultura invalida o talhão: ele era de outra. Volta para "Todos". */
+  useEffect(() => {
+    if (talhaoId !== TODOS && !talhoesDaCultura.some(t => t.id === talhaoId)) setTalhaoId(TODOS);
+  }, [talhoesDaCultura, talhaoId]);
 
   /**
    * ⚠ UMA LEITURA SÓ PARA OS DOIS: o consolidado soma a safra e a lista mostra o talhão, mas
@@ -81,26 +109,28 @@ export function AgriColheitaTab() {
   const idsDaSafra = useMemo(() => talhoes.map(t => t.id), [talhoes]);
   const { linhas, salvarCarga, excluirCarga } = useColheita(idsDaSafra);
 
-  const talhao = talhoes.find(t => t.id === talhaoId) ?? null;
-  const doTalhao = useMemo(
-    () => linhas.filter(l => l.safra_area_id === talhaoId),
-    [linhas, talhaoId]);
+  const talhaoSel = talhoesDaCultura.find(t => t.id === talhaoId) ?? null;
+  /** Os talhões que a lista mostra: o escolhido, ou todos os da cultura. */
+  const talhoesDaLista = talhaoSel ? [talhaoSel] : talhoesDaCultura;
+  const idsDaLista = useMemo(() => new Set(talhoesDaLista.map(t => t.id)), [talhoesDaLista]);
+  const doRecorte = useMemo(
+    () => linhas.filter(l => idsDaLista.has(l.safra_area_id)), [linhas, idsDaLista]);
 
   /**
-   * O consolidado da safra.
+   * O CONSOLIDADO É DA CULTURA — mudou no PR-POR-CULTURA-11.
    *
-   * ⚠ A CULTURA E A ÁREA SÃO AS DO TALHÃO ABERTO, e isso limita a produtividade: somar
-   * amendoim com mandioca numa produtividade só não significa nada. Enquanto a safra tiver
-   * mais de uma cultura, o número por hectare fica em branco em vez de misturar as duas.
+   * ⚠ ANTES ELE ERA DA SAFRA, e por isso a produtividade ficava em branco sempre que a safra
+   * tinha duas culturas — que é o caso da 25/26. Com a cultura no seletor, o recorte tem uma
+   * unidade só: as sacas por hectare voltam a significar alguma coisa, e a área é a SOMA dos
+   * talhões daquela cultura (24/25 amendoim = 186,5 ha), não a da safra inteira.
    */
-  const culturasNaSafra = useMemo(
-    () => Array.from(new Set(talhoes.map(t => t.cultura))), [talhoes]);
-  const areaDaSafra = useMemo(
-    () => talhoes.reduce((s, t) => s + t.area_plantada_ha, 0), [talhoes]);
-  const umaCulturaSo = culturasNaSafra.length === 1;
+  const areaDaCultura = useMemo(
+    () => talhoesDaCultura.reduce((s, t) => s + t.area_plantada_ha, 0), [talhoesDaCultura]);
+  const idsDaCultura = useMemo(
+    () => new Set(talhoesDaCultura.map(t => t.id)), [talhoesDaCultura]);
 
   const totais = useMemo(() => {
-    const comoForm = linhas.map(l => ({
+    const comoForm = linhas.filter(l => idsDaCultura.has(l.safra_area_id)).map(l => ({
       id: l.id, dataColheita: l.data_colheita ?? '', ticketBalanca: '', nfProdutor: '', filial: '',
       horaChegada: '',
       pesoVerdeKg: String(l.peso_verde_kg ?? ''), pesoSecoKg: String(l.peso_seco_kg ?? ''),
@@ -109,11 +139,10 @@ export function AgriColheitaTab() {
       graoRocaKg: String(l.grao_roca_kg ?? ''), rendaLiquidaPct: '',
       taxaSecagem: '', valorSecagem: String(l.valor_secagem ?? ''), observacoes: '',
     })) as CargaForm[];
-    return totaisColheita(comoForm, umaCulturaSo ? culturasNaSafra[0] : null,
-      umaCulturaSo ? areaDaSafra : null);
-  }, [linhas, umaCulturaSo, culturasNaSafra, areaDaSafra]);
+    return totaisColheita(comoForm, culturaSel || null, areaDaCultura);
+  }, [linhas, idsDaCultura, culturaSel, areaDaCultura]);
 
-  const unidade = unidadeDaCultura(umaCulturaSo ? culturasNaSafra[0] : null);
+  const unidade = unidadeDaCultura(culturaSel || null);
   const safraLabel = safras.find(s => s.id === safraId);
 
   return (
@@ -138,16 +167,37 @@ export function AgriColheitaTab() {
               </SelectContent>
             </Select>
           </div>
-          <div className="w-[260px]">
-            <Label className="text-[10px]">Talhão</Label>
-            <Select value={talhaoId} onValueChange={setTalhaoId} disabled={talhoes.length === 0}>
+          {/* ⚠ TRÊS NÍVEIS, NA ORDEM EM QUE O PRODUTOR PENSA: ele colhe amendoim numa safra, e
+              só depois lembra em que pasto. Medido no Proto, multi-talhão por cultura é o caso
+              COMUM — só a 23/24 tem talhão único —, então o nível do meio não é enfeite. */}
+          <div className="w-[150px]">
+            <Label className="text-[10px]">Cultura</Label>
+            <Select value={culturaSel} onValueChange={setCulturaSel} disabled={culturasDaSafra.length === 0}>
               <SelectTrigger className="mt-0.5 h-8 text-[12px]">
-                <SelectValue placeholder={talhoes.length === 0 ? 'Safra sem área cadastrada' : 'Selecione'} />
+                <SelectValue placeholder={culturasDaSafra.length === 0 ? 'Safra sem área' : 'Selecione'} />
               </SelectTrigger>
               <SelectContent>
-                {talhoes.map(t => (
+                {culturasDaSafra.map(c => (
+                  <SelectItem key={c} value={c} className="text-[12px]">{labelDaCultura(c)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="w-[230px]">
+            <Label className="text-[10px]">Talhão</Label>
+            <Select value={talhaoId} onValueChange={setTalhaoId} disabled={talhoesDaCultura.length === 0}>
+              <SelectTrigger className="mt-0.5 h-8 text-[12px]">
+                <SelectValue placeholder={talhoesDaCultura.length === 0 ? 'Cultura sem talhão' : 'Selecione'} />
+              </SelectTrigger>
+              <SelectContent>
+                {/* ⚠ "TODOS" NO TOPO, e é o padrão ao entrar: a pergunta que o produtor faz
+                    primeiro é sobre a cultura inteira; o talhão é o detalhe de quem vai lançar. */}
+                <SelectItem value={TODOS} className="text-[12px]">
+                  Todos os talhões{talhoesDaCultura.length > 0 && ` (${talhoesDaCultura.length})`}
+                </SelectItem>
+                {talhoesDaCultura.map(t => (
                   <SelectItem key={t.id} value={t.id} className="text-[12px]">
-                    {labelDaCultura(t.cultura)} · {t.pastoNome} · {formatNum(t.area_plantada_ha, 2)} ha
+                    {t.pastoNome} · {formatNum(t.area_plantada_ha, 2)} ha
                     {t.status === 'abertura' && ' (abertura)'}
                   </SelectItem>
                 ))}
@@ -206,8 +256,10 @@ export function AgriColheitaTab() {
           )}
           <div className="flex-1" />
           <span className="text-[10px] text-muted-foreground">
-            {safraLabel?.codigo || safraLabel?.nome || '—'} · {totais.cargas} {totais.cargas === 1 ? 'carga' : 'cargas'}
-            {!umaCulturaSo && culturasNaSafra.length > 1 && ' · safra com mais de uma cultura'}
+            {safraLabel?.codigo || safraLabel?.nome || '—'}
+            {culturaSel && ` · ${labelDaCultura(culturaSel)}`}
+            {' · '}{totais.cargas} {totais.cargas === 1 ? 'carga' : 'cargas'}
+            {talhoesDaCultura.length > 1 && ` · ${talhoesDaCultura.length} talhões`}
           </span>
         </div>
       </div>
@@ -220,27 +272,24 @@ export function AgriColheitaTab() {
         aberto={analiseAberta}
         onFechar={() => setAnaliseAberta(false)}
         totais={totais}
-        cultura={umaCulturaSo ? culturasNaSafra[0] : null}
-        areaHa={umaCulturaSo ? areaDaSafra : null}
+        cultura={culturaSel || null}
+        areaHa={areaDaCultura || null}
         safraRotulo={safraLabel?.codigo || safraLabel?.nome || ''}
-        avisoCulturas={!umaCulturaSo && culturasNaSafra.length > 1
-          ? 'Esta safra tem mais de uma cultura. Os pesos somam; as produtividades não —'
-            + ' sacas de amendoim por hectare não se misturam com toneladas de mandioca.'
-          : undefined}
       />
 
-      {/* ── ROLA: as cargas do talhão ── */}
-      {talhao ? (
+      {/* ── ROLA: as cargas do recorte ── */}
+      {talhoesDaLista.length > 0 ? (
         <CargasDaArea
-          key={talhao.id}
+          /* ⚠ A CHAVE É O RECORTE INTEIRO: trocar de talhão ou entrar em "Todos" recomeça a
+             lista — e com ela a ordenação, que é do recorte anterior. */
+          key={`${culturaSel}-${talhaoId}`}
           clienteId={clienteId}
-          safraAreaId={talhao.id}
-          cultura={talhao.cultura}
-          areaHa={talhao.area_plantada_ha}
-          pastoNome={talhao.pastoNome}
-          fazendaNome={talhao.fazendaNome}
+          talhoes={talhoesDaLista}
+          talhaoDestino={talhaoSel}
+          cultura={culturaSel}
+          rotuloTotal={talhaoSel ? 'Total do talhão' : 'Total da cultura'}
           safraRotulo={safraLabel?.codigo || safraLabel?.nome || ''}
-          linhas={doTalhao}
+          linhas={doRecorte}
           salvarCarga={salvarCarga}
           excluirCarga={excluirCarga}
         />
