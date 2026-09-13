@@ -12,8 +12,10 @@
  * que ainda não tem cultura decidida — receita sem cultura e lançamento marcado com cultura
  * não plantada nesta safra. Zerada, ela diz "a safra está classificada", que é informação.
  * ⚠ CLICAR NA CÉLULA ABRE OS LANÇAMENTOS DELA, no mesmo drawer/árvore do Painel por período.
- * As duas linhas de RATEIO não abrem: o valor chegou ali por peso de área, não por lançamento
- * — não há o que listar, e fingir que há seria mentir sobre a origem do número.
+ * ⚠ E A CÉLULA TEM DUAS PARTES, o que o drill precisou aprender: DIRETO (lançamento marcado
+ * com a cultura) + RATEADO (o pool sem cultura, distribuído por peso de área). No Investimento
+ * do amendoim o direto é R$ 429 mil de um número de R$ 5,1 milhões — mostrar só ele fazia o
+ * relatório parecer errado. O drawer abre as duas seções e a soma fecha com a célula.
  * ⚠ E O LANÇAMENTO ABRE PARA EDIÇÃO, no MESMO `LancamentoV2Dialog` do Painel por período. O
  * clique na linha já existia no `DrillDownEconomico` (prop `onAbrirLancamento`); esta tela é
  * que não o ligava. Nada de modal novo: de onde se enxerga o número, corrige-se o número.
@@ -31,7 +33,8 @@ import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
 import { useSafrasLavoura } from '@/hooks/useAreaPlantada';
 import { useDreAgricola } from '@/hooks/useDreAgricola';
-import { useLancamentosDaSafra } from '@/hooks/useLancamentosDaSafra';
+import { useLancamentosDaSafra, type LancamentoDaSafra } from '@/hooks/useLancamentosDaSafra';
+import { usePoolAdministrativo } from '@/hooks/usePoolAdministrativo';
 import { AnaliseDrawer } from '@/components/financeiro-v2/AnaliseDrawer';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
 import { useFinanceiroV2, type LancamentoV2 } from '@/hooks/useFinanceiroV2';
@@ -40,7 +43,9 @@ import { NIVEIS_DRILL, type ItemDrill } from '@/lib/analise/drillEconomico';
 import {
   montarMatriz, valorDe, resultadoPorHa, percentualCustoDireto, montanteRateado, houveRateio,
   exibeTraco, bucketDaLinha, celulaTemDrill, ehLinhaRateio, ehLinhaSaida,
-  GRUPO_DA_LINHA, TIPO_DA_LINHA, LINHA, COL_TOTAL, COL_NAO_APROPRIADO,
+  temParteRateada, pesoDaCultura,
+  GRUPO_DA_LINHA, TIPO_DA_LINHA, POOL_DA_LINHA, LINHA, COL_TOTAL, COL_COMPARTILHADO,
+  COL_NAO_APROPRIADO,
   ORDENS_CASCATA, ORDENS_ABAIXO_DA_LINHA, ORDENS_SUBTOTAL,
 } from '@/lib/agri/dreCultura';
 
@@ -75,6 +80,10 @@ export function AgriDreCulturaTab() {
   const {
     lancamentos, fornecedores, recarregar: recarregarLancamentos,
   } = useLancamentosDaSafra(clienteAtual?.id ?? null, safraId || null);
+  /* O pool administrativo é o único que não sai por `safra_id` — ver `usePoolAdministrativo`. */
+  const safraAtual = safras.find(s => s.id === safraId);
+  const poolAdmin = usePoolAdministrativo(
+    clienteAtual?.id ?? null, safraAtual?.data_inicio, safraAtual?.data_fim);
 
   /* ── A EDIÇÃO, igual à do Painel por período ────────────────────────────────────────── */
   const fin = useFinanceiroV2();
@@ -119,10 +128,24 @@ export function AgriDreCulturaTab() {
     return labelDaCultura(c);
   };
 
+  const paraItemDrill = useMemo(() => (l: LancamentoDaSafra): ItemDrill => ({
+    id: l.id,
+    data: l.data_pagamento || l.data_vencimento || l.data_competencia || '',
+    mov: ((l.tipo_operacao || '').startsWith('1') ? 1 : -1) * Math.abs(Number(l.valor) || 0),
+    tipo: l.tipo_operacao ?? '',
+    produto: l.descricao,
+    fornecedor: (l.favorecido_id && fornecedores.get(l.favorecido_id)) || '',
+    doc: l.numero_documento || l.documento || '',
+    macro: l.macro_custo ?? null,
+    grupo: l.grupo_custo ?? null,
+    centroPlano: l.centro_custo ?? null,
+    subcentro: l.subcentro ?? null,
+  }), [fornecedores]);
+
   /* ⚠ OS ITENS DO DRILL SAEM DO MESMO `bucketDaLinha` QUE A RPC USA. Agrupar pela coluna
      `cultura` crua faria a lista discordar da célula clicada em toda safra que tenha
      lançamento com cultura não plantada — que é justamente a que mais precisa de conferência. */
-  const itensDoDrill: ItemDrill[] = useMemo(() => {
+  const itensDiretos: ItemDrill[] = useMemo(() => {
     if (!drill) return [];
     const grupo = GRUPO_DA_LINHA[drill.ordem];
     const tipo = TIPO_DA_LINHA[drill.ordem];
@@ -130,22 +153,38 @@ export function AgriDreCulturaTab() {
     return lancamentos
       .filter(l => l.grupo_custo === grupo && l.tipo_operacao === tipo
         && bucketDaLinha(l.cultura, l.grupo_custo, m.culturas) === drill.cultura)
-      .map(l => ({
-        id: l.id,
-        data: l.data_pagamento || l.data_vencimento || l.data_competencia || '',
-        mov: ((l.tipo_operacao || '').startsWith('1') ? 1 : -1) * Math.abs(Number(l.valor) || 0),
-        tipo: l.tipo_operacao ?? '',
-        produto: l.descricao,
-        fornecedor: (l.favorecido_id && fornecedores.get(l.favorecido_id)) || '',
-        doc: l.numero_documento || l.documento || '',
-        macro: l.macro_custo ?? null,
-        grupo: l.grupo_custo ?? null,
-        centroPlano: l.centro_custo ?? null,
-        subcentro: l.subcentro ?? null,
-      }));
-  }, [drill, lancamentos, fornecedores, m.culturas]);
+      .map(paraItemDrill);
+  }, [drill, lancamentos, paraItemDrill, m.culturas]);
 
-  const totalDoDrill = itensDoDrill.reduce((s, it) => s + Math.abs(it.mov), 0);
+  /**
+   * O POOL QUE A LINHA RATEIA — os lançamentos SEM cultura que a RPC distribuiu por área.
+   *
+   * ⚠ ELES APARECEM PELO VALOR CHEIO, e a nota do cabeçalho diz o peso. Multiplicar cada
+   * lançamento pelo peso inventaria centavos que não existem em lugar nenhum — nem no banco,
+   * nem no extrato — e o operador não conseguiria casar a linha com a nota fiscal dela.
+   */
+  const itensDoPool: ItemDrill[] = useMemo(() => {
+    if (!drill || drill.cultura === COL_NAO_APROPRIADO || !temParteRateada(drill.ordem)) return [];
+    if (drill.ordem === LINHA.rateioAdmin) return poolAdmin.lancamentos.map(paraItemDrill);
+    const grupos = POOL_DA_LINHA[drill.ordem] ?? [];
+    return lancamentos
+      .filter(l => l.tipo_operacao === '2-Saídas' && (l.grupo_custo ?? '') !== ''
+        && grupos.includes(l.grupo_custo ?? '')
+        && bucketDaLinha(l.cultura, l.grupo_custo, m.culturas) === COL_COMPARTILHADO)
+      .map(paraItemDrill);
+  }, [drill, lancamentos, poolAdmin.lancamentos, paraItemDrill, m.culturas]);
+
+  /**
+   * ⚠ O RATEADO É A CÉLULA MENOS O DIRETO, e nunca `pool × peso` refeito aqui. A RPC já
+   * arredondou uma vez; refazer a conta no front criaria um segundo resultado e a soma do
+   * drawer deixaria de fechar com o número clicado por centavos — a diferença mais cara de
+   * conferir, porque parece erro de regra e é erro de aritmética repetida.
+   */
+  const valorDaCelula = drill ? valorDe(m, drill.cultura, drill.ordem) : null;
+  const totalDireto = itensDiretos.reduce((s, it) => s + Math.abs(it.mov), 0);
+  const totalDoPool = itensDoPool.reduce((s, it) => s + Math.abs(it.mov), 0);
+  const totalRateado = (valorDaCelula ?? 0) - totalDireto;
+  const pesoDoDrill = drill ? pesoDaCultura(m, drill.cultura) : null;
 
   return (
     <div className="w-full space-y-3 p-4 pb-20 animate-fade-in">
@@ -235,7 +274,7 @@ export function AgriDreCulturaTab() {
               <span>
                 <b className="font-medium text-foreground">{formatMoeda(rateado)}</b> em custos comuns
                 foram rateados por área entre as culturas — as duas linhas de rateio são estimativa,
-                não lançamento, e por isso não abrem detalhe.
+                não lançamento; abri-las mostra o pool comum que as originou.
               </span>
             </p>
           )}
@@ -322,11 +361,11 @@ export function AgriDreCulturaTab() {
                           subtotal && 'font-bold')}>
                           <span className="inline-flex items-center gap-1">
                             {rotulo}
-                            {/* ⚠ O ÍCONE DIZ "ESTE NÚMERO FOI CALCULADO", e é o que separa as
-                                duas linhas de rateio de todas as outras: elas não têm lançamento
-                                por trás, então também não abrem detalhe. */}
+                            {/* ⚠ O ÍCONE DIZ "ESTE NÚMERO FOI CALCULADO", e continua verdade
+                                agora que as duas linhas abrem: o que se abre é o POOL que foi
+                                rateado, não um lançamento da cultura. */}
                             {rateio && (
-                              <span title="Valor estimado: rateio por área, sem lançamento próprio"
+                              <span title="Valor estimado: rateio por área — clique no número para ver o pool que o originou"
                                 className="inline-flex items-center gap-0.5 text-[9px] text-muted-foreground">
                                 <Calculator className="h-2.5 w-2.5" /> estimado
                               </span>
@@ -457,21 +496,76 @@ export function AgriDreCulturaTab() {
       )}
 
       {/* ── O DRILL ──
-          ⚠ MESMO DRAWER E MESMA ÁRVORE DO PAINEL POR PERÍODO, sem cópia: a célula já fixa o
-          grupo do plano, então restam os dois degraus de baixo — centro e subcentro — até o
-          lançamento. */}
+          ⚠ MESMO DRAWER E MESMA ÁRVORE DO PAINEL POR PERÍODO, sem cópia. O que é próprio daqui
+          são as DUAS SEÇÕES: a célula de uma cultura pode ser direto + rateado, e um drawer de
+          seção única mostraria uma fração do número clicado. */}
       {drill && (
         <AnaliseDrawer
           titulo={`${tituloColuna(drill.cultura)} · ${m.rotulos.get(drill.ordem) ?? ''}`}
-          subtitulo={`${GRUPO_DA_LINHA[drill.ordem] ?? ''} · ${itensDoDrill.length} lançamento${itensDoDrill.length === 1 ? '' : 's'}`}
-          total={totalDoDrill}
+          subtitulo={pesoDoDrill != null && totalRateado > 0.005
+            ? `direto + rateado por área · ${formatNum(pesoDoDrill * 100, 1)}% da área da safra`
+            : `${GRUPO_DA_LINHA[drill.ordem] ?? ''} · ${itensDiretos.length} lançamento${itensDiretos.length === 1 ? '' : 's'}`}
+          total={valorDaCelula ?? 0}
           totalLabel="TOTAL DA CÉLULA"
           onClose={() => setDrill(null)}>
-          <DrillDownEconomico
-            itens={itensDoDrill}
-            raiz={GRUPO_DA_LINHA[drill.ordem] ?? ''}
-            niveis={NIVEIS_DRILL.slice(2)}
-            onAbrirLancamento={(id) => { void abrirLancamento(id); }} />
+
+          {/* ── 1. DIRETO: o que alguém marcou com a cultura ── */}
+          {GRUPO_DA_LINHA[drill.ordem] != null && (
+            <div className="mb-3">
+              <div className="mb-1 flex items-baseline justify-between gap-2 border-b pb-1">
+                <span className="text-[11px] font-bold uppercase tracking-wide text-foreground">
+                  Direto da cultura
+                </span>
+                <span className="text-[11px] tabular-nums text-muted-foreground">
+                  {formatMoeda(totalDireto)} · {itensDiretos.length} lançamento{itensDiretos.length === 1 ? '' : 's'}
+                </span>
+              </div>
+              <DrillDownEconomico
+                itens={itensDiretos}
+                raiz={GRUPO_DA_LINHA[drill.ordem] ?? ''}
+                niveis={NIVEIS_DRILL.slice(2)}
+                onAbrirLancamento={(id) => { void abrirLancamento(id); }} />
+            </div>
+          )}
+
+          {/* ── 2. RATEADO: o pool comum, pelo valor cheio, com o peso dito ── */}
+          {itensDoPool.length > 0 && (
+            <div>
+              <div className="mb-1 flex items-baseline justify-between gap-2 border-b pb-1">
+                <span className="text-[11px] font-bold uppercase tracking-wide text-foreground">
+                  Rateado por área
+                </span>
+                <span className="text-[11px] tabular-nums text-muted-foreground">
+                  {formatMoeda(totalRateado)}
+                  {pesoDoDrill != null && m.areaTotal != null && (
+                    <> · {formatNum(pesoDoDrill * 100, 1)}% da área
+                      ({formatNum(m.areaPorCultura.get(drill.cultura) ?? 0, 1)} de {formatNum(m.areaTotal, 1)} ha)</>
+                  )}
+                </span>
+              </div>
+              {/* ⚠ A NOTA É FIXA E FICA NO TOPO DA LISTA, não num rodapé: sem ela o operador lê
+                  R$ 5,9 milhões de pool dentro de uma célula de R$ 5,1 milhões e conclui que a
+                  tela está somando errado. O que ele vê é o pool INTEIRO; o que a cultura
+                  recebe é a fração dita ao lado. */}
+              <p className="mb-1.5 rounded bg-muted/60 px-2 py-1 text-[10px] leading-snug text-muted-foreground">
+                Valores do pool comum, inteiros — a cultura recebe{' '}
+                {pesoDoDrill != null ? `${formatNum(pesoDoDrill * 100, 1)}%` : 'a fração'} dele por área.
+                {drill.ordem === LINHA.rateioAdmin && poolAdmin.porAno.length > 0 && (
+                  <> O administrativo entra antes pelo percentual declarado de cada ano:{' '}
+                    {poolAdmin.porAno.map(a => `${a.ano} ${a.percentual != null ? `${formatNum(a.percentual, 0)}%` : '— não declarado'}`).join(' · ')}.</>
+                )}
+                {' '}Pool listado: {formatMoeda(totalDoPool)} em {itensDoPool.length} lançamento{itensDoPool.length === 1 ? '' : 's'}.
+              </p>
+              <DrillDownEconomico
+                itens={itensDoPool}
+                raiz={drill.ordem === LINHA.rateioAdmin ? 'Administrativo da janela' : 'Pool comum sem cultura'}
+                /* Com mais de um grupo no pool, o grupo volta a ser um degrau — senão centros de
+                   custo de juros e de insumo apareceriam lado a lado sem dizer de onde vêm. */
+                niveis={(POOL_DA_LINHA[drill.ordem]?.length ?? 2) > 1 || drill.ordem === LINHA.rateioAdmin
+                  ? NIVEIS_DRILL.slice(1) : NIVEIS_DRILL.slice(2)}
+                onAbrirLancamento={(id) => { void abrirLancamento(id); }} />
+            </div>
+          )}
         </AnaliseDrawer>
       )}
 

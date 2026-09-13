@@ -11,6 +11,7 @@ import {
   montarMatriz, valorDe, resultadoPorHa, percentualCustoDireto, montanteRateado,
   houveRateio, exibeTraco, LINHA, COL_TOTAL, COL_COMPARTILHADO, COL_NAO_APROPRIADO,
   ORDENS_CASCATA, bucketDaLinha, celulaTemDrill, ehLinhaRateio, ehLinhaSaida,
+  temParteRateada, pesoDaCultura, POOL_DA_LINHA,
   type CelulaDre,
 } from './dreCultura';
 
@@ -221,11 +222,26 @@ describe('o que abre e o que não abre', () => {
     expect(celulaTemDrill(LINHA.depreciacao, 'amendoim')).toBe(false);
   });
 
-  it('⚠ RATEIO NÃO ABRE — o valor é estimado por área, não tem lançamento por trás', () => {
-    expect(celulaTemDrill(LINHA.rateioCompartilhado, 'amendoim')).toBe(false);
-    expect(celulaTemDrill(LINHA.rateioAdmin, 'amendoim')).toBe(false);
+  it('⚠ RATEIO ABRE — e isto reverte o UX-03: o pool rateado é o que explica o número', () => {
+    expect(celulaTemDrill(LINHA.rateioCompartilhado, 'amendoim')).toBe(true);
+    expect(celulaTemDrill(LINHA.rateioAdmin, 'amendoim')).toBe(true);
+    /* A marca "estimado" continua: abrir o pool não faz do valor um lançamento. */
     expect(ehLinhaRateio(LINHA.rateioCompartilhado)).toBe(true);
     expect(ehLinhaRateio(LINHA.custoFixo)).toBe(false);
+  });
+
+  it('⚠ "Não apropriado" não abre rateio: sem área não há peso, e sem peso não há parte rateada', () => {
+    expect(celulaTemDrill(LINHA.rateioCompartilhado, COL_NAO_APROPRIADO)).toBe(false);
+    /* Mas o direto dele abre — são lançamentos de verdade, com cultura não plantada. */
+    expect(celulaTemDrill(LINHA.custoVariavel, COL_NAO_APROPRIADO)).toBe(true);
+  });
+
+  it('só as linhas com pool têm parte rateada', () => {
+    expect(temParteRateada(LINHA.investimento)).toBe(true);
+    expect(temParteRateada(LINHA.rateioCompartilhado)).toBe(true);
+    expect(temParteRateada(LINHA.rateioAdmin)).toBe(true);
+    expect(temParteRateada(LINHA.custoVariavel)).toBe(false);
+    expect(temParteRateada(LINHA.receitaBruta)).toBe(false);
   });
 
   it('a coluna Total não abre: ela é soma de colunas, não de lançamentos', () => {
@@ -237,6 +253,31 @@ describe('o que abre e o que não abre', () => {
     expect(ehLinhaSaida('Receita bruta')).toBe(false);
     expect(ehLinhaSaida('= Resultado de caixa')).toBe(false);
     expect(ehLinhaSaida(undefined)).toBe(false);
+  });
+});
+
+describe('o peso de área', () => {
+  const m = montarMatriz(SET);
+
+  it('é a área da cultura sobre a área total da safra', () => {
+    /* 192,3 de 227,1 no conjunto deste teste. */
+    expect(pesoDaCultura(m, 'amendoim')).toBeCloseTo(0.84676, 5);
+  });
+
+  it('⚠ sem área não há peso — e sem peso a cultura não recebe rateio nenhum', () => {
+    const sem = montarMatriz([
+      cel('soja', LINHA.resultadoCaixa, 10, { area_ha: 0, area_cadastrada: false }),
+    ]);
+    expect(pesoDaCultura(sem, 'soja')).toBeNull();
+  });
+
+  it('o pool do rateio compartilhado são os três grupos de custo comum', () => {
+    expect(POOL_DA_LINHA[LINHA.rateioCompartilhado]).toEqual([
+      'Custo Variável Agricultura', 'Custo Fixo Agricultura', 'Juros de Financiamento Agricultura',
+    ]);
+    expect(POOL_DA_LINHA[LINHA.investimento]).toEqual(['Investimento Agricultura']);
+    /* ⚠ O ADMINISTRATIVO NÃO TEM POOL AQUI: o dele não é da safra, é da janela de datas. */
+    expect(POOL_DA_LINHA[LINHA.rateioAdmin]).toBeUndefined();
   });
 });
 

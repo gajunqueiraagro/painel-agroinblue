@@ -211,10 +211,58 @@ export const GRUPO_DA_LINHA: Record<number, string | null> = {
   [LINHA.depreciacao]: null,
 };
 
-/** A célula abre drill? Só as que têm grupo, e só nas colunas que têm lançamento por trás. */
+/**
+ * O POOL COMUM QUE CADA LINHA RATEIA — PR-AGRI-DRE-DRILL-05.
+ *
+ * ⚠ SÃO OS GRUPOS DOS LANÇAMENTOS SEM CULTURA. A RPC soma esse pool e distribui por peso de
+ * área; a célula da cultura é, portanto, DIRETO + POOL × PESO. O drill mostrava só o direto —
+ * no Investimento do amendoim isso era R$ 429 mil de um número de R$ 5,1 milhões, e a
+ * conclusão natural do operador era que o relatório estava errado.
+ * ⚠ O RATEIO ADMINISTRATIVO NÃO ESTÁ AQUI porque o pool dele NÃO É DA SAFRA: são os
+ * lançamentos `escopo_negocio = 'administrativo'` da JANELA de datas, multiplicados pelo
+ * percentual declarado do ANO de cada um. Ele tem hook próprio — ver `usePoolAdministrativo`.
+ */
+export const POOL_DA_LINHA: Record<number, readonly string[]> = {
+  [LINHA.rateioCompartilhado]: [
+    'Custo Variável Agricultura', 'Custo Fixo Agricultura', 'Juros de Financiamento Agricultura',
+  ],
+  [LINHA.investimento]: ['Investimento Agricultura'],
+};
+
+/** A linha tem parte rateada — pool próprio da safra ou o pool administrativo. */
+export function temParteRateada(ordem: number): boolean {
+  return POOL_DA_LINHA[ordem] != null || ordem === LINHA.rateioAdmin;
+}
+
+/**
+ * O peso de área da cultura no rateio — o mesmo denominador da RPC.
+ *
+ * ⚠ É INFORMATIVO, NUNCA MULTIPLICADOR. O valor rateado que a tela exibe vem da célula menos
+ * o direto, e não deste peso: refazer a multiplicação no front criaria um segundo
+ * arredondamento e a soma do drawer deixaria de fechar com a célula por alguns centavos —
+ * que é exatamente o tipo de diferença que custa uma tarde de conferência.
+ */
+export function pesoDaCultura(m: MatrizDre, cultura: string): number | null {
+  const area = m.areaPorCultura.get(cultura) ?? null;
+  if (area == null || area <= 0 || m.areaTotal == null || m.areaTotal <= 0) return null;
+  return area / m.areaTotal;
+}
+
+/**
+ * A célula abre drill?
+ *
+ * ⚠ AS DUAS LINHAS DE RATEIO ABREM, e isto REVERTE a decisão do UX-03. Lá elas não abriam
+ * porque "não têm lançamento por trás" — e não têm mesmo: o que elas têm é o POOL que foi
+ * rateado, e mostrá-lo com o peso ao lado responde a pergunta que o operador faz ("de onde
+ * veio esse número?") em vez de encerrá-la. A marca "estimado" continua: o valor segue sendo
+ * calculado, não lançado.
+ */
 export function celulaTemDrill(ordem: number, cultura: string): boolean {
   if (cultura === COL_TOTAL || cultura === COL_COMPARTILHADO) return false;
-  return GRUPO_DA_LINHA[ordem] != null;
+  if (GRUPO_DA_LINHA[ordem] != null) return true;
+  /* "Não apropriado" não recebe rateio — não tem área, logo não tem peso nem parte rateada. */
+  if (cultura === COL_NAO_APROPRIADO) return false;
+  return temParteRateada(ordem);
 }
 
 /** A linha é um rateio — o valor é estimado, e o rótulo diz isso. */
