@@ -29,6 +29,8 @@ import {
   type CargaForm,
 } from '@/lib/agri/colheita';
 import type { ColheitaRow, useColheita } from '@/hooks/useColheita';
+import { useOrdenacaoTabela, type ColunaOrdenavel } from '@/hooks/useOrdenacaoTabela';
+import { ThOrdenavel } from '@/components/ui/th-ordenavel';
 
 /**
  * A linha do banco vira campo de texto — JÁ FORMATADO em pt-BR.
@@ -61,14 +63,27 @@ const doBanco = (r: ColheitaRow): CargaForm => ({
   observacoes: r.observacoes ?? '',
 });
 
-/** O cabeçalho da lista, na ordem em que a cooperativa lê o romaneio. */
-const COLUNAS = [
-  { h: 'Data', a: 'text-left' }, { h: 'Hora', a: 'text-left' }, { h: 'Ticket', a: 'text-left' },
-  { h: 'Verde (kg)', a: 'text-right' }, { h: 'Seco (kg)', a: 'text-right' },
-  { h: 'Umid. %', a: 'text-right' }, { h: 'Afla. ppb', a: 'text-right' },
-  { h: 'Sacas boas', a: 'text-right' }, { h: 'Roça (sc)', a: 'text-right' },
-  { h: '', a: 'text-right' },
-] as const;
+/**
+ * O CABEÇALHO DA LISTA, na ordem em que a cooperativa lê o romaneio — e a régua de ordenação
+ * de cada coluna (PR-TABELA-SORT-01).
+ *
+ * ⚠ O TIPO É DA COLUNA, NÃO DO VALOR, e é o que faz 180 vir depois de 27: como texto, "180"
+ * viria antes de "27" porque "1" < "2". Data e hora ordenam como texto de propósito — vêm em
+ * ISO (`yyyy-mm-dd`) e `HH:MM`, onde a ordem alfabética É a cronológica, sem construir mil
+ * `Date` a cada render.
+ */
+const COLUNAS: ReadonlyArray<ColunaOrdenavel<ColheitaRow, string> & { h: string; direita?: boolean }> = [
+  { coluna: 'data', h: 'Data', tipo: 'data', valor: l => l.data_colheita },
+  { coluna: 'hora', h: 'Hora', tipo: 'data', valor: l => l.hora_chegada },
+  { coluna: 'ticket', h: 'Ticket', tipo: 'texto', valor: l => l.ticket_balanca },
+  { coluna: 'nf', h: 'NF', tipo: 'texto', valor: l => l.nf_produtor },
+  { coluna: 'verde', h: 'Verde (kg)', tipo: 'numero', direita: true, valor: l => l.peso_verde_kg },
+  { coluna: 'seco', h: 'Seco (kg)', tipo: 'numero', direita: true, valor: l => l.peso_seco_kg },
+  { coluna: 'umidade', h: 'Umid. %', tipo: 'numero', direita: true, valor: l => l.umidade_pct },
+  { coluna: 'aflatoxina', h: 'Afla. ppb', tipo: 'numero', direita: true, valor: l => l.aflatoxina_ppb },
+  { coluna: 'sacas', h: 'Sacas boas', tipo: 'numero', direita: true, valor: l => l.sacas_boas },
+  { coluna: 'roca', h: 'Roça (sc)', tipo: 'numero', direita: true, valor: l => l.grao_roca_sacas },
+];
 
 const TH = 'sticky top-0 z-10 bg-[#f1f3f5] shadow-[inset_0_-1px_0_#e2e8f0] px-1.5 py-1'
   + ' text-[9px] font-semibold uppercase tracking-wide text-[#1e3a5f]';
@@ -161,6 +176,11 @@ export function CargasDaArea({
   const totaisDoTalhao = useMemo(
     () => totaisColheita(linhas.map(doBanco), cultura, areaHa), [linhas, cultura, areaHa]);
 
+  /* ⚠ SÓ EXIBIÇÃO: o `tfoot` continua somando `linhas`, não `ordenadas` — soma não muda com a
+     ordem, e ligá-la à lista ordenada sugeriria que muda. */
+  const { ordem, alternar, ordenadas } = useOrdenacaoTabela<ColheitaRow, string>(
+    linhas, COLUNAS, { coluna: 'data', direcao: 'asc' });
+
   const dataBR = (iso: string | null) => (iso && iso.length >= 10
     ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(2, 4)}` : '—');
 
@@ -184,15 +204,22 @@ export function CargasDaArea({
       <div className="min-h-0 flex-1 overflow-auto rounded-md border">
         <table className="w-full border-collapse text-[10px]">
           <thead>
-            <tr>{COLUNAS.map(c => <th key={c.h} className={cn(TH, c.a)}>{c.h}</th>)}</tr>
+            <tr>
+              {COLUNAS.map(c => (
+                <ThOrdenavel key={c.coluna} coluna={c.coluna} rotulo={c.h} ordem={ordem}
+                  onOrdenar={alternar} className={TH} alinhaDireita={c.direita} />
+              ))}
+              {/* A coluna de ações não ordena: não há o que comparar num par de botões. */}
+              <th className={cn(TH, 'text-right')} />
+            </tr>
           </thead>
           <tbody>
             {linhas.length === 0 && (
-              <tr><td colSpan={COLUNAS.length} className="px-2 py-3 text-center text-[11px] text-muted-foreground">
+              <tr><td colSpan={COLUNAS.length + 1} className="px-2 py-3 text-center text-[11px] text-muted-foreground">
                 Nenhuma carga lançada neste talhão.
               </td></tr>
             )}
-            {linhas.map(l => (
+            {ordenadas.map(l => (
               <tr key={l.id} className="border-t border-slate-100 odd:bg-[#1e3a5f]/[0.03]">
                 <td className="whitespace-nowrap px-1.5 py-0.5 tabular-nums">{dataBR(l.data_colheita)}</td>
                 <td className="whitespace-nowrap px-1.5 py-0.5 tabular-nums">{(l.hora_chegada ?? '').slice(0, 5) || '—'}</td>
