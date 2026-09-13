@@ -23,7 +23,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Save } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatNum } from '@/lib/calculos/formatters';
-import { CampoNumero } from '@/components/ui/campo-moeda';
+import { CampoNumero, CampoMoeda } from '@/components/ui/campo-moeda';
 import { parseMoeda } from '@/lib/calculos/numeroBR';
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
 import { LancamentoModalEnvelope } from '@/components/lancamento/LancamentoModalEnvelope';
@@ -237,11 +237,21 @@ export function CargaModal({
                 `bg-muted` da faixa isso é uma diferença de dois tons, e não se via qual aba
                 estava aberta. Aqui o ativo ganha também a cor e o peso do texto, que é o que
                 a casa usa para "selecionado" no resto das telas. */}
-            <TabsList className="grid h-8 w-full shrink-0 grid-cols-3">
+            {/* ⚠ VISUAL DE PASTA, E SÓ AQUI. O primitivo serve oito telas e não se fragmenta
+                por causa de uma; o desenho vem por `className` sobre o mesmo
+                `data-[state=active]`. A ativa ganha fundo do corpo, borda em cima e nos lados,
+                NENHUMA embaixo, e desce 1px (`-mb-px`) sobre a linha da faixa — é isso que a
+                "conecta" ao conteúdo. As inativas ficam sem fundo e apagadas.
+                ⚠ `rounded-none` NA LISTA e fundo transparente: o `bg-muted` arredondado do
+                padrão é o que fazia duas abas parecerem a mesma coisa. */}
+            <TabsList className="h-auto w-full shrink-0 justify-start gap-1 rounded-none border-b bg-transparent p-0">
               {([['cadastro', 'Cadastro'], ['producao', 'Produção'], ['classificacao', 'Classificação']] as const)
                 .map(([valor, rotulo]) => (
                   <TabsTrigger key={valor} value={valor}
-                    className="text-[11px] data-[state=active]:font-bold data-[state=active]:text-primary data-[state=active]:shadow">
+                    className="-mb-px rounded-b-none rounded-t-md border border-transparent px-3 py-1.5 text-[11px]
+                      text-muted-foreground data-[state=active]:border-border data-[state=active]:border-b-background
+                      data-[state=active]:bg-background data-[state=active]:font-bold data-[state=active]:text-primary
+                      data-[state=active]:shadow-none">
                     {rotulo}
                   </TabsTrigger>
                 ))}
@@ -328,9 +338,17 @@ export function CargaModal({
                 <Campo rotulo="Taxa de secagem" valor={form.taxaSecagem} numerico
                   dica="Como a cooperativa cobra — R$ por saca ou percentual, do romaneio."
                   onChange={v => onChange('taxaSecagem', v)} />
-                <Campo rotulo="Valor da secagem (R$)" valor={form.valorSecagem} numerico
-                  dica="O que esta carga pagou de secagem."
-                  onChange={v => onChange('valorSecagem', v)} />
+                {/* ⚠ `CampoMoeda`, NÃO `CampoNumero`: a secagem é dinheiro, e o campo tem de
+                    escrever "R$ 1.445,14" como todo valor do sistema. A taxa ao lado continua
+                    número — ela é R$/saca ou percentual, e o "R$" ali diria o preço errado.
+                    ⚠ A PONTE É O TEXTO: o form guarda string (como os treze campos), então o
+                    campo recebe o número parseado e devolve o número de volta como texto. */}
+                <div>
+                  <Label className="text-[10px]">Valor da secagem</Label>
+                  <CampoMoeda valor={num(form.valorSecagem)}
+                    onChange={n => onChange('valorSecagem', n == null ? '' : String(n))}
+                    className="mt-0.5 h-8 text-right font-mono text-[12px]" />
+                </div>
               </div>
               {/* ⚠ PREÇO NÃO ENTRA, e não é esquecimento: `agri_colheita` não tem coluna de
                   preço nenhuma (conferido no banco). Preço é venda de grão, frente própria —

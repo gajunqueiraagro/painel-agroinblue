@@ -30,8 +30,15 @@ import {
 } from '@/lib/agri/colheita';
 import type { ColheitaRow, useColheita } from '@/hooks/useColheita';
 
-/** A linha do banco vira campo de texto — vírgula decimal, porque é o que se digita. */
-const texto = (v: number | null): string => (v == null ? '' : String(v).replace('.', ','));
+/**
+ * A linha do banco vira campo de texto — JÁ FORMATADO em pt-BR.
+ *
+ * ⚠ `String(26180)` DAVA "26180" NA CARA DO OPERADOR: o `CampoNumero` formata no blur, e
+ * abrir uma carga para editar não dispara blur nenhum. O campo mostrava o número cru
+ * justamente na hora em que se está conferindo contra o romaneio — e "26180" ao lado de
+ * "26.180,00" no papel é exatamente o tipo de diferença que faz duvidar do sistema.
+ */
+const texto = (v: number | null): string => (v == null ? '' : formatNum(v, 2));
 
 const doBanco = (r: ColheitaRow): CargaForm => ({
   id: r.id,
@@ -66,6 +73,10 @@ const COLUNAS = [
 const TH = 'sticky top-0 z-10 bg-[#f1f3f5] shadow-[inset_0_-1px_0_#e2e8f0] px-1.5 py-1'
   + ' text-[9px] font-semibold uppercase tracking-wide text-[#1e3a5f]';
 
+/** O rodapé de totais: mesma técnica do cabeçalho, grudado embaixo. */
+const TFOOT = 'sticky bottom-0 z-10 bg-[#f1f3f5] shadow-[inset_0_1px_0_#cbd5e1] px-1.5 py-1'
+  + ' text-[10px] font-bold tabular-nums text-[#1e3a5f]';
+
 export function CargasDaArea({
   clienteId, safraAreaId, cultura, areaHa, pastoNome, fazendaNome, safraRotulo,
   linhas, salvarCarga, excluirCarga, somenteLeitura,
@@ -86,34 +97,35 @@ export function CargasDaArea({
   /** `null` = modal fechado. */
   const [form, setForm] = useState<CargaForm | null>(null);
   const [salvando, setSalvando] = useState(false);
-  /**
-   * OS CAMPOS QUE O OPERADOR ESCREVEU À MÃO.
-   *
-   * ⚠ O CÁLCULO SUGERE, O OPERADOR DECIDE — e depois que ele decide, o sistema não desmancha.
-   * Sem esta marca, corrigir o peso seco depois de ajustar as sacas jogaria fora o número que
-   * a cooperativa mandou, e ninguém veria acontecer.
-   */
-  const [aMao, setAMao] = useState<Set<keyof CargaForm>>(new Set());
   const temSaca = unidadeDaCultura(cultura).kgPorSaca != null;
   const comoTexto = (v: number | null) => (v == null ? '' : String(v).replace('.', ','));
 
+  /**
+   * A REGRA DE DERIVAÇÃO — refeita no POLISH-08.
+   *
+   * ⚠ MEXEU NO PESO, DERIVA. MEXEU NA SACA, A SACA VENCE. É sequencial, e por isso não há
+   * mais estado a guardar: quem mudou por último manda. O PR-02 tinha um `Set` de "campos
+   * escritos à mão", e ao REABRIR uma carga ele marcava os dois derivados — para não
+   * sobrescrever o romaneio conferido. O efeito era o defeito: editar o peso seco de uma
+   * carga gravada não recalculava mais nada, e as sacas ficavam com o valor velho para
+   * sempre. Um estado que existia para proteger o dado passou a congelá-lo.
+   * ⚠ E O ROMANEIO CONTINUA PROTEGIDO, pelo caminho mais simples: o valor salvo carrega no
+   * campo e só muda se alguém mexer no peso — que é justamente quando ele TEM de mudar.
+   */
   const editar = (campo: keyof CargaForm, valor: string) => {
     setForm(f => {
       if (!f) return f;
       const novo = { ...f, [campo]: valor };
       /* ⚠ A DERIVAÇÃO É SÓ DO PESO PARA A SACA, nunca o contrário: o peso é o que a balança
          mediu, e recalcular o peso a partir da saca inventaria quilo que ninguém pesou. */
-      if (temSaca && campo === 'pesoSecoKg' && !aMao.has('sacasBoas')) {
+      if (temSaca && campo === 'pesoSecoKg') {
         novo.sacasBoas = comoTexto(sacasDoPeso(parseMoeda(valor), cultura));
       }
-      if (temSaca && campo === 'graoRocaKg' && !aMao.has('graoRocaSacas')) {
+      if (temSaca && campo === 'graoRocaKg') {
         novo.graoRocaSacas = comoTexto(sacasDoPeso(parseMoeda(valor), cultura));
       }
       return novo;
     });
-    if (campo === 'sacasBoas' || campo === 'graoRocaSacas') {
-      setAMao(prev => new Set(prev).add(campo));
-    }
   };
 
   const gravar = async () => {
@@ -163,7 +175,7 @@ export function CargasDaArea({
         <div className="flex-1" />
         <Button variant="outline" size="sm" className="h-7 gap-1 text-[11px]"
           disabled={somenteLeitura}
-          onClick={() => { setAMao(new Set()); setForm(cargaVazia()); }}>
+          onClick={() => setForm(cargaVazia())}>
           <Plus className="h-3 w-3" /> Nova carga
         </Button>
       </div>
@@ -207,13 +219,8 @@ export function CargasDaArea({
                 <td className="whitespace-nowrap px-1.5 py-0.5 text-right">
                   <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground"
                     disabled={somenteLeitura} title="Editar esta carga"
-                    /* ⚠ A CARGA GRAVADA ABRE COM TUDO "À MÃO": os números dela vieram do
-                       romaneio e já foram conferidos; recalcular ao reabrir sobrescreveria o
-                       que a cooperativa mandou. */
-                    onClick={() => {
-                      setAMao(new Set(['sacasBoas', 'graoRocaSacas'] as Array<keyof CargaForm>));
-                      setForm(doBanco(l));
-                    }}>
+                    /* A carga abre com os valores salvos; nada é recalculado só por abrir. */
+                    onClick={() => setForm(doBanco(l))}>
                     <Pencil className="h-3 w-3" />
                   </Button>
                   <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive"
@@ -225,30 +232,31 @@ export function CargasDaArea({
               </tr>
             ))}
           </tbody>
+          {/* ── O TOTAL DO TALHÃO, NO RODAPÉ DA PRÓPRIA TABELA ──
+              ⚠ `<tfoot>` E NÃO UMA FAIXA ABAIXO: assim cada total cai EMBAIXO DA SUA COLUNA
+              por construção, sem replicar larguras que sairiam do lugar no primeiro ajuste
+              de coluna. Verde sob Verde, Seco sob Seco — e as colunas que não somam ficam
+              vazias, porque somar ticket ou umidade não quer dizer nada.
+              ⚠ O `sticky` VAI NAS CÉLULAS, nunca no `<tfoot>`: com `border-collapse` o
+              navegador não gruda `tfoot` nem `tr`, só a célula. É a mesma lição do cabeçalho,
+              e o fundo tem de ser opaco pelo mesmo motivo. */}
+          <tfoot>
+            <tr>
+              <td className={cn(TFOOT, 'text-left font-semibold uppercase tracking-wide text-muted-foreground')} colSpan={3}>
+                Total do talhão
+              </td>
+              <td className={cn(TFOOT, 'text-right')}>{formatNum(totaisDoTalhao.verdeKg, 2)}</td>
+              <td className={cn(TFOOT, 'text-right')}>
+                {totaisDoTalhao.secoKg > 0 ? formatNum(totaisDoTalhao.secoKg, 2) : '—'}
+              </td>
+              <td className={TFOOT} />
+              <td className={TFOOT} />
+              <td className={cn(TFOOT, 'text-right')}>{formatNum(totaisDoTalhao.sacasBoas, 2)}</td>
+              <td className={cn(TFOOT, 'text-right')}>{formatNum(totaisDoTalhao.graoRocaSacas, 2)}</td>
+              <td className={TFOOT} />
+            </tr>
+          </tfoot>
         </table>
-      </div>
-
-      {/* ── FIXO: a linha de totais, fora da área que rola ──
-          ⚠ ELA NÃO ROLA COM AS LINHAS, e é o mesmo arranjo do TOTAL do drill do DRE: quem
-          confere uma lista de trinta cargas precisa do total à vista enquanto percorre o
-          meio dela. As colunas alinham com as da tabela acima. */}
-      <div className="mt-1 flex shrink-0 items-center gap-3 rounded-md border bg-muted/40 px-2 py-1 text-[10px]">
-        <span className="font-semibold uppercase tracking-wide text-muted-foreground">Total do talhão</span>
-        <div className="flex-1" />
-        <span className="text-muted-foreground">
-          verde <b className="tabular-nums text-foreground">{formatNum(totaisDoTalhao.verdeKg, 2)} kg</b>
-        </span>
-        <span className="text-muted-foreground">
-          seco <b className="tabular-nums text-foreground">
-            {totaisDoTalhao.secoKg > 0 ? `${formatNum(totaisDoTalhao.secoKg, 2)} kg` : '—'}
-          </b>
-        </span>
-        <span className="text-muted-foreground">
-          sacas boas <b className="tabular-nums text-foreground">{formatNum(totaisDoTalhao.sacasBoas, 2)}</b>
-        </span>
-        <span className="text-muted-foreground">
-          roça <b className="tabular-nums text-foreground">{formatNum(totaisDoTalhao.graoRocaSacas, 2)} sc</b>
-        </span>
       </div>
 
       {/* ⚠ O MODAL É IRMÃO DA LISTA, nunca filho de uma linha: assim editar e criar são o
