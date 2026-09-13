@@ -65,6 +65,38 @@ export function unidadeDaCultura(cultura: string | null | undefined): UnidadeCul
   return UNIDADES[(cultura || '').trim()] ?? PADRAO;
 }
 
+/**
+ * QUANTAS SACAS HÁ EM N QUILOS — AGRI-COLHEITA-DERIVADOS-02.
+ *
+ * ⚠ O PESO DA SACA VEM DE `UNIDADES`, NÃO DE UMA CONSTANTE NOVA. O briefing pedia um
+ * `SACA_AMENDOIM_KG = 25` "por ora fixa, futuramente por cultura" — e o mapa por cultura já
+ * existe neste arquivo desde o AGRI-COLHEITA-TELA-01, com o 25 do amendoim decidido pelo
+ * Gabriel. Criar a constante seria uma SEGUNDA fonte do mesmo número, e no dia da mudança uma
+ * das duas ficaria para trás.
+ * ⚠ DUAS CASAS, e é o que faz o consolidado fechar com a cooperativa: 22.222,70 kg dão
+ * 888,908 sacas, que se guardam como 888,91 e se EXIBEM como 889. Arredondar para inteiro
+ * antes de somar perderia 65 centésimos de saca nas dez cargas — a diferença que o produtor
+ * encontra conferindo o total contra o papel da Casul.
+ * ⚠ `null` PARA CULTURA SEM SACA: mandioca é raiz e se mede em tonelada. Devolver zero ali
+ * faria a tela escrever "0 sc" onde a resposta certa é "não se aplica".
+ */
+export function sacasDoPeso(pesoKg: number | null, cultura: string | null | undefined): number | null {
+  const { kgPorSaca } = unidadeDaCultura(cultura);
+  if (!kgPorSaca || pesoKg == null || !(pesoKg > 0)) return null;
+  return Math.round((pesoKg / kgPorSaca) * 100) / 100;
+}
+
+/**
+ * A QUEBRA DA CARGA, em quilos — o que a secagem tirou.
+ *
+ * ⚠ SÓ EXISTE COM OS DOIS PESOS. Enquanto o seco não voltou da cooperativa, a quebra não é
+ * zero: ela ainda não aconteceu, e um "0 kg" ali leria como "não houve perda".
+ */
+export function quebraKg(verdeKg: number | null, secoKg: number | null): number | null {
+  if (verdeKg == null || secoKg == null) return null;
+  return Math.round((verdeKg - secoKg) * 100) / 100;
+}
+
 /** Uma carga, como a tela a edita — tudo texto, porque campo é texto. */
 export interface CargaForm {
   id: string | null;

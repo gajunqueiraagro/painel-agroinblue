@@ -8,7 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   LIMITE_AFLATOXINA, faixaAflatoxina, unidadeDaCultura, validarCarga, totaisColheita,
-  cargaVazia, type CargaForm,
+  cargaVazia, sacasDoPeso, quebraKg, type CargaForm,
 } from './colheita';
 
 const carga = (over: Partial<CargaForm> = {}): CargaForm => ({
@@ -174,5 +174,49 @@ describe('os totais da safra', () => {
     expect(t.cargas).toBe(0);
     expect(t.verdeKg).toBe(0);
     expect(t.quebraPct).toBeNull();
+  });
+});
+
+/**
+ * AS DERIVAÇÕES DA CARGA — AGRI-COLHEITA-DERIVADOS-02.
+ *
+ * ⚠ OS NÚMEROS SÃO OS DA CARGA 1 REAL DO NJ 23/24, conferidos contra o papel da Casul:
+ * 27.160 kg verdes, 22.222,70 secos, 1.304,00 kg de grão de roça.
+ */
+describe('sacas derivadas do peso', () => {
+  it('a carga 1: 22.222,70 kg secos dão 888,91 sacas', () => {
+    expect(sacasDoPeso(22222.70, 'amendoim')).toBe(888.91);
+  });
+
+  it('o grão de roça: 1.304 kg dão 52,16 sacas', () => {
+    expect(sacasDoPeso(1304, 'amendoim')).toBe(52.16);
+  });
+
+  it('⚠ DUAS CASAS, NÃO INTEIRO — é o que faz o total fechar com a cooperativa', () => {
+    /* Guardar 889 em vez de 888,91 perderia 9 centésimos NESTA carga; em dez, o
+       consolidado não bate com o papel. A célula é que arredonda, não o dado. */
+    expect(sacasDoPeso(22222.70, 'amendoim')).not.toBe(889);
+    expect(Math.round(sacasDoPeso(22222.70, 'amendoim') ?? 0)).toBe(889);
+  });
+
+  it('⚠ CULTURA SEM SACA NÃO DERIVA NADA: mandioca é tonelada, não saca', () => {
+    expect(sacasDoPeso(10000, 'mandioca')).toBeNull();
+    expect(sacasDoPeso(10000, 'soja')).toBeNull();
+  });
+
+  it('sem peso não há saca — zero e nulo não viram "0 sc"', () => {
+    expect(sacasDoPeso(0, 'amendoim')).toBeNull();
+    expect(sacasDoPeso(null, 'amendoim')).toBeNull();
+  });
+});
+
+describe('a quebra da carga', () => {
+  it('a carga 1: 27.160 − 22.222,70 = 4.937,30 kg', () => {
+    expect(quebraKg(27160, 22222.70)).toBe(4937.30);
+  });
+
+  it('⚠ SEM O SECO NÃO HÁ QUEBRA, e ela não é zero: ainda não aconteceu', () => {
+    expect(quebraKg(27160, null)).toBeNull();
+    expect(quebraKg(null, 22222.70)).toBeNull();
   });
 });

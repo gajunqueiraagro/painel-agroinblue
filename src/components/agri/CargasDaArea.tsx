@@ -22,8 +22,10 @@ import { cn } from '@/lib/utils';
 import { formatNum } from '@/lib/calculos/formatters';
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
 import {
-  LIMITE_AFLATOXINA, cargaVazia, validarCarga, type CargaForm,
+  LIMITE_AFLATOXINA, cargaVazia, validarCarga, sacasDoPeso, quebraKg, unidadeDaCultura,
+  type CargaForm,
 } from '@/lib/agri/colheita';
+import { parseNumericValue } from '@/lib/calculos/abate';
 import type { ColheitaRow, useColheita } from '@/hooks/useColheita';
 
 /** A linha do banco vira campo de texto — vírgula decimal, porque é o que se digita. */
@@ -90,9 +92,44 @@ export function CargasDaArea({
   /** `null` = nenhum form aberto. */
   const [form, setForm] = useState<CargaForm | null>(null);
   const [salvando, setSalvando] = useState(false);
+  /**
+   * OS CAMPOS QUE O OPERADOR ESCREVEU À MÃO.
+   *
+   * ⚠ O CÁLCULO SUGERE, O OPERADOR DECIDE — e depois que ele decide, o sistema não desmancha.
+   * Sem esta marca, corrigir o peso seco depois de ajustar as sacas jogaria fora o número que
+   * a cooperativa mandou, e ninguém veria acontecer.
+   */
+  const [aMao, setAMao] = useState<Set<keyof CargaForm>>(new Set());
+  const temSaca = unidadeDaCultura(cultura).kgPorSaca != null;
 
-  const editar = (campo: keyof CargaForm, valor: string) =>
-    setForm(f => (f ? { ...f, [campo]: valor } : f));
+  /* Texto pt-BR de volta para a tela: é assim que o resto dos campos se lê. */
+  const comoTexto = (v: number | null) => (v == null ? '' : String(v).replace('.', ','));
+
+  const editar = (campo: keyof CargaForm, valor: string) => {
+    setForm(f => {
+      if (!f) return f;
+      const novo = { ...f, [campo]: valor };
+      /* ⚠ A DERIVAÇÃO É SÓ DO PESO PARA A SACA, nunca o contrário: o peso é o que a balança
+         mediu, e recalcular o peso a partir da saca inventaria quilo que ninguém pesou. */
+      if (temSaca && campo === 'pesoSecoKg' && !aMao.has('sacasBoas')) {
+        novo.sacasBoas = comoTexto(sacasDoPeso(parseNumericValue(valor), cultura));
+      }
+      if (temSaca && campo === 'graoRocaKg' && !aMao.has('graoRocaSacas')) {
+        novo.graoRocaSacas = comoTexto(sacasDoPeso(parseNumericValue(valor), cultura));
+      }
+      return novo;
+    });
+    if (campo === 'sacasBoas' || campo === 'graoRocaSacas') {
+      setAMao(prev => new Set(prev).add(campo));
+    }
+  };
+
+  /** Informativa e só leitura: o que a secagem tirou desta carga. */
+  const quebraDaCarga = form
+    ? quebraKg(
+      form.pesoVerdeKg.trim() ? parseNumericValue(form.pesoVerdeKg) : null,
+      form.pesoSecoKg.trim() ? parseNumericValue(form.pesoSecoKg) : null)
+    : null;
 
   const gravar = async () => {
     if (!form || !clienteId) return;
@@ -130,7 +167,7 @@ export function CargasDaArea({
           <div className="flex-1" />
           <Button variant="outline" size="sm" className="h-7 gap-1 text-[11px]"
             disabled={somenteLeitura || !!form}
-            onClick={() => setForm(cargaVazia())}>
+            onClick={() => { setAMao(new Set()); setForm(cargaVazia()); }}>
             <Plus className="h-3 w-3" /> Nova carga
           </Button>
         </div>
@@ -159,9 +196,24 @@ export function CargasDaArea({
                 dica={`O corte da cooperativa é ${LIMITE_AFLATOXINA} ppb — o número entra aqui como veio do laudo.`}
                 onChange={v => editar('aflatoxinaPpb', v)} />
 
-              <Campo rotulo="Sacas boas" valor={form.sacasBoas} numerico onChange={v => editar('sacasBoas', v)} />
-              <Campo rotulo="Grão de roça (sc)" valor={form.graoRocaSacas} numerico onChange={v => editar('graoRocaSacas', v)} />
               <Campo rotulo="Grão de roça (kg)" valor={form.graoRocaKg} numerico onChange={v => editar('graoRocaKg', v)} />
+              <Campo rotulo="Sacas boas" valor={form.sacasBoas} numerico
+                dica={temSaca
+                  ? 'Calculado do peso seco — pode ser corrigido, e a correção não se desfaz.'
+                  : `${labelDaCultura(cultura)} não se mede em sacas.`}
+                onChange={v => editar('sacasBoas', v)} />
+              <Campo rotulo="Grão de roça (sc)" valor={form.graoRocaSacas} numerico
+                dica={temSaca ? 'Calculado do grão de roça em quilos — pode ser corrigido.' : undefined}
+                onChange={v => editar('graoRocaSacas', v)} />
+              <div>
+                {/* ⚠ SÓ LEITURA, E SEM CAMPO NO BANCO: a quebra é a subtração dos dois pesos.
+                    Guardá-la criaria um terceiro número que pode discordar dos dois que a
+                    balança mediu. */}
+                <Label className="text-[10px]">Quebra (kg)</Label>
+                <div className="mt-0.5 flex h-7 items-center justify-end rounded-md border border-dashed bg-muted/30 px-2 font-mono text-[11px] tabular-nums text-muted-foreground">
+                  {quebraDaCarga != null ? formatNum(quebraDaCarga, 2) : '—'}
+                </div>
+              </div>
               <Campo rotulo="Renda líquida (%)" valor={form.rendaLiquidaPct} numerico onChange={v => editar('rendaLiquidaPct', v)} />
 
               <div className="col-span-2 md:col-span-4">
@@ -211,12 +263,21 @@ export function CargasDaArea({
                 {/* ⚠ SEM COR NA AFLATOXINA: a faixa é da cooperativa e aparece no consolidado.
                     Pintar a linha aqui faria a tela julgar a carga antes do laudo fechar. */}
                 <td className="px-1.5 py-1 text-right tabular-nums">{l.aflatoxina_ppb != null ? formatNum(l.aflatoxina_ppb, 2) : '—'}</td>
-                <td className="px-1.5 py-1 text-right tabular-nums">{l.sacas_boas != null ? formatNum(l.sacas_boas, 2) : '—'}</td>
-                <td className="px-1.5 py-1 text-right tabular-nums">{l.grao_roca_sacas != null ? formatNum(l.grao_roca_sacas, 2) : '—'}</td>
+                {/* ⚠ SACA INTEIRA NA CÉLULA, DECIMAL NO BANCO — é o que a Casul faz, e é o que
+                    faz o consolidado fechar: cada carga se lê arredondada, o total soma o valor
+                    cheio. Somar os arredondados perderia centésimos a cada linha. */}
+                <td className="px-1.5 py-1 text-right tabular-nums" title={l.sacas_boas != null ? `${formatNum(l.sacas_boas, 2)} sc` : undefined}>{l.sacas_boas != null ? formatNum(l.sacas_boas, 0) : '—'}</td>
+                <td className="px-1.5 py-1 text-right tabular-nums" title={l.grao_roca_sacas != null ? `${formatNum(l.grao_roca_sacas, 2)} sc` : undefined}>{l.grao_roca_sacas != null ? formatNum(l.grao_roca_sacas, 0) : '—'}</td>
                 <td className="whitespace-nowrap px-1.5 py-1 text-right">
                   <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground"
                     disabled={somenteLeitura} title="Editar esta carga"
-                    onClick={() => setForm(doBanco(l))}>
+                    /* ⚠ A CARGA GRAVADA ABRE COM TUDO "À MÃO": os números dela vieram do
+                       romaneio e já foram conferidos; recalcular ao reabrir sobrescreveria o
+                       que a cooperativa mandou. */
+                    onClick={() => {
+                      setAMao(new Set(['sacasBoas', 'graoRocaSacas'] as Array<keyof CargaForm>));
+                      setForm(doBanco(l));
+                    }}>
                     <Pencil className="h-3 w-3" />
                   </Button>
                   <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive"
