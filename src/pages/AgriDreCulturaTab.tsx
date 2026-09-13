@@ -598,10 +598,16 @@ export function AgriDreCulturaTab() {
               rateado; nas demais células a seção única entra direto, como sempre entrou.
               ⚠ ABRE NA DIRETA porque ela é o gasto que alguém marcou naquela cultura — o
               rateado é estimativa por área, e estimativa não é o que se confere primeiro.
-              ⚠ TROCAR DE ABA RECOMEÇA A NAVEGAÇÃO, e é de graça: o Radix desmonta o conteúdo
-              inativo, então o caminho que o `DrillDownEconomico` guarda no state dele se perde
-              junto. Previsível e sem estado a sincronizar — voltar para a aba devolve a raiz,
-              não um degrau esquecido de minutos atrás. */}
+              ⚠ TROCAR DE ABA RECOMEÇA A NAVEGAÇÃO, e é de graça: o Radix não monta os FILHOS
+              da aba inativa (`present && children`), então o caminho que o `DrillDownEconomico`
+              guarda no state dele se perde junto. Voltar para a aba devolve a raiz, não um
+              degrau esquecido de minutos atrás.
+              ⚠ MAS O DIV DA ABA INATIVA CONTINUA NO FLUXO — medido no Radix instalado: ele
+              renderiza `<div hidden>` e só os filhos somem. E `[hidden]{display:none}` do
+              preflight PERDE para `.flex{display:flex}`: mesma especificidade, e as utilities
+              vêm depois no CSS. Com `flex` cru aqui, o painel repartia a altura com uma caixa
+              VAZIA e a segunda aba abria empurrada para baixo dela. Por isso o `display` é
+              condicionado ao estado, nunca escrito solto. */}
           {secaoDireta && secaoRateada ? (
             <Tabs defaultValue="direta" className="flex min-h-0 flex-1 flex-col">
               <TabsList className="mb-1 grid h-7 w-full shrink-0 grid-cols-2">
@@ -613,10 +619,12 @@ export function AgriDreCulturaTab() {
                 </TabsTrigger>
               </TabsList>
               {/* `mt-0` cancela a margem padrão do primitivo: aqui quem dá o respiro é a aba. */}
-              <TabsContent value="direta" className="mt-0 flex min-h-0 flex-1 flex-col">
+              <TabsContent value="direta"
+                className="mt-0 min-h-0 flex-1 flex-col data-[state=active]:flex data-[state=inactive]:hidden">
                 {secaoDireta}
               </TabsContent>
-              <TabsContent value="rateada" className="mt-0 flex min-h-0 flex-1 flex-col">
+              <TabsContent value="rateada"
+                className="mt-0 min-h-0 flex-1 flex-col data-[state=active]:flex data-[state=inactive]:hidden">
                 {secaoRateada}
               </TabsContent>
             </Tabs>

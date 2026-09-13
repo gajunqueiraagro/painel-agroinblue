@@ -61,7 +61,12 @@ export function AnaliseDrawer({ titulo, subtitulo, corAccent = '#1e3a5f', total,
             `overflow` desta linha deixaria essas duas telas sem rolagem nenhuma.
             ⚠ `min-h-0` É OBRIGATÓRIO: sem ele um filho flex não encolhe abaixo do conteúdo, a
             caixa cresce, e a rolagem escapa para o container errado — a armadilha da casa. */}
-        <div className="flex min-h-0 flex-1 flex-col overflow-auto">{children}</div>
+        {/* ⚠ O RESPIRO HORIZONTAL É AQUI, não em cada tabela. Sem ele o valor da última coluna
+            encostava a 1px da borda do painel — e a folga precisa valer para TUDO que o drawer
+            recebe (resumo da seção, breadcrumb, cabeçalho e linhas), não só para quem lembrou
+            de pedir. Como o scrollport agora é a lista, a barra de rolagem também nasce dentro
+            desta folga, em vez de raspar a borda. */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-auto px-3 py-2">{children}</div>
 
         <div className="flex items-center justify-between gap-2 px-3 py-2 border-t-2 bg-[#1e3a5f]/[0.05]" style={{ borderTopColor: corAccent }}>
           <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{totalLabel}</span>
