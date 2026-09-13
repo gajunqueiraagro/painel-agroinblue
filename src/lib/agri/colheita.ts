@@ -128,6 +128,18 @@ export interface CargaForm {
   graoRocaSacas: string;
   graoRocaKg: string;
   rendaLiquidaPct: string;
+  /**
+   * A SECAGEM DO ROMANEIO — AGRI-COLHEITA-03.
+   *
+   * ⚠ DOIS NÚMEROS DIGITADOS, nenhum derivado do outro: a taxa é o quanto a cooperativa cobra
+   * (R$/saca ou %, como ela escrever) e o valor é o que aquela carga pagou. Multiplicar um
+   * pelo outro produziria um terceiro número que o papel não tem.
+   * ⚠ POR ORA SÓ REGISTRO. A secagem É CUSTO e futuramente vira lançamento financeiro no
+   * subcentro "Secagem e Beneficiamento" (13180) — frente própria,
+   * PR-COLHEITA-SECAGEM-FINANCEIRO. Até lá o valor vive aqui e no consolidado, sem tocar o DRE.
+   */
+  taxaSecagem: string;
+  valorSecagem: string;
   observacoes: string;
 }
 
@@ -145,6 +157,8 @@ export interface CargaPayload {
   grao_roca_sacas: number | null;
   grao_roca_kg: number | null;
   renda_liquida_pct: number | null;
+  taxa_secagem: number | null;
+  valor_secagem: number | null;
   observacoes: string | null;
 }
 
@@ -157,7 +171,8 @@ export interface ValidacaoCarga {
 export const cargaVazia = (): CargaForm => ({
   id: null, dataColheita: '', horaChegada: '', ticketBalanca: '', nfProdutor: '', filial: '',
   pesoVerdeKg: '', pesoSecoKg: '', umidadePct: '', aflatoxinaPpb: '', sacasBoas: '',
-  graoRocaSacas: '', graoRocaKg: '', rendaLiquidaPct: '', observacoes: '',
+  graoRocaSacas: '', graoRocaKg: '', rendaLiquidaPct: '', taxaSecagem: '', valorSecagem: '',
+  observacoes: '',
 });
 
 /**
@@ -205,12 +220,15 @@ export function validarCarga(form: CargaForm): ValidacaoCarga {
   const rocaSacas = num(form.graoRocaSacas);
   const rocaKg = num(form.graoRocaKg);
   const renda = num(form.rendaLiquidaPct);
+  const taxaSecagem = num(form.taxaSecagem);
+  const valorSecagem = num(form.valorSecagem);
 
   const naoNegativos: ReadonlyArray<readonly [string, number | null]> = [
     ['peso verde', verde], ['peso seco', seco], ['a umidade', umidade],
     ['a aflatoxina', aflatoxina], ['as sacas boas', sacasBoas],
     ['o grão de roça em sacas', rocaSacas], ['o grão de roça em quilos', rocaKg],
     ['a renda líquida', renda],
+    ['a taxa de secagem', taxaSecagem], ['o valor da secagem', valorSecagem],
   ];
   for (const [rotulo, v] of naoNegativos) {
     if (v != null && v < 0) return { ok: false, erro: `Valor negativo em ${rotulo}.` };
@@ -249,6 +267,8 @@ export function validarCarga(form: CargaForm): ValidacaoCarga {
       grao_roca_sacas: rocaSacas,
       grao_roca_kg: rocaKg,
       renda_liquida_pct: renda,
+      taxa_secagem: taxaSecagem,
+      valor_secagem: valorSecagem,
       observacoes: form.observacoes.trim() || null,
     },
   };
@@ -273,6 +293,8 @@ export interface TotaisColheita {
   sacasAcimaLimite: number;
   /** Sacas de carga sem aflatoxina informada — pendência, não faixa. */
   sacasSemClasse: number;
+  /** O que a cooperativa cobrou de secagem na safra — custo, ainda sem lançamento. */
+  valorSecagem: number;
 }
 
 const arred = (v: number, casas = 2) => {
@@ -297,7 +319,7 @@ export function totaisColheita(
 ): TotaisColheita {
   let verdeKg = 0, secoKg = 0, sacasBoas = 0, graoRocaSacas = 0, graoRocaKg = 0;
   let verdeComSeco = 0, aguardandoSeco = 0;
-  let sacasAteLimite = 0, sacasAcimaLimite = 0, sacasSemClasse = 0;
+  let sacasAteLimite = 0, sacasAcimaLimite = 0, sacasSemClasse = 0, valorSecagem = 0;
 
   for (const l of linhas) {
     const v = num(l.pesoVerdeKg) ?? 0;
@@ -308,6 +330,7 @@ export function totaisColheita(
     sacasBoas += sb;
     graoRocaSacas += num(l.graoRocaSacas) ?? 0;
     graoRocaKg += num(l.graoRocaKg) ?? 0;
+    valorSecagem += num(l.valorSecagem) ?? 0;
     if (s > 0) verdeComSeco += v; else if (v > 0) aguardandoSeco++;
 
     const faixa = faixaAflatoxina(num(l.aflatoxinaPpb));
@@ -340,5 +363,6 @@ export function totaisColheita(
     sacasAteLimite: arred(sacasAteLimite),
     sacasAcimaLimite: arred(sacasAcimaLimite),
     sacasSemClasse: arred(sacasSemClasse),
+    valorSecagem: arred(valorSecagem),
   };
 }

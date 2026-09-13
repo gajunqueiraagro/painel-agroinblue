@@ -25,7 +25,7 @@ import { parseMoeda } from '@/lib/calculos/numeroBR';
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
 import { CargaModal } from '@/components/agri/CargaModal';
 import {
-  cargaVazia, validarCarga, sacasDoPeso, unidadeDaCultura, type CargaForm,
+  cargaVazia, validarCarga, sacasDoPeso, unidadeDaCultura, faixaAflatoxina, type CargaForm,
 } from '@/lib/agri/colheita';
 import type { ColheitaRow, useColheita } from '@/hooks/useColheita';
 
@@ -48,6 +48,8 @@ const doBanco = (r: ColheitaRow): CargaForm => ({
   graoRocaSacas: texto(r.grao_roca_sacas),
   graoRocaKg: texto(r.grao_roca_kg),
   rendaLiquidaPct: texto(r.renda_liquida_pct),
+  taxaSecagem: texto(r.taxa_secagem),
+  valorSecagem: texto(r.valor_secagem),
   observacoes: r.observacoes ?? '',
 });
 
@@ -169,21 +171,29 @@ export function CargasDaArea({
             )}
             {linhas.map(l => (
               <tr key={l.id} className="border-t border-slate-100 odd:bg-[#1e3a5f]/[0.03]">
-                <td className="whitespace-nowrap px-1.5 py-1 tabular-nums">{dataBR(l.data_colheita)}</td>
-                <td className="whitespace-nowrap px-1.5 py-1 tabular-nums">{(l.hora_chegada ?? '').slice(0, 5) || '—'}</td>
-                <td className="px-1.5 py-1">{l.ticket_balanca || '—'}</td>
-                <td className="px-1.5 py-1 text-right tabular-nums">{l.peso_verde_kg != null ? formatNum(l.peso_verde_kg, 2) : '—'}</td>
-                <td className="px-1.5 py-1 text-right tabular-nums">{l.peso_seco_kg != null ? formatNum(l.peso_seco_kg, 2) : '—'}</td>
-                <td className="px-1.5 py-1 text-right tabular-nums">{l.umidade_pct != null ? formatNum(l.umidade_pct, 2) : '—'}</td>
-                {/* ⚠ SEM COR NA AFLATOXINA: a faixa é da cooperativa e aparece no consolidado.
-                    Pintar a linha aqui faria a tela julgar a carga antes do laudo fechar. */}
-                <td className="px-1.5 py-1 text-right tabular-nums">{l.aflatoxina_ppb != null ? formatNum(l.aflatoxina_ppb, 2) : '—'}</td>
+                <td className="whitespace-nowrap px-1.5 py-0.5 tabular-nums">{dataBR(l.data_colheita)}</td>
+                <td className="whitespace-nowrap px-1.5 py-0.5 tabular-nums">{(l.hora_chegada ?? '').slice(0, 5) || '—'}</td>
+                <td className="px-1.5 py-0.5">{l.ticket_balanca || '—'}</td>
+                <td className="px-1.5 py-0.5 text-right tabular-nums">{l.peso_verde_kg != null ? formatNum(l.peso_verde_kg, 2) : '—'}</td>
+                <td className="px-1.5 py-0.5 text-right tabular-nums">{l.peso_seco_kg != null ? formatNum(l.peso_seco_kg, 2) : '—'}</td>
+                <td className="px-1.5 py-0.5 text-right tabular-nums">{l.umidade_pct != null ? formatNum(l.umidade_pct, 2) : '—'}</td>
+                {/* ⚠ A COR SAI DE `faixaAflatoxina`, o MESMO corte que o consolidado usa — nunca
+                    de um `> 20` escrito aqui. No dia em que a cooperativa mudar o limite, a
+                    célula e o total têm de mudar juntos, senão a lista pinta de verde a carga
+                    que o rodapé conta como fora de faixa.
+                    ⚠ SEM LAUDO CONTINUA CINZA: ausência não é aprovação. */}
+                <td className={cn('px-1.5 py-0.5 text-right tabular-nums',
+                  faixaAflatoxina(l.aflatoxina_ppb) === 'ate' ? 'text-success'
+                    : faixaAflatoxina(l.aflatoxina_ppb) === 'acima' ? 'text-destructive'
+                      : 'text-muted-foreground')}>
+                  {l.aflatoxina_ppb != null ? formatNum(l.aflatoxina_ppb, 2) : '—'}
+                </td>
                 {/* ⚠ SACA INTEIRA NA CÉLULA, DECIMAL NO BANCO — é o que a Casul faz, e é o que
                     faz o consolidado fechar: cada carga se lê arredondada, o total soma o valor
                     cheio. Somar os arredondados perderia centésimos a cada linha. */}
-                <td className="px-1.5 py-1 text-right tabular-nums" title={l.sacas_boas != null ? `${formatNum(l.sacas_boas, 2)} sc` : undefined}>{l.sacas_boas != null ? formatNum(l.sacas_boas, 0) : '—'}</td>
-                <td className="px-1.5 py-1 text-right tabular-nums" title={l.grao_roca_sacas != null ? `${formatNum(l.grao_roca_sacas, 2)} sc` : undefined}>{l.grao_roca_sacas != null ? formatNum(l.grao_roca_sacas, 0) : '—'}</td>
-                <td className="whitespace-nowrap px-1.5 py-1 text-right">
+                <td className="px-1.5 py-0.5 text-right tabular-nums" title={l.sacas_boas != null ? `${formatNum(l.sacas_boas, 2)} sc` : undefined}>{l.sacas_boas != null ? formatNum(l.sacas_boas, 0) : '—'}</td>
+                <td className="px-1.5 py-0.5 text-right tabular-nums" title={l.grao_roca_sacas != null ? `${formatNum(l.grao_roca_sacas, 2)} sc` : undefined}>{l.grao_roca_sacas != null ? formatNum(l.grao_roca_sacas, 0) : '—'}</td>
+                <td className="whitespace-nowrap px-1.5 py-0.5 text-right">
                   <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground"
                     disabled={somenteLeitura} title="Editar esta carga"
                     /* ⚠ A CARGA GRAVADA ABRE COM TUDO "À MÃO": os números dela vieram do

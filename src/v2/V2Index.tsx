@@ -1372,7 +1372,12 @@ export default function V2Index() {
      linha — ela e' `flex-wrap` e vira duas em janela estreita, e ai' a tela nascia
      mais alta que a area util e a section rolava. Com a secao no app-shell o PAI da'
      a altura e a tela deixa de conhecer numero magico. */
-  const SECOES_APP_SHELL = new Set(['conciliacao', 'mapa-pastos', 'conferencia-lancamentos', 'financiamentos', 'recorrencias']);
+  /* ⚠ ESTA LISTA É O QUE DÁ ALTURA À PÁGINA, e sem ela nenhum `sticky` interno gruda. Fora
+     dela o `<section>` entra com `overflow-auto` e o filho SEM altura: o `h-full` da tela não
+     tem referência, a página inteira cresce, e quem rola é o `<section>` — então o cabeçalho
+     "fixo" de qualquer lista interna sobe junto. Foi o caso da colheita
+     (`lancamentos-agricultura`), que nasceu escrita para app-shell e estava fora da lista. */
+  const SECOES_APP_SHELL = new Set(['conciliacao', 'mapa-pastos', 'conferencia-lancamentos', 'financiamentos', 'recorrencias', 'lancamentos-agricultura']);
   const appShell = SECOES_APP_SHELL.has(section);
 
   return (

@@ -268,3 +268,38 @@ describe('o sinal de menos', () => {
     expect(validarCarga(carga({ pesoVerdeKg: '-26.560' })).ok).toBe(false);
   });
 });
+
+/**
+ * A SECAGEM — AGRI-COLHEITA-03 / LAYOUT-06.
+ *
+ * ⚠ Os números são os do romaneio do Gabriel: taxa 3,80 e R$ 4.128,32 na carga; R$ 16.604,38
+ * na safra inteira.
+ */
+describe('a secagem da carga', () => {
+  it('taxa e valor são dois campos digitados, nenhum derivado do outro', () => {
+    const v = validarCarga(carga({ taxaSecagem: '3,80', valorSecagem: '4.128,32' }));
+    expect(v.ok).toBe(true);
+    expect(v.payload?.taxa_secagem).toBe(3.8);
+    expect(v.payload?.valor_secagem).toBe(4128.32);
+  });
+
+  it('⚠ "4.128,32" É QUATRO MIL, não 4,12 — o mesmo parse do peso', () => {
+    expect(validarCarga(carga({ valorSecagem: '4.128' })).payload?.valor_secagem).toBe(4128);
+  });
+
+  it('negativo é recusado, como os outros valores', () => {
+    expect(validarCarga(carga({ valorSecagem: '-100' })).ok).toBe(false);
+  });
+
+  it('o consolidado soma a secagem da safra', () => {
+    const quatro = [
+      carga({ valorSecagem: '4.128,32' }), carga({ valorSecagem: '4.128,32' }),
+      carga({ valorSecagem: '4.128,32' }), carga({ valorSecagem: '4.219,42' }),
+    ];
+    expect(totaisColheita(quatro, 'amendoim', 60.6).valorSecagem).toBeCloseTo(16604.38, 2);
+  });
+
+  it('sem secagem lançada o total é zero — e a tela mostra traço, não "R$ 0,00"', () => {
+    expect(totaisColheita([carga()], 'amendoim', 60.6).valorSecagem).toBe(0);
+  });
+});

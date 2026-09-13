@@ -93,7 +93,8 @@ export function AgriColheitaTab() {
       pesoVerdeKg: String(l.peso_verde_kg ?? ''), pesoSecoKg: String(l.peso_seco_kg ?? ''),
       umidadePct: '', aflatoxinaPpb: l.aflatoxina_ppb == null ? '' : String(l.aflatoxina_ppb),
       sacasBoas: String(l.sacas_boas ?? ''), graoRocaSacas: String(l.grao_roca_sacas ?? ''),
-      graoRocaKg: String(l.grao_roca_kg ?? ''), rendaLiquidaPct: '', observacoes: '',
+      graoRocaKg: String(l.grao_roca_kg ?? ''), rendaLiquidaPct: '',
+      taxaSecagem: '', valorSecagem: String(l.valor_secagem ?? ''), observacoes: '',
     })) as CargaForm[];
     return totaisColheita(comoForm, umaCulturaSo ? culturasNaSafra[0] : null,
       umaCulturaSo ? areaDaSafra : null);
@@ -145,11 +146,15 @@ export function AgriColheitaTab() {
 
       {/* ── FIXO: o consolidado da safra ── */}
       <div className="shrink-0 space-y-1.5">
-        <div className="grid grid-cols-2 gap-1.5 md:grid-cols-5">
+        <div className="grid grid-cols-2 gap-1.5 md:grid-cols-6">
           <Metrica rotulo="Peso verde" valor={formatNum(totais.verdeKg, 2)} sufixo="kg" destaque />
           <Metrica rotulo="Peso seco" valor={totais.secoKg > 0 ? formatNum(totais.secoKg, 2) : '—'} sufixo={totais.secoKg > 0 ? 'kg' : undefined} destaque />
           <Metrica rotulo="Sacas boas" valor={formatNum(totais.sacasBoas, 2)} sufixo="sc" destaque />
           <Metrica rotulo="Quebra" valor={totais.quebraPct != null ? formatNum(totais.quebraPct, 1) : '—'} sufixo={totais.quebraPct != null ? '%' : undefined} />
+          {/* ⚠ CUSTO QUE AINDA NÃO É LANÇAMENTO: a secagem aparece para o produtor conferir
+              contra o romaneio, e não entra no DRE — ver PR-COLHEITA-SECAGEM-FINANCEIRO. */}
+          <Metrica rotulo="Secagem"
+            valor={totais.valorSecagem > 0 ? `R$ ${formatNum(totais.valorSecagem, 2)}` : '—'} />
           <Metrica rotulo="Produtividade"
             valor={totais.produtividade != null ? formatNum(totais.produtividade, 2) : '—'}
             sufixo={totais.produtividade != null ? unidade.unidadeProdutividade : undefined} />

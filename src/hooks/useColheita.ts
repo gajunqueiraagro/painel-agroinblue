@@ -30,12 +30,15 @@ export interface ColheitaRow {
   grao_roca_sacas: number | null;
   grao_roca_kg: number | null;
   renda_liquida_pct: number | null;
+  taxa_secagem: number | null;
+  valor_secagem: number | null;
   observacoes: string | null;
 }
 
 const COLS = 'id, safra_area_id, data_colheita, hora_chegada, ticket_balanca, nf_produtor, filial,'
   + ' peso_verde_kg, peso_seco_kg, umidade_pct, aflatoxina_ppb, sacas_boas,'
-  + ' grao_roca_sacas, grao_roca_kg, renda_liquida_pct, observacoes';
+  + ' grao_roca_sacas, grao_roca_kg, renda_liquida_pct, taxa_secagem, valor_secagem,'
+  + ' observacoes';
 
 export function useColheita(safraAreaIds: readonly string[]) {
   const [linhas, setLinhas] = useState<ColheitaRow[]>([]);

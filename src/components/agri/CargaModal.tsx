@@ -206,6 +206,8 @@ export function CargaModal({
                       : 'sem laudo'} />
                 <Par rotulo="Grão de roça" valor={traco(num(form.graoRocaSacas), 2, ' sc')} />
                 <Par rotulo="Renda líquida" valor={traco(num(form.rendaLiquidaPct), 2, '%')} />
+                <Par rotulo="Secagem" valor={num(form.valorSecagem) != null
+                  ? `R$ ${formatNum(num(form.valorSecagem), 2)}` : '—'} />
               </div>
             </div>
           )}>
@@ -286,6 +288,21 @@ export function CargaModal({
                 <Campo rotulo="Grão de roça (sc)" valor={form.graoRocaSacas} numerico
                   dica="Calculado do grão de roça em quilos — pode ser corrigido."
                   onChange={v => onChange('graoRocaSacas', v)} />
+              </div>
+              {/* ⚠ A SECAGEM É CUSTO, e por ora SÓ REGISTRO: os dois números vêm do romaneio e
+                  ficam aqui e no consolidado da safra, sem tocar o DRE. Virar lançamento no
+                  subcentro "Secagem e Beneficiamento" (13180) é frente própria —
+                  PR-COLHEITA-SECAGEM-FINANCEIRO.
+                  ⚠ SÃO DOIS CAMPOS DIGITADOS, nenhum derivado do outro: a taxa é o quanto a
+                  cooperativa cobra e o valor é o que aquela carga pagou. Multiplicar um pelo
+                  outro criaria um terceiro número que o papel não tem. */}
+              <div className="grid grid-cols-2 gap-2">
+                <Campo rotulo="Taxa de secagem" valor={form.taxaSecagem} numerico
+                  dica="Como a cooperativa cobra — R$ por saca ou percentual, do romaneio."
+                  onChange={v => onChange('taxaSecagem', v)} />
+                <Campo rotulo="Valor da secagem (R$)" valor={form.valorSecagem} numerico
+                  dica="O que esta carga pagou de secagem."
+                  onChange={v => onChange('valorSecagem', v)} />
               </div>
               {/* ⚠ PREÇO NÃO ENTRA, e não é esquecimento: `agri_colheita` não tem coluna de
                   preço nenhuma (conferido no banco). Preço é venda de grão, frente própria —
