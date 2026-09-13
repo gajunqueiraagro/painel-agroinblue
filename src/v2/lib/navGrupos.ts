@@ -57,6 +57,7 @@ export type V2Section =
      SECTION_TO_GROUP e de SECTION_PERIODO de proposito — os tres mapas sao `Partial`,
      entao ausencia ali nao quebra nada. */
   | 'lancamentos-agricultura' | 'lancamentos-silvicultura'
+  | 'barter-contratos'       // PR-AGRI-BARTER-TELA-A — a operação comercial da lavoura
   | 'agricultura-home' | 'silvicultura-home'
   /* ── VALIDAR — PR-VALIDAR-01. Tres telas do v1 embutidas como estao, visiveis so' para
      quem e' admin do AGROinBLUE. Elas nao sao produto do cliente: sao a bancada de quem
@@ -141,9 +142,14 @@ export const NAV_GRUPOS: NavGrupo[] = [
         ],
       },
       {
+        /* ⚠ O BARTER ENTRA AQUI, ao lado de "Operações Comerciais" da Pecuária logo acima: ele
+           É a operação comercial da lavoura. Nasce da colheita (Lançar › Agricultura) e só
+           termina no Financeiro, quando se materializa — pendurá-lo lá poria a origem no lugar
+           errado. */
         titulo: 'Agricultura',
         itens: [
           { id: 'agricultura-home', label: 'Visão Geral', status: 'ready', emConstrucao: true },
+          { id: 'barter-contratos', label: 'Barter', status: 'ready' },
         ],
       },
       {

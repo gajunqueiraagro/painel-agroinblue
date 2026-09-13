@@ -1,0 +1,123 @@
+/**
+ * OS CONTRATOS DE BARTER DO CLIENTE — PR-AGRI-BARTER-TELA-A.
+ *
+ * ⚠ ABRIR CONTRATO É RPC, NÃO INSERT. `agri_barter_abrir_contrato` cria a conta de permuta do
+ * parceiro (ou reusa a que existe) e grava o contrato já ligado a ela, na mesma transação.
+ * Inserir direto na tabela pela tela criaria contrato sem conta — e contrato sem conta não
+ * materializa, o que só se descobriria na hora de levar o barter ao DRE.
+ * ⚠ TABELAS FORA DO `types.ts` (migrations posteriores ao último regen): vale o idioma da
+ * casa — `(supabase as any)` no builder, resultado convertido no ato.
+ */
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+
+export interface BarterContrato {
+  id: string;
+  nome: string;
+  descricao: string | null;
+  status: string;
+  data_abertura: string;
+  parceiro_fornecedor_id: string;
+  conta_permuta_id: string | null;
+  fazenda_id: string | null;
+}
+
+/** O contrato com o que a lista precisa mostrar — nomes, nunca ids. */
+export interface ContratoNaLista extends BarterContrato {
+  parceiroNome: string;
+  contaPermutaNome: string | null;
+}
+
+export interface AberturaContrato {
+  ok: boolean;
+  contrato_id?: string;
+  conta_permuta_id?: string;
+  /** `true` só quando a conta NASCEU agora; `false` quando a do parceiro foi reusada. */
+  conta_criada?: boolean;
+}
+
+const COLS = 'id, nome, descricao, status, data_abertura, parceiro_fornecedor_id,'
+  + ' conta_permuta_id, fazenda_id';
+
+export function useBarterContratos(clienteId: string | null | undefined) {
+  const queryClient = useQueryClient();
+  const chave = ['barter-contratos', clienteId ?? ''];
+
+  const { data, isLoading } = useQuery({
+    queryKey: chave,
+    enabled: !!clienteId,
+    queryFn: async (): Promise<ContratoNaLista[]> => {
+      const db = supabase as any;
+      const { data: linhas, error } = await db.from('agri_barter_contratos')
+        .select(COLS)
+        .eq('cliente_id', clienteId)
+        .eq('ativo', true)
+        .order('data_abertura', { ascending: false });
+      if (error) throw error;
+      const contratos = (linhas ?? []) as BarterContrato[];
+
+      /* ⚠ DOIS LOOKUPS, NÃO UM JOIN ANINHADO: o `select` com relação do PostgREST depende do
+         `types.ts`, que não conhece `agri_barter_contratos` — viria `SelectQueryError` e o nome
+         sairia mudo em runtime, sem erro. É o mesmo impasse já resolvido assim em
+         `useTalhoesDaSafra`. */
+      const fornIds = Array.from(new Set(contratos.map(c => c.parceiro_fornecedor_id).filter(Boolean)));
+      const contaIds = Array.from(new Set(contratos.map(c => c.conta_permuta_id).filter(Boolean)));
+      const forn = new Map<string, string>();
+      const contas = new Map<string, string>();
+      if (fornIds.length > 0) {
+        const { data: fs } = await db.from('financeiro_fornecedores').select('id, nome').in('id', fornIds);
+        for (const f of (fs ?? []) as Array<{ id: string; nome: string }>) forn.set(f.id, f.nome);
+      }
+      if (contaIds.length > 0) {
+        const { data: cs } = await db.from('financeiro_contas_bancarias')
+          .select('id, nome_exibicao').in('id', contaIds);
+        for (const c of (cs ?? []) as Array<{ id: string; nome_exibicao: string | null }>) {
+          contas.set(c.id, c.nome_exibicao ?? '');
+        }
+      }
+      return contratos.map(c => ({
+        ...c,
+        parceiroNome: forn.get(c.parceiro_fornecedor_id) ?? '—',
+        contaPermutaNome: c.conta_permuta_id ? (contas.get(c.conta_permuta_id) ?? null) : null,
+      }));
+    },
+  });
+
+  /**
+   * Abre o contrato pela RPC.
+   *
+   * ⚠ O ERRO DO BANCO CHEGA INTEIRO À TELA. As guardas da função falam em português
+   * ("Sem usuario autenticado", "Fornecedor % nao encontrado"), e traduzi-las aqui só
+   * acrescentaria uma segunda mensagem para manter em dia.
+   */
+  const abrir = async (
+    parceiroFornecedorId: string, nome: string,
+    fazendaId: string | null, descricao: string | null,
+  ): Promise<{ ok: boolean; erro?: string; abertura?: AberturaContrato }> => {
+    const { data: r, error } = await (supabase as any).rpc('agri_barter_abrir_contrato', {
+      p_parceiro_fornecedor_id: parceiroFornecedorId,
+      p_nome: nome,
+      p_fazenda_id: fazendaId,
+      p_descricao: descricao,
+    });
+    if (error) return { ok: false, erro: error.message };
+    await queryClient.invalidateQueries({ queryKey: chave });
+    return { ok: true, abertura: (r ?? {}) as AberturaContrato };
+  };
+
+  return { contratos: data ?? [], carregando: isLoading, abrir };
+}
+
+/** Os parceiros possíveis — os fornecedores do cliente. */
+export function useFornecedoresDoCliente(clienteId: string | null | undefined) {
+  const { data } = useQuery({
+    queryKey: ['barter-fornecedores', clienteId ?? ''],
+    enabled: !!clienteId,
+    queryFn: async (): Promise<Array<{ id: string; nome: string }>> => {
+      const { data: fs } = await (supabase as any).from('financeiro_fornecedores')
+        .select('id, nome').eq('cliente_id', clienteId).order('nome');
+      return (fs ?? []) as Array<{ id: string; nome: string }>;
+    },
+  });
+  return data ?? [];
+}

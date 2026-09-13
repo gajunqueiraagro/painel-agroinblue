@@ -60,6 +60,7 @@ import { FinV2SafrasTab } from '@/pages/FinV2SafrasTab';
 import { FinV2RateioAdminTab } from '@/pages/FinV2RateioAdminTab';
 import { AgriDreCulturaTab } from '@/pages/AgriDreCulturaTab';
 import { AgriColheitaTab } from '@/pages/AgriColheitaTab';
+import { AgriBarterTab } from '@/pages/AgriBarterTab';
 import { ContratosTab } from '@/pages/ContratosTab';
 import FinanciamentosListaPage from '@/pages/FinanciamentosListaPage';
 import FinanciamentoDetalhe from '@/pages/FinanciamentoDetalhe';
@@ -850,6 +851,8 @@ export default function V2Index() {
     if (section === 'home') return <V2Home ano={ano} mes={mes} viewMode={viewMode} onViewModeChange={setViewMode} onIrPara={irParaPendencia} onMesChange={setMes} onAnoChange={setAno} />;
     /* Produção › Lançar › Agricultura — o lançamento de colheita, carga por carga. */
     if (section === 'lancamentos-agricultura') return <AgriColheitaTab />;
+    /* Produção › Agricultura › Barter — os contratos de troca com a cooperativa. */
+    if (section === 'barter-contratos') return <AgriBarterTab />;
     if (section === 'dre-cultura') return (
       <AgriDreCulturaTab />
     );
@@ -1377,7 +1380,7 @@ export default function V2Index() {
      tem referência, a página inteira cresce, e quem rola é o `<section>` — então o cabeçalho
      "fixo" de qualquer lista interna sobe junto. Foi o caso da colheita
      (`lancamentos-agricultura`), que nasceu escrita para app-shell e estava fora da lista. */
-  const SECOES_APP_SHELL = new Set(['conciliacao', 'mapa-pastos', 'conferencia-lancamentos', 'financiamentos', 'recorrencias', 'lancamentos-agricultura']);
+  const SECOES_APP_SHELL = new Set(['conciliacao', 'mapa-pastos', 'conferencia-lancamentos', 'financiamentos', 'recorrencias', 'lancamentos-agricultura', 'barter-contratos']);
   const appShell = SECOES_APP_SHELL.has(section);
 
   return (
