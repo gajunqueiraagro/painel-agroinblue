@@ -81,9 +81,13 @@ export interface MatrizDre {
   /**
    * A coluna "Não apropriado" carrega algum valor?
    *
-   * ⚠ NÃO É PARA ESCONDER A COLUNA — ela fica sempre no mesmo lugar (A23: nada aparece ou some
-   * conforme o dado). A flag governa a OBSERVAÇÃO abaixo da tabela: quando há valor, a frase
-   * explica que aquilo aguarda classificação; quando não há, não há o que explicar.
+   * ⚠ É ELA QUE DECIDE SE A COLUNA EXISTE NA TELA — e isto reverte o que o UX-03 escreveu
+   * aqui. A leitura de A23 que valia então ("tudo no seu lugar, sempre") tratava a coluna como
+   * parte do relatório; a decisão do Gabriel é que ela é uma PENDÊNCIA, e pendência resolvida
+   * sai da vista em vez de ficar como uma faixa de traços a conferir todo mês. A observação
+   * abaixo da tabela acompanha a coluna: sem resíduo, não há o que explicar.
+   * ⚠ A RPC CONTINUA DEVOLVENDO A COLUNA SEMPRE. Quem decide exibir é a tela — o dia em que
+   * alguém for procurar o resíduo no banco, ele está lá, zerado.
    */
   temNaoApropriado: boolean;
 }
@@ -119,9 +123,11 @@ export function montarMatriz(linhas: readonly CelulaDre[] | null | undefined): M
     areaTotal: areaPorCultura.get(COL_TOTAL) ?? null,
     rateioAdminDeclarado,
     vazio: (linhas ?? []).length === 0,
-    /* Zero aqui é a leitura boa: a safra inteira está apropriada. */
+    /* ⚠ TOLERÂNCIA DE MEIO CENTAVO, não `!== 0`: o resíduo do rateio chega em `numeric` com
+       vinte casas, e um 0,0000000001 sobrando faria a coluna inteira reaparecer dizendo
+       "há algo pendente" sobre nada. Zero aqui é a leitura boa — a safra está apropriada. */
     temNaoApropriado: [...(celula.get(COL_NAO_APROPRIADO)?.values() ?? [])]
-      .some((c) => c.valor != null && Number(c.valor) !== 0),
+      .some((c) => c.valor != null && Math.abs(Number(c.valor)) > 0.005),
   };
 }
 

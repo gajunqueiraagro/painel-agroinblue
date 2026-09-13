@@ -8,9 +8,11 @@
  * ⚠ O INVESTIMENTO FICA ABAIXO DA LINHA, em bloco próprio: é caixa que saiu e não é custo da
  * safra (regra de formação de área, congelada na RPC). Misturá-lo ao resultado faria a
  * primeira safra de uma área nova parecer desastre.
- * ⚠ "NÃO APROPRIADO" É UMA COLUNA PERMANENTE, não um alerta que aparece e some. Ela mostra o
- * que ainda não tem cultura decidida — receita sem cultura e lançamento marcado com cultura
- * não plantada nesta safra. Zerada, ela diz "a safra está classificada", que é informação.
+ * ⚠ "NÃO APROPRIADO" É UMA PENDÊNCIA, E PENDÊNCIA RESOLVIDA SAI DA TELA. A coluna mostra o que
+ * ainda não tem cultura decidida — receita sem cultura e lançamento marcado com cultura não
+ * plantada nesta safra — e só é renderizada quando carrega algo (tolerância de meio centavo,
+ * em `montarMatriz`). Sem resíduo, some com a nota que a explica; a RPC continua devolvendo a
+ * coluna zerada para quem for conferir no banco.
  * ⚠ CLICAR NA CÉLULA ABRE OS LANÇAMENTOS DELA, no mesmo drawer/árvore do Painel por período.
  * ⚠ E A CÉLULA TEM DUAS PARTES, o que o drill precisou aprender: DIRETO (lançamento marcado
  * com a cultura) + RATEADO (o pool sem cultura, distribuído por peso de área). No Investimento
@@ -119,9 +121,10 @@ export function AgriDreCulturaTab() {
   const porHaTotal = resultadoPorHa(m, COL_TOTAL);
   const rateado = montanteRateado(m);
 
-  /* ⚠ A ORDEM DAS COLUNAS É FIXA (A23): culturas, "Não apropriado", Total. Nenhuma delas
-     aparece ou some conforme o dado da safra — o que muda é o número dentro. */
-  const colunas = [...m.culturas, COL_NAO_APROPRIADO, COL_TOTAL];
+  /* ⚠ A ORDEM É FIXA — culturas, "Não apropriado", Total — e só a do meio é condicional. O
+     Total nunca sai, e nenhuma cultura plantada some por estar zerada: o que aparece e
+     desaparece é a PENDÊNCIA, não o relatório. */
+  const colunas = [...m.culturas, ...(m.temNaoApropriado ? [COL_NAO_APROPRIADO] : []), COL_TOTAL];
   const tituloColuna = (c: string) => {
     if (c === COL_TOTAL) return 'Total';
     if (c === COL_NAO_APROPRIADO) return 'Não apropriado';

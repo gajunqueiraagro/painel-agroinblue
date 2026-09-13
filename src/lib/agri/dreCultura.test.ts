@@ -289,4 +289,26 @@ describe('a coluna "não apropriado"', () => {
     const sem = montarMatriz([cel(COL_NAO_APROPRIADO, LINHA.receitaBruta, 0)]);
     expect(sem.temNaoApropriado).toBe(false);
   });
+
+  it('uma linha com valor basta — é pendência, não precisa ser a receita', () => {
+    /* O caso vivo da safra 26/27: R$ 4.000 no investimento e o resto zerado. */
+    const so4k = montarMatriz([
+      cel(COL_NAO_APROPRIADO, LINHA.receitaBruta, 0),
+      cel(COL_NAO_APROPRIADO, LINHA.investimento, 4000),
+    ]);
+    expect(so4k.temNaoApropriado).toBe(true);
+  });
+
+  it('⚠ MEIO CENTAVO NÃO É PENDÊNCIA: o resíduo do rateio não reacende a coluna', () => {
+    /* A RPC devolve `numeric` com vinte casas; um `!== 0` cru faria a coluna reaparecer
+       dizendo "há algo a classificar" sobre 0,000000001. */
+    const residuo = montarMatriz([cel(COL_NAO_APROPRIADO, LINHA.rateioCompartilhado, 0.0000000001)]);
+    expect(residuo.temNaoApropriado).toBe(false);
+    const centavo = montarMatriz([cel(COL_NAO_APROPRIADO, LINHA.investimento, 0.01)]);
+    expect(centavo.temNaoApropriado).toBe(true);
+  });
+
+  it('nulo em todas as linhas não acende a coluna', () => {
+    expect(montarMatriz([cel(COL_NAO_APROPRIADO, LINHA.depreciacao, null)]).temNaoApropriado).toBe(false);
+  });
 });
