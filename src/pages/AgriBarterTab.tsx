@@ -30,6 +30,8 @@ import { useBarterVenda, type BarterVenda, type VendaPayload } from '@/hooks/use
 import { BarterInsumoModal } from '@/components/agri/BarterInsumoModal';
 import { BarterVendaModal } from '@/components/agri/BarterVendaModal';
 import { labelDaClasse, saldoDoContrato } from '@/lib/agri/barterVenda';
+import { useBarterMaterializacao, useExtratoPermuta } from '@/hooks/useBarterMaterializacao';
+import { BarterMaterializarCard } from '@/components/agri/BarterMaterializarCard';
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
 import { useFinanceiroV2 } from '@/hooks/useFinanceiroV2';
 import { useSafrasLavoura } from '@/hooks/useAreaPlantada';
@@ -47,16 +49,6 @@ const dataBR = (iso: string | null) => (iso && iso.length >= 10
 
 const TH = 'sticky top-0 z-10 bg-primary px-1.5 py-1 text-[9px] font-semibold'
   + ' text-primary-foreground';
-
-/** Um bloco que ainda não existe — e que diz qual fatia o trará. */
-function AindaNao({ titulo, descricao }: { titulo: string; descricao: string }) {
-  return (
-    <div className="rounded-md border border-dashed p-4">
-      <div className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{titulo}</div>
-      <p className="mt-1 text-[10px] leading-snug text-muted-foreground">{descricao}</p>
-    </div>
-  );
-}
 
 export function AgriBarterTab() {
   const { clienteAtual } = useCliente();
@@ -172,6 +164,40 @@ export function AgriBarterTab() {
      cooperativa e nunca chega ao produtor. */
   const balanco = saldoDoContrato(totalEntregue, totalInsumos);
 
+  /* ── MATERIALIZAR / ESTORNAR (fatia D) ── */
+  const { materializar, estornar } = useBarterMaterializacao(abertoId, contrato?.conta_permuta_id ?? null);
+  const { linhas: extrato, saldo: saldoPermuta } = useExtratoPermuta(contrato?.conta_permuta_id ?? null);
+  const [ocupado, setOcupado] = useState(false);
+
+  /**
+   * ⚠ A CONTA É A MESMA DA RPC, e por isso conta PARTE e INSUMO juntos, ignorando valor zero:
+   * o laço do banco varre `agri_oc_partes` com `coalesce(valor,0) <> 0` e `agri_oc_insumos`
+   * idem. Se a tela prometesse 30 e o banco gerasse 28, o operador confirmaria um número que
+   * não existe.
+   */
+  const partesDasVendas = useMemo(() => vendas.flatMap(v => v.partes), [vendas]);
+  const pendentes = useMemo(() =>
+    partesDasVendas.filter(p => !p.financeiro_lancamento_id && Number(p.valor) !== 0).length
+    + insumos.filter(i => !i.financeiro_lancamento_id && Number(i.valor) !== 0).length,
+  [partesDasVendas, insumos]);
+  const materializados = useMemo(() =>
+    partesDasVendas.filter(p => !!p.financeiro_lancamento_id).length
+    + insumos.filter(i => !!i.financeiro_lancamento_id).length,
+  [partesDasVendas, insumos]);
+
+  const rodar = async (acao: 'materializar' | 'estornar') => {
+    setOcupado(true);
+    try {
+      const r = acao === 'materializar' ? await materializar() : await estornar();
+      if (!r.ok) { toast.error(r.erro ?? 'Não foi possível concluir.'); return; }
+      toast.success(acao === 'materializar'
+        ? `${'gerados' in r ? r.gerados : 0} lançamentos gerados no DRE.`
+        : 'Lançamentos estornados. A conta de permuta voltou a zero.');
+    } finally {
+      setOcupado(false);
+    }
+  };
+
   const criar = async () => {
     if (!parceiroId) { toast.error('Escolha o parceiro do contrato.'); return; }
     if (!nome.trim()) { toast.error('Dê um nome ao contrato.'); return; }
@@ -229,7 +255,12 @@ export function AgriBarterTab() {
           <Metrica rotulo="Saldo" valor={formatMoeda(balanco.saldo)} nota={balanco.rotulo} destaque />
         </div>
 
-        <div className="grid min-h-0 flex-1 gap-2 md:grid-cols-2">
+        {/* ⚠ AS DUAS PERNAS FICAM COM O DOBRO DA ALTURA DO EXTRATO (`flex-[2]` contra
+            `flex-[1]`), e o número não é estética: sem um `flex` explícito no card de baixo, o
+            extrato cresceria com os 28 lançamentos e empurraria a página inteira a rolar — e aí
+            os cabeçalhos fixos das duas colunas de cima sairiam da tela, que é exatamente o que
+            o A21 existe para impedir. */}
+        <div className="grid min-h-0 flex-[2] gap-2 md:grid-cols-2">
           {/* ── RECEBI (fatia B) ─────────────────────────────────────────────────────────
               ⚠ O CABEÇALHO E O TOTAL FICAM; SÓ O CORPO ROLA (A21). O `min-h-0` na coluna é o
               que dá altura ao scrollport interno — sem ele o `sticky` das células sobe junto
@@ -393,19 +424,16 @@ export function AgriBarterTab() {
             </div>
           </div>
         </div>
-        {/* ⚠⚠ PENDÊNCIA BLOQUEANTE DA FATIA D, escrita no ponto onde ela será cobrada.
-            A RPC `agri_barter_materializar_contrato` JÁ EXISTE no banco (medida em 13/09/2026)
-            e ainda não tem botão — a fatia D é quem a liga. O laço dela varre SOMENTE
-            `natureza='receita_venda'` e os insumos: `imposto`, `desconto` e `frete` não têm
-            laço nenhum. Como a parte de receita grava o BRUTO (decisão do Gabriel), ligar o
-            botão sem ensinar o motor levaria a receita cheia ao DRE e deixaria o Senar de fora.
-            A fatia D tem de materializar essas três naturezas como SAÍDA na conta de permuta,
-            e o estorno tem de desfazê-las junto.
-            ⚠ O TEXTO DIZ ISSO AO OPERADOR, não só ao programador: enquanto o botão não existe,
-            quem conferir o DRE contra esta tela vê a diferença — e é essa visibilidade que
-            torna a dívida aceitável. */}
-        <AindaNao titulo="Materializar"
-          descricao="Gerar os lançamentos no DRE — receita da venda e custo do insumo, na conta de permuta, sem tocar no caixa — e o estorno que desfaz. Entra na fatia D. Atenção: a receita vai ao DRE pelo valor BRUTO; a dedução (Senar) fica registrada na venda e só virará lançamento quando a fatia D ensinar o motor a materializá-la. Até lá, o resultado do barter fica maior que o líquido desta tela, pelo valor da dedução." />
+        <BarterMaterializarCard
+          contaPermutaNome={contrato.contaPermutaNome}
+          pendentes={pendentes}
+          materializados={materializados}
+          linhas={extrato}
+          saldo={saldoPermuta}
+          ocupado={ocupado}
+          onMaterializar={() => void rodar('materializar')}
+          onEstornar={() => void rodar('estornar')}
+        />
 
         <BarterVendaModal
           aberto={modalVenda}
