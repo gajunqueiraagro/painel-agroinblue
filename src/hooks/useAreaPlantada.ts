@@ -230,3 +230,71 @@ export function useCulturasDaSafra(safraId: string | null | undefined) {
 
   return culturas;
 }
+
+/**
+ * Um talhão da safra, como o seletor da colheita o lê — AGRI-COLHEITA-TELA-01.
+ *
+ * ⚠ O PASTO ENTRA NO RÓTULO PORQUE A CULTURA NÃO IDENTIFICA A ÁREA. Medido em 13/09/2026: na
+ * 24/25 o amendoim tem 2 talhões, na 25/26 tem 2 e a mandioca 2, na 26/27 são 3. A FK de
+ * `agri_colheita` aponta para o talhão, não para a cultura — um seletor por cultura não teria
+ * onde pendurar a carga, e escolher "o primeiro" gravaria no talhão errado sem avisar.
+ */
+export interface TalhaoDaSafra {
+  id: string;
+  cultura: string;
+  status: string;
+  area_plantada_ha: number;
+  pastoNome: string;
+}
+
+/**
+ * Os talhões ATIVOS de uma safra, com o nome do pasto resolvido.
+ *
+ * ⚠ DUAS CONSULTAS, NÃO UM JOIN EMBUTIDO: o `select` com relação aninhada do PostgREST depende
+ * do `types.ts`, que não conhece `agri_safra_area` — o resultado viria como `SelectQueryError`
+ * e o campo do pasto sairia mudo em runtime sem erro nenhum. Buscar os nomes por `.in()` é o
+ * idioma já usado no repo para o mesmo impasse.
+ */
+export function useTalhoesDaSafra(clienteId: string | null | undefined, safraId: string | null) {
+  const [talhoes, setTalhoes] = useState<TalhaoDaSafra[]>([]);
+  const [carregando, setCarregando] = useState(false);
+
+  useEffect(() => {
+    if (!clienteId || !safraId) { setTalhoes([]); return; }
+    let vivo = true;
+    setCarregando(true);
+    const db = supabase as any;
+    void (async () => {
+      const { data } = await db.from('agri_safra_area')
+        .select('id, pasto_id, cultura, status, area_plantada_ha')
+        .eq('cliente_id', clienteId)
+        .eq('safra_id', safraId)
+        .eq('ativo', true);
+      const linhas = (data ?? []) as Array<{
+        id: string; pasto_id: string; cultura: string; status: string; area_plantada_ha: number;
+      }>;
+      const ids = Array.from(new Set(linhas.map(l => l.pasto_id).filter(Boolean)));
+      const nomes = new Map<string, string>();
+      if (ids.length > 0) {
+        const { data: ps } = await db.from('pastos').select('id, nome').in('id', ids);
+        for (const p of (ps ?? []) as Array<{ id: string; nome: string }>) nomes.set(p.id, p.nome);
+      }
+      if (!vivo) return;
+      setTalhoes(linhas
+        .map(l => ({
+          id: l.id,
+          cultura: l.cultura,
+          status: l.status,
+          area_plantada_ha: Number(l.area_plantada_ha) || 0,
+          /* Sem nome de pasto o talhão continua existindo — e a carga precisa cair nele. */
+          pastoNome: nomes.get(l.pasto_id) ?? '—',
+        }))
+        .sort((a, b) => a.cultura.localeCompare(b.cultura, 'pt-BR')
+          || a.pastoNome.localeCompare(b.pastoNome, 'pt-BR')));
+      setCarregando(false);
+    })();
+    return () => { vivo = false; };
+  }, [clienteId, safraId]);
+
+  return { talhoes, carregando };
+}

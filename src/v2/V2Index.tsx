@@ -59,6 +59,7 @@ import { FinV2SubcentroAliasesTab } from '@/pages/FinV2SubcentroAliasesTab';
 import { FinV2SafrasTab } from '@/pages/FinV2SafrasTab';
 import { FinV2RateioAdminTab } from '@/pages/FinV2RateioAdminTab';
 import { AgriDreCulturaTab } from '@/pages/AgriDreCulturaTab';
+import { AgriColheitaTab } from '@/pages/AgriColheitaTab';
 import { ContratosTab } from '@/pages/ContratosTab';
 import FinanciamentosListaPage from '@/pages/FinanciamentosListaPage';
 import FinanciamentoDetalhe from '@/pages/FinanciamentoDetalhe';
@@ -847,6 +848,8 @@ export default function V2Index() {
 
   function renderContent() {
     if (section === 'home') return <V2Home ano={ano} mes={mes} viewMode={viewMode} onViewModeChange={setViewMode} onIrPara={irParaPendencia} onMesChange={setMes} onAnoChange={setAno} />;
+    /* Produção › Lançar › Agricultura — o lançamento de colheita, carga por carga. */
+    if (section === 'lancamentos-agricultura') return <AgriColheitaTab />;
     if (section === 'dre-cultura') return (
       <AgriDreCulturaTab />
     );

@@ -1,31 +1,40 @@
 /**
- * Os romaneios de colheita de uma área plantada — AGRI-COLHEITA-TELA-01.
+ * As cargas de colheita de uma área plantada — AGRI-COLHEITA-TELA-01.
  *
  * ⚠ A CHAVE É A ÁREA, NÃO O PASTO NEM O MÊS: `agri_colheita.safra_area_id` aponta para
- * `agri_safra_area`, então a entrega pertence ao talhão daquela cultura naquela safra. Um
- * pasto com amendoim e milho tem duas listas de romaneio, e é o que se quer — o seco do
- * amendoim não se soma ao do milho.
- * ⚠ TABELA FORA DO `types.ts` (migration AGRI-03, posterior ao regen): vale o mesmo idioma já
- * usado em `useAreaPlantada` — `supabase as any` no builder, resultado convertido no ato.
+ * `agri_safra_area`, então a carga pertence ao talhão daquela cultura naquela safra. Um pasto
+ * com amendoim e milho tem duas listas — o seco de um não se soma ao do outro.
+ * ⚠ UMA CARGA POR VEZ, NÃO EM LOTE. O romaneio chega avulso e se lança avulso; salvar a lista
+ * inteira obrigaria a apagar e reinserir o que não mudou, e um erro no meio deixaria metade
+ * gravada. Aqui cada gesto é uma linha: grava, devolve erro se falhar, recarrega.
+ * ⚠ TABELA FORA DO `types.ts` (migration posterior ao regen): vale o idioma já usado em
+ * `useAreaPlantada` — `supabase as any` no builder, resultado convertido no ato.
  */
 import { useState, useCallback, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import type { RomaneioPayload } from '@/lib/agri/colheita';
+import type { CargaPayload } from '@/lib/agri/colheita';
 
 export interface ColheitaRow {
   id: string;
   safra_area_id: string;
   data_colheita: string;
-  peso_bruto_kg: number | null;
-  peso_liquido_kg: number | null;
-  peso_refugo_kg: number | null;
-  sacas: number | null;
-  destino: string | null;
-  romaneio_ref: string | null;
+  ticket_balanca: string | null;
+  nf_produtor: string | null;
+  filial: string | null;
+  peso_verde_kg: number | null;
+  peso_seco_kg: number | null;
+  umidade_pct: number | null;
+  aflatoxina_ppb: number | null;
+  sacas_boas: number | null;
+  grao_roca_sacas: number | null;
+  grao_roca_kg: number | null;
+  renda_liquida_pct: number | null;
   observacoes: string | null;
 }
 
-const COLS = 'id, safra_area_id, data_colheita, peso_bruto_kg, peso_liquido_kg, peso_refugo_kg, sacas, destino, romaneio_ref, observacoes';
+const COLS = 'id, safra_area_id, data_colheita, ticket_balanca, nf_produtor, filial,'
+  + ' peso_verde_kg, peso_seco_kg, umidade_pct, aflatoxina_ppb, sacas_boas,'
+  + ' grao_roca_sacas, grao_roca_kg, renda_liquida_pct, observacoes';
 
 export function useColheita(safraAreaIds: readonly string[]) {
   const [linhas, setLinhas] = useState<ColheitaRow[]>([]);
@@ -49,44 +58,37 @@ export function useColheita(safraAreaIds: readonly string[]) {
 
   useEffect(() => { void carregar(); }, [carregar]);
 
-  /**
-   * Grava a lista de romaneios DE UMA ÁREA: insere, atualiza e apaga o que saiu da tela.
-   *
-   * ⚠ O ESCOPO DO APAGAR É A ÁREA, e não a lista inteira carregada: o hook pode estar
-   * segurando os romaneios de duas culturas do mesmo pasto, e salvar o amendoim não pode
-   * levar o milho junto. É o tipo de erro que só aparece quando o segundo talhão existe.
-   */
-  const salvar = useCallback(async (
+  /** Grava UMA carga — insere quando `id` é nulo, atualiza quando não é. */
+  const salvarCarga = useCallback(async (
     safraAreaId: string,
-    lista: Array<RomaneioPayload & { id: string | null }>,
+    id: string | null,
+    payload: CargaPayload,
     clienteId: string,
   ): Promise<{ ok: boolean; erro?: string }> => {
     const db = supabase as any;
-    const daArea = linhas.filter(l => l.safra_area_id === safraAreaId);
-    const ficam = new Set(lista.map(l => l.id).filter(Boolean) as string[]);
-    for (const l of daArea.filter(x => !ficam.has(x.id))) {
-      const { error } = await db.from('agri_colheita').delete().eq('id', l.id);
-      if (error) return { ok: false, erro: `Não foi possível remover o romaneio de ${l.data_colheita}: ${error.message}` };
-    }
-    for (const l of lista) {
-      const payload = {
-        data_colheita: l.data_colheita,
-        peso_bruto_kg: l.peso_bruto_kg,
-        peso_liquido_kg: l.peso_liquido_kg,
-        peso_refugo_kg: l.peso_refugo_kg,
-        sacas: l.sacas,
-        destino: l.destino,
-        romaneio_ref: l.romaneio_ref,
-        observacoes: l.observacoes,
-      };
-      const { error } = l.id
-        ? await db.from('agri_colheita').update(payload).eq('id', l.id)
-        : await db.from('agri_colheita').insert({ ...payload, cliente_id: clienteId, safra_area_id: safraAreaId });
-      if (error) return { ok: false, erro: error.message };
-    }
+    const { error } = id
+      ? await db.from('agri_colheita').update(payload).eq('id', id)
+      : await db.from('agri_colheita')
+        .insert({ ...payload, cliente_id: clienteId, safra_area_id: safraAreaId });
+    /* ⚠ O ERRO DO BANCO VAI INTEIRO PARA A TELA. "Não foi possível salvar" sozinho manda o
+       operador adivinhar; a mensagem do PostgREST diz qual coluna recusou. */
+    if (error) return { ok: false, erro: error.message };
     await carregar();
     return { ok: true };
-  }, [linhas, carregar]);
+  }, [carregar]);
 
-  return { linhas, carregando, carregar, salvar };
+  /**
+   * ⚠ EXCLUSÃO É LÓGICA, não `delete`: `ativo = false`. A carga é documento — ticket de
+   * balança e nota do produtor existem no papel da cooperativa, e apagar a linha do banco
+   * tiraria do sistema o que continua existindo no arquivo do produtor.
+   */
+  const excluirCarga = useCallback(async (id: string): Promise<{ ok: boolean; erro?: string }> => {
+    const db = supabase as any;
+    const { error } = await db.from('agri_colheita').update({ ativo: false }).eq('id', id);
+    if (error) return { ok: false, erro: error.message };
+    await carregar();
+    return { ok: true };
+  }, [carregar]);
+
+  return { linhas, carregando, carregar, salvarCarga, excluirCarga };
 }

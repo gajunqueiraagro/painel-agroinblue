@@ -1,159 +1,178 @@
 /**
- * A colheita: unidade, romaneio e totais — AGRI-COLHEITA-TELA-01.
+ * A colheita carga por carga — AGRI-COLHEITA-TELA-01.
  *
- * ⚠ O CASO QUE MOTIVA QUASE TODOS ESTES TESTES é o seco que chega DEPOIS. Entre embarcar e a
- * cooperativa devolver a classificação passam dias, e nesse meio-tempo a tela tem de dizer o
- * que sabe sem inventar o que não sabe.
+ * ⚠ OS NÚMEROS SÃO OS DO ROMANEIO QUE O GABRIEL VAI LANÇAR: dez cargas da 23/24 de amendoim,
+ * 227.500 kg verdes e ~193.666 kg secos. Se um dia a régua de faixa ou de quebra mudar, é aqui
+ * que a divergência aparece antes de chegar à tela.
  */
 import { describe, it, expect } from 'vitest';
 import {
-  unidadeDaCultura, sacasDoPeso, validarRomaneio, totaisColheita, DESTINOS,
-  type RomaneioForm,
+  LIMITE_AFLATOXINA, faixaAflatoxina, unidadeDaCultura, validarCarga, totaisColheita,
+  cargaVazia, type CargaForm,
 } from './colheita';
 
-const linha = (over: Partial<RomaneioForm> = {}): RomaneioForm => ({
-  id: null, dataColheita: '2026-02-10', pesoVerdeKg: '5000', sacas: '',
-  pesoSecoKg: '', pesoRefugoKg: '', destino: '', romaneioRef: '', observacoes: '',
-  ...over,
+const carga = (over: Partial<CargaForm> = {}): CargaForm => ({
+  ...cargaVazia(), dataColheita: '2024-03-15', pesoVerdeKg: '22750', ...over,
 });
 
-describe('a unidade muda com a cultura', () => {
-  it('amendoim é saca de 25 kg', () => {
+describe('a faixa de aflatoxina', () => {
+  it('o corte é 20 ppb, e ele é constante nomeada', () => {
+    expect(LIMITE_AFLATOXINA).toBe(20);
+  });
+
+  it('no limite ainda é "até" — o corte inclui o próprio 20', () => {
+    expect(faixaAflatoxina(20)).toBe('ate');
+    expect(faixaAflatoxina(19.9)).toBe('ate');
+    expect(faixaAflatoxina(0)).toBe('ate');
+  });
+
+  it('acima do corte é outra faixa, e outra tabela de preço', () => {
+    expect(faixaAflatoxina(20.1)).toBe('acima');
+    expect(faixaAflatoxina(35)).toBe('acima');
+  });
+
+  it('⚠ SEM LAUDO NÃO É "ATÉ 20": ausência não vira faixa boa', () => {
+    expect(faixaAflatoxina(null)).toBeNull();
+    expect(faixaAflatoxina(undefined)).toBeNull();
+  });
+});
+
+describe('a unidade da cultura', () => {
+  it('amendoim se mede em saca de 25 kg; mandioca, em tonelada', () => {
     expect(unidadeDaCultura('amendoim').kgPorSaca).toBe(25);
-    expect(unidadeDaCultura('amendoim').unidadeProdutividade).toBe('sc/ha');
-    expect(sacasDoPeso(5000, 'amendoim')).toBe(200);
-  });
-
-  it('mandioca é raiz: tonelada, sem saca', () => {
     expect(unidadeDaCultura('mandioca').kgPorSaca).toBeNull();
-    expect(unidadeDaCultura('mandioca').unidadeTotal).toBe('t');
-    expect(sacasDoPeso(5000, 'mandioca')).toBeNull();
   });
 
-  it('⚠ soja e milho ficam SEM saca até alguém decidir o peso', () => {
-    /* 60 kg é convenção de mercado, não decisão registrada. Afirmá-la aqui faria o sistema
-       publicar uma produtividade que ninguém confirmou. */
+  it('⚠ soja e milho ficam SEM saca até alguém decidir — convenção não é decisão', () => {
     expect(unidadeDaCultura('soja').kgPorSaca).toBeNull();
     expect(unidadeDaCultura('milho').kgPorSaca).toBeNull();
-    expect(unidadeDaCultura('cultura_que_nao_existe').kgPorSaca).toBeNull();
-    expect(unidadeDaCultura(null).kgPorSaca).toBeNull();
-  });
-
-  it('peso zero ou negativo não vira saca', () => {
-    expect(sacasDoPeso(0, 'amendoim')).toBeNull();
-    expect(sacasDoPeso(-10, 'amendoim')).toBeNull();
+    expect(unidadeDaCultura(null).unidadeProdutividade).toBe('t/ha');
   });
 });
 
-describe('validarRomaneio', () => {
-  it('caminho feliz: sacas derivam do verde quando ninguém as digita', () => {
-    const r = validarRomaneio(linha(), 'amendoim');
-    expect(r.ok).toBe(true);
-    expect(r.payload?.peso_bruto_kg).toBe(5000);
-    expect(r.payload?.sacas).toBe(200);
-    expect(r.payload?.peso_liquido_kg).toBeNull();
+describe('validar a carga', () => {
+  it('sem data não grava: é ela que põe a carga na safra', () => {
+    expect(validarCarga(carga({ dataColheita: '' })).ok).toBe(false);
   });
 
-  it('⚠ as sacas digitadas VENCEM o cálculo — o romaneio às vezes já vem em sacas', () => {
-    const r = validarRomaneio(linha({ sacas: '198' }), 'amendoim');
-    expect(r.payload?.sacas).toBe(198);
+  it('sem peso nenhum não grava', () => {
+    const v = validarCarga(carga({ pesoVerdeKg: '', pesoSecoKg: '' }));
+    expect(v.ok).toBe(false);
   });
 
-  it('milhar com ponto E vírgula decimal é lido certo', () => {
-    const r = validarRomaneio(linha({ pesoVerdeKg: '5.000,00', pesoSecoKg: '4.312,5' }), 'amendoim');
-    expect(r.payload?.peso_bruto_kg).toBe(5000);
-    expect(r.payload?.peso_liquido_kg).toBe(4312.5);
+  it('⚠ SECO MAIOR QUE VERDE É DÍGITO TROCADO: secar tira água, não acrescenta', () => {
+    const v = validarCarga(carga({ pesoVerdeKg: '22750', pesoSecoKg: '23000' }));
+    expect(v.ok).toBe(false);
+    expect(v.erro).toMatch(/seco/i);
   });
 
-  it('⚠ ARMADILHA CONHECIDA: "5.000" sem casas decimais é lido como CINCO', () => {
-    /* `parseNumericValue` (a mesma do abate, usada aqui de propósito para não haver duas
-       leituras de número no sistema) trata ponto SEM vírgula como separador DECIMAL — é o que
-       "1.5" pede. Num campo de quilos isso morde: quem digita "5.000" quer cinco mil.
-       O que segura o engano é o eco: o total do bloco recalcula a cada tecla, e "Total verde:
-       5 kg" denuncia na hora. Máscara de milhar no campo é a correção de raiz, e é decisão de
-       produto — não se resolve inventando uma segunda regra de parsing aqui. */
-    const r = validarRomaneio(linha({ pesoVerdeKg: '5.000' }), 'amendoim');
-    expect(r.payload?.peso_bruto_kg).toBe(5);
+  it('percentual acima de 100 é recusado, nos dois campos', () => {
+    expect(validarCarga(carga({ umidadePct: '120' })).ok).toBe(false);
+    expect(validarCarga(carga({ rendaLiquidaPct: '101' })).ok).toBe(false);
   });
 
-  it('sem data não grava', () => {
-    expect(validarRomaneio(linha({ dataColheita: '' })).ok).toBe(false);
+  it('negativo é recusado e a mensagem diz qual campo', () => {
+    const v = validarCarga(carga({ aflatoxinaPpb: '-1' }));
+    expect(v.ok).toBe(false);
+    expect(v.erro).toMatch(/aflatoxina/i);
   });
 
-  it('sem peso nenhum não grava — romaneio vazio não é entrega', () => {
-    expect(validarRomaneio(linha({ pesoVerdeKg: '' })).ok).toBe(false);
+  it('⚠ O TEXTO É pt-BR: "22.750,5" são vinte e dois mil, não vinte e dois', () => {
+    const v = validarCarga(carga({ pesoVerdeKg: '22.750,5' }));
+    expect(v.payload?.peso_verde_kg).toBe(22750.5);
   });
 
-  it('só o seco basta: o romaneio pode ser lançado quando a classificação chega', () => {
-    expect(validarRomaneio(linha({ pesoVerdeKg: '', pesoSecoKg: '4000' })).ok).toBe(true);
+  it('campo em branco vira null, nunca zero — zero é medição, branco é ausência', () => {
+    const v = validarCarga(carga({ pesoSecoKg: '', aflatoxinaPpb: '', ticketBalanca: '' }));
+    expect(v.ok).toBe(true);
+    expect(v.payload?.peso_seco_kg).toBeNull();
+    expect(v.payload?.aflatoxina_ppb).toBeNull();
+    expect(v.payload?.ticket_balanca).toBeNull();
   });
 
-  it('⚠ seco maior que verde é recusado — secar tira água, não acrescenta', () => {
-    const r = validarRomaneio(linha({ pesoSecoKg: '6000' }), 'amendoim');
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.erro).toContain('não pode ser maior');
-  });
-
-  it('destino fora da lista é recusado; vazio é aceito como ausência', () => {
-    expect(validarRomaneio(linha({ destino: 'exportacao' })).ok).toBe(false);
-    expect(validarRomaneio(linha({ destino: '' })).payload?.destino).toBeNull();
-    expect(validarRomaneio(linha({ destino: 'armazem' })).payload?.destino).toBe('armazem');
-  });
-
-  it('os quatro destinos do CHECK do banco estão na lista da tela', () => {
-    expect(DESTINOS.map(d => d.valor)).toEqual(['armazem', 'venda', 'consumo', 'outro']);
+  it('o payload leva os campos do romaneio, um a um', () => {
+    const v = validarCarga(carga({
+      ticketBalanca: '12345', nfProdutor: '778', filial: 'Matriz',
+      pesoSecoKg: '19366,6', umidadePct: '8,2', aflatoxinaPpb: '12',
+      sacasBoas: '774,66', graoRocaSacas: '22', graoRocaKg: '550', rendaLiquidaPct: '85,1',
+    }));
+    expect(v.ok).toBe(true);
+    expect(v.payload).toMatchObject({
+      data_colheita: '2024-03-15', ticket_balanca: '12345', nf_produtor: '778', filial: 'Matriz',
+      peso_verde_kg: 22750, peso_seco_kg: 19366.6, umidade_pct: 8.2, aflatoxina_ppb: 12,
+      sacas_boas: 774.66, grao_roca_sacas: 22, grao_roca_kg: 550, renda_liquida_pct: 85.1,
+    });
   });
 });
 
-describe('totaisColheita', () => {
-  it('soma verde e sacas de vários romaneios', () => {
-    const t = totaisColheita([linha(), linha({ pesoVerdeKg: '3000' })], 'amendoim', 96.4);
-    expect(t.verdeKg).toBe(8000);
-    expect(t.sacas).toBe(320);
+describe('os totais da safra', () => {
+  /* Dez cargas iguais: 227.500 kg verdes e 193.666 kg secos — o romaneio da 23/24. */
+  const dez = Array.from({ length: 10 }, (_, i) => carga({
+    pesoVerdeKg: '22750', pesoSecoKg: '19366,6', sacasBoas: '774,66',
+    aflatoxinaPpb: i < 8 ? '12' : '35', graoRocaSacas: '22,2',
+  }));
+
+  it('soma o verde e o seco das cargas', () => {
+    const t = totaisColheita(dez, 'amendoim', 60.6);
+    expect(t.verdeKg).toBe(227500);
+    expect(t.secoKg).toBeCloseTo(193666, 0);
+    expect(t.cargas).toBe(10);
   });
 
-  it('⚠ sem nenhum seco, quebra e produtividade NÃO existem — é o "aguardando cooperativa"', () => {
-    const t = totaisColheita([linha(), linha({ pesoVerdeKg: '3000' })], 'amendoim', 96.4);
-    expect(t.quebraPct).toBeNull();
-    expect(t.produtividade).toBeNull();
-    expect(t.aguardandoSeco).toBe(2);
+  it('a separação por faixa sai do ppb de cada carga', () => {
+    const t = totaisColheita(dez, 'amendoim', 60.6);
+    expect(t.sacasAteLimite).toBeCloseTo(774.66 * 8, 2);
+    expect(t.sacasAcimaLimite).toBeCloseTo(774.66 * 2, 2);
+    expect(t.sacasSemClasse).toBe(0);
   });
 
-  it('⚠ a quebra é do que JÁ voltou seco, não do verde total', () => {
-    /* Um romaneio de 5.000 voltou com 4.000 (20%); o outro, de 5.000, ainda está na
-       cooperativa. Contra o verde total a quebra pareceria 60% — perda inventada. */
-    const t = totaisColheita([linha({ pesoSecoKg: '4000' }), linha()], 'amendoim', 100);
-    expect(t.quebraPct).toBe(20);
+  it('⚠ O GRÃO DE ROÇA FICA FORA DAS DUAS FAIXAS — ele já é refugo', () => {
+    const t = totaisColheita(dez, 'amendoim', 60.6);
+    expect(t.graoRocaSacas).toBeCloseTo(222, 1);
+    expect(t.sacasAteLimite + t.sacasAcimaLimite).toBeCloseTo(t.sacasBoas, 2);
+  });
+
+  it('⚠ CARGA SEM LAUDO VAI PARA "SEM CLASSE", não para a faixa boa', () => {
+    const t = totaisColheita([carga({ sacasBoas: '100', aflatoxinaPpb: '' })], 'amendoim', 10);
+    expect(t.sacasSemClasse).toBe(100);
+    expect(t.sacasAteLimite).toBe(0);
+  });
+
+  it('⚠ A QUEBRA É SOBRE O VERDE QUE JÁ VOLTOU SECO, não sobre o verde total', () => {
+    /* Metade da safra ainda na cooperativa: a quebra é 10%, não 55%. */
+    const meio = [
+      carga({ pesoVerdeKg: '1000', pesoSecoKg: '900' }),
+      carga({ pesoVerdeKg: '1000', pesoSecoKg: '' }),
+    ];
+    const t = totaisColheita(meio, 'amendoim', 1);
+    expect(t.quebraPct).toBe(10);
     expect(t.aguardandoSeco).toBe(1);
   });
 
-  it('a produtividade é do seco e por hectare', () => {
-    /* 4.000 kg secos ÷ 25 kg/saca = 160 sacas; ÷ 100 ha = 1,6 sc/ha. */
-    const t = totaisColheita([linha({ pesoSecoKg: '4000' })], 'amendoim', 100);
-    expect(t.produtividade).toBe(1.6);
-  });
-
-  it('mandioca mede produtividade em toneladas por hectare', () => {
-    const t = totaisColheita([linha({ pesoVerdeKg: '50000', pesoSecoKg: '50000' })], 'mandioca', 2);
-    expect(t.sacas).toBeNull();
-    expect(t.produtividade).toBe(25); // 50 t ÷ 2 ha
-  });
-
-  it('sem área não há produtividade — não se divide por ausência', () => {
-    expect(totaisColheita([linha({ pesoSecoKg: '4000' })], 'amendoim', null).produtividade).toBeNull();
-    expect(totaisColheita([linha({ pesoSecoKg: '4000' })], 'amendoim', 0).produtividade).toBeNull();
-  });
-
-  it('lista vazia não quebra a conta', () => {
-    const t = totaisColheita([], 'amendoim', 96.4);
-    expect(t.verdeKg).toBe(0);
-    expect(t.sacas).toBeNull();
+  it('sem nenhum seco não há quebra — e não é zero', () => {
+    const t = totaisColheita([carga({ pesoSecoKg: '' })], 'amendoim', 10);
     expect(t.quebraPct).toBeNull();
   });
 
-  it('o grão de roça soma à parte, sem entrar no verde', () => {
-    const t = totaisColheita([linha({ pesoRefugoKg: '120' })], 'amendoim', 96.4);
-    expect(t.refugoKg).toBe(120);
-    expect(t.verdeKg).toBe(5000);
+  it('a produtividade do amendoim é em sacas boas por hectare', () => {
+    const t = totaisColheita(dez, 'amendoim', 60.6);
+    expect(t.produtividade).toBeCloseTo((774.66 * 10) / 60.6, 2);
+  });
+
+  it('sem saca, a produtividade é o seco em tonelada por hectare', () => {
+    const t = totaisColheita([carga({ pesoVerdeKg: '10000', pesoSecoKg: '9000' })], 'mandioca', 3);
+    expect(t.produtividade).toBeCloseTo(3, 2);
+  });
+
+  it('⚠ SEM ÁREA NÃO HÁ PRODUTIVIDADE — dividir por zero daria "∞ sc/ha"', () => {
+    expect(totaisColheita(dez, 'amendoim', 0).produtividade).toBeNull();
+    expect(totaisColheita(dez, 'amendoim', null).produtividade).toBeNull();
+  });
+
+  it('lista vazia não quebra', () => {
+    const t = totaisColheita([], 'amendoim', 60.6);
+    expect(t.cargas).toBe(0);
+    expect(t.verdeKg).toBe(0);
+    expect(t.quebraPct).toBeNull();
   });
 });
