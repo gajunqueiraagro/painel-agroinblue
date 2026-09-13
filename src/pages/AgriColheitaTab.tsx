@@ -22,6 +22,10 @@ import { useSafrasLavoura, useTalhoesDaSafra } from '@/hooks/useAreaPlantada';
 import { useColheita } from '@/hooks/useColheita';
 import { CargasDaArea } from '@/components/agri/CargasDaArea';
 import { AnaliseProducaoModal } from '@/components/agri/AnaliseProducaoModal';
+import { ExportarColheita } from '@/components/agri/ExportarColheita';
+import {
+  exportarColheitaXlsx, exportarColheitaPdf, type LinhaExport,
+} from '@/lib/agri/exportColheita';
 import {
   LIMITE_AFLATOXINA, totaisColheita, unidadeDaCultura, type CargaForm,
 } from '@/lib/agri/colheita';
@@ -145,6 +149,47 @@ export function AgriColheitaTab() {
   const unidade = unidadeDaCultura(culturaSel || null);
   const safraLabel = safras.find(s => s.id === safraId);
 
+  /**
+   * O QUE VAI PARA O ARQUIVO — o recorte da tela, resolvido para nomes.
+   *
+   * ⚠ AS MESMAS LINHAS E O MESMO `totais` QUE A TELA MOSTRA. O export não busca nada: se
+   * buscasse, o papel poderia divergir do que está à vista, e ninguém confere um PDF contra a
+   * tela antes de levá-lo para a cooperativa.
+   */
+  const linhasParaExport: LinhaExport[] = useMemo(() => {
+    const nome = new Map(talhoesDaLista.map(t => [t.id, t.pastoNome]));
+    const faz = new Map(talhoesDaLista.map(t => [t.id, t.fazendaCodigo || '']));
+    return doRecorte.map(l => ({
+      fazenda: faz.get(l.safra_area_id) || '',
+      talhao: nome.get(l.safra_area_id) || '',
+      data: l.data_colheita ?? '',
+      hora: (l.hora_chegada ?? '').slice(0, 5),
+      ticket: l.ticket_balanca ?? '',
+      nf: l.nf_produtor ?? '',
+      pesoFazendaKg: l.peso_fazenda_kg,
+      verdeKg: l.peso_verde_kg,
+      secoKg: l.peso_seco_kg,
+      umidadePct: l.umidade_pct,
+      aflatoxinaPpb: l.aflatoxina_ppb,
+      sacasBoas: l.sacas_boas,
+      graoRocaSacas: l.grao_roca_sacas,
+    }));
+  }, [doRecorte, talhoesDaLista]);
+
+  const exportar = async (formato: 'xlsx' | 'pdf', comAnalise: boolean) => {
+    const ctx = {
+      cliente: clienteAtual?.nome ?? '—',
+      safra: safraLabel?.codigo || safraLabel?.nome || '',
+      cultura: culturaSel,
+      talhao: talhaoSel ? talhaoSel.pastoNome : 'Todos os talhões',
+      /* A área do RECORTE: do talhão aberto, ou a soma dos da cultura em "Todos". */
+      areaHa: talhoesDaLista.reduce((acc, t) => acc + t.area_plantada_ha, 0) || null,
+      comAnalise,
+    };
+    if (formato === 'xlsx') exportarColheitaXlsx(linhasParaExport, totais, ctx);
+    else await exportarColheitaPdf(linhasParaExport, totais, ctx);
+  };
+
   return (
     /* `h-[calc(100vh-...)]` não: a altura vem do pai do shell, e `min-h-0` é o que deixa a
        lista encolher e rolar em vez de empurrar a página. */
@@ -204,6 +249,13 @@ export function AgriColheitaTab() {
               </SelectContent>
             </Select>
           </div>
+          {/* ⚠ O BOTÃO FICA SEMPRE, mesmo sem carga: desabilitado e com o motivo escrito. Um
+              "Exportar" que some conforme o dado faz procurar um botão que se jura ter visto —
+              é o defeito que o `ExportMenu` do Financeiro já pagou. */}
+          <ExportarColheita
+            desabilitado={linhasParaExport.length === 0}
+            motivo={linhasParaExport.length === 0 ? 'sem carga para exportar' : undefined}
+            onExportar={exportar} />
         </div>
       </div>
 
