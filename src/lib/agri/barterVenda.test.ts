@@ -8,7 +8,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  disponivelPorClasse, calcularEntregas, totaisVenda, senarSugerido,
+  disponivelPorClasse, calcularEntregas, totaisVenda, deducaoPorAliquota, aliquotaDoValor,
   saldoDoContrato, labelDaClasse, CLASSES_VENDA,
 } from './barterVenda';
 
@@ -111,10 +111,31 @@ describe('totaisVenda', () => {
   });
 });
 
-describe('senarSugerido', () => {
+describe('dedução por alíquota', () => {
   it('1,5% sobre o bruto', () => {
-    expect(senarSugerido(660134.8)).toBe(9902.02);
-    expect(senarSugerido(0)).toBe(0);
+    expect(deducaoPorAliquota(660134.8, 1.5)).toBe(9902.02);
+    expect(deducaoPorAliquota(0, 1.5)).toBe(0);
+  });
+
+  /* ⚠ A ALÍQUOTA MUDOU DE VERDADE — subiu para 1,7%. É o caso que motivou torná-la editável. */
+  it('1,7% sobre o mesmo bruto dá outro número', () => {
+    expect(deducaoPorAliquota(660134.8, 1.7)).toBe(11222.29);
+  });
+
+  it('alíquota zerada ou inválida não deduz nada', () => {
+    expect(deducaoPorAliquota(1000, 0)).toBe(0);
+    expect(deducaoPorAliquota(1000, -1)).toBe(0);
+    expect(deducaoPorAliquota(1000, NaN)).toBe(0);
+  });
+
+  /* ⚠ O CAMINHO INVERSO tem de fechar com o de ida, senão a % exibida mente sobre o valor. */
+  it('a alíquota de um valor é o inverso do cálculo', () => {
+    expect(aliquotaDoValor(660134.8, 9902.02)).toBe(1.5);
+    expect(aliquotaDoValor(660134.8, 11222.29)).toBe(1.7);
+  });
+
+  it('sem bruto não há alíquota — e não é divisão por zero', () => {
+    expect(aliquotaDoValor(0, 100)).toBe(0);
   });
 });
 

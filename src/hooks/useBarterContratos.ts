@@ -152,7 +152,30 @@ export function useBarterContratos(clienteId: string | null | undefined) {
     return { ok: true, abertura };
   };
 
-  return { contratos: data ?? [], carregando: isLoading, abrir };
+  /**
+   * EDITA UM CONTRATO EXISTENTE — item 1b do RESUMO-2.
+   *
+   * ⚠ NÃO HÁ RPC DE UPDATE, e medi antes de escrever: `pg_proc` tem três funções
+   * `agri_barter_*` — abrir, materializar e estornar. O update vai direto na tabela, que é o
+   * que as policies permitem (as quatro são abertas).
+   * ⚠ A CULTURA FICA DE FORA DE PROPÓSITO. Ela já foi para os 28 lançamentos materializados;
+   * trocá-la aqui deixaria o contrato dizendo "milho" e o DRE mostrando amendoim, sem nada
+   * reconciliar os dois. Mudar cultura de contrato materializado é frente própria.
+   * ⚠ E A DATA É O MOTIVO DE ISTO EXISTIR: o 23/24 nasceu com 13/09/2026 porque a coluna tem
+   * `default CURRENT_DATE` e a RPC não recebe data. Sem edição, o único conserto seria SQL.
+   */
+  const editar = async (
+    id: string,
+    dados: { nome: string; descricao: string | null; data_abertura: string },
+  ): Promise<{ ok: boolean; erro?: string }> => {
+    const { error } = await (supabase as any).from('agri_barter_contratos')
+      .update(dados).eq('id', id);
+    if (error) return { ok: false, erro: error.message };
+    await queryClient.invalidateQueries({ queryKey: chave });
+    return { ok: true };
+  };
+
+  return { contratos: data ?? [], carregando: isLoading, abrir, editar };
 }
 
 /*
@@ -165,3 +188,50 @@ export function useBarterContratos(clienteId: string | null | undefined) {
  * segunda leitura de fornecedores era, por construção, uma segunda definição de "quem pode
  * ser parceiro" — e a que esquece o `ativo` é a que chega na tela do operador.
  */
+
+/**
+ * OS TOTAIS DE CADA CONTRATO, PARA A LISTA — item 2 do RESUMO-2.
+ *
+ * ⚠ DUAS CONSULTAS PARA TODOS OS CONTRATOS, não duas POR contrato. Reusar `useBarterInsumos` e
+ * `useBarterVenda` numa lista de N linhas faria 2N viagens ao banco — o N+1 clássico, que só
+ * aparece quando o cliente tem vinte contratos e a tela demora sem motivo visível.
+ * ⚠ O ENTREGUE É O LÍQUIDO, como no detalhe: o Senar fica com a cooperativa e nunca chega ao
+ * produtor. Se a lista somasse o bruto, o saldo dela discordaria do saldo do contrato aberto —
+ * duas respostas para a mesma pergunta, a um clique de distância.
+ */
+export interface TotaisContrato {
+  recebido: number;
+  entregue: number;
+  saldo: number;
+}
+
+export function useTotaisPorContrato(clienteId: string | null | undefined) {
+  const { data } = useQuery({
+    queryKey: ['barter-totais-contratos', clienteId ?? ''],
+    enabled: !!clienteId,
+    queryFn: async (): Promise<Map<string, TotaisContrato>> => {
+      const db = supabase as any;
+      const [{ data: ins }, { data: ops }] = await Promise.all([
+        db.from('agri_oc_insumos').select('contrato_barter_id, valor')
+          .eq('cliente_id', clienteId).eq('ativo', true),
+        db.from('agri_operacoes_comerciais').select('contrato_barter_id, valor_liquido')
+          .eq('cliente_id', clienteId).eq('ativo', true),
+      ]);
+      const mapa = new Map<string, TotaisContrato>();
+      const pega = (id: string) => {
+        const a = mapa.get(id) ?? { recebido: 0, entregue: 0, saldo: 0 };
+        mapa.set(id, a);
+        return a;
+      };
+      for (const i of (ins ?? []) as Array<{ contrato_barter_id: string; valor: number }>) {
+        if (i.contrato_barter_id) pega(i.contrato_barter_id).recebido += Number(i.valor) || 0;
+      }
+      for (const o of (ops ?? []) as Array<{ contrato_barter_id: string | null; valor_liquido: number | null }>) {
+        if (o.contrato_barter_id) pega(o.contrato_barter_id).entregue += Number(o.valor_liquido) || 0;
+      }
+      for (const t of mapa.values()) t.saldo = t.entregue - t.recebido;
+      return mapa;
+    },
+  });
+  return data ?? new Map<string, TotaisContrato>();
+}

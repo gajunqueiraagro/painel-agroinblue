@@ -23,7 +23,7 @@ import { Plus, ArrowLeft, Handshake, Save, Pencil, Trash2, Lock, List } from 'lu
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { formatMoeda } from '@/lib/calculos/formatters';
-import { useBarterContratos, type ContratoNaLista } from '@/hooks/useBarterContratos';
+import { useBarterContratos, useTotaisPorContrato, type ContratoNaLista } from '@/hooks/useBarterContratos';
 import { FornecedorSelect } from '@/components/shared/FornecedorSelect';
 import { useBarterInsumos, type BarterInsumo, type InsumoPayload } from '@/hooks/useBarterInsumos';
 import { useBarterVenda, type BarterVenda, type VendaPayload } from '@/hooks/useBarterVenda';
@@ -64,10 +64,13 @@ export function AgriBarterTab() {
   const { clienteAtual } = useCliente();
   const { fazendaAtual } = useFazenda();
   const clienteId = clienteAtual?.id ?? null;
-  const { contratos, carregando, abrir } = useBarterContratos(clienteId);
+  const { contratos, carregando, abrir, editar } = useBarterContratos(clienteId);
+  const totaisPorContrato = useTotaisPorContrato(clienteId);
 
   const [abertoId, setAbertoId] = useState<string | null>(null);
   const [novoAberto, setNovoAberto] = useState(false);
+  /** `null` = criando; preenchido = editando aquele contrato. */
+  const [editandoId, setEditandoId] = useState<string | null>(null);
   const [parceiroId, setParceiroId] = useState('');
   /* ⚠ O NOME VEM DO SELETOR, não de uma segunda leitura. O `FornecedorSelect` entrega
      `(id, nome)` no mesmo gesto, e é esse nome que a mensagem da conta de permuta usa. */
@@ -263,9 +266,20 @@ export function AgriBarterTab() {
     /* ⚠ A CULTURA É OBRIGATÓRIA, e não por capricho: sem ela os insumos vão ao DRE por cultura
        SEM cultura e caem em "Não apropriado" — o custo some da lavoura que o gerou. Foi
        exatamente o que aconteceu com o contrato 23/24 antes do AGRI-BARTER-04. */
-    if (!cultura) { toast.error('Escolha a cultura do barter.'); return; }
+    /* ⚠ NA EDIÇÃO A CULTURA NÃO É ALTERADA — ela já foi para os lançamentos materializados, e
+       trocá-la deixaria o contrato dizendo uma coisa e o DRE outra, sem nada reconciliar os dois. */
+    if (!editandoId && !cultura) { toast.error('Escolha a cultura do barter.'); return; }
     setSalvando(true);
     try {
+      if (editandoId) {
+        const r = await editar(editandoId, {
+          nome: nome.trim(), descricao: descricao.trim() || null, data_abertura: dataAbertura,
+        });
+        if (!r.ok) { toast.error(r.erro ?? 'Não foi possível salvar o contrato.'); return; }
+        toast.success('Contrato atualizado.');
+        setNovoAberto(false); setEditandoId(null);
+        return;
+      }
       const r = await abrir(parceiroId, nome.trim(), fazendaAtual?.id ?? null,
         descricao.trim() || null, cultura, dataAbertura || null);
       if (!r.ok) { toast.error(r.erro ?? 'Não foi possível abrir o contrato.'); return; }
@@ -336,9 +350,12 @@ export function AgriBarterTab() {
             </dl>
           </div>
           <div className="grid grid-cols-3 gap-1.5">
-            <Metrica rotulo="Recebido (insumos)" valor={formatMoeda(totalInsumos)}
+            {/* ⚠ A MESMA COR DOS CARTÕES DE AÇÃO — item 3. Estes três eram os únicos números de
+                dinheiro da tela ainda neutros, e cor que vale em metade da tela não é padrão, é
+                exceção: custo vermelho, receita verde, em toda parte. */}
+            <Metrica rotulo="Recebido (insumos)" valor={formatMoeda(totalInsumos)} cor="text-destructive"
               nota={`${insumos.length} ${insumos.length === 1 ? 'insumo' : 'insumos'}`} />
-            <Metrica rotulo="Entregue (grão)" valor={formatMoeda(totalEntregue)}
+            <Metrica rotulo="Entregue (grão)" valor={formatMoeda(totalEntregue)} cor="text-success"
               nota={`${vendas.length} ${vendas.length === 1 ? 'venda' : 'vendas'} · líquido`} />
             {/* ⚠ O RÓTULO É A METADE ÚTIL DO NÚMERO, e a COR é a outra: "−390.000" não diz de que
                 lado o produtor está. Verde = crédito com o parceiro, vermelho = deve. */}
@@ -679,7 +696,12 @@ export function AgriBarterTab() {
             Troca de grãos por insumos com a cooperativa — entra no resultado, não no caixa.
           </p>
         </div>
-        <Button size="sm" className="h-8 gap-1 text-[11px]" onClick={() => setNovoAberto(true)}>
+        <Button size="sm" className="h-8 gap-1 text-[11px]"
+          onClick={() => {
+            setEditandoId(null); setParceiroId(''); setParceiroNome(''); setNome('');
+            setCultura(''); setDataAbertura(new Date().toISOString().slice(0, 10)); setDescricao('');
+            setNovoAberto(true);
+          }}>
           <Plus className="h-3.5 w-3.5" /> Novo contrato
         </Button>
       </div>
@@ -687,43 +709,84 @@ export function AgriBarterTab() {
       <div className="min-h-0 flex-1 overflow-auto rounded-md border">
         <table className="w-full table-fixed border-collapse text-[10px] leading-tight">
           <colgroup>
-            {['26%', '30%', '16%', '14%', '14%'].map((w, i) => <col key={i} style={{ width: w }} />)}
+            {['16%', '19%', '17%', '9%', '11%', '11%', '11%', '6%'].map((w, i) => <col key={i} style={{ width: w }} />)}
           </colgroup>
           <thead>
             <tr>
-              {['Parceiro', 'Contrato', 'Conta de permuta', 'Abertura', 'Status'].map(h => (
-                <th key={h} className={cn(TH, 'text-left')}>{h}</th>
-              ))}
+              <th className={cn(TH, 'text-left')}>Parceiro</th>
+              <th className={cn(TH, 'text-left')}>Contrato</th>
+              <th className={cn(TH, 'text-left')}>Conta de permuta</th>
+              <th className={cn(TH, 'text-left')}>Abertura</th>
+              {/* ⚠ OS TRÊS NÚMEROS NA LISTA — item 2. Sem eles o operador abria contrato por
+                  contrato só para saber onde está o dinheiro. */}
+              <th className={cn(TH, 'text-right')}>Recebido</th>
+              <th className={cn(TH, 'text-right')}>Entregue</th>
+              <th className={cn(TH, 'text-right')}>Saldo</th>
+              <th className={cn(TH, 'text-right')} />
             </tr>
           </thead>
           <tbody>
             {!carregando && contratos.length === 0 && (
-              <tr><td colSpan={5} className="px-2 py-6 text-center text-[11px] text-muted-foreground">
+              <tr><td colSpan={8} className="px-2 py-6 text-center text-[11px] text-muted-foreground">
                 <Handshake className="mx-auto mb-1 h-5 w-5 opacity-40" />
                 Nenhum contrato de barter. O primeiro cria a conta de permuta do parceiro.
               </td></tr>
             )}
-            {contratos.map((c: ContratoNaLista) => (
-              <tr key={c.id}
-                className="cursor-pointer border-t border-slate-100 odd:bg-[#1e3a5f]/[0.03] hover:bg-[#1e3a5f]/[0.06]"
-                title="Abrir o contrato" onClick={() => setAbertoId(c.id)}>
-                <td className="truncate px-1.5 py-0.5" title={c.parceiroNome}>{c.parceiroNome}</td>
-                <td className="truncate px-1.5 py-0.5" title={c.nome}>{c.nome}</td>
-                {/* ⚠ `whitespace-nowrap` JUNTO COM `truncate`: só o truncate não impede a quebra
-                    quando a célula tem largura de coluna fixa e o texto tem espaços — e "Permuta ·
-                    Cooperativa Agropecuaria de Parapua 1" tem cinco. O nome inteiro fica no
-                    `title`. */}
-                <td className="truncate whitespace-nowrap px-1.5 py-0.5 text-muted-foreground"
-                  title={c.contaPermutaNome ?? undefined}>
-                  {c.contaPermutaNome ?? '—'}
-                </td>
-                <td className="whitespace-nowrap px-1.5 py-0.5 tabular-nums">{dataBR(c.data_abertura)}</td>
-                <td className="px-1.5 py-0.5">
-                  <span className={cn('rounded px-1 py-0.5 text-[9px] font-medium',
-                    TOM_STATUS[c.status] ?? 'bg-muted')}>{c.status}</span>
-                </td>
-              </tr>
-            ))}
+            {contratos.map((c: ContratoNaLista) => {
+              const t = totaisPorContrato.get(c.id) ?? { recebido: 0, entregue: 0, saldo: 0 };
+              return (
+                /* ⚠ LINHA MAIS ALTA — item 1a. `py-1.5` contra `py-0.5`: a lista tem oito colunas
+                   e é a primeira coisa que o operador vê; densidade não é apertar até doer. */
+                <tr key={c.id}
+                  className="cursor-pointer border-t border-slate-100 odd:bg-[#1e3a5f]/[0.03] hover:bg-[#1e3a5f]/[0.06]"
+                  title="Abrir o contrato" onClick={() => setAbertoId(c.id)}>
+                  <td className="truncate px-1.5 py-1.5" title={c.parceiroNome}>{c.parceiroNome}</td>
+                  <td className="truncate px-1.5 py-1.5" title={c.nome}>
+                    {c.nome}
+                    {/* ⚠ O STATUS COLADO NO NOME, não em coluna própria: ele é adjetivo do
+                        contrato, e uma coluna inteira para três palavras curtas roubava o espaço
+                        que os números precisavam. */}
+                    <span className={cn('ml-1.5 rounded px-1 py-0.5 text-[9px] font-medium',
+                      TOM_STATUS[c.status] ?? 'bg-muted')}>{c.status}</span>
+                  </td>
+                  {/* ⚠ `whitespace-nowrap` JUNTO COM `truncate`: só o truncate não impede a quebra
+                      quando a célula tem largura fixa e o texto tem espaços — e "Permuta ·
+                      Cooperativa Agropecuaria de Parapua 1" tem cinco. O nome inteiro no `title`. */}
+                  <td className="truncate whitespace-nowrap px-1.5 py-1.5 text-muted-foreground"
+                    title={c.contaPermutaNome ?? undefined}>
+                    {c.contaPermutaNome ?? '—'}
+                  </td>
+                  <td className="whitespace-nowrap px-1.5 py-1.5 tabular-nums">{dataBR(c.data_abertura)}</td>
+                  <td className="whitespace-nowrap px-1.5 py-1.5 text-right tabular-nums text-destructive">
+                    {formatMoeda(t.recebido)}
+                  </td>
+                  <td className="whitespace-nowrap px-1.5 py-1.5 text-right tabular-nums text-success">
+                    {formatMoeda(t.entregue)}
+                  </td>
+                  <td className={cn('whitespace-nowrap px-1.5 py-1.5 text-right font-medium tabular-nums',
+                    t.saldo > 0 ? 'text-success' : t.saldo < 0 ? 'text-destructive' : undefined)}>
+                    {formatMoeda(t.saldo)}
+                  </td>
+                  <td className="px-1 py-1.5 text-right">
+                    {/* ⚠ `stopPropagation` PORQUE A LINHA INTEIRA ABRE O CONTRATO: sem ele, clicar
+                        em editar abriria o detalhe por baixo do modal. */}
+                    <button type="button" title="Editar contrato"
+                      className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        setEditandoId(c.id);
+                        setParceiroId(c.parceiro_fornecedor_id); setParceiroNome(c.parceiroNome);
+                        setNome(c.nome); setCultura(c.cultura ?? '');
+                        setDataAbertura(c.data_abertura?.slice(0, 10) ?? '');
+                        setDescricao(c.descricao ?? '');
+                        setNovoAberto(true);
+                      }}>
+                      <Pencil className="h-3 w-3" />
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -732,9 +795,13 @@ export function AgriBarterTab() {
       <Dialog open={novoAberto} onOpenChange={o => { if (!o) setNovoAberto(false); }}>
         <DialogContent className="max-w-md gap-0 p-0 [&>button.absolute]:hidden">
           <div className="bg-primary px-4 py-2.5 text-primary-foreground">
-            <h2 className="text-[15px] font-bold leading-tight">Novo contrato de barter</h2>
+            <h2 className="text-[15px] font-bold leading-tight">
+              {editandoId ? 'Editar contrato de barter' : 'Novo contrato de barter'}
+            </h2>
             <p className="mt-0.5 text-[11px] text-primary-foreground/80">
-              A conta de permuta do parceiro nasce junto, se ainda não existir.
+              {editandoId
+                ? 'Parceiro e cultura não mudam: eles já foram para os lançamentos.'
+                : 'A conta de permuta do parceiro nasce junto, se ainda não existir.'}
             </p>
           </div>
           <div className="space-y-2 p-4">
@@ -746,6 +813,7 @@ export function AgriBarterTab() {
             <FornecedorSelect
               label="Parceiro"
               required
+              disabled={!!editandoId}
               fornecedorId={parceiroId || null}
               onFornecedorChange={(id, n) => { setParceiroId(id ?? ''); setParceiroNome(n ?? ''); }}
               clienteId={clienteId ?? ''}
@@ -763,7 +831,7 @@ export function AgriBarterTab() {
                   safras, o insumo entra numa e o grão sai na seguinte. Sem safra não há como
                   perguntar "o que foi plantado nela"; o que se reusa é o catálogo canônico. */}
               <Label className="text-[10px]">Cultura <span className="text-destructive">*</span></Label>
-              <Select value={cultura} onValueChange={setCultura}>
+              <Select value={cultura} onValueChange={setCultura} disabled={!!editandoId}>
                 <SelectTrigger className="mt-0.5 h-8 text-[12px]">
                   <SelectValue placeholder="O que este barter negocia" />
                 </SelectTrigger>
@@ -803,10 +871,11 @@ export function AgriBarterTab() {
           </div>
           <div className="flex items-center justify-end gap-2 bg-primary px-4 py-2">
             <Button variant="ghost" className="text-primary-foreground/90 hover:bg-white/10 hover:text-white"
-              onClick={() => setNovoAberto(false)}>Fechar</Button>
+              onClick={() => { setNovoAberto(false); setEditandoId(null); }}>Fechar</Button>
             <Button className="gap-1 bg-white text-primary hover:bg-white/90"
               disabled={salvando} onClick={() => { void criar(); }}>
-              <Save className="h-4 w-4" /> {salvando ? 'Abrindo…' : 'Abrir contrato'}
+              <Save className="h-4 w-4" />
+              {salvando ? 'Salvando…' : editandoId ? 'Salvar contrato' : 'Abrir contrato'}
             </Button>
           </div>
         </DialogContent>
@@ -821,8 +890,11 @@ function Metrica({ rotulo, valor, nota, destaque, cor }: {
   return (
     <div className="min-w-0 rounded-md border bg-card px-2.5 py-1.5">
       <div className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">{rotulo}</div>
-      <div className={cn('mt-0.5 truncate leading-none',
-        destaque ? 'text-[16px] font-medium tabular-nums' : 'text-[12px]', cor)}>{valor}</div>
+      {/* ⚠ O NÚMERO GANHA PESO QUANDO GANHA COR: um valor colorido em 12px normal some ao lado
+          do saldo em 16px. Os três cartões de número usam a mesma régua. */}
+      <div className={cn('mt-0.5 truncate leading-none tabular-nums',
+        destaque ? 'text-[16px] font-medium' : cor ? 'text-[14px] font-medium' : 'text-[12px]',
+        cor)}>{valor}</div>
       {nota && <div className="mt-0.5 text-[9px] text-muted-foreground">{nota}</div>}
     </div>
   );

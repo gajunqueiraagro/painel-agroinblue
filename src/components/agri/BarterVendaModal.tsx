@@ -18,7 +18,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DatePicker } from '@/components/ui/date-picker';
-import { CampoMoeda } from '@/components/ui/campo-moeda';
+import { CampoMoeda, CampoNumero } from '@/components/ui/campo-moeda';
+import { parseMoeda } from '@/lib/calculos/numeroBR';
 import { PlanoSubcentroSelect } from '@/components/shared/PlanoSubcentroSelect';
 import { Save, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -28,7 +29,7 @@ import { useTalhoesDaSafra, type SafraLavoura } from '@/hooks/useAreaPlantada';
 import { useColheita } from '@/hooks/useColheita';
 import {
   CLASSES_VENDA, labelDaClasse, disponivelPorClasse, calcularEntregas, totaisVenda,
-  senarSugerido, type EntregaForm,
+  deducaoPorAliquota, aliquotaDoValor, ALIQUOTA_DEDUCAO_PADRAO, type EntregaForm,
 } from '@/lib/agri/barterVenda';
 import type { ClassificacaoItem } from '@/hooks/useFinanceiroV2';
 import type { BarterVenda, VendaPayload } from '@/hooks/useBarterVenda';
@@ -62,6 +63,9 @@ export function BarterVendaModal({
   const [precificacao, setPrecificacao] = useState('fixo');
   const [linhas, setLinhas] = useState<EntregaForm[]>(LINHAS_VAZIAS);
   const [deducao, setDeducao] = useState<number | null>(null);
+  /* ⚠ A ALÍQUOTA É ESTADO DE TELA, não do dado: o que se grava é o VALOR. Ela existe para
+     calcular e para dizer que percentual o valor representa. */
+  const [aliquota, setAliquota] = useState(String(ALIQUOTA_DEDUCAO_PADRAO).replace('.', ','));
   const [subcentro, setSubcentro] = useState('');
   const [planoId, setPlanoId] = useState<string | null>(null);
   const [busca, setBusca] = useState('');
@@ -73,6 +77,9 @@ export function BarterVendaModal({
     setData(venda?.data_operacao ?? hoje());
     setPrecificacao(venda?.tipo_precificacao ?? 'fixo');
     setDeducao(venda?.descontos ?? null);
+    /* ⚠ AO REABRIR, A % VEM DO VALOR GRAVADO — não do padrão. Mostrar 1,5% ao lado de um valor
+       que é 1,7% do bruto seria o campo mentindo sobre o número ao lado dele. */
+    setAliquota(String(ALIQUOTA_DEDUCAO_PADRAO).replace('.', ','));
     /* As quatro linhas sempre existem; a venda só preenche as que gravou. */
     setLinhas(LINHAS_VAZIAS().map(l => {
       const e = venda?.entregas.find(x => x.classe_aflatoxina === l.classe);
@@ -154,7 +161,7 @@ export function BarterVendaModal({
         centro_custo: cls?.centro_custo ?? null,
         subcentro: cls?.subcentro ?? subcentro ?? null,
       },
-      deducao: { valor: totais.deducoes, descricao: totais.deducoes > 0 ? 'Senar' : null },
+      deducao: { valor: totais.deducoes, descricao: totais.deducoes > 0 ? 'Senar / Funrural' : null },
     });
   };
 
@@ -232,12 +239,13 @@ export function BarterVendaModal({
                   <th className={cn(TH, 'text-left')}>Classe</th>
                   <th className={cn(TH, 'text-right')}>Tem na safra</th>
                   <th className={cn(TH, 'text-right')}>Sacas vendidas</th>
-                  {/* ⚠ COLUNA NOVA — item 6d. É a subtração à vista: o que sobra na classe depois
-                      desta venda. Ela conversa com a frente de ESTOQUE, mas aqui é só aritmética
-                      da tela: nada é gravado nem reservado. */}
-                  <th className={cn(TH, 'text-right')}>Restam</th>
                   <th className={cn(TH, 'text-right')}>R$/saca</th>
                   <th className={cn(TH, 'text-right')}>Valor</th>
+                  {/* ⚠ ÚLTIMA COLUNA — item 7. Ela é CONSEQUÊNCIA da venda, não insumo dela: no
+                      meio da tabela separava os campos que se digitam do valor que resulta. No
+                      fim, a linha se lê na ordem em que se pensa. Conversa com a frente de
+                      ESTOQUE, mas aqui é só aritmética da tela: nada é gravado nem reservado. */}
+                  <th className={cn(TH, 'text-right')}>Sacas restantes</th>
                 </tr>
               </thead>
               <tbody>
@@ -251,24 +259,26 @@ export function BarterVendaModal({
                       {formatNum(e.disponivel, 2)}
                       {e.excede && <AlertTriangle className="ml-1 inline h-3 w-3 align-[-2px]" />}
                     </td>
+                    {/* ⚠ `CampoNumero` É A PEÇA DA CASA — item 6. Ele deixa digitar cru e
+                        normaliza em pt-BR no blur ("10000" vira "10.000,00"), que é o que faltava:
+                        o polish-2 já corrigiu a exibição ao REABRIR, mas ao DIGITAR o campo ficava
+                        sem separador. Um `Input` solto aqui seria a terceira máscara da casa. */}
                     <td className="px-1 py-0.5">
-                      <Input value={linhas[i].sacas} onChange={ev => mudar(i, 'sacas', ev.target.value)}
-                        inputMode="decimal"
+                      <CampoNumero valor={linhas[i].sacas} onChange={v => mudar(i, 'sacas', v)}
                         className={cn('h-6 px-1 text-right font-mono text-[10px]', FOCO)} />
                     </td>
-                    {/* ⚠ NEGATIVO EM VERMELHO: vender mais do que tem deixa o "restam" negativo,
-                        e o número negativo é a mesma informação do aviso de excesso, na linha. */}
+                    <td className="px-1 py-0.5">
+                      <CampoNumero valor={linhas[i].precoSaca} onChange={v => mudar(i, 'precoSaca', v)}
+                        className={cn('h-6 px-1 text-right font-mono text-[10px]', FOCO)} />
+                    </td>
+                    <td className="px-1.5 py-0.5 text-right tabular-nums">{formatMoeda(e.valor)}</td>
+                    {/* ⚠ NEGATIVO EM VERMELHO: vender mais do que tem deixa o restante negativo, e
+                        o número negativo é a mesma informação do aviso de excesso, na linha. */}
                     <td className={cn('px-1.5 py-0.5 text-right tabular-nums',
                       e.disponivel - e.sacas < 0 ? 'font-semibold text-destructive'
                         : 'text-muted-foreground')}>
                       {formatNum(e.disponivel - e.sacas, 2)}
                     </td>
-                    <td className="px-1 py-0.5">
-                      <Input value={linhas[i].precoSaca} onChange={ev => mudar(i, 'precoSaca', ev.target.value)}
-                        inputMode="decimal"
-                        className={cn('h-6 px-1 text-right font-mono text-[10px]', FOCO)} />
-                    </td>
-                    <td className="px-1.5 py-0.5 text-right tabular-nums">{formatMoeda(e.valor)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -283,11 +293,11 @@ export function BarterVendaModal({
                   <td className={cn(TH, 'text-right tabular-nums')}>
                     {formatNum(calculadas.reduce((t, e) => t + e.sacas, 0), 2)}
                   </td>
+                  <td className={TH} />
+                  <td className={cn(TH, 'text-right tabular-nums')}>{formatMoeda(totais.bruto)}</td>
                   <td className={cn(TH, 'text-right tabular-nums')}>
                     {formatNum(calculadas.reduce((t, e) => t + (e.disponivel - e.sacas), 0), 2)}
                   </td>
-                  <td className={TH} />
-                  <td className={cn(TH, 'text-right tabular-nums')}>{formatMoeda(totais.bruto)}</td>
                 </tr>
               </tfoot>
             </table>
@@ -308,15 +318,40 @@ export function BarterVendaModal({
 
           <div className="grid grid-cols-[1fr_1fr_1fr] items-end gap-2">
             <div>
-              <Label className="text-[10px]">Dedução (Senar)</Label>
-              <CampoMoeda valor={deducao} onChange={setDeducao}
-                className={cn('mt-0.5 h-8 text-right font-mono text-[12px]', FOCO)} />
-              {/* ⚠ SUGERIR NÃO É GRAVAR. Quem retém é a cooperativa, e o que vale no acerto é o
-                  documento dela — o botão preenche, o operador confere. */}
+              {/* ⚠ "SENAR / FUNRURAL" e a % EDITÁVEL — item 5. A alíquota muda por lei e por ano
+                  (subiu para 1,7%), e uma constante no código faria o sistema discordar do
+                  documento da cooperativa sem ninguém saber qual dos dois está certo.
+                  ⚠ OS DOIS CAMPOS SÃO O MESMO NÚMERO POR DOIS CAMINHOS: digitar a % recalcula o
+                  valor; digitar o valor recalcula a %. O que se GRAVA é o valor — quem retém é a
+                  cooperativa, e o que vale no acerto é o papel dela. */}
+              <Label className="text-[10px]">Dedução (Senar / Funrural)</Label>
+              <div className="mt-0.5 flex items-center gap-1">
+                <div className="relative w-[74px] shrink-0">
+                  <CampoNumero valor={aliquota}
+                    onChange={v => {
+                      setAliquota(v);
+                      const pct = parseMoeda(v);
+                      if (pct != null) setDeducao(deducaoPorAliquota(totais.bruto, pct));
+                    }}
+                    className={cn('h-8 pr-5 text-right font-mono text-[12px]', FOCO)} />
+                  <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">%</span>
+                </div>
+                <CampoMoeda valor={deducao}
+                  onChange={v => {
+                    setDeducao(v);
+                    /* ⚠ O INVERSO MANTÉM A % HONESTA: sem isto ela ficaria em 1,5% ao lado de um
+                       valor que é outro percentual do bruto. */
+                    setAliquota(formatNum(aliquotaDoValor(totais.bruto, v ?? 0), 2));
+                  }}
+                  className={cn('h-8 flex-1 text-right font-mono text-[12px]', FOCO)} />
+              </div>
               <button type="button"
                 className="mt-0.5 text-[9px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
-                onClick={() => setDeducao(senarSugerido(totais.bruto))}>
-                usar 1,5% do bruto ({formatMoeda(senarSugerido(totais.bruto))})
+                onClick={() => {
+                  const pct = parseMoeda(aliquota) ?? ALIQUOTA_DEDUCAO_PADRAO;
+                  setDeducao(deducaoPorAliquota(totais.bruto, pct));
+                }}>
+                recalcular sobre o bruto ({formatMoeda(deducaoPorAliquota(totais.bruto, parseMoeda(aliquota) ?? 0))})
               </button>
             </div>
             <div className="rounded-md border bg-card px-2.5 py-1.5">

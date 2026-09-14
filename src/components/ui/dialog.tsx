@@ -36,7 +36,18 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
+        /* ⚠ `overflow-hidden` CORRIGE O "L" BRANCO NOS CANTOS — e é conserto de DEFAULT, não
+           preferência. O contêiner tem `sm:rounded-lg` e `bg-background`; um filho com faixa
+           colorida e cantos retos (o cabeçalho `bg-primary` de 43 telas da casa) desenha por cima
+           do raio, e o fundo do contêiner aparece no cantinho entre a curva e o retângulo.
+           ⚠ QUE O DEFAULT ESTAVA ERRADO, O REPO JÁ DIZIA: 46 dos 114 consumidores acrescentavam
+           `overflow-hidden` por conta própria. Quase metade tinha descoberto o problema e o
+           resolvido sozinha — a assinatura de algo que faltava na origem. Para esses 46 a mudança
+           é inócua (a classe repetida não muda nada).
+           ⚠ E NÃO CORTA OVERLAY: `Select`, `Popover` e `DropdownMenu` da casa renderizam em
+           `Portal`, fora deste nó (conferido nos três arquivos de ui/). O que `overflow-hidden`
+           conteria é conteúdo absoluto do próprio diálogo, que não deveria vazar da moldura. */
+        "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 overflow-hidden border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
         className,
       )}
       {...props}

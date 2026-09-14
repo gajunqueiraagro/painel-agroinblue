@@ -203,17 +203,33 @@ export function totaisVenda(
 }
 
 /**
- * O Senar sobre a receita bruta da venda de produto rural.
+ * A dedução sobre a receita bruta da venda de produto rural — Senar e Funrural.
  *
- * ⚠ A ALÍQUOTA É SUGESTÃO, NÃO REGRA GRAVADA. O campo de dedução continua editável porque
- * quem retém é a cooperativa, e o que vale no acerto é o que veio no documento dela — não o
- * que este arquivo calcula. Fixar o número faria o sistema discordar do papel e ninguém
- * saberia qual dos dois está certo.
+ * ⚠ A ALÍQUOTA É SUGESTÃO, NÃO REGRA GRAVADA, e desde o RESUMO-2 ela é EDITÁVEL na tela. O
+ * percentual muda por lei e por ano — subiu para 1,7% —, e uma constante no código faria o
+ * sistema discordar do documento da cooperativa sem ninguém saber qual dos dois está certo.
+ * O 1,5% aqui é só o ponto de partida do campo.
+ * ⚠ E O VALOR CONTINUA EDITÁVEL DIRETO: quem retém é a cooperativa, e o que vale no acerto é o
+ * que veio no papel dela. A alíquota calcula; o valor manda.
  */
-export const ALIQUOTA_SENAR = 0.015;
+export const ALIQUOTA_DEDUCAO_PADRAO = 1.5;
 
-export function senarSugerido(bruto: number): number {
-  return arred(bruto * ALIQUOTA_SENAR);
+/** O valor da dedução para uma alíquota em PERCENTUAL (1,5 = 1,5%). */
+export function deducaoPorAliquota(bruto: number, aliquotaPct: number): number {
+  if (!isFinite(aliquotaPct) || aliquotaPct <= 0) return 0;
+  return arred(bruto * (aliquotaPct / 100));
+}
+
+/**
+ * A alíquota que um valor representa sobre o bruto — o caminho inverso.
+ *
+ * ⚠ EXISTE PARA O CAMPO NÃO MENTIR quando o operador digita o VALOR do documento: sem isto, a
+ * caixinha de % continuaria mostrando 1,5% ao lado de um valor que é 1,7% do bruto, e o
+ * percentual exibido seria uma afirmação falsa sobre o número ao lado.
+ */
+export function aliquotaDoValor(bruto: number, valor: number): number {
+  if (bruto <= 0) return 0;
+  return arred((valor / bruto) * 100, 4);
 }
 
 /**
