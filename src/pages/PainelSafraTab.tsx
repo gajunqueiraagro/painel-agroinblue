@@ -25,6 +25,12 @@ import {
   type SafraComparada,
 } from '@/hooks/usePainelSafra';
 import { BarrasCompactas, type BarraCompacta } from '@/components/ui/barras-compactas';
+import {
+  useLancamentosDaSafra, paraItemDrillDaSafra, type LancamentoDaSafra,
+} from '@/hooks/useLancamentosDaSafra';
+import { AnaliseDrawer } from '@/components/financeiro-v2/AnaliseDrawer';
+import { DrillDownEconomico } from '@/components/financeiro-v2/DrillDownEconomico';
+import { NIVEIS_DRILL, type ItemDrill } from '@/lib/analise/drillEconomico';
 
 /** Cabeçalho azul das três colunas, como o resto da família. */
 const TH = 'bg-primary px-2 py-1 text-[9px] font-semibold uppercase tracking-wide'
@@ -52,7 +58,7 @@ function Cartao({ rotulo, valor, nota }: { rotulo: string; valor: string; nota?:
  * leitura.
  */
 function Linha({
-  rotulo, valor, area, sacas, nivel, cor, nota,
+  rotulo, valor, area, sacas, nivel, cor, nota, onAbrir,
 }: {
   rotulo: string;
   valor: number;
@@ -62,12 +68,32 @@ function Linha({
   nivel: 'destaque' | 'item' | 'saldo';
   cor?: string;
   nota?: string;
+  /**
+   * Abre o detalhe daquela linha. Sem ela, a linha não é clicável — e essa é a regra:
+   * as linhas-RESUMO (Faturamento, Custeio total, Saldo, Total investido) NÃO abrem.
+   *
+   * ⚠ É O MESMO CRITÉRIO DO DRE POR CULTURA, conferido lá: `celulaTemDrill` só devolve `true`
+   * quando a linha tem grupo próprio; receita líquida, resultado de caixa e depreciação — os
+   * resumos dele — ficam sem clique. Um total que abre uma lista "de tudo" não é um drill: é a
+   * tela inteira num drawer mais estreito.
+   */
+  onAbrir?: () => void;
 }) {
   const destaque = nivel === 'destaque';
   const saldo = nivel === 'saldo';
   const td = 'px-2 py-0.5 text-right tabular-nums';
   return (
-    <tr className={cn('border-t border-slate-100', saldo && 'border-t-2 border-slate-300')}>
+    /* ⚠ O `hover` E O `cursor` SÓ EXISTEM QUANDO HÁ O QUE ABRIR: uma linha que muda de cor ao
+       passar o mouse e não faz nada ao clique é pior que uma linha inerte — ela promete. */
+    <tr className={cn('border-t border-slate-100', saldo && 'border-t-2 border-slate-300',
+      onAbrir && 'cursor-pointer hover:bg-[#1e3a5f]/[0.06]')}
+      onClick={onAbrir}
+      tabIndex={onAbrir ? 0 : undefined}
+      role={onAbrir ? 'button' : undefined}
+      aria-label={onAbrir ? `Ver lançamentos de ${rotulo}` : undefined}
+      onKeyDown={onAbrir
+        ? e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onAbrir(); } }
+        : undefined}>
       <td className={cn('px-2 py-0.5',
         destaque && 'text-[14px] font-bold',
         saldo && 'text-[15px] font-bold',
@@ -132,6 +158,53 @@ export function PainelSafraTab() {
 
   /** Só as naturezas com valor — a tabela ajusta entre safras, como o briefing decidiu. */
   const naturezas = (painel?.natureza ?? []).filter(n => n.valor !== 0);
+
+  /* ───────────────────────── O DRILL ─────────────────────────
+   * ⚠ MESMO DRAWER, MESMA ÁRVORE, MESMA TRADUÇÃO DO DRE POR CULTURA. Nada novo foi escrito:
+   * `AnaliseDrawer` + `DrillDownEconomico` + `NIVEIS_DRILL` + `paraItemDrillDaSafra`.
+   *
+   * ⚠ MAS A PENEIRA É A DO PAINEL, NÃO A DO DRE, e é a parte que não se pode copiar. O DRE
+   * agrupa por `grupo_custo` e reparte as culturas com `bucketDaLinha`; `fn_painel_safra`
+   * agrupa por `centro_custo` (custeio) e por `subcentro` (investimento), e trata a cultura de
+   * outro jeito — `coalesce(cultura,'') in (p_cultura,'')`, ou seja, o lançamento SEM cultura
+   * entra em TODAS as culturas da safra. Medido na 25/26: são 397 lançamentos sem cultura, que
+   * contam tanto no amendoim quanto na mandioca. Filtrar por `cultura = X` faria a lista somar
+   * bem menos que o número clicado.
+   */
+  const { lancamentos, fornecedores } = useLancamentosDaSafra(clienteId, safraId || null);
+  const [drill, setDrill] = useState<
+    { tipo: 'centro' | 'subcentro' | 'grupo'; chave: string; rotulo: string } | null>(null);
+
+  /* ⚠ OS TRÊS PREDICADOS COMUNS, COPIADOS DA RPC: cliente e safra já vêm da consulta; aqui
+     ficam a cultura (com o vazio junto) e a separação custeio × investimento, que é
+     `macro_custo ilike '%investimento%'` — nunca uma lista de nomes escrita à mão. */
+  const daCultura = (l: LancamentoDaSafra) => (l.cultura ?? '') === cultura || (l.cultura ?? '') === '';
+  const ehInvestimento = (l: LancamentoDaSafra) => (l.macro_custo ?? '').toLowerCase().includes('investimento');
+
+  const itensDoDrill: ItemDrill[] = useMemo(() => {
+    if (!drill) return [];
+    const filtro = drill.tipo === 'centro'
+      /* ⚠ `compoe_dre` E `2-Saídas` SÃO DA RPC, e sem os dois a lista passaria a somar o que a
+         própria tela declara FORA do custeio, no aviso do rodapé. O `(sem)` é o rótulo que a
+         RPC dá ao centro nulo — comparar com ele devolve exatamente aquelas linhas. */
+      ? (l: LancamentoDaSafra) => l.compoe_dre === true && l.tipo_operacao === '2-Saídas'
+        && !ehInvestimento(l) && (l.centro_custo ?? '(sem)') === drill.chave
+      : drill.tipo === 'subcentro'
+        ? (l: LancamentoDaSafra) => ehInvestimento(l) && (l.subcentro ?? '') === drill.chave
+        /* ⚠ JUROS É O ÚNICO QUE FILTRA POR GRUPO, porque é o único que não vem da agregação por
+           natureza: o painel o lê do DRE (`fn_dre_agricola_por_safra`), e o grupo é a chave que
+           o DRE usa. Conferido nas cinco combinações safra×cultura do Proto: onde a linha
+           aparece, a soma por grupo bate com o número do DRE ao centavo (25/26 amendoim,
+           137.241,23 dos dois lados). */
+        : (l: LancamentoDaSafra) => (l.grupo_custo ?? '') === drill.chave;
+    return lancamentos.filter(l => daCultura(l) && filtro(l))
+      .map(l => paraItemDrillDaSafra(l, fornecedores));
+    /* eslint-disable-next-line react-hooks/exhaustive-deps -- `daCultura`/`ehInvestimento` são
+       puras e derivam de `cultura`, que já está nas dependências. */
+  }, [drill, lancamentos, fornecedores, cultura]);
+
+  const totalDoDrill = useMemo(
+    () => itensDoDrill.reduce((acc, it) => acc + Math.abs(it.mov), 0), [itensDoDrill]);
 
   return (
     <div className="w-full space-y-2 p-4 animate-fade-in">
@@ -243,7 +316,8 @@ export function PainelSafraTab() {
               area={area} sacas={sacas} nivel="destaque" cor="text-destructive" />
             {naturezas.map(n => (
               <Linha key={n.centro} rotulo={n.centro} valor={n.valor}
-                area={area} sacas={sacas} nivel="item" />
+                area={area} sacas={sacas} nivel="item"
+                onAbrir={() => setDrill({ tipo: 'centro', chave: n.centro, rotulo: n.centro })} />
             ))}
             {/* ⚠ LINHA PRÓPRIA, E MARCADA. O rateio administrativo não tem centro de custo: ele é
                 repartido por janela de datas e peso da cultura. Somado às naturezas viraria um
@@ -254,7 +328,10 @@ export function PainelSafraTab() {
             )}
             {(painel?.juros ?? 0) !== 0 && (
               <Linha rotulo="Juros" valor={painel?.juros ?? 0}
-                area={area} sacas={sacas} nivel="item" />
+                area={area} sacas={sacas} nivel="item"
+                onAbrir={() => setDrill({
+                  tipo: 'grupo', chave: 'Juros de Financiamento Agricultura', rotulo: 'Juros',
+                })} />
             )}
 
             <Linha rotulo="Saldo" valor={painel?.saldo ?? 0} area={area} sacas={sacas}
@@ -283,8 +360,20 @@ export function PainelSafraTab() {
               </tr>
             </thead>
             <tbody>
+              {/* ⚠ UM DRILL POR SUBCENTRO, não um "investimento" só: Formação de Área, Máquinas,
+                  Instalações e Correção de Solo são linhas distintas porque a RPC as agrupa por
+                  `subcentro` — e é pelo subcentro que a lista de cada uma se filtra. */}
               {painel?.investimento_tipos.map(t => (
-                <tr key={t.tipo} className="border-t border-slate-100">
+                <tr key={t.tipo}
+                  className="cursor-pointer border-t border-slate-100 hover:bg-[#1e3a5f]/[0.06]"
+                  onClick={() => setDrill({ tipo: 'subcentro', chave: t.tipo, rotulo: t.tipo })}
+                  tabIndex={0} role="button" aria-label={`Ver lançamentos de ${t.tipo}`}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setDrill({ tipo: 'subcentro', chave: t.tipo, rotulo: t.tipo });
+                    }
+                  }}>
                   <td className="px-2 py-0.5 pl-6 text-[11px] text-muted-foreground">{t.tipo}</td>
                   <td className="px-2 py-0.5 text-right text-[11px] tabular-nums text-muted-foreground">
                     {formatMoeda(t.valor)}
@@ -547,6 +636,30 @@ export function PainelSafraTab() {
         )}
         {carregando && <p className="text-[10px] text-muted-foreground">Carregando…</p>}
       </div>
+
+      {/* ── O DRILL ──
+          ⚠ O MESMO DRAWER E A MESMA ÁRVORE DO DRE POR CULTURA, sem cópia e sem variante: os
+          quatro degraus de `NIVEIS_DRILL` (natureza → grupo → centro → subcentro) são os
+          mesmos, e o operador que já usa o DRE não aprende nada novo.
+          ⚠ SEÇÃO ÚNICA, ao contrário do DRE: lá a célula de uma cultura pode ser direto +
+          rateado e precisa de duas abas. Aqui cada linha clicável tem uma origem só — o rateio
+          administrativo, que seria a exceção, é justamente a linha que NÃO abre nesta fatia.
+          ⚠ SEM `onAbrirLancamento`: abrir o lançamento para edição é do DRE, que recarrega as
+          três fontes ao salvar. Este painel lê de uma RPC agregada; abrir a edição aqui pediria
+          a mesma orquestração de recarga, e sem ela a tela mostraria um número e o detalhe
+          dele outro. Fica para quando a fatia 3 decidir. */}
+      {drill && (
+        <AnaliseDrawer
+          titulo={`${drill.rotulo} · ${labelDaCultura(cultura)}`
+            + (safra ? ` · Safra ${safra.codigo || safra.nome}` : '')}
+          /* ⚠ O SUBTÍTULO DIZ A CONTAGEM, que é o que se confere primeiro contra a tela. */
+          subtitulo={`${itensDoDrill.length} lançamento${itensDoDrill.length === 1 ? '' : 's'}`}
+          total={totalDoDrill}
+          totalLabel="TOTAL DA LINHA"
+          onClose={() => setDrill(null)}>
+          <DrillDownEconomico itens={itensDoDrill} raiz={drill.rotulo} niveis={NIVEIS_DRILL} />
+        </AnaliseDrawer>
+      )}
     </div>
   );
 }

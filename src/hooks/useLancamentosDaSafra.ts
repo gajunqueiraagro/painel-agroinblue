@@ -15,6 +15,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { paginarTudo } from '@/lib/financeiro/paginarTudo';
 import { useNomesDeFornecedores } from '@/hooks/useNomesDeFornecedores';
+import type { ItemDrill } from '@/lib/analise/drillEconomico';
 
 export interface LancamentoDaSafra {
   id: string;
@@ -32,11 +33,50 @@ export interface LancamentoDaSafra {
   data_pagamento: string | null;
   data_vencimento: string | null;
   data_competencia: string | null;
+  /**
+   * O lançamento compõe o DRE?
+   *
+   * ⚠ ENTROU PARA O PAINEL DA SAFRA, que peneira por ele: `fn_painel_safra` monta as naturezas
+   * do custeio com `compoe_dre = true`, e sem a coluna o drill listaria também as saídas que a
+   * própria tela contabiliza FORA do custeio — a linha "lançamentos fora do custeio" que ela
+   * mostra no rodapé. A lista somaria mais que o número clicado.
+   * ⚠ O DRILL DO DRE NÃO USA e continua sem usar: a RPC dele peneira por grupo, não por esta
+   * flag. O campo é aditivo.
+   */
+  compoe_dre: boolean | null;
 }
 
 const COLUNAS = 'id, valor, tipo_operacao, cultura, macro_custo, grupo_custo, centro_custo,'
   + ' subcentro, descricao, favorecido_id, numero_documento, documento,'
-  + ' data_pagamento, data_vencimento, data_competencia';
+  + ' data_pagamento, data_vencimento, data_competencia, compoe_dre';
+
+/**
+ * O LANÇAMENTO DA SAFRA COMO O DRILL O ENXERGA.
+ *
+ * ⚠ MORA AQUI, JUNTO DO TIPO QUE ELE TRADUZ, e não na tela que o usava. Nasceu dentro do
+ * `AgriDreCulturaTab`; quando o Painel da Safra passou a abrir o MESMO drawer, copiá-lo seria
+ * criar duas traduções do mesmo lançamento — e a primeira divergência (um `doc` que num lugar
+ * cai para `documento` e no outro não) apareceria como "o drill do painel mostra outra coisa".
+ * ⚠ FUNÇÃO PURA, NÃO HOOK: quem tem o mapa de fornecedores é a tela, e é ela que decide quando
+ * memorizar. O corpo é o do DRE, sem uma vírgula de diferença.
+ */
+export function paraItemDrillDaSafra(
+  l: LancamentoDaSafra, nomesDeFavorecidos: Map<string, string>,
+): ItemDrill {
+  return {
+    id: l.id,
+    data: l.data_pagamento || l.data_vencimento || l.data_competencia || '',
+    mov: ((l.tipo_operacao || '').startsWith('1') ? 1 : -1) * Math.abs(Number(l.valor) || 0),
+    tipo: l.tipo_operacao ?? '',
+    produto: l.descricao,
+    fornecedor: (l.favorecido_id && nomesDeFavorecidos.get(l.favorecido_id)) || '',
+    doc: l.numero_documento || l.documento || '',
+    macro: l.macro_custo ?? null,
+    grupo: l.grupo_custo ?? null,
+    centroPlano: l.centro_custo ?? null,
+    subcentro: l.subcentro ?? null,
+  };
+}
 
 export function useLancamentosDaSafra(clienteId: string | null | undefined, safraId: string | null) {
   const queryClient = useQueryClient();

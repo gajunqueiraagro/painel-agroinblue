@@ -36,7 +36,9 @@ import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
 import { useSafrasLavoura } from '@/hooks/useAreaPlantada';
 import { useDreAgricola } from '@/hooks/useDreAgricola';
-import { useLancamentosDaSafra, type LancamentoDaSafra } from '@/hooks/useLancamentosDaSafra';
+import {
+  useLancamentosDaSafra, paraItemDrillDaSafra, type LancamentoDaSafra,
+} from '@/hooks/useLancamentosDaSafra';
 import { usePoolAdministrativo } from '@/hooks/usePoolAdministrativo';
 import { AnaliseDrawer } from '@/components/financeiro-v2/AnaliseDrawer';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
@@ -164,19 +166,12 @@ export function AgriDreCulturaTab() {
     () => new Map([...fornecedores, ...poolAdmin.fornecedores]),
     [fornecedores, poolAdmin.fornecedores]);
 
-  const paraItemDrill = useMemo(() => (l: LancamentoDaSafra): ItemDrill => ({
-    id: l.id,
-    data: l.data_pagamento || l.data_vencimento || l.data_competencia || '',
-    mov: ((l.tipo_operacao || '').startsWith('1') ? 1 : -1) * Math.abs(Number(l.valor) || 0),
-    tipo: l.tipo_operacao ?? '',
-    produto: l.descricao,
-    fornecedor: (l.favorecido_id && nomesDeFavorecidos.get(l.favorecido_id)) || '',
-    doc: l.numero_documento || l.documento || '',
-    macro: l.macro_custo ?? null,
-    grupo: l.grupo_custo ?? null,
-    centroPlano: l.centro_custo ?? null,
-    subcentro: l.subcentro ?? null,
-  }), [nomesDeFavorecidos]);
+  /* ⚠ A TRADUÇÃO SAIU DAQUI PARA `useLancamentosDaSafra`, sem mudar de corpo: o Painel da Safra
+     abre o MESMO drawer, e duas cópias divergiriam na primeira manutenção. O `useMemo` fica,
+     porque a identidade da função é dependência dos `itens*` abaixo. */
+  const paraItemDrill = useMemo(
+    () => (l: LancamentoDaSafra): ItemDrill => paraItemDrillDaSafra(l, nomesDeFavorecidos),
+    [nomesDeFavorecidos]);
 
   /* ⚠ OS ITENS DO DRILL SAEM DO MESMO `bucketDaLinha` QUE A RPC USA. Agrupar pela coluna
      `cultura` crua faria a lista discordar da célula clicada em toda safra que tenha
