@@ -125,18 +125,22 @@ export function useAreaPlantada(safraId: string | null, pastoId: string | null) 
       if (error) return { ok: false, erro: `Não foi possível remover ${a.cultura}: ${error.message}` };
     }
     for (const l of linhas) {
-      const payload = {
-        cultura: l.cultura,
-        status: l.status,
-        area_plantada_ha: l.area_plantada_ha,
-        /* ⚠ EM ABERTURA AS DATAS VÃO NULAS, e isso é gravação, não omissão: virar de
-           "Plantada" para "Em abertura" precisa APAGAR o plantio que ficou para trás, senão a
-           área carrega uma data que a tela não mostra mais — dado invisível é dado que
-           ninguém confere. O caminho de volta (marcar Plantada) pede tudo de novo, que é o
-           correto: se voltou para abertura, o que havia não valia. */
-        data_plantio: l.data_plantio,
-        data_colheita_prevista: l.data_colheita_prevista,
-      };
+      /**
+       * ⚠⚠ O PAYLOAD VAI INTEIRO, e esta linha É O CONSERTO do PR-AGRI-VARIEDADE-SAVE.
+       * Antes, este bloco DESMONTAVA o payload que a lib montou e remontava um objeto à mão com
+       * cinco campos — e `variedade` não estava entre eles. O campo viajava do formulário até a
+       * porta do banco e era descartado na última linha antes do `update`.
+       * ⚠ E A DEFESA QUE EXISTIA NÃO PEGOU. O `AreaPlantadaPanel` diz, em comentário, que "o tipo
+       * sai da lib, não de uma lista de campos repetida aqui: foi assim que `status` quase entrou
+       * no formulário sem entrar no payload. O compilador cobra o campo novo". Isso vale até
+       * AQUI: um objeto literal novo não é cobrado por tipo nenhum — ele só não tem o campo, e
+       * o TypeScript não reclama de propriedade ausente num literal que ninguém tipou.
+       * ⚠ COM O REST (`...payload`), campo novo em `AreaPlantadaPayload` chega ao banco sozinho.
+       * A regra das datas em abertura continua onde sempre esteve, em `validarAreaPlantada`:
+       * virar de "Plantada" para "Em abertura" APAGA o plantio que ficou para trás, senão a área
+       * carrega uma data que a tela não mostra mais — dado invisível é dado que ninguém confere.
+       */
+      const { id: _id, ...payload } = l;
       const { error } = l.id
         ? await db.from('agri_safra_area').update(payload).eq('id', l.id)
         : await db.from('agri_safra_area').insert({
