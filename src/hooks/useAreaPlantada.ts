@@ -6,8 +6,9 @@
  * no builder, com o resultado convertido imediatamente para o tipo local desta camada. O dia
  * do próximo regen é o dia de tirar os dois casts.
  * ⚠ E A LEITURA É POR (safra, pasto), que é como o operador pensa: "o que plantei NESTE pasto
- * NESTA safra". A UNIQUE do banco é (safra_id, pasto_id, cultura), então o resultado é uma
- * lista curta — uma linha por cultura, a safrinha inclusa.
+ * NESTA safra". A UNIQUE do banco é (safra_id, pasto_id, cultura, variedade), então o resultado
+ * é uma lista curta — a safrinha inclusa, e as duas variedades quando o pasto foi dividido
+ * entre dois cultivares da mesma cultura.
  */
 import { useState, useCallback, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -104,9 +105,10 @@ export function useAreaPlantada(safraId: string | null, pastoId: string | null) 
    * Grava a lista inteira do par (safra, pasto): insere as novas, atualiza as existentes e
    * APAGA as que o operador removeu da tela.
    *
-   * ⚠ APAGA DE VERDADE, e não por `ativo = false`: a UNIQUE é (safra_id, pasto_id, cultura) e
-   * NÃO inclui `ativo` — uma linha inativada continuaria ocupando a chave, e recadastrar a
-   * mesma cultura devolveria um 23505 que a tela não conseguiria explicar. Inativar só faria
+   * ⚠ APAGA DE VERDADE, e não por `ativo = false`: a UNIQUE é
+   * (safra_id, pasto_id, cultura, variedade) e NÃO inclui `ativo` — uma linha inativada
+   * continuaria ocupando a chave, e recadastrar a mesma cultura devolveria um 23505 que a tela
+   * não conseguiria explicar. Inativar só faria
    * sentido com a UNIQUE parcial, que é decisão do arquiteto.
    * ⚠ SEQUENCIAL, NÃO EM LOTE: são unidades por pasto, o custo é o do gesto, e um erro no meio
    * precisa dizer QUAL cultura falhou.

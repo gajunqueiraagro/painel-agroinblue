@@ -7,7 +7,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  validarAreaPlantada, culturaDuplicada, somaAreas, labelDaCultura, CULTURAS_AREA,
+  validarAreaPlantada, colisaoDeArea, textoDaColisao, somaAreas, labelDaCultura, CULTURAS_AREA,
   primeiroDiaDoMes, safrasQueCobremOMes, safraInicialDoMes,
   ehAbertura, STATUS_AREA, AVISO_ABERTURA,
   type AreaPlantadaForm,
@@ -83,17 +83,92 @@ describe('validarAreaPlantada', () => {
   });
 });
 
-describe('culturaDuplicada — o que a UNIQUE do banco recusaria', () => {
-  it('acha a repetida e a nomeia', () => {
-    expect(culturaDuplicada([base, { ...base, id: null }])).toBe('amendoim');
+describe('colisaoDeArea — o que a UNIQUE do banco recusaria', () => {
+  /* ⚠ O CASO QUE MOTIVOU O PR, e o único que ANTES reprovava sem motivo: Ind 01 / 25-26 com
+     amendoim OL3 (75 ha) e amendoim BRS 421 (16 ha). O banco aceita desde que a `variedade`
+     entrou na chave; era o front que recusava. */
+  it('duas variedades da mesma cultura convivem no mesmo pasto', () => {
+    expect(colisaoDeArea([
+      { ...base, variedade: 'OL3', areaHa: '75' },
+      { ...base, variedade: 'BRS 421', areaHa: '16' },
+    ])).toBeNull();
+  });
+
+  it('mesma cultura E mesma variedade é a mesma área digitada duas vezes', () => {
+    const c = colisaoDeArea([{ ...base, variedade: 'OL3' }, { ...base, variedade: 'OL3' }]);
+    expect(c?.motivo).toBe('duplicata');
+    expect(c?.cultura).toBe('amendoim');
+    expect(c?.variedade).toBe('OL3');
+  });
+
+  /* ⚠ AQUI O FRONT É MAIS ESTRITO QUE O BANCO, DE PROPÓSITO. "OL3" e "ol3" são strings
+     diferentes: a UNIQUE aceitaria as duas linhas sem reclamar. Mas são o MESMO cultivar para
+     quem lê a tela, e duas áreas indistinguíveis a olho é o problema que a chave existe para
+     evitar — a chave só não sabe ler. */
+  it('a mesma variedade em caixa diferente continua sendo a mesma', () => {
+    expect(colisaoDeArea([{ ...base, variedade: 'OL3' }, { ...base, variedade: 'ol3 ' }])?.motivo)
+      .toBe('duplicata');
+  });
+
+  /* ⚠ `NULLS NOT DISTINCT`: dois nulos COLIDEM nesta chave, ao contrário do padrão do Postgres. */
+  it('duas sem variedade colidem, e a saída é informar o cultivar', () => {
+    expect(colisaoDeArea([base, { ...base, id: null }])?.motivo).toBe('sem-variedade');
+  });
+
+  it('uma com variedade e outra sem não colidem — são chaves diferentes', () => {
+    expect(colisaoDeArea([{ ...base, variedade: 'OL3' }, base])).toBeNull();
+  });
+
+  /* ⚠ EM ABERTURA A VARIEDADE É DESCARTADA no payload e o campo some da tela: duas linhas em
+     abertura da mesma cultura colidem mesmo com cultivar digitado, e mandar "informe a
+     variedade" seria mandar preencher um campo que não existe. */
+  it('duas em abertura são caso próprio, não "sem variedade"', () => {
+    const emAbertura = { ...base, status: 'abertura' };
+    expect(colisaoDeArea([emAbertura, { ...emAbertura, variedade: 'OL3' }])?.motivo)
+      .toBe('abertura');
+  });
+
+  it('uma em abertura e uma plantada com variedade não colidem', () => {
+    expect(colisaoDeArea([
+      { ...base, status: 'abertura' },
+      { ...base, variedade: 'OL3' },
+    ])).toBeNull();
   });
 
   it('duas culturas diferentes no mesmo pasto são a safrinha, e passam', () => {
-    expect(culturaDuplicada([base, { ...base, cultura: 'milho' }])).toBeNull();
+    expect(colisaoDeArea([base, { ...base, cultura: 'milho' }])).toBeNull();
   });
 
   it('linha ainda em branco não conta como repetição', () => {
-    expect(culturaDuplicada([{ ...base, cultura: '' }, { ...base, cultura: '' }])).toBeNull();
+    expect(colisaoDeArea([{ ...base, cultura: '' }, { ...base, cultura: '' }])).toBeNull();
+  });
+});
+
+describe('textoDaColisao', () => {
+  /* ⚠ A REGRA VELHA NÃO PODE SOBREVIVER NA MICROCOPY: "uma linha por cultura" deixou de ser
+     verdade quando a variedade entrou na chave, e um aviso que ensina a regra errada é pior
+     que nenhum — ele manda somar duas áreas que são legitimamente distintas. */
+  it('nenhuma das três frases promete uma linha por cultura', () => {
+    for (const c of [
+      { cultura: 'amendoim', motivo: 'duplicata' as const, variedade: 'OL3' },
+      { cultura: 'amendoim', motivo: 'sem-variedade' as const },
+      { cultura: 'amendoim', motivo: 'abertura' as const },
+    ]) {
+      expect(textoDaColisao(c)).not.toMatch(/uma linha por cultura/);
+      expect(textoDaColisao(c)).toContain('Amendoim');
+    }
+  });
+
+  it('a duplicata nomeia o cultivar que repetiu', () => {
+    expect(textoDaColisao({ cultura: 'amendoim', motivo: 'duplicata', variedade: 'OL3' }))
+      .toContain('"OL3"');
+  });
+
+  it('só o "sem variedade" manda informar o cultivar — em abertura não há campo', () => {
+    expect(textoDaColisao({ cultura: 'amendoim', motivo: 'sem-variedade' }))
+      .toMatch(/Informe o cultivar/);
+    expect(textoDaColisao({ cultura: 'amendoim', motivo: 'abertura' }))
+      .not.toMatch(/Informe o cultivar/);
   });
 });
 

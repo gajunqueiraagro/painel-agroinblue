@@ -5,9 +5,10 @@
  * cadastro de safra justamente para ela vir parar neste lugar: a safra é o PERÍODO ("25/26
  * Lavoura") e a cultura é o que se plantou EM CADA TALHÃO. Amendoim e milho na mesma
  * temporada são duas áreas plantadas do mesmo pasto, não duas safras.
- * ⚠ O BANCO JÁ DIZ ISSO: `agri_safra_area` tem UNIQUE (safra_id, pasto_id, cultura) — a
- * safrinha é prevista por construção, e é por isso que a tela é uma LISTA e não um formulário
- * de um registro só.
+ * ⚠ O BANCO JÁ DIZ ISSO: `agri_safra_area` tem UNIQUE (safra_id, pasto_id, cultura, variedade)
+ * — a safrinha é prevista por construção, e é por isso que a tela é uma LISTA e não um
+ * formulário de um registro só. A `variedade` entrou na chave depois, e com ela o pasto passou
+ * a comportar dois cultivares da MESMA cultura: OL3 e BRS 421 lado a lado.
  * ⚠ SÓ REGRA PURA AQUI. Nada de React nem de Supabase: o que este módulo sabe é o que torna
  * uma linha gravável, e é o que os testes cobrem.
  */
@@ -176,22 +177,104 @@ export function validarAreaPlantada(form: AreaPlantadaForm, areaDoPastoHa?: numb
   };
 }
 
+/** O que a chave do banco recusaria, e QUAL das três recusas é — cada uma tem uma saída
+ *  diferente para o operador, e uma mensagem só serviria mal às três. */
+export interface ColisaoArea {
+  /** A cultura repetida. */
+  cultura: string;
+  /**
+   * `duplicata` — mesma cultura E mesma variedade: é a mesma área digitada duas vezes.
+   * `sem-variedade` — mesma cultura, e pelo menos duas sem cultivar informado.
+   * `abertura` — mesma cultura em duas linhas EM ABERTURA. Parece o caso acima e NÃO é:
+   *   ali o operador digita a variedade e resolve; aqui o campo nem existe na tela.
+   */
+  motivo: 'duplicata' | 'sem-variedade' | 'abertura';
+  /** Só no `duplicata`: o cultivar que repetiu, para a mensagem poder nomeá-lo. */
+  variedade?: string;
+}
+
 /**
- * A CULTURA REPETIDA NA MESMA SAFRA — o que o UNIQUE do banco recusaria.
+ * A LINHA REPETIDA NA MESMA SAFRA — o que o UNIQUE do banco recusaria.
  *
  * ⚠ AVISAR ANTES, NÃO DEPOIS: sem isto o operador preenche a segunda linha inteira e leva um
  * 23505 no Salvar, com a tela sem saber qual das linhas causou. É a mesma decisão do aviso de
  * código repetido no cadastro de safra.
+ *
+ * ⚠⚠ A IDENTIDADE É CULTURA + VARIEDADE, NÃO CULTURA. Esta função nasceu quando a chave era
+ * (safra, pasto, cultura) e ficou para trás quando a `variedade` entrou nela: o banco passou a
+ * aceitar OL3 e BRS 421 no mesmo pasto, e era o FRONT que recusava — o operador via a faixa
+ * âmbar e a segunda área não persistia, por uma regra que só existia aqui. Medido no Proto em
+ * 14/09/2026: `UNIQUE NULLS NOT DISTINCT (safra_id, pasto_id, cultura, variedade)`.
+ *
+ * ⚠ O `NULLS NOT DISTINCT` É A PARTE QUE SURPREENDE, e é por isso que "sem variedade" continua
+ * sendo colisão. No Postgres, por padrão, dois NULLs NÃO colidem numa UNIQUE — seriam duas
+ * linhas válidas. Com `NULLS NOT DISTINCT` eles colidem, e duas áreas de amendoim sem cultivar
+ * viram a mesma chave. O front não escolhe isso: ele espelha.
+ *
+ * ⚠ E ABERTURA É CASO PRÓPRIO, não um "sem variedade" mais preguiçoso. `validarAreaPlantada`
+ * força `variedade: null` em abertura, e o painel ESCONDE o campo — então "informe o cultivar"
+ * mandaria o operador preencher algo que a tela não mostra. A saída dele é outra: uma linha só,
+ * ou marcar como plantada a que já foi.
  */
-export function culturaDuplicada(linhas: readonly AreaPlantadaForm[]): string | null {
-  const vistas = new Set<string>();
+export function colisaoDeArea(linhas: readonly AreaPlantadaForm[]): ColisaoArea | null {
+  /* ⚠ A CHAVE COMPARADA É A QUE VAI AO BANCO, não a que está no formulário: em abertura a
+     variedade é descartada no payload, então ela vale vazio aqui também. Comparar o que o
+     operador digitou faria a tela liberar um par que o banco recusaria — que é o defeito
+     inverso do que este PR conserta, e o pior dos dois: falha só no Salvar. */
+  const chave = (l: AreaPlantadaForm) =>
+    ehAbertura(l.status) ? '' : (l.variedade || '').trim().toLowerCase();
+
+  const porCultura = new Map<string, AreaPlantadaForm[]>();
   for (const l of linhas) {
     const c = (l.cultura || '').trim();
     if (!c) continue;
-    if (vistas.has(c)) return c;
-    vistas.add(c);
+    const g = porCultura.get(c);
+    if (g) g.push(l); else porCultura.set(c, [l]);
+  }
+
+  for (const [cultura, grupo] of porCultura) {
+    if (grupo.length < 2) continue;
+    const vistas = new Set<string>();
+    for (const l of grupo) {
+      const v = chave(l);
+      if (!vistas.has(v)) { vistas.add(v); continue; }
+      /* ⚠ A ORDEM DOS TESTES IMPORTA: uma linha em abertura tem chave vazia, e sem esta
+         checagem ela cairia em `sem-variedade` e receberia um conselho impossível de seguir. */
+      if (ehAbertura(l.status) || grupo.some(g => ehAbertura(g.status) && chave(g) === v)) {
+        return { cultura, motivo: 'abertura' };
+      }
+      if (!v) return { cultura, motivo: 'sem-variedade' };
+      return { cultura, motivo: 'duplicata', variedade: (l.variedade || '').trim() };
+    }
   }
   return null;
+}
+
+/**
+ * A FRASE DA COLISÃO — uma fonte só para a faixa âmbar e para o toast do Salvar.
+ *
+ * ⚠ CADA MOTIVO TEM UMA SAÍDA DIFERENTE, e a frase tem de dizer QUAL: "aparece duas vezes" sem
+ * o que fazer é o aviso que o operador lê três vezes e ignora na quarta. A redação antiga
+ * afirmava "o banco guarda uma linha por cultura em cada safra" — uma regra que não existe mais,
+ * e que mandava somar duas áreas que são legitimamente distintas.
+ */
+export function textoDaColisao(c: ColisaoArea): string {
+  const nome = labelDaCultura(c.cultura);
+  if (c.motivo === 'duplicata') {
+    return `${nome} "${c.variedade}" aparece duas vezes. Duas áreas da mesma cultura convivem no `
+      + `pasto quando têm variedades diferentes — troque a variedade de uma ou some as duas áreas.`;
+  }
+  if (c.motivo === 'sem-variedade') {
+    return `${nome} aparece duas vezes sem variedade. Informe o cultivar de cada uma `
+      + `(OL3, BRS 421…) para as duas áreas se distinguirem.`;
+  }
+  /* ⚠ NÃO DIZ "as duas em abertura": BASTA UMA. Uma linha em abertura tem a variedade
+     descartada, então ela colide com a linha da mesma cultura que também está sem cultivar —
+     e afirmar que ambas estão em abertura mandaria o operador procurar um estado que uma
+     delas não tem. */
+  return `${nome} tem duas áreas que o sistema não consegue distinguir: área em abertura não `
+    + `guarda cultivar. Deixe uma só enquanto não plantar, ou marque como plantada a que já foi `
+    + `e informe a variedade dela.`;
 }
 
 /** A soma das áreas digitadas — o número que o painel mostra ao lado da área do pasto. */

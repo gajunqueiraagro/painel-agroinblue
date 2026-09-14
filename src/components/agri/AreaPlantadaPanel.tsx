@@ -23,7 +23,7 @@ import { toast } from 'sonner';
 import { formatNum } from '@/lib/calculos/formatters';
 import { cn } from '@/lib/utils';
 import {
-  CULTURAS_AREA, validarAreaPlantada, culturaDuplicada, somaAreas, labelDaCultura,
+  CULTURAS_AREA, validarAreaPlantada, colisaoDeArea, textoDaColisao, somaAreas, labelDaCultura,
   safrasQueCobremOMes, safraInicialDoMes, ehAbertura, STATUS_AREA, STATUS_AREA_PADRAO,
   AVISO_ABERTURA,
   type AreaPlantadaForm, type AreaPlantadaPayload,
@@ -118,7 +118,7 @@ export function AreaPlantadaPanel({ clienteId, pastoId, pastoNome, areaProdutiva
     [colheitasDasAreas]);
 
   const total = useMemo(() => somaAreas(linhas), [linhas]);
-  const duplicada = useMemo(() => culturaDuplicada(linhas), [linhas]);
+  const colisao = useMemo(() => colisaoDeArea(linhas), [linhas]);
   /**
    * ⚠ O BOTÃO SÓ SE ACENDE QUANDO HÁ O QUE SALVAR — AGRI-AREA-POR-SAFRA-01 item 4. Ele ficava
    * em destaque para sempre depois de gravar, e um botão que parece pedir ação quando não há
@@ -156,7 +156,10 @@ export function AreaPlantadaPanel({ clienteId, pastoId, pastoNome, areaProdutiva
 
   const handleSalvar = async () => {
     if (!clienteId || !safraId) { toast.error('Escolha a safra.'); return; }
-    if (duplicada) { toast.error(`${labelDaCultura(duplicada)} aparece duas vezes — uma cultura por safra.`); return; }
+    /* ⚠ O TOAST E A FAIXA DIZEM A MESMA COISA, de uma fonte só: duas redações do mesmo
+       bloqueio divergem no primeiro ajuste, e aí o operador lê um motivo na tela e outro ao
+       tentar salvar. */
+    if (colisao) { toast.error(textoDaColisao(colisao)); return; }
     /* Linha totalmente em branco não é erro: é a linha que o painel abre sozinho. Ela sai da
        gravação em silêncio; o que não se faz é gravar cultura sem área nem área sem cultura. */
     const preenchidas = linhas.filter(l => l.cultura.trim() || l.areaHa.trim());
@@ -343,10 +346,9 @@ export function AreaPlantadaPanel({ clienteId, pastoId, pastoNome, areaProdutiva
         })}
       </div>
 
-      {duplicada && (
+      {colisao && (
         <div className="rounded-md border border-amber-400 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
-          <b>{labelDaCultura(duplicada)}</b> aparece duas vezes. O banco guarda uma linha por cultura em cada safra —
-          some as duas áreas ou escolha outra cultura.
+          {textoDaColisao(colisao)}
         </div>
       )}
 
