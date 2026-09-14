@@ -548,7 +548,15 @@ export function PainelSafraTab() {
             </colgroup>
             <thead>
               <tr>
-                <th className={cn(TH_CINZA, 'text-left')}>Talhão</th>
+                {/* ⚠ O PRIMEIRO `th` É O NOME DA SEÇÃO, não o rótulo da coluna — o padrão que a
+                    tabela de Investimento já usa neste arquivo ("Investimento na abertura" no
+                    lugar de "Tipo"). O rótulo não se perde: uma coluna de nomes de talhão sob um
+                    título que diz "Análise por Talhão" não precisa repetir a palavra.
+                    ⚠ E O PADRÃO TEM DUAS PARTES: o título AQUI e o `pl-6` na primeira célula do
+                    corpo. É o recuo que faz as linhas se lerem como itens DAQUELA seção; só o
+                    texto no `th` deixaria o nome da seção parecendo um cabeçalho de coluna
+                    comprido. */}
+                <th className={cn(TH_CINZA, 'text-left')}>Análise por talhão</th>
                 <th className={cn(TH_CINZA, 'text-left')}>Variedade</th>
                 <th className={cn(TH_CINZA, 'text-right')}>Área ha</th>
                 <th className={cn(TH_CINZA, 'text-right')}>Sacas</th>
@@ -560,7 +568,7 @@ export function PainelSafraTab() {
               {painel?.talhoes.map((t, i) => (
                 <tr key={`${t.talhao}·${t.variedade ?? ''}`}
                   className={cn('border-t border-slate-100', zebra(i))}>
-                  <td className="truncate px-2 py-0.5 text-[11px]" title={t.talhao}>{t.talhao}</td>
+                  <td className="truncate px-2 py-0.5 pl-6 text-[11px]" title={t.talhao}>{t.talhao}</td>
                   {/* ⚠ `—` PARA VARIEDADE NULA: a coluna existe sempre, porque some-la quando
                       nenhum talhão tem variedade faria a tabela mudar de forma entre safras. */}
                   <td className="truncate px-2 py-0.5 text-[11px] text-muted-foreground">
@@ -599,7 +607,9 @@ export function PainelSafraTab() {
               </colgroup>
               <thead>
                 <tr>
-                  <th className={cn(TH_CINZA, 'text-left')}>Safra</th>
+                  {/* ⚠ MESMO PADRÃO DA SEÇÃO ACIMA: o nome da seção no primeiro `th`, e o
+                      `pl-6` no corpo. */}
+                  <th className={cn(TH_CINZA, 'text-left')}>Histórico de safras</th>
                   <th className={cn(TH_CINZA, 'text-right')}>Área ha</th>
                   <th className={cn(TH_CINZA, 'text-right')}>Sacas</th>
                   <th className={cn(TH_CINZA, 'text-right')}>sc / ha</th>
@@ -618,7 +628,7 @@ export function PainelSafraTab() {
                     <tr key={sf.safra_id}
                       className={cn('border-t border-slate-100',
                         atual ? 'bg-primary/[0.06]' : zebra(i))}>
-                      <td className="truncate px-2 py-0.5 text-[11px]">
+                      <td className="truncate px-2 py-0.5 pl-6 text-[11px]">
                         {/* ⚠ A SAFRA ABERTA FICA MARCADA: sem isso o operador compara quatro linhas
                             sem saber qual delas é a que os cards acima estão descrevendo. */}
                         <span className={cn(atual && 'font-bold')}>{sf.codigo}</span>
