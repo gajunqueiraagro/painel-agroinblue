@@ -41,6 +41,20 @@ export interface TalhaoProdutividade {
   variedade: string | null;
   area_ha: number;
   sacas: number;
+  /** Só o grão que vale preço — `sacas` menos a roça. */
+  sacas_boas: number;
+  /** O refugo, em sacas. */
+  roca_sacas: number;
+  /**
+   * Quanto das SACAS BOAS saiu acima de 20 ppb de aflatoxina, em %.
+   *
+   * ⚠ A BASE É O GRÃO BOM, não a produção total: o corte de 20 ppb é o que a cooperativa aplica
+   * ao lote que ela compra, e a roça já está fora dessa conversa. Dividir pelo total diluiria o
+   * problema justamente no talhão que mais refugou.
+   * ⚠ ZERO É RESPOSTA, não ausência: 0,0% quer dizer "nenhuma carga acima do corte" — um
+   * resultado bom, e a tela o escreve em vez de mostrar "—".
+   */
+  pct_afla20: number;
   sacas_ha: number;
   cargas: number;
 }
@@ -130,6 +144,9 @@ export function usePainelSafra(
           area_ha: num(x?.area_ha),
           sacas: num(x?.sacas),
           sacas_ha: num(x?.sacas_ha),
+          sacas_boas: num(x?.sacas_boas),
+          roca_sacas: num(x?.roca_sacas),
+          pct_afla20: num(x?.pct_afla20),
           cargas: num(x?.cargas),
         })),
         natureza: (Array.isArray(j.natureza) ? j.natureza : []).map((x: Record<string, unknown>) => ({
@@ -203,6 +220,18 @@ export interface SafraComparada {
   custeio_direto: number;
   receita_ha: number;
   /**
+   * O custeio TOTAL da safra — as seis linhas de saída do DRE, rateio administrativo incluído.
+   *
+   * ⚠ É OUTRO NÚMERO, NÃO UM APELIDO DO `custeio_direto`. Aquele é só o que tem `safra_id`; este
+   * soma deduções, custo variável, custo fixo, juros e os dois rateios. Foi por isso que a tabela
+   * podia dizer "não subtraia daqui": com o direto, receita − custeio dava um saldo diferente do
+   * DRE. Com o total, a margem abaixo fecha — e a ressalva deixou de ser necessária.
+   */
+  custeio_total: number;
+  custeio_ha: number;
+  /** `receita − custeio_total`, por hectare. Negativa é prejuízo — salvo receita incompleta. */
+  margem_ha: number;
+  /**
    * Heurística do banco: há produção mas a receita não chega a R$ 40/saca.
    * ⚠ AVISA, NUNCA CORRIGE. É o caso da 24/25, cuja venda ainda não foi lançada.
    */
@@ -236,6 +265,9 @@ export function useComparativoSafras(
         receita: num(x?.receita),
         custeio_direto: num(x?.custeio_direto),
         receita_ha: num(x?.receita_ha),
+        custeio_total: num(x?.custeio_total),
+        custeio_ha: num(x?.custeio_ha),
+        margem_ha: num(x?.margem_ha),
         /* ⚠ `=== true` e não truthy: o JSON pode trazer a string "false", que é truthy e marcaria
            TODA safra como venda parcial — o aviso viraria ruído e ninguém mais o leria. */
         receita_incompleta: x?.receita_incompleta === true || x?.receita_incompleta === 'true',

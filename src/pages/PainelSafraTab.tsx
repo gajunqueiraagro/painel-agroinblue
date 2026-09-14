@@ -297,6 +297,33 @@ export function PainelSafraTab() {
   const totalDoDrill = useMemo(
     () => itensDoDrill.reduce((acc, it) => acc + Math.abs(it.mov), 0), [itensDoDrill]);
 
+  /**
+   * A LINHA DE TOTAIS DA ANÁLISE POR TALHÃO — somada aqui, não pedida à RPC.
+   *
+   * ⚠ SOMAR O QUE A TELA MOSTRA é o que garante que o total feche com as linhas acima dele. Uma
+   * soma feita no banco, sobre a mesma tabela mas por outro caminho, pode divergir da lista por
+   * um talhão filtrado ou um arredondamento — e aí o operador confere com a régua e acha uma
+   * diferença que não existe em lugar nenhum.
+   * ⚠ MAS O sc/ha É RAZÃO, NÃO SOMA: `soma(sacas) / soma(area)`, nunca a média dos sc/ha. Somar
+   * produtividades daria peso igual a um talhão de 5 ha e a um de 90.
+   * ⚠ E A % DE AFLATOXINA É PONDERADA PELAS SACAS BOAS, pela mesma razão e com mais força: a
+   * média simples de 11,5% num talhão pequeno com 0,0% num grande diria ~5,8%, quando o lote
+   * inteiro que a cooperativa recebe tem outra proporção. O peso é o grão, não o talhão.
+   */
+  const totaisTalhoes = useMemo(() => {
+    const ts = painel?.talhoes ?? [];
+    const area = ts.reduce((a, t) => a + t.area_ha, 0);
+    const sacas = ts.reduce((a, t) => a + t.sacas, 0);
+    const boas = ts.reduce((a, t) => a + t.sacas_boas, 0);
+    const roca = ts.reduce((a, t) => a + t.roca_sacas, 0);
+    const acima = ts.reduce((a, t) => a + (t.sacas_boas * t.pct_afla20) / 100, 0);
+    return {
+      area, sacas, boas, roca,
+      sacasHa: area > 0 ? sacas / area : 0,
+      pctAfla: boas > 0 ? (acima / boas) * 100 : 0,
+    };
+  }, [painel?.talhoes]);
+
   /* ───────────────── A EDIÇÃO DE UM LANÇAMENTO, DE DENTRO DO DRILL ─────────────────
    * ⚠ O MESMO `LancamentoV2Dialog` DO DRE POR CULTURA E DO PAINEL POR PERÍODO, com a mesma
    * passagem de catálogos e o mesmo `onSave`. Nenhuma variante: o operador que corrige um
@@ -582,7 +609,7 @@ export function PainelSafraTab() {
         <div className="overflow-hidden rounded-md border">
           <table className="w-full table-fixed border-collapse">
             <colgroup>
-              {['24%', '22%', '13%', '15%', '14%', '12%'].map((w, i) => <col key={i} style={{ width: w }} />)}
+              {['21%', '17%', '11%', '14%', '12%', '13%', '12%'].map((w, i) => <col key={i} style={{ width: w }} />)}
             </colgroup>
             <thead>
               <tr>
@@ -597,9 +624,13 @@ export function PainelSafraTab() {
                 <th className={cn(TH_CINZA, 'text-left')}>Análise por talhão</th>
                 <th className={cn(TH_CINZA, 'text-left')}>Variedade</th>
                 <th className={cn(TH_CINZA, 'text-right')}>Área ha</th>
-                <th className={cn(TH_CINZA, 'text-right')}>Sacas</th>
+                <th className={cn(TH_CINZA, 'text-right')}>Sacas boas</th>
                 <th className={cn(TH_CINZA, 'text-right')}>sc / ha</th>
-                <th className={cn(TH_CINZA, 'text-right')}>Cargas</th>
+                <th className={cn(TH_CINZA, 'text-right')}>Roça (sc)</th>
+                {/* ⚠ "% Afla" É SOBRE AS SACAS BOAS ACIMA DE 20 ppb — o corte da cooperativa.
+                    O rótulo é curto porque a coluna é estreita; o que ele significa está no
+                    tipo da RPC e na nota do rodapé desta tabela. */}
+                <th className={cn(TH_CINZA, 'text-right')}>% Afla</th>
               </tr>
             </thead>
             <tbody>
@@ -613,18 +644,52 @@ export function PainelSafraTab() {
                     {t.variedade ?? '—'}
                   </td>
                   <td className="px-2 py-0.5 text-right text-[11px] tabular-nums">{formatNum(t.area_ha, 2)}</td>
-                  <td className="px-2 py-0.5 text-right text-[11px] tabular-nums">{formatNum(t.sacas, 2)}</td>
+                  <td className="px-2 py-0.5 text-right text-[11px] tabular-nums">{formatNum(t.sacas_boas, 2)}</td>
                   {/* ⚠ O MELHOR EM NEGRITO SÓ QUANDO HÁ COM QUEM COMPARAR. Com um talhão só,
                       destacar a única linha sugeriria um ranking que não existe. */}
                   <td className={cn('px-2 py-0.5 text-right text-[11px] tabular-nums',
                     i === 0 && (painel?.talhoes.length ?? 0) > 1 && 'font-bold text-success')}>
                     {formatNum(t.sacas_ha, 2)}
                   </td>
-                  <td className="px-2 py-0.5 text-right text-[11px] tabular-nums text-muted-foreground">
-                    {t.cargas}
+                  {/* ⚠ ROÇA É SEMPRE VERMELHA, a mesma convenção da lista de cargas: ela é
+                      refugo, e o vermelho aqui não julga uma faixa — diz o que aquele grão é.
+                      ⚠ ZERO FICA CINZA: um talhão sem refugo não é um alerta. */}
+                  <td className={cn('px-2 py-0.5 text-right text-[11px] tabular-nums',
+                    t.roca_sacas > 0 ? 'text-destructive' : 'text-muted-foreground')}>
+                    {formatNum(t.roca_sacas, 2)}
+                  </td>
+                  {/* ⚠ 0,0% APARECE, nunca "—": o traço diria que o laudo não existe, e aqui
+                      ele existe e deu zero — que é o melhor resultado possível. */}
+                  <td className={cn('px-2 py-0.5 text-right text-[11px] tabular-nums',
+                    t.pct_afla20 > 0 ? 'text-destructive' : 'text-muted-foreground')}>
+                    {formatNum(t.pct_afla20, 1)}%
                   </td>
                 </tr>
               ))}
+              {/* ⚠ FAIXA ESCURA, como o "Total investido": é o mesmo papel — a borda de baixo da
+                  tabela — e duas convenções diferentes para a mesma função fariam o olho
+                  reaprender a cada bloco.
+                  ⚠ A ÁREA E AS SACAS FECHAM COM OS CARTÕES DO TOPO por construção: são o mesmo
+                  array somado. Se um dia divergirem, é porque alguém passou a filtrar a lista
+                  sem filtrar o cartão. */}
+              <tr className="bg-primary text-primary-foreground">
+                <td className="px-2 py-1 text-[12px] font-bold" colSpan={2}>Total</td>
+                <td className="px-2 py-1 text-right text-[12px] font-bold tabular-nums">
+                  {formatNum(totaisTalhoes.area, 2)}
+                </td>
+                <td className="px-2 py-1 text-right text-[12px] font-bold tabular-nums">
+                  {formatNum(totaisTalhoes.boas, 2)}
+                </td>
+                <td className="px-2 py-1 text-right text-[12px] font-bold tabular-nums">
+                  {formatNum(totaisTalhoes.sacasHa, 2)}
+                </td>
+                <td className="px-2 py-1 text-right text-[12px] font-bold tabular-nums">
+                  {formatNum(totaisTalhoes.roca, 2)}
+                </td>
+                <td className="px-2 py-1 text-right text-[12px] font-bold tabular-nums">
+                  {formatNum(totaisTalhoes.pctAfla, 1)}%
+                </td>
+              </tr>
             </tbody>
           </table>
           <p className="border-t bg-muted/40 px-2 py-1 text-[10px] leading-snug text-muted-foreground">
@@ -641,18 +706,24 @@ export function PainelSafraTab() {
           <div className="min-w-0 overflow-hidden rounded-md border">
             <table className="w-full table-fixed border-collapse">
               <colgroup>
-                {['16%', '13%', '15%', '14%', '16%', '15%', '11%'].map((w, i) => <col key={i} style={{ width: w }} />)}
+                {['20%', '14%', '17%', '17%', '18%', '14%'].map((w, i) => <col key={i} style={{ width: w }} />)}
               </colgroup>
               <thead>
                 <tr>
                   {/* ⚠ MESMO PADRÃO DA SEÇÃO ACIMA: o nome da seção no primeiro `th`, e o
                       `pl-6` no corpo. */}
                   <th className={cn(TH_CINZA, 'text-left')}>Histórico de safras</th>
-                  <th className={cn(TH_CINZA, 'text-right')}>Área ha</th>
-                  <th className={cn(TH_CINZA, 'text-right')}>Sacas</th>
+                  {/* ⚠ "Custeio direto" SAIU E NÃO FOI RENOMEADO: a coluna agora é o custeio
+                      TOTAL por hectare, que é outro número — o direto ignora o rateio
+                      administrativo. Trocar só o rótulo sobre o campo velho seria pior que a
+                      coluna antiga, porque passaria a prometer o que não entrega.
+                      ⚠ Área e Sacas saíram para abrir espaço: as duas seguem nos cartões do topo
+                      para a safra aberta, e o que esta tabela compara entre safras é a RÉGUA POR
+                      HECTARE — somar hectares de safras diferentes não quer dizer nada. */}
                   <th className={cn(TH_CINZA, 'text-right')}>sc / ha</th>
                   <th className={cn(TH_CINZA, 'text-right')}>Receita / ha</th>
-                  <th className={cn(TH_CINZA, 'text-right')}>Custeio direto</th>
+                  <th className={cn(TH_CINZA, 'text-right')}>Custeio / ha</th>
+                  <th className={cn(TH_CINZA, 'text-right')}>Margem / ha</th>
                   <th className={cn(TH_CINZA, 'text-right')}>% roça</th>
                 </tr>
               </thead>
@@ -678,12 +749,8 @@ export function PainelSafraTab() {
                           </span>
                         )}
                       </td>
-                      <td className="px-2 py-0.5 text-right text-[11px] tabular-nums">{formatNum(sf.area_ha, 2)}</td>
                       {/* ⚠ SEM COLHEITA É "—", NÃO ZERO: a 26/27 tem 279 ha plantados e o grão no
                           chão; zero afirmaria fracasso sobre safra que nem terminou. */}
-                      <td className="px-2 py-0.5 text-right text-[11px] tabular-nums">
-                        {colheu(sf) ? formatNum(sf.total_sacas, 2) : '—'}
-                      </td>
                       <td className="px-2 py-0.5 text-right text-[11px] font-medium tabular-nums">
                         {colheu(sf) ? formatNum(sf.sacas_ha, 2) : '—'}
                       </td>
@@ -697,8 +764,24 @@ export function PainelSafraTab() {
                         {sf.receita > 0 ? formatMoeda(sf.receita_ha) : '—'}
                       </td>
                       <td className={cn('px-2 py-0.5 text-right text-[11px] tabular-nums',
-                        sf.custeio_direto > 0 && 'text-destructive')}>
-                        {sf.custeio_direto > 0 ? formatMoeda(sf.custeio_direto) : '—'}
+                        sf.custeio_ha > 0 && 'text-destructive')}>
+                        {sf.custeio_ha > 0 ? formatMoeda(sf.custeio_ha) : '—'}
+                      </td>
+                      {/* ⚠ MARGEM NEGATIVA NEM SEMPRE É PREJUÍZO, e esta é a única célula da
+                          tela em que a cor MENTIRIA. A 24/25 tem −2.431,86/ha porque a venda
+                          ainda não foi lançada, não porque a safra deu errado — a flag
+                          `receita_incompleta` é a mesma que já marca o código da safra ao lado.
+                          Nesse caso a margem sai CINZA com o motivo no hover: o número continua
+                          à vista, mas sem o veredicto que ele não sustenta.
+                          ⚠ E O CRITÉRIO É A FLAG, NUNCA O SINAL: pintar de cinza toda margem
+                          negativa esconderia o prejuízo real de uma safra fechada. */}
+                      <td className={cn('px-2 py-0.5 text-right text-[11px] font-medium tabular-nums',
+                        sf.receita_incompleta ? 'text-muted-foreground'
+                          : sf.margem_ha >= 0 ? 'text-success' : 'text-destructive')}
+                        title={sf.receita_incompleta
+                          ? 'Receita incompleta — falta lançar a venda desta safra.' : undefined}>
+                        {formatMoeda(sf.margem_ha)}
+                        {sf.receita_incompleta && <span className="ml-0.5 text-amber-600">*</span>}
                       </td>
                       <td className={cn('px-2 py-0.5 text-right text-[11px] tabular-nums',
                         colheu(sf) && sf.pct_roca > 0 && 'text-destructive')}>
@@ -709,13 +792,17 @@ export function PainelSafraTab() {
                 })}
               </tbody>
             </table>
-            {/* ⚠ A RESSALVA DO CUSTEIO FICA ESCRITA: esta coluna é o DIRETO, sem o rateio
-                administrativo. Quem subtrair receita menos custeio aqui acha um saldo diferente
-                do que o DRE mostra, e tem de saber por quê antes de desconfiar de um dos dois. */}
+            {/* ⚠ A RESSALVA VELHA SAIU COM A COLUNA VELHA, e é preciso dizer por quê: ela
+                avisava "não subtraia da receita aqui" porque a coluna era o custeio DIRETO, e a
+                subtração dava um saldo diferente do DRE. Com o custeio TOTAL, a margem fecha —
+                e manter o aviso mandaria desconfiar de um número que agora está certo.
+                ⚠ O QUE FICA É A NOTA DO ASTERISCO: a única ressalva que sobrevive é a da safra
+                cuja venda não foi lançada, e ela é por LINHA, não da tabela inteira. */}
             <p className="border-t bg-muted/40 px-2 py-1 text-[10px] leading-snug text-muted-foreground">
-              <strong>Custeio direto</strong> é só o que está lançado na safra — sem o rateio
-              administrativo, que entra no DRE por janela de datas. Não subtraia da receita aqui:
-              o saldo do ciclo é o da tabela do topo.
+              <strong>Custeio / ha</strong> é o custeio total do ciclo — rateio administrativo
+              incluído —, então <strong>receita − custeio = margem</strong> fecha com o saldo da
+              tabela do topo. A margem marcada com <span className="text-amber-600">*</span> é de
+              safra com venda ainda não lançada: o número é parcial, não prejuízo.
             </p>
           </div>
 
