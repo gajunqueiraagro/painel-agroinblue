@@ -18,7 +18,9 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
-export function ExportarColheita({ desabilitado, motivo, onExportar, classeGatilho }: {
+export function ExportarColheita({
+  desabilitado, motivo, onExportar, classeGatilho, classeEnvolucro,
+}: {
   desabilitado?: boolean;
   /** Por que não dá para exportar — escrito, não só no `title` (regra da OC). */
   motivo?: string;
@@ -32,6 +34,18 @@ export function ExportarColheita({ desabilitado, motivo, onExportar, classeGatil
    * ocupava espaço e era invisível. Na colheita, que o monta sobre fundo claro, nada muda.
    */
   classeGatilho?: string;
+  /**
+   * Classe do INVÓLUCRO, para quem o monta numa barra que não é a da colheita.
+   *
+   * ⚠ NASCEU DE UM DESALINHO MEDIDO: o invólucro carrega um `mb-[13px]` fixo, escrito para a
+   * toolbar da colheita, onde ele compensa o rótulo de um campo vizinho. Num `flex items-center`
+   * qualquer outro, essa margem torna a caixa 13px mais alta e o centro dela sobe — o botão sai
+   * 6,5px acima do vizinho (metade da margem). As alturas sempre foram iguais; o que desalinhava
+   * era a margem.
+   * ⚠ OPT-IN PARA NÃO MEXER NA COLHEITA: tirar o `mb-[13px]` daqui consertaria o barter e
+   * quebraria o host original, que é quem pediu por ele.
+   */
+  classeEnvolucro?: string;
 }) {
   const [aberto, setAberto] = useState(false);
   const [comAnalise, setComAnalise] = useState(true);
@@ -67,7 +81,7 @@ export function ExportarColheita({ desabilitado, motivo, onExportar, classeGatil
      * ⚠ E CONTINUA ESCRITO, não só no `title` — a regra da OC é que o botão desabilitado diga por
      * quê. Mudou de "ao lado" para "abaixo"; não deixou de dizer.
      */
-    <div className="relative mb-[13px] flex items-center">
+    <div className={cn('relative mb-[13px] flex items-center', classeEnvolucro)}>
       <Popover open={aberto} onOpenChange={setAberto}>
         <PopoverTrigger asChild>
           <Button variant="outline" size="sm"

@@ -561,6 +561,11 @@ export function AgriBarterTab() {
                casa; Exportar é secundário e fica em contorno. `items-center` e a mesma `h-7`
                nos dois é o que alinha de fato — sem altura igual, `items-center` alinha centros
                de caixas de tamanhos diferentes.
+               ⚠ E AS ALTURAS JÁ ERAM IGUAIS — o desalinho era OUTRO. Medido: 28px nos dois, e o
+               Exportar saía 6,5px acima porque o invólucro dele tem um `mb-[13px]` fixo, escrito
+               para a toolbar da colheita; `items-center` centra a caixa COM a margem, e metade
+               dela vira deslocamento. O `classeEnvolucro="mb-0"` é o que zera isso aqui sem
+               mexer no host original. Os dois em `h-8`, a altura de toolbar da casa.
                ⚠ E ESTE É UM COMENTÁRIO DE JS, não de JSX: aqui dentro de `acao={(…)}` a forma
                com chaves é um objeto literal para o parser, não um comentário. Quarta vez neste
                repo — a regra é: dentro de uma EXPRESSÃO, comentário de JS; dentro de FILHOS de
@@ -569,7 +574,8 @@ export function AgriBarterTab() {
                ali mesmo, e o resto da prosa vira código. Foi o que acabou de acontecer aqui. */
             <div className="flex items-center gap-1.5">
               <ExportarColheita
-                classeGatilho="h-7 border-white/40 bg-transparent text-primary-foreground hover:bg-white/10 hover:text-white"
+                classeEnvolucro="mb-0"
+                classeGatilho="h-8 border-white/40 bg-transparent text-primary-foreground hover:bg-white/10 hover:text-white"
                 desabilitado={insumos.length === 0}
                 motivo={insumos.length === 0 ? 'Nenhum insumo para exportar.' : undefined}
                 onExportar={async (formato) => {
@@ -577,7 +583,7 @@ export function AgriBarterTab() {
                   else await exportarInsumosPdf(insumos, ctxExport, totalInsumos);
                 }}
               />
-              <Button size="sm" variant="acao" className="h-7 gap-1 px-2 text-[10px]"
+              <Button size="sm" variant="acao" className="h-8 gap-1 px-2 text-[10px]"
                 onClick={() => { setInsumoAberto(null); setModalInsumo(true); }}>
                 <Plus className="h-3 w-3" /> Adicionar insumo
               </Button>

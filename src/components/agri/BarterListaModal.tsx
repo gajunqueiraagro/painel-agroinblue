@@ -69,9 +69,17 @@ export function BarterListaModal({
         </div>
 
         {/* ⚠ RECUO INTERNO — item 10 do polish. A tabela nascia colada nas bordas do modal, e
-            texto encostado na moldura se lê pior e parece corte. O `px-3 py-2` é o mesmo respiro
-            dos outros modais da casa. */}
-        <div className="min-h-0 flex-1 overflow-auto px-3 py-2">{children}</div>
+            texto encostado na moldura se lê pior e parece corte.
+            ⚠⚠ MAS O RECUO DE CIMA SAIU, e é o conserto do cabeçalho vazado. `sticky top-0` ancora
+            no PADDING BOX do scrollport, não na borda dele: com `py-2`, o cabeçalho grudava 8px
+            ABAIXO do topo — medido — e nessa faixa de 8px as linhas passavam à vista, por cima
+            da faixa escura. O fundo do cabeçalho sempre esteve opaco e o `z-10` sempre
+            funcionou; o que existia era um vão.
+            ⚠ `pb-2` FICA: padding embaixo não cria vão nenhum, porque nada gruda no rodapé deste
+            scrollport — o total é irmão dele, fora da rolagem. E o respiro do topo deixou de ser
+            necessário: quem encosta na moldura agora é a faixa escura do cabeçalho, que é
+            justamente onde ela deve estar. */}
+        <div className="min-h-0 flex-1 overflow-auto px-3 pb-2">{children}</div>
 
         <div className={cn('flex shrink-0 items-center justify-between gap-2 px-4 py-1.5',
           'text-[11px] font-semibold text-primary-foreground', corRodape ?? 'bg-primary')}>
