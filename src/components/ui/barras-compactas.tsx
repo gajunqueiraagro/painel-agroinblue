@@ -30,7 +30,7 @@ export interface BarraCompacta {
 
 export function BarrasCompactas({
   barras, titulo, legenda, larguraMax = 340, altura = 96, preencherLargura = false,
-  larguraBarra = 22, fonteValor = 8,
+  larguraBarra = 22, fonteValor = 8, distribuir = false,
 }: {
   barras: readonly BarraCompacta[];
   titulo: string;
@@ -61,6 +61,20 @@ export function BarrasCompactas({
    * representa. Sobe quando o bloco permite.
    */
   fonteValor?: number;
+  /**
+   * As colunas se DISTRIBUEM na largura do bloco, e cada coluna tem a largura do seu VALOR —
+   * a barra fica centrada dentro dela.
+   *
+   * ⚠ É A DIFERENÇA ESTRUTURAL QUE FAZIA OS NÚMEROS SE AMONTOAREM. No modo normal a coluna tem
+   * a largura da BARRA (22px) e o valor, maior que ela, transborda para os lados; com três
+   * colunas coladas por `gap`, os três valores se encostam e viram "9.100 7.747 621" numa fila
+   * só, longe das barras que representam.
+   * ⚠ Aqui a coluna não tem largura declarada: ela cresce com o texto, `justify-around` reparte
+   * o espaço entre as três, e a barra recebe `larguraBarra` com margem automática. Cada número
+   * fica centrado sobre a SUA barra, e nenhum encosta no vizinho.
+   * ⚠ OPT-IN, como as outras: sem a prop, nada muda para quem já usa.
+   */
+  distribuir?: boolean;
 }) {
   /**
    * ⚠ A ESCALA IGNORA OS NULOS e nunca é zero: com todas as barras sem dado, ou com um único
@@ -72,15 +86,26 @@ export function BarrasCompactas({
 
   /* ⚠ UMA CLASSE SÓ PARA OS DOIS TRILHOS — o da barra e o do rótulo. Se divergirem, o rótulo
      deixa de ficar embaixo da sua barra, que é o defeito mais silencioso que um gráfico pode ter. */
-  const colEstilo = preencherLargura ? undefined : { width: larguraBarra };
-  const colClasse = preencherLargura ? 'min-w-0 flex-1' : 'shrink-0';
+  const colEstilo = distribuir ? undefined
+    : preencherLargura ? undefined : { width: larguraBarra };
+  const colClasse = distribuir ? 'shrink-0 text-center'
+    : preencherLargura ? 'min-w-0 flex-1' : 'shrink-0';
+  /* ⚠ `space-around` reparte a folga ANTES, ENTRE e DEPOIS das colunas — é o que tira o recuo
+     à esquerda e a sobra à direita de uma vez. Com `gap`, a folga fica toda no fim. */
+  const trilhoClasse = distribuir ? 'justify-around' : 'gap-1.5';
 
+  /*
+   * ⚠ NO MODO DISTRIBUÍDO A LARGURA É FIXA, não teto. Com `max-width` o card encolhe até o
+   * conteúdo — medido: 134px em vez dos 158 pedidos —, e aí os três valores de 15px somam mais
+   * do que a folga e ENCOSTAM um no outro. É a largura declarada que cria o espaço entre eles.
+   */
   return (
-    <div className="rounded-md border bg-card p-2" style={{ maxWidth: larguraMax }}>
+    <div className="rounded-md border bg-card p-2"
+      style={distribuir ? { width: larguraMax, maxWidth: larguraMax } : { maxWidth: larguraMax }}>
       <div className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">{titulo}</div>
       {/* ⚠ ALTURA FIXA NO TRILHO, não no conteúdo: a barra cresce de baixo para cima dentro de um
           espaço que não muda. Sem isso, trocar de cultura faria o bloco inteiro pular. */}
-      <div className="mt-1.5 flex items-end gap-1.5" style={{ height: altura }}>
+      <div className={cn('mt-1.5 flex items-end', trilhoClasse)} style={{ height: altura }}>
         {barras.map((b, i) => {
           const pct = b.valor != null && max > 0 ? Math.max(2, (b.valor / max) * 100) : 0;
           return (
@@ -102,18 +127,21 @@ export function BarrasCompactas({
                   dele. Nenhuma barra é comprimida. */}
               <div className="flex min-h-0 flex-1 items-end">
                 {b.valor == null ? (
-                  <div className="w-full rounded-sm border border-dashed border-muted-foreground/40"
-                    style={{ height: 6 }} title="Sem dado" />
+                  <div className={cn('rounded-sm border border-dashed border-muted-foreground/40',
+                    distribuir ? 'mx-auto' : 'w-full')}
+                    style={{ height: 6, width: distribuir ? larguraBarra : undefined }}
+                    title="Sem dado" />
                 ) : (
-                  <div className={cn('w-full rounded-sm', b.cor ?? 'bg-primary')}
-                    style={{ height: `${pct}%` }} />
+                  <div className={cn('rounded-sm', distribuir ? 'mx-auto' : 'w-full',
+                    b.cor ?? 'bg-primary')}
+                    style={{ height: `${pct}%`, width: distribuir ? larguraBarra : undefined }} />
                 )}
               </div>
             </div>
           );
         })}
       </div>
-      <div className="mt-1 flex gap-1.5">
+      <div className={cn('mt-1 flex', trilhoClasse)}>
         {barras.map((b, i) => (
           <div key={`r-${b.rotulo}-${i}`} className={cn('text-center', colClasse)} style={colEstilo}>
             <div className="truncate text-[8px] leading-tight text-muted-foreground" title={b.rotulo}>

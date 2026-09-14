@@ -3,10 +3,10 @@
  *
  * ⚠ ZERO CONTA AQUI. Todo número vem do `totaisColheita` que o consolidado da tela já usa —
  * o mesmo objeto, não uma segunda chamada. Recalcular por fora criaria dois "aproveitado" na
- * mesma tela, e seria o de baixo que o produtor levaria para a conversa com a cooperativa.
+ * mesma tela, e seria o de baixo que o produtor levaria para a conversa com a indústria.
  * ⚠ A CADEIA CONTA UMA HISTÓRIA, e é por isso que ela é horizontal: o que arrancou perde água
  * na secagem, o que sobra se divide em grão bom e refugo, e a soma dos dois é o que a
- * cooperativa aceitou. Cada seta é uma perda ou uma separação — nenhuma é um total novo.
+ * indústria aceitou. Cada seta é uma perda ou uma separação — nenhuma é um total novo.
  * ⚠ VERMELHO ONDE O GRÃO NÃO VALE O PREÇO CHEIO: quebra, roça e acima do corte. O corte é o
  * `LIMITE_AFLATOXINA`, o mesmo que separa as sacas no consolidado.
  */
@@ -20,7 +20,7 @@ import {
 } from '@/lib/agri/colheita';
 import { BarrasCompactas, type BarraCompacta } from '@/components/ui/barras-compactas';
 
-/** Um elo da cadeia. `destaque` é o fim dela — o que a cooperativa aceitou. */
+/** Um elo da cadeia. `destaque` é o fim dela — o que a indústria aceitou. */
 function Elo({ rotulo, valor, nota2, nota, cor, destaque }: {
   rotulo: string; valor: string;
   /**
@@ -206,7 +206,7 @@ export function AnaliseProducaoModal({
               embaixo. Alinhados em grade, os quatro pares se comparam na vertical sem procurar. */}
           <div>
             <div className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Do que arrancou ao que a cooperativa aceitou
+              Do que arrancou ao que a indústria aceitou
             </div>
             <div className="grid grid-cols-2 gap-1.5 md:grid-cols-4">
               {COLUNAS.map(c => (
@@ -241,7 +241,7 @@ export function AnaliseProducaoModal({
                 : totais.secoKg > 0 ? `${formatNum(totais.verdeKg - totais.secoKg, 2)} kg de água` : undefined} />
             <Card rotulo="Secagem paga"
               valor={totais.valorSecagem > 0 ? `R$ ${formatNum(totais.valorSecagem, 2)}` : '—'}
-              cor="text-destructive" nota="custo · à cooperativa" />
+              cor="text-destructive" nota="custo · à indústria" />
           </div>
 
           {/* ── 3. A CLASSIFICAÇÃO + OS GRÁFICOS, LADO A LADO ──
@@ -343,12 +343,18 @@ export function AnaliseProducaoModal({
                   key={titulo}
                   titulo={titulo}
                   legenda={`verde × boas × roça, em ${un}`}
-                  larguraMax={230}
-                  altura={84}
-                  larguraBarra={18}
-                  fonteValor={10}
-                  preencherLargura={false}
+                  larguraMax={158}
+                  altura={118}
+                  larguraBarra={30}
+                  fonteValor={15}
+                  distribuir
                   barras={[
+                    /* ⚠ O MESMO FORMATO NAS TRÊS — inteiro com separador de milhar. É a única
+                       regra que se aplica igual a 9.100,00, 7.746,65 e 620,63; a casa decimal
+                       não cabe (em 15px, "7.746,65" pede ~64px numa coluna de ~46px).
+                       ⚠ E ARREDONDA, não trunca: 620,63 vira 621. O mock mostra 620, mas ele
+                       trunca a roça enquanto arredonda as boas (7.746,65 → 7.747) — duas regras
+                       na mesma linha. Uma só, e é a que soma certo. */
                     { rotulo: 'verde', valor: verde, cor: 'bg-primary',
                       texto: verde == null ? '—' : formatNum(verde, 0) },
                     { rotulo: 'boas', valor: boas, cor: 'bg-success',
