@@ -36,11 +36,75 @@ import { NIVEIS_DRILL, type ItemDrill } from '@/lib/analise/drillEconomico';
 const TH = 'bg-primary px-2 py-1 text-[9px] font-semibold uppercase tracking-wide'
   + ' text-primary-foreground';
 
-function Cartao({ rotulo, valor, nota }: { rotulo: string; valor: string; nota?: string }) {
+/**
+ * O CABEÇALHO CINZA DAS TABELAS DE APOIO — talhão e histórico.
+ *
+ * ⚠ DOIS AZUIS SEGUIDOS VIRAM UM SÓ. O DRE e o Investimento são a resposta principal e ficam no
+ * azul da casa; talhão e histórico são leitura de apoio, e repetir o azul neles fazia quatro
+ * faixas iguais empilhadas — o olho perdia onde uma seção terminava e a outra começava.
+ * ⚠ O CINZA NÃO É NOVO: é o `PALETA.CINZA_CABECALHO` do chassi do PDF (88,96,105), já usado no
+ * cabeçalho e no total das tabelas impressas. Papel e tela passam a falar a mesma língua.
+ */
+const TH_CINZA = 'bg-[#58606a] px-2 py-1 text-[9px] font-semibold uppercase tracking-wide'
+  + ' text-white';
+
+/**
+ * A ZEBRA, LINHA A LINHA — e explicitamente, nunca por `:nth-child`.
+ *
+ * ⚠ O SELETOR NÃO PEGA AQUI, e o mock provou: `odd:`/`nth-child` contam o `<tr>` DENTRO do pai,
+ * e o corpo destas tabelas é montado por `map` com linhas condicionais ao redor — basta uma
+ * linha aparecer ou sumir (uma safra sem colheita, um talhão a menos) para toda a alternância
+ * inverter. Pintar pelo índice do dado é o que mantém a faixa onde ela estava.
+ */
+const zebra = (i: number) => (i % 2 === 0 ? 'bg-card' : 'bg-muted/40');
+
+/**
+ * AS LARGURAS DO DRE — e do Investimento, que usa as MESMAS.
+ *
+ * ⚠ UMA CONSTANTE, NÃO DOIS LITERAIS IGUAIS. As duas tabelas ficam coladas uma sob a outra e
+ * precisam de "R$ total sob R$ total"; com o array escrito duas vezes, o primeiro ajuste de
+ * coluna desalinharia as duas e ninguém veria até alguém conferir com régua.
+ */
+const COLS_DRE = ['40%', '17%', '16%', '11%', '16%'];
+
+/**
+ * ⚠ A UNIDADE SOBE PARA O RÓTULO, e é o que impede o corte — item 2 do F2.
+ *
+ * MEDIDO com a fonte compilada, e o corte é ESTRUTURAL, não de tamanho: o bloco Colheita tem
+ * cinco cartões em meia tela, o que dá ~88px de texto por cartão em 1440 e ~72px em 1280.
+ * "R$ 2.742.022,26" pede 157px em 20px e ainda 107px em 13px — não existe fonte acima do piso
+ * que o faça caber. O maior número real da base é 6.087.725,25 (investimento da 25/26), então
+ * não é caso de borda.
+ * ⚠ TRÊS CORTES, NESTA ORDEM, cada um medido: o "R$ " sai do número e vira unidade de 9px no
+ * rótulo (−20px); os centavos saem (−20px); e a fonte do bloco denso cai para 13px. Só o
+ * conjunto cabe: 65,9px contra os 72px disponíveis na tela mais estreita.
+ * ⚠ OS CENTAVOS NÃO SE PERDEM — eles seguem no `title` e, exatos, na tabela do DRE logo abaixo.
+ * O cartão é o relance; a conferência é a tabela.
+ */
+function Cartao({ rotulo, valor, nota, unidade, titulo, denso }: {
+  rotulo: string;
+  valor: string;
+  nota?: string;
+  /** "R$", "ha", "sc" — some do número e aparece ao lado do rótulo, em 9px. */
+  unidade?: string;
+  /** O valor por extenso, com centavos, no hover. */
+  titulo?: string;
+  /** O bloco tem cinco cartões em meia tela: 13px em vez de 20px. */
+  denso?: boolean;
+}) {
   return (
     <div className="min-w-0 rounded-md border bg-card px-2.5 py-1.5">
-      <div className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">{rotulo}</div>
-      <div className="mt-0.5 truncate text-[20px] font-medium leading-none tabular-nums">{valor}</div>
+      <div className="flex items-baseline gap-1 text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
+        <span className="min-w-0 truncate">{rotulo}</span>
+        {unidade && <span className="shrink-0 normal-case opacity-70">{unidade}</span>}
+      </div>
+      {/* ⚠ O `truncate` FICA como última defesa, mesmo com a conta fechando: uma safra futura
+          pode passar da casa dos milhões, e cortar com o inteiro no `title` é melhor que empurrar
+          o cartão vizinho para fora do bloco. */}
+      <div className={cn('mt-0.5 truncate font-medium leading-none tabular-nums',
+        denso ? 'text-[13px]' : 'text-[20px]')} title={titulo}>
+        {valor}
+      </div>
       {/* ⚠ ALTURA RESERVADA MESMO SEM NOTA: sem o `min-h`, um cartão com nota e outro sem
           teriam alturas diferentes na mesma linha, e a régua de cima dançaria ao trocar de
           safra. */}
@@ -58,12 +122,23 @@ function Cartao({ rotulo, valor, nota }: { rotulo: string; valor: string; nota?:
  * leitura.
  */
 function Linha({
-  rotulo, valor, area, sacas, nivel, cor, nota, onAbrir,
+  rotulo, valor, area, sacas, nivel, cor, nota, onAbrir, pct,
 }: {
   rotulo: string;
   valor: number;
   area: number;
   sacas: number;
+  /**
+   * A participação da linha no custeio total, em %. `undefined` = a coluna fica VAZIA.
+   *
+   * ⚠ SÓ AS NATUREZAS TÊM: a participação de "Custeio total" em si mesmo seria 100% — um número
+   * que não informa nada e ainda compete com os que informam. Faturamento e Saldo não são parte
+   * do custeio, então para eles a pergunta nem existe.
+   * ⚠ CALCULADO NO FRONT, sem RPC nova: a RPC já manda o valor de cada natureza, e o custeio
+   * total já é somado aqui por `custeioTotal`. Pedir o percentual ao banco seria criar uma
+   * segunda fonte para uma divisão.
+   */
+  pct?: number;
   /** 'destaque' = 14px negrito; 'item' = 11px recuado cinza; 'saldo' = 15px negrito. */
   nivel: 'destaque' | 'item' | 'saldo';
   cor?: string;
@@ -81,7 +156,11 @@ function Linha({
 }) {
   const destaque = nivel === 'destaque';
   const saldo = nivel === 'saldo';
-  const td = 'px-2 py-0.5 text-right tabular-nums';
+  /* ⚠ A ALTURA ACOMPANHA A FONTE, e é metade da hierarquia: só aumentar o corpo do total sem
+     lhe dar ar deixa o número grande espremido entre duas naturezas, e a linha que devia
+     descansar o olho vira a mais apertada da tabela. */
+  const pad = nivel === 'item' ? 'py-0.5' : 'py-1';
+  const td = `px-2 ${pad} text-right tabular-nums`;
   return (
     /* ⚠ O `hover` E O `cursor` SÓ EXISTEM QUANDO HÁ O QUE ABRIR: uma linha que muda de cor ao
        passar o mouse e não faz nada ao clique é pior que uma linha inerte — ela promete. */
@@ -94,25 +173,30 @@ function Linha({
       onKeyDown={onAbrir
         ? e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onAbrir(); } }
         : undefined}>
-      <td className={cn('px-2 py-0.5',
-        destaque && 'text-[14px] font-bold',
-        saldo && 'text-[15px] font-bold',
+      <td className={cn('px-2', pad,
+        destaque && 'text-[15px] font-bold',
+        saldo && 'text-[17px] font-bold',
         nivel === 'item' && 'pl-6 text-[11px] text-muted-foreground')}>
         {rotulo}
         {/* ⚠ "estimado" FICA COLADO NO RÓTULO, não numa coluna própria: é qualidade do número,
             e quem lê a linha tem de ver a ressalva sem procurar. */}
         {nota && <span className="ml-1 text-[9px] font-normal text-amber-600">{nota}</span>}
       </td>
-      <td className={cn(td, destaque && 'text-[14px] font-bold', saldo && 'text-[15px] font-bold',
-        nivel === 'item' && 'text-[11px] text-muted-foreground', cor)}>
+      <td className={cn(td, destaque && 'text-[15px] font-bold', saldo && 'text-[17px] font-bold',
+        nivel === 'item' && 'text-[11px]', cor)}>
         {formatMoeda(valor)}
       </td>
-      <td className={cn(td, destaque && 'text-[14px] font-bold', saldo && 'text-[15px] font-bold',
-        nivel === 'item' && 'text-[11px] text-muted-foreground', cor)}>
+      <td className={cn(td, destaque && 'text-[15px] font-bold', saldo && 'text-[17px] font-bold',
+        nivel === 'item' && 'text-[11px]', cor)}>
         {formatMoeda(porHa(valor, area))}
       </td>
-      <td className={cn(td, destaque && 'text-[14px] font-bold', saldo && 'text-[15px] font-bold',
-        nivel === 'item' && 'text-[11px] text-muted-foreground', cor)}>
+      {/* ⚠ A % FICA CINZA MESMO NA LINHA VERMELHA: ela não é dinheiro, é proporção — pintá-la
+          de vermelho junto faria três colunas gritando a mesma coisa e nenhuma sobressaindo. */}
+      <td className={cn(td, nivel === 'item' && 'text-[11px]', 'text-muted-foreground')}>
+        {pct == null ? '' : `${formatNum(pct, 1)}%`}
+      </td>
+      <td className={cn(td, destaque && 'text-[15px] font-bold', saldo && 'text-[17px] font-bold',
+        nivel === 'item' && 'text-[11px]', cor)}>
         {formatMoeda(porSaca(valor, sacas))}
       </td>
     </tr>
@@ -266,41 +350,72 @@ export function PainelSafraTab() {
         </div>
       )}
 
-      {/* ── PLANTIO E COLHEITA ──
+      {/* ── PLANTIO E COLHEITA — A FAIXA QUE FICA ──
           ⚠ OS DOIS BLOCOS FICAM SEMPRE, com os mesmos cartões, mesmo zerados. Safra sem colheita
-          mostra zero — que é a verdade — em vez de sumir com metade da tela. */}
-      <div className="grid gap-2 md:grid-cols-2">
+          mostra zero — que é a verdade — em vez de sumir com metade da tela.
+          ⚠ E AGORA ELES NÃO SAEM DA TELA (A21): as tabelas rolam POR BAIXO desta faixa. Área,
+          custeio/ha e sc/ha são a régua contra a qual cada linha do DRE é lida — rolar até o
+          histórico e não ter mais o denominador à vista é o que obrigava a subir e descer.
+          ⚠ QUEM ROLA É A `<section>` DO V2INDEX, conferido antes de escrever `sticky`: a seção
+          `painel-safra` não está em `SECOES_APP_SHELL`, então cai no ramo
+          `flex-1 min-h-0 overflow-auto` — é NELA que o `top-0` ancora. Sem essa conferência o
+          `sticky` gruda num scrollport que não existe e a faixa sobe junto com a página, que é
+          o defeito que a lista de movimentações já teve duas vezes.
+          ⚠ `-mx-4 px-4` PARA COBRIR O `p-4` DO CONTAINER: sem isso a faixa é mais estreita que
+          as tabelas, e as linhas passam pelos dois vãos laterais por cima dela. E o fundo é
+          `bg-background` OPACO — translúcido seria pior que não fixar, porque o número que se
+          está conferindo ficaria com a tabela correndo por dentro.
+          ⚠ `-mt-2 pt-2` CANCELA O `space-y-2` acima dela: o respiro do irmão anterior viraria
+          uma fresta transparente no topo quando a faixa gruda. */}
+      <div className="sticky top-0 z-20 -mx-4 -mt-2 grid gap-2 bg-background px-4 pb-2 pt-2
+        md:grid-cols-2">
         <div className="rounded-md border p-2">
           <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Plantio</div>
+          {/* ⚠ TRÊS CARTÕES EM MEIA TELA CABEM EM 20px — medido: ~167px de texto cada, e o
+              maior número real pede 101px. Só o bloco de CINCO é que aperta. */}
           <div className="grid grid-cols-3 gap-1.5">
-            <Cartao rotulo="Área" valor={`${formatNum(area, 2)} ha`} />
-            <Cartao rotulo="Custeio total" valor={formatMoeda(custeio)} />
-            <Cartao rotulo="Custeio / ha" valor={formatMoeda(porHa(custeio, area))} />
+            <Cartao rotulo="Área" unidade="ha" valor={formatNum(area, 2)} />
+            <Cartao rotulo="Custeio total" unidade="R$" valor={formatNum(custeio, 0)}
+              titulo={formatMoeda(custeio)} />
+            <Cartao rotulo="Custeio / ha" unidade="R$" valor={formatNum(porHa(custeio, area), 0)}
+              titulo={formatMoeda(porHa(custeio, area))} />
           </div>
         </div>
         <div className="rounded-md border p-2">
           <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Colheita</div>
+          {/* ⚠ O BLOCO DENSO: cinco cartões em meia tela. Todos em 13px, inclusive os curtos —
+              três tamanhos numa fila só fariam o olho ler uma hierarquia que não existe entre
+              eles. `R$ / sc` MANTÉM OS CENTAVOS, e é a exceção com motivo: é um PREÇO, e 90
+              contra 90,37 é a diferença que o produtor negocia; ele cabe folgado (43px). */}
           <div className="grid grid-cols-5 gap-1.5">
-            <Cartao rotulo="sc / ha" valor={formatNum(painel?.sacas_ha ?? 0, 2)} />
-            <Cartao rotulo="R$ / sc" valor={formatMoeda(porSaca(painel?.faturamento ?? 0, sacas))} />
-            <Cartao rotulo="Total sc" valor={formatNum(sacas, 2)} nota="boas + roça" />
-            <Cartao rotulo="Faturamento" valor={formatMoeda(painel?.faturamento ?? 0)} />
-            <Cartao rotulo="Fat. / ha" valor={formatMoeda(porHa(painel?.faturamento ?? 0, area))} />
+            <Cartao denso rotulo="sc / ha" valor={formatNum(painel?.sacas_ha ?? 0, 2)} />
+            <Cartao denso rotulo="R$ / sc" unidade="R$"
+              valor={formatNum(porSaca(painel?.faturamento ?? 0, sacas), 2)} />
+            <Cartao denso rotulo="Total sc" unidade="sc" valor={formatNum(sacas, 2)} nota="boas + roça" />
+            <Cartao denso rotulo="Faturamento" unidade="R$"
+              valor={formatNum(painel?.faturamento ?? 0, 0)}
+              titulo={formatMoeda(painel?.faturamento ?? 0)} />
+            <Cartao denso rotulo="Fat. / ha" unidade="R$"
+              valor={formatNum(porHa(painel?.faturamento ?? 0, area), 0)}
+              titulo={formatMoeda(porHa(painel?.faturamento ?? 0, area))} />
           </div>
         </div>
       </div>
 
-      {/* ── O DRE DO CICLO ── */}
+      {/* ── O DRE DO CICLO ──
+          ⚠ CINCO COLUNAS AGORA, e as MESMAS cinco no Investimento logo abaixo: as duas tabelas
+          ficam uma sob a outra e um colgroup diferente faria o olho reancorar entre elas. */}
       <div className="overflow-hidden rounded-md border">
         <table className="w-full table-fixed border-collapse">
           <colgroup>
-            {['46%', '18%', '18%', '18%'].map((w, i) => <col key={i} style={{ width: w }} />)}
+            {COLS_DRE.map((w, i) => <col key={i} style={{ width: w }} />)}
           </colgroup>
           <thead>
             <tr>
               <th className={cn(TH, 'text-left')}>Linha</th>
               <th className={cn(TH, 'text-right')}>R$ total</th>
               <th className={cn(TH, 'text-right')}>R$ / ha</th>
+              <th className={cn(TH, 'text-right')}>%</th>
               <th className={cn(TH, 'text-right')}>R$ / sc</th>
             </tr>
           </thead>
@@ -309,26 +424,36 @@ export function PainelSafraTab() {
               area={area} sacas={sacas} nivel="destaque" cor="text-success" />
             {(painel?.deducoes ?? 0) !== 0 && (
               <Linha rotulo="Deduções" valor={painel?.deducoes ?? 0}
-                area={area} sacas={sacas} nivel="item" />
+                area={area} sacas={sacas} nivel="item" cor="text-destructive" />
             )}
 
             <Linha rotulo="Custeio total" valor={custeio}
               area={area} sacas={sacas} nivel="destaque" cor="text-destructive" />
             {naturezas.map(n => (
               <Linha key={n.centro} rotulo={n.centro} valor={n.valor}
-                area={area} sacas={sacas} nivel="item"
+                area={area} sacas={sacas} nivel="item" cor="text-destructive"
+                pct={custeio > 0 ? (n.valor / custeio) * 100 : undefined}
                 onAbrir={() => setDrill({ tipo: 'centro', chave: n.centro, rotulo: n.centro })} />
             ))}
             {/* ⚠ LINHA PRÓPRIA, E MARCADA. O rateio administrativo não tem centro de custo: ele é
                 repartido por janela de datas e peso da cultura. Somado às naturezas viraria um
                 centro que não existe; fora da conta, o custeio não fecharia com o DRE. */}
+            {/* ⚠ O "estimado" SAIU DO RÓTULO (decisão do Gabriel), mas a ressalva NÃO sumiu da
+                tela: ela segue no comentário acima e, para o operador, no rodapé do comparativo,
+                que explica que o rateio entra por janela de datas. O que se tirou foi o adjetivo
+                colado no nome — não a informação.
+                ⚠ E O COMENTÁRIO FICA AQUI FORA, nunca como primeiro filho de `cond && (…)`: ali
+                ele é uma EXPRESSÃO de objeto vazio para o parser, não um comentário, e derruba o
+                build com TS1005. Já aconteceu duas vezes neste repo. */}
             {(painel?.rateio_admin ?? 0) !== 0 && (
               <Linha rotulo="Rateio administrativo" valor={painel?.rateio_admin ?? 0}
-                area={area} sacas={sacas} nivel="item" nota="estimado" />
+                area={area} sacas={sacas} nivel="item" cor="text-destructive"
+                pct={custeio > 0 ? ((painel?.rateio_admin ?? 0) / custeio) * 100 : undefined} />
             )}
             {(painel?.juros ?? 0) !== 0 && (
               <Linha rotulo="Juros" valor={painel?.juros ?? 0}
-                area={area} sacas={sacas} nivel="item"
+                area={area} sacas={sacas} nivel="item" cor="text-destructive"
+                pct={custeio > 0 ? ((painel?.juros ?? 0) / custeio) * 100 : undefined}
                 onAbrir={() => setDrill({
                   tipo: 'grupo', chave: 'Juros de Financiamento Agricultura', rotulo: 'Juros',
                 })} />
@@ -349,13 +474,18 @@ export function PainelSafraTab() {
         <div className="overflow-hidden rounded-md border">
           <table className="w-full table-fixed border-collapse">
             <colgroup>
-              {['46%', '18%', '18%', '18%'].map((w, i) => <col key={i} style={{ width: w }} />)}
+              {COLS_DRE.map((w, i) => <col key={i} style={{ width: w }} />)}
             </colgroup>
             <thead>
+              {/* ⚠ AS CINCO COLUNAS DO DRE, DUAS DELAS VAZIAS DE PROPÓSITO. "% do custeio" não
+                  existe para investimento — ele está FORA do custeio — e "R$/saca de um trator"
+                  não quer dizer nada. Vazias, elas mantêm R$ total sob R$ total; removidas,
+                  as duas tabelas deixariam de se ler como uma coluna só. */}
               <tr>
                 <th className={cn(TH, 'text-left')}>Investimento na abertura</th>
                 <th className={cn(TH, 'text-right')}>R$ total</th>
                 <th className={cn(TH, 'text-right')}>R$ / ha</th>
+                <th className={TH} />
                 <th className={TH} />
               </tr>
             </thead>
@@ -375,23 +505,29 @@ export function PainelSafraTab() {
                     }
                   }}>
                   <td className="px-2 py-0.5 pl-6 text-[11px] text-muted-foreground">{t.tipo}</td>
-                  <td className="px-2 py-0.5 text-right text-[11px] tabular-nums text-muted-foreground">
+                  <td className="px-2 py-0.5 text-right text-[11px] tabular-nums text-destructive">
                     {formatMoeda(t.valor)}
                   </td>
-                  <td className="px-2 py-0.5 text-right text-[11px] tabular-nums text-muted-foreground">
+                  <td className="px-2 py-0.5 text-right text-[11px] tabular-nums text-destructive">
                     {formatMoeda(t.valor_ha)}
                   </td>
                   <td />
+                  <td />
                 </tr>
               ))}
-              <tr className="border-t-2 border-slate-300">
-                <td className="px-2 py-0.5 text-[14px] font-bold">Total investido</td>
-                <td className="px-2 py-0.5 text-right text-[14px] font-bold tabular-nums">
+              {/* ⚠ FAIXA ESCURA NO TOTAL, o mesmo `bg-primary` do cabeçalho: as duas bordas da
+                  tabela fecham iguais, como no `tfoot` das listas da colheita. Aqui ela substitui
+                  o negrito solto sobre fundo branco, que se confundia com mais uma linha de
+                  investimento. */}
+              <tr className="bg-primary text-primary-foreground">
+                <td className="px-2 py-1 text-[15px] font-bold">Total investido</td>
+                <td className="px-2 py-1 text-right text-[15px] font-bold tabular-nums">
                   {formatMoeda(painel?.investimento ?? 0)}
                 </td>
-                <td className="px-2 py-0.5 text-right text-[14px] font-bold tabular-nums">
+                <td className="px-2 py-1 text-right text-[15px] font-bold tabular-nums">
                   {formatMoeda(porHa(painel?.investimento ?? 0, area))}
                 </td>
+                <td />
                 <td />
               </tr>
             </tbody>
@@ -412,17 +548,18 @@ export function PainelSafraTab() {
             </colgroup>
             <thead>
               <tr>
-                <th className={cn(TH, 'text-left')}>Talhão</th>
-                <th className={cn(TH, 'text-left')}>Variedade</th>
-                <th className={cn(TH, 'text-right')}>Área ha</th>
-                <th className={cn(TH, 'text-right')}>Sacas</th>
-                <th className={cn(TH, 'text-right')}>sc / ha</th>
-                <th className={cn(TH, 'text-right')}>Cargas</th>
+                <th className={cn(TH_CINZA, 'text-left')}>Talhão</th>
+                <th className={cn(TH_CINZA, 'text-left')}>Variedade</th>
+                <th className={cn(TH_CINZA, 'text-right')}>Área ha</th>
+                <th className={cn(TH_CINZA, 'text-right')}>Sacas</th>
+                <th className={cn(TH_CINZA, 'text-right')}>sc / ha</th>
+                <th className={cn(TH_CINZA, 'text-right')}>Cargas</th>
               </tr>
             </thead>
             <tbody>
               {painel?.talhoes.map((t, i) => (
-                <tr key={`${t.talhao}·${t.variedade ?? ''}`} className="border-t border-slate-100">
+                <tr key={`${t.talhao}·${t.variedade ?? ''}`}
+                  className={cn('border-t border-slate-100', zebra(i))}>
                   <td className="truncate px-2 py-0.5 text-[11px]" title={t.talhao}>{t.talhao}</td>
                   {/* ⚠ `—` PARA VARIEDADE NULA: a coluna existe sempre, porque some-la quando
                       nenhum talhão tem variedade faria a tabela mudar de forma entre safras. */}
@@ -462,21 +599,25 @@ export function PainelSafraTab() {
               </colgroup>
               <thead>
                 <tr>
-                  <th className={cn(TH, 'text-left')}>Safra</th>
-                  <th className={cn(TH, 'text-right')}>Área ha</th>
-                  <th className={cn(TH, 'text-right')}>Sacas</th>
-                  <th className={cn(TH, 'text-right')}>sc / ha</th>
-                  <th className={cn(TH, 'text-right')}>Receita / ha</th>
-                  <th className={cn(TH, 'text-right')}>Custeio direto</th>
-                  <th className={cn(TH, 'text-right')}>% roça</th>
+                  <th className={cn(TH_CINZA, 'text-left')}>Safra</th>
+                  <th className={cn(TH_CINZA, 'text-right')}>Área ha</th>
+                  <th className={cn(TH_CINZA, 'text-right')}>Sacas</th>
+                  <th className={cn(TH_CINZA, 'text-right')}>sc / ha</th>
+                  <th className={cn(TH_CINZA, 'text-right')}>Receita / ha</th>
+                  <th className={cn(TH_CINZA, 'text-right')}>Custeio direto</th>
+                  <th className={cn(TH_CINZA, 'text-right')}>% roça</th>
                 </tr>
               </thead>
               <tbody>
-                {comparadas.map(sf => {
+                {comparadas.map((sf, i) => {
                   const atual = sf.safra_id === safraId;
                   return (
+                    /* ⚠ A MARCA DA SAFRA ABERTA VENCE A ZEBRA, nesta ordem: as duas pintam o
+                       fundo, e se a zebra viesse depois ela apagaria justamente a linha que o
+                       operador precisa achar. */
                     <tr key={sf.safra_id}
-                      className={cn('border-t border-slate-100', atual && 'bg-primary/[0.06]')}>
+                      className={cn('border-t border-slate-100',
+                        atual ? 'bg-primary/[0.06]' : zebra(i))}>
                       <td className="truncate px-2 py-0.5 text-[11px]">
                         {/* ⚠ A SAFRA ABERTA FICA MARCADA: sem isso o operador compara quatro linhas
                             sem saber qual delas é a que os cards acima estão descrevendo. */}
@@ -498,13 +639,21 @@ export function PainelSafraTab() {
                       <td className="px-2 py-0.5 text-right text-[11px] font-medium tabular-nums">
                         {colheu(sf) ? formatNum(sf.sacas_ha, 2) : '—'}
                       </td>
-                      <td className="px-2 py-0.5 text-right text-[11px] tabular-nums">
+                      {/* ⚠ A COR SEGUE O SINAL DO DINHEIRO, não a coluna: receita verde,
+                          custeio e roça vermelhos — o mesmo par do DRE acima, para as duas
+                          tabelas se lerem com a mesma convenção.
+                          ⚠ O "—" NÃO GANHA COR. Ausência não é receita nem gasto; pintá-la de
+                          verde diria que a safra faturou nada, que é diferente de não se saber. */}
+                      <td className={cn('px-2 py-0.5 text-right text-[11px] tabular-nums',
+                        sf.receita > 0 && 'text-success')}>
                         {sf.receita > 0 ? formatMoeda(sf.receita_ha) : '—'}
                       </td>
-                      <td className="px-2 py-0.5 text-right text-[11px] tabular-nums">
+                      <td className={cn('px-2 py-0.5 text-right text-[11px] tabular-nums',
+                        sf.custeio_direto > 0 && 'text-destructive')}>
                         {sf.custeio_direto > 0 ? formatMoeda(sf.custeio_direto) : '—'}
                       </td>
-                      <td className="px-2 py-0.5 text-right text-[11px] tabular-nums">
+                      <td className={cn('px-2 py-0.5 text-right text-[11px] tabular-nums',
+                        colheu(sf) && sf.pct_roca > 0 && 'text-destructive')}>
                         {colheu(sf) ? `${formatNum(sf.pct_roca, 1)}%` : '—'}
                       </td>
                     </tr>
