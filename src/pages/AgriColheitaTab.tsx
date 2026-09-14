@@ -121,20 +121,24 @@ export function AgriColheitaTab() {
     () => linhas.filter(l => idsDaLista.has(l.safra_area_id)), [linhas, idsDaLista]);
 
   /**
-   * O CONSOLIDADO É DA CULTURA — mudou no PR-POR-CULTURA-11.
+   * O CONSOLIDADO É DO RECORTE — o MESMO da lista (PR-AGRI-COLHEITA-CARDS-FILTRO-TALHAO).
    *
-   * ⚠ ANTES ELE ERA DA SAFRA, e por isso a produtividade ficava em branco sempre que a safra
-   * tinha duas culturas — que é o caso da 25/26. Com a cultura no seletor, o recorte tem uma
-   * unidade só: as sacas por hectare voltam a significar alguma coisa, e a área é a SOMA dos
-   * talhões daquela cultura (24/25 amendoim = 186,5 ha), não a da safra inteira.
+   * ⚠ ELE ERA DA CULTURA INTEIRA, E ISSO ERA DEFEITO. A lista filtrava por `idsDaLista`, que
+   * respeita o talhão escolhido, e os cards somavam `idsDaCultura`, que ignora: com o Ind 02
+   * selecionado a lista mostrava 14 cargas e 14.503,74 sc enquanto os cards logo acima diziam
+   * 28.156 sc — os dois talhões. Duas respostas para a mesma pergunta, na mesma tela, e a de
+   * cima é a que o operador lê primeiro.
+   * ⚠ E A PRODUTIVIDADE ERRAVA DUAS VEZES: sacas da cultura inteira divididas pela área da
+   * cultura inteira. Com um talhão filtrado, nem o numerador nem o denominador eram dele.
+   * ⚠ AGORA HÁ UMA FONTE SÓ: `doRecorte` alimenta a lista E o consolidado, e a área é a dos
+   * talhões que o recorte contém. "Todos os talhões" continua dando o total da cultura, porque
+   * aí `talhoesDaLista` É `talhoesDaCultura` — o caso geral não precisou de exceção.
    */
-  const areaDaCultura = useMemo(
-    () => talhoesDaCultura.reduce((s, t) => s + t.area_plantada_ha, 0), [talhoesDaCultura]);
-  const idsDaCultura = useMemo(
-    () => new Set(talhoesDaCultura.map(t => t.id)), [talhoesDaCultura]);
+  const areaDoRecorte = useMemo(
+    () => talhoesDaLista.reduce((s, t) => s + t.area_plantada_ha, 0), [talhoesDaLista]);
 
   const totais = useMemo(() => {
-    const comoForm = linhas.filter(l => idsDaCultura.has(l.safra_area_id)).map(l => ({
+    const comoForm = doRecorte.map(l => ({
       id: l.id, dataColheita: l.data_colheita ?? '', ticketBalanca: '', nfProdutor: '', filial: '',
       horaChegada: '',
       pesoVerdeKg: String(l.peso_verde_kg ?? ''), pesoSecoKg: String(l.peso_seco_kg ?? ''),
@@ -143,8 +147,8 @@ export function AgriColheitaTab() {
       graoRocaKg: String(l.grao_roca_kg ?? ''), rendaLiquidaPct: '',
       taxaSecagem: '', valorSecagem: String(l.valor_secagem ?? ''), observacoes: '',
     })) as CargaForm[];
-    return totaisColheita(comoForm, culturaSel || null, areaDaCultura);
-  }, [linhas, idsDaCultura, culturaSel, areaDaCultura]);
+    return totaisColheita(comoForm, culturaSel || null, areaDoRecorte);
+  }, [doRecorte, culturaSel, areaDoRecorte]);
 
   const unidade = unidadeDaCultura(culturaSel || null);
   const safraLabel = safras.find(s => s.id === safraId);
@@ -183,7 +187,7 @@ export function AgriColheitaTab() {
       cultura: culturaSel,
       talhao: talhaoSel ? talhaoSel.pastoNome : 'Todos os talhões',
       /* A área do RECORTE: do talhão aberto, ou a soma dos da cultura em "Todos". */
-      areaHa: talhoesDaLista.reduce((acc, t) => acc + t.area_plantada_ha, 0) || null,
+      areaHa: areaDoRecorte || null,
       comAnalise,
     };
     if (formato === 'xlsx') exportarColheitaXlsx(linhasParaExport, totais, ctx);
@@ -311,7 +315,10 @@ export function AgriColheitaTab() {
             {safraLabel?.codigo || safraLabel?.nome || '—'}
             {culturaSel && ` · ${labelDaCultura(culturaSel)}`}
             {' · '}{totais.cargas} {totais.cargas === 1 ? 'carga' : 'cargas'}
-            {talhoesDaCultura.length > 1 && ` · ${talhoesDaCultura.length} talhões`}
+            {/* ⚠ CONTA OS TALHÕES DO RECORTE, não os da cultura: com o Ind 02 filtrado a linha
+                dizia "2 talhões" ao lado de números de um só. */}
+            {talhoesDaLista.length > 1 && ` · ${talhoesDaLista.length} talhões`}
+            {talhaoSel && ` · ${talhaoSel.pastoNome}`}
           </span>
         </div>
       </div>
@@ -325,7 +332,7 @@ export function AgriColheitaTab() {
         onFechar={() => setAnaliseAberta(false)}
         totais={totais}
         cultura={culturaSel || null}
-        areaHa={areaDaCultura || null}
+        areaHa={areaDoRecorte || null}
         safraRotulo={safraLabel?.codigo || safraLabel?.nome || ''}
       />
 
