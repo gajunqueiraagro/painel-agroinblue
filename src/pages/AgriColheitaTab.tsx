@@ -44,18 +44,30 @@ const TODOS = '__todos__';
  * lugar nenhum não deve ter cursor de mão. Sem `onAbrir`, ele continua exatamente como era.
  */
 /**
- * ⚠ DUAS LINHAS ALINHADAS — Grupo 2 do LAYOUT. O peso vive em duas unidades ao mesmo tempo: o
- * romaneio vem em quilo e o acerto com a cooperativa é em saca. Mostrar só uma obrigava o
- * produtor a converter de cabeça no meio da conferência.
- * ⚠ A SEGUNDA LINHA OCUPA ALTURA SEMPRE, com ou sem conteúdo: cards com e sem conversão na mesma
- * grade teriam alturas diferentes, e a régua de cima dançaria ao trocar de safra.
+ * UM CARD DA RÉGUA — PR-COLHEITA-TELA-PRINCIPAL-REORG.
+ *
+ * ⚠ QUATRO FAIXAS DE ALTURA FIXA, iguais em todos os cards: rótulo (reservado para DUAS linhas),
+ * valor, primeira sublinha (kg) e segunda (sc/ha). É `gridTemplateRows` declarado, não
+ * empilhamento livre — com empilhamento, um rótulo de uma linha sobe o número e a régua se
+ * quebra entre vizinhos. "Quebra" e "Secagem" não têm sc/ha e mantêm a quarta faixa VAZIA.
+ *
+ * ⚠ A UNIDADE ENCOLHE, O NÚMERO NÃO — lei anti-estouro. O que estoura um card é o dígito, não a
+ * unidade: uma safra de 44 mil sacas escreve "1.192.660,00" no quilo. Encolher a unidade devolve
+ * largura ao número sem tirar destaque dele. `tabular-nums` em tudo, para todo dígito ocupar o
+ * mesmo espaço e a régua não dançar quando o valor muda.
+ * ⚠ E NADA QUEBRA LINHA: `whitespace-nowrap` nas quatro faixas. Um número partido em duas linhas
+ * empurraria as sublinhas e desalinharia a régua inteira — pior do que apertado.
  */
-function Metrica({ rotulo, valor, sufixo, segunda, destaque, cor, onAbrir }: {
-  rotulo: string; valor: string; sufixo?: string;
-  /** A mesma grandeza na outra unidade — menor, embaixo. */
+function Metrica({ rotulo, valor, sufixo, segunda, terceira, destaque, cor, onAbrir }: {
+  rotulo: string;
+  valor: string;
+  /** sc, kg, %, R$ — sempre menor que o número. */
+  sufixo?: string;
+  /** A primeira sublinha: o quilo. */
   segunda?: string;
+  /** A segunda sublinha: o por-hectare. Vazia em Quebra e Secagem, com a faixa reservada. */
+  terceira?: string;
   destaque?: boolean;
-  /** Classe de cor do número principal. Secagem é custo: vermelho. */
   cor?: string;
   onAbrir?: () => void;
 }) {
@@ -65,15 +77,28 @@ function Metrica({ rotulo, valor, sufixo, segunda, destaque, cor, onAbrir }: {
       tabIndex={onAbrir ? 0 : undefined}
       role={onAbrir ? 'button' : undefined}
       title={onAbrir ? 'Abrir a análise de produção da safra' : undefined}
-      className={cn('rounded-md border bg-card px-2.5 py-1.5',
-        onAbrir && 'cursor-pointer transition-colors hover:border-primary hover:bg-accent/40')}>
-      <div className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">{rotulo}</div>
-      <div className={cn('mt-0.5 tabular-nums leading-none',
-        destaque ? 'text-[16px] font-medium' : 'text-[13px]', cor ?? 'text-foreground')}>
-        {valor}{sufixo && <span className="ml-0.5 text-[10px] text-muted-foreground">{sufixo}</span>}
+      className={cn('grid min-w-0 rounded-md border px-2 py-1.5',
+        destaque ? 'border-primary bg-primary text-primary-foreground' : 'bg-card',
+        onAbrir && 'cursor-pointer transition-colors hover:border-primary hover:bg-accent/40')}
+      style={{ gridTemplateRows: '20px 18px 12px 12px' }}>
+      <div className={cn('overflow-hidden text-[9px] font-medium uppercase leading-[10px] tracking-wide',
+        destaque ? 'text-primary-foreground/80' : 'text-muted-foreground')}>
+        {rotulo}
       </div>
-      <div className="mt-0.5 min-h-[12px] text-[10px] leading-none tabular-nums text-muted-foreground">
+      <div className={cn('self-end truncate whitespace-nowrap text-[16px] font-medium leading-none tabular-nums',
+        destaque ? 'text-primary-foreground' : cor ?? 'text-foreground')}>
+        {valor}
+        {/* ⚠ 9px CONTRA 16px: a unidade some do caminho do dígito sem sumir da leitura. */}
+        {sufixo && <span className={cn('ml-0.5 text-[9px] font-normal',
+          destaque ? 'text-primary-foreground/70' : 'text-muted-foreground')}>{sufixo}</span>}
+      </div>
+      <div className={cn('truncate whitespace-nowrap text-[9px] leading-none tabular-nums',
+        destaque ? 'text-primary-foreground/70' : 'text-muted-foreground')}>
         {segunda ?? ''}
+      </div>
+      <div className={cn('truncate whitespace-nowrap text-[9px] leading-none tabular-nums',
+        destaque ? 'text-primary-foreground/70' : 'text-muted-foreground')}>
+        {terceira ?? ''}
       </div>
     </div>
   );
@@ -172,10 +197,12 @@ export function AgriColheitaTab() {
    * peso de saca decidido (`kgPorSaca: null` em `colheita.ts`, de propósito): inventar "0 sc"
    * ali afirmaria uma conversão que ninguém confirmou.
    */
-  const emSacas = (kg: number, sufixo: string) => {
-    const sc = sacasDoPeso(kg, culturaSel || null);
-    return sc == null ? undefined : `${formatNum(sc, 2)} ${sufixo}`;
-  };
+  /* ⚠ O sc/ha SAI DO MESMO `sacas ÷ área` que produz 138,07 e 127,83 — nenhum cálculo novo. */
+  const scHa = (sacas: number | null) => (sacas != null && areaDoRecorte > 0
+    ? `${formatNum(sacas / areaDoRecorte, 2)} ${unidade.unidadeProdutividade}` : undefined);
+  /** A água que saiu na secagem, em sacas — o verde menos o que sobrou de bom. */
+  const aguaEmSacas = totais.verdeEmSacas != null && totais.secoKg > 0
+    ? totais.verdeEmSacas - totais.sacasBoas : null;
   const emKg = (sacas: number) => {
     const kg = pesoDasSacas(sacas, culturaSel || null);
     return kg == null ? undefined : `${formatNum(kg, 2)} kg`;
@@ -295,32 +322,45 @@ export function AgriColheitaTab() {
       {/* ── FIXO: o consolidado da safra ── */}
       <div className="shrink-0 space-y-1.5">
         <div className="grid grid-cols-2 gap-1.5 md:grid-cols-6">
-          {/* ⚠ KG EM CIMA, SACA EMBAIXO nos dois pesos; nas "sacas boas" o inverso, porque o
-              número nativo dela é a saca. A conversão usa `sacasDoPeso`/`pesoDasSacas`, que leem
-              o kg por saca da CULTURA — 25 kg no amendoim, e `null` em quem não tem saca (aí a
-              segunda linha fica vazia, não zero). */}
-          <Metrica rotulo="Peso verde" valor={formatNum(totais.verdeKg, 2)} sufixo="kg" destaque
-            segunda={emSacas(totais.verdeKg, 'sc')} />
-          <Metrica rotulo="Peso seco" valor={totais.secoKg > 0 ? formatNum(totais.secoKg, 2) : '—'}
-            sufixo={totais.secoKg > 0 ? 'kg' : undefined} destaque
-            segunda={emSacas(totais.secoKg, 'sc')} />
-          <Metrica rotulo="Sacas boas" valor={formatNum(totais.sacasBoas, 2)} sufixo="sc" destaque
-            segunda={emKg(totais.sacasBoas)} />
-          <Metrica rotulo="Quebra" valor={totais.quebraPct != null ? formatNum(totais.quebraPct, 1) : '—'} sufixo={totais.quebraPct != null ? '%' : undefined} />
+          {/* ⚠ SEIS CARDS, UMA LINHA, RÉGUA BATIDA — espelha a matriz do modal (c90915fb).
+              ⚠ "PESO SECO" SAIU: mostrava as mesmas sacas de "Sacas boas" e o fluxo caía verde →
+              seco e depois SUBIA para o final aproveitado. E o card avulso de PRODUTIVIDADE saiu
+              também: o sc/ha virou a quarta faixa DE CADA card, que é onde ele se compara com o
+              vizinho em vez de flutuar sozinho no fim da linha.
+              ⚠ A CONVERSÃO USA `sacasDoPeso`/`pesoDasSacas`, que leem o kg por saca da CULTURA —
+              25 kg no amendoim, e `null` em quem não tem saca (aí a faixa fica vazia, não zero). */}
+          <Metrica rotulo="Peso verde"
+            valor={totais.verdeEmSacas != null ? formatNum(totais.verdeEmSacas, 2) : '—'} sufixo="sc"
+            segunda={`${formatNum(totais.verdeKg, 2)} kg`}
+            terceira={scHa(totais.verdeEmSacas)} />
+          <Metrica rotulo="Final aproveitado" destaque
+            valor={formatNum(totais.sacasFinais, 2)} sufixo="sc"
+            segunda={emKg(totais.sacasFinais)}
+            terceira={totais.produtividadeFinal != null
+              ? `${formatNum(totais.produtividadeFinal, 2)} ${unidade.unidadeProdutividade}` : undefined}
+            onAbrir={() => setAnaliseAberta(true)} />
+          <Metrica rotulo="Sacas boas"
+            valor={formatNum(totais.sacasBoas, 2)} sufixo="sc"
+            segunda={emKg(totais.sacasBoas)}
+            terceira={totais.produtividade != null
+              ? `${formatNum(totais.produtividade, 2)} ${unidade.unidadeProdutividade}` : undefined} />
+          {/* ⚠ VERMELHO NOS DOIS ANDARES: a roça é receita, mas é o número que se quer ver cair. */}
+          <Metrica rotulo="Grão de roça" cor="text-destructive"
+            valor={formatNum(totais.graoRocaSacas, 2)} sufixo="sc"
+            segunda={emKg(totais.graoRocaSacas)}
+            terceira={scHa(totais.graoRocaSacas)} />
+          {/* ⚠ A ÁGUA EM SACAS, como no modal: o resto da tela conta em sacas, e só esta linha
+              falava em quilo. A quarta faixa fica VAZIA e reservada — nada sobe. */}
+          <Metrica rotulo="Quebra" cor="text-destructive"
+            valor={totais.quebraPct != null ? formatNum(totais.quebraPct, 1) : '—'}
+            sufixo={totais.quebraPct != null ? '%' : undefined}
+            segunda={aguaEmSacas != null ? `${formatNum(aguaEmSacas, 2)} sc de água` : undefined} />
           {/* ⚠ CUSTO QUE AINDA NÃO É LANÇAMENTO: a secagem aparece para o produtor conferir
               contra o romaneio, e não entra no DRE — ver PR-COLHEITA-SECAGEM-FINANCEIRO. */}
           <Metrica rotulo="Secagem" cor="text-destructive"
-            valor={totais.valorSecagem > 0 ? `R$ ${formatNum(totais.valorSecagem, 2)}` : '—'} />
-          {/* ⚠ "LÍQUIDA" NO RÓTULO, e não é detalhe: este número é só de SACAS BOAS. A
-              produtividade FINAL — boas mais grão de roça — é outra, maior, e é a que o
-              produtor usa para comparar talhão. Sem a palavra, as duas se confundem, e a
-              diferença é o refugo inteiro da safra. */}
-          {/* ⚠ O SUFIXO DESCEU PARA A SEGUNDA LINHA: "127,83 sc/ha líquida" numa linha só fazia o
-              número, que é o que se compara entre safras, dividir espaço com três palavras. */}
-          <Metrica rotulo="Produtividade" destaque
-            valor={totais.produtividade != null ? formatNum(totais.produtividade, 2) : '—'}
-            segunda={totais.produtividade != null ? `${unidade.unidadeProdutividade} líquida` : undefined}
-            onAbrir={() => setAnaliseAberta(true)} />
+            valor={totais.valorSecagem > 0 ? formatNum(totais.valorSecagem, 2) : '—'}
+            sufixo={totais.valorSecagem > 0 ? 'R$' : undefined}
+            segunda="custo · à indústria" />
         </div>
         {/* ⚠ A FAIXA VEM DO ppb DE CADA CARGA, e o grão de roça fica FORA das duas: ele já é
             refugo, e somá-lo a qualquer faixa faria o lote bom parecer maior do que a
