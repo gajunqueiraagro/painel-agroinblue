@@ -30,6 +30,7 @@ export interface BarraCompacta {
 
 export function BarrasCompactas({
   barras, titulo, legenda, larguraMax = 340, altura = 96, preencherLargura = false,
+  larguraBarra = 22, fonteValor = 8,
 }: {
   barras: readonly BarraCompacta[];
   titulo: string;
@@ -48,6 +49,18 @@ export function BarrasCompactas({
    * que ela nasce booleana e default `false`, em vez de a lei ser reescrita para todos.
    */
   preencherLargura?: boolean;
+  /**
+   * A largura de cada barra, em px. Default 22 — a medida da lei.
+   * ⚠ MENOR SE JUSTIFICA QUANDO HÁ MAIS BARRAS no mesmo bloco: três em 22px num card de 230px
+   * ficam largas e o gráfico perde a leitura de proporção que é a razão de existir dele.
+   */
+  larguraBarra?: number;
+  /**
+   * O tamanho do número acima da barra, em px. Default 8.
+   * ⚠ ELE É O DADO, não legenda: em 8px o valor que se quer comparar some ao lado da barra que o
+   * representa. Sobe quando o bloco permite.
+   */
+  fonteValor?: number;
 }) {
   /**
    * ⚠ A ESCALA IGNORA OS NULOS e nunca é zero: com todas as barras sem dado, ou com um único
@@ -59,7 +72,8 @@ export function BarrasCompactas({
 
   /* ⚠ UMA CLASSE SÓ PARA OS DOIS TRILHOS — o da barra e o do rótulo. Se divergirem, o rótulo
      deixa de ficar embaixo da sua barra, que é o defeito mais silencioso que um gráfico pode ter. */
-  const colClasse = preencherLargura ? 'min-w-0 flex-1' : 'w-[22px] shrink-0';
+  const colEstilo = preencherLargura ? undefined : { width: larguraBarra };
+  const colClasse = preencherLargura ? 'min-w-0 flex-1' : 'shrink-0';
 
   return (
     <div className="rounded-md border bg-card p-2" style={{ maxWidth: larguraMax }}>
@@ -70,10 +84,12 @@ export function BarrasCompactas({
         {barras.map((b, i) => {
           const pct = b.valor != null && max > 0 ? Math.max(2, (b.valor / max) * 100) : 0;
           return (
-            <div key={`${b.rotulo}-${i}`} className={cn('flex h-full flex-col', colClasse)}>
+            <div key={`${b.rotulo}-${i}`} className={cn('flex h-full flex-col', colClasse)}
+              style={colEstilo}>
               {/* O número fica ACIMA da barra e sempre no fluxo: sem ele reservado, barras altas
                   e baixas alinhariam o texto em alturas diferentes. */}
-              <div className="mb-0.5 shrink-0 whitespace-nowrap text-center text-[8px] leading-none tabular-nums text-muted-foreground">
+              <div className="mb-0.5 shrink-0 whitespace-nowrap text-center leading-none tabular-nums text-muted-foreground"
+                style={{ fontSize: fonteValor }}>
                 {b.texto}
               </div>
               {/* ⚠ A PORCENTAGEM É DESTE TRILHO, NÃO DA COLUNA — e a diferença DISTORCIA O
@@ -99,7 +115,7 @@ export function BarrasCompactas({
       </div>
       <div className="mt-1 flex gap-1.5">
         {barras.map((b, i) => (
-          <div key={`r-${b.rotulo}-${i}`} className={cn('text-center', colClasse)}>
+          <div key={`r-${b.rotulo}-${i}`} className={cn('text-center', colClasse)} style={colEstilo}>
             <div className="truncate text-[8px] leading-tight text-muted-foreground" title={b.rotulo}>
               {b.rotulo}
             </div>

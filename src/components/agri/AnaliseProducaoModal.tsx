@@ -57,7 +57,13 @@ function Card({ rotulo, valor, sufixo, nota, cor }: {
 }) {
   return (
     <div className="rounded-md border bg-card px-2.5 py-1.5">
-      <div className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">{rotulo}</div>
+      {/* ⚠ ALTURA DE DUAS LINHAS SEMPRE — lei da estabilidade, item 2. "Produtividade líquida"
+          quebra em duas e "Quebra de secagem" não; sem a altura reservada, o NÚMERO de cada card
+          sentava numa base diferente e os quatro da linha ficavam em degrau. `min-h` fixo põe os
+          quatro na mesma base, com rótulo de uma ou de duas linhas. */}
+      <div className="flex min-h-[22px] items-start text-[9px] font-medium uppercase leading-[11px] tracking-wide text-muted-foreground">
+        {rotulo}
+      </div>
       {/* ⚠ 20px — item 3c. Produtividade final, líquida e quebra são os três números que o
           produtor leva para a conversa; em 16px disputavam atenção com os elos da cadeia. */}
       <div className={cn('mt-0.5 text-[20px] font-medium leading-none tabular-nums', cor)}>
@@ -112,6 +118,56 @@ export function AnaliseProducaoModal({
   const traco = (v: number | null, casas = 2, sufixo = '') =>
     (v == null ? '—' : `${formatNum(v, casas)}${sufixo}`);
 
+  /**
+   * AS QUATRO COLUNAS DA MATRIZ — total em cima, por-hectare embaixo.
+   *
+   * ⚠ NADA AQUI É CÁLCULO NOVO. Dois dos quatro por-hectare já vinham prontos de
+   * `totaisColheita` (`produtividadeFinal` e `produtividade`); os dois que faltavam — a do VERDE
+   * e a da ROÇA — saem do MESMO helper `porHa`, que é `sacas ÷ área`, a conta que produz os
+   * outros. Conferido contra o mock: 9.100 ÷ 60,60 = 150,17 e 620,63 ÷ 60,60 = 10,24.
+   * ⚠ O QUILO VEM DA CONVERSÃO DAS SACAS, não do peso gravado, e os dois diferem por centavos:
+   * 7.746,65 sc × 25 = 193.666,25 kg, enquanto o seco pesado foi 193.666,32. A coluna inteira se
+   * lê em sacas; converter dela mantém a linha coerente consigo mesma, que é o que o olho
+   * confere. O peso real continua no card do verde e na quebra.
+   * ⚠ E ELAS VÊM DEPOIS DE `porHa` E `traco` DE PROPÓSITO: é array avaliado no corpo do
+   * componente, então usar um helper declarado abaixo daria TDZ em tempo de render — o defeito
+   * que o `check:tdz` existe para pegar.
+   */
+  const COLUNAS: Array<{
+    rotulo: string; valor: string; kg?: string; nota: string; cor?: string; destaque?: boolean;
+    rotuloProd: string; prod: number | null; notaProd: string;
+  }> = [
+    {
+      rotulo: 'Peso verde', valor: `${traco(totais.verdeEmSacas, 2)} sc`,
+      kg: `${formatNum(totais.verdeKg, 2)} kg`, nota: 'o que arrancou',
+      rotuloProd: 'Produtividade fazenda', prod: porHa(totais.verdeEmSacas),
+      notaProd: 'verde por hectare',
+    },
+    {
+      rotulo: 'Final aproveitado', valor: `${formatNum(totais.sacasFinais, 2)} sc`,
+      kg: emKg(totais.sacasFinais), nota: 'boas + roça', destaque: true,
+      rotuloProd: 'Produtividade final', prod: totais.produtividadeFinal,
+      notaProd: 'aproveitado (boas + roça)',
+    },
+    {
+      rotulo: 'Sacas boas', valor: `${formatNum(totais.sacasBoas, 2)} sc`,
+      kg: emKg(totais.sacasBoas), nota: 'grão que vale preço',
+      rotuloProd: 'Produtividade líquida', prod: totais.produtividade,
+      notaProd: 'só sacas boas',
+    },
+    {
+      /* ⚠ VERMELHO NOS DOIS ANDARES: a roça é receita, mas é o número que se quer ver cair. */
+      rotulo: 'Grão de roça', valor: `${formatNum(totais.graoRocaSacas, 2)} sc`,
+      kg: emKg(totais.graoRocaSacas), nota: 'refugo', cor: 'text-destructive',
+      rotuloProd: 'Produtividade roça', prod: porHa(totais.graoRocaSacas),
+      notaProd: 'refugo por hectare',
+    },
+  ];
+
+  /** A água que saiu na secagem, em sacas — o verde menos o que sobrou de bom. */
+  const aguaEmSacas = totais.verdeEmSacas != null && totais.secoKg > 0
+    ? totais.verdeEmSacas - totais.sacasBoas : null;
+
   return (
     <Dialog open={aberto} onOpenChange={o => { if (!o) onFechar(); }}>
       {/* O X do `DialogContent` fica escondido: quem fecha é o do cabeçalho, como nos modais
@@ -142,54 +198,47 @@ export function AnaliseProducaoModal({
             </p>
           )}
 
-          {/* ── 1. A CADEIA ── */}
+          {/* ── A MATRIZ: 4 COLUNAS × 2 LINHAS ──
+              ⚠ O CARD "PESO SECO" SAIU, e é decisão de leitura, não de espaço: ele mostrava as
+              MESMAS 7.746,65 sc de "Sacas boas", e a cadeia caía verde → seco e depois SUBIA
+              para o final aproveitado. Um fluxo que desce e sobe não se lê como fluxo.
+              ⚠ CADA COLUNA É UMA GRANDEZA VISTA DE DOIS JEITOS — o total em cima, o por-hectare
+              embaixo. Alinhados em grade, os quatro pares se comparam na vertical sem procurar. */}
           <div>
             <div className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
               Do que arrancou ao que a cooperativa aceitou
             </div>
-            <div className="flex items-stretch gap-1.5">
-              {/* ⚠ SACA EM CIMA, KG EMBAIXO — invertido em relação aos cards da tela, de
-                  propósito: aqui a cadeia inteira é contada em SACAS (verde → seco → boas →
-                  final), e pôr o quilo no topo obrigaria o olho a converter a cada elo. O quilo
-                  fica como conferência do romaneio. */}
-              <Elo rotulo="Peso verde" valor={emSc(totais.verdeKg)} nota2={`${formatNum(totais.verdeKg, 2)} kg`}
-                nota={temSaca ? `${traco(totais.verdeEmSacas, 2)} sc · o que arrancou` : 'o que arrancou'} />
-              <Seta />
-              <Elo rotulo="Peso seco" valor={totais.secoKg > 0 ? emSc(totais.secoKg) : '—'}
-                nota2={totais.secoKg > 0 ? `${formatNum(totais.secoKg, 2)} kg` : undefined}
-                nota={totais.quebraPct != null ? `−${formatNum(totais.quebraPct, 1)}% na secagem` : 'aguardando a cooperativa'}
-                cor={totais.quebraPct != null ? 'text-destructive' : undefined} />
-              <Seta />
-              <Elo rotulo="Sacas boas" valor={`${formatNum(totais.sacasBoas, 2)} sc`}
-                nota2={emKg(totais.sacasBoas)} nota="grão que vale preço" />
-              <Seta />
-              {/* ⚠ A ROÇA ENTRA NO FINAL, mas em vermelho: ela foi aceita e é refugo ao mesmo
-                  tempo. Deixá-la fora faria o "aproveitado" discordar do romaneio. */}
-              <Elo rotulo="Grão de roça" valor={`${formatNum(totais.graoRocaSacas, 2)} sc`}
-                nota2={emKg(totais.graoRocaSacas)}
-                nota="refugo" cor="text-destructive" />
-              <Seta />
-              <Elo rotulo="Final aproveitado" valor={`${formatNum(totais.sacasFinais, 2)} sc`}
-                nota2={emKg(totais.sacasFinais)}
-                nota="boas + roça" destaque />
+            <div className="grid grid-cols-2 gap-1.5 md:grid-cols-4">
+              {COLUNAS.map(c => (
+                <Elo key={c.rotulo} rotulo={c.rotulo} valor={c.valor} nota2={c.kg}
+                  nota={c.nota} cor={c.cor} destaque={c.destaque} />
+              ))}
+              {/* ⚠ A SEGUNDA LINHA É OUTRO `map` NA MESMA GRADE, não um card de duas alturas:
+                  assim as oito células dividem as mesmas quatro trilhas e nada pode desalinhar
+                  por diferença de conteúdo. */}
+              {COLUNAS.map(c => (
+                <Card key={`p-${c.rotulo}`} rotulo={c.rotuloProd}
+                  valor={traco(c.prod)}
+                  sufixo={c.prod != null ? unidade.unidadeProdutividade : undefined}
+                  nota={c.notaProd} cor={c.cor} />
+              ))}
             </div>
           </div>
 
-          {/* ── 2. OS QUATRO NÚMEROS ── */}
+          {/* ── A SECAGEM ── */}
           <div className="grid grid-cols-2 gap-1.5 md:grid-cols-4">
-            <Card rotulo="Produtividade final"
-              valor={traco(totais.produtividadeFinal)}
-              sufixo={totais.produtividadeFinal != null ? unidade.unidadeProdutividade : undefined}
-              nota="aproveitado (boas + roça)" />
-            <Card rotulo="Produtividade líquida"
-              valor={traco(totais.produtividade)}
-              sufixo={totais.produtividade != null ? unidade.unidadeProdutividade : undefined}
-              nota="só sacas boas" />
             <Card rotulo="Quebra de secagem"
               valor={totais.quebraPct != null ? formatNum(totais.quebraPct, 1) : '—'}
               sufixo={totais.quebraPct != null ? '%' : undefined}
               cor="text-destructive"
-              nota={totais.secoKg > 0 ? `${formatNum(totais.verdeKg - totais.secoKg, 2)} kg de água` : undefined} />
+              nota={aguaEmSacas != null
+                /* ⚠ A ÁGUA EM SACAS, COM O QUILO ENTRE PARÊNTESES. O modal inteiro conta em
+                   sacas; só esta nota falava em quilo, e o operador tinha de converter para
+                   saber quantas sacas a secagem levou. As sacas saem da diferença entre o verde
+                   e as boas — os mesmos dois números da matriz acima —, e o quilo, dos pesos
+                   reais, que é onde o romaneio se confere. */
+                ? `${formatNum(aguaEmSacas, 2)} sc de água (${formatNum(totais.verdeKg - totais.secoKg, 2)} kg)`
+                : totais.secoKg > 0 ? `${formatNum(totais.verdeKg - totais.secoKg, 2)} kg de água` : undefined} />
             <Card rotulo="Secagem paga"
               valor={totais.valorSecagem > 0 ? `R$ ${formatNum(totais.valorSecagem, 2)}` : '—'}
               cor="text-destructive" nota="custo · à cooperativa" />
@@ -277,23 +326,35 @@ export function AnaliseProducaoModal({
                 A barra desenhava — sem cor de fundo, transparente. O gráfico não quebrou nem
                 avisou: mostrou uma barra onde havia duas.
                 ⚠ REGRA QUE FICA: classe de Tailwind concatenada é classe que não existe. */}
+            {/* ⚠ TRÊS BARRAS, E ELAS SÃO AS TRÊS COLUNAS DA MATRIZ: verde (o que arrancou), boas
+                (o que vale preço) e roça (o refugo). Duas barras mostravam a quebra; três mostram
+                para onde a safra foi.
+                ⚠ ESCALAS SEPARADAS, uma por card, como já estava: total (milhares) e por-hectare
+                (dezenas) na mesma escala fariam as três de hectare virarem risco.
+                ⚠ AS CORES SÃO LITERAIS — classe de Tailwind concatenada não existe no CSS, porque
+                a varredura é estática. Foi assim que a barra "seco" ficou invisível. */}
             {([
-              ['Total colhido', scVerde, scSeco, 'bg-primary', 'bg-primary/50', 'sacas'],
-              ['Por hectare', porHa(scVerde), porHa(scSeco), 'bg-success', 'bg-success/50', 'sc/ha'],
-            ] as Array<[string, number | null, number | null, string, string, string]>).map(
-              ([titulo, verde, seco, corCheia, corClara, un]) => (
+              ['Total em sacas', totais.verdeEmSacas, totais.sacasBoas, totais.graoRocaSacas, 'sacas'],
+              ['Sacas por hectare', porHa(totais.verdeEmSacas), totais.produtividade,
+                porHa(totais.graoRocaSacas), 'sc/ha'],
+            ] as Array<[string, number | null, number | null, number | null, string]>).map(
+              ([titulo, verde, boas, roca, un]) => (
                 <BarrasCompactas
                   key={titulo}
                   titulo={titulo}
-                  legenda={`colhido × seco, em ${un} — a diferença é a quebra`}
+                  legenda={`verde × boas × roça, em ${un}`}
                   larguraMax={230}
                   altura={84}
-                  preencherLargura
+                  larguraBarra={18}
+                  fonteValor={10}
+                  preencherLargura={false}
                   barras={[
-                    { rotulo: 'colhido', valor: verde, cor: corCheia,
+                    { rotulo: 'verde', valor: verde, cor: 'bg-primary',
                       texto: verde == null ? '—' : formatNum(verde, 0) },
-                    { rotulo: 'seco', valor: seco, cor: corClara,
-                      texto: seco == null ? '—' : formatNum(seco, 0) },
+                    { rotulo: 'boas', valor: boas, cor: 'bg-success',
+                      texto: boas == null ? '—' : formatNum(boas, 0) },
+                    { rotulo: 'roça', valor: roca, cor: 'bg-destructive',
+                      texto: roca == null ? '—' : formatNum(roca, 0) },
                   ] satisfies BarraCompacta[]}
                 />
               ))}
