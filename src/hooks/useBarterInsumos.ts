@@ -99,5 +99,14 @@ export function useBarterInsumos(clienteId: string | null | undefined, contratoI
 
   const total = (data ?? []).reduce((s, i) => s + (Number(i.valor) || 0), 0);
 
-  return { insumos: data ?? [], carregando: isLoading, salvar, excluir, total };
+  /**
+   * ⚠ EXPOSTO PARA QUEM EDITA O LANÇAMENTO VINCULADO — o mesmo idioma de
+   * `useLancamentosDaSafra` e `usePainelSafra`, que já devolvem o seu `recarregar`. O valor do
+   * insumo e o do lançamento são o MESMO dinheiro visto de dois lados: corrigir um pelo modal
+   * financeiro e não recarregar o outro deixaria a linha e o "Total recebido" discordando na
+   * mesma tela aberta.
+   */
+  const recarregar = () => queryClient.invalidateQueries({ queryKey: chave });
+
+  return { insumos: data ?? [], carregando: isLoading, salvar, excluir, total, recarregar };
 }

@@ -22,7 +22,7 @@ import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export function BarterListaModal({
-  aberto, titulo, subtitulo, acao, rodapeEsquerda, rodapeDireita, onFechar, children,
+  aberto, titulo, subtitulo, acao, rodapeEsquerda, rodapeDireita, onFechar, children, corRodape,
 }: {
   aberto: boolean;
   titulo: string;
@@ -37,6 +37,14 @@ export function BarterListaModal({
   onFechar: () => void;
   /** A tabela. O cabeçalho dela usa `sticky top-0` e gruda neste scrollport. */
   children: ReactNode;
+  /**
+   * A cor da faixa do total. Sem ela, o `bg-primary` de sempre.
+   *
+   * ⚠ OPT-IN, E O MOTIVO É A REGRA DA CASA: o rodapé tem de ter o MESMO tom do cabeçalho da
+   * tabela que ele fecha. Quando uma das três listas muda de tom, só ela muda — e sem a prop a
+   * alternativa seria mudar as três de uma vez por causa de uma.
+   */
+  corRodape?: string;
 }) {
   return (
     <Dialog open={aberto} onOpenChange={o => { if (!o) onFechar(); }}>
@@ -65,8 +73,8 @@ export function BarterListaModal({
             dos outros modais da casa. */}
         <div className="min-h-0 flex-1 overflow-auto px-3 py-2">{children}</div>
 
-        <div className="flex shrink-0 items-center justify-between gap-2 bg-primary px-4 py-1.5
-          text-[11px] font-semibold text-primary-foreground">
+        <div className={cn('flex shrink-0 items-center justify-between gap-2 px-4 py-1.5',
+          'text-[11px] font-semibold text-primary-foreground', corRodape ?? 'bg-primary')}>
           <span className="truncate">{rodapeEsquerda}</span>
           <span className="tabular-nums">{rodapeDireita}</span>
         </div>

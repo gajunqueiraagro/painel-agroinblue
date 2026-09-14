@@ -15,11 +15,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { Plus, ArrowLeft, Handshake, Save, Pencil, Trash2, Lock, List } from 'lucide-react';
+import {
+  Plus, ArrowLeft, Handshake, Save, Pencil, Trash2, Lock, List, ExternalLink,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { formatMoeda } from '@/lib/calculos/formatters';
@@ -43,7 +46,10 @@ import { labelDaCultura } from '@/lib/agri/areaPlantada';
 import { DatePicker } from '@/components/ui/date-picker';
 import { CULTURAS_LANCAMENTO } from '@/lib/agri/rateioLancamento';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useFinanceiroV2 } from '@/hooks/useFinanceiroV2';
+import { useFinanceiroV2, type LancamentoV2 } from '@/hooks/useFinanceiroV2';
+import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
+import { useOrdenacaoTabela, type ColunaOrdenavel } from '@/hooks/useOrdenacaoTabela';
+import { ThOrdenavel } from '@/components/ui/th-ordenavel';
 import { useSafrasLavoura } from '@/hooks/useAreaPlantada';
 import { formatNum } from '@/lib/calculos/formatters';
 
@@ -60,9 +66,37 @@ const dataBR = (iso: string | null) => (iso && iso.length >= 10
 const TH = 'sticky top-0 z-10 bg-primary px-1.5 py-1 text-[9px] font-semibold'
   + ' text-primary-foreground';
 
+/**
+ * O CINZA ESCURO DA LISTA DE INSUMOS — cabeçalho e total no MESMO tom.
+ *
+ * ⚠ ELE É MAIS CLARO QUE O `bg-primary`, não mais escuro, e vale registrar porque o briefing
+ * pedia "cinza escuro, não o cinza claro atual": o atual NÃO era cinza claro — era o navy
+ * `--primary` (#1d3a5d). Este #3a4864 é um passo ACIMA dele, um azul-ardósia. A mudança é de
+ * tom, não de claro para escuro.
+ * ⚠ E OS DOIS ANDAM JUNTOS: o total fecha a tabela e tem de ter a cor do cabeçalho, senão as
+ * duas bordas da lista se leem como blocos diferentes.
+ */
+const CINZA_ESCURO = 'bg-[#3a4864]';
+const TH_INSUMO = 'sticky top-0 z-10 bg-[#3a4864] px-1.5 py-1 text-[9px] font-semibold text-white';
+
+/**
+ * AS COLUNAS ORDENÁVEIS DOS INSUMOS — contrato de `useOrdenacaoTabela`, o mesmo ordenador da
+ * lista de cargas da colheita e do modal de rateio. Nada novo aqui.
+ * ⚠ A DATA ORDENA POR DATA REAL, não pelo texto dd/mm/aaaa: ordenar o formatado poria 01/12
+ * antes de 02/01, porque compara o dia primeiro. O valor de comparação é o ISO do banco.
+ */
+const COLUNAS_INSUMO: Array<ColunaOrdenavel<BarterInsumo, string> & { h: string; dir?: boolean }> = [
+  { coluna: 'data', h: 'Data', tipo: 'data', valor: i => i.data_recebimento },
+  { coluna: 'produto', h: 'Produto', tipo: 'texto', valor: i => i.produto },
+  { coluna: 'nf', h: 'NF', tipo: 'texto', valor: i => i.nf_numero },
+  { coluna: 'quantidade', h: 'Quantidade', tipo: 'numero', valor: i => i.quantidade, dir: true },
+  { coluna: 'safra', h: 'Safra', tipo: 'texto', valor: i => i.safra_id },
+  { coluna: 'valor', h: 'Valor', tipo: 'numero', valor: i => i.valor, dir: true },
+];
+
 export function AgriBarterTab() {
   const { clienteAtual } = useCliente();
-  const { fazendaAtual } = useFazenda();
+  const { fazendaAtual, fazendas } = useFazenda();
   const clienteId = clienteAtual?.id ?? null;
   const { contratos, carregando, abrir, editar } = useBarterContratos(clienteId);
   const totaisPorContrato = useTotaisPorContrato(clienteId);
@@ -86,8 +120,10 @@ export function AgriBarterTab() {
     () => contratos.find(c => c.id === abertoId) ?? null, [contratos, abertoId]);
 
   /* ── A PERNA RECEBI (fatia B) ── */
-  const { insumos, salvar: salvarInsumo, excluir: excluirInsumo, total: totalInsumos } =
-    useBarterInsumos(clienteId, abertoId);
+  const {
+    insumos, salvar: salvarInsumo, excluir: excluirInsumo, total: totalInsumos,
+    recarregar: recarregarInsumos,
+  } = useBarterInsumos(clienteId, abertoId);
   const [insumoAberto, setInsumoAberto] = useState<BarterInsumo | null>(null);
   const [modalInsumo, setModalInsumo] = useState(false);
   const [salvandoInsumo, setSalvandoInsumo] = useState(false);
@@ -102,7 +138,34 @@ export function AgriBarterTab() {
    * ao erro num campo que o operador não pode conferir depois.
    */
   const fin = useFinanceiroV2();
-  useEffect(() => { void fin.loadClassificacoes(); }, [fin.loadClassificacoes]);
+  /* ⚠ OS QUATRO CATÁLOGOS, não só as classificações: o `LancamentoV2Dialog` que o atalho abre
+     precisa de contas, fornecedores e safras além delas, e buscá-los ao clicar deixaria o
+     primeiro lançamento com os seletores vazios. É o mesmo `useEffect` do DRE e do painel. */
+  useEffect(() => {
+    void fin.loadClassificacoes();
+    void fin.loadContas();
+    void fin.loadFornecedores();
+    void fin.loadSafras();
+  }, [fin.loadClassificacoes, fin.loadContas, fin.loadFornecedores, fin.loadSafras]);
+
+  const [editandoLanc, setEditandoLanc] = useState<LancamentoV2 | null>(null);
+
+  /**
+   * ⚠ A LINHA VEM INTEIRA DO BANCO (`select('*')`) — copiado do DRE e do painel, e pelo mesmo
+   * motivo: o insumo guarda seis campos e o modal precisa das sessenta e cinco. Buscar uma linha
+   * ao clicar é mais barato que trazer tudo para o caso de o operador abrir uma.
+   */
+  const abrirLancamento = async (id: string | null) => {
+    if (!id) return;
+    const { data } = await (supabase as any).from('financeiro_lancamentos_v2')
+      .select('*').eq('id', id).maybeSingle();
+    const linha: LancamentoV2 | null = data ?? null;
+    if (linha) setEditandoLanc(linha);
+  };
+
+  /* ⚠ A ORDENAÇÃO É DA LISTA CRUA, e o total do rodapé continua somando `insumos`: soma não muda
+     com a ordem, e ligá-la à lista ordenada sugeriria que muda. */
+  const ordInsumos = useOrdenacaoTabela(insumos, COLUNAS_INSUMO, { coluna: 'data', direcao: 'asc' });
   const { safras } = useSafrasLavoura(clienteId);
   const nomeDaSafra = useMemo(() => {
     const m = new Map<string, string>();
@@ -491,9 +554,22 @@ export function AgriBarterTab() {
           titulo="Insumos recebidos"
           subtitulo="O que a cooperativa entregou — a perna de custo do barter."
           acao={(
+            /* ⚠ OS DOIS NA MESMA ALTURA, e era isso que desencaixava: o Exportar vinha com
+               fundo BRANCO CHEIO e o Adicionar transparente com borda — dois pesos visuais
+               diferentes na mesma linha, e o olho lia como se um fosse o principal.
+               ⚠ AGORA A HIERARQUIA É A CERTA: Adicionar é a ação e leva o verde `--acao` da
+               casa; Exportar é secundário e fica em contorno. `items-center` e a mesma `h-7`
+               nos dois é o que alinha de fato — sem altura igual, `items-center` alinha centros
+               de caixas de tamanhos diferentes.
+               ⚠ E ESTE É UM COMENTÁRIO DE JS, não de JSX: aqui dentro de `acao={(…)}` a forma
+               com chaves é um objeto literal para o parser, não um comentário. Quarta vez neste
+               repo — a regra é: dentro de uma EXPRESSÃO, comentário de JS; dentro de FILHOS de
+               elemento, comentário de JSX.
+               ⚠ E NÃO SE ESCREVE O DELIMITADOR DE FECHO NO MEIO DO TEXTO: ele fecha o comentário
+               ali mesmo, e o resto da prosa vira código. Foi o que acabou de acontecer aqui. */
             <div className="flex items-center gap-1.5">
               <ExportarColheita
-                classeGatilho="border-white/40 bg-white text-primary hover:bg-white/90 hover:text-primary"
+                classeGatilho="h-7 border-white/40 bg-transparent text-primary-foreground hover:bg-white/10 hover:text-white"
                 desabilitado={insumos.length === 0}
                 motivo={insumos.length === 0 ? 'Nenhum insumo para exportar.' : undefined}
                 onExportar={async (formato) => {
@@ -501,8 +577,7 @@ export function AgriBarterTab() {
                   else await exportarInsumosPdf(insumos, ctxExport, totalInsumos);
                 }}
               />
-              <Button size="sm" variant="outline"
-                className="h-7 gap-1 border-white/40 bg-transparent px-2 text-[10px] text-primary-foreground hover:bg-white/10 hover:text-white"
+              <Button size="sm" variant="acao" className="h-7 gap-1 px-2 text-[10px]"
                 onClick={() => { setInsumoAberto(null); setModalInsumo(true); }}>
                 <Plus className="h-3 w-3" /> Adicionar insumo
               </Button>
@@ -510,29 +585,37 @@ export function AgriBarterTab() {
           )}
           rodapeEsquerda="Total recebido"
           rodapeDireita={formatMoeda(totalInsumos)}
+          corRodape={CINZA_ESCURO}
           onFechar={() => setVerInsumos(false)}>
+        {/* ⚠ SÓ O PRODUTO É FLEXÍVEL. Data, NF, quantidade, safra e valor têm largura reservada
+            para o pior caso e `whitespace-nowrap`: o VALOR não pode quebrar em duas linhas, que
+            é o defeito que esta fatia veio corrigir. Quem encolhe quando falta espaço é o nome
+            do produto, que trunca com reticência e guarda o inteiro no `title`. */}
         <table className="w-full table-fixed border-collapse text-[10px] leading-tight">
           <colgroup>
-            {['30%', '13%', '17%', '15%', '17%', '8%'].map((w, i) => <col key={i} style={{ width: w }} />)}
+            {['12%', '27%', '11%', '16%', '14%', '13%', '7%'].map((w, i) => <col key={i} style={{ width: w }} />)}
           </colgroup>
           <thead>
             <tr>
-              <th className={cn(TH, 'text-left')}>Produto</th>
-              <th className={cn(TH, 'text-left')}>NF</th>
-              <th className={cn(TH, 'text-right')}>Quantidade</th>
-              <th className={cn(TH, 'text-left')}>Safra</th>
-              <th className={cn(TH, 'text-right')}>Valor</th>
-              <th className={cn(TH, 'text-right')} />
+              {COLUNAS_INSUMO.map(c => (
+                <ThOrdenavel key={c.coluna} coluna={c.coluna} rotulo={c.h}
+                  ordem={ordInsumos.ordem} onOrdenar={ordInsumos.alternar}
+                  className={TH_INSUMO} alinhaDireita={c.dir} />
+              ))}
+              <th className={cn(TH_INSUMO, 'text-right')} />
             </tr>
           </thead>
           <tbody>
             {insumos.length === 0 && (
-              <tr><td colSpan={6} className="px-2 py-6 text-center text-[10px] text-muted-foreground">
+              <tr><td colSpan={7} className="px-2 py-6 text-center text-[10px] text-muted-foreground">
                 Nenhum insumo lançado. O que a cooperativa entregou entra aqui.
               </td></tr>
             )}
-            {insumos.map(i => (
+            {ordInsumos.ordenadas.map(i => (
               <tr key={i.id} className="border-t border-slate-100 odd:bg-[#1e3a5f]/[0.03]">
+                {/* ⚠ A DATA É A DE RECEBIMENTO — a competência que vai para o DRE —, não a de
+                    criação do registro. É ela que o operador confere contra a nota. */}
+                <td className="whitespace-nowrap px-1.5 py-0.5 tabular-nums">{dataBR(i.data_recebimento)}</td>
                 <td className="truncate px-1.5 py-0.5" title={i.produto}>{i.produto}</td>
                 <td className="truncate px-1.5 py-0.5 text-muted-foreground">{i.nf_numero ?? '—'}</td>
                 <td className="whitespace-nowrap px-1.5 py-0.5 text-right tabular-nums">
@@ -558,6 +641,21 @@ export function AgriBarterTab() {
                         className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
                         onClick={() => { setInsumoAberto(i); setModalInsumo(true); }}>
                         <Pencil className="h-3 w-3" />
+                      </button>
+                      {/* ⚠ O ATALHO PARA O LANÇAMENTO é o que estava faltando: o insumo guarda o
+                          QUE e QUANTO, mas vencimento e pagamento vivem no lançamento financeiro
+                          vinculado — e até aqui só se chegava lá por outra tela.
+                          ⚠ ELE OCUPA O LUGAR MESMO SEM VÍNCULO, desabilitado e dizendo por quê:
+                          botão que some conforme o dado desloca a coluna inteira. */}
+                      <button type="button"
+                        title={i.financeiro_lancamento_id
+                          ? 'Abrir o lançamento financeiro (vencimento e pagamento)'
+                          : 'Este insumo ainda não tem lançamento financeiro vinculado.'}
+                        disabled={!i.financeiro_lancamento_id}
+                        className="rounded p-0.5 text-muted-foreground hover:bg-muted
+                          hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent"
+                        onClick={() => { void abrirLancamento(i.financeiro_lancamento_id); }}>
+                        <ExternalLink className="h-3 w-3" />
                       </button>
                       <button type="button" title="Excluir insumo"
                         className="rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
@@ -678,6 +776,29 @@ export function AgriBarterTab() {
           salvando={salvandoInsumo}
           onFechar={() => { setModalInsumo(false); setInsumoAberto(null); }}
           onSalvar={p => void gravarInsumo(p)}
+        />
+
+        {/* ⚠ O MODAL DO LANÇAMENTO É IRMÃO DA LISTA, nunca filho de uma linha — a mesma decisão
+            do DRE e do painel: fechar a edição não desmonta o modal de insumos por baixo, então
+            a ordenação e a posição da rolagem continuam onde estavam.
+            ⚠ AO SALVAR, RECARREGA O INSUMO TAMBÉM: o valor do lançamento e o do insumo são o
+            mesmo dinheiro visto de dois lados, e atualizar só um deixaria a linha dizendo um
+            número e o "Total recebido" outro, na mesma tela aberta. */}
+        <LancamentoV2Dialog
+          open={!!editandoLanc}
+          onClose={() => setEditandoLanc(null)}
+          onSave={async (form, id) => {
+            const ok = id ? await fin.editarLancamento(id, form) : await fin.criarLancamento(form);
+            if (ok && id) await recarregarInsumos();
+            return ok;
+          }}
+          lancamento={editandoLanc}
+          fazendas={fazendas}
+          contas={fin.contasBancarias}
+          classificacoes={fin.classificacoes}
+          fornecedores={fin.fornecedores}
+          safras={fin.safras}
+          onCriarFornecedor={fin.criarFornecedor}
         />
       </div>
     );
