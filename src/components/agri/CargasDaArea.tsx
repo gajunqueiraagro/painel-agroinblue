@@ -113,9 +113,30 @@ const COLUNAS_BASE: ReadonlyArray<ColunaOrdenavel<ColheitaRow, string> & { h: st
  * ⚠ OS 2% SAÍRAM DE TALHÃO E TICKET, um de cada, porque são os dois campos que já truncam por
  * natureza (nome livre) e perdem menos com um caractere a menos. A soma segue 100%.
  */
-const LARGURAS = ['5%', '7%', '8%', '5%', '6%', '8%', '11%', '11%', '7%', '8%', '9%', '8%', '7%'];
+/**
+ * AS LARGURAS DAS CATORZE COLUNAS — a lei anti-estouro desta tela.
+ *
+ * ⚠ NÃO SÃO NÚMEROS REDONDOS PORQUE NÃO PODEM SER. Cada uma é a fatia PROPORCIONAL ao que
+ * aquela coluna precisa para não cortar, medido no navegador com a fonte compilada: soma
+ * mínima de 798px para as catorze. Alocar proporcional é o que maximiza a menor folga — com
+ * qualquer desvio, uma coluna passa a estourar antes das outras, e o ganho não vai para
+ * ninguém. Abaixo de ~807px de tabela o cabeçalho de "Sacas boas" começa a truncar; todo o
+ * resto aguenta até ~802px.
+ *
+ * ⚠ E EM SEIS DELAS QUEM MANDA É O CABEÇALHO, NÃO O DADO. "Sacas boas" precisa de 70px de
+ * rótulo e mostra "1.234" em 43px; "Umid.%", "Afla.ppb", "Roça(sc)", "Hora" e "Variedade" são
+ * iguais. Dimensionar pelo dado — que é o instinto — truncaria justamente o nome da coluna que
+ * o operador usa para se achar na tabela.
+ * ⚠ A SETA DE ORDENAR CUSTA 12px EM TODO CABEÇALHO, sempre, mesmo invisível (`ThOrdenavel`
+ * reserva o lugar dela para a tabela não se remexer a cada clique). Ela está nesta conta.
+ */
+const LARGURAS = ['4.4%', '7.3%', '8.1%', '6.8%', '5.1%', '5.9%', '9%',
+  '8.2%', '8.2%', '6.8%', '7.1%', '8.7%', '7.4%', '7%'];
 
-const colunasCom = (nomePorId: Map<string, string>, fazPorId: Map<string, string>) => ([
+const colunasCom = (
+  nomePorId: Map<string, string>, fazPorId: Map<string, string>,
+  variedadePorId: Map<string, string>,
+) => ([
   {
     coluna: 'fazenda', h: 'Faz', tipo: 'texto' as const,
     valor: (l: ColheitaRow) => fazPorId.get(l.safra_area_id) ?? '',
@@ -123,6 +144,18 @@ const colunasCom = (nomePorId: Map<string, string>, fazPorId: Map<string, string
   {
     coluna: 'talhao', h: 'Talhão', tipo: 'texto' as const,
     valor: (l: ColheitaRow) => nomePorId.get(l.safra_area_id) ?? '',
+  },
+  /**
+   * ⚠ A VARIEDADE VEM PELO MESMO ELO DAS DUAS ACIMA — `safra_area_id`, a ÁREA EXATA. Não é
+   * detalhe de implementação: na 25/26 o amendoim tem três cultivares, e DOIS deles dividem o
+   * Ind 01 (OL3 e BRS 421). Quem resolvesse por (safra, cultura) acharia três candidatos e
+   * carimbaria o primeiro em todas as cargas — um erro que não se vê, porque a coluna ficaria
+   * preenchida e plausível.
+   * ⚠ TEXTO, NÃO NÚMERO: sem `tabular-nums`, e a ordenação é alfabética como a do talhão.
+   */
+  {
+    coluna: 'variedade', h: 'Variedade', tipo: 'texto' as const,
+    valor: (l: ColheitaRow) => variedadePorId.get(l.safra_area_id) ?? '',
   },
   ...COLUNAS_BASE,
 ]);
@@ -165,6 +198,8 @@ export interface TalhaoDaLista {
   pastoNome: string;
   fazendaNome?: string | null;
   fazendaCodigo?: string | null;
+  /** O cultivar da área. `null`/ausente = a coluna mostra "—". */
+  variedade?: string | null;
 }
 
 export function CargasDaArea({
@@ -217,7 +252,11 @@ export function CargasDaArea({
     () => new Map(talhoes.map(t => [t.id, t.pastoNome])), [talhoes]);
   const fazPorId = useMemo(
     () => new Map(talhoes.map(t => [t.id, t.fazendaCodigo || ''])), [talhoes]);
-  const COLUNAS = useMemo(() => colunasCom(nomePorId, fazPorId), [nomePorId, fazPorId]);
+  const variedadePorId = useMemo(
+    () => new Map(talhoes.map(t => [t.id, t.variedade || ''])), [talhoes]);
+  const COLUNAS = useMemo(
+    () => colunasCom(nomePorId, fazPorId, variedadePorId),
+    [nomePorId, fazPorId, variedadePorId]);
   /* A área do recorte: um talhão, ou a soma dos da cultura em "Todos". */
   const areaDoRecorte = useMemo(
     () => talhoes.reduce((acc, t) => acc + t.area_plantada_ha, 0), [talhoes]);
@@ -357,6 +396,11 @@ export function CargasDaArea({
                     não pode alargar a coluna — ele corta, e o `title` guarda o inteiro. */}
                 <td className="truncate px-1 py-0" title={fazPorId.get(l.safra_area_id) || undefined}>{fazPorId.get(l.safra_area_id) || '—'}</td>
                 <td className="truncate px-1 py-0" title={nomePorId.get(l.safra_area_id) || undefined}>{nomePorId.get(l.safra_area_id) ?? '—'}</td>
+                {/* ⚠ `title` COM O NOME INTEIRO, nunca com o id: um cultivar longo trunca na
+                    célula e o hover devolve o nome — que é o que o operador foi procurar. */}
+                <td className="truncate px-1 py-0" title={variedadePorId.get(l.safra_area_id) || undefined}>
+                  {variedadePorId.get(l.safra_area_id) || '—'}
+                </td>
                 <td className="whitespace-nowrap px-1 py-0 tabular-nums">{dataBR(l.data_colheita)}</td>
                 <td className="whitespace-nowrap px-1 py-0 tabular-nums">{(l.hora_chegada ?? '').slice(0, 5) || '—'}</td>
                 <td className="truncate px-1 py-0" title={l.ticket_balanca || undefined}>{l.ticket_balanca || '—'}</td>
@@ -429,13 +473,14 @@ export function CargasDaArea({
               e o fundo tem de ser opaco pelo mesmo motivo. */}
           <tfoot>
             <tr>
-              {/* ⚠ `colSpan` ACOMPANHA O CABEÇALHO: são CINCO colunas de identificação antes
-                  do primeiro número (fazenda, talhão, data, hora, ticket, NF). Um `colSpan`
-                  desatualizado desalinha o total inteiro — foi o defeito do FIX-CABECALHO, e
-                  a coluna nova o traria de volta.
-                  ⚠ TALHÃO NÃO SOMA: nome não soma, e por isso ele entra no `colSpan` do rótulo
-                  em vez de ganhar uma célula de total vazia. */}
-              <td className={cn(TFOOT, 'text-left font-semibold')} colSpan={6}>
+              {/* ⚠ `colSpan` ACOMPANHA O CABEÇALHO: são SETE colunas de identificação antes do
+                  primeiro número — fazenda, talhão, variedade, data, hora, ticket, NF. Um
+                  `colSpan` desatualizado desalinha o total inteiro; foi o defeito do
+                  FIX-CABECALHO, e a coluna da variedade o traria de volta, exatamente como o
+                  aviso que estava escrito aqui previa. Era 6.
+                  ⚠ TALHÃO E VARIEDADE NÃO SOMAM: nome não soma, e por isso entram no `colSpan`
+                  do rótulo em vez de ganharem uma célula de total vazia. */}
+              <td className={cn(TFOOT, 'text-left font-semibold')} colSpan={7}>
                 {rotuloTotal ?? 'Total do talhão'}
               </td>
               <td className={cn(TFOOT, 'text-right')}>{formatNum(totaisDoTalhao.verdeKg, 2)}</td>

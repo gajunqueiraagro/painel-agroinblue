@@ -271,6 +271,16 @@ export interface TalhaoDaSafra {
    * "Faz" para toda "Faz. Alguma coisa" — o prefixo é igual em quase todas.
    */
   fazendaCodigo: string | null;
+  /**
+   * O cultivar daquela área — "OL3", "BRS 421". `null` quando não foi cadastrado, e nesse caso
+   * a tela mostra "—": ausência declarada, nunca vazio.
+   *
+   * ⚠ É DA ÁREA, NÃO DA SAFRA NEM DA CULTURA. Na 25/26 o amendoim tem três áreas com três
+   * cultivares, duas delas no MESMO pasto (OL3 e BRS 421 no Ind 01) — quem pergunta por
+   * (safra, cultura) recebe três respostas e escolhe a errada em dois terços das vezes. O
+   * `id` desta linha é `agri_colheita.safra_area_id`, e é ele que dá a resposta certa.
+   */
+  variedade: string | null;
 }
 
 /**
@@ -292,12 +302,16 @@ export function useTalhoesDaSafra(clienteId: string | null | undefined, safraId:
     const db = supabase as any;
     void (async () => {
       const { data } = await db.from('agri_safra_area')
-        .select('id, pasto_id, cultura, status, area_plantada_ha')
+        /* ⚠ `variedade` NO `select`, e não só no tipo — a mesma lição que o comentário do
+           `codigo` abaixo registra: o builder é `as any`, o TSC não cobra a coluna ausente, e
+           a tela mostraria "—" com o cultivar inteiro gravado no banco. */
+        .select('id, pasto_id, cultura, status, area_plantada_ha, variedade')
         .eq('cliente_id', clienteId)
         .eq('safra_id', safraId)
         .eq('ativo', true);
       const linhas = (data ?? []) as Array<{
         id: string; pasto_id: string; cultura: string; status: string; area_plantada_ha: number;
+        variedade: string | null;
       }>;
       const ids = Array.from(new Set(linhas.map(l => l.pasto_id).filter(Boolean)));
       const nomes = new Map<string, string>();
@@ -332,6 +346,7 @@ export function useTalhoesDaSafra(clienteId: string | null | undefined, safraId:
           pastoNome: nomes.get(l.pasto_id) ?? '—',
           fazendaNome: fazendas.get(fazendaDoPasto.get(l.pasto_id) ?? '') ?? null,
           fazendaCodigo: codigos.get(fazendaDoPasto.get(l.pasto_id) ?? '') ?? null,
+          variedade: (l.variedade || '').trim() || null,
         }))
         .sort((a, b) => a.cultura.localeCompare(b.cultura, 'pt-BR')
           || a.pastoNome.localeCompare(b.pastoNome, 'pt-BR')));
