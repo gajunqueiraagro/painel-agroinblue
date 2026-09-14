@@ -59,6 +59,7 @@ import { FinV2SubcentroAliasesTab } from '@/pages/FinV2SubcentroAliasesTab';
 import { FinV2SafrasTab } from '@/pages/FinV2SafrasTab';
 import { FinV2RateioAdminTab } from '@/pages/FinV2RateioAdminTab';
 import { AgriDreCulturaTab } from '@/pages/AgriDreCulturaTab';
+import { PainelSafraTab } from '@/pages/PainelSafraTab';
 import { AgriColheitaTab } from '@/pages/AgriColheitaTab';
 import { AgriBarterTab } from '@/pages/AgriBarterTab';
 import { ContratosTab } from '@/pages/ContratosTab';
@@ -856,6 +857,8 @@ export default function V2Index() {
     if (section === 'dre-cultura') return (
       <AgriDreCulturaTab />
     );
+    /* Executivo › Painel da Safra — o raio-x do ciclo, irmão do DRE por cultura. */
+    if (section === 'painel-safra') return <PainelSafraTab />;
     if (section === 'painel-consultor') return (
       <PainelConsultorTab
         onBack={() => setSection('home')}

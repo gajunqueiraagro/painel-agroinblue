@@ -48,6 +48,7 @@ export type V2Section =
   | 'lancamentos-meta-fin'   // (em construção) — futura variante de financeiro-lanc filtrada por META
   | 'dre-executivo'          // (em construção)
   | 'dre-cultura'            // PR-AGRI-DRE-01 — DRE de caixa por cultura da safra
+  | 'painel-safra'           // PR-PAINEL-SAFRA-A — o raio-x do ciclo de uma safra/cultura
   | 'divergencias'           // (em construção)
   | 'logs'                   // (em construção)
   | 'validacoes'             // (em construção)
@@ -256,6 +257,11 @@ export const NAV_GRUPOS: NavGrupo[] = [
              cultura de uma safra, lido da fn_dre_agricola_por_safra. Ocupar a rota do outro
              faria a tela em construção parecer pronta. */
           { id: 'dre-cultura',         label: 'DRE por cultura',              status: 'ready' },
+          /* ⚠ AO LADO DO DRE, e não dentro dele: as duas leem a MESMA fonte
+             (`fn_dre_agricola_por_safra`), mas respondem a perguntas diferentes — o DRE mostra a
+             linha contábil do período, o Painel mostra o CICLO de uma safra por hectare e por
+             saca. Fundi-las faria uma tela com dois eixos e nenhuma resposta clara. */
+          { id: 'painel-safra',        label: 'Painel da Safra',              status: 'ready' },
           { id: 'dre-executivo',       label: 'DRE Executivo (em construção)', status: 'needs-wrapper' },
         ],
       },
@@ -368,6 +374,7 @@ export const SECTION_TO_GROUP: Partial<Record<V2Section, string>> = {
   // ── executivo ──
   'painel-consultor':    'executivo',
   'dre-cultura':         'executivo',
+  'painel-safra':        'executivo',
   'painel-anual':        'executivo',
   'auditoria-anual':     'executivo',
   'indicadores-zoot':    'executivo',
