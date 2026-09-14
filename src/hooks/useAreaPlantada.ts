@@ -281,6 +281,15 @@ export interface TalhaoDaSafra {
    * `id` desta linha é `agri_colheita.safra_area_id`, e é ele que dá a resposta certa.
    */
   variedade: string | null;
+  /**
+   * O id da fazenda do pasto — a venda avulsa precisa dele, e o nome não serve.
+   *
+   * ⚠ ELE JÁ ERA BUSCADO e ficava só no caminho: o hook lê `pastos.fazenda_id` para resolver o
+   * NOME e o CÓDIGO da fazenda, e descartava o id. Expor o que já se tem é mais barato que uma
+   * segunda consulta — e evita que a venda grave a fazenda errada por ter resolvido o id por
+   * outro caminho.
+   */
+  fazendaId: string | null;
 }
 
 /**
@@ -347,6 +356,7 @@ export function useTalhoesDaSafra(clienteId: string | null | undefined, safraId:
           fazendaNome: fazendas.get(fazendaDoPasto.get(l.pasto_id) ?? '') ?? null,
           fazendaCodigo: codigos.get(fazendaDoPasto.get(l.pasto_id) ?? '') ?? null,
           variedade: (l.variedade || '').trim() || null,
+          fazendaId: fazendaDoPasto.get(l.pasto_id) ?? null,
         }))
         .sort((a, b) => a.cultura.localeCompare(b.cultura, 'pt-BR')
           || a.pastoNome.localeCompare(b.pastoNome, 'pt-BR')));

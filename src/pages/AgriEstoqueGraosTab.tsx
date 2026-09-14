@@ -27,6 +27,11 @@ import { useSafrasLavoura, useTalhoesDaSafra } from '@/hooks/useAreaPlantada';
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
 import { labelDaClasse, corDaClasse } from '@/lib/agri/barterVenda';
 import { useEstoqueGraos, totaisDoEstoque } from '@/hooks/useEstoqueGraos';
+import { VendaAvulsaModal, type VendaAvulsaPayload } from '@/components/agri/VendaAvulsaModal';
+import { useFinanceiroV2 } from '@/hooks/useFinanceiroV2';
+import { useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 /**
  * ⚠ O MESMO CINZA DOS MODAIS DO BARTER (#3a4864), e de propósito: esta tela lê a mesma operação
@@ -85,6 +90,51 @@ export function AgriEstoqueGraosTab() {
 
   const { linhas, carregando, erro } = useEstoqueGraos(clienteId, safraId || null, cultura || null);
   const t = useMemo(() => totaisDoEstoque(linhas), [linhas]);
+
+  /* ───────────────────────── A VENDA AVULSA ─────────────────────────
+   * ⚠ A FAZENDA SAI DO TALHÃO, não de um contexto global: a RPC exige `p_fazenda_id`, e esta tela
+   * não é por fazenda. Todo talhão daquela cultura naquela safra pertence à mesma fazenda —
+   * medido no Proto: as cinco combinações safra×cultura têm UMA fazenda cada. Pegar a do primeiro
+   * talhão é, hoje, pegar a única.
+   * ⚠ E SE UM DIA FOREM DUAS, a venda gravaria na primeira. Não é hipótese remota: o modelo
+   * permite, e é por isso que o botão desliga quando não há fazenda em vez de gravar `null`.
+   */
+  const fazendaId = useMemo(
+    () => talhoes.find(x => x.cultura === cultura)?.fazendaId ?? null,
+    [talhoes, cultura]);
+
+  const fin = useFinanceiroV2();
+  useEffect(() => {
+    void fin.loadContas();
+    void fin.loadFornecedores();
+  }, [fin.loadContas, fin.loadFornecedores]);
+
+  const queryClient = useQueryClient();
+  const [modalVenda, setModalVenda] = useState(false);
+  const [salvandoVenda, setSalvandoVenda] = useState(false);
+
+  const registrarVenda = async (p: VendaAvulsaPayload) => {
+    if (!clienteId || !safraId || !cultura || !fazendaId) return;
+    setSalvandoVenda(true);
+    try {
+      const { data, error } = await (supabase as any).rpc('agri_venda_avulsa_registrar', {
+        p_cliente: clienteId, p_safra_id: safraId, p_cultura: cultura,
+        p_fazenda_id: fazendaId, p_comprador_id: p.comprador_id, p_data: p.data,
+        p_condicao: p.condicao, p_conta_id: p.conta_id, p_vencimento: p.vencimento,
+        p_itens: p.itens,
+      });
+      if (error) { toast.error(error.message ?? 'Não foi possível registrar a venda.'); return; }
+      const r = (data ?? {}) as { valor?: number };
+      toast.success(`Venda registrada — ${formatMoeda(Number(r.valor) || 0)}.`);
+      setModalVenda(false);
+      /* ⚠ O ESTOQUE RECARREGA PORQUE O SALDO É DERIVADO: a venda virou entrega, e
+         `fn_estoque_graos` já vai devolver o saldo menor. Não há baixa a escrever — há uma
+         leitura a refazer. */
+      await queryClient.invalidateQueries({ queryKey: ['estoque-graos'] });
+    } finally {
+      setSalvandoVenda(false);
+    }
+  };
 
   /* ⚠ A ORDEM DAS CLASSES É A DA QUALIDADE, não a do valor: bom, fora de faixa, refugo. É como o
      produtor pensa o lote, e é a mesma ordem das entregas do barter. */
@@ -254,16 +304,38 @@ export function AgriEstoqueGraosTab() {
           vista parece um número que ninguém pode mexer, e o operador iria procurar a saída em
           outra tela. */}
       <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" variant="acao" className="h-8 gap-1 px-2 text-[11px]" disabled
-          title="Em breve — o registro de saída avulsa é a próxima fatia.">
+        {/* ⚠ O MOTIVO DE ESTAR DESLIGADO FICA ESCRITO AO LADO, não só no `title` — regra da OC.
+            E são motivos DIFERENTES: sem saldo não há o que vender; sem fazenda a venda não tem
+            onde ser gravada, e gravar `null` poria a receita fora de qualquer fazenda. */}
+        <Button size="sm" variant="acao" className="h-8 gap-1 px-2 text-[11px]"
+          disabled={t.saldo <= 0 || !fazendaId}
+          title={t.saldo <= 0 ? 'Não há grão em estoque para vender.'
+            : !fazendaId ? 'Esta cultura não tem fazenda resolvida nesta safra.'
+              : 'Registrar uma venda do estoque'}
+          onClick={() => setModalVenda(true)}>
           <Plus className="h-3.5 w-3.5" /> Registrar saída (venda avulsa)
         </Button>
         <Button size="sm" variant="outline" className="h-8 gap-1 px-2 text-[11px]" disabled
           title="Em breve — a baixa por quebra é a próxima fatia.">
           <TrendingDown className="h-3.5 w-3.5" /> Baixar por quebra
         </Button>
-        <span className="text-[10px] text-muted-foreground">Em breve</span>
+        {t.saldo <= 0 && !carregando && !erro && (
+          <span className="text-[10px] text-muted-foreground">Sem grão em estoque.</span>
+        )}
       </div>
+
+      <VendaAvulsaModal
+        aberto={modalVenda}
+        onFechar={() => setModalVenda(false)}
+        onRegistrar={p => { void registrarVenda(p); }}
+        salvando={salvandoVenda}
+        estoque={linhas}
+        cultura={cultura}
+        safraRotulo={safras.find(s => s.id === safraId)?.codigo
+          || safras.find(s => s.id === safraId)?.nome || ''}
+        fornecedores={fin.fornecedores}
+        contas={fin.contasBancarias}
+      />
 
       <p className="text-[10px] leading-snug text-muted-foreground">
         {/* ⚠ A RESSALVA DA SAFRA INTEIRA SAIU COM O FILTRO: enquanto a RPC não aceitava cultura,
