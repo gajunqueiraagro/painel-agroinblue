@@ -62,6 +62,7 @@ import { AgriDreCulturaTab } from '@/pages/AgriDreCulturaTab';
 import { PainelSafraTab } from '@/pages/PainelSafraTab';
 import { AgriColheitaTab } from '@/pages/AgriColheitaTab';
 import { AgriBarterTab } from '@/pages/AgriBarterTab';
+import { AgriEstoqueGraosTab } from '@/pages/AgriEstoqueGraosTab';
 import { ContratosTab } from '@/pages/ContratosTab';
 import FinanciamentosListaPage from '@/pages/FinanciamentosListaPage';
 import FinanciamentoDetalhe from '@/pages/FinanciamentoDetalhe';
@@ -854,6 +855,8 @@ export default function V2Index() {
     if (section === 'lancamentos-agricultura') return <AgriColheitaTab />;
     /* Produção › Agricultura › Barter — os contratos de troca com a cooperativa. */
     if (section === 'barter-contratos') return <AgriBarterTab />;
+    /* Produção › Agricultura › Estoque de Grãos — o que sobrou entre a colheita e a venda. */
+    if (section === 'estoque-graos') return <AgriEstoqueGraosTab />;
     if (section === 'dre-cultura') return (
       <AgriDreCulturaTab />
     );

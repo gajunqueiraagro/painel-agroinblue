@@ -59,6 +59,7 @@ export type V2Section =
      entao ausencia ali nao quebra nada. */
   | 'lancamentos-agricultura' | 'lancamentos-silvicultura'
   | 'barter-contratos'       // PR-AGRI-BARTER-TELA-A — a operação comercial da lavoura
+  | 'estoque-graos'          // PR-ESTOQUE-GRAOS-F1 — o grão em mãos, entre a colheita e a venda
   | 'agricultura-home' | 'silvicultura-home'
   /* ── VALIDAR — PR-VALIDAR-01. Tres telas do v1 embutidas como estao, visiveis so' para
      quem e' admin do AGROinBLUE. Elas nao sao produto do cliente: sao a bancada de quem
@@ -151,6 +152,10 @@ export const NAV_GRUPOS: NavGrupo[] = [
         itens: [
           { id: 'agricultura-home', label: 'Visão Geral', status: 'ready', emConstrucao: true },
           { id: 'barter-contratos', label: 'Barter', status: 'ready' },
+          /* ⚠ O ESTOQUE VEM DEPOIS DO BARTER porque é ele que o consome: o grão sai da colheita,
+             passa pelo barter (ou por uma venda) e o que sobra é o estoque. A ordem do menu é a
+             do caminho do grão. */
+          { id: 'estoque-graos', label: 'Estoque de Grãos', status: 'ready' },
         ],
       },
       {
