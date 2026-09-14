@@ -20,6 +20,31 @@ export interface NaturezaCusto {
   valor: number;
 }
 
+/** Uma fatia do investimento, por subcentro. */
+export interface InvestimentoTipo {
+  tipo: string;
+  valor: number;
+  valor_ha: number;
+}
+
+/**
+ * A produtividade de um talhão.
+ *
+ * ⚠ A CHAVE É TALHÃO + VARIEDADE, não só o talhão: o mesmo pasto pode ter duas variedades na
+ * mesma safra, e desde o AGRI-AREA-VARIEDADE-NA-CHAVE elas são duas linhas de `agri_safra_area`.
+ * ⚠ SÓ A PRODUTIVIDADE É REAL AQUI. Custo não liga a talhão — `financeiro_lancamentos_v2` guarda
+ * safra e cultura, nunca a área plantada —, e a tela diz isso por escrito em vez de dividir o
+ * custo pela área e fingir que sabe de onde ele veio.
+ */
+export interface TalhaoProdutividade {
+  talhao: string;
+  variedade: string | null;
+  area_ha: number;
+  sacas: number;
+  sacas_ha: number;
+  cargas: number;
+}
+
 export interface PainelSafra {
   area_ha: number;
   /** Sacas boas + grão de roça — é o que a RPC soma. */
@@ -37,6 +62,10 @@ export interface PainelSafra {
   saldo: number;
   /** Fora do resultado, por decisão de modelo. Detalhe é a fatia B. */
   investimento: number;
+  /** O investimento quebrado por subcentro — Formação de Área, Máquinas. */
+  investimento_tipos: InvestimentoTipo[];
+  /** Produtividade por talhão+variedade, do melhor para o pior. */
+  talhoes: TalhaoProdutividade[];
   natureza: NaturezaCusto[];
   /** Saídas da safra que NÃO compõem DRE — existem e o operador precisa saber. */
   fora_do_custeio: number;
@@ -82,6 +111,22 @@ export function usePainelSafra(
         rateio_admin: num(j.rateio_admin),
         saldo: num(j.saldo),
         investimento: num(j.investimento),
+        investimento_tipos: (Array.isArray(j.investimento_tipos) ? j.investimento_tipos : [])
+          .map((x: Record<string, unknown>) => ({
+            tipo: String(x?.tipo ?? '—'),
+            valor: num(x?.valor),
+            valor_ha: num(x?.valor_ha),
+          })),
+        talhoes: (Array.isArray(j.talhoes) ? j.talhoes : []).map((x: Record<string, unknown>) => ({
+          talhao: String(x?.talhao ?? '—'),
+          /* ⚠ `null` FICA `null`, não vira '—': o traço é decisão de EXIBIÇÃO e mora na tela.
+             Convertê-lo aqui faria uma variedade chamada "—" existir no dado. */
+          variedade: x?.variedade == null ? null : String(x.variedade),
+          area_ha: num(x?.area_ha),
+          sacas: num(x?.sacas),
+          sacas_ha: num(x?.sacas_ha),
+          cargas: num(x?.cargas),
+        })),
         natureza: (Array.isArray(j.natureza) ? j.natureza : []).map((x: Record<string, unknown>) => ({
           centro: String(x?.centro ?? '—'),
           n: num(x?.n),

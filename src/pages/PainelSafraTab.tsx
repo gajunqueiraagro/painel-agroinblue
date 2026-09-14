@@ -258,21 +258,111 @@ export function PainelSafraTab() {
         </table>
       </div>
 
-      {/* ── O QUE FICA FORA DO RESULTADO ──
-          ⚠ ESTAS DUAS LINHAS EXISTEM PARA NÃO MENTIR POR OMISSÃO. O operador que somar os
-          lançamentos da safra à mão vai achar diferença; dizer antes o que ficou de fora, e por
-          quê, é mais barato do que ele descobrir sozinho e desconfiar da tela inteira. */}
-      <div className="space-y-1">
-        {(painel?.investimento ?? 0) !== 0 && (
-          <p className="flex items-start gap-1.5 text-[10px] leading-snug text-muted-foreground">
-            <Info className="mt-px h-3 w-3 shrink-0" />
-            <span>
-              <strong>{formatMoeda(painel?.investimento ?? 0)}</strong> em investimento na fazenda,
-              fora do resultado do ciclo — ele vira patrimônio, não custo da safra. O detalhe por
-              tipo entra na próxima fatia.
-            </span>
+      {/* ── INVESTIMENTO NA ABERTURA ──
+          ⚠ MESMAS COLUNAS DA TABELA DE CIMA, e por isso o mesmo `colgroup`: as duas tabelas ficam
+          uma sob a outra, e larguras diferentes fariam o olho reancorar a cada bloco. Aqui só
+          duas das três colunas têm sentido — R$/saca de um trator não diz nada —, e a terceira
+          fica VAZIA em vez de sumir, para as bordas continuarem alinhadas. */}
+      {(painel?.investimento_tipos.length ?? 0) > 0 && (
+        <div className="overflow-hidden rounded-md border">
+          <table className="w-full table-fixed border-collapse">
+            <colgroup>
+              {['46%', '18%', '18%', '18%'].map((w, i) => <col key={i} style={{ width: w }} />)}
+            </colgroup>
+            <thead>
+              <tr>
+                <th className={cn(TH, 'text-left')}>Investimento na abertura</th>
+                <th className={cn(TH, 'text-right')}>R$ total</th>
+                <th className={cn(TH, 'text-right')}>R$ / ha</th>
+                <th className={TH} />
+              </tr>
+            </thead>
+            <tbody>
+              {painel?.investimento_tipos.map(t => (
+                <tr key={t.tipo} className="border-t border-slate-100">
+                  <td className="px-2 py-0.5 pl-6 text-[11px] text-muted-foreground">{t.tipo}</td>
+                  <td className="px-2 py-0.5 text-right text-[11px] tabular-nums text-muted-foreground">
+                    {formatMoeda(t.valor)}
+                  </td>
+                  <td className="px-2 py-0.5 text-right text-[11px] tabular-nums text-muted-foreground">
+                    {formatMoeda(t.valor_ha)}
+                  </td>
+                  <td />
+                </tr>
+              ))}
+              <tr className="border-t-2 border-slate-300">
+                <td className="px-2 py-0.5 text-[14px] font-bold">Total investido</td>
+                <td className="px-2 py-0.5 text-right text-[14px] font-bold tabular-nums">
+                  {formatMoeda(painel?.investimento ?? 0)}
+                </td>
+                <td className="px-2 py-0.5 text-right text-[14px] font-bold tabular-nums">
+                  {formatMoeda(porHa(painel?.investimento ?? 0, area))}
+                </td>
+                <td />
+              </tr>
+            </tbody>
+          </table>
+          <p className="border-t bg-muted/40 px-2 py-1 text-[10px] leading-snug text-muted-foreground">
+            Fora do resultado do ciclo: vira patrimônio e amortiza em anos. Está aqui para o
+            produtor ver quanto a safra consumiu de caixa ao todo, não só de custeio.
           </p>
-        )}
+        </div>
+      )}
+
+      {/* ── POR TALHÃO / VARIEDADE ── */}
+      {(painel?.talhoes.length ?? 0) > 0 && (
+        <div className="overflow-hidden rounded-md border">
+          <table className="w-full table-fixed border-collapse">
+            <colgroup>
+              {['24%', '22%', '13%', '15%', '14%', '12%'].map((w, i) => <col key={i} style={{ width: w }} />)}
+            </colgroup>
+            <thead>
+              <tr>
+                <th className={cn(TH, 'text-left')}>Talhão</th>
+                <th className={cn(TH, 'text-left')}>Variedade</th>
+                <th className={cn(TH, 'text-right')}>Área ha</th>
+                <th className={cn(TH, 'text-right')}>Sacas</th>
+                <th className={cn(TH, 'text-right')}>sc / ha</th>
+                <th className={cn(TH, 'text-right')}>Cargas</th>
+              </tr>
+            </thead>
+            <tbody>
+              {painel?.talhoes.map((t, i) => (
+                <tr key={`${t.talhao}·${t.variedade ?? ''}`} className="border-t border-slate-100">
+                  <td className="truncate px-2 py-0.5 text-[11px]" title={t.talhao}>{t.talhao}</td>
+                  {/* ⚠ `—` PARA VARIEDADE NULA: a coluna existe sempre, porque some-la quando
+                      nenhum talhão tem variedade faria a tabela mudar de forma entre safras. */}
+                  <td className="truncate px-2 py-0.5 text-[11px] text-muted-foreground">
+                    {t.variedade ?? '—'}
+                  </td>
+                  <td className="px-2 py-0.5 text-right text-[11px] tabular-nums">{formatNum(t.area_ha, 2)}</td>
+                  <td className="px-2 py-0.5 text-right text-[11px] tabular-nums">{formatNum(t.sacas, 2)}</td>
+                  {/* ⚠ O MELHOR EM NEGRITO SÓ QUANDO HÁ COM QUEM COMPARAR. Com um talhão só,
+                      destacar a única linha sugeriria um ranking que não existe. */}
+                  <td className={cn('px-2 py-0.5 text-right text-[11px] tabular-nums',
+                    i === 0 && (painel?.talhoes.length ?? 0) > 1 && 'font-bold text-success')}>
+                    {formatNum(t.sacas_ha, 2)}
+                  </td>
+                  <td className="px-2 py-0.5 text-right text-[11px] tabular-nums text-muted-foreground">
+                    {t.cargas}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="border-t bg-muted/40 px-2 py-1 text-[10px] leading-snug text-muted-foreground">
+            Só a <strong>produtividade</strong> é real por talhão. O custo não aparece aqui porque
+            o lançamento financeiro guarda safra e cultura, nunca o talhão — custo por talhão vem
+            quando o lançamento marcar talhão.
+          </p>
+        </div>
+      )}
+
+      {/* ── O QUE FICA FORA DO RESULTADO ──
+          ⚠ ESTA LINHA EXISTE PARA NÃO MENTIR POR OMISSÃO. O operador que somar os lançamentos da
+          safra à mão vai achar diferença; dizer antes o que ficou de fora, e por quê, é mais
+          barato do que ele descobrir sozinho e desconfiar da tela inteira. */}
+      <div className="space-y-1">
         {(painel?.fora_do_custeio ?? 0) !== 0 && (
           <p className="flex items-start gap-1.5 text-[10px] leading-snug text-muted-foreground">
             <Info className="mt-px h-3 w-3 shrink-0" />
