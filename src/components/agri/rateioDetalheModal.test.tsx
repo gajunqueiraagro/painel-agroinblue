@@ -32,6 +32,9 @@ const BASE: RateioDetalhe = {
     { data: '2026-03-14', descricao: 'Energia da sede', favorecido: 'CPFL', valor: 1200, compartilhado: true },
     { data: '2026-04-02', descricao: 'Contabilidade', favorecido: 'Escritório X', valor: 3400, compartilhado: true },
   ],
+  /* ⚠ `null` NO BASE porque o base é um recorte de NATUREZA: o percentual da atividade só existe
+     no ramo admin, e os casos de admin abaixo o sobrescrevem. */
+  pct_agricultura: null,
 };
 
 /**
@@ -51,6 +54,9 @@ function montar(dados: RateioDetalhe, tipo: 'natureza' | 'investimento' | 'admin
       dados={dados} tipo={tipo} />,
   );
 }
+
+/** Um recorte administrativo, com o percentual efetivo que a RPC devolve. */
+const ADMIN = (pct: number | null): RateioDetalhe => ({ ...BASE, pct_agricultura: pct });
 
 /**
  * ⚠ AS DUAS FRASES SE TESTAM COMO FUNÇÃO, NÃO PELA TELA, e foi a tela que me obrigou a isso: o
@@ -97,15 +103,16 @@ describe('notaDoRateio — o que muda entre os tipos', () => {
      pelo percentual da atividade. A nota tem de dizer que a soma NÃO fecha, senão a divergência
      parece defeito. */
   it('admin: avisa que a lista não soma a linha, e nomeia os dois passos', () => {
-    const t = txt(notaDoRateio(BASE, 'admin', 34.5));
+    const t = txt(notaDoRateio(ADMIN(34.5), 'admin'));
     expect(t).toContain('34,5% (agricultura) × 78,8% (área) = R$ 82.484,55');
     expect(t).toContain('não soma o valor da linha');
   });
 
-  /* ⚠ SEM O PERCENTUAL DA ATIVIDADE a nota continua correta — ela só deixa de nomear o primeiro
-     passo. O percentual não vem no payload da RPC, e inventar um número seria pior que omiti-lo. */
+  /* ⚠ SEM O PERCENTUAL a nota continua correta — ela só deixa de nomear o primeiro passo. A RPC
+     devolve `null` quando o bruto administrativo do período é zero, e inventar um número ali
+     seria pior que omiti-lo. */
   it('admin sem o percentual da atividade: explica sem inventar o número', () => {
-    const t = txt(notaDoRateio(BASE, 'admin'));
+    const t = txt(notaDoRateio(ADMIN(null), 'admin'));
     expect(t).toContain('não soma o valor da linha');
     expect(t).not.toContain('(agricultura) ×');
     expect(t).toContain('78,8% (área)');

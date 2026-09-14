@@ -56,6 +56,17 @@ export interface RateioDetalhe {
   direto_cultura: number;
   fatias: FatiaRateio[];
   lancamentos: LancamentoRateio[];
+  /**
+   * O percentual da atividade agricultura no rateio administrativo. `null` fora do ramo admin.
+   *
+   * ⚠ É O EFETIVO DO PERÍODO, NÃO O CADASTRADO, e a diferença aparece na tela: a RPC soma o custo
+   * administrativo ANO A ANO, cada ano multiplicado pelo percentual daquele ano, e devolve
+   * `100 × pool / bruto`. Toda safra do Proto atravessa a virada (jul→jun), e a 23/24 tem 15% em
+   * 2023 e 25% em 2024 — ela mostra 21,0%, que não está em lugar nenhum do cadastro. Está certo.
+   * ⚠ `null` FORA DO ADMIN é ausência declarada, não zero: nos outros ramos não há rateio em dois
+   * passos, e a pergunta não existe.
+   */
+  pct_agricultura: number | null;
 }
 
 /**
@@ -106,17 +117,18 @@ export function subtituloDoRateio(d: RateioDetalhe): string {
  * percentual da atividade: a soma da lista NÃO fecha com o valor da linha, POR CONSTRUÇÃO. Sem
  * esta frase o operador soma, acha diferença e conclui que o sistema errou — o pior desfecho
  * possível para uma tela cuja função é auditar.
- * ⚠ `pctAtividade` É OPCIONAL porque NÃO VEM NO PAYLOAD: a RPC devolve o `pool` já multiplicado,
- * mas não o percentual em si. Sem ele a frase explica os dois passos sem nomear o primeiro — que
- * é melhor que inventar o número.
+ * ⚠ O PERCENTUAL SAI DO PAYLOAD, NÃO DE UMA PROP. Ele chegou a ser prop enquanto a RPC não o
+ * devolvia; agora que devolve, recebê-lo de fora só abriria a porta para um chamador passar um
+ * número diferente do que a RPC calculou — e seriam DOIS números certos e discordantes na mesma
+ * frase. O `null` continua tratado: sem ele, a frase explica os dois passos sem nomear o primeiro.
  */
-export function notaDoRateio(d: RateioDetalhe, tipo: TipoRateio, pctAtividade?: number): string {
+export function notaDoRateio(d: RateioDetalhe, tipo: TipoRateio): string {
   const f = fatiaAtual(d);
   const fatia = f?.valor ?? 0;
   const peso = formatNum(f?.peso ?? 0, 1);
   if (tipo === 'admin') {
     return 'A lista mostra o custo administrativo inteiro do período. A fração desta cultura é '
-      + (pctAtividade != null ? `${formatNum(pctAtividade, 1)}% (agricultura) × ` : '')
+      + (d.pct_agricultura != null ? `${formatNum(d.pct_agricultura, 1)}% (agricultura) × ` : '')
       + `${peso}% (área) = ${formatMoeda(fatia)}. `
       + 'Por isso a lista não soma o valor da linha — é rateio em dois passos.';
   }
@@ -125,7 +137,7 @@ export function notaDoRateio(d: RateioDetalhe, tipo: TipoRateio, pctAtividade?: 
 }
 
 export function RateioDetalheModal({
-  aberto, onFechar, titulo, subtitulo, dados, tipo, pctAtividade,
+  aberto, onFechar, titulo, subtitulo, dados, tipo,
 }: {
   aberto: boolean;
   onFechar: () => void;
@@ -142,15 +154,6 @@ export function RateioDetalheModal({
   dados: RateioDetalhe;
   /** 'natureza' | 'investimento' | 'admin' — muda a nota do rodapé, não o cálculo. */
   tipo: TipoRateio;
-  /**
-   * O percentual da atividade agricultura no rateio administrativo.
-   *
-   * ⚠ NÃO VEM NO PAYLOAD DA RPC, e por isso é prop: `fn_painel_rateio_detalhe` já devolve o
-   * `pool` COM o percentual aplicado (total do ano × % agricultura), mas não devolve o
-   * percentual em si. Sem ele a nota do admin explica o rateio em dois passos sem poder nomear
-   * o primeiro — o que ainda é melhor que inventar o número.
-   */
-  pctAtividade?: number;
 }) {
   const totalArea = useMemo(
     () => dados.fatias.reduce((a, f) => a + f.area_ha, 0), [dados.fatias]);
@@ -344,7 +347,7 @@ export function RateioDetalheModal({
             </div>
 
             <p className="mt-1 shrink-0 text-[10px] leading-snug text-muted-foreground">
-              {notaDoRateio(dados, tipo, pctAtividade)}
+              {notaDoRateio(dados, tipo)}
             </p>
           </TabsContent>
         </Tabs>

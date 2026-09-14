@@ -33,6 +33,9 @@ import { AnaliseDrawer } from '@/components/financeiro-v2/AnaliseDrawer';
 import { DrillDownEconomico } from '@/components/financeiro-v2/DrillDownEconomico';
 import { NIVEIS_DRILL, type ItemDrill } from '@/lib/analise/drillEconomico';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
+import {
+  RateioDetalheModal, type RateioDetalhe, type TipoRateio,
+} from '@/components/agri/RateioDetalheModal';
 import { useFinanceiroV2, type LancamentoV2 } from '@/hooks/useFinanceiroV2';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -341,6 +344,52 @@ export function PainelSafraTab() {
   const totalDoDrill = useMemo(
     () => itensDoDrill.reduce((acc, it) => acc + Math.abs(it.mov), 0), [itensDoDrill]);
 
+  /* ─────────────────────── O MODAL DO RATEIO ───────────────────────
+   * ⚠ QUEM DECIDE QUAL TELA ABRIR É O DADO, NÃO O TIPO DA LINHA. Uma natureza pode ser 100%
+   * direta (Logística, Operações) ou quase toda compartilhada (Operações Mecanizadas, com
+   * R$ 561 mil de pool na 25/26) — e o painel não sabe qual é qual, porque `fn_painel_safra`
+   * devolve só o valor somado. A `fn_painel_rateio_detalhe` sabe: se ela volta com `pool > 0`,
+   * a linha é rateada e merece o modal; senão, o drawer simples de sempre responde melhor.
+   * ⚠ UMA CONSULTA POR CLIQUE, nunca por render: é o mesmo payload que o modal consome, então
+   * quando ele abre já está tudo carregado — e a linha direta paga uma consulta barata para
+   * cair no caminho de antes.
+   */
+  const [rateio, setRateio] = useState<
+    { dados: RateioDetalhe; tipo: TipoRateio; titulo: string } | null>(null);
+
+  const abrirRateio = async (
+    tipo: TipoRateio, chave: string, rotulo: string,
+    /* O que fazer quando a linha for direta pura — o drawer de sempre. */
+    seDireta: () => void,
+  ) => {
+    if (!clienteId || !safraId || !cultura) return;
+    const { data } = await (supabase as any).rpc('fn_painel_rateio_detalhe', {
+      p_cliente: clienteId, p_safra_id: safraId, p_cultura: cultura,
+      p_tipo: tipo, p_chave: chave,
+    });
+    const d = data as RateioDetalhe | null;
+    /* ⚠ O ADMIN ABRE SEMPRE, mesmo com pool zero: ele É o rateio, e a explicação dos dois passos
+       é a razão de a linha existir. Nas outras duas, pool zero quer dizer "não há o que
+       repartir" — e um donut de uma fatia só não explica nada. */
+    if (d && (tipo === 'admin' || d.pool > 0)) {
+      setRateio({
+        dados: d, tipo,
+        titulo: `${rotulo} · ${labelDaCultura(cultura)}`
+          + (safra ? ` · Safra ${safra.codigo || safra.nome}` : ''),
+      });
+      return;
+    }
+    seDireta();
+  };
+
+  /* ⚠ UMA FUNÇÃO SÓ PARA O INVESTIMENTO porque o clique e o Enter chamam o mesmo caminho, e
+     duplicar a chamada nos dois faria um deles envelhecer sozinho.
+     ⚠ E ELA VEM DEPOIS DE `abrirRateio`, não antes: o gate de TDZ acusa função usada acima da
+     declaração no mesmo escopo, e aqui o conserto é só ordem. */
+  const abrirInvestimento = (tipo: string) => abrirRateio('investimento', tipo, tipo,
+    () => setDrill({ tipo: 'subcentro', chave: tipo, rotulo: tipo }));
+
+
   /**
    * A LINHA DE TOTAIS DA ANÁLISE POR TALHÃO — somada aqui, não pedida à RPC.
    *
@@ -600,7 +649,8 @@ export function PainelSafraTab() {
               <Linha key={n.centro} rotulo={n.centro} valor={n.valor}
                 area={area} sacas={sacas} nivel="item" cor="text-destructive"
                 pct={custeio > 0 ? (n.valor / custeio) * 100 : undefined}
-                onAbrir={() => setDrill({ tipo: 'centro', chave: n.centro, rotulo: n.centro })} />
+                onAbrir={() => { void abrirRateio('natureza', n.centro, n.centro,
+                  () => setDrill({ tipo: 'centro', chave: n.centro, rotulo: n.centro })); }} />
             ))}
             {/* ⚠ LINHA PRÓPRIA, E MARCADA. O rateio administrativo não tem centro de custo: ele é
                 repartido por janela de datas e peso da cultura. Somado às naturezas viraria um
@@ -612,10 +662,18 @@ export function PainelSafraTab() {
                 ⚠ E O COMENTÁRIO FICA AQUI FORA, nunca como primeiro filho de `cond && (…)`: ali
                 ele é uma EXPRESSÃO de objeto vazio para o parser, não um comentário, e derruba o
                 build com TS1005. Já aconteceu duas vezes neste repo. */}
+            {/* ⚠ E AGORA ELE ABRE — era a única linha sem clique desde a F1, e por um motivo que
+                deixou de valer: faltava a maquinaria que explica o rateio em dois passos, e ela é
+                exatamente o que o `RateioDetalheModal` faz. A chave é VAZIA porque a RPC ignora
+                `p_chave` no ramo admin; inventar uma seria fingir um recorte.
+                ⚠ O COMENTÁRIO FICA AQUI FORA, nunca como primeiro filho de `cond && (…)`: ali ele
+                é uma expressão de objeto vazio para o parser, não um comentário. Terceira vez
+                neste arquivo. */}
             {(painel?.rateio_admin ?? 0) !== 0 && (
               <Linha rotulo="Rateio administrativo" valor={painel?.rateio_admin ?? 0}
                 area={area} sacas={sacas} nivel="item" cor="text-destructive"
-                pct={custeio > 0 ? ((painel?.rateio_admin ?? 0) / custeio) * 100 : undefined} />
+                pct={custeio > 0 ? ((painel?.rateio_admin ?? 0) / custeio) * 100 : undefined}
+                onAbrir={() => { void abrirRateio('admin', '', 'Rateio administrativo', () => {}); }} />
             )}
             {(painel?.juros ?? 0) !== 0 && (
               <Linha rotulo="Juros" valor={painel?.juros ?? 0}
@@ -663,12 +721,12 @@ export function PainelSafraTab() {
               {painel?.investimento_tipos.map(t => (
                 <tr key={t.tipo}
                   className="cursor-pointer border-t border-slate-100 hover:bg-[#1e3a5f]/[0.06]"
-                  onClick={() => setDrill({ tipo: 'subcentro', chave: t.tipo, rotulo: t.tipo })}
+                  onClick={() => { void abrirInvestimento(t.tipo); }}
                   tabIndex={0} role="button" aria-label={`Ver lançamentos de ${t.tipo}`}
                   onKeyDown={e => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
-                      setDrill({ tipo: 'subcentro', chave: t.tipo, rotulo: t.tipo });
+                      void abrirInvestimento(t.tipo);
                     }
                   }}>
                   <td className="px-2 py-0 pl-6 text-[10px] text-muted-foreground">{t.tipo}</td>
@@ -965,20 +1023,27 @@ export function PainelSafraTab() {
                         {sf.custeio_ha > 0 ? formatMoeda(sf.custeio_ha) : '—'}
                       </td>
                       {/* ⚠ MARGEM NEGATIVA NEM SEMPRE É PREJUÍZO, e esta é a única célula da
-                          tela em que a cor MENTIRIA. A 24/25 tem −2.431,86/ha porque a venda
-                          ainda não foi lançada, não porque a safra deu errado — a flag
-                          `receita_incompleta` é a mesma que já marca o código da safra ao lado.
-                          Nesse caso a margem sai CINZA com o motivo no hover: o número continua
-                          à vista, mas sem o veredicto que ele não sustenta.
-                          ⚠ E O CRITÉRIO É A FLAG, NUNCA O SINAL: pintar de cinza toda margem
-                          negativa esconderia o prejuízo real de uma safra fechada. */}
+                          tela em que a cor MENTIRIA. São DOIS motivos diferentes, e nenhum é
+                          prejuízo:
+                            · `receita_incompleta` — a 24/25 tem −2.431,86/ha porque a venda ainda
+                              não foi lançada, não porque a safra deu errado;
+                            · SEM COLHEITA — a 26/27 tem 279 ha plantados, custeio lançado e o grão
+                              no chão. A receita não está atrasada: ela ainda não existe.
+                          Nos dois a margem sai CINZA com o motivo no hover — o número continua à
+                          vista, sem o veredicto que ele não sustenta.
+                          ⚠ O CRITÉRIO É A FLAG OU A AUSÊNCIA DE SACAS, NUNCA O SINAL: pintar de
+                          cinza toda margem negativa esconderia o prejuízo real de uma safra
+                          fechada, que é justamente o que esta coluna existe para mostrar. */}
                       <td className={cn('px-2 py-0.5 text-right text-[11px] font-medium tabular-nums',
-                        sf.receita_incompleta ? 'text-muted-foreground'
+                        !colheu(sf) || sf.receita_incompleta ? 'text-muted-foreground'
                           : sf.margem_ha >= 0 ? 'text-success' : 'text-destructive')}
-                        title={sf.receita_incompleta
-                          ? 'Receita incompleta — falta lançar a venda desta safra.' : undefined}>
+                        title={!colheu(sf)
+                          ? 'Safra em andamento — ainda não há colheita, então não há receita.'
+                          : sf.receita_incompleta
+                            ? 'Receita incompleta — falta lançar a venda desta safra.' : undefined}>
                         {formatMoeda(sf.margem_ha)}
-                        {sf.receita_incompleta && <span className="ml-0.5 text-amber-600">*</span>}
+                        {(!colheu(sf) || sf.receita_incompleta)
+                          && <span className="ml-0.5 text-amber-600">*</span>}
                       </td>
                       <td className={cn('px-2 py-0.5 text-right text-[11px] tabular-nums',
                         colheu(sf) && sf.pct_roca > 0 && 'text-destructive')}>
@@ -1079,6 +1144,19 @@ export function PainelSafraTab() {
           <DrillDownEconomico itens={itensDoDrill} raiz={drill.rotulo} niveis={NIVEIS_DRILL}
             onAbrirLancamento={(id) => { void abrirLancamento(id); }} />
         </AnaliseDrawer>
+      )}
+
+      {/* ⚠ O MODAL DO RATEIO É IRMÃO DOS OUTROS DOIS, pelo mesmo motivo: fechá-lo não pode
+          desmontar nada por baixo. Ele recebe o payload INTEIRO da RPC — inclusive o
+          `pct_agricultura` —, e deriva sozinho o subtítulo e a nota. */}
+      {rateio && (
+        <RateioDetalheModal
+          aberto
+          onFechar={() => setRateio(null)}
+          titulo={rateio.titulo}
+          dados={rateio.dados}
+          tipo={rateio.tipo}
+        />
       )}
 
       {/* ⚠ O MODAL É IRMÃO DO DRAWER, NUNCA FILHO — a mesma decisão do DRE, e é o que faz a
