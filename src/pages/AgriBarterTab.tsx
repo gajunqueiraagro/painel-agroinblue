@@ -33,12 +33,14 @@ import { labelDaClasse, corDaClasse, saldoDoContrato } from '@/lib/agri/barterVe
 import { ExportarColheita } from '@/components/agri/ExportarColheita';
 import {
   exportarInsumosXlsx, exportarInsumosPdf, exportarVendasXlsx, exportarVendasPdf,
+  exportarExtratoXlsx, exportarExtratoPdf,
   type ContextoBarter,
 } from '@/lib/agri/exportBarter';
 import { useBarterMaterializacao, useExtratoPermuta } from '@/hooks/useBarterMaterializacao';
 import { BarterMaterializarCard } from '@/components/agri/BarterMaterializarCard';
 import { BarterListaModal, BarterResumoCard } from '@/components/agri/BarterListaModal';
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
+import { DatePicker } from '@/components/ui/date-picker';
 import { CULTURAS_LANCAMENTO } from '@/lib/agri/rateioLancamento';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFinanceiroV2 } from '@/hooks/useFinanceiroV2';
@@ -72,6 +74,8 @@ export function AgriBarterTab() {
   const [parceiroNome, setParceiroNome] = useState('');
   const [nome, setNome] = useState('');
   const [cultura, setCultura] = useState('');
+  /* ⚠ Nasce em hoje, mas EDITÁVEL: o barter costuma ser lançado meses depois de assinado. */
+  const [dataAbertura, setDataAbertura] = useState(() => new Date().toISOString().slice(0, 10));
   const [descricao, setDescricao] = useState('');
   const [salvando, setSalvando] = useState(false);
 
@@ -263,8 +267,11 @@ export function AgriBarterTab() {
     setSalvando(true);
     try {
       const r = await abrir(parceiroId, nome.trim(), fazendaAtual?.id ?? null,
-        descricao.trim() || null, cultura);
+        descricao.trim() || null, cultura, dataAbertura || null);
       if (!r.ok) { toast.error(r.erro ?? 'Não foi possível abrir o contrato.'); return; }
+      /* ⚠ `ok` COM `erro` é o caso da data que não gravou: o contrato existe, só a data ficou a
+         de hoje. Avisar sem bloquear é o que impede o operador de abrir um segundo. */
+      if (r.erro) toast.warning(r.erro);
       /* ⚠ A MENSAGEM SEGUE `conta_criada`, que agora diz a verdade (AGRI-BARTER-03C): anunciar
          "conta criada" ao reusar a do parceiro faria o operador procurar uma segunda conta que
          não existe — e a trava do banco garante que ela não exista mesmo. */
@@ -273,7 +280,8 @@ export function AgriBarterTab() {
         ? `Contrato aberto. A conta "Permuta · ${parceiro}" foi criada.`
         : `Contrato aberto na conta de permuta que já existia com ${parceiro}.`);
       setNovoAberto(false);
-      setParceiroId(''); setParceiroNome(''); setNome(''); setCultura(''); setDescricao('');
+      setParceiroId(''); setParceiroNome(''); setNome(''); setCultura('');
+      setDataAbertura(new Date().toISOString().slice(0, 10)); setDescricao('');
       if (r.abertura?.contrato_id) setAbertoId(r.abertura.contrato_id);
     } finally {
       setSalvando(false);
@@ -348,8 +356,9 @@ export function AgriBarterTab() {
             ações. Repetir o número gastaria a altura que este PR existe para economizar. */}
         <div className="grid shrink-0 grid-cols-1 gap-1.5 md:grid-cols-3">
           <BarterResumoCard titulo="Recebi (insumos)"
+            valor={formatMoeda(totalInsumos)} cor="text-destructive"
             estado={insumos.length === 0 ? 'nenhum insumo lançado'
-              : `${insumos.length} ${insumos.length === 1 ? 'insumo' : 'insumos'} · ${formatMoeda(totalInsumos)}`}>
+              : `${insumos.length} ${insumos.length === 1 ? 'insumo' : 'insumos'} do parceiro`}>
             <Button size="sm" variant="outline" className="h-6 gap-1 px-1.5 text-[10px]"
               onClick={() => setVerInsumos(true)}>
               <List className="h-3 w-3" /> Ver insumos
@@ -361,8 +370,9 @@ export function AgriBarterTab() {
           </BarterResumoCard>
 
           <BarterResumoCard titulo="Entreguei (grão)"
+            valor={formatMoeda(totalEntregue)} cor="text-success"
             estado={vendas.length === 0 ? 'nenhuma venda lançada'
-              : `${vendas.length} ${vendas.length === 1 ? 'venda' : 'vendas'} · ${formatMoeda(totalEntregue)}`}>
+              : `${vendas.length} ${vendas.length === 1 ? 'venda' : 'vendas'} de grão · líquido`}>
             <Button size="sm" variant="outline" className="h-6 gap-1 px-1.5 text-[10px]"
               onClick={() => setVerVendas(true)}>
               <List className="h-3 w-3" /> Ver vendas
@@ -382,6 +392,11 @@ export function AgriBarterTab() {
             ocupado={ocupado}
             onMaterializar={() => void rodar('materializar')}
             onEstornar={() => void rodar('estornar')}
+            onExportar={async (formato) => {
+              const conta = contrato.contaPermutaNome ?? '—';
+              if (formato === 'xlsx') exportarExtratoXlsx(extrato, ctxExport, saldoPermuta, conta);
+              else await exportarExtratoPdf(extrato, ctxExport, saldoPermuta, conta);
+            }}
           />
         </div>
 
@@ -389,8 +404,10 @@ export function AgriBarterTab() {
             ⚠ FICA NA TELA, NÃO NO MODAL: é a conferência que o produtor faz com a cooperativa, e
             escondê-la atrás de um clique faria a tela mostrar um total de R$ 413 mil sem dizer
             como ele foi pago — que é exatamente a pergunta que ele tem na mão. */}
+        {/* ⚠ BLOCO CONTIDO — item 3. A composição ocupava a largura inteira para mostrar quatro
+            linhas de três números, e uma tabela esticada põe o rótulo a um palmo do valor. */}
         {composicao.linhas.length > 0 && (
-          <div className="shrink-0 overflow-hidden rounded-md border">
+          <div className="w-full max-w-[560px] shrink-0 overflow-hidden rounded-md border">
             <table className="w-full table-fixed border-collapse text-[10px] leading-tight">
               <colgroup>
                 {['40%', '18%', '18%', '24%'].map((w, i) => <col key={i} style={{ width: w }} />)}
@@ -459,6 +476,7 @@ export function AgriBarterTab() {
           acao={(
             <div className="flex items-center gap-1.5">
               <ExportarColheita
+                classeGatilho="border-white/40 bg-white text-primary hover:bg-white/90 hover:text-primary"
                 desabilitado={insumos.length === 0}
                 motivo={insumos.length === 0 ? 'Nenhum insumo para exportar.' : undefined}
                 onExportar={async (formato) => {
@@ -545,6 +563,7 @@ export function AgriBarterTab() {
           acao={(
             <div className="flex items-center gap-1.5">
               <ExportarColheita
+                classeGatilho="border-white/40 bg-white text-primary hover:bg-white/90 hover:text-primary"
                 desabilitado={vendas.length === 0}
                 motivo={vendas.length === 0 ? 'Nenhuma venda para exportar.' : undefined}
                 onExportar={async (formato) => {
@@ -758,6 +777,15 @@ export function AgriBarterTab() {
                 A receita e os insumos herdam esta cultura no resultado — é ela que põe o custo
                 da semente na mesma coluna da venda do grão, sem ratear.
               </p>
+            </div>
+            <div>
+              {/* ⚠ EDITÁVEL, E ISSO É CONSERTO: a coluna tem default `CURRENT_DATE`, então todo
+                  contrato nascia com a data do dia em que alguém o lançou — não do dia em que foi
+                  assinado. E é esta data que o materializador usa como competência do insumo que
+                  não informou a sua. */}
+              <Label className="text-[10px]">Aberto em</Label>
+              <DatePicker value={dataAbertura} onChange={v => setDataAbertura(v ?? '')}
+                className="mt-0.5" />
             </div>
             <div>
               <Label className="text-[10px]">Descrição</Label>

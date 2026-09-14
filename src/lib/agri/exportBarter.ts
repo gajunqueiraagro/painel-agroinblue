@@ -18,6 +18,7 @@ import { labelDaUnidade } from '@/lib/agri/unidades';
 import { labelDaClasse } from '@/lib/agri/barterVenda';
 import type { BarterInsumo } from '@/hooks/useBarterInsumos';
 import type { BarterVenda } from '@/hooks/useBarterVenda';
+import type { LinhaExtrato } from '@/hooks/useBarterMaterializacao';
 
 export interface ContextoBarter {
   cliente: string;
@@ -189,4 +190,56 @@ export async function exportarVendasPdf(
   });
   addFooterComPaginacao(doc);
   doc.save(nomeDoArquivoBarter(ctx.contrato, 'vendas', 'pdf'));
+}
+
+/**
+ * O EXTRATO DA PERMUTA — item 8 do polish.
+ *
+ * ⚠ O SALDO ACUMULADO VAI JUNTO, e é o motivo de exportar: quem confere com a cooperativa segue
+ * linha a linha até o saldo final. Uma planilha só com movimento obrigaria a refazer a soma —
+ * e refazer a soma é exatamente onde as duas partes divergem.
+ */
+export function exportarExtratoXlsx(
+  linhas: readonly LinhaExtrato[], ctx: ContextoBarter, saldo: number, conta: string,
+): void {
+  const cabecalho: Array<Record<string, XlsxCellValue>> = [
+    { Campo: 'Cliente', Valor: ctx.cliente },
+    { Campo: 'Contrato', Valor: ctx.contrato },
+    { Campo: 'Conta de permuta', Valor: conta },
+    { Campo: 'Saldo', Valor: saldo },
+  ];
+  triggerXlsxDownload({
+    filename: nomeDoArquivoBarter(ctx.contrato, 'extrato', 'xlsx'),
+    sheets: [
+      { name: 'Resumo', rows: cabecalho },
+      {
+        name: 'Extrato',
+        rows: linhas.map(l => ({
+          Data: dataBR(l.data),
+          Descrição: l.descricao,
+          Movimento: l.movimento,
+          Saldo: l.saldo,
+        })),
+      },
+    ],
+  });
+}
+
+export async function exportarExtratoPdf(
+  linhas: readonly LinhaExtrato[], ctx: ContextoBarter, saldo: number, conta: string,
+): Promise<void> {
+  const { doc, y } = await docComHeader(ctx, 'Barter — extrato da permuta');
+  const y2 = addTituloSecao(doc, conta, y);
+  autoTable(doc, {
+    startY: y2,
+    head: [['Data', 'Descrição', 'Movimento', 'Saldo']],
+    body: linhas.map(l => [dataBR(l.data), l.descricao, brl(l.movimento), brl(l.saldo)]),
+    foot: [['Saldo final', '', '', brl(saldo)]],
+    styles: { fontSize: 7.5, cellPadding: 1.5 },
+    headStyles: { fillColor: [30, 58, 95] },
+    footStyles: { fillColor: [30, 58, 95] },
+    didParseCell: alinharADireita([2, 3]),
+  });
+  addFooterComPaginacao(doc);
+  doc.save(nomeDoArquivoBarter(ctx.contrato, 'extrato', 'pdf'));
 }

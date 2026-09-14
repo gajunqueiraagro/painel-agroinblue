@@ -77,16 +77,33 @@ export function BarterVendaModal({
     setLinhas(LINHAS_VAZIAS().map(l => {
       const e = venda?.entregas.find(x => x.classe_aflatoxina === l.classe);
       if (!e) return l;
+      /* ⚠ REABRE EM FORMATO BR COMPLETO, com milhar: `String(3706.37).replace('.', ',')` dava
+         "3706,37", que é lido mas não é como o operador escreve. `formatNum` devolve
+         "3.706,37" — e `parseMoeda`, que lê o campo de volta, entende os dois (testado). */
       return {
         classe: l.classe,
-        sacas: e.sacas == null ? '' : String(e.sacas).replace('.', ','),
-        precoSaca: e.preco_saca == null ? '' : String(e.preco_saca).replace('.', ','),
+        sacas: e.sacas == null ? '' : formatNum(e.sacas, 2),
+        precoSaca: e.preco_saca == null ? '' : formatNum(e.preco_saca, 2),
       };
     }));
     const receita = venda?.partes.find(p => p.natureza === NATUREZA_RECEITA);
     setPlanoId(receita?.plano_conta_id ?? null);
+    /**
+     * ⚠ A CAUSA DO "DIVIDENDOS" QUE VOLTOU TRÊS VEZES — e ela nunca esteve no filtro da lista.
+     * `ClassificacaoItem.id` é OPCIONAL, e as entradas de dividendo têm `id: undefined` POR
+     * DESIGN (`planoContasBuilder`: `id: i.is_dividendo ? undefined : i.id`, porque o id delas é
+     * a string `dividendo-<uuid>`, que não é uuid e quebraria o save).
+     * Num lançamento NOVO o `plano_conta_id` também é `undefined`. Então
+     * `.find(c => c.id === undefined)` casava com a PRIMEIRA entrada de dividendo do array, e o
+     * `subcentro` dela virava o valor inicial do campo — por FORA da lista filtrada, que sempre
+     * esteve correta (medido três vezes: 53 contas agrícolas, zero dividendos).
+     * ⚠ POR ISSO A GUARDA VEM ANTES DA BUSCA: sem id não há o que procurar, e procurar por
+     * `undefined` num campo opcional acha o primeiro que não o tem.
+     */
     setSubcentro(receita?.subcentro
-      ?? classificacoes.find(c => c.id === receita?.plano_conta_id)?.subcentro ?? '');
+      ?? (receita?.plano_conta_id
+        ? (classificacoes.find(c => c.id === receita.plano_conta_id)?.subcentro ?? '')
+        : ''));
     setBusca('');
   }, [aberto, venda, classificacoes]);
 
@@ -208,13 +225,17 @@ export function BarterVendaModal({
           <div className="overflow-hidden rounded-md border">
             <table className="w-full table-fixed border-collapse text-[10px] leading-tight">
               <colgroup>
-                {['30%', '18%', '18%', '17%', '17%'].map((w, i) => <col key={i} style={{ width: w }} />)}
+                {['24%', '15%', '16%', '15%', '15%', '15%'].map((w, i) => <col key={i} style={{ width: w }} />)}
               </colgroup>
               <thead>
                 <tr>
                   <th className={cn(TH, 'text-left')}>Classe</th>
                   <th className={cn(TH, 'text-right')}>Tem na safra</th>
                   <th className={cn(TH, 'text-right')}>Sacas vendidas</th>
+                  {/* ⚠ COLUNA NOVA — item 6d. É a subtração à vista: o que sobra na classe depois
+                      desta venda. Ela conversa com a frente de ESTOQUE, mas aqui é só aritmética
+                      da tela: nada é gravado nem reservado. */}
+                  <th className={cn(TH, 'text-right')}>Restam</th>
                   <th className={cn(TH, 'text-right')}>R$/saca</th>
                   <th className={cn(TH, 'text-right')}>Valor</th>
                 </tr>
@@ -235,6 +256,13 @@ export function BarterVendaModal({
                         inputMode="decimal"
                         className={cn('h-6 px-1 text-right font-mono text-[10px]', FOCO)} />
                     </td>
+                    {/* ⚠ NEGATIVO EM VERMELHO: vender mais do que tem deixa o "restam" negativo,
+                        e o número negativo é a mesma informação do aviso de excesso, na linha. */}
+                    <td className={cn('px-1.5 py-0.5 text-right tabular-nums',
+                      e.disponivel - e.sacas < 0 ? 'font-semibold text-destructive'
+                        : 'text-muted-foreground')}>
+                      {formatNum(e.disponivel - e.sacas, 2)}
+                    </td>
                     <td className="px-1 py-0.5">
                       <Input value={linhas[i].precoSaca} onChange={ev => mudar(i, 'precoSaca', ev.target.value)}
                         inputMode="decimal"
@@ -245,8 +273,20 @@ export function BarterVendaModal({
                 ))}
               </tbody>
               <tfoot>
+                {/* ⚠ O TOTAL DO "TEM NA SAFRA" ALINHADO NA PRÓPRIA COLUNA — item 6a. Sem ele o
+                    operador somava as quatro classes de cabeça para saber quanto a safra rendeu. */}
                 <tr>
-                  <td className={cn(TH, 'text-left')} colSpan={4}>Bruto da venda</td>
+                  <td className={cn(TH, 'text-left')}>Total</td>
+                  <td className={cn(TH, 'text-right tabular-nums')}>
+                    {formatNum(calculadas.reduce((t, e) => t + e.disponivel, 0), 2)}
+                  </td>
+                  <td className={cn(TH, 'text-right tabular-nums')}>
+                    {formatNum(calculadas.reduce((t, e) => t + e.sacas, 0), 2)}
+                  </td>
+                  <td className={cn(TH, 'text-right tabular-nums')}>
+                    {formatNum(calculadas.reduce((t, e) => t + (e.disponivel - e.sacas), 0), 2)}
+                  </td>
+                  <td className={TH} />
                   <td className={cn(TH, 'text-right tabular-nums')}>{formatMoeda(totais.bruto)}</td>
                 </tr>
               </tfoot>

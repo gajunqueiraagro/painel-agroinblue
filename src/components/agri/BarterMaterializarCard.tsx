@@ -25,6 +25,7 @@ import { cn } from '@/lib/utils';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import type { LinhaExtrato } from '@/hooks/useBarterMaterializacao';
 import { BarterListaModal, BarterResumoCard } from '@/components/agri/BarterListaModal';
+import { ExportarColheita } from '@/components/agri/ExportarColheita';
 
 const TH = 'sticky top-0 z-10 bg-primary px-1.5 py-1 text-[9px] font-semibold'
   + ' text-primary-foreground';
@@ -34,6 +35,7 @@ const dataBR = (iso: string) => (iso && iso.length >= 10
 
 export function BarterMaterializarCard({
   contaPermutaNome, pendentes, materializados, linhas, saldo, ocupado, onMaterializar, onEstornar,
+  onExportar,
 }: {
   contaPermutaNome: string | null;
   /** Partes + insumos com valor que ainda não viraram lançamento. */
@@ -45,6 +47,8 @@ export function BarterMaterializarCard({
   ocupado: boolean;
   onMaterializar: () => void;
   onEstornar: () => void;
+  /** Item 8: o extrato também se exporta. A tela monta os dados; o card só oferece o botão. */
+  onExportar: (formato: 'xlsx' | 'pdf') => void | Promise<void>;
 }) {
   const [confirmar, setConfirmar] = useState<'materializar' | 'estornar' | null>(null);
   const [verExtrato, setVerExtrato] = useState(false);
@@ -97,6 +101,14 @@ export function BarterMaterializarCard({
         aberto={verExtrato}
         titulo="Extrato da conta de permuta"
         subtitulo="O que se deve e o que se tem com o parceiro. Entra no resultado, não no caixa."
+        acao={(
+          <ExportarColheita
+            classeGatilho="border-white/40 bg-white text-primary hover:bg-white/90 hover:text-primary"
+            desabilitado={linhas.length === 0}
+            motivo={linhas.length === 0 ? 'Extrato vazio.' : undefined}
+            onExportar={async (formato) => { await onExportar(formato); }}
+          />
+        )}
         rodapeEsquerda={contaPermutaNome ?? 'Sem conta de permuta'}
         rodapeDireita={formatMoeda(saldo)}
         onFechar={() => setVerExtrato(false)}>
@@ -129,7 +141,11 @@ export function BarterMaterializarCard({
                   l.movimento < 0 ? 'text-destructive' : 'text-success')}>
                   {formatMoeda(l.movimento)}
                 </td>
-                <td className="whitespace-nowrap px-1.5 py-0.5 text-right tabular-nums">
+                {/* ⚠ O SALDO SEGUE O MESMO PADRÃO DO CARD — verde credor, vermelho devedor. Era
+                    a única coluna de dinheiro da tela que saía neutra, e o operador tinha de ler
+                    o sinal para saber de que lado estava. */}
+                <td className={cn('whitespace-nowrap px-1.5 py-0.5 text-right tabular-nums',
+                  l.saldo < 0 ? 'text-destructive' : l.saldo > 0 ? 'text-success' : undefined)}>
                   {formatMoeda(l.saldo)}
                 </td>
               </tr>

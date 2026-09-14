@@ -104,6 +104,7 @@ export function useBarterContratos(clienteId: string | null | undefined) {
   const abrir = async (
     parceiroFornecedorId: string, nome: string,
     fazendaId: string | null, descricao: string | null, cultura: string | null,
+    dataAbertura: string | null,
   ): Promise<{ ok: boolean; erro?: string; abertura?: AberturaContrato }> => {
     /**
      * ⚠ A CULTURA VAI NA PRÓPRIA RPC — AGRI-BARTER-04. Ela ganhou um 5º parâmetro
@@ -122,8 +123,33 @@ export function useBarterContratos(clienteId: string | null | undefined) {
       p_cultura: cultura,
     });
     if (error) return { ok: false, erro: error.message };
+    const abertura = (r ?? {}) as AberturaContrato;
+
+    /**
+     * ⚠ A DATA VAI NUM UPDATE, e não pela RPC — item 4 do polish. `agri_barter_abrir_contrato`
+     * tem cinco parâmetros e nenhum é a data; a coluna `data_abertura` tem default
+     * `CURRENT_DATE`, e por isso todo contrato nascia com a data de HOJE. Um barter assinado em
+     * abril lançado em setembro ficava com setembro, e é a data de abertura que ancora a
+     * competência do insumo sem `data_recebimento`.
+     * ⚠ SÓ ATUALIZA QUANDO O OPERADOR MUDOU: mandar a data de hoje explicitamente seria
+     * reescrever o default com o mesmo valor e gastar uma viagem para nada.
+     * ⚠ E FALHAR AQUI NÃO PERDE O CONTRATO: ele já existe, com a conta de permuta. O retorno é
+     * `ok` com um aviso, como na cultura antes de ela ir para a RPC — dizer "não foi possível
+     * abrir" sobre um contrato aberto faria o operador criar o segundo.
+     */
+    if (dataAbertura && abertura.contrato_id) {
+      const { error: errData } = await (supabase as any).from('agri_barter_contratos')
+        .update({ data_abertura: dataAbertura }).eq('id', abertura.contrato_id);
+      if (errData) {
+        await queryClient.invalidateQueries({ queryKey: chave });
+        return {
+          ok: true, abertura,
+          erro: `O contrato foi aberto, mas a data não gravou (${errData.message}). Ele ficou com a data de hoje.`,
+        };
+      }
+    }
     await queryClient.invalidateQueries({ queryKey: chave });
-    return { ok: true, abertura: (r ?? {}) as AberturaContrato };
+    return { ok: true, abertura };
   };
 
   return { contratos: data ?? [], carregando: isLoading, abrir };

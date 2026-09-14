@@ -60,7 +60,10 @@ export function BarterListaModal({
           </Button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-auto">{children}</div>
+        {/* ⚠ RECUO INTERNO — item 10 do polish. A tabela nascia colada nas bordas do modal, e
+            texto encostado na moldura se lê pior e parece corte. O `px-3 py-2` é o mesmo respiro
+            dos outros modais da casa. */}
+        <div className="min-h-0 flex-1 overflow-auto px-3 py-2">{children}</div>
 
         <div className="flex shrink-0 items-center justify-between gap-2 bg-primary px-4 py-1.5
           text-[11px] font-semibold text-primary-foreground">
@@ -83,19 +86,33 @@ export function BarterListaModal({
  * exatamente o que a lei de estabilidade visual proíbe.
  */
 export function BarterResumoCard({
-  titulo, estado, children,
+  titulo, estado, valor, cor, children,
 }: {
   titulo: string;
-  /** Uma linha: "26 insumos", "28 lançamentos no DRE". Nunca vazia — use "—". */
+  /** A contagem: "26 insumos". Nunca vazia — use "—". */
   estado: ReactNode;
+  /**
+   * O DINHEIRO, em destaque — item 2 do polish.
+   *
+   * ⚠ ELE SAIU DA MESMA LINHA DA CONTAGEM. "26 insumos · R$ 390.252,59" em 11px cinza punha o
+   * número que importa no mesmo peso do que é só contexto, e o olho não achava nenhum dos dois.
+   */
+  valor?: string;
+  /** Verde para receita, vermelho para custo — o padrão de cor da casa. */
+  cor?: string;
   /** Os botões. */
   children: ReactNode;
 }) {
   return (
-    <div className="flex min-w-0 flex-col gap-1.5 rounded-md border bg-card px-2.5 py-2">
+    <div className="flex min-w-0 flex-col gap-1 rounded-md border bg-card px-2.5 py-2">
       <div className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">{titulo}</div>
-      <div className="min-h-[14px] truncate text-[11px] leading-tight">{estado}</div>
-      <div className="flex flex-wrap items-center gap-1">{children}</div>
+      {/* ⚠ A LINHA DO VALOR OCUPA ALTURA SEMPRE, com ou sem número: o card de materializar não tem
+          valor, e sem o `min-h` os três cartões da linha teriam alturas diferentes. */}
+      <div className={cn('min-h-[19px] truncate text-[16px] font-medium leading-none tabular-nums', cor)}>
+        {valor ?? ''}
+      </div>
+      <div className="min-h-[13px] truncate text-[10px] leading-tight text-muted-foreground">{estado}</div>
+      <div className="mt-0.5 flex flex-wrap items-center gap-1">{children}</div>
     </div>
   );
 }

@@ -16,12 +16,22 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
-export function ExportarColheita({ desabilitado, motivo, onExportar }: {
+export function ExportarColheita({ desabilitado, motivo, onExportar, classeGatilho }: {
   desabilitado?: boolean;
   /** Por que não dá para exportar — escrito, não só no `title` (regra da OC). */
   motivo?: string;
   onExportar: (formato: 'xlsx' | 'pdf', comAnalise: boolean) => void | Promise<void>;
+  /**
+   * Classe do BOTÃO, para quem o monta sobre fundo escuro.
+   *
+   * ⚠ NASCEU DE UM DEFEITO REAL: o `variant="outline"` não declara cor de texto, então dentro de
+   * uma faixa `bg-primary text-primary-foreground` — o cabeçalho dos modais do barter — ele
+   * herdava BRANCO sobre o `bg-background` branco do próprio botão. O "Exportar" existia,
+   * ocupava espaço e era invisível. Na colheita, que o monta sobre fundo claro, nada muda.
+   */
+  classeGatilho?: string;
 }) {
   const [aberto, setAberto] = useState(false);
   const [comAnalise, setComAnalise] = useState(true);
@@ -48,7 +58,8 @@ export function ExportarColheita({ desabilitado, motivo, onExportar }: {
       )}
       <Popover open={aberto} onOpenChange={setAberto}>
         <PopoverTrigger asChild>
-          <Button variant="outline" size="sm" className="h-8 gap-1 text-[11px]" disabled={desabilitado}>
+          <Button variant="outline" size="sm"
+            className={cn('h-8 gap-1 text-[11px]', classeGatilho)} disabled={desabilitado}>
             <Download className="h-3.5 w-3.5" /> Exportar
           </Button>
         </PopoverTrigger>

@@ -76,7 +76,21 @@ export function BarterInsumoModal({
     setPlanoId(insumo?.plano_conta_id ?? null);
     /* ⚠ O SUBCENTRO VEM DO PLANO, por busca reversa: a tabela guarda o id, e o seletor mostra
        texto. Sem isto, reabrir um insumo exibiria o campo vazio com o plano gravado. */
-    setSubcentro(classificacoes.find(c => c.id === insumo?.plano_conta_id)?.subcentro ?? '');
+    /**
+     * ⚠ A CAUSA DO "DIVIDENDOS" QUE VOLTOU TRÊS VEZES — e ela nunca esteve no filtro da lista.
+     * `ClassificacaoItem.id` é OPCIONAL, e as entradas de dividendo têm `id: undefined` POR
+     * DESIGN (`planoContasBuilder`: `id: i.is_dividendo ? undefined : i.id`, porque o id delas é
+     * a string `dividendo-<uuid>`, que não é uuid e quebraria o save).
+     * Num lançamento NOVO o `plano_conta_id` também é `undefined`. Então
+     * `.find(c => c.id === undefined)` casava com a PRIMEIRA entrada de dividendo do array, e o
+     * `subcentro` dela virava o valor inicial do campo — por FORA da lista filtrada, que sempre
+     * esteve correta (medido três vezes: 53 contas agrícolas, zero dividendos).
+     * ⚠ POR ISSO A GUARDA VEM ANTES DA BUSCA: sem id não há o que procurar, e procurar por
+     * `undefined` num campo opcional acha o primeiro que não o tem.
+     */
+    setSubcentro(insumo?.plano_conta_id
+      ? (classificacoes.find(c => c.id === insumo.plano_conta_id)?.subcentro ?? '')
+      : '');
     setBusca('');
   }, [aberto, insumo, classificacoes]);
 
