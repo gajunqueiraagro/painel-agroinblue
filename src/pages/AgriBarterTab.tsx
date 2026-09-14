@@ -306,7 +306,9 @@ export function AgriBarterTab() {
   const {
     linhas: extrato, saldo: saldoPermuta,
     carregando: carregandoExtrato, erro: erroExtrato, recarregar: recarregarExtrato,
-  } = useExtratoPermuta(contrato?.conta_permuta_id ?? null);
+    /* ⚠ OS DOIS, conta E contrato: a conta de permuta é do PARCEIRO, e dois barters com a mesma
+       cooperativa a dividem — sem o contrato, o extrato de um mostrava os lançamentos do outro. */
+  } = useExtratoPermuta(contrato?.conta_permuta_id ?? null, abertoId);
   const [ocupado, setOcupado] = useState(false);
   const [verInsumos, setVerInsumos] = useState(false);
   const [verVendas, setVerVendas] = useState(false);

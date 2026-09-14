@@ -138,10 +138,19 @@ export function BarterMaterializarCard({
             </tr>
           </thead>
           <tbody>
+            {/* ⚠ A FRASE DIZ "ESTE CONTRATO", não "a conta": a conta é do parceiro e pode ter
+                lançamentos de OUTRO barter com a mesma cooperativa. Dizer que a conta está vazia
+                seria falso justamente no caso que este PR conserta — e o operador que acabou de
+                ver 28 lançamentos no contrato ao lado concluiria que a tela quebrou.
+                ⚠ E O COMENTÁRIO FICA AQUI, entre os FILHOS, nunca entre os ATRIBUTOS de um
+                elemento: na posição de atributo a forma com chaves não é comentário para o
+                parser. Quinta vez neste repo.
+                ⚠ E NÃO SE ESCREVE O DELIMITADOR DE FECHO NO MEIO DO TEXTO: ele encerra o
+                comentário ali e a chave que sobra vira caractere solto no JSX. Segunda vez. */}
             <EstadoDaLista carregando={carregando} erro={erro} vazio={linhas.length === 0}
               colunas={4} onTentarDeNovo={onTentarDeNovo}
-              mensagemVazio={'A conta de permuta ainda não tem lançamento. Ela é o deve/tem com o '
-                + 'parceiro, e só se move ao materializar.'} />
+              mensagemVazio={'Este contrato ainda não tem lançamento na conta de permuta. Ela é o '
+                + 'deve/tem com o parceiro, e só se move ao materializar.'} />
             {linhas.map(l => (
               <tr key={l.id} className="border-t border-slate-100 odd:bg-[#1e3a5f]/[0.03]">
                 <td className="whitespace-nowrap px-1.5 py-0.5 tabular-nums">{dataBR(l.data)}</td>

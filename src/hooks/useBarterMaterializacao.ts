@@ -46,20 +46,35 @@ export interface ResultadoMaterializacao {
  * linhas do meio, e o operador não teria como saber qual está certo. O saldo FINAL seria o mesmo
  * nas duas — o que torna o defeito invisível até alguém conferir linha a linha.
  */
-export function useExtratoPermuta(contaPermutaId: string | null | undefined) {
+export function useExtratoPermuta(
+  contaPermutaId: string | null | undefined,
+  /**
+   * O CONTRATO ABERTO — e ele NÃO é opcional por engano.
+   *
+   * ⚠ A CONTA DE PERMUTA É DO PARCEIRO, NÃO DO CONTRATO: dois barters com a mesma cooperativa
+   * apontam para a MESMA conta, porque ela é o deve/tem com ela. Filtrar só por conta fazia o
+   * contrato novo, sem nenhum lançamento próprio, mostrar os do contrato anterior — e um saldo
+   * que não era dele. Medido no Proto: os dois barters de amendoim compartilham a conta
+   * 69370449…, o 23/24 tem 28 lançamentos e o 24/25 tem zero, mas via os 28.
+   * ⚠ OS DOIS FILTROS FICAM, não só o contrato: a conta é o que garante que um `contrato_id`
+   * repetido noutro contexto não traga lançamento de fora da permuta.
+   */
+  contratoId: string | null | undefined,
+) {
   const queryClient = useQueryClient();
   /* ⚠ A CHAVE NUMA CONSTANTE, não repetida no `invalidateQueries`: duas listas iguais escritas em
      lugares diferentes é como nasce um recarregar que invalida uma chave que ninguém usa — sem
      erro e sem efeito. O mesmo cuidado de `usePainelSafra`. */
-  const chave = ['barter-extrato-permuta', contaPermutaId ?? ''];
+  const chave = ['barter-extrato-permuta', contaPermutaId ?? '', contratoId ?? ''];
   const { data, isLoading, error } = useQuery({
     queryKey: chave,
-    enabled: !!contaPermutaId,
+    enabled: !!contaPermutaId && !!contratoId,
     queryFn: async (): Promise<LinhaExtrato[]> => {
       const { data: linhas, error } = await supabase
         .from('financeiro_lancamentos_v2')
         .select('id, data_competencia, descricao, valor, sinal, created_at')
         .eq('conta_bancaria_id', contaPermutaId as string)
+        .eq('contrato_id', contratoId as string)
         .eq('cancelado', false)
         .order('data_competencia', { ascending: true })
         .order('created_at', { ascending: true })
