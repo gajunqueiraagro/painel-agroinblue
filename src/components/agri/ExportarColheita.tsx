@@ -52,10 +52,22 @@ export function ExportarColheita({ desabilitado, motivo, onExportar, classeGatil
   };
 
   return (
-    <div className="flex items-center gap-2">
-      {desabilitado && motivo && (
-        <span className="text-[10px] text-muted-foreground">{motivo}</span>
-      )}
+    /**
+     * ⚠ O MOTIVO OCUPA ALTURA, NUNCA LARGURA — lei de estabilidade visual.
+     * Ele ficava numa linha, ANTES do botão, montado por condicional: ao trocar para uma safra
+     * sem carga, o texto "sem carga para exportar" entrava no fluxo e EMPURRAVA o botão — e,
+     * como o bloco inteiro vive num `justify-between`, empurrava a barra de seletores junto.
+     * Trocar de safra mexia a tela toda.
+     * ⚠ E ELE SAI DO FLUXO POR INTEIRO (`absolute`), não só desce de linha. Medido: com o texto
+     * em fluxo abaixo do botão, o CONTÊINER ainda crescia na largura — "sem carga para exportar"
+     * é mais largo que "Exportar" — e empurrava os seletores de Safra e Cultura 46px para a
+     * esquerda. Metade do defeito tinha sobrado.
+     * ⚠ O ESPAÇO DE BAIXO É RESERVADO POR `mb`, sempre: fora do fluxo, o texto não empurraria
+     * nada, mas sobreporia o que vem abaixo. A margem o acomoda com ou sem texto.
+     * ⚠ E CONTINUA ESCRITO, não só no `title` — a regra da OC é que o botão desabilitado diga por
+     * quê. Mudou de "ao lado" para "abaixo"; não deixou de dizer.
+     */
+    <div className="relative mb-[13px] flex items-center">
       <Popover open={aberto} onOpenChange={setAberto}>
         <PopoverTrigger asChild>
           <Button variant="outline" size="sm"
@@ -95,6 +107,10 @@ export function ExportarColheita({ desabilitado, motivo, onExportar, classeGatil
           </div>
         </PopoverContent>
       </Popover>
+      <span className="pointer-events-none absolute right-0 top-[calc(100%+2px)] w-[170px]
+        text-right text-[10px] leading-none text-muted-foreground">
+        {desabilitado && motivo ? motivo : ''}
+      </span>
     </div>
   );
 }

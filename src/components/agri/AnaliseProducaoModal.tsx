@@ -15,11 +15,21 @@ import { ChevronRight, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatNum } from '@/lib/calculos/formatters';
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
-import { LIMITE_AFLATOXINA, unidadeDaCultura, type TotaisColheita } from '@/lib/agri/colheita';
+import {
+  LIMITE_AFLATOXINA, unidadeDaCultura, sacasDoPeso, pesoDasSacas, type TotaisColheita,
+} from '@/lib/agri/colheita';
+import { BarrasCompactas, type BarraCompacta } from '@/components/ui/barras-compactas';
 
 /** Um elo da cadeia. `destaque` é o fim dela — o que a cooperativa aceitou. */
-function Elo({ rotulo, valor, nota, cor, destaque }: {
-  rotulo: string; valor: string; nota?: string; cor?: string; destaque?: boolean;
+function Elo({ rotulo, valor, nota2, nota, cor, destaque }: {
+  rotulo: string; valor: string;
+  /**
+   * A MESMA grandeza na outra unidade, logo abaixo do número.
+   * ⚠ ALTURA RESERVADA SEMPRE: os cinco elos vivem lado a lado, e um com conversão e outro sem
+   * teriam alturas diferentes na mesma fila.
+   */
+  nota2?: string;
+  nota?: string; cor?: string; destaque?: boolean;
 }) {
   return (
     <div className={cn('min-w-0 flex-1 rounded-md border px-2.5 py-1.5',
@@ -28,6 +38,8 @@ function Elo({ rotulo, valor, nota, cor, destaque }: {
         destaque ? 'text-primary-foreground/80' : 'text-muted-foreground')}>{rotulo}</div>
       <div className={cn('mt-0.5 text-[15px] font-medium leading-none tabular-nums',
         destaque ? 'text-primary-foreground' : cor)}>{valor}</div>
+      <div className={cn('mt-0.5 min-h-[11px] text-[10px] leading-none tabular-nums',
+        destaque ? 'text-primary-foreground/80' : 'text-muted-foreground')}>{nota2 ?? ''}</div>
       {nota && (
         <div className={cn('mt-0.5 text-[9px] leading-tight',
           destaque ? 'text-primary-foreground/80' : cor ?? 'text-muted-foreground')}>{nota}</div>
@@ -46,7 +58,9 @@ function Card({ rotulo, valor, sufixo, nota, cor }: {
   return (
     <div className="rounded-md border bg-card px-2.5 py-1.5">
       <div className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">{rotulo}</div>
-      <div className={cn('mt-0.5 text-[16px] font-medium leading-none tabular-nums', cor)}>
+      {/* ⚠ 20px — item 3c. Produtividade final, líquida e quebra são os três números que o
+          produtor leva para a conversa; em 16px disputavam atenção com os elos da cadeia. */}
+      <div className={cn('mt-0.5 text-[20px] font-medium leading-none tabular-nums', cor)}>
         {valor}{sufixo && <span className="ml-0.5 text-[10px] text-muted-foreground">{sufixo}</span>}
       </div>
       {nota && <div className="mt-0.5 text-[9px] leading-tight text-muted-foreground">{nota}</div>}
@@ -71,6 +85,30 @@ export function AnaliseProducaoModal({
   const unidade = unidadeDaCultura(cultura);
   const temSaca = unidade.kgPorSaca != null;
   const pct = (v: number) => (totais.sacasFinais > 0 ? (v / totais.sacasFinais) * 100 : 0);
+
+  /* ⚠ VAZIO, NÃO ZERO, quando a cultura não tem peso de saca decidido — mesma regra dos cards. */
+  const emSc = (kg: number) => {
+    const sc = sacasDoPeso(kg, cultura);
+    return sc == null ? `${formatNum(kg, 2)} kg` : `${formatNum(sc, 2)} sc`;
+  };
+  const emKg = (sacas: number) => {
+    const kg = pesoDasSacas(sacas, cultura);
+    return kg == null ? undefined : `${formatNum(kg, 2)} kg`;
+  };
+
+  /**
+   * O GRÁFICO DA CADEIA — item 3e.
+   *
+   * ⚠ QUATRO BARRAS, DUAS LEITURAS: colhido e seco, no total e por hectare. É a mesma perda da
+   * secagem vista de dois jeitos — e o por-hectare é o que se compara com outra safra, porque o
+   * total depende do tamanho do talhão.
+   * ⚠ A RAZÃO ENTRE AS BARRAS É A RAZÃO ENTRE OS NÚMEROS: as duas de total dividem a mesma
+   * escala e as duas de hectare também, então a quebra aparece como diferença de altura. Foi o
+   * gate que o gráfico do Painel da Safra reprovou na primeira versão.
+   */
+  const scVerde = sacasDoPeso(totais.verdeKg, cultura);
+  const scSeco = sacasDoPeso(totais.secoKg, cultura);
+  const porHa = (v: number | null) => (v != null && areaHa && areaHa > 0 ? v / areaHa : null);
   const traco = (v: number | null, casas = 2, sufixo = '') =>
     (v == null ? '—' : `${formatNum(v, casas)}${sufixo}`);
 
@@ -110,21 +148,29 @@ export function AnaliseProducaoModal({
               Do que arrancou ao que a cooperativa aceitou
             </div>
             <div className="flex items-stretch gap-1.5">
-              <Elo rotulo="Peso verde" valor={`${formatNum(totais.verdeKg, 2)} kg`}
+              {/* ⚠ SACA EM CIMA, KG EMBAIXO — invertido em relação aos cards da tela, de
+                  propósito: aqui a cadeia inteira é contada em SACAS (verde → seco → boas →
+                  final), e pôr o quilo no topo obrigaria o olho a converter a cada elo. O quilo
+                  fica como conferência do romaneio. */}
+              <Elo rotulo="Peso verde" valor={emSc(totais.verdeKg)} nota2={`${formatNum(totais.verdeKg, 2)} kg`}
                 nota={temSaca ? `${traco(totais.verdeEmSacas, 2)} sc · o que arrancou` : 'o que arrancou'} />
               <Seta />
-              <Elo rotulo="Peso seco" valor={totais.secoKg > 0 ? `${formatNum(totais.secoKg, 2)} kg` : '—'}
+              <Elo rotulo="Peso seco" valor={totais.secoKg > 0 ? emSc(totais.secoKg) : '—'}
+                nota2={totais.secoKg > 0 ? `${formatNum(totais.secoKg, 2)} kg` : undefined}
                 nota={totais.quebraPct != null ? `−${formatNum(totais.quebraPct, 1)}% na secagem` : 'aguardando a cooperativa'}
                 cor={totais.quebraPct != null ? 'text-destructive' : undefined} />
               <Seta />
-              <Elo rotulo="Sacas boas" valor={`${formatNum(totais.sacasBoas, 2)} sc`} nota="grão que vale preço" />
+              <Elo rotulo="Sacas boas" valor={`${formatNum(totais.sacasBoas, 2)} sc`}
+                nota2={emKg(totais.sacasBoas)} nota="grão que vale preço" />
               <Seta />
               {/* ⚠ A ROÇA ENTRA NO FINAL, mas em vermelho: ela foi aceita e é refugo ao mesmo
                   tempo. Deixá-la fora faria o "aproveitado" discordar do romaneio. */}
               <Elo rotulo="Grão de roça" valor={`${formatNum(totais.graoRocaSacas, 2)} sc`}
+                nota2={emKg(totais.graoRocaSacas)}
                 nota="refugo" cor="text-destructive" />
               <Seta />
               <Elo rotulo="Final aproveitado" valor={`${formatNum(totais.sacasFinais, 2)} sc`}
+                nota2={emKg(totais.sacasFinais)}
                 nota="boas + roça" destaque />
             </div>
           </div>
@@ -156,10 +202,12 @@ export function AnaliseProducaoModal({
             </div>
             <table className="w-full border-collapse overflow-hidden rounded-md border text-[10px]">
               <thead>
-                {/* ⚠ CABEÇALHO E TOTAL NO MESMO TOM: são as duas bordas da tabela e se lêem
-                    como um par — o azul num e o cinza no outro faziam parecer duas tabelas
-                    coladas. `bg-muted` nos dois, e o que distingue o total é o negrito. */}
-                <tr className="bg-muted">
+                {/* ⚠ CABEÇALHO E TOTAL NO MESMO TOM: são as duas bordas da tabela e se lêem como
+                    um par — o azul num e o cinza no outro faziam parecer duas tabelas coladas.
+                    ⚠ E O TOM SUBIU PARA `bg-muted-foreground/15` (item 3d): o `bg-muted` era quase
+                    o fundo do modal, e as duas bordas se perdiam no meio das linhas de dado. O que
+                    distingue o total continua sendo o negrito. */}
+                <tr className="bg-muted-foreground/15">
                   <th className="px-2 py-1 text-left text-[9px] font-semibold tracking-wide">Faixa</th>
                   <th className="px-2 py-1 text-right text-[9px] font-semibold tracking-wide">Sacas</th>
                   <th className="px-2 py-1 text-right text-[9px] font-semibold tracking-wide">%</th>
@@ -190,13 +238,44 @@ export function AnaliseProducaoModal({
                     </td>
                   </tr>
                 )}
-                <tr className="border-t bg-muted font-bold">
+                <tr className="border-t bg-muted-foreground/15 font-bold">
                   <td className="px-2 py-1">Total</td>
                   <td className="px-2 py-1 text-right tabular-nums">{formatNum(totais.sacasFinais, 2)}</td>
                   <td className="px-2 py-1 text-right tabular-nums">100,0%</td>
                 </tr>
               </tbody>
             </table>
+          </div>
+
+          {/* ⚠ O GRÁFICO OCUPA O VAZIO À DIREITA da classificação — item 3e. Bloco contido, não
+              largura total: é a lei do gráfico compacto. */}
+          <div className="flex w-full flex-wrap gap-2 md:w-auto">
+            {/* ⚠ DOIS GRÁFICOS, NÃO UM — e a razão é a escala. Total e por-hectare são ordens de
+                grandeza diferentes (9.100 sc contra 150 sc/ha): na mesma escala, as duas barras de
+                hectare valeriam 1,6% da altura e apareceriam como risco. Um gráfico em que metade
+                das barras some não compara nada.
+                ⚠ SEPARADOS, cada par divide a SUA escala, e a quebra da secagem — que é o que se
+                quer ver — aparece como diferença de altura nos dois. */}
+            {([
+              ['Total colhido', scVerde, scSeco, 'bg-primary', 'sacas'],
+              ['Por hectare', porHa(scVerde), porHa(scSeco), 'bg-success', 'sc/ha'],
+            ] as Array<[string, number | null, number | null, string, string]>).map(
+              ([titulo, verde, seco, cor, un]) => (
+                <BarrasCompactas
+                  key={titulo}
+                  titulo={titulo}
+                  legenda={`colhido × seco, em ${un} — a diferença é a quebra`}
+                  larguraMax={132}
+                  altura={84}
+                  barras={([['colhido', verde], ['seco', seco]] as Array<[string, number | null]>)
+                    .map(([rotulo, v]): BarraCompacta => ({
+                      rotulo,
+                      valor: v,
+                      texto: v == null ? '—' : formatNum(v, 0),
+                      cor: rotulo === 'seco' ? `${cor}/50` : cor,
+                    }))}
+                />
+              ))}
           </div>
         </div>
       </DialogContent>
