@@ -111,30 +111,34 @@ export function BarrasCompactas({
           return (
             <div key={`${b.rotulo}-${i}`} className={cn('flex h-full flex-col', colClasse)}
               style={colEstilo}>
-              {/* O número fica ACIMA da barra e sempre no fluxo: sem ele reservado, barras altas
-                  e baixas alinhariam o texto em alturas diferentes. */}
-              <div className="mb-0.5 shrink-0 whitespace-nowrap text-center leading-none tabular-nums text-muted-foreground"
-                style={{ fontSize: fonteValor }}>
-                {b.texto}
-              </div>
-              {/* ⚠ A PORCENTAGEM É DESTE TRILHO, NÃO DA COLUNA — e a diferença DISTORCIA O
-                  GRÁFICO. Medido em 14/09/2026: com a barra filha direta da coluna, o `height: %`
-                  media os 96px cheios, mas o desenho acontecia nos ~86px que sobram depois do
-                  texto. A barra de 100% pedia 96 e era ACHATADA para 86; as menores não. Duas
-                  safras de 138 e 239 sc/ha apareciam na razão 64% em vez de 58% — o gráfico
-                  mentia sobre a comparação que existe para fazer.
-                  ⚠ Com `flex-1 min-h-0`, o trilho é exatamente o espaço da barra, e 100% é 100%
-                  dele. Nenhuma barra é comprimida. */}
-              <div className="flex min-h-0 flex-1 items-end">
+              {/* ⚠ O NÚMERO ACOMPANHA A ALTURA DA BARRA — ele fica ANCORADO NO TOPO DELA, não
+                  numa linha fixa no alto do card. Antes, o valor da roça (barra de 7%) aparecia
+                  lá em cima enquanto a barra ficava rente ao chão: o olho não ligava um ao outro.
+                  ⚠ E ELE É `absolute`, FORA DO FLUXO, de propósito. Em fluxo ele ocuparia altura
+                  DENTRO do trilho, e a barra de 100% pediria mais espaço do que sobra — que é
+                  exatamente o achatamento medido em 14/09: as barras altas comprimiam e as baixas
+                  não, e a razão entre elas deixava de ser a razão entre os números.
+                  ⚠ O `paddingTop` do trilho reserva o lugar do número mais alto: sem ele, o valor
+                  da barra de 100% sairia por cima do título do card. */}
+              <div className="relative flex min-h-0 flex-1 items-end"
+                style={{ paddingTop: fonteValor + 4 }}>
                 {b.valor == null ? (
-                  <div className={cn('rounded-sm border border-dashed border-muted-foreground/40',
+                  <div className={cn('relative rounded-sm border border-dashed border-muted-foreground/40',
                     distribuir ? 'mx-auto' : 'w-full')}
                     style={{ height: 6, width: distribuir ? larguraBarra : undefined }}
-                    title="Sem dado" />
+                    title="Sem dado">
+                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 whitespace-nowrap
+                      pb-[2px] leading-none tabular-nums text-muted-foreground"
+                      style={{ fontSize: fonteValor }}>{b.texto}</span>
+                  </div>
                 ) : (
-                  <div className={cn('rounded-sm', distribuir ? 'mx-auto' : 'w-full',
+                  <div className={cn('relative rounded-sm', distribuir ? 'mx-auto' : 'w-full',
                     b.cor ?? 'bg-primary')}
-                    style={{ height: `${pct}%`, width: distribuir ? larguraBarra : undefined }} />
+                    style={{ height: `${pct}%`, width: distribuir ? larguraBarra : undefined }}>
+                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 whitespace-nowrap
+                      pb-[2px] leading-none tabular-nums text-muted-foreground"
+                      style={{ fontSize: fonteValor }}>{b.texto}</span>
+                  </div>
                 )}
               </div>
             </div>

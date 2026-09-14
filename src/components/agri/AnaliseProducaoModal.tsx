@@ -346,7 +346,7 @@ export function AnaliseProducaoModal({
                   larguraMax={158}
                   altura={118}
                   larguraBarra={30}
-                  fonteValor={15}
+                  fonteValor={11}
                   distribuir
                   barras={[
                     /* ⚠ O MESMO FORMATO NAS TRÊS — inteiro com separador de milhar. É a única
