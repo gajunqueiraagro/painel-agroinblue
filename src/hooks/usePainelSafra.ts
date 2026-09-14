@@ -9,7 +9,7 @@
  * RPC. Elas não são dado novo: são o mesmo dado dividido pela área e pela produção que vieram
  * junto, e por isso não podem divergir da fonte.
  */
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
 /** Uma linha do desdobramento por centro de custo. */
@@ -81,8 +81,13 @@ export function usePainelSafra(
   safraId: string | null,
   cultura: string | null,
 ) {
+  const queryClient = useQueryClient();
+  /* ⚠ A CHAVE NUMA CONSTANTE, e não repetida no `invalidateQueries`: duas listas iguais
+     escritas em lugares diferentes é como nasce um recarregar que não recarrega nada — ele
+     invalida uma chave que ninguém usa, sem erro e sem efeito. */
+  const chave = ['painel-safra', clienteId ?? '', safraId ?? '', cultura ?? ''];
   const { data, isLoading, error } = useQuery({
-    queryKey: ['painel-safra', clienteId ?? '', safraId ?? '', cultura ?? ''],
+    queryKey: chave,
     enabled: !!clienteId && !!safraId && !!cultura,
     queryFn: async (): Promise<PainelSafra> => {
       const { data: r, error: err } = await (supabase as any).rpc('fn_painel_safra', {
@@ -137,7 +142,15 @@ export function usePainelSafra(
     },
   });
 
-  return { painel: data ?? null, carregando: isLoading, erro: error as Error | null };
+  /**
+   * ⚠ EXPOSTO PARA A EDIÇÃO DENTRO DO DRILL — o mesmo idioma de `useLancamentosDaSafra` e de
+   * `useDreAgricola`, que já devolvem o seu `recarregar`. Editar um lançamento pelo drawer muda
+   * o número que a RPC soma; sem esta porta, o painel continuaria mostrando o valor velho com o
+   * detalhe já corrigido logo ao lado — na mesma tela, ao mesmo tempo.
+   */
+  const recarregar = () => queryClient.invalidateQueries({ queryKey: chave });
+
+  return { painel: data ?? null, carregando: isLoading, erro: error as Error | null, recarregar };
 }
 
 /**
@@ -199,8 +212,10 @@ export interface SafraComparada {
 export function useComparativoSafras(
   clienteId: string | null | undefined, cultura: string | null,
 ) {
+  const queryClient = useQueryClient();
+  const chave = ['painel-safra-comparativo', clienteId ?? '', cultura ?? ''];
   const { data, isLoading } = useQuery({
-    queryKey: ['painel-safra-comparativo', clienteId ?? '', cultura ?? ''],
+    queryKey: chave,
     enabled: !!clienteId && !!cultura,
     queryFn: async (): Promise<SafraComparada[]> => {
       const { data: r, error } = await (supabase as any).rpc('fn_painel_safra_comparativo', {
@@ -227,7 +242,11 @@ export function useComparativoSafras(
       }));
     },
   });
-  return { safras: data ?? [], carregando: isLoading };
+  /* ⚠ O HISTÓRICO TAMBÉM MUDA: o lançamento editado entra no custeio direto da safra dele, que
+     é coluna da tabela de baixo. Recarregar só o painel deixaria as duas discordando. */
+  const recarregar = () => queryClient.invalidateQueries({ queryKey: chave });
+
+  return { safras: data ?? [], carregando: isLoading, recarregar };
 }
 
 /**

@@ -31,6 +31,10 @@ import {
 import { AnaliseDrawer } from '@/components/financeiro-v2/AnaliseDrawer';
 import { DrillDownEconomico } from '@/components/financeiro-v2/DrillDownEconomico';
 import { NIVEIS_DRILL, type ItemDrill } from '@/lib/analise/drillEconomico';
+import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
+import { useFinanceiroV2, type LancamentoV2 } from '@/hooks/useFinanceiroV2';
+import { useFazenda } from '@/contexts/FazendaContext';
+import { supabase } from '@/integrations/supabase/client';
 
 /** Cabeçalho azul das três colunas, como o resto da família. */
 const TH = 'bg-primary px-2 py-1 text-[9px] font-semibold uppercase tracking-wide'
@@ -232,8 +236,10 @@ export function PainelSafraTab() {
   const talhoesDaCultura = useMemo(
     () => talhoes.filter(t => t.cultura === cultura), [talhoes, cultura]);
 
-  const { painel, carregando, erro } = usePainelSafra(clienteId, safraId || null, cultura || null);
-  const { safras: comparadas } = useComparativoSafras(clienteId, cultura || null);
+  const { painel, carregando, erro, recarregar: recarregarPainel } =
+    usePainelSafra(clienteId, safraId || null, cultura || null);
+  const { safras: comparadas, recarregar: recarregarComparativo } =
+    useComparativoSafras(clienteId, cultura || null);
   const safra = safras.find(s => s.id === safraId);
 
   const area = painel?.area_ha ?? 0;
@@ -255,7 +261,8 @@ export function PainelSafraTab() {
    * contam tanto no amendoim quanto na mandioca. Filtrar por `cultura = X` faria a lista somar
    * bem menos que o número clicado.
    */
-  const { lancamentos, fornecedores } = useLancamentosDaSafra(clienteId, safraId || null);
+  const { lancamentos, fornecedores, recarregar: recarregarLancamentos } =
+    useLancamentosDaSafra(clienteId, safraId || null);
   const [drill, setDrill] = useState<
     { tipo: 'centro' | 'subcentro' | 'grupo'; chave: string; rotulo: string } | null>(null);
 
@@ -289,6 +296,37 @@ export function PainelSafraTab() {
 
   const totalDoDrill = useMemo(
     () => itensDoDrill.reduce((acc, it) => acc + Math.abs(it.mov), 0), [itensDoDrill]);
+
+  /* ───────────────── A EDIÇÃO DE UM LANÇAMENTO, DE DENTRO DO DRILL ─────────────────
+   * ⚠ O MESMO `LancamentoV2Dialog` DO DRE POR CULTURA E DO PAINEL POR PERÍODO, com a mesma
+   * passagem de catálogos e o mesmo `onSave`. Nenhuma variante: o operador que corrige um
+   * lançamento aqui vê exatamente a tela que veria vindo do DRE.
+   */
+  const fin = useFinanceiroV2();
+  const { fazendas } = useFazenda();
+  const [editando, setEditando] = useState<LancamentoV2 | null>(null);
+
+  /* ⚠ OS CATÁLOGOS CARREGAM UMA VEZ, na montagem, como no DRE: o modal precisa de contas,
+     classificações, fornecedores e safras, e buscá-los ao abrir deixaria o primeiro clique com
+     os seletores vazios. */
+  useEffect(() => {
+    void fin.loadContas();
+    void fin.loadClassificacoes();
+    void fin.loadFornecedores();
+    void fin.loadSafras();
+  }, [fin.loadContas, fin.loadClassificacoes, fin.loadFornecedores, fin.loadSafras]);
+
+  /**
+   * ⚠ A LINHA VEM INTEIRA DO BANCO (`select('*')`) — copiado do DRE, e pelo mesmo motivo: a
+   * lista do drill carrega quinze colunas e o modal precisa das sessenta e cinco. Buscar uma
+   * linha ao clicar é mais barato que trazer tudo para o caso de o operador abrir uma.
+   */
+  const abrirLancamento = async (id: string) => {
+    const { data } = await (supabase as any).from('financeiro_lancamentos_v2')
+      .select('*').eq('id', id).maybeSingle();
+    const linha: LancamentoV2 | null = data ?? null;
+    if (linha) setEditando(linha);
+  };
 
   return (
     <div className="w-full space-y-2 p-4 animate-fade-in">
@@ -803,10 +841,8 @@ export function PainelSafraTab() {
           ⚠ SEÇÃO ÚNICA, ao contrário do DRE: lá a célula de uma cultura pode ser direto +
           rateado e precisa de duas abas. Aqui cada linha clicável tem uma origem só — o rateio
           administrativo, que seria a exceção, é justamente a linha que NÃO abre nesta fatia.
-          ⚠ SEM `onAbrirLancamento`: abrir o lançamento para edição é do DRE, que recarrega as
-          três fontes ao salvar. Este painel lê de uma RPC agregada; abrir a edição aqui pediria
-          a mesma orquestração de recarga, e sem ela a tela mostraria um número e o detalhe
-          dele outro. Fica para quando a fatia 3 decidir. */}
+          ⚠ COM `onAbrirLancamento` DESDE A F1B: a orquestração de recarga que faltava está
+          escrita no `onSave` do modal abaixo — e são TRÊS fontes nesta tela, não duas. */}
       {drill && (
         <AnaliseDrawer
           titulo={`${drill.rotulo} · ${labelDaCultura(cultura)}`
@@ -816,9 +852,40 @@ export function PainelSafraTab() {
           total={totalDoDrill}
           totalLabel="TOTAL DA LINHA"
           onClose={() => setDrill(null)}>
-          <DrillDownEconomico itens={itensDoDrill} raiz={drill.rotulo} niveis={NIVEIS_DRILL} />
+          <DrillDownEconomico itens={itensDoDrill} raiz={drill.rotulo} niveis={NIVEIS_DRILL}
+            onAbrirLancamento={(id) => { void abrirLancamento(id); }} />
         </AnaliseDrawer>
       )}
+
+      {/* ⚠ O MODAL É IRMÃO DO DRAWER, NUNCA FILHO — a mesma decisão do DRE, e é o que faz a
+          volta funcionar de graça: fechar a edição não desmonta o drawer, então o caminho
+          descido na árvore e a ordenação continuam onde estavam. Aninhá-lo dentro do drawer
+          reconstruiria a árvore a cada abertura e devolveria o operador à raiz. */}
+      <LancamentoV2Dialog
+        open={!!editando}
+        onClose={() => setEditando(null)}
+        onSave={async (form, id) => {
+          const ok = id ? await fin.editarLancamento(id, form) : await fin.criarLancamento(form);
+          /* ⚠ AS TRÊS FONTES DESTA TELA, e nenhuma sobra: o painel é somado pela RPC, a lista do
+             drawer é lida do PostgREST e o histórico de safras vem de uma SEGUNDA RPC — o
+             lançamento editado entra no custeio direto da safra dele, que é coluna de lá.
+             Recarregar duas das três é o pior dos mundos: a linha muda e o detalhe dela não, na
+             mesma tela aberta. É a lição que o DRE já pagou. */
+          if (ok && id) {
+            await recarregarLancamentos();
+            await recarregarPainel();
+            await recarregarComparativo();
+          }
+          return ok;
+        }}
+        lancamento={editando}
+        fazendas={fazendas}
+        contas={fin.contasBancarias}
+        classificacoes={fin.classificacoes}
+        fornecedores={fin.fornecedores}
+        safras={fin.safras}
+        onCriarFornecedor={fin.criarFornecedor}
+      />
     </div>
   );
 }
