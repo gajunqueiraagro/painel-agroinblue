@@ -6,9 +6,12 @@
  * divergissem ninguém saberia qual está certo — que é exatamente o problema que uma tela de
  * estoque existe para não ter.
  *
- * ⚠ ELA NÃO RECEBE CULTURA, e isso é do contrato, não omissão: a assinatura é
- * `(p_cliente, p_safra_id)`. O estoque é da SAFRA INTEIRA. A tela não oferece filtro de cultura
- * por causa disto — um seletor que não muda número nenhum é pior que seletor nenhum.
+ * ⚠ A CULTURA FILTRA DOS DOIS LADOS, e são colunas DIFERENTES no banco: o colhido por
+ * `agri_safra_area.cultura` — a área é que sabe o que foi plantado — e o entregue por
+ * `agri_operacoes_comerciais.cultura` — a venda é que sabe o que foi negociado. Filtrar só um
+ * lado daria saldo negativo numa cultura e inflado na outra.
+ * ⚠ A ASSINATURA DE DOIS PARÂMETROS NÃO EXISTE MAIS: ela foi dropada no banco quando a cultura
+ * entrou. Não há sobrecarga para cair por engano.
  */
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -38,14 +41,20 @@ const num = (v: unknown): number => {
   return isFinite(n) ? n : 0;
 };
 
-export function useEstoqueGraos(clienteId: string | null | undefined, safraId: string | null) {
+export function useEstoqueGraos(
+  clienteId: string | null | undefined, safraId: string | null, cultura: string | null,
+) {
   const { data, isLoading, error } = useQuery({
-    queryKey: ['estoque-graos', clienteId ?? '', safraId ?? ''],
-    enabled: !!clienteId && !!safraId,
+    queryKey: ['estoque-graos', clienteId ?? '', safraId ?? '', cultura ?? ''],
+    /* ⚠ SEM CULTURA A CONSULTA NEM SAI: a RPC exige os três, e chamá-la com `null` devolveria
+       erro em vez de "ainda não escolhi". O seletor abre preenchido, então isto só vale para o
+       instante entre carregar as culturas e escolher a primeira. */
+    enabled: !!clienteId && !!safraId && !!cultura,
     queryFn: async (): Promise<EstoqueClasse[]> => {
       const { data: r, error: err } = await (supabase as any).rpc('fn_estoque_graos', {
         p_cliente: clienteId,
         p_safra_id: safraId,
+        p_cultura: cultura,
       });
       if (err) throw err;
       /**

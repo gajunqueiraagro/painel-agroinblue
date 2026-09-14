@@ -8,11 +8,12 @@
  * existem desabilitados porque a tela precisa mostrar, desde o primeiro dia, o que ela vai
  * saber fazer — um saldo sem saída aparente parece um número que ninguém pode mexer.
  *
- * ⚠ SEM FILTRO DE CULTURA, e é decisão, não esquecimento: `fn_estoque_graos` recebe
- * `(cliente, safra)` e o corpo dela não menciona cultura. O estoque é da SAFRA INTEIRA. Oferecer
- * um seletor de cultura que não muda número nenhum seria pior que não oferecer — o operador
- * trocaria a cultura, veria o mesmo saldo e concluiria que a tela está quebrada. A nota do
- * rodapé diz isso com todas as letras.
+ * ⚠ SAFRA + CULTURA, como o Painel da Safra. A primeira versão desta tela tinha só a safra,
+ * porque a RPC não aceitava cultura e um seletor que não muda número nenhum é pior que seletor
+ * nenhum; a RPC ganhou o parâmetro e o filtro veio junto.
+ * ⚠ A CULTURA SAI DOS TALHÕES DAQUELA SAFRA, não de uma lista fixa: só se estoca o que se
+ * plantou, e oferecer milho numa safra que só teve amendoim abriria a tela zerada sem dizer
+ * por quê.
  */
 import { useState, useEffect, useMemo } from 'react';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -22,7 +23,8 @@ import { Button } from '@/components/ui/button';
 import { Plus, TrendingDown, Loader2, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
-import { useSafrasLavoura } from '@/hooks/useAreaPlantada';
+import { useSafrasLavoura, useTalhoesDaSafra } from '@/hooks/useAreaPlantada';
+import { labelDaCultura } from '@/lib/agri/areaPlantada';
 import { labelDaClasse, corDaClasse } from '@/lib/agri/barterVenda';
 import { useEstoqueGraos, totaisDoEstoque } from '@/hooks/useEstoqueGraos';
 
@@ -70,7 +72,18 @@ export function AgriEstoqueGraosTab() {
     if (!safraId && safras.length > 0) setSafraId(safras[safras.length - 1].id);
   }, [safras, safraId]);
 
-  const { linhas, carregando, erro } = useEstoqueGraos(clienteId, safraId || null);
+  /* ⚠ AS CULTURAS SAEM DOS TALHÕES, o mesmo caminho da colheita e do Painel da Safra. */
+  const { talhoes } = useTalhoesDaSafra(clienteId, safraId || null);
+  const culturasDaSafra = useMemo(
+    () => Array.from(new Set(talhoes.map(t => t.cultura))).sort((a, b) => a.localeCompare(b, 'pt-BR')),
+    [talhoes]);
+  const [cultura, setCultura] = useState('');
+  useEffect(() => {
+    if (culturasDaSafra.length === 0) { setCultura(''); return; }
+    if (!culturasDaSafra.includes(cultura)) setCultura(culturasDaSafra[0]);
+  }, [culturasDaSafra, cultura]);
+
+  const { linhas, carregando, erro } = useEstoqueGraos(clienteId, safraId || null, cultura || null);
   const t = useMemo(() => totaisDoEstoque(linhas), [linhas]);
 
   /* ⚠ A ORDEM DAS CLASSES É A DA QUALIDADE, não a do valor: bom, fora de faixa, refugo. É como o
@@ -88,20 +101,36 @@ export function AgriEstoqueGraosTab() {
     <div className="w-full space-y-2 p-4 animate-fade-in">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <h2 className="text-[15px] font-bold text-foreground">Estoque de Grãos</h2>
-        <div className="w-[170px]">
-          <Label className="text-[10px]">Safra</Label>
-          <Select value={safraId} onValueChange={setSafraId}>
-            <SelectTrigger className="mt-0.5 h-8 text-[12px]">
-              <SelectValue placeholder="Escolha" />
-            </SelectTrigger>
-            <SelectContent>
-              {safras.map(s => (
-                <SelectItem key={s.id} value={s.id} className="text-[12px]">
-                  {s.codigo || s.nome}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="w-[170px]">
+            <Label className="text-[10px]">Safra</Label>
+            <Select value={safraId} onValueChange={setSafraId}>
+              <SelectTrigger className="mt-0.5 h-8 text-[12px]">
+                <SelectValue placeholder="Escolha" />
+              </SelectTrigger>
+              <SelectContent>
+                {safras.map(s => (
+                  <SelectItem key={s.id} value={s.id} className="text-[12px]">
+                    {s.codigo || s.nome}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="w-[150px]">
+            <Label className="text-[10px]">Cultura</Label>
+            <Select value={cultura} onValueChange={setCultura}
+              disabled={culturasDaSafra.length === 0}>
+              <SelectTrigger className="mt-0.5 h-8 text-[12px]">
+                <SelectValue placeholder={culturasDaSafra.length === 0 ? 'Safra sem área' : 'Escolha'} />
+              </SelectTrigger>
+              <SelectContent>
+                {culturasDaSafra.map(c => (
+                  <SelectItem key={c} value={c} className="text-[12px]">{labelDaCultura(c)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
 
@@ -157,7 +186,7 @@ export function AgriEstoqueGraosTab() {
               </td></tr>
             ) : ordenadas.length === 0 ? (
               <tr><td colSpan={7} className="px-2 py-6 text-center text-[10px] text-muted-foreground">
-                Esta safra ainda não tem colheita lançada.
+                Esta cultura ainda não tem colheita lançada nesta safra.
               </td></tr>
             ) : ordenadas.map(l => (
               <tr key={l.classe} className="border-t border-slate-100">
@@ -237,12 +266,10 @@ export function AgriEstoqueGraosTab() {
       </div>
 
       <p className="text-[10px] leading-snug text-muted-foreground">
-        Saldo = Colhido − Entregue (barter/venda) − Quebra, por safra e classe.{' '}
-        {/* ⚠ A RESSALVA DA CULTURA FICA ESCRITA, e não é detalhe técnico: numa safra com duas
-            culturas colhidas as sacas das duas se somam na mesma classe, e quem não souber disso
-            vai conferir contra a colheita de uma cultura só e achar diferença. */}
-        O estoque é de <strong>toda a safra</strong> — se ela tiver mais de uma cultura colhida,
-        as sacas das duas entram na mesma classe.
+        {/* ⚠ A RESSALVA DA SAFRA INTEIRA SAIU COM O FILTRO: enquanto a RPC não aceitava cultura,
+            as sacas de duas culturas colhidas somavam na mesma classe e a nota tinha de avisar.
+            Agora o recorte é o que o topo diz, e repetir o aviso confundiria. */}
+        Saldo = Colhido − Entregue (barter/venda) − Quebra, por safra, cultura e classe.
       </p>
     </div>
   );
