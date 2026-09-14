@@ -19,6 +19,31 @@ import logoUrl from '@/assets/logo.png';
 const PAGE_W = 210;
 const PAGE_H = 297;
 const MARGEM = 10;          // margem lateral (útil = 190mm)
+
+/**
+ * O ÚLTIMO Y EM QUE AINDA SE PODE DESENHAR.
+ *
+ * ⚠ O RODAPÉ OCUPA O PÉ DA FOLHA: `addFooterComPaginacao` escreve em `PAGE_H - 8` e traça a
+ * linha em `PAGE_H - 12`. Desenhar abaixo daqui põe conteúdo por cima do rodapé — e o rodapé é
+ * aplicado DEPOIS, em todas as páginas, então quem sobrepõe é sempre o conteúdo.
+ */
+export const LIMITE_Y = PAGE_H - 20;
+
+/**
+ * Garante espaço para o que vem a seguir; se não couber, abre página e devolve o topo.
+ *
+ * ⚠ NASCEU DE UM DEFEITO MEDIDO: no relatório da colheita, "Perdas e custos", "Produção em
+ * barras" e os gráficos desenharam UM POR CIMA DO OUTRO no pé da folha. O `y` avançava sem
+ * ninguém perguntar se o próximo bloco cabia — e `doc.text`/`doc.rect` não quebram página
+ * sozinhos; eles desenham onde mandam, dentro ou fora do papel.
+ * ⚠ O `autoTable` PAGINA O CORPO DELE, mas não sabe do título que veio antes: por isso a guarda
+ * é de quem chama, não da tabela.
+ */
+export function garantirEspaco(doc: jsPDF, y: number, alturaNecessaria: number): number {
+  if (y + alturaNecessaria <= LIMITE_Y) return y;
+  doc.addPage();
+  return 20;
+}
 const LOGO_W = 32;          // ~32mm, proporção 2:1 (mesma do FM)
 const LOGO_H = 16;
 
@@ -196,6 +221,10 @@ export function addHeaderGlobalTodasPaginas(
  */
 export function addTituloSecao(doc: jsPDF, texto: string, y: number, cor?: RGB): number {
   const barH = 8;
+  /* ⚠ TÍTULO NUNCA FICA ÓRFÃO — keep-with-next. A faixa sozinha no pé da página, com o conteúdo
+     na seguinte, é pior do que a quebra: quem lê vira a folha sem saber o que está vendo. Os
+     14mm reservados são a faixa mais o cabeçalho da tabela que costuma vir logo abaixo. */
+  y = garantirEspaco(doc, y, barH + 14);
   doc.setFillColor(...(cor ?? PALETA.AZUL_PRIMARIO));
   doc.rect(MARGEM, y, PAGE_W - 2 * MARGEM, barH, 'F');
   doc.setFontSize(11);

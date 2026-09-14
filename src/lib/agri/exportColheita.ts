@@ -19,7 +19,7 @@ type RGBPdf = [number, number, number];
 import { triggerXlsxDownload, type XlsxCellValue } from '@/lib/xlsxDownload';
 import {
   criarDocRetratoA4, carregarLogoBase64, addHeader, addCardsKPI, addTituloSecao,
-  addTabelaExecutiva, addFooterComPaginacao, PALETA,
+  addTabelaExecutiva, addFooterComPaginacao, garantirEspaco, PALETA,
 } from '@/lib/pdf/pdfChassi';
 import { formatNum } from '@/lib/calculos/formatters';
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
@@ -281,7 +281,7 @@ export async function exportarColheitaPdf(
      romaneio por romaneio: uma lista que para na vigésima segunda carga não serve para conferir
      nenhuma das outras. O documento cresce em páginas, que é o que um relatório faz. */
   const mostradas = linhas;
-  y = addTituloSecao(doc, `Cargas (${linhas.length})`, y, PALETA.CINZA_CABECALHO);
+  y = addTituloSecao(doc, `Cargas (${linhas.length})`, y);
 
   y = addTabelaExecutiva(doc, {
     startY: y,
@@ -296,8 +296,13 @@ export async function exportarColheitaPdf(
       l.graoRocaSacas != null ? formatNum(l.graoRocaSacas, 0) : '—',
     ]),
     opts: {
+      /* ⚠ CINZA NO CABEÇALHO DE COLUNA E NA LINHA TOTAL — as duas bordas da tabela. O título da
+         seção segue AZUL, que é a hierarquia: a faixa larga nomeia a seção, a tabela é o
+         conteúdo dela, e duas faixas azuis coladas faziam parecer duas seções. */
       fontSize: 7,
       cellPadding: 1,
+      headFill: PALETA.CINZA_CABECALHO,
+      footFill: PALETA.CINZA_CABECALHO,
       foot: [['TOTAL', '', '', '',
         formatNum(totais.verdeKg, 2),
         totais.secoKg > 0 ? formatNum(totais.secoKg, 2) : '—',
@@ -340,6 +345,8 @@ export async function exportarColheitaPdf(
       body: faixas.map(([rotulo, v]) => [rotulo, formatNum(v, 2), `${formatNum(pct(v), 1)}%`]),
       opts: {
         fontSize: 7, cellPadding: 1,
+        headFill: PALETA.CINZA_CABECALHO,
+        footFill: PALETA.CINZA_CABECALHO,
         foot: [['TOTAL', formatNum(totais.sacasFinais, 2), '100,0%']],
         columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' } },
         didParseCell: (d) => {
@@ -370,6 +377,7 @@ export async function exportarColheitaPdf(
       ],
       opts: {
         fontSize: 7, cellPadding: 1,
+        headFill: PALETA.CINZA_CABECALHO,
         columnStyles: { 1: { halign: 'right' } },
         didParseCell: alinharNumerosADireita([1]),
       },
@@ -383,8 +391,13 @@ export async function exportarColheitaPdf(
      desenhar por cima do rodapé é pior do que uma página a mais. */
   if (ctx.comAnalise) {
     const ALTURA_GRAFICO = 46;
-    if (y + ALTURA_GRAFICO + 16 > 280) { doc.addPage(); y = 20; }
-    y = addTituloSecao(doc, 'Produção em barras', y + 2, PALETA.CINZA_CABECALHO);
+    /* ⚠ O BLOCO INTEIRO SE MEDE ANTES: a faixa do título (8) + o rótulo do card (6) + as barras
+       (46) + os rótulos de baixo (6). Checar só o título deixaria a faixa na página e as barras
+       na seguinte — e foi assim que elas desenharam por cima de "Perdas e custos".
+       ⚠ `garantirEspaco` DUAS VEZES NÃO DUPLICA PÁGINA: se já coube aqui, o `addTituloSecao`
+       abaixo também cabe e não quebra de novo. */
+    y = garantirEspaco(doc, y + 2, 8 + 6 + ALTURA_GRAFICO + 6);
+    y = addTituloSecao(doc, 'Produção em barras', y);
 
     const AZUL: RGBPdf = [30, 58, 95];
     const VERDE: RGBPdf = [40, 175, 96];
