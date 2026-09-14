@@ -47,8 +47,13 @@ export interface ResultadoMaterializacao {
  * nas duas — o que torna o defeito invisível até alguém conferir linha a linha.
  */
 export function useExtratoPermuta(contaPermutaId: string | null | undefined) {
-  const { data, isLoading } = useQuery({
-    queryKey: ['barter-extrato-permuta', contaPermutaId ?? ''],
+  const queryClient = useQueryClient();
+  /* ⚠ A CHAVE NUMA CONSTANTE, não repetida no `invalidateQueries`: duas listas iguais escritas em
+     lugares diferentes é como nasce um recarregar que invalida uma chave que ninguém usa — sem
+     erro e sem efeito. O mesmo cuidado de `usePainelSafra`. */
+  const chave = ['barter-extrato-permuta', contaPermutaId ?? ''];
+  const { data, isLoading, error } = useQuery({
+    queryKey: chave,
     enabled: !!contaPermutaId,
     queryFn: async (): Promise<LinhaExtrato[]> => {
       const { data: linhas, error } = await supabase
@@ -79,9 +84,20 @@ export function useExtratoPermuta(contaPermutaId: string | null | undefined) {
   });
 
   const linhas = data ?? [];
+  /**
+   * ⚠ `recarregar` PESA MAIS AQUI que nas outras duas listas, e por isso ele existe. O extrato é o
+   * SALDO da conta de permuta: uma falha de leitura sem saída afirma, na prática, que a conta não
+   * tem lançamento — o operador leria "não devo nada ao parceiro" sobre uma conta que só não foi
+   * lida. E sem o botão a única saída seria F5, que fecha o contrato aberto e faz recomeçar.
+   */
+  const recarregar = () => queryClient.invalidateQueries({ queryKey: chave });
+
   return {
     linhas,
     carregando: isLoading,
+    /* ⚠ O ERRO SOBE PARA A TELA — ver a nota de `useBarterInsumos`. */
+    erro: error as Error | null,
+    recarregar,
     /** O saldo final — o mesmo crédito/débito que o card do contrato mostra. */
     saldo: linhas.length > 0 ? linhas[linhas.length - 1].saldo : 0,
   };

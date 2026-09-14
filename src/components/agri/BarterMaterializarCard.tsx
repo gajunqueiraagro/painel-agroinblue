@@ -22,6 +22,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Undo2, PlayCircle, CheckCircle2, List } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { EstadoDaLista } from '@/components/agri/BarterListaModal';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import type { LinhaExtrato } from '@/hooks/useBarterMaterializacao';
 import { BarterListaModal, BarterResumoCard } from '@/components/agri/BarterListaModal';
@@ -35,7 +36,7 @@ const dataBR = (iso: string) => (iso && iso.length >= 10
 
 export function BarterMaterializarCard({
   contaPermutaNome, pendentes, materializados, linhas, saldo, ocupado, onMaterializar, onEstornar,
-  onExportar,
+  onExportar, carregando, erro, onTentarDeNovo,
 }: {
   contaPermutaNome: string | null;
   /** Partes + insumos com valor que ainda não viraram lançamento. */
@@ -43,6 +44,18 @@ export function BarterMaterializarCard({
   /** Partes + insumos que já viraram lançamento. */
   materializados: number;
   linhas: LinhaExtrato[];
+  /**
+   * Os dois estados que o extrato não distinguia do vazio.
+   *
+   * ⚠ AQUI ELE PESA MAIS que nas outras duas listas: o extrato é o SALDO da conta de permuta, e
+   * uma falha de leitura mostrada como "ainda não tem lançamento" afirma saldo zero — o operador
+   * leria "não devo nada ao parceiro" sobre uma conta que não foi lida.
+   */
+  carregando: boolean;
+  erro: Error | null;
+  /** Nova tentativa de leitura do extrato — sem ela, a saída de uma falha seria recarregar a
+   *  página, que fecha o contrato aberto. */
+  onTentarDeNovo?: () => void;
   saldo: number;
   ocupado: boolean;
   onMaterializar: () => void;
@@ -125,12 +138,10 @@ export function BarterMaterializarCard({
             </tr>
           </thead>
           <tbody>
-            {linhas.length === 0 && (
-              <tr><td colSpan={4} className="px-2 py-4 text-center text-[10px] text-muted-foreground">
-                A conta de permuta ainda não tem lançamento. Ela é o deve/tem com o parceiro, e
-                só se move ao materializar.
-              </td></tr>
-            )}
+            <EstadoDaLista carregando={carregando} erro={erro} vazio={linhas.length === 0}
+              colunas={4} onTentarDeNovo={onTentarDeNovo}
+              mensagemVazio={'A conta de permuta ainda não tem lançamento. Ela é o deve/tem com o '
+                + 'parceiro, e só se move ao materializar.'} />
             {linhas.map(l => (
               <tr key={l.id} className="border-t border-slate-100 odd:bg-[#1e3a5f]/[0.03]">
                 <td className="whitespace-nowrap px-1.5 py-0.5 tabular-nums">{dataBR(l.data)}</td>

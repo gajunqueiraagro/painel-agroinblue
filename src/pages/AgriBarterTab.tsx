@@ -44,7 +44,9 @@ import {
 } from '@/lib/agri/exportBarter';
 import { useBarterMaterializacao, useExtratoPermuta } from '@/hooks/useBarterMaterializacao';
 import { BarterMaterializarCard } from '@/components/agri/BarterMaterializarCard';
-import { BarterListaModal, BarterResumoCard } from '@/components/agri/BarterListaModal';
+import {
+  BarterListaModal, BarterResumoCard, EstadoDaLista,
+} from '@/components/agri/BarterListaModal';
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
 import { DatePicker } from '@/components/ui/date-picker';
 import { CULTURAS_LANCAMENTO } from '@/lib/agri/rateioLancamento';
@@ -141,7 +143,7 @@ export function AgriBarterTab() {
   /* ── A PERNA RECEBI (fatia B) ── */
   const {
     insumos, salvar: salvarInsumo, excluir: excluirInsumo, total: totalInsumos,
-    recarregar: recarregarInsumos,
+    recarregar: recarregarInsumos, carregando: carregandoInsumos, erro: erroInsumos,
   } = useBarterInsumos(clienteId, abertoId);
   const [insumoAberto, setInsumoAberto] = useState<BarterInsumo | null>(null);
   const [modalInsumo, setModalInsumo] = useState(false);
@@ -227,6 +229,7 @@ export function AgriBarterTab() {
      poderiam divergir por um render e a venda nasceria apontando para outro parceiro. */
   const {
     vendas, salvar: salvarVenda, excluir: excluirVenda, totalEntregue, materializada,
+    carregando: carregandoVendas, erro: erroVendas, recarregar: recarregarVendas,
   } = useBarterVenda(
     clienteId, abertoId,
     contrato?.fazenda_id ?? null,
@@ -300,7 +303,10 @@ export function AgriBarterTab() {
 
   /* ── MATERIALIZAR / ESTORNAR (fatia D) ── */
   const { materializar, estornar } = useBarterMaterializacao(abertoId, contrato?.conta_permuta_id ?? null);
-  const { linhas: extrato, saldo: saldoPermuta } = useExtratoPermuta(contrato?.conta_permuta_id ?? null);
+  const {
+    linhas: extrato, saldo: saldoPermuta,
+    carregando: carregandoExtrato, erro: erroExtrato, recarregar: recarregarExtrato,
+  } = useExtratoPermuta(contrato?.conta_permuta_id ?? null);
   const [ocupado, setOcupado] = useState(false);
   const [verInsumos, setVerInsumos] = useState(false);
   const [verVendas, setVerVendas] = useState(false);
@@ -479,6 +485,9 @@ export function AgriBarterTab() {
             pendentes={pendentes}
             materializados={materializados}
             linhas={extrato}
+            carregando={carregandoExtrato}
+            erro={erroExtrato}
+            onTentarDeNovo={recarregarExtrato}
             saldo={saldoPermuta}
             ocupado={ocupado}
             onMaterializar={() => void rodar('materializar')}
@@ -566,11 +575,9 @@ export function AgriBarterTab() {
             </tr>
           </thead>
           <tbody>
-            {insumos.length === 0 && (
-              <tr><td colSpan={7} className="px-2 py-6 text-center text-[10px] text-muted-foreground">
-                Nenhum insumo lançado. O que a cooperativa entregou entra aqui.
-              </td></tr>
-            )}
+            <EstadoDaLista carregando={carregandoInsumos} erro={erroInsumos}
+              vazio={insumos.length === 0} colunas={7} onTentarDeNovo={recarregarInsumos}
+              mensagemVazio="Nenhum insumo lançado. O que a cooperativa entregou entra aqui." />
             {ordInsumos.ordenadas.map(i => (
               <tr key={i.id} className="border-t border-slate-100 odd:bg-[#1e3a5f]/[0.03]">
                 {/* ⚠ A DATA É A DE RECEBIMENTO — a competência que vai para o DRE —, não a de
@@ -686,11 +693,9 @@ export function AgriBarterTab() {
             </tr>
           </thead>
           <tbody>
-            {vendas.length === 0 && (
-              <tr><td colSpan={5} className="px-2 py-6 text-center text-[10px] text-muted-foreground">
-                Nenhuma venda lançada. O grão que foi para o parceiro entra aqui.
-              </td></tr>
-            )}
+            <EstadoDaLista carregando={carregandoVendas} erro={erroVendas}
+              vazio={vendas.length === 0} colunas={5} onTentarDeNovo={recarregarVendas}
+              mensagemVazio="Nenhuma venda lançada. O grão que foi para o parceiro entra aqui." />
             {ordVendas.ordenadas.map(v => (
               <tr key={v.id} className="border-t border-slate-100 odd:bg-[#1e3a5f]/[0.03]">
                 <td className="whitespace-nowrap px-1.5 py-0.5 tabular-nums">{dataBR(v.data_operacao)}</td>

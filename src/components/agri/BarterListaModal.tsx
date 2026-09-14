@@ -16,6 +16,7 @@
  * vendas e extrato. A quarta cópia é que costuma cobrar o preço; aqui a terceira já bastou.
  */
 import type { ReactNode } from 'react';
+import { AlertTriangle, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { X } from 'lucide-react';
@@ -131,4 +132,78 @@ export function BarterResumoCard({
       <div className="mt-0.5 flex flex-wrap items-center gap-1">{children}</div>
     </div>
   );
+}
+
+/**
+ * OS TRÊS ESTADOS DE UMA LISTA — carregando, falhou, vazia — numa linha só de tabela.
+ *
+ * ⚠ ELE EXISTE PORQUE OS TRÊS CAÍAM NO MESMO TEXTO. As listas do barter renderizavam "Nenhum
+ * insumo lançado" tanto ao carregar quanto ao falhar: o `queryFn` lança, a tela ignorava, e uma
+ * falha de rede ficava indistinguível de uma lista de fato vazia. Custou uma investigação inteira
+ * — uma venda "sumiu" e nunca tinha saído do banco.
+ * ⚠ VAZIO É AFIRMAÇÃO, NÃO PADRÃO. "Nenhuma venda lançada" diz que o operador não lançou nada, e
+ * isso só se pode afirmar depois de carregar sem erro. Nos outros dois casos a tela não sabe, e
+ * tem de dizer que não sabe.
+ * ⚠ DEVOLVE `null` QUANDO HÁ LINHAS: o chamador o põe antes do `map` e não precisa de condicional
+ * própria — quem decide se há o que dizer é este componente.
+ */
+export function EstadoDaLista({ carregando, erro, vazio, colunas, mensagemVazio, onTentarDeNovo }: {
+  carregando: boolean;
+  erro: Error | null;
+  /** A lista carregou e não tem linhas. */
+  vazio: boolean;
+  /** Quantas colunas a tabela tem — o `colSpan` da linha. */
+  colunas: number;
+  /** O texto do vazio REAL, próprio de cada lista. */
+  mensagemVazio: string;
+  onTentarDeNovo?: () => void;
+}) {
+  /* ⚠ O ERRO VEM ANTES DO CARREGANDO: numa nova tentativa os dois são verdade ao mesmo tempo, e
+     trocar a mensagem de falha por "carregando…" esconderia que houve falha. */
+  if (erro) {
+    return (
+      <tr>
+        <td colSpan={colunas} className="px-2 py-6 text-center">
+          <div className="flex flex-col items-center gap-1.5 text-[11px] text-destructive">
+            <span className="inline-flex items-center gap-1.5">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              Não foi possível carregar.
+            </span>
+            {/* ⚠ A MENSAGEM CRUA NÃO VAI PARA A TELA: ela é da biblioteca, em inglês, e não diz
+                nada ao operador. Fica no `title`, para quem for reportar o problema copiar. */}
+            <span className="text-[10px] text-muted-foreground" title={erro.message}>
+              A lista não foi lida — o dado continua no banco.
+            </span>
+            {onTentarDeNovo && (
+              <button type="button" onClick={onTentarDeNovo}
+                className="mt-0.5 rounded border px-2 py-0.5 text-[10px] text-foreground hover:bg-muted">
+                Tentar de novo
+              </button>
+            )}
+          </div>
+        </td>
+      </tr>
+    );
+  }
+  if (carregando) {
+    return (
+      <tr>
+        <td colSpan={colunas} className="px-2 py-6 text-center text-[11px] text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Carregando…
+          </span>
+        </td>
+      </tr>
+    );
+  }
+  if (vazio) {
+    return (
+      <tr>
+        <td colSpan={colunas} className="px-2 py-6 text-center text-[10px] text-muted-foreground">
+          {mensagemVazio}
+        </td>
+      </tr>
+    );
+  }
+  return null;
 }

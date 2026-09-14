@@ -155,7 +155,7 @@ export function useBarterVenda(
   const queryClient = useQueryClient();
   const chave = ['barter-vendas', contratoId ?? ''];
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: chave,
     enabled: !!contratoId,
     queryFn: async (): Promise<BarterVenda[]> => {
@@ -374,7 +374,13 @@ export function useBarterVenda(
   /** Alguma venda já virou lançamento? Enquanto virar, não se edita. */
   const materializada = (v: BarterVenda) => v.partes.some(p => !!p.financeiro_lancamento_id);
 
+  /* ⚠ `recarregar` NASCE AQUI para o botão "tentar de novo" do estado de erro ter o que chamar:
+     sem ele a única saída de uma falha de rede seria F5, que perde o contrato aberto. */
+  const recarregar = () => queryClient.invalidateQueries({ queryKey: chave });
+
+  /* ⚠ O ERRO SOBE PARA A TELA — ver a nota de `useBarterInsumos`: a lista vazia mentia. */
   return {
-    vendas, carregando: isLoading, salvar, excluir, totalEntregue, materializada,
+    vendas, carregando: isLoading, erro: error as Error | null,
+    salvar, excluir, totalEntregue, materializada, recarregar,
   };
 }

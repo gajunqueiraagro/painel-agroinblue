@@ -56,7 +56,7 @@ export function useBarterInsumos(clienteId: string | null | undefined, contratoI
   const queryClient = useQueryClient();
   const chave = ['barter-insumos', contratoId ?? ''];
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: chave,
     enabled: !!contratoId,
     queryFn: async (): Promise<BarterInsumo[]> => {
@@ -108,5 +108,14 @@ export function useBarterInsumos(clienteId: string | null | undefined, contratoI
    */
   const recarregar = () => queryClient.invalidateQueries({ queryKey: chave });
 
-  return { insumos: data ?? [], carregando: isLoading, salvar, excluir, total, recarregar };
+  /**
+   * ⚠ O ERRO SOBE PARA A TELA, e é o conserto de um defeito que já custou uma investigação: o
+   * `queryFn` lança em falha, a tela ignorava e renderizava "Nenhum insumo lançado". Uma lista
+   * que mente sobre estar vazia é pior que uma que não carrega — foi assim que uma venda
+   * "sumiu" sem nunca ter saído do banco.
+   */
+  return {
+    insumos: data ?? [], carregando: isLoading, erro: error as Error | null,
+    salvar, excluir, total, recarregar,
+  };
 }
