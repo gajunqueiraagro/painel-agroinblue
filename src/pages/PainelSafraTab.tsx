@@ -64,7 +64,7 @@ const TH = 'bg-primary px-2 py-1 text-[9px] font-semibold uppercase tracking-wid
  * ⚠ `rounded-b-lg rounded-tr-lg` E NÃO `rounded-lg`: o canto superior ESQUERDO fica reto porque
  * é lá que a primeira aba encosta. Arredondá-lo deixaria um degrau visível sob a aba "Resultado".
  */
-const ABA = 'mt-0 space-y-2 rounded-b-lg rounded-tr-lg border border-border bg-card p-2';
+const ABA = 'mt-0 space-y-1.5 rounded-b-lg rounded-tr-lg border border-border bg-card p-1.5';
 
 const zebra = (i: number) => (i % 2 === 0 ? 'bg-card' : 'bg-muted/40');
 
@@ -112,7 +112,9 @@ function Cartao({ rotulo, valor, unidade, titulo, cor }: {
   cor?: string;
 }) {
   return (
-    <div className="min-w-0 rounded-md border bg-card px-2.5 py-1.5">
+    /* ⚠ `py-1` E `leading-none` NO VALOR: a altura do cartão é multiplicada por dois blocos e
+       some da tela em toda rolagem. Cada pixel aqui é pixel de tabela lá embaixo. */
+    <div className="min-w-0 rounded-md border bg-card px-2.5 py-1">
       <div className="truncate text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
         {rotulo}
       </div>
@@ -125,7 +127,7 @@ function Cartao({ rotulo, valor, unidade, titulo, cor }: {
             {unidade}
           </span>
         )}
-        <span className={cn('truncate text-[18px] font-medium leading-none tabular-nums', cor)}>
+        <span className={cn('truncate text-[16px] font-medium leading-[1.1] tabular-nums', cor)}>
           {valor}
         </span>
       </div>
@@ -182,9 +184,9 @@ function Linha({
      ⚠ A NATUREZA FOI AO CHÃO — `py-0` e 10px, o piso do A18. O que ganha densidade é SÓ ela: os
      totais mantêm `py-1`, senão comprimir a tabela inteira devolveria o bloco uniforme que a
      hierarquia existiu para desfazer.
-     ⚠ E OS TOTAIS DESCERAM DE 15/17px PARA 14px `font-medium`: a hierarquia 14 > 10 continua
-     inteira, e o que saiu foi o exagero — um Saldo em 17px negrito competia com o título da
-     tela, não com as naturezas. O respiro que sobrou entre as
+     ⚠ E OS TOTAIS DESCERAM ATÉ 12px `font-medium` (eram 15/17 negrito, depois 14): a hierarquia
+     12 > 10 continua inteira — dois pontos bastam para o olho separar total de item — e cada
+     ponto a menos é linha de tabela que passa a caber sem rolar. O respiro que sobrou entre as
      naturezas é o `border-t` de cada linha, não padding. */
   const pad = nivel === 'item' ? 'py-0' : 'py-1';
   const td = `px-2 ${pad} text-right tabular-nums`;
@@ -201,19 +203,19 @@ function Linha({
         ? e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onAbrir(); } }
         : undefined}>
       <td className={cn('px-2', pad,
-        destaque && 'text-[14px] font-medium',
-        saldo && 'text-[14px] font-medium',
+        destaque && 'text-[12px] font-medium',
+        saldo && 'text-[12px] font-medium',
         nivel === 'item' && 'pl-6 text-[10px] text-muted-foreground')}>
         {rotulo}
         {/* ⚠ "estimado" FICA COLADO NO RÓTULO, não numa coluna própria: é qualidade do número,
             e quem lê a linha tem de ver a ressalva sem procurar. */}
         {nota && <span className="ml-1 text-[9px] font-normal text-amber-600">{nota}</span>}
       </td>
-      <td className={cn(td, destaque && 'text-[14px] font-medium', saldo && 'text-[14px] font-medium',
+      <td className={cn(td, destaque && 'text-[12px] font-medium', saldo && 'text-[12px] font-medium',
         nivel === 'item' && 'text-[10px]', cor)}>
         {formatMoeda(valor)}
       </td>
-      <td className={cn(td, destaque && 'text-[14px] font-medium', saldo && 'text-[14px] font-medium',
+      <td className={cn(td, destaque && 'text-[12px] font-medium', saldo && 'text-[12px] font-medium',
         nivel === 'item' && 'text-[10px]', cor)}>
         {formatMoeda(porHa(valor, area))}
       </td>
@@ -222,7 +224,7 @@ function Linha({
       <td className={cn(td, nivel === 'item' && 'text-[10px]', 'text-muted-foreground')}>
         {pct == null ? '' : `${formatNum(pct, 1)}%`}
       </td>
-      <td className={cn(td, destaque && 'text-[14px] font-medium', saldo && 'text-[14px] font-medium',
+      <td className={cn(td, destaque && 'text-[12px] font-medium', saldo && 'text-[12px] font-medium',
         nivel === 'item' && 'text-[10px]', cor)}>
         {formatMoeda(porSaca(valor, sacas))}
       </td>
@@ -417,15 +419,18 @@ export function PainelSafraTab() {
           transparente acima quando ele gruda.
           ⚠ FUNDO `bg-background` OPACO e `border-b` NO PRÓPRIO BLOCO (A21): translúcido é pior
           que não fixar — o número que se está conferindo fica com a tabela correndo por dentro. */}
-      <div className="sticky top-0 z-20 -mx-4 -mt-4 mb-2 space-y-2 border-b bg-background
-        px-4 pb-1.5 pt-4">
+      {/* ⚠ OS VÃOS FORAM AO MÍNIMO ÚTIL, não a zero: `space-y-1.5` entre as faixas do cabeçalho,
+          `pt-3` acima do título e `pb-1` abaixo das abas. Colar tudo faria a barra de abas
+          parecer parte da régua de cartões; o que se tirou foi o excesso, não a separação. */}
+      <div className="sticky top-0 z-20 -mx-4 -mt-4 mb-1.5 space-y-1.5 border-b bg-background
+        px-4 pb-1 pt-3">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-bold text-foreground">Painel da Safra</h2>
-          <p className="text-xs text-muted-foreground">
-            O ciclo inteiro: o que plantou, colheu, gastou e sobrou — por hectare e por saca.
-          </p>
-        </div>
+        {/* ⚠ O SUBTÍTULO SAIU. Ele explicava o que a tela é — "o ciclo inteiro: o que plantou,
+            colheu, gastou e sobrou" — e isso se aprende na primeira visita, não na milésima. O
+            bloco congelado cobra a altura dele em TODA rolagem, de todo operador, para sempre:
+            é a linha mais cara da tela e a menos lida. Os quatro cartões logo abaixo dizem a
+            mesma coisa com números. */}
+        <h2 className="text-[15px] font-bold text-foreground">Painel da Safra</h2>
         <div className="flex flex-wrap items-end gap-2">
           <div className="w-[170px]">
             <Label className="text-[10px]">Safra</Label>
@@ -488,9 +493,9 @@ export function PainelSafraTab() {
       {/* ⚠ O `sticky` SAIU DAQUI: quem fixa agora é o bloco inteiro acima. Dois `sticky top-0`
           aninhados disputariam a mesma âncora e o de dentro venceria, deixando o título rolar
           por baixo dos próprios cartões. */}
-      <div className="grid gap-2 md:grid-cols-2">
-        <div className="rounded-md border p-2">
-          <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Plantio</div>
+      <div className="grid gap-1.5 md:grid-cols-2">
+        <div className="rounded-md border p-1.5">
+          <div className="mb-1 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">Plantio</div>
           {/* ⚠ DOIS CARTÕES, E SÓ O POR HECTARE. O "Custeio total" saiu daqui porque ele está,
               em R$ cheio e com centavos, na linha "Custeio total" do DRE dez pixels abaixo —
               e dois números iguais em tamanhos diferentes na mesma tela é como nascem as
@@ -505,8 +510,8 @@ export function PainelSafraTab() {
               titulo={formatMoeda(porHa(custeio, area))} />
           </div>
         </div>
-        <div className="rounded-md border p-2">
-          <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Colheita</div>
+        <div className="rounded-md border p-1.5">
+          <div className="mb-1 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">Colheita</div>
           {/* ⚠ Sc/ha ANTES de Fat./ha: é a ordem da pergunta do produtor — primeiro quanto o
               hectare produziu, depois quanto isso virou dinheiro.
               ⚠ SAÍRAM "Total sc", "Faturamento" e "R$/sc". Os dois primeiros porque o
@@ -644,7 +649,7 @@ export function PainelSafraTab() {
                   não quer dizer nada. Vazias, elas mantêm R$ total sob R$ total; removidas,
                   as duas tabelas deixariam de se ler como uma coluna só. */}
               <tr>
-                <th className={cn(TH, 'text-left')}>Investimento na abertura</th>
+                <th className={cn(TH, 'text-left')}>Investimentos</th>
                 <th className={cn(TH, 'text-right')}>R$ total</th>
                 <th className={cn(TH, 'text-right')}>R$ / ha</th>
                 <th className={TH} />
@@ -666,31 +671,39 @@ export function PainelSafraTab() {
                       setDrill({ tipo: 'subcentro', chave: t.tipo, rotulo: t.tipo });
                     }
                   }}>
-                  <td className="px-2 py-0.5 pl-6 text-[11px] text-muted-foreground">{t.tipo}</td>
-                  <td className="px-2 py-0.5 text-right text-[11px] tabular-nums text-destructive">
+                  <td className="px-2 py-0 pl-6 text-[10px] text-muted-foreground">{t.tipo}</td>
+                  <td className="px-2 py-0 text-right text-[10px] tabular-nums text-destructive">
                     {formatMoeda(t.valor)}
                   </td>
-                  <td className="px-2 py-0.5 text-right text-[11px] tabular-nums text-destructive">
+                  <td className="px-2 py-0 text-right text-[10px] tabular-nums text-destructive">
                     {formatMoeda(t.valor_ha)}
                   </td>
-                  <td />
-                  <td />
+                  {/* ⚠ TRAÇO, NÃO CÉLULA VAZIA. Vazio é ambíguo — parece dado que não carregou;
+                      o traço afirma que a pergunta não se aplica: investimento está FORA do
+                      custeio, então não tem participação nele, e R$/saca de um trator não quer
+                      dizer nada. As colunas continuam existindo para a régua bater com o DRE. */}
+                  <td className="px-2 py-0 text-right text-[10px] text-muted-foreground">—</td>
+                  <td className="px-2 py-0 text-right text-[10px] text-muted-foreground">—</td>
                 </tr>
               ))}
               {/* ⚠ FAIXA ESCURA NO TOTAL, o mesmo `bg-primary` do cabeçalho: as duas bordas da
                   tabela fecham iguais, como no `tfoot` das listas da colheita. Aqui ela substitui
                   o negrito solto sobre fundo branco, que se confundia com mais uma linha de
                   investimento. */}
+              {/* ⚠ A TABELA INTEIRA EM 10px, TOTAL INCLUÍDO. Aqui não há hierarquia a marcar: são
+                  quatro subcentros e a soma deles, não totais competindo com itens como no DRE.
+                  O que separa o total é a FAIXA ESCURA, que já faz o trabalho sozinha — o corpo
+                  grande só roubava altura. */}
               <tr className="bg-primary text-primary-foreground">
-                <td className="px-2 py-1 text-[15px] font-bold">Total investido</td>
-                <td className="px-2 py-1 text-right text-[15px] font-bold tabular-nums">
+                <td className="px-2 py-0.5 text-[10px] font-bold">Total investido</td>
+                <td className="px-2 py-0.5 text-right text-[10px] font-bold tabular-nums">
                   {formatMoeda(painel?.investimento ?? 0)}
                 </td>
-                <td className="px-2 py-1 text-right text-[15px] font-bold tabular-nums">
+                <td className="px-2 py-0.5 text-right text-[10px] font-bold tabular-nums">
                   {formatMoeda(porHa(painel?.investimento ?? 0, area))}
                 </td>
-                <td />
-                <td />
+                <td className="px-2 py-0.5 text-right text-[10px] font-bold">—</td>
+                <td className="px-2 py-0.5 text-right text-[10px] font-bold">—</td>
               </tr>
             </tbody>
           </table>
