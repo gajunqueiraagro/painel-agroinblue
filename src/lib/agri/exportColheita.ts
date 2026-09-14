@@ -403,8 +403,23 @@ export async function exportarColheitaPdf(
        abaixo também cabe e não quebra de novo. */
     /* ⚠ O CINTO DE SEGURANÇA, além do `y =` acima: se algum bloco futuro voltar a descartar o
        retorno, o `lastAutoTable.finalY` ainda aponta o fim real do que foi desenhado. */
-    y = garantirEspaco(doc, yRealAposDesenho(doc, y) + 2, 8 + 6 + ALTURA_GRAFICO + 6);
-    y = addTituloSecao(doc, 'Produção em barras', y);
+    /**
+     * ⚠ A FOLGA EXISTE POR CAUSA DO BASELINE, e é isso que fazia o rótulo parecer colado.
+     * `addTituloSecao` devolve o `y` 2mm abaixo da faixa — o mesmo respiro que as tabelas têm —,
+     * mas `doc.text` desenha pelo BASELINE: o topo visual de um texto de 7,5pt fica 2,65mm ACIMA
+     * do `y` que se passa. Resultado: o topo de "TOTAL EM SACAS" caía 0,65mm DENTRO da faixa.
+     * A tabela não sofre disso porque o autoTable desenha a partir do topo da célula.
+     * ⚠ A CONTA, com os números medidos: o `y` chega 2mm abaixo da faixa; somando 7, o baseline
+     * vai para 9mm; o topo do texto sobe 2,65mm e para em 6,35mm abaixo da faixa — dentro dos
+     * 6–8mm pedidos. Uma tabela na mesma posição mostraria 2mm, e é menos: ela não perde nada
+     * para o baseline.
+     */
+    const FOLGA_TITULO = 7;
+    /* ⚠ A FOLGA ENTRA NA ALTURA MEDIDA: sem somá-la aqui, o bloco caberia por 5mm a menos do que
+       de fato ocupa — e voltaria a invadir o rodapé na página cheia. */
+    y = garantirEspaco(doc, yRealAposDesenho(doc, y) + 2,
+      8 + FOLGA_TITULO + 6 + ALTURA_GRAFICO + 6);
+    y = addTituloSecao(doc, 'Produção em barras', y) + FOLGA_TITULO;
 
     const AZUL: RGBPdf = [30, 58, 95];
     const VERDE: RGBPdf = [40, 175, 96];
