@@ -29,7 +29,7 @@ export interface BarraCompacta {
 }
 
 export function BarrasCompactas({
-  barras, titulo, legenda, larguraMax = 340, altura = 96,
+  barras, titulo, legenda, larguraMax = 340, altura = 96, preencherLargura = false,
 }: {
   barras: readonly BarraCompacta[];
   titulo: string;
@@ -37,6 +37,17 @@ export function BarrasCompactas({
   legenda?: string;
   larguraMax?: number;
   altura?: number;
+  /**
+   * As barras DIVIDEM a largura do bloco em vez de ficarem em 22px fixos.
+   *
+   * ⚠ OPT-IN, E CONTRARIA O DEFAULT DA LEI DE PROPÓSITO. A lei do gráfico compacto existe para
+   * o gráfico não se espalhar pela tela; ela pressupõe um bloco largo com poucas barras
+   * estreitas. Num card ESTREITO com DUAS barras, os mesmos 22px deixam três quartos da largura
+   * vazios e o rótulo "colhido" trunca em "col…" — o compacto vira apertado.
+   * ⚠ NADA MUDA PARA QUEM NÃO PEDIR: sem a prop, largura fixa de 22px, como antes. É por isso
+   * que ela nasce booleana e default `false`, em vez de a lei ser reescrita para todos.
+   */
+  preencherLargura?: boolean;
 }) {
   /**
    * ⚠ A ESCALA IGNORA OS NULOS e nunca é zero: com todas as barras sem dado, ou com um único
@@ -45,6 +56,10 @@ export function BarrasCompactas({
    */
   const valores = barras.map(b => b.valor).filter((v): v is number => v != null);
   const max = valores.length > 0 ? Math.max(...valores, 0) : 0;
+
+  /* ⚠ UMA CLASSE SÓ PARA OS DOIS TRILHOS — o da barra e o do rótulo. Se divergirem, o rótulo
+     deixa de ficar embaixo da sua barra, que é o defeito mais silencioso que um gráfico pode ter. */
+  const colClasse = preencherLargura ? 'min-w-0 flex-1' : 'w-[22px] shrink-0';
 
   return (
     <div className="rounded-md border bg-card p-2" style={{ maxWidth: larguraMax }}>
@@ -55,7 +70,7 @@ export function BarrasCompactas({
         {barras.map((b, i) => {
           const pct = b.valor != null && max > 0 ? Math.max(2, (b.valor / max) * 100) : 0;
           return (
-            <div key={`${b.rotulo}-${i}`} className="flex h-full w-[22px] shrink-0 flex-col">
+            <div key={`${b.rotulo}-${i}`} className={cn('flex h-full flex-col', colClasse)}>
               {/* O número fica ACIMA da barra e sempre no fluxo: sem ele reservado, barras altas
                   e baixas alinhariam o texto em alturas diferentes. */}
               <div className="mb-0.5 shrink-0 whitespace-nowrap text-center text-[8px] leading-none tabular-nums text-muted-foreground">
@@ -84,7 +99,7 @@ export function BarrasCompactas({
       </div>
       <div className="mt-1 flex gap-1.5">
         {barras.map((b, i) => (
-          <div key={`r-${b.rotulo}-${i}`} className="w-[22px] shrink-0 text-center">
+          <div key={`r-${b.rotulo}-${i}`} className={cn('text-center', colClasse)}>
             <div className="truncate text-[8px] leading-tight text-muted-foreground" title={b.rotulo}>
               {b.rotulo}
             </div>

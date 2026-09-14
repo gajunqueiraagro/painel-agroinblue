@@ -195,8 +195,11 @@ export function AnaliseProducaoModal({
               cor="text-destructive" nota="custo · à cooperativa" />
           </div>
 
-          {/* ── 3. A CLASSIFICAÇÃO ── */}
-          <div className="w-full md:w-1/2">
+          {/* ── 3. A CLASSIFICAÇÃO ──
+              ⚠ A TABELA PEGA A LARGURA DO PRÓPRIO CONTEÚDO e os gráficos ficam AO LADO, no
+              espaço que sobra. Eles saíram embaixo na primeira versão porque a tabela tomava
+              metade fixa (`md:w-1/2`) e o bloco seguinte quebrava para a linha de baixo. */}
+          <div className="w-full md:w-auto md:min-w-[280px] md:flex-1">
             <div className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
               Classificação por qualidade
             </div>
@@ -249,31 +252,42 @@ export function AnaliseProducaoModal({
 
           {/* ⚠ O GRÁFICO OCUPA O VAZIO À DIREITA da classificação — item 3e. Bloco contido, não
               largura total: é a lei do gráfico compacto. */}
-          <div className="flex w-full flex-wrap gap-2 md:w-auto">
+          {/* ⚠ EMPILHADOS NA VERTICAL, não lado a lado: na coluna da direita cada card pega a
+              largura inteira, e é ela que dá espaço para as duas barras e para os rótulos
+              inteiros. Lado a lado, cada um ficava com metade e "colhido" truncava. */}
+          <div className="flex w-full flex-col gap-2 md:w-[230px] md:shrink-0">
             {/* ⚠ DOIS GRÁFICOS, NÃO UM — e a razão é a escala. Total e por-hectare são ordens de
                 grandeza diferentes (9.100 sc contra 150 sc/ha): na mesma escala, as duas barras de
                 hectare valeriam 1,6% da altura e apareceriam como risco. Um gráfico em que metade
                 das barras some não compara nada.
                 ⚠ SEPARADOS, cada par divide a SUA escala, e a quebra da secagem — que é o que se
                 quer ver — aparece como diferença de altura nos dois. */}
+            {/* ⚠⚠ AS CORES SÃO LITERAIS, NUNCA MONTADAS EM RUNTIME — e foi exatamente aqui que a
+                barra "seco" sumiu. Ela vinha de `` `${cor}/50` ``, que produz "bg-primary/50" como
+                STRING em tempo de execução; o Tailwind varre o código-fonte ESTATICAMENTE e nunca
+                vê essa classe, então não a gera. Conferido no CSS compilado: `bg-primary` e
+                `bg-success` existem, `bg-primary/50` e `bg-success/50` têm ZERO ocorrências.
+                A barra desenhava — sem cor de fundo, transparente. O gráfico não quebrou nem
+                avisou: mostrou uma barra onde havia duas.
+                ⚠ REGRA QUE FICA: classe de Tailwind concatenada é classe que não existe. */}
             {([
-              ['Total colhido', scVerde, scSeco, 'bg-primary', 'sacas'],
-              ['Por hectare', porHa(scVerde), porHa(scSeco), 'bg-success', 'sc/ha'],
-            ] as Array<[string, number | null, number | null, string, string]>).map(
-              ([titulo, verde, seco, cor, un]) => (
+              ['Total colhido', scVerde, scSeco, 'bg-primary', 'bg-primary/50', 'sacas'],
+              ['Por hectare', porHa(scVerde), porHa(scSeco), 'bg-success', 'bg-success/50', 'sc/ha'],
+            ] as Array<[string, number | null, number | null, string, string, string]>).map(
+              ([titulo, verde, seco, corCheia, corClara, un]) => (
                 <BarrasCompactas
                   key={titulo}
                   titulo={titulo}
                   legenda={`colhido × seco, em ${un} — a diferença é a quebra`}
-                  larguraMax={132}
+                  larguraMax={230}
                   altura={84}
-                  barras={([['colhido', verde], ['seco', seco]] as Array<[string, number | null]>)
-                    .map(([rotulo, v]): BarraCompacta => ({
-                      rotulo,
-                      valor: v,
-                      texto: v == null ? '—' : formatNum(v, 0),
-                      cor: rotulo === 'seco' ? `${cor}/50` : cor,
-                    }))}
+                  preencherLargura
+                  barras={[
+                    { rotulo: 'colhido', valor: verde, cor: corCheia,
+                      texto: verde == null ? '—' : formatNum(verde, 0) },
+                    { rotulo: 'seco', valor: seco, cor: corClara,
+                      texto: seco == null ? '—' : formatNum(seco, 0) },
+                  ] satisfies BarraCompacta[]}
                 />
               ))}
           </div>
