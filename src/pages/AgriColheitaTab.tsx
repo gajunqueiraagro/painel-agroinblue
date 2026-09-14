@@ -242,9 +242,13 @@ export function AgriColheitaTab() {
   const linhasParaExport: LinhaExport[] = useMemo(() => {
     const nome = new Map(talhoesDaLista.map(t => [t.id, t.pastoNome]));
     const faz = new Map(talhoesDaLista.map(t => [t.id, t.fazendaCodigo || '']));
+    /* ⚠ O TERCEIRO MAPA, PELA MESMA CHAVE: `safra_area_id` é a área EXATA da carga, e é o que
+       distingue OL3 de BRS 421 dentro do mesmo Ind 01. O papel herda o elo da tela inteiro. */
+    const cultivar = new Map(talhoesDaLista.map(t => [t.id, t.variedade || '']));
     return doRecorte.map(l => ({
       fazenda: faz.get(l.safra_area_id) || '',
       talhao: nome.get(l.safra_area_id) || '',
+      variedade: cultivar.get(l.safra_area_id) || '',
       data: l.data_colheita ?? '',
       hora: (l.hora_chegada ?? '').slice(0, 5),
       ticket: l.ticket_balanca ?? '',

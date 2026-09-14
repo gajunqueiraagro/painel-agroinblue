@@ -29,6 +29,15 @@ import { LIMITE_AFLATOXINA, unidadeDaCultura, type TotaisColheita } from '@/lib/
 export interface LinhaExport {
   fazenda: string;
   talhao: string;
+  /**
+   * O cultivar da ÁREA da carga — "OL3", "BRS 421". Vazio quando não cadastrado.
+   *
+   * ⚠ RESOLVIDO PELO CHAMADOR, como `fazenda` e `talhao`, e pelo MESMO elo: `safra_area_id`,
+   * a área exata. Na 25/26 o amendoim tem três cultivares e dois deles dividem o Ind 01 —
+   * resolver por (safra, cultura) carimbaria o primeiro em todas as cargas, e o papel sairia
+   * preenchido, plausível e errado.
+   */
+  variedade: string;
   data: string;
   hora: string;
   ticket: string;
@@ -87,7 +96,8 @@ export function exportarColheitaXlsx(
   ];
 
   const cargas: Array<Record<string, XlsxCellValue>> = linhas.map(l => ({
-    Faz: l.fazenda, Talhão: l.talhao, Data: dataBR(l.data), Hora: l.hora,
+    Faz: l.fazenda, Talhão: l.talhao, Variedade: l.variedade || '—',
+    Data: dataBR(l.data), Hora: l.hora,
     Ticket: l.ticket, NF: l.nf,
     'Peso fazenda (kg)': n(l.pesoFazendaKg),
     'Verde (kg)': n(l.verdeKg), 'Seco (kg)': n(l.secoKg),
@@ -96,7 +106,7 @@ export function exportarColheitaXlsx(
   }));
   /* A linha de total fecha a planilha como fecha a tela — e é a MESMA soma. */
   cargas.push({
-    Faz: 'TOTAL', Talhão: '', Data: '', Hora: '', Ticket: '', NF: '',
+    Faz: 'TOTAL', Talhão: '', Variedade: '', Data: '', Hora: '', Ticket: '', NF: '',
     'Peso fazenda (kg)': null,
     'Verde (kg)': totais.verdeKg, 'Seco (kg)': totais.secoKg,
     'Umidade (%)': null, 'Aflatoxina (ppb)': null,
@@ -107,8 +117,12 @@ export function exportarColheitaXlsx(
     { name: 'Colheita', mode: 'json' as const, rows: cabecalho, cols: [{ wch: 16 }, { wch: 34 }] },
     {
       name: 'Cargas', mode: 'json' as const, rows: cargas,
-      cols: [{ wch: 6 }, { wch: 10 }, { wch: 11 }, { wch: 7 }, { wch: 10 }, { wch: 10 },
-        { wch: 15 }, { wch: 13 }, { wch: 13 }, { wch: 11 }, { wch: 14 }, { wch: 12 }, { wch: 11 }],
+      /* ⚠ UMA LARGURA POR COLUNA, NA ORDEM — `cols` é POSICIONAL, não nomeado: a coluna nova
+         entra no índice 2 aqui também, senão todas as larguras seguintes escorregam uma casa e
+         "Peso fazenda (kg)" passa a medir o que era da "Umidade (%)". Eram treze; são catorze. */
+      cols: [{ wch: 6 }, { wch: 10 }, { wch: 12 }, { wch: 11 }, { wch: 7 }, { wch: 10 },
+        { wch: 10 }, { wch: 15 }, { wch: 13 }, { wch: 13 }, { wch: 11 }, { wch: 14 },
+        { wch: 12 }, { wch: 11 }],
     },
   ];
 
@@ -285,9 +299,10 @@ export async function exportarColheitaPdf(
 
   y = addTabelaExecutiva(doc, {
     startY: y,
-    head: [['Faz', 'Talhão', 'Data', 'Ticket', 'Verde (kg)', 'Seco (kg)', 'Umid.', 'Afla.', 'Sacas', 'Roça']],
+    head: [['Faz', 'Talhão', 'Variedade', 'Data', 'Ticket', 'Verde (kg)', 'Seco (kg)',
+      'Umid.', 'Afla.', 'Sacas', 'Roça']],
     body: mostradas.map(l => [
-      l.fazenda, l.talhao, dataBR(l.data), l.ticket,
+      l.fazenda, l.talhao, l.variedade || '—', dataBR(l.data), l.ticket,
       l.verdeKg != null ? formatNum(l.verdeKg, 2) : '—',
       l.secoKg != null ? formatNum(l.secoKg, 2) : '—',
       l.umidadePct != null ? formatNum(l.umidadePct, 2) : '—',
@@ -303,27 +318,50 @@ export async function exportarColheitaPdf(
       cellPadding: 1,
       headFill: PALETA.CINZA_CABECALHO,
       footFill: PALETA.CINZA_CABECALHO,
-      foot: [['TOTAL', '', '', '',
+      /* ⚠ O `foot` É POSICIONAL E TEM DE CRESCER JUNTO: eram dez células, são onze. Uma a
+         menos não dá erro — desloca TODOS os totais uma coluna à esquerda, e o papel sai com o
+         peso verde debaixo de "Ticket". É o mesmo defeito que o `colSpan` do `tfoot` na tela
+         teria causado. */
+      foot: [['TOTAL', '', '', '', '',
         formatNum(totais.verdeKg, 2),
         totais.secoKg > 0 ? formatNum(totais.secoKg, 2) : '—',
         '', '',
         formatNum(totais.sacasBoas, 2),
         formatNum(totais.graoRocaSacas, 2)]],
+      /* ⚠ TODO ÍNDICE AQUI ANDOU UM, e é a parte perigosa deste PR: `columnStyles`,
+         `alinharNumerosADireita` e os dois testes de cor em `didParseCell` endereçam a coluna
+         por POSIÇÃO. Eram 4..9; são 5..10. Um índice esquecido não quebra nada visivelmente —
+         pinta de vermelho a coluna errada, ou alinha à esquerda um número. Era 7 a aflatoxina
+         e 9 a roça; agora 8 e 10.
+         ⚠ `ellipsize` SÓ NA VARIEDADE: a tabela inteira é `linebreak` (o default, que quebra a
+         linha em duas), e um cultivar longo faria a linha da carga crescer em altura. Aqui o
+         nome corta com reticência, porque a identidade da carga são o talhão e o ticket — não
+         o final do nome do cultivar.
+         ⚠⚠ E `ellipsize` SOZINHO NÃO CORTA NADA — medido. O `autoTable` dimensiona a coluna
+         PELO CONTEÚDO e só depois aplica o overflow: sem teto, "BRS 421 Precoce Vermelho
+         Rasteiro" faz a coluna inchar de 20 para 50,8mm e o resto da tabela encolher junto
+         (Talhão cai de 19,9 para 16,1mm, Verde de 21,1 para 17,1). A tabela nunca estoura —
+         a soma é sempre ~181,8mm —, ela se DEFORMA, e uma carga com nome comprido reformataria
+         o relatório inteiro. O teto é o que faz a reticência existir.
+         ⚠ 20mm NÃO É NÚMERO ESCOLHIDO A ESMO: é o que a coluna já toma sozinha com um cultivar
+         normal (20,33mm medidos com "BRS 421"). Com o teto, a tabela de cultivar curto fica
+         onde estava e a de cultivar longo passa a ficar também. */
       columnStyles: {
-        4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' },
-        7: { halign: 'right' }, 8: { halign: 'right' }, 9: { halign: 'right' },
+        2: { cellWidth: 20, overflow: 'ellipsize' },
+        5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' },
+        8: { halign: 'right' }, 9: { halign: 'right' }, 10: { halign: 'right' },
       },
       /* ⚠ AS MESMAS CORES DA TELA: acima do corte e roça em vermelho. O papel e a tela têm de
          apontar o mesmo grão — o corte vem do `LIMITE_AFLATOXINA`, nunca de um 20 escrito aqui. */
       didParseCell: (d) => {
-        alinharNumerosADireita([4, 5, 6, 7, 8, 9])(d);
+        alinharNumerosADireita([5, 6, 7, 8, 9, 10])(d);
         if (d.section !== 'body') return;
-        if (d.column.index === 7) {
+        if (d.column.index === 8) {
           const ppb = mostradas[d.row.index]?.aflatoxinaPpb;
           if (ppb != null) d.cell.styles.textColor = ppb > LIMITE_AFLATOXINA
             ? [190, 40, 40] : PALETA.VERDE_POSITIVO;
         }
-        if (d.column.index === 9 && (mostradas[d.row.index]?.graoRocaSacas ?? 0) > 0) {
+        if (d.column.index === 10 && (mostradas[d.row.index]?.graoRocaSacas ?? 0) > 0) {
           d.cell.styles.textColor = [190, 40, 40];
         }
       },
