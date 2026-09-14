@@ -589,41 +589,52 @@ export function AgriBarterTab() {
                 {/* ⚠ OS BOTÕES FICAM SEMPRE NO LUGAR, mesmo travados (lei de estabilidade
                     visual). Materializado troca o par por um cadeado que DIZ o motivo —
                     não some, não desloca a coluna. */}
+                {/* ⚠ O ↗ FICA FORA DO `if` DO CADEADO, como já ficou na lista de vendas: ver o
+                    lançamento é LEITURA, e leitura não se tranca. Vencimento e pagamento são
+                    exatamente o que se confere DEPOIS de materializar — trancá-los junto com a
+                    edição escondia a informação no momento em que ela passa a ser cobrada.
+                    ⚠ O QUE O CADEADO TRANCA é o insumo: editar e excluir. E ele DIZ a saída —
+                    "estorne o contrato" —, em vez de só recusar. */}
                 <td className="px-1 py-0.5 text-right">
+                  <span className="inline-flex items-center gap-0.5">
                   {materializado(i) ? (
                     <span className="inline-flex h-5 w-5 items-center justify-center text-muted-foreground"
-                      title="Insumo já materializado no DRE. Estorne o contrato para editar ou excluir.">
+                      title="Insumo já materializado no DRE. Para editar, estorne o contrato.">
                       <Lock className="h-3 w-3" />
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-0.5">
+                    <>
                       <button type="button" title="Editar insumo"
                         className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
                         onClick={() => { setInsumoAberto(i); setModalInsumo(true); }}>
                         <Pencil className="h-3 w-3" />
-                      </button>
-                      {/* ⚠ O ATALHO PARA O LANÇAMENTO é o que estava faltando: o insumo guarda o
-                          QUE e QUANTO, mas vencimento e pagamento vivem no lançamento financeiro
-                          vinculado — e até aqui só se chegava lá por outra tela.
-                          ⚠ ELE OCUPA O LUGAR MESMO SEM VÍNCULO, desabilitado e dizendo por quê:
-                          botão que some conforme o dado desloca a coluna inteira. */}
-                      <button type="button"
-                        title={i.financeiro_lancamento_id
-                          ? 'Abrir o lançamento financeiro (vencimento e pagamento)'
-                          : 'Este insumo ainda não tem lançamento financeiro vinculado.'}
-                        disabled={!i.financeiro_lancamento_id}
-                        className="rounded p-0.5 text-muted-foreground hover:bg-muted
-                          hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent"
-                        onClick={() => { void abrirLancamento(i.financeiro_lancamento_id); }}>
-                        <ExternalLink className="h-3 w-3" />
                       </button>
                       <button type="button" title="Excluir insumo"
                         className="rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                         onClick={() => void removerInsumo(i)}>
                         <Trash2 className="h-3 w-3" />
                       </button>
-                    </span>
+                    </>
                   )}
+                  {/* ⚠ O ATALHO PARA O LANÇAMENTO: o insumo guarda o QUE e QUANTO, mas vencimento
+                      e pagamento vivem no lançamento financeiro vinculado — e até aqui só se
+                      chegava lá por outra tela.
+                      ⚠ ELE OCUPA O LUGAR MESMO SEM VÍNCULO, desabilitado e dizendo por quê: botão
+                      que some conforme o dado desloca a coluna inteira. E um insumo NÃO
+                      materializado normalmente não tem vínculo — é o materializar que o cria —,
+                      então o desabilitado é o estado comum antes, e o ativo o estado comum
+                      depois. */}
+                  <button type="button"
+                    title={i.financeiro_lancamento_id
+                      ? 'Abrir o lançamento financeiro (vencimento e pagamento)'
+                      : 'Este insumo ainda não tem lançamento financeiro vinculado.'}
+                    disabled={!i.financeiro_lancamento_id}
+                    className="rounded p-0.5 text-muted-foreground hover:bg-muted
+                      hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent"
+                    onClick={() => { void abrirLancamento(i.financeiro_lancamento_id); }}>
+                    <ExternalLink className="h-3 w-3" />
+                  </button>
+                  </span>
                 </td>
               </tr>
             ))}
