@@ -19,7 +19,7 @@ type RGBPdf = [number, number, number];
 import { triggerXlsxDownload, type XlsxCellValue } from '@/lib/xlsxDownload';
 import {
   criarDocRetratoA4, carregarLogoBase64, addHeader, addCardsKPI, addTituloSecao,
-  addTabelaExecutiva, addFooterComPaginacao, garantirEspaco, PALETA,
+  addTabelaExecutiva, addFooterComPaginacao, garantirEspaco, yRealAposDesenho, PALETA,
 } from '@/lib/pdf/pdfChassi';
 import { formatNum } from '@/lib/calculos/formatters';
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
@@ -360,7 +360,12 @@ export async function exportarColheitaPdf(
     });
 
     y = addTituloSecao(doc, 'Perdas e custos', y + 2);
-    addTabelaExecutiva(doc, {
+    /* ⚠ `y =` — E É A CAUSA DA SOBREPOSIÇÃO QUE ESTE PR CONSERTA. A chamada descartava o retorno
+       desde que nasceu, o que era inofensivo enquanto esta era a ÚLTIMA coisa do PDF. Quando os
+       gráficos entraram depois dela, eles passaram a partir do `y` de ANTES da tabela — e
+       desenharam dentro dela. O `garantirEspaco` não salvava: ele media um `y` que já estava
+       errado e concluía, corretamente, que cabia. */
+    y = addTabelaExecutiva(doc, {
       startY: y,
       head: [['Indicador', 'Valor']],
       body: [
@@ -396,7 +401,9 @@ export async function exportarColheitaPdf(
        na seguinte — e foi assim que elas desenharam por cima de "Perdas e custos".
        ⚠ `garantirEspaco` DUAS VEZES NÃO DUPLICA PÁGINA: se já coube aqui, o `addTituloSecao`
        abaixo também cabe e não quebra de novo. */
-    y = garantirEspaco(doc, y + 2, 8 + 6 + ALTURA_GRAFICO + 6);
+    /* ⚠ O CINTO DE SEGURANÇA, além do `y =` acima: se algum bloco futuro voltar a descartar o
+       retorno, o `lastAutoTable.finalY` ainda aponta o fim real do que foi desenhado. */
+    y = garantirEspaco(doc, yRealAposDesenho(doc, y) + 2, 8 + 6 + ALTURA_GRAFICO + 6);
     y = addTituloSecao(doc, 'Produção em barras', y);
 
     const AZUL: RGBPdf = [30, 58, 95];

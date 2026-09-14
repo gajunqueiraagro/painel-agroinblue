@@ -39,6 +39,24 @@ export const LIMITE_Y = PAGE_H - 20;
  * ⚠ O `autoTable` PAGINA O CORPO DELE, mas não sabe do título que veio antes: por isso a guarda
  * é de quem chama, não da tabela.
  */
+/**
+ * O Y VERDADEIRO depois da última tabela — a defesa contra um `y` que ficou para trás.
+ *
+ * ⚠ NASCEU DE UM DEFEITO MEDIDO, e a armadilha é sutil: `addTabelaExecutiva` DEVOLVE o `y` final,
+ * mas quem chama pode descartar o retorno, e o TypeScript não reclama de valor ignorado. Num PDF
+ * isso é inofensivo enquanto a tabela é a ÚLTIMA coisa desenhada — e foi assim que a chamada de
+ * "Perdas e custos" viveu desde que nasceu, sem `y =`.
+ * ⚠ O DIA EM QUE ALGUÉM ACRESCENTA UM BLOCO DEPOIS, a bomba dispara: o novo bloco parte de um
+ * `y` anterior à tabela e desenha POR CIMA dela. Foi o que os gráficos da colheita fizeram.
+ * ⚠ ESTA FUNÇÃO NÃO SUBSTITUI O `y =` — ela é o cinto de segurança. Consertar o chamador continua
+ * sendo o certo; isto evita que o mesmo esquecimento volte a produzir sobreposição silenciosa.
+ */
+export function yRealAposDesenho(doc: jsPDF, y: number): number {
+  const finalY = (doc as unknown as { lastAutoTable?: { finalY: number } })
+    .lastAutoTable?.finalY;
+  return finalY != null && finalY > y ? finalY : y;
+}
+
 export function garantirEspaco(doc: jsPDF, y: number, alturaNecessaria: number): number {
   if (y + alturaNecessaria <= LIMITE_Y) return y;
   doc.addPage();
