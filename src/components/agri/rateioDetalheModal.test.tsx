@@ -35,6 +35,9 @@ const BASE: RateioDetalhe = {
   /* ⚠ `null` NO BASE porque o base é um recorte de NATUREZA: o percentual da atividade só existe
      no ramo admin, e os casos de admin abaixo o sobrescrevem. */
   pct_agricultura: null,
+  /* ⚠ SEM fatias_atividade: natureza e investimento não têm primeiro passo, e o modal não deve
+     desenhar um donut de etapa que não existe. */
+  fatias_atividade: null,
 };
 
 /**
@@ -55,8 +58,21 @@ function montar(dados: RateioDetalhe, tipo: 'natureza' | 'investimento' | 'admin
   );
 }
 
-/** Um recorte administrativo, com o percentual efetivo que a RPC devolve. */
-const ADMIN = (pct: number | null): RateioDetalhe => ({ ...BASE, pct_agricultura: pct });
+/**
+ * Um recorte administrativo: percentual efetivo + o primeiro passo do rateio.
+ *
+ * ⚠ OS TRÊS VALORES SÃO OS DO CADASTRO REAL — 70/25/5 de 2024 em diante —, e somam o bruto do
+ * período. É a soma que o donut do passo 1 mostra no centro.
+ */
+const ADMIN = (pct: number | null): RateioDetalhe => ({
+  ...BASE,
+  pct_agricultura: pct,
+  fatias_atividade: [
+    { atividade: 'pecuaria', valor: 678290.68 },
+    { atividade: 'agricultura', valor: 242246.67 },
+    { atividade: 'silvicultura', valor: 48449.34 },
+  ],
+});
 
 /**
  * ⚠ AS DUAS FRASES SE TESTAM COMO FUNÇÃO, NÃO PELA TELA, e foi a tela que me obrigou a isso: o
@@ -69,7 +85,7 @@ const ADMIN = (pct: number | null): RateioDetalhe => ({ ...BASE, pct_agricultura
  */
 describe('subtituloDoRateio — os dois números que se comparam', () => {
   it('sem parcela direta, diz a fatia da cultura e o pool', () => {
-    const t = txt(subtituloDoRateio(BASE));
+    const t = txt(subtituloDoRateio(BASE, 'natureza'));
     expect(t).toContain('R$ 82.484,55 nesta cultura');
     expect(t).toContain('R$ 104.675,83 no total');
   });
@@ -77,13 +93,25 @@ describe('subtituloDoRateio — os dois números que se comparam', () => {
   /* ⚠ COM PARCELA DIRETA O SUBTÍTULO ABRE A CONTA. Um número só, somando direto + rateado,
      mandaria o operador procurar uma nota fiscal de um valor que nunca foi lançado. */
   it('com parcela direta, abre direto + compartilhado', () => {
-    const t = txt(subtituloDoRateio({ ...BASE, direto_cultura: 10000 }));
+    const t = txt(subtituloDoRateio({ ...BASE, direto_cultura: 10000 }, 'natureza'));
     expect(t).toContain('R$ 92.484,55 nesta cultura');
     expect(t).toContain('R$ 10.000,00 direto + R$ 82.484,55 do compartilhado');
   });
 
+  /* ⚠ O ADMIN DIZ A CADEIA, não um número só: é a conta que o operador refaz no papel, e o
+     subtítulo a escreve na ordem em que ele a faz. */
+  it('no admin, o subtítulo escreve os dois passos em sequência', () => {
+    const t = txt(subtituloDoRateio(ADMIN(25), 'admin'));
+    expect(t).toContain('R$ 82.484,55 nesta cultura');
+    expect(t).toContain('rateio em dois passos');
+    /* O bruto é a SOMA das fatias de atividade, nunca um total assumido. */
+    expect(t).toContain('R$ 968.986,69 de admin');
+    expect(t).toContain('25,0% agricultura');
+    expect(t).toContain('78,8% área');
+  });
+
   it('recorte sem cultura marcada nao vira NaN', () => {
-    const t = txt(subtituloDoRateio({ ...BASE, fatias: [] }));
+    const t = txt(subtituloDoRateio({ ...BASE, fatias: [] }, 'natureza'));
     expect(t).toContain('R$ 0,00 nesta cultura');
   });
 });
@@ -102,10 +130,10 @@ describe('notaDoRateio — o que muda entre os tipos', () => {
   /* ⚠ O ADMIN É OUTRO FATO: a lista traz o custo inteiro do período e o pool já vem multiplicado
      pelo percentual da atividade. A nota tem de dizer que a soma NÃO fecha, senão a divergência
      parece defeito. */
-  it('admin: avisa que a lista não soma a linha, e nomeia os dois passos', () => {
+  it('admin: avisa que a lista fecha com o donut 1, não com a linha', () => {
     const t = txt(notaDoRateio(ADMIN(34.5), 'admin'));
     expect(t).toContain('34,5% (agricultura) × 78,8% (área) = R$ 82.484,55');
-    expect(t).toContain('não soma o valor da linha');
+    expect(t).toContain('fecha com o primeiro donut, não com a linha do painel');
   });
 
   /* ⚠ SEM O PERCENTUAL a nota continua correta — ela só deixa de nomear o primeiro passo. A RPC
@@ -113,7 +141,7 @@ describe('notaDoRateio — o que muda entre os tipos', () => {
      seria pior que omiti-lo. */
   it('admin sem o percentual da atividade: explica sem inventar o número', () => {
     const t = txt(notaDoRateio(ADMIN(null), 'admin'));
-    expect(t).toContain('não soma o valor da linha');
+    expect(t).toContain('fecha com o primeiro donut');
     expect(t).not.toContain('(agricultura) ×');
     expect(t).toContain('78,8% (área)');
   });

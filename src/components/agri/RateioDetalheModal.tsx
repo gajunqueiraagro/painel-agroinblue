@@ -27,6 +27,8 @@ import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
+import { useOrdenacaoTabela, type ColunaOrdenavel } from '@/hooks/useOrdenacaoTabela';
+import { ThOrdenavel } from '@/components/ui/th-ordenavel';
 
 /** Uma cultura na repartição do pool. */
 export interface FatiaRateio {
@@ -50,6 +52,12 @@ export interface LancamentoRateio {
   compartilhado: boolean;
 }
 
+/** Uma atividade da fazenda no PRIMEIRO passo do rateio administrativo. */
+export interface FatiaAtividade {
+  atividade: string;
+  valor: number;
+}
+
 /** O payload de `fn_painel_rateio_detalhe`, inteiro. */
 export interface RateioDetalhe {
   pool: number;
@@ -67,6 +75,18 @@ export interface RateioDetalhe {
    * passos, e a pergunta não existe.
    */
   pct_agricultura: number | null;
+  /**
+   * O PRIMEIRO passo do rateio administrativo: o custo do escritório repartido entre as
+   * atividades da fazenda. `null`/vazio fora do ramo admin.
+   *
+   * ⚠ ELAS SOMAM O BRUTO POR CADASTRO, NÃO POR CONSTRUÇÃO. Medido no Proto: os sete anos de
+   * `agri_rateio_admin` fecham em 100%. Nada na função obriga isso — um ano cadastrado com 90%
+   * deixaria 10% fora de todas as fatias, e o donut somaria menos que o bruto sem dizer por quê.
+   * Por isso o total do passo 1 é a SOMA DAS FATIAS, nunca um "bruto" assumido: assim o número
+   * do centro e as fatias sempre concordam, e a diferença, se houver, aparece contra a aba
+   * Lançamentos em vez de se esconder.
+   */
+  fatias_atividade?: FatiaAtividade[] | null;
 }
 
 /**
@@ -77,11 +97,90 @@ export interface RateioDetalhe {
 const CORES = ['#2a78d6', '#eb6834', '#2f9e6b', '#b45cd6', '#d6a52a', '#5a6b7a'];
 const corDaFatia = (i: number) => CORES[i % CORES.length];
 
+/**
+ * ⚠ A ATIVIDADE TEM COR PRÓPRIA, POR NOME e não por posição: a agricultura é o azul da casa —
+ * o mesmo do donut do passo 2 — e as outras duas ficam em tons neutros. É o que liga
+ * visualmente a fatia azul do primeiro donut ao total do segundo; com cor por índice, a
+ * agricultura mudaria de cor conforme a ordem por valor, e o elo entre os dois passos sumiria.
+ */
+const COR_ATIVIDADE: Record<string, string> = {
+  pecuaria: '#888780', agricultura: '#2a78d6', silvicultura: '#c8c6bd',
+};
+const corDaAtividade = (a: string) => COR_ATIVIDADE[a.toLowerCase()] ?? '#5a6b7a';
+const rotuloAtividade = (a: string) => (a ? a.charAt(0).toUpperCase() + a.slice(1) : '—');
+
 const dataBR = (iso: string | null) => (iso && iso.length >= 10
   ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '—');
 
 const TH = 'sticky top-0 z-10 bg-primary px-2 py-1 text-[9px] font-semibold uppercase'
   + ' tracking-wide text-primary-foreground';
+
+/**
+ * O DONUT — um só componente para os dois passos do admin e para o de cultura.
+ *
+ * ⚠ ELE ILUSTRA, NÃO SELECIONA. Sem `onClick`, sem `activeIndex`, sem `activeShape`: o realce
+ * que "prendia" a fatia depois do clique vinha de o recharts assumir seleção onde não há nada
+ * para selecionar — quem lista e destaca é a TABELA ao lado.
+ * ⚠ E A BORDA FEIA ERA O FOCO DO NAVEGADOR, não o recharts: os setores são `<path>` focáveis
+ * (o recharts dá `tabIndex` a eles por acessibilidade), e clicar desenhava o anel de foco do
+ * SO por cima do arco. `rootTabIndex={-1}` tira os setores da navegação e o `outline-none`
+ * fecha o caso nos navegadores que focam no clique mesmo assim.
+ * ⚠ SEM `ResponsiveContainer`: a caixa tem tamanho declarado, então não há o que medir — e ele
+ * monta um `ResizeObserver` que o jsdom não tem, derrubando os testes.
+ */
+/**
+ * AS COLUNAS ORDENÁVEIS — o mesmo contrato de `useOrdenacaoTabela`, que a lista de cargas da
+ * colheita já usa. Não há ordenação nova aqui: o hook e o `ThOrdenavel` são os da casa, e a
+ * seta invisível que eles reservam em cada cabeçalho é o que impede a tabela de se remexer a
+ * cada clique.
+ */
+const COLUNAS_ATIVIDADE: Array<ColunaOrdenavel<FatiaAtividade, string> & { h: string }> = [
+  { coluna: 'atividade', h: 'Atividade', tipo: 'texto', valor: f => f.atividade },
+  { coluna: 'pct', h: '%', tipo: 'numero', valor: f => f.valor },
+  { coluna: 'valor', h: 'R$', tipo: 'numero', valor: f => f.valor },
+];
+
+const COLUNAS_FATIA: Array<ColunaOrdenavel<FatiaRateio, string> & { h: string }> = [
+  { coluna: 'cultura', h: 'Cultura', tipo: 'texto', valor: f => f.cultura },
+  { coluna: 'area', h: 'Área ha', tipo: 'numero', valor: f => f.area_ha },
+  { coluna: 'peso', h: '%', tipo: 'numero', valor: f => f.peso },
+  { coluna: 'valor', h: 'R$', tipo: 'numero', valor: f => f.valor },
+];
+
+const COLUNAS_LANC: Array<ColunaOrdenavel<LancamentoRateio, string> & { h: string }> = [
+  { coluna: 'data', h: 'Data', tipo: 'data', valor: l => l.data },
+  { coluna: 'descricao', h: 'Descrição', tipo: 'texto', valor: l => l.descricao },
+  { coluna: 'favorecido', h: 'Favorecido', tipo: 'texto', valor: l => l.favorecido },
+  { coluna: 'valor', h: 'Valor', tipo: 'numero', valor: l => l.valor },
+];
+
+function Donut({ dados, cor, total, rotuloTotal, tamanho = 152 }: {
+  dados: Array<{ nome: string; valor: number }>;
+  cor: (i: number, nome: string) => string;
+  total: number;
+  rotuloTotal: string;
+  tamanho?: number;
+}) {
+  return (
+    <div className="relative shrink-0 [&_*]:outline-none"
+      style={{ width: tamanho, height: tamanho }}>
+      <PieChart width={tamanho} height={tamanho}>
+        <Pie data={dados} dataKey="valor" nameKey="nome" cx="50%" cy="50%"
+          innerRadius={tamanho * 0.31} outerRadius={tamanho * 0.47}
+          paddingAngle={1} isAnimationActive={false} rootTabIndex={-1}>
+          {dados.map((d, i) => (
+            <Cell key={d.nome} fill={cor(i, d.nome)} stroke="#fff" strokeWidth={1} />
+          ))}
+        </Pie>
+      </PieChart>
+      {/* ⚠ `pointer-events-none` PARA O TEXTO NÃO ROUBAR O HOVER do donut atrás dele. */}
+      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-[9px] uppercase tracking-wide text-muted-foreground">{rotuloTotal}</span>
+        <span className="text-[12px] font-bold leading-tight tabular-nums">{formatMoeda(total)}</span>
+      </div>
+    </div>
+  );
+}
 
 /** O tipo de recorte que o painel clicou — muda a frase do rodapé, nunca o cálculo. */
 export type TipoRateio = 'natureza' | 'investimento' | 'admin';
@@ -99,8 +198,20 @@ const fatiaAtual = (d: RateioDetalhe) => d.fatias.find(f => f.atual) ?? null;
  * fatia do compartilhado, e um número só somando os dois faria o operador procurar uma nota
  * fiscal de um valor que nunca foi lançado.
  */
-export function subtituloDoRateio(d: RateioDetalhe): string {
+export function subtituloDoRateio(d: RateioDetalhe, tipo: TipoRateio): string {
   const fatia = fatiaAtual(d)?.valor ?? 0;
+  /**
+   * ⚠ O ADMIN DIZ A CADEIA INTEIRA, porque ela É a resposta: o valor da linha não sai de uma
+   * divisão, sai de DUAS em sequência. "R$ 968.986 de admin → 25% agricultura → 78,8% área"
+   * é a conta que o operador refaz no papel; o subtítulo a escreve na ordem em que ele a faz.
+   */
+  if (tipo === 'admin') {
+    const bruto = (d.fatias_atividade ?? []).reduce((a, f) => a + f.valor, 0);
+    const passo1 = d.pct_agricultura != null ? `${formatNum(d.pct_agricultura, 1)}% agricultura` : 'agricultura';
+    const passo2 = `${formatNum(fatiaAtual(d)?.peso ?? 0, 1)}% área`;
+    return `${formatMoeda(fatia)} nesta cultura · rateio em dois passos: `
+      + `${formatMoeda(bruto)} de admin → ${passo1} → ${passo2}`;
+  }
   if (d.direto_cultura > 0) {
     return `${formatMoeda(d.direto_cultura + fatia)} nesta cultura `
       + `(${formatMoeda(d.direto_cultura)} direto + ${formatMoeda(fatia)} do compartilhado)`;
@@ -127,10 +238,16 @@ export function notaDoRateio(d: RateioDetalhe, tipo: TipoRateio): string {
   const fatia = f?.valor ?? 0;
   const peso = formatNum(f?.peso ?? 0, 1);
   if (tipo === 'admin') {
-    return 'A lista mostra o custo administrativo inteiro do período. A fração desta cultura é '
+    /* ⚠ A NOTA ENCOLHEU PORQUE OS DONUTS PASSARAM A EXPLICAR. Ela existia para dizer, em
+       palavras, que a lista NÃO fecha com a linha do painel — e agora a aba Rateio mostra os
+       dois passos desenhados. O que sobrou é o que o desenho não diz: que ESTA LISTA é o admin
+       inteiro, e por isso ela fecha com o PRIMEIRO donut, não com a linha.
+       ⚠ O PERCENTUAL SAI DO PAYLOAD, não de uma prop: recebê-lo de fora abriria a porta para um
+       chamador passar número diferente do que a RPC calculou. */
+    return 'Esta lista é o custo administrativo INTEIRO do período: ela fecha com o primeiro '
+      + 'donut, não com a linha do painel. '
       + (d.pct_agricultura != null ? `${formatNum(d.pct_agricultura, 1)}% (agricultura) × ` : '')
-      + `${peso}% (área) = ${formatMoeda(fatia)}. `
-      + 'Por isso a lista não soma o valor da linha — é rateio em dois passos.';
+      + `${peso}% (área) = ${formatMoeda(fatia)}.`;
   }
   return `A fração desta cultura (${peso}% por área) é ${formatMoeda(fatia)} `
     + '— é esse valor que entra na linha do painel.';
@@ -157,6 +274,15 @@ export function RateioDetalheModal({
 }) {
   const totalArea = useMemo(
     () => dados.fatias.reduce((a, f) => a + f.area_ha, 0), [dados.fatias]);
+  const passo1 = dados.fatias_atividade ?? [];
+  const totalAtividades = useMemo(
+    () => passo1.reduce((a, f) => a + f.valor, 0), [passo1]);
+
+  /* ⚠ TRÊS ORDENAÇÕES INDEPENDENTES, uma por tabela: ordenar as culturas não pode reordenar os
+     lançamentos, e o hook guarda o estado de cada uma separadamente. */
+  const ordAtv = useOrdenacaoTabela(passo1, COLUNAS_ATIVIDADE, { coluna: 'valor', direcao: 'desc' });
+  const ordFat = useOrdenacaoTabela(dados.fatias, COLUNAS_FATIA, { coluna: 'valor', direcao: 'desc' });
+  const ordLanc = useOrdenacaoTabela(dados.lancamentos, COLUNAS_LANC, { coluna: 'data', direcao: 'asc' });
   const totalLancamentos = useMemo(
     () => dados.lancamentos.reduce((a, l) => a + l.valor, 0), [dados.lancamentos]);
 
@@ -174,7 +300,7 @@ export function RateioDetalheModal({
           <div className="min-w-0">
             <h2 className="truncate text-[15px] font-bold leading-tight">{titulo}</h2>
             <p className="mt-0.5 text-[11px] text-primary-foreground/80">
-              {subtitulo ?? subtituloDoRateio(dados)}
+              {subtitulo ?? subtituloDoRateio(dados, tipo)}
             </p>
           </div>
           <div className="flex-1" />
@@ -199,92 +325,143 @@ export function RateioDetalheModal({
 
           {/* ───────────────────────── ABA 1 — O RATEIO ───────────────────────── */}
           <TabsContent value="rateio"
-            className="mt-0 min-h-0 flex-1 flex-col overflow-auto data-[state=active]:flex data-[state=inactive]:hidden">
-            <div className="mb-2 shrink-0 text-[11px] font-semibold text-foreground">
-              Como este valor foi repartido — por área plantada
-            </div>
+            className="mt-0 min-h-0 flex-1 flex-col gap-3 overflow-auto data-[state=active]:flex data-[state=inactive]:hidden">
 
-            <div className="flex flex-wrap items-start justify-center gap-3">
-              {/* ⚠ CAIXA DE TAMANHO DECLARADO, e o total NO CENTRO: sem o número no miolo, o
-                  donut vira decoração — ele mostra proporção e esconde a grandeza. */}
-              {/* ⚠ SEM `ResponsiveContainer`, E É A LEI DO GRÁFICO COMPACTO APLICADA: ele existe
-                  para OCUPAR a largura disponível, e aqui a caixa tem 168px declarados — não há
-                  nada para ele medir. Passar as medidas direto ao `PieChart` é o que o desenho
-                  já pedia.
-                  ⚠ E FOI O TESTE QUE COBROU: o `ResponsiveContainer` monta um `ResizeObserver`,
-                  que não existe no jsdom, e derrubava os oito casos com `ReferenceError`. Podia
-                  ter sido resolvido com um stub global; tirar o que não era necessário é melhor
-                  que instalar uma muleta para sustentá-lo. */}
-              <div className="relative h-[168px] w-[168px] shrink-0">
-                <PieChart width={168} height={168}>
-                  <Pie data={dados.fatias} dataKey="valor" nameKey="cultura"
-                    cx="50%" cy="50%" innerRadius={52} outerRadius={80}
-                    paddingAngle={1} isAnimationActive={false}>
-                    {dados.fatias.map((f, i) => (
-                      <Cell key={f.cultura} fill={corDaFatia(i)} stroke="#fff" strokeWidth={1} />
-                    ))}
-                  </Pie>
-                </PieChart>
-                {/* ⚠ `pointer-events-none` PARA O TEXTO NÃO ROUBAR O HOVER do donut atrás dele. */}
-                <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-[9px] uppercase tracking-wide text-muted-foreground">Total</span>
-                  <span className="text-[13px] font-bold leading-tight tabular-nums">
-                    {formatMoeda(dados.pool)}
-                  </span>
+            {/* ── PASSO 1 — só no administrativo ──
+                ⚠ SÓ O ADMIN TEM DOIS PASSOS. Numa natureza ou num investimento o compartilhado
+                já é da lavoura e vai direto para as culturas; no administrativo o custo é do
+                ESCRITÓRIO, e antes de chegar à cultura ele passa pela atividade. Desenhar um
+                passo 1 vazio nos outros dois inventaria uma etapa que não existe. */}
+            {passo1.length > 0 && (
+              <div>
+                <div className="mb-1.5 text-[11px] font-semibold text-foreground">
+                  Passo 1 — o administrativo do período repartido entre as atividades
+                </div>
+                <div className="flex flex-wrap items-start gap-3">
+                  <Donut dados={passo1.map(f => ({ nome: f.atividade, valor: f.valor }))}
+                    cor={(_, nome) => corDaAtividade(nome)}
+                    total={totalAtividades} rotuloTotal="Admin do período" />
+                  <div className="min-w-[240px] flex-1">
+                    <table className="w-full table-fixed border-collapse">
+                      <colgroup>
+                        {['48%', '20%', '32%'].map((w, i) => <col key={i} style={{ width: w }} />)}
+                      </colgroup>
+                      <thead>
+                        <tr>
+                          {COLUNAS_ATIVIDADE.map(c => (
+                            <ThOrdenavel key={c.coluna} coluna={c.coluna} rotulo={c.h}
+                              ordem={ordAtv.ordem} onOrdenar={ordAtv.alternar}
+                              className={TH} alinhaDireita={c.coluna !== 'atividade'} />
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {ordAtv.ordenadas.map(f => (
+                          /* ⚠ A AGRICULTURA FICA DESTACADA porque é a fatia que SEGUE para o
+                             passo 2 — sem isso os dois donuts parecem dois assuntos. */
+                          <tr key={f.atividade}
+                            className={cn('border-t border-slate-100',
+                              f.atividade.toLowerCase() === 'agricultura' && 'bg-accent')}>
+                            <td className="truncate px-2 py-0.5 text-[11px]">
+                              <span className="mr-1.5 inline-block h-2 w-2 shrink-0 rounded-[2px] align-middle"
+                                style={{ backgroundColor: corDaAtividade(f.atividade) }} />
+                              <span className={cn(f.atividade.toLowerCase() === 'agricultura' && 'font-bold')}>
+                                {rotuloAtividade(f.atividade)}
+                              </span>
+                            </td>
+                            <td className="px-2 py-0.5 text-right text-[11px] tabular-nums">
+                              {totalAtividades > 0 ? `${formatNum((f.valor / totalAtividades) * 100, 1)}%` : '—'}
+                            </td>
+                            <td className="px-2 py-0.5 text-right text-[11px] font-medium tabular-nums">
+                              {formatMoeda(f.valor)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
+            )}
 
-              {/* ⚠ A LEGENDA É UMA TABELA, não uma lista com bolinhas: as quatro colunas se leem
-                  em coluna, e é isso que permite comparar duas culturas sem contar dígito. */}
-              <div className="min-w-[280px] flex-1">
-                <table className="w-full table-fixed border-collapse">
-                  <colgroup>
-                    {['38%', '19%', '15%', '28%'].map((w, i) => <col key={i} style={{ width: w }} />)}
-                  </colgroup>
-                  <thead>
-                    <tr>
-                      <th className={cn(TH, 'text-left')}>Cultura</th>
-                      <th className={cn(TH, 'text-right')}>Área ha</th>
-                      <th className={cn(TH, 'text-right')}>%</th>
-                      <th className={cn(TH, 'text-right')}>R$</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {dados.fatias.map((f, i) => (
-                      /* ⚠ A CULTURA ABERTA FICA DESTACADA: sem isso o operador lê quatro linhas
-                         sem saber qual delas explica o número que ele clicou. */
-                      <tr key={f.cultura}
-                        className={cn('border-t border-slate-100', f.atual && 'bg-accent')}>
-                        <td className="truncate px-2 py-0.5 text-[11px]" title={labelDaCultura(f.cultura)}>
-                          <span className="mr-1.5 inline-block h-2 w-2 shrink-0 rounded-[2px] align-middle"
-                            style={{ backgroundColor: corDaFatia(i) }} />
-                          <span className={cn(f.atual && 'font-bold')}>{labelDaCultura(f.cultura)}</span>
+            {/* ── PASSO 2 (ou o único, fora do admin) ── */}
+            <div>
+              <div className="mb-1.5 text-[11px] font-semibold text-foreground">
+                {passo1.length > 0
+                  ? `Passo 2 — a parcela da lavoura (${formatMoeda(dados.pool)}) repartida entre as culturas, por área`
+                  : 'Como este valor foi repartido — por área plantada'}
+              </div>
+
+              {/* ⚠ O DIRETO NÃO VIRA FATIA, E ISSO PRECISA ESTAR ESCRITO. O donut mostra só o
+                  POOL, porque só ele se reparte; o gasto já marcado nesta cultura não passa por
+                  rateio nenhum. Sem esta linha, o total do centro (o pool) discordaria do
+                  subtítulo (direto + fração) e pareceria erro — quando é a diferença entre "o
+                  que se reparte" e "o que a cultura tem". */}
+              {dados.direto_cultura > 0 && (
+                <p className="mb-1.5 text-[10px] leading-snug text-muted-foreground">
+                  O que se reparte: <strong>{formatMoeda(dados.pool)}</strong>. O resto,{' '}
+                  <strong>{formatMoeda(dados.direto_cultura)}</strong>, é direto desta cultura e
+                  não se reparte.
+                </p>
+              )}
+
+              <div className="flex flex-wrap items-start gap-3">
+                <Donut dados={dados.fatias.map(f => ({ nome: f.cultura, valor: f.valor }))}
+                  cor={i => corDaFatia(i)}
+                  total={dados.pool} rotuloTotal="A repartir" />
+
+                {/* ⚠ A LEGENDA É UMA TABELA, não uma lista com bolinhas: as quatro colunas se
+                    leem em coluna, e é isso que permite comparar duas culturas sem contar
+                    dígito. */}
+                <div className="min-w-[280px] flex-1">
+                  <table className="w-full table-fixed border-collapse">
+                    <colgroup>
+                      {['38%', '19%', '15%', '28%'].map((w, i) => <col key={i} style={{ width: w }} />)}
+                    </colgroup>
+                    <thead>
+                      <tr>
+                        {COLUNAS_FATIA.map(c => (
+                          <ThOrdenavel key={c.coluna} coluna={c.coluna} rotulo={c.h}
+                            ordem={ordFat.ordem} onOrdenar={ordFat.alternar}
+                            className={TH} alinhaDireita={c.coluna !== 'cultura'} />
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ordFat.ordenadas.map(f => (
+                        <tr key={f.cultura}
+                          className={cn('border-t border-slate-100', f.atual && 'bg-accent')}>
+                          <td className="truncate px-2 py-0.5 text-[11px]" title={labelDaCultura(f.cultura)}>
+                            <span className="mr-1.5 inline-block h-2 w-2 shrink-0 rounded-[2px] align-middle"
+                              style={{ backgroundColor: corDaFatia(dados.fatias.indexOf(f)) }} />
+                            <span className={cn(f.atual && 'font-bold')}>{labelDaCultura(f.cultura)}</span>
+                          </td>
+                          <td className="px-2 py-0.5 text-right text-[11px] tabular-nums">
+                            {formatNum(f.area_ha, 2)}
+                          </td>
+                          <td className="px-2 py-0.5 text-right text-[11px] tabular-nums">
+                            {formatNum(f.peso, 1)}%
+                          </td>
+                          <td className="px-2 py-0.5 text-right text-[11px] font-medium tabular-nums">
+                            {formatMoeda(f.valor)}
+                          </td>
+                        </tr>
+                      ))}
+                      {/* ⚠ O TOTAL NA MESMA RÉGUA, e os 100% ESCRITOS: eles são a prova de que
+                          nenhuma cultura ficou de fora da repartição. */}
+                      <tr className="bg-primary text-primary-foreground">
+                        <td className="px-2 py-1 text-[11px] font-bold">Total</td>
+                        <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">
+                          {formatNum(totalArea, 2)}
                         </td>
-                        <td className="px-2 py-0.5 text-right text-[11px] tabular-nums">
-                          {formatNum(f.area_ha, 2)}
-                        </td>
-                        <td className="px-2 py-0.5 text-right text-[11px] tabular-nums">
-                          {formatNum(f.peso, 1)}%
-                        </td>
-                        <td className="px-2 py-0.5 text-right text-[11px] font-medium tabular-nums">
-                          {formatMoeda(f.valor)}
+                        <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">100,0%</td>
+                        <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">
+                          {formatMoeda(dados.pool)}
                         </td>
                       </tr>
-                    ))}
-                    {/* ⚠ O TOTAL NA MESMA RÉGUA, e os 100% ESCRITOS: eles são a prova de que
-                        nenhuma cultura ficou de fora da repartição. */}
-                    <tr className="bg-primary text-primary-foreground">
-                      <td className="px-2 py-1 text-[11px] font-bold">Total</td>
-                      <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">
-                        {formatNum(totalArea, 2)}
-                      </td>
-                      <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">100,0%</td>
-                      <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">
-                        {formatMoeda(dados.pool)}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </TabsContent>
@@ -301,10 +478,11 @@ export function RateioDetalheModal({
                 </colgroup>
                 <thead>
                   <tr>
-                    <th className={cn(TH, 'text-left')}>Data</th>
-                    <th className={cn(TH, 'text-left')}>Descrição</th>
-                    <th className={cn(TH, 'text-left')}>Favorecido</th>
-                    <th className={cn(TH, 'text-right')}>Valor</th>
+                    {COLUNAS_LANC.map(c => (
+                      <ThOrdenavel key={c.coluna} coluna={c.coluna} rotulo={c.h}
+                        ordem={ordLanc.ordem} onOrdenar={ordLanc.alternar}
+                        className={TH} alinhaDireita={c.coluna === 'valor'} />
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
@@ -313,7 +491,7 @@ export function RateioDetalheModal({
                       Nenhum lançamento neste recorte.
                     </td></tr>
                   )}
-                  {dados.lancamentos.map((l, i) => (
+                  {ordLanc.ordenadas.map((l, i) => (
                     <tr key={`${l.data}-${i}`}
                       className={cn('border-t border-slate-100', i % 2 === 1 && 'bg-muted/40')}>
                       <td className="whitespace-nowrap px-2 py-0.5 text-[10px] tabular-nums">
