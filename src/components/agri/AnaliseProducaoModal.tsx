@@ -355,12 +355,18 @@ export function AnaliseProducaoModal({
                 (dezenas) na mesma escala fariam as três de hectare virarem risco.
                 ⚠ AS CORES SÃO LITERAIS — classe de Tailwind concatenada não existe no CSS, porque
                 a varredura é estática. Foi assim que a barra "seco" ficou invisível. */}
+            {/* ⚠ AS DUAS ÚLTIMAS COLUNAS DA TUPLA SÃO POR CARD, e é o que os separa: `casas` e
+                `fonte`. Eles nasceram com o MESMO literal, e enquanto isso era verdade a tupla
+                não precisava carregá-los — agora precisa, e o lugar de decidir é aqui, junto
+                dos números, não numa prop repetida em dois lugares que divergem no primeiro
+                ajuste. */}
             {([
-              ['Total em sacas', totais.verdeEmSacas, totais.sacasBoas, totais.graoRocaSacas, 'sacas'],
+              ['Total em sacas', totais.verdeEmSacas, totais.sacasBoas, totais.graoRocaSacas,
+                'sacas', 0, 10],
               ['Sacas por hectare', porHa(totais.verdeEmSacas), totais.produtividade,
-                porHa(totais.graoRocaSacas), 'sc/ha'],
-            ] as Array<[string, number | null, number | null, number | null, string]>).map(
-              ([titulo, verde, boas, roca, un]) => (
+                porHa(totais.graoRocaSacas), 'sc/ha', 1, 11],
+            ] as Array<[string, number | null, number | null, number | null, string, number, number]>).map(
+              ([titulo, verde, boas, roca, un, casas, fonte]) => (
                 <BarrasCompactas
                   key={titulo}
                   titulo={titulo}
@@ -368,21 +374,26 @@ export function AnaliseProducaoModal({
                   larguraMax={158}
                   altura={118}
                   larguraBarra={30}
-                  fonteValor={11}
+                  fonteValor={fonte}
                   distribuir
                   barras={[
-                    /* ⚠ O MESMO FORMATO NAS TRÊS — inteiro com separador de milhar. É a única
-                       regra que se aplica igual a 9.100,00, 7.746,65 e 620,63; a casa decimal
-                       não cabe (em 15px, "7.746,65" pede ~64px numa coluna de ~46px).
+                    /* ⚠ O MESMO FORMATO NAS TRÊS DO CARD — o que muda é o card, nunca a barra:
+                       as três se comparam entre si, e duas casas numa e nenhuma na vizinha
+                       trocariam a comparação por aritmética mental.
+                       ⚠ INTEIRO NO TOTAL, UMA CASA NO POR-HECTARE, e a razão é o tamanho do
+                       número: 9.100,00 não cabe com decimal (em 15px, "7.746,65" pedia ~64px
+                       numa coluna de ~46px — foi o que fixou o inteiro aqui), mas 257,9 cabe
+                       folgado, e no por-hectare a casa decimal é o que distingue duas safras
+                       parecidas. Mesma lei, números de ordem diferente.
                        ⚠ E ARREDONDA, não trunca: 620,63 vira 621. O mock mostra 620, mas ele
                        trunca a roça enquanto arredonda as boas (7.746,65 → 7.747) — duas regras
                        na mesma linha. Uma só, e é a que soma certo. */
                     { rotulo: 'verde', valor: verde, cor: 'bg-primary',
-                      texto: verde == null ? '—' : formatNum(verde, 0) },
+                      texto: verde == null ? '—' : formatNum(verde, casas) },
                     { rotulo: 'boas', valor: boas, cor: 'bg-success',
-                      texto: boas == null ? '—' : formatNum(boas, 0) },
+                      texto: boas == null ? '—' : formatNum(boas, casas) },
                     { rotulo: 'roça', valor: roca, cor: 'bg-destructive',
-                      texto: roca == null ? '—' : formatNum(roca, 0) },
+                      texto: roca == null ? '—' : formatNum(roca, casas) },
                   ] satisfies BarraCompacta[]}
                 />
               ))}
