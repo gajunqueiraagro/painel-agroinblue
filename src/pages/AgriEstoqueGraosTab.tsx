@@ -26,7 +26,7 @@ import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { useSafrasLavoura, useTalhoesDaSafra } from '@/hooks/useAreaPlantada';
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
 import { labelDaClasse, corDaClasse } from '@/lib/agri/barterVenda';
-import { useEstoqueGraos, totaisDoEstoque } from '@/hooks/useEstoqueGraos';
+import { useEstoqueGraos, totaisDoEstoque, useEstoqueGraosResumo } from '@/hooks/useEstoqueGraos';
 import { VendaAvulsaModal, type VendaAvulsaPayload } from '@/components/agri/VendaAvulsaModal';
 import { useFinanceiroV2 } from '@/hooks/useFinanceiroV2';
 import { useQueryClient } from '@tanstack/react-query';
@@ -39,6 +39,13 @@ import { toast } from 'sonner';
  * assunto.
  */
 const TH = 'bg-[#3a4864] px-2 py-1 text-[9px] font-semibold uppercase tracking-wide text-white';
+
+/**
+ * ⚠ O VALOR SENTINELA DO "TODAS", e ele NÃO pode ser string vazia: o `Select` do Radix trata
+ * `''` como "nada escolhido" e o seletor voltaria ao placeholder em vez de mostrar "Todas".
+ * Um token improvável é o que distingue "escolhi ver todas" de "ainda não escolhi".
+ */
+const TODAS = '__todas__';
 
 /**
  * ⚠ O CARTÃO É O DO PAINEL DA SAFRA, com a unidade miúda ao lado do número e `nowrap` — a mesma
@@ -82,14 +89,29 @@ export function AgriEstoqueGraosTab() {
   const culturasDaSafra = useMemo(
     () => Array.from(new Set(talhoes.map(t => t.cultura))).sort((a, b) => a.localeCompare(b, 'pt-BR')),
     [talhoes]);
-  const [cultura, setCultura] = useState('');
+  /**
+   * ⚠ ABRE EM "TODAS", não na primeira cultura: a pergunta do estoque é "o que eu tenho", e numa
+   * safra com duas culturas abrir numa delas esconde metade da resposta sem dizer que escondeu.
+   * ⚠ E "TODAS" SOBREVIVE À TROCA DE SAFRA — só a cultura ESPECÍFICA que não existe na nova é que
+   * cai de volta para o resumo. Quem está comparando safras pelo total não quer ser jogado numa
+   * cultura a cada troca.
+   */
+  const [cultura, setCultura] = useState(TODAS);
   useEffect(() => {
-    if (culturasDaSafra.length === 0) { setCultura(''); return; }
-    if (!culturasDaSafra.includes(cultura)) setCultura(culturasDaSafra[0]);
+    if (cultura === TODAS) return;
+    if (culturasDaSafra.length === 0 || !culturasDaSafra.includes(cultura)) setCultura(TODAS);
   }, [culturasDaSafra, cultura]);
 
-  const { linhas, carregando, erro } = useEstoqueGraos(clienteId, safraId || null, cultura || null);
+  const verTodas = cultura === TODAS;
+
+  const { linhas, carregando, erro } = useEstoqueGraos(
+    clienteId, safraId || null, verTodas ? null : (cultura || null));
+  const resumo = useEstoqueGraosResumo(clienteId, safraId || null, verTodas);
   const t = useMemo(() => totaisDoEstoque(linhas), [linhas]);
+  const totalResumo = useMemo(() => ({
+    saldo: resumo.culturas.reduce((a, c) => a + c.saldo, 0),
+    valor: resumo.culturas.reduce((a, c) => a + c.valor, 0),
+  }), [resumo.culturas]);
 
   /* ───────────────────────── A VENDA AVULSA ─────────────────────────
    * ⚠ A FAZENDA SAI DO TALHÃO, não de um contexto global: a RPC exige `p_fazenda_id`, e esta tela
@@ -175,6 +197,7 @@ export function AgriEstoqueGraosTab() {
                 <SelectValue placeholder={culturasDaSafra.length === 0 ? 'Safra sem área' : 'Escolha'} />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value={TODAS} className="text-[12px]">Todas</SelectItem>
                 {culturasDaSafra.map(c => (
                   <SelectItem key={c} value={c} className="text-[12px]">{labelDaCultura(c)}</SelectItem>
                 ))}
@@ -187,16 +210,104 @@ export function AgriEstoqueGraosTab() {
       {/* ── OS TRÊS NÚMEROS DO TOPO ──
           ⚠ ELES SOMAM O MESMO ARRAY QUE A TABELA MOSTRA, nunca uma segunda consulta: é o que
           garante que o cartão e a linha de total não possam discordar. */}
+      {/* ⚠ EM "TODAS" OS CARTÕES SOMAM O RESUMO, não o detalhe: com nenhuma cultura escolhida o
+          detalhe por classe nem foi buscado, e somar um array vazio mostraria zero sobre uma
+          safra cheia de grão. */}
       <div className="grid gap-1.5 md:grid-cols-3">
-        <Cartao rotulo="Em estoque" unidade="sc" valor={formatNum(t.saldo, 2)} />
-        <Cartao rotulo="Valor estimado" unidade="R$" valor={formatNum(t.valor, 2)}
-          titulo={formatMoeda(t.valor)} cor="text-success" />
+        <Cartao rotulo="Em estoque" unidade="sc"
+          valor={formatNum(verTodas ? totalResumo.saldo : t.saldo, 2)} />
+        <Cartao rotulo="Valor estimado" unidade="R$"
+          valor={formatNum(verTodas ? totalResumo.valor : t.valor, 2)}
+          titulo={formatMoeda(verTodas ? totalResumo.valor : t.valor)} cor="text-success" />
         {/* ⚠ O "% PARADO" NÃO GANHA COR: estoque alto não é bom nem ruim por si — depende do
             preço que o produtor está esperando. Pintá-lo de vermelho seria dar um conselho que
-            a tela não tem como sustentar. */}
-        <Cartao rotulo="% colhido parado" unidade="%" valor={formatNum(t.pctParado, 1)} />
+            a tela não tem como sustentar.
+            ⚠ E EM "TODAS" ELE É "—", não zero: `fn_estoque_graos_resumo` devolve saldo e valor,
+            não o COLHIDO — sem denominador não há percentual, e 0,0% afirmaria que nada ficou
+            parado quando o que falta é a conta. */}
+        <Cartao rotulo="% colhido parado" unidade={verTodas ? undefined : '%'}
+          valor={verTodas ? '—' : formatNum(t.pctParado, 1)} />
       </div>
 
+      {/* ── "TODAS": UMA LINHA POR CULTURA ──
+          ⚠ ELA NÃO REPETE O DETALHE POR CLASSE, e é de propósito: a pergunta de quem abre em
+          "Todas" é "onde está meu grão", não "como ele se divide". O detalhe fica a um clique. */}
+      {verTodas ? (
+        <div className="overflow-hidden rounded-md border">
+          <table className="w-full table-fixed border-collapse">
+            <colgroup>
+              {['46%', '27%', '27%'].map((w, i) => <col key={i} style={{ width: w }} />)}
+            </colgroup>
+            <thead>
+              <tr>
+                <th className={cn(TH, 'text-left')}>Cultura</th>
+                <th className={cn(TH, 'text-right')}>Sacas em estoque</th>
+                <th className={cn(TH, 'text-right')}>Valor estimado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {resumo.erro ? (
+                <tr><td colSpan={3} className="px-2 py-6 text-center">
+                  <span className="inline-flex items-center gap-1.5 text-[11px] text-destructive">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    Não foi possível carregar o estoque.
+                  </span>
+                  <div className="mt-1 text-[10px] text-muted-foreground" title={resumo.erro.message}>
+                    O saldo não foi lido — o dado continua no banco.
+                  </div>
+                </td></tr>
+              ) : resumo.carregando ? (
+                <tr><td colSpan={3} className="px-2 py-6 text-center text-[11px] text-muted-foreground">
+                  <span className="inline-flex items-center gap-1.5">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Carregando…
+                  </span>
+                </td></tr>
+              ) : resumo.culturas.length === 0 ? (
+                <tr><td colSpan={3} className="px-2 py-6 text-center text-[10px] text-muted-foreground">
+                  Esta safra ainda não tem área cadastrada.
+                </td></tr>
+              ) : resumo.culturas.map(c => (
+                /* ⚠ A LINHA INTEIRA É O BOTÃO, não um ícone no fim: o gesto é "quero ver esta
+                    cultura", e o alvo é o nome dela. */
+                <tr key={c.cultura}
+                  className="cursor-pointer border-t border-slate-100 hover:bg-[#1e3a5f]/[0.06]"
+                  onClick={() => setCultura(c.cultura)}
+                  tabIndex={0} role="button"
+                  aria-label={`Ver o estoque de ${labelDaCultura(c.cultura)} por classe`}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCultura(c.cultura); }
+                  }}>
+                  <td className="truncate px-2 py-1 text-[11px] font-medium">
+                    {labelDaCultura(c.cultura)}
+                  </td>
+                  <td className={cn('px-2 py-1 text-right text-[11px] tabular-nums',
+                    c.saldo > 0 && 'text-success')}>
+                    {formatNum(c.saldo, 2)}
+                  </td>
+                  {/* ⚠ "—" QUANDO O VALOR É ZERO, nunca "R$ 0,00": a RPC devolve zero quando a
+                      cultura nunca entregou e não há preço de referência. "R$ 0,00" ao lado de
+                      44 mil sacas afirmaria que elas não valem nada — o que falta é o preço,
+                      não o valor. */}
+                  <td className="px-2 py-1 text-right text-[11px] font-medium tabular-nums">
+                    {c.valor > 0 ? formatMoeda(c.valor) : '—'}
+                  </td>
+                </tr>
+              ))}
+              {resumo.culturas.length > 0 && !resumo.erro && !resumo.carregando && (
+                <tr className="bg-[#3a4864] text-white">
+                  <td className="px-2 py-1 text-[11px] font-bold">Total</td>
+                  <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">
+                    {formatNum(totalResumo.saldo, 2)}
+                  </td>
+                  <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">
+                    {totalResumo.valor > 0 ? formatMoeda(totalResumo.valor) : '—'}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      ) : (
       <div className="overflow-hidden rounded-md border">
         <table className="w-full table-fixed border-collapse">
           <colgroup>
@@ -298,6 +409,7 @@ export function AgriEstoqueGraosTab() {
           </tbody>
         </table>
       </div>
+      )}
 
       {/* ⚠ OS DOIS BOTÕES NASCEM DESABILITADOS E DIZEM POR QUÊ — a regra da OC: o motivo fica
           escrito, não só no `title`. Eles existem desde já porque um saldo sem nenhuma ação à
@@ -307,11 +419,15 @@ export function AgriEstoqueGraosTab() {
         {/* ⚠ O MOTIVO DE ESTAR DESLIGADO FICA ESCRITO AO LADO, não só no `title` — regra da OC.
             E são motivos DIFERENTES: sem saldo não há o que vender; sem fazenda a venda não tem
             onde ser gravada, e gravar `null` poria a receita fora de qualquer fazenda. */}
+        {/* ⚠ EM "TODAS" NÃO SE VENDE: a venda grava UMA cultura na operação, e o modal pede as
+            classes de uma só. Escolher a cultura é o primeiro passo da venda, não um detalhe —
+            e o motivo fica escrito, como os outros dois. */}
         <Button size="sm" variant="acao" className="h-8 gap-1 px-2 text-[11px]"
-          disabled={t.saldo <= 0 || !fazendaId}
-          title={t.saldo <= 0 ? 'Não há grão em estoque para vender.'
-            : !fazendaId ? 'Esta cultura não tem fazenda resolvida nesta safra.'
-              : 'Registrar uma venda do estoque'}
+          disabled={verTodas || t.saldo <= 0 || !fazendaId}
+          title={verTodas ? 'Escolha uma cultura para vender.'
+            : t.saldo <= 0 ? 'Não há grão em estoque para vender.'
+              : !fazendaId ? 'Esta cultura não tem fazenda resolvida nesta safra.'
+                : 'Registrar uma venda do estoque'}
           onClick={() => setModalVenda(true)}>
           <Plus className="h-3.5 w-3.5" /> Registrar saída (venda avulsa)
         </Button>
@@ -319,7 +435,9 @@ export function AgriEstoqueGraosTab() {
           title="Em breve — a baixa por quebra é a próxima fatia.">
           <TrendingDown className="h-3.5 w-3.5" /> Baixar por quebra
         </Button>
-        {t.saldo <= 0 && !carregando && !erro && (
+        {verTodas ? (
+          <span className="text-[10px] text-muted-foreground">Escolha uma cultura para vender.</span>
+        ) : t.saldo <= 0 && !carregando && !erro && (
           <span className="text-[10px] text-muted-foreground">Sem grão em estoque.</span>
         )}
       </div>
@@ -341,7 +459,14 @@ export function AgriEstoqueGraosTab() {
         {/* ⚠ A RESSALVA DA SAFRA INTEIRA SAIU COM O FILTRO: enquanto a RPC não aceitava cultura,
             as sacas de duas culturas colhidas somavam na mesma classe e a nota tinha de avisar.
             Agora o recorte é o que o topo diz, e repetir o aviso confundiria. */}
-        Saldo = Colhido − Entregue (barter/venda) − Quebra, por safra, cultura e classe.
+        {verTodas
+          /* ⚠ A NOTA MUDA COM A VISÃO porque a conta muda: no resumo o valor é uma ESTIMATIVA
+              pelo preço médio de todas as classes entregues, e dizer isso é o que impede o
+              operador de levar o número a uma negociação como se fosse preço firme. */
+          ? <>Saldo por cultura = Colhido − Entregue. O valor é <strong>estimativa</strong>: usa o
+              preço médio de todas as classes já entregues daquela cultura, não o da classe que
+              sobrou.</>
+          : <>Saldo = Colhido − Entregue (barter/venda) − Quebra, por safra, cultura e classe.</>}
       </p>
     </div>
   );

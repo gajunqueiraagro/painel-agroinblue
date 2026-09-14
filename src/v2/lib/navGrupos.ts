@@ -151,11 +151,12 @@ export const NAV_GRUPOS: NavGrupo[] = [
         titulo: 'Agricultura',
         itens: [
           { id: 'agricultura-home', label: 'Visão Geral', status: 'ready', emConstrucao: true },
-          { id: 'barter-contratos', label: 'Barter', status: 'ready' },
-          /* ⚠ O ESTOQUE VEM DEPOIS DO BARTER porque é ele que o consome: o grão sai da colheita,
-             passa pelo barter (ou por uma venda) e o que sobra é o estoque. A ordem do menu é a
-             do caminho do grão. */
+          /* ⚠ O ESTOQUE VEM ANTES DO BARTER (decisão do Gabriel). A primeira ordem seguia o
+             caminho do grão — colheita, barter, sobra —, mas o menu não é uma linha do tempo: é
+             onde se procura. O estoque é a pergunta de todo dia ("quanto tenho para vender?") e
+             o barter é o contrato que se abre de vez em quando. */
           { id: 'estoque-graos', label: 'Estoque de Grãos', status: 'ready' },
+          { id: 'barter-contratos', label: 'Barter', status: 'ready' },
         ],
       },
       {

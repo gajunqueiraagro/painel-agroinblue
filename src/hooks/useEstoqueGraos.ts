@@ -102,3 +102,54 @@ export function totaisDoEstoque(linhas: readonly EstoqueClasse[]) {
     pctParado: colhido > 0 ? (saldo / colhido) * 100 : 0,
   };
 }
+
+/** Uma cultura no resumo do estoque — o que a opção "Todas" lista. */
+export interface EstoqueResumoCultura {
+  cultura: string;
+  saldo: number;
+  /**
+   * O valor estimado do saldo.
+   *
+   * ⚠ ZERO AQUI É "SEM REFERÊNCIA DE PREÇO", NÃO "SEM VALOR". A RPC usa `coalesce(preco,0)`, e
+   * uma cultura que nunca entregou não tem preço médio — o produto dá zero. A tela mostra "—",
+   * porque "R$ 0,00" ao lado de 44 mil sacas afirmaria que elas não valem nada.
+   * ⚠ E É ESTIMATIVA MESMO COM PREÇO: a média é de TODAS as classes entregues, não da classe que
+   * sobrou. Quem entregou só roça a R$ 80 e guardou grão bom vê o saldo avaliado abaixo do que
+   * ele vale.
+   */
+  valor: number;
+}
+
+/**
+ * O ESTOQUE DE TODAS AS CULTURAS DA SAFRA — a lista que a opção "Todas" mostra.
+ *
+ * ⚠ ELE NÃO É A SOMA DO DETALHE, e os dois podem divergir por centavos de saca. `fn_estoque_graos`
+ * aplica a tolerância de meio saco POR CLASSE; esta soma o líquido da cultura inteira. Medido na
+ * 23/24 amendoim: o resumo dá 3.219,64 e o detalhe 3.219,65, porque a roça tem −0,01 que o
+ * detalhe zera e o resumo não. Clicar na linha e cair no detalhe muda a segunda casa — e não é
+ * defeito de nenhum dos dois.
+ */
+export function useEstoqueGraosResumo(
+  clienteId: string | null | undefined, safraId: string | null, ativo: boolean,
+) {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['estoque-graos-resumo', clienteId ?? '', safraId ?? ''],
+    /* ⚠ SÓ CONSULTA QUANDO "TODAS" ESTÁ ABERTO: com uma cultura escolhida esta lista não aparece,
+       e buscá-la assim mesmo seria uma ida ao banco por troca de cultura, sem ninguém para ler. */
+    enabled: !!clienteId && !!safraId && ativo,
+    queryFn: async (): Promise<EstoqueResumoCultura[]> => {
+      const { data: r, error: err } = await (supabase as any).rpc('fn_estoque_graos_resumo', {
+        p_cliente: clienteId,
+        p_safra_id: safraId,
+      });
+      if (err) throw err;
+      return (Array.isArray(r) ? r : []).map((x: Record<string, unknown>) => ({
+        cultura: String(x?.cultura ?? '—'),
+        saldo: num(x?.saldo),
+        valor: num(x?.valor),
+      }));
+    },
+  });
+
+  return { culturas: data ?? [], carregando: isLoading, erro: error as Error | null };
+}
