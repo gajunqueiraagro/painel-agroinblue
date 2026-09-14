@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Plus, Trash2, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { formatNum } from '@/lib/calculos/formatters';
+import { formatNum, formatarNF } from '@/lib/calculos/formatters';
 /* ⚠ `parseMoeda`, como no validador: a derivação lê o MESMO texto que a gravação vai ler.
    Com dois parsers, "26.560" viraria 1.062 sacas num lugar e 1 no outro. */
 import { parseMoeda } from '@/lib/calculos/numeroBR';
@@ -105,7 +105,15 @@ const COLUNAS_BASE: ReadonlyArray<ColunaOrdenavel<ColheitaRow, string> & { h: st
  * distribuído entre as colunas — em pixels a soma sobraria ou faltaria conforme a janela, e a
  * proporção entre as colunas mudaria com ela. A soma aqui é 100.
  */
-const LARGURAS = ['5%', '8%', '8%', '5%', '7%', '6%', '11%', '11%', '7%', '8%', '9%', '8%', '7%'];
+/**
+ * ⚠ A COLUNA DA NF FOI DE 6% PARA 8% — padrão A25, e o número saiu de medição, não de palpite.
+ * Medido no CSS compilado a 1180px: "007.086.649" em 10px `tabular-nums` ocupa 64px, e a 6% a
+ * coluna tinha 69px — menos que os 64 + 8 de `px-1`. Não cabia, e o formato seria truncado, que
+ * é o defeito que este padrão existe para acabar. A 8% a coluna vai a 92px e sobra.
+ * ⚠ OS 2% SAÍRAM DE TALHÃO E TICKET, um de cada, porque são os dois campos que já truncam por
+ * natureza (nome livre) e perdem menos com um caractere a menos. A soma segue 100%.
+ */
+const LARGURAS = ['5%', '7%', '8%', '5%', '6%', '8%', '11%', '11%', '7%', '8%', '9%', '8%', '7%'];
 
 const colunasCom = (nomePorId: Map<string, string>, fazPorId: Map<string, string>) => ([
   {
@@ -357,7 +365,17 @@ export function CargasDaArea({
                     células e o `<tbody>` dez — cada rótulo caía uma coluna adiante e "Roça"
                     aparecia sobre os botões de ação. Os dados sempre estiveram certos; o que
                     estava errado era a contagem. */}
-                <td className="truncate px-1 py-0" title={l.nf_produtor || undefined}>{l.nf_produtor || '—'}</td>
+                {/* ⚠ NF SEMPRE EM 000.000.000 — padrão A25. A coluna mostrava o número CRU e
+                    TRUNCADO ("70985…"), que não se confere com papel nenhum: o `nNF` tem nove
+                    dígitos por definição do leiaute, e é assim que a nota se lê.
+                    ⚠ 9px É ABAIXO DO PISO DE 10px? NÃO: o piso do A18 vale para o TEXTO da lista,
+                    e aqui a fonte fica em 10px — o que muda é `tabular-nums`, que dá a todos os
+                    dígitos a mesma largura e faz "007.086.649" caber onde o número cru não cabia.
+                    ⚠ E SEM `truncate`: com o formato fixo, truncar só poderia esconder dado. */}
+                <td className="whitespace-nowrap px-1 py-0 text-[10px] tabular-nums"
+                  title={l.nf_produtor || undefined}>
+                  {formatarNF(l.nf_produtor) || '—'}
+                </td>
                 <td className="px-1 py-0 text-right tabular-nums">{l.peso_verde_kg != null ? formatNum(l.peso_verde_kg, 2) : '—'}</td>
                 <td className="px-1 py-0 text-right tabular-nums">{l.peso_seco_kg != null ? formatNum(l.peso_seco_kg, 2) : '—'}</td>
                 <td className="px-1 py-0 text-right tabular-nums">{l.umidade_pct != null ? formatNum(l.umidade_pct, 2) : '—'}</td>

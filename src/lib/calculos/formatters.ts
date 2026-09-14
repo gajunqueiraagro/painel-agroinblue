@@ -132,3 +132,29 @@ export function formatPainel(val: number, tipo: PainelFormatType): string {
   if (tipo === 'moneyInt') return formatMoedaInt(val);
   return formatPadrao(val);
 }
+
+/**
+ * O NÚMERO DA NOTA FISCAL EM 000.000.000 — padrão A25.
+ *
+ * ⚠ EXTRAÍDO, NÃO ESCRITO. O corpo veio de `numeroEmRepouso`, em
+ * `components/compra/DocumentoFormOC.tsx`, que já era a regra certa da casa desde o
+ * PR-OC-DOC-TABELA-01. Escrever um terceiro aqui criaria a divergência que este arquivo existe
+ * para acabar — e a casa já tinha DOIS.
+ *
+ * ⚠ O OUTRO NÃO É EQUIVALENTE, e por isso não foi ele o escolhido: `formatNFNumber`, em
+ * `lib/financeiro/documentoHelper.ts`, faz `slice(0, 9)` — ele TRUNCA um número de dez dígitos
+ * e mostra nove, apagando dado na tela sem avisar. Aqui, número com mais de nove dígitos volta
+ * COMO VEIO: não é `nNF` (o leiaute da NF-e define nove), e mutilar para caber na máscara é
+ * pior do que exibir fora do formato.
+ *
+ * ⚠ O `nNF` TEM NOVE DÍGITOS POR DEFINIÇÃO, e é assim que a nota se lê. Os zeros à esquerda
+ * entram EM REPOUSO — na lista, no blur —, nunca enquanto se digita: teclar "7" viraria
+ * "000.000.007" e o cursor saltaria para o fim a cada tecla.
+ */
+export function formatarNF(valor: string | null | undefined): string {
+  const bruto = (valor ?? '').trim();
+  if (!bruto) return '';
+  const d = bruto.replace(/\D/g, '');
+  if (!d || d.length > 9) return bruto;
+  return d.padStart(9, '0').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}

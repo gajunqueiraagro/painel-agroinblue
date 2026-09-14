@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
+import { formatarNF } from '@/lib/calculos/formatters';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -56,11 +57,13 @@ export const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency',
 const agrupar3 = (d: string) => d.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 export const ehNotaFiscal = (e: EspecieDoc) => e === 'nf_principal' || e === 'nf_complementar';
 export const numeroDigitando = (s: string) => agrupar3(s.replace(/\D/g, '').slice(0, 9));
-export const numeroEmRepouso = (s: string) => {
-  const d = s.replace(/\D/g, '');
-  if (!d || d.length > 9) return s;
-  return agrupar3(d.padStart(9, '0'));
-};
+/**
+ * ⚠ A REGRA MUDOU DE CASA — PR-NF-FORMATO-PADRAO. O corpo foi para
+ * `lib/calculos/formatters.ts` como `formatarNF`, porque a colheita passou a precisar dela e
+ * uma segunda cópia seria a terceira implementação de NF do repo. Aqui fica o reexport, para
+ * os chamadores desta tela não mudarem.
+ */
+export const numeroEmRepouso = (s: string) => formatarNF(s);
 /** O que a lista mostra: mascara so quando e' NF e o numero existe. */
 export const fmtNumeroDoc = (numero: string | null, especie: EspecieDoc) =>
   (numero && ehNotaFiscal(especie) ? numeroEmRepouso(numero) : numero);

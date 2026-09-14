@@ -765,3 +765,35 @@ barra grossa de novo — que é como um padrão morre.
 **Onde nasceu:** PR-PARC-05b item 4. A tabela de parcelas do detalhe do contrato ficou com
 rolagem interna (A21) e a barra do sistema apareceu dentro do card, a 6px do valor da
 parcela.
+
+
+## A25 — Número de nota fiscal sempre em 000.000.000
+
+NF se exibe **sempre** no formato `000.000.000`: só dígitos, zeros à esquerda até nove, ponto a
+cada três. Nunca crua, nunca truncada. A fonte pode cair ao piso de 10px para caber; **nunca
+abaixo disso** — se ainda não couber, alarga-se a coluna.
+
+**Por quê.** O `nNF` da NF-e tem nove dígitos por definição do leiaute, e é assim que a nota se lê
+no papel. Um número cru e cortado ("70985…") não se confere com documento nenhum — que é
+exatamente o que a coluna existe para permitir.
+
+**A fonte única é `formatarNF`**, em `src/lib/calculos/formatters.ts`. Ela foi EXTRAÍDA de
+`numeroEmRepouso` (`components/compra/DocumentoFormOC.tsx`), que já era a regra certa desde o
+PR-OC-DOC-TABELA-01. Não escreva uma segunda.
+
+⚠ **Mais de nove dígitos volta como veio, não mutilado.** Não é `nNF`, e truncar para caber na
+máscara apagaria dado na tela sem avisar. Há um segundo formatter no repo — `formatNFNumber`, em
+`lib/financeiro/documentoHelper.ts` — que faz `slice(0, 9)` e **trunca**; ele tem um consumidor
+(`LancamentoV2Dialog`) e não foi unificado neste PR. Quem for unificar começa por ali.
+
+⚠ **Os zeros entram EM REPOUSO**, nunca enquanto se digita: teclar "7" viraria "000.000.007" e o
+cursor saltaria para o fim a cada tecla. Para o campo em digitação existe `numeroDigitando`, que
+agrupa sem preencher.
+
+⚠ **Largura se mede, não se estima.** "007.086.649" em 10px `tabular-nums` ocupa 64px; numa coluna
+de 69px com `px-1` ele não cabe. Na colheita a coluna foi de 6% para 8% (92px) por medição no CSS
+compilado.
+
+⚠ **Varredura pendente:** medidas 43 renderizações de NF crua no app, em 12+ arquivos (Mesa,
+painéis de Compra/Venda/Abate, extrato, conciliação). Este padrão foi aplicado **só na Colheita**;
+o resto é decisão de escopo.
