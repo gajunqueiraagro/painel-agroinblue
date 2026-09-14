@@ -14,6 +14,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useCliente } from '@/contexts/ClienteContext';
 import { Label } from '@/components/ui/label';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -217,6 +218,17 @@ export function PainelSafraTab() {
   const { safras } = useSafrasLavoura(clienteId);
   const [safraId, setSafraId] = useState('');
   const [cultura, setCultura] = useState('');
+  /**
+   * A aba aberta. `'resultado'` por padrão — é a pergunta que traz o operador aqui.
+   *
+   * ⚠ NÃO VAI PARA A URL, e é decisão, não esquecimento: a casa tem o padrão (`useFiltroUrl`,
+   * `usePeriodoUrl`) e ele existe para o que se COMPARTILHA por link — período e filtro. Qual
+   * aba estava aberta é estado de sessão de quem olha, não recorte do dado; pô-la na URL faria
+   * o link do painel carregar a preferência de navegação de quem o mandou.
+   * ⚠ E TROCAR DE SAFRA NÃO VOLTA PARA A PRIMEIRA ABA: quem está comparando histórico quer
+   * comparar outra safra no MESMO histórico.
+   */
+  const [aba, setAba] = useState('resultado');
 
   /* A safra mais recente abre por padrão — a lista vem em ordem cronológica crescente. */
   useEffect(() => {
@@ -357,7 +369,27 @@ export function PainelSafraTab() {
   };
 
   return (
-    <div className="w-full space-y-2 p-4 animate-fade-in">
+    <div className="w-full p-4 animate-fade-in">
+      {/* ⚠ O `Tabs` ENVOLVE O BLOCO CONGELADO TAMBÉM, e não só o conteúdo: a `TabsList` é parte
+          do que fica fixo, e ela só funciona dentro do contexto. O `Tabs` em si não desenha
+          nada — é provedor e um `div`. */}
+      <Tabs value={aba} onValueChange={setAba}>
+      {/* ── O BLOCO QUE FICA ──
+          ⚠ AGORA É O CABEÇALHO INTEIRO, não só os cartões: título, seletores, régua e a barra de
+          abas. Antes, rolar até o histórico deixava o operador sem saber qual safra estava
+          vendo — e trocar de safra exigia subir a tela toda.
+          ⚠ QUEM ROLA É A `<section>` DO V2INDEX, reconferido: a seção `painel-safra` não está em
+          `SECOES_APP_SHELL`, então cai no ramo `flex-1 min-h-0 overflow-auto` — é NELA que o
+          `top-0` ancora. Sem essa conferência o `sticky` gruda num scrollport que não existe e o
+          bloco sobe junto com a página, que é o defeito que a lista de movimentações já teve
+          duas vezes.
+          ⚠ `-mx-4 -mt-4 px-4 pt-4` CANCELA O `p-4` DO CONTAINER: sem isso o bloco é mais estreito
+          que as tabelas e elas passam pelos dois vãos laterais por cima dele, e sobra uma fresta
+          transparente acima quando ele gruda.
+          ⚠ FUNDO `bg-background` OPACO e `border-b` NO PRÓPRIO BLOCO (A21): translúcido é pior
+          que não fixar — o número que se está conferindo fica com a tabela correndo por dentro. */}
+      <div className="sticky top-0 z-20 -mx-4 -mt-4 mb-2 space-y-2 border-b bg-background
+        px-4 pb-1.5 pt-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold text-foreground">Painel da Safra</h2>
@@ -424,8 +456,10 @@ export function PainelSafraTab() {
           está conferindo ficaria com a tabela correndo por dentro.
           ⚠ `-mt-2 pt-2` CANCELA O `space-y-2` acima dela: o respiro do irmão anterior viraria
           uma fresta transparente no topo quando a faixa gruda. */}
-      <div className="sticky top-0 z-20 -mx-4 -mt-2 grid gap-2 bg-background px-4 pb-2 pt-2
-        md:grid-cols-2">
+      {/* ⚠ O `sticky` SAIU DAQUI: quem fixa agora é o bloco inteiro acima. Dois `sticky top-0`
+          aninhados disputariam a mesma âncora e o de dentro venceria, deixando o título rolar
+          por baixo dos próprios cartões. */}
+      <div className="grid gap-2 md:grid-cols-2">
         <div className="rounded-md border p-2">
           <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Plantio</div>
           {/* ⚠ DOIS CARTÕES, E SÓ O POR HECTARE. O "Custeio total" saiu daqui porque ele está,
@@ -457,6 +491,21 @@ export function PainelSafraTab() {
           </div>
         </div>
       </div>
+
+        {/* ⚠ A BARRA DE ABAS É A ÚLTIMA COISA DO BLOCO FIXO, encostada na borda de baixo: é ela
+            que diz o que está sendo mostrado logo abaixo, e separá-la do conteúdo por uma faixa
+            que rola faria o rótulo e a tabela se descolarem ao primeiro scroll. */}
+        <TabsList className="grid h-7 w-full grid-cols-3">
+          <TabsTrigger value="resultado" className="text-[11px]">Resultado</TabsTrigger>
+          <TabsTrigger value="producao" className="text-[11px]">Produção</TabsTrigger>
+          <TabsTrigger value="historico" className="text-[11px]">Histórico</TabsTrigger>
+        </TabsList>
+      </div>
+
+      {/* ⚠ `mt-0` CANCELA a margem padrão do primitivo — quem dá o respiro é o `mb-2` do bloco
+          fixo. E o `space-y-2` de cada aba é o que era do container antes das abas: o
+          espaçamento entre tabelas não mudou, só mudou de dono. */}
+      <TabsContent value="resultado" className="mt-0 space-y-2">
 
       {/* ── O DRE DO CICLO ──
           ⚠ CINCO COLUNAS AGORA, e as MESMAS cinco no Investimento logo abaixo: as duas tabelas
@@ -595,6 +644,10 @@ export function PainelSafraTab() {
         </div>
       )}
 
+      </TabsContent>
+
+      <TabsContent value="producao" className="mt-0 space-y-2">
+
       {/* ── POR TALHÃO / VARIEDADE ── */}
       {(painel?.talhoes.length ?? 0) > 0 && (
         <div className="overflow-hidden rounded-md border">
@@ -690,6 +743,97 @@ export function PainelSafraTab() {
           </p>
         </div>
       )}
+
+      {/* ── COMPOSIÇÃO POR QUALIDADE ──
+          ⚠ A ROÇA É RECEITA *E* PERDA, e as duas coisas ao mesmo tempo (decisão do Gabriel). Ela
+          é vendida a R$ 80 e entra no faturamento e na produtividade — escondê-la faria a conta
+          não fechar. Mas é grão refugado, e o que se quer é reduzi-la safra a safra. Por isso
+          aparece SEPARADA e nomeada "perda de qualidade", nunca fundida no total nem omitida. */}
+      {(() => {
+        const sel = comparadas.find(sf => sf.safra_id === safraId);
+        if (!sel || !colheu(sel)) return null;
+        const pctBom = sel.total_sacas > 0 ? 100 - sel.pct_roca : 0;
+        const comColheita = comparadas.filter(colheu);
+        return (
+          <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto]">
+            <div className="min-w-0 overflow-hidden rounded-md border">
+              <table className="w-full table-fixed border-collapse">
+                <colgroup>
+                  {['34%', '22%', '22%', '22%'].map((w, i) => <col key={i} style={{ width: w }} />)}
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th className={cn(TH, 'text-left')}>Composição da produção</th>
+                    <th className={cn(TH, 'text-right')}>Sacas</th>
+                    <th className={cn(TH, 'text-right')}>% do total</th>
+                    <th className={cn(TH, 'text-right')}>sc / ha</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-t border-slate-100">
+                    <td className="px-2 py-0.5 text-[11px]">
+                      <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-success align-[-1px]" />
+                      Grão bom
+                    </td>
+                    <td className="px-2 py-0.5 text-right text-[11px] tabular-nums">{formatNum(sel.sacas_boas, 2)}</td>
+                    <td className="px-2 py-0.5 text-right text-[11px] tabular-nums">{formatNum(pctBom, 1)}%</td>
+                    <td className="px-2 py-0.5 text-right text-[11px] tabular-nums">
+                      {formatNum(porHa(sel.sacas_boas, sel.area_ha), 2)}
+                    </td>
+                  </tr>
+                  <tr className="border-t border-slate-100">
+                    <td className="px-2 py-0.5 text-[11px]">
+                      <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-[#8b5e3c] align-[-1px]" />
+                      Grão de roça <span className="text-[9px] text-muted-foreground">perda de qualidade</span>
+                    </td>
+                    <td className="px-2 py-0.5 text-right text-[11px] tabular-nums">{formatNum(sel.sacas_roca, 2)}</td>
+                    <td className="px-2 py-0.5 text-right text-[11px] font-medium tabular-nums">
+                      {formatNum(sel.pct_roca, 1)}%
+                    </td>
+                    <td className="px-2 py-0.5 text-right text-[11px] tabular-nums">
+                      {formatNum(porHa(sel.sacas_roca, sel.area_ha), 2)}
+                    </td>
+                  </tr>
+                  <tr className="border-t-2 border-slate-300">
+                    <td className="px-2 py-0.5 text-[11px] font-bold">Total colhido</td>
+                    <td className="px-2 py-0.5 text-right text-[11px] font-bold tabular-nums">
+                      {formatNum(sel.total_sacas, 2)}
+                    </td>
+                    <td className="px-2 py-0.5 text-right text-[11px] font-bold tabular-nums">100,0%</td>
+                    <td className="px-2 py-0.5 text-right text-[11px] font-bold tabular-nums">
+                      {formatNum(sel.sacas_ha, 2)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <p className="border-t bg-muted/40 px-2 py-1 text-[10px] leading-snug text-muted-foreground">
+                O grão de roça <strong>é receita</strong> — a cooperativa o compra mais barato — e
+                já está no faturamento e na produtividade acima. Aparece separado porque é
+                <strong> perda de qualidade</strong>: o alvo é reduzi-lo safra a safra.
+              </p>
+            </div>
+
+            <BarrasCompactas
+              titulo="Roça por safra"
+              legenda="% do total — quanto menor, melhor"
+              barras={comColheita.map((sf): BarraCompacta => ({
+                rotulo: sf.codigo.replace('-Lav', ''),
+                valor: sf.pct_roca,
+                texto: `${formatNum(sf.pct_roca, 1)}%`,
+                cor: sf.safra_id === safraId ? 'bg-[#8b5e3c]' : 'bg-[#8b5e3c]/45',
+              }))}
+            />
+          </div>
+        );
+      })()}
+
+      {/* ⚠ A COMPOSIÇÃO SUBIU E O COMPARATIVO DESCEU — é a única troca de ordem desta fatia, e
+          ela é consequência das abas, não escolha de layout: a composição pertence a "Produção"
+          e o comparativo a "Histórico", e no arquivo o comparativo vinha primeiro. Dentro de
+          cada aba a ordem dos blocos está intacta. */}
+      </TabsContent>
+
+      <TabsContent value="historico" className="mt-0 space-y-2">
 
       {/* ── COMPARATIVO ENTRE SAFRAS (fatia C) ── */}
       {comparadas.length > 0 && (
@@ -811,88 +955,9 @@ export function PainelSafraTab() {
         </div>
       )}
 
-      {/* ── COMPOSIÇÃO POR QUALIDADE ──
-          ⚠ A ROÇA É RECEITA *E* PERDA, e as duas coisas ao mesmo tempo (decisão do Gabriel). Ela
-          é vendida a R$ 80 e entra no faturamento e na produtividade — escondê-la faria a conta
-          não fechar. Mas é grão refugado, e o que se quer é reduzi-la safra a safra. Por isso
-          aparece SEPARADA e nomeada "perda de qualidade", nunca fundida no total nem omitida. */}
-      {(() => {
-        const sel = comparadas.find(sf => sf.safra_id === safraId);
-        if (!sel || !colheu(sel)) return null;
-        const pctBom = sel.total_sacas > 0 ? 100 - sel.pct_roca : 0;
-        const comColheita = comparadas.filter(colheu);
-        return (
-          <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto]">
-            <div className="min-w-0 overflow-hidden rounded-md border">
-              <table className="w-full table-fixed border-collapse">
-                <colgroup>
-                  {['34%', '22%', '22%', '22%'].map((w, i) => <col key={i} style={{ width: w }} />)}
-                </colgroup>
-                <thead>
-                  <tr>
-                    <th className={cn(TH, 'text-left')}>Composição da produção</th>
-                    <th className={cn(TH, 'text-right')}>Sacas</th>
-                    <th className={cn(TH, 'text-right')}>% do total</th>
-                    <th className={cn(TH, 'text-right')}>sc / ha</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr className="border-t border-slate-100">
-                    <td className="px-2 py-0.5 text-[11px]">
-                      <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-success align-[-1px]" />
-                      Grão bom
-                    </td>
-                    <td className="px-2 py-0.5 text-right text-[11px] tabular-nums">{formatNum(sel.sacas_boas, 2)}</td>
-                    <td className="px-2 py-0.5 text-right text-[11px] tabular-nums">{formatNum(pctBom, 1)}%</td>
-                    <td className="px-2 py-0.5 text-right text-[11px] tabular-nums">
-                      {formatNum(porHa(sel.sacas_boas, sel.area_ha), 2)}
-                    </td>
-                  </tr>
-                  <tr className="border-t border-slate-100">
-                    <td className="px-2 py-0.5 text-[11px]">
-                      <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-[#8b5e3c] align-[-1px]" />
-                      Grão de roça <span className="text-[9px] text-muted-foreground">perda de qualidade</span>
-                    </td>
-                    <td className="px-2 py-0.5 text-right text-[11px] tabular-nums">{formatNum(sel.sacas_roca, 2)}</td>
-                    <td className="px-2 py-0.5 text-right text-[11px] font-medium tabular-nums">
-                      {formatNum(sel.pct_roca, 1)}%
-                    </td>
-                    <td className="px-2 py-0.5 text-right text-[11px] tabular-nums">
-                      {formatNum(porHa(sel.sacas_roca, sel.area_ha), 2)}
-                    </td>
-                  </tr>
-                  <tr className="border-t-2 border-slate-300">
-                    <td className="px-2 py-0.5 text-[11px] font-bold">Total colhido</td>
-                    <td className="px-2 py-0.5 text-right text-[11px] font-bold tabular-nums">
-                      {formatNum(sel.total_sacas, 2)}
-                    </td>
-                    <td className="px-2 py-0.5 text-right text-[11px] font-bold tabular-nums">100,0%</td>
-                    <td className="px-2 py-0.5 text-right text-[11px] font-bold tabular-nums">
-                      {formatNum(sel.sacas_ha, 2)}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-              <p className="border-t bg-muted/40 px-2 py-1 text-[10px] leading-snug text-muted-foreground">
-                O grão de roça <strong>é receita</strong> — a cooperativa o compra mais barato — e
-                já está no faturamento e na produtividade acima. Aparece separado porque é
-                <strong> perda de qualidade</strong>: o alvo é reduzi-lo safra a safra.
-              </p>
-            </div>
 
-            <BarrasCompactas
-              titulo="Roça por safra"
-              legenda="% do total — quanto menor, melhor"
-              barras={comColheita.map((sf): BarraCompacta => ({
-                rotulo: sf.codigo.replace('-Lav', ''),
-                valor: sf.pct_roca,
-                texto: `${formatNum(sf.pct_roca, 1)}%`,
-                cor: sf.safra_id === safraId ? 'bg-[#8b5e3c]' : 'bg-[#8b5e3c]/45',
-              }))}
-            />
-          </div>
-        );
-      })()}
+      </TabsContent>
+      </Tabs>
 
       {/* ── O QUE FICA FORA DO RESULTADO ──
           ⚠ ESTA LINHA EXISTE PARA NÃO MENTIR POR OMISSÃO. O operador que somar os lançamentos da
