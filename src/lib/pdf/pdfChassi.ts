@@ -31,6 +31,9 @@ export const PALETA = {
   CARD_KPI_BG: [239, 246, 255] as RGB,    // fundo dos cards do Resumo Executivo
   ZEBRA_CLARA: [247, 250, 252] as RGB,    // linha alternada das tabelas
   VERDE_POSITIVO: [34, 120, 74] as RGB,   // destaque positivo / linha TOTAL
+  /* Cabeçalho de seção e linha TOTAL quando o relatório não quer o azul. Escuro o bastante para
+     texto branco por cima — medido contra o branco: contraste de sobra. */
+  CINZA_CABECALHO: [88, 96, 105] as RGB,
   CINZA_TEXTO: [80, 80, 80] as RGB,
   CINZA_MEDIO: [120, 120, 120] as RGB,
   CINZA_RODAPE: [130, 130, 130] as RGB,
@@ -184,9 +187,16 @@ export function addHeaderGlobalTodasPaginas(
 /**
  * 4) Faixa de título de seção (barra azul, texto branco bold). RETORNA novo Y.
  */
-export function addTituloSecao(doc: jsPDF, texto: string, y: number): number {
+/**
+ * A faixa de título de uma seção.
+ *
+ * ⚠ A COR É PARÂMETRO OPCIONAL, com o azul de sempre como default — PR-COLHEITA-PDF-REORG. O
+ * relatório da colheita passou a usar cinza nos cabeçalhos, e pintar a `PALETA` repintaria TODOS
+ * os PDFs da casa de uma vez. Quem não passa cor não muda nada.
+ */
+export function addTituloSecao(doc: jsPDF, texto: string, y: number, cor?: RGB): number {
   const barH = 8;
-  doc.setFillColor(...PALETA.AZUL_PRIMARIO);
+  doc.setFillColor(...(cor ?? PALETA.AZUL_PRIMARIO));
   doc.rect(MARGEM, y, PAGE_W - 2 * MARGEM, barH, 'F');
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
@@ -203,14 +213,18 @@ export function addTituloSecao(doc: jsPDF, texto: string, y: number): number {
  */
 export function addCardsKPI(
   doc: jsPDF,
-  kpis: { label: string; valor: string }[],
+  /* ⚠ `sub` É OPCIONAL: a linha miúda abaixo do número — o quilo e o por-hectare do relatório da
+     colheita. Quem não passa mantém o card de duas linhas de sempre, e a altura só cresce quando
+     há o que escrever. */
+  kpis: { label: string; valor: string; sub?: string }[],
   y: number,
   opts?: { colunas?: number },
 ): number {
   const colunas = opts?.colunas ?? 3;
   const innerW = PAGE_W - 2 * MARGEM;
   const colW = innerW / colunas;
-  const rowH = 13;
+  const temSub = kpis.some(k => k.sub);
+  const rowH = temSub ? 17 : 13;
   const linhas = Math.max(1, Math.ceil(kpis.length / colunas));
   const boxH = linhas * rowH + 3;
 
@@ -232,6 +246,12 @@ export function addCardsKPI(
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(...PALETA.AZUL_PRIMARIO);
     doc.text(kpi.valor, x, cy + 5.5);
+    if (kpi.sub) {
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...PALETA.CINZA_MEDIO);
+      doc.text(kpi.sub, x, cy + 10);
+    }
   });
 
   doc.setTextColor(...PALETA.PRETO);
@@ -254,6 +274,10 @@ export function addTabelaExecutiva(
       foot?: RowInput[];
       totalVerde?: boolean;
       headFill?: RGB;
+      /* ⚠ A LINHA TOTAL TAMBÉM É AZUL FIXA (`AZUL_VARIANTE`), e sem este parâmetro um relatório
+         em cinza ficaria com o cabeçalho cinza e o total azul — pior do que não ter trocado.
+         Default preservado: quem não passa continua com o azul de sempre. */
+      footFill?: RGB;
       columnStyles?: UserOptions['columnStyles'];
       // Capacidades OPCIONAIS genéricas (infra; sem regra de domínio aqui):
       fontSize?: number;                              // tabelas densas (ex.: extrato)
@@ -294,7 +318,8 @@ export function addTabelaExecutiva(
     bodyStyles: { valign: 'middle' },
     alternateRowStyles: { fillColor: PALETA.ZEBRA_CLARA },
     footStyles: {
-      fillColor: opts?.totalVerde ? PALETA.VERDE_POSITIVO : PALETA.AZUL_VARIANTE,
+      fillColor: opts?.totalVerde ? PALETA.VERDE_POSITIVO
+        : (opts?.footFill ?? PALETA.AZUL_VARIANTE),
       textColor: PALETA.BRANCO,
       fontStyle: 'bold',
     },

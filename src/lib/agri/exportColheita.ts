@@ -2,7 +2,7 @@
  * EXPORTAR A COLHEITA — Excel e PDF (PR-AGRI-COLHEITA-EXPORT-15).
  *
  * ⚠ NADA É RECALCULADO AQUI. Os totais chegam prontos, do MESMO `totaisColheita` que a tela
- * mostra: o papel que o produtor leva para a cooperativa tem de dizer o que a tela dizia. Um
+ * mostra: o papel que o produtor leva para a indústria tem de dizer o que a tela dizia. Um
  * segundo cálculo no export é a forma mais silenciosa de o relatório divergir do sistema — e
  * ninguém confere um PDF contra a tela antes de imprimir.
  * ⚠ NADA DE LIB NOVA. A casa já exporta: `xlsx` (0.18.5) pelo `triggerXlsxDownload`, e `jspdf`
@@ -12,6 +12,10 @@
  * os talhões). Exportar "tudo" quando a tela mostra um talhão seria entregar outro documento.
  */
 import { format } from 'date-fns';
+import type { jsPDF } from 'jspdf';
+
+/** O tripé RGB que o jsPDF aceita — o mesmo formato da `PALETA`. */
+type RGBPdf = [number, number, number];
 import { triggerXlsxDownload, type XlsxCellValue } from '@/lib/xlsxDownload';
 import {
   criarDocRetratoA4, carregarLogoBase64, addHeader, addCardsKPI, addTituloSecao,
@@ -110,7 +114,7 @@ export function exportarColheitaXlsx(
 
   if (ctx.comAnalise) {
     const analise: Array<Record<string, XlsxCellValue>> = [
-      { Indicador: 'Peso verde (kg)', Valor: totais.verdeKg, Observação: 'o que a cooperativa recebeu' },
+      { Indicador: 'Peso verde (kg)', Valor: totais.verdeKg, Observação: 'o que a indústria recebeu' },
       { Indicador: 'Peso seco (kg)', Valor: totais.secoKg, Observação: 'depois de secar' },
       { Indicador: 'Quebra de secagem (%)', Valor: n(totais.quebraPct), Observação: 'sobre o que já voltou seco' },
       { Indicador: 'Sacas boas', Valor: totais.sacasBoas, Observação: 'grão que vale preço' },
@@ -118,7 +122,7 @@ export function exportarColheitaXlsx(
       { Indicador: 'Final aproveitado (sc)', Valor: totais.sacasFinais, Observação: 'boas + roça' },
       { Indicador: `Produtividade final (${unidade.unidadeProdutividade})`, Valor: n(totais.produtividadeFinal), Observação: 'aproveitado por hectare' },
       { Indicador: `Produtividade líquida (${unidade.unidadeProdutividade})`, Valor: n(totais.produtividade), Observação: 'só sacas boas' },
-      { Indicador: 'Secagem paga (R$)', Valor: totais.valorSecagem, Observação: 'custo · à cooperativa' },
+      { Indicador: 'Secagem paga (R$)', Valor: totais.valorSecagem, Observação: 'custo · à indústria' },
     ];
     const pct = (v: number) => (totais.sacasFinais > 0 ? (v / totais.sacasFinais) * 100 : 0);
     const classificacao: Array<Record<string, XlsxCellValue>> = [
@@ -127,7 +131,7 @@ export function exportarColheitaXlsx(
       { Faixa: 'grão de roça', Sacas: totais.graoRocaSacas, '%': pct(totais.graoRocaSacas) },
     ];
     /* ⚠ "SEM LAUDO" SÓ APARECE SE EXISTIR, e fora das faixas: somá-la à primeira venderia um
-       número que a cooperativa ainda não classificou. */
+       número que a indústria ainda não classificou. */
     if (totais.sacasSemClasse > 0) {
       classificacao.push({ Faixa: 'sem laudo', Sacas: totais.sacasSemClasse, '%': pct(totais.sacasSemClasse) });
     }
@@ -143,7 +147,6 @@ export function exportarColheitaXlsx(
 }
 
 /** Quantas cargas cabem numa página sem empurrar a análise para a segunda. */
-const MAX_LINHAS_PDF = 22;
 
 /**
  * ALINHA À DIREITA AS COLUNAS DE NÚMERO, INCLUSIVE NO TOTAL.
@@ -161,6 +164,58 @@ const alinharNumerosADireita = (colunas: readonly number[]) => (d: {
   if (d.section !== 'body' && d.section !== 'foot') return;
   if (colunas.includes(d.column.index)) d.cell.styles.halign = 'right';
 };
+
+/**
+ * UM GRÁFICO DE BARRAS DESENHADO À MÃO — PR-COLHEITA-PDF-REORG.
+ *
+ * ⚠ O PDF NÃO TEM HTML: aqui não há flex nem `height: %`. Cada barra é um `doc.rect`, e a altura
+ * sai de `valor ÷ max × altura_útil` — a MESMA conta que a tela faz em percentual. É isso que
+ * mantém o gate do gráfico de pé nos dois lugares: a razão entre as alturas é a razão entre os
+ * números.
+ * ⚠ ESCALA POR CARD, nunca compartilhada: total (milhares) e por-hectare (dezenas) numa escala
+ * só fariam as três barras de hectare virarem risco — o defeito que a tela já pagou.
+ * ⚠ O VALOR VAI ACIMA DA BARRA, acompanhando a altura dela, como na tela.
+ */
+function desenharGrafico(
+  doc: jsPDF,
+  params: {
+    x: number; y: number; largura: number; alturaUtil: number;
+    titulo: string;
+    barras: Array<{ rotulo: string; valor: number | null; texto: string; cor: RGBPdf }>;
+  },
+): void {
+  const { x, y, largura, alturaUtil, titulo, barras } = params;
+  doc.setFontSize(7.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...PALETA.CINZA_TEXTO);
+  doc.text(titulo.toUpperCase(), x, y);
+
+  const validos = barras.map(b => b.valor).filter((v): v is number => v != null);
+  const max = validos.length > 0 ? Math.max(...validos) : 0;
+  const larguraBarra = 9;
+  const passo = largura / barras.length;
+  const base = y + 6 + alturaUtil;
+
+  barras.forEach((b, i) => {
+    const cx = x + passo * i + passo / 2;
+    /* ⚠ MEIO MILÍMETRO DE PISO: uma barra de 0,07% do máximo sairia com altura zero e o
+       retângulo não apareceria — o leitor concluiria que o dado não existe, quando ele é só
+       pequeno. É o mesmo piso de 2% que a tela usa. */
+    const h = b.valor != null && max > 0 ? Math.max(0.5, (b.valor / max) * alturaUtil) : 0;
+    if (b.valor != null) {
+      doc.setFillColor(...b.cor);
+      doc.rect(cx - larguraBarra / 2, base - h, larguraBarra, h, 'F');
+    }
+    doc.setFontSize(6.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...PALETA.CINZA_TEXTO);
+    doc.text(b.texto, cx, base - h - 1.2, { align: 'center' });
+    doc.setFontSize(6);
+    doc.setTextColor(...PALETA.CINZA_MEDIO);
+    doc.text(b.rotulo, cx, base + 3.2, { align: 'center' });
+  });
+  doc.setTextColor(...PALETA.PRETO);
+}
 
 export async function exportarColheitaPdf(
   linhas: readonly LinhaExport[], totais: TotaisColheita, ctx: ContextoExport,
@@ -181,21 +236,52 @@ export async function exportarColheitaPdf(
     logoData,
   });
 
+  /**
+   * ⚠ A MATRIZ DO PAPEL É A DA TELA — mesmas quatro colunas, mesma ordem, mesmos números.
+   * Relatório que reorganiza o que a tela mostra obriga o operador a reconciliar dois desenhos
+   * da mesma safra; o "Peso seco" saiu daqui pelo mesmo motivo que saiu de lá (repetia as sacas
+   * boas e fazia o fluxo descer e subir).
+   * ⚠ CADA CARD TRAZ AS TRÊS LEITURAS: sacas em cima, quilo miúdo e o por-hectare — é o que o
+   * `addCardsKPI` aceita como `valor` e `sub`.
+   */
+  const kgDe = (sacas: number) => {
+    const kg = unidade.kgPorSaca != null ? sacas * unidade.kgPorSaca : null;
+    return kg == null ? '' : `${formatNum(kg, 2)} kg`;
+  };
+  const porHa = (v: number | null) => (v != null && ctx.areaHa && ctx.areaHa > 0
+    ? `${formatNum(v / ctx.areaHa, 2)} ${unidade.unidadeProdutividade}` : '—');
+
   y = addCardsKPI(doc, [
-    { label: 'Peso verde', valor: `${formatNum(totais.verdeKg, 2)} kg` },
-    { label: 'Peso seco', valor: totais.secoKg > 0 ? `${formatNum(totais.secoKg, 2)} kg` : '—' },
-    { label: 'Sacas boas', valor: `${formatNum(totais.sacasBoas, 2)} sc` },
-    { label: 'Produtividade líquida', valor: totais.produtividade != null
-      ? `${formatNum(totais.produtividade, 2)} ${unidade.unidadeProdutividade}` : '—' },
+    {
+      label: 'Peso verde',
+      valor: totais.verdeEmSacas != null ? `${formatNum(totais.verdeEmSacas, 2)} sc` : '—',
+      sub: `${formatNum(totais.verdeKg, 2)} kg · ${porHa(totais.verdeEmSacas)}`,
+    },
+    {
+      label: 'Final aproveitado',
+      valor: `${formatNum(totais.sacasFinais, 2)} sc`,
+      sub: `${kgDe(totais.sacasFinais)} · ${totais.produtividadeFinal != null
+        ? `${formatNum(totais.produtividadeFinal, 2)} ${unidade.unidadeProdutividade}` : '—'}`,
+    },
+    {
+      label: 'Sacas boas',
+      valor: `${formatNum(totais.sacasBoas, 2)} sc`,
+      sub: `${kgDe(totais.sacasBoas)} · ${totais.produtividade != null
+        ? `${formatNum(totais.produtividade, 2)} ${unidade.unidadeProdutividade}` : '—'}`,
+    },
+    {
+      label: 'Grão de roça',
+      valor: `${formatNum(totais.graoRocaSacas, 2)} sc`,
+      sub: `${kgDe(totais.graoRocaSacas)} · ${porHa(totais.graoRocaSacas)}`,
+    },
   ], y, { colunas: 4 });
 
-  /* ⚠ A LISTA PODE SER RESUMIDA, e o relatório DIZ isso: uma safra de sessenta cargas não cabe
-     em uma página, e cortar em silêncio faria o produtor somar de cabeça e não fechar. */
-  const cortada = linhas.length > MAX_LINHAS_PDF;
-  const mostradas = cortada ? linhas.slice(0, MAX_LINHAS_PDF) : linhas;
-  y = addTituloSecao(doc, cortada
-    ? `Cargas (${MAX_LINHAS_PDF} de ${linhas.length} — a planilha traz todas)`
-    : `Cargas (${linhas.length})`, y);
+  /* ⚠ TODAS AS CARGAS, SEMPRE — o corte saiu (PR-COLHEITA-PDF-REORG). O relatório resumia em
+     `MAX_LINHAS_PDF` e anunciava o resumo no título, mas quem leva o PDF à indústria confere
+     romaneio por romaneio: uma lista que para na vigésima segunda carga não serve para conferir
+     nenhuma das outras. O documento cresce em páginas, que é o que um relatório faz. */
+  const mostradas = linhas;
+  y = addTituloSecao(doc, `Cargas (${linhas.length})`, y, PALETA.CINZA_CABECALHO);
 
   y = addTabelaExecutiva(doc, {
     startY: y,
@@ -271,8 +357,11 @@ export async function exportarColheitaPdf(
       startY: y,
       head: [['Indicador', 'Valor']],
       body: [
+        /* ⚠ A ÁGUA EM SACAS, COM O QUILO ENTRE PARÊNTESES — igual à tela. */
         ['Quebra de secagem', totais.quebraPct != null
-          ? `${formatNum(totais.quebraPct, 1)}% (${formatNum(totais.verdeKg - totais.secoKg, 2)} kg)` : '—'],
+          ? `${formatNum(totais.quebraPct, 1)}% · ${totais.verdeEmSacas != null
+            ? `${formatNum(totais.verdeEmSacas - totais.sacasBoas, 2)} sc de água ` : ''}`
+            + `(${formatNum(totais.verdeKg - totais.secoKg, 2)} kg)` : '—'],
         ['Secagem paga', totais.valorSecagem > 0 ? `R$ ${formatNum(totais.valorSecagem, 2)}` : '—'],
         [`Produtividade final (${unidade.unidadeProdutividade})`,
           totais.produtividadeFinal != null ? formatNum(totais.produtividadeFinal, 2) : '—'],
@@ -284,6 +373,52 @@ export async function exportarColheitaPdf(
         columnStyles: { 1: { halign: 'right' } },
         didParseCell: alinharNumerosADireita([1]),
       },
+    });
+  }
+
+  /* ── OS DOIS GRÁFICOS, NO FIM ──
+     ⚠ DEPOIS DE CARGAS E CLASSIFICAÇÃO, como o briefing pede: eles são a leitura de fechamento,
+     e quem confere romaneio quer a lista primeiro.
+     ⚠ QUEBRA DE PÁGINA SE NÃO COUBER: com a lista completa o `y` pode chegar ao pé da folha, e
+     desenhar por cima do rodapé é pior do que uma página a mais. */
+  if (ctx.comAnalise) {
+    const ALTURA_GRAFICO = 46;
+    if (y + ALTURA_GRAFICO + 16 > 280) { doc.addPage(); y = 20; }
+    y = addTituloSecao(doc, 'Produção em barras', y + 2, PALETA.CINZA_CABECALHO);
+
+    const AZUL: RGBPdf = [30, 58, 95];
+    const VERDE: RGBPdf = [40, 175, 96];
+    const VERMELHO: RGBPdf = [190, 40, 40];
+    const porHaNum = (v: number | null) => (v != null && ctx.areaHa && ctx.areaHa > 0
+      ? v / ctx.areaHa : null);
+
+    const larguraCard = (210 - 2 * 10 - 8) / 2;
+    /* ⚠ `formatNum(v, 0)` NO TOTAL e `, 2` NO POR-HECTARE — o briefing fixou as duas casas do
+       sc/ha (150,17 / 127,83 / 10,24), e no total a casa decimal não cabe na barra. */
+    desenharGrafico(doc, {
+      x: 10, y, largura: larguraCard, alturaUtil: ALTURA_GRAFICO, titulo: 'Total em sacas',
+      barras: [
+        { rotulo: 'verde', valor: totais.verdeEmSacas, cor: AZUL,
+          texto: totais.verdeEmSacas != null ? formatNum(totais.verdeEmSacas, 0) : '—' },
+        { rotulo: 'boas', valor: totais.sacasBoas, cor: VERDE,
+          texto: formatNum(totais.sacasBoas, 0) },
+        { rotulo: 'roça', valor: totais.graoRocaSacas, cor: VERMELHO,
+          texto: formatNum(totais.graoRocaSacas, 0) },
+      ],
+    });
+    desenharGrafico(doc, {
+      x: 10 + larguraCard + 8, y, largura: larguraCard, alturaUtil: ALTURA_GRAFICO,
+      titulo: 'Sacas por hectare',
+      barras: [
+        { rotulo: 'verde', valor: porHaNum(totais.verdeEmSacas), cor: AZUL,
+          texto: porHaNum(totais.verdeEmSacas) != null
+            ? formatNum(porHaNum(totais.verdeEmSacas) as number, 2) : '—' },
+        { rotulo: 'boas', valor: totais.produtividade, cor: VERDE,
+          texto: totais.produtividade != null ? formatNum(totais.produtividade, 2) : '—' },
+        { rotulo: 'roça', valor: porHaNum(totais.graoRocaSacas), cor: VERMELHO,
+          texto: porHaNum(totais.graoRocaSacas) != null
+            ? formatNum(porHaNum(totais.graoRocaSacas) as number, 2) : '—' },
+      ],
     });
   }
 
