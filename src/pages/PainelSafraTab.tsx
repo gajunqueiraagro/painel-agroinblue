@@ -20,7 +20,11 @@ import { cn } from '@/lib/utils';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { useSafrasLavoura, useTalhoesDaSafra } from '@/hooks/useAreaPlantada';
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
-import { usePainelSafra, custeioTotal, porHa, porSaca } from '@/hooks/usePainelSafra';
+import {
+  usePainelSafra, useComparativoSafras, custeioTotal, porHa, porSaca, colheu,
+  type SafraComparada,
+} from '@/hooks/usePainelSafra';
+import { BarrasCompactas, type BarraCompacta } from '@/components/ui/barras-compactas';
 
 /** Cabeçalho azul das três colunas, como o resto da família. */
 const TH = 'bg-primary px-2 py-1 text-[9px] font-semibold uppercase tracking-wide'
@@ -119,6 +123,7 @@ export function PainelSafraTab() {
     () => talhoes.filter(t => t.cultura === cultura), [talhoes, cultura]);
 
   const { painel, carregando, erro } = usePainelSafra(clienteId, safraId || null, cultura || null);
+  const { safras: comparadas } = useComparativoSafras(clienteId, cultura || null);
   const safra = safras.find(s => s.id === safraId);
 
   const area = painel?.area_ha ?? 0;
@@ -357,6 +362,173 @@ export function PainelSafraTab() {
           </p>
         </div>
       )}
+
+      {/* ── COMPARATIVO ENTRE SAFRAS (fatia C) ── */}
+      {comparadas.length > 0 && (
+        <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto]">
+          <div className="min-w-0 overflow-hidden rounded-md border">
+            <table className="w-full table-fixed border-collapse">
+              <colgroup>
+                {['16%', '13%', '15%', '14%', '16%', '15%', '11%'].map((w, i) => <col key={i} style={{ width: w }} />)}
+              </colgroup>
+              <thead>
+                <tr>
+                  <th className={cn(TH, 'text-left')}>Safra</th>
+                  <th className={cn(TH, 'text-right')}>Área ha</th>
+                  <th className={cn(TH, 'text-right')}>Sacas</th>
+                  <th className={cn(TH, 'text-right')}>sc / ha</th>
+                  <th className={cn(TH, 'text-right')}>Receita / ha</th>
+                  <th className={cn(TH, 'text-right')}>Custeio direto</th>
+                  <th className={cn(TH, 'text-right')}>% roça</th>
+                </tr>
+              </thead>
+              <tbody>
+                {comparadas.map(sf => {
+                  const atual = sf.safra_id === safraId;
+                  return (
+                    <tr key={sf.safra_id}
+                      className={cn('border-t border-slate-100', atual && 'bg-primary/[0.06]')}>
+                      <td className="truncate px-2 py-0.5 text-[11px]">
+                        {/* ⚠ A SAFRA ABERTA FICA MARCADA: sem isso o operador compara quatro linhas
+                            sem saber qual delas é a que os cards acima estão descrevendo. */}
+                        <span className={cn(atual && 'font-bold')}>{sf.codigo}</span>
+                        {sf.receita_incompleta && (
+                          /* ⚠ ÂMBAR, NUNCA VERMELHO. Vermelho aqui diria "prejuízo", e é venda que
+                             falta lançar — o produtor não pode achar que perdeu dinheiro. */
+                          <span className="ml-1 whitespace-nowrap text-[8px] text-amber-600">
+                            venda parcial — falta lançar
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-2 py-0.5 text-right text-[11px] tabular-nums">{formatNum(sf.area_ha, 2)}</td>
+                      {/* ⚠ SEM COLHEITA É "—", NÃO ZERO: a 26/27 tem 279 ha plantados e o grão no
+                          chão; zero afirmaria fracasso sobre safra que nem terminou. */}
+                      <td className="px-2 py-0.5 text-right text-[11px] tabular-nums">
+                        {colheu(sf) ? formatNum(sf.total_sacas, 2) : '—'}
+                      </td>
+                      <td className="px-2 py-0.5 text-right text-[11px] font-medium tabular-nums">
+                        {colheu(sf) ? formatNum(sf.sacas_ha, 2) : '—'}
+                      </td>
+                      <td className="px-2 py-0.5 text-right text-[11px] tabular-nums">
+                        {sf.receita > 0 ? formatMoeda(sf.receita_ha) : '—'}
+                      </td>
+                      <td className="px-2 py-0.5 text-right text-[11px] tabular-nums">
+                        {sf.custeio_direto > 0 ? formatMoeda(sf.custeio_direto) : '—'}
+                      </td>
+                      <td className="px-2 py-0.5 text-right text-[11px] tabular-nums">
+                        {colheu(sf) ? `${formatNum(sf.pct_roca, 1)}%` : '—'}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {/* ⚠ A RESSALVA DO CUSTEIO FICA ESCRITA: esta coluna é o DIRETO, sem o rateio
+                administrativo. Quem subtrair receita menos custeio aqui acha um saldo diferente
+                do que o DRE mostra, e tem de saber por quê antes de desconfiar de um dos dois. */}
+            <p className="border-t bg-muted/40 px-2 py-1 text-[10px] leading-snug text-muted-foreground">
+              <strong>Custeio direto</strong> é só o que está lançado na safra — sem o rateio
+              administrativo, que entra no DRE por janela de datas. Não subtraia da receita aqui:
+              o saldo do ciclo é o da tabela do topo.
+            </p>
+          </div>
+
+          <BarrasCompactas
+            titulo="Produtividade por safra"
+            legenda="sacas por hectare, com grão de roça — quanto maior, melhor"
+            barras={comparadas.map((sf): BarraCompacta => ({
+              rotulo: sf.codigo.replace('-Lav', ''),
+              valor: colheu(sf) ? sf.sacas_ha : null,
+              texto: colheu(sf) ? formatNum(sf.sacas_ha, 0) : '—',
+              nota: sf.receita_incompleta ? 'parcial' : undefined,
+              cor: sf.safra_id === safraId ? 'bg-primary' : 'bg-primary/45',
+            }))}
+          />
+        </div>
+      )}
+
+      {/* ── COMPOSIÇÃO POR QUALIDADE ──
+          ⚠ A ROÇA É RECEITA *E* PERDA, e as duas coisas ao mesmo tempo (decisão do Gabriel). Ela
+          é vendida a R$ 80 e entra no faturamento e na produtividade — escondê-la faria a conta
+          não fechar. Mas é grão refugado, e o que se quer é reduzi-la safra a safra. Por isso
+          aparece SEPARADA e nomeada "perda de qualidade", nunca fundida no total nem omitida. */}
+      {(() => {
+        const sel = comparadas.find(sf => sf.safra_id === safraId);
+        if (!sel || !colheu(sel)) return null;
+        const pctBom = sel.total_sacas > 0 ? 100 - sel.pct_roca : 0;
+        const comColheita = comparadas.filter(colheu);
+        return (
+          <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto]">
+            <div className="min-w-0 overflow-hidden rounded-md border">
+              <table className="w-full table-fixed border-collapse">
+                <colgroup>
+                  {['34%', '22%', '22%', '22%'].map((w, i) => <col key={i} style={{ width: w }} />)}
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th className={cn(TH, 'text-left')}>Composição da produção</th>
+                    <th className={cn(TH, 'text-right')}>Sacas</th>
+                    <th className={cn(TH, 'text-right')}>% do total</th>
+                    <th className={cn(TH, 'text-right')}>sc / ha</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-t border-slate-100">
+                    <td className="px-2 py-0.5 text-[11px]">
+                      <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-success align-[-1px]" />
+                      Grão bom
+                    </td>
+                    <td className="px-2 py-0.5 text-right text-[11px] tabular-nums">{formatNum(sel.sacas_boas, 2)}</td>
+                    <td className="px-2 py-0.5 text-right text-[11px] tabular-nums">{formatNum(pctBom, 1)}%</td>
+                    <td className="px-2 py-0.5 text-right text-[11px] tabular-nums">
+                      {formatNum(porHa(sel.sacas_boas, sel.area_ha), 2)}
+                    </td>
+                  </tr>
+                  <tr className="border-t border-slate-100">
+                    <td className="px-2 py-0.5 text-[11px]">
+                      <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-[#8b5e3c] align-[-1px]" />
+                      Grão de roça <span className="text-[9px] text-muted-foreground">perda de qualidade</span>
+                    </td>
+                    <td className="px-2 py-0.5 text-right text-[11px] tabular-nums">{formatNum(sel.sacas_roca, 2)}</td>
+                    <td className="px-2 py-0.5 text-right text-[11px] font-medium tabular-nums">
+                      {formatNum(sel.pct_roca, 1)}%
+                    </td>
+                    <td className="px-2 py-0.5 text-right text-[11px] tabular-nums">
+                      {formatNum(porHa(sel.sacas_roca, sel.area_ha), 2)}
+                    </td>
+                  </tr>
+                  <tr className="border-t-2 border-slate-300">
+                    <td className="px-2 py-0.5 text-[11px] font-bold">Total colhido</td>
+                    <td className="px-2 py-0.5 text-right text-[11px] font-bold tabular-nums">
+                      {formatNum(sel.total_sacas, 2)}
+                    </td>
+                    <td className="px-2 py-0.5 text-right text-[11px] font-bold tabular-nums">100,0%</td>
+                    <td className="px-2 py-0.5 text-right text-[11px] font-bold tabular-nums">
+                      {formatNum(sel.sacas_ha, 2)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <p className="border-t bg-muted/40 px-2 py-1 text-[10px] leading-snug text-muted-foreground">
+                O grão de roça <strong>é receita</strong> — a cooperativa o compra mais barato — e
+                já está no faturamento e na produtividade acima. Aparece separado porque é
+                <strong> perda de qualidade</strong>: o alvo é reduzi-lo safra a safra.
+              </p>
+            </div>
+
+            <BarrasCompactas
+              titulo="Roça por safra"
+              legenda="% do total — quanto menor, melhor"
+              barras={comColheita.map((sf): BarraCompacta => ({
+                rotulo: sf.codigo.replace('-Lav', ''),
+                valor: sf.pct_roca,
+                texto: `${formatNum(sf.pct_roca, 1)}%`,
+                cor: sf.safra_id === safraId ? 'bg-[#8b5e3c]' : 'bg-[#8b5e3c]/45',
+              }))}
+            />
+          </div>
+        );
+      })()}
 
       {/* ── O QUE FICA FORA DO RESULTADO ──
           ⚠ ESTA LINHA EXISTE PARA NÃO MENTIR POR OMISSÃO. O operador que somar os lançamentos da

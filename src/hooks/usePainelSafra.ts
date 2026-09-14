@@ -165,3 +165,78 @@ export function porHa(valor: number, areaHa: number): number {
 export function porSaca(valor: number, sacas: number): number {
   return sacas > 0 ? valor / sacas : 0;
 }
+
+/* ────────────────────────────────────────────────────────────────────────────────────────────
+   O COMPARATIVO ENTRE SAFRAS — fatia C.
+   ──────────────────────────────────────────────────────────────────────────────────────────── */
+
+export interface SafraComparada {
+  codigo: string;
+  safra_id: string;
+  area_ha: number;
+  total_sacas: number;
+  sacas_ha: number;
+  sacas_boas: number;
+  sacas_roca: number;
+  /** Percentual da produção que saiu como roça — a régua de qualidade. */
+  pct_roca: number;
+  receita: number;
+  /**
+   * ⚠ É O CUSTEIO *DIRETO*, não o total. Só o que tem `safra_id`; o rateio administrativo fica
+   * fora, porque ele é por janela de datas e não por safra. Somar `receita − custeio_direto` e
+   * chamar de saldo daria um número DIFERENTE do que o DRE e a fatia A mostram para a mesma
+   * safra — e a tela não faz essa conta por isso.
+   */
+  custeio_direto: number;
+  receita_ha: number;
+  /**
+   * Heurística do banco: há produção mas a receita não chega a R$ 40/saca.
+   * ⚠ AVISA, NUNCA CORRIGE. É o caso da 24/25, cuja venda ainda não foi lançada.
+   */
+  receita_incompleta: boolean;
+}
+
+export function useComparativoSafras(
+  clienteId: string | null | undefined, cultura: string | null,
+) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['painel-safra-comparativo', clienteId ?? '', cultura ?? ''],
+    enabled: !!clienteId && !!cultura,
+    queryFn: async (): Promise<SafraComparada[]> => {
+      const { data: r, error } = await (supabase as any).rpc('fn_painel_safra_comparativo', {
+        p_cliente: clienteId,
+        p_cultura: cultura,
+      });
+      if (error) throw error;
+      const lista = (r as Record<string, unknown> | null)?.safras;
+      return (Array.isArray(lista) ? lista : []).map((x: Record<string, unknown>) => ({
+        codigo: String(x?.codigo ?? '—'),
+        safra_id: String(x?.safra_id ?? ''),
+        area_ha: num(x?.area_ha),
+        total_sacas: num(x?.total_sacas),
+        sacas_ha: num(x?.sacas_ha),
+        sacas_boas: num(x?.sacas_boas),
+        sacas_roca: num(x?.sacas_roca),
+        pct_roca: num(x?.pct_roca),
+        receita: num(x?.receita),
+        custeio_direto: num(x?.custeio_direto),
+        receita_ha: num(x?.receita_ha),
+        /* ⚠ `=== true` e não truthy: o JSON pode trazer a string "false", que é truthy e marcaria
+           TODA safra como venda parcial — o aviso viraria ruído e ninguém mais o leria. */
+        receita_incompleta: x?.receita_incompleta === true || x?.receita_incompleta === 'true',
+      }));
+    },
+  });
+  return { safras: data ?? [], carregando: isLoading };
+}
+
+/**
+ * A safra COLHEU?
+ *
+ * ⚠ É A PERGUNTA QUE SEPARA "—" DE "ZERO". A 26/27 tem 279,30 ha plantados e nenhuma carga: a
+ * produtividade dela não é zero, é DESCONHECIDA — o grão ainda está no chão. Zero afirmaria
+ * fracasso sobre uma safra que nem terminou.
+ */
+export function colheu(s: SafraComparada): boolean {
+  return s.total_sacas > 0;
+}
