@@ -41,17 +41,11 @@ import { supabase } from '@/integrations/supabase/client';
 const TH = 'bg-primary px-2 py-1 text-[9px] font-semibold uppercase tracking-wide'
   + ' text-primary-foreground';
 
-/**
- * O CABEÇALHO CINZA DAS TABELAS DE APOIO — talhão e histórico.
- *
- * ⚠ DOIS AZUIS SEGUIDOS VIRAM UM SÓ. O DRE e o Investimento são a resposta principal e ficam no
- * azul da casa; talhão e histórico são leitura de apoio, e repetir o azul neles fazia quatro
- * faixas iguais empilhadas — o olho perdia onde uma seção terminava e a outra começava.
- * ⚠ O CINZA NÃO É NOVO: é o `PALETA.CINZA_CABECALHO` do chassi do PDF (88,96,105), já usado no
- * cabeçalho e no total das tabelas impressas. Papel e tela passam a falar a mesma língua.
- */
-const TH_CINZA = 'bg-[#58606a] px-2 py-1 text-[9px] font-semibold uppercase tracking-wide'
-  + ' text-white';
+/* ⚠ O CINZA DAS TABELAS DE APOIO SAIU. Ele existia para separar a resposta principal (DRE e
+   Investimento, em azul) da leitura de apoio (talhão, composição, histórico) — quatro faixas
+   azuis empilhadas faziam o olho perder onde uma seção terminava. As ABAS passaram a fazer essa
+   separação, e melhor: agora cada tabela está numa aba própria, nunca empilhada com as outras.
+   O cinza virou distinção sem diferença, e a tela volta a ter um azul só. */
 
 /**
  * A ZEBRA, LINHA A LINHA — e explicitamente, nunca por `:nth-child`.
@@ -61,6 +55,17 @@ const TH_CINZA = 'bg-[#58606a] px-2 py-1 text-[9px] font-semibold uppercase trac
  * linha aparecer ou sumir (uma safra sem colheita, um talhão a menos) para toda a alternância
  * inverter. Pintar pelo índice do dado é o que mantém a faixa onde ela estava.
  */
+/**
+ * O CORPO DA ABA — o mesmo tom e a mesma borda da aba ativa, que é o que fecha a pasta.
+ *
+ * ⚠ `-mt-2` CANCELA o `mb-2` do bloco congelado: a aba ativa tem de ENCOSTAR no corpo, e o
+ * respiro que separa o cabeçalho do conteúdo, quando havia abas de sublinhado, agora seria a
+ * fresta que desmancha a pasta.
+ * ⚠ `rounded-b-lg rounded-tr-lg` E NÃO `rounded-lg`: o canto superior ESQUERDO fica reto porque
+ * é lá que a primeira aba encosta. Arredondá-lo deixaria um degrau visível sob a aba "Resultado".
+ */
+const ABA = 'mt-0 space-y-2 rounded-b-lg rounded-tr-lg border border-border bg-card p-2';
+
 const zebra = (i: number) => (i % 2 === 0 ? 'bg-card' : 'bg-muted/40');
 
 /**
@@ -90,13 +95,21 @@ const COLS_DRE = ['40%', '17%', '16%', '11%', '16%'];
  * abaixo sem passar o mouse.
  * ⚠ O `title` FICA MESMO ASSIM: ele é a defesa do `truncate`, não o esconderijo do centavo.
  */
-function Cartao({ rotulo, valor, unidade, titulo }: {
+function Cartao({ rotulo, valor, unidade, titulo, cor }: {
   rotulo: string;
   valor: string;
   /** "R$", "ha" — miúdo, colado no número. */
   unidade?: string;
   /** O valor por extenso, com centavos, no hover. */
   titulo?: string;
+  /**
+   * A cor do VALOR — vermelho para custo, verde para receita.
+   *
+   * ⚠ SÓ NOS CARTÕES DE DINHEIRO, e é o que dá sentido à cor: Área e sc/ha ficam neutros porque
+   * não são custo nem receita, e pintá-los faria a cor virar decoração em vez de sinal.
+   * ⚠ O RÓTULO E A UNIDADE NÃO ACOMPANHAM: quem carrega o sinal é o número.
+   */
+  cor?: string;
 }) {
   return (
     <div className="min-w-0 rounded-md border bg-card px-2.5 py-1.5">
@@ -112,7 +125,9 @@ function Cartao({ rotulo, valor, unidade, titulo }: {
             {unidade}
           </span>
         )}
-        <span className="truncate text-[18px] font-medium leading-none tabular-nums">{valor}</span>
+        <span className={cn('truncate text-[18px] font-medium leading-none tabular-nums', cor)}>
+          {valor}
+        </span>
       </div>
     </div>
   );
@@ -165,8 +180,11 @@ function Linha({
      lhe dar ar deixa o número grande espremido entre duas naturezas, e a linha que devia
      descansar o olho vira a mais apertada da tabela.
      ⚠ A NATUREZA FOI AO CHÃO — `py-0` e 10px, o piso do A18. O que ganha densidade é SÓ ela: os
-     totais mantêm 15/17px e `py-1`, senão comprimir a tabela inteira devolveria o bloco
-     uniforme que a hierarquia do F2 existiu para desfazer. O respiro que sobrou entre as
+     totais mantêm `py-1`, senão comprimir a tabela inteira devolveria o bloco uniforme que a
+     hierarquia existiu para desfazer.
+     ⚠ E OS TOTAIS DESCERAM DE 15/17px PARA 14px `font-medium`: a hierarquia 14 > 10 continua
+     inteira, e o que saiu foi o exagero — um Saldo em 17px negrito competia com o título da
+     tela, não com as naturezas. O respiro que sobrou entre as
      naturezas é o `border-t` de cada linha, não padding. */
   const pad = nivel === 'item' ? 'py-0' : 'py-1';
   const td = `px-2 ${pad} text-right tabular-nums`;
@@ -183,19 +201,19 @@ function Linha({
         ? e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onAbrir(); } }
         : undefined}>
       <td className={cn('px-2', pad,
-        destaque && 'text-[15px] font-bold',
-        saldo && 'text-[17px] font-bold',
+        destaque && 'text-[14px] font-medium',
+        saldo && 'text-[14px] font-medium',
         nivel === 'item' && 'pl-6 text-[10px] text-muted-foreground')}>
         {rotulo}
         {/* ⚠ "estimado" FICA COLADO NO RÓTULO, não numa coluna própria: é qualidade do número,
             e quem lê a linha tem de ver a ressalva sem procurar. */}
         {nota && <span className="ml-1 text-[9px] font-normal text-amber-600">{nota}</span>}
       </td>
-      <td className={cn(td, destaque && 'text-[15px] font-bold', saldo && 'text-[17px] font-bold',
+      <td className={cn(td, destaque && 'text-[14px] font-medium', saldo && 'text-[14px] font-medium',
         nivel === 'item' && 'text-[10px]', cor)}>
         {formatMoeda(valor)}
       </td>
-      <td className={cn(td, destaque && 'text-[15px] font-bold', saldo && 'text-[17px] font-bold',
+      <td className={cn(td, destaque && 'text-[14px] font-medium', saldo && 'text-[14px] font-medium',
         nivel === 'item' && 'text-[10px]', cor)}>
         {formatMoeda(porHa(valor, area))}
       </td>
@@ -204,7 +222,7 @@ function Linha({
       <td className={cn(td, nivel === 'item' && 'text-[10px]', 'text-muted-foreground')}>
         {pct == null ? '' : `${formatNum(pct, 1)}%`}
       </td>
-      <td className={cn(td, destaque && 'text-[15px] font-bold', saldo && 'text-[17px] font-bold',
+      <td className={cn(td, destaque && 'text-[14px] font-medium', saldo && 'text-[14px] font-medium',
         nivel === 'item' && 'text-[10px]', cor)}>
         {formatMoeda(porSaca(valor, sacas))}
       </td>
@@ -253,6 +271,17 @@ export function PainelSafraTab() {
     usePainelSafra(clienteId, safraId || null, cultura || null);
   const { safras: comparadas, recarregar: recarregarComparativo } =
     useComparativoSafras(clienteId, cultura || null);
+  /**
+   * As safras que EFETIVAMENTE colheram — a série dos dois gráficos do histórico.
+   *
+   * ⚠ SUBIU PARA CÁ quando a Roça mudou de aba: ela era um `const` dentro do closure da
+   * Composição, e o gráfico foi para o Histórico. Em vez de refazer o `filter` nos dois lugares,
+   * ele passou a ser um só — dois filtros iguais em telas diferentes é como um deles envelhece
+   * sozinho.
+   * ⚠ SAFRA SEM COLHEITA FICA DE FORA, não entra com zero: a 26/27 tem 279 ha plantados e o grão
+   * no chão, e uma barra de altura zero afirmaria fracasso sobre safra que nem terminou.
+   */
+  const comColheita = useMemo(() => comparadas.filter(colheu), [comparadas]);
   const safra = safras.find(s => s.id === safraId);
 
   const area = painel?.area_ha ?? 0;
@@ -471,7 +500,8 @@ export function PainelSafraTab() {
               cinco; sem ele, o número volta a caber inteiro. */}
           <div className="grid grid-cols-2 gap-1.5">
             <Cartao rotulo="Área" unidade="ha" valor={formatNum(area, 2)} />
-            <Cartao rotulo="Custeio / ha" unidade="R$" valor={formatNum(porHa(custeio, area), 2)}
+            <Cartao rotulo="Custeio / ha" unidade="R$" cor="text-destructive"
+              valor={formatNum(porHa(custeio, area), 2)}
               titulo={formatMoeda(porHa(custeio, area))} />
           </div>
         </div>
@@ -485,7 +515,7 @@ export function PainelSafraTab() {
               pertence à venda, não ao raio-x da safra. */}
           <div className="grid grid-cols-2 gap-1.5">
             <Cartao rotulo="sc / ha" valor={formatNum(painel?.sacas_ha ?? 0, 2)} />
-            <Cartao rotulo="Fat. / ha" unidade="R$"
+            <Cartao rotulo="Fat. / ha" unidade="R$" cor="text-success"
               valor={formatNum(porHa(painel?.faturamento ?? 0, area), 2)}
               titulo={formatMoeda(porHa(painel?.faturamento ?? 0, area))} />
           </div>
@@ -495,17 +525,41 @@ export function PainelSafraTab() {
         {/* ⚠ A BARRA DE ABAS É A ÚLTIMA COISA DO BLOCO FIXO, encostada na borda de baixo: é ela
             que diz o que está sendo mostrado logo abaixo, e separá-la do conteúdo por uma faixa
             que rola faria o rótulo e a tabela se descolarem ao primeiro scroll. */}
-        <TabsList className="grid h-7 w-full grid-cols-3">
-          <TabsTrigger value="resultado" className="text-[11px]">Resultado</TabsTrigger>
-          <TabsTrigger value="producao" className="text-[11px]">Produção</TabsTrigger>
-          <TabsTrigger value="historico" className="text-[11px]">Histórico</TabsTrigger>
+        {/* ⚠ ABAS EM PASTA, e o que as faz parecer pasta é UMA coisa: a ativa NÃO TEM BORDA
+            EMBAIXO. É essa falta que cola a aba no corpo e cria a ilusão de continuidade; o
+            fundo igual e o raio só de cima são o acabamento. Sem isso, três retângulos
+            arredondados em cima de uma caixa não leem como pasta nenhuma.
+            ⚠ E ELA É PUXADA MEIO PIXEL PARA BAIXO (`top-[0.5px]`) para COBRIR a borda superior
+            do corpo — sem esse meio pixel sobra um fio entre a aba e o conteúdo, e a pasta
+            aparece cortada.
+            ⚠ O `TabsList` DA CASA VEM COM `bg-muted`, `rounded-md` e `p-0.5`, que desenham a
+            pílula do padrão antigo: os três são desfeitos aqui, não sobrescritos por acaso.
+            `h-auto` porque a aba ativa é mais alta que as inativas, de propósito. */}
+        <TabsList className="h-auto w-auto justify-start gap-1 rounded-none bg-transparent p-0">
+          {([
+            ['resultado', 'Resultado'],
+            ['producao', 'Produção'],
+            ['historico', 'Histórico'],
+          ] as const).map(([v, rotulo]) => (
+            <TabsTrigger key={v} value={v}
+              className={cn(
+                'rounded-b-none rounded-t-lg border border-border px-5 text-[12px] font-medium',
+                'data-[state=active]:relative data-[state=active]:top-[0.5px]',
+                'data-[state=active]:border-b-transparent data-[state=active]:bg-card',
+                'data-[state=active]:text-foreground data-[state=active]:shadow-none',
+                'data-[state=inactive]:bg-muted data-[state=inactive]:text-muted-foreground',
+                'data-[state=active]:py-1.5 data-[state=inactive]:py-1',
+              )}>
+              {rotulo}
+            </TabsTrigger>
+          ))}
         </TabsList>
       </div>
 
       {/* ⚠ `mt-0` CANCELA a margem padrão do primitivo — quem dá o respiro é o `mb-2` do bloco
           fixo. E o `space-y-2` de cada aba é o que era do container antes das abas: o
           espaçamento entre tabelas não mudou, só mudou de dono. */}
-      <TabsContent value="resultado" className="mt-0 space-y-2">
+      <TabsContent value="resultado" className={ABA}>
 
       {/* ── O DRE DO CICLO ──
           ⚠ CINCO COLUNAS AGORA, e as MESMAS cinco no Investimento logo abaixo: as duas tabelas
@@ -517,7 +571,10 @@ export function PainelSafraTab() {
           </colgroup>
           <thead>
             <tr>
-              <th className={cn(TH, 'text-left')}>Linha</th>
+              {/* ⚠ "DRE" E NÃO "Linha": com as abas, esta é a tabela que responde pela aba
+                  Resultado, e o cabeçalho da primeira coluna é onde ela se nomeia — o mesmo
+                  padrão de "Investimento na abertura" logo abaixo. */}
+              <th className={cn(TH, 'text-left')}>DRE</th>
               <th className={cn(TH, 'text-right')}>R$ total</th>
               <th className={cn(TH, 'text-right')}>R$ / ha</th>
               <th className={cn(TH, 'text-right')}>%</th>
@@ -646,7 +703,7 @@ export function PainelSafraTab() {
 
       </TabsContent>
 
-      <TabsContent value="producao" className="mt-0 space-y-2">
+      <TabsContent value="producao" className={ABA}>
 
       {/* ── POR TALHÃO / VARIEDADE ── */}
       {(painel?.talhoes.length ?? 0) > 0 && (
@@ -665,16 +722,16 @@ export function PainelSafraTab() {
                     corpo. É o recuo que faz as linhas se lerem como itens DAQUELA seção; só o
                     texto no `th` deixaria o nome da seção parecendo um cabeçalho de coluna
                     comprido. */}
-                <th className={cn(TH_CINZA, 'text-left')}>Análise por talhão</th>
-                <th className={cn(TH_CINZA, 'text-left')}>Variedade</th>
-                <th className={cn(TH_CINZA, 'text-right')}>Área ha</th>
-                <th className={cn(TH_CINZA, 'text-right')}>Sacas boas</th>
-                <th className={cn(TH_CINZA, 'text-right')}>sc / ha</th>
-                <th className={cn(TH_CINZA, 'text-right')}>Roça (sc)</th>
+                <th className={cn(TH, 'text-left')}>Análise por talhão</th>
+                <th className={cn(TH, 'text-left')}>Variedade</th>
+                <th className={cn(TH, 'text-right')}>Área ha</th>
+                <th className={cn(TH, 'text-right')}>Sacas boas</th>
+                <th className={cn(TH, 'text-right')}>sc / ha</th>
+                <th className={cn(TH, 'text-right')}>Roça (sc)</th>
                 {/* ⚠ "% Afla" É SOBRE AS SACAS BOAS ACIMA DE 20 ppb — o corte da cooperativa.
                     O rótulo é curto porque a coluna é estreita; o que ele significa está no
                     tipo da RPC e na nota do rodapé desta tabela. */}
-                <th className={cn(TH_CINZA, 'text-right')}>% Afla</th>
+                <th className={cn(TH, 'text-right')}>% Afla</th>
               </tr>
             </thead>
             <tbody>
@@ -753,9 +810,11 @@ export function PainelSafraTab() {
         const sel = comparadas.find(sf => sf.safra_id === safraId);
         if (!sel || !colheu(sel)) return null;
         const pctBom = sel.total_sacas > 0 ? 100 - sel.pct_roca : 0;
-        const comColheita = comparadas.filter(colheu);
         return (
-          <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto]">
+          /* ⚠ UMA COLUNA AGORA: o grid de duas existia para o gráfico da Roça, que foi para a aba
+             Histórico. Mantê-lo faria a tabela ocupar metade da largura e a outra metade ficar
+             vazia — o grid vazio é mais visível que o grid ausente. */
+          <div className="grid gap-2">
             <div className="min-w-0 overflow-hidden rounded-md border">
               <table className="w-full table-fixed border-collapse">
                 <colgroup>
@@ -813,16 +872,6 @@ export function PainelSafraTab() {
               </p>
             </div>
 
-            <BarrasCompactas
-              titulo="Roça por safra"
-              legenda="% do total — quanto menor, melhor"
-              barras={comColheita.map((sf): BarraCompacta => ({
-                rotulo: sf.codigo.replace('-Lav', ''),
-                valor: sf.pct_roca,
-                texto: `${formatNum(sf.pct_roca, 1)}%`,
-                cor: sf.safra_id === safraId ? 'bg-[#8b5e3c]' : 'bg-[#8b5e3c]/45',
-              }))}
-            />
           </div>
         );
       })()}
@@ -833,7 +882,7 @@ export function PainelSafraTab() {
           cada aba a ordem dos blocos está intacta. */}
       </TabsContent>
 
-      <TabsContent value="historico" className="mt-0 space-y-2">
+      <TabsContent value="historico" className={ABA}>
 
       {/* ── COMPARATIVO ENTRE SAFRAS (fatia C) ── */}
       {comparadas.length > 0 && (
@@ -847,7 +896,7 @@ export function PainelSafraTab() {
                 <tr>
                   {/* ⚠ MESMO PADRÃO DA SEÇÃO ACIMA: o nome da seção no primeiro `th`, e o
                       `pl-6` no corpo. */}
-                  <th className={cn(TH_CINZA, 'text-left')}>Histórico de safras</th>
+                  <th className={cn(TH, 'text-left')}>Histórico de safras</th>
                   {/* ⚠ "Custeio direto" SAIU E NÃO FOI RENOMEADO: a coluna agora é o custeio
                       TOTAL por hectare, que é outro número — o direto ignora o rateio
                       administrativo. Trocar só o rótulo sobre o campo velho seria pior que a
@@ -855,11 +904,11 @@ export function PainelSafraTab() {
                       ⚠ Área e Sacas saíram para abrir espaço: as duas seguem nos cartões do topo
                       para a safra aberta, e o que esta tabela compara entre safras é a RÉGUA POR
                       HECTARE — somar hectares de safras diferentes não quer dizer nada. */}
-                  <th className={cn(TH_CINZA, 'text-right')}>sc / ha</th>
-                  <th className={cn(TH_CINZA, 'text-right')}>Receita / ha</th>
-                  <th className={cn(TH_CINZA, 'text-right')}>Custeio / ha</th>
-                  <th className={cn(TH_CINZA, 'text-right')}>Margem / ha</th>
-                  <th className={cn(TH_CINZA, 'text-right')}>% roça</th>
+                  <th className={cn(TH, 'text-right')}>sc / ha</th>
+                  <th className={cn(TH, 'text-right')}>Receita / ha</th>
+                  <th className={cn(TH, 'text-right')}>Custeio / ha</th>
+                  <th className={cn(TH, 'text-right')}>Margem / ha</th>
+                  <th className={cn(TH, 'text-right')}>% roça</th>
                 </tr>
               </thead>
               <tbody>
@@ -941,6 +990,14 @@ export function PainelSafraTab() {
             </p>
           </div>
 
+          {/* ⚠ OS DOIS GRÁFICOS EMPILHADOS NA MESMA COLUNA `auto` do grid, não lado a lado: eles
+              respondem perguntas diferentes sobre a MESMA série de safras — quanto produziu e
+              quanto refugou —, e lê-los um sob o outro mantém os rótulos de safra alinhados na
+              vertical, que é o que permite comparar a mesma safra nos dois.
+              ⚠ A ROÇA VEIO DA ABA PRODUÇÃO (F1), onde tinha ficado por dividir grid e closure com
+              a Composição. Separá-la não custou estado nenhum: `comColheita` era usado SÓ por ela,
+              e `sel` SÓ pela tabela — bastou a filtragem mudar de lugar. */}
+          <div className="flex flex-col gap-2">
           <BarrasCompactas
             titulo="Produtividade por safra"
             legenda="sacas por hectare, com grão de roça — quanto maior, melhor"
@@ -952,6 +1009,17 @@ export function PainelSafraTab() {
               cor: sf.safra_id === safraId ? 'bg-primary' : 'bg-primary/45',
             }))}
           />
+          <BarrasCompactas
+            titulo="Roça por safra"
+            legenda="% do total — quanto menor, melhor"
+            barras={comColheita.map((sf): BarraCompacta => ({
+              rotulo: sf.codigo.replace('-Lav', ''),
+              valor: sf.pct_roca,
+              texto: `${formatNum(sf.pct_roca, 1)}%`,
+              cor: sf.safra_id === safraId ? 'bg-[#8b5e3c]' : 'bg-[#8b5e3c]/45',
+            }))}
+          />
+          </div>
         </div>
       )}
 
