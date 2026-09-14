@@ -38,6 +38,24 @@ export const CLASSES_VENDA = [
 
 export type ClasseVenda = (typeof CLASSES_VENDA)[number]['valor'];
 
+/**
+ * A COR DE CADA CLASSE — PR-AGRI-BARTER-POLISH item 9.
+ *
+ * ⚠ A COR CARREGA SIGNIFICADO, não enfeite: verde é o lote que a cooperativa paga mais caro,
+ * coral é o que passou do limite de aflatoxina e vale menos, marrom é o refugo. O produtor lê a
+ * composição da entrega de relance e vê onde foi parar a safra dele.
+ * ⚠ E ELA NÃO SUBSTITUI O RÓTULO: o ponto colorido acompanha o texto, nunca o troca — quem não
+ * distingue as cores continua lendo "Acima de 20 ppb".
+ */
+export function corDaClasse(valor: string | null | undefined): string {
+  switch (valor) {
+    case 'ate_20': return 'bg-success';
+    case 'acima_20': return 'bg-[#e8735a]';
+    case 'roca': return 'bg-[#8b5e3c]';
+    default: return 'bg-muted-foreground';
+  }
+}
+
 export function labelDaClasse(valor: string | null | undefined): string {
   if (!valor) return '—';
   return CLASSES_VENDA.find(c => c.valor === valor)?.label ?? valor;

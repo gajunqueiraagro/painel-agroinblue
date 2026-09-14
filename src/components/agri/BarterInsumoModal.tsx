@@ -178,10 +178,11 @@ export function BarterInsumoModal({
               </SelectContent>
             </Select>
             {/* ⚠ A FRASE FICA, e não é redundância: o operador que acabou de abrir um contrato
-                para o amendoim 25/26 vai estranhar escolher 26/27 aqui — e está certo escolher. */}
+                para o amendoim vai estranhar escolher uma safra diferente aqui — e está certo
+                escolher. O que o contrato define é a CULTURA; a safra é de cada perna. */}
             <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
-              Pode ser diferente da safra do grão: o insumo costuma entrar numa safra e o grão
-              sair na seguinte. É por isso que o contrato não tem safra.
+              A cultura vem do contrato. A safra é desta nota: pode ser diferente da safra do
+              grão, porque o insumo entra numa safra e o grão sai na seguinte.
             </p>
           </div>
 

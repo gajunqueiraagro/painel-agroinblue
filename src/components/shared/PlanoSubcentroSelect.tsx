@@ -106,6 +106,11 @@ export function PlanoSubcentroSelect({
   const combinaEscopo = (c: ClassificacaoItem) => {
     if (!escopoNegocio) return true;
     const e = (c.escopo_negocio || '').trim();
+    /* ⚠ COM A TRAVA LIGADA, VAZIO NÃO PASSA — PR-AGRI-BARTER-POLISH. Escopo em branco é conta
+       que NINGUÉM classificou, e uma tela que exige atividade não pode oferecê-la como se
+       servisse a todas. Sem `escopoObrigatorio` o comportamento é o de sempre (o vazio passa),
+       que é o que mantém os outros chamadores intactos. */
+    if (escopoObrigatorio) return e === escopoNegocio;
     return e === '' || e === escopoNegocio;
   };
 

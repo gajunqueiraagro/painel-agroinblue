@@ -29,7 +29,12 @@ import { useBarterInsumos, type BarterInsumo, type InsumoPayload } from '@/hooks
 import { useBarterVenda, type BarterVenda, type VendaPayload } from '@/hooks/useBarterVenda';
 import { BarterInsumoModal } from '@/components/agri/BarterInsumoModal';
 import { BarterVendaModal } from '@/components/agri/BarterVendaModal';
-import { labelDaClasse, saldoDoContrato } from '@/lib/agri/barterVenda';
+import { labelDaClasse, corDaClasse, saldoDoContrato } from '@/lib/agri/barterVenda';
+import { ExportarColheita } from '@/components/agri/ExportarColheita';
+import {
+  exportarInsumosXlsx, exportarInsumosPdf, exportarVendasXlsx, exportarVendasPdf,
+  type ContextoBarter,
+} from '@/lib/agri/exportBarter';
 import { useBarterMaterializacao, useExtratoPermuta } from '@/hooks/useBarterMaterializacao';
 import { BarterMaterializarCard } from '@/components/agri/BarterMaterializarCard';
 import { BarterListaModal, BarterResumoCard } from '@/components/agri/BarterListaModal';
@@ -164,6 +169,50 @@ export function AgriBarterTab() {
     toast.success('Venda excluída.');
   };
 
+  /**
+   * A COMPOSIÇÃO DA ENTREGA POR CLASSE — item 9 do polish, e o motivo de existir da tela.
+   *
+   * ⚠ É O QUE O PRODUTOR CONFERE COM A COOPERATIVA, saca a saca. "Entregue R$ 413.717,24" não
+   * diz COMO foi pago; a cooperativa paga preços diferentes por classe de aflatoxina, e é
+   * exatamente aí que uma divergência de acerto aparece.
+   * ⚠ SOMA AS ENTREGAS DE TODAS AS VENDAS do contrato, agrupadas por classe: duas vendas da mesma
+   * classe em datas diferentes são o mesmo lote de qualidade para quem confere.
+   * ⚠ O PREÇO EXIBIDO É O MÉDIO PONDERADO (valor ÷ sacas), não o da primeira linha. Com uma venda
+   * só eles coincidem; com duas a preços diferentes, mostrar o primeiro seria afirmar um preço
+   * que não foi praticado no conjunto.
+   */
+  const composicao = useMemo(() => {
+    const porClasse = new Map<string, { sacas: number; valor: number }>();
+    for (const v of vendas) {
+      for (const e of v.entregas) {
+        const k = e.classe_aflatoxina ?? '—';
+        const a = porClasse.get(k) ?? { sacas: 0, valor: 0 };
+        a.sacas += Number(e.sacas) || 0;
+        a.valor += Number(e.valor) || 0;
+        porClasse.set(k, a);
+      }
+    }
+    const linhas = Array.from(porClasse, ([classe, a]) => ({
+      classe, sacas: a.sacas, valor: a.valor,
+      precoMedio: a.sacas > 0 ? a.valor / a.sacas : 0,
+    })).sort((x, y) => y.valor - x.valor);
+    return {
+      linhas,
+      sacas: linhas.reduce((t, l) => t + l.sacas, 0),
+      bruto: vendas.reduce((t, v) => t + (Number(v.valor_bruto) || 0), 0),
+      deducoes: vendas.reduce((t, v) => t + (Number(v.descontos) || 0), 0),
+    };
+  }, [vendas]);
+
+  const ctxExport = useMemo((): ContextoBarter => ({
+    cliente: clienteAtual?.nome ?? '—',
+    contrato: contrato?.nome ?? '—',
+    parceiro: contrato?.parceiroNome ?? '—',
+    cultura: contrato?.cultura ? labelDaCultura(contrato.cultura) : '—',
+    /* ⚠ O PAPEL NÃO LEVA UUID: a safra vai pelo código, resolvida pelo mesmo mapa da tela. */
+    nomeDaSafra: (id) => (id ? (nomeDaSafra.get(id) ?? '—') : '—'),
+  }), [clienteAtual, contrato, nomeDaSafra]);
+
   /* ⚠ AGORA O SALDO FECHA, e é o LÍQUIDO que entra dos dois lados: o Senar fica com a
      cooperativa e nunca chega ao produtor. */
   const balanco = saldoDoContrato(totalEntregue, totalInsumos);
@@ -256,18 +305,39 @@ export function AgriBarterTab() {
           </span>
         </div>
 
-        <div className="grid shrink-0 grid-cols-2 gap-1.5 md:grid-cols-5">
-          <Metrica rotulo="Parceiro" valor={contrato.parceiroNome} />
-          {/* ⚠ O NOME DA CONTA, NUNCA O ID: sem UUID na tela, e o nome já é único por parceiro
-              (índice `uq_conta_permuta_por_parceiro`). */}
-          <Metrica rotulo="Conta de permuta" valor={contrato.contaPermutaNome ?? '—'} />
-          <Metrica rotulo="Recebido (insumos)" valor={formatMoeda(totalInsumos)}
-            nota={`${insumos.length} ${insumos.length === 1 ? 'insumo' : 'insumos'}`} />
-          <Metrica rotulo="Entregue (grão)" valor={formatMoeda(totalEntregue)}
-            nota={`${vendas.length} ${vendas.length === 1 ? 'venda' : 'vendas'} · líquido`} />
-          {/* ⚠ O RÓTULO É A METADE ÚTIL DO NÚMERO. "−390.000" não diz de que lado o produtor
-              está; "deve ao parceiro" diz. O sinal sozinho já custou leitura errada em tela. */}
-          <Metrica rotulo="Saldo" valor={formatMoeda(balanco.saldo)} nota={balanco.rotulo} destaque />
+        {/* ⚠ IDENTIDADE É LISTA, NÚMERO É CARTÃO — item 4 do polish. Cinco cartões iguais faziam
+            "Parceiro" competir com "Saldo" pela mesma atenção, e nenhum dos dois é lido primeiro.
+            O que identifica o contrato (parceiro, conta, cultura, status, abertura) vira um bloco
+            de linhas alinhadas, sóbrio; só os TRÊS NÚMEROS ficam em destaque. */}
+        <div className="grid shrink-0 gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
+          <div className="min-w-0 rounded-md border bg-card px-3 py-2">
+            <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-[11px]">
+              {([
+                ['Parceiro', contrato.parceiroNome],
+                /* ⚠ O NOME DA CONTA, NUNCA O ID: sem UUID na tela, e o nome já é único por
+                   parceiro (índice `uq_conta_permuta_por_parceiro`). */
+                ['Conta de permuta', contrato.contaPermutaNome ?? '—'],
+                ['Cultura', contrato.cultura ? labelDaCultura(contrato.cultura) : '—'],
+                ['Aberto em', dataBR(contrato.data_abertura)],
+              ] as Array<[string, string]>).map(([k, v]) => (
+                <div key={k} className="contents">
+                  <dt className="whitespace-nowrap text-muted-foreground">{k}</dt>
+                  <dd className="min-w-0 truncate whitespace-nowrap font-medium" title={v}>{v}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+          <div className="grid grid-cols-3 gap-1.5">
+            <Metrica rotulo="Recebido (insumos)" valor={formatMoeda(totalInsumos)}
+              nota={`${insumos.length} ${insumos.length === 1 ? 'insumo' : 'insumos'}`} />
+            <Metrica rotulo="Entregue (grão)" valor={formatMoeda(totalEntregue)}
+              nota={`${vendas.length} ${vendas.length === 1 ? 'venda' : 'vendas'} · líquido`} />
+            {/* ⚠ O RÓTULO É A METADE ÚTIL DO NÚMERO, e a COR é a outra: "−390.000" não diz de que
+                lado o produtor está. Verde = crédito com o parceiro, vermelho = deve. */}
+            <Metrica rotulo="Saldo" valor={formatMoeda(balanco.saldo)} nota={balanco.rotulo}
+              destaque cor={balanco.saldo > 0 ? 'text-success'
+                : balanco.saldo < 0 ? 'text-destructive' : undefined} />
+          </div>
         </div>
 
         {/* ⚠ AS TRÊS LISTAS SAÍRAM DA TELA E VIRARAM MODAL — PR-AGRI-BARTER-RESUMO-MODAL.
@@ -279,7 +349,7 @@ export function AgriBarterTab() {
         <div className="grid shrink-0 grid-cols-1 gap-1.5 md:grid-cols-3">
           <BarterResumoCard titulo="Recebi (insumos)"
             estado={insumos.length === 0 ? 'nenhum insumo lançado'
-              : `${insumos.length} ${insumos.length === 1 ? 'insumo' : 'insumos'} do parceiro`}>
+              : `${insumos.length} ${insumos.length === 1 ? 'insumo' : 'insumos'} · ${formatMoeda(totalInsumos)}`}>
             <Button size="sm" variant="outline" className="h-6 gap-1 px-1.5 text-[10px]"
               onClick={() => setVerInsumos(true)}>
               <List className="h-3 w-3" /> Ver insumos
@@ -292,7 +362,7 @@ export function AgriBarterTab() {
 
           <BarterResumoCard titulo="Entreguei (grão)"
             estado={vendas.length === 0 ? 'nenhuma venda lançada'
-              : `${vendas.length} ${vendas.length === 1 ? 'venda' : 'vendas'} de grão`}>
+              : `${vendas.length} ${vendas.length === 1 ? 'venda' : 'vendas'} · ${formatMoeda(totalEntregue)}`}>
             <Button size="sm" variant="outline" className="h-6 gap-1 px-1.5 text-[10px]"
               onClick={() => setVerVendas(true)}>
               <List className="h-3 w-3" /> Ver vendas
@@ -315,17 +385,93 @@ export function AgriBarterTab() {
           />
         </div>
 
+        {/* ── COMPOSIÇÃO DA ENTREGA POR CLASSE ──
+            ⚠ FICA NA TELA, NÃO NO MODAL: é a conferência que o produtor faz com a cooperativa, e
+            escondê-la atrás de um clique faria a tela mostrar um total de R$ 413 mil sem dizer
+            como ele foi pago — que é exatamente a pergunta que ele tem na mão. */}
+        {composicao.linhas.length > 0 && (
+          <div className="shrink-0 overflow-hidden rounded-md border">
+            <table className="w-full table-fixed border-collapse text-[10px] leading-tight">
+              <colgroup>
+                {['40%', '18%', '18%', '24%'].map((w, i) => <col key={i} style={{ width: w }} />)}
+              </colgroup>
+              <thead>
+                <tr>
+                  <th className={cn(TH, 'text-left')}>Composição da entrega</th>
+                  <th className={cn(TH, 'text-right')}>Sacas</th>
+                  <th className={cn(TH, 'text-right')}>R$ / saca</th>
+                  <th className={cn(TH, 'text-right')}>Valor</th>
+                </tr>
+              </thead>
+              <tbody>
+                {composicao.linhas.map(l => (
+                  <tr key={l.classe} className="border-t border-slate-100">
+                    <td className="px-1.5 py-0.5">
+                      {/* ⚠ O PONTO ACOMPANHA O RÓTULO, nunca o substitui: quem não distingue as
+                          cores continua lendo "Acima de 20 ppb". */}
+                      <span className={cn('mr-1.5 inline-block h-2 w-2 rounded-full align-[-1px]',
+                        corDaClasse(l.classe))} />
+                      {labelDaClasse(l.classe)}
+                    </td>
+                    <td className="px-1.5 py-0.5 text-right tabular-nums">{formatNum(l.sacas, 2)}</td>
+                    <td className="px-1.5 py-0.5 text-right tabular-nums text-muted-foreground">
+                      {formatMoeda(l.precoMedio)}
+                    </td>
+                    <td className="px-1.5 py-0.5 text-right tabular-nums">{formatMoeda(l.valor)}</td>
+                  </tr>
+                ))}
+                <tr className="border-t-2 border-slate-300">
+                  <td className="px-1.5 py-0.5 font-semibold">Bruto</td>
+                  <td className="px-1.5 py-0.5 text-right font-semibold tabular-nums">
+                    {formatNum(composicao.sacas, 2)}
+                  </td>
+                  <td />
+                  <td className="px-1.5 py-0.5 text-right font-semibold tabular-nums">
+                    {formatMoeda(composicao.bruto)}
+                  </td>
+                </tr>
+                {composicao.deducoes > 0 && (
+                  <tr className="border-t border-slate-100">
+                    <td className="px-1.5 py-0.5 pl-4 text-muted-foreground">(−) Senar</td>
+                    <td /><td />
+                    <td className="px-1.5 py-0.5 text-right tabular-nums text-destructive">
+                      {formatMoeda(composicao.deducoes)}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td className={cn(TH, 'text-left')}>Líquido entregue</td>
+                  <td className={TH} /><td className={TH} />
+                  <td className={cn(TH, 'text-right tabular-nums')}>{formatMoeda(totalEntregue)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+
         {/* ── AS TRÊS LISTAS, agora em modal ── */}
         <BarterListaModal
           aberto={verInsumos}
           titulo="Insumos recebidos"
           subtitulo="O que a cooperativa entregou — a perna de custo do barter."
           acao={(
-            <Button size="sm" variant="outline"
-              className="h-7 gap-1 border-white/40 bg-transparent px-2 text-[10px] text-primary-foreground hover:bg-white/10 hover:text-white"
-              onClick={() => { setInsumoAberto(null); setModalInsumo(true); }}>
-              <Plus className="h-3 w-3" /> Adicionar insumo
-            </Button>
+            <div className="flex items-center gap-1.5">
+              <ExportarColheita
+                desabilitado={insumos.length === 0}
+                motivo={insumos.length === 0 ? 'Nenhum insumo para exportar.' : undefined}
+                onExportar={async (formato) => {
+                  if (formato === 'xlsx') exportarInsumosXlsx(insumos, ctxExport, totalInsumos);
+                  else await exportarInsumosPdf(insumos, ctxExport, totalInsumos);
+                }}
+              />
+              <Button size="sm" variant="outline"
+                className="h-7 gap-1 border-white/40 bg-transparent px-2 text-[10px] text-primary-foreground hover:bg-white/10 hover:text-white"
+                onClick={() => { setInsumoAberto(null); setModalInsumo(true); }}>
+                <Plus className="h-3 w-3" /> Adicionar insumo
+              </Button>
+            </div>
           )}
           rodapeEsquerda="Total recebido"
           rodapeDireita={formatMoeda(totalInsumos)}
@@ -397,11 +543,21 @@ export function AgriBarterTab() {
           titulo="Vendas de grão"
           subtitulo="O que foi entregue ao parceiro, por classe de qualidade."
           acao={(
-            <Button size="sm" variant="outline"
-              className="h-7 gap-1 border-white/40 bg-transparent px-2 text-[10px] text-primary-foreground hover:bg-white/10 hover:text-white"
-              onClick={() => { setVendaAberta(null); setModalVenda(true); }}>
-              <Plus className="h-3 w-3" /> Lançar venda
-            </Button>
+            <div className="flex items-center gap-1.5">
+              <ExportarColheita
+                desabilitado={vendas.length === 0}
+                motivo={vendas.length === 0 ? 'Nenhuma venda para exportar.' : undefined}
+                onExportar={async (formato) => {
+                  if (formato === 'xlsx') exportarVendasXlsx(vendas, ctxExport, totalEntregue);
+                  else await exportarVendasPdf(vendas, ctxExport, totalEntregue);
+                }}
+              />
+              <Button size="sm" variant="outline"
+                className="h-7 gap-1 border-white/40 bg-transparent px-2 text-[10px] text-primary-foreground hover:bg-white/10 hover:text-white"
+                onClick={() => { setVendaAberta(null); setModalVenda(true); }}>
+                <Plus className="h-3 w-3" /> Lançar venda
+              </Button>
+            </div>
           )}
           rodapeEsquerda="Total entregue (líquido)"
           rodapeDireita={formatMoeda(totalEntregue)}
@@ -497,7 +653,12 @@ export function AgriBarterTab() {
       <div className="flex shrink-0 flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold text-foreground">Barter</h2>
-          <p className="text-xs text-muted-foreground">{clienteAtual?.nome ?? '—'}</p>
+          {/* ⚠ O SUBTÍTULO EXPLICA O QUE É, não repete o cliente. O nome do cliente já está na
+              barra de cima, em toda tela; aqui ele gastava a única linha que podia dizer ao
+              operador novo o que esta tela faz. */}
+          <p className="text-xs text-muted-foreground">
+            Troca de grãos por insumos com a cooperativa — entra no resultado, não no caixa.
+          </p>
         </div>
         <Button size="sm" className="h-8 gap-1 text-[11px]" onClick={() => setNovoAberto(true)}>
           <Plus className="h-3.5 w-3.5" /> Novo contrato
@@ -529,7 +690,12 @@ export function AgriBarterTab() {
                 title="Abrir o contrato" onClick={() => setAbertoId(c.id)}>
                 <td className="truncate px-1.5 py-0.5" title={c.parceiroNome}>{c.parceiroNome}</td>
                 <td className="truncate px-1.5 py-0.5" title={c.nome}>{c.nome}</td>
-                <td className="truncate px-1.5 py-0.5 text-muted-foreground" title={c.contaPermutaNome ?? undefined}>
+                {/* ⚠ `whitespace-nowrap` JUNTO COM `truncate`: só o truncate não impede a quebra
+                    quando a célula tem largura de coluna fixa e o texto tem espaços — e "Permuta ·
+                    Cooperativa Agropecuaria de Parapua 1" tem cinco. O nome inteiro fica no
+                    `title`. */}
+                <td className="truncate whitespace-nowrap px-1.5 py-0.5 text-muted-foreground"
+                  title={c.contaPermutaNome ?? undefined}>
                   {c.contaPermutaNome ?? '—'}
                 </td>
                 <td className="whitespace-nowrap px-1.5 py-0.5 tabular-nums">{dataBR(c.data_abertura)}</td>
@@ -598,11 +764,13 @@ export function AgriBarterTab() {
               <Input value={descricao} onChange={e => setDescricao(e.target.value)}
                 className="mt-0.5 h-8 text-[12px]" />
             </div>
-            {/* ⚠ A SAFRA NÃO SE PEDE AQUI, e é decisão de modelo: ela vive em CADA PERNA, porque
-                o barter atravessa safras — o insumo entra numa e o grão sai na seguinte. */}
+            {/* ⚠ O TEXTO DIZ O QUE O CONTRATO DEFINE, não só o que ele NÃO pede. A frase antiga
+                começava pela ausência ("a safra não entra") e o operador saía sem saber que a
+                CULTURA entra — que é justamente o campo obrigatório logo acima. */}
             <p className="text-[10px] leading-snug text-muted-foreground">
-              A safra não entra no contrato: cada perna tem a sua, porque o insumo costuma entrar
-              numa safra e o grão sair na seguinte.
+              O contrato define a <strong>cultura</strong>. A <strong>safra</strong> você informa em
+              cada insumo e na venda, porque o insumo pode entrar numa safra e o grão sair na
+              seguinte.
             </p>
           </div>
           <div className="flex items-center justify-end gap-2 bg-primary px-4 py-2">
@@ -619,14 +787,14 @@ export function AgriBarterTab() {
   );
 }
 
-function Metrica({ rotulo, valor, nota, destaque }: {
-  rotulo: string; valor: string; nota?: string; destaque?: boolean;
+function Metrica({ rotulo, valor, nota, destaque, cor }: {
+  rotulo: string; valor: string; nota?: string; destaque?: boolean; cor?: string;
 }) {
   return (
     <div className="min-w-0 rounded-md border bg-card px-2.5 py-1.5">
       <div className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">{rotulo}</div>
       <div className={cn('mt-0.5 truncate leading-none',
-        destaque ? 'text-[16px] font-medium tabular-nums' : 'text-[12px]')}>{valor}</div>
+        destaque ? 'text-[16px] font-medium tabular-nums' : 'text-[12px]', cor)}>{valor}</div>
       {nota && <div className="mt-0.5 text-[9px] text-muted-foreground">{nota}</div>}
     </div>
   );
