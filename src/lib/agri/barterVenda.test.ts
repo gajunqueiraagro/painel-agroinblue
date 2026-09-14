@@ -9,7 +9,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   disponivelPorClasse, calcularEntregas, totaisVenda, deducaoPorAliquota, aliquotaDoValor,
-  saldoDoContrato, labelDaClasse, CLASSES_VENDA,
+  saldoDoContrato, labelDaClasse, CLASSES_VENDA, composicaoDasVendas,
 } from './barterVenda';
 
 describe('disponivelPorClasse', () => {
@@ -168,5 +168,72 @@ describe('vocabulário das classes', () => {
   it('classe desconhecida devolve o próprio valor, nunca vazio', () => {
     expect(labelDaClasse('xpto')).toBe('xpto');
     expect(labelDaClasse(null)).toBe('—');
+  });
+});
+
+describe('composicaoDasVendas — a mesma conta no card e no detalhe', () => {
+  /* ⚠ DUAS VENDAS DA MESMA CLASSE A PREÇOS DIFERENTES — é o caso que o preço médio existe para
+     responder, e o único em que mostrar "o preço da primeira linha" mentiria. */
+  const v1 = {
+    valor_bruto: 100000, descontos: 1500,
+    entregas: [{ classe_aflatoxina: 'ate_20', sacas: 1000, valor: 100000 }],
+  };
+  const v2 = {
+    valor_bruto: 40000, descontos: 600,
+    entregas: [{ classe_aflatoxina: 'ate_20', sacas: 500, valor: 40000 }],
+  };
+
+  it('agrupa por classe e devolve o preço MÉDIO PONDERADO, não o da primeira', () => {
+    const c = composicaoDasVendas([v1, v2]);
+    expect(c.linhas).toHaveLength(1);
+    expect(c.linhas[0].sacas).toBe(1500);
+    expect(c.linhas[0].valor).toBe(140000);
+    /* 140.000 ÷ 1.500 = 93,33 — nem os 100 de uma nem os 80 da outra. */
+    expect(c.linhas[0].precoMedio).toBeCloseTo(93.333, 3);
+  });
+
+  it('o líquido é bruto menos deduções, derivado e não recebido', () => {
+    const c = composicaoDasVendas([v1, v2]);
+    expect(c.bruto).toBe(140000);
+    expect(c.deducoes).toBe(2100);
+    expect(c.liquido).toBe(137900);
+  });
+
+  /* ⚠ É O MESMO CÁLCULO NOS DOIS LEITORES, e este teste é o que trava isso: a composição de UMA
+     venda tem de ser exatamente o que a do contrato mostraria se só ela existisse. */
+  it('uma venda só devolve o que o card mostraria se ela fosse a única', () => {
+    const so = composicaoDasVendas([v1]);
+    expect(so.sacas).toBe(1000);
+    expect(so.liquido).toBe(98500);
+    expect(so.linhas[0].precoMedio).toBe(100);
+  });
+
+  it('classes diferentes saem ordenadas por valor, da maior para a menor', () => {
+    const c = composicaoDasVendas([{
+      valor_bruto: 0, descontos: 0,
+      entregas: [
+        { classe_aflatoxina: 'roca', sacas: 100, valor: 8000 },
+        { classe_aflatoxina: 'ate_20', sacas: 1000, valor: 90000 },
+      ],
+    }]);
+    expect(c.linhas.map(l => l.classe)).toEqual(['ate_20', 'roca']);
+  });
+
+  /* ⚠ SEM ENTREGA NÃO É ERRO: uma venda pode existir antes de as classes serem lançadas, e a
+     tabela tem de dizer "nada ainda" em vez de estourar numa divisão por zero. */
+  it('sem entregas não vira NaN', () => {
+    const c = composicaoDasVendas([{ valor_bruto: 0, descontos: 0, entregas: [] }]);
+    expect(c.linhas).toEqual([]);
+    expect(c.sacas).toBe(0);
+    expect(c.liquido).toBe(0);
+  });
+
+  it('classe nula vira um nó próprio, não some da conta', () => {
+    const c = composicaoDasVendas([{
+      valor_bruto: 500, descontos: 0,
+      entregas: [{ classe_aflatoxina: null, sacas: 10, valor: 500 }],
+    }]);
+    expect(c.linhas[0].classe).toBe('—');
+    expect(c.sacas).toBe(10);
   });
 });

@@ -31,8 +31,11 @@ import { FornecedorSelect } from '@/components/shared/FornecedorSelect';
 import { useBarterInsumos, type BarterInsumo, type InsumoPayload } from '@/hooks/useBarterInsumos';
 import { useBarterVenda, type BarterVenda, type VendaPayload } from '@/hooks/useBarterVenda';
 import { BarterInsumoModal } from '@/components/agri/BarterInsumoModal';
+import { BarterComposicaoEntrega } from '@/components/agri/BarterComposicaoEntrega';
 import { BarterVendaModal } from '@/components/agri/BarterVendaModal';
-import { labelDaClasse, corDaClasse, saldoDoContrato } from '@/lib/agri/barterVenda';
+import {
+  labelDaClasse, saldoDoContrato, composicaoDasVendas,
+} from '@/lib/agri/barterVenda';
 import { ExportarColheita } from '@/components/agri/ExportarColheita';
 import {
   exportarInsumosXlsx, exportarInsumosPdf, exportarVendasXlsx, exportarVendasPdf,
@@ -85,6 +88,22 @@ const TH_INSUMO = 'sticky top-0 z-10 bg-[#3a4864] px-1.5 py-1 text-[9px] font-se
  * ⚠ A DATA ORDENA POR DATA REAL, não pelo texto dd/mm/aaaa: ordenar o formatado poria 01/12
  * antes de 02/01, porque compara o dia primeiro. O valor de comparação é o ISO do banco.
  */
+/**
+ * AS COLUNAS ORDENÁVEIS DAS VENDAS — mesmo contrato do insumo, mesmo ordenador.
+ * ⚠ "CLASSES VENDIDAS" ORDENA PELO TEXTO CONCATENADO, que é o que a célula mostra: ordenar por
+ * quantidade de classes poria "Até 20 ppb" ao lado de "Grão de roça" só por ambas terem uma, e a
+ * ordem não corresponderia ao que se lê.
+ */
+const COLUNAS_VENDA: Array<ColunaOrdenavel<BarterVenda, string> & { h: string; dir?: boolean }> = [
+  { coluna: 'data', h: 'Data', tipo: 'data', valor: v => v.data_operacao },
+  { coluna: 'cultura', h: 'Cultura', tipo: 'texto', valor: v => v.cultura },
+  {
+    coluna: 'classes', h: 'Classes vendidas', tipo: 'texto',
+    valor: v => v.entregas.map(e => labelDaClasse(e.classe_aflatoxina)).join(' · '),
+  },
+  { coluna: 'liquido', h: 'Líquido', tipo: 'numero', valor: v => v.valor_liquido, dir: true },
+];
+
 const COLUNAS_INSUMO: Array<ColunaOrdenavel<BarterInsumo, string> & { h: string; dir?: boolean }> = [
   { coluna: 'data', h: 'Data', tipo: 'data', valor: i => i.data_recebimento },
   { coluna: 'produto', h: 'Produto', tipo: 'texto', valor: i => i.produto },
@@ -251,28 +270,20 @@ export function AgriBarterTab() {
    * só eles coincidem; com duas a preços diferentes, mostrar o primeiro seria afirmar um preço
    * que não foi praticado no conjunto.
    */
-  const composicao = useMemo(() => {
-    const porClasse = new Map<string, { sacas: number; valor: number }>();
-    for (const v of vendas) {
-      for (const e of v.entregas) {
-        const k = e.classe_aflatoxina ?? '—';
-        const a = porClasse.get(k) ?? { sacas: 0, valor: 0 };
-        a.sacas += Number(e.sacas) || 0;
-        a.valor += Number(e.valor) || 0;
-        porClasse.set(k, a);
-      }
-    }
-    const linhas = Array.from(porClasse, ([classe, a]) => ({
-      classe, sacas: a.sacas, valor: a.valor,
-      precoMedio: a.sacas > 0 ? a.valor / a.sacas : 0,
-    })).sort((x, y) => y.valor - x.valor);
-    return {
-      linhas,
-      sacas: linhas.reduce((t, l) => t + l.sacas, 0),
-      bruto: vendas.reduce((t, v) => t + (Number(v.valor_bruto) || 0), 0),
-      deducoes: vendas.reduce((t, v) => t + (Number(v.descontos) || 0), 0),
-    };
-  }, [vendas]);
+  const composicao = useMemo(() => composicaoDasVendas(vendas), [vendas]);
+
+  /* ⚠ AQUI, e não junto do ordenador dos insumos: `vendas` só existe depois do hook, e o gate de
+     TDZ acusa uso acima da declaração. É ordem, não lógica. */
+  const ordVendas = useOrdenacaoTabela(vendas, COLUNAS_VENDA, { coluna: 'data', direcao: 'asc' });
+
+  /**
+   * A venda cuja composição está aberta. `null` = fechada.
+   *
+   * ⚠ ELA SOBREVIVE AO CADEADO, e é a diferença entre ver e editar: uma venda materializada não
+   * se altera sem estorno, mas conferir COMO ela foi paga — por classe, com o preço de cada uma —
+   * é justamente o que se faz depois de materializar, contra o acerto da cooperativa.
+   */
+  const [composicaoDe, setComposicaoDe] = useState<BarterVenda | null>(null);
 
   const ctxExport = useMemo((): ContextoBarter => ({
     cliente: clienteAtual?.nome ?? '—',
@@ -487,65 +498,8 @@ export function AgriBarterTab() {
         {/* ⚠ BLOCO CONTIDO — item 3. A composição ocupava a largura inteira para mostrar quatro
             linhas de três números, e uma tabela esticada põe o rótulo a um palmo do valor. */}
         {composicao.linhas.length > 0 && (
-          <div className="w-full max-w-[560px] shrink-0 overflow-hidden rounded-md border">
-            <table className="w-full table-fixed border-collapse text-[10px] leading-tight">
-              <colgroup>
-                {['40%', '18%', '18%', '24%'].map((w, i) => <col key={i} style={{ width: w }} />)}
-              </colgroup>
-              <thead>
-                <tr>
-                  <th className={cn(TH, 'text-left')}>Composição da entrega</th>
-                  <th className={cn(TH, 'text-right')}>Sacas</th>
-                  <th className={cn(TH, 'text-right')}>R$ / saca</th>
-                  <th className={cn(TH, 'text-right')}>Valor</th>
-                </tr>
-              </thead>
-              <tbody>
-                {composicao.linhas.map(l => (
-                  <tr key={l.classe} className="border-t border-slate-100">
-                    <td className="px-1.5 py-0.5">
-                      {/* ⚠ O PONTO ACOMPANHA O RÓTULO, nunca o substitui: quem não distingue as
-                          cores continua lendo "Acima de 20 ppb". */}
-                      <span className={cn('mr-1.5 inline-block h-2 w-2 rounded-full align-[-1px]',
-                        corDaClasse(l.classe))} />
-                      {labelDaClasse(l.classe)}
-                    </td>
-                    <td className="px-1.5 py-0.5 text-right tabular-nums">{formatNum(l.sacas, 2)}</td>
-                    <td className="px-1.5 py-0.5 text-right tabular-nums text-muted-foreground">
-                      {formatMoeda(l.precoMedio)}
-                    </td>
-                    <td className="px-1.5 py-0.5 text-right tabular-nums">{formatMoeda(l.valor)}</td>
-                  </tr>
-                ))}
-                <tr className="border-t-2 border-slate-300">
-                  <td className="px-1.5 py-0.5 font-semibold">Bruto</td>
-                  <td className="px-1.5 py-0.5 text-right font-semibold tabular-nums">
-                    {formatNum(composicao.sacas, 2)}
-                  </td>
-                  <td />
-                  <td className="px-1.5 py-0.5 text-right font-semibold tabular-nums">
-                    {formatMoeda(composicao.bruto)}
-                  </td>
-                </tr>
-                {composicao.deducoes > 0 && (
-                  <tr className="border-t border-slate-100">
-                    <td className="px-1.5 py-0.5 pl-4 text-muted-foreground">(−) Senar</td>
-                    <td /><td />
-                    <td className="px-1.5 py-0.5 text-right tabular-nums text-destructive">
-                      {formatMoeda(composicao.deducoes)}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-              <tfoot>
-                <tr>
-                  <td className={cn(TH, 'text-left')}>Líquido entregue</td>
-                  <td className={TH} /><td className={TH} />
-                  <td className={cn(TH, 'text-right tabular-nums')}>{formatMoeda(totalEntregue)}</td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
+          <BarterComposicaoEntrega composicao={composicao} rotuloTotal="Líquido entregue"
+            th={TH} larguraMax={560} />
         )}
 
         {/* ── AS TRÊS LISTAS, agora em modal ── */}
@@ -684,7 +638,8 @@ export function AgriBarterTab() {
           acao={(
             <div className="flex items-center gap-1.5">
               <ExportarColheita
-                classeGatilho="border-white/40 bg-white text-primary hover:bg-white/90 hover:text-primary"
+                classeEnvolucro="mb-0"
+                classeGatilho="h-8 border-white/40 bg-transparent text-primary-foreground hover:bg-white/10 hover:text-white"
                 desabilitado={vendas.length === 0}
                 motivo={vendas.length === 0 ? 'Nenhuma venda para exportar.' : undefined}
                 onExportar={async (formato) => {
@@ -692,8 +647,7 @@ export function AgriBarterTab() {
                   else await exportarVendasPdf(vendas, ctxExport, totalEntregue);
                 }}
               />
-              <Button size="sm" variant="outline"
-                className="h-7 gap-1 border-white/40 bg-transparent px-2 text-[10px] text-primary-foreground hover:bg-white/10 hover:text-white"
+              <Button size="sm" variant="acao" className="h-8 gap-1 px-2 text-[10px]"
                 onClick={() => { setVendaAberta(null); setModalVenda(true); }}>
                 <Plus className="h-3 w-3" /> Lançar venda
               </Button>
@@ -701,18 +655,23 @@ export function AgriBarterTab() {
           )}
           rodapeEsquerda="Total entregue (líquido)"
           rodapeDireita={formatMoeda(totalEntregue)}
+          corRodape={CINZA_ESCURO}
           onFechar={() => setVerVendas(false)}>
+        {/* ⚠ SÓ "CLASSES VENDIDAS" É FLEXÍVEL. Data, cultura e líquido têm largura reservada e
+            `whitespace-nowrap`: o LÍQUIDO não pode quebrar em duas linhas — é o mesmo cuidado da
+            lista de insumos, e o mesmo motivo. */}
         <table className="w-full table-fixed border-collapse text-[10px] leading-tight">
           <colgroup>
-            {['24%', '14%', '30%', '24%', '8%'].map((w, i) => <col key={i} style={{ width: w }} />)}
+            {['14%', '21%', '34%', '19%', '12%'].map((w, i) => <col key={i} style={{ width: w }} />)}
           </colgroup>
           <thead>
             <tr>
-              <th className={cn(TH, 'text-left')}>Cultura</th>
-              <th className={cn(TH, 'text-left')}>Data</th>
-              <th className={cn(TH, 'text-left')}>Classes vendidas</th>
-              <th className={cn(TH, 'text-right')}>Líquido</th>
-              <th className={cn(TH, 'text-right')} />
+              {COLUNAS_VENDA.map(c => (
+                <ThOrdenavel key={c.coluna} coluna={c.coluna} rotulo={c.h}
+                  ordem={ordVendas.ordem} onOrdenar={ordVendas.alternar}
+                  className={TH_INSUMO} alinhaDireita={c.dir} />
+              ))}
+              <th className={cn(TH_INSUMO, 'text-right')} />
             </tr>
           </thead>
           <tbody>
@@ -721,10 +680,10 @@ export function AgriBarterTab() {
                 Nenhuma venda lançada. O grão que foi para o parceiro entra aqui.
               </td></tr>
             )}
-            {vendas.map(v => (
+            {ordVendas.ordenadas.map(v => (
               <tr key={v.id} className="border-t border-slate-100 odd:bg-[#1e3a5f]/[0.03]">
-                <td className="truncate px-1.5 py-0.5">{labelDaCultura(v.cultura)}</td>
                 <td className="whitespace-nowrap px-1.5 py-0.5 tabular-nums">{dataBR(v.data_operacao)}</td>
+                <td className="truncate px-1.5 py-0.5">{labelDaCultura(v.cultura)}</td>
                 {/* ⚠ AS CLASSES POR EXTENSO, não a contagem: "2 classes" obrigaria a abrir
                     a venda para saber se o lote bom foi vendido. */}
                 <td className="truncate px-1.5 py-0.5 text-muted-foreground"
@@ -735,26 +694,40 @@ export function AgriBarterTab() {
                 <td className="whitespace-nowrap px-1.5 py-0.5 text-right tabular-nums">
                   {formatMoeda(v.valor_liquido ?? 0)}
                 </td>
+                {/* ⚠ O ↗ FICA FORA DO `if` DO CADEADO, e é a mudança que importa aqui: ver a
+                    composição é LEITURA, e leitura não se tranca. Conferir como a venda foi paga
+                    é exatamente o que se faz DEPOIS de materializar, contra o acerto da
+                    cooperativa — trancá-lo junto com a edição escondia a informação justamente
+                    quando ela passa a ser cobrada.
+                    ⚠ E OS BOTÕES FICAM SEMPRE NO MESMO LUGAR: o par editar/excluir vira um
+                    cadeado que DIZ o motivo, e o ↗ não se move nem some. */}
                 <td className="px-1 py-0.5 text-right">
-                  {materializada(v) ? (
-                    <span className="inline-flex h-5 w-5 items-center justify-center text-muted-foreground"
-                      title="Venda já materializada no DRE. Estorne o contrato para editar ou excluir.">
-                      <Lock className="h-3 w-3" />
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-0.5">
-                      <button type="button" title="Editar venda"
-                        className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                        onClick={() => { setVendaAberta(v); setModalVenda(true); }}>
-                        <Pencil className="h-3 w-3" />
-                      </button>
-                      <button type="button" title="Excluir venda"
-                        className="rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                        onClick={() => void removerVenda(v)}>
-                        <Trash2 className="h-3 w-3" />
-                      </button>
-                    </span>
-                  )}
+                  <span className="inline-flex items-center gap-0.5">
+                    {materializada(v) ? (
+                      <span className="inline-flex h-5 w-5 items-center justify-center text-muted-foreground"
+                        title="Venda já materializada no DRE. Para editar, estorne o contrato.">
+                        <Lock className="h-3 w-3" />
+                      </span>
+                    ) : (
+                      <>
+                        <button type="button" title="Editar venda"
+                          className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                          onClick={() => { setVendaAberta(v); setModalVenda(true); }}>
+                          <Pencil className="h-3 w-3" />
+                        </button>
+                        <button type="button" title="Excluir venda"
+                          className="rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                          onClick={() => void removerVenda(v)}>
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </>
+                    )}
+                    <button type="button" title="Ver a composição por classe desta venda"
+                      className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                      onClick={() => setComposicaoDe(v)}>
+                      <ExternalLink className="h-3 w-3" />
+                    </button>
+                  </span>
                 </td>
               </tr>
             ))}
@@ -762,6 +735,27 @@ export function AgriBarterTab() {
         </table>
         </BarterListaModal>
 
+
+        {/* ⚠ UM `BarterListaModal` TAMBÉM AQUI, não um Dialog novo: a composição é uma tabela com
+            um total no rodapé — exatamente o que este shell resolve —, e o operador reconhece a
+            moldura das outras três listas.
+            ⚠ O SUBTÍTULO DIZ QUAL VENDA É: a composição do card soma TODAS as vendas do contrato,
+            e sem a data e a cultura no topo as duas tabelas seriam indistinguíveis na tela. */}
+        {composicaoDe && (
+          <BarterListaModal
+            aberto
+            titulo="Composição da entrega"
+            subtitulo={`${dataBR(composicaoDe.data_operacao)} · ${labelDaCultura(composicaoDe.cultura)}`
+              + ` — como esta venda foi paga, por classe.`}
+            rodapeEsquerda="Líquido desta venda"
+            rodapeDireita={formatMoeda(composicaoDasVendas([composicaoDe]).liquido)}
+            corRodape={CINZA_ESCURO}
+            onFechar={() => setComposicaoDe(null)}>
+            <BarterComposicaoEntrega
+              composicao={composicaoDasVendas([composicaoDe])}
+              rotuloTotal="Líquido desta venda" th={TH_INSUMO} />
+          </BarterListaModal>
+        )}
 
         <BarterVendaModal
           aberto={modalVenda}

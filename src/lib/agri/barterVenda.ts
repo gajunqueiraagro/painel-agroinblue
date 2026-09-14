@@ -248,3 +248,55 @@ export function saldoDoContrato(entregue: number, recebido: number) {
         : 'quitado',
   };
 }
+
+/** O mínimo que uma venda precisa ter para entrar na composição — estrutural, sem depender do hook. */
+export interface VendaParaComposicao {
+  valor_bruto: number | null;
+  descontos: number | null;
+  entregas: ReadonlyArray<{
+    classe_aflatoxina: string | null;
+    sacas: number | null;
+    valor: number | null;
+  }>;
+}
+
+/**
+ * A COMPOSIÇÃO DA ENTREGA POR CLASSE — a mesma conta para o contrato inteiro e para uma venda só.
+ *
+ * ⚠ SAIU DE DENTRO DA TELA porque agora tem DOIS leitores: o card do contrato, que soma todas as
+ * vendas, e o detalhe de UMA venda, aberto pela lista. Duas cópias da mesma agregação divergiriam
+ * na primeira manutenção — e a divergência apareceria como o card dizendo um preço médio e o
+ * detalhe outro, sobre o mesmo grão.
+ * ⚠ O PREÇO EXIBIDO É O MÉDIO PONDERADO (valor ÷ sacas), não o da primeira linha. Com uma venda
+ * só eles coincidem; com duas a preços diferentes, mostrar o primeiro afirmaria um preço que não
+ * foi praticado no conjunto.
+ * ⚠ E AS ENTREGAS SE AGRUPAM POR CLASSE, não por venda: duas vendas da mesma classe em datas
+ * diferentes são o mesmo lote de qualidade para quem confere com a cooperativa.
+ */
+export function composicaoDasVendas(vendas: readonly VendaParaComposicao[]) {
+  const porClasse = new Map<string, { sacas: number; valor: number }>();
+  for (const v of vendas) {
+    for (const e of v.entregas) {
+      const k = e.classe_aflatoxina ?? '—';
+      const a = porClasse.get(k) ?? { sacas: 0, valor: 0 };
+      a.sacas += Number(e.sacas) || 0;
+      a.valor += Number(e.valor) || 0;
+      porClasse.set(k, a);
+    }
+  }
+  const linhas = Array.from(porClasse, ([classe, a]) => ({
+    classe, sacas: a.sacas, valor: a.valor,
+    precoMedio: a.sacas > 0 ? a.valor / a.sacas : 0,
+  })).sort((x, y) => y.valor - x.valor);
+  const bruto = vendas.reduce((t, v) => t + (Number(v.valor_bruto) || 0), 0);
+  const deducoes = vendas.reduce((t, v) => t + (Number(v.descontos) || 0), 0);
+  return {
+    linhas,
+    sacas: linhas.reduce((t, l) => t + l.sacas, 0),
+    bruto,
+    deducoes,
+    /* ⚠ O LÍQUIDO SE DERIVA AQUI, não se recebe: bruto − deduções é a conta que a tabela mostra,
+       e recebê-lo de fora permitiria que o rodapé discordasse das linhas acima dele. */
+    liquido: bruto - deducoes,
+  };
+}
