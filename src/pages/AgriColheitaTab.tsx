@@ -197,6 +197,29 @@ export function AgriColheitaTab() {
    * peso de saca decidido (`kgPorSaca: null` em `colheita.ts`, de propósito): inventar "0 sc"
    * ali afirmaria uma conversão que ninguém confirmou.
    */
+  /**
+   * OS RÓTULOS DO CABEÇALHO DA ANÁLISE — fazenda e talhão do RECORTE.
+   *
+   * ⚠ SAEM DO MESMO ESTADO DOS SELETORES, não de consulta nova: `talhaoSel` é o talhão escolhido
+   * (ou `null` em "Todos") e `talhoesDaCultura` é a MESMA lista cujo tamanho o seletor já
+   * escreve em "Todos os talhões (N)". Dois lugares contando talhão dariam dois números.
+   * ⚠ NOME, NUNCA ID — regra da casa. O `TalhaoDaSafra` já traz `pastoNome` e `fazendaNome`
+   * resolvidos; o uuid não chega a esta camada.
+   * ⚠ A FAZENDA RESOLVE O PLURAL em vez de escolher a primeira: o modelo permite duas fazendas
+   * na mesma cultura de uma safra (o talhão pertence ao pasto, e o pasto à fazenda). Hoje não
+   * acontece — medido —, mas afirmar "Faz. Pureza" sobre um recorte de duas seria mentir num
+   * cabeçalho que existe para dizer de onde veio o número.
+   */
+  const fazendasDoRecorte = useMemo(
+    () => Array.from(new Set(talhoesDaLista.map(t => t.fazendaNome).filter(Boolean))) as string[],
+    [talhoesDaLista]);
+  const fazendaRotulo = fazendasDoRecorte.length === 1 ? fazendasDoRecorte[0]
+    : fazendasDoRecorte.length > 1 ? `${fazendasDoRecorte.length} fazendas`
+      : undefined;
+  const talhaoRotulo = talhaoSel ? `Talhão ${talhaoSel.pastoNome}`
+    : talhoesDaCultura.length > 0 ? `Todos os talhões (${talhoesDaCultura.length})`
+      : undefined;
+
   /* ⚠ O sc/ha SAI DO MESMO `sacas ÷ área` que produz 138,07 e 127,83 — nenhum cálculo novo. */
   const scHa = (sacas: number | null) => (sacas != null && areaDoRecorte > 0
     ? `${formatNum(sacas / areaDoRecorte, 2)} ${unidade.unidadeProdutividade}` : undefined);
@@ -417,6 +440,8 @@ export function AgriColheitaTab() {
         cultura={culturaSel || null}
         areaHa={areaDoRecorte || null}
         safraRotulo={safraLabel?.codigo || safraLabel?.nome || ''}
+        fazendaRotulo={fazendaRotulo}
+        talhaoRotulo={talhaoRotulo}
       />
 
       {/* ── ROLA: as cargas do recorte ── */}

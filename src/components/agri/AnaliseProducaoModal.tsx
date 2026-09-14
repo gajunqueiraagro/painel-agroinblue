@@ -76,6 +76,7 @@ function Card({ rotulo, valor, sufixo, nota, cor }: {
 
 export function AnaliseProducaoModal({
   aberto, onFechar, totais, cultura, areaHa, safraRotulo, avisoCulturas,
+  fazendaRotulo, talhaoRotulo,
 }: {
   aberto: boolean;
   onFechar: () => void;
@@ -85,6 +86,17 @@ export function AnaliseProducaoModal({
   /** A área REAL cadastrada — 60,6 e não 61. É ela que divide as duas produtividades. */
   areaHa: number | null;
   safraRotulo: string;
+  /**
+   * A fazenda do RECORTE — nome, nunca id.
+   *
+   * ⚠ ELA PODE SER MAIS DE UMA. Cada talhão pertence a um pasto, e o pasto a uma fazenda; nada
+   * no modelo impede duas fazendas na mesma cultura de uma safra. Medido no Proto em 14/09/2026:
+   * hoje as cinco combinações cultura×safra têm UMA fazenda cada — mas quem monta o rótulo
+   * resolve o plural, em vez de escolher a primeira e afirmar uma fazenda que não é a única.
+   */
+  fazendaRotulo?: string;
+  /** "Todos os talhões (N)" ou "Talhão <nome>" — decidido por quem tem o filtro. */
+  talhaoRotulo?: string;
   /** Preenchido quando a safra tem mais de uma cultura: as produtividades não se misturam. */
   avisoCulturas?: string;
 }) {
@@ -176,10 +188,20 @@ export function AnaliseProducaoModal({
         <div className="flex items-start justify-between gap-2 bg-primary px-4 py-2.5 text-primary-foreground">
           <div className="min-w-0">
             <h2 className="text-[15px] font-bold leading-tight">Análise de produção</h2>
-            <div className="mt-0.5 text-[11px] text-primary-foreground/80">
-              {cultura ? labelDaCultura(cultura) : '—'}
-              {safraRotulo && ` · Safra ${safraRotulo}`}
-              {areaHa != null && ` · ${formatNum(areaHa, 2)} ha`}
+            {/* ⚠ O SUBTÍTULO É O FILTRO QUE GEROU A ANÁLISE, na ordem em que o operador o
+                montou: fazenda, talhão, cultura, safra, área. Sem fazenda e talhão, dois
+                recortes diferentes do mesmo amendoim abriam com o mesmo cabeçalho, e o número
+                mudava sem o papel dizer por quê.
+                ⚠ AS PARTES SÃO OPCIONAIS e caem fora quando não há: a `filter(Boolean)` evita o
+                separador solto que sobra de concatenação condicional. */}
+            <div className="mt-0.5 truncate text-[11px] text-primary-foreground/80">
+              {[
+                fazendaRotulo,
+                talhaoRotulo,
+                cultura ? labelDaCultura(cultura) : null,
+                safraRotulo ? `Safra ${safraRotulo}` : null,
+                areaHa != null ? `${formatNum(areaHa, 2)} ha` : null,
+              ].filter(Boolean).join(' · ') || '—'}
             </div>
           </div>
           <button type="button" onClick={onFechar} aria-label="Fechar"
