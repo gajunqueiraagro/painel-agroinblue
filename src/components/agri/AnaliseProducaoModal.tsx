@@ -195,11 +195,18 @@ export function AnaliseProducaoModal({
               cor="text-destructive" nota="custo · à cooperativa" />
           </div>
 
-          {/* ── 3. A CLASSIFICAÇÃO ──
-              ⚠ A TABELA PEGA A LARGURA DO PRÓPRIO CONTEÚDO e os gráficos ficam AO LADO, no
-              espaço que sobra. Eles saíram embaixo na primeira versão porque a tabela tomava
-              metade fixa (`md:w-1/2`) e o bloco seguinte quebrava para a linha de baixo. */}
-          <div className="w-full md:w-auto md:min-w-[280px] md:flex-1">
+          {/* ── 3. A CLASSIFICAÇÃO + OS GRÁFICOS, LADO A LADO ──
+              ⚠⚠ O CONTÊINER DA SEÇÃO É `space-y-3`, NÃO FLEX — e foi isso que eu não vi no PR
+              anterior. A tabela e o bloco de gráficos sempre foram dois IRMÃOS EMPILHADOS na
+              vertical; nunca estiveram lado a lado. Pôr `md:flex-1` na tabela não a fez dividir
+              espaço com ninguém (não havia flex pai onde `flex-1` agisse) — o que esticou foi o
+              `md:w-auto` que veio junto, tirando a metade fixa que a segurava.
+              ⚠ O CONSERTO É O WRAPPER, não a classe do filho: para dois blocos ficarem lado a
+              lado é preciso alguém que os alinhe. `flex-nowrap` garante que nunca quebrem um sob
+              o outro, e `items-start` os prende pelo topo — sem ele, a tabela (mais alta)
+              esticaria os cards. */}
+          <div className="flex flex-row flex-nowrap items-start gap-4">
+          <div className="w-full md:w-1/2">
             <div className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
               Classificação por qualidade
             </div>
@@ -252,10 +259,10 @@ export function AnaliseProducaoModal({
 
           {/* ⚠ O GRÁFICO OCUPA O VAZIO À DIREITA da classificação — item 3e. Bloco contido, não
               largura total: é a lei do gráfico compacto. */}
-          {/* ⚠ EMPILHADOS NA VERTICAL, não lado a lado: na coluna da direita cada card pega a
-              largura inteira, e é ela que dá espaço para as duas barras e para os rótulos
-              inteiros. Lado a lado, cada um ficava com metade e "colhido" truncava. */}
-          <div className="flex w-full flex-col gap-2 md:w-[230px] md:shrink-0">
+          {/* ⚠ LADO A LADO E `shrink-0`: eles moram no espaço que a tabela deixa livre, e sem o
+              `shrink-0` o flex os espremeria para caber — que é como o rótulo "colhido" volta a
+              truncar. Cada um mantém os 230px em que as duas barras desenham inteiras. */}
+          <div className="flex shrink-0 flex-row items-start gap-3">
             {/* ⚠ DOIS GRÁFICOS, NÃO UM — e a razão é a escala. Total e por-hectare são ordens de
                 grandeza diferentes (9.100 sc contra 150 sc/ha): na mesma escala, as duas barras de
                 hectare valeriam 1,6% da altura e apareceriam como risco. Um gráfico em que metade
@@ -290,6 +297,7 @@ export function AnaliseProducaoModal({
                   ] satisfies BarraCompacta[]}
                 />
               ))}
+          </div>
           </div>
         </div>
       </DialogContent>
