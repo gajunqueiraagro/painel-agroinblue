@@ -44,6 +44,13 @@ export default {
           foreground: "hsl(var(--cta-foreground))",
           hover: "hsl(var(--cta-hover))",
         },
+        /* O verde de AÇÃO — ver a nota do token em index.css. Não confundir com `cta` (amarelo
+           no AGRO) nem com `success` (verde-grama, semântico de valor positivo). */
+        acao: {
+          DEFAULT: "hsl(var(--acao))",
+          foreground: "hsl(var(--acao-foreground))",
+          hover: "hsl(var(--acao-hover))",
+        },
         meta: {
           DEFAULT: "hsl(var(--meta))",
           foreground: "hsl(var(--meta-foreground))",

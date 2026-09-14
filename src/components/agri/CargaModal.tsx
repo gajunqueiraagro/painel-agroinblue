@@ -230,8 +230,11 @@ export function CargaModal({
           fazendaNome={fazendaNome}
           onFechar={onFechar}
           acao={(
-            <Button type="button" onClick={onSalvar} disabled={salvando}
-              className="gap-1 bg-white text-primary hover:bg-white/90">
+            /* ⚠ VERDE DE AÇÃO, pela variante `acao` — não cor solta no JSX. O botão era branco
+               sobre a faixa azul do envelope, e branco-sobre-branco já custou um "Exportar"
+               invisível nesta mesma frente. Verde separa o gesto que GRAVA do resto. */
+            <Button type="button" variant="acao" onClick={onSalvar} disabled={salvando}
+              className="gap-1">
               <Save className="h-4 w-4" /> {salvando ? 'Salvando…' : 'Salvar carga'}
             </Button>
           )}

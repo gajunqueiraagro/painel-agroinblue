@@ -16,6 +16,9 @@ const buttonVariants = cva(
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
         primary: "bg-primary text-primary-foreground hover:bg-primary/90",
+        /* O botão que GRAVA — verde de ação. Ver a nota do token `--acao` em index.css: não é
+           `cta` (amarelo aqui) nem `success` (semântico de valor positivo). */
+        acao: "bg-acao text-acao-foreground hover:bg-acao-hover font-semibold",
       },
       size: {
         default: "h-8 px-3 py-1.5",

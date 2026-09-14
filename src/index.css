@@ -39,6 +39,19 @@
     --cta-foreground: 222 47% 11%;
     --cta-hover: 43 80% 55%;
 
+    /* AÇÃO — o verde do botão que GRAVA (Salvar carga, Criar).
+       ⚠ TOKEN PRÓPRIO, e não `--success`. Medido: `success` é hsl(145 63% 42%) = rgb(40,175,96),
+         verde-grama; o alvo é #1DAF92 = hsl(168 72% 40%) = rgb(29,175,146), verde-água. São 51
+         pontos de distância em RGB, quase todos no canal azul — cores distintas a olho nu.
+       ⚠ E `success` TEM SEMÂNTICA NA CASA: ele significa valor positivo, crédito, receita. Um
+         botão pintado com ele diria que salvar é uma receita. O verde de ação é outra coisa e
+         merece outro nome.
+       ⚠ NÃO É `--cta`: no AGRO o `cta` é AMARELO (43 87% 63%). No app de Finanças este mesmo
+         verde É o `cta` — copiar o token de lá traria amarelo para cá. */
+    --acao: 168 72% 40%;
+    --acao-foreground: 0 0% 100%;
+    --acao-hover: 168 72% 33%;
+
     /* Laranja escuro para VALOR DE META. Distinto de --cta e --warning
        (ambos 43 87% 63%, amarelos de fundo de botao/faixa): este e para
        TEXTO sobre fundo claro, e precisa de luminosidade baixa para
