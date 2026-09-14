@@ -15,7 +15,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useCliente } from '@/contexts/ClienteContext';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Sprout, Info } from 'lucide-react';
+import { Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { useSafrasLavoura, useTalhoesDaSafra } from '@/hooks/useAreaPlantada';
@@ -72,47 +72,47 @@ const zebra = (i: number) => (i % 2 === 0 ? 'bg-card' : 'bg-muted/40');
 const COLS_DRE = ['40%', '17%', '16%', '11%', '16%'];
 
 /**
- * ⚠ A UNIDADE SOBE PARA O RÓTULO, e é o que impede o corte — item 2 do F2.
+ * O CARTÃO DA RÉGUA — quatro deles, todos POR HECTARE.
  *
- * MEDIDO com a fonte compilada, e o corte é ESTRUTURAL, não de tamanho: o bloco Colheita tem
- * cinco cartões em meia tela, o que dá ~88px de texto por cartão em 1440 e ~72px em 1280.
- * "R$ 2.742.022,26" pede 157px em 20px e ainda 107px em 13px — não existe fonte acima do piso
- * que o faça caber. O maior número real da base é 6.087.725,25 (investimento da 25/26), então
- * não é caso de borda.
- * ⚠ TRÊS CORTES, NESTA ORDEM, cada um medido: o "R$ " sai do número e vira unidade de 9px no
- * rótulo (−20px); os centavos saem (−20px); e a fonte do bloco denso cai para 13px. Só o
- * conjunto cabe: 65,9px contra os 72px disponíveis na tela mais estreita.
- * ⚠ OS CENTAVOS NÃO SE PERDEM — eles seguem no `title` e, exatos, na tabela do DRE logo abaixo.
- * O cartão é o relance; a conferência é a tabela.
+ * ⚠ A UNIDADE VOLTOU PARA O LADO DO NÚMERO, e o motivo de ela ter subido para o rótulo deixou
+ * de existir. No F2 o bloco Colheita tinha CINCO cartões em meia tela (~72px de texto cada na
+ * tela mais estreita) e "R$ 2.742.022,26" pedia 157px: foi preciso tirar o "R$" do número,
+ * tirar os centavos e descer a fonte para 13px. Agora são DOIS por bloco — ~264px cada — e os
+ * valores que sobraram têm 4 ou 5 dígitos, não 7. O aperto que justificava a gambiarra sumiu
+ * junto com os cartões de total.
+ * ⚠ O `nowrap` É LEI, não zelo: o número e a unidade são uma coisa só, e "R$" sozinho numa
+ * segunda linha é a quebra clássica deste cartão.
+ * ⚠ OS CENTAVOS VOLTARAM. Eles saíram no F2 por causa de um número de SETE dígitos — o
+ * faturamento de 2,7 milhões num cartão de ~72px — e essa razão morreu com o bloco de cinco.
+ * Por-hectare tem 4 ou 5 dígitos: "14.822,37" pede ~110px num cartão de ~264px. A regra tinha
+ * sobrevivido ao motivo dela, e o custo era real — o cartão não batia com a linha do DRE logo
+ * abaixo sem passar o mouse.
+ * ⚠ O `title` FICA MESMO ASSIM: ele é a defesa do `truncate`, não o esconderijo do centavo.
  */
-function Cartao({ rotulo, valor, nota, unidade, titulo, denso }: {
+function Cartao({ rotulo, valor, unidade, titulo }: {
   rotulo: string;
   valor: string;
-  nota?: string;
-  /** "R$", "ha", "sc" — some do número e aparece ao lado do rótulo, em 9px. */
+  /** "R$", "ha" — miúdo, colado no número. */
   unidade?: string;
   /** O valor por extenso, com centavos, no hover. */
   titulo?: string;
-  /** O bloco tem cinco cartões em meia tela: 13px em vez de 20px. */
-  denso?: boolean;
 }) {
   return (
     <div className="min-w-0 rounded-md border bg-card px-2.5 py-1.5">
-      <div className="flex items-baseline gap-1 text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
-        <span className="min-w-0 truncate">{rotulo}</span>
-        {unidade && <span className="shrink-0 normal-case opacity-70">{unidade}</span>}
+      <div className="truncate text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
+        {rotulo}
       </div>
-      {/* ⚠ O `truncate` FICA como última defesa, mesmo com a conta fechando: uma safra futura
-          pode passar da casa dos milhões, e cortar com o inteiro no `title` é melhor que empurrar
-          o cartão vizinho para fora do bloco. */}
-      <div className={cn('mt-0.5 truncate font-medium leading-none tabular-nums',
-        denso ? 'text-[13px]' : 'text-[20px]')} title={titulo}>
-        {valor}
+      {/* ⚠ O `truncate` FICA como última defesa, mesmo com a conta folgada: uma safra futura
+          pode passar da casa dos milhões, e cortar com o inteiro no `title` é melhor que
+          empurrar o cartão vizinho para fora do bloco. */}
+      <div className="mt-0.5 flex items-baseline gap-1 truncate whitespace-nowrap" title={titulo}>
+        {unidade && (
+          <span className="shrink-0 text-[11px] font-medium leading-none text-muted-foreground">
+            {unidade}
+          </span>
+        )}
+        <span className="truncate text-[18px] font-medium leading-none tabular-nums">{valor}</span>
       </div>
-      {/* ⚠ ALTURA RESERVADA MESMO SEM NOTA: sem o `min-h`, um cartão com nota e outro sem
-          teriam alturas diferentes na mesma linha, e a régua de cima dançaria ao trocar de
-          safra. */}
-      <div className="mt-0.5 min-h-[12px] text-[9px] text-muted-foreground">{nota ?? ''}</div>
     </div>
   );
 }
@@ -162,8 +162,12 @@ function Linha({
   const saldo = nivel === 'saldo';
   /* ⚠ A ALTURA ACOMPANHA A FONTE, e é metade da hierarquia: só aumentar o corpo do total sem
      lhe dar ar deixa o número grande espremido entre duas naturezas, e a linha que devia
-     descansar o olho vira a mais apertada da tabela. */
-  const pad = nivel === 'item' ? 'py-0.5' : 'py-1';
+     descansar o olho vira a mais apertada da tabela.
+     ⚠ A NATUREZA FOI AO CHÃO — `py-0` e 10px, o piso do A18. O que ganha densidade é SÓ ela: os
+     totais mantêm 15/17px e `py-1`, senão comprimir a tabela inteira devolveria o bloco
+     uniforme que a hierarquia do F2 existiu para desfazer. O respiro que sobrou entre as
+     naturezas é o `border-t` de cada linha, não padding. */
+  const pad = nivel === 'item' ? 'py-0' : 'py-1';
   const td = `px-2 ${pad} text-right tabular-nums`;
   return (
     /* ⚠ O `hover` E O `cursor` SÓ EXISTEM QUANDO HÁ O QUE ABRIR: uma linha que muda de cor ao
@@ -180,27 +184,27 @@ function Linha({
       <td className={cn('px-2', pad,
         destaque && 'text-[15px] font-bold',
         saldo && 'text-[17px] font-bold',
-        nivel === 'item' && 'pl-6 text-[11px] text-muted-foreground')}>
+        nivel === 'item' && 'pl-6 text-[10px] text-muted-foreground')}>
         {rotulo}
         {/* ⚠ "estimado" FICA COLADO NO RÓTULO, não numa coluna própria: é qualidade do número,
             e quem lê a linha tem de ver a ressalva sem procurar. */}
         {nota && <span className="ml-1 text-[9px] font-normal text-amber-600">{nota}</span>}
       </td>
       <td className={cn(td, destaque && 'text-[15px] font-bold', saldo && 'text-[17px] font-bold',
-        nivel === 'item' && 'text-[11px]', cor)}>
+        nivel === 'item' && 'text-[10px]', cor)}>
         {formatMoeda(valor)}
       </td>
       <td className={cn(td, destaque && 'text-[15px] font-bold', saldo && 'text-[17px] font-bold',
-        nivel === 'item' && 'text-[11px]', cor)}>
+        nivel === 'item' && 'text-[10px]', cor)}>
         {formatMoeda(porHa(valor, area))}
       </td>
       {/* ⚠ A % FICA CINZA MESMO NA LINHA VERMELHA: ela não é dinheiro, é proporção — pintá-la
           de vermelho junto faria três colunas gritando a mesma coisa e nenhuma sobressaindo. */}
-      <td className={cn(td, nivel === 'item' && 'text-[11px]', 'text-muted-foreground')}>
+      <td className={cn(td, nivel === 'item' && 'text-[10px]', 'text-muted-foreground')}>
         {pct == null ? '' : `${formatNum(pct, 1)}%`}
       </td>
       <td className={cn(td, destaque && 'text-[15px] font-bold', saldo && 'text-[17px] font-bold',
-        nivel === 'item' && 'text-[11px]', cor)}>
+        nivel === 'item' && 'text-[10px]', cor)}>
         {formatMoeda(porSaca(valor, sacas))}
       </td>
     </tr>
@@ -232,9 +236,6 @@ export function PainelSafraTab() {
     if (culturasDaSafra.length === 0) { setCultura(''); return; }
     if (!culturasDaSafra.includes(cultura)) setCultura(culturasDaSafra[0]);
   }, [culturasDaSafra, cultura]);
-
-  const talhoesDaCultura = useMemo(
-    () => talhoes.filter(t => t.cultura === cultura), [talhoes, cultura]);
 
   const { painel, carregando, erro, recarregar: recarregarPainel } =
     usePainelSafra(clienteId, safraId || null, cultura || null);
@@ -394,20 +395,11 @@ export function PainelSafraTab() {
         </div>
       </div>
 
-      {/* ── O CABEÇALHO DO CICLO ── */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border bg-muted/40 px-2.5 py-1.5">
-        <Sprout className="h-4 w-4 shrink-0 text-muted-foreground" />
-        <span className="text-[13px] font-bold">{cultura ? labelDaCultura(cultura) : '—'}</span>
-        <span className="text-[11px] text-muted-foreground">{safra?.codigo || safra?.nome || '—'}</span>
-        <span className="text-[11px] text-muted-foreground">{formatNum(area, 2)} ha</span>
-        {/* ⚠ O NOME DO TALHÃO, NUNCA O ID — e todos, não "e mais N": são poucos por cultura
-            (medido: de 1 a 3), e esconder o terceiro obrigaria a abrir outra tela para saber
-            de onde veio o número. */}
-        <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground"
-          title={talhoesDaCultura.map(t => t.pastoNome).join(' · ')}>
-          {talhoesDaCultura.length === 0 ? '—' : talhoesDaCultura.map(t => t.pastoNome).join(' · ')}
-        </span>
-      </div>
+      {/* ⚠ A FAIXA DO CICLO SAIU, e as quatro coisas que ela dizia continuam na tela: cultura e
+          safra nos seletores logo acima, área no primeiro cartão, e os NOMES DOS TALHÕES na
+          coluna "Análise por talhão" lá embaixo — conferido antes de apagar, porque era a única
+          informação da faixa que os filtros não repetiam. Ela custava uma linha inteira para
+          reescrever o que já estava à vista. */}
 
       {erro && (
         <div className="rounded-md border border-destructive/50 bg-destructive/10 px-2 py-1.5 text-[11px] text-destructive">
@@ -436,32 +428,31 @@ export function PainelSafraTab() {
         md:grid-cols-2">
         <div className="rounded-md border p-2">
           <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Plantio</div>
-          {/* ⚠ TRÊS CARTÕES EM MEIA TELA CABEM EM 20px — medido: ~167px de texto cada, e o
-              maior número real pede 101px. Só o bloco de CINCO é que aperta. */}
-          <div className="grid grid-cols-3 gap-1.5">
+          {/* ⚠ DOIS CARTÕES, E SÓ O POR HECTARE. O "Custeio total" saiu daqui porque ele está,
+              em R$ cheio e com centavos, na linha "Custeio total" do DRE dez pixels abaixo —
+              e dois números iguais em tamanhos diferentes na mesma tela é como nascem as
+              divergências de leitura.
+              ⚠ E O POR-HECTARE CABE FOLGADO: os valores que sobraram têm 4 a 5 dígitos, não 7.
+              Foi o `6.087.725` que obrigou a tirar os centavos e a descer para 13px no bloco de
+              cinco; sem ele, o número volta a caber inteiro. */}
+          <div className="grid grid-cols-2 gap-1.5">
             <Cartao rotulo="Área" unidade="ha" valor={formatNum(area, 2)} />
-            <Cartao rotulo="Custeio total" unidade="R$" valor={formatNum(custeio, 0)}
-              titulo={formatMoeda(custeio)} />
-            <Cartao rotulo="Custeio / ha" unidade="R$" valor={formatNum(porHa(custeio, area), 0)}
+            <Cartao rotulo="Custeio / ha" unidade="R$" valor={formatNum(porHa(custeio, area), 2)}
               titulo={formatMoeda(porHa(custeio, area))} />
           </div>
         </div>
         <div className="rounded-md border p-2">
           <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Colheita</div>
-          {/* ⚠ O BLOCO DENSO: cinco cartões em meia tela. Todos em 13px, inclusive os curtos —
-              três tamanhos numa fila só fariam o olho ler uma hierarquia que não existe entre
-              eles. `R$ / sc` MANTÉM OS CENTAVOS, e é a exceção com motivo: é um PREÇO, e 90
-              contra 90,37 é a diferença que o produtor negocia; ele cabe folgado (43px). */}
-          <div className="grid grid-cols-5 gap-1.5">
-            <Cartao denso rotulo="sc / ha" valor={formatNum(painel?.sacas_ha ?? 0, 2)} />
-            <Cartao denso rotulo="R$ / sc" unidade="R$"
-              valor={formatNum(porSaca(painel?.faturamento ?? 0, sacas), 2)} />
-            <Cartao denso rotulo="Total sc" unidade="sc" valor={formatNum(sacas, 2)} nota="boas + roça" />
-            <Cartao denso rotulo="Faturamento" unidade="R$"
-              valor={formatNum(painel?.faturamento ?? 0, 0)}
-              titulo={formatMoeda(painel?.faturamento ?? 0)} />
-            <Cartao denso rotulo="Fat. / ha" unidade="R$"
-              valor={formatNum(porHa(painel?.faturamento ?? 0, area), 0)}
+          {/* ⚠ Sc/ha ANTES de Fat./ha: é a ordem da pergunta do produtor — primeiro quanto o
+              hectare produziu, depois quanto isso virou dinheiro.
+              ⚠ SAÍRAM "Total sc", "Faturamento" e "R$/sc". Os dois primeiros porque o
+              faturamento em R$ cheio já é a primeira linha do DRE e as sacas totais estão no
+              rodapé da análise por talhão; o "R$/sc" porque é PREÇO, não régua de ciclo — ele
+              pertence à venda, não ao raio-x da safra. */}
+          <div className="grid grid-cols-2 gap-1.5">
+            <Cartao rotulo="sc / ha" valor={formatNum(painel?.sacas_ha ?? 0, 2)} />
+            <Cartao rotulo="Fat. / ha" unidade="R$"
+              valor={formatNum(porHa(painel?.faturamento ?? 0, area), 2)}
               titulo={formatMoeda(porHa(painel?.faturamento ?? 0, area))} />
           </div>
         </div>
