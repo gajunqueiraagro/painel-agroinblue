@@ -125,7 +125,13 @@ export function VendaAvulsaModal({
       : totais.semPreco ? 'Informe o preço das classes que está vendendo.'
         : !compradorId ? 'Escolha o comprador.'
           : !data ? 'Informe a data da venda.'
-            : condicao === 'avista' && !contaId ? 'Escolha a conta que vai receber.'
+            /* ⚠ A CONTA É EXIGIDA NOS DOIS CASOS (decisão do Gabriel). À vista ela é onde o
+               dinheiro CAIU; a prazo, onde ele VAI cair — e um a receber que não diz para onde
+               vai é um compromisso que ninguém consegue conciliar quando o dia chegar. */
+            : !contaId ? (condicao === 'avista'
+              ? 'Escolha a conta que vai receber.' : 'Escolha a conta de destino.')
+              /* ⚠ O VENCIMENTO VEM DEPOIS DA CONTA na ordem dos impedimentos porque é a ordem
+                 do FORMULÁRIO: a conta está à esquerda do vencimento na linha. */
               : condicao === 'aprazo' && !vencimento ? 'Informe o vencimento.'
                 : null;
 
@@ -135,8 +141,10 @@ export function VendaAvulsaModal({
       comprador_id: compradorId,
       data,
       condicao,
-      /* ⚠ A PRAZO A CONTA VAI SE HOUVER: ela é o destino futuro do dinheiro, e o lançamento
-         programado já nasce apontando para onde vai cair. Vazia é aceitável. */
+      /* ⚠ O `|| null` FICA COMO REDE, não como caminho: `impedimento` já barrou a conta vazia
+         nos dois casos, então aqui ela sempre existe. O `null` só sobreviveria se alguém
+         chamasse `registrar` por fora da guarda — e aí é melhor a RPC receber null explícito
+         que a string vazia, que não é um uuid. */
       conta_id: contaId || null,
       vencimento: condicao === 'aprazo' ? (vencimento || null) : null,
       /* ⚠ SÓ AS CLASSES COM SACAS: mandar `{sacas: 0}` criaria uma entrega de zero saca, que
@@ -299,13 +307,17 @@ export function VendaAvulsaModal({
                     className="mt-0.5" />
                 </div>
                 <div>
-                  {/* ⚠ A CONTA CONTINUA A PRAZO, e é opcional: ela deixa de ser onde o dinheiro
-                      CAIU e passa a ser onde ele VAI cair. O lançamento programado já nasce
-                      apontando o destino, e quem não sabe ainda deixa vazio. */}
-                  <Label className="text-[10px]">Conta de destino</Label>
+                  {/* ⚠ A CONTA MUDA DE SENTIDO, NÃO DE OBRIGATORIEDADE: a prazo ela deixa de ser
+                      onde o dinheiro CAIU e passa a ser onde ele VAI cair — e continua exigida.
+                      Ela chegou a ser opcional aqui; um a receber sem destino é um compromisso
+                      que ninguém consegue conciliar quando o dia chegar, e o rótulo mudou junto
+                      com a regra para os dois não discordarem. */}
+                  <Label className="text-[10px]">
+                    Conta de destino <span className="text-destructive">*</span>
+                  </Label>
                   <Select value={contaId} onValueChange={setContaId}>
                     <SelectTrigger className="mt-0.5 h-8 text-[12px]">
-                      <SelectValue placeholder="Opcional" />
+                      <SelectValue placeholder="Escolha" />
                     </SelectTrigger>
                     <SelectContent>
                       {contas.map(c => (
