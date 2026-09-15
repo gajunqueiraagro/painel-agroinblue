@@ -215,3 +215,78 @@ export function useEstoqueGraosResumo(
 
   return { culturas: data ?? [], carregando: isLoading, erro: error as Error | null };
 }
+
+/** Uma safra no balanço plurianual — uma linha do extrato do grão. */
+export interface BalancoSafraLinha {
+  /** O código da safra, como o seletor a mostra ("25/26-Lav"). */
+  safra: string;
+  /**
+   * O que entrou na safra vindo da anterior.
+   *
+   * ⚠ ELE É O `final` DA LINHA DE CIMA, sempre — quem encadeia é a RPC, não a tela. A primeira
+   * safra abre em zero, e a tela mostra "—" ali porque não houve movimento anterior a mostrar.
+   */
+  inicial: number;
+  /** Colhido na safra: sacas boas + roça. */
+  producao: number;
+  /** Entregas com `condicao_pagamento = 'dinheiro'`. */
+  venda: number;
+  /** Entregas com `condicao_pagamento = 'barter'`. */
+  barter: number;
+  /** Sempre zero por enquanto — a baixa por quebra é a F2. */
+  quebra: number;
+  /** `inicial + producao − venda − barter − quebra`. Abre a safra seguinte. */
+  final: number;
+}
+
+/**
+ * O BALANÇO PLURIANUAL DE UMA CULTURA — o extrato do grão, safra a safra.
+ *
+ * ⚠ ELE NÃO É A TELA POR SAFRA, E OS NÚMEROS NÃO BATEM DE PROPÓSITO. `fn_estoque_graos` e
+ * `fn_estoque_graos_resumo` respondem POR SAFRA; a RPC do balanço varre a CULTURA INTEIRA.
+ * Medido em 15/09/2026, amendoim: balanço 63.940,73 sc / R$ 5.191.298,60 contra 44.141,52 sc /
+ * R$ 3.694.571,40 da 25/26. São duas perguntas — "quanto tenho no armazém" e "quanto sobrou da
+ * safra que estou olhando" —, e é por isso que os cartões dos dois lados dizem o escopo no
+ * rótulo.
+ * ⚠ O VALOR VEM SOLTO, NÃO POR LINHA, e não é esquecimento: o estoque encadeia, então avaliar
+ * cada safra e somar contaria o mesmo grão duas vezes. As sacas descrevem MOVIMENTO; o valor
+ * descreve INVENTÁRIO de hoje. Não somar as linhas em R$ — não há o que somar.
+ * ⚠ SÓ CONSULTA COM UMA CULTURA ESCOLHIDA: a RPC é `(cliente, cultura)` e não existe balanço de
+ * "todas" — o grão de culturas diferentes nem se mede na mesma unidade.
+ */
+export function useEstoqueGraosBalanco(
+  clienteId: string | null | undefined, cultura: string | null, ativo: boolean,
+) {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['estoque-graos-balanco', clienteId ?? '', cultura ?? ''],
+    enabled: !!clienteId && !!cultura && ativo,
+    queryFn: async (): Promise<{ linhas: BalancoSafraLinha[]; valorMercadoTotal: number }> => {
+      const { data: r, error: err } = await (supabase as any).rpc('fn_estoque_graos_balanco', {
+        p_cliente: clienteId,
+        p_cultura: cultura,
+      });
+      if (err) throw err;
+      const bruto = (r ?? {}) as { linhas?: unknown; valor_mercado_total?: unknown };
+      const linhas = Array.isArray(bruto.linhas) ? bruto.linhas : [];
+      return {
+        linhas: linhas.map((x: Record<string, unknown>) => ({
+          safra: String(x?.safra ?? '—'),
+          inicial: num(x?.inicial),
+          producao: num(x?.producao),
+          venda: num(x?.venda),
+          barter: num(x?.barter),
+          quebra: num(x?.quebra),
+          final: num(x?.final),
+        })),
+        valorMercadoTotal: num(bruto.valor_mercado_total),
+      };
+    },
+  });
+
+  return {
+    linhas: data?.linhas ?? [],
+    valorMercadoTotal: data?.valorMercadoTotal ?? 0,
+    carregando: isLoading,
+    erro: error as Error | null,
+  };
+}

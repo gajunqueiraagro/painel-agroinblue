@@ -21,9 +21,10 @@ import { PageHeader } from '@/components/ui/page-header';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { Plus, TrendingDown, Loader2, AlertTriangle, LineChart } from 'lucide-react';
+import { Plus, TrendingDown, Loader2, AlertTriangle, LineChart, History } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Cartao } from '@/components/ui/cartao';
+import { BalancoSafrasModal } from '@/components/agri/BalancoSafrasModal';
 import { CINZA_CABECALHO, TH_CINZA as TH } from '@/lib/idiomaVisual';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { useSafrasLavoura, useTalhoesDaSafra } from '@/hooks/useAreaPlantada';
@@ -194,6 +195,7 @@ export function AgriEstoqueGraosTab() {
    * decisão de vender, ao lado do preço que já se praticou.
    */
   const [modalCotacao, setModalCotacao] = useState(false);
+  const [modalBalanco, setModalBalanco] = useState(false);
   const [salvandoCotacao, setSalvandoCotacao] = useState(false);
 
   const registrarCotacao = async (p: CotacaoGraosPayload) => {
@@ -295,6 +297,19 @@ export function AgriEstoqueGraosTab() {
               <LineChart className="h-3.5 w-3.5" /> Atualizar cotação
             </Button>
           )}
+          {/* ⚠ A MESMA REGRA DO VIZINHO, e isso é decisão, não coincidência: em "Todas" ele SOME,
+              não fica visível e desligado. O balanço é POR CULTURA — a RPC é `(cliente, cultura)`
+              e grão de culturas diferentes nem se mede na mesma unidade. Dois botões lado a lado
+              seguindo regras opostas ensinariam que a ausência de um deles significa outra coisa.
+              ⚠ E O LAYOUT NÃO SE DESLOCA porque os dois desaparecem juntos: a fila da direita
+              encolhe como já encolhia, e o título continua onde estava, à esquerda. */}
+          {!verTodas && (
+            <Button size="sm" variant="outline" className="h-8 gap-1 px-2 text-[11px]"
+              title="O estoque desta cultura safra a safra — o que entrou, o que saiu e o que atravessou"
+              onClick={() => setModalBalanco(true)}>
+              <History className="h-3.5 w-3.5" /> Balanço por safra
+            </Button>
+          )}
         </div>
       </div>
 
@@ -309,7 +324,10 @@ export function AgriEstoqueGraosTab() {
           ela o cartão "Cotação de" não teria o que dizer; o de "Valor de venda" continua fora
           porque preço médio praticado é por classe, e o resumo não desce a classe. */}
       <div className={cn('grid gap-1.5', verTodas ? 'md:grid-cols-3' : 'md:grid-cols-5')}>
-        <Cartao rotulo="Em estoque" unidade="sc"
+        {/* ⚠ "— ESTA SAFRA" NO RÓTULO, e não é preciosismo: o Balanço por safra mostra um cartão
+            com a MESMA frase e OUTRO número (a cultura inteira, 63.940,73 sc contra 44.141,52 da
+            25/26). Os dois estão certos; sem o escopo escrito, um deles parece defeito. */}
+        <Cartao rotulo="Em estoque — esta safra" unidade="sc"
           valor={formatNum(verTodas ? totalResumo.saldo : t.saldo, 2)} />
         {/* ⚠ O NOME DIZ DE QUE PREÇO SE FALA, e é essa regra que renomeou o cartão do "Todas". Os
             dois são estimativa; o que os separa é a ORIGEM do preço — um já foi praticado, o outro
@@ -317,11 +335,11 @@ export function AgriEstoqueGraosTab() {
             estimado" servia; agora ele avalia A MERCADO, e manter o nome antigo faria a MESMA
             conta ter dois nomes entre a lista e o detalhe — que é a divergência que este PR
             fechou no banco. */}
-        <Cartao rotulo={verTodas ? 'Valor a mercado' : 'Valor de venda'} unidade="R$"
+        <Cartao rotulo={verTodas ? 'Valor a mercado — esta safra' : 'Valor de venda'} unidade="R$"
           valor={formatNum(verTodas ? totalResumo.valor : t.valor, 2)}
           titulo={formatMoeda(verTodas ? totalResumo.valor : t.valor)} cor="text-success" />
         {!verTodas && (
-          <Cartao rotulo="Valor a mercado" unidade="R$" valor={formatNum(t.valorMercado, 2)}
+          <Cartao rotulo="Valor a mercado — esta safra" unidade="R$" valor={formatNum(t.valorMercado, 2)}
             titulo={formatMoeda(t.valorMercado)} cor="text-success" />
         )}
         {/* ⚠ O CARTÃO DA DATA É O QUE DÁ VALIDADE AO OUTRO: "R$ 1,39 mi a mercado" sem dizer de
@@ -622,6 +640,22 @@ export function AgriEstoqueGraosTab() {
         safraRotulo={safraRotulo}
         fornecedores={fin.fornecedores}
         contas={fin.contasBancarias}
+      />
+
+      {/* ⚠ A DATA DA COTAÇÃO VEM DAQUI, não da RPC do balanço: `fn_estoque_graos_balanco` não
+          devolve data, e `t.dataMercado` já é a mais recente entre as classes — a consulta que a
+          alimenta NÃO filtra cotação por safra, então ela é a da cultura. Mudar a RPC por um
+          rodapé seria alterar contrato versionado para ler algo que a tela já tem na mão.
+          ⚠ O LIMITE, E ELE É REAL: `linhas` traz as classes que existem NA SAFRA ABERTA. Uma
+          classe cotada que não aparece naquela safra não entra nesta conta, e o rodapé mostraria
+          uma data mais velha que a última cotação. Hoje o amendoim tem as três classes em todas
+          as safras com colheita, então não acontece. */}
+      <BalancoSafrasModal
+        aberto={modalBalanco}
+        onFechar={() => setModalBalanco(false)}
+        clienteId={clienteId}
+        cultura={verTodas ? '' : cultura}
+        dataCotacao={t.dataMercado}
       />
 
       <CotacaoGraosModal
