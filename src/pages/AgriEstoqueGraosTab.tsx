@@ -23,6 +23,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { Plus, TrendingDown, Loader2, AlertTriangle, LineChart } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Cartao } from '@/components/ui/cartao';
+import { CINZA_CABECALHO, TH_CINZA as TH } from '@/lib/idiomaVisual';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { useSafrasLavoura, useTalhoesDaSafra } from '@/hooks/useAreaPlantada';
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
@@ -37,12 +39,10 @@ import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
-/**
- * ⚠ O MESMO CINZA DOS MODAIS DO BARTER (#3a4864), e de propósito: esta tela lê a mesma operação
- * que aquelas listas — o grão que entrou e o que saiu. Um azul próprio faria parecer outro
- * assunto.
- */
-const TH = 'bg-[#3a4864] px-2 py-1 text-[9px] font-semibold uppercase tracking-wide text-white';
+/* ⚠ O MESMO CINZA DOS MODAIS DO BARTER, e de propósito: esta tela lê a mesma operação que
+   aquelas listas — o grão que entrou e o que saiu. Um azul próprio faria parecer outro assunto.
+   A régua mora em `idiomaVisual` desde o PR-UI-EXTRAIR-CARTAO-TH; o alias mantém o nome curto
+   que as vinte e poucas células deste arquivo já usam. */
 
 /**
  * A DIVISA ENTRE O PREÇO DE VENDA E O DE MERCADO.
@@ -62,32 +62,6 @@ const SEP_TD = 'border-l-2 border-slate-300';
  * Um token improvável é o que distingue "escolhi ver todas" de "ainda não escolhi".
  */
 const TODAS = '__todas__';
-
-/**
- * ⚠ O CARTÃO É O DO PAINEL DA SAFRA, com a unidade miúda ao lado do número e `nowrap` — a mesma
- * lei anti-quebra: "R$" sozinho numa segunda linha é a quebra clássica destes cartões.
- */
-function Cartao({ rotulo, valor, unidade, titulo, cor }: {
-  rotulo: string; valor: string; unidade?: string; titulo?: string; cor?: string;
-}) {
-  return (
-    <div className="min-w-0 rounded-md border bg-card px-2.5 py-1">
-      <div className="truncate text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
-        {rotulo}
-      </div>
-      <div className="mt-0.5 flex items-baseline gap-1 truncate whitespace-nowrap" title={titulo}>
-        {unidade && (
-          <span className="shrink-0 text-[11px] font-medium leading-none text-muted-foreground">
-            {unidade}
-          </span>
-        )}
-        <span className={cn('truncate text-[16px] font-medium leading-[1.1] tabular-nums', cor)}>
-          {valor}
-        </span>
-      </div>
-    </div>
-  );
-}
 
 export function AgriEstoqueGraosTab() {
   const { clienteAtual } = useCliente();
@@ -436,7 +410,7 @@ export function AgriEstoqueGraosTab() {
                 </tr>
               ))}
               {resumo.culturas.length > 0 && !resumo.erro && !resumo.carregando && (
-                <tr className="bg-[#3a4864] text-white">
+                <tr className={cn(CINZA_CABECALHO, 'text-white')}>
                   <td className="px-2 py-1 text-[11px] font-bold">Total</td>
                   <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">
                     {formatNum(totalResumo.saldo, 2)}
@@ -571,7 +545,7 @@ export function AgriEstoqueGraosTab() {
               </tr>
             ))}
             {ordenadas.length > 0 && !erro && !carregando && (
-              <tr className="bg-[#3a4864] text-white">
+              <tr className={cn(CINZA_CABECALHO, 'text-white')}>
                 <td className="px-2 py-1 text-[11px] font-bold">Total</td>
                 <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">
                   {formatNum(t.colhido, 2)}

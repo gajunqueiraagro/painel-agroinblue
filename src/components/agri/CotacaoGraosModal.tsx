@@ -28,6 +28,7 @@ import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
 import { labelDaClasse, corDaClasse } from '@/lib/agri/barterVenda';
 import type { EstoqueClasse } from '@/hooks/useEstoqueGraos';
+import { TH_CINZA as TH } from '@/lib/idiomaVisual';
 
 /** O que o modal devolve para quem chama a RPC. */
 export interface CotacaoGraosPayload {
@@ -45,8 +46,6 @@ export interface CotacaoGraosPayload {
  * barter. É como o produtor pensa o lote.
  */
 const CLASSES = ['ate_20', 'acima_20', 'roca'] as const;
-
-const TH = 'bg-[#3a4864] px-2 py-1 text-[9px] font-semibold uppercase tracking-wide text-white';
 
 export function CotacaoGraosModal({
   aberto, onFechar, onRegistrar, salvando, estoque, cultura, safraRotulo,

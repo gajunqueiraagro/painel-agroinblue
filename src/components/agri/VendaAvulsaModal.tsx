@@ -24,6 +24,7 @@ import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
 import { labelDaClasse, corDaClasse } from '@/lib/agri/barterVenda';
 import type { EstoqueClasse } from '@/hooks/useEstoqueGraos';
+import { TH_CINZA as TH } from '@/lib/idiomaVisual';
 
 /** O que o modal devolve para quem chama a RPC. */
 export interface VendaAvulsaPayload {
@@ -34,8 +35,6 @@ export interface VendaAvulsaPayload {
   vencimento: string | null;
   itens: Array<{ classe: string; sacas: number; preco: number }>;
 }
-
-const TH = 'bg-[#3a4864] px-2 py-1 text-[9px] font-semibold uppercase tracking-wide text-white';
 
 export function VendaAvulsaModal({
   aberto, onFechar, onRegistrar, salvando, estoque, cultura, safraRotulo,

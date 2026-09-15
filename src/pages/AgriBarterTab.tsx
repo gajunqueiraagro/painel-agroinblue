@@ -31,6 +31,7 @@ import { FornecedorSelect } from '@/components/shared/FornecedorSelect';
 import { useBarterInsumos, type BarterInsumo, type InsumoPayload } from '@/hooks/useBarterInsumos';
 import { useBarterVenda, type BarterVenda, type VendaPayload } from '@/hooks/useBarterVenda';
 import { PageHeader } from '@/components/ui/page-header';
+import { CINZA_CABECALHO } from '@/lib/idiomaVisual';
 import { BarterInsumoModal } from '@/components/agri/BarterInsumoModal';
 import { BarterComposicaoEntrega } from '@/components/agri/BarterComposicaoEntrega';
 import { BarterVendaModal } from '@/components/agri/BarterVendaModal';
@@ -75,15 +76,14 @@ const TH = 'sticky top-0 z-10 bg-primary px-1.5 py-1 text-[9px] font-semibold'
 /**
  * O CINZA ESCURO DA LISTA DE INSUMOS — cabeçalho e total no MESMO tom.
  *
- * ⚠ ELE É MAIS CLARO QUE O `bg-primary`, não mais escuro, e vale registrar porque o briefing
- * pedia "cinza escuro, não o cinza claro atual": o atual NÃO era cinza claro — era o navy
- * `--primary` (#1d3a5d). Este #3a4864 é um passo ACIMA dele, um azul-ardósia. A mudança é de
- * tom, não de claro para escuro.
- * ⚠ E OS DOIS ANDAM JUNTOS: o total fecha a tabela e tem de ter a cor do cabeçalho, senão as
- * duas bordas da lista se leem como blocos diferentes.
+ * ⚠ O PORQUÊ DA COR MUDOU DE CASA, não sumiu: por que ela é mais CLARA que o `bg-primary`, e por
+ * que cabeçalho e total andam juntos, está em `CINZA_CABECALHO` (`@/lib/idiomaVisual`). Aqui fica
+ * só o nome local, que as três tabelas deste arquivo já usam.
  */
-const CINZA_ESCURO = 'bg-[#3a4864]';
-const TH_INSUMO = 'sticky top-0 z-10 bg-[#3a4864] px-1.5 py-1 text-[9px] font-semibold text-white';
+const CINZA_ESCURO = CINZA_CABECALHO;
+/* ⚠ ESTA RÉGUA NÃO É A `TH_CINZA` compartilhada, e não deve virar: aqui o `<th>` é `sticky`, tem
+   `px-1.5` e NÃO tem `uppercase tracking-wide`. Só a COR é a mesma — e é só ela que sobe. */
+const TH_INSUMO = `sticky top-0 z-10 ${CINZA_CABECALHO} px-1.5 py-1 text-[9px] font-semibold text-white`;
 
 /**
  * AS COLUNAS ORDENÁVEIS DOS INSUMOS — contrato de `useOrdenacaoTabela`, o mesmo ordenador da
