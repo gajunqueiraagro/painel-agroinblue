@@ -170,6 +170,16 @@ export interface EstoqueResumoCultura {
    * última cotação lançada. Vale o que valia no dia em que alguém a registrou.
    */
   valor: number;
+  /**
+   * O colhido da cultura NAQUELA SAFRA, em sacas — o DENOMINADOR do "% parado".
+   *
+   * ⚠ ELE ENTROU NO PAYLOAD em 15/09/2026 só para isto: o cartão "% colhido parado" exibia "—"
+   * na visão "Todas" porque o resumo dava saldo e valor e nunca o colhido. Sem denominador não
+   * há percentual.
+   * ⚠ E ELE NÃO VAI PARA A TABELA: a lista de "Todas" mostra saldo por unidade e valor, não
+   * colhido. Uma coluna a mais responderia uma pergunta que ninguém fez ali.
+   */
+  colhido: number;
 }
 
 /**
@@ -209,6 +219,7 @@ export function useEstoqueGraosResumo(
         cultura: String(x?.cultura ?? '—'),
         saldo: num(x?.saldo),
         valor: num(x?.valor),
+        colhido: num(x?.colhido),
       }));
     },
   });

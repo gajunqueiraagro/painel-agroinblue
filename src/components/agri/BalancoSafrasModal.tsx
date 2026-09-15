@@ -21,7 +21,7 @@ import { cn } from '@/lib/utils';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { formatIsoToBr } from '@/components/ui/date-picker';
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
-import { unidadeDaCultura } from '@/lib/agri/colheita';
+import { unidadeDaCultura, rotuloCulturaUnidade } from '@/lib/agri/colheita';
 import { TH_CINZA as TH } from '@/lib/idiomaVisual';
 import { Cartao } from '@/components/ui/cartao';
 import { useEstoqueGraosBalanco } from '@/hooks/useEstoqueGraos';
@@ -95,6 +95,11 @@ export function BalancoSafrasModal({
               titulo={formatMoeda(valorMercadoTotal)} cor="text-success" />
           </div>
 
+          {/* ⚠ O MESMO RÓTULO DA TELA DE ESTOQUE E DO MODAL DE VENDA, pela mesma função. Aqui ele
+              trabalha mais que nos outros dois: a tabela abaixo não tem cabeçalho de unidade em
+              coluna nenhuma — "Inicial", "+Produção", "=Final" são todos números nus —, e é esta
+              linha que diz em que se medem. */}
+          <p className="text-[11px] text-muted-foreground">{rotuloCulturaUnidade(cultura)}</p>
           <div className="overflow-hidden rounded-md border">
             <table className="w-full table-fixed border-collapse">
               <colgroup>

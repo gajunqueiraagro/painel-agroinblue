@@ -29,7 +29,7 @@ import { CINZA_CABECALHO, TH_CINZA as TH } from '@/lib/idiomaVisual';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { useSafrasLavoura, useTalhoesDaSafra } from '@/hooks/useAreaPlantada';
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
-import { unidadeDaCultura } from '@/lib/agri/colheita';
+import { unidadeDaCultura, kgPorUnidade, rotuloCulturaUnidade } from '@/lib/agri/colheita';
 import { labelDaClasse, corDaClasse } from '@/lib/agri/barterVenda';
 import { useEstoqueGraos, totaisDoEstoque, useEstoqueGraosResumo } from '@/hooks/useEstoqueGraos';
 import { VendaAvulsaModal, type VendaAvulsaPayload } from '@/components/agri/VendaAvulsaModal';
@@ -143,17 +143,13 @@ export function AgriEstoqueGraosTab() {
   /**
    * O TI'TULO E' UM BREADCRUMB — PR-ESTOQUE-BREADCRUMB-ORDEM.
    *
-   * ⚠ A UNIDADE VEM DE `unidadeDaCultura`, NUNCA de uma lista escrita aqui: `colheita.ts` e' a
-   * fonte unica, e ela diz que SO' o amendoim tem saca (25 kg) — soja, milho, cana e mandioca
-   * caem em tonelada, de proposito, porque "a saca de 60 kg e' convencao de mercado, e convencao
-   * nao e' decisao". Escrever "(60kg saca)" aqui faria a tela afirmar um peso que ninguem
-   * confirmou.
    * ⚠ SO' A RAIZ E' CLICA'VEL. O `›` e o nome da cultura sao texto: se tudo fosse alvo, o gesto de
    * "voltar" competiria com o de "estou aqui", e o operador clicaria no proprio lugar em que ja'
    * esta'.
+   * ⚠ A UNIDADE SAIU DAQUI no PR-ESTOQUE-POLISH — ela vive no rótulo do recorte, abaixo, e o
+   * `rotuloUnidade` que a montava à mão morreu com ela: quem escreve a unidade agora é
+   * `rotuloCulturaUnidade`, em `colheita.ts`.
    */
-  const unidade = unidadeDaCultura(verTodas ? null : cultura);
-  const rotuloUnidade = unidade.kgPorSaca ? `${unidade.kgPorSaca}kg saca` : 'tonelada';
   const tituloTela = verTodas ? 'Estoque de Grãos' : (
     <>
       <button type="button" onClick={() => setCultura(TODAS)}
@@ -169,19 +165,18 @@ export function AgriEstoqueGraosTab() {
   /**
    * O RECORTE — unidade e safra, logo acima da tabela.
    *
-   * ⚠ ELES SAÍRAM DO BREADCRUMB, não sumiram. O título responde "onde estou" e a resposta é um
-   * caminho: Estoque de Grãos › Amendoim. Unidade e safra não são lugar — são o RECORTE do que a
-   * tabela abaixo mostra, e é ao lado dela que eles fazem trabalho.
+   * ⚠ ELE SAIU DO BREADCRUMB, não sumiu. O título responde "onde estou" e a resposta é um caminho:
+   * Estoque de Grãos › Amendoim. A unidade não é lugar — é o RECORTE do que a tabela abaixo
+   * mostra, e é ao lado dela que ela faz trabalho.
+   * ⚠ A SAFRA SAIU DAQUI TAMBÉM, e por outro motivo: ela já está no seletor do topo, a dois
+   * centímetros. Repeti-la aqui gastava a linha com o que a tela já dizia.
    * ⚠ E É POR ISSO QUE ELE NÃO EXISTE EM "TODAS": lá a tabela tem uma linha por cultura, cada uma
-   * com a sua unidade em coluna própria, e não há um recorte único a declarar. Repetir a safra ali
-   * seria dizer o que o seletor do topo já diz.
-   * ⚠ A SAFRA SÓ ENTRA QUANDO HÁ UMA: sem `safraRotulo` o " · Safra " sairia pendurado.
+   * com a sua unidade em coluna própria, e não há um recorte único a declarar.
+   * ⚠ O TEXTO VEM DE `rotuloCulturaUnidade`, a MESMA função que o modal de venda e o do balanço
+   * usam — três textos escritos à mão é a lição do `Cartao` e do cinza do cabeçalho.
    */
   const rotuloRecorte = verTodas ? null : (
-    <p className="text-[11px] text-muted-foreground">
-      {labelDaCultura(cultura)} ({rotuloUnidade})
-      {safraRotulo && <> · Safra {safraRotulo}</>}
-    </p>
+    <p className="text-[11px] text-muted-foreground">{rotuloCulturaUnidade(cultura)}</p>
   );
 
   const { linhas, carregando, erro } = useEstoqueGraos(
@@ -195,6 +190,32 @@ export function AgriEstoqueGraosTab() {
   const totalResumo = useMemo(() => ({
     valor: resumo.culturas.reduce((a, c) => a + c.valor, 0),
   }), [resumo.culturas]);
+
+  /**
+   * O "% COLHIDO PARADO" DA SAFRA INTEIRA — o cartão que em "Todas" mostrava "—".
+   *
+   * ⚠ A CONTA É EM QUILO, e é a única forma de ela existir: duas culturas da mesma safra podem
+   * estar em unidades diferentes (amendoim em saca de 25 kg, mandioca em tonelada), e somar
+   * "sacas" com "toneladas" para dividir uma soma pela outra daria um número que não mede nada.
+   * O quilo é o denominador comum, e o peso vem de `kgPorUnidade` — nunca de um 25 ou um 1000
+   * escrito aqui.
+   * ⚠ O QUILO NÃO APARECE NA TELA. Ele entra na divisão e sai dela: o operador vê só o
+   * percentual, porque quilo é unidade de cálculo e saca é a unidade em que ele pensa.
+   * ⚠ `null` QUANDO NÃO HÁ COLHEITA, nunca 0,0%: safra sem colheita não tem grão parado — ela
+   * não tem grão nenhum, e 0,0% afirmaria que tudo foi vendido.
+   * ⚠ E NÃO TOCA NO DETALHE: com uma cultura escolhida o percentual continua saindo de
+   * `totaisDoEstoque.pctParado`, em sacas, onde a unidade é uma só e a conversão seria ruído.
+   */
+  const pctParadoTodas = useMemo(() => {
+    let paradoKg = 0;
+    let colhidoKg = 0;
+    for (const c of resumo.culturas) {
+      const kg = kgPorUnidade(c.cultura);
+      paradoKg += c.saldo * kg;
+      colhidoKg += c.colhido * kg;
+    }
+    return colhidoKg > 0 ? (paradoKg / colhidoKg) * 100 : null;
+  }, [resumo.culturas]);
 
   /**
    * O TOTAL DE CADA COLUNA DE UNIDADE — e cada uma soma SÓ o que é da mesma unidade.
@@ -323,7 +344,10 @@ export function AgriEstoqueGraosTab() {
           abaixo do topo, enquanto o da Conciliação nasce a 12px: era este o "título baixo". O
           par rótulo+campo continua alinhado por baixo entre si, no `div` da direita. */}
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <PageHeader titulo={tituloTela} />
+        {/* ⚠ O SUBTITULO E' DA TELA, nao da visao: ele diz o que a tela responde, e isso nao muda
+            entre "Todas" e o detalhe de uma cultura. A mesma forma da Conciliacao. */}
+        <PageHeader titulo={tituloTela}
+          subtitulo="O que você colheu e ainda não vendeu, por safra e classe" />
         <div className="flex flex-wrap items-end gap-2">
           <div className="w-[170px]">
             <Label className="text-[10px]">Safra</Label>
@@ -435,11 +459,17 @@ export function AgriEstoqueGraosTab() {
         {/* ⚠ O "% PARADO" NÃO GANHA COR: estoque alto não é bom nem ruim por si — depende do
             preço que o produtor está esperando. Pintá-lo de vermelho seria dar um conselho que
             a tela não tem como sustentar.
-            ⚠ E EM "TODAS" ELE É "—", não zero: `fn_estoque_graos_resumo` devolve saldo e valor,
-            não o COLHIDO — sem denominador não há percentual, e 0,0% afirmaria que nada ficou
-            parado quando o que falta é a conta. */}
-        <Cartao rotulo="% colhido parado" unidade={verTodas ? undefined : '%'}
-          valor={verTodas ? '—' : formatNum(t.pctParado, 1)} />
+            ⚠ ELE DEIXOU DE SER "—" EM "TODAS": a RPC do resumo passou a devolver o COLHIDO, que
+            era o denominador que faltava. A conta ali soma as culturas EM QUILO, porque saca e
+            tonelada não se somam — ver `pctParadoTodas`, acima.
+            ⚠ O "—" SOBREVIVE PARA O CASO CERTO: safra sem colheita nenhuma. Ali 0,0% afirmaria
+            que tudo foi vendido, quando não houve o que vender. */}
+        <Cartao rotulo="% colhido parado"
+          escopo={verTodas ? 'todas as culturas' : undefined}
+          unidade={verTodas && pctParadoTodas === null ? undefined : '%'}
+          valor={verTodas
+            ? (pctParadoTodas === null ? '—' : formatNum(pctParadoTodas, 1))
+            : formatNum(t.pctParado, 1)} />
       </div>
 
       {rotuloRecorte}

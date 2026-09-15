@@ -11,6 +11,10 @@
  * ⚠ SÓ REGRA PURA: nada de React nem de Supabase.
  */
 import { parseMoeda } from '@/lib/calculos/numeroBR';
+/* ⚠ ARESTA NOVA E DE MAO UNICA: `areaPlantada` nao importa `colheita` (ela so' puxa
+   `./culturas` e `calculos/abate`, ambos folhas), entao nao ha' ciclo. Conferido com o madge
+   oficial no mesmo PR. */
+import { labelDaCultura } from '@/lib/agri/areaPlantada';
 
 /**
  * O CORTE DE CLASSE DA COOPERATIVA, em ppb.
@@ -63,6 +67,26 @@ const PADRAO: UnidadeCultura = { kgPorSaca: null, unidadeTotal: 't', unidadeProd
 
 export function unidadeDaCultura(cultura: string | null | undefined): UnidadeCultura {
   return UNIDADES[(cultura || '').trim()] ?? PADRAO;
+}
+
+/**
+ * QUANTOS QUILOS PESA UMA UNIDADE DESTA CULTURA — 25 para a saca de amendoim, 1.000 para a
+ * tonelada.
+ *
+ * ⚠ ELE EXISTE PARA SOMAR O QUE NÃO SE SOMA. Saca e tonelada não têm denominador comum, e
+ * qualquer conta que misture duas culturas — um percentual de estoque parado sobre a safra
+ * inteira, por exemplo — precisa converter os dois lados antes de dividir. O quilo é a moeda
+ * dessa conversão.
+ * ⚠ O `1000` MORA AQUI E SÓ AQUI. `kgPorSaca` já dizia o peso da saca, mas o peso da TONELADA
+ * estava implícito em `unidadeTotal === 't'` e teria de ser escrito à mão em cada consumidor —
+ * que é como um número vira três números.
+ * ⚠ E O RESULTADO NÃO VAI PARA A TELA. Quilo é unidade de CÁLCULO: o operador pensa em saca e em
+ * tonelada, e mostrar "1.103.538 kg parados" trocaria uma resposta que ele lê por uma que ele
+ * teria de converter de cabeça.
+ */
+export function kgPorUnidade(cultura: string | null | undefined): number {
+  const { kgPorSaca } = unidadeDaCultura(cultura);
+  return kgPorSaca ?? 1000;
 }
 
 /**
@@ -405,4 +429,21 @@ export function totaisColheita(
        no romaneio — a cooperativa pesa verde em quilo. Ele não se grava em lugar nenhum. */
     verdeEmSacas: kgPorSaca && verdeKg > 0 ? arred(verdeKg / kgPorSaca) : null,
   };
+}
+
+/**
+ * O RÓTULO "Cultura · unidade" — "Amendoim · sacas de 25kg", "Mandioca · toneladas".
+ *
+ * ⚠ UM SÓ PARA OS TRÊS LUGARES que o mostram — a tela de Estoque de Grãos, o modal de venda
+ * avulsa e o modal do balanço por safra. Três textos escritos à mão é a lição do `Cartao` e do
+ * cinza do cabeçalho, paga duas vezes neste mesmo mês: o que diverge não é o primeiro, é o
+ * terceiro, no dia em que alguém corrige só dois.
+ * ⚠ A UNIDADE VEM DE `UNIDADES`, nunca de uma lista escrita no consumidor: hoje só o amendoim
+ * tem saca, e soja e milho dizem "toneladas" porque o peso da saca deles ainda não foi decidido.
+ * Quando for, este rótulo muda sozinho nos três lugares.
+ */
+export function rotuloCulturaUnidade(cultura: string | null | undefined): string {
+  const { kgPorSaca } = unidadeDaCultura(cultura);
+  const unidade = kgPorSaca ? `sacas de ${kgPorSaca}kg` : 'toneladas';
+  return `${labelDaCultura(cultura)} · ${unidade}`;
 }

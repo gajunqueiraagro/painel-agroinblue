@@ -22,6 +22,7 @@ import { Save, AlertTriangle, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
+import { rotuloCulturaUnidade } from '@/lib/agri/colheita';
 import { labelDaClasse, corDaClasse } from '@/lib/agri/barterVenda';
 import type { EstoqueClasse } from '@/hooks/useEstoqueGraos';
 import { TH_CINZA as TH } from '@/lib/idiomaVisual';
@@ -179,6 +180,10 @@ export function VendaAvulsaModal({
         </div>
 
         <div className="space-y-2 px-3 py-2">
+          {/* ⚠ O MESMO RÓTULO DA TELA DE ESTOQUE, pela mesma função: o operador chega aqui vindo
+              de lá, e ler "sacas de 25kg" nos dois lugares é o que lhe diz que a coluna de
+              quantidade deste modal fala a mesma língua da de lá. */}
+          <p className="text-[11px] text-muted-foreground">{rotuloCulturaUnidade(cultura)}</p>
           <div className="overflow-hidden rounded-md border">
             <table className="w-full table-fixed border-collapse">
               <colgroup>
