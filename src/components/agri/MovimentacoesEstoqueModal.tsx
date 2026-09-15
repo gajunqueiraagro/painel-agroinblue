@@ -123,7 +123,21 @@ export function MovimentacoesEstoqueModal({
             lista; rolar junto seria perder de vista o número que a lista explica.
             ⚠ A ROLAGEM MORA NA LISTA, não neste container: `sticky` se ancora no scrollport mais
             próximo, e se fosse o corpo do modal o bloco subiria junto. */}
-        <div className="space-y-2 px-3 py-2">
+        {/* ⚠⚠ `min-w-0` AQUI É A CORREÇÃO INTEIRA, e a causa não era a que se suporia. `DialogContent`
+            é um **grid** (`ui/dialog.tsx:49`), e item de grid nasce com `min-width: auto` — ele se
+            recusa a encolher abaixo da largura mínima do conteúdo. Com `whitespace-nowrap` na
+            linha 2 da cancelada, o mínimo virou o texto inteiro: MEDIDO no harness com o CSS do
+            build, o corpo ficou com 873,6px dentro de um modal de 672px.
+            ⚠ E FOI ISSO QUE SUMIU COM OS ÍCONES. Eles sempre existiram e sempre renderizaram: a
+            coluna de ações terminava em 877,6px, o modal termina em 696px, e o `overflow-hidden`
+            do `DialogContent` — que existe para o "L" branco dos cantos — os cortava. Não era
+            hover-only nem ausência de render; era clipping.
+            ⚠ E ERA TAMBÉM POR ISSO QUE O `truncate` NÃO DISPARAVA: `text-overflow` só corta quando
+            há um limite, e o container nunca teve um. Medido depois: 670px de corpo, ícones em
+            674px (dentro), e a linha 2 com `clientWidth` 556 contra `scrollWidth` 760 — cortando.
+            ⚠ A LISTA LEVA O MESMO `min-w-0` porque ela é o próximo elo: sem ele, o item flex de
+            dentro repetiria a recusa um nível abaixo. */}
+        <div className="min-w-0 space-y-2 px-3 py-2">
           <div className="grid grid-cols-2 gap-3 rounded-md border bg-muted/20 px-3.5 py-[11px]">
             <div className="min-w-0">
               <div className="text-[11px] font-normal leading-none text-muted-foreground">Quebra ativa</div>
@@ -142,7 +156,7 @@ export function MovimentacoesEstoqueModal({
             </div>
           </div>
 
-          <div className="max-h-[52vh] overflow-y-auto rounded-md border">
+          <div className="max-h-[52vh] min-w-0 overflow-y-auto rounded-md border">
             {/* ⚠ OS TRÊS ESTADOS SEPARADOS, como nas outras listas de grão: uma falha de leitura
                 renderizada como "nenhuma movimentação" afirmaria que nunca se baixou nada. */}
             {erro ? (
@@ -164,21 +178,37 @@ export function MovimentacoesEstoqueModal({
               <div className="px-2 py-6 text-center text-[10px] text-muted-foreground">
                 Nenhuma movimentação nesta safra.
               </div>
-            ) : movimentacoes.map(m => (
+            ) : movimentacoes.map(m => {
+              /* ⚠ O TEXTO INTEIRO VAI PARA O `title`, porque a linha agora CORTA. Reticências sem
+                 como ler o resto seria esconder o motivo do estorno — que é justamente o que o
+                 histórico existe para mostrar. */
+              const l1 = `Quebra · ${labelDaClasse(m.classe)} · ${formatNum(m.quantidade, 2)} ${unidade} · ${labelDoMotivo(m.motivo)}`;
+              const l2 = [
+                dataBR(m.data),
+                m.autor || '—',
+                m.observacoes || null,
+                !m.ativo
+                  ? `cancelada em ${dataBR(m.cancelado_em)} por ${m.cancelado_por || '—'}${m.motivo_cancelamento ? `: ${m.motivo_cancelamento}` : ''}`
+                  : null,
+              ].filter(Boolean).join(' · ');
+              return (
               <div key={m.id} className="border-t border-slate-100 first:border-t-0">
                 <div className={cn('flex items-start gap-2 px-2 py-1.5',
                   !m.ativo && 'bg-muted/30 text-muted-foreground line-through')}>
                   <div className="min-w-0 flex-1">
                     {/* ⚠ LINHA 1 — A IDENTIDADE (12px/500): o que, de que classe, quanto e por quê. */}
-                    <div className="truncate text-[12px] font-medium">
+                    <div className="truncate text-[12px] font-medium" title={l1}>
+                      {/* ⚠ A BOLINHA DA CANCELADA NÃO GRITA: a cor da classe é sinal operacional —
+                          "este é o grão bom" —, e numa linha estornada ela apontaria para uma
+                          decisão que foi desfeita. Cinza, como o resto da linha. */}
                       <span className={cn('mr-1.5 inline-block h-2 w-2 rounded-full align-[-1px]',
-                        corDaClasse(m.classe))} />
+                        m.ativo ? corDaClasse(m.classe) : 'bg-muted-foreground/40')} />
                       Quebra · {labelDaClasse(m.classe)} ·{' '}
                       <span className="tabular-nums">{formatNum(m.quantidade, 2)}</span> {unidade} ·{' '}
                       {labelDoMotivo(m.motivo)}
                     </div>
                     {/* ⚠ LINHA 2 — O CONTEXTO (10px muted): quando, quem, e o que se escreveu. */}
-                    <div className="truncate text-[10px] text-muted-foreground">
+                    <div className="truncate text-[10px] text-muted-foreground" title={l2}>
                       {dataBR(m.data)} · {m.autor || '—'}
                       {m.observacoes && ` · ${m.observacoes}`}
                       {/* ⚠ O ESTORNO CONTA A PRÓPRIA HISTÓRIA na mesma linha: quando, por quem e
@@ -282,7 +312,8 @@ export function MovimentacoesEstoqueModal({
                   </div>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </DialogContent>
