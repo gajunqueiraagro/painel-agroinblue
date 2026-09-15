@@ -64,6 +64,42 @@ const SEP_TD = 'border-l-2 border-slate-300';
  */
 const TODAS = '__todas__';
 
+/**
+ * AS TRÊS COLUNAS DE UNIDADE DA VISÃO "TODAS".
+ *
+ * ⚠ ELAS EXISTEM PORQUE SACA E TONELADA NÃO SOMAM. A coluna única de antes — "Sacas em estoque" —
+ * punha amendoim (saca de 25 kg) e mandioca (tonelada) na mesma célula e somava as duas no total.
+ * O número resultante não media nada: não era saca, não era tonelada.
+ * ⚠ SÃO FIXAS, aparecem mesmo vazias. Uma coluna que só nasce quando há dado esconde a pergunta:
+ * "60 kg" vazia diz que o sistema conhece a saca de soja e não tem estoque dela, enquanto a
+ * ausência da coluna não diz nada.
+ * ⚠ A DE 60 kg ESTÁ VAZIA HOJE, E ISSO É CORRETO: `unidadeDaCultura` (colheita.ts) só dá saca ao
+ * amendoim, porque "a saca de 60 kg é convenção de mercado para soja e milho, mas convenção não é
+ * decisão". Enquanto ninguém decidir, soja e milho se medem em tonelada e caem na terceira
+ * coluna. No dia em que a decisão entrar em `UNIDADES`, esta tabela a mostra sozinha.
+ */
+const COLUNAS_UNIDADE = [
+  { chave: 'sc25', titulo: 'Sacas 25kg', kgPorSaca: 25 },
+  { chave: 'sc60', titulo: 'Sacas 60kg', kgPorSaca: 60 },
+  { chave: 't', titulo: 'Toneladas', kgPorSaca: null },
+] as const;
+
+type ChaveUnidade = typeof COLUNAS_UNIDADE[number]['chave'];
+
+/**
+ * EM QUAL DAS TRÊS COLUNAS ESTA CULTURA ENTRA.
+ *
+ * ⚠ `null` QUANDO NENHUMA SERVE, e não um chute na tonelada: uma cultura medida em saca de outro
+ * peso — 50 kg, digamos — não é tonelada, e jogá-la ali afirmaria um peso errado num total que o
+ * operador vai somar. Hoje `UNIDADES` não produz esse caso; a linha existe para que, se produzir,
+ * a tela diga que não sabe em vez de mentir.
+ */
+function colunaDaCultura(cultura: string): ChaveUnidade | null {
+  const u = unidadeDaCultura(cultura);
+  if (u.unidadeTotal !== 'sacas') return 't';
+  return COLUNAS_UNIDADE.find(c => c.kgPorSaca === u.kgPorSaca)?.chave ?? null;
+}
+
 export function AgriEstoqueGraosTab() {
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id ?? null;
@@ -143,6 +179,25 @@ export function AgriEstoqueGraosTab() {
     saldo: resumo.culturas.reduce((a, c) => a + c.saldo, 0),
     valor: resumo.culturas.reduce((a, c) => a + c.valor, 0),
   }), [resumo.culturas]);
+
+  /**
+   * O TOTAL DE CADA COLUNA DE UNIDADE — e cada uma soma SÓ o que é da mesma unidade.
+   *
+   * ⚠ `null` NÃO É ZERO, e a distinção é a razão de esta conta existir: `null` significa que
+   * NENHUMA cultura da safra se mede naquela unidade (a coluna de 60 kg, hoje), e a tela mostra
+   * "—". Zero significa que há cultura naquela unidade e ela está sem estoque — é o caso da
+   * mandioca em toneladas na 25/26. "0,00" onde não há cultura nenhuma afirmaria um estoque
+   * vazio de algo que nem existe na safra.
+   */
+  const totaisPorUnidade = useMemo(() => {
+    const acc = new Map<ChaveUnidade, number>();
+    for (const c of resumo.culturas) {
+      const col = colunaDaCultura(c.cultura);
+      if (!col) continue;
+      acc.set(col, (acc.get(col) ?? 0) + c.saldo);
+    }
+    return acc;
+  }, [resumo.culturas]);
 
   /* ───────────────────────── A VENDA AVULSA ─────────────────────────
    * ⚠ A FAZENDA SAI DO TALHÃO, não de um contexto global: a RPC exige `p_fazenda_id`, e esta tela
@@ -367,18 +422,20 @@ export function AgriEstoqueGraosTab() {
         <div className="overflow-hidden rounded-md border">
           <table className="w-full table-fixed border-collapse">
             <colgroup>
-              {['46%', '27%', '27%'].map((w, i) => <col key={i} style={{ width: w }} />)}
+              {['28%', '16%', '16%', '16%', '24%'].map((w, i) => <col key={i} style={{ width: w }} />)}
             </colgroup>
             <thead>
               <tr>
                 <th className={cn(TH, 'text-left')}>Cultura</th>
-                <th className={cn(TH, 'text-right')}>Sacas em estoque</th>
+                {COLUNAS_UNIDADE.map(c => (
+                  <th key={c.chave} className={cn(TH, 'text-right')}>{c.titulo}</th>
+                ))}
                 <th className={cn(TH, 'text-right')}>Valor a mercado</th>
               </tr>
             </thead>
             <tbody>
               {resumo.erro ? (
-                <tr><td colSpan={3} className="px-2 py-6 text-center">
+                <tr><td colSpan={5} className="px-2 py-6 text-center">
                   <span className="inline-flex items-center gap-1.5 text-[11px] text-destructive">
                     <AlertTriangle className="h-3.5 w-3.5" />
                     Não foi possível carregar o estoque.
@@ -388,13 +445,13 @@ export function AgriEstoqueGraosTab() {
                   </div>
                 </td></tr>
               ) : resumo.carregando ? (
-                <tr><td colSpan={3} className="px-2 py-6 text-center text-[11px] text-muted-foreground">
+                <tr><td colSpan={5} className="px-2 py-6 text-center text-[11px] text-muted-foreground">
                   <span className="inline-flex items-center gap-1.5">
                     <Loader2 className="h-3.5 w-3.5 animate-spin" /> Carregando…
                   </span>
                 </td></tr>
               ) : resumo.culturas.length === 0 ? (
-                <tr><td colSpan={3} className="px-2 py-6 text-center text-[10px] text-muted-foreground">
+                <tr><td colSpan={5} className="px-2 py-6 text-center text-[10px] text-muted-foreground">
                   Esta safra ainda não tem área cadastrada.
                 </td></tr>
               ) : resumo.culturas.map(c => (
@@ -410,11 +467,32 @@ export function AgriEstoqueGraosTab() {
                   }}>
                   <td className="truncate px-2 py-1 text-[11px] font-medium">
                     {labelDaCultura(c.cultura)}
+                    {/* ⚠ A MARCA SÓ APARECE SE A UNIDADE NÃO COUBER EM COLUNA NENHUMA, e aí ela é
+                        obrigatória: sem ela a linha mostraria três traços e o operador leria
+                        "sem estoque" onde o certo é "não sei em que coluna pôr". */}
+                    {colunaDaCultura(c.cultura) === null && (
+                      <span className="ml-1 text-[10px] text-destructive"
+                        title="Esta cultura se mede numa unidade que ainda não tem coluna — o saldo não está somado em nenhum total.">
+                        ⚠
+                      </span>
+                    )}
                   </td>
-                  <td className={cn('px-2 py-1 text-right text-[11px] tabular-nums',
-                    c.saldo > 0 && 'text-success')}>
-                    {formatNum(c.saldo, 2)}
-                  </td>
+                  {/* ⚠ CADA CULTURA PREENCHE UMA COLUNA SÓ, a da sua unidade; as outras duas são
+                      "—". E o "—" aqui não é ausência de dado — é "esta cultura não se mede
+                      assim", que é por que a coluna própria mostra `0,00` quando o estoque é zero
+                      em vez de traço: zero em tonelada é resposta, tonelada de amendoim não é
+                      pergunta. */}
+                  {COLUNAS_UNIDADE.map(col => {
+                    const minha = colunaDaCultura(c.cultura) === col.chave;
+                    return (
+                      <td key={col.chave}
+                        className={cn('px-2 py-1 text-right text-[11px] tabular-nums',
+                          minha && c.saldo > 0 && 'text-success',
+                          !minha && 'text-muted-foreground')}>
+                        {minha ? formatNum(c.saldo, 2) : '—'}
+                      </td>
+                    );
+                  })}
                   {/* ⚠ "—" QUANDO O VALOR É ZERO, nunca "R$ 0,00": a RPC devolve zero quando
                       NENHUMA CLASSE daquela cultura foi cotada — é o caso da mandioca na 25/26.
                       "R$ 0,00" ao lado de 44 mil sacas afirmaria que elas não valem nada, e o que
@@ -430,9 +508,21 @@ export function AgriEstoqueGraosTab() {
               {resumo.culturas.length > 0 && !resumo.erro && !resumo.carregando && (
                 <tr className={cn(CINZA_CABECALHO, 'text-white')}>
                   <td className="px-2 py-1 text-[11px] font-bold">Total</td>
-                  <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">
-                    {formatNum(totalResumo.saldo, 2)}
-                  </td>
+                  {/* ⚠ CADA COLUNA SOMA A SUA, e é só isso que torna este total legítimo: antes
+                      havia UM total somando saca com tonelada, e o número não media nada. Aqui
+                      não existe "o total de sacas" — existe o de 25 kg, o de 60 kg e o de
+                      toneladas, e eles não se somam entre si nem aqui nem em lugar nenhum. */}
+                  {COLUNAS_UNIDADE.map(col => {
+                    const soma = totaisPorUnidade.get(col.chave);
+                    return (
+                      <td key={col.chave} className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">
+                        {soma === undefined ? '—' : formatNum(soma, 2)}
+                      </td>
+                    );
+                  })}
+                  {/* ⚠ O R$ SOMA TUDO, e é a única coluna que pode: real é real, venha de saca ou
+                      de tonelada. É por isso que ele fica do lado de fora das três — a linha
+                      inteira ensina onde a soma vale e onde não vale. */}
                   <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">
                     {totalResumo.valor > 0 ? formatMoeda(totalResumo.valor) : '—'}
                   </td>
@@ -680,9 +770,10 @@ export function AgriEstoqueGraosTab() {
               (amendoim em saca, mandioca em tonelada) e sacas não. Sem essa linha, um total em R$
               sobre uma coluna de sacas que não somam pareceria erro de conta. */
           ? <>Saldo por cultura = Colhido − Entregue. O valor é <strong>estimativa</strong>: usa a
-              última cotação de mercado lançada para cada classe, não um preço já praticado. O
-              total em R$ soma todas as culturas; o de sacas, não — cada cultura tem a sua
-              unidade.</>
+              última cotação de mercado lançada para cada classe, não um preço já praticado. Sacas
+              de <strong>25 kg</strong> (amendoim) e de <strong>60 kg</strong> (soja, milho) e
+              <strong> toneladas</strong> (mandioca, cana) não se somam entre si — cada uma na sua
+              coluna. O R$ soma tudo.</>
           /* ⚠ A NOTA CARREGA A UNIDADE QUE O CABEÇALHO PERDEU: "Venda" e "Mercado" são R$ por
               SACA, "Valor" e "A mercado" são o total. Com nove colunas o rótulo não comporta a
               distinção, e ela não pode ficar só no `title` — quem lê num relatório impresso ou
