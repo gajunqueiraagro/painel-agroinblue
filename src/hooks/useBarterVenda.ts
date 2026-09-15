@@ -71,6 +71,8 @@ export interface VendaPayload {
   valor_bruto: number;
   descontos: number;
   valor_liquido: number;
+  /** De que local o grao sai. `null` = o banco resolve (trigger, com um local so). */
+  local_estoque_id: string | null;
   entregas: Array<{
     classe_aflatoxina: string;
     sacas: number;
@@ -113,6 +115,7 @@ interface EntregaPayload {
   preco_saca: number;
   valor: number;
   colheita_id: string | null;
+  local_estoque_id?: string;
 }
 
 interface PartePayload {
@@ -259,6 +262,12 @@ export function useBarterVenda(
            cargas (dez na 23/24). Apontar para uma delas seria inventar o vínculo. E `null`
            aqui é legítimo — a coluna ACEITA nulo. */
         colheita_id: null,
+        /* ⚠ SÓ VAI QUANDO HÁ ESCOLHA: com `undefined` a chave nem entra no insert e a trigger
+           `agri_local_estoque_default` resolve o único local — a gravação fica igual à de antes.
+           ⚠ E O TIPO É HOMOGÊNEO porque todas as linhas saem do mesmo `map`: num insert em lote o
+           PostgREST usa a UNIÃO das chaves e manda NULL para quem não a tem, e `null` aqui
+           violaria o NOT NULL da coluna. */
+        ...(p.local_estoque_id ? { local_estoque_id: p.local_estoque_id } : {}),
       }));
       const { error } = await db.from('agri_oc_entregas').insert(linhas);
       if (error) return { ok: false, erro: `Entregas: ${error.message}` };

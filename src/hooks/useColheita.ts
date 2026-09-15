@@ -23,6 +23,8 @@ export interface ColheitaRow {
   ticket_balanca: string | null;
   nf_produtor: string | null;
   filial: string | null;
+  /** EL-02: NOT NULL no banco; a carga sempre tem um local. */
+  local_estoque_id: string | null;
   peso_verde_kg: number | null;
   peso_seco_kg: number | null;
   umidade_pct: number | null;
@@ -37,7 +39,7 @@ export interface ColheitaRow {
 }
 
 const COLS = 'id, safra_area_id, data_colheita, hora_chegada, peso_fazenda_kg,'
-  + ' ticket_balanca, nf_produtor, filial,'
+  + ' ticket_balanca, nf_produtor, filial, local_estoque_id,'
   + ' peso_verde_kg, peso_seco_kg, umidade_pct, aflatoxina_ppb, sacas_boas,'
   + ' grao_roca_sacas, grao_roca_kg, renda_liquida_pct, taxa_secagem, valor_secagem,'
   + ' observacoes';

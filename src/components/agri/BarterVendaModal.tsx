@@ -16,6 +16,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { LocalEstoqueSelect, useRegraLocalEstoque } from '@/components/agri/LocalEstoqueSelect';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DatePicker } from '@/components/ui/date-picker';
 import { CampoMoeda, CampoNumero } from '@/components/ui/campo-moeda';
@@ -67,6 +68,8 @@ export function BarterVendaModal({
   /* ⚠ A ALÍQUOTA É ESTADO DE TELA, não do dado: o que se grava é o VALOR. Ela existe para
      calcular e para dizer que percentual o valor representa. */
   const [aliquota, setAliquota] = useState(String(ALIQUOTA_DEDUCAO_PADRAO).replace('.', ','));
+  const [localId, setLocalId] = useState('');
+  const { precisaEscolher: precisaLocal } = useRegraLocalEstoque(clienteId);
   const [subcentro, setSubcentro] = useState('');
   const [planoId, setPlanoId] = useState<string | null>(null);
   const [busca, setBusca] = useState('');
@@ -122,6 +125,7 @@ export function BarterVendaModal({
         : ''));
     /* ⚠ O QUE ESTÁ GRAVADO NUNCA É SUGESTÃO — foi conferido por alguém no dia em que salvou. */
     setContaSugerida(false);
+    setLocalId('');
     setBusca('');
   }, [aberto, venda, classificacoes]);
 
@@ -199,7 +203,8 @@ export function BarterVendaModal({
    * ⚠ PRECIFICAÇÃO E DEDUÇÃO FICAM DE FORA, e não por esquecimento: a primeira nasce 'fixo' e
    * o Select não tem opção vazia; a segunda pode ser legitimamente zero.
    */
-  const impedimento = !safraId ? 'Escolha a safra do grão.'
+  const impedimento = precisaLocal && !localId ? 'Escolha o local de estoque.'
+    : !safraId ? 'Escolha a safra do grão.'
     : !cultura ? 'Escolha a cultura vendida.'
       : !data ? 'Informe a data da venda.'
         : !(totais.bruto > 0) ? 'Lance ao menos uma classe com sacas e preço.'
@@ -223,6 +228,7 @@ export function BarterVendaModal({
       valor_bruto: totais.bruto,
       descontos: totais.deducoes,
       valor_liquido: totais.liquido,
+      local_estoque_id: localId || null,
       /* Só entra o que tem saca: classe zerada não é venda. */
       entregas: calculadas.filter(e => e.sacas > 0).map(e => ({
         classe_aflatoxina: e.classe,
@@ -293,6 +299,9 @@ export function BarterVendaModal({
               <Label className="text-[10px]">Data da venda <span className="text-destructive">*</span></Label>
               <DatePicker value={data} onChange={v => setData(v || hoje())} className="mt-0.5" />
             </div>
+            {/* ⚠ "SAI DE" ENTRA NO SLOT AO LADO DE PRECIFICAÇÃO, na grade de 4 que já existia —
+                com 2+ locais ele ocupa a quarta coluna; com um, o campo não existe e a grade é
+                a de sempre. */}
             <div>
               <Label className="text-[10px]">Precificação</Label>
               <Select value={precificacao} onValueChange={setPrecificacao}>
@@ -305,6 +314,8 @@ export function BarterVendaModal({
                 </SelectContent>
               </Select>
             </div>
+            <LocalEstoqueSelect clienteId={clienteId} value={localId} onChange={setLocalId}
+              rotulo="Sai de" />
           </div>
 
           {/* ── AS ENTREGAS POR CLASSE ── */}

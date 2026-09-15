@@ -43,6 +43,7 @@ import { labelDaClasse, corDaClasse } from '@/lib/agri/barterVenda';
 import type { EstoqueClasse, LancamentoSubstituivel, VendaGrao } from '@/hooks/useEstoqueGraos';
 import { ComposicaoLeitura, DeducoesLeitura, ParcelasLeitura } from '@/components/agri/VendaGraosLeitura';
 import { ConfirmarComMotivo } from '@/components/ui/confirmar-com-motivo';
+import { LocalEstoqueSelect, useRegraLocalEstoque } from '@/components/agri/LocalEstoqueSelect';
 /* ⚠ O VOCABULARIO DE DOCUMENTO E' O DO FINANCEIRO, IMPORTADO — nao uma lista nova aqui.
    `TIPOS_DOCUMENTO` e' a mesma constante que o `LancamentoV2Dialog` usa no seletor de tipo, e
    e' ela que define o que o banco aceita em `tipo_documento`. Uma copia local divergiria no
@@ -65,6 +66,8 @@ export interface VendaGraosPayload {
     data_pagamento: string | null; conta_id: string | null;
   }>;
   observacoes: string | null;
+  /** De que local o grao sai. `null` = o banco resolve (cliente com um local so). */
+  local_estoque_id: string | null;
   /** Numero do documento da venda (NF, romaneio, simulacao). `null` = sem documento. */
   documento: string | null;
   /** Um dos `TIPOS_DOCUMENTO`. So' existe com documento — a RPC ignora tipo sem numero. */
@@ -224,6 +227,7 @@ export function VendaGraosModal({
   const [abaAntesDeEditar, setAbaAntesDeEditar] = useState<'composicao' | 'deducoes' | 'recebimento' | 'comprador' | 'substituir'>('composicao');
   const compradorRef = useRef<HTMLDivElement>(null);
   const leitura = modoAtual === 'visualizar';
+  const { precisaEscolher: precisaLocal } = useRegraLocalEstoque(clienteId);
   const corrigindo = modoAtual === 'corrigir';
   /* ⚠ `criando` PASSA A SIGNIFICAR "O FORMULÁRIO ESTÁ MONTADO", e corrigir também monta — é o
      mesmo formulário, preenchido. Quem precisa distinguir os dois usa `corrigindo`. */
@@ -265,6 +269,7 @@ export function VendaGraosModal({
   const [compradorId, setCompradorId] = useState('');
   const [data, setData] = useState(() => new Date().toISOString().slice(0, 10));
   const [obs, setObs] = useState('');
+  const [localId, setLocalId] = useState('');
   const [documento, setDocumento] = useState('');
   const [tipoDoc, setTipoDoc] = useState<TipoDocumento | ''>('');
   const [substituir, setSubstituir] = useState<Set<string>>(new Set());
@@ -355,6 +360,7 @@ export function VendaGraosModal({
     setCriterio('preco'); setValorTotal('');
     setAbaAntesDeEditar('composicao');
     setDocumento(''); setTipoDoc('');
+    setLocalId('');
     /* ⚠ VER E EDITAR PREENCHEM O QUE A RPC DE EDIÇÃO ACEITA — comprador, data e observações. O
        resto do formulário nem é montado nesses modos: são as telas de leitura. */
     if (venda) {
@@ -374,6 +380,10 @@ export function VendaGraosModal({
       /* ⚠ O DOCUMENTO VOLTA DESDE O VENDA-11: `fn_vendas_graos` passou a devolvê-lo (do primeiro
          lançamento de receita que tenha um). Antes o campo nascia vazio e a venda corrigida
          perdia o papel da original sem ninguém notar — havia um aviso âmbar no lugar. */
+      /* ⚠ O LOCAL DA VENDA GRAVADA NÃO VOLTA: `fn_vendas_graos` não devolve `local_estoque_id`
+         das entregas (conferido no `prosrc` — `itens[]` traz classe, sacas, preço e valor). Com
+         um local só é irrelevante; com dois, quem corrige escolhe de novo, e o rodapé trava até
+         escolher. Sai do branco quando a RPC de leitura devolver o campo. */
       setDocumento(venda.numero_documento ?? '');
       setTipoDoc((venda.tipo_documento as TipoDocumento | null) ?? '');
       setItens(o => {
@@ -545,7 +555,8 @@ export function VendaGraosModal({
     })));
   };
 
-  const impedimento = vendidas <= 0 ? `Informe quantas ${unidade === 't' ? 'toneladas' : 'sacas'} vender.`
+  const impedimento = precisaLocal && !localId ? 'Escolha o local de estoque.'
+    : vendidas <= 0 ? `Informe quantas ${unidade === 't' ? 'toneladas' : 'sacas'} vender.`
     : excede ? 'Há classe acima do saldo em estoque.'
       : bruto <= 0 ? (criterio === 'valor' ? 'Informe o valor total do documento.'
         : criterio === 'linha' ? 'Informe o valor em R$ de cada classe que está vendendo.'
@@ -593,6 +604,7 @@ export function VendaGraosModal({
       /* ⚠ O TIPO SÓ VIAJA COM O NÚMERO, espelhando a RPC: ela grava `tipo_documento` só quando
          `nullif(btrim(p_documento),'')` não é nulo. Mandar um tipo sozinho seria classificar
          um documento que não existe. */
+      local_estoque_id: localId || null,
       documento: documento.trim() || null,
       tipo_documento: documento.trim() ? (tipoDoc || 'Outros') : null,
       substituir: substituir.size > 0 ? [...substituir] : null,
@@ -714,7 +726,14 @@ export function VendaGraosModal({
             ) : (
             <div className="flex h-full min-h-0 flex-col gap-1.5 px-3 py-2">
               <div className="flex flex-wrap items-end justify-between gap-2">
-                <p className="text-[11px] text-muted-foreground">{rotuloCulturaUnidade(cultura)}</p>
+                {/* ⚠ "SAI DE" FICA À ESQUERDA DO TOGGLE, na linha que já existia — o rótulo da
+                    cultura encolhe para caber, e nem ele nem o toggle mudam de lugar. O campo só
+                    existe com 2+ locais; com um, esta linha é a de sempre. */}
+                <div className="flex min-w-0 flex-wrap items-end gap-2">
+                  <p className="text-[11px] text-muted-foreground">{rotuloCulturaUnidade(cultura)}</p>
+                  <LocalEstoqueSelect clienteId={clienteId} value={localId} onChange={setLocalId}
+                    rotulo="Sai de" className="w-[190px]" />
+                </div>
                 <div className="flex h-8 w-fit overflow-hidden rounded-md border">
                   {([['preco', 'Preço por saca'], ['linha', 'Valor por linha'], ['valor', 'Valor total']] as const).map(([v, r]) => (
                     <button key={v} type="button" onClick={() => trocarCriterio(v)}

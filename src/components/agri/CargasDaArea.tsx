@@ -50,6 +50,9 @@ const doBanco = (r: ColheitaRow): CargaForm => ({
   pesoFazendaKg: texto(r.peso_fazenda_kg),
   ticketBalanca: r.ticket_balanca ?? '',
   nfProdutor: r.nf_produtor ?? '',
+  /* ⚠ REABRE COM O LOCAL GRAVADO — a coluna é NOT NULL desde o EL-02, então toda carga tem um.
+     Com um local só o campo nem aparece; com dois, ele mostra onde a carga entrou. */
+  localEstoqueId: (r as { local_estoque_id?: string | null }).local_estoque_id ?? '',
   filial: r.filial ?? '',
   pesoVerdeKg: texto(r.peso_verde_kg),
   pesoSecoKg: texto(r.peso_seco_kg),
@@ -515,6 +518,7 @@ export function CargasDaArea({
         onChange={editar}
         onFechar={() => setForm(null)}
         onSalvar={() => { void gravar(); }}
+              clienteId={clienteId}
       />
     </div>
   );

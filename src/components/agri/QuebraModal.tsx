@@ -20,6 +20,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { LocalEstoqueSelect, useRegraLocalEstoque } from '@/components/agri/LocalEstoqueSelect';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -37,6 +38,8 @@ import { TH_CINZA as TH, CINZA_CABECALHO } from '@/lib/idiomaVisual';
 /** O que o modal devolve para quem chama a RPC — uma baixa por classe. */
 export interface QuebraPayload {
   data: string;
+  /** `null` = o banco resolve (cliente com um local só). */
+  local_estoque_id: string | null;
   motivo: string;
   observacoes: string | null;
   itens: Array<{ classe: string; quantidade: number }>;
@@ -62,7 +65,7 @@ export const MOTIVOS = [
 ] as const;
 
 export function QuebraModal({
-  aberto, onFechar, onRegistrar, salvando, estoque, cultura, safraRotulo,
+  aberto, onFechar, onRegistrar, salvando, estoque, cultura, safraRotulo, clienteId,
 }: {
   aberto: boolean;
   onFechar: () => void;
@@ -72,8 +75,16 @@ export function QuebraModal({
   estoque: readonly EstoqueClasse[];
   cultura: string;
   safraRotulo: string;
+  clienteId: string | null | undefined;
 }) {
   const [data, setData] = useState(() => new Date().toISOString().slice(0, 10));
+  const [localId, setLocalId] = useState('');
+  const { precisaEscolher, ativos } = useRegraLocalEstoque(clienteId);
+  /* ⚠ O AVISO É SÓ PARA LOCAL DE TERCEIRO (spec 8b): na cooperativa a perda de armazenagem chega
+     pelo extrato de depósito, e lançar aqui o que o extrato vai trazer contaria a mesma saca duas
+     vezes. Quebra por evento — um caminhão que virou, um lote molhado — continua valendo, e é
+     isso que a frase autoriza. */
+  const localEhTerceiro = ativos.find(l => l.id === localId)?.tipo === 'terceiro';
   const [motivo, setMotivo] = useState('');
   const [observacoes, setObservacoes] = useState('');
   /** `classe -> quantidade digitada`, em TEXTO pt-BR — é o `CampoNumero` que preserva "1.234,5". */
@@ -122,7 +133,8 @@ export function QuebraModal({
    * venda. A ordem é a do PREENCHIMENTO, não a da gravidade: quem está montando a baixa quer saber
    * o PRÓXIMO passo, não o pior problema.
    */
-  const impedimento = totais.baixadas <= 0 ? `Informe quanto baixar (${unidade}).`
+  const impedimento = precisaEscolher && !localId ? 'Escolha o local de estoque.'
+    : totais.baixadas <= 0 ? `Informe quanto baixar (${unidade}).`
     : totais.excede ? 'Há classe acima do saldo em estoque.'
       : !data ? 'Informe a data da quebra.'
         : !motivo ? 'Escolha o motivo da quebra.'
@@ -132,6 +144,9 @@ export function QuebraModal({
     if (impedimento) return;
     onRegistrar({
       data,
+      /* ⚠ SÓ MANDA QUANDO HÁ ESCOLHA: com um local, `null` faz o banco resolver — e a chamada
+         fica igual à de antes deste PR. */
+      local_estoque_id: localId || null,
       motivo,
       /* ⚠ VAZIO VIRA `null`, não string vazia: a coluna é opcional, e `''` gravaria uma observação
          que ninguém escreveu. */
@@ -239,6 +254,10 @@ export function QuebraModal({
               <Label className="text-[10px]">Data da quebra <span className="text-destructive">*</span></Label>
               <DatePicker value={data} onChange={setData} className="mt-0.5" />
             </div>
+            {/* ⚠ O CAMPO SÓ EXISTE COM 2+ LOCAIS — o componente decide, não este modal. Ele entra
+                no slot ao lado da data, dentro da grade que já havia: nada muda de lugar. */}
+            <LocalEstoqueSelect clienteId={clienteId} value={localId} onChange={setLocalId}
+              rotulo="Local" />
             <div>
               <Label className="text-[10px]">Motivo <span className="text-destructive">*</span></Label>
               <Select value={motivo} onValueChange={setMotivo}>

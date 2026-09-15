@@ -18,6 +18,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { LocalEstoqueSelect, useRegraLocalEstoque, nomeDoLocal } from '@/components/agri/LocalEstoqueSelect';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -164,7 +165,7 @@ function Par({ rotulo, valor, forte }: { rotulo: string; valor: string; forte?: 
 
 export function CargaModal({
   aberto, form, cultura, talhaoRotulo, safraRotulo, fazendaNome, salvando,
-  areas, areaId, onAreaChange, onChange, onFechar, onSalvar,
+  areas, areaId, onAreaChange, onChange, onFechar, onSalvar, clienteId,
 }: {
   aberto: boolean;
   /** `null` quando não há carga aberta — o modal não monta. */
@@ -175,6 +176,7 @@ export function CargaModal({
   safraRotulo: string;
   fazendaNome: string | null;
   salvando: boolean;
+  clienteId: string | null | undefined;
   /**
    * AS ÁREAS ENTRE AS QUAIS A CARGA PODE ANDAR — PR-TALHAO-NO-MODAL-12.
    *
@@ -191,6 +193,13 @@ export function CargaModal({
   onFechar: () => void;
   onSalvar: () => void;
 }) {
+  /* ⚠ A FILIAL DEIXA DE SER DIGITADA e passa a vir do `codigo_externo` do local (spec 3): era
+     texto livre, e a mesma filial da cooperativa aparecia com duas grafias — foi um dos motivos
+     do EL-01 existir. Com um local só ela continua vindo do único; com dois, segue o escolhido. */
+  const { ativos, precisaEscolher: precisaLocal, locais } = useRegraLocalEstoque(clienteId);
+  const localDaCarga = form?.localEstoqueId || (ativos.length === 1 ? ativos[0].id : '');
+  const filialDoLocal = locais.find(l => l.id === localDaCarga)?.codigo_externo ?? '';
+
   if (!form) return null;
 
   const verde = num(form.pesoVerdeKg);
@@ -347,6 +356,10 @@ export function CargaModal({
                   <DatePicker value={form.dataColheita} onChange={v => onChange('dataColheita', v)}
                     className="mt-0.5" />
                 </div>
+                {/* ⚠ "LOCAL DE ENTRADA" AO LADO DA DATA, dentro da grade de quatro que já existia.
+                    Só existe com 2+ locais; com um, a grade é a de sempre. */}
+                <LocalEstoqueSelect clienteId={clienteId} value={form.localEstoqueId}
+                  onChange={v => onChange('localEstoqueId', v)} rotulo="Local de entrada" />
                 {/* ⚠ `type="time"` É NATIVO E ESTÁ NA MIRA DO GATE DE UI — mas o gate cobre
                     `type="date"` e `<select>`, e não existe componente de hora na casa. Um
                     campo de texto livre aceitaria "14h55" e "2:55 pm", que o Postgres recusa
@@ -366,7 +379,25 @@ export function CargaModal({
               <div className="grid grid-cols-[1fr_1fr_1.2fr] gap-2">
                 <Campo rotulo="Ticket balança" valor={form.ticketBalanca} onChange={v => onChange('ticketBalanca', v)} />
                 <Campo rotulo="NF produtor" valor={form.nfProdutor} onChange={v => onChange('nfProdutor', v)} />
-                <Campo rotulo="Filial" valor={form.filial} onChange={v => onChange('filial', v)} />
+                {/* ⚠⚠ EXIBIDA, NÃO DIGITADA — e o que ela mostra tem uma ordem. Era texto livre, e
+                    a MESMA filial da cooperativa foi gravada de duas formas nas 86 cargas de hoje
+                    ("0136" e "0136 - Bataguassu"): foi um dos motivos de o EL-01 existir.
+                    ⚠ O GRAVADO GANHA DO DERIVADO quando existe, e isso não é preferência: a coluna
+                    `filial` "fica como historico" (comentário da própria coluna no EL-02), e
+                    mostrar "0136" numa carga cujo banco diz "0136 - Bataguassu" seria a tela
+                    discordando do dado. Carga nova, sem filial gravada, mostra o `codigo_externo`
+                    do local — que é o que ela passa a significar.
+                    ⚠ NÃO SE ESCREVE MAIS NELA: o campo travado deixa `form.filial` intacto, então
+                    carga antiga reeditada regrava o que já tinha e carga nova grava nulo. A coluna
+                    para de crescer com grafias novas sem perder as que tem. */}
+                <div>
+                  <Label className="text-[10px]">Filial</Label>
+                  <Input value={form.filial || filialDoLocal || '—'} disabled readOnly
+                    title={form.filial
+                      ? 'Gravado nesta carga (histórico)'
+                      : localDaCarga ? `Do local ${nomeDoLocal(locais, localDaCarga)}` : 'Escolha o local de entrada'}
+                    className="mt-0.5 h-8 border-border/60 bg-muted text-[12px] text-muted-foreground" />
+                </div>
               </div>
               <div>
                 <Label className="text-[10px]">Observações</Label>

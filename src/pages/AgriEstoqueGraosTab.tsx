@@ -387,6 +387,7 @@ export function AgriEstoqueGraosTab() {
    * fecham e lançamento conciliado na substituição. Os outros vão crus — são nomeados e legíveis.
    */
   const erroDaVendaNova = (msg: string) => (
+    erroDeLocal(msg) ??
     /PARCELAS_NAO_FECHAM_LIQUIDO/.test(msg)
       ? 'As parcelas não somam o líquido da venda.'
       : /SUBSTITUIR_LANCAMENTO_CANCELADO_OU_CONCILIADO/.test(msg)
@@ -407,6 +408,7 @@ export function AgriEstoqueGraosTab() {
            `supabase-js` manda um objeto e o PostgREST casa por nome de parâmetro. Fosse
            posicional, acrescentar dois argumentos teria trocado o significado de todos. */
         p_documento: p.documento, p_tipo_documento: p.tipo_documento,
+        ...(p.local_estoque_id ? { p_local_id: p.local_estoque_id } : {}),
       });
       if (error) { toast.error(erroDaVendaNova(error.message ?? '')); return; }
       const r = (data ?? {}) as { lancamentos?: unknown[]; liquido?: number };
@@ -437,6 +439,20 @@ export function AgriEstoqueGraosTab() {
   const [modalQuebra, setModalQuebra] = useState(false);
   const [salvandoQuebra, setSalvandoQuebra] = useState(false);
 
+  /**
+   * OS ERROS DE LOCAL, EM PORTUGUÊS — a mesma tradução para as quatro escritas.
+   *
+   * ⚠ ELES SÃO NOMEADOS NO BANCO de propósito, e é isso que permite traduzi-los sem adivinhar:
+   * o texto cru diz "LOCAL_ESTOQUE_OBRIGATORIO: o cliente tem 2 locais ativos", que é preciso e
+   * ilegível. A frase diz o que fazer.
+   */
+  const erroDeLocal = (msg: string) => (
+    /LOCAL_ESTOQUE_OBRIGATORIO/.test(msg) ? 'Escolha o local de estoque.'
+      : /ACIMA_DO_SALDO_DO_LOCAL/.test(msg) ? 'Esse local não tem esse saldo nessa classe.'
+        : /LOCAL_ESTOQUE_INVALIDO/.test(msg) ? 'Local de estoque inválido.'
+          : /LOCAL_ESTOQUE_NAO_CADASTRADO/.test(msg) ? 'Cadastre um local de estoque antes.'
+            : null);
+
   const registrarQuebra = async (p: QuebraPayload) => {
     if (!clienteId || !safraId || !cultura) return;
     setSalvandoQuebra(true);
@@ -447,13 +463,16 @@ export function AgriEstoqueGraosTab() {
           p_cliente: clienteId, p_safra_id: safraId, p_cultura: cultura,
           p_classe: it.classe, p_quantidade: it.quantidade, p_data: p.data,
           p_motivo: p.motivo, p_observacoes: p.observacoes,
+          /* ⚠ A CHAVE SÓ VAI QUANDO HÁ ESCOLHA (spread condicional): omitida, o PostgREST usa o
+             `default null` e a `agri_local_estoque_resolver` resolve o único local. */
+          ...(p.local_estoque_id ? { p_local_id: p.local_estoque_id } : {}),
         });
         if (error) {
           /* ⚠ A MENSAGEM DA RPC VAI INTEIRA PARA O TOAST — `QUEBRA_ACIMA_DO_SALDO: 50 > 10` diz
              o que a tela precisaria repetir, e com os números do BANCO, que são os que valem.
              ⚠ E O MODAL FICA ABERTO: o operador corrige a linha e tenta de novo, sem redigitar as
              outras classes. */
-          toast.error(error.message ?? 'Não foi possível registrar a quebra.');
+          toast.error(erroDeLocal(error.message ?? '') ?? error.message ?? 'Não foi possível registrar a quebra.');
           if (gravadas > 0) await queryClient.invalidateQueries({ queryKey: ['estoque-graos'] });
           return;
         }
@@ -616,6 +635,7 @@ export function AgriEstoqueGraosTab() {
         p_descontos: p.descontos, p_parcelas: p.parcelas,
         p_observacoes: p.observacoes, p_substituir: p.substituir,
         p_documento: p.documento, p_tipo_documento: p.tipo_documento,
+        ...(p.local_estoque_id ? { p_local_id: p.local_estoque_id } : {}),
       });
       if (error) { toast.error(erroDaCorrecao(error.message ?? '')); return; }
       const r = (data ?? {}) as { lancamentos?: unknown[] };
@@ -1383,6 +1403,7 @@ export function AgriEstoqueGraosTab() {
         estoque={linhas}
         cultura={cultura}
         safraRotulo={safraRotulo}
+              clienteId={clienteId}
       />
 
       <CotacaoGraosModal

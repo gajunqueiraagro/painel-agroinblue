@@ -160,6 +160,8 @@ export interface CargaForm {
   ticketBalanca: string;
   nfProdutor: string;
   filial: string;
+  /** O local de estoque em que a carga entra. `''` = o banco resolve (um local so). */
+  localEstoqueId: string;
   pesoVerdeKg: string;
   pesoSecoKg: string;
   umidadePct: string;
@@ -190,6 +192,8 @@ export interface CargaPayload {
   ticket_balanca: string | null;
   nf_produtor: string | null;
   filial: string | null;
+  /** So viaja quando ha escolha; ausente, a trigger resolve o unico local. */
+  local_estoque_id?: string;
   peso_verde_kg: number | null;
   peso_seco_kg: number | null;
   umidade_pct: number | null;
@@ -211,7 +215,7 @@ export interface ValidacaoCarga {
 
 export const cargaVazia = (): CargaForm => ({
   id: null, dataColheita: '', horaChegada: '', pesoFazendaKg: '',
-  ticketBalanca: '', nfProdutor: '', filial: '',
+  ticketBalanca: '', nfProdutor: '', filial: '', localEstoqueId: '',
   pesoVerdeKg: '', pesoSecoKg: '', umidadePct: '', aflatoxinaPpb: '', sacasBoas: '',
   graoRocaSacas: '', graoRocaKg: '', rendaLiquidaPct: '', taxaSecagem: '', valorSecagem: '',
   observacoes: '',
@@ -303,6 +307,7 @@ export function validarCarga(form: CargaForm): ValidacaoCarga {
       ticket_balanca: form.ticketBalanca.trim() || null,
       nf_produtor: form.nfProdutor.trim() || null,
       filial: form.filial.trim() || null,
+      ...(form.localEstoqueId ? { local_estoque_id: form.localEstoqueId } : {}),
       peso_verde_kg: verde,
       peso_seco_kg: seco,
       umidade_pct: umidade,
