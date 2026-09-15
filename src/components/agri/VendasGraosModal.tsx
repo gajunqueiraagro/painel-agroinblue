@@ -12,6 +12,10 @@
  * ser longo (comprador, composição) trunca com `title`. Um "1.174.697,05" partido em duas linhas
  * desalinha a coluna inteira e faz o olho somar errado.
  *
+ * ⚠ A LARGURA É A DO MODAL DE VENDER (`max-w-5xl`, 1024px), não mais larga. Duas telas que mostram
+ * a mesma venda e abrem em tamanhos diferentes fazem o operador reancorar o olho a cada clique; e a
+ * régua de fontes é a do A18 — topo em 18px, tabela em 11px, pílula em 10px.
+ *
  * ⚠ CLICAR NA LINHA ABRE A VENDA no `VendaGraosModal` — o mesmo modal de criar, em modo leitura.
  * Um segundo modal de detalhe seria a terceira forma de mostrar a mesma venda.
  */
@@ -39,10 +43,10 @@ const dataCurta = (iso: string | null) => {
 /** Cabeçalho de duas linhas: nome em cima, unidade embaixo. */
 const Th = ({ nome, unidade, esq }: { nome: string; unidade?: string; esq?: boolean }) => (
   <th className={cn(TH, 'whitespace-nowrap align-bottom', esq ? 'text-left' : 'text-right')}>
-    <div className="text-[11px] font-medium normal-case tracking-normal">{nome}</div>
+    <div className="text-[11px] font-medium normal-case leading-[1.15] tracking-normal">{nome}</div>
     {/* ⚠ A UNIDADE MORA NO CABEÇALHO, não em cada célula: repeti-la 20 vezes gasta a largura que
         os números precisam, e o A22 já proíbe número quebrado. */}
-    <div className="text-[10px] font-normal normal-case tracking-normal opacity-70">{unidade || ' '}</div>
+    <div className="text-[10px] font-normal normal-case leading-[1.15] tracking-normal opacity-70">{unidade || ' '}</div>
   </th>
 );
 
@@ -115,25 +119,25 @@ export function VendasGraosModal({
           onKeyDown={e => {
             if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onAbrirVenda(v, 'visualizar'); }
           }}>
-          <td className="whitespace-nowrap px-2 py-1 text-[11px] tabular-nums">{dataCurta(v.data)}</td>
-          <td className="whitespace-nowrap px-2 py-1 text-[11px]">{avulsa ? 'Venda' : 'Barter'}</td>
-          <td className="truncate px-2 py-1 text-[11px]" title={v.comprador ?? ''}>{v.comprador || '—'}</td>
-          <td className="truncate px-2 py-1 text-[10px] text-muted-foreground"
+          <td className="whitespace-nowrap px-2 py-[5px] text-[11px] tabular-nums">{dataCurta(v.data)}</td>
+          <td className="whitespace-nowrap px-2 py-[5px] text-[11px]">{avulsa ? 'Venda' : 'Barter'}</td>
+          <td className="truncate px-2 py-[5px] text-[11px]" title={v.comprador ?? ''}>{v.comprador || '—'}</td>
+          <td className="truncate px-2 py-[5px] text-[10px] text-muted-foreground"
             title={v.ativo ? comp : `${compCompleta} — ${dataCurta(v.cancelado_em)} ${v.cancelado_por || ''}`}>
             {compCompleta}
           </td>
-          <td className="whitespace-nowrap px-2 py-1 text-right text-[11px] tabular-nums">{formatNum(v.sacas, 2)}</td>
-          <td className="whitespace-nowrap px-2 py-1 text-right text-[11px] tabular-nums">
+          <td className="whitespace-nowrap px-2 py-[5px] text-right text-[11px] tabular-nums">{formatNum(v.sacas, 2)}</td>
+          <td className="whitespace-nowrap px-2 py-[5px] text-right text-[11px] tabular-nums">
             {precoMedio > 0 ? formatNum(precoMedio, 2) : '—'}
           </td>
-          <td className="whitespace-nowrap px-2 py-1 text-right text-[11px] font-medium tabular-nums">{formatMoeda(v.bruto)}</td>
-          <td className="whitespace-nowrap px-2 py-1 text-right text-[11px] tabular-nums">
+          <td className="whitespace-nowrap px-2 py-[5px] text-right text-[11px] font-medium tabular-nums">{formatMoeda(v.bruto)}</td>
+          <td className="whitespace-nowrap px-2 py-[5px] text-right text-[11px] tabular-nums">
             {v.deducoes > 0 ? formatMoeda(v.deducoes) : '—'}
           </td>
-          <td className="whitespace-nowrap px-2 py-1 text-right text-[11px] font-medium tabular-nums">{formatMoeda(v.liquido)}</td>
-          <td className="whitespace-nowrap px-2 py-1">
+          <td className="whitespace-nowrap px-2 py-[5px] text-right text-[11px] font-medium tabular-nums">{formatMoeda(v.liquido)}</td>
+          <td className="whitespace-nowrap px-2 py-[5px]">
             <div className="flex items-center justify-end gap-[11px] no-underline">
-              <span className={cn('rounded px-1.5 py-0.5 text-[10px] font-medium no-underline', st.cor)}>
+              <span className={cn('rounded px-1.5 py-[1px] text-[10px] font-medium no-underline', st.cor)}>
                 {st.texto}
               </span>
               {v.ativo && avulsa && (
@@ -173,7 +177,7 @@ export function VendasGraosModal({
 
   return (
     <Dialog open={aberto} onOpenChange={o => { if (!o) onFechar(); }}>
-      <DialogContent className="max-w-6xl gap-0 overflow-hidden p-0 [&>button.absolute]:hidden">
+      <DialogContent className="max-w-5xl gap-0 overflow-hidden p-0 [&>button.absolute]:hidden">
         <div className="flex items-start gap-2 bg-primary px-4 py-2.5 text-primary-foreground">
           <div className="min-w-0">
             <h2 className="truncate text-[15px] font-bold leading-tight">
@@ -194,16 +198,21 @@ export function VendasGraosModal({
 
         <div className="min-w-0 space-y-2 px-3 py-2">
           <div className="grid grid-cols-4 gap-3 rounded-md border bg-muted/20 px-3.5 py-[11px]">
+            {/* ⚠ A UNIDADE NÃO ENTRA NO NÚMERO. Ela é 11px muted ao lado do valor de 18px — o mesmo
+                idioma do `Cartao`, com `posicaoUnidade` porque "R$" vem antes e "sc 25kg" depois.
+                Unidade no mesmo corpo do número rouba a largura do número e desalinha os quatro. */}
             {([
-              ['Entregue ativo', `${formatNum(topo.entregue, 2)} ${unidade}`],
-              ['Bruto recebido', formatMoeda(topo.bruto)],
-              ['Deduções', formatMoeda(topo.deducoes)],
-              ['Vendas', `${ativas.length} ativa${ativas.length === 1 ? '' : 's'} · ${canceladas.length} cancelada${canceladas.length === 1 ? '' : 's'}`],
-            ] as const).map(([rot, val]) => (
+              ['Entregue ativo', formatNum(topo.entregue, 2), unidade, 'depois'],
+              ['Bruto recebido', formatNum(topo.bruto, 2), 'R$', 'antes'],
+              ['Deduções', formatNum(topo.deducoes, 2), 'R$', 'antes'],
+              ['Vendas', String(ativas.length), `ativa${ativas.length === 1 ? '' : 's'} · ${canceladas.length} cancelada${canceladas.length === 1 ? '' : 's'}`, 'depois'],
+            ] as const).map(([rot, val, uni, pos]) => (
               <div key={rot} className="min-w-0">
                 <div className="text-[11px] font-normal leading-none text-muted-foreground">{rot}</div>
-                <div className="mt-1 truncate whitespace-nowrap text-[20px] font-medium leading-none tabular-nums">
-                  {val}
+                <div className="mt-1 flex min-w-0 items-baseline gap-1 whitespace-nowrap leading-none">
+                  {pos === 'antes' && <span className="shrink-0 text-[11px] text-muted-foreground">{uni}</span>}
+                  <span className="truncate text-[18px] font-medium tabular-nums">{val}</span>
+                  {pos === 'depois' && <span className="truncate text-[11px] text-muted-foreground">{uni}</span>}
                 </div>
               </div>
             ))}
@@ -212,9 +221,18 @@ export function VendasGraosModal({
           {/* ⚠ ROLA SÓ A LISTA (A28), e o cabeçalho fica: `sticky top-0` dentro do scroller. */}
           <div className="max-h-[56vh] min-w-0 overflow-y-auto rounded-md border">
             <table className="w-full table-fixed border-collapse">
+              {/* ⚠ LARGURA FIXA EM px NAS COLUNAS DE NÚMERO E SITUAÇÃO, e porcentagem em nenhuma.
+                  A Situação precisa de 164px medidos — "Programado 0/2" (90) + 11 + ícone (18) +
+                  11 + ícone (18) + 16 de padding — e o `justify-end` faz o excedente transbordar
+                  para a ESQUERDA: com 11% de uma tabela estreita a pílula entrava 61px por cima
+                  do Líquido. Porcentagem encolhe junto com o modal e a sobreposição volta; px não.
+                  ⚠ E AS DUAS COLUNAS DE TEXTO FICAM SEM LARGURA de propósito: no `table-fixed` elas
+                  dividem o que sobra, então são elas que absorvem o aperto, truncando com `title`.
+                  Abaixo de ~760px de modal elas chegam a zero e nasce rolagem horizontal — que é o
+                  que se quer, porque número escondido é pior que número longe. */}
               <colgroup>
-                {['7%', '8%', '16%', '19%', '9%', '9%', '11%', '9%', '11%', '11%'].map((w, i) => (
-                  <col key={i} style={{ width: w }} />
+                {['70px', '50px', '', '', '70px', '90px', '100px', '90px', '110px', '168px'].map((w, i) => (
+                  <col key={i} style={w ? { width: w } : undefined} />
                 ))}
               </colgroup>
               <thead className="sticky top-0 z-10">
@@ -256,23 +274,23 @@ export function VendasGraosModal({
                     {ativas.map(v => <Linha key={v.id} v={v} />)}
                     {ativas.length > 0 && (
                       <tr className={cn(CINZA_CABECALHO, 'text-white')}>
-                        <td className="whitespace-nowrap px-2 py-1 text-[11px] font-bold" colSpan={4}>Total ativo</td>
-                        <td className="whitespace-nowrap px-2 py-1 text-right text-[11px] font-bold tabular-nums">
+                        <td className="whitespace-nowrap px-2 py-[5px] text-[11px] font-medium" colSpan={4}>Total ativo</td>
+                        <td className="whitespace-nowrap px-2 py-[5px] text-right text-[11px] font-medium tabular-nums">
                           {formatNum(topo.entregue, 2)}
                         </td>
                         {/* ⚠ PREÇO MÉDIO NÃO TEM TOTAL: média de médias não é preço — a mesma regra
                             das colunas de R$/sc da tabela de estoque. */}
-                        <td className="px-2 py-1" />
-                        <td className="whitespace-nowrap px-2 py-1 text-right text-[11px] font-bold tabular-nums">
+                        <td className="px-2 py-[5px]" />
+                        <td className="whitespace-nowrap px-2 py-[5px] text-right text-[11px] font-medium tabular-nums">
                           {formatMoeda(topo.bruto)}
                         </td>
-                        <td className="whitespace-nowrap px-2 py-1 text-right text-[11px] font-bold tabular-nums">
+                        <td className="whitespace-nowrap px-2 py-[5px] text-right text-[11px] font-medium tabular-nums">
                           {formatMoeda(topo.deducoes)}
                         </td>
-                        <td className="whitespace-nowrap px-2 py-1 text-right text-[11px] font-bold tabular-nums">
+                        <td className="whitespace-nowrap px-2 py-[5px] text-right text-[11px] font-medium tabular-nums">
                           {formatMoeda(topo.liquido)}
                         </td>
-                        <td className="px-2 py-1" />
+                        <td className="px-2 py-[5px]" />
                       </tr>
                     )}
                     {canceladas.map(v => <Linha key={v.id} v={v} />)}
