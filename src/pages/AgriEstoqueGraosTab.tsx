@@ -163,20 +163,40 @@ export function AgriEstoqueGraosTab() {
   );
 
   /**
-   * O RECORTE — unidade e safra, logo acima da tabela.
+   * O RECORTE — a legenda da tabela: cultura, unidade e safra.
    *
    * ⚠ ELE SAIU DO BREADCRUMB, não sumiu. O título responde "onde estou" e a resposta é um caminho:
-   * Estoque de Grãos › Amendoim. A unidade não é lugar — é o RECORTE do que a tabela abaixo
-   * mostra, e é ao lado dela que ela faz trabalho.
-   * ⚠ A SAFRA SAIU DAQUI TAMBÉM, e por outro motivo: ela já está no seletor do topo, a dois
-   * centímetros. Repeti-la aqui gastava a linha com o que a tela já dizia.
+   * Estoque de Grãos › Amendoim. Unidade e safra não são lugar — são o RECORTE do que a tabela
+   * abaixo mostra, e é ao lado dela que fazem trabalho.
+   * ⚠ A SAFRA VOLTOU. Ela saiu daqui um PR atrás com o argumento de que o seletor do topo já a
+   * mostrava; na tela não se sustentou — quem lê a tabela olha para a tabela, e "de que safra é
+   * este saldo" é pergunta da legenda, não do controle que fica dois blocos acima. Decisão do
+   * Gabriel, 15/09/2026.
    * ⚠ E É POR ISSO QUE ELE NÃO EXISTE EM "TODAS": lá a tabela tem uma linha por cultura, cada uma
    * com a sua unidade em coluna própria, e não há um recorte único a declarar.
-   * ⚠ O TEXTO VEM DE `rotuloCulturaUnidade`, a MESMA função que o modal de venda e o do balanço
-   * usam — três textos escritos à mão é a lição do `Cartao` e do cinza do cabeçalho.
+   * ⚠ A CULTURA E A UNIDADE VÊM DE `rotuloCulturaUnidade`, a MESMA função que o modal de venda e o
+   * do balanço usam — três textos escritos à mão é a lição do `Cartao` e do cinza do cabeçalho. A
+   * seta e a safra são decoração DESTA tela e não entram no helper: nos modais não há "Todas" para
+   * onde voltar, e o contexto da safra já está no cabeçalho deles.
+   * ⚠ A SETA É O SEGUNDO CAMINHO DE VOLTA, ao lado do "Estoque de Grãos" clicável do título. Dois
+   * caminhos para o mesmo gesto não é duplicação: o operador que está lendo a tabela tem a mão
+   * aqui embaixo, e subir até o título para voltar é o tipo de viagem que faz ninguém voltar.
+   * ⚠ SÓ A SETA É ALVO. O resto é texto — se a linha inteira clicasse, ler a legenda viraria
+   * navegar sem querer.
+   * ⚠ `-mb-1.5` COLA NA TABELA: o container é `space-y-2` (8px entre irmãos), e uma legenda a 8px
+   * da tabela que ela legenda flutua no meio do caminho. Com −6px sobram 2px — perto o bastante
+   * para o olho ler as duas como uma coisa só.
    */
   const rotuloRecorte = verTodas ? null : (
-    <p className="text-[11px] text-muted-foreground">{rotuloCulturaUnidade(cultura)}</p>
+    <p className="-mb-1.5 text-[11px] text-foreground">
+      <button type="button" onClick={() => setCultura(TODAS)}
+        title="Voltar para todas as culturas"
+        className="mr-1 rounded px-0.5 hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+        ‹
+      </button>
+      {rotuloCulturaUnidade(cultura)}
+      {safraRotulo && <> · Safra {safraRotulo}</>}
+    </p>
   );
 
   const { linhas, carregando, erro } = useEstoqueGraos(
