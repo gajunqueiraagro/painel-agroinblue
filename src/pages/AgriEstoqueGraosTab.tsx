@@ -20,7 +20,7 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { Plus, TrendingDown, Loader2, AlertTriangle } from 'lucide-react';
+import { Plus, TrendingDown, Loader2, AlertTriangle, LineChart } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { useSafrasLavoura, useTalhoesDaSafra } from '@/hooks/useAreaPlantada';
@@ -28,6 +28,8 @@ import { labelDaCultura } from '@/lib/agri/areaPlantada';
 import { labelDaClasse, corDaClasse } from '@/lib/agri/barterVenda';
 import { useEstoqueGraos, totaisDoEstoque, useEstoqueGraosResumo } from '@/hooks/useEstoqueGraos';
 import { VendaAvulsaModal, type VendaAvulsaPayload } from '@/components/agri/VendaAvulsaModal';
+import { CotacaoGraosModal, type CotacaoGraosPayload } from '@/components/agri/CotacaoGraosModal';
+import { formatIsoToBr } from '@/components/ui/date-picker';
 import { useFinanceiroV2 } from '@/hooks/useFinanceiroV2';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -39,6 +41,18 @@ import { toast } from 'sonner';
  * assunto.
  */
 const TH = 'bg-[#3a4864] px-2 py-1 text-[9px] font-semibold uppercase tracking-wide text-white';
+
+/**
+ * A DIVISA ENTRE O PREÇO DE VENDA E O DE MERCADO.
+ *
+ * ⚠ ELA NÃO É ENFEITE: sem a linha, oito colunas de número à direita leem como uma sequência só, e
+ * a soma mental de "Valor" com "Valor a mercado" é o erro natural de quem varre a tabela — os dois
+ * são o MESMO grão avaliado de duas maneiras, nunca duas parcelas.
+ * ⚠ SÃO DUAS CLASSES PORQUE SÃO DOIS FUNDOS: no cabeçalho e no total o fundo é o azul escuro, e um
+ * cinza de tabela desapareceria nele; no corpo o fundo é branco, e o branco translúcido sumiria.
+ */
+const SEP_TH = 'border-l-2 border-white/40';
+const SEP_TD = 'border-l-2 border-slate-300';
 
 /**
  * ⚠ O VALOR SENTINELA DO "TODAS", e ele NÃO pode ser string vazia: o `Select` do Radix trata
@@ -158,6 +172,37 @@ export function AgriEstoqueGraosTab() {
     }
   };
 
+  /* ───────────────────────── A COTAÇÃO DE MERCADO ─────────────────────────
+   * ⚠ ELA NÃO É UM LANÇAMENTO, e por isso não passa pelo financeiro: nada entrou, nada saiu, nada
+   * mudou de mão. É a opinião do mercado sobre o grão que continua no armazém — o outro número da
+   * decisão de vender, ao lado do preço que já se praticou.
+   */
+  const [modalCotacao, setModalCotacao] = useState(false);
+  const [salvandoCotacao, setSalvandoCotacao] = useState(false);
+
+  const registrarCotacao = async (p: CotacaoGraosPayload) => {
+    if (!clienteId || verTodas || !cultura) return;
+    setSalvandoCotacao(true);
+    try {
+      const { data, error } = await (supabase as any).rpc('agri_cotacao_graos_registrar', {
+        p_cliente: clienteId, p_cultura: cultura, p_data: p.data, p_fonte: p.fonte,
+        p_itens: p.itens,
+      });
+      if (error) { toast.error(error.message ?? 'Não foi possível gravar a cotação.'); return; }
+      /* ⚠ O CONTADOR DA RPC É O QUE SE ANUNCIA, não o que se mandou: ela pula item sem preço, e
+         dizer "3 gravadas" quando ela gravou 1 seria a tela mentindo sobre o próprio efeito. */
+      const r = (data ?? {}) as { gravadas?: number };
+      const n = Number(r.gravadas) || 0;
+      toast.success(`Cotação gravada — ${n} ${n === 1 ? 'classe' : 'classes'}.`);
+      setModalCotacao(false);
+      /* ⚠ RECARREGA PELO MESMO MOTIVO DA VENDA: o valor a mercado é DERIVADO da cotação dentro da
+         RPC do estoque. Não há número a atualizar na tela — há uma leitura a refazer. */
+      await queryClient.invalidateQueries({ queryKey: ['estoque-graos'] });
+    } finally {
+      setSalvandoCotacao(false);
+    }
+  };
+
   /* ⚠ A ORDEM DAS CLASSES É A DA QUALIDADE, não a do valor: bom, fora de faixa, refugo. É como o
      produtor pensa o lote, e é a mesma ordem das entregas do barter. */
   const ordem = ['ate_20', 'acima_20', 'roca'];
@@ -168,6 +213,19 @@ export function AgriEstoqueGraosTab() {
 
   /** ⚠ ZERO EM SACAS É DADO ("colheu e entregou tudo"); zero em DINHEIRO é ausência. */
   const dinheiro = (v: number, saldo: number) => (saldo > 0 ? formatMoeda(v) : '—');
+
+  /**
+   * O lado do MERCADO — e ele exige mais que o lado da venda.
+   *
+   * ⚠ SÃO DUAS AUSÊNCIAS DIFERENTES CAINDO NO MESMO "—": não há grão (saldo zero) ou não há preço
+   * (nunca se cotou). A do preço precisa dos DOIS testes, porque nenhum sozinho é fiel: a RPC
+   * devolve `preco_mercado = 0` tanto para "nunca cotada" quanto para uma cotação real de zero, e
+   * `data_mercado` sozinha não distingue essas duas. Exigir data E preço maior que zero é a
+   * mesma regra que o modal de cotação aplica — se as duas telas divergissem, uma mostraria um
+   * preço que a outra chama de ausente.
+   */
+  const temCotacao = (l: { data_mercado: string | null; preco_mercado: number }) =>
+    !!l.data_mercado && l.preco_mercado > 0;
 
   return (
     <div className="w-full space-y-2 p-4 animate-fade-in">
@@ -204,6 +262,19 @@ export function AgriEstoqueGraosTab() {
               </SelectContent>
             </Select>
           </div>
+          {/* ⚠ O BOTÃO SÓ EXISTE NO DETALHE, e não é restrição de tela — é do dado: a cotação é por
+              CULTURA e por classe, e em "Todas" não há cultura a cotar nem classes a listar. Deixá-lo
+              visível e desligado pediria uma explicação para uma ação que ali não faz sentido nenhum.
+              ⚠ E ELE FICA NO TOPO, junto dos seletores, não na barra de baixo: aqueles dois botões
+              MOVIMENTAM grão; este só registra uma opinião de preço. Misturá-los sugeriria que
+              atualizar a cotação mexe no estoque. */}
+          {!verTodas && (
+            <Button size="sm" variant="outline" className="h-8 gap-1 px-2 text-[11px]"
+              title="Registrar o preço de mercado de hoje, por classe"
+              onClick={() => setModalCotacao(true)}>
+              <LineChart className="h-3.5 w-3.5" /> Atualizar cotação
+            </Button>
+          )}
         </div>
       </div>
 
@@ -213,12 +284,32 @@ export function AgriEstoqueGraosTab() {
       {/* ⚠ EM "TODAS" OS CARTÕES SOMAM O RESUMO, não o detalhe: com nenhuma cultura escolhida o
           detalhe por classe nem foi buscado, e somar um array vazio mostraria zero sobre uma
           safra cheia de grão. */}
-      <div className="grid gap-1.5 md:grid-cols-3">
+      {/* ⚠ SÃO TRÊS EM "TODAS" E CINCO NO DETALHE, porque os dois números de mercado só existem no
+          detalhe: a cotação é por classe, e `fn_estoque_graos_resumo` — a RPC do "Todas" — não a
+          lê. Mostrá-los ali como "—" seria oferecer uma resposta que aquela visão não tem como
+          dar, e o operador ficaria procurando onde cotar. */}
+      <div className={cn('grid gap-1.5', verTodas ? 'md:grid-cols-3' : 'md:grid-cols-5')}>
         <Cartao rotulo="Em estoque" unidade="sc"
           valor={formatNum(verTodas ? totalResumo.saldo : t.saldo, 2)} />
-        <Cartao rotulo="Valor estimado" unidade="R$"
+        {/* ⚠ "VALOR DE VENDA" DIZ DE QUE PREÇO SE FALA. Ele se chamava "Valor estimado" enquanto era
+            o único; com o de mercado ao lado, "estimado" não distinguiria os dois — os DOIS são
+            estimativa. O que os separa é a ORIGEM do preço: um já foi praticado, o outro é cotação
+            de hoje. Em "Todas" ele volta a ser "Valor estimado" porque lá continua sendo o único. */}
+        <Cartao rotulo={verTodas ? 'Valor estimado' : 'Valor de venda'} unidade="R$"
           valor={formatNum(verTodas ? totalResumo.valor : t.valor, 2)}
           titulo={formatMoeda(verTodas ? totalResumo.valor : t.valor)} cor="text-success" />
+        {!verTodas && (
+          <Cartao rotulo="Valor a mercado" unidade="R$" valor={formatNum(t.valorMercado, 2)}
+            titulo={formatMoeda(t.valorMercado)} cor="text-success" />
+        )}
+        {/* ⚠ O CARTÃO DA DATA É O QUE DÁ VALIDADE AO OUTRO: "R$ 1,39 mi a mercado" sem dizer de
+            quando é o preço convida a usar uma cotação de três meses atrás numa negociação de hoje.
+            ⚠ "—" QUANDO NUNCA SE COTOU, e o cartão continua na tela: sumir com ele esconderia que
+            existe uma cotação a preencher. */}
+        {!verTodas && (
+          <Cartao rotulo="Cotação de"
+            valor={t.dataMercado ? formatIsoToBr(t.dataMercado) : '—'} />
+        )}
         {/* ⚠ O "% PARADO" NÃO GANHA COR: estoque alto não é bom nem ruim por si — depende do
             preço que o produtor está esperando. Pintá-lo de vermelho seria dar um conselho que
             a tela não tem como sustentar.
@@ -311,7 +402,7 @@ export function AgriEstoqueGraosTab() {
       <div className="overflow-hidden rounded-md border">
         <table className="w-full table-fixed border-collapse">
           <colgroup>
-            {['24%', '14%', '14%', '12%', '13%', '10%', '13%'].map((w, i) => (
+            {['18%', '10%', '10%', '8%', '10%', '10%', '11%', '11%', '12%'].map((w, i) => (
               <col key={i} style={{ width: w }} />
             ))}
           </colgroup>
@@ -322,15 +413,40 @@ export function AgriEstoqueGraosTab() {
               <th className={cn(TH, 'text-right')}>Entregue</th>
               <th className={cn(TH, 'text-right')}>Quebra</th>
               <th className={cn(TH, 'text-right')}>Saldo sc</th>
-              <th className={cn(TH, 'text-right')}>R$ / sc</th>
-              <th className={cn(TH, 'text-right')}>Valor</th>
+              {/* ⚠ OS DOIS GRUPOS SÃO DOIS PREÇOS DIFERENTES SOBRE O MESMO GRÃO, e a borda existe
+                  para que ninguém some as duas colunas de valor. À esquerda, o que JÁ SE VENDEU
+                  (média ponderada das entregas); à direita, o que o mercado paga HOJE. "R$ 1,2 mi"
+                  numa e "R$ 1,39 mi" na outra não são duas parcelas — são duas respostas para a
+                  mesma pergunta, e o operador escolhe qual usar.
+                  ⚠ OS RÓTULOS SÃO CURTOS PORQUE NOVE COLUNAS NÃO CABEM COM NOMES LONGOS, e a conta
+                  é literal: com "R$ / sc venda" e "Valor a mercado" o cabeçalho passava a duas
+                  linhas abaixo de 920px de tabela; com estes, abaixo de 635px. Guardar a unidade no
+                  rótulo quase não ajudava — "Venda R$/sc" só desceria para 872px —, então ela saiu
+                  do cabeçalho e ficou no `title` e na nota do rodapé, que é onde há espaço para
+                  dizer que uma coluna é preço por saca e a outra é o total.
+                  ⚠ E É A BORDA QUE DESAMBIGUA OS DOIS "VALOR": sozinhos, "Valor" e "A mercado" não
+                  diriam de que lado cada um está. O rótulo encurtou porque a divisa carrega o
+                  sentido — tirar a borda e manter estes nomes seria pior que o cabeçalho de duas
+                  linhas. */}
+              <th className={cn(TH, 'text-right')} title="Preço médio por saca já praticado nas entregas">
+                Venda
+              </th>
+              <th className={cn(TH, 'text-right')} title="Saldo × preço médio já praticado">
+                Valor
+              </th>
+              <th className={cn(TH, SEP_TH, 'text-right')} title="Última cotação de mercado por saca">
+                Mercado
+              </th>
+              <th className={cn(TH, 'text-right')} title="Saldo × última cotação de mercado">
+                A mercado
+              </th>
             </tr>
           </thead>
           <tbody>
             {/* ⚠ OS TRÊS ESTADOS SEPARADOS, a lição das listas do barter: uma falha de leitura
                 renderizada como "nenhum grão" afirmaria que não há o que vender. */}
             {erro ? (
-              <tr><td colSpan={7} className="px-2 py-6 text-center">
+              <tr><td colSpan={9} className="px-2 py-6 text-center">
                 <span className="inline-flex items-center gap-1.5 text-[11px] text-destructive">
                   <AlertTriangle className="h-3.5 w-3.5" />
                   Não foi possível carregar o estoque.
@@ -340,13 +456,13 @@ export function AgriEstoqueGraosTab() {
                 </div>
               </td></tr>
             ) : carregando ? (
-              <tr><td colSpan={7} className="px-2 py-6 text-center text-[11px] text-muted-foreground">
+              <tr><td colSpan={9} className="px-2 py-6 text-center text-[11px] text-muted-foreground">
                 <span className="inline-flex items-center gap-1.5">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" /> Carregando…
                 </span>
               </td></tr>
             ) : ordenadas.length === 0 ? (
-              <tr><td colSpan={7} className="px-2 py-6 text-center text-[10px] text-muted-foreground">
+              <tr><td colSpan={9} className="px-2 py-6 text-center text-[10px] text-muted-foreground">
                 Esta cultura ainda não tem colheita lançada nesta safra.
               </td></tr>
             ) : ordenadas.map(l => (
@@ -381,6 +497,18 @@ export function AgriEstoqueGraosTab() {
                 <td className="px-2 py-0.5 text-right text-[11px] font-medium tabular-nums">
                   {dinheiro(l.valor, l.saldo)}
                 </td>
+                {/* ⚠ O PREÇO DE MERCADO APARECE MESMO COM SALDO ZERO, e o de venda não: eles
+                    respondem coisas diferentes. "R$/sc venda" com zero saca seria a média de um
+                    lote que já saiu inteiro — informação de arquivo. A cotação, não: ela é do
+                    mercado, vale para a classe que ainda vai colher, e escondê-la faria o operador
+                    achar que a cotação não foi gravada. O VALOR, sim, depende do saldo. */}
+                <td className={cn('px-2 py-0.5 text-right text-[11px] tabular-nums text-muted-foreground',
+                  SEP_TD)}>
+                  {temCotacao(l) ? formatMoeda(l.preco_mercado) : '—'}
+                </td>
+                <td className="px-2 py-0.5 text-right text-[11px] font-medium tabular-nums">
+                  {temCotacao(l) && l.saldo > 0 ? formatMoeda(l.valor_mercado) : '—'}
+                </td>
               </tr>
             ))}
             {ordenadas.length > 0 && !erro && !carregando && (
@@ -398,11 +526,20 @@ export function AgriEstoqueGraosTab() {
                 <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">
                   {formatNum(t.saldo, 2)}
                 </td>
-                {/* ⚠ O TOTAL NÃO TEM R$/sc: a média de três preços de classes diferentes não é
-                    um preço que alguém pratica. Vazio aqui é mais honesto que um número. */}
+                {/* ⚠ NENHUMA DAS DUAS COLUNAS DE R$/sc TEM TOTAL: a média de três preços de
+                    classes diferentes não é um preço que alguém pratica. Vazio aqui é mais honesto
+                    que um número — e vale igual para a venda e para o mercado. */}
                 <td className="px-2 py-1" />
                 <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">
                   {t.saldo > 0 ? formatMoeda(t.valor) : '—'}
+                </td>
+                <td className={cn('px-2 py-1', SEP_TH)} />
+                {/* ⚠ O TOTAL A MERCADO SOMA SÓ AS CLASSES COTADAS, porque é isso que `valor_mercado`
+                    já é: a RPC multiplica pelo preço da classe, e quem não tem cotação contribui
+                    com zero. O número é honesto, mas PARCIAL quando falta cotar alguma classe — e é
+                    o cartão "Cotação de" que denuncia a idade do preço. */}
+                <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">
+                  {t.saldo > 0 && t.valorMercado > 0 ? formatMoeda(t.valorMercado) : '—'}
                 </td>
               </tr>
             )}
@@ -455,6 +592,17 @@ export function AgriEstoqueGraosTab() {
         contas={fin.contasBancarias}
       />
 
+      <CotacaoGraosModal
+        aberto={modalCotacao}
+        onFechar={() => setModalCotacao(false)}
+        onRegistrar={p => { void registrarCotacao(p); }}
+        salvando={salvandoCotacao}
+        estoque={linhas}
+        cultura={cultura}
+        safraRotulo={safras.find(s => s.id === safraId)?.codigo
+          || safras.find(s => s.id === safraId)?.nome || ''}
+      />
+
       <p className="text-[10px] leading-snug text-muted-foreground">
         {/* ⚠ A RESSALVA DA SAFRA INTEIRA SAIU COM O FILTRO: enquanto a RPC não aceitava cultura,
             as sacas de duas culturas colhidas somavam na mesma classe e a nota tinha de avisar.
@@ -466,7 +614,15 @@ export function AgriEstoqueGraosTab() {
           ? <>Saldo por cultura = Colhido − Entregue. O valor é <strong>estimativa</strong>: usa o
               preço médio de todas as classes já entregues daquela cultura, não o da classe que
               sobrou.</>
-          : <>Saldo = Colhido − Entregue (barter/venda) − Quebra, por safra, cultura e classe.</>}
+          /* ⚠ A NOTA CARREGA A UNIDADE QUE O CABEÇALHO PERDEU: "Venda" e "Mercado" são R$ por
+              SACA, "Valor" e "A mercado" são o total. Com nove colunas o rótulo não comporta a
+              distinção, e ela não pode ficar só no `title` — quem lê num relatório impresso ou
+              numa captura de tela não tem mouse. */
+          : <>Saldo = Colhido − Entregue (barter/venda) − Quebra, por safra, cultura e classe.
+              <strong> Venda</strong> e <strong>Mercado</strong> são R$ por saca; <strong>Valor</strong> e
+              <strong> A mercado</strong>, o total do saldo. O primeiro par usa o preço médio já
+              praticado naquela classe, o segundo a última cotação lançada — os dois avaliam o mesmo
+              grão e não se somam.</>}
       </p>
     </div>
   );

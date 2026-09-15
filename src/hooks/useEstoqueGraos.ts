@@ -34,6 +34,27 @@ export interface EstoqueClasse {
   preco_ref: number;
   /** `saldo × preco_ref`, com o saldo travado em zero para baixo. */
   valor: number;
+  /**
+   * O preço de MERCADO mais recente daquela classe — o que o grão vale HOJE.
+   *
+   * ⚠ ELE NÃO É O `preco_ref`, E A DIFERENÇA É O PONTO DA TELA: `preco_ref` é a média do que já
+   * se VENDEU — um número do passado; este é a cotação lançada à mão, um número do presente. Os
+   * dois lado a lado são a decisão de segurar ou vender; um só é meia informação.
+   * ⚠ ZERO AQUI É "SEM COTAÇÃO", e não se pode distinguir isso pelo preço: a RPC faz
+   * `coalesce(...,0)` porque o contrato do payload é numérico, e uma cotação de zero real é
+   * registrável (o CHECK do banco admite `>= 0`). Quem precisa saber se HÁ cotação lê
+   * `data_mercado`.
+   */
+  preco_mercado: number;
+  /**
+   * A data da cotação que está sendo usada — e a ÚNICA sentinela de ausência.
+   *
+   * ⚠ `null` SIGNIFICA "NUNCA FOI COTADA". É por este campo, nunca pelo preço, que a tela decide
+   * entre mostrar o valor e mostrar "—".
+   */
+  data_mercado: string | null;
+  /** `saldo × preco_mercado`, com o saldo travado em zero para baixo. */
+  valor_mercado: number;
 }
 
 const num = (v: unknown): number => {
@@ -69,6 +90,12 @@ export function useEstoqueGraos(
         saldo: num(x?.saldo),
         preco_ref: num(x?.preco_ref),
         valor: num(x?.valor),
+        preco_mercado: num(x?.preco_mercado),
+        /* ⚠ `null` ATRAVESSA INTACTO — é o único campo do payload que NÃO passa por `num`, e de
+           propósito: transformá-lo em zero apagaria a diferença entre "cotada a zero" e "nunca
+           cotada", que é justamente o que ele existe para dizer. */
+        data_mercado: typeof x?.data_mercado === 'string' ? x.data_mercado : null,
+        valor_mercado: num(x?.valor_mercado),
       }));
     },
   });
@@ -93,6 +120,27 @@ export function totaisDoEstoque(linhas: readonly EstoqueClasse[]) {
     entregue: linhas.reduce((a, l) => a + l.entregue, 0),
     saldo,
     valor,
+    /** A soma dos `valor_mercado` — o que o estoque vale ao preço de hoje. */
+    valorMercado: linhas.reduce((a, l) => a + l.valor_mercado, 0),
+    /**
+     * A data da cotação mais recente entre as classes — o que o cartão do topo nomeia.
+     *
+     * ⚠ AS CLASSES PODEM TER DATAS DIFERENTES, e o cartão mostra a MAIS NOVA: cotar só a roça hoje
+     * não invalida a cotação de ontem das outras duas, e o cartão responde "de quando é o preço
+     * que estou vendo", cuja resposta honesta é a data mais recente em uso.
+     * ⚠ COMPARAÇÃO DE STRING FUNCIONA porque o formato é ISO `YYYY-MM-DD`, de largura fixa e com
+     * os campos em ordem decrescente de peso — a ordem lexicográfica É a cronológica. Converter
+     * para `Date` aqui só acrescentaria fuso a uma comparação que não precisa dele.
+     * ⚠ `null` QUANDO NENHUMA CLASSE FOI COTADA, nunca a data de hoje: o cartão mostra "—", e uma
+     * data inventada afirmaria que existe um preço de mercado onde não existe.
+     */
+    dataMercado: linhas.reduce<string | null>(
+      /* ⚠ SÓ CONTA A CLASSE COM PREÇO UTILIZÁVEL (`> 0`), e não bastar ter data é o que mantém o
+         cartão de acordo com a tabela: uma cotação gravada a zero faz as colunas mostrarem "—", e
+         um cartão dizendo "Cotação de 14/09" ao lado de três traços faria o operador procurar o
+         preço que a tela estaria escondendo. */
+      (a, l) => (l.data_mercado && l.preco_mercado > 0 && (!a || l.data_mercado > a)
+        ? l.data_mercado : a), null),
     /**
      * ⚠ O PERCENTUAL PARADO É `saldo / colhido`, e o denominador é o COLHIDO, não o entregue:
      * a pergunta é "quanto da safra ainda está comigo", e o entregue já saiu da fazenda.
