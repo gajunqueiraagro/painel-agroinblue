@@ -489,6 +489,21 @@ export interface VendaLancamento {
   cancelado: boolean;
 }
 
+/** Um lançamento gerado pela venda — receita de uma parcela, o Senar ou um desconto. */
+export interface VendaLancamentoLinha {
+  id: string;
+  /** `receita_venda` | `imposto` | `desconto`. */
+  natureza: string;
+  descricao: string | null;
+  valor: number;
+  sinal: string | null;
+  status: string | null;
+  data_vencimento: string | null;
+  data_pagamento: string | null;
+  conciliado: boolean;
+  cancelado: boolean;
+}
+
 /** Uma saída do estoque COM contrapartida — venda avulsa ou entrega de barter. */
 export interface VendaGrao {
   id: string;
@@ -504,8 +519,29 @@ export interface VendaGrao {
   observacoes: string | null;
   sacas: number;
   valor: number;
+  /**
+   * O DOCUMENTO EM TRÊS NÚMEROS — F3.1.
+   *
+   * ⚠ `valor` E `bruto` SÃO A MESMA COISA e convivem por compatibilidade: `valor` já era a soma
+   * das entregas e continua sendo. O que faltava era o que vem DEPOIS dele — a dedução e o que
+   * sobra —, e é isso que o Financeiro recebe parcelado.
+   * ⚠ `liquido = bruto − senar − deducoes`, e quem faz essa conta é a RPC. O front a repete para
+   * prever, nunca para decidir.
+   */
+  bruto: number;
+  senar: number;
+  deducoes: number;
+  liquido: number;
   itens: VendaItem[];
+  /** O primeiro lançamento de receita — mantido para quem já lia `lancamento`. */
   lancamento: VendaLancamento | null;
+  /**
+   * TODOS os lançamentos da venda: uma receita por parcela, mais Senar e descontos.
+   *
+   * ⚠ ELES SÃO N, NÃO UM — e é por isso que cancelar uma venda passou a ser um gesto de N: a RPC
+   * de cancelamento trata a lista inteira, e recusa se QUALQUER um estiver conciliado.
+   */
+  lancamentos: VendaLancamentoLinha[];
   autor: string;
   criado_em: string;
   cancelado_em: string | null;
@@ -552,6 +588,10 @@ export function useVendasGraos(
           observacoes: (x?.observacoes as string | null) ?? null,
           sacas: num(x?.sacas),
           valor: num(x?.valor),
+          bruto: num(x?.bruto ?? x?.valor),
+          senar: num(x?.senar),
+          deducoes: num(x?.deducoes),
+          liquido: num(x?.liquido ?? x?.valor),
           itens: Array.isArray(x?.itens) ? (x.itens as Record<string, unknown>[]).map(i => ({
             classe: String(i?.classe ?? '—'),
             sacas: num(i?.sacas),
@@ -565,6 +605,20 @@ export function useVendasGraos(
             data_pagamento: (l.data_pagamento as string | null) ?? null,
             cancelado: l.cancelado === true,
           } : null,
+          lancamentos: Array.isArray(x?.lancamentos)
+            ? (x.lancamentos as Record<string, unknown>[]).map(li => ({
+                id: String(li?.id ?? ''),
+                natureza: String(li?.natureza ?? ''),
+                descricao: (li?.descricao as string | null) ?? null,
+                valor: num(li?.valor),
+                sinal: (li?.sinal as string | null) ?? null,
+                status: (li?.status as string | null) ?? null,
+                data_vencimento: (li?.data_vencimento as string | null) ?? null,
+                data_pagamento: (li?.data_pagamento as string | null) ?? null,
+                conciliado: li?.conciliado === true,
+                cancelado: li?.cancelado === true,
+              }))
+            : [],
           autor: String(x?.autor ?? ''),
           criado_em: String(x?.criado_em ?? ''),
           cancelado_em: (x?.cancelado_em as string | null) ?? null,
@@ -576,4 +630,61 @@ export function useVendasGraos(
   });
 
   return { vendas: data ?? [], carregando: isLoading, erro: error as Error | null };
+}
+
+/** Um lançamento manual que a venda pode substituir. */
+export interface LancamentoSubstituivel {
+  id: string;
+  descricao: string | null;
+  valor: number;
+  data_competencia: string | null;
+  favorecido: string | null;
+  status: string | null;
+}
+
+/**
+ * OS LANÇAMENTOS DE RECEITA FEITOS À MÃO que esta venda vem substituir (F3.1, bloco 5).
+ *
+ * ⚠ NÃO HÁ HOOK NEM RPC PARA ISTO NA CASA — medido: nenhum lugar lista lançamento por
+ * safra+cultura. As telas que precisam de lançamento fazem `select` direto em
+ * `financeiro_lancamentos_v2` (é o que `useAnaliseTrimestral` faz), e é o que este faz.
+ * ⚠ O FILTRO É ESTREITO DE PROPÓSITO: só receita (`sinal = '1'`), só origem manual ou de
+ * importação, NÃO cancelado e NÃO conciliado. Conciliado é dinheiro já casado com o extrato —
+ * substituí-lo apagaria a conciliação, e a RPC recusa com
+ * `SUBSTITUIR_LANCAMENTO_CANCELADO_OU_CONCILIADO`. Mostrar aqui o que o banco vai recusar seria
+ * oferecer um caminho que termina em erro.
+ * ⚠ SÓ CONSULTA COM O MODAL ABERTO, como as outras listas desta tela.
+ */
+export function useLancamentosSubstituiveis(
+  clienteId: string | null | undefined, safraId: string | null, cultura: string | null,
+  ativo: boolean,
+) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['lancamentos-substituiveis', clienteId ?? '', safraId ?? '', cultura ?? ''],
+    enabled: !!clienteId && !!safraId && !!cultura && ativo,
+    queryFn: async (): Promise<LancamentoSubstituivel[]> => {
+      const { data: r, error: err } = await (supabase as any)
+        .from('financeiro_lancamentos_v2')
+        .select('id, descricao, valor, data_competencia, status_transacao, financeiro_fornecedores(nome)')
+        .eq('cliente_id', clienteId)
+        .eq('safra_id', safraId)
+        .eq('cultura', cultura)
+        .eq('sinal', '1')
+        .in('origem_lancamento', ['manual', 'importacao_incremental', 'importacao'])
+        .eq('cancelado', false)
+        .is('conciliado_em', null)
+        .order('data_competencia', { ascending: false });
+      if (err) throw err;
+      return (Array.isArray(r) ? r : []).map((x: Record<string, unknown>) => ({
+        id: String(x?.id ?? ''),
+        descricao: (x?.descricao as string | null) ?? null,
+        valor: num(x?.valor),
+        data_competencia: (x?.data_competencia as string | null) ?? null,
+        favorecido: ((x?.financeiro_fornecedores as { nome?: string } | null)?.nome) ?? null,
+        status: (x?.status_transacao as string | null) ?? null,
+      }));
+    },
+  });
+
+  return { lancamentos: data ?? [], carregando: isLoading };
 }

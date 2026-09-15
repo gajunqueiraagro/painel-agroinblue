@@ -165,13 +165,34 @@ export function VendasGraosModal({
               </div>
             ) : vendas.map(v => {
               const avulsa = v.tipo === 'venda_avulsa';
-              const l1 = `${avulsa ? 'Venda avulsa' : 'Barter'} · ${formatNum(v.sacas, 2)} ${unidade} · ${formatMoeda(v.valor)}${v.comprador ? ` · ${v.comprador}` : ''}`;
+              const l1 = `${avulsa ? 'Venda avulsa' : 'Barter'} · ${formatNum(v.sacas, 2)} ${unidade} · ${formatMoeda(v.bruto)}${v.comprador ? ` · ${v.comprador}` : ''}`;
+              /* ⚠ A CONTA DO DOCUMENTO NA LINHA 2 — F3.1. Antes a linha dizia um valor só, e o
+                 operador não tinha como saber se aquele número era o que ele ia RECEBER: a venda
+                 tem bruto, dedução e líquido, e é o líquido que vira parcela no Financeiro.
+                 ⚠ SÓ APARECE QUANDO HÁ DEDUÇÃO: numa venda sem Senar nem desconto, "bruto = líquido"
+                 seria uma linha gasta para não dizer nada. */
+              const temDeducao = v.senar > 0 || v.deducoes > 0;
+              const conta = temDeducao
+                ? `bruto ${formatMoeda(v.bruto)}${v.senar > 0 ? ` − senar ${formatMoeda(v.senar)}` : ''}${v.deducoes > 0 ? ` − descontos ${formatMoeda(v.deducoes)}` : ''} = líquido ${formatMoeda(v.liquido)}`
+                : null;
+              /* ⚠ AS PARCELAS SÃO OS LANÇAMENTOS DE RECEITA, não um campo próprio: cada parcela É
+                 um lançamento, e contar outra coisa aqui seria um segundo número de parcelas. */
+              const recibos = v.lancamentos.filter(li => li.natureza === 'receita_venda');
+              const parcelas = recibos.length > 0
+                ? `${recibos.length} parcela${recibos.length > 1 ? 's' : ''}: ${recibos
+                    .map(li => `${dataBR(li.data_vencimento)} ${li.cancelado ? 'Cancelado' : li.data_pagamento ? 'Pago' : 'Programado'}`)
+                    .join(', ')}`
+                : null;
               /* ⚠ AS CLASSES ENTRAM RESUMIDAS na linha 2 — "ate_20 3.219,65, roca 620,64". A venda
                  pode ter três, e três linhas por venda transformariam a lista num extrato. */
               const classes = v.itens.map(i => `${labelDaClasse(i.classe)} ${formatNum(i.sacas, 2)}`).join(', ');
               const l2 = [
                 dataBR(v.data), v.autor || '—', classes || null,
-                situacaoLancamento(v), v.observacoes || null,
+                conta, parcelas,
+                /* ⚠ A SITUAÇÃO ISOLADA SÓ SOBREVIVE SEM PARCELAS: com a lista de vencimentos ao
+                   lado, repetir "Realizado" seria dizer duas vezes o mesmo. */
+                parcelas ? null : situacaoLancamento(v),
+                v.observacoes || null,
                 !v.ativo
                   ? `cancelada em ${dataBR(v.cancelado_em)} por ${v.cancelado_por || '—'}${v.motivo_cancelamento ? `: ${v.motivo_cancelamento}` : ''}`
                   : null,
@@ -219,7 +240,12 @@ export function VendasGraosModal({
                       motivo={motivoCancel} onMotivoChange={setMotivoCancel}
                       onVoltar={() => setCancelandoId(null)}
                       confirmando={salvando}
-                      onConfirmar={() => onCancelar(v.id, motivoCancel.trim())} />
+                      /* ⚠ FECHA AO CONFIRMAR — defeito visto na homologação: o painel ficava aberto
+                         embaixo de uma linha já riscada, pedindo um motivo para um cancelamento que
+                         já aconteceu. Fechar aqui é otimista de propósito: se a RPC recusar, o toast
+                         diz, e o operador reabre pelo ícone — melhor que deixar um formulário morto
+                         na tela em todo caso de sucesso. */
+                      onConfirmar={() => { onCancelar(v.id, motivoCancel.trim()); setCancelandoId(null); }} />
                   )}
 
                   {editandoId === v.id && (
@@ -229,7 +255,8 @@ export function VendasGraosModal({
                           sem rastro de quais eram. */}
                       <p className="text-[10px] text-muted-foreground">
                         <span className="tabular-nums">{formatNum(v.sacas, 2)}</span> {unidade} ·{' '}
-                        <span className="tabular-nums">{formatMoeda(v.valor)}</span>
+                        <span className="tabular-nums">{formatMoeda(v.bruto)}</span>
+                        {temDeducao ? ` · líquido ${formatMoeda(v.liquido)}` : ''}
                         {classes ? ` · ${classes}` : ''}.
                         {' '}Para corrigir sacas ou preço, cancele e registre de novo.
                       </p>

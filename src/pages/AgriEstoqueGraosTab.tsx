@@ -34,8 +34,8 @@ import { useSafrasLavoura, useTalhoesDaSafra } from '@/hooks/useAreaPlantada';
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
 import { unidadeDaCultura, kgPorUnidade, rotuloCulturaUnidade, unidadeCurtaDaCultura } from '@/lib/agri/colheita';
 import { labelDaClasse, corDaClasse } from '@/lib/agri/barterVenda';
-import { useEstoqueGraos, totaisDoEstoque, useEstoqueGraosResumo, useEstoqueMovimentacoes, useVendasGraos } from '@/hooks/useEstoqueGraos';
-import { VendaAvulsaModal, type VendaAvulsaPayload } from '@/components/agri/VendaAvulsaModal';
+import { useEstoqueGraos, totaisDoEstoque, useEstoqueGraosResumo, useEstoqueMovimentacoes, useVendasGraos, useLancamentosSubstituiveis } from '@/hooks/useEstoqueGraos';
+import { VendaGraosModal, type VendaGraosPayload } from '@/components/agri/VendaGraosModal';
 import { CotacaoGraosModal, type CotacaoGraosPayload } from '@/components/agri/CotacaoGraosModal';
 import { formatIsoToBr } from '@/components/ui/date-picker';
 import { useFinanceiroV2 } from '@/hooks/useFinanceiroV2';
@@ -301,24 +301,44 @@ export function AgriEstoqueGraosTab() {
   const [modalVenda, setModalVenda] = useState(false);
   const [salvandoVenda, setSalvandoVenda] = useState(false);
 
-  const registrarVenda = async (p: VendaAvulsaPayload) => {
+  const substituiveis = useLancamentosSubstituiveis(
+    clienteId, safraId || null, verTodas ? null : (cultura || null), modalVenda);
+
+  /**
+   * ⚠ UMA CHAMADA SÓ — `agri_venda_graos_registrar` grava a operação, as entregas, o Senar, os
+   * descontos e UM lançamento por parcela, e ainda cancela os manuais substituídos. Fatiar isso em
+   * várias chamadas do front seria recriar, sem transação, o que a RPC faz dentro de uma.
+   * ⚠ DOIS ERROS VIRAM FRASE porque são decisões do operador, não defeitos: parcelas que não
+   * fecham e lançamento conciliado na substituição. Os outros vão crus — são nomeados e legíveis.
+   */
+  const erroDaVendaNova = (msg: string) => (
+    /PARCELAS_NAO_FECHAM_LIQUIDO/.test(msg)
+      ? 'As parcelas não somam o líquido da venda.'
+      : /SUBSTITUIR_LANCAMENTO_CANCELADO_OU_CONCILIADO/.test(msg)
+        ? 'Um dos lançamentos marcados já foi cancelado ou conciliado — desmarque e tente de novo.'
+        : msg || 'Não foi possível registrar a venda.');
+
+  const registrarVenda = async (p: VendaGraosPayload) => {
     if (!clienteId || !safraId || !cultura || !fazendaId) return;
     setSalvandoVenda(true);
     try {
-      const { data, error } = await (supabase as any).rpc('agri_venda_avulsa_registrar', {
+      const { data, error } = await (supabase as any).rpc('agri_venda_graos_registrar', {
         p_cliente: clienteId, p_safra_id: safraId, p_cultura: cultura,
         p_fazenda_id: fazendaId, p_comprador_id: p.comprador_id, p_data: p.data,
-        p_condicao: p.condicao, p_conta_id: p.conta_id, p_vencimento: p.vencimento,
-        p_itens: p.itens,
+        p_itens: p.itens, p_valor_bruto: p.valor_bruto, p_senar: p.senar,
+        p_descontos: p.descontos, p_parcelas: p.parcelas,
+        p_observacoes: p.observacoes, p_substituir: p.substituir,
       });
-      if (error) { toast.error(error.message ?? 'Não foi possível registrar a venda.'); return; }
-      const r = (data ?? {}) as { valor?: number };
-      toast.success(`Venda registrada — ${formatMoeda(Number(r.valor) || 0)}.`);
+      if (error) { toast.error(erroDaVendaNova(error.message ?? '')); return; }
+      const r = (data ?? {}) as { lancamentos?: unknown[]; liquido?: number };
+      const n = Array.isArray(r.lancamentos) ? r.lancamentos.length : 0;
+      toast.success(`Venda registrada: ${n} lançamento${n === 1 ? '' : 's'} no Financeiro.`);
       setModalVenda(false);
-      /* ⚠ O ESTOQUE RECARREGA PORQUE O SALDO É DERIVADO: a venda virou entrega, e
-         `fn_estoque_graos` já vai devolver o saldo menor. Não há baixa a escrever — há uma
-         leitura a refazer. */
+      /* ⚠ AS TRÊS LEITURAS: o saldo caiu (estoque), a lista de saídas cresceu (vendas) e os
+         candidatos a substituição mudaram (os marcados foram cancelados). */
       await queryClient.invalidateQueries({ queryKey: ['estoque-graos'] });
+      await queryClient.invalidateQueries({ queryKey: ['vendas-graos'] });
+      await queryClient.invalidateQueries({ queryKey: ['lancamentos-substituiveis'] });
     } finally {
       setSalvandoVenda(false);
     }
@@ -1045,7 +1065,7 @@ export function AgriEstoqueGraosTab() {
         )}
       </div>
 
-      <VendaAvulsaModal
+      <VendaGraosModal
         aberto={modalVenda}
         onFechar={() => setModalVenda(false)}
         onRegistrar={p => { void registrarVenda(p); }}
@@ -1055,6 +1075,7 @@ export function AgriEstoqueGraosTab() {
         safraRotulo={safraRotulo}
         clienteId={clienteId ?? ''}
         contas={fin.contasBancarias}
+        substituiveis={substituiveis.lancamentos}
       />
 
       {/* ⚠ A DATA DA COTAÇÃO VEM DAQUI, não da RPC do balanço: `fn_estoque_graos_balanco` não
