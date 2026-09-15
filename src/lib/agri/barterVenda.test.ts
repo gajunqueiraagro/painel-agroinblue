@@ -9,6 +9,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   disponivelPorClasse, calcularEntregas, totaisVenda, deducaoPorAliquota, aliquotaDoValor,
+  subcentroSugerido,
   saldoDoContrato, labelDaClasse, CLASSES_VENDA, composicaoDasVendas,
 } from './barterVenda';
 
@@ -265,5 +266,39 @@ describe('composicaoDasVendas — a mesma conta no card e no detalhe', () => {
     }]);
     expect(c.linhas[0].classe).toBe('—');
     expect(c.sacas).toBe(10);
+  });
+});
+
+/**
+ * ⚠ A RÉGUA É A DO BANCO. `agri_venda_graos_registrar` escolhe o plano da receita com
+ * `subcentro = 'Venda de '||initcap(p_cultura)` e recua para 'Venda de Outras Culturas'.
+ * Estes testes existem para que as duas pernas do mesmo grão — venda avulsa e barter —
+ * não caiam em contas diferentes no DRE se alguém mexer num dos lados.
+ */
+describe('subcentroSugerido — a conta de receita que a cultura pede', () => {
+  const plano = [
+    'Venda de Amendoim', 'Venda de Cana', 'Venda de Mandioca',
+    'Venda de Milho', 'Venda de Soja', 'Venda de Outras Culturas',
+  ];
+
+  it('acha a conta da cultura, com a inicial em maiúscula como o initcap do Postgres', () => {
+    expect(subcentroSugerido('amendoim', plano)).toBe('Venda de Amendoim');
+    expect(subcentroSugerido('MANDIOCA', plano)).toBe('Venda de Mandioca');
+  });
+
+  it('recua para Outras Culturas quando a cultura não tem conta própria', () => {
+    /* ⚠ CASO REAL: o plano tem "Venda de Cana", não "Venda de Cana de Açúcar". Uma cultura
+       gravada com o nome longo cai no recuo, que é melhor que sugerir o que não existe. */
+    expect(subcentroSugerido('cana de acucar', plano)).toBe('Venda de Outras Culturas');
+    expect(subcentroSugerido('girassol', plano)).toBe('Venda de Outras Culturas');
+  });
+
+  it('não sugere conta que o plano não tem — nem o próprio recuo', () => {
+    expect(subcentroSugerido('amendoim', ['Venda de Soja'])).toBe('');
+    expect(subcentroSugerido('amendoim', [])).toBe('');
+  });
+
+  it('sem cultura não há sugestão', () => {
+    expect(subcentroSugerido('', plano)).toBe('');
   });
 });

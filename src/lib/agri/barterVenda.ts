@@ -225,6 +225,34 @@ export function totaisVenda(
  */
 export const ALIQUOTA_DEDUCAO_PADRAO = 1.5;
 
+/** `initcap` do Postgres: primeira letra de cada palavra em maiúscula, o resto em minúscula. */
+const initcap = (t: string) =>
+  t.toLowerCase().replace(/(^|\s)(\p{L})/gu, (_, e: string, c: string) => e + c.toUpperCase());
+
+/** O subcentro que a receita da venda deve usar, ou `''` quando o plano não tem nenhum. */
+export const SUBCENTRO_OUTRAS = 'Venda de Outras Culturas';
+
+/**
+ * QUAL CONTA DE RECEITA SUGERIR PARA UMA CULTURA.
+ *
+ * ⚠⚠ A REGRA NÃO É INVENTADA AQUI — É A DO BANCO, COPIADA. `agri_venda_graos_registrar` escolhe
+ * o plano da receita exatamente assim: `subcentro = 'Venda de '||initcap(p_cultura)` e, se não
+ * achar, `'Venda de Outras Culturas'`. A venda avulsa do estoque já classifica por essa régua;
+ * usar outra no barter faria as duas pernas do mesmo grão caírem em contas diferentes no DRE.
+ * ⚠ SUGERE, NÃO GRAVA. Devolver o nome é o fim do trabalho desta função: quem decide se ele
+ * vale é o operador, na tela, e por isso o campo continua editável e marcado como sugestão.
+ * ⚠ E SÓ SUGERE O QUE EXISTE: a conferência contra `subcentros` impede propor uma conta que o
+ * plano não tem, que é como um campo obrigatório passaria a aceitar texto sem lastro.
+ */
+export function subcentroSugerido(
+  cultura: string, subcentros: readonly string[],
+): string {
+  if (!cultura) return '';
+  const alvo = `Venda de ${initcap(cultura)}`;
+  if (subcentros.includes(alvo)) return alvo;
+  return subcentros.includes(SUBCENTRO_OUTRAS) ? SUBCENTRO_OUTRAS : '';
+}
+
 /** O valor da dedução para uma alíquota em PERCENTUAL (1,5 = 1,5%). */
 export function deducaoPorAliquota(bruto: number, aliquotaPct: number): number {
   if (!isFinite(aliquotaPct) || aliquotaPct <= 0) return 0;

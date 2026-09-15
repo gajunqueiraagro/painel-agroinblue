@@ -30,7 +30,7 @@ import { useTalhoesDaSafra, type SafraLavoura } from '@/hooks/useAreaPlantada';
 import { useColheita } from '@/hooks/useColheita';
 import {
   CLASSES_VENDA, labelDaClasse, disponivelPorClasse, calcularEntregas, totaisVenda,
-  deducaoPorAliquota, aliquotaDoValor, ALIQUOTA_DEDUCAO_PADRAO, type EntregaForm,
+  deducaoPorAliquota, aliquotaDoValor, ALIQUOTA_DEDUCAO_PADRAO, subcentroSugerido, type EntregaForm,
 } from '@/lib/agri/barterVenda';
 import type { ClassificacaoItem } from '@/hooks/useFinanceiroV2';
 import type { BarterVenda, VendaPayload } from '@/hooks/useBarterVenda';
@@ -70,6 +70,9 @@ export function BarterVendaModal({
   const [subcentro, setSubcentro] = useState('');
   const [planoId, setPlanoId] = useState<string | null>(null);
   const [busca, setBusca] = useState('');
+  /* ⚠ SUGESTÃO NÃO É ESCOLHA, e a tela precisa saber a diferença: só uma sugestão intocada pode
+     ser trocada por outra quando a cultura muda. O que o operador escolheu fica. */
+  const [contaSugerida, setContaSugerida] = useState(false);
 
   useEffect(() => {
     if (!aberto) return;
@@ -117,6 +120,8 @@ export function BarterVendaModal({
       ?? (receita?.plano_conta_id
         ? (classificacoes.find(c => c.id === receita.plano_conta_id)?.subcentro ?? '')
         : ''));
+    /* ⚠ O QUE ESTÁ GRAVADO NUNCA É SUGESTÃO — foi conferido por alguém no dia em que salvou. */
+    setContaSugerida(false);
     setBusca('');
   }, [aberto, venda, classificacoes]);
 
@@ -136,13 +141,78 @@ export function BarterVendaModal({
   const { linhas: cargas } = useColheita(idsDaCultura);
   const disponivel = useMemo(() => disponivelPorClasse(cargas), [cargas]);
 
+  /**
+   * A CONTA DE RECEITA QUE A CULTURA PEDE — sugestão, nunca gravação silenciosa.
+   *
+   * ⚠ O FILTRO É O MESMO DO `PlanoSubcentroSelect` DESTA TELA (`1-Entradas`, escopo
+   * `agricultura` obrigatório, só quem compõe o DRE). Sugerir por uma régua e listar por outra
+   * poria no campo uma conta que o dropdown não mostra — e o operador não teria como voltar
+   * a ela depois de trocar.
+   */
+  const receitasElegiveis = useMemo(
+    () => classificacoes.filter(c =>
+      c.tipo_operacao === '1-Entradas'
+      && (c.escopo_negocio || '').trim() === 'agricultura'
+      && c.compoe_dre === true
+      && !!c.subcentro),
+    [classificacoes]);
+  const sugestaoReceita = useMemo(() => {
+    const nome = subcentroSugerido(cultura, receitasElegiveis.map(c => c.subcentro));
+    return nome ? (receitasElegiveis.find(c => c.subcentro === nome) ?? null) : null;
+  }, [cultura, receitasElegiveis]);
+
+  /**
+   * ⚠ SÓ EM VENDA NOVA, e só por cima do vazio ou de outra sugestão. Uma venda gravada traz a
+   * conta que alguém já conferiu, e trocá-la por palpite ao reabrir reclassificaria no DRE um
+   * documento fechado — sem ninguém pedir.
+   * ⚠ E ELE SETA O `planoId` JUNTO: o payload grava por `plano_conta_id`, e um subcentro sem
+   * plano deixaria a receita meio classificada, com texto e sem chave.
+   */
+  useEffect(() => {
+    if (!aberto || venda) return;
+    /* O operador já escolheu: a sugestão não passa por cima. */
+    if (subcentro !== '' && !contaSugerida) return;
+    const nome = sugestaoReceita?.subcentro ?? '';
+    /* ⚠ A GUARDA DE IGUALDADE É O QUE IMPEDE O LAÇO: `subcentro` está nas dependências para
+       que a escolha do operador seja vista, e sem esta linha cada escrita reagendaria o efeito. */
+    if (subcentro === nome) return;
+    setSubcentro(nome);
+    setPlanoId(sugestaoReceita?.id ?? null);
+    setContaSugerida(!!sugestaoReceita);
+  }, [aberto, venda, sugestaoReceita, subcentro, contaSugerida]);
+
   const calculadas = useMemo(() => calcularEntregas(linhas, disponivel), [linhas, disponivel]);
   const totais = useMemo(() => totaisVenda(calculadas, deducao ?? 0), [calculadas, deducao]);
+
+  /**
+   * O QUE FALTA PARA SALVAR — uma frase só, a PRIMEIRA pendência, como no `VendaGraosModal`.
+   *
+   * ⚠ A LISTA SAIU DE MEDIÇÃO, não do que a tela já marcava com asterisco. O banco sozinho
+   * exige pouco: em `agri_operacoes_comerciais` só `cultura` é NOT NULL sem default, e
+   * `safra_id` é NULÁVEL; em `agri_oc_partes` só `natureza` e `valor`. `subcentro` e
+   * `plano_conta_id` da parte de receita também aceitam nulo. Ou seja: o que torna estes
+   * cinco campos obrigatórios é a REGRA DO PRODUTO, não uma constraint — e por isso a trava
+   * tem de morar aqui, onde se pode dizer o que falta.
+   * ⚠ ANTES ISTO ERA `toast` DEPOIS DO CLIQUE, em `AgriBarterTab.gravarVenda`, e só para três
+   * dos cinco. Contar o erro depois do gesto é pior que impedi-lo: o operador já acreditou que
+   * salvou. Os toasts de lá continuam — são a segunda linha, para quem chamar o hook por fora.
+   * ⚠ PRECIFICAÇÃO E DEDUÇÃO FICAM DE FORA, e não por esquecimento: a primeira nasce 'fixo' e
+   * o Select não tem opção vazia; a segunda pode ser legitimamente zero.
+   */
+  const impedimento = !safraId ? 'Escolha a safra do grão.'
+    : !cultura ? 'Escolha a cultura vendida.'
+      : !data ? 'Informe a data da venda.'
+        : !(totais.bruto > 0) ? 'Lance ao menos uma classe com sacas e preço.'
+          : !subcentro ? 'Escolha a conta da receita.'
+            : null;
 
   const mudar = (i: number, campo: 'sacas' | 'precoSaca', v: string) =>
     setLinhas(ls => ls.map((l, idx) => (idx === i ? { ...l, [campo]: v } : l)));
 
   const gravar = () => {
+    /* ⚠ A GUARDA REPETE O BOTÃO de propósito: `disabled` é do mouse, e Enter num campo, um
+       teclado ou um clique programático não passam por ele. */
+    if (impedimento) return;
     const cls = classificacoes.find(c => c.id === planoId);
     onSalvar({
       cultura,
@@ -217,7 +287,10 @@ export function BarterVendaModal({
               </Select>
             </div>
             <div>
-              <Label className="text-[10px]">Data da venda</Label>
+              {/* ⚠ ASTERISCO NOVO, e ele é honesto: `data_operacao` é NOT NULL no banco, e o
+                  campo já se defendia sozinho (`v || hoje()` nunca deixa vazio). O asterisco
+                  só passou a dizer o que sempre foi verdade. */}
+              <Label className="text-[10px]">Data da venda <span className="text-destructive">*</span></Label>
               <DatePicker value={data} onChange={v => setData(v || hoje())} className="mt-0.5" />
             </div>
             <div>
@@ -390,11 +463,22 @@ export function BarterVendaModal({
             </div>
           </div>
 
+          {/* ⚠ O RÓTULO É DAQUI, não do `PlanoSubcentroSelect`: a prop `label` dele é `string` e
+              o asterisco é JSX. Alargá-la para `ReactNode` mexeria num componente que o
+              `LancamentoV2Dialog` e a Mesa também montam — fora do escopo deste defeito.
+              ⚠ "• SUGERIDO" É O IDIOMA DA CASA, copiado do `MesaPareamentoModal` (text-amber-600,
+              normal-case): ele diz que o campo está preenchido por palpite e pede conferência.
+              Some no instante em que o operador escolhe — a partir daí a conta é dele. */}
+          <Label className="text-[10px]">
+            Conta da receita <span className="text-destructive">*</span>
+            {contaSugerida && subcentro && (
+              <span className="ml-1 font-normal normal-case text-amber-600">• sugerido</span>
+            )}
+          </Label>
           <PlanoSubcentroSelect
-            label="Conta da receita"
             value={subcentro}
-            onChange={setSubcentro}
-            onSelected={(sub, cls) => { setSubcentro(sub); setPlanoId(cls?.id ?? null); }}
+            onChange={v => { setSubcentro(v); setContaSugerida(false); }}
+            onSelected={(sub, cls) => { setSubcentro(sub); setPlanoId(cls?.id ?? null); setContaSugerida(false); }}
             classificacoes={classificacoes}
             tipoOperacao="1-Entradas"
             escopoNegocio="agricultura"
@@ -406,10 +490,17 @@ export function BarterVendaModal({
         </div>
 
         <div className="flex items-center justify-end gap-2 bg-primary px-4 py-2">
+          {/* ⚠ O MOTIVO FICA AO LADO DO BOTÃO TRAVADO — regra da casa (a mesma da OC): o
+              `disabled` é a única fonte de `title` e da frase, e um botão cinza sem explicação
+              faz o operador procurar o que está errado em toda a tela. */}
+          {impedimento && (
+            <span className="mr-auto text-[10px] text-primary-foreground/80">{impedimento}</span>
+          )}
           <Button variant="ghost" className="text-primary-foreground/90 hover:bg-white/10 hover:text-white"
             onClick={onFechar}>Fechar</Button>
           <Button className="gap-1 bg-white text-primary hover:bg-white/90"
-            disabled={salvando} onClick={gravar}>
+            disabled={!!impedimento || salvando} title={impedimento ?? 'Salvar esta venda'}
+            onClick={gravar}>
             <Save className="h-4 w-4" /> {salvando ? 'Salvando…' : 'Salvar venda'}
           </Button>
         </div>
