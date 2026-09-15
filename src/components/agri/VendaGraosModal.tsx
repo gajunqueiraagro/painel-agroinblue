@@ -33,13 +33,15 @@ import { CINZA_CABECALHO, TH_CINZA as TH } from '@/lib/idiomaVisual';
 import { DatePicker, formatIsoToBr } from '@/components/ui/date-picker';
 import { CampoMoeda, CampoNumero } from '@/components/ui/campo-moeda';
 import { parseMoeda, round2, formatCasas } from '@/lib/calculos/numeroBR';
-import { Save, AlertTriangle, X, Plus, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
+import { Save, AlertTriangle, X, Plus, Trash2, Ban, Pencil } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
 import { rotuloCulturaUnidade, unidadeCurtaDaCultura } from '@/lib/agri/colheita';
 import { labelDaClasse, corDaClasse } from '@/lib/agri/barterVenda';
-import type { EstoqueClasse, LancamentoSubstituivel } from '@/hooks/useEstoqueGraos';
+import type { EstoqueClasse, LancamentoSubstituivel, VendaGrao } from '@/hooks/useEstoqueGraos';
+import { ComposicaoLeitura, DeducoesLeitura, ParcelasLeitura } from '@/components/agri/VendaGraosLeitura';
+import { ConfirmarComMotivo } from '@/components/ui/confirmar-com-motivo';
 
 /** O que o modal devolve para quem chama `agri_venda_graos_registrar`. */
 export interface VendaGraosPayload {
@@ -72,6 +74,7 @@ const novaParcela = (): ParcelaForm =>
 export function VendaGraosModal({
   aberto, onFechar, onRegistrar, salvando, estoque, cultura, safraRotulo,
   clienteId, contas, substituiveis,
+  modo = 'criar', venda = null, onEditar, onCancelar,
 }: {
   aberto: boolean;
   onFechar: () => void;
@@ -84,9 +87,30 @@ export function VendaGraosModal({
   contas: ContaSelecionavel[];
   /** Lançamentos manuais que esta venda pode substituir. Vazio = o bloco nem aparece. */
   substituiveis: readonly LancamentoSubstituivel[];
+  /**
+   * ⚠ UM MODAL, TRÊS MODOS — não três componentes. Criar, ver e editar uma venda são a MESMA
+   * coisa vista em momentos diferentes, e é assim que a OC já faz: quem aprendeu onde fica o
+   * líquido ao vender encontra o líquido no mesmo lugar ao conferir.
+   */
+  modo?: 'criar' | 'visualizar' | 'editar';
+  /** A venda sendo vista ou editada. `null` no modo criar. */
+  venda?: VendaGrao | null;
+  onEditar?: (p: { id: string; data: string; comprador_id: string | null; observacoes: string | null }) => void;
+  onCancelar?: (id: string, motivo: string) => void;
 }) {
   /** A aba aberta. A ordem delas É o fluxo: compor → deduzir → receber. */
   const [aba, setAba] = useState<'composicao' | 'deducoes' | 'recebimento' | 'substituir'>('composicao');
+  /* ⚠ O MODO PODE MUDAR DENTRO DO MODAL (ver → editar), e por isso ele é estado, não só prop: o
+     botão "Editar" troca de modo sem fechar e reabrir, que é o que faria o operador perder de vista
+     o que estava conferindo. */
+  const [modoAtual, setModoAtual] = useState<'criar' | 'visualizar' | 'editar'>(modo);
+  const [cancelando, setCancelando] = useState(false);
+  const [motivoCancel, setMotivoCancel] = useState('');
+  const leitura = modoAtual === 'visualizar';
+  const criando = modoAtual === 'criar';
+  /* ⚠ SÓ A VENDA AVULSA ATIVA SE MEXE. O barter se governa no Barter e a cancelada não se
+     reescreve — a RPC recusa os dois, e esconder o botão diz isso antes da tentativa. */
+  const editavel = !!venda && venda.ativo && venda.tipo === 'venda_avulsa';
   const [criterio, setCriterio] = useState<'preco' | 'valor'>('preco');
   const [valorTotal, setValorTotal] = useState('');
   const [itens, setItens] = useState<Record<string, { sacas: string; preco: number | null }>>({});
@@ -113,12 +137,22 @@ export function VendaGraosModal({
     for (const c of estoque) inicial[c.classe] = { sacas: '', preco: c.preco_ref > 0 ? c.preco_ref : null };
     setItens(inicial);
     setAba('composicao');
+    setModoAtual(modo);
+    setCancelando(false); setMotivoCancel('');
     setCriterio('preco'); setValorTotal('');
+    /* ⚠ VER E EDITAR PREENCHEM O QUE A RPC DE EDIÇÃO ACEITA — comprador, data e observações. O
+       resto do formulário nem é montado nesses modos: são as telas de leitura. */
+    if (venda) {
+      setCompradorId(venda.comprador_id ?? '');
+      setData(venda.data.slice(0, 10));
+      setObs(venda.observacoes ?? '');
+      return;
+    }
     setSenarPct(String(SENAR_PCT_PADRAO).replace('.', ',')); setSenarReais(''); setSenarTocado(false);
     setDescontos([]); setCondicao('avista'); setParcelas([novaParcela()]);
     setCompradorId(''); setObs(''); setSubstituir(new Set()); setAbreSubstituir(false);
     setData(new Date().toISOString().slice(0, 10));
-  }, [aberto, estoque]);
+  }, [aberto, estoque, modo, venda]);
 
   /**
    * AS LINHAS, COM O PREÇO QUE VALE EM CADA CRITÉRIO.
@@ -309,7 +343,10 @@ export function VendaGraosModal({
     { id: 'recebimento' as const, label: 'Recebimento' },
     /* ⚠ A ABA DE SUBSTITUIÇÃO SÓ EXISTE COM CANDIDATO, e leva a contagem no título: uma aba vazia
        ensinaria que há uma decisão a tomar onde não há. */
-    ...(substituiveis.length > 0
+    /* ⚠ SÓ NO MODO CRIAR: substituir um lançamento manual é decisão de quem está REGISTRANDO a
+       venda. Depois de gravada, a substituição já aconteceu (ou não) e a aba viraria um botão que
+       não faz nada. */
+    ...(criando && substituiveis.length > 0
       ? [{ id: 'substituir' as const, label: `Substituir (${substituiveis.length})` }]
       : []),
   ];
@@ -328,12 +365,20 @@ export function VendaGraosModal({
         <div className="col-span-2 col-start-1 row-start-1 flex items-start gap-2 bg-primary px-4 py-2.5 text-primary-foreground">
           <div className="min-w-0">
             <h2 className="truncate text-[15px] font-bold leading-tight">
-              Vender do estoque · {labelDaCultura(cultura)}
+              {criando ? 'Vender do estoque' : 'Venda'} · {labelDaCultura(cultura)}
               {safraRotulo && ` · Safra ${safraRotulo}`}
+              {venda && ` · ${formatIsoToBr(venda.data.slice(0, 10))}`}
             </h2>
             <p className="mt-0.5 text-[11px] text-primary-foreground/80">
-              {formatNum(saldoAtual, 2)} {unidade} disponíveis. A venda baixa o estoque e gera os
-              lançamentos no Financeiro, parcela a parcela.
+              {criando
+                ? `${formatNum(saldoAtual, 2)} ${unidade} disponíveis. A venda baixa o estoque e gera os lançamentos no Financeiro, parcela a parcela.`
+                : venda && !venda.ativo
+                  /* ⚠ A FAIXA DA CANCELADA É MUDA, não alarmante: o estorno já aconteceu e foi
+                     deliberado. Vermelho aqui trataria uma decisão do operador como acidente. */
+                  ? `Cancelada em ${formatIsoToBr((venda.cancelado_em ?? '').slice(0, 10) || venda.data.slice(0, 10))} por ${venda.cancelado_por || '—'}${venda.motivo_cancelamento ? `: ${venda.motivo_cancelamento}` : ''}`
+                  : venda?.tipo === 'barter'
+                    ? 'Entrega de barter — o contrato e as entregas se editam no próprio Barter.'
+                    : 'Composição, deduções e recebimento desta venda.'}
             </p>
           </div>
           <div className="flex-1" />
@@ -371,6 +416,7 @@ export function VendaGraosModal({
 
           {/* ── ABA 1 — COMPOSIÇÃO ─────────────────────────────────────────────────────────── */}
           <TabsContent value="composicao" className="min-h-0 flex-1 overflow-hidden p-0 data-[state=inactive]:hidden">
+            {venda ? <ComposicaoLeitura venda={venda} unidade={unidade} /> : (
             <div className="flex h-full min-h-0 flex-col gap-1.5 px-3 py-2">
               <div className="flex flex-wrap items-end justify-between gap-2">
                 <p className="text-[11px] text-muted-foreground">{rotuloCulturaUnidade(cultura)}</p>
@@ -482,10 +528,12 @@ export function VendaGraosModal({
                 </table>
               </div>
             </div>
+            )}
           </TabsContent>
 
           {/* ── ABA 2 — DEDUÇÕES ───────────────────────────────────────────────────────────── */}
           <TabsContent value="deducoes" className="min-h-0 flex-1 overflow-auto p-0 data-[state=inactive]:hidden">
+            {venda ? <DeducoesLeitura venda={venda} /> : (
             <div className="px-3 py-2">
               <div className="rounded-md border bg-muted/20 px-3 py-2">
                 <LinhaConta rotulo="= Bruto">{bruto > 0 ? formatMoeda(bruto) : '—'}</LinhaConta>
@@ -524,12 +572,13 @@ export function VendaGraosModal({
                 </LinhaConta>
               </div>
             </div>
+            )}
           </TabsContent>
 
           {/* ── ABA 3 — RECEBIMENTO ────────────────────────────────────────────────────────── */}
           <TabsContent value="recebimento" className="min-h-0 flex-1 overflow-hidden p-0 data-[state=inactive]:hidden">
             <div className="flex h-full min-h-0 flex-col gap-2 px-3 py-2">
-              <div className="flex flex-wrap items-end justify-between gap-2">
+              <div className={cn('flex flex-wrap items-end justify-between gap-2', venda && 'hidden')}>
                 <div>
                   <Label className="text-[10px]">Recebimento</Label>
                   <div className="mt-0.5 flex h-8 w-fit overflow-hidden rounded-md border">
@@ -558,7 +607,10 @@ export function VendaGraosModal({
                 )}
               </div>
 
-              {condicao === 'avista' ? (
+              {/* ⚠ EM VER/EDITAR AS PARCELAS SÃO LEITURA e os três campos de baixo continuam
+                  editáveis — são exatamente os que `agri_venda_avulsa_editar` aceita. Mostrar um
+                  campo de valor que a RPC ignora seria prometer uma edição que não acontece. */}
+              {venda ? <ParcelasLeitura venda={venda} /> : condicao === 'avista' ? (
                 <div className="grid gap-2 md:grid-cols-2">
                   <div>
                     <Label className="text-[10px]">Conta que recebe <span className="text-destructive">*</span></Label>
@@ -640,17 +692,20 @@ export function VendaGraosModal({
                   <div className="mt-0.5">
                     <FornecedorSelect fornecedorId={compradorId || null}
                       onFornecedorChange={id => setCompradorId(id ?? '')}
-                      clienteId={clienteId} label="" placeholder="Escolha" />
+                      clienteId={clienteId} label="" placeholder="Escolha"
+                      disabled={leitura || (!!venda && !editavel)} />
                   </div>
                 </div>
                 <div>
                   <Label className="text-[10px]">Data da venda <span className="text-destructive">*</span></Label>
-                  <DatePicker value={data} onChange={setData} className="mt-0.5" />
+                  <DatePicker value={data} onChange={setData} className="mt-0.5"
+                    disabled={leitura || (!!venda && !editavel)} />
                 </div>
               </div>
               <div className="shrink-0">
                 <Label className="text-[10px]">Observações</Label>
                 <Input value={obs} onChange={e => setObs(e.target.value)} placeholder="Opcional"
+                  disabled={leitura || (!!venda && !editavel)}
                   className="mt-0.5 h-8 text-[12px]" />
               </div>
             </div>
@@ -710,52 +765,133 @@ export function VendaGraosModal({
             <div className="space-y-0.5 px-3">
               {/* ⚠ SÓ AS CLASSES COM QUANTIDADE: listar as três com "—" gastaria o espaço do
                   resumo com o que o operador não está vendendo. */}
-              {linhas.filter(l => l.sacas > 0).map(l => (
+              {(venda ? venda.itens.map(i => ({ classe: i.classe, sacas: i.sacas }))
+                      : linhas.filter(l => l.sacas > 0)).map(l => (
                 <Row key={l.classe} label={labelDaClasse(l.classe)}
                   value={`${formatNum(l.sacas, 2)} ${unidade}`} />
               ))}
-              <Row label="Total" value={vendidas > 0 ? `${formatNum(vendidas, 2)} ${unidade}` : null} />
-              <Row label="Sobra" value={`${formatNum(sobraTotal, 2)} ${unidade}`} />
+              <Row label="Total" value={(venda ? venda.sacas : vendidas) > 0
+                ? `${formatNum(venda ? venda.sacas : vendidas, 2)} ${unidade}` : null} />
+              {/* ⚠ "SOBRA" SÓ FAZ SENTIDO AO CRIAR: numa venda gravada o saldo atual já a reflete,
+                  e repeti-la aqui contaria a mesma baixa duas vezes na cabeça de quem lê. */}
+              {criando && <Row label="Sobra" value={`${formatNum(sobraTotal, 2)} ${unidade}`} />}
             </div>
 
             <BlocoHead titulo="Financeiro" />
             <div className="space-y-0.5 px-3">
-              <Row label="Bruto" value={bruto > 0 ? formatMoeda(bruto) : null} />
-              <Row label="(−) Senar" value={senar > 0 ? formatMoeda(senar) : null} />
-              <Row label="(−) Descontos" value={totalDescontos > 0 ? formatMoeda(totalDescontos) : null} />
-              <Row label="= Líquido" value={liquido > 0 ? formatMoeda(liquido) : null}
+              {/* ⚠ COM VENDA, O RESUMO LÊ O GRAVADO, não o formulário: em ver/editar o formulário
+                  de composição nem é montado, e recalcular daria zero num documento que existe. */}
+              <Row label="Bruto" value={(venda ? venda.bruto : bruto) > 0 ? formatMoeda(venda ? venda.bruto : bruto) : null} />
+              <Row label="(−) Senar" value={(venda ? venda.senar : senar) > 0 ? formatMoeda(venda ? venda.senar : senar) : null} />
+              <Row label="(−) Descontos"
+                value={(venda ? Math.max(venda.deducoes - venda.senar, 0) : totalDescontos) > 0
+                  ? formatMoeda(venda ? Math.max(venda.deducoes - venda.senar, 0) : totalDescontos) : null} />
+              <Row label="= Líquido" value={(venda ? venda.liquido : liquido) > 0 ? formatMoeda(venda ? venda.liquido : liquido) : null}
                 valueClassName="text-[12px] font-bold text-primary" />
-              <Row label="Recebimento" value={resumoRecebimento} />
+              <Row label="Recebimento" value={venda
+                ? `${venda.lancamentos.filter(l => l.natureza === 'receita_venda').length} parcela(s)`
+                : resumoRecebimento} />
             </div>
 
-            <BlocoHead titulo="Substituição" />
-            <div className="space-y-0.5 px-3">
-              <Row label="Lançamentos"
-                value={substituir.size > 0
-                  ? `${substituir.size} marcado${substituir.size > 1 ? 's' : ''}`
-                  : null} />
-            </div>
+            {criando && (
+              <>
+                <BlocoHead titulo="Substituição" />
+                <div className="space-y-0.5 px-3">
+                  <Row label="Lançamentos"
+                    value={substituir.size > 0
+                      ? `${substituir.size} marcado${substituir.size > 1 ? 's' : ''}`
+                      : null} />
+                </div>
+              </>
+            )}
           </div>
         </aside>
 
-        <div className="col-start-1 row-start-3 flex flex-wrap items-center gap-2 border-t border-border bg-accent px-4 py-2.5">
-          <span className="text-[11px]">
-            Vende <strong className="tabular-nums">{formatNum(vendidas, 2)}</strong> {unidade} ·
-            sobra <strong className="tabular-nums">{formatNum(sobraTotal, 2)}</strong> {unidade}
-          </span>
-          <div className="flex-1" />
-          <span className="text-[11px]">
-            Líquido <strong className="tabular-nums">{formatMoeda(liquido)}</strong> em{' '}
-            {parcelasEfetivas.length} parcela{parcelasEfetivas.length > 1 ? 's' : ''}
-          </span>
-          {impedimento && (
-            <span className="w-full text-[10px] text-muted-foreground md:w-auto">{impedimento}</span>
+        <div className="col-start-1 row-start-3 flex flex-col gap-1.5 border-t border-border bg-accent px-4 py-2.5">
+          {/* ⚠ O PAINEL DE CANCELAMENTO ABRE AQUI DENTRO, acima do rodapé: o operador está olhando
+              a venda, e mandá-lo fechar o modal para cancelar em outra tela seria pedir que ele
+              confie na memória do que acabou de ver. */}
+          {cancelando && venda && (
+            <ConfirmarComMotivo
+              titulo="Cancelar esta venda (lógico — cancela os lançamentos junto)"
+              motivo={motivoCancel} onMotivoChange={setMotivoCancel}
+              onVoltar={() => setCancelando(false)}
+              confirmando={salvando}
+              onConfirmar={() => { onCancelar?.(venda.id, motivoCancel.trim()); setCancelando(false); }} />
           )}
-          <Button size="sm" variant="acao" className="h-8 gap-1 px-3 text-[11px]"
-            disabled={!!impedimento || salvando} title={impedimento ?? 'Registrar a venda'}
-            onClick={registrar}>
-            <Save className="h-3.5 w-3.5" /> Registrar venda
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {criando ? (
+              <span className="text-[11px]">
+                Vende <strong className="tabular-nums">{formatNum(vendidas, 2)}</strong> {unidade} ·
+                sobra <strong className="tabular-nums">{formatNum(sobraTotal, 2)}</strong> {unidade}
+              </span>
+            ) : venda && venda.tipo === 'barter' ? (
+              /* ⚠ O BARTER DIZ ONDE SE EDITA, em vez de só não ter botão: "sem ação" sem explicação
+                 faz o operador procurar o que não existe. */
+              <span className="text-[11px] text-muted-foreground">
+                Este barter se edita no próprio Barter.
+              </span>
+            ) : (
+              <span className="text-[11px]">
+                <strong className="tabular-nums">{formatNum(venda?.sacas ?? 0, 2)}</strong> {unidade} ·
+                bruto <strong className="tabular-nums">{formatMoeda(venda?.bruto ?? 0)}</strong>
+              </span>
+            )}
+            <div className="flex-1" />
+            <span className="text-[11px]">
+              Líquido <strong className="tabular-nums">{formatMoeda(venda ? venda.liquido : liquido)}</strong>
+              {criando && <> em {parcelasEfetivas.length} parcela{parcelasEfetivas.length > 1 ? 's' : ''}</>}
+            </span>
+
+            {criando ? (
+              <>
+                {impedimento && (
+                  <span className="w-full text-[10px] text-muted-foreground md:w-auto">{impedimento}</span>
+                )}
+                <Button size="sm" variant="acao" className="h-8 gap-1 px-3 text-[11px]"
+                  disabled={!!impedimento || salvando} title={impedimento ?? 'Registrar a venda'}
+                  onClick={registrar}>
+                  <Save className="h-3.5 w-3.5" /> Registrar venda
+                </Button>
+              </>
+            ) : leitura ? (
+              <>
+                <Button size="sm" variant="ghost" className="h-8 px-3 text-[11px]" onClick={onFechar}>
+                  Fechar
+                </Button>
+                {editavel && (
+                  <>
+                    <Button size="sm" variant="outline" className="h-8 gap-1 px-2 text-[11px]"
+                      onClick={() => setCancelando(true)} disabled={salvando}
+                      title="Cancelar esta venda">
+                      <Ban className="h-3.5 w-3.5" /> Cancelar venda
+                    </Button>
+                    <Button size="sm" variant="acao" className="h-8 gap-1 px-3 text-[11px]"
+                      onClick={() => setModoAtual('editar')} title="Editar comprador, data e observações">
+                      <Pencil className="h-3.5 w-3.5" /> Editar
+                    </Button>
+                  </>
+                )}
+              </>
+            ) : (
+              <>
+                <Button size="sm" variant="ghost" className="h-8 px-3 text-[11px]"
+                  onClick={() => setModoAtual('visualizar')}>
+                  Voltar
+                </Button>
+                <Button size="sm" variant="acao" className="h-8 gap-1 px-3 text-[11px]"
+                  disabled={!data || salvando}
+                  title={!data ? 'Informe a data da venda.' : 'Salvar as alterações'}
+                  onClick={() => venda && onEditar?.({
+                    id: venda.id, data,
+                    comprador_id: compradorId || null,
+                    observacoes: obs.trim() || null,
+                  })}>
+                  <Save className="h-3.5 w-3.5" /> Salvar alterações
+                </Button>
+              </>
+            )}
+          </div>
         </div>
       </DialogContent>
     </Dialog>

@@ -27,7 +27,7 @@ import { Cartao } from '@/components/ui/cartao';
 import { BalancoSafrasModal } from '@/components/agri/BalancoSafrasModal';
 import { QuebraModal, type QuebraPayload } from '@/components/agri/QuebraModal';
 import { MovimentacoesEstoqueModal, type QuebraEdicaoPayload } from '@/components/agri/MovimentacoesEstoqueModal';
-import { VendasGraosModal, type VendaEdicaoPayload } from '@/components/agri/VendasGraosModal';
+import { VendasGraosModal } from '@/components/agri/VendasGraosModal';
 import { CINZA_CABECALHO, TH_CINZA as TH } from '@/lib/idiomaVisual';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { useSafrasLavoura, useTalhoesDaSafra } from '@/hooks/useAreaPlantada';
@@ -35,6 +35,7 @@ import { labelDaCultura } from '@/lib/agri/areaPlantada';
 import { unidadeDaCultura, kgPorUnidade, rotuloCulturaUnidade, unidadeCurtaDaCultura } from '@/lib/agri/colheita';
 import { labelDaClasse, corDaClasse } from '@/lib/agri/barterVenda';
 import { useEstoqueGraos, totaisDoEstoque, useEstoqueGraosResumo, useEstoqueMovimentacoes, useVendasGraos, useLancamentosSubstituiveis } from '@/hooks/useEstoqueGraos';
+import type { VendaGrao } from '@/hooks/useEstoqueGraos';
 import { VendaGraosModal, type VendaGraosPayload } from '@/components/agri/VendaGraosModal';
 import { CotacaoGraosModal, type CotacaoGraosPayload } from '@/components/agri/CotacaoGraosModal';
 import { formatIsoToBr } from '@/components/ui/date-picker';
@@ -448,6 +449,14 @@ export function AgriEstoqueGraosTab() {
    * muda saldo nem valor, então a invalidação continua sendo só a da lista.
    */
   const [modalVendas, setModalVendas] = useState(false);
+  /**
+   * A VENDA ABERTA EM VER/EDITAR — e ela mora na PÁGINA, não dentro do histórico.
+   *
+   * ⚠ DOIS `Dialog` ANINHADOS SERIAM O CAMINHO FÁCIL E O ERRADO: o Radix empilha overlays, o foco
+   * fica preso no de dentro e fechar um fecha os dois. Com o estado aqui, os dois modais são
+   * irmãos — o histórico continua aberto atrás, e voltar para ele é fechar a venda.
+   */
+  const [vendaAberta, setVendaAberta] = useState<{ venda: VendaGrao; modo: 'visualizar' | 'editar' } | null>(null);
   const [salvandoVenda2, setSalvandoVenda2] = useState(false);
   const vendasHist = useVendasGraos(
     clienteId, safraId || null, verTodas ? null : (cultura || null), modalVendas);
@@ -469,6 +478,9 @@ export function AgriEstoqueGraosTab() {
       });
       if (error) { toast.error(erroDaVenda(error.message ?? '')); return; }
       toast.success('Venda cancelada — o grão voltou ao saldo e o lançamento foi cancelado.');
+      /* ⚠ FECHA A VENDA ABERTA: cancelar de dentro do modal de leitura deixaria na tela um
+         documento que acabou de deixar de valer. */
+      setVendaAberta(null);
       await recarregarVendas();
       await queryClient.invalidateQueries({ queryKey: ['estoque-graos'] });
     } finally {
@@ -476,7 +488,9 @@ export function AgriEstoqueGraosTab() {
     }
   };
 
-  const editarVenda = async (p: VendaEdicaoPayload) => {
+  /* ⚠ O TIPO VEM DO `VendaGraosModal` AGORA: quem define a forma da edição é quem a oferece, e
+     desde o F3.3 quem a oferece é o modal da venda, não o histórico. */
+  const editarVenda = async (p: { id: string; data: string; comprador_id: string | null; observacoes: string | null }) => {
     setSalvandoVenda2(true);
     try {
       const { error } = await (supabase as any).rpc('agri_venda_avulsa_editar', {
@@ -487,6 +501,7 @@ export function AgriEstoqueGraosTab() {
       toast.success('Venda corrigida.');
       /* ⚠ SÓ A LISTA: data, comprador e observação não entram em saldo nenhum. */
       await recarregarVendas();
+      setVendaAberta(null);
     } finally {
       setSalvandoVenda2(false);
     }
@@ -1102,11 +1117,33 @@ export function AgriEstoqueGraosTab() {
         erro={vendasHist.erro}
         cultura={cultura}
         safraRotulo={safraRotulo}
-        clienteId={clienteId ?? ''}
         onCancelar={(id, motivo) => { void cancelarVenda(id, motivo); }}
-        onEditar={p => { void editarVenda(p); }}
+        onAbrirVenda={(v, m) => setVendaAberta({ venda: v, modo: m })}
         salvando={salvandoVenda2}
       />
+
+      {/* ⚠ O MESMO COMPONENTE DE VENDER, em outro modo — irmão do histórico, não aninhado nele.
+          `key` pelo id força o remount ao trocar de venda: sem ele, abrir a segunda venda traria o
+          estado da primeira nos campos editáveis. */}
+      {vendaAberta && (
+        <VendaGraosModal
+          key={vendaAberta.venda.id}
+          aberto
+          modo={vendaAberta.modo}
+          venda={vendaAberta.venda}
+          onFechar={() => setVendaAberta(null)}
+          onRegistrar={() => {}}
+          onEditar={p => { void editarVenda(p); }}
+          onCancelar={(id, motivo) => { void cancelarVenda(id, motivo); }}
+          salvando={salvandoVenda2}
+          estoque={linhas}
+          cultura={cultura}
+          safraRotulo={safraRotulo}
+          clienteId={clienteId ?? ''}
+          contas={fin.contasBancarias}
+          substituiveis={[]}
+        />
+      )}
 
       <MovimentacoesEstoqueModal
         aberto={modalMovimentacoes}
