@@ -37,8 +37,21 @@ import { cn } from '@/lib/utils';
  * abaixo sem passar o mouse.
  * ⚠ O `title` FICA MESMO ASSIM: ele é a defesa do `truncate`, não o esconderijo do centavo.
  */
-export function Cartao({ rotulo, valor, unidade, titulo, cor }: {
+export function Cartao({ rotulo, escopo, valor, unidade, titulo, cor }: {
   rotulo: string;
+  /**
+   * A SEGUNDA LINHA DO RÓTULO — o ESCOPO do número ("esta safra", "todas as safras").
+   *
+   * ⚠ ELE NASCEU DE UM CORTE: o Estoque de Grãos tentou dizer o escopo no próprio rótulo, e
+   * "VALOR A MERCADO — ESTA SAFRA" não cabe em `text-[9px] uppercase` num cartão de um quinto
+   * de tela — virava "VALOR A MERCADO — ESTA SA…". Uma segunda linha miúda cabe, e lê melhor:
+   * o que o número mede fica em cima, de quanto ele fala fica embaixo.
+   * ⚠ SEM TRAVESSÃO. O travessão existia para colar duas coisas numa linha só; com duas linhas
+   * ele vira sujeira.
+   * ⚠ O CARTÃO SEM ESCOPO NÃO MUDA DE ALTURA: a linha só existe quando há o que dizer, e é por
+   * isso que o Painel da Safra — que não passa `escopo` — continua idêntico.
+   */
+  escopo?: string;
   valor: string;
   /** "R$", "ha" — miúdo, colado no número. */
   unidade?: string;
@@ -60,6 +73,12 @@ export function Cartao({ rotulo, valor, unidade, titulo, cor }: {
       <div className="truncate text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
         {rotulo}
       </div>
+      {escopo && (
+        /* ⚠ `leading-none` E SEM `mt`: a linha entra no espaço que o `mt-0.5` do valor já abria,
+           e o cartão cresce o mínimo — cada pixel aqui é pixel de tabela lá embaixo, que é a
+           mesma conta que este arquivo já fazia pelo `py-1`. */
+        <div className="truncate text-[8px] leading-none text-muted-foreground/80">{escopo}</div>
+      )}
       {/* ⚠ O `truncate` FICA como última defesa, mesmo com a conta folgada: uma safra futura
           pode passar da casa dos milhões, e cortar com o inteiro no `title` é melhor que
           empurrar o cartão vizinho para fora do bloco. */}

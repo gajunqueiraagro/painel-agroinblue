@@ -85,7 +85,10 @@ export function BalancoSafrasModal({
               da última linha e o valor vem da RPC. Nenhuma segunda consulta: cartão e tabela não
               podem discordar. */}
           <div className="grid gap-1.5 md:grid-cols-2">
-            <Cartao rotulo="Em estoque hoje — todas as safras" unidade={rotuloUnidade}
+            {/* ⚠ O ESCOPO NA SEGUNDA LINHA, a mesma forma que os cartões da tela atrás passaram a
+                usar: enquanto um dizia "— todas as safras" inline e o outro "esta safra" embaixo,
+                a mesma ideia tinha duas caras entre telas vizinhas. */}
+            <Cartao rotulo="Em estoque hoje" escopo="todas as safras" unidade={rotuloUnidade}
               valor={formatNum(emEstoque, 2)} />
             <Cartao rotulo="Valor a mercado hoje" unidade="R$"
               valor={formatNum(valorMercadoTotal, 2)}

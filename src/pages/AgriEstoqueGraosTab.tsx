@@ -175,8 +175,11 @@ export function AgriEstoqueGraosTab() {
     clienteId, safraId || null, verTodas ? null : (cultura || null));
   const resumo = useEstoqueGraosResumo(clienteId, safraId || null, verTodas);
   const t = useMemo(() => totaisDoEstoque(linhas), [linhas]);
+  /* ⚠ SÓ O `valor`, e a ausência do `saldo` é deliberada: somar o saldo de culturas em unidades
+     diferentes não mede nada (saca de 25 kg com tonelada), e era o que o cartão "Em estoque" fazia
+     em "Todas". Quem quer saldo em "Todas" lê a tabela, que separa por unidade e soma por coluna.
+     O `valor` soma porque real é real. */
   const totalResumo = useMemo(() => ({
-    saldo: resumo.culturas.reduce((a, c) => a + c.saldo, 0),
     valor: resumo.culturas.reduce((a, c) => a + c.valor, 0),
   }), [resumo.culturas]);
 
@@ -374,27 +377,38 @@ export function AgriEstoqueGraosTab() {
       {/* ⚠ EM "TODAS" OS CARTÕES SOMAM O RESUMO, não o detalhe: com nenhuma cultura escolhida o
           detalhe por classe nem foi buscado, e somar um array vazio mostraria zero sobre uma
           safra cheia de grão. */}
-      {/* ⚠ SÃO TRÊS EM "TODAS" E CINCO NO DETALHE, e a razão MUDOU: a RPC do "Todas" passou a ler
-          a cotação — o valor ali JÁ É a mercado. O que ela não devolve é a DATA da cotação, e sem
-          ela o cartão "Cotação de" não teria o que dizer; o de "Valor de venda" continua fora
-          porque preço médio praticado é por classe, e o resumo não desce a classe. */}
-      <div className={cn('grid gap-1.5', verTodas ? 'md:grid-cols-3' : 'md:grid-cols-5')}>
-        {/* ⚠ "— ESTA SAFRA" NO RÓTULO, e não é preciosismo: o Balanço por safra mostra um cartão
-            com a MESMA frase e OUTRO número (a cultura inteira, 63.940,73 sc contra 44.141,52 da
-            25/26). Os dois estão certos; sem o escopo escrito, um deles parece defeito. */}
-        <Cartao rotulo="Em estoque — esta safra" unidade="sc"
-          valor={formatNum(verTodas ? totalResumo.saldo : t.saldo, 2)} />
+      {/* ⚠ SÃO DOIS EM "TODAS" E CINCO NO DETALHE. Os três que faltam lá faltam por motivos
+          diferentes, e vale distinguir: "Cotação de" e "Valor de venda" dependem da CLASSE, e o
+          resumo não desce a classe; "Em estoque" saiu por outra razão, abaixo. */}
+      <div className={cn('grid gap-1.5', verTodas ? 'md:grid-cols-2' : 'md:grid-cols-5')}>
+        {/* ⚠⚠ O CARTÃO DE ESTOQUE NÃO EXISTE EM "TODAS", e a ausência é a correção: ele somava o
+            saldo de TODAS as culturas num número só e o rotulava "sc" — saca de amendoim com
+            tonelada de mandioca, a mesma conta que a coluna única da tabela fazia antes de virar
+            três colunas por unidade. Acertava por acaso enquanto a mandioca estava zerada, e
+            viraria mentira no primeiro lançamento dela.
+            ⚠ NÃO FOI SUBSTITUÍDO POR TRÊS CARTÕES porque a tabela logo abaixo já responde, por
+            unidade, com total por coluna. Dois lugares para o mesmo número é onde um deles
+            envelhece.
+            ⚠ E O `saldo` SAIU DO `totalResumo` JUNTO: uma soma crua de unidades diferentes sem
+            ninguém para lê-la é um convite para o próximo consumidor. O que sobrou lá é o `valor`,
+            que soma legitimamente — real é real, venha de saca ou de tonelada. */}
+        {!verTodas && (
+          <Cartao rotulo="Em estoque" escopo="esta safra" unidade="sc"
+            valor={formatNum(t.saldo, 2)} />
+        )}
         {/* ⚠ O NOME DIZ DE QUE PREÇO SE FALA, e é essa regra que renomeou o cartão do "Todas". Os
             dois são estimativa; o que os separa é a ORIGEM do preço — um já foi praticado, o outro
             é a cotação de hoje. Enquanto o resumo avaliava pelo preço médio de venda, "Valor
             estimado" servia; agora ele avalia A MERCADO, e manter o nome antigo faria a MESMA
             conta ter dois nomes entre a lista e o detalhe — que é a divergência que este PR
             fechou no banco. */}
-        <Cartao rotulo={verTodas ? 'Valor a mercado — esta safra' : 'Valor de venda'} unidade="R$"
+        <Cartao rotulo={verTodas ? 'Valor a mercado' : 'Valor de venda'}
+          escopo={verTodas ? 'esta safra' : undefined} unidade="R$"
           valor={formatNum(verTodas ? totalResumo.valor : t.valor, 2)}
           titulo={formatMoeda(verTodas ? totalResumo.valor : t.valor)} cor="text-success" />
         {!verTodas && (
-          <Cartao rotulo="Valor a mercado — esta safra" unidade="R$" valor={formatNum(t.valorMercado, 2)}
+          <Cartao rotulo="Valor a mercado" escopo="esta safra" unidade="R$"
+            valor={formatNum(t.valorMercado, 2)}
             titulo={formatMoeda(t.valorMercado)} cor="text-success" />
         )}
         {/* ⚠ O CARTÃO DA DATA É O QUE DÁ VALIDADE AO OUTRO: "R$ 1,39 mi a mercado" sem dizer de
