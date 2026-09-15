@@ -14,7 +14,9 @@ import { useState, useEffect, useMemo } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { FornecedorSelect } from '@/components/shared/FornecedorSelect';
+import { ContaBancariaSelect, type ContaSelecionavel } from '@/components/shared/ContaBancariaSelect';
+import { CINZA_CABECALHO } from '@/lib/idiomaVisual';
 import { DatePicker } from '@/components/ui/date-picker';
 import { CampoMoeda, CampoNumero } from '@/components/ui/campo-moeda';
 import { parseMoeda } from '@/lib/calculos/numeroBR';
@@ -39,7 +41,7 @@ export interface VendaAvulsaPayload {
 
 export function VendaAvulsaModal({
   aberto, onFechar, onRegistrar, salvando, estoque, cultura, safraRotulo,
-  fornecedores, contas,
+  clienteId, contas,
 }: {
   aberto: boolean;
   onFechar: () => void;
@@ -49,8 +51,19 @@ export function VendaAvulsaModal({
   estoque: readonly EstoqueClasse[];
   cultura: string;
   safraRotulo: string;
-  fornecedores: ReadonlyArray<{ id: string; nome: string }>;
-  contas: ReadonlyArray<{ id: string; nome_exibicao?: string | null; nome_conta?: string | null }>;
+  /**
+   * ⚠ O COMPRADOR NÃO CHEGA MAIS EM LISTA PRONTA. `FornecedorSelect` busca a sua — é ele que
+   * sabe filtrar por apelido, por CNPJ e por texto legado, e passar-lhe uma lista já montada
+   * desligaria metade disso. O que ele precisa é do tenant.
+   */
+  clienteId: string;
+  /**
+   * Já filtradas por cliente/ativa pelo caller — é o contrato do `ContaBancariaSelect`.
+   *
+   * ⚠ NÃO É `readonly`: o componente da casa declara `ContaSelecionavel[]` mutável, e um
+   * `readonly` aqui não passaria adiante. Preferi seguir o contrato dele a espalhar um cast.
+   */
+  contas: ContaSelecionavel[];
 }) {
   const [compradorId, setCompradorId] = useState('');
   const [data, setData] = useState(() => new Date().toISOString().slice(0, 10));
@@ -98,6 +111,14 @@ export function VendaAvulsaModal({
       excede: sacas > c.saldo + 0.005,
       /* Classe sem saldo não se vende — o campo nasce travado. */
       travada: c.saldo <= 0,
+      /**
+       * O QUE SOBRA NA CLASSE DEPOIS DESTA VENDA — a coluna "Saldo final".
+       *
+       * ⚠ TRAVADA EM ZERO PARA BAIXO. Enquanto o operador digita mais do que tem, a linha já
+       * grita em vermelho com o saldo disponível; um "−3.420,43" ao lado seria um segundo aviso,
+       * mais fraco, para o mesmo erro — e um saldo negativo não existe no estoque.
+       */
+      sobra: Math.max(c.saldo - sacas, 0),
     };
   }), [estoque, itens]);
 
@@ -107,7 +128,10 @@ export function VendaAvulsaModal({
       vendidas,
       valor: linhas.reduce((a, l) => a + l.total, 0),
       saldoAtual: linhas.reduce((a, l) => a + l.saldo, 0),
-      sobra: linhas.reduce((a, l) => a + (l.saldo - l.sacas), 0),
+      /* ⚠ SOMA A MESMA `sobra` DA COLUNA, travada em zero — não `saldo − sacas` cru. O rodapé e a
+         linha de Total dizem a mesma frase e não podem discordar: com uma classe acima do saldo, a
+         conta crua dava um total menor que a soma do que a tabela mostra. */
+      sobra: linhas.reduce((a, l) => a + l.sobra, 0),
       excede: linhas.some(l => l.excede),
       vendidasComPreco: linhas.filter(l => l.sacas > 0 && l.preco > 0).length,
       semPreco: linhas.some(l => l.sacas > 0 && l.preco <= 0),
@@ -154,9 +178,6 @@ export function VendaAvulsaModal({
     });
   };
 
-  const nomeDaConta = (c: { nome_exibicao?: string | null; nome_conta?: string | null }) =>
-    c.nome_exibicao || c.nome_conta || '—';
-
   return (
     <Dialog open={aberto} onOpenChange={o => { if (!o) onFechar(); }}>
       <DialogContent className="max-w-3xl gap-0 overflow-hidden p-0 [&>button.absolute]:hidden">
@@ -187,7 +208,7 @@ export function VendaAvulsaModal({
           <div className="overflow-hidden rounded-md border">
             <table className="w-full table-fixed border-collapse">
               <colgroup>
-                {['28%', '18%', '18%', '18%', '18%'].map((w, i) => (
+                {['22%', '14%', '17%', '17%', '15%', '15%'].map((w, i) => (
                   <col key={i} style={{ width: w }} />
                 ))}
               </colgroup>
@@ -198,6 +219,11 @@ export function VendaAvulsaModal({
                   <th className={cn(TH, 'text-right')}>Vender (sc)</th>
                   <th className={cn(TH, 'text-right')}>R$ / sc</th>
                   <th className={cn(TH, 'text-right')}>Total</th>
+                  {/* ⚠ A ÚLTIMA COLUNA É A RESPOSTA DA PERGUNTA QUE TRAZ O OPERADOR AQUI: ele não
+                      está conferindo quanto vende, está decidindo quanto GUARDAR. Ler "sobra
+                      13.159,14" ao lado do que digitou é a conferência que antes só existia
+                      somada, no rodapé — e somada ela não diz de qual classe se está esvaziando. */}
+                  <th className={cn(TH, 'text-right')}>Saldo final</th>
                 </tr>
               </thead>
               <tbody>
@@ -241,29 +267,65 @@ export function VendaAvulsaModal({
                     <td className="px-2 py-1 text-right text-[11px] font-medium tabular-nums">
                       {l.total > 0 ? formatMoeda(l.total) : '—'}
                     </td>
+                    {/* ⚠ SEM DIGITAR, O SALDO FINAL É O SALDO — e mostrá-lo repetido é de
+                        propósito: a coluna nasce respondendo "se eu não vender nada, fica assim",
+                        que é o ponto de partida da conta que o operador vai fazer. */}
+                    <td className={cn('px-2 py-1 text-right text-[11px] font-medium tabular-nums',
+                      l.sacas > 0 && 'text-success')}>
+                      {formatNum(l.sobra, 2)}
+                    </td>
                   </tr>
                 ))}
+                {/* ⚠ O TOTAL FECHA A TABELA no mesmo cinza do cabeçalho — sem ele, a soma só
+                    existia no rodapé azul, longe das linhas que a compõem. */}
+                <tr className={cn(CINZA_CABECALHO, 'text-white')}>
+                  <td className="px-2 py-1 text-[11px] font-bold">Total</td>
+                  <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">
+                    {formatNum(totais.saldoAtual, 2)}
+                  </td>
+                  <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">
+                    {totais.vendidas > 0 ? formatNum(totais.vendidas, 2) : '—'}
+                  </td>
+                  {/* ⚠ R$/sc NÃO TEM TOTAL: a média de três preços de classes diferentes não é um
+                      preço que alguém pratica. Vazio é mais honesto que um número — a mesma regra
+                      da tabela do estoque atrás. */}
+                  <td className="px-2 py-1" />
+                  <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">
+                    {totais.valor > 0 ? formatMoeda(totais.valor) : '—'}
+                  </td>
+                  <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">
+                    {formatNum(totais.sobra, 2)}
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>
 
           <div className="grid gap-2 md:grid-cols-2">
             <div>
+              {/* ⚠ O RÓTULO É O DESTA TELA, não o do componente: `FornecedorSelect` desenha o seu
+                  dentro de um `space-y-1` (4px), e os outros campos deste modal usam `mt-0.5`
+                  (2px). Dois espaçamentos na mesma linha é exatamente o desalinho do A16 que este
+                  PR veio corrigir — então o rótulo fica aqui e o componente entra só com o campo.
+                  ⚠ E O BOTÃO DE CRIAR VEM DE GRAÇA: ele é do próprio `FornecedorSelect`, que abre
+                  o `FornecedorFormDialog` da casa. Um cadastro de comprador escrito aqui seria o
+                  segundo, e divergiria do financeiro no primeiro campo novo. */}
               <Label className="text-[10px]">Comprador <span className="text-destructive">*</span></Label>
-              <Select value={compradorId} onValueChange={setCompradorId}>
-                <SelectTrigger className="mt-0.5 h-8 text-[12px]">
-                  <SelectValue placeholder="Escolha" />
-                </SelectTrigger>
-                <SelectContent>
-                  {fornecedores.map(f => (
-                    <SelectItem key={f.id} value={f.id} className="text-[12px]">{f.nome}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="mt-0.5">
+                <FornecedorSelect
+                  fornecedorId={compradorId || null}
+                  onFornecedorChange={id => setCompradorId(id ?? '')}
+                  clienteId={clienteId}
+                  placeholder="Escolha"
+                />
+              </div>
             </div>
             <div>
               <Label className="text-[10px]">Data da venda <span className="text-destructive">*</span></Label>
-              <DatePicker value={data} onChange={setData} size="compact" className="mt-0.5" />
+              {/* ⚠ SEM `size="compact"` — A16. O compacto é `h-6` e todo o resto desta linha é
+                  `h-8`: era daí que vinha "Comprador mais alto que Data". Campo de formulário
+                  tem uma altura só; o compacto é para linha de tabela, não para cá. */}
+              <DatePicker value={data} onChange={setData} className="mt-0.5" />
             </div>
           </div>
 
@@ -288,18 +350,13 @@ export function VendaAvulsaModal({
                 <Label className="text-[10px]">
                   Conta que recebe <span className="text-destructive">*</span>
                 </Label>
-                <Select value={contaId} onValueChange={setContaId}>
-                  <SelectTrigger className="mt-0.5 h-8 text-[12px]">
-                    <SelectValue placeholder="Escolha" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {contas.map(c => (
-                      <SelectItem key={c.id} value={c.id} className="text-[12px]">
-                        {nomeDaConta(c)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {/* ⚠ O SELETOR DA CASA, não um `Select` montado aqui: ele agrupa por tipo
+                    (Conta Corrente, Investimentos…) com a ordem e os rótulos de
+                    `gruposDeConta`, e o próprio componente declara ser "o ÚNICO seletor de conta
+                    do sistema — lista montada à mão é defeito, não estilo". Este modal era uma
+                    das listas planas que sobravam. */}
+                <ContaBancariaSelect value={contaId} onValueChange={setContaId} contas={contas}
+                  placeholder="Escolha" className="mt-0.5 h-8 text-[12px]" />
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-2">
@@ -307,8 +364,8 @@ export function VendaAvulsaModal({
                   <Label className="text-[10px]">
                     Vencimento <span className="text-destructive">*</span>
                   </Label>
-                  <DatePicker value={vencimento} onChange={setVencimento} size="compact"
-                    className="mt-0.5" />
+                  {/* ⚠ MESMA ALTURA DA CONTA AO LADO — era este o "Vencimento menor que Conta". */}
+                  <DatePicker value={vencimento} onChange={setVencimento} className="mt-0.5" />
                 </div>
                 <div>
                   {/* ⚠ A CONTA MUDA DE SENTIDO, NÃO DE OBRIGATORIEDADE: a prazo ela deixa de ser
@@ -319,18 +376,8 @@ export function VendaAvulsaModal({
                   <Label className="text-[10px]">
                     Conta de destino <span className="text-destructive">*</span>
                   </Label>
-                  <Select value={contaId} onValueChange={setContaId}>
-                    <SelectTrigger className="mt-0.5 h-8 text-[12px]">
-                      <SelectValue placeholder="Escolha" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {contas.map(c => (
-                        <SelectItem key={c.id} value={c.id} className="text-[12px]">
-                          {nomeDaConta(c)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <ContaBancariaSelect value={contaId} onValueChange={setContaId} contas={contas}
+                    placeholder="Escolha" className="mt-0.5 h-8 text-[12px]" />
                 </div>
               </div>
             )}

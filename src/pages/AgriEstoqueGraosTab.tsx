@@ -813,7 +813,7 @@ export function AgriEstoqueGraosTab() {
         estoque={linhas}
         cultura={cultura}
         safraRotulo={safraRotulo}
-        fornecedores={fin.fornecedores}
+        clienteId={clienteId ?? ''}
         contas={fin.contasBancarias}
       />
 
