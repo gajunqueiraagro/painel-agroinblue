@@ -19,7 +19,7 @@ import { ContaBancariaSelect, type ContaSelecionavel } from '@/components/shared
 import { CINZA_CABECALHO } from '@/lib/idiomaVisual';
 import { DatePicker } from '@/components/ui/date-picker';
 import { CampoMoeda, CampoNumero } from '@/components/ui/campo-moeda';
-import { parseMoeda } from '@/lib/calculos/numeroBR';
+import { parseMoeda, round2 } from '@/lib/calculos/numeroBR';
 import { Save, AlertTriangle, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
@@ -105,7 +105,11 @@ export function VendaAvulsaModal({
       ...c,
       sacas,
       preco,
-      total: sacas * preco,
+      /* ⚠ `round2` NA LINHA — F3, e é o que faz a tela mostrar o número que vai gravar: a RPC faz
+         `round(sacas*preco, 2)` POR ITEM e soma os itens já arredondados. Multiplicar cru aqui e
+         arredondar só no rodapé daria, com quatro casas na entrada, um total um centavo diferente
+         do lançamento — a divergência clássica entre a prévia e o que o Financeiro recebe. */
+      total: round2(sacas * preco),
       /* ⚠ MEIO SACO DE TOLERÂNCIA, a mesma da RPC do estoque: o saldo já vem arredondado a duas
          casas, e barrar por 0,001 de diferença seria recusar uma venda legítima do lote inteiro. */
       excede: sacas > c.saldo + 0.005,
@@ -242,7 +246,14 @@ export function VendaAvulsaModal({
                       {formatNum(l.saldo, 2)}
                     </td>
                     <td className="px-1 py-1">
+                      {/* ⚠ `casas={4}` — F3, decisão do Gabriel: saca e R$/saca aceitam até quatro
+                          casas na ENTRADA porque é assim que o romaneio chega. O que continua em
+                          duas é o DINHEIRO: o total da linha é `round2(sacas × preço)`, a mesma
+                          conta que a RPC faz, para a tela mostrar o número que vai gravar.
+                          ⚠ O `title` LEVA O QUE FOI DIGITADO, porque a coluna de sacas do estoque
+                          mostra duas casas: sem ele, 1.942,986 viraria 1.942,99 sem recurso. */}
                       <CampoNumero valor={itens[l.classe]?.sacas ?? ''} disabled={l.travada}
+                        casas={4} title={itens[l.classe]?.sacas ?? ''}
                         onChange={v => setItens(o => ({
                           ...o, [l.classe]: { ...(o[l.classe] ?? { preco: null }), sacas: v },
                         }))}
@@ -259,6 +270,8 @@ export function VendaAvulsaModal({
                     </td>
                     <td className="px-1 py-1">
                       <CampoMoeda valor={itens[l.classe]?.preco ?? null} disabled={l.travada}
+                        casas={4}
+                        title={itens[l.classe]?.preco == null ? undefined : String(itens[l.classe]?.preco)}
                         onChange={v => setItens(o => ({
                           ...o, [l.classe]: { ...(o[l.classe] ?? { sacas: '' }), preco: v },
                         }))}

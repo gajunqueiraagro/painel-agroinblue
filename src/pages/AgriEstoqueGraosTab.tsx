@@ -27,13 +27,14 @@ import { Cartao } from '@/components/ui/cartao';
 import { BalancoSafrasModal } from '@/components/agri/BalancoSafrasModal';
 import { QuebraModal, type QuebraPayload } from '@/components/agri/QuebraModal';
 import { MovimentacoesEstoqueModal, type QuebraEdicaoPayload } from '@/components/agri/MovimentacoesEstoqueModal';
+import { VendasGraosModal, type VendaEdicaoPayload } from '@/components/agri/VendasGraosModal';
 import { CINZA_CABECALHO, TH_CINZA as TH } from '@/lib/idiomaVisual';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { useSafrasLavoura, useTalhoesDaSafra } from '@/hooks/useAreaPlantada';
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
 import { unidadeDaCultura, kgPorUnidade, rotuloCulturaUnidade, unidadeCurtaDaCultura } from '@/lib/agri/colheita';
 import { labelDaClasse, corDaClasse } from '@/lib/agri/barterVenda';
-import { useEstoqueGraos, totaisDoEstoque, useEstoqueGraosResumo, useEstoqueMovimentacoes } from '@/hooks/useEstoqueGraos';
+import { useEstoqueGraos, totaisDoEstoque, useEstoqueGraosResumo, useEstoqueMovimentacoes, useVendasGraos } from '@/hooks/useEstoqueGraos';
 import { VendaAvulsaModal, type VendaAvulsaPayload } from '@/components/agri/VendaAvulsaModal';
 import { CotacaoGraosModal, type CotacaoGraosPayload } from '@/components/agri/CotacaoGraosModal';
 import { formatIsoToBr } from '@/components/ui/date-picker';
@@ -416,6 +417,58 @@ export function AgriEstoqueGraosTab() {
       await recarregarMovimentacoes();
     } finally {
       setSalvandoMov(false);
+    }
+  };
+
+  /* ───────────────────────── O HISTÓRICO DA VENDA (F3) ─────────────────────────
+   * ⚠ MESMO DESENHO DO HISTÓRICO DA QUEBRA, uma chave ao lado da outra — e a diferença que importa
+   * está no cancelamento: aqui ele mexe no FINANCEIRO. `agri_venda_avulsa_cancelar` cancela o
+   * lançamento junto, então invalidar só a lista deixaria a receita viva na outra tela.
+   * ⚠ EDITAR TAMBÉM PODE TOCAR O LANÇAMENTO (data e favorecido, se ainda não foi pago) — mas não
+   * muda saldo nem valor, então a invalidação continua sendo só a da lista.
+   */
+  const [modalVendas, setModalVendas] = useState(false);
+  const [salvandoVenda2, setSalvandoVenda2] = useState(false);
+  const vendasHist = useVendasGraos(
+    clienteId, safraId || null, verTodas ? null : (cultura || null), modalVendas);
+
+  const recarregarVendas = () => queryClient.invalidateQueries({ queryKey: ['vendas-graos'] });
+
+  /* ⚠ A MENSAGEM CRUA DA RPC VAI PARA O TOAST, MENOS UMA: `VENDA_JA_PAGA_CANCELE_NO_FINANCEIRO`
+     não é frase — é um código que só quem escreveu a função entende, e ele aparece justamente no
+     momento em que o operador precisa saber PARA ONDE ir. As outras são legíveis e vão inteiras. */
+  const erroDaVenda = (msg: string) => (/VENDA_JA_PAGA_CANCELE_NO_FINANCEIRO/.test(msg)
+    ? 'Esta venda já foi paga ou conciliada. Cancele pelo Financeiro.'
+    : msg || 'Não foi possível concluir a operação.');
+
+  const cancelarVenda = async (id: string, motivo: string) => {
+    setSalvandoVenda2(true);
+    try {
+      const { error } = await (supabase as any).rpc('agri_venda_avulsa_cancelar', {
+        p_op_id: id, p_motivo: motivo,
+      });
+      if (error) { toast.error(erroDaVenda(error.message ?? '')); return; }
+      toast.success('Venda cancelada — o grão voltou ao saldo e o lançamento foi cancelado.');
+      await recarregarVendas();
+      await queryClient.invalidateQueries({ queryKey: ['estoque-graos'] });
+    } finally {
+      setSalvandoVenda2(false);
+    }
+  };
+
+  const editarVenda = async (p: VendaEdicaoPayload) => {
+    setSalvandoVenda2(true);
+    try {
+      const { error } = await (supabase as any).rpc('agri_venda_avulsa_editar', {
+        p_op_id: p.id, p_data: p.data, p_comprador_id: p.comprador_id,
+        p_observacoes: p.observacoes,
+      });
+      if (error) { toast.error(erroDaVenda(error.message ?? '')); return; }
+      toast.success('Venda corrigida.');
+      /* ⚠ SÓ A LISTA: data, comprador e observação não entram em saldo nenhum. */
+      await recarregarVendas();
+    } finally {
+      setSalvandoVenda2(false);
     }
   };
 
@@ -848,7 +901,17 @@ export function AgriEstoqueGraosTab() {
                 <td className="px-2 py-0.5 text-right text-[11px] tabular-nums">
                   {formatNum(l.colhido, 2)}
                 </td>
-                <td className="px-2 py-0.5 text-right text-[11px] tabular-nums text-muted-foreground">
+                {/* ⚠ O MESMO GESTO DA COLUNA QUEBRA: o número é o alvo, porque é ele que resume
+                    o que se quer ver. Zero também abre — pode haver venda CANCELADA, que não soma
+                    e existe. Nada muda de tamanho (A23): o mesmo `<td>`, `underline` só no hover. */}
+                <td className={cn('cursor-pointer px-2 py-0.5 text-right text-[11px] tabular-nums',
+                  'text-muted-foreground underline-offset-2 hover:underline')}
+                  role="button" tabIndex={0}
+                  title="Ver vendas e entregas" aria-label="Ver vendas e entregas do estoque"
+                  onClick={() => setModalVendas(true)}
+                  onKeyDown={ev => {
+                    if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); setModalVendas(true); }
+                  }}>
                   {formatNum(l.entregue, 2)}
                 </td>
                 {/* ⚠ A COLUNA LÊ A CHAVE — F2. Ela imprimiu `formatNum(0, 2)` FIXO desde a F1: um
@@ -901,7 +964,13 @@ export function AgriEstoqueGraosTab() {
                 <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">
                   {formatNum(t.colhido, 2)}
                 </td>
-                <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">
+                <td className="cursor-pointer px-2 py-1 text-right text-[11px] font-bold tabular-nums underline-offset-2 hover:underline"
+                  role="button" tabIndex={0}
+                  title="Ver vendas e entregas" aria-label="Ver vendas e entregas do estoque"
+                  onClick={() => setModalVendas(true)}
+                  onKeyDown={ev => {
+                    if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); setModalVendas(true); }
+                  }}>
                   {formatNum(t.entregue, 2)}
                 </td>
                 <td className="cursor-pointer px-2 py-1 text-right text-[11px] font-bold tabular-nums underline-offset-2 hover:underline"
@@ -1002,6 +1071,20 @@ export function AgriEstoqueGraosTab() {
         clienteId={clienteId}
         cultura={verTodas ? '' : cultura}
         dataCotacao={t.dataMercado}
+      />
+
+      <VendasGraosModal
+        aberto={modalVendas}
+        onFechar={() => setModalVendas(false)}
+        vendas={vendasHist.vendas}
+        carregando={vendasHist.carregando}
+        erro={vendasHist.erro}
+        cultura={cultura}
+        safraRotulo={safraRotulo}
+        clienteId={clienteId ?? ''}
+        onCancelar={(id, motivo) => { void cancelarVenda(id, motivo); }}
+        onEditar={p => { void editarVenda(p); }}
+        salvando={salvandoVenda2}
       />
 
       <MovimentacoesEstoqueModal

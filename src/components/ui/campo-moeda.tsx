@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
    mora em componente, e `lib/agri/colheita` precisava do parser sem arrastar React junto.
    A reexportação mantém os doze consumidores intactos: quem importava daqui continua
    importando daqui. */
-import { brl, round2, parseMoeda } from '@/lib/calculos/numeroBR';
+import { brl, round2, roundCasas, formatCasas, parseMoeda } from '@/lib/calculos/numeroBR';
 
 export { brl, round2, parseMoeda };
 
@@ -20,23 +20,37 @@ export { brl, round2, parseMoeda };
 /* ⚠ `disabled` e' a UNICA linha ACRESCENTADA depois do move — o campo original nao a
    tinha porque nenhum chamador dele precisava. E' opcional e, quando omitida, chega ao
    <Input> como `undefined`: AbaCompromissosOC nao muda em nada. */
-export function CampoMoeda({ valor, onChange, placeholder, className, disabled }: {
-  valor: number | null; onChange: (n: number | null) => void; placeholder?: string; className?: string; disabled?: boolean;
+export function CampoMoeda({ valor, onChange, placeholder, className, disabled, casas = 2, title }: {
+  valor: number | null; onChange: (n: number | null) => void; placeholder?: string; className?: string;
+  disabled?: boolean;
+  /**
+   * ⚠ QUANTAS CASAS O CAMPO GUARDA — 2 por padrão, e o padrão é o que mantém os onze consumidores
+   * existentes byte a byte como estavam: `roundCasas(n, 2) === round2(n)` e o formato é o mesmo.
+   * O R$/saca da venda de grão pede 4 (F3): o romaneio da cooperativa traz preço com quatro casas,
+   * e arredondar na digitação joga fora centavos que o comprador de fato cobrou.
+   */
+  casas?: number;
+  title?: string;
 }) {
-  const [texto, setTexto] = useState(valor != null ? brl(valor) : '');
+  /* ⚠ O "R$" SÓ APARECE COM DUAS CASAS. `brl` é fixo em 2 por definição de moeda; com 4 o campo
+     mostra o número puro em pt-BR, porque "R$ 97,8532" não é uma quantia que se escreve — é um
+     preço unitário. O símbolo volta no total, que é dinheiro de verdade. */
+  const escrever = (n: number) => (casas === 2 ? brl(n) : formatCasas(n, casas));
+  const [texto, setTexto] = useState(valor != null ? escrever(valor) : '');
   const [editando, setEditando] = useState(false);
-  useEffect(() => { if (!editando) setTexto(valor != null ? brl(valor) : ''); }, [valor, editando]);
+  useEffect(() => { if (!editando) setTexto(valor != null ? escrever(valor) : ''); }, [valor, editando, casas]);
   return (
     <Input
       inputMode="decimal" value={texto} placeholder={placeholder} className={className} disabled={disabled}
+      title={title}
       onFocus={() => setEditando(true)}
       onChange={(e) => { setTexto(e.target.value); onChange(parseMoeda(e.target.value)); }}
       onBlur={() => {
         setEditando(false);
         const n = parseMoeda(texto);
-        const r = n != null ? round2(n) : null;
+        const r = n != null ? roundCasas(n, casas) : null;
         onChange(r);
-        setTexto(r != null ? brl(r) : '');
+        setTexto(r != null ? escrever(r) : '');
       }}
     />
   );
@@ -80,9 +94,12 @@ export function CampoNumero({
         const n = parseMoeda(valor);
         /* Campo vazio continua vazio: "0,00" onde não se digitou nada é um dado inventado. */
         if (n == null) { onChange(''); return; }
-        onChange(round2(n).toLocaleString('pt-BR', {
-          minimumFractionDigits: casas, maximumFractionDigits: casas,
-        }));
+        /* ⚠ ERA `round2` AQUI, E A PROP `casas` SÓ MEXIA NA FORMATAÇÃO — então pedir 4 casas dava
+           um número já cortado em 2, formatado com quatro zeros à direita. Agora o arredondamento
+           segue a prop, e o piso de exibição continua em 2 (A19).
+           ⚠ COM `casas = 2` O RESULTADO É IDÊNTICO ao de antes: `roundCasas(n,2) === round2(n)` e
+           min=max=2. Nenhum dos consumidores existentes muda. */
+        onChange(formatCasas(roundCasas(n, casas), casas));
       }}
     />
   );

@@ -469,3 +469,111 @@ export function useLocaisEstoque(clienteId: string | null | undefined) {
 
   return { locais: data ?? [], carregando: isLoading, erro: error as Error | null };
 }
+
+/** Uma classe dentro de uma venda ou entrega. */
+export interface VendaItem {
+  classe: string;
+  /** Até 4 casas — é o que o romaneio traz (F3). */
+  sacas: number;
+  preco_saca: number;
+  /** `round(sacas × preço, 2)` — o dinheiro, sempre em duas. */
+  valor: number;
+}
+
+/** O lançamento financeiro ligado à venda, quando há. */
+export interface VendaLancamento {
+  id: string;
+  status: string;
+  data_vencimento: string | null;
+  data_pagamento: string | null;
+  cancelado: boolean;
+}
+
+/** Uma saída do estoque COM contrapartida — venda avulsa ou entrega de barter. */
+export interface VendaGrao {
+  id: string;
+  /** `venda_avulsa` | `barter`. Só a avulsa se cancela e edita por aqui. */
+  tipo: string;
+  contrato_barter_id: string | null;
+  data: string;
+  comprador_id: string | null;
+  comprador: string | null;
+  ativo: boolean;
+  status_comercial: string | null;
+  status_financeiro: string | null;
+  observacoes: string | null;
+  sacas: number;
+  valor: number;
+  itens: VendaItem[];
+  lancamento: VendaLancamento | null;
+  autor: string;
+  criado_em: string;
+  cancelado_em: string | null;
+  cancelado_por: string;
+  motivo_cancelamento: string | null;
+}
+
+/**
+ * TUDO QUE COMPÕE A COLUNA "ENTREGUE" — venda avulsa e barter, ativos e cancelados (F3).
+ *
+ * ⚠ ELE É O ÚNICO LUGAR ONDE A VENDA CANCELADA APARECE. As três leituras de saldo passaram a
+ * ignorar operação com `ativo=false` (migration 20261020120000), então a venda estornada some do
+ * Entregue — que é certo — e ficaria invisível, que não é.
+ * ⚠ O BARTER ENTRA SÓ PARA SER VISTO. Ele tem contrato, insumos e conta de permuta; cancelar e
+ * editar continuam no Barter, e a RPC recusa aqui com `VENDA_NAO_AVULSA_*`. A lista mostra porque
+ * o Entregue é a soma dos dois — esconder metade faria a conta não fechar na tela.
+ * ⚠ NENHUM SALDO SE CALCULA AQUI: o topo soma as sacas ATIVAS desta lista, que é a lista falando
+ * de si. Quem diz o saldo é `fn_estoque_graos`.
+ */
+export function useVendasGraos(
+  clienteId: string | null | undefined, safraId: string | null, cultura: string | null,
+  ativo: boolean,
+) {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['vendas-graos', clienteId ?? '', safraId ?? '', cultura ?? ''],
+    enabled: !!clienteId && !!safraId && !!cultura && ativo,
+    queryFn: async (): Promise<VendaGrao[]> => {
+      const { data: r, error: err } = await (supabase as any).rpc('fn_vendas_graos', {
+        p_cliente: clienteId, p_safra_id: safraId, p_cultura: cultura,
+      });
+      if (err) throw err;
+      return (Array.isArray(r) ? r : []).map((x: Record<string, unknown>) => {
+        const l = x?.lancamento as Record<string, unknown> | null;
+        return {
+          id: String(x?.id ?? ''),
+          tipo: String(x?.tipo ?? 'venda_avulsa'),
+          contrato_barter_id: (x?.contrato_barter_id as string | null) ?? null,
+          data: String(x?.data ?? ''),
+          comprador_id: (x?.comprador_id as string | null) ?? null,
+          comprador: (x?.comprador as string | null) ?? null,
+          ativo: x?.ativo !== false,
+          status_comercial: (x?.status_comercial as string | null) ?? null,
+          status_financeiro: (x?.status_financeiro as string | null) ?? null,
+          observacoes: (x?.observacoes as string | null) ?? null,
+          sacas: num(x?.sacas),
+          valor: num(x?.valor),
+          itens: Array.isArray(x?.itens) ? (x.itens as Record<string, unknown>[]).map(i => ({
+            classe: String(i?.classe ?? '—'),
+            sacas: num(i?.sacas),
+            preco_saca: num(i?.preco_saca),
+            valor: num(i?.valor),
+          })) : [],
+          lancamento: l ? {
+            id: String(l.id ?? ''),
+            status: String(l.status ?? ''),
+            data_vencimento: (l.data_vencimento as string | null) ?? null,
+            data_pagamento: (l.data_pagamento as string | null) ?? null,
+            cancelado: l.cancelado === true,
+          } : null,
+          autor: String(x?.autor ?? ''),
+          criado_em: String(x?.criado_em ?? ''),
+          cancelado_em: (x?.cancelado_em as string | null) ?? null,
+          cancelado_por: String(x?.cancelado_por ?? ''),
+          motivo_cancelamento: (x?.motivo_cancelamento as string | null) ?? null,
+        };
+      });
+    },
+  });
+
+  return { vendas: data ?? [], carregando: isLoading, erro: error as Error | null };
+}

@@ -264,11 +264,17 @@ export function BarterVendaModal({
                         o polish-2 já corrigiu a exibição ao REABRIR, mas ao DIGITAR o campo ficava
                         sem separador. Um `Input` solto aqui seria a terceira máscara da casa. */}
                     <td className="px-1 py-0.5">
+                      {/* ⚠ `casas={4}` — F3. O romaneio da cooperativa traz saca e preço com até
+                          quatro casas, e cortar em duas na digitação joga fora o que o comprador
+                          de fato pagou. A EXIBIÇÃO do valor continua em duas: quem arredonda é o
+                          total da linha, não a entrada. */}
                       <CampoNumero valor={linhas[i].sacas} onChange={v => mudar(i, 'sacas', v)}
+                        casas={4} title={linhas[i].sacas}
                         className={cn('h-6 px-1 text-right font-mono text-[10px]', FOCO)} />
                     </td>
                     <td className="px-1 py-0.5">
                       <CampoNumero valor={linhas[i].precoSaca} onChange={v => mudar(i, 'precoSaca', v)}
+                        casas={4} title={linhas[i].precoSaca}
                         className={cn('h-6 px-1 text-right font-mono text-[10px]', FOCO)} />
                     </td>
                     <td className="px-1.5 py-0.5 text-right tabular-nums">{formatMoeda(e.valor)}</td>
