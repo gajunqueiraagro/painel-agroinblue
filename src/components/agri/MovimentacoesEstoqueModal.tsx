@@ -75,6 +75,11 @@ export function MovimentacoesEstoqueModal({
 
   const unidade = unidadeCurtaDaCultura(cultura);
 
+  /* ⚠ MESMA REGRA DO HISTÓRICO DE VENDAS: cancelada é arquivo, não pauta. Aqui elas vinham
+     MISTURADAS com as ativas, não abaixo de um total — pior ainda, porque a riscada aparecia no
+     meio da leitura. Começa fechado sempre, pelo mesmo motivo de lá. */
+  const [verCanceladas, setVerCanceladas] = useState(false);
+
   const topo = useMemo(() => {
     const ativas = movimentacoes.filter(m => m.ativo);
     return {
@@ -83,6 +88,13 @@ export function MovimentacoesEstoqueModal({
       canceladas: movimentacoes.length - ativas.length,
     };
   }, [movimentacoes]);
+
+  /* ⚠ A LISTA VISÍVEL, e o `topo` continua contando TODAS — o cabeçalho diz "2 ativas · 3
+     canceladas" mesmo com as três escondidas, que é o que torna o interruptor descobrível. */
+  const canceladas = useMemo(() => movimentacoes.filter(m => !m.ativo), [movimentacoes]);
+  const visiveis = useMemo(
+    () => (verCanceladas ? movimentacoes : movimentacoes.filter(m => m.ativo)),
+    [movimentacoes, verCanceladas]);
 
   const abrirEdicao = (m: EstoqueMovimentacao) => {
     setCancelandoId(null);
@@ -178,7 +190,7 @@ export function MovimentacoesEstoqueModal({
               <div className="px-2 py-6 text-center text-[10px] text-muted-foreground">
                 Nenhuma movimentação nesta safra.
               </div>
-            ) : movimentacoes.map(m => {
+            ) : visiveis.map(m => {
               /* ⚠ O TEXTO INTEIRO VAI PARA O `title`, porque a linha agora CORTA. Reticências sem
                  como ler o resto seria esconder o motivo do estorno — que é justamente o que o
                  histórico existe para mostrar. */
@@ -314,6 +326,18 @@ export function MovimentacoesEstoqueModal({
               </div>
               );
             })}
+            {/* ⚠ O INTERRUPTOR FECHA A LISTA, e só existe com cancelada: sem nenhuma ele
+                afirmaria que há algo escondido onde não há. */}
+            {canceladas.length > 0 && !erro && !carregando && (
+              <div className="border-t border-slate-100 px-2 py-1 text-[11px] text-muted-foreground">
+                {canceladas.length} cancelada{canceladas.length === 1 ? '' : 's'}
+                {' · '}
+                <button type="button" onClick={() => setVerCanceladas(o => !o)}
+                  className="rounded font-medium text-primary underline-offset-2 hover:underline">
+                  {verCanceladas ? 'ocultar' : 'mostrar'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </DialogContent>

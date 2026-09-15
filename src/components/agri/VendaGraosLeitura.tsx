@@ -71,8 +71,11 @@ export function ComposicaoLeitura({ venda, unidade }: { venda: VendaGrao; unidad
           </tbody>
         </table>
       </div>
+      {/* ⚠ A FRASE MUDOU COM O BOTÃO: "cancele e registre de novo" era o caminho de quando não
+          havia Corrigir — e continuava mandando o operador fazer à mão o que a RPC agora faz numa
+          transação. Nomear o botão é dizer onde ele está. */}
       <p className="shrink-0 text-[10px] text-muted-foreground">
-        Para corrigir sacas ou preço, cancele e registre de novo.
+        Para corrigir sacas ou preço, use <strong>Corrigir</strong>.
       </p>
     </div>
   );

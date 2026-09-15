@@ -210,6 +210,18 @@ export function VendasGraosModal({
 }) {
   const [cancelandoId, setCancelandoId] = useState<string | null>(null);
   const [motivoCancel, setMotivoCancel] = useState('');
+  /**
+   * AS CANCELADAS NASCEM ESCONDIDAS — e o estado é do MODAL, não do usuário.
+   *
+   * ⚠ ELAS OCUPAVAM MAIS ESPAÇO QUE AS ATIVAS: a 24/25 tem 2 vendas válidas e 3 canceladas, e a
+   * linha riscada ainda carrega o motivo do cancelamento na coluna de composição. A pergunta de
+   * quem abre o histórico é "o que vale", e a resposta estava embaixo de três respostas que não
+   * valem mais.
+   * ⚠ COMEÇA FECHADO SEMPRE, de propósito: guardar a escolha faria a próxima abertura mostrar um
+   * total cercado de riscado sem ninguém ter pedido naquele momento. É um gesto barato de repetir
+   * e caro de herdar.
+   */
+  const [verCanceladas, setVerCanceladas] = useState(false);
 
   const unidade = unidadeCurtaDaCultura(cultura);
 
@@ -350,7 +362,23 @@ export function VendasGraosModal({
                         <td className="px-2 py-[5px]" />
                       </tr>
                     )}
-                    {canceladas.map(v => <Linha key={v.id} v={v} {...propsDaLinha} />)}
+                    {/* ⚠ A LINHA DO INTERRUPTOR SÓ EXISTE COM CANCELADA — sem nenhuma, ela
+                        afirmaria que há algo escondido onde não há. E ela fica ABAIXO do Total
+                        ativo porque é ali que a leitura da tabela termina: o total fecha o que
+                        vale, e o que vem depois é arquivo. */}
+                    {canceladas.length > 0 && (
+                      <tr className="border-t border-slate-100">
+                        <td colSpan={10} className="px-2 py-1 text-[11px] text-muted-foreground">
+                          {canceladas.length} cancelada{canceladas.length === 1 ? '' : 's'}
+                          {' · '}
+                          <button type="button" onClick={() => setVerCanceladas(o => !o)}
+                            className="rounded font-medium text-primary underline-offset-2 hover:underline">
+                            {verCanceladas ? 'ocultar' : 'mostrar'}
+                          </button>
+                        </td>
+                      </tr>
+                    )}
+                    {verCanceladas && canceladas.map(v => <Linha key={v.id} v={v} {...propsDaLinha} />)}
                   </>
                 )}
               </tbody>

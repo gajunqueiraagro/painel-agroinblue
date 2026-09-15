@@ -177,7 +177,7 @@ function LinhaConta({ rotulo, children, destaque }: {
 export function VendaGraosModal({
   aberto, onFechar, onRegistrar, salvando, estoque, cultura, safraRotulo,
   clienteId, contas, substituiveis,
-  modo = 'criar', venda = null, onEditar, onCancelar, onCorrigir,
+  modo = 'criar', venda = null, onEditar, onCancelar, onCorrigir, onPedirCorrecao,
 }: {
   aberto: boolean;
   onFechar: () => void;
@@ -202,6 +202,8 @@ export function VendaGraosModal({
    * antiga e grava outra no lugar, com os lançamentos do Financeiro refeitos.
    */
   onCorrigir?: (p: VendaGraosPayload & { venda_id: string; motivo: string }) => void;
+  /** Pedir para reabrir ESTA venda no modo Corrigir — o mesmo gesto do lápis do histórico. */
+  onPedirCorrecao?: (venda: VendaGrao) => void;
   /** A venda sendo vista ou editada. `null` no modo criar. */
   venda?: VendaGrao | null;
   onEditar?: (p: { id: string; data: string; comprador_id: string | null; observacoes: string | null }) => void;
@@ -234,6 +236,11 @@ export function VendaGraosModal({
      `camposTravados` é o que já existia repetido em cada campo (`leitura || (venda && !editavel)`);
      `docTravado` é mais estreito e a razão é do banco: `agri_venda_avulsa_editar` não recebe
      documento, então ele só se digita ao CRIAR. */
+  /* ⚠ A MESMA PERGUNTA QUE A RPC FAZ antes de aceitar a correção — `bool_or(conciliado_em is
+     not null)` sobre os lançamentos NÃO cancelados. Contar os cancelados travaria uma venda que
+     já foi corrigida uma vez. É a mesma regra do lápis do histórico, escrita duas vezes porque
+     os dois lados precisam dela antes do clique. */
+  const jaConciliada = !!venda && venda.lancamentos.some(l => !l.cancelado && l.conciliado);
   const camposTravados = !corrigindo && (leitura || (!!venda && !editavel));
   const docTravado = !criando;   // `criando` já inclui corrigir
   /**
@@ -645,7 +652,7 @@ export function VendaGraosModal({
                    documento — conferido em pg_proc. Prometer no cabeçalho uma edição que o campo
                    logo abaixo mostra travada seria a tela discordando de si mesma. */
                 : editando
-                  ? 'Editando · só comprador, data e observações podem mudar; o documento se edita no lançamento do Financeiro, e sacas e preço se corrigem cancelando e registrando de novo.'
+                  ? 'Editando dados · comprador, data e observações. Para sacas, preço, deduções ou parcelas use Corrigir.'
                 : venda && !venda.ativo
                   /* ⚠ A FAIXA DA CANCELADA É MUDA, não alarmante: o estorno já aconteceu e foi
                      deliberado. Vermelho aqui trataria uma decisão do operador como acidente. */
@@ -1032,7 +1039,14 @@ export function VendaGraosModal({
               QUANDO o dinheiro entra. Eram a mesma aba, e a tabela de parcelas pagava a conta. */}
           <TabsContent value="comprador" className="min-h-0 flex-1 overflow-auto p-0 data-[state=inactive]:hidden">
             <div className="flex min-h-full flex-col gap-2 px-3 py-2">
-              <div className="grid gap-2 md:grid-cols-2">
+              {/* ⚠⚠ `gap-x-6` E NÃO `gap-2`, e a razão é medida: o `FornecedorSelect` já traz o
+                  "＋" e o "✕" dentro do SEU grupo, a 6px do combobox — o arranjo da casa estava
+                  certo. O que estava errado era a calha da grade: com `gap-2` a Data ficava a 8px
+                  do "＋" contra os 6px que o separam do campo dele, e 6 contra 8 é equidistante
+                  aos olhos — o botão parecia da Data. Com 24px a distância de fora é 4× a de
+                  dentro, e a leitura fica óbvia sem mover nada de lugar.
+                  ⚠ `gap-y-2` PRESERVADO: só a calha horizontal mudou, as linhas continuam a 8px. */}
+              <div className="grid gap-x-6 gap-y-2 md:grid-cols-2">
                 <div>
                   <Label className="text-[10px]">Comprador <span className="text-destructive">*</span></Label>
                   {/* ⚠ O ANEL DE FOCO AQUI É `focus:`, NÃO `focus-visible:`, e é escopado a este
@@ -1059,7 +1073,7 @@ export function VendaGraosModal({
                     className={cn('mt-0.5', camposTravados ? CAMPO_TRAVADO : CAMPO_EDITAVEL)} />
                 </div>
               </div>
-              <div className="grid gap-2 md:grid-cols-2">
+              <div className="grid gap-x-6 gap-y-2 md:grid-cols-2">
                 <div>
                   <Label className="text-[10px]">Documento</Label>
                   {/* ⚠ O TIPO NASCE "Outros" AO PRIMEIRO CARACTERE, e é a mesma regra da RPC
@@ -1289,9 +1303,23 @@ export function VendaGraosModal({
                       title="Cancelar esta venda">
                       <Ban className="h-3.5 w-3.5" /> Cancelar venda
                     </Button>
+                    {/* ⚠⚠ CORRIGIR VEM ANTES E É O PRIMÁRIO, e a ordem é o conserto do defeito:
+                        o Gabriel abriu a venda, clicou "Editar" esperando mudar sacas e Senar, e
+                        achou três campos de cadastro. O botão que responde à pergunta mais comum
+                        — "este número está errado" — não existia aqui; morava só no lápis do
+                        histórico, uma tela atrás.
+                        ⚠ E OS DOIS NOMES PASSARAM A DIZER O TAMANHO DO GESTO: "Corrigir" refaz os
+                        lançamentos; "Editar dados" não encosta no Financeiro. */}
                     <Button size="sm" variant="acao" className="h-8 gap-1 px-3 text-[11px]"
-                      onClick={entrarEmEdicao} title="Editar comprador, data e observações">
-                      <Pencil className="h-3.5 w-3.5" /> Editar
+                      disabled={jaConciliada || salvando || !onPedirCorrecao}
+                      title={jaConciliada ? 'Já conciliada: corrija no Financeiro'
+                        : 'Corrigir sacas, preço, deduções ou parcelas (cancela e grava outra)'}
+                      onClick={() => venda && onPedirCorrecao?.(venda)}>
+                      <Pencil className="h-3.5 w-3.5" /> Corrigir
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-8 gap-1 px-3 text-[11px]"
+                      onClick={entrarEmEdicao} title="Editar comprador, data e observações — não mexe no Financeiro">
+                      Editar dados
                     </Button>
                   </>
                 )}

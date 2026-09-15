@@ -1218,6 +1218,10 @@ export function AgriEstoqueGraosTab() {
           onRegistrar={() => {}}
           onEditar={p => { void editarVenda(p); }}
           onCorrigir={p => { void corrigirVenda(p); }}
+          /* ⚠ O MODAL PEDE E A PÁGINA REABRE: trocar `modo` no estado é o que força o remount
+             pela `key`, e é o remount que preenche o formulário a partir da venda. Trocar o modo
+             por dentro do modal deixaria o estado da leitura por baixo do formulário. */
+          onPedirCorrecao={v => setVendaAberta({ venda: v, modo: 'corrigir' })}
           onCancelar={(id, motivo) => { void cancelarVenda(id, motivo); }}
           salvando={salvandoVenda2}
           estoque={linhas}
