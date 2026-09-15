@@ -303,19 +303,28 @@ export function VendaAvulsaModal({
 
           <div className="grid gap-2 md:grid-cols-2">
             <div>
-              {/* ⚠ O RÓTULO É O DESTA TELA, não o do componente: `FornecedorSelect` desenha o seu
-                  dentro de um `space-y-1` (4px), e os outros campos deste modal usam `mt-0.5`
-                  (2px). Dois espaçamentos na mesma linha é exatamente o desalinho do A16 que este
-                  PR veio corrigir — então o rótulo fica aqui e o componente entra só com o campo.
-                  ⚠ E O BOTÃO DE CRIAR VEM DE GRAÇA: ele é do próprio `FornecedorSelect`, que abre
-                  o `FornecedorFormDialog` da casa. Um cadastro de comprador escrito aqui seria o
-                  segundo, e divergiria do financeiro no primeiro campo novo. */}
+              {/* ⚠ `label=""` — E É O QUE APAGA O SEGUNDO RÓTULO. `FornecedorSelect` tem
+                  `label = 'Fornecedor'` por DEFAULT (`FornecedorSelect.tsx:130`): não passar nada
+                  não é o mesmo que não querer rótulo, e o PR anterior supôs que era. Na tela
+                  saíam dois empilhados — "Comprador *" nosso e "Fornecedor" dele —, e o par
+                  select+"+" descia uma linha inteira abaixo do campo Data.
+                  ⚠ NÃO MEXI NO COMPONENTE. A guarda dele já é `{label && ...}`, então a string
+                  vazia some sem contrato novo e sem tocar no default de que as outras telas
+                  dependem. Uma prop `hideLabel` seria mudança de contrato compartilhado para o
+                  que uma string vazia já resolve neste único callsite.
+                  ⚠ E O `space-y-1` DELE NÃO ENCOSTA AQUI: sem o rótulo, o `div` do campo é o
+                  PRIMEIRO filho-elemento, e `space-y-*` só aplica margem a partir do segundo. O
+                  respiro é o `mt-0.5` desta célula — o mesmo das outras três.
+                  ⚠ O BOTÃO DE CRIAR VEM DE GRAÇA: é do próprio `FornecedorSelect`, que abre o
+                  `FornecedorFormDialog` da casa, e nasce `h-8 w-8` — a mesma altura do gatilho e
+                  do campo de Data ao lado. */}
               <Label className="text-[10px]">Comprador <span className="text-destructive">*</span></Label>
               <div className="mt-0.5">
                 <FornecedorSelect
                   fornecedorId={compradorId || null}
                   onFornecedorChange={id => setCompradorId(id ?? '')}
                   clienteId={clienteId}
+                  label=""
                   placeholder="Escolha"
                 />
               </div>
@@ -333,8 +342,15 @@ export function VendaAvulsaModal({
             <div>
               <Label className="text-[10px]">Recebimento</Label>
               {/* ⚠ DOIS BOTÕES, NÃO UM `select`: são duas opções e a escolha muda os campos
-                  abaixo — ver as duas lado a lado explica a diferença sem abrir nada. */}
-              <div className="mt-0.5 inline-flex h-8 overflow-hidden rounded-md border">
+                  abaixo — ver as duas lado a lado explica a diferença sem abrir nada.
+                  ⚠ `flex w-fit`, NUNCA `inline-flex` — era esta a terceira anatomia do
+                  formulário. O `Label` da casa é um `<label>`, que é INLINE (`ui/label.tsx` não
+                  põe `block`): ao lado de um `inline-flex` os dois dividem a MESMA linha, e o
+                  rótulo aparecia colado à esquerda do toggle enquanto nas outras três células ele
+                  ficava por cima. O que mudou não foi o rótulo — foi o vizinho dele.
+                  ⚠ `w-fit` PORQUE `flex` É BLOCO e esticaria a moldura até a largura da célula,
+                  deixando um retângulo vazio à direita dos dois botões. */}
+              <div className="mt-0.5 flex h-8 w-fit overflow-hidden rounded-md border">
                 {(['avista', 'aprazo'] as const).map(c => (
                   <button key={c} type="button" onClick={() => setCondicao(c)}
                     className={cn('px-3 text-[11px] font-medium transition-colors',
