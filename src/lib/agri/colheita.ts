@@ -447,3 +447,21 @@ export function rotuloCulturaUnidade(cultura: string | null | undefined): string
   const unidade = kgPorSaca ? `sacas de ${kgPorSaca}kg` : 'toneladas';
   return `${labelDaCultura(cultura)} · ${unidade}`;
 }
+
+/**
+ * A UNIDADE CURTA, para colar num número: "sc 25kg", "sc 60kg", "t".
+ *
+ * ⚠ É A MESMA INFORMAÇÃO DE `rotuloCulturaUnidade`, em outra régua — uma para ler numa frase
+ * ("Amendoim · sacas de 25kg"), outra para caber ao lado de um número de seis dígitos num cartão
+ * de um quinto de tela. Duas renderizações, UMA fonte: as duas leem `kgPorSaca`, e no dia em que
+ * a saca de soja for decidida as duas mudam juntas.
+ * ⚠ O PESO ENTRA NA UNIDADE porque sem ele "sc" não diz quanto é. Duas culturas em saca de pesos
+ * diferentes mostrariam o mesmo "sc" ao lado de números que não se comparam — que é a mesma
+ * doença que a coluna única da visão "Todas" tinha.
+ * ⚠ A TONELADA NÃO LEVA PESO: "t 1000kg" seria redundante — a tonelada JÁ é o peso, e o "t"
+ * sozinho é o que o operador escreve.
+ */
+export function unidadeCurtaDaCultura(cultura: string | null | undefined): string {
+  const { kgPorSaca } = unidadeDaCultura(cultura);
+  return kgPorSaca ? `sc ${kgPorSaca}kg` : 't';
+}

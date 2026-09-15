@@ -21,7 +21,7 @@ import { cn } from '@/lib/utils';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { formatIsoToBr } from '@/components/ui/date-picker';
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
-import { unidadeDaCultura, rotuloCulturaUnidade } from '@/lib/agri/colheita';
+import { rotuloCulturaUnidade, unidadeCurtaDaCultura } from '@/lib/agri/colheita';
 import { TH_CINZA as TH } from '@/lib/idiomaVisual';
 import { Cartao } from '@/components/ui/cartao';
 import { useEstoqueGraosBalanco } from '@/hooks/useEstoqueGraos';
@@ -47,8 +47,6 @@ export function BalancoSafrasModal({
   const { linhas, valorMercadoTotal, carregando, erro } =
     useEstoqueGraosBalanco(clienteId, cultura || null, aberto);
 
-  const unidade = unidadeDaCultura(cultura);
-  const rotuloUnidade = unidade.unidadeTotal === 'sacas' ? 'sc' : 't';
   /* ⚠ O ESTOQUE DE HOJE É O `final` DA ÚLTIMA LINHA, não uma soma: as linhas encadeiam, e somar
      os finais contaria o grão uma vez por safra que ele atravessou. */
   const emEstoque = linhas.length > 0 ? linhas[linhas.length - 1].final : 0;
@@ -88,7 +86,11 @@ export function BalancoSafrasModal({
             {/* ⚠ O ESCOPO NA SEGUNDA LINHA, a mesma forma que os cartões da tela atrás passaram a
                 usar: enquanto um dizia "— todas as safras" inline e o outro "esta safra" embaixo,
                 a mesma ideia tinha duas caras entre telas vizinhas. */}
-            <Cartao rotulo="Em estoque hoje" escopo="todas as safras" unidade={rotuloUnidade}
+            {/* ⚠ A UNIDADE COM PESO E DEPOIS DO NÚMERO, a mesma régua do cartão da tela atrás: o
+                "sc" sozinho não dizia quanto é uma saca, e duas culturas em sacas de pesos
+                diferentes mostrariam o mesmo rótulo sobre números que não se comparam. */}
+            <Cartao rotulo="Em estoque hoje" escopo="todas as safras"
+              unidade={unidadeCurtaDaCultura(cultura)} posicaoUnidade="depois"
               valor={formatNum(emEstoque, 2)} />
             <Cartao rotulo="Valor a mercado hoje" unidade="R$"
               valor={formatNum(valorMercadoTotal, 2)}

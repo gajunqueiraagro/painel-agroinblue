@@ -29,7 +29,7 @@ import { CINZA_CABECALHO, TH_CINZA as TH } from '@/lib/idiomaVisual';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { useSafrasLavoura, useTalhoesDaSafra } from '@/hooks/useAreaPlantada';
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
-import { unidadeDaCultura, kgPorUnidade, rotuloCulturaUnidade } from '@/lib/agri/colheita';
+import { unidadeDaCultura, kgPorUnidade, rotuloCulturaUnidade, unidadeCurtaDaCultura } from '@/lib/agri/colheita';
 import { labelDaClasse, corDaClasse } from '@/lib/agri/barterVenda';
 import { useEstoqueGraos, totaisDoEstoque, useEstoqueGraosResumo } from '@/hooks/useEstoqueGraos';
 import { VendaAvulsaModal, type VendaAvulsaPayload } from '@/components/agri/VendaAvulsaModal';
@@ -429,8 +429,14 @@ export function AgriEstoqueGraosTab() {
             ⚠ E O `saldo` SAIU DO `totalResumo` JUNTO: uma soma crua de unidades diferentes sem
             ninguém para lê-la é um convite para o próximo consumidor. O que sobrou lá é o `valor`,
             que soma legitimamente — real é real, venha de saca ou de tonelada. */}
+        {/* ⚠ O "sc" ERA CRAVADO AQUI, e estava errado para metade das culturas: mandioca e cana
+            se medem em tonelada, e o cartão diria "sc" sobre um número de toneladas. Agora a
+            unidade sai de `unidadeCurtaDaCultura` — a mesma fonte do rótulo acima da tabela.
+            ⚠ E ELA VAI DEPOIS DO NÚMERO: unidade de medida vem depois em português, ao contrário
+            da moeda. Os cartões de R$ ao lado continuam com o "R$" na frente. */}
         {!verTodas && (
-          <Cartao rotulo="Em estoque" escopo="esta safra" unidade="sc"
+          <Cartao rotulo="Em estoque" escopo="esta safra"
+            unidade={unidadeCurtaDaCultura(cultura)} posicaoUnidade="depois"
             valor={formatNum(t.saldo, 2)} />
         )}
         {/* ⚠ O NOME DIZ DE QUE PREÇO SE FALA, e é essa regra que renomeou o cartão do "Todas". Os

@@ -37,7 +37,7 @@ import { cn } from '@/lib/utils';
  * abaixo sem passar o mouse.
  * ⚠ O `title` FICA MESMO ASSIM: ele é a defesa do `truncate`, não o esconderijo do centavo.
  */
-export function Cartao({ rotulo, escopo, valor, unidade, titulo, cor }: {
+export function Cartao({ rotulo, escopo, valor, unidade, posicaoUnidade = 'antes', titulo, cor }: {
   rotulo: string;
   /**
    * A SEGUNDA LINHA DO RÓTULO — o ESCOPO do número ("esta safra", "todas as safras").
@@ -53,8 +53,19 @@ export function Cartao({ rotulo, escopo, valor, unidade, titulo, cor }: {
    */
   escopo?: string;
   valor: string;
-  /** "R$", "ha" — miúdo, colado no número. */
+  /** "R$", "ha", "sc 25kg" — miúdo, colado no número. */
   unidade?: string;
+  /**
+   * DE QUE LADO DO NÚMERO A UNIDADE FICA. `'antes'` por padrão — é como todo cartão do repo
+   * nasceu, e é o certo para dinheiro: "R$ 44.141,52" é como se escreve.
+   *
+   * ⚠ QUANTIDADE PEDE O OUTRO LADO, e é por isso que a opção existe: em português a moeda vem
+   * antes do número e a unidade de medida vem depois — "R$ 1.200,00" e "1.200,00 sc 25kg". Ler
+   * "sc 25kg 44.141,52" faz o olho tropeçar na unidade antes de saber quanto é.
+   * ⚠ O PADRÃO NÃO MUDOU DE PROPÓSITO: todo chamador que não passa nada continua exatamente como
+   * estava, e nenhum cartão de dinheiro foi tocado.
+   */
+  posicaoUnidade?: 'antes' | 'depois';
   /** O valor por extenso, com centavos, no hover. */
   titulo?: string;
   /**
@@ -83,7 +94,7 @@ export function Cartao({ rotulo, escopo, valor, unidade, titulo, cor }: {
           pode passar da casa dos milhões, e cortar com o inteiro no `title` é melhor que
           empurrar o cartão vizinho para fora do bloco. */}
       <div className="mt-0.5 flex items-baseline gap-1 truncate whitespace-nowrap" title={titulo}>
-        {unidade && (
+        {unidade && posicaoUnidade === 'antes' && (
           <span className="shrink-0 text-[11px] font-medium leading-none text-muted-foreground">
             {unidade}
           </span>
@@ -91,6 +102,14 @@ export function Cartao({ rotulo, escopo, valor, unidade, titulo, cor }: {
         <span className={cn('truncate text-[16px] font-medium leading-[1.1] tabular-nums', cor)}>
           {valor}
         </span>
+        {/* ⚠ O MESMO `span`, DO OUTRO LADO — mesma fonte, mesmo peso, mesmo `shrink-0`. A unidade
+            não pode encolher nem quebrar: ela é parte do número, e "25kg" numa segunda linha é a
+            mesma quebra clássica que o `nowrap` deste bloco já evita do lado esquerdo. */}
+        {unidade && posicaoUnidade === 'depois' && (
+          <span className="shrink-0 text-[11px] font-medium leading-none text-muted-foreground">
+            {unidade}
+          </span>
+        )}
       </div>
     </div>
   );
