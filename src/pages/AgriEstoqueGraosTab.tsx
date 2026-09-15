@@ -26,6 +26,7 @@ import { cn } from '@/lib/utils';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { useSafrasLavoura, useTalhoesDaSafra } from '@/hooks/useAreaPlantada';
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
+import { unidadeDaCultura } from '@/lib/agri/colheita';
 import { labelDaClasse, corDaClasse } from '@/lib/agri/barterVenda';
 import { useEstoqueGraos, totaisDoEstoque, useEstoqueGraosResumo } from '@/hooks/useEstoqueGraos';
 import { VendaAvulsaModal, type VendaAvulsaPayload } from '@/components/agri/VendaAvulsaModal';
@@ -118,6 +119,46 @@ export function AgriEstoqueGraosTab() {
   }, [culturasDaSafra, cultura]);
 
   const verTodas = cultura === TODAS;
+
+  /* ⚠ UMA CONTA SO' PARA O CO'DIGO DA SAFRA: ele era refeito inline em cada modal, e agora o
+     breadcrumb e' um terceiro leitor. Tres copias da mesma expressao e' onde uma delas fica para
+     tras. E' o `codigo` como o seletor o mostra ("25/26-Lav"), sem cirurgia de string: inventar um
+     recorte aqui faria o cabecalho chamar a safra por um nome que nenhum outro lugar usa. */
+  const safraRotulo = useMemo(() => {
+    const sf = safras.find(x => x.id === safraId);
+    return sf?.codigo || sf?.nome || '';
+  }, [safras, safraId]);
+
+  /**
+   * O TI'TULO E' UM BREADCRUMB — PR-ESTOQUE-BREADCRUMB-ORDEM.
+   *
+   * ⚠ A UNIDADE VEM DE `unidadeDaCultura`, NUNCA de uma lista escrita aqui: `colheita.ts` e' a
+   * fonte unica, e ela diz que SO' o amendoim tem saca (25 kg) — soja, milho, cana e mandioca
+   * caem em tonelada, de proposito, porque "a saca de 60 kg e' convencao de mercado, e convencao
+   * nao e' decisao". Escrever "(60kg saca)" aqui faria a tela afirmar um peso que ninguem
+   * confirmou.
+   * ⚠ SO' A RAIZ E' CLICA'VEL. O `›` e o nome da cultura sao texto: se tudo fosse alvo, o gesto de
+   * "voltar" competiria com o de "estou aqui", e o operador clicaria no proprio lugar em que ja'
+   * esta'.
+   */
+  const unidade = unidadeDaCultura(verTodas ? null : cultura);
+  const rotuloUnidade = unidade.kgPorSaca ? `${unidade.kgPorSaca}kg saca` : 'tonelada';
+  const tituloTela = verTodas ? 'Estoque de Grãos' : (
+    <>
+      <button type="button" onClick={() => setCultura(TODAS)}
+        title="Voltar para todas as culturas"
+        className="rounded underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+        Estoque de Grãos
+      </button>
+      <span className="mx-1 font-normal text-muted-foreground">›</span>
+      {labelDaCultura(cultura)}
+      <span className="font-normal text-muted-foreground"> ({rotuloUnidade})</span>
+      {/* ⚠ A SAFRA SO' ENTRA QUANDO HA' UMA: sem `safraRotulo` o " · Safra " sairia pendurado. */}
+      {safraRotulo && (
+        <span className="font-normal text-muted-foreground"> · Safra {safraRotulo}</span>
+      )}
+    </>
+  );
 
   const { linhas, carregando, erro } = useEstoqueGraos(
     clienteId, safraId || null, verTodas ? null : (cultura || null));
@@ -235,7 +276,7 @@ export function AgriEstoqueGraosTab() {
           abaixo do topo, enquanto o da Conciliação nasce a 12px: era este o "título baixo". O
           par rótulo+campo continua alinhado por baixo entre si, no `div` da direita. */}
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <PageHeader titulo="Estoque de Grãos" />
+        <PageHeader titulo={tituloTela} />
         <div className="flex flex-wrap items-end gap-2">
           <div className="w-[170px]">
             <Label className="text-[10px]">Safra</Label>
@@ -411,8 +452,12 @@ export function AgriEstoqueGraosTab() {
       ) : (
       <div className="overflow-hidden rounded-md border">
         <table className="w-full table-fixed border-collapse">
+          {/* ⚠ A LARGURA ANDOU COM A COLUNA, e isto nao e' detalhe: `colgroup` e' POSICIONAL.
+              Mover "Saldo sc" no `thead` sem mover o `10%` dele aqui nao quebraria nada visivel —
+              so' daria a largura do saldo para a coluna de Venda e a de Venda para o saldo, calado.
+              A soma continua 100%: 18+10+10+8+10+11+10+11+12. */}
           <colgroup>
-            {['18%', '10%', '10%', '8%', '10%', '10%', '11%', '11%', '12%'].map((w, i) => (
+            {['18%', '10%', '10%', '8%', '10%', '11%', '10%', '11%', '12%'].map((w, i) => (
               <col key={i} style={{ width: w }} />
             ))}
           </colgroup>
@@ -422,7 +467,6 @@ export function AgriEstoqueGraosTab() {
               <th className={cn(TH, 'text-right')}>Colhido</th>
               <th className={cn(TH, 'text-right')}>Entregue</th>
               <th className={cn(TH, 'text-right')}>Quebra</th>
-              <th className={cn(TH, 'text-right')}>Saldo sc</th>
               {/* ⚠ OS DOIS GRUPOS SÃO DOIS PREÇOS DIFERENTES SOBRE O MESMO GRÃO, e a borda existe
                   para que ninguém some as duas colunas de valor. À esquerda, o que JÁ SE VENDEU
                   (média ponderada das entregas); à direita, o que o mercado paga HOJE. "R$ 1,2 mi"
@@ -444,6 +488,11 @@ export function AgriEstoqueGraosTab() {
               <th className={cn(TH, 'text-right')} title="Saldo × preço médio já praticado">
                 Valor
               </th>
+              {/* ⚠ O SALDO FECHA O GRUPO DA ESQUERDA, encostado na divisa: ele e' a quantidade que
+                  as duas colunas de valor multiplicam, e' o que o `Mercado` do outro lado tambem
+                  multiplica, e a leitura da linha termina nele — Colhido, Entregue, Quebra, a que
+                  preco, quanto da', e o que sobrou. */}
+              <th className={cn(TH, 'text-right')}>Saldo sc</th>
               <th className={cn(TH, SEP_TH, 'text-right')} title="Última cotação de mercado por saca">
                 Mercado
               </th>
@@ -497,15 +546,15 @@ export function AgriEstoqueGraosTab() {
                 <td className="px-2 py-0.5 text-right text-[11px] tabular-nums text-muted-foreground">
                   {formatNum(0, 2)}
                 </td>
-                <td className={cn('px-2 py-0.5 text-right text-[11px] font-medium tabular-nums',
-                  l.saldo > 0 && 'text-success')}>
-                  {formatNum(l.saldo, 2)}
-                </td>
                 <td className="px-2 py-0.5 text-right text-[11px] tabular-nums text-muted-foreground">
                   {dinheiro(l.preco_ref, l.saldo)}
                 </td>
                 <td className="px-2 py-0.5 text-right text-[11px] font-medium tabular-nums">
                   {dinheiro(l.valor, l.saldo)}
+                </td>
+                <td className={cn('px-2 py-0.5 text-right text-[11px] font-medium tabular-nums',
+                  l.saldo > 0 && 'text-success')}>
+                  {formatNum(l.saldo, 2)}
                 </td>
                 {/* ⚠ O PREÇO DE MERCADO APARECE MESMO COM SALDO ZERO, e o de venda não: eles
                     respondem coisas diferentes. "R$/sc venda" com zero saca seria a média de um
@@ -533,15 +582,15 @@ export function AgriEstoqueGraosTab() {
                 <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">
                   {formatNum(0, 2)}
                 </td>
-                <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">
-                  {formatNum(t.saldo, 2)}
-                </td>
                 {/* ⚠ NENHUMA DAS DUAS COLUNAS DE R$/sc TEM TOTAL: a média de três preços de
                     classes diferentes não é um preço que alguém pratica. Vazio aqui é mais honesto
                     que um número — e vale igual para a venda e para o mercado. */}
                 <td className="px-2 py-1" />
                 <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">
                   {t.saldo > 0 ? formatMoeda(t.valor) : '—'}
+                </td>
+                <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">
+                  {formatNum(t.saldo, 2)}
                 </td>
                 <td className={cn('px-2 py-1', SEP_TH)} />
                 {/* ⚠ O TOTAL A MERCADO SOMA SÓ AS CLASSES COTADAS, porque é isso que `valor_mercado`
@@ -596,8 +645,7 @@ export function AgriEstoqueGraosTab() {
         salvando={salvandoVenda}
         estoque={linhas}
         cultura={cultura}
-        safraRotulo={safras.find(s => s.id === safraId)?.codigo
-          || safras.find(s => s.id === safraId)?.nome || ''}
+        safraRotulo={safraRotulo}
         fornecedores={fin.fornecedores}
         contas={fin.contasBancarias}
       />
@@ -609,8 +657,7 @@ export function AgriEstoqueGraosTab() {
         salvando={salvandoCotacao}
         estoque={linhas}
         cultura={cultura}
-        safraRotulo={safras.find(s => s.id === safraId)?.codigo
-          || safras.find(s => s.id === safraId)?.nome || ''}
+        safraRotulo={safraRotulo}
       />
 
       <p className="text-[10px] leading-snug text-muted-foreground">

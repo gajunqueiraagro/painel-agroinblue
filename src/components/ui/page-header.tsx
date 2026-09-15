@@ -18,7 +18,12 @@
 import type { ReactNode } from 'react';
 
 export function PageHeader({ titulo, subtitulo }: {
-  titulo: string;
+  /* ⚠ `ReactNode` TAMBEM NO TITULO, desde o PR-ESTOQUE-BREADCRUMB-ORDEM: o titulo do Estoque de
+     Graos e' um breadcrumb com a raiz CLICAVEL ("Estoque de Graos › Amendoim (25kg saca)"). A
+     regua nao muda — o `h2` continua sendo o mesmo `text-[15px] font-semibold leading-none`, e o
+     `button` de dentro herda fonte e peso pelo preflight do Tailwind. Nasceu `string` e foi
+     alargado quando a primeira tela precisou; texto puro segue sendo o caso comum. */
+  titulo: ReactNode;
   /* ⚠ `ReactNode`, NÃO `string`: o subtítulo do detalhe do Barter é uma linha composta
      (parceiro · cultura · aberto em), e obrigá-la a virar string mataria o `—` de cultura
      ausente, que é informação. */
