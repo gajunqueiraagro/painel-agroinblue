@@ -34,7 +34,8 @@ import { useSafrasLavoura, useTalhoesDaSafra } from '@/hooks/useAreaPlantada';
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
 import { unidadeDaCultura, kgPorUnidade, rotuloCulturaUnidade, unidadeCurtaDaCultura } from '@/lib/agri/colheita';
 import { labelDaClasse, corDaClasse } from '@/lib/agri/barterVenda';
-import { useEstoqueGraos, totaisDoEstoque, useEstoqueGraosResumo, useEstoqueMovimentacoes, useVendasGraos, useLancamentosSubstituiveis } from '@/hooks/useEstoqueGraos';
+import { rotuloTipoLocal } from '@/lib/agri/locaisEstoque';
+import { useEstoqueGraos, totaisDoEstoque, useEstoqueGraosResumo, useEstoqueMovimentacoes, useVendasGraos, useLancamentosSubstituiveis, useEstoqueGraosPorLocal, useLocaisEstoque } from '@/hooks/useEstoqueGraos';
 import type { VendaGrao } from '@/hooks/useEstoqueGraos';
 import { VendaGraosModal, type VendaGraosPayload } from '@/components/agri/VendaGraosModal';
 import { CotacaoGraosModal, type CotacaoGraosPayload } from '@/components/agri/CotacaoGraosModal';
@@ -67,6 +68,9 @@ const SEP_TD = 'border-l-2 border-slate-300';
  * Um token improvável é o que distingue "escolhi ver todas" de "ainda não escolhi".
  */
 const TODAS = '__todas__';
+/* ⚠ SENTINELA, e não `''`: o `SelectItem` do Radix recusa valor vazio, e o `''` do estado
+   significa "todos". A tradução mora nos dois lados do `onValueChange`. */
+const TODOS_LOCAIS = '__todos_locais__';
 
 /**
  * AS TRÊS COLUNAS DE UNIDADE DA VISÃO "TODAS".
@@ -220,6 +224,26 @@ export function AgriEstoqueGraosTab() {
    */
   const temporada = safraRotulo.split('-')[0].trim();
 
+  /**
+   * O FILTRO DE LOCAL — `''` é "todos", e ele só existe quando há o que escolher.
+   *
+   * ⚠ COM ZERO OU UM LOCAL ATIVO O SELETOR NÃO APARECE, e isso não é esconder um recurso: com um
+   * local só, "Todos os locais" e aquele local são o MESMO conjunto, e oferecer a escolha
+   * ensinaria que existe um recorte onde não existe. É o caso do NJ hoje — a tela fica idêntica
+   * à de antes deste PR, sem filtro e sem "Onde está".
+   */
+  const { locais: locaisCadastro } = useLocaisEstoque(clienteId);
+  const locaisAtivos = useMemo(() => locaisCadastro.filter(l => l.ativo), [locaisCadastro]);
+  const temVariosLocais = locaisAtivos.length > 1;
+  const [localId, setLocalId] = useState('');
+  /* ⚠ O FILTRO SE DESFAZ SOZINHO se o local escolhido deixar de ser ativo (o operador desativou
+     noutra aba): sem isto a tela continuaria filtrando por um local que sumiu do seletor, e o
+     rótulo diria um nome que a lista não tem mais. */
+  useEffect(() => {
+    if (localId && !locaisAtivos.some(l => l.id === localId)) setLocalId('');
+  }, [localId, locaisAtivos]);
+  const localEscolhido = locaisAtivos.find(l => l.id === localId) ?? null;
+
   const rotuloRecorte = verTodas ? (
     /* ⚠ MESMA POSIÇÃO E MESMAS CLASSES do rótulo por cultura — é o SLOT, não dois enfeites
        parecidos. Só o conteúdo muda: aqui não há seta, porque "Todas" É a raiz e não há para
@@ -237,12 +261,21 @@ export function AgriEstoqueGraosTab() {
       </button>
       {rotuloCulturaUnidade(cultura)}
       {safraRotulo && <> · Safra {safraRotulo}</>}
+      {/* ⚠ O RÓTULO DIZ O RECORTE INTEIRO, e o local entra nele porque a tabela abaixo passou a
+          mostrar OUTROS números. Um filtro ativo que não aparece na legenda é a forma mais barata
+          de alguém conferir o total errado com o do histórico. */}
+      {localEscolhido && <> · {localEscolhido.nome}</>}
     </p>
   );
 
+
   const { linhas, carregando, erro } = useEstoqueGraos(
-    clienteId, safraId || null, verTodas ? null : (cultura || null));
-  const resumo = useEstoqueGraosResumo(clienteId, safraId || null, verTodas);
+    clienteId, safraId || null, verTodas ? null : (cultura || null), localId || null);
+  const resumo = useEstoqueGraosResumo(clienteId, safraId || null, verTodas, localId || null);
+  /* ⚠ SEM `p_local_id`: o bloco responde "onde está", então filtrar por um local o deixaria com
+     uma linha só — a resposta seria a pergunta. */
+  const porLocal = useEstoqueGraosPorLocal(
+    clienteId, safraId || null, verTodas ? null : (cultura || null), temVariosLocais && !verTodas);
   const t = useMemo(() => totaisDoEstoque(linhas), [linhas]);
   /* ⚠ SÓ O `valor`, e a ausência do `saldo` é deliberada: somar o saldo de culturas em unidades
      diferentes não mede nada (saca de 25 kg com tonelada), e era o que o cartão "Em estoque" fazia
@@ -707,6 +740,27 @@ export function AgriEstoqueGraosTab() {
               </SelectContent>
             </Select>
           </div>
+          {/* ⚠ O TERCEIRO SELETOR ENTRA À DIREITA DA CULTURA e não move nenhum dos dois: eles têm
+              largura fixa (170 e 150) num `flex`, então um irmão novo cresce para a direita.
+              ⚠ E ELE SÓ EXISTE COM 2+ LOCAIS ATIVOS — ver `temVariosLocais`. Com um local, o slot
+              simplesmente não tem esta caixa, e a linha fica igual à de antes. */}
+          {temVariosLocais && (
+            <div className="w-[190px]">
+              <Label className="text-[10px]">Local</Label>
+              <Select value={localId || TODOS_LOCAIS}
+                onValueChange={v => setLocalId(v === TODOS_LOCAIS ? '' : v)}>
+                <SelectTrigger className="mt-0.5 h-8 text-[12px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={TODOS_LOCAIS} className="text-[12px]">Todos os locais</SelectItem>
+                  {locaisAtivos.map(l => (
+                    <SelectItem key={l.id} value={l.id} className="text-[12px]">{l.nome}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
 
         {/* O grupo da DIREITA — os dois botões, e só eles.
@@ -1152,6 +1206,51 @@ export function AgriEstoqueGraosTab() {
       </div>
       )}
 
+      {/* ── ONDE ESTÁ — o saldo repartido pelos locais ──
+          ⚠ SÓ COM 2+ LOCAIS ATIVOS, e é a mesma regra do filtro: com um local só, este bloco
+          responderia "tudo no único lugar que existe" — uma linha que repete o total da tabela
+          com outro rótulo.
+          ⚠ ELE NÃO SEGUE O FILTRO DE LOCAL (ver `porLocal`): é o mapa, e um mapa filtrado por um
+          ponto mostra o ponto. Fica abaixo da tabela e acima dos botões, que é onde a leitura
+          termina — "de que qualidade é o que sobrou" e então "onde ele está". */}
+      {temVariosLocais && !verTodas && (
+        <div className="overflow-hidden rounded-md border">
+          <div className={cn(TH, 'flex items-center justify-between')}>
+            <span>Onde está</span>
+            <span className="opacity-70">{unidadeCurtaDaCultura(cultura)}</span>
+          </div>
+          {porLocal.erro ? (
+            <div className="px-2 py-4 text-center text-[11px] text-destructive">
+              <AlertTriangle className="mr-1 inline h-3.5 w-3.5 align-[-2px]" />
+              Não foi possível ler os locais — o dado continua no banco.
+            </div>
+          ) : porLocal.carregando ? (
+            <div className="px-2 py-4 text-center text-[11px] text-muted-foreground">
+              <Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin align-[-2px]" /> Carregando…
+            </div>
+          ) : porLocal.locais.length === 0 ? (
+            <div className="px-2 py-4 text-center text-[10px] text-muted-foreground">
+              Nenhum local com grão desta cultura.
+            </div>
+          ) : porLocal.locais.map(l => (
+            /* ⚠ A18 DE DUAS ALTURAS: identidade 12px/500 em cima, contexto 10px muted embaixo, e o
+               número à direita na altura da identidade. O tipo do local é contexto — "próprio" e
+               "terceiro" mudam quem responde pelo grão, não o quanto. */
+            <div key={l.local_id}
+              className="flex items-start gap-2 border-t border-slate-100 px-2 py-1.5 first:border-t-0">
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[12px] font-medium" title={l.nome}>{l.nome}</div>
+                <div className="truncate text-[10px] text-muted-foreground">{rotuloTipoLocal(l.tipo)}</div>
+              </div>
+              <div className={cn('shrink-0 whitespace-nowrap text-[12px] font-medium tabular-nums',
+                l.saldo > 0 && 'text-success')}>
+                {formatNum(l.saldo, 2)}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* ⚠ OS DOIS BOTÕES NASCEM DESABILITADOS E DIZEM POR QUÊ — a regra da OC: o motivo fica
           escrito, não só no `title`. Eles existem desde já porque um saldo sem nenhuma ação à
           vista parece um número que ninguém pode mexer, e o operador iria procurar a saída em
@@ -1216,6 +1315,7 @@ export function AgriEstoqueGraosTab() {
         onFechar={() => setModalBalanco(false)}
         clienteId={clienteId}
         cultura={verTodas ? '' : cultura}
+        localId={localId || null}
         dataCotacao={t.dataMercado}
       />
 

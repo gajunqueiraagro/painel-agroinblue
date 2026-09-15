@@ -89,21 +89,32 @@ const num = (v: unknown): number => {
   return isFinite(n) ? n : 0;
 };
 
+/**
+ * O `p_local_id` SÓ VIAJA QUANDO HÁ FILTRO — e isso é contrato, não economia.
+ *
+ * ⚠ AS TRÊS RPC DECLARAM `p_local_id uuid default null`, e omitir o argumento é o que faz o
+ * PostgREST usar o default. Mandar `null` explícito dá no mesmo NO BANCO, mas a chamada sem o
+ * campo é a mesma de antes deste PR byte a byte — e é assim que se prova que "Todos os locais"
+ * não mudou de comportamento.
+ */
+const comLocal = (base: Record<string, unknown>, localId: string | null | undefined) =>
+  (localId ? { ...base, p_local_id: localId } : base);
+
 export function useEstoqueGraos(
   clienteId: string | null | undefined, safraId: string | null, cultura: string | null,
+  localId?: string | null,
 ) {
   const { data, isLoading, error } = useQuery({
-    queryKey: ['estoque-graos', clienteId ?? '', safraId ?? '', cultura ?? ''],
+    /* ⚠ O LOCAL ENTRA NA CHAVE: sem ele o React Query serviria o cache de "Todos os locais" ao
+       trocar o filtro, e a tela mostraria os números do conjunto com o nome de um local só. */
+    queryKey: ['estoque-graos', clienteId ?? '', safraId ?? '', cultura ?? '', localId ?? ''],
     /* ⚠ SEM CULTURA A CONSULTA NEM SAI: a RPC exige os três, e chamá-la com `null` devolveria
        erro em vez de "ainda não escolhi". O seletor abre preenchido, então isto só vale para o
        instante entre carregar as culturas e escolher a primeira. */
     enabled: !!clienteId && !!safraId && !!cultura,
     queryFn: async (): Promise<EstoqueClasse[]> => {
-      const { data: r, error: err } = await (supabase as any).rpc('fn_estoque_graos', {
-        p_cliente: clienteId,
-        p_safra_id: safraId,
-        p_cultura: cultura,
-      });
+      const { data: r, error: err } = await (supabase as any).rpc('fn_estoque_graos',
+        comLocal({ p_cliente: clienteId, p_safra_id: safraId, p_cultura: cultura }, localId));
       if (err) throw err;
       /**
        * ⚠ TUDO PASSA POR `Number`: `numeric` do Postgres chega como STRING no JSON do PostgREST
@@ -260,17 +271,16 @@ export interface EstoqueResumoCultura {
  */
 export function useEstoqueGraosResumo(
   clienteId: string | null | undefined, safraId: string | null, ativo: boolean,
+  localId?: string | null,
 ) {
   const { data, isLoading, error } = useQuery({
-    queryKey: ['estoque-graos-resumo', clienteId ?? '', safraId ?? ''],
+    queryKey: ['estoque-graos-resumo', clienteId ?? '', safraId ?? '', localId ?? ''],
     /* ⚠ SÓ CONSULTA QUANDO "TODAS" ESTÁ ABERTO: com uma cultura escolhida esta lista não aparece,
        e buscá-la assim mesmo seria uma ida ao banco por troca de cultura, sem ninguém para ler. */
     enabled: !!clienteId && !!safraId && ativo,
     queryFn: async (): Promise<EstoqueResumoCultura[]> => {
-      const { data: r, error: err } = await (supabase as any).rpc('fn_estoque_graos_resumo', {
-        p_cliente: clienteId,
-        p_safra_id: safraId,
-      });
+      const { data: r, error: err } = await (supabase as any).rpc('fn_estoque_graos_resumo',
+        comLocal({ p_cliente: clienteId, p_safra_id: safraId }, localId));
       if (err) throw err;
       return (Array.isArray(r) ? r : []).map((x: Record<string, unknown>) => ({
         cultura: String(x?.cultura ?? '—'),
@@ -332,15 +342,14 @@ export interface BalancoSafraLinha {
  */
 export function useEstoqueGraosBalanco(
   clienteId: string | null | undefined, cultura: string | null, ativo: boolean,
+  localId?: string | null,
 ) {
   const { data, isLoading, error } = useQuery({
-    queryKey: ['estoque-graos-balanco', clienteId ?? '', cultura ?? ''],
+    queryKey: ['estoque-graos-balanco', clienteId ?? '', cultura ?? '', localId ?? ''],
     enabled: !!clienteId && !!cultura && ativo,
     queryFn: async (): Promise<{ linhas: BalancoSafraLinha[]; valorMercadoTotal: number }> => {
-      const { data: r, error: err } = await (supabase as any).rpc('fn_estoque_graos_balanco', {
-        p_cliente: clienteId,
-        p_cultura: cultura,
-      });
+      const { data: r, error: err } = await (supabase as any).rpc('fn_estoque_graos_balanco',
+        comLocal({ p_cliente: clienteId, p_cultura: cultura }, localId));
       if (err) throw err;
       const bruto = (r ?? {}) as { linhas?: unknown; valor_mercado_total?: unknown };
       const linhas = Array.isArray(bruto.linhas) ? bruto.linhas : [];
@@ -472,6 +481,56 @@ export interface LocalEstoque {
  * ⚠ A ORDEM VEM DO BANCO (`ativo desc, tipo, nome`) e a tela não reordena: reordenar aqui criaria
  * uma segunda regra de exibição que divergiria no dia em que a RPC mudasse a dela.
  */
+/** Uma linha do "Onde está" — o saldo de uma cultura num local. */
+export interface EstoquePorLocal {
+  local_id: string;
+  nome: string;
+  tipo: string;
+  colhido: number;
+  entregue: number;
+  quebra: number;
+  saldo: number;
+}
+
+/**
+ * ONDE O GRÃO ESTÁ — o saldo de UMA cultura repartido pelos locais.
+ *
+ * ⚠ ELE NÃO É O `fn_estoque_graos` COM OUTRO `group by`: aquele desce à CLASSE dentro de um
+ * local; este desce ao LOCAL somando as classes. As duas perguntas convivem na mesma tela — "de
+ * que qualidade é o que sobrou" e "onde ele está" — e uma não se deriva da outra sem refazer a
+ * consulta.
+ * ⚠ A RPC TRAZ ATÉ LOCAL INATIVO QUE AINDA TEM MOVIMENTO (`l.ativo or co.sc is not null or …`):
+ * desativar um local no cadastro não faz o grão sair de lá, e escondê-lo faria a soma das linhas
+ * não fechar com o total da tabela.
+ */
+export function useEstoqueGraosPorLocal(
+  clienteId: string | null | undefined, safraId: string | null, cultura: string | null,
+  ativo: boolean,
+) {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['estoque-graos-por-local', clienteId ?? '', safraId ?? '', cultura ?? ''],
+    /* ⚠ SÓ COM 2+ LOCAIS a tela monta o bloco, e o `ativo` carrega essa decisão: com um local só,
+       "Onde está" responderia "tudo no único lugar que existe". */
+    enabled: !!clienteId && !!safraId && !!cultura && ativo,
+    queryFn: async (): Promise<EstoquePorLocal[]> => {
+      const { data: r, error: err } = await (supabase as any).rpc('fn_estoque_graos_por_local', {
+        p_cliente: clienteId, p_safra_id: safraId, p_cultura: cultura,
+      });
+      if (err) throw err;
+      return (Array.isArray(r) ? r : []).map((x: Record<string, unknown>) => ({
+        local_id: String(x?.local_id ?? ''),
+        nome: String(x?.nome ?? '—'),
+        tipo: String(x?.tipo ?? ''),
+        colhido: num(x?.colhido),
+        entregue: num(x?.entregue),
+        quebra: num(x?.quebra),
+        saldo: num(x?.saldo),
+      }));
+    },
+  });
+  return { locais: data ?? [], carregando: isLoading, erro: error as Error | null };
+}
+
 export function useLocaisEstoque(clienteId: string | null | undefined) {
   const { data, isLoading, error } = useQuery({
     queryKey: ['locais-estoque', clienteId ?? ''],

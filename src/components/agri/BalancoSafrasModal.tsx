@@ -27,7 +27,7 @@ import { Cartao } from '@/components/ui/cartao';
 import { useEstoqueGraosBalanco } from '@/hooks/useEstoqueGraos';
 
 export function BalancoSafrasModal({
-  aberto, onFechar, clienteId, cultura, dataCotacao,
+  aberto, onFechar, clienteId, cultura, dataCotacao, localId,
 }: {
   aberto: boolean;
   onFechar: () => void;
@@ -43,9 +43,11 @@ export function BalancoSafrasModal({
    * some, em vez de inventar uma data.
    */
   dataCotacao: string | null;
+  /** O local escolhido no filtro da tela, ou `null` para todos — EL-02. */
+  localId?: string | null;
 }) {
   const { linhas, valorMercadoTotal, carregando, erro } =
-    useEstoqueGraosBalanco(clienteId, cultura || null, aberto);
+    useEstoqueGraosBalanco(clienteId, cultura || null, aberto, localId || null);
 
   /* ⚠ O ESTOQUE DE HOJE É O `final` DA ÚLTIMA LINHA, não uma soma: as linhas encadeiam, e somar
      os finais contaria o grão uma vez por safra que ele atravessou. */
