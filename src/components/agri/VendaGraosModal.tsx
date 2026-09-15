@@ -1,11 +1,15 @@
 /**
  * VENDER DO ESTOQUE — o documento inteiro, de bruto a parcela (F3.1).
  *
- * ⚠ O FLUXO É VERTICAL, UMA COLUNA — regra do roadmap, e o molde é o `AbateDetalhesDialog`:
- * BASE → DEDUÇÕES → LÍQUIDO → PAGAMENTO, nessa ordem, descendo. Um split de duas colunas põe o
- * líquido ao lado da base e o operador perde a única coisa que a tela precisa ensinar: que um
- * número VEM do outro. É a mesma razão pela qual o funrural do abate mora abaixo do valor base,
- * e não ao lado.
+ * ⚠⚠ ABAS + RESUMO LATERAL FIXO — e o shell é o do `LancamentoV2Dialog`, não um desenho novo.
+ * A primeira versão empilhou os cinco blocos numa coluna só, seguindo a ordem do abate: BASE →
+ * DEDUÇÕES → LÍQUIDO → PAGAMENTO. A ordem estava certa e o MEIO estava errado — cinco blocos numa
+ * coluna viram uma página que rola, e o A21 diz que o resumo nunca sai da tela. Aqui a ordem
+ * sobrevive nas ABAS (a numeração delas É o fluxo), e o que era "ver o líquido nascer do bruto"
+ * passa a ser o resumo da direita, que mostra os quatro números ao mesmo tempo, sempre.
+ * ⚠ O GRID É O DE LÁ, copiado: `grid-cols-[1fr_300px] grid-rows-[auto_minmax(0,1fr)_auto]` com
+ * altura FIXA `h-[92vh]`. É a altura fixa que garante o A23 — trocar de aba não muda o tamanho do
+ * modal, porque só o miolo da coluna esquerda rola.
  *
  * ⚠ ELE CRESCEU DO `VendaAvulsaModal`, que era só o bloco 1. O nome mudou junto: "avulsa" era o
  * que ela era enquanto não tinha dedução nem parcela — hoje é uma operação comercial completa,
@@ -18,6 +22,7 @@
  */
 import { useState, useEffect, useMemo } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -80,6 +85,8 @@ export function VendaGraosModal({
   /** Lançamentos manuais que esta venda pode substituir. Vazio = o bloco nem aparece. */
   substituiveis: readonly LancamentoSubstituivel[];
 }) {
+  /** A aba aberta. A ordem delas É o fluxo: compor → deduzir → receber. */
+  const [aba, setAba] = useState<'composicao' | 'deducoes' | 'recebimento' | 'substituir'>('composicao');
   const [criterio, setCriterio] = useState<'preco' | 'valor'>('preco');
   const [valorTotal, setValorTotal] = useState('');
   const [itens, setItens] = useState<Record<string, { sacas: string; preco: number | null }>>({});
@@ -105,6 +112,7 @@ export function VendaGraosModal({
     const inicial: Record<string, { sacas: string; preco: number | null }> = {};
     for (const c of estoque) inicial[c.classe] = { sacas: '', preco: c.preco_ref > 0 ? c.preco_ref : null };
     setItens(inicial);
+    setAba('composicao');
     setCriterio('preco'); setValorTotal('');
     setSenarPct(String(SENAR_PCT_PADRAO).replace('.', ',')); setSenarReais(''); setSenarTocado(false);
     setDescontos([]); setCondicao('avista'); setParcelas([novaParcela()]);
@@ -252,6 +260,27 @@ export function VendaGraosModal({
     });
   };
 
+
+  /* ⚠ AS DUAS PEÇAS DO RESUMO SÃO CÓPIA do `LancamentoV2Dialog` (`ResumoBlocoHead`/`ResumoRow`,
+     linhas 234-253), onde nasceram privadas. A régua tem de ser a MESMA — o briefing pede que as
+     duas telas se leiam como irmãs —, e importar de lá arrastaria um arquivo de 2.300 linhas do
+     Financeiro para dentro do estoque.
+     ⚠ SÃO DOIS CONSUMIDORES AGORA. No terceiro, elas sobem para `ui/` — é a mesma conta que fez o
+     `Cartao` e o cinza do cabeçalho subirem, e a que ainda não foi feita pelo `ConfirmarComMotivo`. */
+  const BlocoHead = ({ titulo }: { titulo: string }) => (
+    <div className="mb-0.5 mt-0.5 border-y border-primary/15 bg-primary/10 px-3 py-0.5 first:mt-0">
+      <span className="text-[9px] font-bold uppercase leading-none tracking-wide text-primary/90">{titulo}</span>
+    </div>
+  );
+  const Row = ({ label, value, valueClassName }: {
+    label: string; value: string | null; valueClassName?: string;
+  }) => (
+    <div className="flex items-baseline justify-between gap-1.5 leading-tight">
+      <span className="shrink-0 text-muted-foreground">{label}</span>
+      <span className={cn('truncate text-right font-medium', valueClassName)}>{value || '—'}</span>
+    </div>
+  );
+
   /** Uma linha do bloco de deduções — rótulo à esquerda, R$ à direita (A17). */
   const LinhaConta = ({ rotulo, children, destaque }: {
     rotulo: React.ReactNode; children: React.ReactNode; destaque?: boolean;
@@ -265,10 +294,38 @@ export function VendaGraosModal({
     </div>
   );
 
+  /* ⚠ O RECEBIMENTO EM UMA FRASE, para o resumo: "A vista em 15/09/26" ou a lista dos vencimentos.
+     Ele é o único item do resumo que não é um número — e é o que o operador confere por último. */
+  const resumoRecebimento = condicao === 'avista'
+    ? (data ? `À vista em ${formatIsoToBr(data)}` : null)
+    : parcelas.some(p => p.vencimento)
+      ? parcelas.filter(p => p.vencimento)
+          .map(p => `${formatIsoToBr(p.vencimento)} ${formatMoeda(parseMoeda(p.valor) ?? 0)}`).join(' · ')
+      : null;
+
+  const abas = [
+    { id: 'composicao' as const, label: 'Composição' },
+    { id: 'deducoes' as const, label: 'Deduções' },
+    { id: 'recebimento' as const, label: 'Recebimento' },
+    /* ⚠ A ABA DE SUBSTITUIÇÃO SÓ EXISTE COM CANDIDATO, e leva a contagem no título: uma aba vazia
+       ensinaria que há uma decisão a tomar onde não há. */
+    ...(substituiveis.length > 0
+      ? [{ id: 'substituir' as const, label: `Substituir (${substituiveis.length})` }]
+      : []),
+  ];
+
   return (
     <Dialog open={aberto} onOpenChange={o => { if (!o) onFechar(); }}>
-      <DialogContent className="max-w-3xl gap-0 overflow-hidden p-0 [&>button.absolute]:hidden">
-        <div className="flex items-start gap-2 bg-primary px-4 py-2.5 text-primary-foreground">
+      {/* ⚠ ALTURA FIXA `h-[92vh]` E GRID DE 2×3 — o shell do `LancamentoV2Dialog`. A altura fixa é
+          o que faz o A23 valer: trocar de aba não muda o tamanho do modal, porque quem rola é só o
+          miolo da coluna esquerda. O resumo faz `row-span-2` e ocupa a coluna direita inteira,
+          inclusive ao lado do rodapé. */}
+      <DialogContent className={cn(
+        'flex flex-col overflow-hidden border border-border bg-card p-0 shadow-2xl',
+        'h-[92vh] max-h-[92vh] max-w-5xl [&>button.absolute]:hidden',
+        'grid grid-cols-[1fr_300px] grid-rows-[auto_minmax(0,1fr)_auto]',
+      )}>
+        <div className="col-span-2 col-start-1 row-start-1 flex items-start gap-2 bg-primary px-4 py-2.5 text-primary-foreground">
           <div className="min-w-0">
             <h2 className="truncate text-[15px] font-bold leading-tight">
               Vender do estoque · {labelDaCultura(cultura)}
@@ -287,317 +344,327 @@ export function VendaGraosModal({
           </Button>
         </div>
 
-        {/* ⚠ `min-w-0` — `DialogContent` é grid; sem isto o conteúdo largo clipa (df1b32a0).
-            ⚠ E A ROLAGEM É DESTE BLOCO, não do diálogo: são cinco blocos empilhados, e o cabeçalho
-            azul e o rodapé têm de ficar. */}
-        <div className="max-h-[70vh] min-w-0 space-y-3 overflow-y-auto px-3 py-2">
-
-          {/* ── BLOCO 1 — COMPOSIÇÃO ─────────────────────────────────────────────────────── */}
-          <div className="space-y-1.5">
-            <div className="flex flex-wrap items-end justify-between gap-2">
-              <p className="text-[11px] text-muted-foreground">{rotuloCulturaUnidade(cultura)}</p>
-              {/* ⚠ O CRITÉRIO É UM TOGGLE, como o À vista/A prazo: são dois jeitos de dizer o mesmo
-                  documento, e ver os dois lado a lado explica a diferença sem abrir nada. */}
-              <div className="flex h-8 w-fit overflow-hidden rounded-md border">
-                {([['preco', 'Preço por saca'], ['valor', 'Valor total']] as const).map(([v, r]) => (
-                  <button key={v} type="button" onClick={() => setCriterio(v)}
-                    className={cn('px-3 text-[11px] font-medium transition-colors',
-                      criterio === v ? 'bg-primary text-primary-foreground'
-                        : 'bg-transparent text-muted-foreground hover:bg-muted')}>
-                    {r}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {criterio === 'valor' && (
-              <div className="flex flex-wrap items-end gap-2 rounded-md border bg-muted/20 px-2 py-1.5">
-                <div className="w-[190px]">
-                  <Label className="text-[10px]">Valor total do documento (R$) <span className="text-destructive">*</span></Label>
-                  <CampoNumero valor={valorTotal} onChange={setValorTotal} casas={2}
-                    className="mt-0.5 h-8 text-right text-[12px]" />
-                </div>
-                {/* ⚠ O TEXTO EXPLICA O QUE O PREÇO VIRA, porque a coluna fica travada e ninguém
-                    adivinha por quê: com preços informados eles são PESO do rateio; sem nenhum, o
-                    rateio é por saca. */}
-                <p className="min-w-0 flex-1 text-[10px] leading-snug text-muted-foreground">
-                  O R$/{unidade} de cada classe é derivado do total. Com preços informados eles
-                  entram como <strong>peso</strong> do rateio; em branco, rateia por saca.
-                </p>
-              </div>
-            )}
-
-            <div className="overflow-hidden rounded-md border">
-              <table className="w-full table-fixed border-collapse">
-                <colgroup>
-                  {['22%', '14%', '17%', '17%', '15%', '15%'].map((w, i) => <col key={i} style={{ width: w }} />)}
-                </colgroup>
-                <thead>
-                  <tr>
-                    <th className={cn(TH, 'text-left')}>Classe</th>
-                    <th className={cn(TH, 'text-right')}>Em estoque</th>
-                    <th className={cn(TH, 'text-right')}>Vender ({unidade})</th>
-                    <th className={cn(TH, 'text-right')}>R$ / {unidade}</th>
-                    <th className={cn(TH, 'text-right')}>Total</th>
-                    <th className={cn(TH, 'text-right')}>Saldo final</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {linhas.map(l => (
-                    <tr key={l.classe} className={cn('border-t border-slate-100', l.travada && 'opacity-45')}>
-                      <td className="truncate px-2 py-1 text-[11px]">
-                        <span className={cn('mr-1.5 inline-block h-2 w-2 rounded-full align-[-1px]',
-                          corDaClasse(l.classe))} />
-                        {labelDaClasse(l.classe)}
-                      </td>
-                      <td className="px-2 py-1 text-right text-[11px] tabular-nums">{formatNum(l.saldo, 2)}</td>
-                      <td className="px-1 py-1">
-                        <CampoNumero valor={itens[l.classe]?.sacas ?? ''} disabled={l.travada}
-                          casas={4} title={itens[l.classe]?.sacas ?? ''}
-                          onChange={v => setItens(o => ({
-                            ...o, [l.classe]: { ...(o[l.classe] ?? { preco: null }), sacas: v },
-                          }))}
-                          className={cn('h-7 text-right text-[11px]',
-                            l.excede && 'border-destructive focus-visible:ring-destructive')} />
-                        {l.excede && (
-                          <div className="mt-0.5 flex items-center gap-1 text-[9px] text-destructive">
-                            <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
-                            acima do saldo ({formatNum(l.saldo, 2)} {unidade})
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-1 py-1">
-                        {criterio === 'valor' ? (
-                          /* ⚠ TRAVADO E MUDO no critério do valor — mostrar o derivado num campo
-                             editável convidaria a corrigi-lo, e a correção seria desfeita no
-                             próximo rateio. */
-                          <div className="truncate px-1 text-right text-[11px] tabular-nums text-muted-foreground"
-                            title={l.precoEfetivo ? formatCasas(l.precoEfetivo, 4) : undefined}>
-                            {l.precoEfetivo > 0 ? formatCasas(l.precoEfetivo, 4) : '—'}
-                          </div>
-                        ) : (
-                          <CampoMoeda valor={itens[l.classe]?.preco ?? null} disabled={l.travada}
-                            casas={4}
-                            onChange={v => setItens(o => ({
-                              ...o, [l.classe]: { ...(o[l.classe] ?? { sacas: '' }), preco: v },
-                            }))}
-                            className="h-7 text-right text-[11px]" />
-                        )}
-                      </td>
-                      <td className="px-2 py-1 text-right text-[11px] font-medium tabular-nums">
-                        {l.total > 0 ? formatMoeda(l.total) : '—'}
-                      </td>
-                      <td className={cn('px-2 py-1 text-right text-[11px] font-medium tabular-nums',
-                        l.sacas > 0 && 'text-success')}>
-                        {formatNum(l.sobra, 2)}
-                      </td>
-                    </tr>
-                  ))}
-                  <tr className={cn(CINZA_CABECALHO, 'text-white')}>
-                    <td className="px-2 py-1 text-[11px] font-bold">Total</td>
-                    <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">{formatNum(saldoAtual, 2)}</td>
-                    <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">
-                      {vendidas > 0 ? formatNum(vendidas, 2) : '—'}
-                    </td>
-                    {/* ⚠ R$/sc NÃO TEM TOTAL: média de preços de classes diferentes não é um preço. */}
-                    <td className="px-2 py-1" />
-                    <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">
-                      {bruto > 0 ? formatMoeda(bruto) : '—'}
-                    </td>
-                    <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">{formatNum(sobraTotal, 2)}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* ── BLOCO 2 — DEDUÇÕES ───────────────────────────────────────────────────────── */}
-          <div className="rounded-md border bg-muted/20 px-3 py-2">
-            <LinhaConta rotulo="= Bruto">{bruto > 0 ? formatMoeda(bruto) : '—'}</LinhaConta>
-            <div className="flex items-center gap-2 py-0.5">
-              <div className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">(−) Senar</div>
-              {/* ⚠ OS DOIS CAMPOS SÃO O MESMO NÚMERO — mexer num escreve o outro, como o funrural
-                  do abate. O operador tem o % na cabeça e o R$ no documento; obrigá-lo a converter
-                  seria pedir uma conta que a tela sabe fazer. */}
-              <div className="flex shrink-0 items-center gap-1">
-                <CampoNumero valor={senarPct} onChange={mudarSenarPct} casas={2}
-                  className="h-7 w-[64px] text-right text-[11px]" />
-                <span className="text-[10px] text-muted-foreground">%</span>
-                <CampoNumero valor={senarTocado ? senarReais : formatCasas(senar, 2)}
-                  onChange={mudarSenarReais} casas={2}
-                  className="h-7 w-[104px] text-right text-[11px]" />
-              </div>
-            </div>
-            {descontos.map((d, i) => (
-              <div key={i} className="flex items-center gap-2 py-0.5">
-                <Input value={d.descricao} placeholder="Secagem, armazenagem…"
-                  onChange={e => setDescontos(o => o.map((x, j) => j === i ? { ...x, descricao: e.target.value } : x))}
-                  className="h-7 min-w-0 flex-1 text-[11px]" />
-                <CampoNumero valor={d.valor} casas={2}
-                  onChange={v => setDescontos(o => o.map((x, j) => j === i ? { ...x, valor: v } : x))}
-                  className="h-7 w-[104px] shrink-0 text-right text-[11px]" />
-                <button type="button" title="Remover desconto" aria-label="Remover desconto"
-                  onClick={() => setDescontos(o => o.filter((_, j) => j !== i))}
-                  className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-rose-100 hover:text-rose-700">
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
+        <Tabs value={aba} onValueChange={v => setAba(v as typeof aba)}
+          className="col-start-1 row-start-2 flex min-h-0 flex-col">
+          {/* ⚠ A RÉGUA DAS ABAS É A DO FINANCEIRO, copiada: inativa discreta, ativa com fundo
+              `background`, borda fininha SEM a de baixo e um `after:` de 1px no primário. Duas
+              bordas somadas dariam a linha grossa que o briefing chama de "pasta evidente". */}
+          <TabsList className="h-8 w-full shrink-0 justify-start gap-0.5 rounded-none border-b border-border bg-accent/40 px-2">
+            {abas.map(a => (
+              <TabsTrigger key={a.id} value={a.id} className={cn(
+                'relative h-6 rounded-b-none rounded-t-md px-3 text-[12px] font-medium text-muted-foreground',
+                'hover:bg-background/60 hover:text-foreground',
+                'data-[state=active]:bg-background data-[state=active]:font-semibold data-[state=active]:text-foreground',
+                'data-[state=active]:border data-[state=active]:border-border data-[state=active]:border-b-transparent data-[state=active]:shadow-sm',
+                'data-[state=active]:after:absolute data-[state=active]:after:inset-x-0 data-[state=active]:after:-bottom-px data-[state=active]:after:h-px data-[state=active]:after:bg-primary',
+              )}>
+                {a.label}
+                {/* ⚠ O PONTO VERMELHO NA ABA QUE TRAVA O BOTÃO — o mesmo recurso do Financeiro. Sem
+                    ele, o operador lê "as parcelas não fecham" no rodapé e não sabe onde ir. */}
+                {a.id === 'recebimento' && !fecha && vendidas > 0 && (
+                  <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-destructive"
+                    aria-label="pendência" />
+                )}
+              </TabsTrigger>
             ))}
-            <button type="button" onClick={() => setDescontos(o => [...o, { descricao: '', valor: '' }])}
-              className="mt-0.5 inline-flex items-center gap-1 rounded px-1 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground">
-              <Plus className="h-3 w-3" /> outro desconto
-            </button>
-            <LinhaConta rotulo="= Líquido a receber" destaque>
-              {liquido > 0 ? formatMoeda(liquido) : '—'}
-            </LinhaConta>
-          </div>
+          </TabsList>
 
-          {/* ── BLOCO 3 — RECEBIMENTO ────────────────────────────────────────────────────── */}
-          <div className="space-y-1.5">
-            <div className="flex flex-wrap items-end justify-between gap-2">
-              <div>
-                <Label className="text-[10px]">Recebimento</Label>
-                <div className="mt-0.5 flex h-8 w-fit overflow-hidden rounded-md border">
-                  {(['avista', 'aprazo'] as const).map(c => (
-                    <button key={c} type="button" onClick={() => setCondicao(c)}
+          {/* ── ABA 1 — COMPOSIÇÃO ─────────────────────────────────────────────────────────── */}
+          <TabsContent value="composicao" className="min-h-0 flex-1 overflow-hidden p-0 data-[state=inactive]:hidden">
+            <div className="flex h-full min-h-0 flex-col gap-1.5 px-3 py-2">
+              <div className="flex flex-wrap items-end justify-between gap-2">
+                <p className="text-[11px] text-muted-foreground">{rotuloCulturaUnidade(cultura)}</p>
+                <div className="flex h-8 w-fit overflow-hidden rounded-md border">
+                  {([['preco', 'Preço por saca'], ['valor', 'Valor total']] as const).map(([v, r]) => (
+                    <button key={v} type="button" onClick={() => setCriterio(v)}
                       className={cn('px-3 text-[11px] font-medium transition-colors',
-                        condicao === c ? 'bg-primary text-primary-foreground'
+                        criterio === v ? 'bg-primary text-primary-foreground'
                           : 'bg-transparent text-muted-foreground hover:bg-muted')}>
-                      {c === 'avista' ? 'À vista' : 'A prazo'}
+                      {r}
                     </button>
                   ))}
                 </div>
               </div>
-              {condicao === 'aprazo' && (
-                <div className="flex items-end gap-2">
-                  <Button type="button" size="sm" variant="outline" className="h-8 gap-1 px-2 text-[11px]"
-                    onClick={dividirIgual} disabled={liquido <= 0}
-                    title="Preenche os valores dividindo o líquido; o resíduo vai na última">
-                    Dividir igual
-                  </Button>
-                  <Button type="button" size="sm" variant="outline" className="h-8 gap-1 px-2 text-[11px]"
-                    onClick={() => setParcelas(o => [...o, novaParcela()])}>
-                    <Plus className="h-3.5 w-3.5" /> parcela
-                  </Button>
-                </div>
-              )}
-            </div>
 
-            {condicao === 'avista' ? (
-              <div className="grid gap-2 md:grid-cols-2">
-                <div>
-                  <Label className="text-[10px]">Conta que recebe <span className="text-destructive">*</span></Label>
-                  <ContaBancariaSelect value={parcelas[0]?.contaId ?? ''} contas={contas}
-                    onValueChange={v => setParcelas(o => [{ ...(o[0] ?? novaParcela()), contaId: v }])}
-                    placeholder="Escolha" className="mt-0.5 h-8 text-[12px]" />
-                </div>
-                {/* ⚠ À VISTA NÃO PEDE VENCIMENTO NEM VALOR: são a data da venda e o líquido. Pedir
-                    de novo é convidar a divergirem. */}
-                <div className="flex items-end">
-                  <p className="text-[10px] leading-snug text-muted-foreground">
-                    Uma parcela de <strong className="tabular-nums">{formatMoeda(liquido)}</strong>,
-                    paga em {data ? formatIsoToBr(data) : '—'}.
+              {criterio === 'valor' && (
+                <div className="flex flex-wrap items-end gap-2 rounded-md border bg-muted/20 px-2 py-1.5">
+                  <div className="w-[190px]">
+                    <Label className="text-[10px]">Valor total do documento (R$) <span className="text-destructive">*</span></Label>
+                    <CampoNumero valor={valorTotal} onChange={setValorTotal} casas={2}
+                      className="mt-0.5 h-8 text-right text-[12px]" />
+                  </div>
+                  <p className="min-w-0 flex-1 text-[10px] leading-snug text-muted-foreground">
+                    O R$/{unidade} de cada classe é derivado do total. Com preços informados eles
+                    entram como <strong>peso</strong> do rateio; em branco, rateia por saca.
                   </p>
                 </div>
+              )}
+
+              {/* ⚠ QUEM ROLA É A LISTA, NÃO O MODAL (A28): o `overflow-auto` mora aqui, e o
+                  cabeçalho e o Total da tabela ficam dentro dele — com três classes nunca rola,
+                  e numa cultura de muitas classes rola só esta caixa. */}
+              <div className="min-h-0 flex-1 overflow-auto rounded-md border">
+                <table className="w-full table-fixed border-collapse">
+                  <colgroup>
+                    {['22%', '14%', '17%', '17%', '15%', '15%'].map((w, i) => <col key={i} style={{ width: w }} />)}
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th className={cn(TH, 'text-left')}>Classe</th>
+                      <th className={cn(TH, 'text-right')}>Em estoque</th>
+                      <th className={cn(TH, 'text-right')}>Vender ({unidade})</th>
+                      <th className={cn(TH, 'text-right')}>R$ / {unidade}</th>
+                      <th className={cn(TH, 'text-right')}>Total</th>
+                      <th className={cn(TH, 'text-right')}>Saldo final</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {linhas.map(l => (
+                      <tr key={l.classe} className={cn('border-t border-slate-100', l.travada && 'opacity-45')}>
+                        <td className="truncate px-2 py-1 text-[11px]">
+                          <span className={cn('mr-1.5 inline-block h-2 w-2 rounded-full align-[-1px]',
+                            corDaClasse(l.classe))} />
+                          {labelDaClasse(l.classe)}
+                        </td>
+                        <td className="px-2 py-1 text-right text-[11px] tabular-nums">{formatNum(l.saldo, 2)}</td>
+                        <td className="px-1 py-1">
+                          <CampoNumero valor={itens[l.classe]?.sacas ?? ''} disabled={l.travada}
+                            casas={4} title={itens[l.classe]?.sacas ?? ''}
+                            onChange={v => setItens(o => ({
+                              ...o, [l.classe]: { ...(o[l.classe] ?? { preco: null }), sacas: v },
+                            }))}
+                            className={cn('h-7 text-right text-[11px]',
+                              l.excede && 'border-destructive focus-visible:ring-destructive')} />
+                          {l.excede && (
+                            <div className="mt-0.5 flex items-center gap-1 text-[9px] text-destructive">
+                              <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
+                              acima do saldo ({formatNum(l.saldo, 2)} {unidade})
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-1 py-1">
+                          {criterio === 'valor' ? (
+                            <div className="truncate px-1 text-right text-[11px] tabular-nums text-muted-foreground"
+                              title={l.precoEfetivo ? formatCasas(l.precoEfetivo, 4) : undefined}>
+                              {l.precoEfetivo > 0 ? formatCasas(l.precoEfetivo, 4) : '—'}
+                            </div>
+                          ) : (
+                            <CampoMoeda valor={itens[l.classe]?.preco ?? null} disabled={l.travada}
+                              casas={4}
+                              onChange={v => setItens(o => ({
+                                ...o, [l.classe]: { ...(o[l.classe] ?? { sacas: '' }), preco: v },
+                              }))}
+                              className="h-7 text-right text-[11px]" />
+                          )}
+                        </td>
+                        <td className="px-2 py-1 text-right text-[11px] font-medium tabular-nums">
+                          {l.total > 0 ? formatMoeda(l.total) : '—'}
+                        </td>
+                        <td className={cn('px-2 py-1 text-right text-[11px] font-medium tabular-nums',
+                          l.sacas > 0 && 'text-success')}>
+                          {formatNum(l.sobra, 2)}
+                        </td>
+                      </tr>
+                    ))}
+                    <tr className={cn(CINZA_CABECALHO, 'text-white')}>
+                      <td className="px-2 py-1 text-[11px] font-bold">Total</td>
+                      <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">{formatNum(saldoAtual, 2)}</td>
+                      <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">
+                        {vendidas > 0 ? formatNum(vendidas, 2) : '—'}
+                      </td>
+                      <td className="px-2 py-1" />
+                      <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">
+                        {bruto > 0 ? formatMoeda(bruto) : '—'}
+                      </td>
+                      <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">{formatNum(sobraTotal, 2)}</td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
-            ) : (
-              <div className="space-y-1.5">
-                {parcelas.map((p, i) => (
-                  <div key={i} className="grid gap-2 md:grid-cols-[1fr_1fr_auto_1fr_1.4fr_auto]">
-                    <div>
-                      <Label className="text-[10px]">Vencimento <span className="text-destructive">*</span></Label>
-                      <DatePicker value={p.vencimento} className="mt-0.5"
-                        onChange={v => setParcelas(o => o.map((x, j) => j === i ? { ...x, vencimento: v } : x))} />
-                    </div>
-                    <div>
-                      <Label className="text-[10px]">Valor <span className="text-destructive">*</span></Label>
-                      <CampoNumero valor={p.valor} casas={2} className="mt-0.5 h-8 text-right text-[12px]"
-                        onChange={v => setParcelas(o => o.map((x, j) => j === i ? { ...x, valor: v } : x))} />
-                    </div>
-                    <div>
-                      <Label className="text-[10px]">Pago?</Label>
-                      <div className="mt-0.5 flex h-8 items-center">
-                        <Checkbox checked={p.pago}
-                          onCheckedChange={c => setParcelas(o => o.map((x, j) => j === i
-                            ? { ...x, pago: c === true, dataPagamento: c === true ? (x.dataPagamento || x.vencimento) : '' }
-                            : x))} />
-                      </div>
-                    </div>
-                    <div>
-                      <Label className="text-[10px]">Pagamento</Label>
-                      <DatePicker value={p.dataPagamento} className="mt-0.5"
-                        onChange={v => setParcelas(o => o.map((x, j) => j === i ? { ...x, dataPagamento: v } : x))} />
-                    </div>
-                    <div>
-                      <Label className="text-[10px]">Conta <span className="text-destructive">*</span></Label>
-                      <ContaBancariaSelect value={p.contaId} contas={contas} placeholder="Escolha"
-                        className="mt-0.5 h-8 text-[12px]"
-                        onValueChange={v => setParcelas(o => o.map((x, j) => j === i ? { ...x, contaId: v } : x))} />
-                    </div>
-                    <div className="flex items-end">
-                      {parcelas.length > 1 && (
-                        <button type="button" title="Remover parcela" aria-label="Remover parcela"
-                          onClick={() => setParcelas(o => o.filter((_, j) => j !== i))}
-                          className="mb-1 rounded p-0.5 text-muted-foreground hover:bg-rose-100 hover:text-rose-700">
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </div>
+            </div>
+          </TabsContent>
+
+          {/* ── ABA 2 — DEDUÇÕES ───────────────────────────────────────────────────────────── */}
+          <TabsContent value="deducoes" className="min-h-0 flex-1 overflow-auto p-0 data-[state=inactive]:hidden">
+            <div className="px-3 py-2">
+              <div className="rounded-md border bg-muted/20 px-3 py-2">
+                <LinhaConta rotulo="= Bruto">{bruto > 0 ? formatMoeda(bruto) : '—'}</LinhaConta>
+                <div className="flex items-center gap-2 py-0.5">
+                  <div className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">(−) Senar</div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <CampoNumero valor={senarPct} onChange={mudarSenarPct} casas={2}
+                      className="h-7 w-[64px] text-right text-[11px]" />
+                    <span className="text-[10px] text-muted-foreground">%</span>
+                    <CampoNumero valor={senarTocado ? senarReais : formatCasas(senar, 2)}
+                      onChange={mudarSenarReais} casas={2}
+                      className="h-7 w-[104px] text-right text-[11px]" />
+                  </div>
+                </div>
+                {descontos.map((d, i) => (
+                  <div key={i} className="flex items-center gap-2 py-0.5">
+                    <Input value={d.descricao} placeholder="Secagem, armazenagem…"
+                      onChange={e => setDescontos(o => o.map((x, j) => j === i ? { ...x, descricao: e.target.value } : x))}
+                      className="h-7 min-w-0 flex-1 text-[11px]" />
+                    <CampoNumero valor={d.valor} casas={2}
+                      onChange={v => setDescontos(o => o.map((x, j) => j === i ? { ...x, valor: v } : x))}
+                      className="h-7 w-[104px] shrink-0 text-right text-[11px]" />
+                    <button type="button" title="Remover desconto" aria-label="Remover desconto"
+                      onClick={() => setDescontos(o => o.filter((_, j) => j !== i))}
+                      className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-rose-100 hover:text-rose-700">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
                   </div>
                 ))}
-                {/* ⚠ O RODAPÉ DO BLOCO É O JUIZ: a RPC recusa com `PARCELAS_NAO_FECHAM_LIQUIDO`, e
-                    descobrir isso depois de apertar Registrar é o pior momento. Verde quando fecha,
-                    vermelho com a diferença quando não. */}
-                <div className={cn('rounded-md px-2 py-1 text-[11px]',
-                  fecha ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive')}>
-                  Parcelas <strong className="tabular-nums">{formatMoeda(somaParcelas)}</strong> ·
-                  Líquido <strong className="tabular-nums">{formatMoeda(liquido)}</strong> ·{' '}
-                  {fecha ? 'confere' : `diferença ${formatMoeda(Math.abs(diferenca))}`}
+                <button type="button" onClick={() => setDescontos(o => [...o, { descricao: '', valor: '' }])}
+                  className="mt-0.5 inline-flex items-center gap-1 rounded px-1 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground">
+                  <Plus className="h-3 w-3" /> outro desconto
+                </button>
+                <LinhaConta rotulo="= Líquido a receber" destaque>
+                  {liquido > 0 ? formatMoeda(liquido) : '—'}
+                </LinhaConta>
+              </div>
+            </div>
+          </TabsContent>
+
+          {/* ── ABA 3 — RECEBIMENTO ────────────────────────────────────────────────────────── */}
+          <TabsContent value="recebimento" className="min-h-0 flex-1 overflow-hidden p-0 data-[state=inactive]:hidden">
+            <div className="flex h-full min-h-0 flex-col gap-2 px-3 py-2">
+              <div className="flex flex-wrap items-end justify-between gap-2">
+                <div>
+                  <Label className="text-[10px]">Recebimento</Label>
+                  <div className="mt-0.5 flex h-8 w-fit overflow-hidden rounded-md border">
+                    {(['avista', 'aprazo'] as const).map(c => (
+                      <button key={c} type="button" onClick={() => setCondicao(c)}
+                        className={cn('px-3 text-[11px] font-medium transition-colors',
+                          condicao === c ? 'bg-primary text-primary-foreground'
+                            : 'bg-transparent text-muted-foreground hover:bg-muted')}>
+                        {c === 'avista' ? 'À vista' : 'A prazo'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {condicao === 'aprazo' && (
+                  <div className="flex items-end gap-2">
+                    <Button type="button" size="sm" variant="outline" className="h-8 gap-1 px-2 text-[11px]"
+                      onClick={dividirIgual} disabled={liquido <= 0}
+                      title="Preenche os valores dividindo o líquido; o resíduo vai na última">
+                      Dividir igual
+                    </Button>
+                    <Button type="button" size="sm" variant="outline" className="h-8 gap-1 px-2 text-[11px]"
+                      onClick={() => setParcelas(o => [...o, novaParcela()])}>
+                      <Plus className="h-3.5 w-3.5" /> parcela
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {condicao === 'avista' ? (
+                <div className="grid gap-2 md:grid-cols-2">
+                  <div>
+                    <Label className="text-[10px]">Conta que recebe <span className="text-destructive">*</span></Label>
+                    <ContaBancariaSelect value={parcelas[0]?.contaId ?? ''} contas={contas}
+                      onValueChange={v => setParcelas(o => [{ ...(o[0] ?? novaParcela()), contaId: v }])}
+                      placeholder="Escolha" className="mt-0.5 h-8 text-[12px]" />
+                  </div>
+                  <div className="flex items-end">
+                    <p className="text-[10px] leading-snug text-muted-foreground">
+                      Uma parcela de <strong className="tabular-nums">{formatMoeda(liquido)}</strong>,
+                      paga em {data ? formatIsoToBr(data) : '—'}.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {/* ⚠ A LISTA DE PARCELAS ROLA SOZINHA (A28) — doze parcelas não empurram o rodapé
+                      nem o resumo; o juiz abaixo fica sempre visível. */}
+                  <div className="min-h-0 flex-1 space-y-1.5 overflow-auto pr-1">
+                    {parcelas.map((p, i) => (
+                      <div key={i} className="grid gap-2 md:grid-cols-[1fr_1fr_auto_1fr_1.4fr_auto]">
+                        <div>
+                          <Label className="text-[10px]">Vencimento <span className="text-destructive">*</span></Label>
+                          <DatePicker value={p.vencimento} className="mt-0.5"
+                            onChange={v => setParcelas(o => o.map((x, j) => j === i ? { ...x, vencimento: v } : x))} />
+                        </div>
+                        <div>
+                          <Label className="text-[10px]">Valor <span className="text-destructive">*</span></Label>
+                          <CampoNumero valor={p.valor} casas={2} className="mt-0.5 h-8 text-right text-[12px]"
+                            onChange={v => setParcelas(o => o.map((x, j) => j === i ? { ...x, valor: v } : x))} />
+                        </div>
+                        <div>
+                          <Label className="text-[10px]">Pago?</Label>
+                          <div className="mt-0.5 flex h-8 items-center">
+                            <Checkbox checked={p.pago}
+                              onCheckedChange={c => setParcelas(o => o.map((x, j) => j === i
+                                ? { ...x, pago: c === true, dataPagamento: c === true ? (x.dataPagamento || x.vencimento) : '' }
+                                : x))} />
+                          </div>
+                        </div>
+                        <div>
+                          <Label className="text-[10px]">Pagamento</Label>
+                          <DatePicker value={p.dataPagamento} className="mt-0.5"
+                            onChange={v => setParcelas(o => o.map((x, j) => j === i ? { ...x, dataPagamento: v } : x))} />
+                        </div>
+                        <div>
+                          <Label className="text-[10px]">Conta <span className="text-destructive">*</span></Label>
+                          <ContaBancariaSelect value={p.contaId} contas={contas} placeholder="Escolha"
+                            className="mt-0.5 h-8 text-[12px]"
+                            onValueChange={v => setParcelas(o => o.map((x, j) => j === i ? { ...x, contaId: v } : x))} />
+                        </div>
+                        <div className="flex items-end">
+                          {parcelas.length > 1 && (
+                            <button type="button" title="Remover parcela" aria-label="Remover parcela"
+                              onClick={() => setParcelas(o => o.filter((_, j) => j !== i))}
+                              className="mb-1 rounded p-0.5 text-muted-foreground hover:bg-rose-100 hover:text-rose-700">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className={cn('shrink-0 rounded-md px-2 py-1 text-[11px]',
+                    fecha ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive')}>
+                    Parcelas <strong className="tabular-nums">{formatMoeda(somaParcelas)}</strong> ·
+                    Líquido <strong className="tabular-nums">{formatMoeda(liquido)}</strong> ·{' '}
+                    {fecha ? 'confere' : `diferença ${formatMoeda(Math.abs(diferenca))}`}
+                  </div>
+                </>
+              )}
+
+              {/* ⚠ COMPRADOR, DATA E OBSERVAÇÕES MORAM AQUI, não numa quarta aba: eles descrevem o
+                  RECEBIMENTO (de quem, quando) e uma aba só para três campos seria uma parada a
+                  mais no caminho de quem já sabe o que está fazendo. */}
+              <div className="grid shrink-0 gap-2 md:grid-cols-2">
+                <div>
+                  <Label className="text-[10px]">Comprador <span className="text-destructive">*</span></Label>
+                  <div className="mt-0.5">
+                    <FornecedorSelect fornecedorId={compradorId || null}
+                      onFornecedorChange={id => setCompradorId(id ?? '')}
+                      clienteId={clienteId} label="" placeholder="Escolha" />
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-[10px]">Data da venda <span className="text-destructive">*</span></Label>
+                  <DatePicker value={data} onChange={setData} className="mt-0.5" />
                 </div>
               </div>
-            )}
-          </div>
-
-          {/* ── BLOCO 4 — COMPRADOR, DATA, OBSERVAÇÕES ───────────────────────────────────── */}
-          <div className="grid gap-2 md:grid-cols-2">
-            <div>
-              <Label className="text-[10px]">Comprador <span className="text-destructive">*</span></Label>
-              <div className="mt-0.5">
-                <FornecedorSelect fornecedorId={compradorId || null}
-                  onFornecedorChange={id => setCompradorId(id ?? '')}
-                  clienteId={clienteId} label="" placeholder="Escolha" />
+              <div className="shrink-0">
+                <Label className="text-[10px]">Observações</Label>
+                <Input value={obs} onChange={e => setObs(e.target.value)} placeholder="Opcional"
+                  className="mt-0.5 h-8 text-[12px]" />
               </div>
             </div>
-            <div>
-              <Label className="text-[10px]">Data da venda <span className="text-destructive">*</span></Label>
-              <DatePicker value={data} onChange={setData} className="mt-0.5" />
-            </div>
-          </div>
-          <div>
-            <Label className="text-[10px]">Observações</Label>
-            <Input value={obs} onChange={e => setObs(e.target.value)} placeholder="Opcional"
-              className="mt-0.5 h-8 text-[12px]" />
-          </div>
+          </TabsContent>
 
-          {/* ── BLOCO 5 — SUBSTITUIR LANÇAMENTOS ─────────────────────────────────────────── */}
-          {/* ⚠ O BLOCO NEM EXISTE SEM CANDIDATO: uma seção vazia perguntando se a venda substitui
-              algo ensinaria que há uma decisão a tomar onde não há. */}
+          {/* ── ABA 4 — SUBSTITUIR ─────────────────────────────────────────────────────────── */}
           {substituiveis.length > 0 && (
-            <div className="rounded-md border">
-              <button type="button" onClick={() => setAbreSubstituir(v => !v)}
-                className="flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-[11px] font-medium hover:bg-muted/50">
-                {abreSubstituir ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-                Esta venda substitui lançamentos já feitos à mão?
-                <span className="ml-1 font-normal text-muted-foreground">
-                  {substituir.size > 0 ? `${substituir.size} marcado${substituir.size > 1 ? 's' : ''}`
-                    : `${substituiveis.length} candidato${substituiveis.length > 1 ? 's' : ''}`}
-                </span>
-              </button>
-              {abreSubstituir && (
-                <div className="border-t">
-                  {/* ⚠ SÓ APARECEM OS QUE A RPC ACEITA — receita manual, não cancelada e NÃO
-                      conciliada. Um conciliado aqui terminaria em
-                      `SUBSTITUIR_LANCAMENTO_CANCELADO_OU_CONCILIADO`. */}
+            <TabsContent value="substituir" className="min-h-0 flex-1 overflow-hidden p-0 data-[state=inactive]:hidden">
+              <div className="flex h-full min-h-0 flex-col gap-1.5 px-3 py-2">
+                <p className="shrink-0 text-[11px] text-muted-foreground">
+                  Esta venda substitui lançamentos já feitos à mão? Os marcados são cancelados com
+                  motivo na mesma gravação.
+                </p>
+                <div className="min-h-0 flex-1 overflow-auto rounded-md border">
                   {substituiveis.map(l => (
                     <label key={l.id}
                       className="flex cursor-pointer items-start gap-2 border-t border-slate-100 px-2 py-1.5 first:border-t-0 hover:bg-muted/30">
@@ -619,12 +686,59 @@ export function VendaGraosModal({
                     </label>
                   ))}
                 </div>
-              )}
-            </div>
+              </div>
+            </TabsContent>
           )}
-        </div>
+        </Tabs>
 
-        <div className="flex flex-wrap items-center gap-2 bg-primary px-4 py-2 text-primary-foreground">
+        {/* ── RESUMO LATERAL ─────────────────────────────────────────────────────────────── */}
+        <aside className="col-start-2 row-span-2 row-start-2 flex flex-col overflow-hidden border-l border-border bg-muted/20">
+          {/* Faixa de título com a MESMA altura e fundo da TabsList — alinha com as abas. */}
+          <div className="flex h-8 shrink-0 items-center border-b border-border bg-accent/40 px-3 text-[11px] font-bold uppercase tracking-wide text-primary">
+            Resumo da venda
+          </div>
+          <div className="flex-1 overflow-y-auto pb-1 text-[10px]">
+            <BlocoHead titulo="Identificação" />
+            <div className="space-y-0.5 px-3">
+              <Row label="Cultura" value={labelDaCultura(cultura)} />
+              <Row label="Safra" value={safraRotulo || null} />
+              <Row label="Comprador" value={compradorId ? 'Selecionado' : null} />
+              <Row label="Data" value={data ? formatIsoToBr(data) : null} />
+            </div>
+
+            <BlocoHead titulo="Composição" />
+            <div className="space-y-0.5 px-3">
+              {/* ⚠ SÓ AS CLASSES COM QUANTIDADE: listar as três com "—" gastaria o espaço do
+                  resumo com o que o operador não está vendendo. */}
+              {linhas.filter(l => l.sacas > 0).map(l => (
+                <Row key={l.classe} label={labelDaClasse(l.classe)}
+                  value={`${formatNum(l.sacas, 2)} ${unidade}`} />
+              ))}
+              <Row label="Total" value={vendidas > 0 ? `${formatNum(vendidas, 2)} ${unidade}` : null} />
+              <Row label="Sobra" value={`${formatNum(sobraTotal, 2)} ${unidade}`} />
+            </div>
+
+            <BlocoHead titulo="Financeiro" />
+            <div className="space-y-0.5 px-3">
+              <Row label="Bruto" value={bruto > 0 ? formatMoeda(bruto) : null} />
+              <Row label="(−) Senar" value={senar > 0 ? formatMoeda(senar) : null} />
+              <Row label="(−) Descontos" value={totalDescontos > 0 ? formatMoeda(totalDescontos) : null} />
+              <Row label="= Líquido" value={liquido > 0 ? formatMoeda(liquido) : null}
+                valueClassName="text-[12px] font-bold text-primary" />
+              <Row label="Recebimento" value={resumoRecebimento} />
+            </div>
+
+            <BlocoHead titulo="Substituição" />
+            <div className="space-y-0.5 px-3">
+              <Row label="Lançamentos"
+                value={substituir.size > 0
+                  ? `${substituir.size} marcado${substituir.size > 1 ? 's' : ''}`
+                  : null} />
+            </div>
+          </div>
+        </aside>
+
+        <div className="col-start-1 row-start-3 flex flex-wrap items-center gap-2 border-t border-border bg-accent px-4 py-2.5">
           <span className="text-[11px]">
             Vende <strong className="tabular-nums">{formatNum(vendidas, 2)}</strong> {unidade} ·
             sobra <strong className="tabular-nums">{formatNum(sobraTotal, 2)}</strong> {unidade}
@@ -635,7 +749,7 @@ export function VendaGraosModal({
             {parcelasEfetivas.length} parcela{parcelasEfetivas.length > 1 ? 's' : ''}
           </span>
           {impedimento && (
-            <span className="w-full text-[10px] text-primary-foreground/80 md:w-auto">{impedimento}</span>
+            <span className="w-full text-[10px] text-muted-foreground md:w-auto">{impedimento}</span>
           )}
           <Button size="sm" variant="acao" className="h-8 gap-1 px-3 text-[11px]"
             disabled={!!impedimento || salvando} title={impedimento ?? 'Registrar a venda'}
