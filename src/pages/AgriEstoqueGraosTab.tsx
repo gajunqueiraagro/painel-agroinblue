@@ -300,10 +300,17 @@ export function AgriEstoqueGraosTab() {
 
   const queryClient = useQueryClient();
   const [modalVenda, setModalVenda] = useState(false);
+  /* ⚠ AQUI EM CIMA, e não junto do cancelamento: `substituiveis` lê este estado para saber se
+     há uma correção aberta, e o gate de TDZ acusa uso acima da declaração. É ordem, não lógica. */
+  const [vendaAberta, setVendaAberta] = useState<{ venda: VendaGrao; modo: 'visualizar' | 'editar' | 'corrigir' } | null>(null);
   const [salvandoVenda, setSalvandoVenda] = useState(false);
 
+  /* ⚠ TAMBÉM NA CORREÇÃO: quem corrige uma venda pode estar justamente substituindo um
+     lançamento manual que ficou de fora da primeira vez. Os lançamentos da venda ANTIGA não
+     entram na lista — a RPC os cancela sozinha, por outro caminho. */
   const substituiveis = useLancamentosSubstituiveis(
-    clienteId, safraId || null, verTodas ? null : (cultura || null), modalVenda);
+    clienteId, safraId || null, verTodas ? null : (cultura || null),
+    modalVenda || vendaAberta?.modo === 'corrigir');
 
   /**
    * ⚠ UMA CHAMADA SÓ — `agri_venda_graos_registrar` grava a operação, as entregas, o Senar, os
@@ -460,7 +467,6 @@ export function AgriEstoqueGraosTab() {
    * fica preso no de dentro e fechar um fecha os dois. Com o estado aqui, os dois modais são
    * irmãos — o histórico continua aberto atrás, e voltar para ele é fechar a venda.
    */
-  const [vendaAberta, setVendaAberta] = useState<{ venda: VendaGrao; modo: 'visualizar' | 'editar' } | null>(null);
   const [salvandoVenda2, setSalvandoVenda2] = useState(false);
   const vendasHist = useVendasGraos(
     clienteId, safraId || null, verTodas ? null : (cultura || null), modalVendas);
@@ -506,6 +512,52 @@ export function AgriEstoqueGraosTab() {
       /* ⚠ SÓ A LISTA: data, comprador e observação não entram em saldo nenhum. */
       await recarregarVendas();
       setVendaAberta(null);
+    } finally {
+      setSalvandoVenda2(false);
+    }
+  };
+
+  /**
+   * CORRIGIR UMA VENDA — cancela a antiga e grava a nova numa transação só.
+   *
+   * ⚠ UMA CHAMADA, NÃO DUAS: `agri_venda_graos_corrigir` faz o cancelamento, o registro e o
+   * vínculo `substitui_operacao_id` dentro da mesma transação. Fatiar isso no front deixaria a
+   * janela em que a venda antiga já foi cancelada e a nova ainda não existe — o estoque voltaria
+   * e o Financeiro ficaria sem a receita, sem ninguém para desfazer.
+   * ⚠ OS ERROS COM NOME PRÓPRIO VIRAM FRASE; os outros vão crus, porque são legíveis.
+   */
+  const erroDaCorrecao = (msg: string) => (
+    /VENDA_JA_PAGA_CORRIJA_NO_FINANCEIRO/.test(msg)
+      ? 'Esta venda tem lançamento conciliado — corrija no Financeiro.'
+      : /VENDA_JA_CANCELADA/.test(msg)
+        ? 'Esta venda já está cancelada.'
+        : /VENDA_NAO_AVULSA_CORRIJA_NO_BARTER/.test(msg)
+          ? 'Entrega de barter se corrige no próprio Barter.'
+          : /CORRECAO_SEM_MOTIVO/.test(msg)
+            ? 'Informe o motivo da correção.'
+            : erroDaVendaNova(msg));
+
+  const corrigirVenda = async (p: VendaGraosPayload & { venda_id: string; motivo: string }) => {
+    if (!clienteId || !safraId || !cultura || !fazendaId) return;
+    setSalvandoVenda2(true);
+    try {
+      const { data, error } = await (supabase as any).rpc('agri_venda_graos_corrigir', {
+        p_venda_id: p.venda_id, p_motivo: p.motivo,
+        p_cliente: clienteId, p_safra_id: safraId, p_cultura: cultura,
+        p_fazenda_id: fazendaId, p_comprador_id: p.comprador_id, p_data: p.data,
+        p_itens: p.itens, p_valor_bruto: p.valor_bruto, p_senar: p.senar,
+        p_descontos: p.descontos, p_parcelas: p.parcelas,
+        p_observacoes: p.observacoes, p_substituir: p.substituir,
+        p_documento: p.documento, p_tipo_documento: p.tipo_documento,
+      });
+      if (error) { toast.error(erroDaCorrecao(error.message ?? '')); return; }
+      const r = (data ?? {}) as { lancamentos?: unknown[] };
+      const n = Array.isArray(r.lancamentos) ? r.lancamentos.length : 0;
+      toast.success(`Venda corrigida: a anterior foi cancelada e ${n} lançamento${n === 1 ? '' : 's'} refeito${n === 1 ? '' : 's'}.`);
+      setVendaAberta(null);
+      await recarregarVendas();
+      await queryClient.invalidateQueries({ queryKey: ['estoque-graos'] });
+      await queryClient.invalidateQueries({ queryKey: ['lancamentos-substituiveis'] });
     } finally {
       setSalvandoVenda2(false);
     }
@@ -1131,13 +1183,16 @@ export function AgriEstoqueGraosTab() {
           estado da primeira nos campos editáveis. */}
       {vendaAberta && (
         <VendaGraosModal
-          key={vendaAberta.venda.id}
+          /* ⚠ A `key` LEVA O MODO: corrigir monta o formulário inteiro a partir da venda, e
+             trocar de ver para corrigir sem remontar deixaria o estado da leitura por baixo. */
+          key={`${vendaAberta.venda.id}:${vendaAberta.modo}`}
           aberto
           modo={vendaAberta.modo}
           venda={vendaAberta.venda}
           onFechar={() => setVendaAberta(null)}
           onRegistrar={() => {}}
           onEditar={p => { void editarVenda(p); }}
+          onCorrigir={p => { void corrigirVenda(p); }}
           onCancelar={(id, motivo) => { void cancelarVenda(id, motivo); }}
           salvando={salvandoVenda2}
           estoque={linhas}
@@ -1145,7 +1200,7 @@ export function AgriEstoqueGraosTab() {
           safraRotulo={safraRotulo}
           clienteId={clienteId ?? ''}
           contas={fin.contasBancarias}
-          substituiveis={[]}
+          substituiveis={vendaAberta.modo === 'corrigir' ? substituiveis.lancamentos : []}
         />
       )}
 

@@ -76,6 +76,16 @@ const composicao = (v: VendaGrao) =>
  * ⚠ "Pago 2/2" DIZ MAIS QUE "Realizado": numa venda a prazo o que o operador precisa saber é
  * quanto já entrou, e o status da operação é um só para N parcelas.
  */
+/**
+ * A VENDA TEM ALGUM LANÇAMENTO JÁ CONCILIADO?
+ *
+ * ⚠ É A MESMA PERGUNTA QUE A RPC FAZ antes de aceitar a correção, e a resposta tem de ser a
+ * mesma: `bool_or(conciliado_em is not null)` sobre os lançamentos NÃO cancelados. Contar os
+ * cancelados travaria uma venda que já foi corrigida uma vez.
+ */
+const conciliada = (v: VendaGrao) =>
+  v.lancamentos.some(l => !l.cancelado && l.conciliado);
+
 const situacao = (v: VendaGrao) => {
     if (!v.ativo) return { texto: 'Cancelada', cor: 'bg-muted text-muted-foreground' };
     if (v.tipo === 'barter') return { texto: 'Barter', cor: 'bg-primary/10 text-primary' };
@@ -92,7 +102,7 @@ function Linha({
   motivoCancel, setMotivoCancel, salvando, onCancelar,
 }: {
   v: VendaGrao;
-  onAbrirVenda: (venda: VendaGrao, modo: 'visualizar' | 'editar') => void;
+  onAbrirVenda: (venda: VendaGrao, modo: 'visualizar' | 'editar' | 'corrigir') => void;
   cancelandoId: string | null;
   setCancelandoId: (id: string | null) => void;
   motivoCancel: string;
@@ -142,9 +152,18 @@ function Linha({
                 <>
                   {/* ⚠ `stopPropagation` NOS DOIS: a linha inteira abre a venda, e sem isto o ✎
                       abriria em editar E a linha abriria em leitura por cima. */}
-                  <button type="button" title="Editar comprador, data e observações" aria-label="Editar venda"
-                    onClick={e => { e.stopPropagation(); onAbrirVenda(v, 'editar'); }}
-                    className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground">
+                  {/* ⚠ O LÁPIS AGORA É CORRIGIR — cancela a venda e grava outra no lugar. A
+                      edição leve (comprador, data, observações) continua existindo, dentro do
+                      modal, no rodapé de quem está vendo: são dois gestos com consequências
+                      MUITO diferentes no Financeiro, e por isso não viraram um só.
+                      ⚠ CONCILIADO TRAVA, e o `title` diz onde resolver: cancelar um lançamento
+                      que já casou com o extrato desfaria uma conciliação que alguém fez. A RPC
+                      recusa com `VENDA_JA_PAGA_CORRIJA_NO_FINANCEIRO`; travar antes poupa a ida. */}
+                  <button type="button" disabled={conciliada(v)}
+                    title={conciliada(v) ? 'Já conciliada: corrija no Financeiro' : 'Corrigir esta venda (cancela e grava outra)'}
+                    aria-label="Corrigir venda"
+                    onClick={e => { e.stopPropagation(); onAbrirVenda(v, 'corrigir'); }}
+                    className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40">
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
                   <button type="button" title="Cancelar esta venda" aria-label="Cancelar venda"
@@ -186,7 +205,7 @@ export function VendasGraosModal({
   safraRotulo: string;
   onCancelar: (id: string, motivo: string) => void;
   /** Abre a venda no `VendaGraosModal`. `editar` quando veio do ✎. */
-  onAbrirVenda: (venda: VendaGrao, modo: 'visualizar' | 'editar') => void;
+  onAbrirVenda: (venda: VendaGrao, modo: 'visualizar' | 'editar' | 'corrigir') => void;
   salvando: boolean;
 }) {
   const [cancelandoId, setCancelandoId] = useState<string | null>(null);

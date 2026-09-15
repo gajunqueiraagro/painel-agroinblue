@@ -33,7 +33,7 @@ import { ContaBancariaSelect, type ContaSelecionavel } from '@/components/shared
 import { CINZA_CABECALHO, TH_CINZA as TH } from '@/lib/idiomaVisual';
 import { DatePicker, formatIsoToBr } from '@/components/ui/date-picker';
 import { CampoMoeda, CampoNumero } from '@/components/ui/campo-moeda';
-import { parseMoeda, round2, formatCasas } from '@/lib/calculos/numeroBR';
+import { parseMoeda, round2, roundCasas, formatCasas } from '@/lib/calculos/numeroBR';
 import { Save, AlertTriangle, X, Plus, Trash2, Ban, Pencil } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
@@ -54,7 +54,8 @@ import { TIPOS_DOCUMENTO, type TipoDocumento } from '@/lib/financeiro/documentoH
 export interface VendaGraosPayload {
   comprador_id: string;
   data: string;
-  itens: Array<{ classe: string; sacas: number; preco: number | null }>;
+  /** `preco` OU `valor` — nunca os dois. A RPC dá precedência ao `valor` quando ele vem. */
+  itens: Array<{ classe: string; sacas: number; preco: number | null; valor: number | null }>;
   /** `null` = critério PREÇO (a RPC soma os itens). Informado = critério VALOR TOTAL. */
   valor_bruto: number | null;
   senar: number;
@@ -176,7 +177,7 @@ function LinhaConta({ rotulo, children, destaque }: {
 export function VendaGraosModal({
   aberto, onFechar, onRegistrar, salvando, estoque, cultura, safraRotulo,
   clienteId, contas, substituiveis,
-  modo = 'criar', venda = null, onEditar, onCancelar,
+  modo = 'criar', venda = null, onEditar, onCancelar, onCorrigir,
 }: {
   aberto: boolean;
   onFechar: () => void;
@@ -194,7 +195,13 @@ export function VendaGraosModal({
    * coisa vista em momentos diferentes, e é assim que a OC já faz: quem aprendeu onde fica o
    * líquido ao vender encontra o líquido no mesmo lugar ao conferir.
    */
-  modo?: 'criar' | 'visualizar' | 'editar';
+  modo?: 'criar' | 'visualizar' | 'editar' | 'corrigir';
+  /**
+   * ⚠ CORRIGIR É CANCELAR-E-REFAZER, e por isso é um modo e não um quarto botão do Editar: o
+   * formulário inteiro volta a ser formulário, e o que sai dele não altera a venda — cancela a
+   * antiga e grava outra no lugar, com os lançamentos do Financeiro refeitos.
+   */
+  onCorrigir?: (p: VendaGraosPayload & { venda_id: string; motivo: string }) => void;
   /** A venda sendo vista ou editada. `null` no modo criar. */
   venda?: VendaGrao | null;
   onEditar?: (p: { id: string; data: string; comprador_id: string | null; observacoes: string | null }) => void;
@@ -205,16 +212,21 @@ export function VendaGraosModal({
   /* ⚠ O MODO PODE MUDAR DENTRO DO MODAL (ver → editar), e por isso ele é estado, não só prop: o
      botão "Editar" troca de modo sem fechar e reabrir, que é o que faria o operador perder de vista
      o que estava conferindo. */
-  const [modoAtual, setModoAtual] = useState<'criar' | 'visualizar' | 'editar'>(modo);
+  const [modoAtual, setModoAtual] = useState<'criar' | 'visualizar' | 'editar' | 'corrigir'>(modo);
   const [cancelando, setCancelando] = useState(false);
   const [motivoCancel, setMotivoCancel] = useState('');
+  const [motivoCorrecao, setMotivoCorrecao] = useState('');
   /* ⚠ DE ONDE O OPERADOR VEIO — para "Voltar" devolvê-lo à aba em que estava. Entrar em edição
      troca de aba (é lá que moram os campos editáveis); sair sem desfazer a troca o deixaria
      numa aba que ele não escolheu. */
   const [abaAntesDeEditar, setAbaAntesDeEditar] = useState<'composicao' | 'deducoes' | 'recebimento' | 'comprador' | 'substituir'>('composicao');
   const compradorRef = useRef<HTMLDivElement>(null);
   const leitura = modoAtual === 'visualizar';
-  const criando = modoAtual === 'criar';
+  const corrigindo = modoAtual === 'corrigir';
+  /* ⚠ `criando` PASSA A SIGNIFICAR "O FORMULÁRIO ESTÁ MONTADO", e corrigir também monta — é o
+     mesmo formulário, preenchido. Quem precisa distinguir os dois usa `corrigindo`. */
+  const criando = modoAtual === 'criar' || corrigindo;
+  const registrando = modoAtual === 'criar';
   /* ⚠ SÓ A VENDA AVULSA ATIVA SE MEXE. O barter se governa no Barter e a cancelada não se
      reescreve — a RPC recusa os dois, e esconder o botão diz isso antes da tentativa. */
   const editavel = !!venda && venda.ativo && venda.tipo === 'venda_avulsa';
@@ -222,11 +234,21 @@ export function VendaGraosModal({
      `camposTravados` é o que já existia repetido em cada campo (`leitura || (venda && !editavel)`);
      `docTravado` é mais estreito e a razão é do banco: `agri_venda_avulsa_editar` não recebe
      documento, então ele só se digita ao CRIAR. */
-  const camposTravados = leitura || (!!venda && !editavel);
-  const docTravado = !criando;
-  const [criterio, setCriterio] = useState<'preco' | 'valor'>('preco');
+  const camposTravados = !corrigindo && (leitura || (!!venda && !editavel));
+  const docTravado = !criando;   // `criando` já inclui corrigir
+  /**
+   * OS TRÊS CRITÉRIOS, e eles são três PERGUNTAS diferentes ao mesmo documento.
+   *
+   * ⚠ `preco` — sei quanto vale a saca. `linha` — sei quanto a classe rendeu em R$. `valor` —
+   * sei só o total do documento e deixo a RPC ratear. A precedência no banco é a mesma:
+   * valor total > valor de linha > preço por saca.
+   * ⚠ `linha` NÃO RATEIA NADA: o R$ da classe é o que veio no papel da cooperativa, e o preço
+   * por saca passa a ser derivado (`valor / sacas`, 4 casas). É o único critério que reproduz um
+   * acerto sem inventar centavo — e por isso é ele que a correção usa para reabrir uma venda.
+   */
+  const [criterio, setCriterio] = useState<'preco' | 'linha' | 'valor'>('preco');
   const [valorTotal, setValorTotal] = useState('');
-  const [itens, setItens] = useState<Record<string, { sacas: string; preco: number | null }>>({});
+  const [itens, setItens] = useState<Record<string, { sacas: string; preco: number | null; valor: number | null }>>({});
   const [senarPct, setSenarPct] = useState(String(SENAR_PCT_PADRAO).replace('.', ','));
   const [senarReais, setSenarReais] = useState('');
   const [senarTocado, setSenarTocado] = useState(false);
@@ -243,6 +265,40 @@ export function VendaGraosModal({
 
   const unidade = unidadeCurtaDaCultura(cultura);
   const editando = modoAtual === 'editar';
+
+  /**
+   * TROCAR DE CRITÉRIO CONVERTE O QUE JÁ FOI DIGITADO — não apaga, não deixa em branco.
+   *
+   * ⚠ O OPERADOR JÁ DIGITOU QUANDO PERCEBE QUE O CRITÉRIO ERA OUTRO. Zerar as linhas puniria
+   * a descoberta; manter os números em campos que aquele critério não lê seria pior ainda,
+   * porque a tela mostraria um total que a RPC não vai gravar.
+   * ⚠ A CONVERSÃO NÃO É REVERSÍVEL SEM PERDA e é por isso que ela AVISA: de preço para valor,
+   * `valor = round2(sacas × preço)`; de valor para preço, `preço = valor / sacas` a 4 casas.
+   * Ida e volta em 1.234,56 com 3 sacas não devolve o mesmo centavo.
+   */
+  const [criterioConvertido, setCriterioConvertido] = useState<string | null>(null);
+  const trocarCriterio = (novo: 'preco' | 'linha' | 'valor') => {
+    if (novo === criterio) return;
+    setItens(o => {
+      const out: typeof o = {};
+      for (const [classe, v] of Object.entries(o)) {
+        const sacas = parseMoeda(v.sacas) ?? 0;
+        if (novo === 'linha' && v.valor == null && sacas > 0 && (v.preco ?? 0) > 0) {
+          out[classe] = { ...v, valor: round2(sacas * (v.preco ?? 0)) };
+        } else if (novo === 'preco' && (v.preco ?? 0) <= 0 && sacas > 0 && (v.valor ?? 0) > 0) {
+          out[classe] = { ...v, preco: roundCasas((v.valor ?? 0) / sacas, 4) };
+        } else {
+          out[classe] = v;
+        }
+      }
+      return out;
+    });
+    setCriterioConvertido(
+      novo === 'linha' ? 'Os preços viraram o R$ de cada linha (sacas × preço).'
+        : criterio === 'linha' && novo === 'preco' ? 'Os valores viraram preço por saca (valor ÷ sacas, 4 casas).'
+          : null);
+    setCriterio(novo);
+  };
 
   /**
    * ENTRAR EM EDIÇÃO É IR ONDE SE EDITA — e é isto que faltava.
@@ -283,8 +339,8 @@ export function VendaGraosModal({
      porque é o que já se praticou naquela classe. */
   useEffect(() => {
     if (!aberto) return;
-    const inicial: Record<string, { sacas: string; preco: number | null }> = {};
-    for (const c of estoque) inicial[c.classe] = { sacas: '', preco: c.preco_ref > 0 ? c.preco_ref : null };
+    const inicial: Record<string, { sacas: string; preco: number | null; valor: number | null }> = {};
+    for (const c of estoque) inicial[c.classe] = { sacas: '', preco: c.preco_ref > 0 ? c.preco_ref : null, valor: null };
     setItens(inicial);
     setAba('composicao');
     setModoAtual(modo);
@@ -298,6 +354,61 @@ export function VendaGraosModal({
       setCompradorId(venda.comprador_id ?? '');
       setData(venda.data.slice(0, 10));
       setObs(venda.observacoes ?? '');
+      setMotivoCorrecao('');
+      if (modo !== 'corrigir') return;
+      /**
+       * ⚠⚠ CORRIGIR REABRE NO CRITÉRIO `linha`, e é o ÚNICO que reproduz o gravado sem perda.
+       * O banco guarda `sacas`, `preco_saca` (4 casas) e `valor` (2) por entrega; refazer por
+       * `sacas × preço` devolveria centavos diferentes dos que estão lá. Com o valor da linha,
+       * a venda nova nasce com os mesmos números da antiga — e o que mudar terá sido o operador.
+       */
+      setCriterio('linha');
+      setCriterioConvertido(null);
+      setItens(o => {
+        const out = { ...o };
+        for (const it of venda.itens) {
+          out[it.classe] = { sacas: formatCasas(it.sacas, 4), preco: it.preco_saca, valor: it.valor };
+        }
+        return out;
+      });
+      setSenarTocado(true);
+      setSenarReais(formatCasas(venda.senar, 2));
+      setSenarPct(venda.bruto > 0 ? formatCasas(round2(venda.senar / venda.bruto * 100), 2) : '0,00');
+      /* ⚠ OS DESCONTOS VOLTAM COMO UMA LINHA SÓ, e não como os que foram digitados: a RPC soma
+         `p_descontos` num único `v_desc` e nunca guarda a descrição de cada um. O total é
+         recuperável; a discriminação foi perdida na gravação original. */
+      const outrosDescontos = round2(Math.max(venda.deducoes - venda.senar, 0));
+      setDescontos(outrosDescontos > 0 ? [{ descricao: 'Descontos', valor: formatCasas(outrosDescontos, 2) }] : []);
+      /* ⚠ AS PARCELAS SÃO OS LANÇAMENTOS DE RECEITA não cancelados — a mesma leitura do
+         `ParcelasLeitura`. A CONTA não vem: `fn_vendas_graos` não devolve `conta_destino_id`,
+         então ela volta em branco e o rodapé trava até o operador escolher. É consciente, não
+         silencioso: gravar a conta errada seria pior que pedi-la de novo. */
+      const vivos = venda.lancamentos.filter(l => !l.cancelado);
+      const recibos = vivos.filter(l => l.natureza === 'receita_venda');
+      /**
+       * ⚠ O VALOR DA PARCELA É O LÍQUIDO, e o lançamento de receita guarda o BRUTO dela:
+       * a RPC grava `receita_i = parcela_i + senar_i + desconto_i`. Para voltar ao que o
+       * operador digitou, subtraem-se as deduções DAQUELA parcela — casadas pelo vencimento,
+       * que é o mesmo `v_venc` nos três lançamentos.
+       * ⚠ RATEAR `deducoes / n` DARIA ERRADO NA ÚLTIMA: a RPC manda o resíduo dos centavos para
+       * a parcela final, e uma divisão igual não o reproduz.
+       */
+      const deducaoDoVencimento = (venc: string | null) => vivos
+        .filter(l => l.natureza !== 'receita_venda' && l.data_vencimento === venc)
+        .reduce((a, l) => a + l.valor, 0);
+      /* ⚠ SEMPRE "A PRAZO", mesmo com uma parcela: o modo à vista sobrescreve valor e data com o
+         líquido e a data da venda, e aqui o que vale é o que foi gravado. Uma parcela a prazo é
+         a mesma coisa, sem a sobrescrita. */
+      setCondicao('aprazo');
+      setParcelas(recibos.length > 0
+        ? recibos.map(l => ({
+            vencimento: (l.data_vencimento ?? '').slice(0, 10),
+            valor: formatCasas(round2(l.valor - deducaoDoVencimento(l.data_vencimento)), 2),
+            pago: !!l.data_pagamento || l.conciliado,
+            dataPagamento: (l.data_pagamento ?? '').slice(0, 10),
+            contaId: '',
+          }))
+        : [novaParcela()]);
       return;
     }
     setSenarPct(String(SENAR_PCT_PADRAO).replace('.', ',')); setSenarReais(''); setSenarTocado(false);
@@ -320,7 +431,8 @@ export function VendaGraosModal({
     const brutos = estoque.map(c => {
       const sacas = parseMoeda(itens[c.classe]?.sacas ?? '') ?? 0;
       const preco = itens[c.classe]?.preco ?? 0;
-      return { classe: c.classe, sacas, preco };
+      const valor = itens[c.classe]?.valor ?? 0;
+      return { classe: c.classe, sacas, preco, valor };
     });
     const somaAoPreco = brutos.reduce((a, b) => a + round2(b.sacas * b.preco), 0);
     const somaSacas = brutos.reduce((a, b) => a + b.sacas, 0);
@@ -329,15 +441,23 @@ export function VendaGraosModal({
 
     return estoque.map(c => {
       const b = brutos.find(x => x.classe === c.classe)!;
-      const precoEfetivo = criterio === 'preco' ? b.preco
-        : somaAoPreco > 0 ? b.preco * fator
-          : somaSacas > 0 ? alvo / somaSacas : 0;
+      /* ⚠ NO CRITÉRIO `linha` O PREÇO É QUE DERIVA, e a divisão é a mesma da RPC: `valor / sacas`
+         a 4 casas. Sem saca não há preço — a RPC recusa com `VALOR_DE_LINHA_SEM_SACAS`, e aqui
+         o zero apenas evita dividir por zero até o operador digitar a quantidade. */
+      const precoEfetivo = criterio === 'linha'
+        ? (b.sacas > 0 ? roundCasas(b.valor / b.sacas, 4) : 0)
+        : criterio === 'preco' ? b.preco
+          : somaAoPreco > 0 ? b.preco * fator
+            : somaSacas > 0 ? alvo / somaSacas : 0;
       return {
         ...c,
         sacas: b.sacas,
         precoDigitado: b.preco,
+        valorDigitado: b.valor,
         precoEfetivo,
-        total: round2(b.sacas * precoEfetivo),
+        /* ⚠ EM `linha` O TOTAL É O QUE VEIO NO PAPEL, não `sacas × preço`: refazer a conta a
+           partir do preço derivado devolveria centavos diferentes do documento. */
+        total: criterio === 'linha' ? round2(b.valor) : round2(b.sacas * precoEfetivo),
         excede: b.sacas > c.saldo + 0.005,
         travada: c.saldo <= 0,
         sobra: Math.max(c.saldo - b.sacas, 0),
@@ -355,7 +475,7 @@ export function VendaGraosModal({
      outro, por centavos de rateio. */
   const bruto = criterio === 'valor'
     ? (parseMoeda(valorTotal) ?? 0)
-    : linhas.reduce((a, l) => a + l.total, 0);
+    : linhas.reduce((a, l) => a + l.total, 0);   // `linha` e `preco` somam o total da linha
 
   /**
    * SENAR: O % E O R$ SE PERSEGUEM, como o funrural do abate.
@@ -411,24 +531,36 @@ export function VendaGraosModal({
 
   const impedimento = vendidas <= 0 ? `Informe quantas ${unidade === 't' ? 'toneladas' : 'sacas'} vender.`
     : excede ? 'Há classe acima do saldo em estoque.'
-      : bruto <= 0 ? (criterio === 'valor' ? 'Informe o valor total do documento.' : 'Informe o preço das classes que está vendendo.')
+      : bruto <= 0 ? (criterio === 'valor' ? 'Informe o valor total do documento.'
+        : criterio === 'linha' ? 'Informe o valor em R$ de cada classe que está vendendo.'
+          : 'Informe o preço das classes que está vendendo.')
         : liquido <= 0 ? 'As deduções não podem consumir o valor da venda.'
           : !compradorId ? 'Escolha o comprador.'
             : !data ? 'Informe a data da venda.'
               : parcelasEfetivas.some(p => !p.vencimento) ? 'Informe o vencimento de cada parcela.'
                 : parcelasEfetivas.some(p => !p.contaId) ? 'Escolha a conta de cada parcela.'
                   : !fecha ? `As parcelas não fecham o líquido — diferença de ${formatMoeda(Math.abs(diferenca))}.`
-                    : null;
+                    : corrigindo && !motivoCorrecao.trim() ? 'Informe o motivo da correção.'
+                      : null;
 
   const registrar = () => {
     if (impedimento) return;
-    onRegistrar({
+    /* ⚠ O MESMO FORMULÁRIO, DUAS SAÍDAS: corrigir manda o payload inteiro mais o id e o motivo,
+       e quem chama decide a RPC. Montar dois payloads diferentes faria a correção divergir do
+       registro no dia em que um campo novo entrasse só num deles. */
+    const enviar = corrigindo && venda && onCorrigir
+      ? (p: VendaGraosPayload) => onCorrigir({ ...p, venda_id: venda.id, motivo: motivoCorrecao.trim() })
+      : onRegistrar;
+    enviar({
       comprador_id: compradorId,
       data,
       /* ⚠ MANDA O PREÇO DIGITADO, não o derivado: no critério "valor total" quem deriva é a RPC, e
          mandar o derivado faria a conta acontecer duas vezes, com dois arredondamentos. */
-      itens: linhas.filter(l => l.sacas > 0)
-        .map(l => ({ classe: l.classe, sacas: l.sacas, preco: l.precoDigitado > 0 ? l.precoDigitado : null })),
+      /* ⚠ EM `linha` VAI O VALOR E NÃO O PREÇO: mandar os dois faria a RPC escolher (ela dá
+         precedência ao `valor`) e o front afirmaria duas coisas sobre a mesma linha. */
+      itens: linhas.filter(l => l.sacas > 0).map(l => criterio === 'linha'
+        ? { classe: l.classe, sacas: l.sacas, preco: null, valor: round2(l.valorDigitado) }
+        : { classe: l.classe, sacas: l.sacas, preco: l.precoDigitado > 0 ? l.precoDigitado : null, valor: null }),
       valor_bruto: criterio === 'valor' ? bruto : null,
       senar,
       descontos: descontos
@@ -496,12 +628,14 @@ export function VendaGraosModal({
         <div className="col-span-2 col-start-1 row-start-1 flex items-start gap-2 bg-primary px-4 py-2.5 text-primary-foreground">
           <div className="min-w-0">
             <h2 className="truncate text-[15px] font-bold leading-tight">
-              {criando ? 'Vender do estoque' : 'Venda'} · {labelDaCultura(cultura)}
+              {corrigindo ? 'Corrigir venda' : registrando ? 'Vender do estoque' : 'Venda'} · {labelDaCultura(cultura)}
               {safraRotulo && ` · Safra ${safraRotulo}`}
               {venda && ` · ${formatIsoToBr(venda.data.slice(0, 10))}`}
             </h2>
             <p className="mt-0.5 text-[11px] text-primary-foreground/80">
-              {criando
+              {corrigindo
+                ? 'A venda atual será cancelada e esta registrada no lugar; os lançamentos do Financeiro são refeitos.'
+                : criando
                 ? `${formatNum(saldoAtual, 2)} ${unidade} disponíveis. A venda baixa o estoque e gera os lançamentos no Financeiro, parcela a parcela.`
                 /* ⚠ O SUBTÍTULO É O SINAL DE MODO MAIS ALTO da tela, e diz o LIMITE junto: o que
                    não se edita aqui tem conserto (cancelar e registrar de novo), e dizê-lo agora
@@ -556,7 +690,7 @@ export function VendaGraosModal({
 
           {/* ── ABA 1 — COMPOSIÇÃO ─────────────────────────────────────────────────────────── */}
           <TabsContent value="composicao" className="min-h-0 flex-1 overflow-hidden p-0 data-[state=inactive]:hidden">
-            {venda ? (
+            {venda && !corrigindo ? (
               <div className="flex h-full min-h-0 flex-col">
                 <AvisoSomenteLeitura editando={editando} onIr={() => setAba('comprador')} />
                 <ComposicaoLeitura venda={venda} unidade={unidade} />
@@ -566,8 +700,8 @@ export function VendaGraosModal({
               <div className="flex flex-wrap items-end justify-between gap-2">
                 <p className="text-[11px] text-muted-foreground">{rotuloCulturaUnidade(cultura)}</p>
                 <div className="flex h-8 w-fit overflow-hidden rounded-md border">
-                  {([['preco', 'Preço por saca'], ['valor', 'Valor total']] as const).map(([v, r]) => (
-                    <button key={v} type="button" onClick={() => setCriterio(v)}
+                  {([['preco', 'Preço por saca'], ['linha', 'Valor por linha'], ['valor', 'Valor total']] as const).map(([v, r]) => (
+                    <button key={v} type="button" onClick={() => trocarCriterio(v)}
                       className={cn('px-3 text-[11px] font-medium transition-colors',
                         criterio === v ? 'bg-primary text-primary-foreground'
                           : 'bg-transparent text-muted-foreground hover:bg-muted')}>
@@ -576,6 +710,12 @@ export function VendaGraosModal({
                   ))}
                 </div>
               </div>
+
+              {/* ⚠ UMA LINHA MUTED, e ela some ao próximo gesto: o aviso responde "cadê meus
+                  números?" no instante em que a pergunta existe, e não vira mobília depois. */}
+              {criterioConvertido && (
+                <p className="text-[10px] text-muted-foreground">{criterioConvertido}</p>
+              )}
 
               {criterio === 'valor' && (
                 <div className="flex flex-wrap items-end gap-2 rounded-md border bg-muted/20 px-2 py-1.5">
@@ -605,7 +745,7 @@ export function VendaGraosModal({
                       <th className={cn(TH, 'text-right')}>Em estoque</th>
                       <th className={cn(TH, 'text-right')}>Vender ({unidade})</th>
                       <th className={cn(TH, 'text-right')}>R$ / {unidade}</th>
-                      <th className={cn(TH, 'text-right')}>Total</th>
+                      <th className={cn(TH, 'text-right')}>{criterio === 'linha' ? 'Valor (R$)' : 'Total'}</th>
                       <th className={cn(TH, 'text-right')}>Saldo final</th>
                     </tr>
                   </thead>
@@ -622,7 +762,7 @@ export function VendaGraosModal({
                           <CampoNumero valor={itens[l.classe]?.sacas ?? ''} disabled={l.travada}
                             casas={4} title={itens[l.classe]?.sacas ?? ''}
                             onChange={v => setItens(o => ({
-                              ...o, [l.classe]: { ...(o[l.classe] ?? { preco: null }), sacas: v },
+                              ...o, [l.classe]: { ...(o[l.classe] ?? { preco: null, valor: null }), sacas: v },
                             }))}
                             className={cn('h-7 text-right text-[11px]',
                               l.excede && 'border-destructive focus-visible:ring-destructive')} />
@@ -634,7 +774,9 @@ export function VendaGraosModal({
                           )}
                         </td>
                         <td className="px-1 py-1">
-                          {criterio === 'valor' ? (
+                          {/* ⚠ EM `valor` E EM `linha` O PREÇO É DERIVADO e aparece muted — a coluna
+                              não muda de lugar nem de largura, só deixa de ser campo (A23). */}
+                          {criterio !== 'preco' ? (
                             <div className="truncate px-1 text-right text-[11px] tabular-nums text-muted-foreground"
                               title={l.precoEfetivo ? formatCasas(l.precoEfetivo, 4) : undefined}>
                               {l.precoEfetivo > 0 ? formatCasas(l.precoEfetivo, 4) : '—'}
@@ -643,14 +785,28 @@ export function VendaGraosModal({
                             <CampoMoeda valor={itens[l.classe]?.preco ?? null} disabled={l.travada}
                               casas={4}
                               onChange={v => setItens(o => ({
-                                ...o, [l.classe]: { ...(o[l.classe] ?? { sacas: '' }), preco: v },
+                                ...o, [l.classe]: { ...(o[l.classe] ?? { sacas: '', valor: null }), preco: v },
                               }))}
                               className="h-7 text-right text-[11px]" />
                           )}
                         </td>
-                        <td className="px-2 py-1 text-right text-[11px] font-medium tabular-nums">
-                          {l.total > 0 ? formatMoeda(l.total) : '—'}
-                        </td>
+                        {/* ⚠ É A COLUNA `TOTAL` QUE VIRA CAMPO, não uma coluna nova: o número que
+                            o operador tem no papel é o total da classe, e ele o digita onde já o
+                            lê. Nenhuma coluna muda de posição entre os três critérios (A23). */}
+                        {criterio === 'linha' ? (
+                          <td className="px-1 py-1">
+                            <CampoMoeda valor={itens[l.classe]?.valor ?? null} disabled={l.travada}
+                              casas={2}
+                              onChange={v => setItens(o => ({
+                                ...o, [l.classe]: { ...(o[l.classe] ?? { sacas: '', preco: null }), valor: v },
+                              }))}
+                              className="h-7 text-right text-[11px]" />
+                          </td>
+                        ) : (
+                          <td className="px-2 py-1 text-right text-[11px] font-medium tabular-nums">
+                            {l.total > 0 ? formatMoeda(l.total) : '—'}
+                          </td>
+                        )}
                         <td className={cn('px-2 py-1 text-right text-[11px] font-medium tabular-nums',
                           l.sacas > 0 && 'text-success')}>
                           {formatNum(l.sobra, 2)}
@@ -678,7 +834,7 @@ export function VendaGraosModal({
 
           {/* ── ABA 2 — DEDUÇÕES ───────────────────────────────────────────────────────────── */}
           <TabsContent value="deducoes" className="min-h-0 flex-1 overflow-auto p-0 data-[state=inactive]:hidden">
-            {venda ? (
+            {venda && !corrigindo ? (
               <div className="flex h-full min-h-0 flex-col">
                 <AvisoSomenteLeitura editando={editando} onIr={() => setAba('comprador')} />
                 <DeducoesLeitura venda={venda} />
@@ -740,7 +896,7 @@ export function VendaGraosModal({
                   mas sem ALTURA, então crescia e era cortado pelo `overflow-hidden` da aba — o
                   aviso do CLAUDE.md, "antes de escrever `sticky`/`overflow`, achar quem rola".
                   Um scrollport só, aqui. */}
-              {venda ? (
+              {venda && !corrigindo ? (
                 <div className="min-h-0 flex-1 overflow-y-auto"><ParcelasLeitura venda={venda} /></div>
               ) : (
               <div className="flex h-full min-h-0 flex-col gap-2 px-3 py-2">
@@ -943,6 +1099,15 @@ export function VendaGraosModal({
                   Documento se edita no lançamento do Financeiro.
                 </p>
               )}
+              {/* ⚠ O DOCUMENTO NÃO VOLTA NA CORREÇÃO, e o campo em branco não pode passar por
+                  "não tinha": `fn_vendas_graos` não devolve `numero_documento` (conferido no
+                  `prosrc`), então a venda nova nasceria sem o papel da antiga sem ninguém notar.
+                  Enquanto a RPC de leitura não o devolver, quem corrige redigita. */}
+              {corrigindo && (
+                <p className="shrink-0 text-[10px] text-amber-600">
+                  O documento da venda original não é lido de volta — redigite-o se havia um.
+                </p>
+              )}
               <div>
                 <Label className="text-[10px]">Observações</Label>
                 <Input value={obs} onChange={e => setObs(e.target.value)} placeholder="Opcional"
@@ -1097,10 +1262,19 @@ export function VendaGraosModal({
                 {impedimento && (
                   <span className="w-full text-[10px] text-muted-foreground md:w-auto">{impedimento}</span>
                 )}
+                {/* ⚠ O MOTIVO É OBRIGATÓRIO E MORA NO RODAPÉ, ao lado do botão que ele destrava —
+                    é o idioma do `ConfirmarComMotivo`, e a RPC recusa sem ele
+                    (`CORRECAO_SEM_MOTIVO`). Travar antes é dizer a mesma coisa sem gastar uma ida
+                    ao servidor. */}
+                {corrigindo && (
+                  <Input value={motivoCorrecao} onChange={e => setMotivoCorrecao(e.target.value)}
+                    placeholder="Motivo da correção (obrigatório)"
+                    className="h-8 w-full min-w-0 flex-1 text-[11px] md:w-auto" />
+                )}
                 <Button size="sm" variant="acao" className="h-8 gap-1 px-3 text-[11px]"
-                  disabled={!!impedimento || salvando} title={impedimento ?? 'Registrar a venda'}
+                  disabled={!!impedimento || salvando} title={impedimento ?? (corrigindo ? 'Cancelar a venda atual e gravar esta' : 'Registrar a venda')}
                   onClick={registrar}>
-                  <Save className="h-3.5 w-3.5" /> Registrar venda
+                  <Save className="h-3.5 w-3.5" /> {corrigindo ? 'Confirmar correção' : 'Registrar venda'}
                 </Button>
               </>
             ) : leitura ? (
