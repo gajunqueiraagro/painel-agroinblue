@@ -163,12 +163,25 @@ export function AgriEstoqueGraosTab() {
       </button>
       <span className="mx-1 font-normal text-muted-foreground">›</span>
       {labelDaCultura(cultura)}
-      <span className="font-normal text-muted-foreground"> ({rotuloUnidade})</span>
-      {/* ⚠ A SAFRA SO' ENTRA QUANDO HA' UMA: sem `safraRotulo` o " · Safra " sairia pendurado. */}
-      {safraRotulo && (
-        <span className="font-normal text-muted-foreground"> · Safra {safraRotulo}</span>
-      )}
     </>
+  );
+
+  /**
+   * O RECORTE — unidade e safra, logo acima da tabela.
+   *
+   * ⚠ ELES SAÍRAM DO BREADCRUMB, não sumiram. O título responde "onde estou" e a resposta é um
+   * caminho: Estoque de Grãos › Amendoim. Unidade e safra não são lugar — são o RECORTE do que a
+   * tabela abaixo mostra, e é ao lado dela que eles fazem trabalho.
+   * ⚠ E É POR ISSO QUE ELE NÃO EXISTE EM "TODAS": lá a tabela tem uma linha por cultura, cada uma
+   * com a sua unidade em coluna própria, e não há um recorte único a declarar. Repetir a safra ali
+   * seria dizer o que o seletor do topo já diz.
+   * ⚠ A SAFRA SÓ ENTRA QUANDO HÁ UMA: sem `safraRotulo` o " · Safra " sairia pendurado.
+   */
+  const rotuloRecorte = verTodas ? null : (
+    <p className="text-[11px] text-muted-foreground">
+      {labelDaCultura(cultura)} ({rotuloUnidade})
+      {safraRotulo && <> · Safra {safraRotulo}</>}
+    </p>
   );
 
   const { linhas, carregando, erro } = useEstoqueGraos(
@@ -428,6 +441,8 @@ export function AgriEstoqueGraosTab() {
         <Cartao rotulo="% colhido parado" unidade={verTodas ? undefined : '%'}
           valor={verTodas ? '—' : formatNum(t.pctParado, 1)} />
       </div>
+
+      {rotuloRecorte}
 
       {/* ── "TODAS": UMA LINHA POR CULTURA ──
           ⚠ ELA NÃO REPETE O DETALHE POR CLASSE, e é de propósito: a pergunta de quem abre em
