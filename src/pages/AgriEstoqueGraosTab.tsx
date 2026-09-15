@@ -104,6 +104,23 @@ function colunaDaCultura(cultura: string): ChaveUnidade | null {
   return COLUNAS_UNIDADE.find(c => c.kgPorSaca === u.kgPorSaca)?.chave ?? null;
 }
 
+/**
+ * Cabeçalho de duas linhas: nome em cima, unidade embaixo — a mesma peça do histórico de vendas.
+ *
+ * ⚠ A UNIDADE SAIU DO NOME E DESCEU UMA LINHA. Com ela no rótulo ("Venda R$/sc") o cabeçalho
+ * quebrava em duas linhas abaixo de 872px e o `title` virava o único lugar que dizia se a coluna
+ * era preço ou total. Em duas linhas o nome fica curto, a unidade fica escrita, e a altura é a
+ * mesma para as nove colunas.
+ */
+const Th2 = ({ nome, unidade, esq, className }: {
+  nome: string; unidade?: string; esq?: boolean; className?: string;
+}) => (
+  <th className={cn(TH, 'whitespace-nowrap align-bottom', esq ? 'text-left' : 'text-right', className)}>
+    <div className="text-[11px] font-medium normal-case leading-[1.15] tracking-normal">{nome}</div>
+    <div className="text-[10px] font-normal normal-case leading-[1.15] tracking-normal opacity-70">{unidade || ' '}</div>
+  </th>
+);
+
 export function AgriEstoqueGraosTab() {
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id ?? null;
@@ -604,8 +621,6 @@ export function AgriEstoqueGraosTab() {
     [linhas]);
 
   /** ⚠ ZERO EM SACAS É DADO ("colheu e entregou tudo"); zero em DINHEIRO é ausência. */
-  const dinheiro = (v: number, saldo: number) => (saldo > 0 ? formatMoeda(v) : '—');
-
   /**
    * O lado do MERCADO — e ele exige mais que o lado da venda.
    *
@@ -749,10 +764,20 @@ export function AgriEstoqueGraosTab() {
             estimado" servia; agora ele avalia A MERCADO, e manter o nome antigo faria a MESMA
             conta ter dois nomes entre a lista e o detalhe — que é a divergência que este PR
             fechou no banco. */}
-        <Cartao rotulo={verTodas ? 'Valor a mercado' : 'Valor de venda'}
-          escopo={verTodas ? 'esta safra' : undefined} unidade="R$"
-          valor={formatNum(verTodas ? totalResumo.valor : t.valor, 2)}
-          titulo={formatMoeda(verTodas ? totalResumo.valor : t.valor)} cor="text-success" />
+        {/* ⚠⚠ "VALOR DE VENDA" ERA O SALDO VALORIZADO pelo preço já praticado, e virou VENDIDO:
+            o que entrou de verdade, com a quantidade que o produziu no rótulo de baixo. O cartão
+            antigo e a coluna antiga eram o mesmo número e o mesmo engano — uma projeção com cara
+            de realizado, no lugar do realizado.
+            ⚠ O SUBRÓTULO É A QUANTIDADE, não "esta safra": R$ sozinho não deixa conferir com o
+            histórico, e "{entregue} sc" ao lado do dinheiro dá as duas metades do preço médio
+            que a tabela mostra na coluna ao lado.
+            ⚠ EM "TODAS" ELE CONTINUA SENDO O VALOR A MERCADO do resumo: aquela RPC não desce à
+            classe e não devolve recebido — trocar o rótulo lá afirmaria um número que não existe. */}
+        <Cartao rotulo={verTodas ? 'Valor a mercado' : 'Vendido'}
+          escopo={verTodas ? 'esta safra' : `${formatNum(t.entregue, 2)} ${unidadeCurtaDaCultura(cultura)}`}
+          unidade="R$"
+          valor={formatNum(verTodas ? totalResumo.valor : t.recebido, 2)}
+          titulo={formatMoeda(verTodas ? totalResumo.valor : t.recebido)} cor="text-success" />
         {!verTodas && (
           <Cartao rotulo="Valor a mercado" escopo="esta safra" unidade="R$"
             valor={formatNum(t.valorMercado, 2)}
@@ -901,59 +926,49 @@ export function AgriEstoqueGraosTab() {
           </table>
         </div>
       ) : (
-      <div className="overflow-hidden rounded-md border">
+      /* ⚠ `overflow-x-auto`, NÃO `overflow-hidden`: com as colunas em px a tabela tem largura
+         mínima, e `hidden` CORTARIA as últimas numa janela estreita — número escondido, que é
+         exatamente o que a régua da casa proíbe. Com `auto` nasce a barra e nada some. */
+      <div className="overflow-x-auto rounded-md border">
         <table className="w-full table-fixed border-collapse">
           {/* ⚠ A LARGURA ANDOU COM A COLUNA, e isto nao e' detalhe: `colgroup` e' POSICIONAL.
-              Mover "Saldo sc" no `thead` sem mover o `10%` dele aqui nao quebraria nada visivel —
-              so' daria a largura do saldo para a coluna de Venda e a de Venda para o saldo, calado.
-              A soma continua 100%: 18+10+10+8+10+11+10+11+12. */}
+              Mover "Saldo sc" no `thead` sem mover a largura dele aqui nao quebraria nada visivel —
+              so' daria a largura do saldo para a coluna de preco e a de preco para o saldo, calado.
+              ⚠⚠ px, NÃO PORCENTAGEM, e medido pelo maior conteúdo real: "R$ 1.536.232,09" a 11px
+              são 82,3px de texto, e com o padding de 16 a coluna precisa de 99. Com porcentagem a
+              mesma coluna encolhia junto com a janela e o número quebrava — é a mesma correção
+              que a tabela do histórico de vendas já recebeu.
+              ⚠ A CLASSE TEM PISO, não largura livre: medido, "Acima de 20 ppb" com a bolinha pede
+              104,8px, e sem piso ela chegava a ZERO numa janela estreita — a linha de Total ficava
+              sem a palavra "Total". Com 120px nada some em largura nenhuma; a tabela para de
+              encolher em 906px e nasce a barra horizontal. Ela ainda cede antes dos números, que
+              é o que se queria: número não encolhe sem mentir. */}
           <colgroup>
-            {['18%', '10%', '10%', '8%', '10%', '11%', '10%', '11%', '12%'].map((w, i) => (
-              <col key={i} style={{ width: w }} />
+            {['120px', '92px', '92px', '86px', '96px', '116px', '92px', '96px', '116px'].map((w, i) => (
+              <col key={i} style={w ? { width: w } : undefined} />
             ))}
           </colgroup>
           <thead>
             <tr>
-              <th className={cn(TH, 'text-left')}>Classe</th>
-              <th className={cn(TH, 'text-right')}>Colhido</th>
-              <th className={cn(TH, 'text-right')}>Entregue</th>
-              <th className={cn(TH, 'text-right')}>Quebra</th>
-              {/* ⚠ A DIVISA MUDOU DE LUGAR — ela separava "Mercado" do resto e agora abre em
-                  "Saldo sc". O corte deixou de ser entre DOIS PREÇOS e passou a ser entre DOIS
-                  TEMPOS: à esquerda o que JÁ ACONTECEU (colhido, entregue, quebra e a venda já
-                  praticada); à direita a POSIÇÃO DE HOJE e quanto ela vale — o saldo, a cotação e
-                  o valor a mercado. O saldo pertence à direita porque é ele que as duas colunas
-                  de mercado multiplicam.
-                  ⚠ O QUE A BORDA IMPEDIA CONTINUA IMPEDIDO: "Valor" e "A mercado" seguem em lados
-                  opostos, e somá-los continua sendo o erro natural de quem varre a tabela — são
-                  duas respostas para a mesma pergunta, não duas parcelas.
-                  ⚠ OS RÓTULOS SÃO CURTOS PORQUE NOVE COLUNAS NÃO CABEM COM NOMES LONGOS, e a conta
-                  é literal: com "R$ / sc venda" e "Valor a mercado" o cabeçalho passava a duas
-                  linhas abaixo de 920px de tabela; com estes, abaixo de 635px. Guardar a unidade no
-                  rótulo quase não ajudava — "Venda R$/sc" só desceria para 872px —, então ela saiu
-                  do cabeçalho e ficou no `title` e na nota do rodapé, que é onde há espaço para
-                  dizer que uma coluna é preço por saca e a outra é o total.
-                  ⚠ E É A BORDA QUE DESAMBIGUA OS DOIS "VALOR": sozinhos, "Valor" e "A mercado" não
-                  diriam de que lado cada um está. O rótulo encurtou porque a divisa carrega o
-                  sentido — tirar a borda e manter estes nomes seria pior que o cabeçalho de duas
-                  linhas. */}
-              <th className={cn(TH, 'text-right')} title="Preço médio por saca já praticado nas entregas">
-                Venda
-              </th>
-              <th className={cn(TH, 'text-right')} title="Saldo × preço médio já praticado">
-                Valor
-              </th>
-              {/* ⚠ O SALDO FECHA O GRUPO DA ESQUERDA, encostado na divisa: ele e' a quantidade que
-                  as duas colunas de valor multiplicam, e' o que o `Mercado` do outro lado tambem
-                  multiplica, e a leitura da linha termina nele — Colhido, Entregue, Quebra, a que
-                  preco, quanto da', e o que sobrou. */}
-              <th className={cn(TH, SEP_TH, 'text-right')}>Saldo sc</th>
-              <th className={cn(TH, 'text-right')} title="Última cotação de mercado por saca">
-                Mercado
-              </th>
-              <th className={cn(TH, 'text-right')} title="Saldo × última cotação de mercado">
-                A mercado
-              </th>
+              <Th2 nome="Classe" esq />
+              <Th2 nome="Colhido" unidade={unidadeCurtaDaCultura(cultura)} />
+              <Th2 nome="Entregue" unidade={unidadeCurtaDaCultura(cultura)} />
+              <Th2 nome="Quebra" unidade={unidadeCurtaDaCultura(cultura)} />
+              {/* ⚠⚠ AS DUAS COLUNAS DO MEIO MUDARAM DE SIGNIFICADO, e é o defeito deste PR.
+                  Eram "Venda" (preço praticado) e "Valor" — e "Valor" era o SALDO valorizado por
+                  aquele preço: 4.165,85 × 95 = R$ 395.755,57, um número que não é realizado nem é
+                  mercado. Ele respondia "quanto valeria se eu vendesse o resto pelo preço de
+                  antes", pergunta que ninguém fez, e ocupava o lugar da que todos fazem.
+                  ⚠ AGORA AS DUAS OLHAM PARA TRÁS, as duas da direita para frente: quanto saiu e
+                  por quanto (Preço venda, Recebido) contra o que sobrou e quanto vale hoje
+                  (Saldo, Mercado, A mercado). A divisa separa exatamente isso. */}
+              <Th2 nome="Preço venda" unidade={`R$ / ${unidadeCurtaDaCultura(cultura)}`} />
+              <Th2 nome="Recebido" unidade="R$" />
+              {/* ⚠ O SALDO ABRE O GRUPO DA DIREITA, encostado na divisa: é a quantidade que as
+                  duas colunas de mercado multiplicam. */}
+              <Th2 nome="Saldo" unidade={unidadeCurtaDaCultura(cultura)} className={SEP_TH} />
+              <Th2 nome="Mercado" unidade={`R$ / ${unidadeCurtaDaCultura(cultura)}`} />
+              <Th2 nome="A mercado" unidade="R$" />
             </tr>
           </thead>
           <tbody>
@@ -981,7 +996,7 @@ export function AgriEstoqueGraosTab() {
               </td></tr>
             ) : ordenadas.map(l => (
               <tr key={l.classe} className="border-t border-slate-100">
-                <td className="truncate px-2 py-0.5 text-[11px]">
+                <td className="truncate px-2 py-0.5 text-[11px]" title={labelDaClasse(l.classe)}>
                   {/* ⚠ O PONTO ACOMPANHA O RÓTULO, nunca o substitui: quem não distingue as
                       cores continua lendo "Acima de 20 ppb". A cor é a mesma da composição do
                       barter — o mesmo grão, o mesmo código visual. */}
@@ -1026,11 +1041,16 @@ export function AgriEstoqueGraosTab() {
                   }}>
                   {formatNum(l.quebra, 2)}
                 </td>
+                {/* ⚠ O TRAÇO AQUI DEPENDE DO ENTREGUE, NÃO DO SALDO — e a troca é o conserto.
+                    `dinheiro(v, saldo)` escondia o preço praticado quando o saldo zerava, porque
+                    a coluna antiga valorizava o saldo. Estas duas falam do que JÁ SAIU: a roça de
+                    23/24 vendeu tudo e continua tendo preço e recebido. Sem entrega, aí sim não
+                    há o que dizer. */}
                 <td className="px-2 py-0.5 text-right text-[11px] tabular-nums text-muted-foreground">
-                  {dinheiro(l.preco_ref, l.saldo)}
+                  {l.entregue > 0 ? formatMoeda(l.preco_ref) : '—'}
                 </td>
                 <td className="px-2 py-0.5 text-right text-[11px] font-medium tabular-nums">
-                  {dinheiro(l.valor, l.saldo)}
+                  {l.recebido > 0 ? formatMoeda(l.recebido) : '—'}
                 </td>
                 <td className={cn('px-2 py-0.5 text-right text-[11px] font-medium tabular-nums',
                   SEP_TD, l.saldo > 0 && 'text-success')}>
@@ -1073,12 +1093,17 @@ export function AgriEstoqueGraosTab() {
                   }}>
                   {formatNum(t.quebra, 2)}
                 </td>
-                {/* ⚠ NENHUMA DAS DUAS COLUNAS DE R$/sc TEM TOTAL: a média de três preços de
-                    classes diferentes não é um preço que alguém pratica. Vazio aqui é mais honesto
-                    que um número — e vale igual para a venda e para o mercado. */}
-                <td className="px-2 py-1" />
+                {/* ⚠ O PREÇO DE VENDA TEM TOTAL E O DE MERCADO NÃO, e a diferença é real: o da
+                    venda é `recebido ÷ entregue`, uma média PONDERADA pelo que de fato saiu — um
+                    preço que a safra praticou. O de mercado seria a média de três cotações sem
+                    peso nenhum, que não é preço de coisa alguma.
+                    ⚠ E ELE NÃO É A MÉDIA DOS `preco_ref` DAS LINHAS: três classes a 95, 65 e 60
+                    não dão 73,33 quando as quantidades diferem. A ponderação mora na divisão. */}
                 <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">
-                  {t.saldo > 0 ? formatMoeda(t.valor) : '—'}
+                  {t.entregue > 0 ? formatMoeda(t.precoVenda) : '—'}
+                </td>
+                <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">
+                  {t.recebido > 0 ? formatMoeda(t.recebido) : '—'}
                 </td>
                 <td className={cn('px-2 py-1 text-right text-[11px] font-bold tabular-nums', SEP_TH)}>
                   {formatNum(t.saldo, 2)}
@@ -1253,15 +1278,13 @@ export function AgriEstoqueGraosTab() {
               de <strong>25 kg</strong> (amendoim) e de <strong>60 kg</strong> (soja, milho) e
               <strong> toneladas</strong> (mandioca, cana) não se somam entre si — cada uma na sua
               coluna. O R$ soma tudo.</>
-          /* ⚠ A NOTA CARREGA A UNIDADE QUE O CABEÇALHO PERDEU: "Venda" e "Mercado" são R$ por
-              SACA, "Valor" e "A mercado" são o total. Com nove colunas o rótulo não comporta a
-              distinção, e ela não pode ficar só no `title` — quem lê num relatório impresso ou
-              numa captura de tela não tem mouse. */
-          : <>Saldo = Colhido − Entregue (barter/venda) − Quebra, por safra, cultura e classe.
-              <strong> Venda</strong> e <strong>Mercado</strong> são R$ por saca; <strong>Valor</strong> e
-              <strong> A mercado</strong>, o total do saldo. O primeiro par usa o preço médio já
-              praticado naquela classe, o segundo a última cotação lançada — os dois avaliam o mesmo
-              grão e não se somam.</>}
+          /* ⚠ A NOTA DIZ QUAL METADE DA TABELA OLHA PARA TRÁS. A unidade saiu daqui porque agora
+              está escrita no cabeçalho, em duas linhas; o que a nota carrega é o que o cabeçalho
+              não tem como dizer — que as duas colunas do meio são PASSADO (o que saiu e o que
+              entrou) e as duas da direita são PRESENTE (o que sobrou e quanto vale hoje). */
+          : <>Saldo = Colhido − Entregue − Quebra. <strong>Preço venda</strong> e
+              <strong> Recebido</strong> são o que já saiu (barter e dinheiro); <strong>Mercado</strong> e
+              <strong> A mercado</strong> avaliam o que ainda está no estoque pela última cotação.</>}
       </p>
     </div>
   );

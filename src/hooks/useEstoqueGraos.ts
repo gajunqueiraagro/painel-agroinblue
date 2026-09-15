@@ -40,7 +40,24 @@ export interface EstoqueClasse {
    * Subtrair de novo no front contaria a perda duas vezes.
    */
   quebra: number;
-  /** A média ponderada do que já se entregou daquela classe. Zero quando nunca se entregou. */
+  /**
+   * O BRUTO JÁ RECEBIDO POR AQUELA CLASSE — barter e dinheiro, somados.
+   *
+   * ⚠ A RPC SEMPRE DEVOLVEU ESTE CAMPO e o front o descartava no `map`: é `sum(e.valor)` das
+   * entregas ativas, o mesmo número que a tabela de vendas soma no histórico. Sem ele a tela
+   * não tinha como responder "quanto já entrou" e valorizava o SALDO pelo preço praticado —
+   * uma projeção apresentada como fato.
+   * ⚠ ELE É BRUTO, não líquido: Senar e descontos saem depois, no Financeiro. A coluna diz o
+   * que o comprador deve pela mercadoria entregue.
+   */
+  recebido: number;
+  /**
+   * A média ponderada do que já se entregou daquela classe. Zero quando nunca se entregou.
+   *
+   * ⚠ É `recebido / entregue`, E QUEM DIVIDE É A RPC — `sum(e.valor)/nullif(sum(e.sacas),0)`,
+   * conferido no `prosrc`. O front não repete essa conta por classe; só a refaz para o TOTAL,
+   * que a RPC não devolve.
+   */
   preco_ref: number;
   /** `saldo × preco_ref`, com o saldo travado em zero para baixo. */
   valor: number;
@@ -99,6 +116,7 @@ export function useEstoqueGraos(
         entregue: num(x?.entregue),
         quebra: num(x?.quebra),
         saldo: num(x?.saldo),
+        recebido: num(x?.recebido),
         preco_ref: num(x?.preco_ref),
         valor: num(x?.valor),
         preco_mercado: num(x?.preco_mercado),
@@ -126,9 +144,22 @@ export function totaisDoEstoque(linhas: readonly EstoqueClasse[]) {
   const colhido = linhas.reduce((a, l) => a + l.colhido, 0);
   const saldo = linhas.reduce((a, l) => a + l.saldo, 0);
   const valor = linhas.reduce((a, l) => a + l.valor, 0);
+  const entregue = linhas.reduce((a, l) => a + l.entregue, 0);
+  const recebido = linhas.reduce((a, l) => a + l.recebido, 0);
   return {
     colhido,
-    entregue: linhas.reduce((a, l) => a + l.entregue, 0),
+    entregue,
+    /** O bruto já recebido na safra inteira — barter e dinheiro. */
+    recebido,
+    /**
+     * O PREÇO MÉDIO DA SAFRA — e ele é `recebido / entregue`, nunca a média das três médias.
+     *
+     * ⚠ MÉDIA DE MÉDIAS NÃO É PREÇO: três classes vendidas a 95, 65 e 60 não dão 73,33 se as
+     * quantidades forem diferentes. A ponderação está na divisão, e é por isso que ela usa os
+     * dois totais em vez dos `preco_ref` das linhas.
+     * ⚠ ZERO ENTREGUE DÁ ZERO, não NaN — e a tela o traduz em traço.
+     */
+    precoVenda: entregue > 0 ? recebido / entregue : 0,
     /* ⚠ SOMA O MESMO ARRAY QUE A TABELA MOSTRA, como os outros totais — nunca uma segunda
        consulta, para que o rodapé da coluna não possa discordar das linhas. */
     quebra: linhas.reduce((a, l) => a + l.quebra, 0),
