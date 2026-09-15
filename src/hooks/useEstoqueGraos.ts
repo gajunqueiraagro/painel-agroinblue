@@ -321,3 +321,67 @@ export function useEstoqueGraosBalanco(
     erro: error as Error | null,
   };
 }
+
+/** Uma movimentação do livro de estoque — hoje só `quebra`, ativa ou cancelada. */
+export interface EstoqueMovimentacao {
+  id: string;
+  tipo: string;
+  classe: string;
+  quantidade: number;
+  data: string;
+  motivo: string;
+  observacoes: string | null;
+  /** `false` = cancelada. Ela CONTINUA na lista; o que sai é do saldo. */
+  ativo: boolean;
+  /** O nome de quem registrou, de `profiles`. String vazia quando não há perfil. */
+  autor: string;
+  criado_em: string;
+  cancelado_em: string | null;
+  cancelado_por: string;
+  motivo_cancelamento: string | null;
+}
+
+/**
+ * O LIVRO DE MOVIMENTAÇÕES DE UMA CULTURA NA SAFRA — o histórico da quebra.
+ *
+ * ⚠ ELE É O ÚNICO LUGAR ONDE A CANCELADA APARECE. As três leituras de saldo filtram `ativo`, de
+ * propósito: uma baixa cancelada não deve pesar no estoque. Mas ela precisa ser VISÍVEL em algum
+ * lugar, senão o estorno é invisível e uma baixa cancelada por engano não tem como ser conferida.
+ * ⚠ NÃO É CACHE DO SALDO. Esta lista não alimenta número nenhum da tela — quem diz o saldo é
+ * `fn_estoque_graos`. Somar as ativas aqui para conferir o saldo seria criar a segunda conta que
+ * este módulo inteiro existe para não ter.
+ * ⚠ CHAVE PRÓPRIA (`estoque-movimentacoes`): cancelar invalida ESTA e também `estoque-graos`,
+ * porque o saldo muda; editar invalida só esta, porque data/motivo/observação não mexem no saldo.
+ */
+export function useEstoqueMovimentacoes(
+  clienteId: string | null | undefined, safraId: string | null, cultura: string | null,
+  ativo: boolean,
+) {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['estoque-movimentacoes', clienteId ?? '', safraId ?? '', cultura ?? ''],
+    enabled: !!clienteId && !!safraId && !!cultura && ativo,
+    queryFn: async (): Promise<EstoqueMovimentacao[]> => {
+      const { data: r, error: err } = await (supabase as any).rpc('fn_estoque_movimentacoes', {
+        p_cliente: clienteId, p_safra_id: safraId, p_cultura: cultura,
+      });
+      if (err) throw err;
+      return (Array.isArray(r) ? r : []).map((x: Record<string, unknown>) => ({
+        id: String(x?.id ?? ''),
+        tipo: String(x?.tipo ?? 'quebra'),
+        classe: String(x?.classe ?? '—'),
+        quantidade: num(x?.quantidade),
+        data: String(x?.data ?? ''),
+        motivo: String(x?.motivo ?? ''),
+        observacoes: (x?.observacoes as string | null) ?? null,
+        ativo: x?.ativo !== false,
+        autor: String(x?.autor ?? ''),
+        criado_em: String(x?.criado_em ?? ''),
+        cancelado_em: (x?.cancelado_em as string | null) ?? null,
+        cancelado_por: String(x?.cancelado_por ?? ''),
+        motivo_cancelamento: (x?.motivo_cancelamento as string | null) ?? null,
+      }));
+    },
+  });
+
+  return { movimentacoes: data ?? [], carregando: isLoading, erro: error as Error | null };
+}

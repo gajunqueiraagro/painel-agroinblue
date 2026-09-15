@@ -26,13 +26,14 @@ import { cn } from '@/lib/utils';
 import { Cartao } from '@/components/ui/cartao';
 import { BalancoSafrasModal } from '@/components/agri/BalancoSafrasModal';
 import { QuebraModal, type QuebraPayload } from '@/components/agri/QuebraModal';
+import { MovimentacoesEstoqueModal, type QuebraEdicaoPayload } from '@/components/agri/MovimentacoesEstoqueModal';
 import { CINZA_CABECALHO, TH_CINZA as TH } from '@/lib/idiomaVisual';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { useSafrasLavoura, useTalhoesDaSafra } from '@/hooks/useAreaPlantada';
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
 import { unidadeDaCultura, kgPorUnidade, rotuloCulturaUnidade, unidadeCurtaDaCultura } from '@/lib/agri/colheita';
 import { labelDaClasse, corDaClasse } from '@/lib/agri/barterVenda';
-import { useEstoqueGraos, totaisDoEstoque, useEstoqueGraosResumo } from '@/hooks/useEstoqueGraos';
+import { useEstoqueGraos, totaisDoEstoque, useEstoqueGraosResumo, useEstoqueMovimentacoes } from '@/hooks/useEstoqueGraos';
 import { VendaAvulsaModal, type VendaAvulsaPayload } from '@/components/agri/VendaAvulsaModal';
 import { CotacaoGraosModal, type CotacaoGraosPayload } from '@/components/agri/CotacaoGraosModal';
 import { formatIsoToBr } from '@/components/ui/date-picker';
@@ -366,6 +367,55 @@ export function AgriEstoqueGraosTab() {
       await queryClient.invalidateQueries({ queryKey: ['estoque-graos'] });
     } finally {
       setSalvandoQuebra(false);
+    }
+  };
+
+  /* ───────────────────────── O HISTÓRICO DA QUEBRA (F2.1) ─────────────────────────
+   * ⚠ A LISTA SÓ CARREGA COM O MODAL ABERTO: é o mesmo `enabled` do resumo e do balanço. Buscar
+   * o histórico a cada troca de cultura seria uma ida ao banco por gesto de navegação, sem
+   * ninguém para ler.
+   * ⚠ CANCELAR INVALIDA AS DUAS CHAVES, EDITAR SÓ UMA — e a diferença é a conta: cancelar tira a
+   * quebra do saldo (`ativo=false`, e as três leituras filtram `ativo`), então a tabela atrás
+   * muda; editar mexe em data, motivo e observação, que não entram em conta nenhuma.
+   */
+  const [modalMovimentacoes, setModalMovimentacoes] = useState(false);
+  const [salvandoMov, setSalvandoMov] = useState(false);
+  const mov = useEstoqueMovimentacoes(
+    clienteId, safraId || null, verTodas ? null : (cultura || null), modalMovimentacoes);
+
+  const recarregarMovimentacoes = () =>
+    queryClient.invalidateQueries({ queryKey: ['estoque-movimentacoes'] });
+
+  const cancelarQuebra = async (id: string, motivo: string) => {
+    setSalvandoMov(true);
+    try {
+      const { error } = await (supabase as any).rpc('agri_quebra_cancelar', {
+        p_id: id, p_motivo: motivo,
+      });
+      if (error) { toast.error(error.message ?? 'Não foi possível cancelar a quebra.'); return; }
+      toast.success('Quebra cancelada — o grão voltou ao saldo.');
+      await recarregarMovimentacoes();
+      /* ⚠ O ESTOQUE TAMBÉM: a linha saiu do saldo, e a tabela atrás precisa refletir isso sem
+         recarregar a página. Mesma chave da venda e da quebra — não há um segundo reload. */
+      await queryClient.invalidateQueries({ queryKey: ['estoque-graos'] });
+    } finally {
+      setSalvandoMov(false);
+    }
+  };
+
+  const editarQuebra = async (p: QuebraEdicaoPayload) => {
+    setSalvandoMov(true);
+    try {
+      const { error } = await (supabase as any).rpc('agri_quebra_editar', {
+        p_id: p.id, p_data: p.data, p_motivo: p.motivo, p_observacoes: p.observacoes,
+      });
+      if (error) { toast.error(error.message ?? 'Não foi possível salvar a correção.'); return; }
+      toast.success('Movimentação corrigida.');
+      /* ⚠ SÓ A LISTA: data, motivo e observação não entram no saldo, então invalidar
+         `estoque-graos` aqui seria uma consulta que não muda um número na tela. */
+      await recarregarMovimentacoes();
+    } finally {
+      setSalvandoMov(false);
     }
   };
 
@@ -806,8 +856,20 @@ export function AgriEstoqueGraosTab() {
                     `fn_estoque_graos` devolve `quebra`, e o que está aqui é o que o banco tem.
                     ⚠ ZERO É VALOR, NUNCA "—": "não houve perda" é uma resposta, e um traço diria
                     que a tela não sabe. */}
-                <td className={cn('px-2 py-0.5 text-right text-[11px] tabular-nums',
-                  l.quebra > 0 ? 'text-destructive' : 'text-muted-foreground')}>
+                {/* ⚠ O NÚMERO É O ALVO, não um ícone ao lado: o gesto é "quero ver estas quebras",
+                    e o alvo natural é a quantidade que as resume. Zero também abre — pode haver
+                    CANCELADA, que não soma e existe.
+                    ⚠ NADA MUDA DE TAMANHO ao virar clicável (A23): é o mesmo `<td>`, com
+                    `underline` só no hover. Um `<button>` aqui traria padding e altura próprios. */}
+                <td className={cn('cursor-pointer px-2 py-0.5 text-right text-[11px] tabular-nums',
+                  'underline-offset-2 hover:underline',
+                  l.quebra > 0 ? 'text-destructive' : 'text-muted-foreground')}
+                  role="button" tabIndex={0}
+                  title="Ver movimentações" aria-label="Ver movimentações do estoque"
+                  onClick={() => setModalMovimentacoes(true)}
+                  onKeyDown={ev => {
+                    if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); setModalMovimentacoes(true); }
+                  }}>
                   {formatNum(l.quebra, 2)}
                 </td>
                 <td className="px-2 py-0.5 text-right text-[11px] tabular-nums text-muted-foreground">
@@ -842,7 +904,13 @@ export function AgriEstoqueGraosTab() {
                 <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">
                   {formatNum(t.entregue, 2)}
                 </td>
-                <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">
+                <td className="cursor-pointer px-2 py-1 text-right text-[11px] font-bold tabular-nums underline-offset-2 hover:underline"
+                  role="button" tabIndex={0}
+                  title="Ver movimentações" aria-label="Ver movimentações do estoque"
+                  onClick={() => setModalMovimentacoes(true)}
+                  onKeyDown={ev => {
+                    if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); setModalMovimentacoes(true); }
+                  }}>
                   {formatNum(t.quebra, 2)}
                 </td>
                 {/* ⚠ NENHUMA DAS DUAS COLUNAS DE R$/sc TEM TOTAL: a média de três preços de
@@ -934,6 +1002,19 @@ export function AgriEstoqueGraosTab() {
         clienteId={clienteId}
         cultura={verTodas ? '' : cultura}
         dataCotacao={t.dataMercado}
+      />
+
+      <MovimentacoesEstoqueModal
+        aberto={modalMovimentacoes}
+        onFechar={() => setModalMovimentacoes(false)}
+        movimentacoes={mov.movimentacoes}
+        carregando={mov.carregando}
+        erro={mov.erro}
+        cultura={cultura}
+        safraRotulo={safraRotulo}
+        onCancelar={(id, motivo) => { void cancelarQuebra(id, motivo); }}
+        onEditar={p => { void editarQuebra(p); }}
+        salvando={salvandoMov}
       />
 
       <QuebraModal

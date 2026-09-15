@@ -47,8 +47,14 @@ export interface QuebraPayload {
  * exatamente `{umidade, praga, manuseio, outro}`, e um quinto valor aqui seria recusado no insert.
  * ⚠ O RÓTULO EXPLICA O VALOR porque "praga" sozinho não diz o que conta como praga — o operador
  * que perdeu saca para rato precisa reconhecer a opção sem perguntar.
+ * ⚠ EXPORTADO porque o histórico (`MovimentacoesEstoqueModal`) precisa do MESMO mapa para ler
+ * "praga" de volta como "Praga (roedor, inseto)". Duas listas seriam dois vocabulários para o
+ * mesmo `CHECK` do banco — a lição do `Cartao` e do cinza do cabeçalho, pela terceira vez.
+ * ⚠ E ELE MORA NUM COMPONENTE, o que não é o ideal: o lugar certo de um vocabulário de domínio é
+ * um módulo folha em `lib/agri`. Fica assim enquanto houver DOIS consumidores e os dois forem
+ * modais da mesma tela; no terceiro, move-se — e aí o import deixa de ser componente→componente.
  */
-const MOTIVOS = [
+export const MOTIVOS = [
   { valor: 'umidade', rotulo: 'Umidade' },
   { valor: 'praga', rotulo: 'Praga (roedor, inseto)' },
   { valor: 'manuseio', rotulo: 'Manuseio e transporte interno' },
