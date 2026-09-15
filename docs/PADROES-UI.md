@@ -797,3 +797,51 @@ compilado.
 ⚠ **Varredura pendente:** medidas 43 renderizações de NF crua no app, em 12+ arquivos (Mesa,
 painéis de Compra/Venda/Abate, extrato, conciliação). Este padrão foi aplicado **só na Colheita**;
 o resto é decisão de escopo.
+
+---
+
+## A26 — Título de tela tem uma régua só, e ela é o `PageHeader`
+
+Toda tela nova abre com o mesmo bloco de identidade — **título e subtítulo**, nesta métrica,
+vinda do `PageHeader` (`src/components/ui/page-header.tsx`):
+
+```tsx
+<div className="... p-3 animate-fade-in">           {/* o respiro do topo: 12px */}
+  <div className="flex flex-wrap items-start justify-between gap-3">
+    <PageHeader titulo="Barter" subtitulo="Troca de grãos por insumos…" />
+    {/* ações / seletores da tela */}
+  </div>
+```
+
+| peça | valor | de onde |
+| --- | --- | --- |
+| respiro do topo | `p-3` no container da tela — **12px** | Conciliação |
+| título | `text-[15px] font-semibold leading-none` | Conciliação |
+| subtítulo | `mt-1 text-[11px] text-muted-foreground` | Conciliação |
+
+**A referência é a Conciliação** (`ConciliacaoBancariaTab`), e a métrica do componente é cópia
+verbatim da dela — não uma aproximação. Ela ainda monta o bloco à mão; adotar o componente lá é
+o passo seguinte, e é o que fecha a régua.
+
+⚠ **O respiro não mora no componente, mora no container.** Se o `PageHeader` trouxesse padding
+próprio, toda tela que já tem o seu somaria dois; e o bloco fixo do A21 precisa que o padding
+seja do container para poder cobri-lo com `-mt-2 pt-2`.
+
+⚠ **`items-start` na linha do cabeçalho, não `items-end`** — salvo quando o bloco de identidade
+for o item mais alto da linha. Este é o defeito que originou a regra: no Estoque de Grãos o
+título de uma linha (22px) dividia a linha com um par rótulo+campo de 49px sob `items-end`, e
+por isso **nascia 34px abaixo do topo** enquanto o da Conciliação nasce a 12px. Era esse o
+"título baixo". Com dois itens de alturas diferentes, `items-end` não alinha nada — **derruba o
+menor**.
+
+⚠ **O componente é só o bloco, sem a linha e sem as ações.** Quem sabe se o que está à direita é
+um botão de 32px (que fica bem alinhado por baixo, e aí `items-end` é legítimo) ou uma fila de
+seletores de 49px (que exige `items-start`) é a tela, não o cabeçalho.
+
+⚠ **`text-lg font-bold` é o que havia antes, e não é o padrão — é o acúmulo.** Medido no repo
+(primeiro `<h1>/<h2>` de cada arquivo em `src/pages` e `src/v2/pages`): **22** telas em
+`text-lg`, 9 em `text-sm`, 6 em `text-xl`, 6 em `text-base`, 4 em `text-[15px]`, 3 em `text-xs`,
+3 em `text-2xl`, 2 em `text-[20px]`, 1 em `text-[11px]` e 1 em `text-4xl` — dez réguas para a
+mesma pergunta. A varredura das telas antigas é **frente
+própria**, não item de PR de feature; o que esta regra fixa é que **tela nova nasce no
+`PageHeader`**.

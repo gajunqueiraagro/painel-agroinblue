@@ -17,6 +17,7 @@
  */
 import { useState, useEffect, useMemo } from 'react';
 import { useCliente } from '@/contexts/ClienteContext';
+import { PageHeader } from '@/components/ui/page-header';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
@@ -228,9 +229,13 @@ export function AgriEstoqueGraosTab() {
     !!l.data_mercado && l.preco_mercado > 0;
 
   return (
-    <div className="w-full space-y-2 p-4 animate-fade-in">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <h2 className="text-[15px] font-bold text-foreground">Estoque de Grãos</h2>
+    <div className="w-full space-y-2 p-3 animate-fade-in">
+      {/* ⚠ `items-start`, NÃO `items-end` — PR-HEADER-PADRAO. Com `items-end` o título de uma
+          linha era empurrado para o rodapé de uma fila de 49px (rótulo + campo) e nascia 34px
+          abaixo do topo, enquanto o da Conciliação nasce a 12px: era este o "título baixo". O
+          par rótulo+campo continua alinhado por baixo entre si, no `div` da direita. */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <PageHeader titulo="Estoque de Grãos" />
         <div className="flex flex-wrap items-end gap-2">
           <div className="w-[170px]">
             <Label className="text-[10px]">Safra</Label>

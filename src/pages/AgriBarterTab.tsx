@@ -30,6 +30,7 @@ import { useBarterContratos, useTotaisPorContrato, type ContratoNaLista } from '
 import { FornecedorSelect } from '@/components/shared/FornecedorSelect';
 import { useBarterInsumos, type BarterInsumo, type InsumoPayload } from '@/hooks/useBarterInsumos';
 import { useBarterVenda, type BarterVenda, type VendaPayload } from '@/hooks/useBarterVenda';
+import { PageHeader } from '@/components/ui/page-header';
 import { BarterInsumoModal } from '@/components/agri/BarterInsumoModal';
 import { BarterComposicaoEntrega } from '@/components/agri/BarterComposicaoEntrega';
 import { BarterVendaModal } from '@/components/agri/BarterVendaModal';
@@ -387,22 +388,22 @@ export function AgriBarterTab() {
   /* ── O DETALHE ── */
   if (contrato) {
     return (
-      <div className="flex h-full min-h-0 w-full flex-col gap-2 p-4 animate-fade-in">
+      <div className="flex h-full min-h-0 w-full flex-col gap-2 p-3 animate-fade-in">
         <div className="flex shrink-0 items-start gap-2">
           <Button variant="ghost" size="icon" className="h-8 w-8" title="Voltar aos contratos"
             onClick={() => setAbertoId(null)}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <div className="min-w-0">
-            <h2 className="text-lg font-bold leading-tight text-foreground">{contrato.nome}</h2>
-            {/* ⚠ A CULTURA APARECE AQUI, na linha que já existe, e não num sexto card: ela é
-                identidade do contrato ("o barter do amendoim"), não número a conferir. E o "—"
-                quando falta é informação — foi assim que o 23/24 passou meses sem ela. */}
-            <p className="text-xs text-muted-foreground">
+          {/* ⚠ A CULTURA APARECE AQUI, na linha que já existe, e não num sexto card: ela é
+              identidade do contrato ("o barter do amendoim"), não número a conferir. E o "—"
+              quando falta é informação — foi assim que o 23/24 passou meses sem ela. */}
+          <PageHeader
+            titulo={contrato.nome}
+            subtitulo={<>
               {contrato.parceiroNome} · {contrato.cultura ? labelDaCultura(contrato.cultura) : '—'}
               {' · aberto em '}{dataBR(contrato.data_abertura)}
-            </p>
-          </div>
+            </>}
+          />
           <div className="flex-1" />
           <span className={cn('rounded px-2 py-0.5 text-[10px] font-medium', TOM_STATUS[contrato.status] ?? 'bg-muted')}>
             {contrato.status}
@@ -824,17 +825,15 @@ export function AgriBarterTab() {
 
   /* ── A LISTA ── */
   return (
-    <div className="flex h-full min-h-0 w-full flex-col gap-2 p-4 animate-fade-in">
+    <div className="flex h-full min-h-0 w-full flex-col gap-2 p-3 animate-fade-in">
       <div className="flex shrink-0 flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-bold text-foreground">Barter</h2>
-          {/* ⚠ O SUBTÍTULO EXPLICA O QUE É, não repete o cliente. O nome do cliente já está na
-              barra de cima, em toda tela; aqui ele gastava a única linha que podia dizer ao
-              operador novo o que esta tela faz. */}
-          <p className="text-xs text-muted-foreground">
-            Troca de grãos por insumos com a cooperativa — entra no resultado, não no caixa.
-          </p>
-        </div>
+        {/* ⚠ O SUBTÍTULO EXPLICA O QUE É, não repete o cliente. O nome do cliente já está na
+            barra de cima, em toda tela; aqui ele gastava a única linha que podia dizer ao
+            operador novo o que esta tela faz. */}
+        <PageHeader
+          titulo="Barter"
+          subtitulo="Troca de grãos por insumos com a cooperativa — entra no resultado, não no caixa."
+        />
         <Button size="sm" className="h-8 gap-1 text-[11px]"
           onClick={() => {
             setEditandoId(null); setParceiroId(''); setParceiroNome(''); setNome('');
