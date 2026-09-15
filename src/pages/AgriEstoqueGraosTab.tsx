@@ -46,7 +46,7 @@ import { toast } from 'sonner';
    que as vinte e poucas células deste arquivo já usam. */
 
 /**
- * A DIVISA ENTRE O PREÇO DE VENDA E O DE MERCADO.
+ * A DIVISA ENTRE O QUE JÁ ACONTECEU E A POSIÇÃO DE HOJE — abre em "Saldo sc".
  *
  * ⚠ ELA NÃO É ENFEITE: sem a linha, oito colunas de número à direita leem como uma sequência só, e
  * a soma mental de "Valor" com "Valor a mercado" é o erro natural de quem varre a tabela — os dois
@@ -187,7 +187,27 @@ export function AgriEstoqueGraosTab() {
    * da tabela que ela legenda flutua no meio do caminho. Com −6px sobram 2px — perto o bastante
    * para o olho ler as duas como uma coisa só.
    */
-  const rotuloRecorte = verTodas ? null : (
+  /**
+   * A TEMPORADA, sem o sufixo de escopo — "25/26" a partir de "25/26-Lav".
+   *
+   * ⚠ NÃO HÁ COLUNA LIMPA NO BANCO, e eu procurei antes de recortar: `financeiro_safras` tem
+   * `codigo` ("25/26-Lav"), `nome` ("Safra 25/26 Lavoura") e `ciclo` ("anual"). Nenhuma guarda a
+   * temporada sozinha. MEDIDO nas 9 safras de agricultura do Proto: todas têm `-`, e o pedaço
+   * antes dele é exatamente a temporada (23/24, 24/25, 25/26, 26/27).
+   * ⚠ SEM `-`, FICA INTEIRO. É o caso de uma safra que caia no `nome` por falta de `codigo`:
+   * melhor um rótulo longo e verdadeiro que um recorte no lugar errado.
+   */
+  const temporada = safraRotulo.split('-')[0].trim();
+
+  const rotuloRecorte = verTodas ? (
+    /* ⚠ MESMA POSIÇÃO E MESMAS CLASSES do rótulo por cultura — é o SLOT, não dois enfeites
+       parecidos. Só o conteúdo muda: aqui não há seta, porque "Todas" É a raiz e não há para
+       onde voltar; uma seta inerte ensinaria que existe um nível acima.
+       ⚠ A TEMPORADA SÓ ENTRA QUANDO HÁ SAFRA: sem ela, "· safra " sairia pendurado. */
+    <p className="-mb-1.5 text-[11px] text-foreground">
+      Estoque ativo{temporada && <> · safra {temporada}</>}
+    </p>
+  ) : (
     <p className="-mb-1.5 text-[11px] text-foreground">
       <button type="button" onClick={() => setCultura(TODAS)}
         title="Voltar para todas as culturas"
@@ -359,15 +379,29 @@ export function AgriEstoqueGraosTab() {
 
   return (
     <div className="w-full space-y-2 p-3 animate-fade-in">
-      {/* ⚠ `items-start`, NÃO `items-end` — PR-HEADER-PADRAO. Com `items-end` o título de uma
-          linha era empurrado para o rodapé de uma fila de 49px (rótulo + campo) e nascia 34px
-          abaixo do topo, enquanto o da Conciliação nasce a 12px: era este o "título baixo". O
-          par rótulo+campo continua alinhado por baixo entre si, no `div` da direita. */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        {/* ⚠ O SUBTITULO E' DA TELA, nao da visao: ele diz o que a tela responde, e isso nao muda
-            entre "Todas" e o detalhe de uma cultura. A mesma forma da Conciliacao. */}
-        <PageHeader titulo={tituloTela}
-          subtitulo="O que você colheu e ainda não vendeu, por safra e classe" />
+      {/* ⚠ O TÍTULO TEM A LINHA SÓ PARA ELE. Antes ele dividia um `flex flex-wrap justify-between`
+          com a fila de seletores, que ficava à DIREITA, e o Gabriel relatou na homologação que ao
+          escolher uma cultura a fila ia para uma linha própria à esquerda, empurrando os cartões.
+          ⚠ A CAUSA DAQUELE SALTO NÃO FOI REPRODUZIDA. Remontei o cabeçalho antigo num harness com
+          o CSS do build e varri a largura de 1440 a 700px: em toda ela a fila permaneceu à direita
+          nas duas visões, salto 0px. A hipótese óbvia — o `flex-wrap` quebrando quando os dois
+          botões entram — NÃO se confirmou, porque o `min-w-0` do título deixa ele encolher em vez
+          de empurrar. Não sei o que dispara aquilo na tela real, e prefiro dizer isso a escrever
+          aqui uma explicação que a medição não sustenta.
+          ⚠ O QUE A CORREÇÃO GARANTE INDEPENDE DA CAUSA, e é por isso que ela vale mesmo sem o
+          diagnóstico: com duas linhas DECLARADAS, a posição dos filtros deixa de ser resultado de
+          caber ou não caber. Não há wrap possível entre título e filtros porque eles não dividem
+          mais uma linha. Medido: filtros e cartões no mesmo topo nas duas visões, ida e volta. */}
+      {/* ⚠ O SUBTITULO E' DA TELA, nao da visao: ele diz o que a tela responde, e isso nao muda
+          entre "Todas" e o detalhe de uma cultura. A mesma forma da Conciliacao. */}
+      <PageHeader titulo={tituloTela}
+        subtitulo="O que você colheu e ainda não vendeu, por safra e classe" />
+
+      {/* SLOT 2 — A LINHA DE FILTROS, IGUAL NAS DUAS VISÕES.
+          ⚠ OS DOIS GRUPOS SÃO DECLARADOS SEMPRE, e o da direita fica VAZIO em "Todas" em vez de
+          não existir: `justify-between` com um filho só alinharia o primeiro grupo de um jeito
+          diferente, e é exatamente esse tipo de layout-por-consequência que este PR veio tirar. */}
+      <div className="flex flex-wrap items-end justify-between gap-2">
         <div className="flex flex-wrap items-end gap-2">
           <div className="w-[170px]">
             <Label className="text-[10px]">Safra</Label>
@@ -399,6 +433,12 @@ export function AgriEstoqueGraosTab() {
               </SelectContent>
             </Select>
           </div>
+        </div>
+
+        {/* O grupo da DIREITA — os dois botões, e só eles.
+            ⚠ ESCONDÊ-LOS NÃO MOVE OS FILTROS: eles moram noutro grupo, no fim da linha, e o
+            `justify-between` mantém a esquerda ancorada com a direita vazia. */}
+        <div className="flex flex-wrap items-end gap-2">
           {/* ⚠ O BOTÃO SÓ EXISTE NO DETALHE, e não é restrição de tela — é do dado: a cotação é por
               CULTURA e por classe, e em "Todas" não há cultura a cotar nem classes a listar. Deixá-lo
               visível e desligado pediria uma explicação para uma ação que ali não faz sentido nenhum.
@@ -416,8 +456,10 @@ export function AgriEstoqueGraosTab() {
               não fica visível e desligado. O balanço é POR CULTURA — a RPC é `(cliente, cultura)`
               e grão de culturas diferentes nem se mede na mesma unidade. Dois botões lado a lado
               seguindo regras opostas ensinariam que a ausência de um deles significa outra coisa.
-              ⚠ E O LAYOUT NÃO SE DESLOCA porque os dois desaparecem juntos: a fila da direita
-              encolhe como já encolhia, e o título continua onde estava, à esquerda. */}
+              ⚠ E AGORA O LAYOUT REALMENTE NÃO SE DESLOCA — antes esta linha dizia que não, e
+              estava errada: a fila encolhia, sim, mas era a PRESENÇA dos botões que fazia o bloco
+              inteiro quebrar de linha e mudar de lado. Com os filtros num grupo próprio, sumir
+              daqui não move nada lá. */}
           {!verTodas && (
             <Button size="sm" variant="outline" className="h-8 gap-1 px-2 text-[11px]"
               title="O estoque desta cultura safra a safra — o que entrou, o que saiu e o que atravessou"
@@ -634,11 +676,15 @@ export function AgriEstoqueGraosTab() {
               <th className={cn(TH, 'text-right')}>Colhido</th>
               <th className={cn(TH, 'text-right')}>Entregue</th>
               <th className={cn(TH, 'text-right')}>Quebra</th>
-              {/* ⚠ OS DOIS GRUPOS SÃO DOIS PREÇOS DIFERENTES SOBRE O MESMO GRÃO, e a borda existe
-                  para que ninguém some as duas colunas de valor. À esquerda, o que JÁ SE VENDEU
-                  (média ponderada das entregas); à direita, o que o mercado paga HOJE. "R$ 1,2 mi"
-                  numa e "R$ 1,39 mi" na outra não são duas parcelas — são duas respostas para a
-                  mesma pergunta, e o operador escolhe qual usar.
+              {/* ⚠ A DIVISA MUDOU DE LUGAR — ela separava "Mercado" do resto e agora abre em
+                  "Saldo sc". O corte deixou de ser entre DOIS PREÇOS e passou a ser entre DOIS
+                  TEMPOS: à esquerda o que JÁ ACONTECEU (colhido, entregue, quebra e a venda já
+                  praticada); à direita a POSIÇÃO DE HOJE e quanto ela vale — o saldo, a cotação e
+                  o valor a mercado. O saldo pertence à direita porque é ele que as duas colunas
+                  de mercado multiplicam.
+                  ⚠ O QUE A BORDA IMPEDIA CONTINUA IMPEDIDO: "Valor" e "A mercado" seguem em lados
+                  opostos, e somá-los continua sendo o erro natural de quem varre a tabela — são
+                  duas respostas para a mesma pergunta, não duas parcelas.
                   ⚠ OS RÓTULOS SÃO CURTOS PORQUE NOVE COLUNAS NÃO CABEM COM NOMES LONGOS, e a conta
                   é literal: com "R$ / sc venda" e "Valor a mercado" o cabeçalho passava a duas
                   linhas abaixo de 920px de tabela; com estes, abaixo de 635px. Guardar a unidade no
@@ -659,8 +705,8 @@ export function AgriEstoqueGraosTab() {
                   as duas colunas de valor multiplicam, e' o que o `Mercado` do outro lado tambem
                   multiplica, e a leitura da linha termina nele — Colhido, Entregue, Quebra, a que
                   preco, quanto da', e o que sobrou. */}
-              <th className={cn(TH, 'text-right')}>Saldo sc</th>
-              <th className={cn(TH, SEP_TH, 'text-right')} title="Última cotação de mercado por saca">
+              <th className={cn(TH, SEP_TH, 'text-right')}>Saldo sc</th>
+              <th className={cn(TH, 'text-right')} title="Última cotação de mercado por saca">
                 Mercado
               </th>
               <th className={cn(TH, 'text-right')} title="Saldo × última cotação de mercado">
@@ -720,7 +766,7 @@ export function AgriEstoqueGraosTab() {
                   {dinheiro(l.valor, l.saldo)}
                 </td>
                 <td className={cn('px-2 py-0.5 text-right text-[11px] font-medium tabular-nums',
-                  l.saldo > 0 && 'text-success')}>
+                  SEP_TD, l.saldo > 0 && 'text-success')}>
                   {formatNum(l.saldo, 2)}
                 </td>
                 {/* ⚠ O PREÇO DE MERCADO APARECE MESMO COM SALDO ZERO, e o de venda não: eles
@@ -728,8 +774,7 @@ export function AgriEstoqueGraosTab() {
                     lote que já saiu inteiro — informação de arquivo. A cotação, não: ela é do
                     mercado, vale para a classe que ainda vai colher, e escondê-la faria o operador
                     achar que a cotação não foi gravada. O VALOR, sim, depende do saldo. */}
-                <td className={cn('px-2 py-0.5 text-right text-[11px] tabular-nums text-muted-foreground',
-                  SEP_TD)}>
+                <td className="px-2 py-0.5 text-right text-[11px] tabular-nums text-muted-foreground">
                   {temCotacao(l) ? formatMoeda(l.preco_mercado) : '—'}
                 </td>
                 <td className="px-2 py-0.5 text-right text-[11px] font-medium tabular-nums">
@@ -756,10 +801,10 @@ export function AgriEstoqueGraosTab() {
                 <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">
                   {t.saldo > 0 ? formatMoeda(t.valor) : '—'}
                 </td>
-                <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">
+                <td className={cn('px-2 py-1 text-right text-[11px] font-bold tabular-nums', SEP_TH)}>
                   {formatNum(t.saldo, 2)}
                 </td>
-                <td className={cn('px-2 py-1', SEP_TH)} />
+                <td className="px-2 py-1" />
                 {/* ⚠ O TOTAL A MERCADO SOMA SÓ AS CLASSES COTADAS, porque é isso que `valor_mercado`
                     já é: a RPC multiplica pelo preço da classe, e quem não tem cotação contribui
                     com zero. O número é honesto, mas PARCIAL quando falta cotar alguma classe — e é
