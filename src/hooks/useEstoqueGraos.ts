@@ -156,14 +156,18 @@ export interface EstoqueResumoCultura {
   cultura: string;
   saldo: number;
   /**
-   * O valor estimado do saldo.
+   * O valor do saldo A MERCADO: saldo POR CLASSE × a cotação mais recente daquela classe, somado.
    *
-   * ⚠ ZERO AQUI É "SEM REFERÊNCIA DE PREÇO", NÃO "SEM VALOR". A RPC usa `coalesce(preco,0)`, e
-   * uma cultura que nunca entregou não tem preço médio — o produto dá zero. A tela mostra "—",
-   * porque "R$ 0,00" ao lado de 44 mil sacas afirmaria que elas não valem nada.
-   * ⚠ E É ESTIMATIVA MESMO COM PREÇO: a média é de TODAS as classes entregues, não da classe que
-   * sobrou. Quem entregou só roça a R$ 80 e guardou grão bom vê o saldo avaliado abaixo do que
-   * ele vale.
+   * ⚠ ELE ERA O PREÇO MÉDIO DE VENDA ATÉ 15/09/2026, e a troca fechou um defeito: preço médio de
+   * venda só existe depois da primeira entrega, então uma safra colhida e não vendida — a 25/26,
+   * com 44.141,52 sacas — era avaliada em ZERO. A cotação não depende de ter vendido; é
+   * justamente o número de quem ainda não vendeu.
+   * ⚠ ZERO AQUI É "SEM COTAÇÃO", NÃO "SEM VALOR", e continua sem sentinela: o payload do resumo
+   * não traz `data_mercado` (o do detalhe traz), então `valor > 0` é tudo o que a tela tem para
+   * separar os dois casos. A tela mostra "—", porque "R$ 0,00" ao lado de 44 mil sacas afirmaria
+   * que elas não valem nada.
+   * ⚠ E CONTINUA SENDO ESTIMATIVA — de outro jeito: não é mais a média do que já se praticou, é a
+   * última cotação lançada. Vale o que valia no dia em que alguém a registrou.
    */
   valor: number;
 }
@@ -171,11 +175,21 @@ export interface EstoqueResumoCultura {
 /**
  * O ESTOQUE DE TODAS AS CULTURAS DA SAFRA — a lista que a opção "Todas" mostra.
  *
- * ⚠ ELE NÃO É A SOMA DO DETALHE, e os dois podem divergir por centavos de saca. `fn_estoque_graos`
- * aplica a tolerância de meio saco POR CLASSE; esta soma o líquido da cultura inteira. Medido na
- * 23/24 amendoim: o resumo dá 3.219,64 e o detalhe 3.219,65, porque a roça tem −0,01 que o
- * detalhe zera e o resumo não. Clicar na linha e cair no detalhe muda a segunda casa — e não é
- * defeito de nenhum dos dois.
+ * ⚠ ELE PASSOU A BATER COM O DETALHE, e o aviso que morava aqui não vale mais. Dizia que os dois
+ * divergiam por centavos de saca — medido na 23/24 amendoim, 3.219,64 no resumo contra 3.219,65
+ * no detalhe, porque a roça tinha −0,01 que o detalhe zerava e o resumo não. O resumo agora
+ * aplica `greatest(...,0)` POR CLASSE antes de somar, e aquela classe negativa zera nos dois.
+ * MEDIDO EM 15/09/2026 SOBRE O PROTO INTEIRO, as três safras com colheita, em saldo E em valor:
+ *     23/24 amendoim   3.219,65 sc   R$   273.670,25
+ *     24/25 amendoim  16.579,57 sc   R$ 1.223.057,65
+ *     25/26 amendoim  44.141,52 sc   R$ 3.694.571,40
+ * diferença 0,0000 nas três, nas duas colunas. Clicar na linha e cair no detalhe não muda mais o
+ * número.
+ * ⚠ DUAS DIFERENÇAS RESTAM, e nenhuma é de valor: o detalhe arredonda por classe e a tela soma,
+ * enquanto o resumo soma e arredonda no fim (centavos, zero hoje); e o SALDO ainda não é a mesma
+ * conta — o detalhe zera a classe quando |colhido−entregue| < 0,5 e o resumo só impede o
+ * negativo. Uma diferença POSITIVA de 0,3 saca apareceria como 0,00 lá e 0,30 aqui. Latente:
+ * zero ocorrências no Proto hoje.
  */
 export function useEstoqueGraosResumo(
   clienteId: string | null | undefined, safraId: string | null, ativo: boolean,

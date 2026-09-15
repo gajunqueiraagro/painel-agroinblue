@@ -289,18 +289,20 @@ export function AgriEstoqueGraosTab() {
       {/* ⚠ EM "TODAS" OS CARTÕES SOMAM O RESUMO, não o detalhe: com nenhuma cultura escolhida o
           detalhe por classe nem foi buscado, e somar um array vazio mostraria zero sobre uma
           safra cheia de grão. */}
-      {/* ⚠ SÃO TRÊS EM "TODAS" E CINCO NO DETALHE, porque os dois números de mercado só existem no
-          detalhe: a cotação é por classe, e `fn_estoque_graos_resumo` — a RPC do "Todas" — não a
-          lê. Mostrá-los ali como "—" seria oferecer uma resposta que aquela visão não tem como
-          dar, e o operador ficaria procurando onde cotar. */}
+      {/* ⚠ SÃO TRÊS EM "TODAS" E CINCO NO DETALHE, e a razão MUDOU: a RPC do "Todas" passou a ler
+          a cotação — o valor ali JÁ É a mercado. O que ela não devolve é a DATA da cotação, e sem
+          ela o cartão "Cotação de" não teria o que dizer; o de "Valor de venda" continua fora
+          porque preço médio praticado é por classe, e o resumo não desce a classe. */}
       <div className={cn('grid gap-1.5', verTodas ? 'md:grid-cols-3' : 'md:grid-cols-5')}>
         <Cartao rotulo="Em estoque" unidade="sc"
           valor={formatNum(verTodas ? totalResumo.saldo : t.saldo, 2)} />
-        {/* ⚠ "VALOR DE VENDA" DIZ DE QUE PREÇO SE FALA. Ele se chamava "Valor estimado" enquanto era
-            o único; com o de mercado ao lado, "estimado" não distinguiria os dois — os DOIS são
-            estimativa. O que os separa é a ORIGEM do preço: um já foi praticado, o outro é cotação
-            de hoje. Em "Todas" ele volta a ser "Valor estimado" porque lá continua sendo o único. */}
-        <Cartao rotulo={verTodas ? 'Valor estimado' : 'Valor de venda'} unidade="R$"
+        {/* ⚠ O NOME DIZ DE QUE PREÇO SE FALA, e é essa regra que renomeou o cartão do "Todas". Os
+            dois são estimativa; o que os separa é a ORIGEM do preço — um já foi praticado, o outro
+            é a cotação de hoje. Enquanto o resumo avaliava pelo preço médio de venda, "Valor
+            estimado" servia; agora ele avalia A MERCADO, e manter o nome antigo faria a MESMA
+            conta ter dois nomes entre a lista e o detalhe — que é a divergência que este PR
+            fechou no banco. */}
+        <Cartao rotulo={verTodas ? 'Valor a mercado' : 'Valor de venda'} unidade="R$"
           valor={formatNum(verTodas ? totalResumo.valor : t.valor, 2)}
           titulo={formatMoeda(verTodas ? totalResumo.valor : t.valor)} cor="text-success" />
         {!verTodas && (
@@ -338,7 +340,7 @@ export function AgriEstoqueGraosTab() {
               <tr>
                 <th className={cn(TH, 'text-left')}>Cultura</th>
                 <th className={cn(TH, 'text-right')}>Sacas em estoque</th>
-                <th className={cn(TH, 'text-right')}>Valor estimado</th>
+                <th className={cn(TH, 'text-right')}>Valor a mercado</th>
               </tr>
             </thead>
             <tbody>
@@ -380,10 +382,13 @@ export function AgriEstoqueGraosTab() {
                     c.saldo > 0 && 'text-success')}>
                     {formatNum(c.saldo, 2)}
                   </td>
-                  {/* ⚠ "—" QUANDO O VALOR É ZERO, nunca "R$ 0,00": a RPC devolve zero quando a
-                      cultura nunca entregou e não há preço de referência. "R$ 0,00" ao lado de
-                      44 mil sacas afirmaria que elas não valem nada — o que falta é o preço,
-                      não o valor. */}
+                  {/* ⚠ "—" QUANDO O VALOR É ZERO, nunca "R$ 0,00": a RPC devolve zero quando
+                      NENHUMA CLASSE daquela cultura foi cotada — é o caso da mandioca na 25/26.
+                      "R$ 0,00" ao lado de 44 mil sacas afirmaria que elas não valem nada, e o que
+                      falta é o preço, não o valor.
+                      ⚠ E É `valor > 0` PORQUE NÃO HÁ OUTRA SENTINELA: o payload do resumo não traz
+                      `data_mercado` como o do detalhe. Uma cotação registrada a R$ 0,00 — o CHECK
+                      admite — apareceria aqui como ausência. */}
                   <td className="px-2 py-1 text-right text-[11px] font-medium tabular-nums">
                     {c.valor > 0 ? formatMoeda(c.valor) : '—'}
                   </td>
@@ -614,11 +619,15 @@ export function AgriEstoqueGraosTab() {
             Agora o recorte é o que o topo diz, e repetir o aviso confundiria. */}
         {verTodas
           /* ⚠ A NOTA MUDA COM A VISÃO porque a conta muda: no resumo o valor é uma ESTIMATIVA
-              pelo preço médio de todas as classes entregues, e dizer isso é o que impede o
-              operador de levar o número a uma negociação como se fosse preço firme. */
-          ? <>Saldo por cultura = Colhido − Entregue. O valor é <strong>estimativa</strong>: usa o
-              preço médio de todas as classes já entregues daquela cultura, não o da classe que
-              sobrou.</>
+              pela última cotação lançada, e dizer isso é o que impede o operador de levar o
+              número a uma negociação como se fosse preço firme.
+              ⚠ E ELA DIZ QUE O TOTAL SOMA: reais somam entre culturas de unidades diferentes
+              (amendoim em saca, mandioca em tonelada) e sacas não. Sem essa linha, um total em R$
+              sobre uma coluna de sacas que não somam pareceria erro de conta. */
+          ? <>Saldo por cultura = Colhido − Entregue. O valor é <strong>estimativa</strong>: usa a
+              última cotação de mercado lançada para cada classe, não um preço já praticado. O
+              total em R$ soma todas as culturas; o de sacas, não — cada cultura tem a sua
+              unidade.</>
           /* ⚠ A NOTA CARREGA A UNIDADE QUE O CABEÇALHO PERDEU: "Venda" e "Mercado" são R$ por
               SACA, "Valor" e "A mercado" são o total. Com nove colunas o rótulo não comporta a
               distinção, e ela não pode ficar só no `title` — quem lê num relatório impresso ou
