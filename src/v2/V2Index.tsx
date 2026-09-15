@@ -57,6 +57,7 @@ import { FinV2ContasTab } from '@/pages/FinV2ContasTab';
 import { FinV2FornecedoresTab } from '@/pages/FinV2FornecedoresTab';
 import { FinV2SubcentroAliasesTab } from '@/pages/FinV2SubcentroAliasesTab';
 import { FinV2SafrasTab } from '@/pages/FinV2SafrasTab';
+import { CadastroLocaisEstoqueTab } from '@/pages/CadastroLocaisEstoqueTab';
 import { FinV2RateioAdminTab } from '@/pages/FinV2RateioAdminTab';
 import { AgriDreCulturaTab } from '@/pages/AgriDreCulturaTab';
 import { PainelSafraTab } from '@/pages/PainelSafraTab';
@@ -946,6 +947,8 @@ export default function V2Index() {
     if (section === 'safras') return (
       <FinV2SafrasTab />
     );
+    /* Cadastros › Locais de estoque — onde o grão fica (EL-01). */
+    if (section === 'locais-estoque') return <CadastroLocaisEstoqueTab />;
     if (section === 'rateio-admin') return (
       <FinV2RateioAdminTab />
     );

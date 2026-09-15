@@ -385,3 +385,87 @@ export function useEstoqueMovimentacoes(
 
   return { movimentacoes: data ?? [], carregando: isLoading, erro: error as Error | null };
 }
+
+/** O contrato de armazenagem vigente de um local terceiro. `null` quando não há. */
+export interface ContratoArmazenagem {
+  id: string;
+  vigencia_inicio: string;
+  vigencia_fim: string | null;
+  quebra_tecnica_tipo: string;
+  quebra_tecnica_pct: number | null;
+  quebra_tecnica_base: string | null;
+  taxa_armazenagem_valor: number | null;
+  taxa_armazenagem_unidade: string | null;
+  documento_ref: string | null;
+  observacoes: string | null;
+}
+
+/** Um local de estoque — galpão próprio ou armazém de terceiro. */
+export interface LocalEstoque {
+  id: string;
+  nome: string;
+  tipo: string;
+  ativo: boolean;
+  fazenda_id: string | null;
+  fazenda_nome: string | null;
+  fornecedor_id: string | null;
+  fornecedor_nome: string | null;
+  codigo_externo: string | null;
+  aliases: string[];
+  observacoes: string | null;
+  /**
+   * ⚠ O CONTRATO VIGENTE, UM SÓ — e a escolha é da RPC, não do front: ela ordena por "ainda
+   * vigente" e depois por início desc, `limit 1`. Não há constraint contra dois contratos
+   * sobrepostos; o que a tela mostra é o que vale hoje.
+   */
+  contrato: ContratoArmazenagem | null;
+}
+
+/**
+ * OS LOCAIS DE ESTOQUE DO CLIENTE — a leitura única do cadastro (EL-01).
+ *
+ * ⚠ A ORDEM VEM DO BANCO (`ativo desc, tipo, nome`) e a tela não reordena: reordenar aqui criaria
+ * uma segunda regra de exibição que divergiria no dia em que a RPC mudasse a dela.
+ */
+export function useLocaisEstoque(clienteId: string | null | undefined) {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['locais-estoque', clienteId ?? ''],
+    enabled: !!clienteId,
+    queryFn: async (): Promise<LocalEstoque[]> => {
+      const { data: r, error: err } = await (supabase as any).rpc('fn_locais_estoque', {
+        p_cliente: clienteId,
+      });
+      if (err) throw err;
+      return (Array.isArray(r) ? r : []).map((x: Record<string, unknown>) => {
+        const c = x?.contrato as Record<string, unknown> | null;
+        return {
+          id: String(x?.id ?? ''),
+          nome: String(x?.nome ?? '—'),
+          tipo: String(x?.tipo ?? 'terceiro'),
+          ativo: x?.ativo !== false,
+          fazenda_id: (x?.fazenda_id as string | null) ?? null,
+          fazenda_nome: (x?.fazenda_nome as string | null) ?? null,
+          fornecedor_id: (x?.fornecedor_id as string | null) ?? null,
+          fornecedor_nome: (x?.fornecedor_nome as string | null) ?? null,
+          codigo_externo: (x?.codigo_externo as string | null) ?? null,
+          aliases: Array.isArray(x?.aliases) ? (x.aliases as unknown[]).map(a => String(a)) : [],
+          observacoes: (x?.observacoes as string | null) ?? null,
+          contrato: c ? {
+            id: String(c.id ?? ''),
+            vigencia_inicio: String(c.vigencia_inicio ?? ''),
+            vigencia_fim: (c.vigencia_fim as string | null) ?? null,
+            quebra_tecnica_tipo: String(c.quebra_tecnica_tipo ?? 'nenhuma'),
+            quebra_tecnica_pct: c.quebra_tecnica_pct == null ? null : num(c.quebra_tecnica_pct),
+            quebra_tecnica_base: (c.quebra_tecnica_base as string | null) ?? null,
+            taxa_armazenagem_valor: c.taxa_armazenagem_valor == null ? null : num(c.taxa_armazenagem_valor),
+            taxa_armazenagem_unidade: (c.taxa_armazenagem_unidade as string | null) ?? null,
+            documento_ref: (c.documento_ref as string | null) ?? null,
+            observacoes: (c.observacoes as string | null) ?? null,
+          } : null,
+        };
+      });
+    },
+  });
+
+  return { locais: data ?? [], carregando: isLoading, erro: error as Error | null };
+}

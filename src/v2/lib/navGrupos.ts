@@ -27,7 +27,7 @@ export type V2Section =
   | 'financiamentos' | 'painel-financiamentos'
   // financeiro — cadastros
   | 'contas-bancarias' | 'fornecedores' | 'plano-contas' | 'dividendos'
-  | 'subcentro-aliases' | 'safras' | 'rateio-admin'
+  | 'subcentro-aliases' | 'safras' | 'rateio-admin' | 'locais-estoque'
   // financeiro — análise
   | 'analise-trimestral' | 'financeiro-caixa' | 'fluxo-anual'
   // planejamento (IDs legados preservados)
@@ -307,6 +307,10 @@ export const NAV_GRUPOS: NavGrupo[] = [
           { id: 'fornecedores',      label: 'Fornecedores',        status: 'needs-wrapper' },
           { id: 'plano-contas',      label: 'Plano de Contas',     status: 'needs-wrapper' },
           { id: 'safras',            label: 'Safras',              status: 'ready' },
+          /* ⚠ ELE FICA EM CADASTROS, NÃO EM AGRICULTURA, e a diferença é o que o item É: um local
+             de estoque é identidade que o resto referencia — como Fazendas e Fornecedores —, não
+             uma operação que se lança. O grão passa por ele; ele não passa pelo grão. */
+          { id: 'locais-estoque',    label: 'Locais de estoque',   status: 'ready' },
           /* ⚠ "Rateio administrativo" NÃO É o "Rateio ADM" do Financeiro, e os nomes vão
              conviver: aquele distribui o administrativo entre FAZENDAS pelo rebanho médio
              (derivado, tela de conferência); este declara quanto do administrativo é de cada
@@ -401,6 +405,7 @@ export const SECTION_TO_GROUP: Partial<Record<V2Section, string>> = {
   'fornecedores':      'cadastros',
   'plano-contas':      'cadastros',
   'safras':            'cadastros',
+  'locais-estoque':    'cadastros',
   'rateio-admin':      'cadastros',
   'subcentro-aliases': 'cadastros',
   'dividendos':        'cadastros',
