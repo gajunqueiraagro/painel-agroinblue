@@ -50,47 +50,33 @@ const Th = ({ nome, unidade, esq }: { nome: string; unidade?: string; esq?: bool
   </th>
 );
 
-export function VendasGraosModal({
-  aberto, onFechar, vendas, carregando, erro, cultura, safraRotulo,
-  onCancelar, onAbrirVenda, salvando,
-}: {
-  aberto: boolean;
-  onFechar: () => void;
-  vendas: readonly VendaGrao[];
-  carregando: boolean;
-  erro: Error | null;
-  cultura: string;
-  safraRotulo: string;
-  onCancelar: (id: string, motivo: string) => void;
-  /** Abre a venda no `VendaGraosModal`. `editar` quando veio do ✎. */
-  onAbrirVenda: (venda: VendaGrao, modo: 'visualizar' | 'editar') => void;
-  salvando: boolean;
-}) {
-  const [cancelandoId, setCancelandoId] = useState<string | null>(null);
-  const [motivoCancel, setMotivoCancel] = useState('');
 
-  const unidade = unidadeCurtaDaCultura(cultura);
-  const ativas = useMemo(() => vendas.filter(v => v.ativo), [vendas]);
-  const canceladas = useMemo(() => vendas.filter(v => !v.ativo), [vendas]);
-
-  const topo = useMemo(() => ({
-    entregue: ativas.reduce((a, v) => a + v.sacas, 0),
-    bruto: ativas.reduce((a, v) => a + v.bruto, 0),
-    deducoes: ativas.reduce((a, v) => a + v.deducoes, 0),
-    liquido: ativas.reduce((a, v) => a + v.liquido, 0),
-  }), [ativas]);
-
-  /** "classe qtd · classe qtd" — a composição em uma linha, truncada com o inteiro no `title`. */
-  const composicao = (v: VendaGrao) =>
+/**
+ * UMA LINHA DA TABELA — e ela mora AQUI FORA, em nível de módulo, por uma razão de foco.
+ *
+ * ⚠⚠ O DEFEITO QUE ISTO CORRIGE: o campo do motivo, no painel de cancelamento, aceitava UMA
+ * letra e o cursor saía. `Linha` era declarada DENTRO do corpo do `VendasGraosModal`, então cada
+ * render criava uma FUNÇÃO NOVA; o React compara tipos por identidade, vê um tipo diferente e
+ * DESMONTA o subtree inteiro em vez de atualizá-lo. O `motivoCancel` mora no modal, cada tecla
+ * re-renderiza o modal, e o `Input` do motivo era destruído e recriado a cada letra.
+ * ⚠ `key={v.id}` NÃO SALVA DISSO. A key só desempata irmãos do MESMO tipo; com o tipo trocando,
+ * a remontagem acontece antes de a key ter alguma coisa a dizer. Medido no Chrome com React
+ * 18.3.1: seis teclas, seis remontagens, foco em `body` ao fim. Com a declaração aqui fora,
+ * zero remontagens e o foco no campo.
+ * ⚠ E É POR ISSO QUE `composicao` E `situacao` VIERAM JUNTAS: elas não usavam estado nenhum do
+ * modal, e deixá-las lá dentro convidaria a próxima peça a nascer no lugar errado de novo.
+ */
+/** "classe qtd · classe qtd" — a composição em uma linha, truncada com o inteiro no `title`. */
+const composicao = (v: VendaGrao) =>
     v.itens.map(i => `${labelDaClasse(i.classe)} ${formatNum(i.sacas, 2)}`).join(' · ');
 
-  /**
-   * A PÍLULA DE SITUAÇÃO — e ela conta parcela, não status de operação.
+/**
+ * A PÍLULA DE SITUAÇÃO — e ela conta parcela, não status de operação.
    *
-   * ⚠ "Pago 2/2" DIZ MAIS QUE "Realizado": numa venda a prazo o que o operador precisa saber é
-   * quanto já entrou, e o status da operação é um só para N parcelas.
-   */
-  const situacao = (v: VendaGrao) => {
+ * ⚠ "Pago 2/2" DIZ MAIS QUE "Realizado": numa venda a prazo o que o operador precisa saber é
+ * quanto já entrou, e o status da operação é um só para N parcelas.
+ */
+const situacao = (v: VendaGrao) => {
     if (!v.ativo) return { texto: 'Cancelada', cor: 'bg-muted text-muted-foreground' };
     if (v.tipo === 'barter') return { texto: 'Barter', cor: 'bg-primary/10 text-primary' };
     const recibos = v.lancamentos.filter(l => l.natureza === 'receita_venda' && !l.cancelado);
@@ -101,7 +87,19 @@ export function VendasGraosModal({
       : { texto: `Programado ${pagos}/${n}`, cor: 'bg-warning/15 text-warning' };
   };
 
-  const Linha = ({ v }: { v: VendaGrao }) => {
+function Linha({
+  v, onAbrirVenda, cancelandoId, setCancelandoId,
+  motivoCancel, setMotivoCancel, salvando, onCancelar,
+}: {
+  v: VendaGrao;
+  onAbrirVenda: (venda: VendaGrao, modo: 'visualizar' | 'editar') => void;
+  cancelandoId: string | null;
+  setCancelandoId: (id: string | null) => void;
+  motivoCancel: string;
+  setMotivoCancel: (v: string) => void;
+  salvando: boolean;
+  onCancelar: (id: string, motivo: string) => void;
+}) {
     const st = situacao(v);
     const avulsa = v.tipo === 'venda_avulsa';
     const comp = composicao(v);
@@ -173,7 +171,47 @@ export function VendasGraosModal({
         )}
       </>
     );
+  }
+
+export function VendasGraosModal({
+  aberto, onFechar, vendas, carregando, erro, cultura, safraRotulo,
+  onCancelar, onAbrirVenda, salvando,
+}: {
+  aberto: boolean;
+  onFechar: () => void;
+  vendas: readonly VendaGrao[];
+  carregando: boolean;
+  erro: Error | null;
+  cultura: string;
+  safraRotulo: string;
+  onCancelar: (id: string, motivo: string) => void;
+  /** Abre a venda no `VendaGraosModal`. `editar` quando veio do ✎. */
+  onAbrirVenda: (venda: VendaGrao, modo: 'visualizar' | 'editar') => void;
+  salvando: boolean;
+}) {
+  const [cancelandoId, setCancelandoId] = useState<string | null>(null);
+  const [motivoCancel, setMotivoCancel] = useState('');
+
+  const unidade = unidadeCurtaDaCultura(cultura);
+
+  /* ⚠ UM PACOTE SÓ, e não nove atributos repetidos em dois `map`: o que `Linha` precisa do modal
+     é exatamente isto, e listá-lo aqui deixa visível o preço de ter movido o componente para
+     fora — que é o preço certo a pagar por um campo que não perde o foco.
+     ⚠ NÃO PRECISA DE `useMemo`: `Linha` não é memoizada, então um objeto novo a cada render não
+     custa render nenhum a mais. Memoizar aqui seria cerimônia sem efeito. */
+  const propsDaLinha = {
+    onAbrirVenda, cancelandoId, setCancelandoId,
+    motivoCancel, setMotivoCancel, salvando, onCancelar,
   };
+  const ativas = useMemo(() => vendas.filter(v => v.ativo), [vendas]);
+  const canceladas = useMemo(() => vendas.filter(v => !v.ativo), [vendas]);
+
+  const topo = useMemo(() => ({
+    entregue: ativas.reduce((a, v) => a + v.sacas, 0),
+    bruto: ativas.reduce((a, v) => a + v.bruto, 0),
+    deducoes: ativas.reduce((a, v) => a + v.deducoes, 0),
+    liquido: ativas.reduce((a, v) => a + v.liquido, 0),
+  }), [ativas]);
 
   return (
     <Dialog open={aberto} onOpenChange={o => { if (!o) onFechar(); }}>
@@ -271,7 +309,7 @@ export function VendasGraosModal({
                   </td></tr>
                 ) : (
                   <>
-                    {ativas.map(v => <Linha key={v.id} v={v} />)}
+                    {ativas.map(v => <Linha key={v.id} v={v} {...propsDaLinha} />)}
                     {ativas.length > 0 && (
                       <tr className={cn(CINZA_CABECALHO, 'text-white')}>
                         <td className="whitespace-nowrap px-2 py-[5px] text-[11px] font-medium" colSpan={4}>Total ativo</td>
@@ -293,7 +331,7 @@ export function VendasGraosModal({
                         <td className="px-2 py-[5px]" />
                       </tr>
                     )}
-                    {canceladas.map(v => <Linha key={v.id} v={v} />)}
+                    {canceladas.map(v => <Linha key={v.id} v={v} {...propsDaLinha} />)}
                   </>
                 )}
               </tbody>
