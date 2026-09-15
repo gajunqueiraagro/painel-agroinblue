@@ -329,6 +329,10 @@ export function AgriEstoqueGraosTab() {
         p_itens: p.itens, p_valor_bruto: p.valor_bruto, p_senar: p.senar,
         p_descontos: p.descontos, p_parcelas: p.parcelas,
         p_observacoes: p.observacoes, p_substituir: p.substituir,
+        /* ⚠ A CHAMADA É POR NOME, e por isso a assinatura nova (15 argumentos) não a quebrou:
+           `supabase-js` manda um objeto e o PostgREST casa por nome de parâmetro. Fosse
+           posicional, acrescentar dois argumentos teria trocado o significado de todos. */
+        p_documento: p.documento, p_tipo_documento: p.tipo_documento,
       });
       if (error) { toast.error(erroDaVendaNova(error.message ?? '')); return; }
       const r = (data ?? {}) as { lancamentos?: unknown[]; liquido?: number };

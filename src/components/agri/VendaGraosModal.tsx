@@ -20,13 +20,14 @@
  * travar o botão quando as parcelas não fecham. Onde os dois discordarem, quem vale é a RPC — e é
  * por isso que a prévia usa exatamente o arredondamento dela, item a item.
  */
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FornecedorSelect } from '@/components/shared/FornecedorSelect';
 import { ContaBancariaSelect, type ContaSelecionavel } from '@/components/shared/ContaBancariaSelect';
 import { CINZA_CABECALHO, TH_CINZA as TH } from '@/lib/idiomaVisual';
@@ -42,6 +43,12 @@ import { labelDaClasse, corDaClasse } from '@/lib/agri/barterVenda';
 import type { EstoqueClasse, LancamentoSubstituivel, VendaGrao } from '@/hooks/useEstoqueGraos';
 import { ComposicaoLeitura, DeducoesLeitura, ParcelasLeitura } from '@/components/agri/VendaGraosLeitura';
 import { ConfirmarComMotivo } from '@/components/ui/confirmar-com-motivo';
+/* ⚠ O VOCABULARIO DE DOCUMENTO E' O DO FINANCEIRO, IMPORTADO — nao uma lista nova aqui.
+   `TIPOS_DOCUMENTO` e' a mesma constante que o `LancamentoV2Dialog` usa no seletor de tipo, e
+   e' ela que define o que o banco aceita em `tipo_documento`. Uma copia local divergiria no
+   primeiro tipo que o Financeiro acrescentasse, e a venda gravaria um tipo que o resto do
+   sistema nao conhece. */
+import { TIPOS_DOCUMENTO, type TipoDocumento } from '@/lib/financeiro/documentoHelper';
 
 /** O que o modal devolve para quem chama `agri_venda_graos_registrar`. */
 export interface VendaGraosPayload {
@@ -57,11 +64,28 @@ export interface VendaGraosPayload {
     data_pagamento: string | null; conta_id: string | null;
   }>;
   observacoes: string | null;
+  /** Numero do documento da venda (NF, romaneio, simulacao). `null` = sem documento. */
+  documento: string | null;
+  /** Um dos `TIPOS_DOCUMENTO`. So' existe com documento — a RPC ignora tipo sem numero. */
+  tipo_documento: string | null;
   substituir: string[] | null;
 }
 
 /** O Senar da agricultura — 0,2% sobre o bruto. Editável, e pode ser zero. */
 const SENAR_PCT_PADRAO = 0.2;
+
+/**
+ * O IDIOMA DOS CAMPOS — e ele é o sinal de modo, não um enfeite.
+ *
+ * ⚠ O DEFEITO QUE ISTO CORRIGE: "Editar" não mudava nada visível. Os três campos editáveis moram
+ * na aba Recebimento, e quem clicava Editar na Composição continuava olhando a mesma tela de
+ * leitura — o modo tinha mudado e a tela não dizia.
+ * ⚠ BRANCO COM BORDA = SE ESCREVE. CINZA SEM CONTRASTE = NÃO SE ESCREVE. Nenhum dos dois muda
+ * altura, padding ou fonte: o A23 vale entre modos, e um campo que cresce ao virar editável
+ * empurraria os de baixo a cada clique.
+ */
+const CAMPO_EDITAVEL = 'border-input bg-background';
+const CAMPO_TRAVADO = 'border-border/60 bg-muted text-muted-foreground';
 
 interface ParcelaForm {
   vencimento: string; valor: string; pago: boolean;
@@ -106,11 +130,22 @@ export function VendaGraosModal({
   const [modoAtual, setModoAtual] = useState<'criar' | 'visualizar' | 'editar'>(modo);
   const [cancelando, setCancelando] = useState(false);
   const [motivoCancel, setMotivoCancel] = useState('');
+  /* ⚠ DE ONDE O OPERADOR VEIO — para "Voltar" devolvê-lo à aba em que estava. Entrar em edição
+     troca de aba (é lá que moram os campos editáveis); sair sem desfazer a troca o deixaria
+     numa aba que ele não escolheu. */
+  const [abaAntesDeEditar, setAbaAntesDeEditar] = useState<'composicao' | 'deducoes' | 'recebimento' | 'substituir'>('composicao');
+  const compradorRef = useRef<HTMLDivElement>(null);
   const leitura = modoAtual === 'visualizar';
   const criando = modoAtual === 'criar';
   /* ⚠ SÓ A VENDA AVULSA ATIVA SE MEXE. O barter se governa no Barter e a cancelada não se
      reescreve — a RPC recusa os dois, e esconder o botão diz isso antes da tentativa. */
   const editavel = !!venda && venda.ativo && venda.tipo === 'venda_avulsa';
+  /* ⚠ OS DOIS PREDICADOS DE TRAVA, nomeados uma vez porque decidem a cor de cinco campos.
+     `camposTravados` é o que já existia repetido em cada campo (`leitura || (venda && !editavel)`);
+     `docTravado` é mais estreito e a razão é do banco: `agri_venda_avulsa_editar` não recebe
+     documento, então ele só se digita ao CRIAR. */
+  const camposTravados = leitura || (!!venda && !editavel);
+  const docTravado = !criando;
   const [criterio, setCriterio] = useState<'preco' | 'valor'>('preco');
   const [valorTotal, setValorTotal] = useState('');
   const [itens, setItens] = useState<Record<string, { sacas: string; preco: number | null }>>({});
@@ -123,10 +158,46 @@ export function VendaGraosModal({
   const [compradorId, setCompradorId] = useState('');
   const [data, setData] = useState(() => new Date().toISOString().slice(0, 10));
   const [obs, setObs] = useState('');
+  const [documento, setDocumento] = useState('');
+  const [tipoDoc, setTipoDoc] = useState<TipoDocumento | ''>('');
   const [substituir, setSubstituir] = useState<Set<string>>(new Set());
   const [abreSubstituir, setAbreSubstituir] = useState(false);
 
   const unidade = unidadeCurtaDaCultura(cultura);
+  const editando = modoAtual === 'editar';
+
+  /**
+   * ENTRAR EM EDIÇÃO É IR ONDE SE EDITA — e é isto que faltava.
+   *
+   * ⚠ OS CAMPOS EDITÁVEIS MORAM NO RECEBIMENTO (comprador, data, observações), e o botão Editar
+   * vive no rodapé, visível de qualquer aba. Quem clicava a partir da Composição trocava de modo
+   * sem sair do lugar e concluía, com razão, que o botão não fazia nada.
+   */
+  const entrarEmEdicao = () => {
+    setAbaAntesDeEditar(aba);
+    setModoAtual('editar');
+    setAba('recebimento');
+  };
+  const voltarDaEdicao = () => {
+    setModoAtual('visualizar');
+    setAba(abaAntesDeEditar);
+  };
+
+  /**
+   * O CURSOR CAI NO COMPRADOR — e o anel dele é `focus:`, não `focus-visible:`, DE PROPÓSITO.
+   *
+   * ⚠ MEDIDO NO CHROME: `.focus()` programático logo depois de um clique de mouse NÃO casa
+   * `:focus-visible` num `button` nem num `[role=combobox]` (só casa em campo de texto). Focar o
+   * comprador e parar por aí seria repetir o defeito em outra forma — o foco iria para lá e o
+   * operador não veria nada mudar. O anel abaixo é incondicional enquanto se edita.
+   */
+  useEffect(() => {
+    if (!aberto || !editando || aba !== 'recebimento') return;
+    const id = requestAnimationFrame(() => {
+      compradorRef.current?.querySelector<HTMLElement>('button[role="combobox"]')?.focus();
+    });
+    return () => cancelAnimationFrame(id);
+  }, [aberto, editando, aba]);
 
   /* ⚠ RECOMEÇA A CADA ABERTURA — sem isto, reabrir traz a venda anterior e um Registrar distraído
      vende o mesmo grão duas vezes. O preço nasce no `preco_ref` da classe: é um palpite honesto,
@@ -140,6 +211,8 @@ export function VendaGraosModal({
     setModoAtual(modo);
     setCancelando(false); setMotivoCancel('');
     setCriterio('preco'); setValorTotal('');
+    setAbaAntesDeEditar('composicao');
+    setDocumento(''); setTipoDoc('');
     /* ⚠ VER E EDITAR PREENCHEM O QUE A RPC DE EDIÇÃO ACEITA — comprador, data e observações. O
        resto do formulário nem é montado nesses modos: são as telas de leitura. */
     if (venda) {
@@ -290,6 +363,11 @@ export function VendaGraosModal({
         conta_id: p.contaId || null,
       })),
       observacoes: obs.trim() || null,
+      /* ⚠ O TIPO SÓ VIAJA COM O NÚMERO, espelhando a RPC: ela grava `tipo_documento` só quando
+         `nullif(btrim(p_documento),'')` não é nulo. Mandar um tipo sozinho seria classificar
+         um documento que não existe. */
+      documento: documento.trim() || null,
+      tipo_documento: documento.trim() ? (tipoDoc || 'Outros') : null,
       substituir: substituir.size > 0 ? [...substituir] : null,
     });
   };
@@ -312,6 +390,26 @@ export function VendaGraosModal({
     <div className="flex items-baseline justify-between gap-1.5 leading-tight">
       <span className="shrink-0 text-muted-foreground">{label}</span>
       <span className={cn('truncate text-right font-medium', valueClassName)}>{value || '—'}</span>
+    </div>
+  );
+
+  /**
+   * A LINHA QUE DIZ ONDE SE EDITA — só em edição, e só nas abas que não se editam.
+   *
+   * ⚠ ELA NÃO EXISTE EM VISUALIZAR: ali TUDO é leitura, e dizer "somente leitura" numa tela que
+   * não prometeu edição nenhuma seria ruído. O aviso responde a uma pergunta que só quem clicou
+   * em Editar tem — "então cadê o campo?".
+   * ⚠ E O ATALHO É UM BOTÃO DE VERDADE, não um texto que ensina a clicar na aba: quem leu a
+   * frase já quer ir, e obrigá-lo a mirar a aba lá em cima é cobrar duas mirações pelo mesmo
+   * pedido.
+   */
+  const AvisoSomenteLeitura = () => !editando ? null : (
+    <div className="shrink-0 border-b border-border bg-muted/40 px-3 py-1 text-[10px] text-muted-foreground">
+      Somente leitura.{' '}
+      <button type="button" onClick={() => setAba('recebimento')}
+        className="rounded font-medium text-primary underline-offset-2 hover:underline">
+        O que pode ser editado está em Recebimento.
+      </button>
     </div>
   );
 
@@ -372,6 +470,15 @@ export function VendaGraosModal({
             <p className="mt-0.5 text-[11px] text-primary-foreground/80">
               {criando
                 ? `${formatNum(saldoAtual, 2)} ${unidade} disponíveis. A venda baixa o estoque e gera os lançamentos no Financeiro, parcela a parcela.`
+                /* ⚠ O SUBTÍTULO É O SINAL DE MODO MAIS ALTO da tela, e diz o LIMITE junto: o que
+                   não se edita aqui tem conserto (cancelar e registrar de novo), e dizê-lo agora
+                   evita a busca por um campo de sacas que não existe.
+                   ⚠ E ELE NÃO PROMETE O DOCUMENTO. O briefing pedia "comprador, data, documento e
+                   observações", mas `agri_venda_avulsa_editar` tem 4 argumentos e nenhum é
+                   documento — conferido em pg_proc. Prometer no cabeçalho uma edição que o campo
+                   logo abaixo mostra travada seria a tela discordando de si mesma. */
+                : editando
+                  ? 'Editando · só comprador, data e observações podem mudar; o documento se edita no lançamento do Financeiro, e sacas e preço se corrigem cancelando e registrando de novo.'
                 : venda && !venda.ativo
                   /* ⚠ A FAIXA DA CANCELADA É MUDA, não alarmante: o estorno já aconteceu e foi
                      deliberado. Vermelho aqui trataria uma decisão do operador como acidente. */
@@ -416,7 +523,12 @@ export function VendaGraosModal({
 
           {/* ── ABA 1 — COMPOSIÇÃO ─────────────────────────────────────────────────────────── */}
           <TabsContent value="composicao" className="min-h-0 flex-1 overflow-hidden p-0 data-[state=inactive]:hidden">
-            {venda ? <ComposicaoLeitura venda={venda} unidade={unidade} /> : (
+            {venda ? (
+              <div className="flex h-full min-h-0 flex-col">
+                <AvisoSomenteLeitura />
+                <ComposicaoLeitura venda={venda} unidade={unidade} />
+              </div>
+            ) : (
             <div className="flex h-full min-h-0 flex-col gap-1.5 px-3 py-2">
               <div className="flex flex-wrap items-end justify-between gap-2">
                 <p className="text-[11px] text-muted-foreground">{rotuloCulturaUnidade(cultura)}</p>
@@ -533,7 +645,12 @@ export function VendaGraosModal({
 
           {/* ── ABA 2 — DEDUÇÕES ───────────────────────────────────────────────────────────── */}
           <TabsContent value="deducoes" className="min-h-0 flex-1 overflow-auto p-0 data-[state=inactive]:hidden">
-            {venda ? <DeducoesLeitura venda={venda} /> : (
+            {venda ? (
+              <div className="flex h-full min-h-0 flex-col">
+                <AvisoSomenteLeitura />
+                <DeducoesLeitura venda={venda} />
+              </div>
+            ) : (
             <div className="px-3 py-2">
               <div className="rounded-md border bg-muted/20 px-3 py-2">
                 <LinhaConta rotulo="= Bruto">{bruto > 0 ? formatMoeda(bruto) : '—'}</LinhaConta>
@@ -683,30 +800,79 @@ export function VendaGraosModal({
                 </>
               )}
 
-              {/* ⚠ COMPRADOR, DATA E OBSERVAÇÕES MORAM AQUI, não numa quarta aba: eles descrevem o
-                  RECEBIMENTO (de quem, quando) e uma aba só para três campos seria uma parada a
-                  mais no caminho de quem já sabe o que está fazendo. */}
-              <div className="grid shrink-0 gap-2 md:grid-cols-2">
+              {/* ⚠ COMPRADOR, DATA, DOCUMENTO E OBSERVAÇÕES MORAM AQUI, não numa quarta aba: eles
+                  descrevem o RECEBIMENTO (de quem, quando, contra qual papel) e uma aba só para
+                  quatro campos seria uma parada a mais no caminho de quem já sabe o que faz. */}
+              <div className="grid shrink-0 gap-2 md:grid-cols-[1.4fr_1fr_1.3fr_1fr]">
                 <div>
                   <Label className="text-[10px]">Comprador <span className="text-destructive">*</span></Label>
-                  <div className="mt-0.5">
+                  {/* ⚠ O ANEL DE FOCO AQUI É `focus:`, NÃO `focus-visible:`, e é escopado a este
+                      campo. Medido: `.focus()` programático depois de um clique de mouse não casa
+                      `:focus-visible` num `[role=combobox]` — o foco iria para o comprador e a tela
+                      não mostraria nada. Fora da edição a regra nem existe, então nenhum outro
+                      clique ganha anel grosso.
+                      ⚠ O `:focus` VAI DENTRO DO COLCHETE — `[&_button[role=combobox]:focus]`, não
+                      `[&_button[role=combobox]]:focus`. Medido no CSS construído: a segunda forma
+                      compila para `.classe:focus button[role=combobox]`, que prende o `:focus` na
+                      DIV de fora — e uma div nunca recebe foco. A regra existia e era morta. */}
+                  <div ref={compradorRef} className={cn('mt-0.5',
+                    editando && '[&_button[role=combobox]:focus]:ring-2 [&_button[role=combobox]:focus]:ring-ring [&_button[role=combobox]:focus]:ring-offset-1',
+                    camposTravados && '[&_button[role=combobox]]:border-border/60 [&_button[role=combobox]]:bg-muted [&_button[role=combobox]]:text-muted-foreground')}>
                     <FornecedorSelect fornecedorId={compradorId || null}
                       onFornecedorChange={id => setCompradorId(id ?? '')}
                       clienteId={clienteId} label="" placeholder="Escolha"
-                      disabled={leitura || (!!venda && !editavel)} />
+                      disabled={camposTravados} />
                   </div>
                 </div>
                 <div>
                   <Label className="text-[10px]">Data da venda <span className="text-destructive">*</span></Label>
-                  <DatePicker value={data} onChange={setData} className="mt-0.5"
-                    disabled={leitura || (!!venda && !editavel)} />
+                  <DatePicker value={data} onChange={setData} disabled={camposTravados}
+                    className={cn('mt-0.5', camposTravados ? CAMPO_TRAVADO : CAMPO_EDITAVEL)} />
+                </div>
+                <div>
+                  <Label className="text-[10px]">Documento</Label>
+                  {/* ⚠ O TIPO NASCE "Outros" AO PRIMEIRO CARACTERE, e é a mesma regra da RPC
+                      (`coalesce(p_tipo_documento,'Outros')`). Quem digitou um número já disse que
+                      há papel; obrigá-lo a classificar antes de continuar seria cobrar uma
+                      decisão que o padrão já resolve. */}
+                  <Input value={documento} disabled={docTravado} placeholder="NF, romaneio, simulação…"
+                    title={docTravado ? 'O documento se edita no lançamento do Financeiro.' : 'Número do documento desta venda'}
+                    onChange={e => {
+                      setDocumento(e.target.value);
+                      if (e.target.value.trim() && !tipoDoc) setTipoDoc('Outros');
+                    }}
+                    className={cn('mt-0.5 h-8 text-[12px]', docTravado ? CAMPO_TRAVADO : CAMPO_EDITAVEL)} />
+                </div>
+                <div>
+                  <Label className="text-[10px]">Tipo</Label>
+                  {/* ⚠ DESABILITADO SEM NÚMERO: tipo sem documento é uma classificação de nada, e
+                      a RPC o descartaria de qualquer jeito. */}
+                  <Select value={tipoDoc} disabled={docTravado || !documento.trim()}
+                    onValueChange={v => setTipoDoc(v as TipoDocumento)}>
+                    <SelectTrigger className={cn('mt-0.5 h-8 text-[12px]',
+                      docTravado || !documento.trim() ? CAMPO_TRAVADO : CAMPO_EDITAVEL)}>
+                      <SelectValue placeholder="—" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TIPOS_DOCUMENTO.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
+              {/* ⚠ A NOTA APARECE NOS DOIS MODOS DE VENDA GRAVADA (ver e editar), não só em
+                  editar — é o que faz o A23 valer aqui: trocar de modo não move a linha de
+                  Observações um pixel. E ela diz ONDE se edita, que é a única pergunta que um
+                  campo travado deixa em aberto. */}
+              {!criando && (
+                <p className="shrink-0 text-[10px] text-muted-foreground">
+                  Documento se edita no lançamento do Financeiro.
+                </p>
+              )}
               <div className="shrink-0">
                 <Label className="text-[10px]">Observações</Label>
                 <Input value={obs} onChange={e => setObs(e.target.value)} placeholder="Opcional"
-                  disabled={leitura || (!!venda && !editavel)}
-                  className="mt-0.5 h-8 text-[12px]" />
+                  disabled={camposTravados}
+                  className={cn('mt-0.5 h-8 text-[12px]', camposTravados ? CAMPO_TRAVADO : CAMPO_EDITAVEL)} />
               </div>
             </div>
           </TabsContent>
@@ -759,6 +925,14 @@ export function VendaGraosModal({
               <Row label="Safra" value={safraRotulo || null} />
               <Row label="Comprador" value={compradorId ? 'Selecionado' : null} />
               <Row label="Data" value={data ? formatIsoToBr(data) : null} />
+              {/* ⚠ EM VENDA GRAVADA ISTO É SEMPRE "—", E O TRAÇO ESTÁ CERTO: `fn_vendas_graos` não
+                  devolve `numero_documento` em `lancamentos[]` (conferido no `prosrc` — o
+                  `jsonb_build_object` traz id, natureza, descrição, valor, sinal, status, datas,
+                  conciliado e cancelado, e mais nada). Traço é "não sei", que é a verdade aqui,
+                  e não "não tem". Sai do traço quando a RPC devolver o campo. */}
+              <Row label="Documento" value={criando
+                ? (documento.trim() ? `${tipoDoc || 'Outros'} ${documento.trim()}` : null)
+                : null} />
             </div>
 
             <BlocoHead titulo="Composição" />
@@ -867,7 +1041,7 @@ export function VendaGraosModal({
                       <Ban className="h-3.5 w-3.5" /> Cancelar venda
                     </Button>
                     <Button size="sm" variant="acao" className="h-8 gap-1 px-3 text-[11px]"
-                      onClick={() => setModoAtual('editar')} title="Editar comprador, data e observações">
+                      onClick={entrarEmEdicao} title="Editar comprador, data e observações">
                       <Pencil className="h-3.5 w-3.5" /> Editar
                     </Button>
                   </>
@@ -876,7 +1050,7 @@ export function VendaGraosModal({
             ) : (
               <>
                 <Button size="sm" variant="ghost" className="h-8 px-3 text-[11px]"
-                  onClick={() => setModoAtual('visualizar')}>
+                  onClick={voltarDaEdicao}>
                   Voltar
                 </Button>
                 <Button size="sm" variant="acao" className="h-8 gap-1 px-3 text-[11px]"
