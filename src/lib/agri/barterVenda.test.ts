@@ -72,6 +72,36 @@ describe('calcularEntregas — o caso da homologação', () => {
     expect(l.excede).toBe(false);
   });
 
+  /**
+   * ⚠ O CASO DE 30/04/2025, QUE CHEGOU AO BANCO ERRADO — e nenhum teste acima o pegaria,
+   * porque todos usam sacas de DUAS casas, onde arredondar antes ou depois dá no mesmo.
+   * A linha real ficou gravada com `sacas = 12374.35` e `valor = 1175563.25`; os dois
+   * documentos da cooperativa somam 1.175.563,43.
+   */
+  it('quatro casas de saca entram na conta — arredonda o PRODUTO, nunca os fatores', () => {
+    const [l] = calcularEntregas(
+      [{ classe: 'ate_20', sacas: '12.374,3519', precoSaca: '95,00' }],
+      { ate_20: 16540.2, acima_20: 0, roca: 0, sem_classe: 0 });
+    /* 12.374,3519 × 95 = 1.175.563,4305 → 1.175.563,43. Cortar a saca em duas casas
+       primeiro daria 1.175.563,25 — dezoito centavos a menos, por venda. */
+    expect(l.sacas).toBe(12374.3519);
+    expect(l.valor).toBe(1175563.43);
+    /* E o restante da safra guarda as quatro casas: 16.540,20 − 12.374,3519. */
+    expect(l.disponivel - l.sacas).toBeCloseTo(4165.8481, 4);
+  });
+
+  it('o líquido do caso de 30/04/2025 fecha com o acerto da cooperativa', () => {
+    const e = calcularEntregas(
+      [{ classe: 'ate_20', sacas: '12.374,3519', precoSaca: '95,00' }],
+      { ate_20: 16540.2, acima_20: 0, roca: 0, sem_classe: 0 });
+    const bruto = totaisVenda(e, 0).bruto;
+    const funrural = deducaoPorAliquota(bruto, 1.5);
+    /* ⚠ O FUNRURAL ACERTAVA POR COINCIDÊNCIA mesmo com o bruto errado (1.175.563,25 ×
+       1,5% também arredonda para 17.633,45). Quem denuncia o defeito é o líquido. */
+    expect(funrural).toBe(17633.45);
+    expect(totaisVenda(e, funrural).liquido).toBe(1157929.98);
+  });
+
   it('campo vazio vale zero, não NaN', () => {
     const [l] = calcularEntregas([{ classe: 'ate_20', sacas: '', precoSaca: '' }], disp);
     expect(l.sacas).toBe(0);

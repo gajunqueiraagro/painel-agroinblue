@@ -24,6 +24,7 @@ import { PlanoSubcentroSelect } from '@/components/shared/PlanoSubcentroSelect';
 import { Save, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
+import { formatCasas } from '@/lib/calculos/numeroBR';
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
 import { useTalhoesDaSafra, type SafraLavoura } from '@/hooks/useAreaPlantada';
 import { useColheita } from '@/hooks/useColheita';
@@ -85,12 +86,17 @@ export function BarterVendaModal({
       const e = venda?.entregas.find(x => x.classe_aflatoxina === l.classe);
       if (!e) return l;
       /* ⚠ REABRE EM FORMATO BR COMPLETO, com milhar: `String(3706.37).replace('.', ',')` dava
-         "3706,37", que é lido mas não é como o operador escreve. `formatNum` devolve
-         "3.706,37" — e `parseMoeda`, que lê o campo de volta, entende os dois (testado). */
+         "3706,37", que é lido mas não é como o operador escreve. `formatCasas` devolve
+         "3.706,37" — e `parseMoeda`, que lê o campo de volta, entende os dois (testado).
+         ⚠⚠ E É `formatCasas(_, 4)`, NÃO `formatNum(_, 2)`: com duas casas, reabrir uma venda
+         de 12.374,3519 sacas devolvia 12.374,35 ao CAMPO, e o próximo Salvar regravava o
+         número cortado. O cálculo teria sido consertado e a segunda gravação o desfaria.
+         ⚠ `formatCasas` tem MÍNIMO 2 e MÁXIMO 4, que é o que a tela quer: 12.374,35 continua
+         "12.374,35" e não vira "12.374,3500". */
       return {
         classe: l.classe,
-        sacas: e.sacas == null ? '' : formatNum(e.sacas, 2),
-        precoSaca: e.preco_saca == null ? '' : formatNum(e.preco_saca, 2),
+        sacas: e.sacas == null ? '' : formatCasas(e.sacas, 4),
+        precoSaca: e.preco_saca == null ? '' : formatCasas(e.preco_saca, 4),
       };
     }));
     const receita = venda?.partes.find(p => p.natureza === NATUREZA_RECEITA);
@@ -256,7 +262,10 @@ export function BarterVendaModal({
                         é dado de apoio, não campo. Vermelho quando a venda passa dele. */}
                     <td className={cn('px-1.5 py-0.5 text-right tabular-nums',
                       e.excede ? 'font-semibold text-destructive' : 'text-muted-foreground')}>
-                      {formatNum(e.disponivel, 2)}
+                      {/* ⚠ EXIBE DUAS, `title` LEVA AS QUATRO — a régua do F3. Sem o título aqui,
+                          o "restante" ao lado mostraria quatro casas vindas de dois números que a
+                          tela mostra com duas, e a subtração não fecharia aos olhos de quem lê. */}
+                      <span title={formatCasas(e.disponivel, 4)}>{formatNum(e.disponivel, 2)}</span>
                       {e.excede && <AlertTriangle className="ml-1 inline h-3 w-3 align-[-2px]" />}
                     </td>
                     {/* ⚠ `CampoNumero` É A PEÇA DA CASA — item 6. Ele deixa digitar cru e
@@ -283,7 +292,9 @@ export function BarterVendaModal({
                     <td className={cn('px-1.5 py-0.5 text-right tabular-nums',
                       e.disponivel - e.sacas < 0 ? 'font-semibold text-destructive'
                         : 'text-muted-foreground')}>
-                      {formatNum(e.disponivel - e.sacas, 2)}
+                      <span title={formatCasas(e.disponivel - e.sacas, 4)}>
+                        {formatNum(e.disponivel - e.sacas, 2)}
+                      </span>
                     </td>
                   </tr>
                 ))}
@@ -293,15 +304,21 @@ export function BarterVendaModal({
                     operador somava as quatro classes de cabeça para saber quanto a safra rendeu. */}
                 <tr>
                   <td className={cn(TH, 'text-left')}>Total</td>
-                  <td className={cn(TH, 'text-right tabular-nums')}>
+                  {/* ⚠ OS TOTAIS SOMAM O CRU E ARREDONDAM NA EXIBIÇÃO, nunca o contrário: somar
+                      quatro parcelas já cortadas em duas casas erra até dois centavos de saca, e
+                      é o mesmo erro do valor da linha em outra escala. */}
+                  <td className={cn(TH, 'text-right tabular-nums')}
+                    title={formatCasas(calculadas.reduce((t, e) => t + e.disponivel, 0), 4)}>
                     {formatNum(calculadas.reduce((t, e) => t + e.disponivel, 0), 2)}
                   </td>
-                  <td className={cn(TH, 'text-right tabular-nums')}>
+                  <td className={cn(TH, 'text-right tabular-nums')}
+                    title={formatCasas(calculadas.reduce((t, e) => t + e.sacas, 0), 4)}>
                     {formatNum(calculadas.reduce((t, e) => t + e.sacas, 0), 2)}
                   </td>
                   <td className={TH} />
                   <td className={cn(TH, 'text-right tabular-nums')}>{formatMoeda(totais.bruto)}</td>
-                  <td className={cn(TH, 'text-right tabular-nums')}>
+                  <td className={cn(TH, 'text-right tabular-nums')}
+                    title={formatCasas(calculadas.reduce((t, e) => t + (e.disponivel - e.sacas), 0), 4)}>
                     {formatNum(calculadas.reduce((t, e) => t + (e.disponivel - e.sacas), 0), 2)}
                   </td>
                 </tr>

@@ -163,8 +163,19 @@ export function calcularEntregas(
   disponivel: DisponivelPorClasse,
 ): EntregaCalculada[] {
   return linhas.map(l => {
-    const sacas = arred(lerNumero(l.sacas));
-    const precoSaca = arred(lerNumero(l.precoSaca));
+    /* ⚠⚠ QUATRO CASAS, NÃO DUAS — e o `arred()` sem segundo argumento aqui era o defeito.
+       Ele arredondava as SACAS para 2 casas ANTES da multiplicação: 12.374,3519 × 95 virava
+       12.374,35 × 95 = R$ 1.175.563,25, quando o documento da cooperativa diz 1.175.563,43.
+       Dezoito centavos por venda, e o número errado ia para o banco — conferido na linha real
+       de 30/04/2025, gravada com `sacas = 12374.35`.
+       ⚠ QUEM ARREDONDA É O PRODUTO, NÃO OS FATORES. É a mesma regra do `VendaGraosModal` (F3) e
+       a razão de o campo declarar `casas={4}`: o romaneio traz saca e preço com quatro casas, e
+       cortar o fator joga fora o que o comprador de fato pagou.
+       ⚠ E O 4 NÃO É LIBERDADE: é a precisão que o próprio campo promete. Normalizar aqui impede
+       que um valor ainda não normalizado pelo blur (o operador digitou e salvou direto) chegue
+       ao banco com mais casas do que a tela sabe mostrar. */
+    const sacas = arred(lerNumero(l.sacas), 4);
+    const precoSaca = arred(lerNumero(l.precoSaca), 4);
     const disp = dispDaClasse(disponivel, l.classe);
     return {
       classe: l.classe,
