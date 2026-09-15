@@ -30,6 +30,16 @@ export interface EstoqueClasse {
    * tela diria "−0,01 sc em estoque", que não é saldo negativo — é arredondamento.
    */
   saldo: number;
+  /**
+   * A perda física já baixada nesta classe — a soma das quebras ativas.
+   *
+   * ⚠ ELE ERA ZERO IMPRESSO NA TELA, não zero lido: até a F2 a coluna "Quebra" escrevia
+   * `formatNum(0, 2)` fixo, porque a RPC não devolvia a chave. Agora devolve, e zero aqui é
+   * VALOR — "não houve perda" —, não ausência. Por isso a tela mostra "0,00" e nunca "—".
+   * ⚠ E ELE JÁ ESTÁ DENTRO DO `saldo`: `fn_estoque_graos` faz `colhido − entregue − quebra`.
+   * Subtrair de novo no front contaria a perda duas vezes.
+   */
+  quebra: number;
   /** A média ponderada do que já se entregou daquela classe. Zero quando nunca se entregou. */
   preco_ref: number;
   /** `saldo × preco_ref`, com o saldo travado em zero para baixo. */
@@ -87,6 +97,7 @@ export function useEstoqueGraos(
         classe: String(x?.classe ?? '—'),
         colhido: num(x?.colhido),
         entregue: num(x?.entregue),
+        quebra: num(x?.quebra),
         saldo: num(x?.saldo),
         preco_ref: num(x?.preco_ref),
         valor: num(x?.valor),
@@ -118,6 +129,9 @@ export function totaisDoEstoque(linhas: readonly EstoqueClasse[]) {
   return {
     colhido,
     entregue: linhas.reduce((a, l) => a + l.entregue, 0),
+    /* ⚠ SOMA O MESMO ARRAY QUE A TABELA MOSTRA, como os outros totais — nunca uma segunda
+       consulta, para que o rodapé da coluna não possa discordar das linhas. */
+    quebra: linhas.reduce((a, l) => a + l.quebra, 0),
     saldo,
     valor,
     /** A soma dos `valor_mercado` — o que o estoque vale ao preço de hoje. */
@@ -244,7 +258,13 @@ export interface BalancoSafraLinha {
   venda: number;
   /** Entregas com `condicao_pagamento = 'barter'`. */
   barter: number;
-  /** Sempre zero por enquanto — a baixa por quebra é a F2. */
+  /**
+   * A quebra baixada naquela safra.
+   *
+   * ⚠ ELA ERA `0::numeric` FIXO NA RPC até a F2, e o front já lia a chave — por isso o modal do
+   * balanço não mudou uma linha quando a quebra passou a existir de verdade. Ler a chave em vez
+   * de imprimir zero foi a decisão que fez o custo desta fatia ser zero lá.
+   */
   quebra: number;
   /** `inicial + producao − venda − barter − quebra`. Abre a safra seguinte. */
   final: number;

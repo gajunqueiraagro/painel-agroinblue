@@ -25,6 +25,7 @@ import { Plus, TrendingDown, Loader2, AlertTriangle, LineChart, History } from '
 import { cn } from '@/lib/utils';
 import { Cartao } from '@/components/ui/cartao';
 import { BalancoSafrasModal } from '@/components/agri/BalancoSafrasModal';
+import { QuebraModal, type QuebraPayload } from '@/components/agri/QuebraModal';
 import { CINZA_CABECALHO, TH_CINZA as TH } from '@/lib/idiomaVisual';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { useSafrasLavoura, useTalhoesDaSafra } from '@/hooks/useAreaPlantada';
@@ -318,6 +319,53 @@ export function AgriEstoqueGraosTab() {
       await queryClient.invalidateQueries({ queryKey: ['estoque-graos'] });
     } finally {
       setSalvandoVenda(false);
+    }
+  };
+
+  /* ───────────────────────── A BAIXA POR QUEBRA (F2) ─────────────────────────
+   * ⚠ ELA MORA AQUI, ao lado da venda, e não num hook: é o mesmo lugar de onde
+   * `agri_venda_avulsa_registrar` é chamada, e separar as duas escritas da mesma tela em camadas
+   * diferentes faria a próxima pessoa procurar a segunda no lugar errado.
+   * ⚠ E É UMA CHAMADA POR CLASSE — DÍVIDA CONHECIDA, a mesma da venda em outra forma. A RPC é
+   * `(classe, quantidade)`, então baixar três classes são três `rpc`, SEM transação: se a segunda
+   * falhar, a primeira já gravou. Aceitável hoje porque a guarda do banco é por classe e uma falha
+   * parcial deixa o estoque CORRETO (só menos baixado do que se quis), e porque o operador vê o
+   * resultado na tela recarregada. Uma `agri_quebra_registrar_lote(p_itens jsonb)` resolveria —
+   * é frente própria, não deste PR.
+   */
+  const [modalQuebra, setModalQuebra] = useState(false);
+  const [salvandoQuebra, setSalvandoQuebra] = useState(false);
+
+  const registrarQuebra = async (p: QuebraPayload) => {
+    if (!clienteId || !safraId || !cultura) return;
+    setSalvandoQuebra(true);
+    try {
+      let gravadas = 0;
+      for (const it of p.itens) {
+        const { error } = await (supabase as any).rpc('agri_quebra_registrar', {
+          p_cliente: clienteId, p_safra_id: safraId, p_cultura: cultura,
+          p_classe: it.classe, p_quantidade: it.quantidade, p_data: p.data,
+          p_motivo: p.motivo, p_observacoes: p.observacoes,
+        });
+        if (error) {
+          /* ⚠ A MENSAGEM DA RPC VAI INTEIRA PARA O TOAST — `QUEBRA_ACIMA_DO_SALDO: 50 > 10` diz
+             o que a tela precisaria repetir, e com os números do BANCO, que são os que valem.
+             ⚠ E O MODAL FICA ABERTO: o operador corrige a linha e tenta de novo, sem redigitar as
+             outras classes. */
+          toast.error(error.message ?? 'Não foi possível registrar a quebra.');
+          if (gravadas > 0) await queryClient.invalidateQueries({ queryKey: ['estoque-graos'] });
+          return;
+        }
+        gravadas++;
+      }
+      toast.success(`Quebra registrada — ${gravadas} classe${gravadas > 1 ? 's' : ''}.`);
+      setModalQuebra(false);
+      /* ⚠ O ESTOQUE RECARREGA PORQUE O SALDO É DERIVADO, exatamente como na venda: a quebra virou
+         linha em `agri_estoque_movimentacoes` e `fn_estoque_graos` já subtrai. Mesma chave, mesma
+         invalidação — não há um segundo caminho de reload. */
+      await queryClient.invalidateQueries({ queryKey: ['estoque-graos'] });
+    } finally {
+      setSalvandoQuebra(false);
     }
   };
 
@@ -753,11 +801,14 @@ export function AgriEstoqueGraosTab() {
                 <td className="px-2 py-0.5 text-right text-[11px] tabular-nums text-muted-foreground">
                   {formatNum(l.entregue, 2)}
                 </td>
-                {/* ⚠ QUEBRA É SEMPRE ZERO NESTA FATIA — a baixa por quebra é a F2. A coluna já
-                    existe para a tabela não mudar de forma quando ela chegar, e o zero aqui é
-                    verdade: nada foi baixado ainda. */}
-                <td className="px-2 py-0.5 text-right text-[11px] tabular-nums text-muted-foreground">
-                  {formatNum(0, 2)}
+                {/* ⚠ A COLUNA LÊ A CHAVE — F2. Ela imprimiu `formatNum(0, 2)` FIXO desde a F1: um
+                    zero que não vinha de lugar nenhum, sobrevivendo ao motivo dele. Agora
+                    `fn_estoque_graos` devolve `quebra`, e o que está aqui é o que o banco tem.
+                    ⚠ ZERO É VALOR, NUNCA "—": "não houve perda" é uma resposta, e um traço diria
+                    que a tela não sabe. */}
+                <td className={cn('px-2 py-0.5 text-right text-[11px] tabular-nums',
+                  l.quebra > 0 ? 'text-destructive' : 'text-muted-foreground')}>
+                  {formatNum(l.quebra, 2)}
                 </td>
                 <td className="px-2 py-0.5 text-right text-[11px] tabular-nums text-muted-foreground">
                   {dinheiro(l.preco_ref, l.saldo)}
@@ -792,7 +843,7 @@ export function AgriEstoqueGraosTab() {
                   {formatNum(t.entregue, 2)}
                 </td>
                 <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">
-                  {formatNum(0, 2)}
+                  {formatNum(t.quebra, 2)}
                 </td>
                 {/* ⚠ NENHUMA DAS DUAS COLUNAS DE R$/sc TEM TOTAL: a média de três preços de
                     classes diferentes não é um preço que alguém pratica. Vazio aqui é mais honesto
@@ -839,8 +890,15 @@ export function AgriEstoqueGraosTab() {
           onClick={() => setModalVenda(true)}>
           <Plus className="h-3.5 w-3.5" /> Registrar saída (venda avulsa)
         </Button>
-        <Button size="sm" variant="outline" className="h-8 gap-1 px-2 text-[11px]" disabled
-          title="Em breve — a baixa por quebra é a próxima fatia.">
+        {/* ⚠ AS MESMAS CONDIÇÕES DO BOTÃO DE VENDA, menos a fazenda: a quebra não gera receita,
+            então não precisa de fazenda resolvida — `agri_quebra_registrar` não recebe
+            `p_fazenda_id`. Exigi-la aqui seria copiar um impedimento que não é desta ação. */}
+        <Button size="sm" variant="outline" className="h-8 gap-1 px-2 text-[11px]"
+          disabled={verTodas || t.saldo <= 0}
+          title={verTodas ? 'Escolha uma cultura para baixar por quebra.'
+            : t.saldo <= 0 ? 'Não há grão em estoque para baixar.'
+              : 'Registrar uma perda física do estoque'}
+          onClick={() => setModalQuebra(true)}>
           <TrendingDown className="h-3.5 w-3.5" /> Baixar por quebra
         </Button>
         {verTodas ? (
@@ -876,6 +934,16 @@ export function AgriEstoqueGraosTab() {
         clienteId={clienteId}
         cultura={verTodas ? '' : cultura}
         dataCotacao={t.dataMercado}
+      />
+
+      <QuebraModal
+        aberto={modalQuebra}
+        onFechar={() => setModalQuebra(false)}
+        onRegistrar={p => { void registrarQuebra(p); }}
+        salvando={salvandoQuebra}
+        estoque={linhas}
+        cultura={cultura}
+        safraRotulo={safraRotulo}
       />
 
       <CotacaoGraosModal
