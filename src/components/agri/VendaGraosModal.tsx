@@ -371,6 +371,11 @@ export function VendaGraosModal({
        */
       setCriterio('linha');
       setCriterioConvertido(null);
+      /* ⚠ O DOCUMENTO VOLTA DESDE O VENDA-11: `fn_vendas_graos` passou a devolvê-lo (do primeiro
+         lançamento de receita que tenha um). Antes o campo nascia vazio e a venda corrigida
+         perdia o papel da original sem ninguém notar — havia um aviso âmbar no lugar. */
+      setDocumento(venda.numero_documento ?? '');
+      setTipoDoc((venda.tipo_documento as TipoDocumento | null) ?? '');
       setItens(o => {
         const out = { ...o };
         for (const it of venda.itens) {
@@ -413,7 +418,11 @@ export function VendaGraosModal({
             valor: formatCasas(round2(l.valor - deducaoDoVencimento(l.data_vencimento)), 2),
             pago: !!l.data_pagamento || l.conciliado,
             dataPagamento: (l.data_pagamento ?? '').slice(0, 10),
-            contaId: '',
+            /* ⚠ A CONTA VOLTA DESDE O VENDA-11: `conta_id` é `coalesce(conta_destino_id,
+               conta_bancaria_id)`, resolvido na RPC. Antes vinha vazia e o rodapé travava até o
+               operador reescolher de memória a conta de cada parcela — e escolher outra era
+               silencioso. */
+            contaId: l.conta_id ?? '',
           }))
         : [novaParcela()]);
       return;
@@ -1113,15 +1122,6 @@ export function VendaGraosModal({
                   Documento se edita no lançamento do Financeiro.
                 </p>
               )}
-              {/* ⚠ O DOCUMENTO NÃO VOLTA NA CORREÇÃO, e o campo em branco não pode passar por
-                  "não tinha": `fn_vendas_graos` não devolve `numero_documento` (conferido no
-                  `prosrc`), então a venda nova nasceria sem o papel da antiga sem ninguém notar.
-                  Enquanto a RPC de leitura não o devolver, quem corrige redigita. */}
-              {corrigindo && (
-                <p className="shrink-0 text-[10px] text-amber-600">
-                  O documento da venda original não é lido de volta — redigite-o se havia um.
-                </p>
-              )}
               <div>
                 <Label className="text-[10px]">Observações</Label>
                 <Input value={obs} onChange={e => setObs(e.target.value)} placeholder="Opcional"
@@ -1184,9 +1184,13 @@ export function VendaGraosModal({
                   `jsonb_build_object` traz id, natureza, descrição, valor, sinal, status, datas,
                   conciliado e cancelado, e mais nada). Traço é "não sei", que é a verdade aqui,
                   e não "não tem". Sai do traço quando a RPC devolver o campo. */}
+              {/* ⚠ SAIU DO TRAÇO PERMANENTE: `fn_vendas_graos` passou a devolver o documento da
+                  venda, então o modo ver mostra o que está gravado. O traço ficou para o caso
+                  certo — venda sem documento nenhum. */}
               <Row label="Documento" value={criando
                 ? (documento.trim() ? `${tipoDoc || 'Outros'} ${documento.trim()}` : null)
-                : null} />
+                : (venda?.numero_documento
+                    ? `${venda.tipo_documento || 'Outros'} ${venda.numero_documento}` : null)} />
             </div>
 
             <BlocoHead titulo="Composição" />

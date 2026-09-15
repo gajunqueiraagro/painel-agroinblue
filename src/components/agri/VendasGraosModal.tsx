@@ -86,22 +86,39 @@ const composicao = (v: VendaGrao) =>
 const conciliada = (v: VendaGrao) =>
   v.lancamentos.some(l => !l.cancelado && l.conciliado);
 
-const situacao = (v: VendaGrao) => {
-    if (!v.ativo) return { texto: 'Cancelada', cor: 'bg-muted text-muted-foreground' };
-    if (v.tipo === 'barter') return { texto: 'Barter', cor: 'bg-primary/10 text-primary' };
-    const recibos = v.lancamentos.filter(l => l.natureza === 'receita_venda' && !l.cancelado);
-    const pagos = recibos.filter(l => l.data_pagamento || l.conciliado).length;
-    const n = recibos.length;
-    return pagos === n && n > 0
-      ? { texto: `Pago ${pagos}/${n}`, cor: 'bg-success/15 text-success' }
-      : { texto: `Programado ${pagos}/${n}`, cor: 'bg-warning/15 text-warning' };
-  };
+const situacao = (v: VendaGrao, vendas: readonly VendaGrao[]) => {
+  /* ⚠⚠ CORRIGIDA NÃO É CANCELADA, e a distinção veio do banco neste PR. As duas terminam com a
+     operação inativa, mas cancelar é DESISTIR da venda e corrigir é SUBSTITUÍ-LA: o grão continua
+     vendido, por outros números. Chamar as duas de "Cancelada" fazia parecer desfeito o que só
+     tinha sido reescrito.
+     ⚠ MUDA O NOME, NÃO A COR — as duas seguem muted, porque nenhuma das duas conta para o total.
+     Vermelho aqui trataria uma correção como acidente.
+     ⚠ E O `title` DIZ POR QUAL, com a data: "Corrigida" sozinha deixa a pergunta no ar, e a
+     resposta está na mesma tabela, algumas linhas acima. */
+  if (!v.ativo && v.corrigida_por) {
+    const nova = vendas.find(x => x.id === v.corrigida_por);
+    return {
+      texto: 'Corrigida', cor: 'bg-muted text-muted-foreground',
+      titulo: nova ? `Corrigida pela venda de ${dataCurta(nova.data)}` : 'Corrigida por outra venda',
+    };
+  }
+  if (!v.ativo) return { texto: 'Cancelada', cor: 'bg-muted text-muted-foreground', titulo: v.motivo_cancelamento ?? undefined };
+  if (v.tipo === 'barter') return { texto: 'Barter', cor: 'bg-primary/10 text-primary', titulo: undefined };
+  const recibos = v.lancamentos.filter(l => l.natureza === 'receita_venda' && !l.cancelado);
+  const pagos = recibos.filter(l => l.data_pagamento || l.conciliado).length;
+  const n = recibos.length;
+  return pagos === n && n > 0
+    ? { texto: `Pago ${pagos}/${n}`, cor: 'bg-success/15 text-success', titulo: undefined }
+    : { texto: `Programado ${pagos}/${n}`, cor: 'bg-warning/15 text-warning', titulo: undefined };
+};
 
 function Linha({
-  v, onAbrirVenda, cancelandoId, setCancelandoId,
+  v, vendas, onAbrirVenda, cancelandoId, setCancelandoId,
   motivoCancel, setMotivoCancel, salvando, onCancelar,
 }: {
   v: VendaGrao;
+  /** A lista inteira — só para achar a venda que substituiu esta, quando houver. */
+  vendas: readonly VendaGrao[];
   onAbrirVenda: (venda: VendaGrao, modo: 'visualizar' | 'editar' | 'corrigir') => void;
   cancelandoId: string | null;
   setCancelandoId: (id: string | null) => void;
@@ -110,7 +127,7 @@ function Linha({
   salvando: boolean;
   onCancelar: (id: string, motivo: string) => void;
 }) {
-    const st = situacao(v);
+    const st = situacao(v, vendas);
     const avulsa = v.tipo === 'venda_avulsa';
     const comp = composicao(v);
     /* ⚠ PREÇO MÉDIO É DERIVADO, e por isso não vem da RPC: é `bruto / sacas`, a conta que o
@@ -145,7 +162,8 @@ function Linha({
           <td className="whitespace-nowrap px-2 py-[5px] text-right text-[11px] font-medium tabular-nums">{formatMoeda(v.liquido)}</td>
           <td className="whitespace-nowrap px-2 py-[5px]">
             <div className="flex items-center justify-end gap-[11px] no-underline">
-              <span className={cn('rounded px-1.5 py-[1px] text-[10px] font-medium no-underline', st.cor)}>
+              <span className={cn('rounded px-1.5 py-[1px] text-[10px] font-medium no-underline', st.cor)}
+                title={st.titulo}>
                 {st.texto}
               </span>
               {v.ativo && avulsa && (
@@ -231,7 +249,7 @@ export function VendasGraosModal({
      ⚠ NÃO PRECISA DE `useMemo`: `Linha` não é memoizada, então um objeto novo a cada render não
      custa render nenhum a mais. Memoizar aqui seria cerimônia sem efeito. */
   const propsDaLinha = {
-    onAbrirVenda, cancelandoId, setCancelandoId,
+    vendas, onAbrirVenda, cancelandoId, setCancelandoId,
     motivoCancel, setMotivoCancel, salvando, onCancelar,
   };
   const ativas = useMemo(() => vendas.filter(v => v.ativo), [vendas]);

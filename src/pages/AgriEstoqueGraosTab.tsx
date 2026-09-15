@@ -250,7 +250,24 @@ export function AgriEstoqueGraosTab() {
      O `valor` soma porque real é real. */
   const totalResumo = useMemo(() => ({
     valor: resumo.culturas.reduce((a, c) => a + c.valor, 0),
+    /* ⚠ ESTES DOIS SOMAM LEGITIMAMENTE POR MOTIVOS DIFERENTES: `recebido` é real, e real soma
+       sempre. `entregue` é quantidade, e quantidades de unidades diferentes NÃO somam — mas
+       aqui ele só aparece no subrótulo do cartão, ao lado do dinheiro, e some quando há mais de
+       uma unidade na safra. Ver `unidadesDoResumo`, abaixo. */
+    recebido: resumo.culturas.reduce((a, c) => a + c.recebido, 0),
+    entregue: resumo.culturas.reduce((a, c) => a + c.entregue, 0),
   }), [resumo.culturas]);
+
+  /**
+   * AS UNIDADES PRESENTES NO RESUMO — e o cartão só mostra a quantidade quando há UMA.
+   *
+   * ⚠ É A MESMA REGRA QUE TIROU O CARTÃO "EM ESTOQUE" DE "TODAS": somar saca de 25 kg com
+   * tonelada não mede nada. Com amendoim e mandioca na mesma safra, "17.984,46 sc" seria falso;
+   * com só amendoim, é exatamente o número que o histórico daquela cultura mostra.
+   */
+  const unidadesDoResumo = useMemo(
+    () => new Set(resumo.culturas.filter(c => c.entregue > 0).map(c => unidadeCurtaDaCultura(c.cultura))),
+    [resumo.culturas]);
 
   /**
    * O "% COLHIDO PARADO" DA SAFRA INTEIRA — o cartão que em "Todas" mostrava "—".
@@ -773,11 +790,23 @@ export function AgriEstoqueGraosTab() {
             que a tabela mostra na coluna ao lado.
             ⚠ EM "TODAS" ELE CONTINUA SENDO O VALOR A MERCADO do resumo: aquela RPC não desce à
             classe e não devolve recebido — trocar o rótulo lá afirmaria um número que não existe. */}
-        <Cartao rotulo={verTodas ? 'Valor a mercado' : 'Vendido'}
-          escopo={verTodas ? 'esta safra' : `${formatNum(t.entregue, 2)} ${unidadeCurtaDaCultura(cultura)}`}
+        {/* ⚠ AGORA "VENDIDO" NOS DOIS, e o resumo parou de responder outra pergunta com o mesmo
+            cartão: `fn_estoque_graos_resumo` passou a devolver `entregue` e `recebido` por
+            cultura, da MESMA fonte do detalhe (`agri_oc_entregas` das operações ativas). Enquanto
+            não devolvia, "Todas" mostrava valor A MERCADO no lugar onde a visão por cultura
+            mostra o VENDIDO — duas contas diferentes no mesmo quadrado.
+            ⚠ O SUBRÓTULO SÓ TRAZ A QUANTIDADE COM UMA UNIDADE NA SAFRA: saca de 25 kg e tonelada
+            não somam, e "17.984,46 sc" sobre amendoim mais mandioca seria falso. Com duas ou mais,
+            o cartão diz só o dinheiro — que soma sempre. */}
+        <Cartao rotulo="Vendido"
+          escopo={verTodas
+            ? (unidadesDoResumo.size === 1
+                ? `${formatNum(totalResumo.entregue, 2)} ${[...unidadesDoResumo][0]}`
+                : 'esta safra')
+            : `${formatNum(t.entregue, 2)} ${unidadeCurtaDaCultura(cultura)}`}
           unidade="R$"
-          valor={formatNum(verTodas ? totalResumo.valor : t.recebido, 2)}
-          titulo={formatMoeda(verTodas ? totalResumo.valor : t.recebido)} cor="text-success" />
+          valor={formatNum(verTodas ? totalResumo.recebido : t.recebido, 2)}
+          titulo={formatMoeda(verTodas ? totalResumo.recebido : t.recebido)} cor="text-success" />
         {!verTodas && (
           <Cartao rotulo="Valor a mercado" escopo="esta safra" unidade="R$"
             valor={formatNum(t.valorMercado, 2)}

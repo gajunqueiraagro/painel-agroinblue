@@ -225,6 +225,18 @@ export interface EstoqueResumoCultura {
    * colhido. Uma coluna a mais responderia uma pergunta que ninguém fez ali.
    */
   colhido: number;
+  /**
+   * O ENTREGUE E O RECEBIDO DA CULTURA NA SAFRA — os dois que faltavam para "Todas" responder
+   * a mesma pergunta que a visão por cultura já responde.
+   *
+   * ⚠ MESMA FONTE DO DETALHE: `sum(agri_oc_entregas)` das operações ATIVAS da safra, igual ao
+   * `recebido` de `fn_estoque_graos`. Duas telas com a mesma pergunta não podem ter duas contas.
+   * ⚠ E ELES TAMBÉM NÃO VÃO PARA A TABELA: a lista de "Todas" tem saldo por unidade e o valor a
+   * mercado, e não existe coluna equivalente ao "Vendido" para trocar. Quem usa os dois é o
+   * cartão do topo.
+   */
+  entregue: number;
+  recebido: number;
 }
 
 /**
@@ -265,6 +277,8 @@ export function useEstoqueGraosResumo(
         saldo: num(x?.saldo),
         valor: num(x?.valor),
         colhido: num(x?.colhido),
+        entregue: num(x?.entregue),
+        recebido: num(x?.recebido),
       }));
     },
   });
@@ -533,6 +547,18 @@ export interface VendaLancamentoLinha {
   data_pagamento: string | null;
   conciliado: boolean;
   cancelado: boolean;
+  /**
+   * A conta do lançamento — `coalesce(conta_destino_id, conta_bancaria_id)`, resolvido na RPC.
+   *
+   * ⚠ OS DOIS CAMPOS SÃO A CONVENÇÃO DO FINANCEIRO: entrada grava a conta em `conta_destino_id`,
+   * saída em `conta_bancaria_id`. Quem lê precisa dos dois, e resolver isso na RPC é o que
+   * impede a próxima tela de escolher o campo errado.
+   * ⚠ É ELE QUE A CORREÇÃO REUSA: sem a conta, reabrir uma venda para corrigir pedia que o
+   * operador reescolhesse de memória a conta de cada parcela.
+   */
+  conta_id: string | null;
+  numero_documento: string | null;
+  tipo_documento: string | null;
 }
 
 /** Uma saída do estoque COM contrapartida — venda avulsa ou entrega de barter. */
@@ -563,6 +589,21 @@ export interface VendaGrao {
   senar: number;
   deducoes: number;
   liquido: number;
+  /** A venda que ESTA corrige — gravado pela `agri_venda_graos_corrigir`. */
+  substitui_operacao_id: string | null;
+  /**
+   * A venda ATIVA que corrigiu esta — o caminho inverso, e o que faltava.
+   *
+   * ⚠ `null` NUMA CANCELADA SIGNIFICA "CANCELADA À MÃO", e é essa a distinção que o histórico
+   * mostra: cancelar é desistir da venda; corrigir é substituí-la. As duas terminam com a
+   * operação inativa, e até aqui a tela dizia "Cancelada" para as duas.
+   * ⚠ SÓ CONTA SUBSTITUTA ATIVA, a mais recente — corrigir duas vezes deixa uma cadeia, e o que
+   * importa é quem vale hoje.
+   */
+  corrigida_por: string | null;
+  /** O documento da venda — do primeiro lançamento de receita que tenha um. */
+  numero_documento: string | null;
+  tipo_documento: string | null;
   itens: VendaItem[];
   /** O primeiro lançamento de receita — mantido para quem já lia `lancamento`. */
   lancamento: VendaLancamento | null;
@@ -648,8 +689,15 @@ export function useVendasGraos(
                 data_pagamento: (li?.data_pagamento as string | null) ?? null,
                 conciliado: li?.conciliado === true,
                 cancelado: li?.cancelado === true,
+                conta_id: (li?.conta_id as string | null) ?? null,
+                numero_documento: (li?.numero_documento as string | null) ?? null,
+                tipo_documento: (li?.tipo_documento as string | null) ?? null,
               }))
             : [],
+          substitui_operacao_id: (x?.substitui_operacao_id as string | null) ?? null,
+          corrigida_por: (x?.corrigida_por as string | null) ?? null,
+          numero_documento: (x?.numero_documento as string | null) ?? null,
+          tipo_documento: (x?.tipo_documento as string | null) ?? null,
           autor: String(x?.autor ?? ''),
           criado_em: String(x?.criado_em ?? ''),
           cancelado_em: (x?.cancelado_em as string | null) ?? null,
