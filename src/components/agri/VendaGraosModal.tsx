@@ -95,6 +95,84 @@ interface ParcelaForm {
 const novaParcela = (): ParcelaForm =>
   ({ vencimento: '', valor: '', pago: false, dataPagamento: '', contaId: '' });
 
+
+/* ⚠ AS DUAS PEÇAS DO RESUMO SÃO CÓPIA do `LancamentoV2Dialog` (`ResumoBlocoHead`/`ResumoRow`,
+   linhas 234-253), onde nasceram privadas. A régua tem de ser a MESMA — o briefing pede que as
+   duas telas se leiam como irmãs —, e importar de lá arrastaria um arquivo de 2.300 linhas do
+   Financeiro para dentro do estoque.
+   ⚠⚠ O TERCEIRO CONSUMIDOR CHEGOU, e a conta que este comentário prometia está VENCIDA:
+   `ResumoLateralOC` (compra/ResumoLateralOC.tsx:176) declara a terceira cópia, dizendo-se
+   "ESPELHO de ResumoBlocoHead / ResumoRow". Subir as duas para `ui/` exige migrar também o
+   `LancamentoV2Dialog` (25 usos) e a OC — é frente própria, [RESUMO-LATERAL-UI], não este PR.
+   Não há nada em `ui/` para reusar hoje: `ui/bloco-topo-aba.tsx` é outra peça (o bloco cinza de
+   números do TOPO de uma aba), conferido antes de escrever isto. */
+
+/**
+ * ⚠⚠ AS QUATRO PEÇAS MORAM AQUI FORA, em nível de módulo, e isso é correção de defeito latente
+ * — [COMPONENTE-INTERNO-REMONTA]. Declaradas dentro do corpo, cada render criava um TIPO novo, e
+ * o React desmonta e remonta um subtree cujo tipo mudou em vez de atualizá-lo. É exatamente o que
+ * fazia o campo do motivo de cancelamento perder o foco a cada tecla no histórico de vendas
+ * (0a99c9c5), medido lá: seis teclas, seis remontagens. Aqui nenhuma delas tem campo de digitação
+ * hoje — mas o `AvisoSomenteLeitura` tem um `<button>`, e a próxima peça a nascer no lugar errado
+ * herdaria o defeito inteiro.
+ */
+function BlocoHead({ titulo }: { titulo: string }) {
+  return (
+    <div className="mb-0.5 mt-0.5 border-y border-primary/15 bg-primary/10 px-3 py-0.5 first:mt-0">
+      <span className="text-[9px] font-bold uppercase leading-none tracking-wide text-primary/90">{titulo}</span>
+    </div>
+  );
+}
+
+function Row({ label, value, valueClassName }: {
+  label: string; value: string | null; valueClassName?: string;
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-1.5 leading-tight">
+      <span className="shrink-0 text-muted-foreground">{label}</span>
+      <span className={cn('truncate text-right font-medium', valueClassName)}>{value || '—'}</span>
+    </div>
+  );
+}
+
+/**
+ * A LINHA QUE DIZ ONDE SE EDITA — só em edição, e só nas abas que não se editam.
+ *
+ * ⚠ ELA NÃO EXISTE EM VISUALIZAR: ali TUDO é leitura, e dizer "somente leitura" numa tela que
+ * não prometeu edição nenhuma seria ruído. O aviso responde a uma pergunta que só quem clicou
+ * em Editar tem — "então cadê o campo?".
+ * ⚠ E O ATALHO É UM BOTÃO DE VERDADE, não um texto que ensina a clicar na aba: quem leu a
+ * frase já quer ir, e obrigá-lo a mirar a aba lá em cima é cobrar duas mirações pelo mesmo
+ * pedido.
+ */
+function AvisoSomenteLeitura({ editando, onIr }: { editando: boolean; onIr: () => void }) {
+  if (!editando) return null;
+  return (
+    <div className="shrink-0 border-b border-border bg-muted/40 px-3 py-1 text-[10px] text-muted-foreground">
+      Somente leitura.{' '}
+      <button type="button" onClick={onIr}
+        className="rounded font-medium text-primary underline-offset-2 hover:underline">
+        O que pode ser editado está em Comprador.
+      </button>
+    </div>
+  );
+}
+
+/** Uma linha do bloco de deduções — rótulo à esquerda, R$ à direita (A17). */
+function LinhaConta({ rotulo, children, destaque }: {
+  rotulo: React.ReactNode; children: React.ReactNode; destaque?: boolean;
+}) {
+  return (
+    <div className={cn('flex items-center gap-2 py-0.5', destaque && 'border-t pt-1.5')}>
+      <div className={cn('min-w-0 flex-1 truncate text-[11px]',
+        destaque ? 'font-semibold' : 'text-muted-foreground')}>{rotulo}</div>
+      <div className={cn('shrink-0 tabular-nums', destaque ? 'text-[13px] font-bold' : 'text-[11px]')}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 export function VendaGraosModal({
   aberto, onFechar, onRegistrar, salvando, estoque, cultura, safraRotulo,
   clienteId, contas, substituiveis,
@@ -123,7 +201,7 @@ export function VendaGraosModal({
   onCancelar?: (id: string, motivo: string) => void;
 }) {
   /** A aba aberta. A ordem delas É o fluxo: compor → deduzir → receber. */
-  const [aba, setAba] = useState<'composicao' | 'deducoes' | 'recebimento' | 'substituir'>('composicao');
+  const [aba, setAba] = useState<'composicao' | 'deducoes' | 'recebimento' | 'comprador' | 'substituir'>('composicao');
   /* ⚠ O MODO PODE MUDAR DENTRO DO MODAL (ver → editar), e por isso ele é estado, não só prop: o
      botão "Editar" troca de modo sem fechar e reabrir, que é o que faria o operador perder de vista
      o que estava conferindo. */
@@ -133,7 +211,7 @@ export function VendaGraosModal({
   /* ⚠ DE ONDE O OPERADOR VEIO — para "Voltar" devolvê-lo à aba em que estava. Entrar em edição
      troca de aba (é lá que moram os campos editáveis); sair sem desfazer a troca o deixaria
      numa aba que ele não escolheu. */
-  const [abaAntesDeEditar, setAbaAntesDeEditar] = useState<'composicao' | 'deducoes' | 'recebimento' | 'substituir'>('composicao');
+  const [abaAntesDeEditar, setAbaAntesDeEditar] = useState<'composicao' | 'deducoes' | 'recebimento' | 'comprador' | 'substituir'>('composicao');
   const compradorRef = useRef<HTMLDivElement>(null);
   const leitura = modoAtual === 'visualizar';
   const criando = modoAtual === 'criar';
@@ -176,7 +254,7 @@ export function VendaGraosModal({
   const entrarEmEdicao = () => {
     setAbaAntesDeEditar(aba);
     setModoAtual('editar');
-    setAba('recebimento');
+    setAba('comprador');
   };
   const voltarDaEdicao = () => {
     setModoAtual('visualizar');
@@ -186,13 +264,14 @@ export function VendaGraosModal({
   /**
    * O CURSOR CAI NO COMPRADOR — e o anel dele é `focus:`, não `focus-visible:`, DE PROPÓSITO.
    *
+   * ⚠ A ABA É `comprador` DESDE O VENDA-08 — era `recebimento`, e os campos mudaram de casa.
    * ⚠ MEDIDO NO CHROME: `.focus()` programático logo depois de um clique de mouse NÃO casa
    * `:focus-visible` num `button` nem num `[role=combobox]` (só casa em campo de texto). Focar o
    * comprador e parar por aí seria repetir o defeito em outra forma — o foco iria para lá e o
    * operador não veria nada mudar. O anel abaixo é incondicional enquanto se edita.
    */
   useEffect(() => {
-    if (!aberto || !editando || aba !== 'recebimento') return;
+    if (!aberto || !editando || aba !== 'comprador') return;
     const id = requestAnimationFrame(() => {
       compradorRef.current?.querySelector<HTMLElement>('button[role="combobox"]')?.focus();
     });
@@ -373,59 +452,6 @@ export function VendaGraosModal({
   };
 
 
-  /* ⚠ AS DUAS PEÇAS DO RESUMO SÃO CÓPIA do `LancamentoV2Dialog` (`ResumoBlocoHead`/`ResumoRow`,
-     linhas 234-253), onde nasceram privadas. A régua tem de ser a MESMA — o briefing pede que as
-     duas telas se leiam como irmãs —, e importar de lá arrastaria um arquivo de 2.300 linhas do
-     Financeiro para dentro do estoque.
-     ⚠ SÃO DOIS CONSUMIDORES AGORA. No terceiro, elas sobem para `ui/` — é a mesma conta que fez o
-     `Cartao` e o cinza do cabeçalho subirem, e a que ainda não foi feita pelo `ConfirmarComMotivo`. */
-  const BlocoHead = ({ titulo }: { titulo: string }) => (
-    <div className="mb-0.5 mt-0.5 border-y border-primary/15 bg-primary/10 px-3 py-0.5 first:mt-0">
-      <span className="text-[9px] font-bold uppercase leading-none tracking-wide text-primary/90">{titulo}</span>
-    </div>
-  );
-  const Row = ({ label, value, valueClassName }: {
-    label: string; value: string | null; valueClassName?: string;
-  }) => (
-    <div className="flex items-baseline justify-between gap-1.5 leading-tight">
-      <span className="shrink-0 text-muted-foreground">{label}</span>
-      <span className={cn('truncate text-right font-medium', valueClassName)}>{value || '—'}</span>
-    </div>
-  );
-
-  /**
-   * A LINHA QUE DIZ ONDE SE EDITA — só em edição, e só nas abas que não se editam.
-   *
-   * ⚠ ELA NÃO EXISTE EM VISUALIZAR: ali TUDO é leitura, e dizer "somente leitura" numa tela que
-   * não prometeu edição nenhuma seria ruído. O aviso responde a uma pergunta que só quem clicou
-   * em Editar tem — "então cadê o campo?".
-   * ⚠ E O ATALHO É UM BOTÃO DE VERDADE, não um texto que ensina a clicar na aba: quem leu a
-   * frase já quer ir, e obrigá-lo a mirar a aba lá em cima é cobrar duas mirações pelo mesmo
-   * pedido.
-   */
-  const AvisoSomenteLeitura = () => !editando ? null : (
-    <div className="shrink-0 border-b border-border bg-muted/40 px-3 py-1 text-[10px] text-muted-foreground">
-      Somente leitura.{' '}
-      <button type="button" onClick={() => setAba('recebimento')}
-        className="rounded font-medium text-primary underline-offset-2 hover:underline">
-        O que pode ser editado está em Recebimento.
-      </button>
-    </div>
-  );
-
-  /** Uma linha do bloco de deduções — rótulo à esquerda, R$ à direita (A17). */
-  const LinhaConta = ({ rotulo, children, destaque }: {
-    rotulo: React.ReactNode; children: React.ReactNode; destaque?: boolean;
-  }) => (
-    <div className={cn('flex items-center gap-2 py-0.5', destaque && 'border-t pt-1.5')}>
-      <div className={cn('min-w-0 flex-1 truncate text-[11px]',
-        destaque ? 'font-semibold' : 'text-muted-foreground')}>{rotulo}</div>
-      <div className={cn('shrink-0 tabular-nums', destaque ? 'text-[13px] font-bold' : 'text-[11px]')}>
-        {children}
-      </div>
-    </div>
-  );
-
   /* ⚠ O RECEBIMENTO EM UMA FRASE, para o resumo: "A vista em 15/09/26" ou a lista dos vencimentos.
      Ele é o único item do resumo que não é um número — e é o que o operador confere por último. */
   const resumoRecebimento = condicao === 'avista'
@@ -439,6 +465,13 @@ export function VendaGraosModal({
     { id: 'composicao' as const, label: 'Composição' },
     { id: 'deducoes' as const, label: 'Deduções' },
     { id: 'recebimento' as const, label: 'Recebimento' },
+    /* ⚠ COMPRADOR É ABA, e não mais o rodapé da Recebimento: quem estava ali lia duas coisas
+       diferentes na mesma tela — QUANDO o dinheiro entra (parcelas) e DE QUEM é a venda
+       (comprador, data, documento). Separadas, a tabela de parcelas ganha a altura inteira da
+       aba, que é o que faltava para quatro parcelas caberem.
+       ⚠ DEPOIS DE RECEBIMENTO, não antes: a ordem das abas É o fluxo (compor → deduzir →
+       receber → identificar), e identificação é o que se confere por último, junto do resumo. */
+    { id: 'comprador' as const, label: 'Comprador' },
     /* ⚠ A ABA DE SUBSTITUIÇÃO SÓ EXISTE COM CANDIDATO, e leva a contagem no título: uma aba vazia
        ensinaria que há uma decisão a tomar onde não há. */
     /* ⚠ SÓ NO MODO CRIAR: substituir um lançamento manual é decisão de quem está REGISTRANDO a
@@ -525,7 +558,7 @@ export function VendaGraosModal({
           <TabsContent value="composicao" className="min-h-0 flex-1 overflow-hidden p-0 data-[state=inactive]:hidden">
             {venda ? (
               <div className="flex h-full min-h-0 flex-col">
-                <AvisoSomenteLeitura />
+                <AvisoSomenteLeitura editando={editando} onIr={() => setAba('comprador')} />
                 <ComposicaoLeitura venda={venda} unidade={unidade} />
               </div>
             ) : (
@@ -647,7 +680,7 @@ export function VendaGraosModal({
           <TabsContent value="deducoes" className="min-h-0 flex-1 overflow-auto p-0 data-[state=inactive]:hidden">
             {venda ? (
               <div className="flex h-full min-h-0 flex-col">
-                <AvisoSomenteLeitura />
+                <AvisoSomenteLeitura editando={editando} onIr={() => setAba('comprador')} />
                 <DeducoesLeitura venda={venda} />
               </div>
             ) : (
@@ -693,117 +726,157 @@ export function VendaGraosModal({
           </TabsContent>
 
           {/* ── ABA 3 — RECEBIMENTO ────────────────────────────────────────────────────────── */}
+          {/* ⚠⚠ A TABELA OCUPA A ALTURA INTEIRA DA ABA, e é o conserto do defeito: as parcelas
+              viviam numa pilha de `div`s com rótulo por linha, dentro de um `overflow-auto` sem
+              cabeçalho fixo — com duas parcelas a primeira aparecia pela metade no topo, e com
+              quatro a aba ficava inoperável. Tabela densa, cabeçalho fixo, rótulo UMA vez.
+              ⚠ TRÊS FAIXAS, e só a do meio rola (A21/A28): a barra em cima, a tabela no
+              `flex-1 min-h-0`, o juiz embaixo. O juiz NUNCA rola junto — ele é a conta que
+              trava o botão, e um total que sai da tela é um total que não se confere. */}
           <TabsContent value="recebimento" className="min-h-0 flex-1 overflow-hidden p-0 data-[state=inactive]:hidden">
-            <div className="flex h-full min-h-0 flex-col gap-2 px-3 py-2">
-              <div className={cn('flex flex-wrap items-end justify-between gap-2', venda && 'hidden')}>
-                <div>
-                  <Label className="text-[10px]">Recebimento</Label>
-                  <div className="mt-0.5 flex h-8 w-fit overflow-hidden rounded-md border">
-                    {(['avista', 'aprazo'] as const).map(c => (
-                      <button key={c} type="button" onClick={() => setCondicao(c)}
-                        className={cn('px-3 text-[11px] font-medium transition-colors',
-                          condicao === c ? 'bg-primary text-primary-foreground'
-                            : 'bg-transparent text-muted-foreground hover:bg-muted')}>
-                        {c === 'avista' ? 'À vista' : 'A prazo'}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                {condicao === 'aprazo' && (
-                  <div className="flex items-end gap-2">
-                    <Button type="button" size="sm" variant="outline" className="h-8 gap-1 px-2 text-[11px]"
-                      onClick={dividirIgual} disabled={liquido <= 0}
-                      title="Preenche os valores dividindo o líquido; o resíduo vai na última">
-                      Dividir igual
-                    </Button>
-                    <Button type="button" size="sm" variant="outline" className="h-8 gap-1 px-2 text-[11px]"
-                      onClick={() => setParcelas(o => [...o, novaParcela()])}>
-                      <Plus className="h-3.5 w-3.5" /> parcela
-                    </Button>
-                  </div>
-                )}
-              </div>
-
-              {/* ⚠ EM VER/EDITAR AS PARCELAS SÃO LEITURA e os três campos de baixo continuam
-                  editáveis — são exatamente os que `agri_venda_avulsa_editar` aceita. Mostrar um
-                  campo de valor que a RPC ignora seria prometer uma edição que não acontece. */}
-              {venda ? <ParcelasLeitura venda={venda} /> : condicao === 'avista' ? (
-                <div className="grid gap-2 md:grid-cols-2">
-                  <div>
-                    <Label className="text-[10px]">Conta que recebe <span className="text-destructive">*</span></Label>
-                    <ContaBancariaSelect value={parcelas[0]?.contaId ?? ''} contas={contas}
-                      onValueChange={v => setParcelas(o => [{ ...(o[0] ?? novaParcela()), contaId: v }])}
-                      placeholder="Escolha" className="mt-0.5 h-8 text-[12px]" />
-                  </div>
-                  <div className="flex items-end">
-                    <p className="text-[10px] leading-snug text-muted-foreground">
-                      Uma parcela de <strong className="tabular-nums">{formatMoeda(liquido)}</strong>,
-                      paga em {data ? formatIsoToBr(data) : '—'}.
-                    </p>
-                  </div>
-                </div>
+            <div className="flex h-full min-h-0 flex-col">
+              <AvisoSomenteLeitura editando={editando} onIr={() => setAba('comprador')} />
+              {/* ⚠ QUEM ROLA É ESTE `div`, não o `ParcelasLeitura`: ele é `min-h-0 overflow-auto`
+                  mas sem ALTURA, então crescia e era cortado pelo `overflow-hidden` da aba — o
+                  aviso do CLAUDE.md, "antes de escrever `sticky`/`overflow`, achar quem rola".
+                  Um scrollport só, aqui. */}
+              {venda ? (
+                <div className="min-h-0 flex-1 overflow-y-auto"><ParcelasLeitura venda={venda} /></div>
               ) : (
-                <>
-                  {/* ⚠ A LISTA DE PARCELAS ROLA SOZINHA (A28) — doze parcelas não empurram o rodapé
-                      nem o resumo; o juiz abaixo fica sempre visível. */}
-                  <div className="min-h-0 flex-1 space-y-1.5 overflow-auto pr-1">
-                    {parcelas.map((p, i) => (
-                      <div key={i} className="grid gap-2 md:grid-cols-[1fr_1fr_auto_1fr_1.4fr_auto]">
-                        <div>
-                          <Label className="text-[10px]">Vencimento <span className="text-destructive">*</span></Label>
-                          <DatePicker value={p.vencimento} className="mt-0.5"
-                            onChange={v => setParcelas(o => o.map((x, j) => j === i ? { ...x, vencimento: v } : x))} />
-                        </div>
-                        <div>
-                          <Label className="text-[10px]">Valor <span className="text-destructive">*</span></Label>
-                          <CampoNumero valor={p.valor} casas={2} className="mt-0.5 h-8 text-right text-[12px]"
-                            onChange={v => setParcelas(o => o.map((x, j) => j === i ? { ...x, valor: v } : x))} />
-                        </div>
-                        <div>
-                          <Label className="text-[10px]">Pago?</Label>
-                          <div className="mt-0.5 flex h-8 items-center">
-                            <Checkbox checked={p.pago}
-                              onCheckedChange={c => setParcelas(o => o.map((x, j) => j === i
-                                ? { ...x, pago: c === true, dataPagamento: c === true ? (x.dataPagamento || x.vencimento) : '' }
-                                : x))} />
-                          </div>
-                        </div>
-                        <div>
-                          <Label className="text-[10px]">Pagamento</Label>
-                          <DatePicker value={p.dataPagamento} className="mt-0.5"
-                            onChange={v => setParcelas(o => o.map((x, j) => j === i ? { ...x, dataPagamento: v } : x))} />
-                        </div>
-                        <div>
-                          <Label className="text-[10px]">Conta <span className="text-destructive">*</span></Label>
-                          <ContaBancariaSelect value={p.contaId} contas={contas} placeholder="Escolha"
-                            className="mt-0.5 h-8 text-[12px]"
-                            onValueChange={v => setParcelas(o => o.map((x, j) => j === i ? { ...x, contaId: v } : x))} />
-                        </div>
-                        <div className="flex items-end">
-                          {parcelas.length > 1 && (
-                            <button type="button" title="Remover parcela" aria-label="Remover parcela"
-                              onClick={() => setParcelas(o => o.filter((_, j) => j !== i))}
-                              className="mb-1 rounded p-0.5 text-muted-foreground hover:bg-rose-100 hover:text-rose-700">
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+              <div className="flex h-full min-h-0 flex-col gap-2 px-3 py-2">
+                <div className="flex shrink-0 flex-wrap items-end justify-between gap-2">
+                  <div>
+                    <Label className="text-[10px]">Recebimento</Label>
+                    <div className="mt-0.5 flex h-8 w-fit overflow-hidden rounded-md border">
+                      {(['avista', 'aprazo'] as const).map(c => (
+                        <button key={c} type="button" onClick={() => setCondicao(c)}
+                          className={cn('px-3 text-[11px] font-medium transition-colors',
+                            condicao === c ? 'bg-primary text-primary-foreground'
+                              : 'bg-transparent text-muted-foreground hover:bg-muted')}>
+                          {c === 'avista' ? 'À vista' : 'A prazo'}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <div className={cn('shrink-0 rounded-md px-2 py-1 text-[11px]',
-                    fecha ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive')}>
-                    Parcelas <strong className="tabular-nums">{formatMoeda(somaParcelas)}</strong> ·
-                    Líquido <strong className="tabular-nums">{formatMoeda(liquido)}</strong> ·{' '}
-                    {fecha ? 'confere' : `diferença ${formatMoeda(Math.abs(diferenca))}`}
-                  </div>
-                </>
-              )}
+                  {/* ⚠ À VISTA NÃO TEM OS DOIS BOTÕES: dividir uma parcela em uma parcela e
+                      acrescentar a segunda são gestos de "a prazo". Mostrá-los desabilitados
+                      ensinaria que há algo a fazer ali. */}
+                  {condicao === 'aprazo' && (
+                    <div className="flex items-end gap-2">
+                      <Button type="button" size="sm" variant="outline" className="h-8 gap-1 px-2 text-[11px]"
+                        onClick={dividirIgual} disabled={liquido <= 0}
+                        title="Preenche os valores dividindo o líquido; o resíduo vai na última">
+                        Dividir igual
+                      </Button>
+                      <Button type="button" size="sm" variant="outline" className="h-8 gap-1 px-2 text-[11px]"
+                        onClick={() => setParcelas(o => [...o, novaParcela()])}>
+                        <Plus className="h-3.5 w-3.5" /> parcela
+                      </Button>
+                    </div>
+                  )}
+                </div>
 
-              {/* ⚠ COMPRADOR, DATA, DOCUMENTO E OBSERVAÇÕES MORAM AQUI, não numa quarta aba: eles
-                  descrevem o RECEBIMENTO (de quem, quando, contra qual papel) e uma aba só para
-                  quatro campos seria uma parada a mais no caminho de quem já sabe o que faz. */}
-              <div className="grid shrink-0 gap-2 md:grid-cols-[1.4fr_1fr_1.3fr_1fr]">
+                <div className="min-h-0 flex-1 overflow-y-auto rounded-md border">
+                  <table className="w-full table-fixed border-collapse">
+                    {/* ⚠ px MEDIDOS PELO MAIOR CONTEÚDO, não porcentagem. "30/04/2025" a 12px são
+                        70,9px, e o `DatePicker` da casa soma `px-2.5` à esquerda e `pr-8` à
+                        direita (o botão do calendário): 112,9px de campo, 120,9 de coluna. Com os
+                        118px que a grade antiga dava, a data saía "15/09/2" — o defeito 2 do
+                        briefing. 128 dá o mínimo com folga.
+                        ⚠ CONTA FICA SEM LARGURA: é ela que absorve o aperto quando o modal
+                        encolhe, truncando um nome que o `title` guarda — as datas e o valor não
+                        podem encolher sem cortar número. */}
+                    <colgroup>
+                      {['28px', '128px', '116px', '52px', '128px', '', '32px'].map((w, i) => (
+                        <col key={i} style={w ? { width: w } : undefined} />
+                      ))}
+                    </colgroup>
+                    <thead className="sticky top-0 z-10">
+                      <tr>
+                        <th className={cn(TH, 'text-center')}>#</th>
+                        <th className={cn(TH, 'text-left')}>Vencimento</th>
+                        <th className={cn(TH, 'text-right')}>Valor</th>
+                        <th className={cn(TH, 'text-center')}>Pago?</th>
+                        <th className={cn(TH, 'text-left')}>Pagamento</th>
+                        <th className={cn(TH, 'text-left')}>Conta</th>
+                        <th className={TH} />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {parcelasEfetivas.map((p, i) => (
+                        <tr key={i} className="border-t border-slate-100">
+                          <td className="px-1 py-1 text-center text-[11px] tabular-nums text-muted-foreground">{i + 1}</td>
+                          <td className="px-1 py-1">
+                            {/* ⚠ À VISTA A LINHA É ESPELHO, não formulário: vencimento, valor e
+                                pagamento saem da data da venda e do líquido, e deixá-los editáveis
+                                permitiria uma parcela única que não fecha o próprio líquido. */}
+                            <DatePicker value={p.vencimento} disabled={condicao === 'avista'}
+                              className={cn(condicao === 'avista' && CAMPO_TRAVADO)}
+                              onChange={v => setParcelas(o => o.map((x, j) => j === i ? { ...x, vencimento: v } : x))} />
+                          </td>
+                          <td className="px-1 py-1">
+                            <CampoNumero valor={p.valor} casas={2} disabled={condicao === 'avista'}
+                              className={cn('h-8 text-right text-[12px]', condicao === 'avista' && CAMPO_TRAVADO)}
+                              onChange={v => setParcelas(o => o.map((x, j) => j === i ? { ...x, valor: v } : x))} />
+                          </td>
+                          <td className="px-1 py-1 text-center">
+                            <span className="inline-flex h-8 items-center">
+                              <Checkbox checked={p.pago} disabled={condicao === 'avista'}
+                                onCheckedChange={c => setParcelas(o => o.map((x, j) => j === i
+                                  ? { ...x, pago: c === true, dataPagamento: c === true ? (x.dataPagamento || x.vencimento) : '' }
+                                  : x))} />
+                            </span>
+                          </td>
+                          <td className="px-1 py-1">
+                            <DatePicker value={p.dataPagamento} disabled={condicao === 'avista' || !p.pago}
+                              className={cn((condicao === 'avista' || !p.pago) && CAMPO_TRAVADO)}
+                              onChange={v => setParcelas(o => o.map((x, j) => j === i ? { ...x, dataPagamento: v } : x))} />
+                          </td>
+                          <td className="px-1 py-1">
+                            <ContaBancariaSelect value={p.contaId} contas={contas} placeholder="Escolha"
+                              className="h-8 text-[12px]"
+                              onValueChange={v => setParcelas(o => {
+                                /* À vista o array tem uma posição só, e ela pode nem existir ainda. */
+                                if (condicao === 'avista') return [{ ...(o[0] ?? novaParcela()), contaId: v }];
+                                return o.map((x, j) => j === i ? { ...x, contaId: v } : x);
+                              })} />
+                          </td>
+                          <td className="px-1 py-1 text-center">
+                            {condicao === 'aprazo' && parcelas.length > 1 && (
+                              <button type="button" title="Remover parcela" aria-label="Remover parcela"
+                                onClick={() => setParcelas(o => o.filter((_, j) => j !== i))}
+                                className="rounded p-0.5 text-muted-foreground hover:bg-rose-100 hover:text-rose-700">
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* ⚠ O JUIZ FICA FORA DA ÁREA QUE ROLA — é ele que diz por que o botão está
+                    travado, e um total que sai da tela com a oitava parcela seria a conta
+                    escondida justamente quando ela fica difícil. */}
+                <div className={cn('shrink-0 rounded-md px-2 py-1 text-[11px]',
+                  fecha ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive')}>
+                  Parcelas <strong className="tabular-nums">{formatMoeda(somaParcelas)}</strong> ·
+                  Líquido <strong className="tabular-nums">{formatMoeda(liquido)}</strong> ·{' '}
+                  {fecha ? 'confere' : `diferença ${formatMoeda(Math.abs(diferenca))}`}
+                </div>
+              </div>
+              )}
+            </div>
+          </TabsContent>
+
+          {/* ── ABA 4 — COMPRADOR ──────────────────────────────────────────────────────────── */}
+          {/* ⚠ AQUI MORAM OS CAMPOS EDITÁVEIS, e é para cá que o botão "Editar" pula. Comprador,
+              data, documento e observações descrevem DE QUEM é a venda; parcelas descrevem
+              QUANDO o dinheiro entra. Eram a mesma aba, e a tabela de parcelas pagava a conta. */}
+          <TabsContent value="comprador" className="min-h-0 flex-1 overflow-auto p-0 data-[state=inactive]:hidden">
+            <div className="flex min-h-full flex-col gap-2 px-3 py-2">
+              <div className="grid gap-2 md:grid-cols-2">
                 <div>
                   <Label className="text-[10px]">Comprador <span className="text-destructive">*</span></Label>
                   {/* ⚠ O ANEL DE FOCO AQUI É `focus:`, NÃO `focus-visible:`, e é escopado a este
@@ -829,6 +902,8 @@ export function VendaGraosModal({
                   <DatePicker value={data} onChange={setData} disabled={camposTravados}
                     className={cn('mt-0.5', camposTravados ? CAMPO_TRAVADO : CAMPO_EDITAVEL)} />
                 </div>
+              </div>
+              <div className="grid gap-2 md:grid-cols-2">
                 <div>
                   <Label className="text-[10px]">Documento</Label>
                   {/* ⚠ O TIPO NASCE "Outros" AO PRIMEIRO CARACTERE, e é a mesma regra da RPC
@@ -868,7 +943,7 @@ export function VendaGraosModal({
                   Documento se edita no lançamento do Financeiro.
                 </p>
               )}
-              <div className="shrink-0">
+              <div>
                 <Label className="text-[10px]">Observações</Label>
                 <Input value={obs} onChange={e => setObs(e.target.value)} placeholder="Opcional"
                   disabled={camposTravados}
