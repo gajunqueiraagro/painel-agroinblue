@@ -23,14 +23,15 @@ const CHAVES: (keyof DreLinhas)[] = [
   'depreciacao',
 ];
 
-const linhas = (receita: number, deducoes: number, juros: number): DreLinhas => {
+const linhas = (receita: number, deducoes: number, juros: number, rateio: number): DreLinhas => {
   const base = Object.fromEntries(CHAVES.map(k => [k, v(0)])) as unknown as DreLinhas;
-  return { ...base, receita_bruta: v(receita), deducoes: v(deducoes), juros: v(juros) };
+  return { ...base, receita_bruta: v(receita), deducoes: v(deducoes), juros: v(juros),
+    rateio_compartilhado: v(rateio) };
 };
 
 const AMENDOIM: DreCultura = {
   cultura: 'amendoim', area_ha: 185, peso_area: 78.8, producao: 43949.4, produtividade: 237.56,
-  linhas: linhas(2925162.25, 33905.13, 143707.14),
+  linhas: linhas(2925162.25, 33905.13, 143707.14, 532913.77),
   a_pagar: { operacional: 136277.79, investimento: 0 },
   custo_operacional: 2655464.72, pct_direto: 70,
   equilibrio: { preco_realizado: 66.56, preco_equilibrio: 60.42, produtividade_equilibrio: 215.7 },
@@ -55,7 +56,7 @@ const DRE: DreLavoura = {
   safra: { id: 's1', codigo: '25/26-Lav', data_inicio: '2025-07-01', data_fim: '2026-06-30' },
   culturas: [AMENDOIM],
   total: {
-    area_ha: 234.8, linhas: linhas(2932505.88, 34111.57, 144001.02), custo_operacional: 3009508.69,
+    area_ha: 234.8, linhas: linhas(2932505.88, 34111.57, 144001.02, 676368.40), custo_operacional: 3009508.69,
     a_pagar: { operacional: 136277.79, investimento: 0 }, pct_direto: 66,
   },
   centros: [INSUMOS, SOLO],
@@ -137,6 +138,16 @@ describe('quais células da grade abrem a lista de lançamentos', () => {
     const { abrir } = montar();
     clicar(celulaCom('351.983,40'));
     expect(abrir).toHaveBeenCalledWith('investimento', 'Solo', 'Solo', 'amendoim');
+  });
+
+  /* ⚠ A LINHA DO RATEIO COMPARTILHADO PEDE O POOL, e a chave nula é a assinatura disso: no ramo
+     natureza da RPC, `p_chave` nulo significa "todos os centros compartilhados". Passar `''`
+     pediria o centro cujo nome é vazio — e a RPC devolveria nada, calada. */
+  it('a linha de rateio compartilhado abre o pool, com chave nula', () => {
+    const { abrir, onDrill } = montar();
+    clicar(celulaCom('532.913,77'));
+    expect(abrir).toHaveBeenCalledWith('natureza', null, '(−) Rateio compartilhado', 'amendoim');
+    expect(onDrill).not.toHaveBeenCalled();
   });
 
   /* ⚠ A COLUNA TOTAL NÃO ABRE: `fn_painel_rateio_detalhe` recebe `p_cultura` e não aceita

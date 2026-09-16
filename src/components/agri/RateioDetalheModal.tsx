@@ -52,6 +52,15 @@ export interface LancamentoRateio {
    * lançamento — o mesmo caminho do drawer do DRE.
    */
   id: string;
+  /**
+   * O centro de custo do lançamento — `null` fora do ramo natureza/investimento.
+   *
+   * ⚠ ELE EXISTE PARA A LISTA DO POOL. Quando o modal abre o rateio compartilhado inteiro, as
+   * linhas vêm de VÁRIOS centros (Insumos, Operações Mecanizadas, Serviços…), e sem esta coluna
+   * a lista é um amontoado em que o operador não sabe de onde cada nota veio. Nas listas de um
+   * centro só a coluna não aparece — ali ela repetiria o título.
+   */
+  centro?: string | null;
   data: string | null;
   descricao: string | null;
   favorecido: string | null;
@@ -162,6 +171,15 @@ const COLUNAS_LANC: Array<ColunaOrdenavel<LancamentoRateio, string> & { h: strin
   { coluna: 'valor', h: 'Valor', tipo: 'numero', valor: l => l.valor },
 ];
 
+/** As mesmas, com Centro entre Descrição e Favorecido — só a lista do pool a usa. */
+const COLUNAS_LANC_COM_CENTRO: Array<ColunaOrdenavel<LancamentoRateio, string> & { h: string }> = [
+  { coluna: 'data', h: 'Data', tipo: 'data', valor: l => l.data },
+  { coluna: 'descricao', h: 'Descrição', tipo: 'texto', valor: l => l.descricao },
+  { coluna: 'centro', h: 'Centro', tipo: 'texto', valor: l => l.centro ?? '' },
+  { coluna: 'favorecido', h: 'Favorecido', tipo: 'texto', valor: l => l.favorecido },
+  { coluna: 'valor', h: 'Valor', tipo: 'numero', valor: l => l.valor },
+];
+
 function Donut({ dados, cor, total, rotuloTotal, tamanho = 150 }: {
   dados: Array<{ nome: string; valor: number }>;
   cor: (i: number, nome: string) => string;
@@ -227,7 +245,7 @@ export function ecoDaCelula(
   return `${formatMoeda(d.direto_cultura + fatia)} nesta cultura`;
 }
 
-export function subtituloDoRateio(d: RateioDetalhe, tipo: TipoRateio): string {
+export function subtituloDoRateio(d: RateioDetalhe, tipo: TipoRateio, ehPool?: boolean): string {
   const fatia = fatiaAtual(d)?.valor ?? 0;
   /**
    * ⚠ O ADMIN DIZ A CADEIA INTEIRA, porque ela É a resposta: o valor da linha não sai de uma
@@ -250,6 +268,12 @@ export function subtituloDoRateio(d: RateioDetalhe, tipo: TipoRateio): string {
   if (d.direto_cultura > 0) {
     return `${formatMoeda(d.direto_cultura + fatia)} nesta cultura = ${formatMoeda(d.direto_cultura)} `
       + `direto + ${formatMoeda(fatia)} do rateio (${pct}% de ${formatMoeda(d.pool)} por área)`;
+  }
+  /* ⚠ A CAUDA MUDA ENTRE "UM CENTRO SEM DIRETO" E "O POOL INTEIRO": no primeiro caso o operador
+     precisa saber que aquele centro não tem nota marcada com a cultura; no segundo a frase seria
+     falsa — um pool não tem parte direta por definição. */
+  if (ehPool) {
+    return `${pct}% de ${formatMoeda(d.pool)} por área`;
   }
   return `${formatMoeda(fatia)} nesta cultura = ${pct}% de ${formatMoeda(d.pool)} por área `
     + '(sem custo direto neste centro)';
@@ -298,12 +322,17 @@ export function notaDoRateio(d: RateioDetalhe, tipo: TipoRateio): string {
  * ⚠ UM COMPONENTE, DOIS USOS: com duas cópias, a primeira coluna que alguém ajustasse desalinharia
  * as abas irmãs.
  */
-function ListaLancamentos({ linhas, rotuloTotal, onAbrir }: {
+function ListaLancamentos({ linhas, rotuloTotal, onAbrir, comCentro }: {
   linhas: LancamentoRateio[];
   rotuloTotal: string;
   onAbrir?: (id: string) => void;
+  /** A lista do pool vem de vários centros e precisa dizer qual. */
+  comCentro?: boolean;
 }) {
-  const ord = useOrdenacaoTabela(linhas, COLUNAS_LANC, { coluna: 'data', direcao: 'asc' });
+  const colunas = comCentro ? COLUNAS_LANC_COM_CENTRO : COLUNAS_LANC;
+  const larguras = comCentro
+    ? ['14%', '30%', '20%', '20%', '16%'] : ['16%', '40%', '26%', '18%'];
+  const ord = useOrdenacaoTabela(linhas, colunas, { coluna: 'data', direcao: 'asc' });
   const total = useMemo(() => linhas.reduce((a, l) => a + l.valor, 0), [linhas]);
   return (
     <>
@@ -312,11 +341,11 @@ function ListaLancamentos({ linhas, rotuloTotal, onAbrir }: {
       <div className="min-h-0 flex-1 overflow-auto rounded-md border">
         <table className="w-full table-fixed border-collapse">
           <colgroup>
-            {['16%', '40%', '26%', '18%'].map((w, i) => <col key={i} style={{ width: w }} />)}
+            {larguras.map((w, i) => <col key={i} style={{ width: w }} />)}
           </colgroup>
           <thead>
             <tr>
-              {COLUNAS_LANC.map(c => (
+              {colunas.map(c => (
                 <ThOrdenavel key={c.coluna} coluna={c.coluna} rotulo={c.h}
                   ordem={ord.ordem} onOrdenar={ord.alternar}
                   className={TH} alinhaDireita={c.coluna === 'valor'} />
@@ -325,7 +354,7 @@ function ListaLancamentos({ linhas, rotuloTotal, onAbrir }: {
           </thead>
           <tbody>
             {linhas.length === 0 && (
-              <tr><td colSpan={4} className="px-2 py-3 text-center text-[11px] text-muted-foreground">
+              <tr><td colSpan={colunas.length} className="px-2 py-3 text-center text-[11px] text-muted-foreground">
                 Nenhum lançamento neste recorte.
               </td></tr>
             )}
@@ -344,6 +373,11 @@ function ListaLancamentos({ linhas, rotuloTotal, onAbrir }: {
                 <td className="truncate px-2 py-0.5 text-[10px]" title={l.descricao ?? undefined}>
                   {l.descricao || '—'}
                 </td>
+                {comCentro && (
+                  <td className="truncate px-2 py-0.5 text-[10px]" title={l.centro ?? undefined}>
+                    {l.centro || '—'}
+                  </td>
+                )}
                 <td className="truncate px-2 py-0.5 text-[10px] text-muted-foreground"
                   title={l.favorecido ?? undefined}>
                   {l.favorecido || '—'}
@@ -369,7 +403,7 @@ function ListaLancamentos({ linhas, rotuloTotal, onAbrir }: {
 }
 
 export function RateioDetalheModal({
-  aberto, onFechar, titulo, subtitulo, dados, tipo, onAbrirLancamento, rateioDentro,
+  aberto, onFechar, titulo, subtitulo, dados, tipo, onAbrirLancamento, rateioDentro, pool,
 }: {
   aberto: boolean;
   onFechar: () => void;
@@ -399,6 +433,14 @@ export function RateioDetalheModal({
    * veio entender a divisão.
    */
   rateioDentro?: boolean;
+  /**
+   * O modal está descrevendo o POOL COMPARTILHADO inteiro, não um centro.
+   *
+   * ⚠ ELE MUDA DUAS COISAS E NENHUM CÁLCULO: some a aba "Custos diretos" — `direto_cultura` vem
+   * 0 aqui por construção, e uma aba vazia com nome de conteúdo é pior que aba nenhuma — e a
+   * lista ganha a coluna Centro, porque as linhas vêm de vários.
+   */
+  pool?: boolean;
 }) {
   const totalArea = useMemo(
     () => dados.fatias.reduce((a, f) => a + f.area_ha, 0), [dados.fatias]);
@@ -434,8 +476,10 @@ export function RateioDetalheModal({
      ⚠ `rateioDentro === undefined` MANTÉM O COMPORTAMENTO ANTIGO (três abas): o admin e
      qualquer chamador futuro que não conheça o toggle continuam como estavam. */
   const mostrarRateio = temDivisao && rateioDentro !== false;
-  const tresAbas = !admin && mostrarRateio;
-  const semAbas = !admin && !mostrarRateio;
+  /* ⚠ NO POOL SÃO DUAS ABAS, sempre: a divisão e a lista do que há para ratear. Não há "custos
+     diretos" de um pool — se houvesse, ele não seria compartilhado. */
+  const tresAbas = !admin && !pool && mostrarRateio;
+  const semAbas = !admin && !pool && !mostrarRateio;
 
   /* ⚠ AS ABAS VIRARAM ESTADO CONTROLADO porque a barra deixou de ser a `TabsList` do Radix e
      passou a ser o `Segmentado` da casa (regra de UI do PR-04). O `Tabs` continua governando o
@@ -444,8 +488,12 @@ export function RateioDetalheModal({
   /* ⚠ SEM ABAS SÓ HÁ UMA; COM ABAS ABRE NA DIVISÃO — que é o que o número da célula precisa
      explicar quando o toggle está em "Com rateio nos centros". */
   const abaInicial = semAbas ? 'diretos' : 'rateio';
+  const duasAbasDoPool = [
+    { valor: 'rateio', rotulo: 'Divisão do rateio' },
+    { valor: 'rateados', rotulo: `A ratear · ${rateados.length}` },
+  ];
   const [abaAtual, setAbaAtual] = useState(abaInicial);
-  const opcoesDeAba = tresAbas
+  const opcoesDeAba = pool ? duasAbasDoPool : tresAbas
     ? [
       { valor: 'diretos', rotulo: `Custos diretos · ${diretos.length}` },
       { valor: 'rateio', rotulo: 'Divisão do rateio' },
@@ -488,9 +536,9 @@ export function RateioDetalheModal({
                 {/* ⚠ A SEGUNDA LINHA SÓ EXISTE ONDE HÁ RATEIO A EXPLICAR (§0a): no modo "Custos
                     diretos" ela falaria de pool e de percentual que a tela de trás não está
                     usando — informação certa na hora errada. */}
-                {!semAbas && (
+                {(!semAbas || pool) && (
                   <p className="mt-0.5 text-[11px] text-primary-foreground/80">
-                    {subtituloDoRateio(dados, tipo)}
+                    {subtituloDoRateio(dados, tipo, pool)}
                   </p>
                 )}
               </>
@@ -693,14 +741,15 @@ export function RateioDetalheModal({
 
           {/* ────────────────────── ABA 2 — OS LANÇAMENTOS ────────────────────── */}
           {/* ─────────── ABA 3 — OS RATEADOS (ou a lista inteira, no admin) ─────────── */}
-          <TabsContent value={tresAbas ? 'rateados' : 'lancamentos'}
+          <TabsContent value={tresAbas || pool ? 'rateados' : 'lancamentos'}
             className="mt-0 min-h-0 flex-1 flex-col data-[state=active]:flex data-[state=inactive]:hidden">
             <ListaLancamentos
-              linhas={tresAbas ? rateados : dados.lancamentos}
-              rotuloTotal={tresAbas ? 'Pool compartilhado' : 'Total dos lançamentos'}
+              linhas={tresAbas || pool ? rateados : dados.lancamentos}
+              rotuloTotal={tresAbas || pool ? 'Pool compartilhado' : 'Total dos lançamentos'}
+              comCentro={pool}
               onAbrir={onAbrirLancamento} />
             <p className="mt-1 shrink-0 text-[10px] leading-snug text-muted-foreground">
-              {tresAbas
+              {tresAbas || pool
                 /* ⚠ A SOMA DESTA LISTA É O POOL INTEIRO, não a fatia da cultura — e dizer isso
                    aqui é o que impede o operador de somar, achar diferença e concluir que o
                    sistema errou. A fatia está no subtítulo e na aba do meio. */

@@ -58,10 +58,11 @@ const txt = (t: string) => t.replace(/\u00A0/g, ' ');
 
 function montar(
   dados: RateioDetalhe, tipo: 'natureza' | 'investimento' | 'admin', rateioDentro?: boolean,
+  pool?: boolean,
 ) {
   render(
     <RateioDetalheModal aberto onFechar={vi.fn()} titulo="Administração · Amendoim · Safra 25/26"
-      dados={dados} tipo={tipo} rateioDentro={rateioDentro} />,
+      dados={dados} tipo={tipo} rateioDentro={rateioDentro} pool={pool} />,
   );
 }
 
@@ -186,6 +187,25 @@ describe('o que a aba aberta mostra', () => {
     expect(screen.getByText(/Divisão do rateio/)).toBeTruthy();
     expect(screen.getByText(/A ratear · 2/)).toBeTruthy();
     expect(screen.getByText(/78,8% de R\$ 104\.675,83 por área/)).toBeTruthy();
+  });
+
+  /* ⚠ O POOL TEM DUAS ABAS, NUNCA TRÊS: "custos diretos" de um pool é contradição — se houvesse
+     parte direta, ela não seria compartilhada. E a lista ganha a coluna Centro, porque as linhas
+     vêm de vários (Insumos, Operações Mecanizadas, Serviços…). */
+  it('o pool abre com duas abas, coluna Centro e sem custos diretos', () => {
+    montar({
+      ...BASE, direto_cultura: 0,
+      lancamentos: [
+        { id: 'p1', centro: 'Insumos', data: '2026-01-10', descricao: 'Adubo', favorecido: 'Coop', valor: 5000, compartilhado: true },
+        { id: 'p2', centro: 'Operações Mecanizadas', data: '2026-02-10', descricao: 'Diesel', favorecido: 'Posto', valor: 8000, compartilhado: true },
+      ],
+    }, 'natureza', false, true);
+    expect(screen.getByText(/Divisão do rateio/)).toBeTruthy();
+    expect(screen.getByText(/A ratear · 2/)).toBeTruthy();
+    expect(screen.queryByText(/Custos diretos/)).toBeNull();
+    /* ⚠ A SEGUNDA LINHA É SÓ O PERCENTUAL DO POOL: a cauda "(sem custo direto neste centro)"
+       seria falsa aqui — um pool não tem parte direta por definição. */
+    expect(screen.getByText('78,8% de R$ 104.675,83 por área')).toBeTruthy();
   });
 
   /* ⚠ SEM DIVISÃO NÃO HÁ BARRA DE ABAS (§10c): pool zero, ou uma cultura só na safra, e o modal

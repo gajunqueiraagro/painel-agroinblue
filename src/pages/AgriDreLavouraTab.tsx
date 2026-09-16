@@ -241,9 +241,13 @@ export function AgriDreLavouraTab() {
    * caminho alternativo (o drawer) é do PR-02, então o clique simplesmente não abre.
    */
   const [rateio, setRateio] = useState<
-    { dados: RateioDetalhe; tipo: TipoRateio; titulo: string } | null>(null);
+    { dados: RateioDetalhe; tipo: TipoRateio; titulo: string; pool: boolean } | null>(null);
 
-  const abrir = (tipo: TipoRateio, chave: string, rotulo: string, cultura: string) => {
+  /* ⚠ `chave` PODE SER `null` DESDE O PR-07, e é o que abre o POOL: no ramo natureza da
+     `fn_painel_rateio_detalhe`, `p_chave` nulo deixou de significar "nenhum centro" e passou a
+     significar "todos os centros compartilhados" — os lançamentos sem cultura cujo plano está em
+     `bloco_dre in ('custeio','pos_colheita')`. É a RPC que soma; aqui só se pede. */
+  const abrir = (tipo: TipoRateio, chave: string | null, rotulo: string, cultura: string) => {
     if (!clienteId || !safraId) return;
     void (async () => {
       const { data } = await (supabase as any).rpc('fn_painel_rateio_detalhe', {
@@ -262,7 +266,7 @@ export function AgriDreLavouraTab() {
       if (!d) return;
       const s = safras.find(x => x.id === safraId);
       setRateio({
-        dados: d, tipo,
+        dados: d, tipo, pool: chave === null,
         titulo: `${rotulo} · ${labelDaCultura(cultura)}`
           + (s ? ` · Safra ${s.codigo || s.nome}` : ''),
       });
@@ -686,7 +690,7 @@ export function AgriDreLavouraTab() {
       {rateio && (
         <RateioDetalheModal aberto onFechar={() => setRateio(null)}
           titulo={rateio.titulo} dados={rateio.dados} tipo={rateio.tipo}
-          rateioDentro={rateioDentro}
+          rateioDentro={rateioDentro} pool={rateio.pool}
           onAbrirLancamento={(id) => { void abrirLancamento(id); }} />
       )}
 
@@ -1181,14 +1185,19 @@ function LinhaDre({
         const v = valorDaLinha(l, def);
         const rat = def.bloco && rateioDentro ? (l.rateado ?? 0) : 0;
         const cor = def.corPorSinal ? corDoSinal(v) : corLinha;
+        /* ⚠ A LINHA DO RATEIO COMPARTILHADO ABRE O POOL INTEIRO (§2), com `p_chave` nulo. Ela só
+           existe no modo "Custos diretos" — no outro o rateio está dentro dos centros e a linha
+           some, junto com a pergunta que ela responde. */
+        const ehPool = def.chave === 'rateio_compartilhado';
         const tipo = TIPO_DO_MODAL[def.chave];
         /* ⚠ DUAS PORTAS, NUNCA AS DUAS NA MESMA CÉLULA: o rateio administrativo abre o MODAL
            (ele é rateio e precisa dos dois passos desenhados); receita, deduções e juros abrem o
            DRAWER, porque cada um tem origem única e o que se quer ali é a lista. */
         const grupo = onDrill ? GRUPO_DO_DRAWER[def.chave] : undefined;
-        const aoAbrir = tipo ? () => abrir(tipo, '', def.rotulo, c.cultura)
-          : grupo && onDrill ? () => onDrill(grupo, def.rotulo, c.cultura)
-            : undefined;
+        const aoAbrir = ehPool ? () => abrir('natureza', null, def.rotulo, c.cultura)
+          : tipo ? () => abrir(tipo, '', def.rotulo, c.cultura)
+            : grupo && onDrill ? () => onDrill(grupo, def.rotulo, c.cultura)
+              : undefined;
         return (
           <Fragment key={c.cultura}>
             {/* ⚠ AS TRÊS CÉLULAS ABREM A MESMA LISTA (§5), e não só a de R$: são a MESMA linha
