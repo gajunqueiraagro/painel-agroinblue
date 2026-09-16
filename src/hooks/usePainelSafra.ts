@@ -59,6 +59,49 @@ export interface TalhaoProdutividade {
   cargas: number;
 }
 
+/**
+ * UMA NOTA DE ENTREGA DIRETA — uma linha de `entrega.por_nf`.
+ *
+ * ⚠ SEM COMPRADOR, e isto é o contrato do banco, não um esquecimento da tela:
+ * `fn_painel_safra_entrega` monta `por_nf` com `nf, data, cargas, toneladas, rendimento_g, valor`
+ * e nada mais. Inventar a indústria aqui — casando a NF com a carga — daria um segundo caminho
+ * para a mesma pergunta, e ele discordaria no dia em que uma nota tivesse duas.
+ */
+export interface NotaDeEntrega {
+  nf: string;
+  data: string | null;
+  cargas: number;
+  toneladas: number;
+  rendimento_g: number | null;
+  valor: number;
+}
+
+/**
+ * O BLOCO DA ENTREGA DIRETA — `fn_painel_safra_entrega`, filha de `fn_painel_safra`.
+ *
+ * ⚠ `null` NO BLOCO INTEIRO quando a cultura não tem carga com tonelada: a RPC devolve
+ * `case when (select t from tot) is null then null`. Ausência é ausência; um objeto zerado diria
+ * "entreguei nada" onde o certo é "não há entrega aqui".
+ * ⚠ E OS CAMPOS DE RAZÃO SÃO `number | null` DE PROPÓSITO — `preco_t`, `servicos_t` e
+ * `rendimento_medio_g` saem `null` quando não há tonelada para dividir. Lê-los com o `num()` desta
+ * casa (que devolve 0) apagaria a diferença entre "R$ 0,00 por tonelada" e "ainda não sei" — foi
+ * exatamente o defeito do `equilibrio` no PR-DRE-LAVOURA-03.
+ */
+export interface EntregaDireta {
+  toneladas_bruto: number;
+  desconto_t: number;
+  toneladas: number;
+  rendimento_medio_g: number | null;
+  receita_bruta: number;
+  deducoes: number;
+  a_receber: number;
+  preco_t: number | null;
+  servicos_total: number;
+  servicos_t: number | null;
+  cargas: number;
+  por_nf: NotaDeEntrega[];
+}
+
 export interface PainelSafra {
   area_ha: number;
   /** Sacas boas + grão de roça — é o que a RPC soma. */
@@ -83,11 +126,38 @@ export interface PainelSafra {
   natureza: NaturezaCusto[];
   /** Saídas da safra que NÃO compõem DRE — existem e o operador precisa saber. */
   fora_do_custeio: number;
+  /** `null` na cultura que estoca em saca — ver `EntregaDireta`. */
+  entrega: EntregaDireta | null;
 }
 
 const num = (v: unknown): number => {
   const n = Number(v);
   return isFinite(n) ? n : 0;
+};
+
+/**
+ * ⚠ O IRMÃO QUE NÃO INVENTA ZERO. `num()` devolve 0 para `null`, e isso é o certo num total; num
+ * campo que a RPC deixa nulo de propósito é o defeito do `equilibrio` (PR-DRE-LAVOURA-03): a tela
+ * checava `== null` e a checagem nunca disparava, porque o parser já havia decidido por ela.
+ */
+/**
+ * Um objeto do JSON da RPC, estreitado SEM `as` (zero-cast é regra do CLAUDE.md).
+ *
+ * ⚠ `Object.entries` É O ESTREITAMENTO: ele aceita o `object` que o `typeof` já provou e devolve
+ * pares tipados, então a cópia nasce `Record<string, unknown>` por construção. Um `as` aqui
+ * afirmaria a forma; isto a verifica.
+ */
+function objeto(v: unknown): Record<string, unknown> {
+  if (v == null || typeof v !== 'object' || Array.isArray(v)) return {};
+  const saida: Record<string, unknown> = {};
+  for (const [k, valor] of Object.entries(v)) saida[k] = valor;
+  return saida;
+}
+
+const numOuNulo = (v: unknown): number | null => {
+  if (v == null) return null;
+  const n = Number(v);
+  return isFinite(n) ? n : null;
 };
 
 export function usePainelSafra(
@@ -155,6 +225,32 @@ export function usePainelSafra(
           valor: num(x?.valor),
         })),
         fora_do_custeio: num(j.fora_do_custeio),
+        /* ⚠ O BLOCO INTEIRO PODE SER NULO, e o `&&` guarda os dois casos: cultura de saca (a RPC
+           nem monta o objeto) e cultura de entrega sem nenhuma carga com tonelada. */
+        entrega: j.entrega == null ? null : (() => {
+          const e = objeto(j.entrega);
+          return {
+            toneladas_bruto: num(e.toneladas_bruto),
+            desconto_t: num(e.desconto_t),
+            toneladas: num(e.toneladas),
+            rendimento_medio_g: numOuNulo(e.rendimento_medio_g),
+            receita_bruta: num(e.receita_bruta),
+            deducoes: num(e.deducoes),
+            a_receber: num(e.a_receber),
+            preco_t: numOuNulo(e.preco_t),
+            servicos_total: num(e.servicos_total),
+            servicos_t: numOuNulo(e.servicos_t),
+            cargas: num(e.cargas),
+            por_nf: (Array.isArray(e.por_nf) ? e.por_nf : []).map((x: Record<string, unknown>) => ({
+              nf: String(x?.nf ?? '—'),
+              data: x?.data == null ? null : String(x.data),
+              cargas: num(x?.cargas),
+              toneladas: num(x?.toneladas),
+              rendimento_g: numOuNulo(x?.rendimento_g),
+              valor: num(x?.valor),
+            })),
+          };
+        })(),
       };
     },
   });

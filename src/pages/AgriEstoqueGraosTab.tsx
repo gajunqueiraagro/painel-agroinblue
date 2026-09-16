@@ -283,6 +283,20 @@ export function AgriEstoqueGraosTab() {
   const { linhas, carregando, erro } = useEstoqueGraos(
     clienteId, safraId || null, verTodas ? null : (cultura || null), localId || null);
   const resumo = useEstoqueGraosResumo(clienteId, safraId || null, verTodas, localId || null);
+  /**
+   * ⚠ O MESMO MAPA QUE GOVERNA O SELETOR, agora sobre a TABELA DE "TODAS" — AGRI-MANDIOCA-01c §6.
+   * `fn_estoque_graos_resumo` monta a lista final a partir de `agri_safra_area` em LEFT JOIN
+   * (`from culturas cu left join por_cultura pc`), com `coalesce(...,0)` em tudo: TODA cultura com
+   * área ativa ganha linha, e a que não estoca ganha linha ZERADA. A mandioca aparecia aqui como
+   * linha-botão que não ia a lugar nenhum — clicar chamava `setCultura('mandioca')` e o efeito
+   * logo abaixo, que vigia `culturasDaSafra`, devolvia na hora para "Todas".
+   * ⚠ O FILTRO DE `culturasDaSafra` NÃO ALCANÇAVA ISTO: ele governa os TALHÕES, e esta lista vem
+   * da RPC. Duas fontes para "quais culturas existem", e só uma passava pelo mapa.
+   * ⚠ NO FRONT, E NÃO NA RPC: a função é do arquiteto e serve outros leitores; a regra de quem
+   * estoca é do modelo comercial, que mora aqui.
+   */
+  const culturasNoEstoque = useMemo(
+    () => resumo.culturas.filter(c => !ehEntregaDireta(c.cultura)), [resumo.culturas]);
   /* ⚠ SEM `p_local_id`: o bloco responde "onde está", então filtrar por um local o deixaria com
      uma linha só — a resposta seria a pergunta. */
   const porLocal = useEstoqueGraosPorLocal(
@@ -293,14 +307,14 @@ export function AgriEstoqueGraosTab() {
      em "Todas". Quem quer saldo em "Todas" lê a tabela, que separa por unidade e soma por coluna.
      O `valor` soma porque real é real. */
   const totalResumo = useMemo(() => ({
-    valor: resumo.culturas.reduce((a, c) => a + c.valor, 0),
+    valor: culturasNoEstoque.reduce((a, c) => a + c.valor, 0),
     /* ⚠ ESTES DOIS SOMAM LEGITIMAMENTE POR MOTIVOS DIFERENTES: `recebido` é real, e real soma
        sempre. `entregue` é quantidade, e quantidades de unidades diferentes NÃO somam — mas
        aqui ele só aparece no subrótulo do cartão, ao lado do dinheiro, e some quando há mais de
        uma unidade na safra. Ver `unidadesDoResumo`, abaixo. */
-    recebido: resumo.culturas.reduce((a, c) => a + c.recebido, 0),
-    entregue: resumo.culturas.reduce((a, c) => a + c.entregue, 0),
-  }), [resumo.culturas]);
+    recebido: culturasNoEstoque.reduce((a, c) => a + c.recebido, 0),
+    entregue: culturasNoEstoque.reduce((a, c) => a + c.entregue, 0),
+  }), [culturasNoEstoque]);
 
   /**
    * AS UNIDADES PRESENTES NO RESUMO — e o cartão só mostra a quantidade quando há UMA.
@@ -310,8 +324,8 @@ export function AgriEstoqueGraosTab() {
    * com só amendoim, é exatamente o número que o histórico daquela cultura mostra.
    */
   const unidadesDoResumo = useMemo(
-    () => new Set(resumo.culturas.filter(c => c.entregue > 0).map(c => unidadeCurtaDaCultura(c.cultura))),
-    [resumo.culturas]);
+    () => new Set(culturasNoEstoque.filter(c => c.entregue > 0).map(c => unidadeCurtaDaCultura(c.cultura))),
+    [culturasNoEstoque]);
 
   /**
    * O "% COLHIDO PARADO" DA SAFRA INTEIRA — o cartão que em "Todas" mostrava "—".
@@ -331,13 +345,13 @@ export function AgriEstoqueGraosTab() {
   const pctParadoTodas = useMemo(() => {
     let paradoKg = 0;
     let colhidoKg = 0;
-    for (const c of resumo.culturas) {
+    for (const c of culturasNoEstoque) {
       const kg = kgPorUnidade(c.cultura);
       paradoKg += c.saldo * kg;
       colhidoKg += c.colhido * kg;
     }
     return colhidoKg > 0 ? (paradoKg / colhidoKg) * 100 : null;
-  }, [resumo.culturas]);
+  }, [culturasNoEstoque]);
 
   /**
    * O TOTAL DE CADA COLUNA DE UNIDADE — e cada uma soma SÓ o que é da mesma unidade.
@@ -350,13 +364,13 @@ export function AgriEstoqueGraosTab() {
    */
   const totaisPorUnidade = useMemo(() => {
     const acc = new Map<ChaveUnidade, number>();
-    for (const c of resumo.culturas) {
+    for (const c of culturasNoEstoque) {
       const col = colunaDaCultura(c.cultura);
       if (!col) continue;
       acc.set(col, (acc.get(col) ?? 0) + c.saldo);
     }
     return acc;
-  }, [resumo.culturas]);
+  }, [culturasNoEstoque]);
 
   /* ───────────────────────── A VENDA AVULSA ─────────────────────────
    * ⚠ A FAZENDA SAI DO TALHÃO, não de um contexto global: a RPC exige `p_fazenda_id`, e esta tela
@@ -958,11 +972,11 @@ export function AgriEstoqueGraosTab() {
                     <Loader2 className="h-3.5 w-3.5 animate-spin" /> Carregando…
                   </span>
                 </td></tr>
-              ) : resumo.culturas.length === 0 ? (
+              ) : culturasNoEstoque.length === 0 ? (
                 <tr><td colSpan={5} className="px-2 py-6 text-center text-[10px] text-muted-foreground">
                   Esta safra ainda não tem área cadastrada.
                 </td></tr>
-              ) : resumo.culturas.map(c => (
+              ) : culturasNoEstoque.map(c => (
                 /* ⚠ A LINHA INTEIRA É O BOTÃO, não um ícone no fim: o gesto é "quero ver esta
                     cultura", e o alvo é o nome dela. */
                 <tr key={c.cultura}
@@ -1013,7 +1027,7 @@ export function AgriEstoqueGraosTab() {
                   </td>
                 </tr>
               ))}
-              {resumo.culturas.length > 0 && !resumo.erro && !resumo.carregando && (
+              {culturasNoEstoque.length > 0 && !resumo.erro && !resumo.carregando && (
                 <tr className={cn(CINZA_CABECALHO, 'text-white')}>
                   <td className="px-2 py-1 text-[11px] font-bold">Total</td>
                   {/* ⚠ CADA COLUNA SOMA A SUA, e é só isso que torna este total legítimo: antes

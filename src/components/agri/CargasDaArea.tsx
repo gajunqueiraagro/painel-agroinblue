@@ -13,11 +13,18 @@
  * ⚠ CABEÇALHO FIXO, SÓ AS LINHAS ROLAM (A21). A rolagem está no container da tabela, não na
  * página: quem confere uma carga precisa do nome da coluna à vista.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Plus, Trash2, Pencil } from 'lucide-react';
 import { ehEntregaDireta } from '@/lib/agri/modeloComercial';
-import { CargasEntregaDireta } from '@/components/agri/CargasEntregaDireta';
+import { CargasEntregaDireta, type CargaAgrupada } from '@/components/agri/CargasEntregaDireta';
+import {
+  CargaMandiocaModal, cargaMandiocaVazia, type CargaMandiocaForm,
+} from '@/components/agri/CargaMandiocaModal';
+import {
+  useCargaMandioca, useContextoCargaMandioca, TIPOS_SERVICO,
+  type LancamentoTravado, type ParametrosCarga,
+} from '@/hooks/useCargaMandioca';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { formatNum, formatarNF } from '@/lib/calculos/formatters';
@@ -210,7 +217,7 @@ export interface TalhaoDaLista {
 export function CargasDaArea({
   clienteId, talhoes, talhoesDaCultura, talhaoDestino, cultura, safraRotulo,
   linhas, salvarCarga, excluirCarga, somenteLeitura, rotuloTotal,
-  vendaPorCarga, industriaPorId,
+  vendaPorCarga, industriaPorId, rendimentoMedioG, aoGravarCarga,
 }: {
   clienteId: string | null | undefined;
   /**
@@ -251,10 +258,34 @@ export function CargasDaArea({
    */
   vendaPorCarga?: ReturnType<typeof useColheita>['vendaPorCarga'];
   industriaPorId?: ReturnType<typeof useColheita>['industriaPorId'];
+  /**
+   * O g médio do rodapé da lista — `entrega.rendimento_medio_g` da RPC.
+   *
+   * ⚠ ELE VEM DE FORA porque é da SAFRA, não do recorte: quem chama já tem o painel carregado, e
+   * pedi-lo aqui dentro daria uma segunda leitura da mesma RPC para o mesmo número.
+   */
+  rendimentoMedioG?: number | null;
+  /** Recarrega a lista e o painel depois que uma RPC de carga grava. */
+  aoGravarCarga?: () => void;
   somenteLeitura?: boolean;
 }) {
   /** `null` = modal fechado. */
   const [form, setForm] = useState<CargaForm | null>(null);
+
+  /**
+   * O ESTADO DA ENTREGA DIRETA — separado do `form` da saca, e não por organização.
+   *
+   * ⚠ SÃO DUAS GRAMÁTICAS, E NENHUM CAMPO É COMUM aos dois além de data e talhão. Um estado só,
+   * com trinta campos em que metade é sempre nula, obrigaria cada leitura a perguntar "de qual
+   * cultura eu sou" — e um dia alguém leria o campo da outra sem perceber.
+   */
+  const [formMandioca, setFormMandioca] = useState<CargaMandiocaForm | null>(null);
+  const [travados, setTravados] = useState<LancamentoTravado[]>([]);
+  const [icmsTravado, setIcmsTravado] = useState(false);
+  const { registrar, corrigir, cancelar } = useCargaMandioca();
+  const idsDaCultura = useMemo(
+    () => (talhoesDaCultura ?? talhoes).map(t => t.id), [talhoesDaCultura, talhoes]);
+  const { proposta, icmsJaNaNota } = useContextoCargaMandioca(idsDaCultura);
   /** A área da carga aberta. `''` em "Todos os talhões" antes de o operador escolher. */
   const [areaId, setAreaId] = useState('');
   const [salvando, setSalvando] = useState(false);
@@ -331,6 +362,149 @@ export function CargasDaArea({
     if (form?.id === l.id) setForm(null);
   };
 
+  /* ════════════ ENTREGA DIRETA — a carga que fala com as três RPCs ════════════ */
+
+  /**
+   * Abre uma carga NOVA já com a proposta de serviços da última da safra.
+   *
+   * ⚠ A PROPOSTA É BUSCADA NA ABERTURA, não guardada: o preço do arranquio muda de semana para
+   * semana, e um valor em cache proporia o de duas cargas atrás sem dizer que era velho.
+   */
+  const abrirCargaNovaMandioca = async () => {
+    const base = cargaMandiocaVazia();
+    setTravados([]);
+    setIcmsTravado(false);
+    setAreaId(talhaoDestino?.id ?? '');
+    setFormMandioca(base);
+    const p = await proposta();
+    if (p.length === 0) return;
+    setFormMandioca(f => (f && f.ids.length === 0
+      ? {
+        ...f,
+        servicos: TIPOS_SERVICO.map(({ tipo }) => {
+          const achou = p.find(x => x.tipo === tipo);
+          return { tipo, fornecedor_id: achou?.fornecedor_id ?? null, preco_t: achou?.preco_t ?? null };
+        }),
+      }
+      : f));
+  };
+
+  /**
+   * Abre uma carga GRAVADA para correção.
+   *
+   * ⚠ OS SERVIÇOS NÃO VOLTAM PREENCHIDOS, e é honestidade: o que o banco guarda é o VALOR de cada
+   * serviço, não o preço por tonelada que o gerou. Reconstituí-lo por divisão daria um número
+   * arredondado que o operador leria como "o que foi contratado" — e ele salvaria isso de volta.
+   * Em branco, o campo diz o que é verdade: para corrigir a carga, informe os preços de novo.
+   */
+  const abrirCargaMandioca = async (c: CargaAgrupada) => {
+    setTravados([]);
+    setAreaId(c.principal.safra_area_id);
+    setFormMandioca({
+      ...cargaMandiocaVazia(),
+      ids: c.ids,
+      dataColheita: c.principal.data_colheita ?? '',
+      industriaId: c.principal.industria_id,
+      industriaNome: c.comprador || null,
+      nf: c.principal.nf_produtor ?? '',
+      ticket: c.principal.ticket_balanca ?? '',
+      pesoBrutoKg: c.principal.peso_fazenda_kg != null ? formatNum(c.principal.peso_fazenda_kg, 2) : '',
+      descontoKg: c.principal.desconto_kg != null ? formatNum(c.principal.desconto_kg, 2) : '',
+      rendimentoG: c.rendimento_g != null ? String(c.rendimento_g) : '',
+      precoG: c.preco_g != null ? formatNum(c.preco_g, 2) : '',
+      observacoes: c.principal.observacoes ?? '',
+      valorBruto: c.valor,
+    });
+    setIcmsTravado(await icmsJaNaNota(c.principal.nf_produtor ?? ''));
+  };
+
+  /**
+   * ⚠ A TRAVA DO ICMS SEGUE A NF DIGITADA, e não só a carga aberta: o operador lança a segunda
+   * carga da mesma nota digitando a NF, e é nesse instante que o campo tem de travar — depois de
+   * salvar seria tarde.
+   */
+  /* ⚠ A DEPENDÊNCIA É SÓ A NF, e isso importa: com o form inteiro na lista, cada tecla digitada
+     em qualquer campo — peso, rendimento, observação — dispararia as duas consultas da trava. */
+  const nfDaCarga = formMandioca?.nf.trim() ?? '';
+  useEffect(() => {
+    if (!nfDaCarga) { setIcmsTravado(false); return; }
+    let vivo = true;
+    void icmsJaNaNota(nfDaCarga).then(v => { if (vivo) setIcmsTravado(v); });
+    return () => { vivo = false; };
+  }, [nfDaCarga, icmsJaNaNota]);
+
+  const gravarMandioca = async () => {
+    const f = formMandioca;
+    if (!f || !clienteId) return;
+    if (!areaId) { toast.error('Escolha o talhão desta carga antes de salvar.'); return; }
+    if (!f.industriaId) { toast.error('Escolha o comprador — a indústria que recebe a carga.'); return; }
+    const bruto = parseMoeda(f.pesoBrutoKg);
+    const rend = parseMoeda(f.rendimentoG);
+    const preco = parseMoeda(f.precoG);
+    /* ⚠ AS TRÊS CONDIÇÕES SÃO AS DA PRÓPRIA RPC, repetidas aqui só para dar a mensagem em
+       português antes da ida ao banco — a RPC continua sendo quem recusa. */
+    if (!bruto || bruto <= 0) { toast.error('Informe o peso bruto da carga.'); return; }
+    if (!rend || rend <= 0) { toast.error('Informe o rendimento em gramas.'); return; }
+    if (!preco || preco <= 0) { toast.error('Informe o preço por grama.'); return; }
+
+    const params: ParametrosCarga = {
+      clienteId,
+      safraAreaId: areaId,
+      data: f.dataColheita,
+      industriaId: f.industriaId,
+      nf: f.nf.trim() || null,
+      ticket: f.ticket.trim() || null,
+      pesoBrutoKg: bruto,
+      descontoKg: parseMoeda(f.descontoKg) || 0,
+      rendimentoG: rend,
+      precoG: preco,
+      servicos: f.servicos,
+      /* ⚠ ICMS TRAVADO VAI NULO, nunca o que está na caixa: a nota já levou o imposto, e mandar o
+         valor faria a RPC descartá-lo em silêncio — a tela teria prometido um lançamento. */
+      icms: icmsTravado ? null : (parseMoeda(f.icms) || null),
+      funrural: parseMoeda(f.funrural) || null,
+      observacao: f.observacoes.trim() || null,
+    };
+
+    setSalvando(true);
+    setTravados([]);
+    try {
+      const r = f.ids.length > 0 ? await corrigir(f.ids, params) : await registrar(params);
+      if (!r.ok) {
+        /* ⚠ A LISTA DE TRAVADOS FICA NO MODAL, não num toast: são linhas do Financeiro que o
+           operador precisa ler e ir desfazer, e um toast some antes de ele terminar de ler. */
+        setTravados(r.travados ?? []);
+        toast.error(r.erro === 'lancamento_realizado_ou_conciliado'
+          ? 'A carga não foi alterada: há lançamento realizado ou conciliado.'
+          : (r.erro ?? 'Não foi possível salvar a carga.'));
+        return;
+      }
+      toast.success(f.ids.length > 0 ? 'Carga corrigida.' : 'Carga lançada.');
+      setFormMandioca(null);
+      aoGravarCarga?.();
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  /**
+   * ⚠ MOTIVO OBRIGATÓRIO, e é a RPC que exige — ela recusa `motivo` vazio. A carga é documento: o
+   * cancelamento escreve a razão na observação do lançamento e da colheita, e é isso que explica,
+   * meses depois, por que a nota do produtor não tem contrapartida no Financeiro.
+   */
+  const removerMandioca = async (c: CargaAgrupada) => {
+    const motivo = window.prompt('Por que esta carga está sendo excluída?')?.trim();
+    if (!motivo) { toast.error('A exclusão precisa de um motivo.'); return; }
+    const r = await cancelar(c.ids, motivo);
+    if (!r.ok) {
+      setTravados(r.travados ?? []);
+      toast.error('A carga não foi excluída: há lançamento realizado ou conciliado.');
+      return;
+    }
+    toast.success('Carga excluída.');
+    aoGravarCarga?.();
+  };
+
   /**
    * ⚠ A MESMA FUNÇÃO DO CONSOLIDADO, sobre as linhas DESTE talhão. O rodapé da lista e a faixa
    * de métricas respondem perguntas diferentes — um talhão contra a safra —, mas pela MESMA
@@ -363,9 +537,13 @@ export function CargasDaArea({
         {/* ⚠ O BOTÃO VOLTOU A FICAR LIGADO EM "TODOS OS TALHÕES" — PR-TALHAO-NO-MODAL-12. Ele
             ficava apagado porque a FK precisa de UM talhão e o contexto não tinha qual; agora
             quem responde isso é o seletor do modal, que abre vazio e exige escolha. */}
+        {/* ⚠ O MESMO BOTÃO, DOIS MODAIS — a escolha é do mapa, como tudo nesta tela. */}
         <Button variant="outline" size="sm" className="h-7 gap-1 text-[11px]"
           disabled={somenteLeitura}
-          onClick={() => { setAreaId(talhaoDestino?.id ?? ''); setForm(cargaVazia()); }}>
+          onClick={() => {
+            if (ehEntregaDireta(cultura)) { void abrirCargaNovaMandioca(); return; }
+            setAreaId(talhaoDestino?.id ?? ''); setForm(cargaVazia());
+          }}>
           <Plus className="h-3 w-3" /> Nova carga
         </Button>
       </div>
@@ -387,8 +565,9 @@ export function CargasDaArea({
             linhas={linhas} vendaPorCarga={vendaPorCarga ?? new Map()}
             industriaPorId={industriaPorId ?? new Map()}
             nomePorId={nomePorId} fazPorId={fazPorId} somenteLeitura={somenteLeitura}
-            onEditar={l => { setAreaId(l.safra_area_id); setForm(doBanco(l)); }}
-            onExcluir={l => { void remover(l); }} />
+            rendimentoMedioG={rendimentoMedioG}
+            onEditar={c => { void abrirCargaMandioca(c); }}
+            onExcluir={c => { void removerMandioca(c); }} />
         ) : (
         <table className="w-full table-fixed border-collapse text-[10px] leading-tight">
           {/* ⚠ `colgroup` E NÃO largura nos `th`: a largura declarada na célula vale só
@@ -541,6 +720,26 @@ export function CargasDaArea({
         onFechar={() => setForm(null)}
         onSalvar={() => { void gravar(); }}
               clienteId={clienteId}
+      />
+
+      {/* ⚠ O MODAL IRMÃO DA ENTREGA DIRETA. Os dois convivem montados porque cada um só abre com
+          o SEU form preenchido, e nunca os dois ao mesmo tempo: o gesto que abre um é o mesmo que
+          deixa o outro nulo. */}
+      <CargaMandiocaModal
+        aberto={!!formMandioca}
+        form={formMandioca}
+        clienteId={clienteId}
+        areas={areasParaEscolha}
+        areaId={areaId}
+        safraRotulo={safraRotulo ?? ''}
+        fazendaNome={talhaoDestino?.fazendaNome ?? talhoes[0]?.fazendaNome ?? null}
+        salvando={salvando}
+        icmsTravado={icmsTravado}
+        travados={travados}
+        onAreaChange={setAreaId}
+        onChange={setFormMandioca}
+        onFechar={() => { setFormMandioca(null); setTravados([]); }}
+        onSalvar={() => { void gravarMandioca(); }}
       />
     </div>
   );

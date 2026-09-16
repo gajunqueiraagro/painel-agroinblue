@@ -1,0 +1,323 @@
+/**
+ * A CARGA DE MANDIOCA — as três RPCs que gravam, corrigem e cancelam.
+ *
+ * ⚠ TODA ESCRITA PASSA POR RPC, nenhuma por `insert` daqui. Uma carga de entrega direta não é só
+ * uma linha de `agri_colheita`: ela nasce junto de até seis lançamentos financeiros (venda, ICMS,
+ * Funrural, arranquio, frete, carregamento) e dos vínculos que os amarram por `papel`. Gravar a
+ * colheita pela tela e os lançamentos "depois" deixaria a metade de fora no primeiro erro de rede.
+ * ⚠ AS TRÊS FALAM DIALETOS DIFERENTES, e o front tem de saber disso:
+ *   · `registrar` devolve o objeto da carga e NÃO traz `ok` — sucesso é não ter exceção;
+ *   · `cancelar` devolve `{ok:false, travados[]}` quando algum lançamento já foi realizado ou
+ *     conciliado, e aí NADA foi tocado;
+ *   · `corrigir` é cancelar + registrar, então herda o `{ok:false}` do primeiro.
+ * Ler `ok !== false` é o único teste que serve para as três.
+ */
+import { useCallback } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+
+/** Um lançamento que impede o cancelamento — já realizado ou conciliado. */
+export interface LancamentoTravado {
+  lancamento_id: string;
+  descricao: string | null;
+  status: string | null;
+}
+
+export interface RespostaCarga {
+  ok: boolean;
+  erro?: string;
+  travados?: LancamentoTravado[];
+  /** Só no sucesso de `registrar`/`corrigir`. */
+  valorBruto?: number | null;
+  toneladas?: number | null;
+  servicosTotal?: number | null;
+  icmsLancado?: boolean;
+}
+
+/** Os três serviços que a carga paga por tonelada. */
+export type TipoServico = 'arranquio' | 'frete' | 'carregamento';
+
+export const TIPOS_SERVICO: ReadonlyArray<{ tipo: TipoServico; rotulo: string }> = [
+  { tipo: 'arranquio', rotulo: 'Arranquio' },
+  { tipo: 'frete', rotulo: 'Frete' },
+  { tipo: 'carregamento', rotulo: 'Carregamento' },
+];
+
+export interface ServicoDaCarga {
+  tipo: TipoServico;
+  fornecedor_id: string | null;
+  /** R$ por tonelada — o que o prestador cobra, não o total da carga. */
+  preco_t: number | null;
+}
+
+export interface ParametrosCarga {
+  clienteId: string;
+  safraAreaId: string;
+  data: string;
+  industriaId: string;
+  nf: string | null;
+  ticket: string | null;
+  pesoBrutoKg: number;
+  descontoKg: number;
+  rendimentoG: number;
+  precoG: number;
+  servicos: ServicoDaCarga[];
+  icms: number | null;
+  funrural: number | null;
+  observacao: string | null;
+}
+
+const num = (v: unknown): number | null => {
+  if (v == null) return null;
+  const n = Number(v);
+  return isFinite(n) ? n : null;
+};
+
+/**
+ * ⚠ O ESTREITAMENTO SEM `as` — a mesma regra de `usePainelSafra`. `Object.entries` aceita o
+ * `object` que o `typeof` provou e devolve pares tipados, então a cópia nasce com a forma certa
+ * por construção, em vez de por afirmação.
+ */
+function objeto(v: unknown): Record<string, unknown> {
+  if (v == null || typeof v !== 'object' || Array.isArray(v)) return {};
+  const saida: Record<string, unknown> = {};
+  for (const [k, valor] of Object.entries(v)) saida[k] = valor;
+  return saida;
+}
+
+function lerTravados(v: unknown): LancamentoTravado[] {
+  if (!Array.isArray(v)) return [];
+  return v.map(x => {
+    const o = objeto(x);
+    return {
+      lancamento_id: String(o.lancamento_id ?? ''),
+      descricao: o.descricao == null ? null : String(o.descricao),
+      status: o.status == null ? null : String(o.status),
+    };
+  });
+}
+
+/** A resposta de qualquer uma das três, no mesmo idioma. */
+function lerResposta(r: unknown): RespostaCarga {
+  const o = objeto(r);
+  /* ⚠ `ok` AUSENTE É SUCESSO, e não falta de resposta: `registrar` devolve a carga gravada sem
+     envelope. Testar `o.ok === true` reprovaria toda gravação bem-sucedida. */
+  if (o.ok === false) {
+    return {
+      ok: false,
+      erro: o.motivo == null ? undefined : String(o.motivo),
+      travados: lerTravados(o.travados),
+    };
+  }
+  return {
+    ok: true,
+    valorBruto: num(o.valor_bruto),
+    toneladas: num(o.toneladas),
+    servicosTotal: num(o.servicos_total),
+    icmsLancado: o.icms_lancado === true,
+  };
+}
+
+const servicosParaRpc = (servicos: readonly ServicoDaCarga[]) => servicos
+  /* ⚠ SÓ O QUE TEM PRESTADOR E PREÇO: a RPC pula preço zero, mas levanta exceção quando o
+     `fornecedor_id` não resolve — mandar a linha vazia derrubaria a gravação inteira. */
+  .filter(s => s.fornecedor_id && s.preco_t != null && s.preco_t > 0)
+  .map(s => ({ tipo: s.tipo, fornecedor_id: s.fornecedor_id, preco_t: s.preco_t }));
+
+export function useCargaMandioca() {
+  /**
+   * Grava uma carga nova.
+   *
+   * ⚠ O ERRO DO BANCO VAI INTEIRO PARA A TELA — a RPC recusa por exceção nomeada ("peso bruto
+   * obrigatorio", "talhao sem fazenda", "esta RPC e so para mandioca"), e essas frases dizem o que
+   * corrigir. "Não foi possível salvar" manda o operador adivinhar.
+   */
+  const registrar = useCallback(async (p: ParametrosCarga): Promise<RespostaCarga> => {
+    const { data, error } = await (supabase as any).rpc('agri_carga_mandioca_registrar', {
+      p_cliente: p.clienteId,
+      p_safra_area_id: p.safraAreaId,
+      p_data: p.data,
+      p_industria_id: p.industriaId,
+      p_nf: p.nf,
+      p_ticket: p.ticket,
+      p_peso_bruto_kg: p.pesoBrutoKg,
+      p_desconto_kg: p.descontoKg,
+      p_rendimento_g: p.rendimentoG,
+      p_preco_g: p.precoG,
+      p_servicos: servicosParaRpc(p.servicos),
+      p_icms: p.icms,
+      p_funrural: p.funrural,
+      p_observacao: p.observacao,
+    });
+    if (error) return { ok: false, erro: error.message };
+    return lerResposta(data);
+  }, []);
+
+  /**
+   * Cancela a carga inteira — TODAS as colheitas que a compõem.
+   *
+   * ⚠ A PRIMEIRA CHAMADA É O PORTÃO, e isso não é otimismo: as metades de uma carga apontam para
+   * o MESMO lançamento de venda (é essa partilha que as agrupa na lista). `cancelar` só recusa por
+   * lançamento ativo realizado ou conciliado; depois que a primeira passa, o lançamento partilhado
+   * já está `cancelado=true` e as seguintes não têm mais o que travar. Então: se a primeira
+   * recusa, NADA mudou — que é o que o §3 exige.
+   */
+  const cancelar = useCallback(async (
+    ids: readonly string[], motivo: string,
+  ): Promise<RespostaCarga> => {
+    let primeira: RespostaCarga = { ok: true };
+    for (const id of ids) {
+      const { data, error } = await (supabase as any).rpc('agri_carga_mandioca_cancelar', {
+        p_colheita_id: id, p_motivo: motivo,
+      });
+      if (error) return { ok: false, erro: error.message };
+      const r = lerResposta(data);
+      if (!r.ok) return r;
+      primeira = r;
+    }
+    return primeira;
+  }, []);
+
+  /**
+   * Corrige a carga — `_corrigir` na colheita principal, e as demais metades saem depois.
+   *
+   * ⚠ POR QUE AS DUAS COISAS: `agri_carga_mandioca_corrigir` recebe UM `p_colheita_id` e devolve
+   * UMA carga nova. Numa carga do backfill, que tem duas metades, corrigir só a principal deixaria
+   * a outra viva, apontando para um lançamento já cancelado — um valor fantasma na lista. E a
+   * ordem importa: o `corrigir` é o portão (ele cancela antes de gravar e devolve `{ok:false}` sem
+   * tocar em nada), e só depois que ele passa é que as metades restantes são baixadas.
+   * ⚠ A CARGA VOLTA INTEIRA, EM UM TALHÃO SÓ. É a decisão do §1: a divisão por área do backfill
+   * não se reproduz na tela, e reproduzi-la exigiria que o operador digitasse duas vezes o mesmo
+   * romaneio.
+   */
+  const corrigir = useCallback(async (
+    ids: readonly string[], p: ParametrosCarga,
+  ): Promise<RespostaCarga> => {
+    const [principal, ...resto] = ids;
+    const { data, error } = await (supabase as any).rpc('agri_carga_mandioca_corrigir', {
+      p_colheita_id: principal,
+      p_safra_area_id: p.safraAreaId,
+      p_data: p.data,
+      p_industria_id: p.industriaId,
+      p_nf: p.nf,
+      p_ticket: p.ticket,
+      p_peso_bruto_kg: p.pesoBrutoKg,
+      p_desconto_kg: p.descontoKg,
+      p_rendimento_g: p.rendimentoG,
+      p_preco_g: p.precoG,
+      p_servicos: servicosParaRpc(p.servicos),
+      p_icms: p.icms,
+      p_funrural: p.funrural,
+      p_observacao: p.observacao,
+    });
+    if (error) return { ok: false, erro: error.message };
+    const r = lerResposta(data);
+    if (!r.ok || resto.length === 0) return r;
+    const baixa = await cancelar(resto, 'metade substituída pela carga corrigida');
+    /* ⚠ SE A BAIXA DAS METADES FALHAR, o erro aparece: a correção já gravou, e esconder isso
+       deixaria a lista com uma carga a mais sem ninguém saber por quê. */
+    if (!baixa.ok) return { ...baixa, erro: baixa.erro ?? 'A carga foi corrigida, mas uma metade antiga não pôde ser baixada.' };
+    return r;
+  }, [cancelar]);
+
+  return { registrar, corrigir, cancelar };
+}
+
+/**
+ * O CONTEXTO QUE A CARGA NOVA HERDA — a proposta de serviços e a trava do ICMS.
+ *
+ * ⚠ AS DUAS PERGUNTAS SÃO DO MESMO GESTO ("vou lançar uma carga"), e por isso moram juntas: abrir
+ * o modal dispara uma leitura, não duas telas de espera.
+ */
+export interface PropostaServico {
+  tipo: TipoServico;
+  fornecedor_id: string;
+  preco_t: number;
+}
+
+export function useContextoCargaMandioca(safraAreaIds: readonly string[]) {
+  /* Mesma chave estável do `useColheita`: o array muda de identidade a cada render. */
+  const chave = [...safraAreaIds].sort().join(',');
+
+  /**
+   * Os serviços da ÚLTIMA carga da safra, em R$/t.
+   *
+   * ⚠ O PREÇO POR TONELADA É RECONSTITUÍDO (`valor / toneladas`), porque é assim que o banco o
+   * guarda: a RPC grava `round(t * preco_t, 2)` e a coluna do preço não existe. Isto é PROPOSTA —
+   * entra em âmbar num campo que o operador confere antes de salvar —, nunca um número exibido
+   * como verdade. A diferença importa: proposta errada o operador corrige; total errado ele
+   * acredita.
+   * ⚠ E SÓ A ÚLTIMA, não uma média das anteriores: o que o arranquio custou na semana passada é
+   * um preço que existiu; a média de seis semanas é um número que ninguém negociou.
+   */
+  const proposta = useCallback(async (): Promise<PropostaServico[]> => {
+    if (!chave) return [];
+    const db = supabase as any;
+    const { data: ultima } = await db.from('agri_colheita')
+      .select('id, toneladas')
+      .in('safra_area_id', chave.split(','))
+      .eq('ativo', true)
+      .not('toneladas', 'is', null)
+      .order('data_colheita', { ascending: false })
+      .limit(1);
+    const carga = (ultima ?? [])[0] as { id: string; toneladas: number | null } | undefined;
+    if (!carga?.id || !carga.toneladas) return [];
+
+    const { data: elos } = await db.from('agri_colheita_lancamentos')
+      .select('lancamento_id, papel')
+      .eq('colheita_id', carga.id)
+      .eq('ativo', true)
+      .in('papel', TIPOS_SERVICO.map(s => s.tipo));
+    const pares = (elos ?? []) as Array<{ lancamento_id: string; papel: string }>;
+    if (pares.length === 0) return [];
+
+    const { data: lancs } = await db.from('financeiro_lancamentos_v2')
+      .select('id, valor, favorecido_id')
+      .in('id', pares.map(p => p.lancamento_id));
+    const porId = new Map<string, { valor: number | null; favorecido_id: string | null }>();
+    for (const l of (lancs ?? []) as Array<{ id: string; valor: number | null; favorecido_id: string | null }>) {
+      porId.set(l.id, { valor: l.valor, favorecido_id: l.favorecido_id });
+    }
+
+    const saida: PropostaServico[] = [];
+    for (const par of pares) {
+      const l = porId.get(par.lancamento_id);
+      const tipo = TIPOS_SERVICO.find(s => s.tipo === par.papel)?.tipo;
+      if (!tipo || !l?.favorecido_id || l.valor == null) continue;
+      saida.push({
+        tipo,
+        fornecedor_id: l.favorecido_id,
+        preco_t: Math.round((l.valor / carga.toneladas) * 100) / 100,
+      });
+    }
+    return saida;
+  }, [chave]);
+
+  /**
+   * A NF já tem ICMS lançado?
+   *
+   * ⚠ A MESMA PERGUNTA QUE A RPC FAZ, e de propósito: ela também checa antes de gravar e
+   * simplesmente ignora o ICMS repetido. Sem esta leitura o operador digitaria 2.016,00 na segunda
+   * carga da nota, a RPC descartaria em silêncio, e a tela teria mentido sobre o que gravou.
+   * ⚠ POR `papel`, NUNCA PELA DESCRIÇÃO — o mesmo idioma do `useColheita`.
+   */
+  const icmsJaNaNota = useCallback(async (nf: string): Promise<boolean> => {
+    if (!chave || !nf.trim()) return false;
+    const db = supabase as any;
+    const { data: cargas } = await db.from('agri_colheita')
+      .select('id')
+      .in('safra_area_id', chave.split(','))
+      .eq('nf_produtor', nf.trim())
+      .eq('ativo', true);
+    const ids = ((cargas ?? []) as Array<{ id: string }>).map(c => c.id);
+    if (ids.length === 0) return false;
+    const { data: elos } = await db.from('agri_colheita_lancamentos')
+      .select('colheita_id')
+      .in('colheita_id', ids)
+      .eq('papel', 'icms')
+      .eq('ativo', true)
+      .limit(1);
+    return ((elos ?? []) as unknown[]).length > 0;
+  }, [chave]);
+
+  return { proposta, icmsJaNaNota };
+}

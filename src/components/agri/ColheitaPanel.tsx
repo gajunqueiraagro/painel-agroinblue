@@ -23,7 +23,7 @@ interface Props {
 
 export function ColheitaPanel({ clienteId, areas, somenteLeitura }: Props) {
   const ids = useMemo(() => areas.map(a => a.id), [areas]);
-  const { linhas, vendaPorCarga, industriaPorId, salvarCarga, excluirCarga } = useColheita(ids);
+  const { linhas, vendaPorCarga, industriaPorId, carregar, salvarCarga, excluirCarga } = useColheita(ids);
 
   if (areas.length === 0) return null;
 
@@ -48,6 +48,10 @@ export function ColheitaPanel({ clienteId, areas, somenteLeitura }: Props) {
             linhas={linhas.filter(l => l.safra_area_id === area.id)}
             vendaPorCarga={vendaPorCarga}
             industriaPorId={industriaPorId}
+            /* ⚠ SEM `rendimentoMedioG` AQUI, e de propósito: o cadastro não carrega o painel da
+               safra, e o g médio é da SAFRA. O rodapé mostra "—" em vez de uma média do talhão
+               travestida de média da safra. */
+            aoGravarCarga={() => { void carregar(); }}
             salvarCarga={salvarCarga}
             excluirCarga={excluirCarga}
             somenteLeitura={somenteLeitura}

@@ -22,6 +22,9 @@ import { useSafrasLavoura, useTalhoesDaSafra } from '@/hooks/useAreaPlantada';
 import { useColheita } from '@/hooks/useColheita';
 import { CargasDaArea } from '@/components/agri/CargasDaArea';
 import { AnaliseProducaoModal } from '@/components/agri/AnaliseProducaoModal';
+import { FaixaEntregaDireta } from '@/components/agri/FaixaEntregaDireta';
+import { ehEntregaDireta } from '@/lib/agri/modeloComercial';
+import { usePainelSafra } from '@/hooks/usePainelSafra';
 import { ExportarColheita } from '@/components/agri/ExportarColheita';
 import {
   exportarColheitaXlsx, exportarColheitaPdf, type LinhaExport,
@@ -152,7 +155,7 @@ export function AgriColheitaTab() {
    * total logo acima dela com o número velho — na mesma tela, ao mesmo tempo.
    */
   const idsDaSafra = useMemo(() => talhoes.map(t => t.id), [talhoes]);
-  const { linhas, vendaPorCarga, industriaPorId, salvarCarga, excluirCarga } = useColheita(idsDaSafra);
+  const { linhas, vendaPorCarga, industriaPorId, carregar, salvarCarga, excluirCarga } = useColheita(idsDaSafra);
 
   const talhaoSel = talhoesDaCultura.find(t => t.id === talhaoId) ?? null;
   /** Os talhões que a lista mostra: o escolhido, ou todos os da cultura. */
@@ -190,6 +193,24 @@ export function AgriColheitaTab() {
     })) as CargaForm[];
     return totaisColheita(comoForm, culturaSel || null, areaDoRecorte);
   }, [doRecorte, culturaSel, areaDoRecorte]);
+
+  /**
+   * O PAINEL DA SAFRA — só na entrega direta, e é o mapa que decide.
+   *
+   * ⚠ A CULTURA VAI NULA NO AMENDOIM, e isso DESLIGA a consulta (`enabled: !!cultura` no hook):
+   * a tela da saca estocável não ganha nem uma ida ao banco. O consolidado dela continua vindo de
+   * `totaisColheita`, sobre as linhas que já estavam carregadas.
+   * ⚠ E É A MESMA RPC DO DRE, de propósito: a faixa do Colheita e o DRE da Lavoura têm de dizer a
+   * mesma tonelada. Somar as cargas aqui criaria um segundo número para a mesma safra.
+   */
+  const entregaDireta = ehEntregaDireta(culturaSel || null);
+  const { painel, recarregar: recarregarPainel } = usePainelSafra(
+    clienteId, safraId || null, entregaDireta ? (culturaSel || null) : null);
+  /* ⚠ AS INDÚSTRIAS SE CONTAM DAS CARGAS CARREGADAS, não de uma consulta nova: `por_nf` da RPC não
+     traz o comprador (o contrato é `nf, data, cargas, toneladas, rendimento_g, valor`), e este
+     número é do recorte que já está na tela. */
+  const nIndustrias = useMemo(
+    () => new Set(doRecorte.map(l => l.industria_id).filter(Boolean)).size, [doRecorte]);
 
   const unidade = unidadeDaCultura(culturaSel || null);
   /**
@@ -347,7 +368,18 @@ export function AgriColheitaTab() {
       </div>
 
       {/* ── FIXO: o consolidado da safra ── */}
+      {/* ⚠ DUAS GRAMÁTICAS, UMA ESCOLHA — a mesma do `CargasDaArea`, e pelo MAPA. A faixa da saca
+          conta verde → seco → sacas boas → roça → quebra → secagem; a da entrega direta conta
+          tonelada → rendimento → preço → serviços → receita. Não são a mesma faixa com campos
+          diferentes: são perguntas diferentes, e tecer condicionais nos seis cards produziria
+          cards que não sabem de quem são. */}
       <div className="shrink-0 space-y-1.5">
+        {entregaDireta ? (
+          <FaixaEntregaDireta entrega={painel?.entrega ?? null}
+            produtividade={painel?.sacas_ha ?? null} nIndustrias={nIndustrias}
+            onAbrirAnalise={() => setAnaliseAberta(true)} />
+        ) : (
+        <>
         <div className="grid grid-cols-2 gap-1.5 md:grid-cols-6">
           {/* ⚠ SEIS CARDS, UMA LINHA, RÉGUA BATIDA — espelha a matriz do modal (c90915fb).
               ⚠ "PESO SECO" SAIU: mostrava as mesmas sacas de "Sacas boas" e o fluxo caía verde →
@@ -431,6 +463,8 @@ export function AgriColheitaTab() {
             {talhaoSel && ` · ${talhaoSel.pastoNome}`}
           </span>
         </div>
+        </>
+        )}
       </div>
 
       {/* ⚠ O PAINEL LÊ O MESMO `totais` DA FAIXA ACIMA — não um segundo cálculo. Se algum dia
@@ -446,6 +480,10 @@ export function AgriColheitaTab() {
         safraRotulo={safraLabel?.codigo || safraLabel?.nome || ''}
         fazendaRotulo={fazendaRotulo}
         talhaoRotulo={talhaoRotulo}
+        /* ⚠ SÓ NA ENTREGA DIRETA: `entrega` nulo deixa o modal exatamente como era. */
+        entrega={entregaDireta ? (painel?.entrega ?? null) : null}
+        produtividadeEntrega={painel?.sacas_ha ?? null}
+        talhoesEntrega={painel?.talhoes ?? []}
       />
 
       {/* ── ROLA: as cargas do recorte ── */}
@@ -466,6 +504,11 @@ export function AgriColheitaTab() {
           linhas={doRecorte}
           vendaPorCarga={vendaPorCarga}
           industriaPorId={industriaPorId}
+          rendimentoMedioG={painel?.entrega?.rendimento_medio_g ?? null}
+          /* ⚠ AS DUAS LEITURAS SE RECARREGAM JUNTAS: a RPC de carga mexe na colheita E nos
+             lançamentos, então a lista e a faixa mudam no mesmo gesto. Recarregar só uma deixaria
+             o rodapé discordando do total logo acima dele. */
+          aoGravarCarga={() => { void carregar(); recarregarPainel(); }}
           salvarCarga={salvarCarga}
           excluirCarga={excluirCarga}
         />

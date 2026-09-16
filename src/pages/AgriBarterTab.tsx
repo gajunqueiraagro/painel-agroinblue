@@ -53,6 +53,7 @@ import {
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
 import { DatePicker } from '@/components/ui/date-picker';
 import { CULTURAS_LANCAMENTO } from '@/lib/agri/rateioLancamento';
+import { ehEntregaDireta } from '@/lib/agri/modeloComercial';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFinanceiroV2, type LancamentoV2 } from '@/hooks/useFinanceiroV2';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
@@ -156,6 +157,16 @@ export function AgriBarterTab() {
 
   const contrato = useMemo(
     () => contratos.find(c => c.id === abertoId) ?? null, [contratos, abertoId]);
+
+  /**
+   * ⚠ BARTER É TROCA DE GRÃO ESTOCÁVEL — AGRI-MANDIOCA-01c §5. Numa cultura de entrega direta a
+   * carga sai do talhão e entra na indústria no mesmo ato: não há saca guardada para pagar insumo
+   * depois, que é exatamente o que um barter negocia. O contrato de mandioca não deveria existir,
+   * e enquanto existir a tela não oferece o gesto de "lançar venda" nele.
+   * ⚠ QUEM DECIDE É O MAPA, nunca o nome. E só o GESTO NOVO some: a venda já lançada continua
+   * visível e editável, porque apagar da tela o que está gravado é pior que o gesto indevido.
+   */
+  const semVendaDeGrao = ehEntregaDireta(contrato?.cultura ?? null);
 
   /* ── A PERNA RECEBI (fatia B) ── */
   const {
@@ -509,10 +520,12 @@ export function AgriBarterTab() {
               onClick={() => setVerVendas(true)}>
               <List className="h-3 w-3" /> Ver vendas
             </Button>
-            <Button size="sm" variant="outline" className="h-6 gap-1 px-1.5 text-[10px]"
-              onClick={() => { setVendaAberta(null); setModalVenda(true); }}>
-              <Plus className="h-3 w-3" /> Lançar venda
-            </Button>
+            {!semVendaDeGrao && (
+              <Button size="sm" variant="outline" className="h-6 gap-1 px-1.5 text-[10px]"
+                onClick={() => { setVendaAberta(null); setModalVenda(true); }}>
+                <Plus className="h-3 w-3" /> Lançar venda
+              </Button>
+            )}
           </BarterResumoCard>
 
           <BarterMaterializarCard
@@ -700,10 +713,12 @@ export function AgriBarterTab() {
                   else await exportarVendasPdf(vendas, ctxExport, totalEntregue);
                 }}
               />
-              <Button size="sm" variant="acao" className="h-8 gap-1 px-2 text-[10px]"
-                onClick={() => { setVendaAberta(null); setModalVenda(true); }}>
-                <Plus className="h-3 w-3" /> Lançar venda
-              </Button>
+              {!semVendaDeGrao && (
+                <Button size="sm" variant="acao" className="h-8 gap-1 px-2 text-[10px]"
+                  onClick={() => { setVendaAberta(null); setModalVenda(true); }}>
+                  <Plus className="h-3 w-3" /> Lançar venda
+                </Button>
+              )}
             </div>
           )}
           rodapeEsquerda="Total entregue (líquido)"
@@ -809,7 +824,7 @@ export function AgriBarterTab() {
         )}
 
         <BarterVendaModal
-          aberto={modalVenda}
+          aberto={modalVenda && !semVendaDeGrao}
           venda={vendaAberta}
           clienteId={clienteId}
           safras={safras}

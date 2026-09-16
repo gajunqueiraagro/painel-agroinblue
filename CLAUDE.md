@@ -350,6 +350,14 @@ no mesmo arquivo.
   o mapa que decide se a cultura estoca em saca ou entrega direto. O caso que importa e' o da
   cultura DESCONHECIDA: ela cai em `saca_estocavel`, que e' o comportamento que todas as telas
   ja' tinham. Um mapa devolvendo `undefined` faria cada tela decidir sozinha.
+  De 1504 para 1509 no PR-AGRI-MANDIOCA-01c: entrou
+  `src/components/agri/cargasEntregaDireta.test.ts` (+5) — a regra de que UMA LINHA E' UMA CARGA.
+  O backfill gravou cada carga como DUAS colheitas (uma por metade de talhao), e a lista do 01b
+  mostrava 42 linhas para 21 cargas; o agrupamento e' pelo `lancamento_id` do papel 'venda'.
+  ⚠ O CASO QUE JUSTIFICA O ARQUIVO E' O DO VALOR: as duas metades apontam para o MESMO lancamento,
+  entao soma-las contaria o mesmo dinheiro duas vezes e o total da tela ficaria exatamente o dobro
+  do extrato. Os outros quatro travam a chave (nao e' a NF — ha' nota com varias cargas), o
+  rendimento lido e nao mediado, a carga sem elo (que fica sozinha e sem status) e o comprador.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 

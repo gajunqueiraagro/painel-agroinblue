@@ -15,6 +15,8 @@ import { ChevronRight, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatNum } from '@/lib/calculos/formatters';
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
+import { AnaliseEntregaDireta } from '@/components/agri/AnaliseEntregaDireta';
+import type { EntregaDireta, TalhaoProdutividade } from '@/hooks/usePainelSafra';
 import {
   LIMITE_AFLATOXINA, unidadeDaCultura, sacasDoPeso, pesoDasSacas, type TotaisColheita,
 } from '@/lib/agri/colheita';
@@ -76,7 +78,7 @@ function Card({ rotulo, valor, sufixo, nota, cor }: {
 
 export function AnaliseProducaoModal({
   aberto, onFechar, totais, cultura, areaHa, safraRotulo, avisoCulturas,
-  fazendaRotulo, talhaoRotulo,
+  fazendaRotulo, talhaoRotulo, entrega, produtividadeEntrega, talhoesEntrega,
 }: {
   aberto: boolean;
   onFechar: () => void;
@@ -99,6 +101,18 @@ export function AnaliseProducaoModal({
   talhaoRotulo?: string;
   /** Preenchido quando a safra tem mais de uma cultura: as produtividades não se misturam. */
   avisoCulturas?: string;
+  /**
+   * O BLOCO DA ENTREGA DIRETA — quando vem, o corpo inteiro é outro (§4).
+   *
+   * ⚠ OPCIONAL, e por isso a tela da saca não muda: sem ele o modal é byte a byte o de antes.
+   * ⚠ O CABEÇALHO CONTINUA SENDO O MESMO para as duas: o recorte que gerou a análise é a mesma
+   * pergunta em qualquer cultura.
+   */
+  entrega?: EntregaDireta | null;
+  /** t/ha da safra — só a entrega direta usa. */
+  produtividadeEntrega?: number | null;
+  /** Produtividade por talhão, da RPC — só a entrega direta usa. */
+  talhoesEntrega?: readonly TalhaoProdutividade[];
 }) {
   const unidade = unidadeDaCultura(cultura);
   const temSaca = unidade.kgPorSaca != null;
@@ -210,6 +224,15 @@ export function AnaliseProducaoModal({
           </button>
         </div>
 
+        {/* ⚠ DUAS ANÁLISES, UMA ESCOLHA — e ela é de quem CHAMA, que é quem tem o painel da
+            safra carregado. Buscar a RPC aqui dentro daria uma segunda leitura do mesmo dado. */}
+        {entrega ? (
+          <div className="space-y-3 bg-muted/30 p-4">
+            <AnaliseEntregaDireta entrega={entrega}
+              produtividade={produtividadeEntrega ?? null}
+              talhoes={talhoesEntrega ?? []} />
+          </div>
+        ) : (
         <div className="space-y-3 bg-muted/30 p-4">
           {avisoCulturas && (
             /* ⚠ SAFRA COM DUAS CULTURAS NÃO TEM UMA PRODUTIVIDADE: somar sacas de amendoim com
@@ -400,6 +423,7 @@ export function AnaliseProducaoModal({
           </div>
           </div>
         </div>
+        )}
       </DialogContent>
     </Dialog>
   );
