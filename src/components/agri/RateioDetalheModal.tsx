@@ -18,10 +18,11 @@
  * ⚠ A LEI DO GRÁFICO COMPACTO CONTINUA VALENDO: caixa de tamanho declarado, sem `ResponsiveContainer`
  * espalhando o donut pela largura do modal.
  */
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { PieChart, Pie, Cell } from 'recharts';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
+import { Segmentado } from '@/components/ui/segmentado';
 import { Button } from '@/components/ui/button';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -205,6 +206,25 @@ const fatiaAtual = (d: RateioDetalhe) => d.fatias.find(f => f.atual) ?? null;
  * fatia do compartilhado, e um número só somando os dois faria o operador procurar uma nota
  * fiscal de um valor que nunca foi lançado.
  */
+/**
+ * A PRIMEIRA LINHA DO SUBTÍTULO — o número que o operador acabou de clicar, e nenhum outro.
+ *
+ * ⚠ ELA DEPENDE DO TOGGLE DA GRADE, e é esse o ponto: "dentro dos centros" mostra o total
+ * (direto + fatia) e "em linha própria" mostra só o direto. O modal precisa dizer o mesmo, ou a
+ * primeira coisa que o operador lê já contradiz a célula de onde ele veio.
+ * ⚠ SEM O TOGGLE (admin, ou chamada de outra tela) ela dá o total — que é o que o modal sempre
+ * disse, e continua certo.
+ */
+export function ecoDaCelula(
+  d: RateioDetalhe, tipo: TipoRateio, rateioDentro?: boolean,
+): string {
+  const fatia = fatiaAtual(d)?.valor ?? 0;
+  if (tipo !== 'admin' && rateioDentro === false) {
+    return `${formatMoeda(d.direto_cultura)} direto nesta cultura`;
+  }
+  return `${formatMoeda(d.direto_cultura + fatia)} nesta cultura`;
+}
+
 export function subtituloDoRateio(d: RateioDetalhe, tipo: TipoRateio): string {
   const fatia = fatiaAtual(d)?.valor ?? 0;
   /**
@@ -347,7 +367,7 @@ function ListaLancamentos({ linhas, rotuloTotal, onAbrir }: {
 }
 
 export function RateioDetalheModal({
-  aberto, onFechar, titulo, subtitulo, dados, tipo, onAbrirLancamento,
+  aberto, onFechar, titulo, subtitulo, dados, tipo, onAbrirLancamento, rateioDentro,
 }: {
   aberto: boolean;
   onFechar: () => void;
@@ -366,6 +386,17 @@ export function RateioDetalheModal({
   tipo: TipoRateio;
   /** Abre o lançamento clicado. Sem ela as listas continuam de leitura, como antes. */
   onAbrirLancamento?: (id: string) => void;
+  /**
+   * O estado do toggle "Rateio compartilhado" da grade que abriu este modal.
+   *
+   * ⚠ ELE EXISTE PARA O TÍTULO ECOAR A CÉLULA CLICADA. Com o toggle desligado a tabela mostra
+   * 1.121.599,85 (só o direto) e o modal abria dizendo 1.172.900,53 — o número certo do centro,
+   * mas não o que o dedo apontou. Dois números certos e discordantes na mesma ação é o começo de
+   * toda desconfiança de relatório.
+   * ⚠ E ELE TAMBÉM ESCOLHE A ABA INICIAL: desligado, o operador veio olhar o direto; ligado,
+   * veio entender a divisão.
+   */
+  rateioDentro?: boolean;
 }) {
   const totalArea = useMemo(
     () => dados.fatias.reduce((a, f) => a + f.area_ha, 0), [dados.fatias]);
@@ -388,7 +419,31 @@ export function RateioDetalheModal({
   /* ⚠ O ADMIN CONTINUA COM DUAS ABAS. Lá a lista é o custo do escritório INTEIRO e não se divide
      em "meu" e "comum" — a repartição dele é por atividade, que é o que o passo 1 desenha.
      Três abas ali inventariam um recorte que o dado não tem. */
-  const tresAbas = tipo !== 'admin';
+  const admin = tipo === 'admin';
+  /* ⚠ AS ABAS DE RATEIO SÓ EXISTEM QUANDO HÁ RATEIO PARA EXPLICAR (§10): pool zero, ou uma
+     cultura só na safra, e não há divisão nenhuma — o donut teria uma fatia e a tabela uma
+     linha. Nesse caso o modal vira o que o operador foi buscar: a lista daquele centro naquela
+     cultura, sem barra de abas. Mesmo componente, mesma chamada, mesma lista. */
+  const temDivisao = dados.pool > 0 && dados.fatias.length > 1;
+  const tresAbas = !admin && temDivisao;
+  const semAbas = !admin && !temDivisao;
+
+  /* ⚠ AS ABAS VIRARAM ESTADO CONTROLADO porque a barra deixou de ser a `TabsList` do Radix e
+     passou a ser o `Segmentado` da casa (regra de UI do PR-04). O `Tabs` continua governando o
+     CONTEÚDO — é ele que monta e desmonta cada `TabsContent`; o que mudou foi quem desenha a
+     escolha. */
+  const abaInicial = semAbas || (tresAbas && rateioDentro === false) ? 'diretos' : 'rateio';
+  const [abaAtual, setAbaAtual] = useState(abaInicial);
+  const opcoesDeAba = tresAbas
+    ? [
+      { valor: 'diretos', rotulo: `Custos diretos · ${diretos.length}` },
+      { valor: 'rateio', rotulo: 'Divisão do rateio' },
+      { valor: 'rateados', rotulo: `Rateados · ${rateados.length}` },
+    ]
+    : [
+      { valor: 'rateio', rotulo: 'Rateio' },
+      { valor: 'lancamentos', rotulo: `Lançamentos · ${dados.lancamentos.length}` },
+    ];
 
   return (
     <Dialog open={aberto} onOpenChange={o => { if (!o) onFechar(); }}>
@@ -401,11 +456,25 @@ export function RateioDetalheModal({
         className={cn('flex h-[80vh] max-w-3xl flex-col gap-0 overflow-hidden p-0',
           '[&>button.absolute]:hidden')}>
         <div className="flex shrink-0 items-start gap-2 bg-primary px-4 py-2.5 text-primary-foreground">
+          {/* ⚠ DUAS LINHAS (§1b): a primeira É O NÚMERO QUE O DEDO APONTOU, em 14px; a segunda é a
+              conta que o explica, em 11px. Antes havia uma só, e ela dava o total com rateio
+              mesmo quando a tabela estava mostrando o direto — o operador clicava em
+              1.121.599,85 e o modal respondia 1.172.900,53. */}
           <div className="min-w-0">
             <h2 className="truncate text-[15px] font-bold leading-tight">{titulo}</h2>
-            <p className="mt-0.5 text-[11px] text-primary-foreground/80">
-              {subtitulo ?? subtituloDoRateio(dados, tipo)}
-            </p>
+            {subtitulo ? (
+              <p className="mt-0.5 text-[11px] text-primary-foreground/80">{subtitulo}</p>
+            ) : (
+              <>
+                <p className="mt-0.5 truncate text-[14px] font-medium leading-tight">
+                  {ecoDaCelula(dados, tipo, rateioDentro)}
+                </p>
+                <p className="mt-0.5 text-[11px] text-primary-foreground/80">
+                  {rateioDentro === false ? 'Com o rateio dentro: ' : ''}
+                  {subtituloDoRateio(dados, tipo)}
+                </p>
+              </>
+            )}
           </div>
           <div className="flex-1" />
           <Button variant="ghost" size="icon"
@@ -419,36 +488,31 @@ export function RateioDetalheModal({
             `AgriDreCulturaTab` já pagou: o Radix renderiza a aba inativa como `<div hidden>` e
             só os FILHOS somem; `[hidden]{display:none}` do preflight perde para `.flex`, e a
             caixa vazia continuaria repartindo a altura com a aba visível. */}
-        {/* ⚠ ABRE NO RATEIO, como sempre abriu. Cheguei a pôr "Custos diretos" como primeira, e
-            era mudança que ninguém pediu: este modal existe para EXPLICAR o rateio — é o que o
-            cabeçalho do arquivo diz e o que o teste de render trava. As duas listas são o
-            detalhe de quem já entendeu a divisão. */}
-        <Tabs defaultValue="rateio"
+        {/* ⚠ A ABA INICIAL SEGUE O TOGGLE DA GRADE (§1c): desligado, o operador estava olhando o
+            direto e é nele que o modal abre; ligado, ele estava olhando o total com rateio
+            dentro, e a divisão é a explicação daquele número. Sem o toggle (admin, ou chamada de
+            outra tela) fica o rateio, como sempre foi. */}
+        <Tabs value={abaAtual} onValueChange={setAbaAtual}
           className="flex min-h-0 flex-1 flex-col px-3 pb-2 pt-2">
           {/* ⚠ A ORDEM É DIRETO → DIVISÃO → RATEADO, a mesma da frase do subtítulo: o operador lê
               "X = Y direto + Z do rateio" e encontra as abas na ordem em que acabou de ler. */}
-          <TabsList className={cn('mb-1.5 grid h-7 w-full shrink-0',
-            tresAbas ? 'grid-cols-3' : 'grid-cols-2')}>
-            {tresAbas && (
-              <TabsTrigger value="diretos" className="text-[10px]">
-                Custos diretos · {diretos.length}
-              </TabsTrigger>
-            )}
-            <TabsTrigger value="rateio" className="text-[10px]">
-              {tresAbas ? 'Divisão do rateio' : 'Rateio'}
-            </TabsTrigger>
-            <TabsTrigger value={tresAbas ? 'rateados' : 'lancamentos'} className="text-[10px]">
-              {tresAbas ? `Rateados · ${rateados.length}` : `Lançamentos · ${dados.lancamentos.length}`}
-            </TabsTrigger>
-          </TabsList>
+          {/* ⚠ SEM BARRA DE ABAS quando não há divisão (§10c): uma aba só é um rótulo, não uma
+              escolha, e desenhá-la só ocuparia 28px dizendo ao operador que existe outro lugar
+              para ir. O conteúdo continua sendo um `TabsContent` — o Radix segue governando. */}
+          {!semAbas && (
+            <Segmentado className="mb-1.5 w-full [&>button]:flex-1" valor={abaAtual}
+              onEscolher={setAbaAtual} opcoes={opcoesDeAba} />
+          )}
 
-          {tresAbas && (
+          {(tresAbas || semAbas) && (
             <TabsContent value="diretos"
               className="mt-0 min-h-0 flex-1 flex-col data-[state=active]:flex data-[state=inactive]:hidden">
               <ListaLancamentos linhas={diretos} rotuloTotal="Direto nesta cultura"
                 onAbrir={onAbrirLancamento} />
               <p className="mt-1 shrink-0 text-[10px] leading-snug text-muted-foreground">
-                Lançamentos marcados com esta cultura — é o que soma o "direto" do subtítulo.
+                {semAbas
+                  ? 'Lançamentos deste centro nesta cultura. Não há rateio a repartir aqui.'
+                  : 'Lançamentos marcados com esta cultura — é o que soma o "direto" do subtítulo.'}
               </p>
             </TabsContent>
           )}

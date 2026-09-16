@@ -286,7 +286,7 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 2026-09-16: 1477 passando, 22 skipped, 100 arquivos, e
+  Baseline em 2026-09-16: 1484 passando, 22 skipped, 101 arquivos, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -312,6 +312,21 @@ no mesmo arquivo.
   cobrando a frase velha — nao regressao, mas tambem nao ruido: era o gate fazendo o
   trabalho dele. Os casos foram atualizados para o contrato novo, nunca removidos para
   passar.
+  De 1477 para 1484 no PR-DRE-LAVOURA-04, em dois arquivos. Entrou
+  `src/pages/agriDreLavouraGrade.test.tsx` (+4): ele exercita o CLIQUE de cada celula da
+  grade — as tres da mesma linha (R$, /ha, /sc), a linha de centro e a coluna Total, que
+  nao abre. Nasceu porque essa fiacao ja quebrou duas vezes de formas que TSC e build nao
+  veem: no PR-02 so' a celula de R$ abria, e no PR-03 um guard de `pool > 0` fazia o clique
+  na linha de centro nao fazer NADA.
+  ⚠ E ELE ACHOU UM TERCEIRO NA PRIMEIRA RODADA: o `onClick` estava no `<span>` do texto e
+  nao no `<td>`, entao os 7px de padding de cada lado nao respondiam — enquanto a celula
+  vizinha (`CelulaUnit`) ja' o tinha no `td`. Duas areas de clique diferentes na mesma linha.
+  E `rateioDetalheModal.test.tsx` foi de 12 para 15
+  casos — entraram os dois estados do toggle no cabecalho e o modo SEM abas de §10c. Um
+  caso existente foi reescrito (o cabecalho virou DUAS linhas: eco da celula clicada mais a
+  conta que a explica): ele
+  falhava com "Found multiple elements" porque a frase que ele procurava passou a
+  aparecer nas duas linhas do cabecalho — falha certa, pela razao certa.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -390,6 +405,20 @@ NAO E' ITEM DE BRIEFING, E' GATE VISUAL: antes de reportar, conferir no
 preview que o cabecalho nao sai da tela ao rolar.
 - Detalhes do A18/A21/A22 em docs/PADROES-UI.md; aqui fica o que nao se
   negocia por PR.
+- ⚠ SELECAO SE MARCA COM NAVY, NUNCA COM SUBLINHADO OU PILULA CLARA (regra
+  permanente, PR-DRE-LAVOURA-04). Aba, segmento ou escolha de 2 a 4 opcoes:
+  selecionado = `bg-primary` (o navy do item ativo do menu lateral) + texto
+  branco; nao selecionado = fundo transparente + `text-muted-foreground`.
+  O componente e' `src/components/ui/segmentado.tsx` (`<Segmentado>`), e ele
+  e' o unico — altura 26 por padrao, 22 nas reguas de cabecalho.
+  ⚠ NASCEU DE TRES MARCACOES DIFERENTES NA MESMA TELA: o seletor de atividade
+  do DRE (navy), as abas Resultado|Producao|Historico (sublinhado) e as abas do
+  `RateioDetalheModal` (a pilula do Radix). Tres respostas visuais para a mesma
+  pergunta — "qual esta aberta?" — a dez pixels uma da outra. Sobreviveu o do
+  cabecalho do DRE.
+  ⚠ ELE NAO SUBSTITUI O `Tabs` DO RADIX onde ha conteudo a governar: entra no
+  lugar da `TabsList`, e o `TabsContent` continua lendo o valor do contexto.
+  Aba nova em qualquer tela usa este componente.
 - ⚠ FIXAR O CABECALHO E' PO'R A ROLAGEM NO NIVEL CERTO, nao acrescentar
   `sticky`. Ja aconteceu duas vezes de o `sticky` existir e nao grudar:
   a lista de movimentacoes (ZOOT-LISTA-01/02) e a previa do custeio. O

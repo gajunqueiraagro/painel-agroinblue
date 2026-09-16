@@ -56,10 +56,12 @@ const BASE: RateioDetalhe = {
  */
 const txt = (t: string) => t.replace(/\u00A0/g, ' ');
 
-function montar(dados: RateioDetalhe, tipo: 'natureza' | 'investimento' | 'admin') {
+function montar(
+  dados: RateioDetalhe, tipo: 'natureza' | 'investimento' | 'admin', rateioDentro?: boolean,
+) {
   render(
     <RateioDetalheModal aberto onFechar={vi.fn()} titulo="Administração · Amendoim · Safra 25/26"
-      dados={dados} tipo={tipo} />,
+      dados={dados} tipo={tipo} rateioDentro={rateioDentro} />,
   );
 }
 
@@ -157,9 +159,40 @@ describe('notaDoRateio — o que muda entre os tipos', () => {
 });
 
 describe('o que a aba aberta mostra', () => {
-  it('o subtítulo derivado vai para o cabeçalho', () => {
+  /* ⚠ DUAS LINHAS DESDE O PR-04, e o teste tem de distingui-las: a primeira ECOA a célula
+     clicada, a segunda EXPLICA a conta. Um `getByText` solto achava as duas e falhava dizendo
+     "multiple elements" — a falha certa, pela razão certa. */
+  it('o cabeçalho traz o eco da célula e a conta que o explica', () => {
     montar(BASE, 'natureza');
-    expect(screen.getByText(/R\$ 82\.484,55 nesta cultura/)).toBeTruthy();
+    expect(screen.getByText('R$ 82.484,55 nesta cultura')).toBeTruthy();
+    expect(screen.getByText(/78,8% de R\$ 104\.675,83 por área/)).toBeTruthy();
+  });
+
+  /* ⚠ COM O TOGGLE DESLIGADO A TABELA MOSTRA SÓ O DIRETO, e o modal tem de abrir dizendo o mesmo
+     número — senão a primeira linha que o operador lê já contradiz a célula de onde ele veio. */
+  it('com o rateio em linha própria, o eco é o direto e a conta ganha prefixo', () => {
+    montar({ ...BASE, direto_cultura: 10000 }, 'natureza', false);
+    expect(screen.getByText('R$ 10.000,00 direto nesta cultura')).toBeTruthy();
+    expect(screen.getByText(/Com o rateio dentro:/)).toBeTruthy();
+  });
+
+  it('com o rateio dentro dos centros, o eco é o total', () => {
+    montar({ ...BASE, direto_cultura: 10000 }, 'natureza', true);
+    expect(screen.getByText('R$ 92.484,55 nesta cultura')).toBeTruthy();
+    expect(screen.queryByText(/Com o rateio dentro:/)).toBeNull();
+  });
+
+  /* ⚠ SEM DIVISÃO NÃO HÁ BARRA DE ABAS (§10c): pool zero, ou uma cultura só na safra, e o modal
+     vira a lista daquele centro. Uma aba só é rótulo, não escolha. */
+  it('sem pool e com uma cultura, abre sem abas e só com os diretos', () => {
+    montar({
+      ...BASE, pool: 0, direto_cultura: 23737.56,
+      fatias: [{ cultura: 'mandioca', area_ha: 49.8, peso: 100, valor: 0, atual: true }],
+      lancamentos: [{ id: 'x', data: '2026-02-01', descricao: 'Frete', favorecido: 'Transp', valor: 23737.56, compartilhado: false }],
+    }, 'natureza');
+    expect(screen.queryByText(/Divisão do rateio/)).toBeNull();
+    expect(screen.queryByText(/Rateados ·/)).toBeNull();
+    expect(screen.getByText(/Não há rateio a repartir aqui/)).toBeTruthy();
   });
 
   /* ⚠ O TOTAL EM 100% É A PROVA de que nenhuma cultura ficou de fora da repartição. */

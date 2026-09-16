@@ -27,6 +27,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PageHeader } from '@/components/ui/page-header';
 import { cn } from '@/lib/utils';
+import { Segmentado } from '@/components/ui/segmentado';
 import { CINZA_CABECALHO } from '@/lib/idiomaVisual';
 import { supabase } from '@/integrations/supabase/client';
 import { RateioDetalheModal, type RateioDetalhe, type TipoRateio } from '@/components/agri/RateioDetalheModal';
@@ -57,7 +58,14 @@ import {
    ⚠ px FIXOS, e `table-layout: fixed`: número não quebra e não encolhe. Porcentagem faria as
    colunas seguirem a janela, e "3.009.508,69" partido em duas linhas desalinha a coluna inteira.
    A coluna vazia do fim absorve a sobra — é ela que deixa a tabela caber sem esticar números. */
-const W_CULTURA = 240;
+/**
+ * ⚠ 210px, E O NÚMERO SAIU DA RÉGUA, não do palpite. O rótulo mais longo é
+ * "▸ (−) Rateio compartilhado [estimado]" e ele mede, a 11px: caret 11 + texto 128,8 + espaço 4 +
+ * etiqueta 49 + padding 14 = **206,8px**. Em 200 ele truncava por 6,8px — e truncar justamente a
+ * etiqueta "[estimado]" apagaria a ressalva que a linha existe para fazer. Em 210 sobram 3,2px.
+ * ⚠ ERA 240, e os 33px que sobravam eram largura roubada das colunas de número.
+ */
+const W_CULTURA = 210;
 const W_RS = 104;      // R$ por cultura
 const W_HA = 76;       // R$/ha
 const W_UN = 60;       // R$/unidade
@@ -102,8 +110,11 @@ const LINHAS: DefLinha[] = [
   { chave: 'resultado_operacional',  rotulo: '= Resultado operacional',         tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
   { chave: 'juros',                  rotulo: '(−) Despesas financeiras (juros)', tom: 'custo' },
   { chave: 'resultado_caixa',        rotulo: '= Resultado de caixa',            tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
-  { chave: 'investimento',           rotulo: 'Investimento no período',         tom: 'neutro', bloco: 'investimento' },
-  { chave: 'depreciacao',            rotulo: 'Depreciação (reservada · o custo operacional total = efetivo + depreciação nasce aqui)', tom: 'neutro' },
+  /* ⚠ INVESTIMENTO E DEPRECIAÇÃO SÃO SAÍDA, e por isso vermelhos: ficar "abaixo da linha de
+     caixa" diz que não entram no RESULTADO do período, não que o dinheiro não saiu. Em cinza,
+     6,3 milhões de investimento pareciam uma nota de rodapé. */
+  { chave: 'investimento',           rotulo: 'Investimento no período',         tom: 'custo', bloco: 'investimento' },
+  { chave: 'depreciacao',            rotulo: 'Depreciação (reservada · o custo operacional total = efetivo + depreciação nasce aqui)', tom: 'custo' },
 ];
 
 /** Onde entra a faixa "abaixo da linha de caixa". */
@@ -124,14 +135,19 @@ const TIPO_DO_MODAL: Partial<Record<ChaveLinha, 'admin'>> = { rateio_admin: 'adm
  */
 const VERDE = 'text-green-700';
 const VERDE_70 = 'text-green-700/70';
+/* ⚠ `text-red-600` E NÃO `text-destructive`: o token da casa é o vermelho de ERRO, e aqui o
+   vermelho significa saída de caixa — um fato, não um alarme. Em 11px o destructive puxa para o
+   laranja ao lado do verde novo; o par red-600/green-700 é o que a Conciliação já usa. */
+const VERMELHO = 'text-red-600';
+const VERMELHO_70 = 'text-red-600/70';
 
 const corDoTom = (tom: DefLinha['tom']) =>
-  (tom === 'receita' ? VERDE : tom === 'custo' ? 'text-destructive' : '');
+  (tom === 'receita' ? VERDE : tom === 'custo' ? VERMELHO : '');
 
 /** ⚠ A COR DO SUBTOTAL VEM DO PRÓPRIO NÚMERO, célula a célula: numa safra o amendoim pode fechar
     positivo e a mandioca negativa, e uma cor só para a linha mentiria sobre uma das duas. */
 const corDoSinal = (v: number | null) =>
-  (v == null ? '' : v < 0 ? 'text-destructive' : VERDE);
+  (v == null ? '' : v < 0 ? VERMELHO : VERDE);
 
 const traco = '—';
 /** Com "R$" — para a faixa, os títulos e os `title`, onde não há cabeçalho declarando a unidade. */
@@ -235,7 +251,15 @@ export function AgriDreLavouraTab() {
         p_tipo: tipo, p_chave: chave,
       });
       const d = data as RateioDetalhe | null;
-      if (!d || (tipo !== 'admin' && d.pool <= 0)) return;
+      /* ⚠ O GUARD DE `pool > 0` SAIU (§10), e ele era o defeito. A regra vinha copiada do Painel
+         da Safra, onde fazia sentido: lá, pool zero caía no drawer de lançamentos daquele
+         centro, então havia PARA ONDE ir. Aqui não havia alternativa nenhuma — o clique em
+         Operações, Logística ou em qualquer centro de uma safra de cultura única simplesmente
+         não fazia nada, e nada é o pior resultado possível: o operador não sabe se a tela quebrou
+         ou se ele errou o alvo.
+         ⚠ AGORA QUEM DECIDE É O MODAL, não este guard: ele abre sempre que a RPC responde, e as
+         abas de rateio só aparecem quando há rateio para explicar. Um componente, duas formas. */
+      if (!d) return;
       const s = safras.find(x => x.id === safraId);
       setRateio({
         dados: d, tipo,
@@ -452,17 +476,16 @@ export function AgriDreLavouraTab() {
             <div className="flex shrink-0 items-center gap-2 whitespace-nowrap">
               {/* ⚠ PECUÁRIA E CONSOLIDADO NASCEM DESLIGADOS E VISÍVEIS: eles dizem para onde a
                   tela vai, e escondê-los faria a Lavoura parecer a única resposta possível. */}
-              <div className="flex h-[22px] overflow-hidden rounded-md border">
-                {(['Lavoura', 'Pecuária', 'Consolidado'] as const).map(a => (
-                  <button key={a} type="button" disabled={a !== 'Lavoura'}
-                    title={a === 'Lavoura' ? undefined : 'em breve'}
-                    className={cn('px-2 text-[10px] font-medium transition-colors',
-                      a === 'Lavoura' ? 'bg-primary text-primary-foreground'
-                        : 'bg-transparent text-muted-foreground disabled:opacity-50')}>
-                    {a}
-                  </button>
-                ))}
-              </div>
+              {/* ⚠ O PARÂMETRO DE TIPO EXPLÍCITO porque as outras duas opções ainda não existem
+                  como estado: sem ele o `T` sairia de `valor="lavoura"` e as opções desligadas
+                  seriam erro de compilação — o que é o comportamento certo do componente. */}
+              <Segmentado<'lavoura' | 'pecuaria' | 'consolidado'>
+                altura={22} valor="lavoura" onEscolher={() => {}}
+                opcoes={[
+                  { valor: 'lavoura', rotulo: 'Lavoura' },
+                  { valor: 'pecuaria', rotulo: 'Pecuária', desabilitada: true, title: 'em breve' },
+                  { valor: 'consolidado', rotulo: 'Consolidado', desabilitada: true, title: 'em breve' },
+                ]} />
               <Select value={safraId} onValueChange={setSafraId}>
                 <SelectTrigger className="h-[22px] w-[130px] text-[10px]">
                   <SelectValue placeholder="Safra" />
@@ -519,37 +542,36 @@ export function AgriDreLavouraTab() {
                Com `h-[26px]` nos botões e a borda no pai, a barra media 27 — e o cartão do drill
                descia 27 em vez de 26. `box-border` (padrão do Tailwind) faz a borda caber na
                altura declarada; os botões preenchem o que sobra. */
-            <div className="flex h-[26px] gap-3 border-b border-border/60">
-              {(['resultado', 'producao', 'historico'] as const).map(v => (
-                <button key={v} type="button" onClick={() => setAba(v)}
-                  className={cn('h-full px-1 text-[11px] transition-colors',
-                    aba === v
-                      ? 'border-b-2 border-primary font-medium text-foreground'
-                      : 'border-b-2 border-transparent text-muted-foreground hover:text-foreground')}>
-                  {v === 'resultado' ? 'Resultado' : v === 'producao' ? 'Produção' : 'Histórico'}
-                </button>
-              ))}
-            </div>
+            /* ⚠ O SUBLINHADO SAIU (regra de UI do PR-04): estas abas marcavam a selecionada com
+               uma linha embaixo enquanto o seletor de atividade, dez pixels acima, marcava com
+               navy. Duas marcações para a mesma pergunta na MESMA régua. */
+            <Segmentado valor={aba} onEscolher={setAba}
+              opcoes={[
+                { valor: 'resultado', rotulo: 'Resultado' },
+                { valor: 'producao', rotulo: 'Produção' },
+                { valor: 'historico', rotulo: 'Histórico' },
+              ]} />
           )}
 
+          {/* ⚠ ALTURA FIXA DE 28px E `nowrap` (§6): o controle segmentado tem 26 e não cabia nos
+              18 de antes — ele vazava para fora da linha e ia parar por trás do cartão. E a
+              frase à esquerda muda de tamanho com o toggle: com `flex-wrap` ela quebrava para
+              uma segunda linha e empurrava a tabela para baixo, que é o A23 quebrando a cada
+              clique. Agora a frase trunca e a altura não se move. */}
           {mostraGrade && (
-          <div className="flex h-[18px] flex-wrap items-center justify-between gap-2 text-[10px] text-muted-foreground">
-            <span>
+          <div className="flex h-[28px] items-center justify-between gap-2 text-[10px] text-muted-foreground">
+            <span className="min-w-0 flex-1 truncate">
               {formatNum(poolTotal, 2)} em custos comuns rateados por área — estimativa, não lançamento.
               {rateioDentro && <> {' · '}<span className="text-amber-700">●</span> ao lado do valor = tem rateio dentro.</>}
             </span>
-            <span className="flex items-center gap-2">
+            <span className="flex shrink-0 items-center gap-2 whitespace-nowrap">
               Rateio compartilhado:
-              <span className="flex h-[22px] overflow-hidden rounded-md border">
-                {([[false, 'em linha própria'], [true, 'dentro dos centros']] as const).map(([v, r]) => (
-                  <button key={r} type="button" onClick={() => setRateioDentro(v)}
-                    className={cn('px-2 text-[10px] font-medium transition-colors',
-                      rateioDentro === v ? 'bg-primary text-primary-foreground'
-                        : 'bg-transparent text-muted-foreground hover:bg-muted')}>
-                    {r}
-                  </button>
-                ))}
-              </span>
+              <Segmentado valor={rateioDentro ? 'dentro' : 'propria'}
+                onEscolher={v => setRateioDentro(v === 'dentro')}
+                opcoes={[
+                  { valor: 'propria', rotulo: 'em linha própria' },
+                  { valor: 'dentro', rotulo: 'dentro dos centros' },
+                ]} />
               <span className="flex items-center gap-1">
                 <Checkbox checked={mostrarUnitarios}
                   onCheckedChange={c => setMostrarUnitarios(c === true)} />
@@ -579,9 +601,15 @@ export function AgriDreLavouraTab() {
 
       {/* ⚠ UM SCROLLPORT SÓ, e é o cartão: o cabeçalho gruda dentro dele (`sticky`) e a coluna
           Cultura gruda à esquerda. Duas barras fariam rolar a de dentro sem mover o cabeçalho. */}
+      {/* ⚠ NO AMPLIAR É `height`, NÃO `maxHeight` (§8): com `maxHeight` o cartão encolhe até o
+          tamanho da tabela e sobra janela embaixo — que é exatamente o que "Ampliar" existe para
+          não fazer. No modo normal segue `maxHeight`, para uma tabela curta não desenhar um
+          cartão vazio de meia tela. */}
       {mostraGrade && (
       <div ref={cartao} className="overflow-auto rounded-lg border border-border/60 bg-card"
-        style={alturaCartao ? { maxHeight: alturaCartao } : undefined}>
+        style={alturaCartao
+          ? (ampliado ? { height: alturaCartao } : { maxHeight: alturaCartao })
+          : undefined}>
         {erro ? (
           <div className="px-3 py-8 text-center text-[11px] text-destructive">
             <AlertTriangle className="mr-1 inline h-3.5 w-3.5 align-[-2px]" />
@@ -619,6 +647,7 @@ export function AgriDreLavouraTab() {
       {rateio && (
         <RateioDetalheModal aberto onFechar={() => setRateio(null)}
           titulo={rateio.titulo} dados={rateio.dados} tipo={rateio.tipo}
+          rateioDentro={rateioDentro}
           onAbrirLancamento={(id) => { void abrirLancamento(id); }} />
       )}
 
@@ -740,12 +769,18 @@ function Caixas({ caixas }: { caixas: CaixaFaixa[] }) {
   return (
     <div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(6, minmax(0, 1fr))' }}>
       {caixas.map(c => (
-        <div key={c.rotulo} className="min-w-0 rounded-md border border-border/60 bg-card"
-          style={{ height: 32, padding: '3px 10px' }} title={c.title}>
-          <div className="truncate text-[10px] leading-none text-muted-foreground">{c.rotulo}</div>
-          <div className="mt-0.5 flex items-baseline gap-1 overflow-hidden whitespace-nowrap leading-none">
-            <span className={cn('text-[14px] font-medium tabular-nums', c.cor)}>{c.valor}</span>
-            {c.unidade && <span className="truncate text-[10px] text-muted-foreground">{c.unidade}</span>}
+        /* ⚠ CONTEÚDO CENTRADO E MENOR (§7): 9px no rótulo em caixa alta, 13px no valor. A caixa
+           tem 32px de altura e 6px de padding vertical — com 10/14 o par encostava nas bordas de
+           cima e de baixo, e o uppercase é o que separa rótulo de valor sem precisar de peso. */
+        <div key={c.rotulo}
+          className="flex min-w-0 flex-col items-center justify-center rounded-md border border-border/60 bg-card"
+          style={{ height: 32, padding: '6px 8px' }} title={c.title}>
+          <div className="w-full truncate text-center text-[9px] uppercase leading-none tracking-wide text-muted-foreground">
+            {c.rotulo}
+          </div>
+          <div className="mt-[3px] flex max-w-full items-baseline gap-1 overflow-hidden whitespace-nowrap leading-none">
+            <span className={cn('text-[13px] font-medium tabular-nums', c.cor)}>{c.valor}</span>
+            {c.unidade && <span className="truncate text-[9px] text-muted-foreground">{c.unidade}</span>}
           </div>
         </div>
       ))}
@@ -826,7 +861,21 @@ const GRUPO_DO_DRAWER: Partial<Record<ChaveLinha, string>> = {
 /** Divisória entre grupos de coluna — a mesma nas duas linhas do cabeçalho e no corpo. */
 const DIVISOR = '1px solid rgba(255,255,255,.22)';
 
-function Grade({
+/* ⚠ A COLUNA TOTAL GANHA PESO PRÓPRIO (§9): cabeçalho um tom mais escuro que o navy das culturas,
+   célula em cinza claro e uma borda de 2px à esquerda. Ela é a resposta da safra inteira e estava
+   se lendo como só mais um grupo de cultura. O cinza é claro de propósito — a zebra e os fundos
+   de subtotal continuam passando por cima. */
+const NAVY_TOTAL = '#2b3750';
+const BORDA_TOTAL = '2px solid #cbd5e1';
+const FUNDO_TOTAL = '#f1f5f9';
+
+/**
+ * ⚠ EXPORTADA PARA TESTE, e não é vazamento de escopo: o que ela decide — QUAIS células abrem o
+ * quê — já quebrou duas vezes (o clique que só existia na célula de R$; o guard de `pool > 0` que
+ * fazia o clique não fazer nada). É a parte mais propensa a defeito da tela e a única que um
+ * teste consegue travar sem subir a aplicação inteira com sessão e dados.
+ */
+export function Grade({
   dre, culturas, abertos, setAbertos, rateioDentro, mostrarUnitarios,
   colsPorCultura, centrosDoBloco, valorDaLinha, abrir, semTotal, onAbrirCultura, onDrill,
 }: PropsGrade) {
@@ -847,8 +896,6 @@ function Grade({
   }, [culturas, mostrarUnitarios, semTotal]);
   const larguraMin = larguras.reduce((a, b) => a + b, 0);
   const colsTotal = mostrarUnitarios ? 2 : 1;
-  /** +1 da coluna vazia final, que absorve a sobra. */
-  const nColunas = larguras.length + 1;
 
   const alterna = (k: string) => setAbertos(a => ({ ...a, [k]: !a[k] }));
 
@@ -858,13 +905,16 @@ function Grade({
        fechava em 18,5px com `height: 18` declarado — porque `height` em `<tr>` é MÍNIMO, não
        máximo. A filha ia a 18px no lugar de 15, e a segunda linha do cabeçalho a 17 no lugar de
        14. Com `leading-none` o conteúdo fica menor que a altura declarada em todas elas, e a
-       altura declarada passa a ser a que manda. */
+       altura declarada passa a ser a que manda.
+
+       ⚠ E A LARGURA É A SOMA DAS COLUNAS, não 100% do cartão. Com `width: 100%` e
+       `table-layout: fixed`, a coluna vazia final esticava até a margem direita e a grade
+       terminava no vazio, longe da coluna Total — o olho procurava o fim do dado onde só havia
+       fundo. Agora a tabela acaba na última coluna e a sobra é fundo do cartão. */
     <table className="border-collapse text-[11px] leading-none"
-      style={{ tableLayout: 'fixed', width: '100%', minWidth: larguraMin }}>
+      style={{ tableLayout: 'fixed', width: larguraMin }}>
       <colgroup>
         {larguras.map((w, i) => <col key={i} style={{ width: w }} />)}
-        {/* ⚠ SEM `width`: é ela que absorve a sobra quando o cartão é mais largo que a soma. */}
-        <col />
       </colgroup>
 
       {/* ⚠ `sticky` NO `<th>`, NUNCA NO `<thead>`: com `border-collapse` o navegador não gruda o
@@ -900,8 +950,8 @@ function Grade({
           ))}
           {!semTotal && (
             <th colSpan={colsTotal}
-              className={cn(CINZA_CABECALHO, 'sticky top-0 z-20 px-[7px] text-center text-white')}
-              style={{ borderLeft: DIVISOR }}>
+              className="sticky top-0 z-20 px-[7px] text-center text-white"
+              style={{ backgroundColor: NAVY_TOTAL, borderLeft: BORDA_TOTAL }}>
               <div className="text-[10px] font-medium leading-[12px]">Total</div>
               <div className="whitespace-nowrap text-[10px] font-normal leading-[12px] text-white">
                 {formatNum(dre.total.area_ha, 1)} ha
@@ -915,11 +965,11 @@ function Grade({
             <ThUnidade key={c.cultura} cultura={c.cultura} mostrarUnitarios={mostrarUnitarios} />
           ))}
           {!semTotal && <>
-            <th className={cn(CINZA_CABECALHO, 'sticky z-20 px-[7px] text-right text-[10px] font-normal text-white')}
-              style={{ top: 26, borderLeft: DIVISOR }}>R$</th>
+            <th className="sticky z-20 px-[7px] text-right text-[10px] font-normal text-white"
+              style={{ top: 26, backgroundColor: NAVY_TOTAL, borderLeft: BORDA_TOTAL }}>R$</th>
             {mostrarUnitarios && (
-              <th className={cn(CINZA_CABECALHO, 'sticky z-20 px-[7px] text-right text-[10px] font-normal text-white')}
-                style={{ top: 26 }}>R$/ha</th>
+              <th className="sticky z-20 px-[7px] text-right text-[10px] font-normal text-white"
+                style={{ top: 26, backgroundColor: NAVY_TOTAL }}>R$/ha</th>
             )}
           </>}
         </tr>
@@ -931,13 +981,20 @@ function Grade({
           const filhas = def.bloco && abertos[def.bloco] ? centrosDoBloco(def.bloco) : [];
           return (
             <Fragment key={def.chave}>
+              {/* ⚠ O TEXTO MORA NO `td` DA COLUNA CULTURA, congelado como todos os outros (§2).
+                  Era um `colSpan` da largura inteira, e um `colSpan` NÃO GRUDA: rolando a tabela
+                  para a direita, a frase saía andando enquanto a coluna Cultura ficava parada ao
+                  lado dela. As outras células ficam vazias, só carregando o mesmo fundo. */}
               {def.chave === 'investimento' && (
-                <tr>
-                  <td colSpan={nColunas}
-                    className="border-t border-border/60 px-[7px] text-[10px] text-muted-foreground"
-                    style={{ height: 17 }}>
-                    Abaixo da linha de caixa — não entra no resultado do período
+                <tr className="bg-card" style={{ height: 17 }}>
+                  <td className="sticky left-0 z-10 truncate border-r border-t border-border/60 bg-card
+                    px-[7px] text-[10px] text-muted-foreground"
+                    title="Abaixo da linha de caixa — não entra no resultado do período">
+                    Abaixo da linha de caixa
                   </td>
+                  {Array.from({ length: larguras.length - 1 }).map((_, i) => (
+                    <td key={i} className="border-t border-border/60 bg-card" />
+                  ))}
                 </tr>
               )}
               <LinhaDre def={def} dre={dre} culturas={culturas} rateioDentro={rateioDentro}
@@ -1009,20 +1066,32 @@ function LinhaDre({
   onDrill?: (chave: string, rotulo: string, cultura: string) => void;
 }) {
   const fundo = fundoDaLinha(def.destaque);
-  const peso = def.destaque === 'subtotal' ? 'font-semibold'
-    : def.destaque === 'sub' ? 'font-medium' : '';
+  /* ⚠ TRÊS PESOS, E A REGRA É A HIERARQUIA DO DRE: subtotal e grupo em 500, filha em 400. O 600
+     de antes fazia os cinco subtotais competirem entre si e com o cabeçalho — com 500 eles
+     continuam destacados das linhas comuns sem virar cinco títulos empilhados. */
+  const peso = def.destaque || def.bloco ? 'font-medium' : '';
   const corLinha = corDoTom(def.tom);
   const tot = dre.total.linhas[def.chave];
   /* ⚠ O RATEIO DO GRUPO SE MEDE NAS CULTURAS MOSTRADAS, não no total da safra: no drill só há
      uma coluna, e o total traria o rateio de culturas que não estão na tela. */
   const temRateio = def.bloco
     ? culturas.reduce((a, c) => a + (c.linhas[def.chave].rateado ?? 0), 0) : 0;
+  /* ⚠ SÓ COM UMA CULTURA NA TELA: é o drill. Com N, "a linha" não aponta para lugar nenhum. */
+  const grupoDoRotulo = onDrill && culturas.length === 1 ? GRUPO_DO_DRAWER[def.chave] : undefined;
+  const rotuloAbre = !!grupoDoRotulo;
+  const aoAbrirRotulo = grupoDoRotulo && onDrill
+    ? () => onDrill(grupoDoRotulo, def.rotulo, culturas[0].cultura) : undefined;
 
   return (
     <tr className={cn(fundo, peso)} style={{ height: 18 }}>
-      <td className={cn('sticky left-0 z-10 truncate px-[7px] py-px', fundo,
-        'border-r border-border/60', corLinha)}
-        title={def.rotulo}>
+      {/* ⚠ NO DRILL O RÓTULO TAMBÉM ABRE (§5): com uma cultura só, a linha inteira é aquele
+          número, e obrigar a mirar na célula da direita é atrito sem razão. Na raiz o rótulo
+          continua inerte — ali ele governa N culturas e não há qual abrir. */}
+      <td onClick={rotuloAbre ? aoAbrirRotulo : undefined}
+        title={def.rotulo}
+        className={cn('sticky left-0 z-10 truncate px-[7px] py-px', fundo,
+          'border-r border-border/60', corLinha,
+          rotuloAbre && 'cursor-pointer hover:underline hover:decoration-dotted')}>
         {onAlternar ? (
           /* ⚠ O CARET É BOTÃO, não um `<span onClick>`: a linha inteira não pode alternar
              (clicar no VALOR abre o modal), e um alvo de 11px precisa ser focável pelo teclado. */
@@ -1055,11 +1124,16 @@ function LinhaDre({
             : undefined;
         return (
           <Fragment key={c.cultura}>
+            {/* ⚠ AS TRÊS CÉLULAS ABREM A MESMA LISTA (§5), e não só a de R$: são a MESMA linha
+                lida em três unidades. Clicar em "16.046,42 /ha" e nada acontecer ensina que a
+                tabela é inerte — e o operador para de tentar na célula que funcionaria. */}
             <Celula valor={v} cor={cor} destaque={def.destaque} rateado={rat}
               direto={l.direto} bordaEsquerda onAbrir={aoAbrir} />
             {mostrarUnitarios && <>
-              <CelulaUnit texto={porUnidade(v, c.area_ha)} cor={cor} destaque={def.destaque} />
-              <CelulaUnit texto={porUnidade(v, c.producao)} cor={cor} destaque={def.destaque} />
+              <CelulaUnit texto={porUnidade(v, c.area_ha)} cor={cor} destaque={def.destaque}
+                onAbrir={aoAbrir} />
+              <CelulaUnit texto={porUnidade(v, c.producao)} cor={cor} destaque={def.destaque}
+                onAbrir={aoAbrir} />
             </>}
           </Fragment>
         );
@@ -1068,16 +1142,19 @@ function LinhaDre({
       {/* ⚠ A COLUNA TOTAL NÃO ABRE MODAL: `fn_painel_rateio_detalhe` recebe `p_cultura` e não
           aceita "todas" — abrir com uma cultura arbitrária mostraria o detalhe errado sob o
           número certo. Ela fica de leitura até o drill do PR-02. */}
+      {/* ⚠ A COLUNA TOTAL EM CINZA CLARO E COM BORDA DE 2px: ela responde pela safra inteira e
+          estava lendo como mais um grupo de cultura. O fundo é do `style` e não de classe porque
+          precisa perder para a zebra e para o `bg-muted` do subtotal, que vêm na linha. */}
       {!semTotal && <>
         <Celula valor={valorDaLinha(tot, def)} cor={def.corPorSinal ? corDoSinal(valorDaLinha(tot, def)) : corLinha}
           destaque={def.destaque} rateado={def.bloco && rateioDentro ? (tot.rateado ?? 0) : 0}
-          direto={tot.direto} bordaEsquerda />
+          direto={tot.direto} total />
         {mostrarUnitarios && (
           <CelulaUnit texto={porUnidade(valorDaLinha(tot, def), dre.total.area_ha)}
-            cor={def.corPorSinal ? corDoSinal(valorDaLinha(tot, def)) : corLinha} destaque={def.destaque} />
+            cor={def.corPorSinal ? corDoSinal(valorDaLinha(tot, def)) : corLinha} destaque={def.destaque}
+            total />
         )}
       </>}
-      <td className={fundo} />
     </tr>
   );
 }
@@ -1122,13 +1199,13 @@ function LinhaCentro({ centro, culturas, rateioDentro, mostrarUnitarios, areaTot
       })}
 
       {!semTotal && <>
-        <Celula filha valor={totalCentro} cor="" rateado={rateioDentro ? centro.total.rateado : 0}
-          direto={centro.total.direto} bordaEsquerda fundo={fundo} estilo={estilo} />
+        <Celula filha valor={totalCentro} cor={VERMELHO} rateado={rateioDentro ? centro.total.rateado : 0}
+          direto={centro.total.direto} total fundo={fundo} estilo={estilo} />
         {mostrarUnitarios && (
-          <CelulaUnit filha texto={porUnidade(totalCentro, areaTotal)} cor="" fundo={fundo} estilo={estilo} />
+          <CelulaUnit filha texto={porUnidade(totalCentro, areaTotal)} cor={VERMELHO}
+            total fundo={fundo} estilo={estilo} />
         )}
       </>}
-      <td className={cn('border-t border-dashed border-border/60', fundo)} style={estilo} />
     </tr>
   );
 }
@@ -1143,20 +1220,32 @@ function LinhaCentro({ centro, culturas, rateioDentro, mostrarUnitarios, areaTot
  * transborda e é visível; faltando, o operador vê e a régua se ajusta. Só a coluna Cultura
  * trunca, porque ali o corte tem `title` para desfazer.
  */
-function Celula({ valor, cor, destaque, rateado = 0, direto, bordaEsquerda, onAbrir, filha, fundo, estilo }: {
+function Celula({ valor, cor, destaque, rateado = 0, direto, bordaEsquerda, onAbrir, filha, fundo, estilo, total }: {
   valor: number | null; cor: string; destaque?: DefLinha['destaque'];
   rateado?: number; direto?: number; bordaEsquerda?: boolean;
   onAbrir?: () => void; filha?: boolean; fundo?: string; estilo?: React.CSSProperties;
+  /** A coluna Total: cinza claro, borda de 2px e peso 500. */
+  total?: boolean;
 }) {
   const clicavel = !!onAbrir && valor != null;
   return (
-    <td className={cn('whitespace-nowrap px-[7px] py-px text-right tabular-nums',
-      filha ? 'border-t border-dashed border-border/60 text-[10px]' : '', fundo, cor)}
-      style={{ ...estilo, ...(bordaEsquerda ? { borderLeft: '1px solid hsl(var(--border) / .6)' } : {}) }}>
-      <span className={cn(clicavel && 'cursor-pointer hover:underline hover:decoration-dotted')}
-        onClick={onAbrir}>
-        {numeroDaCelula(valor)}
-      </span>
+    /* ⚠ O CLIQUE É DO `td`, NÃO DO `span` de dentro — e isso foi defeito de verdade: com o
+       handler no span, o alvo era só a largura do texto, e os 7px de padding de cada lado não
+       respondiam. Pior, o `CelulaUnit` já o tinha no `td`: duas células vizinhas da mesma linha
+       com áreas de clique diferentes. Agora a célula inteira é o alvo, nas duas. */
+    <td onClick={clicavel ? onAbrir : undefined}
+      title={clicavel ? 'ver os lançamentos' : undefined}
+      className={cn('whitespace-nowrap px-[7px] py-px text-right tabular-nums',
+      filha ? 'border-t border-dashed border-border/60 text-[10px]' : '',
+      total && 'font-medium',
+      clicavel && 'cursor-pointer hover:underline hover:decoration-dotted', fundo, cor)}
+      style={{
+        ...(total ? { backgroundColor: FUNDO_TOTAL } : {}),
+        ...estilo,
+        ...(total ? { borderLeft: BORDA_TOTAL }
+          : bordaEsquerda ? { borderLeft: '1px solid hsl(var(--border) / .6)' } : {}),
+      }}>
+      {numeroDaCelula(valor)}
       {/* ⚠ O PONTO ÂMBAR É A ÚNICA PISTA DE QUE O NÚMERO MUDOU DE SIGNIFICADO no modo "dentro dos
           centros". Sem ele, Insumos saltaria de 1.121.599,85 para 1.172.900,53 sem explicação. */}
       {rateado > 0 && (
@@ -1169,20 +1258,27 @@ function Celula({ valor, cor, destaque, rateado = 0, direto, bordaEsquerda, onAb
 }
 
 /** A célula de /ha e /unidade — mais clara que a de R$, porque ela é derivada, não lançada. */
-function CelulaUnit({ texto, cor, destaque, filha, fundo, estilo }: {
+function CelulaUnit({ texto, cor, destaque, filha, fundo, estilo, total, onAbrir }: {
   texto: string; cor: string; destaque?: DefLinha['destaque'];
   filha?: boolean; fundo?: string; estilo?: React.CSSProperties;
+  total?: boolean;
+  /** §5: na raiz, /ha e /sc abrem a mesma lista que a célula de R$ — é a mesma linha. */
+  onAbrir?: () => void;
 }) {
   const sub = destaque === 'subtotal' || destaque === 'sub';
+  const clicavel = !!onAbrir && texto !== traco;
   return (
-    <td className={cn('whitespace-nowrap px-[7px] py-px text-right text-[10px] tabular-nums',
-      sub ? 'bg-muted' : 'bg-muted/40',
+    <td onClick={clicavel ? onAbrir : undefined}
+      title={clicavel ? 'ver os lançamentos' : undefined}
+      className={cn('whitespace-nowrap px-[7px] py-px text-right text-[10px] tabular-nums',
+      total ? 'font-medium' : sub ? 'bg-muted' : 'bg-muted/40',
       filha ? 'border-t border-dashed border-border/60' : '',
+      clicavel && 'cursor-pointer hover:underline hover:decoration-dotted',
       /* ⚠ 70% NAS LINHAS COMUNS, 100% NOS SUBTOTAIS: o unitário é leitura de apoio, e ao lado do
          valor cheio ele tem de ceder. No subtotal ele É o número que se lê. */
       sub ? cor : cor === VERDE ? VERDE_70
-        : cor === 'text-destructive' ? 'text-destructive/70' : cor)}
-      style={estilo}>
+        : cor === VERMELHO ? VERMELHO_70 : cor)}
+      style={{ ...(total ? { backgroundColor: FUNDO_TOTAL } : {}), ...estilo }}>
       {texto}
     </td>
   );
