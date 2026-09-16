@@ -186,13 +186,21 @@ export function AgriDreLavouraTab() {
    * que pudesse discordar dele.
    * ⚠ E A SEÇÃO NÃO VAI PARA A URL — não é escolha, é como este shell funciona: `section` é
    * estado do `V2Index`, espelhado em `sessionStorage['v2:section']` só para dizer a ORIGEM a
-   * quem volta de uma tela global (V2Index:1531 diz isso com todas as letras). Quem recarrega o
-   * /v2 cai em `home`, hoje, em QUALQUER seção. O que este PR pode garantir — e garante — é que
-   * a volta a Executivo › DRE reabre a mesma safra e a mesma cultura.
+   * quem volta de uma tela global (V2Index:1531 diz isso com todas as letras).
+   *
+   * ⚠ A SAFRA MORA NA URL; A CULTURA NÃO MORA EM LUGAR NENHUM. Ela era um `searchParam` como a
+   * safra, e isso produzia o defeito: `section` é estado e a query string NÃO é limpa ao trocar
+   * de seção, então sair para a Visão Geral e voltar em Executivo › DRE reabria no drill da
+   * última cultura — uma tela que o operador não pediu, por causa de um parâmetro que ninguém
+   * apagou. Em estado de React ela morre com a desmontagem, que é exatamente "nada guardado
+   * entre entradas".
+   * ⚠ O QUE SE PERDE É O LINK DIRETO PARA UM DRILL, e ele nunca funcionou de verdade: sem
+   * `section` na URL, abrir `?cultura=amendoim` do zero cai em `home`. Trocar uma persistência
+   * que só atrapalhava por um estado honesto é o negócio certo.
    */
   const [searchParams, setSearchParams] = useSearchParams();
   const safraId = searchParams.get('safra') ?? '';
-  const cultura = searchParams.get('cultura') ?? '';
+  const [cultura, setCultura] = useState('');
 
   /* ⚠ `replace: true` SEMPRE: trocar de safra ou abrir o drill não é navegação, é filtro. Com
      `push` o botão Voltar do navegador percorreria cada clique de seletor antes de sair da
@@ -206,12 +214,8 @@ export function AgriDreLavouraTab() {
   const setSafraId = useCallback((id: string) => {
     mexerNaUrl(p => { p.set('safra', id); });
   }, [mexerNaUrl]);
-  const abrirCultura = useCallback((c: string) => {
-    mexerNaUrl(p => { p.set('cultura', c); });
-  }, [mexerNaUrl]);
-  const voltarParaRaiz = useCallback(() => {
-    mexerNaUrl(p => { p.delete('cultura'); });
-  }, [mexerNaUrl]);
+  const abrirCultura = useCallback((c: string) => { setCultura(c); }, []);
+  const voltarParaRaiz = useCallback(() => { setCultura(''); }, []);
 
   useEffect(() => {
     if (!safraId && safras.length > 0) setSafraId(safras[safras.length - 1].id);
@@ -428,9 +432,25 @@ export function AgriDreLavouraTab() {
 
   const centrosDoBloco = (b: Bloco) => (dre?.centros ?? []).filter(c => c.bloco === b);
 
-  /** O valor de um grupo no modo escolhido: `direto` em linha própria, `valor` com rateio dentro. */
-  const valorDaLinha = (l: DreValor, def: DefLinha): number | null =>
-    (rateioDentro || !def.bloco ? l.valor : (l.direto ?? l.valor));
+  /**
+   * O valor de uma linha de grupo — e ele NÃO é o mesmo para os quatro blocos.
+   *
+   * ⚠ CUSTEIO E PÓS-COLHEITA MOSTRAM `direto` NO MODO "Custos diretos", porque o rateio deles
+   * tem LINHA PRÓPRIA logo abaixo (a `rateio_compartilhado`), e a coluna soma
+   * `custeio + pós + rateio = custo variável`. Mostrar `.valor` neles faria a soma contar o
+   * rateio duas vezes.
+   * ⚠ CUSTO FIXO E INVESTIMENTO MOSTRAM `valor` NOS DOIS MODOS (§2), porque não há linha própria
+   * para o rateio deles em lugar nenhum da cascata. Com `.direto` o Custo fixo do NJ aparecia
+   * como 0,00 — e aí `margem − 0 − rateio_admin` não dava o Resultado operacional que a linha
+   * de baixo mostrava. O total mudava de valor ao trocar um modo de APRESENTAÇÃO, que é o que o
+   * A23 proíbe, e a coluna deixava de fechar.
+   */
+  const valorDaLinha = (l: DreValor, def: DefLinha): number | null => {
+    if (!def.bloco) return l.valor;
+    if (rateioDentro) return l.valor;
+    if (BLOCOS_SEM_LINHA_PROPRIA.includes(def.bloco)) return l.valor;
+    return l.direto ?? l.valor;
+  };
 
   const colsPorCultura = mostrarUnitarios ? 3 : 1;
 
@@ -880,6 +900,15 @@ function Faixa({ dre }: { dre: DreLavoura | null }) {
 
 /* ═══════════════════════════════ A GRADE ═══════════════════════════════ */
 
+/**
+ * Os blocos cujo rateio NÃO tem linha própria na cascata do DRE.
+ *
+ * ⚠ CUSTEIO E PÓS-COLHEITA TÊM a linha `(−) Rateio compartilhado` logo depois deles, e é ela que
+ * fecha `custeio + pós + rateio = custo variável`. Custo fixo e Investimento não têm nada
+ * parecido — o rateio deles só existe dentro do próprio número.
+ */
+const BLOCOS_SEM_LINHA_PROPRIA: Bloco[] = ['fixo', 'investimento'];
+
 /** O que um clique num valor precisa dizer para o modal do Painel. */
 type AbrirRateio = (tipo: TipoRateio, chave: string, rotulo: string, cultura: string) => void;
 
@@ -1069,6 +1098,23 @@ export function Grade({
                   rateioDentro={rateioDentro} mostrarUnitarios={mostrarUnitarios}
                   areaTotal={dre.total.area_ha} abrir={abrir} semTotal={semTotal} />
               ))}
+              {/* ⚠ A ÚLTIMA FILHA É O RATEIO DO GRUPO (§2), e ela existe para a conta fechar à
+                  vista: no modo "Custos diretos" os centros mostram só o direto, e sem esta
+                  linha as filhas do Custo fixo somavam 0,00 embaixo de um grupo de 76.544,30.
+                  ⚠ SÓ NOS BLOCOS SEM LINHA PRÓPRIA: custeio e pós-colheita já têm a
+                  `rateio_compartilhado` na cascata, e repetir aqui contaria duas vezes.
+                  ⚠ E ELA NÃO ABRE MODAL — ver o relatório: o `p_chave` nulo da RPC soma
+                  `bloco_dre in ('custeio','pos_colheita')`, e não há como pedir o pool de um
+                  bloco. Cursor normal, para não prometer o que não entrega. */}
+              {/* ⚠ A CONDIÇÃO É O GRUPO ESTAR ABERTO, não ter filhas: um bloco pode ter rateio e
+                  nenhum centro direto (o Custo fixo do NJ é 100% rateado), e amarrar a linha à
+                  existência de filhas a faria sumir justamente no caso que ela explica. */}
+              {def.bloco && abertos[def.bloco] && !rateioDentro
+                && BLOCOS_SEM_LINHA_PROPRIA.includes(def.bloco)
+                && culturas.some(c => (c.linhas[def.chave].rateado ?? 0) > 0) && (
+                <LinhaRateioDoGrupo key={`${def.chave}:rateio`} chave={def.chave} dre={dre}
+                  culturas={culturas} mostrarUnitarios={mostrarUnitarios} semTotal={semTotal} />
+              )}
             </Fragment>
           );
         })}
@@ -1229,6 +1275,56 @@ function LinhaDre({
           <CelulaUnit texto={porUnidade(valorDaLinha(tot, def), dre.total.area_ha)}
             cor={def.corPorSinal ? corDoSinal(valorDaLinha(tot, def)) : corLinha} destaque={def.destaque}
             total />
+        )}
+      </>}
+    </tr>
+  );
+}
+
+/**
+ * A FILHA DE RATEIO DE UM GRUPO — a parcela compartilhada que os centros não mostram.
+ *
+ * ⚠ ELA É LEITURA, NÃO CONTA: o número é `linhas.<grupo>.rateado`, que a RPC já devolve por
+ * cultura e no total. O front não soma nem subtrai nada aqui.
+ * ⚠ E ELA NÃO ABRE NADA. A `fn_painel_rateio_detalhe` com `p_chave` nulo devolve o pool de
+ * `custeio` + `pos_colheita`; não há parâmetro para pedir o de um bloco. Sem cursor de clique,
+ * porque uma linha que parece clicável e não abre é pior que uma que não parece.
+ */
+function LinhaRateioDoGrupo({ chave, dre, culturas, mostrarUnitarios, semTotal }: {
+  chave: ChaveLinha;
+  dre: DreLavoura;
+  culturas: DreCultura[];
+  mostrarUnitarios: boolean;
+  semTotal?: boolean;
+}) {
+  const totalRateado = dre.total.linhas[chave].rateado ?? 0;
+  return (
+    <tr className="bg-card" style={{ height: 15 }}>
+      <td className={cn('sticky left-0 z-10 truncate border-r border-t border-dashed border-border/60',
+        'bg-card px-[7px] py-px text-[10px]', VERMELHO)}
+        title="(−) Rateio compartilhado — estimado, rateado por área">
+        <span className="mr-px inline-block w-[11px]" />(−) Rateio compartilhado
+        <Etiqueta texto="estimado" title="rateado por área — estimativa, não lançamento" />
+      </td>
+
+      {culturas.map(c => {
+        const r = c.linhas[chave].rateado ?? 0;
+        return (
+          <Fragment key={c.cultura}>
+            <Celula filha valor={r} cor={VERMELHO} bordaEsquerda fundo="bg-card" />
+            {mostrarUnitarios && <>
+              <CelulaUnit filha texto={porUnidade(r, c.area_ha)} cor={VERMELHO} fundo="bg-card" />
+              <CelulaUnit filha texto={porUnidade(r, c.producao)} cor={VERMELHO} fundo="bg-card" />
+            </>}
+          </Fragment>
+        );
+      })}
+
+      {!semTotal && <>
+        <Celula filha valor={totalRateado} cor={VERMELHO} total fundo="bg-card" />
+        {mostrarUnitarios && (
+          <CelulaUnit filha texto={porUnidade(totalRateado, dre.total.area_ha)} cor={VERMELHO}
+            total fundo="bg-card" />
         )}
       </>}
     </tr>
