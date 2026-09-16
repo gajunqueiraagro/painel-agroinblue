@@ -47,6 +47,7 @@ export type V2Section =
   | 'lancamentos-meta-zoo'   // (em construção) — futura variante de lancamentos-zoot filtrada por META
   | 'lancamentos-meta-fin'   // (em construção) — futura variante de financeiro-lanc filtrada por META
   | 'dre-executivo'          // (em construção)
+  | 'dre'                    // PR-DRE-LAVOURA-01 — a grade unica do DRE da lavoura
   | 'dre-cultura'            // PR-AGRI-DRE-01 — DRE de caixa por cultura da safra
   | 'painel-safra'           // PR-PAINEL-SAFRA-A — o raio-x do ciclo de uma safra/cultura
   | 'divergencias'           // (em construção)
@@ -262,6 +263,10 @@ export const NAV_GRUPOS: NavGrupo[] = [
              gerencial, por competência, e continua placeholder. Este é o DRE de CAIXA por
              cultura de uma safra, lido da fn_dre_agricola_por_safra. Ocupar a rota do outro
              faria a tela em construção parecer pronta. */
+          /* ⚠ A GRADE UNICA, e ela NAO substitui a de baixo neste PR: as duas leem fontes
+             diferentes (fn_dre_lavoura x fn_dre_agricola_por_safra) e e' conferindo uma contra a
+             outra que se homologa a nova. O PR-02 aposenta a antiga. */
+          { id: 'dre',                 label: 'DRE',                          status: 'ready' },
           { id: 'dre-cultura',         label: 'DRE por cultura',              status: 'ready' },
           /* ⚠ AO LADO DO DRE, e não dentro dele: as duas leem a MESMA fonte
              (`fn_dre_agricola_por_safra`), mas respondem a perguntas diferentes — o DRE mostra a
@@ -383,6 +388,7 @@ export const SECTION_TO_GROUP: Partial<Record<V2Section, string>> = {
 
   // ── executivo ──
   'painel-consultor':    'executivo',
+  'dre':                 'executivo',
   'dre-cultura':         'executivo',
   'painel-safra':        'executivo',
   'painel-anual':        'executivo',

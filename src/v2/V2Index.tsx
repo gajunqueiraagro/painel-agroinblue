@@ -60,6 +60,7 @@ import { FinV2SafrasTab } from '@/pages/FinV2SafrasTab';
 import { CadastroLocaisEstoqueTab } from '@/pages/CadastroLocaisEstoqueTab';
 import { FinV2RateioAdminTab } from '@/pages/FinV2RateioAdminTab';
 import { AgriDreCulturaTab } from '@/pages/AgriDreCulturaTab';
+import { AgriDreLavouraTab } from '@/pages/AgriDreLavouraTab';
 import { PainelSafraTab } from '@/pages/PainelSafraTab';
 import { AgriColheitaTab } from '@/pages/AgriColheitaTab';
 import { AgriBarterTab } from '@/pages/AgriBarterTab';
@@ -858,6 +859,8 @@ export default function V2Index() {
     if (section === 'barter-contratos') return <AgriBarterTab />;
     /* Produção › Agricultura › Estoque de Grãos — o que sobrou entre a colheita e a venda. */
     if (section === 'estoque-graos') return <AgriEstoqueGraosTab />;
+    /* Executivo › DRE — a grade unica da lavoura, de fn_dre_lavoura. */
+    if (section === 'dre') return <AgriDreLavouraTab />;
     if (section === 'dre-cultura') return (
       <AgriDreCulturaTab />
     );
