@@ -46,6 +46,21 @@ export const REGUA_LINHA: Record<TipoLinha,
   filha: { fonte: 9, peso: 'font-normal', altura: 14, recuo: 16 },
 };
 
+/**
+ * O FUNDO DE UMA LINHA — e ele faz parte da RÉGUA DO SUBTOTAL, não é decoração à parte.
+ *
+ * ⚠ `'sub'` E `'subtotal'` PINTAM IGUAL desde o PR-11, e foi medição que mandou. Os cinco
+ * subtotais da lavoura já saíam com 12px/500/20px idênticos — conferido nos cinco. O que fazia
+ * "= Custo variável" parecer MAIOR que "= Margem de contribuição" era o fundo: `bg-muted/40`
+ * contra `bg-muted`. Vermelho sobre quase-branco lê mais pesado que verde sobre a faixa cinza,
+ * e o olho traduz contraste em tamanho.
+ * ⚠ O `'sub'` CONTINUA NO TIPO porque ele é um FATO da cascata — "Custo variável" e "Receita
+ * bruta" são somas parciais, não o fecho de um bloco. O que deixou de existir foi a diferença
+ * VISUAL entre os dois; a distinção semântica fica, para o dia em que ela voltar a significar
+ * algo na tela.
+ */
+export const fundoDaLinha = (d?: DestaqueLinha) => (d ? 'bg-muted' : 'bg-card');
+
 /** O papel de uma linha: o destaque manda, depois o grupo, senão é simples. */
 export const tipoDaLinha = (destaque?: DestaqueLinha, temBloco?: boolean): TipoLinha =>
   (destaque ? 'subtotal' : temBloco ? 'grupo' : 'simples');

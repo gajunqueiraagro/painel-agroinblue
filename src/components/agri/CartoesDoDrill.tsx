@@ -88,11 +88,19 @@ export function CartaoTalhoes({ painel, totais, cultura }: {
             /* ⚠ TRÊS COLUNAS, e a área saiu da direita para junto do NOME: ela descreve o
                talhão, não o rendimento. Com os dois números empilhados à direita, o olho lia
                "120,00 ha · 245,80 sc/ha" como um par comparável — e só o segundo é comparável
-               entre talhões, que é o que a barra ordena. */
+               entre talhões, que é o que a barra ordena.
+               ⚠ E O RÓTULO TEM DOIS PESOS (PR-11): o TALHÃO é o que identifica a linha e fica em
+               10px; a área e a variedade são contexto e vão em 9px muted. Tudo do mesmo tamanho
+               fazia "Ind 04 · 94,00 ha · OL3" ler como três coisas igualmente importantes.
+               ⚠ SEM VARIEDADE, SEM O TERCEIRO SEGMENTO — nunca "· —". O cultivar não é campo
+               obrigatório, e um traço ali afirmaria que falta dado onde só não há o que dizer. */
             <div key={`${t.talhao}-${t.variedade ?? ''}`} className="flex items-center gap-2">
-              <span className="w-[150px] shrink-0 truncate whitespace-nowrap"
-                title={`${t.talhao} · ${formatNum(t.area_ha, 2)} ha`}>
-                {t.talhao} · {formatNum(t.area_ha, 2)} ha
+              <span className="w-[170px] shrink-0 truncate whitespace-nowrap"
+                title={`${t.talhao} · ${formatNum(t.area_ha, 2)} ha${t.variedade ? ` · ${t.variedade}` : ''}`}>
+                <span className="text-[10px]">{t.talhao}</span>
+                <span className="text-[9px] text-muted-foreground">
+                  {' · '}{formatNum(t.area_ha, 2)} ha{t.variedade ? ` · ${t.variedade}` : ''}
+                </span>
               </span>
               <span className="min-w-0 flex-1">
                 <Barra fracao={melhor > 0 ? t.sacas_ha / melhor : 0} cor="hsl(var(--primary))" />

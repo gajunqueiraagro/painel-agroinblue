@@ -24,6 +24,7 @@ import { formatNum } from '@/lib/calculos/formatters';
 import {
   W_RS, W_HA, W_RS_TOTAL, VERDE, VERMELHO, NAVY_TOTAL, BORDA_TOTAL, traco,
   corDoSinal, numeroDaCelula, Celula, CelulaUnit, Etiqueta, Caixas, REGUA_LINHA, tipoDaLinha,
+  fundoDaLinha,
   type CaixaFaixa,
 } from '@/components/agri/dreGrade';
 import type { DrePecuaria, DrePecLinhas, ChaveLinhaPec } from '@/hooks/useDrePecuaria';
@@ -183,8 +184,7 @@ export function PecDrePanel({ dre, alturaCartao, cartaoRef }: {
   );
 }
 
-const fundoDaLinha = (d?: DefPec['destaque']) =>
-  (d === 'subtotal' ? 'bg-muted' : d === 'sub' ? 'bg-muted/40' : 'bg-card');
+
 
 function LinhaPec({ def, dre }: { def: DefPec; dre: DrePecuaria }) {
   const fundo = fundoDaLinha(def.destaque);

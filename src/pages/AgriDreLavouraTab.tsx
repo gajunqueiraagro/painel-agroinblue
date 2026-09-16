@@ -32,7 +32,7 @@ import { CINZA_CABECALHO } from '@/lib/idiomaVisual';
 import {
   W_RS, W_HA, W_UN, W_RS_TOTAL, VERDE, VERDE_70, VERMELHO, VERMELHO_70, AMBAR,
   NAVY_TOTAL, BORDA_TOTAL, FUNDO_TOTAL, traco, corDoSinal, numeroDaCelula, porUnidade,
-  Etiqueta, Celula, CelulaUnit, Caixas, PontoRateio, REGUA_LINHA, tipoDaLinha,
+  Etiqueta, Celula, CelulaUnit, Caixas, PontoRateio, REGUA_LINHA, tipoDaLinha, fundoDaLinha,
   type CaixaFaixa, type DestaqueLinha,
 } from '@/components/agri/dreGrade';
 import { supabase } from '@/integrations/supabase/client';
@@ -736,15 +736,27 @@ export function AgriDreLavouraTab() {
       {!ehPec && mostraGrade && (
       <div className={cn(mostraCartoes && duasColunas && 'grid items-stretch gap-3')}
         style={mostraCartoes && duasColunas
-          ? { gridTemplateColumns: `minmax(${W_MIN_GRADE}px, 1fr) minmax(${W_MIN_CARTOES}px, 1fr)` }
+          ? {
+            gridTemplateColumns: `minmax(${W_MIN_GRADE}px, 1fr) minmax(${W_MIN_CARTOES}px, 1fr)`,
+            /* ⚠ `minHeight` NA LINHA DO GRID, e é o que faz o §3: com `stretch` sozinho a altura
+               da linha é a do item MAIS ALTO, então numa cultura de poucos centros a tabela e os
+               cartões acabavam os dois no meio da tela. Com o piso, a linha vale
+               `max(coluna dos cartões, viewport − topo − 8)` — e o cartão da grade chega ao pé
+               da janela em qualquer cultura. */
+            minHeight: alturaCartao ?? undefined,
+          }
           : undefined}>
       <div ref={cartao} className="overflow-auto rounded-lg border border-border/60 bg-card"
         style={alturaCartao
           ? (ampliado ? { height: alturaCartao }
             /* ⚠ COM OS CARTÕES AO LADO, `height: 100%` faz o `stretch` valer: sem altura própria
                o `grid` estica a CAIXA e o conteúdo não a preenche, e a borda de baixo continua
-               onde a tabela acabou. */
-            : mostraCartoes && duasColunas ? { maxHeight: alturaCartao, height: '100%' }
+               onde a tabela acabou.
+               ⚠ E SEM `maxHeight` AQUI (PR-11): o teto vem do `minHeight` da linha do grid, que
+               já é `max(cartões, viewport − topo − 8)`. Um teto próprio de `alturaCartao`
+               cortaria o cartão quando a coluna dos cartões fosse a mais alta — a tabela pararia
+               no meio e os cartões seguiriam abaixo, que é o degrau que o §3b do PR-09 tirou. */
+            : mostraCartoes && duasColunas ? { height: '100%' }
               : { maxHeight: alturaCartao })
           : undefined}>
         {erro ? (
@@ -1176,8 +1188,7 @@ function ThUnidade({ cultura, mostrarUnitarios }: { cultura: string; mostrarUnit
 /* ─────────────────────── UMA LINHA DO DRE ─────────────────────── */
 
 /** Fundo da linha — e ele tem de ser OPACO, porque a coluna Cultura gruda por cima do corpo. */
-const fundoDaLinha = (d: DefLinha['destaque']) =>
-  (d === 'subtotal' ? 'bg-muted' : d === 'sub' ? 'bg-muted/40' : 'bg-card');
+
 
 
 
