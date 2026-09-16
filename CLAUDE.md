@@ -358,6 +358,18 @@ no mesmo arquivo.
   entao soma-las contaria o mesmo dinheiro duas vezes e o total da tela ficaria exatamente o dobro
   do extrato. Os outros quatro travam a chave (nao e' a NF — ha' nota com varias cargas), o
   rendimento lido e nao mediado, a carga sem elo (que fica sozinha e sem status) e o comprador.
+  De 1509 para 1513 no PR-DRE-PECUARIA-02: `src/pages/pecDrePanel.test.tsx` foi de 4 para 8 casos.
+  Entraram: o TOTAL COMO PRIMEIRA COLUNA (§2a), a linha de % com o VBP como base (§3, com o NUMERO
+  travado), o traco quando o VBP nao e positivo, e os grupos de centro nascendo FECHADOS.
+  ⚠ E DOIS CASOS EXISTENTES FALHARAM ANTES DE SEREM ATUALIZADOS — o gate fazendo o trabalho dele.
+  Eles liam a coluna Total por posicao (`cells[length-2]`, quando ela era a ultima) e passaram a
+  devolver o numero da ultima fazenda. Falha certa, pela razao certa: o contrato da grade mudou.
+  Foram atualizados para o contrato novo (indices nomeados), nunca afrouxados para passar.
+  ⚠ E UM CASO NOVO NASCEU VAZIO, o que vale registrar: "os grupos nascem fechados" passava verde
+  num fixture SEM centro nenhum — nao media nada. Ele ganhou centros de verdade e um clique que
+  PROVA que a busca sabe achar (a mesma licao do auto-teste do `check:tdz`). O clique teve de ser
+  `fireEvent`, nao `element.click()`: o clique cru dispara fora do `act()` do React e a assercao
+  roda antes do re-render.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 

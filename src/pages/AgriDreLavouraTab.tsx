@@ -44,9 +44,16 @@ import { useSafrasLavoura, useTalhoesDaSafra } from '@/hooks/useAreaPlantada';
 import { useColheita } from '@/hooks/useColheita';
 import { useCliente } from '@/contexts/ClienteContext';
 import { usePeriodoUrl } from '@/v2/hooks/usePeriodoUrl';
-import { anoMes, mesCorrente, descreverPeriodo } from '@/v2/lib/periodo';
-import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
-import { useDrePecuaria } from '@/hooks/useDrePecuaria';
+import { anoMes, descreverPeriodo } from '@/v2/lib/periodo';
+import {
+  useDrePecuaria, useDrePecuariaLancamentos, useDrePecuariaPatrimonio, type RecortePec,
+} from '@/hooks/useDrePecuaria';
+import {
+  SeletorPeriodoPecuaria, safraCorrentePecuaria, useSafraDeAbertura,
+} from '@/components/agri/SeletorPeriodoPecuaria';
+import { PecLancamentosModal } from '@/components/agri/PecLancamentosModal';
+import { PecPatrimonioModal } from '@/components/agri/PecPatrimonioModal';
+import { PecRateioAdmModal } from '@/components/agri/PecRateioAdmModal';
 import { PecDrePanel, FaixaPecuaria } from '@/pages/PecDrePanel';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useFinanceiroV2, type LancamentoV2 } from '@/hooks/useFinanceiroV2';
@@ -188,7 +195,11 @@ export function AgriDreLavouraTab() {
   /* ⚠ O PERÍODO DA PECUÁRIA É O DA CASA (`f_de`/`f_ate`), o mesmo do Financeiro — não um
      seletor novo. Ele mora na URL porque é filtro de período, e é assim que o resto do
      sistema o trata. Abre no mês corrente. */
-  const [periodo, setPeriodo] = usePeriodoUrl(mesCorrente());
+  /* ⚠ ABRE NA SAFRA CORRENTE DA PECUÁRIA (§1), não no mês: a pergunta do DRE é o ciclo, e um mês
+     solto mostra uma fatia que nunca fecha com o fechamento de rebanho. `safraCorrentePecuaria`
+     deriva jul→jun do calendário porque o `usePeriodoUrl` exige um padrão no primeiro render,
+     antes de o cadastro de safras chegar. */
+  const [periodo, setPeriodo] = usePeriodoUrl(safraCorrentePecuaria());
 
   /* ⚠ `replace: true` SEMPRE: trocar de safra ou abrir o drill não é navegação, é filtro. Com
      `push` o botão Voltar do navegador percorreria cada clique de seletor antes de sair da
@@ -213,8 +224,42 @@ export function AgriDreLavouraTab() {
   /* ⚠ SÓ CONSULTA QUANDO A PECUÁRIA ESTÁ ABERTA: o `enabled` do hook mantém a lavoura numa
      chamada só, e é o segmento que liga a segunda. */
   const ehPec = segmento === 'pecuaria';
-  const { dre: drePec, carregando: carregandoPec, erro: erroPec } = useDrePecuaria(
+  const {
+    dre: drePec, carregando: carregandoPec, erro: erroPec, recarregar: recarregarPec,
+  } = useDrePecuaria(
     ehPec ? clienteId : null, ehPec ? anoMes(periodo.de) : null, ehPec ? anoMes(periodo.ate) : null);
+
+  /* ════════ OS TRÊS DESTINOS DE UM CLIQUE NA GRADE DA PECUÁRIA (§5 e §6) ════════ */
+  /** O recorte da célula clicada. `null` = nenhuma lista aberta. */
+  const [recortePec, setRecortePec] = useState<RecortePec | null>(null);
+  const [didatico, setDidatico] = useState<
+    { fazendaId: string | null; nome: string; qual: 'vpb' | 'efeito' } | null>(null);
+  const [rateioPecAberto, setRateioPecAberto] = useState(false);
+  /**
+   * ONDE A PECUÁRIA ABRE — a última safra com movimento e com fechamento no fim.
+   *
+   * ⚠ SÓ QUANDO A URL NÃO DIZ NADA. Se `f_de`/`f_ate` vieram no endereço, eles mandam: o link que
+   * o operador copiou tem de reabrir exatamente onde estava, e sobrescrevê-lo aqui faria a tela
+   * "pular" de período um instante depois de carregar.
+   * ⚠ E UMA VEZ SÓ, pelo `aplicada`: sem a trava, trocar o período à mão seria desfeito no render
+   * seguinte — o efeito veria a URL diferente do alvo e a puxaria de volta.
+   */
+  const aberturaPec = useSafraDeAbertura(ehPec ? clienteId : null);
+  const [aberturaAplicada, setAberturaAplicada] = useState(false);
+  useEffect(() => {
+    if (!ehPec || aberturaAplicada || !aberturaPec) return;
+    setAberturaAplicada(true);
+    if (searchParams.get('f_de') || searchParams.get('f_ate')) return;
+    setPeriodo(aberturaPec.periodo);
+  }, [ehPec, aberturaAplicada, aberturaPec, searchParams, setPeriodo]);
+
+  const pecDe = ehPec ? anoMes(periodo.de) : null;
+  const pecAte = ehPec ? anoMes(periodo.ate) : null;
+  const {
+    lancamentos: lancPec, carregando: carregandoLancPec, recarregar: recarregarLancPec,
+  } = useDrePecuariaLancamentos(clienteId, recortePec, pecDe, pecAte);
+  const { patrimonio: patPec, carregando: carregandoPatPec } = useDrePecuariaPatrimonio(
+    clienteId, didatico?.fazendaId ?? null, pecDe, pecAte, !!didatico);
 
   /* ⚠ TRÊS CONTROLES DE APRESENTAÇÃO, e nenhum deles refaz consulta: o payload já traz `direto`,
      `rateado` e `valor` em cada linha. Trocar de modo é escolher qual ler. */
@@ -569,7 +614,8 @@ export function AgriDreLavouraTab() {
                   por PERÍODO DE MESES (o rebanho não tem safra). É o seletor do Financeiro, não
                   um terceiro — "Ano safra" se faz nele pelo Personalizado jul→jun. */}
               {ehPec ? (
-                <SeletorPeriodo periodo={periodo} onPeriodoChange={setPeriodo} />
+                <SeletorPeriodoPecuaria clienteId={clienteId}
+                  periodo={periodo} onPeriodoChange={setPeriodo} />
               ) : (
                 <Select value={safraId} onValueChange={setSafraId}>
                   <SelectTrigger className="h-[22px] w-[130px] text-[10px]">
@@ -725,8 +771,48 @@ export function AgriDreLavouraTab() {
             <Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin align-[-2px]" /> Carregando…
           </div>
         ) : (
-          <PecDrePanel dre={drePec} alturaCartao={alturaCartao} cartaoRef={cartao} />
+          <PecDrePanel dre={drePec} alturaCartao={alturaCartao} cartaoRef={cartao}
+            onAbrirLista={setRecortePec}
+            onAbrirDidatico={(fazendaId, nome, qual) => setDidatico({ fazendaId, nome, qual })}
+            onAbrirRateio={() => setRateioPecAberto(true)} />
         )
+      )}
+
+      {/* ⚠ OS TRÊS MODAIS DA PECUÁRIA SÃO IRMÃOS DA GRADE, nunca filhos de uma célula: assim
+          fechar um não desmonta a tabela por baixo, e o estado da expansão dos grupos sobrevive. */}
+      {ehPec && (
+        <PecLancamentosModal
+          aberto={!!recortePec}
+          recorte={recortePec}
+          lancamentos={lancPec}
+          carregando={carregandoLancPec}
+          periodoRotulo={descreverPeriodo(periodo)}
+          onFechar={() => setRecortePec(null)}
+          /* ⚠ O MESMO CAMINHO DA LAVOURA (PR-05): `abrirLancamento` usa o
+             `buscarLancamentoPorId` do Financeiro, e os quatro catálogos já foram carregados no
+             efeito do topo. Sem eles o formulário abre com os campos em branco sobre dado
+             preenchido — o defeito que esta frente já pagou quatro vezes. */
+          onAbrirLancamento={catalogosProntos ? id => { void abrirLancamento(id); } : undefined}
+        />
+      )}
+      {ehPec && didatico && drePec && (
+        <PecPatrimonioModal
+          aberto
+          fazendaNome={didatico.nome}
+          qual={didatico.qual}
+          patrimonio={patPec}
+          carregando={carregandoPatPec}
+          /* ⚠ A AUSÊNCIA VEM DA GRADE, não de uma segunda consulta: `fn_dre_pecuaria` já disse
+             quais fazendas não têm fechamento na ponta inicial. */
+          semP0={(didatico.fazendaId
+            ? drePec.fazendas.find(f => f.fazenda_id === didatico.fazendaId)?.linhas.sem_p0
+            : drePec.total.sem_p0) === true}
+          onFechar={() => setDidatico(null)}
+        />
+      )}
+      {ehPec && drePec && rateioPecAberto && (
+        <PecRateioAdmModal aberto dre={drePec} periodoRotulo={descreverPeriodo(periodo)}
+          onFechar={() => setRateioPecAberto(false)} />
       )}
 
       {/* ⚠ `items-stretch` NO DRILL (§3b), não `items-start`: com `start` o cartão da tabela
@@ -853,6 +939,14 @@ export function AgriDreLavouraTab() {
             await recarregarPainel();
             await recarregarComparativo();
             await recarregarDre();
+            /* ⚠ A PECUÁRIA TAMBÉM, e pelo MESMO motivo das quatro acima: corrigir a fazenda de um
+               lançamento é justamente o gesto do §5 — a coluna errada perde o valor e a certa o
+               ganha. Recarregar só a lista deixaria a grade mostrando o número velho ao lado do
+               detalhe já corrigido, na mesma tela aberta. */
+            if (ehPec) {
+              recarregarPec();
+              await recarregarLancPec();
+            }
           }
           return ok;
         }}
