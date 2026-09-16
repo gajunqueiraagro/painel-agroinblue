@@ -84,15 +84,22 @@ export function CartaoTalhoes({ painel, totais, cultura }: {
       ) : (
         <div className="flex flex-col gap-1">
           {talhoes.map(t => (
+            /* ⚠ TRÊS COLUNAS, e a área saiu da direita para junto do NOME: ela descreve o
+               talhão, não o rendimento. Com os dois números empilhados à direita, o olho lia
+               "120,00 ha · 245,80 sc/ha" como um par comparável — e só o segundo é comparável
+               entre talhões, que é o que a barra ordena. */
             <div key={`${t.talhao}-${t.variedade ?? ''}`} className="flex items-center gap-2">
-              <span className="w-[86px] shrink-0 truncate" title={t.talhao}>{t.talhao}</span>
+              <span className="w-[150px] shrink-0 truncate whitespace-nowrap"
+                title={`${t.talhao} · ${formatNum(t.area_ha, 2)} ha`}>
+                {t.talhao} · {formatNum(t.area_ha, 2)} ha
+              </span>
               <span className="min-w-0 flex-1">
                 <Barra fracao={melhor > 0 ? t.sacas_ha / melhor : 0} cor="hsl(var(--primary))" />
               </span>
-              {/* ⚠ LARGURA FIXA E `nowrap` NA COLUNA DE NÚMERO: é o que mantém as barras
-                  alinhadas quando um talhão tem 4 dígitos e o outro tem 2. */}
-              <span className="w-[150px] shrink-0 whitespace-nowrap text-right tabular-nums">
-                {formatNum(t.area_ha, 2)} ha · {formatNum(t.sacas_ha, 2)} {un}/ha
+              {/* ⚠ LARGURA FIXA E `nowrap`: é o que mantém as barras alinhadas quando um talhão
+                  tem 4 dígitos e o outro tem 2. */}
+              <span className="w-[90px] shrink-0 whitespace-nowrap text-right tabular-nums">
+                {formatNum(t.sacas_ha, 2)} {un}/ha
               </span>
             </div>
           ))}

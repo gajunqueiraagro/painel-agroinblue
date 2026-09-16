@@ -286,7 +286,7 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 2026-09-16: 1491 passando, 22 skipped, 101 arquivos, e
+  Baseline em 2026-09-16: 1495 passando, 22 skipped, 102 arquivos, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -338,6 +338,9 @@ no mesmo arquivo.
   "Rateio compartilhado" em "Custos diretos" e nenhuma no outro.
   De 1490 para 1491 no PR-DRE-LAVOURA-09: o caso que trava o `p_tipo` das DUAS filhas de rateio
   ('pool_fixo' e 'pool_investimento') e confirma que a da cascata segue em 'natureza'.
+  De 1491 para 1495 no PR-DRE-PECUARIA-01: entrou `src/pages/pecDrePanel.test.tsx` (+4) — a
+  ordem das 18 linhas da cascata, os numeros do NJ na coluna Total, o "—" da fazenda sem
+  fechamento e a coluna Administrativo que aparece de proposito.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
