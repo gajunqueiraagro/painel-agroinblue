@@ -168,18 +168,24 @@ describe('o que a aba aberta mostra', () => {
     expect(screen.getByText(/78,8% de R\$ 104\.675,83 por área/)).toBeTruthy();
   });
 
-  /* ⚠ COM O TOGGLE DESLIGADO A TABELA MOSTRA SÓ O DIRETO, e o modal tem de abrir dizendo o mesmo
-     número — senão a primeira linha que o operador lê já contradiz a célula de onde ele veio. */
-  it('com o rateio em linha própria, o eco é o direto e a conta ganha prefixo', () => {
+  /* ⚠ O MODAL SEGUE O TOGGLE (§0), e este par é o teste que prova: MESMO centro, MESMA cultura,
+     MESMO payload — só o modo muda, e com ele o número do topo, a existência das abas e a linha
+     que explica a divisão. Era o defeito: o modal respondia sempre com o total, mesmo quando a
+     célula clicada mostrava só o direto. */
+  it('modo "Custos diretos": uma lista, zero abas, sem falar de pool', () => {
     montar({ ...BASE, direto_cultura: 10000 }, 'natureza', false);
-    expect(screen.getByText('R$ 10.000,00 direto nesta cultura')).toBeTruthy();
-    expect(screen.getByText(/Com o rateio dentro:/)).toBeTruthy();
+    expect(screen.getByText('R$ 10.000,00 nesta cultura')).toBeTruthy();
+    expect(screen.queryByText(/Divisão do rateio/)).toBeNull();
+    expect(screen.queryByText(/A ratear ·/)).toBeNull();
+    expect(screen.queryByText(/por área/)).toBeNull();
   });
 
-  it('com o rateio dentro dos centros, o eco é o total', () => {
+  it('modo "Com rateio nos centros": três abas e o total no topo', () => {
     montar({ ...BASE, direto_cultura: 10000 }, 'natureza', true);
     expect(screen.getByText('R$ 92.484,55 nesta cultura')).toBeTruthy();
-    expect(screen.queryByText(/Com o rateio dentro:/)).toBeNull();
+    expect(screen.getByText(/Divisão do rateio/)).toBeTruthy();
+    expect(screen.getByText(/A ratear · 2/)).toBeTruthy();
+    expect(screen.getByText(/78,8% de R\$ 104\.675,83 por área/)).toBeTruthy();
   });
 
   /* ⚠ SEM DIVISÃO NÃO HÁ BARRA DE ABAS (§10c): pool zero, ou uma cultura só na safra, e o modal
@@ -204,11 +210,12 @@ describe('o que a aba aberta mostra', () => {
 
   /* ⚠ TRÊS ABAS NO CENTRO, E CADA CONTAGEM É A DA SUA LISTA: a aba única de antes somava direto
      e rateado no mesmo rolo, e era a soma dela que não fechava com nenhum número do subtítulo. */
+  /* ⚠ SEM O TOGGLE (chamador que não o conhece) o comportamento antigo fica: três abas. */
   it('o centro mostra as três abas, cada uma com a contagem da sua lista', () => {
     montar(BASE, 'natureza');
     expect(screen.getByText(/Custos diretos · 1/)).toBeTruthy();
     expect(screen.getByText(/Divisão do rateio/)).toBeTruthy();
-    expect(screen.getByText(/Rateados · 2/)).toBeTruthy();
+    expect(screen.getByText(/A ratear · 2/)).toBeTruthy();
   });
 
   /* ⚠ O ADMIN FICA COM DUAS, e é de propósito: lá a lista é o custo do escritório INTEIRO e não

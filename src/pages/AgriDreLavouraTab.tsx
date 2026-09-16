@@ -349,10 +349,40 @@ export function AgriDreLavouraTab() {
   const totalDoDrill = useMemo(
     () => itensDoDrill.reduce((acc, it) => acc + Math.abs(it.mov), 0), [itensDoDrill]);
 
+  /**
+   * OS QUATRO CATÁLOGOS DO `LancamentoV2Dialog` — e é a ausência deles que era o defeito.
+   *
+   * ⚠ ELES NÃO SE CARREGAM SOZINHOS. `useFinanceiroV2` nasce com `contasBancarias`,
+   * `fornecedores`, `classificacoes` e `safras` VAZIOS e só os preenche quando alguém chama os
+   * `load*`. Lista vazia é lista válida: nenhum tipo acusa, o build passa, e o modal abre com
+   * "Selecione fornecedor…", Conta Origem em branco e "Nenhuma safra de Lavoura cadastrada" —
+   * num lançamento que tem os três. Salvar dali grava nulo por cima do que existia.
+   * ⚠ O EFEITO EXISTIA NO `PainelSafraTab` (linhas 376-380) e eu não o trouxe junto quando movi
+   * o drill para cá, no PR-02. O que veio foi a montagem do diálogo e o `abrirLancamento`; o que
+   * ficou para trás foi o que os alimenta. É a terceira tela a pagar esta mesma lição — o
+   * `AgriBarterTab` e o `AgriDreCulturaTab` a registraram antes de mim, com estas palavras.
+   */
+  useEffect(() => {
+    void fin.loadContas();
+    void fin.loadClassificacoes();
+    void fin.loadFornecedores();
+    void fin.loadSafras();
+  }, [fin.loadContas, fin.loadClassificacoes, fin.loadFornecedores, fin.loadSafras]);
+
+  /**
+   * Os catálogos prontos — sem eles o formulário mente sobre o que o lançamento tem.
+   *
+   * ⚠ OS QUATRO, `classificacoes` INCLUSA: ela alimenta o seletor de plano de contas, e vazia
+   * produz exatamente o mesmo estrago dos outros três — campo em branco sobre dado preenchido.
+   */
+  const catalogosProntos = fin.contasBancarias.length > 0 && fin.fornecedores.length > 0
+    && fin.safras.length > 0 && fin.classificacoes.length > 0;
+
+  /* ⚠ O LOADER É O DO FINANCEIRO, não um `select` próprio: `buscarLancamentoPorId` faz
+     exatamente a mesma consulta que eu vinha repetindo aqui, e ter as duas é ter duas donas do
+     mesmo `select` — a primeira coluna que uma ganhar, a outra não ganha. */
   const abrirLancamento = async (id: string) => {
-    const { data } = await (supabase as any).from('financeiro_lancamentos_v2')
-      .select('*').eq('id', id).maybeSingle();
-    const linha: LancamentoV2 | null = data ?? null;
+    const linha = await fin.buscarLancamentoPorId(id);
     if (linha) setEditando(linha);
   };
 
@@ -445,7 +475,13 @@ export function AgriDreLavouraTab() {
         /* ⚠ BARRA DE VERDADE, NÃO BOTÃO FLUTUANTE. Flutuando, ele pousava por cima da primeira
            linha do cabeçalho — justamente a régua que o Ampliar existe para deixar ler. Aqui ele
            ocupa 24px próprios e o cartão começa embaixo. */
-        <div className="flex h-[24px] shrink-0 items-center justify-end">
+        <div className="flex h-[24px] shrink-0 items-center justify-between gap-2">
+          {/* ⚠ O CONTEXTO NA BARRA (§6): ampliado esconde a régua inteira, e sem ele o operador
+              olha uma grade de números sem saber de que safra — ou de que cultura, no drill. */}
+          <span className="min-w-0 truncate text-[11px] text-muted-foreground">
+            {culturaAberta ? labelDaCultura(cultura) : 'Lavoura'}
+            {safraAtual ? ` · Safra ${safraAtual.codigo || safraAtual.nome}` : ''}
+          </span>
           <button type="button" onClick={() => setAmpliado(false)} title="Reduzir (Esc)"
             className="inline-flex h-[22px] items-center gap-1 rounded-md border bg-card px-2 text-[10px] hover:bg-muted">
             <Minimize2 className="h-3 w-3" /> Reduzir
@@ -569,8 +605,11 @@ export function AgriDreLavouraTab() {
               <Segmentado valor={rateioDentro ? 'dentro' : 'propria'}
                 onEscolher={v => setRateioDentro(v === 'dentro')}
                 opcoes={[
-                  { valor: 'propria', rotulo: 'em linha própria' },
-                  { valor: 'dentro', rotulo: 'dentro dos centros' },
+                  /* ⚠ OS RÓTULOS DIZEM O QUE A CÉLULA MOSTRA, não onde o rateio mora: "em linha
+                     própria" descrevia a LINHA que some, e o operador tinha de deduzir o efeito
+                     sobre os centros. As chaves internas não mudaram. */
+                  { valor: 'propria', rotulo: 'Custos diretos' },
+                  { valor: 'dentro', rotulo: 'Com rateio nos centros' },
                 ]} />
               <span className="flex items-center gap-1">
                 <Checkbox checked={mostrarUnitarios}
@@ -671,8 +710,12 @@ export function AgriDreLavouraTab() {
         </AnaliseDrawer>
       )}
 
+      {/* ⚠ `carregando` ENQUANTO OS CATÁLOGOS NÃO CHEGAM (§1c): o formulário editável com os
+          seletores vazios é o caminho para gravar nulo por cima de dado bom. Esqueleto e Salvar
+          travado até os quatro estarem na mão. */}
       <LancamentoV2Dialog
         open={!!editando}
+        carregando={!catalogosProntos}
         onClose={() => setEditando(null)}
         onSave={async (form, id) => {
           const ok = id ? await fin.editarLancamento(id, form) : await fin.criarLancamento(form);
@@ -769,16 +812,22 @@ function Caixas({ caixas }: { caixas: CaixaFaixa[] }) {
   return (
     <div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(6, minmax(0, 1fr))' }}>
       {caixas.map(c => (
-        /* ⚠ CONTEÚDO CENTRADO E MENOR (§7): 9px no rótulo em caixa alta, 13px no valor. A caixa
-           tem 32px de altura e 6px de padding vertical — com 10/14 o par encostava nas bordas de
-           cima e de baixo, e o uppercase é o que separa rótulo de valor sem precisar de peso. */
+        /* ⚠ SEM ALTURA FIXA (§2), e é conserto de corte: 32px não cabem rótulo de 9px mais valor
+           de 13px com entrelinha de verdade (1,2 → 10,8 + 15,6 = 26,4) somados a 12px de padding
+           = 38,4. Com `height: 32` e `leading-none` o texto era espremido e as bordas cortavam o
+           topo do rótulo e a base do valor. Agora a caixa mede o que o conteúdo pede.
+           ⚠ E `leading-none` SAIU: era ele que fazia o 13px caber num espaço de 13px, sem lugar
+           para acentos e cedilhas. */
         <div key={c.rotulo}
-          className="flex min-w-0 flex-col items-center justify-center rounded-md border border-border/60 bg-card"
-          style={{ height: 32, padding: '6px 8px' }} title={c.title}>
-          <div className="w-full truncate text-center text-[9px] uppercase leading-none tracking-wide text-muted-foreground">
+          className="flex min-w-0 flex-col items-center justify-center gap-[2px] rounded-md border border-border/60 bg-card"
+          style={{ padding: '6px 8px' }} title={c.title}>
+          <div className="w-full truncate text-center text-[9px] uppercase tracking-wide text-muted-foreground"
+            style={{ lineHeight: 1.2 }}>
             {c.rotulo}
           </div>
-          <div className="mt-[3px] flex max-w-full items-baseline gap-1 overflow-hidden whitespace-nowrap leading-none">
+          {/* ⚠ UM ESPAÇO DE VERDADE ENTRE VALOR E UNIDADE (§2b): "234,80 ha", não "234,80ha". */}
+          <div className="flex max-w-full items-baseline gap-1 whitespace-nowrap"
+            style={{ lineHeight: 1.2 }}>
             <span className={cn('text-[13px] font-medium tabular-nums', c.cor)}>{c.valor}</span>
             {c.unidade && <span className="truncate text-[9px] text-muted-foreground">{c.unidade}</span>}
           </div>

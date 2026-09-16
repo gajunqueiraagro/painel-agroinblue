@@ -162,7 +162,7 @@ const COLUNAS_LANC: Array<ColunaOrdenavel<LancamentoRateio, string> & { h: strin
   { coluna: 'valor', h: 'Valor', tipo: 'numero', valor: l => l.valor },
 ];
 
-function Donut({ dados, cor, total, rotuloTotal, tamanho = 152 }: {
+function Donut({ dados, cor, total, rotuloTotal, tamanho = 150 }: {
   dados: Array<{ nome: string; valor: number }>;
   cor: (i: number, nome: string) => string;
   total: number;
@@ -219,8 +219,10 @@ export function ecoDaCelula(
   d: RateioDetalhe, tipo: TipoRateio, rateioDentro?: boolean,
 ): string {
   const fatia = fatiaAtual(d)?.valor ?? 0;
+  /* ⚠ NO MODO "Custos diretos" O ECO É O DIRETO E NADA MAIS. A palavra "direto" saiu da frase:
+     o modal inteiro é dos diretos ali, e repetir o adjetivo em cada linha só o esvazia. */
   if (tipo !== 'admin' && rateioDentro === false) {
-    return `${formatMoeda(d.direto_cultura)} direto nesta cultura`;
+    return `${formatMoeda(d.direto_cultura)} nesta cultura`;
   }
   return `${formatMoeda(d.direto_cultura + fatia)} nesta cultura`;
 }
@@ -425,20 +427,29 @@ export function RateioDetalheModal({
      linha. Nesse caso o modal vira o que o operador foi buscar: a lista daquele centro naquela
      cultura, sem barra de abas. Mesmo componente, mesma chamada, mesma lista. */
   const temDivisao = dados.pool > 0 && dados.fatias.length > 1;
-  const tresAbas = !admin && temDivisao;
-  const semAbas = !admin && !temDivisao;
+  /* ⚠ O MODAL SEGUE O TOGGLE DA GRADE (§0), e não só no título: no modo "Custos diretos" a
+     célula mostra o direto e o operador veio ver AQUELES lançamentos — abas de rateio ali
+     oferecem uma divisão que a tela de trás não está aplicando. No modo "Com rateio nos centros"
+     a célula é direto + fatia, e a divisão é a explicação do número.
+     ⚠ `rateioDentro === undefined` MANTÉM O COMPORTAMENTO ANTIGO (três abas): o admin e
+     qualquer chamador futuro que não conheça o toggle continuam como estavam. */
+  const mostrarRateio = temDivisao && rateioDentro !== false;
+  const tresAbas = !admin && mostrarRateio;
+  const semAbas = !admin && !mostrarRateio;
 
   /* ⚠ AS ABAS VIRARAM ESTADO CONTROLADO porque a barra deixou de ser a `TabsList` do Radix e
      passou a ser o `Segmentado` da casa (regra de UI do PR-04). O `Tabs` continua governando o
      CONTEÚDO — é ele que monta e desmonta cada `TabsContent`; o que mudou foi quem desenha a
      escolha. */
-  const abaInicial = semAbas || (tresAbas && rateioDentro === false) ? 'diretos' : 'rateio';
+  /* ⚠ SEM ABAS SÓ HÁ UMA; COM ABAS ABRE NA DIVISÃO — que é o que o número da célula precisa
+     explicar quando o toggle está em "Com rateio nos centros". */
+  const abaInicial = semAbas ? 'diretos' : 'rateio';
   const [abaAtual, setAbaAtual] = useState(abaInicial);
   const opcoesDeAba = tresAbas
     ? [
       { valor: 'diretos', rotulo: `Custos diretos · ${diretos.length}` },
       { valor: 'rateio', rotulo: 'Divisão do rateio' },
-      { valor: 'rateados', rotulo: `Rateados · ${rateados.length}` },
+      { valor: 'rateados', rotulo: `A ratear · ${rateados.length}` },
     ]
     : [
       { valor: 'rateio', rotulo: 'Rateio' },
@@ -453,7 +464,12 @@ export function RateioDetalheModal({
           ⚠ O X DO PRIMITIVO FICA ESCONDIDO: quem fecha é o do cabeçalho, como nos outros modais
           da casa. */}
       <DialogContent
-        className={cn('flex h-[80vh] max-w-3xl flex-col gap-0 overflow-hidden p-0',
+        /* ⚠ `calc(100vh - 96px)` NO LUGAR DE `80vh` (§5a): em telas de 800px o modal media 640 e
+           o passo 2 do administrativo — donut mais tabela de culturas — ficava cortado na base.
+           ⚠ CONTINUA ALTURA FIXA, e não `max-h`: a aba de lançamentos tem de 3 a 418 linhas, e
+           com `max-h` o modal mudaria de tamanho ao trocar de aba, com o rodapé saindo debaixo
+           do cursor. O que mudou foi o número, não a natureza da regra. */
+        className={cn('flex h-[calc(100vh-96px)] max-w-3xl flex-col gap-0 overflow-hidden p-0',
           '[&>button.absolute]:hidden')}>
         <div className="flex shrink-0 items-start gap-2 bg-primary px-4 py-2.5 text-primary-foreground">
           {/* ⚠ DUAS LINHAS (§1b): a primeira É O NÚMERO QUE O DEDO APONTOU, em 14px; a segunda é a
@@ -469,10 +485,14 @@ export function RateioDetalheModal({
                 <p className="mt-0.5 truncate text-[14px] font-medium leading-tight">
                   {ecoDaCelula(dados, tipo, rateioDentro)}
                 </p>
-                <p className="mt-0.5 text-[11px] text-primary-foreground/80">
-                  {rateioDentro === false ? 'Com o rateio dentro: ' : ''}
-                  {subtituloDoRateio(dados, tipo)}
-                </p>
+                {/* ⚠ A SEGUNDA LINHA SÓ EXISTE ONDE HÁ RATEIO A EXPLICAR (§0a): no modo "Custos
+                    diretos" ela falaria de pool e de percentual que a tela de trás não está
+                    usando — informação certa na hora errada. */}
+                {!semAbas && (
+                  <p className="mt-0.5 text-[11px] text-primary-foreground/80">
+                    {subtituloDoRateio(dados, tipo)}
+                  </p>
+                )}
               </>
             )}
           </div>
@@ -537,8 +557,13 @@ export function RateioDetalheModal({
                     total={totalAtividades} rotuloTotal="Admin do período" />
                   <div className="min-w-[240px] flex-1">
                     <table className="w-full table-fixed border-collapse">
+                      {/* ⚠ px FIXOS (§5b), não porcentagem: esticada até a borda, a tabela
+                          deixava o R$ a meia tela do nome da atividade e o olho perdia a linha.
+                          A última coluna absorve a sobra. */}
                       <colgroup>
-                        {['48%', '20%', '32%'].map((w, i) => <col key={i} style={{ width: w }} />)}
+                        <col style={{ width: 220 }} />
+                        <col style={{ width: 130 }} />
+                        <col />
                       </colgroup>
                       <thead>
                         <tr>
@@ -609,8 +634,14 @@ export function RateioDetalheModal({
                     dígito. */}
                 <div className="min-w-[280px] flex-1">
                   <table className="w-full table-fixed border-collapse">
+                    {/* ⚠ A MESMA RÉGUA DA TABELA DE CIMA (§5b/§5c): nome 220, área 90, % 70,
+                        R$ 130. As duas ficam uma sob a outra e larguras diferentes fariam o olho
+                        reancorar a cada bloco. */}
                     <colgroup>
-                      {['38%', '19%', '15%', '28%'].map((w, i) => <col key={i} style={{ width: w }} />)}
+                      <col style={{ width: 220 }} />
+                      <col style={{ width: 90 }} />
+                      <col style={{ width: 70 }} />
+                      <col style={{ width: 130 }} />
                     </colgroup>
                     <thead>
                       <tr>

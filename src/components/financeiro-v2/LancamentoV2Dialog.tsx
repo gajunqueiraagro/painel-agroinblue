@@ -29,7 +29,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { computeValidacaoModal, type AbaFinanceira } from './lancamentoDialogTabs';
 import { AbaAuditoriaLancamento } from '@/components/financeiro-v2/AbaAuditoriaLancamento';
-import { AlertCircle, AlertTriangle, Copy, KeyRound, RefreshCw, DollarSign, FileText, Beef, Repeat } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Copy, KeyRound, RefreshCw, DollarSign, FileText, Beef, Repeat, Loader2 } from 'lucide-react';
 import { LancamentoZooModal } from '@/v2/components/edicao/LancamentoZooModal';
 import { toast } from 'sonner';
 import type { LancamentoV2, LancamentoV2Form, ContaBancariaV2, ClassificacaoItem, FornecedorV2, Safra } from '@/hooks/useFinanceiroV2';
@@ -51,6 +51,17 @@ import { useCulturasDaSafra } from '@/hooks/useAreaPlantada';
 
 interface Props {
   open: boolean;
+  /**
+   * OS CATÁLOGOS AINDA NÃO CHEGARAM — esqueleto no corpo e Salvar travado.
+   *
+   * ⚠ ELA NASCEU DE DADO PERDIDO, não de estética. `contas`, `fornecedores` e `safras` chegam
+   * VAZIOS enquanto os `load*` do `useFinanceiroV2` não rodam, e lista vazia é lista válida:
+   * nenhum tipo acusa. O formulário abria com "Selecione fornecedor…", Conta em branco e
+   * "Nenhuma safra cadastrada" num lançamento que tinha os três — e Salvar gravava nulo por
+   * cima. Ver o caso no `AgriDreLavouraTab` (PR-DRE-LAVOURA-05).
+   * ⚠ OPCIONAL E `false` POR OMISSÃO: nenhum chamador existente muda de comportamento.
+   */
+  carregando?: boolean;
   onClose: () => void;
   onSave: (form: LancamentoV2Form, id?: string) => Promise<boolean>;
   onDelete?: (id: string) => Promise<boolean>;
@@ -300,7 +311,7 @@ function generateParcelas(totalVal: number, numParcelas: number, dataPgtoInicial
 
 
 export function LancamentoV2Dialog({
-  open, onClose, onSave, onDelete, lancamento, fazendas, contas, classificacoes,
+  open, carregando, onClose, onSave, onDelete, lancamento, fazendas, contas, classificacoes,
   fornecedores, safras, defaultFazendaId, onCriarFornecedor, prefill, lockedFields,
   ocultarParcelamento,
   referenciaOperacionalInfo, excelContext, permiteEditarFavorecidoOC, onAbrirOperacaoOC,
@@ -1046,7 +1057,9 @@ export function LancamentoV2Dialog({
     valorNum, contaOrigemId, contaDestinoId, subcentro,
     formaPagamentoParc, numParcelas, parcelaRowsLength: parcelaRows.length,
   });
-  const canSave = validacao.canSave;
+  /* ⚠ `carregando` VENCE A VALIDAÇÃO: com os catálogos vazios o formulário até pode parecer
+     válido — os campos estão "preenchidos" com nada —, e é justamente esse o caso perigoso. */
+  const canSave = validacao.canSave && !carregando;
   // PR-FIN-V2-STATUS-01-AJUSTE item 2 — mensagem clara da pendência principal (regra/campo).
   const pendenciaMsg = statusTransacao === 'realizado' && !dataPagamento
     ? 'Data de pagamento obrigatória quando status = Realizado.'
@@ -1343,6 +1356,22 @@ export function LancamentoV2Dialog({
           // o fluxo Excel permanece flex-col idêntico.
           !excelContext && "grid grid-cols-[1fr_300px] grid-rows-[auto_minmax(0,1fr)_auto]",
         )}>
+          {/* ⚠ UM `fieldset` DESABILITADO COBRE O FORMULÁRIO INTEIRO (§1c), e é de propósito que
+              seja o elemento nativo: ele desliga TODO controle que estiver dentro — inclusive os
+              que ainda não existem —, sem uma lista de campos para alguém esquecer de atualizar.
+              `display: contents` o apaga do layout, então a grade de duas colunas do modal segue
+              igual.
+              ⚠ E O X DE FECHAR FICA DE FORA: no `ui/dialog.tsx` ele é IRMÃO de `{children}`, não
+              filho. Se estivesse dentro, o operador ficaria preso num modal que não pode editar
+              nem fechar. */}
+          <fieldset disabled={carregando} className="contents">
+          {carregando && (
+            <div className="col-span-2 row-start-2 row-end-4 flex items-center justify-center gap-2
+              bg-card px-5 py-8 text-[11px] text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Carregando o cadastro do lançamento…
+            </div>
+          )}
           {/* Header */}
           {/* PR-FIN-MODAL-02H — no grid (fluxo normal) o header ocupa as 2 colunas na linha 1;
               no fluxo Excel (flex-col) as classes de grid são inertes.
@@ -2354,6 +2383,7 @@ export function LancamentoV2Dialog({
               </div>
             </aside>
           )}
+          </fieldset>
         </DialogContent>
       </Dialog>
 
