@@ -470,3 +470,24 @@ export function unidadeCurtaDaCultura(cultura: string | null | undefined): strin
   const { kgPorSaca } = unidadeDaCultura(cultura);
   return kgPorSaca ? `sc ${kgPorSaca}kg` : 't';
 }
+
+/**
+ * O SÍMBOLO SOZINHO — "sc", "t" —, para onde o peso não cabe na mesma linha.
+ *
+ * ⚠ TERCEIRA RENDERIZAÇÃO, MESMA FONTE, e ela existe por medição: no cabeçalho da grade do DRE a
+ * coluna tem 60px e "R$/sc 25kg" quebra em duas linhas, desalinhando a régua inteira. O peso não
+ * some — vai para o `title`, via `descricaoDaUnidade`.
+ * ⚠ E NÃO SUBSTITUI `unidadeCurtaDaCultura`: onde há largura, o peso na própria unidade continua
+ * sendo o certo, pela razão que aquele comentário registra — "sc" sozinho não diz quanto é.
+ * Quem escolhe entre as duas é o espaço, e a decisão fica no consumidor.
+ */
+export function simboloDaUnidade(cultura: string | null | undefined): string {
+  const { kgPorSaca } = unidadeDaCultura(cultura);
+  return kgPorSaca ? 'sc' : 't';
+}
+
+/** O que o símbolo quer dizer, por extenso — o `title` que acompanha `simboloDaUnidade`. */
+export function descricaoDaUnidade(cultura: string | null | undefined): string {
+  const { kgPorSaca } = unidadeDaCultura(cultura);
+  return kgPorSaca ? `saca de ${kgPorSaca} kg` : 'tonelada';
+}

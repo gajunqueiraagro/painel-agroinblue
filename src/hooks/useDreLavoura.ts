@@ -58,7 +58,18 @@ export interface DreCultura {
   a_pagar: { operacional: number; investimento: number };
   custo_operacional: number;
   pct_direto: number;
-  equilibrio: { preco_realizado: number; preco_equilibrio: number; produtividade_equilibrio: number };
+  /**
+   * ⚠ OS TRÊS SÃO `number | null`, E O `null` É DADO: a RPC o devolve para a cultura que ainda
+   * não colheu — a mandioca da 25/26 vem com os três nulos, porque sem produção não há preço
+   * realizado nem ponto de equilíbrio. Lê-los com o `num` comum transformava `null` em `0` e a
+   * faixa afirmava "0,00 R$/t", que é um preço, não uma ausência. Foi o defeito B4 da
+   * homologação de 16/09, e ele nasceu aqui, no parser — não na tela.
+   */
+  equilibrio: {
+    preco_realizado: number | null;
+    preco_equilibrio: number | null;
+    produtividade_equilibrio: number | null;
+  };
 }
 
 /** Um centro dentro de um bloco — a filha de um grupo expansível. */
@@ -153,9 +164,9 @@ export function useDreLavoura(clienteId: string | null | undefined, safraId: str
             a_pagar: { operacional: num(ap.operacional), investimento: num(ap.investimento) },
             custo_operacional: num(c.custo_operacional), pct_direto: num(c.pct_direto),
             equilibrio: {
-              preco_realizado: num(eq.preco_realizado),
-              preco_equilibrio: num(eq.preco_equilibrio),
-              produtividade_equilibrio: num(eq.produtividade_equilibrio),
+              preco_realizado: numOuNulo(eq.preco_realizado),
+              preco_equilibrio: numOuNulo(eq.preco_equilibrio),
+              produtividade_equilibrio: numOuNulo(eq.produtividade_equilibrio),
             },
           };
         }),

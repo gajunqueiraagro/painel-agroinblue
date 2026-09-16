@@ -28,9 +28,14 @@ const BASE: RateioDetalhe = {
     { cultura: 'amendoim', area_ha: 185, peso: 78.8, valor: 82484.55, atual: true },
     { cultura: 'mandioca', area_ha: 49.8, peso: 21.2, valor: 22191.28, atual: false },
   ],
+  /* ⚠ DOIS COMPARTILHADOS E UM DIRETO, desde o PR-03: a lista deixou de ser um rolo só e virou
+     duas abas separadas por `compartilhado`, então o fixture precisa ter os dois lados para
+     provar que cada uma pega o seu. O `id` também entrou — é por ele que a linha abre o
+     lançamento, e ele sempre veio da RPC. */
   lancamentos: [
-    { data: '2026-03-14', descricao: 'Energia da sede', favorecido: 'CPFL', valor: 1200, compartilhado: true },
-    { data: '2026-04-02', descricao: 'Contabilidade', favorecido: 'Escritório X', valor: 3400, compartilhado: true },
+    { id: 'l1', data: '2026-03-14', descricao: 'Energia da sede', favorecido: 'CPFL', valor: 1200, compartilhado: true },
+    { id: 'l2', data: '2026-04-02', descricao: 'Contabilidade', favorecido: 'Escritório X', valor: 3400, compartilhado: true },
+    { id: 'l3', data: '2026-04-09', descricao: 'Semente de amendoim', favorecido: 'Coop', valor: 10000, compartilhado: false },
   ],
   /* ⚠ `null` NO BASE porque o base é um recorte de NATUREZA: o percentual da atividade só existe
      no ramo admin, e os casos de admin abaixo o sobrescrevem. */
@@ -84,18 +89,22 @@ const ADMIN = (pct: number | null): RateioDetalhe => ({
  * que a aba ABERTA mostra: o subtítulo do cabeçalho e a grade do rateio.
  */
 describe('subtituloDoRateio — os dois números que se comparam', () => {
-  it('sem parcela direta, diz a fatia da cultura e o pool', () => {
+  /* ⚠ O SUBTÍTULO PASSOU A DIZER DE ONDE A FATIA SAIU (PR-03): antes ele dava a fatia e o pool
+     como dois fatos soltos, e o operador tinha de descobrir sozinho que um é percentual do
+     outro. Agora a frase é a conta. */
+  it('sem parcela direta, diz a fatia como percentual do pool', () => {
     const t = txt(subtituloDoRateio(BASE, 'natureza'));
     expect(t).toContain('R$ 82.484,55 nesta cultura');
-    expect(t).toContain('R$ 104.675,83 no total');
+    expect(t).toContain('78,8% de R$ 104.675,83 por área');
+    expect(t).toContain('sem custo direto neste centro');
   });
 
-  /* ⚠ COM PARCELA DIRETA O SUBTÍTULO ABRE A CONTA. Um número só, somando direto + rateado,
-     mandaria o operador procurar uma nota fiscal de um valor que nunca foi lançado. */
-  it('com parcela direta, abre direto + compartilhado', () => {
+  /* ⚠ COM PARCELA DIRETA O SUBTÍTULO ABRE A CONTA INTEIRA. Um número só, somando direto +
+     rateado, mandaria o operador procurar uma nota fiscal de um valor que nunca foi lançado. */
+  it('com parcela direta, escreve total = direto + rateio (pct do pool)', () => {
     const t = txt(subtituloDoRateio({ ...BASE, direto_cultura: 10000 }, 'natureza'));
-    expect(t).toContain('R$ 92.484,55 nesta cultura');
-    expect(t).toContain('R$ 10.000,00 direto + R$ 82.484,55 do compartilhado');
+    expect(t).toContain('R$ 92.484,55 nesta cultura = R$ 10.000,00 direto');
+    expect(t).toContain('R$ 82.484,55 do rateio (78,8% de R$ 104.675,83 por área)');
   });
 
   /* ⚠ O ADMIN DIZ A CADEIA, não um número só: é a conta que o operador refaz no papel, e o
@@ -160,8 +169,20 @@ describe('o que a aba aberta mostra', () => {
     expect(screen.getByText('234,80')).toBeTruthy();
   });
 
-  it('a contagem de lançamentos aparece no rótulo da aba', () => {
+  /* ⚠ TRÊS ABAS NO CENTRO, E CADA CONTAGEM É A DA SUA LISTA: a aba única de antes somava direto
+     e rateado no mesmo rolo, e era a soma dela que não fechava com nenhum número do subtítulo. */
+  it('o centro mostra as três abas, cada uma com a contagem da sua lista', () => {
     montar(BASE, 'natureza');
-    expect(screen.getByText(/Lançamentos · 2/)).toBeTruthy();
+    expect(screen.getByText(/Custos diretos · 1/)).toBeTruthy();
+    expect(screen.getByText(/Divisão do rateio/)).toBeTruthy();
+    expect(screen.getByText(/Rateados · 2/)).toBeTruthy();
+  });
+
+  /* ⚠ O ADMIN FICA COM DUAS, e é de propósito: lá a lista é o custo do escritório INTEIRO e não
+     se divide em "meu" e "comum" — a repartição dele é por atividade, que é o passo 1. */
+  it('o administrativo continua com duas abas e a lista inteira', () => {
+    montar(ADMIN(25), 'admin');
+    expect(screen.getByText(/Lançamentos · 3/)).toBeTruthy();
+    expect(screen.queryByText(/Custos diretos/)).toBeNull();
   });
 });

@@ -44,6 +44,13 @@ export interface FatiaRateio {
 
 /** Um lançamento de origem, como a RPC o devolve. */
 export interface LancamentoRateio {
+  /**
+   * ⚠ ELE SEMPRE VEIO DA RPC E O FRONT O JOGAVA FORA. `fn_painel_rateio_detalhe` monta cada
+   * lançamento com `jsonb_build_object('id', lid, ...)` desde que existe; esta interface é que
+   * não o declarava, e por isso a lista era só de leitura. Com ele, clicar numa linha abre o
+   * lançamento — o mesmo caminho do drawer do DRE.
+   */
+  id: string;
   data: string | null;
   descricao: string | null;
   favorecido: string | null;
@@ -212,12 +219,18 @@ export function subtituloDoRateio(d: RateioDetalhe, tipo: TipoRateio): string {
     return `${formatMoeda(fatia)} nesta cultura · rateio em dois passos: `
       + `${formatMoeda(bruto)} de admin → ${passo1} → ${passo2}`;
   }
+  /* ⚠ A CONTA INTEIRA NUMA LINHA, e os quatro números já vêm do payload — `direto_cultura`, o
+     `valor` e o `peso` da fatia marcada, e o `pool`. A soma `direto + fatia` é a mesma que o
+     modal sempre fez; o que entrou foi dizer de ONDE a fatia saiu, que é a pergunta seguinte.
+     ⚠ O PERCENTUAL É O DA RPC, arredondado só na exibição: 78,8% de 561.493,13 dá 442.456, e a
+     fatia real é 442.403,02 (peso 78,79%). Quem manda é a fatia; o percentual é legenda. */
+  const pct = formatNum(fatiaAtual(d)?.peso ?? 0, 1);
   if (d.direto_cultura > 0) {
-    return `${formatMoeda(d.direto_cultura + fatia)} nesta cultura `
-      + `(${formatMoeda(d.direto_cultura)} direto + ${formatMoeda(fatia)} do compartilhado)`;
+    return `${formatMoeda(d.direto_cultura + fatia)} nesta cultura = ${formatMoeda(d.direto_cultura)} `
+      + `direto + ${formatMoeda(fatia)} do rateio (${pct}% de ${formatMoeda(d.pool)} por área)`;
   }
-  return `${formatMoeda(fatia)} nesta cultura · ${formatMoeda(d.pool)} no total `
-    + '(compartilhado, rateado por área)';
+  return `${formatMoeda(fatia)} nesta cultura = ${pct}% de ${formatMoeda(d.pool)} por área `
+    + '(sem custo direto neste centro)';
 }
 
 /**
@@ -253,8 +266,88 @@ export function notaDoRateio(d: RateioDetalhe, tipo: TipoRateio): string {
     + '— é esse valor que entra na linha do painel.';
 }
 
+/**
+ * A LISTA DE LANÇAMENTOS DE UM RECORTE — usada pelas DUAS abas novas, nunca copiada.
+ *
+ * ⚠ ELA NASCEU DA ABA "Lançamentos" ÚNICA, que somava direto e rateado no mesmo rolo. Separar em
+ * duas listas foi o pedido da homologação, e a razão é de leitura: numa o operador confere a
+ * nota fiscal que ele mesmo marcou com a cultura; na outra, o custo comum que a fazenda inteira
+ * dividiu. São duas perguntas, e a soma de cada uma bate com um número diferente do subtítulo.
+ * ⚠ UM COMPONENTE, DOIS USOS: com duas cópias, a primeira coluna que alguém ajustasse desalinharia
+ * as abas irmãs.
+ */
+function ListaLancamentos({ linhas, rotuloTotal, onAbrir }: {
+  linhas: LancamentoRateio[];
+  rotuloTotal: string;
+  onAbrir?: (id: string) => void;
+}) {
+  const ord = useOrdenacaoTabela(linhas, COLUNAS_LANC, { coluna: 'data', direcao: 'asc' });
+  const total = useMemo(() => linhas.reduce((a, l) => a + l.valor, 0), [linhas]);
+  return (
+    <>
+      {/* ⚠ UM SCROLLPORT SÓ, e é este: a aba não rola, a caixa da tabela rola. Duas barras
+          fariam o cabeçalho grudado ficar parado enquanto a lista anda por dentro. */}
+      <div className="min-h-0 flex-1 overflow-auto rounded-md border">
+        <table className="w-full table-fixed border-collapse">
+          <colgroup>
+            {['16%', '40%', '26%', '18%'].map((w, i) => <col key={i} style={{ width: w }} />)}
+          </colgroup>
+          <thead>
+            <tr>
+              {COLUNAS_LANC.map(c => (
+                <ThOrdenavel key={c.coluna} coluna={c.coluna} rotulo={c.h}
+                  ordem={ord.ordem} onOrdenar={ord.alternar}
+                  className={TH} alinhaDireita={c.coluna === 'valor'} />
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {linhas.length === 0 && (
+              <tr><td colSpan={4} className="px-2 py-3 text-center text-[11px] text-muted-foreground">
+                Nenhum lançamento neste recorte.
+              </td></tr>
+            )}
+            {ord.ordenadas.map((l, i) => (
+              <tr key={l.id || `${l.data}-${i}`}
+                onClick={onAbrir ? () => onAbrir(l.id) : undefined}
+                title={onAbrir ? 'abrir o lançamento' : undefined}
+                className={cn('border-t border-slate-100', i % 2 === 1 && 'bg-muted/40',
+                  onAbrir && 'cursor-pointer hover:bg-primary/[0.06]')}>
+                <td className="whitespace-nowrap px-2 py-0.5 text-[10px] tabular-nums">
+                  {dataBR(l.data)}
+                </td>
+                {/* ⚠ `truncate` COM `title`: a descrição é o campo livre do lançamento e
+                    não tem teto de tamanho; deixá-la quebrar faria a linha crescer e a
+                    lista de 418 itens virar um rolo. */}
+                <td className="truncate px-2 py-0.5 text-[10px]" title={l.descricao ?? undefined}>
+                  {l.descricao || '—'}
+                </td>
+                <td className="truncate px-2 py-0.5 text-[10px] text-muted-foreground"
+                  title={l.favorecido ?? undefined}>
+                  {l.favorecido || '—'}
+                </td>
+                <td className="px-2 py-0.5 text-right text-[10px] tabular-nums">
+                  {formatMoeda(l.valor)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* ⚠ O TOTAL FICA FIXO FORA DO SCROLLPORT, não num `tfoot`: com 418 linhas o operador
+          precisa do total à vista enquanto procura a nota, não depois de rolar até o fim. */}
+      <div className="mt-1 flex shrink-0 items-center justify-between gap-2 rounded-md
+        bg-primary px-2 py-1 text-[11px] font-bold text-primary-foreground">
+        <span>{rotuloTotal} ({linhas.length})</span>
+        <span className="tabular-nums">{formatMoeda(total)}</span>
+      </div>
+    </>
+  );
+}
+
 export function RateioDetalheModal({
-  aberto, onFechar, titulo, subtitulo, dados, tipo,
+  aberto, onFechar, titulo, subtitulo, dados, tipo, onAbrirLancamento,
 }: {
   aberto: boolean;
   onFechar: () => void;
@@ -271,6 +364,8 @@ export function RateioDetalheModal({
   dados: RateioDetalhe;
   /** 'natureza' | 'investimento' | 'admin' — muda a nota do rodapé, não o cálculo. */
   tipo: TipoRateio;
+  /** Abre o lançamento clicado. Sem ela as listas continuam de leitura, como antes. */
+  onAbrirLancamento?: (id: string) => void;
 }) {
   const totalArea = useMemo(
     () => dados.fatias.reduce((a, f) => a + f.area_ha, 0), [dados.fatias]);
@@ -282,9 +377,18 @@ export function RateioDetalheModal({
      lançamentos, e o hook guarda o estado de cada uma separadamente. */
   const ordAtv = useOrdenacaoTabela(passo1, COLUNAS_ATIVIDADE, { coluna: 'valor', direcao: 'desc' });
   const ordFat = useOrdenacaoTabela(dados.fatias, COLUNAS_FATIA, { coluna: 'valor', direcao: 'desc' });
-  const ordLanc = useOrdenacaoTabela(dados.lancamentos, COLUNAS_LANC, { coluna: 'data', direcao: 'asc' });
-  const totalLancamentos = useMemo(
-    () => dados.lancamentos.reduce((a, l) => a + l.valor, 0), [dados.lancamentos]);
+  /* ⚠ A DIVISÃO É A DA PRÓPRIA RPC, não um critério novo: lá dentro, `comp` é `l.cultura is
+     null`, e é com ele que ela soma `pool` (compartilhado) e `direto_cultura` (o resto). Aqui
+     `compartilhado` é esse mesmo booleano, já no payload — então a soma de cada lista fecha com
+     o número do subtítulo por construção, sem o front refazer conta nenhuma. */
+  const diretos = useMemo(
+    () => dados.lancamentos.filter(l => !l.compartilhado), [dados.lancamentos]);
+  const rateados = useMemo(
+    () => dados.lancamentos.filter(l => l.compartilhado), [dados.lancamentos]);
+  /* ⚠ O ADMIN CONTINUA COM DUAS ABAS. Lá a lista é o custo do escritório INTEIRO e não se divide
+     em "meu" e "comum" — a repartição dele é por atividade, que é o que o passo 1 desenha.
+     Três abas ali inventariam um recorte que o dado não tem. */
+  const tresAbas = tipo !== 'admin';
 
   return (
     <Dialog open={aberto} onOpenChange={o => { if (!o) onFechar(); }}>
@@ -315,13 +419,39 @@ export function RateioDetalheModal({
             `AgriDreCulturaTab` já pagou: o Radix renderiza a aba inativa como `<div hidden>` e
             só os FILHOS somem; `[hidden]{display:none}` do preflight perde para `.flex`, e a
             caixa vazia continuaria repartindo a altura com a aba visível. */}
-        <Tabs defaultValue="rateio" className="flex min-h-0 flex-1 flex-col px-3 pb-2 pt-2">
-          <TabsList className="mb-1.5 grid h-7 w-full shrink-0 grid-cols-2">
-            <TabsTrigger value="rateio" className="text-[10px]">Rateio</TabsTrigger>
-            <TabsTrigger value="lancamentos" className="text-[10px]">
-              Lançamentos · {dados.lancamentos.length}
+        {/* ⚠ ABRE NO RATEIO, como sempre abriu. Cheguei a pôr "Custos diretos" como primeira, e
+            era mudança que ninguém pediu: este modal existe para EXPLICAR o rateio — é o que o
+            cabeçalho do arquivo diz e o que o teste de render trava. As duas listas são o
+            detalhe de quem já entendeu a divisão. */}
+        <Tabs defaultValue="rateio"
+          className="flex min-h-0 flex-1 flex-col px-3 pb-2 pt-2">
+          {/* ⚠ A ORDEM É DIRETO → DIVISÃO → RATEADO, a mesma da frase do subtítulo: o operador lê
+              "X = Y direto + Z do rateio" e encontra as abas na ordem em que acabou de ler. */}
+          <TabsList className={cn('mb-1.5 grid h-7 w-full shrink-0',
+            tresAbas ? 'grid-cols-3' : 'grid-cols-2')}>
+            {tresAbas && (
+              <TabsTrigger value="diretos" className="text-[10px]">
+                Custos diretos · {diretos.length}
+              </TabsTrigger>
+            )}
+            <TabsTrigger value="rateio" className="text-[10px]">
+              {tresAbas ? 'Divisão do rateio' : 'Rateio'}
+            </TabsTrigger>
+            <TabsTrigger value={tresAbas ? 'rateados' : 'lancamentos'} className="text-[10px]">
+              {tresAbas ? `Rateados · ${rateados.length}` : `Lançamentos · ${dados.lancamentos.length}`}
             </TabsTrigger>
           </TabsList>
+
+          {tresAbas && (
+            <TabsContent value="diretos"
+              className="mt-0 min-h-0 flex-1 flex-col data-[state=active]:flex data-[state=inactive]:hidden">
+              <ListaLancamentos linhas={diretos} rotuloTotal="Direto nesta cultura"
+                onAbrir={onAbrirLancamento} />
+              <p className="mt-1 shrink-0 text-[10px] leading-snug text-muted-foreground">
+                Lançamentos marcados com esta cultura — é o que soma o "direto" do subtítulo.
+              </p>
+            </TabsContent>
+          )}
 
           {/* ───────────────────────── ABA 1 — O RATEIO ───────────────────────── */}
           <TabsContent value="rateio"
@@ -467,65 +597,21 @@ export function RateioDetalheModal({
           </TabsContent>
 
           {/* ────────────────────── ABA 2 — OS LANÇAMENTOS ────────────────────── */}
-          <TabsContent value="lancamentos"
+          {/* ─────────── ABA 3 — OS RATEADOS (ou a lista inteira, no admin) ─────────── */}
+          <TabsContent value={tresAbas ? 'rateados' : 'lancamentos'}
             className="mt-0 min-h-0 flex-1 flex-col data-[state=active]:flex data-[state=inactive]:hidden">
-            {/* ⚠ UM SCROLLPORT SÓ, e é este: a aba não rola, a caixa da tabela rola. Duas barras
-                fariam o cabeçalho grudado ficar parado enquanto a lista anda por dentro. */}
-            <div className="min-h-0 flex-1 overflow-auto rounded-md border">
-              <table className="w-full table-fixed border-collapse">
-                <colgroup>
-                  {['16%', '40%', '26%', '18%'].map((w, i) => <col key={i} style={{ width: w }} />)}
-                </colgroup>
-                <thead>
-                  <tr>
-                    {COLUNAS_LANC.map(c => (
-                      <ThOrdenavel key={c.coluna} coluna={c.coluna} rotulo={c.h}
-                        ordem={ordLanc.ordem} onOrdenar={ordLanc.alternar}
-                        className={TH} alinhaDireita={c.coluna === 'valor'} />
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {dados.lancamentos.length === 0 && (
-                    <tr><td colSpan={4} className="px-2 py-3 text-center text-[11px] text-muted-foreground">
-                      Nenhum lançamento neste recorte.
-                    </td></tr>
-                  )}
-                  {ordLanc.ordenadas.map((l, i) => (
-                    <tr key={`${l.data}-${i}`}
-                      className={cn('border-t border-slate-100', i % 2 === 1 && 'bg-muted/40')}>
-                      <td className="whitespace-nowrap px-2 py-0.5 text-[10px] tabular-nums">
-                        {dataBR(l.data)}
-                      </td>
-                      {/* ⚠ `truncate` COM `title`: a descrição é o campo livre do lançamento e
-                          não tem teto de tamanho; deixá-la quebrar faria a linha crescer e a
-                          lista de 418 itens virar um rolo. */}
-                      <td className="truncate px-2 py-0.5 text-[10px]" title={l.descricao ?? undefined}>
-                        {l.descricao || '—'}
-                      </td>
-                      <td className="truncate px-2 py-0.5 text-[10px] text-muted-foreground"
-                        title={l.favorecido ?? undefined}>
-                        {l.favorecido || '—'}
-                      </td>
-                      <td className="px-2 py-0.5 text-right text-[10px] tabular-nums">
-                        {formatMoeda(l.valor)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* ⚠ O TOTAL FICA FIXO FORA DO SCROLLPORT, não num `tfoot`: com 418 linhas o operador
-                precisa do total à vista enquanto procura a nota, não depois de rolar até o fim. */}
-            <div className="mt-1 flex shrink-0 items-center justify-between gap-2 rounded-md
-              bg-primary px-2 py-1 text-[11px] font-bold text-primary-foreground">
-              <span>Total dos lançamentos ({dados.lancamentos.length})</span>
-              <span className="tabular-nums">{formatMoeda(totalLancamentos)}</span>
-            </div>
-
+            <ListaLancamentos
+              linhas={tresAbas ? rateados : dados.lancamentos}
+              rotuloTotal={tresAbas ? 'Pool compartilhado' : 'Total dos lançamentos'}
+              onAbrir={onAbrirLancamento} />
             <p className="mt-1 shrink-0 text-[10px] leading-snug text-muted-foreground">
-              {notaDoRateio(dados, tipo)}
+              {tresAbas
+                /* ⚠ A SOMA DESTA LISTA É O POOL INTEIRO, não a fatia da cultura — e dizer isso
+                   aqui é o que impede o operador de somar, achar diferença e concluir que o
+                   sistema errou. A fatia está no subtítulo e na aba do meio. */
+                ? 'Lançamentos sem cultura marcada — o custo comum. A soma é o pool INTEIRO; '
+                  + 'a fatia desta cultura está no subtítulo.'
+                : notaDoRateio(dados, tipo)}
             </p>
           </TabsContent>
         </Tabs>

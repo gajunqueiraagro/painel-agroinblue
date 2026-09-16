@@ -286,7 +286,7 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 2026-09-16: 1476 passando, 22 skipped, 100 arquivos, e
+  Baseline em 2026-09-16: 1477 passando, 22 skipped, 100 arquivos, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -303,6 +303,15 @@ no mesmo arquivo.
   ⚠ E E' A MESMA TERCEIRA MANEIRA DE UMA BASELINE CAIR ja' registrada no TSC e no
   check:ui-nativo: a peca deixa de existir porque OUTRA passou a responder. Nao houve
   conserto de teste nem supressao.
+  De 1476 para 1477 no PR-DRE-LAVOURA-03, no mesmo dia: o modal de centro passou de duas
+  abas para tres (Custos diretos | Divisao do rateio | Rateados), e
+  src/components/agri/rateioDetalheModal.test.tsx acompanhou — 1 caso saiu (a contagem da
+  aba unica, que nao existe mais) e 2 entraram (as tres abas do centro; as duas do admin).
+  ⚠ E FOI ELE QUE PEGOU A MUDANCA DE CONTRATO. O subtitulo do modal mudou de forma no mesmo
+  PR, e as quatro falhas que apareceram no primeiro `vitest run` eram os casos velhos
+  cobrando a frase velha — nao regressao, mas tambem nao ruido: era o gate fazendo o
+  trabalho dele. Os casos foram atualizados para o contrato novo, nunca removidos para
+  passar.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
