@@ -33,6 +33,7 @@ import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { useSafrasLavoura, useTalhoesDaSafra } from '@/hooks/useAreaPlantada';
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
 import { unidadeDaCultura, kgPorUnidade, rotuloCulturaUnidade, unidadeCurtaDaCultura } from '@/lib/agri/colheita';
+import { ehEntregaDireta } from '@/lib/agri/modeloComercial';
 import { labelDaClasse, corDaClasse } from '@/lib/agri/barterVenda';
 import { rotuloTipoLocal } from '@/lib/agri/locaisEstoque';
 import { useEstoqueGraos, totaisDoEstoque, useEstoqueGraosResumo, useEstoqueMovimentacoes, useVendasGraos, useLancamentosSubstituiveis, useEstoqueGraosPorLocal, useLocaisEstoque } from '@/hooks/useEstoqueGraos';
@@ -138,8 +139,18 @@ export function AgriEstoqueGraosTab() {
 
   /* ⚠ AS CULTURAS SAEM DOS TALHÕES, o mesmo caminho da colheita e do Painel da Safra. */
   const { talhoes } = useTalhoesDaSafra(clienteId, safraId || null);
+  /**
+   * ⚠ CULTURA DE ENTREGA DIRETA NÃO APARECE AQUI, e some inteira — não vem com tudo em zero. A
+   * mandioca industrial não estoca: colheita, entrega e venda são o mesmo ato. Uma linha zerada
+   * convidaria o operador a procurar saldo, quebra e local de um grão que nunca esteve num
+   * galpão; e o total "Todas" somaria tonelada com saca.
+   * ⚠ QUEM DECIDE É O MAPA, nunca o nome da cultura: cana entra na mesma regra sem uma linha
+   * nova, e cultura desconhecida continua aparecendo, que é o comportamento de antes.
+   */
   const culturasDaSafra = useMemo(
-    () => Array.from(new Set(talhoes.map(t => t.cultura))).sort((a, b) => a.localeCompare(b, 'pt-BR')),
+    () => Array.from(new Set(talhoes.map(t => t.cultura)))
+      .filter(c => !ehEntregaDireta(c))
+      .sort((a, b) => a.localeCompare(b, 'pt-BR')),
     [talhoes]);
   /**
    * ⚠ ABRE EM "TODAS", não na primeira cultura: a pergunta do estoque é "o que eu tenho", e numa

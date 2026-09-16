@@ -690,7 +690,7 @@ export function AgriDreLavouraTab() {
           com o próprio scroll. Empilhá-los dentro do cartão do DRE daria dois scrollports. */}
       {culturaAberta && aba === 'producao' && !ampliado && (
         <ProducaoSafraPanel painel={painel} totaisTalhoes={totaisTalhoes}
-          comparadas={comparadas} safraId={safraId || null} />
+          comparadas={comparadas} safraId={safraId || null} cultura={cultura} />
       )}
       {culturaAberta && aba === 'historico' && !ampliado && (
         <HistoricoCultura safras={historico} carregando={carregandoHist}

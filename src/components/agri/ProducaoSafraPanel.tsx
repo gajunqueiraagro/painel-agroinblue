@@ -20,6 +20,7 @@ import { formatNum } from '@/lib/calculos/formatters';
 /* ⚠ `colheu` E `porHa` CONTINUAM VINDO DE `usePainelSafra`, que é de onde sempre vieram — só
    `TH` e `zebra` precisaram ser copiados, porque eram locais do arquivo que morre. */
 import { colheu, porHa, type PainelSafra, type SafraComparada } from '@/hooks/usePainelSafra';
+import { temClassesDeQualidade } from '@/lib/agri/modeloComercial';
 
 /* ⚠ COPIADO VERBATIM de `PainelSafraTab.tsx:45-46`. */
 const TH = 'bg-primary px-2 py-1 text-[9px] font-semibold uppercase tracking-wide'
@@ -35,12 +36,22 @@ export interface TotaisTalhoes {
   acima: number;
 }
 
-export function ProducaoSafraPanel({ painel, totaisTalhoes, comparadas, safraId }: {
+export function ProducaoSafraPanel({ painel, totaisTalhoes, comparadas, safraId, cultura }: {
   painel: PainelSafra | null;
   totaisTalhoes: TotaisTalhoes;
   comparadas: SafraComparada[];
   safraId: string | null;
+  /** Sem cultura, o painel se comporta como sempre (saca) — nenhum chamador antigo muda. */
+  cultura?: string;
 }) {
+  /**
+   * ⚠ A COMPOSIÇÃO POR QUALIDADE SOME NA ENTREGA DIRETA, e some INTEIRA — não vira "—". Traço
+   * quer dizer "não sei"; aqui a resposta é "não se aplica". A indústria pesa e mede o amido:
+   * não há grão bom nem roça a classificar, e uma tabela de classes zerada faria o operador
+   * procurar um refugo que não existe nesta cultura.
+   * ⚠ QUEM DECIDE É O MAPA. Sem cultura informada, tudo continua como estava.
+   */
+  const temClasses = cultura == null || temClassesDeQualidade(cultura);
   return (
     <>
 
@@ -146,6 +157,8 @@ export function ProducaoSafraPanel({ painel, totaisTalhoes, comparadas, safraId 
           não fechar. Mas é grão refugado, e o que se quer é reduzi-la safra a safra. Por isso
           aparece SEPARADA e nomeada "perda de qualidade", nunca fundida no total nem omitida. */}
       {(() => {
+        /* ⚠ A GUARDA DO MAPA VEM ANTES DE TUDO (§3i): sem classes, o bloco inteiro não existe. */
+        if (!temClasses) return null;
         const sel = comparadas.find(sf => sf.safra_id === safraId);
         if (!sel || !colheu(sel)) return null;
         const pctBom = sel.total_sacas > 0 ? 100 - sel.pct_roca : 0;

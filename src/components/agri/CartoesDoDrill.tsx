@@ -12,6 +12,7 @@
 import { cn } from '@/lib/utils';
 import { formatNum } from '@/lib/calculos/formatters';
 import { simboloDaUnidade, descricaoDaUnidade } from '@/lib/agri/colheita';
+import { temClassesDeQualidade } from '@/lib/agri/modeloComercial';
 import type { PainelSafra } from '@/hooks/usePainelSafra';
 import type { TotaisTalhoes } from '@/components/agri/ProducaoSafraPanel';
 import type { DreCultura } from '@/hooks/useDreLavoura';
@@ -112,6 +113,10 @@ export function CartaoTalhoes({ painel, totais, cultura }: {
 /* ═════════════════════ 3b — QUALIDADE DA COLHEITA ═════════════════════ */
 
 export function CartaoQualidade({ totais, cultura }: { totais: TotaisTalhoes; cultura: string }) {
+  /* ⚠ SEM CLASSES, O CARTÃO NÃO EXISTE (§3i) — não é um cartão com "—". A mandioca não tem grão
+     bom nem roça: a indústria pesa e mede o amido. Um cartão vazio ocuparia 110px dizendo que
+     falta dado, quando a resposta é que a pergunta não se aplica. */
+  if (!temClassesDeQualidade(cultura)) return null;
   const un = simboloDaUnidade(cultura);
   /* ⚠ TRÊS CLASSES, E A DO MEIO NÃO É CAMPO DE HOOK NENHUM — ver o relatório do PR-09. Ela sai
      de `totais.acima`, que a própria aba Produção já soma (carga a carga, o grão bom acima de

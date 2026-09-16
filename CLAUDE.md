@@ -286,7 +286,7 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 2026-09-16: 1499 passando, 22 skipped, 102 arquivos, e
+  Baseline em 2026-09-16: 1504 passando, 22 skipped, 103 arquivos, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -346,6 +346,10 @@ no mesmo arquivo.
   a altura cabendo a propria fonte, e o total da grade ficando MENOR que o da grade uniforme.
   ⚠ O ULTIMO E' O QUE IMPORTA: a primeira versao da regua (22/18/18/16) passava em fonte e peso
   e fazia a grade CRESCER. Teste de aparencia nao pega isso; teste de total pega.
+  De 1499 para 1504 no PR-AGRI-MANDIOCA-01a: entrou `src/lib/agri/modeloComercial.test.ts` (+5) —
+  o mapa que decide se a cultura estoca em saca ou entrega direto. O caso que importa e' o da
+  cultura DESCONHECIDA: ela cai em `saca_estocavel`, que e' o comportamento que todas as telas
+  ja' tinham. Um mapa devolvendo `undefined` faria cada tela decidir sozinha.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
