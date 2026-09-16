@@ -23,7 +23,8 @@ import { CINZA_CABECALHO } from '@/lib/idiomaVisual';
 import { formatNum } from '@/lib/calculos/formatters';
 import {
   W_RS, W_HA, W_RS_TOTAL, VERDE, VERMELHO, NAVY_TOTAL, BORDA_TOTAL, traco,
-  corDoSinal, numeroDaCelula, Celula, CelulaUnit, Etiqueta, Caixas, type CaixaFaixa,
+  corDoSinal, numeroDaCelula, Celula, CelulaUnit, Etiqueta, Caixas, REGUA_LINHA, tipoDaLinha,
+  type CaixaFaixa,
 } from '@/components/agri/dreGrade';
 import type { DrePecuaria, DrePecLinhas, ChaveLinhaPec } from '@/hooks/useDrePecuaria';
 
@@ -189,11 +190,16 @@ function LinhaPec({ def, dre }: { def: DefPec; dre: DrePecuaria }) {
   const fundo = fundoDaLinha(def.destaque);
   const corLinha = corDoTom(def.tom);
   const tot = valorDe(dre.total, def.chave);
+  /* ⚠ A MESMA RÉGUA DA LAVOURA (PR-10): a pecuária não tem grupos nem filhas, então só dois dos
+     quatro papéis aparecem aqui — subtotal e simples. O mapa é um só de propósito: o dia em que
+     o subtotal mudar de tamanho, ele muda nas duas telas. */
+  const regua = REGUA_LINHA[tipoDaLinha(def.destaque)];
 
   return (
-    <tr className={cn(fundo, def.destaque && 'font-medium')} style={{ height: 18 }}>
-      <td className={cn('sticky left-0 z-10 truncate px-[7px] py-px', fundo,
-        'border-r border-border/60', corLinha)} title={def.rotulo}>
+    <tr className={cn(fundo, regua.peso)} style={{ height: regua.altura }}>
+      <td className={cn('sticky left-0 z-10 truncate py-px', fundo,
+        'border-r border-border/60', corLinha)} title={def.rotulo}
+        style={{ fontSize: regua.fonte, paddingLeft: 7 + regua.recuo, paddingRight: 7 }}>
         {def.rotulo}
         {def.etiqueta && <Etiqueta texto={def.etiqueta} />}
       </td>
@@ -208,17 +214,20 @@ function LinhaPec({ def, dre }: { def: DefPec; dre: DrePecuaria }) {
           && (f.linhas.sem_p0 || f.linhas.sem_p1);
         return (
           <Fragment key={f.fazenda_id}>
-            <Celula valor={v} cor={cor} destaque={def.destaque} bordaEsquerda fundo={fundo}
+            <Celula valor={v} cor={cor} destaque={def.destaque} fonte={regua.fonte}
+              bordaEsquerda fundo={fundo}
               title={semFech ? 'sem fechamento' : undefined} />
-            <CelulaUnit texto={porCabeca(v, cab)} cor={cor} destaque={def.destaque} fundo={fundo} />
+            <CelulaUnit texto={porCabeca(v, cab)} cor={cor} destaque={def.destaque}
+              fonte={regua.fonte} fundo={fundo} />
           </Fragment>
         );
       })}
 
       <Celula valor={tot} cor={def.corPorSinal ? corDoSinal(tot) : corLinha}
-        destaque={def.destaque} total fundo={fundo} />
+        destaque={def.destaque} fonte={regua.fonte} total fundo={fundo} />
       <CelulaUnit texto={porCabeca(tot, dre.total.patrimonio.cab_fim)}
-        cor={def.corPorSinal ? corDoSinal(tot) : corLinha} destaque={def.destaque} total fundo={fundo} />
+        cor={def.corPorSinal ? corDoSinal(tot) : corLinha} destaque={def.destaque}
+        fonte={regua.fonte} total fundo={fundo} />
     </tr>
   );
 }

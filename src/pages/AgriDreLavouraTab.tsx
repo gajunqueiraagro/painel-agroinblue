@@ -32,7 +32,8 @@ import { CINZA_CABECALHO } from '@/lib/idiomaVisual';
 import {
   W_RS, W_HA, W_UN, W_RS_TOTAL, VERDE, VERDE_70, VERMELHO, VERMELHO_70, AMBAR,
   NAVY_TOTAL, BORDA_TOTAL, FUNDO_TOTAL, traco, corDoSinal, numeroDaCelula, porUnidade,
-  Etiqueta, Celula, CelulaUnit, Caixas, type CaixaFaixa, type DestaqueLinha,
+  Etiqueta, Celula, CelulaUnit, Caixas, PontoRateio, REGUA_LINHA, tipoDaLinha,
+  type CaixaFaixa, type DestaqueLinha,
 } from '@/components/agri/dreGrade';
 import { supabase } from '@/integrations/supabase/client';
 import { RateioDetalheModal, type RateioDetalhe, type TipoRateio } from '@/components/agri/RateioDetalheModal';
@@ -660,7 +661,7 @@ export function AgriDreLavouraTab() {
           <div className="flex h-[28px] items-center justify-between gap-2 text-[10px] text-muted-foreground">
             <span className="min-w-0 flex-1 truncate">
               {formatNum(poolTotal, 2)} em custos comuns rateados por área — estimativa, não lançamento.
-              {rateioDentro && <> {' · '}<span className="text-amber-700">●</span> ao lado do valor = tem rateio dentro.</>}
+              {rateioDentro && <> {' · '}<span className="text-amber-700">●</span> ao lado do nome = tem rateio dentro.</>}
             </span>
             <span className="flex shrink-0 items-center gap-2 whitespace-nowrap">
               Rateio compartilhado:
@@ -1196,7 +1197,10 @@ function LinhaDre({
   /* ⚠ TRÊS PESOS, E A REGRA É A HIERARQUIA DO DRE: subtotal e grupo em 500, filha em 400. O 600
      de antes fazia os cinco subtotais competirem entre si e com o cabeçalho — com 500 eles
      continuam destacados das linhas comuns sem virar cinco títulos empilhados. */
-  const peso = def.destaque || def.bloco ? 'font-medium' : '';
+  /* ⚠ A RÉGUA VEM DO MÓDULO, não de literais aqui: tamanho, peso, altura e recuo saem de
+     `REGUA_LINHA` pelo PAPEL da linha, e é o que mantém a lavoura e a pecuária iguais. */
+  const regua = REGUA_LINHA[tipoDaLinha(def.destaque, !!def.bloco)];
+  const peso = regua.peso;
   const corLinha = corDoTom(def.tom);
   const tot = dre.total.linhas[def.chave];
   /* ⚠ O RATEIO DO GRUPO SE MEDE NAS CULTURAS MOSTRADAS, não no total da safra: no drill só há
@@ -1210,15 +1214,16 @@ function LinhaDre({
     ? () => onDrill(grupoDoRotulo, def.rotulo, culturas[0].cultura) : undefined;
 
   return (
-    <tr className={cn(fundo, peso)} style={{ height: 18 }}>
+    <tr className={cn(fundo, peso)} style={{ height: regua.altura }}>
       {/* ⚠ NO DRILL O RÓTULO TAMBÉM ABRE (§5): com uma cultura só, a linha inteira é aquele
           número, e obrigar a mirar na célula da direita é atrito sem razão. Na raiz o rótulo
           continua inerte — ali ele governa N culturas e não há qual abrir. */}
       <td onClick={rotuloAbre ? aoAbrirRotulo : undefined}
         title={def.rotulo}
-        className={cn('sticky left-0 z-10 truncate px-[7px] py-px', fundo,
+        className={cn('sticky left-0 z-10 truncate py-px', fundo,
           'border-r border-border/60', corLinha,
-          rotuloAbre && 'cursor-pointer hover:underline hover:decoration-dotted')}>
+          rotuloAbre && 'cursor-pointer hover:underline hover:decoration-dotted')}
+        style={{ fontSize: regua.fonte, paddingLeft: 7 + regua.recuo, paddingRight: 7 }}>
         {onAlternar ? (
           /* ⚠ O CARET É BOTÃO, não um `<span onClick>`: a linha inteira não pode alternar
              (clicar no VALOR abre o modal), e um alvo de 11px precisa ser focável pelo teclado. */
@@ -1232,8 +1237,13 @@ function LinhaDre({
         {/* ⚠ SÓ QUANDO HÁ RATEIO DE VERDADE. A etiqueta aparecia em todo grupo expansível no
             modo "dentro dos centros", e Pós-colheita tem `rateado 0` no NJ — ela prometia um
             rateio que não existe e mandava o operador procurar diferença onde não há. */}
-        {def.bloco && rateioDentro && (temRateio ?? 0) > 0
-          && <Etiqueta texto="rateio" cor={AMBAR} title="inclui rateio compartilhado" />}
+        {/* ⚠ A ETIQUETA CONTINUA, E A BOLINHA VEM DEPOIS DELA (§1 do PR-10): a etiqueta diz o
+            QUE a linha tem; o ponto é a marca rápida que o olho pega varrendo a coluna. Na
+            célula de valor ele empurrava o número — e a grade existe para comparar colunas. */}
+        {def.bloco && rateioDentro && (temRateio ?? 0) > 0 && <>
+          <Etiqueta texto="rateio" cor={AMBAR} title="inclui rateio compartilhado" />
+          <PontoRateio />
+        </>}
       </td>
 
       {culturas.map(c => {
@@ -1259,13 +1269,13 @@ function LinhaDre({
             {/* ⚠ AS TRÊS CÉLULAS ABREM A MESMA LISTA (§5), e não só a de R$: são a MESMA linha
                 lida em três unidades. Clicar em "16.046,42 /ha" e nada acontecer ensina que a
                 tabela é inerte — e o operador para de tentar na célula que funcionaria. */}
-            <Celula valor={v} cor={cor} destaque={def.destaque} rateado={rat}
-              direto={l.direto} bordaEsquerda onAbrir={aoAbrir} />
+            <Celula valor={v} cor={cor} destaque={def.destaque} fonte={regua.fonte}
+              bordaEsquerda onAbrir={aoAbrir} />
             {mostrarUnitarios && <>
               <CelulaUnit texto={porUnidade(v, c.area_ha)} cor={cor} destaque={def.destaque}
-                onAbrir={aoAbrir} />
+                fonte={regua.fonte} onAbrir={aoAbrir} />
               <CelulaUnit texto={porUnidade(v, c.producao)} cor={cor} destaque={def.destaque}
-                onAbrir={aoAbrir} />
+                fonte={regua.fonte} onAbrir={aoAbrir} />
             </>}
           </Fragment>
         );
@@ -1279,11 +1289,11 @@ function LinhaDre({
           precisa perder para a zebra e para o `bg-muted` do subtotal, que vêm na linha. */}
       {!semTotal && <>
         <Celula valor={valorDaLinha(tot, def)} cor={def.corPorSinal ? corDoSinal(valorDaLinha(tot, def)) : corLinha}
-          destaque={def.destaque} rateado={def.bloco && rateioDentro ? (tot.rateado ?? 0) : 0}
-          direto={tot.direto} total />
+          destaque={def.destaque} fonte={regua.fonte} total />
         {mostrarUnitarios && (
           <CelulaUnit texto={porUnidade(valorDaLinha(tot, def), dre.total.area_ha)}
-            cor={def.corPorSinal ? corDoSinal(valorDaLinha(tot, def)) : corLinha} destaque={def.destaque}
+            cor={def.corPorSinal ? corDoSinal(valorDaLinha(tot, def)) : corLinha}
+            destaque={def.destaque} fonte={regua.fonte}
             total />
         )}
       </>}
@@ -1322,11 +1332,13 @@ function LinhaRateioDoGrupo({ chave, dre, culturas, mostrarUnitarios, semTotal, 
   const tipo = TIPO_DO_POOL[chave];
   const rotulo = `(−) Rateio compartilhado · ${BLOCO_NO_TITULO[chave] ?? ''}`;
   return (
-    <tr className="bg-card" style={{ height: 15 }}>
+    <tr className="bg-card" style={{ height: REGUA_LINHA.filha.altura }}>
       <td className={cn('sticky left-0 z-10 truncate border-r border-t border-dashed border-border/60',
-        'bg-card px-[7px] py-px text-[10px]', VERMELHO)}
+        'bg-card py-px', VERMELHO)}
+        style={{ fontSize: REGUA_LINHA.filha.fonte,
+          paddingLeft: 7 + REGUA_LINHA.filha.recuo, paddingRight: 7 }}
         title="(−) Rateio compartilhado — estimado, rateado por área">
-        <span className="mr-px inline-block w-[11px]" />(−) Rateio compartilhado
+        (−) Rateio compartilhado
         <Etiqueta texto="estimado" title="rateado por área — estimativa, não lançamento" />
       </td>
 
@@ -1334,12 +1346,15 @@ function LinhaRateioDoGrupo({ chave, dre, culturas, mostrarUnitarios, semTotal, 
         const r = c.linhas[chave].rateado ?? 0;
         return (
           <Fragment key={c.cultura}>
-            <Celula filha valor={r} cor={VERMELHO} bordaEsquerda fundo="bg-card"
+            <Celula filha valor={r} cor={VERMELHO} fonte={REGUA_LINHA.filha.fonte}
+              bordaEsquerda fundo="bg-card"
               onAbrir={tipo ? () => abrir(tipo, null, rotulo, c.cultura) : undefined} />
             {mostrarUnitarios && <>
-              <CelulaUnit filha texto={porUnidade(r, c.area_ha)} cor={VERMELHO} fundo="bg-card"
+              <CelulaUnit filha texto={porUnidade(r, c.area_ha)} cor={VERMELHO}
+                fonte={REGUA_LINHA.filha.fonte} fundo="bg-card"
                 onAbrir={tipo ? () => abrir(tipo, null, rotulo, c.cultura) : undefined} />
-              <CelulaUnit filha texto={porUnidade(r, c.producao)} cor={VERMELHO} fundo="bg-card"
+              <CelulaUnit filha texto={porUnidade(r, c.producao)} cor={VERMELHO}
+                fonte={REGUA_LINHA.filha.fonte} fundo="bg-card"
                 onAbrir={tipo ? () => abrir(tipo, null, rotulo, c.cultura) : undefined} />
             </>}
           </Fragment>
@@ -1347,10 +1362,11 @@ function LinhaRateioDoGrupo({ chave, dre, culturas, mostrarUnitarios, semTotal, 
       })}
 
       {!semTotal && <>
-        <Celula filha valor={totalRateado} cor={VERMELHO} total fundo="bg-card" />
+        <Celula filha valor={totalRateado} cor={VERMELHO} fonte={REGUA_LINHA.filha.fonte}
+          total fundo="bg-card" />
         {mostrarUnitarios && (
           <CelulaUnit filha texto={porUnidade(totalRateado, dre.total.area_ha)} cor={VERMELHO}
-            total fundo="bg-card" />
+            fonte={REGUA_LINHA.filha.fonte} total fundo="bg-card" />
         )}
       </>}
     </tr>
@@ -1370,14 +1386,23 @@ function LinhaCentro({ centro, culturas, rateioDentro, mostrarUnitarios, areaTot
   const estilo = solo ? { backgroundColor: '#fbf3e6' } : undefined;
   const tipo: TipoRateio = centro.bloco === 'investimento' ? 'investimento' : 'natureza';
   const totalCentro = rateioDentro ? centro.total.valor : centro.total.direto;
+  const regua = REGUA_LINHA.filha;
+  /* ⚠ UMA BOLINHA POR LINHA, não uma por coluna: ela diz que AQUELE CENTRO tem rateio dentro, e
+     isso é um fato da linha. Repetida célula a célula, virava ruído e desalinhava os números. */
+  const temRateioAqui = rateioDentro
+    && (centro.total.rateado > 0 || culturas.some(c => (centro.por_cultura[c.cultura]?.rateado ?? 0) > 0));
 
   return (
-    <tr className={fundo} style={{ height: 15, ...estilo }}>
+    <tr className={fundo} style={{ height: regua.altura, ...estilo }}>
       <td className={cn('sticky left-0 z-10 truncate border-r border-t border-dashed border-border/60',
-        'px-[7px] py-px text-[10px]', fundo)}
-        style={{ ...estilo, ...(solo ? { color: '#8a5a1e', fontWeight: 600 } : undefined) }}
+        'py-px', fundo)}
+        style={{
+          fontSize: regua.fonte, paddingLeft: 7 + regua.recuo, paddingRight: 7,
+          ...estilo, ...(solo ? { color: '#8a5a1e', fontWeight: 600 } : undefined),
+        }}
         title={centro.centro}>
-        <span className="mr-px inline-block w-[11px]" />{centro.centro}
+        {centro.centro}
+        {temRateioAqui && <PontoRateio />}
       </td>
 
       {culturas.map(c => {
@@ -1389,23 +1414,25 @@ function LinhaCentro({ centro, culturas, rateioDentro, mostrarUnitarios, areaTot
                 ficavam em cinza herdado, e Infraestrutura com 5,9 milhões lia como nota de
                 rodapé ao lado dos custeios vermelhos. Investimento é dinheiro que saiu.
                 ⚠ O FUNDO ÂMBAR DO SOLO NÃO MUDA — ele marca a formação de área, não o sinal. */}
-            <Celula filha valor={v} cor={VERMELHO} rateado={rateioDentro && p ? p.rateado : 0}
-              direto={p?.direto} bordaEsquerda fundo={fundo} estilo={estilo}
+            <Celula filha valor={v} cor={VERMELHO} fonte={regua.fonte}
+              bordaEsquerda fundo={fundo} estilo={estilo}
               onAbrir={() => abrir(tipo, centro.centro, centro.centro, c.cultura)} />
             {mostrarUnitarios && <>
-              <CelulaUnit filha texto={porUnidade(v, c.area_ha)} cor={VERMELHO} fundo={fundo} estilo={estilo} />
-              <CelulaUnit filha texto={porUnidade(v, c.producao)} cor={VERMELHO} fundo={fundo} estilo={estilo} />
+              <CelulaUnit filha texto={porUnidade(v, c.area_ha)} cor={VERMELHO} fonte={regua.fonte}
+                fundo={fundo} estilo={estilo} />
+              <CelulaUnit filha texto={porUnidade(v, c.producao)} cor={VERMELHO} fonte={regua.fonte}
+                fundo={fundo} estilo={estilo} />
             </>}
           </Fragment>
         );
       })}
 
       {!semTotal && <>
-        <Celula filha valor={totalCentro} cor={VERMELHO} rateado={rateioDentro ? centro.total.rateado : 0}
-          direto={centro.total.direto} total fundo={fundo} estilo={estilo} />
+        <Celula filha valor={totalCentro} cor={VERMELHO} fonte={regua.fonte}
+          total fundo={fundo} estilo={estilo} />
         {mostrarUnitarios && (
           <CelulaUnit filha texto={porUnidade(totalCentro, areaTotal)} cor={VERMELHO}
-            total fundo={fundo} estilo={estilo} />
+            fonte={regua.fonte} total fundo={fundo} estilo={estilo} />
         )}
       </>}
     </tr>

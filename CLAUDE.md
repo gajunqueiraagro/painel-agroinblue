@@ -286,7 +286,7 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 2026-09-16: 1495 passando, 22 skipped, 102 arquivos, e
+  Baseline em 2026-09-16: 1499 passando, 22 skipped, 102 arquivos, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -341,6 +341,11 @@ no mesmo arquivo.
   De 1491 para 1495 no PR-DRE-PECUARIA-01: entrou `src/pages/pecDrePanel.test.tsx` (+4) — a
   ordem das 18 linhas da cascata, os numeros do NJ na coluna Total, o "—" da fazenda sem
   fechamento e a coluna Administrativo que aparece de proposito.
+  De 1495 para 1499 no PR-DRE-LAVOURA-10: quatro casos que travam a REGUA TIPOGRAFICA da grade
+  como NUMERO — os quatro papeis, o invariante de que so' o subtotal passa dos 18px de antes,
+  a altura cabendo a propria fonte, e o total da grade ficando MENOR que o da grade uniforme.
+  ⚠ O ULTIMO E' O QUE IMPORTA: a primeira versao da regua (22/18/18/16) passava em fonte e peso
+  e fazia a grade CRESCER. Teste de aparencia nao pega isso; teste de total pega.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -434,6 +439,22 @@ NAO E' ITEM DE BRIEFING, E' GATE VISUAL: antes de reportar, conferir no
 preview que o cabecalho nao sai da tela ao rolar.
 - Detalhes do A18/A21/A22 em docs/PADROES-UI.md; aqui fica o que nao se
   negocia por PR.
+- ⚠ PISO DE 10px, COM UMA EXCECAO E SO' UMA: as FILHAS DE GRUPO da Grade do DRE
+  (centros de custo dentro de Custeio, Pos-colheita, Custo fixo e Investimento)
+  vao a 9px com altura 16 — decisao do Gabriel em 16/09, mock B do
+  PR-DRE-LAVOURA-10. A regua inteira mora em `REGUA_LINHA`
+  (`src/components/agri/dreGrade.tsx`): subtotal 12/500/20/recuo 0, grupo
+  10/500/16/recuo 8, simples 10/400/16/recuo 8, filha 9/400/14/recuo 16.
+  ⚠ AS ALTURAS NAO SAO AS DO MOCK, E ISSO FOI MEDIDO: com 22/18/18/16 nenhum tipo
+  de linha encolhia (subtotal +4, filha +1, resto igual) e a grade CRESCIA de 287
+  para 307px na raiz — o oposto do alvo. Fontes e recuos ficaram como o mock
+  aprovou; so as alturas desceram, e ai a mesma hierarquia cabe em MENOS espaco
+  que a grade uniforme de 18px de antes. Quem mexer nelas mede a grade inteira,
+  nao so' a linha.
+  ⚠ ELA E' EXCECAO DECLARADA, NAO PRECEDENTE. Nenhum outro texto do sistema desce
+  de 10px, e 9px fora da Grade do DRE reprova o PR. A razao aqui e' hierarquia:
+  com tudo em 11px a cascata virava dezoito linhas iguais e o olho tinha de LER
+  para achar onde a conta fecha.
 - ⚠ SELECAO SE MARCA COM NAVY, NUNCA COM SUBLINHADO OU PILULA CLARA (regra
   permanente, PR-DRE-LAVOURA-04). Aba, segmento ou escolha de 2 a 4 opcoes:
   selecionado = `bg-primary` (o navy do item ativo do menu lateral) + texto

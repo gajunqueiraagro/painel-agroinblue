@@ -17,6 +17,55 @@ import { formatNum, formatMoeda } from '@/lib/calculos/formatters';
 /** O destaque de uma linha — subtotal, sub, ou nenhum. */
 export type DestaqueLinha = 'subtotal' | 'sub' | null;
 
+/** Os quatro papéis de uma linha na cascata do DRE. */
+export type TipoLinha = 'subtotal' | 'grupo' | 'simples' | 'filha';
+
+/**
+ * A HIERARQUIA TIPOGRÁFICA DA GRADE — variante B, aprovada em 16/09.
+ *
+ * ⚠ ELA EXISTE PORQUE TUDO TINHA O MESMO TAMANHO: com 11px do subtotal à filha, a cascata virava
+ * uma lista de dezoito linhas iguais e o olho tinha de LER para achar onde a conta fecha. Agora o
+ * tamanho e o recuo dizem o papel antes da leitura — subtotal grande e sem recuo, filha pequena e
+ * com dois recuos.
+ * ⚠ AS ALTURAS FORAM CORRIGIDAS DEPOIS DA MEDIÇÃO, e vale registrar por quê. A primeira versão
+ * (22/18/18/16) mantinha as fontes deste mock e fazia a grade CRESCER: nenhum tipo encolhia —
+ * subtotal +4, filha +1, o resto igual —, e a raiz ia de 287 para 307px. O alvo era o contrário.
+ * As fontes e os recuos ficaram como o mock aprovou; só as alturas desceram (20/16/16/14), e aí a
+ * mesma hierarquia passa a caber em MENOS espaço que a grade uniforme de 18px que havia antes.
+ * ⚠ O ESPAÇO SOBRA PORQUE `leading-none` DEIXA A ALTURA MANDAR: um subtotal de 12px ocupa 14px
+ * com o padding, e cabe folgado em 20; a filha de 9px ocupa 12 com a borda tracejada, e cabe em
+ * 14. Encurtar mais bateria no conteúdo — é o piso, não uma escolha de gosto.
+ * ⚠ OS 9px DA FILHA SÃO EXCEÇÃO DECLARADA ao piso de 10px do projeto — a única, registrada no
+ * CLAUDE.md. Nenhum outro texto do sistema desce de 10.
+ */
+export const REGUA_LINHA: Record<TipoLinha,
+  { fonte: number; peso: string; altura: number; recuo: number }> = {
+  subtotal: { fonte: 12, peso: 'font-medium', altura: 20, recuo: 0 },
+  grupo: { fonte: 10, peso: 'font-medium', altura: 16, recuo: 8 },
+  simples: { fonte: 10, peso: 'font-normal', altura: 16, recuo: 8 },
+  filha: { fonte: 9, peso: 'font-normal', altura: 14, recuo: 16 },
+};
+
+/** O papel de uma linha: o destaque manda, depois o grupo, senão é simples. */
+export const tipoDaLinha = (destaque?: DestaqueLinha, temBloco?: boolean): TipoLinha =>
+  (destaque ? 'subtotal' : temBloco ? 'grupo' : 'simples');
+
+/**
+ * O PONTO ÂMBAR — e desde o PR-10 ele mora na coluna do NOME, não na célula de valor.
+ *
+ * ⚠ DENTRO DA CÉLULA ELE EMPURRAVA O NÚMERO: a coluna é alinhada à direita, e uma linha com ponto
+ * ficava 7px mais curta que a de cima. Numa grade cuja função é comparar colunas de número, isso
+ * é o pior lugar possível para um enfeite. Ao lado do nome ele diz a mesma coisa e não desloca
+ * nada — a célula de valor volta a ter só o número.
+ */
+export function PontoRateio({ title = 'tem rateio dentro' }: { title?: string }) {
+  return (
+    <span title={title}
+      className="ml-1 inline-block h-[6px] w-[6px] shrink-0 rounded-full align-middle"
+      style={{ backgroundColor: AMBAR }} />
+  );
+}
+
 export const W_RS = 104;      // R$ por cultura
 export const W_HA = 76;       // R$/ha
 export const W_UN = 60;       // R$/unidade
@@ -100,14 +149,17 @@ export const AMBAR = '#b45309';
  * transborda e é visível; faltando, o operador vê e a régua se ajusta. Só a coluna Cultura
  * trunca, porque ali o corte tem `title` para desfazer.
  */
-export function Celula({ valor, cor, destaque, rateado = 0, direto, bordaEsquerda, onAbrir, filha, fundo, estilo, total, title }: {
+export function Celula({ valor, cor, destaque, bordaEsquerda, onAbrir, filha, fundo, estilo, total, title, fonte }: {
   valor: number | null; cor: string; destaque?: DestaqueLinha;
-  rateado?: number; direto?: number; bordaEsquerda?: boolean;
+  bordaEsquerda?: boolean;
   onAbrir?: () => void; filha?: boolean; fundo?: string; estilo?: CSSProperties;
   /** A coluna Total: cinza claro, borda de 2px e peso 500. */
   total?: boolean;
   /** Um porquê para a célula — "sem fechamento" na pecuária. Só quando há o que dizer. */
   title?: string;
+  /** ⚠ O VALOR SEGUE A FONTE DA LINHA (PR-10): subtotal em 12, filha em 9. Um número de 11px ao
+      lado de um rótulo de 9 desmontaria a hierarquia que o rótulo acabou de declarar. */
+  fonte?: number;
 }) {
   const clicavel = !!onAbrir && valor != null;
   return (
@@ -118,30 +170,26 @@ export function Celula({ valor, cor, destaque, rateado = 0, direto, bordaEsquerd
     <td onClick={clicavel ? onAbrir : undefined}
       title={title ?? (clicavel ? 'ver os lançamentos' : undefined)}
       className={cn('whitespace-nowrap px-[7px] py-px text-right tabular-nums',
-      filha ? 'border-t border-dashed border-border/60 text-[10px]' : '',
+      filha ? 'border-t border-dashed border-border/60' : '',
       total && 'font-medium',
       clicavel && 'cursor-pointer hover:underline hover:decoration-dotted', fundo, cor)}
       style={{
+        ...(fonte ? { fontSize: fonte } : {}),
         ...(total ? { backgroundColor: FUNDO_TOTAL } : {}),
         ...estilo,
         ...(total ? { borderLeft: BORDA_TOTAL }
           : bordaEsquerda ? { borderLeft: '1px solid hsl(var(--border) / .6)' } : {}),
       }}>
       {numeroDaCelula(valor)}
-      {/* ⚠ O PONTO ÂMBAR É A ÚNICA PISTA DE QUE O NÚMERO MUDOU DE SIGNIFICADO no modo "dentro dos
-          centros". Sem ele, Insumos saltaria de 1.121.599,85 para 1.172.900,53 sem explicação. */}
-      {rateado > 0 && (
-        <span title={`direto ${formatMoeda(direto ?? 0)} + rateio ${formatMoeda(rateado)}`}
-          className="ml-1 inline-block h-[6px] w-[6px] rounded-full align-middle"
-          style={{ backgroundColor: AMBAR }} />
-      )}
     </td>
   );
 }
 
 /** A célula de /ha e /unidade — mais clara que a de R$, porque ela é derivada, não lançada. */
-export function CelulaUnit({ texto, cor, destaque, filha, fundo, estilo, total, onAbrir }: {
+export function CelulaUnit({ texto, cor, destaque, filha, fundo, estilo, total, onAbrir, fonte }: {
   texto: string; cor: string; destaque?: DestaqueLinha;
+  /** ⚠ O UNITÁRIO FICA UM PONTO ABAIXO DO VALOR, sempre: ele é leitura de apoio. */
+  fonte?: number;
   filha?: boolean; fundo?: string; estilo?: CSSProperties;
   total?: boolean;
   /** §5: na raiz, /ha e /sc abrem a mesma lista que a célula de R$ — é a mesma linha. */
@@ -160,7 +208,8 @@ export function CelulaUnit({ texto, cor, destaque, filha, fundo, estilo, total, 
          valor cheio ele tem de ceder. No subtotal ele É o número que se lê. */
       sub ? cor : cor === VERDE ? VERDE_70
         : cor === VERMELHO ? VERMELHO_70 : cor)}
-      style={{ ...(total ? { backgroundColor: FUNDO_TOTAL } : {}), ...estilo }}>
+      style={{ ...(fonte ? { fontSize: Math.max(9, fonte - 1) } : {}),
+        ...(total ? { backgroundColor: FUNDO_TOTAL } : {}), ...estilo }}>
       {texto}
     </td>
   );

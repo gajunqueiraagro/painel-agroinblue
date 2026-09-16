@@ -12,6 +12,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import { Grade } from '@/pages/AgriDreLavouraTab';
+import { REGUA_LINHA } from '@/components/agri/dreGrade';
 import type { DreLavoura, DreCultura, DreCentro, DreValor, DreLinhas } from '@/hooks/useDreLavoura';
 
 const v = (valor: number, direto = valor, rateado = 0): DreValor => ({ valor, direto, rateado });
@@ -249,5 +250,51 @@ describe('quais células da grade abrem a lista de lançamentos', () => {
     clicar(celulaCom('2.932.505,88'));
     expect(onDrill).not.toHaveBeenCalled();
     expect(abrir).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * A RÉGUA TIPOGRÁFICA — travada como número, não como aparência.
+ *
+ * ⚠ ELA JÁ FOI CORRIGIDA UMA VEZ POR MEDIÇÃO: a primeira versão (22/18/18/16) fazia a grade
+ * CRESCER, porque nenhum tipo de linha encolhia. As alturas desceram para 20/16/16/14 e o total
+ * passou a cair. Um teste que só olhasse fonte e peso teria passado verde nas duas.
+ * ⚠ OS 9px DA FILHA SÃO A ÚNICA EXCEÇÃO ao piso de 10px do projeto, declarada no CLAUDE.md.
+ */
+describe('a régua tipográfica da grade', () => {
+  it('os quatro papéis têm fonte, peso, altura e recuo declarados', () => {
+    expect(REGUA_LINHA.subtotal).toEqual({ fonte: 12, peso: 'font-medium', altura: 20, recuo: 0 });
+    expect(REGUA_LINHA.grupo).toEqual({ fonte: 10, peso: 'font-medium', altura: 16, recuo: 8 });
+    expect(REGUA_LINHA.simples).toEqual({ fonte: 10, peso: 'font-normal', altura: 16, recuo: 8 });
+    expect(REGUA_LINHA.filha).toEqual({ fonte: 9, peso: 'font-normal', altura: 14, recuo: 16 });
+  });
+
+  /* ⚠ SÓ O SUBTOTAL PODE PASSAR DOS 18px de antes, e ele passa de propósito: é o único que a
+     hierarquia manda destacar. Os outros três têm de caber no mesmo espaço ou menos — foi por
+     não respeitar isso que a primeira versão fez a grade crescer. */
+  it('só o subtotal excede os 18px da grade uniforme', () => {
+    expect(REGUA_LINHA.subtotal.altura).toBeGreaterThan(18);
+    for (const papel of ['grupo', 'simples', 'filha'] as const) {
+      expect(REGUA_LINHA[papel].altura, `${papel} devia caber em 18`).toBeLessThanOrEqual(18);
+    }
+  });
+
+  /* ⚠ E A ALTURA TEM DE CABER O TEXTO: fonte + 2px de padding, mais 1px de borda tracejada na
+     filha. Encurtar além disso bate no conteúdo. */
+  it('cada altura cabe a própria fonte', () => {
+    expect(REGUA_LINHA.subtotal.altura).toBeGreaterThanOrEqual(REGUA_LINHA.subtotal.fonte + 2);
+    expect(REGUA_LINHA.simples.altura).toBeGreaterThanOrEqual(REGUA_LINHA.simples.fonte + 2);
+    expect(REGUA_LINHA.filha.altura).toBeGreaterThanOrEqual(REGUA_LINHA.filha.fonte + 3);
+  });
+
+  /* ⚠ O TOTAL É O QUE O GABRIEL VÊ: 15 linhas da cascata (5 subtotais) + a faixa de seção de
+     17px, e depois com as 9 filhas dos grupos abertos. */
+  it('a grade da raiz fica MAIS BAIXA que a de 18px uniforme', () => {
+    const SECAO = 17, N = 15, SUB = 5, FILHAS = 9;
+    const antes = N * 18 + SECAO;
+    const depois = SUB * REGUA_LINHA.subtotal.altura
+      + (N - SUB) * REGUA_LINHA.simples.altura + SECAO;
+    expect(depois).toBeLessThan(antes);
+    expect(depois + FILHAS * REGUA_LINHA.filha.altura).toBeLessThan(antes + FILHAS * 15);
   });
 });
