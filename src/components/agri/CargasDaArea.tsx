@@ -16,6 +16,8 @@
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Plus, Trash2, Pencil } from 'lucide-react';
+import { ehEntregaDireta } from '@/lib/agri/modeloComercial';
+import { CargasEntregaDireta } from '@/components/agri/CargasEntregaDireta';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { formatNum, formatarNF } from '@/lib/calculos/formatters';
@@ -208,6 +210,7 @@ export interface TalhaoDaLista {
 export function CargasDaArea({
   clienteId, talhoes, talhoesDaCultura, talhaoDestino, cultura, safraRotulo,
   linhas, salvarCarga, excluirCarga, somenteLeitura, rotuloTotal,
+  vendaPorCarga, industriaPorId,
 }: {
   clienteId: string | null | undefined;
   /**
@@ -242,6 +245,12 @@ export function CargasDaArea({
   linhas: readonly ColheitaRow[];
   salvarCarga: ReturnType<typeof useColheita>['salvarCarga'];
   excluirCarga: ReturnType<typeof useColheita>['excluirCarga'];
+  /**
+   * ⚠ SÓ A ENTREGA DIRETA USA, e por isso são opcionais: sem elas o componente se comporta
+   * exatamente como antes. O caminho da saca estocável não vê nem uma linha nova.
+   */
+  vendaPorCarga?: ReturnType<typeof useColheita>['vendaPorCarga'];
+  industriaPorId?: ReturnType<typeof useColheita>['industriaPorId'];
   somenteLeitura?: boolean;
 }) {
   /** `null` = modal fechado. */
@@ -369,6 +378,18 @@ export function CargasDaArea({
         {/* ⚠ `leading-tight` NA TABELA, junto do tamanho: a altura da linha vinha da
             entrelinha padrão, não do padding — que já estava em zero. Um lugar só governa os
             dois, e nenhuma célula repete tamanho (a lição do `TD` da Central). */}
+        {/* ⚠ DUAS GRAMÁTICAS, UMA ESCOLHA — e ela é do MAPA, nunca de `cultura === 'mandioca'`.
+            A tabela da entrega direta é irmã, em arquivo próprio: a de baixo tem catorze colunas
+            com larguras medidas no navegador, e tecer condicionais nela para tirar seis e pôr
+            quatro colocaria em risco a tela do amendoim, que funciona. Aqui só se escolhe. */}
+        {ehEntregaDireta(cultura) ? (
+          <CargasEntregaDireta
+            linhas={linhas} vendaPorCarga={vendaPorCarga ?? new Map()}
+            industriaPorId={industriaPorId ?? new Map()}
+            nomePorId={nomePorId} fazPorId={fazPorId} somenteLeitura={somenteLeitura}
+            onEditar={l => { setAreaId(l.safra_area_id); setForm(doBanco(l)); }}
+            onExcluir={l => { void remover(l); }} />
+        ) : (
         <table className="w-full table-fixed border-collapse text-[10px] leading-tight">
           {/* ⚠ `colgroup` E NÃO largura nos `th`: a largura declarada na célula vale só
               enquanto aquela célula existe, e o `tfoot` usa `colSpan` — sem o colgroup, o
@@ -498,6 +519,7 @@ export function CargasDaArea({
             </tr>
           </tfoot>
         </table>
+        )}
       </div>
 
       {/* ⚠ O MODAL É IRMÃO DA LISTA, nunca filho de uma linha: assim editar e criar são o

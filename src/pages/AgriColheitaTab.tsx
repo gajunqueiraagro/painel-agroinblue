@@ -152,7 +152,7 @@ export function AgriColheitaTab() {
    * total logo acima dela com o número velho — na mesma tela, ao mesmo tempo.
    */
   const idsDaSafra = useMemo(() => talhoes.map(t => t.id), [talhoes]);
-  const { linhas, salvarCarga, excluirCarga } = useColheita(idsDaSafra);
+  const { linhas, vendaPorCarga, industriaPorId, salvarCarga, excluirCarga } = useColheita(idsDaSafra);
 
   const talhaoSel = talhoesDaCultura.find(t => t.id === talhaoId) ?? null;
   /** Os talhões que a lista mostra: o escolhido, ou todos os da cultura. */
@@ -464,6 +464,8 @@ export function AgriColheitaTab() {
           rotuloTotal={talhaoSel ? 'Total do talhão' : 'Total da cultura'}
           safraRotulo={safraLabel?.codigo || safraLabel?.nome || ''}
           linhas={doRecorte}
+          vendaPorCarga={vendaPorCarga}
+          industriaPorId={industriaPorId}
           salvarCarga={salvarCarga}
           excluirCarga={excluirCarga}
         />

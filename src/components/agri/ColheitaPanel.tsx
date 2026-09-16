@@ -23,7 +23,7 @@ interface Props {
 
 export function ColheitaPanel({ clienteId, areas, somenteLeitura }: Props) {
   const ids = useMemo(() => areas.map(a => a.id), [areas]);
-  const { linhas, salvarCarga, excluirCarga } = useColheita(ids);
+  const { linhas, vendaPorCarga, industriaPorId, salvarCarga, excluirCarga } = useColheita(ids);
 
   if (areas.length === 0) return null;
 
@@ -46,6 +46,8 @@ export function ColheitaPanel({ clienteId, areas, somenteLeitura }: Props) {
             talhaoDestino={{ id: area.id, cultura: area.cultura, area_plantada_ha: area.area_plantada_ha, pastoNome: '—' }}
             cultura={area.cultura}
             linhas={linhas.filter(l => l.safra_area_id === area.id)}
+            vendaPorCarga={vendaPorCarga}
+            industriaPorId={industriaPorId}
             salvarCarga={salvarCarga}
             excluirCarga={excluirCarga}
             somenteLeitura={somenteLeitura}
