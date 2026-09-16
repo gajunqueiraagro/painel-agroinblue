@@ -31,6 +31,8 @@ const zebra = (i: number) => (i % 2 === 0 ? 'bg-card' : 'bg-muted/40');
 /** Os totais da tabela de talhões — somados de `painel.talhoes`, como no Painel. */
 export interface TotaisTalhoes {
   area: number; sacas: number; boas: number; roca: number; sacasHa: number; pctAfla: number;
+  /** O grão bom acima de 20 ppb, em sacas — a parcela que o `pctAfla` resume. */
+  acima: number;
 }
 
 export function ProducaoSafraPanel({ painel, totaisTalhoes, comparadas, safraId }: {

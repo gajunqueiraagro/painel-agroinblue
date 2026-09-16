@@ -286,7 +286,7 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 2026-09-16: 1490 passando, 22 skipped, 101 arquivos, e
+  Baseline em 2026-09-16: 1491 passando, 22 skipped, 101 arquivos, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -336,6 +336,8 @@ no mesmo arquivo.
   De 1487 para 1490 no PR-DRE-LAVOURA-08: tres casos do INVARIANTE do modo — custo fixo,
   investimento e os dois resultados sao os MESMOS nos dois modos do toggle; tres linhas de
   "Rateio compartilhado" em "Custos diretos" e nenhuma no outro.
+  De 1490 para 1491 no PR-DRE-LAVOURA-09: o caso que trava o `p_tipo` das DUAS filhas de rateio
+  ('pool_fixo' e 'pool_investimento') e confirma que a da cascata segue em 'natureza'.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 

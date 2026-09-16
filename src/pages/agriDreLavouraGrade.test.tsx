@@ -144,6 +144,33 @@ describe('o invariante do PR-08 — o modo não muda total nenhum', () => {
     expect(rateios).toEqual(['532.913,78', '76.544,30', '155.295,94']);
   });
 
+  /* ⚠ AS DUAS FILHAS NOVAS ABREM O POOL DO SEU BLOCO (PR-09), e o `p_tipo` é o que diz qual:
+     `pool_fixo` e `pool_investimento`. Mandar 'natureza' devolveria o pool de custeio +
+     pós-colheita — outro número, sob o rótulo certo, que é o pior tipo de erro. */
+  it('as filhas de rateio abrem o pool do bloco, cada uma com o seu p_tipo', () => {
+    const { abrir } = montar({ rateioDentro: false });
+    /* ⚠ O ALVO É A LINHA, NÃO O TEXTO: o Custo fixo do NJ é 100% rateado, então o grupo e a sua
+       filha de rateio mostram o MESMO 76.544,30 — e um `getByText` acha os dois. As três linhas
+       de rateio vêm na ordem da cascata: custeio, custo fixo, investimento. */
+    const rateios = linhasDaTabela()
+      .filter(tr => (tr.cells[0]?.textContent ?? '').includes('Rateio compartilhado'));
+    expect(rateios).toHaveLength(3);
+
+    clicar(rateios[1].cells[1]);
+    expect(abrir).toHaveBeenCalledWith(
+      'pool_fixo', null, '(−) Rateio compartilhado · Custo fixo', 'amendoim');
+
+    clicar(rateios[2].cells[1]);
+    expect(abrir).toHaveBeenCalledWith(
+      'pool_investimento', null, '(−) Rateio compartilhado · Investimento', 'amendoim');
+
+    /* ⚠ A DA CASCATA CONTINUA PEDINDO 'natureza' com chave nula — o pool de custeio +
+       pós-colheita, que é outro bloco e outro número. */
+    clicar(rateios[0].cells[1]);
+    expect(abrir).toHaveBeenCalledWith(
+      'natureza', null, '(−) Rateio compartilhado', 'amendoim');
+  });
+
   /* ⚠ E NENHUMA DELAS NO OUTRO MODO: lá o rateio está dentro das filhas, com o ponto âmbar. */
   it('com rateio nos centros não sobra nenhuma linha de rateio', () => {
     montar({ rateioDentro: true });

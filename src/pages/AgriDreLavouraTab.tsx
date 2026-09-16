@@ -41,6 +41,9 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { useFinanceiroV2, type LancamentoV2 } from '@/hooks/useFinanceiroV2';
 import { usePainelSafra, useComparativoSafras } from '@/hooks/usePainelSafra';
 import { ProducaoSafraPanel } from '@/components/agri/ProducaoSafraPanel';
+import {
+  CartaoTalhoes, CartaoQualidade, CartaoEquilibrio, CartaoHistorico,
+} from '@/components/agri/CartoesDoDrill';
 import { useDreLavouraHistorico, type SafraHistorico } from '@/hooks/useDreLavouraHistorico';
 import {
   useLancamentosDaSafra, paraItemDrillDaSafra, type LancamentoDaSafra,
@@ -66,6 +69,12 @@ import {
  * ⚠ ERA 240, e os 33px que sobravam eram largura roubada das colunas de número.
  */
 const W_CULTURA = 210;
+
+/* ⚠ OS DOIS MÍNIMOS DA GRADE DE DUAS COLUNAS (§3), medidos: abaixo de 380px os cartões perdem a
+   coluna de número e os valores quebram linha; abaixo de 450px a tabela não mostra nem a coluna
+   Cultura com uma cultura ao lado. */
+const W_MIN_GRADE = 450;
+const W_MIN_CARTOES = 380;
 const W_RS = 104;      // R$ por cultura
 const W_HA = 76;       // R$/ha
 const W_UN = 60;       // R$/unidade
@@ -331,6 +340,11 @@ export function AgriDreLavouraTab() {
     const acima = ts.reduce((a, t) => a + (t.sacas_boas * t.pct_afla20) / 100, 0);
     return {
       area, sacas, boas, roca,
+      /* ⚠ `acima` JÁ ERA CALCULADO E DESCARTADO: a linha de cima o usava só para derivar o
+         percentual. Ele é a soma, carga a carga, do grão bom que passou de 20 ppb — e é o que
+         o cartão de qualidade mostra como classe própria. Expor o que já existe é melhor que
+         reconstruí-lo a partir do percentual. */
+      acima,
       sacasHa: area > 0 ? sacas / area : 0,
       pctAfla: boas > 0 ? (acima / boas) * 100 : 0,
     };
@@ -456,6 +470,8 @@ export function AgriDreLavouraTab() {
 
   /** O que aparece no cartão: a grade só some quando o drill está em Produção ou Histórico. */
   const mostraGrade = !culturaAberta || aba === 'resultado' || ampliado;
+  /** Os cartões são do drill, da aba Resultado, e somem no Ampliar. */
+  const mostraCartoes = !!culturaAberta && aba === 'resultado' && !ampliado;
 
   /** O contexto da régua — um por tela, e a régua não sabe qual delas está aberta. */
   const contextoDaTela = culturaAberta ? contexto
@@ -472,12 +488,29 @@ export function AgriDreLavouraTab() {
   const raiz = useRef<HTMLDivElement | null>(null);
   const cartao = useRef<HTMLDivElement | null>(null);
   const [alturaCartao, setAlturaCartao] = useState<number | null>(null);
+  /**
+   * ⚠ A LARGURA DO CONTÊINER, NÃO A DA JANELA — e é por isso que não há `lg:` nem `xl:` aqui. O
+   * que decide se os cartões cabem ao lado da grade é o espaço que SOBRA depois da barra
+   * lateral, e nenhum breakpoint de viewport sabe quanto ela ocupa. Medido no harness: as duas
+   * colunas cabem até 830px de conteúdo (450 + 380 + 12 de gap = 842 com a margem), e nada
+   * quebra linha nem é cortado. Abaixo disso os cartões descem para baixo da tabela.
+   */
+  const [larguraRaiz, setLarguraRaiz] = useState(0);
+  /* ⚠ ELE VEM DEPOIS DE `larguraRaiz`, E ISSO É ORDEM, NÃO LÓGICA — o mesmo caso do `contexto`:
+     `const` de bloco lida acima da própria declaração é TDZ, e o TSC pegou (TS2448).
+     ⚠ `- 32` É O `px-4` DOS DOIS LADOS: a raiz medida inclui o próprio padding, e a largura útil
+     é a que sobra dele. Sem descontar, a decisão erraria por 32px justamente no limiar. */
+  const duasColunas = larguraRaiz - 32 >= W_MIN_GRADE + W_MIN_CARTOES + 12;
   useLayoutEffect(() => {
     const medir = () => {
       const el = cartao.current;
-      if (!el) { setAlturaCartao(null); return; }
-      const topo = el.getBoundingClientRect().top;
-      setAlturaCartao(Math.max(120, Math.round(window.innerHeight - topo - 8)));
+      if (el) {
+        const topo = el.getBoundingClientRect().top;
+        setAlturaCartao(Math.max(120, Math.round(window.innerHeight - topo - 8)));
+      } else {
+        setAlturaCartao(null);
+      }
+      if (raiz.current) setLarguraRaiz(raiz.current.getBoundingClientRect().width);
     };
     medir();
     window.addEventListener('resize', medir);
@@ -664,11 +697,20 @@ export function AgriDreLavouraTab() {
 
       {/* ⚠ UM SCROLLPORT SÓ, e é o cartão: o cabeçalho gruda dentro dele (`sticky`) e a coluna
           Cultura gruda à esquerda. Duas barras fariam rolar a de dentro sem mover o cabeçalho. */}
+      {/* ⚠ DUAS COLUNAS NO DRILL (§3), e a dos cartões tem MÍNIMO: abaixo de 380px eles ficariam
+          com barras de dois centímetros e números quebrando linha, então o `minmax` empurra a
+          coluna inteira para baixo da tabela — que é o comportamento certo numa janela estreita.
+          ⚠ SÓ NA ABA RESULTADO E FORA DO AMPLIAR: Produção e Histórico já mostram estas tabelas
+          inteiras, e ampliar é ver a grade. */}
       {/* ⚠ NO AMPLIAR É `height`, NÃO `maxHeight` (§8): com `maxHeight` o cartão encolhe até o
           tamanho da tabela e sobra janela embaixo — que é exatamente o que "Ampliar" existe para
           não fazer. No modo normal segue `maxHeight`, para uma tabela curta não desenhar um
           cartão vazio de meia tela. */}
       {mostraGrade && (
+      <div className={cn(mostraCartoes && duasColunas && 'grid items-start gap-3')}
+        style={mostraCartoes && duasColunas
+          ? { gridTemplateColumns: `minmax(${W_MIN_GRADE}px, 1fr) minmax(${W_MIN_CARTOES}px, 1fr)` }
+          : undefined}>
       <div ref={cartao} className="overflow-auto rounded-lg border border-border/60 bg-card"
         style={alturaCartao
           ? (ampliado ? { height: alturaCartao } : { maxHeight: alturaCartao })
@@ -695,6 +737,21 @@ export function AgriDreLavouraTab() {
             onAbrirCultura={culturaAberta ? undefined : abrirCultura}
             onDrill={(chave, rotulo, cult) => setDrill({ chave, rotulo, cultura: cult })} />
         )}
+      </div>
+
+      {mostraCartoes && culturaAberta && (
+        <div className="flex flex-col gap-2" style={{ maxHeight: alturaCartao ?? undefined }}>
+          <CartaoTalhoes painel={painel} totais={totaisTalhoes} cultura={cultura} />
+          <CartaoQualidade totais={totaisTalhoes} cultura={cultura} />
+          <CartaoEquilibrio c={culturaAberta} />
+          <CartaoHistorico safras={historico}
+            safraAtual={safraAtual?.codigo || safraAtual?.nome || ''}
+            onEscolher={cod => {
+              const alvo = safras.find(x => (x.codigo || x.nome) === cod);
+              if (alvo) setSafraId(alvo.id);
+            }} />
+        </div>
+      )}
       </div>
       )}
 
@@ -1113,7 +1170,8 @@ export function Grade({
                 && BLOCOS_SEM_LINHA_PROPRIA.includes(def.bloco)
                 && culturas.some(c => (c.linhas[def.chave].rateado ?? 0) > 0) && (
                 <LinhaRateioDoGrupo key={`${def.chave}:rateio`} chave={def.chave} dre={dre}
-                  culturas={culturas} mostrarUnitarios={mostrarUnitarios} semTotal={semTotal} />
+                  culturas={culturas} mostrarUnitarios={mostrarUnitarios} semTotal={semTotal}
+                  abrir={abrir} />
               )}
             </Fragment>
           );
@@ -1286,18 +1344,31 @@ function LinhaDre({
  *
  * ⚠ ELA É LEITURA, NÃO CONTA: o número é `linhas.<grupo>.rateado`, que a RPC já devolve por
  * cultura e no total. O front não soma nem subtrai nada aqui.
- * ⚠ E ELA NÃO ABRE NADA. A `fn_painel_rateio_detalhe` com `p_chave` nulo devolve o pool de
- * `custeio` + `pos_colheita`; não há parâmetro para pedir o de um bloco. Sem cursor de clique,
- * porque uma linha que parece clicável e não abre é pior que uma que não parece.
+ * ⚠ E ELA ABRE DESDE O PR-09. No PR-08 ficou sem clique porque a RPC só sabia devolver o pool de
+ * `custeio + pos_colheita`; a migration `20261027120500` deu a ela `pool_fixo` e
+ * `pool_investimento`, e o `p_tipo` passou a dizer de qual bloco é o pool. Mesmo modal do PR-07.
  */
-function LinhaRateioDoGrupo({ chave, dre, culturas, mostrarUnitarios, semTotal }: {
+const TIPO_DO_POOL: Partial<Record<ChaveLinha, TipoRateio>> = {
+  custo_fixo: 'pool_fixo',
+  investimento: 'pool_investimento',
+};
+/** O nome do bloco no título, para o modal não dizer só "Rateio compartilhado" duas vezes. */
+const BLOCO_NO_TITULO: Partial<Record<ChaveLinha, string>> = {
+  custo_fixo: 'Custo fixo',
+  investimento: 'Investimento',
+};
+
+function LinhaRateioDoGrupo({ chave, dre, culturas, mostrarUnitarios, semTotal, abrir }: {
   chave: ChaveLinha;
   dre: DreLavoura;
   culturas: DreCultura[];
   mostrarUnitarios: boolean;
   semTotal?: boolean;
+  abrir: AbrirRateio;
 }) {
   const totalRateado = dre.total.linhas[chave].rateado ?? 0;
+  const tipo = TIPO_DO_POOL[chave];
+  const rotulo = `(−) Rateio compartilhado · ${BLOCO_NO_TITULO[chave] ?? ''}`;
   return (
     <tr className="bg-card" style={{ height: 15 }}>
       <td className={cn('sticky left-0 z-10 truncate border-r border-t border-dashed border-border/60',
@@ -1311,10 +1382,13 @@ function LinhaRateioDoGrupo({ chave, dre, culturas, mostrarUnitarios, semTotal }
         const r = c.linhas[chave].rateado ?? 0;
         return (
           <Fragment key={c.cultura}>
-            <Celula filha valor={r} cor={VERMELHO} bordaEsquerda fundo="bg-card" />
+            <Celula filha valor={r} cor={VERMELHO} bordaEsquerda fundo="bg-card"
+              onAbrir={tipo ? () => abrir(tipo, null, rotulo, c.cultura) : undefined} />
             {mostrarUnitarios && <>
-              <CelulaUnit filha texto={porUnidade(r, c.area_ha)} cor={VERMELHO} fundo="bg-card" />
-              <CelulaUnit filha texto={porUnidade(r, c.producao)} cor={VERMELHO} fundo="bg-card" />
+              <CelulaUnit filha texto={porUnidade(r, c.area_ha)} cor={VERMELHO} fundo="bg-card"
+                onAbrir={tipo ? () => abrir(tipo, null, rotulo, c.cultura) : undefined} />
+              <CelulaUnit filha texto={porUnidade(r, c.producao)} cor={VERMELHO} fundo="bg-card"
+                onAbrir={tipo ? () => abrir(tipo, null, rotulo, c.cultura) : undefined} />
             </>}
           </Fragment>
         );

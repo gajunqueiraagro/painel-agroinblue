@@ -209,7 +209,15 @@ function Donut({ dados, cor, total, rotuloTotal, tamanho = 150 }: {
 }
 
 /** O tipo de recorte que o painel clicou — muda a frase do rodapé, nunca o cálculo. */
-export type TipoRateio = 'natureza' | 'investimento' | 'admin';
+/**
+ * O tipo de recorte que o painel clicou — muda a frase do rodapé, nunca o cálculo.
+ *
+ * ⚠ `pool_fixo` E `pool_investimento` ENTRARAM NO PR-09: eles pedem à RPC o POOL de um bloco
+ * (chave nula), que é o que as filhas de rateio do Custo fixo e do Investimento mostram. São
+ * ramos de `p_tipo`, não um segundo modal — do lado de cá se comportam como 'natureza'.
+ */
+export type TipoRateio =
+  'natureza' | 'investimento' | 'admin' | 'pool_fixo' | 'pool_investimento';
 
 /** A fatia da cultura aberta, ou `null` se o recorte não tiver nenhuma marcada. */
 const fatiaAtual = (d: RateioDetalhe) => d.fatias.find(f => f.atual) ?? null;
