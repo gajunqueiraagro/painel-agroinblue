@@ -11,7 +11,7 @@
  * chega nula de propósito (a linha existe, reservada, e o número ainda não). Transformá-la em
  * zero afirmaria "não há depreciação", que é outra coisa.
  */
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
 const num = (v: unknown): number => (v == null ? 0 : Number(v) || 0);
@@ -67,11 +67,13 @@ export interface DreCentro {
   centro: string;
   por_cultura: Record<string, { valor: number; direto: number; rateado: number; a_pagar: number }>;
   /**
-   * ⚠ O TOTAL DO CENTRO NÃO TRAZ `valor` — só `direto`, `rateado` e `a_pagar`. É o único ponto
-   * do contrato em que a coluna Total de uma linha precisa de uma soma, e por isso ela é feita
-   * aqui, nomeada, em vez de espalhada na tela. Ver `valorTotalDoCentro`.
+   * ⚠ `valor` CHEGOU EM `20261027120300`, e com ele a última soma do front saiu. Até essa
+   * migration o total do centro trazia só `direto` e `rateado`, e a coluna Total de uma filha no
+   * modo "dentro dos centros" tinha de somá-los na tela — a única exceção à regra de que o front
+   * não soma. O número é o mesmo (Insumos: 1.169.045,58 + 65.110,27 = 1.234.155,85); o que mudou
+   * é quem responde por ele.
    */
-  total: { direto: number; rateado: number; a_pagar: number };
+  total: { valor: number; direto: number; rateado: number; a_pagar: number };
 }
 
 export interface DreLavoura {
@@ -91,13 +93,6 @@ export interface DreLavoura {
   nao_apropriado: { por_bloco: Record<string, number>; total: number };
   gerado_em: string;
 }
-
-/**
- * ⚠ A ÚNICA SOMA DO FRONT, e ela existe porque o contrato não traz o campo: `centros[].total` tem
- * `direto` e `rateado` mas não `valor`. No modo "dentro dos centros" a coluna Total da filha
- * precisa dos dois juntos. Fica aqui, com nome, em vez de um `+` solto na célula.
- */
-export const valorTotalDoCentro = (c: DreCentro) => c.total.direto + c.total.rateado;
 
 const lerValor = (x: unknown): DreValor => {
   const o = (x ?? {}) as Record<string, unknown>;
@@ -125,8 +120,10 @@ const lerLinhas = (x: unknown): DreLinhas => {
 };
 
 export function useDreLavoura(clienteId: string | null | undefined, safraId: string | null) {
+  const queryClient = useQueryClient();
+  const chave = ['dre-lavoura', clienteId ?? '', safraId ?? ''];
   const { data, isLoading, error } = useQuery({
-    queryKey: ['dre-lavoura', clienteId ?? '', safraId ?? ''],
+    queryKey: chave,
     enabled: !!clienteId && !!safraId,
     queryFn: async (): Promise<DreLavoura | null> => {
       const { data: r, error: err } = await (supabase as any).rpc('fn_dre_lavoura', {
@@ -181,7 +178,7 @@ export function useDreLavoura(clienteId: string | null | undefined, safraId: str
               valor: num(v?.valor), direto: num(v?.direto),
               rateado: num(v?.rateado), a_pagar: num(v?.a_pagar),
             }])),
-            total: { direto: num(t.direto), rateado: num(t.rateado), a_pagar: num(t.a_pagar) },
+            total: { valor: num(t.valor), direto: num(t.direto), rateado: num(t.rateado), a_pagar: num(t.a_pagar) },
           };
         }),
         rateio_admin: {
@@ -200,5 +197,9 @@ export function useDreLavoura(clienteId: string | null | undefined, safraId: str
       };
     },
   });
-  return { dre: data ?? null, carregando: isLoading, erro: error as Error | null };
+  /* ⚠ A CHAVE NUMA CONSTANTE, e não repetida no `invalidateQueries`: duas listas iguais escritas
+     em lugares diferentes é como nasce um recarregar que não recarrega nada. */
+  const recarregar = () => queryClient.invalidateQueries({ queryKey: chave });
+
+  return { dre: data ?? null, carregando: isLoading, erro: error as Error | null, recarregar };
 }

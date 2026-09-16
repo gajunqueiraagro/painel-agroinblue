@@ -260,6 +260,8 @@ export interface TalhaoDaSafra {
   cultura: string;
   status: string;
   area_plantada_ha: number;
+  /** A data em que o talhão foi plantado. `null` enquanto não for informada. */
+  data_plantio: string | null;
   pastoNome: string;
   /** A fazenda do pasto — o cabeçalho do modal a imprime. `null` quando o pasto não a tem. */
   fazendaNome: string | null;
@@ -314,13 +316,16 @@ export function useTalhoesDaSafra(clienteId: string | null | undefined, safraId:
         /* ⚠ `variedade` NO `select`, e não só no tipo — a mesma lição que o comentário do
            `codigo` abaixo registra: o builder é `as any`, o TSC não cobra a coluna ausente, e
            a tela mostraria "—" com o cultivar inteiro gravado no banco. */
-        .select('id, pasto_id, cultura, status, area_plantada_ha, variedade')
+        /* ⚠ `data_plantio` ENTROU NO PR-DRE-LAVOURA-02, e pela MESMA razão do `variedade` acima:
+           a coluna existe e está preenchida (medido: 5/5 talhões da 25/26 do NJ), e sem ela no
+           `select` a régua do drill imprimiria "—" com a data gravada no banco. */
+        .select('id, pasto_id, cultura, status, area_plantada_ha, variedade, data_plantio')
         .eq('cliente_id', clienteId)
         .eq('safra_id', safraId)
         .eq('ativo', true);
       const linhas = (data ?? []) as Array<{
         id: string; pasto_id: string; cultura: string; status: string; area_plantada_ha: number;
-        variedade: string | null;
+        variedade: string | null; data_plantio: string | null;
       }>;
       const ids = Array.from(new Set(linhas.map(l => l.pasto_id).filter(Boolean)));
       const nomes = new Map<string, string>();
@@ -351,6 +356,7 @@ export function useTalhoesDaSafra(clienteId: string | null | undefined, safraId:
           cultura: l.cultura,
           status: l.status,
           area_plantada_ha: Number(l.area_plantada_ha) || 0,
+          data_plantio: l.data_plantio || null,
           /* Sem nome de pasto o talhão continua existindo — e a carga precisa cair nele. */
           pastoNome: nomes.get(l.pasto_id) ?? '—',
           fazendaNome: fazendas.get(fazendaDoPasto.get(l.pasto_id) ?? '') ?? null,

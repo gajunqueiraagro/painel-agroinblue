@@ -284,6 +284,28 @@ no mesmo arquivo.
   multilinha) e a indentacao acertou os 20. Falso negativo e' o lado certo para
   errar — o gate existe para o que quebra, nao para o que e' feio.
 
+- SUITE DE TESTES — comando OFICIAL:
+      npx vitest run
+  Baseline em 2026-09-16: 1476 passando, 22 skipped, 100 arquivos, e
+  3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
+    2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
+  Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
+  regressao, conferir se ela e' uma destas tres.
+  Era 1514 ate' 2026-09-16 e caiu para 1476 no PR-DRE-LAVOURA-02. Sairam 38, TODOS
+  de src/lib/agri/dreCultura.test.ts, que morreu COM A LIB que testava: o
+  `AgriDreCulturaTab` foi apagado (a grade unica de Executivo > DRE responde a mesma
+  pergunta), e com ele cairam `useDreAgricola`, `usePoolAdministrativo` e
+  `lib/agri/dreCultura` — nesta ordem, cada camada so' ficando orfa depois que a
+  anterior saiu.
+  ⚠ NAO E' REGRESSAO E NAO E' PERDA DE COBERTURA: os 38 testes cobriam `montarMatriz`,
+  `valorDe` e `resultadoPorHa` de uma tela que nao existe mais. Cobertura se perde
+  quando o codigo fica sem teste, nao quando os dois saem juntos.
+  ⚠ E E' A MESMA TERCEIRA MANEIRA DE UMA BASELINE CAIR ja' registrada no TSC e no
+  check:ui-nativo: a peca deixa de existir porque OUTRA passou a responder. Nao houve
+  conserto de teste nem supressao.
+  Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
+  sairam ou entraram.
+
 ## RELATORIO DE EXECUCAO (formato obrigatorio, todo ciclo)
 1. TSC: N erros (baseline 142) — numero explicito, obtido com
    `npx tsc -p tsconfig.app.json --noEmit`

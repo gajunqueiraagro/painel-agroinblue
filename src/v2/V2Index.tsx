@@ -59,9 +59,7 @@ import { FinV2SubcentroAliasesTab } from '@/pages/FinV2SubcentroAliasesTab';
 import { FinV2SafrasTab } from '@/pages/FinV2SafrasTab';
 import { CadastroLocaisEstoqueTab } from '@/pages/CadastroLocaisEstoqueTab';
 import { FinV2RateioAdminTab } from '@/pages/FinV2RateioAdminTab';
-import { AgriDreCulturaTab } from '@/pages/AgriDreCulturaTab';
 import { AgriDreLavouraTab } from '@/pages/AgriDreLavouraTab';
-import { PainelSafraTab } from '@/pages/PainelSafraTab';
 import { AgriColheitaTab } from '@/pages/AgriColheitaTab';
 import { AgriBarterTab } from '@/pages/AgriBarterTab';
 import { AgriEstoqueGraosTab } from '@/pages/AgriEstoqueGraosTab';
@@ -859,13 +857,15 @@ export default function V2Index() {
     if (section === 'barter-contratos') return <AgriBarterTab />;
     /* Produção › Agricultura › Estoque de Grãos — o que sobrou entre a colheita e a venda. */
     if (section === 'estoque-graos') return <AgriEstoqueGraosTab />;
-    /* Executivo › DRE — a grade unica da lavoura, de fn_dre_lavoura. */
-    if (section === 'dre') return <AgriDreLavouraTab />;
-    if (section === 'dre-cultura') return (
-      <AgriDreCulturaTab />
-    );
-    /* Executivo › Painel da Safra — o raio-x do ciclo, irmão do DRE por cultura. */
-    if (section === 'painel-safra') return <PainelSafraTab />;
+    /* Executivo › DRE — a grade unica da lavoura, de fn_dre_lavoura.
+       ⚠ AS DUAS CHAVES ANTIGAS CAEM AQUI (PR-DRE-LAVOURA-02): 'dre-cultura' e 'painel-safra'
+       nao tem mais tela, e as telas que tinham foram apagadas. O redirect existe porque as
+       chaves sobrevivem fora do nosso alcance — um favorito, um `sessionStorage['v2:section']`
+       residual de quem estava numa delas quando o deploy subiu. Rota morta devolveria tela
+       branca; aqui o operador cai na tela que responde a mesma pergunta. */
+    if (section === 'dre' || section === 'dre-cultura' || section === 'painel-safra') {
+      return <AgriDreLavouraTab />;
+    }
     if (section === 'painel-consultor') return (
       <PainelConsultorTab
         onBack={() => setSection('home')}

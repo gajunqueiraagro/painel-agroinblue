@@ -3,19 +3,25 @@
  *
  * ⚠⚠ NENHUM CÁLCULO AQUI. `fn_dre_lavoura` devolve cada linha já arredondada, por cultura e no
  * total, e esta tela RENDERIZA. As únicas contas são as duas divisões que o contrato deixa
- * explicitamente ao consumidor — `valor / area_ha` e `valor / producao` — e a soma nomeada
- * `valorTotalDoCentro`, que existe só porque `centros[].total` não traz `valor`.
+ * explicitamente ao consumidor — `valor / area_ha` e `valor / producao`. A soma que existia aqui
+ * (o total de um centro) saiu na migration `20261027120300`, que passou a devolver `total.valor`.
  *
- * ⚠ ELA NASCE DO `AgriDreCulturaTab` (mesmo esqueleto de tabela) e convive com ele: o PR-02
- * aposenta a tela antiga e o Resultado do Painel. Até lá as duas respondem, e é de propósito —
- * é assim que se confere uma contra a outra.
+ * ⚠ ELA NASCEU DO `AgriDreCulturaTab` (mesmo esqueleto de tabela) e o SUBSTITUIU no PR-02,
+ * junto com o Painel da Safra: as duas telas foram apagadas e suas seções redirecionam para cá.
+ * A Produção do Painel veio inteira (`ProducaoSafraPanel`) e o Histórico passou a ler
+ * `fn_dre_lavoura_historico`. Uma safra, uma tela, um número.
+ *
+ * ⚠ DUAS TELAS: a RAIZ compara as culturas da safra; o DRILL (clique no cabeçalho de uma
+ * cultura) é o painel dela, com Resultado, Produção e Histórico. O que separa as duas é um
+ * estado só — `cultura`, lido da URL.
  *
  * ⚠ A ORDEM DAS LINHAS É O DRE (padrão Conab), e ela mora AQUI, não no banco: `fn_dre_lavoura`
  * devolve um objeto de 15 chaves sem ordem, porque JSON não tem ordem. Quem sabe que "margem de
  * contribuição" vem depois do custo variável é a apresentação.
  */
-import { Fragment, useMemo, useState, useEffect } from 'react';
-import { Maximize2, Minimize2, AlertTriangle, Loader2 } from 'lucide-react';
+import { Fragment, useMemo, useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Maximize2, Minimize2, AlertTriangle, Loader2, ChevronLeft } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -27,10 +33,23 @@ import { RateioDetalheModal, type RateioDetalhe, type TipoRateio } from '@/compo
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
 import { unidadeCurtaDaCultura } from '@/lib/agri/colheita';
-import { useSafrasLavoura } from '@/hooks/useAreaPlantada';
+import { useSafrasLavoura, useTalhoesDaSafra } from '@/hooks/useAreaPlantada';
+import { useColheita } from '@/hooks/useColheita';
 import { useCliente } from '@/contexts/ClienteContext';
+import { useFazenda } from '@/contexts/FazendaContext';
+import { useFinanceiroV2, type LancamentoV2 } from '@/hooks/useFinanceiroV2';
+import { usePainelSafra, useComparativoSafras } from '@/hooks/usePainelSafra';
+import { ProducaoSafraPanel } from '@/components/agri/ProducaoSafraPanel';
+import { useDreLavouraHistorico, type SafraHistorico } from '@/hooks/useDreLavouraHistorico';
 import {
-  useDreLavoura, valorTotalDoCentro,
+  useLancamentosDaSafra, paraItemDrillDaSafra, type LancamentoDaSafra,
+} from '@/hooks/useLancamentosDaSafra';
+import { AnaliseDrawer } from '@/components/financeiro-v2/AnaliseDrawer';
+import { DrillDownEconomico } from '@/components/financeiro-v2/DrillDownEconomico';
+import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
+import { NIVEIS_DRILL, type ItemDrill } from '@/lib/analise/drillEconomico';
+import {
+  useDreLavoura,
   type ChaveLinha, type DreCentro, type DreCultura, type DreLavoura, type DreValor,
 } from '@/hooks/useDreLavoura';
 
@@ -116,6 +135,13 @@ const dinheiro = (v: number | null | undefined) => (v == null ? traco : formatMo
  * unidade é declarada uma vez, no alto da coluna, em vez de repetida mil vezes embaixo dela.
  */
 const numeroDaCelula = (v: number | null | undefined) => (v == null ? traco : formatNum(v, 2));
+/* ⚠ DATAS FATIADAS DA STRING, NUNCA POR `new Date('2025-11-10')`: essa forma é interpretada
+   como UTC e, em fuso negativo, volta um dia — "09/11" para quem plantou em 10/11. O banco
+   devolve `date` como 'YYYY-MM-DD', e o que a régua mostra é exatamente o que está lá. */
+const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+const dataCurta = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}`;
+const mesCurto = (d: string) => `${MESES[Number(d.slice(5, 7)) - 1] ?? '—'}/${d.slice(0, 4)}`;
+
 /** ⚠ DIVISÃO É A ÚNICA CONTA QUE O CONTRATO DEIXA AQUI. Denominador zero vira traço, não Infinity. */
 const porUnidade = (v: number | null | undefined, den: number) =>
   (v == null || !(den > 0) ? traco : formatNum(v / den, 2));
@@ -124,12 +150,45 @@ export function AgriDreLavouraTab() {
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id ?? null;
   const { safras } = useSafrasLavoura(clienteId);
-  const [safraId, setSafraId] = useState('');
+
+  /* ───────────────────── SAFRA E CULTURA MORAM NA URL ─────────────────────
+   * ⚠ `cultura` É O QUE SEPARA A RAIZ DO DRILL: vazio, a grade compara as culturas da safra;
+   * preenchido, a tela vira o painel daquela cultura. Um estado só, e não um `modo` paralelo
+   * que pudesse discordar dele.
+   * ⚠ E A SEÇÃO NÃO VAI PARA A URL — não é escolha, é como este shell funciona: `section` é
+   * estado do `V2Index`, espelhado em `sessionStorage['v2:section']` só para dizer a ORIGEM a
+   * quem volta de uma tela global (V2Index:1531 diz isso com todas as letras). Quem recarrega o
+   * /v2 cai em `home`, hoje, em QUALQUER seção. O que este PR pode garantir — e garante — é que
+   * a volta a Executivo › DRE reabre a mesma safra e a mesma cultura.
+   */
+  const [searchParams, setSearchParams] = useSearchParams();
+  const safraId = searchParams.get('safra') ?? '';
+  const cultura = searchParams.get('cultura') ?? '';
+
+  /* ⚠ `replace: true` SEMPRE: trocar de safra ou abrir o drill não é navegação, é filtro. Com
+     `push` o botão Voltar do navegador percorreria cada clique de seletor antes de sair da
+     tela — o defeito clássico de filtro em query string. */
+  const mexerNaUrl = useCallback((mudar: (p: URLSearchParams) => void) => {
+    const p = new URLSearchParams(searchParams);
+    mudar(p);
+    setSearchParams(p, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  const setSafraId = useCallback((id: string) => {
+    mexerNaUrl(p => { p.set('safra', id); });
+  }, [mexerNaUrl]);
+  const abrirCultura = useCallback((c: string) => {
+    mexerNaUrl(p => { p.set('cultura', c); });
+  }, [mexerNaUrl]);
+  const voltarParaRaiz = useCallback(() => {
+    mexerNaUrl(p => { p.delete('cultura'); });
+  }, [mexerNaUrl]);
+
   useEffect(() => {
     if (!safraId && safras.length > 0) setSafraId(safras[safras.length - 1].id);
-  }, [safras, safraId]);
+  }, [safras, safraId, setSafraId]);
 
-  const { dre, carregando, erro } = useDreLavoura(clienteId, safraId || null);
+  const { dre, carregando, erro, recarregar: recarregarDre } = useDreLavoura(clienteId, safraId || null);
 
   /* ⚠ TRÊS CONTROLES DE APRESENTAÇÃO, e nenhum deles refaz consulta: o payload já traz `direto`,
      `rateado` e `valor` em cada linha. Trocar de modo é escolher qual ler. */
@@ -137,6 +196,11 @@ export function AgriDreLavouraTab() {
   const [mostrarUnitarios, setMostrarUnitarios] = useState(true);
   const [ampliado, setAmpliado] = useState(false);
   const [abertos, setAbertos] = useState<Record<string, boolean>>({});
+  /* ⚠ A ABA É ESTADO DE TELA, não de URL: ela não muda o QUE se vê (a safra e a cultura mudam),
+     só o ângulo. Pôr mais um parâmetro na barra por causa dela seria ruído no link que o
+     operador copia. Volta a 'resultado' ao trocar de cultura — ver o efeito abaixo. */
+  const [aba, setAba] = useState<'resultado' | 'producao' | 'historico'>('resultado');
+  useEffect(() => { setAba('resultado'); }, [cultura]);
 
   /* ─────────────────── O MODAL DO PAINEL, REUSADO COMO ESTÁ ───────────────────
    * ⚠ NENHUM MODAL NOVO: o `RateioDetalheModal` do Painel da Safra já responde às três chaves
@@ -177,7 +241,108 @@ export function AgriDreLavouraTab() {
     return () => window.removeEventListener('keydown', sai);
   }, [ampliado]);
 
+  /* ───────────────────── O QUE SÓ O DRILL CONSOME ─────────────────────
+   * ⚠ TUDO DESLIGADO NA RAIZ, e é o que mantém a grade barata: as quatro consultas abaixo só
+   * ganham `enabled` quando há cultura. Na raiz nenhuma delas sai — é uma chamada só,
+   * `fn_dre_lavoura`, como no PR-01.
+   */
+  const culturaOuNulo = cultura || null;
+  const { fazendas } = useFazenda();
+  const { talhoes } = useTalhoesDaSafra(clienteId, culturaOuNulo ? (safraId || null) : null);
+  const talhoesDaCultura = useMemo(
+    () => talhoes.filter(t => t.cultura === cultura), [talhoes, cultura]);
+  /* ⚠ A PRIMEIRA COLHEITA VEM DAS CARGAS, não de `agri_safra_area.data_colheita_real`: medido no
+     NJ 25/26, a coluna está NULA nos 5 talhões, enquanto `agri_colheita` tem 40 cargas entre
+     07/03 e 11/04/2026. Ler a coluna daria "—" numa safra inteiramente colhida. */
+  const { linhas: cargas } = useColheita(useMemo(
+    () => talhoesDaCultura.map(t => t.id), [talhoesDaCultura]));
+  const fin = useFinanceiroV2();
+  const { painel, recarregar: recarregarPainel } = usePainelSafra(clienteId, safraId || null, culturaOuNulo);
+  const { safras: comparadas, recarregar: recarregarComparativo } = useComparativoSafras(clienteId, culturaOuNulo);
+  const { safras: historico, carregando: carregandoHist } = useDreLavouraHistorico(clienteId, culturaOuNulo);
+  /* ⚠ O MAPA DE FORNECEDORES VEM DAQUI, não de `fin.fornecedores`: `paraItemDrillDaSafra` quer
+     um `Map<id, nome>`, e é este hook que o monta — a lista do `useFinanceiroV2` é outra forma
+     do mesmo dado e não encaixa. Mesma escolha do Painel (`PainelSafraTab:254`). */
+  const { lancamentos, fornecedores, recarregar: recarregarLancamentos } = useLancamentosDaSafra(
+    clienteId, culturaOuNulo ? (safraId || null) : null);
+
+  /* ⚠ OS TOTAIS DOS TALHÕES, COPIADOS DE `PainelSafraTab:349-361`: eles somam o que a tabela
+     mostra, e é isso que faz o rodapé fechar com as linhas acima dele. */
+  const totaisTalhoes = useMemo(() => {
+    const ts = painel?.talhoes ?? [];
+    const area = ts.reduce((a, t) => a + t.area_ha, 0);
+    const sacas = ts.reduce((a, t) => a + t.sacas, 0);
+    const boas = ts.reduce((a, t) => a + t.sacas_boas, 0);
+    const roca = ts.reduce((a, t) => a + t.roca_sacas, 0);
+    const acima = ts.reduce((a, t) => a + (t.sacas_boas * t.pct_afla20) / 100, 0);
+    return {
+      area, sacas, boas, roca,
+      sacasHa: area > 0 ? sacas / area : 0,
+      pctAfla: boas > 0 ? (acima / boas) * 100 : 0,
+    };
+  }, [painel?.talhoes]);
+
+  /* ───────────────── O DRAWER DE LANÇAMENTOS, O MESMO DO PAINEL ─────────────────
+   * ⚠ RECEITA, DEDUÇÕES E JUROS PELO MESMO RAMO `grupo`, e as chaves são as do plano de contas
+   * — as MESMAS do `CASE` da migration `plano_bloco_dre`. Medido no NJ 25/26 amendoim:
+   * 'Receita Agrícola' soma 2.925.162,25 (= receita_bruta), 'Deduções Agricultura' 33.905,13
+   * (e 2.925.162,25 − 33.905,13 = 2.891.257,12 = receita_liquida) e o grupo dos juros
+   * 143.707,14. Nenhuma maquinaria nova: o Painel já abria os juros exatamente assim.
+   */
+  const [drill, setDrill] = useState<{ chave: string; rotulo: string } | null>(null);
+  const [editando, setEditando] = useState<LancamentoV2 | null>(null);
+
+  const itensDoDrill: ItemDrill[] = useMemo(() => {
+    if (!drill) return [];
+    /* ⚠ A MESMA REGRA DE CULTURA DO PAINEL: o lançamento da cultura E o sem cultura, que é o
+       pool compartilhado. Copiada de `PainelSafraTab:262`, não reinventada. */
+    const daCultura = (l: LancamentoDaSafra) => (l.cultura ?? '') === cultura || (l.cultura ?? '') === '';
+    return lancamentos
+      .filter(l => daCultura(l) && (l.grupo_custo ?? '') === drill.chave)
+      .map(l => paraItemDrillDaSafra(l, fornecedores));
+  }, [drill, lancamentos, fornecedores, cultura]);
+  const totalDoDrill = useMemo(
+    () => itensDoDrill.reduce((acc, it) => acc + Math.abs(it.mov), 0), [itensDoDrill]);
+
+  const abrirLancamento = async (id: string) => {
+    const { data } = await (supabase as any).from('financeiro_lancamentos_v2')
+      .select('*').eq('id', id).maybeSingle();
+    const linha: LancamentoV2 | null = data ?? null;
+    if (linha) setEditando(linha);
+  };
+
   const culturas = dre?.culturas ?? [];
+  /** A cultura aberta, do payload do DRE — é dela que a faixa e a grade do drill vivem. */
+  const culturaAberta = cultura ? culturas.find(c => c.cultura === cultura) ?? null : null;
+  const safraAtual = safras.find(x => x.id === safraId) ?? null;
+
+  /* ⚠ ELE VEM DEPOIS DE `culturaAberta`, E ISSO É ORDEM, NÃO LÓGICA: o array de dependências de
+     um `useMemo` é avaliado NA HORA, então `culturaAberta` citada ali acima da própria
+     declaração estoura em TDZ e derruba a tela inteira. É o caso que o `check:tdz` existe para
+     pegar, e o conserto é mover a declaração — nunca mudar a conta. */
+  /**
+   * A LINHA DE CONTEXTO DO DRILL — seis fatos, e cada ausência vira "—".
+   *
+   * ⚠ ELA NÃO INVENTA NENHUM: fazendas e talhões saem de `useTalhoesDaSafra`, o plantio da
+   * coluna `data_plantio` (que este PR acrescentou ao `select`), a colheita do MÊS da primeira
+   * carga em `agri_colheita`, e o percentual do `pct_direto` da própria cultura no payload.
+   * ⚠ E O `pct_direto` AQUI É O DA CULTURA (70 no amendoim), não o do total (66). São dois
+   * números certos em dois lugares, e o que a régua do drill descreve é a cultura aberta.
+   */
+  const contexto = useMemo(() => {
+    if (!culturaAberta) return '';
+    const nomes = (lista: (string | null)[]) =>
+      Array.from(new Set(lista.filter((x): x is string => !!x))).join(' · ');
+    const faz = nomes(talhoesDaCultura.map(t => t.fazendaNome)) || '—';
+    const tal = nomes(talhoesDaCultura.map(t => t.pastoNome)) || '—';
+    const plantios = talhoesDaCultura.map(t => t.data_plantio).filter((d): d is string => !!d).sort();
+    const colheitas = cargas.map(c => c.data_colheita).filter(Boolean).sort();
+    return `${labelDaCultura(cultura)} · ${faz} · ${tal}`
+      + ` · plantio ${plantios[0] ? dataCurta(plantios[0]) : '—'}`
+      + ` · colheita ${colheitas[0] ? mesCurto(colheitas[0]) : '—'}`
+      + ` · custos ${formatNum(culturaAberta.pct_direto, 0)} % apropriados direto`;
+  }, [culturaAberta, talhoesDaCultura, cargas, cultura]);
+
   const poolTotal = useMemo(
     () => Object.values(dre?.pool_compartilhado ?? {}).reduce((a, b) => a + b, 0),
     [dre]);
@@ -201,8 +366,19 @@ export function AgriDreLavouraTab() {
       {!ampliado && (
         <>
           <div className="flex flex-wrap items-start justify-between gap-2">
-            <PageHeader titulo="DRE"
-              subtitulo={`${clienteAtual?.nome ?? '—'} · por safra · custo operacional efetivo`} />
+            <div className="flex items-start gap-1">
+              {/* ⚠ O ‹ SÓ EXISTE NO DRILL, e some na raiz em vez de ficar desabilitado: um botão
+                  de voltar apagado na tela de onde não se volta é ruído permanente. */}
+              {culturaAberta && (
+                <button type="button" onClick={voltarParaRaiz} title="Voltar para todas as culturas"
+                  className="mt-px inline-flex h-[24px] w-[24px] items-center justify-center rounded-md border hover:bg-muted">
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                </button>
+              )}
+              <PageHeader titulo="DRE"
+                subtitulo={culturaAberta ? contexto
+                  : `${clienteAtual?.nome ?? '—'} · por safra · custo operacional efetivo`} />
+            </div>
             <div className="flex flex-wrap items-center gap-2">
               {/* ⚠ PECUÁRIA E CONSOLIDADO NASCEM DESLIGADOS E VISÍVEIS: eles dizem para onde a
                   tela vai, e escondê-los faria a Lavoura parecer a única resposta possível. */}
@@ -229,6 +405,23 @@ export function AgriDreLavouraTab() {
                   ))}
                 </SelectContent>
               </Select>
+              {/* ⚠ O SLOT DE CULTURA SÓ APARECE NO DRILL: na raiz todas as culturas já estão na
+                  grade, e um seletor ali significaria filtrar a comparação — que é o oposto do
+                  que a raiz existe para fazer. */}
+              {culturaAberta && (
+                <Select value={cultura} onValueChange={abrirCultura}>
+                  <SelectTrigger className="h-[22px] w-[150px] text-[10px]">
+                    <SelectValue placeholder="Cultura" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {culturas.map(c => (
+                      <SelectItem key={c.cultura} value={c.cultura} className="text-[12px]">
+                        {labelDaCultura(c.cultura)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               <button type="button" onClick={() => setAmpliado(true)}
                 title="Ampliar a grade (só a tabela)"
                 className="inline-flex h-[22px] items-center gap-1 rounded-md border px-2 text-[10px] hover:bg-muted">
@@ -237,7 +430,9 @@ export function AgriDreLavouraTab() {
             </div>
           </div>
 
-          <Faixa dre={dre} />
+          {culturaAberta
+            ? <FaixaCultura c={culturaAberta} />
+            : <Faixa dre={dre} />}
 
           <div className="flex h-[18px] flex-wrap items-center justify-between gap-2 text-[10px] text-muted-foreground">
             <span>
@@ -274,8 +469,41 @@ export function AgriDreLavouraTab() {
         </button>
       )}
 
+      {/* ⚠ AS ABAS SÓ EXISTEM NO DRILL, e ficam FORA do cartão que rola: elas são parte do que
+          fica, como o cabeçalho. Dentro do cartão sumiriam ao rolar a grade.
+          ⚠ E SOMEM NO AMPLIAR junto com todo o resto — ampliar é ver a tabela, não a moldura. */}
+      {culturaAberta && !ampliado && (
+        <div className="flex gap-3 border-b border-border/60">
+          {(['resultado', 'producao', 'historico'] as const).map(v => (
+            <button key={v} type="button" onClick={() => setAba(v)}
+              className={cn('h-[26px] px-1 text-[11px] transition-colors',
+                aba === v
+                  ? 'border-b-2 border-primary font-medium text-foreground'
+                  : 'border-b-2 border-transparent text-muted-foreground hover:text-foreground')}>
+              {v === 'resultado' ? 'Resultado' : v === 'producao' ? 'Produção' : 'Histórico'}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ⚠ PRODUÇÃO E HISTÓRICO NÃO ENTRAM NO CARTÃO DA GRADE: cada um traz as próprias tabelas,
+          com o próprio scroll. Empilhá-los dentro do cartão do DRE daria dois scrollports. */}
+      {culturaAberta && aba === 'producao' && !ampliado && (
+        <ProducaoSafraPanel painel={painel} totaisTalhoes={totaisTalhoes}
+          comparadas={comparadas} safraId={safraId || null} />
+      )}
+      {culturaAberta && aba === 'historico' && !ampliado && (
+        <HistoricoCultura safras={historico} carregando={carregandoHist}
+          cultura={cultura} safraAtual={safraAtual?.codigo || safraAtual?.nome || ''}
+          onEscolher={cod => {
+            const alvo = safras.find(x => (x.codigo || x.nome) === cod);
+            if (alvo) setSafraId(alvo.id);
+          }} />
+      )}
+
       {/* ⚠ UM SCROLLPORT SÓ, e é o cartão: o cabeçalho gruda dentro dele (`sticky`) e a coluna
           Cultura gruda à esquerda. Duas barras fariam rolar a de dentro sem mover o cabeçalho. */}
+      {(!culturaAberta || aba === 'resultado' || ampliado) && (
       <div className="overflow-auto rounded-lg border border-border/60 bg-card"
         style={{ maxHeight: ampliado ? 'calc(100vh - 14px)' : 'calc(100vh - 212px)' }}>
         {erro ? (
@@ -288,12 +516,20 @@ export function AgriDreLavouraTab() {
             <Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin align-[-2px]" /> Carregando…
           </div>
         ) : (
-          <Grade dre={dre} culturas={culturas} abertos={abertos} setAbertos={setAbertos}
+          /* ⚠ A MESMA `Grade`, com a lista de culturas reduzida a uma e sem a coluna Total: o
+             drill não é outra tabela, é a mesma olhando para uma cultura só. Duas tabelas com a
+             mesma gramática divergiriam na primeira correção. */
+          <Grade dre={dre} culturas={culturaAberta ? [culturaAberta] : culturas}
+            semTotal={!!culturaAberta}
+            abertos={abertos} setAbertos={setAbertos}
             rateioDentro={rateioDentro} mostrarUnitarios={mostrarUnitarios}
             colsPorCultura={colsPorCultura} centrosDoBloco={centrosDoBloco}
-            valorDaLinha={valorDaLinha} abrir={abrir} />
+            valorDaLinha={valorDaLinha} abrir={abrir}
+            onAbrirCultura={culturaAberta ? undefined : abrirCultura}
+            onDrill={culturaAberta ? (chave, rotulo) => setDrill({ chave, rotulo }) : undefined} />
         )}
       </div>
+      )}
 
       {/* ⚠ SÓ APARECE COM SOBRA: `nao_apropriado` zero significa que toda cultura lançada está
           plantada nesta safra — e um aviso permanente ensinaria a ignorá-lo. */}
@@ -308,32 +544,101 @@ export function AgriDreLavouraTab() {
         <RateioDetalheModal aberto onFechar={() => setRateio(null)}
           titulo={rateio.titulo} dados={rateio.dados} tipo={rateio.tipo} />
       )}
+
+      {/* ⚠ O DRAWER É IRMÃO DO MODAL, NUNCA FILHO — a mesma decisão do Painel e do DRE por
+          cultura: fechar a edição não pode desmontar o drawer, senão o operador volta à raiz da
+          árvore a cada lançamento corrigido. */}
+      {drill && (
+        <AnaliseDrawer
+          titulo={`${drill.rotulo} · ${labelDaCultura(cultura)}`
+            + (safraAtual ? ` · Safra ${safraAtual.codigo || safraAtual.nome}` : '')}
+          subtitulo={`${itensDoDrill.length} lançamento${itensDoDrill.length === 1 ? '' : 's'}`}
+          total={totalDoDrill}
+          totalLabel="TOTAL DA LINHA"
+          onClose={() => setDrill(null)}>
+          <DrillDownEconomico itens={itensDoDrill} raiz={drill.rotulo} niveis={NIVEIS_DRILL}
+            onAbrirLancamento={(id) => { void abrirLancamento(id); }} />
+        </AnaliseDrawer>
+      )}
+
+      <LancamentoV2Dialog
+        open={!!editando}
+        onClose={() => setEditando(null)}
+        onSave={async (form, id) => {
+          const ok = id ? await fin.editarLancamento(id, form) : await fin.criarLancamento(form);
+          /* ⚠ AS QUATRO FONTES DESTA TELA, e nenhuma sobra: o DRE é somado por `fn_dre_lavoura`,
+             a lista do drawer vem do PostgREST, a Produção de `fn_painel_safra` mais o
+             comparativo, e o Histórico de `fn_dre_lavoura_historico`. Recarregar algumas é o
+             pior dos mundos — a linha muda e o detalhe dela não, na mesma tela aberta. */
+          if (ok && id) {
+            await recarregarLancamentos();
+            await recarregarPainel();
+            await recarregarComparativo();
+            await recarregarDre();
+          }
+          return ok;
+        }}
+        lancamento={editando}
+        fazendas={fazendas}
+        contas={fin.contasBancarias}
+        classificacoes={fin.classificacoes}
+        fornecedores={fin.fornecedores}
+        safras={fin.safras}
+        onCriarFornecedor={fin.criarFornecedor}
+      />
     </div>
   );
 }
 
-/** As seis caixas do topo. */
-function Faixa({ dre }: { dre: DreLavoura | null }) {
-  if (!dre) return null;
-  const t = dre.total;
-  const res = t.linhas.resultado_caixa.valor;
-  const resHa = t.linhas.resultado_caixa.por_ha ?? null;
-  const caixas: { rotulo: string; valor: string; cor?: string; sub?: string }[] = [
-    { rotulo: 'Área plantada', valor: `${formatNum(t.area_ha, 2)} ha` },
-    { rotulo: 'Receita líquida', valor: dinheiro(t.linhas.receita_liquida.valor), cor: 'text-success' },
-    { rotulo: 'Custo operacional efetivo', valor: dinheiro(t.custo_operacional), cor: 'text-destructive',
-      sub: t.a_pagar.operacional > 0 ? `a pagar ${formatMoeda(t.a_pagar.operacional)}` : undefined },
-    { rotulo: 'Resultado de caixa', valor: dinheiro(res), cor: corDoSinal(res) },
-    { rotulo: 'Resultado por hectare', valor: resHa == null ? traco : `${formatNum(resHa, 2)}`, cor: corDoSinal(resHa) },
-    { rotulo: 'Custos apropriados direto', valor: `${formatNum(t.pct_direto, 0)} %` },
+/**
+ * A FAIXA DO DRILL — os seis números do ciclo daquela cultura.
+ *
+ * ⚠ REGRA DO BRIEFING, E ELA É DE LEGIBILIDADE: valor + unidade curta na caixa; o que explica
+ * vai para o `title`. "Preço de equilíbrio 60,42 R$/sc" cabe; "preço de equilíbrio 60,42 contra
+ * 66,56 realizado" não cabe em 32px de altura sem virar duas linhas de 9px. O realizado está a
+ * um hover.
+ * ⚠ E A UNIDADE É DA CULTURA: mandioca fecha em tonelada. Um "/sc" fixo mentiria.
+ * ⚠ SEM COLHEITA, TUDO É "—" E NÃO ZERO. A mandioca da 25/26 tem `producao 0` e os três campos
+ * de equilíbrio `null` — a safra está no chão, não fracassou. Zero afirmaria fracasso.
+ */
+function FaixaCultura({ c }: { c: DreCultura }) {
+  const un = unidadeCurtaDaCultura(c.cultura);
+  const temColheita = c.producao > 0;
+  const eq = c.equilibrio;
+  /* ⚠ A ÚNICA CONTA DESTA FAIXA, e o briefing a previu: `custo_operacional` chega escalar, sem
+     `valor_ha` pronto. Medido: 2.655.464,72 / 185 = 14.353,86 — o número da homologação. */
+  const custoHa = c.area_ha > 0 ? c.custo_operacional / c.area_ha : null;
+  const caixas: CaixaFaixa[] = [
+    { rotulo: 'Área', valor: `${formatNum(c.area_ha, 2)} ha` },
+    { rotulo: 'Colhido', valor: temColheita ? `${formatNum(c.producao, 2)} ${un}` : traco },
+    { rotulo: 'Produtividade', valor: temColheita ? `${formatNum(c.produtividade, 2)} ${un}/ha` : traco },
+    { rotulo: 'Custo operacional /ha', valor: custoHa == null ? traco : formatNum(custoHa, 2),
+      cor: 'text-destructive', title: custoHa == null ? undefined : formatMoeda(custoHa) },
+    { rotulo: 'Preço de equilíbrio',
+      valor: eq.preco_equilibrio == null ? traco : `${formatNum(eq.preco_equilibrio, 2)} R$/${un}`,
+      title: eq.preco_realizado == null ? undefined
+        : `realizado ${formatNum(eq.preco_realizado, 2)} R$/${un}` },
+    { rotulo: 'Prod. de equilíbrio',
+      valor: eq.produtividade_equilibrio == null ? traco
+        : `${formatNum(eq.produtividade_equilibrio, 2)} ${un}/ha`,
+      title: temColheita ? `realizada ${formatNum(c.produtividade, 2)} ${un}/ha` : undefined },
   ];
+  return <Caixas caixas={caixas} />;
+}
+
+interface CaixaFaixa {
+  rotulo: string; valor: string; cor?: string; sub?: string; title?: string;
+}
+
+/** As seis caixas, desenhadas uma vez só — a raiz e o drill mudam o conteúdo, nunca a régua. */
+function Caixas({ caixas }: { caixas: CaixaFaixa[] }) {
   return (
     <div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(6, minmax(0, 1fr))' }}>
       {caixas.map(c => (
         <div key={c.rotulo} className="min-w-0 rounded-md border border-border/60 bg-card px-2 py-1"
-          style={{ height: 32 }}>
+          style={{ height: 32 }} title={c.title}>
           <div className="truncate text-[10px] leading-none text-muted-foreground">{c.rotulo}</div>
-          <div className={cn('mt-0.5 flex items-baseline gap-1 whitespace-nowrap leading-none')}>
+          <div className="mt-0.5 flex items-baseline gap-1 whitespace-nowrap leading-none">
             <span className={cn('truncate text-[14px] font-medium tabular-nums', c.cor)}>{c.valor}</span>
             {c.sub && <span className="truncate text-[10px] text-muted-foreground">{c.sub}</span>}
           </div>
@@ -341,6 +646,26 @@ function Faixa({ dre }: { dre: DreLavoura | null }) {
       ))}
     </div>
   );
+}
+
+/** As seis caixas do topo, na raiz: o consolidado da safra. */
+function Faixa({ dre }: { dre: DreLavoura | null }) {
+  if (!dre) return null;
+  const t = dre.total;
+  const res = t.linhas.resultado_caixa.valor;
+  const resHa = t.linhas.resultado_caixa.por_ha ?? null;
+  const caixas: CaixaFaixa[] = [
+    { rotulo: 'Área plantada', valor: `${formatNum(t.area_ha, 2)} ha` },
+    { rotulo: 'Receita líquida', valor: dinheiro(t.linhas.receita_liquida.valor), cor: 'text-success' },
+    { rotulo: 'Custo operacional efetivo', valor: dinheiro(t.custo_operacional), cor: 'text-destructive',
+      sub: t.a_pagar.operacional > 0 ? `a pagar ${formatMoeda(t.a_pagar.operacional)}` : undefined },
+    { rotulo: 'Resultado de caixa', valor: dinheiro(res), cor: corDoSinal(res) },
+    { rotulo: 'Resultado por hectare', valor: resHa == null ? traco : `${formatNum(resHa, 2)}`, cor: corDoSinal(resHa) },
+    /* ⚠ AQUI É O `pct_direto` DO TOTAL (66 no NJ 25/26), não o de uma cultura (70 no amendoim).
+       São dois números certos em dois lugares: esta caixa descreve a safra inteira. */
+    { rotulo: 'Custos apropriados direto', valor: `${formatNum(t.pct_direto, 0)} %` },
+  ];
+  return <Caixas caixas={caixas} />;
 }
 
 /* ═══════════════════════════════ A GRADE ═══════════════════════════════ */
@@ -359,14 +684,33 @@ interface PropsGrade {
   centrosDoBloco: (b: Bloco) => DreCentro[];
   valorDaLinha: (l: DreValor, def: DefLinha) => number | null;
   abrir: AbrirRateio;
+  /** No drill a coluna Total some: com uma cultura só ela repetiria a coluna ao lado. */
+  semTotal?: boolean;
+  /** Só na raiz: clicar no cabeçalho da cultura abre o drill dela. */
+  onAbrirCultura?: (cultura: string) => void;
+  /** Só no drill: receita, deduções e juros abrem o drawer de lançamentos. */
+  onDrill?: (chave: string, rotulo: string) => void;
 }
+
+/**
+ * As três linhas que abrem o DRAWER (e não o modal de rateio), com a chave do plano de contas.
+ *
+ * ⚠ AS CHAVES SÃO `grupo_custo`, as MESMAS do `CASE` da migration `plano_bloco_dre` — não são
+ * rótulos de tela. Medido no NJ 25/26 amendoim: 2.925.162,25 · 33.905,13 · 143.707,14, que são
+ * exatamente `receita_bruta`, a diferença até `receita_liquida` e `juros` do payload.
+ */
+const GRUPO_DO_DRAWER: Partial<Record<ChaveLinha, string>> = {
+  receita_bruta: 'Receita Agrícola',
+  deducoes: 'Deduções Agricultura',
+  juros: 'Juros de Financiamento Agricultura',
+};
 
 /** Divisória entre grupos de coluna — a mesma nas duas linhas do cabeçalho e no corpo. */
 const DIVISOR = '1px solid rgba(255,255,255,.22)';
 
 function Grade({
   dre, culturas, abertos, setAbertos, rateioDentro, mostrarUnitarios,
-  colsPorCultura, centrosDoBloco, valorDaLinha, abrir,
+  colsPorCultura, centrosDoBloco, valorDaLinha, abrir, semTotal, onAbrirCultura, onDrill,
 }: PropsGrade) {
   /* ⚠ A RÉGUA NASCE UMA VEZ E SERVE AO `<colgroup>` E À LARGURA MÍNIMA. Escrever as larguras no
      `<col>` e repeti-las no `style` de cada `<td>` é o caminho conhecido para as duas listas
@@ -377,10 +721,12 @@ function Grade({
       cols.push(W_RS);
       if (mostrarUnitarios) cols.push(W_HA, W_UN);
     });
-    cols.push(W_RS_TOTAL);
-    if (mostrarUnitarios) cols.push(W_HA);
+    if (!semTotal) {
+      cols.push(W_RS_TOTAL);
+      if (mostrarUnitarios) cols.push(W_HA);
+    }
     return cols;
-  }, [culturas, mostrarUnitarios]);
+  }, [culturas, mostrarUnitarios, semTotal]);
   const larguraMin = larguras.reduce((a, b) => a + b, 0);
   const colsTotal = mostrarUnitarios ? 2 : 1;
   /** +1 da coluna vazia final, que absorve a sobra. */
@@ -414,9 +760,14 @@ function Grade({
             Cultura
           </th>
           {culturas.map(c => (
+            /* ⚠ O CABEÇALHO DA CULTURA É A PORTA DO DRILL, e só na raiz: dentro do drill ele
+               abriria a tela em que já se está. `cursor default` quando não abre — um pointer
+               que não leva a lugar nenhum é promessa quebrada. */
             <th key={c.cultura} colSpan={colsPorCultura}
+              onClick={onAbrirCultura ? () => onAbrirCultura(c.cultura) : undefined}
+              title={onAbrirCultura ? `abrir o painel de ${labelDaCultura(c.cultura)}` : undefined}
               className={cn(CINZA_CABECALHO, 'sticky top-0 z-20 px-[7px] text-right',
-                'align-middle text-white')}
+                'align-middle text-white', onAbrirCultura ? 'cursor-pointer' : 'cursor-default')}
               style={{ borderLeft: DIVISOR }}>
               <span className="text-[10px] font-medium leading-none">{labelDaCultura(c.cultura)}</span>
               <span className="ml-1 whitespace-nowrap text-[10px] font-normal leading-none text-white">
@@ -424,26 +775,30 @@ function Grade({
               </span>
             </th>
           ))}
-          <th colSpan={colsTotal}
-            className={cn(CINZA_CABECALHO, 'sticky top-0 z-20 px-[7px] text-right text-white')}
-            style={{ borderLeft: DIVISOR }}>
-            <span className="text-[10px] font-medium leading-none">Total</span>
-            <span className="ml-1 whitespace-nowrap text-[10px] font-normal leading-none text-white">
-              {formatNum(dre.total.area_ha, 1)} ha
-            </span>
-          </th>
+          {!semTotal && (
+            <th colSpan={colsTotal}
+              className={cn(CINZA_CABECALHO, 'sticky top-0 z-20 px-[7px] text-right text-white')}
+              style={{ borderLeft: DIVISOR }}>
+              <span className="text-[10px] font-medium leading-none">Total</span>
+              <span className="ml-1 whitespace-nowrap text-[10px] font-normal leading-none text-white">
+                {formatNum(dre.total.area_ha, 1)} ha
+              </span>
+            </th>
+          )}
           <th rowSpan={2} className={cn(CINZA_CABECALHO, 'sticky top-0 z-20')} />
         </tr>
         <tr style={{ height: 14 }}>
           {culturas.map(c => (
             <ThUnidade key={c.cultura} cultura={c.cultura} mostrarUnitarios={mostrarUnitarios} />
           ))}
-          <th className={cn(CINZA_CABECALHO, 'sticky z-20 px-[7px] text-right text-[10px] font-normal text-white')}
-            style={{ top: 26, borderLeft: DIVISOR }}>R$</th>
-          {mostrarUnitarios && (
+          {!semTotal && <>
             <th className={cn(CINZA_CABECALHO, 'sticky z-20 px-[7px] text-right text-[10px] font-normal text-white')}
-              style={{ top: 26 }}>R$/ha</th>
-          )}
+              style={{ top: 26, borderLeft: DIVISOR }}>R$</th>
+            {mostrarUnitarios && (
+              <th className={cn(CINZA_CABECALHO, 'sticky z-20 px-[7px] text-right text-[10px] font-normal text-white')}
+                style={{ top: 26 }}>R$/ha</th>
+            )}
+          </>}
         </tr>
       </thead>
 
@@ -465,11 +820,11 @@ function Grade({
               <LinhaDre def={def} dre={dre} culturas={culturas} rateioDentro={rateioDentro}
                 mostrarUnitarios={mostrarUnitarios} aberto={!!(def.bloco && abertos[def.bloco])}
                 onAlternar={def.bloco ? () => alterna(def.bloco as string) : undefined}
-                valorDaLinha={valorDaLinha} abrir={abrir} />
+                valorDaLinha={valorDaLinha} abrir={abrir} semTotal={semTotal} onDrill={onDrill} />
               {filhas.map(ct => (
                 <LinhaCentro key={`${def.chave}:${ct.centro}`} centro={ct} culturas={culturas}
                   rateioDentro={rateioDentro} mostrarUnitarios={mostrarUnitarios}
-                  areaTotal={dre.total.area_ha} abrir={abrir} />
+                  areaTotal={dre.total.area_ha} abrir={abrir} semTotal={semTotal} />
               ))}
             </Fragment>
           );
@@ -515,12 +870,15 @@ const AMBAR = '#b45309';
 
 function LinhaDre({
   def, dre, culturas, rateioDentro, mostrarUnitarios, aberto, onAlternar, valorDaLinha, abrir,
+  semTotal, onDrill,
 }: {
   def: DefLinha; dre: DreLavoura; culturas: DreCultura[];
   rateioDentro: boolean; mostrarUnitarios: boolean;
   aberto: boolean; onAlternar?: () => void;
   valorDaLinha: (l: DreValor, def: DefLinha) => number | null;
   abrir: AbrirRateio;
+  semTotal?: boolean;
+  onDrill?: (chave: string, rotulo: string) => void;
 }) {
   const fundo = fundoDaLinha(def.destaque);
   const peso = def.destaque === 'subtotal' ? 'font-semibold'
@@ -552,11 +910,17 @@ function LinhaDre({
         const rat = def.bloco && rateioDentro ? (l.rateado ?? 0) : 0;
         const cor = def.corPorSinal ? corDoSinal(v) : corLinha;
         const tipo = TIPO_DO_MODAL[def.chave];
+        /* ⚠ DUAS PORTAS, NUNCA AS DUAS NA MESMA CÉLULA: o rateio administrativo abre o MODAL
+           (ele é rateio e precisa dos dois passos desenhados); receita, deduções e juros abrem o
+           DRAWER, porque cada um tem origem única e o que se quer ali é a lista. */
+        const grupo = onDrill ? GRUPO_DO_DRAWER[def.chave] : undefined;
+        const aoAbrir = tipo ? () => abrir(tipo, '', def.rotulo, c.cultura)
+          : grupo && onDrill ? () => onDrill(grupo, def.rotulo)
+            : undefined;
         return (
           <Fragment key={c.cultura}>
             <Celula valor={v} cor={cor} destaque={def.destaque} rateado={rat}
-              direto={l.direto} bordaEsquerda
-              onAbrir={tipo ? () => abrir(tipo, '', def.rotulo, c.cultura) : undefined} />
+              direto={l.direto} bordaEsquerda onAbrir={aoAbrir} />
             {mostrarUnitarios && <>
               <CelulaUnit texto={porUnidade(v, c.area_ha)} cor={cor} destaque={def.destaque} />
               <CelulaUnit texto={porUnidade(v, c.producao)} cor={cor} destaque={def.destaque} />
@@ -568,22 +932,25 @@ function LinhaDre({
       {/* ⚠ A COLUNA TOTAL NÃO ABRE MODAL: `fn_painel_rateio_detalhe` recebe `p_cultura` e não
           aceita "todas" — abrir com uma cultura arbitrária mostraria o detalhe errado sob o
           número certo. Ela fica de leitura até o drill do PR-02. */}
-      <Celula valor={valorDaLinha(tot, def)} cor={def.corPorSinal ? corDoSinal(valorDaLinha(tot, def)) : corLinha}
-        destaque={def.destaque} rateado={def.bloco && rateioDentro ? (tot.rateado ?? 0) : 0}
-        direto={tot.direto} bordaEsquerda />
-      {mostrarUnitarios && (
-        <CelulaUnit texto={porUnidade(valorDaLinha(tot, def), dre.total.area_ha)}
-          cor={def.corPorSinal ? corDoSinal(valorDaLinha(tot, def)) : corLinha} destaque={def.destaque} />
-      )}
+      {!semTotal && <>
+        <Celula valor={valorDaLinha(tot, def)} cor={def.corPorSinal ? corDoSinal(valorDaLinha(tot, def)) : corLinha}
+          destaque={def.destaque} rateado={def.bloco && rateioDentro ? (tot.rateado ?? 0) : 0}
+          direto={tot.direto} bordaEsquerda />
+        {mostrarUnitarios && (
+          <CelulaUnit texto={porUnidade(valorDaLinha(tot, def), dre.total.area_ha)}
+            cor={def.corPorSinal ? corDoSinal(valorDaLinha(tot, def)) : corLinha} destaque={def.destaque} />
+        )}
+      </>}
       <td className={fundo} />
     </tr>
   );
 }
 
 /** Uma filha: o centro de custo dentro do grupo aberto. */
-function LinhaCentro({ centro, culturas, rateioDentro, mostrarUnitarios, areaTotal, abrir }: {
+function LinhaCentro({ centro, culturas, rateioDentro, mostrarUnitarios, areaTotal, abrir, semTotal }: {
   centro: DreCentro; culturas: DreCultura[];
   rateioDentro: boolean; mostrarUnitarios: boolean; areaTotal: number; abrir: AbrirRateio;
+  semTotal?: boolean;
 }) {
   /* ⚠ SOLO DESTACADO, e só ele: é a formação de área — o dinheiro que vira terra plantável e
      não volta nesta safra. O âmbar diz "leia esta linha antes de comparar o investimento". */
@@ -591,7 +958,7 @@ function LinhaCentro({ centro, culturas, rateioDentro, mostrarUnitarios, areaTot
   const fundo = solo ? '' : 'bg-card';
   const estilo = solo ? { backgroundColor: '#fbf3e6' } : undefined;
   const tipo: TipoRateio = centro.bloco === 'investimento' ? 'investimento' : 'natureza';
-  const totalCentro = rateioDentro ? valorTotalDoCentro(centro) : centro.total.direto;
+  const totalCentro = rateioDentro ? centro.total.valor : centro.total.direto;
 
   return (
     <tr className={fundo} style={{ height: 15, ...estilo }}>
@@ -618,11 +985,13 @@ function LinhaCentro({ centro, culturas, rateioDentro, mostrarUnitarios, areaTot
         );
       })}
 
-      <Celula filha valor={totalCentro} cor="" rateado={rateioDentro ? centro.total.rateado : 0}
-        direto={centro.total.direto} bordaEsquerda fundo={fundo} estilo={estilo} />
-      {mostrarUnitarios && (
-        <CelulaUnit filha texto={porUnidade(totalCentro, areaTotal)} cor="" fundo={fundo} estilo={estilo} />
-      )}
+      {!semTotal && <>
+        <Celula filha valor={totalCentro} cor="" rateado={rateioDentro ? centro.total.rateado : 0}
+          direto={centro.total.direto} bordaEsquerda fundo={fundo} estilo={estilo} />
+        {mostrarUnitarios && (
+          <CelulaUnit filha texto={porUnidade(totalCentro, areaTotal)} cor="" fundo={fundo} estilo={estilo} />
+        )}
+      </>}
       <td className={cn('border-t border-dashed border-border/60', fundo)} style={estilo} />
     </tr>
   );
@@ -680,5 +1049,117 @@ function CelulaUnit({ texto, cor, destaque, filha, fundo, estilo }: {
       style={estilo}>
       {texto}
     </td>
+  );
+}
+
+/* ═══════════════════════════ O HISTÓRICO DA CULTURA ═══════════════════════════ */
+
+/**
+ * Uma linha por safra em que a cultura teve área plantada — a régua do ciclo ao longo do tempo.
+ *
+ * ⚠ ZERO CONTA AQUI, nem as divisões: `fn_dre_lavoura_historico` devolve `/ha`, `/unidade`, o
+ * equilíbrio e o `delta_resultado_ha` prontos. O delta em especial NÃO poderia ser do front sem
+ * reordenar as safras por data — e reordenar é o tipo de passo que diverge calado.
+ * ⚠ A ORDEM É CRESCENTE POR `data_inicio`, como a RPC devolve: o histórico se lê do passado para
+ * o presente, e a safra aberta é a última linha, marcada.
+ */
+function HistoricoCultura({ safras, carregando, cultura, safraAtual, onEscolher }: {
+  safras: SafraHistorico[];
+  carregando: boolean;
+  cultura: string;
+  safraAtual: string;
+  onEscolher: (codigo: string) => void;
+}) {
+  const un = unidadeCurtaDaCultura(cultura);
+  /* ⚠ px FIXOS E `nowrap`, a mesma régua da grade e pelo mesmo motivo: número partido no meio
+     desalinha a coluna inteira. A última coluna absorve a sobra. */
+  const cols = [90, 70, 70, 96, 80, 96, 96, 96, 96];
+  const cabecalhos: [string, string][] = [
+    ['Safra', ''], ['Área', 'ha'], ['Produtividade', `${un}/ha`],
+    ['Custo op.', 'R$/ha'], ['Custo', `R$/${un}`],
+    ['Preço realizado', `R$/${un}`], ['Preço equilíbrio', `R$/${un}`],
+    ['Resultado', 'R$/ha'], ['Δ vs anterior', 'R$/ha'],
+  ];
+  const th = cn(CINZA_CABECALHO, 'sticky px-[7px] text-right text-white');
+
+  return (
+    <div className="overflow-auto rounded-lg border border-border/60 bg-card"
+      style={{ maxHeight: 'calc(100vh - 212px)' }}>
+      {carregando ? (
+        <div className="px-3 py-8 text-center text-[11px] text-muted-foreground">
+          <Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin align-[-2px]" /> Carregando…
+        </div>
+      ) : safras.length === 0 ? (
+        <div className="px-3 py-8 text-center text-[11px] text-muted-foreground">
+          Nenhuma safra com esta cultura plantada.
+        </div>
+      ) : (
+        <table className="border-collapse text-[11px] leading-none"
+          style={{ tableLayout: 'fixed', width: '100%', minWidth: cols.reduce((a, b) => a + b, 0) }}>
+          <colgroup>
+            {cols.map((w, i) => <col key={i} style={{ width: w }} />)}
+            <col />
+          </colgroup>
+          <thead>
+            <tr style={{ height: 26 }}>
+              {cabecalhos.map(([nome], i) => (
+                <th key={nome} className={cn(th, 'top-0 z-20', i === 0 && 'text-left')}
+                  style={{ top: 0 }}>
+                  <span className="text-[10px] font-medium leading-none">{nome}</span>
+                </th>
+              ))}
+              <th className={cn(CINZA_CABECALHO, 'sticky z-20')} style={{ top: 0 }} />
+            </tr>
+            <tr style={{ height: 14 }}>
+              {cabecalhos.map(([nome, un2], i) => (
+                <th key={nome} className={cn(th, 'z-20', i === 0 && 'text-left')} style={{ top: 26 }}>
+                  <span className="text-[10px] font-normal leading-none">{un2}</span>
+                </th>
+              ))}
+              <th className={cn(CINZA_CABECALHO, 'sticky z-20')} style={{ top: 26 }} />
+            </tr>
+          </thead>
+          <tbody>
+            {safras.map(s => {
+              const atual = s.safra === safraAtual;
+              const td = cn('whitespace-nowrap px-[7px] py-px text-right tabular-nums',
+                atual && 'bg-muted font-semibold');
+              return (
+                /* ⚠ CLICAR NUMA SAFRA TROCA O SLOT, não abre nada: o histórico é a porta de
+                   entrada para o ciclo anterior, e a tela inteira se recarrega naquela safra. */
+                <tr key={s.safra} onClick={() => onEscolher(s.safra)}
+                  title={`ver a safra ${s.safra}`}
+                  className={cn('cursor-pointer hover:bg-muted/60', atual ? 'bg-muted' : 'bg-card')}
+                  style={{ height: 18 }}>
+                  <td className={cn(td, 'text-left')}>
+                    {s.safra}
+                    {/* ⚠ "em dia" MUDO, EM MUTED: ele diz qual linha os cartões acima descrevem,
+                        sem competir com os números — é marca, não aviso. */}
+                    {atual && <span className="ml-1 font-normal text-muted-foreground">· em dia</span>}
+                  </td>
+                  <td className={td}>{formatNum(s.area_ha, 2)}</td>
+                  <td className={td}>{s.producao > 0 ? formatNum(s.produtividade, 2) : traco}</td>
+                  <td className={cn(td, 'text-destructive')}>{formatNum(s.custo_ha, 2)}</td>
+                  <td className={cn(td, 'text-destructive')}>{formatNum(s.custo_unidade, 2)}</td>
+                  <td className={cn(td, 'text-success')}>
+                    {s.preco_realizado == null ? traco : formatNum(s.preco_realizado, 2)}
+                  </td>
+                  <td className={td}>
+                    {s.preco_equilibrio == null ? traco : formatNum(s.preco_equilibrio, 2)}
+                  </td>
+                  <td className={cn(td, corDoSinal(s.resultado_ha))}>{formatNum(s.resultado_ha, 2)}</td>
+                  {/* ⚠ "—" NA PRIMEIRA SAFRA, e sem cor: não há anterior contra o que comparar.
+                      Zero diria "não mudou", que é uma afirmação — e falsa. */}
+                  <td className={cn(td, corDoSinal(s.delta_resultado_ha))}>
+                    {s.delta_resultado_ha == null ? traco : formatNum(s.delta_resultado_ha, 2)}
+                  </td>
+                  <td className={atual ? 'bg-muted' : 'bg-card'} />
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+    </div>
   );
 }

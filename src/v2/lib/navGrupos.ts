@@ -48,8 +48,11 @@ export type V2Section =
   | 'lancamentos-meta-fin'   // (em construção) — futura variante de financeiro-lanc filtrada por META
   | 'dre-executivo'          // (em construção)
   | 'dre'                    // PR-DRE-LAVOURA-01 — a grade unica do DRE da lavoura
-  | 'dre-cultura'            // PR-AGRI-DRE-01 — DRE de caixa por cultura da safra
-  | 'painel-safra'           // PR-PAINEL-SAFRA-A — o raio-x do ciclo de uma safra/cultura
+  /* ⚠ AS DUAS ABAIXO NAO ESTAO MAIS NO MENU (PR-DRE-LAVOURA-02) e nao tem mais tela: o V2Index
+     as redireciona para 'dre'. Ficam no tipo porque sao o que um link antigo ou um
+     `sessionStorage` residual ainda dizem — apagar do tipo tornaria o redirect impossivel. */
+  | 'dre-cultura'            // LEGADO -> 'dre'
+  | 'painel-safra'           // LEGADO -> 'dre'
   | 'divergencias'           // (em construção)
   | 'logs'                   // (em construção)
   | 'validacoes'             // (em construção)
@@ -259,20 +262,17 @@ export const NAV_GRUPOS: NavGrupo[] = [
           { id: 'fechamento-periodo',  label: 'Fechamento do Período',        status: 'ready' },
           { id: 'indicadores-zoot',    label: 'Indicadores',                  status: 'needs-wrapper' },
           { id: 'valor-rebanho',       label: 'Evolução Patrimonial',         status: 'needs-wrapper' },
-          /* ⚠ NÃO É O "DRE Executivo" ACIMA, e por isso entra como item próprio: aquele é o
-             gerencial, por competência, e continua placeholder. Este é o DRE de CAIXA por
-             cultura de uma safra, lido da fn_dre_agricola_por_safra. Ocupar a rota do outro
-             faria a tela em construção parecer pronta. */
-          /* ⚠ A GRADE UNICA, e ela NAO substitui a de baixo neste PR: as duas leem fontes
-             diferentes (fn_dre_lavoura x fn_dre_agricola_por_safra) e e' conferindo uma contra a
-             outra que se homologa a nova. O PR-02 aposenta a antiga. */
+          /* ⚠ A GRADE UNICA DA LAVOURA — compara as culturas da safra, abre os centros e, no
+             clique do cabecalho de uma cultura, vira o painel dela (Resultado, Producao,
+             Historico). E' a unica porta do DRE agricola desde o PR-DRE-LAVOURA-02. */
           { id: 'dre',                 label: 'DRE',                          status: 'ready' },
-          { id: 'dre-cultura',         label: 'DRE por cultura',              status: 'ready' },
-          /* ⚠ AO LADO DO DRE, e não dentro dele: as duas leem a MESMA fonte
-             (`fn_dre_agricola_por_safra`), mas respondem a perguntas diferentes — o DRE mostra a
-             linha contábil do período, o Painel mostra o CICLO de uma safra por hectare e por
-             saca. Fundi-las faria uma tela com dois eixos e nenhuma resposta clara. */
-          { id: 'painel-safra',        label: 'Painel da Safra',              status: 'ready' },
+          /* ⚠ "DRE por cultura" E "Painel da Safra" SAIRAM NO PR-DRE-LAVOURA-02, e nao por
+             arrumacao: a grade unica de `Executivo > DRE` responde as duas perguntas — compara
+             culturas E abre os centros — e o drill por cultura trouxe a Producao e o Historico
+             do Painel para dentro dela. Duas telas lendo a mesma safra por caminhos diferentes
+             e' como nasce divergencia de numero entre relatorios.
+             ⚠ AS CHAVES CONTINUAM NO TIPO E VIRAM REDIRECT para 'dre' no V2Index: link antigo,
+             favorito e `sessionStorage` residual caem na tela nova em vez de em rota morta. */
           { id: 'dre-executivo',       label: 'DRE Executivo (em construção)', status: 'needs-wrapper' },
         ],
       },
