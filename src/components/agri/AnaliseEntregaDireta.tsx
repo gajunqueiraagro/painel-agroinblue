@@ -87,6 +87,50 @@ export function AnaliseEntregaDireta({ entrega, produtividade, talhoes }: {
         </div>
       </div>
 
+      {/* ── RENDIMENTO POR CARGA — as três pontas da safra ── */}
+      {/* ⚠ SÓ APARECE SE A RPC DEVOLVER AS PONTAS (01d). No 01c ela não devolvia e o bloco não
+          existia — mostrar três traços seria ocupar espaço para dizer nada. */}
+      {(entrega.rendimento_min || entrega.rendimento_max) && (
+        <div>
+          <div className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Rendimento por carga
+          </div>
+          <div className="space-y-1 rounded-md border bg-card p-2">
+            {([
+              { rot: 'Menor', p: entrega.rendimento_min, cor: 'bg-destructive', txt: 'text-destructive' },
+              { rot: 'Médio', p: null, cor: 'bg-primary', txt: '' },
+              { rot: 'Maior', p: entrega.rendimento_max, cor: 'bg-success', txt: 'text-success' },
+            ] as const).map(b => {
+              /* ⚠ A MÉDIA NÃO TEM PONTA, e é por isso que ela não traz data nem NF: ela não é de
+                 uma carga. As outras duas trazem, porque "469 g" sozinho não manda ninguém a
+                 lugar nenhum — "469 g em 28/08, NF 9310349" manda olhar aquele arranquio. */
+              const g = b.p ? b.p.g : entrega.rendimento_medio_g;
+              /* ⚠ A ESCALA É O MAIOR, como nas barras por talhão: com escala no zero as três
+                 ficariam quase do mesmo tamanho (469, 490 e 508 g), e a comparação — que é a
+                 pergunta — sumiria. */
+              const teto = entrega.rendimento_max?.g ?? g;
+              const pct = g != null && teto ? Math.max((g / teto) * 100, 1) : 0;
+              return (
+                <div key={b.rot} className="grid grid-cols-[3.2rem_2fr_1fr] items-center gap-2">
+                  <span className="text-[10px] text-muted-foreground">{b.rot}</span>
+                  <div className="h-2.5 rounded-sm bg-muted">
+                    <div className={cn('h-full rounded-sm', b.cor)} style={{ width: `${pct}%` }} />
+                  </div>
+                  <span className="whitespace-nowrap text-right text-[10px] tabular-nums">
+                    <span className={b.txt}>{traco(g, 0)} g</span>
+                    {b.p && (
+                      <span className="text-muted-foreground">
+                        {' · '}{dataBR(b.p.data)}{b.p.nf ? ` · NF ${b.p.nf}` : ''}
+                      </span>
+                    )}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div className="grid gap-3 md:grid-cols-2">
         {/* ── POR NOTA ── */}
         <div>
@@ -99,6 +143,11 @@ export function AnaliseEntregaDireta({ entrega, produtividade, talhoes }: {
                 <tr className="border-b">
                   <th className={cn(TH, 'text-left')}>NF</th>
                   <th className={cn(TH, 'text-left')}>Data</th>
+                  {/* ⚠ O COMPRADOR SÓ EXISTE AQUI DESDE O 01d: no 01c a RPC não o devolvia, e a
+                      coluna ficou de fora em vez de ser preenchida casando a NF com a carga no
+                      front — dois caminhos para a mesma pergunta discordariam no dia em que uma
+                      nota tivesse duas indústrias. Agora quem responde é o banco. */}
+                  <th className={cn(TH, 'text-left')}>Comprador</th>
                   <th className={cn(TH, 'text-right')}>Cargas</th>
                   <th className={cn(TH, 'text-right')}>t</th>
                   <th className={cn(TH, 'text-right')} title="Rendimento médio da nota">g</th>
@@ -107,7 +156,7 @@ export function AnaliseEntregaDireta({ entrega, produtividade, talhoes }: {
               </thead>
               <tbody>
                 {entrega.por_nf.length === 0 && (
-                  <tr><td colSpan={6} className="px-2 py-3 text-center text-muted-foreground">
+                  <tr><td colSpan={7} className="px-2 py-3 text-center text-muted-foreground">
                     Nenhuma nota nesta safra.
                   </td></tr>
                 )}
@@ -115,6 +164,9 @@ export function AnaliseEntregaDireta({ entrega, produtividade, talhoes }: {
                   <tr key={n.nf} className="border-t border-slate-100 odd:bg-[#1e3a5f]/[0.03]">
                     <td className="truncate px-1 py-0.5" title={n.nf}>{n.nf}</td>
                     <td className="whitespace-nowrap px-1 py-0.5 tabular-nums">{dataBR(n.data)}</td>
+                    <td className="truncate px-1 py-0.5" title={n.comprador ?? undefined}>
+                      {n.comprador || '—'}
+                    </td>
                     <td className="px-1 py-0.5 text-right tabular-nums">{formatNum(n.cargas, 0)}</td>
                     <td className="px-1 py-0.5 text-right tabular-nums">{formatNum(n.toneladas, 2)}</td>
                     <td className="px-1 py-0.5 text-right tabular-nums">{traco(n.rendimento_g, 0)}</td>
@@ -129,7 +181,9 @@ export function AnaliseEntregaDireta({ entrega, produtividade, talhoes }: {
                   duas partes do painel nunca discordem. */}
               <tfoot>
                 <tr className="border-t-2 border-slate-300 bg-card font-semibold">
-                  <td className="px-1 py-0.5" colSpan={2}>{entrega.por_nf.length} nota(s)</td>
+                  {/* ⚠ O `colSpan` CRESCEU COM A COLUNA: eram 2, são 3. Uma a menos não dá erro —
+                      desloca todos os totais uma coluna à esquerda. */}
+                  <td className="px-1 py-0.5" colSpan={3}>{entrega.por_nf.length} nota(s)</td>
                   <td className="px-1 py-0.5 text-right tabular-nums">{formatNum(entrega.cargas, 0)}</td>
                   <td className="px-1 py-0.5 text-right tabular-nums">{formatNum(entrega.toneladas, 2)}</td>
                   <td className="px-1 py-0.5 text-right tabular-nums">

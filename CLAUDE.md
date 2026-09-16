@@ -370,6 +370,16 @@ no mesmo arquivo.
   PROVA que a busca sabe achar (a mesma licao do auto-teste do `check:tdz`). O clique teve de ser
   `fireEvent`, nao `element.click()`: o clique cru dispara fora do `act()` do React e a assercao
   roda antes do re-render.
+  De 1513 para 1517 no PR-AGRI-MANDIOCA-01d: entrou
+  `src/lib/agri/exportEntregaDireta.test.ts` (+4) — o relatorio da mandioca NAO fala de saca.
+  ⚠ NASCE DE UM PRINT, nao de zelo: em 16/09 o "Relatorio de Colheita" da mandioca saiu com Peso
+  verde, Sacas boas, Grao de roca, Ticket, Verde/Seco/Umid./Afla/Sacas/Roca — e com 42 linhas para
+  as 21 cargas do backfill. Tudo de amendoim, num papel que vai para a industria.
+  O caso principal varre TODO o texto do documento (nome do arquivo, abas, cabecalhos e conteudo)
+  atras de 'saca', 'afla', 'secagem' e 'roca', e so depois afirma que nao ha nenhuma — com duas
+  assercoes que PROVAM que a busca sabe achar ('rendimento' e 'comprador' estao la), porque um
+  payload vazio passaria verde sem elas. Os outros tres travam a linha por CARGA (21, nunca 42), o
+  comprador na aba "Por nota" e o numero indo como numero.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 

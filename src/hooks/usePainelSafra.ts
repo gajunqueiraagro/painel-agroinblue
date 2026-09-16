@@ -62,10 +62,10 @@ export interface TalhaoProdutividade {
 /**
  * UMA NOTA DE ENTREGA DIRETA — uma linha de `entrega.por_nf`.
  *
- * ⚠ SEM COMPRADOR, e isto é o contrato do banco, não um esquecimento da tela:
- * `fn_painel_safra_entrega` monta `por_nf` com `nf, data, cargas, toneladas, rendimento_g, valor`
- * e nada mais. Inventar a indústria aqui — casando a NF com a carga — daria um segundo caminho
- * para a mesma pergunta, e ele discordaria no dia em que uma nota tivesse duas.
+ * ⚠ O COMPRADOR PASSOU A VIR DA RPC (01d). No 01c ele não existia aqui, e a coluna ficou fora da
+ * tabela "Por nota" de propósito: preenchê-la casando a NF com a carga no front criaria um segundo
+ * caminho para a mesma pergunta, e os dois discordariam no dia em que uma nota tivesse duas
+ * indústrias. Agora quem responde é o banco — `max(comprador)` dentro do grupo da nota.
  */
 export interface NotaDeEntrega {
   nf: string;
@@ -74,6 +74,22 @@ export interface NotaDeEntrega {
   toneladas: number;
   rendimento_g: number | null;
   valor: number;
+  /** `null` quando a carga não tem indústria gravada. */
+  comprador: string | null;
+}
+
+/**
+ * A PONTA DE UMA FAIXA DE RENDIMENTO — a carga que rendeu menos, e a que rendeu mais.
+ *
+ * ⚠ ELA CARREGA DATA E NF porque o número sozinho não serve: "469 g" não diz nada; "469 g em 28/08,
+ * NF 9310349" manda o produtor olhar aquele arranquio.
+ * ⚠ A RPC A TIRA DE `col`, QUE É POR COLHEITA, não por carga — e nesta base dá no mesmo, porque as
+ * duas metades de uma carga do backfill têm o MESMO `rendimento_g`. Anotado na migration.
+ */
+export interface PontaRendimento {
+  g: number | null;
+  data: string | null;
+  nf: string | null;
 }
 
 /**
@@ -100,6 +116,9 @@ export interface EntregaDireta {
   servicos_t: number | null;
   cargas: number;
   por_nf: NotaDeEntrega[];
+  /** `null` quando a safra não tem carga com tonelada — a RPC nem monta o objeto. */
+  rendimento_min: PontaRendimento | null;
+  rendimento_max: PontaRendimento | null;
 }
 
 export interface PainelSafra {
@@ -147,6 +166,17 @@ const num = (v: unknown): number => {
  * pares tipados, então a cópia nasce `Record<string, unknown>` por construção. Um `as` aqui
  * afirmaria a forma; isto a verifica.
  */
+/** Uma ponta da faixa de rendimento, ou `null` quando a RPC não a montou. */
+function lerPonta(v: unknown): PontaRendimento | null {
+  if (v == null) return null;
+  const o = objeto(v);
+  return {
+    g: numOuNulo(o.g),
+    data: o.data == null ? null : String(o.data),
+    nf: o.nf == null ? null : String(o.nf),
+  };
+}
+
 function objeto(v: unknown): Record<string, unknown> {
   if (v == null || typeof v !== 'object' || Array.isArray(v)) return {};
   const saida: Record<string, unknown> = {};
@@ -248,7 +278,12 @@ export function usePainelSafra(
               toneladas: num(x?.toneladas),
               rendimento_g: numOuNulo(x?.rendimento_g),
               valor: num(x?.valor),
+              /* ⚠ `null` FICA `null`, não vira '—': o traço é decisão de EXIBIÇÃO. A mesma regra
+                 da `variedade` do talhão, logo acima neste arquivo. */
+              comprador: x?.comprador == null ? null : String(x.comprador),
             })),
+            rendimento_min: lerPonta(e.rendimento_min),
+            rendimento_max: lerPonta(e.rendimento_max),
           };
         })(),
       };

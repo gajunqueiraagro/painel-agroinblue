@@ -23,6 +23,10 @@ import { useColheita } from '@/hooks/useColheita';
 import { CargasDaArea } from '@/components/agri/CargasDaArea';
 import { AnaliseProducaoModal } from '@/components/agri/AnaliseProducaoModal';
 import { FaixaEntregaDireta } from '@/components/agri/FaixaEntregaDireta';
+import {
+  exportarEntregaDiretaXlsx, exportarEntregaDiretaPdf,
+} from '@/lib/agri/exportEntregaDireta';
+import { agruparCargas } from '@/components/agri/CargasEntregaDireta';
 import { ehEntregaDireta } from '@/lib/agri/modeloComercial';
 import { usePainelSafra } from '@/hooks/usePainelSafra';
 import { ExportarColheita } from '@/components/agri/ExportarColheita';
@@ -294,6 +298,25 @@ export function AgriColheitaTab() {
       areaHa: areaDoRecorte || null,
       comAnalise,
     };
+    /**
+     * ⚠ DOIS RELATÓRIOS, UMA ESCOLHA — e ela é do MAPA, como tudo nesta frente. O documento da
+     * entrega direta não é o da saca com colunas escondidas: são outras perguntas (tonelada,
+     * rendimento em amido, nota da indústria) e uma LINHA POR CARGA, não por metade de talhão.
+     * ⚠ O PAPEL LÊ AS MESMAS FONTES DA TELA: `painel.entrega` e a MESMA `agruparCargas` que a
+     * lista monta. Buscar de novo aqui deixaria o PDF livre para divergir do que está à vista.
+     */
+    if (entregaDireta && painel?.entrega) {
+      const cargas = agruparCargas(
+        doRecorte, vendaPorCarga, industriaPorId,
+        new Map(talhoesDaLista.map(t => [t.id, t.pastoNome])),
+        new Map(talhoesDaLista.map(t => [t.id, t.fazendaCodigo || ''])),
+      );
+      /* ⚠ A PRODUTIVIDADE VAI JUNTO, vinda da RPC — o papel mostra o MESMO t/ha da faixa da tela,
+         nunca um recalculado sobre a área do recorte. */
+      if (formato === 'xlsx') exportarEntregaDiretaXlsx(cargas, painel.entrega, ctx, painel.sacas_ha);
+      else await exportarEntregaDiretaPdf(cargas, painel.entrega, ctx, painel.sacas_ha);
+      return;
+    }
     if (formato === 'xlsx') exportarColheitaXlsx(linhasParaExport, totais, ctx);
     else await exportarColheitaPdf(linhasParaExport, totais, ctx);
   };
