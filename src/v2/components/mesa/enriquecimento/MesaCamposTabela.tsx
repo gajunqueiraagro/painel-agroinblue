@@ -319,7 +319,8 @@ export function MesaCamposTabela({
                     valorAtual={row.edicao.dataPagamentoAtual} campo="data_pagamento" onEditar={onEditar} />
                 ) : editavel && campo === 'Safra' && safras ? (
                   <ResultadoSafraEditor value={row.edicao.safraId} valorAtual={row.edicao.safraIdAtual}
-                    safras={safras} onEditar={onEditar} administrativo={contaEhAdministrativa} />
+                    safras={safras} sugeridaId={row.edicao.safraSugeridaId}
+                    onEditar={onEditar} administrativo={contaEhAdministrativa} />
                 ) : editavel && campo === 'Banco' && contas ? (
                   <ResultadoContaEditor value={row.edicao.contaBancariaId}
                     valorAtual={row.edicao.contaBancariaIdAtual} contas={contas} onEditar={onEditar} />
@@ -329,6 +330,7 @@ export function MesaCamposTabela({
                     subcentroTransferencia={subcentroTransferencia}
                     subcentroAtualProposto={row.edicao.subcentro}
                     contaDestinoSugeridaId={row.edicao.contaDestinoSugeridaId}
+                    transferenciaSugerida={row.edicao.tipoTransferenciaSugerido}
                     onEditar={onEditar} />
                 ) : editavel && campo === 'Conta destino' && contas ? (
                   <ResultadoContaDestinoEditor value={row.edicao.contaDestinoId}

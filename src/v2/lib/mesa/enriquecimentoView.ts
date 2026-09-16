@@ -15,6 +15,41 @@ import type {
 } from '@/v2/components/mesa/enriquecimento/types';
 import { fmtData, fmtBRL, fmtTexto, mesAbrev, dataHoraCurta, STATUS_META } from '@/v2/components/mesa/enriquecimento/fmt';
 import { resolverContaPorTexto, type ContaResolvivel } from '@/v2/lib/mesa/resolverConta';
+/* ⚠ AS DUAS REGRAS VÊM DE ONDE JÁ MORAM, chamadas — nunca copiadas. `safraSugerida` é a mesma
+   função do `LancamentoV2Dialog` (e do import de custeio), e `escopoDoSubcentro` é a mesma que
+   aquele modal usa para decidir administrativo. Uma segunda cópia aqui envelheceria calada: os
+   subcentros MUDAM de escopo no plano — quatro mudaram em 11/09/2026. */
+import { safraSugerida, type SafraCandidata } from '@/lib/agri/safraSugerida';
+import { escopoDoSubcentro, ESCOPO_ADMINISTRATIVO } from '@/lib/financeiro/escopoDoSubcentro';
+import type { ClassificacaoItem } from '@/hooks/useFinanceiroV2';
+import { ehTipoTransferencia, subcentroDeTransferencia } from '@/v2/lib/mesa/transferenciaPlano';
+
+/**
+ * OS CATÁLOGOS QUE AS DUAS SUGESTÕES PRECISAM — PR-MESA-SUGESTOES-01.
+ *
+ * ⚠ OPCIONAIS, e pela mesma razão do `contas` acima: sem catálogo a sugestão simplesmente não é
+ * feita. Um adapter que os exigisse obrigaria todo teste a montá-los para ler uma linha — e a
+ * ausência de catálogo não é "sem safra", é "ainda não sei".
+ */
+export interface CatalogosDaSugestao {
+  classificacoes?: readonly ClassificacaoItem[];
+  safras?: readonly SafraCandidata[];
+}
+
+/**
+ * O TEXTO QUE DENUNCIA UMA TRANSFERÊNCIA — §2.
+ *
+ * ⚠ TRÊS RADICAIS, NÃO TRÊS PALAVRAS: "aplicação", "aplicacao" e "aplicou" casam em `aplica`;
+ * "resgate" e "resgatou" em `resgat`; "transferência", "transferencia" e "transf" em `transf`.
+ * Casar palavra inteira deixaria de fora metade das grafias que o extrato traz.
+ * ⚠ E ISTO É PROPOSTA, NUNCA GRAVAÇÃO. "Aplicação de recursos em fertilizante" casa aqui e não é
+ * transferência nenhuma — por isso o resultado entra em âmbar e o operador confirma.
+ */
+const TEXTO_DE_TRANSFERENCIA = /aplica|resgat|transf/i;
+
+export function textoSugereTransferencia(...textos: Array<string | null | undefined>): boolean {
+  return textos.some(t => !!t && TEXTO_DE_TRANSFERENCIA.test(t));
+}
 
 /**
  * ⚠ O TRAÇO É VAZIO — 133i item 8. A planilha usa "-" como "não se aplica", e o adapter
@@ -182,6 +217,8 @@ export function toRowVM(
    * para ler uma linha — e a ausência de catálogo não é conflito de conta.
    */
   contas: readonly ContaResolvivel[] = [],
+  /** Os catálogos das duas sugestões. Sem eles, a linha sai como saía antes deste PR. */
+  catalogos: CatalogosDaSugestao = {},
 ): EnriqRowVM {
   const statusLabel = STATUS_META[row.match_status]?.label ?? row.match_status;
 
@@ -420,6 +457,61 @@ export function toRowVM(
     return { iso: row.excel_data ?? row.lanc_data_competencia ?? null, ehCompetencia: true };
   })();
 
+  /* ════════ AS DUAS SUGESTÕES — PR-MESA-SUGESTOES-01 ════════ */
+
+  /**
+   * A SAFRA QUE A COMPETÊNCIA IMPLICA — §1.
+   *
+   * ⚠ SÓ QUANDO NÃO HÁ SAFRA EM LUGAR NENHUM. Com proposta da planilha ou safra no lançamento, o
+   * comportamento é o de hoje: a sugestão preencheria por cima de um dado que alguém pôs.
+   * ⚠ O ESCOPO VEM DO SUBCENTRO EFETIVO, pela função do modal — nunca de uma lista local. E
+   * administrativo NÃO sugere (OC_013): safra em administrativo é regra do backfill, pelo que o
+   * plano aponta, e o trigger `resolve_classificacao_from_plano` a zera de qualquer jeito.
+   * ⚠ `desempatar: false`, COMO NO MODAL. Aqui o operador está olhando a linha; a política de
+   * chutar a cultura principal é do import em lote, onde ninguém confere. Duas safras na mesma
+   * temporada devolvem `null`, e o campo fica vazio para ele escolher.
+   */
+  /* ⚠ SEM O `escopoNegocio` DO TERCEIRO ARGUMENTO, e é o dado que manda: a linha do staging NÃO
+     traz escopo — só o subcentro. `escopoDoSubcentro` resolve pelo plano, que é a porta soberana;
+     o terceiro argumento do modal é o escopo que o LANÇAMENTO já tem, e aqui ele não existe. */
+  const escopoDaLinha = catalogos.classificacoes
+    ? escopoDoSubcentro(catalogos.classificacoes, subcentroEfetivo, null)
+    : null;
+  const semSafraEmLugarNenhum = !row.proposto_safra_id && !row.lanc_safra_id;
+  const safraSugeridaId = (
+    semSafraEmLugarNenhum
+    && catalogos.safras
+    && escopoDaLinha
+    && escopoDaLinha !== ESCOPO_ADMINISTRATIVO
+  )
+    ? safraSugerida(
+      row.proposto_data_competencia ?? row.lanc_data_competencia ?? row.excel_data,
+      escopoDaLinha, [...catalogos.safras], { desempatar: false })
+    : null;
+
+  /**
+   * ESTA LINHA É UMA TRANSFERÊNCIA? — §2.
+   *
+   * ⚠ TRÊS PORTAS, E A PRIMEIRA JÁ EXISTIA NO DADO: a planilha dizendo o tipo, o plano resolvido
+   * sendo a 18010, ou o texto denunciando. A terceira é a única heurística das três — e é por
+   * isso que o resultado é PROPOSTA em âmbar, nunca gravação: "Aplicação de recursos em
+   * fertilizante" casa no texto e não é transferência nenhuma.
+   * ⚠ E ELA NÃO SUGERE O QUE JÁ É: com o tipo efetivo já em transferência não há proposta a
+   * fazer, e um âmbar ali diria ao operador que falta confirmar algo que está feito.
+   */
+  /* ⚠ A 18010 SE ACHA PELA FUNÇÃO DA CASA, que a procura por `ordem_exibicao` — não pelo texto
+     nem pelo id, que mudam. */
+  const subcentroDaTransferencia = catalogos.classificacoes
+    ? subcentroDeTransferencia([...catalogos.classificacoes])
+    : null;
+  const tipoEfetivoDaLinha = row.proposto_tipo_operacao ?? row.lanc_tipo_operacao ?? row.excel_tipo_operacao;
+  const tipoTransferenciaSugerido = !ehTipoTransferencia(tipoEfetivoDaLinha)
+    && (
+      ehTipoTransferencia(row.excel_tipo_operacao)
+      || (!!subcentroDaTransferencia && subcentroEfetivo === subcentroDaTransferencia)
+      || textoSugereTransferencia(row.lanc_descricao, row.excel_produto)
+    );
+
   const edicao: EnriqEdicao = {
     subcentro: subcentroEfetivo,   // BUG — nunca a proposta órfã; proposta válida ou o Sistema soberano
     favorecidoId: row.proposto_favorecido_id,
@@ -463,7 +555,15 @@ export function toRowVM(
        planilha passa pelo resolvedor soberano, que consulta os apelidos do cadastro de
        contas antes de tentar nome e agência+número. Sem apelido e sem casamento, `null`:
        não saber a qual conta o texto se refere é ausência, e ausência não vira proposta. */
-    contaDestinoSugeridaId: resolverContaPorTexto(row.excel_conta_destino, contas)?.id ?? null,
+    /* ⚠ A DESCRIÇÃO ENTRA COMO SEGUNDA PORTA (§2), depois da coluna de destino — nunca antes: a
+       planilha, quando diz a conta, DIZ; o texto do extrato apenas sugere. Ordem invertida faria
+       "Aplicação BB Rende Fácil" ganhar de uma coluna preenchida à mão. */
+    contaDestinoSugeridaId: resolverContaPorTexto(row.excel_conta_destino, contas)?.id
+      ?? resolverContaPorTexto(row.lanc_descricao, contas)?.id
+      ?? resolverContaPorTexto(row.excel_produto, contas)?.id
+      ?? null,
+    safraSugeridaId,
+    tipoTransferenciaSugerido,
   };
 
   // PR-U2d-1 — estado operacional da linha (ordem: primeira condição que casar vence).

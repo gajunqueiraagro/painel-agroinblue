@@ -367,8 +367,11 @@ export function MesaEnriquecimentoTab({
     })),
     [contasBancarias]);
   const rowsVM = useMemo(
-    () => stagingConta.map((r) => toRowVM(r, contasResolviveis)),
-    [stagingConta, contasResolviveis]);
+    /* ⚠ OS CATÁLOGOS ENTRAM AQUI — PR-MESA-SUGESTOES-01. São eles que deixam a view calcular a
+       safra pela competência e reconhecer uma transferência; sem eles a linha sai como saía
+       antes, que é o comportamento de todo teste que monta a view sem catálogo. */
+    () => stagingConta.map((r) => toRowVM(r, contasResolviveis, { classificacoes, safras })),
+    [stagingConta, contasResolviveis, classificacoes, safras]);
   /* 133h item 3 — o único gate é o card do topo; `filtrarPorModo` saiu daqui com o
      "Todas | Pendentes". A função segue exportada e testada, para as telas legadas. */
   /* ⚠ AS DUAS CONTAGENS SAEM DE `rowsVM`, o recorte da CONTA — o mesmo universo do contador
@@ -706,6 +709,14 @@ export function MesaEnriquecimentoTab({
        cria uma linha por parte. */
     : selecionado.parteDeAgrupamento
       ? 'Faz parte de um agrupamento — use Agrupar.'
+    /* ⚠ A TRANSFERÊNCIA GANHA FRASE PRÓPRIA — PR-MESA-SUGESTOES-01 §2. "Falta preencher: Conta
+       destino" descreve o campo; "Transferência exige conta de destino" descreve a REGRA, e é a
+       regra que explica por que um campo que não existe nas outras linhas apareceu nesta. A
+       genérica continua valendo para todo o resto, inclusive quando falta mais de um campo. */
+    : (ehTipoTransferencia(selecionado.edicao.tipoOperacao)
+        && !(selecionado.edicao.contaDestinoId ?? selecionado.edicao.contaDestinoIdAtual)
+        && obrigatoriosVazios.length === CAMPOS_OBRIGATORIOS_SE_TRANSFERENCIA.length)
+      ? 'Transferência exige conta de destino.'
     : obrigatoriosVazios.length > 0
       ? `Falta preencher: ${obrigatoriosVazios.join(', ')}.`
     : null;
@@ -951,6 +962,23 @@ export function MesaEnriquecimentoTab({
        */
       if (precisaAlinhar(selecionado)) {
         await editarProposto({ staging_id: id, patch: { subcentro: selecionado.edicao.subcentro } });
+      }
+      /**
+       * A SAFRA SUGERIDA VIRA PROPOSTA NO SALVAR — PR-MESA-SUGESTOES-01 §1.
+       *
+       * ⚠ AQUI, E NÃO NUM EFEITO AO ABRIR A LINHA. Escrever no `update_proposto` quando o
+       * operador apenas SELECIONA uma linha faria navegar pela lista gravar propostas em massa —
+       * e a auditoria registraria dezenas de edições que ninguém fez. O alinhamento do subcentro,
+       * logo acima, já resolveu isto do mesmo jeito: a tela mostra, o Salvar grava.
+       * ⚠ E SÓ QUANDO O RESULTADO CONTINUA VAZIO: se o operador escolheu uma safra à mão entre
+       * abrir e salvar, é a dele que vale — a sugestão não sobrescreve escolha.
+       */
+      if (selecionado.edicao.safraSugeridaId
+          && !selecionado.edicao.safraId
+          && !contaAdministrativa(selecionado)) {
+        await editarProposto({
+          staging_id: id, patch: { safra_id: selecionado.edicao.safraSugeridaId },
+        });
       }
       const res: any = await applyRow({ staging_id: id, overwrite: true });
       if (res?.aplicado) {

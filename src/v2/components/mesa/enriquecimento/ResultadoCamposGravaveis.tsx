@@ -26,6 +26,7 @@ import { ContaBancariaSelect, type ContaSelecionavel } from '@/components/shared
 import { CELULA_EDITAVEL, CELULA_EDITAVEL_DATA, ITEM_DROPDOWN } from './medidasMesa';
 import { TIPOS_OPERACAO_RESULTADO, ehTipoTransferencia } from '@/v2/lib/mesa/transferenciaPlano';
 import { AVISO_ADMIN_SEM_SAFRA, AVISO_ADMIN_SAFRA_SAI } from '@/lib/financeiro/escopoDoSubcentro';
+import { cn } from '@/lib/utils';
 
 type Editar = (patch: Record<string, unknown>) => Promise<void>;
 
@@ -52,10 +53,19 @@ export function ResultadoDataEditor({ value, valorAtual, campo, onEditar }: {
   );
 }
 
-export function ResultadoSafraEditor({ value, valorAtual, safras, onEditar, administrativo = false }: {
+export function ResultadoSafraEditor({ value, valorAtual, safras, sugeridaId, onEditar, administrativo = false }: {
   value: string | null;
   valorAtual: string | null;
   safras: { id: string; codigo?: string | null; nome?: string | null }[];
+  /**
+   * A safra que a competência implica — PR-MESA-SUGESTOES-01 §1.
+   *
+   * ⚠ ELA ENTRA COMO VALOR EXIBIDO e a moldura fica ÂMBAR: é proposta, e o Salvar a grava. O
+   * âmbar é o que separa "o sistema deduziu" de "alguém decidiu" — sem ele, o operador leria
+   * uma safra escolhida onde há um palpite, e a diferença importa justamente nas linhas que ele
+   * revisaria.
+   */
+  sugeridaId?: string | null;
   onEditar: Editar;
   /**
    * ⚠ ADMINISTRATIVO NÃO TEM SAFRA — MESA-SAFRA-ADM-01, a mesma regra do modal de lançamento,
@@ -67,7 +77,10 @@ export function ResultadoSafraEditor({ value, valorAtual, safras, onEditar, admi
   administrativo?: boolean;
 }) {
   const SEM = '__sem__';
-  const efetivo = value ?? valorAtual ?? '';
+  /* ⚠ A SUGESTÃO É O ÚLTIMO RECURSO, depois da proposta e do que o lançamento já tem: ela só
+     aparece onde não há safra nenhuma, que é exatamente quando a view a calcula. */
+  const efetivo = value ?? valorAtual ?? sugeridaId ?? '';
+  const ehSugestao = !value && !valorAtual && !!sugeridaId;
   if (administrativo) {
     /* ⚠ NÃO É UM SELECT DESABILITADO, é a leitura do fato: o campo não se aplica. Um `Select`
        cinza ainda convida ao clique — e foi clicando que o operador descobriu que não mudava. */
@@ -89,7 +102,13 @@ export function ResultadoSafraEditor({ value, valorAtual, safras, onEditar, admi
            `campos_rejeitados` e o operador veria erro num gesto que deu certo. */
         void onEditar({ safra_id: id });
       }}>
-      <SelectTrigger className={CELULA_EDITAVEL}><SelectValue placeholder="—" /></SelectTrigger>
+      {/* ⚠ ÂMBAR NA MOLDURA, não no texto: o código da safra tem de continuar legível como os
+          outros campos, e é a BORDA que diz "isto ainda é proposta". Mesma gramática da proposta
+          de serviços do modal de carga. */}
+      <SelectTrigger className={cn(CELULA_EDITAVEL, ehSugestao && 'border-amber-500 bg-amber-50')}
+        title={ehSugestao ? 'Safra sugerida pela competência — grava ao salvar' : undefined}>
+        <SelectValue placeholder="—" />
+      </SelectTrigger>
       <SelectContent>
         <SelectItem value={SEM} className={ITEM_DROPDOWN}>— sem safra</SelectItem>
         {safras.map(s => (
@@ -141,9 +160,18 @@ export function ResultadoContaEditor({ value, valorAtual, contas, onEditar }: {
  * operador ou proposta pela planilha sobrevive. O destino sai sempre — a própria RPC o zera
  * quando o tipo deixa de ser transferência, e mantê-lo na tela prometeria o contrário.
  */
-export function ResultadoTipoEditor({ value, valorAtual, subcentroTransferencia, subcentroAtualProposto, contaDestinoSugeridaId, onEditar }: {
+export function ResultadoTipoEditor({ value, valorAtual, subcentroTransferencia, subcentroAtualProposto, contaDestinoSugeridaId, transferenciaSugerida = false, onEditar }: {
   value: string | null;
   valorAtual: string | null;
+  /**
+   * A linha PARECE transferência e o tipo ainda não é — PR-MESA-SUGESTOES-01 §2.
+   *
+   * ⚠ AQUI A PROPOSTA NÃO VIRA VALOR, e é a diferença para a safra: trocar o tipo grava TRÊS
+   * coisas (tipo, 18010 e destino) e exige uma conta de destino que só o operador sabe. Mostrar
+   * "Transferência" já escolhido esconderia dele que falta a metade obrigatória do gesto. O
+   * âmbar convida; o clique decide.
+   */
+  transferenciaSugerida?: boolean;
   /** O subcentro da linha 18010 do plano; `null` quando o catálogo ainda não chegou. */
   subcentroTransferencia: string | null;
   /** O subcentro que o Resultado mostra agora — para saber se o 18010 foi imposto por aqui. */
@@ -169,7 +197,13 @@ export function ResultadoTipoEditor({ value, valorAtual, subcentroTransferencia,
         }
         void onEditar(patch);
       }}>
-      <SelectTrigger className={CELULA_EDITAVEL}><SelectValue placeholder="—" /></SelectTrigger>
+      <SelectTrigger
+        className={cn(CELULA_EDITAVEL, transferenciaSugerida && 'border-amber-500 bg-amber-50')}
+        title={transferenciaSugerida
+          ? 'Parece uma transferência — escolha "Transferência" para travar a conta 18010 e informar o destino'
+          : undefined}>
+        <SelectValue placeholder="—" />
+      </SelectTrigger>
       <SelectContent>
         {TIPOS_OPERACAO_RESULTADO.map((t) => (
           <SelectItem key={t.valor} value={t.valor} className={ITEM_DROPDOWN}>{t.rotulo}</SelectItem>

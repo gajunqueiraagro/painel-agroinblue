@@ -160,6 +160,8 @@ describe('diferencasDoResultado', () => {
     /* PR-MESA-TRANSF-01 — o tipo e o destino também são Resultado. */
     tipoOperacaoProposto: null, tipoOperacaoAtual: null, tipoOperacaoExcel: null,
     contaDestinoId: null, contaDestinoIdAtual: null, contaDestinoSugeridaId: null,
+    /* PR-MESA-SUGESTOES-01 — as duas propostas de regra; este fixture não as exercita. */
+    safraSugeridaId: null, tipoTransferenciaSugerido: false,
   };
 
   it('safra 25/26 -> 26/27 É diferença (o caso que a view não via)', () => {

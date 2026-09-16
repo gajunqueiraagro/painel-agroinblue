@@ -140,6 +140,24 @@ export interface EnriqEdicao {
    * único momento em que a tela pode gravar sem o operador ter pedido.
    */
   contaDestinoSugeridaId: string | null;
+
+  /* ── PR-MESA-SUGESTOES-01: as duas propostas que vêm de regra, não da planilha ─────────
+   *
+   * ⚠ ELAS NÃO SÃO O RESULTADO — são o que o Resultado SERIA se ninguém tivesse dito nada. O
+   * Resultado continua sendo `safraId`/`tipoOperacao`; estas duas só existem para a tela propor
+   * em âmbar e para o gesto de aceitar gravar a proposta. Confundi-las com o valor gravado faria
+   * a Mesa mostrar como decidido o que ainda é palpite.
+   */
+  /**
+   * A safra que a competência implica, quando não há safra em lugar nenhum.
+   *
+   * ⚠ `null` EM TRÊS CASOS DIFERENTES, e nenhum deles é erro: já existe safra (proposta ou no
+   * lançamento), a linha é administrativa (que não tem safra), ou há duas safras na mesma
+   * temporada e o desempate está desligado — aí o operador escolhe.
+   */
+  safraSugeridaId: string | null;
+  /** A linha parece uma transferência e o tipo efetivo ainda não é. Proposta, nunca gravação. */
+  tipoTransferenciaSugerido: boolean;
 }
 
 export interface EnriqRowVM {

@@ -380,6 +380,16 @@ no mesmo arquivo.
   assercoes que PROVAM que a busca sabe achar ('rendimento' e 'comprador' estao la), porque um
   payload vazio passaria verde sem elas. Os outros tres travam a linha por CARGA (21, nunca 42), o
   comprador na aba "Por nota" e o numero indo como numero.
+  De 1517 para 1521 no PR-MESA-SUGESTOES-01: entrou `src/v2/lib/mesa/sugestoesDaMesa.test.ts`
+  (+4) — a UNICA heuristica nova do PR, o texto que denuncia uma transferencia.
+  ⚠ UM DOS QUATRO CASOS AFIRMA UM FALSO POSITIVO de proposito: "Aplicacao de recursos em
+  fertilizante" CASA na heuristica e nao e transferencia nenhuma. Nao e defeito a consertar — e a
+  razao de a sugestao ser ambar e exigir o clique do operador. Se alguem fizer a heuristica gravar
+  sozinha, e este caso que mostra o estrago.
+  ⚠ E O QUE ELE NAO COBRE FICA DITO NO PROPRIO ARQUIVO: a composicao dentro do `toRowVM` (safra
+  sugerida + as tres portas juntas). A linha crua da view tem 87 campos obrigatorios e nenhum teste
+  da casa monta uma; as pecas compostas — `safraSugerida`, `escopoDoSubcentro` e
+  `subcentroDeTransferencia` — tem testes proprios. A ligacao e homologacao.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
