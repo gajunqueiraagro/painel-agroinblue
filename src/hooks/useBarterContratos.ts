@@ -166,7 +166,7 @@ export function useBarterContratos(clienteId: string | null | undefined) {
    */
   const editar = async (
     id: string,
-    dados: { nome: string; descricao: string | null; data_abertura: string },
+    dados: { nome: string; descricao: string | null; data_abertura: string; fazenda_id: string },
   ): Promise<{ ok: boolean; erro?: string }> => {
     const { error } = await (supabase as any).from('agri_barter_contratos')
       .update(dados).eq('id', id);

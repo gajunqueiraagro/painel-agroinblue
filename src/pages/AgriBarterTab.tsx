@@ -28,6 +28,7 @@ import { cn } from '@/lib/utils';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { useBarterContratos, useTotaisPorContrato, type ContratoNaLista } from '@/hooks/useBarterContratos';
 import { FornecedorSelect } from '@/components/shared/FornecedorSelect';
+import { FazendaSelect } from '@/components/shared/FazendaSelect';
 import { useBarterInsumos, type BarterInsumo, type InsumoPayload } from '@/hooks/useBarterInsumos';
 import { useBarterVenda, type BarterVenda, type VendaPayload } from '@/hooks/useBarterVenda';
 import { PageHeader } from '@/components/ui/page-header';
@@ -118,7 +119,10 @@ const COLUNAS_INSUMO: Array<ColunaOrdenavel<BarterInsumo, string> & { h: string;
 
 export function AgriBarterTab() {
   const { clienteAtual } = useCliente();
-  const { fazendaAtual, fazendas } = useFazenda();
+  const { fazendaAtual, fazendas, isGlobal } = useFazenda();
+  /* ⚠ A SEMENTE DO CAMPO: com uma fazenda escolhida no cabeçalho ela vem preenchida e editável —
+     o idioma do Novo Lançamento. Em Global vem VAZIA, nunca a sentinela. */
+  const fazendaDoCabecalho = isGlobal ? '' : (fazendaAtual?.id ?? '');
   const clienteId = clienteAtual?.id ?? null;
   const { contratos, carregando, abrir, editar } = useBarterContratos(clienteId);
   const totaisPorContrato = useTotaisPorContrato(clienteId);
@@ -136,6 +140,18 @@ export function AgriBarterTab() {
   /* ⚠ Nasce em hoje, mas EDITÁVEL: o barter costuma ser lançado meses depois de assinado. */
   const [dataAbertura, setDataAbertura] = useState(() => new Date().toISOString().slice(0, 10));
   const [descricao, setDescricao] = useState('');
+  /**
+   * A FAZENDA DO CONTRATO — campo, não mais o filtro do cabeçalho.
+   *
+   * ⚠⚠ O `fazendaAtual?.id ?? null` QUE ESTAVA AQUI ERA DEFEITO, e o `?? null` nunca o pegou: em
+   * "Global" o contexto NÃO devolve `null` — devolve a fazenda-sentinela `{ id: '__global__' }`
+   * (FazendaContext:24). O valor ia inteiro para `p_fazenda_id uuid` da
+   * `agri_barter_abrir_contrato`, e "__global__" não é UUID: o Postgres recusa a chamada.
+   * ⚠ E A FAZENDA É DO CONTRATO, não da venda: `useBarterVenda` lê `contrato.fazenda_id` e é ela
+   * que vai para toda operação daquele barter. Um contrato sem fazenda contamina em silêncio
+   * todas as vendas que ele gerar — a coluna em `agri_operacoes_comerciais` é nulável.
+   */
+  const [fazendaContratoId, setFazendaContratoId] = useState('');
   const [salvando, setSalvando] = useState(false);
 
   const contrato = useMemo(
@@ -343,27 +359,43 @@ export function AgriBarterTab() {
     }
   };
 
+  /**
+   * O QUE FALTA PARA ABRIR O CONTRATO — uma frase, a PRIMEIRA pendência, na ordem do formulário.
+   *
+   * ⚠ ERAM TRÊS `toast` DEPOIS DO CLIQUE, e contar o erro depois do gesto é pior que impedi-lo: o
+   * operador já acreditou que salvou. É o mesmo idioma dos três modais de grão — `impedimento`
+   * trava o botão, vira o `title` e fica escrito ao lado.
+   * ⚠ A CULTURA SÓ É COBRADA AO ABRIR: na edição ela nem é editável, porque já foi para os
+   * lançamentos materializados.
+   */
+  const impedimentoContrato = !parceiroId ? 'Escolha o parceiro do contrato.'
+    : !nome.trim() ? 'Dê um nome ao contrato.'
+      : !editandoId && !cultura ? 'Escolha a cultura do barter.'
+        : !fazendaContratoId ? 'Escolha a fazenda do contrato.'
+          : null;
+
   const criar = async () => {
-    if (!parceiroId) { toast.error('Escolha o parceiro do contrato.'); return; }
-    if (!nome.trim()) { toast.error('Dê um nome ao contrato.'); return; }
+    /* ⚠ A GUARDA REPETE O BOTÃO de propósito: `disabled` é do mouse, e Enter ou um clique
+       programático não passam por ele. */
+    if (impedimentoContrato) return;
     /* ⚠ A CULTURA É OBRIGATÓRIA, e não por capricho: sem ela os insumos vão ao DRE por cultura
        SEM cultura e caem em "Não apropriado" — o custo some da lavoura que o gerou. Foi
        exatamente o que aconteceu com o contrato 23/24 antes do AGRI-BARTER-04. */
-    /* ⚠ NA EDIÇÃO A CULTURA NÃO É ALTERADA — ela já foi para os lançamentos materializados, e
-       trocá-la deixaria o contrato dizendo uma coisa e o DRE outra, sem nada reconciliar os dois. */
-    if (!editandoId && !cultura) { toast.error('Escolha a cultura do barter.'); return; }
     setSalvando(true);
     try {
       if (editandoId) {
         const r = await editar(editandoId, {
           nome: nome.trim(), descricao: descricao.trim() || null, data_abertura: dataAbertura,
+          /* ⚠ A EDIÇÃO TAMBÉM GRAVA A FAZENDA: contrato aberto antes deste PR pode estar sem ela
+             (ou com a sentinela), e a tela de edição é o único lugar onde isso se conserta. */
+          fazenda_id: fazendaContratoId,
         });
         if (!r.ok) { toast.error(r.erro ?? 'Não foi possível salvar o contrato.'); return; }
         toast.success('Contrato atualizado.');
         setNovoAberto(false); setEditandoId(null);
         return;
       }
-      const r = await abrir(parceiroId, nome.trim(), fazendaAtual?.id ?? null,
+      const r = await abrir(parceiroId, nome.trim(), fazendaContratoId,
         descricao.trim() || null, cultura, dataAbertura || null);
       if (!r.ok) { toast.error(r.erro ?? 'Não foi possível abrir o contrato.'); return; }
       /* ⚠ `ok` COM `erro` é o caso da data que não gravou: o contrato existe, só a data ficou a
@@ -838,6 +870,7 @@ export function AgriBarterTab() {
           onClick={() => {
             setEditandoId(null); setParceiroId(''); setParceiroNome(''); setNome('');
             setCultura(''); setDataAbertura(new Date().toISOString().slice(0, 10)); setDescricao('');
+            setFazendaContratoId(fazendaDoCabecalho);
             setNovoAberto(true);
           }}>
           <Plus className="h-3.5 w-3.5" /> Novo contrato
@@ -917,6 +950,10 @@ export function AgriBarterTab() {
                         setNome(c.nome); setCultura(c.cultura ?? '');
                         setDataAbertura(c.data_abertura?.slice(0, 10) ?? '');
                         setDescricao(c.descricao ?? '');
+                        /* ⚠ O GRAVADO, NÃO O CABEÇALHO: abrir para editar um contrato de outra
+                           fazenda com o cabeçalho noutra reescreveria a fazenda dele no primeiro
+                           Salvar, sem ninguém pedir. */
+                        setFazendaContratoId(c.fazenda_id ?? '');
                         setNovoAberto(true);
                       }}>
                       <Pencil className="h-3 w-3" />
@@ -984,14 +1021,24 @@ export function AgriBarterTab() {
                 da semente na mesma coluna da venda do grão, sem ratear.
               </p>
             </div>
-            <div>
-              {/* ⚠ EDITÁVEL, E ISSO É CONSERTO: a coluna tem default `CURRENT_DATE`, então todo
-                  contrato nascia com a data do dia em que alguém o lançou — não do dia em que foi
-                  assinado. E é esta data que o materializador usa como competência do insumo que
-                  não informou a sua. */}
-              <Label className="text-[10px]">Aberto em</Label>
-              <DatePicker value={dataAbertura} onChange={v => setDataAbertura(v ?? '')}
-                className="mt-0.5" />
+            {/* ⚠ FAZENDA E DATA NA MESMA LINHA, mesma anatomia de célula (rótulo 10px em cima,
+                controle h-8 embaixo, mesmo gap) — A16. */}
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                {/* ⚠ EDITÁVEL, E ISSO É CONSERTO: a coluna tem default `CURRENT_DATE`, então todo
+                    contrato nascia com a data do dia em que alguém o lançou — não do dia em que foi
+                    assinado. E é esta data que o materializador usa como competência do insumo que
+                    não informou a sua. */}
+                <Label className="text-[10px]">Aberto em</Label>
+                <DatePicker value={dataAbertura} onChange={v => setDataAbertura(v ?? '')}
+                  className="mt-0.5" />
+              </div>
+              {/* ⚠ `forcaAdministrativo={false}`: o barter é operação de LAVOURA, e forçar a
+                  fazenda Administrativo poria o contrato fora da lavoura que o gerou. A prop é
+                  obrigatória no componente, então o `false` é declaração, não omissão. */}
+              <FazendaSelect value={fazendaContratoId} onChange={setFazendaContratoId}
+                fazendas={fazendas} forcaAdministrativo={false}
+                label="Fazenda" />
             </div>
             <div>
               <Label className="text-[10px]">Descrição</Label>
@@ -1008,10 +1055,18 @@ export function AgriBarterTab() {
             </p>
           </div>
           <div className="flex items-center justify-end gap-2 bg-primary px-4 py-2">
+            {/* ⚠ O MOTIVO AO LADO DO BOTÃO TRAVADO — regra da casa, e o mesmo idioma dos três
+                modais de grão: um botão cinza sem explicação faz o operador procurar o erro na
+                tela inteira. */}
+            {impedimentoContrato && (
+              <span className="mr-auto text-[10px] text-primary-foreground/80">{impedimentoContrato}</span>
+            )}
             <Button variant="ghost" className="text-primary-foreground/90 hover:bg-white/10 hover:text-white"
               onClick={() => { setNovoAberto(false); setEditandoId(null); }}>Fechar</Button>
             <Button className="gap-1 bg-white text-primary hover:bg-white/90"
-              disabled={salvando} onClick={() => { void criar(); }}>
+              disabled={!!impedimentoContrato || salvando}
+              title={impedimentoContrato ?? (editandoId ? 'Salvar o contrato' : 'Abrir o contrato')}
+              onClick={() => { void criar(); }}>
               <Save className="h-4 w-4" />
               {salvando ? 'Salvando…' : editandoId ? 'Salvar contrato' : 'Abrir contrato'}
             </Button>
