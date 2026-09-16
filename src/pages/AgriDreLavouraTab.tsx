@@ -770,17 +770,18 @@ function FaixaCultura({ c }: { c: DreCultura }) {
       unidade: temColheita ? un : undefined, title: peso },
     { rotulo: 'Produtividade', valor: temColheita ? formatNum(c.produtividade, 2) : traco,
       unidade: temColheita ? `${un}/ha` : undefined, title: peso },
-    { rotulo: 'Custo operacional /ha', valor: custoHa == null ? traco : formatNum(custoHa, 2),
+    { rotulo: 'Custo op. por ha', titleRotulo: 'Custo operacional por hectare',
+      valor: custoHa == null ? traco : formatNum(custoHa, 2),
       unidade: custoHa == null ? undefined : 'R$/ha', cor: 'text-destructive',
       title: custoHa == null ? undefined : formatMoeda(custoHa) },
     /* ⚠ `null` É "—", NUNCA "0,00": a mandioca da 25/26 chega com os três nulos porque não
        colheu. "0,00 R$/t" seria um preço — uma afirmação, e falsa. */
-    { rotulo: 'Preço de equilíbrio',
+    { rotulo: 'Preço equilíbrio', titleRotulo: 'Preço de equilíbrio',
       valor: eq.preco_equilibrio == null ? traco : formatNum(eq.preco_equilibrio, 2),
       unidade: eq.preco_equilibrio == null ? undefined : `R$/${un}`,
       title: eq.preco_realizado == null ? peso
         : `realizado ${formatNum(eq.preco_realizado, 2)} R$/${un} · ${peso}` },
-    { rotulo: 'Prod. de equilíbrio',
+    { rotulo: 'Prod. equilíbrio', titleRotulo: 'Produtividade de equilíbrio',
       valor: eq.produtividade_equilibrio == null ? traco
         : formatNum(eq.produtividade_equilibrio, 2),
       unidade: eq.produtividade_equilibrio == null ? undefined : `${un}/ha`,
@@ -790,7 +791,10 @@ function FaixaCultura({ c }: { c: DreCultura }) {
 }
 
 interface CaixaFaixa {
+  /** Curto, para caber na janela real. O nome inteiro vai em `titleRotulo`. */
   rotulo: string;
+  /** O rótulo por extenso — só onde a abreviação esconde alguma coisa. */
+  titleRotulo?: string;
   valor: string;
   /** A unidade sai do valor e vira 10px muted ao lado — "185,00" + "ha". */
   unidade?: string;
@@ -821,8 +825,12 @@ function Caixas({ caixas }: { caixas: CaixaFaixa[] }) {
         <div key={c.rotulo}
           className="flex min-w-0 flex-col items-center justify-center gap-[2px] rounded-md border border-border/60 bg-card"
           style={{ padding: '6px 8px' }} title={c.title}>
-          <div className="w-full truncate text-center text-[9px] uppercase tracking-wide text-muted-foreground"
-            style={{ lineHeight: 1.2 }}>
+          {/* ⚠ 10px E SEM CAIXA ALTA (§3a). O uppercase é ~12% mais largo que o mesmo texto em
+              minúsculas, e a medição a 1168px — que aprovou o 9px no PR-04 — era larga demais: a
+              janela real tem ~900px de conteúdo, e ali "CUSTO OPERACIONAL EFETIVO" virava
+              "CUSTO OPERACIONAL EFETI…". Medir no limiar errado é não medir. */}
+          <div className="w-full truncate text-center text-[10px] text-muted-foreground"
+            style={{ lineHeight: 1.2 }} title={c.titleRotulo}>
             {c.rotulo}
           </div>
           {/* ⚠ UM ESPAÇO DE VERDADE ENTRE VALOR E UNIDADE (§2b): "234,80 ha", não "234,80ha". */}
@@ -859,7 +867,9 @@ function Faixa({ dre }: { dre: DreLavoura | null }) {
       unidade: resHa == null ? undefined : 'R$/ha', cor: corDoSinal(resHa) },
     /* ⚠ AQUI É O `pct_direto` DO TOTAL (66 no NJ 25/26), não o de uma cultura (70 no amendoim).
        São dois números certos em dois lugares: esta caixa descreve a safra inteira. */
-    { rotulo: 'Custos apropriados direto', valor: formatNum(t.pct_direto, 0), unidade: '%' },
+    { rotulo: 'Custos diretos', valor: formatNum(t.pct_direto, 0), unidade: '%',
+      titleRotulo: `Custos apropriados direto: ${formatNum(t.pct_direto, 0)} %`,
+      title: `Custos apropriados direto: ${formatNum(t.pct_direto, 0)} %` },
   ];
   return <Caixas caixas={caixas} />;
 }
@@ -1090,11 +1100,19 @@ function ThUnidade({ cultura, mostrarUnitarios }: { cultura: string; mostrarUnit
 const fundoDaLinha = (d: DefLinha['destaque']) =>
   (d === 'subtotal' ? 'bg-muted' : d === 'sub' ? 'bg-muted/40' : 'bg-card');
 
-/** Etiqueta pequena ao lado do rótulo — "estimado", "inclui rateio". */
-function Etiqueta({ texto, cor }: { texto: string; cor?: string }) {
+/**
+ * Etiqueta pequena ao lado do rótulo — "estimado", "rateio".
+ *
+ * ⚠ 8px E `padding: 0 4px` DESDE O PR-06, e foi medição que mandou: com "inclui rateio" a 9px, as
+ * linhas "(−) Custo fixo da lavoura" e "Investimento no período" passavam dos 210px da coluna
+ * Cultura e a etiqueta quebrava para uma segunda linha, estourando a altura de 18px da linha.
+ * O texto encolheu para "rateio" e a frase inteira foi para o `title`.
+ */
+function Etiqueta({ texto, cor, title }: { texto: string; cor?: string; title?: string }) {
   return (
-    <span className="ml-1 whitespace-nowrap rounded-[3px] border px-1 text-[9px] leading-[11px]"
-      style={{ borderColor: cor ?? 'currentColor', color: cor }}>
+    <span title={title}
+      className="ml-1 whitespace-nowrap rounded-[3px] border text-[8px] leading-[11px]"
+      style={{ borderColor: cor ?? 'currentColor', color: cor, padding: '0 4px' }}>
       {texto}
     </span>
   );
@@ -1155,7 +1173,7 @@ function LinhaDre({
             modo "dentro dos centros", e Pós-colheita tem `rateado 0` no NJ — ela prometia um
             rateio que não existe e mandava o operador procurar diferença onde não há. */}
         {def.bloco && rateioDentro && (temRateio ?? 0) > 0
-          && <Etiqueta texto="inclui rateio" cor={AMBAR} />}
+          && <Etiqueta texto="rateio" cor={AMBAR} title="inclui rateio compartilhado" />}
       </td>
 
       {culturas.map(c => {
@@ -1236,12 +1254,16 @@ function LinhaCentro({ centro, culturas, rateioDentro, mostrarUnitarios, areaTot
         const v = p ? (rateioDentro ? p.valor : p.direto) : null;
         return (
           <Fragment key={c.cultura}>
-            <Celula filha valor={v} cor="" rateado={rateioDentro && p ? p.rateado : 0}
+            {/* ⚠ FILHO DE SAÍDA É VERMELHO, SEM EXCEÇÃO POR BLOCO (§4): os centros de investimento
+                ficavam em cinza herdado, e Infraestrutura com 5,9 milhões lia como nota de
+                rodapé ao lado dos custeios vermelhos. Investimento é dinheiro que saiu.
+                ⚠ O FUNDO ÂMBAR DO SOLO NÃO MUDA — ele marca a formação de área, não o sinal. */}
+            <Celula filha valor={v} cor={VERMELHO} rateado={rateioDentro && p ? p.rateado : 0}
               direto={p?.direto} bordaEsquerda fundo={fundo} estilo={estilo}
               onAbrir={() => abrir(tipo, centro.centro, centro.centro, c.cultura)} />
             {mostrarUnitarios && <>
-              <CelulaUnit filha texto={porUnidade(v, c.area_ha)} cor="" fundo={fundo} estilo={estilo} />
-              <CelulaUnit filha texto={porUnidade(v, c.producao)} cor="" fundo={fundo} estilo={estilo} />
+              <CelulaUnit filha texto={porUnidade(v, c.area_ha)} cor={VERMELHO} fundo={fundo} estilo={estilo} />
+              <CelulaUnit filha texto={porUnidade(v, c.producao)} cor={VERMELHO} fundo={fundo} estilo={estilo} />
             </>}
           </Fragment>
         );

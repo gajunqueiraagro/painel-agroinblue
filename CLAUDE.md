@@ -286,7 +286,7 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 2026-09-16: 1484 passando, 22 skipped, 101 arquivos, e
+  Baseline em 2026-09-16: 1485 passando, 22 skipped, 101 arquivos, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -327,6 +327,9 @@ no mesmo arquivo.
   conta que a explica): ele
   falhava com "Found multiple elements" porque a frase que ele procurava passou a
   aparecer nas duas linhas do cabecalho — falha certa, pela razao certa.
+  De 1484 para 1485 no PR-DRE-LAVOURA-06: `agriDreLavouraGrade.test.tsx` ganhou o caso que
+  trava o `p_tipo` do clique num centro de INVESTIMENTO ('investimento', nao 'natureza') —
+  os dois ramos de `fn_painel_rateio_detalhe` filtram tabelas diferentes.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 

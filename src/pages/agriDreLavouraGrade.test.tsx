@@ -42,6 +42,14 @@ const INSUMOS: DreCentro = {
   total: { valor: 1234155.85, direto: 1169045.58, rateado: 65110.27, a_pagar: 136277.79 },
 };
 
+/* ⚠ UM CENTRO DE INVESTIMENTO ao lado do de custeio: eles vão para a RPC com `p_tipo`
+   DIFERENTE, e era o que faltava travar. */
+const SOLO: DreCentro = {
+  bloco: 'investimento', centro: 'Solo',
+  por_cultura: { amendoim: { valor: 351983.4, direto: 351983.4, rateado: 0, a_pagar: 0 } },
+  total: { valor: 511037.5, direto: 511037.5, rateado: 0, a_pagar: 0 },
+};
+
 const DRE: DreLavoura = {
   versao: 'dre-lavoura-01',
   safra: { id: 's1', codigo: '25/26-Lav', data_inicio: '2025-07-01', data_fim: '2026-06-30' },
@@ -50,7 +58,7 @@ const DRE: DreLavoura = {
     area_ha: 234.8, linhas: linhas(2932505.88, 34111.57, 144001.02), custo_operacional: 3009508.69,
     a_pagar: { operacional: 136277.79, investimento: 0 }, pct_direto: 66,
   },
-  centros: [INSUMOS],
+  centros: [INSUMOS, SOLO],
   rateio_admin: { admin_total: 961411.27, parcela_agricultura: 240352.82, declarado: true },
   pool_compartilhado: { custeio: 676368.4 },
   nao_apropriado: { por_bloco: {}, total: 0 },
@@ -61,7 +69,8 @@ function montar(opts: { onDrill?: ReturnType<typeof vi.fn>; abrir?: ReturnType<t
   const onDrill = opts.onDrill ?? vi.fn();
   const abrir = opts.abrir ?? vi.fn();
   render(
-    <Grade dre={DRE} culturas={DRE.culturas} abertos={{ custeio: true }} setAbertos={vi.fn()}
+    <Grade dre={DRE} culturas={DRE.culturas} abertos={{ custeio: true, investimento: true }}
+      setAbertos={vi.fn()}
       rateioDentro={false} mostrarUnitarios colsPorCultura={3}
       centrosDoBloco={b => DRE.centros.filter(c => c.bloco === b)}
       valorDaLinha={(l, def) => (def.bloco ? (l.direto ?? l.valor) : l.valor)}
@@ -113,6 +122,21 @@ describe('quais células da grade abrem a lista de lançamentos', () => {
     clicar(celulaCom('1.121.599,85'));
     expect(abrir).toHaveBeenCalledWith('natureza', 'Insumos', 'Insumos', 'amendoim');
     expect(onDrill).not.toHaveBeenCalled();
+  });
+
+  /**
+   * ⚠ O TIPO MUDA COM O BLOCO, e é o que separa um centro de custeio de um de investimento na
+   * `fn_painel_rateio_detalhe`: os dois ramos filtram tabelas diferentes. Mandar 'natureza' para
+   * Solo devolveria vazio — o `macro_custo ilike '%investimento%'` está excluído lá.
+   * ⚠ ESTE TESTE NÃO PROVA QUE O MODAL DO SOLO ENCHE. A `p_chave` que a grade tem é o
+   * `centro_custo` ("Solo"), e o ramo de investimento da RPC filtra por `subcentro`
+   * ("Investimento Formação de Área Agrícola"). O vocabulário é que diverge, e isso é do banco —
+   * ver o relatório do PR-DRE-LAVOURA-06.
+   */
+  it('centro de investimento vai com p_tipo investimento, não natureza', () => {
+    const { abrir } = montar();
+    clicar(celulaCom('351.983,40'));
+    expect(abrir).toHaveBeenCalledWith('investimento', 'Solo', 'Solo', 'amendoim');
   });
 
   /* ⚠ A COLUNA TOTAL NÃO ABRE: `fn_painel_rateio_detalhe` recebe `p_cultura` e não aceita
