@@ -373,6 +373,21 @@ Quando o briefing incluir uma secao CHECKS (greps verificaveis), rodar
 todos e reportar. Qualquer check falho = PARAR e reportar, mesmo que o
 fail pareca cosmetico. Nao corrigir por iniciativa propria.
 
+## RLS POR TENANT — NO AR (ACESSOS-01, 2026-09-16)
+Toda tabela com `cliente_id` passou a filtrar por `tenant_ok(cliente)` = admin AgroinBlue OU
+membro ativo daquele cliente. Versionado em
+`supabase/migrations/20261027120600_acessos_01_rls_tenant.sql` (aplicado pelo arquiteto; a
+migration e' REGISTRO HISTORICO, nao se reaplica).
+- Restam 4 policies `true`, e as quatro sao de REFERENCIA GLOBAL, nao brecha: leitura livre,
+  escrita so' admin.
+- `financeiro_plano_contas` e `meta_parametros_nutricao` com `cliente_id` NULO continuam
+  legiveis por todos — sao o catalogo global. Linha com cliente preenchido ja' filtra.
+- `chuvas` tem 24 linhas SEM cliente: elas passam a ser visiveis so' para admin. Nao e' perda de
+  dado; e' dado que nunca teve dono.
+- ⚠ O QUE ISSO MUDA PARA QUEM ESCREVE TELA: consulta que lia a tabela sem `.eq('cliente_id', ...)`
+  passa a devolver MENOS linhas, e sem erro — a lista so' encolhe. Nenhum gate pega isso.
+  Antes de culpar a RPC por um numero que baixou, conferir se a tela le direto e sem tenant.
+
 ## TRABALHO PARKED (nao tocar)
 Working tree pode conter trabalho estacionado de outros PRs (ex: P3.4
 desconsiderar OFX). Arquivos modificados/untracked que nao pertencem ao
