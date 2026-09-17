@@ -184,6 +184,28 @@ export interface ImportacaoDaConta {
   substituidos: number;
   /** Quando o arquivo foi desfeito por inteiro — `null` quando ainda tem linha viva. */
   desfeitaEm: string | null;
+  /**
+   * Os meses (`YYYY-MM`) que os movimentos do arquivo tocam — PR-IMPORTACOES-MES-01.
+   * ⚠ O MÊS VEM DOS MOVIMENTOS, NÃO DO UPLOAD: o extrato de setembro enviado em 17/09 e o de
+   * agosto enviado em 31/08 têm datas de envio que não dizem de que mês são. Um arquivo que
+   * atravessa dois meses está nos dois.
+   */
+  meses: string[];
+  /** O registro da importação está cancelado — `cancelado_em` OU o legado `cancelada_em`. */
+  canceladaNoRegistro: boolean;
+}
+
+/**
+ * AS IMPORTAÇÕES DE UM MÊS, EM UMA REGRA SÓ — PR-IMPORTACOES-MES-01. O modal "Ver importações"
+ * e o contador do botão que o abre leem daqui, para o número do botão ser o da lista.
+ * ⚠ DO MÊS = algum movimento com `data_movimento` no mês (não a data do envio); o arquivo que
+ * atravessa dois meses está nos dois. CANCELADA = o registro marcado (`cancelado_em` ou o legado
+ * `cancelada_em`) ou todas as linhas desfeitas.
+ */
+export function importacoesDoMes(lista: readonly ImportacaoDaConta[], anoMes: string) {
+  const doMes = lista.filter(i => i.meses.includes(anoMes));
+  const eCancelada = (i: ImportacaoDaConta) => i.canceladaNoRegistro || i.desfeitaEm != null;
+  return { ativas: doMes.filter(i => !eCancelada(i)), canceladas: doMes.filter(eCancelada) };
 }
 
 /**
@@ -214,17 +236,17 @@ export function useImportacoesDaConta(clienteId: string | null, contaId: string 
          primeiro clique. */
       const { data: movs } = await supabase
         .from('extrato_bancario_v2')
-        .select('id, importacao_id, cancelado_em')
+        .select('id, importacao_id, cancelado_em, data_movimento')
         .eq('cliente_id', clienteId)
         .eq('conta_bancaria_id', contaId)
         .not('importacao_id', 'is', null);
-      const linhas: { id: string; importacao_id: string; cancelado_em: string | null }[] = movs ?? [];
+      const linhas: { id: string; importacao_id: string; cancelado_em: string | null; data_movimento: string }[] = movs ?? [];
       if (linhas.length === 0) { setImportacoes([]); return; }
 
       const ids = Array.from(new Set(linhas.map(l => l.importacao_id)));
       const [{ data: imps }, { data: vinc }] = await Promise.all([
         supabase.from('financeiro_importacoes_v2')
-          .select('id, nome_arquivo, created_at').in('id', ids),
+          .select('id, nome_arquivo, created_at, cancelado_em, cancelada_em').in('id', ids),
         /* ⚠ `tipo_aprovacao` ENTROU NO SELECT — [CONCIL-MES-01] (130). O card contava
            quantos movimentos do arquivo têm vínculo, mas não DE ONDE o vínculo veio; e o
            "Conciliar o mês" produz dois tipos distintos, `ofx_cru` (lançamento novo) e
@@ -239,6 +261,14 @@ export function useImportacoesDaConta(clienteId: string | null, contaId: string 
       const comVinculo = new Set(vincLista.map(v => v.extrato_id));
       const tipoPorExtrato = new Map(vincLista.map(v => [v.extrato_id, v.tipo_aprovacao]));
       const porImp: Record<string, { n: number; v: number; crus: number; subs: number; canceladas: number; desfeitaEm: string | null }> = {};
+      /* Os meses de TODAS as linhas, canceladas incluídas: a importação desfeita continua
+         sendo de um mês, e é nele que "ver canceladas" a mostra. */
+      const mesesPorImp = new Map<string, Set<string>>();
+      for (const l of linhas) {
+        const set = mesesPorImp.get(l.importacao_id) ?? new Set<string>();
+        set.add(l.data_movimento.slice(0, 7));
+        mesesPorImp.set(l.importacao_id, set);
+      }
       for (const l of linhas) {
         const acc = porImp[l.importacao_id] ?? { n: 0, v: 0, crus: 0, subs: 0, canceladas: 0, desfeitaEm: null };
         /* ⚠ LINHA CANCELADA NÃO É VIVA. Ela conta para saber que a importação inteira foi
@@ -272,6 +302,8 @@ export function useImportacoesDaConta(clienteId: string | null, contaId: string 
            entrou; lixo visível se conserta, invisível não. */
         desfeitaEm: (porImp[i.id]?.n ?? 0) === 0 && (porImp[i.id]?.canceladas ?? 0) > 0
           ? porImp[i.id]?.desfeitaEm ?? null : null,
+        meses: [...(mesesPorImp.get(i.id) ?? [])].sort(),
+        canceladaNoRegistro: i.cancelado_em != null || i.cancelada_em != null,
       })).sort((a, b) => b.data.localeCompare(a.data)));
     } finally {
       setLoading(false);

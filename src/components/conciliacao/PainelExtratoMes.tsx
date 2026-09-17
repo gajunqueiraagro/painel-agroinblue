@@ -7,7 +7,7 @@ import {
   useConciliacaoDoMes, useSugestoesDoMes, contarBaldes, frameDoRodape,
   type MovimentoConciliacao, type SituacaoMovimento,
 } from '@/hooks/useConciliacaoDoMes';
-import { useSaldoGerencialDoMes, useSaldoSistemaNaPosicao, useImportacoesDaConta } from '@/hooks/useExtratoDaConta';
+import { useSaldoGerencialDoMes, useSaldoSistemaNaPosicao, useImportacoesDaConta, importacoesDoMes } from '@/hooks/useExtratoDaConta';
 import { SaldoRealDialog } from '@/components/conciliacao/SaldoRealDialog';
 import { ImportacoesDialog } from '@/components/conciliacao/ImportacoesDialog';
 import { EstacaoConciliar } from '@/components/conciliacao/EstacaoConciliar';
@@ -96,7 +96,8 @@ export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comP
         <Button type="button" variant="outline" size="sm"
           className="h-6 gap-1 px-2 text-[10px]" onClick={() => setVerImportacoes(true)}>
           <FileText className="h-3 w-3" />
-          Ver importações ({importacoes.importacoes.length})
+          {/* O número é o da lista do modal: ativas do mês (PR-IMPORTACOES-MES-01). */}
+          Ver importações ({importacoesDoMes(importacoes.importacoes, `${ano}-${String(mes).padStart(2, '0')}`).ativas.length})
         </Button>
         {/* ⚠ O BOTÃO DEIXOU DE SER MORTO — FIN-CONCIL-PALCO-MES-01. Estava
             desabilitado com o motivo escrito desde a portagem; o palco existe
@@ -342,6 +343,7 @@ export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comP
       <ImportacoesDialog
         aberto={verImportacoes} aoFechar={() => setVerImportacoes(false)}
         contaNome={contaNome} importacoes={importacoes.importacoes}
+        anoMes={`${ano}-${String(mes).padStart(2, '0')}`}
         carregando={importacoes.loading} aoDesfazer={importacoes.desfazer}
         desfazendo={importacoes.desfazendo}
       />
@@ -372,7 +374,7 @@ export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comP
         onOpenChange={setVerConciliarMes}
         clienteId={clienteId} contaId={contaId} contaNome={contaNome}
         ano={ano} mes={mes}
-        arquivosOfx={importacoes.importacoes.length}
+        arquivosOfx={importacoesDoMes(importacoes.importacoes, `${ano}-${String(mes).padStart(2, '0')}`).ativas.length}
         saldoSistemaHoje={sistema.saldoSistema ?? null}
         aoConcluir={async () => { await recarregar(); }}
       />

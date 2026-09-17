@@ -54,7 +54,12 @@ export function ConciliarMesDialog({
   contaNome: string;
   ano: number;
   mes: number;
-  /** Quantos OFX desta conta — vem de `useImportacoesDaConta`, não é recontado aqui. */
+  /**
+   * Quantos OFX ATIVOS DESTE MÊS — vem de `importacoesDoMes` sobre `useImportacoesDaConta`, não
+   * é recontado aqui. ⚠ ERA O TOTAL DA CONTA (PR-IMPORTACOES-MES-01): o diálogo é de um mês, e o
+   * total fazia três números discordarem na mesma tela — aqui, no botão "Ver importações" e na
+   * lista do modal. O mês de um arquivo é o dos movimentos dele, não o da data de envio.
+   */
   arquivosOfx: number;
   /**
    * O "Saldo no sistema" que o card já mostra, passado por prop.

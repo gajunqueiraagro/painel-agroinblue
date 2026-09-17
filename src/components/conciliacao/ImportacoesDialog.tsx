@@ -1,7 +1,8 @@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { FileText, Loader2, Undo2 } from 'lucide-react';
-import type { ImportacaoDaConta } from '@/hooks/useExtratoDaConta';
+import { useEffect, useState } from 'react';
+import { importacoesDoMes, type ImportacaoDaConta } from '@/hooks/useExtratoDaConta';
 
 /**
  * ImportacoesDialog — portado do `AllinBlues/financas`
@@ -21,14 +22,28 @@ interface Props {
   aoFechar: () => void;
   contaNome: string;
   importacoes: ImportacaoDaConta[];
+  /** O mês da régua, `YYYY-MM`: a lista mostra só as importações com movimento nele. */
+  anoMes: string;
   carregando: boolean;
   desfazendo: boolean;
   aoDesfazer: (id: string) => void;
 }
 
 export function ImportacoesDialog({
-  aberto, aoFechar, contaNome, importacoes, carregando, desfazendo, aoDesfazer,
+  aberto, aoFechar, contaNome, importacoes: todas, anoMes, carregando, desfazendo, aoDesfazer,
 }: Props) {
+  /* ⚠ SÓ O MÊS DA RÉGUA, PELO MOVIMENTO — PR-IMPORTACOES-MES-01. A lista trazia todas as
+     importações da conta, e em agosto aparecia a cancelada de setembro. O mês de um arquivo é o
+     dos movimentos dele (não a data do envio), e o que atravessa dois meses aparece nos dois.
+     ⚠ CANCELADA FICA ATRÁS DE "ver canceladas": cancelar é história e não se apaga, mas não
+     polui a lista de trabalho. Cancelada é o registro marcado (as DUAS colunas, `cancelado_em`
+     e o legado `cancelada_em`) ou o arquivo com todas as linhas desfeitas. */
+  const [verCanceladas, setVerCanceladas] = useState(false);
+  useEffect(() => { setVerCanceladas(false); }, [anoMes]);
+  const { ativas, canceladas } = importacoesDoMes(todas, anoMes);
+  const canceladasIds = new Set(canceladas.map(i => i.id));
+  const eCancelada = (i: ImportacaoDaConta) => canceladasIds.has(i.id);
+  const importacoes = verCanceladas ? [...ativas, ...canceladas] : ativas;
   return (
     <Dialog open={aberto} onOpenChange={o => !o && aoFechar()}>
       <DialogContent className="flex max-h-[80vh] w-[92vw] max-w-lg flex-col gap-0 overflow-hidden p-0">
@@ -45,7 +60,7 @@ export function ImportacoesDialog({
             <p className="px-4 py-8 text-center text-xs text-muted-foreground">Carregando…</p>
           ) : importacoes.length === 0 ? (
             <p className="px-4 py-8 text-center text-xs text-muted-foreground">
-              Nenhuma importação rastreada nesta conta.
+              Nenhuma importação com movimento neste mês.
             </p>
           ) : (
             <ul className="divide-y">
@@ -70,6 +85,7 @@ export function ImportacoesDialog({
                     {imp.desfeitaEm && (
                       <span> · desfeita em {imp.desfeitaEm.slice(0, 10).split('-').reverse().join('/')}</span>
                     )}
+                    {!imp.desfeitaEm && imp.canceladaNoRegistro && <span> · cancelada</span>}
                     {(imp.crus > 0 || imp.substituidos > 0) && (
                       <span className="text-muted-foreground/80">
                         {' ('}
@@ -86,7 +102,7 @@ export function ImportacoesDialog({
                       explica qual é. */}
                   {/* Arquivo já desfeito não tem o que desfazer: o botão SOME, em vez de
                       ficar cinza pedindo um clique que não faria nada. */}
-                  {!imp.desfeitaEm && (
+                  {!eCancelada(imp) && (
                   <Button
                     type="button" variant="ghost" size="sm"
                     className="h-6 shrink-0 gap-1 px-1.5 text-[10px] text-muted-foreground"
@@ -102,6 +118,13 @@ export function ImportacoesDialog({
                 </li>
               ))}
             </ul>
+          )}
+          {!carregando && canceladas.length > 0 && (
+            <button type="button"
+              className="block w-full px-4 py-1.5 text-left text-[10px] text-muted-foreground underline hover:text-foreground"
+              onClick={() => setVerCanceladas(v => !v)}>
+              {verCanceladas ? 'ocultar canceladas' : `ver canceladas (${canceladas.length})`}
+            </button>
           )}
         </div>
 
