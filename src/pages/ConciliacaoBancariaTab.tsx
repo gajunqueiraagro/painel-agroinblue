@@ -12,7 +12,7 @@ import { ImportarBancoInline } from '@/components/conciliacao/ImportarBancoInlin
 import { ExtratoGerencialTab } from '@/components/financeiro-v2/ExtratoGerencialTab';
 import { EnriquecerPorPlanilha } from '@/components/conciliacao/EnriquecerPorPlanilha';
 import { inscreverEmLancamentos } from '@/hooks/useFinanceiroV2';
-import { ORDEM_GRUPO_CONTA } from '@/lib/financeiro/gruposDeConta';
+import { ORDEM_GRUPO_CONTA, agruparContasPorTipo } from '@/lib/financeiro/gruposDeConta';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -755,9 +755,21 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     Math.round(c.saldoInicial * 100) === 0 && !c.temMovimento && c.ext === null;
   const qtdOcultas = perContaSaldos.filter(ehOculta).length;
   const contasVisiveis = mostrarOcultas ? perContaSaldos : perContaSaldos.filter(c => !ehOculta(c));
-  const contasCC    = contasVisiveis.filter(c=>(c.conta.tipo_conta||'').toLowerCase()==='cc');
-  const contasINV   = contasVisiveis.filter(c=>(c.conta.tipo_conta||'').toLowerCase()==='inv');
-  const contasCartao= contasVisiveis.filter(c=>(c.conta.tipo_conta||'').toLowerCase()==='cartao');
+  /* ⚠ OS GRUPOS SAEM DO AGRUPADOR ÚNICO — PR-CONCILIA-GRUPOS-01. Eram três `<tr>` literais
+     (cc/inv/cartao), e a conta de qualquer outro tipo (a permuta da NJ) ficava INVISÍVEL na
+     tabela mas entrava no Total — nenhum subtotal fecharia. `agruparContasPorTipo` dá faixa a
+     todo tipo, com o rótulo e a ordem que o dropdown do Importar Banco já usa.
+     ⚠ O SUBTOTAL É A MESMA SOMA DO `totalSaldos`, sobre as contas do grupo: `ext` nulo só
+     quando nenhuma conta do grupo tem extrato. Oculta vale zero, então a soma dos grupos
+     fecha com o Total com ou sem o "mostrar". */
+  const somarSaldos = (lista: readonly PerContaSaldo[]) => ({
+    sis: r2(lista.reduce((s,c)=>s+c.sis,0)),
+    ext: lista.every(c=>c.ext===null) ? null : r2(lista.reduce((s,c)=>s+(c.ext||0),0)),
+    dif: r2(lista.reduce((s,c)=>s+c.dif,0)),
+  });
+  const gruposSaldos = agruparContasPorTipo(
+    contasVisiveis.map(c => ({ ...c, tipo_conta: c.conta.tipo_conta, label: getContaLabel(c.conta) })),
+  ).map(g => ({ ...g, subtotal: somarSaldos(g.contas) }));
 
   /* ⚠ O PAREAMENTO É LIDO PELO MESMO HOOK DA ABA IMPORTAR — uma fonte, dois
      consumidores. Sem conta escolhida o hook não consulta e devolve vazio, e o
@@ -1385,51 +1397,34 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                       <td className="py-2 shadow-[inset_0_-1px_0_hsl(var(--border))]" />
                     </tr>
                   </thead>
-                  <tbody>
-                    {/* CC group */}
-                    {contasCC.length > 0 && <>
-                      <tr className="border-t-2 border-blue-100"><td colSpan={5} className="px-2 py-1 text-[8px] font-semibold uppercase tracking-wider text-blue-600 bg-blue-50">Conta corrente</td></tr>
-                      {contasCC.map(s=>(
-                        <SaldoContaRow key={s.conta.id} data={s}
-                          isActive={selectedConta===s.conta.id}
-                          isDimmed={selectedConta!=='__all__'&&selectedConta!==s.conta.id}
-                          onClick={()=>setSelectedConta(s.conta.id)}
-                          onEdit={()=>handleEditSaldo(anoMesSel,s.conta.id,s.ext)}
-                          canEdit={canEditSaldoFinal(anoMesSel)}
-                          showSaldoAlert={anoMesSel === s.conta.mes_inicio && s.conta.saldo_inicial_oficial === null} />
+                  {/* ⚠ UM <tbody> POR GRUPO — estrutura que o sticky da faixa (etapa 2) vai exigir: o
+                      elemento sticky fica preso ao contêiner dele, e só com um tbody por grupo o grupo
+                      seguinte empurra o anterior. O `last:border-b-0` das contas passa a valer por grupo.
+                      ⚠ A FAIXA SAIU DO AZUL: o `bg-blue-50` brigava com o azul da conta selecionada. A
+                      borda `border-t-2` virou sombra interna, pelo mesmo motivo do Total — borda colapsada
+                      não acompanha bloco fixo. Texto 8px → 10px (piso do CLAUDE.md). */}
+                  {gruposSaldos.map(g => (
+                    <tbody key={g.chave}>
+                      <tr>
+                        <td className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-muted-foreground/15 shadow-[inset_0_1px_0_hsl(var(--border))]">{g.rotulo}</td>
+                        <td className="py-1 px-1 text-right text-[10px] font-semibold tabular-nums whitespace-nowrap text-muted-foreground bg-muted-foreground/15 shadow-[inset_0_1px_0_hsl(var(--border))]">{formatMoeda(g.subtotal.sis)}</td>
+                        <td className="py-1 px-1 text-right text-[10px] font-semibold tabular-nums whitespace-nowrap text-muted-foreground bg-muted-foreground/15 shadow-[inset_0_1px_0_hsl(var(--border))]">{g.subtotal.ext===null ? '—' : formatMoeda(g.subtotal.ext)}</td>
+                        <td className={`py-1 px-1 text-right text-[10px] font-semibold tabular-nums whitespace-nowrap bg-muted-foreground/15 shadow-[inset_0_1px_0_hsl(var(--border))] ${g.subtotal.ext===null?'text-muted-foreground':Math.abs(g.subtotal.dif)<=0.01?'text-success':'text-destructive'}`}>
+                          {g.subtotal.ext===null ? '—' : Math.abs(g.subtotal.dif)<=0.01 ? 'confere' : formatMoeda(g.subtotal.dif)}
+                        </td>
+                        <td className="py-1 bg-muted-foreground/15 shadow-[inset_0_1px_0_hsl(var(--border))]" />
+                      </tr>
+                      {g.contas.map(s=>(
+                      <SaldoContaRow key={s.conta.id} data={s}
+                        isActive={selectedConta===s.conta.id}
+                        isDimmed={selectedConta!=='__all__'&&selectedConta!==s.conta.id}
+                        onClick={()=>setSelectedConta(s.conta.id)}
+                        onEdit={()=>handleEditSaldo(anoMesSel,s.conta.id,s.ext)}
+                        canEdit={canEditSaldoFinal(anoMesSel)}
+                        showSaldoAlert={anoMesSel === s.conta.mes_inicio && s.conta.saldo_inicial_oficial === null} />
                       ))}
-                    </>}
-
-                    {/* INV group */}
-                    {contasINV.length > 0 && <>
-                      <tr className="border-t-2 border-blue-100"><td colSpan={5} className="px-2 py-1 text-[8px] font-semibold uppercase tracking-wider text-blue-600 bg-blue-50">Investimento</td></tr>
-                      {contasINV.map(s=>(
-                        <SaldoContaRow key={s.conta.id} data={s}
-                          isActive={selectedConta===s.conta.id}
-                          isDimmed={selectedConta!=='__all__'&&selectedConta!==s.conta.id}
-                          onClick={()=>setSelectedConta(s.conta.id)}
-                          onEdit={()=>handleEditSaldo(anoMesSel,s.conta.id,s.ext)}
-                          canEdit={canEditSaldoFinal(anoMesSel)}
-                          showSaldoAlert={anoMesSel === s.conta.mes_inicio && s.conta.saldo_inicial_oficial === null} />
-                      ))}
-                    </>}
-
-                    {/* Cartao group */}
-                    {contasCartao.length > 0 && <>
-                      <tr className="border-t-2 border-blue-100"><td colSpan={5} className="px-2 py-1 text-[8px] font-semibold uppercase tracking-wider text-blue-600 bg-blue-50">Cartão</td></tr>
-                      {contasCartao.map(s=>(
-                        <SaldoContaRow key={s.conta.id} data={s}
-                          isActive={selectedConta===s.conta.id}
-                          isDimmed={selectedConta!=='__all__'&&selectedConta!==s.conta.id}
-                          onClick={()=>setSelectedConta(s.conta.id)}
-                          onEdit={()=>handleEditSaldo(anoMesSel,s.conta.id,s.ext)}
-                          canEdit={canEditSaldoFinal(anoMesSel)}
-                          showSaldoAlert={anoMesSel === s.conta.mes_inicio && s.conta.saldo_inicial_oficial === null} />
-                      ))}
-                    </>}
-
-                    {/* Total row — sticky no topo, destaque azul-escuro */}
-                  </tbody>
+                    </tbody>
+                  ))}
                 </table>
 
                 {/* Rodapé das ocultas — só exibição, estado local, não persiste. */}
