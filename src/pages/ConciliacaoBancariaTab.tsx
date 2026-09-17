@@ -897,35 +897,6 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
           />
         </div>
 
-        {/* Subtitle */}
-        {selectedCard && (
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-bold">{selectedCard.label}/{ano}</span>
-            <span style={{
-              background:cor.bg, color:cor.txt, border:`1px solid ${cor.border}`,
-              fontSize:'10px', fontWeight:500, padding:'2px 8px', borderRadius:'20px',
-            }}>
-              {cardStatus==='realizado'?'✅':cardStatus==='parcial'?'⚠':cardStatus==='nao_conciliado'?'❌':'⏳'} {meta.label}
-            </span>
-            {meta.sub && <span className="text-[10px] text-muted-foreground">{meta.sub}</span>}
-            <div className="flex-1" />
-            {/* ⚠ O BOTAO "⬆ Importar Extrato" DO CABECALHO SAIU — B-24. Ele era a
-                outra porta para o modal antigo, e era por ela que o fluxo legado
-                voltava a aparecer depois do clone. O gesto de importar mora na
-                aba, inteiro: escolher a conta, escolher o arquivo, conferir a
-                previa ali e confirmar. Duas portas para o mesmo ato, uma delas
-                para o miolo velho, e' como o defeito reabriria sozinho.
-                ⚠ O MODAL SEGUE MONTADO no fim deste arquivo e vivo nas telas
-                velhas — nada morre antes da homologacao da rodada 2. */}
-            {onNavigateToLancamentos && (
-              <Button size="sm" variant="outline" className="h-6 text-[10px] gap-1 px-2.5"
-                onClick={() => onNavigateToLancamentos(ano, parseInt(selectedMes))}>
-                ↗ Lançamentos
-              </Button>
-            )}
-          </div>
-        )}
-
         {/* PR-MOS-1 — abas da Conciliação Bancária. A Auditoria Bancária continua separada;
             o Espelho é modal, não aba (PR-ESPELHO-02) — ver o comentário do `vistaExtrato`. */}
         {!loading && selectedCard && (
@@ -954,6 +925,40 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             >
               Conciliação
             </button>
+          </div>
+        )}
+
+        {/* ⚠ A FAIXA DO MÊS FICA ABAIXO DAS ABAS — PR-CONCILIA-FAIXA-MES-CONTA-01. Vale para as
+            quatro abas e mora fora de qualquer área que rola (o container é `md:shrink-0`, A21).
+            Sem `!loading`, como antes: não pisca a cada recarga. A conta veio do cabeçalho do
+            card Resumo, onde cortava nomes longos; aqui a linha é larga e o nome sai inteiro. */}
+        {selectedCard && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-bold">{selectedCard.label}/{ano}</span>
+            <span style={{
+              background:cor.bg, color:cor.txt, border:`1px solid ${cor.border}`,
+              fontSize:'10px', fontWeight:500, padding:'2px 8px', borderRadius:'20px',
+            }}>
+              {cardStatus==='realizado'?'✅':cardStatus==='parcial'?'⚠':cardStatus==='nao_conciliado'?'❌':'⏳'} {meta.label}
+            </span>
+            {meta.sub && <span className="text-[10px] text-muted-foreground">{meta.sub}</span>}
+            <span className="text-[10px] text-muted-foreground" aria-hidden>·</span>
+            <span className="text-[13px] font-medium text-[#185FA5]">{contaAtual}</span>
+            <div className="flex-1" />
+            {/* ⚠ O BOTAO "⬆ Importar Extrato" DO CABECALHO SAIU — B-24. Ele era a
+                outra porta para o modal antigo, e era por ela que o fluxo legado
+                voltava a aparecer depois do clone. O gesto de importar mora na
+                aba, inteiro: escolher a conta, escolher o arquivo, conferir a
+                previa ali e confirmar. Duas portas para o mesmo ato, uma delas
+                para o miolo velho, e' como o defeito reabriria sozinho.
+                ⚠ O MODAL SEGUE MONTADO no fim deste arquivo e vivo nas telas
+                velhas — nada morre antes da homologacao da rodada 2. */}
+            {onNavigateToLancamentos && (
+              <Button size="sm" variant="outline" className="h-6 text-[10px] gap-1 px-2.5"
+                onClick={() => onNavigateToLancamentos(ano, parseInt(selectedMes))}>
+                ↗ Lançamentos
+              </Button>
+            )}
           </div>
         )}
       </div>
@@ -1108,18 +1113,12 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
 
               {/* ── COL 1: Resumo das movimentações ── */}
               <div className="rounded-lg border overflow-hidden bg-card">
-                {/* ⚠ O CABEÇALHO NÃO MUDA DE ALTURA — PR-CONCILIA-TOPO-01 (A27). O nome da conta
-                    quebrava em duas linhas ("Banco Bradesco Tito") e o card inteiro andava ao trocar
-                    de conta. Agora os dois textos são uma linha só, o nome corta com reticências e
-                    mostra o inteiro no `title`, e o bloco reserva a altura dessa linha: 32px =
-                    pílula (10px × 1,5 + 4 de padding) + 12 de `py-1.5` + 1 de borda. */}
+                {/* ⚠ O CABEÇALHO NÃO MUDA DE ALTURA (A27). O nome da conta morava aqui e saiu para a
+                    faixa do mês, abaixo das abas (PR-CONCILIA-FAIXA-MES-CONTA-01). O `min-h-[32px]`
+                    fica: é a altura que a pílula dava, e sem ele este cabeçalho encolheria ~5,5px e
+                    desalinharia dos cards Status e Saldos. */}
                 <div className="px-3 py-1.5 border-b bg-primary text-primary-foreground flex items-center justify-between min-h-[32px]">
                   <span className="text-[9px] font-medium uppercase tracking-wider whitespace-nowrap shrink-0">Resumo das movimentações</span>
-                  <span title={contaAtual}
-                    style={{fontSize:'10px',fontWeight:500,color:'#185FA5',background:'#E6F1FB',padding:'2px 8px',borderRadius:'12px',
-                      whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'60%',minWidth:0}}>
-                    {contaAtual}
-                  </span>
                 </div>
                 <div className="px-3 pt-1.5 flex justify-between">
                   <span className="text-[10px] text-muted-foreground">Saldo inicial</span>
