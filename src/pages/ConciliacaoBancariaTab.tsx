@@ -1012,8 +1012,12 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             contradizia a do corpo ("Banco Bradesco" em cima, "B.Brasil-Invest.Facil" embaixo). A
             Conciliação não tem seletor, então é a única aba onde esta conta é a que vale.
             ⚠ O "↗ Lançamentos" FICA FORA DA CONDIÇÃO: Importar e Extrato Gerencial não têm outra
-            porta para Lançamentos. Ele segue nas quatro abas, na ponta direita. */}
-        {selectedCard && (vistaExtrato === 'conciliacao' || onNavigateToLancamentos) && (
+            porta para Lançamentos. Ele segue nas cinco abas, na ponta direita.
+            ⚠ E O "Espelho OFX × Sistema" VEIO PARA CÁ — PR-IMPORTAR-CABECALHO-01. Ele morava numa
+            faixa só dele, dentro da aba Importar, logo abaixo desta: duas linhas empilhadas com um
+            botão cada, e o conteúdo da aba começando 34px mais abaixo. Mesma ponta direita, mesma
+            condição de antes (só na aba Importar), uma linha a menos. */}
+        {selectedCard && (vistaExtrato === 'conciliacao' || vistaExtrato === 'importar' || onNavigateToLancamentos) && (
           <div className="flex items-center gap-2">
             {vistaExtrato === 'conciliacao' && (<>
             <span className="text-sm font-bold">{selectedCard.label}/{ano}</span>
@@ -1039,6 +1043,19 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
               <Button size="sm" variant="outline" className="h-6 text-[10px] gap-1 px-2.5"
                 onClick={() => onNavigateToLancamentos(ano, parseInt(selectedMes))}>
                 ↗ Lançamentos
+              </Button>
+            )}
+            {/* ⚠ CONTA E MÊS VÊM DO CABEÇALHO: o espelho não tem seletor próprio, e com
+                "todas" o botão fica desabilitado dizendo por quê — a RPC compara UMA conta,
+                e somar o extrato de uma com o sistema de várias não é espelho nenhum. */}
+            {vistaExtrato === 'importar' && (
+              <Button
+                variant="outline" size="sm" className="h-6 text-[10px]"
+                disabled={selectedConta === '__all__'}
+                title={selectedConta === '__all__' ? 'Escolha uma conta' : 'Comparar o extrato desta conta com o que o sistema pagou nela'}
+                onClick={() => setEspelhoAberto(true)}
+              >
+                Espelho OFX × Sistema
               </Button>
             )}
           </div>
@@ -1079,20 +1096,6 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                 registra "cta -> verde-agua (AGRO usa ambar 43 87% 63%)". O ambar
                 nao e' desvio da portagem; e' a identidade desta casa, e cravar
                 cor num botao so' seria inventar. (Medido em B-26.) */}
-            {/* ⚠ CONTA E MÊS VÊM DO CABEÇALHO: o espelho não tem seletor próprio, e com
-                "todas" o botão fica desabilitado dizendo por quê — a RPC compara UMA conta,
-                e somar o extrato de uma com o sistema de várias não é espelho nenhum. */}
-            <div className="flex justify-end">
-              <Button
-                variant="outline" size="sm" className="h-6 text-[10px]"
-                disabled={selectedConta === '__all__'}
-                title={selectedConta === '__all__' ? 'Escolha uma conta' : 'Comparar o extrato desta conta com o que o sistema pagou nela'}
-                onClick={() => setEspelhoAberto(true)}
-              >
-                Espelho OFX × Sistema
-              </Button>
-            </div>
-
             <ImportarBancoInline
               contas={contas.map(c => ({ id: c.id, label: getContaLabel(c), tipo_conta: c.tipo_conta }))}
               contaId={selectedConta !== '__all__' ? selectedConta : ''}
