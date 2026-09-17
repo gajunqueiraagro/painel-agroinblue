@@ -1176,6 +1176,12 @@ export function useImportacaoExtrato() {
             total_validas: novos.length,
             total_com_erro: preview.existentesNoBanco,
             status: 'processada',
+            /* PR-IMPORTAR-SALDO-OFX-01 — o saldo que o ARQUIVO declara (LEDGERBAL/DTASOF),
+               que a prévia já tinha e se perdia aqui. É conferência, não o saldo do mês:
+               o manual continua em saldos_v2 e prevalece. Sem a tag (CSV, TXT, OFX sem
+               LEDGERBAL) a prévia traz `null`, e grava-se `null` — nunca 0. */
+            saldo_declarado: preview.saldoDeclarado,
+            saldo_declarado_data: preview.saldoDeclaradoData,
           } as any)
           .select('id')
           .single();
