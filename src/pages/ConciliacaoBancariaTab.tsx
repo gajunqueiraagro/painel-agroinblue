@@ -1188,21 +1188,16 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                   <span className="text-[10px] text-muted-foreground">
                     Saldo extrato {posicaoDoCard && <span className="opacity-60">({posicaoDoCard})</span>}
                   </span>
-                  <span className="flex items-baseline gap-1.5 text-[11px] font-medium tabular-nums">
+                  {/* O lápis que morava aqui saiu — PR-CONCILIA-GRUPOS-HIERARQUIA-01: fazia a MESMA
+                      edição do lápis da conta em "Saldos por conta" (mesma conta, mesmo mês). */}
+                  <span className="text-[11px] font-medium tabular-nums whitespace-nowrap shrink-0">
                     {selectedCard.saldoExtrato !== null ? formatMoeda(selectedCard.saldoExtrato) : '—'}
-                    {selectedConta !== '__all__' && canEditSaldoFinal(anoMesSel) && (
-                      <button type="button" className="text-muted-foreground hover:text-foreground"
-                        title="Informar o saldo real do banco e a data da posição."
-                        onClick={() => handleEditSaldo(anoMesSel, selectedConta, selectedCard.saldoExtrato)}>
-                        <Pencil className="h-2.5 w-2.5" />
-                      </button>
-                    )}
                   </span>
                 </div>
                 {/* NEW: Diferença — sem extrato é "—" e sem fundo: ausência nunca aparenta "confere". */}
                 <div className={`px-3 py-1 flex justify-between mb-1 ${difResumo === null ? '' : difResumoConfere ? 'bg-success/10' : 'bg-destructive/10'}`}>
                   <span className="text-[10px] text-muted-foreground">Diferença de saldo <span className="opacity-60">(o mês fecha?)</span></span>
-                  <span className={`text-[11px] font-bold tabular-nums ${difResumo === null ? 'text-muted-foreground' : difResumoConfere ? 'text-success' : 'text-destructive'}`}>
+                  <span className={`text-[11px] font-bold tabular-nums whitespace-nowrap shrink-0 ${difResumo === null ? 'text-muted-foreground' : difResumoConfere ? 'text-success' : 'text-destructive'}`}>
                     {difResumo === null ? '—' : difResumoConfere ? 'confere' : formatMoeda(difResumo)}
                   </span>
                 </div>
@@ -1388,10 +1383,10 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                       className="cursor-pointer transition-colors bg-accent"
                       onClick={() => setSelectedConta('__all__')}
                     >
-                      <td className="py-2 px-2 font-bold text-[9px] text-blue-900 shadow-[inset_0_-1px_0_hsl(var(--border))]">Total — todas as contas</td>
-                      <td className={`py-2 px-1 text-right font-semibold text-[9px] tabular-nums whitespace-nowrap text-blue-900 shadow-[inset_0_-1px_0_hsl(var(--border))] ${totalSaldos.sis<0?'text-destructive':''}`}>{formatMoeda(totalSaldos.sis)}</td>
-                      <td className="py-2 px-1 text-right font-semibold text-[9px] tabular-nums whitespace-nowrap text-blue-900 shadow-[inset_0_-1px_0_hsl(var(--border))]">{totalSaldos.ext===null?'—':formatMoeda(totalSaldos.ext)}</td>
-                      <td className={`py-2 px-1 text-right font-semibold text-[9px] tabular-nums whitespace-nowrap shadow-[inset_0_-1px_0_hsl(var(--border))] ${totalSaldos.ext===null?'text-muted-foreground':Math.abs(totalSaldos.dif)<=0.01?'text-success':'text-destructive'}`}>
+                      <td className="py-2 px-2 font-medium text-[13px] text-blue-900 shadow-[inset_0_-1px_0_hsl(var(--border))]">Total — todas as contas</td>
+                      <td className={`py-2 px-1 text-right font-bold text-[11px] tabular-nums whitespace-nowrap text-blue-900 shadow-[inset_0_-1px_0_hsl(var(--border))] ${totalSaldos.sis<0?'text-destructive':''}`}>{formatMoeda(totalSaldos.sis)}</td>
+                      <td className="py-2 px-1 text-right font-bold text-[11px] tabular-nums whitespace-nowrap text-blue-900 shadow-[inset_0_-1px_0_hsl(var(--border))]">{totalSaldos.ext===null?'—':formatMoeda(totalSaldos.ext)}</td>
+                      <td className={`py-2 px-1 text-right font-bold text-[11px] tabular-nums whitespace-nowrap shadow-[inset_0_-1px_0_hsl(var(--border))] ${totalSaldos.ext===null?'text-muted-foreground':Math.abs(totalSaldos.dif)<=0.01?'text-success':'text-destructive'}`}>
                         {totalSaldos.ext===null ? '—' : Math.abs(totalSaldos.dif)<=0.01 ? 'confere' : formatMoeda(totalSaldos.dif)}
                       </td>
                       <td className="py-2 shadow-[inset_0_-1px_0_hsl(var(--border))]" />
@@ -1406,10 +1401,10 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                   {gruposSaldos.map(g => (
                     <tbody key={g.chave}>
                       <tr>
-                        <td className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-muted-foreground/15 shadow-[inset_0_1px_0_hsl(var(--border))]">{g.rotulo}</td>
-                        <td className="py-1 px-1 text-right text-[10px] font-semibold tabular-nums whitespace-nowrap text-muted-foreground bg-muted-foreground/15 shadow-[inset_0_1px_0_hsl(var(--border))]">{formatMoeda(g.subtotal.sis)}</td>
-                        <td className="py-1 px-1 text-right text-[10px] font-semibold tabular-nums whitespace-nowrap text-muted-foreground bg-muted-foreground/15 shadow-[inset_0_1px_0_hsl(var(--border))]">{g.subtotal.ext===null ? '—' : formatMoeda(g.subtotal.ext)}</td>
-                        <td className={`py-1 px-1 text-right text-[10px] font-semibold tabular-nums whitespace-nowrap bg-muted-foreground/15 shadow-[inset_0_1px_0_hsl(var(--border))] ${g.subtotal.ext===null?'text-muted-foreground':Math.abs(g.subtotal.dif)<=0.01?'text-success':'text-destructive'}`}>
+                        <td className="px-2 py-1 text-[11px] font-semibold text-muted-foreground bg-muted-foreground/15 shadow-[inset_0_1px_0_hsl(var(--border))]">{g.rotulo}</td>
+                        <td className="py-1 px-1 text-right text-[11px] font-semibold tabular-nums whitespace-nowrap text-muted-foreground bg-muted-foreground/15 shadow-[inset_0_1px_0_hsl(var(--border))]">{formatMoeda(g.subtotal.sis)}</td>
+                        <td className="py-1 px-1 text-right text-[11px] font-semibold tabular-nums whitespace-nowrap text-muted-foreground bg-muted-foreground/15 shadow-[inset_0_1px_0_hsl(var(--border))]">{g.subtotal.ext===null ? '—' : formatMoeda(g.subtotal.ext)}</td>
+                        <td className={`py-1 px-1 text-right text-[11px] font-semibold tabular-nums whitespace-nowrap bg-muted-foreground/15 shadow-[inset_0_1px_0_hsl(var(--border))] ${g.subtotal.ext===null?'text-muted-foreground':Math.abs(g.subtotal.dif)<=0.01?'text-success':'text-destructive'}`}>
                           {g.subtotal.ext===null ? '—' : Math.abs(g.subtotal.dif)<=0.01 ? 'confere' : formatMoeda(g.subtotal.dif)}
                         </td>
                         <td className="py-1 bg-muted-foreground/15 shadow-[inset_0_1px_0_hsl(var(--border))]" />
@@ -1698,10 +1693,10 @@ function SaldoContaRow({data, isActive, isDimmed, onClick, onEdit, canEdit, show
           <span className="ml-1 text-[8px] font-semibold text-warning border border-amber-300 bg-warning/10 rounded px-0.5" title="Saldo inicial não definido">⚠</span>
         )}
       </td>
-      <td className={`py-0.5 px-1 text-right text-[9px] tabular-nums whitespace-nowrap ${sis<0?'text-destructive':''}`}>{formatMoeda(sis)}</td>
-      <td className="py-0.5 px-1 text-right text-[9px] tabular-nums whitespace-nowrap">{ext===null?'—':formatMoeda(ext)}</td>
+      <td className={`py-0.5 px-1 text-right text-[10px] tabular-nums whitespace-nowrap ${sis<0?'text-destructive':''}`}>{formatMoeda(sis)}</td>
+      <td className="py-0.5 px-1 text-right text-[10px] tabular-nums whitespace-nowrap">{ext===null?'—':formatMoeda(ext)}</td>
       {/* Sem extrato é "—" (dado ausente); com extrato e |dif| ≤ 0,01 é "confere". */}
-      <td className={`py-0.5 px-1 text-right text-[9px] tabular-nums whitespace-nowrap ${ext===null?'font-medium text-muted-foreground':Math.abs(dif)<=0.01?'font-medium text-success':'font-semibold text-destructive'}`}>
+      <td className={`py-0.5 px-1 text-right text-[10px] tabular-nums whitespace-nowrap ${ext===null?'font-medium text-muted-foreground':Math.abs(dif)<=0.01?'font-medium text-success':'font-semibold text-destructive'}`}>
         {ext===null ? '—' : Math.abs(dif)<=0.01 ? 'confere' : formatMoeda(dif)}
       </td>
       <td className="py-0.5 px-1 text-center">
