@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -731,6 +731,23 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
      empurra as outras para baixo. Some da LISTA; o Total continua somando todas
      (a oculta vale zero nas três colunas, então o número é o mesmo). */
   const [mostrarOcultas, setMostrarOcultas] = useState(false);
+
+  /* ⚠ A ALTURA DO CABEÇALHO SE MEDE, NÃO SE ESCREVE — PR-CONCILIA-SALDOS-UI-01. O
+     `thead` grudava em `top: 36px` fixo, e o cabeçalho do card só tem 36px quando o
+     botão "Fechar contas sem movimento" aparece; sem ele fica ~26px e as linhas
+     passavam pelo vão entre os dois blocos fixos. Callback ref, não `useRef`: o card
+     só monta na aba Conciliação, e o observador tem de nascer e morrer com ele. */
+  const [alturaCabSaldos, setAlturaCabSaldos] = useState(0);
+  const observadorCabSaldos = useRef<ResizeObserver | null>(null);
+  const refCabSaldos = useCallback((el: HTMLDivElement | null) => {
+    observadorCabSaldos.current?.disconnect();
+    observadorCabSaldos.current = null;
+    if (!el) return;
+    setAlturaCabSaldos(el.offsetHeight);
+    const ro = new ResizeObserver(() => setAlturaCabSaldos(el.offsetHeight));
+    ro.observe(el);
+    observadorCabSaldos.current = ro;
+  }, []);
   const ehOculta = (c: PerContaSaldo) =>
     Math.round(c.saldoInicial * 100) === 0 && !c.temMovimento && c.ext === null;
   const qtdOcultas = perContaSaldos.filter(ehOculta).length;
@@ -1272,7 +1289,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
 
               {/* ── COL 3: Saldos por conta ── */}
               <div className="rounded-lg border bg-card" style={{display:'flex',flexDirection:'column',overflowY:'auto',maxHeight:'calc(100vh - 230px)'}}>
-                <div className="px-3 py-1.5 border-b bg-primary text-primary-foreground flex items-center justify-between shrink-0 sticky top-0 z-10">
+                <div ref={refCabSaldos} className="px-3 py-1.5 border-b bg-primary text-primary-foreground flex items-center justify-between shrink-0 sticky top-0 z-10">
                   <span className="text-[9px] font-medium uppercase tracking-wider">Saldos por conta</span>
                   <div className="flex items-center gap-2">
                     {selectedConta !== '__all__' && (
@@ -1287,7 +1304,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                         size="sm"
                         onClick={handleFecharSemMovimento}
                         disabled={fechandoSemMovimento}
-                        className="h-6 text-[10px] px-2"
+                        className="h-6 text-[10px] px-2 text-primary-foreground border border-primary-foreground/40 rounded bg-transparent hover:bg-primary-foreground/10 hover:text-primary-foreground"
                       >
                         {fechandoSemMovimento ? 'Fechando...' : 'Fechar contas sem movimento'}
                       </Button>
@@ -1324,7 +1341,10 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                     <col style={{width:'18%'}} />
                     <col style={{width:'6%'}} />
                   </colgroup>
-                  <thead className="sticky z-[9] bg-blue-50" style={{top:'36px'}}>
+                  {/* O Total mora no `thead`: gruda junto com o cabeçalho das colunas, logo abaixo
+                      do cabeçalho do card (top MEDIDO). A borda inferior é sombra interna nas
+                      células — com `border-collapse` a borda da tabela não viaja com o sticky. */}
+                  <thead className="sticky z-[9] bg-blue-50" style={{top:`${alturaCabSaldos}px`}}>
                     <tr className="border-b bg-blue-50">
                       <th className="py-1 px-2 text-center text-[9px] font-medium text-muted-foreground">Conta</th>
                       <th className="py-1 px-2 text-center text-[9px] font-medium text-muted-foreground">Sistema</th>
@@ -1332,20 +1352,20 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                       <th className="py-1 px-2 text-center text-[9px] font-medium text-muted-foreground">Diferença</th>
                       <th className="w-7" />
                     </tr>
-                  </thead>
-                  <tbody>
                     <tr
                       className="border-t cursor-pointer transition-colors bg-accent"
                       onClick={() => setSelectedConta('__all__')}
                     >
-                      <td className="py-2 px-2 font-bold text-[9px] text-blue-900">Total — todas as contas</td>
-                      <td className={`py-2 px-1 text-right font-semibold text-[9px] tabular-nums whitespace-nowrap text-blue-900 ${totalSaldos.sis<0?'text-destructive':''}`}>{formatMoeda(totalSaldos.sis)}</td>
-                      <td className="py-2 px-1 text-right font-semibold text-[9px] tabular-nums whitespace-nowrap text-blue-900">{totalSaldos.ext===null?'—':formatMoeda(totalSaldos.ext)}</td>
-                      <td className={`py-2 px-1 text-right font-semibold text-[9px] tabular-nums whitespace-nowrap ${totalSaldos.ext===null?'text-muted-foreground':Math.abs(totalSaldos.dif)<=0.01?'text-success':'text-destructive'}`}>
+                      <td className="py-2 px-2 font-bold text-[9px] text-blue-900 shadow-[inset_0_-1px_0_hsl(var(--border))]">Total — todas as contas</td>
+                      <td className={`py-2 px-1 text-right font-semibold text-[9px] tabular-nums whitespace-nowrap text-blue-900 shadow-[inset_0_-1px_0_hsl(var(--border))] ${totalSaldos.sis<0?'text-destructive':''}`}>{formatMoeda(totalSaldos.sis)}</td>
+                      <td className="py-2 px-1 text-right font-semibold text-[9px] tabular-nums whitespace-nowrap text-blue-900 shadow-[inset_0_-1px_0_hsl(var(--border))]">{totalSaldos.ext===null?'—':formatMoeda(totalSaldos.ext)}</td>
+                      <td className={`py-2 px-1 text-right font-semibold text-[9px] tabular-nums whitespace-nowrap shadow-[inset_0_-1px_0_hsl(var(--border))] ${totalSaldos.ext===null?'text-muted-foreground':Math.abs(totalSaldos.dif)<=0.01?'text-success':'text-destructive'}`}>
                         {totalSaldos.ext===null ? '—' : Math.abs(totalSaldos.dif)<=0.01 ? 'confere' : formatMoeda(totalSaldos.dif)}
                       </td>
-                      <td className="py-2" />
+                      <td className="py-2 shadow-[inset_0_-1px_0_hsl(var(--border))]" />
                     </tr>
+                  </thead>
+                  <tbody>
                     {/* CC group */}
                     {contasCC.length > 0 && <>
                       <tr className="border-t-2 border-blue-100"><td colSpan={5} className="px-2 py-1 text-[8px] font-semibold uppercase tracking-wider text-blue-600 bg-blue-50">Conta corrente</td></tr>
