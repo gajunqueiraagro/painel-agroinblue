@@ -663,14 +663,17 @@ function LinhaLancSemPar({ s, mesDoRecorte, marcado, onMarcar, onAbrir }: {
  * subcentro · status · vencido · sem conta · documento, truncado com o inteiro no `title`.
  * ⚠ JÁ VINCULADO não é casável (a RPC recusa `lancamento_ja_conciliado`): linha esmaecida, sem
  * checkbox, sem alça e sem receber arrasto.
- * ⚠ SEM CONTA TAMBÉM NÃO SE MARCA AQUI: `fn_espelho_casar` promove o lançamento a realizado mas
- * NÃO preenche a conta — ele sairia conciliado e sem conta, fora do saldo de qualquer conta.
- * Fica visível (é o cadastro incompleto que se quer ver) até a conta ser amarrada.
+ * ⚠ SEM CONTA É CASÁVEL — PR-ESPELHO-SEMCONTA-CASAVEL-03. O bloqueio de 9310fd3d existia porque
+ * `fn_espelho_casar` promovia a realizado sem preencher a conta, e o lançamento sairia conciliado
+ * e fora do saldo de qualquer conta. As duas RPCs passaram a preencher a conta do extrato POR
+ * DIREÇÃO quando ela falta (saída → `conta_bancaria_id`; entrada → `conta_destino_id`; migrations
+ * 20261027122200 e 20261027122300), nos dois sentidos (1:N e N:1). A pílula "sem conta" continua:
+ * diz que o lançamento vai ganhar a conta do extrato ao casar.
  */
 function LinhaCandidato({ c, marcado, onMarcar, onAbrir }: {
   c: EspCandidato; marcado: boolean; onMarcar: () => void; onAbrir?: (id: string) => void;
 }) {
-  const casavel = !c.ja_conciliado && !c.sem_conta;
+  const casavel = !c.ja_conciliado;
   const { isOver, setNodeRef } = useDroppable({ id: `lan:${c.lancamento_id}`, disabled: !casavel });
   const badge = badgeDeStatusTransacao(c.status_transacao);
   const doc = c.numero_documento ? [c.tipo_documento, c.numero_documento].filter(Boolean).join(' ') : null;
