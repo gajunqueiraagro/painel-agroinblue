@@ -743,8 +743,11 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     observadorCabSaldos.current?.disconnect();
     observadorCabSaldos.current = null;
     if (!el) return;
-    setAlturaCabSaldos(el.offsetHeight);
-    const ro = new ResizeObserver(() => setAlturaCabSaldos(el.offsetHeight));
+    /* `getBoundingClientRect().height`, não `offsetHeight`: este arredonda para inteiro, e
+       a altura real é quebrada (~32,5px sem o botão "Fechar…") — o `top` errava meio pixel
+       e abria fresta entre o cabeçalho do card e o das colunas. */
+    setAlturaCabSaldos(el.getBoundingClientRect().height);
+    const ro = new ResizeObserver(() => setAlturaCabSaldos(el.getBoundingClientRect().height));
     ro.observe(el);
     observadorCabSaldos.current = ro;
   }, []);
@@ -1352,15 +1355,20 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                       do cabeçalho do card (top MEDIDO). A borda inferior é sombra interna nas
                       células — com `border-collapse` a borda da tabela não viaja com o sticky. */}
                   <thead className="sticky z-[9] bg-blue-50" style={{top:`${alturaCabSaldos}px`}}>
-                    <tr className="border-b bg-blue-50">
-                      <th className="py-1 px-2 text-center text-[9px] font-medium text-muted-foreground">Conta</th>
-                      <th className="py-1 px-2 text-center text-[9px] font-medium text-muted-foreground">Sistema</th>
-                      <th className="py-1 px-2 text-center text-[9px] font-medium text-muted-foreground">Extrato</th>
-                      <th className="py-1 px-2 text-center text-[9px] font-medium text-muted-foreground">Diferença</th>
-                      <th className="w-7" />
+                    {/* ⚠ SEPARAÇÃO POR SOMBRA, NÃO POR BORDA — PR-CONCILIA-SALDOS-UI-01. O `border-b`
+                        daqui e o `border-t` do Total colapsavam em 1px de GRADE, que não ganha o fundo
+                        do `thead` sticky: as contas apareciam por essa faixa ao rolar. A linha virou
+                        sombra interna nas células, e o 1px que a borda ocupava voltou como `pb-[5px]`
+                        (4 + 1) — a altura do bloco é a mesma de antes. */}
+                    <tr className="bg-blue-50">
+                      <th className="pt-1 pb-[5px] px-2 text-center text-[9px] font-medium text-muted-foreground shadow-[inset_0_-1px_0_hsl(var(--border))]">Conta</th>
+                      <th className="pt-1 pb-[5px] px-2 text-center text-[9px] font-medium text-muted-foreground shadow-[inset_0_-1px_0_hsl(var(--border))]">Sistema</th>
+                      <th className="pt-1 pb-[5px] px-2 text-center text-[9px] font-medium text-muted-foreground shadow-[inset_0_-1px_0_hsl(var(--border))]">Extrato</th>
+                      <th className="pt-1 pb-[5px] px-2 text-center text-[9px] font-medium text-muted-foreground shadow-[inset_0_-1px_0_hsl(var(--border))]">Diferença</th>
+                      <th className="w-7 shadow-[inset_0_-1px_0_hsl(var(--border))]" />
                     </tr>
                     <tr
-                      className="border-t cursor-pointer transition-colors bg-accent"
+                      className="cursor-pointer transition-colors bg-accent"
                       onClick={() => setSelectedConta('__all__')}
                     >
                       <td className="py-2 px-2 font-bold text-[9px] text-blue-900 shadow-[inset_0_-1px_0_hsl(var(--border))]">Total — todas as contas</td>
