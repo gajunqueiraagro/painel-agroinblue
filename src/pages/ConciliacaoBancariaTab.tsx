@@ -923,7 +923,15 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   /* ── Render ── */
   return (
     <div className="animate-fade-in pb-20 md:pb-0 md:flex-1 md:min-h-0 md:flex md:flex-col md:overflow-hidden">
-      <div className="p-3 space-y-1 sticky top-0 z-20 bg-background md:static md:z-auto md:shrink-0">
+      {/* ⚠ A COR SEPARA MOLDURA DE CONTEÚDO — PR-CONCILIACAO-CABECALHO-COR-01. Cabeçalho em
+          `bg-muted/40`, corpo em `bg-card`: antes os dois eram o mesmo fundo e não se
+          distinguia o que é filtro do que é resposta.
+          ⚠ O FIO DE BAIXO É SOMBRA INTERNA, NÃO BORDA, e a razão é medida: a altura daqui é do
+          conteúdo, então `border-b` somaria 1px POR FORA (`box-border` só segura borda quando há
+          altura declarada) e a tabela de saldos, que teto em `calc(100vh - 230px)` fixo, passaria
+          a ser cortada embaixo. `inset shadow` pinta dentro da caixa e não move layout — o mesmo
+          idioma da fresta do Total naquela tabela. */}
+      <div className="p-3 space-y-1 sticky top-0 z-20 bg-muted/40 shadow-[inset_0_-1px_0_hsl(var(--border)/0.6)] md:static md:z-auto md:shrink-0">
 
         {/* ⚠ O CABEÇALHO DA PÁGINA — CONCIL-PARIDADE-VISUAL-01 §1. A tela abria
             direto no seletor de ano, sem dizer o que ela é: quem chegava por um
@@ -968,36 +976,41 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             o Espelho é modal (o fecho) e também a aba "Enriquecer · Sistema" — ver o comentário
             do `vistaExtrato`.
             ⚠ A BARRA NÃO USA O `Segmentado` da casa: são botões à mão, como já eram. Migrar é
-            frente própria. */}
+            frente própria.
+            ⚠ A ATIVA É BRANCA, NÃO NAVY — PR-CONCILIACAO-CABECALHO-COR-01. Ela é a aba RECORTADA
+            do corpo (`bg-card`, os três lados em sombra interna, o de baixo aberto para o
+            conteúdo); a inativa perdeu o `bg-muted`, que agora seria a própria cor da faixa e a
+            faria sumir. As três medidas (`px-2.5 py-1`, 10px/700) não mudam: com sombra em vez de
+            borda, a barra continua nos 23px de sempre. */}
         {!loading && selectedCard && (
           <div className="flex gap-1 items-center">
             <button
               onClick={() => setVistaExtrato('importar')}
-              className={`px-2.5 py-1 rounded text-[10px] font-bold transition-colors ${vistaExtrato === 'importar' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+              className={`px-2.5 py-1 rounded-t text-[10px] font-bold transition-colors ${vistaExtrato === 'importar' ? 'bg-card text-foreground shadow-[inset_0_1px_0_hsl(var(--border)/0.6),inset_1px_0_0_hsl(var(--border)/0.6),inset_-1px_0_0_hsl(var(--border)/0.6)]' : 'bg-transparent text-muted-foreground hover:bg-background/60'}`}
             >
               Importar Banco
             </button>
             <button
               onClick={() => setVistaExtrato('enriquecer_sistema')}
-              className={`px-2.5 py-1 rounded text-[10px] font-bold transition-colors ${vistaExtrato === 'enriquecer_sistema' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+              className={`px-2.5 py-1 rounded-t text-[10px] font-bold transition-colors ${vistaExtrato === 'enriquecer_sistema' ? 'bg-card text-foreground shadow-[inset_0_1px_0_hsl(var(--border)/0.6),inset_1px_0_0_hsl(var(--border)/0.6),inset_-1px_0_0_hsl(var(--border)/0.6)]' : 'bg-transparent text-muted-foreground hover:bg-background/60'}`}
             >
               Enriquecer · Sistema
             </button>
             <button
               onClick={() => setVistaExtrato('enriquecer')}
-              className={`px-2.5 py-1 rounded text-[10px] font-bold transition-colors ${vistaExtrato === 'enriquecer' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+              className={`px-2.5 py-1 rounded-t text-[10px] font-bold transition-colors ${vistaExtrato === 'enriquecer' ? 'bg-card text-foreground shadow-[inset_0_1px_0_hsl(var(--border)/0.6),inset_1px_0_0_hsl(var(--border)/0.6),inset_-1px_0_0_hsl(var(--border)/0.6)]' : 'bg-transparent text-muted-foreground hover:bg-background/60'}`}
             >
               Enriquecer · Excel
             </button>
             <button
               onClick={() => setVistaExtrato('gerencial')}
-              className={`px-2.5 py-1 rounded text-[10px] font-bold transition-colors ${vistaExtrato === 'gerencial' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+              className={`px-2.5 py-1 rounded-t text-[10px] font-bold transition-colors ${vistaExtrato === 'gerencial' ? 'bg-card text-foreground shadow-[inset_0_1px_0_hsl(var(--border)/0.6),inset_1px_0_0_hsl(var(--border)/0.6),inset_-1px_0_0_hsl(var(--border)/0.6)]' : 'bg-transparent text-muted-foreground hover:bg-background/60'}`}
             >
               Extrato Gerencial
             </button>
             <button
               onClick={() => setVistaExtrato('conciliacao')}
-              className={`px-2.5 py-1 rounded text-[10px] font-bold transition-colors ${vistaExtrato === 'conciliacao' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+              className={`px-2.5 py-1 rounded-t text-[10px] font-bold transition-colors ${vistaExtrato === 'conciliacao' ? 'bg-card text-foreground shadow-[inset_0_1px_0_hsl(var(--border)/0.6),inset_1px_0_0_hsl(var(--border)/0.6),inset_-1px_0_0_hsl(var(--border)/0.6)]' : 'bg-transparent text-muted-foreground hover:bg-background/60'}`}
             >
               Conciliação
             </button>
@@ -1065,7 +1078,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
       {/* PR-2.7.2 — Região de conteúdo: recebe o flex-1 real do app-shell; as branches
           (Importar/Enriquecer/Conciliação) vivem aqui. O cabeçalho/abas acima é shrink-0.
           Padding horizontal/inferior preservado (px-3 pb-3). */}
-      <div className="px-3 pb-3 md:flex-1 md:min-h-0 md:flex md:flex-col md:min-w-0">
+      <div className="px-3 pb-3 bg-card md:flex-1 md:min-h-0 md:flex md:flex-col md:min-w-0">
 
         {loading && <div className="text-center text-xs text-muted-foreground py-8">Carregando...</div>}
 
