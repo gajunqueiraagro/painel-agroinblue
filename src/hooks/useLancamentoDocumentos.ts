@@ -16,6 +16,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Json, Database } from '@/integrations/supabase/types';
+import { extensaoDoArquivo } from '@/lib/oc/caminhoDocumento';
 
 /* ⚠ O TIPO VEM DO BANCO, não de um `as`. A tabela entrou no `types.ts` em `eb478369`;
    antes disto o único caminho seria um cast, e ele deixaria de acusar no dia em que uma
@@ -408,7 +409,8 @@ export function useLancamentoDocumentos(
    */
   const anexar = useCallback(async (documentoId: string, versaoEsperada: number, file: File) => {
     if (!habilitado) return false;
-    if (!TIPOS_ACEITOS.includes(file.type)) throw new Error('Formato não aceito. Envie PDF, JPG ou PNG.');
+    const ext = extensaoDoArquivo(file);
+    if (!ext || !TIPOS_ACEITOS.includes(file.type)) throw new Error('Formato não aceito. Envie PDF, JPG ou PNG.');
     if (file.size > TAMANHO_MAXIMO) throw new Error('Arquivo acima de 10 MB.');
     setSaving(true);
     try {
@@ -418,9 +420,15 @@ export function useLancamentoDocumentos(
          a convenção de `caminhoDocumentoOC`, e é dela que a policy por cliente depende
          (`foldername[1]`). Subir o arquivo da OC no caminho do lançamento passaria na
          policy e deixaria o arquivo onde a aba da OC não o procura. */
+      /* ⚠ A CHAVE NÃO LEVA O NOME DO ARQUIVO — PR-ANEXO-KEY-POR-ID-02B1. O storage recusa
+         acento na chave ("Invalid key"), e o macOS grava acento decomposto. Id do documento
+         + extensão do TIPO, como no `caminhoDocumentoOC`; o nome original fica no registro.
+         No lançamento o `Date.now()` continua, depois do id: o mesmo documento pode receber
+         um arquivo novo pela edição, e com `upsert: false` a chave repetida recusaria.
+         As chaves antigas (com o nome) não mudam: a leitura usa o `url` gravado. */
       const caminho = daOC && doc?.operacaoId
-        ? `${clienteId}/${doc.operacaoId}/${documentoId}.${file.name.split('.').pop() ?? 'bin'}`
-        : `${clienteId}/${lancamentoId}/${Date.now()}-${file.name}`;
+        ? `${clienteId}/${doc.operacaoId}/${documentoId}.${ext}`
+        : `${clienteId}/${lancamentoId}/${documentoId}-${Date.now()}.${ext}`;
       const up = await supabase.storage.from(daOC ? BUCKET_OC : BUCKET)
         .upload(caminho, file, { upsert: false });
       if (up.error) throw up.error;

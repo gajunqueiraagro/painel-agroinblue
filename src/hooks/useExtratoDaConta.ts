@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { faixaDoMes } from '@/hooks/useConciliacaoDoMes';
 import { TIPOS_ACEITOS, TAMANHO_MAXIMO } from '@/hooks/useLancamentoDocumentos';
+import { extensaoDoArquivo } from '@/lib/oc/caminhoDocumento';
 
 /**
  * useExtratoDaConta — o saldo do mês e as importações da conta.
@@ -588,7 +589,8 @@ export async function anexarSaldoDocumento(params: {
   clienteId: string; contaId: string; anoMes: string; file: File;
 }): Promise<{ ok: boolean; erro: string | null }> {
   const { clienteId, contaId, anoMes, file } = params;
-  if (!TIPOS_ACEITOS.includes(file.type)) return { ok: false, erro: 'Formato não aceito. Envie PDF, JPG ou PNG.' };
+  const ext = extensaoDoArquivo(file);
+  if (!ext || !TIPOS_ACEITOS.includes(file.type)) return { ok: false, erro: 'Formato não aceito. Envie PDF, JPG ou PNG.' };
   if (file.size > TAMANHO_MAXIMO) return { ok: false, erro: 'Arquivo acima de 10 MB.' };
 
   const userId = (await supabase.auth.getUser()).data.user?.id ?? null;
@@ -603,7 +605,12 @@ export async function anexarSaldoDocumento(params: {
     .single();
   if (erroRegistro || !linha) return { ok: false, erro: erroRegistro?.message ?? 'Não foi possível registrar o anexo.' };
 
-  const caminho = `${clienteId}/saldos/${contaId}/${anoMes}/${Date.now()}-${file.name}`;
+  /* ⚠ A CHAVE É O ID, NUNCA O NOME DO ARQUIVO — PR-ANEXO-KEY-POR-ID-02B1. O storage recusa
+     acento na chave ("Invalid key"), e o macOS grava o nome com acento DECOMPOSTO: "Itaú"
+     virava "u" + acento combinado e o upload falhava. O molde é o de `caminhoDocumentoOC`:
+     id da linha já registrada + extensão tirada do TIPO. O nome original fica na coluna
+     `nome`, que é o que a lista mostra. */
+  const caminho = `${clienteId}/saldos/${contaId}/${anoMes}/${linha.id}.${ext}`;
   const up = await supabase.storage.from(BUCKET_SALDO_DOC).upload(caminho, file, { upsert: false });
   if (up.error) return { ok: false, erro: up.error.message };
 
