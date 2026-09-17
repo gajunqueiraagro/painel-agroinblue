@@ -157,8 +157,12 @@ export function SaldoRealDialog({
 
   return (
     <Dialog open onOpenChange={(a) => !a && aoFechar()}>
-      <DialogContent className="w-[94vw] max-w-md gap-0 overflow-hidden p-0">
-        <DialogHeader className="border-b bg-primary/10 px-4 py-2.5 pr-12 text-left">
+      {/* ⚠ TRÊS FAIXAS, SÓ O CORPO ROLA — PR-ANEXO-MODAL-OVERFLOW-01 (A21). Com anexos de nome
+          longo o modal crescia além da tela e levava o rodapé junto: o "Atualizar" sumia e não
+          havia como salvar. E o `DialogContent` base é `grid`: sem `flex`, a linha de nome sem
+          quebra alargava a coluna em vez de truncar, e o "visualizar" saía cortado. */}
+      <DialogContent className="flex max-h-[85vh] w-[94vw] max-w-md flex-col gap-0 overflow-hidden p-0">
+        <DialogHeader className="shrink-0 border-b bg-primary/10 px-4 py-2.5 pr-12 text-left">
           <DialogTitle className="text-[14px] font-medium leading-none text-primary">
             Saldo real de {contaNome}
           </DialogTitle>
@@ -167,7 +171,7 @@ export function SaldoRealDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-2.5 px-4 py-3">
+        <div className="min-h-0 min-w-0 flex-1 space-y-2.5 overflow-y-auto px-4 py-3">
           <div className="grid grid-cols-2 gap-2">
             <div>
               <Label className="text-[10px]">Saldo real (R$)</Label>
@@ -237,18 +241,18 @@ export function SaldoRealDialog({
             {anexos.documentos.length === 0 ? (
               <div className="pt-1 text-[10px] text-muted-foreground">Nenhum arquivo anexado.</div>
             ) : (
-              <ul className="mt-1 max-h-[72px] divide-y overflow-y-auto">
+              <ul className="mt-1 max-h-[120px] divide-y overflow-y-auto">
                 {anexos.documentos.map(d => (
                   <li key={d.id} className="py-0.5">
-                    <div className="flex items-center gap-2">
-                      <span className="min-w-0 flex-1 truncate text-[10px]" title={d.nome}>{d.nome}</span>
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="min-w-0 flex-1 truncate whitespace-nowrap text-[10px]" title={d.nome}>{d.nome}</span>
                       {d.url ? (
-                        <button type="button" className="text-[10px] text-primary underline"
+                        <button type="button" className="shrink-0 text-[10px] text-primary underline"
                           onClick={() => { void abrirAnexo(d.url); }}>visualizar</button>
                       ) : (
-                        <span className="text-[10px] text-warning">sem arquivo</span>
+                        <span className="shrink-0 text-[10px] text-warning">sem arquivo</span>
                       )}
-                      <button type="button" className="text-[10px] text-destructive underline"
+                      <button type="button" className="shrink-0 text-[10px] text-destructive underline"
                         onClick={() => { setCancelandoId(d.id); setMotivo(''); }}>cancelar</button>
                     </div>
                     {cancelandoId === d.id && (
@@ -273,7 +277,7 @@ export function SaldoRealDialog({
           </p>
         </div>
 
-        <DialogFooter className="items-center gap-2 border-t bg-accent px-4 py-2.5 sm:justify-between">
+        <DialogFooter className="shrink-0 items-center gap-2 border-t bg-accent px-4 py-2.5 sm:justify-between">
           {/* Remover à esquerda e destrutivo: separado das ações de salvar, para
               não ser clicado no caminho do Cancelar. */}
           {jaInformado ? (
