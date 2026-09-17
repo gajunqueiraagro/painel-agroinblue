@@ -885,6 +885,911 @@ export type Database = {
         }
         Relationships: []
       }
+      agri_barter_contratos: {
+        Row: {
+          ativo: boolean
+          cliente_id: string
+          conta_permuta_id: string | null
+          created_at: string
+          created_by: string | null
+          cultura: string | null
+          data_abertura: string
+          data_fechamento: string | null
+          descricao: string | null
+          fazenda_id: string
+          id: string
+          nome: string
+          observacoes: string | null
+          parceiro_fornecedor_id: string
+          status: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          ativo?: boolean
+          cliente_id: string
+          conta_permuta_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          cultura?: string | null
+          data_abertura?: string
+          data_fechamento?: string | null
+          descricao?: string | null
+          fazenda_id: string
+          id?: string
+          nome: string
+          observacoes?: string | null
+          parceiro_fornecedor_id: string
+          status?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          ativo?: boolean
+          cliente_id?: string
+          conta_permuta_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          cultura?: string | null
+          data_abertura?: string
+          data_fechamento?: string | null
+          descricao?: string | null
+          fazenda_id?: string
+          id?: string
+          nome?: string
+          observacoes?: string | null
+          parceiro_fornecedor_id?: string
+          status?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      agri_colheita: {
+        Row: {
+          aflatoxina_ppb: number | null
+          ativo: boolean
+          cliente_id: string
+          created_at: string
+          data_colheita: string
+          desconto_kg: number | null
+          destino: string | null
+          filial: string | null
+          grao_roca_kg: number | null
+          grao_roca_sacas: number | null
+          hora_chegada: string | null
+          id: string
+          industria_id: string | null
+          local_estoque_id: string | null
+          nf_produtor: string | null
+          observacoes: string | null
+          peso_bruto_kg: number | null
+          peso_fazenda_kg: number | null
+          peso_liquido_kg: number | null
+          peso_refugo_kg: number | null
+          peso_seco_kg: number | null
+          peso_verde_kg: number | null
+          preco_g: number | null
+          renda_liquida_pct: number | null
+          rendimento_g: number | null
+          romaneio_ref: string | null
+          sacas: number | null
+          sacas_boas: number | null
+          safra_area_id: string
+          taxa_secagem: number | null
+          ticket_balanca: string | null
+          toneladas: number | null
+          umidade_pct: number | null
+          updated_at: string
+          valor_secagem: number | null
+        }
+        Insert: {
+          aflatoxina_ppb?: number | null
+          ativo?: boolean
+          cliente_id: string
+          created_at?: string
+          data_colheita: string
+          desconto_kg?: number | null
+          destino?: string | null
+          filial?: string | null
+          grao_roca_kg?: number | null
+          grao_roca_sacas?: number | null
+          hora_chegada?: string | null
+          id?: string
+          industria_id?: string | null
+          local_estoque_id?: string | null
+          nf_produtor?: string | null
+          observacoes?: string | null
+          peso_bruto_kg?: number | null
+          peso_fazenda_kg?: number | null
+          peso_liquido_kg?: number | null
+          peso_refugo_kg?: number | null
+          peso_seco_kg?: number | null
+          peso_verde_kg?: number | null
+          preco_g?: number | null
+          renda_liquida_pct?: number | null
+          rendimento_g?: number | null
+          romaneio_ref?: string | null
+          sacas?: number | null
+          sacas_boas?: number | null
+          safra_area_id: string
+          taxa_secagem?: number | null
+          ticket_balanca?: string | null
+          toneladas?: number | null
+          umidade_pct?: number | null
+          updated_at?: string
+          valor_secagem?: number | null
+        }
+        Update: {
+          aflatoxina_ppb?: number | null
+          ativo?: boolean
+          cliente_id?: string
+          created_at?: string
+          data_colheita?: string
+          desconto_kg?: number | null
+          destino?: string | null
+          filial?: string | null
+          grao_roca_kg?: number | null
+          grao_roca_sacas?: number | null
+          hora_chegada?: string | null
+          id?: string
+          industria_id?: string | null
+          local_estoque_id?: string | null
+          nf_produtor?: string | null
+          observacoes?: string | null
+          peso_bruto_kg?: number | null
+          peso_fazenda_kg?: number | null
+          peso_liquido_kg?: number | null
+          peso_refugo_kg?: number | null
+          peso_seco_kg?: number | null
+          peso_verde_kg?: number | null
+          preco_g?: number | null
+          renda_liquida_pct?: number | null
+          rendimento_g?: number | null
+          romaneio_ref?: string | null
+          sacas?: number | null
+          sacas_boas?: number | null
+          safra_area_id?: string
+          taxa_secagem?: number | null
+          ticket_balanca?: string | null
+          toneladas?: number | null
+          umidade_pct?: number | null
+          updated_at?: string
+          valor_secagem?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agri_colheita_industria_id_fkey"
+            columns: ["industria_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_fornecedores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agri_colheita_local_estoque_id_fkey"
+            columns: ["local_estoque_id"]
+            isOneToOne: false
+            referencedRelation: "agri_locais_estoque"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agri_colheita_safra_area_id_fkey"
+            columns: ["safra_area_id"]
+            isOneToOne: false
+            referencedRelation: "agri_safra_area"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agri_colheita_lancamentos: {
+        Row: {
+          ativo: boolean
+          colheita_id: string
+          created_at: string
+          lancamento_id: string
+          papel: string
+        }
+        Insert: {
+          ativo?: boolean
+          colheita_id: string
+          created_at?: string
+          lancamento_id: string
+          papel: string
+        }
+        Update: {
+          ativo?: boolean
+          colheita_id?: string
+          created_at?: string
+          lancamento_id?: string
+          papel?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agri_colheita_lancamentos_colheita_id_fkey"
+            columns: ["colheita_id"]
+            isOneToOne: false
+            referencedRelation: "agri_colheita"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agri_colheita_lancamentos_lancamento_id_fkey"
+            columns: ["lancamento_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_lancamentos_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agri_colheita_lancamentos_lancamento_id_fkey"
+            columns: ["lancamento_id"]
+            isOneToOne: false
+            referencedRelation: "vw_classificacao_staging_preview"
+            referencedColumns: ["lanc_id"]
+          },
+          {
+            foreignKeyName: "agri_colheita_lancamentos_lancamento_id_fkey"
+            columns: ["lancamento_id"]
+            isOneToOne: false
+            referencedRelation: "vw_financeiro_lancamentos_v2_doc"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agri_contratos_armazenagem: {
+        Row: {
+          ativo: boolean
+          cliente_id: string
+          created_at: string
+          created_by: string | null
+          documento_ref: string | null
+          id: string
+          local_id: string
+          observacoes: string | null
+          quebra_tecnica_base: string | null
+          quebra_tecnica_pct: number | null
+          quebra_tecnica_tipo: string
+          taxa_armazenagem_unidade: string | null
+          taxa_armazenagem_valor: number | null
+          updated_at: string
+          updated_by: string | null
+          vigencia_fim: string | null
+          vigencia_inicio: string
+        }
+        Insert: {
+          ativo?: boolean
+          cliente_id: string
+          created_at?: string
+          created_by?: string | null
+          documento_ref?: string | null
+          id?: string
+          local_id: string
+          observacoes?: string | null
+          quebra_tecnica_base?: string | null
+          quebra_tecnica_pct?: number | null
+          quebra_tecnica_tipo?: string
+          taxa_armazenagem_unidade?: string | null
+          taxa_armazenagem_valor?: number | null
+          updated_at?: string
+          updated_by?: string | null
+          vigencia_fim?: string | null
+          vigencia_inicio: string
+        }
+        Update: {
+          ativo?: boolean
+          cliente_id?: string
+          created_at?: string
+          created_by?: string | null
+          documento_ref?: string | null
+          id?: string
+          local_id?: string
+          observacoes?: string | null
+          quebra_tecnica_base?: string | null
+          quebra_tecnica_pct?: number | null
+          quebra_tecnica_tipo?: string
+          taxa_armazenagem_unidade?: string | null
+          taxa_armazenagem_valor?: number | null
+          updated_at?: string
+          updated_by?: string | null
+          vigencia_fim?: string | null
+          vigencia_inicio?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agri_contratos_armazenagem_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agri_contratos_armazenagem_local_id_fkey"
+            columns: ["local_id"]
+            isOneToOne: false
+            referencedRelation: "agri_locais_estoque"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agri_cotacao_graos: {
+        Row: {
+          classe_aflatoxina: string
+          cliente_id: string
+          created_at: string
+          created_by: string | null
+          cultura: string
+          data_referencia: string
+          fonte: string | null
+          id: string
+          observacoes: string | null
+          preco_saca: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          classe_aflatoxina: string
+          cliente_id: string
+          created_at?: string
+          created_by?: string | null
+          cultura: string
+          data_referencia: string
+          fonte?: string | null
+          id?: string
+          observacoes?: string | null
+          preco_saca: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          classe_aflatoxina?: string
+          cliente_id?: string
+          created_at?: string
+          created_by?: string | null
+          cultura?: string
+          data_referencia?: string
+          fonte?: string | null
+          id?: string
+          observacoes?: string | null
+          preco_saca?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      agri_estoque_movimentacoes: {
+        Row: {
+          ativo: boolean
+          cancelado_em: string | null
+          cancelado_por: string | null
+          classe: string | null
+          cliente_id: string
+          created_at: string
+          created_by: string | null
+          cultura: string
+          data_movimento: string
+          id: string
+          local_estoque_id: string
+          motivo: string
+          motivo_cancelamento: string | null
+          observacoes: string | null
+          quantidade: number
+          safra_id: string
+          tipo: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          ativo?: boolean
+          cancelado_em?: string | null
+          cancelado_por?: string | null
+          classe?: string | null
+          cliente_id: string
+          created_at?: string
+          created_by?: string | null
+          cultura: string
+          data_movimento: string
+          id?: string
+          local_estoque_id: string
+          motivo: string
+          motivo_cancelamento?: string | null
+          observacoes?: string | null
+          quantidade: number
+          safra_id: string
+          tipo?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          ativo?: boolean
+          cancelado_em?: string | null
+          cancelado_por?: string | null
+          classe?: string | null
+          cliente_id?: string
+          created_at?: string
+          created_by?: string | null
+          cultura?: string
+          data_movimento?: string
+          id?: string
+          local_estoque_id?: string
+          motivo?: string
+          motivo_cancelamento?: string | null
+          observacoes?: string | null
+          quantidade?: number
+          safra_id?: string
+          tipo?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agri_estoque_movimentacoes_local_estoque_id_fkey"
+            columns: ["local_estoque_id"]
+            isOneToOne: false
+            referencedRelation: "agri_locais_estoque"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agri_estoque_movimentacoes_safra_id_fkey"
+            columns: ["safra_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_safras"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agri_locais_estoque: {
+        Row: {
+          aliases: string[] | null
+          ativo: boolean
+          cliente_id: string
+          codigo_externo: string | null
+          created_at: string
+          created_by: string | null
+          fazenda_id: string | null
+          fornecedor_id: string | null
+          id: string
+          nome: string
+          observacoes: string | null
+          tipo: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          aliases?: string[] | null
+          ativo?: boolean
+          cliente_id: string
+          codigo_externo?: string | null
+          created_at?: string
+          created_by?: string | null
+          fazenda_id?: string | null
+          fornecedor_id?: string | null
+          id?: string
+          nome: string
+          observacoes?: string | null
+          tipo: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          aliases?: string[] | null
+          ativo?: boolean
+          cliente_id?: string
+          codigo_externo?: string | null
+          created_at?: string
+          created_by?: string | null
+          fazenda_id?: string | null
+          fornecedor_id?: string | null
+          id?: string
+          nome?: string
+          observacoes?: string | null
+          tipo?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agri_locais_estoque_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agri_locais_estoque_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agri_locais_estoque_fornecedor_id_fkey"
+            columns: ["fornecedor_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_fornecedores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agri_oc_entregas: {
+        Row: {
+          classe_aflatoxina: string | null
+          cliente_id: string
+          colheita_id: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          local_estoque_id: string
+          observacoes: string | null
+          operacao_id: string
+          preco_saca: number | null
+          sacas: number | null
+          updated_at: string
+          updated_by: string | null
+          valor: number | null
+        }
+        Insert: {
+          classe_aflatoxina?: string | null
+          cliente_id: string
+          colheita_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          local_estoque_id: string
+          observacoes?: string | null
+          operacao_id: string
+          preco_saca?: number | null
+          sacas?: number | null
+          updated_at?: string
+          updated_by?: string | null
+          valor?: number | null
+        }
+        Update: {
+          classe_aflatoxina?: string | null
+          cliente_id?: string
+          colheita_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          local_estoque_id?: string
+          observacoes?: string | null
+          operacao_id?: string
+          preco_saca?: number | null
+          sacas?: number | null
+          updated_at?: string
+          updated_by?: string | null
+          valor?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agri_oc_entregas_local_estoque_id_fkey"
+            columns: ["local_estoque_id"]
+            isOneToOne: false
+            referencedRelation: "agri_locais_estoque"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agri_oc_insumos: {
+        Row: {
+          ativo: boolean
+          cliente_id: string
+          contrato_barter_id: string
+          created_at: string
+          created_by: string | null
+          data_recebimento: string | null
+          financeiro_lancamento_id: string | null
+          id: string
+          nf_numero: string | null
+          observacoes: string | null
+          plano_conta_id: string | null
+          produto: string
+          quantidade: number | null
+          safra_id: string | null
+          unidade: string | null
+          updated_at: string
+          updated_by: string | null
+          valor: number
+        }
+        Insert: {
+          ativo?: boolean
+          cliente_id: string
+          contrato_barter_id: string
+          created_at?: string
+          created_by?: string | null
+          data_recebimento?: string | null
+          financeiro_lancamento_id?: string | null
+          id?: string
+          nf_numero?: string | null
+          observacoes?: string | null
+          plano_conta_id?: string | null
+          produto: string
+          quantidade?: number | null
+          safra_id?: string | null
+          unidade?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          valor: number
+        }
+        Update: {
+          ativo?: boolean
+          cliente_id?: string
+          contrato_barter_id?: string
+          created_at?: string
+          created_by?: string | null
+          data_recebimento?: string | null
+          financeiro_lancamento_id?: string | null
+          id?: string
+          nf_numero?: string | null
+          observacoes?: string | null
+          plano_conta_id?: string | null
+          produto?: string
+          quantidade?: number | null
+          safra_id?: string | null
+          unidade?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          valor?: number
+        }
+        Relationships: []
+      }
+      agri_oc_partes: {
+        Row: {
+          centro_custo: string | null
+          cliente_id: string
+          created_at: string
+          created_by: string | null
+          data_vencimento: string | null
+          descricao: string | null
+          financeiro_lancamento_id: string | null
+          grupo_custo: string | null
+          id: string
+          incluso_no_total: boolean
+          macro_custo: string | null
+          natureza: string
+          operacao_id: string
+          plano_conta_id: string | null
+          subcentro: string | null
+          updated_at: string
+          updated_by: string | null
+          valor: number
+        }
+        Insert: {
+          centro_custo?: string | null
+          cliente_id: string
+          created_at?: string
+          created_by?: string | null
+          data_vencimento?: string | null
+          descricao?: string | null
+          financeiro_lancamento_id?: string | null
+          grupo_custo?: string | null
+          id?: string
+          incluso_no_total?: boolean
+          macro_custo?: string | null
+          natureza: string
+          operacao_id: string
+          plano_conta_id?: string | null
+          subcentro?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          valor: number
+        }
+        Update: {
+          centro_custo?: string | null
+          cliente_id?: string
+          created_at?: string
+          created_by?: string | null
+          data_vencimento?: string | null
+          descricao?: string | null
+          financeiro_lancamento_id?: string | null
+          grupo_custo?: string | null
+          id?: string
+          incluso_no_total?: boolean
+          macro_custo?: string | null
+          natureza?: string
+          operacao_id?: string
+          plano_conta_id?: string | null
+          subcentro?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          valor?: number
+        }
+        Relationships: []
+      }
+      agri_operacoes_comerciais: {
+        Row: {
+          ativo: boolean
+          cancelado_em: string | null
+          cancelado_por: string | null
+          cliente_id: string
+          condicao_pagamento: string
+          contraparte_fornecedor_id: string
+          contrato_barter_id: string | null
+          created_at: string
+          created_by: string | null
+          cultura: string
+          data_operacao: string
+          descontos: number | null
+          fazenda_id: string | null
+          id: string
+          motivo_cancelamento: string | null
+          observacoes: string | null
+          safra_id: string
+          status_comercial: string
+          status_financeiro: string
+          substitui_operacao_id: string | null
+          tipo_operacao: string
+          tipo_precificacao: string
+          updated_at: string
+          updated_by: string | null
+          valor_bruto: number | null
+          valor_liquido: number | null
+        }
+        Insert: {
+          ativo?: boolean
+          cancelado_em?: string | null
+          cancelado_por?: string | null
+          cliente_id: string
+          condicao_pagamento?: string
+          contraparte_fornecedor_id: string
+          contrato_barter_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          cultura: string
+          data_operacao?: string
+          descontos?: number | null
+          fazenda_id?: string | null
+          id?: string
+          motivo_cancelamento?: string | null
+          observacoes?: string | null
+          safra_id: string
+          status_comercial?: string
+          status_financeiro?: string
+          substitui_operacao_id?: string | null
+          tipo_operacao?: string
+          tipo_precificacao?: string
+          updated_at?: string
+          updated_by?: string | null
+          valor_bruto?: number | null
+          valor_liquido?: number | null
+        }
+        Update: {
+          ativo?: boolean
+          cancelado_em?: string | null
+          cancelado_por?: string | null
+          cliente_id?: string
+          condicao_pagamento?: string
+          contraparte_fornecedor_id?: string
+          contrato_barter_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          cultura?: string
+          data_operacao?: string
+          descontos?: number | null
+          fazenda_id?: string | null
+          id?: string
+          motivo_cancelamento?: string | null
+          observacoes?: string | null
+          safra_id?: string
+          status_comercial?: string
+          status_financeiro?: string
+          substitui_operacao_id?: string | null
+          tipo_operacao?: string
+          tipo_precificacao?: string
+          updated_at?: string
+          updated_by?: string | null
+          valor_bruto?: number | null
+          valor_liquido?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agri_operacoes_comerciais_substitui_operacao_id_fkey"
+            columns: ["substitui_operacao_id"]
+            isOneToOne: false
+            referencedRelation: "agri_operacoes_comerciais"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agri_rateio_admin: {
+        Row: {
+          ano: number
+          atividade: string
+          cliente_id: string
+          created_at: string
+          id: string
+          percentual: number
+          updated_at: string
+        }
+        Insert: {
+          ano: number
+          atividade: string
+          cliente_id: string
+          created_at?: string
+          id?: string
+          percentual: number
+          updated_at?: string
+        }
+        Update: {
+          ano?: number
+          atividade?: string
+          cliente_id?: string
+          created_at?: string
+          id?: string
+          percentual?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      agri_safra_area: {
+        Row: {
+          area_plantada_ha: number
+          ativo: boolean
+          cliente_id: string
+          created_at: string
+          cultura: string
+          data_colheita_prevista: string | null
+          data_colheita_real: string | null
+          data_plantio: string | null
+          densidade_plantio: string | null
+          id: string
+          observacoes: string | null
+          pasto_id: string
+          safra_id: string
+          status: string
+          updated_at: string
+          variedade: string | null
+        }
+        Insert: {
+          area_plantada_ha: number
+          ativo?: boolean
+          cliente_id: string
+          created_at?: string
+          cultura: string
+          data_colheita_prevista?: string | null
+          data_colheita_real?: string | null
+          data_plantio?: string | null
+          densidade_plantio?: string | null
+          id?: string
+          observacoes?: string | null
+          pasto_id: string
+          safra_id: string
+          status?: string
+          updated_at?: string
+          variedade?: string | null
+        }
+        Update: {
+          area_plantada_ha?: number
+          ativo?: boolean
+          cliente_id?: string
+          created_at?: string
+          cultura?: string
+          data_colheita_prevista?: string | null
+          data_colheita_real?: string | null
+          data_plantio?: string | null
+          densidade_plantio?: string | null
+          id?: string
+          observacoes?: string | null
+          pasto_id?: string
+          safra_id?: string
+          status?: string
+          updated_at?: string
+          variedade?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agri_safra_area_pasto_id_fkey"
+            columns: ["pasto_id"]
+            isOneToOne: false
+            referencedRelation: "pastos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agri_safra_area_safra_id_fkey"
+            columns: ["safra_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_safras"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       analise_consultor: {
         Row: {
           ano: number
@@ -5013,7 +5918,15 @@ export type Database = {
           tipo_conta?: string | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "financeiro_contas_bancarias_consolida_em_conta_id_fkey"
+            columns: ["consolida_em_conta_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_contas_bancarias"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       financeiro_contratos: {
         Row: {
@@ -5431,6 +6344,8 @@ export type Database = {
           id: string
           nome_arquivo: string | null
           owner_user_id: string | null
+          saldo_declarado: number | null
+          saldo_declarado_data: string | null
           status: string | null
           tipo_arquivo: string | null
           total_com_erro: number | null
@@ -5454,6 +6369,8 @@ export type Database = {
           id?: string
           nome_arquivo?: string | null
           owner_user_id?: string | null
+          saldo_declarado?: number | null
+          saldo_declarado_data?: string | null
           status?: string | null
           tipo_arquivo?: string | null
           total_com_erro?: number | null
@@ -5477,6 +6394,8 @@ export type Database = {
           id?: string
           nome_arquivo?: string | null
           owner_user_id?: string | null
+          saldo_declarado?: number | null
+          saldo_declarado_data?: string | null
           status?: string | null
           tipo_arquivo?: string | null
           total_com_erro?: number | null
@@ -5753,6 +6672,7 @@ export type Database = {
           contrato_id: string | null
           created_at: string | null
           created_by: string | null
+          cultura: string | null
           dados_pagamento: Json | null
           data_competencia: string | null
           data_pagamento: string | null
@@ -5762,6 +6682,7 @@ export type Database = {
           duplicado_de_id: string | null
           editado_manual: boolean | null
           escopo_negocio: string | null
+          fase: string | null
           favorecido_id: string | null
           fazenda_id: string | null
           financiamento_id: string | null
@@ -5822,6 +6743,7 @@ export type Database = {
           contrato_id?: string | null
           created_at?: string | null
           created_by?: string | null
+          cultura?: string | null
           dados_pagamento?: Json | null
           data_competencia?: string | null
           data_pagamento?: string | null
@@ -5831,6 +6753,7 @@ export type Database = {
           duplicado_de_id?: string | null
           editado_manual?: boolean | null
           escopo_negocio?: string | null
+          fase?: string | null
           favorecido_id?: string | null
           fazenda_id?: string | null
           financiamento_id?: string | null
@@ -5891,6 +6814,7 @@ export type Database = {
           contrato_id?: string | null
           created_at?: string | null
           created_by?: string | null
+          cultura?: string | null
           dados_pagamento?: Json | null
           data_competencia?: string | null
           data_pagamento?: string | null
@@ -5900,6 +6824,7 @@ export type Database = {
           duplicado_de_id?: string | null
           editado_manual?: boolean | null
           escopo_negocio?: string | null
+          fase?: string | null
           favorecido_id?: string | null
           fazenda_id?: string | null
           financiamento_id?: string | null
@@ -6040,6 +6965,7 @@ export type Database = {
       financeiro_plano_contas: {
         Row: {
           ativo: boolean | null
+          bloco_dre: string | null
           centro_custo: string | null
           cliente_id: string | null
           compoe_dre: boolean | null
@@ -6057,6 +6983,7 @@ export type Database = {
         }
         Insert: {
           ativo?: boolean | null
+          bloco_dre?: string | null
           centro_custo?: string | null
           cliente_id?: string | null
           compoe_dre?: boolean | null
@@ -6074,6 +7001,7 @@ export type Database = {
         }
         Update: {
           ativo?: boolean | null
+          bloco_dre?: string | null
           centro_custo?: string | null
           cliente_id?: string | null
           compoe_dre?: boolean | null
@@ -6332,9 +7260,12 @@ export type Database = {
         Row: {
           aliases: Json
           ativa: boolean
+          ciclo: string
           cliente_id: string
           codigo: string | null
           created_at: string
+          data_fim: string | null
+          data_inicio: string | null
           descricao: string | null
           escopo_negocio: string | null
           id: string
@@ -6346,9 +7277,12 @@ export type Database = {
         Insert: {
           aliases?: Json
           ativa?: boolean
+          ciclo?: string
           cliente_id: string
           codigo?: string | null
           created_at?: string
+          data_fim?: string | null
+          data_inicio?: string | null
           descricao?: string | null
           escopo_negocio?: string | null
           id?: string
@@ -6360,9 +7294,12 @@ export type Database = {
         Update: {
           aliases?: Json
           ativa?: boolean
+          ciclo?: string
           cliente_id?: string
           codigo?: string | null
           created_at?: string
+          data_fim?: string | null
+          data_inicio?: string | null
           descricao?: string | null
           escopo_negocio?: string | null
           id?: string
@@ -6372,6 +7309,81 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      financeiro_saldo_documentos: {
+        Row: {
+          ano_mes: string
+          cancelado: boolean
+          cancelado_em: string | null
+          cancelado_motivo: string | null
+          cancelado_por: string | null
+          cliente_id: string
+          conta_bancaria_id: string
+          id: string
+          nome: string
+          tamanho_bytes: number | null
+          tipo: string | null
+          updated_at: string
+          updated_by: string | null
+          uploaded_em: string
+          uploaded_por: string | null
+          url: string | null
+          versao: number
+        }
+        Insert: {
+          ano_mes: string
+          cancelado?: boolean
+          cancelado_em?: string | null
+          cancelado_motivo?: string | null
+          cancelado_por?: string | null
+          cliente_id: string
+          conta_bancaria_id: string
+          id?: string
+          nome: string
+          tamanho_bytes?: number | null
+          tipo?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          uploaded_em?: string
+          uploaded_por?: string | null
+          url?: string | null
+          versao?: number
+        }
+        Update: {
+          ano_mes?: string
+          cancelado?: boolean
+          cancelado_em?: string | null
+          cancelado_motivo?: string | null
+          cancelado_por?: string | null
+          cliente_id?: string
+          conta_bancaria_id?: string
+          id?: string
+          nome?: string
+          tamanho_bytes?: number | null
+          tipo?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          uploaded_em?: string
+          uploaded_por?: string | null
+          url?: string | null
+          versao?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financeiro_saldo_documentos_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financeiro_saldo_documentos_conta_bancaria_id_fkey"
+            columns: ["conta_bancaria_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_contas_bancarias"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       financeiro_saldos_audit: {
         Row: {
@@ -11061,6 +12073,7 @@ export type Database = {
           proposto_alias_id: string | null
           proposto_categoria: string | null
           proposto_conta_bancaria_id: string | null
+          proposto_conta_destino_id: string | null
           proposto_data_competencia: string | null
           proposto_data_pagamento: string | null
           proposto_data_vencimento: string | null
@@ -11080,6 +12093,7 @@ export type Database = {
           proposto_subcentro: string | null
           proposto_subcentro_existe_no_plano: boolean | null
           proposto_tier: string | null
+          proposto_tipo_operacao: string | null
           revisado_em: string | null
           revisado_por: string | null
           sessao_id: string | null
@@ -11242,6 +12256,7 @@ export type Database = {
           cenario: string | null
           centro_custo: string | null
           cliente_id: string | null
+          compoe_dre: boolean | null
           conciliado_em: string | null
           conta_bancaria_id: string | null
           conta_destino_id: string | null
@@ -11288,6 +12303,7 @@ export type Database = {
           cenario?: string | null
           centro_custo?: string | null
           cliente_id?: string | null
+          compoe_dre?: boolean | null
           conciliado_em?: string | null
           conta_bancaria_id?: string | null
           conta_destino_id?: string | null
@@ -11334,6 +12350,7 @@ export type Database = {
           cenario?: string | null
           centro_custo?: string | null
           cliente_id?: string | null
+          compoe_dre?: boolean | null
           conciliado_em?: string | null
           conta_bancaria_id?: string | null
           conta_destino_id?: string | null
@@ -11961,7 +12978,217 @@ export type Database = {
         }
         Returns: boolean
       }
+      _oc_sync_abate_lancamento: {
+        Args: { p_operacao_id: string }
+        Returns: number
+      }
       _oc_valor_do_lote: { Args: { p_lote_id: string }; Returns: Json }
+      agri_barter_abrir_contrato: {
+        Args: {
+          p_cultura?: string
+          p_descricao?: string
+          p_fazenda_id?: string
+          p_nome: string
+          p_parceiro_fornecedor_id: string
+        }
+        Returns: Json
+      }
+      agri_barter_estornar_contrato: {
+        Args: { p_contrato_id: string }
+        Returns: Json
+      }
+      agri_barter_materializar_contrato: {
+        Args: { p_contrato_id: string }
+        Returns: Json
+      }
+      agri_carga_mandioca_cancelar: {
+        Args: { p_colheita_id: string; p_motivo: string }
+        Returns: Json
+      }
+      agri_carga_mandioca_corrigir: {
+        Args: {
+          p_colheita_id: string
+          p_data: string
+          p_desconto_kg: number
+          p_funrural: number
+          p_icms: number
+          p_industria_id: string
+          p_nf: string
+          p_observacao?: string
+          p_peso_bruto_kg: number
+          p_preco_g: number
+          p_rendimento_g: number
+          p_safra_area_id: string
+          p_servicos: Json
+          p_ticket: string
+        }
+        Returns: Json
+      }
+      agri_carga_mandioca_registrar: {
+        Args: {
+          p_cliente: string
+          p_data: string
+          p_desconto_kg: number
+          p_funrural: number
+          p_icms: number
+          p_industria_id: string
+          p_nf: string
+          p_observacao?: string
+          p_peso_bruto_kg: number
+          p_preco_g: number
+          p_rendimento_g: number
+          p_safra_area_id: string
+          p_servicos: Json
+          p_ticket: string
+        }
+        Returns: Json
+      }
+      agri_contrato_armazenagem_salvar: {
+        Args: {
+          p_ativo?: boolean
+          p_cliente: string
+          p_documento_ref: string
+          p_id: string
+          p_local_id: string
+          p_observacoes: string
+          p_quebra_tecnica_base: string
+          p_quebra_tecnica_pct: number
+          p_quebra_tecnica_tipo: string
+          p_taxa_unidade: string
+          p_taxa_valor: number
+          p_vigencia_fim: string
+          p_vigencia_inicio: string
+        }
+        Returns: string
+      }
+      agri_cotacao_graos_registrar: {
+        Args: {
+          p_cliente: string
+          p_cultura: string
+          p_data: string
+          p_fonte: string
+          p_itens: Json
+        }
+        Returns: Json
+      }
+      agri_local_estoque_resolver: {
+        Args: { p_cliente: string; p_local_id: string }
+        Returns: string
+      }
+      agri_local_estoque_salvar: {
+        Args: {
+          p_aliases: string[]
+          p_ativo?: boolean
+          p_cliente: string
+          p_codigo_externo: string
+          p_fazenda_id: string
+          p_fornecedor_id: string
+          p_id: string
+          p_nome: string
+          p_observacoes: string
+          p_tipo: string
+        }
+        Returns: string
+      }
+      agri_quebra_cancelar: {
+        Args: { p_id: string; p_motivo: string }
+        Returns: undefined
+      }
+      agri_quebra_editar: {
+        Args: {
+          p_data: string
+          p_id: string
+          p_motivo: string
+          p_observacoes: string
+        }
+        Returns: undefined
+      }
+      agri_quebra_registrar: {
+        Args: {
+          p_classe: string
+          p_cliente: string
+          p_cultura: string
+          p_data: string
+          p_local_id?: string
+          p_motivo: string
+          p_observacoes?: string
+          p_quantidade: number
+          p_safra_id: string
+        }
+        Returns: string
+      }
+      agri_venda_avulsa_cancelar: {
+        Args: { p_motivo: string; p_op_id: string }
+        Returns: undefined
+      }
+      agri_venda_avulsa_editar: {
+        Args: {
+          p_comprador_id: string
+          p_data: string
+          p_observacoes: string
+          p_op_id: string
+        }
+        Returns: undefined
+      }
+      agri_venda_avulsa_registrar: {
+        Args: {
+          p_cliente: string
+          p_comprador_id: string
+          p_condicao: string
+          p_conta_id: string
+          p_cultura: string
+          p_data: string
+          p_fazenda_id: string
+          p_itens: Json
+          p_safra_id: string
+          p_vencimento: string
+        }
+        Returns: Json
+      }
+      agri_venda_graos_corrigir: {
+        Args: {
+          p_cliente: string
+          p_comprador_id: string
+          p_cultura: string
+          p_data: string
+          p_descontos: Json
+          p_documento?: string
+          p_fazenda_id: string
+          p_itens: Json
+          p_local_id?: string
+          p_motivo: string
+          p_observacoes: string
+          p_parcelas: Json
+          p_safra_id: string
+          p_senar: number
+          p_substituir?: string[]
+          p_tipo_documento?: string
+          p_valor_bruto: number
+          p_venda_id: string
+        }
+        Returns: Json
+      }
+      agri_venda_graos_registrar: {
+        Args: {
+          p_cliente: string
+          p_comprador_id: string
+          p_cultura: string
+          p_data: string
+          p_descontos: Json
+          p_documento?: string
+          p_fazenda_id: string
+          p_itens: Json
+          p_local_id?: string
+          p_observacoes: string
+          p_parcelas: Json
+          p_safra_id: string
+          p_senar: number
+          p_substituir?: string[]
+          p_tipo_documento?: string
+          p_valor_bruto: number
+        }
+        Returns: Json
+      }
       audit_modulo_from_lancamento_tipo: {
         Args: { p_tipo: string }
         Returns: string
@@ -12499,6 +13726,51 @@ export type Database = {
         Args: { p_sessao_id: string }
         Returns: Json
       }
+      fn_dre_agricola_por_safra: {
+        Args: { p_cliente_id: string; p_safra_id: string }
+        Returns: {
+          area_cadastrada: boolean
+          area_ha: number
+          cultura: string
+          linha: string
+          ordem: number
+          rateio_admin_declarado: boolean
+          rotulo: string
+          valor: number
+        }[]
+      }
+      fn_dre_lavoura: {
+        Args: { p_cliente_id: string; p_safra_id: string }
+        Returns: Json
+      }
+      fn_dre_lavoura_historico: {
+        Args: { p_cliente_id: string; p_cultura: string }
+        Returns: Json
+      }
+      fn_dre_pecuaria: {
+        Args: { p_ate: string; p_cliente: string; p_de: string }
+        Returns: Json
+      }
+      fn_dre_pecuaria_lancamentos: {
+        Args: {
+          p_ate: string
+          p_bloco: string
+          p_centro: string
+          p_cliente: string
+          p_de: string
+          p_fazenda: string
+        }
+        Returns: Json
+      }
+      fn_dre_pecuaria_patrimonio: {
+        Args: {
+          p_ate: string
+          p_cliente: string
+          p_de: string
+          p_fazenda: string
+        }
+        Returns: Json
+      }
       fn_endividamento_mensal: {
         Args: { p_ano: number; p_cliente_id: string }
         Returns: {
@@ -12514,6 +13786,49 @@ export type Database = {
           juros_pec: number
           mes: number
         }[]
+      }
+      fn_espelho_casar: {
+        Args: {
+          p_extrato_id: string
+          p_itens: Json
+          p_motivo?: string
+          p_simular?: boolean
+        }
+        Returns: Json
+      }
+      fn_espelho_casar_n1: {
+        Args: {
+          p_extratos: string[]
+          p_lancamento_id: string
+          p_motivo?: string
+          p_simular?: boolean
+        }
+        Returns: Json
+      }
+      fn_estoque_graos: {
+        Args: {
+          p_cliente: string
+          p_cultura: string
+          p_local_id?: string
+          p_safra_id: string
+        }
+        Returns: Json
+      }
+      fn_estoque_graos_balanco: {
+        Args: { p_cliente: string; p_cultura: string; p_local_id?: string }
+        Returns: Json
+      }
+      fn_estoque_graos_por_local: {
+        Args: { p_cliente: string; p_cultura: string; p_safra_id: string }
+        Returns: Json
+      }
+      fn_estoque_graos_resumo: {
+        Args: { p_cliente: string; p_local_id?: string; p_safra_id: string }
+        Returns: Json
+      }
+      fn_estoque_movimentacoes: {
+        Args: { p_cliente: string; p_cultura: string; p_safra_id: string }
+        Returns: Json
       }
       fn_estorno_aplicar: {
         Args: { p_entrada_id: string; p_saida_id: string; p_simular?: boolean }
@@ -12531,6 +13846,14 @@ export type Database = {
           p_cliente_id: string
           p_conta_bancaria_id: string
           p_limite?: number
+          p_simular?: boolean
+        }
+        Returns: Json
+      }
+      fn_extrato_desfazer_arquivo: {
+        Args: {
+          p_importacao_id: string
+          p_motivo?: string
           p_simular?: boolean
         }
         Returns: Json
@@ -12616,6 +13939,7 @@ export type Database = {
           total: number
         }[]
       }
+      fn_locais_estoque: { Args: { p_cliente: string }; Returns: Json }
       fn_locais_sugeridos_mes: {
         Args: { p_ano_mes: string; p_fazenda_id: string }
         Returns: {
@@ -12719,6 +14043,28 @@ export type Database = {
         Args: { p_ano_mes: string; p_fazenda_id: string }
         Returns: Json
       }
+      fn_painel_rateio_detalhe: {
+        Args: {
+          p_chave: string
+          p_cliente: string
+          p_cultura: string
+          p_safra_id: string
+          p_tipo: string
+        }
+        Returns: Json
+      }
+      fn_painel_safra: {
+        Args: { p_cliente: string; p_cultura: string; p_safra_id: string }
+        Returns: Json
+      }
+      fn_painel_safra_comparativo: {
+        Args: { p_cliente: string; p_cultura: string }
+        Returns: Json
+      }
+      fn_painel_safra_entrega: {
+        Args: { p_cliente: string; p_cultura: string; p_safra_id: string }
+        Returns: Json
+      }
       fn_pastos_aplicaveis_mes: {
         Args: { p_ano_mes: string; p_fazenda_id: string }
         Returns: {
@@ -12793,6 +14139,14 @@ export type Database = {
       }
       fn_recorrencia_gerar: {
         Args: { p_ate?: string; p_recorrencia_id: string; p_simular?: boolean }
+        Returns: Json
+      }
+      fn_recorrencia_propagar: {
+        Args: {
+          p_escopo?: string
+          p_recorrencia_id: string
+          p_simular?: boolean
+        }
         Returns: Json
       }
       fn_regenerar_area_do_mes: {
@@ -12881,6 +14235,10 @@ export type Database = {
           uso_operacional: string
           uso_operacional_origem: string
         }[]
+      }
+      fn_vendas_graos: {
+        Args: { p_cliente: string; p_cultura: string; p_safra_id: string }
+        Returns: Json
       }
       fn_vincular_exatos_mes: {
         Args: {
@@ -13447,6 +14805,7 @@ export type Database = {
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      tenant_ok: { Args: { _cliente: string }; Returns: boolean }
       unaccent: { Args: { "": string }; Returns: string }
     }
     Enums: {
