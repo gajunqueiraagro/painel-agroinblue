@@ -853,7 +853,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   /* ── Render ── */
   return (
     <div className="animate-fade-in pb-20 md:pb-0 md:flex-1 md:min-h-0 md:flex md:flex-col md:overflow-hidden">
-      <div className="p-3 space-y-2 sticky top-0 z-20 bg-background md:static md:z-auto md:shrink-0">
+      <div className="p-3 space-y-1 sticky top-0 z-20 bg-background md:static md:z-auto md:shrink-0">
 
         {/* ⚠ O CABEÇALHO DA PÁGINA — CONCIL-PARIDADE-VISUAL-01 §1. A tela abria
             direto no seletor de ano, sem dizer o que ela é: quem chegava por um
@@ -1105,9 +1105,16 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
 
               {/* ── COL 1: Resumo das movimentações ── */}
               <div className="rounded-lg border overflow-hidden bg-card">
-                <div className="px-3 py-1.5 border-b bg-primary text-primary-foreground flex items-center justify-between">
-                  <span className="text-[9px] font-medium uppercase tracking-wider">Resumo das movimentações</span>
-                  <span style={{fontSize:'10px',fontWeight:500,color:'#185FA5',background:'#E6F1FB',padding:'2px 8px',borderRadius:'12px'}}>
+                {/* ⚠ O CABEÇALHO NÃO MUDA DE ALTURA — PR-CONCILIA-TOPO-01 (A27). O nome da conta
+                    quebrava em duas linhas ("Banco Bradesco Tito") e o card inteiro andava ao trocar
+                    de conta. Agora os dois textos são uma linha só, o nome corta com reticências e
+                    mostra o inteiro no `title`, e o bloco reserva a altura dessa linha: 32px =
+                    pílula (10px × 1,5 + 4 de padding) + 12 de `py-1.5` + 1 de borda. */}
+                <div className="px-3 py-1.5 border-b bg-primary text-primary-foreground flex items-center justify-between min-h-[32px]">
+                  <span className="text-[9px] font-medium uppercase tracking-wider whitespace-nowrap shrink-0">Resumo das movimentações</span>
+                  <span title={contaAtual}
+                    style={{fontSize:'10px',fontWeight:500,color:'#185FA5',background:'#E6F1FB',padding:'2px 8px',borderRadius:'12px',
+                      whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'60%',minWidth:0}}>
                     {contaAtual}
                   </span>
                 </div>

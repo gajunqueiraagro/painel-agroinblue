@@ -845,3 +845,24 @@ seletores de 49px (que exige `items-start`) é a tela, não o cabeçalho.
 mesma pergunta. A varredura das telas antigas é **frente
 própria**, não item de PR de feature; o que esta regra fixa é que **tela nova nasce no
 `PageHeader`**.
+
+---
+
+## A27 — Estrutura não se move ao trocar filtro ou seleção
+
+Todo slot de conteúdo variável (nome, valor, contagem) tem tamanho reservado para o **pior
+caso**: `min-height` no bloco, `nowrap` + truncate + `title` no texto. Trocar de conta, mês,
+aba ou filtro **nunca** muda a posição de nenhum bloco vizinho. Texto que cresce corta com
+reticências e mostra o inteiro no `title` — nunca empurra o layout.
+
+- **No bloco:** `min-height` com a altura da linha única, calculada pelo que a compõe
+  (fonte × line-height + padding + borda), e não um número de memória.
+- **No texto:** `white-space: nowrap`, `overflow: hidden`, `text-overflow: ellipsis`,
+  `min-width: 0` (sem ele o flex não encolhe) e um `max-width` proporcional ao **bloco**,
+  nunca à tela. O `title` carrega o texto inteiro.
+- Rótulo fixo ao lado do texto variável também leva `nowrap`: se só um dos dois ficar numa
+  linha, o outro quebra e o bloco cresce do mesmo jeito.
+
+**Onde nasceu:** o cabeçalho do card Resumo da Conciliação (PR-CONCILIA-TOPO-01) andava
+quando o nome da conta quebrava em duas linhas — "Banco Bradesco" cabia em ~32px, "Banco
+Bradesco Tito" subia para ~47px e desalinhava o card dos vizinhos Status e Saldos.
