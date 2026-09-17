@@ -46,7 +46,12 @@ export function ImportacoesDialog({
   const importacoes = verCanceladas ? [...ativas, ...canceladas] : ativas;
   return (
     <Dialog open={aberto} onOpenChange={o => !o && aoFechar()}>
-      <DialogContent className="flex max-h-[80vh] w-[92vw] max-w-lg flex-col gap-0 overflow-hidden p-0">
+      {/* ⚠ `max-w-2xl` E NAO `max-w-lg` — PR-IMPORTAR-CORPO-02, e a largura foi medida, nao
+          escolhida no olho. O nome de arquivo mais longo do proto
+          ("07.26_2_modelo_cartao_bb_ouro_financeiro_referencia.xlsx") mede 371px em mono 11px; o
+          cromo da linha (padding, icone, gaps e o botao Desfazer) come 126px. Em `max-w-lg` (512)
+          sobravam 386px — passava raspando; em `max-w-2xl` (672) sobram 546px. */}
+      <DialogContent className="flex max-h-[80vh] w-[92vw] max-w-2xl flex-col gap-0 overflow-hidden p-0">
         <DialogHeader className="shrink-0 border-b px-4 py-2 pr-12 text-left">
           <DialogTitle className="text-sm font-semibold">Importações desta conta</DialogTitle>
           <DialogDescription className="text-[10px]">
@@ -55,6 +60,11 @@ export function ImportacoesDialog({
           </DialogDescription>
         </DialogHeader>
 
+        {/* ⚠ DUAS LINHAS POR ARQUIVO, NAO UMA — PR-IMPORTAR-CORPO-02. O nome dividia a linha com
+            a data e as contagens, e era o unico `truncate` da fila: bastava a contagem crescer
+            ("128 importados · 113 conciliado(s) (106 crus)") para o nome virar "Banco…". Agora o
+            nome tem a linha dele e o contexto desce para 10px em muted — a hierarquia diz qual e
+            o assunto e qual e a nota de rodape. */}
         <div className="min-h-0 flex-1 overflow-y-auto">
           {carregando ? (
             <p className="px-4 py-8 text-center text-xs text-muted-foreground">Carregando…</p>
@@ -66,14 +76,14 @@ export function ImportacoesDialog({
             <ul className="divide-y">
               {importacoes.map(imp => (
                 <li key={imp.id}
-                  className={`flex items-center gap-2 px-4 py-1.5 text-[11px] ${
+                  className={`flex items-start gap-2 px-4 py-1.5 text-[11px] ${
                     imp.desfeitaEm ? 'text-muted-foreground' : ''}`}>
-                  <FileText className="h-3 w-3 shrink-0 text-muted-foreground" />
-                  <span className="truncate font-mono" title={imp.nomeArquivo}>{imp.nomeArquivo}</span>
-                  <span className="shrink-0 text-muted-foreground">
+                  <FileText className="mt-[3px] h-3 w-3 shrink-0 text-muted-foreground" />
+                  <div className="min-w-0 flex-1">
+                  <div className="truncate font-mono" title={imp.nomeArquivo}>{imp.nomeArquivo}</div>
+                  <div className="text-[10px] text-muted-foreground">
                     {imp.data.split('-').reverse().join('/')}
-                  </span>
-                  <span className="shrink-0 text-muted-foreground">
+                    {' · '}
                     {imp.importados} importado{imp.importados === 1 ? '' : 's'}
                     {imp.comVinculo > 0 && ` · ${imp.comVinculo} conciliado(s)`}
                     {/* ⚠ DE ONDE VEIO O VÍNCULO — 130 item 5. "Conciliado" não distingue o
@@ -95,8 +105,8 @@ export function ImportacoesDialog({
                         {')'}
                       </span>
                     )}
-                  </span>
-                  <div className="flex-1" />
+                  </div>
+                  </div>
                   {/* ⚠ O BOTÃO DIZ POR QUE, quando não dá — a regra do B-09. Com
                       vínculo ativo ele não some: some a possibilidade, e a frase
                       explica qual é. */}

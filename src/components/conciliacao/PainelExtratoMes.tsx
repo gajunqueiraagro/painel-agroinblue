@@ -1,28 +1,30 @@
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
-import { LayoutList, FileText, Link2, Pencil, ListPlus } from 'lucide-react';
+import { LayoutList, FileText, Pencil, ListPlus } from 'lucide-react';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import {
   useConciliacaoDoMes, useSugestoesDoMes, contarBaldes, frameDoRodape,
-  type MovimentoConciliacao, type SituacaoMovimento,
+  type SituacaoMovimento,
 } from '@/hooks/useConciliacaoDoMes';
 import { useSaldoGerencialDoMes, useSaldoSistemaNaPosicao, useImportacoesDaConta, importacoesDoMes } from '@/hooks/useExtratoDaConta';
 import { SaldoRealDialog } from '@/components/conciliacao/SaldoRealDialog';
 import { ImportacoesDialog } from '@/components/conciliacao/ImportacoesDialog';
-import { EstacaoConciliar } from '@/components/conciliacao/EstacaoConciliar';
 import { PalcoDoMes } from '@/components/conciliacao/PalcoDoMes';
 import { ConciliarMesDialog } from '@/components/conciliacao/ConciliarMesDialog';
 
 /**
- * PainelExtratoMes — o card "Extrato do mês" + o placar + a lista + a estação.
+ * PainelExtratoMes — o cabeçalho do "Extrato do mês": a conta, a contagem, as três portas do mês
+ * (Ver importações / Conciliar o mês / Ver o mês) e os quatro números do fechamento.
  * FIN-CONCIL-INTEGRAR-01.
  *
- * ⚠ UMA PECA, DOIS LUGARES. A aba "Importar Banco" mostra o card e a lista logo
- * abaixo do upload (para conferir o que acabou de entrar); a aba "Conciliação"
- * mostra o mesmo card com o PLACAR e o rodapé. Duas cópias divergiriam na
- * primeira mudança de coluna — e a tela toda existe para não ter dois números
- * para a mesma pergunta.
+ * ⚠ ELE NÃO LISTA MAIS OS MOVIMENTOS — PR-IMPORTAR-CORPO-02. A lista morava aqui e era a TERCEIRA
+ * cópia da mesma pergunta: o "Ver o mês" mostra os mesmos movimentos com os filtros do motor, e o
+ * "Revisar" de cada linha daqui abria a mesma `EstacaoConciliar` que o palco abre. O que ficou é o
+ * que só existe aqui: os números que dizem se o mês fecha.
+ *
+ * ⚠ E HOJE ELE TEM UM LUGAR SÓ, a aba "Importar Banco" — o comentário antigo falava em duas abas,
+ * e a segunda não existe mais. `comPlacar` (o placar de baldes e o rodapé) segue no arquivo sem
+ * nenhum caller: é código morto ANTERIOR a este PR, não resíduo dele. Apagá-lo é frente própria.
  *
  * ⚠ OS FILTROS VÊM DE FORA, sempre. Ano, mês e conta são do CABEÇALHO da tela de
  * Conciliação e valem para todas as abas — este painel não tem seletor próprio,
@@ -43,10 +45,9 @@ export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comP
   const [verImportacoes, setVerImportacoes] = useState(false);
   const [verPalco, setVerPalco] = useState(false);
   const [verConciliarMes, setVerConciliarMes] = useState(false);
-  const [conciliando, setConciliando] = useState<MovimentoConciliacao | null>(null);
   const [balde, setBalde] = useState<'todos' | SituacaoMovimento | 'match_direto' | 'provavel' | 'ambiguo' | 'sem_match'>('todos');
 
-  const { movimentos, loading, recarregar } = useConciliacaoDoMes(clienteId, contaId, ano, mes);
+  const { movimentos, recarregar } = useConciliacaoDoMes(clienteId, contaId, ano, mes);
   const saldo = useSaldoGerencialDoMes(clienteId, contaId, ano, mes);
   const sistema = useSaldoSistemaNaPosicao(
     clienteId, contaId, saldo.anoMes, saldo.saldoInicial, saldo.posicaoEm);
@@ -59,21 +60,6 @@ export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comP
      dos `valor_aplicado` ativos), não heurística. Movimento parcial fica de fora, como
      antes. */
   const semVinculo = useMemo(() => movimentos.filter(m => m.situacao === 'nao_conciliado').length, [movimentos]);
-  /* ⚠ O FILTRO LÊ O MESMO CAMPO QUE O CONTADOR — a regra do original. Os baldes
-     de fato filtram por `situacao` (o vínculo); os de sugestão, pelo `estado`
-     que a RPC devolveu. Nenhum dos dois recalcula nada aqui. */
-  const estadoPorMov = useMemo(() => {
-    const m: Record<string, string> = {};
-    for (const s of sug.sugestoes ?? []) m[s.extratoId] = s.estado;
-    return m;
-  }, [sug.sugestoes]);
-  const lista = useMemo(() => {
-    if (balde === 'todos') return movimentos;
-    if (balde === 'conciliado' || balde === 'parcial' || balde === 'nao_conciliado') {
-      return movimentos.filter(m => m.situacao === balde);
-    }
-    return movimentos.filter(m => estadoPorMov[m.id] === balde);
-  }, [movimentos, balde, estadoPorMov]);
 
   return (
     <div className="rounded-lg border border-border bg-card">
@@ -259,82 +245,19 @@ export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comP
         </div>
       )}
 
-      {loading ? (
-        <div className="space-y-1 p-2">
-          {[0, 1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-4 w-full" />)}
-        </div>
-      ) : movimentos.length === 0 ? (
-        <p className="px-3 py-8 text-center text-xs text-muted-foreground">
-          Nenhum movimento importado neste mês.
-        </p>
-      ) : (
-        /* ⚠ SÓ AS LINHAS ROLAM, como no original: o bloco de saldo e o placar
-           ficam parados e o `thead` é `sticky`. Rolar a página levaria o resumo
-           embora junto — que é o que o cabeçalho fixo existe para impedir. */
-        /* ⚠ A ALTURA AGORA E' NOSSA, e a conta esta escrita — B-28, item 6. O
-           `23.2rem` que veio do original era medido para a PILHA DELE (319px
-           acima da tabela + 52px de respiro do shell); a nossa tem um bloco a
-           mais que a de la', a regua de doze cards de mes, e por isso o numero
-           herdado sobrava.
-           A CONTA, em duas parcelas verificaveis:
-             a) a linha custa 19px — as celulas sao `py-0`, entao quem define a
-                altura e' o botao `h-[18px]` da ponta, mais 1px de `border-b`;
-             b) a homologacao do B-27 mediu na tela real que faltavam 5 linhas.
-                5 x 19px = 95px = 5.94rem.
-             23.2rem - 5.94rem = 17.26rem, arredondado para 17.3rem.
-           ⚠ A PARCELA (b) E' MEDIDA NO NAVEGADOR, NAO CALCULADA AQUI, e e' de
-           proposito: somar a pilha por CSS exigiria o shell do /v2, que este
-           ambiente nao renderiza. Estimar aquilo foi o que produziu o `26rem`
-           errado antes. O `min-h` segue impedindo que a area suma em tela curta. */
-        <div className="max-h-[calc(100vh-17.3rem)] min-h-[9rem] overflow-auto">
-          <table className="w-full border-collapse text-[10px]">
-            <thead className="sticky top-0 z-10 bg-muted/60">
-              <tr className="border-b border-border">
-                <Th className="text-left">Data</Th>
-                <Th className="text-left">Descrição</Th>
-                <Th className="text-left">Doc</Th>
-                <Th className="text-right">Valor</Th>
-                <Th className="text-center">Situação</Th>
-                <Th className="text-right"> </Th>
-              </tr>
-            </thead>
-            <tbody>
-              {/* ⚠ `py-0` NAS CELULAS, como no original: a altura da linha passa a
-                  vir do conteudo, e quem a define e' o botao `h-[18px]` da ponta.
-                  Com `py-1` a linha custava ~29px; assim custa ~19px. Densidade e'
-                  quantas linhas cabem sem rolar. */}
-              {lista.map(m => (
-                <tr key={m.id} className="border-b border-border/60 hover:bg-muted/40">
-                  <td className="whitespace-nowrap px-2 py-0 font-mono">{brData(m.data_movimento)}</td>
-                  <td className="w-full max-w-0 truncate px-2 py-0" title={m.descricao ?? ''}>{m.descricao ?? '—'}</td>
-                  <td className="whitespace-nowrap px-2 py-0 font-mono text-muted-foreground">{m.documento || '—'}</td>
-                  {/* Cor por sinal, e o sinal já está escrito no número — a cor
-                      acompanha, nunca é o único canal. */}
-                  <td className={`whitespace-nowrap px-2 py-0 text-right font-medium tabular-nums ${
-                    m.valor < 0 ? 'text-destructive' : 'text-success'}`}>
-                    {formatMoeda(m.valor)}
-                  </td>
-                  <td className="px-2 py-0 text-center"><SituacaoBadge situacao={m.situacao} /></td>
-                  {/* ⚠ O BOTAO E' O DO ORIGINAL menos o tamanho: la' e' `text-[9px]`
-                      e o piso de leitura desta casa e' 10px (PADROES-UI, "nada que o
-                      operador precise ler desce abaixo disso"). Altura, folga, icone
-                      de elo e a ausencia de `text-primary` vieram verbatim — era o
-                      `text-primary` que fazia o "Revisar" sair mais escuro que o de
-                      la'. */}
-                  <td className="whitespace-nowrap px-2 py-0 text-right">
-                    <Button type="button" variant="ghost" size="sm"
-                      className="h-[18px] gap-1 px-1 text-[10px]"
-                      onClick={() => setConciliando(m)}>
-                      <Link2 className="h-3 w-3" />
-                      Revisar
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {/* ⚠ A TABELA DE MOVIMENTOS SAIU DAQUI — PR-IMPORTAR-CORPO-02. Ela listava os movimentos do
+          mês com um "Revisar" por linha, e os dois modais deste mesmo cabeçalho já fazem tudo o
+          que ela fazia: "Ver o mês" mostra a lista inteira com os filtros do motor (match direto,
+          provável, ambíguo, sem match) e o "Vincular os exatos", e o "Revisar" dela abria
+          exatamente a MESMA `EstacaoConciliar` que o palco abre. Nenhuma função se perde; some a
+          terceira cópia da mesma lista.
+          ⚠ E DOIS DEFEITOS SAEM COM ELA, que é o motivo de sair agora: o subcabeçalho rolava com
+          a página e o `thead` era translúcido (`bg-muted/60`), então as linhas passavam por baixo
+          do cabeçalho enquanto se conferia o número. Não há o que congelar nem o que opacizar
+          numa tabela que não existe.
+          ⚠ O ESTADO VAZIO TAMBÉM SAIU: "Nenhum movimento importado neste mês" dizia o que a
+          contagem do cabeçalho ("0 movimentos") já diz, na mesma tela. */}
+
 
       {comPlacar && (
         <div className="px-3 py-1.5 text-[10px] text-muted-foreground">{frameDoRodape(contagem)}</div>
@@ -347,12 +270,6 @@ export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comP
         carregando={importacoes.loading} aoDesfazer={importacoes.desfazer}
         desfazendo={importacoes.desfazendo}
       />
-      {conciliando && (
-        <EstacaoConciliar movimento={conciliando} aoFechar={() => setConciliando(null)}
-          contaBancariaId={contaId}
-          aoMudar={async () => { await recarregar(); }} />
-      )}
-
       {/* ⚠ O PALCO RECEBE O MESMO ANO/MÊS/CONTA DESTE CARD — ele é a mesma
           pergunta em outra escala, não uma tela com filtro próprio. E ao fechar,
           o card recarrega: um vínculo feito lá dentro muda o "Conciliados N de M"
@@ -394,31 +311,6 @@ function Chip({ rotulo, n, cor, ativo, onClick }: {
   );
 }
 
-function SituacaoBadge({ situacao }: { situacao: SituacaoMovimento }) {
-  if (situacao === 'conciliado') {
-    return <span className="rounded bg-success/15 px-1 py-0 text-[10px] font-semibold uppercase text-success">conciliado</span>;
-  }
-  if (situacao === 'parcial') {
-    return <span className="rounded bg-primary/10 px-1 py-0 text-[10px] font-semibold uppercase text-primary">parcial</span>;
-  }
-  return <span className="rounded bg-muted px-1 py-0 text-[10px] font-semibold uppercase text-muted-foreground">em aberto</span>;
-}
-
-/**
- * ⚠ CAIXA ALTA PEQUENA, como no original — `uppercase tracking-wide` era o que
- * faltava e o que fazia o cabecalho sair "normal e maior" no print do B-27.
- * ⚠ O `text-[9px]` do original NAO veio: o piso de leitura desta casa e' 10px
- * (docs/PADROES-UI.md). Sem tamanho proprio, o `th` herda o `text-[10px]` da
- * tabela — no piso, e nao abaixo dele.
- */
-function Th({ children, className }: { children?: React.ReactNode; className?: string }) {
-  return (
-    <th className={`px-2 py-1 font-semibold uppercase tracking-wide text-muted-foreground ${className ?? ''}`}>
-      {children}
-    </th>
-  );
-}
-
 function Campo({ rotulo, children }: { rotulo: string; children: React.ReactNode }) {
   return (
     <div className="min-w-0 py-0.5">
@@ -427,8 +319,6 @@ function Campo({ rotulo, children }: { rotulo: string; children: React.ReactNode
     </div>
   );
 }
-
-const brData = (iso: string) => (iso ? iso.slice(0, 10).split('-').reverse().join('/') : '—');
 
 /** 'YYYY-MM-DD' → 'DD/MM'. Data civil, sem `Date` — fuso não muda o dia aqui. */
 const diaMesBr = (iso: string): string => {
