@@ -20,9 +20,21 @@ export { brl, round2, parseMoeda };
 /* ⚠ `disabled` e' a UNICA linha ACRESCENTADA depois do move — o campo original nao a
    tinha porque nenhum chamador dele precisava. E' opcional e, quando omitida, chega ao
    <Input> como `undefined`: AbaCompromissosOC nao muda em nada. */
-export function CampoMoeda({ valor, onChange, placeholder, className, disabled, casas = 2, title }: {
+export function CampoMoeda({ valor, onChange, placeholder, className, disabled, casas = 2, title, aceitaNegativo = false, autoFocus }: {
   valor: number | null; onChange: (n: number | null) => void; placeholder?: string; className?: string;
   disabled?: boolean;
+  /**
+   * ⚠ ACEITA SINAL NEGATIVO — PR-CAMPO-MOEDA-NEGATIVO-01. `parseMoeda` apaga tudo que não é
+   * dígito, ponto ou vírgula, o sinal junto: "-1.845,32" virava +1.845,32 em silêncio. Saldo de
+   * conta no vermelho é negativo de verdade, então o campo lê o sinal no INÍCIO do texto
+   * (hífen `-` ou o menos tipográfico `−`, U+2212) e o aplica ao número.
+   * ⚠ O PADRÃO É `false` E O PARSER NÃO MUDOU: quem não passa o flag segue exatamente como
+   * antes — peso, preço, valor de documento não têm negativo. `-R$ 1.845,32` é o que `brl`
+   * escreve em pt-BR, e começa com o hífen, então refocar e sair de novo preserva o sinal.
+   */
+  aceitaNegativo?: boolean;
+  /** Repassado ao input. Opcional: quem não passa, segue sem foco automático, como antes. */
+  autoFocus?: boolean;
   /**
    * ⚠ QUANTAS CASAS O CAMPO GUARDA — 2 por padrão, e o padrão é o que mantém os onze consumidores
    * existentes byte a byte como estavam: `roundCasas(n, 2) === round2(n)` e o formato é o mesmo.
@@ -36,18 +48,24 @@ export function CampoMoeda({ valor, onChange, placeholder, className, disabled, 
      mostra o número puro em pt-BR, porque "R$ 97,8532" não é uma quantia que se escreve — é um
      preço unitário. O símbolo volta no total, que é dinheiro de verdade. */
   const escrever = (n: number) => (casas === 2 ? brl(n) : formatCasas(n, casas));
+  const ler = (t: string): number | null => {
+    if (!aceitaNegativo) return parseMoeda(t);
+    const negativo = /^[-\u2212]/.test(t.trim());
+    const n = parseMoeda(t);
+    return n == null ? null : negativo && n !== 0 ? -n : n;
+  };
   const [texto, setTexto] = useState(valor != null ? escrever(valor) : '');
   const [editando, setEditando] = useState(false);
   useEffect(() => { if (!editando) setTexto(valor != null ? escrever(valor) : ''); }, [valor, editando, casas]);
   return (
     <Input
       inputMode="decimal" value={texto} placeholder={placeholder} className={className} disabled={disabled}
-      title={title}
+      title={title} autoFocus={autoFocus}
       onFocus={() => setEditando(true)}
-      onChange={(e) => { setTexto(e.target.value); onChange(parseMoeda(e.target.value)); }}
+      onChange={(e) => { setTexto(e.target.value); onChange(ler(e.target.value)); }}
       onBlur={() => {
         setEditando(false);
-        const n = parseMoeda(texto);
+        const n = ler(texto);
         const r = n != null ? roundCasas(n, casas) : null;
         onChange(r);
         setTexto(r != null ? escrever(r) : '');

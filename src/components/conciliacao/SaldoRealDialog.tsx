@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { CampoMoeda } from '@/components/ui/campo-moeda';
 import { Label } from '@/components/ui/label';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Loader2, Paperclip, Trash2 } from 'lucide-react';
@@ -63,9 +64,9 @@ export function SaldoRealDialog({
 }: Props) {
   const anoMes = `${ano}-${String(mes).padStart(2, '0')}`;
   const jaInformado = saldoAtual !== null;
-  const [texto, setTexto] = useState(
-    saldoAtual === null ? '' : String(saldoAtual).replace('.', ','),
-  );
+  /* O campo é o `CampoMoeda` com sinal (PR-CAMPO-MOEDA-NEGATIVO-01): o estado é o NÚMERO, e o
+     texto formatado (R$ 208.561,46 / -R$ 1.845,32) é dele. */
+  const [valor, setValor] = useState<number | null>(saldoAtual);
   const [data, setData] = useState(saldoDataAtual ?? fimDoMes(ano, mes));
   const [ocupado, setOcupado] = useState(false);
 
@@ -87,8 +88,7 @@ export function SaldoRealDialog({
   /* ⚠ O SINAL SOBREVIVE: conta no vermelho é o caso que motivou o campo, e
      `Math.abs` em qualquer ponto do caminho apagaria justamente o dado que se
      quer conferir. */
-  const valor = Number(texto.trim().replace(/\./g, '').replace(',', '.'));
-  const valorValido = texto.trim() !== '' && Number.isFinite(valor);
+  const valorValido = valor != null && Number.isFinite(valor);
 
   const impedimento: string | null =
     !valorValido ? 'Informe o saldo que o banco mostra — com o sinal, se estiver negativo.'
@@ -100,6 +100,7 @@ export function SaldoRealDialog({
     if (impedimento) return;
     setOcupado(true);
     try {
+      if (valor == null) return;
       const r = await gravarSaldoReal({ clienteId, contaId, anoMes, saldo: valor, saldoData: data });
       if (!r.ok) { toast.error(r.erro ?? 'O banco recusou a gravação.'); return; }
       toast.success('Saldo real atualizado.');
@@ -175,8 +176,8 @@ export function SaldoRealDialog({
           <div className="grid grid-cols-2 gap-2">
             <div>
               <Label className="text-[10px]">Saldo real (R$)</Label>
-              <Input value={texto} onChange={(e) => setTexto(e.target.value)}
-                className="h-8 text-xs tabular-nums" placeholder="-1.845,32" autoFocus />
+              <CampoMoeda aceitaNegativo autoFocus valor={valor} onChange={setValor}
+                className="h-8 text-xs tabular-nums" placeholder="-1.845,32" />
             </div>
             <div>
               <Label className="text-[10px]">Posição em</Label>
