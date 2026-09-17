@@ -900,7 +900,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
         {/* PR-MOS-1 — abas da Conciliação Bancária. A Auditoria Bancária continua separada;
             o Espelho é modal, não aba (PR-ESPELHO-02) — ver o comentário do `vistaExtrato`. */}
         {!loading && selectedCard && (
-          <div className="flex gap-1 items-center pt-1">
+          <div className="flex gap-1 items-center">
             <button
               onClick={() => setVistaExtrato('importar')}
               className={`px-2.5 py-1 rounded text-[10px] font-bold transition-colors ${vistaExtrato === 'importar' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
@@ -928,12 +928,18 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
           </div>
         )}
 
-        {/* ⚠ A FAIXA DO MÊS FICA ABAIXO DAS ABAS — PR-CONCILIA-FAIXA-MES-CONTA-01. Vale para as
-            quatro abas e mora fora de qualquer área que rola (o container é `md:shrink-0`, A21).
-            Sem `!loading`, como antes: não pisca a cada recarga. A conta veio do cabeçalho do
-            card Resumo, onde cortava nomes longos; aqui a linha é larga e o nome sai inteiro. */}
-        {selectedCard && (
+        {/* ⚠ A FAIXA DO MÊS FICA ABAIXO DAS ABAS — PR-CONCILIA-FAIXA-MES-CONTA-01, e mora fora de
+            qualquer área que rola (o container é `md:shrink-0`, A21). Sem `!loading`: não pisca a
+            cada recarga.
+            ⚠ MÊS + STATUS + CONTA SÓ NA ABA CONCILIAÇÃO — PR-CONCILIA-FAIXA-SO-CONCILIACAO-01.
+            Importar e Extrato Gerencial têm filtro de conta PRÓPRIO, e a conta global aqui
+            contradizia a do corpo ("Banco Bradesco" em cima, "B.Brasil-Invest.Facil" embaixo). A
+            Conciliação não tem seletor, então é a única aba onde esta conta é a que vale.
+            ⚠ O "↗ Lançamentos" FICA FORA DA CONDIÇÃO: Importar e Extrato Gerencial não têm outra
+            porta para Lançamentos. Ele segue nas quatro abas, na ponta direita. */}
+        {selectedCard && (vistaExtrato === 'conciliacao' || onNavigateToLancamentos) && (
           <div className="flex items-center gap-2">
+            {vistaExtrato === 'conciliacao' && (<>
             <span className="text-sm font-bold">{selectedCard.label}/{ano}</span>
             <span style={{
               background:cor.bg, color:cor.txt, border:`1px solid ${cor.border}`,
@@ -941,9 +947,9 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             }}>
               {cardStatus==='realizado'?'✅':cardStatus==='parcial'?'⚠':cardStatus==='nao_conciliado'?'❌':'⏳'} {meta.label}
             </span>
-            {meta.sub && <span className="text-[10px] text-muted-foreground">{meta.sub}</span>}
             <span className="text-[10px] text-muted-foreground" aria-hidden>·</span>
             <span className="text-[13px] font-medium text-[#185FA5]">{contaAtual}</span>
+            </>)}
             <div className="flex-1" />
             {/* ⚠ O BOTAO "⬆ Importar Extrato" DO CABECALHO SAIU — B-24. Ele era a
                 outra porta para o modal antigo, e era por ela que o fluxo legado
