@@ -751,6 +751,20 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     ro.observe(el);
     observadorCabSaldos.current = ro;
   }, []);
+  /* A altura do `thead` fixo (colunas + Total), medida do mesmo jeito — PR-CONCILIA-GRUPOS-STICKY-02.
+     A faixa de grupo gruda logo abaixo dele: `top` = cabeçalho do card + thead. Medida, não
+     escrita: o Total muda de altura com a fonte e o cabeçalho com o botão "Fechar…". */
+  const [alturaThead, setAlturaThead] = useState(0);
+  const observadorThead = useRef<ResizeObserver | null>(null);
+  const refThead = useCallback((el: HTMLTableSectionElement | null) => {
+    observadorThead.current?.disconnect();
+    observadorThead.current = null;
+    if (!el) return;
+    setAlturaThead(el.getBoundingClientRect().height);
+    const ro = new ResizeObserver(() => setAlturaThead(el.getBoundingClientRect().height));
+    ro.observe(el);
+    observadorThead.current = ro;
+  }, []);
   const ehOculta = (c: PerContaSaldo) =>
     Math.round(c.saldoInicial * 100) === 0 && !c.temMovimento && c.ext === null;
   const qtdOcultas = perContaSaldos.filter(ehOculta).length;
@@ -1366,7 +1380,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                   {/* O Total mora no `thead`: gruda junto com o cabeçalho das colunas, logo abaixo
                       do cabeçalho do card (top MEDIDO). A borda inferior é sombra interna nas
                       células — com `border-collapse` a borda da tabela não viaja com o sticky. */}
-                  <thead className="sticky z-[9] bg-blue-50" style={{top:`${alturaCabSaldos}px`}}>
+                  <thead ref={refThead} className="sticky z-[9] bg-blue-50" style={{top:`${alturaCabSaldos}px`}}>
                     {/* ⚠ SEPARAÇÃO POR SOMBRA, NÃO POR BORDA — PR-CONCILIA-SALDOS-UI-01. O `border-b`
                         daqui e o `border-t` do Total colapsavam em 1px de GRADE, que não ganha o fundo
                         do `thead` sticky: as contas apareciam por essa faixa ao rolar. A linha virou
@@ -1384,9 +1398,9 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                       onClick={() => setSelectedConta('__all__')}
                     >
                       <td className="py-2 px-2 font-medium text-[13px] text-blue-900 shadow-[inset_0_-1px_0_hsl(var(--border))]">Total — todas as contas</td>
-                      <td className={`py-2 px-1 text-right font-bold text-[11px] tabular-nums whitespace-nowrap text-blue-900 shadow-[inset_0_-1px_0_hsl(var(--border))] ${totalSaldos.sis<0?'text-destructive':''}`}>{formatMoeda(totalSaldos.sis)}</td>
-                      <td className="py-2 px-1 text-right font-bold text-[11px] tabular-nums whitespace-nowrap text-blue-900 shadow-[inset_0_-1px_0_hsl(var(--border))]">{totalSaldos.ext===null?'—':formatMoeda(totalSaldos.ext)}</td>
-                      <td className={`py-2 px-1 text-right font-bold text-[11px] tabular-nums whitespace-nowrap shadow-[inset_0_-1px_0_hsl(var(--border))] ${totalSaldos.ext===null?'text-muted-foreground':Math.abs(totalSaldos.dif)<=0.01?'text-success':'text-destructive'}`}>
+                      <td className={`py-2 px-1 text-right font-bold text-[10px] tabular-nums whitespace-nowrap text-blue-900 shadow-[inset_0_-1px_0_hsl(var(--border))] ${totalSaldos.sis<0?'text-destructive':''}`}>{formatMoeda(totalSaldos.sis)}</td>
+                      <td className="py-2 px-1 text-right font-bold text-[10px] tabular-nums whitespace-nowrap text-blue-900 shadow-[inset_0_-1px_0_hsl(var(--border))]">{totalSaldos.ext===null?'—':formatMoeda(totalSaldos.ext)}</td>
+                      <td className={`py-2 px-1 text-right font-bold text-[10px] tabular-nums whitespace-nowrap shadow-[inset_0_-1px_0_hsl(var(--border))] ${totalSaldos.ext===null?'text-muted-foreground':Math.abs(totalSaldos.dif)<=0.01?'text-success':'text-destructive'}`}>
                         {totalSaldos.ext===null ? '—' : Math.abs(totalSaldos.dif)<=0.01 ? 'confere' : formatMoeda(totalSaldos.dif)}
                       </td>
                       <td className="py-2 shadow-[inset_0_-1px_0_hsl(var(--border))]" />
@@ -1398,16 +1412,23 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                       ⚠ A FAIXA SAIU DO AZUL: o `bg-blue-50` brigava com o azul da conta selecionada. A
                       borda `border-t-2` virou sombra interna, pelo mesmo motivo do Total — borda colapsada
                       não acompanha bloco fixo. Texto 8px → 10px (piso do CLAUDE.md). */}
+                  {/* ⚠ A FAIXA DE GRUPO GRUDA ABAIXO DO TOTAL — PR-CONCILIA-GRUPOS-STICKY-02. Sticky nas
+                      CÉLULAS (z-[8], abaixo do thead z-[9]), com fundo OPACO em duas camadas: `bg-card`
+                      embaixo e o mesmo cinza translúcido da etapa 1 por cima, como imagem — o cinza
+                      percebido é o mesmo e as contas não vazam por ele ao rolar.
+                      ⚠ NÃO HÁ "EMPURRÃO": medido no Chromium, o limite de uma célula sticky é a TABELA, não
+                      o tbody. A faixa do grupo seguinte chega ao mesmo `top` e COBRE a anterior (vem
+                      depois no DOM); como as duas são opacas e da mesma altura, a troca é limpa. */}
                   {gruposSaldos.map(g => (
                     <tbody key={g.chave}>
                       <tr>
-                        <td className="px-2 py-1 text-[11px] font-semibold text-muted-foreground bg-muted-foreground/15 shadow-[inset_0_1px_0_hsl(var(--border))]">{g.rotulo}</td>
-                        <td className="py-1 px-1 text-right text-[11px] font-semibold tabular-nums whitespace-nowrap text-muted-foreground bg-muted-foreground/15 shadow-[inset_0_1px_0_hsl(var(--border))]">{formatMoeda(g.subtotal.sis)}</td>
-                        <td className="py-1 px-1 text-right text-[11px] font-semibold tabular-nums whitespace-nowrap text-muted-foreground bg-muted-foreground/15 shadow-[inset_0_1px_0_hsl(var(--border))]">{g.subtotal.ext===null ? '—' : formatMoeda(g.subtotal.ext)}</td>
-                        <td className={`py-1 px-1 text-right text-[11px] font-semibold tabular-nums whitespace-nowrap bg-muted-foreground/15 shadow-[inset_0_1px_0_hsl(var(--border))] ${g.subtotal.ext===null?'text-muted-foreground':Math.abs(g.subtotal.dif)<=0.01?'text-success':'text-destructive'}`}>
+                        <td style={{top:`${alturaCabSaldos + alturaThead}px`}} className="px-2 py-1 text-[11px] font-semibold text-muted-foreground sticky z-[8] bg-card bg-[linear-gradient(hsl(var(--muted-foreground)/0.15),hsl(var(--muted-foreground)/0.15))] shadow-[inset_0_1px_0_hsl(var(--border))]">{g.rotulo}</td>
+                        <td style={{top:`${alturaCabSaldos + alturaThead}px`}} className="py-1 px-1 text-right text-[10px] font-semibold tabular-nums whitespace-nowrap text-muted-foreground sticky z-[8] bg-card bg-[linear-gradient(hsl(var(--muted-foreground)/0.15),hsl(var(--muted-foreground)/0.15))] shadow-[inset_0_1px_0_hsl(var(--border))]">{formatMoeda(g.subtotal.sis)}</td>
+                        <td style={{top:`${alturaCabSaldos + alturaThead}px`}} className="py-1 px-1 text-right text-[10px] font-semibold tabular-nums whitespace-nowrap text-muted-foreground sticky z-[8] bg-card bg-[linear-gradient(hsl(var(--muted-foreground)/0.15),hsl(var(--muted-foreground)/0.15))] shadow-[inset_0_1px_0_hsl(var(--border))]">{g.subtotal.ext===null ? '—' : formatMoeda(g.subtotal.ext)}</td>
+                        <td style={{top:`${alturaCabSaldos + alturaThead}px`}} className={`py-1 px-1 text-right text-[10px] font-semibold tabular-nums whitespace-nowrap sticky z-[8] bg-card bg-[linear-gradient(hsl(var(--muted-foreground)/0.15),hsl(var(--muted-foreground)/0.15))] shadow-[inset_0_1px_0_hsl(var(--border))] ${g.subtotal.ext===null?'text-muted-foreground':Math.abs(g.subtotal.dif)<=0.01?'text-success':'text-destructive'}`}>
                           {g.subtotal.ext===null ? '—' : Math.abs(g.subtotal.dif)<=0.01 ? 'confere' : formatMoeda(g.subtotal.dif)}
                         </td>
-                        <td className="py-1 bg-muted-foreground/15 shadow-[inset_0_1px_0_hsl(var(--border))]" />
+                        <td style={{top:`${alturaCabSaldos + alturaThead}px`}} className="py-1 sticky z-[8] bg-card bg-[linear-gradient(hsl(var(--muted-foreground)/0.15),hsl(var(--muted-foreground)/0.15))] shadow-[inset_0_1px_0_hsl(var(--border))]" />
                       </tr>
                       {g.contas.map(s=>(
                       <SaldoContaRow key={s.conta.id} data={s}
