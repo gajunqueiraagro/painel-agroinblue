@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { inscreverEmLancamentos } from '@/hooks/useFinanceiroV2';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { faixaDoMes } from '@/hooks/useConciliacaoDoMes';
+import { TIPOS_ACEITOS, TAMANHO_MAXIMO } from '@/hooks/useLancamentoDocumentos';
 
 /**
  * useExtratoDaConta — o saldo do mês e as importações da conta.
@@ -466,4 +468,172 @@ export function useSaldoSistemaNaPosicao(
   }, [clienteId, contaId, anoMes, saldoInicial, posicaoEm, versao]);
 
   return { saldoSistema, aposPosicao, carregando };
+}
+
+/* ─── PR-SALDO-MODAL-OFX-ANEXO-02B ────────────────────────────────────────────────
+   O saldo que o OFX declarou e os anexos do extrato, para o modal do lápis.
+   ⚠ OS DOIS SÃO CONFERÊNCIA, NÃO SALDO. Quem vale é o `saldo_final` que o operador
+   grava em `saldos_v2` (`gravarSaldoReal`); nada aqui escreve lá. */
+
+/** O saldo declarado pelo arquivo do banco (LEDGERBAL) numa posição do mês. */
+export interface SaldoDeclaradoOfx {
+  valor: number;
+  /** Data da posição declarada (DTASOF), `YYYY-MM-DD`. */
+  data: string;
+  nomeArquivo: string | null;
+}
+
+/**
+ * A posição mais recente que um OFX declarou dentro do mês — a da data mais tarde, e
+ * entre duas na mesma data, a da importação mais nova.
+ * ⚠ AS DUAS MARCAS DE DESFEITA ENTRAM NO FILTRO: o Desfazer atual grava `status =
+ * 'cancelada'` e `cancelado_em`; a coluna `cancelada_em` é de um fluxo antigo. Uma
+ * importação desfeita não pode continuar afirmando saldo.
+ */
+export function useSaldoDeclaradoOfx(
+  clienteId: string | null, contaId: string | null, ano: number, mes: number,
+) {
+  const [ofx, setOfx] = useState<SaldoDeclaradoOfx | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelado = false;
+    if (!clienteId || !contaId) { setOfx(null); return; }
+    const { inicio, fim } = faixaDoMes(ano, mes);
+    setLoading(true);
+    (async () => {
+      const { data } = await supabase
+        .from('financeiro_importacoes_v2')
+        .select('id, nome_arquivo, saldo_declarado, saldo_declarado_data, data_importacao')
+        .eq('cliente_id', clienteId)
+        .eq('conta_bancaria_id', contaId)
+        .not('saldo_declarado', 'is', null)
+        .is('cancelado_em', null)
+        .is('cancelada_em', null)
+        .neq('status', 'cancelada')
+        .gte('saldo_declarado_data', inicio)
+        .lt('saldo_declarado_data', fim)
+        .order('saldo_declarado_data', { ascending: false })
+        .order('data_importacao', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (cancelado) return;
+      setOfx(data && data.saldo_declarado != null && data.saldo_declarado_data
+        ? { valor: Number(data.saldo_declarado), data: data.saldo_declarado_data, nomeArquivo: data.nome_arquivo }
+        : null);
+      setLoading(false);
+    })();
+    return () => { cancelado = true; setLoading(false); };
+  }, [clienteId, contaId, ano, mes]);
+
+  return { ofx, loading };
+}
+
+/** Um anexo do extrato da conta no mês. `url` é o CAMINHO no bucket, não um link. */
+export interface SaldoDocumento {
+  id: string;
+  nome: string;
+  tipo: string | null;
+  url: string | null;
+  tamanhoBytes: number | null;
+  uploadedEm: string;
+}
+
+const BUCKET_SALDO_DOC = 'fin-documentos';
+
+/** A lista viva (não cancelada) de anexos da conta no mês, mais recente primeiro. */
+export function useSaldoDocumentos(
+  clienteId: string | null, contaId: string | null, ano: number, mes: number,
+) {
+  const [documentos, setDocumentos] = useState<SaldoDocumento[]>([]);
+  const [loading, setLoading] = useState(false);
+  const anoMes = `${ano}-${String(mes).padStart(2, '0')}`;
+
+  const recarregar = useCallback(async () => {
+    if (!clienteId || !contaId) { setDocumentos([]); return; }
+    setLoading(true);
+    try {
+      const { data } = await supabase
+        .from('financeiro_saldo_documentos')
+        .select('id, nome, tipo, url, tamanho_bytes, uploaded_em')
+        .eq('cliente_id', clienteId)
+        .eq('conta_bancaria_id', contaId)
+        .eq('ano_mes', anoMes)
+        .eq('cancelado', false)
+        .order('uploaded_em', { ascending: false });
+      setDocumentos((data ?? []).map(d => ({
+        id: d.id, nome: d.nome, tipo: d.tipo, url: d.url,
+        tamanhoBytes: d.tamanho_bytes, uploadedEm: d.uploaded_em,
+      })));
+    } finally {
+      setLoading(false);
+    }
+  }, [clienteId, contaId, anoMes]);
+
+  useEffect(() => { void recarregar(); }, [recarregar]);
+
+  return { documentos, loading, recarregar };
+}
+
+/**
+ * Anexa um arquivo ao extrato da conta no mês. Fluxo copiado de `useLancamentoDocumentos`,
+ * gravando direto na tabela (a RLS protege) no estilo de `gravarSaldoReal`: devolve
+ * `{ ok, erro }` e não lança.
+ * ⚠ REGISTRAR PRIMEIRO, SUBIR DEPOIS. Linha sem arquivo aparece na lista como "sem
+ * arquivo" — lixo visível, que se conserta. Arquivo no bucket sem linha nenhuma é lixo
+ * invisível, que ninguém acha para limpar.
+ * ⚠ A PRIMEIRA PASTA DO CAMINHO É O CLIENTE: é o que a policy do `fin-documentos` confere.
+ */
+export async function anexarSaldoDocumento(params: {
+  clienteId: string; contaId: string; anoMes: string; file: File;
+}): Promise<{ ok: boolean; erro: string | null }> {
+  const { clienteId, contaId, anoMes, file } = params;
+  if (!TIPOS_ACEITOS.includes(file.type)) return { ok: false, erro: 'Formato não aceito. Envie PDF, JPG ou PNG.' };
+  if (file.size > TAMANHO_MAXIMO) return { ok: false, erro: 'Arquivo acima de 10 MB.' };
+
+  const userId = (await supabase.auth.getUser()).data.user?.id ?? null;
+  const { data: linha, error: erroRegistro } = await supabase
+    .from('financeiro_saldo_documentos')
+    .insert({
+      cliente_id: clienteId, conta_bancaria_id: contaId, ano_mes: anoMes,
+      nome: file.name, tipo: file.type, tamanho_bytes: file.size,
+      url: null, uploaded_por: userId,
+    })
+    .select('id')
+    .single();
+  if (erroRegistro || !linha) return { ok: false, erro: erroRegistro?.message ?? 'Não foi possível registrar o anexo.' };
+
+  const caminho = `${clienteId}/saldos/${contaId}/${anoMes}/${Date.now()}-${file.name}`;
+  const up = await supabase.storage.from(BUCKET_SALDO_DOC).upload(caminho, file, { upsert: false });
+  if (up.error) return { ok: false, erro: up.error.message };
+
+  const { error } = await supabase
+    .from('financeiro_saldo_documentos')
+    .update({ url: caminho, updated_at: new Date().toISOString(), updated_by: userId })
+    .eq('id', linha.id);
+  return { ok: !error, erro: error?.message ?? null };
+}
+
+/** Cancela um anexo. Não apaga o arquivo: documento se cancela, não some. */
+export async function cancelarSaldoDocumento(params: {
+  documentoId: string; clienteId: string; motivo: string;
+}): Promise<{ ok: boolean; erro: string | null }> {
+  const userId = (await supabase.auth.getUser()).data.user?.id ?? null;
+  const agora = new Date().toISOString();
+  const { error } = await supabase
+    .from('financeiro_saldo_documentos')
+    .update({
+      cancelado: true, cancelado_em: agora, cancelado_por: userId,
+      cancelado_motivo: params.motivo, updated_at: agora, updated_by: userId,
+    })
+    .eq('id', params.documentoId)
+    .eq('cliente_id', params.clienteId);
+  return { ok: !error, erro: error?.message ?? null };
+}
+
+/** Link temporário (60s) para abrir o anexo. `null` em erro, sem lançar. */
+export async function urlAssinadaSaldoDocumento(caminho: string): Promise<string | null> {
+  const { data, error } = await supabase.storage.from(BUCKET_SALDO_DOC).createSignedUrl(caminho, 60);
+  if (error) return null;
+  return data?.signedUrl ?? null;
 }

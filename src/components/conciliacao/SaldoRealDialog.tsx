@@ -1,13 +1,18 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { DatePicker } from '@/components/ui/date-picker';
-import { Loader2, Trash2 } from 'lucide-react';
+import { Loader2, Paperclip, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatMoeda } from '@/lib/calculos/formatters';
-import { gravarSaldoReal, removerSaldoReal, fimDoMes } from '@/hooks/useExtratoDaConta';
+import {
+  gravarSaldoReal, removerSaldoReal, fimDoMes,
+  useSaldoDeclaradoOfx, useSaldoDocumentos,
+  anexarSaldoDocumento, cancelarSaldoDocumento, urlAssinadaSaldoDocumento,
+} from '@/hooks/useExtratoDaConta';
+import { TIPOS_ACEITOS } from '@/hooks/useLancamentoDocumentos';
 
 /**
  * SaldoRealDialog — o lápis: informar o saldo que o banco mostra, e QUANDO.
@@ -64,6 +69,16 @@ export function SaldoRealDialog({
   const [data, setData] = useState(saldoDataAtual ?? fimDoMes(ano, mes));
   const [ocupado, setOcupado] = useState(false);
 
+  /* PR-SALDO-MODAL-OFX-ANEXO-02B — conferência ao lado do saldo manual: o que o OFX
+     declarou e os anexos do extrato. Nenhum dos dois grava saldo; quem prevalece é o
+     saldo informado aqui. */
+  const { ofx } = useSaldoDeclaradoOfx(clienteId, contaId, ano, mes);
+  const anexos = useSaldoDocumentos(clienteId, contaId, ano, mes);
+  const inputArquivo = useRef<HTMLInputElement>(null);
+  const [anexando, setAnexando] = useState(false);
+  const [cancelandoId, setCancelandoId] = useState<string | null>(null);
+  const [motivo, setMotivo] = useState('');
+
   /* ⚠ A DATA VEM DA TELA, e desde a regeneração do types.ts (02/09) ela pode vir:
      `saldo_data` entrou no tipo gerado, então o `select` de quem monta o modal a
      carrega sem cast. A versão anterior deste arquivo a buscava sozinho — um
@@ -92,6 +107,42 @@ export function SaldoRealDialog({
       aoFechar();
     } finally { setOcupado(false); }
   };
+
+  const anexar = async (file: File | undefined) => {
+    if (!file) return;
+    setAnexando(true);
+    try {
+      const r = await anexarSaldoDocumento({ clienteId, contaId, anoMes, file });
+      if (!r.ok) toast.error(r.erro ?? 'Não foi possível anexar o arquivo.');
+      else toast.success('Extrato anexado.');
+      await anexos.recarregar();
+    } finally {
+      setAnexando(false);
+      if (inputArquivo.current) inputArquivo.current.value = '';
+    }
+  };
+
+  const abrirAnexo = async (caminho: string | null) => {
+    if (!caminho) return;
+    const url = await urlAssinadaSaldoDocumento(caminho);
+    if (!url) { toast.error('Não foi possível abrir o arquivo.'); return; }
+    window.open(url, '_blank', 'noopener');
+  };
+
+  const confirmarCancelamento = async () => {
+    if (!cancelandoId) return;
+    /* Motivo obrigatório: é o que a auditoria mostra daqui a um ano. */
+    if (!motivo.trim()) { toast.error('Informe o motivo do cancelamento.'); return; }
+    const r = await cancelarSaldoDocumento({ documentoId: cancelandoId, clienteId, motivo: motivo.trim() });
+    if (!r.ok) { toast.error(r.erro ?? 'Não foi possível cancelar o anexo.'); return; }
+    toast.success('Anexo cancelado.');
+    setCancelandoId(null); setMotivo('');
+    await anexos.recarregar();
+  };
+
+  /* O OFX é comparado com o saldo GRAVADO, não com o digitado — pela mesma razão do
+     bloco sistema/diferença: número que muda enquanto se digita não confere nada. */
+  const difOfx = ofx && saldoAtual !== null ? Math.round((ofx.valor - saldoAtual) * 100) / 100 : null;
 
   const remover = async () => {
     setOcupado(true);
@@ -129,6 +180,25 @@ export function SaldoRealDialog({
             </div>
           </div>
 
+          {/* O que o arquivo do banco declarou (LEDGERBAL). Sem OFX com saldo no mês a linha
+              não aparece: ausência não se mostra como zero. */}
+          {ofx && (
+          <div className="space-y-0.5 rounded border bg-muted/30 px-2 py-1.5">
+            <div className="flex justify-between" title={ofx.nomeArquivo ?? undefined}>
+              <span className="text-[10px] text-muted-foreground">OFX em {ofx.data.slice(8, 10)}/{ofx.data.slice(5, 7)}</span>
+              <span className="text-[11px] tabular-nums">{formatMoeda(ofx.valor)}</span>
+            </div>
+            {difOfx !== null && (
+              <div className="flex justify-between">
+                <span className="text-[10px] text-muted-foreground">contra o saldo gravado</span>
+                <span className={`text-[11px] tabular-nums ${Math.abs(difOfx) <= 0.01 ? 'text-success' : 'font-semibold text-destructive'}`}>
+                  {Math.abs(difOfx) <= 0.01 ? 'confere' : formatMoeda(difOfx)}
+                </span>
+              </div>
+            )}
+          </div>
+          )}
+
           {/* ⚠ OS NÚMEROS GRAVADOS, NÃO OS DIGITADOS — PR-CONCILIACAO-CARDS-01a. São os
               mesmos da linha da conta no card, repassados pela tela; nada é recalculado
               aqui, e por isso não mudam enquanto se digita. */}
@@ -150,6 +220,52 @@ export function SaldoRealDialog({
             </div>
           </div>
           )}
+
+          {/* Anexos do extrato — prova visual. Gravam na hora, independente do Informar/
+              Atualizar do saldo. A lista rola sozinha a partir do 4º arquivo; o modal não. */}
+          <div className="rounded border px-2 py-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-medium text-muted-foreground">Extrato (PDF/imagem)</span>
+              <input ref={inputArquivo} type="file" accept={TIPOS_ACEITOS.join(',')} className="hidden"
+                onChange={(e) => { void anexar(e.target.files?.[0]); }} />
+              <Button type="button" variant="outline" size="sm" className="h-6 gap-1 px-2 text-[10px]"
+                disabled={anexando} onClick={() => inputArquivo.current?.click()}>
+                {anexando ? <Loader2 className="h-3 w-3 animate-spin" /> : <Paperclip className="h-3 w-3" />}
+                Anexar
+              </Button>
+            </div>
+            {anexos.documentos.length === 0 ? (
+              <div className="pt-1 text-[10px] text-muted-foreground">Nenhum arquivo anexado.</div>
+            ) : (
+              <ul className="mt-1 max-h-[72px] divide-y overflow-y-auto">
+                {anexos.documentos.map(d => (
+                  <li key={d.id} className="py-0.5">
+                    <div className="flex items-center gap-2">
+                      <span className="min-w-0 flex-1 truncate text-[10px]" title={d.nome}>{d.nome}</span>
+                      {d.url ? (
+                        <button type="button" className="text-[10px] text-primary underline"
+                          onClick={() => { void abrirAnexo(d.url); }}>visualizar</button>
+                      ) : (
+                        <span className="text-[10px] text-warning">sem arquivo</span>
+                      )}
+                      <button type="button" className="text-[10px] text-destructive underline"
+                        onClick={() => { setCancelandoId(d.id); setMotivo(''); }}>cancelar</button>
+                    </div>
+                    {cancelandoId === d.id && (
+                      <div className="flex items-center gap-1 pt-0.5">
+                        <Input value={motivo} onChange={(e) => setMotivo(e.target.value)}
+                          className="h-6 flex-1 text-[10px]" placeholder="Motivo do cancelamento" autoFocus />
+                        <Button type="button" size="sm" variant="destructive" className="h-6 px-2 text-[10px]"
+                          onClick={() => { void confirmarCancelamento(); }}>Confirmar</Button>
+                        <Button type="button" size="sm" variant="ghost" className="h-6 px-2 text-[10px]"
+                          onClick={() => { setCancelandoId(null); setMotivo(''); }}>Voltar</Button>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
 
           <p className="text-[10px] leading-snug text-muted-foreground">
             O saldo do sistema é somado até esta data — posição contra posição. Conta no vermelho:
