@@ -28,7 +28,7 @@
  * string que interpole conteúdo do arquivo (linha de extrato, cabeçalho lido),
  * mensagem do PostgREST, stack, path, SQL ou UUID.
  */
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { parseOFX, lerSaldoDeclaradoOFX, lerPeriodoDeclaradoOFX, type MovimentoBruto } from '@/lib/financeiro/parser/parseOFX';
@@ -306,6 +306,62 @@ function recomputarAgregados(
     // preservado pelos rebuilds (spread ...m). Não afeta nenhum outro contador.
     suspeitasDuplicata: movimentos.filter((m) => !!m.dupClassificacao).length,
   };
+}
+
+/**
+ * Quais destes hashes JÁ ESTÃO no extrato desta conta — a dedupe da importação.
+ *
+ * ⚠ CANCELADO NÃO CONTA, e foi por não olhar isso que a importação travou na Vera Ligia
+ * (17/09/2026): ela cancelou uma importação duplicada e o arquivo seguinte passou a vir
+ * "0 novos · 34 já no extrato", porque as 33 linhas canceladas continuavam respondendo
+ * "existe". Cancelar precisa devolver o direito de reimportar — senão cancelar é uma via
+ * sem volta.
+ * ⚠ E NÃO ADIANTARIA FILTRAR POR `status`: NÃO EXISTE status 'cancelado'. Os movimentos de
+ * uma importação desfeita seguem 'nao_conciliado'; quem marca o cancelamento é a COLUNA
+ * `cancelado_em`. Quem filtrar por status não enxerga cancelamento nenhum.
+ *
+ * ⚠ A REGRA É A DO ÍNDICE DO BANCO, copiada e não reinventada — `idx_extrato_v2_hash_unico`
+ * é `UNIQUE (cliente_id, hash_movimento) WHERE cancelado_em IS NULL AND status <> 'ignorado'`.
+ * A prévia tem de dizer exatamente o que o banco vai aceitar; qualquer outra régua faz a tela
+ * prometer uma coisa e o INSERT fazer outra. Por isso o ignorado sai pelo `status`, que é o
+ * que o índice usa (`ignorado_em` e `status='ignorado'` estão 1:1 hoje — 16 e 16 —, mas uma
+ * régua só é uma régua só).
+ *
+ * ⚠ UMA FUNÇÃO, DOIS CHAMADORES: esta consulta existia DUAS VEZES, copiada entre a prévia e o
+ * `refreshStatusPersistidos`. Consertar uma só reintroduziria o defeito no próximo salvar.
+ */
+async function buscarPersistidosPorHash(
+  clienteId: string,
+  contaBancariaId: string,
+  hashes: string[],
+): Promise<Map<string, { id: string; status: StatusPersistido; criadoEm: string | null }>> {
+  const mapa = new Map<string, { id: string; status: StatusPersistido; criadoEm: string | null }>();
+  if (hashes.length === 0) return mapa;
+  // BUG-CSV-DEDUP-01: paginação OBRIGATÓRIA — o PostgREST corta em ~1000 linhas por request.
+  // Sem paginar, arquivos com >1000 movimentos já existentes vinham truncados e as duplicatas
+  // escapavam para o INSERT.
+  const PAGE_DEDUP = 1000;
+  for (let from = 0; ; from += PAGE_DEDUP) {
+    const { data, error } = await supabase
+      .from('extrato_bancario_v2' as any)
+      .select('id, hash_movimento, status, created_at')
+      .eq('cliente_id', clienteId)
+      /* A conta já entra no hash, então este filtro não muda o resultado — ele só evita
+         varrer o cliente inteiro para responder por uma conta. */
+      .eq('conta_bancaria_id', contaBancariaId)
+      .is('cancelado_em', null)
+      .neq('status', 'ignorado')
+      .in('hash_movimento', hashes)
+      .order('id', { ascending: true })
+      .range(from, from + PAGE_DEDUP - 1);
+    if (error) throw error;
+    const lote = (data as unknown as
+      { id: string; hash_movimento: string; status: StatusPersistido; created_at: string | null }[] ?? []);
+    for (const r of lote) mapa.set(r.hash_movimento, { id: r.id, status: r.status, criadoEm: r.created_at });
+    if (lote.length < PAGE_DEDUP) break;
+    if (from > 500_000) break; // salvaguarda anti-loop
+  }
+  return mapa;
 }
 
 export interface ConfirmarParams {
@@ -592,6 +648,9 @@ function calcularScoreAgrupado(
 export function useImportacaoExtrato() {
   const { clienteAtual } = useCliente();
   const [preview, setPreview] = useState<PreviewResult | null>(null);
+  /* A conta da prévia em curso — o `refreshStatusPersistidos` precisa dela para repetir a
+     MESMA dedupe, e o `PreviewResult` não a carrega. */
+  const contaDoPreviewRef = useRef<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -691,23 +750,9 @@ export function useImportacaoExtrato() {
          EXISTE" sem dizer desde quando, e o operador lia como "o sistema já lançou isso".
          Uma coluna a mais na consulta que já roda transforma o susto em fato: "já importado
          em 18/08". Nenhuma lógica de dedupe muda. */
-      const persistidoPorHash = new Map<string, { id: string; status: StatusPersistido; criadoEm: string | null }>();
-      const PAGE_DEDUP = 1000;
-      for (let from = 0; ; from += PAGE_DEDUP) {
-        const { data: existentes, error: errSel } = await supabase
-          .from('extrato_bancario_v2' as any)
-          .select('id, hash_movimento, status, created_at')
-          .eq('cliente_id', clienteAtual.id)
-          .in('hash_movimento', hashes)
-          .order('id', { ascending: true })
-          .range(from, from + PAGE_DEDUP - 1);
-        if (errSel) throw errSel;
-        const lote = (existentes as unknown as
-          { id: string; hash_movimento: string; status: StatusPersistido; created_at: string | null }[] ?? []);
-        for (const r of lote) persistidoPorHash.set(r.hash_movimento, { id: r.id, status: r.status, criadoEm: r.created_at });
-        if (lote.length < PAGE_DEDUP) break;
-        if (from > 500_000) break; // salvaguarda anti-loop
-      }
+      contaDoPreviewRef.current = params.contaBancariaId;
+      const persistidoPorHash = await buscarPersistidosPorHash(
+        clienteAtual.id, params.contaBancariaId, hashes);
 
       // ── Match financeiro: buscar candidatos em financeiro_lancamentos_v2 ──
       // Range de datas amplo (±10 dias para cobrir 1:1 e composição N:N).
@@ -1211,11 +1256,29 @@ export function useImportacaoExtrato() {
         }));
         // BUG-CSV-DEDUP-01 (blindagem — ÚLTIMA linha de defesa, não o mecanismo principal):
         // upsert idempotente. Se a pré-detecção paginada falhar por algum motivo, duplicatas
-        // por hash são IGNORADAS em vez de estourar a unique. `.select()` só retorna as linhas
+        // são IGNORADAS em vez de estourar a unique. `.select()` só retorna as linhas
         // REALMENTE inseridas → `inseridos` conta o que entrou de fato (as ignoradas já existiam).
+        /* ⚠ SEM `onConflict`, E ISSO NÃO É DESCUIDO — PR-IMPORT-CANCELADO-01. Os dois índices
+           únicos desta tabela viraram PARCIAIS (`WHERE cancelado_em IS NULL AND status <>
+           'ignorado'`), e `ON CONFLICT (colunas)` NÃO consegue inferir um índice parcial sem
+           repetir o predicado — coisa que o PostgREST não tem como mandar. Medido no proto:
+             ON CONFLICT (cliente_id, hash_movimento) → ERRO 42P10
+             ON CONFLICT sem alvo                     → aceito, e ignora a duplicata
+           Omitir `onConflict` faz o supabase-js não mandar `on_conflict` na URL, e o PostgREST
+           emite `ON CONFLICT DO NOTHING` sem alvo — a única forma que funciona com índice
+           parcial. Enquanto estava com alvo, IMPORTAR ESTAVA QUEBRADO: todo salvamento
+           estourava 42P10.
+           ⚠ E O PREÇO ESTÁ DITO: sem alvo, o DO NOTHING passa a cobrir TAMBÉM o outro índice
+           único parcial, `idx_extrato_v2_chave_natural` (conta+data+valor+doc+seq). Uma linha
+           que bata na chave natural sem bater no hash — descrição reexportada diferente pelo
+           banco, por exemplo — agora é PULADA em silêncio, onde antes estourava. `inseridos`
+           conta o que de fato entrou, então o número na tela continua verdadeiro; o que falta é
+           a tela DIZER que pulou. Fica registrado como frente própria.
+           ⚠ ISSO SÓ SE PROVA EM RUNTIME: PostgREST monta o `ON CONFLICT` em texto, e nem TSC
+           nem build enxergam a incompatibilidade. */
         const { data: inserted, error: e2 } = await supabase
           .from('extrato_bancario_v2' as any)
-          .upsert(fatia, { onConflict: 'cliente_id,hash_movimento', ignoreDuplicates: true })
+          .upsert(fatia, { ignoreDuplicates: true })
           .select('id, hash_movimento');
         if (e2) throw e2;
         for (const r of (inserted ?? []) as { id: string; hash_movimento: string }[]) {
@@ -1305,25 +1368,17 @@ export function useImportacaoExtrato() {
 
     // BUG-CSV-DEDUP-01: mesma paginação obrigatória (PostgREST corta em ~1000) para os
     // contadores refletirem TODOS os hashes existentes, não só os 1000 primeiros.
-    const persistidoPorHash = new Map<string, { id: string; status: StatusPersistido; criadoEm: string | null }>();
-    const PAGE_DEDUP = 1000;
-    for (let from = 0; ; from += PAGE_DEDUP) {
-      const { data, error } = await supabase
-        .from('extrato_bancario_v2' as any)
-        .select('id, hash_movimento, status, created_at')
-        .eq('cliente_id', clienteAtual.id)
-        .in('hash_movimento', hashes)
-        .order('id', { ascending: true })
-        .range(from, from + PAGE_DEDUP - 1);
-      if (error) {
-        console.error(normalizarErro(error, 'refreshStatusPersistidos').diagnostico);
-        return;
-      }
-      const lote = (data as unknown as
-        { id: string; hash_movimento: string; status: StatusPersistido; created_at: string | null }[] ?? []);
-      for (const r of lote) persistidoPorHash.set(r.hash_movimento, { id: r.id, status: r.status, criadoEm: r.created_at });
-      if (lote.length < PAGE_DEDUP) break;
-      if (from > 500_000) break; // salvaguarda anti-loop
+    /* ⚠ A CONTA VEM DO REF, não de uma prop: este refresh roda depois da prévia, e a conta
+       dela é a que vale. Sem conta não há o que refrescar — a mesma pergunta precisa do
+       mesmo recorte nos dois chamadores. */
+    const contaDaPrevia = contaDoPreviewRef.current;
+    if (!contaDaPrevia) return;
+    let persistidoPorHash: Map<string, { id: string; status: StatusPersistido; criadoEm: string | null }>;
+    try {
+      persistidoPorHash = await buscarPersistidosPorHash(clienteAtual.id, contaDaPrevia, hashes);
+    } catch (e) {
+      console.error(normalizarErro(e, 'refreshStatusPersistidos').diagnostico);
+      return;
     }
 
     setPreview((prev) => {
