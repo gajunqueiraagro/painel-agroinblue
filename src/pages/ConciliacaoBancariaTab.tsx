@@ -7,6 +7,7 @@ import { SaldoRealDialog } from '@/components/conciliacao/SaldoRealDialog';
 import { EspelhoOfxSistemaModal } from '@/components/financeiro-v2/EspelhoConciliacaoTab';
 import { ImportacoesDaConta } from '@/components/conciliacao/ImportacoesDaConta';
 import { fimDoMes } from '@/hooks/useExtratoDaConta';
+import { useConciliacaoDoMes, contarBaldes } from '@/hooks/useConciliacaoDoMes';
 import { ImportarBancoInline } from '@/components/conciliacao/ImportarBancoInline';
 import { ExtratoGerencialTab } from '@/components/financeiro-v2/ExtratoGerencialTab';
 import { EnriquecerPorPlanilha } from '@/components/conciliacao/EnriquecerPorPlanilha';
@@ -33,7 +34,6 @@ import {
 } from '@/lib/financeiro/conciliacaoCalc';
 import { detectarDuplicatasCrossOrigin, montarSituacaoFechamento, derivarPendenciasGerenciais, derivarDetalhePendencias } from '@/lib/financeiro/fechamentoPendencias';
 import { buildUnifiedSaldos, type ContaSaldoRef, type SaldoV2SourceRow, type SaldoLegacySourceRow } from '@/lib/financeiro/saldosBancarios';
-import { ExtratoListaTab } from '@/components/financeiro-v2/ExtratoListaTab';
 import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
 import { mesUnico } from '@/v2/lib/periodo';
 // PR-MOS-2 — LotesExcelTab (Referências Operacionais antigas) desacoplado da aba Enriquecer (legado).
@@ -124,6 +124,9 @@ interface PerContaSaldo {
   // PR-E1-F1 — proveniência do saldo inicial (fim do saldo_final=0 fantasma).
   siOrigem: 'informado' | 'herdado' | 'ausente';
   temMovimento: boolean;
+  /* O saldo inicial que `calcConciliacaoMensal` já devolve — repassado, não
+     recalculado. Serve à regra de exibição das contas ocultas. */
+  saldoInicial: number;
 }
 
 /* ── Constants ── */
@@ -583,6 +586,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
         status:official.status as MesStatusExt, saldoRow,
         siOrigem,
         temMovimento: official.totalEntradas !== 0 || official.totalSaidas !== 0,
+        saldoInicial: official.saldoInicial,
       };
     });
   }, [ano, selectedMes, saldos, lancamentos, contas]);
@@ -722,9 +726,41 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     && belongsToConta(l, selectedConta)
     && !l.cancelado && l.cenario === 'realizado' && !l.sem_movimentacao_caixa
     && (l.data_pagamento || '').slice(0, 10) > posicaoEmDoCard).length;
-  const contasCC    = perContaSaldos.filter(c=>(c.conta.tipo_conta||'').toLowerCase()==='cc');
-  const contasINV   = perContaSaldos.filter(c=>(c.conta.tipo_conta||'').toLowerCase()==='inv');
-  const contasCartao= perContaSaldos.filter(c=>(c.conta.tipo_conta||'').toLowerCase()==='cartao');
+  /* ⚠ OCULTAR NÃO É INATIVAR — PR-CONCILIACAO-CARDS-01a. Conta que abriu o mês com
+     saldo 0,00, sem lançamento e sem saldo de extrato não diz nada sobre o mês e só
+     empurra as outras para baixo. Some da LISTA; o Total continua somando todas
+     (a oculta vale zero nas três colunas, então o número é o mesmo). */
+  const [mostrarOcultas, setMostrarOcultas] = useState(false);
+  const ehOculta = (c: PerContaSaldo) =>
+    Math.round(c.saldoInicial * 100) === 0 && !c.temMovimento && c.ext === null;
+  const qtdOcultas = perContaSaldos.filter(ehOculta).length;
+  const contasVisiveis = mostrarOcultas ? perContaSaldos : perContaSaldos.filter(c => !ehOculta(c));
+  const contasCC    = contasVisiveis.filter(c=>(c.conta.tipo_conta||'').toLowerCase()==='cc');
+  const contasINV   = contasVisiveis.filter(c=>(c.conta.tipo_conta||'').toLowerCase()==='inv');
+  const contasCartao= contasVisiveis.filter(c=>(c.conta.tipo_conta||'').toLowerCase()==='cartao');
+
+  /* ⚠ O PAREAMENTO É LIDO PELO MESMO HOOK DA ABA IMPORTAR — uma fonte, dois
+     consumidores. Sem conta escolhida o hook não consulta e devolve vazio, e o
+     Status diz "—": "Todas as contas" não tem um extrato para parear. Fora desta
+     aba a conta vai nula de propósito, para não repetir a leitura do PainelExtratoMes. */
+  const { movimentos: movsDoMes } = useConciliacaoDoMes(
+    clienteId ?? null,
+    vistaExtrato === 'conciliacao' && selectedConta !== '__all__' ? selectedConta : null,
+    Number(ano), Number(selectedMes),
+  );
+  const pareamento = useMemo(() => contarBaldes(movsDoMes), [movsDoMes]);
+  /* A diferença do resumo — `null` quando não há saldo de extrato. Ausência é
+     traço, nunca "confere". "Todas" compara o total do extrato com o do sistema,
+     o mesmo cálculo que o card já fazia. */
+  const difResumo: number | null = selectedConta === '__all__'
+    ? (totalSaldos.ext !== null ? r2(totalSaldos.ext - totalSaldos.sis) : null)
+    : (selectedCard && selectedCard.saldoExtrato !== null ? selectedCard.diferenca : null);
+  const difResumoConfere = difResumo !== null && Math.abs(difResumo) <= 0.01;
+  /* A linha da conta que o lápis abriu — os MESMOS números da tabela, repassados ao
+     modal. Só vale para o mês que a tabela mostra. */
+  const linhaDoLapis = editingSaldo && editingSaldo.anoMes === anoMesSel
+    ? perContaSaldos.find(p => p.conta.id === editingSaldo.contaId) ?? null
+    : null;
 
   const handleFecharSemMovimento = useCallback(async () => {
     if (!clienteId) return;
@@ -1052,8 +1088,8 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
 
               {/* ── COL 1: Resumo das movimentações ── */}
               <div className="rounded-lg border overflow-hidden bg-card">
-                <div className="px-3 py-1.5 border-b bg-blue-50 flex items-center justify-between">
-                  <span className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground">📊 Resumo das movimentações</span>
+                <div className="px-3 py-1.5 border-b bg-primary text-primary-foreground flex items-center justify-between">
+                  <span className="text-[9px] font-medium uppercase tracking-wider">Resumo das movimentações</span>
                   <span style={{fontSize:'10px',fontWeight:500,color:'#185FA5',background:'#E6F1FB',padding:'2px 8px',borderRadius:'12px'}}>
                     {contaAtual}
                   </span>
@@ -1063,7 +1099,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                   <span className="text-[11px] font-medium text-muted-foreground tabular-nums">{formatMoeda(selectedCard.saldoInicial)}</span>
                 </div>
                 <div className="mx-3 my-1 h-px bg-border" />
-                <div className="px-3 flex justify-between">
+                <div className="px-3 flex justify-between bg-success/10">
                   <span className="text-[10px] text-muted-foreground">Entradas</span>
                   <span className="text-[11px] font-semibold text-success tabular-nums">{formatMoeda(selectedCard.totalEntradas)}</span>
                 </div>
@@ -1077,7 +1113,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                     </div>
                   </div>
                 )}
-                <div className="px-3 flex justify-between">
+                <div className="px-3 flex justify-between bg-destructive/10">
                   <span className="text-[10px] text-muted-foreground">Saídas</span>
                   <span className="text-[11px] font-semibold text-destructive tabular-nums">{formatMoeda(selectedCard.totalSaidas)}</span>
                 </div>
@@ -1092,7 +1128,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                   </div>
                 )}
                 <div className="mx-3 my-1 h-px bg-border" />
-                <div className="px-3 flex justify-between">
+                <div className="px-3 flex justify-between bg-accent">
                   <span className="text-[10px] text-muted-foreground">Saldo no sistema</span>
                   <span className={`text-[11px] font-bold tabular-nums ${(selectedConta==='__all__'?totalSaldos.sis:selectedCard.saldoCalculado)>=0?'text-success':'text-destructive'}`}>
                     {formatMoeda(selectedConta === '__all__' ? totalSaldos.sis : selectedCard.saldoCalculado)}
@@ -1119,11 +1155,11 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                     )}
                   </span>
                 </div>
-                {/* NEW: Diferença */}
-                <div className="px-3 py-1 bg-muted/20 flex justify-between mb-1">
+                {/* NEW: Diferença — sem extrato é "—" e sem fundo: ausência nunca aparenta "confere". */}
+                <div className={`px-3 py-1 flex justify-between mb-1 ${difResumo === null ? '' : difResumoConfere ? 'bg-success/10' : 'bg-destructive/10'}`}>
                   <span className="text-[10px] text-muted-foreground">Diferença de saldo <span className="opacity-60">(o mês fecha?)</span></span>
-                  <span className={`text-[11px] font-bold tabular-nums ${Math.round((selectedConta==='__all__'?(totalSaldos.ext??0)-totalSaldos.sis:selectedCard.diferenca)*100)===0?'text-success':'text-destructive'}`}>
-                    {formatMoeda(selectedConta === '__all__' ? (totalSaldos.ext !== null ? r2((totalSaldos.ext??0) - totalSaldos.sis) : 0) : selectedCard.diferenca)}
+                  <span className={`text-[11px] font-bold tabular-nums ${difResumo === null ? 'text-muted-foreground' : difResumoConfere ? 'text-success' : 'text-destructive'}`}>
+                    {difResumo === null ? '—' : difResumoConfere ? 'confere' : formatMoeda(difResumo)}
                   </span>
                 </div>
                   {/* ⚠ O AVISO COBRA A ATUALIZAÇÃO — a posição no meio do mês é
@@ -1174,15 +1210,29 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             </div>
 
               {/* ── COL 2: Status ── */}
-              <div className="rounded-lg overflow-hidden flex flex-col" style={{border:`1px solid ${cor.border}`}}>
-                <div className="px-3 py-1.5 border-b text-[9px] font-medium uppercase tracking-wider text-muted-foreground bg-blue-50"
-                     style={{borderColor:cor.border}}>
-                  ⚖ Status
+              {/* A cor do card É o veredito: vermelho não conciliado, verde conciliado; parcial e
+                  pendente mantêm a borda do tom deles e o cabeçalho navy dos outros cards. */}
+              <div className={`rounded-lg overflow-hidden flex flex-col border ${cardStatus === 'nao_conciliado' ? 'border-destructive' : cardStatus === 'realizado' ? 'border-success' : ''}`}
+                   style={cardStatus === 'nao_conciliado' || cardStatus === 'realizado' ? undefined : {borderColor:cor.border}}>
+                <div className={`px-3 py-1.5 border-b text-[9px] font-medium uppercase tracking-wider ${cardStatus === 'nao_conciliado' ? 'bg-destructive text-destructive-foreground border-destructive' : cardStatus === 'realizado' ? 'bg-success text-success-foreground border-success' : 'bg-primary text-primary-foreground'}`}>
+                  Status
                 </div>
                 <div className="flex-1 flex flex-col items-center justify-center gap-1.5 p-3 text-center"
                      style={{background:cor.bg}}>
                   <StatusIcon className="h-7 w-7" style={{color:cor.txt}} />
                   <div className="text-[11px] font-bold" style={{color:cor.txt}}>{meta.label}</div>
+                  {/* ⚠ O QUE FALHOU, e não só QUE falhou. Pareamento sai do mesmo hook da aba
+                      Importar; sem conta escolhida ou sem extrato importado, é "—". */}
+                  <div className="text-[10px] leading-tight tabular-nums" style={{color:cor.txt}}>
+                    <div>
+                      {pareamento.todos === 0
+                        ? 'pareamento —'
+                        : `pareamento ${pareamento.conciliado}/${pareamento.todos} ${pareamento.conciliado === pareamento.todos ? 'ok' : 'falha'}`}
+                    </div>
+                    <div>
+                      {difResumo === null ? 'saldo —' : difResumoConfere ? 'saldo confere' : 'saldo diverge'}
+                    </div>
+                  </div>
                   {meta.sub && (
                     <div className="text-[9px] leading-tight" style={{color:cor.txt, maxWidth:'90px'}}>{meta.sub}</div>
                   )}
@@ -1222,12 +1272,12 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
 
               {/* ── COL 3: Saldos por conta ── */}
               <div className="rounded-lg border bg-card" style={{display:'flex',flexDirection:'column',overflowY:'auto',maxHeight:'calc(100vh - 230px)'}}>
-                <div className="px-3 py-1.5 border-b bg-blue-50 flex items-center justify-between shrink-0 sticky top-0 z-10 bg-blue-50">
-                  <span className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground">🏦 Saldos por conta</span>
+                <div className="px-3 py-1.5 border-b bg-primary text-primary-foreground flex items-center justify-between shrink-0 sticky top-0 z-10">
+                  <span className="text-[9px] font-medium uppercase tracking-wider">Saldos por conta</span>
                   <div className="flex items-center gap-2">
                     {selectedConta !== '__all__' && (
                       <button onClick={() => setSelectedConta('__all__')}
-                        className="text-[9px] text-muted-foreground border border-border rounded px-1.5 py-0.5 bg-transparent hover:bg-muted cursor-pointer">
+                        className="text-[9px] text-primary-foreground border border-primary-foreground/40 rounded px-1.5 py-0.5 bg-transparent hover:bg-primary-foreground/10 cursor-pointer">
                         ← Todas
                       </button>
                     )}
@@ -1247,7 +1297,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                         const cId = selectedConta !== '__all__' ? selectedConta : (contas[0]?.id || '');
                         if (cId) handleEditSaldo(anoMesSel, cId, 0);
                       }}
-                      className="text-[9px] text-blue-600 border border-blue-300 rounded px-1.5 py-0.5 bg-transparent hover:bg-blue-50 cursor-pointer flex items-center gap-0.5">
+                      className="text-[9px] text-primary-foreground border border-primary-foreground/40 rounded px-1.5 py-0.5 bg-transparent hover:bg-primary-foreground/10 cursor-pointer flex items-center gap-0.5">
                       <Plus className="h-2.5 w-2.5" /> Cadastrar
                     </button>
                   </div>
@@ -1285,17 +1335,14 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                   </thead>
                   <tbody>
                     <tr
-                      className="border-t cursor-pointer transition-colors"
-                      style={{
-                        background: selectedConta==='__all__' ? '#93C5FD' : '#BFDBFE',
-                      }}
+                      className="border-t cursor-pointer transition-colors bg-accent"
                       onClick={() => setSelectedConta('__all__')}
                     >
                       <td className="py-2 px-2 font-bold text-[9px] text-blue-900">Total — todas as contas</td>
                       <td className={`py-2 px-1 text-right font-semibold text-[9px] tabular-nums whitespace-nowrap text-blue-900 ${totalSaldos.sis<0?'text-destructive':''}`}>{formatMoeda(totalSaldos.sis)}</td>
                       <td className="py-2 px-1 text-right font-semibold text-[9px] tabular-nums whitespace-nowrap text-blue-900">{totalSaldos.ext===null?'—':formatMoeda(totalSaldos.ext)}</td>
-                      <td className={`py-2 px-1 text-right font-semibold text-[9px] tabular-nums whitespace-nowrap text-blue-900 ${totalSaldos.dif<0?'text-destructive':totalSaldos.dif===0?'text-success':''}`}>
-                        {formatMoeda(totalSaldos.dif)}
+                      <td className={`py-2 px-1 text-right font-semibold text-[9px] tabular-nums whitespace-nowrap ${totalSaldos.ext===null?'text-muted-foreground':Math.abs(totalSaldos.dif)<=0.01?'text-success':'text-destructive'}`}>
+                        {totalSaldos.ext===null ? '—' : Math.abs(totalSaldos.dif)<=0.01 ? 'confere' : formatMoeda(totalSaldos.dif)}
                       </td>
                       <td className="py-2" />
                     </tr>
@@ -1341,22 +1388,29 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                       ))}
                     </>}
 
-                    {/* Legend */}
-                    <tr><td colSpan={5} className="px-2 py-1 text-[9px] text-muted-foreground">
-                      Clique para filtrar · ● verde=ok · ● vermelho=diverge · ○ cinza=sem extrato
-                    </td></tr>
-
                     {/* Total row — sticky no topo, destaque azul-escuro */}
                   </tbody>
                 </table>
+
+                {/* Rodapé das ocultas — só exibição, estado local, não persiste. */}
+                {qtdOcultas > 0 && (
+                  <div className="px-3 py-1 border-t text-[10px] text-muted-foreground">
+                    {qtdOcultas} {qtdOcultas === 1 ? 'conta sem saldo e sem movimento oculta' : 'contas sem saldo e sem movimento ocultas'}
+                    {' · '}
+                    <button type="button" className="underline hover:text-foreground cursor-pointer"
+                      onClick={() => setMostrarOcultas(v => !v)}>
+                      {mostrarOcultas ? 'ocultar' : 'mostrar'}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* PR-MOS-1 — casar sistema × banco: lista de movimentos do extrato (reuso). */}
-            <ExtratoListaTab
-              contaBancariaId={selectedConta !== '__all__' ? selectedConta : null}
-              anoMes={`${ano}-${selectedMes}`}
-            />
+            {/* ⚠ A LISTA ANTIGA SAIU — PR-CONCILIACAO-CARDS-01a. Aqui era montado o
+                `ExtratoListaTab`, um segundo lugar dizendo o estado do mês, com contagens
+                e soma próprias. Criar de OFX órfão e conciliar por linha vivem no Espelho
+                e na EstacaoConciliar; criar em lote e a prévia de rematch viraram frentes
+                ([CONCIL-CRIAR-DE-ORFAO], [REMATCH-PREVIA]). */}
           </div>
         )}
       </div>
@@ -1514,6 +1568,8 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
           mes={Number(editingSaldo.anoMes.slice(5,7))}
           saldoAtual={editingSaldo.current}
           saldoDataAtual={editingSaldo.saldoData}
+          saldoSistema={linhaDoLapis?.sis ?? null}
+          diferenca={linhaDoLapis && linhaDoLapis.ext !== null ? linhaDoLapis.dif : null}
           aoFechar={()=>setEditingSaldo(null)}
           aoSalvar={()=>{ loadData(); }}
         />
@@ -1609,8 +1665,9 @@ function SaldoContaRow({data, isActive, isDimmed, onClick, onEdit, canEdit, show
       </td>
       <td className={`py-0.5 px-1 text-right text-[9px] tabular-nums whitespace-nowrap ${sis<0?'text-destructive':''}`}>{formatMoeda(sis)}</td>
       <td className="py-0.5 px-1 text-right text-[9px] tabular-nums whitespace-nowrap">{ext===null?'—':formatMoeda(ext)}</td>
-      <td className={`py-0.5 px-1 text-right text-[9px] font-medium tabular-nums whitespace-nowrap ${dif<0?'text-destructive':dif===0?'text-success':''}`}>
-        {formatMoeda(dif)}
+      {/* Sem extrato é "—" (dado ausente); com extrato e |dif| ≤ 0,01 é "confere". */}
+      <td className={`py-0.5 px-1 text-right text-[9px] tabular-nums whitespace-nowrap ${ext===null?'font-medium text-muted-foreground':Math.abs(dif)<=0.01?'font-medium text-success':'font-semibold text-destructive'}`}>
+        {ext===null ? '—' : Math.abs(dif)<=0.01 ? 'confere' : formatMoeda(dif)}
       </td>
       <td className="py-0.5 px-1 text-center">
         {canEdit && (

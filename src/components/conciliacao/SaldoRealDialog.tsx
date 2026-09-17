@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Loader2, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { formatMoeda } from '@/lib/calculos/formatters';
 import { gravarSaldoReal, removerSaldoReal, fimDoMes } from '@/hooks/useExtratoDaConta';
 
 /**
@@ -42,13 +43,18 @@ interface Props {
   saldoAtual: number | null;
   /** Posição atual declarada; `null` = nunca informada (o modal propõe o fim do mês). */
   saldoDataAtual: string | null;
+  /** Saldo do sistema da linha da conta no card; `null` = a tela não o tem.
+      Ausente (`undefined`) = o chamador não repassa o resumo, e o bloco não aparece. */
+  saldoSistema?: number | null;
+  /** Diferença da linha da conta no card; `null` = sem saldo de extrato (ausência, não zero). */
+  diferenca?: number | null;
   aoFechar: () => void;
   aoSalvar: () => void | Promise<void>;
 }
 
 export function SaldoRealDialog({
   clienteId, contaId, contaNome, ano, mes,
-  saldoAtual, saldoDataAtual, aoFechar, aoSalvar,
+  saldoAtual, saldoDataAtual, saldoSistema, diferenca, aoFechar, aoSalvar,
 }: Props) {
   const anoMes = `${ano}-${String(mes).padStart(2, '0')}`;
   const jaInformado = saldoAtual !== null;
@@ -123,6 +129,28 @@ export function SaldoRealDialog({
             </div>
           </div>
 
+          {/* ⚠ OS NÚMEROS GRAVADOS, NÃO OS DIGITADOS — PR-CONCILIACAO-CARDS-01a. São os
+              mesmos da linha da conta no card, repassados pela tela; nada é recalculado
+              aqui, e por isso não mudam enquanto se digita. */}
+          {saldoSistema !== undefined && (
+          <div className="space-y-0.5 rounded border bg-muted/30 px-2 py-1.5">
+            <div className="flex justify-between">
+              <span className="text-[10px] text-muted-foreground">
+                sistema em {dataBr(saldoDataAtual ?? fimDoMes(ano, mes))}
+              </span>
+              <span className="text-[11px] tabular-nums">
+                {saldoSistema === null ? '—' : formatMoeda(saldoSistema)}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[10px] text-muted-foreground">diferença</span>
+              <span className={`text-[11px] tabular-nums ${diferenca == null ? 'text-muted-foreground' : Math.abs(diferenca) <= 0.01 ? 'text-success' : 'font-semibold text-destructive'}`}>
+                {diferenca == null ? '—' : Math.abs(diferenca) <= 0.01 ? 'confere' : formatMoeda(diferenca)}
+              </span>
+            </div>
+          </div>
+          )}
+
           <p className="text-[10px] leading-snug text-muted-foreground">
             O saldo do sistema é somado até esta data — posição contra posição. Conta no vermelho:
             informe com o sinal, ex. −1.845,32.
@@ -158,6 +186,11 @@ export function SaldoRealDialog({
     </Dialog>
   );
 }
+
+const dataBr = (iso: string): string => {
+  const [a, m, d] = iso.slice(0, 10).split('-');
+  return `${d}/${m}/${a}`;
+};
 
 const MES_CURTO = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 const mesBr = (anoMes: string): string => {
