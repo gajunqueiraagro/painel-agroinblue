@@ -22,7 +22,7 @@ import { formatMoeda } from '@/lib/calculos/formatters';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
   CheckCircle2, AlertTriangle, XCircle, Pencil, ArrowLeft,
-  ArrowUp, ArrowDown, ArrowUpDown, Plus,
+  ArrowUp, ArrowDown, ArrowUpDown, Plus, FileText, Paperclip,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
@@ -449,8 +449,50 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
       .then(({data}) => setFornecedores((data as FornecedorRef[])||[]));
   }, [clienteId]);
 
+  /* ⚠ OS ÍCONES DE CONFIANÇA DO SALDO — PR-SALDO-ICONES-LINHA-02C. Duas consultas por
+     carga, nunca uma por linha: quais contas têm OFX com saldo declarado e quais têm
+     extrato anexado. Carregam o ANO inteiro, agrupado por mês, porque trocar de mês na
+     régua não recarrega o `loadData` — consultar só o mês selecionado deixaria os ícones
+     do mês anterior na tela. Os filtros do OFX são os mesmos de `useSaldoDeclaradoOfx`. */
+  const [contasComOfx, setContasComOfx] = useState<Map<string, Set<string>>>(new Map());
+  const [contasComPdf, setContasComPdf] = useState<Map<string, Set<string>>>(new Map());
+  const carregarIndicadoresSaldo = useCallback(async () => {
+    if (!clienteId) return;
+    const [{ data: imps }, { data: docs }] = await Promise.all([
+      supabase.from('financeiro_importacoes_v2')
+        .select('conta_bancaria_id, saldo_declarado_data')
+        .eq('cliente_id', clienteId)
+        .not('saldo_declarado', 'is', null)
+        .is('cancelado_em', null)
+        .is('cancelada_em', null)
+        .neq('status', 'cancelada')
+        .gte('saldo_declarado_data', `${ano}-01-01`)
+        .lt('saldo_declarado_data', `${Number(ano) + 1}-01-01`),
+      supabase.from('financeiro_saldo_documentos')
+        .select('conta_bancaria_id, ano_mes')
+        .eq('cliente_id', clienteId)
+        .eq('cancelado', false)
+        .gte('ano_mes', `${ano}-01`)
+        .lte('ano_mes', `${ano}-12`),
+    ]);
+    const porMes = (linhas: { conta: string | null; mes: string | null }[]) => {
+      const m = new Map<string, Set<string>>();
+      for (const l of linhas) {
+        if (!l.conta || !l.mes) continue;
+        const k = l.mes.slice(0, 7);
+        const set = m.get(k) ?? new Set<string>();
+        set.add(l.conta);
+        m.set(k, set);
+      }
+      return m;
+    };
+    setContasComOfx(porMes((imps ?? []).map(i => ({ conta: i.conta_bancaria_id, mes: i.saldo_declarado_data }))));
+    setContasComPdf(porMes((docs ?? []).map(d => ({ conta: d.conta_bancaria_id, mes: d.ano_mes }))));
+  }, [clienteId, ano]);
+
   const loadData = useCallback(async () => {
     if (!clienteId) return;
+    void carregarIndicadoresSaldo();
     setLoading(true);
     setLancamentos([]);
     const prevDec    = `${Number(ano)-1}-12`;
@@ -516,7 +558,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     }
     setLancamentos(allLanc);
     setLoading(false);
-  }, [clienteId, ano, contas]);
+  }, [clienteId, ano, contas, carregarIndicadoresSaldo]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -1443,7 +1485,9 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                         onClick={()=>setSelectedConta(s.conta.id)}
                         onEdit={()=>handleEditSaldo(anoMesSel,s.conta.id,s.ext)}
                         canEdit={canEditSaldoFinal(anoMesSel)}
-                        showSaldoAlert={anoMesSel === s.conta.mes_inicio && s.conta.saldo_inicial_oficial === null} />
+                        showSaldoAlert={anoMesSel === s.conta.mes_inicio && s.conta.saldo_inicial_oficial === null}
+                        temOfx={contasComOfx.get(anoMesSel)?.has(s.conta.id) ?? false}
+                        temPdf={contasComPdf.get(anoMesSel)?.has(s.conta.id) ?? false} />
                       ))}
                     </tbody>
                   ))}
@@ -1627,7 +1671,9 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
           saldoDataAtual={editingSaldo.saldoData}
           saldoSistema={linhaDoLapis?.sis ?? null}
           diferenca={linhaDoLapis && linhaDoLapis.ext !== null ? linhaDoLapis.dif : null}
-          aoFechar={()=>setEditingSaldo(null)}
+          /* Anexar ou cancelar um extrato no modal não passa pelo `aoSalvar` (grava na hora),
+             então os ícones recarregam ao fechar. */
+          aoFechar={()=>{ setEditingSaldo(null); void carregarIndicadoresSaldo(); }}
           aoSalvar={()=>{ loadData(); }}
         />
       )}
@@ -1702,9 +1748,13 @@ interface SaldoContaRowProps {
   onEdit: () => void;
   canEdit: boolean;
   showSaldoAlert?: boolean;
+  /** O mês desta conta tem OFX importado com saldo declarado. */
+  temOfx?: boolean;
+  /** O mês desta conta tem extrato (PDF/imagem) anexado. */
+  temPdf?: boolean;
 }
 
-function SaldoContaRow({data, isActive, isDimmed, onClick, onEdit, canEdit, showSaldoAlert}: SaldoContaRowProps) {
+function SaldoContaRow({data, isActive, isDimmed, onClick, onEdit, canEdit, showSaldoAlert, temOfx, temPdf}: SaldoContaRowProps) {
   const {conta, sis, ext, dif, status} = data;
   const dotColor = status==='realizado' ? '#2E7D32' : status==='nao_conciliado' ? '#C62828' : '#90A4AE';
   return (
@@ -1718,6 +1768,17 @@ function SaldoContaRow({data, isActive, isDimmed, onClick, onEdit, canEdit, show
         <span className="text-[11px]" style={{verticalAlign:'middle'}}>{getContaLabel(conta)}</span>
         {showSaldoAlert && (
           <span className="ml-1 text-[8px] font-semibold text-warning border border-amber-300 bg-warning/10 rounded px-0.5" title="Saldo inicial não definido">⚠</span>
+        )}
+        {/* Sem OFX e sem anexo, nenhum ícone: ausência não ganha marcador. */}
+        {temOfx && (
+          <span className="ml-1 inline-flex text-primary" style={{verticalAlign:'middle'}} title="Extrato OFX importado" aria-label="Extrato OFX importado">
+            <FileText className="h-2.5 w-2.5" aria-hidden />
+          </span>
+        )}
+        {temPdf && (
+          <span className="ml-1 inline-flex text-purple-600" style={{verticalAlign:'middle'}} title="PDF do extrato anexado" aria-label="PDF do extrato anexado">
+            <Paperclip className="h-2.5 w-2.5" aria-hidden />
+          </span>
         )}
       </td>
       <td className={`py-0.5 px-1 text-right text-[9.5px] tabular-nums whitespace-nowrap ${sis<0?'text-destructive':''}`}>{formatMoeda(sis)}</td>
