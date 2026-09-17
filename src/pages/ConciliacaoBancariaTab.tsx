@@ -981,9 +981,22 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             do corpo (`bg-card`, os três lados em sombra interna, o de baixo aberto para o
             conteúdo); a inativa perdeu o `bg-muted`, que agora seria a própria cor da faixa e a
             faria sumir. As três medidas (`px-2.5 py-1`, 10px/700) não mudam: com sombra em vez de
-            borda, a barra continua nos 23px de sempre. */}
-        {!loading && selectedCard && (
+            borda, a barra continua nos 23px de sempre.
+            ⚠ OS BOTÕES DIVIDEM ESTA LINHA COM AS ABAS — PR-CONCILIACAO-CABECALHO-BOTOES-02. A
+            barra terminava em "Conciliação" com metade da largura vazia à direita, e os dois
+            botões gastavam uma faixa inteira logo abaixo. Eles vieram para cá, na ponta direita.
+            ⚠ E O `!loading` DESCEU PARA DENTRO, de propósito: ele governava a linha toda e, se
+            continuasse governando, os botões passariam a sumir a cada recarga — exatamente o
+            piscar que o comentário da faixa abaixo dizia estar evitando. A linha agora existe
+            sempre que há mês selecionado; só as abas esperam o carregamento, como antes.
+            ⚠ E OS BOTÕES DESCERAM DE `h-6` PARA `h-5`, POR MEDIÇÃO: 24px numa linha de abas de
+            23px esticava a linha em 1px, e a altura desta faixa é justamente o que a tabela de
+            saldos não pode perder (teto fixo em `calc(100vh - 230px)`). Com `h-5` a linha fica nos
+            mesmos 23px. Medido em Chromium: cabeçalho 146,5 → 143,5 na Conciliação e → 118,5 nas
+            demais abas, que perderam a faixa vazia. */}
+        {selectedCard && (
           <div className="flex gap-1 items-center">
+            {!loading && (<>
             <button
               onClick={() => setVistaExtrato('importar')}
               className={`px-2.5 py-1 rounded-t text-[10px] font-bold transition-colors ${vistaExtrato === 'importar' ? 'bg-card text-foreground shadow-[inset_0_1px_0_hsl(var(--border)/0.6),inset_1px_0_0_hsl(var(--border)/0.6),inset_-1px_0_0_hsl(var(--border)/0.6)]' : 'bg-transparent text-muted-foreground hover:bg-background/60'}`}
@@ -1014,34 +1027,6 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             >
               Conciliação
             </button>
-          </div>
-        )}
-
-        {/* ⚠ A FAIXA DO MÊS FICA ABAIXO DAS ABAS — PR-CONCILIA-FAIXA-MES-CONTA-01, e mora fora de
-            qualquer área que rola (o container é `md:shrink-0`, A21). Sem `!loading`: não pisca a
-            cada recarga.
-            ⚠ MÊS + STATUS + CONTA SÓ NA ABA CONCILIAÇÃO — PR-CONCILIA-FAIXA-SO-CONCILIACAO-01.
-            Importar e Extrato Gerencial têm filtro de conta PRÓPRIO, e a conta global aqui
-            contradizia a do corpo ("Banco Bradesco" em cima, "B.Brasil-Invest.Facil" embaixo). A
-            Conciliação não tem seletor, então é a única aba onde esta conta é a que vale.
-            ⚠ O "↗ Lançamentos" FICA FORA DA CONDIÇÃO: Importar e Extrato Gerencial não têm outra
-            porta para Lançamentos. Ele segue nas cinco abas, na ponta direita.
-            ⚠ E O "Espelho OFX × Sistema" VEIO PARA CÁ — PR-IMPORTAR-CABECALHO-01. Ele morava numa
-            faixa só dele, dentro da aba Importar, logo abaixo desta: duas linhas empilhadas com um
-            botão cada, e o conteúdo da aba começando 34px mais abaixo. Mesma ponta direita, mesma
-            condição de antes (só na aba Importar), uma linha a menos. */}
-        {selectedCard && (vistaExtrato === 'conciliacao' || vistaExtrato === 'importar' || onNavigateToLancamentos) && (
-          <div className="flex items-center gap-2">
-            {vistaExtrato === 'conciliacao' && (<>
-            <span className="text-sm font-bold">{selectedCard.label}/{ano}</span>
-            <span style={{
-              background:cor.bg, color:cor.txt, border:`1px solid ${cor.border}`,
-              fontSize:'10px', fontWeight:500, padding:'2px 8px', borderRadius:'20px',
-            }}>
-              {cardStatus==='realizado'?'✅':cardStatus==='parcial'?'⚠':cardStatus==='nao_conciliado'?'❌':'⏳'} {meta.label}
-            </span>
-            <span className="text-[10px] text-muted-foreground" aria-hidden>·</span>
-            <span className="text-[13px] font-medium text-[#185FA5]">{contaAtual}</span>
             </>)}
             <div className="flex-1" />
             {/* ⚠ O BOTAO "⬆ Importar Extrato" DO CABECALHO SAIU — B-24. Ele era a
@@ -1053,7 +1038,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                 ⚠ O MODAL SEGUE MONTADO no fim deste arquivo e vivo nas telas
                 velhas — nada morre antes da homologacao da rodada 2. */}
             {onNavigateToLancamentos && (
-              <Button size="sm" variant="outline" className="h-6 text-[10px] gap-1 px-2.5"
+              <Button size="sm" variant="outline" className="h-5 text-[10px] gap-1 px-2.5"
                 onClick={() => onNavigateToLancamentos(ano, parseInt(selectedMes))}>
                 ↗ Lançamentos
               </Button>
@@ -1063,7 +1048,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                 e somar o extrato de uma com o sistema de várias não é espelho nenhum. */}
             {vistaExtrato === 'importar' && (
               <Button
-                variant="outline" size="sm" className="h-6 text-[10px]"
+                variant="outline" size="sm" className="h-5 text-[10px]"
                 disabled={selectedConta === '__all__'}
                 title={selectedConta === '__all__' ? 'Escolha uma conta' : 'Comparar o extrato desta conta com o que o sistema pagou nela'}
                 onClick={() => setEspelhoAberto(true)}
@@ -1071,6 +1056,33 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                 Espelho OFX × Sistema
               </Button>
             )}
+          </div>
+        )}
+
+        {/* ⚠ A FAIXA DO MÊS FICA ABAIXO DAS ABAS — PR-CONCILIA-FAIXA-MES-CONTA-01, e mora fora de
+            qualquer área que rola (o container é `md:shrink-0`, A21). Sem `!loading`: não pisca a
+            cada recarga.
+            ⚠ MÊS + STATUS + CONTA SÓ NA ABA CONCILIAÇÃO — PR-CONCILIA-FAIXA-SO-CONCILIACAO-01.
+            Importar e Extrato Gerencial têm filtro de conta PRÓPRIO, e a conta global aqui
+            contradizia a do corpo ("Banco Bradesco" em cima, "B.Brasil-Invest.Facil" embaixo). A
+            Conciliação não tem seletor, então é a única aba onde esta conta é a que vale.
+            ⚠ OS DOIS BOTÕES SUBIRAM PARA A LINHA DAS ABAS — PR-CONCILIACAO-CABECALHO-BOTOES-02.
+            Eles moraram aqui de PR-IMPORTAR-CABECALHO-01 até agora, e a faixa existia por causa
+            deles em abas que não tinham mais nada a dizer: nas outras quatro ela era uma linha em
+            branco com um botão na ponta. Ela agora só nasce quando tem conteúdo PRÓPRIO, que hoje
+            é mês + status + conta — ou seja, só na aba Conciliação. As condições dos botões não
+            mudaram, mudou onde eles são desenhados. */}
+        {selectedCard && vistaExtrato === 'conciliacao' && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-bold">{selectedCard.label}/{ano}</span>
+            <span style={{
+              background:cor.bg, color:cor.txt, border:`1px solid ${cor.border}`,
+              fontSize:'10px', fontWeight:500, padding:'2px 8px', borderRadius:'20px',
+            }}>
+              {cardStatus==='realizado'?'✅':cardStatus==='parcial'?'⚠':cardStatus==='nao_conciliado'?'❌':'⏳'} {meta.label}
+            </span>
+            <span className="text-[10px] text-muted-foreground" aria-hidden>·</span>
+            <span className="text-[13px] font-medium text-[#185FA5]">{contaAtual}</span>
           </div>
         )}
       </div>
