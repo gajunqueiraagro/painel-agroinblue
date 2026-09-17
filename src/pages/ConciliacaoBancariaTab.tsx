@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { PainelExtratoMes } from '@/components/conciliacao/PainelExtratoMes';
 import { SaldoRealDialog } from '@/components/conciliacao/SaldoRealDialog';
-import { EspelhoOfxSistemaModal } from '@/components/financeiro-v2/EspelhoConciliacaoTab';
+import { EspelhoOfxSistemaModal, EspelhoConciliacaoTab } from '@/components/financeiro-v2/EspelhoConciliacaoTab';
 import { ImportacoesDaConta } from '@/components/conciliacao/ImportacoesDaConta';
 import { fimDoMes } from '@/hooks/useExtratoDaConta';
 import { useConciliacaoDoMes, contarBaldes } from '@/hooks/useConciliacaoDoMes';
@@ -418,18 +418,17 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
      simples que existe para isso e nao exige o painel expor um `recarregar`. */
   const [refreshExtrato, setRefreshExtrato] = useState(0);
   const [showPendencias, setShowPendencias] = useState(false);
-  // PR-MOS-1 — 3 abas oficiais: Importar Banco · Enriquecer · Conciliação (só layout/roteamento).
-  /* ⚠ O ESPELHO NÃO É ABA — PR-ESPELHO-02. Chegou como quinta aba no 01 e virou MODAL no
-     mesmo dia, aberto por um botão dentro de "Importar Banco": é lá que o operador está
-     quando quer saber o que o arquivo deixou de fora, e uma aba o tiraria da tela em que
-     ele acabou de trabalhar. "Auditoria fica separada" continua valendo para a Auditoria
-     Bancária, que é leitura de fechamento; a seção saiu de lá e ficou o link. */
-  /* ⚠ QUATRO ABAS — FIN-CONCIL-INTEGRAR-01. "Extrato Gerencial" entrou entre
-     Enriquecer e Conciliação, na ordem do original. Os filtros do CABEÇALHO
-     (ano, mês, conta) valem para todas e se mantêm ao trocar de aba: são estado
-     desta tela, não de cada aba — trocar de aba nunca perde onde o operador
-     estava. */
-  const [vistaExtrato, setVistaExtrato] = useState<'importar' | 'enriquecer' | 'gerencial' | 'conciliacao'>('conciliacao');
+  /* ⚠ O ESPELHO CONTINUA MODAL, E TAMBÉM VIRA ABA — PR-ESPELHO-02 e PR-CONCILIACAO-5-ABAS-01.
+     O modal "Espelho OFX × Sistema", aberto pelo botão em "Importar Banco", segue sendo o FECHO
+     do mês: só realizados, sem candidatos. A aba "Enriquecer · Sistema" monta o MESMO
+     componente do Espelho, só na sub-aba Conferência e com os candidatos (previsto, agendado,
+     programado) casáveis — é onde o extrato atualiza o sistema antes do Excel. "Auditoria fica
+     separada" continua valendo para a Auditoria Bancária.
+     ⚠ CINCO ABAS, NA ORDEM DO FLUXO (decisão do Gabriel, 17/09): Importar Banco → Enriquecer ·
+     Sistema → Enriquecer · Excel → Extrato Gerencial → Conciliação. Os filtros do CABEÇALHO (ano,
+     mês, conta) valem para todas e se mantêm ao trocar de aba: são estado desta tela, não de cada
+     aba — trocar de aba nunca perde onde o operador estava. */
+  const [vistaExtrato, setVistaExtrato] = useState<'importar' | 'enriquecer_sistema' | 'enriquecer' | 'gerencial' | 'conciliacao'>('conciliacao');
   const [espelhoAberto, setEspelhoAberto] = useState(false);
 
   /* Edit saldo */
@@ -966,7 +965,10 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
         </div>
 
         {/* PR-MOS-1 — abas da Conciliação Bancária. A Auditoria Bancária continua separada;
-            o Espelho é modal, não aba (PR-ESPELHO-02) — ver o comentário do `vistaExtrato`. */}
+            o Espelho é modal (o fecho) e também a aba "Enriquecer · Sistema" — ver o comentário
+            do `vistaExtrato`.
+            ⚠ A BARRA NÃO USA O `Segmentado` da casa: são botões à mão, como já eram. Migrar é
+            frente própria. */}
         {!loading && selectedCard && (
           <div className="flex gap-1 items-center">
             <button
@@ -976,10 +978,16 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
               Importar Banco
             </button>
             <button
+              onClick={() => setVistaExtrato('enriquecer_sistema')}
+              className={`px-2.5 py-1 rounded text-[10px] font-bold transition-colors ${vistaExtrato === 'enriquecer_sistema' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+            >
+              Enriquecer · Sistema
+            </button>
+            <button
               onClick={() => setVistaExtrato('enriquecer')}
               className={`px-2.5 py-1 rounded text-[10px] font-bold transition-colors ${vistaExtrato === 'enriquecer' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
             >
-              Enriquecer
+              Enriquecer · Excel
             </button>
             <button
               onClick={() => setVistaExtrato('gerencial')}
@@ -1125,6 +1133,18 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             vencia — regua marcando Mai e extrato mostrando Jun (print de 15:39).
             Passando `periodo`, esta tela e' a dona: os selects nao sao renderizados
             e trocar o mes na regua chega na aba no mesmo render. */}
+        {/* ⚠ ENRIQUECER · SISTEMA — PR-CONCILIACAO-5-ABAS-01. O Espelho na sub-aba Conferência, com os
+            candidatos casáveis: o extrato atualiza o programado/previsto que já está no sistema.
+            ⚠ PAI EM COLUNA FLEX SEM ROLAGEM, no molde do Enriquecer: a mesa tem rolagem própria, e
+            um pai com `overflow-y-auto` daria duas barras. Sem conta, o componente pede a escolha. */}
+        {!loading && selectedCard && vistaExtrato === 'enriquecer_sistema' && (
+          <div className="md:flex md:min-h-0 md:flex-1 md:flex-col md:overflow-hidden">
+            <EspelhoConciliacaoTab clienteId={clienteId ?? null}
+              contaId={selectedConta === '__all__' ? null : selectedConta}
+              ano={String(ano)} mes={selectedMes} soConferencia mostrarCandidatos />
+          </div>
+        )}
+
         {!loading && selectedCard && vistaExtrato === 'gerencial' && (
           <div className="md:flex-1 md:min-h-0 md:overflow-y-auto">
             <ExtratoGerencialTab periodo={{ ano: Number(ano), mes: Number(selectedMes) }} />

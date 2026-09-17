@@ -784,9 +784,11 @@ function comPrazo<T>(promessa: PromiseLike<T>, ms: number): Promise<T> {
   ]);
 }
 
-function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos, onAbrir, onMudou }: {
+function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos, onAbrir, onMudou, mostrarCandidatos = true }: {
   data: EspelhadosReais; anoMes: string; nomeConta?: string; clienteId: string; contaId: string | null;
   internos: ReadonlySet<string>; onAbrir?: (id: string) => void; onMudou: () => void;
+  /** Sem candidatos, a mesa é só o fecho dos realizados (o modal do Espelho). */
+  mostrarCandidatos?: boolean;
 }) {
   const dias = useMemo(() => montarMesa(data, internos), [data, internos]);
   const [sel, setSel] = useState<EstadoSelecao>({ extratos: new Set(), lancamentos: new Set() });
@@ -798,7 +800,11 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
      desconsiderar seria uma porta sem volta dentro desta tela — e uma decisão que não se
      desfaz onde foi tomada é uma decisão que o operador evita tomar. */
   const [verIgnorados, setVerIgnorados] = useState(false);
-  const candidatos = useMemo(() => data.sistema_candidatos ?? [], [data]);
+  /* ⚠ UM LUGAR SÓ DECIDE — PR-CONCILIACAO-5-ABAS-01. Com a lista vazia somem de uma vez a
+     faixa, as linhas e os candidatos do `sisIndex` (nada de marcar ou arrastar candidato). */
+  const candidatos = useMemo(
+    () => (mostrarCandidatos ? (data.sistema_candidatos ?? []) : []),
+    [data, mostrarCandidatos]);
   const [ignorarId, setIgnorarId] = useState<string | null>(null);
   const [revertendoId, setRevertendoId] = useState<string | null>(null);
   const { data: ignorados, refetch: refetchIgnorados } = useQuery({
@@ -1374,11 +1380,21 @@ interface Props {
   contaId: string | null;
   ano: string;
   mes: string;
+  /**
+   * Candidatos do sistema (previsto/agendado/programado) na mesa — PR-CONCILIACAO-5-ABAS-01.
+   * A aba "Enriquecer · Sistema" os mostra para casar; o modal do Espelho é o FECHO e passa
+   * `false`: só realizados.
+   */
+  mostrarCandidatos?: boolean;
+  /** Só a Conferência, sem a fileira das 4 sub-abas — a montagem como aba da Conciliação. */
+  soConferencia?: boolean;
 }
 
-export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes }: Props) {
+export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes, mostrarCandidatos = true, soConferencia = false }: Props) {
   const anoMes = `${ano}-${mes}`;
-  const [aba, setAba] = useState<'conferencia' | 'ofx' | 'sistema' | 'evolucao'>('conferencia');
+  const [abaEscolhida, setAba] = useState<'conferencia' | 'ofx' | 'sistema' | 'evolucao'>('conferencia');
+  /* Com `soConferencia` a sub-aba é fixa: a fileira some e nada a troca. */
+  const aba = soConferencia ? 'conferencia' : abaEscolhida;
   /* "abrir" é a MESMA leitura que o Extrato Gerencial usa — a aba é dona do próprio diálogo,
      em vez de exigir um handler de uma página que não tem nenhum. */
   const [lancLeituraId, setLancLeituraId] = useState<string | null>(null);
@@ -1487,6 +1503,7 @@ export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes }: Props) {
             Math.abs(difEntradas) <= 0.01 ? 'text-muted-foreground' : 'text-amber-600')}>{fmtBRL(difEntradas)}</span>
         </div>
 
+        {!soConferencia && (
         <div className="flex flex-wrap gap-1">
           {abas.map((a) => (
             <button key={a.key} type="button" onClick={() => setAba(a.key)}
@@ -1496,12 +1513,14 @@ export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes }: Props) {
             </button>
           ))}
         </div>
+        )}
       </div>
 
       {aba === 'conferencia' && (
         <AbaConferencia data={data} anoMes={anoMes} nomeConta={data.escopo.nome_conta ?? undefined}
           clienteId={clienteId} contaId={contaId} internos={internas.lancamentosInternos}
-          onAbrir={onAbrirLancamento} onMudou={() => { void refetch(); }} />
+          onAbrir={onAbrirLancamento} onMudou={() => { void refetch(); }}
+          mostrarCandidatos={mostrarCandidatos} />
       )}
       {aba === 'ofx' && <AbaOfxReal ofx={data.ofx_completo} inicial={inicial} internas={internas} />}
       {aba === 'sistema' && <AbaSistemaReal sistema={data.sistema_completo} inicial={inicial} onAbrir={onAbrirLancamento} />}
@@ -1546,8 +1565,10 @@ export function EspelhoOfxSistemaModal({
             </button>
           </div>
         </div>
+        {/* O modal é o FECHO: só realizados, sem candidatos (PR-CONCILIACAO-5-ABAS-01). */}
         {open && (
-          <EspelhoConciliacaoTab clienteId={clienteId} contaId={contaId} ano={ano} mes={mes} />
+          <EspelhoConciliacaoTab clienteId={clienteId} contaId={contaId} ano={ano} mes={mes}
+            mostrarCandidatos={false} />
         )}
       </DialogContent>
     </Dialog>
