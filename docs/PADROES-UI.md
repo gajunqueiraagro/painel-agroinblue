@@ -403,8 +403,8 @@ Tarciso Ferreira Honorio · 29/07/2024
   cá** — nunca "—" em cima com a informação real embaixo (mesma regra do A17: a
   identidade nunca fica no corpo menor).
 - **linha 2 — contexto**: 10px, cinza, partes separadas por ` · `. É o que confirma a
-  escolha, não o que a motiva. **10px é o piso**: nada que o operador precise ler desce
-  abaixo disso (ver A21).
+  escolha, não o que a motiva. **Piso: 9,5px.** Nada abaixo disso em texto que o operador
+  lê. Se algo já está em 9,5px, não desce mais — reportar em vez de encolher (ver A21).
 - **à direita**: valor (12px, peso 500, `tabular-nums`), estado como pílula pequena
   (10px) e as ações como **ícones** com `title` e `aria-label`.
 - **altura**: `px-3.5 py-[7px]` e `leading-[1.35]` — ~34px por linha.
@@ -420,7 +420,7 @@ contexto                      10px, cinza
 O salto entre topo e linha tem de ser **visível**. Números do topo do mesmo tamanho da
 identidade da linha invertem a leitura: o olho encontra primeiro a linha e depois procura
 o total, quando é o total que dá sentido à lista. Se o salto não bastar, **sobe o topo** —
-nunca desce a linha, que já está no piso de 10px.
+nunca desce a linha abaixo do piso de 9,5px.
 - separação por `divide-y` num container `rounded-md border`; sem zebra e sem
   `overflow-x`.
 
@@ -576,9 +576,11 @@ fixa por coluna cortaria o conteúdo — ali o corpo rola inteiro, como sempre r
 
 **A barra fica na área da lista, nunca dentro de uma célula ou linha.**
 
-**Piso de leitura: 10px.** A densidade é boa até aqui e nenhum texto que o operador
+**Piso de leitura: 9,5px.** A densidade é boa até aqui e nenhum texto que o operador
 precise ler desce abaixo disso. Pílulas de estado, faixas de data e rótulos de bloco
-técnico já estão em 10px — eles **não** descem para 9px para "ganhar" espaço.
+técnico já estão em 10px — eles **não** descem abaixo de 9,5px para "ganhar" espaço.
+(O piso era 10px até 2026-09-17; desceu para 9,5px por decisão do Gabriel, na tabela de
+saldos da Conciliação.)
 
 ---
 
@@ -683,8 +685,8 @@ erro entra.
 - **`whitespace-nowrap` + `overflow-hidden` + `min-w-0`** em todo campo e célula que
   mostra número. O `min-w-0` é o que permite ao container encolher: sem ele, o flex se
   recusa a apertar e o número transborda.
-- Se não couber: **o campo alarga** ou **a fonte cai até 10px** — nunca duas linhas.
-  Abaixo de 10px não se desce (A21), e aí o certo é reportar que não coube.
+- Se não couber: **o campo alarga** ou **a fonte cai até 9,5px** — nunca duas linhas.
+  Abaixo de 9,5px não se desce (A21), e aí o certo é reportar que não coube.
 - Vale para o sistema inteiro, não só para a tela que motivou a regra.
 
 **Onde nasceu:** o modal de negociar lote do abate (ABATE-UX-01g). Com um campo estreito
@@ -711,7 +713,7 @@ escolha por componente.
 | vazio | `text-[11px] text-zinc-400`, `py-3` |
 | altura máxima da lista | `max-h-56`, e a rolagem só na lista |
 
-- **Piso 10px.** Nada em `text-sm`/`text-base` dentro de lista suspensa — 14px numa lista
+- **Piso 9,5px.** Nada em `text-sm`/`text-base` dentro de lista suspensa — 14px numa lista
   de itens de 26px é o tamanho de um parágrafo dentro de um menu.
 - **O item nunca quebra em duas linhas.** `whitespace-nowrap overflow-hidden
   text-ellipsis` no item e o texto completo no `title`: sem o `title`, truncar esconde a
@@ -770,7 +772,7 @@ parcela.
 ## A25 — Número de nota fiscal sempre em 000.000.000
 
 NF se exibe **sempre** no formato `000.000.000`: só dígitos, zeros à esquerda até nove, ponto a
-cada três. Nunca crua, nunca truncada. A fonte pode cair ao piso de 10px para caber; **nunca
+cada três. Nunca crua, nunca truncada. A fonte pode cair ao piso de 9,5px para caber; **nunca
 abaixo disso** — se ainda não couber, alarga-se a coluna.
 
 **Por quê.** O `nNF` da NF-e tem nove dígitos por definição do leiaute, e é assim que a nota se lê

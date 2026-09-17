@@ -494,7 +494,8 @@ NAO E' ITEM DE BRIEFING, E' GATE VISUAL: antes de reportar, conferir no
 preview que o cabecalho nao sai da tela ao rolar.
 - Detalhes do A18/A21/A22 em docs/PADROES-UI.md; aqui fica o que nao se
   negocia por PR.
-- ⚠ PISO DE 10px, COM UMA EXCECAO E SO' UMA: as FILHAS DE GRUPO da Grade do DRE
+- ⚠ PISO DE 9,5px (era 10px ate' 2026-09-17; desceu por decisao do Gabriel, na tabela de
+  saldos da Conciliacao), COM UMA EXCECAO E SO' UMA: as FILHAS DE GRUPO da Grade do DRE
   (centros de custo dentro de Custeio, Pos-colheita, Custo fixo e Investimento)
   vao a 9px com altura 16 — decisao do Gabriel em 16/09, mock B do
   PR-DRE-LAVOURA-10. A regua inteira mora em `REGUA_LINHA`
@@ -507,7 +508,7 @@ preview que o cabecalho nao sai da tela ao rolar.
   que a grade uniforme de 18px de antes. Quem mexer nelas mede a grade inteira,
   nao so' a linha.
   ⚠ ELA E' EXCECAO DECLARADA, NAO PRECEDENTE. Nenhum outro texto do sistema desce
-  de 10px, e 9px fora da Grade do DRE reprova o PR. A razao aqui e' hierarquia:
+  de 9,5px, e 9px fora da Grade do DRE reprova o PR. A razao aqui e' hierarquia:
   com tudo em 11px a cascata virava dezoito linhas iguais e o olho tinha de LER
   para achar onde a conta fecha.
 - ⚠ SELECAO SE MARCA COM NAVY, NUNCA COM SUBLINHADO OU PILULA CLARA (regra

@@ -1403,7 +1403,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                       className="cursor-pointer transition-colors bg-accent"
                       onClick={() => setSelectedConta('__all__')}
                     >
-                      <td className="py-2 px-2 font-medium text-[13px] text-blue-900 shadow-[inset_0_-1px_0_hsl(var(--border))]">Total — todas as contas</td>
+                      <td className="py-2 px-2 font-medium text-[12px] text-blue-900 shadow-[inset_0_-1px_0_hsl(var(--border))]">Total — todas as contas</td>
                       <td className={`py-2 px-1 text-right font-bold text-[10px] tabular-nums whitespace-nowrap text-blue-900 shadow-[inset_0_-1px_0_hsl(var(--border))] ${totalSaldos.sis<0?'text-destructive':''}`}>{formatMoeda(totalSaldos.sis)}</td>
                       <td className="py-2 px-1 text-right font-bold text-[10px] tabular-nums whitespace-nowrap text-blue-900 shadow-[inset_0_-1px_0_hsl(var(--border))]">{totalSaldos.ext===null?'—':formatMoeda(totalSaldos.ext)}</td>
                       <td className={`py-2 px-1 text-right font-bold text-[10px] tabular-nums whitespace-nowrap shadow-[inset_0_-1px_0_hsl(var(--border))] ${totalSaldos.ext===null?'text-muted-foreground':Math.abs(totalSaldos.dif)<=0.01?'text-success':'text-destructive'}`}>
@@ -1428,7 +1428,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                   {gruposSaldos.map(g => (
                     <tbody key={g.chave}>
                       <tr>
-                        <td style={{top:`${alturaCabSaldos + alturaThead}px`}} className="px-2 py-1 text-[11px] font-semibold text-muted-foreground sticky z-[8] bg-card bg-[linear-gradient(hsl(var(--muted-foreground)/0.15),hsl(var(--muted-foreground)/0.15))] shadow-[inset_0_1px_0_hsl(var(--border))]">{g.rotulo}</td>
+                        <td style={{top:`${alturaCabSaldos + alturaThead}px`}} className="px-2 py-1 text-[12px] font-semibold text-muted-foreground sticky z-[8] bg-card bg-[linear-gradient(hsl(var(--muted-foreground)/0.15),hsl(var(--muted-foreground)/0.15))] shadow-[inset_0_1px_0_hsl(var(--border))]">{g.rotulo}</td>
                         <td style={{top:`${alturaCabSaldos + alturaThead}px`}} className={`py-1 px-1 text-right text-[10px] font-semibold tabular-nums whitespace-nowrap sticky z-[8] bg-card bg-[linear-gradient(hsl(var(--muted-foreground)/0.15),hsl(var(--muted-foreground)/0.15))] shadow-[inset_0_1px_0_hsl(var(--border))] ${g.subtotal.sis<0?'text-destructive':''}`}>{formatMoeda(g.subtotal.sis)}</td>
                         <td style={{top:`${alturaCabSaldos + alturaThead}px`}} className="py-1 px-1 text-right text-[10px] font-semibold tabular-nums whitespace-nowrap sticky z-[8] bg-card bg-[linear-gradient(hsl(var(--muted-foreground)/0.15),hsl(var(--muted-foreground)/0.15))] shadow-[inset_0_1px_0_hsl(var(--border))]">{g.subtotal.ext===null ? '—' : formatMoeda(g.subtotal.ext)}</td>
                         <td style={{top:`${alturaCabSaldos + alturaThead}px`}} className={`py-1 px-1 text-right text-[10px] font-semibold tabular-nums whitespace-nowrap sticky z-[8] bg-card bg-[linear-gradient(hsl(var(--muted-foreground)/0.15),hsl(var(--muted-foreground)/0.15))] shadow-[inset_0_1px_0_hsl(var(--border))] ${g.subtotal.ext===null?'text-muted-foreground':Math.abs(g.subtotal.dif)<=0.01?'text-success':'text-destructive'}`}>
@@ -1713,17 +1713,17 @@ function SaldoContaRow({data, isActive, isDimmed, onClick, onEdit, canEdit, show
       style={{opacity:isDimmed?0.3:1, background:isActive?'#E3F2FD':undefined}}
       onClick={onClick}
     >
-      <td className="py-1 px-2 overflow-hidden">
+      <td className="py-0.5 px-2 overflow-hidden">
         <span style={{width:7,height:7,borderRadius:'50%',background:dotColor,display:'inline-block',marginRight:4,verticalAlign:'middle',flexShrink:0}} />
-        <span className="text-[10px]" style={{verticalAlign:'middle'}}>{getContaLabel(conta)}</span>
+        <span className="text-[11px]" style={{verticalAlign:'middle'}}>{getContaLabel(conta)}</span>
         {showSaldoAlert && (
           <span className="ml-1 text-[8px] font-semibold text-warning border border-amber-300 bg-warning/10 rounded px-0.5" title="Saldo inicial não definido">⚠</span>
         )}
       </td>
-      <td className={`py-0.5 px-1 text-right text-[10px] tabular-nums whitespace-nowrap ${sis<0?'text-destructive':''}`}>{formatMoeda(sis)}</td>
-      <td className="py-0.5 px-1 text-right text-[10px] tabular-nums whitespace-nowrap">{ext===null?'—':formatMoeda(ext)}</td>
+      <td className={`py-0.5 px-1 text-right text-[9.5px] tabular-nums whitespace-nowrap ${sis<0?'text-destructive':''}`}>{formatMoeda(sis)}</td>
+      <td className="py-0.5 px-1 text-right text-[9.5px] tabular-nums whitespace-nowrap">{ext===null?'—':formatMoeda(ext)}</td>
       {/* Sem extrato é "—" (dado ausente); com extrato e |dif| ≤ 0,01 é "confere". */}
-      <td className={`py-0.5 px-1 text-right text-[10px] tabular-nums whitespace-nowrap ${ext===null?'font-medium text-muted-foreground':Math.abs(dif)<=0.01?'font-medium text-success':'font-semibold text-destructive'}`}>
+      <td className={`py-0.5 px-1 text-right text-[9.5px] tabular-nums whitespace-nowrap ${ext===null?'font-medium text-muted-foreground':Math.abs(dif)<=0.01?'font-medium text-success':'font-semibold text-destructive'}`}>
         {ext===null ? '—' : Math.abs(dif)<=0.01 ? 'confere' : formatMoeda(dif)}
       </td>
       <td className="py-0.5 px-1 text-center">
