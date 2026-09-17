@@ -1200,26 +1200,26 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
               {/* Transação — footer do card como badges */}
               <div className="px-2 pt-2 pb-2 border-t mt-1 flex items-center gap-1 flex-wrap">
                 <button onClick={()=>{setFiltroModal('todos');setShowLancModal(true);}}
-                  className="px-2 py-0.5 rounded text-[9px] font-bold bg-blue-100 text-blue-800 hover:bg-blue-200 cursor-pointer">
+                  className="px-2 py-0.5 rounded text-[9px] font-bold bg-primary/10 text-primary hover:bg-primary/20 cursor-pointer">
                   Todos ({selectedCard.lancamentos.length})
                 </button>
                 <button onClick={()=>{setFiltroModal('entradas');setShowLancModal(true);}}
-                  className="px-2 py-0.5 rounded text-[9px] font-bold bg-success/15 text-success hover:bg-success/25 cursor-pointer">
+                  className="px-2 py-0.5 rounded text-[9px] font-bold bg-success/10 text-success hover:bg-success/20 cursor-pointer">
                   Entradas ({entradas.length})
                 </button>
                 <button onClick={()=>{setFiltroModal('saidas');setShowLancModal(true);}}
-                  className="px-2 py-0.5 rounded text-[9px] font-bold bg-destructive/15 text-destructive hover:bg-destructive/25 cursor-pointer">
+                  className="px-2 py-0.5 rounded text-[9px] font-bold bg-destructive/10 text-destructive hover:bg-destructive/20 cursor-pointer">
                   Saídas ({saidas.length})
                 </button>
                 {transfEntrada.length > 0 && (
                   <button onClick={()=>{setFiltroModal('transf_entrada');setShowLancModal(true);}}
-                    className="px-2 py-0.5 rounded text-[9px] font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 cursor-pointer border border-blue-200">
+                    className="px-2 py-0.5 rounded text-[9px] font-bold border border-primary/20 bg-primary/5 text-primary hover:bg-primary/10 cursor-pointer">
                     Transf. Ent. ({transfEntrada.length})
                   </button>
                 )}
                 {transfSaida.length > 0 && (
                   <button onClick={()=>{setFiltroModal('transf_saida');setShowLancModal(true);}}
-                    className="px-2 py-0.5 rounded text-[9px] font-bold bg-orange-50 text-orange-700 hover:bg-orange-100 cursor-pointer border border-orange-200">
+                    className="px-2 py-0.5 rounded text-[9px] font-bold border border-warning/30 bg-warning/10 text-warning-foreground hover:bg-warning/20 cursor-pointer">
                     Transf. Saída ({transfSaida.length})
                   </button>
                 )}
