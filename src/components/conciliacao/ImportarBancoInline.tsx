@@ -141,7 +141,7 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
           id: c.id, nome_conta: c.label, nome_exibicao: null, tipo_conta: c.tipo_conta ?? null,
         }))}
         placeholder="Conta"
-        className="h-8 text-xs"
+        className="h-7 text-xs"
       />
     </div>
   );
@@ -163,10 +163,16 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
       {/* ⚠ A LINHA DO SELETOR SÓ SAI QUANDO ALGO TOMA O LUGAR DELA: a prévia do
           extrato, ou o fluxo do Excel/custeio. Escondê-la por `tipo` sozinho
           deixaria a tela vazia entre escolher o OFX e a prévia chegar. */}
+      {/* ⚠ LINHA, NÃO CARD — PR-IMPORTAR-CORPO-01. O card custava 46px (32 do mais alto + 12 de
+          padding + 2 de borda) para dizer "escolha a conta e o arquivo", e essa altura saía da
+          tabela de movimentos, que é a tela. A moldura não informava nada: o que está aqui já se
+          entende sem borda em volta. Sem card e com os controles em 28px, a linha cai para 28px.
+          ⚠ E OS 28px NÃO SÃO ESCOLHA SOLTA: é a altura do `h-7` do repo, a mesma do botão de
+          voltar do cabeçalho e da régua de meses. */}
       {!preview && tipo !== 'excel' && tipo !== 'custeio-txt' && (
-        <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5">
+        <div className="flex items-center gap-2">
           {seletor}
-          <Button type="button" size="sm" className="h-8 gap-1.5 text-xs"
+          <Button type="button" size="sm" className="h-7 gap-1.5 text-xs"
             disabled={!contaId || loading}
             title={contaId ? undefined : 'Escolha a conta primeiro'}
             onClick={() => input.current?.click()}>

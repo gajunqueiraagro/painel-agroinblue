@@ -5,7 +5,6 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { PainelExtratoMes } from '@/components/conciliacao/PainelExtratoMes';
 import { SaldoRealDialog } from '@/components/conciliacao/SaldoRealDialog';
 import { EspelhoOfxSistemaModal, EspelhoConciliacaoTab } from '@/components/financeiro-v2/EspelhoConciliacaoTab';
-import { ImportacoesDaConta } from '@/components/conciliacao/ImportacoesDaConta';
 import { fimDoMes } from '@/hooks/useExtratoDaConta';
 import { useConciliacaoDoMes, contarBaldes } from '@/hooks/useConciliacaoDoMes';
 import { ImportarBancoInline } from '@/components/conciliacao/ImportarBancoInline';
@@ -1128,18 +1127,16 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
               onImportado={() => { setRefreshExtrato(n => n + 1); queryClient.invalidateQueries({ queryKey: ['extrato-bancario-v2'] }); }}
             />
 
-            {/* ⚠ ABAIXO DO IMPORTADOR, e não noutra aba: desfazer um arquivo é a operação
-                irmã de importá-lo, e quem acabou de subir o OFX errado está exatamente aqui. */}
-            <ImportacoesDaConta
-              clienteId={clienteId ?? null}
-              contaId={selectedConta !== '__all__' ? selectedConta : null}
-              onDesfeito={() => {
-                setRefreshExtrato(n => n + 1);
-                queryClient.invalidateQueries({ queryKey: ['extrato-bancario-v2'] });
-                queryClient.invalidateQueries({ queryKey: ['espelho-conciliacao'] });
-              }}
-            />
-
+            {/* ⚠ A TABELA "Importações desta conta" SAIU DAQUI — PR-IMPORTAR-CORPO-01. Ela
+                respondia à mesma pergunta do "Ver importações (N)" do painel abaixo, e o modal
+                responde melhor: ele filtra pelo MÊS que os movimentos cobrem e esconde as
+                canceladas. A tabela listava a conta inteira, então agosto e setembro apareciam
+                juntos na tela de agosto.
+                ⚠ E COM ELA MORRE O SEGUNDO "DESFAZER", que é o motivo real de ela sair: havia
+                duas telas desfazendo importação, com listas diferentes, e desfazer numa não
+                atualizava a outra. Agora o desfazer tem UMA fonte — o modal.
+                ⚠ O COMPONENTE `ImportacoesDaConta` CONTINUA EXISTINDO: só deixou de ser montado
+                aqui. Quem o quiser de volta monta; quem for apagá-lo abre frente própria. */}
             <PainelExtratoMes
               key={refreshExtrato}
               clienteId={clienteAtual?.id ?? null}
