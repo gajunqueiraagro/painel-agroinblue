@@ -323,7 +323,13 @@ export function MesaCamposTabela({
                     onEditar={onEditar} administrativo={contaEhAdministrativa} />
                 ) : editavel && campo === 'Banco' && contas ? (
                   <ResultadoContaEditor value={row.edicao.contaBancariaId}
-                    valorAtual={row.edicao.contaBancariaIdAtual} contas={contas} onEditar={onEditar} />
+                    valorAtual={row.edicao.contaBancariaIdAtual} contas={contas}
+                    /* ⚠ O TIPO EFETIVO DECIDE A COLUNA DE GRAVAÇÃO (§2a) — é o mesmo `tipoOperacao`
+                       que o `PlanoSubcentroSelect` já usa para filtrar o plano. */
+                    tipoEfetivo={row.edicao.tipoOperacao}
+                    sugeridaId={row.edicao.contaSugeridaId}
+                    textoNaoReconhecido={row.edicao.contaTextoNaoReconhecido}
+                    onEditar={onEditar} />
                 ) : editavel && campo === 'Tipo' ? (
                   <ResultadoTipoEditor value={row.edicao.tipoOperacaoProposto}
                     valorAtual={row.edicao.tipoOperacaoAtual ?? row.edicao.tipoOperacaoExcel}

@@ -27,6 +27,7 @@ import { CELULA_EDITAVEL, CELULA_EDITAVEL_DATA, ITEM_DROPDOWN } from './medidasM
 import { TIPOS_OPERACAO_RESULTADO, ehTipoTransferencia } from '@/v2/lib/mesa/transferenciaPlano';
 import { AVISO_ADMIN_SEM_SAFRA, AVISO_ADMIN_SAFRA_SAI } from '@/lib/financeiro/escopoDoSubcentro';
 import { cn } from '@/lib/utils';
+import { patchDaConta } from '@/v2/lib/mesa/contaDaLinha';
 
 type Editar = (patch: Record<string, unknown>) => Promise<void>;
 
@@ -121,28 +122,65 @@ export function ResultadoSafraEditor({ value, valorAtual, safras, sugeridaId, on
   );
 }
 
-export function ResultadoContaEditor({ value, valorAtual, contas, onEditar }: {
+export function ResultadoContaEditor({ value, valorAtual, contas, tipoEfetivo, sugeridaId, textoNaoReconhecido, onEditar }: {
   value: string | null;
   valorAtual: string | null;
   contas: ContaSelecionavel[];
+  /**
+   * O tipo EFETIVO da linha — PR-MESA-CONTA-ENTRADA-01 §2a.
+   *
+   * ⚠ ELE DECIDE EM QUAL COLUNA A CONTA SE GRAVA, e sem ele este editor escrevia sempre em
+   * `conta_bancaria_id`. Numa ENTRADA a conta mora em `conta_destino_id` — 1.392 entradas deste
+   * cliente têm `conta_bancaria_id` NULO —, então a escolha do operador ia para a coluna que
+   * ninguém lê e a que todos leem ficava como estava.
+   */
+  tipoEfetivo?: string | null;
+  /** A conta que o Excel propõe, quando uma das colunas resolve (§2b). */
+  sugeridaId?: string | null;
+  /** O texto de conta que o Excel trouxe e ninguém reconheceu (§2c). */
+  textoNaoReconhecido?: string | null;
   onEditar: Editar;
 }) {
-  const efetivo = value ?? valorAtual ?? '';
+  const efetivo = value ?? valorAtual ?? sugeridaId ?? '';
+  const ehSugestao = !value && !valorAtual && !!sugeridaId;
+
+  /**
+   * ⚠ "NÃO RECONHECIDA" NO LUGAR DO "—" — §2c, e é o aviso que faltava. O vazio silencioso foi o
+   * que escondeu o defeito: a coluna Resultado dizia "—", o operador salvava por cima e a conta
+   * ia embora sem nada na tela sugerindo que havia algo a conferir. Com o texto à vista ele lê que
+   * a planilha disse algo que o cadastro não conhece.
+   * ⚠ E ELE NÃO É UM CAMPO DESABILITADO: o `Select` continua ali, porque escolher a conta à mão é
+   * exatamente o que se espera que ele faça em seguida.
+   */
   return (
-    <ContaBancariaSelect
-      value={efetivo}
-      contas={contas}
-      placeholder="—"
-      /* ⚠ `CELULA_EDITAVEL_WRAPPER` NUNCA APLICOU — 133e adendo. Ele é um seletor de
-         DESCENDENTE (`[&>button]`), e `ContaBancariaSelect` entrega a `className` ao próprio
-         gatilho: a regra procurava um botão filho do botão. Era por isso que a Conta
-         bancária saltava na linha de 22px enquanto os outros campos obedeciam. */
-      size="compact"
-      onValueChange={(id) => {
-        if (id === efetivo) return;
-        void onEditar({ conta_bancaria_id: id || null });
-      }}
-    />
+    <div className="min-w-0">
+      <ContaBancariaSelect
+        value={efetivo}
+        contas={contas}
+        placeholder="—"
+        /* ⚠ `CELULA_EDITAVEL_WRAPPER` NUNCA APLICOU — 133e adendo. Ele é um seletor de
+           DESCENDENTE (`[&>button]`), e `ContaBancariaSelect` entrega a `className` ao próprio
+           gatilho: a regra procurava um botão filho do botão. Era por isso que a Conta
+           bancária saltava na linha de 22px enquanto os outros campos obedeciam. */
+        size="compact"
+        className={cn((ehSugestao || !!textoNaoReconhecido) && 'border-amber-500 bg-amber-50')}
+        onValueChange={(id) => {
+          if (id === efetivo) return;
+          /* ⚠ A REGRA MORA EM `patchDaConta`, chamada — nunca repetida aqui. E vazio NÃO escreve
+             chave nenhuma: proposta vazia é silêncio, nunca "apague o que está lá". Era
+             `conta_bancaria_id: id || null`, e esse `null` apagou vinte contas conciliadas. */
+          const patch = patchDaConta(tipoEfetivo, id);
+          if (Object.keys(patch).length === 0) return;
+          void onEditar(patch);
+        }}
+      />
+      {!!textoNaoReconhecido && (
+        <div className="truncate text-[9px] leading-tight text-amber-700"
+          title={`A planilha diz "${textoNaoReconhecido}", e nenhuma conta do cadastro casa com esse texto.`}>
+          não reconhecida: {textoNaoReconhecido}
+        </div>
+      )}
+    </div>
   );
 }
 

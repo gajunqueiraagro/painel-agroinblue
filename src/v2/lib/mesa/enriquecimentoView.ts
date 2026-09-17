@@ -15,6 +15,7 @@ import type {
 } from '@/v2/components/mesa/enriquecimento/types';
 import { fmtData, fmtBRL, fmtTexto, mesAbrev, dataHoraCurta, STATUS_META } from '@/v2/components/mesa/enriquecimento/fmt';
 import { resolverContaPorTexto, type ContaResolvivel } from '@/v2/lib/mesa/resolverConta';
+import { contaDaLinha } from '@/v2/lib/mesa/contaDaLinha';
 /* ⚠ AS DUAS REGRAS VÊM DE ONDE JÁ MORAM, chamadas — nunca copiadas. `safraSugerida` é a mesma
    função do `LancamentoV2Dialog` (e do import de custeio), e `escopoDoSubcentro` é a mesma que
    aquele modal usa para decidir administrativo. Uma segunda cópia aqui envelheceria calada: os
@@ -457,6 +458,15 @@ export function toRowVM(
     return { iso: row.excel_data ?? row.lanc_data_competencia ?? null, ehCompetencia: true };
   })();
 
+  /**
+   * QUAL DAS DUAS COLUNAS DO EXCEL É A CONTA — PR-MESA-CONTA-ENTRADA-01 §2b.
+   *
+   * ⚠ UMA CHAMADA, UM LUGAR. A regra mora em `contaDaLinha` e é a mesma que o teste exercita;
+   * espalhá-la faria a conta sugerida e o aviso de "não reconhecida" discordarem sobre o mesmo
+   * texto.
+   */
+  const contaDoExcel = contaDaLinha(row.excel_conta_origem, row.excel_conta_destino, contas);
+
   /* ════════ AS DUAS SUGESTÕES — PR-MESA-SUGESTOES-01 ════════ */
 
   /**
@@ -555,13 +565,28 @@ export function toRowVM(
        planilha passa pelo resolvedor soberano, que consulta os apelidos do cadastro de
        contas antes de tentar nome e agência+número. Sem apelido e sem casamento, `null`:
        não saber a qual conta o texto se refere é ausência, e ausência não vira proposta. */
-    /* ⚠ A DESCRIÇÃO ENTRA COMO SEGUNDA PORTA (§2), depois da coluna de destino — nunca antes: a
-       planilha, quando diz a conta, DIZ; o texto do extrato apenas sugere. Ordem invertida faria
-       "Aplicação BB Rende Fácil" ganhar de uma coluna preenchida à mão. */
-    contaDestinoSugeridaId: resolverContaPorTexto(row.excel_conta_destino, contas)?.id
+    /**
+     * ⚠ O DESTINO DA TRANSFERÊNCIA — PR-MESA-CONTA-ENTRADA-01 §2b.
+     *
+     * ⚠ SÓ QUANDO AS DUAS COLUNAS RESOLVEM é que há destino a propor: é isso que caracteriza uma
+     * transferência. Antes, `excel_conta_destino` era lido sozinho, e "terceiros | . ." — que não
+     * é conta de ninguém — entrava como se fosse. Quem decide é o resolvedor, não a posição.
+     * ⚠ A DESCRIÇÃO CONTINUA COMO SEGUNDA PORTA (MESA-SUGESTOES-01), depois das colunas — nunca
+     * antes: a planilha, quando diz a conta, DIZ; o texto do extrato apenas sugere.
+     */
+    contaDestinoSugeridaId: contaDoExcel.destinoId
       ?? resolverContaPorTexto(row.lanc_descricao, contas)?.id
       ?? resolverContaPorTexto(row.excel_produto, contas)?.id
       ?? null,
+    /**
+     * A CONTA DA LINHA, quando UMA das colunas resolve — §2b.
+     *
+     * ⚠ ELA É A RESPOSTA PARA ENTRADA E SAÍDA NAS DUAS, sem a tela precisar saber qual é qual: a
+     * coluna que resolve para uma conta do cliente é a conta; a outra é o terceiro.
+     */
+    contaSugeridaId: contaDoExcel.contaId,
+    /** O texto que o Excel trouxe e ninguém reconheceu — §2c. */
+    contaTextoNaoReconhecido: contaDoExcel.textoNaoReconhecido,
     safraSugeridaId,
     tipoTransferenciaSugerido,
   };

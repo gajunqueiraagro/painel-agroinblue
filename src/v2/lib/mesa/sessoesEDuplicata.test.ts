@@ -162,6 +162,8 @@ describe('diferencasDoResultado', () => {
     contaDestinoId: null, contaDestinoIdAtual: null, contaDestinoSugeridaId: null,
     /* PR-MESA-SUGESTOES-01 — as duas propostas de regra; este fixture não as exercita. */
     safraSugeridaId: null, tipoTransferenciaSugerido: false,
+    /* PR-MESA-CONTA-ENTRADA-01 — a conta vinda do Excel; este fixture não a exercita. */
+    contaSugeridaId: null, contaTextoNaoReconhecido: null,
   };
 
   it('safra 25/26 -> 26/27 É diferença (o caso que a view não via)', () => {

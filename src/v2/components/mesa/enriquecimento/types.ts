@@ -141,6 +141,22 @@ export interface EnriqEdicao {
    */
   contaDestinoSugeridaId: string | null;
 
+  /* ── PR-MESA-CONTA-ENTRADA-01: qual coluna do Excel é a conta, e o que fazer quando nenhuma é ──
+   *
+   * ⚠ `contaSugeridaId` É A CONTA DA LINHA quando UMA das colunas resolve — serve entrada e saída
+   * sem a tela precisar distinguir. Numa transferência ela é nula de propósito: ali não há "a
+   * conta", há duas, e elas moram em `contaDestinoSugeridaId` e no campo de origem.
+   */
+  contaSugeridaId: string | null;
+  /**
+   * O texto de conta que o Excel trouxe e ninguém reconheceu.
+   *
+   * ⚠ ELE EXISTE PORQUE O VAZIO SILENCIOSO ESCONDEU O DEFEITO: a coluna Resultado mostrava "—", o
+   * operador salvava por cima e a conta ia embora. Com o texto à vista ele vê que a planilha disse
+   * algo que o cadastro não conhece — que é o caso das 95 linhas de apelido antigo.
+   */
+  contaTextoNaoReconhecido: string | null;
+
   /* ── PR-MESA-SUGESTOES-01: as duas propostas que vêm de regra, não da planilha ─────────
    *
    * ⚠ ELAS NÃO SÃO O RESULTADO — são o que o Resultado SERIA se ninguém tivesse dito nada. O

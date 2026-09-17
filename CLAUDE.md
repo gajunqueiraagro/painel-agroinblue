@@ -390,6 +390,17 @@ no mesmo arquivo.
   sugerida + as tres portas juntas). A linha crua da view tem 87 campos obrigatorios e nenhum teste
   da casa monta uma; as pecas compostas — `safraSugerida`, `escopoDoSubcentro` e
   `subcentroDeTransferencia` — tem testes proprios. A ligacao e homologacao.
+  De 1521 para 1530 no PR-MESA-CONTA-ENTRADA-01: entrou `src/v2/lib/mesa/contaDaLinha.test.ts`
+  (+9) — as duas regras que, somadas, apagaram vinte contas conciliadas em 16/09/2026.
+  Sao QUAL coluna do Excel e a conta (origem ou destino: a que RESOLVE; as duas resolvendo e
+  transferencia) e EM QUAL coluna do lancamento ela se grava (entrada no `conta_destino_id`,
+  saida no `conta_bancaria_id`).
+  ⚠ O CASO QUE JUSTIFICA O ARQUIVO e "Resultado vazio nao escreve nenhuma das duas chaves": o
+  editor mandava `conta_bancaria_id: id || null`, entao proposta VAZIA propunha APAGAR. Vazio e
+  "nao tenho proposta", nunca "apague o que esta la".
+  ⚠ E A CAUSA MAIOR ERA DA RPC, nao do front: `fn_classificacao_apply_row` zerava
+  `conta_destino_id` sempre que o tipo efetivo nao era transferencia (`ELSE NULL` incondicional).
+  Corrigida na migration 20261027121700, com a simetria que ja existia em `conta_bancaria_id`.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
