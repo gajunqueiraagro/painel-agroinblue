@@ -30,7 +30,6 @@ import { useEspelhoInternas, type EspelhoInternas } from '@/hooks/useEspelhoInte
 import { toast } from 'sonner';
 import { X } from 'lucide-react';
 import { badgeDeStatusTransacao } from '@/lib/statusOperacional';
-import { brl } from '@/lib/calculos/numeroBR';
 
 const MESES_CURTOS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
@@ -656,6 +655,67 @@ function LinhaLancSemPar({ s, mesDoRecorte, marcado, onMarcar, onAbrir }: {
   );
 }
 
+/**
+ * UM CANDIDATO NA COLUNA DO SISTEMA, EM LINHA ÚNICA — PR-ESPELHO-CANDIDATOS-COLUNA-02.
+ *
+ * Mesmo desenho do lançamento sem par (checkbox · valor · texto · ações), porque entra na mesma
+ * mecânica de marcar e casar. O texto segue a ordem: vencimento · descrição · fornecedor ·
+ * subcentro · status · vencido · sem conta · documento, truncado com o inteiro no `title`.
+ * ⚠ JÁ VINCULADO não é casável (a RPC recusa `lancamento_ja_conciliado`): linha esmaecida, sem
+ * checkbox, sem alça e sem receber arrasto.
+ * ⚠ SEM CONTA TAMBÉM NÃO SE MARCA AQUI: `fn_espelho_casar` promove o lançamento a realizado mas
+ * NÃO preenche a conta — ele sairia conciliado e sem conta, fora do saldo de qualquer conta.
+ * Fica visível (é o cadastro incompleto que se quer ver) até a conta ser amarrada.
+ */
+function LinhaCandidato({ c, marcado, onMarcar, onAbrir }: {
+  c: EspCandidato; marcado: boolean; onMarcar: () => void; onAbrir?: (id: string) => void;
+}) {
+  const casavel = !c.ja_conciliado && !c.sem_conta;
+  const { isOver, setNodeRef } = useDroppable({ id: `lan:${c.lancamento_id}`, disabled: !casavel });
+  const badge = badgeDeStatusTransacao(c.status_transacao);
+  const doc = c.numero_documento ? [c.tipo_documento, c.numero_documento].filter(Boolean).join(' ') : null;
+  const fornecedorDiferente = c.fornecedor && c.fornecedor !== c.descricao ? c.fornecedor : null;
+  const titulo = [
+    `${fmtData(c.data_vencimento)} venc.`, c.descricao || c.fornecedor, fornecedorDiferente && c.descricao ? fornecedorDiferente : null,
+    c.subcentro, badge.label, c.vencido ? 'vencido' : null, c.sem_conta ? 'sem conta' : null,
+    c.ja_conciliado ? 'já vinculado' : null, doc,
+  ].filter(Boolean).join(' · ');
+  return (
+    <tr ref={setNodeRef} className={cn(H21, 'border-b border-border/50',
+      c.ja_conciliado && 'opacity-60',
+      marcado && 'bg-amber-500/10',
+      isOver && 'bg-emerald-500/10 outline-dashed outline-2 outline-emerald-500')}>
+      <td /><td /><td /><td />
+      <td className={MEIO} />
+      <td className="text-center">
+        {casavel && (
+          <input type="checkbox" className="h-3 w-3 align-middle" checked={marcado}
+            onChange={onMarcar} aria-label="Marcar candidato" />
+        )}
+      </td>
+      <td className={cn(CEL, 'text-left text-[11px] font-medium tabular-nums', corVal(c.valor_assinado))}>{fmtBRL(c.valor_assinado)}</td>
+      <td className={CEL} title={titulo}>
+        <span className="text-[10px] tabular-nums text-muted-foreground">{fmtData(c.data_vencimento)} venc.</span>
+        <span className="text-[11px] font-medium">{' · '}{c.descricao || c.fornecedor || '—'}</span>
+        <span className="text-[10px] text-muted-foreground">
+          {fornecedorDiferente && c.descricao && <>{' · '}{fornecedorDiferente}</>}
+          {c.subcentro && <>{' · '}{c.subcentro}</>}
+          {' · '}
+        </span>
+        <span className={cn('rounded px-1 text-[10px]', badge.cls)}>{badge.label}</span>
+        {c.vencido && <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] font-medium text-amber-800">vencido</span>}
+        {c.sem_conta && <span className="ml-1 rounded bg-destructive/10 px-1 text-[10px] font-medium text-destructive">sem conta</span>}
+        {c.ja_conciliado && <span className="ml-1 text-[10px] italic text-muted-foreground">já vinculado</span>}
+        {doc && <span className="text-[10px] text-muted-foreground">{' · '}{doc}</span>}
+      </td>
+      <td className={cn(CEL, 'text-right whitespace-nowrap')}>
+        {onAbrir && <Acao onClick={() => onAbrir(c.lancamento_id)}>abrir</Acao>}
+        {casavel && <Alca id={`dragLan:${c.lancamento_id}`} />}
+      </td>
+    </tr>
+  );
+}
+
 /** Descrição + fornecedor (+ competência quando difere, + origem quando sem par), UMA linha. */
 function textoLancamento(s: EspSis | undefined, mesDoRecorte: string, semPar = false) {
   if (!s) return <span className="text-muted-foreground">—</span>;
@@ -738,8 +798,7 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
      desconsiderar seria uma porta sem volta dentro desta tela — e uma decisão que não se
      desfaz onde foi tomada é uma decisão que o operador evita tomar. */
   const [verIgnorados, setVerIgnorados] = useState(false);
-  const candidatos = data.sistema_candidatos ?? [];
-  const [verCandidatos, setVerCandidatos] = useState(true);
+  const candidatos = useMemo(() => data.sistema_candidatos ?? [], [data]);
   const [ignorarId, setIgnorarId] = useState<string | null>(null);
   const [revertendoId, setRevertendoId] = useState<string | null>(null);
   const { data: ignorados, refetch: refetchIgnorados } = useQuery({
@@ -807,7 +866,19 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
   });
 
   const extratoIndex = useMemo(() => new Map(data.ofx_completo.map((o) => [o.extrato_id, o])), [data]);
-  const sisIndex = useMemo(() => new Map(data.sistema_completo.map((s) => [s.lancamento_id, s])), [data]);
+  /* ⚠ O CANDIDATO ENTRA NO MESMO ÍNDICE DO REALIZADO — PR-ESPELHO-CANDIDATOS-COLUNA-02. Soma da
+     barra, conciliar pela barra, arrastar e o modal "Casar com o banco" leem `sisIndex`; com o
+     candidato lá, a mecânica inteira serve a ele sem um segundo caminho. A data é o vencimento,
+     e a RPC de casar é quem promove a realizado (data de pagamento = data do extrato). */
+  const sisIndex = useMemo(() => new Map([
+    ...data.sistema_completo,
+    ...candidatos.map((c): EspSis => ({
+      lancamento_id: c.lancamento_id, data: c.data_vencimento, descricao: c.descricao,
+      centro: c.centro, subcentro: c.subcentro, valor_assinado: c.valor_assinado, sinal: c.sinal,
+      status: c.ja_conciliado ? 'conciliado' : 'sem_vinculo',
+      fornecedor: c.fornecedor, origem_lancamento: null, competencia: c.competencia,
+    })),
+  ].map((s) => [s.lancamento_id, s])), [data, candidatos]);
   const somaExtratos = [...sel.extratos].reduce((a, id) => a + (extratoIndex.get(id)?.valor ?? 0), 0);
   const somaLancs = [...sel.lancamentos].reduce((a, id) => a + (sisIndex.get(id)?.valor_assinado ?? 0), 0);
   /* ⚠ A DIFERENÇA DA BARRA É SÓ PARA EXIBIR. Quem decide se pode conciliar é a RPC: ela
@@ -1140,6 +1211,25 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
                 </tr>
               </React.Fragment>
             ))}
+
+            {/* ⚠ CANDIDATOS NA COLUNA DO SISTEMA, DEPOIS DE TODOS OS DIAS — PR-ESPELHO-CANDIDATOS-
+                COLUNA-02. Previstos, agendados e programados que podem casar com o extrato, o
+                vencimento mais antigo primeiro (ordem da RPC). A faixa os separa dos realizados:
+                não entram em nenhum fechamento de dia, e misturá-los convidaria a somá-los. */}
+            {candidatos.length > 0 && (
+              <tr className="h-4 bg-muted/40">
+                <td colSpan={4} />
+                <td className={MEIO} />
+                <td colSpan={4} className="px-[5px] text-[10px] font-medium text-muted-foreground">
+                  candidatos do sistema ({candidatos.length})
+                </td>
+              </tr>
+            )}
+            {candidatos.map((c) => (
+              <LinhaCandidato key={c.lancamento_id} c={c}
+                marcado={marcado('lancamentos', c.lancamento_id)}
+                onMarcar={() => alterna('lancamentos', c.lancamento_id)} onAbrir={onAbrir} />
+            ))}
           </tbody>
         </table>
       </div>
@@ -1158,63 +1248,13 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
         {LEGENDA_ICONES.map((ic) => (
           <span key={ic.simbolo}><span className="text-muted-foreground">{ic.simbolo}</span> {ic.curto}</span>
         ))}
-        {candidatos.length > 0 && (
-          <span className="ml-auto">
-            {candidatos.length} candidato{candidatos.length === 1 ? '' : 's'} do sistema{' · '}
-            <Acao onClick={() => setVerCandidatos((v) => !v)}>{verCandidatos ? 'ocultar' : 'ver'}</Acao>
-          </span>
-        )}
         {!!ignorados?.length && (
-          <span className={candidatos.length > 0 ? undefined : 'ml-auto'}>
+          <span className="ml-auto">
             {ignorados.length} ignorado{ignorados.length === 1 ? '' : 's'} neste mês{' · '}
             <Acao onClick={() => setVerIgnorados((v) => !v)}>{verIgnorados ? 'ocultar' : 'ver'}</Acao>
           </span>
         )}
       </div>
-
-      {/* ⚠ CANDIDATOS DO SISTEMA — PR-ESPELHO-CANDIDATOS-FRONT-01. Previstos, agendados e
-          programados que podem casar com o extrato, os vencidos em aberto primeiro (a ordem é a
-          da RPC: vencimento mais antigo no topo). FORA DA MESA, como os ignorados: não são
-          realizados, não entram na soma de nenhum dia, e mostrá-los entre os dias convidaria a
-          somá-los com os olhos. Rolam na própria área (A21), sem empurrar a mesa.
-          ⚠ SÓ LEITURA NESTA ETAPA: sem seleção e sem casar — isso é a Etapa 2. */}
-      {verCandidatos && candidatos.length > 0 && (
-        <div className="shrink-0 max-h-[180px] overflow-y-auto border-t bg-muted/10 px-3.5 py-1">
-          <div className="text-[10px] font-medium text-muted-foreground">Candidatos do sistema</div>
-          <ul className="divide-y divide-border/40">
-            {candidatos.map((c) => {
-              const badge = badgeDeStatusTransacao(c.status_transacao);
-              const safra = c.safra_codigo || c.safra_descricao;
-              const doc = c.numero_documento ? [c.tipo_documento, c.numero_documento].filter(Boolean).join(' ') : null;
-              return (
-                <li key={c.lancamento_id} className={cn('py-[3px] leading-[1.3]', c.ja_conciliado && 'opacity-60')}>
-                  <div className="flex items-baseline gap-2">
-                    <span className="min-w-0 flex-1 truncate text-[11px] font-medium"
-                      title={[c.descricao, c.fornecedor].filter(Boolean).join(' · ')}>
-                      {c.descricao || c.fornecedor || '—'}
-                      {c.descricao && c.fornecedor && <span className="font-normal text-muted-foreground">{' · '}{c.fornecedor}</span>}
-                    </span>
-                    <span className={cn('shrink-0 whitespace-nowrap text-[11px] font-medium tabular-nums', corVal(c.valor_assinado))}>
-                      {brl(c.valor_assinado)}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-x-1 text-[10px] text-muted-foreground">
-                    <span className="tabular-nums">{fmtData(c.data_vencimento)}</span>
-                    {c.subcentro && <><span>·</span><span>{c.subcentro}</span></>}
-                    {safra && <><span>·</span><span>{safra}</span></>}
-                    <span>·</span>
-                    <span className={cn('rounded px-1', badge.cls)}>{badge.label}</span>
-                    {doc && <><span>·</span><span>{doc}</span></>}
-                    {c.vencido && <span className="ml-1 rounded bg-amber-100 px-1 font-medium text-amber-800">vencido</span>}
-                    {c.sem_conta && <span className="ml-1 rounded bg-destructive/10 px-1 font-medium text-destructive">sem conta</span>}
-                    {c.ja_conciliado && <span className="ml-1 italic">já vinculado</span>}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      )}
 
       {/* ⚠ A LISTA FICA FORA DA MESA, e não como mais um bloco de dia: o ignorado não está no
           fechamento — ele saiu de lá, é isso que ignorar significa. Mostrá-lo entre os dias
