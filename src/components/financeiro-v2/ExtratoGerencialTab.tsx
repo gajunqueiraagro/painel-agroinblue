@@ -50,8 +50,17 @@ interface LancExtrato {
 }
 interface SaldoRow { saldo_inicial: number | null; saldo_final: number | null; status_mes: string | null; }
 
-type AnaliseView = 'evolucao' | 'organizacao' | 'economica' | 'compromissos';
+/**
+ * As cinco sub-abas do corpo — PR-GERENCIAL-SUBABAS-01.
+ *
+ * ⚠ O EXTRATO VIROU UMA DELAS, e com isso o modo 'extrato' | 'analise' deixou de existir. As
+ * quatro análises moravam atrás de um botão "Analisar Fluxo", e voltar exigia um "Voltar ao
+ * extrato": duas portas para dizer qual leitura está aberta, quando a fileira de sub-abas já
+ * dizia isso para as outras quatro. Agora é uma pergunta só, respondida num lugar só.
+ */
+type AnaliseView = 'extrato' | 'evolucao' | 'organizacao' | 'economica' | 'compromissos';
 const ANALISE_VIEWS: { k: AnaliseView; l: string }[] = [
+  { k: 'extrato', l: 'Extrato' },
   { k: 'evolucao', l: '📈 Evolução do caixa' },
   { k: 'organizacao', l: '📅 Organização dos pagamentos' },
   { k: 'economica', l: '📊 Distribuição econômica' },
@@ -93,8 +102,7 @@ export function ExtratoGerencialTab({ periodo }: { periodo: PeriodoControlado })
   const [contaSel, setContaSel] = useState<string | null>(null);
   const [statusSel, setStatusSel] = useState<Set<string>>(new Set(STATUS_OFICIAIS));
   const [incluirLegados, setIncluirLegados] = useState(false);
-  const [modo, setModo] = useState<'extrato' | 'analise'>('extrato');
-  const [analiseView, setAnaliseView] = useState<AnaliseView>('evolucao');
+  const [analiseView, setAnaliseView] = useState<AnaliseView>('extrato');
   const [lancLeituraId, setLancLeituraId] = useState<string | null>(null);
   /**
    * ⚠ DUAS PORTAS, DE PROPÓSITO — FIN-PAINEL-SAFRA-02 (B4). A LINHA do extrato continua
@@ -409,10 +417,6 @@ export function ExtratoGerencialTab({ periodo }: { periodo: PeriodoControlado })
                 {saldoFin !== null ? 'Mês fechado · saldo final oficial' : 'Mês aberto · projeção conforme compromissos selecionados'}
               </div>
             </div>
-            <button type="button" onClick={() => setModo((m) => (m === 'extrato' ? 'analise' : 'extrato'))}
-              className="h-7 px-2 rounded border text-[10px] font-medium bg-white hover:bg-muted whitespace-nowrap">
-              {modo === 'extrato' ? '📊 Analisar Fluxo' : '📋 Voltar ao extrato'}
-            </button>
           </div>
         </div>
         <div className="flex flex-wrap gap-1.5">
@@ -428,22 +432,31 @@ export function ExtratoGerencialTab({ periodo }: { periodo: PeriodoControlado })
         </div>
       </div>
 
+      {/* ⚠ A FILEIRA SAIU DE DENTRO DA ANÁLISE — PR-GERENCIAL-SUBABAS-01. Ela morava dentro do
+          ramo `modo === 'analise'`, então só existia depois do clique no botão; agora é irmã do
+          cabeçalho e diz, em qualquer sub-aba, qual leitura está aberta. O `shrink-0` é o mesmo
+          das duas caixas acima: o pai tem altura fixa (`h-[calc(100vh-64px)]`) e quem absorve a
+          sobra é a tabela, com `flex-1 min-h-0` — sem ele, a fileira seria a primeira a ceder. */}
+      {/* Sub-abas do corpo + exportação executiva */}
+      <div className="flex flex-wrap items-center gap-1 shrink-0">
+        {ANALISE_VIEWS.map((v) => (
+          <button key={v.k} onClick={() => setAnaliseView(v.k)}
+            className={`px-2 py-0.5 rounded-md border text-[11px] ${analiseView === v.k ? 'bg-primary text-primary-foreground border-primary' : 'bg-white text-muted-foreground'}`}>
+            {v.l}
+          </button>
+        ))}
+        {/* ⚠ O PDF NÃO É "EXPORTAR ESTA SUB-ABA": é relatório fixo de 4 páginas, montado das
+            mesmas `linhas`/`dadosOrg` em qualquer sub-aba aberta. Por isso segue na ponta
+            direita da fileira, e não dentro de nenhuma das leituras. */}
+        <button type="button" onClick={exportarPdfExecutivo}
+          className="ml-auto px-2 py-0.5 rounded-md border text-[11px] font-medium bg-white hover:bg-muted whitespace-nowrap">
+          📄 PDF Executivo
+        </button>
+      </div>
+
       {/* Análise (Bloco 1) — mesma conta/mês/status; consome as mesmas `linhas` do extrato */}
-      {modo === 'analise' ? (
+      {analiseView !== 'extrato' ? (
         <div className="flex-1 min-h-0 overflow-auto space-y-1.5">
-          {/* Sub-seletor de views da Análise + exportação executiva */}
-          <div className="flex flex-wrap items-center gap-1">
-            {ANALISE_VIEWS.map((v) => (
-              <button key={v.k} onClick={() => setAnaliseView(v.k)}
-                className={`px-2 py-0.5 rounded-md border text-[11px] ${analiseView === v.k ? 'bg-primary text-primary-foreground border-primary' : 'bg-white text-muted-foreground'}`}>
-                {v.l}
-              </button>
-            ))}
-            <button type="button" onClick={exportarPdfExecutivo}
-              className="ml-auto px-2 py-0.5 rounded-md border text-[11px] font-medium bg-white hover:bg-muted whitespace-nowrap">
-              📄 PDF Executivo
-            </button>
-          </div>
           {analiseView === 'evolucao' ? (
             <ExtratoAnaliseFluxo linhas={linhas} saldoIni={saldoIni} contaNome={contaNome} periodoLabel={`${MESES[mes - 1]}/${ano}`} ano={ano} mes={mes} />
           ) : analiseView === 'organizacao' ? (
