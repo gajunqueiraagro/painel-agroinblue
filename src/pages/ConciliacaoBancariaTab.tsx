@@ -1141,7 +1141,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             {/* ════ 3 CARDS: [Resumo] [Status] [Saldos por conta] ════
                 Resumo encurta um pouco; Saldos ganha espaço para evitar corte
                 em Sistema/Extrato/Diferença. Status mantido compacto. */}
-            <div className="grid gap-2" style={{gridTemplateColumns:'1.7fr 0.75fr 3fr', alignItems:'start'}}>
+            <div className="grid gap-2" style={{gridTemplateColumns:'1.7fr 0.7fr 3.05fr', alignItems:'start'}}>
 
               {/* ── COL 1: Resumo das movimentações ── */}
               <div className="rounded-lg border overflow-hidden bg-card">
@@ -1369,13 +1369,19 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                 </div>
 
                 {/* Tabela única — garante alinhamento perfeito entre todos os grupos */}
-                <table className="w-full border-collapse" style={{fontSize:'10px', tableLayout:'fixed'}}>
+                {/* ⚠ `table-layout:auto` — ajuste do PR-CONCILIA, valores colando em 1280. Com `fixed` as colunas eram % da
+                    tabela e o valor de milhão não cabia em 1280: colava no da coluna vizinha. No
+                    `auto` cada coluna de valor tem a largura do maior valor dela, e quem cede é o
+                    nome da conta (quebra linha). Medido no Chromium: 0 valores estourando em 1280 e
+                    1366, colunas alinhadas entre thead e os tbody, sticky intacto. Só o lápis fica
+                    pinado (34px), senão encolheria até o ícone. */}
+                <table className="w-full border-collapse" style={{fontSize:'10px', tableLayout:'auto'}}>
                   <colgroup>
-                    <col style={{width:'42%'}} />
-                    <col style={{width:'17%'}} />
-                    <col style={{width:'17%'}} />
-                    <col style={{width:'18%'}} />
-                    <col style={{width:'6%'}} />
+                    <col />
+                    <col />
+                    <col />
+                    <col />
+                    <col style={{width:'34px'}} />
                   </colgroup>
                   {/* O Total mora no `thead`: gruda junto com o cabeçalho das colunas, logo abaixo
                       do cabeçalho do card (top MEDIDO). A borda inferior é sombra interna nas
@@ -1423,8 +1429,8 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                     <tbody key={g.chave}>
                       <tr>
                         <td style={{top:`${alturaCabSaldos + alturaThead}px`}} className="px-2 py-1 text-[11px] font-semibold text-muted-foreground sticky z-[8] bg-card bg-[linear-gradient(hsl(var(--muted-foreground)/0.15),hsl(var(--muted-foreground)/0.15))] shadow-[inset_0_1px_0_hsl(var(--border))]">{g.rotulo}</td>
-                        <td style={{top:`${alturaCabSaldos + alturaThead}px`}} className="py-1 px-1 text-right text-[10px] font-semibold tabular-nums whitespace-nowrap text-muted-foreground sticky z-[8] bg-card bg-[linear-gradient(hsl(var(--muted-foreground)/0.15),hsl(var(--muted-foreground)/0.15))] shadow-[inset_0_1px_0_hsl(var(--border))]">{formatMoeda(g.subtotal.sis)}</td>
-                        <td style={{top:`${alturaCabSaldos + alturaThead}px`}} className="py-1 px-1 text-right text-[10px] font-semibold tabular-nums whitespace-nowrap text-muted-foreground sticky z-[8] bg-card bg-[linear-gradient(hsl(var(--muted-foreground)/0.15),hsl(var(--muted-foreground)/0.15))] shadow-[inset_0_1px_0_hsl(var(--border))]">{g.subtotal.ext===null ? '—' : formatMoeda(g.subtotal.ext)}</td>
+                        <td style={{top:`${alturaCabSaldos + alturaThead}px`}} className={`py-1 px-1 text-right text-[10px] font-semibold tabular-nums whitespace-nowrap sticky z-[8] bg-card bg-[linear-gradient(hsl(var(--muted-foreground)/0.15),hsl(var(--muted-foreground)/0.15))] shadow-[inset_0_1px_0_hsl(var(--border))] ${g.subtotal.sis<0?'text-destructive':''}`}>{formatMoeda(g.subtotal.sis)}</td>
+                        <td style={{top:`${alturaCabSaldos + alturaThead}px`}} className="py-1 px-1 text-right text-[10px] font-semibold tabular-nums whitespace-nowrap sticky z-[8] bg-card bg-[linear-gradient(hsl(var(--muted-foreground)/0.15),hsl(var(--muted-foreground)/0.15))] shadow-[inset_0_1px_0_hsl(var(--border))]">{g.subtotal.ext===null ? '—' : formatMoeda(g.subtotal.ext)}</td>
                         <td style={{top:`${alturaCabSaldos + alturaThead}px`}} className={`py-1 px-1 text-right text-[10px] font-semibold tabular-nums whitespace-nowrap sticky z-[8] bg-card bg-[linear-gradient(hsl(var(--muted-foreground)/0.15),hsl(var(--muted-foreground)/0.15))] shadow-[inset_0_1px_0_hsl(var(--border))] ${g.subtotal.ext===null?'text-muted-foreground':Math.abs(g.subtotal.dif)<=0.01?'text-success':'text-destructive'}`}>
                           {g.subtotal.ext===null ? '—' : Math.abs(g.subtotal.dif)<=0.01 ? 'confere' : formatMoeda(g.subtotal.dif)}
                         </td>
