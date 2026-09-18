@@ -125,7 +125,20 @@ export function lerPares(j: unknown): ParExato[] {
   });
 }
 
-const dataBr = (iso: string | null) => (iso ? iso.slice(0, 10).split('-').reverse().join('/') : '—');
+/**
+ * DATA CURTA — DD/MM. PR-CONCILIAR-MES-DATA-VAZANDO-01.
+ *
+ * ⚠ ELA DEVOLVIA DD/MM/AAAA E VAZAVA POR CIMA DA DESCRIÇÃO. As células destas listas têm
+ * `w-[38px]` — largura de "04/09" —, e "04/09/2026" mede quase o dobro: o texto transbordava e
+ * a tela mostrava "04/09/20PAG BOLETO UNIAO INDUSTRIA…". Em TODAS as linhas.
+ * ⚠ O ANO É REDUNDANTE AQUI, e é por isso que a saída é DD/MM e não uma coluna mais larga:
+ * estas listas são de UM mês, anunciado no cabeçalho do próprio diálogo. Repetir "2026" em
+ * cada linha gasta largura para não dizer nada.
+ * ⚠ EXPORTADA: o `ConciliarMesDialog` tinha uma cópia byte a byte desta função, e as duas
+ * vazavam do mesmo jeito. Uma peça, nunca uma cópia.
+ */
+export const dataBr = (iso: string | null) =>
+  (iso ? iso.slice(0, 10).split('-').reverse().slice(0, 2).join('/') : '—');
 const corValor = (v: number) => (v < 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400');
 
 export function VincularMatchDireto({ clienteId, contaId, ano, mes, aoConcluir }: Props) {
@@ -256,7 +269,10 @@ export function VincularMatchDireto({ clienteId, contaId, ano, mes, aoConcluir }
               {previa.pares.map(par => (
                 <div key={par.extratoId}
                   className="flex items-center gap-2 border-b border-border/50 px-2 py-1 last:border-b-0">
-                  <span className="w-[38px] shrink-0 tabular-nums text-muted-foreground">{dataBr(par.data)}</span>
+                  {/* ⚠ `overflow-hidden` É CINTO E SUSPENSÓRIO: a largura já cabe DD/MM, mas uma
+                      célula de largura fixa sem contenção vaza por cima da vizinha em vez de
+                      cortar — foi assim que o ano apareceu por cima da descrição. */}
+                  <span className="w-[38px] shrink-0 overflow-hidden tabular-nums text-muted-foreground">{dataBr(par.data)}</span>
                   <span className="min-w-0 flex-1 truncate" title={par.historicoBanco ?? ''}>
                     {par.historicoBanco ?? '—'}
                   </span>

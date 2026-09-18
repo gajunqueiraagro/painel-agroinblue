@@ -34,12 +34,11 @@ import { formatMoeda } from '@/lib/calculos/formatters';
 import { saldoConfere } from '@/lib/financeiro/conciliacaoCalc';
 import { useConciliarMes, type PreviaConciliarMes } from '@/hooks/useConciliarMes';
 import { supabase } from '@/integrations/supabase/client';
-import { lerPares, faixaInclusiva, type ParExato } from '@/components/conciliacao/VincularMatchDireto';
+import { lerPares, faixaInclusiva, dataBr, type ParExato } from '@/components/conciliacao/VincularMatchDireto';
 import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
 
 type Aba = 'crus' | 'esperando' | 'ja';
 
-const dataBr = (iso: string | null) => (iso ? iso.slice(0, 10).split('-').reverse().join('/') : '—');
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
 /* ⚠ SINAL E COR DE UMA FONTE SÓ — a mesma decisão da Mesa (129d): duas funções para a
@@ -391,7 +390,7 @@ export function ConciliarMesDialog({
                           movimento do proto é R$ 2.667.572,77 (o maior lançamento, R$ 3.996.196,13).
                           96px cobre até 8 dígitos (R$ 12.500.000,55 mede 92,36px), que é o próximo
                           degrau desta base. */}
-                        <span className="w-[38px] shrink-0 tabular-nums text-muted-foreground">{dataBr(mov.dataBanco)}</span>
+                        <span className="w-[38px] shrink-0 overflow-hidden tabular-nums text-muted-foreground">{dataBr(mov.dataBanco)}</span>
                         <span className="min-w-0 flex-1 truncate" title={mov.historicoBanco ?? undefined}>
                           {mov.historicoBanco ?? '—'}
                         </span>
@@ -426,7 +425,7 @@ export function ConciliarMesDialog({
                       </div>
                       {semPar.map(mov => (
                         <div key={mov.extratoId} className="flex items-center gap-2 border-b border-border/60 px-3 py-[7px] text-[10px]">
-                          <span className="w-[38px] shrink-0 tabular-nums text-muted-foreground">{dataBr(mov.dataBanco)}</span>
+                          <span className="w-[38px] shrink-0 overflow-hidden tabular-nums text-muted-foreground">{dataBr(mov.dataBanco)}</span>
                           <span className="min-w-0 flex-1 truncate" title={mov.historicoBanco ?? undefined}>
                             {mov.historicoBanco ?? '—'}
                           </span>
