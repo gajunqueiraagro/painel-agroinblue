@@ -20,8 +20,15 @@
  * `npx madge --circular` (gate da casa) acusaria. A direção única resolve, e ela aponta para
  * o módulo mais básico dos dois.
  */
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Ban, ChevronDown, ChevronRight, Loader2, Undo2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { toast } from 'sonner';
+import { useCancelarMovimento, MOTIVOS_DE_CANCELAMENTO } from '@/hooks/useCancelarMovimento';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useEspelhoInternas, type EspelhoInternas } from '@/hooks/useEspelhoInternas';
@@ -134,7 +141,7 @@ export function useExtratoDoMesEspelhado(
  * deles obrigaria a confiar: com os dois, "confere" é uma afirmação verificável, e a
  * diferença — quando existe — é o próprio número que falta explicar.
  */
-export function TabelaExtratoDoMes({ ofx, inicial, internas, rolagem = 'propria' }: {
+export function TabelaExtratoDoMes({ ofx, inicial, internas, rolagem = 'propria', aoMarcarDuplicado }: {
   ofx: EspOfx[]; inicial: number; internas: EspelhoInternas;
   /**
    * Quem rola esta lista.
@@ -148,6 +155,17 @@ export function TabelaExtratoDoMes({ ofx, inicial, internas, rolagem = 'propria'
    * PRÓXIMO: dentro do modal é esta div; na aba, é o corpo dela. O total não rola em nenhum.
    */
   rolagem?: 'propria' | 'da-pagina';
+  /**
+   * A ação de "marcar como duplicado" por linha — PR-EXTRATO-CANCELAR-MOVIMENTO-01.
+   *
+   * ⚠ OPCIONAL, E É ASSIM QUE A PEÇA SERVE AOS DOIS LUGARES SEM VIRAR DUAS. Quem passa a
+   * função ganha a coluna; quem não passa fica com a tabela de antes, idêntica.
+   * ⚠ HOJE SÓ A ABA IMPORTAR PASSA, e é decisão de produto: o passo 1 é conferir o que
+   * ENTROU — é ali que se descobre a linha que não deveria existir. O Espelho é o FECHO do
+   * mês e vive dentro do passo 2; editar o extrato de dentro da conferência final convidaria
+   * a "arrumar" o extrato para o mês fechar, que é o avesso de conferir.
+   */
+  aoMarcarDuplicado?: (linha: EspOfx) => void;
 }) {
   /* ⚠ O CONSOLIDADO MANDA QUANDO EXISTE; sem ele, o saldo da própria conta, que é o que a
      lista sempre usou. Nunca um zero no lugar do desconhecido: `??` não cai em 0. */
@@ -160,6 +178,18 @@ export function TabelaExtratoDoMes({ ofx, inicial, internas, rolagem = 'propria'
   const fechamento = abertura + movimentos;
   const informado = internas.saldoInformadoConsolidado;
   const difere = informado == null ? null : fechamento - informado;
+  /* ⚠ A COLUNA DA AÇÃO É ESTRUTURAL, NÃO DEPENDE DO DADO — e é isso que mantém a Lei de
+     Estabilidade Visual de pé: ela existe ou não existe pela CAPACIDADE da tela (passou a
+     função?), e nunca aparece no meio do uso porque uma linha é diferente da outra. Dentro de
+     cada tela as larguras são constantes; medido nos dois lugares.
+     ⚠ AS DUAS CLASSES SÃO LITERAIS INTEIRAS de propósito: o Tailwind varre o fonte em busca de
+     nomes completos, e uma classe montada por concatenação não seria gerada. */
+  const colunas = aoMarcarDuplicado
+    ? 'grid-cols-[44px_1fr_72px_92px_92px_92px_24px]'
+    : 'grid-cols-[44px_1fr_72px_92px_92px_92px]';
+  const colunasDoTotal = aoMarcarDuplicado
+    ? 'grid-cols-[1fr_92px_92px_24px]'
+    : 'grid-cols-[1fr_92px_92px]';
   return (
     /* ⚠ A LISTA OCUPA A ALTURA QUE SOBRA, E TEM A MARGEM DA CONFERÊNCIA — PR-ESPELHO-06 item C.
        Era `max-h-[55vh]` sem padding lateral: a tabela parava no meio do modal de 92vh,
@@ -170,17 +200,19 @@ export function TabelaExtratoDoMes({ ofx, inicial, internas, rolagem = 'propria'
        o `overflow-y-auto` nunca ganha barra — a página inteira é que rolaria. */
     <div className={cn('border-t px-3.5 text-[10px]',
       rolagem === 'propria' && 'min-h-0 flex-1 overflow-y-auto')}>
-      <div className="grid grid-cols-[44px_1fr_72px_92px_92px_92px] gap-1 font-semibold text-muted-foreground border-b pb-0.5 sticky top-0 bg-card">
+      <div className={cn('grid gap-1 font-semibold text-muted-foreground border-b pb-0.5 sticky top-0 bg-card', colunas)}>
         <span>Data</span><span>Histórico</span><span>Documento</span><span className="text-right">Valor</span><span className="text-right">Saldo</span><span>Status</span>
+        {aoMarcarDuplicado && <span />}
       </div>
-      <div className="grid grid-cols-[44px_1fr_72px_92px_92px_92px] gap-1 py-0.5 bg-muted/40 text-[11px] font-semibold border-b">
+      <div className={cn('grid gap-1 py-0.5 bg-muted/40 text-[11px] font-semibold border-b', colunas)}>
         <span className="col-span-3">Saldo inicial (extrato)</span>
         <span />
         <span className={cn('text-right tabular-nums', corValReal(abertura))}>{fmtBRL(abertura)}</span>
         <span />
+        {aoMarcarDuplicado && <span />}
       </div>
       {rows.map(({ r, saldo }) => (
-        <div key={r.extrato_id} className="grid grid-cols-[44px_1fr_72px_92px_92px_92px] gap-1 py-0.5 border-b last:border-b-0 items-center">
+        <div key={r.extrato_id} className={cn('group grid gap-1 py-0.5 border-b last:border-b-0 items-center', colunas)}>
           <span className="text-muted-foreground">{fmtData(r.data)}</span>
           <span className="truncate flex items-center gap-1" title={r.historico ?? ''}>
             <span className="truncate">{r.historico ?? '—'}</span>
@@ -191,6 +223,21 @@ export function TabelaExtratoDoMes({ ofx, inicial, internas, rolagem = 'propria'
           <span className={`text-right tabular-nums ${corValReal(r.valor)}`}>{fmtBRL(r.valor)}</span>
           <span className={`text-right tabular-nums ${corValReal(saldo)}`}>{fmtBRL(saldo)}</span>
           <EspStatusCell status={r.status} />
+          {/* ⚠ A AÇÃO DIZ O MOTIVO, NÃO O MECANISMO — "marcar como duplicado", nunca
+              "cancelar": numa linha de tabela, "cancelar" se confunde com "cancelar a
+              operação", e o operador que quer tirar a duplicata hesita justamente por medo de
+              desfazer o que estava fazendo.
+              ⚠ `title` E `aria-label` (regra da casa), e os dois dizem a mesma frase inteira —
+              um ícone sozinho não é rótulo de nada. */}
+          {aoMarcarDuplicado && (
+            <button type="button"
+              className="flex h-4 w-4 items-center justify-center rounded text-muted-foreground opacity-0 transition hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
+              title="Marcar como duplicado — o movimento sai do extrato do mês"
+              aria-label={`Marcar como duplicado o movimento de ${fmtData(r.data)}, ${fmtBRL(r.valor)}`}
+              onClick={() => aoMarcarDuplicado(r)}>
+              <Ban className="h-3 w-3" />
+            </button>
+          )}
         </div>
       ))}
 
@@ -207,7 +254,7 @@ export function TabelaExtratoDoMes({ ofx, inicial, internas, rolagem = 'propria'
           hover. Este bloco é um TOTAL, não uma linha de dados: ele mantém as duas últimas
           colunas alinhadas (`1fr 92px 92px` cai exatamente sobre Saldo e Status, medido) e
           deixa o texto usar a largura que sobra à esquerda. */}
-      <div className="sticky bottom-0 z-[2] grid grid-cols-[1fr_92px_92px] gap-1 border-t bg-muted py-0.5 text-[11px] font-semibold">
+      <div className={cn('sticky bottom-0 z-[2] grid gap-1 border-t bg-muted py-0.5 text-[11px] font-semibold', colunasDoTotal)}>
         <span className="flex min-w-0 items-baseline gap-2">
           <span className="shrink-0">Saldo final (extrato)</span>
           {/* ⚠ "—" QUANDO FALTA SALDO INFORMADO, nunca "difere R$ 0,00": a sentinela do
@@ -228,6 +275,7 @@ export function TabelaExtratoDoMes({ ofx, inicial, internas, rolagem = 'propria'
         </span>
         <span className={cn('text-right tabular-nums', corValReal(fechamento))}>{fmtBRL(fechamento)}</span>
         <span />
+        {aoMarcarDuplicado && <span />}
       </div>
     </div>
   );
@@ -249,6 +297,9 @@ export function ExtratoDoMesInline({ clienteId, contaId, anoMes }: {
 }) {
   const { data, isLoading, error } = useExtratoDoMesEspelhado(clienteId, contaId, anoMes);
   const internas = useEspelhoInternas(clienteId, contaId, anoMes);
+  const api = useCancelarMovimento(clienteId, contaId, anoMes);
+  const [alvo, setAlvo] = useState<EspOfx | null>(null);
+  const [verCancelados, setVerCancelados] = useState(false);
 
   if (!clienteId || !contaId) {
     return (
@@ -285,7 +336,175 @@ export function ExtratoDoMesInline({ clienteId, contaId, anoMes }: {
           {data.ofx.length} movimento{data.ofx.length === 1 ? '' : 's'} · o saldo corre linha a linha até fechar com o banco
         </span>
       </div>
-      <TabelaExtratoDoMes ofx={data.ofx} inicial={data.inicial} internas={internas} rolagem="da-pagina" />
+      <TabelaExtratoDoMes ofx={data.ofx} inicial={data.inicial} internas={internas} rolagem="da-pagina"
+        aoMarcarDuplicado={setAlvo} />
+
+      {/* ═══ OS CANCELADOS DO MÊS ══════════════════════════════════════════════════════
+          ⚠ ELES PRECISAM TER ONDE APARECER, e este é o lugar: o operador que acabou de tirar
+          uma linha do extrato tem de poder conferir o que tirou, aqui mesmo, sem trocar de
+          tela. O único lugar que mostrava cancelados era o "ver canceladas (N)" do modal de
+          importações — e aquilo responde por ARQUIVO, que é outra pergunta.
+          ⚠ FECHADO POR PADRÃO e sem existir quando não há nenhum: num mês limpo, uma linha
+          dizendo "0 cancelados" seria ruído permanente para a exceção. */}
+      {api.cancelados.length > 0 && (
+        <div className="border-t">
+          <button type="button"
+            className="flex w-full items-center gap-1 px-3.5 py-1 text-left text-[10px] text-muted-foreground hover:bg-muted/40"
+            aria-expanded={verCancelados}
+            onClick={() => setVerCancelados(v => !v)}>
+            {verCancelados ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+            {api.cancelados.length} movimento{api.cancelados.length === 1 ? '' : 's'} cancelado{api.cancelados.length === 1 ? '' : 's'} neste mês
+            <span className="text-[10px] opacity-70">— fora do saldo e da conciliação</span>
+          </button>
+          {verCancelados && (
+            <div className="border-t bg-muted/20 px-3.5 py-1 text-[10px]">
+              {api.cancelados.map(c => (
+                <div key={c.id} className="flex items-center gap-2 border-b border-border/40 py-0.5 last:border-b-0">
+                  <span className="w-[44px] shrink-0 text-muted-foreground">{fmtData(c.data)}</span>
+                  <span className="min-w-0 flex-1 truncate line-through opacity-70" title={c.descricao ?? ''}>
+                    {c.descricao ?? '—'}
+                  </span>
+                  <span className="shrink-0 italic text-muted-foreground">{c.motivo ?? '—'}</span>
+                  <span className={cn('w-[92px] shrink-0 text-right tabular-nums line-through opacity-70', corValReal(c.valor))}>
+                    {fmtBRL(c.valor)}
+                  </span>
+                  {/* ⚠ A VOLTA EXISTE — e é o que separa este PR de repetir o defeito que ele
+                      veio corrigir. Cancelar sem desfazer devolveria o operador a depender de
+                      quem tem acesso ao banco, que foi a queixa de origem. */}
+                  <Button type="button" variant="ghost" size="sm"
+                    className="h-4 shrink-0 gap-1 px-1 text-[10px]"
+                    disabled={api.gravando}
+                    title="Trazer o movimento de volta para o extrato do mês"
+                    aria-label={`Trazer de volta o movimento de ${fmtData(c.data)}, ${fmtBRL(c.valor)}`}
+                    onClick={async () => {
+                      const ok = await api.reverter(c.id);
+                      toast[ok ? 'success' : 'error'](ok ? 'Movimento de volta no extrato.' : (api.erro ?? 'Não foi possível reverter.'));
+                    }}>
+                    <Undo2 className="h-3 w-3" /> voltar
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      <MarcarDuplicadoDialog
+        alvo={alvo} aoFechar={() => setAlvo(null)}
+        gravando={api.gravando} erro={api.erro}
+        aoConfirmar={async (motivo) => {
+          if (!alvo) return;
+          const ok = await api.cancelar(alvo.extrato_id, motivo);
+          if (ok) { toast.success('Movimento marcado como duplicado — saiu do extrato do mês.'); setAlvo(null); }
+        }}
+      />
     </div>
+  );
+}
+
+/**
+ * A CONFIRMAÇÃO, COM A LINHA À VISTA — PR-EXTRATO-CANCELAR-MOVIMENTO-01.
+ *
+ * ⚠ A LINHA APARECE INTEIRA AQUI, e não é enfeite: o clique acontece numa tabela de 35 linhas
+ * de 10px, e confirmar "tem certeza?" sem dizer SOBRE QUAL é como não perguntar nada. Data,
+ * histórico, documento e valor são exatamente os quatro campos pelos quais o operador reconhece
+ * um movimento no papel do banco.
+ * ⚠ E O AVISO DIZ O QUE MUDA, em vez de assustar: o movimento sai do saldo, das sugestões e da
+ * prévia — e dá para trazer de volta, o que muda o peso da decisão.
+ */
+function MarcarDuplicadoDialog({ alvo, aoFechar, aoConfirmar, gravando, erro }: {
+  alvo: EspOfx | null;
+  aoFechar: () => void;
+  aoConfirmar: (motivo: string) => void | Promise<void>;
+  gravando: boolean;
+  erro: string | null;
+}) {
+  const [escolha, setEscolha] = useState<string>(MOTIVOS_DE_CANCELAMENTO[0]);
+  const [livre, setLivre] = useState('');
+  const outro = escolha === 'Outro';
+  const motivo = outro ? livre.trim() : escolha;
+
+  /* Cada movimento recomeça a conversa: herdar o motivo do anterior faria o segundo
+     cancelamento sair com a justificativa do primeiro, e ninguém notaria. */
+  const aoAbrir = (aberto: boolean) => {
+    if (!aberto) { setEscolha(MOTIVOS_DE_CANCELAMENTO[0]); setLivre(''); aoFechar(); }
+  };
+
+  return (
+    <Dialog open={alvo != null} onOpenChange={aoAbrir}>
+      <DialogContent className="max-w-lg gap-0 p-0">
+        <DialogHeader className="border-b px-4 py-2.5">
+          <DialogTitle className="text-[13px] font-semibold">Marcar como duplicado</DialogTitle>
+        </DialogHeader>
+
+        {alvo && (
+          <div className="space-y-2.5 px-4 py-3">
+            <div className="rounded border bg-muted/40 px-2.5 py-1.5 text-[11px]">
+              <div className="flex items-baseline gap-2">
+                <span className="shrink-0 tabular-nums text-muted-foreground">{fmtData(alvo.data)}</span>
+                <span className="min-w-0 flex-1 truncate font-medium" title={alvo.historico ?? ''}>
+                  {alvo.historico ?? '—'}
+                </span>
+                <span className={cn('shrink-0 font-semibold tabular-nums', corValReal(alvo.valor))}>
+                  {fmtBRL(alvo.valor)}
+                </span>
+              </div>
+              <div className="mt-0.5 text-[10px] text-muted-foreground">
+                documento {alvo.documento ?? '—'}
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                Por quê?
+              </label>
+              {/* ⚠ `Select` DA CASA, NUNCA `<select>` NATIVO (gate `check:ui-nativo`). */}
+              <Select value={escolha} onValueChange={setEscolha}>
+                <SelectTrigger className="h-7 text-[11px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {MOTIVOS_DE_CANCELAMENTO.map(m => (
+                    <SelectItem key={m} value={m} className="text-[11px]">{m}</SelectItem>
+                  ))}
+                  <SelectItem value="Outro" className="text-[11px]">Outro…</SelectItem>
+                </SelectContent>
+              </Select>
+              {outro && (
+                <Input autoFocus value={livre} onChange={e => setLivre(e.target.value)}
+                  placeholder="Escreva o motivo — ele fica gravado na auditoria."
+                  className="h-7 text-[11px]" />
+              )}
+            </div>
+
+            <p className="text-[10px] leading-relaxed text-muted-foreground">
+              O movimento sai do extrato do mês: deixa de contar no saldo, nas sugestões e na
+              prévia da conciliação. Ele continua listado abaixo da tabela, e dá para trazer de
+              volta.
+            </p>
+
+            {/* ⚠ O ERRO DO BANCO FICA NA TELA, e as recusas previstas (movimento conciliado, já
+                cancelado) vêm escritas em português pela própria RPC — é onde o operador lê o
+                que precisa fazer ANTES. */}
+            {erro && (
+              <p className="rounded border border-destructive/40 bg-destructive/5 px-2 py-1 text-[10px] text-destructive">
+                {erro}
+              </p>
+            )}
+          </div>
+        )}
+
+        <DialogFooter className="border-t px-4 py-2">
+          <Button type="button" variant="ghost" size="sm" className="h-7 text-[11px]" onClick={() => aoAbrir(false)}>
+            Fechar sem alterar
+          </Button>
+          <Button type="button" size="sm" variant="destructive" className="h-7 gap-1 text-[11px]"
+            disabled={gravando || motivo === ''}
+            title={motivo === '' ? 'Escreva o motivo para continuar.' : undefined}
+            onClick={() => { void aoConfirmar(motivo); }}>
+            {gravando ? <Loader2 className="h-3 w-3 animate-spin" /> : <Ban className="h-3 w-3" />}
+            Marcar como duplicado
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
