@@ -243,6 +243,12 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
             valorAberto: extrato.valor,
             situacao: 'nao_conciliado',
             lancamentoId: null,
+            /* Movimento sintético para o diálogo de criação: ele nasce SEM vínculo por
+               construção — os três campos do par existem para a linha do Palco e aqui são o
+               estado vazio, não uma informação omitida. */
+            vinculos: 0,
+            lancamentoDescricao: null,
+            lancamentoFavorecido: null,
           }}
           contaBancariaId={contaBancariaId}
           valorSugerido={sim ? Math.abs(sim.diferenca) : undefined}

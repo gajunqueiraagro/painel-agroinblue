@@ -228,7 +228,7 @@ export function PalcoDoMes({ clienteId, contaId, contaNome, ano, mes, aoFechar, 
                     <Th className="w-[62px] text-left">Data</Th>
                     <Th className="text-left">Descrição</Th>
                     <Th className="w-[80px] text-left">Estado</Th>
-                    <Th className="text-left">Lançamento sugerido</Th>
+                    <Th className="text-left">Lançamento</Th>
                     {/* O DINHEIRO EM BLOCO, à direita e colado na ação: movimento
                         e sugestão lado a lado respondem de graça a pergunta que o
                         operador faz — "bate?" */}
@@ -254,14 +254,21 @@ export function PalcoDoMes({ clienteId, contaId, contaNome, ano, mes, aoFechar, 
                         <td className="h-[21px] px-2 py-0 align-middle">
                           <EstadoBadge situacao={m.situacao} estado={s?.estado ?? null} />
                         </td>
-                        {/* ⚠ "calculando…" NÃO É "—" — PR-PALCO-SUGESTOES-01. Enquanto o motor
-                            responde, a coluna precisa dizer que ESTÁ ESPERANDO; repetir o traço
-                            faz a tela AFIRMAR que não há sugestão, que é a leitura oposta — e foi
-                            o que enganou na homologação. Traço é dado ausente; aqui o dado ainda
-                            não chegou. */}
-                        <td className="h-[21px] max-w-0 truncate px-2 py-0 align-middle text-muted-foreground"
-                          title={s?.descricao ?? undefined}>
-                          {m.situacao === 'conciliado' ? '— conciliado —'
+                        {/* ⚠ UMA COLUNA, DUAS NATUREZAS, E O ✓ DIZ QUAL — PR-PALCO-VINCULO-01.
+                            Ela responde sempre à mesma pergunta ("qual lançamento do sistema
+                            corresponde a este movimento?"), mas a resposta ora é FATO (há vínculo
+                            gravado) ora é PALPITE (o motor sugeriu). Sem marcar a diferença, a
+                            coluna voltaria a enganar — é a mesma família do "—" que fazia o
+                            operador ler "não há sugestão" onde ninguém tinha perguntado.
+                            ⚠ ANTES ELA ESCONDIA: o conciliado imprimia "— conciliado —" e o par
+                            só aparecia abrindo a Estação, uma linha por vez.
+                            ⚠ "calculando…" NÃO É "—": traço é dado ausente; aqui o dado ainda não
+                            chegou. */}
+                        <td className={cn('h-[21px] max-w-0 truncate px-2 py-0 align-middle',
+                          m.vinculos > 0 ? '' : 'text-muted-foreground')}
+                          title={m.vinculos > 0 ? (parDoVinculo(m) ?? undefined) : (s?.descricao ?? undefined)}>
+                          {m.vinculos > 0
+                            ? <>✓ {parDoVinculo(m)}</>
                             : s?.descricao ?? (aguardandoMotor ? <span className="italic">calculando…</span> : '—')}
                         </td>
                         <td className={cn('h-[21px] whitespace-nowrap px-2 py-0 text-right align-middle font-semibold tabular-nums',
@@ -351,6 +358,19 @@ function Th({ children, className }: { children?: React.ReactNode; className?: s
       {children}
     </th>
   );
+}
+
+/**
+ * O que a coluna "Lançamento" mostra num movimento JÁ VINCULADO.
+ *
+ * ⚠ COM DOIS OU MAIS, A CONTAGEM — e não um deles. São 43 movimentos no proto (27 com dois, um
+ * com dez): escolher um para exibir esconderia os outros nove e faria a tela afirmar um par que
+ * não é "o" par. `lancamentoDescricao` chega nulo nesse caso, de propósito.
+ */
+function parDoVinculo(m: MovimentoConciliacao): string {
+  if (m.vinculos > 1) return `${m.vinculos} lançamentos · ${formatMoeda(m.valorConciliado)}`;
+  const desc = m.lancamentoDescricao?.trim() || '—';
+  return m.lancamentoFavorecido ? `${desc} · ${m.lancamentoFavorecido}` : desc;
 }
 
 const brData = (iso: string) => (iso ? iso.slice(0, 10).split('-').reverse().join('/') : '—');

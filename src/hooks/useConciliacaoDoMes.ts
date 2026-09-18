@@ -44,6 +44,18 @@ export interface MovimentoConciliacao {
    * linha volta pelo caminho de criação em vez de atualizar o lançamento errado.
    */
   lancamentoId: string | null;
+  /** Quantos vínculos ativos o movimento tem. 0 = nenhum; 1 = o par; 2+ = grupo. */
+  vinculos: number;
+  /**
+   * O que o lançamento vinculado É — para a linha dizer COM QUEM o movimento casou, em vez de
+   * só afirmar "conciliado" — PR-PALCO-VINCULO-01.
+   *
+   * ⚠ NULOS COM DOIS OU MAIS VÍNCULOS, pela mesma razão do `lancamentoId`: o movimento coberto
+   * por vários lançamentos não tem "a" descrição, e mostrar a do primeiro esconderia os outros.
+   * Nesse caso a linha mostra a CONTAGEM.
+   */
+  lancamentoDescricao: string | null;
+  lancamentoFavorecido: string | null;
 }
 
 /**
@@ -255,17 +267,44 @@ export function useConciliacaoDoMes(
          lote pelos ids já carregados. É o mesmo cuidado que a Central declara
          no topo dela — zero N+1, requests fixos. */
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado
+      /* ⚠ O EMBED VEM NA CONSULTA QUE JÁ RODA — PR-PALCO-VINCULO-01. O Palco escondia com o quê
+         cada movimento casou (imprimia "— conciliado —") porque a linha só tinha o `lancamento_id`;
+         o que o lançamento É morava noutro hook, `useVinculosDoMovimento`, chamado um movimento
+         por vez dentro da Estação. Pedir isso por linha aqui seria N+1 — 219 requisições no mês
+         grande do NJ —, e o comentário logo acima proíbe: "zero N+1, requests fixos".
+         ⚠ É O MESMO IDIOMA DE `useVinculosDoMovimento`: embed aninhado do PostgREST, lançamento e
+         fornecedor. Trocamos a lista de colunas de uma consulta que já existia; ZERO consulta a
+         mais por abertura do palco. */
       const { data: vinc } = await (supabase as any)
         .from('conciliacao_bancaria_itens')
-        .select('extrato_id, valor_aplicado, lancamento_id')
+        .select('extrato_id, valor_aplicado, lancamento_id, financeiro_lancamentos_v2(descricao, financeiro_fornecedores(nome))')
         .in('extrato_id', movs.map(m => m.id))
         .is('desfeito_em', null);
       const aplicadoPorMov: Record<string, number> = {};
       /* `undefined` = nenhum vínculo; string = exatamente um; `null` = dois ou
          mais, e aí não há "o" lançamento do movimento. */
       const lancPorMov: Record<string, string | null> = {};
-      for (const v of (vinc ?? []) as { extrato_id: string; valor_aplicado: number; lancamento_id: string }[]) {
+      /* ⚠ A CONTAGEM ENTRA AGORA, e não é detalhe: 43 movimentos do proto têm MAIS DE UM vínculo
+         (27 com dois, e um com dez). Sem ela a linha teria de escolher um dos dez para mostrar —
+         e escolher seria mentir sobre os outros nove. */
+      const nVincPorMov: Record<string, number> = {};
+      const descPorMov: Record<string, string | null> = {};
+      const fornPorMov: Record<string, string | null> = {};
+      for (const v of (vinc ?? []) as {
+        extrato_id: string; valor_aplicado: number; lancamento_id: string;
+        financeiro_lancamentos_v2?: { descricao: string | null; financeiro_fornecedores?: { nome: string | null } | null } | null;
+      }[]) {
         aplicadoPorMov[v.extrato_id] = (aplicadoPorMov[v.extrato_id] ?? 0) + Number(v.valor_aplicado ?? 0);
+        nVincPorMov[v.extrato_id] = (nVincPorMov[v.extrato_id] ?? 0) + 1;
+        /* A descrição e o fornecedor são os do ÚNICO vínculo; com dois ou mais a linha mostra a
+           contagem, então guardar o primeiro seria guardar lixo. */
+        if (v.extrato_id in lancPorMov) {
+          descPorMov[v.extrato_id] = null;
+          fornPorMov[v.extrato_id] = null;
+        } else {
+          descPorMov[v.extrato_id] = v.financeiro_lancamentos_v2?.descricao ?? null;
+          fornPorMov[v.extrato_id] = v.financeiro_lancamentos_v2?.financeiro_fornecedores?.nome ?? null;
+        }
         lancPorMov[v.extrato_id] = v.extrato_id in lancPorMov ? null : v.lancamento_id;
       }
 
@@ -284,6 +323,9 @@ export function useConciliacaoDoMes(
           documento: m.documento, valor,
           valorConciliado: aplicado, valorAberto: Math.max(0, aberto), situacao,
           lancamentoId: lancPorMov[m.id] ?? null,
+          vinculos: nVincPorMov[m.id] ?? 0,
+          lancamentoDescricao: descPorMov[m.id] ?? null,
+          lancamentoFavorecido: fornPorMov[m.id] ?? null,
         };
       }));
     } finally {
