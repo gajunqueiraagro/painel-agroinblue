@@ -45,12 +45,20 @@ const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'o
 const corValor = (v: number) => (v < 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400');
 const comSinal = (v: number) => `${v < 0 ? '−' : '+'}${formatMoeda(Math.abs(v))}`;
 
-/** Par rótulo-valor do resumo lateral — idioma do A17. */
+/**
+ * Par rótulo-valor do resumo lateral — idioma do A17.
+ *
+ * ⚠ QUEM ENCOLHE É O RÓTULO, E ISSO ESTAVA INVERTIDO — PR-CONCILIAR-MES-VER-OS-PARES-01. O
+ * rótulo era `shrink-0` e o valor `truncate`: numa coluna de 300px, "Lançamentos sem par no
+ * banco (38)" empurrava o número até ele virar "−R$ 140.45…". Cortava justamente o que o
+ * operador foi ler — o rótulo ele já sabe, o número é a informação.
+ * ⚠ E O `title` VEM JUNTO no rótulo: truncar sem tooltip troca um corte por outro.
+ */
 function LinhaResumo({ rotulo, valor, cor }: { rotulo: string; valor: string; cor?: string }) {
   return (
     <div className="flex items-baseline justify-between gap-1.5 leading-tight">
-      <span className="shrink-0 text-muted-foreground">{rotulo}</span>
-      <span className={`truncate text-right font-medium tabular-nums ${cor ?? ''}`}>{valor}</span>
+      <span className="min-w-0 truncate text-muted-foreground" title={rotulo}>{rotulo}</span>
+      <span className={`shrink-0 whitespace-nowrap text-right font-medium tabular-nums ${cor ?? ''}`}>{valor}</span>
     </div>
   );
 }
@@ -234,7 +242,13 @@ export function ConciliarMesDialog({
                     pronto. */}
                 {([
                   ['crus', `A criar ${nCrus}`],
-                  ['esperando', `Esperando ${nAguardando + (previa.ambiguos ?? 0) + nSemPar}`],
+                  /* ⚠ O BADGE CONTA MOVIMENTOS DO BANCO, E SÓ ELES — PR-CONCILIAR-MES-VER-OS-PARES-01.
+                     Ele somava os 38 LANÇAMENTOS do sistema aos 21 movimentos e exibia 59 — um número
+                     maior que os 35 movimentos que o próprio cabeçalho anuncia, e que não era a
+                     contagem de nada. Agora as três abas somam o mês: 5 + 21 + 9 = 35.
+                     ⚠ OS LANÇAMENTOS CONTINUAM DENTRO DA ABA, na faixa que é deles e com o número
+                     deles. O que sai da SOMA é a mistura de naturezas, não a informação. */
+                  ['esperando', `Esperando ${nAguardando + (previa.ambiguos ?? 0)}`],
                   ['ja', `Já conciliados ${previa.jaConciliados}`],
                 ] as const).map(([id, rot]) => (
                   <button type="button" key={id} onClick={() => setAba(id)}
@@ -394,11 +408,35 @@ export function ConciliarMesDialog({
                 <div className="border-b bg-muted/40 px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
                   O que fica para os outros passos
                 </div>
-                <div className="space-y-1 px-3 py-2">
-                  <LinhaResumo rotulo={`Têm par exato, esperando "Vincular os exatos" (${nAguardando})`} valor="—" />
-                  <LinhaResumo rotulo={`Têm 2+ candidatos, esperando agrupamento (${previa.ambiguos ?? 0})`} valor="—" />
-                  <LinhaResumo rotulo={`Lançamentos sem par no banco (${nSemPar})`} valor={comSinal(previa.semParTotal)} cor={corValor(previa.semParTotal)} />
-                  <LinhaResumo rotulo={`Já conciliados (${previa.jaConciliados})`} valor="—" />
+                {/* ⚠ DUAS NATUREZAS, DOIS SUB-BLOCOS — PR-CONCILIAR-MES-VER-OS-PARES-01. As quatro
+                    linhas vinham empilhadas como se fossem a mesma coisa, e não são: três contam
+                    MOVIMENTOS DO BANCO e uma conta LANÇAMENTOS DO SISTEMA. Somá-las com o olho —
+                    que é o que uma lista sem título convida a fazer — dá um número que não existe,
+                    e foi assim que o badge chegou a 59 num mês de 35.
+                    ⚠ O TÍTULO DE CADA GRUPO É A CORREÇÃO, e não um enfeite: ele diz de que lado da
+                    conciliação aquele número veio, que é a única coisa que impede a soma errada. */}
+                <div className="space-y-1.5 px-3 py-2">
+                  <div>
+                    <div className="mb-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground/70">
+                      Movimentos do banco
+                    </div>
+                    <div className="space-y-1">
+                      <LinhaResumo rotulo="Com par exato, esperando vincular" valor={`${nAguardando}`} />
+                      <LinhaResumo rotulo="Com 2+ candidatos, esperando agrupar" valor={`${previa.ambiguos ?? 0}`} />
+                      <LinhaResumo rotulo="Já conciliados" valor={`${previa.jaConciliados}`} />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="mb-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground/70">
+                      Lançamentos do sistema
+                    </div>
+                    <div className="space-y-1">
+                      {/* ⚠ O ÚNICO COM DINHEIRO, e agora ele cabe inteiro: a contagem vai no rótulo e
+                          o valor fica sozinho na direita, que é onde ele não disputa espaço. */}
+                      <LinhaResumo rotulo={`Sem par no banco (${nSemPar})`}
+                        valor={comSinal(previa.semParTotal)} cor={corValor(previa.semParTotal)} />
+                    </div>
+                  </div>
                 </div>
               </div>
 
