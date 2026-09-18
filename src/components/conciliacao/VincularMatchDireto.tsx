@@ -7,6 +7,7 @@ import {
 import { Loader2, Link2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { formatMoeda } from '@/lib/calculos/formatters';
 import { faixaDoMes } from '@/hooks/useConciliacaoDoMes';
 
 /**
@@ -76,10 +77,62 @@ interface RetornoRpc {
   simulacao: boolean;
 }
 
+/**
+ * UM PAR EXATO, COM OS DOIS LADOS — PR-CONCILIAR-MES-VER-OS-PARES-01.
+ *
+ * ⚠ ELE NÃO EXISTIA NO RETORNO ATÉ 18/09/2026. A RPC percorria o `m1 JOIN l1` inteiro e só
+ * contava: devolvia `vinculados` e nada mais. A caixa então dizia "Vincular 20 pares exatos?"
+ * sem mostrar um par sequer — pedir aprovação sem mostrar o que se aprova, que é o defeito que
+ * este projeto passou o dia tirando das telas.
+ */
+interface ParExato {
+  extratoId: string;
+  lancamentoId: string;
+  data: string | null;
+  historicoBanco: string | null;
+  valorBanco: number;
+  descricaoSistema: string | null;
+  favorecido: string | null;
+  /** ⚠ JÁ VEM COM O SINAL — a RPC aplica `sinal` sobre o valor, para a tela não precisar
+      conhecer a convenção de `financeiro_lancamentos_v2` (valor positivo + direção à parte). */
+  valorSistema: number;
+}
+
+/* ⚠ NARROWING, NÃO CAST: o retorno é `jsonb` e a regra zero-cast vale. Perguntar antes de ler é
+   o que faz a caixa mostrar o que tem, em vez de quebrar, se a RPC mudar de forma. */
+const ehObjeto = (j: unknown): j is Record<string, unknown> =>
+  !!j && typeof j === 'object' && !Array.isArray(j);
+const txt = (j: unknown): string | null => (typeof j === 'string' ? j : null);
+const num = (j: unknown): number => { const v = Number(j); return Number.isFinite(v) ? v : 0; };
+
+function lerPares(j: unknown): ParExato[] {
+  if (!Array.isArray(j)) return [];
+  return j.flatMap(i => {
+    if (!ehObjeto(i)) return [];
+    return [{
+      extratoId: String(i.extrato_id),
+      lancamentoId: String(i.lancamento_id),
+      data: txt(i.data),
+      historicoBanco: txt(i.historico_banco),
+      valorBanco: num(i.valor_banco),
+      descricaoSistema: txt(i.descricao_sistema),
+      favorecido: txt(i.favorecido),
+      valorSistema: num(i.valor_sistema),
+    }];
+  });
+}
+
+const dataBr = (iso: string | null) => (iso ? iso.slice(0, 10).split('-').reverse().join('/') : '—');
+const corValor = (v: number) => (v < 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400');
+
 export function VincularMatchDireto({ clienteId, contaId, ano, mes, aoConcluir }: Props) {
   const [ocupado, setOcupado] = useState(false);
-  /** Quantos a varredura encontrou. `null` = ainda não perguntamos; o diálogo abre com o número. */
-  const [previa, setPrevia] = useState<number | null>(null);
+  /**
+   * O que a varredura encontrou. `null` = ainda não perguntamos.
+   * ⚠ ERA SÓ O NÚMERO (`number | null`), e era essa a limitação que fazia a caixa afirmar sem
+   * mostrar. Agora guarda os pares, que é o que o operador precisa ver para aprovar.
+   */
+  const [previa, setPrevia] = useState<{ n: number; pares: ParExato[] } | null>(null);
 
   const impedimento: string | null =
     !clienteId ? 'Escolha um cliente primeiro.'
@@ -107,7 +160,7 @@ export function VincularMatchDireto({ clienteId, contaId, ano, mes, aoConcluir }
         /* ⚠ ZERO TAMBÉM ABRE O DIÁLOGO: "não há par exato" é uma resposta, e ela merece a mesma
            caixa que o "há 2". Um toast que some em três segundos faria o operador duvidar se a
            varredura rodou. */
-        setPrevia(n);
+        setPrevia({ n, pares: lerPares(ehObjeto(data) ? data.pares : null) });
         return;
       }
 
@@ -153,15 +206,21 @@ export function VincularMatchDireto({ clienteId, contaId, ano, mes, aoConcluir }
           são botões diferentes, em posições diferentes, com palavras diferentes. Fechar o
           diálogo por Esc ou pelo fundo também não grava. */}
       <AlertDialog open={previa !== null} onOpenChange={(aberto) => { if (!aberto) setPrevia(null); }}>
-        <AlertDialogContent className="max-w-md">
-          <AlertDialogHeader>
+        {/* ⚠ A CAIXA CRESCEU PORQUE AGORA ELA MOSTRA — PR-CONCILIAR-MES-VER-OS-PARES-01. Era
+            `max-w-md` para um texto de três linhas; com os dois lados de cada par lado a lado,
+            `md` cortaria as descrições a ponto de o operador não reconhecer nem um nem outro.
+            ⚠ A CADEIA DO A21: altura máxima no diálogo, a LISTA é o único scrollport, e o rodapé
+            com "Cancelar" e "Vincular N pares" fica FORA dele — o botão que grava não pode sair
+            da vista enquanto se lê a lista que ele vai executar. */}
+        <AlertDialogContent className="flex max-h-[85vh] max-w-3xl flex-col gap-0">
+          <AlertDialogHeader className="shrink-0 pb-2">
             <AlertDialogTitle className="text-sm">
-              {previa === 0
+              {previa?.n === 0
                 ? 'Nenhum par exato neste mês'
-                : `Vincular ${previa} par${previa === 1 ? '' : 'es'} exato${previa === 1 ? '' : 's'}?`}
+                : `Vincular ${previa?.n} par${previa?.n === 1 ? '' : 'es'} exato${previa?.n === 1 ? '' : 's'}?`}
             </AlertDialogTitle>
             <AlertDialogDescription className="text-[11px] leading-relaxed">
-              {previa === 0 ? (
+              {previa?.n === 0 ? (
                 /* ⚠ ZERO É RESPOSTA, NÃO FALHA — e a frase diz o que fazer a seguir, em vez de
                    deixar o operador achando que a varredura quebrou. */
                 <>Não há par de mesma data e mesmo valor em aberto neste mês. O que restou exige
@@ -176,15 +235,51 @@ export function VincularMatchDireto({ clienteId, contaId, ano, mes, aoConcluir }
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
+
+          {/* ═══ OS PARES, OS DOIS LADOS ═══════════════════════════════════════════════════
+              ⚠ ESQUERDA É O BANCO, DIREITA É O SISTEMA, e a régua entre as duas não é enfeite:
+              ela diz que cada linha é um CASAMENTO, não um item de lista. Sem a divisão, ler
+              "PAG BOLETO UNIAO INDUSTRIA · 50 SACC SE · Pontero Nutrição" seria uma frase só.
+              ⚠ OS DOIS VALORES APARECEM, um de cada lado, e são sempre iguais em módulo — é o
+              critério do "exato". Mostrá-los duas vezes parece redundante e não é: é o que
+              permite conferir sem ler, correndo o olho pela coluna.
+              ⚠ FONTE 10px, o piso da casa: são até dezenas de linhas, e o que importa aqui é
+              reconhecer, não estudar. */}
+          {previa && previa.pares.length > 0 && (
+            <div className="min-h-0 flex-1 overflow-y-auto rounded border bg-muted/20 text-[10px]">
+              {previa.pares.map(par => (
+                <div key={par.extratoId}
+                  className="flex items-center gap-2 border-b border-border/50 px-2 py-1 last:border-b-0">
+                  <span className="w-[38px] shrink-0 tabular-nums text-muted-foreground">{dataBr(par.data)}</span>
+                  <span className="min-w-0 flex-1 truncate" title={par.historicoBanco ?? ''}>
+                    {par.historicoBanco ?? '—'}
+                  </span>
+                  <span className={`w-[86px] shrink-0 text-right font-medium tabular-nums ${corValor(par.valorBanco)}`}>
+                    {formatMoeda(par.valorBanco)}
+                  </span>
+                  <span className="shrink-0 text-muted-foreground/40" aria-hidden>│</span>
+                  <span className="min-w-0 flex-1 truncate"
+                    title={[par.descricaoSistema, par.favorecido].filter(Boolean).join(' · ')}>
+                    {par.descricaoSistema ?? '—'}
+                    {par.favorecido && <span className="text-muted-foreground"> · {par.favorecido}</span>}
+                  </span>
+                  <span className={`w-[86px] shrink-0 text-right font-medium tabular-nums ${corValor(par.valorSistema)}`}>
+                    {formatMoeda(par.valorSistema)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <AlertDialogFooter className="shrink-0 pt-3">
             <AlertDialogCancel className="h-7 text-[11px]">
-              {previa === 0 ? 'Fechar' : 'Cancelar'}
+              {previa?.n === 0 ? 'Fechar' : 'Cancelar'}
             </AlertDialogCancel>
-            {previa !== null && previa > 0 && (
+            {previa !== null && previa.n > 0 && (
               <AlertDialogAction className="h-7 text-[11px]" disabled={ocupado}
                 onClick={() => { void chamar(false); }}>
                 {ocupado ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
-                Vincular {previa} par{previa === 1 ? '' : 'es'}
+                Vincular {previa.n} par{previa.n === 1 ? '' : 'es'}
               </AlertDialogAction>
             )}
           </AlertDialogFooter>
