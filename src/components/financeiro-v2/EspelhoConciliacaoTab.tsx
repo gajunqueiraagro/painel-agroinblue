@@ -425,6 +425,13 @@ export function montarMesa(data: EspelhadosReais, internos: ReadonlySet<string>)
     d.extratosSemPar = ordenar(d.extratosSemPar, (e) => e.valor);
     d.lancsSemPar = ordenar(d.lancsSemPar, (s) => s.valor_assinado);
     d.internas = ordenar(d.internas, (s) => s.valor_assinado);
+    /* ⚠ A MESMA `ordenar` DAS OUTRAS CINCO — PR-ESPELHO-CANDIDATOS-ORDEM-06. Os candidatos
+       vinham na ordem crua da RPC (por vencimento), e dentro de um DIA o vencimento é o mesmo
+       para todos: a ordem virava acaso. Na Vera, 04/09, isso punha −33,61 acima de −12.000,00.
+       ⚠ E É `ordenar`, NÃO UM COMPARADOR NOVO: entrada antes de saída, cada grupo do maior para
+       o menor. Um segundo critério aqui faria a lista do sistema mudar de regra no meio do
+       mesmo dia — o candidato numa ordem, o lançamento sem par logo acima noutra. */
+    d.candidatos = ordenar(d.candidatos, (c) => c.valor_assinado);
   }
   return lista;
 }
@@ -769,7 +776,12 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
   const candidatosOrfaos = useMemo(() => {
     if (!mostrarCandidatos) return [];
     const agrupados = new Set(dias.flatMap((d) => d.candidatos.map((c) => c.lancamento_id)));
-    return (data.sistema_candidatos ?? []).filter((c) => !agrupados.has(c.lancamento_id));
+    /* ⚠ OS ÓRFÃOS SEGUEM A MESMA RÉGUA — PR-ESPELHO-CANDIDATOS-ORDEM-06. Eles são de dias
+       diferentes, então aqui a ordenação por valor atravessa datas; é o que se quer numa faixa
+       que existe para mostrar o que está atrasado — o maior primeiro. */
+    return ordenar(
+      (data.sistema_candidatos ?? []).filter((c) => !agrupados.has(c.lancamento_id)),
+      (c) => c.valor_assinado);
   }, [dias, data, mostrarCandidatos]);
   const [ignorarId, setIgnorarId] = useState<string | null>(null);
   const [revertendoId, setRevertendoId] = useState<string | null>(null);
