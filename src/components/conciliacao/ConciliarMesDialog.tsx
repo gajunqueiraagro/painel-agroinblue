@@ -4,8 +4,19 @@
  * ⚠ VER ANTES DE GRAVAR. O botão que este diálogo substitui criava um lançamento cru para
  * cada movimento do extrato, sem prévia: na Sicredi Pessoal do NJ em ago/2026 seriam 107
  * crus por cima de 31 lançamentos que já existiam sem vínculo — 31 duplicatas. Aqui o
- * operador vê o que entra cru, o que o banco substitui, o que sobra sem par e se o saldo
- * fecha, e só então confirma.
+ * operador vê o que entra, o que fica para os outros passos e se o saldo fecha, e só
+ * então confirma.
+ *
+ * ⚠ E ELE FAZ UMA COISA SÓ, DESDE PR-CONCILIACAO-CRUS-01: CRIAR LANÇAMENTO A PARTIR DO BANCO,
+ * e apenas para os movimentos que o operador MARCAR. Antes o mesmo clique também casava
+ * sozinho o movimento de candidato único (com régua de ±5 dias) e criava cru por cima dos
+ * ambíguos. Eram três decisões num botão, duas delas irreversíveis na prática — desfazer um
+ * cru exige achar cada um e cancelar a um. Casar agora é o passo 2a ("Vincular os exatos"), e
+ * o ambíguo espera o agrupamento (2b).
+ *
+ * ⚠ O SEGUNDO BLOCO DO RESUMO EXISTE POR CAUSA DISSO. Num mês de 35 movimentos o botão pode
+ * criar 6 e não tocar nos outros 29; sem dizer para onde esses 29 foram, o silêncio vira
+ * desconfiança — e esta tela já ensinou o operador a desconfiar uma vez.
  *
  * ⚠ A CONTA DA PRÉVIA É A DA RPC, sempre. Nada aqui recalcula totais nem decide o que
  * substitui: `fn_extrato_conciliar_mes` percorre o mesmo caminho em simulação e em
@@ -23,7 +34,7 @@ import { formatMoeda } from '@/lib/calculos/formatters';
 import { useConciliarMes, type PreviaConciliarMes } from '@/hooks/useConciliarMes';
 import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
 
-type Aba = 'crus' | 'substituidos' | 'sem_par' | 'ja';
+type Aba = 'crus' | 'esperando' | 'ja';
 
 const dataBr = (iso: string | null) => (iso ? iso.slice(0, 10).split('-').reverse().join('/') : '—');
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
@@ -83,9 +94,24 @@ export function ConciliarMesDialog({
   }, [open, clienteId, contaId, anoMes]);
 
   const nCrus = previa?.crus.length ?? 0;
-  const nSubs = previa?.substituidos.length ?? 0;
   const nSemPar = previa?.semPar.length ?? 0;
-  const nadaAFazer = !!previa && nCrus === 0 && nSubs === 0;
+  const nAguardando = previa?.aguardandoExatos.length ?? 0;
+  const nadaAFazer = !!previa && nCrus === 0;
+
+  /**
+   * ⚠ QUAIS CRIAR — PR-CONCILIACAO-CRUS-01, e a escolha é por LINHA porque criar lançamento é
+   * irreversível na prática: desfazer exige achar cada cru e cancelar um a um. Nasce vazio
+   * (nada marcado), e o cabeçalho tem "marcar todos" para o caso de o operador querer o lote.
+   */
+  const [marcados, setMarcados] = useState<Set<string>>(new Set());
+  /* Toda simulação nova zera a escolha: marcar sobre uma lista velha aprovaria outra coisa. */
+  useEffect(() => { setMarcados(new Set()); }, [previa]);
+  const alternar = (id: string) => setMarcados(prev => {
+    const n = new Set(prev);
+    if (n.has(id)) n.delete(id); else n.add(id);
+    return n;
+  });
+  const todosMarcados = nCrus > 0 && marcados.size === nCrus;
 
   /* A diferença do saldo do sistema contra o extrato — o número que explica por que o mês
      não fecha hoje. `null` quando falta um dos dois: "não sei" não vira zero. */
@@ -96,11 +122,11 @@ export function ConciliarMesDialog({
   }, [saldoSistemaHoje, previa]);
 
   const confirmar = async () => {
-    if (!clienteId || !contaId) return;
-    const r = await api.gravar(clienteId, contaId, anoMes);
-    if (!r) { toast.error(api.erro ?? 'Falha ao conciliar o mês.'); return; }
+    if (!clienteId || !contaId || marcados.size === 0) return;
+    const r = await api.gravar(clienteId, contaId, anoMes, [...marcados]);
+    if (!r) { toast.error(api.erro ?? 'Falha ao criar os lançamentos.'); return; }
     toast.success(
-      `${r.crus.length} criado${r.crus.length === 1 ? '' : 's'} · ${r.substituidos.length} substituído${r.substituidos.length === 1 ? '' : 's'} · ${r.semPar.length} sem par no banco`);
+      `${r.crus.length} lançamento${r.crus.length === 1 ? '' : 's'} criado${r.crus.length === 1 ? '' : 's'} a partir do banco.`);
     /* ⚠ AVISAR DEPOIS DA ESCRITA, E ANTES DE FECHAR — 132. A RPC gravou por fora de todo
        hook desta tela; sem a notificação, o card "Saldo no sistema" e a aba Conciliação
        ficavam com o número de antes até um F5. `aoConcluir` recarrega a lista do extrato;
@@ -120,9 +146,14 @@ export function ConciliarMesDialog({
     return [...m];
   };
 
-  const rotuloBotao = nCrus > 0
-    ? `Criar ${nCrus} lançamento${nCrus === 1 ? '' : 's'} cru${nCrus === 1 ? '' : 's'} e conciliar`
-    : `Conciliar ${nSubs} lançamento${nSubs === 1 ? '' : 's'}`;
+  /**
+   * ⚠ "DO QUE SOBROU" É O RECORTE, E ELE TEM DEFINIÇÃO: sobrou = ZERO candidatos no sistema.
+   * O que tem um candidato vai para o passo 2a e o que tem dois ou mais vai para o 2b; só o
+   * que não casa com nada precisa nascer aqui.
+   * ⚠ O NÚMERO É O DOS MARCADOS, não o dos crus possíveis — o botão diz o que o clique FAZ.
+   * Com a caixa por linha, `(6)` enquanto 3 estão marcados prometeria o dobro.
+   */
+  const rotuloBotao = `Criar lançamentos do que sobrou (${marcados.size})`;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -194,10 +225,14 @@ export function ConciliarMesDialog({
 
               {/* ═══ ABAS ══════════════════════════════════════════════════════ */}
               <div className="flex shrink-0 flex-wrap gap-1 border-b px-3 py-1.5">
+                {/* ⚠ TRÊS ABAS, E A DO MEIO É NOVA — PR-CONCILIACAO-CRUS-01. Antes eram quatro,
+                    misturando o que este botão FAZIA (criar cru, substituir) com o que ele
+                    apenas relatava. Agora o botão faz uma coisa só, e as abas separam: o que
+                    VAI SER CRIADO aqui, o que FICA para os outros passos, e o que já está
+                    pronto. */}
                 {([
-                  ['crus', `Entram crus do banco ${nCrus}`],
-                  ['substituidos', `O banco substitui do sistema ${nSubs}`],
-                  ['sem_par', `Ficam no sistema sem par no banco ${nSemPar}`],
+                  ['crus', `A criar ${nCrus}`],
+                  ['esperando', `Esperando ${nAguardando + (previa.ambiguos ?? 0) + nSemPar}`],
                   ['ja', `Já conciliados ${previa.jaConciliados}`],
                 ] as const).map(([id, rot]) => (
                   <button type="button" key={id} onClick={() => setAba(id)}
@@ -206,6 +241,19 @@ export function ConciliarMesDialog({
                     {rot}
                   </button>
                 ))}
+
+                {/* ⚠ "MARCAR TODOS" SÓ NA ABA EM QUE HÁ O QUE MARCAR — a mesma decisão da coluna
+                    de caixas da prévia de importação: controle que não faz nada na aba errada é
+                    ruído permanente. */}
+                {aba === 'crus' && nCrus > 0 && (
+                  <label className="ml-auto flex cursor-pointer items-center gap-1 text-[10px] text-muted-foreground"
+                    title="Marcar os movimentos sem candidato nenhum no sistema — são os que podem virar lançamento novo.">
+                    <input type="checkbox" className="h-3 w-3 cursor-pointer"
+                      checked={todosMarcados}
+                      onChange={(e) => setMarcados(e.target.checked ? new Set(previa.crus.map(c => c.extratoId)) : new Set())} />
+                    marcar todos
+                  </label>
+                )}
               </div>
 
               {/* ═══ A LISTA — o único scrollport ══════════════════════════════ */}
@@ -216,11 +264,21 @@ export function ConciliarMesDialog({
                     {previa.jaConciliados === 1 ? ' tinha' : ' tinham'} vínculo e não {previa.jaConciliados === 1 ? 'é tocado' : 'são tocados'}.
                   </p>
                 ) : aba === 'crus' ? (
-                  porDia(previa.crus, c => c.dataBanco).map(([dia, itens]) => (
+                  nCrus === 0 ? (
+                    <p className="px-3 py-6 text-center text-[11px] text-muted-foreground">
+                      Nenhum movimento do mês está sem candidato no sistema — não há lançamento a criar aqui.
+                    </p>
+                  ) : porDia(previa.crus, c => c.dataBanco).map(([dia, itens]) => (
                     <div key={dia}>
                       <div className="sticky top-0 z-[2] border-b bg-muted px-3 py-1 text-[10px] font-medium">{dataBr(dia)}</div>
                       {itens.map(c => (
-                        <div key={c.extratoId} className="flex items-center gap-2 border-b border-border/60 px-3 py-[7px]">
+                        /* ⚠ A LINHA INTEIRA É O ALVO DO CLIQUE (é um `<label>`), não só os 12px da
+                           caixa — a mesma correção que o teste da grade do DRE pegou no `<td>`. */
+                        <label key={c.extratoId}
+                          className="flex cursor-pointer items-center gap-2 border-b border-border/60 px-3 py-[7px] hover:bg-muted/40">
+                          <input type="checkbox" className="h-3 w-3 shrink-0 cursor-pointer"
+                            checked={marcados.has(c.extratoId)}
+                            onChange={() => alternar(c.extratoId)} />
                           <div className="min-w-0 flex-1">
                             <div className="truncate text-[12px] font-medium" title={c.historicoBanco ?? undefined}>
                               {c.historicoBanco ?? '—'}
@@ -229,7 +287,7 @@ export function ConciliarMesDialog({
                               {contaNome}{c.documentoBanco ? ` · doc ${c.documentoBanco}` : ''}
                               {' · '}
                               <span className="text-amber-700 dark:text-amber-300">
-                                {c.ambiguo ? '2 candidatos no sistema, entrou cru' : 'sem subcentro, sem fornecedor'}
+                                nada parecido no sistema · nasce sem subcentro e sem fornecedor
                               </span>
                             </div>
                           </div>
@@ -237,59 +295,78 @@ export function ConciliarMesDialog({
                             {comSinal(c.valorBanco)}
                           </div>
                           <span className="shrink-0 rounded-full bg-blue-100 px-1.5 py-px text-[10px] text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">cru</span>
-                        </div>
-                      ))}
-                    </div>
-                  ))
-                ) : aba === 'substituidos' ? (
-                  porDia(previa.substituidos, s => s.dataBanco).map(([dia, itens]) => (
-                    <div key={dia}>
-                      <div className="sticky top-0 z-[2] border-b bg-muted px-3 py-1 text-[10px] font-medium">{dataBr(dia)}</div>
-                      {itens.map(s => (
-                        <div key={s.extratoId} className="flex items-center gap-2 border-b border-border/60 px-3 py-[7px]">
-                          <div className="min-w-0 flex-1">
-                            <div className="truncate text-[12px] font-medium" title={s.historicoBanco ?? undefined}>
-                              {s.historicoBanco ?? '—'}
-                            </div>
-                            {/* ⚠ SÓ O QUE MUDA. Repetir o que ficou igual faria o operador
-                                caçar a diferença no meio do que não mudou. */}
-                            <div className="truncate text-[10px] text-muted-foreground">
-                              {s.descricao ?? '—'}
-                              {' · previsto '}{dataBr(s.antes.dataPagamento ?? s.antes.dataVencimento)}
-                              {s.antes.valor != null ? ` ${formatMoeda(s.antes.valor)}` : ''}
-                              {', o banco pagou '}{dataBr(s.dataBanco)}
-                            </div>
-                          </div>
-                          <div className={`shrink-0 text-[12px] font-medium tabular-nums ${corValor(s.valorBanco)}`}>
-                            {comSinal(s.valorBanco)}
-                          </div>
-                          <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-px text-[10px] text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">substituído</span>
-                        </div>
+                        </label>
                       ))}
                     </div>
                   ))
                 ) : (
-                  porDia(previa.semPar, s => s.data).map(([dia, itens]) => (
-                    <div key={dia}>
-                      <div className="sticky top-0 z-[2] border-b bg-muted px-3 py-1 text-[10px] font-medium">{dataBr(dia)}</div>
-                      {itens.map(s => (
-                        <div key={s.lancamentoId} className="flex items-center gap-2 border-b border-border/60 px-3 py-[7px]">
-                          <div className="min-w-0 flex-1">
-                            <div className="truncate text-[12px] font-medium" title={s.descricao ?? undefined}>
-                              {s.descricao ?? '—'}
-                            </div>
-                            <div className="truncate text-[10px] text-muted-foreground">
-                              {contaNome}{s.subcentro ? ` · ${s.subcentro}` : ''}{s.statusTransacao ? ` · ${s.statusTransacao}` : ''}
-                            </div>
-                          </div>
-                          <div className={`shrink-0 text-[12px] font-medium tabular-nums ${corValor(s.valor)}`}>
-                            {comSinal(s.valor)}
-                          </div>
-                          <span className="shrink-0 rounded-full bg-muted px-1.5 py-px text-[10px] text-muted-foreground">sem par</span>
-                        </div>
-                      ))}
+                  /* ═══ ESPERANDO — três coisas diferentes, e é por isso que cada uma tem faixa
+                       própria: duas são movimentos do BANCO e a terceira são LANÇAMENTOS do
+                       sistema. Empilhá-las sem dizer qual é qual faria o operador somar peras
+                       com maçãs para conferir o mês. */
+                  <div>
+                    <div className="border-b bg-muted/60 px-3 py-1 text-[10px] font-medium">
+                      Têm par exato no sistema — esperando “Vincular os exatos” ({nAguardando})
                     </div>
-                  ))
+                    {nAguardando === 0 ? (
+                      <p className="px-3 py-3 text-center text-[10px] text-muted-foreground">Nenhum.</p>
+                    ) : previa.aguardandoExatos.map(a => (
+                      <div key={a.extratoId} className="flex items-center gap-2 border-b border-border/60 px-3 py-[7px]">
+                        <div className="w-[56px] shrink-0 text-[10px] tabular-nums text-muted-foreground">{dataBr(a.dataBanco)}</div>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-[12px] font-medium" title={a.historicoBanco ?? undefined}>
+                            {a.historicoBanco ?? '—'}
+                          </div>
+                          <div className="truncate text-[10px] text-muted-foreground">
+                            {contaNome}{a.documentoBanco ? ` · doc ${a.documentoBanco}` : ''}
+                          </div>
+                        </div>
+                        <div className={`shrink-0 text-[12px] font-medium tabular-nums ${corValor(a.valorBanco)}`}>
+                          {comSinal(a.valorBanco)}
+                        </div>
+                        <span className="shrink-0 rounded-full bg-amber-100 px-1.5 py-px text-[10px] text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">1 candidato</span>
+                      </div>
+                    ))}
+
+                    <div className="border-y bg-muted/60 px-3 py-1 text-[10px] font-medium">
+                      Têm 2 ou mais candidatos — esperando o agrupamento ({previa.ambiguos})
+                    </div>
+                    {/* ⚠ SÓ O NÚMERO: a RPC devolve a lista dos ambíguos, mas o contrato deste hook
+                        guarda apenas a contagem. Mostrar quais é o passo 2b, e é lá que o operador
+                        escolhe — prometer a lista aqui seria abrir uma decisão nesta tela de novo. */}
+                    <p className="px-3 py-3 text-center text-[10px] text-muted-foreground">
+                      {previa.ambiguos === 0
+                        ? 'Nenhum.'
+                        : `${previa.ambiguos} movimento${previa.ambiguos === 1 ? '' : 's'} do banco ${previa.ambiguos === 1 ? 'casa' : 'casam'} com mais de um lançamento. Nada é criado nem vinculado por conta própria.`}
+                    </p>
+
+                    <div className="border-y bg-muted/60 px-3 py-1 text-[10px] font-medium">
+                      Lançamentos do sistema sem par no banco ({nSemPar})
+                    </div>
+                    {nSemPar === 0 ? (
+                      <p className="px-3 py-3 text-center text-[10px] text-muted-foreground">Nenhum.</p>
+                    ) : porDia(previa.semPar, s => s.data).map(([dia, itens]) => (
+                      <div key={dia}>
+                        <div className="border-b bg-muted/30 px-3 py-1 text-[10px]">{dataBr(dia)}</div>
+                        {itens.map(s => (
+                          <div key={s.lancamentoId} className="flex items-center gap-2 border-b border-border/60 px-3 py-[7px]">
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate text-[12px] font-medium" title={s.descricao ?? undefined}>
+                                {s.descricao ?? '—'}
+                              </div>
+                              <div className="truncate text-[10px] text-muted-foreground">
+                                {contaNome}{s.subcentro ? ` · ${s.subcentro}` : ''}{s.statusTransacao ? ` · ${s.statusTransacao}` : ''}
+                              </div>
+                            </div>
+                            <div className={`shrink-0 text-[12px] font-medium tabular-nums ${corValor(s.valor)}`}>
+                              {comSinal(s.valor)}
+                            </div>
+                            <span className="shrink-0 rounded-full bg-muted px-1.5 py-px text-[10px] text-muted-foreground">sem par</span>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
             </div>
@@ -301,9 +378,24 @@ export function ConciliarMesDialog({
                   O que vai acontecer
                 </div>
                 <div className="space-y-1 px-3 py-2">
-                  <LinhaResumo rotulo={`Entram crus (${nCrus})`} valor={comSinal(previa.crusTotal)} cor={corValor(previa.crusTotal)} />
-                  <LinhaResumo rotulo={`Substituídos (${nSubs})`} valor={comSinal(previa.substituidosTotal)} cor={corValor(previa.substituidosTotal)} />
-                  <LinhaResumo rotulo={`Sem par (${nSemPar})`} valor={comSinal(previa.semParTotal)} cor={corValor(previa.semParTotal)} />
+                  <LinhaResumo rotulo={`Entram como lançamento novo (${marcados.size})`}
+                    valor={comSinal(previa.crus.filter(c => marcados.has(c.extratoId)).reduce((a, c) => a + c.valorBanco, 0))}
+                    cor={corValor(previa.crusTotal)} />
+                </div>
+              </div>
+
+              {/* ⚠ O SEGUNDO BLOCO É O QUE IMPEDE O OPERADOR DE ACHAR QUE PERDEU MOVIMENTO —
+                  PR-CONCILIACAO-CRUS-01. Este botão passou a fazer UMA coisa, então num mês de
+                  35 ele cria 6 e não toca nos outros 29. Sem dizer para onde esses 29 foram, o
+                  silêncio vira desconfiança — e a tela já ensinou esse erro antes. */}
+              <div className="rounded-lg border bg-card text-[11px]">
+                <div className="border-b bg-muted/40 px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                  O que fica para os outros passos
+                </div>
+                <div className="space-y-1 px-3 py-2">
+                  <LinhaResumo rotulo={`Têm par exato, esperando "Vincular os exatos" (${nAguardando})`} valor="—" />
+                  <LinhaResumo rotulo={`Têm 2+ candidatos, esperando agrupamento (${previa.ambiguos ?? 0})`} valor="—" />
+                  <LinhaResumo rotulo={`Lançamentos sem par no banco (${nSemPar})`} valor={comSinal(previa.semParTotal)} cor={corValor(previa.semParTotal)} />
                   <LinhaResumo rotulo={`Já conciliados (${previa.jaConciliados})`} valor="—" />
                 </div>
               </div>
@@ -323,17 +415,20 @@ export function ConciliarMesDialog({
               <div className="rounded-lg border bg-muted/30 px-3 py-2 text-[10px] leading-relaxed text-muted-foreground">
                 {api.gravando ? (
                   <span className="tabular-nums">
-                    Gravando em lotes de 30 — <b className="text-foreground">{api.gravados}</b> de {nCrus + nSubs}.
+                    Gravando em lotes de 30 — <b className="text-foreground">{api.gravados}</b> de {marcados.size}.
                     Cada lote é gravado por inteiro; se um falhar, os anteriores ficam.
                   </span>
                 ) : nadaAFazer ? (
-                  'Nada a fazer: todos os movimentos já têm vínculo.'
+                  'Nada a criar: todo movimento do mês já tem vínculo ou tem candidato no sistema.'
                 ) : (
                   <>
-                    O banco é a verdade. Serão criados <b className="text-foreground">{nCrus}</b> lançamentos
-                    crus, iguais ao extrato: data, valor e histórico do banco, sem subcentro e sem
-                    fornecedor. <b className="text-foreground">{nSubs}</b> lançamentos que já existiam
-                    recebem data e valor do banco. Nada é apagado.
+                    Serão criados <b className="text-foreground">{marcados.size}</b> lançamentos crus,
+                    iguais ao extrato: data, valor e histórico do banco, sem subcentro e sem
+                    fornecedor. Nenhum lançamento existente é alterado e nada é apagado.
+                    {/* ⚠ E NÃO SE CASA NADA AQUI — PR-CONCILIACAO-CRUS-01. Dizer isso na tela é o
+                        que separa este passo do "Vincular os exatos"; sem a frase, "conciliar o
+                        mês" continua parecendo o botão que fazia tudo. */}
+                    {' '}Vincular o que já existe é o passo seguinte.
                     {/* ⚠ A FRASE DO "PODE SER DESFEITO" NÃO ENTRA AINDA — 130 item 5. O
                         desfazer por arquivo NÃO alcança os crus hoje; prometer isso seria a
                         tela afirmando um caminho que não existe. */}
@@ -359,16 +454,25 @@ export function ConciliarMesDialog({
             Fechar sem alterar
           </Button>
           {previa && !nadaAFazer && (
-            <Button type="button" size="sm"
-              className="h-7 bg-[#f3c84a] text-[11px] font-medium text-foreground hover:bg-[#e8bd3e]"
-              disabled={api.gravando}
-              onClick={() => { void confirmar(); }}>
-              {api.gravando
-                /* ⚠ O NÚMERO SOBE PORQUE SÃO VÁRIAS CHAMADAS — 132. Um "Conciliando…" mudo
-                   por 10 s num lote de 107 é indistinguível de uma tela travada. */
-                ? `Gravando… ${api.gravados} de ${nCrus + nSubs}`
-                : rotuloBotao}
-            </Button>
+            <>
+              {/* ⚠ O MOTIVO FICA ESCRITO AO LADO — regra da OC: botão desabilitado diz por quê,
+                  e a mesma frase governa o `disabled` e o `title`. Sem ela, o operador vê um
+                  botão morto e não descobre que faltava marcar a linha. */}
+              {marcados.size === 0 && !api.gravando && (
+                <span className="text-[10px] text-muted-foreground">Marque as linhas que devem virar lançamento.</span>
+              )}
+              <Button type="button" size="sm"
+                className="h-7 bg-[#f3c84a] text-[11px] font-medium text-foreground hover:bg-[#e8bd3e]"
+                disabled={api.gravando || marcados.size === 0}
+                title={marcados.size === 0 ? 'Marque as linhas que devem virar lançamento.' : undefined}
+                onClick={() => { void confirmar(); }}>
+                {api.gravando
+                  /* ⚠ O NÚMERO SOBE PORQUE SÃO VÁRIAS CHAMADAS — 132. Um "Conciliando…" mudo
+                     por 10 s num lote de 107 é indistinguível de uma tela travada. */
+                  ? `Gravando… ${api.gravados} de ${marcados.size}`
+                  : rotuloBotao}
+              </Button>
+            </>
           )}
         </div>
       </DialogContent>

@@ -56,6 +56,22 @@ export interface SemParConciliar {
   origemLancamento: string | null;
 }
 
+/**
+ * Movimento que TEM par no sistema e está esperando o "Vincular os exatos" — PR-CONCILIACAO-CRUS-01.
+ *
+ * ⚠ ELE NÃO EXISTIA NO RETORNO, e essa ausência era o buraco: com a RPC deixando de casar, o
+ * movimento de 1 candidato não é cru, não é substituído, não é ambíguo e não é "sem par" (quem
+ * aparece em `sem_par` é o LANÇAMENTO, não ele). Sem esta lista, o operador clicaria em "criar 6"
+ * num mês de 35 e não saberia onde foram os outros 29.
+ */
+export interface AguardandoExatosConciliar {
+  extratoId: string;
+  dataBanco: string | null;
+  valorBanco: number;
+  historicoBanco: string | null;
+  documentoBanco: string | null;
+}
+
 export interface SaldoConciliar {
   inicial: number | null;
   movimentosExtrato: number | null;
@@ -75,8 +91,16 @@ export interface PreviaConciliarMes {
   restantes: number;
   crus: CruConciliar[];
   crusTotal: number;
+  /**
+   * ⚠ SEMPRE VAZIA desde PR-CONCILIACAO-CRUS-01 — o casamento saiu desta RPC e virou o
+   * "Vincular os exatos". A chave FICA no contrato porque a RPC continua devolvendo-a, e tirá-la
+   * do tipo obrigaria a mexer no `daPrevia` por nada. Quando ela voltar a ter conteúdo, será
+   * porque alguém religou o casamento aqui — e aí é decisão, não acidente.
+   */
   substituidos: SubstituidoConciliar[];
   substituidosTotal: number;
+  /** Os que têm par exato e esperam o passo 2a. */
+  aguardandoExatos: AguardandoExatosConciliar[];
   semPar: SemParConciliar[];
   semParTotal: number;
   ambiguos: number;
@@ -138,6 +162,10 @@ function daPrevia(j: Json | null): PreviaConciliarMes | null {
       importacaoId: txt(c.importacao_id), ambiguo: c.ambiguo === true,
     })),
     crusTotal: num(e.crus_total),
+    aguardandoExatos: lista(e.aguardando_exatos).map(a => ({
+      extratoId: String(a.extrato_id), dataBanco: txt(a.data_banco), valorBanco: num(a.valor_banco),
+      historicoBanco: txt(a.historico_banco), documentoBanco: txt(a.documento_banco),
+    })),
     substituidos: lista(e.substituidos).map(x => {
       const a = obj(x.antes) ?? {}; const d = obj(x.depois) ?? {};
       return {
@@ -179,7 +207,7 @@ export interface ConciliarMesApi {
   simulando: boolean;
   gravando: boolean;
   simular: (clienteId: string, contaId: string, anoMes: string) => Promise<PreviaConciliarMes | null>;
-  gravar: (clienteId: string, contaId: string, anoMes: string) => Promise<PreviaConciliarMes | null>;
+  gravar: (clienteId: string, contaId: string, anoMes: string, extratos: readonly string[]) => Promise<PreviaConciliarMes | null>;
   /** A mensagem crua do Postgres quando a RPC recusou. `null` quando não houve erro. */
   erro: string | null;
   /** Quantos já foram gravados no lote em curso — para o botão e o resumo. */
@@ -195,6 +223,7 @@ export function useConciliarMes(): ConciliarMesApi {
 
   const chamar = useCallback(async (
     clienteId: string, contaId: string, anoMes: string, simular: boolean, limite?: number,
+    extratos?: readonly string[],
   ): Promise<PreviaConciliarMes | null> => {
     setErro(null);
     try {
@@ -203,6 +232,11 @@ export function useConciliarMes(): ConciliarMesApi {
         /* `undefined` não vai no corpo — a RPC usa o default `NULL` (sem limite), que é o
            que a simulação quer: ela sempre cobre o mês inteiro. */
         ...(limite == null ? {} : { p_limite: limite }),
+        /* ⚠ QUAIS CRIAR — PR-CONCILIACAO-CRUS-01. Criar lançamento é irreversível na prática:
+           desfazer exige achar cada cru e cancelar um a um. Por isso a gravação diz QUAIS, e o
+           operador marca linha a linha. `undefined` na SIMULAÇÃO é de propósito — ela mostra
+           tudo o que poderia ser criado, e a escolha vem depois. */
+        ...(extratos == null ? {} : { p_extratos: [...extratos] }),
       });
       if (error) throw error;
       const p = daPrevia(data);
@@ -238,7 +272,9 @@ export function useConciliarMes(): ConciliarMesApi {
    * ⚠ TETO DE VOLTAS: `restantes` sempre cai, mas um `p_limite` que não avançasse faria
    * laço infinito no navegador do produtor. O guarda para e diz.
    */
-  const gravar = useCallback(async (clienteId: string, contaId: string, anoMes: string) => {
+  const gravar = useCallback(async (
+    clienteId: string, contaId: string, anoMes: string, extratos: readonly string[],
+  ) => {
     setGravando(true);
     setGravados(0);
     try {
@@ -248,7 +284,7 @@ export function useConciliarMes(): ConciliarMesApi {
       let ultima: PreviaConciliarMes | null = null;
       let voltas = 0;
       for (;;) {
-        const r = await chamar(clienteId, contaId, anoMes, false, LOTE_CONCILIAR);
+        const r = await chamar(clienteId, contaId, anoMes, false, LOTE_CONCILIAR, extratos);
         if (!r) return null;                       // o erro já está em `erro`
         crus.push(...r.crus);
         substituidos.push(...r.substituidos);
