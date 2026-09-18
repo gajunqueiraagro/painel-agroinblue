@@ -80,12 +80,15 @@ interface RetornoRpc {
 /**
  * UM PAR EXATO, COM OS DOIS LADOS — PR-CONCILIAR-MES-VER-OS-PARES-01.
  *
+ * ⚠ EXPORTADO — PR-CONCILIAR-MES-ESPERANDO-COM-PAR-01. O `ConciliarMesDialog` mostra os mesmos
+ * pares na faixa "Têm par exato", e uma segunda cópia do tipo e do narrowing divergiria na
+ * primeira mudança do contrato da RPC. Uma peça, nunca uma cópia.
  * ⚠ ELE NÃO EXISTIA NO RETORNO ATÉ 18/09/2026. A RPC percorria o `m1 JOIN l1` inteiro e só
  * contava: devolvia `vinculados` e nada mais. A caixa então dizia "Vincular 20 pares exatos?"
  * sem mostrar um par sequer — pedir aprovação sem mostrar o que se aprova, que é o defeito que
  * este projeto passou o dia tirando das telas.
  */
-interface ParExato {
+export interface ParExato {
   extratoId: string;
   lancamentoId: string;
   data: string | null;
@@ -105,7 +108,7 @@ const ehObjeto = (j: unknown): j is Record<string, unknown> =>
 const txt = (j: unknown): string | null => (typeof j === 'string' ? j : null);
 const num = (j: unknown): number => { const v = Number(j); return Number.isFinite(v) ? v : 0; };
 
-function lerPares(j: unknown): ParExato[] {
+export function lerPares(j: unknown): ParExato[] {
   if (!Array.isArray(j)) return [];
   return j.flatMap(i => {
     if (!ehObjeto(i)) return [];
@@ -247,6 +250,9 @@ export function VincularMatchDireto({ clienteId, contaId, ano, mes, aoConcluir }
               reconhecer, não estudar. */}
           {previa && previa.pares.length > 0 && (
             <div className="min-h-0 flex-1 overflow-y-auto rounded border bg-muted/20 text-[10px]">
+              {/* ⚠ 96px, E ERA 86 — medido em PR-CONCILIAR-MES-ESPERANDO-COM-PAR-01: "-R$ 1.500.000,55"
+                  mede 85,94px a 10px e cabia por 6 CENTÉSIMOS. O maior lançamento do proto é
+                  R$ 3.996.196,13; o primeiro valor de 8 dígitos cortaria em silêncio. */}
               {previa.pares.map(par => (
                 <div key={par.extratoId}
                   className="flex items-center gap-2 border-b border-border/50 px-2 py-1 last:border-b-0">
@@ -254,7 +260,7 @@ export function VincularMatchDireto({ clienteId, contaId, ano, mes, aoConcluir }
                   <span className="min-w-0 flex-1 truncate" title={par.historicoBanco ?? ''}>
                     {par.historicoBanco ?? '—'}
                   </span>
-                  <span className={`w-[86px] shrink-0 text-right font-medium tabular-nums ${corValor(par.valorBanco)}`}>
+                  <span className={`w-[96px] shrink-0 text-right font-medium tabular-nums ${corValor(par.valorBanco)}`}>
                     {formatMoeda(par.valorBanco)}
                   </span>
                   <span className="shrink-0 text-muted-foreground/40" aria-hidden>│</span>
@@ -263,7 +269,7 @@ export function VincularMatchDireto({ clienteId, contaId, ano, mes, aoConcluir }
                     {par.descricaoSistema ?? '—'}
                     {par.favorecido && <span className="text-muted-foreground"> · {par.favorecido}</span>}
                   </span>
-                  <span className={`w-[86px] shrink-0 text-right font-medium tabular-nums ${corValor(par.valorSistema)}`}>
+                  <span className={`w-[96px] shrink-0 text-right font-medium tabular-nums ${corValor(par.valorSistema)}`}>
                     {formatMoeda(par.valorSistema)}
                   </span>
                 </div>
@@ -296,7 +302,7 @@ export function VincularMatchDireto({ clienteId, contaId, ano, mes, aoConcluir }
  * palco que o operador está vendo. A régua do mês continua sendo uma só; o que
  * se faz aqui é converter a convenção, explicitamente.
  */
-function faixaInclusiva(ano: number, mes: number): { de: string; ate: string } {
+export function faixaInclusiva(ano: number, mes: number): { de: string; ate: string } {
   const { inicio, fim } = faixaDoMes(ano, mes);
   const d = new Date(`${fim}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() - 1);

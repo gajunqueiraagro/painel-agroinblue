@@ -33,6 +33,8 @@ import { toast } from 'sonner';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { saldoConfere } from '@/lib/financeiro/conciliacaoCalc';
 import { useConciliarMes, type PreviaConciliarMes } from '@/hooks/useConciliarMes';
+import { supabase } from '@/integrations/supabase/client';
+import { lerPares, faixaInclusiva, type ParExato } from '@/components/conciliacao/VincularMatchDireto';
 import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
 
 type Aba = 'crus' | 'esperando' | 'ja';
@@ -101,6 +103,58 @@ export function ConciliarMesDialog({
     return () => { vivo = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `api` muda a cada render; a chave é (open, conta, mês)
   }, [open, clienteId, contaId, anoMes]);
+
+  /**
+   * OS PARES QUE O "VINCULAR OS EXATOS" VAI CASAR — PR-CONCILIAR-MES-ESPERANDO-COM-PAR-01.
+   *
+   * ⚠ A FONTE DO PAR É A MESMA FUNÇÃO QUE VAI GRAVÁ-LO, e essa foi a decisão do PR. A chave
+   * `aguardando_exatos` da prévia conta o candidato pela régua de ±5 DIAS; o botão casa pela
+   * régua de MESMA DATA. Emitir o candidato da prévia aqui faria a faixa prometer um par que o
+   * botão ao lado pode não casar — o mesmo defeito que esta tela vem perdendo o dia inteiro.
+   * ⚠ E CUSTA 800 ms, medido como `authenticated` com o teto de 8 s aplicado (Vera Ligia · Itaú
+   * Personalite · set/26). É SQL puro — o `m1 JOIN l1` —, não o motor por movimento, que é o
+   * caminho que não escala e saiu do Palco hoje.
+   * ⚠ FALHA EM SILÊNCIO DE PROPÓSITO: sem os pares a faixa ainda mostra o lado do banco, que é
+   * o que ela mostrava antes. Um erro aqui não pode derrubar a prévia inteira, que é o que o
+   * diálogo existe para mostrar.
+   */
+  const [pares, setPares] = useState<ParExato[]>([]);
+  useEffect(() => {
+    if (!open || !clienteId || !contaId) { setPares([]); return; }
+    let vivo = true;
+    const { de, ate } = faixaInclusiva(ano, mes);
+    void (async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+      const { data, error } = await (supabase as any).rpc('fn_vincular_exatos_mes', {
+        p_cliente_id: clienteId, p_conta_bancaria_id: contaId, p_de: de, p_ate: ate, p_simular: true,
+      });
+      if (!vivo || error) return;
+      /* `data` vem `any` do idioma `(supabase as any).rpc`; quem confere a forma é `lerPares`,
+         que faz o narrowing campo a campo. Zero cast novo aqui. */
+      setPares(lerPares(data?.pares));
+    })();
+    return () => { vivo = false; };
+  }, [open, clienteId, contaId, ano, mes]);
+
+  /** O par de cada movimento, pelo `extrato_id` — a chave que os dois lados compartilham. */
+  const parPorExtrato = useMemo(() => {
+    const m = new Map<string, ParExato>();
+    for (const p of pares) m.set(p.extratoId, p);
+    return m;
+  }, [pares]);
+
+  /**
+   * ⚠ A FAIXA SE PARTE EM DUAS PELO QUE O BOTÃO CONSEGUE FAZER, não pelo que a prévia contou.
+   * `comPar` = a prévia viu E o botão casa (mostra os dois lados). `semPar` = a prévia viu e o
+   * botão NÃO casa (candidato em data diferente). A soma continua sendo o `aguardando_exatos`,
+   * que é o que o badge "Esperando" conta — nenhum movimento se perde na divisão.
+   */
+  const comPar = useMemo(() => (previa?.aguardandoExatos ?? []).flatMap(mov => {
+    const par = parPorExtrato.get(mov.extratoId);
+    return par ? [{ mov, par }] : [];
+  }), [previa, parPorExtrato]);
+  const semPar = useMemo(() => (previa?.aguardandoExatos ?? [])
+    .filter(mov => !parPorExtrato.has(mov.extratoId)), [previa, parPorExtrato]);
 
   const nCrus = previa?.crus.length ?? 0;
   const nSemPar = previa?.semPar.length ?? 0;
@@ -322,27 +376,71 @@ export function ConciliarMesDialog({
                        com maçãs para conferir o mês. */
                   <div>
                     <div className="border-b bg-muted/60 px-3 py-1 text-[10px] font-medium">
-                      Têm par exato no sistema — esperando “Vincular os exatos” ({nAguardando})
+                      Têm par exato — “Vincular os exatos” resolve ({comPar.length})
                     </div>
-                    {nAguardando === 0 ? (
+                    {comPar.length === 0 ? (
                       <p className="px-3 py-3 text-center text-[10px] text-muted-foreground">Nenhum.</p>
-                    ) : previa.aguardandoExatos.map(a => (
-                      <div key={a.extratoId} className="flex items-center gap-2 border-b border-border/60 px-3 py-[7px]">
-                        <div className="w-[56px] shrink-0 text-[10px] tabular-nums text-muted-foreground">{dataBr(a.dataBanco)}</div>
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-[12px] font-medium" title={a.historicoBanco ?? undefined}>
-                            {a.historicoBanco ?? '—'}
-                          </div>
-                          <div className="truncate text-[10px] text-muted-foreground">
-                            {contaNome}{a.documentoBanco ? ` · doc ${a.documentoBanco}` : ''}
-                          </div>
-                        </div>
-                        <div className={`shrink-0 text-[12px] font-medium tabular-nums ${corValor(a.valorBanco)}`}>
-                          {comSinal(a.valorBanco)}
-                        </div>
-                        <span className="shrink-0 rounded-full bg-amber-100 px-1.5 py-px text-[10px] text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">1 candidato</span>
+                    ) : comPar.map(({ mov, par }) => (
+                      /* ⚠ OS DOIS LADOS, E O SELO "1 candidato" SAIU — PR-CONCILIAR-MES-ESPERANDO-
+                         COM-PAR-01. Dizer QUANTOS sem dizer QUEM é pedir aprovação sobre um número.
+                         É o mesmo desenho da caixa do "Vincular os exatos", de propósito: quem vê
+                         aqui e confirma lá está olhando a mesma lista. */
+                      <div key={mov.extratoId} className="flex items-center gap-2 border-b border-border/60 px-3 py-[7px] text-[10px]">
+                        {/* ⚠ 96px NÃO É CHUTE — PR-CONCILIAR-MES-ESPERANDO-COM-PAR-01. Em 86px o valor de
+                          7 dígitos CORTAVA: "−R$ 1.500.000,55" mede 87,61px a 10px, e o maior
+                          movimento do proto é R$ 2.667.572,77 (o maior lançamento, R$ 3.996.196,13).
+                          96px cobre até 8 dígitos (R$ 12.500.000,55 mede 92,36px), que é o próximo
+                          degrau desta base. */}
+                        <span className="w-[38px] shrink-0 tabular-nums text-muted-foreground">{dataBr(mov.dataBanco)}</span>
+                        <span className="min-w-0 flex-1 truncate" title={mov.historicoBanco ?? undefined}>
+                          {mov.historicoBanco ?? '—'}
+                        </span>
+                        <span className={`w-[96px] shrink-0 text-right font-medium tabular-nums ${corValor(mov.valorBanco)}`}>
+                          {comSinal(mov.valorBanco)}
+                        </span>
+                        <span className="shrink-0 text-muted-foreground/40" aria-hidden>│</span>
+                        <span className="min-w-0 flex-1 truncate"
+                          title={[par.descricaoSistema, par.favorecido].filter(Boolean).join(' · ')}>
+                          {par.descricaoSistema ?? '—'}
+                          {par.favorecido && <span className="text-muted-foreground"> · {par.favorecido}</span>}
+                        </span>
+                        <span className={`w-[96px] shrink-0 text-right font-medium tabular-nums ${corValor(par.valorSistema)}`}>
+                          {comSinal(par.valorSistema)}
+                        </span>
                       </div>
                     ))}
+
+                    {/* ⚠ FAIXA PRÓPRIA PARA QUEM NÃO PAREIA — e ela existe porque as duas réguas
+                        são COMPATÍVEIS, NÃO IDÊNTICAS: a prévia conta candidato até 5 dias, o
+                        botão casa só com data igual. Medido na Vera · set/26: 20 contra 19.
+                        ⚠ O QUE SOBRA NÃO PODE SUMIR NEM APARECER SEM PAR numa lista de pareados —
+                        afirmar "tem par exato" e deixar a direita vazia seria a tela mentindo de
+                        novo. Ele fica na faixa que descreve a situação dele, apontando a Estação,
+                        que é onde a escolha com data diferente se resolve.
+                        ⚠ O QUE ESTA FAIXA NÃO DIZ é QUAL é o candidato: a prévia não emite o
+                        lançamento, e o botão não o pareia. Nomeá-lo exige a RPC emitir o
+                        candidato MARCADO como aproximado — frente própria. */}
+                    {semPar.length > 0 && (<>
+                      <div className="border-y bg-muted/60 px-3 py-1 text-[10px] font-medium">
+                        Têm candidato, mas em data diferente ({semPar.length})
+                      </div>
+                      {semPar.map(mov => (
+                        <div key={mov.extratoId} className="flex items-center gap-2 border-b border-border/60 px-3 py-[7px] text-[10px]">
+                          <span className="w-[38px] shrink-0 tabular-nums text-muted-foreground">{dataBr(mov.dataBanco)}</span>
+                          <span className="min-w-0 flex-1 truncate" title={mov.historicoBanco ?? undefined}>
+                            {mov.historicoBanco ?? '—'}
+                          </span>
+                          <span className={`w-[96px] shrink-0 text-right font-medium tabular-nums ${corValor(mov.valorBanco)}`}>
+                            {comSinal(mov.valorBanco)}
+                          </span>
+                          <span className="shrink-0 text-muted-foreground/40" aria-hidden>│</span>
+                          <span className="min-w-0 flex-1 truncate italic text-muted-foreground">
+                            o botão não casa datas diferentes — resolva na Estação
+                          </span>
+                          <span className="w-[96px] shrink-0" />
+                        </div>
+                      ))}
+                    </>)}
 
                     <div className="border-y bg-muted/60 px-3 py-1 text-[10px] font-medium">
                       Têm 2 ou mais candidatos — esperando o agrupamento ({previa.ambiguos})
