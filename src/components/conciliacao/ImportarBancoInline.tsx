@@ -254,6 +254,65 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
       {preview && (() => {
         /* ⚠ A COLUNA DA CAIXA SÓ APARECE QUANDO HÁ PROVÁVEL REIMPORTAÇÃO no arquivo — e o
            "marcar todos" do cabeçalho reflete o estado real das linhas, não um estado próprio. */
+        /**
+         * O PERFIL DO ARQUIVO — PR-IMPORTAR-PERFIL-01. Cada cliente usa o extrato de um jeito:
+         * uns lançam tudo e o OFX só confere, outros não lançam nada e o extrato vira a base.
+         * A tela lê o que aconteceu e diz — sem configuração de perfil.
+         *
+         * ⚠ NENHUM CÁLCULO NOVO: os quatro números já existiam em `PreviewResult` e nenhuma tela
+         * os mostrava. O motor de candidatos roda em toda prévia e o resultado era descartado.
+         *
+         * ⚠ "PROVÁVEL", E NUNCA "JÁ LANÇADO" — e a diferença foi medida, não escolhida. O score
+         * do candidato COMEÇA em 70 e o limiar é 50: todo candidato viável nasce acima do corte,
+         * porque para entrar na lista ele já precisou ter o MESMO VALOR (tolerância 0,01) dentro
+         * de 7 DIAS. Texto e proximidade de data só levam 70 a 100. Então `matchEncontrado` quer
+         * dizer "existe um lançamento com o mesmo valor por perto", não "este movimento já está
+         * lançado" — o vínculo só existe depois da conciliação. Escrever "já lançado" faria o
+         * operador PULAR a conferência do passo 2.
+         *
+         * ⚠ E A BASE É `acionaveis`, NÃO O ARQUIVO INTEIRO: os quatro são contados sobre os
+         * movimentos ainda não gravados ou gravados em aberto/parcial. Por isso a frase declara o
+         * recorte quando ele existe — número que não fecha na cara do operador derruba a
+         * confiança em todos os outros da tela.
+         */
+        const provaveis = preview.matchDireto + preview.matchAgrupados;
+        const acionaveis = provaveis + preview.semMatch + preview.ambiguos;
+        const perfilDoArquivo = ((): string => {
+          if (acionaveis === 0) return '';
+          /* O recorte só aparece quando há movimentos FORA da conta — senão ele seria ruído. */
+          const sujeito = acionaveis < preview.movimentos.length
+            ? `Dos ${acionaveis} movimentos ainda em aberto, `
+            : '';
+          const virarao = preview.semMatch === 1 ? 'virará' : 'virarão';
+          /* Um movimento só é caso real (conta nova, primeiro arquivo do mês) e "dos 1 movimentos"
+             é o tipo de frase que faz o operador desconfiar da tela inteira. */
+          const um = acionaveis === 1;
+          let frase: string;
+          if (provaveis === 0) {
+            frase = sujeito
+              ? `${sujeito}nenhum tem lançamento no sistema — o extrato vai ser a base dos lançamentos.`
+              : um
+                ? 'O único movimento não tem lançamento no sistema — o extrato vai ser a base dos lançamentos.'
+                : `Nenhum dos ${acionaveis} movimentos tem lançamento no sistema — o extrato vai ser a base dos lançamentos.`;
+          } else if (preview.semMatch === 0) {
+            frase = sujeito
+              ? `${sujeito}todos têm um lançamento provável no sistema — o extrato vai conferir o que já foi lançado.`
+              : um
+                ? 'O único movimento tem um lançamento provável no sistema — o extrato vai conferir o que já foi lançado.'
+                : `Os ${acionaveis} movimentos têm um lançamento provável no sistema — o extrato vai conferir o que já foi lançado.`;
+          } else if (provaveis >= preview.semMatch) {
+            /* A maioria tem candidato: o verbo é CONFERIR, e o resto vira lançamento novo. */
+            frase = `${sujeito || ''}${sujeito ? provaveis : `${provaveis} dos ${acionaveis} movimentos`} têm um lançamento provável no sistema — o extrato vai conferir o que já foi lançado. ${preview.semMatch} sem candidato ${virarao} lançamento novo.`;
+          } else {
+            /* Metade a metade, ou mais sem candidato: a frase não escolhe verbo, diz os dois lados. */
+            frase = `${sujeito || ''}${sujeito ? provaveis : `${provaveis} dos ${acionaveis} movimentos`} têm um lançamento provável no sistema; ${preview.semMatch} não têm e ${virarao} lançamento novo.`;
+          }
+          if (preview.ambiguos > 0) {
+            frase += ` · ${preview.ambiguos} com mais de um candidato ${preview.ambiguos === 1 ? 'exigirá' : 'exigirão'} escolha no passo seguinte.`;
+          }
+          return frase;
+        })();
+
         /* ⚠ DATA CRESCENTE, E DENTRO DO DIA O MAIOR VALOR PRIMEIRO — PR-IMPORT-DUPLICATA-LEITURA-01.
            A ordem de antes era a FÍSICA DO ARQUIVO (não havia `sort` nenhum): parecia por data
            porque o OFX do Itaú vem assim, não porque a tela decidia. Ordenar deixa os candidatos
@@ -358,6 +417,15 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
                 </span>
               )}
             </Campo>
+          </div>
+
+          {/* ⚠ ALTURA RESERVADA, MESMO VAZIA — Lei de Estabilidade Visual. A frase muda de tamanho
+              com o arquivo (dois dígitos viram três, o caso curto vira o longo) e some quando não
+              há nada acionável; sem o `min-h` a tabela subiria e desceria entre um arquivo e
+              outro. `truncate` mantém UMA linha sempre, e o texto inteiro fica no `title`. */}
+          <div className="min-h-[18px] truncate px-3 pt-1 text-[10px] leading-tight text-muted-foreground"
+            title={perfilDoArquivo || undefined}>
+            {perfilDoArquivo}
           </div>
 
           {/* linha a linha, com o que já existe apagado */}
