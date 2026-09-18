@@ -1208,10 +1208,15 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                 do painel de importação, onde o operador entrava para conferir se o arquivo tinha
                 chegado completo. A tela ensinava o passo errado, e quem explicava o próprio fluxo
                 se perdia no meio.
-                ⚠ O "Espelho OFX × Sistema" VEIO JUNTO, e NÃO foi removido: ele monta este mesmo
-                componente SEM `soConferencia`, e por isso mostra três visões que a aba não tem —
-                Extrato (banco), Sistema e Evolução do saldo. Apagá-lo apagaria três telas que não
-                existem em nenhum outro lugar. Fundir as duas é frente própria. */}
+                ⚠ O "Espelho OFX × Sistema" CONTINUA AQUI, e agora por OUTRA razão — PR-SISTEMA-
+                SUBABAS-01. Ele não é mais o único lugar das três visões (a aba ganhou as quatro),
+                mas ele monta o componente com `mostrarCandidatos={false}`, e é a ÚNICA forma de
+                ver a Conferência **só com realizados** — o "fecho" do mês, sem os candidatos
+                previstos/programados no meio. Medido: `mostrarCandidatos` só é lido pela
+                `AbaConferencia` (EspelhoConciliacaoTab:718); nas outras três visões os dois
+                caminhos são idênticos.
+                ⚠ ENTÃO REMOVÊ-LO HOJE CUSTARIA uma capacidade real, ainda que pequena. Fica, com o
+                `title` dizendo o que ele passou a ser. */}
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <AcoesDoMes
                 clienteId={clienteId ?? null}
@@ -1223,15 +1228,24 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
               <Button
                 variant="outline" size="sm" className="h-6 gap-1 px-2 text-[10px]"
                 disabled={selectedConta === '__all__'}
-                title={selectedConta === '__all__' ? 'Escolha uma conta' : 'O mês inteiro em quatro visões: conferência, extrato do banco, sistema e evolução do saldo.'}
+                title={selectedConta === '__all__' ? 'Escolha uma conta' : 'O fecho do mês: as mesmas quatro visões, com a Conferência SÓ de realizados — sem os candidatos previstos e programados.'}
                 onClick={() => setEspelhoAberto(true)}
               >
-                Espelho OFX × Sistema
+                Fecho do mês (só realizados)
               </Button>
             </div>
+            {/* ⚠ AS QUATRO VISÕES VIERAM PARA A ABA — PR-SISTEMA-SUBABAS-01, e o que mudou foi
+                UMA prop: `soConferencia` saiu. Ela escondia a fileira
+                [Conferência] [Extrato (banco)] [Sistema] [Evolução do saldo], e era só por causa
+                dela que o operador precisava abrir um modal para ver três telas que não existem
+                em nenhum outro lugar.
+                ⚠ `mostrarCandidatos` FICA: a Conferência desta aba é a mesa de casar o extrato
+                com o previsto/programado, e é o que separa esta montagem da do modal.
+                ⚠ E A CONFERÊNCIA CONTINUA SENDO A INICIAL — o `useState` do componente nasce em
+                'conferencia', então abrir a aba não mudou de lugar para quem já a usava. */}
             <EspelhoConciliacaoTab clienteId={clienteId ?? null}
               contaId={selectedConta === '__all__' ? null : selectedConta}
-              ano={String(ano)} mes={selectedMes} soConferencia mostrarCandidatos />
+              ano={String(ano)} mes={selectedMes} mostrarCandidatos />
           </div>
         )}
 
