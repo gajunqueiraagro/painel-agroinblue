@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Link2, Loader2 } from 'lucide-react';
+import { AlertTriangle, Link2, Loader2, RotateCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import {
@@ -37,11 +37,22 @@ import { VincularMatchDireto } from '@/components/conciliacao/VincularMatchDiret
  * ⚠ AS DUAS GUARDAS FICARAM, e continuam certas: elas são RE-cálculo depois de gravar
  * (vincular em lote, mexer na Estação) — "se já respondeu, refaça". Quem faz a PRIMEIRA
  * chamada é o efeito abaixo.
- * ⚠ E O CUSTO FOI MEDIDO antes de decidir que roda sozinho: o caminho caro da RPC (o LATERAL
- * sobre os lançamentos na janela de ±60 dias) leva 13,7 ms em 35 movimentos e 276,6 ms em 219
- * — piso, porque a função ainda pontua e resolve empates. Centenas de milissegundos não
- * justificam cobrar um clique numa tela que existe para mostrar justamente isto. Os "~91 ms
- * por movimento" que já se contaram aqui eram ilusão de mês.
+ * ⚠ E O NÚMERO QUE ESTAVA ESCRITO AQUI ESTAVA 725× ERRADO — corrigido em
+ * PR-PALCO-ERRO-VISIVEL-01. A linha dizia "13,7 ms em 35 movimentos e 276,6 ms em 219", e
+ * aquilo era o LEFT JOIN REPLICADO à mão numa medição de plano, não a função. Medido em
+ * 18/09/2026 pelo caminho de verdade, como `authenticated` e com o JWT real:
+ *     fn_sugestoes_extrato  ·  Vera Ligia · Itaú Personalite · set/26 · 35 movimentos
+ *     9.907 ms  —  283 ms por movimento  (fn_candidatos_conciliacao sozinha: 409 ms para um)
+ * ⚠ E O TETO DO PAPEL É 8 s (`statement_timeout` de `authenticated`, em `pg_roles.rolconfig`),
+ * então a RPC morre em `57014` e NUNCA responde neste mês. Cabem ~28 movimentos no teto; 45
+ * dos 64 pares conta/mês de 2026 no proto passam disso — 70,3% das telas, média de 68
+ * movimentos, maior mês com 262.
+ * ⚠ ESTE PR NÃO CONSERTA A LENTIDÃO, conserta a MENTIRA: a tela passa a dizer que não
+ * conseguiu calcular, em vez de prometer um cálculo que não vem. O desempenho é a frente
+ * seguinte.
+ * ⚠ E A LIÇÃO É A DO NÚMERO ERRADO, de novo: foi este "13,7 ms" que serviu de prova para o
+ * motor passar a rodar sozinho ao abrir. Um número medido no caminho errado não é menos
+ * perigoso que nenhum — ele convence.
  *
  * ⚠ OS "~91 ms POR MOVIMENTO" QUE ESTAVAM ESCRITOS AQUI ERAM ILUSÃO DE MÊS
  * PEQUENO — a remedição deu ~6-8 s por movimento, e 190 movimentos estouravam em
@@ -52,6 +63,11 @@ import { VincularMatchDireto } from '@/components/conciliacao/VincularMatchDiret
  * necessária, mas por índice em `transferencia_grupo_id` mais a janela de ±60
  * dias no WHERE de `fn_candidatos_conciliacao`: o mês de 190 responde em ~3,7 s.
  * O diagnóstico "precisa ser set-based" também era do número errado.
+ * ⚠ ESTE PARÁGRAFO NÃO SE SUSTENTA NA MEDIÇÃO DE 18/09, e fica com a ressalva em vez de
+ * sumir: a 283 ms por movimento, um mês de 190 levaria ~54 s, não 3,7 s. Ou a correção de
+ * 01/09 foi medida por outro caminho (como o "13,7 ms" acima), ou o desempenho regrediu
+ * desde então. Saber qual dos dois é a primeira pergunta da frente de desempenho — e é por
+ * isso que a afirmação continua escrita, marcada.
  *
  * ⚠ ESTADO AUSENTE ≠ SEM MATCH. Enquanto o motor não respondeu, a linha não
  * afirma estado nenhum — mostra a situação do VÍNCULO, que é fato do banco.
@@ -101,9 +117,28 @@ export function PalcoDoMes({ clienteId, contaId, contaNome, ano, mes, aoFechar, 
     void calcularSugestoes();
   }, [clienteId, contaId, ano, mes, calcularSugestoes]);
 
-  /* O motor ainda não respondeu para este mês: ou está calculando, ou nem começou. Nos dois
-     casos a resposta honesta é "espere", não "não há". */
-  const aguardandoMotor = sug.sugestoes == null;
+  /**
+   * ⚠ TRÊS ESTADOS, E O DO MEIO É NOVO — PR-PALCO-ERRO-VISIVEL-01.
+   *   falhouMotor      — perguntei e o banco recusou (quase sempre: passou dos 8 s).
+   *   aguardandoMotor  — ainda não respondeu: ou está calculando, ou nem começou.
+   *   nenhum dos dois  — respondeu, e aí o que está na lista é a resposta (vazia inclusive).
+   * ⚠ A ORDEM IMPORTA: `sugestoes` é `null` nos DOIS primeiros casos, então "falhou" tem de
+   * ser perguntado ANTES. Era essa colisão que fazia a tela escrever "calculando…" para
+   * sempre num mês que já tinha morrido em timeout.
+   */
+  const falhouMotor = sug.erro != null;
+  const aguardandoMotor = sug.sugestoes == null && !falhouMotor;
+
+  /**
+   * A frase do operador — e ela nomeia o TEMPO quando foi tempo.
+   * ⚠ "ERRO 57014" NÃO É PORTUGUÊS DE NINGUÉM: o código fica no `title`, para quem for
+   * investigar, e a linha diz o que aconteceu. Quando a causa NÃO é tempo, a frase não
+   * inventa: diz que não conseguiu e mostra o motivo cru.
+   */
+  const foiTempo = !!sug.erro && (/57014/.test(sug.erro) || /timeout/i.test(sug.erro));
+  const fraseDaFalha = foiTempo
+    ? `O cálculo das sugestões passou do tempo limite do banco (8 s) — este mês tem ${movimentos.length} movimentos, e o motor leva cerca de 0,3 s em cada um.`
+    : 'Não foi possível calcular as sugestões deste mês.';
 
   const contagem = useMemo(() => contarBaldes(movimentos, sug.sugestoes), [movimentos, sug.sugestoes]);
 
@@ -167,7 +202,12 @@ export function PalcoDoMes({ clienteId, contaId, contaNome, ano, mes, aoFechar, 
                 <button key={chip.filtro} type="button"
                   disabled={ausente || vazio}
                   onClick={() => setFiltro(chip.filtro)}
-                  title={ausente ? 'O motor de sugestões ainda não respondeu para este mês.' : undefined}
+                  /* ⚠ O `title` DIZ QUAL DOS DOIS SILÊNCIOS É — PR-PALCO-ERRO-VISIVEL-01. O chip
+                     fica desabilitado em ambos, mas "ainda não respondeu" sobre um mês que já
+                     morreu em timeout manda o operador esperar por nada. */
+                  title={ausente
+                    ? (falhouMotor ? fraseDaFalha : 'O motor de sugestões ainda não respondeu para este mês.')
+                    : undefined}
                   className={cn(
                     'inline-flex h-5 items-center rounded px-1.5 text-[10px] font-semibold transition',
                     chip.cor,
@@ -208,6 +248,32 @@ export function PalcoDoMes({ clienteId, contaId, contaNome, ano, mes, aoFechar, 
               }}
             />
           </div>
+
+          {/* ⚠ O AVISO E O CAMINHO DE VOLTA — PR-PALCO-ERRO-VISIVEL-01. Dizer "não calculou"
+              nas células e parar por aí deixaria o operador sem saída: ele veria a falha e não
+              teria o que fazer com ela. O botão repete a MESMA chamada — num mês de 28 ou 29
+              movimentos ela às vezes passa, e quando não passa a falha se repete, que também é
+              uma resposta.
+              ⚠ FORA DO SCROLLPORT, e por isso irmão da tabela e não filho: um aviso que some ao
+              rolar é um aviso que o operador perde justamente enquanto procura a linha que o
+              motivou. */}
+          {falhouMotor && (
+            <div className="flex shrink-0 items-center gap-2 border-b border-amber-300/60 bg-amber-50 px-5 py-1.5 text-[10px] text-amber-900 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-200">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              <span className="min-w-0 flex-1">
+                {fraseDaFalha} As colunas de sugestão ficam sem resposta; o resto da tela é fato do
+                banco e continua valendo.
+              </span>
+              <Button type="button" variant="outline" size="sm"
+                className="h-5 shrink-0 gap-1 px-2 text-[10px]"
+                disabled={sug.carregando}
+                title={sug.erro ?? undefined}
+                onClick={() => { void sug.calcular(); }}>
+                {sug.carregando ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCw className="h-3 w-3" />}
+                Tentar de novo
+              </Button>
+            </div>
+          )}
 
           <div className="min-h-0 flex-1 overflow-auto">
             {loading ? (
@@ -269,7 +335,7 @@ export function PalcoDoMes({ clienteId, contaId, contaNome, ano, mes, aoFechar, 
                           title={m.vinculos > 0 ? (parDoVinculo(m) ?? undefined) : (s?.descricao ?? undefined)}>
                           {m.vinculos > 0
                             ? <>✓ {parDoVinculo(m)}</>
-                            : s?.descricao ?? (aguardandoMotor ? <span className="italic">calculando…</span> : '—')}
+                            : s?.descricao ?? <SemSugestao aguardando={aguardandoMotor} falhou={falhouMotor} />}
                         </td>
                         <td className={cn('h-[21px] whitespace-nowrap px-2 py-0 text-right align-middle font-semibold tabular-nums',
                           m.valor < 0 ? 'text-destructive' : 'text-success')}>
@@ -279,8 +345,9 @@ export function PalcoDoMes({ clienteId, contaId, contaNome, ano, mes, aoFechar, 
                           s?.valor != null ? (s.valor < 0 ? 'text-destructive' : 'text-success') : 'text-muted-foreground')}>
                           {s?.valor != null && s.estado !== 'sem_match' && m.situacao !== 'conciliado'
                             ? formatMoeda(s.valor)
-                            : (aguardandoMotor && m.situacao !== 'conciliado'
-                                ? <span className="italic">calculando…</span> : '—')}
+                            : (m.situacao === 'conciliado'
+                                ? '—'
+                                : <SemSugestao aguardando={aguardandoMotor} falhou={falhouMotor} />)}
                         </td>
                         <td className="h-[21px] whitespace-nowrap px-2 py-0 text-right align-middle"
                           onClick={e => e.stopPropagation()}>
@@ -329,6 +396,27 @@ export function PalcoDoMes({ clienteId, contaId, contaNome, ano, mes, aoFechar, 
       )}
     </>
   );
+}
+
+/**
+ * O que a célula de sugestão escreve quando NÃO há sugestão — PR-PALCO-ERRO-VISIVEL-01.
+ *
+ * ⚠ TRÊS AUSÊNCIAS DIFERENTES, TRÊS TEXTOS, e é a regra das sentinelas do CLAUDE.md levada
+ * até o fim:
+ *   calculando…    — perguntei e ainda não voltou. Espere.
+ *   não calculou   — perguntei e o banco recusou. Não adianta esperar.
+ *   sem sugestão   — perguntei, respondeu, e não achou nada. É resposta, não ausência.
+ * ⚠ O "—" SAIU DAQUI, e era ele o defeito de um nível adiante: traço quer dizer "dado
+ * ausente", e o motor que respondeu "não achei" não deixou dado ausente nenhum — deixou uma
+ * resposta. Quem lia "—" concluía que ninguém tinha perguntado.
+ * ⚠ UMA FUNÇÃO PARA AS DUAS COLUNAS: "Lançamento" e "Valor sug." respondem à mesma pergunta
+ * em pedaços diferentes, e dois textos que divergissem na mesma linha seriam pior que um
+ * errado.
+ */
+function SemSugestao({ aguardando, falhou }: { aguardando: boolean; falhou: boolean }) {
+  if (falhou) return <span className="italic text-amber-700 dark:text-amber-300">não calculou</span>;
+  if (aguardando) return <span className="italic">calculando…</span>;
+  return <span>sem sugestão</span>;
 }
 
 /**

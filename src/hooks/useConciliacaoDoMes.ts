@@ -396,26 +396,69 @@ export interface SugestaoDoMes {
  * ⚠ ERRO NÃO VIRA TELA VAZIA: sem sugestões, os três baldes voltam a aparecer
  * como ausentes — que é o estado honesto de "o motor não respondeu".
  */
+/**
+ * A mensagem do Postgres com o código junto — PR-PALCO-ERRO-VISIVEL-01.
+ *
+ * ⚠ O CÓDIGO ENTRA NA STRING de propósito: é o `57014` que distingue "demorou demais" de
+ * "sem permissão", e é por ele que a tela escolhe a frase que mostra ao operador. Sem ele
+ * sobraria "canceling statement due to statement timeout", que não é português de ninguém.
+ * ⚠ É PRIMA DA `mensagemCrua` DE `useConciliarMes`, e não a mesma: aquela junta `details` e
+ * `hint` porque a tela dela mostra o texto inteiro ao produtor; esta é lida por um `title`.
+ * Compartilhá-las obrigaria a exportar uma e a fazer as duas telas concordarem sobre o que
+ * é "o erro" — duas perguntas diferentes, duas respostas.
+ */
+function mensagemDaRpc(e: unknown): string {
+  if (e && typeof e === 'object') {
+    const o = e as { message?: unknown; code?: unknown };
+    const msg = typeof o.message === 'string' && o.message.trim() !== '' ? o.message : null;
+    const cod = typeof o.code === 'string' && o.code ? ` (${o.code})` : '';
+    if (msg) return msg + cod;
+  }
+  return e instanceof Error ? e.message : 'Falha ao calcular as sugestões.';
+}
+
 export function useSugestoesDoMes(
   clienteId: string | null, contaId: string | null, ano: number, mes: number,
 ) {
   const [sugestoes, setSugestoes] = useState<SugestaoDoMes[] | null>(null);
   const [carregando, setCarregando] = useState(false);
+  /**
+   * ⚠ O TERCEIRO ESTADO — PR-PALCO-ERRO-VISIVEL-01. Eram dois (`null` = não perguntei,
+   * array = respondeu) e a falha era enfiada no primeiro: `setSugestoes(null)` num erro
+   * fazia a tela ler "ainda estou calculando" para sempre, sem toast e sem log.
+   * ⚠ E NÃO É HIPÓTESE, É O CASO COMUM. Medido em 18/09/2026 no proto, como `authenticated`
+   * e com o JWT real: `fn_sugestoes_extrato` leva 9.907 ms na Vera Ligia · Itaú Personalite ·
+   * set/26 (35 movimentos, 283 ms por movimento), e o `statement_timeout` do papel
+   * `authenticated` é 8 s — a RPC morre em `57014` SEMPRE. Cabem ~28 movimentos no teto, e
+   * 45 dos 64 pares conta/mês de 2026 passam disso: 70,3% das telas.
+   * ⚠ ADITIVO, NÃO QUEBRA NINGUÉM: `erro` é um campo NOVO do objeto devolvido. Quem só lê
+   * `sugestoes`/`carregando`/`calcular` (o `PainelExtratoMes`, por exemplo) segue igual, e
+   * `sugestoes` continua com os mesmos dois valores de antes — o erro não inventa um array
+   * vazio, que diria "perguntei e não há".
+   */
+  const [erro, setErro] = useState<string | null>(null);
 
   /* Trocar de mês/conta ZERA o que estava calculado: manter o placar do mês
-     anterior sobre a lista do mês novo seria a pior mentira possível aqui. */
-  useEffect(() => { setSugestoes(null); }, [clienteId, contaId, ano, mes]);
+     anterior sobre a lista do mês novo seria a pior mentira possível aqui.
+     ⚠ E ZERA O ERRO JUNTO: falha do mês passado não acusa o mês novo. */
+  useEffect(() => { setSugestoes(null); setErro(null); }, [clienteId, contaId, ano, mes]);
 
   const calcular = useCallback(async () => {
     if (!clienteId || !contaId) return;
     setCarregando(true);
+    setErro(null);
     try {
       const { inicio, fim } = faixaDoMes(ano, mes);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
       const { data, error } = await (supabase as any).rpc('fn_sugestoes_extrato', {
         p_cliente_id: clienteId, p_conta_bancaria_id: contaId, p_de: inicio, p_ate: fim,
       });
-      if (error) { setSugestoes(null); return; }
+      /* ⚠ FALHOU ≠ NÃO PERGUNTEI. `sugestoes` fica `null` como antes (não há placar), mas
+         `erro` diz por quê — e é o que a tela precisa para parar de escrever "calculando…".
+         A mensagem vai CRUA, com o código: é ela que nomeia o invariante (`57014` = tempo,
+         `42501` = permissão), e traduzir aqui apagaria a diferença. Quem escreve a frase do
+         operador é a tela, que tem o contexto. */
+      if (error) { setSugestoes(null); setErro(mensagemDaRpc(error)); return; }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- linhas da RPC, fora de types.ts
       setSugestoes((data ?? []).map((r: any) => ({
         extratoId: r.extrato_id,
@@ -425,12 +468,17 @@ export function useSugestoesDoMes(
         sugestaoFavorecido: r.sugestao_favorecido ?? null,
         sugestaoValor: r.sugestao_valor == null ? null : Number(r.sugestao_valor),
       })));
+    } catch (e) {
+      /* Falha de rede não chega por `error`: ela é lançada, e sem este ramo voltaria a ser
+         o silêncio de antes — a tela "calculando" com a promessa quebrada. */
+      setSugestoes(null);
+      setErro(mensagemDaRpc(e));
     } finally {
       setCarregando(false);
     }
   }, [clienteId, contaId, ano, mes]);
 
-  return { sugestoes, carregando, calcular };
+  return { sugestoes, carregando, calcular, erro };
 }
 
 /**
