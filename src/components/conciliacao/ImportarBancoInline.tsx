@@ -56,7 +56,7 @@ interface Props {
 export function ImportarBancoInline({ contas, contaId, onContaChange, onImportado, acoes }: Props) {
   const input = useRef<HTMLInputElement>(null);
   const { preview, loading, gerarPreview, confirmarImportacao, reset,
-    toggleReimportacao, marcarTodasReimportacoes } = useImportacaoExtrato();
+    toggleImportarSuspeita, marcarTodasSuspeitas } = useImportacaoExtrato();
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [gravando, setGravando] = useState(false);
   /**
@@ -254,10 +254,9 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
       {preview && (() => {
         /* ⚠ A COLUNA DA CAIXA SÓ APARECE QUANDO HÁ PROVÁVEL REIMPORTAÇÃO no arquivo — e o
            "marcar todos" do cabeçalho reflete o estado real das linhas, não um estado próprio. */
-        const reimportacoes = preview.movimentos.filter((m) => m.provavelReimportacao);
-        const temReimportacoes = reimportacoes.length > 0;
-        const todasReimportMarcadas = temReimportacoes
-          && reimportacoes.every((m) => m.reimportacaoImportar === true);
+        const suspeitas = preview.movimentos.filter((m) => m.dupClassificacao && !m.existeNoDB);
+        const temSuspeitas = suspeitas.length > 0;
+        const todasSuspeitasMarcadas = temSuspeitas && suspeitas.every((m) => m.dupImportar === true);
         /* ⚠ UM ARQUIVO SÓ → A DATA DELE; VÁRIOS → A CONTAGEM. Uma data escolhida entre
            três representaria mal o conjunto, e "já no extrato (arquivo de 18/08)" seria
            falso para as outras duas. */
@@ -290,10 +289,10 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
                 existente porque é isso que ele é: nem um nem outro, e a decisão é do operador.
                 O contador de "novos" à esquerda sobe conforme ele marca as caixas, então o
                 botão de gravar sempre diz quantos vão entrar de verdade. */}
-            {preview.provaveisReimportacao > 0 && (
+            {preview.suspeitasForaDaImportacao > 0 && (
               <Badge variant="secondary" className="h-5 border-warning/40 bg-warning/15 px-1.5 text-[9px] text-warning"
-                title="Mesma data, valor e histórico de movimentos que já estão no extrato, com documento diferente — o banco renumera a sequência do dia a cada exportação. Por segurança não entram; marque na lista o que for movimento novo mesmo.">
-                {preview.provaveisReimportacao} reimportado?
+                title="Movimentos com a mesma data e o mesmo valor de linhas que já estão no extrato, e com histórico parecido ou documento igual. Por segurança NÃO entram; marque na lista o que for movimento novo mesmo.">
+                {preview.suspeitasForaDaImportacao} duplicado?
               </Badge>
             )}
             {preview.existentesNoBanco > 0 && (
@@ -359,13 +358,13 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
                   {/* ⚠ A COLUNA SÓ EXISTE QUANDO HÁ O QUE DECIDIR — PR-IMPORT-REIMPORTACAO-01.
                       Uma coluna de caixas vazias em todo arquivo normal seria ruído permanente
                       para um caso que é a exceção. */}
-                  {temReimportacoes && (
+                  {temSuspeitas && (
                     <Th className="text-center">
                       <label className="flex cursor-pointer items-center justify-center gap-1"
-                        title="Marcar todas as linhas 'reimportado?' como movimento novo — elas passam a entrar na importação.">
+                        title="Marcar todas as linhas suspeitas como movimento novo — elas passam a entrar na importação.">
                         <input type="checkbox" className="h-3 w-3"
-                          checked={todasReimportMarcadas}
-                          onChange={(e) => marcarTodasReimportacoes(e.target.checked)} />
+                          checked={todasSuspeitasMarcadas}
+                          onChange={(e) => marcarTodasSuspeitas(e.target.checked)} />
                         importar
                       </label>
                     </Th>
@@ -378,11 +377,11 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
                   /* ⚠ APAGADA ENQUANTO NÃO FOR MARCADA: a provável reimportação não entra, então
                      ela se parece com o que já existe — e volta ao normal quando o operador diz
                      que é movimento novo. */
-                  const reimport = !!m.provavelReimportacao;
-                  const reimportFora = reimport && !m.reimportacaoImportar;
+                  const suspeita = m.dupClassificacao ?? null;
+                  const suspeitaFora = !!suspeita && m.dupImportar === false;
                   return (
                     <tr key={`${m.data}-${m.documento ?? i}-${i}`}
-                      className={cn('border-b border-border/60', (repetido || reimportFora) && 'opacity-45')}>
+                      className={cn('border-b border-border/60', (repetido || suspeitaFora) && 'opacity-45')}>
                       <td className="whitespace-nowrap px-2 py-0.5 font-mono">{brData(m.data)}</td>
                       <td className="max-w-[280px] truncate px-2 py-0.5" title={m.descricao}>{m.descricao || '—'}</td>
                       <td className="px-2 py-0.5 font-mono text-muted-foreground">{m.documento ?? '—'}</td>
@@ -396,27 +395,39 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
                             mesmo movimento com documento novo ou um pagamento igual repetido no
                             mesmo dia. Afirmar qualquer um dos dois seria prometer certeza que
                             não existe; perguntar devolve a decisão a quem sabe. */}
+                        {/* ⚠ UM SELO, TRÊS GRAUS — PR-IMPORT-DUPLICATA-UNIFICA-01. A régua é a
+                            suspeita por SEMELHANÇA, e o grau diz de quanta certeza se trata:
+                            FORTE é o mesmo documento (o banco reenviou a mesma linha), duplicado?
+                            é texto parecido com documento diferente, e "mesmo dia e valor" é só a
+                            coincidência de data e valor — que na pecuária é rotina.
+                            ⚠ O `title` MOSTRA O PAR, que o motor já guardava e ninguém exibia: é
+                            o lado a lado que faltou quando "RESGATE CDB" entrou duplicando
+                            "INT RESGATE CDB" na Vera Ligia. */}
                         <span className={cn('rounded px-1 py-0 text-[9px] font-semibold uppercase',
                           repetido ? 'bg-muted text-muted-foreground'
-                            : reimport ? 'bg-warning/15 text-warning'
+                            : suspeita === 'FORTE' ? 'bg-destructive/15 text-destructive'
+                            : suspeita === 'PROVAVEL' ? 'bg-warning/15 text-warning'
+                            : suspeita ? 'bg-muted text-muted-foreground'
                             : 'bg-success/15 text-success')}
                           title={repetido ? 'esta linha já está no extrato; não será duplicada'
-                            : reimport
-                              ? `Mesma data, valor e histórico de um movimento já no extrato, com documento diferente${m.documentoExistente ? ` (era ${m.documentoExistente})` : ''}. O banco renumera a sequência do dia a cada exportação. Não será importado — marque se for movimento novo mesmo.`
+                            : suspeita
+                              ? `${m.dupResumo ?? ''}\nJá no extrato: ${m.dupExistenteDescricao ?? '—'}${m.dupExistenteDocumento ? ` (doc ${m.dupExistenteDocumento})` : ''}.${m.dupImportar === false ? '\nNão será importado — marque se for movimento novo mesmo.' : '\nSerá importado — desmarque se for repetição.'}`
                               : undefined}>
                           {repetido
                             ? (m.criadoEmExistente ? `já importado ${brData(m.criadoEmExistente.slice(0, 10))}` : 'já no extrato')
-                            : reimport ? 'reimportado?'
+                            : suspeita === 'FORTE' ? 'mesmo documento'
+                            : suspeita === 'PROVAVEL' ? 'duplicado?'
+                            : suspeita ? 'mesmo dia e valor'
                             : 'novo'}
                         </span>
                       </td>
-                      {temReimportacoes && (
+                      {temSuspeitas && (
                         <td className="px-2 py-0.5 text-center">
-                          {reimport && (
+                          {suspeita && (
                             <input type="checkbox" className="h-3 w-3 cursor-pointer"
-                              checked={!!m.reimportacaoImportar}
-                              onChange={() => toggleReimportacao(m.hash)}
-                              title="Importar esta linha assim mesmo — é movimento novo, não reimportação." />
+                              checked={m.dupImportar === true}
+                              onChange={() => toggleImportarSuspeita(m.hash)}
+                              title="Importar esta linha assim mesmo — é movimento novo, não repetição." />
                           )}
                         </td>
                       )}
