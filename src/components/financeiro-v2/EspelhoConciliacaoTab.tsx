@@ -22,7 +22,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 import { iconeOrigemLancamento, LEGENDA_ICONES, rotuloOrigem, vinculoVencedor } from '@/v2/lib/origemLancamento';
 import { desfazerVinculo, desfazerGrupo } from '@/hooks/useConciliacaoDoMes';
-import { LancamentoLeituraDialog } from '@/components/financeiro-v2/LancamentoLeituraDialog';
+import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
+import { useFinanceiroV2, type LancamentoV2 } from '@/hooks/useFinanceiroV2';
+import { useFazenda } from '@/contexts/FazendaContext';
 import { CasarComBancoModal, CasarN1Modal, type ExtratoAlvo, type LevadoInicial } from '@/components/financeiro-v2/CasarComBancoModal';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { DecisaoDerivadosDialog } from '@/components/financeiro-v2/DecisaoDerivadosDialog';
@@ -1466,10 +1468,50 @@ export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes, mostrarCan
      ⚠ E `abaDeFora` VENCE QUANDO EXISTE: quem monta a fileira na própria barra governa a
      escolha; sem ela, o estado interno continua mandando, como sempre. */
   const aba = soConferencia ? 'conferencia' : (abaDeFora ?? abaEscolhida);
-  /* "abrir" é a MESMA leitura que o Extrato Gerencial usa — a aba é dona do próprio diálogo,
-     em vez de exigir um handler de uma página que não tem nenhum. */
-  const [lancLeituraId, setLancLeituraId] = useState<string | null>(null);
-  const onAbrirLancamento = (id: string) => setLancLeituraId(id);
+  /**
+   * "ABRIR" PASSA A EDITAR — PR-ESPELHO-ABRIR-EDITA-09, e a fiação é COPIADA do
+   * `AgriDreLavouraTab`, que já fazia isto.
+   *
+   * ⚠ ERA UM FIM DE LINHA: o `LancamentoLeituraDialog` só lê — não edita, não cancela, não
+   * restaura. Quem achava um cru errado no extrato (um `PIX TRANSF EDVALDO` sem fornecedor, por
+   * exemplo) via o problema e não podia resolvê-lo daqui; tinha de sair, achar o lançamento
+   * noutra tela e voltar. Uma tela que mostra o defeito e não deixa corrigir ensina a ignorá-lo.
+   * ⚠ O ESCRITOR É O DO FINANCEIRO — `fin.editarLancamento` / `fin.excluirLancamento`. Nada de
+   * salvar próprio: dois escritores para o mesmo lançamento divergem na primeira regra nova.
+   */
+  const fin = useFinanceiroV2();
+  const { fazendas } = useFazenda();
+  const [editando, setEditando] = useState<LancamentoV2 | null>(null);
+
+  /**
+   * OS QUATRO CATÁLOGOS DO `LancamentoV2Dialog`.
+   *
+   * ⚠ ELES NÃO SE CARREGAM SOZINHOS, e esta é a terceira tela a herdar a lição (o
+   * `AgriBarterTab`, o `AgriDreCulturaTab` e o `AgriDreLavouraTab` a registraram antes):
+   * `useFinanceiroV2` nasce com `contasBancarias`, `fornecedores`, `classificacoes` e `safras`
+   * VAZIOS e só os preenche quando alguém chama os `load*`. Lista vazia é lista VÁLIDA —
+   * nenhum tipo acusa, o build passa, e o modal abre com "Selecione fornecedor…" e a conta em
+   * branco num lançamento que tem os dois. Salvar dali grava nulo por cima de dado bom.
+   */
+  useEffect(() => {
+    void fin.loadContas();
+    void fin.loadClassificacoes();
+    void fin.loadFornecedores();
+    void fin.loadSafras();
+  }, [fin.loadContas, fin.loadClassificacoes, fin.loadFornecedores, fin.loadSafras]);
+
+  const catalogosProntos = fin.contasBancarias.length > 0 && fin.fornecedores.length > 0
+    && fin.safras.length > 0 && fin.classificacoes.length > 0;
+
+  /* ⚠ O LOADER É O DO FINANCEIRO — `buscarLancamentoPorId` faz a consulta que esta tela
+     precisaria repetir, e ter as duas é ter duas donas do mesmo `select`: a primeira coluna que
+     uma ganhar, a outra não ganha. Também evita carregar o mês inteiro para editar uma linha. */
+  const onAbrirLancamento = (id: string) => {
+    void (async () => {
+      const linha = await fin.buscarLancamentoPorId(id);
+      if (linha) setEditando(linha);
+    })();
+  };
 
   const internas = useEspelhoInternas(clienteId, contaId, anoMes);
 
@@ -1611,7 +1653,36 @@ export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes, mostrarCan
       {aba === 'sistema' && <AbaSistemaReal sistema={data.sistema_completo} inicial={inicial} onAbrir={onAbrirLancamento} />}
       {aba === 'evolucao' && <AbaEvolucaoReal data={data} internos={internas.lancamentosInternos} />}
 
-      <LancamentoLeituraDialog open={!!lancLeituraId} lancamentoId={lancLeituraId} onClose={() => setLancLeituraId(null)} />
+      {/* ⚠ `carregando={!catalogosProntos}`: esqueleto e Salvar travado até os quatro catálogos
+          estarem na mão. Abrir o formulário editável com seletor vazio é o caminho para gravar
+          nulo por cima de dado bom — ver o comentário dos catálogos acima.
+          ⚠ EDITAR E EXCLUIR VALEM MESMO NO CONCILIADO, decisão do Gabriel: o `refetch` re-avalia
+          a mesa, e se o valor mudou e não bate mais, a linha passa a MOSTRAR a divergência.
+          Bloquear esconderia o que a tela existe para revelar. */}
+      <LancamentoV2Dialog
+        open={!!editando}
+        carregando={!catalogosProntos}
+        lancamento={editando}
+        fazendas={fazendas}
+        contas={fin.contasBancarias}
+        classificacoes={fin.classificacoes}
+        fornecedores={fin.fornecedores}
+        safras={fin.safras}
+        onCriarFornecedor={fin.criarFornecedor}
+        onClose={() => setEditando(null)}
+        onSave={async (form, id) => {
+          const ok = id ? await fin.editarLancamento(id, form) : await fin.criarLancamento(form);
+          /* O Espelho inteiro vem de UMA RPC: um `refetch` recarrega a mesa, os candidatos, os
+             saldos e a evolução de uma vez — não há segunda fonte para sair de sincronia. */
+          if (ok) { setEditando(null); await refetch(); }
+          return ok;
+        }}
+        onDelete={async (id) => {
+          const ok = await fin.excluirLancamento(id);
+          if (ok) { setEditando(null); await refetch(); }
+          return ok;
+        }}
+      />
     </div>
   );
 }
