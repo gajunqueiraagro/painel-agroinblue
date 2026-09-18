@@ -256,6 +256,18 @@ interface DiaConf {
    * não a mostra.
    */
   internas: EspSis[];
+  /**
+   * Os candidatos (previsto/agendado/programado) que VENCEM neste dia — PR-ESPELHO-CANDIDATOS-
+   * POR-DATA-05.
+   *
+   * ⚠ ELES NÃO ENTRAM EM `banco` NEM EM `sistema`, e essa é a regra que o pool separado
+   * protegia: candidato é SUGESTÃO, não realizado. Somá-lo no dia faria o fechamento deixar de
+   * bater com o extrato — e "confere" é a afirmação mais cara desta tela.
+   * ⚠ AGRUPAMENTO POR DATA, NÃO PAREAMENTO: o candidato entra no dia do vencimento dele porque
+   * é ali que o operador procura, ao lado do movimento do banco do mesmo dia. Quem casa com
+   * quem continua sendo decisão dele, na marcação.
+   */
+  candidatos: EspCandidato[];
   banco: number;
   sistema: number;
 }
@@ -322,7 +334,7 @@ export function montarMesa(data: EspelhadosReais, internos: ReadonlySet<string>)
   const dia = (d: string | null): DiaConf => {
     const k = d ?? 'sem-data';
     let atual = dias.get(k);
-    if (!atual) { atual = { data: d, pareados: [], paredosN1: [], extratosSemPar: [], lancsSemPar: [], internas: [], banco: 0, sistema: 0 }; dias.set(k, atual); }
+    if (!atual) { atual = { data: d, pareados: [], paredosN1: [], extratosSemPar: [], lancsSemPar: [], internas: [], candidatos: [], banco: 0, sistema: 0 }; dias.set(k, atual); }
     return atual;
   };
 
@@ -393,6 +405,17 @@ export function montarMesa(data: EspelhadosReais, internos: ReadonlySet<string>)
     if (internos.has(s.lancamento_id)) { d.internas.push(s); continue; }
     d.lancsSemPar.push(s);
     d.sistema += s.valor_assinado;
+  }
+
+  /* ⚠ O CANDIDATO ENTRA NO DIA QUE JÁ EXISTE, e NUNCA cria um — PR-ESPELHO-CANDIDATOS-POR-
+     DATA-05. Usa `dias.get`, não o helper `dia()`: criar dia a partir de candidato encheria a
+     mesa de datas sem nenhum movimento do banco, e a mesa é do EXTRATO. Quem não acha dia é
+     vencido de outro mês, e o render o mostra na faixa do fim.
+     ⚠ A CHAVE É A MESMA DO MAPA (`?? 'sem-data'`), senão candidato sem vencimento nunca casaria
+     com o dia sem data. */
+  for (const c of data.sistema_candidatos ?? []) {
+    const alvo = dias.get(c.data_vencimento ?? 'sem-data');
+    if (alvo) alvo.candidatos.push(c);
   }
 
   const lista = [...dias.values()].sort((a, b) => (a.data ?? '') < (b.data ?? '') ? -1 : (a.data ?? '') > (b.data ?? '') ? 1 : 0);
@@ -606,19 +629,34 @@ function LinhaCandidato({ c, marcado, onMarcar, onAbrir }: {
         )}
       </td>
       <td className={cn(CEL, 'text-left text-[11px] font-medium tabular-nums', corVal(c.valor_assinado))}>{fmtBRL(c.valor_assinado)}</td>
-      <td className={CEL} title={titulo}>
-        <span className="text-[10px] tabular-nums text-muted-foreground">{fmtData(c.data_vencimento)} venc.</span>
-        <span className="text-[11px] font-medium">{' · '}{c.descricao || c.fornecedor || '—'}</span>
-        <span className="text-[10px] text-muted-foreground">
-          {fornecedorDiferente && c.descricao && <>{' · '}{fornecedorDiferente}</>}
-          {c.subcentro && <>{' · '}{c.subcentro}</>}
-          {' · '}
+      {/* ⚠ O STATUS ERA A PRIMEIRA COISA A SUMIR — PR-ESPELHO-CANDIDATOS-POR-DATA-05, e é ele que
+          o operador vem ler. A célula inteira era uma linha de texto corrido dentro de um
+          `overflow-hidden text-ellipsis`: descrição e subcentro são longos, empurravam o badge
+          para fora da largura e o corte comia justamente `agendado`/`previsto`/`programado`. Na
+          tela tudo parecia "venc.", porque o que sobrava à esquerda era a data.
+          ⚠ A CORREÇÃO É DE ESTRUTURA, NÃO DE TAMANHO: a célula vira `flex`, o que PODE encolher
+          (descrição, fornecedor, subcentro) fica num `min-w-0 truncate`, e o que NÃO pode (badge,
+          vencido, sem conta, já vinculado) é `shrink-0`. Diminuir a fonte adiaria o corte; tirar
+          do truncamento o resolve.
+          ⚠ AS CORES DO BADGE NÃO SE TOCAM: vêm de `badgeDeStatusTransacao`, o mapa da casa.
+          ⚠ E A DATA PERDE PESO, não presença: ela é o RÓTULO do vencimento, e estava competindo
+          com o dado por ser a primeira e estar em tabular. */}
+      <td className={cn(CEL, 'max-w-0')} title={titulo}>
+        <span className="flex items-center gap-1">
+          <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground/70">{fmtData(c.data_vencimento)}</span>
+          <span className="min-w-0 flex-1 truncate">
+            <span className="text-[11px] font-medium">{c.descricao || c.fornecedor || '—'}</span>
+            <span className="text-[10px] text-muted-foreground">
+              {fornecedorDiferente && c.descricao && <>{' · '}{fornecedorDiferente}</>}
+              {c.subcentro && <>{' · '}{c.subcentro}</>}
+              {doc && <>{' · '}{doc}</>}
+            </span>
+          </span>
+          <span className={cn('shrink-0 rounded px-1 text-[10px]', badge.cls)}>{badge.label}</span>
+          {c.vencido && <span className="shrink-0 rounded bg-amber-100 px-1 text-[10px] font-medium text-amber-800">vencido</span>}
+          {c.sem_conta && <span className="shrink-0 rounded bg-destructive/10 px-1 text-[10px] font-medium text-destructive">sem conta</span>}
+          {c.ja_conciliado && <span className="shrink-0 text-[10px] italic text-muted-foreground">já vinculado</span>}
         </span>
-        <span className={cn('rounded px-1 text-[10px]', badge.cls)}>{badge.label}</span>
-        {c.vencido && <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] font-medium text-amber-800">vencido</span>}
-        {c.sem_conta && <span className="ml-1 rounded bg-destructive/10 px-1 text-[10px] font-medium text-destructive">sem conta</span>}
-        {c.ja_conciliado && <span className="ml-1 text-[10px] italic text-muted-foreground">já vinculado</span>}
-        {doc && <span className="text-[10px] text-muted-foreground">{' · '}{doc}</span>}
       </td>
       <td className={cn(CEL, 'text-right whitespace-nowrap')}>
         {onAbrir && <Acao onClick={() => onAbrir(c.lancamento_id)}>abrir</Acao>}
@@ -717,6 +755,22 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
   const candidatos = useMemo(
     () => (mostrarCandidatos ? (data.sistema_candidatos ?? []) : []),
     [data, mostrarCandidatos]);
+
+  /**
+   * Os candidatos que NÃO acharam dia na mesa — PR-ESPELHO-CANDIDATOS-POR-DATA-05.
+   *
+   * ⚠ DERIVADO DO QUE A MESA AGRUPOU, e não de uma segunda regra de data: o órfão é, por
+   * definição, quem sobrou depois que `montarMesa` distribuiu. Reimplementar aqui o "tem dia?"
+   * criaria a segunda régua, e as duas divergiriam no dia em que a primeira mudasse.
+   * ⚠ NA PRÁTICA SÃO OS VENCIDOS DE MESES ANTERIORES: o dia deles não existe nesta mesa porque
+   * o extrato do mês não tem movimento naquela data. Sem esta faixa eles sumiriam da tela — e
+   * some justamente o que está atrasado.
+   */
+  const candidatosOrfaos = useMemo(() => {
+    if (!mostrarCandidatos) return [];
+    const agrupados = new Set(dias.flatMap((d) => d.candidatos.map((c) => c.lancamento_id)));
+    return (data.sistema_candidatos ?? []).filter((c) => !agrupados.has(c.lancamento_id));
+  }, [dias, data, mostrarCandidatos]);
   const [ignorarId, setIgnorarId] = useState<string | null>(null);
   const [revertendoId, setRevertendoId] = useState<string | null>(null);
   const { data: ignorados, refetch: refetchIgnorados } = useQuery({
@@ -1111,6 +1165,24 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
                     onMarcar={() => alterna('lancamentos', sl.lancamento_id)} onAbrir={onAbrir} />
                 ))}
 
+                {/* ⚠ OS CANDIDATOS DO DIA, LOGO ABAIXO DO EXTRATO DELE — PR-ESPELHO-CANDIDATOS-
+                    POR-DATA-05. Eles viviam num POOL no fim da mesa, depois de todos os dias: o
+                    operador via um movimento do banco em 04/09 e precisava rolar até o fim para
+                    achar o agendado do mesmo 04/09 que talvez fosse o par. Agora estão a uma
+                    linha de distância.
+                    ⚠ E FICAM DEPOIS DO FECHAMENTO? NÃO — ficam ANTES dele e FORA da soma. O
+                    `d.banco` e o `d.sistema` não os contam (ver `DiaConf.candidatos`), então o
+                    "confere" do dia é exatamente o mesmo de antes deste PR. Estar na vizinhança
+                    não é estar na conta.
+                    ⚠ `mostrarCandidatos` MANDA AQUI, como mandava no pool: o modal-fecho passa
+                    `false` e não vê candidato nenhum. `montarMesa` agrupa sempre; quem decide
+                    mostrar é o render. */}
+                {mostrarCandidatos && d.candidatos.map((c) => (
+                  <LinhaCandidato key={c.lancamento_id} c={c}
+                    marcado={marcado('lancamentos', c.lancamento_id)}
+                    onMarcar={() => alterna('lancamentos', c.lancamento_id)} onAbrir={onAbrir} />
+                ))}
+
                 <tr className="h-[22px] bg-primary/10 border-t border-b border-border">
                   <td colSpan={3} className={cn(CEL, 'text-[11px] font-semibold text-primary')}>fechamento {fmtData(d.data)}</td>
                   <td className={cn(CEL, 'text-right text-[11px] font-semibold tabular-nums text-primary')}>{fmtBRL(d.banco)}</td>
@@ -1131,20 +1203,23 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
               </React.Fragment>
             ))}
 
-            {/* ⚠ CANDIDATOS NA COLUNA DO SISTEMA, DEPOIS DE TODOS OS DIAS — PR-ESPELHO-CANDIDATOS-
-                COLUNA-02. Previstos, agendados e programados que podem casar com o extrato, o
-                vencimento mais antigo primeiro (ordem da RPC). A faixa os separa dos realizados:
-                não entram em nenhum fechamento de dia, e misturá-los convidaria a somá-los. */}
-            {candidatos.length > 0 && (
+            {/* ⚠ O POOL "candidatos do sistema (N)" MORREU AQUI — PR-ESPELHO-CANDIDATOS-POR-DATA-05.
+                Ele juntava TODOS os candidatos no fim da mesa, depois de todos os dias; agora cada
+                um vive no dia em que vence, ao lado do extrato daquele dia. O que sobra nesta
+                faixa é só quem NÃO achou dia: vencido de mês anterior, sem movimento do banco na
+                mesma data. Esse não tem vizinhança para ocupar, e some se não tiver casa própria.
+                ⚠ A FAIXA MUDOU DE NOME junto com o recorte: dizer "candidatos do sistema" sobre
+                uma lista que é só de vencidos órfãos seria descrever o conjunto antigo. */}
+            {candidatosOrfaos.length > 0 && (
               <tr className="h-4 bg-muted/40">
                 <td colSpan={4} />
                 <td className={MEIO} />
                 <td colSpan={4} className="px-[5px] text-[10px] font-medium text-muted-foreground">
-                  candidatos do sistema ({candidatos.length})
+                  vencidos em aberto — sem dia no extrato ({candidatosOrfaos.length})
                 </td>
               </tr>
             )}
-            {candidatos.map((c) => (
+            {candidatosOrfaos.map((c) => (
               <LinhaCandidato key={c.lancamento_id} c={c}
                 marcado={marcado('lancamentos', c.lancamento_id)}
                 onMarcar={() => alterna('lancamentos', c.lancamento_id)} onAbrir={onAbrir} />
