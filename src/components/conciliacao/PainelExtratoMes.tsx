@@ -6,7 +6,7 @@ import {
   useConciliacaoDoMes, useSugestoesDoMes, contarBaldes, frameDoRodape,
   type SituacaoMovimento,
 } from '@/hooks/useConciliacaoDoMes';
-import { useSaldoGerencialDoMes, useSaldoSistemaNaPosicao, useImportacoesDaConta, importacoesDoMes } from '@/hooks/useExtratoDaConta';
+import { useSaldoGerencialDoMes, useSaldoSistemaNaPosicao, useImportacoesDaConta, importacoesDoMes, useSaldoDeclaradoOfx } from '@/hooks/useExtratoDaConta';
 import { SaldoRealDialog } from '@/components/conciliacao/SaldoRealDialog';
 import { ImportacoesDialog } from '@/components/conciliacao/ImportacoesDialog';
 import { PalcoDoMes } from '@/components/conciliacao/PalcoDoMes';
@@ -54,6 +54,51 @@ export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comP
   const [editandoSaldo, setEditandoSaldo] = useState(false);
   const importacoes = useImportacoesDaConta(clienteId, contaId);
   const sug = useSugestoesDoMes(clienteId, contaId, ano, mes);
+  /* ⚠ O MESMO HOOK DO LÁPIS — PR-IMPORTAR-PORTAO-01. `useSaldoDeclaradoOfx` já lê a importação
+     do mês (viva, não cancelada) com saldo declarado, e já resolve o desempate: a MAIS RECENTE
+     pela data do saldo e, empatando, pela data da importação. Uma segunda leitura aqui daria
+     duas respostas para "qual saldo o banco declarou neste mês". */
+  const ofx = useSaldoDeclaradoOfx(clienteId, contaId, ano, mes);
+
+  /**
+   * O PORTÃO DO PASSO 1 — "o extrato fecha?".
+   *
+   * ⚠ ELE PERGUNTA OUTRA COISA QUE OS QUATRO NÚMEROS ACIMA. Lá a conta é sistema × o que o
+   * operador digitou no lápis; aqui é o que o banco MANDOU (a soma dos movimentos) × o que o
+   * banco DECLARA (o LEDGERBAL do próprio arquivo). É a única conferência da tela em que os
+   * dois lados vêm de fora da casa — e por isso é a que prova que a importação está completa.
+   *
+   * ⚠ TOLERANCIA ZERO, E NÃO BLOQUEIA: conciliação bancária é 100%, então qualquer diferença
+   * aparece, inclusive de um centavo. Aparecer não é impedir — o operador julga. Na Vera Ligia
+   * de set/26 a diferença de R$ 2,94 é o Itaú declarando saldo com rendimento do dia já
+   * provisionado, que ainda não virou movimento: comportamento do banco, não erro da casa.
+   *
+   * ⚠ O CORTE É A DATA DO OFX, NÃO O FIM DO MÊS: o arquivo declara "saldo em 17/09" e o mês
+   * ainda não acabou. Somar setembro inteiro compararia posições diferentes e acusaria uma
+   * diferença que é só o resto do mês.
+   *
+   * ⚠ O INICIAL É O `saldo_inicial` DO PRÓPRIO MÊS, e não uma leitura nova do mês anterior: a
+   * cadeia de `saldos_v2` garante `saldo_final(N) = saldo_inicial(N+1)` — conferido na Vera
+   * Ligia (ago/26 fecha em 30.943,91 e set/26 abre com 30.943,91). Ler o mês anterior seria uma
+   * consulta a mais para chegar ao mesmo número, com o risco de discordar dele.
+   *
+   * ⚠ E OS MOVIMENTOS SÃO OS QUE A TELA JÁ CARREGOU: `useConciliacaoDoMes` traz os do mês já
+   * filtrados por `cancelado_em IS NULL` e `ignorado_em IS NULL`. Zero consulta nova.
+   */
+  const portao = useMemo(() => {
+    if (!ofx.ofx) return null;
+    if (saldo.saldoInicial == null) return null;
+    const corte = ofx.ofx.data.slice(0, 10);
+    const soma = movimentos
+      .filter((m) => m.data_movimento.slice(0, 10) <= corte)
+      .reduce((acc, m) => acc + (Number(m.valor) || 0), 0);
+    const calculado = Math.round((saldo.saldoInicial + soma) * 100) / 100;
+    const declarado = ofx.ofx.valor;
+    return {
+      corte, calculado, declarado,
+      diferenca: Math.round((declarado - calculado) * 100) / 100,
+    };
+  }, [ofx.ofx, saldo.saldoInicial, movimentos]);
 
   const contagem = useMemo(() => contarBaldes(movimentos, sug.sugestoes), [movimentos, sug.sugestoes]);
   /* ⚠ MESMA RÉGUA DO BOTÃO ANTIGO: `situacao === 'nao_conciliado'` é o vínculo real (soma
@@ -175,6 +220,49 @@ export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comP
 
         <Campo rotulo="Conciliados">{contagem.conciliado} de {contagem.todos}</Campo>
       </div>
+
+      {/* ⚠ A FAIXA DO PORTÃO — PR-IMPORTAR-PORTAO-01. Ela responde "o extrato fecha?" logo depois
+          de importar, antes de o operador seguir para a classificação: se faltou movimento no
+          arquivo, tudo o que vier depois é trabalho sobre base incompleta.
+          ⚠ FAIXA E NÃO UM QUINTO NÚMERO, e a razão é medida: um campo de 1/5 de largura mostraria
+          "R$ 2,94" sem dizer de onde saiu, e com tolerância zero essa diferença aparece com
+          frequência — o operador teria de abrir o lápis toda vez para descobrir o par. A faixa
+          mostra os três números de uma vez e custa 23px; o quinto campo dentro do grid de quatro
+          quebraria a linha e empurraria a tabela em 34px (medido em Chromium). */}
+      {portao && portao.diferenca === 0 && (
+        <div className="border-b border-border bg-success/10 px-3 py-1 text-[10px] leading-snug text-success">
+          <strong className="font-semibold">O extrato fecha</strong> em {diaMesBr(portao.corte)} ·
+          {' '}calculado {formatMoeda(portao.calculado)} · o banco declara {formatMoeda(portao.declarado)}
+        </div>
+      )}
+
+      {portao && portao.diferenca !== 0 && (
+        /* ⚠ MOSTRA E NÃO BLOQUEIA: nada aqui desabilita botão nem impede ir para as outras abas.
+           Conciliação bancária é 100%, então a diferença aparece inteira — inclusive de um
+           centavo —, e quem julga é o operador. Há causas legítimas: o Itaú declara o saldo já
+           com o rendimento do dia provisionado, que ainda não virou movimento. */
+        <div className="border-b border-border bg-warning/10 px-3 py-1 text-[10px] leading-snug text-warning">
+          <strong className="font-semibold">O extrato não fecha</strong> em {diaMesBr(portao.corte)} ·
+          {' '}calculado {formatMoeda(portao.calculado)} · o banco declara {formatMoeda(portao.declarado)} ·
+          {' '}diferença <strong className="font-semibold">{formatMoeda(portao.diferenca)}</strong>
+        </div>
+      )}
+
+      {/* ⚠ SEM O SALDO DO BANCO A TELA DIZ ISSO, e não "confere": a coluna `saldo_declarado`
+          nasceu em 17/09/2026, então 81 das 83 importações do proto não a têm. Afirmar que fecha
+          sem ter com o que comparar seria a tela inventando uma conferência que ninguém fez. O
+          caminho é o mesmo lápis que já existe — o saldo do extrato em PDF. */}
+      {!portao && clienteId && contaId && movimentos.length > 0 && !ofx.loading && (
+        <div className="border-b border-border bg-muted/30 px-3 py-1 text-[10px] leading-snug text-muted-foreground">
+          {ofx.ofx === null
+            ? <>Este arquivo não trouxe o saldo do banco — não dá para conferir se o extrato fecha.{' '}</>
+            : <>Sem saldo inicial neste mês — não dá para calcular se o extrato fecha.{' '}</>}
+          <button type="button" onClick={() => setEditandoSaldo(true)}
+            className="underline underline-offset-2 hover:text-foreground">
+            Confira pelo extrato em PDF e informe o saldo
+          </button>
+        </div>
+      )}
 
       {/* ⚠ O AVISO COBRA A ATUALIZAÇÃO, e existe porque a posição no meio do mês é
           declaração TEMPORÁRIA: a cadeia mensal segue lendo `saldo_final` como
