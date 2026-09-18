@@ -1113,19 +1113,13 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             tela varia; sem ele, o texto quebraria para duas linhas abaixo de ~1000px e o
             cabeçalho cresceria justo onde há menos espaço — e a tabela de saldos tem teto FIXO
             em `calc(100vh - 230px)`, que não acompanha. Com ele o custo é 19,13px, sempre. */}
-        {selectedCard && vistaExtrato === 'conciliacao' && (
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-bold">{selectedCard.label}/{ano}</span>
-            <span style={{
-              background:cor.bg, color:cor.txt, border:`1px solid ${cor.border}`,
-              fontSize:'10px', fontWeight:500, padding:'2px 8px', borderRadius:'20px',
-            }}>
-              {cardStatus==='realizado'?'✅':cardStatus==='parcial'?'⚠':cardStatus==='nao_conciliado'?'❌':'⏳'} {meta.label}
-            </span>
-            <span className="text-[10px] text-muted-foreground" aria-hidden>·</span>
-            <span className="text-[13px] font-medium text-[#185FA5]">{contaAtual}</span>
-          </div>
-        )}
+        {/* ⚠ A FAIXA "mês · status · conta" SAIU DAQUI — PR-CONC-FAIXA-STATUS-03. Ela era o ÚLTIMO
+            filho deste bloco colorido e só existia numa das cinco abas, o que fazia a Conciliação
+            ser a única com cabeçalho mais alto: 136px contra 107px das outras.
+            ⚠ E ISSO ERA UMA EXCEÇÃO NO COMPARTILHADO, não um detalhe de layout: este `div` é o
+            cabeçalho de TODAS as abas, e um filho condicional a uma delas faz a régua comum
+            depender de quem está aberto. A faixa desceu para o conteúdo da própria Conciliação,
+            onde ela pode variar sem arrastar as outras quatro junto. */}
       </div>
 
       {/* PR-2.7.2 — Região de conteúdo: recebe o flex-1 real do app-shell; as branches
@@ -1338,6 +1332,31 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
 
         {!loading && selectedCard && vistaExtrato === 'conciliacao' && (
           <div className="space-y-2 md:flex-1 md:min-h-0 md:overflow-y-auto">
+            {/* ⚠ A FAIXA DO MÊS VEIO DO CABEÇALHO — PR-CONC-FAIXA-STATUS-03. Mesmo conteúdo, mesma
+                ordem, mesmo cálculo de status; o que mudou foi a casa. Aqui ela é a primeira coisa
+                do conteúdo DESTA aba, e por isso não cobra altura das outras quatro.
+                ⚠ `px-3` PARA ALINHAR COM O CONTEÚDO e `py-1.5` de respiro: o container de fora já
+                dá o padding lateral da página, e a faixa precisa nascer na mesma coluna dos cards
+                que vêm abaixo dela — desalinhada, ela pareceria um cabeçalho de outra coisa.
+                ⚠ A PÍLULA ENCOLHEU (10px → 9,5px, padding 2px 8px → 1px 6px): ela é o estado do
+                mês, não um alarme. Em 10px com padding largo, ao lado de um "Set/2026" em 14px,
+                ela competia com o próprio dado que qualifica. 9,5px é o PISO do sistema — não
+                desce mais, e a exceção de 9px é só das filhas de grupo da Grade do DRE. */}
+            <div className="flex items-center gap-2 px-3 py-1.5">
+              <span className="text-sm font-bold">{selectedCard.label}/{ano}</span>
+              <span style={{
+                background:cor.bg, color:cor.txt, border:`1px solid ${cor.border}`,
+                fontSize:'9.5px', fontWeight:500, padding:'1px 6px', borderRadius:'20px',
+              }}>
+                {cardStatus==='realizado'?'✅':cardStatus==='parcial'?'⚠':cardStatus==='nao_conciliado'?'❌':'⏳'} {meta.label}
+              </span>
+              <span className="text-[10px] text-muted-foreground" aria-hidden>·</span>
+              {/* ⚠ O `text-[#185FA5]` É HEX SOLTO e fica ANOTADO, não corrigido: o briefing o
+                  protege, e trocá-lo por token é frente própria — seria a única cor do sistema
+                  mudando de dono num PR que só move um bloco. */}
+              <span className="text-[13px] font-medium text-[#185FA5]">{contaAtual}</span>
+            </div>
+
             {/* ════ 3 CARDS: [Resumo] [Status] [Saldos por conta] ════
                 Resumo encurta um pouco; Saldos ganha espaço para evitar corte
                 em Sistema/Extrato/Diferença. Status mantido compacto. */}
