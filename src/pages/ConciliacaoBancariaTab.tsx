@@ -29,6 +29,7 @@ import { format, parseISO } from 'date-fns';
 import {
   belongsToConta,
   calcConciliacaoMensal,
+  roundCurrency,
   type ConciliacaoLancamentoBase,
   type ConciliacaoStatus,
 } from '@/lib/financeiro/conciliacaoCalc';
@@ -180,6 +181,29 @@ function classifyLanc(l: LancamentoResumo, contaId: string): 'entrada'|'saida'|'
 }
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * O SALDO FECHA? — e a resposta é SIM só quando a diferença é exatamente zero.
+ * PR-CONCILIACAO-TOLERANCIA-ZERO-01.
+ *
+ * ⚠ HAVIA DUAS RÉGUAS PARA A MESMA PERGUNTA NESTA TELA. O portão do passo 1 exige zero; esta
+ * tabela aceitava `<= 0,01` e escrevia "confere" sobre um centavo de diferença — medido pelo
+ * Gabriel na Santa Rita · jul/26: Bradesco com 511.555,99 contra 511.556,00, e o total das
+ * contas com 3.929.179,75 contra ...,76. Conciliação bancária é 100%: divergência de centavo
+ * não bloqueia nada, mas tem de APARECER.
+ * ⚠ E A RÉGUA CERTA JÁ EXISTIA NO REPO — `getConciliacaoStatus`, em `conciliacaoCalc.ts`, diz
+ * no próprio comentário "Regra absoluta: diferença = 0 → verde, diferença ≠ 0 → vermelho". A
+ * tabela é que não a usava. Este helper é a mesma conta com o mesmo `roundCurrency`, para que
+ * a terceira régua não nasça no próximo PR.
+ * ⚠ `roundCurrency` E NÃO `=== 0` CRU: em ponto flutuante `511556.00 - 511555.99` dá
+ * `0.010000000058...`, e uma subtração que DEVERIA dar zero pode devolver `1e-10`. Comparar o
+ * float cru transformaria "tolerância zero" em falso alarme. Zero aqui é zero em CENTAVOS, que
+ * é a unidade em que dinheiro existe.
+ * ⚠ ISTO NÃO TOCA A TOLERÂNCIA DO PAREAMENTO (valor de movimento × valor de lançamento), que é
+ * outra pergunta e continua em 0,01: lá o centavo é arredondamento de UM par; aqui é saldo, e
+ * saldo fecha ou não fecha.
+ */
+const saldoConfere = (dif: number) => roundCurrency(dif) === 0;
 
 /* ── Pure function to build month cards for any contaId ── */
 /**
@@ -856,7 +880,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   const difResumo: number | null = selectedConta === '__all__'
     ? (totalSaldos.ext !== null ? r2(totalSaldos.ext - totalSaldos.sis) : null)
     : (selectedCard && selectedCard.saldoExtrato !== null ? selectedCard.diferenca : null);
-  const difResumoConfere = difResumo !== null && Math.abs(difResumo) <= 0.01;
+  const difResumoConfere = difResumo !== null && saldoConfere(difResumo);
   /* A linha da conta que o lápis abriu — os MESMOS números da tabela, repassados ao
      modal. Só vale para o mês que a tabela mostra. */
   const linhaDoLapis = editingSaldo && editingSaldo.anoMes === anoMesSel
@@ -1556,8 +1580,8 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                       <td className="py-2 px-2 font-medium text-[12px] text-blue-900 shadow-[inset_0_-1px_0_hsl(var(--border))]">Total — todas as contas</td>
                       <td className={`py-2 px-1 text-right font-bold text-[10px] tabular-nums whitespace-nowrap text-blue-900 shadow-[inset_0_-1px_0_hsl(var(--border))] ${totalSaldos.sis<0?'text-destructive':''}`}>{formatMoeda(totalSaldos.sis)}</td>
                       <td className="py-2 px-1 text-right font-bold text-[10px] tabular-nums whitespace-nowrap text-blue-900 shadow-[inset_0_-1px_0_hsl(var(--border))]">{totalSaldos.ext===null?'—':formatMoeda(totalSaldos.ext)}</td>
-                      <td className={`py-2 px-1 text-right font-bold text-[10px] tabular-nums whitespace-nowrap shadow-[inset_0_-1px_0_hsl(var(--border))] ${totalSaldos.ext===null?'text-muted-foreground':Math.abs(totalSaldos.dif)<=0.01?'text-success':'text-destructive'}`}>
-                        {totalSaldos.ext===null ? '—' : Math.abs(totalSaldos.dif)<=0.01 ? 'confere' : formatMoeda(totalSaldos.dif)}
+                      <td className={`py-2 px-1 text-right font-bold text-[10px] tabular-nums whitespace-nowrap shadow-[inset_0_-1px_0_hsl(var(--border))] ${totalSaldos.ext===null?'text-muted-foreground':saldoConfere(totalSaldos.dif)?'text-success':'text-destructive'}`}>
+                        {totalSaldos.ext===null ? '—' : saldoConfere(totalSaldos.dif) ? 'confere' : formatMoeda(totalSaldos.dif)}
                       </td>
                       <td className="py-2 shadow-[inset_0_-1px_0_hsl(var(--border))]" />
                     </tr>
@@ -1581,8 +1605,8 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                         <td style={{top:`${alturaCabSaldos + alturaThead}px`}} className="px-2 py-1 text-[12px] font-semibold text-muted-foreground sticky z-[8] bg-card bg-[linear-gradient(hsl(var(--muted-foreground)/0.15),hsl(var(--muted-foreground)/0.15))] shadow-[inset_0_1px_0_hsl(var(--border))]">{g.rotulo}</td>
                         <td style={{top:`${alturaCabSaldos + alturaThead}px`}} className={`py-1 px-1 text-right text-[10px] font-semibold tabular-nums whitespace-nowrap sticky z-[8] bg-card bg-[linear-gradient(hsl(var(--muted-foreground)/0.15),hsl(var(--muted-foreground)/0.15))] shadow-[inset_0_1px_0_hsl(var(--border))] ${g.subtotal.sis<0?'text-destructive':''}`}>{formatMoeda(g.subtotal.sis)}</td>
                         <td style={{top:`${alturaCabSaldos + alturaThead}px`}} className="py-1 px-1 text-right text-[10px] font-semibold tabular-nums whitespace-nowrap sticky z-[8] bg-card bg-[linear-gradient(hsl(var(--muted-foreground)/0.15),hsl(var(--muted-foreground)/0.15))] shadow-[inset_0_1px_0_hsl(var(--border))]">{g.subtotal.ext===null ? '—' : formatMoeda(g.subtotal.ext)}</td>
-                        <td style={{top:`${alturaCabSaldos + alturaThead}px`}} className={`py-1 px-1 text-right text-[10px] font-semibold tabular-nums whitespace-nowrap sticky z-[8] bg-card bg-[linear-gradient(hsl(var(--muted-foreground)/0.15),hsl(var(--muted-foreground)/0.15))] shadow-[inset_0_1px_0_hsl(var(--border))] ${g.subtotal.ext===null?'text-muted-foreground':Math.abs(g.subtotal.dif)<=0.01?'text-success':'text-destructive'}`}>
-                          {g.subtotal.ext===null ? '—' : Math.abs(g.subtotal.dif)<=0.01 ? 'confere' : formatMoeda(g.subtotal.dif)}
+                        <td style={{top:`${alturaCabSaldos + alturaThead}px`}} className={`py-1 px-1 text-right text-[10px] font-semibold tabular-nums whitespace-nowrap sticky z-[8] bg-card bg-[linear-gradient(hsl(var(--muted-foreground)/0.15),hsl(var(--muted-foreground)/0.15))] shadow-[inset_0_1px_0_hsl(var(--border))] ${g.subtotal.ext===null?'text-muted-foreground':saldoConfere(g.subtotal.dif)?'text-success':'text-destructive'}`}>
+                          {g.subtotal.ext===null ? '—' : saldoConfere(g.subtotal.dif) ? 'confere' : formatMoeda(g.subtotal.dif)}
                         </td>
                         <td style={{top:`${alturaCabSaldos + alturaThead}px`}} className="py-1 sticky z-[8] bg-card bg-[linear-gradient(hsl(var(--muted-foreground)/0.15),hsl(var(--muted-foreground)/0.15))] shadow-[inset_0_1px_0_hsl(var(--border))]" />
                       </tr>
@@ -1891,9 +1915,9 @@ function SaldoContaRow({data, isActive, isDimmed, onClick, onEdit, canEdit, show
       </td>
       <td className={`py-0.5 px-1 text-right text-[9.5px] tabular-nums whitespace-nowrap ${sis<0?'text-destructive':''}`}>{formatMoeda(sis)}</td>
       <td className="py-0.5 px-1 text-right text-[9.5px] tabular-nums whitespace-nowrap">{ext===null?'—':formatMoeda(ext)}</td>
-      {/* Sem extrato é "—" (dado ausente); com extrato e |dif| ≤ 0,01 é "confere". */}
-      <td className={`py-0.5 px-1 text-right text-[9.5px] tabular-nums whitespace-nowrap ${ext===null?'font-medium text-muted-foreground':Math.abs(dif)<=0.01?'font-medium text-success':'font-semibold text-destructive'}`}>
-        {ext===null ? '—' : Math.abs(dif)<=0.01 ? 'confere' : formatMoeda(dif)}
+      {/* Sem extrato é "—" (dado ausente); com extrato, "confere" só com diferença ZERO. */}
+      <td className={`py-0.5 px-1 text-right text-[9.5px] tabular-nums whitespace-nowrap ${ext===null?'font-medium text-muted-foreground':saldoConfere(dif)?'font-medium text-success':'font-semibold text-destructive'}`}>
+        {ext===null ? '—' : saldoConfere(dif) ? 'confere' : formatMoeda(dif)}
       </td>
       <td className="py-0.5 px-1 text-center">
         {canEdit && (
