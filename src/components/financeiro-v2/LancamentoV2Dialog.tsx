@@ -399,7 +399,49 @@ export function LancamentoV2Dialog({
   // Frequency state
 
   const [fazendaId, setFazendaId] = useState('');
-  const [safraId, setSafraId] = useState('');
+
+  /**
+   * A CLASSIFICAÇÃO INTEIRA, NUM OBJETO SÓ — PAR-01a-i, passo 1 de 2 do extract.
+   *
+   * ⚠ ERAM DEZ `useState` SOLTOS, e a soltura era o problema: a regra que os governa é
+   * CRUZADA — trocar a atividade limpa o subcentro de outro escopo e a safra cruzada; escolher
+   * um subcentro sobrescreve a atividade; administrativo limpa a safra e trava a fazenda. Dez
+   * estados independentes para um dado que se move junto é o convite para o próximo PR mexer em
+   * nove e esquecer o décimo.
+   * ⚠ OS NOMES SÃO OS DO SAVE (`safra_id`, `macro_custo`, …), não os das variáveis antigas: é
+   * este objeto que vai virar o `value` do `ClassificacaoLancamento` no PAR-01a-ii, e renomear
+   * na passagem seria trocar duas coisas de uma vez.
+   * ⚠ E OS TRÊS ESTADOS DE INTERAÇÃO FICARAM DE FORA — `safraSugeridaId`, `safraEditadaAMao` e
+   * `subcentroLimpoPelaAtividade`. Eles não são dado gravado: são memória de quem está
+   * digitando, e é ela que coordena a sugestão de safra com a hidratação. Misturá-los ao dado
+   * faria o `value` do componente carregar estado de interação.
+   */
+  const [classificacao, setClassificacao] = useState<{
+    atividade: Atividade | null;
+    safra_id: string;
+    cultura: string;
+    fase: string;
+    subcentro: string;
+    macro_custo: string;
+    grupo_custo: string;
+    centro_custo: string;
+    escopo_negocio: string;
+    plano_conta_id: string | null;
+  }>({
+    atividade: null, safra_id: '', cultura: '', fase: '',
+    subcentro: '', macro_custo: '', grupo_custo: '', centro_custo: '',
+    escopo_negocio: '', plano_conta_id: null,
+  });
+
+  /* ⚠ AS LEITURAS CONTINUAM PELOS MESMOS NOMES, e é de propósito: são mais de noventa pontos
+     que apenas LEEM esses campos (no JSX, no payload do save, nas validações). Trocar os
+     noventa junto com os trinta que escrevem misturaria a mudança de forma com a chance de
+     errar um. Aqui muda o ESTADO; os nomes de leitura ficam onde estavam. */
+  const {
+    atividade, safra_id: safraId, cultura, fase, subcentro,
+    macro_custo: macroCusto, grupo_custo: grupoCusto, centro_custo: centroCusto,
+    escopo_negocio: escopoNegocio, plano_conta_id: planoContaId,
+  } = classificacao;
   /**
    * O CARD "ATIVIDADE" É PRÉ-FILTRO, NÃO DADO — PR-FIN-ATIVIDADE-01 (decisão D13).
    *
@@ -411,11 +453,8 @@ export function LancamentoV2Dialog({
    * editar um lançamento cujo plano mudou de escopo depois de gravado; nos dois casos o
    * dado gravado vence a preferência de quem está olhando.
    */
-  const [atividade, setAtividade] = useState<Atividade | null>(null);
   /* CULTURA (lavoura) e FASE (pecuária) — AGRI-MODAL-CULTURA-01. Vazio é escolha: significa
      compartilhado, e a frase abaixo do campo diz isso. */
-  const [cultura, setCultura] = useState('');
-  const [fase, setFase] = useState('');
   const [subcentroLimpoPelaAtividade, setSubcentroLimpoPelaAtividade] = useState(false);
   /**
    * A SAFRA SE SUGERE, MAS NÃO SE IMPÕE — PR-FIN-ATIVIDADE-01b.
@@ -447,7 +486,6 @@ export function LancamentoV2Dialog({
   const [dataPagamento, setDataPagamento] = useState('');
   const [descricao, setDescricao] = useState('');
   const [favorecidoId, setFavorecidoId] = useState('');
-  const [subcentro, setSubcentro] = useState('');
   /**
    * A chave da linha do plano escolhida — PR-FIN-PLANO-CHAVE-02 (front).
    *
@@ -458,10 +496,6 @@ export function LancamentoV2Dialog({
    * ⚠ `null` É VÁLIDO E ACONTECE: subcentro legado (sem linha no plano) e dividendo (cuja
    * entrada é sintetizada por cliente) não têm chave. O trigger resolve os dois pelo texto.
    */
-  const [planoContaId, setPlanoContaId] = useState<string | null>(null);
-  const [macroCusto, setMacroCusto] = useState('');
-  const [grupoCusto, setGrupoCusto] = useState('');
-  const [centroCusto, setCentroCusto] = useState('');
   // FIN-MODAL-FECHO-01 item 2 — operacao_id + tipo resolvidos pelo vínculo zoo_operacao_partes
   // (somente leitura). O link "Abrir operação" só é exibido para tipos que possuem fluxo soberano
   // de abertura implementado (hoje: compra — CompraModalShell/PR-OC-COMPRA-OPEN-01). Venda/abate
@@ -469,7 +503,6 @@ export function LancamentoV2Dialog({
   const [operacaoId, setOperacaoId] = useState<string | null>(null);
   const [operacaoTipo, setOperacaoTipo] = useState<string | null>(null);
   const operacaoAbrivel = !!operacaoId && operacaoTipo === 'compra';
-  const [escopoNegocio, setEscopoNegocio] = useState('');
   const [tipoOperacao, setTipoOperacao] = useState('2-Saídas');
   const [statusTransacao, setStatusTransacao] = useState<string>(STATUS_FINANCEIRO_INICIAL);   // PR-FIN-STATUS-UX-03A-1 — inicial 'previsto' (era 'meta')
   // PR-FIN-STATUS-UX-03A-1 — anti-reclassificação silenciosa do legado 'meta':
@@ -566,22 +599,31 @@ export function LancamentoV2Dialog({
    */
   const aplicarAtividade = (v: Atividade) => {
     const nova = atividade === v ? null : v;
-    setAtividade(nova);
     lembrarAtividade(nova);
+    /* ⚠ UM `set` SÓ PARA A REGRA INTEIRA — PAR-01a-i. Eram até oito setters em sequência; o
+       React os agrupava no mesmo render, mas o leitor tinha de juntá-los de cabeça para saber
+       em que estado o formulário ficava. Agora a regra se lê como uma transição: do objeto
+       atual para o próximo. */
     /* ⚠ O EIXO DA OUTRA ATIVIDADE SAI NA HORA — AGRI-MODAL-CULTURA-01. Escolher Amendoim e
        depois trocar para Pecuária deixaria um custo de pecuária marcado como custo direto de
        amendoim no DRE da lavoura. O `culturaParaGravar`/`faseParaGravar` também protege o
        payload; limpar aqui é para a TELA não mostrar o que não vai gravar. */
-    if (nova !== 'agricultura') setCultura('');
-    if (nova !== 'pecuaria') setFase('');
+    setClassificacao((c) => ({
+      ...c,
+      atividade: nova,
+      cultura: nova !== 'agricultura' ? '' : c.cultura,
+      fase: nova !== 'pecuaria' ? '' : c.fase,
+    }));
     if (!nova) { setSubcentroLimpoPelaAtividade(false); return; }
     /* Mesma comparação do save: aparar e ignorar caixa. */
     const alvo = (subcentro || '').trim().toLowerCase();
     const atual = classificacoes.find((c) => (c.subcentro || '').trim().toLowerCase() === alvo);
     const escopoAtual = (atual?.escopo_negocio || '').trim();
     if (atual && escopoAtual && escopoAtual !== nova) {
-      setSubcentro(''); setMacroCusto(''); setGrupoCusto(''); setCentroCusto(''); setEscopoNegocio('');
-      setPlanoContaId(null);
+      setClassificacao((c) => ({
+        ...c, subcentro: '', macro_custo: '', grupo_custo: '', centro_custo: '',
+        escopo_negocio: '', plano_conta_id: null,
+      }));
       setSubcentroLimpoPelaAtividade(true);
     }
     /* ⚠ A SAFRA DE OUTRA ATIVIDADE TAMBÉM SAI, e volta a ser sugerida — PR-FIN-SAFRA-ESCOPO-01.
@@ -591,7 +633,7 @@ export function LancamentoV2Dialog({
     const safraAtual = (safras ?? []).find((sf) => sf.id === safraId);
     const escopoSafra = (safraAtual?.escopo_negocio || '').trim();
     if (safraAtual && escopoSafra && escopoSafra !== nova) {
-      setSafraId('');
+      setClassificacao((c) => ({ ...c, safra_id: '' }));
       setSafraSugeridaId(null);
       setSafraEditadaAMao(false);
     }
@@ -722,7 +764,12 @@ export function LancamentoV2Dialog({
     const nova = atividade && atividade !== 'administrativo'
       ? safraSugerida(dataCompetencia, atividade, safras ?? [], { desempatar: false })
       : null;
-    setSafraId(nova ?? '');
+    /* ⚠ OS DOIS GUARDS ACIMA NÃO MUDARAM — PAR-01a-i, e são eles que impedem a sugestão de
+       atropelar a hidratação: `safraEditadaAMao` cala depois da escolha manual, e
+       `safraId !== safraSugeridaId` cala quando o campo já tem valor que não veio daqui —
+       exatamente o caso do lançamento antigo que acabou de ser carregado. Só a FORMA do set
+       mudou. */
+    setClassificacao((c) => ({ ...c, safra_id: nova ?? '' }));
     setSafraSugeridaId(nova);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [atividade, dataCompetencia, safras, safraEditadaAMao]);
@@ -732,16 +779,21 @@ export function LancamentoV2Dialog({
     setSubcentroSearch('');
     const plano = ehTipoTransferencia(v) ? planoDeTransferencia(classificacoes) : null;
     if (plano) {
-      setSubcentro(plano.subcentro);
-      setMacroCusto(plano.macro_custo);
-      setGrupoCusto(plano.grupo_custo || '');
-      setCentroCusto(plano.centro_custo);
-      setEscopoNegocio(plano.escopo_negocio || '');
-      setPlanoContaId(plano.id ?? null);
+      setClassificacao((c) => ({
+        ...c,
+        subcentro: plano.subcentro,
+        macro_custo: plano.macro_custo,
+        grupo_custo: plano.grupo_custo || '',
+        centro_custo: plano.centro_custo,
+        escopo_negocio: plano.escopo_negocio || '',
+        plano_conta_id: plano.id ?? null,
+      }));
       return;
     }
-    setSubcentro(''); setMacroCusto(''); setGrupoCusto(''); setCentroCusto('');
-    setPlanoContaId(null);
+    setClassificacao((c) => ({
+      ...c, subcentro: '', macro_custo: '', grupo_custo: '', centro_custo: '',
+      plano_conta_id: null,
+    }));
   };
 
   // PR-U2c-1D: classMap + filteredSubcentros migraram para <PlanoSubcentroSelect />.
@@ -754,9 +806,6 @@ export function LancamentoV2Dialog({
     statusTouchedRef.current = false;
     if (lancamento) {
       setFazendaId(lancamento.fazenda_id);
-      setSafraId(lancamento.safra_id ?? '');
-      setCultura(lancamento.cultura ?? '');
-      setFase(lancamento.fase ?? '');
       setDataCompetencia(lancamento.data_competencia);
       setDataVencimento(lancamento.data_vencimento || '');   // PR-FIN-MODAL-VENCIMENTO-02B — carrega o vencimento real
       setDataPagamento(lancamento.data_pagamento || '');
@@ -772,18 +821,29 @@ export function LancamentoV2Dialog({
          a assimetria era o defeito inteiro. */
       const planoTransfAoAbrir = ehTipoTransferencia(lancamento.tipo_operacao)
         ? planoDeTransferencia(classificacoes) : null;
-      setSubcentro(planoTransfAoAbrir?.subcentro ?? (lancamento.subcentro || ''));
-      setMacroCusto(planoTransfAoAbrir?.macro_custo ?? (lancamento.macro_custo || ''));
-      setGrupoCusto(planoTransfAoAbrir?.grupo_custo ?? (lancamento.grupo_custo || ''));
-      setCentroCusto(planoTransfAoAbrir?.centro_custo ?? (lancamento.centro_custo || ''));
-      setEscopoNegocio(planoTransfAoAbrir?.escopo_negocio ?? (lancamento.escopo_negocio || ''));
+      /* ⚠ UM `set` PARA A CLASSIFICAÇÃO INTEIRA — PAR-01a-i. Os dez campos vinham em oito
+         setters espalhados por trinta linhas, com a safra e a cultura lá em cima e o plano aqui
+         embaixo; abrir um lançamento escrevia o mesmo objeto em dois lugares distantes. A
+         precedência da transferência e os `??` são os mesmos, byte a byte. */
+      setClassificacao({
+        safra_id: lancamento.safra_id ?? '',
+        cultura: lancamento.cultura ?? '',
+        fase: lancamento.fase ?? '',
+        subcentro: planoTransfAoAbrir?.subcentro ?? (lancamento.subcentro || ''),
+        macro_custo: planoTransfAoAbrir?.macro_custo ?? (lancamento.macro_custo || ''),
+        grupo_custo: planoTransfAoAbrir?.grupo_custo ?? (lancamento.grupo_custo || ''),
+        centro_custo: planoTransfAoAbrir?.centro_custo ?? (lancamento.centro_custo || ''),
+        escopo_negocio: planoTransfAoAbrir?.escopo_negocio ?? (lancamento.escopo_negocio || ''),
+        plano_conta_id: planoTransfAoAbrir?.id ?? lancamento.plano_conta_id ?? null,
+        atividade: atividadeValida(planoTransfAoAbrir?.escopo_negocio ?? lancamento.escopo_negocio),
+      });
       /* ⚠ A CHAVE GRAVADA ABRE COM O LANÇAMENTO, e a da transferência tem precedência pela
          mesma razão que o texto dela (os seis lançamentos de fatura de cartão do
          PR-FIN-TRANSF-SUBCENTRO-01): o que vale é a 18010, não o que ficou no banco. */
-      setPlanoContaId(planoTransfAoAbrir?.id ?? lancamento.plano_conta_id ?? null);
+
       /* O card segue o lançamento — e o lançamento segue o plano. */
       setSubcentroDeAbertura(planoTransfAoAbrir?.subcentro ?? (lancamento.subcentro || ''));
-      setAtividade(atividadeValida(planoTransfAoAbrir?.escopo_negocio ?? lancamento.escopo_negocio));
+
       setSubcentroLimpoPelaAtividade(false);
       setSafraSugeridaId(null);
       /* ⚠ LANÇAMENTO GRAVADO COM SAFRA NÃO RECEBE SUGESTÃO. O que está no banco é decisão
@@ -824,7 +884,6 @@ export function LancamentoV2Dialog({
       // Entradas → destino; demais → origem.
       const today = new Date().toISOString().slice(0, 10);
       setFazendaId(prefill.fazenda_id ?? defaultFazendaId ?? '');
-      setSafraId(prefill.safra_id ?? '');
       setDataCompetencia(prefill.data_competencia ?? prefill.data_pagamento ?? today);
       /* PR-FIN-MODAL-VENCIMENTO-02B — o default segue vazio; só preenche quem passou a
          chave, porque só esse chamador conhece a regra de vencimento do seu fluxo. */
@@ -847,16 +906,31 @@ export function LancamentoV2Dialog({
       // Operador edita livremente. Campos opcionais — fallback '' preserva
       // comportamento atual quando vêm undefined (OFX órfão etc.).
       setFavorecidoId(prefill.favorecido_id ?? '');
-      setSubcentro(prefill.subcentro ?? '');
-      setMacroCusto(prefill.macro_custo ?? '');
-      setGrupoCusto(prefill.grupo_custo ?? '');
-      setCentroCusto(prefill.centro_custo ?? '');
+      /* ⚠ A CLASSIFICAÇÃO DO PREFILL NUM `set` SÓ — PAR-01a-i. `cultura`, `fase` e `atividade`
+         não vêm do prefill e por isso nascem vazios, exatamente como nasciam quando eram
+         `useState` que ninguém tocava neste ramo. */
       /* ⚠ A PROP `prefill.plano_conta_id` EXISTIA E NINGUÉM A LIA NEM A PASSAVA — declarada
          no PR-Mesa-CreateFromExcel-A junto da hierarquia, e esquecida. Ler aqui não muda
          nada hoje (medido: zero chamadores a passam) e fecha o par: quem um dia mandar a
          hierarquia manda a chave junto, da MESMA fonte, e não um par que não combina. */
-      setPlanoContaId(prefill.plano_conta_id ?? null);
-      setEscopoNegocio('');
+      /* ⚠ SPREAD, E NÃO OBJETO NOVO — e isto é FIDELIDADE, não preferência. O ramo do prefill
+         nunca tocou `cultura`, `fase` nem `atividade`: eles ficavam com o valor que estivesse
+         no estado. Zerá-los aqui seria CORRIGIR um comportamento, e este PR não corrige nada —
+         ele muda a forma do estado e mais nada.
+         ⚠ E O QUE ISSO ESCONDE FICA REPORTADO: abrir o modal com prefill logo depois de um
+         lançamento de lavoura herda a cultura daquele lançamento, porque este ramo não limpa e
+         o `else` (reset) limpa. É defeito anterior a este PR, e some junto quando o cluster
+         virar componente com `value` próprio. */
+      setClassificacao((c) => ({
+        ...c,
+        subcentro: prefill.subcentro ?? '',
+        macro_custo: prefill.macro_custo ?? '',
+        grupo_custo: prefill.grupo_custo ?? '',
+        centro_custo: prefill.centro_custo ?? '',
+        plano_conta_id: prefill.plano_conta_id ?? null,
+        escopo_negocio: '',
+        safra_id: prefill.safra_id ?? '',
+      }));
       setTipoDocumento('');
       setObservacao('');
       setFormaPagamentoParc('avista');
@@ -867,24 +941,25 @@ export function LancamentoV2Dialog({
     } else {
       const today = new Date().toISOString().slice(0, 10);
       setFazendaId(defaultFazendaId || '');
-      setSafraId('');
       setDataCompetencia(today);
       setDataVencimento('');   // PR-FIN-MODAL-VENCIMENTO-02B — novo lançamento abre com vencimento vazio
       setDataPagamento('');   // PR-FIN-V2-STATUS-01 — novo lançamento NÃO recebe pagamento=hoje automático (só realizado exige)
       setStatusTransacao(deriveStatus(today));
       setDescricao('');
       setFavorecidoId('');
-      setSubcentro('');
-      setMacroCusto('');
-      setGrupoCusto('');
-      setCentroCusto('');
-      setEscopoNegocio('');
-      setPlanoContaId(null);
+
       /* ⚠ LANÇAMENTO NOVO HERDA A ÚLTIMA ATIVIDADE DA SESSÃO — quem classifica quatrocentos
          lançamentos de lavoura não quer marcar "Lavoura" quatrocentas vezes. No primeiro uso
          é `null`, e aí a lista é a completa, como sempre foi. */
       setSubcentroDeAbertura('');
-      setAtividade(ultimaAtividade());
+      /* ⚠ O RESET INTEIRO NUM `set` — PAR-01a-i, e a última atividade continua sendo a única
+         coisa que sobrevive à troca de lançamento (memória de sessão, não dado gravado). */
+      setClassificacao({
+        atividade: ultimaAtividade(),
+        safra_id: '', cultura: '', fase: '',
+        subcentro: '', macro_custo: '', grupo_custo: '', centro_custo: '',
+        escopo_negocio: '', plano_conta_id: null,
+      });
       setSubcentroLimpoPelaAtividade(false);
       setSafraSugeridaId(null);
       setSafraEditadaAMao(false);
@@ -1792,28 +1867,35 @@ export function LancamentoV2Dialog({
               <div className="col-span-8">
                 <PlanoSubcentroSelect
                   value={subcentro}
-                  onChange={setSubcentro}
+                  onChange={(v) => setClassificacao((c) => ({ ...c, subcentro: v }))}
                   onSelected={(_sub, cls) => {
                     if (cls) {
-                      setMacroCusto(cls.macro_custo);
-                      setGrupoCusto(cls.grupo_custo || '');
-                      setCentroCusto(cls.centro_custo);
-                      setEscopoNegocio(cls.escopo_negocio || '');
-                      /* A chave da linha ESCOLHIDA. `?? null` porque nem toda entrada da
-                         lista tem uma: as combinações legadas e os dividendos não têm. */
-                      setPlanoContaId(cls.id ?? null);
                       /* ⚠ O PLANO MANDA — a precedência do card. Escolher um subcentro de
                          outro escopo (possível com a lista completa, ou com "Mostrar todos")
                          move a pílula para o escopo que veio. O card é preferência de quem
-                         olha; o plano é o dado. */
-                      setAtividade(atividadeValida(cls.escopo_negocio));
+                         olha; o plano é o dado.
+                         ⚠ A chave da linha ESCOLHIDA vai junto. `?? null` porque nem toda
+                         entrada da lista tem uma: as combinações legadas e os dividendos não
+                         têm.
+                         ⚠ CONTA ADMINISTRATIVA LIMPA A SAFRA NO MESMO `set` — PR-FIN-SAFRA-
+                         ADM-01. Antes eram dois setters em pontos diferentes do mesmo `if`;
+                         agora a transição inteira se lê de uma vez. */
+                      const ehAdm = (cls.escopo_negocio || '').trim() === 'administrativo';
+                      setClassificacao((c) => ({
+                        ...c,
+                        macro_custo: cls.macro_custo,
+                        grupo_custo: cls.grupo_custo || '',
+                        centro_custo: cls.centro_custo,
+                        escopo_negocio: cls.escopo_negocio || '',
+                        plano_conta_id: cls.id ?? null,
+                        atividade: atividadeValida(cls.escopo_negocio),
+                        safra_id: ehAdm ? '' : c.safra_id,
+                      }));
                       setSubcentroLimpoPelaAtividade(false);
-                      /* ⚠ CONTA ADMINISTRATIVA LIMPA A SAFRA NA HORA — PR-FIN-SAFRA-ADM-01.
-                         É o mesmo gesto de quando o card muda: escolher no meio da sessão é
-                         decisão de agora, e o campo esvazia. O RISCADO fica reservado para o
+                      /* ⚠ É o mesmo gesto de quando o card muda: escolher no meio da sessão
+                         é decisão de agora, e o campo esvazia. O RISCADO fica reservado para o
                          que já estava gravado — ali o operador precisa ver o que vai sair. */
-                      if ((cls.escopo_negocio || '').trim() === 'administrativo') {
-                        setSafraId('');
+                      if (ehAdm) {
                         setSafraSugeridaId(null);
                         setSafraEditadaAMao(false);
                       }
@@ -1822,7 +1904,7 @@ export function LancamentoV2Dialog({
                          seletor só oferece o que está no seu próprio mapa), mas um `id`
                          velho ao lado de um subcentro novo é o único par que o trigger
                          resolveria para o lado errado, e ele obedece à chave. */
-                      setPlanoContaId(null);
+                      setClassificacao((c) => ({ ...c, plano_conta_id: null }));
                     }
                   }}
                   escopoNegocio={atividade ?? undefined}
@@ -1878,7 +1960,7 @@ export function LancamentoV2Dialog({
                 <Select
                   value={safraId || '__none_safra__'}
                   disabled={ehAdministrativo}
-                  onValueChange={v => { setSafraId(v === '__none_safra__' ? '' : v); setSafraEditadaAMao(true); setSafraSugeridaId(null); }}
+                  onValueChange={v => { setClassificacao((c) => ({ ...c, safra_id: v === '__none_safra__' ? '' : v })); setSafraEditadaAMao(true); setSafraSugeridaId(null); }}
                 >
                   {/* ⚠ 12px E `truncate` COM `title` — o nome inteiro cabe nesta largura
                       (medido: "Safra 26/27 Amendoim" pede 132,9px e a coluna dá 216,7),
@@ -1954,7 +2036,7 @@ export function LancamentoV2Dialog({
                 <div className="col-span-4">
                   <Label className="text-[10px]">Cultura</Label>
                   <Select value={cultura || SEM_CULTURA}
-                    onValueChange={v => setCultura(v === SEM_CULTURA ? '' : v)}>
+                    onValueChange={v => setClassificacao((c) => ({ ...c, cultura: v === SEM_CULTURA ? '' : v }))}>
                     <SelectTrigger className={cn('h-8 text-xs [&>span]:truncate', fieldBg)}>
                       <SelectValue />
                     </SelectTrigger>
@@ -1979,7 +2061,7 @@ export function LancamentoV2Dialog({
                 <div className="col-span-4">
                   <Label className="text-[10px]">Fase</Label>
                   <Select value={fase || SEM_CULTURA}
-                    onValueChange={v => setFase(v === SEM_CULTURA ? '' : v)}>
+                    onValueChange={v => setClassificacao((c) => ({ ...c, fase: v === SEM_CULTURA ? '' : v }))}>
                     <SelectTrigger className={cn('h-8 text-xs [&>span]:truncate', fieldBg)}>
                       <SelectValue />
                     </SelectTrigger>
