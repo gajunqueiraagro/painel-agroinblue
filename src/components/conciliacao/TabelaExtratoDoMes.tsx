@@ -32,6 +32,7 @@ import { useCancelarMovimento, MOTIVOS_DE_CANCELAMENTO } from '@/hooks/useCancel
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useEspelhoInternas, type EspelhoInternas } from '@/hooks/useEspelhoInternas';
+import { saldoConfere } from '@/lib/financeiro/conciliacaoCalc';
 
 /* ─── formatadores (movidos de EspelhoConciliacaoTab, verbatim) ─────────────── */
 
@@ -278,7 +279,10 @@ export function TabelaExtratoDoMes({ ofx, inicial, internas, rolagem = 'propria'
             {informado == null
               ? '—'
               : <>informado: {fmtBRL(informado)}{' · '}
-                  {Math.abs(difere ?? 0) <= 0.01
+                  {/* ⚠ TOLERÂNCIA ZERO — PR-CONCILIACAO-TOLERANCIA-ZERO-02: este é o total do
+                      extrato contra o que o banco declarou, e é a mesma pergunta do portão e da
+                      tabela de saldos. Um centavo aqui é divergência, e divergência aparece. */}
+                  {saldoConfere(difere ?? 0)
                     ? <span className="text-success">confere</span>
                     : <span className="text-amber-600">difere R$ {fmtBRL(Math.abs(difere ?? 0))}</span>}
                 </>}

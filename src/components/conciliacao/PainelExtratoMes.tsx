@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { FileText, ListOrdered, Pencil } from 'lucide-react';
 import { formatMoeda } from '@/lib/calculos/formatters';
+import { saldoConfere } from '@/lib/financeiro/conciliacaoCalc';
 import {
   useConciliacaoDoMes, useSugestoesDoMes, contarBaldes, frameDoRodape,
   type SituacaoMovimento,
@@ -191,11 +192,15 @@ export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comP
 
         {/* ⚠ "—" QUANDO NÃO SE PERGUNTOU. Sem saldo declarado não há diferença a
             calcular; mostrar zero afirmaria que o mês fecha. */}
+        {/* ⚠ TOLERÂNCIA ZERO — PR-CONCILIACAO-TOLERANCIA-ZERO-02, e este era O VIZINHO: a tabela
+            de saldos, a centímetros daqui, passou a exigir zero no PR anterior, e enquanto este
+            campo aceitasse um centavo as duas réguas voltariam a conviver na mesma tela — uma
+            contradizendo a outra sobre o mesmo número. */}
         <Campo rotulo="Diferença de saldo (o mês fecha?)">
           {saldo.saldo == null || sistema.saldoSistema == null ? '—' : (
-            <span className={Math.abs(saldo.saldo - sistema.saldoSistema) < 0.01
+            <span className={saldoConfere(saldo.saldo - sistema.saldoSistema)
               ? 'text-success' : 'text-destructive'}>
-              {Math.abs(saldo.saldo - sistema.saldoSistema) < 0.01
+              {saldoConfere(saldo.saldo - sistema.saldoSistema)
                 ? 'confere'
                 : formatMoeda(saldo.saldo - sistema.saldoSistema)}
             </span>

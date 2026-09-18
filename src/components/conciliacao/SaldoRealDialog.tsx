@@ -8,6 +8,7 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { Loader2, Paperclip, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatMoeda } from '@/lib/calculos/formatters';
+import { saldoConfere } from '@/lib/financeiro/conciliacaoCalc';
 import {
   gravarSaldoReal, removerSaldoReal, fimDoMes,
   useSaldoDeclaradoOfx, useSaldoDocumentos,
@@ -196,8 +197,8 @@ export function SaldoRealDialog({
             {difOfx !== null && (
               <div className="flex justify-between">
                 <span className="text-[10px] text-muted-foreground">contra o saldo gravado</span>
-                <span className={`text-[11px] tabular-nums ${Math.abs(difOfx) <= 0.01 ? 'text-success' : 'font-semibold text-destructive'}`}>
-                  {Math.abs(difOfx) <= 0.01 ? 'confere' : formatMoeda(difOfx)}
+                <span className={`text-[11px] tabular-nums ${saldoConfere(difOfx) ? 'text-success' : 'font-semibold text-destructive'}`}>
+                  {saldoConfere(difOfx) ? 'confere' : formatMoeda(difOfx)}
                 </span>
               </div>
             )}
@@ -219,8 +220,8 @@ export function SaldoRealDialog({
             </div>
             <div className="flex justify-between">
               <span className="text-[10px] text-muted-foreground">diferença</span>
-              <span className={`text-[11px] tabular-nums ${diferenca == null ? 'text-muted-foreground' : Math.abs(diferenca) <= 0.01 ? 'text-success' : 'font-semibold text-destructive'}`}>
-                {diferenca == null ? '—' : Math.abs(diferenca) <= 0.01 ? 'confere' : formatMoeda(diferenca)}
+              <span className={`text-[11px] tabular-nums ${diferenca == null ? 'text-muted-foreground' : saldoConfere(diferenca) ? 'text-success' : 'font-semibold text-destructive'}`}>
+                {diferenca == null ? '—' : saldoConfere(diferenca) ? 'confere' : formatMoeda(diferenca)}
               </span>
             </div>
           </div>

@@ -33,6 +33,7 @@ import { LancamentoV2Dialog } from './LancamentoV2Dialog';
 import { DecisaoDerivadosDialog } from './DecisaoDerivadosDialog';
 import { supabase } from '@/integrations/supabase/client';
 import { formatMoeda } from '@/lib/calculos/formatters';
+import { saldoConfere } from '@/lib/financeiro/conciliacaoCalc';
 import { format, parseISO } from 'date-fns';
 import { toast } from 'sonner';
 import { useFinanceiroV2, type LancamentoV2Form } from '@/hooks/useFinanceiroV2';
@@ -860,10 +861,12 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
     calculado_ofx: 'calculado pelo OFX',
     indisponivel: 'indisponível',
   };
+  /* ⚠ TOLERÂNCIA ZERO — PR-CONCILIACAO-TOLERANCIA-ZERO-02: a cor é a afirmação. Verde sobre um
+     centavo de diferença diz "fechou" para quem só olha a cor, que é como esta linha é lida. */
   const diffCls = (() => {
     const d = resumoConciliacao.diferencaSaldoFinal;
     if (d == null) return 'text-muted-foreground';
-    if (Math.abs(d) < 0.01) return 'text-emerald-700';
+    if (saldoConfere(d)) return 'text-emerald-700';
     return 'text-red-700';
   })();
 

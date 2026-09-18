@@ -29,7 +29,7 @@ import { format, parseISO } from 'date-fns';
 import {
   belongsToConta,
   calcConciliacaoMensal,
-  roundCurrency,
+  saldoConfere,
   type ConciliacaoLancamentoBase,
   type ConciliacaoStatus,
 } from '@/lib/financeiro/conciliacaoCalc';
@@ -182,28 +182,6 @@ function classifyLanc(l: LancamentoResumo, contaId: string): 'entrada'|'saida'|'
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
-/**
- * O SALDO FECHA? — e a resposta é SIM só quando a diferença é exatamente zero.
- * PR-CONCILIACAO-TOLERANCIA-ZERO-01.
- *
- * ⚠ HAVIA DUAS RÉGUAS PARA A MESMA PERGUNTA NESTA TELA. O portão do passo 1 exige zero; esta
- * tabela aceitava `<= 0,01` e escrevia "confere" sobre um centavo de diferença — medido pelo
- * Gabriel na Santa Rita · jul/26: Bradesco com 511.555,99 contra 511.556,00, e o total das
- * contas com 3.929.179,75 contra ...,76. Conciliação bancária é 100%: divergência de centavo
- * não bloqueia nada, mas tem de APARECER.
- * ⚠ E A RÉGUA CERTA JÁ EXISTIA NO REPO — `getConciliacaoStatus`, em `conciliacaoCalc.ts`, diz
- * no próprio comentário "Regra absoluta: diferença = 0 → verde, diferença ≠ 0 → vermelho". A
- * tabela é que não a usava. Este helper é a mesma conta com o mesmo `roundCurrency`, para que
- * a terceira régua não nasça no próximo PR.
- * ⚠ `roundCurrency` E NÃO `=== 0` CRU: em ponto flutuante `511556.00 - 511555.99` dá
- * `0.010000000058...`, e uma subtração que DEVERIA dar zero pode devolver `1e-10`. Comparar o
- * float cru transformaria "tolerância zero" em falso alarme. Zero aqui é zero em CENTAVOS, que
- * é a unidade em que dinheiro existe.
- * ⚠ ISTO NÃO TOCA A TOLERÂNCIA DO PAREAMENTO (valor de movimento × valor de lançamento), que é
- * outra pergunta e continua em 0,01: lá o centavo é arredondamento de UM par; aqui é saldo, e
- * saldo fecha ou não fecha.
- */
-const saldoConfere = (dif: number) => roundCurrency(dif) === 0;
 
 /* ── Pure function to build month cards for any contaId ── */
 /**

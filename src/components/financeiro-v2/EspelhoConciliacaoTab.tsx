@@ -27,6 +27,7 @@ import { CasarComBancoModal, CasarN1Modal, type ExtratoAlvo, type LevadoInicial 
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { DecisaoDerivadosDialog } from '@/components/financeiro-v2/DecisaoDerivadosDialog';
 import { useEspelhoInternas, type EspelhoInternas } from '@/hooks/useEspelhoInternas';
+import { saldoConfere } from '@/lib/financeiro/conciliacaoCalc';
 import {
   TabelaExtratoDoMes, EspStatusCell, fmtBRL, fmtData, corValReal,
   type EspOfx, type EspStatus,
@@ -1121,7 +1122,8 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
                   <td className={cn(CEL, 'text-left text-[11px] font-semibold tabular-nums text-primary')}>{fmtBRL(d.sistema)}</td>
                   <td />
                   <td className={cn(CEL, 'text-right text-[11px] font-semibold')}>
-                    {Math.abs(d.banco - d.sistema) <= 0.01
+                    {/* ⚠ TOLERÂNCIA ZERO — PR-CONCILIACAO-TOLERANCIA-ZERO-02. */}
+                    {saldoConfere(d.banco - d.sistema)
                       ? <span className="text-emerald-600">confere</span>
                       : <span className="text-amber-600">diferença {fmtBRL(d.banco - d.sistema)}</span>}
                   </td>
@@ -1406,7 +1408,7 @@ export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes, mostrarCan
           <span className="text-[12px] font-medium tabular-nums leading-[14px] text-destructive">{fmtBRL(saidasBanco)}</span>
           <span className="text-[12px] font-medium tabular-nums leading-[14px] text-destructive">{fmtBRL(saidasSistema)}</span>
           <span className={cn('text-[12px] font-medium tabular-nums leading-[14px]',
-            Math.abs(difSaidas) <= 0.01 ? 'text-muted-foreground' : 'text-amber-600')}>{fmtBRL(difSaidas)}</span>
+            saldoConfere(difSaidas) ? 'text-muted-foreground' : 'text-amber-600')}>{fmtBRL(difSaidas)}</span>
           <span className="row-span-2 self-center text-[10px] text-muted-foreground leading-tight">
             {semCorrespondencia.length} extrato{semCorrespondencia.length === 1 ? '' : 's'}
             {' · '}{noSistemaNaoNoBanco.length} lançamento{noSistemaNaoNoBanco.length === 1 ? '' : 's'}
@@ -1419,7 +1421,7 @@ export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes, mostrarCan
           <span className="text-[12px] font-medium tabular-nums leading-[14px] text-emerald-600">{fmtBRL(entradasBanco)}</span>
           <span className="text-[12px] font-medium tabular-nums leading-[14px] text-emerald-600">{fmtBRL(entradasSistema)}</span>
           <span className={cn('text-[12px] font-medium tabular-nums leading-[14px]',
-            Math.abs(difEntradas) <= 0.01 ? 'text-muted-foreground' : 'text-amber-600')}>{fmtBRL(difEntradas)}</span>
+            saldoConfere(difEntradas) ? 'text-muted-foreground' : 'text-amber-600')}>{fmtBRL(difEntradas)}</span>
         </div>
 
         {!soConferencia && (

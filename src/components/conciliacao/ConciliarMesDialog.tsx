@@ -31,6 +31,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatMoeda } from '@/lib/calculos/formatters';
+import { saldoConfere } from '@/lib/financeiro/conciliacaoCalc';
 import { useConciliarMes, type PreviaConciliarMes } from '@/hooks/useConciliarMes';
 import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
 
@@ -191,7 +192,8 @@ export function ConciliarMesDialog({
                   <div className="text-[18px] font-medium leading-tight tabular-nums">
                     {saldoSistemaHoje == null ? '—' : formatMoeda(saldoSistemaHoje)}
                   </div>
-                  {difSistema != null && Math.abs(difSistema) > 0.01 && (
+                  {/* ⚠ TOLERÂNCIA ZERO — PR-CONCILIACAO-TOLERANCIA-ZERO-02. */}
+                  {difSistema != null && !saldoConfere(difSistema) && (
                     <div className="text-[11px] text-red-600 dark:text-red-400 tabular-nums">
                       {comSinal(difSistema)} contra o extrato
                     </div>

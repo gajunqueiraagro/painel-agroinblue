@@ -80,6 +80,33 @@ export function roundCurrency(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+/**
+ * O SALDO FECHA? — e a resposta é SIM só quando a diferença é exatamente zero.
+ * PR-CONCILIACAO-TOLERANCIA-ZERO-02.
+ *
+ * ⚠ ELE MORA AQUI PORQUE A DOUTRINA MORA AQUI: `getConciliacaoStatus`, logo abaixo, já dizia
+ * "Regra absoluta: diferença = 0 → verde, diferença ≠ 0 → vermelho". O que faltava era as TELAS
+ * usarem a regra — oito pontos espalhados comparavam `Math.abs(dif) <= 0.01` à mão e escreviam
+ * "confere" sobre um centavo de divergência. Medido pelo Gabriel na Santa Rita · jul/26:
+ * Bradesco com 511.555,99 contra 511.556,00, e o total das contas com 3.929.179,75 contra
+ * ...,76, os dois dizendo que conferiam.
+ * ⚠ CONCILIAÇÃO BANCÁRIA É 100%: divergência de centavo não bloqueia nada, mas tem de APARECER
+ * — é ela que denuncia o lançamento digitado com um algarismo a menos.
+ * ⚠ `roundCurrency` E NÃO `=== 0` CRU, e não é zelo: `511556.00 - 511555.99` dá
+ * `0.010000000009` em float64 e `3929179.76 - 3929179.75` dá `0.009999999776`. Comparar o float
+ * cru faria uma subtração que DEVERIA dar zero devolver `1e-10` e virar falso alarme. Zero aqui
+ * é zero em CENTAVOS, que é a unidade em que dinheiro existe.
+ * ⚠ E ERA A TOLERÂNCIA ANTIGA QUE FLUTUAVA, o que é pior que ser frouxa: pelos dois números
+ * acima, `<= 0.01` dá `false` no primeiro e `true` no segundo — o MESMO centavo de erro dizia
+ * "confere" numa conta e aparecia na outra.
+ * ⚠ NÃO SERVE PARA PAREAMENTO. Comparar o valor de um movimento com o de um lançamento continua
+ * em 0,01, e de propósito: lá o centavo é arredondamento de UM par; aqui é saldo, que fecha ou
+ * não fecha.
+ */
+export function saldoConfere(diferenca: number): boolean {
+  return roundCurrency(diferenca) === 0;
+}
+
 export function belongsToConta(
   lanc: Pick<ConciliacaoLancamentoBase, 'conta_bancaria_id' | 'conta_destino_id'>,
   contaId: string,
