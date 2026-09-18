@@ -26,6 +26,17 @@
     --secondary: 209 49% 36%;
     --secondary-foreground: 0 0% 100%;
     --muted: 220 17% 97%;
+
+    /* ⚠ A FAIXA DO CABEÇALHO — PR-CONC-HEADER-TOM-01, tom escolhido pelo Gabriel (opção C).
+       Ela existe porque `bg-muted/40` computava rgb(246,247,249): muted (L 97%) a 40% SOBRE um
+       fundo que também é muted — um branco lavado que não separava o cabeçalho do conteúdo.
+       ⚠ E É OPACA DE PROPÓSITO, sem `/40` nem nada: o container é `sticky top-0` no mobile, e a
+       A21 da casa diz que fundo de bloco fixo não pode ser translúcido — o conteúdo passa por
+       baixo do que se está lendo. Cor cheia resolve; opacidade não.
+       ⚠ TOKEN, E NÃO A COR SOLTA NA CLASSE: uma faixa hexadecimal cravada num `className` é
+       invisível para quem procurar a paleta depois, e seria a primeira cor do sistema fora do
+       `:root`. */
+    --header: 213 28% 89%;
     --muted-foreground: 220 9% 46%;
     --accent: 220 14% 94%;
     --accent-foreground: 222 47% 11%;

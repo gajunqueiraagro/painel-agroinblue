@@ -951,7 +951,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
           altura declarada) e a tabela de saldos, que teto em `calc(100vh - 230px)` fixo, passaria
           a ser cortada embaixo. `inset shadow` pinta dentro da caixa e não move layout — o mesmo
           idioma da fresta do Total naquela tabela. */}
-      <div className="p-3 space-y-1 sticky top-0 z-20 bg-muted/40 shadow-[inset_0_-1px_0_hsl(var(--border)/0.6)] md:static md:z-auto md:shrink-0">
+      <div className="p-3 space-y-1 sticky top-0 z-20 bg-[hsl(var(--header))] shadow-[inset_0_-1px_0_hsl(var(--border)/0.6)] md:static md:z-auto md:shrink-0">
 
         {/* ⚠ O CABEÇALHO DA PÁGINA — CONCIL-PARIDADE-VISUAL-01 §1. A tela abria
             direto no seletor de ano, sem dizer o que ela é: quem chegava por um
