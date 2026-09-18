@@ -10,7 +10,8 @@ import { PalcoDoMes } from '@/components/conciliacao/PalcoDoMes';
 import { ConciliarMesDialog } from '@/components/conciliacao/ConciliarMesDialog';
 
 /**
- * AcoesDoMes — as duas portas que CONCILIAM o mês: "Conciliar o mês" e "Ver o mês".
+ * AcoesDoMes — as duas portas que CONCILIAM o mês: "Conciliar em lote" e "Conciliar unitário"
+ * (nomes de PR-ACOES-DO-MES-ROTULOS-01; eram "Conciliar o mês" e "Ver o mês").
  *
  * ⚠ ELAS MORAVAM NA ABA "IMPORTAR BANCO", e era isso que ensinava o fluxo errado —
  * PR-CONCILIACAO-PASSOS-01. O operador entrava para conferir se o extrato chegou completo e
@@ -70,7 +71,11 @@ export function AcoesDoMes({ clienteId, contaId, contaNome, ano, mes, aoMudar }:
         className="h-6 gap-1 px-2 text-[10px]"
         disabled={!clienteId || !contaId}
         title={!contaId ? 'Escolha uma conta na régua para conciliar o mês.'
-          : 'Ver o que entra cru, o que o banco substitui e se o saldo fecha — antes de gravar.'}
+          /* ⚠ ESTE TEXTO PROMETIA O QUE A RPC DEIXOU DE FAZER — PR-ACOES-DO-MES-ROTULOS-02. Ele
+             dizia "o que o banco substitui", e o substituir saiu de `fn_extrato_conciliar_mes`
+             em 984f9400: a chave `substituidos` volta SEMPRE vazia desde então, porque casar
+             virou o passo 2a, que pede aprovação. O botão faz uma coisa só. */
+          : 'Cria lançamento para os movimentos do banco que não têm par no sistema. Você escolhe quais, linha a linha.'}
         onClick={() => setVerConciliarMes(true)}>
         <ListPlus className="h-3 w-3" />
         {/* ⚠ "CONCILIAR EM LOTE", E ERA "Conciliar o mês" — PR-ACOES-DO-MES-ROTULOS-01. Os dois
@@ -84,7 +89,13 @@ export function AcoesDoMes({ clienteId, contaId, contaNome, ano, mes, aoMudar }:
       {/* ⚠ ESTE SÓ MOSTRA; o outro GRAVA, e é o que merece o verbo — 130. */}
       <Button type="button" variant="outline" size="sm"
         className="h-6 gap-1 px-2 text-[10px]"
-        title="Ver o mês inteiro com as sugestões do motor, numa tela só. Não grava nada."
+        /* ⚠ E ESTE PROMETIA UM MOTOR QUE SAIU DA TELA — PR-ACOES-DO-MES-ROTULOS-02. As
+           sugestões deixaram o Palco em eb027cda (9.907 ms contra teto de 8 s), e o tooltip
+           continuou anunciando a coluna que não existe mais.
+           ⚠ OS DOIS FICARAM FALSOS POR PRs DO MESMO DIA, e é o padrão que vale registrar:
+           tooltip não quebra gate nenhum — nem TSC, nem build, nem lint —, então ele sobrevive
+           à mudança que o desmentiu. Quem muda comportamento relê os textos que o descrevem. */
+        title="O mês inteiro numa tela, para conciliar um movimento de cada vez. Não grava nada aqui."
         onClick={() => setVerPalco(true)}>
         <LayoutList className="h-3 w-3" />
         Conciliar unitário

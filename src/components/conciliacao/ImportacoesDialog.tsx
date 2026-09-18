@@ -147,7 +147,7 @@ export function ImportacoesDialog({
           Importações anteriores a 25/08/2026 não são rastreadas — os movimentos delas entraram
           sem vínculo de arquivo, e o Desfazer não os alcança.
           {' '}Desfazer só alcança arquivos sem vínculo. Os lançamentos crus e os vínculos criados
-          pelo Conciliar o mês serão desfeitos por um caminho próprio — em construção.
+          pela conciliação em lote serão desfeitos por um caminho próprio — em construção.
         </p>
       </DialogContent>
     </Dialog>
