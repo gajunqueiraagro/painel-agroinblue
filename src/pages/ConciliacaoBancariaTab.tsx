@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { PainelExtratoMes } from '@/components/conciliacao/PainelExtratoMes';
+import { ExtratoDoMesInline } from '@/components/conciliacao/TabelaExtratoDoMes';
 import { AcoesDoMes } from '@/components/conciliacao/AcoesDoMes';
 import { SaldoRealDialog } from '@/components/conciliacao/SaldoRealDialog';
 import { EspelhoOfxSistemaModal, EspelhoConciliacaoTab } from '@/components/financeiro-v2/EspelhoConciliacaoTab';
@@ -951,11 +952,30 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             direto no seletor de ano, sem dizer o que ela é: quem chegava por um
             atalho via doze cards de mês e nenhum nome. O subtítulo é o da
             referência, e diz a pergunta que a tela responde. */}
-        <div className="min-w-0">
-          <h2 className="text-[15px] font-semibold leading-none">Conciliação</h2>
-          <p className="mt-1 text-[11px] text-muted-foreground">
-            Extrato, saldo corrente e o mês fechando — conta a conta
-          </p>
+        {/* ⚠ A FRASE DE APOIO SUBIU PARA CÁ — PR-IMPORTAR-VER-EXTRATO-01. Ela morava abaixo das
+            abas e custava uma linha inteira do cabeçalho (19,13px + o gap), justamente onde a
+            tela tem menos espaço: a tabela de saldos tem teto FIXO em `calc(100vh - 230px)` e
+            não acompanha o que cresce acima dela.
+            ⚠ AQUI ELA NÃO CUSTA NADA, e isso foi medido: esta linha já tem duas alturas de texto
+            (o título de 15px e o subtítulo de 11px) e sobrava largura à direita. A frase ocupa a
+            largura vazia, na mesma base do subtítulo — o cabeçalho encolhe pelo tanto que a
+            linha de baixo deixou de existir.
+            ⚠ `items-end` E NÃO `items-center`: as duas frases têm o mesmo tamanho e a mesma cor,
+            e alinhá-las pela base faz delas uma linha só aos olhos, em vez de dois textos soltos
+            na mesma altura. */}
+        <div className="flex min-w-0 items-end justify-between gap-4">
+          <div className="min-w-0">
+            <h2 className="text-[15px] font-semibold leading-none">Conciliação</h2>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Extrato, saldo corrente e o mês fechando — conta a conta
+            </p>
+          </div>
+          {selectedCard && !loading && APOIO_DA_ABA[vistaExtrato] && (
+            <p className="min-w-0 max-w-[52%] truncate text-right text-[11px] leading-snug text-muted-foreground"
+              title={APOIO_DA_ABA[vistaExtrato]}>
+              {APOIO_DA_ABA[vistaExtrato]}
+            </p>
+          )}
         </div>
 
         {/* ════ HEADER: year dropdown + 12 month cards ════ */}
@@ -1088,13 +1108,6 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             tela varia; sem ele, o texto quebraria para duas linhas abaixo de ~1000px e o
             cabeçalho cresceria justo onde há menos espaço — e a tabela de saldos tem teto FIXO
             em `calc(100vh - 230px)`, que não acompanha. Com ele o custo é 19,13px, sempre. */}
-        {selectedCard && !loading && APOIO_DA_ABA[vistaExtrato] && (
-          <div className="truncate text-[11px] leading-snug text-muted-foreground"
-            title={APOIO_DA_ABA[vistaExtrato]}>
-            {APOIO_DA_ABA[vistaExtrato]}
-          </div>
-        )}
-
         {selectedCard && vistaExtrato === 'conciliacao' && (
           <div className="flex items-center gap-2">
             <span className="text-sm font-bold">{selectedCard.label}/{ano}</span>
@@ -1167,6 +1180,24 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
               contaId={selectedConta !== '__all__' ? selectedConta : null}
               ano={Number(ano)} mes={Number(selectedMes)}
               contaNome={contaAtual}
+            />
+
+            {/* ⚠ O PASSO 1 PASSA A MOSTRAR O EXTRATO — PR-IMPORTAR-VER-EXTRATO-01. A aba promete
+                "confira se o extrato do mês está completo" e até aqui entregava quatro números e
+                uma faixa: o extrato em si só existia dentro do modal da aba seguinte. Não dá para
+                conferir sem ver.
+                ⚠ É A MESMA PEÇA DO ESPELHO, não uma segunda tabela — `TabelaExtratoDoMes` saiu de
+                lá inteira neste PR, e as duas telas montam a mesma. Duas listas do mesmo extrato
+                divergiriam na primeira mudança de regra.
+                ⚠ INLINE, NÃO MODAL: conferir numa janela que se fecha não é conferir — e o corpo
+                desta aba tinha 623px vazios logo abaixo do portão do saldo, medidos.
+                ⚠ E ELA ROLA COM A ABA (`rolagem="da-pagina"`): o corpo daqui já é o scrollport, e
+                uma segunda barra quebraria a regra do scrollport único. */}
+            <ExtratoDoMesInline
+              key={`extrato-${refreshExtrato}`}
+              clienteId={clienteAtual?.id ?? null}
+              contaId={selectedConta !== '__all__' ? selectedConta : null}
+              anoMes={`${ano}-${selectedMes}`}
             />
           </div>
         )}

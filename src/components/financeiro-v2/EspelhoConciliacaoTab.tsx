@@ -27,22 +27,20 @@ import { CasarComBancoModal, CasarN1Modal, type ExtratoAlvo, type LevadoInicial 
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { DecisaoDerivadosDialog } from '@/components/financeiro-v2/DecisaoDerivadosDialog';
 import { useEspelhoInternas, type EspelhoInternas } from '@/hooks/useEspelhoInternas';
+import {
+  TabelaExtratoDoMes, EspStatusCell, fmtBRL, fmtData, corValReal,
+  type EspOfx, type EspStatus,
+} from '@/components/conciliacao/TabelaExtratoDoMes';
 import { toast } from 'sonner';
 import { X } from 'lucide-react';
 import { badgeDeStatusTransacao } from '@/lib/statusOperacional';
 
 const MESES_CURTOS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
-const fmtBRL = (v: number | null | undefined) =>
-  v == null ? '—' : Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const fmtData = (s: string | null) => {
-  if (!s) return '—';
-  const [, m, d] = s.split('-');
-  return d && m ? `${d}/${m}` : s;
-};
-
-type EspStatus = 'conciliado' | 'sem_vinculo' | 'ignorado';
-interface EspOfx { extrato_id: string; data: string | null; historico: string | null; documento: string | null; valor: number; status: EspStatus; flag_dup: boolean; flag_investimento: boolean; }
+/* ⚠ OS FORMATADORES, O STATUS E O TIPO DA LINHA MUDARAM DE CASA — PR-IMPORTAR-VER-EXTRATO-01.
+   Eles foram com a tabela do extrato para `TabelaExtratoDoMes`, e o Espelho passa a
+   importá-los de lá. A direção é única de propósito: a peça importando daqui fecharia um
+   ciclo de import, que o `npx madge --circular` acusa. Nada mudou no que eles fazem. */
 interface EspSis {
   lancamento_id: string; data: string | null; descricao: string | null;
   centro: string | null; subcentro: string | null; valor_assinado: number;
@@ -105,97 +103,7 @@ export interface EspelhadosReais {
   gerado_em: string;
 }
 
-const corValReal = (v: number) => (v >= 0 ? 'text-blue-600' : 'text-rose-600');
 
-/* ⚠ PISO DE 10px NO MODAL INTEIRO — PR-ESPELHO-02. Estes rótulos vieram em 8px e 9px do
-   arquivo de origem, quando eram detalhe de um card recolhido dentro de outra tela. Num
-   modal de 92vh não há o que economizar em altura, e 8px deixa de ser denso para virar
-   ilegível: só a classe muda, o texto e a regra ficam. */
-function EspStatusCell({ status }: { status: string }) {
-  if (status === 'conciliado') return <span className="text-emerald-700 text-[10px] shrink-0">✓ conciliado</span>;
-  if (status === 'ignorado') return <span className="text-muted-foreground text-[10px] shrink-0">⊘ ignorado</span>;
-  return <span className="text-amber-700 text-[10px] shrink-0">⚠ sem vínculo</span>;
-}
-
-/**
- * A aba do extrato, com as duas pontas do saldo — PR-ESPELHO-07 item C.
- *
- * ⚠ O SALDO DO EXTRATO É CONSOLIDADO, e é isso que a lista precisava dizer. O extrato do
- * Bradesco mostra a conta corrente JUNTO com a Invest Fácil, que o banco consolida nela:
- * 1,00 + 238.790,26 = 238.791,26 em 31/07. Abrir a lista pelo saldo da conta sozinha —
- * 1,00 — faria a última linha fechar 238 mil longe do papel do banco, e o operador
- * procuraria por semanas um erro que não existe.
- *
- * ⚠ O FINAL É CALCULADO, O INFORMADO É LIDO, e os dois aparecem lado a lado. Exibir só um
- * deles obrigaria a confiar: com os dois, "confere" é uma afirmação verificável, e a
- * diferença — quando existe — é o próprio número que falta explicar.
- */
-function AbaOfxReal({ ofx, inicial, internas }: { ofx: EspOfx[]; inicial: number; internas: EspelhoInternas }) {
-  /* ⚠ O CONSOLIDADO MANDA QUANDO EXISTE; sem ele, o saldo da própria conta, que é o que a
-     lista sempre usou. Nunca um zero no lugar do desconhecido: `??` não cai em 0. */
-  const abertura = internas.saldoInicialConsolidado ?? inicial;
-  const rows = useMemo(() => {
-    let acc = abertura;
-    return ofx.map((r) => { acc += r.valor; return { r, saldo: acc }; });
-  }, [ofx, abertura]);
-  const movimentos = ofx.reduce((a, r) => a + r.valor, 0);
-  const fechamento = abertura + movimentos;
-  const informado = internas.saldoInformadoConsolidado;
-  const difere = informado == null ? null : fechamento - informado;
-  const SALDO_LINHA = 'grid grid-cols-[44px_1fr_72px_92px_92px_92px] gap-1 py-0.5 bg-muted/40 text-[11px] font-semibold';
-  return (
-    /* ⚠ A LISTA OCUPA A ALTURA QUE SOBRA, E TEM A MARGEM DA CONFERÊNCIA — PR-ESPELHO-06 item C.
-       Era `max-h-[55vh]` sem padding lateral: a tabela parava no meio do modal de 92vh,
-       sobrava faixa morta até o rodapé, e o texto encostava na borda enquanto a Conferência
-       respirava em `px-3.5`. `min-h-0 flex-1` é a MESMA receita da Conferência — 55vh é uma
-       altura chutada; `flex-1` é a altura que existe.
-       ⚠ `min-h-0` NÃO É ENFEITE: sem ele o filho de um flex não encolhe abaixo do conteúdo e
-       o `overflow-y-auto` nunca ganha barra — a página inteira é que rolaria. */
-    <div className="min-h-0 flex-1 overflow-y-auto border-t px-3.5 text-[10px]">
-      <div className="grid grid-cols-[44px_1fr_72px_92px_92px_92px] gap-1 font-semibold text-muted-foreground border-b pb-0.5 sticky top-0 bg-card">
-        <span>Data</span><span>Histórico</span><span>Documento</span><span className="text-right">Valor</span><span className="text-right">Saldo</span><span>Status</span>
-      </div>
-      <div className={cn(SALDO_LINHA, 'border-b')}>
-        <span className="col-span-3">Saldo inicial (extrato)</span>
-        <span />
-        <span className={cn('text-right tabular-nums', corValReal(abertura))}>{fmtBRL(abertura)}</span>
-        <span />
-      </div>
-      {rows.map(({ r, saldo }) => (
-        <div key={r.extrato_id} className="grid grid-cols-[44px_1fr_72px_92px_92px_92px] gap-1 py-0.5 border-b last:border-b-0 items-center">
-          <span className="text-muted-foreground">{fmtData(r.data)}</span>
-          <span className="truncate flex items-center gap-1" title={r.historico ?? ''}>
-            <span className="truncate">{r.historico ?? '—'}</span>
-            {r.flag_dup && <span className="px-1 rounded bg-orange-100 text-orange-700 text-[10px] shrink-0">dup</span>}
-            {r.flag_investimento && <span className="px-1 rounded bg-violet-100 text-violet-700 text-[10px] shrink-0">invest</span>}
-          </span>
-          <span className="truncate text-muted-foreground" title={r.documento ?? ''}>{r.documento ?? '—'}</span>
-          <span className={`text-right tabular-nums ${corValReal(r.valor)}`}>{fmtBRL(r.valor)}</span>
-          <span className={`text-right tabular-nums ${corValReal(saldo)}`}>{fmtBRL(saldo)}</span>
-          <EspStatusCell status={r.status} />
-        </div>
-      ))}
-      <div className={cn(SALDO_LINHA, 'border-t')}>
-        <span className="col-span-3">Saldo final (extrato)</span>
-        <span />
-        <span className={cn('text-right tabular-nums', corValReal(fechamento))}>{fmtBRL(fechamento)}</span>
-        {/* ⚠ "—" QUANDO FALTA SALDO INFORMADO, nunca "difere R$ 0,00": a sentinela do
-            CLAUDE.md diz que ausência é traço, e um "confere" sobre dado que não existe é a
-            pior das duas mentiras possíveis aqui. */}
-        <span className="text-[10px] font-normal text-muted-foreground truncate"
-          title={informado == null ? 'sem saldo informado para o mês' : undefined}>
-          {informado == null
-            ? '—'
-            : <>informado: {fmtBRL(informado)}{' · '}
-                {Math.abs(difere ?? 0) <= 0.01
-                  ? <span className="text-success">confere</span>
-                  : <span className="text-amber-600">difere R$ {fmtBRL(Math.abs(difere ?? 0))}</span>}
-              </>}
-        </span>
-      </div>
-    </div>
-  );
-}
 
 function AbaSistemaReal({ sistema, inicial, onAbrir }: { sistema: EspSis[]; inicial: number; onAbrir?: (lancamentoId: string) => void }) {
   const rows = useMemo(() => {
@@ -1479,6 +1387,14 @@ export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes, mostrarCan
             e ninguém rolava até lá para ver — enquanto o topo repetia dois dos quatro números
             noutro arranjo. Uma leitura só, no lugar por onde o olho entra, e a altura que
             sobrou foi inteira para a lista. */}
+        {/* ⚠ OS SEIS NÚMEROS DESCERAM DE 15px PARA 12px — PR-IMPORTAR-VER-EXTRATO-01, a pedido
+            do Gabriel olhando a tela. 15px é tamanho de NÚMERO DE TOPO (a régua A18 reserva
+            20px/500 para aquele papel), e estes não são o número de topo: são seis valores de
+            CONFERÊNCIA, lidos em par — banco contra sistema. Em 15px ao lado de rótulos de 10px
+            eles gritavam sem hierarquizar nada, porque todos os seis gritavam junto.
+            ⚠ 12px/500 É A "IDENTIDADE" DA RÉGUA A18, que é exatamente o papel deles, e fica dois
+            pontos acima dos rótulos — a hierarquia continua legível. O piso da casa é 9,5px, bem
+            abaixo; não se está raspando limite nenhum. */}
         <div className="grid grid-cols-[54px_1fr_1fr_1fr_1.4fr] gap-x-3 items-baseline">
           <span />
           <span className="text-[10px] leading-[12px] text-muted-foreground">banco</span>
@@ -1487,9 +1403,9 @@ export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes, mostrarCan
           <span className="text-[10px] leading-[12px] text-muted-foreground">sem par</span>
 
           <span className="text-[10px] text-muted-foreground">saídas</span>
-          <span className="text-[15px] font-medium tabular-nums leading-[16px] text-destructive">{fmtBRL(saidasBanco)}</span>
-          <span className="text-[15px] font-medium tabular-nums leading-[16px] text-destructive">{fmtBRL(saidasSistema)}</span>
-          <span className={cn('text-[15px] font-medium tabular-nums leading-[16px]',
+          <span className="text-[12px] font-medium tabular-nums leading-[14px] text-destructive">{fmtBRL(saidasBanco)}</span>
+          <span className="text-[12px] font-medium tabular-nums leading-[14px] text-destructive">{fmtBRL(saidasSistema)}</span>
+          <span className={cn('text-[12px] font-medium tabular-nums leading-[14px]',
             Math.abs(difSaidas) <= 0.01 ? 'text-muted-foreground' : 'text-amber-600')}>{fmtBRL(difSaidas)}</span>
           <span className="row-span-2 self-center text-[10px] text-muted-foreground leading-tight">
             {semCorrespondencia.length} extrato{semCorrespondencia.length === 1 ? '' : 's'}
@@ -1500,9 +1416,9 @@ export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes, mostrarCan
           </span>
 
           <span className="text-[10px] text-muted-foreground">entradas</span>
-          <span className="text-[15px] font-medium tabular-nums leading-[16px] text-emerald-600">{fmtBRL(entradasBanco)}</span>
-          <span className="text-[15px] font-medium tabular-nums leading-[16px] text-emerald-600">{fmtBRL(entradasSistema)}</span>
-          <span className={cn('text-[15px] font-medium tabular-nums leading-[16px]',
+          <span className="text-[12px] font-medium tabular-nums leading-[14px] text-emerald-600">{fmtBRL(entradasBanco)}</span>
+          <span className="text-[12px] font-medium tabular-nums leading-[14px] text-emerald-600">{fmtBRL(entradasSistema)}</span>
+          <span className={cn('text-[12px] font-medium tabular-nums leading-[14px]',
             Math.abs(difEntradas) <= 0.01 ? 'text-muted-foreground' : 'text-amber-600')}>{fmtBRL(difEntradas)}</span>
         </div>
 
@@ -1525,7 +1441,7 @@ export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes, mostrarCan
           onAbrir={onAbrirLancamento} onMudou={() => { void refetch(); }}
           mostrarCandidatos={mostrarCandidatos} />
       )}
-      {aba === 'ofx' && <AbaOfxReal ofx={data.ofx_completo} inicial={inicial} internas={internas} />}
+      {aba === 'ofx' && <TabelaExtratoDoMes ofx={data.ofx_completo} inicial={inicial} internas={internas} />}
       {aba === 'sistema' && <AbaSistemaReal sistema={data.sistema_completo} inicial={inicial} onAbrir={onAbrirLancamento} />}
       {aba === 'evolucao' && <AbaEvolucaoReal data={data} internos={internas.lancamentosInternos} />}
 
