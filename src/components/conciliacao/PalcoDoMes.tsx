@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Link2, Loader2 } from 'lucide-react';
@@ -27,10 +27,21 @@ import { VincularMatchDireto } from '@/components/conciliacao/VincularMatchDiret
  * rota paralela já os usava. Reescrever qualquer um deles criaria dois
  * contadores para a mesma pergunta.
  *
- * ⚠ AS SUGESTÕES SÃO SOB DEMANDA, e a medição é que decidiu: `fn_sugestoes_extrato`
- * chama `fn_candidatos_conciliacao` uma vez POR MOVIMENTO. Aqui elas são pedidas
- * ao ABRIR o palco, porque o palco existe para mostrá-las; quem só quer ver a
- * lista tem o card do mês, que não paga esse preço.
+ * ⚠ AS SUGESTÕES SÃO PEDIDAS AO ABRIR, e desde PR-PALCO-SUGESTOES-01 isto é verdade —
+ * antes o comentário afirmava e o código não fazia. As duas únicas chamadas de `calcular()`
+ * estavam dentro de `if (sug.sugestoes != null)`, e `sugestoes` NASCE `null` e volta a `null`
+ * a cada troca de mês/conta: a condição nunca abria. O efeito na tela era silencioso e
+ * enganoso — "Lançamento sugerido" e "Valor sug." em "—" para sempre, o badge sempre "em
+ * aberto", os quatro chips do motor sempre desabilitados. Quem olhava lia "está tudo em
+ * aberto"; o que havia era um motor que nunca respondeu.
+ * ⚠ AS DUAS GUARDAS FICARAM, e continuam certas: elas são RE-cálculo depois de gravar
+ * (vincular em lote, mexer na Estação) — "se já respondeu, refaça". Quem faz a PRIMEIRA
+ * chamada é o efeito abaixo.
+ * ⚠ E O CUSTO FOI MEDIDO antes de decidir que roda sozinho: o caminho caro da RPC (o LATERAL
+ * sobre os lançamentos na janela de ±60 dias) leva 13,7 ms em 35 movimentos e 276,6 ms em 219
+ * — piso, porque a função ainda pontua e resolve empates. Centenas de milissegundos não
+ * justificam cobrar um clique numa tela que existe para mostrar justamente isto. Os "~91 ms
+ * por movimento" que já se contaram aqui eram ilusão de mês.
  *
  * ⚠ OS "~91 ms POR MOVIMENTO" QUE ESTAVAM ESCRITOS AQUI ERAM ILUSÃO DE MÊS
  * PEQUENO — a remedição deu ~6-8 s por movimento, e 190 movimentos estouravam em
@@ -77,6 +88,22 @@ export function PalcoDoMes({ clienteId, contaId, contaNome, ano, mes, aoFechar, 
   const sug = useSugestoesDoMes(clienteId, contaId, ano, mes);
   const [filtro, setFiltro] = useState<FiltroDoPalco>('todos');
   const [conciliando, setConciliando] = useState<MovimentoConciliacao | null>(null);
+
+  /* ⚠ A PRIMEIRA CHAMADA — PR-PALCO-SUGESTOES-01. É este efeito que faltava: sem ele, as duas
+     chamadas guardadas por `sugestoes != null` nunca disparavam a primeira, e o palco abria
+     mudo. Dispara ao montar e a cada troca de cliente/conta/mês, que é exatamente quando
+     `useSugestoesDoMes` zera o que tinha.
+     ⚠ SEM RISCO DE LAÇO: `calcular` é um `useCallback` estável e `sugestoes` só muda por ele —
+     ele não está nas dependências, então uma resposta não pede outra. */
+  const calcularSugestoes = sug.calcular;
+  useEffect(() => {
+    if (!clienteId || !contaId) return;
+    void calcularSugestoes();
+  }, [clienteId, contaId, ano, mes, calcularSugestoes]);
+
+  /* O motor ainda não respondeu para este mês: ou está calculando, ou nem começou. Nos dois
+     casos a resposta honesta é "espere", não "não há". */
+  const aguardandoMotor = sug.sugestoes == null;
 
   const contagem = useMemo(() => contarBaldes(movimentos, sug.sugestoes), [movimentos, sug.sugestoes]);
 
@@ -227,9 +254,15 @@ export function PalcoDoMes({ clienteId, contaId, contaNome, ano, mes, aoFechar, 
                         <td className="h-[21px] px-2 py-0 align-middle">
                           <EstadoBadge situacao={m.situacao} estado={s?.estado ?? null} />
                         </td>
+                        {/* ⚠ "calculando…" NÃO É "—" — PR-PALCO-SUGESTOES-01. Enquanto o motor
+                            responde, a coluna precisa dizer que ESTÁ ESPERANDO; repetir o traço
+                            faz a tela AFIRMAR que não há sugestão, que é a leitura oposta — e foi
+                            o que enganou na homologação. Traço é dado ausente; aqui o dado ainda
+                            não chegou. */}
                         <td className="h-[21px] max-w-0 truncate px-2 py-0 align-middle text-muted-foreground"
                           title={s?.descricao ?? undefined}>
-                          {m.situacao === 'conciliado' ? '— conciliado —' : (s?.descricao ?? '—')}
+                          {m.situacao === 'conciliado' ? '— conciliado —'
+                            : s?.descricao ?? (aguardandoMotor ? <span className="italic">calculando…</span> : '—')}
                         </td>
                         <td className={cn('h-[21px] whitespace-nowrap px-2 py-0 text-right align-middle font-semibold tabular-nums',
                           m.valor < 0 ? 'text-destructive' : 'text-success')}>
@@ -239,7 +272,8 @@ export function PalcoDoMes({ clienteId, contaId, contaNome, ano, mes, aoFechar, 
                           s?.valor != null ? (s.valor < 0 ? 'text-destructive' : 'text-success') : 'text-muted-foreground')}>
                           {s?.valor != null && s.estado !== 'sem_match' && m.situacao !== 'conciliado'
                             ? formatMoeda(s.valor)
-                            : '—'}
+                            : (aguardandoMotor && m.situacao !== 'conciliado'
+                                ? <span className="italic">calculando…</span> : '—')}
                         </td>
                         <td className="h-[21px] whitespace-nowrap px-2 py-0 text-right align-middle"
                           onClick={e => e.stopPropagation()}>
