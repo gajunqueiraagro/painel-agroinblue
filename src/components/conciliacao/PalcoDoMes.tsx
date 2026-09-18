@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, Link2, Loader2, RotateCw } from 'lucide-react';
+import { Link2, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import {
-  useConciliacaoDoMes, useSugestoesDoMes, contarBaldes, frameDoRodape,
+  useConciliacaoDoMes, contarBaldes, frameDoRodape,
   type MovimentoConciliacao, type SituacaoMovimento,
 } from '@/hooks/useConciliacaoDoMes';
 import { EstacaoConciliar } from '@/components/conciliacao/EstacaoConciliar';
@@ -27,51 +27,39 @@ import { VincularMatchDireto } from '@/components/conciliacao/VincularMatchDiret
  * rota paralela já os usava. Reescrever qualquer um deles criaria dois
  * contadores para a mesma pergunta.
  *
- * ⚠ AS SUGESTÕES SÃO PEDIDAS AO ABRIR, e desde PR-PALCO-SUGESTOES-01 isto é verdade —
- * antes o comentário afirmava e o código não fazia. As duas únicas chamadas de `calcular()`
- * estavam dentro de `if (sug.sugestoes != null)`, e `sugestoes` NASCE `null` e volta a `null`
- * a cada troca de mês/conta: a condição nunca abria. O efeito na tela era silencioso e
- * enganoso — "Lançamento sugerido" e "Valor sug." em "—" para sempre, o badge sempre "em
- * aberto", os quatro chips do motor sempre desabilitados. Quem olhava lia "está tudo em
- * aberto"; o que havia era um motor que nunca respondeu.
- * ⚠ AS DUAS GUARDAS FICARAM, e continuam certas: elas são RE-cálculo depois de gravar
- * (vincular em lote, mexer na Estação) — "se já respondeu, refaça". Quem faz a PRIMEIRA
- * chamada é o efeito abaixo.
- * ⚠ E O NÚMERO QUE ESTAVA ESCRITO AQUI ESTAVA 725× ERRADO — corrigido em
- * PR-PALCO-ERRO-VISIVEL-01. A linha dizia "13,7 ms em 35 movimentos e 276,6 ms em 219", e
- * aquilo era o LEFT JOIN REPLICADO à mão numa medição de plano, não a função. Medido em
- * 18/09/2026 pelo caminho de verdade, como `authenticated` e com o JWT real:
- *     fn_sugestoes_extrato  ·  Vera Ligia · Itaú Personalite · set/26 · 35 movimentos
- *     9.907 ms  —  283 ms por movimento  (fn_candidatos_conciliacao sozinha: 409 ms para um)
- * ⚠ E O TETO DO PAPEL É 8 s (`statement_timeout` de `authenticated`, em `pg_roles.rolconfig`),
- * então a RPC morre em `57014` e NUNCA responde neste mês. Cabem ~28 movimentos no teto; 45
- * dos 64 pares conta/mês de 2026 no proto passam disso — 70,3% das telas, média de 68
- * movimentos, maior mês com 262.
- * ⚠ ESTE PR NÃO CONSERTA A LENTIDÃO, conserta a MENTIRA: a tela passa a dizer que não
- * conseguiu calcular, em vez de prometer um cálculo que não vem. O desempenho é a frente
- * seguinte.
- * ⚠ E A LIÇÃO É A DO NÚMERO ERRADO, de novo: foi este "13,7 ms" que serviu de prova para o
- * motor passar a rodar sozinho ao abrir. Um número medido no caminho errado não é menos
- * perigoso que nenhum — ele convence.
+ * ⚠ O MOTOR DE SUGESTÕES SAIU DESTA TELA — PR-PALCO-SEM-MOTOR-01, decisão do Gabriel em
+ * 18/09/2026, e o histórico fica porque ele explica por quê.
  *
- * ⚠ OS "~91 ms POR MOVIMENTO" QUE ESTAVAM ESCRITOS AQUI ERAM ILUSÃO DE MÊS
- * PEQUENO — a remedição deu ~6-8 s por movimento, e 190 movimentos estouravam em
- * timeout. Fica registrado porque um número errado num comentário é pior que
- * nenhum: este foi citado como evidência de que o caminho escalava.
+ * A tela teve, em UM DIA, três versões do mesmo defeito:
+ *   1. O motor NUNCA era chamado — as duas chamadas de `calcular()` estavam guardadas por
+ *      `if (sugestoes != null)`, e `sugestoes` nasce `null`. As colunas ficavam em "—" para
+ *      sempre e quem lia concluía "não há sugestão" onde ninguém tinha perguntado.
+ *   2. Passou a ser chamado (447a1e91), e o "—" virou "calculando…" — que também mentia,
+ *      porque a RPC morria em `57014` e a promessa nunca chegava.
+ *   3. A tela passou a dizer "não calculou" com uma faixa âmbar e um "tentar de novo"
+ *      (PR-PALCO-ERRO-VISIVEL-01) — honesto, e ainda assim inútil: o operador via um aviso
+ *      que não tinha como resolver.
  *
- * ⚠ E JÁ FOI CORRIGIDO, em 01/09 — não pela reescrita set-based que se supunha
- * necessária, mas por índice em `transferencia_grupo_id` mais a janela de ±60
- * dias no WHERE de `fn_candidatos_conciliacao`: o mês de 190 responde em ~3,7 s.
- * O diagnóstico "precisa ser set-based" também era do número errado.
- * ⚠ ESTE PARÁGRAFO NÃO SE SUSTENTA NA MEDIÇÃO DE 18/09, e fica com a ressalva em vez de
- * sumir: a 283 ms por movimento, um mês de 190 levaria ~54 s, não 3,7 s. Ou a correção de
- * 01/09 foi medida por outro caminho (como o "13,7 ms" acima), ou o desempenho regrediu
- * desde então. Saber qual dos dois é a primeira pergunta da frente de desempenho — e é por
- * isso que a afirmação continua escrita, marcada.
+ * ⚠ E O NÚMERO É O ARGUMENTO: `fn_sugestoes_extrato` leva 9.907 ms na Vera Ligia · Itaú
+ * Personalite · set/26 (35 movimentos, 283 ms cada), contra `statement_timeout` de 8 s do papel
+ * `authenticated`. Cabem ~28 movimentos no teto, e 45 dos 64 pares conta/mês de 2026 passam
+ * disso — 70,3% das telas, média de 68 movimentos, maior mês com 262. Não é lentidão de mês
+ * grande: é a maioria dos meses reais.
+ * ⚠ TIRAR NÃO É DESISTIR DO MOTOR: ele continua vivo na ESTAÇÃO, onde roda para UM movimento
+ * por vez (`fn_candidatos_conciliacao`, 409 ms medidos) e entrega o que promete. O que saiu foi
+ * a varredura do mês inteiro, que é o caminho que não escala.
+ * ⚠ E O CUSTO DE DEIXAR ERA MAIOR QUE O DE TIRAR: uma coluna que não responde ocupa espaço,
+ * exige explicação e ensina o operador a ignorar a tela. Uma tela que mostra menos e não mente
+ * vale mais que uma que promete e falha.
  *
- * ⚠ ESTADO AUSENTE ≠ SEM MATCH. Enquanto o motor não respondeu, a linha não
- * afirma estado nenhum — mostra a situação do VÍNCULO, que é fato do banco.
- * Escrever "sem match" antes de perguntar seria inventar resposta.
+ * ⚠ O NÚMERO "13,7 ms em 35 movimentos" QUE JÁ ESTEVE ESCRITO AQUI ERA 725× ERRADO — vinha de
+ * um LEFT JOIN replicado à mão, não da função. Foi ele que serviu de prova para o motor passar
+ * a rodar sozinho ao abrir. Fica registrado porque um número medido no caminho errado não é
+ * menos perigoso que nenhum: ele convence.
+ *
+ * ⚠ O VÍNCULO REAL FICOU, e é o que a coluna "Conciliado com" mostra: `✓` mais a descrição do
+ * lançamento que casou (PR-PALCO-VINCULO-01). Isso é fato do banco, não palpite, e é a única
+ * coisa que aquela coluna afirma agora.
  */
 interface Props {
   clienteId: string | null;
@@ -88,89 +76,45 @@ interface Props {
    primeiro o que se resolve num clique, depois o que exige a mão, e por último o
    que já está fechado. As cores são as mesmas do original; todas existem aqui
    com o mesmo nome, então nenhuma tradução de token foi necessária. */
-type FiltroDoPalco = 'todos' | 'match_direto' | 'provavel' | 'ambiguo' | 'sem_match' | 'parcial' | 'conciliado';
+/**
+ * ⚠ OS QUATRO CHIPS DO MOTOR SAÍRAM — PR-PALCO-SEM-MOTOR-01. Eram `match direto`, `provável`,
+ * `ambíguo` e `sem match`, e os quatro liam o `estado` que `fn_sugestoes_extrato` devolvia. Sem
+ * o motor, eles não teriam o que contar — e um chip permanentemente desabilitado é pior que
+ * chip nenhum: ele anuncia uma capacidade que a tela não tem.
+ * ⚠ OS TRÊS QUE FICAM SÃO FATO DO BANCO — `conciliado`, `parcial` e `sem vínculo` saem da
+ * `situacao`, que é a soma dos `valor_aplicado` ativos. Nenhum depende de palpite, e por isso
+ * nenhum pode ficar "ausente": a contagem é sempre um número.
+ */
+type FiltroDoPalco = 'todos' | 'parcial' | 'conciliado' | 'sem_vinculo';
 const CHIPS: readonly { filtro: FiltroDoPalco; rotulo: string; cor: string }[] = [
-  { filtro: 'todos',        rotulo: 'Todos',        cor: 'bg-muted text-muted-foreground' },
-  { filtro: 'match_direto', rotulo: 'match direto', cor: 'bg-success/15 text-success' },
-  { filtro: 'provavel',     rotulo: 'provável',     cor: 'bg-primary/10 text-primary' },
-  { filtro: 'ambiguo',      rotulo: 'ambíguo',      cor: 'bg-warning/15 text-warning' },
-  { filtro: 'sem_match',    rotulo: 'sem match',    cor: 'bg-destructive/10 text-destructive' },
-  { filtro: 'parcial',      rotulo: 'parcial',      cor: 'bg-primary/10 text-primary' },
-  { filtro: 'conciliado',   rotulo: 'conciliados',  cor: 'bg-success/15 text-success' },
+  { filtro: 'todos',       rotulo: 'Todos',        cor: 'bg-muted text-muted-foreground' },
+  { filtro: 'sem_vinculo', rotulo: 'sem vínculo',  cor: 'bg-destructive/10 text-destructive' },
+  { filtro: 'parcial',     rotulo: 'parcial',      cor: 'bg-primary/10 text-primary' },
+  { filtro: 'conciliado',  rotulo: 'conciliados',  cor: 'bg-success/15 text-success' },
 ] as const;
 
 export function PalcoDoMes({ clienteId, contaId, contaNome, ano, mes, aoFechar, aoMudar }: Props) {
   const { movimentos, loading, recarregar } = useConciliacaoDoMes(clienteId, contaId, ano, mes);
-  const sug = useSugestoesDoMes(clienteId, contaId, ano, mes);
   const [filtro, setFiltro] = useState<FiltroDoPalco>('todos');
   const [conciliando, setConciliando] = useState<MovimentoConciliacao | null>(null);
 
-  /* ⚠ A PRIMEIRA CHAMADA — PR-PALCO-SUGESTOES-01. É este efeito que faltava: sem ele, as duas
-     chamadas guardadas por `sugestoes != null` nunca disparavam a primeira, e o palco abria
-     mudo. Dispara ao montar e a cada troca de cliente/conta/mês, que é exatamente quando
-     `useSugestoesDoMes` zera o que tinha.
-     ⚠ SEM RISCO DE LAÇO: `calcular` é um `useCallback` estável e `sugestoes` só muda por ele —
-     ele não está nas dependências, então uma resposta não pede outra. */
-  const calcularSugestoes = sug.calcular;
-  useEffect(() => {
-    if (!clienteId || !contaId) return;
-    void calcularSugestoes();
-  }, [clienteId, contaId, ano, mes, calcularSugestoes]);
-
-  /**
-   * ⚠ TRÊS ESTADOS, E O DO MEIO É NOVO — PR-PALCO-ERRO-VISIVEL-01.
-   *   falhouMotor      — perguntei e o banco recusou (quase sempre: passou dos 8 s).
-   *   aguardandoMotor  — ainda não respondeu: ou está calculando, ou nem começou.
-   *   nenhum dos dois  — respondeu, e aí o que está na lista é a resposta (vazia inclusive).
-   * ⚠ A ORDEM IMPORTA: `sugestoes` é `null` nos DOIS primeiros casos, então "falhou" tem de
-   * ser perguntado ANTES. Era essa colisão que fazia a tela escrever "calculando…" para
-   * sempre num mês que já tinha morrido em timeout.
-   */
-  const falhouMotor = sug.erro != null;
-  const aguardandoMotor = sug.sugestoes == null && !falhouMotor;
-
-  /**
-   * A frase do operador — e ela nomeia o TEMPO quando foi tempo.
-   * ⚠ "ERRO 57014" NÃO É PORTUGUÊS DE NINGUÉM: o código fica no `title`, para quem for
-   * investigar, e a linha diz o que aconteceu. Quando a causa NÃO é tempo, a frase não
-   * inventa: diz que não conseguiu e mostra o motivo cru.
-   */
-  const foiTempo = !!sug.erro && (/57014/.test(sug.erro) || /timeout/i.test(sug.erro));
-  const fraseDaFalha = foiTempo
-    ? `O cálculo das sugestões passou do tempo limite do banco (8 s) — este mês tem ${movimentos.length} movimentos, e o motor leva cerca de 0,3 s em cada um.`
-    : 'Não foi possível calcular as sugestões deste mês.';
-
-  const contagem = useMemo(() => contarBaldes(movimentos, sug.sugestoes), [movimentos, sug.sugestoes]);
-
-  /* ⚠ UM MAPA, DUAS COLUNAS: estado e sugestão saem da MESMA linha da RPC. */
-  const porMovimento = useMemo(() => {
-    const m = new Map<string, { estado: string; descricao: string | null; valor: number | null }>();
-    for (const s of sug.sugestoes ?? []) {
-      m.set(s.extratoId, { estado: s.estado, descricao: s.sugestaoDescricao, valor: s.sugestaoValor });
-    }
-    return m;
-  }, [sug.sugestoes]);
+  const contagem = useMemo(() => contarBaldes(movimentos), [movimentos]);
 
   /* ⚠ O FILTRO LÊ O MESMO CAMPO QUE O CONTADOR — a regra do original. Os baldes
      de fato (`parcial`, `conciliado`) filtram pela `situacao`, que é o vínculo;
      os de sugestão, pelo `estado` que a RPC devolveu. Nada é recalculado. */
   const visiveis = useMemo(() => {
     if (filtro === 'todos') return movimentos;
-    if (filtro === 'conciliado' || filtro === 'parcial') {
-      return movimentos.filter(m => m.situacao === filtro);
-    }
-    return movimentos.filter(m => porMovimento.get(m.id)?.estado === filtro);
-  }, [movimentos, filtro, porMovimento]);
+    if (filtro === 'sem_vinculo') return movimentos.filter(m => m.situacao === 'nao_conciliado');
+    return movimentos.filter(m => m.situacao === filtro);
+  }, [movimentos, filtro]);
 
-  const contagemDoChip = (f: FiltroDoPalco): number | null => {
+  const contagemDoChip = (f: FiltroDoPalco): number => {
     switch (f) {
-      case 'todos':        return contagem.todos;
-      case 'conciliado':   return contagem.conciliado;
-      case 'parcial':      return contagem.parcial;
-      case 'match_direto': return contagem.match_direto;
-      case 'provavel':     return contagem.provavel;
-      case 'ambiguo':      return contagem.ambiguo;
-      case 'sem_match':    return contagem.sem_match;
+      case 'todos':       return contagem.todos;
+      case 'conciliado':  return contagem.conciliado;
+      case 'parcial':     return contagem.parcial;
+      case 'sem_vinculo': return contagem.sem_vinculo;
     }
   };
 
@@ -196,37 +140,24 @@ export function PalcoDoMes({ clienteId, contaId, contaNome, ano, mes, aoFechar, 
           <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-border px-5 py-1.5">
             {CHIPS.map(chip => {
               const n = contagemDoChip(chip.filtro);
-              const ausente = n == null;
               const vazio = n === 0;
               return (
                 <button key={chip.filtro} type="button"
-                  disabled={ausente || vazio}
+                  disabled={vazio}
                   onClick={() => setFiltro(chip.filtro)}
-                  /* ⚠ O `title` DIZ QUAL DOS DOIS SILÊNCIOS É — PR-PALCO-ERRO-VISIVEL-01. O chip
-                     fica desabilitado em ambos, mas "ainda não respondeu" sobre um mês que já
-                     morreu em timeout manda o operador esperar por nada. */
-                  title={ausente
-                    ? (falhouMotor ? fraseDaFalha : 'O motor de sugestões ainda não respondeu para este mês.')
-                    : undefined}
                   className={cn(
                     'inline-flex h-5 items-center rounded px-1.5 text-[10px] font-semibold transition',
                     chip.cor,
-                    ausente || vazio
+                    vazio
                       ? 'cursor-not-allowed opacity-40'
                       : filtro === chip.filtro
                         ? 'cursor-pointer ring-1 ring-current ring-offset-1'
                         : 'cursor-pointer hover:brightness-95',
                   )}>
-                  {chip.filtro === 'todos' ? `Todos (${n ?? 0})` : `${n ?? '—'} ${chip.rotulo}`}
+                  {chip.filtro === 'todos' ? `Todos (${n})` : `${n} ${chip.rotulo}`}
                 </button>
               );
             })}
-            {sug.carregando && (
-              <span className="ml-1 inline-flex items-center gap-1 text-[10px] text-muted-foreground">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                procurando sugestões…
-              </span>
-            )}
             {/* ⚠ AO LADO DOS CHIPS, e não no rodapé: o botão age sobre UM balde,
                 e fica onde o operador vê a contagem dele. Recarrega a lista e os
                 baldes ao terminar, sem fechar o palco.
@@ -243,37 +174,10 @@ export function PalcoDoMes({ clienteId, contaId, contaNome, ano, mes, aoFechar, 
               mes={mes}
               aoConcluir={async () => {
                 await recarregar();
-                if (sug.sugestoes != null) await sug.calcular();
                 await aoMudar?.();
               }}
             />
           </div>
-
-          {/* ⚠ O AVISO E O CAMINHO DE VOLTA — PR-PALCO-ERRO-VISIVEL-01. Dizer "não calculou"
-              nas células e parar por aí deixaria o operador sem saída: ele veria a falha e não
-              teria o que fazer com ela. O botão repete a MESMA chamada — num mês de 28 ou 29
-              movimentos ela às vezes passa, e quando não passa a falha se repete, que também é
-              uma resposta.
-              ⚠ FORA DO SCROLLPORT, e por isso irmão da tabela e não filho: um aviso que some ao
-              rolar é um aviso que o operador perde justamente enquanto procura a linha que o
-              motivou. */}
-          {falhouMotor && (
-            <div className="flex shrink-0 items-center gap-2 border-b border-amber-300/60 bg-amber-50 px-5 py-1.5 text-[10px] text-amber-900 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-200">
-              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-              <span className="min-w-0 flex-1">
-                {fraseDaFalha} As colunas de sugestão ficam sem resposta; o resto da tela é fato do
-                banco e continua valendo.
-              </span>
-              <Button type="button" variant="outline" size="sm"
-                className="h-5 shrink-0 gap-1 px-2 text-[10px]"
-                disabled={sug.carregando}
-                title={sug.erro ?? undefined}
-                onClick={() => { void sug.calcular(); }}>
-                {sug.carregando ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCw className="h-3 w-3" />}
-                Tentar de novo
-              </Button>
-            </div>
-          )}
 
           <div className="min-h-0 flex-1 overflow-auto">
             {loading ? (
@@ -294,18 +198,13 @@ export function PalcoDoMes({ clienteId, contaId, contaNome, ano, mes, aoFechar, 
                     <Th className="w-[62px] text-left">Data</Th>
                     <Th className="text-left">Descrição</Th>
                     <Th className="w-[80px] text-left">Estado</Th>
-                    <Th className="text-left">Lançamento</Th>
-                    {/* O DINHEIRO EM BLOCO, à direita e colado na ação: movimento
-                        e sugestão lado a lado respondem de graça a pergunta que o
-                        operador faz — "bate?" */}
+                    <Th className="text-left">Conciliado com</Th>
                     <Th className="w-[92px] text-right">Valor</Th>
-                    <Th className="w-[92px] text-right">Valor sug.</Th>
                     <Th className="w-[86px] text-right"> </Th>
                   </tr>
                 </thead>
                 <tbody>
                   {visiveis.map(m => {
-                    const s = porMovimento.get(m.id);
                     return (
                       <tr key={m.id}
                         className="cursor-pointer border-b border-border/60 hover:bg-muted/40"
@@ -318,36 +217,24 @@ export function PalcoDoMes({ clienteId, contaId, contaNome, ano, mes, aoFechar, 
                           {m.descricao || '—'}
                         </td>
                         <td className="h-[21px] px-2 py-0 align-middle">
-                          <EstadoBadge situacao={m.situacao} estado={s?.estado ?? null} />
+                          <EstadoBadge situacao={m.situacao} />
                         </td>
-                        {/* ⚠ UMA COLUNA, DUAS NATUREZAS, E O ✓ DIZ QUAL — PR-PALCO-VINCULO-01.
-                            Ela responde sempre à mesma pergunta ("qual lançamento do sistema
-                            corresponde a este movimento?"), mas a resposta ora é FATO (há vínculo
-                            gravado) ora é PALPITE (o motor sugeriu). Sem marcar a diferença, a
-                            coluna voltaria a enganar — é a mesma família do "—" que fazia o
-                            operador ler "não há sugestão" onde ninguém tinha perguntado.
-                            ⚠ ANTES ELA ESCONDIA: o conciliado imprimia "— conciliado —" e o par
-                            só aparecia abrindo a Estação, uma linha por vez.
-                            ⚠ "calculando…" NÃO É "—": traço é dado ausente; aqui o dado ainda não
-                            chegou. */}
-                        <td className={cn('h-[21px] max-w-0 truncate px-2 py-0 align-middle',
-                          m.vinculos > 0 ? '' : 'text-muted-foreground')}
-                          title={m.vinculos > 0 ? (parDoVinculo(m) ?? undefined) : (s?.descricao ?? undefined)}>
-                          {m.vinculos > 0
-                            ? <>✓ {parDoVinculo(m)}</>
-                            : s?.descricao ?? <SemSugestao aguardando={aguardandoMotor} falhou={falhouMotor} />}
+                        {/* ⚠ SÓ O VÍNCULO REAL — PR-PALCO-SEM-MOTOR-01. A coluna mostrava DUAS
+                            naturezas: o par gravado (com ✓) e o palpite do motor. O palpite saiu
+                            com o motor; o ✓ FICA, que é o que PR-PALCO-VINCULO-01 trouxe e
+                            continua sendo fato do banco.
+                            ⚠ VAZIA QUANDO NÃO HÁ VÍNCULO, e não "—" nem "calculando…": o traço é
+                            a sentinela de dado AUSENTE, e aqui não falta dado nenhum — o
+                            movimento simplesmente ainda não foi conciliado, o que a coluna
+                            "Estado" ao lado já diz. Repetir a mesma ausência em duas colunas é
+                            ruído, e foi de onde saíram todos os enganos desta tela. */}
+                        <td className="h-[21px] max-w-0 truncate px-2 py-0 align-middle"
+                          title={m.vinculos > 0 ? (parDoVinculo(m) ?? undefined) : undefined}>
+                          {m.vinculos > 0 ? <>✓ {parDoVinculo(m)}</> : null}
                         </td>
                         <td className={cn('h-[21px] whitespace-nowrap px-2 py-0 text-right align-middle font-semibold tabular-nums',
                           m.valor < 0 ? 'text-destructive' : 'text-success')}>
                           {formatMoeda(m.valor)}
-                        </td>
-                        <td className={cn('h-[21px] whitespace-nowrap px-2 py-0 text-right align-middle tabular-nums',
-                          s?.valor != null ? (s.valor < 0 ? 'text-destructive' : 'text-success') : 'text-muted-foreground')}>
-                          {s?.valor != null && s.estado !== 'sem_match' && m.situacao !== 'conciliado'
-                            ? formatMoeda(s.valor)
-                            : (m.situacao === 'conciliado'
-                                ? '—'
-                                : <SemSugestao aguardando={aguardandoMotor} falhou={falhouMotor} />)}
                         </td>
                         <td className="h-[21px] whitespace-nowrap px-2 py-0 text-right align-middle"
                           onClick={e => e.stopPropagation()}>
@@ -389,7 +276,6 @@ export function PalcoDoMes({ clienteId, contaId, contaNome, ano, mes, aoFechar, 
             /* ⚠ AS SUGESTÕES SÓ RECALCULAM SE JÁ EXISTIAM: pedir o motor aqui,
                quando ninguém o pediu antes, custaria os ~5 s no meio de um
                fluxo em que o operador só desfez um vínculo. */
-            if (sug.sugestoes != null) await sug.calcular();
             await aoMudar?.();
           }}
         />
@@ -399,45 +285,19 @@ export function PalcoDoMes({ clienteId, contaId, contaNome, ano, mes, aoFechar, 
 }
 
 /**
- * O que a célula de sugestão escreve quando NÃO há sugestão — PR-PALCO-ERRO-VISIVEL-01.
- *
- * ⚠ TRÊS AUSÊNCIAS DIFERENTES, TRÊS TEXTOS, e é a regra das sentinelas do CLAUDE.md levada
- * até o fim:
- *   calculando…    — perguntei e ainda não voltou. Espere.
- *   não calculou   — perguntei e o banco recusou. Não adianta esperar.
- *   sem sugestão   — perguntei, respondeu, e não achou nada. É resposta, não ausência.
- * ⚠ O "—" SAIU DAQUI, e era ele o defeito de um nível adiante: traço quer dizer "dado
- * ausente", e o motor que respondeu "não achei" não deixou dado ausente nenhum — deixou uma
- * resposta. Quem lia "—" concluía que ninguém tinha perguntado.
- * ⚠ UMA FUNÇÃO PARA AS DUAS COLUNAS: "Lançamento" e "Valor sug." respondem à mesma pergunta
- * em pedaços diferentes, e dois textos que divergissem na mesma linha seriam pior que um
- * errado.
- */
-function SemSugestao({ aguardando, falhou }: { aguardando: boolean; falhou: boolean }) {
-  if (falhou) return <span className="italic text-amber-700 dark:text-amber-300">não calculou</span>;
-  if (aguardando) return <span className="italic">calculando…</span>;
-  return <span>sem sugestão</span>;
-}
-
-/**
  * ⚠ O VÍNCULO MANDA, A SUGESTÃO COMPLETA. `conciliado` e `parcial` são fato do
  * banco e vencem sempre; o estado do motor só aparece onde o vínculo não diz
  * nada. Deixar uma sugestão sobrepor o vínculo seria o oposto da regra
  * vínculo-first que o `contarBaldes` protege.
  */
-function EstadoBadge({ situacao, estado }: { situacao: SituacaoMovimento; estado: string | null }) {
+function EstadoBadge({ situacao }: { situacao: SituacaoMovimento }) {
   const base = 'rounded px-1 py-0 text-[10px] font-semibold uppercase';
   if (situacao === 'conciliado') return <span className={cn(base, 'bg-success/15 text-success')}>conciliado</span>;
   if (situacao === 'parcial')    return <span className={cn(base, 'bg-primary/10 text-primary')}>parcial</span>;
-  switch (estado) {
-    case 'match_direto': return <span className={cn(base, 'bg-success/15 text-success')}>match direto</span>;
-    case 'provavel':     return <span className={cn(base, 'bg-primary/10 text-primary')}>provável</span>;
-    case 'ambiguo':      return <span className={cn(base, 'bg-warning/15 text-warning')}>ambíguo</span>;
-    case 'sem_match':    return <span className={cn(base, 'bg-destructive/10 text-destructive')}>sem match</span>;
-    /* Sem resposta do motor, a linha diz o que sabe — e "em aberto" é o vínculo,
-       não um palpite. */
-    default:             return <span className={cn(base, 'bg-muted text-muted-foreground')}>em aberto</span>;
-  }
+  /* ⚠ OS QUATRO ESTADOS DO MOTOR SAÍRAM DAQUI — PR-PALCO-SEM-MOTOR-01. `match direto`,
+     `provável`, `ambíguo` e `sem match` eram palpite; o que sobra é fato do vínculo, e
+     "em aberto" sempre foi a resposta honesta para quem não tem par gravado. */
+  return <span className={cn(base, 'bg-muted text-muted-foreground')}>em aberto</span>;
 }
 
 function Th({ children, className }: { children?: React.ReactNode; className?: string }) {
