@@ -682,7 +682,14 @@ function textoLancamento(s: EspSis | undefined, mesDoRecorte: string, semPar = f
   return (
     <>
       <span className="text-[11px] font-medium">{s.descricao ?? '—'}</span>
-      <span className="text-[10px] text-muted-foreground">
+      {/* ⚠ SEM `text-muted-foreground` — PR-ESPELHO-CONFERENCIA-FONTE-07. O fornecedor e a
+          competência são o que o operador LÊ para ter certeza de que este lançamento é o par
+          daquele movimento do banco; em cinza claro a 10px eles viravam contexto de fundo, e
+          conciliar passava a depender de adivinhar.
+          ⚠ SÓ A COR MUDA: 10px continua, porque a hierarquia com a descrição (11px/medium) vem
+          do tamanho e do peso, não do apagado. Tirar os dois faria o fornecedor competir com a
+          descrição; tirar só a cor o traz para a leitura sem mexer em uma linha do layout. */}
+      <span className="text-[10px]">
         {' · '}{s.fornecedor || '—'}
         {comp && ` · competência ${comp}`}
         {semPar && s.origem_lancamento && ` · ${rotuloOrigem(s.origem_lancamento)}`}
