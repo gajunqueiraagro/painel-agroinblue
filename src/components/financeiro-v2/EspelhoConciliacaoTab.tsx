@@ -1301,13 +1301,40 @@ interface Props {
   mostrarCandidatos?: boolean;
   /** Só a Conferência, sem a fileira das 4 sub-abas — a montagem como aba da Conciliação. */
   soConferencia?: boolean;
+  /**
+   * A sub-aba aberta, CONTROLADA DE FORA — PR-SISTEMA-BARRA-COMPACTA-01.
+   *
+   * ⚠ ELA EXISTE PARA A FILEIRA PODER MORAR NA BARRA DE AÇÕES da tela que monta este
+   * componente, em vez de dentro dele. A fileira custava 23px de altura no corpo, e esses
+   * 23px saíam da Mesa — que é a tela. Na barra de ações eles custam ZERO: lá já há uma linha,
+   * com 569px ocupados de ~1.300.
+   * ⚠ CONTROLADO OU NÃO, os dois modos valem: sem estas props o componente governa a própria
+   * sub-aba (é o que o modal faz). Com elas, quem monta governa — e desenha a fileira onde
+   * quiser, usando `ABAS_ESPELHO`.
+   * ⚠ E NÃO USEI PORTAL. `createPortal` + `hostBarra` (o padrão do `PastosTab`) resolveria o
+   * mesmo, mas exige um `callback ref` no host e move DOM entre árvores; içar o ESTADO é o
+   * caminho mais simples e é o idioma React de sempre para "quem manda é quem monta".
+   */
+  aba?: AbaEspelho;
+  onAbaChange?: (a: AbaEspelho) => void;
 }
 
-export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes, mostrarCandidatos = true, soConferencia = false }: Props) {
+/** As quatro visões do mês, na ordem em que se lê o extrato. */
+export type AbaEspelho = 'conferencia' | 'ofx' | 'sistema' | 'evolucao';
+export const ABAS_ESPELHO: readonly { key: AbaEspelho; label: string }[] = [
+  { key: 'conferencia', label: 'Conferência' },
+  { key: 'ofx', label: 'Extrato (banco)' },
+  { key: 'sistema', label: 'Sistema' },
+  { key: 'evolucao', label: 'Evolução do saldo' },
+] as const;
+
+export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes, mostrarCandidatos = true, soConferencia = false, aba: abaDeFora, onAbaChange }: Props) {
   const anoMes = `${ano}-${mes}`;
-  const [abaEscolhida, setAba] = useState<'conferencia' | 'ofx' | 'sistema' | 'evolucao'>('conferencia');
-  /* Com `soConferencia` a sub-aba é fixa: a fileira some e nada a troca. */
-  const aba = soConferencia ? 'conferencia' : abaEscolhida;
+  const [abaEscolhida, setAba] = useState<AbaEspelho>('conferencia');
+  /* Com `soConferencia` a sub-aba é fixa: a fileira some e nada a troca.
+     ⚠ E `abaDeFora` VENCE QUANDO EXISTE: quem monta a fileira na própria barra governa a
+     escolha; sem ela, o estado interno continua mandando, como sempre. */
+  const aba = soConferencia ? 'conferencia' : (abaDeFora ?? abaEscolhida);
   /* "abrir" é a MESMA leitura que o Extrato Gerencial usa — a aba é dona do próprio diálogo,
      em vez de exigir um handler de uma página que não tem nenhum. */
   const [lancLeituraId, setLancLeituraId] = useState<string | null>(null);
@@ -1366,13 +1393,6 @@ export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes, mostrarCan
     (s) => !vinculados.has(s.lancamento_id) && !internas.lancamentosInternos.has(s.lancamento_id));
   const totalNaoNoBanco = noSistemaNaoNoBanco.reduce((a, s) => a + s.valor_assinado, 0);
 
-  const abas = [
-    { key: 'conferencia' as const, label: 'Conferência' },
-    { key: 'ofx' as const, label: 'Extrato (banco)' },
-    { key: 'sistema' as const, label: 'Sistema' },
-    { key: 'evolucao' as const, label: 'Evolução do saldo' },
-  ];
-
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {/* A21 — os números não rolam; só a lista de dentro da sub-aba. O título e a conta
@@ -1380,11 +1400,10 @@ export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes, mostrarCan
       {/* ⚠ TETO DE 96px NO CABEÇALHO. Cada pixel aqui é uma linha a menos na mesa, e a mesa é a
           tela. O que cede é espaçamento — a informação fica inteira. */}
       <div className="shrink-0 space-y-0.5 px-3.5 py-1">
-        <div className="text-[10px] text-muted-foreground">
-          {data.ofx_completo.length} movimento{data.ofx_completo.length === 1 ? '' : 's'} no extrato ·{' '}
-          {noSistemaNaoNoBanco.length} lançamento{noSistemaNaoNoBanco.length === 1 ? '' : 's'} sem par no banco
-        </div>
-
+        {/* ⚠ O TEXTO "N movimentos no extrato · N lançamentos sem par" SAIU — PR-SISTEMA-BARRA-
+            COMPACTA-01. Ele custava uma linha inteira do cabeçalho para repetir dois números que
+            a grade logo abaixo já dá, na coluna "sem par", e que a Mesa mostra linha a linha.
+            Cada pixel daqui é uma linha a menos na Mesa, e a Mesa é a tela. */}
         {/* ⚠ UMA GRADE, NÃO QUATRO CARTÕES. O bloco que ficava ABAIXO da lista dizia isto mesmo,
             e ninguém rolava até lá para ver — enquanto o topo repetia dois dos quatro números
             noutro arranjo. Uma leitura só, no lugar por onde o olho entra, e a altura que
@@ -1397,19 +1416,30 @@ export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes, mostrarCan
             ⚠ 12px/500 É A "IDENTIDADE" DA RÉGUA A18, que é exatamente o papel deles, e fica dois
             pontos acima dos rótulos — a hierarquia continua legível. O piso da casa é 9,5px, bem
             abaixo; não se está raspando limite nenhum. */}
-        <div className="grid grid-cols-[54px_1fr_1fr_1fr_1.4fr] gap-x-3 items-baseline">
+        {/* ⚠ TABELA, E NÃO TRÊS COLUNAS ELÁSTICAS — PR-SISTEMA-BARRA-COMPACTA-01, A16: valores
+            alinhados em coluna, à direita, em `tabular-nums`. As colunas eram `1fr` e ficavam com
+            213px cada; o número usava 75 e os outros 138 eram ar entre o rótulo e o valor, que é
+            o que fazia isto parecer texto corrido em vez de tabela.
+            ⚠ 92px NÃO É CHUTE: a 11px, "123.456.789,01" (nove dígitos) mede 89,14px e
+            "12.500.000,55" mede 82px. 92 cobre nove dígitos com folga — a lição dos 86px que
+            cortaram o valor de sete dígitos duas vezes hoje.
+            ⚠ E 11px, NÃO 10px: medi os dois. De 12px para 11px o bloco cai 3px (40 → 37); de
+            11px para 10px não cai NADA (os rótulos e os `line-height` é que passam a mandar),
+            e o número encostaria nos rótulos de 9,5px. Menor sem ganhar altura é só menos
+            legível. */}
+        <div className="grid grid-cols-[52px_92px_92px_92px_1fr] gap-x-2.5 items-baseline">
           <span />
-          <span className="text-[10px] leading-[12px] text-muted-foreground">banco</span>
-          <span className="text-[10px] leading-[12px] text-muted-foreground">sistema</span>
-          <span className="text-[10px] leading-[12px] text-muted-foreground">diferença</span>
-          <span className="text-[10px] leading-[12px] text-muted-foreground">sem par</span>
+          <span className="text-right text-[9.5px] leading-[11px] text-muted-foreground">banco</span>
+          <span className="text-right text-[9.5px] leading-[11px] text-muted-foreground">sistema</span>
+          <span className="text-right text-[9.5px] leading-[11px] text-muted-foreground">diferença</span>
+          <span className="text-[9.5px] leading-[11px] text-muted-foreground">sem par</span>
 
-          <span className="text-[10px] text-muted-foreground">saídas</span>
-          <span className="text-[12px] font-medium tabular-nums leading-[14px] text-destructive">{fmtBRL(saidasBanco)}</span>
-          <span className="text-[12px] font-medium tabular-nums leading-[14px] text-destructive">{fmtBRL(saidasSistema)}</span>
-          <span className={cn('text-[12px] font-medium tabular-nums leading-[14px]',
+          <span className="text-[9.5px] text-muted-foreground">saídas</span>
+          <span className="text-right text-[11px] font-medium tabular-nums leading-[13px] text-destructive">{fmtBRL(saidasBanco)}</span>
+          <span className="text-right text-[11px] font-medium tabular-nums leading-[13px] text-destructive">{fmtBRL(saidasSistema)}</span>
+          <span className={cn('text-right text-[11px] font-medium tabular-nums leading-[13px]',
             saldoConfere(difSaidas) ? 'text-muted-foreground' : 'text-amber-600')}>{fmtBRL(difSaidas)}</span>
-          <span className="row-span-2 self-center text-[10px] text-muted-foreground leading-tight">
+          <span className="row-span-2 self-center text-[9.5px] text-muted-foreground leading-tight">
             {semCorrespondencia.length} extrato{semCorrespondencia.length === 1 ? '' : 's'}
             {' · '}{noSistemaNaoNoBanco.length} lançamento{noSistemaNaoNoBanco.length === 1 ? '' : 's'}
             {noSistemaNaoNoBanco.length > 0 && (
@@ -1417,16 +1447,19 @@ export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes, mostrarCan
             )}
           </span>
 
-          <span className="text-[10px] text-muted-foreground">entradas</span>
-          <span className="text-[12px] font-medium tabular-nums leading-[14px] text-emerald-600">{fmtBRL(entradasBanco)}</span>
-          <span className="text-[12px] font-medium tabular-nums leading-[14px] text-emerald-600">{fmtBRL(entradasSistema)}</span>
-          <span className={cn('text-[12px] font-medium tabular-nums leading-[14px]',
+          <span className="text-[9.5px] text-muted-foreground">entradas</span>
+          <span className="text-right text-[11px] font-medium tabular-nums leading-[13px] text-emerald-600">{fmtBRL(entradasBanco)}</span>
+          <span className="text-right text-[11px] font-medium tabular-nums leading-[13px] text-emerald-600">{fmtBRL(entradasSistema)}</span>
+          <span className={cn('text-right text-[11px] font-medium tabular-nums leading-[13px]',
             saldoConfere(difEntradas) ? 'text-muted-foreground' : 'text-amber-600')}>{fmtBRL(difEntradas)}</span>
         </div>
 
-        {!soConferencia && (
+        {/* ⚠ A FILEIRA SÓ NASCE AQUI QUANDO NINGUÉM A MONTOU FORA — PR-SISTEMA-BARRA-COMPACTA-01.
+            É o que o modal faz. Na aba da Conciliação ela vive na barra de ações, onde não custa
+            altura, e aí `onAbaChange` chega preenchido. */}
+        {!soConferencia && !onAbaChange && (
         <div className="flex flex-wrap gap-1">
-          {abas.map((a) => (
+          {ABAS_ESPELHO.map((a) => (
             <button key={a.key} type="button" onClick={() => setAba(a.key)}
               className={cn('px-2 py-0.5 rounded text-[10px] border',
                 aba === a.key ? 'border-primary bg-primary/10 text-foreground' : 'bg-card text-muted-foreground')}>

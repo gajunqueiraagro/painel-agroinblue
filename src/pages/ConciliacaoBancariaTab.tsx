@@ -6,7 +6,7 @@ import { PainelExtratoMes } from '@/components/conciliacao/PainelExtratoMes';
 import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { AcoesDoMes } from '@/components/conciliacao/AcoesDoMes';
 import { SaldoRealDialog } from '@/components/conciliacao/SaldoRealDialog';
-import { EspelhoOfxSistemaModal, EspelhoConciliacaoTab } from '@/components/financeiro-v2/EspelhoConciliacaoTab';
+import { EspelhoOfxSistemaModal, EspelhoConciliacaoTab, ABAS_ESPELHO, type AbaEspelho } from '@/components/financeiro-v2/EspelhoConciliacaoTab';
 import { fimDoMes } from '@/hooks/useExtratoDaConta';
 import { useConciliacaoDoMes, contarBaldes } from '@/hooks/useConciliacaoDoMes';
 import { ImportarBancoInline } from '@/components/conciliacao/ImportarBancoInline';
@@ -434,6 +434,9 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
      importacao que o operador acabou de confirmar. A `key` e' o gesto mais
      simples que existe para isso e nao exige o painel expor um `recarregar`. */
   const [refreshExtrato, setRefreshExtrato] = useState(0);
+  /* ⚠ A SUB-ABA DO ESPELHO MORA AQUI — PR-SISTEMA-BARRA-COMPACTA-01: a fileira foi para a barra
+     de ações desta tela, então quem governa a escolha é quem desenha os botões. */
+  const [abaEspelho, setAbaEspelho] = useState<AbaEspelho>('conferencia');
   const [showPendencias, setShowPendencias] = useState(false);
   /* ⚠ O ESPELHO CONTINUA MODAL, E TAMBÉM VIRA ABA — PR-ESPELHO-02 e PR-CONCILIACAO-5-ABAS-01.
      O modal "Espelho OFX × Sistema", aberto pelo botão em "Importar Banco", segue sendo o FECHO
@@ -1209,29 +1212,21 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                 do painel de importação, onde o operador entrava para conferir se o arquivo tinha
                 chegado completo. A tela ensinava o passo errado, e quem explicava o próprio fluxo
                 se perdia no meio.
-                ⚠ O "Espelho OFX × Sistema" CONTINUA AQUI, e agora por OUTRA razão — PR-SISTEMA-
-                SUBABAS-01. Ele não é mais o único lugar das três visões (a aba ganhou as quatro),
-                mas ele monta o componente com `mostrarCandidatos={false}`, e é a ÚNICA forma de
-                ver a Conferência **só com realizados** — o "fecho" do mês, sem os candidatos
-                previstos/programados no meio. Medido: `mostrarCandidatos` só é lido pela
-                `AbaConferencia` (EspelhoConciliacaoTab:718); nas outras três visões os dois
-                caminhos são idênticos.
-                ⚠ ENTÃO REMOVÊ-LO HOJE CUSTARIA uma capacidade real, ainda que pequena. Fica, com o
-                `title` dizendo o que ele passou a ser. */}
+                ⚠ O "Fecho do mês (só realizados)" SAIU — PR-SISTEMA-BARRA-COMPACTA-01, decisão
+                do Gabriel: "não faz sentido duas telas iguais; se preciso a gente arruma isso na
+                tabela que já tem". Ele abria em modal o MESMO componente desta aba.
+                ⚠ E COM ELE SE PERDE UMA CAPACIDADE, que fica registrada: era a única forma de ver
+                a Conferência SÓ com realizados (`mostrarCandidatos={false}`), sem os previstos e
+                programados no meio da mesa. Medido antes de remover — `mostrarCandidatos` só é
+                lido pela `AbaConferencia`; as outras três visões nunca dependeram dele. Se fizer
+                falta, a saída é um interruptor dentro da própria Conferência, não um segundo modal.
+                ⚠ `EspelhoOfxSistemaModal` FICA SEM CONSUMIDOR e NÃO foi apagado: quem o quiser de
+                volta monta; quem for apagá-lo abre frente própria. */}
             <div className="mb-2 flex flex-wrap items-center gap-2">
-              {/* ⚠ O SELETOR DE CONTA VEIO PARA CÁ — PR-SISTEMA-SELETOR-CONTA-01. A aba não tinha
-                  nenhum, e a conta vinha de outra tela sem que esta dissesse qual era: o operador
-                  lia uma mesa de conciliação sem saber de que conta ela falava.
-                  ⚠ É O MESMO COMPONENTE DA ABA IMPORTAR — `ContaBancariaSelect`, o seletor da casa,
-                  com o mesmo `w-[190px]`, o mesmo `h-7 text-xs` e o mesmo mapeamento de `contas`.
-                  Nenhum dropdown novo: a lei do componente padrão existe porque duas listas de
-                  conta na mesma tela divergem no agrupamento, que foi o defeito de 133g.
-                  ⚠ E A FONTE DA VERDADE CONTINUA SENDO UMA: `selectedConta`, o mesmo estado que a
-                  Importar lê e escreve, com a mesma conversão `'__all__' ↔ ''`. Trocar a conta aqui
-                  troca lá, e vice-versa — não nasce um segundo "qual conta estou vendo".
-                  ⚠ A SENTINELA `__none__` É DO COMPONENTE, não daqui: ela mora dentro do
-                  `ImportarBancoInline` pela razão do Radix (value="" viraria não-controlado). Aqui
-                  a conversão é a mesma que a Importar faz na borda. */}
+              {/* ⚠ O SELETOR DE CONTA — PR-SISTEMA-SELETOR-CONTA-01. É o MESMO componente da aba
+                  Importar (`ContaBancariaSelect`, o seletor da casa), com as mesmas medidas e o
+                  mesmo mapeamento. A fonte da verdade continua sendo `selectedConta`: trocar aqui
+                  troca na Importar, e vice-versa. */}
               <div className="w-[190px]">
                 <ContaBancariaSelect
                   value={selectedConta !== '__all__' ? selectedConta : '__none__'}
@@ -1250,27 +1245,37 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                 ano={Number(ano)} mes={Number(selectedMes)}
                 aoMudar={() => { setRefreshExtrato(n => n + 1); }}
               />
-              <Button
-                variant="outline" size="sm" className="h-6 gap-1 px-2 text-[10px]"
-                disabled={selectedConta === '__all__'}
-                title={selectedConta === '__all__' ? 'Escolha uma conta' : 'O fecho do mês: as mesmas quatro visões, com a Conferência SÓ de realizados — sem os candidatos previstos e programados.'}
-                onClick={() => setEspelhoAberto(true)}
-              >
-                Fecho do mês (só realizados)
-              </Button>
+
+              {/* ⚠ AS QUATRO SUB-ABAS SUBIRAM PARA CÁ — PR-SISTEMA-BARRA-COMPACTA-01, e o motivo é
+                  altura: dentro do corpo a fileira custava 23px, e 23px são uma linha da Mesa, que
+                  é a tela. Aqui ela custa ZERO — esta linha já existe, e sobrava largura nela.
+                  ⚠ SEM PORTAL: o estado da sub-aba é que subiu (`aba` + `onAbaChange`), e a
+                  fileira é desenhada aqui com `ABAS_ESPELHO`. `createPortal` + host (o padrão do
+                  `PastosTab`) faria o mesmo movendo DOM entre árvores; içar o estado é o idioma
+                  React de sempre e não precisa de `callback ref`. */}
+              <div className="flex flex-wrap gap-1">
+                {ABAS_ESPELHO.map(a => (
+                  <button key={a.key} type="button" onClick={() => setAbaEspelho(a.key)}
+                    className={`rounded border px-2 py-0.5 text-[10px] ${
+                      abaEspelho === a.key ? 'border-primary bg-primary/10 text-foreground' : 'bg-card text-muted-foreground'}`}>
+                    {a.label}
+                  </button>
+                ))}
+              </div>
             </div>
             {/* ⚠ AS QUATRO VISÕES VIERAM PARA A ABA — PR-SISTEMA-SUBABAS-01, e o que mudou foi
-                UMA prop: `soConferencia` saiu. Ela escondia a fileira
-                [Conferência] [Extrato (banco)] [Sistema] [Evolução do saldo], e era só por causa
-                dela que o operador precisava abrir um modal para ver três telas que não existem
-                em nenhum outro lugar.
+                UMA prop: `soConferencia` saiu. Ela escondia a fileira das quatro visões, e era só
+                por causa dela que o operador precisava abrir um modal para vê-las.
+                ⚠ A FILEIRA MUDOU DE LUGAR DEPOIS — PR-SISTEMA-BARRA-COMPACTA-01: ela é desenhada
+                na barra acima, e a sub-aba aberta chega por prop.
                 ⚠ `mostrarCandidatos` FICA: a Conferência desta aba é a mesa de casar o extrato
                 com o previsto/programado, e é o que separa esta montagem da do modal.
                 ⚠ E A CONFERÊNCIA CONTINUA SENDO A INICIAL — o `useState` do componente nasce em
                 'conferencia', então abrir a aba não mudou de lugar para quem já a usava. */}
             <EspelhoConciliacaoTab clienteId={clienteId ?? null}
               contaId={selectedConta === '__all__' ? null : selectedConta}
-              ano={String(ano)} mes={selectedMes} mostrarCandidatos />
+              ano={String(ano)} mes={selectedMes} mostrarCandidatos
+              aba={abaEspelho} onAbaChange={setAbaEspelho} />
           </div>
         )}
 

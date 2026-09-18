@@ -149,13 +149,15 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
 
   return (
     <div className="space-y-2">
-      <input ref={input} type="file" accept=".ofx,.OFX,.xlsx,.xls,.txt,.csv" className="hidden"
-        onChange={e => {
-          const a = e.target.files?.[0];
-          if (a) void escolher(a);
-          // permite reescolher o MESMO arquivo depois de cancelar
-          e.target.value = '';
-        }} />
+      {/* ⚠ O INPUT ESCONDIDO DESCEU PARA O FIM — PR-SISTEMA-BARRA-COMPACTA-01, e são 8px de
+          altura que ninguém decidiu dar. `space-y-2` aplica `margin-top` do SEGUNDO filho em
+          diante; com o input `hidden` ocupando a primeira posição, a linha do seletor era a
+          segunda e ganhava 8px de margem — sobre um elemento que não ocupa espaço nenhum.
+          ⚠ MEDIDO: o seletor desta aba começava a 8px do topo e o da aba Sistema a 0px, e foi
+          essa diferença que o Gabriel viu na tela. Igualar por cima (dar 8px à Sistema) tiraria
+          altura da Mesa, que é o que este PR veio devolver; igualar por baixo devolve os 8px às
+          DUAS abas. Nada de comportamento mudou aqui: o input continua escondido e continua
+          sendo o mesmo `ref`. */}
 
       {/* ⚠ UMA LINHA — o card de quatro linhas do legado explicava o que a prévia
           já mostra, e ocupava o topo da tela inclusive nas dezenas de vezes em
@@ -563,6 +565,14 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
         </div>
         );
       })()}
+      {/* ⚠ ÚLTIMO FILHO, e é isso que devolve os 8px — ver o comentário no topo deste bloco. */}
+      <input ref={input} type="file" accept=".ofx,.OFX,.xlsx,.xls,.txt,.csv" className="hidden"
+        onChange={e => {
+          const a = e.target.files?.[0];
+          if (a) void escolher(a);
+          // permite reescolher o MESMO arquivo depois de cancelar
+          e.target.value = '';
+        }} />
     </div>
   );
 }
