@@ -14,6 +14,13 @@ import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { CredorAutocomplete } from '@/components/financiamentos/CredorAutocomplete';
 import { DestinacoesForm, DestinacaoItem } from '@/components/financiamentos/DestinacoesForm';
 import { useFinanciamentoCadastro, FinanciamentoForm, NaturezaContrato } from '@/hooks/useFinanciamentoCadastro';
+/* PAR-01c — a MESMA classificação do modal do financeiro, reusada sem copiar a regra. */
+import { ClassificacaoLancamento } from '@/components/shared/ClassificacaoLancamento';
+import { FazendaSelect } from '@/components/shared/FazendaSelect';
+import { useFazenda } from '@/contexts/FazendaContext';
+import { useCulturasDaSafra } from '@/hooks/useAreaPlantada';
+import { FORMAS_PAGAMENTO_V2, FORMA_PAGAMENTO_V2_NENHUMA } from '@/lib/financeiro/formasPagamentoV2';
+import { ehSubcentroAdministrativo } from '@/lib/financeiro/escopoDoSubcentro';
 import ModalBaixaParcela from '@/components/financiamentos/ModalBaixaParcela';
 import { TableFooter } from '@/components/ui/table';
 import { Pencil } from 'lucide-react';
@@ -182,8 +189,26 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
     salvar, saving,
     contas,
     planosEntrada, planosSaida, planosParcelamento,
+    classificacao, setClassificacao,
+    classificacoes, safras,
     clienteId,
   } = useFinanciamentoCadastro();
+
+  /* ── PAR-01c — a classificação do parcelamento ─────────────────────────────────────────── */
+  const { fazendas } = useFazenda();
+  /**
+   * ⚠ ORDENA, NUNCA FILTRA — é a prop que o cluster pede para pôr as culturas com área
+   * plantada naquela safra no topo da lista. Sem ela o componente aceita `[]` e perde só o
+   * atalho; com ela, a tela de Parcelamentos oferece a mesma ordem que o modal do financeiro.
+   */
+  const culturasDaSafra = useCulturasDaSafra(classificacao.safra_id || null);
+  /**
+   * ⚠ A MESMA PERGUNTA QUE DESLIGA A SAFRA DESLIGA A FAZENDA — a regra da casa, em
+   * `escopoDoSubcentro`. Conta administrativa não tem fazenda operacional: o `FazendaSelect`
+   * força o Administrativo e se trava sozinho. Não é regra nova desta tela; é a que o
+   * `LancamentoV2Dialog` já aplica, chamada da mesma função pura.
+   */
+  const ehAdministrativo = ehSubcentroAdministrativo(classificacoes, classificacao.subcentro);
 
   const qc = useQueryClient();
   const [aba, setAba] = useState<Aba>('contrato');
@@ -274,6 +299,16 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
       plano_conta_captacao_id: contrato.plano_conta_captacao_id ?? '',
       plano_conta_parcela_id: contrato.plano_conta_parcela_id ?? '',
       gerar_lancamento_captacao: !!contrato.gerar_lancamento_captacao,
+      /* ⚠ A FAZENDA HIDRATA; A FORMA DE PAGAMENTO NAO TEM DE ONDE — PAR-01c. `fazenda_id` e'
+         coluna de `financiamentos` e volta do contrato. Ja' `forma_pagamento` mora no
+         LANCAMENTO de cada parcela, nao no contrato: o pai nao a guarda, e inventar um valor
+         aqui seria mostrar em tela algo que o banco nao disse.
+         ⚠ E O GRAVADOR DE EDICAO NAO ESCREVE NENHUMA DAS DUAS (`FinanciamentoDetalhe.saveEdit`
+         lista as colunas que grava, e elas nao estao la'). Este PR muda o NASCIMENTO; trocar a
+         fazenda de um parcelamento ja' criado — e o que fazer com os lancamentos que ja'
+         nasceram nela — e' frente propria. */
+      fazenda_id: contrato.fazenda_id ?? '',
+      forma_pagamento: '',
     });
     const statusBruto = contrato.status ?? '';
     setStatusContrato(ehStatusContrato(statusBruto) ? statusBruto : 'ativo');
@@ -346,7 +381,15 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
          (saidas operacionais) e quem escolhe e' o operador. */
       if (form.plano_conta_parcela_id && form.plano_conta_parcela_id === idAmortizacaoEscopo) {
         set('plano_conta_parcela_id', '');
+        return;
       }
+      /* ⚠ QUEM ESCOLHE A CONTA AGORA E' O CLUSTER — PAR-01c, e esta linha e' a costura.
+         `plano_conta_parcela_id` continua sendo a coluna que o contrato grava e que as
+         pendencias, o resumo e o gravador leem; o que mudou e' de onde o valor VEM. Espelhar
+         aqui, num lugar so', evitou reescrever esses tres consumidores — e evitou que a
+         classificacao passasse a ter duas fontes. */
+      const doCluster = classificacao.plano_conta_id ?? '';
+      if (form.plano_conta_parcela_id !== doCluster) set('plano_conta_parcela_id', doCluster);
       return;
     }
     /* ⚠ EM EDICAO SO' PREENCHE O VAZIO. Um contrato antigo pode apontar para outro plano,
@@ -356,7 +399,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
     if (idAmortizacaoEscopo && form.plano_conta_parcela_id !== idAmortizacaoEscopo) {
       set('plano_conta_parcela_id', idAmortizacaoEscopo);
     }
-  }, [ehEdicao, ehParcelamento, idAmortizacaoEscopo, form.plano_conta_parcela_id, set]);
+  }, [ehEdicao, ehParcelamento, idAmortizacaoEscopo, form.plano_conta_parcela_id, classificacao.plano_conta_id, set]);
 
   /* ── PENDENCIAS — a MESMA cadeia que ja desabilitava o botao, agora como lista ──
      ⚠ MESMAS REGRAS, MESMAS FRASES, MESMA ORDEM da pagina: o que muda e' que cada uma
@@ -370,9 +413,13 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
     if (!form.data_primeira_parcela) lista.push({ aba: 'parcelas', texto: 'Informe a data da 1ª parcela.' });
     if (!Number(form.total_parcelas)) lista.push({ aba: 'parcelas', texto: 'Informe o número de parcelas.' });
     if (ehParcelamento && !form.plano_conta_parcela_id) lista.push({ aba: 'classificacao', texto: 'Escolha a classificação da parcela' });
+    /* ⚠ A FAZENDA E' OBRIGATORIA NO PARCELAMENTO — PAR-01c, e a RPC recusa sem ela. A pendencia
+       existe para o operador ler a frase ANTES de clicar, em vez de receber de volta a recusa do
+       banco: o botao ja fica desabilitado com o motivo no `title`. */
+    if (ehParcelamento && !form.fazenda_id) lista.push({ aba: 'contrato', texto: 'Escolha a fazenda do parcelamento.' });
     return lista;
   }, [form.descricao, form.valor_total, form.data_contrato, form.data_primeira_parcela,
-      form.total_parcelas, form.plano_conta_parcela_id, ehParcelamento]);
+      form.total_parcelas, form.plano_conta_parcela_id, form.fazenda_id, ehParcelamento]);
 
   const primeiraPendencia = pendencias[0]?.texto ?? null;
   const contarPendencias = (a: Aba) => pendencias.filter(p => p.aba === a).length;
@@ -446,7 +493,18 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
   };
 
   const nomeCaptacao = nomePlano(planosEntrada, form.plano_conta_captacao_id);
-  const nomeParcela = nomePlano(planosParcelamento, form.plano_conta_parcela_id);
+  /**
+   * ⚠ O NOME DA CONTA VEM DO CLUSTER NO PARCELAMENTO — PAR-01c.
+   *
+   * `planosParcelamento` e' a lista PENEIRADA (saidas operacionais, sem "Saida Financeira" nem
+   * "Transferencias"); o cluster escolhe sobre o plano INTEIRO. Uma conta valida que a peneira
+   * nao contem faria o `find` devolver `null` e o resumo mostrar "—" ao lado de um contrato que
+   * TEM classificacao — e "—" significa dado ausente, nunca "nao procurei direito".
+   * O `subcentro` que o cluster ja' resolveu e' a resposta, sem segunda busca.
+   */
+  const nomeParcela = ehParcelamento
+    ? (classificacao.subcentro || nomePlano(planosParcelamento, form.plano_conta_parcela_id))
+    : nomePlano(planosParcelamento, form.plano_conta_parcela_id);
 
   const valorParcela = parcelas.length > 0 ? parcelas[0].valor_principal + parcelas[0].valor_juros : null;
   const ultimaParcela = parcelas.length > 0 ? parcelas[parcelas.length - 1].data_vencimento : '';
@@ -621,7 +679,32 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                     )}
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
+                  {/* ⚠ TRES COLUNAS SO' NO PARCELAMENTO — a Fazenda entra ao lado do Credor e da
+                      Conta porque as tres respondem "de quem, de onde, para qual fazenda". */}
+                  <div className={`grid gap-2 ${ehParcelamento ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                    {/* ⚠ A FAZENDA SO' EXISTE NO PARCELAMENTO — PAR-01c. Financiamento e
+                        emprestimo continuam nascendo na fazenda Administrativo, fixada pelo
+                        gravador e sem campo aqui: a regra nao foi revogada, foi DELIMITADA. O
+                        parcelamento e' N despesas operacionais (o IPTU de uma fazenda, o seguro
+                        de um maquinario), e manda-las para o Administrativo tiraria essas N
+                        parcelas do rateio da fazenda que de fato as gastou.
+                        ⚠ `forcaAdministrativo` NAO E' O CONTRARIO DISSO: se a conta escolhida no
+                        cluster for administrativa, a propria regra da casa devolve a fazenda ao
+                        Administrativo e trava o campo — a mesma porta que desliga a safra. */}
+                    {ehParcelamento && (
+                      <div>
+                        <Label className={ROTULO}>Fazenda *</Label>
+                        <FazendaSelect
+                          value={form.fazenda_id}
+                          onChange={(id) => set('fazenda_id', id)}
+                          fazendas={fazendas}
+                          forcaAdministrativo={ehAdministrativo}
+                          triggerClassName={CAMPO}
+                          hideAviso
+                        />
+                        <p className={APOIO}>Onde a despesa cai</p>
+                      </div>
+                    )}
                     <div>
                       <Label className={ROTULO}>Credor</Label>
                       {clienteId && (
@@ -646,6 +729,35 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                     </div>
                   </div>
 
+                  {/* ⚠ A FORMA DE PAGAMENTO E' DO LANCAMENTO, NAO DO CONTRATO — PAR-01c, e e'
+                      por isso que ela so' aparece no parcelamento e nao ao lado da Conta lá em
+                      cima. `financiamentos` nao tem esta coluna; quem a tem e' cada PARCELA, que
+                      nasce linha de `financeiro_lancamentos_v2`. A RPC a repassa para as N.
+                      ⚠ AS OITO SAO AS DO MODAL DO FINANCEIRO, lidas do mesmo const — e' a MESMA
+                      coluna do banco, entao oferecer um vocabulario diferente aqui faria a
+                      parcela nascer com uma forma que a tela que a edita nao sabe mostrar.
+                      ⚠ NAO E' A LISTA DA OC (`formasPagamento.ts`, com Cheque): aquela serve
+                      `zoo_operacao_parcelas_programacao.forma`, outra tabela.
+                      ⚠ OPCIONAL, e "Nenhuma" grava NULO — ausencia, nunca a palavra. */}
+                  {ehParcelamento && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label className={ROTULO}>Forma de pagamento</Label>
+                        <Select
+                          value={form.forma_pagamento || FORMA_PAGAMENTO_V2_NENHUMA}
+                          onValueChange={v => set('forma_pagamento', v === FORMA_PAGAMENTO_V2_NENHUMA ? '' : v)}
+                        >
+                          <SelectTrigger className={CAMPO}><SelectValue placeholder="Selecione" /></SelectTrigger>
+                          <SelectContent position="popper" className={SELECT_POPPER}>
+                            <SelectItem value={FORMA_PAGAMENTO_V2_NENHUMA}>Nenhuma</SelectItem>
+                            {FORMAS_PAGAMENTO_V2.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                        <p className={APOIO}>Vai em cada parcela</p>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <Label className={ROTULO}>Data do contrato *</Label>
@@ -667,7 +779,11 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                       so' anuncia importancia que nao tem, e afasta o rotulo do numero. A
                       grade e' de 4 colunas com teto de 200px por campo; a quarta fica
                       VAZIA de proposito. */}
-                  <div className={`grid gap-2 ${ehEdicao ? 'grid-cols-4 [&>div]:max-w-[200px]' : 'grid-cols-3'}`}>
+                  {/* ⚠ A GRADE ACOMPANHA O CAMPO QUE SUMIU — PAR-01c. Sem a entrada, o
+                      parcelamento tem dois campos nesta linha; manter `grid-cols-3` deixaria
+                      um vão de uma coluna no meio da linha, e a Lei da Estabilidade Visual vale
+                      também para o espaço vazio. */}
+                  <div className={`grid gap-2 ${ehEdicao ? 'grid-cols-4 [&>div]:max-w-[200px]' : (ehParcelamento ? 'grid-cols-2' : 'grid-cols-3')}`}>
                     <div>
                       <Label className={ROTULO}>Valor total *</Label>
                       <CampoMoeda valor={form.valor_total || null}
@@ -675,6 +791,17 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                         placeholder="R$ 0,00"
                         className={`${CAMPO} text-right ${NUM}`} />
                     </div>
+                    {/* ⚠ SEM ENTRADA NO PARCELAMENTO — PAR-01c, e o motivo é que a tela e o
+                        banco discordavam. A prévia daqui calcula
+                        `(valor_total − valor_entrada) / total_parcelas`; a RPC que passou a
+                        gravar divide o total CHEIO por N e grava `valor_entrada` em 0. Com uma
+                        entrada preenchida, a tabela de prévia mostrava um valor de parcela e o
+                        banco gravava outro — a tela mentiria sobre o que ela mesma criou.
+                        ⚠ ESCONDIDO É SUFICIENTE PORQUE O VALOR NÃO VIAJA: o gravador do
+                        parcelamento não manda `valor_entrada` no payload, então o que ficou no
+                        state de uma troca de natureza não chega ao banco. É a mesma escolha que
+                        a Frequência e os juros já faziam. */}
+                    {!ehParcelamento && (
                     <div>
                       <Label className={ROTULO}>Valor de entrada</Label>
                       <CampoMoeda valor={form.valor_entrada || null}
@@ -683,6 +810,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                         className={`${CAMPO} text-right ${NUM}`} />
                       <p className={APOIO}>Pago à vista, fora das parcelas</p>
                     </div>
+                    )}
                     <div>
                       <Label className={ROTULO}>Nº de parcelas *</Label>
                       {/* ⚠ TRAVADO EM EDICAO, e nao aceito-e-ignorado. Mudar o numero aqui
@@ -936,18 +1064,45 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                 <TabsContent value="classificacao" className="mt-0 space-y-2.5">
                   {ehParcelamento ? (
                     <>
-                      <div>
-                        <Label className={ROTULO}>Classificação da parcela *</Label>
-                        <Select value={form.plano_conta_parcela_id} onValueChange={v => set('plano_conta_parcela_id', v)}>
-                          <SelectTrigger className={CAMPO}><SelectValue placeholder="Selecione" /></SelectTrigger>
-                          <SelectContent>
-                            {planosParcelamento.map(p => (
-                              <SelectItem key={p.id} value={p.id}>{p.subcentro || p.centro_custo}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <p className={APOIO}>Cada parcela vira um lançamento nesta classificação</p>
+                      {/* ⚠ AQUI MORAVA UM `<Select>` SO' — PAR-01c. A classificação do
+                          parcelamento era uma conta do plano e mais nada: sem Atividade, sem
+                          Safra, sem Cultura, sem Fase. Cada parcela vira um lançamento no v2, e
+                          um lançamento sem safra não entra no DRE da safra — o parcelamento
+                          nascia fora da análise que ele mesmo deveria alimentar.
+                          ⚠ O COMPONENTE E' O MESMO DO MODAL DO FINANCEIRO, reusado sem uma
+                          linha de cópia. As regras que cruzam os campos (trocar a atividade
+                          limpa o subcentro de outro escopo; escolher o subcentro sobrescreve a
+                          atividade; administrativo apaga a safra; cultura só em lavoura, fase só
+                          em pecuária) valem aqui de graça, e continuarão valendo quando mudarem
+                          lá — que é a razão de ele ter sido extraído.
+                          ⚠ `grid grid-cols-12` PORQUE O CLUSTER DEVOLVE UM FRAGMENT: os campos
+                          são filhos DIRETOS da grade, não um bloco. Sem esta `div` eles cairiam
+                          soltos no `space-y` da aba e as larguras (4/8/4/4/4) não significariam
+                          nada. Está escrito no cabeçalho do componente.
+                          ⚠ `planosParcelamento` DEIXOU DE SER USADA AQUI e segue carregada: ela
+                          é a lista peneirada de saídas operacionais, e o cluster precisa do
+                          plano INTEIRO para cruzar escopo e atividade. Quem filtra agora é o
+                          `PlanoSubcentroSelect`, por `tipoOperacao`. */}
+                      <div className="grid grid-cols-12 gap-2">
+                        <ClassificacaoLancamento
+                          value={classificacao}
+                          /* ⚠ O SETTER DO `useState` VAI DIRETO — o cluster manda updater
+                             funcional e quem o resolve é o estado vivo do pai (PAR-01a-ii-fix1).
+                             Um lambda intermediário recriaria o bug do closure. */
+                          onChange={setClassificacao}
+                          classificacoes={classificacoes}
+                          safras={safras}
+                          /* ⚠ A COMPETÊNCIA QUE SUGERE A SAFRA E' A DATA DO CONTRATO, a mesma
+                             que o gravador manda para a RPC. Se a tela sugerisse por uma data e
+                             o banco gravasse outra, a safra sugerida não bateria com a
+                             competência gravada. */
+                          dataCompetencia={form.data_contrato}
+                          culturasDaSafra={culturasDaSafra}
+                          /* Um parcelamento é sempre despesa — é o que filtra a lista de contas. */
+                          tipoOperacao="2-Saídas"
+                        />
                       </div>
+                      <p className={APOIO}>Cada parcela vira um lançamento nesta classificação</p>
                       <p className="text-[10px] text-muted-foreground">
                         Parcelamento não tem captação: o dinheiro não entra, a despesa é que sai em N vezes.
                       </p>

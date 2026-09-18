@@ -19,6 +19,7 @@ import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { DatePicker } from '@/components/ui/date-picker';
 import { ProdutoAutocomplete } from '@/components/shared/ProdutoAutocomplete';
 import { FazendaSelect } from '@/components/shared/FazendaSelect';
+import { FORMAS_PAGAMENTO_V2, FORMA_PAGAMENTO_V2_NENHUMA } from '@/lib/financeiro/formasPagamentoV2';
 import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
 import { ClassificacaoLancamento, CAMPO_BG, atividadeValida } from '@/components/shared/ClassificacaoLancamento';
 import { Input } from '@/components/ui/input';
@@ -982,9 +983,9 @@ export function LancamentoV2Dialog({
 
   /** Re-fill payment data when payment method changes */
   const handleFormaPgtoChange = useCallback((metodo: string) => {
-    setFormaPgto(metodo === '__none_fp__' ? '' : metodo);
+    setFormaPgto(metodo === FORMA_PAGAMENTO_V2_NENHUMA ? '' : metodo);
     const f = fornecedores.find(x => x.id === favorecidoId);
-    if (f && metodo && metodo !== '__none_fp__') {
+    if (f && metodo && metodo !== FORMA_PAGAMENTO_V2_NENHUMA) {
       setDadosPagamento(buildDadosPagamento(f, metodo));
     }
   }, [fornecedores, favorecidoId, buildDadosPagamento]);
@@ -1842,18 +1843,18 @@ export function LancamentoV2Dialog({
               <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
                 <div>
                   <Label className="text-[10px]">Forma de Pagamento</Label>
-                  <Select value={formaPgto || '__none_fp__'} onValueChange={handleFormaPgtoChange}>
+                  <Select value={formaPgto || FORMA_PAGAMENTO_V2_NENHUMA} onValueChange={handleFormaPgtoChange}>
                     <SelectTrigger tabIndex={13} className={cn("h-8", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    {/* ⚠ A LISTA SAIU DAQUI — PAR-01c. Os oito itens eram escritos à mão neste
+                        ponto; a tela de Parcelamentos passou a gravar a MESMA coluna
+                        (`financeiro_lancamentos_v2.forma_pagamento`, via a parcela que nasce
+                        lançamento) e duas cópias divergiriam na primeira forma nova. Os valores
+                        são os mesmos, byte a byte, na mesma ordem.
+                        ⚠ NÃO É O MÓDULO DA OC: `formasPagamento.ts` serve outra coluna e tem
+                        Cheque. Este é o do v2 — ver o cabeçalho de `formasPagamentoV2.ts`. */}
                     <SelectContent>
-                      <SelectItem value="__none_fp__">Nenhuma</SelectItem>
-                      <SelectItem value="PIX">PIX</SelectItem>
-                      <SelectItem value="Cartão">Cartão</SelectItem>
-                      <SelectItem value="Boleto">Boleto</SelectItem>
-                      <SelectItem value="Débito Automático">Débito Automático</SelectItem>
-                      <SelectItem value="Débito">Débito</SelectItem>
-                      <SelectItem value="Transferência">Transferência</SelectItem>
-                      <SelectItem value="Dinheiro">Dinheiro</SelectItem>
-                      <SelectItem value="Outro">Outro</SelectItem>
+                      <SelectItem value={FORMA_PAGAMENTO_V2_NENHUMA}>Nenhuma</SelectItem>
+                      {FORMAS_PAGAMENTO_V2.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>

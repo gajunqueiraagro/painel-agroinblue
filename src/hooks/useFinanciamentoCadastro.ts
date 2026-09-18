@@ -7,6 +7,9 @@ import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { addMonths, format } from 'date-fns';
 import { montarPayloadConta } from '@/lib/financeiro/contaPayload';
+import { loadPlanoContasCompleto, planoToClassificacoes } from '@/lib/financeiro/planoContasBuilder';
+import type { ClassificacaoItem, Safra } from '@/hooks/useFinanceiroV2';
+import type { ClassificacaoValor } from '@/components/shared/ClassificacaoLancamento';
 
 /* ── Types ── */
 export interface ParcelaPreview {
@@ -46,6 +49,29 @@ export interface FinanciamentoForm {
   plano_conta_captacao_id: string;
   plano_conta_parcela_id: string;
   gerar_lancamento_captacao: boolean;
+  /**
+   * A FAZENDA — e ela só existe no PARCELAMENTO. PAR-01c.
+   *
+   * ⚠ NO FINANCIAMENTO E NO EMPRESTIMO A FAZENDA CONTINUA SENDO O ADMINISTRATIVO, fixada pelo
+   * gravador e não escolhida (ver `fazendaDoContrato` abaixo). O parcelamento é outra coisa: é
+   * uma despesa operacional paga em N vezes — IPTU de uma fazenda, seguro de um maquinário —, e
+   * mandá-la para o Administrativo tiraria N lançamentos do rateio da fazenda que os gastou.
+   * Vazio aqui só acontece antes de o operador escolher; o gravador recusa.
+   */
+  fazenda_id: string;
+  /**
+   * A forma de pagamento da parcela — e ela é do LANÇAMENTO, não do contrato. PAR-01c.
+   *
+   * ⚠ `financiamentos` NÃO TEM ESTA COLUNA: quem a tem é cada parcela, que nasce linha de
+   * `financeiro_lancamentos_v2`. Ela viaja no payload e a RPC a repassa para as N parcelas.
+   * ⚠ O VOCABULÁRIO É O DO V2 (`lib/financeiro/formasPagamentoV2`), oito itens, porque é a
+   * MESMA coluna que o modal do financeiro grava — a tela que vai EDITAR essa parcela é aquela,
+   * e oferecer aqui um vocabulário diferente faria a parcela nascer com uma forma que a outra
+   * tela não sabe mostrar.
+   * ⚠ NÃO É `lib/financeiro/formasPagamento` (a da OC, com Cheque): outra tabela, outra coluna.
+   * ⚠ VAZIO GRAVA NULO — ausência, não a palavra "nenhuma".
+   */
+  forma_pagamento: string;
 }
 
 const INITIAL: FinanciamentoForm = {
@@ -66,6 +92,8 @@ const INITIAL: FinanciamentoForm = {
   plano_conta_captacao_id: '',
   plano_conta_parcela_id: '',
   gerar_lancamento_captacao: false,
+  fazenda_id: '',
+  forma_pagamento: '',
 };
 
 const MESES_POR_FREQUENCIA: Record<FrequenciaParcela, number> = {
@@ -97,11 +125,40 @@ export function useFinanciamentoCadastro() {
       return data?.id ?? null;
     },
   });
-  const fazendaId = fazendaAdmId ?? null;
-
   const [form, setForm] = useState<FinanciamentoForm>({ ...INITIAL });
   const [parcelas, setParcelas] = useState<ParcelaPreview[]>([]);
   const [saving, setSaving] = useState(false);
+  /**
+   * A CLASSIFICAÇÃO DO PARCELAMENTO — o value de `<ClassificacaoLancamento>`.
+   *
+   * ⚠ FORA DO `FinanciamentoForm` DE PROPÓSITO, pelo mesmo motivo que `parcelas`: é o estado de
+   * um COMPONENTE controlado, com dez campos que se cruzam por regra própria, e não um campo do
+   * contrato. Inchá-lo no form faria o gravador de EDIÇÃO (`FinanciamentoDetalhe.saveEdit`)
+   * receber dez chaves que ele não grava.
+   * ⚠ DESTE OBJETO SÓ QUATRO CAMPOS VÃO PARA A RPC — plano, safra, cultura e fase. Os outros
+   * seis (macro, grupo, centro, subcentro, escopo, atividade) são DERIVADOS do plano pelos
+   * triggers do v2; mandá-los seria oferecer ao banco uma segunda opinião sobre o que ele já
+   * sabe calcular.
+   */
+  /**
+   * A FAZENDA DO CONTRATO — e a regra do Administrativo ficou ESCOPADA. PAR-01c.
+   *
+   * ⚠ A REGRA ACIMA NÃO FOI REVOGADA, FOI DELIMITADA: financiamento e empréstimo continuam
+   * nascendo no Administrativo, fixados aqui e sem campo na tela. O que mudou é que o
+   * PARCELAMENTO deixou de ser arrastado junto — ele é N despesas classificadas, não captação
+   * administrativa, e o único parcelamento real da base está numa fazenda de pecuária.
+   * ⚠ NÃO CAI PARA O ADMINISTRATIVO quando o parcelamento está sem fazenda: o gravador recusa.
+   * Um fallback silencioso mandaria as parcelas para a fazenda errada sem ninguém ver.
+   */
+  const fazendaId = form.natureza === 'parcelamento'
+    ? (form.fazenda_id || null)
+    : (fazendaAdmId ?? null);
+
+  const [classificacao, setClassificacao] = useState<ClassificacaoValor>({
+    atividade: null, safra_id: '', cultura: '', fase: '', subcentro: '',
+    macro_custo: '', grupo_custo: '', centro_custo: '', escopo_negocio: '',
+    plano_conta_id: null,
+  });
 
   /* ── Lookups ── */
   const { data: fornecedores = [] } = useQuery({
@@ -205,6 +262,47 @@ export function useFinanciamentoCadastro() {
     },
   });
 
+  /**
+   * O PLANO DE CONTAS INTEIRO, na forma que `<ClassificacaoLancamento>` consome. PAR-01c.
+   *
+   * ⚠ NÃO É A `planosParcelamento` ACIMA, e as duas convivem por razões diferentes: aquela é
+   * uma lista já peneirada para um `<Select>` simples, com quatro colunas; o cluster precisa do
+   * `ClassificacaoItem` completo (grupo, escopo, tipo_operacao, ordem) porque é ele que cruza
+   * atividade × subcentro × safra.
+   * ⚠ REUSA AS FUNÇÕES SOBERANAS, não uma query nova: `loadPlanoContasCompleto` +
+   * `planoToClassificacoes` são exatamente as que o `useFinanceiroV2` chama. Escrever aqui um
+   * segundo `select` do plano seria criar a segunda fonte que este PR existe para evitar.
+   * ⚠ SEM O ENRIQUECIMENTO COM OS COMBOS LEGADOS, e isso é deliberado. O `useFinanceiroV2`
+   * acrescenta as combinações que só existem em lançamentos antigos, para que a lista FILTRE o
+   * que já foi gravado. Aqui se está CRIANDO: oferecer uma conta que não existe mais no plano
+   * faria nascer, hoje, um lançamento numa classificação aposentada.
+   */
+  const { data: classificacoes = [] } = useQuery<ClassificacaoItem[]>({
+    queryKey: ['fin-classificacoes-plano', clienteId],
+    enabled: !!clienteId,
+    queryFn: async () => planoToClassificacoes(await loadPlanoContasCompleto(clienteId)),
+  });
+
+  /**
+   * As safras ativas — a mesma consulta do `useFinanceiroV2.loadSafras`, colunas incluídas.
+   * ⚠ `codigo` E `escopo_negocio` NÃO SÃO ENFEITE: sem eles `safraSugerida` não tem como sugerir
+   * (a regra é temporada + escopo), e o cluster abriria sempre sem sugestão nenhuma.
+   */
+  const { data: safras = [] } = useQuery<Safra[]>({
+    queryKey: ['fin-safras-ativas', clienteId],
+    enabled: !!clienteId,
+    queryFn: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: financeiro_safras fora de types.ts
+      const { data } = await (supabase as any).from('financeiro_safras')
+        .select('id, nome, descricao, ativa, codigo, escopo_negocio')
+        .eq('cliente_id', clienteId)
+        .eq('ativa', true)
+        .order('ordem_exibicao', { ascending: true })
+        .order('nome', { ascending: true });
+      return (data as Safra[]) ?? [];
+    },
+  });
+
   /* ── Geração de parcelas ── */
   const gerarParcelas = useCallback(() => {
     const { valor_total, valor_entrada, total_parcelas, taxa_juros_anual, data_primeira_parcela, frequencia_parcela, natureza } = form;
@@ -272,22 +370,93 @@ export function useFinanciamentoCadastro() {
     }
     /* PR-PARC-02 — 1c — no parcelamento a classificação da parcela é o ÚNICO
        destino contábil do contrato: sem captação, é ela que diz em que
-       subcentro a despesa cai. Vazia, o contrato nasce mudo. */
+       subcentro a despesa cai. Vazia, o contrato nasce mudo.
+       ⚠ A CONTA AGORA VEM DO CLUSTER — PAR-01c. O campo `plano_conta_parcela_id` do form deixou
+       de ser preenchido por um `<Select>` próprio e passou a ser o `plano_conta_id` que o
+       `<ClassificacaoLancamento>` resolve; a tela o mantém em sincronia. A regra que ele guarda
+       — parcelamento sem conta nasce mudo — continua valendo, e é a mesma linha. */
     if (form.natureza === 'parcelamento' && !form.plano_conta_parcela_id) {
       toast.error('Escolha a classificação da parcela');
       return false;
     }
 
+    /* ═══ PARCELAMENTO: O BANCO É QUEM ESCREVE — PAR-01c ═══════════════════════════════════
+       ⚠ AQUI MORRE O CAMINHO CLIENT-SIDE DA PARCELA. Abaixo desta chave, o gravador antigo
+       insere `financiamentos`, depois `financiamento_parcelas`, e desfaz o primeiro com um
+       DELETE quando o segundo falha — um rollback à mão, sem transação, que deixa contrato órfão
+       se a aba fechar no meio. E, desde a Opção A, ele NÃO cria o lançamento de cada parcela: o
+       `criarMirrorParcela` está comentado, e o parcelamento nascia com parcelas que nenhum
+       lançamento espelhava. A RPC faz os três inserts numa transação só.
+       ⚠ O RAMO DE FINANCIAMENTO/EMPRÉSTIMO NÃO PASSA POR AQUI: captação, juros e destinações
+       continuam no caminho de baixo, intocados. Só o parcelamento trocou de gravador. */
+    if (form.natureza === 'parcelamento') {
+      if (!fazendaId) {
+        toast.error('Escolha a fazenda do parcelamento');
+        return false;
+      }
+      setSaving(true);
+      try {
+        /* ⚠ A COMPETÊNCIA É A DATA DO CONTRATO, e é decisão, não falta de campo: a tela não tem
+           campo de competência e o único parcelamento real da base tem competência igual ao
+           contrato. Fica FIXA em todas as parcelas — quem escalona é o vencimento. */
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+        const { data, error } = await (supabase as any).rpc('fn_parcelamento_cadastrar', {
+          p_payload: {
+            cliente_id: clienteId,
+            fazenda_id: fazendaId,
+            descricao: form.descricao.trim(),
+            valor_total: form.valor_total,
+            total_parcelas: form.total_parcelas,
+            data_primeira_parcela: form.data_primeira_parcela,
+            data_competencia: form.data_contrato,
+            intervalo_meses: MESES_POR_FREQUENCIA[form.frequencia_parcela] ?? 1,
+            /* ⚠ SEMPRE SAÍDA: um parcelamento é uma despesa dividida em N vezes, nunca uma
+               entrada. É daqui que a RPC deriva o sinal, pelo prefixo. */
+            tipo_operacao: '2-Saídas',
+            plano_conta_id: form.plano_conta_parcela_id,
+            safra_id: classificacao.safra_id || null,
+            cultura: classificacao.cultura || null,
+            fase: classificacao.fase || null,
+            favorecido_id: form.credor_id || null,
+            forma_pagamento: form.forma_pagamento || null,
+            conta_bancaria_id: form.conta_bancaria_id || null,
+            tipo_financiamento: form.tipo_financiamento,
+            numero_contrato: form.numero_contrato.trim() || null,
+            observacao: form.observacao || null,
+            /* ⚠ `valor_entrada` NÃO VIAJA, e o campo sumiu da tela no parcelamento: a prévia
+               divide o total cheio por N, e a RPC também. Mandá-lo faria os dois discordarem. */
+          },
+        });
+        if (error) throw error;
+        toast.success('Parcelamento cadastrado');
+        return !!data;
+      } catch (e) {
+        /* A mensagem crua da RPC — ela escreve em português de operador justamente para chegar
+           assim ("Sem acesso ao cliente informado", "plano, fazenda, competencia e primeira
+           parcela obrigatorios"). Traduzir aqui criaria um segundo texto para a mesma regra. */
+        toast.error(e instanceof Error ? e.message : 'Falha ao cadastrar o parcelamento');
+        return false;
+      } finally {
+        setSaving(false);
+      }
+    }
+
     setSaving(true);
     try {
       /* PR-PARC-02 — 1c — o parcelamento não capta e não cobra juros. As três
-         decisões abaixo são tomadas no GRAVADOR, não na tela: esconder o campo
+         decisões abaixo eram tomadas no GRAVADOR, não na tela: esconder o campo
          não apaga o valor que ficou no state, e o que chega ao banco é o que
-         vale. */
-      const ehParcelamento = form.natureza === 'parcelamento';
-      const taxaAnual = ehParcelamento ? 0 : form.taxa_juros_anual;
-      const gerarCaptacao = ehParcelamento ? false : form.gerar_lancamento_captacao;
-      const planoCaptacaoId = ehParcelamento ? null : (form.plano_conta_captacao_id || null);
+         vale.
+         ⚠ AS TRÊS VIRARAM DESNECESSÁRIAS AQUI — PAR-01c, e o compilador foi quem disse. O
+         parcelamento retorna no bloco da RPC, acima; deste ponto em diante `natureza` só pode
+         ser 'financiamento' ou 'emprestimo', e o TS passou a acusar TS2367 ("no overlap") na
+         comparação. Os ternários eram guardas contra um caso que não chega mais.
+         ⚠ A REGRA NÃO SUMIU, MUDOU DE DONO: quem garante que o parcelamento nasce sem juros,
+         sem captação e sem entrada é a RPC, que grava `taxa_juros`, `taxa_juros_mensal` e
+         `valor_entrada` em 0 e `gerar_lancamento_captacao` em false — no banco, não na tela. */
+      const taxaAnual = form.taxa_juros_anual;
+      const gerarCaptacao = form.gerar_lancamento_captacao;
+      const planoCaptacaoId = form.plano_conta_captacao_id || null;
 
       // Conversão juros compostos: anual → mensal
       const taxaMensal = taxaAnual > 0
@@ -496,7 +665,7 @@ export function useFinanciamentoCadastro() {
     } finally {
       setSaving(false);
     }
-  }, [clienteId, fazendaId, user, form, parcelas]);
+  }, [clienteId, fazendaId, user, form, parcelas, classificacao]);
 
   return {
     form, setForm,
@@ -507,6 +676,9 @@ export function useFinanciamentoCadastro() {
     salvar, saving,
     fornecedores, contas,
     planosEntrada, planosSaida, planosParcelamento,
+    /* PAR-01c — o cluster de classificação do parcelamento e as duas listas que ele consome. */
+    classificacao, setClassificacao,
+    classificacoes, safras,
     clienteId,
   };
 }
