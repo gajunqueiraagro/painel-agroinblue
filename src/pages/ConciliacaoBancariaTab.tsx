@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { PainelExtratoMes } from '@/components/conciliacao/PainelExtratoMes';
+import { AcoesDoMes } from '@/components/conciliacao/AcoesDoMes';
 import { SaldoRealDialog } from '@/components/conciliacao/SaldoRealDialog';
 import { EspelhoOfxSistemaModal, EspelhoConciliacaoTab } from '@/components/financeiro-v2/EspelhoConciliacaoTab';
 import { fimDoMes } from '@/hooks/useExtratoDaConta';
@@ -367,6 +368,20 @@ interface ConciliacaoProps {
   initialAno?: string;
   initialMes?: string;
 }
+
+/**
+ * A frase de apoio de cada aba — PR-CONCILIACAO-PASSOS-01.
+ *
+ * ⚠ SÓ AS TRÊS DO FLUXO. `gerencial` e `conciliacao` não estão aqui, e a ausência é a decisão:
+ * elas são consulta, não passo do trabalho.
+ * ⚠ CURTAS POR MEDIÇÃO: 65 caracteres cabem numa linha até 700px de largura. Acima disso a
+ * frase quebraria, e o `truncate` a cortaria — dizer menos é melhor que dizer cortado.
+ */
+const APOIO_DA_ABA: Partial<Record<'importar' | 'enriquecer_sistema' | 'enriquecer' | 'gerencial' | 'conciliacao', string>> = {
+  importar: 'Confira se o extrato do mês está completo. Nada é conciliado aqui.',
+  enriquecer_sistema: 'Case o extrato com o que já está lançado. O que sobrar vira novo.',
+  enriquecer: 'Classifique o que entrou: subcentro, fornecedor, safra.',
+};
 
 export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initialAno, initialMes }: ConciliacaoProps = {}) {
   const { clienteAtual } = useCliente();
@@ -1045,16 +1060,6 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             {/* ⚠ CONTA E MÊS VÊM DO CABEÇALHO: o espelho não tem seletor próprio, e com
                 "todas" o botão fica desabilitado dizendo por quê — a RPC compara UMA conta,
                 e somar o extrato de uma com o sistema de várias não é espelho nenhum. */}
-            {vistaExtrato === 'importar' && (
-              <Button
-                variant="outline" size="sm" className="h-5 text-[10px]"
-                disabled={selectedConta === '__all__'}
-                title={selectedConta === '__all__' ? 'Escolha uma conta' : 'Comparar o extrato desta conta com o que o sistema pagou nela'}
-                onClick={() => setEspelhoAberto(true)}
-              >
-                Espelho OFX × Sistema
-              </Button>
-            )}
           </div>
         )}
 
@@ -1071,6 +1076,25 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             branco com um botão na ponta. Ela agora só nasce quando tem conteúdo PRÓPRIO, que hoje
             é mês + status + conta — ou seja, só na aba Conciliação. As condições dos botões não
             mudaram, mudou onde eles são desenhados. */}
+        {/* ⚠ CADA ABA DIZ O QUE SE FAZ NELA — PR-CONCILIACAO-PASSOS-01. A tela tem cinco abas e
+            nenhuma dizia para que servia; o operador aprendia o fluxo clicando, e aprendia
+            errado enquanto os botões de conciliar moravam na aba de importar.
+            ⚠ SÓ NAS TRÊS DO FLUXO. Extrato Gerencial e Conciliação são consulta, não passo — uma
+            frase de apoio ali seria enfeite, e enfeite que custa 19px de cabeçalho.
+            ⚠ E A FRASE DESCREVE O QUE A TELA FAZ HOJE, não o fluxo que ainda vamos construir:
+            dizer "primeiro o exato, depois agrupa" seria prometer no cabeçalho uma ordem que o
+            próximo PR é que vai criar.
+            ⚠ `truncate` + `title` DE PROPÓSITO: a frase muda de tamanho por aba e a largura da
+            tela varia; sem ele, o texto quebraria para duas linhas abaixo de ~1000px e o
+            cabeçalho cresceria justo onde há menos espaço — e a tabela de saldos tem teto FIXO
+            em `calc(100vh - 230px)`, que não acompanha. Com ele o custo é 19,13px, sempre. */}
+        {selectedCard && !loading && APOIO_DA_ABA[vistaExtrato] && (
+          <div className="truncate text-[11px] leading-snug text-muted-foreground"
+            title={APOIO_DA_ABA[vistaExtrato]}>
+            {APOIO_DA_ABA[vistaExtrato]}
+          </div>
+        )}
+
         {selectedCard && vistaExtrato === 'conciliacao' && (
           <div className="flex items-center gap-2">
             <span className="text-sm font-bold">{selectedCard.label}/{ano}</span>
@@ -1164,6 +1188,32 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             um pai com `overflow-y-auto` daria duas barras. Sem conta, o componente pede a escolha. */}
         {!loading && selectedCard && vistaExtrato === 'enriquecer_sistema' && (
           <div className="md:flex md:min-h-0 md:flex-1 md:flex-col md:overflow-hidden">
+            {/* ⚠ AS AÇÕES DO MÊS VIERAM DA ABA IMPORTAR — PR-CONCILIACAO-PASSOS-01. "Conciliar o
+                mês" e "Ver o mês" CONCILIAM, e conciliar é o passo 2; elas moravam no cabeçalho
+                do painel de importação, onde o operador entrava para conferir se o arquivo tinha
+                chegado completo. A tela ensinava o passo errado, e quem explicava o próprio fluxo
+                se perdia no meio.
+                ⚠ O "Espelho OFX × Sistema" VEIO JUNTO, e NÃO foi removido: ele monta este mesmo
+                componente SEM `soConferencia`, e por isso mostra três visões que a aba não tem —
+                Extrato (banco), Sistema e Evolução do saldo. Apagá-lo apagaria três telas que não
+                existem em nenhum outro lugar. Fundir as duas é frente própria. */}
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <AcoesDoMes
+                clienteId={clienteId ?? null}
+                contaId={selectedConta === '__all__' ? null : selectedConta}
+                contaNome={contaAtual}
+                ano={Number(ano)} mes={Number(selectedMes)}
+                aoMudar={() => { setRefreshExtrato(n => n + 1); }}
+              />
+              <Button
+                variant="outline" size="sm" className="h-6 gap-1 px-2 text-[10px]"
+                disabled={selectedConta === '__all__'}
+                title={selectedConta === '__all__' ? 'Escolha uma conta' : 'O mês inteiro em quatro visões: conferência, extrato do banco, sistema e evolução do saldo.'}
+                onClick={() => setEspelhoAberto(true)}
+              >
+                Espelho OFX × Sistema
+              </Button>
+            </div>
             <EspelhoConciliacaoTab clienteId={clienteId ?? null}
               contaId={selectedConta === '__all__' ? null : selectedConta}
               ano={String(ano)} mes={selectedMes} soConferencia mostrarCandidatos />

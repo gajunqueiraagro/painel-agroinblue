@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { LayoutList, FileText, Pencil, ListPlus } from 'lucide-react';
+import { FileText, Pencil } from 'lucide-react';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import {
   useConciliacaoDoMes, useSugestoesDoMes, contarBaldes, frameDoRodape,
@@ -9,8 +9,6 @@ import {
 import { useSaldoGerencialDoMes, useSaldoSistemaNaPosicao, useImportacoesDaConta, importacoesDoMes, useSaldoDeclaradoOfx } from '@/hooks/useExtratoDaConta';
 import { SaldoRealDialog } from '@/components/conciliacao/SaldoRealDialog';
 import { ImportacoesDialog } from '@/components/conciliacao/ImportacoesDialog';
-import { PalcoDoMes } from '@/components/conciliacao/PalcoDoMes';
-import { ConciliarMesDialog } from '@/components/conciliacao/ConciliarMesDialog';
 
 /**
  * PainelExtratoMes — o cabeçalho do "Extrato do mês": a conta, a contagem, as três portas do mês
@@ -43,8 +41,6 @@ interface Props {
 
 export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comPlacar }: Props) {
   const [verImportacoes, setVerImportacoes] = useState(false);
-  const [verPalco, setVerPalco] = useState(false);
-  const [verConciliarMes, setVerConciliarMes] = useState(false);
   const [balde, setBalde] = useState<'todos' | SituacaoMovimento | 'match_direto' | 'provavel' | 'ambiguo' | 'sem_match'>('todos');
 
   const { movimentos, recarregar } = useConciliacaoDoMes(clienteId, contaId, ano, mes);
@@ -101,10 +97,6 @@ export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comP
   }, [ofx.ofx, saldo.saldoInicial, movimentos]);
 
   const contagem = useMemo(() => contarBaldes(movimentos, sug.sugestoes), [movimentos, sug.sugestoes]);
-  /* ⚠ MESMA RÉGUA DO BOTÃO ANTIGO: `situacao === 'nao_conciliado'` é o vínculo real (soma
-     dos `valor_aplicado` ativos), não heurística. Movimento parcial fica de fora, como
-     antes. */
-  const semVinculo = useMemo(() => movimentos.filter(m => m.situacao === 'nao_conciliado').length, [movimentos]);
 
   return (
     <div className="rounded-lg border border-border bg-card">
@@ -130,44 +122,13 @@ export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comP
           {/* O número é o da lista do modal: ativas do mês (PR-IMPORTACOES-MES-01). */}
           Ver importações ({importacoesDoMes(importacoes.importacoes, `${ano}-${String(mes).padStart(2, '0')}`).ativas.length})
         </Button>
-        {/* ⚠ O BOTÃO DEIXOU DE SER MORTO — FIN-CONCIL-PALCO-MES-01. Estava
-            desabilitado com o motivo escrito desde a portagem; o palco existe
-            agora e ele abre. Segue sumindo com o mês vazio: não há mês inteiro
-            para mostrar quando não há movimento. */}
-        {/* ⚠ O PRIMEIRO PASSO DO FLUXO DO NJ mora aqui, ao lado das outras ações
-            do mês: importar o OFX, lançar tudo cru e conciliado, e só então
-            classificar pelo Excel. */}
-        {/* ⚠ O LAÇO MORREU — [CONCIL-MES-01] (130). "Lançar todos os sem vínculo" criava um
-            cru para CADA movimento, sem prévia e sem olhar o sistema: na Sicredi Pessoal do
-            NJ seriam 107 crus por cima de 31 lançamentos existentes — 31 duplicatas. Agora
-            o botão abre a prévia, e quem grava é uma RPC atômica.
-            ⚠ O NÚMERO NO RÓTULO É O MESMO DE ANTES (movimentos sem vínculo): é o que o
-            operador conta na tela. Quantos viram cru e quantos são substituídos só a RPC
-            sabe, e ela diz na prévia — prometer aqui seria adivinhar. */}
-        {movimentos.length > 0 && (
-          <Button type="button" variant="outline" size="sm"
-            className="h-6 gap-1 px-2 text-[10px]"
-            disabled={!clienteId || !contaId}
-            title={!contaId ? 'Escolha uma conta na régua para conciliar o mês.'
-              : 'Ver o que entra cru, o que o banco substitui e se o saldo fecha — antes de gravar.'}
-            onClick={() => setVerConciliarMes(true)}>
-            <ListPlus className="h-3 w-3" />
-            Conciliar o mês{semVinculo > 0 ? ` (${semVinculo})` : ''}
-          </Button>
-        )}
-        {/* ⚠ ERA "Conciliar o mês" E VIROU "Ver o mês" — 130. Dois botões com o mesmo nome
-            ao lado um do outro, um abrindo prévia de gravação e o outro uma tela de
-            leitura, é a receita do clique errado. Este só MOSTRA; o outro GRAVA, e é o que
-            merece o verbo. */}
-        {movimentos.length > 0 && (
-          <Button type="button" variant="outline" size="sm"
-            className="h-6 gap-1 px-2 text-[10px]"
-            title="Ver o mês inteiro com as sugestões do motor, numa tela só. Não grava nada."
-            onClick={() => setVerPalco(true)}>
-            <LayoutList className="h-3 w-3" />
-            Ver o mês
-          </Button>
-        )}
+        {/* ⚠ "CONCILIAR O MÊS" E "VER O MÊS" SAÍRAM DAQUI — PR-CONCILIACAO-PASSOS-01, e a razão é
+            de produto: eles CONCILIAM, e esta aba é a de IMPORTAR. O operador entrava para
+            conferir se o extrato chegou completo e encontrava, no mesmo cabeçalho, dois botões
+            que gravam vínculo e criam lançamento — a tela ensinava o passo errado. Agora moram
+            em `AcoesDoMes`, montado na aba "Enriquecer · Sistema", que é o passo 2.
+            ⚠ AQUI FICA O QUE É DO PASSO 1: a conta, a contagem, "Ver importações", os quatro
+            números e o portão do saldo. Nada que concilie. */}
       </div>
 
       {/* ⚠ "SALDO DO MÊS (GERENCIAL)" ATÉ O IMPORTADOR NOVO — opção B, ratificada.
@@ -362,27 +323,6 @@ export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comP
           pergunta em outra escala, não uma tela com filtro próprio. E ao fechar,
           o card recarrega: um vínculo feito lá dentro muda o "Conciliados N de M"
           daqui. */}
-      {verPalco && (
-        <PalcoDoMes
-          clienteId={clienteId} contaId={contaId} contaNome={contaNome}
-          ano={ano} mes={mes}
-          aoFechar={() => setVerPalco(false)}
-          aoMudar={async () => { await recarregar(); }}
-        />
-      )}
-
-      {/* ⚠ O SALDO DO SISTEMA VAI POR PROP — 130. O card já o calcula (posição contra
-          posição, FIN-SALDO-POSICAO-01); refazer a conta dentro do diálogo daria dois
-          números para a mesma pergunta na mesma tela. */}
-      <ConciliarMesDialog
-        open={verConciliarMes}
-        onOpenChange={setVerConciliarMes}
-        clienteId={clienteId} contaId={contaId} contaNome={contaNome}
-        ano={ano} mes={mes}
-        arquivosOfx={importacoesDoMes(importacoes.importacoes, `${ano}-${String(mes).padStart(2, '0')}`).ativas.length}
-        saldoSistemaHoje={sistema.saldoSistema ?? null}
-        aoConcluir={async () => { await recarregar(); }}
-      />
     </div>
   );
 }
