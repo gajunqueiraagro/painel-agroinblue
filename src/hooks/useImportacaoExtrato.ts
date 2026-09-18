@@ -34,7 +34,7 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { parseOFX, lerSaldoDeclaradoOFX, lerPeriodoDeclaradoOFX, type MovimentoBruto } from '@/lib/financeiro/parser/parseOFX';
 import { parseCSVComRelatorio } from '@/lib/financeiro/parser/parseCSV';
 import { extractPdfText } from '@/lib/financeiro/parser/extractPdfText';
-import { hashMovimento } from '@/lib/financeiro/extratoHash';
+import { hashMovimento, normalizarTexto } from '@/lib/financeiro/extratoHash';
 import { dataAncoraLancamento, orFiltroDataAncora, OR_CENARIO_NAO_META } from '@/lib/financeiro/dataAncora';
 import {
   classificarDuplicidadeOFX,
@@ -93,6 +93,21 @@ export interface MovimentoPreview extends MovimentoBruto {
   criadoEmExistente?: string | null;
   /** Status operacional do registro persistido (null se não existe). */
   statusPersistido: StatusPersistido | null;
+  /**
+   * PROVÁVEL REIMPORTAÇÃO — PR-IMPORT-REIMPORTACAO-01. O hash não bate (o DOCUMENTO mudou),
+   * mas conta+data+valor+descrição batem com um movimento VIVO do extrato.
+   *
+   * ⚠ NASCE DE UM DEFEITO REAL DO BANCO: o Itaú RENUMERA a sequência do dia a cada exportação
+   * — o mesmo movimento de 03/09 estava gravado como 20260903007 e voltou 20260903001. Como o
+   * documento entra no hash, o movimento se apresentava como NOVO e importar duplicaria.
+   * ⚠ NÃO É CERTEZA, E POR ISSO NÃO DECIDE SOZINHO: pode ser um movimento repetido de verdade
+   * (quatro PIX iguais no mesmo dia existem). O padrão é NÃO importar e o operador marca.
+   */
+  provavelReimportacao?: boolean;
+  /** O documento do movimento vivo com que ele casou pela chave fraca — o "era 20260903007". */
+  documentoExistente?: string | null;
+  /** O operador marcou "é novo mesmo, importa" na linha provável. */
+  reimportacaoImportar?: boolean;
   /** Score 0-100 do melhor candidato em financeiro_lancamentos_v2 (apenas visual). */
   scoreMatch: number;
   /** Sinal de match: scoreMatch >= 50 (1:1 ou agrupado). */
@@ -217,6 +232,8 @@ export interface PreviewResult {
   conciliados: number;
   /** existeNoDB && statusPersistido='ignorado'. */
   ignorados: number;
+  /** Prováveis reimportações (documento renumerado) ainda NÃO marcadas para importar. */
+  provaveisReimportacao: number;
   /**
    * Match counters — calculados sobre movimentos AINDA acionáveis
    * (não existe no DB ou status_persistido ∈ {nao_conciliado, parcial}).
@@ -275,7 +292,7 @@ function recomputarAgregados(
   PreviewResult,
   | 'novosParaSalvar' | 'existentesNoBanco' | 'jaExistentesPorChave' | 'pendentes' | 'parciais'
   | 'conciliados' | 'ignorados' | 'matchDireto' | 'matchAgrupados'
-  | 'semMatch' | 'ambiguos' | 'suspeitasDuplicata'
+  | 'semMatch' | 'ambiguos' | 'suspeitasDuplicata' | 'provaveisReimportacao'
 > {
   const acionaveis = movimentos.filter(
     (m) =>
@@ -285,7 +302,16 @@ function recomputarAgregados(
   );
   return {
     // PR-OFX-DEDUP-01 (1B) — renumerados (jaExistenteChave) saem de "novos" e viram "já existentes".
-    novosParaSalvar:   movimentos.filter((m) => !m.existeNoDB && !m.jaExistenteChave).length,
+    /* ⚠ A PROVÁVEL REIMPORTAÇÃO SAI DE "NOVOS" ENQUANTO NÃO FOR MARCADA — PR-IMPORT-REIMPORTACAO-01,
+       e o padrão é esse porque DUPLICAR É PIOR QUE FALTAR: duplicata suja saldo e conciliação e
+       só se descobre depois; o que falta o operador vê na hora e reimporta. Marcar a linha a
+       devolve para "novos", e o número do botão de gravar sobe junto. */
+    novosParaSalvar:   movimentos.filter((m) =>
+      !m.existeNoDB && !m.jaExistenteChave && (!m.provavelReimportacao || m.reimportacaoImportar === true)
+    ).length,
+    provaveisReimportacao: movimentos.filter((m) =>
+      !m.existeNoDB && !m.jaExistenteChave && m.provavelReimportacao === true && m.reimportacaoImportar !== true
+    ).length,
     existentesNoBanco: movimentos.filter((m) =>  m.existeNoDB).length,
     jaExistentesPorChave: movimentos.filter((m) => !m.existeNoDB && m.jaExistenteChave === true).length,
     // Pendente = null (não salvo) OR nao_conciliado. Conciliado/parcial/ignorado
@@ -364,6 +390,89 @@ async function buscarPersistidosPorHash(
   return mapa;
 }
 
+/** A chave FRACA: tudo o que identifica um movimento MENOS o documento. */
+function chaveFraca(dataISO: string, valor: number, descricao: string | null | undefined): string {
+  return [dataISO.slice(0, 10), valor.toFixed(2), normalizarTexto(descricao)].join('|');
+}
+
+/**
+ * Os movimentos VIVOS da conta no intervalo do arquivo — a base para reconhecer reimportação.
+ *
+ * ⚠ POR INTERVALO DE DATAS, não por hash: é justamente o hash que não bate quando o banco
+ * renumera o documento. O recorte é o período que o arquivo cobre, então lê dezenas de linhas,
+ * não a conta inteira.
+ * ⚠ MESMO FILTRO DE VIVO das outras duas consultas (cancelado_em IS NULL, status <> 'ignorado'):
+ * é a regra do índice `idx_extrato_v2_hash_unico`, e uma régua só.
+ */
+async function buscarVivosNoPeriodo(
+  clienteId: string,
+  contaBancariaId: string,
+  dataIni: string,
+  dataFim: string,
+): Promise<{ id: string; hash: string; chave: string; documento: string | null; criadoEm: string | null }[]> {
+  const { data, error } = await supabase
+    .from('extrato_bancario_v2' as any)
+    .select('id, hash_movimento, data_movimento, valor, descricao, documento, created_at')
+    .eq('cliente_id', clienteId)
+    .eq('conta_bancaria_id', contaBancariaId)
+    .is('cancelado_em', null)
+    .neq('status', 'ignorado')
+    .gte('data_movimento', dataIni)
+    .lte('data_movimento', dataFim);
+  if (error) throw error;
+  const linhas = (data as unknown as {
+    id: string; hash_movimento: string; data_movimento: string;
+    valor: number; descricao: string | null; documento: string | null; created_at: string | null;
+  }[] ?? []);
+  return linhas.map((l) => ({
+    id: l.id,
+    hash: l.hash_movimento,
+    chave: chaveFraca(l.data_movimento, Number(l.valor) || 0, l.descricao),
+    documento: l.documento,
+    criadoEm: l.created_at,
+  }));
+}
+
+/**
+ * Marca como PROVÁVEL REIMPORTAÇÃO os movimentos do arquivo que casam pela chave fraca com um
+ * movimento vivo do extrato — e SÓ esses.
+ *
+ * ⚠ O PAREAMENTO É `MIN(N, M)`, E É O QUE PROTEGE OS REPETIDOS LEGÍTIMOS. Quatro PIX iguais no
+ * mesmo dia existem de verdade (NJ 05/05: cinco DARFs de R$ 666,95; Vera 23/07: quatro PIX de
+ * R$ 3.780). Se o extrato já tem 4 e o arquivo traz 4, os quatro são reimportação; se o arquivo
+ * traz 5, quatro são reimportação e O QUINTO CONTINUA NOVO — senão o quinto pagamento do dia
+ * nunca entraria. Medido no proto: 65 grupos de chave fraca têm 2+ linhas (154 movimentos, o
+ * maior grupo com 5); os outros 4.156 são únicos e caem no caso trivial.
+ * ⚠ E O QUE JÁ CASOU POR HASH NÃO ENTRA NO BALDE: aquele par está resolvido, e deixá-lo aqui
+ * faria uma linha viva ser consumida duas vezes.
+ */
+function marcarProvaveisReimportacoes(
+  movimentos: MovimentoPreview[],
+  vivos: { id: string; hash: string; chave: string; documento: string | null; criadoEm: string | null }[],
+): MovimentoPreview[] {
+  const hashesDoArquivo = new Set(movimentos.map((m) => m.hash));
+  // Só os vivos que NENHUM movimento do arquivo já reivindicou pelo hash.
+  const disponiveisPorChave = new Map<string, typeof vivos>();
+  for (const v of vivos) {
+    if (hashesDoArquivo.has(v.hash)) continue;
+    const fila = disponiveisPorChave.get(v.chave);
+    if (fila) fila.push(v); else disponiveisPorChave.set(v.chave, [v]);
+  }
+  return movimentos.map((m) => {
+    if (m.existeNoDB) return m;
+    const fila = disponiveisPorChave.get(chaveFraca(m.data, m.valor, m.descricao));
+    const par = fila?.shift();
+    if (!par) return m;
+    return {
+      ...m,
+      provavelReimportacao: true,
+      documentoExistente: par.documento,
+      criadoEmExistente: par.criadoEm,
+      reimportacaoImportar: false,
+    };
+  });
+}
+
 export interface ConfirmarParams {
   contaBancariaId: string;
   nomeArquivo: string;
@@ -396,14 +505,10 @@ function diasEntre(a: string, b: string): number {
   return Math.round((d1 - d2) / 86400000);
 }
 
-function normalizarTexto(s: string | null | undefined): string {
-  return (s ?? '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toUpperCase();
-}
+/* ⚠ A CÓPIA LOCAL DE `normalizarTexto` SAIU DAQUI — PR-IMPORT-REIMPORTACAO-01. Ela era byte a
+   byte igual à de `extratoHash.ts`, que agora é exportada: duas cópias da normalização da
+   identidade do movimento, e a comparação de texto deste arquivo tinha de concordar com o hash
+   por coincidência. Agora concorda por construção. */
 
 interface LancamentoCandidato {
   id: string;
@@ -1120,10 +1225,24 @@ export function useImportacaoExtrato() {
         m.jaExistenteChave = chavesVivasNoBanco.has(`${kSemSeq}|${seq}`);
       }
 
+      /* ⚠ A TERCEIRA CAMADA DE IDENTIDADE — PR-IMPORT-REIMPORTACAO-01. Hash pega o movimento
+         idêntico; a chave natural pega a renumeração do FITID; esta pega o DOCUMENTO trocado
+         pelo banco na reexportação, que as outras duas deixam passar como "novo". Uma consulta
+         a mais por prévia, limitada ao intervalo de datas do arquivo. */
+      const datasDoArquivo = movimentos.map((m) => m.data.slice(0, 10)).sort();
+      const movimentosComReimport = datasDoArquivo.length === 0 ? movimentos
+        : marcarProvaveisReimportacoes(
+            movimentos,
+            await buscarVivosNoPeriodo(
+              clienteAtual.id, params.contaBancariaId,
+              datasDoArquivo[0], datasDoArquivo[datasDoArquivo.length - 1],
+            ),
+          );
+
       const result: PreviewResult = {
-        movimentos,
-        totalLinhas: movimentos.length,
-        ...recomputarAgregados(movimentos),
+        movimentos: movimentosComReimport,
+        totalLinhas: movimentosComReimport.length,
+        ...recomputarAgregados(movimentosComReimport),
         linhasInformativas, // BUG-CSV-PARSE-VALOR-01 — datadas sem valor, puladas
         formato,
         saldoDeclarado,
@@ -1178,7 +1297,13 @@ export function useImportacaoExtrato() {
     const novos = preview.movimentos.filter(
       // PR-OFX-DEDUP-01 (1B): jaExistenteChave é dedupe DETERMINÍSTICO (chave natural viva no
       // banco) → sempre pula, mesmo com forcarImportarSuspeitas (reinserir violaria o UNIQUE).
-      (m) => !m.existeNoDB && !m.jaExistenteChave && (params.forcarImportarSuspeitas || m.dupImportar !== false),
+      /* ⚠ A PROVÁVEL REIMPORTAÇÃO NÃO ENTRA ENQUANTO NÃO FOR MARCADA — PR-IMPORT-REIMPORTACAO-01,
+         e ela NÃO obedece a `forcarImportarSuspeitas`: aquele "importar tudo" é do alerta de
+         duplicata por semelhança, outra pergunta. Aqui a decisão é por linha, porque o mesmo
+         arquivo pode trazer quatro reimportações e um pagamento novo de igual valor. */
+      (m) => !m.existeNoDB && !m.jaExistenteChave
+        && (params.forcarImportarSuspeitas || m.dupImportar !== false)
+        && (!m.provavelReimportacao || m.reimportacaoImportar === true),
     );
     // BUG-CSV-DEDUP-01 (UX): tudo já existe → mensagem clara, nunca erro SQL.
     if (novos.length === 0) throw new ErroUsuarioSeguro('Extrato já importado anteriormente. Nenhuma movimentação nova foi encontrada.');
@@ -1412,6 +1537,35 @@ export function useImportacaoExtrato() {
       return { ...prev, movimentos: movs, ...recomputarAgregados(movs) };
     });
   }
+  /**
+   * A caixa da linha "reimportado?" — PR-IMPORT-REIMPORTACAO-01.
+   *
+   * ⚠ POR LINHA, NÃO EM LOTE, e o caso que decidiu isso é real: quatro PIX iguais gravados e
+   * CINCO no arquivo — quatro são reimportação e um é pagamento novo. Um botão de lote obrigaria
+   * o operador a errar num dos dois sentidos.
+   */
+  function toggleReimportacao(hash: string): void {
+    setPreview((prev) => {
+      if (!prev) return prev;
+      const movs = prev.movimentos.map((m) =>
+        m.hash === hash && m.provavelReimportacao
+          ? { ...m, reimportacaoImportar: !m.reimportacaoImportar } : m,
+      );
+      return { ...prev, movimentos: movs, ...recomputarAgregados(movs) };
+    });
+  }
+
+  /** "Marcar todos" do cabeçalho: todas as prováveis passam a entrar (ou a ficar de fora). */
+  function marcarTodasReimportacoes(importar: boolean): void {
+    setPreview((prev) => {
+      if (!prev) return prev;
+      const movs = prev.movimentos.map((m) =>
+        m.provavelReimportacao ? { ...m, reimportacaoImportar: importar } : m,
+      );
+      return { ...prev, movimentos: movs, ...recomputarAgregados(movs) };
+    });
+  }
+
   return {
     preview,
     loading,
@@ -1421,5 +1575,7 @@ export function useImportacaoExtrato() {
     refreshStatusPersistidos,
     reset,
     toggleImportarSuspeita,
+    toggleReimportacao,
+    marcarTodasReimportacoes,
   };
 }

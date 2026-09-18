@@ -16,7 +16,18 @@
  *   - UPPERCASE
  */
 
-function normalizarTexto(s: string | null | undefined): string {
+/**
+ * A normalização da IDENTIDADE do movimento — NFD sem diacríticos, espaços colapsados, trim,
+ * UPPERCASE.
+ *
+ * ⚠ PÚBLICA DESDE O PR-IMPORT-REIMPORTACAO-01, e por um motivo: a prévia passou a comparar
+ * também pela CHAVE FRACA (conta+data+valor+descrição, sem o documento) para reconhecer
+ * reimportação, e ela precisa normalizar a descrição EXATAMENTE como o hash normaliza. Uma
+ * segunda cópia desta função faria as duas comparações discordarem no primeiro acento — e o
+ * defeito apareceria como "movimento novo" onde havia reimportação.
+ * ⚠ O CÁLCULO DO HASH NÃO MUDOU: só ganhou nome público o que já era usado aqui dentro.
+ */
+export function normalizarTexto(s: string | null | undefined): string {
   return (s ?? '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
