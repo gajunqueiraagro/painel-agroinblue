@@ -20,7 +20,7 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { ProdutoAutocomplete } from '@/components/shared/ProdutoAutocomplete';
 import { FazendaSelect } from '@/components/shared/FazendaSelect';
 import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
-import { PlanoSubcentroSelect } from '@/components/shared/PlanoSubcentroSelect';
+import { ClassificacaoLancamento, CAMPO_BG, atividadeValida } from '@/components/shared/ClassificacaoLancamento';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -399,6 +399,9 @@ export function LancamentoV2Dialog({
   // Frequency state
 
   const [fazendaId, setFazendaId] = useState('');
+  /* ⚠ SÓ PARA A `key` DO CLUSTER — ver o comentário na montagem dele. Incrementa a cada
+     abertura, que é o gesto em que os estados de interação da classificação precisam zerar. */
+  const [aberturaSeq, setAberturaSeq] = useState(0);
 
   /**
    * A CLASSIFICAÇÃO INTEIRA, NUM OBJETO SÓ — PAR-01a-i, passo 1 de 2 do extract.
@@ -455,7 +458,6 @@ export function LancamentoV2Dialog({
    */
   /* CULTURA (lavoura) e FASE (pecuária) — AGRI-MODAL-CULTURA-01. Vazio é escolha: significa
      compartilhado, e a frase abaixo do campo diz isso. */
-  const [subcentroLimpoPelaAtividade, setSubcentroLimpoPelaAtividade] = useState(false);
   /**
    * A SAFRA SE SUGERE, MAS NÃO SE IMPÕE — PR-FIN-ATIVIDADE-01b.
    *
@@ -474,13 +476,9 @@ export function LancamentoV2Dialog({
    * saber se o operador MEXEU, e mexer é diferente de divergir do banco.
    */
   const [subcentroDeAbertura, setSubcentroDeAbertura] = useState('');
-  const [safraSugeridaId, setSafraSugeridaId] = useState<string | null>(null);
-  const [safraEditadaAMao, setSafraEditadaAMao] = useState(false);
 
   /* O plano tem escopos que o card não oferece (vazio, e os legados). Marcar uma pílula que
      não existe deixaria o card em branco filtrando por algo — pior que não filtrar. */
-  const atividadeValida = (v: string | null | undefined): Atividade | null =>
-    ATIVIDADES.some((a) => a.valor === v) ? (v as Atividade) : null;
   const [dataCompetencia, setDataCompetencia] = useState('');
   const [dataVencimento, setDataVencimento] = useState('');   // PR-FIN-MODAL-VENCIMENTO-02B
   const [dataPagamento, setDataPagamento] = useState('');
@@ -527,7 +525,6 @@ export function LancamentoV2Dialog({
 
   // PR-U2c-1D: seletor de Subcentro migrou p/ <PlanoSubcentroSelect />. `subcentroSearch`
   // permanece controlado aqui pois o reset ao trocar tipo_operacao o usa.
-  const [subcentroSearch, setSubcentroSearch] = useState('');
 
   const isTransferencia = tipoOperacao === '3-Transferências';
   const isEntrada = tipoOperacao === '1-Entradas';
@@ -597,47 +594,6 @@ export function LancamentoV2Dialog({
    * classificação que ninguém conferiu é pior que um campo vazio, porque não pede
    * conferência. O campo fica destacado dizendo o que aconteceu.
    */
-  const aplicarAtividade = (v: Atividade) => {
-    const nova = atividade === v ? null : v;
-    lembrarAtividade(nova);
-    /* ⚠ UM `set` SÓ PARA A REGRA INTEIRA — PAR-01a-i. Eram até oito setters em sequência; o
-       React os agrupava no mesmo render, mas o leitor tinha de juntá-los de cabeça para saber
-       em que estado o formulário ficava. Agora a regra se lê como uma transição: do objeto
-       atual para o próximo. */
-    /* ⚠ O EIXO DA OUTRA ATIVIDADE SAI NA HORA — AGRI-MODAL-CULTURA-01. Escolher Amendoim e
-       depois trocar para Pecuária deixaria um custo de pecuária marcado como custo direto de
-       amendoim no DRE da lavoura. O `culturaParaGravar`/`faseParaGravar` também protege o
-       payload; limpar aqui é para a TELA não mostrar o que não vai gravar. */
-    setClassificacao((c) => ({
-      ...c,
-      atividade: nova,
-      cultura: nova !== 'agricultura' ? '' : c.cultura,
-      fase: nova !== 'pecuaria' ? '' : c.fase,
-    }));
-    if (!nova) { setSubcentroLimpoPelaAtividade(false); return; }
-    /* Mesma comparação do save: aparar e ignorar caixa. */
-    const alvo = (subcentro || '').trim().toLowerCase();
-    const atual = classificacoes.find((c) => (c.subcentro || '').trim().toLowerCase() === alvo);
-    const escopoAtual = (atual?.escopo_negocio || '').trim();
-    if (atual && escopoAtual && escopoAtual !== nova) {
-      setClassificacao((c) => ({
-        ...c, subcentro: '', macro_custo: '', grupo_custo: '', centro_custo: '',
-        escopo_negocio: '', plano_conta_id: null,
-      }));
-      setSubcentroLimpoPelaAtividade(true);
-    }
-    /* ⚠ A SAFRA DE OUTRA ATIVIDADE TAMBÉM SAI, e volta a ser sugerida — PR-FIN-SAFRA-ESCOPO-01.
-       Mantê-la seria guardar o conflito para o operador descobrir no save, depois de ter
-       preenchido o resto. Limpar aqui devolve o campo ao ciclo da sugestão, que é onde ele
-       estava antes de a atividade mudar. */
-    const safraAtual = (safras ?? []).find((sf) => sf.id === safraId);
-    const escopoSafra = (safraAtual?.escopo_negocio || '').trim();
-    if (safraAtual && escopoSafra && escopoSafra !== nova) {
-      setClassificacao((c) => ({ ...c, safra_id: '' }));
-      setSafraSugeridaId(null);
-      setSafraEditadaAMao(false);
-    }
-  };
 
   /**
    * As culturas que existem em campo naquela safra — AGRI-MODAL-CULTURA-01/02.
@@ -667,19 +623,7 @@ export function LancamentoV2Dialog({
    * perdeu — e o que se quer ali é justamente VER o que está gravado para poder corrigir.
    * (Medido: hoje nenhuma safra tem escopo nulo; 37 são de pecuária e 9 de lavoura.)
    */
-  const safrasDoCard = useMemo(() => {
-    const todas = safras ?? [];
-    if (!atividade) return todas;
-    return todas.filter(sf =>
-      (sf.escopo_negocio || '').trim() === atividade || sf.id === safraId);
-  }, [safras, atividade, safraId]);
-
   const culturasDaSafra = useCulturasDaSafra(safraId || null);
-  const culturasOferecidas = useMemo(() => {
-    const plantadas = CULTURAS_LANCAMENTO.filter(c => culturasDaSafra.includes(c.valor));
-    const demais = CULTURAS_LANCAMENTO.filter(c => !culturasDaSafra.includes(c.valor));
-    return [...plantadas, ...demais];
-  }, [culturasDaSafra]);
 
   /* ⚠ AS CANDIDATAS SAÍRAM DAQUI — FIN-SAFRA-ORDEM-02. Elas existiam só para serem
      empilhadas no topo do dropdown; a SUGESTÃO nunca dependeu desta lista: `safraSugerida`
@@ -694,7 +638,6 @@ export function LancamentoV2Dialog({
    * ⚠ E O RÓTULO DIZ O QUE HOUVE, em vez de um traço mudo: "safra inativa" explica por que o
    * campo parece vazio num lançamento que tem safra gravada.
    */
-  const safraNome = (id: string) => (safras ?? []).find((s) => s.id === id)?.nome ?? 'safra inativa';
 
   /**
    * O escopo que o PLANO diz sobre o subcentro escolhido — PR-FIN-SAFRA-ADM-01.
@@ -758,25 +701,9 @@ export function LancamentoV2Dialog({
    * e é por isso que ela é opção da função e não regra dela: lá campo vazio vira lançamento
    * sem safra que ninguém revisa; aqui o operador está olhando o campo.
    */
-  useEffect(() => {
-    if (safraEditadaAMao) return;
-    if (safraId && safraId !== safraSugeridaId) return;
-    const nova = atividade && atividade !== 'administrativo'
-      ? safraSugerida(dataCompetencia, atividade, safras ?? [], { desempatar: false })
-      : null;
-    /* ⚠ OS DOIS GUARDS ACIMA NÃO MUDARAM — PAR-01a-i, e são eles que impedem a sugestão de
-       atropelar a hidratação: `safraEditadaAMao` cala depois da escolha manual, e
-       `safraId !== safraSugeridaId` cala quando o campo já tem valor que não veio daqui —
-       exatamente o caso do lançamento antigo que acabou de ser carregado. Só a FORMA do set
-       mudou. */
-    setClassificacao((c) => ({ ...c, safra_id: nova ?? '' }));
-    setSafraSugeridaId(nova);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [atividade, dataCompetencia, safras, safraEditadaAMao]);
 
   const aplicarTipoOperacao = (v: string) => {
     setTipoOperacao(v);
-    setSubcentroSearch('');
     const plano = ehTipoTransferencia(v) ? planoDeTransferencia(classificacoes) : null;
     if (plano) {
       setClassificacao((c) => ({
@@ -802,6 +729,10 @@ export function LancamentoV2Dialog({
     // PR-FIN-STATUS-UX-03A-1 — reset por abertura: guarda o status original persistido e zera o marcador
     //   de interação ANTES de hidratar o formulário (a hidratação usa setStatusTransacao direto, nunca o
     //   onValueChange do Select, então não é contada como escolha do usuário).
+    /* ⚠ A ABERTURA CONTA, e é ela que remonta o cluster de classificação — PAR-01a-ii. O
+       incremento entra no MESMO efeito que já existe por abertura, porque é exatamente o
+       momento em que os estados de interação daquele bloco precisam voltar ao zero. */
+    setAberturaSeq((n) => n + 1);
     statusOriginalRef.current = lancamento?.status_transacao ?? null;
     statusTouchedRef.current = false;
     if (lancamento) {
@@ -844,12 +775,13 @@ export function LancamentoV2Dialog({
       /* O card segue o lançamento — e o lançamento segue o plano. */
       setSubcentroDeAbertura(planoTransfAoAbrir?.subcentro ?? (lancamento.subcentro || ''));
 
-      setSubcentroLimpoPelaAtividade(false);
-      setSafraSugeridaId(null);
       /* ⚠ LANÇAMENTO GRAVADO COM SAFRA NÃO RECEBE SUGESTÃO. O que está no banco é decisão
          de alguém, ainda que de outro dia; sobrescrevê-la ao abrir seria reclassificar sem
-         pedir licença. */
-      setSafraEditadaAMao(!!lancamento.safra_id);
+         pedir licença.
+         ⚠ ESTE `set` SAIU DAQUI — PAR-01a-ii, e quem garante a mesma coisa agora é o SEGUNDO
+         guard do efeito, dentro do cluster: `safra_id && safra_id !== safraSugeridaId`. Ao
+         abrir, `safraSugeridaId` nasce `null` (o cluster remonta pela `key`) e o `safra_id`
+         chega preenchido pela hidratação — o efeito retorna sem tocar em nada. */
       setTipoOperacao(lancamento.tipo_operacao);
       setStatusTransacao(normalizeStatusModal(lancamento.status_transacao));   // PR-FIN-STATUS-UX-03A-1 — legado 'meta' exibe como 'previsto' (sem gravar)
       setValorDisplay(toBRL(Math.abs(lancamento.valor)));
@@ -960,9 +892,6 @@ export function LancamentoV2Dialog({
         subcentro: '', macro_custo: '', grupo_custo: '', centro_custo: '',
         escopo_negocio: '', plano_conta_id: null,
       });
-      setSubcentroLimpoPelaAtividade(false);
-      setSafraSugeridaId(null);
-      setSafraEditadaAMao(false);
       setTipoOperacao('2-Saídas');
       setStatusTransacao(STATUS_FINANCEIRO_INICIAL);   // PR-FIN-STATUS-UX-03A-1 — era 'meta'
       setValorDisplay('0,00');
@@ -977,7 +906,6 @@ export function LancamentoV2Dialog({
       setFormaPgto('');
       setDadosPagamento('');
     }
-    setSubcentroSearch('');
     setFornecedorSearch('');
     setAbaAtiva('geral');
   }, [open, lancamento, defaultFazendaId, prefill, lockedFields]);
@@ -1403,7 +1331,10 @@ export function LancamentoV2Dialog({
   // PR-FIN-MODAL-02C #10 — densidade dos blocos: padding/espaçamento reduzidos (~20% menos altura).
   const sectionClass = "rounded-lg border border-[hsl(var(--border))] bg-[hsl(210_33%_97%)] dark:bg-muted/20 px-3 py-1.5 space-y-1";
   const sectionTitleClass = "flex items-center gap-1.5 text-[11px] font-bold text-primary uppercase tracking-[0.08em]";
-  const fieldBg = "bg-background border-[hsl(210_20%_80%)] focus-visible:border-primary focus-visible:ring-primary/20 focus-visible:shadow-[0_0_0_3px_hsl(var(--primary)/0.08)]";
+  /* ⚠ A MESMA STRING, AGORA DE UM DONO SÓ — PAR-01a-ii: ela é usada pelos campos deste
+     diálogo e pelos do cluster, e duas cópias divergiriam no dia em que alguém ajustasse o
+     foco de um lado. */
+  const fieldBg = CAMPO_BG;
   // PR-FIN-STATUS-UX-03A-1 — fonte reduzida SÓ nos 3 DatePickers da Linha 1 (Competência/Vencimento/
   //   Pagamento) para o ano caber (dd/MM/yyyy). text-[10px] vence o text-[12px] padrão do DatePicker
   //   via twMerge (11px ainda encostava o ano no ícone); largura/grid/padding/altura/ícone inalterados;
@@ -1817,264 +1748,33 @@ export function LancamentoV2Dialog({
               )}
             </div>
 
-            {/* ── LINHA 4 — Classificação INCORPORADA: Safra + Subcentro ──
-                Resumo automático (Macro · Grupo · Centro) SOMENTE LEITURA abaixo do Subcentro,
-                a partir dos derivados já existentes. Mesmos estados/ids/handlers/validação da
-                antiga aba Classificação (movida verbatim). */}
-            <div className="grid grid-cols-12 gap-2 items-start">
-              {/* ── Atividade — PR-FIN-ATIVIDADE-01 (D13). Vem ANTES do Subcentro porque é o
-                     que encolhe a lista dele: o plano passou de 137 para 206 subcentros em
-                     10/09 e continua crescendo; digitar "combust" devolvia pecuária,
-                     agricultura e silvicultura juntas.
-                     ⚠ A VERSÃO QUE ROLAVA NUMA LINHA SÓ MORREU na homologação de 10/09: em
-                     coluna estreita as quatro pílulas saíam ilegíveis ou cortadas. Viraram
-                     grade 2×2 de 50px, e a altura do campo é DECLARADA pela grade — não
-                     depende do rótulo, que é o que a A16 pede. */}
-              <div className="col-span-4">
-                <Label className="text-[10px]">Atividade</Label>
-                {/* ⚠ 2×2 EM 50px, E ESTA É A ÚNICA LINHA DO MODAL MAIS ALTA QUE 32 — decisão
-                    do Gabriel na homologação de 10/09. A versão anterior espremia as quatro
-                    pílulas em 32px com entrelinha de 11: cabia, mas ninguém lia. Aqui a
-                    pílula tem 24px de altura e 11px de texto, e a linha cresce para 50 —
-                    os vizinhos alinham pelo topo (`items-start`), então os rótulos ficam na
-                    mesma altura e só o campo da atividade é mais alto. */}
-                <div className="grid grid-cols-2 gap-0.5">
-                  {ATIVIDADES.map((a) => {
-                    const marcada = atividade === a.valor;
-                    return (
-                      <button
-                        key={a.valor}
-                        type="button"
-                        disabled={subcentroTravado}
-                        onClick={() => aplicarAtividade(a.valor)}
-                        aria-pressed={marcada}
-                        className={cn(
-                          'h-6 rounded-full border text-center text-[11px] transition-colors',
-                          subcentroTravado && 'opacity-45',
-                          'truncate px-2',
-                          marcada
-                            ? 'border-primary bg-primary text-primary-foreground'
-                            : 'border-border bg-card text-muted-foreground hover:bg-muted',
-                        )}
-                      >
-                        {a.rotulo}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-              {/* Subcentro — PR-U2c-1D: <PlanoSubcentroSelect /> (fonte única) */}
-              <div className="col-span-8">
-                <PlanoSubcentroSelect
-                  value={subcentro}
-                  onChange={(v) => setClassificacao((c) => ({ ...c, subcentro: v }))}
-                  onSelected={(_sub, cls) => {
-                    if (cls) {
-                      /* ⚠ O PLANO MANDA — a precedência do card. Escolher um subcentro de
-                         outro escopo (possível com a lista completa, ou com "Mostrar todos")
-                         move a pílula para o escopo que veio. O card é preferência de quem
-                         olha; o plano é o dado.
-                         ⚠ A chave da linha ESCOLHIDA vai junto. `?? null` porque nem toda
-                         entrada da lista tem uma: as combinações legadas e os dividendos não
-                         têm.
-                         ⚠ CONTA ADMINISTRATIVA LIMPA A SAFRA NO MESMO `set` — PR-FIN-SAFRA-
-                         ADM-01. Antes eram dois setters em pontos diferentes do mesmo `if`;
-                         agora a transição inteira se lê de uma vez. */
-                      const ehAdm = (cls.escopo_negocio || '').trim() === 'administrativo';
-                      setClassificacao((c) => ({
-                        ...c,
-                        macro_custo: cls.macro_custo,
-                        grupo_custo: cls.grupo_custo || '',
-                        centro_custo: cls.centro_custo,
-                        escopo_negocio: cls.escopo_negocio || '',
-                        plano_conta_id: cls.id ?? null,
-                        atividade: atividadeValida(cls.escopo_negocio),
-                        safra_id: ehAdm ? '' : c.safra_id,
-                      }));
-                      setSubcentroLimpoPelaAtividade(false);
-                      /* ⚠ É o mesmo gesto de quando o card muda: escolher no meio da sessão
-                         é decisão de agora, e o campo esvazia. O RISCADO fica reservado para o
-                         que já estava gravado — ali o operador precisa ver o que vai sair. */
-                      if (ehAdm) {
-                        setSafraSugeridaId(null);
-                        setSafraEditadaAMao(false);
-                      }
-                    } else {
-                      /* ⚠ SEM ITEM, SEM CHAVE — nunca a anterior. Hoje não acontece (o
-                         seletor só oferece o que está no seu próprio mapa), mas um `id`
-                         velho ao lado de um subcentro novo é o único par que o trigger
-                         resolveria para o lado errado, e ele obedece à chave. */
-                      setClassificacao((c) => ({ ...c, plano_conta_id: null }));
-                    }
-                  }}
-                  escopoNegocio={atividade ?? undefined}
-                  classificacoes={classificacoes}
-                  tipoOperacao={tipoOperacao}
-                  search={subcentroSearch}
-                  onSearchChange={setSubcentroSearch}
-                  label="Subcentro *"
-                  triggerClassName={fieldBg}
-                  tabIndex={11}
-                  disabled={isOCTitulo || subcentroTravado}
-                />
-                {/* ⚠ CAMPO LIMPO DIZ POR QUÊ — mesma regra do campo travado abaixo. Trocar a
-                    atividade apaga um subcentro de outro escopo, e um campo que esvazia
-                    sozinho sem explicação parece defeito. Este modal não tem idioma de
-                    "obrigatório vazio" (a validação é por toast no save), então a frase ao
-                    lado é o idioma que existe aqui. */}
-                {subcentroLimpoPelaAtividade && !subcentro && (
-                  <div className="mt-0.5 text-[10px] leading-snug text-destructive">
-                    o subcentro anterior era de outra atividade — escolha um novo
-                  </div>
-                )}
-                {/* ⚠ CAMPO TRAVADO DIZ POR QUÊ, ao lado — a mesma regra do botão
-                    desabilitado. Sem a frase, o operador vê um select apagado com um valor
-                    que ele não escolheu e procura o defeito. */}
-                {subcentroTravado && (
-                  <div className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
-                    transferência entre contas usa esta conta do plano e nenhuma outra (fora
-                    da DRE); troque o Tipo Operação para liberar
-                  </div>
-                )}
-                {/* Resumo automático dos derivados (Macro › Grupo › Centro). Somente leitura;
-                    sem estado novo, sem recálculo, sem edição. "—" quando não houver derivação. */}
-                <div className="mt-1 text-[10px] leading-snug text-muted-foreground">
-                  {(macroCusto || grupoCusto || centroCusto) ? (
-                    <>
-                      Macro: <span className="font-medium text-foreground/70">{macroCusto || '—'}</span>
-                      {' · '}Grupo: <span className="font-medium text-foreground/70">{grupoCusto || '—'}</span>
-                      {' · '}Centro: <span className="font-medium text-foreground/70">{centroCusto || '—'}</span>
-                    </>
-                  ) : '—'}
-                </div>
-              </div>
-            </div>
-
-            {/* ── LINHA B — Safra. Ela não cabe na linha da classificação: medido, o nome
-                 mais longo do subcentro pede 291,5px e a pílula "Administrativo" 90,4, e as
-                 doze colunas de 666px não comportam os três inteiros (4+6+4 = 14). Entre
-                 truncar dois nomes e usar uma linha a mais, a linha a mais é mais barata. */}
-            <div className="grid grid-cols-12 gap-2 items-start">
-              <div className="col-span-4">
-                <Label className="text-[10px]">Safra</Label>
-                <Select
-                  value={safraId || '__none_safra__'}
-                  disabled={ehAdministrativo}
-                  onValueChange={v => { setClassificacao((c) => ({ ...c, safra_id: v === '__none_safra__' ? '' : v })); setSafraEditadaAMao(true); setSafraSugeridaId(null); }}
-                >
-                  {/* ⚠ 12px E `truncate` COM `title` — o nome inteiro cabe nesta largura
-                      (medido: "Safra 26/27 Amendoim" pede 132,9px e a coluna dá 216,7),
-                      mas nomes futuros podem não caber, e aí o title é quem responde. */}
-                  <SelectTrigger
-                    title={safraId ? safraNome(safraId) : undefined}
-                    className={cn('h-8 text-xs [&>span]:truncate', fieldBg,
-                      safraSugeridaId && safraId === safraSugeridaId && 'border-dashed border-primary',
-                      /* ⚠ RISCADO SÓ QUANDO HÁ O QUE RISCAR. O traço diz "este valor não vai
-                         sobreviver ao save"; num campo vazio ele não diria nada. */
-                      ehAdministrativo && safraId && 'line-through opacity-60')}>
-                    <SelectValue placeholder="Sem safra" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none_safra__">Sem safra</SelectItem>
-                    {/* ⚠ ORDEM CRONOLÓGICA PURA — FIN-SAFRA-ORDEM-02 (decisão do Gabriel,
-                        11/09/2026), desfazendo o "candidatas primeiro" do FIN-ATIVIDADE-01b.
-                        A lista sai na ordem em que a fonte a entrega (`ordem_exibicao` asc,
-                        desempate por `nome`, em `loadSafras`): 21/22 no topo, 26/27 embaixo,
-                        em qualquer competência.
-                        ⚠ PÔR DUAS SAFRAS AO ALCANCE DA MÃO CUSTOU A ORDEM DE TODAS. Com
-                        25/26 Amendoim e Mandioca no topo e 21/22 logo abaixo, quem procura
-                        uma safra pela posição não acha nenhuma — e procurar pela posição é o
-                        que se faz numa lista que já está ordenada.
-                        ⚠ A SUGESTÃO NÃO MUDOU: a safra sugerida continua pré-selecionada e
-                        marcada (borda tracejada + "sugerida"), agora no seu lugar
-                        cronológico. O que saiu foi o empilhamento, não a sugestão. */}
-                    {safrasDoCard.map(s => (
-                      <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {/* ⚠ SUGERIDA DIZ QUE É SUGERIDA. Um campo que se preenche sozinho e não
-                    avisa é um campo que ninguém confere — e safra errada só aparece no
-                    fechamento, meses depois. */}
-                {safraSugeridaId && safraId === safraSugeridaId && !ehAdministrativo && (
-                  <div className="mt-0.5 text-[10px] leading-snug text-primary">sugerida</div>
-                )}
-                {/* ⚠ LISTA VAZIA DIZ POR QUÊ. Silvicultura não tem nenhuma safra cadastrada
-                    hoje (medido: 37 de pecuária, 9 de lavoura, zero de silvicultura), e um
-                    dropdown só com "Sem safra" parece defeito da tela em vez de ausência no
-                    cadastro. */}
-                {!ehAdministrativo && atividade && safrasDoCard.length === 0 && (
-                  <div className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
-                    Nenhuma safra de {ATIVIDADES.find(a => a.valor === atividade)?.rotulo} cadastrada.
-                  </div>
-                )}
-                {/* ⚠ CAMPO DESABILITADO DIZ POR QUÊ — mesmo idioma do subcentro travado da
-                    transferência, dez linhas acima. Um campo que apaga sozinho e fica cinza
-                    sem explicação parece defeito, e o operador vai procurá-lo em outro lugar.
-                    ⚠ DUAS FRASES PORQUE SÃO DOIS FATOS: com safra, o que importa é avisar que
-                    ela SAI ao salvar; sem safra, o que importa é dizer que o campo não se
-                    aplica. Uma frase só teria de mentir num dos dois casos. */}
-                {ehAdministrativo && (
-                  <div className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
-                    {safraId ? AVISO_ADMIN_SAFRA_SAI : AVISO_ADMIN_SEM_SAFRA}
-                  </div>
-                )}
-              </div>
-
-              {/* ── CULTURA (lavoura) ou FASE (pecuária) — AGRI-MODAL-CULTURA-01.
-                   ⚠ AO LADO DA SAFRA, e não numa linha nova: safra e cultura são a mesma
-                   pergunta em dois níveis ("de qual ciclo" e "de qual parte dele"), e quem
-                   preenche uma confere a outra.
-                   ⚠ SILVICULTURA E ADMINISTRATIVO NÃO TÊM CAMPO NENHUM: eucalipto não é
-                   cultura de lavoura (é atividade própria) e administrativo não é de
-                   ninguém. Campo que não se aplica não fica cinza — não existe.
-                   ⚠ E A FRASE É O PULO DO GATO: "vazio" aqui não é esquecimento, é a escolha
-                   de ratear. Sem ela, o operador leria o campo em branco como pendência e
-                   preencheria por via das dúvidas — transformando custo compartilhado em
-                   custo direto da primeira cultura da lista. */}
-              {atividade === 'agricultura' && (
-                <div className="col-span-4">
-                  <Label className="text-[10px]">Cultura</Label>
-                  <Select value={cultura || SEM_CULTURA}
-                    onValueChange={v => setClassificacao((c) => ({ ...c, cultura: v === SEM_CULTURA ? '' : v }))}>
-                    <SelectTrigger className={cn('h-8 text-xs [&>span]:truncate', fieldBg)}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={SEM_CULTURA}>Todas (rateia)</SelectItem>
-                      {culturasOferecidas.map(c => (
-                        <SelectItem key={c.valor} value={c.valor}>
-                          {c.label}
-                          {/* A marca diz por que ela está no topo — sem ela, a ordem pareceria
-                              arbitrária, e ordem sem motivo se lê como bug. */}
-                          {culturasDaSafra.includes(c.valor) && (
-                            <span className="ml-1 text-[10px] text-muted-foreground">· plantada</span>
-                          )}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-
-              {atividade === 'pecuaria' && (
-                <div className="col-span-4">
-                  <Label className="text-[10px]">Fase</Label>
-                  <Select value={fase || SEM_CULTURA}
-                    onValueChange={v => setClassificacao((c) => ({ ...c, fase: v === SEM_CULTURA ? '' : v }))}>
-                    <SelectTrigger className={cn('h-8 text-xs [&>span]:truncate', fieldBg)}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={SEM_CULTURA}>Todas (rateia)</SelectItem>
-                      {FASES.map(f => (
-                        <SelectItem key={f.valor} value={f.valor}>{f.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-            </div>
+            {/* ⚠ O CLUSTER DE CLASSIFICAÇÃO SAIU DAQUI — PAR-01a-ii. Atividade, Subcentro, Safra,
+                Cultura e Fase, mais as regras que os cruzam, viraram `ClassificacaoLancamento`
+                em `@/components/shared`, para o parcelamento montar a MESMA classificação sem
+                copiar a regra.
+                ⚠ O DADO FICOU AQUI: os quatro fluxos que o escrevem de fora — hidratar ao
+                editar, transferência, prefill e reset — são do ciclo de vida DESTE diálogo. O
+                componente é controlado: recebe `value` e devolve o próximo.
+                ⚠ A `key` REMONTA O CLUSTER A CADA ABERTURA, e ela não é enfeite: os três estados
+                de interação (`safraSugeridaId`, `safraEditadaAMao`, `subcentroLimpoPelaAtividade`)
+                moraram aqui e eram ZERADOS pela hidratação e pelo reset. Agora que moram no
+                filho, sem remontar eles atravessariam a troca de lançamento — abrir um com safra
+                e depois um novo deixaria a sugestão calada no segundo, porque `safraEditadaAMao`
+                teria ficado `true`.
+                ⚠ `culturasDaSafra` VAI POR PROP: o hook não tem cache e esta tela também a usa,
+                no aviso de rateio logo abaixo — chamar dos dois lados seria duas consultas. */}
+            <ClassificacaoLancamento
+              key={`cls-${lancamento?.id ?? 'novo'}-${aberturaSeq}`}
+              value={classificacao}
+              onChange={setClassificacao}
+              classificacoes={classificacoes}
+              safras={safras}
+              dataCompetencia={dataCompetencia}
+              culturasDaSafra={culturasDaSafra}
+              tipoOperacao={tipoOperacao}
+              travado={subcentroTravado}
+              subcentroDesabilitado={isOCTitulo || subcentroTravado}
+            />
 
             {/* "Compõe DRE" (SOMENTE LEITURA) — PR-FIN-MODAL-02C #6, corrigido em PR-FIN-DRE-BADGE-01.
                 ⚠ ELE MOSTRAVA O PASSADO ENQUANTO O OPERADOR MUDAVA O PRESENTE. Lia só
