@@ -951,7 +951,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
           altura declarada) e a tabela de saldos, que teto em `calc(100vh - 230px)` fixo, passaria
           a ser cortada embaixo. `inset shadow` pinta dentro da caixa e não move layout — o mesmo
           idioma da fresta do Total naquela tabela. */}
-      <div className="p-3 pb-1 space-y-1 sticky top-0 z-20 bg-[hsl(var(--header))] shadow-[inset_0_-1px_0_hsl(var(--border)/0.6)] md:static md:z-auto md:shrink-0">
+      <div className="p-3 pb-0 space-y-1 sticky top-0 z-20 bg-[hsl(var(--header))] shadow-[inset_0_-1px_0_hsl(var(--border)/0.6)] md:static md:z-auto md:shrink-0">
 
         {/* ⚠ O CABEÇALHO DA PÁGINA — CONCIL-PARIDADE-VISUAL-01 §1. A tela abria
             direto no seletor de ano, sem dizer o que ela é: quem chegava por um
@@ -1113,7 +1113,18 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             tela varia; sem ele, o texto quebraria para duas linhas abaixo de ~1000px e o
             cabeçalho cresceria justo onde há menos espaço — e a tabela de saldos tem teto FIXO
             em `calc(100vh - 230px)`, que não acompanha. Com ele o custo é 19,13px, sempre. */}
-        {/* ⚠ A FAIXA "mês · status · conta" SAIU DAQUI — PR-CONC-FAIXA-STATUS-03. Ela era o ÚLTIMO
+        {/* ⚠ `pb-0` E NÃO `pb-1` — PR-CONC-ABAS-FOLDER-04, e é ele que faz a aba virar PASTA.
+          A peça toda já existia: a prateleira é o `shadow-[inset_0_-1px_0_...]` deste container,
+          e a aba ativa já é `bg-card` + `rounded-t` + sombra interna em cima/esquerda/direita —
+          três lados, sem o de baixo, que é o desenho de uma pasta aberta. O que faltava era ela
+          ENCOSTAR: os 4px de `pb-1` deixavam a aba flutuando acima da hairline, e no vão aparecia
+          a faixa azul separando a aba do conteúdo que ela deveria abrir.
+          ⚠ COM `pb-0` A ABA ATIVA COBRE A HAIRLINE embaixo dela e emenda no branco do conteúdo;
+          as inativas, sendo transparentes, deixam a linha passar por trás — pastas no fundo.
+          Nenhum `z-index`, nenhuma borda nova: é o padding que faltava.
+          ⚠ ELE SUPERSEDE O `pb-1` DE PR-CONC-HEADER-AJUSTES-02 (T3), e o respiro do seletor NÃO
+          depende dele: aquele vem do `pt-2` no wrapper de cada aba com seletor, que fica. */}
+      {/* ⚠ A FAIXA "mês · status · conta" SAIU DAQUI — PR-CONC-FAIXA-STATUS-03. Ela era o ÚLTIMO
             filho deste bloco colorido e só existia numa das cinco abas, o que fazia a Conciliação
             ser a única com cabeçalho mais alto: 136px contra 107px das outras.
             ⚠ E ISSO ERA UMA EXCEÇÃO NO COMPARTILHADO, não um detalhe de layout: este `div` é o
@@ -1343,7 +1354,11 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                 ela competia com o próprio dado que qualifica. 9,5px é o PISO do sistema — não
                 desce mais, e a exceção de 9px é só das filhas de grupo da Grade do DRE. */}
             <div className="flex items-center gap-2 px-3 py-1.5">
-              <span className="text-sm font-bold">{selectedCard.label}/{ano}</span>
+              {/* ⚠ 12px/medium, E ERA 14px/bold — PR-CONC-ABAS-FOLDER-04 (proposto no PR-03 e
+                  aprovado). Na área branca, logo abaixo das pílulas de mês, um "Set/2026" em
+                  negrito repetia em destaque o mês que a pílula selecionada já diz. E ele é o
+                  RÓTULO desta linha, não o dado: o dado é o status e a conta, à direita. */}
+              <span className="text-[12px] font-medium">{selectedCard.label}/{ano}</span>
               <span style={{
                 background:cor.bg, color:cor.txt, border:`1px solid ${cor.border}`,
                 fontSize:'9.5px', fontWeight:500, padding:'1px 6px', borderRadius:'20px',
