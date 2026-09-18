@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { PainelExtratoMes } from '@/components/conciliacao/PainelExtratoMes';
+import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { AcoesDoMes } from '@/components/conciliacao/AcoesDoMes';
 import { SaldoRealDialog } from '@/components/conciliacao/SaldoRealDialog';
 import { EspelhoOfxSistemaModal, EspelhoConciliacaoTab } from '@/components/financeiro-v2/EspelhoConciliacaoTab';
@@ -1218,6 +1219,30 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                 ⚠ ENTÃO REMOVÊ-LO HOJE CUSTARIA uma capacidade real, ainda que pequena. Fica, com o
                 `title` dizendo o que ele passou a ser. */}
             <div className="mb-2 flex flex-wrap items-center gap-2">
+              {/* ⚠ O SELETOR DE CONTA VEIO PARA CÁ — PR-SISTEMA-SELETOR-CONTA-01. A aba não tinha
+                  nenhum, e a conta vinha de outra tela sem que esta dissesse qual era: o operador
+                  lia uma mesa de conciliação sem saber de que conta ela falava.
+                  ⚠ É O MESMO COMPONENTE DA ABA IMPORTAR — `ContaBancariaSelect`, o seletor da casa,
+                  com o mesmo `w-[190px]`, o mesmo `h-7 text-xs` e o mesmo mapeamento de `contas`.
+                  Nenhum dropdown novo: a lei do componente padrão existe porque duas listas de
+                  conta na mesma tela divergem no agrupamento, que foi o defeito de 133g.
+                  ⚠ E A FONTE DA VERDADE CONTINUA SENDO UMA: `selectedConta`, o mesmo estado que a
+                  Importar lê e escreve, com a mesma conversão `'__all__' ↔ ''`. Trocar a conta aqui
+                  troca lá, e vice-versa — não nasce um segundo "qual conta estou vendo".
+                  ⚠ A SENTINELA `__none__` É DO COMPONENTE, não daqui: ela mora dentro do
+                  `ImportarBancoInline` pela razão do Radix (value="" viraria não-controlado). Aqui
+                  a conversão é a mesma que a Importar faz na borda. */}
+              <div className="w-[190px]">
+                <ContaBancariaSelect
+                  value={selectedConta !== '__all__' ? selectedConta : '__none__'}
+                  onValueChange={v => setSelectedConta(v === '__none__' ? '__all__' : v)}
+                  contas={contas.map(c => ({
+                    id: c.id, nome_conta: getContaLabel(c), nome_exibicao: null, tipo_conta: c.tipo_conta ?? null,
+                  }))}
+                  placeholder="Conta"
+                  className="h-7 text-xs"
+                />
+              </div>
               <AcoesDoMes
                 clienteId={clienteId ?? null}
                 contaId={selectedConta === '__all__' ? null : selectedConta}
