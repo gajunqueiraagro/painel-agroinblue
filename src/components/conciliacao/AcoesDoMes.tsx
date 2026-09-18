@@ -73,7 +73,12 @@ export function AcoesDoMes({ clienteId, contaId, contaNome, ano, mes, aoMudar }:
           : 'Ver o que entra cru, o que o banco substitui e se o saldo fecha — antes de gravar.'}
         onClick={() => setVerConciliarMes(true)}>
         <ListPlus className="h-3 w-3" />
-        Conciliar o mês{semVinculo > 0 ? ` (${semVinculo})` : ''}
+        {/* ⚠ "CONCILIAR EM LOTE", E ERA "Conciliar o mês" — PR-ACOES-DO-MES-ROTULOS-01. Os dois
+            botões desta barra abrem caminhos de conciliar, e os nomes antigos não diziam a
+            diferença entre eles: um falava de PERÍODO ("o mês") e o outro de LEITURA ("ver"),
+            quando o que os separa é a ESCALA do ato — muitos de uma vez, ou um de cada vez.
+            ⚠ O CONTADOR NÃO MUDA: ele continua sendo os movimentos sem vínculo. */}
+        Conciliar em lote{semVinculo > 0 ? ` (${semVinculo})` : ''}
       </Button>
 
       {/* ⚠ ESTE SÓ MOSTRA; o outro GRAVA, e é o que merece o verbo — 130. */}
@@ -82,7 +87,7 @@ export function AcoesDoMes({ clienteId, contaId, contaNome, ano, mes, aoMudar }:
         title="Ver o mês inteiro com as sugestões do motor, numa tela só. Não grava nada."
         onClick={() => setVerPalco(true)}>
         <LayoutList className="h-3 w-3" />
-        Ver o mês
+        Conciliar unitário
       </Button>
 
       {verPalco && (
