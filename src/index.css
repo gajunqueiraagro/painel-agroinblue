@@ -36,7 +36,10 @@
        ⚠ TOKEN, E NÃO A COR SOLTA NA CLASSE: uma faixa hexadecimal cravada num `className` é
        invisível para quem procurar a paleta depois, e seria a primeira cor do sistema fora do
        `:root`. */
-    --header: 213 28% 89%;
+    /* ⚠ AZUL DA MARCA, E NÃO O CINZA-AZULADO DE ANTES — PR-CONC-HEADER-AJUSTES-02. O primeiro
+       tom (213 28% 89%) leu como planilha: cinza demais para uma faixa que é a identidade da
+       tela. Este puxa para a família do `--primary` e continua no mesmo degrau de luz. */
+    --header: 211 45% 88%;
     --muted-foreground: 220 9% 46%;
     --accent: 220 14% 94%;
     --accent-foreground: 222 47% 11%;

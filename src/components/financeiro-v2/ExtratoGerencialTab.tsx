@@ -380,7 +380,12 @@ export function ExtratoGerencialTab({ periodo }: { periodo: PeriodoControlado })
       {/* Filtros */}
       <div className="flex flex-wrap items-end gap-1.5 shrink-0">
         <div className="min-w-[220px]">
-          <label className="text-[9px] font-semibold text-muted-foreground block mb-0.5">Conta</label>
+          {/* ⚠ O RÓTULO "Conta" SAIU — PR-CONC-HEADER-AJUSTES-02. As outras abas desta tela
+              (Importar Banco, Enriquecer · Sistema) montam o seletor SEM rótulo, e o mesmo
+              controle com duas aparências na mesma tela é a divergência que a lei do componente
+              padrão existe para evitar.
+              ⚠ E ELE JÁ FURAVA O PISO DE FONTE: `text-[9px]` contra os 9,5px do PADROES-UI, com
+              a exceção de 9px reservada só às filhas de grupo da Grade do DRE. */}
           <ContaBancariaSelect value={contaId} onValueChange={setContaSel} contas={contas} showBankDetails="agencia" placeholder="Selecionar conta" />
         </div>
         {/* ⚠ SEM SELECTS DE MÊS E ANO — rodada 2. O período é de quem monta, e

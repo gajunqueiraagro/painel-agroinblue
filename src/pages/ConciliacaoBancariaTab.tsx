@@ -951,7 +951,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
           altura declarada) e a tabela de saldos, que teto em `calc(100vh - 230px)` fixo, passaria
           a ser cortada embaixo. `inset shadow` pinta dentro da caixa e não move layout — o mesmo
           idioma da fresta do Total naquela tabela. */}
-      <div className="p-3 space-y-1 sticky top-0 z-20 bg-[hsl(var(--header))] shadow-[inset_0_-1px_0_hsl(var(--border)/0.6)] md:static md:z-auto md:shrink-0">
+      <div className="p-3 pb-1 space-y-1 sticky top-0 z-20 bg-[hsl(var(--header))] shadow-[inset_0_-1px_0_hsl(var(--border)/0.6)] md:static md:z-auto md:shrink-0">
 
         {/* ⚠ O CABEÇALHO DA PÁGINA — CONCIL-PARIDADE-VISUAL-01 §1. A tela abria
             direto no seletor de ano, sem dizer o que ela é: quem chegava por um
@@ -1130,7 +1130,11 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
 
       {/* PR-2.7.2 — Região de conteúdo: recebe o flex-1 real do app-shell; as branches
           (Importar/Enriquecer/Conciliação) vivem aqui. O cabeçalho/abas acima é shrink-0.
-          Padding horizontal/inferior preservado (px-3 pb-3). */}
+          Padding horizontal/inferior preservado (px-3 pb-3).
+          ⚠ ELE NÃO GANHOU `pt-2` — PR-CONC-HEADER-AJUSTES-02. O respiro acima do seletor de conta
+          era para as abas que TÊM seletor; este container é de TODAS, inclusive a Conciliação,
+          cujos cards desceriam 8px sem ninguém ter pedido. O `pt-2` foi para o wrapper de cada
+          aba com seletor — quatro lugares, nenhum compartilhado. */}
       <div className="px-3 pb-3 bg-card md:flex-1 md:min-h-0 md:flex md:flex-col md:min-w-0">
 
         {loading && <div className="text-center text-xs text-muted-foreground py-8">Carregando...</div>}
@@ -1147,7 +1151,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             componente que o Financas cita como gabarito da tela dele —, e ele
             le' o arquivo no navegador e mostra a previa antes de gravar. */}
         {!loading && selectedCard && vistaExtrato === 'importar' && (
-          <div className="space-y-2.5 md:flex-1 md:min-h-0 md:overflow-y-auto">
+          <div className="space-y-2.5 pt-2 md:flex-1 md:min-h-0 md:overflow-y-auto">
             {/* ⚠ O FLUXO E O DO ORIGINAL, e nao so' a casca — correcao do B-24. O
                 botao abre um `input file` ali mesmo, o arquivo e' lido no
                 navegador e a previa nasce NESTA aba. O modal antigo nao e' mais
@@ -1206,7 +1210,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             ⚠ PAI EM COLUNA FLEX SEM ROLAGEM, no molde do Enriquecer: a mesa tem rolagem própria, e
             um pai com `overflow-y-auto` daria duas barras. Sem conta, o componente pede a escolha. */}
         {!loading && selectedCard && vistaExtrato === 'enriquecer_sistema' && (
-          <div className="md:flex md:min-h-0 md:flex-1 md:flex-col md:overflow-hidden">
+          <div className="pt-2 md:flex md:min-h-0 md:flex-1 md:flex-col md:overflow-hidden">
             {/* ⚠ AS AÇÕES DO MÊS VIERAM DA ABA IMPORTAR — PR-CONCILIACAO-PASSOS-01. "Conciliar o
                 mês" e "Ver o mês" CONCILIAM, e conciliar é o passo 2; elas moravam no cabeçalho
                 do painel de importação, onde o operador entrava para conferir se o arquivo tinha
@@ -1280,7 +1284,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
         )}
 
         {!loading && selectedCard && vistaExtrato === 'gerencial' && (
-          <div className="md:flex-1 md:min-h-0 md:overflow-y-auto">
+          <div className="pt-2 md:flex-1 md:min-h-0 md:overflow-y-auto">
             <ExtratoGerencialTab periodo={{ ano: Number(ano), mes: Number(selectedMes) }} />
           </div>
         )}
@@ -1304,7 +1308,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
              rolagem volta para dentro das listas — que é onde o A21 a quer.
              ⚠ FIXAR CABEÇALHO É PÔR A ROLAGEM NO NÍVEL CERTO, não acrescentar `sticky`: um
              `sticky` aqui ancoraria neste scrollport e subiria junto com ele. */
-          <div className="space-y-2 md:flex md:min-h-0 md:flex-1 md:flex-col md:overflow-hidden">
+          <div className="space-y-2 pt-2 md:flex md:min-h-0 md:flex-1 md:flex-col md:overflow-hidden">
             {/* ⚠ OS DOIS CAMINHOS VIRARAM UM — 133b, e a decisão de produto veio no
                 envelope. O B-22a deixou a planilha AO LADO da Mesa justamente por não
                 ter recebido essa decisão; o custo medido foi o operador não saber qual

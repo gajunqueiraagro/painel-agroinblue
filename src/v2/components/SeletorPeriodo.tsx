@@ -358,7 +358,16 @@ export function SeletorPeriodo({
           ⚠ ALTURA DECLARADA, não derivada do conteúdo: `minHeight` mais `lineHeight` iguais
           garantem que a linha vazia meça o mesmo que a preenchida. Medida que depende do
           texto volta a mover a tabela no dia em que a frase ganhar uma palavra a mais. */}
-      {modo === 'ano-mes' && (
+      {/* ⚠ E NÃO SE RESERVA NADA QUANDO `modoUnico` — PR-CONC-HEADER-AJUSTES-02. A A23 acima
+          continua valendo onde ela nasceu: na tela que ALTERNA entre mês e intervalo, a linha
+          existe sempre para a tabela não pular 18px. Mas com `modoUnico` o intervalo não existe
+          — `querPeriodo` é `!modoUnico && comShift`, então nunca há `inicioParcial`, e o período
+          é sempre mês único, o que faz `frase` ser SEMPRE `null`. Reservar 18px + 4px de `mt-1`
+          para um conteúdo impossível é espaço morto, e nesta tela ele empurrava as abas para
+          longe das pílulas de mês.
+          ⚠ O COMPONENTE JÁ FAZIA ISSO, e esta linha segue o padrão dele: a fita de intervalo
+          logo acima também é `modo === 'ano-mes' && !modoUnico`. */}
+      {modo === 'ano-mes' && !modoUnico && (
         <div className="mt-1 flex items-center"
           style={{ fontSize: 11, minHeight: 18, lineHeight: '18px' }}>
           {/* ⚠ A FRASE VIROU CHIP PORQUE ELA PRECISAVA SER BRANCA. Em texto escuro sobre o
