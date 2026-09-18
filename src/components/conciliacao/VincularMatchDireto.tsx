@@ -1,5 +1,9 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Loader2, Link2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -45,6 +49,16 @@ import { faixaDoMes } from '@/hooks/useConciliacaoDoMes';
  * ⚠ PRÉVIA E EXECUÇÃO SÃO A MESMA CHAMADA, com `p_simular` alternando — o mesmo
  * contrato da geração de recorrências. Uma prévia que responde por um caminho e
  * grava por outro pode prometer N e entregar M.
+ *
+ * ⚠ O ALVO DA CONFIRMAÇÃO NÃO PODE SER O MESMO DO DISPARO — PR-VINCULAR-EXATOS-CONFIRMA-01, e
+ * isto nasce de um defeito real: o botão SIMULAVA no primeiro clique e trocava o próprio rótulo
+ * para "Confirmar N vínculos", no MESMO lugar; o segundo clique gravava. Um duplo-clique, ou
+ * quem clicou de novo achando que não pegou, atravessava a confirmação sem ler nada — foi o que
+ * aconteceu na Vera Ligia em 18/09/2026, com dois vínculos gravados sem o operador ver o que
+ * ia acontecer. A prévia existia e o desenho a tornava invisível.
+ * ⚠ AGORA O BOTÃO SÓ SIMULA E ABRE O DIÁLOGO. Ele nunca grava, em clique nenhum: quem grava é
+ * um segundo botão, noutra caixa, ao lado de um "Cancelar". Toda ação em lote desta tela mostra
+ * o que vai alterar antes de gravar.
  */
 interface Props {
   clienteId: string | null;
@@ -64,7 +78,7 @@ interface RetornoRpc {
 
 export function VincularMatchDireto({ clienteId, contaId, ano, mes, aoConcluir }: Props) {
   const [ocupado, setOcupado] = useState(false);
-  /** Quantos a varredura encontrou. `null` = ainda não perguntamos. */
+  /** Quantos a varredura encontrou. `null` = ainda não perguntamos; o diálogo abre com o número. */
   const [previa, setPrevia] = useState<number | null>(null);
 
   const impedimento: string | null =
@@ -90,10 +104,10 @@ export function VincularMatchDireto({ clienteId, contaId, ano, mes, aoConcluir }
       const n = Number(r.vinculados ?? 0);
 
       if (simular) {
+        /* ⚠ ZERO TAMBÉM ABRE O DIÁLOGO: "não há par exato" é uma resposta, e ela merece a mesma
+           caixa que o "há 2". Um toast que some em três segundos faria o operador duvidar se a
+           varredura rodou. */
         setPrevia(n);
-        /* ⚠ ZERO É RESPOSTA, NÃO FALHA: significa que não há par exato em aberto
-           neste mês. Dizer só "0" faria parecer defeito da varredura. */
-        if (n === 0) toast.info('Nenhum par exato em aberto neste mês. O que restou é decisão sua, na estação.');
         return;
       }
 
@@ -119,30 +133,63 @@ export function VincularMatchDireto({ clienteId, contaId, ano, mes, aoConcluir }
   return (
     <span className="ml-1 inline-flex items-center gap-1.5">
       {/* ⚠ O BOTÃO DIZ O QUE FAZ E, QUANDO NÃO PODE, POR QUÊ — e o motivo é fonte
-          única do `disabled`, do `title` e da dica ao lado. */}
+          única do `disabled`, do `title` e da dica ao lado.
+          ⚠ E ELE NÃO GRAVA NUNCA: o rótulo é fixo e o clique só simula e abre o diálogo. Era
+          esta a armadilha do desenho anterior — o mesmo alvo para perguntar e para gravar. */}
       <Button type="button" variant="outline" size="sm"
         className="h-5 gap-1 px-2 text-[10px]"
         disabled={impedimento !== null || ocupado}
-        title={impedimento ?? (previa === null
-          ? 'Procura os pares de mesma data e mesmo valor, únicos dos dois lados, e mostra quantos são antes de gravar.'
-          : 'Grava os vínculos encontrados. Cada par passa pelas mesmas travas do vínculo manual.')}
-        onClick={() => { void chamar(previa === null || previa === 0); }}>
+        title={impedimento ?? 'Procura os pares de mesma data e mesmo valor, únicos dos dois lados, e mostra quantos são antes de gravar.'}
+        onClick={() => { void chamar(true); }}>
         {ocupado ? <Loader2 className="h-3 w-3 animate-spin" /> : <Link2 className="h-3 w-3" />}
-        {previa === null || previa === 0
-          ? 'Vincular os exatos'
-          : `Confirmar ${previa} vínculo${previa === 1 ? '' : 's'}`}
+        Vincular os exatos
       </Button>
 
-      {/* A prévia fica escrita ao lado até virar gravação — o operador confere o
-          número antes de confirmar, e pode desistir sem consequência. */}
-      {previa !== null && previa > 0 && !ocupado && (
-        <span className="text-[10px] text-muted-foreground">
-          {previa} par{previa === 1 ? '' : 'es'} exato{previa === 1 ? '' : 's'} · mesma data e mesmo valor
-        </span>
-      )}
       {impedimento && (
         <span className="text-[10px] text-muted-foreground">{impedimento}</span>
       )}
+
+      {/* ⚠ DUAS SAÍDAS SEPARADAS, e a que grava é a da direita: "Cancelar" e "Vincular N pares"
+          são botões diferentes, em posições diferentes, com palavras diferentes. Fechar o
+          diálogo por Esc ou pelo fundo também não grava. */}
+      <AlertDialog open={previa !== null} onOpenChange={(aberto) => { if (!aberto) setPrevia(null); }}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-sm">
+              {previa === 0
+                ? 'Nenhum par exato neste mês'
+                : `Vincular ${previa} par${previa === 1 ? '' : 'es'} exato${previa === 1 ? '' : 's'}?`}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-[11px] leading-relaxed">
+              {previa === 0 ? (
+                /* ⚠ ZERO É RESPOSTA, NÃO FALHA — e a frase diz o que fazer a seguir, em vez de
+                   deixar o operador achando que a varredura quebrou. */
+                <>Não há par de mesma data e mesmo valor em aberto neste mês. O que restou exige
+                decisão sua, uma de cada vez, na estação de conciliação.</>
+              ) : (
+                <>
+                  O critério é <strong>mesma data e mesmo valor, um de cada lado, sem tolerância</strong>:
+                  só entram os pares em que existe exatamente um movimento do banco e exatamente um
+                  lançamento do sistema com aquela data e aquele valor, ambos ainda sem vínculo.
+                  {' '}Cada par passa pelas mesmas travas do vínculo manual.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="h-7 text-[11px]">
+              {previa === 0 ? 'Fechar' : 'Cancelar'}
+            </AlertDialogCancel>
+            {previa !== null && previa > 0 && (
+              <AlertDialogAction className="h-7 text-[11px]" disabled={ocupado}
+                onClick={() => { void chamar(false); }}>
+                {ocupado ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
+                Vincular {previa} par{previa === 1 ? '' : 'es'}
+              </AlertDialogAction>
+            )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </span>
   );
 }
