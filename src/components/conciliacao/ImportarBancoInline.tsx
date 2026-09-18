@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { Fragment, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
@@ -254,6 +254,21 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
       {preview && (() => {
         /* ⚠ A COLUNA DA CAIXA SÓ APARECE QUANDO HÁ PROVÁVEL REIMPORTAÇÃO no arquivo — e o
            "marcar todos" do cabeçalho reflete o estado real das linhas, não um estado próprio. */
+        /* ⚠ DATA CRESCENTE, E DENTRO DO DIA O MAIOR VALOR PRIMEIRO — PR-IMPORT-DUPLICATA-LEITURA-01.
+           A ordem de antes era a FÍSICA DO ARQUIVO (não havia `sort` nenhum): parecia por data
+           porque o OFX do Itaú vem assim, não porque a tela decidia. Ordenar deixa os candidatos
+           a duplicata vizinhos — mesmo dia e mesmo valor caem lado a lado, que é como o olho
+           confere.
+           ⚠ POR VALOR ABSOLUTO, não pelo sinal: com sinal, as SAÍDAS maiores — que é por onde o
+           dinheiro sai — iriam para o fim da lista, e é justamente onde se olha primeiro.
+           ⚠ E ISSO CUSTA O ALINHAMENTO COM O ARQUIVO, de propósito: não dá mais para conferir
+           linha a linha contra o extrato em PDF. A conferência por TOTAL, que é a que importa,
+           o portão do saldo já faz sozinho no painel abaixo. */
+        const movimentosOrdenados = [...preview.movimentos].sort((a, b) => {
+          const da = a.data.slice(0, 10), db = b.data.slice(0, 10);
+          if (da !== db) return da < db ? -1 : 1;
+          return Math.abs(b.valor) - Math.abs(a.valor);
+        });
         const suspeitas = preview.movimentos.filter((m) => m.dupClassificacao && !m.existeNoDB);
         const temSuspeitas = suspeitas.length > 0;
         const todasSuspeitasMarcadas = temSuspeitas && suspeitas.every((m) => m.dupImportar === true);
@@ -372,16 +387,20 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
                 </tr>
               </thead>
               <tbody>
-                {preview.movimentos.map((m, i) => {
+                {movimentosOrdenados.map((m, i) => {
                   const repetido = m.existeNoDB || !!m.jaExistenteChave;
                   /* ⚠ APAGADA ENQUANTO NÃO FOR MARCADA: a provável reimportação não entra, então
                      ela se parece com o que já existe — e volta ao normal quando o operador diz
                      que é movimento novo. */
                   const suspeita = m.dupClassificacao ?? null;
                   const suspeitaFora = !!suspeita && m.dupImportar === false;
+                  const chave = `${m.data}-${m.documento ?? i}-${i}`;
                   return (
-                    <tr key={`${m.data}-${m.documento ?? i}-${i}`}
-                      className={cn('border-b border-border/60', (repetido || suspeitaFora) && 'opacity-45')}>
+                    <Fragment key={chave}>
+                    <tr className={cn((repetido || suspeitaFora) && 'opacity-45',
+                      /* ⚠ A BORDA DE BAIXO SAI QUANDO HÁ LINHA DO PAR: ela pertence ao CONJUNTO
+                         (movimento + par), e riscar entre os dois separaria o que é uma coisa só. */
+                      suspeita ? '' : 'border-b border-border/60')}>
                       <td className="whitespace-nowrap px-2 py-0.5 font-mono">{brData(m.data)}</td>
                       <td className="max-w-[280px] truncate px-2 py-0.5" title={m.descricao}>{m.descricao || '—'}</td>
                       <td className="px-2 py-0.5 font-mono text-muted-foreground">{m.documento ?? '—'}</td>
@@ -432,6 +451,26 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
                         </td>
                       )}
                     </tr>
+                    {/* ⚠ O PAR NA PRÓPRIA LINHA, E NÃO SÓ NO HOVER — PR-IMPORT-DUPLICATA-LEITURA-01.
+                        O selo acusava sem mostrar a prova: para saber POR QUE a linha foi marcada,
+                        o operador tinha de passar o mouse uma a uma. Na Vera Ligia, cinco marcadas
+                        e a leitura foi "não achei valores iguais" — o sistema estava certo e a tela
+                        não deixava ver.
+                        ⚠ SEGUNDA `<tr>` COM `colSpan`, e a escolha foi MEDIDA: pôr o par dentro da
+                        célula da descrição, ou numa coluna própria, re-largava TODAS as colunas
+                        (a tabela é `table-layout: auto`) — a coluna Descrição ia de 325px para
+                        396px numa, e caía para 232px na outra. Atravessando a largura toda, a linha
+                        do par não disputa espaço com coluna nenhuma: as seis ficam idênticas. */}
+                    {suspeita && (
+                      <tr className={cn('border-b border-border/60', suspeitaFora && 'opacity-45')}>
+                        <td colSpan={temSuspeitas ? 6 : 5}
+                          className="truncate px-2 pb-0.5 pt-0 pl-6 text-[9px] text-muted-foreground">
+                          ↳ já no extrato: {m.dupExistenteDescricao ?? '—'}
+                          {m.dupExistenteDocumento ? ` (doc ${m.dupExistenteDocumento})` : ''}
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
                   );
                 })}
               </tbody>
