@@ -1766,6 +1766,10 @@ export function LancamentoV2Dialog({
             <ClassificacaoLancamento
               key={`cls-${lancamento?.id ?? 'novo'}-${aberturaSeq}`}
               value={classificacao}
+              /* ⚠ O SETTER DO `useState` VAI DIRETO, e é ele que resolve o updater funcional
+                  sobre o estado vivo — PAR-01a-ii-fix1. Não envolver num lambda que chame
+                  `next(classificacao)`: seria recriar, do lado do pai, exatamente o bug do
+                  closure que este fix tirou do filho. */
               onChange={setClassificacao}
               classificacoes={classificacoes}
               safras={safras}

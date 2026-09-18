@@ -64,7 +64,12 @@ export function ClassificacaoLancamento({
   culturasDaSafra = [], subcentroDesabilitado = false, tipoOperacao, travado = false,
 }: {
   value: ClassificacaoValor;
-  onChange: (proximo: ClassificacaoValor) => void;
+  /**
+   * ⚠ ACEITA OBJETO **OU** UPDATER FUNCIONAL, e é o updater que importa — PAR-01a-ii-fix1.
+   * Quem resolve a função é o `useState` do PAI, sobre o estado VIVO. Resolvê-la aqui, sobre o
+   * `value` que este render recebeu, foi o defeito: ver a nota do `setClassificacao` abaixo.
+   */
+  onChange: (proximo: ClassificacaoValor | ((anterior: ClassificacaoValor) => ClassificacaoValor)) => void;
   classificacoes: ClassificacaoItem[];
   safras?: Safra[];
   /** A competência que dispara a sugestão de safra. */
@@ -94,9 +99,17 @@ export function ClassificacaoLancamento({
   /* ⚠ O ADAPTADOR QUE FEZ ESTE PR SER UM *MOVE*: com `setClassificacao` aqui e os campos
      desestruturados com os nomes antigos, os handlers e o JSX abaixo entraram VERBATIM, sem uma
      edição. Reescrevê-los para `onChange({...value, x})` em cada ponto seria a chance de errar
-     um — e este PR não pode mudar comportamento. */
+     um — e este PR não pode mudar comportamento.
+     ⚠ ELE SÓ REPASSA, E ISSO É O CONSERTO — PAR-01a-ii-fix1. Antes ele resolvia a função aqui:
+     `onChange(fn(value))`. E `value` é o do CLOSURE deste render — não o estado vivo do pai.
+     No primeiro mount (a `key` remonta este bloco a cada abertura), `value` ainda é o vazio: o
+     efeito de sugestão rodava, fazia `fn(vazio)` e devolvia ao pai o objeto VAZIO inteiro com só
+     a `safra_id` trocada — apagando os dez campos que a hidratação tinha acabado de pôr. O modal
+     abria em branco sobre um lançamento cheio.
+     ⚠ QUEM RESOLVE AGORA É O `useState` DO PAI, que aplica o updater sobre o valor mais recente.
+     O `...c` de cada handler passa a mesclar com o estado vivo, não com uma foto velha. */
   const setClassificacao = (fn: ClassificacaoValor | ((c: ClassificacaoValor) => ClassificacaoValor)) =>
-    onChange(typeof fn === 'function' ? fn(value) : fn);
+    onChange(fn);
   const {
     atividade, safra_id: safraId, cultura, fase, subcentro,
     macro_custo: macroCusto, grupo_custo: grupoCusto, centro_custo: centroCusto,
