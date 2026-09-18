@@ -407,15 +407,27 @@ export function montarMesa(data: EspelhadosReais, internos: ReadonlySet<string>)
     d.sistema += s.valor_assinado;
   }
 
-  /* ⚠ O CANDIDATO ENTRA NO DIA QUE JÁ EXISTE, e NUNCA cria um — PR-ESPELHO-CANDIDATOS-POR-
-     DATA-05. Usa `dias.get`, não o helper `dia()`: criar dia a partir de candidato encheria a
-     mesa de datas sem nenhum movimento do banco, e a mesa é do EXTRATO. Quem não acha dia é
-     vencido de outro mês, e o render o mostra na faixa do fim.
-     ⚠ A CHAVE É A MESMA DO MAPA (`?? 'sem-data'`), senão candidato sem vencimento nunca casaria
-     com o dia sem data. */
+  /**
+   * ⚠ O RECORTE É VENCIDO × A VENCER — PR-ESPELHO-VENCIDOS-NO-TOPO-08, e ele SUBSTITUI o
+   * critério anterior ("tem dia no extrato ou não"), de PR-ESPELHO-CANDIDATOS-POR-DATA-05.
+   *
+   * O critério antigo misturava duas coisas numa faixa só: o agendado de 25/09 (futuro, 591 mil)
+   * caía ao lado do previsto vencido de 05/06, porque nenhum dos dois tinha movimento do banco
+   * na sua data — e a faixa ordenava por valor, então o futuro aparecia ACIMA do atrasado. Ter
+   * ou não OFX no mesmo dia é acidente do extrato; vencer ou não é fato do lançamento, e é o
+   * que o operador decide em cima.
+   *
+   * ⚠ A VENCER CRIA O DIA (`dia()`, não `dias.get`): o agendado de 25/09 vira um bloco próprio,
+   * na posição cronológica do corpo, mesmo sem nenhum movimento do banco naquela data. Era
+   * justamente o que o critério antigo impedia.
+   * ⚠ VENCIDO NÃO ENTRA EM DIA NENHUM: ele é do passado e não pertence ao fluxo deste mês —
+   * vai para a faixa do topo, onde o render o mostra sob demanda.
+   * ⚠ E NADA DISSO SOMA em `d.banco`/`d.sistema`: candidato segue fora do subtotal, como desde
+   * o primeiro PR. O "confere" dos dias com OFX não muda.
+   */
   for (const c of data.sistema_candidatos ?? []) {
-    const alvo = dias.get(c.data_vencimento ?? 'sem-data');
-    if (alvo) alvo.candidatos.push(c);
+    if (c.vencido) continue;
+    dia(c.data_vencimento).candidatos.push(c);
   }
 
   const lista = [...dias.values()].sort((a, b) => (a.data ?? '') < (b.data ?? '') ? -1 : (a.data ?? '') > (b.data ?? '') ? 1 : 0);
@@ -764,6 +776,11 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
      desconsiderar seria uma porta sem volta dentro desta tela — e uma decisão que não se
      desfaz onde foi tomada é uma decisão que o operador evita tomar. */
   const [verIgnorados, setVerIgnorados] = useState(false);
+  /* ⚠ COMEÇA OCULTO — PR-ESPELHO-VENCIDOS-NO-TOPO-08. O vencido é do passado e não pertence ao
+     fluxo do mês que se está conferindo; aberto por padrão, ele empurraria o dia 01 para baixo
+     da dobra em toda abertura da tela. A contagem no rótulo é o que garante que ele não some:
+     "Mostrar vencidos (7)" informa mesmo fechado. */
+  const [mostrarVencidos, setMostrarVencidos] = useState(false);
   /* ⚠ UM LUGAR SÓ DECIDE — PR-CONCILIACAO-5-ABAS-01. Com a lista vazia somem de uma vez a
      faixa, as linhas e os candidatos do `sisIndex` (nada de marcar ou arrastar candidato). */
   const candidatos = useMemo(
@@ -771,25 +788,25 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
     [data, mostrarCandidatos]);
 
   /**
-   * Os candidatos que NÃO acharam dia na mesa — PR-ESPELHO-CANDIDATOS-POR-DATA-05.
+   * OS VENCIDOS — PR-ESPELHO-VENCIDOS-NO-TOPO-08. O que já passou da data e continua em aberto.
    *
-   * ⚠ DERIVADO DO QUE A MESA AGRUPOU, e não de uma segunda regra de data: o órfão é, por
-   * definição, quem sobrou depois que `montarMesa` distribuiu. Reimplementar aqui o "tem dia?"
-   * criaria a segunda régua, e as duas divergiriam no dia em que a primeira mudasse.
-   * ⚠ NA PRÁTICA SÃO OS VENCIDOS DE MESES ANTERIORES: o dia deles não existe nesta mesa porque
-   * o extrato do mês não tem movimento naquela data. Sem esta faixa eles sumiriam da tela — e
-   * some justamente o que está atrasado.
+   * ⚠ A ORDEM É CRONOLÓGICA, E ISSO É O CONSERTO. A faixa anterior ordenava só por VALOR,
+   * atravessando datas — e aí dois "−3.671,00 Folha", um de 05/06 e outro de 05/07, apareciam
+   * colados sem nada dizendo que eram dois meses diferentes. Numa lista de atraso, QUANDO venceu
+   * é a informação; o valor só desempata.
+   * ⚠ DUAS PASSADAS, NÃO UM COMPARADOR NOVO: primeiro a `ordenar` da casa (entrada antes de
+   * saída, maior primeiro), depois um `sort` estável por data ascendente. O `Array#sort` do JS é
+   * estável desde o ES2019, então a ordem de valor sobrevive dentro de cada data — que é
+   * exatamente a régua das outras linhas do mesmo dia.
    */
-  const candidatosOrfaos = useMemo(() => {
+  const vencidos = useMemo(() => {
     if (!mostrarCandidatos) return [];
-    const agrupados = new Set(dias.flatMap((d) => d.candidatos.map((c) => c.lancamento_id)));
-    /* ⚠ OS ÓRFÃOS SEGUEM A MESMA RÉGUA — PR-ESPELHO-CANDIDATOS-ORDEM-06. Eles são de dias
-       diferentes, então aqui a ordenação por valor atravessa datas; é o que se quer numa faixa
-       que existe para mostrar o que está atrasado — o maior primeiro. */
-    return ordenar(
-      (data.sistema_candidatos ?? []).filter((c) => !agrupados.has(c.lancamento_id)),
+    const doMaiorParaOMenor = ordenar(
+      (data.sistema_candidatos ?? []).filter((c) => c.vencido),
       (c) => c.valor_assinado);
-  }, [dias, data, mostrarCandidatos]);
+    return [...doMaiorParaOMenor].sort((a, b) =>
+      (a.data_vencimento ?? '').localeCompare(b.data_vencimento ?? ''));
+  }, [data, mostrarCandidatos]);
   const [ignorarId, setIgnorarId] = useState<string | null>(null);
   const [revertendoId, setRevertendoId] = useState<string | null>(null);
   const { data: ignorados, refetch: refetchIgnorados } = useQuery({
@@ -1034,6 +1051,35 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
             </tr>
           </thead>
           <tbody>
+            {/* ═══ VENCIDOS — NO TOPO, CRONOLÓGICOS, FECHADOS POR PADRÃO ═══════════════════
+                ⚠ ELES SUBIRAM DO FIM PARA CÁ — PR-ESPELHO-VENCIDOS-NO-TOPO-08. Atraso se lê
+                antes, não depois: quem abre a conferência precisa saber que há coisa vencida
+                ANTES de decidir o que fazer com o mês corrente, e no fim da mesa isso ficava
+                atrás de trinta dias de movimento.
+                ⚠ E FECHADO POR PADRÃO, com a contagem no rótulo: aberto, ele empurraria o dia 01
+                para baixo da dobra em toda abertura. Fechado, ele AVISA sem ocupar — que é o que
+                uma lista de pendência antiga deve fazer numa tela de conferir o mês. */}
+            {vencidos.length > 0 && (
+              <tr className="h-[22px] bg-amber-50 border-b border-amber-200 dark:bg-amber-950/20 dark:border-amber-900">
+                <td colSpan={4} />
+                <td className={MEIO} />
+                <td colSpan={4} className="px-[5px]">
+                  <label className="flex cursor-pointer items-center gap-1.5 text-[10px] font-medium text-amber-900 dark:text-amber-200">
+                    <input type="checkbox" className="h-3 w-3 cursor-pointer"
+                      checked={mostrarVencidos}
+                      onChange={(e) => setMostrarVencidos(e.target.checked)} />
+                    Mostrar vencidos ({vencidos.length})
+                    <span className="font-normal opacity-70">— em aberto de meses anteriores</span>
+                  </label>
+                </td>
+              </tr>
+            )}
+            {mostrarVencidos && vencidos.map((c) => (
+              <LinhaCandidato key={c.lancamento_id} c={c}
+                marcado={marcado('lancamentos', c.lancamento_id)}
+                onMarcar={() => alterna('lancamentos', c.lancamento_id)} onAbrir={onAbrir} />
+            ))}
+
             {dias.map((d) => (
               <React.Fragment key={d.data ?? 'sem-data'}>
                 <tr className="bg-muted/40 h-4">
@@ -1202,6 +1248,17 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
                     onMarcar={() => alterna('lancamentos', c.lancamento_id)} onAbrir={onAbrir} />
                 ))}
 
+                {/* ⚠ DIA SÓ DE CANDIDATO NÃO TEM O QUE FECHAR — PR-ESPELHO-VENCIDOS-NO-TOPO-08.
+                    Com os "a vencer" criando o próprio dia (o 25/09 sem OFX, por exemplo), passou
+                    a existir dia com ZERO linha realizada. Uma linha de "fechamento 25/09" ali
+                    diria `0,00 · 0,00 · confere` — e um "confere" sobre um dia em que nada
+                    aconteceu é a afirmação mais vazia que esta tela poderia fazer: ela parece
+                    conferência e não conferiu nada.
+                    ⚠ O TESTE É PELAS LINHAS REALIZADAS, não pelos totais: um dia pode fechar em
+                    zero tendo movimento (entrada e saída que se anulam), e esse fecha de verdade.
+                    Olhar `banco === 0 && sistema === 0` esconderia justamente esse caso. */}
+                {(d.pareados.length > 0 || d.paredosN1.length > 0 || d.extratosSemPar.length > 0
+                  || d.lancsSemPar.length > 0 || d.internas.length > 0) && (
                 <tr className="h-[22px] bg-primary/10 border-t border-b border-border">
                   <td colSpan={3} className={cn(CEL, 'text-[11px] font-semibold text-primary')}>fechamento {fmtData(d.data)}</td>
                   <td className={cn(CEL, 'text-right text-[11px] font-semibold tabular-nums text-primary')}>{fmtBRL(d.banco)}</td>
@@ -1219,30 +1276,10 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
                       : <span className="text-amber-600">diferença {fmtBRL(d.banco - d.sistema)}</span>}
                   </td>
                 </tr>
+                )}
               </React.Fragment>
             ))}
 
-            {/* ⚠ O POOL "candidatos do sistema (N)" MORREU AQUI — PR-ESPELHO-CANDIDATOS-POR-DATA-05.
-                Ele juntava TODOS os candidatos no fim da mesa, depois de todos os dias; agora cada
-                um vive no dia em que vence, ao lado do extrato daquele dia. O que sobra nesta
-                faixa é só quem NÃO achou dia: vencido de mês anterior, sem movimento do banco na
-                mesma data. Esse não tem vizinhança para ocupar, e some se não tiver casa própria.
-                ⚠ A FAIXA MUDOU DE NOME junto com o recorte: dizer "candidatos do sistema" sobre
-                uma lista que é só de vencidos órfãos seria descrever o conjunto antigo. */}
-            {candidatosOrfaos.length > 0 && (
-              <tr className="h-4 bg-muted/40">
-                <td colSpan={4} />
-                <td className={MEIO} />
-                <td colSpan={4} className="px-[5px] text-[10px] font-medium text-muted-foreground">
-                  vencidos em aberto — sem dia no extrato ({candidatosOrfaos.length})
-                </td>
-              </tr>
-            )}
-            {candidatosOrfaos.map((c) => (
-              <LinhaCandidato key={c.lancamento_id} c={c}
-                marcado={marcado('lancamentos', c.lancamento_id)}
-                onMarcar={() => alterna('lancamentos', c.lancamento_id)} onAbrir={onAbrir} />
-            ))}
           </tbody>
         </table>
       </div>
