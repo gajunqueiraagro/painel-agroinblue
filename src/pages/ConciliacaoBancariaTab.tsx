@@ -3,7 +3,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { PainelExtratoMes } from '@/components/conciliacao/PainelExtratoMes';
-import { ExtratoDoMesInline } from '@/components/conciliacao/TabelaExtratoDoMes';
 import { AcoesDoMes } from '@/components/conciliacao/AcoesDoMes';
 import { SaldoRealDialog } from '@/components/conciliacao/SaldoRealDialog';
 import { EspelhoOfxSistemaModal, EspelhoConciliacaoTab } from '@/components/financeiro-v2/EspelhoConciliacaoTab';
@@ -1182,23 +1181,6 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
               contaNome={contaAtual}
             />
 
-            {/* ⚠ O PASSO 1 PASSA A MOSTRAR O EXTRATO — PR-IMPORTAR-VER-EXTRATO-01. A aba promete
-                "confira se o extrato do mês está completo" e até aqui entregava quatro números e
-                uma faixa: o extrato em si só existia dentro do modal da aba seguinte. Não dá para
-                conferir sem ver.
-                ⚠ É A MESMA PEÇA DO ESPELHO, não uma segunda tabela — `TabelaExtratoDoMes` saiu de
-                lá inteira neste PR, e as duas telas montam a mesma. Duas listas do mesmo extrato
-                divergiriam na primeira mudança de regra.
-                ⚠ INLINE, NÃO MODAL: conferir numa janela que se fecha não é conferir — e o corpo
-                desta aba tinha 623px vazios logo abaixo do portão do saldo, medidos.
-                ⚠ E ELA ROLA COM A ABA (`rolagem="da-pagina"`): o corpo daqui já é o scrollport, e
-                uma segunda barra quebraria a regra do scrollport único. */}
-            <ExtratoDoMesInline
-              key={`extrato-${refreshExtrato}`}
-              clienteId={clienteAtual?.id ?? null}
-              contaId={selectedConta !== '__all__' ? selectedConta : null}
-              anoMes={`${ano}-${selectedMes}`}
-            />
           </div>
         )}
 

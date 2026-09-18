@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { FileText, Pencil } from 'lucide-react';
+import { FileText, ListOrdered, Pencil } from 'lucide-react';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import {
   useConciliacaoDoMes, useSugestoesDoMes, contarBaldes, frameDoRodape,
@@ -9,6 +9,7 @@ import {
 import { useSaldoGerencialDoMes, useSaldoSistemaNaPosicao, useImportacoesDaConta, importacoesDoMes, useSaldoDeclaradoOfx } from '@/hooks/useExtratoDaConta';
 import { SaldoRealDialog } from '@/components/conciliacao/SaldoRealDialog';
 import { ImportacoesDialog } from '@/components/conciliacao/ImportacoesDialog';
+import { ExtratoDoMesModal } from '@/components/conciliacao/TabelaExtratoDoMes';
 
 /**
  * PainelExtratoMes — o cabeçalho do "Extrato do mês": a conta, a contagem, as três portas do mês
@@ -41,6 +42,7 @@ interface Props {
 
 export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comPlacar }: Props) {
   const [verImportacoes, setVerImportacoes] = useState(false);
+  const [verExtrato, setVerExtrato] = useState(false);
   const [balde, setBalde] = useState<'todos' | SituacaoMovimento | 'match_direto' | 'provavel' | 'ambiguo' | 'sem_match'>('todos');
 
   const { movimentos, recarregar } = useConciliacaoDoMes(clienteId, contaId, ano, mes);
@@ -121,6 +123,27 @@ export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comP
           <FileText className="h-3 w-3" />
           {/* O número é o da lista do modal: ativas do mês (PR-IMPORTACOES-MES-01). */}
           Ver importações ({importacoesDoMes(importacoes.importacoes, `${ano}-${String(mes).padStart(2, '0')}`).ativas.length})
+        </Button>
+        {/* ⚠ O EXTRATO VOLTOU A SER SOB DEMANDA — PR-IMPORTAR-EXTRATO-MODAL-01. Ele nasceu inline
+            no corpo desta aba (PR-IMPORTAR-VER-EXTRATO-01) por argumento meu, e a tela desmentiu o
+            argumento: com 35 linhas a tabela tomava a aba inteira e empurrava para fora do campo
+            de visão o portão do saldo e os quatro números — exatamente a conferência que ela
+            deveria apoiar.
+            ⚠ AO LADO DE "VER IMPORTAÇÕES" DE PROPÓSITO: as duas respondem à mesma família de
+            pergunta do passo 1 — "o que entrou?" (os arquivos) e "o que entrou?" (as linhas) —, e
+            quem procura uma procura a outra.
+            ⚠ O NÚMERO É O QUE A LINHA AO LADO JÁ DIZ (`movimentos.length`), e não uma segunda
+            leitura: dois contadores para "quantos movimentos tem o mês" divergiriam no primeiro
+            cancelamento. */}
+        <Button type="button" variant="outline" size="sm"
+          className="h-6 gap-1 px-2 text-[10px]"
+          disabled={!clienteId || !contaId}
+          title={!contaId
+            ? 'Escolha uma conta na régua para ver o extrato.'
+            : 'Ver o extrato do mês linha a linha, com o saldo correndo até fechar com o banco.'}
+          onClick={() => setVerExtrato(true)}>
+          <ListOrdered className="h-3 w-3" />
+          Ver o extrato ({movimentos.length})
         </Button>
         {/* ⚠ "CONCILIAR O MÊS" E "VER O MÊS" SAÍRAM DAQUI — PR-CONCILIACAO-PASSOS-01, e a razão é
             de produto: eles CONCILIAM, e esta aba é a de IMPORTAR. O operador entrava para
@@ -311,6 +334,12 @@ export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comP
       {comPlacar && (
         <div className="px-3 py-1.5 text-[10px] text-muted-foreground">{frameDoRodape(contagem)}</div>
       )}
+
+      <ExtratoDoMesModal
+        clienteId={clienteId} contaId={contaId} contaNome={contaNome}
+        anoMes={`${ano}-${String(mes).padStart(2, '0')}`}
+        aberto={verExtrato} aoFechar={() => setVerExtrato(false)}
+      />
 
       <ImportacoesDialog
         aberto={verImportacoes} aoFechar={() => setVerImportacoes(false)}

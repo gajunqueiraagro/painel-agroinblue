@@ -200,7 +200,18 @@ export function TabelaExtratoDoMes({ ofx, inicial, internas, rolagem = 'propria'
        o `overflow-y-auto` nunca ganha barra — a página inteira é que rolaria. */
     <div className={cn('border-t px-3.5 text-[10px]',
       rolagem === 'propria' && 'min-h-0 flex-1 overflow-y-auto')}>
-      <div className={cn('grid gap-1 font-semibold text-muted-foreground border-b pb-0.5 sticky top-0 bg-card', colunas)}>
+      {/* ⚠ O CABEÇALHO FIXO GANHOU `z` EXPLÍCITO — PR-IMPORTAR-EXTRATO-MODAL-01, A21: em lista
+          com rolagem, cabeçalho e totais ficam parados e só o corpo anda. O rodapé já tinha
+          `z-[2]` desde o PR anterior; o topo não tinha nenhum, e dependia da regra implícita de
+          que um elemento posicionado cobre os não-posicionados. Regra implícita é a que quebra
+          quando alguém acrescenta um badge posicionado numa célula.
+          ⚠ O FUNDO É OPACO E ISSO FOI CONFERIDO NO TOKEN, não presumido: `--card: 0 0% 100%`,
+          sem alpha. É a mesma lição do rodapé, que era `bg-muted/40` e deixava as linhas
+          aparecerem por baixo do total.
+          ⚠ SEM MARGEM NEGATIVA LATERAL (A21): o container tem `px-3.5`, e resolver a faixa dos
+          lados com `-mx-3.5` comeria as bordas do cartão. O eixo vertical é o único em que a
+          compensação é segura, e aqui nem ele é necessário. */}
+      <div className={cn('grid gap-1 font-semibold text-muted-foreground border-b pb-0.5 sticky top-0 z-[3] bg-card', colunas)}>
         <span>Data</span><span>Histórico</span><span>Documento</span><span className="text-right">Valor</span><span className="text-right">Saldo</span><span>Status</span>
         {aoMarcarDuplicado && <span />}
       </div>
@@ -282,18 +293,34 @@ export function TabelaExtratoDoMes({ ofx, inicial, internas, rolagem = 'propria'
 }
 
 /**
- * O EXTRATO DO MÊS PRONTO PARA MONTAR — a aba Importar precisa de uma linha, não de três hooks.
+ * O EXTRATO DO MÊS, NUM MODAL — PR-IMPORTAR-EXTRATO-MODAL-01.
+ *
+ * ⚠ ELE ERA INLINE NO CORPO DA ABA, e o argumento que o pôs lá era MEU: "conferir numa janela
+ * que se fecha não é conferir". O argumento não sobreviveu à tela. Com 35 linhas a tabela toma
+ * a aba inteira e empurra para fora do campo de visão o portão do saldo e os quatro números —
+ * ou seja, empurra para fora justamente a conferência que ela deveria apoiar. Quem decidiu foi
+ * o uso, não a teoria: a tabela é CONSULTA sob demanda, e o que fica na aba é o veredito.
+ * ⚠ E A LIÇÃO VALE ALÉM DESTE PR: "não pode ser modal porque conferir exige permanência" era
+ * uma regra plausível e errada. O que exige permanência é o RESULTADO da conferência (fecha ou
+ * não fecha, quantos movimentos, qual saldo), e ele continua na aba. O detalhe linha a linha é
+ * o que se abre quando o resultado não convence.
  *
  * ⚠ OS HOOKS FICAM AQUI, e não na tela: são dois (`useExtratoDoMesEspelhado` e
  * `useEspelhoInternas`) e nascem sempre juntos — a tabela não sabe abrir o saldo sem o
- * consolidado das contas internas. Espalhá-los pela `ConciliacaoBancariaTab` daria à tela
- * duas leituras para guardar e nenhuma para usar sozinha.
+ * consolidado das contas internas.
+ * ⚠ DENTRO DO MODAL A ROLAGEM É `propria`, e não mais `da-pagina`: o modal tem altura fixa
+ * (`h-[88vh]`) e a lista é o único scrollport dele, que é a receita do A21 — e é assim que o
+ * cabeçalho gruda no topo da LISTA, à vista, em vez de grudar no topo de uma aba que rola por
+ * outro motivo. A prop continua existindo porque o Espelho usa o mesmo modo.
  * ⚠ CADA ESTADO TEM A SUA FRASE, e nenhuma delas é "—": sem conta escolhida, carregando,
  * falhou e mês vazio dizem coisas diferentes, e é o passo 1 — conferir se o extrato chegou
  * completo — que depende de saber qual dos quatro é.
  */
-export function ExtratoDoMesInline({ clienteId, contaId, anoMes }: {
+export function ExtratoDoMesModal({ clienteId, contaId, anoMes, contaNome, aberto, aoFechar }: {
   clienteId: string | null; contaId: string | null; anoMes: string;
+  contaNome: string;
+  aberto: boolean;
+  aoFechar: () => void;
 }) {
   const { data, isLoading, error } = useExtratoDoMesEspelhado(clienteId, contaId, anoMes);
   const internas = useEspelhoInternas(clienteId, contaId, anoMes);
@@ -301,93 +328,112 @@ export function ExtratoDoMesInline({ clienteId, contaId, anoMes }: {
   const [alvo, setAlvo] = useState<EspOfx | null>(null);
   const [verCancelados, setVerCancelados] = useState(false);
 
-  if (!clienteId || !contaId) {
-    return (
-      <div className="rounded-md border border-dashed bg-muted/10 px-3 py-6 text-center text-[11px] text-muted-foreground">
+  /* ⚠ OS QUATRO ESTADOS VIRARAM MIOLO DO MODAL, e não `return` antecipado: o diálogo precisa
+     existir para poder ser fechado. Um `return` antes do `<Dialog>` faria o modal sumir da
+     árvore em vez de fechar, e o `aoFechar` do pai nunca rodaria. */
+  const miolo = () => {
+    if (!clienteId || !contaId) {
+      return <p className="px-4 py-10 text-center text-[11px] text-muted-foreground">
         Escolha uma conta no cabeçalho para ver o extrato do mês.
-      </div>
-    );
-  }
-  if (isLoading) {
-    return <div className="rounded-md border px-3 py-6 text-center text-[11px] text-muted-foreground">Lendo o extrato do mês…</div>;
-  }
-  if (error || !data) {
-    /* ⚠ A MENSAGEM DO BANCO VAI JUNTO, no `title`: um "não consegui" mudo é o defeito que o
-       PR-PALCO-ERRO-VISIVEL-01 acabou de tirar da tela vizinha. */
-    return (
-      <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-6 text-center text-[11px] text-destructive"
+      </p>;
+    }
+    if (isLoading) {
+      return <p className="flex items-center justify-center gap-2 px-4 py-10 text-[11px] text-muted-foreground">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Lendo o extrato do mês…
+      </p>;
+    }
+    if (error || !data) {
+      /* ⚠ A MENSAGEM DO BANCO VAI JUNTO, no `title`: um "não consegui" mudo é o defeito que o
+         PR-PALCO-ERRO-VISIVEL-01 acabou de tirar da tela vizinha. */
+      return <p className="px-4 py-10 text-center text-[11px] text-destructive"
         title={error instanceof Error ? error.message : undefined}>
         Não foi possível ler o extrato deste mês.
-      </div>
-    );
-  }
-  if (data.ofx.length === 0) {
+      </p>;
+    }
+    if (data.ofx.length === 0) {
+      return <p className="px-4 py-10 text-center text-[11px] text-muted-foreground">
+        Nenhum movimento importado neste mês — importe o OFX na aba.
+      </p>;
+    }
     return (
-      <div className="rounded-md border border-dashed bg-muted/10 px-3 py-6 text-center text-[11px] text-muted-foreground">
-        Nenhum movimento importado neste mês — importe o OFX acima.
-      </div>
-    );
-  }
-  return (
-    <div className="rounded-md border bg-card">
-      <div className="px-3.5 py-1.5 text-[11px] font-medium">
-        O extrato do mês, como o banco mandou
-        <span className="ml-1.5 text-[10px] font-normal text-muted-foreground">
-          {data.ofx.length} movimento{data.ofx.length === 1 ? '' : 's'} · o saldo corre linha a linha até fechar com o banco
-        </span>
-      </div>
-      <TabelaExtratoDoMes ofx={data.ofx} inicial={data.inicial} internas={internas} rolagem="da-pagina"
-        aoMarcarDuplicado={setAlvo} />
+      <>
+        <TabelaExtratoDoMes ofx={data.ofx} inicial={data.inicial} internas={internas}
+          rolagem="propria" aoMarcarDuplicado={setAlvo} />
 
-      {/* ═══ OS CANCELADOS DO MÊS ══════════════════════════════════════════════════════
-          ⚠ ELES PRECISAM TER ONDE APARECER, e este é o lugar: o operador que acabou de tirar
-          uma linha do extrato tem de poder conferir o que tirou, aqui mesmo, sem trocar de
-          tela. O único lugar que mostrava cancelados era o "ver canceladas (N)" do modal de
-          importações — e aquilo responde por ARQUIVO, que é outra pergunta.
-          ⚠ FECHADO POR PADRÃO e sem existir quando não há nenhum: num mês limpo, uma linha
-          dizendo "0 cancelados" seria ruído permanente para a exceção. */}
-      {api.cancelados.length > 0 && (
-        <div className="border-t">
-          <button type="button"
-            className="flex w-full items-center gap-1 px-3.5 py-1 text-left text-[10px] text-muted-foreground hover:bg-muted/40"
-            aria-expanded={verCancelados}
-            onClick={() => setVerCancelados(v => !v)}>
-            {verCancelados ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-            {api.cancelados.length} movimento{api.cancelados.length === 1 ? '' : 's'} cancelado{api.cancelados.length === 1 ? '' : 's'} neste mês
-            <span className="text-[10px] opacity-70">— fora do saldo e da conciliação</span>
-          </button>
-          {verCancelados && (
-            <div className="border-t bg-muted/20 px-3.5 py-1 text-[10px]">
-              {api.cancelados.map(c => (
-                <div key={c.id} className="flex items-center gap-2 border-b border-border/40 py-0.5 last:border-b-0">
-                  <span className="w-[44px] shrink-0 text-muted-foreground">{fmtData(c.data)}</span>
-                  <span className="min-w-0 flex-1 truncate line-through opacity-70" title={c.descricao ?? ''}>
-                    {c.descricao ?? '—'}
-                  </span>
-                  <span className="shrink-0 italic text-muted-foreground">{c.motivo ?? '—'}</span>
-                  <span className={cn('w-[92px] shrink-0 text-right tabular-nums line-through opacity-70', corValReal(c.valor))}>
-                    {fmtBRL(c.valor)}
-                  </span>
-                  {/* ⚠ A VOLTA EXISTE — e é o que separa este PR de repetir o defeito que ele
-                      veio corrigir. Cancelar sem desfazer devolveria o operador a depender de
-                      quem tem acesso ao banco, que foi a queixa de origem. */}
-                  <Button type="button" variant="ghost" size="sm"
-                    className="h-4 shrink-0 gap-1 px-1 text-[10px]"
-                    disabled={api.gravando}
-                    title="Trazer o movimento de volta para o extrato do mês"
-                    aria-label={`Trazer de volta o movimento de ${fmtData(c.data)}, ${fmtBRL(c.valor)}`}
-                    onClick={async () => {
-                      const ok = await api.reverter(c.id);
-                      toast[ok ? 'success' : 'error'](ok ? 'Movimento de volta no extrato.' : (api.erro ?? 'Não foi possível reverter.'));
-                    }}>
-                    <Undo2 className="h-3 w-3" /> voltar
-                  </Button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+        {/* ═══ OS CANCELADOS DO MÊS ══════════════════════════════════════════════════════
+            ⚠ ELES PRECISAM TER ONDE APARECER, e este é o lugar: o operador que acabou de tirar
+            uma linha do extrato tem de poder conferir o que tirou, aqui mesmo, sem trocar de
+            tela. O único lugar que mostrava cancelados era o "ver canceladas (N)" do modal de
+            importações — e aquilo responde por ARQUIVO, que é outra pergunta.
+            ⚠ FECHADO POR PADRÃO e sem existir quando não há nenhum: num mês limpo, uma linha
+            dizendo "0 cancelados" seria ruído permanente para a exceção.
+            ⚠ E FORA DO SCROLLPORT (`shrink-0`), abaixo da lista: ele é rodapé de conferência,
+            não conteúdo — some da vista se rolar junto, que é o defeito que o total teve. */}
+        {api.cancelados.length > 0 && (
+          <div className="max-h-[22vh] shrink-0 overflow-y-auto border-t">
+            <button type="button"
+              className="sticky top-0 z-[2] flex w-full items-center gap-1 bg-card px-3.5 py-1 text-left text-[10px] text-muted-foreground hover:bg-muted/40"
+              aria-expanded={verCancelados}
+              onClick={() => setVerCancelados(v => !v)}>
+              {verCancelados ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+              {api.cancelados.length} movimento{api.cancelados.length === 1 ? '' : 's'} cancelado{api.cancelados.length === 1 ? '' : 's'} neste mês
+              <span className="text-[10px] opacity-70">— fora do saldo e da conciliação</span>
+            </button>
+            {verCancelados && (
+              <div className="border-t bg-muted/20 px-3.5 py-1 text-[10px]">
+                {api.cancelados.map(c => (
+                  <div key={c.id} className="flex items-center gap-2 border-b border-border/40 py-0.5 last:border-b-0">
+                    <span className="w-[44px] shrink-0 text-muted-foreground">{fmtData(c.data)}</span>
+                    <span className="min-w-0 flex-1 truncate line-through opacity-70" title={c.descricao ?? ''}>
+                      {c.descricao ?? '—'}
+                    </span>
+                    <span className="shrink-0 italic text-muted-foreground">{c.motivo ?? '—'}</span>
+                    <span className={cn('w-[92px] shrink-0 text-right tabular-nums line-through opacity-70', corValReal(c.valor))}>
+                      {fmtBRL(c.valor)}
+                    </span>
+                    {/* ⚠ A VOLTA EXISTE — e é o que separa este PR de repetir o defeito que ele
+                        veio corrigir. Cancelar sem desfazer devolveria o operador a depender de
+                        quem tem acesso ao banco, que foi a queixa de origem. */}
+                    <Button type="button" variant="ghost" size="sm"
+                      className="h-4 shrink-0 gap-1 px-1 text-[10px]"
+                      disabled={api.gravando}
+                      title="Trazer o movimento de volta para o extrato do mês"
+                      aria-label={`Trazer de volta o movimento de ${fmtData(c.data)}, ${fmtBRL(c.valor)}`}
+                      onClick={async () => {
+                        const ok = await api.reverter(c.id);
+                        toast[ok ? 'success' : 'error'](ok ? 'Movimento de volta no extrato.' : (api.erro ?? 'Não foi possível reverter.'));
+                      }}>
+                      <Undo2 className="h-3 w-3" /> voltar
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </>
+    );
+  };
+
+  return (
+    <>
+      {/* ⚠ A ALTURA É FIXA (`h-[88vh]`) E A CADEIA É A DO A21: `flex-col` → cabeçalho
+          `shrink-0` → lista `flex-1 min-h-0` com o único `overflow-y-auto`. É o que faz o
+          cabeçalho da tabela grudar no topo do que ROLA, e não no topo de uma aba que rola por
+          outro motivo. */}
+      <Dialog open={aberto} onOpenChange={o => { if (!o) aoFechar(); }}>
+        <DialogContent className="flex h-[88vh] max-h-[88vh] w-[94vw] max-w-[1200px] flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="shrink-0 space-y-0.5 border-b px-4 py-2.5 pr-10 text-left">
+            <DialogTitle className="text-[13px] font-semibold">
+              Extrato do mês · {contaNome || 'conta'}
+            </DialogTitle>
+            <p className="text-[11px] text-muted-foreground">
+              O que o banco mandou, linha a linha, com o saldo correndo até fechar. Nada aqui concilia.
+            </p>
+          </DialogHeader>
+          {miolo()}
+        </DialogContent>
+      </Dialog>
 
       <MarcarDuplicadoDialog
         alvo={alvo} aoFechar={() => setAlvo(null)}
@@ -398,7 +444,7 @@ export function ExtratoDoMesInline({ clienteId, contaId, anoMes }: {
           if (ok) { toast.success('Movimento marcado como duplicado — saiu do extrato do mês.'); setAlvo(null); }
         }}
       />
-    </div>
+    </>
   );
 }
 
