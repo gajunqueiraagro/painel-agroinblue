@@ -428,6 +428,11 @@ export function ContasPagarReceberTab() {
             .eq('cliente_id', clienteId)
             .eq('cancelado', false)
             .eq('cenario', 'realizado')
+            /* A mesma régua da consulta principal — ver a nota longa abaixo. Aqui o filtro é
+               comprovadamente NEUTRO (as 69 linhas da permuta do NJ são todas `realizado`, e o
+               acumulado segue 264.875,89); entra para as duas consultas não divergirem no dia
+               em que alguém lançar uma permuta programada. */
+            .eq('status_transacao', 'realizado')
             .or(`conta_bancaria_id.in.(${idsSemExtrato.join(',')}),`
               + `conta_destino_id.in.(${idsSemExtrato.join(',')})`)
             .order('id', { ascending: true })
@@ -466,6 +471,23 @@ export function ContasPagarReceberTab() {
           .eq('cliente_id', clienteId)
           .eq('cancelado', false)
           .eq('cenario', 'realizado')
+          /**
+           * ⚠ `status_transacao = 'realizado'` TAMBÉM — PR-CPR-2B.3.4, e é correção de SSoT.
+           * `cenario` e `status_transacao` são eixos diferentes: o primeiro separa realidade de
+           * planejamento, o segundo diz se a obrigação ACONTECEU. Existe linha com
+           * `cenario='realizado'` e `status='programado'` — planejada como real, mas não paga —
+           * e ela vinha para cá como se tivesse saído da conta.
+           * ⚠ ISSO FAZIA O CARD DISCORDAR DA TELA DE CONCILIAÇÃO, que sempre filtrou os dois
+           * (`ConciliacaoBancariaTab`: `.eq('status_transacao','realizado').eq('cenario',
+           * 'realizado')`). No NJ era UMA linha — "Revisão Hilux 6/6", R$ 859,84, saída da
+           * Caixa Carlos em 10/08, `programado`: ela sozinha impedia agosto de fechar naquela
+           * conta, arrastava o "conciliado até" do cliente inteiro de 31/08 para 31/07 e
+           * trocava o saldo âncora por um roll-forward de julho.
+           * ⚠ MEDIDO EM 19/09/2026: 2 linhas no NJ e 5 no Teste Cliente em seis meses; Vera,
+           * Santa Rita, Agnaldo e RRCC têm ZERO. Só o card do NJ muda — 1.832.544,83 →
+           * 1.833.404,67, que é o número que a Conciliação já mostrava.
+           */
+          .eq('status_transacao', 'realizado')
           .gte('data_pagamento', `${mesMinimo}-01`)
           .lte('data_pagamento', isoLocal(hoje))
           .order('id', { ascending: true })
