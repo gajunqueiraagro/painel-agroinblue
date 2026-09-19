@@ -7,7 +7,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  escalaSimetrica, montarFluxoPrevisto, passoRedondo, primeiroNegativo, rotuloDoDia,
+  combinarComPassado, escalaSimetrica, montarFluxoPrevisto, passoRedondo, primeiroNegativo, rotuloDoDia,
   rotuloDoMes, MAX_PONTOS_DIA, type LinhaFluxoPrevisto,
 } from './fluxoPrevisto';
 
@@ -283,5 +283,76 @@ describe('a área segue o SINAL da linha — PR-CPR-2B.2', () => {
     expect(nov.saldo).toBeLessThan(0);
     expect(nov.saldoPos).toBe(0);
     expect(nov.saldoNeg).toBe(nov.saldo);
+  });
+});
+
+describe('combinarComPassado — as três zonas — PR-CPR-2B.3', () => {
+  const DIA = { granularidade: 'dia' as const, hoje: HOJE };
+  const passado = [
+    { data: '2026-09-16', saldo: 300, conciliado: true },
+    { data: '2026-09-17', saldo: 300, conciliado: true },
+    { data: '2026-09-18', saldo: 250, conciliado: false },
+    { data: HOJE, saldo: 200, conciliado: false },
+  ];
+
+  it('as três zonas aparecem, na ordem, e hoje é UM ponto só', () => {
+    const fluxo = montarFluxoPrevisto([saida('2026-09-21', 50)], 200, DIA);
+    const linha = combinarComPassado(fluxo, passado, HOJE);
+    /* 16 e 17/09 conciliados, 18/09 a conferir, e o futuro Hoje + 19, 20, 21. */
+    expect(linha.map((p) => p.zona)).toEqual([
+      'conciliado', 'conciliado', 'realizado',
+      'previsto', 'previsto', 'previsto', 'previsto']);
+    expect(linha.filter((p) => p.rotulo === 'Hoje')).toHaveLength(1);
+  });
+
+  /**
+   * ⚠ SEM A PONTE A LINHA APARECERIA PARTIDA. Cada zona é uma série própria com
+   * `connectNulls={false}`; se a série do conciliado terminasse no seu último ponto, ficaria um
+   * vão de um segmento até onde a do realizado começa.
+   */
+  it('cada zona repete o primeiro ponto da seguinte, para os trechos se tocarem', () => {
+    const fluxo = montarFluxoPrevisto([saida('2026-09-21', 50)], 200, DIA);
+    const linha = combinarComPassado(fluxo, passado, HOJE);
+    const ultimoVerde = linha[1];
+    expect(ultimoVerde.saldoConciliado).toBe(300);
+    expect(ultimoVerde.saldoRealizado).toBe(300);
+    const ultimoAzul = linha[2];
+    expect(ultimoAzul.saldoRealizado).toBe(250);
+    expect(ultimoAzul.saldoPrevisto).toBe(250);
+  });
+
+  it('fora da sua zona, cada série é nula', () => {
+    const fluxo = montarFluxoPrevisto([saida('2026-09-21', 50)], 200, DIA);
+    const linha = combinarComPassado(fluxo, passado, HOJE);
+    expect(linha[0].saldoPrevisto).toBeNull();
+    expect(linha[linha.length - 1].saldoConciliado).toBeNull();
+  });
+
+  it('sem passado, a série inteira é prevista — como antes da 2B.3', () => {
+    const fluxo = montarFluxoPrevisto([saida('2026-09-21', 50)], 200, DIA);
+    const linha = combinarComPassado(fluxo, [], HOJE);
+    expect(linha.every((p) => p.zona === 'previsto')).toBe(true);
+  });
+
+  /** No mensal o passado vira um ponto por mês, senão oitenta dias esmagariam o futuro. */
+  it('no mensal o passado é reduzido ao último dia de cada mês', () => {
+    const fluxo = montarFluxoPrevisto([saida('2026-10-01', 50)], 200, MES);
+    const longo = [
+      { data: '2026-07-30', saldo: 900, conciliado: true },
+      { data: '2026-07-31', saldo: 800, conciliado: true },
+      { data: '2026-08-31', saldo: 500, conciliado: false },
+      { data: HOJE, saldo: 200, conciliado: false },
+    ];
+    const linha = combinarComPassado(fluxo, longo, HOJE);
+    expect(linha.map((p) => p.rotulo)).toEqual(['jul/26', 'ago/26', 'Hoje', 'out/26']);
+  });
+
+  it('a faixa é recalculada sobre a série inteira, incluindo os meses do passado', () => {
+    const fluxo = montarFluxoPrevisto([saida('2026-10-01', 50)], 200, DIA);
+    const comAgosto = [{ data: '2026-08-31', saldo: 300, conciliado: true }, ...passado];
+    const linha = combinarComPassado(fluxo, comAgosto, HOJE);
+    expect(linha[0].faixa).toBe('ago/26');
+    expect(linha[0].abreFaixa).toBe(true);
+    expect(linha.find((p) => p.faixa === 'set/26')?.abreFaixa).toBe(true);
   });
 });

@@ -19,12 +19,20 @@ import {
 } from 'recharts';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import {
-  escalaSimetrica, montarFluxoPrevisto, primeiroNegativo,
-  type Granularidade, type LinhaFluxoPrevisto, type PontoFluxo,
+  combinarComPassado, escalaSimetrica, montarFluxoPrevisto, primeiroNegativo,
+  type Granularidade, type LinhaFluxoPrevisto, type PontoLinha, type PontoPassadoEntrada,
+  type ZonaFluxo,
 } from '@/lib/financeiro/fluxoPrevisto';
 
 /* A paleta do painel do diesel — laranja no saldo, verde/vermelho nos movimentos. */
 const COR_SALDO = '#e8952f';
+/* As três zonas de tempo — PR-CPR-2B.3. */
+const COR_CONCILIADO = '#3f8f5e';
+const COR_REALIZADO = '#3b7ea1';
+
+function corDaZona(zona: ZonaFluxo): string {
+  return zona === 'conciliado' ? COR_CONCILIADO : zona === 'realizado' ? COR_REALIZADO : COR_SALDO;
+}
 const COR_ENTRADA = '#3f8f5e';
 const COR_SAIDA = '#c0392b';
 const COR_TEXTO = '#3a3a3a';
@@ -63,7 +71,7 @@ function fmtTag(v: number): string {
  */
 function TickEixoX({ x, y, payload, index, pontos, passoRotulo, faixaCabe }: {
   x?: number; y?: number; payload?: { value?: string | number }; index?: number;
-  pontos: readonly PontoFluxo[]; passoRotulo: number;
+  pontos: readonly PontoLinha[]; passoRotulo: number;
   faixaCabe: (faixa: string) => boolean;
 }) {
   const i = index ?? 0;
@@ -147,7 +155,7 @@ function TooltipFluxo({ active, label, payload }: TooltipProps) {
   );
 }
 
-export function CprFluxoPrevisto({ linhas, saldoInicial, caveat, granularidade, hoje }: {
+export function CprFluxoPrevisto({ linhas, saldoInicial, caveat, granularidade, hoje, passado }: {
   linhas: readonly LinhaFluxoPrevisto[];
   /** O mesmo "Saldo em caixa (estimado)" do card. `null` quando não há âncora. */
   saldoInicial: number | null;
@@ -157,11 +165,19 @@ export function CprFluxoPrevisto({ linhas, saldoInicial, caveat, granularidade, 
   granularidade: Granularidade;
   /** Hoje em ISO local — a série diária precisa dele para começar no dia certo. */
   hoje: string;
+  /**
+   * O passado, vindo de `serieDoSaldoPassado` — a MESMA cadeia que o card usa.
+   * ⚠ Ele fecha no total do card por construção (há teste). Um degrau visível em "hoje" é
+   * furo de conciliação no dado, nunca defeito de desenho.
+   */
+  passado: readonly PontoPassadoEntrada[];
 }) {
   const fluxo = useMemo(
     () => montarFluxoPrevisto(linhas, saldoInicial ?? 0, { granularidade, hoje }),
     [linhas, saldoInicial, granularidade, hoje]);
-  const { pontos, semVencimento, rebaixada, anteriores } = fluxo;
+  const { semVencimento, rebaixada, anteriores } = fluxo;
+  const pontos = useMemo(
+    () => combinarComPassado(fluxo, passado, hoje), [fluxo, passado, hoje]);
 
   /**
    * A largura medida do gráfico — é dela que sai o espaçamento dos rótulos.
@@ -195,13 +211,19 @@ export function CprFluxoPrevisto({ linhas, saldoInicial, caveat, granularidade, 
    * ⚠ UM PONTO POR DIA numa série de 90 dias vira um colar, e o olho perde exatamente o que a
    * bolinha deveria destacar. Marcam-se o início, o fim, o maior, o menor e a virada de sinal.
    */
-  const marcos = useMemo((): PontoFluxo[] => {
+  const marcos = useMemo((): PontoLinha[] => {
     if (pontos.length === 0) return [];
     const saldos = pontos.map((p) => p.saldo);
+    /* ⚠ AS VIRADAS DE ZONA SÃO MARCOS, e as mais importantes: o fim do conciliado e o "hoje"
+       são os dois pontos que o operador confere contra o card e contra a Conciliação. */
+    const fimConciliado = [...pontos].reverse().find((p) => p.zona === 'conciliado');
+    const emHoje = pontos.find((p) => p.rotulo === 'Hoje');
     const candidatos = [
       pontos[0], pontos[pontos.length - 1],
       pontos[saldos.indexOf(Math.max(...saldos))],
       pontos[saldos.indexOf(Math.min(...saldos))],
+      ...(fimConciliado ? [fimConciliado] : []),
+      ...(emHoje ? [emHoje] : []),
       ...(negativo ? [negativo] : []),
     ];
     /* Um ponto pode ser dois marcos ao mesmo tempo (o fim costuma ser o menor); dedup pela
@@ -233,8 +255,10 @@ export function CprFluxoPrevisto({ linhas, saldoInicial, caveat, granularidade, 
     );
   }
 
-  const inicial = pontos[0];
   const final = pontos[pontos.length - 1];
+  const emHoje = pontos.find((p) => p.rotulo === 'Hoje') ?? pontos[0];
+  /* O fim do conciliado ganha o próprio valor escrito: é o número que bate com a Conciliação. */
+  const fimConciliado = [...pontos].reverse().find((p) => p.zona === 'conciliado') ?? null;
 
   const MARGEM_ESQ = 8;
   const MARGEM_DIR = 96;
@@ -269,7 +293,27 @@ export function CprFluxoPrevisto({ linhas, saldoInicial, caveat, granularidade, 
         </p>
       </div>
 
-      <div ref={refPlot} className="min-h-0 flex-1 px-1 pb-1 pt-3">
+      {/* ⚠ LEGENDA PRÓPRIA, não a do recharts: ela precisa mostrar o TRACEJADO do previsto, e
+          o `<Legend>` desenha só um retângulo cheio por série — as três zonas sairiam iguais,
+          que é justamente o que a legenda existe para distinguir. */}
+      <div className="flex shrink-0 flex-wrap items-center gap-3 px-4 pt-2">
+        {([
+          { cor: COR_CONCILIADO, rotulo: 'Conciliado', tracejado: false },
+          { cor: COR_REALIZADO, rotulo: 'Realizado, a conferir', tracejado: false },
+          { cor: COR_SALDO, rotulo: 'Previsto', tracejado: true },
+        ] as const).map((z) => (
+          <span key={z.rotulo} className="flex items-center gap-1.5 text-[11px]"
+            style={{ color: COR_TEXTO }}>
+            <svg width="18" height="6" aria-hidden>
+              <line x1="0" y1="3" x2="18" y2="3" stroke={z.cor} strokeWidth="2.2"
+                strokeLinecap="round" strokeDasharray={z.tracejado ? '4 3' : undefined} />
+            </svg>
+            {z.rotulo}
+          </span>
+        ))}
+      </div>
+
+      <div ref={refPlot} className="min-h-0 flex-1 px-1 pb-1 pt-2">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={pontos}
             margin={{ top: 22, right: MARGEM_DIR, bottom: 30, left: MARGEM_ESQ }}>
@@ -278,10 +322,14 @@ export function CprFluxoPrevisto({ linhas, saldoInicial, caveat, granularidade, 
             {/* ⚠ `interval={0}` — todos os ticks são RENDERIZADOS e o tick decide o que
                 desenhar. Ver a nota em `TickEixoX`: era o `interval` numérico que apagava a
                 faixa de mês junto com o rótulo do dia. */}
-            <XAxis dataKey="rotulo" interval={0} height={38} tickLine={false}
+            {/* ⚠ `tickLine` LIGADO nos dois eixos — a marca de escala do `ExtratoAnaliseFluxo`.
+                Sem ela o rótulo flutua e o olho não sabe a que altura exata ele pertence. */}
+            <XAxis dataKey="rotulo" interval={0} height={38}
+              tickLine={{ stroke: COR_TEXTO, opacity: 0.4 }} axisLine={{ stroke: '#ded6c9' }}
               tick={<TickEixoX pontos={pontos} passoRotulo={passoRotulo} faixaCabe={faixaCabe} />} />
             <YAxis domain={escala.dominio} ticks={escala.ticks} width={LARGURA_EIXO_Y}
-              tickLine={false} tick={{ fontSize: 12, fill: COR_TEXTO }} tickFormatter={fmtEixoY} />
+              tickLine={{ stroke: COR_TEXTO, opacity: 0.4 }} axisLine={false}
+              tick={{ fontSize: 12, fill: COR_TEXTO }} tickFormatter={fmtEixoY} />
             <Tooltip content={<TooltipFluxo />} cursor={{ fill: '#00000008' }} />
             <ReferenceLine y={0} stroke={COR_TEXTO} strokeWidth={1.2} />
 
@@ -307,21 +355,46 @@ export function CprFluxoPrevisto({ linhas, saldoInicial, caveat, granularidade, 
                 devolver um elemento para TODOS os pontos, e nos 90 dias isso são 90 nós só
                 para esconder 85. Com `isFront` os cinco marcos ainda ficam por cima da área e
                 da linha, que é onde têm de estar. */}
-            <Line type="monotone" dataKey="saldo" name="Saldo projetado"
-              stroke={COR_SALDO} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round"
-              dot={false} isAnimationActive={false} />
+            {/* ⚠ TRÊS SÉRIES, UMA POR ZONA DE TEMPO, cada uma nula fora da sua (ver
+                `combinarComPassado`). `connectNulls={false}` é o que impede o recharts de ligar
+                o fim de uma zona ao começo da seguinte por cima do vão — e a repetição do ponto
+                de virada é o que faz os trechos SE TOCAREM em vez de deixar um buraco.
+                ⚠ O PREVISTO É TRACEJADO porque não aconteceu: o traço contínuo é o que já é
+                fato, e a diferença tem de ser legível sem consultar a legenda. */}
+            <Line type="monotone" dataKey="saldoConciliado" name="Conciliado"
+              stroke={COR_CONCILIADO} strokeWidth={2.2} strokeLinecap="round"
+              strokeLinejoin="round" dot={false} connectNulls={false} isAnimationActive={false} />
+            <Line type="monotone" dataKey="saldoRealizado" name="Realizado, a conferir"
+              stroke={COR_REALIZADO} strokeWidth={2.2} strokeLinecap="round"
+              strokeLinejoin="round" dot={false} connectNulls={false} isAnimationActive={false} />
+            <Line type="monotone" dataKey="saldoPrevisto" name="Previsto"
+              stroke={COR_SALDO} strokeWidth={2.2} strokeLinecap="round" strokeDasharray="5 4"
+              strokeLinejoin="round" dot={false} connectNulls={false} isAnimationActive={false} />
 
             {marcos.map((m) => (
-              <ReferenceDot key={`marco-${m.chave}`} x={m.rotulo} y={m.saldo} r={3.2} isFront
-                fill={m.saldo < 0 ? COR_SAIDA : COR_SALDO} stroke="#fff" strokeWidth={1.2} />
+              <ReferenceDot key={`marco-${m.chave}`} x={m.rotulo} y={m.saldo} r={3.4} isFront
+                fill={m.saldo < 0 ? COR_SAIDA : corDaZona(m.zona)}
+                stroke="#fff" strokeWidth={1.3} />
             ))}
 
             {/* ⚠ AS TAGS FICAM FORA DA LINHA. A de hoje sobe acima do ponto inicial; a do saldo
                 final vai para a margem direita reservada no `margin` — é o valor do painel de
                 referência, que não disputa espaço com o traço. */}
-            <ReferenceDot x={inicial.rotulo} y={inicial.saldo} r={0} isFront
-              label={{ value: `hoje ${fmtTag(inicial.saldo)}`, position: 'top',
-                fontSize: 11, fill: COR_TEXTO, offset: 12 }} />
+            {/* ⚠ A TAG ANCORA EM "HOJE", NÃO NO PRIMEIRO PONTO — PR-CPR-2B.3: com o passado
+                desenhado, o primeiro ponto passou a ser o começo do mês conciliado, e o valor
+                que o operador confere contra o card é o de hoje.
+                ⚠ E O TEXTO VAI PARA A ESQUERDA DO PONTO (`dx` negativo) quando "hoje" está
+                perto da borda: colado no eixo Y ele ficava por cima dos números da escala. */}
+            {emHoje && (
+              <ReferenceDot x={emHoje.rotulo} y={emHoje.saldo} r={0} isFront
+                label={{ value: `hoje ${fmtTag(emHoje.saldo)}`, position: 'top',
+                  fontSize: 11, fontWeight: 600, fill: COR_TEXTO, offset: 14 }} />
+            )}
+            {fimConciliado && fimConciliado.chave !== emHoje.chave && (
+              <ReferenceDot x={fimConciliado.rotulo} y={fimConciliado.saldo} r={0} isFront
+                label={{ value: fmtTag(fimConciliado.saldo), position: 'top', offset: 14,
+                  fontSize: 11, fill: COR_CONCILIADO }} />
+            )}
             <ReferenceDot x={final.rotulo} y={final.saldo} r={0} isFront
               label={{ value: fmtTag(final.saldo), position: 'right', offset: 10,
                 fontSize: 13, fontWeight: 600,

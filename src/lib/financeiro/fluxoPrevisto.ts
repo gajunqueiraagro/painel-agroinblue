@@ -230,7 +230,9 @@ export function montarFluxoPrevisto(
  * ⚠ O PONTO "Hoje" ENTRA NA BUSCA: um cliente já negativo hoje tem de aparecer negativo desde
  * o começo, e não a partir do primeiro mês com movimento.
  */
-export function primeiroNegativo(pontos: readonly PontoFluxo[]): PontoFluxo | null {
+export function primeiroNegativo<T extends PontoFluxo>(pontos: readonly T[]): T | null {
+  /* Genérica para servir tanto à série crua quanto à das três zonas (`PontoLinha`), sem
+     obrigar o chamador a um cast para recuperar o tipo que ele já tinha. */
   return pontos.find((p) => p.saldo < 0) ?? null;
 }
 
@@ -319,4 +321,115 @@ export function escalaSimetrica(pontos: readonly PontoFluxo[]): EscalaY {
   const ticks: number[] = [];
   for (let i = -abaixo; i <= acima; i++) ticks.push(arredondar(i * passo));
   return { dominio: [-abaixo * passo, acima * passo], ticks, passo };
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   AS TRÊS ZONAS DE TEMPO — PR-CPR-2B.3
+
+   A linha deixa de começar em hoje e passa a contar a história inteira:
+
+     CONCILIADO  o passado confirmado com o banco, até a posição conciliada mais atrasada
+     REALIZADO   o que já aconteceu e ainda não foi conciliado, dali até hoje
+     PREVISTO    de hoje em diante
+
+   ⚠ O VALOR EM "HOJE" É O MESMO PONTO, não dois. O passado termina em hoje e o futuro começa
+   em hoje, com o mesmo saldo — que é o do card. Duplicar o dia faria a linha ter um degrau de
+   largura zero exatamente onde ela precisa ser contínua.
+   ⚠ E É POR ISSO QUE UM DEGRAU VISÍVEL ALI É DADO, NÃO DESENHO: `serieDoSaldoPassado` fecha no
+   total do card por construção (há teste). Se a tela mostrar um salto em hoje, o que está
+   furado é a conciliação.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+export type ZonaFluxo = 'conciliado' | 'realizado' | 'previsto';
+
+/** Um ponto do passado, como `serieDoSaldoPassado` entrega. */
+export interface PontoPassadoEntrada {
+  data: string;
+  saldo: number;
+  conciliado: boolean;
+}
+
+export interface PontoLinha extends PontoFluxo {
+  zona: ZonaFluxo;
+  /**
+   * O saldo repetido em três séries, nulo fora da sua zona.
+   *
+   * ⚠ TRÊS SÉRIES, E NÃO UMA COM COR POR PONTO: o recharts pinta uma `Line` inteira com um
+   * `stroke` só, e o `dot` colorido não muda o traço ENTRE os pontos. Com três séries e
+   * `connectNulls={false}` cada trecho é um caminho próprio, com a sua cor e o seu tracejado.
+   * ⚠ CADA ZONA REPETE O PRIMEIRO PONTO DA SEGUINTE, senão fica um vão de um segmento entre
+   * elas — a linha apareceria partida nas viradas.
+   */
+  saldoConciliado: number | null;
+  saldoRealizado: number | null;
+  saldoPrevisto: number | null;
+}
+
+/**
+ * Junta o passado à projeção numa série só.
+ *
+ * No modo mensal o passado é reduzido ao ÚLTIMO dia de cada mês: misturar oitenta pontos
+ * diários com cinquenta e sete mensais no mesmo eixo categórico esmagaria o futuro contra a
+ * margem direita.
+ */
+export function combinarComPassado(
+  fluxo: FluxoPrevisto,
+  passado: readonly PontoPassadoEntrada[],
+  hoje: string,
+): PontoLinha[] {
+  const vestir = (p: PontoFluxo, zona: ZonaFluxo): PontoLinha => ({
+    ...p, zona, saldoConciliado: null, saldoRealizado: null, saldoPrevisto: null,
+  });
+
+  if (passado.length === 0) {
+    const so = fluxo.pontos.map((p) => vestir(p, 'previsto'));
+    return preencherSeries(so);
+  }
+
+  const doDia = fluxo.granularidade === 'dia';
+  /* No mensal, um ponto por mês: o último dia de cada um. */
+  const reduzido = doDia ? passado : passado.filter((p, i) =>
+    i === passado.length - 1 || p.data.slice(0, 7) !== passado[i + 1].data.slice(0, 7));
+
+  const anteriores: PontoLinha[] = reduzido
+    /* Hoje NÃO entra aqui: ele é o primeiro ponto do futuro, e um só. */
+    .filter((p) => p.data < hoje)
+    .map((p) => ({
+      chave: p.data,
+      rotulo: doDia ? rotuloDoDia(p.data) : rotuloDoMes(p.data.slice(0, 7)),
+      faixa: doDia ? rotuloDoMes(p.data.slice(0, 7)) : p.data.slice(0, 4),
+      abreFaixa: false,
+      entradas: 0,
+      saidas: 0,
+      saldo: p.saldo,
+      saldoPos: Math.max(p.saldo, 0),
+      saldoNeg: Math.min(p.saldo, 0),
+      zona: p.conciliado ? 'conciliado' : 'realizado',
+      saldoConciliado: null, saldoRealizado: null, saldoPrevisto: null,
+    }));
+
+  /* O primeiro ponto do futuro é "Hoje" e traz o saldo do card — é a costura das duas metades. */
+  const futuro = fluxo.pontos.map((p) => vestir(p, 'previsto'));
+
+  const juntos = [...anteriores, ...futuro];
+  /* A faixa é recalculada sobre a série inteira: o passado acrescentou meses à esquerda. */
+  let faixaAnterior = '';
+  for (const p of juntos) {
+    p.abreFaixa = !!p.faixa && p.faixa !== faixaAnterior;
+    if (p.faixa) faixaAnterior = p.faixa;
+  }
+  return preencherSeries(juntos);
+}
+
+/** Espalha o saldo nas três séries, repetindo a virada para os trechos se tocarem. */
+function preencherSeries(pontos: PontoLinha[]): PontoLinha[] {
+  for (let i = 0; i < pontos.length; i++) {
+    const p = pontos[i];
+    const proxima = pontos[i + 1]?.zona;
+    const ponte = proxima && proxima !== p.zona ? proxima : null;
+    if (p.zona === 'conciliado' || ponte === 'conciliado') p.saldoConciliado = p.saldo;
+    if (p.zona === 'realizado' || ponte === 'realizado') p.saldoRealizado = p.saldo;
+    if (p.zona === 'previsto' || ponte === 'previsto') p.saldoPrevisto = p.saldo;
+  }
+  return pontos;
 }

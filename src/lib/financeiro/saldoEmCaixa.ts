@@ -283,3 +283,91 @@ export function estimarSaldoEmCaixa(entrada: {
     ancoradas,
   };
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   A SÉRIE DO PASSADO — PR-CPR-2B.3
+
+   ⚠ ELA É A MESMA CONTA DO CARD, AVALIADA EM TODO DIA em vez de só em hoje. O card faz
+   `Σ_conta (âncora_c + realizados_c depois da âncora_c até HOJE)`; esta função faz
+   `Σ_conta (âncora_c + realizados_c depois da âncora_c até D)` para cada D do intervalo. Em
+   D = hoje as duas expressões são literalmente a mesma, então a linha FECHA no card por
+   construção — e há um teste que trava isso. Recalcular o passado por outro caminho seria
+   criar uma segunda verdade ao lado do número que o operador já leu no topo.
+
+   ⚠ CADA CONTA ANDA DEPOIS DA SUA PRÓPRIA ÂNCORA, e é isso que impede o "número fantasma" que
+   a 2A.1 matou de voltar pela porta dos fundos. Antes da sua âncora, a conta contribui com o
+   valor confirmado, parado. Por isso o trecho verde é um PATAMAR: dentro do mês conciliado
+   nada se move porque o valor confirmado já contém aquele movimento. Desenhar uma subida ali
+   seria contar duas vezes.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+export interface PontoPassado {
+  /** `YYYY-MM-DD`. */
+  data: string;
+  saldo: number;
+  /** `true` até a posição conciliada mais atrasada (o trecho verde). */
+  conciliado: boolean;
+}
+
+export interface SeriePassado {
+  pontos: PontoPassado[];
+  /** A posição conciliada mais atrasada — onde o verde vira azul. */
+  boundary: string | null;
+}
+
+/**
+ * O saldo, dia a dia, do primeiro dia do mês da âncora mais atrasada até hoje.
+ *
+ * `[]` quando nenhuma conta ancorou — sem ponto de partida não há passado a desenhar.
+ */
+export function serieDoSaldoPassado(entrada: {
+  contas: readonly ContaEmCaixa[];
+  saldos: readonly SaldoMesConta[];
+  linhas: readonly LinhaDaPosicao[];
+  hoje: string;
+  mesMinimo: string;
+}): SeriePassado {
+  const { contas, saldos, linhas, hoje, mesMinimo } = entrada;
+
+  const ancoras: AncoraDaConta[] = [];
+  for (const c of contas) {
+    if (grupoDoTipoConta(c.tipo) === 'fora') continue;
+    const a = contaSemExtrato(c.tipo)
+      ? ancoraSemExtrato(c.id, saldos)
+      : ancoraDaConta(c.id, saldos, linhas, mesMinimo);
+    if (a) ancoras.push(a);
+  }
+  if (ancoras.length === 0) return { pontos: [], boundary: null };
+
+  const boundary = ancoras.reduce((m, a) => (a.data < m ? a.data : m), ancoras[0].data);
+  const inicio = `${boundary.slice(0, 7)}-01`;
+  if (inicio > hoje) return { pontos: [], boundary };
+
+  const base = ancoras.reduce((s, a) => s + a.valor, 0);
+
+  /* O movimento de cada dia, já respeitando a âncora de cada conta: uma linha só conta a
+     partir do dia SEGUINTE à posição conciliada da sua própria conta. */
+  const movPorDia = new Map<string, number>();
+  for (const a of ancoras) {
+    for (const l of linhas) {
+      const d = (l.data_pagamento ?? '').slice(0, 10);
+      if (!d || d <= a.data || d > hoje) continue;
+      if (l.conta_bancaria_id !== a.contaId && l.conta_destino_id !== a.contaId) continue;
+      movPorDia.set(d, (movPorDia.get(d) ?? 0) + movimentoNaConta(l, a.contaId));
+    }
+  }
+
+  const pontos: PontoPassado[] = [];
+  let acumulado = base;
+  for (let d = inicio; d <= hoje; d = proximoDia(d)) {
+    acumulado += movPorDia.get(d) ?? 0;
+    pontos.push({ data: d, saldo: roundCurrency(acumulado), conciliado: d <= boundary });
+  }
+  return { pontos, boundary };
+}
+
+function proximoDia(iso: string): string {
+  const d = new Date(`${iso}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}

@@ -8,7 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   ancoraDaConta, ancoraSemExtrato, contaSemExtrato, estimarSaldoDaConta, estimarSaldoEmCaixa,
-  grupoDoTipoConta, posicaoDoSaldo,
+  grupoDoTipoConta, posicaoDoSaldo, serieDoSaldoPassado,
   type SaldoMesConta,
 } from './saldoEmCaixa';
 import type { LinhaDaPosicao } from '@/hooks/useExtratoDaConta';
@@ -287,5 +287,87 @@ describe('permuta — o caso do NJ em 19/09/2026', () => {
     expect(r.aplicado).toBe(-800);
     expect(r.total).toBe(29350.70);
     expect(r.aConferir).toEqual(['Permuta · Cooperativa']);
+  });
+});
+
+describe('serieDoSaldoPassado — PR-CPR-2B.3', () => {
+  const contasVera = [
+    { id: ITAU, nome: 'Itaú Personalite', tipo: 'cc' },
+    { id: CDI, nome: 'Itaú CDI', tipo: 'inv' },
+    { id: BTG, nome: 'BTG Corretora', tipo: 'cc' },
+  ];
+  const saldosVera = [
+    saldo(ITAU, '2026-08', 208561.46, 30943.91, '2026-08-31'),
+    saldo(CDI, '2026-08', 301905.93, 305208.79, '2026-08-31'),
+    saldo(BTG, '2026-08', 1154.08, 1154.08),
+  ];
+  const linhasVera = [
+    saida(ITAU, '2026-08-15', 177617.55),
+    entrada(ITAU, '2026-09-05', 124802.87),
+    saida(ITAU, '2026-09-18', 58809.06),
+    entrada(CDI, '2026-08-15', 3302.86),
+    saida(CDI, '2026-09-10', 205000.85),
+  ];
+  const entradaComum = {
+    contas: contasVera, saldos: saldosVera, linhas: linhasVera,
+    hoje: HOJE, mesMinimo: JANELA,
+  };
+
+  /**
+   * ⚠ O TESTE QUE JUSTIFICA O ARQUIVO INTEIRO. O gráfico do passado existe para PROVAR a
+   * conciliação: ele parte do último saldo conciliado, aplica os realizados e tem de pousar
+   * exatamente no número que o card mostra. Se as duas contas divergirem, o operador vê um
+   * degrau em "hoje" e não sabe se é furo de dado ou defeito de desenho. Aqui fica travado que
+   * é a MESMA conta — logo, qualquer degrau na tela é dado.
+   */
+  it('o último ponto é EXATAMENTE o total do card', () => {
+    const serie = serieDoSaldoPassado(entradaComum);
+    const card = estimarSaldoEmCaixa(entradaComum);
+    const ultimo = serie.pontos[serie.pontos.length - 1];
+    expect(ultimo.data).toBe(HOJE);
+    expect(ultimo.saldo).toBe(card.total);
+    expect(ultimo.saldo).toBe(198299.74);
+  });
+
+  it('começa no 1º dia do mês da âncora mais atrasada', () => {
+    const serie = serieDoSaldoPassado(entradaComum);
+    expect(serie.pontos[0].data).toBe('2026-08-01');
+    expect(serie.boundary).toBe('2026-08-31');
+  });
+
+  /**
+   * ⚠ O PATAMAR VERDE É CORRETO, não um bug de desenho: dentro do mês conciliado o valor
+   * confirmado JÁ contém aquele movimento. Fazer a linha subir ali contaria a saída de
+   * 15/08 duas vezes — uma no `saldo_final` declarado e outra no caminhar.
+   */
+  it('o trecho conciliado é um PATAMAR — não recontabiliza o mês já fechado', () => {
+    const serie = serieDoSaldoPassado(entradaComum);
+    const verdes = serie.pontos.filter((p) => p.conciliado);
+    expect(verdes).toHaveLength(31);
+    expect(new Set(verdes.map((p) => p.saldo)).size).toBe(1);
+    expect(verdes[0].saldo).toBe(337306.78);
+  });
+
+  it('o trecho a conferir anda com os realizados de setembro', () => {
+    const serie = serieDoSaldoPassado(entradaComum);
+    const azuis = serie.pontos.filter((p) => !p.conciliado);
+    expect(azuis[0].data).toBe('2026-09-01');
+    expect(azuis[0].saldo).toBe(337306.78);
+    expect(azuis[azuis.length - 1].saldo).toBe(198299.74);
+  });
+
+  /** ⚠ O caso do NJ em setembro: sem realizado no período, a linha fica PLANA — e é correto. */
+  it('período sem realizado nenhum fica plano até hoje', () => {
+    const serie = serieDoSaldoPassado({ ...entradaComum, linhas: [
+      saida(ITAU, '2026-08-15', 177617.55), entrada(CDI, '2026-08-15', 3302.86),
+    ] });
+    const azuis = serie.pontos.filter((p) => !p.conciliado);
+    expect(new Set(azuis.map((p) => p.saldo)).size).toBe(1);
+    expect(azuis[azuis.length - 1].saldo).toBe(337306.78);
+  });
+
+  it('sem conta ancorada não há passado a desenhar', () => {
+    expect(serieDoSaldoPassado({ ...entradaComum, saldos: [] }))
+      .toEqual({ pontos: [], boundary: null });
   });
 });

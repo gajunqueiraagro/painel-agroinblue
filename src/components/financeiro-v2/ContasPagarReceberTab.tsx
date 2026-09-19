@@ -32,8 +32,8 @@ import { aplicarPlanoNaView, type LinhaViewDoc } from '@/lib/financeiro/listaPag
 import { montarPlanoBaseV2 } from '@/lib/financeiro/filtrosBaseV2';
 import { paginarTudo } from '@/lib/financeiro/paginarTudo';
 import {
-  contaSemExtrato, estimarSaldoEmCaixa, grupoDoTipoConta,
-  type ContaEmCaixa, type SaldoEmCaixa,
+  contaSemExtrato, estimarSaldoEmCaixa, grupoDoTipoConta, serieDoSaldoPassado,
+  type ContaEmCaixa, type SaldoEmCaixa, type SeriePassado,
 } from '@/lib/financeiro/saldoEmCaixa';
 import { movimentoNaConta, type LinhaDaPosicao } from '@/hooks/useExtratoDaConta';
 import { rotuloOrigem } from '@/v2/lib/origemLancamento';
@@ -384,7 +384,7 @@ export function ContasPagarReceberTab() {
   const { data: caixa } = useQuery({
     queryKey: ['cpr-caixa', clienteId, isoLocal(hoje)],
     enabled: !!clienteId,
-    queryFn: async (): Promise<SaldoEmCaixa | null> => {
+    queryFn: async (): Promise<(SaldoEmCaixa & { passado: SeriePassado }) | null> => {
       if (!clienteId) return null;
       const { data: contasRaw } = await supabase
         .from('financeiro_contas_bancarias')
@@ -460,9 +460,20 @@ export function ContasPagarReceberTab() {
         return { linhas: leva, brutas: leva.length };
       });
 
-      return estimarSaldoEmCaixa({
+      /**
+       * ⚠ A SÉRIE DO PASSADO SAI DAQUI, e não de uma consulta própria — PR-CPR-2B.3. Esta
+       * query já tem as três coisas de que ela precisa (contas, saldos e os realizados dos
+       * últimos seis meses), e é justamente por partilhar a MESMA entrada que a linha do
+       * gráfico fecha no número do card. Buscar de novo abriria a porta para os dois
+       * divergirem por um filtro de diferença.
+       */
+      const argumentos = {
         contas, saldos: saldos ?? [], linhas, hoje: isoLocal(hoje), mesMinimo,
-      });
+      };
+      return {
+        ...estimarSaldoEmCaixa(argumentos),
+        passado: serieDoSaldoPassado(argumentos),
+      };
     },
   });
 
@@ -827,6 +838,7 @@ export function ContasPagarReceberTab() {
                  Agnaldo Cedenho), e aí a própria lib rebaixa para mensal e avisa. */
               granularidade={horizonte === 'tudo' ? 'mes' : 'dia'}
               hoje={isoLocal(hoje)}
+              passado={caixa?.passado.pontos ?? []}
             />
           ) : (
           <>
