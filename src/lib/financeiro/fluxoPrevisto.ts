@@ -60,6 +60,23 @@ export interface PontoFluxo {
   saidas: number;
   /** Saldo projetado ao fim do período. */
   saldo: number;
+  /**
+   * O saldo partido em duas séries, para a área trocar de cor NO CRUZAMENTO — PR-CPR-2B.2.
+   *
+   * ⚠ ELAS EXISTEM PARA CONSERTAR UM BUG DE GRADIENTE, e a causa vale registrar: a versão
+   * anterior desenhava UMA área (`baseValue={0}`) pintada por um `linearGradient` cujo offset
+   * era a posição do zero no DOMÍNIO. Só que o gradiente de um `fill` usa `objectBoundingBox`
+   * — ele mede a caixa da PRÓPRIA FORMA, não o plot. Numa série sempre positiva a área ocupa
+   * só o terço de cima do gráfico, e o offset de 71% caía dentro dela: metade da área positiva
+   * saía vermelha, sem a linha jamais ter ido abaixo de zero.
+   * ⚠ DUAS SÉRIES RESOLVEM SEM PIXEL NENHUM. `saldoPos` é o saldo quando positivo e zero
+   * quando não; `saldoNeg`, o contrário. Cada uma vira uma área com base no zero: onde a linha
+   * é positiva só a azul tem altura, onde é negativa só a vermelha. No cruzamento as duas
+   * valem zero, então a troca acontece exatamente no ponto — por construção, não por
+   * aproximação de cor.
+   */
+  saldoPos: number;
+  saldoNeg: number;
 }
 
 export interface FluxoPrevisto {
@@ -68,6 +85,12 @@ export interface FluxoPrevisto {
   granularidade: Granularidade;
   /** `true` quando a pedida era diária e a série teve de cair para mensal. */
   rebaixada: boolean;
+  /**
+   * Lançamentos com vencimento ANTERIOR a hoje, que não entram na projeção.
+   * ⚠ Contados, não escondidos: no horizonte "Vencidos" eles são a lista inteira, e o gráfico
+   * precisa poder dizer por que está mostrando outra coisa.
+   */
+  anteriores: number;
   /**
    * Lançamentos sem `data_vencimento`, que NÃO entram no gráfico.
    * ⚠ ELES EXISTEM E PRECISAM SER DITOS. Um compromisso sem data não tem posição num eixo de
@@ -111,6 +134,7 @@ export function montarFluxoPrevisto(
 ): FluxoPrevisto {
   const porChave = new Map<string, { entradas: number; saidas: number }>();
   let semVencimento = 0;
+  let anteriores = 0;
   let menorVenc: string | null = null;
   let maiorVenc: string | null = null;
 
@@ -124,6 +148,11 @@ export function montarFluxoPrevisto(
 
     const venc = (l.data_vencimento ?? '').slice(0, 10);
     if (!venc) { semVencimento += 1; continue; }
+    /* ⚠ O FLUXO É SÓ PARA A FRENTE — PR-CPR-2B.2. Ele responde "o caixa aguenta daqui em
+       diante?", e um vencimento que já passou não está no futuro de ninguém: ele ou foi pago
+       (e já está no saldo de partida) ou está vencido (e é assunto da Lista). Deixá-lo entrar
+       descontava duas vezes a mesma obrigação e ainda puxava o eixo para jul/2025. */
+    if (venc < opcoes.hoje) { anteriores += 1; continue; }
     if (!menorVenc || venc < menorVenc) menorVenc = venc;
     if (!maiorVenc || venc > maiorVenc) maiorVenc = venc;
 
@@ -139,8 +168,10 @@ export function montarFluxoPrevisto(
      dariam uma linha que salta de 05/10 para 13/11 com a mesma inclinação de um dia para o
      outro — o eixo deixaria de ser tempo. Dia sem movimento entra com barra zero e o saldo
      anterior, que é a verdade: naquele dia nada aconteceu. */
-  const precisaDia = opcoes.granularidade === 'dia' && menorVenc && maiorVenc;
-  const de = precisaDia ? (menorVenc! < opcoes.hoje ? menorVenc! : opcoes.hoje) : '';
+  const precisaDia = opcoes.granularidade === 'dia' && !!maiorVenc;
+  /* O eixo ABRE EM HOJE, sempre: o horizonte diz até onde ir para a frente, nunca o quanto
+     voltar. Sem isto o "Tudo" começava em jul/2025 e o "Vencidos" olhava para trás. */
+  const de = precisaDia ? opcoes.hoje : '';
   const ate = precisaDia ? (maiorVenc! > opcoes.hoje ? maiorVenc! : opcoes.hoje) : '';
   const totalDias = precisaDia ? diasEntre(de, ate) + 1 : 0;
   const granularidade: Granularidade =
@@ -165,7 +196,7 @@ export function montarFluxoPrevisto(
      que a evolução do Extrato Gerencial usa. */
   const pontos: PontoFluxo[] = [{
     chave: 'inicio', rotulo: 'Hoje', faixa: '', abreFaixa: false,
-    entradas: 0, saidas: 0, saldo: arredondar(saldoInicial),
+    entradas: 0, saidas: 0, ...partesDoSaldo(saldoInicial),
   }];
 
   const chaves: string[] = granularidade === 'dia'
@@ -185,12 +216,12 @@ export function montarFluxoPrevisto(
       abreFaixa: faixa !== faixaAnterior,
       entradas: arredondar(entradas),
       saidas: arredondar(-saidas),
-      saldo: arredondar(acumulado),
+      ...partesDoSaldo(acumulado),
     });
     faixaAnterior = faixa;
   }
 
-  return { pontos, granularidade, rebaixada, semVencimento };
+  return { pontos, granularidade, rebaixada, semVencimento, anteriores };
 }
 
 /**
@@ -205,6 +236,12 @@ export function primeiroNegativo(pontos: readonly PontoFluxo[]): PontoFluxo | nu
 
 function arredondar(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+/** O saldo e as suas duas metades, para a área azul e a vermelha. */
+function partesDoSaldo(v: number): { saldo: number; saldoPos: number; saldoNeg: number } {
+  const saldo = arredondar(v);
+  return { saldo, saldoPos: Math.max(saldo, 0), saldoNeg: Math.min(saldo, 0) };
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────

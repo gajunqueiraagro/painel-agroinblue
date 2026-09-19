@@ -225,9 +225,20 @@ function limiteDoHorizonte(h: Horizonte, hoje: Date): string | null {
  * paginada já fecha com o seu `RAMO_SEM_VENCIMENTO`. Aqui elas vão para um grupo próprio,
  * no fim.
  */
-function ramoDoHorizonte(h: Horizonte, hoje: Date): string | null {
-  if (h === 'tudo') return null;
+function ramoDoHorizonte(h: Horizonte, hoje: Date, apenasFuturo = false): string | null {
   const hojeIso = isoLocal(hoje);
+  /**
+   * ⚠ NO FLUXO O RECORTE É SEMPRE PARA A FRENTE — PR-CPR-2B.2. O horizonte passa a dizer só
+   * ATÉ ONDE ir, nunca o quanto voltar: "Vencidos" projeta de hoje em diante (vencido é
+   * assunto da Lista) e "Tudo" deixa de começar em jul/2025.
+   * ⚠ E O BOTÃO CONTINUA ATIVO em "Vencidos": desabilitá-lo faria o operador achar que o
+   * Fluxo quebrou. Ele mostra a projeção e o subtítulo diz quantos vencidos ficaram fora.
+   */
+  if (apenasFuturo) {
+    if (h === 'tudo' || h === 'vencidos') return `data_vencimento.gte.${hojeIso}`;
+    return `and(data_vencimento.gte.${hojeIso},data_vencimento.lte.${limiteDoHorizonte(h, hoje)})`;
+  }
+  if (h === 'tudo') return null;
   if (h === 'vencidos') return `data_vencimento.lt.${hojeIso},data_vencimento.is.null`;
   const ate = limiteDoHorizonte(h, hoje);
   return `and(data_vencimento.gte.${hojeIso},data_vencimento.lte.${ate}),data_vencimento.is.null`;
@@ -305,6 +316,17 @@ export function ContasPagarReceberTab() {
     return () => { vivo = false; };
   }, [fin.loadContas, fin.loadClassificacoes, fin.loadFornecedores, fin.loadSafras]);
 
+  /**
+   * ⚠ O FLUXO ABRE EM "AMBOS" — PR-CPR-2B.2. Fluxo de caixa é entrada E saída; com o segmento
+   * em "A Pagar" (o default da Lista) o gráfico mostrava metade do fluxo e a linha só descia.
+   * ⚠ E FORÇA SÓ NA ENTRADA DA VISÃO: a dependência é `[visao]`, então trocar o segmento com o
+   * Fluxo aberto é respeitado. Um efeito que olhasse `segmento` também o puxaria de volta a
+   * cada clique, e o operador não conseguiria ver só o que recebe.
+   */
+  useEffect(() => {
+    if (visao === 'fluxo') setSegmento('ambos');
+  }, [visao]);
+
   const hoje = useMemo(() => hojeLocal(), []);
   const limite = limiteDoHorizonte(horizonte, hoje);
 
@@ -316,7 +338,7 @@ export function ContasPagarReceberTab() {
    * a duas consultas para pintar a mesma barra.
    */
   const { data: linhas = [], isFetching } = useQuery({
-    queryKey: ['cpr-lancs', clienteId, fazScope, horizonte, statusLigados.join(','), limite],
+    queryKey: ['cpr-lancs', clienteId, fazScope, horizonte, statusLigados.join(','), limite, visao],
     enabled: !!clienteId && statusLigados.length > 0,
     queryFn: async (): Promise<LinhaViewDoc[]> => {
       if (!clienteId) return [];
@@ -325,7 +347,7 @@ export function ContasPagarReceberTab() {
         fazScope ? { fazenda_id: fazScope } : {},
         { relacao: 'view', semRecorteTemporal: true },
       );
-      const ramo = ramoDoHorizonte(horizonte, hoje);
+      const ramo = ramoDoHorizonte(horizonte, hoje, visao === 'fluxo');
       return paginarTudo<LinhaViewDoc>(async (de, tamanho) => {
         let q = aplicarPlanoNaView(fin.abrirView('*'), plano)
           .in('status_transacao', statusLigados)

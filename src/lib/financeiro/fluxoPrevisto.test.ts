@@ -154,11 +154,12 @@ describe('granularidade diária — PR-CPR-2B.1', () => {
   });
 
   /**
-   * ⚠ O CASO MEDIDO: "Vencidos" do Agnaldo Cedenho vai até 03/02/2020 — 2.420 dias. Um gráfico
-   * com 2.420 colunas não é denso, é ilegível. A série cai para mensal e AVISA.
+   * ⚠ O CASO MEDIDO: o "Tudo" do NJ vai até out/2040 — mais de cinco mil dias para a frente.
+   * Um gráfico com essa quantidade de colunas não é denso, é ilegível. A série cai para mensal
+   * e AVISA.
    */
   it('span grande demais cai para mensal e declara que caiu', () => {
-    const r = montarFluxoPrevisto([saida('2020-02-03', 500), saida('2026-09-01', 100)], 0, DIA);
+    const r = montarFluxoPrevisto([saida('2026-10-01', 500), saida('2028-06-01', 100)], 0, DIA);
     expect(r.granularidade).toBe('mes');
     expect(r.rebaixada).toBe(true);
     expect(r.pontos.length).toBeLessThan(MAX_PONTOS_DIA);
@@ -211,5 +212,76 @@ describe('escalaSimetrica — o eixo Y', () => {
     const { ticks } = escalaSimetrica(montarFluxoPrevisto([], 0, MES).pontos);
     expect(ticks).toContain(0);
     expect(ticks.length).toBeGreaterThan(1);
+  });
+});
+
+describe('o fluxo é sempre de hoje para a frente — PR-CPR-2B.2', () => {
+  const DIA = { granularidade: 'dia' as const, hoje: HOJE };
+
+  /**
+   * ⚠ O DEFEITO QUE ISTO CONSERTA: o gráfico herdava a janela da Lista e no "Tudo" começava em
+   * jul/2025. Um vencimento que já passou ou foi pago — e então já está dentro do saldo de
+   * partida — ou está vencido, e aí é assunto da Lista. Nos dois casos, descontá-lo do futuro
+   * cobraria a mesma obrigação duas vezes.
+   */
+  it('vencimento anterior a hoje NÃO entra na projeção, e é contado', () => {
+    const r = montarFluxoPrevisto(
+      [saida('2025-07-01', 500_000), saida('2026-10-01', 100)], 1000, MES);
+    expect(r.anteriores).toBe(1);
+    expect(r.pontos.map((p) => p.rotulo)).toEqual(['Hoje', 'out/26']);
+    expect(r.pontos[1].saldo).toBe(900);
+  });
+
+  it('o eixo diário abre em HOJE mesmo com o horizonte olhando para trás', () => {
+    const r = montarFluxoPrevisto([saida('2026-03-10', 999), saida('2026-09-21', 10)], 0, DIA);
+    expect(r.pontos[0].rotulo).toBe('Hoje');
+    expect(r.pontos[1].rotulo).toBe('19/09');
+    expect(r.anteriores).toBe(1);
+  });
+
+  it('só vencidos: sobra o ponto de hoje, e o gráfico pode dizer por quê', () => {
+    const r = montarFluxoPrevisto([saida('2026-01-01', 10), saida('2026-05-01', 20)], 7000, DIA);
+    expect(r.pontos).toHaveLength(1);
+    expect(r.anteriores).toBe(2);
+    expect(r.pontos[0].saldo).toBe(7000);
+  });
+
+  it('vencimento em HOJE entra — a fronteira é inclusiva', () => {
+    const r = montarFluxoPrevisto([saida(HOJE, 100)], 500, DIA);
+    expect(r.anteriores).toBe(0);
+    expect(r.pontos[1].saldo).toBe(400);
+  });
+});
+
+describe('a área segue o SINAL da linha — PR-CPR-2B.2', () => {
+  /**
+   * ⚠ O BUG QUE ISTO FECHA: a versão anterior pintava com um gradiente cujo offset era a
+   * posição do zero no domínio. Gradiente de `fill` mede a caixa da PRÓPRIA FORMA
+   * (`objectBoundingBox`), não o plot — então numa série sempre positiva, cuja área ocupa só o
+   * topo, o offset caía dentro dela e metade saía vermelha sem a linha nunca ter ido lá.
+   */
+  it('série sempre positiva não tem NADA na série vermelha', () => {
+    const r = montarFluxoPrevisto([saida('2026-10-01', 100)], 1_000_000, MES);
+    expect(r.pontos.every((p) => p.saldoNeg === 0)).toBe(true);
+    expect(r.pontos.every((p) => p.saldoPos === p.saldo)).toBe(true);
+  });
+
+  it('série sempre negativa não tem NADA na série azul', () => {
+    const r = montarFluxoPrevisto([saida('2026-10-01', 100)], -5000, MES);
+    expect(r.pontos.every((p) => p.saldoPos === 0)).toBe(true);
+    expect(r.pontos.every((p) => p.saldoNeg === p.saldo)).toBe(true);
+  });
+
+  /** As duas valem zero no cruzamento — é isso que faz a cor trocar no ponto, não perto dele. */
+  it('no cruzamento cada lado guarda só a sua metade', () => {
+    const r = montarFluxoPrevisto([
+      saida('2026-10-01', 42065.75), saida('2026-11-01', 2510230.75),
+    ], 141938.13, MES);
+    const [, out, nov] = r.pontos;
+    expect(out.saldo).toBeGreaterThan(0);
+    expect(out.saldoNeg).toBe(0);
+    expect(nov.saldo).toBeLessThan(0);
+    expect(nov.saldoPos).toBe(0);
+    expect(nov.saldoNeg).toBe(nov.saldo);
   });
 });
