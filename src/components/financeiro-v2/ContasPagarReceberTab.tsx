@@ -30,6 +30,8 @@ import { Segmentado } from '@/components/ui/segmentado';
 import { aplicarPlanoNaView, type LinhaViewDoc } from '@/lib/financeiro/listaPaginadaV2';
 import { montarPlanoBaseV2 } from '@/lib/financeiro/filtrosBaseV2';
 import { paginarTudo } from '@/lib/financeiro/paginarTudo';
+import { estimarSaldoEmCaixa, type ContaEmCaixa, type SaldoEmCaixa } from '@/lib/financeiro/saldoEmCaixa';
+import type { LinhaDaPosicao } from '@/hooks/useExtratoDaConta';
 import { rotuloOrigem } from '@/v2/lib/origemLancamento';
 import { STATUS_FILTRO_COR, STATUS_FILTRO_LABEL } from '@/lib/financeiro/statusFinanceiro';
 import { formatMoeda } from '@/lib/calculos/formatters';
@@ -76,6 +78,22 @@ const CORTE_DESTAQUE = 100_000;
 
 /** Contas que somam no "saldo em caixa". Lista BRANCA de propósito — ver o comentário do card. */
 const TIPOS_EM_CAIXA = new Set(['cc', 'inv']);
+
+/**
+ * Quantos meses para trás procurar a âncora conciliada de cada conta.
+ *
+ * ⚠ SEIS, E O NÚMERO FOI MEDIDO: nesta janela o cliente mais pesado (NJ) tem 3.155 realizados,
+ * que cabem em quatro levas do PostgREST, e as 20 contas de todos os clientes do proto acharam
+ * âncora dentro dela. Uma janela maior tornaria o card caro para atender a um caso que não
+ * existe; uma menor deixaria conta sem âncora — e conta sem âncora fica FORA do total.
+ */
+const MESES_BUSCA_ANCORA = 6;
+
+/** O `YYYY-MM` de N meses atrás — o piso da busca pela âncora. */
+function mesDeCorte(hoje: Date, meses: number): string {
+  const d = new Date(hoje.getFullYear(), hoje.getMonth() - meses, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Datas — tudo em horário LOCAL, nunca em UTC
@@ -239,72 +257,94 @@ export function ContasPagarReceberTab() {
    * o hoje e falharia no dia em que um tipo novo aparecesse: ele entraria no caixa sozinho,
    * em silêncio. Dizer quem ENTRA faz o tipo desconhecido ficar de fora, que é o lado certo
    * para errar num número que o operador usa para decidir pagamento.
-   * ⚠ E CARTÃO NÃO É CAIXA por definição, não por saldo: hoje as três contas de cartão e a
-   * de permuta do NJ estão todas em R$ 0,00, então a exclusão não muda número nenhum — o
-   * que ela impede é o dia em que mudarem.
+   *
+   * ⚠ A SOMA MUDOU DE REGRA EM PR-CPR-2A.1, e o card antigo era um número fantasma: ele pegava
+   * o MAIOR `ano_mes` de cada conta, e como as contas fecham em meses diferentes a soma
+   * misturava competências. Na Vera dava R$ 462.109,65 — Itaú Personalite de setembro com Itaú
+   * CDI de AGOSTO, quando o CDI já havia caído 205 mil em setembro. Agora cada conta parte do
+   * último mês que CONCILIA e soma os realizados desde aquela posição: R$ 198.299,74, o mesmo
+   * que a Conciliação mostra. Quem decide é `estimarSaldoEmCaixa`, que é puro e testado.
    */
   const { data: caixa } = useQuery({
-    queryKey: ['cpr-caixa', clienteId],
+    queryKey: ['cpr-caixa', clienteId, isoLocal(hoje)],
     enabled: !!clienteId,
-    queryFn: async () => {
+    queryFn: async (): Promise<SaldoEmCaixa | null> => {
       if (!clienteId) return null;
-      const { data: contas } = await supabase
+      const { data: contasRaw } = await supabase
         .from('financeiro_contas_bancarias')
-        .select('id, tipo_conta')
+        .select('id, nome_conta, nome_exibicao, tipo_conta')
         .eq('cliente_id', clienteId)
         .eq('ativa', true);
-      const emCaixa = new Set(
-        (contas ?? []).filter((c) => TIPOS_EM_CAIXA.has(c.tipo_conta ?? '')).map((c) => c.id),
-      );
-      if (emCaixa.size === 0) return null;
+      const contas: ContaEmCaixa[] = (contasRaw ?? [])
+        .filter((c) => TIPOS_EM_CAIXA.has(c.tipo_conta ?? ''))
+        .map((c) => ({ id: c.id, nome: c.nome_exibicao || c.nome_conta || 'Conta sem nome' }));
+      if (contas.length === 0) return null;
+
+      const mesMinimo = mesDeCorte(hoje, MESES_BUSCA_ANCORA);
 
       const { data: saldos } = await supabase
         .from('financeiro_saldos_bancarios_v2')
-        .select('conta_bancaria_id, ano_mes, saldo_final, status_mes')
+        .select('conta_bancaria_id, ano_mes, saldo_inicial, saldo_final, saldo_data')
         .eq('cliente_id', clienteId)
-        .order('ano_mes', { ascending: false });
+        .gte('ano_mes', mesMinimo);
 
-      /* O saldo de cada conta é o do seu MAIOR `ano_mes` — as contas não fecham todas no
-         mesmo mês, e somar um mês fixo perderia a que ainda não chegou nele. */
-      const ultima = new Map<string, { ano_mes: string; saldo_final: number; status_mes: string | null }>();
-      for (const s of saldos ?? []) {
-        const id = s.conta_bancaria_id;
-        if (!id || !emCaixa.has(id) || ultima.has(id)) continue;
-        ultima.set(id, {
-          ano_mes: s.ano_mes ?? '',
-          saldo_final: Number(s.saldo_final ?? 0),
-          status_mes: s.status_mes,
-        });
-      }
-      if (ultima.size === 0) return null;
+      /* Os realizados desde o primeiro mês candidato. `paginarTudo` porque o teto de mil do
+         PostgREST não avisa: o NJ tem 3.155 linhas nesta janela, e uma soma silenciosamente
+         truncada é o pior defeito possível num card de saldo. */
+      const linhas = await paginarTudo<LinhaDaPosicao>(async (de, tamanho) => {
+        const { data, error } = await supabase
+          .from('financeiro_lancamentos_v2')
+          .select('valor, sinal, tipo_operacao, data_pagamento, conta_bancaria_id, conta_destino_id')
+          .eq('cliente_id', clienteId)
+          .eq('cancelado', false)
+          .eq('cenario', 'realizado')
+          .gte('data_pagamento', `${mesMinimo}-01`)
+          .lte('data_pagamento', isoLocal(hoje))
+          .order('id', { ascending: true })
+          .range(de, de + tamanho - 1);
+        if (error) throw error;
+        const leva = data ?? [];
+        return { linhas: leva, brutas: leva.length };
+      });
 
-      let total = 0;
-      let referencia = '';
-      let algumaAberta = false;
-      for (const v of ultima.values()) {
-        total += v.saldo_final;
-        if (v.ano_mes > referencia) referencia = v.ano_mes;
-        if (v.status_mes !== 'fechado') algumaAberta = true;
-      }
-      return { total, referencia, algumaAberta };
+      return estimarSaldoEmCaixa({
+        contas, saldos: saldos ?? [], linhas, hoje: isoLocal(hoje), mesMinimo,
+      });
     },
   });
 
   /**
-   * O aviso de conciliação.
+   * O rótulo do caixa — calmo. Divergência é informação, não alarme.
    *
-   * ⚠ NÃO EXISTE "DATA DA ÚLTIMA CONCILIAÇÃO" para mostrar aqui: `financeiro_conciliacoes`
-   * está VAZIA (0 linhas, todos os clientes — medido em 19/09/2026). O sinal honesto é o
-   * `status_mes` dos saldos, e é só ele que esta linha usa. Inventar uma data a partir de
-   * `conciliacao_bancaria_itens.created_at` seria apresentar "quando alguém mexeu" como
-   * "até quando está conferido" — duas coisas diferentes.
+   * ⚠ A DATA É O ELO FRACO, e é por isso que ela não é "a data de hoje" nem "o mês de
+   * referência": com contas conferidas em datas diferentes, o número inteiro só é tão confiável
+   * quanto a conta mais atrasada. Dizer "conciliado até 31/ago" quando uma conta fechou em
+   * 17/09 é a leitura conservadora, e é a única que não promete mais do que se sabe.
+   * ⚠ NÃO VEM DE `financeiro_conciliacoes`: a tabela está VAZIA (0 linhas, todos os clientes,
+   * medido em 19/09/2026). Vem de onde a Conciliação de fato decide — o saldo declarado que
+   * FECHA na sua posição, pela mesma `saldoConfere` de tolerância zero.
+   * ⚠ E QUANDO TUDO ESTÁ EM DIA o aviso SOME: sobra só "conciliado até DD/mmm". Um alerta que
+   * nunca desliga deixa de ser lido.
    */
-  const avisoCaixa = useMemo(() => {
-    if (!caixa) return null;
+  const rotuloCaixa = useMemo(() => {
+    if (!caixa || !caixa.ancoraMaisAtrasada) return null;
+    const ate = `conciliado até ${format(parseISO(caixa.ancoraMaisAtrasada), 'dd/MMM', { locale: ptBR })}`;
+    const partes = [ate];
+    /* "Inclui <mês> não conciliado" só quando o elo fraco ficou para trás do mês corrente —
+       é literalmente o período que o roll-forward está estimando. */
+    const mesDoElo = caixa.ancoraMaisAtrasada.slice(0, 7);
     const mesCorrente = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
-    if (!caixa.algumaAberta && caixa.referencia >= mesCorrente) return null;
-    const nome = format(hoje, 'MMMM', { locale: ptBR });
-    return `${nome.charAt(0).toUpperCase()}${nome.slice(1)} em aberto — não conciliado`;
+    if (mesDoElo < mesCorrente) {
+      partes.push(`inclui ${format(hoje, 'MMMM', { locale: ptBR })} não conciliado`);
+    }
+    /* A conta que ficou de fora é NOMEADA. Um total silenciosamente incompleto é pior que um
+       total menor e declarado. */
+    if (caixa.semAncora.length > 0) {
+      partes.push(caixa.semAncora.length === 1
+        ? `${caixa.semAncora[0]} sem saldo conferido, fora da soma`
+        : `${caixa.semAncora.length} contas sem saldo conferido, fora da soma`);
+    }
+    return partes.join(' · ');
   }, [caixa, hoje]);
 
   // ── Recortes em memória ────────────────────────────────────────────────────
@@ -446,14 +486,11 @@ export function ContasPagarReceberTab() {
             borda="border-l-success"
           />
           <CardResumo
-            rotulo="Saldo em caixa"
-            valor={caixa ? formatMoeda(caixa.total) : '—'}
+            rotulo="Saldo em caixa (estimado)"
+            valor={caixa && caixa.ancoradas > 0 ? formatMoeda(caixa.total) : '—'}
             classeValor="text-foreground"
             borda="border-l-primary"
-            nota={caixa?.referencia
-              ? `ref. ${format(parseISO(`${caixa.referencia}-01`), 'MMM/yyyy', { locale: ptBR })}`
-              : undefined}
-            aviso={avisoCaixa ?? undefined}
+            nota={rotuloCaixa ?? undefined}
           />
         </div>
 
@@ -630,13 +667,19 @@ export function ContasPagarReceberTab() {
  * Um slot do resumo. Largura vem do `grid-cols-3` do pai e NUNCA do conteúdo; a altura é
  * fixa para que a presença ou ausência do aviso não mexa na régua (A27).
  */
-function CardResumo({ rotulo, valor, classeValor, borda, nota, aviso }: {
+function CardResumo({ rotulo, valor, classeValor, borda, nota }: {
   rotulo: string;
   valor: string;
   classeValor: string;
   borda: string;
+  /**
+   * A terceira linha do slot.
+   * ⚠ ELA É MUTED, E NUNCA VERMELHA — decisão do PR-CPR-2A.1. O rótulo do caixa diz
+   * "conciliado até 31/ago · inclui setembro não conciliado", que é INFORMAÇÃO sobre até onde
+   * o número está conferido, não um defeito a corrigir. Um alarme que aparece todo mês, por
+   * construção, é um alarme que o operador aprende a não ler.
+   */
   nota?: string;
-  aviso?: string;
 }) {
   return (
     <div className={cn('min-w-0 h-[60px] rounded-md border border-l-[3px] px-3 py-1.5', borda)}>
@@ -645,12 +688,8 @@ function CardResumo({ rotulo, valor, classeValor, borda, nota, aviso }: {
       <div className={cn('mt-1 truncate text-[20px] font-medium leading-none tabular-nums', classeValor)}>
         {valor}
       </div>
-      <div className="mt-1 truncate text-[9.5px] leading-none" title={aviso ?? nota}>
-        {aviso
-          ? <span className="text-amber-600 dark:text-amber-400">{aviso}</span>
-          : nota
-            ? <span className="text-muted-foreground">{nota}</span>
-            : <span>&nbsp;</span>}
+      <div className="mt-1 truncate text-[9.5px] leading-none text-muted-foreground" title={nota}>
+        {nota ?? '\u00a0'}
       </div>
     </div>
   );
