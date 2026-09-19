@@ -134,9 +134,9 @@ describe('granularidade diária — PR-CPR-2B.1', () => {
   it('inclui os dias SEM movimento, com saldo estável', () => {
     const r = montarFluxoPrevisto([saida('2026-09-22', 100)], 1000, DIA);
     expect(r.granularidade).toBe('dia');
-    /* Hoje + 19, 20, 21, 22 */
-    expect(r.pontos.map((p) => p.rotulo)).toEqual(['Hoje', '19/09', '20/09', '21/09', '22/09']);
-    expect(r.pontos.map((p) => p.saldo)).toEqual([1000, 1000, 1000, 1000, 900]);
+    /* "Hoje" É o dia 19; o laço diário começa no 20. */
+    expect(r.pontos.map((p) => p.rotulo)).toEqual(['Hoje', '20/09', '21/09', '22/09']);
+    expect(r.pontos.map((p) => p.saldo)).toEqual([1000, 1000, 1000, 900]);
   });
 
   it('a faixa de baixo é o mês, e marca onde ele vira', () => {
@@ -235,7 +235,7 @@ describe('o fluxo é sempre de hoje para a frente — PR-CPR-2B.2', () => {
   it('o eixo diário abre em HOJE mesmo com o horizonte olhando para trás', () => {
     const r = montarFluxoPrevisto([saida('2026-03-10', 999), saida('2026-09-21', 10)], 0, DIA);
     expect(r.pontos[0].rotulo).toBe('Hoje');
-    expect(r.pontos[1].rotulo).toBe('19/09');
+    expect(r.pontos[1].rotulo).toBe('20/09');
     expect(r.anteriores).toBe(1);
   });
 
@@ -246,9 +246,14 @@ describe('o fluxo é sempre de hoje para a frente — PR-CPR-2B.2', () => {
     expect(r.pontos[0].saldo).toBe(7000);
   });
 
-  it('vencimento em HOJE entra — a fronteira é inclusiva', () => {
-    const r = montarFluxoPrevisto([saida(HOJE, 100)], 500, DIA);
+  /**
+   * ⚠ O QUE VENCE HOJE É BARRA EM HOJE E DESCONTO A PARTIR DE AMANHÃ: o saldo de hoje é o que
+   * está na conta agora, e uma obrigação que vence hoje e não foi paga ainda não saiu de lá.
+   */
+  it('vencimento em HOJE vira barra no ponto de hoje, sem mexer no saldo de hoje', () => {
+    const r = montarFluxoPrevisto([saida(HOJE, 100), saida('2026-09-21', 10)], 500, DIA);
     expect(r.anteriores).toBe(0);
+    expect(r.pontos[0]).toMatchObject({ rotulo: 'Hoje', saidas: -100, saldo: 500 });
     expect(r.pontos[1].saldo).toBe(400);
   });
 });
@@ -289,19 +294,18 @@ describe('a área segue o SINAL da linha — PR-CPR-2B.2', () => {
 describe('combinarComPassado — as três zonas — PR-CPR-2B.3', () => {
   const DIA = { granularidade: 'dia' as const, hoje: HOJE };
   const passado = [
-    { data: '2026-09-16', saldo: 300, conciliado: true },
-    { data: '2026-09-17', saldo: 300, conciliado: true },
-    { data: '2026-09-18', saldo: 250, conciliado: false },
-    { data: HOJE, saldo: 200, conciliado: false },
+    { data: '2026-09-16', saldo: 300, conciliado: true, entradas: 0, saidas: 0 },
+    { data: '2026-09-17', saldo: 300, conciliado: true, entradas: 0, saidas: 0 },
+    { data: '2026-09-18', saldo: 250, conciliado: false, entradas: 0, saidas: 0 },
+    { data: HOJE, saldo: 200, conciliado: false, entradas: 0, saidas: 0 },
   ];
 
   it('as três zonas aparecem, na ordem, e hoje é UM ponto só', () => {
     const fluxo = montarFluxoPrevisto([saida('2026-09-21', 50)], 200, DIA);
     const linha = combinarComPassado(fluxo, passado, HOJE);
-    /* 16 e 17/09 conciliados, 18/09 a conferir, e o futuro Hoje + 19, 20, 21. */
+    /* 16 e 17/09 conciliados, 18/09 a conferir, e o futuro Hoje + 20, 21. */
     expect(linha.map((p) => p.zona)).toEqual([
-      'conciliado', 'conciliado', 'realizado',
-      'previsto', 'previsto', 'previsto', 'previsto']);
+      'conciliado', 'conciliado', 'realizado', 'previsto', 'previsto', 'previsto']);
     expect(linha.filter((p) => p.rotulo === 'Hoje')).toHaveLength(1);
   });
 
@@ -338,10 +342,10 @@ describe('combinarComPassado — as três zonas — PR-CPR-2B.3', () => {
   it('no mensal o passado é reduzido ao último dia de cada mês', () => {
     const fluxo = montarFluxoPrevisto([saida('2026-10-01', 50)], 200, MES);
     const longo = [
-      { data: '2026-07-30', saldo: 900, conciliado: true },
-      { data: '2026-07-31', saldo: 800, conciliado: true },
-      { data: '2026-08-31', saldo: 500, conciliado: false },
-      { data: HOJE, saldo: 200, conciliado: false },
+      { data: '2026-07-30', saldo: 900, conciliado: true, entradas: 0, saidas: 0 },
+      { data: '2026-07-31', saldo: 800, conciliado: true, entradas: 0, saidas: 0 },
+      { data: '2026-08-31', saldo: 500, conciliado: false, entradas: 0, saidas: 0 },
+      { data: HOJE, saldo: 200, conciliado: false, entradas: 0, saidas: 0 },
     ];
     const linha = combinarComPassado(fluxo, longo, HOJE);
     expect(linha.map((p) => p.rotulo)).toEqual(['jul/26', 'ago/26', 'Hoje', 'out/26']);
@@ -349,10 +353,47 @@ describe('combinarComPassado — as três zonas — PR-CPR-2B.3', () => {
 
   it('a faixa é recalculada sobre a série inteira, incluindo os meses do passado', () => {
     const fluxo = montarFluxoPrevisto([saida('2026-10-01', 50)], 200, DIA);
-    const comAgosto = [{ data: '2026-08-31', saldo: 300, conciliado: true }, ...passado];
+    const comAgosto = [{ data: '2026-08-31', saldo: 300, conciliado: true, entradas: 0, saidas: 0 }, ...passado];
     const linha = combinarComPassado(fluxo, comAgosto, HOJE);
     expect(linha[0].faixa).toBe('ago/26');
     expect(linha[0].abreFaixa).toBe(true);
     expect(linha.find((p) => p.faixa === 'set/26')?.abreFaixa).toBe(true);
+  });
+});
+
+describe('o degrau em "hoje" — PR-CPR-2B.3.1', () => {
+  const DIA = { granularidade: 'dia' as const, hoje: HOJE };
+  const passado = [
+    { data: '2026-09-18', saldo: 250, conciliado: false, entradas: 0, saidas: -50 },
+    { data: HOJE, saldo: 250, conciliado: false, entradas: 0, saidas: 0 },
+  ];
+
+  /**
+   * ⚠ QUANDO AS DUAS CONTAS FECHAM, não há degrau: o azul termina onde o laranja começa. Foi o
+   * caso medido de NJ e Vera em 19/09/2026.
+   */
+  it('caminhada igual ao card: azul e laranja se encontram no mesmo valor', () => {
+    const fluxo = montarFluxoPrevisto([saida('2026-09-21', 10)], 250, DIA);
+    const linha = combinarComPassado(fluxo, passado, HOJE);
+    const emHoje = linha.find((p) => p.rotulo === 'Hoje')!;
+    expect(emHoje.saldoRealizado).toBe(250);
+    expect(emHoje.saldoPrevisto).toBe(250);
+  });
+
+  /** ⚠ Quando divergem, o ponto carrega os DOIS valores — o salto entre eles é a denúncia. */
+  it('caminhada diferente do card: o ponto guarda os dois valores', () => {
+    const fluxo = montarFluxoPrevisto([saida('2026-09-21', 10)], 200, DIA);
+    const linha = combinarComPassado(fluxo, passado, HOJE);
+    const emHoje = linha.find((p) => p.rotulo === 'Hoje')!;
+    expect(emHoje.saldoRealizado).toBe(250);
+    expect(emHoje.saldoPrevisto).toBe(200);
+    /* O `saldo` — que o tooltip, a área e a tag mostram — é o do CARD, a autoridade. */
+    expect(emHoje.saldo).toBe(200);
+  });
+
+  it('as barras do passado chegam à série', () => {
+    const fluxo = montarFluxoPrevisto([], 250, DIA);
+    const linha = combinarComPassado(fluxo, passado, HOJE);
+    expect(linha[0].saidas).toBe(-50);
   });
 });

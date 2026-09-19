@@ -290,84 +290,99 @@ describe('permuta — o caso do NJ em 19/09/2026', () => {
   });
 });
 
-describe('serieDoSaldoPassado — PR-CPR-2B.3', () => {
+describe('serieDoSaldoPassado — regra fixa de mês — PR-CPR-2B.3.1', () => {
   const contasVera = [
     { id: ITAU, nome: 'Itaú Personalite', tipo: 'cc' },
     { id: CDI, nome: 'Itaú CDI', tipo: 'inv' },
     { id: BTG, nome: 'BTG Corretora', tipo: 'cc' },
+    { id: 'cartao', nome: 'Cartão', tipo: 'cartao' },
   ];
+  /* Partida = 31/jul somado das contas de caixa; o cartão não entra. */
   const saldosVera = [
-    saldo(ITAU, '2026-08', 208561.46, 30943.91, '2026-08-31'),
-    saldo(CDI, '2026-08', 301905.93, 305208.79, '2026-08-31'),
-    saldo(BTG, '2026-08', 1154.08, 1154.08),
+    saldo(ITAU, '2026-07', 172615.25, 208561.46, '2026-07-31'),
+    saldo(CDI, '2026-07', 311388.14, 301905.93, '2026-07-31'),
+    saldo(BTG, '2026-07', 1154.08, 1154.08),
+    saldo('cartao', '2026-07', 0, 999999),
   ];
   const linhasVera = [
     saida(ITAU, '2026-08-15', 177617.55),
+    entrada(CDI, '2026-08-15', 3302.86),
     entrada(ITAU, '2026-09-05', 124802.87),
     saida(ITAU, '2026-09-18', 58809.06),
-    entrada(CDI, '2026-08-15', 3302.86),
     saida(CDI, '2026-09-10', 205000.85),
   ];
-  const entradaComum = {
-    contas: contasVera, saldos: saldosVera, linhas: linhasVera,
-    hoje: HOJE, mesMinimo: JANELA,
+  const base = {
+    contas: contasVera, saldos: saldosVera, linhas: linhasVera, hoje: HOJE,
   };
 
-  /**
-   * ⚠ O TESTE QUE JUSTIFICA O ARQUIVO INTEIRO. O gráfico do passado existe para PROVAR a
-   * conciliação: ele parte do último saldo conciliado, aplica os realizados e tem de pousar
-   * exatamente no número que o card mostra. Se as duas contas divergirem, o operador vê um
-   * degrau em "hoje" e não sabe se é furo de dado ou defeito de desenho. Aqui fica travado que
-   * é a MESMA conta — logo, qualquer degrau na tela é dado.
-   */
-  it('o último ponto é EXATAMENTE o total do card', () => {
-    const serie = serieDoSaldoPassado(entradaComum);
-    const card = estimarSaldoEmCaixa(entradaComum);
-    const ultimo = serie.pontos[serie.pontos.length - 1];
-    expect(ultimo.data).toBe(HOJE);
-    expect(ultimo.saldo).toBe(card.total);
-    expect(ultimo.saldo).toBe(198299.74);
-  });
-
-  it('começa no 1º dia do mês da âncora mais atrasada', () => {
-    const serie = serieDoSaldoPassado(entradaComum);
-    expect(serie.pontos[0].data).toBe('2026-08-01');
-    expect(serie.boundary).toBe('2026-08-31');
+  it('começa em 01 do mês ANTERIOR, partindo do saldo do mês retrasado', () => {
+    const s = serieDoSaldoPassado(base);
+    expect(s.pontos[0].data).toBe('2026-08-01');
+    expect(s.boundary).toBe('2026-08-31');
+    /* 208.561,46 + 301.905,93 + 1.154,08 = 511.621,47 — o cartão fica de fora. */
+    expect(s.pontos[0].saldo).toBe(511621.47);
   });
 
   /**
-   * ⚠ O PATAMAR VERDE É CORRETO, não um bug de desenho: dentro do mês conciliado o valor
-   * confirmado JÁ contém aquele movimento. Fazer a linha subir ali contaria a saída de
-   * 15/08 duas vezes — uma no `saldo_final` declarado e outra no caminhar.
+   * ⚠ O DEFEITO QUE A 2B.3.1 CONSERTA: com a âncora POR CONTA, uma única conta atrasada puxava
+   * o gráfico um mês para trás. A regra fixa é a mesma para todo cliente.
    */
-  it('o trecho conciliado é um PATAMAR — não recontabiliza o mês já fechado', () => {
-    const serie = serieDoSaldoPassado(entradaComum);
-    const verdes = serie.pontos.filter((p) => p.conciliado);
-    expect(verdes).toHaveLength(31);
-    expect(new Set(verdes.map((p) => p.saldo)).size).toBe(1);
-    expect(verdes[0].saldo).toBe(337306.78);
+  it('o mês retrasado NÃO aparece na série', () => {
+    const s = serieDoSaldoPassado(base);
+    expect(s.pontos.some((p) => p.data.startsWith('2026-07'))).toBe(false);
   });
 
-  it('o trecho a conferir anda com os realizados de setembro', () => {
-    const serie = serieDoSaldoPassado(entradaComum);
-    const azuis = serie.pontos.filter((p) => !p.conciliado);
-    expect(azuis[0].data).toBe('2026-09-01');
-    expect(azuis[0].saldo).toBe(337306.78);
-    expect(azuis[azuis.length - 1].saldo).toBe(198299.74);
+  /** ⚠ O passado VIVE: o mês anterior é percorrido dia a dia, não é patamar. */
+  it('a linha CAMINHA no mês conciliado, com os realizados do dia', () => {
+    const s = serieDoSaldoPassado(base);
+    const dia15 = s.pontos.find((p) => p.data === '2026-08-15')!;
+    expect(dia15.saidas).toBe(-177617.55);
+    expect(dia15.entradas).toBe(3302.86);
+    const saldosDeAgosto = new Set(
+      s.pontos.filter((p) => p.conciliado).map((p) => p.saldo));
+    expect(saldosDeAgosto.size).toBeGreaterThan(1);
   });
 
-  /** ⚠ O caso do NJ em setembro: sem realizado no período, a linha fica PLANA — e é correto. */
-  it('período sem realizado nenhum fica plano até hoje', () => {
-    const serie = serieDoSaldoPassado({ ...entradaComum, linhas: [
+  it('o fim do mês anterior é o saldo conciliado somado', () => {
+    const s = serieDoSaldoPassado(base);
+    const fimAgosto = s.pontos.find((p) => p.data === '2026-08-31')!;
+    expect(fimAgosto.conciliado).toBe(true);
+    /* 511.621,47 − 177.617,55 + 3.302,86 = 337.306,78 */
+    expect(fimAgosto.saldo).toBe(337306.78);
+  });
+
+  /**
+   * ⚠ O NÚMERO QUE A HOMOLOGAÇÃO CONFERE. Medido no proto em 19/09/2026: a caminhada fixa e o
+   * card caem no MESMO valor quando toda conta está conciliada até o fim do mês anterior.
+   * Quando não caem, a diferença vira um degrau visível em hoje — que é a denúncia.
+   */
+  it('chega em hoje no mesmo valor do card, quando a conciliação fecha', () => {
+    const s = serieDoSaldoPassado(base);
+    const hoje = s.pontos[s.pontos.length - 1];
+    expect(hoje.data).toBe(HOJE);
+    expect(hoje.saldo).toBe(198299.74);
+  });
+
+  it('setembro sem realizado até hoje fica PLANO — o caso do NJ', () => {
+    const s = serieDoSaldoPassado({ ...base, linhas: [
       saida(ITAU, '2026-08-15', 177617.55), entrada(CDI, '2026-08-15', 3302.86),
+      /* 30/09 é FUTURO: realizado com data adiante não entra na caminhada. */
+      saida(ITAU, '2026-09-30', 13750),
     ] });
-    const azuis = serie.pontos.filter((p) => !p.conciliado);
-    expect(new Set(azuis.map((p) => p.saldo)).size).toBe(1);
-    expect(azuis[azuis.length - 1].saldo).toBe(337306.78);
+    const setembro = s.pontos.filter((p) => !p.conciliado);
+    expect(new Set(setembro.map((p) => p.saldo)).size).toBe(1);
+    expect(setembro[setembro.length - 1].saldo).toBe(337306.78);
   });
 
-  it('sem conta ancorada não há passado a desenhar', () => {
-    expect(serieDoSaldoPassado({ ...entradaComum, saldos: [] }))
+  it('cartão e permuta não entram na partida nem nas barras', () => {
+    const s = serieDoSaldoPassado({ ...base, linhas: [
+      ...linhasVera, saida('cartao', '2026-08-20', 50000),
+    ] });
+    expect(s.pontos.find((p) => p.data === '2026-08-20')?.saidas).toBe(0);
+  });
+
+  it('sem saldo no mês retrasado não há passado a desenhar', () => {
+    expect(serieDoSaldoPassado({ ...base, saldos: [] }))
       .toEqual({ pontos: [], boundary: null });
   });
 });

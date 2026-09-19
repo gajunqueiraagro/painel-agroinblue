@@ -45,21 +45,26 @@ const COR_AREA_NEG = '#c0392b';
 /** Largura mínima que um rótulo "dd/mm" ocupa sem colar no vizinho. */
 const LARGURA_ROTULO_DIA = 34;
 
-/** Eixo Y compacto: 1,2 mi · 400k · 0. */
-function fmtEixoY(v: number): string {
+/**
+ * Escala curta — "1,83 mi", "462 mil", "0".
+ *
+ * ⚠ NUNCA O NÚMERO CHEIO NO EIXO: "1.832.544,83" repetido em sete linhas de grade rouba a
+ * largura do gráfico e não acrescenta precisão nenhuma — quem quer o centavo lê a tag ou o
+ * tooltip. E "mil" por extenso em vez de "k": o painel é para o produtor, não para o mercado.
+ */
+function fmtCurto(v: number): string {
   const abs = Math.abs(v);
   const sinal = v < 0 ? '-' : '';
-  if (abs >= 1_000_000) return `${sinal}${(abs / 1_000_000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mi`;
-  if (abs >= 1000) return `${sinal}${Math.round(abs / 1000)}k`;
+  if (abs >= 1_000_000) {
+    return `${sinal}${(abs / 1_000_000).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} mi`;
+  }
+  if (abs >= 1000) return `${sinal}${Math.round(abs / 1000)} mil`;
   return String(Math.round(v));
 }
 
-/** Tag de valor: milhar sempre, milhão abreviado quando o número é grande. */
+/** Tag de valor: mesma escala curta, com o cifrão. */
 function fmtTag(v: number): string {
-  if (Math.abs(v) >= 1_000_000) {
-    return `R$ ${(v / 1_000_000).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} mi`;
-  }
-  return formatMoeda(v);
+  return `R$ ${fmtCurto(v)}`;
 }
 
 /**
@@ -96,10 +101,12 @@ function TickEixoX({ x, y, payload, index, pontos, passoRotulo, faixaCabe }: {
 
   return (
     <g transform={`translate(${cx},${cy})`}>
+      {/* ⚠ SÓ O DIA, SEM O MÊS: o mês já está na faixa logo abaixo, e "01/08" repetido em
+          vinte colunas polui sem informar. "Hoje" continua escrito por extenso. */}
       {mostraDia && (
         <text x={0} y={0} dy={11} textAnchor={i === 0 ? 'start' : 'middle'}
-          fill={COR_TEXTO} fontSize={11}>
-          {ponto?.rotulo ?? String(payload?.value ?? '')}
+          fill={COR_TEXTO} fontSize={9.5}>
+          {ponto?.rotulo === 'Hoje' ? 'Hoje' : (ponto?.rotulo ?? '').slice(0, 2)}
         </text>
       )}
       {/* ⚠ O TRAÇO DA VIRADA COMEÇA ABAIXO DA LINHA DOS DIAS (y=17), nunca em y=2: subindo até
@@ -329,7 +336,7 @@ export function CprFluxoPrevisto({ linhas, saldoInicial, caveat, granularidade, 
               tick={<TickEixoX pontos={pontos} passoRotulo={passoRotulo} faixaCabe={faixaCabe} />} />
             <YAxis domain={escala.dominio} ticks={escala.ticks} width={LARGURA_EIXO_Y}
               tickLine={{ stroke: COR_TEXTO, opacity: 0.4 }} axisLine={false}
-              tick={{ fontSize: 12, fill: COR_TEXTO }} tickFormatter={fmtEixoY} />
+              tick={{ fontSize: 10, fill: COR_TEXTO }} tickFormatter={fmtCurto} />
             <Tooltip content={<TooltipFluxo />} cursor={{ fill: '#00000008' }} />
             <ReferenceLine y={0} stroke={COR_TEXTO} strokeWidth={1.2} />
 
@@ -386,9 +393,17 @@ export function CprFluxoPrevisto({ linhas, saldoInicial, caveat, granularidade, 
                 ⚠ E O TEXTO VAI PARA A ESQUERDA DO PONTO (`dx` negativo) quando "hoje" está
                 perto da borda: colado no eixo Y ele ficava por cima dos números da escala. */}
             {emHoje && (
-              <ReferenceDot x={emHoje.rotulo} y={emHoje.saldo} r={0} isFront
-                label={{ value: `hoje ${fmtTag(emHoje.saldo)}`, position: 'top',
-                  fontSize: 11, fontWeight: 600, fill: COR_TEXTO, offset: 14 }} />
+              <>
+                {/* ⚠ DUAS LINHAS, "hoje" ACIMA do valor: numa linha só o rótulo empurrava o
+                    número para cima da curva. Separados, o valor fica logo acima do ponto e a
+                    palavra acima dele, sem encostar em nada. */}
+                <ReferenceDot x={emHoje.rotulo} y={emHoje.saldo} r={0} isFront
+                  label={{ value: 'hoje', position: 'top', fontSize: 10,
+                    fill: COR_TEXTO, offset: 30 }} />
+                <ReferenceDot x={emHoje.rotulo} y={emHoje.saldo} r={0} isFront
+                  label={{ value: fmtTag(emHoje.saldo), position: 'top', fontSize: 12,
+                    fontWeight: 600, fill: COR_TEXTO, offset: 15 }} />
+              </>
             )}
             {fimConciliado && fimConciliado.chave !== emHoje.chave && (
               <ReferenceDot x={fimConciliado.rotulo} y={fimConciliado.saldo} r={0} isFront

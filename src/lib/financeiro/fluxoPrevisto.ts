@@ -168,14 +168,21 @@ export function montarFluxoPrevisto(
      dariam uma linha que salta de 05/10 para 13/11 com a mesma inclinação de um dia para o
      outro — o eixo deixaria de ser tempo. Dia sem movimento entra com barra zero e o saldo
      anterior, que é a verdade: naquele dia nada aconteceu. */
-  const precisaDia = opcoes.granularidade === 'dia' && !!maiorVenc;
+  /* ⚠ SEM COMPROMISSO FUTURO A SÉRIE CONTINUA DIÁRIA. Amarrar a granularidade à existência de
+     um vencimento fazia um cliente sem nada a vencer cair para mensal — e levava junto o
+     PASSADO, que é diário e tem o que mostrar. O intervalo vira só o dia de hoje; o passado
+     acrescenta os dias dele por fora. */
+  const precisaDia = opcoes.granularidade === 'dia';
   /* O eixo ABRE EM HOJE, sempre: o horizonte diz até onde ir para a frente, nunca o quanto
      voltar. Sem isto o "Tudo" começava em jul/2025 e o "Vencidos" olhava para trás. */
-  const de = precisaDia ? opcoes.hoje : '';
+  /* ⚠ O LAÇO DIÁRIO COMEÇA EM HOJE+1, e não em hoje: o ponto "Hoje" já É o dia de hoje. Até a
+     2B.2 os dois coexistiam e o dia atual saía duplicado — invisível enquanto a série abria
+     nele, óbvio agora que o passado chega até ali e a junção tem de ser um ponto só. */
+  const de = precisaDia ? somarDiasIso(opcoes.hoje, 1) : '';
   const ate = precisaDia ? (maiorVenc! > opcoes.hoje ? maiorVenc! : opcoes.hoje) : '';
-  const totalDias = precisaDia ? diasEntre(de, ate) + 1 : 0;
+  const totalDias = precisaDia && ate >= de ? diasEntre(de, ate) + 1 : 0;
   const granularidade: Granularidade =
-    opcoes.granularidade === 'dia' && totalDias > 0 && totalDias <= MAX_PONTOS_DIA ? 'dia' : 'mes';
+    opcoes.granularidade === 'dia' && totalDias <= MAX_PONTOS_DIA ? 'dia' : 'mes';
   const rebaixada = opcoes.granularidade === 'dia' && granularidade === 'mes' && totalDias > MAX_PONTOS_DIA;
 
   /* Caiu para mensal depois de agrupar por dia: reagrupar pelas chaves de mês. */
@@ -194,16 +201,29 @@ export function montarFluxoPrevisto(
   /* ⚠ O PONTO "HOJE" ABRE A SÉRIE, e não é enfeite: sem ele a linha nasceria já descontada do
      primeiro período, e o operador não veria de onde ela partiu. É o mesmo `{ dia: 'Início' }`
      que a evolução do Extrato Gerencial usa. */
+  /**
+   * ⚠ O QUE VENCE HOJE FICA NO PONTO "HOJE", mas NÃO no saldo dele. O saldo de hoje é o do
+   * card — o dinheiro que está na conta agora —, e uma obrigação que vence hoje e ainda não
+   * foi paga não saiu de lá. Ela aparece como BARRA no dia de hoje e desconta a linha a partir
+   * do ponto seguinte.
+   * ⚠ E NÃO É DETALHE: no NJ são R$ 600.500,00 vencendo hoje (a amortização Sicredi mais os
+   * juros). Sem isto, o laço diário começando amanhã as perderia por inteiro.
+   */
+  const deHoje = granularidade === 'dia'
+    ? mapa.get(opcoes.hoje) ?? { entradas: 0, saidas: 0 }
+    : { entradas: 0, saidas: 0 };
+
   const pontos: PontoFluxo[] = [{
     chave: 'inicio', rotulo: 'Hoje', faixa: '', abreFaixa: false,
-    entradas: 0, saidas: 0, ...partesDoSaldo(saldoInicial),
+    entradas: arredondar(deHoje.entradas), saidas: arredondar(-deHoje.saidas),
+    ...partesDoSaldo(saldoInicial),
   }];
 
   const chaves: string[] = granularidade === 'dia'
     ? Array.from({ length: totalDias }, (_, i) => somarDiasIso(de, i))
     : Array.from(mapa.keys()).sort();
 
-  let acumulado = saldoInicial;
+  let acumulado = saldoInicial + deHoje.entradas - deHoje.saidas;
   let faixaAnterior = '';
   for (const chave of chaves) {
     const { entradas, saidas } = mapa.get(chave) ?? { entradas: 0, saidas: 0 };
@@ -237,7 +257,11 @@ export function primeiroNegativo<T extends PontoFluxo>(pontos: readonly T[]): T 
 }
 
 function arredondar(n: number): number {
-  return Math.round(n * 100) / 100;
+  const r = Math.round(n * 100) / 100;
+  /* ⚠ `-0` NÃO É `0` para `Object.is`, e é o que `-(0)` produz ao inverter o sinal das saídas.
+     Ele não muda desenho nenhum, mas faz uma comparação de igualdade falhar sem motivo — e
+     seria um enigma para quem lesse o teste. */
+  return r === 0 ? 0 : r;
 }
 
 /** O saldo e as suas duas metades, para a área azul e a vermelha. */
@@ -347,6 +371,9 @@ export interface PontoPassadoEntrada {
   data: string;
   saldo: number;
   conciliado: boolean;
+  /** Realizados do dia — as barras do passado. Entradas >= 0, saídas <= 0. */
+  entradas: number;
+  saidas: number;
 }
 
 export interface PontoLinha extends PontoFluxo {
@@ -399,8 +426,10 @@ export function combinarComPassado(
       rotulo: doDia ? rotuloDoDia(p.data) : rotuloDoMes(p.data.slice(0, 7)),
       faixa: doDia ? rotuloDoMes(p.data.slice(0, 7)) : p.data.slice(0, 4),
       abreFaixa: false,
-      entradas: 0,
-      saidas: 0,
+      /* ⚠ AS BARRAS DO PASSADO SÃO REALIZADOS, não previsões — mesma forma, outro tempo. Sem
+         elas o mês anterior seria uma linha andando sem que nada explicasse por quê. */
+      entradas: p.entradas,
+      saidas: p.saidas,
       saldo: p.saldo,
       saldoPos: Math.max(p.saldo, 0),
       saldoNeg: Math.min(p.saldo, 0),
@@ -411,6 +440,17 @@ export function combinarComPassado(
   /* O primeiro ponto do futuro é "Hoje" e traz o saldo do card — é a costura das duas metades. */
   const futuro = fluxo.pontos.map((p) => vestir(p, 'previsto'));
 
+  /**
+   * ⚠ O DEGRAU EM "HOJE" É INFORMAÇÃO, e por isso o ponto carrega DOIS valores. A caminhada do
+   * passado (regra de mês fixo) e o card (âncora por conta) são construções diferentes: quando
+   * toda conta está conciliada até o fim do mês anterior elas coincidem — medido, NJ e Vera com
+   * diferença zero —, e quando não coincidem a diferença é uma conta cuja conciliação não
+   * fecha. O trecho azul termina no valor caminhado e o laranja começa no valor do card; o
+   * salto entre os dois, na mesma vertical, é a denúncia.
+   * ⚠ E A TELA NÃO NOMEIA A CONTA: isso é trabalho da Conciliação. Aqui só se mostra que há.
+   */
+  const passadoEmHoje = passado.find((p) => p.data === hoje) ?? null;
+
   const juntos = [...anteriores, ...futuro];
   /* A faixa é recalculada sobre a série inteira: o passado acrescentou meses à esquerda. */
   let faixaAnterior = '';
@@ -418,7 +458,14 @@ export function combinarComPassado(
     p.abreFaixa = !!p.faixa && p.faixa !== faixaAnterior;
     if (p.faixa) faixaAnterior = p.faixa;
   }
-  return preencherSeries(juntos);
+  const series = preencherSeries(juntos);
+  if (passadoEmHoje) {
+    const emHoje = series.find((p) => p.rotulo === 'Hoje');
+    /* O `saldo` do ponto continua sendo o do card — é ele que o tooltip, a área e a tag dizem.
+       O que muda é só onde o traço azul termina. */
+    if (emHoje) emHoje.saldoRealizado = passadoEmHoje.saldo;
+  }
+  return series;
 }
 
 /** Espalha o saldo nas três séries, repetindo a virada para os trechos se tocarem. */
