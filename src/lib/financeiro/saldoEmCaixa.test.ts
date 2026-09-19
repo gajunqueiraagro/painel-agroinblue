@@ -7,7 +7,8 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  ancoraDaConta, estimarSaldoDaConta, estimarSaldoEmCaixa, posicaoDoSaldo,
+  ancoraDaConta, ancoraSemExtrato, contaSemExtrato, estimarSaldoDaConta, estimarSaldoEmCaixa,
+  grupoDoTipoConta, posicaoDoSaldo,
   type SaldoMesConta,
 } from './saldoEmCaixa';
 import type { LinhaDaPosicao } from '@/hooks/useExtratoDaConta';
@@ -136,9 +137,9 @@ describe('estimarSaldoDaConta', () => {
 
 describe('estimarSaldoEmCaixa — o caso da Vera em 19/09/2026', () => {
   const contas = [
-    { id: ITAU, nome: 'Itaú Personalite' },
-    { id: CDI, nome: 'Itaú CDI' },
-    { id: BTG, nome: 'BTG Corretora' },
+    { id: ITAU, nome: 'Itaú Personalite', tipo: 'cc' },
+    { id: CDI, nome: 'Itaú CDI', tipo: 'inv' },
+    { id: BTG, nome: 'BTG Corretora', tipo: 'cc' },
   ];
   const saldos = [
     saldo(ITAU, '2026-08', 208561.46, 30943.91, '2026-08-31'),
@@ -162,6 +163,13 @@ describe('estimarSaldoEmCaixa — o caso da Vera em 19/09/2026', () => {
     expect(r.semAncora).toEqual([]);
   });
 
+  it('quebra em disponível (cc) e aplicado (inv) — e os dois somam o total', () => {
+    const r = estimarSaldoEmCaixa({ contas, saldos, linhas, hoje: HOJE, mesMinimo: JANELA });
+    expect(r.disponivel).toBe(98091.80);   // Itaú Personalite 96.937,72 + BTG 1.154,08
+    expect(r.aplicado).toBe(100207.94);    // Itaú CDI
+    expect(r.disponivel + r.aplicado).toBe(r.total);
+  });
+
   it('o elo fraco é a posição mais atrasada, e nomeia as contas presas nela', () => {
     const r = estimarSaldoEmCaixa({ contas, saldos, linhas, hoje: HOJE, mesMinimo: JANELA });
     expect(r.ancoraMaisAtrasada).toBe('2026-08-31');
@@ -169,10 +177,115 @@ describe('estimarSaldoEmCaixa — o caso da Vera em 19/09/2026', () => {
   });
 
   it('conta sem âncora fica FORA do total e é nomeada', () => {
-    const comOrfa = [...contas, { id: 'orfa', nome: 'Conta Órfã' }];
+    const comOrfa = [...contas, { id: 'orfa', nome: 'Conta Órfã', tipo: 'cc' }];
     const r = estimarSaldoEmCaixa({ contas: comOrfa, saldos, linhas, hoje: HOJE, mesMinimo: JANELA });
     expect(r.total).toBe(198299.74);
     expect(r.semAncora).toEqual(['Conta Órfã']);
     expect(r.ancoradas).toBe(3);
+  });
+});
+
+describe('grupoDoTipoConta', () => {
+  it('corrente é disponível; investimento e permuta são aplicado; cartão fica fora', () => {
+    expect(grupoDoTipoConta('cc')).toBe('disponivel');
+    expect(grupoDoTipoConta('inv')).toBe('aplicado');
+    expect(grupoDoTipoConta('permuta')).toBe('aplicado');
+    expect(grupoDoTipoConta('cartao')).toBe('fora');
+  });
+  /**
+   * ⚠ O CASO QUE PROTEGE O NÚMERO: tipo desconhecido (ou nulo) NÃO entra no caixa. É a mesma
+   * doutrina da lista branca da 2A.1 — um tipo novo que entrasse sozinho, em silêncio, inflaria
+   * um número que decide pagamento.
+   */
+  it('tipo desconhecido ou nulo fica FORA, nunca no caixa por omissão', () => {
+    expect(grupoDoTipoConta('cripto')).toBe('fora');
+    expect(grupoDoTipoConta(null)).toBe('fora');
+    expect(grupoDoTipoConta(undefined)).toBe('fora');
+    expect(grupoDoTipoConta('')).toBe('fora');
+  });
+  it('só a permuta é conta sem extrato', () => {
+    expect(contaSemExtrato('permuta')).toBe(true);
+    expect(contaSemExtrato('cc')).toBe(false);
+    expect(contaSemExtrato('inv')).toBe(false);
+  });
+});
+
+describe('ancoraSemExtrato', () => {
+  const PERM = 'permuta-nj';
+  /**
+   * ⚠ ESTE É O CASO QUE A 2A.1 ERRAVA. Onde não há banco não há extrato a bater, e exigir que o
+   * mês "feche" descartava a conta inteira. O declarado vale como âncora por si.
+   */
+  it('aceita o último saldo declarado SEM exigir que o mês feche', () => {
+    const saldos = [saldo(PERM, '2026-08', 0, 500)];   // 0 + nada ≠ 500: não "fecha"
+    expect(ancoraDaConta(PERM, saldos, [], JANELA)).toBeNull();
+    expect(ancoraSemExtrato(PERM, saldos))
+      .toEqual({ contaId: PERM, anoMes: '2026-08', data: '2026-08-31', valor: 500 });
+  });
+  it('pega o mês mais recente quando há vários', () => {
+    const saldos = [saldo(PERM, '2026-06', 0, 10), saldo(PERM, '2026-08', 0, 99)];
+    expect(ancoraSemExtrato(PERM, saldos)?.valor).toBe(99);
+  });
+  it('sem saldo declarado nenhum devolve null — a conta é nomeada, nunca chutada', () => {
+    expect(ancoraSemExtrato(PERM, [])).toBeNull();
+  });
+});
+
+describe('permuta — o caso do NJ em 19/09/2026', () => {
+  const PERM = 'permuta-parapua';
+  const CC = 'sicredi-lavoura';
+  const contas = [
+    { id: CC, nome: 'Sicredi Lavoura', tipo: 'cc' },
+    { id: 'cartao-bb', nome: 'Cartão BB', tipo: 'cartao' },
+    /* O acumulado real: 69 lançamentos de barter entre set/2023 e mar/2026. */
+    { id: PERM, nome: 'Permuta · Cooperativa', tipo: 'permuta', acumuladoRealizados: 264875.89 },
+  ];
+  const saldos = [
+    saldo(CC, '2026-08', 30150.70, 30150.70),   // fecha: sem movimento no mês
+    saldo(PERM, '2026-08', 0, 0, '2026-08-31'),
+    saldo('cartao-bb', '2026-08', 0, 999999),
+  ];
+
+  it('a permuta ENTRA no aplicado — não some mais, como somia na 2A.1', () => {
+    const r = estimarSaldoEmCaixa({ contas, saldos, linhas: [], hoje: HOJE, mesMinimo: JANELA });
+    expect(r.ancoradas).toBe(2);              // corrente + permuta; o cartão nem é avaliado
+    expect(r.semAncora).toEqual([]);
+    expect(r.disponivel).toBe(30150.70);
+    expect(r.aplicado).toBe(0);
+  });
+
+  it('o cartão fica FORA do total, com saldo alto e tudo', () => {
+    const r = estimarSaldoEmCaixa({ contas, saldos, linhas: [], hoje: HOJE, mesMinimo: JANELA });
+    expect(r.total).toBe(30150.70);
+    expect(r.total).not.toBe(1030150.70);
+  });
+
+  /**
+   * ⚠ O CASO QUE JUSTIFICA A NOTA ÂMBAR. O declarado de ago/2026 é R$ 0,00 e a conta carrega
+   * R$ 264.875,89 de movimentos que esse zero não explica. O total usa o DECLARADO — inventar
+   * outro número aqui criaria uma segunda verdade ao lado da tela de Saldos —, mas a
+   * divergência para de ser invisível.
+   */
+  it('declarado que não explica os movimentos acende "a conferir", sem mexer no total', () => {
+    const r = estimarSaldoEmCaixa({ contas, saldos, linhas: [], hoje: HOJE, mesMinimo: JANELA });
+    expect(r.aConferir).toEqual(['Permuta · Cooperativa']);
+    expect(r.total).toBe(30150.70);
+  });
+
+  it('permuta coerente com os movimentos NÃO acende nada', () => {
+    const coerente = contas.map((c) => c.id === PERM ? { ...c, acumuladoRealizados: 0 } : c);
+    const r = estimarSaldoEmCaixa({
+      contas: coerente, saldos, linhas: [], hoje: HOJE, mesMinimo: JANELA });
+    expect(r.aConferir).toEqual([]);
+  });
+
+  /** ⚠ Negativo é erro de lançamento, nunca estado válido — e aparece, nunca é zerado. */
+  it('permuta negativa aparece no total e acende "a conferir"', () => {
+    const negativa = [saldo(CC, '2026-08', 30150.70, 30150.70), saldo(PERM, '2026-08', 0, -800)];
+    const r = estimarSaldoEmCaixa({
+      contas, saldos: negativa, linhas: [], hoje: HOJE, mesMinimo: JANELA });
+    expect(r.aplicado).toBe(-800);
+    expect(r.total).toBe(29350.70);
+    expect(r.aConferir).toEqual(['Permuta · Cooperativa']);
   });
 });

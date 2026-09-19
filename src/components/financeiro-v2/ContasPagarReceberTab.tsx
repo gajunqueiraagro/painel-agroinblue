@@ -30,8 +30,11 @@ import { Segmentado } from '@/components/ui/segmentado';
 import { aplicarPlanoNaView, type LinhaViewDoc } from '@/lib/financeiro/listaPaginadaV2';
 import { montarPlanoBaseV2 } from '@/lib/financeiro/filtrosBaseV2';
 import { paginarTudo } from '@/lib/financeiro/paginarTudo';
-import { estimarSaldoEmCaixa, type ContaEmCaixa, type SaldoEmCaixa } from '@/lib/financeiro/saldoEmCaixa';
-import type { LinhaDaPosicao } from '@/hooks/useExtratoDaConta';
+import {
+  contaSemExtrato, estimarSaldoEmCaixa, grupoDoTipoConta,
+  type ContaEmCaixa, type SaldoEmCaixa,
+} from '@/lib/financeiro/saldoEmCaixa';
+import { movimentoNaConta, type LinhaDaPosicao } from '@/hooks/useExtratoDaConta';
 import { rotuloOrigem } from '@/v2/lib/origemLancamento';
 import { STATUS_FILTRO_COR, STATUS_FILTRO_LABEL } from '@/lib/financeiro/statusFinanceiro';
 import { formatMoeda } from '@/lib/calculos/formatters';
@@ -76,8 +79,6 @@ const STATUS_INICIAIS: string[] = ['previsto', 'programado', 'agendado'];
  */
 const CORTE_DESTAQUE = 100_000;
 
-/** Contas que somam no "saldo em caixa". Lista BRANCA de propósito — ver o comentário do card. */
-const TIPOS_EM_CAIXA = new Set(['cc', 'inv']);
 
 /**
  * Quantos meses para trás procurar a âncora conciliada de cada conta.
@@ -253,10 +254,10 @@ export function ContasPagarReceberTab() {
 
   // ── Saldo em caixa ─────────────────────────────────────────────────────────
   /**
-   * ⚠ LISTA BRANCA (`cc` + `inv`), NUNCA LISTA NEGRA. Excluir "cartão e permuta" resolveria
-   * o hoje e falharia no dia em que um tipo novo aparecesse: ele entraria no caixa sozinho,
-   * em silêncio. Dizer quem ENTRA faz o tipo desconhecido ficar de fora, que é o lado certo
-   * para errar num número que o operador usa para decidir pagamento.
+   * ⚠ QUEM ENTRA NO CAIXA É `grupoDoTipoConta`, e a lista é BRANCA: corrente é disponível,
+   * investimento e PERMUTA são aplicado, cartão e tipo desconhecido ficam fora. A permuta
+   * entrou em PR-CPR-2A.2 — é dinheiro que se transfere para conta corrente, só não é dinheiro
+   * livre. A régua mora na lib, não aqui, porque a tela não é lugar de decidir o que é caixa.
    *
    * ⚠ A SOMA MUDOU DE REGRA EM PR-CPR-2A.1, e o card antigo era um número fantasma: ele pegava
    * o MAIOR `ano_mes` de cada conta, e como as contas fecham em meses diferentes a soma
@@ -275,10 +276,47 @@ export function ContasPagarReceberTab() {
         .select('id, nome_conta, nome_exibicao, tipo_conta')
         .eq('cliente_id', clienteId)
         .eq('ativa', true);
-      const contas: ContaEmCaixa[] = (contasRaw ?? [])
-        .filter((c) => TIPOS_EM_CAIXA.has(c.tipo_conta ?? ''))
-        .map((c) => ({ id: c.id, nome: c.nome_exibicao || c.nome_conta || 'Conta sem nome' }));
-      if (contas.length === 0) return null;
+      const doCaixa = (contasRaw ?? []).filter((c) => grupoDoTipoConta(c.tipo_conta) !== 'fora');
+      if (doCaixa.length === 0) return null;
+
+      /**
+       * O acumulado de sempre das contas SEM extrato — só para a nota "a conferir".
+       *
+       * ⚠ UMA CONSULTA A MAIS, E SÓ PARA A PERMUTA: é a única conta sem extrato do proto (69
+       * lançamentos). Ela NÃO entra no total — quem manda no número é o saldo declarado, o
+       * mesmo que a tela de Saldos mostra. O que ela responde é se esse declarado explica a
+       * conta: a permuta do NJ declara R$ 0,00 em ago/2026 e carrega R$ 264.875,89 de barter
+       * entre 2023 e 2026. Sem esta pergunta, essa diferença ficaria invisível.
+       */
+      const idsSemExtrato = doCaixa.filter((c) => contaSemExtrato(c.tipo_conta)).map((c) => c.id);
+      const acumulado = new Map<string, number>();
+      if (idsSemExtrato.length > 0) {
+        const historico = await paginarTudo<LinhaDaPosicao>(async (de, tamanho) => {
+          const { data, error } = await supabase
+            .from('financeiro_lancamentos_v2')
+            .select('valor, sinal, tipo_operacao, data_pagamento, conta_bancaria_id, conta_destino_id')
+            .eq('cliente_id', clienteId)
+            .eq('cancelado', false)
+            .eq('cenario', 'realizado')
+            .or(`conta_bancaria_id.in.(${idsSemExtrato.join(',')}),`
+              + `conta_destino_id.in.(${idsSemExtrato.join(',')})`)
+            .order('id', { ascending: true })
+            .range(de, de + tamanho - 1);
+          if (error) throw error;
+          const leva = data ?? [];
+          return { linhas: leva, brutas: leva.length };
+        });
+        for (const id of idsSemExtrato) {
+          acumulado.set(id, historico.reduce((soma, l) => soma + movimentoNaConta(l, id), 0));
+        }
+      }
+
+      const contas: ContaEmCaixa[] = doCaixa.map((c) => ({
+        id: c.id,
+        nome: c.nome_exibicao || c.nome_conta || 'Conta sem nome',
+        tipo: c.tipo_conta,
+        acumuladoRealizados: acumulado.get(c.id) ?? null,
+      }));
 
       const mesMinimo = mesDeCorte(hoje, MESES_BUSCA_ANCORA);
 
@@ -490,6 +528,9 @@ export function ContasPagarReceberTab() {
             valor={caixa && caixa.ancoradas > 0 ? formatMoeda(caixa.total) : '—'}
             classeValor="text-foreground"
             borda="border-l-primary"
+            quebra={caixa && caixa.ancoradas > 0
+              ? { disponivel: caixa.disponivel, aplicado: caixa.aplicado, aConferir: caixa.aConferir }
+              : undefined}
             nota={rotuloCaixa ?? undefined}
           />
         </div>
@@ -667,11 +708,19 @@ export function ContasPagarReceberTab() {
  * Um slot do resumo. Largura vem do `grid-cols-3` do pai e NUNCA do conteúdo; a altura é
  * fixa para que a presença ou ausência do aviso não mexa na régua (A27).
  */
-function CardResumo({ rotulo, valor, classeValor, borda, nota }: {
+function CardResumo({ rotulo, valor, classeValor, borda, quebra, nota }: {
   rotulo: string;
   valor: string;
   classeValor: string;
   borda: string;
+  /**
+   * A segunda linha do slot — a quebra do caixa em disponível e aplicado.
+   *
+   * ⚠ "APLICADO" JUNTA INVESTIMENTO E PERMUTA, e o nome é a informação: os dois são dinheiro
+   * que existe e não está livre. Separá-los em duas linhas faria o operador somar de cabeça
+   * para responder a única pergunta que ele tem aqui — "quanto disso paga boleto amanhã?".
+   */
+  quebra?: { disponivel: number; aplicado: number; aConferir: string[] };
   /**
    * A terceira linha do slot.
    * ⚠ ELA É MUTED, E NUNCA VERMELHA — decisão do PR-CPR-2A.1. O rótulo do caixa diz
@@ -682,11 +731,37 @@ function CardResumo({ rotulo, valor, classeValor, borda, nota }: {
   nota?: string;
 }) {
   return (
-    <div className={cn('min-w-0 h-[60px] rounded-md border border-l-[3px] px-3 py-1.5', borda)}>
+    <div className={cn('min-w-0 h-[76px] rounded-md border border-l-[3px] px-3 py-1.5', borda)}>
       <div className="truncate text-[11px] leading-none text-muted-foreground">{rotulo}</div>
       {/* 20px/500 — o "número de topo" do A18, que a régua da casa não negocia. */}
       <div className={cn('mt-1 truncate text-[20px] font-medium leading-none tabular-nums', classeValor)}>
         {valor}
+      </div>
+      {/* ⚠ A LINHA EXISTE MESMO SEM QUEBRA (`&nbsp;`), e é o que segura o A27: os três slots do
+          resumo têm a MESMA altura, com ou sem conteúdo, então trocar de cliente não move o
+          bloco vizinho. */}
+      <div className="mt-1 flex items-baseline gap-1.5 truncate text-[9.5px] leading-none">
+        {quebra ? (
+          <>
+            <span className="truncate text-muted-foreground">
+              disponível <span className="tabular-nums text-foreground">{formatMoeda(quebra.disponivel)}</span>
+              {' · '}
+              aplicado <span className={cn('tabular-nums',
+                quebra.aplicado < 0 ? 'text-destructive' : 'text-foreground')}>
+                {formatMoeda(quebra.aplicado)}
+              </span>
+            </span>
+            {/* ⚠ ÂMBAR, NUNCA VERMELHO, E NUNCA ESCONDER O NÚMERO. Saldo de permuta negativo —
+                ou declarado que não explica os movimentos da conta — é erro de lançamento, não
+                estado válido. O conserto é frente da Conciliação; daqui sai só a visibilidade. */}
+            {quebra.aConferir.length > 0 && (
+              <span className="shrink-0 text-amber-600 dark:text-amber-400"
+                title={`Conferir: ${quebra.aConferir.join(', ')}`}>
+                ⚠ confira permuta
+              </span>
+            )}
+          </>
+        ) : <span>&nbsp;</span>}
       </div>
       <div className="mt-1 truncate text-[9.5px] leading-none text-muted-foreground" title={nota}>
         {nota ?? '\u00a0'}
