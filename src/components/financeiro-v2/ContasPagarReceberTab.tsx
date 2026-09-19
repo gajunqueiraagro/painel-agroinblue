@@ -36,6 +36,8 @@ import {
 } from '@/lib/financeiro/saldoEmCaixa';
 import { movimentoNaConta, type LinhaDaPosicao } from '@/hooks/useExtratoDaConta';
 import { rotuloOrigem } from '@/v2/lib/origemLancamento';
+import { useNomesDeFornecedores } from '@/hooks/useNomesDeFornecedores';
+import { Paperclip } from 'lucide-react';
 import { STATUS_FILTRO_COR, STATUS_FILTRO_LABEL } from '@/lib/financeiro/statusFinanceiro';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { cn } from '@/lib/utils';
@@ -78,6 +80,31 @@ const STATUS_INICIAIS: string[] = ['previsto', 'programado', 'agendado'];
  * marca metade da lista não destaca nada.
  */
 const CORTE_DESTAQUE = 100_000;
+
+/**
+ * A RÉGUA DE COLUNAS — uma só, para o cabeçalho, as linhas e o total do grupo.
+ *
+ * ⚠ TRÊS LUGARES DESENHAM A MESMA GRADE, e é por isso que as larguras moram aqui: o cabeçalho
+ * de coluna, a linha do lançamento e o total da faixa de data têm de ficar alinhados no pixel.
+ * Três listas de classes copiadas divergem no primeiro ajuste — e aí o total do grupo deixa de
+ * cair embaixo da coluna Valor, que é a única razão de ele estar à direita.
+ *
+ * ⚠ AS LARGURAS FORAM MEDIDAS, NÃO ARBITRADAS. A 1168px a barra lateral (`w-52` = 208px) deixa
+ * 960px para a tela; menos `px-4` do container, a borda do cartão e o `px-3` da linha, sobram
+ * ~898px. Com os fixos abaixo (526px) e os seis vãos (36px), a Descrição fica com ~336px —
+ * cerca de 58 caracteres a 11px, acima do p95 medido de 49. Sobre 1.175 lançamentos visíveis
+ * no proto: descrição p95 49 (mediana 18), fornecedor p95 37 (mediana 20), banco p95 16
+ * (máximo 25). Por isso Fornecedor e Banco NÃO precisaram ser fundidos.
+ */
+const COL = {
+  vencimento: 'w-[42px]',
+  fornecedor: 'w-[132px]',
+  banco: 'w-[96px]',
+  origem: 'w-[76px]',
+  status: 'w-[62px]',
+  anexo: 'w-[14px]',
+  valor: 'w-[104px]',
+} as const;
 
 
 /**
@@ -405,6 +432,47 @@ export function ContasPagarReceberTab() {
    * chave de ordenação usa `'9999-99-99'` para que ele caia depois de qualquer data real
    * sem um segundo critério de ordenação por perto.
    */
+  /**
+   * Os NOMES dos favorecidos — hook existente, não consulta nova escrita aqui.
+   *
+   * ⚠ UUID NUNCA VAI À TELA, e a view só traz `favorecido_id`. O `useNomesDeFornecedores` já
+   * resolve isso em levas (o `.in()` do PostgREST tem teto) e com uma `queryKey` que não
+   * serializa o array a cada render. Escrever a consulta aqui seria a terceira cópia da mesma.
+   */
+  const nomesFornecedores = useNomesDeFornecedores(useMemo(
+    () => linhas.map((l) => l.favorecido_id), [linhas]));
+
+  /**
+   * Quais lançamentos TÊM documento anexado.
+   *
+   * ⚠ A VIEW DA LISTA NÃO SABE DISSO — medido: `vw_financeiro_lancamentos_v2_doc` tem
+   * `documento`, `numero_documento`, `tipo_documento` e `documento_formatado`, e os quatro são
+   * o NÚMERO da nota, não um anexo. O anexo mora em `vw_lancamento_documentos`, a mesma fonte
+   * que o modal já lê.
+   * ⚠ E O CUSTO É MÍNIMO, por isso entrou sem virar item próprio: são 351 documentos em todo o
+   * proto, 111 lançamentos distintos, e a pergunta é um `.in()` sobre os ids JÁ visíveis — o
+   * mesmo padrão do mapa de conciliação do Extrato Gerencial. Nenhum join novo.
+   */
+  const idsVisiveis = useMemo(() => linhas.map((l) => l.id).sort(), [linhas]);
+  const { data: comAnexo } = useQuery({
+    queryKey: ['cpr-anexos', clienteId, idsVisiveis.length, idsVisiveis[0] ?? ''],
+    enabled: !!clienteId && idsVisiveis.length > 0,
+    queryFn: async (): Promise<Set<string>> => {
+      const achados = await paginarTudo<{ lancamento_id: string | null }>(async (de, tamanho) => {
+        const fatia = idsVisiveis.slice(de, de + tamanho);
+        if (fatia.length === 0) return { linhas: [], brutas: 0 };
+        const { data, error } = await supabase
+          .from('vw_lancamento_documentos')
+          .select('lancamento_id')
+          .eq('cliente_id', clienteId ?? '')
+          .in('lancamento_id', fatia);
+        if (error) throw error;
+        return { linhas: data ?? [], brutas: fatia.length };
+      });
+      return new Set(achados.map((d) => d.lancamento_id).filter((v): v is string => !!v));
+    },
+  });
+
   const grupos = useMemo((): Grupo[] => {
     const mapa = new Map<string, LinhaViewDoc[]>();
     for (const l of doSegmento) {
@@ -503,10 +571,14 @@ export function ContasPagarReceberTab() {
           </span>
         </div>
 
-        {/* RESUMO — três slots de LARGURA FIXA (A27). O `grid-cols-3` divide o espaço em
-            partes iguais e independentes do conteúdo; `tabular-nums` + `truncate` seguram o
-            valor dentro do slot. Trocar de horizonte muda os números e não move nada. */}
-        <div className="grid grid-cols-3 gap-2">
+        {/* RESUMO — três slots de largura FIXA (A27), agora em PROPORÇÕES diferentes.
+            ⚠ IGUAIS NÃO SERVIAM: "A pagar" e "A receber" têm um rótulo e um número; o Saldo tem
+            três linhas, e a do meio carrega "disponível R$ 9.999.999,99 · aplicado
+            R$ 9.999.999,99" mais o âmbar. Com um terço da largura ela quebrava e o "aplicado"
+            saía cortado — o defeito que este PR conserta. As proporções são FIXAS e não
+            dependem do conteúdo, então trocar de cliente ou de filtro continua não movendo
+            nada: o que muda é a divisão, não a regra. */}
+        <div className="grid grid-cols-[1fr_1fr_2fr] gap-2">
           <CardResumo
             rotulo={`A pagar · ${rotuloJanela}`}
             valor={formatMoeda(totalPagar)}
@@ -590,28 +662,61 @@ export function ContasPagarReceberTab() {
       {/* ── LISTA — o ÚNICO scrollport da tela (A21) ── */}
       <div className="min-h-0 flex-1 px-4 pb-2">
         <div className="flex h-full min-h-0 flex-col rounded-lg border border-border bg-card shadow-[0_1px_3px_0_rgb(0_0_0/0.04)]">
+
           {statusLigados.length === 0 ? (
             <Vazio texto="Nenhum status selecionado — ligue ao menos um acima" />
           ) : grupos.length === 0 ? (
             <Vazio texto={isFetching ? 'Carregando…' : vazioTexto} />
           ) : (
-            <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+            /* ⚠ `rolagem-fina` (A24) E `rolagem-sem-tampar`: a barra grossa do sistema come
+               ~15px de LARGURA DE COLUNA numa lista de 22px por linha, e o gutter estável
+               impede que as linhas andem quando a rolagem aparece. Os dois utilitários já
+               existem em `index.css`; aqui é só adesão. */
+            <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden rolagem-fina rolagem-sem-tampar">
+
+              {/* CABEÇALHO DE COLUNA — UMA vez, e DENTRO do scrollport.
+                  ⚠ DENTRO, E NÃO ACIMA, POR CAUSA DA BARRA DE ROLAGEM. Fora do scrollport ele
+                  teria a largura cheia enquanto as linhas perdem o gutter da barra, e as oito
+                  colunas nasceriam desalinhadas do cabeçalho por alguns pixels — em overlay
+                  (macOS) e clássica (Windows) por medidas DIFERENTES, o que nenhum padding fixo
+                  resolve. Dentro, ele encolhe junto com as linhas por construção.
+                  ⚠ E É POR ISSO QUE A FAIXA DE GRUPO GRUDA EM `top-[22px]`: as duas são sticky
+                  no MESMO scrollport, e a faixa tem de parar embaixo do cabeçalho em vez de por
+                  cima dele. O 22 é a altura do cabeçalho, declarada logo abaixo. */}
+              <div className={cn(
+                'sticky top-0 z-20 flex h-[22px] items-center gap-1.5 border-b bg-card px-3',
+                'text-[10px] uppercase tracking-wide text-muted-foreground',
+                'border-l-[3px] border-l-transparent',
+              )}>
+                <span className={cn(COL.vencimento, 'shrink-0')}>Venc.</span>
+                <span className="min-w-0 flex-1">Descrição</span>
+                <span className={cn(COL.fornecedor, 'shrink-0')}>Fornecedor</span>
+                <span className={cn(COL.banco, 'shrink-0')}>Banco</span>
+                <span className={cn(COL.origem, 'shrink-0')}>Origem</span>
+                <span className={cn(COL.status, 'shrink-0')}>Status</span>
+                <span className={cn(COL.anexo, 'shrink-0')} aria-hidden />
+                <span className={cn(COL.valor, 'shrink-0 text-right')}>Valor</span>
+              </div>
+
               {grupos.map((g) => (
                 <div key={g.chave}>
                   {/* ⚠ FUNDO OPACO E `z` ACIMA DAS LINHAS (A21): transparente é pior que não
-                      fixar — o conteúdo passa por baixo do total que se está conferindo. */}
+                      fixar — o conteúdo passa por baixo do total que se está conferindo.
+                      ⚠ E O TOTAL CAI NA COLUNA VALOR, pela mesma régua `COL` das linhas: é o
+                      alinhamento que faz o total do grupo ser lido como soma da coluna, e não
+                      como mais um número solto à direita. */}
                   <div className={cn(
-                    'sticky top-0 z-10 flex items-center justify-between gap-2',
-                    'border-b bg-muted px-3.5 py-1',
+                    'sticky top-[22px] z-10 flex items-center gap-1.5 border-b bg-muted px-3 py-1',
+                    'border-l-[3px] border-l-transparent',
                   )}>
                     <span className={cn(
-                      'truncate text-[10px] font-medium uppercase tracking-wide',
+                      'min-w-0 flex-1 truncate text-[10px] font-medium uppercase tracking-wide',
                       g.vencido ? 'text-destructive' : 'text-muted-foreground',
                     )}>
                       {g.rotulo}
                     </span>
                     <span className={cn(
-                      'shrink-0 text-[11px] font-medium tabular-nums',
+                      COL.valor, 'shrink-0 text-right text-[10px] font-medium tabular-nums',
                       g.total < 0 ? 'text-destructive' : 'text-success',
                     )}>
                       {formatMoeda(Math.abs(g.total))}
@@ -623,6 +728,8 @@ export function ContasPagarReceberTab() {
                     const receber = ehReceber(l);
                     const grande = valor >= CORTE_DESTAQUE;
                     const status = (l.status_transacao ?? '').toLowerCase();
+                    const fornecedor = (l.favorecido_id && nomesFornecedores.get(l.favorecido_id)) || '—';
+                    const anexo = comAnexo?.has(l.id) ?? false;
                     return (
                       <button
                         key={l.id}
@@ -631,7 +738,7 @@ export function ContasPagarReceberTab() {
                         onClick={() => void abrir(l.id)}
                         title={catalogosProntos ? 'Abrir o lançamento' : 'Carregando os catálogos…'}
                         className={cn(
-                          'flex w-full items-center gap-3 border-b px-3.5 py-[7px] text-left leading-[1.35]',
+                          'flex h-[22px] w-full items-center gap-1.5 border-b px-3 text-left text-[11px]',
                           'transition-colors hover:bg-muted/50 disabled:cursor-default',
                           /* A faixa de 3px do destaque. `border-l-[3px]` em TODAS as linhas,
                              transparente nas comuns: sem isso o texto andaria 3px ao cruzar
@@ -640,33 +747,50 @@ export function ContasPagarReceberTab() {
                           grande ? (receber ? 'border-l-success' : 'border-l-destructive') : 'border-l-transparent',
                         )}
                       >
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-[12px] font-medium text-foreground">
-                            {l.descricao || '—'}
-                          </span>
-                          <span className="mt-px block truncate text-[10px] text-muted-foreground">
-                            {nomeConta(l.conta_bancaria_id)}
-                            {' · '}
-                            {rotuloOrigem(l.origem_lancamento)}
-                            {' · '}
-                            {/* ⚠ PÍLULA SEM BORDA. A caixa com borda em toda linha já foi
-                                revertida uma vez (FIN-LISTA-VISUAL-01): numa lista densa ela
-                                compete com o valor. O mapa de COR ficou, e é ele que marca
-                                o status aqui. */}
-                            <span className={cn(
-                              'rounded px-1 py-px text-[9.5px] font-medium bg-muted',
-                              STATUS_FILTRO_COR[status] ?? 'text-muted-foreground',
-                            )}>
-                              {STATUS_FILTRO_LABEL[status] ?? (status || '—')}
-                            </span>
+                        <span className={cn(COL.vencimento, 'shrink-0 tabular-nums text-muted-foreground')}>
+                          {l.data_vencimento ? format(parseISO(l.data_vencimento), 'dd/MM') : '—'}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate font-medium text-foreground"
+                          title={l.descricao ?? undefined}>
+                          {l.descricao || '—'}
+                        </span>
+                        <span className={cn(COL.fornecedor, 'shrink-0 truncate text-muted-foreground')}
+                          title={fornecedor}>
+                          {fornecedor}
+                        </span>
+                        <span className={cn(COL.banco, 'shrink-0 truncate text-muted-foreground')}
+                          title={nomeConta(l.conta_bancaria_id)}>
+                          {nomeConta(l.conta_bancaria_id)}
+                        </span>
+                        <span className={cn(COL.origem, 'shrink-0 truncate text-muted-foreground')}>
+                          {rotuloOrigem(l.origem_lancamento)}
+                        </span>
+                        {/* ⚠ PÍLULA SEM BORDA. A caixa com borda em toda linha já foi revertida
+                            uma vez (FIN-LISTA-VISUAL-01): numa lista densa ela compete com o
+                            valor. O mapa de COR ficou, e é ele que marca o status aqui. */}
+                        <span className={cn(COL.status, 'shrink-0')}>
+                          <span className={cn(
+                            'block truncate rounded bg-muted px-1 text-[9.5px] font-medium',
+                            STATUS_FILTRO_COR[status] ?? 'text-muted-foreground',
+                          )}>
+                            {STATUS_FILTRO_LABEL[status] ?? (status || '—')}
                           </span>
                         </span>
-
-                        {/* Coluna de valor com largura RESERVADA: dimensionada para
-                            "R$ 9.999.999,99" — o valor nunca reflui a identidade (A27). */}
+                        {/* ⚠ A COLUNA EXISTE EM TODA LINHA, com ou sem clipe — é ela que impede
+                            o Valor de andar 14px conforme o anexo apareça ou não (A27). */}
+                        {/* ⚠ O RÓTULO MORA NO `span`, NÃO NO ÍCONE: `title` não está no tipo de
+                            props do lucide, e pendurá-lo no SVG reprovaria o gate de tipos. O
+                            elemento que carrega a coluna é quem descreve o que ela diz.
+                            Só leitura nesta fase: o clique continua sendo o da LINHA, e abre o
+                            lançamento — não o anexo. */}
+                        <span className={cn(COL.anexo, 'shrink-0')}
+                          title={anexo ? 'tem documento anexado' : undefined}
+                          aria-label={anexo ? 'tem documento anexado' : undefined}>
+                          {anexo && <Paperclip className="h-3 w-3 text-muted-foreground" aria-hidden />}
+                        </span>
                         <span className={cn(
-                          'w-[132px] shrink-0 text-right tabular-nums',
-                          grande ? 'text-[14px] font-semibold' : 'text-[12px] font-medium',
+                          COL.valor, 'shrink-0 text-right tabular-nums',
+                          grande ? 'text-[12px] font-semibold' : 'font-medium',
                           receber ? 'text-success' : 'text-destructive',
                         )}>
                           {formatMoeda(valor)}
