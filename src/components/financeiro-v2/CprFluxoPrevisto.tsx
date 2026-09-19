@@ -19,7 +19,8 @@ import {
 } from 'recharts';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import {
-  combinarComPassado, escalaSimetrica, montarFluxoPrevisto, primeiroNegativo,
+  ajusteVencidoPorDia, combinarComPassado, escalaSimetrica, montarFluxoPrevisto,
+  primeiroNegativo,
   type Granularidade, type LinhaFluxoPrevisto, type PontoLinha, type PontoPassadoEntrada,
   type ZonaFluxo,
 } from '@/lib/financeiro/fluxoPrevisto';
@@ -31,7 +32,10 @@ const COR_CONCILIADO = '#3f8f5e';
 const COR_REALIZADO = '#3b7ea1';
 
 function corDaZona(zona: ZonaFluxo): string {
-  return zona === 'conciliado' ? COR_CONCILIADO : zona === 'realizado' ? COR_REALIZADO : COR_SALDO;
+  if (zona === 'conciliado') return COR_CONCILIADO;
+  /* Vencido e realizado partilham a cor: são o mesmo tempo, com certezas diferentes. */
+  if (zona === 'realizado' || zona === 'vencido') return COR_REALIZADO;
+  return COR_SALDO;
 }
 const COR_ENTRADA = '#3f8f5e';
 const COR_SAIDA = '#c0392b';
@@ -141,7 +145,15 @@ function TooltipFluxo({ active, label, payload }: TooltipProps) {
   };
   const entradas = achar('entradas');
   const saidas = achar('saidas');
-  const saldo = achar('saldo');
+  /**
+   * ⚠ O SALDO VEM DA SÉRIE ATIVA, por coalescência — PR-CPR-2B.3.2. Ler um `dataKey` fixo
+   * mostrava "R$ 0,00" em toda zona onde aquela série é NULA, que é a maioria dos pontos: o
+   * tooltip afirmava zero sobre uma linha que estava a um milhão. Agora ele pega a primeira
+   * série que tem valor naquele ponto.
+   */
+  const saldo = ['saldoConciliado', 'saldoRealizado', 'saldoVencido', 'saldoPrevisto', 'saldo']
+    .map((k) => payload.find((x) => x.dataKey === k)?.value)
+    .find((v) => typeof v === 'number') ?? 0;
   return (
     <div className="rounded-md border bg-card/95 px-2 py-1.5 shadow-sm backdrop-blur-sm">
       <div className="text-[10px] font-medium text-foreground">{label}</div>
@@ -156,13 +168,15 @@ function TooltipFluxo({ active, label, payload }: TooltipProps) {
         </div>
       )}
       <div className="mt-0.5 text-[11px] font-medium tabular-nums" style={{ color: COR_SALDO }}>
-        saldo {formatMoeda(saldo)}
+        saldo {formatMoeda(Number(saldo))}
       </div>
     </div>
   );
 }
 
-export function CprFluxoPrevisto({ linhas, saldoInicial, caveat, granularidade, hoje, passado }: {
+export function CprFluxoPrevisto({
+  linhas, saldoInicial, caveat, granularidade, hoje, passado, conciliadoAte,
+}: {
   linhas: readonly LinhaFluxoPrevisto[];
   /** O mesmo "Saldo em caixa (estimado)" do card. `null` quando não há âncora. */
   saldoInicial: number | null;
@@ -178,13 +192,43 @@ export function CprFluxoPrevisto({ linhas, saldoInicial, caveat, granularidade, 
    * furo de conciliação no dado, nunca defeito de desenho.
    */
   passado: readonly PontoPassadoEntrada[];
+  /**
+   * Até onde a conciliação chegou — a mesma data do rótulo do card.
+   * ⚠ Ela decide DUAS coisas: até onde a linha é verde, e a partir de quando um vencido-não-pago
+   * passa a contar. Antes dela, o saldo conferido com o banco é soberano.
+   */
+  conciliadoAte: string | null;
 }) {
+  /**
+   * ⚠ AS DUAS VERDADES, E ELAS NÃO DEVEM FECHAR — PR-CPR-2B.3.2.
+   *
+   * O CARD diz quanto TEM na conta: só conciliado e realizado. A LINHA diz onde o caixa
+   * estaria se tudo tivesse caído no vencimento — logo, o card MENOS o que venceu e não foi
+   * pago. No NJ são ~R$ 521 mil de diferença, e essa diferença é a informação: forçá-las a
+   * coincidir apagaria justamente o que a tela existe para mostrar.
+   */
+  const inicioDesenho = useMemo(() => {
+    const d = new Date(`${hoje}T12:00:00Z`);
+    d.setUTCDate(1);
+    d.setUTCMonth(d.getUTCMonth() - 1);
+    return d.toISOString().slice(0, 10);
+  }, [hoje]);
+
+  const vencidoPorDia = useMemo(
+    () => ajusteVencidoPorDia(linhas, inicioDesenho, hoje, conciliadoAte),
+    [linhas, inicioDesenho, hoje, conciliadoAte]);
+  const ajusteTotal = useMemo(
+    () => Array.from(vencidoPorDia.values()).reduce((s, v) => s + v, 0), [vencidoPorDia]);
+
+  /* A projeção parte de onde a LINHA está em hoje — card mais o vencido —, senão haveria um
+     salto artificial na junção que nada explicaria. */
   const fluxo = useMemo(
-    () => montarFluxoPrevisto(linhas, saldoInicial ?? 0, { granularidade, hoje }),
-    [linhas, saldoInicial, granularidade, hoje]);
+    () => montarFluxoPrevisto(linhas, (saldoInicial ?? 0) + ajusteTotal, { granularidade, hoje }),
+    [linhas, saldoInicial, ajusteTotal, granularidade, hoje]);
   const { semVencimento, rebaixada, anteriores } = fluxo;
   const pontos = useMemo(
-    () => combinarComPassado(fluxo, passado, hoje), [fluxo, passado, hoje]);
+    () => combinarComPassado(fluxo, passado, hoje, vencidoPorDia),
+    [fluxo, passado, hoje, vencidoPorDia]);
 
   /**
    * A largura medida do gráfico — é dela que sai o espaçamento dos rótulos.
@@ -307,6 +351,7 @@ export function CprFluxoPrevisto({ linhas, saldoInicial, caveat, granularidade, 
         {([
           { cor: COR_CONCILIADO, rotulo: 'Conciliado', tracejado: false },
           { cor: COR_REALIZADO, rotulo: 'Realizado, a conferir', tracejado: false },
+          { cor: COR_REALIZADO, rotulo: 'Venceu e não foi pago', tracejado: true },
           { cor: COR_SALDO, rotulo: 'Previsto', tracejado: true },
         ] as const).map((z) => (
           <span key={z.rotulo} className="flex items-center gap-1.5 text-[11px]"
@@ -374,8 +419,14 @@ export function CprFluxoPrevisto({ linhas, saldoInicial, caveat, granularidade, 
             <Line type="monotone" dataKey="saldoRealizado" name="Realizado, a conferir"
               stroke={COR_REALIZADO} strokeWidth={2.2} strokeLinecap="round"
               strokeLinejoin="round" dot={false} connectNulls={false} isAnimationActive={false} />
+            {/* ⚠ MESMA COR DO REALIZADO, TRAÇO DIFERENTE: os dois são o mesmo tempo (passado
+                não conciliado); o que muda é se aconteceu. Cor para o tempo, traço para a
+                certeza — trocar a cor aqui faria o operador procurar um terceiro período. */}
+            <Line type="monotone" dataKey="saldoVencido" name="Venceu e não foi pago"
+              stroke={COR_REALIZADO} strokeWidth={2} strokeLinecap="round" strokeDasharray="5 4"
+              strokeLinejoin="round" dot={false} connectNulls={false} isAnimationActive={false} />
             <Line type="monotone" dataKey="saldoPrevisto" name="Previsto"
-              stroke={COR_SALDO} strokeWidth={2.2} strokeLinecap="round" strokeDasharray="5 4"
+              stroke={COR_SALDO} strokeWidth={2} strokeLinecap="round" strokeDasharray="5 4"
               strokeLinejoin="round" dot={false} connectNulls={false} isAnimationActive={false} />
 
             {marcos.map((m) => (
@@ -404,6 +455,15 @@ export function CprFluxoPrevisto({ linhas, saldoInicial, caveat, granularidade, 
                   label={{ value: fmtTag(emHoje.saldo), position: 'top', fontSize: 12,
                     fontWeight: 600, fill: COR_TEXTO, offset: 15 }} />
               </>
+            )}
+            {/* ⚠ A REFERÊNCIA DO CARD, SEPARADA DO PONTO DA LINHA. Elas só coincidem quando não
+                há vencido-não-pago; quando há, o operador precisa ver as duas — "tenho isto na
+                conta" e "estaria aqui se tudo tivesse sido pago". */}
+            {saldoInicial !== null && ajusteTotal !== 0 && (
+              <ReferenceDot x={emHoje.rotulo} y={saldoInicial} r={3.4} isFront
+                fill="#fff" stroke={COR_TEXTO} strokeWidth={1.6}
+                label={{ value: `na conta ${fmtTag(saldoInicial)}`, position: 'right',
+                  offset: 8, fontSize: 10, fill: COR_TEXTO }} />
             )}
             {fimConciliado && fimConciliado.chave !== emHoje.chave && (
               <ReferenceDot x={fimConciliado.rotulo} y={fimConciliado.saldo} r={0} isFront

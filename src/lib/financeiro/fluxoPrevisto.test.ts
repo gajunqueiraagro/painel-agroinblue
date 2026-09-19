@@ -7,7 +7,8 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  combinarComPassado, escalaSimetrica, montarFluxoPrevisto, passoRedondo, primeiroNegativo, rotuloDoDia,
+  ajusteVencidoPorDia, combinarComPassado, escalaSimetrica, montarFluxoPrevisto, passoRedondo,
+  primeiroNegativo, rotuloDoDia,
   rotuloDoMes, MAX_PONTOS_DIA, type LinhaFluxoPrevisto,
 } from './fluxoPrevisto';
 
@@ -395,5 +396,123 @@ describe('o degrau em "hoje" — PR-CPR-2B.3.1', () => {
     const fluxo = montarFluxoPrevisto([], 250, DIA);
     const linha = combinarComPassado(fluxo, passado, HOJE);
     expect(linha[0].saidas).toBe(-50);
+  });
+});
+
+describe('vencido e não pago — PR-CPR-2B.3.2', () => {
+  const DIA = { granularidade: 'dia' as const, hoje: HOJE };
+  const INICIO = '2026-08-01';
+
+  /** ⚠ No dia do VENCIMENTO, não em hoje: é quando o caixa passou a dever. */
+  it('o ajuste entra no dia do vencimento', () => {
+    const m = ajusteVencidoPorDia([saida('2026-09-03', 1000)], INICIO, HOJE, null);
+    expect(m.get('2026-09-03')).toBe(-1000);
+    expect(m.size).toBe(1);
+  });
+
+  it('o que vence HOJE não entra — já é barra do ponto de hoje', () => {
+    expect(ajusteVencidoPorDia([saida(HOJE, 1000)], INICIO, HOJE, null).size).toBe(0);
+  });
+
+  it('o que vence depois de hoje não entra — é previsto', () => {
+    expect(ajusteVencidoPorDia([saida('2026-10-01', 1000)], INICIO, HOJE, null).size).toBe(0);
+  });
+
+  it('entrada vencida soma, saída vencida subtrai', () => {
+    const m = ajusteVencidoPorDia(
+      [entrada('2026-09-03', 400), saida('2026-09-03', 1000)], INICIO, HOJE, null);
+    expect(m.get('2026-09-03')).toBe(-600);
+  });
+
+  /**
+   * ⚠ O DEFEITO QUE ISTO CONSERTA: sem o vencido, um mês de contas não pagas desenhava uma
+   * linha RETA — a tela dizia "nada aconteceu" onde havia meio milhão em atraso.
+   */
+  it('a linha DESCE no dia do vencimento e a zona vira "vencido"', () => {
+    const passado = [
+      { data: '2026-09-02', saldo: 1000, conciliado: false, entradas: 0, saidas: 0 },
+      { data: '2026-09-03', saldo: 1000, conciliado: false, entradas: 0, saidas: 0 },
+      { data: HOJE, saldo: 1000, conciliado: false, entradas: 0, saidas: 0 },
+    ];
+    const vencido = ajusteVencidoPorDia([saida('2026-09-03', 400)], INICIO, HOJE, null);
+    const fluxo = montarFluxoPrevisto([], 600, DIA);
+    const linha = combinarComPassado(fluxo, passado, HOJE, vencido);
+    expect(linha[0]).toMatchObject({ saldo: 1000, zona: 'realizado' });
+    expect(linha[1]).toMatchObject({ saldo: 600, zona: 'vencido', saidas: -400 });
+  });
+
+  /** ⚠ Depois de um vencido, o NÍVEL continua incerto: não volta a ser contínuo. */
+  it('a incerteza não volta a ser contínua depois do primeiro vencido', () => {
+    const passado = [
+      { data: '2026-09-03', saldo: 1000, conciliado: false, entradas: 0, saidas: 0 },
+      { data: '2026-09-10', saldo: 1000, conciliado: false, entradas: 0, saidas: 0 },
+      { data: HOJE, saldo: 1000, conciliado: false, entradas: 0, saidas: 0 },
+    ];
+    const vencido = ajusteVencidoPorDia([saida('2026-09-03', 400)], INICIO, HOJE, null);
+    const linha = combinarComPassado(montarFluxoPrevisto([], 600, DIA), passado, HOJE, vencido);
+    expect(linha.map((p) => p.zona)).toEqual(['vencido', 'vencido', 'previsto']);
+  });
+
+  it('sem vencido, o comportamento é o da 2B.3.1', () => {
+    const passado = [{ data: '2026-09-03', saldo: 1000, conciliado: false, entradas: 0, saidas: 0 }];
+    const linha = combinarComPassado(montarFluxoPrevisto([], 1000, DIA), passado, HOJE);
+    expect(linha[0]).toMatchObject({ saldo: 1000, zona: 'realizado' });
+  });
+});
+
+describe('a conciliação apaga o vencido anterior a ela — PR-CPR-2B.3.3', () => {
+  const INICIO = '2026-08-01';
+
+  /**
+   * ⚠ A REGRA CENTRAL. Até o "conciliado até", o saldo declarado foi conferido contra o
+   * extrato e já contém tudo o que aconteceu. Um "programado e não pago" com vencimento ali
+   * dentro ou foi pago sem baixa, ou não existe — em nenhum dos dois casos pode descontar de
+   * novo um saldo que o banco confirmou.
+   */
+  it('vencido ANTES do conciliado até não entra em série nenhuma', () => {
+    const m = ajusteVencidoPorDia([saida('2026-08-10', 20066.96)], INICIO, HOJE, '2026-08-31');
+    expect(m.size).toBe(0);
+  });
+
+  it('vencido DEPOIS do conciliado até entra normalmente', () => {
+    const m = ajusteVencidoPorDia([saida('2026-09-03', 541169.74)], INICIO, HOJE, '2026-08-31');
+    expect(m.get('2026-09-03')).toBe(-541169.74);
+  });
+
+  it('o próprio dia do conciliado até é inclusivo — nele a conciliação ainda manda', () => {
+    const m = ajusteVencidoPorDia([saida('2026-08-31', 500)], INICIO, HOJE, '2026-08-31');
+    expect(m.size).toBe(0);
+  });
+
+  /** ⚠ Conciliação no MEIO do mês: 01-10 conciliado, 11 em diante conta. */
+  it('conciliado até o meio do mês corta no dia exato', () => {
+    const m = ajusteVencidoPorDia(
+      [saida('2026-09-10', 100), saida('2026-09-11', 200)], INICIO, HOJE, '2026-09-10');
+    expect(m.size).toBe(1);
+    expect(m.get('2026-09-11')).toBe(-200);
+  });
+
+  /**
+   * ⚠ O CASO DO NJ: conciliado até 31/jul, e o desenho começa em 01/ago — logo NENHUM mês
+   * visível está conciliado, e os vencidos de agosto CONTAM. O resultado é o mesmo da 2B.3.2,
+   * mas agora pelo motivo certo.
+   */
+  it('conciliado antes do início do desenho: todo vencido do desenho conta', () => {
+    const m = ajusteVencidoPorDia(
+      [saida('2026-08-10', 20066.96), saida('2026-09-03', 541169.74)],
+      INICIO, HOJE, '2026-07-31');
+    expect(m.size).toBe(2);
+  });
+
+  /** ⚠ Conciliado até hoje: não sobra vencido, a linha fecha no card sem marcador. */
+  it('conciliado até hoje: nenhum vencido, nenhum degrau', () => {
+    const m = ajusteVencidoPorDia(
+      [saida('2026-08-10', 100), saida('2026-09-03', 200)], INICIO, HOJE, HOJE);
+    expect(m.size).toBe(0);
+  });
+
+  it('sem conciliação nenhuma, todo vencido do desenho conta', () => {
+    const m = ajusteVencidoPorDia([saida('2026-08-10', 100)], INICIO, HOJE, null);
+    expect(m.get('2026-08-10')).toBe(-100);
   });
 });

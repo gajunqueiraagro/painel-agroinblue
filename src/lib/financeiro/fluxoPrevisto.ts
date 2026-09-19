@@ -364,7 +364,20 @@ export function escalaSimetrica(pontos: readonly PontoFluxo[]): EscalaY {
    furado é a conciliação.
    ───────────────────────────────────────────────────────────────────────────── */
 
-export type ZonaFluxo = 'conciliado' | 'realizado' | 'previsto';
+/**
+ * COR = ZONA NO TEMPO, TRAÇO = CERTEZA — PR-CPR-2B.3.2.
+ *
+ *   conciliado  verde  contínuo   conferido com o banco
+ *   realizado   azul   contínuo   já pago, ainda não conciliado
+ *   vencido     azul   tracejado  venceu e NÃO foi pago
+ *   previsto    laranja tracejado ainda vai vencer
+ *
+ * ⚠ O TRACEJADO DO VENCIDO É A DENÚNCIA. Até a 2B.3.1 o passado só andava com o que foi pago,
+ * então um mês inteiro de contas vencidas e não pagas desenhava uma linha RETA — a tela dizia
+ * "nada aconteceu" quando o que houve foi meio milhão não pago. Agora a linha desce no dia do
+ * vencimento, tracejada, e o nível fica explicitamente incerto dali em diante.
+ */
+export type ZonaFluxo = 'conciliado' | 'realizado' | 'vencido' | 'previsto';
 
 /** Um ponto do passado, como `serieDoSaldoPassado` entrega. */
 export interface PontoPassadoEntrada {
@@ -389,6 +402,7 @@ export interface PontoLinha extends PontoFluxo {
    */
   saldoConciliado: number | null;
   saldoRealizado: number | null;
+  saldoVencido: number | null;
   saldoPrevisto: number | null;
 }
 
@@ -399,13 +413,54 @@ export interface PontoLinha extends PontoFluxo {
  * diários com cinquenta e sete mensais no mesmo eixo categórico esmagaria o futuro contra a
  * margem direita.
  */
+/**
+ * O ajuste do vencido-não-pago sobre o passado.
+ *
+ * ⚠ ELE ENTRA NO DIA DO VENCIMENTO, não em hoje — decisão do Gabriel. Uma conta que venceu dia
+ * 3 e não foi paga faz o caixa DEVER desde o dia 3; empilhar tudo em hoje esconderia quando o
+ * aperto começou, que é a pergunta da tela.
+ *
+ * ⚠ E A CONCILIAÇÃO APAGA O VENCIDO ANTERIOR A ELA — PR-CPR-2B.3.3. Até a data "conciliado
+ * até", o saldo declarado é a VERDADE ABSOLUTA: ele foi conferido contra o extrato do banco e
+ * já contém tudo o que de fato aconteceu naquele período. Um lançamento que consta como
+ * "programado e não pago" com vencimento ali dentro ou foi pago sem ninguém dar baixa, ou não
+ * existe — em nenhum dos dois casos ele pode descontar de novo um saldo que o banco confirmou.
+ * Desenhá-lo faria a linha divergir do extrato exatamente onde ela é mais confiável.
+ * ⚠ ISSO NÃO É "ESCONDER ATRASO": o lançamento continua na Lista, que é onde ele se resolve.
+ * O que o gráfico deixa de fazer é cobrá-lo duas vezes.
+ */
+export function ajusteVencidoPorDia(
+  linhas: readonly LinhaFluxoPrevisto[], inicio: string, hoje: string,
+  conciliadoAte: string | null,
+): Map<string, number> {
+  const porDia = new Map<string, number>();
+  for (const l of linhas) {
+    const tipo = l.tipo_operacao ?? '';
+    const ehEntrada = tipo.startsWith('1-');
+    const ehSaida = tipo.startsWith('2-');
+    if (!ehEntrada && !ehSaida) continue;
+    const venc = (l.data_vencimento ?? '').slice(0, 10);
+    /* `< hoje`: o que vence HOJE já é barra do ponto de hoje (ver `montarFluxoPrevisto`). */
+    if (!venc || venc < inicio || venc >= hoje) continue;
+    /* Dentro do período conciliado o saldo do banco manda — ver a nota acima. */
+    if (conciliadoAte && venc <= conciliadoAte) continue;
+    const v = Math.abs(Number(l.valor ?? 0));
+    if (!Number.isFinite(v)) continue;
+    porDia.set(venc, (porDia.get(venc) ?? 0) + (ehEntrada ? v : -v));
+  }
+  return porDia;
+}
+
 export function combinarComPassado(
   fluxo: FluxoPrevisto,
   passado: readonly PontoPassadoEntrada[],
   hoje: string,
+  /** Vencido-e-não-pago por dia. Vazio reproduz o comportamento da 2B.3.1. */
+  vencidoPorDia: ReadonlyMap<string, number> = new Map(),
 ): PontoLinha[] {
   const vestir = (p: PontoFluxo, zona: ZonaFluxo): PontoLinha => ({
-    ...p, zona, saldoConciliado: null, saldoRealizado: null, saldoPrevisto: null,
+    ...p, zona, saldoConciliado: null, saldoRealizado: null,
+    saldoVencido: null, saldoPrevisto: null,
   });
 
   if (passado.length === 0) {
@@ -418,6 +473,19 @@ export function combinarComPassado(
   const reduzido = doDia ? passado : passado.filter((p, i) =>
     i === passado.length - 1 || p.data.slice(0, 7) !== passado[i + 1].data.slice(0, 7));
 
+  /* O acumulado do vencido até cada dia, e o primeiro dia em que ele aparece: dali em diante
+     o NÍVEL da linha é incerto, não só aquele degrau — por isso o tracejado não volta a ser
+     contínuo depois de um dia sem vencimento. */
+  let primeiroVencido: string | null = null;
+  for (const d of Array.from(vencidoPorDia.keys()).sort()) {
+    if (!primeiroVencido) primeiroVencido = d;
+  }
+  const acumuladoVencidoAte = (d: string) => {
+    let soma = 0;
+    for (const [dia, v] of vencidoPorDia) if (dia <= d) soma += v;
+    return soma;
+  };
+
   const anteriores: PontoLinha[] = reduzido
     /* Hoje NÃO entra aqui: ele é o primeiro ponto do futuro, e um só. */
     .filter((p) => p.data < hoje)
@@ -429,12 +497,13 @@ export function combinarComPassado(
       /* ⚠ AS BARRAS DO PASSADO SÃO REALIZADOS, não previsões — mesma forma, outro tempo. Sem
          elas o mês anterior seria uma linha andando sem que nada explicasse por quê. */
       entradas: p.entradas,
-      saidas: p.saidas,
-      saldo: p.saldo,
-      saldoPos: Math.max(p.saldo, 0),
-      saldoNeg: Math.min(p.saldo, 0),
-      zona: p.conciliado ? 'conciliado' : 'realizado',
-      saldoConciliado: null, saldoRealizado: null, saldoPrevisto: null,
+      saidas: p.saidas + Math.min(vencidoPorDia.get(p.data) ?? 0, 0),
+      saldo: arredondar(p.saldo + acumuladoVencidoAte(p.data)),
+      saldoPos: Math.max(arredondar(p.saldo + acumuladoVencidoAte(p.data)), 0),
+      saldoNeg: Math.min(arredondar(p.saldo + acumuladoVencidoAte(p.data)), 0),
+      zona: p.conciliado ? 'conciliado'
+        : (primeiroVencido && p.data >= primeiroVencido) ? 'vencido' : 'realizado',
+      saldoConciliado: null, saldoRealizado: null, saldoVencido: null, saldoPrevisto: null,
     }));
 
   /* O primeiro ponto do futuro é "Hoje" e traz o saldo do card — é a costura das duas metades. */
@@ -476,6 +545,7 @@ function preencherSeries(pontos: PontoLinha[]): PontoLinha[] {
     const ponte = proxima && proxima !== p.zona ? proxima : null;
     if (p.zona === 'conciliado' || ponte === 'conciliado') p.saldoConciliado = p.saldo;
     if (p.zona === 'realizado' || ponte === 'realizado') p.saldoRealizado = p.saldo;
+    if (p.zona === 'vencido' || ponte === 'vencido') p.saldoVencido = p.saldo;
     if (p.zona === 'previsto' || ponte === 'previsto') p.saldoPrevisto = p.saldo;
   }
   return pontos;

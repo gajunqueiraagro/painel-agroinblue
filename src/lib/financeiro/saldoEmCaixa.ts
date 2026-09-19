@@ -319,7 +319,7 @@ export interface PontoPassado {
 
 export interface SeriePassado {
   pontos: PontoPassado[];
-  /** O último dia do mês anterior — onde o verde vira azul. `null` sem série. */
+  /** Até onde o verde vai — a posição conciliada mais atrasada. `null` quando não há. */
   boundary: string | null;
 }
 
@@ -342,13 +342,23 @@ export function serieDoSaldoPassado(entrada: {
   saldos: readonly SaldoMesConta[];
   linhas: readonly LinhaDaPosicao[];
   hoje: string;
+  /**
+   * A posição conciliada mais atrasada entre as contas — o `ancoraMaisAtrasada` do card.
+   *
+   * ⚠ A FRONTEIRA DO VERDE É DINÂMICA — PR-CPR-2B.3.2. Ela não é "o fim do mês anterior": é
+   * até onde a conciliação de fato chegou, e pode cair no MEIO do mês (a Vera declara posição
+   * em 17/09 no Itaú). Conforme o operador concilia, o verde avança dia a dia.
+   * ⚠ E PODE FICAR ANTES DO INÍCIO DO DESENHO: no NJ o elo fraco é 31/jul, e o gráfico começa
+   * em 01/ago — então o NJ nasce SEM verde nenhum, o que é a verdade sobre ele.
+   */
+  conciliadoAte: string | null;
 }): SeriePassado {
-  const { contas, saldos, linhas, hoje } = entrada;
+  const { contas, saldos, linhas, hoje, conciliadoAte } = entrada;
 
   const mesAnterior = mesRelativo(hoje, -1);
   const mesRetrasado = mesRelativo(hoje, -2);
   const inicio = `${mesAnterior}-01`;
-  const boundary = fimDoAnoMes(mesAnterior);
+  const boundary = conciliadoAte;
 
   /* A mesma cesta do card: corrente e investimento das contas ativas; cartão fora. */
   const doCaixa = new Set(
@@ -383,7 +393,7 @@ export function serieDoSaldoPassado(entrada: {
     pontos.push({
       data: d,
       saldo: roundCurrency(acumulado),
-      conciliado: d <= boundary,
+      conciliado: !!boundary && d <= boundary,
       entradas: roundCurrency(entradas),
       saidas: roundCurrency(saidas),
     });

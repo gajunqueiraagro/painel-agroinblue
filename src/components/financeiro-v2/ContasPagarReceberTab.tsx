@@ -170,6 +170,12 @@ const FONTE_QUANDO = 'text-[9px]';
  */
 const MESES_BUSCA_ANCORA = 6;
 
+/** O `YYYY-MM` deslocado de N meses a partir de hoje. */
+export function mesRelativoAoHoje(hoje: Date, deslocamento: number): string {
+  const d = new Date(hoje.getFullYear(), hoje.getMonth() + deslocamento, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
 /** O `YYYY-MM` de N meses atrás — o piso da busca pela âncora. */
 function mesDeCorte(hoje: Date, meses: number): string {
   const d = new Date(hoje.getFullYear(), hoje.getMonth() - meses, 1);
@@ -235,8 +241,17 @@ function ramoDoHorizonte(h: Horizonte, hoje: Date, apenasFuturo = false): string
    * Fluxo quebrou. Ele mostra a projeção e o subtítulo diz quantos vencidos ficaram fora.
    */
   if (apenasFuturo) {
-    if (h === 'tudo' || h === 'vencidos') return `data_vencimento.gte.${hojeIso}`;
-    return `and(data_vencimento.gte.${hojeIso},data_vencimento.lte.${limiteDoHorizonte(h, hoje)})`;
+    /**
+     * ⚠ O FLUXO VOLTOU A OLHAR PARA TRÁS — mas só até o começo do desenho, PR-CPR-2B.3.2. O
+     * gráfico passou a mostrar o que VENCEU E NÃO FOI PAGO, e isso é, por definição, um
+     * vencimento anterior a hoje. Sem estender o recorte, esses lançamentos não chegavam à
+     * tela e o trecho tracejado nasceria vazio.
+     * ⚠ E O PISO É O INÍCIO DO DESENHO, não "tudo": o gráfico começa em 01 do mês anterior, e
+     * trazer vencidos de 2020 encheria a memória sem desenhar um pixel a mais.
+     */
+    const inicioDoDesenho = `${mesRelativoAoHoje(hoje, -1)}-01`;
+    if (h === 'tudo' || h === 'vencidos') return `data_vencimento.gte.${inicioDoDesenho}`;
+    return `and(data_vencimento.gte.${inicioDoDesenho},data_vencimento.lte.${limiteDoHorizonte(h, hoje)})`;
   }
   if (h === 'tudo') return null;
   if (h === 'vencidos') return `data_vencimento.lt.${hojeIso},data_vencimento.is.null`;
@@ -470,9 +485,12 @@ export function ContasPagarReceberTab() {
       const argumentos = {
         contas, saldos: saldos ?? [], linhas, hoje: isoLocal(hoje), mesMinimo,
       };
+      const card = estimarSaldoEmCaixa(argumentos);
       return {
-        ...estimarSaldoEmCaixa(argumentos),
-        passado: serieDoSaldoPassado(argumentos),
+        ...card,
+        /* A fronteira do verde é o MESMO "conciliado até" que o rótulo do card mostra — uma
+           regra, dois lugares. */
+        passado: serieDoSaldoPassado({ ...argumentos, conciliadoAte: card.ancoraMaisAtrasada }),
       };
     },
   });
@@ -839,6 +857,7 @@ export function ContasPagarReceberTab() {
               granularidade={horizonte === 'tudo' ? 'mes' : 'dia'}
               hoje={isoLocal(hoje)}
               passado={caixa?.passado.pontos ?? []}
+              conciliadoAte={caixa?.passado.boundary ?? null}
             />
           ) : (
           <>

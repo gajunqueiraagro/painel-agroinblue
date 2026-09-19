@@ -313,6 +313,7 @@ describe('serieDoSaldoPassado — regra fixa de mês — PR-CPR-2B.3.1', () => {
   ];
   const base = {
     contas: contasVera, saldos: saldosVera, linhas: linhasVera, hoje: HOJE,
+    conciliadoAte: '2026-08-31',
   };
 
   it('começa em 01 do mês ANTERIOR, partindo do saldo do mês retrasado', () => {
@@ -384,5 +385,32 @@ describe('serieDoSaldoPassado — regra fixa de mês — PR-CPR-2B.3.1', () => {
   it('sem saldo no mês retrasado não há passado a desenhar', () => {
     expect(serieDoSaldoPassado({ ...base, saldos: [] }))
       .toEqual({ pontos: [], boundary: null });
+  });
+});
+
+describe('a fronteira do verde é dinâmica — PR-CPR-2B.3.2', () => {
+  const contas = [{ id: ITAU, nome: 'Itaú', tipo: 'cc' }];
+  const saldos = [saldo(ITAU, '2026-07', 0, 1000, '2026-07-31')];
+  const base = { contas, saldos, linhas: [], hoje: HOJE, conciliadoAte: '2026-08-31' };
+
+  it('conciliado até o meio do mês: o verde para exatamente ali', () => {
+    const s = serieDoSaldoPassado({ ...base, conciliadoAte: '2026-09-17' });
+    expect(s.pontos.find((p) => p.data === '2026-09-17')?.conciliado).toBe(true);
+    expect(s.pontos.find((p) => p.data === '2026-09-18')?.conciliado).toBe(false);
+  });
+
+  /**
+   * ⚠ O CASO DO NJ: o elo fraco é 31/jul e o desenho começa em 01/ago — o cliente nasce SEM
+   * verde, e isso é a verdade sobre ele, não um defeito de desenho.
+   */
+  it('conciliado antes do início do desenho: nenhum ponto é verde', () => {
+    const s = serieDoSaldoPassado({ ...base, conciliadoAte: '2026-07-31' });
+    expect(s.pontos.some((p) => p.conciliado)).toBe(false);
+    expect(s.pontos.length).toBeGreaterThan(0);
+  });
+
+  it('sem conciliação nenhuma, nada é verde', () => {
+    const s = serieDoSaldoPassado({ ...base, conciliadoAte: null });
+    expect(s.pontos.some((p) => p.conciliado)).toBe(false);
   });
 });
