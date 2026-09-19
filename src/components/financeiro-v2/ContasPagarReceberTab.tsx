@@ -82,6 +82,25 @@ const STATUS_INICIAIS: string[] = ['previsto', 'programado', 'agendado'];
 const CORTE_DESTAQUE = 100_000;
 
 /**
+ * A RÉGUA TIPOGRÁFICA DA LISTA — PR-CPR-2A.3.1, e ela é um NÚMERO, não um gosto.
+ *
+ * ⚠ A HIERARQUIA ESTAVA INVERTIDA (A18): a linha de lançamento vinha em 11px com a descrição
+ * em peso 500 e o valor do grande em 12px/600, enquanto a faixa do dia — o resumo — ficava em
+ * 10px. O detalhe gritava mais alto que o agrupamento, e o olho tinha de LER para achar onde o
+ * dia começa. Quem manda numa lista agrupada é a faixa.
+ *
+ *   faixa do dia      11px / 500 / altura 20   ← o único texto acima de 10px
+ *   total do grupo    11px / 500               ← acompanha a faixa, é parte dela
+ *   linha inteira     10px / 400 / altura 18   ← todas as células, valor incluído
+ *   cabeçalho coluna  10px / 400 / altura 22
+ *
+ * ⚠ PISO 10px NESTA TELA, e ele é mais alto que o piso global de 9,5px do CLAUDE.md por
+ * decisão do briefing. A pílula de status subiu de 9,5 para 10 por causa dele.
+ * ⚠ E NENHUMA CÉLULA EM NEGRITO. Peso é hierarquia, e a hierarquia desta lista já está dita
+ * pela faixa; repeti-la na linha é desfazê-la.
+ */
+
+/**
  * A RÉGUA DE COLUNAS — uma só, para o cabeçalho, as linhas e o total do grupo.
  *
  * ⚠ TRÊS LUGARES DESENHAM A MESMA GRADE, e é por isso que as larguras moram aqui: o cabeçalho
@@ -706,17 +725,17 @@ export function ContasPagarReceberTab() {
                       alinhamento que faz o total do grupo ser lido como soma da coluna, e não
                       como mais um número solto à direita. */}
                   <div className={cn(
-                    'sticky top-[22px] z-10 flex items-center gap-1.5 border-b bg-muted px-3 py-1',
+                    'sticky top-[22px] z-10 flex h-[20px] items-center gap-1.5 border-b bg-muted px-3',
                     'border-l-[3px] border-l-transparent',
                   )}>
                     <span className={cn(
-                      'min-w-0 flex-1 truncate text-[10px] font-medium uppercase tracking-wide',
+                      'min-w-0 flex-1 truncate text-[11px] font-medium uppercase tracking-wide',
                       g.vencido ? 'text-destructive' : 'text-muted-foreground',
                     )}>
                       {g.rotulo}
                     </span>
                     <span className={cn(
-                      COL.valor, 'shrink-0 text-right text-[10px] font-medium tabular-nums',
+                      COL.valor, 'shrink-0 text-right text-[11px] font-medium tabular-nums',
                       g.total < 0 ? 'text-destructive' : 'text-success',
                     )}>
                       {formatMoeda(Math.abs(g.total))}
@@ -738,11 +757,17 @@ export function ContasPagarReceberTab() {
                         onClick={() => void abrir(l.id)}
                         title={catalogosProntos ? 'Abrir o lançamento' : 'Carregando os catálogos…'}
                         className={cn(
-                          'flex h-[22px] w-full items-center gap-1.5 border-b px-3 text-left text-[11px]',
+                          'flex h-[18px] w-full items-center gap-1.5 border-b px-3 text-left text-[10px]',
                           'transition-colors hover:bg-muted/50 disabled:cursor-default',
                           /* A faixa de 3px do destaque. `border-l-[3px]` em TODAS as linhas,
                              transparente nas comuns: sem isso o texto andaria 3px ao cruzar
-                             o corte, e a lista tremeria ao trocar de filtro (A27). */
+                             o corte, e a lista tremeria ao trocar de filtro (A27).
+                             ⚠ E A LISTRA É O DESTAQUE INTEIRO — PR-CPR-2A.3.1. Antes ela vinha
+                             acompanhada de fonte maior e peso no Valor, e o efeito era o oposto
+                             do pretendido: os Juros e a Amortização do Sicredi pareciam linhas
+                             de outra categoria, e o olho lia TAMANHO como hierarquia numa lista
+                             onde quem manda é a faixa do dia. Agora a linha do grande é
+                             visualmente idêntica às outras — muda só a listra. */
                           'border-l-[3px]',
                           grande ? (receber ? 'border-l-success' : 'border-l-destructive') : 'border-l-transparent',
                         )}
@@ -750,7 +775,7 @@ export function ContasPagarReceberTab() {
                         <span className={cn(COL.vencimento, 'shrink-0 tabular-nums text-muted-foreground')}>
                           {l.data_vencimento ? format(parseISO(l.data_vencimento), 'dd/MM') : '—'}
                         </span>
-                        <span className="min-w-0 flex-1 truncate font-medium text-foreground"
+                        <span className="min-w-0 flex-1 truncate text-foreground"
                           title={l.descricao ?? undefined}>
                           {l.descricao || '—'}
                         </span>
@@ -770,7 +795,7 @@ export function ContasPagarReceberTab() {
                             valor. O mapa de COR ficou, e é ele que marca o status aqui. */}
                         <span className={cn(COL.status, 'shrink-0')}>
                           <span className={cn(
-                            'block truncate rounded bg-muted px-1 text-[9.5px] font-medium',
+                            'block truncate rounded bg-muted px-1 text-[10px]',
                             STATUS_FILTRO_COR[status] ?? 'text-muted-foreground',
                           )}>
                             {STATUS_FILTRO_LABEL[status] ?? (status || '—')}
@@ -790,7 +815,6 @@ export function ContasPagarReceberTab() {
                         </span>
                         <span className={cn(
                           COL.valor, 'shrink-0 text-right tabular-nums',
-                          grande ? 'text-[12px] font-semibold' : 'font-medium',
                           receber ? 'text-success' : 'text-destructive',
                         )}>
                           {formatMoeda(valor)}
