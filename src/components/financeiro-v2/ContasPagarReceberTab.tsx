@@ -799,6 +799,12 @@ export function ContasPagarReceberTab() {
               linhas={doSegmento}
               saldoInicial={caixa && caixa.ancoradas > 0 ? caixa.total : null}
               caveat={rotuloCaixa}
+              /* ⚠ DIÁRIO NOS HORIZONTES CURTOS, MENSAL SÓ NO "TUDO" — decisão do Gabriel:
+                 agrupar por semana esconderia o dia exato do aperto, que é o que a tela
+                 existe para mostrar. Em "Vencidos" o span pode ser de anos (2.420 dias no
+                 Agnaldo Cedenho), e aí a própria lib rebaixa para mensal e avisa. */
+              granularidade={horizonte === 'tudo' ? 'mes' : 'dia'}
+              hoje={isoLocal(hoje)}
             />
           ) : (
           <>

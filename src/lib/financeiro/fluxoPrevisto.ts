@@ -23,11 +23,32 @@ export interface LinhaFluxoPrevisto {
   tipo_operacao: string | null;
 }
 
+export type Granularidade = 'dia' | 'mes';
+
+/**
+ * Teto de pontos no modo diário.
+ *
+ * ⚠ ELE NASCE DE UMA MEDIÇÃO, não de cautela: o horizonte "Vencidos" do Agnaldo Cedenho vai
+ * até 03/02/2020 — 2.420 dias. Um gráfico com 2.420 colunas não é denso, é ilegível, e ainda
+ * derruba o navegador do produtor. Acima do teto a série cai para mensal e DIZ que caiu; o
+ * chamador mostra isso, porque um gráfico que troca de régua em silêncio é pior que um
+ * gráfico grosso.
+ */
+export const MAX_PONTOS_DIA = 180;
+
 export interface PontoFluxo {
-  /** `'inicio'` ou `'YYYY-MM'`. */
+  /** `'inicio'`, `'YYYY-MM-DD'` (diário) ou `'YYYY-MM'` (mensal). */
   chave: string;
-  /** `'Hoje'` ou `'set/26'`. */
+  /** `'Hoje'`, `'19/09'` (diário) ou `'set/26'` (mensal). */
   rotulo: string;
+  /**
+   * A faixa de baixo do eixo X: `'set/26'` no diário, `'2026'` no mensal.
+   * ⚠ ELA MORA NO PONTO, e não é derivada no componente: é o que permite o tick customizado
+   * desenhar o traço vertical exatamente onde a faixa muda, sem reinterpretar a chave.
+   */
+  faixa: string;
+  /** Primeiro ponto de uma faixa nova — onde o tick desenha o traço de virada. */
+  abreFaixa: boolean;
   /** Entradas do mês, sempre >= 0. */
   entradas: number;
   /**
@@ -43,6 +64,10 @@ export interface PontoFluxo {
 
 export interface FluxoPrevisto {
   pontos: PontoFluxo[];
+  /** A granularidade EFETIVAMENTE usada — pode diferir da pedida (ver `MAX_PONTOS_DIA`). */
+  granularidade: Granularidade;
+  /** `true` quando a pedida era diária e a série teve de cair para mensal. */
+  rebaixada: boolean;
   /**
    * Lançamentos sem `data_vencimento`, que NÃO entram no gráfico.
    * ⚠ ELES EXISTEM E PRECISAM SER DITOS. Um compromisso sem data não tem posição num eixo de
@@ -61,12 +86,33 @@ export function rotuloDoMes(anoMes: string): string {
   return `${MESES[mes - 1] ?? anoMes}/${ano}`;
 }
 
+/** `'2026-09-19'` → `'19/09'`. */
+export function rotuloDoDia(iso: string): string {
+  return `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+}
+
+/** Soma dias a uma data ISO, sem passar por `Date` local. */
+function somarDiasIso(iso: string, n: number): string {
+  const d = new Date(`${iso}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+function diasEntre(de: string, ate: string): number {
+  const a = new Date(`${de}T12:00:00Z`).getTime();
+  const b = new Date(`${ate}T12:00:00Z`).getTime();
+  return Math.round((b - a) / 86_400_000);
+}
+
 export function montarFluxoPrevisto(
   linhas: readonly LinhaFluxoPrevisto[],
   saldoInicial: number,
+  opcoes: { granularidade: Granularidade; hoje: string },
 ): FluxoPrevisto {
-  const porMes = new Map<string, { entradas: number; saidas: number }>();
+  const porChave = new Map<string, { entradas: number; saidas: number }>();
   let semVencimento = 0;
+  let menorVenc: string | null = null;
+  let maiorVenc: string | null = null;
 
   for (const l of linhas) {
     const tipo = (l.tipo_operacao ?? '');
@@ -76,37 +122,75 @@ export function montarFluxoPrevisto(
     const ehSaida = tipo.startsWith('2-');
     if (!ehEntrada && !ehSaida) continue;
 
-    const venc = (l.data_vencimento ?? '').slice(0, 7);
+    const venc = (l.data_vencimento ?? '').slice(0, 10);
     if (!venc) { semVencimento += 1; continue; }
+    if (!menorVenc || venc < menorVenc) menorVenc = venc;
+    if (!maiorVenc || venc > maiorVenc) maiorVenc = venc;
 
     const v = Math.abs(Number(l.valor ?? 0));
     if (!Number.isFinite(v)) continue;
-    const atual = porMes.get(venc) ?? { entradas: 0, saidas: 0 };
+    const chave = opcoes.granularidade === 'dia' ? venc : venc.slice(0, 7);
+    const atual = porChave.get(chave) ?? { entradas: 0, saidas: 0 };
     if (ehEntrada) atual.entradas += v; else atual.saidas += v;
-    porMes.set(venc, atual);
+    porChave.set(chave, atual);
   }
 
+  /* ⚠ A SÉRIE DIÁRIA É CONTÍNUA, e é isso que a torna um saldo. Só os dias COM movimento
+     dariam uma linha que salta de 05/10 para 13/11 com a mesma inclinação de um dia para o
+     outro — o eixo deixaria de ser tempo. Dia sem movimento entra com barra zero e o saldo
+     anterior, que é a verdade: naquele dia nada aconteceu. */
+  const precisaDia = opcoes.granularidade === 'dia' && menorVenc && maiorVenc;
+  const de = precisaDia ? (menorVenc! < opcoes.hoje ? menorVenc! : opcoes.hoje) : '';
+  const ate = precisaDia ? (maiorVenc! > opcoes.hoje ? maiorVenc! : opcoes.hoje) : '';
+  const totalDias = precisaDia ? diasEntre(de, ate) + 1 : 0;
+  const granularidade: Granularidade =
+    opcoes.granularidade === 'dia' && totalDias > 0 && totalDias <= MAX_PONTOS_DIA ? 'dia' : 'mes';
+  const rebaixada = opcoes.granularidade === 'dia' && granularidade === 'mes' && totalDias > MAX_PONTOS_DIA;
+
+  /* Caiu para mensal depois de agrupar por dia: reagrupar pelas chaves de mês. */
+  const mapa = granularidade === 'dia' ? porChave : (() => {
+    if (opcoes.granularidade === 'mes') return porChave;
+    const m = new Map<string, { entradas: number; saidas: number }>();
+    for (const [k, v] of porChave) {
+      const mes = k.slice(0, 7);
+      const atual = m.get(mes) ?? { entradas: 0, saidas: 0 };
+      atual.entradas += v.entradas; atual.saidas += v.saidas;
+      m.set(mes, atual);
+    }
+    return m;
+  })();
+
   /* ⚠ O PONTO "HOJE" ABRE A SÉRIE, e não é enfeite: sem ele a linha nasceria já descontada do
-     primeiro mês, e o operador não veria de onde ela partiu. É o mesmo `{ dia: 'Início' }` que
-     a evolução do Extrato Gerencial usa. */
+     primeiro período, e o operador não veria de onde ela partiu. É o mesmo `{ dia: 'Início' }`
+     que a evolução do Extrato Gerencial usa. */
   const pontos: PontoFluxo[] = [{
-    chave: 'inicio', rotulo: 'Hoje', entradas: 0, saidas: 0, saldo: arredondar(saldoInicial),
+    chave: 'inicio', rotulo: 'Hoje', faixa: '', abreFaixa: false,
+    entradas: 0, saidas: 0, saldo: arredondar(saldoInicial),
   }];
 
+  const chaves: string[] = granularidade === 'dia'
+    ? Array.from({ length: totalDias }, (_, i) => somarDiasIso(de, i))
+    : Array.from(mapa.keys()).sort();
+
   let acumulado = saldoInicial;
-  for (const mes of Array.from(porMes.keys()).sort()) {
-    const { entradas, saidas } = porMes.get(mes)!;
+  let faixaAnterior = '';
+  for (const chave of chaves) {
+    const { entradas, saidas } = mapa.get(chave) ?? { entradas: 0, saidas: 0 };
     acumulado += entradas - saidas;
+    const faixa = granularidade === 'dia' ? rotuloDoMes(chave.slice(0, 7)) : chave.slice(0, 4);
     pontos.push({
-      chave: mes,
-      rotulo: rotuloDoMes(mes),
+      chave,
+      rotulo: granularidade === 'dia' ? rotuloDoDia(chave) : rotuloDoMes(chave),
+      faixa,
+      abreFaixa: faixa !== faixaAnterior,
       entradas: arredondar(entradas),
       saidas: arredondar(-saidas),
       saldo: arredondar(acumulado),
     });
+    faixaAnterior = faixa;
   }
 
-  return { pontos, semVencimento };
+  return { pontos, granularidade, rebaixada, semVencimento };
 }
 
 /**
@@ -121,4 +205,81 @@ export function primeiroNegativo(pontos: readonly PontoFluxo[]): PontoFluxo | nu
 
 function arredondar(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   A ESCALA DO EIXO Y — PR-CPR-2B.1
+
+   ⚠ O DEFEITO QUE ELA CONSERTA: com o domínio automático do recharts, um cliente cujas saídas
+   são pequenas ao lado do saldo ganhava um zero COLADO na borda de baixo, e o gráfico virava
+   um deserto branco com a linha rente ao teto. Pior, os passos saíam quebrados — 400k para
+   cima e 150k para baixo —, e duas divisões de tamanho diferente na mesma grade fazem o olho
+   comparar alturas que não são comparáveis.
+
+   As três regras, nesta ordem:
+     1. PASSO ÚNICO. O intervalo entre linhas de grade é o mesmo acima e abaixo do zero.
+     2. RESPIRO NO TOPO. O maior valor para cima não encosta: ~15% de folga.
+     3. PISO DE RESPIRO EMBAIXO. Mesmo sem saída nenhuma, o zero fica a pelo menos ~25% da
+        altura do gráfico da borda inferior — é isso que impede o zero de virar rodapé.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/** Fração mínima da altura do gráfico reservada abaixo do zero. */
+export const PISO_RESPIRO_ABAIXO = 0.25;
+
+/** Folga acima do maior valor. */
+export const FOLGA_ACIMA = 0.15;
+
+/** Divisões-alvo da grade. Menos que isso fica pobre; mais, poluído. */
+const DIVISOES_ALVO = 7;
+
+/**
+ * O "passo redondo" imediatamente acima de um valor cru.
+ * ⚠ 1 · 2 · 2,5 · 5 × 10^k — a série que produz grade legível em dinheiro (200k, 250k, 500k).
+ * Um passo de 137k é matematicamente válido e ilegível.
+ */
+export function passoRedondo(bruto: number): number {
+  if (!Number.isFinite(bruto) || bruto <= 0) return 1;
+  const potencia = 10 ** Math.floor(Math.log10(bruto));
+  const normalizado = bruto / potencia;
+  const escolhido = normalizado <= 1 ? 1
+    : normalizado <= 2 ? 2
+    : normalizado <= 2.5 ? 2.5
+    : normalizado <= 5 ? 5
+    : 10;
+  return escolhido * potencia;
+}
+
+export interface EscalaY {
+  dominio: [number, number];
+  ticks: number[];
+  passo: number;
+}
+
+export function escalaSimetrica(pontos: readonly PontoFluxo[]): EscalaY {
+  let maiorCima = 0;
+  let maiorBaixo = 0;
+  for (const p of pontos) {
+    maiorCima = Math.max(maiorCima, p.saldo, p.entradas);
+    /* `saidas` já é negativo; o saldo negativo também empurra para baixo. */
+    maiorBaixo = Math.max(maiorBaixo, -p.saidas, -p.saldo);
+  }
+  if (maiorCima === 0 && maiorBaixo === 0) {
+    return { dominio: [-1, 1], ticks: [-1, 0, 1], passo: 1 };
+  }
+
+  const alvoCima = maiorCima * (1 + FOLGA_ACIMA);
+  /* ⚠ O PISO É RELATIVO À ALTURA TOTAL, não ao valor de baixo: `baixo >= 25% de (cima+baixo)`
+     resolve para `baixo >= cima/3`. É a forma fechada da regra "o zero não cola na borda". */
+  const alvoBaixo = Math.max(
+    maiorBaixo * (1 + FOLGA_ACIMA),
+    alvoCima * (PISO_RESPIRO_ABAIXO / (1 - PISO_RESPIRO_ABAIXO)),
+  );
+
+  const passo = passoRedondo((alvoCima + alvoBaixo) / DIVISOES_ALVO);
+  const acima = Math.max(1, Math.ceil(alvoCima / passo));
+  const abaixo = Math.max(1, Math.ceil(alvoBaixo / passo));
+
+  const ticks: number[] = [];
+  for (let i = -abaixo; i <= acima; i++) ticks.push(arredondar(i * passo));
+  return { dominio: [-abaixo * passo, acima * passo], ticks, passo };
 }
