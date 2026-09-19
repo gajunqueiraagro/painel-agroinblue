@@ -92,6 +92,19 @@ export interface LancamentoV2 {
    *  indicador visual e roteamento para LancamentoZooModal. */
   movimentacao_rebanho_id: string | null;
   /**
+   * "Este lançamento não move caixa" — lido pelo guard do cancelamento.
+   *
+   * ⚠ A COLUNA SEMPRE VEIO NO PAYLOAD (o select é `*`) e os writers deste hook já a gravam;
+   * só o tipo não a declarava, como aconteceu com `created_by` e `recorrencia_id`. Sem ela
+   * declarada, espelhar `guard_zoo_financeiro_cancelamento_realizado` na tela exigiria um cast
+   * — e o cast apagaria a conferência de todas as outras colunas junto. Aditivo: nenhum
+   * writer mudou.
+   */
+  /* ⚠ OPCIONAL, como `safra_id` logo abaixo: o hook MONTA objetos `LancamentoV2` em memória
+     (o otimista do editar), e esses não têm a coluna. Torná-la obrigatória reprovaria aquela
+     montagem sem ganhar nada — quem vem do banco sempre a traz. */
+  sem_movimentacao_caixa?: boolean | null;
+  /**
    * A regra que gerou este lançamento — FIN-RECORR-PROPAGA-01.
    *
    * ⚠ A COLUNA EXISTE DESDE O FIN-RECORRENCIA-01 e o tipo não a declarava: 460 linhas do

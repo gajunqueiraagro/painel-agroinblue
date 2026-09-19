@@ -15,6 +15,13 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { useLancamentoDocumentos } from '@/hooks/useLancamentoDocumentos';
 import { AbaDocumentosLancamento } from '@/components/financeiro-v2/AbaDocumentosLancamento';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  bloqueiaCancelamentoPeloFinanceiro, MOTIVO_BLOQUEIO_REBANHO,
+} from '@/lib/financeiro/cancelamentoLancamento';
 import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { DatePicker } from '@/components/ui/date-picker';
 import { ProdutoAutocomplete } from '@/components/shared/ProdutoAutocomplete';
@@ -68,7 +75,13 @@ interface Props {
   carregando?: boolean;
   onClose: () => void;
   onSave: (form: LancamentoV2Form, id?: string) => Promise<boolean>;
-  onDelete?: (id: string) => Promise<boolean>;
+  /**
+   * ⚠ O SEGUNDO ARGUMENTO É ADITIVO — PR-CPR-2A.4. O diálogo passou a PEDIR um motivo na
+   * confirmação, e quem sabe o que fazer com ele é o chamador: a CPR manda para o `p_motivo`
+   * da `fn_cancelar_lancamento_auditoria`; os chamadores antigos recebem `(id)` como sempre e
+   * ignoram o resto. Nenhum deles mudou de comportamento.
+   */
+  onDelete?: (id: string, motivo?: string) => Promise<boolean>;
   lancamento?: LancamentoV2 | null;
   fazendas: Fazenda[];
   contas: ContaBancariaV2[];
@@ -335,6 +348,10 @@ export function LancamentoV2Dialog({
     editingIdRef.current = lancamento?.id ?? null;
   }, [lancamento]);
   const [saving, setSaving] = useState(false);
+  /* A confirmação do cancelamento e o motivo que ela coleta — PR-CPR-2A.4. */
+  const [confirmandoCancelamento, setConfirmandoCancelamento] = useState(false);
+  const [motivoCancelamento, setMotivoCancelamento] = useState('');
+  const [cancelando, setCancelando] = useState(false);
   // PR-FIN-MODAL-02B — aba ativa (Tabs controlado). Vive no pai; nenhum estado de campo é
   // duplicado por aba. Redefinida para 'geral' na hidratação (abrir/trocar de registro).
   const [abaAtiva, setAbaAtiva] = useState<AbaVisual>('geral');
@@ -2109,18 +2126,26 @@ export function LancamentoV2Dialog({
               </button>
             )}
             <div className="flex-1" />
-            {isEdit && onDelete && (
+            {/* ⚠ O BOTÃO SOME QUANDO O BANCO RECUSARIA — PR-CPR-2A.4. Lançamento de origem
+                zootécnica já realizado, agendado ou conciliado é barrado pelo trigger
+                `guard_zoo_financeiro_cancelamento_realizado` com P0001. Oferecer o botão para
+                depois mostrar um erro é fazer o operador descobrir a regra errando; no lugar
+                dele vai a frase que diz por onde se faz.
+                ⚠ E O ESPELHO NÃO É O CONTROLE: a RPC continua sendo a autoridade, e se a
+                corrida acontecer o erro dela aparece no toast do chamador. */}
+            {isEdit && onDelete && lancamento && bloqueiaCancelamentoPeloFinanceiro(lancamento) && (
+              <span className="text-[11px] text-muted-foreground">{MOTIVO_BLOQUEIO_REBANHO}</span>
+            )}
+            {isEdit && onDelete && lancamento && !bloqueiaCancelamentoPeloFinanceiro(lancamento) && (
               <Button
-                variant="destructive"
+                variant="ghost"
                 size="sm"
-                onClick={async () => {
-                  if (!confirm('Tem certeza que deseja excluir este lançamento?')) return;
-                  const ok = await onDelete(lancamento!.id);
-                  if (ok) onClose();
-                }}
-                className="px-4"
+                /* ⚠ `ghost`, NÃO `destructive`: cancelar é ação rara e não compete com Salvar,
+                   que é o que o operador veio fazer. A cor destrutiva fica no texto. */
+                className="px-3 text-[11px] text-destructive hover:bg-destructive/10 hover:text-destructive"
+                onClick={() => { setMotivoCancelamento(''); setConfirmandoCancelamento(true); }}
               >
-                Excluir
+                Cancelar lançamento
               </Button>
             )}
             <Button tabIndex={17} onClick={handleSubmit} disabled={saving || !canSave} className="px-8 font-semibold shadow-md shadow-primary/25 ring-1 ring-primary/20">
@@ -2187,6 +2212,74 @@ export function LancamentoV2Dialog({
           </fieldset>
         </DialogContent>
       </Dialog>
+
+      {/* ── CONFIRMAÇÃO DO CANCELAMENTO — PR-CPR-2A.4 ──
+          ⚠ `AlertDialog`, E NÃO O `confirm()` NATIVO que estava aqui. O nativo abre o modal do
+          SISTEMA OPERACIONAL — outro idioma visual, outra fonte em cada máquina —, não cabe um
+          campo de motivo dentro dele e é a mesma família do `<select>` cru que o
+          `check:ui-nativo` persegue. O `AlertDialog` é o padrão da casa: 37 arquivos o usam
+          contra 9 que ainda chamam `confirm()`, e este era um dos nove.
+          ⚠ O TEXTO RESPONDE À DÚVIDA DO CLIQUE: "cancelar" sugere apagar, e o operador precisa
+          saber que o registro continua existindo — senão hesita, ou pior, cancela achando que
+          limpa. É a mesma redação do cancelamento de recorrência. */}
+      <AlertDialog
+        open={confirmandoCancelamento}
+        onOpenChange={(o) => { if (!o && !cancelando) setConfirmandoCancelamento(false); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar este lançamento?</AlertDialogTitle>
+            <AlertDialogDescription className="text-[11px] leading-snug">
+              Ele <b>sai da lista</b> mas <b>fica na auditoria</b>, com quem cancelou, quando e
+              por quê. Se estiver conciliado, a conciliação daquele mês <b>reabre</b>.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          {/* ⚠ O MOTIVO É PEDIDO, NÃO DEDUZIDO. A RPC tem `p_motivo` com default
+              `'duplicado_auditoria'` — mandar vazio grava esse motivo em TODO cancelamento,
+              inclusive nos que não são duplicidade nenhuma, e a auditoria passa a mentir com
+              cara de preenchida. O campo nasce vazio e o botão só libera com texto. */}
+          <div className="space-y-1">
+            <Label htmlFor="motivo-cancelamento" className="text-[11px]">
+              Motivo <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="motivo-cancelamento"
+              value={motivoCancelamento}
+              onChange={(e) => setMotivoCancelamento(e.target.value)}
+              placeholder="Ex.: lançado em duplicidade; valor errado; não vai acontecer"
+              className="h-8 text-[11px]"
+              autoFocus
+            />
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancelando}>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={cancelando || !motivoCancelamento.trim()}
+              /* O motivo em branco desabilita, e o porquê fica escrito ao lado — regra da casa:
+                 botão desabilitado diz por quê. */
+              title={motivoCancelamento.trim() ? undefined : 'Escreva o motivo para continuar'}
+              onClick={async (e) => {
+                /* ⚠ `preventDefault`: o `AlertDialogAction` fecha o diálogo por padrão ao
+                   clicar, e fechá-lo antes da RPC responder faria o erro voltar para uma tela
+                   que já não existe. Quem fecha é o resultado. */
+                e.preventDefault();
+                if (!onDelete || !lancamento) return;
+                setCancelando(true);
+                try {
+                  const ok = await onDelete(lancamento.id, motivoCancelamento.trim());
+                  if (ok) { setConfirmandoCancelamento(false); onClose(); }
+                } finally {
+                  setCancelando(false);
+                }
+              }}
+            >
+              {cancelando ? 'Cancelando…' : 'Cancelar lançamento'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* FASE 1 zoo-fin: modal soberano zoo aberto após V2Dialog fechar. */}
       {zooModalId && (

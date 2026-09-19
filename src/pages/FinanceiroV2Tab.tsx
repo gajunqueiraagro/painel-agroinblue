@@ -861,8 +861,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     }
     return true;
   };
-  const handleDelete = async (id: string) => {
-    const ok = await hook.excluirLancamento(id);
+  const handleDelete = async (id: string, motivo?: string) => {
+    /* O motivo vem da confirmacao do modal (PR-CPR-2A.4). `excluirLancamento` ja o grava em
+       `cancelado_motivo`; descarta-lo faria o campo obrigatorio da confirmacao ser teatro. */
+    const ok = await hook.excluirLancamento(id, motivo);
     if (ok) {
       const scrollTop = scrollContainerRef.current?.scrollTop ?? 0;
       await hook.loadLancamentos(filtros, hook.page);

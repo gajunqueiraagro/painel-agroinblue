@@ -1677,8 +1677,9 @@ export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes, mostrarCan
           if (ok) { setEditando(null); await refetch(); }
           return ok;
         }}
-        onDelete={async (id) => {
-          const ok = await fin.excluirLancamento(id);
+        onDelete={async (id, motivo) => {
+          /* Motivo da confirmacao do modal — PR-CPR-2A.4. */
+          const ok = await fin.excluirLancamento(id, motivo);
           if (ok) { setEditando(null); await refetch(); }
           return ok;
         }}

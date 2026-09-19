@@ -201,8 +201,9 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
     return ok;
   }, [v2Hook, reloadData]);
 
-  const handleEditDelete = useCallback(async (id: string) => {
-    const ok = await v2Hook.excluirLancamento(id);
+  const handleEditDelete = useCallback(async (id: string, motivo?: string) => {
+    /* Motivo da confirmacao do modal — PR-CPR-2A.4. */
+    const ok = await v2Hook.excluirLancamento(id, motivo);
     if (ok) {
       setEditDialogOpen(false);
       setEditingLancV2(null);

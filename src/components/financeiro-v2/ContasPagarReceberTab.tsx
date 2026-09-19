@@ -41,6 +41,7 @@ import { Paperclip } from 'lucide-react';
 import { STATUS_FILTRO_COR, STATUS_FILTRO_LABEL } from '@/lib/financeiro/statusFinanceiro';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Vocabulário da tela
@@ -582,6 +583,51 @@ export function ContasPagarReceberTab() {
     }
   };
 
+  /**
+   * Invalidar o que esta tela mostra — as TRÊS consultas, não só a lista.
+   *
+   * ⚠ O SALDO EM CAIXA MUDA quando um REALIZADO é cancelado: ele entra no roll-forward da
+   * conta. Invalidar só `cpr-lancs` deixaria o topo afirmando um caixa que o próprio gesto
+   * acabou de desfazer — e o operador não tem como saber que precisa de F5.
+   * ⚠ E `cpr-anexos` vai junto porque a chave dela é o conjunto de ids visíveis; sem
+   * invalidar, o clipe de uma linha que saiu continuaria no cache.
+   */
+  const invalidarTela = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['cpr-lancs'] }),
+      queryClient.invalidateQueries({ queryKey: ['cpr-caixa'] }),
+      queryClient.invalidateQueries({ queryKey: ['cpr-anexos'] }),
+    ]);
+  };
+
+  /**
+   * Cancelar — pela RPC, nunca por UPDATE.
+   *
+   * ⚠ `fn_cancelar_lancamento_auditoria` NÃO É SÓ UM `cancelado = true`: ela desfaz o vínculo
+   * de conciliação e recalcula o status do extrato. Um UPDATE cru deixaria o item do extrato
+   * apontando para um lançamento que não existe mais para a tela, e o mês continuaria dizendo
+   * "conciliado" contra um saldo que mudou.
+   * ⚠ O MOTIVO VAI SEMPRE PREENCHIDO. O default da RPC é `'duplicado_auditoria'`, então omitir
+   * o argumento grava esse motivo em todo cancelamento — inclusive nos que não são duplicidade.
+   * Quem coleta o texto é a confirmação do modal.
+   * ⚠ E O ERRO DO BANCO VAI CRU PARA O TOAST: o guard do zoo devolve P0001 com uma frase que
+   * nomeia o invariante ("Altere pelo Financeiro Oficial"), mais precisa que qualquer texto
+   * nosso. Mesma decisão do `useConciliarMes`.
+   */
+  const cancelarLancamento = async (id: string, motivo?: string): Promise<boolean> => {
+    const { error } = await supabase.rpc('fn_cancelar_lancamento_auditoria', {
+      p_lancamento_id: id,
+      ...(motivo ? { p_motivo: motivo } : {}),
+    });
+    if (error) {
+      toast.error(error.message || 'Não foi possível cancelar o lançamento.');
+      return false;
+    }
+    await invalidarTela();
+    toast.success('Lançamento cancelado. Ele sai da lista e fica na auditoria.');
+    return true;
+  };
+
   const nomeConta = (id: string | null): string => {
     if (!id) return '—';
     const c = fin.contasBancarias.find((x) => x.id === id);
@@ -914,9 +960,10 @@ export function ContasPagarReceberTab() {
         onClose={() => setLancEdicao(null)}
         onSave={async (form, id) => {
           const ok = id ? await fin.editarLancamento(id, form) : await fin.criarLancamento(form);
-          if (ok) await queryClient.invalidateQueries({ queryKey: ['cpr-lancs'] });
+          if (ok) await invalidarTela();
           return ok;
         }}
+        onDelete={cancelarLancamento}
         lancamento={lancEdicao}
         fazendas={fazendas}
         contas={fin.contasBancarias}
