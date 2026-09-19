@@ -1704,6 +1704,19 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     cancelarMigracao,
     loadAnosDisponiveis,
     setPage,
+    /**
+     * A porta da view, para quem precisa de um recorte que `FiltrosV2` não expressa.
+     *
+     * ⚠ EXPOSTA EM PR-CPR-2A, e por uma razão estreita: a tela de Contas a Pagar e Receber
+     * recorta por uma JANELA DE DATAS ("hoje até hoje+90"), e o plano de `FiltrosV2` só sabe
+     * falar em anos e meses. Ela aplica o MESMO `aplicarPlanoNaView` — e portanto os mesmos
+     * cortes de `cancelado`, `conciliado` e `cenario='meta'` — e só acrescenta o seu `or`
+     * temporal por cima.
+     * ⚠ O CAST CONTINUA MORANDO AQUI DENTRO, que é o ponto de expor a função em vez do
+     * `supabase`: quem consome recebe `BuilderView`, com todo nome de coluna conferido pelo
+     * compilador. Reconstruir esta linha na tela custaria um cast novo a cada tela.
+     */
+    abrirView,
     // PR-FIN-LISTA-VENCIMENTO-03 · 2C-3 — conjunto completo sob demanda (exportação).
     buscarConjuntoFiltrado,
     // PR-FIN-LISTA-VENCIMENTO-03 · 2C-2B — superfície paginada. Nenhum consumidor ainda.

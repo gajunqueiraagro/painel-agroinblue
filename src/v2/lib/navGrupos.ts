@@ -18,6 +18,7 @@ export type V2Section =
   | 'financeiro-home' | 'financeiro-dashboard' | 'fluxo-caixa'
   | 'rateio-adm' | 'importacao-extratos' | 'importacao-custeio-txt' | 'recorrencias'
   | 'painel-periodo'
+  | 'contas-a-pagar-receber'
   | 'importacao-lanc-excel'
   // financeiro — lançamentos
   | 'financeiro-lanc' | 'contratos'
@@ -220,6 +221,11 @@ export const NAV_GRUPOS: NavGrupo[] = [
              Fica em Gestão, e não em Conciliação, porque Conciliação é operação de UMA conta num
              mês; aqui a pergunta é por safra, ano ou datas, com todas as contas. */
           { id: 'painel-periodo',        label: 'Painel por Período',    status: 'ready' },
+          /* ⚠ FICA EM GESTÃO, AO LADO DO PAINEL POR PERÍODO, e não em Operação — PR-CPR-2A.
+             Operação é o que se faz numa conta e num mês; aqui a pergunta é "o que vence,
+             quando, somando todas as contas", que é a mesma família do Painel por Período:
+             leitura de compromisso, não lançamento. */
+          { id: 'contas-a-pagar-receber', label: 'Contas a Pagar/Receber', status: 'ready' },
           { id: 'painel-financiamentos', label: 'Painel Financiamentos', status: 'needs-wrapper' },
         ],
       },
@@ -367,6 +373,7 @@ export const SECTION_TO_GROUP: Partial<Record<V2Section, string>> = {
   // ── financeiro ──
   'financeiro-home': 'financeiro', 'financeiro-dashboard': 'financeiro',
   'fluxo-caixa': 'financeiro', 'rateio-adm': 'financeiro', 'painel-periodo': 'financeiro',
+  'contas-a-pagar-receber': 'financeiro',
   'importacao-extratos': 'financeiro', 'importacao-custeio-txt': 'financeiro', 'financeiro-lanc': 'financeiro',
   'recorrencias': 'financeiro',
   'conciliacao-extrato': 'financeiro',

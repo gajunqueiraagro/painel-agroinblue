@@ -71,6 +71,7 @@ import { ConciliacaoBancariaTab } from '@/pages/ConciliacaoBancariaTab';
 import V2Recorrencias from '@/v2/pages/V2Recorrencias';
 import { ExtratoGerencialTab } from '@/components/financeiro-v2/ExtratoGerencialTab';
 import { PainelPeriodoTab } from '@/components/financeiro-v2/PainelPeriodoTab';
+import { ContasPagarReceberTab } from '@/components/financeiro-v2/ContasPagarReceberTab';
 import { VisaoConsolidadaTab } from '@/components/financeiro-v2/VisaoConsolidadaTab';
 // PR-CLEANUP-REFERENCIAS-OPERACIONAIS-01 — import de V2MesaOperacional removido: a tela saiu
 // do menu e da rota. O arquivo continua no repo (quarentena), fora do bundle.
@@ -970,6 +971,7 @@ export default function V2Index() {
 
     if (section === 'recorrencias') return <V2Recorrencias />;
     if (section === 'painel-periodo') return <PainelPeriodoTab />;
+    if (section === 'contas-a-pagar-receber') return <ContasPagarReceberTab />;
     // PR-IMPORT-EXCEL-LANC-01 — passos 1-3 (ler, mapear, conferir). A gravação
     // (passo 4) entra depois, no mesmo PR; o botão fica desabilitado até lá.
 
@@ -1392,7 +1394,7 @@ export default function V2Index() {
      tem referência, a página inteira cresce, e quem rola é o `<section>` — então o cabeçalho
      "fixo" de qualquer lista interna sobe junto. Foi o caso da colheita
      (`lancamentos-agricultura`), que nasceu escrita para app-shell e estava fora da lista. */
-  const SECOES_APP_SHELL = new Set(['conciliacao', 'mapa-pastos', 'conferencia-lancamentos', 'financiamentos', 'recorrencias', 'lancamentos-agricultura', 'barter-contratos']);
+  const SECOES_APP_SHELL = new Set(['conciliacao', 'mapa-pastos', 'conferencia-lancamentos', 'financiamentos', 'recorrencias', 'lancamentos-agricultura', 'barter-contratos', 'contas-a-pagar-receber']);
   const appShell = SECOES_APP_SHELL.has(section);
 
   return (
