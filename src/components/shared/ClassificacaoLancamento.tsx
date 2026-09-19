@@ -17,9 +17,21 @@
  * `safraEditadaAMao`, `subcentroLimpoPelaAtividade`): memória de quem está digitando, não dado
  * gravado.
  *
- * ⚠ DEVOLVE UM FRAGMENT, NUNCA UM WRAPPER. Os campos são filhos DIRETOS de uma
- * `grid grid-cols-12` que também tem o Valor e as Contas; um `<div>` a mais aqui viraria uma
- * célula só e empurraria a grade inteira. Passa em TSC e em build — só a tela pega.
+ * ⚠ MONTE-O EM BLOCO SIMPLES — NUNCA DENTRO DE UMA GRADE. Ele devolve um Fragment cujos dois
+ * filhos de topo são `grid grid-cols-12 gap-2 items-start` COMPLETAS (:237 e :370): as colunas
+ * já vêm com ele. Envolvê-lo em outra `grid grid-cols-12` faz cada uma dessas duas grades virar
+ * um ITEM de UMA coluna do envelope — 1/12 da largura, ~24px — e o cluster colapsa: as pílulas
+ * de atividade viram bolinhas de 18px e os rótulos se sobrepõem. Passa em TSC e em build — só a
+ * tela pega. O `LancamentoV2Dialog` o monta depois de as grades DELE fecharem (:1750 fecha,
+ * :1767 monta), e é esse o padrão.
+ *
+ * ⚠ ESTE AVISO DIZIA O CONTRÁRIO ATÉ 19/09/2026, e o preço foi um defeito visível em tela
+ * (OBRIGACAO-UI-03). Ele descrevia o estado ANTERIOR à extração, quando os campos eram mesmo
+ * filhos soltos da grade do modal; o passo 2 do PAR-01a-ii trouxe as duas grades para cá e o
+ * texto não acompanhou. Quem escreveu o parcelamento leu o aviso, embrulhou numa
+ * `grid grid-cols-12` e mediu num harness montado à mão, que não reproduzia estas duas grades —
+ * e o harness confirmou o engano. Comentário obsoleto em regra de layout não é ruído: é uma
+ * instrução errada que passa nos gates.
  *
  * ⚠ `ehAdministrativo` É CALCULADO AQUI E TAMBÉM NO PAI, e não é duplicação de regra: os dois
  * chamam `escopoDoSubcentro`, a função pura da casa, que saiu do modal justamente para a Mesa

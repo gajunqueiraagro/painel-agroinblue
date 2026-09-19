@@ -43,7 +43,17 @@ import { useQueryClient } from '@tanstack/react-query';
    dois nunca se anulam em toda altura de janela, e o caso que importa e' a janela
    BAIXA, onde o modal quase nao cabe. */
 const ALTURA_CORPO = 'h-[69vh]';
-const ALTURA_PREVIA = 'max-h-[190px]';
+/**
+ * A ALTURA DA TABELA DE PARCELAS — OBRIGACAO-UI-03.
+ *
+ * ⚠ SUBIU DE 190 PARA 260px COM ALTURA MEDIDA, nao no olho: a linha unica dos quatro campos
+ * devolveu 66px (139 -> 73, OBRIGACAO-UI-02) e as duas frases-guia que subiram para a linha do
+ * rotulo devolveram outra faixa. O que se ganhou em cima, a tabela recebe — que e' o unico
+ * bloco da aba onde mais altura vira mais informacao.
+ * ⚠ CONTINUA SENDO `max-h`, NAO `h`: com tres parcelas a caixa encolhe para tres linhas em vez
+ * de reservar 260px de vazio. Altura fixa aqui seria moldura em volta de nada.
+ */
+const ALTURA_PREVIA = 'max-h-[260px]';
 const CAMPO = 'h-8';                       // A16 — todo campo do formulario na mesma altura
 const CAMPO_CELULA = 'h-6';                // A16 — dentro da grade densa, todos na dela
 /* Idioma canonico de campo travado (AbaLiquidacaoOC / CompraModalShell). */
@@ -138,7 +148,11 @@ const dataBR = (iso: string): string | null =>
 /* ── Resumo lateral: faixa de secao e par rotulo-valor (A17) ──────────────────── */
 function BlocoHead({ titulo }: { titulo: string }) {
   return (
-    <div className="bg-muted/40 border-y border-border/60 px-3 py-0.5 mt-0.5 first:mt-0 mb-0.5">
+    /* ⚠ SEM RESPIRO VERTICAL EM VOLTA — OBRIGACAO-UI-03. As bordas do proprio bloco ja'
+       separam uma secao da outra; `py`/`mt`/`mb` de 2px cada somavam ~18px nos tres blocos, e
+       essa altura estava empurrando o resumo para a rolagem. O fundo e as bordas fazem a
+       separacao que o espaco fazia. */
+    <div className="bg-muted/40 border-y border-border/60 px-3 mt-0 mb-0">
       <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">{titulo}</span>
     </div>
   );
@@ -926,21 +940,31 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                   </div>
                   </div>{/* fecha o wrapper de uma-linha-so — OBRIGACAO-UI-02 */}
 
-                  {ehParcelamento && (
-                    /* ⚠ A FRASE DO ARREDONDAMENTO. Sem ela o operador soma as parcelas
-                       na mao, acha centavos de diferenca e duvida do sistema. */
-                    <p className="text-[10px] text-muted-foreground">
-                      Sem juros. O valor de cada parcela é o total dividido por N; a última absorve o arredondamento.
-                    </p>
-                  )}
-
                   <div>
-                    <Label className={ROTULO}>{ehEdicao ? 'Parcelas do contrato' : 'Prévia das parcelas'}</Label>
-                    {ehEdicao && (
-                      <p className="mb-0.5 text-[10px] text-amber-600 dark:text-amber-500">
-                        Cada parcela se edita pelo lápis. Valor total, nº e 1ª parcela não refazem o cronograma.
-                      </p>
-                    )}
+                    {/* ⚠ A FRASE-GUIA SOBE PARA A LINHA DO ROTULO — OBRIGACAO-UI-03. As duas
+                        (arredondamento na criacao, lapis na edicao) ocupavam uma FAIXA INTEIRA
+                        cada, e a altura que elas comiam saia da tabela, que e' o que o operador
+                        precisa ver. Na mesma linha do rotulo, a direita, custam ZERO altura: o
+                        rotulo ja' reservava aquela faixa.
+                        ⚠ NENHUMA FRASE FOI CORTADA e a fonte nao desceu do piso de 10px — o
+                        briefing pedia comprimir, e comprimir espacamento e' diferente de apagar
+                        informacao. As duas sao exclusivas entre si (uma so' na criacao, outra so'
+                        na edicao), entao a linha nunca leva as duas.
+                        ⚠ `min-w-0` + `truncate` NA FRASE, nao no rotulo: em coluna estreita quem
+                        cede e' a explicacao, nunca o nome do campo. */}
+                    <div className="flex items-baseline justify-between gap-2">
+                      <Label className={ROTULO}>{ehEdicao ? 'Parcelas do contrato' : 'Prévia das parcelas'}</Label>
+                      {ehParcelamento && !ehEdicao && (
+                        <span className="min-w-0 truncate text-[10px] text-muted-foreground">
+                          Sem juros. Cada parcela é o total dividido por N; a última absorve o arredondamento.
+                        </span>
+                      )}
+                      {ehEdicao && (
+                        <span className="min-w-0 truncate text-[10px] text-amber-600 dark:text-amber-500">
+                          Cada parcela se edita pelo lápis. Valor total, nº e 1ª parcela não refazem o cronograma.
+                        </span>
+                      )}
+                    </div>
                     {parcelas.length === 0 ? (
                       <p className="mt-0.5 rounded-md border border-dashed px-2 py-3 text-center text-[10px] text-muted-foreground">
                         {ehEdicao ? 'Este contrato não tem parcelas.' : 'Preencha valor total, nº de parcelas e data da 1ª parcela.'}
@@ -1103,16 +1127,29 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                           atividade; administrativo apaga a safra; cultura só em lavoura, fase só
                           em pecuária) valem aqui de graça, e continuarão valendo quando mudarem
                           lá — que é a razão de ele ter sido extraído.
-                          ⚠ `grid grid-cols-12` PORQUE O CLUSTER DEVOLVE UM FRAGMENT: os campos
-                          são filhos DIRETOS da grade, não um bloco. Sem esta `div` eles cairiam
-                          soltos no `space-y` da aba e as larguras (4/8/4/4/4) não significariam
-                          nada. Está escrito no cabeçalho do componente.
+                          ⚠ NADA DE GRADE EM VOLTA — E ESTE COMENTARIO JA' DISSE O CONTRARIO,
+                          o que custou um defeito visivel em tela (OBRIGACAO-UI-03). O cluster
+                          NAO devolve campos soltos: o Fragment dele traz DUAS
+                          `grid grid-cols-12 gap-2 items-start` COMPLETAS (ClassificacaoLancamento
+                          :237 e :370). Envolve-lo noutra `grid grid-cols-12` fazia cada uma
+                          dessas duas grades virar um ITEM de UMA coluna do envelope — 1/12 da
+                          largura, ~58px — e o cluster inteiro colapsava: as pilulas de atividade
+                          viravam bolinhas e os rotulos se sobrepunham. O texto de apoio abaixo
+                          saia inteiro porque e' irmao do envelope, e era esse contraste no print
+                          que denunciava o problema.
+                          ⚠ O QUE O FINANCEIRO FAZ, e e' o que passa a valer aqui: monta o
+                          componente em BLOCO SIMPLES, depois de as grades dele proprio fecharem
+                          (LancamentoV2Dialog :1750 fecha, :1767 monta). Sem wrapper de grade.
+                          ⚠ O HARNESS DISSE QUE ESTAVA CERTO, E O HARNESS ESTAVA ERRADO: eu
+                          reproduzi a arvore a' mao com um `col-span-4` no lugar do componente, em
+                          vez da estrutura real de duas grades — entao medi 700px de largura numa
+                          arvore que nao era a da tela. Medicao que nao usa a arvore real mede
+                          outra coisa; o print e' que era o dado.
                           ⚠ `planosParcelamento` DEIXOU DE SER USADA AQUI e segue carregada: ela
                           é a lista peneirada de saídas operacionais, e o cluster precisa do
                           plano INTEIRO para cruzar escopo e atividade. Quem filtra agora é o
                           `PlanoSubcentroSelect`, por `tipoOperacao`. */}
-                      <div className="grid grid-cols-12 gap-2">
-                        <ClassificacaoLancamento
+                      <ClassificacaoLancamento
                           value={classificacao}
                           /* ⚠ O SETTER DO `useState` VAI DIRETO — o cluster manda updater
                              funcional e quem o resolve é o estado vivo do pai (PAR-01a-ii-fix1).
@@ -1128,8 +1165,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                           culturasDaSafra={culturasDaSafra}
                           /* Um parcelamento é sempre despesa — é o que filtra a lista de contas. */
                           tipoOperacao="2-Saídas"
-                        />
-                      </div>
+                      />
                       <p className={APOIO}>Cada parcela vira um lançamento nesta classificação</p>
                       <p className="text-[10px] text-muted-foreground">
                         Parcelamento não tem captação: o dinheiro não entra, a despesa é que sai em N vezes.
@@ -1230,7 +1266,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                   </div>
                   <div className="pb-1">
                     <BlocoHead titulo="Contrato" />
-                    <div className="px-3 space-y-0.5">
+                    <div className="px-3">
                       <div className="flex h-6 items-center justify-between gap-1.5 leading-tight">
                         <span className="text-muted-foreground shrink-0">Natureza</span>
                         <span className="flex items-center gap-1 min-w-0">
@@ -1251,7 +1287,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                     </div>
 
                     <BlocoHead titulo="Cronograma" />
-                    <div className="px-3 space-y-0.5">
+                    <div className="px-3">
                       <div className="flex items-baseline justify-between gap-1.5 leading-tight">
                         <span className="text-muted-foreground shrink-0">Valor total</span>
                         <span className={`text-[14px] font-semibold ${NUM}`}>
@@ -1273,7 +1309,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                     </div>
 
                     <BlocoHead titulo="Classificação" />
-                    <div className="px-3 space-y-0.5">
+                    <div className="px-3">
                       {ehParcelamento ? (
                         <Linha rotulo="Parcela" valor={nomeParcela} />
                       ) : (
