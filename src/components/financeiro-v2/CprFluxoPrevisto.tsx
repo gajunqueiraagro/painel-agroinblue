@@ -200,12 +200,17 @@ export function CprFluxoPrevisto({
   conciliadoAte: string | null;
 }) {
   /**
-   * ⚠ AS DUAS VERDADES, E ELAS NÃO DEVEM FECHAR — PR-CPR-2B.3.2.
+   * ⚠ AS DUAS VERDADES, E CADA UMA NO SEU LUGAR — PR-CPR-2B.3.2, ajustado em 2B.3.5.
    *
-   * O CARD diz quanto TEM na conta: só conciliado e realizado. A LINHA diz onde o caixa
-   * estaria se tudo tivesse caído no vencimento — logo, o card MENOS o que venceu e não foi
-   * pago. No NJ são ~R$ 521 mil de diferença, e essa diferença é a informação: forçá-las a
-   * coincidir apagaria justamente o que a tela existe para mostrar.
+   * O CARD, no topo da tela, diz quanto TEM na conta: só conciliado e realizado. A LINHA diz
+   * onde o caixa estaria se tudo tivesse caído no vencimento — o card MENOS o que venceu e não
+   * foi pago. As duas continuam sendo calculadas assim, e o `ajusteTotal` é o que separa uma
+   * da outra.
+   * ⚠ MAS O GRÁFICO NÃO DESENHA MAIS AS DUAS. Até a 2B.3.4 o ponto de hoje trazia também um
+   * marcador "na conta R$ X" com o valor do card, e o efeito foi o oposto do pretendido: dois
+   * números a centímetros um do outro, no mesmo ponto, convidando a uma comparação que o
+   * gráfico não existe para fazer. O card já está no topo, a três centímetros dali. Aqui fica
+   * um ponto só, com o valor da LINHA — que é a pergunta desta visão.
    */
   const inicioDesenho = useMemo(() => {
     const d = new Date(`${hoje}T12:00:00Z`);
@@ -337,7 +342,7 @@ export function CprFluxoPrevisto({
         {/* ⚠ O CAVEAT DO SALDO VEM INTEIRO, e ganha o seu próprio: o gráfico parte de um saldo
             conciliado até certa data E assume que todo compromisso cai no vencimento. */}
         <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
-          {caveat ? `${caveat} · ` : ''}de hoje em diante, assumindo que tudo cai no vencimento
+          {caveat ? `${caveat} · ` : ''}* de hoje em diante, assumindo que tudo cai no vencimento
           {anteriores > 0 && ` · ${anteriores} já vencido${anteriores > 1 ? 's' : ''}, fora da projeção`}
           {semVencimento > 0 && ` · ${semVencimento} sem vencimento, fora do gráfico`}
           {rebaixada && ' · período longo demais para o detalhe diário: agrupado por mês'}
@@ -447,23 +452,24 @@ export function CprFluxoPrevisto({
               <>
                 {/* ⚠ DUAS LINHAS, "hoje" ACIMA do valor: numa linha só o rótulo empurrava o
                     número para cima da curva. Separados, o valor fica logo acima do ponto e a
-                    palavra acima dele, sem encostar em nada. */}
+                    palavra acima dele, sem encostar em nada.
+                    ⚠ LARANJA E COM ASTERISCO — PR-CPR-2B.3.5, e é o mesmo token da linha
+                    tracejada do futuro (`COR_SALDO`), não uma cor nova. Este número NÃO é o
+                    dinheiro que está na conta: é a projeção, o caixa que haveria se tudo o que
+                    venceu tivesse sido pago no vencimento. O dinheiro real está no card do
+                    topo. Pintá-lo da cor do texto o fazia passar por fato; na cor do previsto,
+                    ele se declara estimativa antes de ser lido.
+                    ⚠ E O ASTERISCO É RESOLVIDO NO SUBTÍTULO, não numa legenda nova: a frase
+                    que explica a premissa já está lá em cima, e ganhou o `*` na frente. Um
+                    rodapé só para essa estrela acrescentaria uma linha ao gráfico para repetir
+                    o que já estava escrito. */}
                 <ReferenceDot x={emHoje.rotulo} y={emHoje.saldo} r={0} isFront
                   label={{ value: 'hoje', position: 'top', fontSize: 10,
-                    fill: COR_TEXTO, offset: 30 }} />
+                    fill: COR_SALDO, offset: 30 }} />
                 <ReferenceDot x={emHoje.rotulo} y={emHoje.saldo} r={0} isFront
-                  label={{ value: fmtTag(emHoje.saldo), position: 'top', fontSize: 12,
-                    fontWeight: 600, fill: COR_TEXTO, offset: 15 }} />
+                  label={{ value: `${fmtTag(emHoje.saldo)} *`, position: 'top', fontSize: 12,
+                    fontWeight: 600, fill: COR_SALDO, offset: 15 }} />
               </>
-            )}
-            {/* ⚠ A REFERÊNCIA DO CARD, SEPARADA DO PONTO DA LINHA. Elas só coincidem quando não
-                há vencido-não-pago; quando há, o operador precisa ver as duas — "tenho isto na
-                conta" e "estaria aqui se tudo tivesse sido pago". */}
-            {saldoInicial !== null && ajusteTotal !== 0 && (
-              <ReferenceDot x={emHoje.rotulo} y={saldoInicial} r={3.4} isFront
-                fill="#fff" stroke={COR_TEXTO} strokeWidth={1.6}
-                label={{ value: `na conta ${fmtTag(saldoInicial)}`, position: 'right',
-                  offset: 8, fontSize: 10, fill: COR_TEXTO }} />
             )}
             {fimConciliado && fimConciliado.chave !== emHoje.chave && (
               <ReferenceDot x={fimConciliado.rotulo} y={fimConciliado.saldo} r={0} isFront
