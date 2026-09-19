@@ -636,7 +636,11 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                     )}
                   </div>
 
-                  <div className={`grid gap-2 ${ehEdicao ? 'grid-cols-[2fr_1fr_1fr_1fr]' : 'grid-cols-[2fr_1fr_1fr]'}`}>
+                  {/* ⚠ A QUARTA COLUNA SO' EXISTE SE A SITUACAO EXISTIR — OBRIGACAO-UI-02.
+                      Ela hospeda o campo "Situacao do contrato", que agora some tambem ao editar
+                      um parcelamento; manter `[2fr_1fr_1fr_1fr]` deixaria um quarto de linha
+                      vazio a' direita, que e' o mesmo defeito que este PR veio tirar da Forma. */}
+                  <div className={`grid gap-2 ${ehEdicao && !ehParcelamento ? 'grid-cols-[2fr_1fr_1fr_1fr]' : 'grid-cols-[2fr_1fr_1fr]'}`}>
                     <div>
                       <Label className={ROTULO}>Descrição *</Label>
                       <Input className={CAMPO} value={form.descricao}
@@ -664,7 +668,11 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                     {/* ⚠ SO' NA EDICAO. Na criacao nao ha' o que escolher — todo contrato
                         nasce 'ativo' e quem fixa isso e' o gravador; oferecer "Quitado" a um
                         contrato que ainda nao existe seria um campo que nao decide nada. */}
-                    {ehEdicao && (
+                    {/* ⚠ E NEM AO EDITAR UM PARCELAMENTO — OBRIGACAO-UI-02. O campo ja' nao
+                        existia na criacao (todo contrato nasce 'ativo'); agora tambem some do
+                        parcelamento em edicao. Um parcelamento nao tem "situacao de contrato" a
+                        governar: ele e' N despesas, e quem diz se acabaram sao as parcelas. */}
+                    {ehEdicao && !ehParcelamento && (
                       <div>
                         <Label className={ROTULO}>Situação do contrato</Label>
                         <Select value={statusContrato} onValueChange={v => { if (ehStatusContrato(v)) setStatusContrato(v); }}>
@@ -739,8 +747,16 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                       ⚠ NAO E' A LISTA DA OC (`formasPagamento.ts`, com Cheque): aquela serve
                       `zoo_operacao_parcelas_programacao.forma`, outra tabela.
                       ⚠ OPCIONAL, e "Nenhuma" grava NULO — ausencia, nunca a palavra. */}
-                  {ehParcelamento && (
-                    <div className="grid grid-cols-2 gap-2">
+                  {/* ⚠ UMA LINHA SO', E AS LARGURAS SEGUEM O CONTEUDO — OBRIGACAO-UI-02.
+                      A Forma morava num `grid-cols-2` com UM filho: metade da linha ocupada e
+                      metade VAZIA a direita, que se le como campo que faltou carregar. Agora as
+                      tres dividem a mesma faixa, e a Observacao — que e' texto livre e a unica
+                      que cresce com o conteudo — fica com o dobro das outras duas.
+                      ⚠ SEM A FORMA (financiamento/emprestimo) A GRADE VIRA DE DUAS, nao de tres
+                      com um vao: esconder a celula mantendo o `[1fr_1fr_2fr]` deixaria o buraco
+                      que este item veio tirar. */}
+                  <div className={`grid gap-2 ${ehParcelamento ? 'grid-cols-[1fr_1fr_2fr]' : 'grid-cols-[1fr_2fr]'}`}>
+                    {ehParcelamento && (
                       <div>
                         <Label className={ROTULO}>Forma de pagamento</Label>
                         <Select
@@ -755,10 +771,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                         </Select>
                         <p className={APOIO}>Vai em cada parcela</p>
                       </div>
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-2 gap-2">
+                    )}
                     <div>
                       <Label className={ROTULO}>Data do contrato *</Label>
                       <DatePicker value={form.data_contrato} onChange={v => set('data_contrato', v)} />
@@ -783,7 +796,21 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                       parcelamento tem dois campos nesta linha; manter `grid-cols-3` deixaria
                       um vão de uma coluna no meio da linha, e a Lei da Estabilidade Visual vale
                       também para o espaço vazio. */}
-                  <div className={`grid gap-2 ${ehEdicao ? 'grid-cols-4 [&>div]:max-w-[200px]' : (ehParcelamento ? 'grid-cols-2' : 'grid-cols-3')}`}>
+                  {/* ⚠ UMA LINHA SO' NO PARCELAMENTO — OBRIGACAO-UI-02. Sem entrada e sem
+                      juros, sobram QUATRO campos (valor, N, 1a parcela, frequencia) que estavam
+                      em DUAS linhas de dois — e cada linha custa rotulo + campo + a linha de
+                      apoio embaixo. Juntas, some uma faixa inteira do topo da aba.
+                      ⚠ `contents` E' O MECANISMO, e e' o mesmo de que o cluster de classificacao
+                      ja' depende: um elemento `display:contents` some do layout e seus filhos
+                      viram itens da grade do AVO. Assim as duas grades internas continuam
+                      existindo — com suas proprias regras de coluna para financiamento e para a
+                      edicao — sem que nenhum campo mude de lugar no JSX. Mover a marcacao dos
+                      campos para juntar as linhas seria a chance de errar um.
+                      ⚠ SO' NA CRIACAO DE PARCELAMENTO: em edicao a grade ja' e' de quatro com
+                      teto de 200px por campo, e o financiamento tem seis campos, que em uma
+                      linha ficariam ilegiveis. */}
+                  <div className={ehParcelamento && !ehEdicao ? 'grid grid-cols-4 gap-2' : 'space-y-2.5'}>
+                  <div className={ehParcelamento && !ehEdicao ? 'contents' : `grid gap-2 ${ehEdicao ? 'grid-cols-4 [&>div]:max-w-[200px]' : 'grid-cols-3'}`}>
                     <div>
                       <Label className={ROTULO}>Valor total *</Label>
                       <CampoMoeda valor={form.valor_total || null}
@@ -843,7 +870,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                       Esconder a terceira celula mantendo `grid-cols-3` deixaria um
                       terco vazio a' direita, e buraco em grade le-se como campo que
                       faltou carregar. */}
-                  <div className={`grid gap-2 ${ehEdicao ? 'grid-cols-4 [&>div]:max-w-[200px]' : (!ehParcelamento ? 'grid-cols-3' : 'grid-cols-2')}`}>
+                  <div className={ehParcelamento && !ehEdicao ? 'contents' : `grid gap-2 ${ehEdicao ? 'grid-cols-4 [&>div]:max-w-[200px]' : 'grid-cols-3'}`}>
                     <div>
                       <Label className={ROTULO}>1ª parcela *</Label>
                       <DatePicker value={form.data_primeira_parcela} onChange={v => set('data_primeira_parcela', v)} />
@@ -897,6 +924,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                       </div>
                     )}
                   </div>
+                  </div>{/* fecha o wrapper de uma-linha-so — OBRIGACAO-UI-02 */}
 
                   {ehParcelamento && (
                     /* ⚠ A FRASE DO ARREDONDAMENTO. Sem ela o operador soma as parcelas
