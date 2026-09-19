@@ -33,6 +33,9 @@ import { AbaAuditoriaLancamento } from '@/components/financeiro-v2/AbaAuditoriaL
 import { AlertCircle, AlertTriangle, Copy, KeyRound, RefreshCw, DollarSign, FileText, Beef, Repeat, Loader2 } from 'lucide-react';
 import { LancamentoZooModal } from '@/v2/components/edicao/LancamentoZooModal';
 import { toast } from 'sonner';
+import { useQueryClient } from '@tanstack/react-query';
+/* PAR-02 — a montagem do payload e a previa, compartilhadas com a tela de Parcelamentos. */
+import { montarPayloadParcelamento, preverParcelas } from '@/lib/financiamentos/montarPayloadParcelamento';
 import type { LancamentoV2, LancamentoV2Form, ContaBancariaV2, ClassificacaoItem, FornecedorV2, Safra } from '@/hooks/useFinanceiroV2';
 import type { Fazenda } from '@/contexts/FazendaContext';
 import { NovoFornecedorDialog } from './NovoFornecedorDialog';
@@ -288,28 +291,17 @@ function getMonthLabel(dateStr: string): string {
   return d.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
 }
 
-interface ParcelaRow {
-  dataPagamento: string;
-  valorDisplay: string;
-}
-
-/** Generate initial parcela rows from total value and start date */
-function generateParcelas(totalVal: number, numParcelas: number, dataPgtoInicial: string): ParcelaRow[] {
-  const abs = Math.abs(totalVal);
-  const baseVal = Math.floor((abs / numParcelas) * 100) / 100;
-  const lastVal = Math.round((abs - baseVal * (numParcelas - 1)) * 100) / 100;
-
-  const rows: ParcelaRow[] = [];
-  for (let i = 0; i < numParcelas; i++) {
-    const val = i === numParcelas - 1 ? lastVal : baseVal;
-    rows.push({
-      dataPagamento: dataPgtoInicial ? addDays(dataPgtoInicial, i * 30) : '',
-      valorDisplay: toBRL(val),
-    });
-  }
-  return rows;
-}
-
+/* ⚠ `ParcelaRow` E `generateParcelas` MORRERAM AQUI — PAR-02, e eram o WRITER, não uma prévia.
+   A grade que o operador editava virava, linha a linha, N lançamentos soltos pelo laço do
+   salvar. Quem calcula as parcelas agora é a RPC, e quem as MOSTRA é `preverParcelas`
+   (`lib/financiamentos/montarPayloadParcelamento`), que espelha a aritmética dela.
+   ⚠ AS TRÊS DIVERGÊNCIAS QUE A FUNÇÃO ANTIGA TINHA, e que faziam a tela prometer o que o banco
+   não gravava: `addDays(i * 30)` em vez de mês de verdade (num plano de 8x o dia derivava de 6
+   para 2), `Math.floor` onde a RPC usa `round`, e a data escalonada indo para o PAGAMENTO sob
+   um cabeçalho escrito "Vencimento".
+   ⚠ NÃO CONFUNDIR COM AS QUATRO `gerarParcelas` HOMÔNIMAS do repo (AbateFinanceiroPanel,
+   VendaFinanceiroPanel, BoitelPlanningDialog e useFinanciamentoCadastro): são funções próprias,
+   de outras telas, e nenhuma foi tocada. */
 
 export function LancamentoV2Dialog({
   open, carregando, onClose, onSave, onDelete, lancamento, fazendas, contas, classificacoes,
@@ -318,6 +310,7 @@ export function LancamentoV2Dialog({
   referenciaOperacionalInfo, excelContext, permiteEditarFavorecidoOC, onAbrirOperacaoOC,
 }: Props) {
   const { clienteAtual } = useCliente();
+  const qc = useQueryClient();
   /* ⚠ OS DOCUMENTOS SÓ EXISTEM DEPOIS QUE O LANÇAMENTO EXISTE: as RPCs recebem
      `p_lancamento_id`, e num lançamento novo não há id para anexar nada. Por isso o hook
      nasce desligado (`null`) e a aba diz o que fazer, em vez de oferecer um botão que
@@ -395,7 +388,9 @@ export function LancamentoV2Dialog({
     setNumParcelas(n);
     setNumParcelasTexto(String(n));
   };
-  const [parcelaRows, setParcelaRows] = useState<ParcelaRow[]>([]);
+  /* ⚠ DERIVADO, NÃO ESTADO — PAR-02. Era `useState` porque a grade era editável e o que
+     estivesse nela ia para o banco. Agora ela só mostra o que a RPC vai gravar, então manter
+     uma cópia em estado seria abrir espaço para a tela e o banco discordarem de novo. */
 
   // Frequency state
 
@@ -809,7 +804,6 @@ export function LancamentoV2Dialog({
       // CRITICAL: reset parcela/recorrência when editing — prevents stale state from previous "new" dialog
       setFormaPagamentoParc('avista');
       setNumParcelas(2); setNumParcelasTexto('2');
-      setParcelaRows([]);
     } else if (prefill) {
       // Modo "criar a partir de fonte externa" (OFX órfão, p.ex.) — campos
       // chave vêm pré-preenchidos do prefill; demais ficam vazios igual ao
@@ -868,7 +862,6 @@ export function LancamentoV2Dialog({
       setObservacao('');
       setFormaPagamentoParc('avista');
       setNumParcelas(2); setNumParcelasTexto('2');
-      setParcelaRows([]);
       setFormaPgto('');
       setDadosPagamento('');
     } else {
@@ -903,7 +896,6 @@ export function LancamentoV2Dialog({
       setObservacao('');
       setFormaPagamentoParc('avista');
       setNumParcelas(2); setNumParcelasTexto('2');
-      setParcelaRows([]);
       setFormaPgto('');
       setDadosPagamento('');
     }
@@ -945,21 +937,17 @@ export function LancamentoV2Dialog({
   // Regenerate parcela rows when key inputs change
   const valorNum = parseBRL(valorDisplay);
 
-  const regenerateParcelas = useCallback(() => {
-    if (formaPagamentoParc === 'parcelada' && numParcelas >= 2 && valorNum > 0) {
-      setParcelaRows(generateParcelas(valorNum, numParcelas, dataPagamento));
-    }
-  }, [formaPagamentoParc, numParcelas, valorNum, dataPagamento]);
-
-  // Auto-regenerate when switching to parcelada or changing num parcelas / valor / data
-  useEffect(() => {
-    if (formaPagamentoParc === 'parcelada' && numParcelas >= 2) {
-      regenerateParcelas();
-    } else {
-      setParcelaRows([]);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formaPagamentoParc, numParcelas, valorNum, dataPagamento]);
+  /**
+   * A PRÉVIA — o que a RPC vai gravar, calculado pela mesma função. PAR-02.
+   * ⚠ A SEMENTE É O VENCIMENTO: a RPC escalona `data_vencimento`. O pagamento só entra quando
+   * não há vencimento nenhum, para a prévia não ficar muda enquanto o operador preenche.
+   */
+  const parcelaRows = useMemo(
+    () => (formaPagamentoParc === 'parcelada' && numParcelas >= 2
+      ? preverParcelas(valorNum, numParcelas, dataVencimento || dataPagamento, 1)
+      : []),
+    [formaPagamentoParc, numParcelas, valorNum, dataVencimento, dataPagamento],
+  );
 
   /** Build payment text from supplier data */
   const buildDadosPagamento = useCallback((f: FornecedorV2, metodo?: string): string => {
@@ -1013,20 +1001,10 @@ export function LancamentoV2Dialog({
     }
   };
 
-  const handleParcelaValorChange = (idx: number, e: React.ChangeEvent<HTMLInputElement>) => {
-    const digits = e.target.value.replace(/\D/g, '');
-    if (!digits) {
-      setParcelaRows(prev => prev.map((r, i) => i === idx ? { ...r, valorDisplay: '0,00' } : r));
-      return;
-    }
-    const num = parseInt(digits, 10) / 100;
-    const display = num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    setParcelaRows(prev => prev.map((r, i) => i === idx ? { ...r, valorDisplay: display } : r));
-  };
-
-  const handleParcelaDateChange = (idx: number, val: string) => {
-    setParcelaRows(prev => prev.map((r, i) => i === idx ? { ...r, dataPagamento: val } : r));
-  };
+  /* ⚠ OS DOIS HANDLERS DA GRADE EDITÁVEL SAÍRAM — PAR-02. Editar uma linha ali mudava o que
+     seria GRAVADO; agora quem calcula é a RPC, e uma célula editável prometeria um controle que
+     o banco não tem. Valor e datas se mudam nos campos do lançamento, que são a entrada real
+     do cálculo. */
 
   const notaFiscalDisplay = notaFiscal
     ? (tipoDocumento === 'Nota Fiscal' ? formatNFNumber(notaFiscal) : notaFiscal)
@@ -1211,46 +1189,77 @@ export function LancamentoV2Dialog({
       contaDestinoFinal = null;
     }
 
-    // --- Installment logic (ONLY for new lancamentos, NEVER for edit) ---
-    if (!currentIsEdit && formaPagamentoParc === 'parcelada' && numParcelas >= 2 && parcelaRows.length === numParcelas) {
-      let allOk = true;
-      for (let i = 0; i < numParcelas; i++) {
-        const row = parcelaRows[i];
-        const parcelaVal = parseBRL(row.valorDisplay);
-        const parcelaDesc = `${descricao} - Parcela ${i + 1}/${numParcelas}`;
-
-        const form: LancamentoV2Form = {
-          fazenda_id: fazendaIdEfetivo,
-          conta_bancaria_id: contaBancariaId,
-          conta_destino_id: contaDestinoFinal,
-          data_competencia: dataCompetencia,
-          data_vencimento: dataVencimento || null,   // PR-FIN-MODAL-VENCIMENTO-02B
-          data_pagamento: row.dataPagamento || dataPagamento,
-          valor: parcelaVal,
-          tipo_operacao: tipoOperacao,
-          status_transacao: 'programado',
-          descricao: parcelaDesc,
-          /* ⚠ MESMA REGRA DO OUTRO SAVE — o caminho das parcelas grava tantos lançamentos
-             quantas forem, e um deles com a classificação errada é o mesmo defeito
-             multiplicado. */
-          ...classificacaoParaGravar(),
-          observacao,
-           numero_documento: notaFiscal || null,
-           tipo_documento: tipoDocumento || null,
-          favorecido_id: favorecidoForForm,
-          forma_pagamento: formaPgto || null,
-          dados_pagamento: dadosPagamento || null,
-          safra_id: safraParaGravar(),
-          cultura: culturaParaGravar(atividade, cultura),
-          fase: faseParaGravar(atividade, fase),
-        };
-
-        const ok = await onSave(form);
-        if (!ok) { allOk = false; break; }
+    /* ═══ PARCELADA: O BANCO É QUEM ESCREVE — PAR-02 ══════════════════════════════════════
+       ⚠ AQUI MORRIA O PARCELAMENTO. Este ramo era um LAÇO de `await onSave(form)` — N inserts
+       separados, sem transação — e o que ele produzia foi medido no proto: das 21 famílias de
+       parcela multi-linha, 20 SEM PAI (`financiamento_id` nulo), 8 com contagem diferente da
+       que a própria descrição declara ("Energisa" diz 36 e tem 32), 8 com o MESMO vencimento
+       nas N. O `break` do laço deixava no banco as parcelas já gravadas: quem clicava de novo
+       somava um segundo lote ao primeiro, e foi assim que as "Farmácia Pessoal" viraram 5 para
+       um plano de 3.
+       ⚠ AGORA É UMA CHAMADA SÓ, transacional no banco: ou nasce o parcelamento inteiro — pai,
+       N parcelas e os N lançamentos ligados a elas — ou não nasce nada. Acabou o meio-caminho.
+       ⚠ É O MESMO WRITER DA TELA DE PARCELAMENTOS, pelo MESMO montador
+       (`montarPayloadParcelamento`). Um parcelamento criado aqui e um criado lá ficam idênticos
+       no banco — que é o item 4 da homologação. */
+    if (!currentIsEdit && formaPagamentoParc === 'parcelada' && numParcelas >= 2) {
+      if (!clienteAtual?.id) { toast.error('Sessão inválida'); setSaving(false); return; }
+      if (!fazendaIdEfetivo) { toast.error('Escolha a fazenda'); setSaving(false); return; }
+      /* ⚠ A 1ª PARCELA É O VENCIMENTO, NÃO O PAGAMENTO — e essa inversão era metade do defeito.
+         A grade de prévia tinha cabeçalho "Vencimento" sobre um campo que gravava
+         `data_pagamento`, e o vencimento real ia igual nas N. A RPC escalona o VENCIMENTO e
+         deixa o pagamento NULO, que é o que 'programado' significa. O pagamento só entra como
+         semente quando não há vencimento nenhum — não inventar data é melhor que recusar. */
+      const primeira = dataVencimento || dataPagamento;
+      if (!primeira) { toast.error('Informe a data de vencimento da 1ª parcela'); setSaving(false); return; }
+      try {
+        const payload = montarPayloadParcelamento(
+          clienteAtual.id,
+          {
+            fazendaId: fazendaIdEfetivo,
+            descricao,
+            valorTotal: Math.abs(valorNum),
+            totalParcelas: numParcelas,
+            dataPrimeiraParcela: primeira,
+            dataCompetencia,
+            /* ⚠ MENSAL FIXO, e não é campo novo: o `addDays(i * 30)` que morreu aqui já TENTAVA
+               ser mensal. A RPC faz `make_interval(months => …)`, que é mensal de verdade. */
+            intervaloMeses: 1,
+            favorecidoId: favorecidoForForm,
+            formaPagamento: formaPgto || null,
+            contaBancariaId,
+            /* ⚠ O ESCOPO VEM DO PLANO, pelo cluster. A tela de Parcelamentos indexa por ele, e
+               sem escopo o parcelamento nasceria mudo lá. */
+            tipoFinanciamento: classificacao.escopo_negocio || null,
+            /* ⚠ NULO, E NÃO A NOTA FISCAL: o modal tem `numero_documento` (a NF do lançamento),
+               que não é o número do CONTRATO. Enfiar um no outro encheria a coluna errada com
+               um dado certo — pior que deixá-la vazia. */
+            numeroContrato: null,
+            observacao: observacao || null,
+          },
+          {
+            plano_conta_id: classificacao.plano_conta_id,
+            safra_id: safraParaGravar(),
+            cultura: culturaParaGravar(atividade, cultura),
+            fase: faseParaGravar(atividade, fase),
+          },
+        );
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+        const { error } = await (supabase as any).rpc('fn_parcelamento_cadastrar', { p_payload: payload });
+        if (error) throw error;
+        /* ⚠ INVALIDAÇÃO AMPLA, e é deliberado: este modal é montado por DEZ telas diferentes,
+           cada uma com o seu `onSave` e a sua forma de recarregar, e o parcelamento não passa
+           por nenhum deles — quem grava agora é a RPC. Escolher chaves aqui exigiria este
+           componente conhecer as dez. */
+        await qc.invalidateQueries();
+        toast.success(`Parcelamento criado: ${numParcelas} parcelas`);
+        onClose();
+      } catch (e) {
+        /* A mensagem crua da RPC, que escreve em português de operador. */
+        toast.error(e instanceof Error ? e.message : 'Falha ao criar o parcelamento');
+      } finally {
+        setSaving(false);
       }
-
-      setSaving(false);
-      if (allOk) onClose();
       return;
     }
 
@@ -1310,7 +1319,7 @@ export function LancamentoV2Dialog({
   };
 
   // Sum of parcelas for display
-  const parcelasTotal = parcelaRows.reduce((acc, r) => acc + parseBRL(r.valorDisplay), 0);
+  const parcelasTotal = parcelaRows.reduce((acc, r) => acc + r.valor, 0);
 
   // Determine button label
   const getSubmitLabel = () => {
@@ -1938,11 +1947,16 @@ export function LancamentoV2Dialog({
                         <span>Valor (R$)</span>
                       </div>
                       <div className="divide-y divide-border/20">
-                        {parcelaRows.map((row, idx) => (
-                          <div key={idx} className="grid grid-cols-[48px_1fr_1fr] gap-1 px-2 py-0.5 items-center">
-                            <span className="text-[11px] font-semibold text-muted-foreground">{idx + 1}/{numParcelas}</span>
-                            <DatePicker value={row.dataPagamento} onChange={v => handleParcelaDateChange(idx, v)} size="compact" className="bg-background dark:bg-card border-border/30" />
-                            <Input value={row.valorDisplay} onChange={e => handleParcelaValorChange(idx, e)} onFocus={e => e.target.select()} inputMode="numeric" className="h-6 text-[11px] bg-background dark:bg-card border-border/30 text-right font-mono" />
+                        {/* ⚠ SO' LEITURA, E A COLUNA "Vencimento" AGORA MOSTRA O VENCIMENTO —
+                            PAR-02. O cabecalho ja' dizia "Vencimento"; o campo embaixo era
+                            `row.dataPagamento`, e era ele que ia para o banco como pagamento
+                            numa parcela 'programado'. A grade era o WRITER: o que estivesse
+                            nela virava lancamento. Agora ela ESPELHA o que a RPC vai gravar. */}
+                        {parcelaRows.map((row) => (
+                          <div key={row.numero} className="grid grid-cols-[48px_1fr_1fr] gap-1 px-2 py-0.5 items-center">
+                            <span className="text-[11px] font-semibold text-muted-foreground">{row.numero}/{numParcelas}</span>
+                            <span className="text-[11px] tabular-nums">{resumoFmtData(row.dataVencimento) ?? '—'}</span>
+                            <span className="text-[11px] text-right font-mono tabular-nums">{formatMoeda(row.valor)}</span>
                           </div>
                         ))}
                       </div>

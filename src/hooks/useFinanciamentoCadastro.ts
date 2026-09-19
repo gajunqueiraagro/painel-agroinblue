@@ -10,6 +10,7 @@ import { montarPayloadConta } from '@/lib/financeiro/contaPayload';
 import { loadPlanoContasCompleto, planoToClassificacoes } from '@/lib/financeiro/planoContasBuilder';
 import type { ClassificacaoItem, Safra } from '@/hooks/useFinanceiroV2';
 import type { ClassificacaoValor } from '@/components/shared/ClassificacaoLancamento';
+import { montarPayloadParcelamento } from '@/lib/financiamentos/montarPayloadParcelamento';
 
 /* ── Types ── */
 export interface ParcelaPreview {
@@ -399,33 +400,39 @@ export function useFinanciamentoCadastro() {
         /* ⚠ A COMPETÊNCIA É A DATA DO CONTRATO, e é decisão, não falta de campo: a tela não tem
            campo de competência e o único parcelamento real da base tem competência igual ao
            contrato. Fica FIXA em todas as parcelas — quem escalona é o vencimento. */
+        /* ⚠ A MONTAGEM SAIU DAQUI — PAR-02. As 19 chaves eram montadas inline neste ponto,
+           quando só esta tela chamava a RPC. O "parcelada" do modal do financeiro passou a
+           chamar a MESMA função, e duas montagens divergiriam na primeira chave nova. O que
+           cada chave recebe é o mesmo, byte a byte; só mudou de arquivo.
+           ⚠ `plano_conta_id` CONTINUA VINDO DE `form.plano_conta_parcela_id`, não do cluster:
+           é a coluna que o contrato grava, e o efeito de espelho a mantém igual ao cluster. O
+           modal passa o dele; por isso o montador recebe o valor em vez de escolher. */
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
         const { data, error } = await (supabase as any).rpc('fn_parcelamento_cadastrar', {
-          p_payload: {
-            cliente_id: clienteId,
-            fazenda_id: fazendaId,
-            descricao: form.descricao.trim(),
-            valor_total: form.valor_total,
-            total_parcelas: form.total_parcelas,
-            data_primeira_parcela: form.data_primeira_parcela,
-            data_competencia: form.data_contrato,
-            intervalo_meses: MESES_POR_FREQUENCIA[form.frequencia_parcela] ?? 1,
-            /* ⚠ SEMPRE SAÍDA: um parcelamento é uma despesa dividida em N vezes, nunca uma
-               entrada. É daqui que a RPC deriva o sinal, pelo prefixo. */
-            tipo_operacao: '2-Saídas',
-            plano_conta_id: form.plano_conta_parcela_id,
-            safra_id: classificacao.safra_id || null,
-            cultura: classificacao.cultura || null,
-            fase: classificacao.fase || null,
-            favorecido_id: form.credor_id || null,
-            forma_pagamento: form.forma_pagamento || null,
-            conta_bancaria_id: form.conta_bancaria_id || null,
-            tipo_financiamento: form.tipo_financiamento,
-            numero_contrato: form.numero_contrato.trim() || null,
-            observacao: form.observacao || null,
-            /* ⚠ `valor_entrada` NÃO VIAJA, e o campo sumiu da tela no parcelamento: a prévia
-               divide o total cheio por N, e a RPC também. Mandá-lo faria os dois discordarem. */
-          },
+          p_payload: montarPayloadParcelamento(
+            clienteId,
+            {
+              fazendaId,
+              descricao: form.descricao,
+              valorTotal: form.valor_total,
+              totalParcelas: form.total_parcelas,
+              dataPrimeiraParcela: form.data_primeira_parcela,
+              dataCompetencia: form.data_contrato,
+              intervaloMeses: MESES_POR_FREQUENCIA[form.frequencia_parcela] ?? 1,
+              favorecidoId: form.credor_id || null,
+              formaPagamento: form.forma_pagamento || null,
+              contaBancariaId: form.conta_bancaria_id || null,
+              tipoFinanciamento: form.tipo_financiamento,
+              numeroContrato: form.numero_contrato.trim() || null,
+              observacao: form.observacao || null,
+            },
+            {
+              plano_conta_id: form.plano_conta_parcela_id,
+              safra_id: classificacao.safra_id || null,
+              cultura: classificacao.cultura || null,
+              fase: classificacao.fase || null,
+            },
+          ),
         });
         if (error) throw error;
         toast.success('Parcelamento cadastrado');
