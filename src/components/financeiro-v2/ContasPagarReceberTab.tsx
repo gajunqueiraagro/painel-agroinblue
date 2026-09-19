@@ -110,20 +110,50 @@ const CORTE_DESTAQUE = 100_000;
  *
  * ⚠ AS LARGURAS FORAM MEDIDAS, NÃO ARBITRADAS. A 1168px a barra lateral (`w-52` = 208px) deixa
  * 960px para a tela; menos `px-4` do container, a borda do cartão e o `px-3` da linha, sobram
- * ~898px. Com os fixos abaixo (526px) e os seis vãos (36px), a Descrição fica com ~336px —
- * cerca de 58 caracteres a 11px, acima do p95 medido de 49. Sobre 1.175 lançamentos visíveis
- * no proto: descrição p95 49 (mediana 18), fornecedor p95 37 (mediana 20), banco p95 16
- * (máximo 25). Por isso Fornecedor e Banco NÃO precisaram ser fundidos.
+ * ~899px. Com os fixos abaixo (624px) e os oito vãos (48px), a Descrição fica com ~227px —
+ * cerca de 45 caracteres a 10px. Sobre 1.175 lançamentos visíveis no proto: descrição p95 49
+ * (mediana 18), fornecedor p95 37 (mediana 20), banco p95 16 (máximo 25).
+ *
+ * ⚠ A DESCRIÇÃO ENCOLHEU DE PROPÓSITO em PR-CPR-2A.3.2 — ela tinha ~331px e comia as vizinhas,
+ * que truncavam cedo. Agora ela cobre a mediana com folga e trunca (com `title`) acima de 45
+ * caracteres, enquanto Fornecedor, Origem e Status ganharam o que ela devolveu e a coluna Doc
+ * coube no que sobrou.
+ * ⚠ FORNECEDOR E BANCO CONTINUAM SEPARADOS — a fusão foi vetada pelo Gabriel na 2A.3.2, e não
+ * foi necessária: a conta fecha sem rolagem horizontal a 1168px.
  */
 const COL = {
   vencimento: 'w-[42px]',
-  fornecedor: 'w-[132px]',
-  banco: 'w-[96px]',
-  origem: 'w-[76px]',
-  status: 'w-[62px]',
-  anexo: 'w-[14px]',
+  fornecedor: 'w-[144px]',
+  banco: 'w-[88px]',
+  origem: 'w-[100px]',
+  status: 'w-[72px]',
+  anexo: 'w-[12px]',
+  doc: 'w-[62px]',
   valor: 'w-[104px]',
 } as const;
+
+/**
+ * AS TRÊS EXCEÇÕES AO PISO DE 10px DESTA TELA — autorizadas nominalmente, PR-CPR-2A.3.2.
+ *
+ * O piso da lista é 10px (2A.3.1) e continua valendo para todo o resto. Estas três descem, e
+ * cada uma tem motivo próprio:
+ *
+ *   `doc`     8px — é um NÚMERO de conferência, não texto de leitura corrida. Só 46 dos 1.144
+ *                   lançamentos visíveis têm um, e ele existe para bater com o papel na mão,
+ *                   não para ser lido varrendo a lista.
+ *   `status`  9px — "Programado" é a palavra mais longa do vocabulário e em 10px não cabia na
+ *                   coluna sem virar "Program…". Truncar um estado é pior que reduzi-lo: meia
+ *                   palavra não diz em que etapa o lançamento está.
+ *   `quando`  9px — o "em 17 dias" da faixa é o SUFIXO do rótulo do dia, não o rótulo. Mantê-lo
+ *                   em 11px fazia a contagem competir com a data, que é o que identifica o
+ *                   grupo. O dia e a data continuam em 11px.
+ *
+ * ⚠ NENHUMA OUTRA CÉLULA DESCE. Se algo novo não couber em 10px, a saída é a largura da
+ * coluna, nunca a fonte — e se a largura não houver, reporta-se.
+ */
+const FONTE_DOC = 'text-[8px]';
+const FONTE_STATUS = 'text-[9px]';
+const FONTE_QUANDO = 'text-[9px]';
 
 
 /**
@@ -199,17 +229,27 @@ function ramoDoHorizonte(h: Horizonte, hoje: Date): string | null {
   return `and(data_vencimento.gte.${hojeIso},data_vencimento.lte.${ate}),data_vencimento.is.null`;
 }
 
-/** "sexta · 19 set · em 3 dias" — a faixa que encabeça cada grupo. */
-function faixaDaData(iso: string, hoje: Date): string {
+/**
+ * A faixa que encabeça cada grupo, em DUAS partes: "Sexta · 19 set" e "em 3 dias".
+ *
+ * ⚠ SEPARADAS PORQUE TÊM TAMANHOS DIFERENTES — PR-CPR-2A.3.2. O dia e a data identificam o
+ * grupo e ficam em 11px; a contagem é contexto e vai a 9px. Numa string só, reduzir o sufixo
+ * exigiria recortá-lo no JSX por índice — que quebra no dia em que o texto mudar de forma.
+ * ⚠ E A PRIMEIRA LETRA SOBE AQUI, não no CSS. `format` do date-fns devolve "sexta" minúsculo, e
+ * o `capitalize` do CSS agiria sobre CADA palavra do elemento; a faixa tem três ("sexta · 19
+ * set"), e "19 Set" não é o que se quer.
+ */
+function faixaDaData(iso: string, hoje: Date): { dia: string; quando: string } {
   const d = parseISO(iso);
-  const dia = format(d, "EEEE · dd MMM", { locale: ptBR });
+  const cru = format(d, "EEEE · dd MMM", { locale: ptBR });
+  const dia = cru.charAt(0).toUpperCase() + cru.slice(1);
   const n = diasAte(iso, hoje);
   const quando = n === 0 ? 'hoje'
     : n === 1 ? 'amanhã'
     : n === -1 ? 'ontem'
     : n > 0 ? `em ${n} dias`
     : `vencido há ${Math.abs(n)} dias`;
-  return `${dia} · ${quando}`;
+  return { dia, quando };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -218,7 +258,9 @@ function faixaDaData(iso: string, hoje: Date): string {
 
 interface Grupo {
   chave: string;
-  rotulo: string;
+  dia: string;
+  /** O sufixo de contagem ("em 3 dias"). Vazio no grupo "Sem vencimento", que não tem data. */
+  quando: string;
   vencido: boolean;
   linhas: LinhaViewDoc[];
   total: number;
@@ -510,9 +552,11 @@ export function ContasPagarReceberTab() {
           return s + (ehReceber(l) ? v : -v);
         }, 0);
         const semData = chave === '9999-99-99';
+        const faixa = semData ? { dia: 'Sem vencimento', quando: '' } : faixaDaData(chave, hoje);
         return {
           chave,
-          rotulo: semData ? 'Sem vencimento' : faixaDaData(chave, hoje),
+          dia: faixa.dia,
+          quando: faixa.quando,
           vencido: !semData && diasAte(chave, hoje) < 0,
           linhas: itens,
           total,
@@ -702,9 +746,20 @@ export function ContasPagarReceberTab() {
                   ⚠ E É POR ISSO QUE A FAIXA DE GRUPO GRUDA EM `top-[22px]`: as duas são sticky
                   no MESMO scrollport, e a faixa tem de parar embaixo do cabeçalho em vez de por
                   cima dele. O 22 é a altura do cabeçalho, declarada logo abaixo. */}
+              {/* ⚠ NAVY, E NÃO MUTED — PR-CPR-2A.3.2. Em `text-muted-foreground` o cabeçalho
+                  tinha a MESMA cor do contexto das linhas e brigava com elas: o olho não achava
+                  onde a grade começa. O navy (`bg-primary`) é o tratamento que 5 telas da casa
+                  já dão ao cabeçalho de lista densa dentro de um cartão — `V2Recorrencias`,
+                  `FinanciamentosListaPage`, `FinanciamentoDetalhe`, `ObrigacaoDialog` e a
+                  `CentralOperacoesComerciais` —, e é o mesmo `bg-primary` do `<Segmentado>` e do
+                  item ativo do menu. Copiado dali, não inventado.
+                  ⚠ AS DUAS TELAS QUE O BRIEFING CITOU NÃO SERVIAM DE FONTE: o `ExtratoListaTab`
+                  usa `bg-background` e o `LancamentosTab` usa muted — as duas são exatamente o
+                  caso que este item conserta.
+                  ⚠ PRIMEIRA-MAIÚSCULA, sem `uppercase`: os rótulos já vêm escritos como se lê. */}
               <div className={cn(
-                'sticky top-0 z-20 flex h-[22px] items-center gap-1.5 border-b bg-card px-3',
-                'text-[10px] uppercase tracking-wide text-muted-foreground',
+                'sticky top-0 z-20 flex h-[22px] items-center gap-1.5 px-3',
+                'text-[10px] font-medium tracking-wide bg-primary text-primary-foreground',
                 'border-l-[3px] border-l-transparent',
               )}>
                 <span className={cn(COL.vencimento, 'shrink-0')}>Venc.</span>
@@ -712,8 +767,9 @@ export function ContasPagarReceberTab() {
                 <span className={cn(COL.fornecedor, 'shrink-0')}>Fornecedor</span>
                 <span className={cn(COL.banco, 'shrink-0')}>Banco</span>
                 <span className={cn(COL.origem, 'shrink-0')}>Origem</span>
-                <span className={cn(COL.status, 'shrink-0')}>Status</span>
+                <span className={cn(COL.status, 'shrink-0 text-center')}>Status</span>
                 <span className={cn(COL.anexo, 'shrink-0')} aria-hidden />
+                <span className={cn(COL.doc, 'shrink-0')}>Doc</span>
                 <span className={cn(COL.valor, 'shrink-0 text-right')}>Valor</span>
               </div>
 
@@ -729,13 +785,19 @@ export function ContasPagarReceberTab() {
                     'border-l-[3px] border-l-transparent',
                   )}>
                     <span className={cn(
-                      'min-w-0 flex-1 truncate text-[11px] font-medium uppercase tracking-wide',
+                      'min-w-0 flex-1 truncate text-[11px] font-medium tracking-wide',
                       g.vencido ? 'text-destructive' : 'text-muted-foreground',
                     )}>
-                      {g.rotulo}
+                      {g.dia}
+                      {/* O sufixo de contagem é contexto, não identidade do grupo: 9px. */}
+                      {g.quando && (
+                        <span className={cn(FONTE_QUANDO, 'ml-1 font-normal opacity-80')}>
+                          · {g.quando}
+                        </span>
+                      )}
                     </span>
                     <span className={cn(
-                      COL.valor, 'shrink-0 text-right text-[11px] font-medium tabular-nums',
+                      COL.valor, 'shrink-0 text-right text-[11px] font-semibold tabular-nums',
                       g.total < 0 ? 'text-destructive' : 'text-success',
                     )}>
                       {formatMoeda(Math.abs(g.total))}
@@ -749,6 +811,7 @@ export function ContasPagarReceberTab() {
                     const status = (l.status_transacao ?? '').toLowerCase();
                     const fornecedor = (l.favorecido_id && nomesFornecedores.get(l.favorecido_id)) || '—';
                     const anexo = comAnexo?.has(l.id) ?? false;
+                    const doc = (l.numero_documento ?? '').trim() ? (l.documento_formatado ?? '') : '';
                     return (
                       <button
                         key={l.id}
@@ -787,15 +850,20 @@ export function ContasPagarReceberTab() {
                           title={nomeConta(l.conta_bancaria_id)}>
                           {nomeConta(l.conta_bancaria_id)}
                         </span>
-                        <span className={cn(COL.origem, 'shrink-0 truncate text-muted-foreground')}>
+                        {/* ⚠ COM `title`: os rótulos de origem são longos de propósito
+                            ("Parcela de financiamento", a 2ª mais comum, tem 24 caracteres) e
+                            truncam mesmo com a coluna mais larga. Truncar sem `title` esconderia
+                            o dado; com ele, o texto inteiro está a um passar de mouse. */}
+                        <span className={cn(COL.origem, 'shrink-0 truncate text-muted-foreground')}
+                          title={rotuloOrigem(l.origem_lancamento)}>
                           {rotuloOrigem(l.origem_lancamento)}
                         </span>
                         {/* ⚠ PÍLULA SEM BORDA. A caixa com borda em toda linha já foi revertida
                             uma vez (FIN-LISTA-VISUAL-01): numa lista densa ela compete com o
                             valor. O mapa de COR ficou, e é ele que marca o status aqui. */}
-                        <span className={cn(COL.status, 'shrink-0')}>
+                        <span className={cn(COL.status, 'shrink-0 text-center')}>
                           <span className={cn(
-                            'block truncate rounded bg-muted px-1 text-[10px]',
+                            'inline-block rounded bg-muted px-1 whitespace-nowrap', FONTE_STATUS,
                             STATUS_FILTRO_COR[status] ?? 'text-muted-foreground',
                           )}>
                             {STATUS_FILTRO_LABEL[status] ?? (status || '—')}
@@ -811,7 +879,18 @@ export function ContasPagarReceberTab() {
                         <span className={cn(COL.anexo, 'shrink-0')}
                           title={anexo ? 'tem documento anexado' : undefined}
                           aria-label={anexo ? 'tem documento anexado' : undefined}>
-                          {anexo && <Paperclip className="h-3 w-3 text-muted-foreground" aria-hidden />}
+                          {anexo && <Paperclip className="h-2.5 w-2.5 text-muted-foreground" aria-hidden />}
+                        </span>
+                        {/* ⚠ Doc É O NÚMERO DA NOTA, NÃO O ANEXO, e os dois convivem: o clipe diz
+                            "tem arquivo", esta coluna diz "tem nota lançada".
+                            ⚠ E O CAMPO EXIGE O GUARDA DO `numero_documento` — medido: quando não
+                            há número, `documento_formatado` degrada para o nome do TIPO
+                            ("Fatura", "Contrato", "Nota Fiscal") ou para "-". Imprimi-lo cru
+                            encheria 1.098 das 1.144 linhas visíveis com rótulos que não são
+                            número nenhum. Só 46 têm documento de verdade. */}
+                        <span className={cn(COL.doc, 'shrink-0 truncate text-muted-foreground', FONTE_DOC)}
+                          title={doc || undefined}>
+                          {doc}
                         </span>
                         <span className={cn(
                           COL.valor, 'shrink-0 text-right tabular-nums',
