@@ -27,6 +27,7 @@ import { useFinanceiroV2, type LancamentoV2 } from '@/hooks/useFinanceiroV2';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
 import { PageHeader } from '@/components/ui/page-header';
 import { Segmentado } from '@/components/ui/segmentado';
+import { CprFluxoPrevisto } from '@/components/financeiro-v2/CprFluxoPrevisto';
 import { aplicarPlanoNaView, type LinhaViewDoc } from '@/lib/financeiro/listaPaginadaV2';
 import { montarPlanoBaseV2 } from '@/lib/financeiro/filtrosBaseV2';
 import { paginarTudo } from '@/lib/financeiro/paginarTudo';
@@ -49,6 +50,8 @@ import { toast } from 'sonner';
 
 type Horizonte = 'vencidos' | '7' | '30' | '60' | '90' | 'tudo';
 type Segmento = 'pagar' | 'receber' | 'ambos';
+/** As duas visões da tela. A Lista é o default; o Fluxo é a mesma pergunta acumulada. */
+type Visao = 'lista' | 'fluxo';
 
 /**
  * ⚠ A UNIÃO PRECISA DAS DUAS PONTAS mesmo com só uma viva. O `Segmentado` resolve o seu `T`
@@ -275,6 +278,7 @@ export function ContasPagarReceberTab() {
   const queryClient = useQueryClient();
   const fin = useFinanceiroV2();
 
+  const [visao, setVisao] = useState<Visao>('lista');
   const [horizonte, setHorizonte] = useState<Horizonte>('90');
   const [segmento, setSegmento] = useState<Segmento>('pagar');
   const [statusLigados, setStatusLigados] = useState<string[]>(STATUS_INICIAIS);
@@ -657,9 +661,23 @@ export function ContasPagarReceberTab() {
             titulo="Contas a Pagar e Receber"
             subtitulo="O que vence, quando, somando todas as contas — pelo vencimento, não pelo pagamento"
           />
-          {isFetching && (
-            <span className="shrink-0 text-[10px] text-muted-foreground">carregando…</span>
-          )}
+          <div className="flex shrink-0 items-center gap-2">
+            {isFetching && (
+              <span className="text-[10px] text-muted-foreground">carregando…</span>
+            )}
+            {/* ⚠ NO CABEÇALHO CONGELADO, ao lado do título: é a pergunta mais alta da tela
+                ("como eu quero ver isto?") e fica acima do horizonte e do segmento, que são
+                recortes de dentro de qualquer uma das duas visões. */}
+            <Segmentado
+              valor={visao}
+              onEscolher={setVisao}
+              altura={22}
+              opcoes={[
+                { valor: 'lista', rotulo: 'Lista' },
+                { valor: 'fluxo', rotulo: 'Fluxo' },
+              ]}
+            />
+          </div>
         </div>
 
         {/* HORIZONTE — navy no selecionado. O verde do mock contraria a regra da casa
@@ -768,9 +786,22 @@ export function ContasPagarReceberTab() {
         </div>
       </div>
 
-      {/* ── LISTA — o ÚNICO scrollport da tela (A21) ── */}
+      {/* ── CORPO — Lista ou Fluxo, no mesmo cartão e na mesma caixa ──
+          ⚠ O CARTÃO É O MESMO PARA AS DUAS VISÕES, de propósito: trocar de visão não pode
+          mudar a altura nem a largura do que está em volta (A27). O que troca é o conteúdo. */}
       <div className="min-h-0 flex-1 px-4 pb-2">
         <div className="flex h-full min-h-0 flex-col rounded-lg border border-border bg-card shadow-[0_1px_3px_0_rgb(0_0_0/0.04)]">
+          {visao === 'fluxo' ? (
+            /* ⚠ AS MESMAS `doSegmento` QUE A LISTA DESENHA, não `linhas`: o gráfico obedece ao
+               segmento (A Pagar / A Receber / Ambos) como tudo o mais na tela. E o saldo é o
+               mesmo objeto do card — uma fonte, dois desenhos. */
+            <CprFluxoPrevisto
+              linhas={doSegmento}
+              saldoInicial={caixa && caixa.ancoradas > 0 ? caixa.total : null}
+              caveat={rotuloCaixa}
+            />
+          ) : (
+          <>
 
           {statusLigados.length === 0 ? (
             <Vazio texto="Nenhum status selecionado — ligue ao menos um acima" />
@@ -950,6 +981,8 @@ export function ContasPagarReceberTab() {
                 </div>
               ))}
             </div>
+          )}
+          </>
           )}
         </div>
       </div>
