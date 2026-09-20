@@ -113,11 +113,26 @@ function AbaSistemaReal({ sistema, inicial, onAbrir }: { sistema: EspSis[]; inic
     let acc = inicial;
     return sistema.map((r) => { acc += r.valor_assinado; return { r, saldo: acc }; });
   }, [sistema, inicial]);
+  /* O fechamento é o saldo da última linha — sem linha nenhuma, é o próprio inicial. */
+  const fechamento = rows.length > 0 ? rows[rows.length - 1].saldo : inicial;
   return (
     /* Mesma régua do Extrato acima — a lista é o scrollport, e ele é o modal inteiro. */
     <div className="min-h-0 flex-1 overflow-y-auto border-t px-3.5 text-[10px]">
-      <div className="grid grid-cols-[44px_1fr_130px_92px_92px_80px] gap-1 font-semibold text-muted-foreground border-b pb-0.5 sticky top-0 bg-card">
+      {/* ⚠ O MESMO CABEÇALHO DO EXTRATO — PR-CONC-CABECALHO-PADRAO-01: navy do token da casa
+          (`bg-primary`), primeira maiúscula, e `z-[3]` que faltava. Sem o z-index o cabeçalho
+          dependia da regra implícita de que um elemento posicionado cobre os não-posicionados,
+          e essa regra quebra quando alguém põe um badge posicionado numa célula. */}
+      <div className="grid grid-cols-[44px_1fr_130px_92px_92px_80px] gap-1 font-medium text-primary-foreground border-b py-1 sticky top-0 z-[3] bg-primary">
         <span>Data</span><span>Descrição</span><span>Centro/Subcentro</span><span className="text-right">Valor</span><span className="text-right">Saldo</span><span>Status</span>
+      </div>
+      {/* ⚠ SALDO INICIAL E FINAL, como no Extrato: a aba Sistema mostrava uma coluna de saldo
+          corrido sem dizer de onde ela partia nem onde chegava. São as duas pontas que tornam a
+          coluna conferível. */}
+      <div className="grid grid-cols-[44px_1fr_130px_92px_92px_80px] gap-1 py-0.5 bg-muted/40 text-[11px] font-semibold border-b">
+        <span className="col-span-3">Saldo inicial (sistema)</span>
+        <span />
+        <span className={cn('text-right tabular-nums', corValReal(inicial))}>{fmtBRL(inicial)}</span>
+        <span />
       </div>
       {rows.map(({ r, saldo }) => {
         const cs = [r.centro, r.subcentro].filter(Boolean).join(' / ') || '—';
@@ -134,6 +149,15 @@ function AbaSistemaReal({ sistema, inicial, onAbrir }: { sistema: EspSis[]; inic
           </div>
         );
       })}
+      {/* ⚠ CONGELADO NO RODAPÉ (`sticky bottom-0`) e com FUNDO OPACO, o mesmo tratamento do
+          Extrato: um total transparente deixa as linhas passarem por baixo do número que se
+          está conferindo — a lição já paga naquele arquivo. */}
+      <div className="sticky bottom-0 z-[2] grid grid-cols-[44px_1fr_130px_92px_92px_80px] gap-1 border-t bg-muted py-0.5 text-[11px] font-semibold">
+        <span className="col-span-3">Saldo final (sistema)</span>
+        <span />
+        <span className={cn('text-right tabular-nums', corValReal(fechamento))}>{fmtBRL(fechamento)}</span>
+        <span />
+      </div>
     </div>
   );
 }
@@ -1045,10 +1069,10 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
           <thead className="sticky top-0 z-10">
             <tr className="bg-primary h-[22px] text-primary-foreground">
               <th />
-              <th colSpan={3} className="px-[5px] text-left text-[10px] font-medium">BANCO (OFX)</th>
+              <th colSpan={3} className="px-[5px] text-left text-[10px] font-medium">Banco (OFX)</th>
               {/* A divisória atravessa o cabeçalho também — em branco, porque o fundo é azul. */}
               <th className="border-l border-r border-primary-foreground/40 px-0" />
-              <th colSpan={3} className="px-[5px] text-left text-[10px] font-medium">SISTEMA</th>
+              <th colSpan={3} className="px-[5px] text-left text-[10px] font-medium">Sistema</th>
               <th />
             </tr>
           </thead>

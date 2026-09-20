@@ -212,7 +212,14 @@ export function TabelaExtratoDoMes({ ofx, inicial, internas, rolagem = 'propria'
           ⚠ SEM MARGEM NEGATIVA LATERAL (A21): o container tem `px-3.5`, e resolver a faixa dos
           lados com `-mx-3.5` comeria as bordas do cartão. O eixo vertical é o único em que a
           compensação é segura, e aqui nem ele é necessário. */}
-      <div className={cn('grid gap-1 font-semibold text-muted-foreground border-b pb-0.5 sticky top-0 z-[3] bg-card', colunas)}>
+      {/* ⚠ NAVY, E É O TOKEN DA CASA — PR-CONC-CABECALHO-PADRAO-01. Em `bg-card` +
+          `text-muted-foreground` o cabeçalho tinha a mesma cor do contexto das linhas e sumia
+          no branco: o olho não achava onde a grade começa. `bg-primary` é o mesmo navy que a
+          Conferência já usava, que o `CompraModalShell` usa no seu cabeçalho e que cinco
+          tabelas da casa adotam. Nenhuma cor nova.
+          ⚠ SEM MARGEM NEGATIVA LATERAL, como a nota logo acima manda: a faixa fica recuada os
+          14px do `px-3.5` do container. Esticá-la com `-mx-3.5` comeria as bordas do cartão. */}
+      <div className={cn('grid gap-1 font-medium text-primary-foreground border-b py-1 sticky top-0 z-[3] bg-primary', colunas)}>
         <span>Data</span><span>Histórico</span><span>Documento</span><span className="text-right">Valor</span><span className="text-right">Saldo</span><span>Status</span>
         {aoMarcarDuplicado && <span />}
       </div>
