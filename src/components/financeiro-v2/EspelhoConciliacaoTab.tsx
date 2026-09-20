@@ -218,7 +218,14 @@ function AbaEvolucaoReal({ data, internos }: { data: EspelhadosReais; internos: 
        duas frases viram UMA linha de 10px muted no fim dela. */
     <div className="min-h-0 flex-1 overflow-y-auto border-t px-3.5 text-[10px]">
       <div>
-        <div className="grid grid-cols-[52px_1fr_1fr_1fr_1fr_1fr] gap-1 font-semibold text-muted-foreground border-b pb-0.5 sticky top-0 bg-card">
+        {/* ⚠ O MESMO CABEÇALHO DAS OUTRAS TRÊS — PR-CONC-CABECALHO-02, fechando o que o 01
+            deixou de fora. Em `bg-card` + `text-muted-foreground` ele tinha a cor do contexto
+            das linhas e sumia no branco. `bg-primary` é o token da casa, o mesmo do
+            `CompraModalShell` e da Conferência — nunca um hex, que foi a lição do PR anterior.
+            ⚠ E O `z-[3]` QUE FALTAVA: sem ele o cabeçalho dependia da regra implícita de que
+            elemento posicionado cobre não-posicionado, e ela quebra no dia em que alguém puser
+            um badge posicionado numa célula — e aqui já há um, o "nasceu aqui". */}
+        <div className="grid grid-cols-[52px_1fr_1fr_1fr_1fr_1fr] gap-1 font-medium text-primary-foreground border-b py-1 sticky top-0 z-[3] bg-primary">
           <span>Data</span><span className="text-right">Mov. OFX</span><span className="text-right">Mov. Sist.</span><span className="text-right">Saldo OFX</span><span className="text-right">Saldo Sist.</span><span className="text-right">Dif. Acum.</span>
         </div>
         {rows.map((r) => {
@@ -235,10 +242,18 @@ function AbaEvolucaoReal({ data, internos }: { data: EspelhadosReais; internos: 
           );
         })}
       </div>
-      <div className="py-1 text-[10px] leading-tight text-muted-foreground">
-        Extrato bancário importado contém movimentos até {fmtData(data.saldos.extrato_fim)}
+      {/* ⚠ CONGELADO NO RODAPÉ, como o saldo final do Extrato e o do Sistema: é a fronteira
+          do que o banco cobre, e rolar trinta dias perdendo-a de vista é justamente perder a
+          régua contra a qual se está lendo a coluna.
+          ⚠ FUNDO OPACO (`bg-muted`) e `z-[2]`: transparente deixaria as linhas passarem por
+          baixo do número — a lição já paga no `TabelaExtratoDoMes`.
+          ⚠ "DATA DO EXTRATO", E NÃO "MOVIMENTOS ATÉ": a frase antiga se lia como um recorte
+          qualquer; o que ela diz é ATÉ ONDE o extrato do banco alcança. O valor é o mesmo
+          `extrato_fim` de sempre — mudou a palavra, não o cálculo. */}
+      <div className="sticky bottom-0 z-[2] border-t bg-muted py-1 text-[10px] leading-tight text-muted-foreground">
+        Data do extrato: {fmtData(data.saldos.extrato_fim)}
         {' · '}Saldo final oficial (extrato):{' '}
-        <span className="tabular-nums">{fmtBRL(data.saldos.final_oficial)}</span>
+        <span className="tabular-nums font-semibold text-foreground">{fmtBRL(data.saldos.final_oficial)}</span>
       </div>
     </div>
   );
