@@ -305,7 +305,10 @@ export function ContasPagarReceberTab() {
   const fin = useFinanceiroV2();
 
   const [visao, setVisao] = useState<Visao>('lista');
-  const [horizonte, setHorizonte] = useState<Horizonte>('90');
+  /* ⚠ 30 DIAS É O DEFAULT — PR-CPR-2B.3.6. A tela responde "o que vence e quando"; um mês é o
+     alcance em que o produtor de fato decide pagamento. Noventa dias abriam a lista com o
+     trimestre inteiro e o que vence esta semana chegava misturado ao que vence em dezembro. */
+  const [horizonte, setHorizonte] = useState<Horizonte>('30');
   const [segmento, setSegmento] = useState<Segmento>('pagar');
   const [statusLigados, setStatusLigados] = useState<string[]>(STATUS_INICIAIS);
   const [lancEdicao, setLancEdicao] = useState<LancamentoV2 | null>(null);
@@ -796,7 +799,7 @@ export function ContasPagarReceberTab() {
             borda="border-l-success"
           />
           <CardResumo
-            rotulo="Saldo em caixa (estimado)"
+            rotulo="Saldo em caixa"
             valor={caixa && caixa.ancoradas > 0 ? formatMoeda(caixa.total) : '—'}
             classeValor="text-foreground"
             borda="border-l-primary"
