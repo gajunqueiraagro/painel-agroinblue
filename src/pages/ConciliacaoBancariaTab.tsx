@@ -34,6 +34,7 @@ import {
   type ConciliacaoLancamentoBase,
   type ConciliacaoStatus,
 } from '@/lib/financeiro/conciliacaoCalc';
+import { paginarTudo } from '@/lib/financeiro/paginarTudo';
 import { detectarDuplicatasCrossOrigin, montarSituacaoFechamento, derivarPendenciasGerenciais, derivarDetalhePendencias } from '@/lib/financeiro/fechamentoPendencias';
 import { buildUnifiedSaldos, type ContaSaldoRef, type SaldoV2SourceRow, type SaldoLegacySourceRow } from '@/lib/financeiro/saldosBancarios';
 import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
@@ -473,6 +474,20 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
      extrato anexado. Carregam o ANO inteiro, agrupado por mês, porque trocar de mês na
      régua não recarrega o `loadData` — consultar só o mês selecionado deixaria os ícones
      do mês anterior na tela. Os filtros do OFX são os mesmos de `useSaldoDeclaradoOfx`. */
+  /**
+   * CONTAS COM MOVIMENTO DE EXTRATO NO MÊS — PR-CONC-CONTA-PARADA-01.
+   *
+   * ⚠ NÃO DÁ PARA REUSAR O `contasComOfx` ABAIXO, e isso foi medido: ele exige
+   * `saldo_declarado` não nulo, e 60 das 64 importações vivas do proto NÃO o têm (nem
+   * `saldo_declarado_data`). Ele responde "quem declarou saldo pelo OFX", que é outra
+   * pergunta — usá-lo aqui ocultaria conta com extrato importado, que é justamente onde há
+   * o que conferir.
+   * ⚠ A FONTE HONESTA É O MOVIMENTO: `extrato_bancario_v2` pelo mês de `data_movimento`.
+   * Importação sem movimento não dá o que conciliar; movimento sem saldo declarado dá.
+   * ⚠ EM LEVAS: são 4.555 linhas no proto e 2.708 só do NJ em 2026 — acima do teto de mil do
+   * PostgREST, que não avisa quando corta.
+   */
+  const [contasComExtrato, setContasComExtrato] = useState<Map<string, Set<string>>>(new Map());
   const [contasComOfx, setContasComOfx] = useState<Map<string, Set<string>>>(new Map());
   const [contasComPdf, setContasComPdf] = useState<Map<string, Set<string>>>(new Map());
   const carregarIndicadoresSaldo = useCallback(async () => {
@@ -507,6 +522,24 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     };
     setContasComOfx(porMes((imps ?? []).map(i => ({ conta: i.conta_bancaria_id, mes: i.saldo_declarado_data }))));
     setContasComPdf(porMes((docs ?? []).map(d => ({ conta: d.conta_bancaria_id, mes: d.ano_mes }))));
+
+    /* O movimento de extrato do ano, em levas — ver a nota do `contasComExtrato`. */
+    const movs = await paginarTudo<{ conta_bancaria_id: string | null; data_movimento: string | null }>(
+      async (de, tamanho) => {
+        const { data, error } = await supabase
+          .from('extrato_bancario_v2')
+          .select('conta_bancaria_id, data_movimento')
+          .eq('cliente_id', clienteId)
+          .is('cancelado_em', null)
+          .gte('data_movimento', `${ano}-01-01`)
+          .lt('data_movimento', `${Number(ano) + 1}-01-01`)
+          .order('id', { ascending: true })
+          .range(de, de + tamanho - 1);
+        if (error) throw error;
+        const leva = data ?? [];
+        return { linhas: leva, brutas: leva.length };
+      });
+    setContasComExtrato(porMes(movs.map(m => ({ conta: m.conta_bancaria_id, mes: m.data_movimento }))));
   }, [clienteId, ano]);
 
   const loadData = useCallback(async () => {
@@ -826,8 +859,26 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     ro.observe(el);
     observadorThead.current = ro;
   }, []);
+  /**
+   * A CONTA PARADA E ZERADA NO MÊS — PR-CONC-CONTA-PARADA-01.
+   *
+   * ⚠ DUAS CONDIÇÕES ENTRARAM NESTA RODADA, e cada uma corrige um caso real:
+   *   `ext` ZERO, e não só `ext` NULO. Antes, só sumia a conta SEM linha de saldo; uma conta
+   *     com linha declarando 0,00 continuava ocupando a tela. Medido na Vera/set: Bradesco
+   *     Pessoal e Dinheiro declaram 0,00 e não tinham por que aparecer.
+   *   SEM EXTRATO no mês. Conta zerada COM extrato importado tem o que conferir — ocultá-la
+   *     esconderia justamente o trabalho a fazer.
+   * ⚠ E `saldo_final <> 0` SEGUE APARECENDO SEMPRE: investimento parado e dinheiro esquecido
+   *   precisam ser carregados e conciliados. São 12 casos em agosto no proto, e nenhum deles
+   *   pode sumir — a conta não movimentou, mas TEM saldo.
+   * ⚠ "SEM MOVIMENTAÇÃO" NÃO É "INATIVA": a conta continua viva e `cb.ativa` não é tocada. O
+   *   rodapé "mostrar" a traz de volta para quem precisar digitar uma posição nela.
+   */
   const ehOculta = (c: PerContaSaldo) =>
-    Math.round(c.saldoInicial * 100) === 0 && !c.temMovimento && c.ext === null;
+    Math.round(c.saldoInicial * 100) === 0
+    && Math.round((c.ext ?? 0) * 100) === 0
+    && !c.temMovimento
+    && !(contasComExtrato.get(anoMesSel)?.has(c.conta.id) ?? false);
   const qtdOcultas = perContaSaldos.filter(ehOculta).length;
   const contasVisiveis = mostrarOcultas ? perContaSaldos : perContaSaldos.filter(c => !ehOculta(c));
   /* ⚠ OS GRUPOS SAEM DO AGRUPADOR ÚNICO — PR-CONCILIA-GRUPOS-01. Eram três `<tr>` literais
