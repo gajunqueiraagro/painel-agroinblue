@@ -387,7 +387,21 @@ export function CprFluxoPrevisto({
    * (valor e data) dentro da margem, e subi-lo desmancharia esse arranjo para consertar outro.
    */
   const indiceDe = (chave: string) => pontos.findIndex((p) => p.chave === chave);
-  const faixasDosRotulos = useMemo(() => {
+  /**
+   * ⚠ SEM `useMemo`, E NÃO É DESCUIDO — PR-CPR-FLUXO-HOOK-310. Ele estava aqui, DEPOIS dos dois
+   * early returns acima (`saldoInicial === null` e `pontos.length <= 1`), e por isso era um hook
+   * CONDICIONAL: o componente chamava um número de hooks quando o gráfico tinha pontos e outro
+   * quando não tinha. O React aborta essa transição com o erro #310 — tela branca ao filtrar por
+   * "Vencidos" e voltar, por exemplo. O `eslint` apontava a linha exata, com a regra
+   * `react-hooks/rules-of-hooks`; faltava rodá-lo.
+   * ⚠ A SAÍDA FOI TIRAR O MEMO, não subir o cálculo. Subi-lo exigiria mover junto `larguraPorPonto`
+   * e as quatro constantes de margem, que moram abaixo dos returns e que o briefing da anti-colisão
+   * marcou como risco explícito — elas alimentam o passo do eixo X e o nome do mês.
+   * ⚠ E O MEMO NÃO PROTEGIA NADA: `faixasSemColisao` ordena NO MÁXIMO QUATRO itens (`MAX_FAIXAS`),
+   * sobre uma lista de no máximo três rótulos. Memoizar isso custa mais do que recalcular.
+   * O corpo abaixo é o mesmo, byte a byte; só o envelope mudou.
+   */
+  const faixasDosRotulos = ((): ReturnType<typeof faixasSemColisao> => {
     const lista: Parameters<typeof faixasSemColisao>[0][number][] = [];
     const emHojeLocal = pontos.find((p) => p.rotulo === 'Hoje');
     const fimConcLocal = [...pontos].reverse().find((p) => p.zona === 'conciliado');
@@ -418,7 +432,7 @@ export function CprFluxoPrevisto({
       });
     }
     return faixasSemColisao(lista);
-  }, [pontos, larguraPorPonto]);
+  })();
 
   return (
     <div className="flex h-full min-h-0 flex-col rounded-lg" style={{ background: COR_CREME }}>
