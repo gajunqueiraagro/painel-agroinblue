@@ -2001,7 +2001,22 @@ function SaldoContaRow({data, isActive, isDimmed, onClick, onEdit, canEdit, show
     >
       <td className="py-0.5 px-2 overflow-hidden">
         <span style={{width:7,height:7,borderRadius:'50%',background:dotColor,display:'inline-block',marginRight:4,verticalAlign:'middle',flexShrink:0}} />
-        <span className="text-[11px]" style={{verticalAlign:'middle'}}>{getContaLabel(conta)}</span>
+        {/* ⚠ 10px, E NÃO 11 — PR-CONC-SALDOS-NOME-DATA-01. Medido antes de mexer: o nome estava
+            em 11px e era o maior texto da linha só porque os valores são 10px. Igualado a eles,
+            ele para de puxar o olho sem perder nada de legibilidade — a identidade da linha já
+            é dada pela posição e pelo ponto colorido do status. */}
+        <span className="text-[10px]" style={{verticalAlign:'middle'}}>{getContaLabel(conta)}</span>
+        {/* ⚠ ATÉ QUANDO ESTA CONTA FOI CONFERIDA, ao lado do nome. Antes só se sabia abrindo o
+            lápis, uma conta por vez; a régua da conciliação é por CONTA e é aqui que ela se lê.
+            ⚠ 9,5px MUTED: o piso da casa, e ele nasceu nesta mesma tabela (CLAUDE.md, decisão de
+            17/09). A hierarquia vem da COR antes do tamanho — a data é contexto, não identidade.
+            ⚠ SEM POSIÇÃO DECLARADA NÃO MOSTRA NADA, nem traço: ausência de conferência não é um
+            dado a exibir, e um "—" aqui pareceria erro numa conta que só está parada. */}
+        {data.saldoRow?.saldo_data && (
+          <span className="ml-1 text-[9.5px] text-muted-foreground" style={{verticalAlign:'middle'}}>
+            · {data.saldoRow.saldo_data.slice(8, 10)}/{data.saldoRow.saldo_data.slice(5, 7)}
+          </span>
+        )}
         {showSaldoAlert && (
           <span className="ml-1 text-[8px] font-semibold text-warning border border-amber-300 bg-warning/10 rounded px-0.5" title="Saldo inicial não definido">⚠</span>
         )}
