@@ -227,6 +227,18 @@ export function CargaMandiocaModal({
   /* ⚠ O MODAL BUSCA AS CONTAS, como a `AbaCompromissosOC` faz: elas são do cliente, não da carga,
      e passá-las por prop obrigaria a `CargasDaArea` a carregá-las só para repassar. */
   const { contas } = useContasBancariasLeves(clienteId);
+  /**
+   * ⚠ TODOS OS HOOKS ANTES DO `if (!form) return null` — regra dos Hooks, e esta linha já custou
+   * uma tela branca (React #310, 21/09/2026). Ela nasceu junto das três abas e ficou ABAIXO do
+   * early return: com o modal fechado (`form === null`) o componente chamava dois hooks, com ele
+   * aberto chamava três, e o React aborta na transição.
+   * ⚠ `form?.ids ?? []` É O PREÇO DE SUBIR, e é barato: o hook trata lista vazia sem consultar o
+   * banco (a chave de dependência é o texto dos ids, não o array). Condicionar a CHAMADA seria
+   * repetir o defeito; condicionar o ARGUMENTO é o que a regra pede.
+   * ⚠ LÊ PELOS IDS DA CARGA INTEIRA. Ler por uma metade faria o ICMS sumir em metade das cargas:
+   * medido na NF 9287581, os elos de `icms` e `funrural` pendiam só da metade IND.05.
+   */
+  const { linhas: lancamentosDaCarga, carregando: carregandoFin } = useCompromissosDaCarga(form?.ids ?? []);
 
   /* ⚠ O VALOR GRAVADO SOME QUANDO O ROMANEIO MUDA: ele é a resposta da RPC para os números
      ANTERIORES, e mantê-lo na tela depois de mexer no peso mostraria o valor de uma carga que não
@@ -259,9 +271,6 @@ export function CargaMandiocaModal({
    * A trava sai quando o modal souber editar a carga INTEIRA e devolver serviços e impostos.
    */
   const corrigindo = form.ids.length > 0;
-  /* ⚠ LÊ PELOS IDS DA CARGA INTEIRA. Ler por uma metade faria o ICMS sumir em metade das cargas:
-     medido na NF 9287581, os elos de `icms` e `funrural` pendiam só da metade IND.05. */
-  const { linhas: lancamentosDaCarga, carregando: carregandoFin } = useCompromissosDaCarga(form.ids);
   const t = toneladasDaCarga(form.pesoBrutoKg, form.descontoKg);
   /* ⚠ O DIVISOR DO R$/t É `t`, que agora é a CARGA INTEIRA (o form carrega o peso somado).
      Com a metade, 5.647,60 / 12,15 daria 464,82 R$/t — um preço que ninguém contratou. */
