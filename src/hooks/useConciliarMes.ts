@@ -72,6 +72,26 @@ export interface AguardandoExatosConciliar {
   documentoBanco: string | null;
 }
 
+/**
+ * Movimento do banco com 2+ candidatos no sistema — PR-CONCILIAR-MES-SUBABAS-01.
+ *
+ * ⚠ A RPC SEMPRE EMITIU A LISTA e este hook guardava só o `.length`. Enquanto os quatro grupos
+ * de "Esperando" empilhavam, um parágrafo com o número bastava; virando sub-aba própria, uma
+ * aba que só repete o próprio badge não é aba.
+ * ⚠ E ELA É DE LEITURA, SEM AÇÃO — o comentário que este PR substitui dizia que "prometer a
+ * lista aqui seria abrir uma decisão nesta tela de novo", e a ressalva continua valendo: quem
+ * ESCOLHE entre os candidatos é o passo 2b. Listar quem espera não é escolher por ninguém, e
+ * era a mesma razão por que a faixa de "data diferente" já listava os dela.
+ */
+export interface AmbiguoConciliar {
+  extratoId: string;
+  dataBanco: string | null;
+  valorBanco: number;
+  historicoBanco: string | null;
+  /** Quantos lançamentos do sistema disputam este movimento. */
+  candidatos: number;
+}
+
 export interface SaldoConciliar {
   inicial: number | null;
   movimentosExtrato: number | null;
@@ -104,6 +124,13 @@ export interface PreviaConciliarMes {
   semPar: SemParConciliar[];
   semParTotal: number;
   ambiguos: number;
+  /**
+   * ⚠ ADITIVO, E DE PROPÓSITO — PR-CONCILIAR-MES-SUBABAS-01. `ambiguos` continua sendo o NÚMERO
+   * porque é ele que o `gravar` acumula entre os lotes de 30 (`ambiguos += r.ambiguos`); trocar
+   * o campo por uma lista mexeria na soma da gravação, que este PR não toca. A lista entra ao
+   * lado, e quem só quer contar segue contando.
+   */
+  ambiguosLista: AmbiguoConciliar[];
   saldo: SaldoConciliar;
 }
 
@@ -190,6 +217,10 @@ function daPrevia(j: Json | null): PreviaConciliarMes | null {
     })),
     semParTotal: num(e.sem_par_total),
     ambiguos: lista(e.ambiguos).length,
+    ambiguosLista: lista(e.ambiguos).map(x => ({
+      extratoId: String(x.extrato_id), dataBanco: txt(x.data_banco), valorBanco: num(x.valor_banco),
+      historicoBanco: txt(x.historico_banco), candidatos: num(x.candidatos),
+    })),
     saldo: {
       inicial: numOuNulo(s?.inicial), movimentosExtrato: numOuNulo(s?.movimentos_extrato),
       finalCalculado: numOuNulo(s?.final_calculado), finalDigitado: numOuNulo(s?.final_digitado),

@@ -33,11 +33,14 @@ import { toast } from 'sonner';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { saldoConfere } from '@/lib/financeiro/conciliacaoCalc';
 import { useConciliarMes, type PreviaConciliarMes } from '@/hooks/useConciliarMes';
+import { Segmentado } from '@/components/ui/segmentado';
 import { supabase } from '@/integrations/supabase/client';
 import { lerPares, faixaInclusiva, dataBr, type ParExato } from '@/components/conciliacao/VincularMatchDireto';
 import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
 
 type Aba = 'crus' | 'esperando' | 'ja';
+/** Os quatro grupos de "Esperando", que deixaram de empilhar — PR-CONCILIAR-MES-SUBABAS-01. */
+type SubAba = 'par' | 'datadif' | 'agrupar' | 'sistema';
 
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
@@ -118,8 +121,23 @@ export function ConciliarMesDialog({
    * diálogo existe para mostrar.
    */
   const [pares, setPares] = useState<ParExato[]>([]);
+  /**
+   * SE OS PARES JÁ RESPONDERAM — PR-CONCILIAR-MES-SUBABAS-01, e é o que impede a barra de
+   * sub-abas de cintilar.
+   *
+   * ⚠ `pares.length === 0` NÃO SERVE PARA ISSO, e é a armadilha: "ainda não respondeu" e
+   * "respondeu que não há par nenhum" são o mesmo array vazio. Enquanto não respondeu, TODO
+   * `aguardandoExatos` cai em `semPar` — a barra abriria "Data diferente (20)" e, 800 ms
+   * depois, viraria "Par exato (19)" + "Data diferente (1)" na cara do operador.
+   * ⚠ ERRO TAMBÉM MARCA PRONTO. A chamada falha em silêncio de propósito (a prévia não pode cair
+   * junto); se o erro deixasse a flag em `false`, a barra ficaria "carregando pares…" para
+   * sempre, e um estado de carregamento eterno é pior que a lista incompleta que ele esconde.
+   */
+  const [paresProntos, setParesProntos] = useState(false);
   useEffect(() => {
-    if (!open || !clienteId || !contaId) { setPares([]); return; }
+    setPares([]);
+    setParesProntos(false);
+    if (!open || !clienteId || !contaId) return;
     let vivo = true;
     const { de, ate } = faixaInclusiva(ano, mes);
     void (async () => {
@@ -127,10 +145,11 @@ export function ConciliarMesDialog({
       const { data, error } = await (supabase as any).rpc('fn_vincular_exatos_mes', {
         p_cliente_id: clienteId, p_conta_bancaria_id: contaId, p_de: de, p_ate: ate, p_simular: true,
       });
-      if (!vivo || error) return;
+      if (!vivo) return;
       /* `data` vem `any` do idioma `(supabase as any).rpc`; quem confere a forma é `lerPares`,
          que faz o narrowing campo a campo. Zero cast novo aqui. */
-      setPares(lerPares(data?.pares));
+      if (!error) setPares(lerPares(data?.pares));
+      setParesProntos(true);
     })();
     return () => { vivo = false; };
   }, [open, clienteId, contaId, ano, mes]);
@@ -159,6 +178,66 @@ export function ConciliarMesDialog({
   const nSemPar = previa?.semPar.length ?? 0;
   const nAguardando = previa?.aguardandoExatos.length ?? 0;
   const nadaAFazer = !!previa && nCrus === 0;
+
+  /**
+   * AS SUB-ABAS DE "ESPERANDO" — PR-CONCILIAR-MES-SUBABAS-01.
+   *
+   * ⚠ ELAS ERAM QUATRO FAIXAS EMPILHADAS, e três delas costumavam estar vazias: medido no proto,
+   * Sicredi Lavoura ago/26 tem par exato 0, e Bradesco set/26 tem 0, 0 e 0 nas três de banco.
+   * Cada grupo vazio gastava ~46px (faixa + "Nenhum.") no mesmo scrollport em que as linhas de
+   * dois andares já custam 44px cada — a tela dizia quatro vezes que não tinha nada a dizer.
+   *
+   * ⚠ DUAS NATUREZAS, E É POR ISSO QUE A LISTA CARREGA `natureza`: 'banco' são MOVIMENTOS do
+   * extrato e 'sistema' são LANÇAMENTOS. Misturá-las numa fileira só foi exatamente o defeito do
+   * PR-CONCILIAR-MES-VER-OS-PARES-01 (badge somando 38 lançamentos com 21 movimentos e exibindo
+   * 59 num mês de 35). Aqui elas ficam em barras separadas, com rótulo e cor próprios, e o badge
+   * de "Esperando" segue SEM o grupo do sistema.
+   *
+   * ⚠ `par` E `datadif` SÓ EXISTEM DEPOIS DE `paresProntos` — a corrida do item (a). As outras
+   * duas não dependem dos pares e montam de imediato.
+   */
+  const subAbas = useMemo(() => {
+    const t: { id: SubAba; rotulo: string; n: number; natureza: 'banco' | 'sistema' }[] = [];
+    if (paresProntos) {
+      t.push({ id: 'par', rotulo: 'Par exato', n: comPar.length, natureza: 'banco' });
+      t.push({ id: 'datadif', rotulo: 'Data diferente', n: semPar.length, natureza: 'banco' });
+    }
+    t.push({ id: 'agrupar', rotulo: 'Agrupar', n: previa?.ambiguosLista.length ?? 0, natureza: 'banco' });
+    t.push({ id: 'sistema', rotulo: 'Sem par no banco', n: nSemPar, natureza: 'sistema' });
+    return t;
+  }, [paresProntos, comPar.length, semPar.length, previa, nSemPar]);
+
+  const comConteudo = useMemo(() => subAbas.filter(x => x.n > 0), [subAbas]);
+
+  const [subAba, setSubAba] = useState<SubAba | null>(null);
+  /* Prévia nova é outro mês ou outra conta: a escolha velha não descreve mais nada. */
+  useEffect(() => { setSubAba(null); }, [previa]);
+  /**
+   * ⚠ A PRIMEIRA COM CONTEÚDO, UMA VEZ SÓ — e a gravação da escolha é o que impede o CONTEÚDO de
+   * pular quando os pares chegam. Derivar a ativa a cada render (`?? comConteudo[0]`) faria o
+   * corpo saltar de "Agrupar" para "Par exato" sozinho, 800 ms depois de aberto: a barra pararia
+   * de cintilar e o miolo passaria a cintilar no lugar dela.
+   */
+  useEffect(() => {
+    if (subAba === null && comConteudo.length > 0) setSubAba(comConteudo[0].id);
+  }, [subAba, comConteudo]);
+
+  /**
+   * ⚠ A ATIVA NÃO FECHA SOZINHA AO ESVAZIAR — item (a) do briefing. `subAbas` guarda TODAS as
+   * montáveis, com contagem zero inclusive; só `comConteudo` filtra. Então uma sub-aba que zera
+   * enquanto o operador a lê continua selecionada, e o corpo dela diz "resolvido". Cair para a
+   * vizinha no meio de uma corrida de dados é trocar a cintilação da barra pela do conteúdo.
+   */
+  const subAtiva: SubAba | null = subAba && subAbas.some(x => x.id === subAba)
+    ? subAba
+    : (comConteudo[0]?.id ?? null);
+
+  /* A que zerou com o operador dentro dela continua na barra — some quando ele sair. */
+  const subVisiveis = useMemo(
+    () => subAbas.filter(x => x.n > 0 || x.id === subAtiva), [subAbas, subAtiva]);
+  const subBanco = subVisiveis.filter(x => x.natureza === 'banco');
+  const subSistema = subVisiveis.filter(x => x.natureza === 'sistema');
+  const nAtiva = subAbas.find(x => x.id === subAtiva)?.n ?? 0;
 
   /**
    * ⚠ QUAIS CRIAR — PR-CONCILIACAO-CRUS-01, e a escolha é por LINHA porque criar lançamento é
@@ -330,6 +409,65 @@ export function ConciliarMesDialog({
                 )}
               </div>
 
+              {/* ═══ SUB-ABAS DE "ESPERANDO" (nível 2) ════════════════════════
+                  ⚠ FORA DO SCROLLPORT, e é o que a torna fixa: `sticky` aqui ancoraria na lista
+                  e subiria com ela. Fixar cabeçalho é pôr a rolagem no nível certo.
+                  ⚠ E A MARCAÇÃO É O `Segmentado` DA CASA, não a pílula clara do mock: a regra
+                  permanente do CLAUDE.md diz que seleção se marca com NAVY preenchido, e que aba
+                  nova em qualquer tela usa este componente. A hierarquia entre os dois níveis vem
+                  da FORMA — nível 1 são pílulas soltas `rounded-full`, nível 2 é a barra emendada
+                  de 22px —, não de enfraquecer a marcação do nível de baixo.
+                  ⚠ DUAS BARRAS, E É ASSIM QUE O DIVISOR NASCE: `Segmentado` é uma barra emendada,
+                  então separar as naturezas em duas instâncias dá a divisão de graça, com a borda
+                  de cada uma. A do sistema vai de âmbar. Passar a mesma `subAtiva` às duas é o que
+                  faz só uma acender — a outra não encontra o valor entre as suas opções. */}
+              {aba === 'esperando' && (
+                <div className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b bg-muted/30 px-3 py-1.5">
+                  {/* ⚠ O PLACEHOLDER SEGURA O LUGAR DAS DUAS QUE DEPENDEM DOS PARES — item (a).
+                      Sem ele a barra abriria com "Data diferente (20)" e, 800 ms depois, se
+                      redesenharia como "Par exato (19)" + "Data diferente (1)". */}
+                  {!paresProntos && (
+                    <span className="text-[10px] italic text-muted-foreground">carregando pares…</span>
+                  )}
+                  {subAtiva && subBanco.length > 0 && (
+                    <>
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70">
+                        movimentos do banco:
+                      </span>
+                      <Segmentado altura={22} valor={subAtiva} onEscolher={setSubAba}
+                        opcoes={subBanco.map(x => ({
+                          valor: x.id,
+                          /* ⚠ `✓` NO LUGAR DO ZERO: a aba que zerou com o operador dentro dela
+                             continua na barra, e um "(0)" diria que ela está vazia em vez de
+                             dizer que o grupo acabou. */
+                          rotulo: <>{x.rotulo}<span className="ml-1 font-semibold tabular-nums">{x.n > 0 ? x.n : '✓'}</span></>,
+                        }))} />
+                    </>
+                  )}
+                  {subAtiva && subSistema.length > 0 && (
+                    <>
+                      {/* ⚠ "SISTEMA:" E ÂMBAR PORQUE A NATUREZA É OUTRA — aqui são LANÇAMENTOS, não
+                          movimentos do banco, e foi somá-los que fez o badge exibir 59 num mês de
+                          35 (PR-CONCILIAR-MES-VER-OS-PARES-01). A contagem desta barra continua
+                          FORA do badge de "Esperando", como lá. */}
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-700/80 dark:text-amber-400/80">
+                        sistema:
+                      </span>
+                      <Segmentado altura={22} className="border-amber-600/50" valor={subAtiva} onEscolher={setSubAba}
+                        opcoes={subSistema.map(x => ({
+                          valor: x.id,
+                          rotulo: <>{x.rotulo}<span className="ml-1 font-semibold tabular-nums">{x.n > 0 ? x.n : '✓'}</span></>,
+                        }))} />
+                    </>
+                  )}
+                  {paresProntos && !subAtiva && (
+                    <span className="text-[10px] text-muted-foreground">
+                      Nada esperando: todo movimento do mês já tem vínculo ou vai ser criado aqui.
+                    </span>
+                  )}
+                </div>
+              )}
+
               {/* ═══ A LISTA — o único scrollport ══════════════════════════════ */}
               <div className="min-h-0 flex-1 overflow-y-auto">
                 {aba === 'ja' ? (
@@ -374,60 +512,70 @@ export function ConciliarMesDialog({
                     </div>
                   ))
                 ) : (
-                  /* ═══ ESPERANDO — três coisas diferentes, e é por isso que cada uma tem faixa
-                       própria: duas são movimentos do BANCO e a terceira são LANÇAMENTOS do
-                       sistema. Empilhá-las sem dizer qual é qual faria o operador somar peras
-                       com maçãs para conferir o mês. */
-                  <div>
-                    <div className="border-b bg-muted/60 px-3 py-1 text-[10px] font-medium">
-                      Têm par exato — “Vincular os exatos” resolve ({comPar.length})
+                  /* ═══ ESPERANDO — QUATRO GRUPOS, E AGORA UM DE CADA VEZ ═══════════
+                       PR-CONCILIAR-MES-SUBABAS-01. Eles empilhavam, cada um com a sua faixa, e os
+                       vazios custavam ~46px só para dizer "Nenhum." — num scrollport em que a
+                       linha de dois andares já come 44px. Medido no proto: em 3 das 4 contas com
+                       movimento em aberto, dois ou três dos quatro grupos estão vazios.
+                       ⚠ A BARRA DAS SUB-ABAS FICA FORA DESTE SCROLLPORT, acima — regra do
+                       cabeçalho fixo (A21). Dentro dele ela rolaria para fora justamente quando a
+                       lista ficasse longa, que é quando saber em qual grupo se está importa. */
+                  subAtiva === null ? (
+                    /* ⚠ SEM SUB-ABA NENHUMA SÃO DOIS ESTADOS, e confundi-los seria o erro de
+                       sentinela da casa: "ainda não sei" não pode se vestir de "não há". Enquanto
+                       os pares não voltam, duas das quatro nem foram montadas. */
+                    <p className="px-3 py-6 text-center text-[11px] text-muted-foreground">
+                      {paresProntos
+                        ? 'Nada esperando: todo movimento do mês já tem vínculo ou vai ser criado aqui.'
+                        : 'Conferindo os pares no banco…'}
+                    </p>
+                  ) : nAtiva === 0 ? (
+                    /* ⚠ "RESOLVIDO", E NÃO CAIR PARA A VIZINHA: a sub-aba que zera com o operador
+                       dentro dela continua aberta. Trocar o conteúdo sozinho seria a mesma
+                       cintilação que a barra deixou de ter. */
+                    <p className="px-3 py-6 text-center text-[11px] text-muted-foreground">
+                      Resolvido ✓ — nada mais neste grupo.
+                    </p>
+                  ) : subAtiva === 'par' ? (
+                    <div>
+                      {/* ⚠ OS DOIS LADOS, E O SELO "1 candidato" SAIU — PR-CONCILIAR-MES-ESPERANDO-
+                          COM-PAR-01. Dizer QUANTOS sem dizer QUEM é pedir aprovação sobre um número.
+                          É o mesmo desenho da caixa do "Vincular os exatos", de propósito: quem vê
+                          aqui e confirma lá está olhando a mesma lista. */}
+                      {comPar.map(({ mov, par }) => (
+                        <div key={mov.extratoId} className="flex items-center gap-2 border-b border-border/60 px-3 py-[7px] text-[10px]">
+                          {/* ⚠ 96px NÃO É CHUTE — PR-CONCILIAR-MES-ESPERANDO-COM-PAR-01. Em 86px o valor de
+                            7 dígitos CORTAVA: "−R$ 1.500.000,55" mede 87,61px a 10px, e o maior
+                            movimento do proto é R$ 2.667.572,77 (o maior lançamento, R$ 3.996.196,13).
+                            96px cobre até 8 dígitos (R$ 12.500.000,55 mede 92,36px), que é o próximo
+                            degrau desta base. */}
+                          <span className="w-[38px] shrink-0 overflow-hidden tabular-nums text-muted-foreground">{dataBr(mov.dataBanco)}</span>
+                          <span className="min-w-0 flex-1 truncate" title={mov.historicoBanco ?? undefined}>
+                            {mov.historicoBanco ?? '—'}
+                          </span>
+                          <span className={`w-[96px] shrink-0 text-right font-medium tabular-nums ${corValor(mov.valorBanco)}`}>
+                            {comSinal(mov.valorBanco)}
+                          </span>
+                          <span className="shrink-0 text-muted-foreground/40" aria-hidden>│</span>
+                          <span className="min-w-0 flex-1 truncate"
+                            title={[par.descricaoSistema, par.favorecido].filter(Boolean).join(' · ')}>
+                            {par.descricaoSistema ?? '—'}
+                            {par.favorecido && <span className="text-muted-foreground"> · {par.favorecido}</span>}
+                          </span>
+                          <span className={`w-[96px] shrink-0 text-right font-medium tabular-nums ${corValor(par.valorSistema)}`}>
+                            {comSinal(par.valorSistema)}
+                          </span>
+                        </div>
+                      ))}
                     </div>
-                    {comPar.length === 0 ? (
-                      <p className="px-3 py-3 text-center text-[10px] text-muted-foreground">Nenhum.</p>
-                    ) : comPar.map(({ mov, par }) => (
-                      /* ⚠ OS DOIS LADOS, E O SELO "1 candidato" SAIU — PR-CONCILIAR-MES-ESPERANDO-
-                         COM-PAR-01. Dizer QUANTOS sem dizer QUEM é pedir aprovação sobre um número.
-                         É o mesmo desenho da caixa do "Vincular os exatos", de propósito: quem vê
-                         aqui e confirma lá está olhando a mesma lista. */
-                      <div key={mov.extratoId} className="flex items-center gap-2 border-b border-border/60 px-3 py-[7px] text-[10px]">
-                        {/* ⚠ 96px NÃO É CHUTE — PR-CONCILIAR-MES-ESPERANDO-COM-PAR-01. Em 86px o valor de
-                          7 dígitos CORTAVA: "−R$ 1.500.000,55" mede 87,61px a 10px, e o maior
-                          movimento do proto é R$ 2.667.572,77 (o maior lançamento, R$ 3.996.196,13).
-                          96px cobre até 8 dígitos (R$ 12.500.000,55 mede 92,36px), que é o próximo
-                          degrau desta base. */}
-                        <span className="w-[38px] shrink-0 overflow-hidden tabular-nums text-muted-foreground">{dataBr(mov.dataBanco)}</span>
-                        <span className="min-w-0 flex-1 truncate" title={mov.historicoBanco ?? undefined}>
-                          {mov.historicoBanco ?? '—'}
-                        </span>
-                        <span className={`w-[96px] shrink-0 text-right font-medium tabular-nums ${corValor(mov.valorBanco)}`}>
-                          {comSinal(mov.valorBanco)}
-                        </span>
-                        <span className="shrink-0 text-muted-foreground/40" aria-hidden>│</span>
-                        <span className="min-w-0 flex-1 truncate"
-                          title={[par.descricaoSistema, par.favorecido].filter(Boolean).join(' · ')}>
-                          {par.descricaoSistema ?? '—'}
-                          {par.favorecido && <span className="text-muted-foreground"> · {par.favorecido}</span>}
-                        </span>
-                        <span className={`w-[96px] shrink-0 text-right font-medium tabular-nums ${corValor(par.valorSistema)}`}>
-                          {comSinal(par.valorSistema)}
-                        </span>
-                      </div>
-                    ))}
-
-                    {/* ⚠ FAIXA PRÓPRIA PARA QUEM NÃO PAREIA — e ela existe porque as duas réguas
-                        são COMPATÍVEIS, NÃO IDÊNTICAS: a prévia conta candidato até 5 dias, o
-                        botão casa só com data igual. Medido na Vera · set/26: 20 contra 19.
-                        ⚠ O QUE SOBRA NÃO PODE SUMIR NEM APARECER SEM PAR numa lista de pareados —
-                        afirmar "tem par exato" e deixar a direita vazia seria a tela mentindo de
-                        novo. Ele fica na faixa que descreve a situação dele, apontando a Estação,
-                        que é onde a escolha com data diferente se resolve.
-                        ⚠ O QUE ESTA FAIXA NÃO DIZ é QUAL é o candidato: a prévia não emite o
-                        lançamento, e o botão não o pareia. Nomeá-lo exige a RPC emitir o
-                        candidato MARCADO como aproximado — frente própria. */}
-                    {semPar.length > 0 && (<>
-                      <div className="border-y bg-muted/60 px-3 py-1 text-[10px] font-medium">
-                        Têm candidato, mas em data diferente ({semPar.length})
-                      </div>
+                  ) : subAtiva === 'datadif' ? (
+                    <div>
+                      {/* ⚠ A SUB-ABA EXISTE PORQUE AS DUAS RÉGUAS SÃO COMPATÍVEIS, NÃO IDÊNTICAS: a
+                          prévia conta candidato até 5 dias, o botão casa só com data igual. Medido
+                          na Vera · set/26: 20 contra 19.
+                          ⚠ O QUE ELA NÃO DIZ é QUAL é o candidato — a prévia não emite o lançamento
+                          e o botão não o pareia. Nomeá-lo exige a RPC emitir o candidato marcado
+                          como aproximado: é migration, e é a fase 2 desta frente. */}
                       {semPar.map(mov => (
                         <div key={mov.extratoId} className="flex items-center gap-2 border-b border-border/60 px-3 py-[7px] text-[10px]">
                           <span className="w-[38px] shrink-0 overflow-hidden tabular-nums text-muted-foreground">{dataBr(mov.dataBanco)}</span>
@@ -444,47 +592,61 @@ export function ConciliarMesDialog({
                           <span className="w-[96px] shrink-0" />
                         </div>
                       ))}
-                    </>)}
-
-                    <div className="border-y bg-muted/60 px-3 py-1 text-[10px] font-medium">
-                      Têm 2 ou mais candidatos — esperando o agrupamento ({previa.ambiguos})
                     </div>
-                    {/* ⚠ SÓ O NÚMERO: a RPC devolve a lista dos ambíguos, mas o contrato deste hook
-                        guarda apenas a contagem. Mostrar quais é o passo 2b, e é lá que o operador
-                        escolhe — prometer a lista aqui seria abrir uma decisão nesta tela de novo. */}
-                    <p className="px-3 py-3 text-center text-[10px] text-muted-foreground">
-                      {previa.ambiguos === 0
-                        ? 'Nenhum.'
-                        : `${previa.ambiguos} movimento${previa.ambiguos === 1 ? '' : 's'} do banco ${previa.ambiguos === 1 ? 'casa' : 'casam'} com mais de um lançamento. Nada é criado nem vinculado por conta própria.`}
-                    </p>
-
-                    <div className="border-y bg-muted/60 px-3 py-1 text-[10px] font-medium">
-                      Lançamentos do sistema sem par no banco ({nSemPar})
+                  ) : subAtiva === 'agrupar' ? (
+                    <div>
+                      {/* ⚠ A LISTA ENTROU AQUI, e ela substitui um parágrafo que só repetia o número
+                          da própria aba. O comentário anterior guardava a razão de NÃO listar —
+                          "prometer a lista aqui seria abrir uma decisão nesta tela de novo" —, e a
+                          ressalva continua de pé: é ela que define a FORMA desta lista. Ela é de
+                          LEITURA — sem caixa, sem clique, sem ação. Quem ESCOLHE entre os
+                          candidatos é o passo 2b, e era o mesmo critério da faixa de data
+                          diferente, que já listava os dela sem deixar agir. */}
+                      {previa.ambiguosLista.map(m => (
+                        <div key={m.extratoId} className="flex items-center gap-2 border-b border-border/60 px-3 py-[7px] text-[10px]">
+                          <span className="w-[38px] shrink-0 overflow-hidden tabular-nums text-muted-foreground">{dataBr(m.dataBanco)}</span>
+                          <span className="min-w-0 flex-1 truncate" title={m.historicoBanco ?? undefined}>
+                            {m.historicoBanco ?? '—'}
+                          </span>
+                          <span className={`w-[96px] shrink-0 text-right font-medium tabular-nums ${corValor(m.valorBanco)}`}>
+                            {comSinal(m.valorBanco)}
+                          </span>
+                          <span className="shrink-0 text-muted-foreground/40" aria-hidden>│</span>
+                          <span className="min-w-0 flex-1 truncate italic text-muted-foreground">
+                            {m.candidatos} lançamentos do sistema disputam este movimento — o agrupamento resolve
+                          </span>
+                          <span className="w-[96px] shrink-0" />
+                        </div>
+                      ))}
                     </div>
-                    {nSemPar === 0 ? (
-                      <p className="px-3 py-3 text-center text-[10px] text-muted-foreground">Nenhum.</p>
-                    ) : porDia(previa.semPar, s => s.data).map(([dia, itens]) => (
-                      <div key={dia}>
-                        <div className="border-b bg-muted/30 px-3 py-1 text-[10px]">{dataBr(dia)}</div>
-                        {itens.map(s => (
-                          <div key={s.lancamentoId} className="flex items-center gap-2 border-b border-border/60 px-3 py-[7px]">
-                            <div className="min-w-0 flex-1">
-                              <div className="truncate text-[12px] font-medium" title={s.descricao ?? undefined}>
-                                {s.descricao ?? '—'}
+                  ) : (
+                    <div>
+                      {/* ⚠ ESTES SÃO LANÇAMENTOS, NÃO MOVIMENTOS — a natureza que a barra separa com
+                          divisor, rótulo próprio e âmbar, e a mesma distinção que tirou o "59 > 35"
+                          do badge em PR-CONCILIAR-MES-VER-OS-PARES-01. */}
+                      {porDia(previa.semPar, s => s.data).map(([dia, itens]) => (
+                        <div key={dia}>
+                          <div className="border-b bg-muted/30 px-3 py-1 text-[10px]">{dataBr(dia)}</div>
+                          {itens.map(s => (
+                            <div key={s.lancamentoId} className="flex items-center gap-2 border-b border-border/60 px-3 py-[7px]">
+                              <div className="min-w-0 flex-1">
+                                <div className="truncate text-[12px] font-medium" title={s.descricao ?? undefined}>
+                                  {s.descricao ?? '—'}
+                                </div>
+                                <div className="truncate text-[10px] text-muted-foreground">
+                                  {contaNome}{s.subcentro ? ` · ${s.subcentro}` : ''}{s.statusTransacao ? ` · ${s.statusTransacao}` : ''}
+                                </div>
                               </div>
-                              <div className="truncate text-[10px] text-muted-foreground">
-                                {contaNome}{s.subcentro ? ` · ${s.subcentro}` : ''}{s.statusTransacao ? ` · ${s.statusTransacao}` : ''}
+                              <div className={`shrink-0 text-[12px] font-medium tabular-nums ${corValor(s.valor)}`}>
+                                {comSinal(s.valor)}
                               </div>
+                              <span className="shrink-0 rounded-full bg-muted px-1.5 py-px text-[10px] text-muted-foreground">sem par</span>
                             </div>
-                            <div className={`shrink-0 text-[12px] font-medium tabular-nums ${corValor(s.valor)}`}>
-                              {comSinal(s.valor)}
-                            </div>
-                            <span className="shrink-0 rounded-full bg-muted px-1.5 py-px text-[10px] text-muted-foreground">sem par</span>
-                          </div>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  )
                 )}
               </div>
             </div>
