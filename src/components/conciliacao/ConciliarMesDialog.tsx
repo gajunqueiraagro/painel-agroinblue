@@ -222,7 +222,12 @@ export function ConciliarMesDialog({
       <DialogContent className="flex h-[92vh] max-h-[92vh] w-[96vw] max-w-[1400px] flex-col gap-0 overflow-hidden p-0">
         <DialogHeader className="shrink-0 space-y-0.5 bg-primary px-4 py-2.5">
           <DialogTitle className="text-[14px] font-semibold text-primary-foreground">
-            Conciliar {MESES[mes - 1]}/{ano} — {contaNome || 'conta'}
+            {/* ⚠ O TÍTULO DIZ O ATO, NÃO O PASSO — PR-ACOES-DO-MES-VERBO-01. Ele abria com
+                "Conciliar", e este diálogo não concilia nada desde PR-CONCILIACAO-CRUS-01: ele
+                cria lançamento a partir do movimento do banco que ficou sem par. O botão do
+                rodapé já dizia "Criar lançamentos do que sobrou"; o título o contradizia no
+                topo da mesma tela. */}
+            Criar lançamentos do extrato · {MESES[mes - 1]}/{ano} · {contaNome || 'conta'}
           </DialogTitle>
           <p className="text-[11px] text-primary-foreground/85">
             {arquivosOfx} arquivo{arquivosOfx === 1 ? '' : 's'} OFX · {previa?.movimentosExtrato ?? '—'} movimentos

@@ -10,8 +10,13 @@ import { PalcoDoMes } from '@/components/conciliacao/PalcoDoMes';
 import { ConciliarMesDialog } from '@/components/conciliacao/ConciliarMesDialog';
 
 /**
- * AcoesDoMes — as duas portas que CONCILIAM o mês: "Conciliar em lote" e "Conciliar unitário"
- * (nomes de PR-ACOES-DO-MES-ROTULOS-01; eram "Conciliar o mês" e "Ver o mês").
+ * AcoesDoMes — as duas portas do passo 2: "Criar lançamentos em lote" e "Conciliar unitário".
+ * (Nomes: o primeiro é de PR-ACOES-DO-MES-VERBO-01 e já foi "Conciliar o mês" e "Conciliar em
+ * lote"; o segundo é de PR-ACOES-DO-MES-ROTULOS-01 e era "Ver o mês".)
+ *
+ * ⚠ E ELAS NÃO FAZEM A MESMA COISA — esta frase dizia "as duas portas que CONCILIAM o mês", e era
+ * falsa desde PR-CONCILIACAO-CRUS-01: só a segunda concilia. A primeira CRIA lançamento para o
+ * movimento do banco que ficou sem par nenhum no sistema.
  *
  * ⚠ ELAS MORAVAM NA ABA "IMPORTAR BANCO", e era isso que ensinava o fluxo errado —
  * PR-CONCILIACAO-PASSOS-01. O operador entrava para conferir se o extrato chegou completo e
@@ -78,12 +83,20 @@ export function AcoesDoMes({ clienteId, contaId, contaNome, ano, mes, aoMudar }:
           : 'Cria lançamento para os movimentos do banco que não têm par no sistema. Você escolhe quais, linha a linha.'}
         onClick={() => setVerConciliarMes(true)}>
         <ListPlus className="h-3 w-3" />
-        {/* ⚠ "CONCILIAR EM LOTE", E ERA "Conciliar o mês" — PR-ACOES-DO-MES-ROTULOS-01. Os dois
-            botões desta barra abrem caminhos de conciliar, e os nomes antigos não diziam a
-            diferença entre eles: um falava de PERÍODO ("o mês") e o outro de LEITURA ("ver"),
-            quando o que os separa é a ESCALA do ato — muitos de uma vez, ou um de cada vez.
+        {/* ⚠ "CRIAR LANÇAMENTOS EM LOTE", E JÁ FOI "Conciliar o mês" (PR-ACOES-DO-MES-ROTULOS-01)
+            E "Conciliar em lote" (este PR, PR-ACOES-DO-MES-VERBO-01). Os dois primeiros nomes
+            erravam por ESCALA — um falava de PERÍODO ("o mês"), o outro de LEITURA ("ver"), quando
+            o que separa estes dois botões é quantos de cada vez. O terceiro errava no VERBO, que é
+            pior: este botão NÃO concilia. Ele CRIA LANÇAMENTO a partir do banco, para o movimento
+            que não tem par nenhum no sistema. Conciliar — casar com o que já existe — é o botão ao
+            lado, e é por isso que só ele guarda o verbo.
+            ⚠ E ERA O ÚLTIMO "Conciliar" QUE MENTIA nesta cadeia: a aba mudou em
+            PR-CONCILIACAO-PASSOS-01, o tooltip em PR-ACOES-DO-MES-ROTULOS-02, o motor em
+            PR-CONCILIACAO-CRUS-01 (a RPC deixou de casar) e o botão de dentro do diálogo já dizia
+            "Criar lançamentos do que sobrou". Só o rótulo de fora seguia prometendo o botão antigo
+            — o que fazia o próprio Gabriel esperar que apertar conciliasse o mês.
             ⚠ O CONTADOR NÃO MUDA: ele continua sendo os movimentos sem vínculo. */}
-        Conciliar em lote{semVinculo > 0 ? ` (${semVinculo})` : ''}
+        Criar lançamentos em lote{semVinculo > 0 ? ` (${semVinculo})` : ''}
       </Button>
 
       {/* ⚠ ESTE SÓ MOSTRA; o outro GRAVA, e é o que merece o verbo — 130. */}
