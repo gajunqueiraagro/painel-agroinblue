@@ -14,7 +14,7 @@
  * responder, e depois mostra o que ela gravou. Multiplicar `t × g × R$/g` aqui daria um segundo
  * número para a mesma carga — e, no dia do arredondamento discordante, seria a tela contra o banco.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,6 +38,7 @@ import { formatNum, formatMoeda, formatarNF } from '@/lib/calculos/formatters';
 import { CampoNumero, CampoMoeda } from '@/components/ui/campo-moeda';
 import { parseMoeda } from '@/lib/calculos/numeroBR';
 import { observacoesDoOperador, temMetadadoDeMigracao } from '@/lib/agri/observacoesDaCarga';
+import { reconstruirCarga } from '@/lib/agri/compromissosDaCarga';
 import { LancamentoModalEnvelope } from '@/components/lancamento/LancamentoModalEnvelope';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
 import { useFinanceiroV2, type LancamentoV2 } from '@/hooks/useFinanceiroV2';
@@ -290,6 +291,8 @@ export function CargaMandiocaModal({
    * dizer qual usar — e a inline salvava direto, sem confirmação, enquanto o diálogo pede Salvar.
    */
   const [editandoLanc, setEditandoLanc] = useState<LancamentoV2 | null>(null);
+  /** Qual carga já teve serviços e impostos reconstruídos — a chave são os ids dela. */
+  const reconstruidaRef = useRef<string | null>(null);
   /* ⚠ AS FAZENDAS SÃO DO CONTEXTO, como no `AgriDreLavouraTab`: o diálogo as exige e a carga não
      as tem. */
   const { fazendas } = useFazenda();
@@ -321,8 +324,48 @@ export function CargaMandiocaModal({
   /* Fechar devolve a aba à primeira: reabrir noutra carga na aba Financeiro esconderia os campos
      que o operador veio ver. */
   useEffect(() => {
-    if (!aberto) setAba('colheita');
+    if (!aberto) { setAba('colheita'); reconstruidaRef.current = null; }
   }, [aberto]);
+
+  /**
+   * A CARGA VOLTA A SABER COM QUE NÚMEROS FOI FEITA — e é isto que autoriza o Salvar a existir.
+   *
+   * ⚠ A AUSÊNCIA DISTO APAGOU DINHEIRO. Em 21/09/2026 a 9287581 foi corrigida e perdeu 28,19 t e
+   * R$ 16.402,85 em cinco lançamentos. `agri_carga_mandioca_corrigir` é `cancelar + registrar`, e
+   * o formulário reabria com `servicos: []`, `icms: ''` e `funrural: ''`: o payload de volta
+   * descrevia uma carga menor que a existente, e a RPC obedeceu — ela não tinha como distinguir
+   * "não tem serviço" de "esqueci de ler os serviços".
+   * ⚠ POR ISSO O PREENCHIMENTO VEM ANTES DA DESTRAVA, nesta ordem e não na inversa. A trava do
+   * front era contenção enquanto o formulário fosse cego.
+   *
+   * ⚠ UMA VEZ POR CARGA, pelo `reconstruidaRef`: sem ele o `onChange` re-renderiza o pai, o efeito
+   * roda de novo e sobrescreveria o que o operador acabou de digitar — a cada tecla.
+   * ⚠ E SÓ PARA CARGA EXISTENTE (`ids.length > 0`). Carga nova não tem o que reconstruir, e é a
+   * `proposta()` que a preenche, com o contrato âmbar de sugestão.
+   */
+  useEffect(() => {
+    if (!form || form.ids.length === 0) return;
+    const chave = form.ids.join(',');
+    if (reconstruidaRef.current === chave) return;
+    if (carregandoFin || lancamentosDaCarga.length === 0) return;
+
+    const t = toneladasDaCarga(form.pesoBrutoKg, form.descontoKg);
+    const rec = reconstruirCarga(lancamentosDaCarga, t);
+    /* ⚠ MARCA ANTES DE CHAMAR: o `onChange` é síncrono e reentra neste efeito. */
+    reconstruidaRef.current = chave;
+
+    const txt = (n: number | null): string => (n == null ? '' : String(n));
+    onChange({
+      ...form,
+      servicos: rec.servicos,
+      icms: txt(rec.icms),
+      funrural: txt(rec.funrural),
+      inss: txt(rec.inss),
+      icmsTransporte: txt(rec.icmsTransporte),
+      /* ⚠ `valorBruto` NÃO se zera aqui. Ele é o que a RPC gravou, e reconstruir não é editar:
+         zerá-lo faria a carga recém-aberta dizer "salve para saber" sobre um valor que ela tem. */
+    });
+  }, [form, carregandoFin, lancamentosDaCarga, onChange]);
 
   if (!form) return null;
 
@@ -403,11 +446,16 @@ export function CargaMandiocaModal({
           onFechar={onFechar}
           acao={(
             <Button type="button" variant="acao" onClick={onSalvar}
-              disabled={salvando || corrigindo}
-              /* ⚠ O MOTIVO TAMBÉM NO `title`, além do aviso no corpo — regra da OC: botão
-                 desabilitado diz por quê, e a mesma frase governa os dois. */
-              title={corrigindo
-                ? 'Edição de carga em reconstrução — salvar apagaria os serviços e os impostos.'
+              /* ⚠ A JANELA CEGA CONTINUA TRAVADA, e é a única que sobra. A trava saiu porque o
+                 formulário passou a reconstruir serviços e impostos — mas ele só os tem DEPOIS de
+                 `useCompromissosDaCarga` responder. Salvar antes disso manda exatamente o payload
+                 vazio que apagou R$ 16.402,85 da 9287581. São milissegundos, e é neles que o dano
+                 mora.
+                 ⚠ E O MOTIVO VAI NO `title` — regra da OC: botão desabilitado diz por quê, com a
+                 mesma frase que o aviso do corpo. */
+              disabled={salvando || (corrigindo && carregandoFin)}
+              title={corrigindo && carregandoFin
+                ? 'Lendo os serviços e os impostos desta carga — é deles que ela é refeita.'
                 : undefined}
               className="gap-1">
               <Save className="h-4 w-4" /> {salvando ? 'Salvando…' : 'Salvar carga'}
@@ -499,19 +547,18 @@ export function CargaMandiocaModal({
               {/* ⚠ A RECUSA APARECE INTEIRA E NO TOPO. `_cancelar` devolve a lista de lançamentos
                   já realizados ou conciliados e NÃO muda nada; dizer só "não foi possível" deixaria
                   o operador sem saber qual baixa desfazer no Financeiro. */}
-              {/* ⚠ O AVISO VEM ANTES DE TUDO e diz o que se PERDERIA, não "não é possível": o
-                  operador precisa saber que o risco é apagar lançamentos, senão ele tenta de novo
-                  por outro caminho. */}
-              {corrigindo && (
+              {/* ⚠ O AVISO DE RECONSTRUÇÃO SAIU com a trava — a carga edita. Enquanto os
+                  compromissos não chegam, porém, o formulário AINDA não sabe os serviços: salvar
+                  nesse instante mandaria o payload cego que apagou a 9287581. O aviso abaixo
+                  ocupa exatamente essa janela, e some sozinho. */}
+              {corrigindo && carregandoFin && (
                 <div className="rounded-md border border-amber-500/50 bg-amber-50 p-2 dark:border-amber-500/40 dark:bg-amber-950/30">
                   <div className="flex items-center gap-1 text-[10px] font-semibold text-amber-800 dark:text-amber-300">
                     <AlertTriangle className="h-3 w-3" />
-                    Edição de carga em reconstrução — não é possível salvar por ora
+                    Lendo os serviços e os impostos desta carga…
                   </div>
                   <p className="mt-1 text-[10px] leading-snug text-amber-800/90 dark:text-amber-300/90">
-                    Salvar recriaria a carga do zero e ela perderia os serviços e os impostos, que
-                    não voltam preenchidos nesta tela. Para conferir os números, a carga está
-                    aberta aqui em leitura.
+                    Espere os números aparecerem antes de salvar: é deles que a carga é refeita.
                   </p>
                 </div>
               )}

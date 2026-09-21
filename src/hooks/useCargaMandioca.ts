@@ -468,6 +468,7 @@ export function useCompromissosDaCarga(ids: readonly string[]) {
         statusTransacao: x.status_transacao,
         dataVencimento: x.data_vencimento,
         favorecido: x.favorecido_id ? (nomeForn.get(x.favorecido_id) || null) : null,
+        favorecidoId: x.favorecido_id,
         conta: x.conta_efetiva_id ? (nomeConta.get(x.conta_efetiva_id) || null) : null,
         contaId: x.conta_efetiva_id,
         pago: pagoPorId.get(x.id) ?? 0,

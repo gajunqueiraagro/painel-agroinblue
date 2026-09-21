@@ -9,7 +9,7 @@ import {
 const l = (papel: string, valor: number, sinal: string, extra: Partial<LancamentoDaCarga> = {}): LancamentoDaCarga => ({
   lancamentoId: `L-${papel}`, papel, valor, sinal,
   statusTransacao: 'programado', dataVencimento: '2026-08-21',
-  favorecido: null, conta: 'Sicredi Lavoura', contaId: 'CONTA-1',
+  favorecido: null, favorecidoId: null, conta: 'Sicredi Lavoura', contaId: 'CONTA-1',
   pago: 0, conciliadoEm: null, conciliado: false, ...extra,
 });
 
@@ -185,5 +185,94 @@ describe('topoFinanceiro', () => {
     const t = topoFinanceiro(montarCompromissos(pago, 40.34, 1.05));
     expect(t.pagas).toBe(2000);
     expect(t.despesas).toBeCloseTo(16118.00, 2);
+  });
+});
+
+/* ────────────────────────────────────────────────────────────────────────────────────────────
+   RECONSTRUÇÃO — a guarda que precede a retirada da trava (PR-MANDIOCA-FASE3).
+   ──────────────────────────────────────────────────────────────────────────────────────────── */
+import { reconstruirCarga } from '@/lib/agri/compromissosDaCarga';
+
+/* Os lançamentos REAIS da NF 9287581, lidos do proto em 21/09/2026 depois da fusão.
+   Os ids de favorecido são os do banco. */
+const r = (papel: string, valor: number, favorecidoId: string | null): LancamentoDaCarga => ({
+  lancamentoId: `L-${papel}`, papel, valor, sinal: papel === 'venda' ? '1' : '-1',
+  statusTransacao: 'programado', dataVencimento: '2026-08-21',
+  favorecido: null, favorecidoId, conta: null, contaId: null,
+  pago: 0, conciliadoEm: null, conciliado: false,
+});
+
+const CARGA_9287581: LancamentoDaCarga[] = [
+  r('venda', 20585.50, '28fd64af-20d4-4a76-96f5-61061bb0f024'),
+  r('arranquio', 5647.60, 'c9ccdb59-51db-4aaf-82a9-b84a9460bb75'),
+  r('frete', 5647.60, '3a67853a-07f1-42f7-9061-51ec15a71433'),
+  r('carregamento', 2017.00, '7b56949a-35ff-4220-9ae6-1c146f67bfdf'),
+  r('icms', 2470.26, '948cab3f-52e3-46bd-b4b8-3e022828125b'),
+  r('funrural', 335.54, '28fd64af-20d4-4a76-96f5-61061bb0f024'),
+];
+
+describe('reconstruirCarga', () => {
+  /* ⚠ ESTE É O TESTE QUE AUTORIZA A TRAVA A SAIR. Enquanto o formulário reabria com serviços
+     vazios, salvar apagava dinheiro — foi o que aconteceu nesta carga em 21/09. Os números aqui
+     são os do proto: se algum dia ele falhar, o salvar volta a ser destrutivo. */
+  it('devolve os R$/t que foram negociados, e não zero', () => {
+    const c = reconstruirCarga(CARGA_9287581, 40.34);
+    const por = (t: string) => c.servicos.find(s => s.tipo === t);
+    expect(por('mao_obra')?.preco_t).toBe(140);
+    expect(por('trator')?.preco_t).toBe(50);
+    expect(por('frete')?.preco_t).toBe(140);
+    expect(c.servicos).toHaveLength(3);
+  });
+
+  it('os impostos vêm inteiros, sem dividir por tonelada', () => {
+    const c = reconstruirCarga(CARGA_9287581, 40.34);
+    expect(c.icms).toBeCloseTo(2470.26, 2);
+    expect(c.funrural).toBeCloseTo(335.54, 2);
+    /* Esta carga não tem os dois novos — e ausência é `null`, não zero. */
+    expect(c.inss).toBeNull();
+    expect(c.icmsTransporte).toBeNull();
+  });
+
+  /* ⚠ O ID, NÃO O NOME: o payload grava `fornecedor_id`. Reconstruir por texto criaria um segundo
+     cadastro com o mesmo nome na primeira gravação. */
+  it('cada serviço volta com o favorecido que tinha', () => {
+    const c = reconstruirCarga(CARGA_9287581, 40.34);
+    expect(c.servicos.find(s => s.tipo === 'mao_obra')?.fornecedor_id)
+      .toBe('c9ccdb59-51db-4aaf-82a9-b84a9460bb75');
+    expect(c.servicos.find(s => s.tipo === 'frete')?.fornecedor_id)
+      .toBe('3a67853a-07f1-42f7-9061-51ec15a71433');
+    expect(c.servicos.find(s => s.tipo === 'trator')?.fornecedor_id)
+      .toBe('7b56949a-35ff-4220-9ae6-1c146f67bfdf');
+  });
+
+  it('os nomes novos do serviço reconstroem igual aos antigos', () => {
+    const c = reconstruirCarga(
+      [r('mao_obra', 5647.60, 'F1'), r('trator', 2017, 'F2'), r('frete', 5647.60, 'F3')], 40.34);
+    expect(c.servicos.map(s => `${s.tipo}:${s.preco_t}`).sort())
+      .toEqual(['frete:140', 'mao_obra:140', 'trator:50']);
+  });
+
+  /* ⚠ SEM TONELADAS, `null` — NUNCA ZERO. Zero num preço de serviço é "de graça", e um payload
+     que promete serviço gratuito apaga dinheiro exatamente como o payload vazio apagava. */
+  it('sem toneladas o preço é ausência, não zero', () => {
+    for (const t of [null, 0]) {
+      const c = reconstruirCarga(CARGA_9287581, t);
+      expect(c.servicos.every(s => s.preco_t === null)).toBe(true);
+      /* e o imposto continua vindo: ele não depende do peso */
+      expect(c.icms).toBeCloseTo(2470.26, 2);
+    }
+  });
+
+  /* ⚠ DOIS NOMES DO MESMO SERVIÇO NÃO VIRAM DUAS LINHAS: o payload levaria o tipo duas vezes e a
+     RPC gravaria dois lançamentos onde havia um. */
+  it('arranquio e mao_obra na mesma carga produzem UM serviço', () => {
+    const c = reconstruirCarga([r('arranquio', 100, 'F1'), r('mao_obra', 200, 'F2')], 10);
+    expect(c.servicos.filter(s => s.tipo === 'mao_obra')).toHaveLength(1);
+  });
+
+  it('carga sem serviço nenhum devolve lista vazia, sem inventar', () => {
+    const c = reconstruirCarga([r('venda', 1000, 'F1')], 10);
+    expect(c.servicos).toEqual([]);
+    expect(c.icms).toBeNull();
   });
 });

@@ -456,16 +456,18 @@ export function CargasDaArea({
   const gravarMandioca = async () => {
     const f = formMandioca;
     if (!f || !clienteId) return;
-    /* ⚠ A TRAVA DE CORRIGIR MORA AQUI TAMBÉM — PR-CARGA-MANDIOCA-TRAVAR-CORRIGIR, e não é
-       redundância: o botão desabilitado é o aviso, esta linha é a trava. O dano acontece neste
-       handler, e `corrigir` apaga a carga antes de recriá-la — um Enter num campo, um atalho ou um
-       caminho futuro que chame `gravarMandioca` sem passar pelo botão bastaria.
-       ⚠ E O TOAST REPETE O QUE O MODAL JÁ DIZ, de propósito: quem chegar aqui não está olhando o
-       aviso do topo. */
-    if (f.ids.length > 0) {
-      toast.error('Edição de carga está em reconstrução — salvar apagaria os serviços e os impostos.');
-      return;
-    }
+    /* ⚠ A TRAVA DE CORRIGIR SAIU AQUI — PR-MANDIOCA-FASE3, e o que a tornou desnecessária foi o
+       CONSERTO DA RAIZ, não uma decisão de risco. Ela existia porque o formulário reabria cego:
+       `servicos: []`, `icms: ''`, `funrural: ''`, e como `corrigir` é `cancelar + registrar`, o
+       payload de volta apagava o que não soubesse ler — foi assim que a 9287581 perdeu 28,19 t e
+       R$ 16.402,85 em 21/09/2026.
+       Agora o modal reconstrói serviços e impostos dos próprios lançamentos ao abrir
+       (`reconstruirCarga`), e o payload volta completo. O teste que prova isso com os números
+       daquela carga está em `compromissosDaCarga.test.ts` — se ele cair, salvar volta a ser
+       destrutivo.
+       ⚠ E A REDE DO BANCO NÃO SAIU: a guarda de `agri_carga_mandioca_corrigir` (migration
+       20261027123900) recusa payload que ENCOLHA a carga. Ela não é redundância desta linha — é a
+       defesa que continua valendo para qualquer caminho, inclusive os que não passam por aqui. */
     if (!areaId) { toast.error('Escolha o talhão desta carga antes de salvar.'); return; }
     if (!f.industriaId) { toast.error('Escolha o comprador — a indústria que recebe a carga.'); return; }
     const bruto = parseMoeda(f.pesoBrutoKg);

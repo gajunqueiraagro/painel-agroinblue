@@ -75,6 +75,14 @@ export interface LancamentoDaCarga {
   statusTransacao: string | null;
   dataVencimento: string | null;
   favorecido: string | null;
+  /**
+   * O id de quem recebe — não o nome.
+   * ⚠ ELE EXISTE PARA A RECONSTRUÇÃO, não para a lista: a lista mostra `favorecido`, mas o payload
+   * de `agri_carga_mandioca_corrigir` grava `fornecedor_id`. Reconstruir a carga a partir do NOME
+   * exigiria procurar o fornecedor por texto — e é assim que se cria um segundo cadastro com o
+   * mesmo nome. A consulta já trazia a coluna; só não a devolvia.
+   */
+  favorecidoId: string | null;
   conta: string | null;
   /** O id da conta, para o seletor — `conta` é só o nome que a linha mostra. */
   contaId: string | null;
@@ -269,4 +277,81 @@ export function topoFinanceiro(linhas: readonly LinhaCompromisso[]): TopoFinance
     else { despesas += abs; pagas += l.pago; }
   }
   return { aReceber, recebido, despesas, pagas };
+}
+
+/* ────────────────────────────────────────────────────────────────────────────────────────────
+   RECONSTRUÇÃO DA CARGA — o que o modal precisa para reabrir uma carga SEM perdê-la.
+   ──────────────────────────────────────────────────────────────────────────────────────────── */
+
+/** O que uma carga gravada devolve quando se pergunta "com que números você foi feita?". */
+export interface CargaReconstruida {
+  servicos: Array<{ tipo: 'frete' | 'trator' | 'mao_obra'; fornecedor_id: string | null; preco_t: number | null }>;
+  icms: number | null;
+  funrural: number | null;
+  inss: number | null;
+  icmsTransporte: number | null;
+}
+
+/** Os dois nomes de cada serviço apontam para o mesmo tipo do payload. */
+const TIPO_DO_PAPEL: Record<string, 'frete' | 'trator' | 'mao_obra'> = {
+  frete: 'frete',
+  trator: 'trator',
+  mao_obra: 'mao_obra',
+  carregamento: 'trator',
+  arranquio: 'mao_obra',
+};
+
+/**
+ * Reconstrói serviços e impostos de uma carga JÁ GRAVADA, a partir dos lançamentos dela.
+ *
+ * ⚠ ELA EXISTE PORQUE A AUSÊNCIA DELA APAGOU DINHEIRO. Em 21/09/2026 a carga 9287581 foi
+ * corrigida e perdeu 28,19 t e R$ 16.402,85 em cinco lançamentos. A causa não era a correção:
+ * `agri_carga_mandioca_corrigir` é `cancelar + registrar`, e o formulário reabria com
+ * `servicos: []`, `icms: ''` e `funrural: ''`. O payload que voltava descrevia uma carga menor do
+ * que a que existia, e a RPC obedeceu — ela não tinha como saber que aquilo era esquecimento.
+ * ⚠ O CONSERTO É AQUI, NÃO NA TRAVA. A trava do front era contenção: enquanto o formulário não
+ * soubesse ler o que já existe, salvar era destruir. Com esta função ele sabe.
+ *
+ * ⚠ O R$/t É RECONSTRUÍVEL, e isso derruba a premissa de 16/09 de que não era. O lançamento guarda
+ * o TOTAL e a colheita guarda as toneladas; o preço unitário é a divisão. Conferido na 9287581:
+ * 5.647,60 / 40,34 = 140,00 (arranquio e frete) e 2.017,00 / 40,34 = 50,00 (carregamento) — os
+ * mesmos números que foram negociados.
+ * ⚠ IMPOSTO NÃO SE DIVIDE: ele é valor fechado da nota, não preço por tonelada. ICMS 2.470,26 e
+ * Funrural 335,54 entram como estão.
+ *
+ * ⚠ TONELADAS ZERO OU AUSENTE DEVOLVE `preco_t: null`, nunca zero — e a diferença é a que separa
+ * "não sei" de "é de graça". Zero num preço de serviço faria o payload prometer um serviço
+ * gratuito, que é justamente a forma de apagar dinheiro que esta função existe para impedir.
+ */
+export function reconstruirCarga(
+  linhas: readonly LancamentoDaCarga[], toneladas: number | null,
+): CargaReconstruida {
+  const t = toneladas != null && toneladas > 0 ? toneladas : null;
+
+  const servicos: CargaReconstruida['servicos'] = [];
+  for (const l of linhas) {
+    const tipo = TIPO_DO_PAPEL[l.papel];
+    if (!tipo) continue;
+    /* ⚠ UMA LINHA POR TIPO: se os dois nomes do mesmo serviço coexistissem numa carga, o payload
+       levaria o tipo duas vezes e a RPC gravaria dois lançamentos onde havia um. */
+    if (servicos.some(s => s.tipo === tipo)) continue;
+    servicos.push({
+      tipo,
+      fornecedor_id: l.favorecidoId,
+      preco_t: t != null ? Math.round((Math.abs(l.valor) / t) * 100) / 100 : null,
+    });
+  }
+
+  const valorDe = (papel: string): number | null => {
+    const l = linhas.find(x => x.papel === papel);
+    return l ? Math.abs(l.valor) : null;
+  };
+
+  return {
+    servicos,
+    icms: valorDe('icms'),
+    funrural: valorDe('funrural'),
+    inss: valorDe('inss'),
+    icmsTransporte: valorDe('icms_transporte'),
+  };
 }
