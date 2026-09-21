@@ -19,8 +19,8 @@ import {
 } from 'recharts';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import {
-  ajusteVencidoPorDia, combinarComPassado, escalaSimetrica, montarFluxoPrevisto,
-  primeiroNegativo,
+  ajusteVencidoPorDia, combinarComPassado, escalaSimetrica, faixasSemColisao,
+  larguraEstimada, montarFluxoPrevisto, primeiroNegativo,
   type Granularidade, type LinhaFluxoPrevisto, type PontoLinha, type PontoPassadoEntrada,
   type ZonaFluxo,
 } from '@/lib/financeiro/fluxoPrevisto';
@@ -45,6 +45,16 @@ const COR_CREME = '#f7f3ec';
    fazia os dois competirem. O vermelho fica reservado ao trecho abaixo do zero. */
 const COR_AREA_POS = '#3b7ea1';
 const COR_AREA_NEG = '#c0392b';
+
+/**
+ * A régua vertical dos rótulos do topo — PR-CPR-FLUXO-LABEL-ANTICOLISAO-01.
+ *
+ * `OFFSET_ROTULO` é onde um rótulo fica quando não disputa espaço com ninguém; `ALTURA_FAIXA`
+ * é o degrau que ele sobe a cada colisão. 18px cabe uma linha de 12px com respiro — menos que
+ * isso e o rótulo de cima encosta no de baixo, que é o problema que se está resolvendo.
+ */
+const OFFSET_ROTULO = 15;
+const ALTURA_FAIXA = 18;
 
 /** Largura mínima que um rótulo "dd/mm" ocupa sem colar no vizinho. */
 const LARGURA_ROTULO_DIA = 34;
@@ -127,6 +137,39 @@ function TickEixoX({ x, y, payload, index, pontos, passoRotulo, faixaCabe }: {
           )}
         </>
       )}
+    </g>
+  );
+}
+
+/**
+ * UM RÓTULO DO TOPO, COM O TRAÇO QUE O LIGA AO PONTO.
+ *
+ * ⚠ O TRAÇO SÓ APARECE QUANDO O RÓTULO SOBE. Na posição natural ele estaria colado ao ponto e
+ * seria ruído; deslocado, sem o traço, o número perde o dono — num gráfico de oitenta pontos,
+ * um valor solto no ar não diz a que dia pertence.
+ * ⚠ E ELE TEM A COR DA SÉRIE daquele ponto (verde no conciliado, azul no realizado, laranja no
+ * previsto): é o mesmo recurso que faz o rótulo pertencer a um trecho, e não ao gráfico inteiro.
+ * ⚠ `label` COMO FUNÇÃO É O QUE O RECHARTS 2.15.4 OFERECE — `ImplicitLabelType` aceita
+ * `(props) => ReactElement<SVGElement>` e entrega o `viewBox` do ponto ancorado. Nenhuma camada
+ * SVG por cima do gráfico: o traço e o texto são filhos do próprio `ReferenceDot`.
+ */
+function RotuloDoTopo({ viewBox, texto, cor, tamanho, peso, faixa }: {
+  viewBox?: { x?: number; y?: number };
+  texto: string; cor: string; tamanho: number; peso?: number; faixa: number;
+}) {
+  const x = viewBox?.x ?? 0;
+  const y = viewBox?.y ?? 0;
+  const yTexto = y - OFFSET_ROTULO - faixa * ALTURA_FAIXA;
+  return (
+    <g>
+      {faixa > 0 && (
+        <line x1={x} y1={y - 5} x2={x} y2={yTexto + 4}
+          stroke={cor} strokeWidth={1} opacity={0.5} />
+      )}
+      <text x={x} y={yTexto} textAnchor="middle" fill={cor}
+        fontSize={tamanho} fontWeight={peso}>
+        {texto}
+      </text>
     </g>
   );
 }
@@ -333,6 +376,50 @@ export function CprFluxoPrevisto({
   const faixaCabe = (faixa: string) =>
     (pontosPorFaixa.get(faixa) ?? 0) * larguraPorPonto >= 30;
 
+  /**
+   * ONDE CADA RÓTULO DO TOPO FICA — a regra anti-colisão aplicada à geometria real.
+   *
+   * ⚠ A POSIÇÃO X SAI DO ÍNDICE DO PONTO, não de medição: `índice × larguraPorPonto` é a mesma
+   * conta que o recharts usa para distribuir a série num eixo categórico. Serve para decidir se
+   * dois rótulos se encostam, que é tudo o que se precisa.
+   * ⚠ A PRIORIDADE É PRODUTO, NÃO TÉCNICA: o "hoje" é o número que o operador veio ver, então
+   * ele fica onde está e quem cede é o resto. O saldo final é FIXO — ele já é um par empilhado
+   * (valor e data) dentro da margem, e subi-lo desmancharia esse arranjo para consertar outro.
+   */
+  const indiceDe = (chave: string) => pontos.findIndex((p) => p.chave === chave);
+  const faixasDosRotulos = useMemo(() => {
+    const lista: Parameters<typeof faixasSemColisao>[0][number][] = [];
+    const emHojeLocal = pontos.find((p) => p.rotulo === 'Hoje');
+    const fimConcLocal = [...pontos].reverse().find((p) => p.zona === 'conciliado');
+    const ultimo = pontos[pontos.length - 1];
+
+    if (ultimo) {
+      /* Ancorado à esquerda e crescendo para a margem — daí a largura toda de um lado só. */
+      const t = fmtTag(ultimo.saldo);
+      lista.push({
+        id: 'final', x: indiceDe(ultimo.chave) * larguraPorPonto,
+        paraEsquerda: 0, paraDireita: larguraEstimada(t, 13), prioridade: 2, fixo: true,
+      });
+    }
+    if (emHojeLocal) {
+      const t = `${fmtTag(emHojeLocal.saldo)} *`;
+      const meia = larguraEstimada(t, 12) / 2;
+      lista.push({
+        id: 'hoje', x: indiceDe(emHojeLocal.chave) * larguraPorPonto,
+        paraEsquerda: meia, paraDireita: meia, prioridade: 0,
+      });
+    }
+    if (fimConcLocal && emHojeLocal && fimConcLocal.chave !== emHojeLocal.chave) {
+      const t = fmtTag(fimConcLocal.saldo);
+      const meia = larguraEstimada(t, 11) / 2;
+      lista.push({
+        id: 'conciliado', x: indiceDe(fimConcLocal.chave) * larguraPorPonto,
+        paraEsquerda: meia, paraDireita: meia, prioridade: 1,
+      });
+    }
+    return faixasSemColisao(lista);
+  }, [pontos, larguraPorPonto]);
+
   return (
     <div className="flex h-full min-h-0 flex-col rounded-lg" style={{ background: COR_CREME }}>
       <div className="shrink-0 px-4 pt-3">
@@ -463,18 +550,28 @@ export function CprFluxoPrevisto({
                     que explica a premissa já está lá em cima, e ganhou o `*` na frente. Um
                     rodapé só para essa estrela acrescentaria uma linha ao gráfico para repetir
                     o que já estava escrito. */}
+                {/* ⚠ A PALAVRA ACOMPANHA O VALOR: ela sobe junto quando o valor sobe, senão o
+                    par se separaria e o "hoje" ficaria explicando um número que saiu de baixo
+                    dele. Por isso as duas leem a MESMA faixa. */}
                 <ReferenceDot x={emHoje.rotulo} y={emHoje.saldo} r={0} isFront
-                  label={{ value: 'hoje', position: 'top', fontSize: 10,
-                    fill: COR_SALDO, offset: 30 }} />
+                  label={(props) => (
+                    <RotuloDoTopo {...props} texto="hoje" cor={COR_SALDO} tamanho={10}
+                      faixa={(faixasDosRotulos.get('hoje') ?? 0) + 0.85} />
+                  )} />
                 <ReferenceDot x={emHoje.rotulo} y={emHoje.saldo} r={0} isFront
-                  label={{ value: `${fmtTag(emHoje.saldo)} *`, position: 'top', fontSize: 12,
-                    fontWeight: 600, fill: COR_SALDO, offset: 15 }} />
+                  label={(props) => (
+                    <RotuloDoTopo {...props} texto={`${fmtTag(emHoje.saldo)} *`} cor={COR_SALDO}
+                      tamanho={12} peso={600} faixa={faixasDosRotulos.get('hoje') ?? 0} />
+                  )} />
               </>
             )}
             {fimConciliado && fimConciliado.chave !== emHoje.chave && (
               <ReferenceDot x={fimConciliado.rotulo} y={fimConciliado.saldo} r={0} isFront
-                label={{ value: fmtTag(fimConciliado.saldo), position: 'top', offset: 14,
-                  fontSize: 11, fill: COR_CONCILIADO }} />
+                label={(props) => (
+                  <RotuloDoTopo {...props} texto={fmtTag(fimConciliado.saldo)}
+                    cor={COR_CONCILIADO} tamanho={11}
+                    faixa={faixasDosRotulos.get('conciliado') ?? 0} />
+                )} />
             )}
             <ReferenceDot x={final.rotulo} y={final.saldo} r={0} isFront
               label={{ value: fmtTag(final.saldo), position: 'right', offset: 10,

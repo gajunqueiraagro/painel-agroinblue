@@ -7,7 +7,8 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  ajusteVencidoPorDia, combinarComPassado, escalaSimetrica, montarFluxoPrevisto, passoRedondo,
+  ajusteVencidoPorDia, combinarComPassado, escalaSimetrica, faixasSemColisao, larguraEstimada,
+  montarFluxoPrevisto, passoRedondo,
   primeiroNegativo, rotuloDoDia,
   rotuloDoMes, MAX_PONTOS_DIA, type LinhaFluxoPrevisto,
 } from './fluxoPrevisto';
@@ -514,5 +515,84 @@ describe('a conciliação apaga o vencido anterior a ela — PR-CPR-2B.3.3', () 
   it('sem conciliação nenhuma, todo vencido do desenho conta', () => {
     const m = ajusteVencidoPorDia([saida('2026-08-10', 100)], INICIO, HOJE, null);
     expect(m.get('2026-08-10')).toBe(-100);
+  });
+});
+
+describe('rótulos que não se pisam — PR-CPR-FLUXO-LABEL-ANTICOLISAO-01', () => {
+  const centrado = (id: string, x: number, largura: number, prioridade: number) =>
+    ({ id, x, paraEsquerda: largura / 2, paraDireita: largura / 2, prioridade });
+
+  it('longe um do outro, ninguém sobe — o desenho é o de antes', () => {
+    const f = faixasSemColisao([centrado('hoje', 500, 76, 0), centrado('conc', 200, 52, 1)]);
+    expect(f.get('hoje')).toBe(0);
+    expect(f.get('conc')).toBe(0);
+  });
+
+  /**
+   * ⚠ O CASO MEDIDO: a Vera em 21/09, conciliada havia 4 dias. Os dois rótulos ficam a 39px e
+   * precisam de 64px — quem tem menos prioridade sobe.
+   */
+  it('perto, quem tem MENOS prioridade sobe e o mais importante fica onde estava', () => {
+    const f = faixasSemColisao([
+      centrado('hoje', 500, 76, 0),
+      centrado('conc', 461, 52, 1),
+    ]);
+    expect(f.get('hoje')).toBe(0);
+    expect(f.get('conc')).toBe(1);
+  });
+
+  it('a prioridade manda, não a ordem em que entram na lista', () => {
+    const f = faixasSemColisao([
+      centrado('conc', 461, 52, 1),
+      centrado('hoje', 500, 76, 0),
+    ]);
+    expect(f.get('hoje')).toBe(0);
+    expect(f.get('conc')).toBe(1);
+  });
+
+  /** ⚠ Fixo ocupa espaço e não cede: quem desvia é o outro, mesmo tendo prioridade melhor. */
+  it('rótulo fixo nunca sobe — os demais o contornam', () => {
+    const f = faixasSemColisao([
+      { id: 'final', x: 700, paraEsquerda: 0, paraDireita: 90, prioridade: 2, fixo: true },
+      centrado('hoje', 720, 76, 0),
+    ]);
+    expect(f.get('final')).toBe(0);
+    expect(f.get('hoje')).toBe(1);
+  });
+
+  /**
+   * ⚠ O CASO DE 7 DIAS VEM DE GRAÇA, e é a razão de a regra ser geral: ninguém escreveu "hoje
+   * contra o valor final" em lugar nenhum — ele cai na mesma conta dos outros.
+   */
+  it('três rótulos apertados ocupam três faixas, sem ninguém dividir a mesma', () => {
+    const f = faixasSemColisao([
+      centrado('a', 500, 80, 0), centrado('b', 510, 80, 1), centrado('c', 520, 80, 2),
+    ]);
+    expect([f.get('a'), f.get('b'), f.get('c')]).toEqual([0, 1, 2]);
+  });
+
+  it('quem não cruza volta para a faixa de baixo, em vez de escalar junto', () => {
+    const f = faixasSemColisao([
+      centrado('a', 500, 80, 0), centrado('b', 510, 80, 1), centrado('c', 900, 80, 2),
+    ]);
+    expect(f.get('c')).toBe(0);
+  });
+
+  it('a mesma entrada em outra ordem dá a mesma saída — layout não pisca', () => {
+    const rs = [centrado('a', 500, 80, 0), centrado('b', 510, 80, 1), centrado('c', 520, 80, 1)];
+    const um = faixasSemColisao(rs);
+    const outro = faixasSemColisao([...rs].reverse());
+    expect([...um.entries()].sort()).toEqual([...outro.entries()].sort());
+  });
+
+  it('não escala sem teto — acima do limite o rótulo para de subir', () => {
+    const muitos = Array.from({ length: 12 }, (_, i) => centrado(`r${i}`, 500, 80, i));
+    const f = faixasSemColisao(muitos);
+    expect(Math.max(...f.values())).toBeLessThanOrEqual(4);
+  });
+
+  it('larguraEstimada cresce com o texto e com a fonte', () => {
+    expect(larguraEstimada('R$ 97 mil', 11)).toBeCloseTo(9 * 11 * 0.58, 5);
+    expect(larguraEstimada('R$ 97 mil', 13)).toBeGreaterThan(larguraEstimada('R$ 97 mil', 11));
   });
 });

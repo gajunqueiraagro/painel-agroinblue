@@ -550,3 +550,102 @@ function preencherSeries(pontos: PontoLinha[]): PontoLinha[] {
   }
   return pontos;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   RÓTULOS QUE NÃO SE PISAM — PR-CPR-FLUXO-LABEL-ANTICOLISAO-01
+
+   ⚠ O DEFEITO PIORA QUANDO O DADO MELHORA, e é isso que torna a regra necessária em vez de um
+   ajuste de offset. Os rótulos do "hoje" e do "fim do conciliado" moram na mesma faixa
+   horizontal acima da linha; a distância entre eles é a distância entre a última conciliação e
+   hoje. Medido em 21/09/2026: a Vera, conciliada havia 4 dias, sobrepunha ~25px; o NJ, com 21
+   dias, não encostava. Ou seja, quem concilia em dia é quem não consegue ler o próprio gráfico.
+   ⚠ O CASO EXTREMO JÁ ESTAVA TRATADO e continua: conciliado EM hoje não desenha o segundo
+   rótulo (os dois pontos coincidem). O que faltava era a faixa intermediária, de 1 a ~10 dias.
+
+   ⚠ REGRA GERAL, NÃO REMENDO NO PAR CONHECIDO. Qualquer rótulo do topo entra na mesma conta, e
+   é por isso que o encontro do "hoje" com o valor final — possível no horizonte de 7 dias —
+   sai resolvido sem uma linha a mais de código.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+export interface RotuloParaPosicionar {
+  id: string;
+  /** Onde o rótulo se ancora no eixo X, em pixels do plot. */
+  x: number;
+  /**
+   * Quanto o texto ocupa de cada lado da âncora.
+   * ⚠ ASSIMÉTRICO DE PROPÓSITO: um rótulo centrado gasta metade para cada lado, mas o do saldo
+   * final é ancorado à ESQUERDA e cresce todo para a direita, dentro da margem. Modelar os dois
+   * como "largura/2" faria o final parecer ocupar espaço que não ocupa, e deixar de ocupar o
+   * que ocupa.
+   */
+  paraEsquerda: number;
+  paraDireita: number;
+  /** Menor é mais importante — quem tem prioridade fica na posição natural e os outros desviam. */
+  prioridade: number;
+  /**
+   * Nunca sobe: ocupa espaço e os demais o contornam.
+   * ⚠ O SALDO FINAL É FIXO porque ele já é um par empilhado (valor em cima, data embaixo).
+   * Subi-lo arrastaria a data junto ou separaria os dois — em ambos os casos, estragando um
+   * arranjo que funciona para consertar outro.
+   */
+  fixo?: boolean;
+}
+
+/** Teto de faixas. Acima disto o rótulo sobe tanto que sai do gráfico — melhor empilhar. */
+const MAX_FAIXAS = 4;
+
+/** Dois rótulos se pisam quando as caixas horizontais se cruzam. */
+function seCruzam(a: RotuloParaPosicionar, b: RotuloParaPosicionar): boolean {
+  return a.x - a.paraEsquerda < b.x + b.paraDireita
+    && b.x - b.paraEsquerda < a.x + a.paraDireita;
+}
+
+/**
+ * Em que faixa vertical cada rótulo fica. `0` é a posição natural; cada degrau sobe um nível.
+ *
+ * ⚠ SÓ AGE QUANDO HÁ COLISÃO. Longe um do outro, todos ficam em zero e o desenho é idêntico ao
+ * de antes — a regra não é um layout novo, é uma saída de emergência.
+ */
+export function faixasSemColisao(
+  rotulos: readonly RotuloParaPosicionar[],
+): Map<string, number> {
+  /* Fixos primeiro (eles não escolhem), depois por prioridade. O `id` desempata para que a
+     mesma entrada produza sempre a mesma saída — um layout que muda entre renders pisca. */
+  const ordenados = [...rotulos].sort((a, b) => {
+    if (!!a.fixo !== !!b.fixo) return a.fixo ? -1 : 1;
+    if (a.prioridade !== b.prioridade) return a.prioridade - b.prioridade;
+    return a.id < b.id ? -1 : 1;
+  });
+
+  const ocupadas = new Map<number, RotuloParaPosicionar[]>();
+  const faixas = new Map<string, number>();
+
+  for (const r of ordenados) {
+    let faixa = 0;
+    if (!r.fixo) {
+      while (faixa < MAX_FAIXAS && (ocupadas.get(faixa) ?? []).some((o) => seCruzam(o, r))) {
+        faixa += 1;
+      }
+    }
+    const lista = ocupadas.get(faixa) ?? [];
+    lista.push(r);
+    ocupadas.set(faixa, lista);
+    faixas.set(r.id, faixa);
+  }
+  return faixas;
+}
+
+/**
+ * Quanto um texto ocupa, por estimativa.
+ *
+ * ⚠ ESTIMATIVA, E ASSUMIDAMENTE. Medir texto em SVG exige `getComputedTextLength`, que só
+ * responde DEPOIS de renderizar — seria um segundo render a cada mudança de dado, para ganhar
+ * precisão num cálculo cujo único uso é decidir se dois rótulos se encostam. O fator 0,58 vem
+ * de o conteúdo ser quase todo dígito e separador ("R$ 1,51 mi", "R$ 97 mil"), mais largos que
+ * a média de um texto corrido.
+ * ⚠ E ERRAR PARA MAIS É O LADO CERTO: superestimar afasta rótulos que talvez coubessem;
+ * subestimar os deixa se pisando, que é o defeito que se está consertando.
+ */
+export function larguraEstimada(texto: string, tamanhoFonte: number): number {
+  return texto.length * tamanhoFonte * 0.58;
+}
