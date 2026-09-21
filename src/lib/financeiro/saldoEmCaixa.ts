@@ -197,6 +197,21 @@ export interface SaldoEmCaixa {
   aplicado: number;
   /** A posição conciliada mais atrasada — o elo fraco. `null` quando nenhuma conta ancorou. */
   ancoraMaisAtrasada: string | null;
+  /**
+   * O elo fraco DE CADA NATUREZA — PR-CPR-SALDO-NATUREZA-01.
+   *
+   * ⚠ UMA DATA SÓ PARA AS DUAS NATUREZAS MENTIA NA LEITURA. Corrente e investimento fecham por
+   * relógios diferentes: a corrente confere contra o extrato do dia, o investimento só fecha
+   * no fim do mês, quando o banco calcula o rendimento. Misturá-las num "conciliado até"
+   * único faz a data da mais atrasada explicar um total de que ela é só metade.
+   * ⚠ É A MESMA REGRA, FILTRADA — não uma segunda fonte. O elo fraco continua sendo o mínimo
+   * das âncoras; o que muda é sobre que subconjunto ele é tirado.
+   */
+  conciliadoCorrenteAte: string | null;
+  conciliadoAplicadoAte: string | null;
+  /** Quantas contas de cada natureza entraram no total — a linha some quando é zero. */
+  contasCorrente: number;
+  contasAplicado: number;
   /** As contas presas nessa posição mais atrasada, para o aviso poder nomeá-las. */
   contasNoEloFraco: string[];
   /** Contas sem nenhum mês que feche na janela — ficam FORA do total, e por isso são nomeadas. */
@@ -236,7 +251,7 @@ export function estimarSaldoEmCaixa(entrada: {
   let ancoradas = 0;
   const semAncora: string[] = [];
   const aConferir: string[] = [];
-  const porConta: { nome: string; data: string }[] = [];
+  const porConta: { nome: string; data: string; grupo: GrupoDeCaixa }[] = [];
 
   for (const c of contas) {
     const grupo = grupoDoTipoConta(c.tipo);
@@ -252,7 +267,7 @@ export function estimarSaldoEmCaixa(entrada: {
     if (grupo === 'disponivel') disponivel = roundCurrency(disponivel + valor);
     else aplicado = roundCurrency(aplicado + valor);
     ancoradas += 1;
-    porConta.push({ nome: c.nome, data: ancora.data });
+    porConta.push({ nome: c.nome, data: ancora.data, grupo });
 
     /* Negativo é erro de lançamento em QUALQUER conta de caixa, e mais ainda na permuta. */
     if (valor < 0) { aConferir.push(c.nome); continue; }
@@ -265,10 +280,20 @@ export function estimarSaldoEmCaixa(entrada: {
   }
 
   const total = roundCurrency(disponivel + aplicado);
+  /** O elo fraco de um subconjunto — `null` quando ele está vazio. */
+  const eloDe = (grupo: GrupoDeCaixa): string | null => {
+    const datas = porConta.filter((p) => p.grupo === grupo).map((p) => p.data);
+    return datas.length === 0 ? null : datas.reduce((m, d) => (d < m ? d : m), datas[0]);
+  };
+  const contasCorrente = porConta.filter((p) => p.grupo === 'disponivel').length;
+  const contasAplicado = porConta.filter((p) => p.grupo === 'aplicado').length;
+
   if (porConta.length === 0) {
     return {
-      total, disponivel, aplicado, ancoraMaisAtrasada: null, contasNoEloFraco: [],
-      semAncora, aConferir, ancoradas: 0,
+      total, disponivel, aplicado, ancoraMaisAtrasada: null,
+      conciliadoCorrenteAte: null, conciliadoAplicadoAte: null,
+      contasCorrente: 0, contasAplicado: 0,
+      contasNoEloFraco: [], semAncora, aConferir, ancoradas: 0,
     };
   }
   const maisAtrasada = porConta.reduce((m, p) => (p.data < m ? p.data : m), porConta[0].data);
@@ -277,6 +302,10 @@ export function estimarSaldoEmCaixa(entrada: {
     disponivel,
     aplicado,
     ancoraMaisAtrasada: maisAtrasada,
+    conciliadoCorrenteAte: eloDe('disponivel'),
+    conciliadoAplicadoAte: eloDe('aplicado'),
+    contasCorrente,
+    contasAplicado,
     contasNoEloFraco: porConta.filter((p) => p.data === maisAtrasada).map((p) => p.nome),
     semAncora,
     aConferir,

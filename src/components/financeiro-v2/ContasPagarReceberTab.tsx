@@ -554,6 +554,44 @@ export function ContasPagarReceberTab() {
     return partes.join(' · ');
   }, [caixa, hoje]);
 
+  /**
+   * AS DUAS LINHAS DO CARD, uma por natureza — PR-CPR-SALDO-NATUREZA-01.
+   *
+   * ⚠ A CORRENTE MOSTRA DATA, O INVESTIMENTO MOSTRA REGRA. A corrente confere contra o extrato
+   * do dia, então "conciliado DD/MM" responde exatamente o que se quer saber dela. O
+   * investimento não tem extrato diário: o banco calcula o rendimento no fechamento, e no meio
+   * do mês o saldo é base mais aplicações menos resgates, SEM rendimento. Isso não é atraso, é
+   * a natureza do produto — e uma data ali faria parecer defeito o que é o normal.
+   * ⚠ A LINHA SOME QUANDO A NATUREZA NÃO EXISTE. Um cliente sem investimento não precisa ler
+   * "R$ 0,00 sem rendimento"; zero de uma coisa que não há é ruído, não informação.
+   * ⚠ "INVESTIDO" INCLUI A PERMUTA, herdado do agrupamento da 2A.2 (`grupoDoTipoConta` manda
+   * `inv` e `permuta` para o mesmo lado). Hoje é inofensivo — a única permuta do proto declara
+   * R$ 0,00 —, mas se ela um dia carregar valor o rótulo estará estreito para o que soma.
+   * Registrado; separá-la é frente própria.
+   */
+  const naturezasDoCaixa = useMemo(() => {
+    if (!caixa || caixa.ancoradas === 0) return undefined;
+    const linhas: { rotulo: string; valor: string; detalhe: string; aConferir?: string[] }[] = [];
+    if (caixa.contasCorrente > 0) {
+      linhas.push({
+        rotulo: 'Corrente',
+        valor: formatMoeda(caixa.disponivel),
+        detalhe: caixa.conciliadoCorrenteAte
+          ? `conciliado ${format(parseISO(caixa.conciliadoCorrenteAte), 'dd/MM')}`
+          : 'sem conciliação',
+      });
+    }
+    if (caixa.contasAplicado > 0) {
+      linhas.push({
+        rotulo: 'Investido',
+        valor: formatMoeda(caixa.aplicado),
+        detalhe: 'saldo sem rendimento · fecha no fim do mês',
+        aConferir: caixa.aConferir,
+      });
+    }
+    return linhas;
+  }, [caixa]);
+
   // ── Recortes em memória ────────────────────────────────────────────────────
   const ehPagar = (l: LinhaViewDoc) => (l.tipo_operacao ?? '').startsWith('2-');
   const ehReceber = (l: LinhaViewDoc) => (l.tipo_operacao ?? '').startsWith('1-');
@@ -803,10 +841,7 @@ export function ContasPagarReceberTab() {
             valor={caixa && caixa.ancoradas > 0 ? formatMoeda(caixa.total) : '—'}
             classeValor="text-foreground"
             borda="border-l-primary"
-            quebra={caixa && caixa.ancoradas > 0
-              ? { disponivel: caixa.disponivel, aplicado: caixa.aplicado, aConferir: caixa.aConferir }
-              : undefined}
-            nota={rotuloCaixa ?? undefined}
+            naturezas={naturezasDoCaixa}
           />
         </div>
 
@@ -1099,24 +1134,36 @@ export function ContasPagarReceberTab() {
  * Um slot do resumo. Largura vem do `grid-cols-3` do pai e NUNCA do conteúdo; a altura é
  * fixa para que a presença ou ausência do aviso não mexa na régua (A27).
  */
-function CardResumo({ rotulo, valor, classeValor, borda, quebra, nota }: {
+/** Uma natureza do caixa — o valor e o que explica a data dele. */
+interface LinhaNatureza {
+  rotulo: string;
+  valor: string;
+  /** O que se sabe sobre a conferência desta natureza. */
+  detalhe: string;
+  /** Acende o âmbar ao lado — hoje, só a permuta inconsistente. */
+  aConferir?: string[];
+}
+
+function CardResumo({ rotulo, valor, classeValor, borda, naturezas, nota }: {
   rotulo: string;
   valor: string;
   classeValor: string;
   borda: string;
   /**
-   * A segunda linha do slot — a quebra do caixa em disponível e aplicado.
+   * As linhas por NATUREZA — PR-CPR-SALDO-NATUREZA-01.
    *
-   * ⚠ "APLICADO" JUNTA INVESTIMENTO E PERMUTA, e o nome é a informação: os dois são dinheiro
-   * que existe e não está livre. Separá-los em duas linhas faria o operador somar de cabeça
-   * para responder a única pergunta que ele tem aqui — "quanto disso paga boleto amanhã?".
+   * ⚠ UMA DATA SÓ PARA AS DUAS MENTIA NA LEITURA. O card trazia "conciliado até DD/mmm" abaixo
+   * do total, e essa data era o elo fraco das contas TODAS: a mais atrasada explicando um
+   * número de que ela é só metade. Corrente e investimento fecham por relógios diferentes — a
+   * corrente confere contra o extrato do dia, o investimento só fecha no fim do mês, quando o
+   * banco calcula o rendimento —, e cada uma passa a dizer a sua.
+   * ⚠ O TOTAL NÃO MUDOU: continua sendo corrente + investido. Mudou a explicação.
    */
-  quebra?: { disponivel: number; aplicado: number; aConferir: string[] };
+  naturezas?: LinhaNatureza[];
   /**
-   * A terceira linha do slot.
-   * ⚠ ELA É MUTED, E NUNCA VERMELHA — decisão do PR-CPR-2A.1. O rótulo do caixa diz
-   * "conciliado até 31/ago · inclui setembro não conciliado", que é INFORMAÇÃO sobre até onde
-   * o número está conferido, não um defeito a corrigir. Um alarme que aparece todo mês, por
+   * A linha final do slot, para o que não é de natureza nenhuma.
+   * ⚠ ELA É MUTED, E NUNCA VERMELHA — decisão do PR-CPR-2A.1: é INFORMAÇÃO sobre até onde o
+   * número está conferido, não um defeito a corrigir. Um alarme que aparece todo mês, por
    * construção, é um alarme que o operador aprende a não ler.
    */
   nota?: string;
@@ -1128,35 +1175,40 @@ function CardResumo({ rotulo, valor, classeValor, borda, quebra, nota }: {
       <div className={cn('mt-1 truncate text-[20px] font-medium leading-none tabular-nums', classeValor)}>
         {valor}
       </div>
-      {/* ⚠ A LINHA EXISTE MESMO SEM QUEBRA (`&nbsp;`), e é o que segura o A27: os três slots do
-          resumo têm a MESMA altura, com ou sem conteúdo, então trocar de cliente não move o
-          bloco vizinho. */}
-      <div className="mt-1 flex items-baseline gap-1.5 truncate text-[9.5px] leading-none">
-        {quebra ? (
-          <>
-            <span className="truncate text-muted-foreground">
-              disponível <span className="tabular-nums text-foreground">{formatMoeda(quebra.disponivel)}</span>
-              {' · '}
-              aplicado <span className={cn('tabular-nums',
-                quebra.aplicado < 0 ? 'text-destructive' : 'text-foreground')}>
-                {formatMoeda(quebra.aplicado)}
-              </span>
-            </span>
-            {/* ⚠ ÂMBAR, NUNCA VERMELHO, E NUNCA ESCONDER O NÚMERO. Saldo de permuta negativo —
-                ou declarado que não explica os movimentos da conta — é erro de lançamento, não
-                estado válido. O conserto é frente da Conciliação; daqui sai só a visibilidade. */}
-            {quebra.aConferir.length > 0 && (
-              <span className="shrink-0 text-amber-600 dark:text-amber-400"
-                title={`Conferir: ${quebra.aConferir.join(', ')}`}>
-                ⚠ confira permuta
-              </span>
-            )}
-          </>
-        ) : <span>&nbsp;</span>}
-      </div>
-      <div className="mt-1 truncate text-[9.5px] leading-none text-muted-foreground" title={nota}>
-        {nota ?? '\u00a0'}
-      </div>
+      {/* ⚠ AS DUAS LINHAS EXISTEM SEMPRE (`&nbsp;` quando não há natureza), e é o que segura o
+          A27: os três slots do resumo têm a MESMA altura, com ou sem conteúdo, então trocar de
+          cliente não move o bloco vizinho.
+          ⚠ E O SLOT RESERVA DUAS: um cliente sem investimento mostra só a Corrente, e a outra
+          linha fica em branco em vez de o card encolher. */}
+      {[0, 1].map((i) => {
+        const n = naturezas?.[i];
+        return (
+          <div key={i}
+            className="mt-1 flex items-baseline gap-1.5 truncate text-[9.5px] leading-none">
+            {n ? (
+              <>
+                <span className="w-[52px] shrink-0 text-muted-foreground">{n.rotulo}</span>
+                <span className={cn('shrink-0 tabular-nums',
+                  n.valor.startsWith('-') ? 'text-destructive' : 'text-foreground')}>
+                  {n.valor}
+                </span>
+                <span className="truncate text-muted-foreground">{n.detalhe}</span>
+                {/* ⚠ ÂMBAR, NUNCA VERMELHO, E NUNCA ESCONDER O NÚMERO. Saldo de permuta
+                    negativo — ou declarado que não explica os movimentos da conta — é erro de
+                    lançamento, não estado válido. O conserto é frente da Conciliação; daqui
+                    sai só a visibilidade. */}
+                {n.aConferir && n.aConferir.length > 0 && (
+                  <span className="shrink-0 text-amber-600 dark:text-amber-400"
+                    title={`Conferir: ${n.aConferir.join(', ')}`}>
+                    ⚠ confira permuta
+                  </span>
+                )}
+              </>
+            ) : <span>&nbsp;</span>}
+          </div>
+        );
+      })}
+
     </div>
   );
 }

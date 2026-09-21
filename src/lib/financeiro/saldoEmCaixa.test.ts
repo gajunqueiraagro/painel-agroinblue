@@ -414,3 +414,64 @@ describe('a fronteira do verde é dinâmica — PR-CPR-2B.3.2', () => {
     expect(s.pontos.some((p) => p.conciliado)).toBe(false);
   });
 });
+
+describe('elo fraco por natureza — PR-CPR-SALDO-NATUREZA-01', () => {
+  const contas = [
+    { id: ITAU, nome: 'Itaú Personalite', tipo: 'cc' },
+    { id: BTG, nome: 'BTG Corretora', tipo: 'cc' },
+    { id: CDI, nome: 'Itaú CDI', tipo: 'inv' },
+  ];
+  /**
+   * ⚠ CENÁRIO CONSTRUÍDO, NÃO RETRATO DE CLIENTE. Os nomes vêm da Vera por conveniência, mas o
+   * que o bloco trava é o INVARIANTE: corrente e investimento podem estar conciliados até datas
+   * diferentes, e cada natureza tem de dizer a sua. Aqui a corrente fica em 31/08 e o
+   * investimento em 17/09.
+   * ⚠ E A VERA JÁ NÃO É ASSIM — em 21/09/2026 as duas naturezas dela estão em 17/09. Amarrar o
+   * teste ao estado de um cliente o faria falhar a cada conciliação feita, que é o oposto do
+   * que um teste deve fazer: ele guarda a REGRA, não o dia.
+   */
+  const saldos = [
+    saldo(ITAU, '2026-08', 30943.91, 30943.91, '2026-08-31'),   // fecha: sem movimento
+    saldo(BTG, '2026-09', 1154.08, 1154.08, '2026-09-17'),
+    saldo(CDI, '2026-09', 100207.94, 100207.94, '2026-09-17'),
+  ];
+  const base = { contas, saldos, linhas: [], hoje: HOJE, mesMinimo: JANELA };
+
+  /**
+   * ⚠ O DEFEITO QUE ISTO CONSERTA: uma data só para as duas naturezas fazia o elo fraco de uma
+   * explicar o total das duas. Corrente e investimento fecham por relógios diferentes.
+   */
+  it('cada natureza tem o seu elo fraco, e eles podem divergir', () => {
+    const r = estimarSaldoEmCaixa(base);
+    expect(r.conciliadoCorrenteAte).toBe('2026-08-31');
+    expect(r.conciliadoAplicadoAte).toBe('2026-09-17');
+    /* O elo fraco geral continua existindo — é ele que o Fluxo usa. */
+    expect(r.ancoraMaisAtrasada).toBe('2026-08-31');
+  });
+
+  it('as somas por natureza fecham no total', () => {
+    const r = estimarSaldoEmCaixa(base);
+    expect(r.disponivel).toBe(32097.99);
+    expect(r.aplicado).toBe(100207.94);
+    expect(r.disponivel + r.aplicado).toBe(r.total);
+  });
+
+  it('conta as contas de cada natureza — a linha some quando é zero', () => {
+    const r = estimarSaldoEmCaixa(base);
+    expect(r.contasCorrente).toBe(2);
+    expect(r.contasAplicado).toBe(1);
+  });
+
+  it('cliente sem investimento: o lado aplicado fica nulo e vazio', () => {
+    const r = estimarSaldoEmCaixa({ ...base, contas: contas.filter((c) => c.tipo === 'cc') });
+    expect(r.conciliadoAplicadoAte).toBeNull();
+    expect(r.contasAplicado).toBe(0);
+    expect(r.aplicado).toBe(0);
+  });
+
+  it('sem conta ancorada, as duas datas são nulas', () => {
+    const r = estimarSaldoEmCaixa({ ...base, saldos: [] });
+    expect(r.conciliadoCorrenteAte).toBeNull();
+    expect(r.conciliadoAplicadoAte).toBeNull();
+  });
+});
