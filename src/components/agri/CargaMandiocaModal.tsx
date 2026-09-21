@@ -34,10 +34,14 @@ import { useContasBancariasLeves } from '@/hooks/useContasBancariasLeves';
 import { Save, AlertTriangle, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { formatNum, formatMoeda } from '@/lib/calculos/formatters';
+import { formatNum, formatMoeda, formatarNF } from '@/lib/calculos/formatters';
 import { CampoNumero, CampoMoeda } from '@/components/ui/campo-moeda';
 import { parseMoeda } from '@/lib/calculos/numeroBR';
+import { observacoesDoOperador, temMetadadoDeMigracao } from '@/lib/agri/observacoesDaCarga';
 import { LancamentoModalEnvelope } from '@/components/lancamento/LancamentoModalEnvelope';
+import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
+import { useFinanceiroV2, type LancamentoV2 } from '@/hooks/useFinanceiroV2';
+import { useFazenda } from '@/contexts/FazendaContext';
 import {
   TIPOS_SERVICO, type ServicoDaCarga, type LancamentoTravado,
 } from '@/hooks/useCargaMandioca';
@@ -155,6 +159,37 @@ function Campo({ rotulo, valor, onChange, numerico, casas = 2, obrigatorio, dica
 }
 
 /**
+ * A NOTA FISCAL EM 000.000.000 — A25, e a máscara é SÓ DE TELA.
+ *
+ * ⚠ O DADO VAI CRU, e isto não é detalhe de estilo: `p_nf` entra na RPC como veio e
+ * `icmsJaNaNota` faz `.eq('nf_produtor', nf.trim())`. No banco a nota desta carga é `9287581` —
+ * sete dígitos, sem pontos. Gravar `009.287.581` faria a consulta do ICMS não achar a própria
+ * nota, e o imposto seria lançado duas vezes na mesma NF.
+ * ⚠ OS ZEROS ENTRAM EM REPOUSO, nunca enquanto se digita — é o que o `formatarNF` documenta:
+ * teclar "7" viraria "000.000.007" e o cursor saltaria para o fim a cada tecla. Por isso o campo
+ * mostra o texto cru enquanto tem foco e a máscara quando o perde.
+ */
+function CampoNF({ valor, onChange, dica }: {
+  valor: string; onChange: (v: string) => void; dica?: string;
+}) {
+  const [focado, setFocado] = useState(false);
+  return (
+    <div>
+      <Label className="text-[10px] text-muted-foreground">NF</Label>
+      <Input
+        value={focado ? valor : formatarNF(valor)}
+        onFocus={() => setFocado(true)}
+        onBlur={() => setFocado(false)}
+        /* ⚠ SÓ DÍGITOS NO ESTADO: se o operador colar "009.287.581", o que se guarda é
+           "009287581". A máscara é reconstruída na exibição a partir do número. */
+        onChange={e => onChange(e.target.value.replace(/\D/g, ''))}
+        title={dica}
+        className={cn('mt-0.5 h-8 text-[12px]', FOCO)} />
+    </div>
+  );
+}
+
+/**
  * Um número que a tela NÃO deixa digitar — moldura tracejada, como no modal irmão.
  *
  * ⚠ A BORDA TRACEJADA É O AVISO: um campo derivado com cara de `<input>` convida a corrigir o que
@@ -244,8 +279,41 @@ export function CargaMandiocaModal({
   /* ⚠ TAMBÉM ANTES DO EARLY RETURN — regra dos Hooks, e o `check:hooks` agora reprova o PR que a
      quebrar. Foi exatamente esta linha, na fase 1, que derrubou a Colheita em tela branca. */
   const { alterar: alterarCompromisso, salvando: salvandoFin } = useAlterarCompromisso();
-  /** Qual compromisso está com a linha de edição aberta. `null` = nenhuma. */
-  const [editandoId, setEditandoId] = useState<string | null>(null);
+  /**
+   * O compromisso aberto no modal do Financeiro. `null` = nenhum.
+   *
+   * ⚠ ELE SUBSTITUIU A EDIÇÃO INLINE de vencimento e conta (fase 2), e a troca é de escopo, não
+   * de aparência: a linha inline mudava DUAS colunas, e o frete desta carga tinha o favorecido
+   * errado — "Emerson" numa despesa paga ao "Silvio". Nenhuma das duas colunas respondia a isso.
+   * ⚠ UM CAMINHO SÓ PARA EDITAR COMPROMISSO, e é o do Financeiro. Manter os dois deixaria o
+   * operador escolhendo entre uma edição que muda tudo e outra que muda duas coisas, sem a tela
+   * dizer qual usar — e a inline salvava direto, sem confirmação, enquanto o diálogo pede Salvar.
+   */
+  const [editandoLanc, setEditandoLanc] = useState<LancamentoV2 | null>(null);
+  /* ⚠ AS FAZENDAS SÃO DO CONTEXTO, como no `AgriDreLavouraTab`: o diálogo as exige e a carga não
+     as tem. */
+  const { fazendas } = useFazenda();
+  /* ⚠ TAMBÉM ACIMA DO EARLY RETURN — o `check:hooks` reprova o PR que descer qualquer um destes. */
+  const fin = useFinanceiroV2();
+  /**
+   * OS QUATRO CATÁLOGOS DO `LancamentoV2Dialog` — e é a ausência deles que já foi defeito.
+   *
+   * ⚠ ELES NÃO SE CARREGAM SOZINHOS. `useFinanceiroV2` nasce com `contasBancarias`,
+   * `fornecedores`, `classificacoes` e `safras` VAZIOS e só os preenche quando alguém chama os
+   * `load*`. Lista vazia é lista válida: nenhum tipo acusa, o build passa, e o modal abre com
+   * "Selecione fornecedor…" e Conta em branco num lançamento que tem os dois — e Salvar grava
+   * nulo por cima. Esta é a QUARTA tela a copiar o aviso: `AgriBarterTab`, `AgriDreCulturaTab` e
+   * `AgriDreLavouraTab` o escreveram antes, com estas palavras.
+   */
+  useEffect(() => {
+    void fin.loadContas();
+    void fin.loadClassificacoes();
+    void fin.loadFornecedores();
+    void fin.loadSafras();
+  }, [fin.loadContas, fin.loadClassificacoes, fin.loadFornecedores, fin.loadSafras]);
+  /* Os quatro prontos — sem eles o formulário mente sobre o que o lançamento tem. */
+  const catalogosProntos = fin.contasBancarias.length > 0 && fin.fornecedores.length > 0
+    && fin.safras.length > 0 && fin.classificacoes.length > 0;
 
   /* ⚠ O VALOR GRAVADO SOME QUANDO O ROMANEIO MUDA: ele é a resposta da RPC para os números
      ANTERIORES, e mantê-lo na tela depois de mexer no peso mostraria o valor de uma carga que não
@@ -261,22 +329,19 @@ export function CargaMandiocaModal({
   const campo = (k: keyof CargaMandiocaForm, v: string) => onChange({ ...form, [k]: v, valorBruto: null });
 
   /**
-   * Salva um ajuste de vencimento ou conta de UM compromisso.
+   * Abre UM compromisso no modal do Financeiro.
    *
-   * ⚠ NÃO PASSA PELA CARGA: é um `update` pontual num lançamento, não uma reconstrução. Por isso
-   * não esbarra na trava do salvar nem na guarda do `corrigir` — e por isso a aba Financeiro pode
-   * ser interativa enquanto o resto do modal segue travado.
-   * ⚠ RECARREGA DEPOIS DE GRAVAR, porque o estado pode ter mudado com o que o banco fez; e o erro
-   * vai inteiro para o toast, com a frase que a RPC escreveu.
+   * ⚠ NÃO PASSA PELA CARGA: é a edição do lançamento, não uma reconstrução. Por isso não esbarra
+   * na trava do salvar nem na guarda do `corrigir` — e por isso a aba Financeiro é editável
+   * enquanto o resto do modal segue em leitura.
+   * ⚠ O LOADER É O DO FINANCEIRO, não um `select` próprio: `buscarLancamentoPorId` faz a mesma
+   * consulta, e ter as duas é ter duas donas do mesmo `select` — a coluna que uma ganhar, a outra
+   * não ganha.
    */
-  const salvarCompromisso = async (
-    lancamentoId: string, campos: { vencimento?: string; contaId?: string },
-  ) => {
-    if (!clienteId) return;
-    const r = await alterarCompromisso(clienteId, lancamentoId, campos);
-    if (!r.ok) { toast.error(r.erro ?? 'Não foi possível alterar o compromisso.'); return; }
-    setEditandoId(null);
-    recarregarFin();
+  const abrirCompromisso = async (lancamentoId: string) => {
+    const linha = await fin.buscarLancamentoPorId(lancamentoId);
+    if (linha) setEditandoLanc(linha);
+    else toast.error('Não foi possível abrir este compromisso.');
   };
   /**
    * ⚠ CORRIGIR ESTÁ TRAVADO — PR-CARGA-MANDIOCA-TRAVAR-CORRIGIR, e isto é contenção, não desenho.
@@ -404,7 +469,16 @@ export function CargaMandiocaModal({
             </div>
           )}>
 
-          <div className="flex min-h-0 flex-col">
+          {/* ⚠ A ROLAGEM DESCE PARA O NÍVEL CERTO — A21, e o conserto NÃO é um `sticky` no cabeçalho
+              azul. Ele já não rolava: é irmão do scrollport do envelope, não filho. Quem subia
+              eram a faixa de abas e as quatro caixas de totais, porque moravam DENTRO da coluna
+              que rola (`LancamentoModalEnvelope:92`). Trocar de aba com a lista rolada deixava o
+              operador sem as abas na tela.
+              ⚠ `h-full` É O QUE DÁ ALTURA A ISTO. Sem ela o filho cresce à vontade e o
+              `overflow-y-auto` de baixo nunca tem o que conter — era o caso. Em telas estreitas o
+              grid do envelope é de uma coluna e não passa altura: ali a rolagem continua sendo a
+              de fora, como hoje. */}
+          <div className="flex h-full min-h-0 flex-col">
             {/* ⚠ O SEGMENTADO DA CASA, não os botões manuais da OC — e aqui a diferença é
                 decisão, não gosto. Os três shells da OC marcam a aba aberta de DUAS formas
                 diferentes entre si (sublinhado na Compra, pílula na Venda e no Abate), e o mock
@@ -421,7 +495,7 @@ export function CargaMandiocaModal({
                 ]} />
             </div>
 
-            <div className="flex flex-col gap-2 rounded-b-md border border-t-0 bg-card p-2.5">
+            <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto rounded-b-md border border-t-0 bg-card p-2.5">
               {/* ⚠ A RECUSA APARECE INTEIRA E NO TOPO. `_cancelar` devolve a lista de lançamentos
                   já realizados ou conciliados e NÃO muda nada; dizer só "não foi possível" deixaria
                   o operador sem saber qual baixa desfazer no Financeiro. */}
@@ -496,19 +570,35 @@ export function CargaMandiocaModal({
                     conta da ÚLTIMA carga deste talhão, no mesmo contrato âmbar dos preços de
                     serviço — proposta que o operador confere, nunca decisão da tela. */}
                 <div className="grid grid-cols-[2fr_1.4fr_1fr_1fr] items-end gap-2">
+                  {/* ⚠ O RÓTULO É DAQUI, NÃO DO SELETOR — A16, mesma altura na mesma linha. O
+                      `FornecedorSelect` separa rótulo e controle com `space-y-1` (4px) e todo o
+                      resto desta linha usa `mt-0.5` (2px): dois pixels, e o bloco do Comprador
+                      subia acima dos três vizinhos.
+                      ⚠ CEDE O LOCAL, NÃO O COMPARTILHADO: o seletor é usado em dezenas de telas e
+                      mudar o espaçamento dele para acertar esta linha mexeria em todas. Sem `label`
+                      ele não imprime rótulo nenhum, e o `space-y-1` com um filho só não separa
+                      nada — então o alinhamento passa a ser o dos vizinhos. O `*` vem junto porque
+                      era o `required` do seletor que o desenhava. */}
                   {clienteId ? (
-                    <FornecedorSelect
-                      clienteId={clienteId}
-                      label="Comprador"
-                      required
-                      placeholder="A indústria que recebe a carga"
-                      fornecedorId={form.industriaId}
-                      onFornecedorChange={(id, nome) =>
-                        onChange({ ...form, industriaId: id, industriaNome: nome, valorBruto: null })}
-                    />
+                    <div>
+                      <Label className="text-[10px] text-muted-foreground">
+                        Comprador<span className="ml-0.5 text-destructive">*</span>
+                      </Label>
+                      <div className="mt-0.5">
+                        <FornecedorSelect
+                          clienteId={clienteId}
+                          placeholder="A indústria que recebe a carga"
+                          fornecedorId={form.industriaId}
+                          onFornecedorChange={(id, nome) =>
+                            onChange({ ...form, industriaId: id, industriaNome: nome, valorBruto: null })}
+                        />
+                      </div>
+                    </div>
                   ) : <div />}
                   <div>
-                    <Label className="text-[10px]">Conta *</Label>
+                    <Label className="text-[10px] text-muted-foreground">
+                      Conta<span className="ml-0.5 text-destructive">*</span>
+                    </Label>
                     <ContaBancariaSelect
                       value={form.contaId ?? '__none__'}
                       onValueChange={v => onChange({ ...form, contaId: v === '__none__' ? null : v, valorBruto: null })}
@@ -520,7 +610,7 @@ export function CargaMandiocaModal({
                       className={cn('mt-0.5 h-8 text-[12px]', FOCO)}
                     />
                   </div>
-                  <Campo rotulo="NF" valor={form.nf} onChange={v => campo('nf', v)}
+                  <CampoNF valor={form.nf} onChange={v => campo('nf', v)}
                     dica="A nota da indústria — é ela que agrupa o ICMS." />
                   <Campo rotulo="Ticket" valor={form.ticket} onChange={v => campo('ticket', v)} />
                 </div>
@@ -549,8 +639,24 @@ export function CargaMandiocaModal({
                     dica={form.valorBruto == null
                       ? 'A indústria fecha o valor: ele aparece depois de salvar, como a RPC gravou.'
                       : 'O valor do lançamento de venda desta carga.'} />
-                  <Campo rotulo="Observações" valor={form.observacoes}
-                    onChange={v => campo('observacoes', v)} />
+                  {/* ⚠ O CAMPO MOSTRA O QUE O OPERADOR ESCREVEU, não o que a migração escreveu.
+                      As 21 cargas ativas trazem "dividida por area entre IND.05 e IND.06 ...
+                      backfill 16/09/2026" e nenhuma tem palavra de gente — e depois da fusão essa
+                      frase virou mentira, porque a carga é UMA.
+                      ⚠ ESCONDER NÃO É APAGAR, e a dica diz isso: o texto continua na coluna, para
+                      quem for auditar o backfill. Limpar o banco é um UPDATE, e é decisão do
+                      Gabriel — o front só parou de repetir o metadado. */}
+                  <div>
+                    <Label className="text-[10px] text-muted-foreground">Observações</Label>
+                    <Input
+                      value={observacoesDoOperador(form.observacoes)}
+                      onChange={e => campo('observacoes', e.target.value)}
+                      title={temMetadadoDeMigracao(form.observacoes)
+                        ? 'Esta carga tem uma nota do backfill guardada no banco, que a tela não '
+                          + 'mostra. O que você escrever aqui substitui o que aparece.'
+                        : undefined}
+                      className={cn('mt-0.5 h-8 text-[12px]', FOCO)} />
+                  </div>
                 </div>
 
                 {/* ── NOTA ── */}
@@ -671,12 +777,23 @@ export function CargaMandiocaModal({
                   compromisso a pagar, que a conciliação vira "Pago" sozinha pelo gatilho. */}
               {aba === 'financeiro' && (
                 <>
-                  <BlocoTopoAba itens={[
-                    { rotulo: 'A receber', valor: topoFin.aReceber > 0 ? formatMoeda(topoFin.aReceber) : null },
-                    { rotulo: 'Recebido', valor: topoFin.recebido > 0 ? formatMoeda(topoFin.recebido) : null },
-                    { rotulo: 'Despesas', valor: topoFin.despesas > 0 ? formatMoeda(topoFin.despesas) : null },
-                    { rotulo: 'Pagas', valor: topoFin.pagas > 0 ? formatMoeda(topoFin.pagas) : null },
-                  ]} />
+                  {/* ⚠ OS TOTAIS FICAM — A21, "cabeçalho e totais fixos, só o corpo rolando".
+                      E aqui o `sticky` FUNCIONA porque o scrollport passou a existir logo acima:
+                      ele ancora no ascendente que rola, e esta tela agora tem um. Escrever este
+                      mesmo `sticky` antes daquela mudança não teria feito nada — foi o que já
+                      aconteceu duas vezes na casa, na lista de movimentações e na prévia do
+                      custeio.
+                      ⚠ FUNDO OPACO E `z` ACIMA, pela mesma regra: transparente é pior que não
+                      fixar, porque as linhas passariam por baixo do número que se confere.
+                      O `-m*`/`p*` devolve a borda de sangria que o padding do container comeria. */}
+                  <div className="sticky top-0 z-10 -mx-2.5 -mt-2.5 bg-card px-2.5 pt-2.5">
+                    <BlocoTopoAba itens={[
+                      { rotulo: 'A receber', valor: topoFin.aReceber > 0 ? formatMoeda(topoFin.aReceber) : null },
+                      { rotulo: 'Recebido', valor: topoFin.recebido > 0 ? formatMoeda(topoFin.recebido) : null },
+                      { rotulo: 'Despesas', valor: topoFin.despesas > 0 ? formatMoeda(topoFin.despesas) : null },
+                      { rotulo: 'Pagas', valor: topoFin.pagas > 0 ? formatMoeda(topoFin.pagas) : null },
+                    ]} />
+                  </div>
 
                   {carregandoFin ? (
                     <p className="px-1 py-6 text-center text-[11px] text-muted-foreground">
@@ -692,7 +809,33 @@ export function CargaMandiocaModal({
                     <div className="rounded-md border divide-y divide-border/60">
                       {compromissos.map(c => (
                         <div key={c.lancamentoId}>
-                        <div className="flex items-center gap-2 px-2.5 py-[7px] leading-[1.35]">
+                        {/* ⚠ A LINHA INTEIRA ABRE O COMPROMISSO — Decisão B. O alvo é a linha e
+                            não um ícone de 12px na ponta: é nela que o operador já está olhando
+                            quando decide que o número está errado.
+                            ⚠ `<div role="button">` E NÃO `<button>`: a linha contém a pílula com
+                            `title` e os números alinhados, e um `<button>` os achataria para o seu
+                            próprio alinhamento de texto. O `tabIndex` e o Enter/Espaço devolvem o
+                            teclado que o elemento nativo daria.
+                            ⚠ CATÁLOGO VAZIO NÃO ABRE: sem os quatro `load*`, o diálogo mostraria
+                            fornecedor e conta em branco num lançamento que os tem — e Salvar
+                            gravaria nulo por cima. Enquanto carregam, a linha não é clicável e o
+                            cursor não promete o que a tela não pode cumprir. */}
+                        <div
+                          {...(c.editavel && catalogosProntos ? {
+                            role: 'button' as const,
+                            tabIndex: 0,
+                            onClick: () => { void abrirCompromisso(c.lancamentoId); },
+                            onKeyDown: (e: React.KeyboardEvent) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                void abrirCompromisso(c.lancamentoId);
+                              }
+                            },
+                            title: 'Abrir o compromisso no Financeiro',
+                          } : {})}
+                          className={cn('flex items-center gap-2 px-2.5 py-[7px] leading-[1.35]',
+                            c.editavel && catalogosProntos
+                              && 'cursor-pointer hover:bg-accent/40 focus-visible:bg-accent/40 focus-visible:outline-none')}>
                           {/* O ponto repete a cor da pílula: a linha se lê de longe sem ler o texto. */}
                           <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full',
                             c.status === 'pago' ? 'bg-emerald-500'
@@ -734,50 +877,18 @@ export function CargaMandiocaModal({
                                 operador precisa para decidir se cobra ou espera. */}
                             {c.status === 'parcial' && ` · falta ${formatMoeda(c.falta)}`}
                           </span>
-                          {/* ⚠ O `⋯` SÓ APARECE NO QUE PODE MUDAR. Compromisso conciliado mostra
-                              cadeado com o motivo — a mesma regra do ICMS travado da aba Colheita:
-                              avisar ANTES de o operador digitar, não depois de a RPC recusar. */}
-                          {c.editavel ? (
-                            <button type="button"
-                              className="shrink-0 rounded px-1 text-[12px] leading-none text-muted-foreground hover:text-foreground"
-                              title="Mudar vencimento ou conta"
-                              onClick={() => setEditandoId(editandoId === c.lancamentoId ? null : c.lancamentoId)}>
-                              ⋯
-                            </button>
-                          ) : (
+                          {/* ⚠ O CADEADO SÓ NO QUE NÃO PODE MUDAR, e com o motivo no `title` — a
+                              mesma regra do ICMS travado da aba Colheita: avisar ANTES de o
+                              operador tentar, não depois de a RPC recusar.
+                              ⚠ E O `⋯` SAIU: a linha inteira é o botão, então um segundo alvo de
+                              clique ao lado dela só criaria a dúvida sobre qual dos dois abre o
+                              quê. Quem não é editável não vira botão e mostra o cadeado. */}
+                          {!c.editavel && (
                             <span className="shrink-0 px-1" title={c.motivoTravado ?? undefined}>
                               <Lock className="h-2.5 w-2.5 text-muted-foreground" />
                             </span>
                           )}
                         </div>
-                        {editandoId === c.lancamentoId && c.editavel && (
-                          <div className="flex flex-wrap items-end gap-2 border-t bg-muted/20 px-2.5 py-2">
-                            <div>
-                              <Label className="text-[10px]">Vencimento</Label>
-                              <DatePicker value={c.dataVencimento ?? ''} size="compact"
-                                className="mt-0.5 w-[118px]"
-                                onChange={v => { void salvarCompromisso(c.lancamentoId, { vencimento: v }); }} />
-                            </div>
-                            <div className="w-[190px]">
-                              <Label className="text-[10px]">Conta</Label>
-                              <ContaBancariaSelect
-                                value={c.contaId ?? '__none__'}
-                                onValueChange={v => {
-                                  if (v === '__none__') return;
-                                  void salvarCompromisso(c.lancamentoId, { contaId: v });
-                                }}
-                                contas={contas.map(x => ({
-                                  id: x.id, nome_conta: x.nome_conta, nome_exibicao: x.nome_exibicao,
-                                  tipo_conta: x.tipo_conta ?? null,
-                                }))}
-                                placeholder="Quem paga"
-                                className={cn('mt-0.5 h-8 text-[12px]', FOCO)} />
-                            </div>
-                            <span className="pb-2 text-[10px] text-muted-foreground">
-                              {salvandoFin ? 'Salvando…' : 'Só o vencimento e a conta; o valor vem da carga.'}
-                            </span>
-                          </div>
-                        )}
                       </div>
                     ))}
                     </div>
@@ -789,6 +900,33 @@ export function CargaMandiocaModal({
           </div>
         </LancamentoModalEnvelope>
       </DialogContent>
+
+      {/* ⚠ IRMÃO DO `DialogContent`, NÃO FILHO — o padrão do `ConciliarExtratoDialog` (linha 635),
+          que é o outro diálogo da casa a abrir este por cima de si. Dentro do conteúdo ele herdaria
+          o `onInteractOutside` que este modal bloqueia, e fechar o de cima fecharia os dois.
+          ⚠ `carregando` ENQUANTO OS CATÁLOGOS NÃO CHEGAM: formulário editável com seletor vazio é
+          o caminho para gravar nulo por cima de dado bom. Esqueleto e Salvar travado até os quatro
+          estarem na mão. */}
+      <LancamentoV2Dialog
+        open={!!editandoLanc}
+        carregando={!catalogosProntos}
+        onClose={() => setEditandoLanc(null)}
+        onSave={async (formLanc, id) => {
+          const ok = id ? await fin.editarLancamento(id, formLanc) : false;
+          /* ⚠ RECARREGA A CARGA INTEIRA, não só a linha: valor, favorecido e vencimento alimentam
+             as quatro caixas do topo, o resumo lateral e o resultado da carga. Atualizar só a
+             lista deixaria o total dizendo um número e a linha dele, outro, na mesma tela. */
+          if (ok) recarregarFin();
+          return ok;
+        }}
+        lancamento={editandoLanc}
+        fazendas={fazendas}
+        contas={fin.contasBancarias}
+        classificacoes={fin.classificacoes}
+        fornecedores={fin.fornecedores}
+        safras={fin.safras}
+        onCriarFornecedor={fin.criarFornecedor}
+      />
     </Dialog>
   );
 }
