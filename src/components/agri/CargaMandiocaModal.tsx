@@ -201,6 +201,25 @@ export function CargaMandiocaModal({
   if (!form) return null;
 
   const campo = (k: keyof CargaMandiocaForm, v: string) => onChange({ ...form, [k]: v, valorBruto: null });
+  /**
+   * ⚠ CORRIGIR ESTÁ TRAVADO — PR-CARGA-MANDIOCA-TRAVAR-CORRIGIR, e isto é contenção, não desenho.
+   *
+   * `agri_carga_mandioca_corrigir` é `cancelar + registrar`: ela apaga a carga e a recria com o
+   * que o formulário mandar. E o formulário reaberto NÃO tem o que recriar — os serviços voltam
+   * em branco por decisão declarada, e `abrirCargaMandioca` nunca leu `icms` nem `funrural`.
+   * Salvar uma carga reaberta apagava frete, trator, mão de obra, ICMS e Funrural, sem aviso.
+   * ⚠ E FUNDIA AS METADES: `corrigir` usa `ids[0]` como principal, manda o peso da METADE que a
+   * tela mostra e cancela o resto. Medido em 21/09/2026 na NF 9287581 — 40,34 t viraram 12,15 t,
+   * seis lançamentos viraram um, R$ 16.402,85 sumiram. 20 das 21 cargas vivas têm duas metades.
+   * ⚠ O DEFEITO É ANTIGO; o que mudou foi a barreira que o escondia. Até o conserto da leitura do
+   * peso (PR-CARGA-MANDIOCA-PESO-P0-01) o campo abria vazio e a RPC recusava com "peso bruto
+   * obrigatorio" — corrigir simplesmente não funcionava. Com o peso preenchido, passou a gravar.
+   * ⚠ `ids.length > 0` É O MESMO DISCRIMINADOR QUE O GRAVADOR USA (`CargasDaArea`, no despacho
+   * entre `corrigir` e `registrar`). Travar por outro critério abriria uma terceira resposta para
+   * a pergunta "esta carga já existe?".
+   * A trava sai quando o modal souber editar a carga INTEIRA e devolver serviços e impostos.
+   */
+  const corrigindo = form.ids.length > 0;
   const t = toneladasDaCarga(form.pesoBrutoKg, form.descontoKg);
   const traco = (v: number | null, casas = 2, sufixo = '') =>
     (v == null ? '—' : `${formatNum(v, casas)}${sufixo}`);
@@ -236,7 +255,13 @@ export function CargaMandiocaModal({
           fazendaNome={fazendaNome}
           onFechar={onFechar}
           acao={(
-            <Button type="button" variant="acao" onClick={onSalvar} disabled={salvando}
+            <Button type="button" variant="acao" onClick={onSalvar}
+              disabled={salvando || corrigindo}
+              /* ⚠ O MOTIVO TAMBÉM NO `title`, além do aviso no corpo — regra da OC: botão
+                 desabilitado diz por quê, e a mesma frase governa os dois. */
+              title={corrigindo
+                ? 'Edição de carga em reconstrução — salvar apagaria os serviços e os impostos.'
+                : undefined}
               className="gap-1">
               <Save className="h-4 w-4" /> {salvando ? 'Salvando…' : 'Salvar carga'}
             </Button>
@@ -296,6 +321,23 @@ export function CargaMandiocaModal({
               {/* ⚠ A RECUSA APARECE INTEIRA E NO TOPO. `_cancelar` devolve a lista de lançamentos
                   já realizados ou conciliados e NÃO muda nada; dizer só "não foi possível" deixaria
                   o operador sem saber qual baixa desfazer no Financeiro. */}
+              {/* ⚠ O AVISO VEM ANTES DE TUDO e diz o que se PERDERIA, não "não é possível": o
+                  operador precisa saber que o risco é apagar lançamentos, senão ele tenta de novo
+                  por outro caminho. */}
+              {corrigindo && (
+                <div className="rounded-md border border-amber-500/50 bg-amber-50 p-2 dark:border-amber-500/40 dark:bg-amber-950/30">
+                  <div className="flex items-center gap-1 text-[10px] font-semibold text-amber-800 dark:text-amber-300">
+                    <AlertTriangle className="h-3 w-3" />
+                    Edição de carga em reconstrução — não é possível salvar por ora
+                  </div>
+                  <p className="mt-1 text-[10px] leading-snug text-amber-800/90 dark:text-amber-300/90">
+                    Salvar recriaria a carga do zero e ela perderia os serviços e os impostos, que
+                    não voltam preenchidos nesta tela. Para conferir os números, a carga está
+                    aberta aqui em leitura.
+                  </p>
+                </div>
+              )}
+
               {travados.length > 0 && (
                 <div className="rounded-md border border-destructive/40 bg-destructive/5 p-2">
                   <div className="flex items-center gap-1 text-[10px] font-semibold text-destructive">

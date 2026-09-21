@@ -451,6 +451,16 @@ export function CargasDaArea({
   const gravarMandioca = async () => {
     const f = formMandioca;
     if (!f || !clienteId) return;
+    /* ⚠ A TRAVA DE CORRIGIR MORA AQUI TAMBÉM — PR-CARGA-MANDIOCA-TRAVAR-CORRIGIR, e não é
+       redundância: o botão desabilitado é o aviso, esta linha é a trava. O dano acontece neste
+       handler, e `corrigir` apaga a carga antes de recriá-la — um Enter num campo, um atalho ou um
+       caminho futuro que chame `gravarMandioca` sem passar pelo botão bastaria.
+       ⚠ E O TOAST REPETE O QUE O MODAL JÁ DIZ, de propósito: quem chegar aqui não está olhando o
+       aviso do topo. */
+    if (f.ids.length > 0) {
+      toast.error('Edição de carga está em reconstrução — salvar apagaria os serviços e os impostos.');
+      return;
+    }
     if (!areaId) { toast.error('Escolha o talhão desta carga antes de salvar.'); return; }
     if (!f.industriaId) { toast.error('Escolha o comprador — a indústria que recebe a carga.'); return; }
     const bruto = parseMoeda(f.pesoBrutoKg);
