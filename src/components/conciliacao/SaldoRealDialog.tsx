@@ -11,7 +11,8 @@ import { formatMoeda } from '@/lib/calculos/formatters';
 import { saldoConfere } from '@/lib/financeiro/conciliacaoCalc';
 import {
   gravarSaldoReal, removerSaldoReal, fimDoMes,
-  useSaldoDeclaradoOfx, useSaldoDocumentos,
+  useSaldoDeclaradoOfx, useSaldoDocumentos, useSaldoGerencialDoMes,
+  useSaldoSistemaNaPosicao, useExtratoFimDoMes,
   anexarSaldoDocumento, cancelarSaldoDocumento, urlAssinadaSaldoDocumento,
 } from '@/hooks/useExtratoDaConta';
 import { TIPOS_ACEITOS } from '@/hooks/useLancamentoDocumentos';
@@ -50,18 +51,13 @@ interface Props {
   saldoAtual: number | null;
   /** Posição atual declarada; `null` = nunca informada (o modal propõe o fim do mês). */
   saldoDataAtual: string | null;
-  /** Saldo do sistema da linha da conta no card; `null` = a tela não o tem.
-      Ausente (`undefined`) = o chamador não repassa o resumo, e o bloco não aparece. */
-  saldoSistema?: number | null;
-  /** Diferença da linha da conta no card; `null` = sem saldo de extrato (ausência, não zero). */
-  diferenca?: number | null;
   aoFechar: () => void;
   aoSalvar: () => void | Promise<void>;
 }
 
 export function SaldoRealDialog({
   clienteId, contaId, contaNome, ano, mes,
-  saldoAtual, saldoDataAtual, saldoSistema, diferenca, aoFechar, aoSalvar,
+  saldoAtual, saldoDataAtual, aoFechar, aoSalvar,
 }: Props) {
   const anoMes = `${ano}-${String(mes).padStart(2, '0')}`;
   const jaInformado = saldoAtual !== null;
@@ -75,6 +71,30 @@ export function SaldoRealDialog({
      declarou e os anexos do extrato. Nenhum dos dois grava saldo; quem prevalece é o
      saldo informado aqui. */
   const { ofx } = useSaldoDeclaradoOfx(clienteId, contaId, ano, mes);
+  /**
+   * ⚠ O MODAL VIROU CONFERÊNCIA VIVA — PR-CONC-MODAL-SALDO-DATA-01, e isto INVERTE de propósito
+   * a decisão do PR-CONCILIACAO-CARDS-01a ("os números gravados, não os digitados").
+   *
+   * Aquela decisão fazia sentido quando o bloco só ecoava a linha do card. Mas o modal existe
+   * para o operador DIGITAR um saldo e uma data, e um número que não reage à data digitada não
+   * confere coisa nenhuma: ao declarar 21/09 ele comparava contra o mês inteiro e acusava uma
+   * diferença que era só o movimento dos dias seguintes.
+   * ⚠ MEDIDO na Itaú Personalite da Vera: posição 17/09, declarado 155.749,72. O sistema ATÉ
+   * 17/09 é 155.746,78 (diferença real 2,94, o rendimento provisionado); o sistema do MÊS
+   * INTEIRO é 96.937,72, e era ele que a tela mostrava — diferença falsa de 58.812,00,
+   * inteiramente composta pelos lançamentos de 18 a 20/09 descontados de uma posição de 17.
+   * ⚠ A SOMA NÃO É NOVA: `useSaldoSistemaNaPosicao` já faz exatamente "saldo inicial do mês
+   * mais os realizados até a posição", e é a mesma função que o card do Extrato usa.
+   * ⚠ E ELA HERDA UMA INCOERÊNCIA DE FILTRO: o hook pede `cenario='realizado'` sem exigir
+   * `status_transacao='realizado'` — a mesma que o card da CPR corrigiu em db5c900c. Na Vera
+   * não muda nada (ela não tem linha nesse estado); no NJ mudaria. Consertar ali afeta
+   * `AcoesDoMes` e `PainelExtratoMes`, então fica PR próprio. Aqui só se registra a herança.
+   */
+  const gerencial = useSaldoGerencialDoMes(clienteId, contaId, ano, mes);
+  /* `data` é o campo "Posição em" — a soma segue o que o operador digita, ao vivo. */
+  const sistemaNaData = useSaldoSistemaNaPosicao(
+    clienteId, contaId, anoMes, gerencial.saldoInicial, data);
+  const extratoFim = useExtratoFimDoMes(clienteId, contaId, ano, mes);
   const anexos = useSaldoDocumentos(clienteId, contaId, ano, mes);
   const inputArquivo = useRef<HTMLInputElement>(null);
   const [anexando, setAnexando] = useState(false);
@@ -142,9 +162,32 @@ export function SaldoRealDialog({
     await anexos.recarregar();
   };
 
-  /* O OFX é comparado com o saldo GRAVADO, não com o digitado — pela mesma razão do
-     bloco sistema/diferença: número que muda enquanto se digita não confere nada. */
-  const difOfx = ofx && saldoAtual !== null ? Math.round((ofx.valor - saldoAtual) * 100) / 100 : null;
+  /**
+   * A DIFERENÇA DO MODAL — saldo VISUAL contra SISTEMA, ambos na data declarada.
+   *
+   * ⚠ É A ÚNICA DIFERENÇA QUE ESTA TELA MOSTRA. O OFX deixou de gerar a sua (ver abaixo):
+   * são duas conciliações independentes, e a visual é a principal.
+   */
+  const dif = valor !== null && sistemaNaData.saldoSistema !== null
+    ? Math.round((valor - sistemaNaData.saldoSistema) * 100) / 100
+    : null;
+
+  /**
+   * ⚠ A RÉGUA DO "CONFERE" NÃO MUDA — continua `saldoConfere`, zero em centavos. A doutrina do
+   * PR-CONCILIACAO-TOLERANCIA-ZERO-02 é que divergência de centavo não bloqueia nada mas TEM
+   * de aparecer: é ela que denuncia o lançamento digitado com um algarismo a menos. Criar uma
+   * tolerância própria deste modal quebraria a régua única do sistema.
+   * ⚠ O QUE MUDA É A COR. Uma diferença pequena e POSITIVA — o banco tendo mais que o sistema —
+   * é quase sempre provisão de rendimento ainda não lançada, e pintá-la de vermelho ensina o
+   * operador a ignorar o vermelho. Em âmbar, o número continua visível e para de gritar erro.
+   * ⚠ O LIMIAR É R$ 50,00 e o SINAL importa. Positivo e pequeno é rendimento a lançar; qualquer
+   * valor NEGATIVO (o sistema tendo mais que o banco) é dinheiro que o extrato não confirma, e
+   * isso é vermelho em qualquer tamanho. Cinquenta reais cobre rendimento de conta corrente e
+   * de investimento pequeno sem chegar perto de uma tarifa ou de um lançamento esquecido.
+   */
+  const LIMIAR_RENDIMENTO = 50;
+  const provavelRendimento = dif !== null && !saldoConfere(dif)
+    && dif > 0 && dif <= LIMIAR_RENDIMENTO;
 
   const remover = async () => {
     setOcupado(true);
@@ -186,46 +229,66 @@ export function SaldoRealDialog({
             </div>
           </div>
 
-          {/* O que o arquivo do banco declarou (LEDGERBAL). Sem OFX com saldo no mês a linha
-              não aparece: ausência não se mostra como zero. */}
-          {ofx && (
+          {/* ⚠ O OFX É REFORÇO, NUNCA VEREDITO — PR-CONC-MODAL-SALDO-DATA-01. São duas
+              conciliações independentes: a VISUAL (o operador confere o PDF do banco e declara
+              saldo e data) é a principal, e o extrato só a reforça até onde alcança. Não ter
+              OFX de depois da data declarada não desfaz conferência nenhuma.
+              ⚠ POR ISSO A LINHA PERDEU A DIFERENÇA E O VERMELHO. Ela comparava o `LEDGERBAL`
+              com o saldo gravado e pintava de destrutivo — transformando "o arquivo é mais
+              antigo que a sua conferência" em erro, que é o oposto do que é.
+              ⚠ E A DATA MUDOU DE FONTE: era o `saldo_declarado_data` do OFX, que existe em só
+              4 das 64 importações vivas do proto (o `LEDGERBAL` é opcional no arquivo). Agora é
+              o último movimento importado, que existe para toda conta com extrato. O valor
+              declarado continua aparecendo quando há, porque é conferência de graça. */}
+          {(extratoFim || ofx) && (
           <div className="space-y-0.5 rounded border bg-muted/30 px-2 py-1.5">
-            <div className="flex justify-between" title={ofx.nomeArquivo ?? undefined}>
-              <span className="text-[10px] text-muted-foreground">OFX em {ofx.data.slice(8, 10)}/{ofx.data.slice(5, 7)}</span>
-              <span className="text-[11px] tabular-nums">{formatMoeda(ofx.valor)}</span>
+            <div className="flex items-baseline justify-between gap-2" title={ofx?.nomeArquivo ?? undefined}>
+              <span className="text-[10px] text-muted-foreground">
+                {extratoFim
+                  ? `OFX validado até ${extratoFim.slice(8, 10)}/${extratoFim.slice(5, 7)}`
+                  : `OFX em ${ofx!.data.slice(8, 10)}/${ofx!.data.slice(5, 7)}`}
+              </span>
+              {ofx && <span className="text-[11px] tabular-nums text-muted-foreground">{formatMoeda(ofx.valor)}</span>}
             </div>
-            {difOfx !== null && (
-              <div className="flex justify-between">
-                <span className="text-[10px] text-muted-foreground">contra o saldo gravado</span>
-                <span className={`text-[11px] tabular-nums ${saldoConfere(difOfx) ? 'text-success' : 'font-semibold text-destructive'}`}>
-                  {saldoConfere(difOfx) ? 'confere' : formatMoeda(difOfx)}
-                </span>
+            {/* Informação, não pendência: o extrato é mais antigo que a posição declarada. */}
+            {extratoFim && data > extratoFim && (
+              <div className="text-[9.5px] leading-tight text-muted-foreground">
+                reimporte um extrato mais recente para reforçar até {data.slice(8, 10)}/{data.slice(5, 7)}
               </div>
             )}
           </div>
           )}
 
-          {/* ⚠ OS NÚMEROS GRAVADOS, NÃO OS DIGITADOS — PR-CONCILIACAO-CARDS-01a. São os
-              mesmos da linha da conta no card, repassados pela tela; nada é recalculado
-              aqui, e por isso não mudam enquanto se digita. */}
-          {saldoSistema !== undefined && (
+          {/* ⚠ AO VIVO, na data que está no campo — ver a nota longa no topo do componente. */}
           <div className="space-y-0.5 rounded border bg-muted/30 px-2 py-1.5">
             <div className="flex justify-between">
               <span className="text-[10px] text-muted-foreground">
-                sistema em {dataBr(saldoDataAtual ?? fimDoMes(ano, mes))}
+                sistema em {dataBr(data)}
               </span>
               <span className="text-[11px] tabular-nums">
-                {saldoSistema === null ? '—' : formatMoeda(saldoSistema)}
+                {sistemaNaData.carregando ? '…'
+                  : sistemaNaData.saldoSistema === null ? '—'
+                  : formatMoeda(sistemaNaData.saldoSistema)}
               </span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-[10px] text-muted-foreground">diferença</span>
-              <span className={`text-[11px] tabular-nums ${diferenca == null ? 'text-muted-foreground' : saldoConfere(diferenca) ? 'text-success' : 'font-semibold text-destructive'}`}>
-                {diferenca == null ? '—' : saldoConfere(diferenca) ? 'confere' : formatMoeda(diferenca)}
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-[10px] text-muted-foreground">
+                diferença
+                {provavelRendimento && (
+                  <span className="ml-1 text-[9.5px] text-amber-600 dark:text-amber-400">
+                    provisão de rendimento?
+                  </span>
+                )}
+              </span>
+              <span className={`text-[11px] tabular-nums ${
+                dif == null ? 'text-muted-foreground'
+                : saldoConfere(dif) ? 'text-success'
+                : provavelRendimento ? 'font-semibold text-amber-600 dark:text-amber-400'
+                : 'font-semibold text-destructive'}`}>
+                {dif == null ? '—' : saldoConfere(dif) ? 'confere' : formatMoeda(dif)}
               </span>
             </div>
           </div>
-          )}
 
           {/* Anexos do extrato — prova visual. Gravam na hora, independente do Informar/
               Atualizar do saldo. A lista rola sozinha a partir do 4º arquivo; o modal não. */}

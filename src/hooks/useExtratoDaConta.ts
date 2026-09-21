@@ -508,6 +508,47 @@ export function useSaldoSistemaNaPosicao(
    ⚠ OS DOIS SÃO CONFERÊNCIA, NÃO SALDO. Quem vale é o `saldo_final` que o operador
    grava em `saldos_v2` (`gravarSaldoReal`); nada aqui escreve lá. */
 
+/**
+ * ATÉ QUANDO O EXTRATO IMPORTADO ALCANÇA — PR-CONC-MODAL-SALDO-DATA-01.
+ *
+ * ⚠ NÃO É O `saldo_declarado_data` DO OFX, e a diferença é medida: das 64 importações vivas
+ * do proto, só 4 trazem `saldo_declarado` (e portanto a data dele). O `LEDGERBAL` é opcional
+ * no arquivo; o MOVIMENTO não. Para dizer "o banco cobre até tal dia" — que é a pergunta —
+ * quem responde é o último `data_movimento` importado, e ele existe para toda conta que já
+ * recebeu um extrato.
+ * ⚠ É A MESMA COISA que o `extrato_fim` da RPC do Espelho (`max(dt) FROM ofx_base`); aqui ela
+ * é lida direto, porque o modal não tem a RPC na mão.
+ */
+export function useExtratoFimDoMes(
+  clienteId: string | null, contaId: string | null, ano: number, mes: number,
+) {
+  const [fim, setFim] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelado = false;
+    if (!clienteId || !contaId) { setFim(null); return; }
+    const { inicio, fim: proximo } = faixaDoMes(ano, mes);
+    (async () => {
+      const { data } = await supabase
+        .from('extrato_bancario_v2')
+        .select('data_movimento')
+        .eq('cliente_id', clienteId)
+        .eq('conta_bancaria_id', contaId)
+        .is('cancelado_em', null)
+        .gte('data_movimento', inicio)
+        .lt('data_movimento', proximo)
+        .order('data_movimento', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (cancelado) return;
+      setFim(data?.data_movimento ?? null);
+    })();
+    return () => { cancelado = true; };
+  }, [clienteId, contaId, ano, mes]);
+
+  return fim;
+}
+
 /** O saldo declarado pelo arquivo do banco (LEDGERBAL) numa posição do mês. */
 export interface SaldoDeclaradoOfx {
   valor: number;

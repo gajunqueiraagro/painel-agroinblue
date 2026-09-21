@@ -914,11 +914,6 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     ? (totalSaldos.ext !== null ? r2(totalSaldos.ext - totalSaldos.sis) : null)
     : (selectedCard && selectedCard.saldoExtrato !== null ? selectedCard.diferenca : null);
   const difResumoConfere = difResumo !== null && saldoConfere(difResumo);
-  /* A linha da conta que o lápis abriu — os MESMOS números da tabela, repassados ao
-     modal. Só vale para o mês que a tabela mostra. */
-  const linhaDoLapis = editingSaldo && editingSaldo.anoMes === anoMesSel
-    ? perContaSaldos.find(p => p.conta.id === editingSaldo.contaId) ?? null
-    : null;
 
   const handleFecharSemMovimento = useCallback(async () => {
     if (!clienteId) return;
@@ -1912,8 +1907,6 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
           mes={Number(editingSaldo.anoMes.slice(5,7))}
           saldoAtual={editingSaldo.current}
           saldoDataAtual={editingSaldo.saldoData}
-          saldoSistema={linhaDoLapis?.sis ?? null}
-          diferenca={linhaDoLapis && linhaDoLapis.ext !== null ? linhaDoLapis.dif : null}
           /* Anexar ou cancelar um extrato no modal não passa pelo `aoSalvar` (grava na hora),
              então os ícones recarregam ao fechar. */
           aoFechar={()=>{ setEditingSaldo(null); void carregarIndicadoresSaldo(); }}
