@@ -277,6 +277,23 @@ export interface PropostaServico {
   preco_t: number;
 }
 
+/**
+ * De todas as colheitas ativas de uma nota, as que NÃO são da carga aberta.
+ *
+ * ⚠ É UMA LINHA, E ELA TEM TESTE PORQUE JÁ QUEBROU. A trava do ICMS pergunta "OUTRA carga desta
+ * nota já levou o imposto?", e a resposta dependia de um conjunto que incluía a própria carga.
+ * Enquanto uma NF tinha duas metades o erro se escondia; a fusão de 21/09/2026 deixou uma carga
+ * por nota, e reabrir a carga passou a travar o campo em R$ 0,00 sobre um ICMS de R$ 2.470,26 que
+ * a aba Financeiro mostrava dois cliques adiante.
+ * ⚠ O NOME DIZ A PERGUNTA. `ids.filter(...)` solto no meio da consulta é o tipo de linha que a
+ * próxima refatoração "simplifica" de volta para o bug.
+ */
+export function outrasCargasDaNota(
+  idsDaNota: readonly string[], daCargaAberta: readonly string[],
+): string[] {
+  return idsDaNota.filter(id => !daCargaAberta.includes(id));
+}
+
 export function useContextoCargaMandioca(safraAreaIds: readonly string[]) {
   /* Mesma chave estável do `useColheita`: o array muda de identidade a cada render. */
   const chave = [...safraAreaIds].sort().join(',');
@@ -348,7 +365,9 @@ export function useContextoCargaMandioca(safraAreaIds: readonly string[]) {
    * carga da nota, a RPC descartaria em silêncio, e a tela teria mentido sobre o que gravou.
    * ⚠ POR `papel`, NUNCA PELA DESCRIÇÃO — o mesmo idioma do `useColheita`.
    */
-  const icmsJaNaNota = useCallback(async (nf: string): Promise<boolean> => {
+  const icmsJaNaNota = useCallback(async (
+    nf: string, colheitasDaCargaAberta: readonly string[] = [],
+  ): Promise<boolean> => {
     if (!chave || !nf.trim()) return false;
     const db = supabase as any;
     const { data: cargas } = await db.from('agri_colheita')
@@ -356,7 +375,23 @@ export function useContextoCargaMandioca(safraAreaIds: readonly string[]) {
       .in('safra_area_id', chave.split(','))
       .eq('nf_produtor', nf.trim())
       .eq('ativo', true);
-    const ids = ((cargas ?? []) as Array<{ id: string }>).map(c => c.id);
+    /**
+     * ⚠ A PRÓPRIA CARGA NÃO CONTA CONTRA SI MESMA, e foi isso que a fusão expôs.
+     *
+     * A pergunta desta função é "OUTRA carga desta nota já levou o ICMS?". Enquanto uma NF tinha
+     * duas metades e o ICMS pendia de uma delas, contar tudo dava a resposta certa por acidente.
+     * Depois da fusão é uma carga por nota: reabrir a carga fazia a consulta achar o ICMS DELA,
+     * concluir que a nota já estava servida e travar o campo em R$ 0,00 — escondendo os 2.470,26
+     * que a aba Financeiro mostrava dois cliques adiante. A tela contradizia a si mesma.
+     *
+     * ⚠ A REGRA "UMA VEZ POR NOTA" NÃO MUDOU, e não devia: ela está certa e a RPC a repete antes
+     * de gravar. O que mudou é o conjunto sobre o qual se pergunta.
+     * ⚠ FILTRO EM MEMÓRIA, não um `.not('id','in',…)`: a lista já veio, tem no máximo duas linhas,
+     * e a sintaxe de negação do PostgREST pede um literal montado à mão — uma vírgula no lugar
+     * errado devolveria "nenhuma carga" em silêncio, que é a resposta que destrava tudo.
+     */
+    const ids = outrasCargasDaNota(
+      ((cargas ?? []) as Array<{ id: string }>).map(c => c.id), colheitasDaCargaAberta);
     if (ids.length === 0) return false;
     const { data: elos } = await db.from('agri_colheita_lancamentos')
       .select('colheita_id')

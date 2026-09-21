@@ -435,7 +435,8 @@ export function CargasDaArea({
       contaId: c.contaId ?? null,
       valorBruto: c.valor,
     });
-    setIcmsTravado(await icmsJaNaNota(c.principal.nf_produtor ?? ''));
+    /* ⚠ AS COLHEITAS DESTA CARGA NÃO CONTAM: a pergunta é se OUTRA carga da nota levou o ICMS. */
+    setIcmsTravado(await icmsJaNaNota(c.principal.nf_produtor ?? '', c.ids));
   };
 
   /**
@@ -443,15 +444,24 @@ export function CargasDaArea({
    * carga da mesma nota digitando a NF, e é nesse instante que o campo tem de travar — depois de
    * salvar seria tarde.
    */
-  /* ⚠ A DEPENDÊNCIA É SÓ A NF, e isso importa: com o form inteiro na lista, cada tecla digitada
-     em qualquer campo — peso, rendimento, observação — dispararia as duas consultas da trava. */
+  /* ⚠ A DEPENDÊNCIA É SÓ A NF E OS IDS DA CARGA, e isso importa: com o form inteiro na lista,
+     cada tecla digitada em qualquer campo — peso, rendimento, observação — dispararia as duas
+     consultas da trava.
+     ⚠ E OS IDS ENTRAM COMO TEXTO, não como array: `formMandioca.ids` é um array novo a cada
+     render, e na lista de dependências ele reexecutaria o efeito para sempre. É o mesmo idioma do
+     `useCompromissosDaCarga`, que já usa o texto dos ids como chave. */
   const nfDaCarga = formMandioca?.nf.trim() ?? '';
+  const idsDaCargaAberta = formMandioca?.ids.join(',') ?? '';
   useEffect(() => {
     if (!nfDaCarga) { setIcmsTravado(false); return; }
     let vivo = true;
-    void icmsJaNaNota(nfDaCarga).then(v => { if (vivo) setIcmsTravado(v); });
+    /* ⚠ ESTE EFEITO É QUEM MANDA, e por isso o conserto tem de estar nos DOIS chamadores: ele roda
+       depois do `abrirCarga` e sobrescreve o que aquele decidiu. Consertar só lá deixaria o bug
+       de pé, com o campo travando meio segundo depois de abrir. */
+    const daCarga = idsDaCargaAberta ? idsDaCargaAberta.split(',') : [];
+    void icmsJaNaNota(nfDaCarga, daCarga).then(v => { if (vivo) setIcmsTravado(v); });
     return () => { vivo = false; };
-  }, [nfDaCarga, icmsJaNaNota]);
+  }, [nfDaCarga, idsDaCargaAberta, icmsJaNaNota]);
 
   const gravarMandioca = async () => {
     const f = formMandioca;
