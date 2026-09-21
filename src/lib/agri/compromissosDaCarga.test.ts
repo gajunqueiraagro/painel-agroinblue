@@ -9,7 +9,8 @@ import {
 const l = (papel: string, valor: number, sinal: string, extra: Partial<LancamentoDaCarga> = {}): LancamentoDaCarga => ({
   lancamentoId: `L-${papel}`, papel, valor, sinal,
   statusTransacao: 'programado', dataVencimento: '2026-08-21',
-  favorecido: null, conta: 'Sicredi Lavoura', ...extra,
+  favorecido: null, conta: 'Sicredi Lavoura', contaId: 'CONTA-1',
+  pago: 0, conciliadoEm: null, conciliado: false, ...extra,
 });
 
 const CARGA: LancamentoDaCarga[] = [
@@ -66,14 +67,61 @@ describe('montarCompromissos', () => {
     expect(linhas.find(x => x.papel === 'frete')?.unitario).toBeNull();
   });
 
-  it('realizado não deve nada; programado deve tudo', () => {
+  /* ⚠ O CASO QUE A FASE 1 ERRAVA. O gatilho da conciliação promove a 'realizado' já no primeiro
+     centavo aplicado, sem olhar valor — então um PARCIAL chega com status de pago. Decidir pelo
+     status dizia "Pago" com R$ 3.647,60 faltando. */
+  it('parcial: status realizado mas aplicado menor que o valor', () => {
     const linhas = montarCompromissos(
-      [l('frete', 5647.60, '-1'), l('trator', 2017, '-1', { statusTransacao: 'realizado' })],
+      [l('frete', 5647.60, '-1', { statusTransacao: 'realizado', pago: 2000, conciliado: true })],
+      40.34, 1.05);
+    const f = linhas[0];
+    expect(f.status).toBe('parcial');
+    expect(f.pago).toBe(2000);
+    expect(f.falta).toBeCloseTo(3647.60, 2);
+  });
+
+  it('quitado não deve nada; sem aplicado deve tudo', () => {
+    const linhas = montarCompromissos(
+      [l('frete', 5647.60, '-1'),
+       l('trator', 2017, '-1', { statusTransacao: 'realizado', pago: 2017, conciliado: true })],
       40.34, 1.05);
     expect(linhas.find(x => x.papel === 'frete')?.falta).toBe(5647.60);
     expect(linhas.find(x => x.papel === 'frete')?.status).toBe('programado');
     expect(linhas.find(x => x.papel === 'trator')?.falta).toBe(0);
     expect(linhas.find(x => x.papel === 'trator')?.status).toBe('pago');
+  });
+
+  /* ⚠ TOLERÂNCIA DE UM CENTAVO, copiada de `_oc_estado_liquidacao`: sem ela um arredondamento
+     deixaria o compromisso eternamente "Parcial · falta R$ 0,00", que parece defeito. */
+  it('um centavo de diferença já conta como quitado', () => {
+    const linhas = montarCompromissos([l('trator', 2017, '-1', { pago: 2016.995 })], 40.34, 1.05);
+    expect(linhas[0].status).toBe('pago');
+    expect(linhas[0].falta).toBe(0);
+  });
+
+  it('pagar mais que o valor não vira dívida negativa', () => {
+    const linhas = montarCompromissos([l('trator', 2017, '-1', { pago: 2500 })], 40.34, 1.05);
+    expect(linhas[0].status).toBe('pago');
+    expect(linhas[0].falta).toBe(0);
+    expect(linhas[0].pago).toBe(2017);
+  });
+
+  /* ⚠ A TELA PERGUNTA ANTES DE MOSTRAR O CAMPO, com as mesmas três condições da guarda da RPC —
+     avisar depois de o operador digitar é pior que não deixar digitar. */
+  it('editável só quando não há conciliação nenhuma', () => {
+    const linhas = montarCompromissos([
+      l('frete', 100, '-1'),
+      l('trator', 100, '-1', { conciliado: true }),
+      l('mao_obra', 100, '-1', { statusTransacao: 'realizado' }),
+      l('icms', 100, '-1', { conciliadoEm: '2026-09-01T00:00:00Z' }),
+    ], 40.34, 1.05);
+    const por = (p: string) => linhas.find(x => x.papel === p)!;
+    expect(por('frete').editavel).toBe(true);
+    expect(por('frete').motivoTravado).toBeNull();
+    for (const p of ['trator', 'mao_obra', 'icms']) {
+      expect(por(p).editavel).toBe(false);
+      expect(por(p).motivoTravado).toBeTruthy();
+    }
   });
 
   it('papel desconhecido aparece com o próprio nome, em vez de sumir', () => {
@@ -84,11 +132,13 @@ describe('montarCompromissos', () => {
 });
 
 describe('statusDaLinha', () => {
-  it('só realizado é pago', () => {
-    expect(statusDaLinha('realizado')).toBe('pago');
-    expect(statusDaLinha('programado')).toBe('programado');
-    expect(statusDaLinha('agendado')).toBe('programado');
-    expect(statusDaLinha(null)).toBe('programado');
+  it('decide pelo aplicado, não pelo status', () => {
+    expect(statusDaLinha(-2017, 2017)).toBe('pago');
+    expect(statusDaLinha(-2017, 1000)).toBe('parcial');
+    expect(statusDaLinha(-2017, 0)).toBe('programado');
+    /* Centavo de sobra é quitado; centavo aplicado já é parcial. */
+    expect(statusDaLinha(-2017, 2016.995)).toBe('pago');
+    expect(statusDaLinha(-2017, 0.02)).toBe('parcial');
   });
 });
 
@@ -105,7 +155,7 @@ describe('resultadoDaCarga', () => {
      caixa", que é a pergunta da conciliação — não a desta tela. */
   it('o resultado não muda quando um serviço vira pago', () => {
     const antes = resultadoDaCarga(montarCompromissos(CARGA, 40.34, 1.05));
-    const pago = CARGA.map(x => (x.papel === 'frete' ? { ...x, statusTransacao: 'realizado' } : x));
+    const pago = CARGA.map(x => (x.papel === 'frete' ? { ...x, pago: 5647.60 } : x));
     expect(resultadoDaCarga(montarCompromissos(pago, 40.34, 1.05))).toEqual(antes);
   });
 });
@@ -120,10 +170,20 @@ describe('topoFinanceiro', () => {
   });
 
   it('o que é pago entra no seu lado, e só nele', () => {
-    const pago = CARGA.map(x => (x.papel === 'icms' ? { ...x, statusTransacao: 'realizado' } : x));
+    const pago = CARGA.map(x => (x.papel === 'icms' ? { ...x, pago: 2470.26 } : x));
     const t = topoFinanceiro(montarCompromissos(pago, 40.34, 1.05));
     expect(t.pagas).toBeCloseTo(2470.26, 2);
     expect(t.recebido).toBe(0);
+    expect(t.despesas).toBeCloseTo(16118.00, 2);
+  });
+
+  /* ⚠ AS CAIXAS SOMAM O APLICADO, não o valor da linha. Com um parcial de 2.000 num compromisso
+     de 5.647,60, "Pagas" tem de dizer 2.000 — dizer o valor inteiro afirmaria que saiu do caixa
+     dinheiro que não saiu, justamente na caixa que se confere contra o extrato. */
+  it('parcial entra pelo que foi aplicado, não pelo valor cheio', () => {
+    const pago = CARGA.map(x => (x.papel === 'frete' ? { ...x, pago: 2000 } : x));
+    const t = topoFinanceiro(montarCompromissos(pago, 40.34, 1.05));
+    expect(t.pagas).toBe(2000);
     expect(t.despesas).toBeCloseTo(16118.00, 2);
   });
 });

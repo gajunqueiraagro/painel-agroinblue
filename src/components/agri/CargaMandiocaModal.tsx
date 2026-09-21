@@ -25,13 +25,14 @@ import { Segmentado } from '@/components/ui/segmentado';
 import { FornecedorSelect } from '@/components/shared/FornecedorSelect';
 import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { BlocoTopoAba } from '@/components/ui/bloco-topo-aba';
-import { useCompromissosDaCarga } from '@/hooks/useCargaMandioca';
+import { useCompromissosDaCarga, useAlterarCompromisso } from '@/hooks/useCargaMandioca';
 import {
   montarCompromissos, resultadoDaCarga, topoFinanceiro, ehImposto,
   type StatusCompromisso,
 } from '@/lib/agri/compromissosDaCarga';
 import { useContasBancariasLeves } from '@/hooks/useContasBancariasLeves';
 import { Save, AlertTriangle, Lock } from 'lucide-react';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { formatNum, formatMoeda } from '@/lib/calculos/formatters';
 import { CampoNumero, CampoMoeda } from '@/components/ui/campo-moeda';
@@ -238,7 +239,13 @@ export function CargaMandiocaModal({
    * ⚠ LÊ PELOS IDS DA CARGA INTEIRA. Ler por uma metade faria o ICMS sumir em metade das cargas:
    * medido na NF 9287581, os elos de `icms` e `funrural` pendiam só da metade IND.05.
    */
-  const { linhas: lancamentosDaCarga, carregando: carregandoFin } = useCompromissosDaCarga(form?.ids ?? []);
+  const { linhas: lancamentosDaCarga, carregando: carregandoFin, recarregar: recarregarFin } =
+    useCompromissosDaCarga(form?.ids ?? []);
+  /* ⚠ TAMBÉM ANTES DO EARLY RETURN — regra dos Hooks, e o `check:hooks` agora reprova o PR que a
+     quebrar. Foi exatamente esta linha, na fase 1, que derrubou a Colheita em tela branca. */
+  const { alterar: alterarCompromisso, salvando: salvandoFin } = useAlterarCompromisso();
+  /** Qual compromisso está com a linha de edição aberta. `null` = nenhuma. */
+  const [editandoId, setEditandoId] = useState<string | null>(null);
 
   /* ⚠ O VALOR GRAVADO SOME QUANDO O ROMANEIO MUDA: ele é a resposta da RPC para os números
      ANTERIORES, e mantê-lo na tela depois de mexer no peso mostraria o valor de uma carga que não
@@ -252,6 +259,25 @@ export function CargaMandiocaModal({
   if (!form) return null;
 
   const campo = (k: keyof CargaMandiocaForm, v: string) => onChange({ ...form, [k]: v, valorBruto: null });
+
+  /**
+   * Salva um ajuste de vencimento ou conta de UM compromisso.
+   *
+   * ⚠ NÃO PASSA PELA CARGA: é um `update` pontual num lançamento, não uma reconstrução. Por isso
+   * não esbarra na trava do salvar nem na guarda do `corrigir` — e por isso a aba Financeiro pode
+   * ser interativa enquanto o resto do modal segue travado.
+   * ⚠ RECARREGA DEPOIS DE GRAVAR, porque o estado pode ter mudado com o que o banco fez; e o erro
+   * vai inteiro para o toast, com a frase que a RPC escreveu.
+   */
+  const salvarCompromisso = async (
+    lancamentoId: string, campos: { vencimento?: string; contaId?: string },
+  ) => {
+    if (!clienteId) return;
+    const r = await alterarCompromisso(clienteId, lancamentoId, campos);
+    if (!r.ok) { toast.error(r.erro ?? 'Não foi possível alterar o compromisso.'); return; }
+    setEditandoId(null);
+    recarregarFin();
+  };
   /**
    * ⚠ CORRIGIR ESTÁ TRAVADO — PR-CARGA-MANDIOCA-TRAVAR-CORRIGIR, e isto é contenção, não desenho.
    *
@@ -665,8 +691,8 @@ export function CargaMandiocaModal({
                   ) : (
                     <div className="rounded-md border divide-y divide-border/60">
                       {compromissos.map(c => (
-                        <div key={c.lancamentoId}
-                          className="flex items-center gap-2 px-2.5 py-[7px] leading-[1.35]">
+                        <div key={c.lancamentoId}>
+                        <div className="flex items-center gap-2 px-2.5 py-[7px] leading-[1.35]">
                           {/* O ponto repete a cor da pílula: a linha se lê de longe sem ler o texto. */}
                           <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full',
                             c.status === 'pago' ? 'bg-emerald-500'
@@ -699,11 +725,61 @@ export function CargaMandiocaModal({
                             {c.entrada ? '+' : '−'}{formatMoeda(Math.abs(c.valor))}
                           </span>
                           <span className={cn('shrink-0 rounded px-1.5 py-px text-[9px] font-semibold',
-                            PILULA[c.status].classe)}>
+                            PILULA[c.status].classe)}
+                            title={c.status === 'parcial'
+                              ? `${formatMoeda(c.pago)} de ${formatMoeda(Math.abs(c.valor))}` : undefined}>
                             {PILULA[c.status].rotulo}
+                            {/* ⚠ O QUANTO FALTA VAI NA PRÓPRIA PÍLULA quando é parcial: "Parcial"
+                                sozinho diz que falta algo e esconde quanto, e é o quanto que o
+                                operador precisa para decidir se cobra ou espera. */}
+                            {c.status === 'parcial' && ` · falta ${formatMoeda(c.falta)}`}
                           </span>
+                          {/* ⚠ O `⋯` SÓ APARECE NO QUE PODE MUDAR. Compromisso conciliado mostra
+                              cadeado com o motivo — a mesma regra do ICMS travado da aba Colheita:
+                              avisar ANTES de o operador digitar, não depois de a RPC recusar. */}
+                          {c.editavel ? (
+                            <button type="button"
+                              className="shrink-0 rounded px-1 text-[12px] leading-none text-muted-foreground hover:text-foreground"
+                              title="Mudar vencimento ou conta"
+                              onClick={() => setEditandoId(editandoId === c.lancamentoId ? null : c.lancamentoId)}>
+                              ⋯
+                            </button>
+                          ) : (
+                            <span className="shrink-0 px-1" title={c.motivoTravado ?? undefined}>
+                              <Lock className="h-2.5 w-2.5 text-muted-foreground" />
+                            </span>
+                          )}
                         </div>
-                      ))}
+                        {editandoId === c.lancamentoId && c.editavel && (
+                          <div className="flex flex-wrap items-end gap-2 border-t bg-muted/20 px-2.5 py-2">
+                            <div>
+                              <Label className="text-[10px]">Vencimento</Label>
+                              <DatePicker value={c.dataVencimento ?? ''} size="compact"
+                                className="mt-0.5 w-[118px]"
+                                onChange={v => { void salvarCompromisso(c.lancamentoId, { vencimento: v }); }} />
+                            </div>
+                            <div className="w-[190px]">
+                              <Label className="text-[10px]">Conta</Label>
+                              <ContaBancariaSelect
+                                value={c.contaId ?? '__none__'}
+                                onValueChange={v => {
+                                  if (v === '__none__') return;
+                                  void salvarCompromisso(c.lancamentoId, { contaId: v });
+                                }}
+                                contas={contas.map(x => ({
+                                  id: x.id, nome_conta: x.nome_conta, nome_exibicao: x.nome_exibicao,
+                                  tipo_conta: x.tipo_conta ?? null,
+                                }))}
+                                placeholder="Quem paga"
+                                className={cn('mt-0.5 h-8 text-[12px]', FOCO)} />
+                            </div>
+                            <span className="pb-2 text-[10px] text-muted-foreground">
+                              {salvandoFin ? 'Salvando…' : 'Só o vencimento e a conta; o valor vem da carga.'}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
                     </div>
                   )}
                 </>

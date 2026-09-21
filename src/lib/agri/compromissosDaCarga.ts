@@ -11,11 +11,14 @@
  * âmbar que o operador confere. Aqui ela é LEITURA: descreve o que já está gravado e não volta
  * para lugar nenhum. A diferença está em para onde o número vai, não em como ele nasce.
  *
- * ⚠ "PAGO" É UM CAMPO SÓ — `status_transacao`. O gatilho
- * `trg_promover_lancamento_realizado_ao_conciliar` já vira 'programado' → 'realizado' quando a
- * conciliação casa o lançamento. Não há view a consultar nem soma a fazer: a OC precisa de três
- * views e de `zoo_operacao_liquidacoes` porque o compromisso dela é outra entidade; aqui o
- * compromisso É o lançamento.
+ * ⚠ "PAGO" É QUANTO FOI APLICADO — `conciliacao_bancaria_itens.valor_aplicado` dos vínculos
+ * vivos, somado por lançamento. A fase 1 decidia por `status_transacao`, e isso MENTIA: o gatilho
+ * `trg_promover_lancamento_realizado_ao_conciliar` promove a 'realizado' na PRIMEIRA conciliação,
+ * sem olhar valor — um pagamento parcial já chegava com status de pago. Medido: não existe coluna
+ * "pago" nem status 'parcial' em `financeiro_lancamentos_v2`; parcial é derivado.
+ * ⚠ AINDA ASSIM É MAIS SIMPLES QUE A OC: lá o pago vem de três views sobre
+ * `zoo_operacao_liquidacoes`, porque o compromisso dela é outra entidade. Aqui o compromisso É o
+ * lançamento, e a soma é uma consulta.
  */
 
 /** Os papéis que a RPC grava em `agri_colheita_lancamentos.papel`. */
@@ -73,6 +76,19 @@ export interface LancamentoDaCarga {
   dataVencimento: string | null;
   favorecido: string | null;
   conta: string | null;
+  /** O id da conta, para o seletor — `conta` é só o nome que a linha mostra. */
+  contaId: string | null;
+  /**
+   * ⚠ SOMA DE `conciliacao_bancaria_itens.valor_aplicado` DOS VÍNCULOS VIVOS — a única fonte de
+   * pagamento desta família. Não existe coluna "pago" nem status 'parcial' em
+   * `financeiro_lancamentos_v2` (medido: os status são previsto, agendado, programado, realizado
+   * e conciliado). "Parcial" é DERIVADO.
+   */
+  pago: number;
+  /** ⚠ Nulo em TODOS os 96 compromissos vivos de mandioca, inclusive nos conciliados — medido. */
+  conciliadoEm: string | null;
+  /** Tem vínculo vivo no extrato. É o que de fato tranca a edição nesta família. */
+  conciliado: boolean;
 }
 
 export type StatusCompromisso = 'programado' | 'pago' | 'parcial';
@@ -87,25 +103,53 @@ export interface LinhaCompromisso {
   entrada: boolean;
   /** "140,00 R$/t", "1,05 R$/g" ou `null` quando a linha não tem unitário (imposto). */
   unitario: string | null;
-  /** O que ainda não foi pago/recebido. Zero quando o lançamento já é realizado. */
+  /** Quanto já foi aplicado pela conciliação. */
+  pago: number;
+  /** `valor − pago`, nunca negativo. Zero quando quitado. */
   falta: number;
   status: StatusCompromisso;
   dataVencimento: string | null;
   conta: string | null;
+  contaId: string | null;
+  /**
+   * ⚠ PODE EDITAR VENCIMENTO E CONTA? É a mesma pergunta que a RPC faz antes de gravar, e a tela
+   * a faz ANTES de mostrar o campo: avisar depois de o operador digitar é pior que não deixar
+   * digitar. As três condições são as da guarda — `conciliado_em`, o status e o vínculo vivo.
+   */
+  editavel: boolean;
+  /** O motivo do travamento, escrito — regra da OC: campo desligado diz por quê. */
+  motivoTravado: string | null;
 }
 
 const duas = (n: number) => n.toFixed(2).replace('.', ',');
 
 /**
- * O status de uma linha.
+ * TOLERÂNCIA DE UM CENTAVO — a mesma do molde.
  *
- * ⚠ TRÊS ESTADOS NO TIPO, DOIS NASCEM HOJE — e isso é declaração, não esquecimento. 'parcial'
- * exige saber QUANTO foi aplicado ao lançamento (`conciliacao_bancaria_itens.valor_aplicado`), que
- * esta fase não lê. Ele está no tipo e na tabela de cores porque a FASE 2 o liga, e porque um
- * estado que aparece depois sem lugar reservado costuma aparecer com a cor de outro.
+ * ⚠ COPIADA DE `_oc_estado_liquidacao` (md5 d5630e18, conferido no proto): ela usa `<= 0.01` para
+ * decidir "liquidada". Sem tolerância, um arredondamento de centavo deixaria um compromisso
+ * eternamente "Parcial · falta R$ 0,00" — o pior dos dois erros, porque parece defeito.
  */
-export function statusDaLinha(statusTransacao: string | null): StatusCompromisso {
-  return statusTransacao === 'realizado' ? 'pago' : 'programado';
+const TOL = 0.01;
+
+/**
+ * O estado de uma linha, pelo QUE FOI PAGO — PR-CARGA-MANDIOCA-MODAL-OC-02 (fase 2).
+ *
+ * ⚠ ELE NÃO LÊ MAIS `status_transacao`, E ISSO CONSERTA UMA MENTIRA DA FASE 1. O gatilho
+ * `trg_promover_lancamento_realizado_ao_conciliar` promove o lançamento a 'realizado' na PRIMEIRA
+ * conciliação, sem olhar valor — então um pagamento PARCIAL já chega com status 'realizado', e a
+ * fase 1, que decidia por ele, mostrava "Pago" com dinheiro faltando.
+ * ⚠ O MOLDE É `_oc_estado_liquidacao(base, liquidado)`, com uma diferença declarada: lá há um
+ * quinto estado, 'excedente' (pagou MAIS que o valor). Aqui ele cai em 'pago', por decisão do
+ * briefing — a pílula tem três cores. Se um dia excedente precisar aparecer, é cor nova, não
+ * reaproveitar a do pago.
+ */
+export function statusDaLinha(valor: number, pago: number): StatusCompromisso {
+  const base = Math.abs(valor);
+  const liq = Math.max(0, pago);
+  if (base > 0 && liq >= base - TOL) return 'pago';
+  if (liq > TOL) return 'parcial';
+  return 'programado';
 }
 
 /**
@@ -122,7 +166,10 @@ export function montarCompromissos(
   const linhas = lancamentos.map((l): LinhaCompromisso => {
     const entrada = l.sinal === '1';
     const valor = entrada ? Math.abs(l.valor) : -Math.abs(l.valor);
-    const status = statusDaLinha(l.statusTransacao);
+    const abs = Math.abs(l.valor);
+    const pago = Math.min(Math.max(0, l.pago), abs);
+    const status = statusDaLinha(l.valor, l.pago);
+    const travado = motivoDoTravamento(l);
     return {
       lancamentoId: l.lancamentoId,
       papel: l.papel,
@@ -130,13 +177,17 @@ export function montarCompromissos(
       favorecido: l.favorecido,
       valor,
       entrada,
-      unitario: unitarioDaLinha(l.papel, Math.abs(l.valor), toneladas, precoG),
-      /* ⚠ PAGO NÃO DEVE NADA. Sem a leitura do aplicado, "falta" é tudo ou nada — e tudo-ou-nada
-         é verdade nos dois extremos, que são os únicos que esta fase sabe distinguir. */
-      falta: status === 'pago' ? 0 : Math.abs(l.valor),
+      unitario: unitarioDaLinha(l.papel, abs, toneladas, precoG),
+      pago,
+      /* ⚠ `falta` VEM DO ESTADO, NÃO DA SUBTRAÇÃO CRUA: quitado com um centavo de sobra devolveria
+         "falta −0,01" e a tela mostraria dívida negativa. Quem já é 'pago' não deve nada. */
+      falta: status === 'pago' ? 0 : Math.max(0, abs - pago),
       status,
       dataVencimento: l.dataVencimento,
       conta: l.conta,
+      contaId: l.contaId,
+      editavel: travado === null,
+      motivoTravado: travado,
     };
   });
   return linhas.sort((a, b) => {
@@ -146,6 +197,22 @@ export function montarCompromissos(
     /* Desempate estável: o mesmo conjunto produz sempre a mesma ordem. */
     return a.lancamentoId < b.lancamentoId ? -1 : 1;
   });
+}
+
+/**
+ * Por que este compromisso não pode ser reprogramado — ou `null` quando pode.
+ *
+ * ⚠ ESPELHA A GUARDA DA RPC, nas três condições e na mesma ordem. Duas respostas diferentes para
+ * "posso editar?" divergem no dia em que alguém mexer numa só; a tela pergunta antes de mostrar o
+ * campo e o banco pergunta antes de gravar, mas a regra é uma.
+ */
+function motivoDoTravamento(l: LancamentoDaCarga): string | null {
+  if (l.conciliadoEm) return 'Conciliado — estorne a conciliação para alterar.';
+  if (l.statusTransacao === 'realizado' || l.statusTransacao === 'conciliado' || l.statusTransacao === 'agendado') {
+    return `Compromisso ${l.statusTransacao} — estorne o pagamento para mudar.`;
+  }
+  if (l.conciliado) return 'Já conciliado no extrato — desfaça a conciliação para alterar.';
+  return null;
 }
 
 function unitarioDaLinha(
@@ -195,8 +262,11 @@ export function topoFinanceiro(linhas: readonly LinhaCompromisso[]): TopoFinance
   let aReceber = 0; let recebido = 0; let despesas = 0; let pagas = 0;
   for (const l of linhas) {
     const abs = Math.abs(l.valor);
-    if (l.entrada) { aReceber += abs; if (l.status === 'pago') recebido += abs; }
-    else { despesas += abs; if (l.status === 'pago') pagas += abs; }
+    /* ⚠ "RECEBIDO" E "PAGAS" SOMAM O APLICADO, não o valor da linha — fase 2. Somar o valor
+       inteiro de um compromisso PARCIAL diria que entrou dinheiro que não entrou, e é justamente
+       a caixa que o operador confere contra o extrato. */
+    if (l.entrada) { aReceber += abs; recebido += l.pago; }
+    else { despesas += abs; pagas += l.pago; }
   }
   return { aReceber, recebido, despesas, pagas };
 }

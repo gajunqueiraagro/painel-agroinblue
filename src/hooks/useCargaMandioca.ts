@@ -387,6 +387,8 @@ export function useContextoCargaMandioca(safraAreaIds: readonly string[]) {
 export function useCompromissosDaCarga(ids: readonly string[]) {
   const [linhas, setLinhas] = useState<LancamentoDaCarga[]>([]);
   const [carregando, setCarregando] = useState(false);
+  /* Contador de recarga: depois de alterar um compromisso, o pago e o estado podem ter mudado. */
+  const [versao, setVersao] = useState(0);
   /* Chave estável: o array muda de identidade a cada render, o texto não. */
   const chave = [...ids].sort().join(',');
 
@@ -408,13 +410,33 @@ export function useCompromissosDaCarga(ids: readonly string[]) {
         return;
       }
       const { data: lancs } = await db.from('financeiro_lancamentos_v2')
-        .select('id, valor, sinal, status_transacao, data_vencimento, favorecido_id, conta_efetiva_id, cancelado')
+        .select('id, valor, sinal, status_transacao, data_vencimento, favorecido_id, conta_efetiva_id, conciliado_em, cancelado')
         .in('id', [...papelPorId.keys()]);
       const vivos = ((lancs ?? []) as Array<{
         id: string; valor: number | null; sinal: string | null; status_transacao: string | null;
         data_vencimento: string | null; favorecido_id: string | null; conta_efetiva_id: string | null;
-        cancelado: boolean | null;
+        conciliado_em: string | null; cancelado: boolean | null;
       }>).filter(x => x.cancelado !== true);
+
+      /**
+       * ⚠ QUANTO FOI APLICADO, por lançamento — a ÚNICA fonte de pagamento desta família.
+       * Não há coluna "pago" nem status 'parcial': medido, os status de
+       * `financeiro_lancamentos_v2` são previsto, agendado, programado, realizado e conciliado.
+       * ⚠ E `status_transacao` NÃO SERVE para decidir: o gatilho
+       * `trg_promover_lancamento_realizado_ao_conciliar` promove a 'realizado' já no primeiro
+       * centavo conciliado, sem olhar valor — a fase 1 decidia por ele e mostrava "Pago" com
+       * dinheiro faltando.
+       * ⚠ CONSULTA PRÓPRIA, SEM EMBED: `conciliacao_bancaria_itens` não tem relacionamento
+       * declarado com esta consulta e o PostgREST não o resolveria.
+       */
+      const { data: aplic } = await db.from('conciliacao_bancaria_itens')
+        .select('lancamento_id, valor_aplicado, desfeito_em')
+        .in('lancamento_id', vivos.map(x => x.id));
+      const pagoPorId = new Map<string, number>();
+      for (const a of (aplic ?? []) as Array<{ lancamento_id: string; valor_aplicado: number | null; desfeito_em: string | null }>) {
+        if (a.desfeito_em) continue;
+        pagoPorId.set(a.lancamento_id, (pagoPorId.get(a.lancamento_id) ?? 0) + (a.valor_aplicado ?? 0));
+      }
 
       /* Nomes numa consulta própria, como o resto desta tela faz — o embed do PostgREST não
          resolve estes dois sem relacionamento declarado. */
@@ -447,11 +469,55 @@ export function useCompromissosDaCarga(ids: readonly string[]) {
         dataVencimento: x.data_vencimento,
         favorecido: x.favorecido_id ? (nomeForn.get(x.favorecido_id) || null) : null,
         conta: x.conta_efetiva_id ? (nomeConta.get(x.conta_efetiva_id) || null) : null,
+        contaId: x.conta_efetiva_id,
+        pago: pagoPorId.get(x.id) ?? 0,
+        conciliadoEm: x.conciliado_em,
+        /* Vínculo VIVO, não histórico: `desfeito_em` já foi filtrado acima. */
+        conciliado: pagoPorId.has(x.id),
       })));
       setCarregando(false);
     })();
     return () => { vivo = false; };
-  }, [chave]);
+  }, [chave, versao]);
 
-  return { linhas, carregando };
+  return { linhas, carregando, recarregar: () => setVersao(v => v + 1) };
+}
+
+/**
+ * AJUSTE FINO DO COMPROMISSO — vencimento e conta, um lançamento por vez.
+ *
+ * ⚠ RPC PRÓPRIA, NÃO A DA OC. `oc_alterar_parcela_programacao` faz o mesmo, mas exige
+ * `p_operacao_id`, confere `versao` e edita `zoo_operacao_parcelas_programacao`. A carga não tem
+ * operação nem parcela: o compromisso dela é o próprio lançamento. O que se copiou daquela função
+ * foi a GUARDA e o desenho de permissão — o corpo é outro.
+ * ⚠ O ERRO DO BANCO VAI INTEIRO PARA A TELA: ele nomeia o motivo da recusa ("conciliado em
+ * 01/09; estorne a conciliação para alterar"), e essa frase diz o que fazer. Um "não foi possível
+ * salvar" mandaria o operador adivinhar.
+ */
+export function useAlterarCompromisso() {
+  const [salvando, setSalvando] = useState(false);
+  const alterar = useCallback(async (
+    clienteId: string, lancamentoId: string,
+    campos: { vencimento?: string | null; contaId?: string | null },
+  ): Promise<{ ok: boolean; erro?: string }> => {
+    setSalvando(true);
+    try {
+      const { data, error } = await (supabase as any).rpc('agri_compromisso_alterar_programacao', {
+        p_cliente_id: clienteId,
+        p_lancamento_id: lancamentoId,
+        /* `undefined` não vai no corpo — a RPC usa o default NULL, que significa "não mexa neste
+           campo" (ela aplica `coalesce`). Mandar null explícito seria o mesmo, mas dizer o que se
+           quer mudar é mais honesto que mandar a linha inteira. */
+        ...(campos.vencimento == null ? {} : { p_vencimento: campos.vencimento }),
+        ...(campos.contaId == null ? {} : { p_conta_id: campos.contaId }),
+      });
+      if (error) return { ok: false, erro: error.message };
+      return (data as { ok?: boolean } | null)?.ok === true
+        ? { ok: true }
+        : { ok: false, erro: 'A alteração não voltou confirmada.' };
+    } finally {
+      setSalvando(false);
+    }
+  }, []);
+  return { alterar, salvando };
 }
