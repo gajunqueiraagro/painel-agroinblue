@@ -284,6 +284,34 @@ no mesmo arquivo.
   multilinha) e a indentacao acertou os 20. Falso negativo e' o lado certo para
   errar — o gate existe para o que quebra, nao para o que e' feio.
 
+- HOOK CONDICIONAL — comando OFICIAL:
+      npm run check:hooks
+  Baseline: 2 (src/components/compra/AbaAuditoriaOC.tsx, linhas 41 e 52), ambas
+  PRE-EXISTENTES. Falha por ocorrencia NOVA: arquivo fora da baseline, ou arquivo
+  da baseline com MAIS do que ela registra. Reduzir e' sempre aceito — atualize a
+  baseline no mesmo PR com `node scripts/check-hooks.mjs --baseline`.
+  ⚠ NASCE DE DUAS TELAS BRANCAS NO MESMO DIA, 21/09/2026, as duas com React #310
+  ("Rendered more hooks than during the previous render"): a Colheita da mandioca
+  (hook abaixo do `if (!form) return null` em CargaMandiocaModal) e o grafico do
+  Fluxo da CPR (useMemo abaixo de dois returns antecipados em CprFluxoPrevisto).
+  ⚠ E AS DUAS PASSARAM PELOS OUTROS SEIS GATES — TSC, build:proto, check:tdz,
+  check:ui-nativo, madge e a suite inteira. NENHUM deles ve ordem de hook. Elas so'
+  quebraram no navegador.
+  ⚠ O DETECTOR JA' ESTAVA NO REPO e ninguem o rodava: `react-hooks/rules-of-hooks`
+  e' `error` no eslint.config.js e apontou a LINHA EXATA dos dois casos. O furo nao
+  era falta de ferramenta — era ela nao estar nesta lista.
+  ⚠ SO' ESSA REGRA, e a medicao explica: `npm run lint` acusa 1.316 erros, dos quais
+  1.246 sao `@typescript-eslint/no-explicit-any`, o idioma documentado do
+  `(supabase as any).rpc`. Ligar o lint inteiro pararia todo PR e o gate seria
+  desligado na primeira semana. Isolada, a regra tem DUAS ocorrencias no repo.
+  ⚠ O SCRIPT SE AUTO-TESTA ANTES DE VARRER, como o check:tdz: roda a regra sobre um
+  fixture com hook depois de early return e sai com codigo 2 se nao o achar. "Zero
+  achados" so' vale quando a busca provou que sabe achar.
+  ⚠ CONSERTO: todo hook vai ANTES de qualquer `return`. Se ele precisa de algo que
+  so' existe depois, condicione o ARGUMENTO (`useAlgo(x?.ids ?? [])`), nunca a
+  CHAMADA. E se o hook nao protege nada caro, tire-o — foi o que resolveu o caso da
+  CPR, onde subi-lo arrastaria as margens do grafico.
+
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
   Baseline em 2026-09-16: 1504 passando, 22 skipped, 103 arquivos, e

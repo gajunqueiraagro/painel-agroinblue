@@ -11,6 +11,7 @@
     "lint": "eslint .",
     "check:tdz": "node scripts/check-tdz-render.mjs",
     "check:ui-nativo": "node scripts/check-ui-nativo.mjs",
+    "check:hooks": "node scripts/check-hooks.mjs",
     "preview:proto": "node scripts/run-vite-safe.mjs preview proto",
     "test": "vitest run",
     "test:watch": "vitest",
