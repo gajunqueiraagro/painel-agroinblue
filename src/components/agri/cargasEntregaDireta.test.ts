@@ -21,6 +21,7 @@ const carga = (id: string, area: string, t: number, extra: Partial<ColheitaRow> 
   data_colheita: '2026-09-12',
   hora_chegada: null,
   peso_fazenda_kg: null,
+  peso_bruto_kg: null,
   ticket_balanca: null,
   nf_produtor: '9365000',
   filial: null,

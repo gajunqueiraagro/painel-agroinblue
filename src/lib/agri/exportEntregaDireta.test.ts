@@ -26,7 +26,7 @@ import type { ColheitaRow } from '@/hooks/useColheita';
 
 const colheita = (id: string, nf: string): ColheitaRow => ({
   id, safra_area_id: 'a1', data_colheita: '2026-08-24',
-  hora_chegada: null, peso_fazenda_kg: null, ticket_balanca: null, nf_produtor: nf,
+  hora_chegada: null, peso_fazenda_kg: null, peso_bruto_kg: null, ticket_balanca: null, nf_produtor: nf,
   filial: null, local_estoque_id: null, peso_verde_kg: null, peso_seco_kg: null,
   umidade_pct: null, aflatoxina_ppb: null, sacas_boas: null, grao_roca_sacas: null,
   grao_roca_kg: null, renda_liquida_pct: null, taxa_secagem: null, valor_secagem: null,

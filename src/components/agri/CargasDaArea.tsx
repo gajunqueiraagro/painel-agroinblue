@@ -408,7 +408,15 @@ export function CargasDaArea({
       industriaNome: c.comprador || null,
       nf: c.principal.nf_produtor ?? '',
       ticket: c.principal.ticket_balanca ?? '',
-      pesoBrutoKg: c.principal.peso_fazenda_kg != null ? formatNum(c.principal.peso_fazenda_kg, 2) : '',
+      /* ⚠ `peso_bruto_kg`, NÃO `peso_fazenda_kg` — PR-CARGA-MANDIOCA-PESO-P0-01. Esta linha lia a
+         coluna do AMENDOIM, que a mandioca nunca preenche: toda carga de mandioca abria com o peso
+         em branco e o operador redigitava. Quem grava aqui é `agri_carga_mandioca_registrar`, e
+         ela grava `peso_bruto_kg`.
+         ⚠ E O DEFEITO NÃO ERA DO BACKFILL: a carga de 40,34 t está inteira no banco (28.190 +
+         12.150 = 40.340 kg). A RPC estava certa desde sempre; a tela é que lia a coluna vizinha.
+         ⚠ SEM `??` PARA A COLUNA ANTIGA: seria ramo morto. Nenhuma das 42 colheitas de mandioca
+         tem `peso_fazenda_kg`, e um fallback que nunca dispara só esconde a próxima divergência. */
+      pesoBrutoKg: c.principal.peso_bruto_kg != null ? formatNum(c.principal.peso_bruto_kg, 2) : '',
       descontoKg: c.principal.desconto_kg != null ? formatNum(c.principal.desconto_kg, 2) : '',
       rendimentoG: c.rendimento_g != null ? String(c.rendimento_g) : '',
       precoG: c.preco_g != null ? formatNum(c.preco_g, 2) : '',

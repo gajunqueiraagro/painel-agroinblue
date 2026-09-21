@@ -19,7 +19,18 @@ export interface ColheitaRow {
   safra_area_id: string;
   data_colheita: string;
   hora_chegada: string | null;
+  /**
+   * ⚠ DUAS COLUNAS DE PESO, E CADA MODELO COMERCIAL USA A SUA — PR-CARGA-MANDIOCA-PESO-P0-01.
+   * `peso_fazenda_kg` é o peso de SAÍDA da saca estocável (amendoim): é ele que o `CargaModal`
+   * grava e é dele que nascem as quebras de transporte e de secagem.
+   * `peso_bruto_kg` é o peso da balança da ENTREGA DIRETA (mandioca): quem grava é a RPC
+   * `agri_carga_mandioca_registrar`, e é dele que saem `peso_liquido_kg` e `toneladas`.
+   * ⚠ ELAS NÃO SE SUBSTITUEM. Medido no proto: as 42 colheitas de mandioca têm as 42 com
+   * `peso_bruto_kg` e ZERO com `peso_fazenda_kg`. Ler uma no lugar da outra devolve vazio — que
+   * foi exatamente o defeito que este campo veio consertar.
+   */
   peso_fazenda_kg: number | null;
+  peso_bruto_kg: number | null;
   ticket_balanca: string | null;
   nf_produtor: string | null;
   filial: string | null;
@@ -61,7 +72,10 @@ export interface VendaDaCarga {
   status: string | null;
 }
 
-const COLS = 'id, safra_area_id, data_colheita, hora_chegada, peso_fazenda_kg,'
+/* ⚠ `peso_bruto_kg` ENTROU AQUI JUNTO COM O CAMPO — PR-CARGA-MANDIOCA-PESO-P0-01, e a ordem
+   importa: sem a coluna no `select`, trocar a leitura na tela não adiantaria nada. O `COLS` é a
+   fronteira real do que a tela pode ler. */
+const COLS = 'id, safra_area_id, data_colheita, hora_chegada, peso_fazenda_kg, peso_bruto_kg,'
   + ' ticket_balanca, nf_produtor, filial, local_estoque_id,'
   + ' peso_verde_kg, peso_seco_kg, umidade_pct, aflatoxina_ppb, sacas_boas,'
   + ' grao_roca_sacas, grao_roca_kg, renda_liquida_pct, taxa_secagem, valor_secagem,'
