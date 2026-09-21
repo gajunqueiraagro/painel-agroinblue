@@ -46,6 +46,14 @@ export interface CargaAgrupada {
   talhao: string;
   comprador: string;
   toneladas: number;
+  /**
+   * ⚠ O PESO DA CARGA INTEIRA, somando as metades — PR-CARGA-MANDIOCA-MODAL-OC-01.
+   * Não é o de `principal`. A carga da NF 9287581 tem 28.190 kg numa metade e 12.150 na outra;
+   * abrir o modal com o da primeira é o que fez `corrigir` recriar 12,15 t no lugar de 40,34 t e
+   * apagar cinco lançamentos em 21/09. Somar aqui é o que permite ao modal editar a carga.
+   */
+  pesoBrutoKg: number;
+  descontoKg: number;
   rendimento_g: number | null;
   preco_g: number | null;
   valor: number | null;
@@ -145,6 +153,8 @@ export function agruparCargas(
       comprador: principal.industria_id ? (industriaPorId.get(principal.industria_id) ?? '') : '',
       /* O peso líquido da carga é a soma das metades — §3. */
       toneladas: ordenadas.reduce((a, l) => a + (l.toneladas ?? 0), 0),
+      pesoBrutoKg: ordenadas.reduce((a, l) => a + (l.peso_bruto_kg ?? 0), 0),
+      descontoKg: ordenadas.reduce((a, l) => a + (l.desconto_kg ?? 0), 0),
       rendimento_g: principal.rendimento_g,
       preco_g: principal.preco_g,
       /* ⚠ O VALOR É LIDO UMA VEZ, do lançamento: somar o valor das duas metades contaria o mesmo

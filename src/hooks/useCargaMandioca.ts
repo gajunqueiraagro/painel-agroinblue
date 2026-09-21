@@ -12,8 +12,9 @@
  *   · `corrigir` é cancelar + registrar, então herda o `{ok:false}` do primeiro.
  * Ler `ok !== false` é o único teste que serve para as três.
  */
-import { useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import type { LancamentoDaCarga } from '@/lib/agri/compromissosDaCarga';
 
 /** Um lançamento que impede o cancelamento — já realizado ou conciliado. */
 export interface LancamentoTravado {
@@ -367,4 +368,90 @@ export function useContextoCargaMandioca(safraAreaIds: readonly string[]) {
   }, [chave]);
 
   return { proposta, icmsJaNaNota };
+}
+
+/**
+ * OS COMPROMISSOS DA CARGA — a leitura da aba Financeiro (PR-CARGA-MANDIOCA-MODAL-OC-01, fase 1).
+ *
+ * ⚠ RECEBE OS IDS DA CARGA INTEIRA, não o da metade. Uma carga dividida entre talhões tem duas
+ * colheitas, e os elos de venda, ICMS e Funrural podem estar ligados a apenas UMA delas — medido
+ * na NF 9287581, em que `icms` e `funrural` pendiam só da metade IND.05. Ler por uma metade faria
+ * o imposto sumir em metade das cargas.
+ * ⚠ E POR ISSO O `lancamento_id` É DEDUPLICADO: a venda é UM lançamento apontado pelas DUAS
+ * metades. Sem o `Map`, ela apareceria duas vezes e o total dobraria — o mesmo erro que a lista
+ * de cargas já teve de corrigir uma vez.
+ *
+ * ⚠ SÓ LEITURA NESTA FASE. Nenhuma escrita, nenhum `valor_aplicado`: o status vem de
+ * `status_transacao`, que o gatilho da conciliação já promove a 'realizado'.
+ */
+export function useCompromissosDaCarga(ids: readonly string[]) {
+  const [linhas, setLinhas] = useState<LancamentoDaCarga[]>([]);
+  const [carregando, setCarregando] = useState(false);
+  /* Chave estável: o array muda de identidade a cada render, o texto não. */
+  const chave = [...ids].sort().join(',');
+
+  useEffect(() => {
+    if (!chave) { setLinhas([]); return; }
+    let vivo = true;
+    setCarregando(true);
+    void (async () => {
+      const db = supabase as any;
+      const { data: elos } = await db.from('agri_colheita_lancamentos')
+        .select('lancamento_id, papel')
+        .in('colheita_id', chave.split(','))
+        .eq('ativo', true);
+      const pares = (elos ?? []) as Array<{ lancamento_id: string; papel: string }>;
+      const papelPorId = new Map<string, string>();
+      for (const p of pares) papelPorId.set(p.lancamento_id, p.papel);
+      if (papelPorId.size === 0) {
+        if (vivo) { setLinhas([]); setCarregando(false); }
+        return;
+      }
+      const { data: lancs } = await db.from('financeiro_lancamentos_v2')
+        .select('id, valor, sinal, status_transacao, data_vencimento, favorecido_id, conta_efetiva_id, cancelado')
+        .in('id', [...papelPorId.keys()]);
+      const vivos = ((lancs ?? []) as Array<{
+        id: string; valor: number | null; sinal: string | null; status_transacao: string | null;
+        data_vencimento: string | null; favorecido_id: string | null; conta_efetiva_id: string | null;
+        cancelado: boolean | null;
+      }>).filter(x => x.cancelado !== true);
+
+      /* Nomes numa consulta própria, como o resto desta tela faz — o embed do PostgREST não
+         resolve estes dois sem relacionamento declarado. */
+      const idsForn = Array.from(new Set(vivos.map(x => x.favorecido_id).filter((x): x is string => !!x)));
+      const idsConta = Array.from(new Set(vivos.map(x => x.conta_efetiva_id).filter((x): x is string => !!x)));
+      const [forn, contas] = await Promise.all([
+        idsForn.length
+          ? db.from('financeiro_fornecedores').select('id, nome, nome_favorecido').in('id', idsForn)
+          : Promise.resolve({ data: [] }),
+        idsConta.length
+          ? db.from('financeiro_contas_bancarias').select('id, nome_conta').in('id', idsConta)
+          : Promise.resolve({ data: [] }),
+      ]);
+      const nomeForn = new Map<string, string>();
+      for (const f of (forn.data ?? []) as Array<{ id: string; nome: string | null; nome_favorecido: string | null }>) {
+        nomeForn.set(f.id, f.nome_favorecido || f.nome || '');
+      }
+      const nomeConta = new Map<string, string>();
+      for (const c of (contas.data ?? []) as Array<{ id: string; nome_conta: string | null }>) {
+        nomeConta.set(c.id, c.nome_conta ?? '');
+      }
+
+      if (!vivo) return;
+      setLinhas(vivos.map(x => ({
+        lancamentoId: x.id,
+        papel: papelPorId.get(x.id) ?? '',
+        valor: x.valor ?? 0,
+        sinal: x.sinal ?? '-1',
+        statusTransacao: x.status_transacao,
+        dataVencimento: x.data_vencimento,
+        favorecido: x.favorecido_id ? (nomeForn.get(x.favorecido_id) || null) : null,
+        conta: x.conta_efetiva_id ? (nomeConta.get(x.conta_efetiva_id) || null) : null,
+      })));
+      setCarregando(false);
+    })();
+    return () => { vivo = false; };
+  }, [chave]);
+
+  return { linhas, carregando };
 }

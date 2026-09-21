@@ -24,6 +24,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Segmentado } from '@/components/ui/segmentado';
 import { FornecedorSelect } from '@/components/shared/FornecedorSelect';
 import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
+import { BlocoTopoAba } from '@/components/ui/bloco-topo-aba';
+import { useCompromissosDaCarga } from '@/hooks/useCargaMandioca';
+import {
+  montarCompromissos, resultadoDaCarga, topoFinanceiro, ehImposto,
+  type StatusCompromisso,
+} from '@/lib/agri/compromissosDaCarga';
 import { useContasBancariasLeves } from '@/hooks/useContasBancariasLeves';
 import { Save, AlertTriangle, Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -49,6 +55,31 @@ const num = (t: string): number | null => (t.trim() ? parseMoeda(t) : null);
  * são corrigidas ou canceladas juntas. Guardar um `id` só deixaria a outra metade viva apontando
  * para um lançamento cancelado.
  */
+/** As três abas do modal — PR-CARGA-MANDIOCA-MODAL-OC-01, fase 1. */
+export type AbaCarga = 'colheita' | 'servicos' | 'financeiro';
+
+/**
+ * ⚠ TRÊS CORES DISTINTAS, e é correção declarada do molde. A OC dá `variant="secondary"` a
+ * `Pago`, `Parcial`, `Lançado` e `Programado` — quatro estados na mesma cor, distinguíveis só
+ * pelo texto. Copiar isso seria copiar o defeito junto com o padrão.
+ * ⚠ 'parcial' AINDA NÃO NASCE nesta fase (falta ler o valor aplicado); está aqui porque a fase 2
+ * o liga, e estado que chega depois sem cor reservada chega com a cor de outro.
+ */
+/**
+ * DD/MM, como o resto da conciliação.
+ * ⚠ O ANO É REDUNDANTE numa carga cujo cabeçalho já anuncia a data — e a coluna é estreita.
+ */
+const diaMes = (iso: string): string => {
+  const p = iso.slice(0, 10).split('-');
+  return p.length === 3 ? `${p[2]}/${p[1]}` : iso;
+};
+
+const PILULA: Record<StatusCompromisso, { rotulo: string; classe: string }> = {
+  programado: { rotulo: 'Programado', classe: 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300' },
+  parcial: { rotulo: 'Parcial', classe: 'bg-orange-100 text-orange-800 dark:bg-orange-950/50 dark:text-orange-300' },
+  pago: { rotulo: 'Pago', classe: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300' },
+};
+
 export interface CargaMandiocaForm {
   ids: string[];
   dataColheita: string;
@@ -159,7 +190,7 @@ function Par({ rotulo, valor, forte }: { rotulo: string; valor: string; forte?: 
 
 export function CargaMandiocaModal({
   aberto, form, clienteId, areas, areaId, safraRotulo, fazendaNome, salvando,
-  icmsTravado, travados, onAreaChange, onChange, onFechar, onSalvar,
+  icmsTravado, talhoesDaCarga, travados, onAreaChange, onChange, onFechar, onSalvar,
 }: {
   aberto: boolean;
   form: CargaMandiocaForm | null;
@@ -177,6 +208,12 @@ export function CargaMandiocaModal({
    * mesma nota e a tela teria prometido um lançamento que nunca existiria.
    */
   icmsTravado: boolean;
+  /**
+   * Os talhões da carga INTEIRA, já unidos ("IND.05 · IND.06"), ou `null` numa carga nova.
+   * ⚠ NÃO SE DERIVA DE `areaId`: ele cabe um só, e uma carga dividida tem dois. Quem junta é
+   * `CargaAgrupada.talhao`, o mesmo texto da lista — não um segundo.
+   */
+  talhoesDaCarga: string | null;
   /** Os lançamentos que impediram a última tentativa — a RPC recusou e nada mudou. */
   travados: LancamentoTravado[];
   onAreaChange: (id: string) => void;
@@ -186,7 +223,7 @@ export function CargaMandiocaModal({
 }) {
   /* ⚠ ABA ÚNICA, E ELA EXISTE: o envelope reserva a altura da faixa de abas, e sem nada ali o
      modal abriria com uma tira vazia no topo. Uma aba só também nomeia o que se está lançando. */
-  const [aba, setAba] = useState<'carga'>('carga');
+  const [aba, setAba] = useState<AbaCarga>('colheita');
   /* ⚠ O MODAL BUSCA AS CONTAS, como a `AbaCompromissosOC` faz: elas são do cliente, não da carga,
      e passá-las por prop obrigaria a `CargasDaArea` a carregá-las só para repassar. */
   const { contas } = useContasBancariasLeves(clienteId);
@@ -194,8 +231,10 @@ export function CargaMandiocaModal({
   /* ⚠ O VALOR GRAVADO SOME QUANDO O ROMANEIO MUDA: ele é a resposta da RPC para os números
      ANTERIORES, e mantê-lo na tela depois de mexer no peso mostraria o valor de uma carga que não
      é mais esta. "—" diz "salve para saber", que é a verdade. */
+  /* Fechar devolve a aba à primeira: reabrir noutra carga na aba Financeiro esconderia os campos
+     que o operador veio ver. */
   useEffect(() => {
-    if (!aberto) setAba('carga');
+    if (!aberto) setAba('colheita');
   }, [aberto]);
 
   if (!form) return null;
@@ -220,7 +259,15 @@ export function CargaMandiocaModal({
    * A trava sai quando o modal souber editar a carga INTEIRA e devolver serviços e impostos.
    */
   const corrigindo = form.ids.length > 0;
+  /* ⚠ LÊ PELOS IDS DA CARGA INTEIRA. Ler por uma metade faria o ICMS sumir em metade das cargas:
+     medido na NF 9287581, os elos de `icms` e `funrural` pendiam só da metade IND.05. */
+  const { linhas: lancamentosDaCarga, carregando: carregandoFin } = useCompromissosDaCarga(form.ids);
   const t = toneladasDaCarga(form.pesoBrutoKg, form.descontoKg);
+  /* ⚠ O DIVISOR DO R$/t É `t`, que agora é a CARGA INTEIRA (o form carrega o peso somado).
+     Com a metade, 5.647,60 / 12,15 daria 464,82 R$/t — um preço que ninguém contratou. */
+  const compromissos = montarCompromissos(lancamentosDaCarga, t, num(form.precoG));
+  const resultado = resultadoDaCarga(compromissos);
+  const topoFin = topoFinanceiro(compromissos);
   const traco = (v: number | null, casas = 2, sufixo = '') =>
     (v == null ? '—' : `${formatNum(v, casas)}${sufixo}`);
 
@@ -267,54 +314,76 @@ export function CargaMandiocaModal({
             </Button>
           )}
           resumo={(
+            /* ⚠ O RESUMO NÃO MUDA COM A ABA — Lei de Estabilidade Visual. Ele descreve a CARGA, e
+                a carga é a mesma nas três; trocar o conteúdo ao trocar de aba faria o operador
+                reaprender onde o número mora a cada clique.
+                ⚠ E ELE DESCREVE A CARGA INTEIRA: o peso é o somado das metades e os talhões vêm
+                juntos ("IND.05 · IND.06"). Era aqui que 12,15 t brigava com R$ 20.585,50 — a
+                metade no peso e a carga inteira no valor, na mesma coluna. */
             <div className="divide-y">
               <div className="py-1">
                 <div className="px-3 pb-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Talhão
+                  Carga
                 </div>
-                <Par rotulo="Área" valor={areas.find(a => a.id === areaId)
-                  ? `${areas.find(a => a.id === areaId)?.pastoNome} · ${formatNum(areas.find(a => a.id === areaId)?.area_plantada_ha ?? 0, 2)} ha`
-                  : '—'} />
+                <Par rotulo="Peso líquido" valor={traco(t, 2, ' t')} forte />
+                <Par rotulo="Talhões" valor={talhoesDaCarga
+                  ?? (areas.find(a => a.id === areaId)?.pastoNome || '—')} />
+                <Par rotulo="Rendimento" valor={traco(num(form.rendimentoG), 0, ' g')} />
                 <Par rotulo="Comprador" valor={form.industriaNome || '—'} />
-                <Par rotulo="Ticket" valor={form.ticket.trim() || '—'} />
               </div>
               <div className="py-1">
                 <div className="px-3 pb-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Peso
+                  Faturamento
                 </div>
-                <Par rotulo="Bruto" valor={traco(num(form.pesoBrutoKg), 2, ' kg')} />
-                <Par rotulo="Desconto" valor={traco(num(form.descontoKg), 2, ' kg')} />
-                <Par rotulo="Líquido" valor={traco(t, 2, ' t')} forte />
+                <Par rotulo="Venda" valor={resultado.venda > 0 ? formatMoeda(resultado.venda) : '—'} />
+                <Par rotulo="Impostos" valor={resultado.impostos > 0 ? `−${formatMoeda(resultado.impostos)}` : '—'} />
               </div>
               <div className="py-1">
                 <div className="px-3 pb-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Rendimento
+                  Serviços
                 </div>
-                <Par rotulo="Amido" valor={traco(num(form.rendimentoG), 0, ' g')} forte />
-                <Par rotulo="Preço" valor={num(form.precoG) != null
-                  ? `${formatMoeda(num(form.precoG))}/g` : '—'} />
+                {TIPOS_SERVICO.map(({ tipo, rotulo }) => {
+                  /* ⚠ SOMA OS DOIS NOMES DO MESMO SERVIÇO: as cargas do backfill guardam
+                     'arranquio' e 'carregamento', a RPC nova grava 'mao_obra' e 'trator'. O
+                     rótulo é um só, e a linha tem de somar os dois — senão a carga antiga mostra
+                     "—" num serviço que ela pagou. */
+                  const soma = compromissos
+                    .filter(c => c.rotulo === rotulo)
+                    .reduce((acc, c) => acc + Math.abs(c.valor), 0);
+                  return (
+                    <Par key={tipo} rotulo={rotulo}
+                      valor={soma > 0 ? `−${formatMoeda(soma)}` : '—'} />
+                  );
+                })}
               </div>
               <div className="py-1">
                 <div className="px-3 pb-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Valor
+                  Resultado da carga
                 </div>
-                {/* ⚠ "—" ATÉ SALVAR, e é o ponto do §1: o valor é da RPC. */}
-                <Par rotulo="Bruto" forte
-                  valor={form.valorBruto != null ? formatMoeda(form.valorBruto) : '—'} />
-                <Par rotulo="Serviços" valor={servicosPrevisto != null
-                  ? formatMoeda(servicosPrevisto) : '—'} />
-                <Par rotulo="Nota" valor={notaTotal > 0 ? formatMoeda(notaTotal) : '—'} />
+                {/* ⚠ VENDA − IMPOSTOS − SERVIÇOS, sobre o que está GRAVADO. É "quanto esta carga
+                    rendeu", não "quanto já entrou no caixa" — essa é a pergunta da conciliação, e
+                    responder as duas no mesmo número seria o erro que o DRE já pagou uma vez. */}
+                <Par rotulo="Líquido"
+                  valor={compromissos.length === 0 ? '—' : formatMoeda(resultado.liquido)} forte />
               </div>
             </div>
           )}>
 
           <div className="flex min-h-0 flex-col">
-            {/* ⚠ O SEGMENTADO DA CASA, não o `TabsTrigger` do Radix — regra permanente do
-                CLAUDE.md. Com uma aba só ele é rótulo e marcação ao mesmo tempo, e continua
-                falando o mesmo navy que o resto do sistema usa para "aberto". */}
+            {/* ⚠ O SEGMENTADO DA CASA, não os botões manuais da OC — e aqui a diferença é
+                decisão, não gosto. Os três shells da OC marcam a aba aberta de DUAS formas
+                diferentes entre si (sublinhado na Compra, pílula na Venda e no Abate), e o mock
+                desta tela desenhou uma terceira. A regra permanente do CLAUDE.md diz que seleção
+                se marca com navy preenchido e que aba nova usa este componente — então é ele.
+                ⚠ ALTURA 22, a das réguas de cabeçalho: a faixa já existia com uma aba só e não
+                pode crescer, senão as três abas custam altura da lista que elas servem. */}
             <div className="shrink-0 border-b pb-1">
-              <Segmentado valor={aba} onEscolher={setAba}
-                opcoes={[{ valor: 'carga', rotulo: 'Carga' }]} />
+              <Segmentado valor={aba} onEscolher={setAba} altura={22}
+                opcoes={[
+                  { valor: 'colheita', rotulo: 'Colheita' },
+                  { valor: 'servicos', rotulo: 'Serviços' },
+                  { valor: 'financeiro', rotulo: 'Financeiro' },
+                ]} />
             </div>
 
             <div className="flex flex-col gap-2 rounded-b-md border border-t-0 bg-card p-2.5">
@@ -355,199 +424,282 @@ export function CargaMandiocaModal({
                 </div>
               )}
 
-              <div className="grid grid-cols-[1.1fr_2fr] gap-2">
-                <div>
-                  <Label className="text-[10px]">Data <span className="text-destructive">*</span></Label>
-                  <DatePicker value={form.dataColheita}
-                    onChange={v => onChange({ ...form, dataColheita: v, valorBruto: null })}
-                    className="mt-0.5" />
+              {aba === 'colheita' && (
+                <>
+                <div className="grid grid-cols-[1.1fr_2fr] gap-2">
+                  <div>
+                    <Label className="text-[10px]">Data <span className="text-destructive">*</span></Label>
+                    <DatePicker value={form.dataColheita}
+                      onChange={v => onChange({ ...form, dataColheita: v, valorBruto: null })}
+                      className="mt-0.5" />
+                  </div>
+                  <div>
+                    <Label className="text-[10px]">Talhão <span className="text-destructive">*</span></Label>
+                    <Select value={areaId} onValueChange={onAreaChange}>
+                      <SelectTrigger className={cn('mt-0.5 h-8 text-[12px]', FOCO)}>
+                        <SelectValue placeholder="Escolha o talhão desta carga" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {areas.map(a => (
+                          <SelectItem key={a.id} value={a.id} className="text-[12px]">
+                            {a.pastoNome} · {formatNum(a.area_plantada_ha, 2)} ha
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-                <div>
-                  <Label className="text-[10px]">Talhão <span className="text-destructive">*</span></Label>
-                  <Select value={areaId} onValueChange={onAreaChange}>
-                    <SelectTrigger className={cn('mt-0.5 h-8 text-[12px]', FOCO)}>
-                      <SelectValue placeholder="Escolha o talhão desta carga" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {areas.map(a => (
-                        <SelectItem key={a.id} value={a.id} className="text-[12px]">
-                          {a.pastoNome} · {formatNum(a.area_plantada_ha, 2)} ha
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+
+                {/* ⚠ "COMPRADOR", NÃO "FORNECEDOR": quem paga a carga é a indústria, e o rótulo tem
+                    de dizer o papel dela nesta operação. O cadastro por trás é o mesmo — um
+                    `financeiro_fornecedores` —, e é ele que a RPC exige em `p_industria_id`. */}
+                {/* ⚠ A CONTA ENTROU NESTA LINHA, e ela não é detalhe: sem conta o compromisso não
+                    aparece na conciliação — `fn_extrato_conciliar_mes` escolhe candidatos por
+                    `conta_efetiva_id`. A RPC grava por direção; aqui se escolhe uma vez, para os
+                    seis lançamentos da carga.
+                    ⚠ E NÃO SE INFERE: o NJ tem dez contas correntes ativas. O que vem pronto é a
+                    conta da ÚLTIMA carga deste talhão, no mesmo contrato âmbar dos preços de
+                    serviço — proposta que o operador confere, nunca decisão da tela. */}
+                <div className="grid grid-cols-[2fr_1.4fr_1fr_1fr] items-end gap-2">
+                  {clienteId ? (
+                    <FornecedorSelect
+                      clienteId={clienteId}
+                      label="Comprador"
+                      required
+                      placeholder="A indústria que recebe a carga"
+                      fornecedorId={form.industriaId}
+                      onFornecedorChange={(id, nome) =>
+                        onChange({ ...form, industriaId: id, industriaNome: nome, valorBruto: null })}
+                    />
+                  ) : <div />}
+                  <div>
+                    <Label className="text-[10px]">Conta *</Label>
+                    <ContaBancariaSelect
+                      value={form.contaId ?? '__none__'}
+                      onValueChange={v => onChange({ ...form, contaId: v === '__none__' ? null : v, valorBruto: null })}
+                      contas={contas.map(c => ({
+                        id: c.id, nome_conta: c.nome_conta, nome_exibicao: c.nome_exibicao,
+                        tipo_conta: c.tipo_conta ?? null,
+                      }))}
+                      placeholder="Quem paga"
+                      className={cn('mt-0.5 h-8 text-[12px]', FOCO)}
+                    />
+                  </div>
+                  <Campo rotulo="NF" valor={form.nf} onChange={v => campo('nf', v)}
+                    dica="A nota da indústria — é ela que agrupa o ICMS." />
+                  <Campo rotulo="Ticket" valor={form.ticket} onChange={v => campo('ticket', v)} />
                 </div>
-              </div>
 
-              {/* ⚠ "COMPRADOR", NÃO "FORNECEDOR": quem paga a carga é a indústria, e o rótulo tem
-                  de dizer o papel dela nesta operação. O cadastro por trás é o mesmo — um
-                  `financeiro_fornecedores` —, e é ele que a RPC exige em `p_industria_id`. */}
-              {/* ⚠ A CONTA ENTROU NESTA LINHA, e ela não é detalhe: sem conta o compromisso não
-                  aparece na conciliação — `fn_extrato_conciliar_mes` escolhe candidatos por
-                  `conta_efetiva_id`. A RPC grava por direção; aqui se escolhe uma vez, para os
-                  seis lançamentos da carga.
-                  ⚠ E NÃO SE INFERE: o NJ tem dez contas correntes ativas. O que vem pronto é a
-                  conta da ÚLTIMA carga deste talhão, no mesmo contrato âmbar dos preços de
-                  serviço — proposta que o operador confere, nunca decisão da tela. */}
-              <div className="grid grid-cols-[2fr_1.4fr_1fr_1fr] items-end gap-2">
-                {clienteId ? (
-                  <FornecedorSelect
-                    clienteId={clienteId}
-                    label="Comprador"
-                    required
-                    placeholder="A indústria que recebe a carga"
-                    fornecedorId={form.industriaId}
-                    onFornecedorChange={(id, nome) =>
-                      onChange({ ...form, industriaId: id, industriaNome: nome, valorBruto: null })}
-                  />
-                ) : <div />}
-                <div>
-                  <Label className="text-[10px]">Conta *</Label>
-                  <ContaBancariaSelect
-                    value={form.contaId ?? '__none__'}
-                    onValueChange={v => onChange({ ...form, contaId: v === '__none__' ? null : v, valorBruto: null })}
-                    contas={contas.map(c => ({
-                      id: c.id, nome_conta: c.nome_conta, nome_exibicao: c.nome_exibicao,
-                      tipo_conta: c.tipo_conta ?? null,
-                    }))}
-                    placeholder="Quem paga"
-                    className={cn('mt-0.5 h-8 text-[12px]', FOCO)}
-                  />
+                <div className="grid grid-cols-5 gap-2">
+                  <Campo rotulo="Peso bruto (kg)" valor={form.pesoBrutoKg} numerico obrigatorio
+                    dica="O que a balança da indústria pesou."
+                    onChange={v => campo('pesoBrutoKg', v)} />
+                  <Campo rotulo="Desconto (kg)" valor={form.descontoKg} numerico
+                    dica="Terra e impureza descontados no ticket."
+                    onChange={v => campo('descontoKg', v)} />
+                  {/* ⚠ A ÚNICA CONTA DA TELA — ver o cabeçalho do arquivo. */}
+                  <Derivado rotulo="Peso líquido (t)" valor={t} sufixo="t"
+                    dica="Peso bruto menos o desconto, em toneladas." />
+                  <Campo rotulo="Rendimento (g)" valor={form.rendimentoG} numerico casas={0} obrigatorio
+                    dica="Gramas de amido por 5 kg de raiz, do laudo da indústria."
+                    onChange={v => campo('rendimentoG', v)} />
+                  <Campo rotulo="Preço (R$/g)" valor={form.precoG} numerico obrigatorio
+                    dica="O preço negociado por grama de rendimento."
+                    onChange={v => campo('precoG', v)} />
                 </div>
-                <Campo rotulo="NF" valor={form.nf} onChange={v => campo('nf', v)}
-                  dica="A nota da indústria — é ela que agrupa o ICMS." />
-                <Campo rotulo="Ticket" valor={form.ticket} onChange={v => campo('ticket', v)} />
-              </div>
 
-              <div className="grid grid-cols-5 gap-2">
-                <Campo rotulo="Peso bruto (kg)" valor={form.pesoBrutoKg} numerico obrigatorio
-                  dica="O que a balança da indústria pesou."
-                  onChange={v => campo('pesoBrutoKg', v)} />
-                <Campo rotulo="Desconto (kg)" valor={form.descontoKg} numerico
-                  dica="Terra e impureza descontados no ticket."
-                  onChange={v => campo('descontoKg', v)} />
-                {/* ⚠ A ÚNICA CONTA DA TELA — ver o cabeçalho do arquivo. */}
-                <Derivado rotulo="Peso líquido (t)" valor={t} sufixo="t"
-                  dica="Peso bruto menos o desconto, em toneladas." />
-                <Campo rotulo="Rendimento (g)" valor={form.rendimentoG} numerico casas={0} obrigatorio
-                  dica="Gramas de amido por 5 kg de raiz, do laudo da indústria."
-                  onChange={v => campo('rendimentoG', v)} />
-                <Campo rotulo="Preço (R$/g)" valor={form.precoG} numerico obrigatorio
-                  dica="O preço negociado por grama de rendimento."
-                  onChange={v => campo('precoG', v)} />
-              </div>
-
-              <div className="grid grid-cols-[1fr_1fr] gap-2">
-                {/* ⚠ O VALOR BRUTO NÃO SE DIGITA NEM SE CALCULA: ele é o que a RPC gravou. */}
-                <Derivado rotulo="Valor bruto (R$)" valor={form.valorBruto}
-                  dica={form.valorBruto == null
-                    ? 'A indústria fecha o valor: ele aparece depois de salvar, como a RPC gravou.'
-                    : 'O valor do lançamento de venda desta carga.'} />
-                <Campo rotulo="Observações" valor={form.observacoes}
-                  onChange={v => campo('observacoes', v)} />
-              </div>
-
-              {/* ── SERVIÇOS POR TONELADA ── */}
-              <div className="rounded-md border p-2">
-                <div className="mb-1 flex items-center gap-2">
-                  <span className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    Serviços por tonelada
-                  </span>
-                  {/* ⚠ O ÂMBAR DIZ "PROPOSTA, CONFIRA": os preços vêm da última carga da safra, e
-                      o operador é quem sabe se o arranquio desta semana mudou. */}
-                  <span className="text-[9px] text-amber-700">
-                    proposta da última carga · confira
-                  </span>
-                  <div className="flex-1" />
-                  <span className="text-[10px] tabular-nums text-muted-foreground">
-                    {servicosPrevisto != null ? `≈ ${formatMoeda(servicosPrevisto)}` : '—'}
-                  </span>
+                <div className="grid grid-cols-[1fr_1fr] gap-2">
+                  {/* ⚠ O VALOR BRUTO NÃO SE DIGITA NEM SE CALCULA: ele é o que a RPC gravou. */}
+                  <Derivado rotulo="Valor bruto (R$)" valor={form.valorBruto}
+                    dica={form.valorBruto == null
+                      ? 'A indústria fecha o valor: ele aparece depois de salvar, como a RPC gravou.'
+                      : 'O valor do lançamento de venda desta carga.'} />
+                  <Campo rotulo="Observações" valor={form.observacoes}
+                    onChange={v => campo('observacoes', v)} />
                 </div>
-                <div className="space-y-1.5">
-                  {TIPOS_SERVICO.map(({ tipo, rotulo }) => {
-                    const s = servico(tipo);
-                    /* ⚠ ÂMBAR SÓ ENQUANTO FOR PROPOSTA — a carga gravada não tem proposta
-                       nenhuma, e pintar de âmbar um número já conferido mentiria sobre o estado. */
-                    const proposto = form.ids.length === 0 && s.preco_t != null;
-                    return (
-                      <div key={tipo} className="grid grid-cols-[0.6fr_2fr_1fr] items-end gap-2">
-                        <span className="pb-2 text-[10px] text-muted-foreground">{rotulo}</span>
-                        {clienteId ? (
-                          <FornecedorSelect
-                            clienteId={clienteId}
-                            label=""
-                            placeholder="Prestador"
-                            fornecedorId={s.fornecedor_id}
-                            onFornecedorChange={id => mudarServico(tipo, { fornecedor_id: id })}
-                          />
-                        ) : <div />}
-                        <div>
-                          <Label className="text-[10px]">R$/t</Label>
-                          <CampoMoeda valor={s.preco_t}
-                            onChange={n => mudarServico(tipo, { preco_t: n })}
-                            className={cn('mt-0.5 h-8 text-right font-mono text-[12px]', FOCO,
-                              proposto && 'border-amber-500 bg-amber-50 text-amber-900')} />
+
+                {/* ── NOTA ── */}
+                <div className="rounded-md border p-2">
+                  <div className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Nota
+                  </div>
+                  {/* ⚠ QUATRO COLUNAS, E A ORDEM SEGUE A NATUREZA: os três primeiros são retidos da
+                      VENDA (dedução de receita); o ICMS de transporte é CUSTO sobre o frete e fica
+                      por último, separado, porque cai noutro subcentro do DRE. */}
+                  <div className="grid grid-cols-[1fr_1fr_1fr_1fr] items-end gap-2">
+                    <div>
+                      <Label className="flex items-center gap-1 text-[10px]">
+                        ICMS (R$)
+                        {icmsTravado && <Lock className="h-2.5 w-2.5 text-muted-foreground" />}
+                      </Label>
+                      <CampoMoeda valor={icmsTravado ? 0 : num(form.icms)}
+                        disabled={icmsTravado}
+                        onChange={n => campo('icms', n == null ? '' : String(n))}
+                        className={cn('mt-0.5 h-8 text-right font-mono text-[12px]', FOCO,
+                          icmsTravado && 'bg-muted text-muted-foreground')} />
+                    </div>
+                    <div>
+                      <Label className="text-[10px]">Funrural (R$)</Label>
+                      <CampoMoeda valor={num(form.funrural)}
+                        onChange={n => campo('funrural', n == null ? '' : String(n))}
+                        className={cn('mt-0.5 h-8 text-right font-mono text-[12px]', FOCO)} />
+                    </div>
+                    <div>
+                      <Label className="text-[10px]">INSS (R$)</Label>
+                      <CampoMoeda valor={num(form.inss)}
+                        onChange={n => campo('inss', n == null ? '' : String(n))}
+                        className={cn('mt-0.5 h-8 text-right font-mono text-[12px]', FOCO)} />
+                    </div>
+                    <div>
+                      {/* ⚠ "DO FRETE" NO RÓTULO, e não é zelo: sem isso ele lê como o ICMS de cima e
+                          o operador digita o mesmo número duas vezes. Este vai para Transporte
+                          Agrícola (13090), junto do frete que ele tributa. */}
+                      <Label className="text-[10px]">ICMS do frete (R$)</Label>
+                      <CampoMoeda valor={num(form.icmsTransporte)}
+                        onChange={n => campo('icmsTransporte', n == null ? '' : String(n))}
+                        className={cn('mt-0.5 h-8 text-right font-mono text-[12px]', FOCO)} />
+                    </div>
+                  </div>
+                  {/* ⚠ O MOTIVO DE ESTAR DESLIGADO FICA ESCRITO ABAIXO, não só no `title` — a
+                      regra da OC. Aqui ele diz QUAL nota já levou o imposto.
+                      ⚠ E SAIU DA GRADE: com quatro campos não sobra coluna para a frase, e espremê-la
+                      cortaria justamente o número da nota, que é o que ela veio dizer. */}
+                  <div className="mt-1">
+                    <span className="text-[10px] leading-snug text-muted-foreground">
+                      {icmsTravado
+                        ? `ICMS da venda já lançado na NF ${form.nf || '—'} — uma vez por nota. O do frete é por carga.`
+                        : ''}
+                    </span>
+                  </div>
+                </div>
+                </>
+              )}
+
+              {aba === 'servicos' && (
+                <>
+                {/* ── SERVIÇOS POR TONELADA ── */}
+                <div className="rounded-md border p-2">
+                  <div className="mb-1 flex items-center gap-2">
+                    <span className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Serviços por tonelada
+                    </span>
+                    {/* ⚠ O ÂMBAR DIZ "PROPOSTA, CONFIRA": os preços vêm da última carga da safra, e
+                        o operador é quem sabe se o arranquio desta semana mudou. */}
+                    <span className="text-[9px] text-amber-700">
+                      proposta da última carga · confira
+                    </span>
+                    <div className="flex-1" />
+                    <span className="text-[10px] tabular-nums text-muted-foreground">
+                      {servicosPrevisto != null ? `≈ ${formatMoeda(servicosPrevisto)}` : '—'}
+                    </span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {TIPOS_SERVICO.map(({ tipo, rotulo }) => {
+                      const s = servico(tipo);
+                      /* ⚠ ÂMBAR SÓ ENQUANTO FOR PROPOSTA — a carga gravada não tem proposta
+                         nenhuma, e pintar de âmbar um número já conferido mentiria sobre o estado. */
+                      const proposto = form.ids.length === 0 && s.preco_t != null;
+                      return (
+                        <div key={tipo} className="grid grid-cols-[0.6fr_2fr_1fr] items-end gap-2">
+                          <span className="pb-2 text-[10px] text-muted-foreground">{rotulo}</span>
+                          {clienteId ? (
+                            <FornecedorSelect
+                              clienteId={clienteId}
+                              label=""
+                              placeholder="Prestador"
+                              fornecedorId={s.fornecedor_id}
+                              onFornecedorChange={id => mudarServico(tipo, { fornecedor_id: id })}
+                            />
+                          ) : <div />}
+                          <div>
+                            <Label className="text-[10px]">R$/t</Label>
+                            <CampoMoeda valor={s.preco_t}
+                              onChange={n => mudarServico(tipo, { preco_t: n })}
+                              className={cn('mt-0.5 h-8 text-right font-mono text-[12px]', FOCO,
+                                proposto && 'border-amber-500 bg-amber-50 text-amber-900')} />
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
 
-              {/* ── NOTA ── */}
-              <div className="rounded-md border p-2">
-                <div className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Nota
-                </div>
-                {/* ⚠ QUATRO COLUNAS, E A ORDEM SEGUE A NATUREZA: os três primeiros são retidos da
-                    VENDA (dedução de receita); o ICMS de transporte é CUSTO sobre o frete e fica
-                    por último, separado, porque cai noutro subcentro do DRE. */}
-                <div className="grid grid-cols-[1fr_1fr_1fr_1fr] items-end gap-2">
-                  <div>
-                    <Label className="flex items-center gap-1 text-[10px]">
-                      ICMS (R$)
-                      {icmsTravado && <Lock className="h-2.5 w-2.5 text-muted-foreground" />}
-                    </Label>
-                    <CampoMoeda valor={icmsTravado ? 0 : num(form.icms)}
-                      disabled={icmsTravado}
-                      onChange={n => campo('icms', n == null ? '' : String(n))}
-                      className={cn('mt-0.5 h-8 text-right font-mono text-[12px]', FOCO,
-                        icmsTravado && 'bg-muted text-muted-foreground')} />
-                  </div>
-                  <div>
-                    <Label className="text-[10px]">Funrural (R$)</Label>
-                    <CampoMoeda valor={num(form.funrural)}
-                      onChange={n => campo('funrural', n == null ? '' : String(n))}
-                      className={cn('mt-0.5 h-8 text-right font-mono text-[12px]', FOCO)} />
-                  </div>
-                  <div>
-                    <Label className="text-[10px]">INSS (R$)</Label>
-                    <CampoMoeda valor={num(form.inss)}
-                      onChange={n => campo('inss', n == null ? '' : String(n))}
-                      className={cn('mt-0.5 h-8 text-right font-mono text-[12px]', FOCO)} />
-                  </div>
-                  <div>
-                    {/* ⚠ "DO FRETE" NO RÓTULO, e não é zelo: sem isso ele lê como o ICMS de cima e
-                        o operador digita o mesmo número duas vezes. Este vai para Transporte
-                        Agrícola (13090), junto do frete que ele tributa. */}
-                    <Label className="text-[10px]">ICMS do frete (R$)</Label>
-                    <CampoMoeda valor={num(form.icmsTransporte)}
-                      onChange={n => campo('icmsTransporte', n == null ? '' : String(n))}
-                      className={cn('mt-0.5 h-8 text-right font-mono text-[12px]', FOCO)} />
-                  </div>
-                </div>
-                {/* ⚠ O MOTIVO DE ESTAR DESLIGADO FICA ESCRITO ABAIXO, não só no `title` — a
-                    regra da OC. Aqui ele diz QUAL nota já levou o imposto.
-                    ⚠ E SAIU DA GRADE: com quatro campos não sobra coluna para a frase, e espremê-la
-                    cortaria justamente o número da nota, que é o que ela veio dizer. */}
-                <div className="mt-1">
-                  <span className="text-[10px] leading-snug text-muted-foreground">
-                    {icmsTravado
-                      ? `ICMS da venda já lançado na NF ${form.nf || '—'} — uma vez por nota. O do frete é por carga.`
-                      : ''}
-                  </span>
-                </div>
-              </div>
+                </>
+              )}
+
+              {/* ═══ FINANCEIRO — os compromissos que a carga criou ══════════════════
+                  ⚠ SÓ LEITURA NESTA FASE. Cada linha é um lançamento que a RPC já gravou; editar
+                  banco e data é a fase 2, e mandar o payload completo (o que destrava o corrigir)
+                  é a fase 3. Mostrar sem deixar agir é deliberado: o operador precisa CONFERIR o
+                  que a carga gerou antes de a edição voltar.
+                  ⚠ E É AQUI QUE O MODELO FICA VISÍVEL: cada serviço e cada imposto é um
+                  compromisso a pagar, que a conciliação vira "Pago" sozinha pelo gatilho. */}
+              {aba === 'financeiro' && (
+                <>
+                  <BlocoTopoAba itens={[
+                    { rotulo: 'A receber', valor: topoFin.aReceber > 0 ? formatMoeda(topoFin.aReceber) : null },
+                    { rotulo: 'Recebido', valor: topoFin.recebido > 0 ? formatMoeda(topoFin.recebido) : null },
+                    { rotulo: 'Despesas', valor: topoFin.despesas > 0 ? formatMoeda(topoFin.despesas) : null },
+                    { rotulo: 'Pagas', valor: topoFin.pagas > 0 ? formatMoeda(topoFin.pagas) : null },
+                  ]} />
+
+                  {carregandoFin ? (
+                    <p className="px-1 py-6 text-center text-[11px] text-muted-foreground">
+                      Lendo os compromissos da carga…
+                    </p>
+                  ) : compromissos.length === 0 ? (
+                    <p className="px-1 py-6 text-center text-[11px] text-muted-foreground">
+                      {corrigindo
+                        ? 'Esta carga não tem lançamento ativo.'
+                        : 'Os compromissos aparecem depois de salvar a carga.'}
+                    </p>
+                  ) : (
+                    <div className="rounded-md border divide-y divide-border/60">
+                      {compromissos.map(c => (
+                        <div key={c.lancamentoId}
+                          className="flex items-center gap-2 px-2.5 py-[7px] leading-[1.35]">
+                          {/* O ponto repete a cor da pílula: a linha se lê de longe sem ler o texto. */}
+                          <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full',
+                            c.status === 'pago' ? 'bg-emerald-500'
+                              : c.status === 'parcial' ? 'bg-orange-500' : 'bg-amber-500')} />
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-[12px] font-medium">
+                              {c.rotulo}
+                              {c.favorecido && <span className="text-muted-foreground"> · {c.favorecido}</span>}
+                            </div>
+                            <div className="truncate text-[10px] text-muted-foreground">
+                              {c.falta > 0 && (
+                                <span className="font-medium text-amber-700 dark:text-amber-500">
+                                  {c.entrada ? 'falta receber' : 'falta pagar'} {formatMoeda(c.falta)}
+                                </span>
+                              )}
+                              {c.falta > 0 && (c.dataVencimento || c.conta) && ' · '}
+                              {c.dataVencimento && `vence ${diaMes(c.dataVencimento)}`}
+                              {c.dataVencimento && c.conta && ' · '}
+                              {c.conta}
+                            </div>
+                          </div>
+                          {/* ⚠ LARGURA FIXA NOS DOIS NÚMEROS — A19. O R$/t e o total não refluem
+                              quando um valor cresce, e o total nunca trunca: são eles que o
+                              operador confere contra o extrato. */}
+                          <span className="w-[86px] shrink-0 text-right text-[10px] tabular-nums text-muted-foreground">
+                            {c.unitario ?? (ehImposto(c.papel) ? 'imposto' : '')}
+                          </span>
+                          <span className={cn('w-[104px] shrink-0 text-right text-[12px] font-medium tabular-nums',
+                            c.entrada ? 'text-emerald-700 dark:text-emerald-500' : 'text-rose-700 dark:text-rose-400')}>
+                            {c.entrada ? '+' : '−'}{formatMoeda(Math.abs(c.valor))}
+                          </span>
+                          <span className={cn('shrink-0 rounded px-1.5 py-px text-[9px] font-semibold',
+                            PILULA[c.status].classe)}>
+                            {PILULA[c.status].rotulo}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+
             </div>
           </div>
         </LancamentoModalEnvelope>

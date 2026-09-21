@@ -48,6 +48,8 @@ const CARGAS: CargaAgrupada[] = Array.from({ length: 21 }, (_, i) => ({
   valor: 10966.73,
   status: 'programado',
   contaId: 'CONTA-1',
+  pesoBrutoKg: 21100,
+  descontoKg: 0,
 }));
 
 const ENTREGA: EntregaDireta = {
