@@ -5,6 +5,7 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { mensagemDoErro } from '@/lib/supabase/mensagemDoErro';
 import { addMonths, format } from 'date-fns';
 import { montarPayloadConta } from '@/lib/financeiro/contaPayload';
 import { loadPlanoContasCompleto, planoToClassificacoes } from '@/lib/financeiro/planoContasBuilder';
@@ -440,8 +441,11 @@ export function useFinanciamentoCadastro() {
       } catch (e) {
         /* A mensagem crua da RPC — ela escreve em português de operador justamente para chegar
            assim ("Sem acesso ao cliente informado", "plano, fazenda, competencia e primeira
-           parcela obrigatorios"). Traduzir aqui criaria um segundo texto para a mesma regra. */
-        toast.error(e instanceof Error ? e.message : 'Falha ao cadastrar o parcelamento');
+           parcela obrigatorios"). Traduzir aqui criaria um segundo texto para a mesma regra.
+           ⚠ E ELA NÃO CHEGAVA. O teste era `e instanceof Error`, que é FALSO para o erro do
+           PostgREST no destructuring: ele é objeto plano, e a biblioteca só constrói
+           `PostgrestError` sob `.throwOnError()`. As frases acima nunca apareceram em tela. */
+        toast.error(mensagemDoErro(e, 'Falha ao cadastrar o parcelamento'));
         return false;
       } finally {
         setSaving(false);

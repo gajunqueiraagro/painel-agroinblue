@@ -40,6 +40,7 @@ import { AbaAuditoriaLancamento } from '@/components/financeiro-v2/AbaAuditoriaL
 import { AlertCircle, AlertTriangle, Copy, KeyRound, RefreshCw, DollarSign, FileText, Beef, Repeat, Loader2 } from 'lucide-react';
 import { LancamentoZooModal } from '@/v2/components/edicao/LancamentoZooModal';
 import { toast } from 'sonner';
+import { mensagemDoErro } from '@/lib/supabase/mensagemDoErro';
 import { useQueryClient } from '@tanstack/react-query';
 /* PAR-02 — a montagem do payload e a previa, compartilhadas com a tela de Parcelamentos. */
 import { montarPayloadParcelamento, preverParcelas } from '@/lib/financiamentos/montarPayloadParcelamento';
@@ -1272,8 +1273,13 @@ export function LancamentoV2Dialog({
         toast.success(`Parcelamento criado: ${numParcelas} parcelas`);
         onClose();
       } catch (e) {
-        /* A mensagem crua da RPC, que escreve em português de operador. */
-        toast.error(e instanceof Error ? e.message : 'Falha ao criar o parcelamento');
+        /* ⚠ A MENSAGEM CRUA DA RPC — e agora ela de fato chega. O teste anterior era
+           `e instanceof Error ? e.message : …`, e ele dava FALSO sempre: no destructuring
+           (`const { error } = await …`) o `error` do PostgREST é um objeto plano, não um `Error`
+           — a biblioteca só constrói `PostgrestError` quando se pede `.throwOnError()`.
+           Resultado: de 18 a 21/09 o botão recusava com o genérico enquanto o banco dizia
+           `42809: op ANY/ALL (array) requires array on right side`, e ninguém viu. */
+        toast.error(mensagemDoErro(e, 'Falha ao criar o parcelamento'));
       } finally {
         setSaving(false);
       }
