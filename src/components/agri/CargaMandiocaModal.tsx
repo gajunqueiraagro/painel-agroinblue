@@ -38,7 +38,7 @@ import { formatNum, formatMoeda, formatarNF } from '@/lib/calculos/formatters';
 import { CampoNumero, CampoMoeda } from '@/components/ui/campo-moeda';
 import { parseMoeda } from '@/lib/calculos/numeroBR';
 import { observacoesDoOperador, temMetadadoDeMigracao } from '@/lib/agri/observacoesDaCarga';
-import { reconstruirCarga } from '@/lib/agri/compromissosDaCarga';
+import { reconstruirCarga, totalDoServico } from '@/lib/agri/compromissosDaCarga';
 import { LancamentoModalEnvelope } from '@/components/lancamento/LancamentoModalEnvelope';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
 import { useFinanceiroV2, type LancamentoV2 } from '@/hooks/useFinanceiroV2';
@@ -429,8 +429,21 @@ export function CargaMandiocaModal({
   /* ⚠ O TOTAL DOS SERVIÇOS É O DA PROPOSTA, e a tela o marca como tal: `preço × tonelada` do que
      está NA CAIXA, para o operador conferir a ordem de grandeza antes de salvar. Quem grava é a
      RPC, e é o número dela que a lista vai mostrar depois. */
-  const servicosT = form.servicos.reduce((a, s) => a + (s.preco_t ?? 0), 0);
-  const servicosPrevisto = t != null ? Math.round(servicosT * t * 100) / 100 : null;
+  /**
+   * O previsto dos serviços — a SOMA DOS TOTAIS DE CADA UM, não o total da soma dos preços.
+   *
+   * ⚠ A DIFERENÇA É O ARREDONDAMENTO, e ela importa porque a RPC arredonda POR SERVIÇO: cada
+   * compromisso nasce de um `preco_t × toneladas` próprio. Somar os preços e multiplicar uma vez
+   * só podia devolver um centavo a mais ou a menos do que a conta dos três lançamentos que a
+   * carga de fato gera — um número que não se confere com nada.
+   * ⚠ E É UM CÁLCULO SÓ PARA A TELA INTEIRA: o mesmo `totalDoServico` alimenta esta faixa e o
+   * total de cada linha logo abaixo. Duas fórmulas para o mesmo conceito, a dez pixels uma da
+   * outra, é como a casa já perdeu tardes conferindo qual das duas estava certa.
+   */
+  const totaisDeServico = form.servicos.map(x => totalDoServico(x.preco_t, t));
+  const servicosPrevisto = totaisDeServico.some(v => v != null)
+    ? totaisDeServico.reduce<number>((a, v) => a + (v ?? 0), 0)
+    : null;
   const notaTotal = (num(form.icms) ?? 0) + (num(form.funrural) ?? 0);
 
   return (
@@ -787,8 +800,16 @@ export function CargaMandiocaModal({
                       /* ⚠ ÂMBAR SÓ ENQUANTO FOR PROPOSTA — a carga gravada não tem proposta
                          nenhuma, e pintar de âmbar um número já conferido mentiria sobre o estado. */
                       const proposto = form.ids.length === 0 && s.preco_t != null;
+                      /* ⚠ O TOTAL SAI DO MESMO `totalDoServico` da faixa acima — é o número que
+                         vai virar o compromisso a pagar, e ele responde ao que se digita no R$/t.
+                         ⚠ NÃO É O VALOR GRAVADO, e a distinção é o ponto: a aba Financeiro e o
+                         resumo lateral mostram o que a RPC JÁ gravou; esta linha mostra o que a
+                         carga VAI gravar. Numa carga aberta e não editada os dois coincidem — é o
+                         instante em que o operador muda o preço que os separa, e é aí que este
+                         número serve para alguma coisa. */
+                      const total = totalDoServico(s.preco_t, t);
                       return (
-                        <div key={tipo} className="grid grid-cols-[0.6fr_2fr_1fr] items-end gap-2">
+                        <div key={tipo} className="grid grid-cols-[0.6fr_2fr_1fr_116px] items-end gap-2">
                           <span className="pb-2 text-[10px] text-muted-foreground">{rotulo}</span>
                           {clienteId ? (
                             <FornecedorSelect
@@ -805,6 +826,26 @@ export function CargaMandiocaModal({
                               onChange={n => mudarServico(tipo, { preco_t: n })}
                               className={cn('mt-0.5 h-8 text-right font-mono text-[12px]', FOCO,
                                 proposto && 'border-amber-500 bg-amber-50 text-amber-900')} />
+                          </div>
+                          {/* ⚠ LARGURA FIXA (116px) E ALINHADO À DIREITA — A19. A coluna não pode
+                              refluir quando o valor cresce: as três linhas têm de manter a mesma
+                              régua enquanto o operador digita, senão o olho persegue o número em
+                              vez de conferi-lo. 116px cabem "R$ 199.999,99" em 12px tabulares.
+                              ⚠ `h-8` E `items-end` ALINHAM COM O CAMPO ao lado, não com o rótulo:
+                              é a altura do `CampoMoeda`, e é por ela que a linha se lê na
+                              horizontal.
+                              ⚠ TRAÇO, NÃO R$ 0,00, quando falta o preço ou o peso: zero afirmaria
+                              que o serviço custa nada. */}
+                          <div>
+                            <Label className="text-[10px] text-muted-foreground">Total</Label>
+                            <div className={cn('mt-0.5 flex h-8 items-center justify-end rounded-md',
+                              'px-2 font-mono text-[12px] tabular-nums',
+                              total == null && 'text-muted-foreground')}
+                              title={total != null
+                                ? `${formatNum(s.preco_t ?? 0, 2)} R$/t × ${formatNum(t ?? 0, 2)} t`
+                                : 'Falta o preço por tonelada ou o peso da carga.'}>
+                              {total != null ? formatMoeda(total) : '—'}
+                            </div>
                           </div>
                         </div>
                       );

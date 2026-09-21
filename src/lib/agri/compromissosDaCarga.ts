@@ -355,3 +355,19 @@ export function reconstruirCarga(
     icmsTransporte: valorDe('icms_transporte'),
   };
 }
+
+/**
+ * O TOTAL de um serviço da carga: o que o R$/t vira em dinheiro.
+ *
+ * ⚠ É O INVERSO EXATO DE `reconstruirCarga`, e por isso mora ao lado dela: uma vai de `valor` para
+ * `preco_t` dividindo pelas toneladas, a outra volta multiplicando. Mesmo arredondamento nas duas
+ * — duas casas —, senão reabrir uma carga e salvá-la sem tocar em nada mudaria o centavo.
+ *
+ * ⚠ SEM PREÇO OU SEM PESO, `null` — nunca zero. É a mesma regra do `preco_t`: zero afirma "este
+ * serviço custa nada", e a tela estaria inventando um total para uma carga que ainda não tem os
+ * dois números. Ausência é traço.
+ */
+export function totalDoServico(precoT: number | null, toneladas: number | null): number | null {
+  if (precoT == null || toneladas == null || toneladas <= 0) return null;
+  return Math.round(precoT * toneladas * 100) / 100;
+}

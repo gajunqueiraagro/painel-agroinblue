@@ -191,7 +191,7 @@ describe('topoFinanceiro', () => {
 /* ────────────────────────────────────────────────────────────────────────────────────────────
    RECONSTRUÇÃO — a guarda que precede a retirada da trava (PR-MANDIOCA-FASE3).
    ──────────────────────────────────────────────────────────────────────────────────────────── */
-import { reconstruirCarga } from '@/lib/agri/compromissosDaCarga';
+import { reconstruirCarga, totalDoServico } from '@/lib/agri/compromissosDaCarga';
 
 /* Os lançamentos REAIS da NF 9287581, lidos do proto em 21/09/2026 depois da fusão.
    Os ids de favorecido são os do banco. */
@@ -274,5 +274,29 @@ describe('reconstruirCarga', () => {
     const c = reconstruirCarga([r('venda', 1000, 'F1')], 10);
     expect(c.servicos).toEqual([]);
     expect(c.icms).toBeNull();
+  });
+});
+
+describe('totalDoServico', () => {
+  /* ⚠ IDA E VOLTA SEM PERDER CENTAVO: é o invariante que liga as duas funções. Reabrir a carga
+     (valor -> preco_t) e salvá-la sem tocar em nada (preco_t -> valor) tem de devolver o mesmo
+     número — senão cada abertura moveria um centavo do compromisso. */
+  it('desfaz a reconstrução sem mover centavo', () => {
+    const c = reconstruirCarga(CARGA_9287581, 40.34);
+    const por = (t: string) => c.servicos.find(s => s.tipo === t)?.preco_t ?? null;
+    expect(totalDoServico(por('mao_obra'), 40.34)).toBeCloseTo(5647.60, 2);
+    expect(totalDoServico(por('trator'), 40.34)).toBeCloseTo(2017.00, 2);
+    expect(totalDoServico(por('frete'), 40.34)).toBeCloseTo(5647.60, 2);
+  });
+
+  it('sem preço ou sem peso é ausência, não zero', () => {
+    expect(totalDoServico(null, 40.34)).toBeNull();
+    expect(totalDoServico(140, null)).toBeNull();
+    expect(totalDoServico(140, 0)).toBeNull();
+  });
+
+  it('arredonda em duas casas', () => {
+    expect(totalDoServico(140.005, 1)).toBeCloseTo(140.01, 2);
+    expect(totalDoServico(33.333, 3)).toBeCloseTo(100, 2);
   });
 });
