@@ -23,6 +23,8 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Segmentado } from '@/components/ui/segmentado';
 import { FornecedorSelect } from '@/components/shared/FornecedorSelect';
+import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
+import { useContasBancariasLeves } from '@/hooks/useContasBancariasLeves';
 import { Save, AlertTriangle, Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatNum, formatMoeda } from '@/lib/calculos/formatters';
@@ -61,6 +63,12 @@ export interface CargaMandiocaForm {
   servicos: ServicoDaCarga[];
   icms: string;
   funrural: string;
+  /** Retido da venda, como o Funrural. */
+  inss: string;
+  /** Custo sobre o frete — não é o ICMS da venda, e não mora no mesmo subcentro. */
+  icmsTransporte: string;
+  /** ⚠ A conta que paga a carga: sem ela o compromisso não aparece na conciliação. */
+  contaId: string | null;
   observacoes: string;
   /** O que a RPC devolveu na última gravação. `null` enquanto não se salvou. */
   valorBruto: number | null;
@@ -80,6 +88,9 @@ export const cargaMandiocaVazia = (): CargaMandiocaForm => ({
   servicos: TIPOS_SERVICO.map(s => ({ tipo: s.tipo, fornecedor_id: null, preco_t: null })),
   icms: '',
   funrural: '',
+  inss: '',
+  icmsTransporte: '',
+  contaId: null,
   observacoes: '',
   valorBruto: null,
 });
@@ -176,6 +187,9 @@ export function CargaMandiocaModal({
   /* ⚠ ABA ÚNICA, E ELA EXISTE: o envelope reserva a altura da faixa de abas, e sem nada ali o
      modal abriria com uma tira vazia no topo. Uma aba só também nomeia o que se está lançando. */
   const [aba, setAba] = useState<'carga'>('carga');
+  /* ⚠ O MODAL BUSCA AS CONTAS, como a `AbaCompromissosOC` faz: elas são do cliente, não da carga,
+     e passá-las por prop obrigaria a `CargasDaArea` a carregá-las só para repassar. */
+  const { contas } = useContasBancariasLeves(clienteId);
 
   /* ⚠ O VALOR GRAVADO SOME QUANDO O ROMANEIO MUDA: ele é a resposta da RPC para os números
      ANTERIORES, e mantê-lo na tela depois de mexer no peso mostraria o valor de uma carga que não
@@ -326,7 +340,14 @@ export function CargaMandiocaModal({
               {/* ⚠ "COMPRADOR", NÃO "FORNECEDOR": quem paga a carga é a indústria, e o rótulo tem
                   de dizer o papel dela nesta operação. O cadastro por trás é o mesmo — um
                   `financeiro_fornecedores` —, e é ele que a RPC exige em `p_industria_id`. */}
-              <div className="grid grid-cols-[2fr_1fr_1fr] items-end gap-2">
+              {/* ⚠ A CONTA ENTROU NESTA LINHA, e ela não é detalhe: sem conta o compromisso não
+                  aparece na conciliação — `fn_extrato_conciliar_mes` escolhe candidatos por
+                  `conta_efetiva_id`. A RPC grava por direção; aqui se escolhe uma vez, para os
+                  seis lançamentos da carga.
+                  ⚠ E NÃO SE INFERE: o NJ tem dez contas correntes ativas. O que vem pronto é a
+                  conta da ÚLTIMA carga deste talhão, no mesmo contrato âmbar dos preços de
+                  serviço — proposta que o operador confere, nunca decisão da tela. */}
+              <div className="grid grid-cols-[2fr_1.4fr_1fr_1fr] items-end gap-2">
                 {clienteId ? (
                   <FornecedorSelect
                     clienteId={clienteId}
@@ -338,6 +359,19 @@ export function CargaMandiocaModal({
                       onChange({ ...form, industriaId: id, industriaNome: nome, valorBruto: null })}
                   />
                 ) : <div />}
+                <div>
+                  <Label className="text-[10px]">Conta *</Label>
+                  <ContaBancariaSelect
+                    value={form.contaId ?? '__none__'}
+                    onValueChange={v => onChange({ ...form, contaId: v === '__none__' ? null : v, valorBruto: null })}
+                    contas={contas.map(c => ({
+                      id: c.id, nome_conta: c.nome_conta, nome_exibicao: c.nome_exibicao,
+                      tipo_conta: c.tipo_conta ?? null,
+                    }))}
+                    placeholder="Quem paga"
+                    className={cn('mt-0.5 h-8 text-[12px]', FOCO)}
+                  />
+                </div>
                 <Campo rotulo="NF" valor={form.nf} onChange={v => campo('nf', v)}
                   dica="A nota da indústria — é ela que agrupa o ICMS." />
                 <Campo rotulo="Ticket" valor={form.ticket} onChange={v => campo('ticket', v)} />
@@ -423,7 +457,10 @@ export function CargaMandiocaModal({
                 <div className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
                   Nota
                 </div>
-                <div className="grid grid-cols-[1fr_1fr_2fr] items-end gap-2">
+                {/* ⚠ QUATRO COLUNAS, E A ORDEM SEGUE A NATUREZA: os três primeiros são retidos da
+                    VENDA (dedução de receita); o ICMS de transporte é CUSTO sobre o frete e fica
+                    por último, separado, porque cai noutro subcentro do DRE. */}
+                <div className="grid grid-cols-[1fr_1fr_1fr_1fr] items-end gap-2">
                   <div>
                     <Label className="flex items-center gap-1 text-[10px]">
                       ICMS (R$)
@@ -441,11 +478,30 @@ export function CargaMandiocaModal({
                       onChange={n => campo('funrural', n == null ? '' : String(n))}
                       className={cn('mt-0.5 h-8 text-right font-mono text-[12px]', FOCO)} />
                   </div>
-                  {/* ⚠ O MOTIVO DE ESTAR DESLIGADO FICA ESCRITO AO LADO, não só no `title` — a
-                      regra da OC. Aqui ele diz QUAL nota já levou o imposto. */}
-                  <span className="pb-2 text-[10px] leading-snug text-muted-foreground">
+                  <div>
+                    <Label className="text-[10px]">INSS (R$)</Label>
+                    <CampoMoeda valor={num(form.inss)}
+                      onChange={n => campo('inss', n == null ? '' : String(n))}
+                      className={cn('mt-0.5 h-8 text-right font-mono text-[12px]', FOCO)} />
+                  </div>
+                  <div>
+                    {/* ⚠ "DO FRETE" NO RÓTULO, e não é zelo: sem isso ele lê como o ICMS de cima e
+                        o operador digita o mesmo número duas vezes. Este vai para Transporte
+                        Agrícola (13090), junto do frete que ele tributa. */}
+                    <Label className="text-[10px]">ICMS do frete (R$)</Label>
+                    <CampoMoeda valor={num(form.icmsTransporte)}
+                      onChange={n => campo('icmsTransporte', n == null ? '' : String(n))}
+                      className={cn('mt-0.5 h-8 text-right font-mono text-[12px]', FOCO)} />
+                  </div>
+                </div>
+                {/* ⚠ O MOTIVO DE ESTAR DESLIGADO FICA ESCRITO ABAIXO, não só no `title` — a
+                    regra da OC. Aqui ele diz QUAL nota já levou o imposto.
+                    ⚠ E SAIU DA GRADE: com quatro campos não sobra coluna para a frase, e espremê-la
+                    cortaria justamente o número da nota, que é o que ela veio dizer. */}
+                <div className="mt-1">
+                  <span className="text-[10px] leading-snug text-muted-foreground">
                     {icmsTravado
-                      ? `ICMS já lançado na NF ${form.nf || '—'} — uma vez por nota.`
+                      ? `ICMS da venda já lançado na NF ${form.nf || '—'} — uma vez por nota. O do frete é por carga.`
                       : ''}
                   </span>
                 </div>

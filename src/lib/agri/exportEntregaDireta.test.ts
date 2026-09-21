@@ -47,6 +47,7 @@ const CARGAS: CargaAgrupada[] = Array.from({ length: 21 }, (_, i) => ({
   preco_g: 1.05,
   valor: 10966.73,
   status: 'programado',
+  contaId: 'CONTA-1',
 }));
 
 const ENTREGA: EntregaDireta = {

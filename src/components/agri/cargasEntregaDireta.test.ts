@@ -53,8 +53,8 @@ describe('as colheitas viram cargas', () => {
   it('duas metades do mesmo lançamento são UMA carga', () => {
     const linhas = [carga('c1', 'a1', 10.55), carga('c2', 'a2', 10.55)];
     const venda = new Map<string, VendaDaCarga>([
-      ['c1', { lancamento_id: 'L1', valor: 10966.73, status: 'programado' }],
-      ['c2', { lancamento_id: 'L1', valor: 10966.73, status: 'programado' }],
+      ['c1', { lancamento_id: 'L1', valor: 10966.73, status: 'programado', conta_efetiva_id: 'CONTA-1' }],
+      ['c2', { lancamento_id: 'L1', valor: 10966.73, status: 'programado', conta_efetiva_id: 'CONTA-1' }],
     ]);
     const cargas = agruparCargas(linhas, venda, industrias, nomes, fazendas);
 
@@ -76,8 +76,8 @@ describe('as colheitas viram cargas', () => {
       carga('c2', 'a2', 10.55, { rendimento_g: 495 }),
     ];
     const venda = new Map<string, VendaDaCarga>([
-      ['c1', { lancamento_id: 'L1', valor: 100, status: 'programado' }],
-      ['c2', { lancamento_id: 'L1', valor: 100, status: 'programado' }],
+      ['c1', { lancamento_id: 'L1', valor: 100, status: 'programado', conta_efetiva_id: 'CONTA-1' }],
+      ['c2', { lancamento_id: 'L1', valor: 100, status: 'programado', conta_efetiva_id: 'CONTA-1' }],
     ]);
     expect(agruparCargas(linhas, venda, industrias, nomes, fazendas)[0].rendimento_g).toBe(495);
   });
@@ -86,8 +86,8 @@ describe('as colheitas viram cargas', () => {
     /* ⚠ O CASO QUE MATA O AGRUPAMENTO POR NF: as 11 notas do NJ cobrem 21 cargas. */
     const linhas = [carga('c1', 'a1', 10), carga('c2', 'a1', 12)];
     const venda = new Map<string, VendaDaCarga>([
-      ['c1', { lancamento_id: 'L1', valor: 100, status: 'programado' }],
-      ['c2', { lancamento_id: 'L2', valor: 120, status: 'realizado' }],
+      ['c1', { lancamento_id: 'L1', valor: 100, status: 'programado', conta_efetiva_id: 'CONTA-1' }],
+      ['c2', { lancamento_id: 'L2', valor: 120, status: 'realizado', conta_efetiva_id: 'CONTA-1' }],
     ]);
     const cargas = agruparCargas(linhas, venda, industrias, nomes, fazendas);
     expect(cargas).toHaveLength(2);

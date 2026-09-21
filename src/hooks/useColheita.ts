@@ -70,6 +70,14 @@ export interface VendaDaCarga {
   lancamento_id: string;
   valor: number | null;
   status: string | null;
+  /**
+   * ⚠ A CONTA QUE RECEBEU A VENDA — PR-CARGA-MANDIOCA-COMPROMISSOS-01. Vem de
+   * `conta_efetiva_id`, a coluna GERADA que já resolve a direção: numa entrada ela é o destino,
+   * numa saída a origem. Ler `conta_bancaria_id` direto devolveria nulo para a venda, que é
+   * `1-Entradas`. É ela que volta pré-selecionada quando a carga é reaberta para correção — sem
+   * isso, corrigir a carga a salvaria sem conta e ela sumiria da conciliação.
+   */
+  conta_efetiva_id: string | null;
 }
 
 /* ⚠ `peso_bruto_kg` ENTROU AQUI JUNTO COM O CAMPO — PR-CARGA-MANDIOCA-PESO-P0-01, e a ordem
@@ -128,16 +136,17 @@ export function useColheita(safraAreaIds: readonly string[]) {
     const mapa = new Map<string, VendaDaCarga>();
     if (pares.length > 0) {
       const { data: lancs } = await db.from('financeiro_lancamentos_v2')
-        .select('id, valor, status_transacao')
+        .select('id, valor, status_transacao, conta_efetiva_id')
         .in('id', pares.map(p => p.lancamento_id));
-      const porId = new Map<string, { valor: number | null; status: string | null }>();
-      for (const l of (lancs ?? []) as Array<{ id: string; valor: number | null; status_transacao: string | null }>) {
-        porId.set(l.id, { valor: l.valor, status: l.status_transacao });
+      const porId = new Map<string, { valor: number | null; status: string | null; conta: string | null }>();
+      for (const l of (lancs ?? []) as Array<{ id: string; valor: number | null; status_transacao: string | null; conta_efetiva_id: string | null }>) {
+        porId.set(l.id, { valor: l.valor, status: l.status_transacao, conta: l.conta_efetiva_id });
       }
       for (const p of pares) {
         const l = porId.get(p.lancamento_id);
         mapa.set(p.colheita_id, {
           lancamento_id: p.lancamento_id, valor: l?.valor ?? null, status: l?.status ?? null,
+          conta_efetiva_id: l?.conta ?? null,
         });
       }
     }

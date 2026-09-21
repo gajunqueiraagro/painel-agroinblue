@@ -50,6 +50,8 @@ export interface CargaAgrupada {
   preco_g: number | null;
   valor: number | null;
   status: string | null;
+  /** A conta que recebeu a venda — volta pré-selecionada ao reabrir a carga. */
+  contaId: string | null;
 }
 
 /** As larguras, na mesma gramática da tabela irmã. */
@@ -149,6 +151,7 @@ export function agruparCargas(
          dinheiro duas vezes, porque as duas apontam para o MESMO lançamento. */
       valor: elo?.valor ?? null,
       status: elo?.status ?? null,
+      contaId: elo?.conta_efetiva_id ?? null,
     });
   }
   return cargas;

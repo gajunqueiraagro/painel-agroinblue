@@ -33,14 +33,38 @@ export interface RespostaCarga {
   icmsLancado?: boolean;
 }
 
-/** Os três serviços que a carga paga por tonelada. */
-export type TipoServico = 'arranquio' | 'frete' | 'carregamento';
+/**
+ * Os três serviços que a carga paga por tonelada — PR-CARGA-MANDIOCA-COMPROMISSOS-01.
+ *
+ * ⚠ OS NOMES MUDARAM, e não é renomeação cosmética: cada um passou a ter SUBCENTRO PRÓPRIO.
+ * 'arranquio' virou 'mao_obra' (13100 Diaristas e Empreita Lavoura) e 'carregamento' virou
+ * 'trator' (13160 Serviços Mecanizados Terceirizados). Antes os dois caíam em 13110 porque a RPC
+ * resolvia o plano com dois destinos para três serviços.
+ * ⚠ E OS NOMES ANTIGOS AINDA EXISTEM NO BANCO — 42 lançamentos do backfill de 16/09. Enquanto a
+ * reclassificação não roda (frente própria), a `proposta()` abaixo não acha o preço deles: ela
+ * procura por `papel`, e 'arranquio' não está mais nesta lista. O campo abre em branco, que é o
+ * que já acontece ao reabrir qualquer carga. O frete não muda de nome e segue propondo.
+ */
+export type TipoServico = 'frete' | 'trator' | 'mao_obra';
 
 export const TIPOS_SERVICO: ReadonlyArray<{ tipo: TipoServico; rotulo: string }> = [
-  { tipo: 'arranquio', rotulo: 'Arranquio' },
   { tipo: 'frete', rotulo: 'Frete' },
-  { tipo: 'carregamento', rotulo: 'Carregamento' },
+  { tipo: 'trator', rotulo: 'Trator' },
+  { tipo: 'mao_obra', rotulo: 'Mão de obra' },
 ];
+
+/**
+ * O que a última carga desta área ensina para a próxima.
+ *
+ * ⚠ A CONTA ENTROU AQUI — PR-CARGA-MANDIOCA-COMPROMISSOS-01 — e não é palpite: é a conta que
+ * pagou a carga anterior do mesmo talhão. O NJ tem dez contas correntes ativas; inferir por
+ * qualquer outra regra erraria. Isto é PROPOSTA, no mesmo contrato dos preços: entra preenchida e
+ * o operador confere antes de salvar.
+ */
+export interface PropostaDaUltimaCarga {
+  servicos: PropostaServico[];
+  contaId: string | null;
+}
 
 export interface ServicoDaCarga {
   tipo: TipoServico;
@@ -64,6 +88,18 @@ export interface ParametrosCarga {
   icms: number | null;
   funrural: number | null;
   observacao: string | null;
+  /**
+   * ⚠ A CONTA QUE PAGA — e sem ela o compromisso não existe para a conciliação.
+   * Nenhum INSERT da RPC gravava conta; as cargas de hoje só têm porque um backfill as carimbou
+   * em 17/09. `fn_extrato_conciliar_mes` escolhe candidatos por `conta_efetiva_id`: carga sem
+   * conta some da conciliação sem erro nenhum. A RPC grava por direção — entrada no destino,
+   * saída na origem.
+   */
+  contaId: string | null;
+  /** Retido da venda, como o Funrural (dedução). */
+  inss: number | null;
+  /** Custo SOBRE O FRETE (13090), não dedução de venda — por isso não é `icms`. */
+  icmsTransporte: number | null;
 }
 
 const num = (v: unknown): number | null => {
@@ -147,6 +183,9 @@ export function useCargaMandioca() {
       p_icms: p.icms,
       p_funrural: p.funrural,
       p_observacao: p.observacao,
+      p_conta_id: p.contaId,
+      p_inss: p.inss,
+      p_icms_transporte: p.icmsTransporte,
     });
     if (error) return { ok: false, erro: error.message };
     return lerResposta(data);
@@ -208,6 +247,9 @@ export function useCargaMandioca() {
       p_icms: p.icms,
       p_funrural: p.funrural,
       p_observacao: p.observacao,
+      p_conta_id: p.contaId,
+      p_inss: p.inss,
+      p_icms_transporte: p.icmsTransporte,
     });
     if (error) return { ok: false, erro: error.message };
     const r = lerResposta(data);
@@ -249,8 +291,8 @@ export function useContextoCargaMandioca(safraAreaIds: readonly string[]) {
    * ⚠ E SÓ A ÚLTIMA, não uma média das anteriores: o que o arranquio custou na semana passada é
    * um preço que existiu; a média de seis semanas é um número que ninguém negociou.
    */
-  const proposta = useCallback(async (): Promise<PropostaServico[]> => {
-    if (!chave) return [];
+  const proposta = useCallback(async (): Promise<PropostaDaUltimaCarga> => {
+    if (!chave) return { servicos: [], contaId: null };
     const db = supabase as any;
     const { data: ultima } = await db.from('agri_colheita')
       .select('id, toneladas')
@@ -260,7 +302,7 @@ export function useContextoCargaMandioca(safraAreaIds: readonly string[]) {
       .order('data_colheita', { ascending: false })
       .limit(1);
     const carga = (ultima ?? [])[0] as { id: string; toneladas: number | null } | undefined;
-    if (!carga?.id || !carga.toneladas) return [];
+    if (!carga?.id || !carga.toneladas) return { servicos: [], contaId: null };
 
     const { data: elos } = await db.from('agri_colheita_lancamentos')
       .select('lancamento_id, papel')
@@ -268,14 +310,19 @@ export function useContextoCargaMandioca(safraAreaIds: readonly string[]) {
       .eq('ativo', true)
       .in('papel', TIPOS_SERVICO.map(s => s.tipo));
     const pares = (elos ?? []) as Array<{ lancamento_id: string; papel: string }>;
-    if (pares.length === 0) return [];
+    if (pares.length === 0) return { servicos: [], contaId: null };
 
     const { data: lancs } = await db.from('financeiro_lancamentos_v2')
-      .select('id, valor, favorecido_id')
+      .select('id, valor, favorecido_id, conta_efetiva_id')
       .in('id', pares.map(p => p.lancamento_id));
     const porId = new Map<string, { valor: number | null; favorecido_id: string | null }>();
-    for (const l of (lancs ?? []) as Array<{ id: string; valor: number | null; favorecido_id: string | null }>) {
+    /* ⚠ A CONTA VEM DE `conta_efetiva_id`, a coluna GERADA que já resolve a direção: nas saídas ela
+       é a origem, nas entradas o destino. Ler `conta_bancaria_id` direto devolveria nulo para a
+       venda, e a última carga poderia propor "sem conta" só por ser uma entrada. */
+    let conta: string | null = null;
+    for (const l of (lancs ?? []) as Array<{ id: string; valor: number | null; favorecido_id: string | null; conta_efetiva_id: string | null }>) {
       porId.set(l.id, { valor: l.valor, favorecido_id: l.favorecido_id });
+      if (!conta && l.conta_efetiva_id) conta = l.conta_efetiva_id;
     }
 
     const saida: PropostaServico[] = [];
@@ -289,7 +336,7 @@ export function useContextoCargaMandioca(safraAreaIds: readonly string[]) {
         preco_t: Math.round((l.valor / carga.toneladas) * 100) / 100,
       });
     }
-    return saida;
+    return { servicos: saida, contaId: conta };
   }, [chave]);
 
   /**

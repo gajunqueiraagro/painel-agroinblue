@@ -377,12 +377,16 @@ export function CargasDaArea({
     setAreaId(talhaoDestino?.id ?? '');
     setFormMandioca(base);
     const p = await proposta();
-    if (p.length === 0) return;
+    if (p.servicos.length === 0 && p.contaId == null) return;
     setFormMandioca(f => (f && f.ids.length === 0
       ? {
         ...f,
+        /* ⚠ A CONTA DA CARGA ANTERIOR ENTRA PRÉ-SELECIONADA, no mesmo contrato dos preços: é
+           proposta, não decisão. Sem ela o operador escolheria entre as dez contas correntes do
+           NJ a cada carga — e uma carga sem conta some da conciliação. */
+        contaId: p.contaId,
         servicos: TIPOS_SERVICO.map(({ tipo }) => {
-          const achou = p.find(x => x.tipo === tipo);
+          const achou = p.servicos.find(x => x.tipo === tipo);
           return { tipo, fornecedor_id: achou?.fornecedor_id ?? null, preco_t: achou?.preco_t ?? null };
         }),
       }
@@ -421,6 +425,9 @@ export function CargasDaArea({
       rendimentoG: c.rendimento_g != null ? String(c.rendimento_g) : '',
       precoG: c.preco_g != null ? formatNum(c.preco_g, 2) : '',
       observacoes: c.principal.observacoes ?? '',
+      /* ⚠ A CONTA VOLTA DA VENDA, que é o lançamento que a carga sempre tem — `conta_efetiva_id`
+         já resolve a direção. Reabrir sem conta e salvar apagaria o elo com a conciliação. */
+      contaId: c.contaId ?? null,
       valorBruto: c.valor,
     });
     setIcmsTravado(await icmsJaNaNota(c.principal.nf_produtor ?? ''));
@@ -472,6 +479,9 @@ export function CargasDaArea({
       icms: icmsTravado ? null : (parseMoeda(f.icms) || null),
       funrural: parseMoeda(f.funrural) || null,
       observacao: f.observacoes.trim() || null,
+      contaId: f.contaId,
+      inss: parseMoeda(f.inss) || null,
+      icmsTransporte: parseMoeda(f.icmsTransporte) || null,
     };
 
     setSalvando(true);
