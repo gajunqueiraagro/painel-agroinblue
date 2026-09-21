@@ -70,6 +70,22 @@ export interface AguardandoExatosConciliar {
   valorBanco: number;
   historicoBanco: string | null;
   documentoBanco: string | null;
+  /**
+   * O CANDIDATO ÚNICO, quando há um — PR-CONCILIAR-MES-CANDIDATO-DATADIF-01.
+   *
+   * ⚠ A RPC PASSOU A EMITIR O QUE JÁ CALCULAVA. O `count(*)` que decide o ramo `v_n = 1` varria
+   * exatamente esta linha e devolvia só o número; a tela dizia "tem candidato" sem poder dizer
+   * quem. Agora a mesma consulta, com os mesmos critérios, também captura a identidade — para
+   * MOSTRAR. Casar continua sendo o passo 2b.
+   * ⚠ `null` É ESTADO REAL, não defeito: só o ramo de candidato único preenche estes campos, e
+   * o `aguardando_exatos` também carrega movimentos que não passaram por ele.
+   * ⚠ `candValor` VEM SEM SINAL — é `financeiro_lancamentos_v2.valor`, que é absoluto, com a
+   * direção guardada à parte em `sinal`. Quem exibe aplica o sinal; ver a nota na tela.
+   */
+  candLancamentoId: string | null;
+  candDescricao: string | null;
+  candValor: number | null;
+  candData: string | null;
 }
 
 /**
@@ -192,6 +208,10 @@ function daPrevia(j: Json | null): PreviaConciliarMes | null {
     aguardandoExatos: lista(e.aguardando_exatos).map(a => ({
       extratoId: String(a.extrato_id), dataBanco: txt(a.data_banco), valorBanco: num(a.valor_banco),
       historicoBanco: txt(a.historico_banco), documentoBanco: txt(a.documento_banco),
+      candLancamentoId: txt(a.cand_lancamento_id), candDescricao: txt(a.cand_descricao),
+      /* ⚠ `numOuNulo`, NUNCA `num`: aqui zero e ausente são coisas diferentes, e `num` devolve
+         0 para o que não veio — a tela mostraria "R$ 0,00" onde não há candidato. */
+      candValor: numOuNulo(a.cand_valor), candData: txt(a.cand_data),
     })),
     substituidos: lista(e.substituidos).map(x => {
       const a = obj(x.antes) ?? {}; const d = obj(x.depois) ?? {};

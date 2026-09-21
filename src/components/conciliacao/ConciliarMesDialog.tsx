@@ -32,6 +32,7 @@ import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { saldoConfere } from '@/lib/financeiro/conciliacaoCalc';
+import { diasEntreISO } from '@/lib/financeiro/antiDupCriarLancamento';
 import { useConciliarMes, type PreviaConciliarMes } from '@/hooks/useConciliarMes';
 import { Segmentado } from '@/components/ui/segmentado';
 import { supabase } from '@/integrations/supabase/client';
@@ -576,6 +577,13 @@ export function ConciliarMesDialog({
                           ⚠ O QUE ELA NÃO DIZ é QUAL é o candidato — a prévia não emite o lançamento
                           e o botão não o pareia. Nomeá-lo exige a RPC emitir o candidato marcado
                           como aproximado: é migration, e é a fase 2 desta frente. */}
+                      {/* ⚠ UMA NOTA, NÃO UMA POR LINHA. O aviso de que casar é o passo seguinte
+                          valia repetido enquanto o lado direito era ele próprio; agora aquele
+                          espaço é do candidato, e repetir a frase em cada linha custaria a
+                          largura que o nome do lançamento passou a usar. */}
+                      <p className="border-b bg-muted/20 px-3 py-1 text-[10px] italic text-muted-foreground">
+                        O candidato é só para conferência — casar com data diferente continua sendo na Estação.
+                      </p>
                       {semPar.map(mov => (
                         <div key={mov.extratoId} className="flex items-center gap-2 border-b border-border/60 px-3 py-[7px] text-[10px]">
                           <span className="w-[38px] shrink-0 overflow-hidden tabular-nums text-muted-foreground">{dataBr(mov.dataBanco)}</span>
@@ -586,10 +594,46 @@ export function ConciliarMesDialog({
                             {comSinal(mov.valorBanco)}
                           </span>
                           <span className="shrink-0 text-muted-foreground/40" aria-hidden>│</span>
-                          <span className="min-w-0 flex-1 truncate italic text-muted-foreground">
-                            o botão não casa datas diferentes — resolva na Estação
-                          </span>
-                          <span className="w-[96px] shrink-0" />
+                          {mov.candLancamentoId == null ? (
+                            /* ⚠ SENTINELA, NÃO DEFEITO: a RPC só preenche o candidato no ramo de
+                               candidato único, e o `aguardando_exatos` carrega mais gente. Sem
+                               ele, a linha volta a dizer o que sempre soube. */
+                            <>
+                              <span className="min-w-0 flex-1 truncate italic text-muted-foreground">
+                                tem candidato, mas em data diferente — resolva na Estação
+                              </span>
+                              <span className="w-[96px] shrink-0" />
+                            </>
+                          ) : (
+                            <>
+                              {/* ⚠ A DESCRIÇÃO TRUNCA, A DATA E OS DIAS NÃO — e a ordem importa. O que
+                                  define este grupo é a DIFERENÇA DE DATA; deixá-la no fim de um
+                                  `truncate` a faria sumir justamente nas descrições longas, que são a
+                                  maioria ("ICMS Venda Mandioca · NF 9310349"). */}
+                              <span className="flex min-w-0 flex-1 items-baseline gap-1">
+                                <span className="min-w-0 truncate" title={mov.candDescricao ?? undefined}>
+                                  {mov.candDescricao ?? '—'}
+                                </span>
+                                <span className="shrink-0 text-muted-foreground">
+                                  · {dataBr(mov.candData)}
+                                  {mov.candData && mov.dataBanco
+                                    && ` · ${diasEntreISO(mov.candData, mov.dataBanco)} dia${diasEntreISO(mov.candData, mov.dataBanco) === 1 ? '' : 's'}`}
+                                </span>
+                              </span>
+                              {/* ⚠ O SINAL VEM DO MOVIMENTO, E NÃO É PALPITE — a RPC seleciona o
+                                  candidato com `l.sinal = (CASE WHEN v_ext.valor < 0 THEN '-1' ELSE
+                                  '1' END)`, no MESMO filtro que o escolheu: ter o sinal do movimento
+                                  é critério de seleção, não coincidência. `cand_valor` é
+                                  `financeiro_lancamentos_v2.valor`, que é absoluto.
+                                  ⚠ E SEM ISSO AS DUAS SUB-ABAS VIZINHAS SE CONTRADIZEM: em "Par
+                                  exato" a RPC já aplica o sinal (`valor_sistema`), então a mesma
+                                  coluna mostraria −R$ 2.016,00 em vermelho lá e +R$ 2.016,00 em verde
+                                  aqui, para pagamentos iguais. */}
+                              <span className={`w-[96px] shrink-0 text-right font-medium tabular-nums ${corValor(mov.valorBanco)}`}>
+                                {comSinal(Math.sign(mov.valorBanco) * Math.abs(mov.candValor ?? 0))}
+                              </span>
+                            </>
+                          )}
                         </div>
                       ))}
                     </div>
