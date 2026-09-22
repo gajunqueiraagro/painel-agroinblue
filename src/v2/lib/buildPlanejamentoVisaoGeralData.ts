@@ -379,14 +379,13 @@ function valorPC100NoRegime(
  * a outros macros e NÃO devem entrar em Custo Variável Pec.
  */
 const SUBCENTROS_NUTRICAO_META_AUTO = [
-  'Nutrição Cria',
-  'Nutrição Recria',
-  'Nutrição Engorda',
+  'Nutrição',
 ] as const;
 
 /**
- * Patch pós-F2.1 — Lê do Map `extras.lancamentosNutricao` apenas as 3 chaves
- * de Nutrição auto (Cria/Recria/Engorda) e devolve a soma mensal[12].
+ * Patch pós-F2.1 — Lê do Map `extras.lancamentosNutricao` apenas a chave de
+ * Nutrição auto ('Nutrição', já a soma Cria + Recria + Engorda desde o
+ * META-SUMIU-01) e devolve a série mensal[12].
  *
  * Reutiliza a fonte oficial já carregada pelo `usePlanejamentoFinanceiro`
  * (`loadNutricao`) — sem query nova, sem duplicar fórmula. Defensivo:

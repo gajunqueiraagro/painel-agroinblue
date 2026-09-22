@@ -52,7 +52,7 @@ const SUBCENTROS_FINANCIAMENTO = new Set([
 ]);
 
 const SUBCENTROS_NUTRICAO = new Set([
-  'Nutrição Cria', 'Nutrição Recria', 'Nutrição Engorda',
+  'Nutrição',
   'Despesas Comerciais Pecuária',
   'Impostos e Despesas de Abates e Vendas',
   'Transferência de Gado entre Fazendas',

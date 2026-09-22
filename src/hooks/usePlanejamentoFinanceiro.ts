@@ -550,12 +550,18 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string, enabl
       if (m >= 1 && m <= 12) sfMap.get(r.categoria_codigo)![m - 1] = Number(r.saldo_final) || 0;
     }
 
+    // ⚠ AS TRÊS FASES VIRAM UMA CHAVE SÓ, 'Nutrição' (META-SUMIU-01): a PLANO-NUTRICAO-01
+    // (20260912094000) juntou Cria/Recria/Engorda no subcentro 'Nutrição' e inativou os três, e
+    // as telas semeiam do plano ATIVO e pintam por nome — com as chaves antigas o valor ficava
+    // sem linha. Cada fase se calcula como antes; a soma mês a mês é gravada uma vez, aqui.
+    const fasesNutricao: number[][] = [];
+
     // CRIA: vacas × custo
     if (criaCusto > 0) {
       const cria = new Array(12).fill(0);
       const vacas = sfMap.get('vacas') || new Array(12).fill(0);
       for (let i = 0; i < 12; i++) cria[i] = Math.round(vacas[i] * criaCusto * 100) / 100;
-      result.set('Nutrição Cria', cria);
+      fasesNutricao.push(cria);
     }
 
     // RECRIA: (novilhas + garrotes + desmama_m + desmama_f) × custo
@@ -567,7 +573,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string, enabl
         for (const c of cats) soma += (sfMap.get(c)?.[i] || 0);
         recria[i] = Math.round(soma * recriaCusto * 100) / 100;
       }
-      result.set('Nutrição Recria', recria);
+      fasesNutricao.push(recria);
     }
 
     // ENGORDA: distribuir custo em 4 meses antes de cada abate
@@ -598,7 +604,16 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string, enabl
         }
       }
       for (let i = 0; i < 12; i++) engorda[i] = Math.round(engorda[i] * 100) / 100;
-      result.set('Nutrição Engorda', engorda);
+      fasesNutricao.push(engorda);
+    }
+
+    // ⚠ SÓ HÁ CHAVE SE ALGUMA FASE EXISTE: sem parâmetro, sem linha auto. Fase ausente é zero.
+    if (fasesNutricao.length > 0) {
+      const nutricao = new Array(12).fill(0);
+      for (const fase of fasesNutricao) {
+        for (let i = 0; i < 12; i++) nutricao[i] = Math.round((nutricao[i] + fase[i]) * 100) / 100;
+      }
+      result.set('Nutrição', nutricao);
     }
 
     // FRETE EM TRANSFERÊNCIAS: alocado na fazenda destino (transferencia_entrada)
