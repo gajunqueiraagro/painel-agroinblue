@@ -57,10 +57,15 @@ import { PecLancamentosModal } from '@/components/agri/PecLancamentosModal';
 import { PecPatrimonioModal } from '@/components/agri/PecPatrimonioModal';
 import { PecRateioAdmModal } from '@/components/agri/PecRateioAdmModal';
 import {
+  PecHistoricoLinhaModal, type RecorteHistoricoPec,
+} from '@/components/agri/PecHistoricoLinhaModal';
+import {
   PecDrePanel, FaixaVisoesPec, SeletorAnosPec, colunasDaVisao, lerVisaoPec, escreverVisaoPec, lerNAnosPec,
-  UNIDADES_PEC, ROTULO_UNIDADE, type UnidadePec,
   escreverNAnosPec, N_ANOS_PADRAO, type VisaoPec,
 } from '@/pages/PecDrePanel';
+/* ⚠ AS UNIDADES VÊM DA RÉGUA, não mais da tela — DRE-HISTORICO-LINHA-01a. Mesma lista, mesmo
+   rótulo; só o arquivo mudou. */
+import { UNIDADES_PEC, ROTULO_UNIDADE, type UnidadePec } from '@/components/agri/drePecRegua';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useFinanceiroV2, type LancamentoV2 } from '@/hooks/useFinanceiroV2';
 import { usePainelSafra, useComparativoSafras } from '@/hooks/usePainelSafra';
@@ -256,6 +261,7 @@ export function AgriDreLavouraTab() {
   const [didatico, setDidatico] = useState<
     { fazendaId: string | null; nome: string; qual: 'vpb' | 'efeito' } | null>(null);
   const [rateioPecAberto, setRateioPecAberto] = useState(false);
+  const [historicoPec, setHistoricoPec] = useState<RecorteHistoricoPec | null>(null);
   /**
    * ONDE A PECUÁRIA ABRE — a última safra com movimento e com fechamento no fim.
    *
@@ -300,6 +306,23 @@ export function AgriDreLavouraTab() {
     }));
   }, [pecDe, pecAte, visaoPec, nAnosPec]);
   const anosPec = useDrePecuariaLista(ehPec ? clienteId : null, periodosAnosPec);
+  /**
+   * OS CINCO ANOS DO HISTÓRICO — DRE-HISTORICO-LINHA-01a.
+   *
+   * ⚠ É A MESMA LEITURA, NÃO UMA SEGUNDA: `useDrePecuariaLista` monta a chave
+   * `['dre-pecuaria', cliente, de, ate, cenario]`, a mesma da grade. Os anos que a visão x Anos já
+   * trouxe saem do cache; com o padrão de 3 anos, abrir o modal custa DUAS requisições.
+   * ⚠ E A LISTA SÓ EXISTE COM O MODAL ABERTO: fora dele são zero períodos e zero requisições —
+   * quem nunca clicar no ícone não paga nada por ele.
+   */
+  const periodosHistoricoPec = useMemo((): PeriodoPec[] => {
+    if (!historicoPec || !pecDe || !pecAte) return [];
+    return Array.from({ length: 5 }, (_, i): PeriodoPec => ({
+      de: anoMesAntes(pecDe, i + 1), ate: anoMesAntes(pecAte, i + 1), cenario: 'realizado',
+    }));
+  }, [historicoPec, pecDe, pecAte]);
+  const anosHistoricoPec = useDrePecuariaLista(
+    historicoPec ? clienteId : null, periodosHistoricoPec);
   const colunasPec = useMemo(() => (drePec && pecDe && pecAte
     ? colunasDaVisao({
       visao: visaoPec, de: pecDe, ate: pecAte, real: drePec,
@@ -881,7 +904,8 @@ export function AgriDreLavouraTab() {
             unidades={unidadesPec}
             onAbrirLista={setRecortePec}
             onAbrirDidatico={(fazendaId, nome, qual) => setDidatico({ fazendaId, nome, qual })}
-            onAbrirRateio={() => setRateioPecAberto(true)} />
+            onAbrirRateio={() => setRateioPecAberto(true)}
+            onAbrirHistorico={setHistoricoPec} />
         )
       )}
 
@@ -920,6 +944,24 @@ export function AgriDreLavouraTab() {
       {ehPec && drePec && rateioPecAberto && (
         <PecRateioAdmModal aberto dre={drePec} periodoRotulo={descreverPeriodo(periodo)}
           onFechar={() => setRateioPecAberto(false)} />
+      )}
+      {/* ⚠ IRMÃO DA GRADE, como os outros três: fechá-lo não desmonta a tabela nem perde a
+          expansão dos grupos. A unidade inicial é a PRIMEIRA marcada nos chips do DRE — o modal
+          abre falando a língua em que o operador estava lendo a grade. */}
+      {ehPec && (
+        <PecHistoricoLinhaModal
+          aberto={!!historicoPec}
+          recorte={historicoPec}
+          atual={drePec}
+          meta={drePecMeta}
+          anos={anosHistoricoPec.map(a => ({
+            de: a.periodo.de, ate: a.periodo.ate, dre: a.dre, carregando: a.carregando,
+          }))}
+          periodoRotulo={descreverPeriodo(periodo)}
+          clienteNome={clienteAtual?.nome ?? '—'}
+          unidadeInicial={unidadesPec[0] ?? 'rs'}
+          onFechar={() => setHistoricoPec(null)}
+        />
       )}
 
       {/* ⚠ `items-stretch` NO DRILL (§3b), não `items-start`: com `start` o cartão da tabela

@@ -26,11 +26,28 @@ export interface BarraCompacta {
   cor?: string;
   /** Uma marca discreta abaixo do rótulo — "venda parcial", por exemplo. */
   nota?: string;
+  /**
+   * A BARRA DA META — contorno tracejado âmbar, sem preenchimento (opt-in).
+   *
+   * ⚠ ELA NÃO É A BARRA TRACEJADA DE "SEM DADO", e a diferença é de significado: aquela é cinza,
+   * tem 6px fixos e diz "não há número"; esta tem a ALTURA DO VALOR e diz "este número é o
+   * planejado, não o realizado". Pintá-la cheia a faria concorrer com as safras; deixá-la fora do
+   * gráfico esconderia justamente a linha contra a qual as outras se comparam.
+   */
+  meta?: boolean;
+  /**
+   * A cor do NÚMERO acima da barra. Sem ela, o cinza de sempre.
+   *
+   * ⚠ ELE ERA SEMPRE `muted`, e num gráfico de UMA linha do DRE isso apaga o sinal: o valor de um
+   * custo tem de se ler em vermelho e o de uma receita em verde, como na grade de onde o operador
+   * veio. A cor é do consumidor porque a natureza é dele — o componente não sabe o que desenha.
+   */
+  corTexto?: string;
 }
 
 export function BarrasCompactas({
   barras, titulo, legenda, larguraMax = 340, altura = 96, preencherLargura = false,
-  larguraBarra = 22, fonteValor = 8, distribuir = false,
+  larguraBarra = 22, fonteValor = 8, distribuir = false, onClickBarra,
 }: {
   barras: readonly BarraCompacta[];
   titulo: string;
@@ -75,6 +92,15 @@ export function BarrasCompactas({
    * ⚠ OPT-IN, como as outras: sem a prop, nada muda para quem já usa.
    */
   distribuir?: boolean;
+  /**
+   * CLICAR NUMA BARRA ESCOLHE AQUELA COLUNA — opt-in, DRE-HISTORICO-LINHA-01a.
+   *
+   * ⚠ SEM ELA O GRÁFICO NÃO RESPONDE A CLIQUE, como sempre foi: o cursor só vira mão onde há
+   * alguém para ouvir. Um gráfico que parece clicável e não é vale menos que um que não parece.
+   * ⚠ A ÁREA CLICÁVEL É A COLUNA INTEIRA, barra e rótulo, não o retângulo pintado: a barra de um
+   * valor pequeno tem poucos pixels de altura, e mirar nela seria trabalho de precisão.
+   */
+  onClickBarra?: (i: number) => void;
 }) {
   /**
    * ⚠ A ESCALA IGNORA OS NULOS e nunca é zero: com todas as barras sem dado, ou com um único
@@ -109,7 +135,9 @@ export function BarrasCompactas({
         {barras.map((b, i) => {
           const pct = b.valor != null && max > 0 ? Math.max(2, (b.valor / max) * 100) : 0;
           return (
-            <div key={`${b.rotulo}-${i}`} className={cn('flex h-full flex-col', colClasse)}
+            <div key={`${b.rotulo}-${i}`}
+              className={cn('flex h-full flex-col', colClasse, onClickBarra && 'cursor-pointer')}
+              onClick={onClickBarra ? () => onClickBarra(i) : undefined}
               style={colEstilo}>
               {/* ⚠ O NÚMERO ACOMPANHA A ALTURA DA BARRA — ele fica ANCORADO NO TOPO DELA, não
                   numa linha fixa no alto do card. Antes, o valor da roça (barra de 7%) aparecia
@@ -132,11 +160,15 @@ export function BarrasCompactas({
                       style={{ fontSize: fonteValor }}>{b.texto}</span>
                   </div>
                 ) : (
+                  /* ⚠ A META É CONTORNO, NÃO PREENCHIMENTO — e a classe é literal, nunca montada
+                     por interpolação: o Tailwind varre o código em busca do nome inteiro, e
+                     `border-${cor}` não existe no CSS gerado. */
                   <div className={cn('relative rounded-sm', distribuir ? 'mx-auto' : 'w-full',
-                    b.cor ?? 'bg-primary')}
+                    b.meta ? 'border border-dashed border-amber-500 bg-transparent'
+                      : (b.cor ?? 'bg-primary'))}
                     style={{ height: `${pct}%`, width: distribuir ? larguraBarra : undefined }}>
-                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 whitespace-nowrap
-                      pb-[2px] leading-none tabular-nums text-muted-foreground"
+                    <span className={cn(`absolute bottom-full left-1/2 -translate-x-1/2 whitespace-nowrap
+                      pb-[2px] leading-none tabular-nums`, b.corTexto ?? 'text-muted-foreground')}
                       style={{ fontSize: fonteValor }}>{b.texto}</span>
                   </div>
                 )}

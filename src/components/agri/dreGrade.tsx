@@ -14,6 +14,9 @@ import type { CSSProperties, ReactNode } from 'react';
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+/* ⚠ RECHARTS ENTRA AQUI COM O `Donut` — DRE-HISTORICO-LINHA-01a. Ele já era dependência da casa
+   (36 telas) e já desenhava ESTE donut no `RateioDetalheModal`; o que muda é o endereço. */
+import { PieChart, Pie, Cell } from 'recharts';
 import { formatNum, formatMoeda } from '@/lib/calculos/formatters';
 
 /** O destaque de uma linha — subtotal, sub, ou nenhum. */
@@ -445,6 +448,55 @@ export function Caixas({ caixas, colunas = 6, selecionada, onEscolher, grande }:
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+/**
+ * O DONUT DO DRE — CÓDIGO MOVIDO, COPIADO BYTE A BYTE de `RateioDetalheModal.tsx`, onde nasceu.
+ *
+ * ⚠ ELE SAIU DE LÁ PORQUE VIROU O SEGUNDO: o modal do histórico da linha (DRE-HISTORICO-LINHA-01a)
+ * desenha o mesmo donut com a mesma caixa fixa, e um donut escrito duas vezes vira dois donuts
+ * diferentes no primeiro ajuste. A lei do gráfico compacto e a escolha por `recharts` estão
+ * explicadas no cabeçalho do arquivo de origem e continuam valendo aqui.
+ * ⚠ O CORPO NÃO FOI TOCADO NO MOVIMENTO. A prop `centro` foi acrescentada DEPOIS, em edição
+ * separada e opcional: sem ela, o centro é o de sempre (rótulo + valor em R$), e o modal do rateio
+ * não muda um pixel.
+ */
+export function Donut({ dados, cor, total, rotuloTotal, tamanho = 150, centro }: {
+  dados: Array<{ nome: string; valor: number }>;
+  cor: (i: number, nome: string) => string;
+  total: number;
+  rotuloTotal: string;
+  tamanho?: number;
+  /**
+   * O QUE VAI NO BURACO DO DONUT — opt-in, DRE-HISTORICO-LINHA-01a.
+   *
+   * ⚠ SEM ELE NADA MUDA: o centro segue sendo rótulo + valor em R$, que é o que o modal do rateio
+   * mostra desde a F1. Com ele, o histórico põe o PERCENTUAL ali — a pergunta daquele modal é
+   * "quanto esta linha pesa", e o peso é o número que tem de estar no meio da figura.
+   */
+  centro?: ReactNode;
+}) {
+  return (
+    <div className="relative shrink-0 [&_*]:outline-none"
+      style={{ width: tamanho, height: tamanho }}>
+      <PieChart width={tamanho} height={tamanho}>
+        <Pie data={dados} dataKey="valor" nameKey="nome" cx="50%" cy="50%"
+          innerRadius={tamanho * 0.31} outerRadius={tamanho * 0.47}
+          paddingAngle={1} isAnimationActive={false} rootTabIndex={-1}>
+          {dados.map((d, i) => (
+            <Cell key={d.nome} fill={cor(i, d.nome)} stroke="#fff" strokeWidth={1} />
+          ))}
+        </Pie>
+      </PieChart>
+      {/* ⚠ `pointer-events-none` PARA O TEXTO NÃO ROUBAR O HOVER do donut atrás dele. */}
+      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+        {centro ?? <>
+          <span className="text-[9px] uppercase tracking-wide text-muted-foreground">{rotuloTotal}</span>
+          <span className="text-[12px] font-bold leading-tight tabular-nums">{formatMoeda(total)}</span>
+        </>}
+      </div>
     </div>
   );
 }

@@ -19,7 +19,9 @@
  * espalhando o donut pela largura do modal.
  */
 import { useMemo, useState } from 'react';
-import { PieChart, Pie, Cell } from 'recharts';
+/* ⚠ O `Donut` SAIU DAQUI — DRE-HISTORICO-LINHA-01a: o modal do histórico da linha desenha o mesmo,
+   e ele passou a morar na régua compartilhada do DRE. Mesmo corpo, mesmo tamanho, mesmo centro. */
+import { Donut } from '@/components/agri/dreGrade';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { Segmentado } from '@/components/ui/segmentado';
@@ -180,33 +182,7 @@ const COLUNAS_LANC_COM_CENTRO: Array<ColunaOrdenavel<LancamentoRateio, string> &
   { coluna: 'valor', h: 'Valor', tipo: 'numero', valor: l => l.valor },
 ];
 
-function Donut({ dados, cor, total, rotuloTotal, tamanho = 150 }: {
-  dados: Array<{ nome: string; valor: number }>;
-  cor: (i: number, nome: string) => string;
-  total: number;
-  rotuloTotal: string;
-  tamanho?: number;
-}) {
-  return (
-    <div className="relative shrink-0 [&_*]:outline-none"
-      style={{ width: tamanho, height: tamanho }}>
-      <PieChart width={tamanho} height={tamanho}>
-        <Pie data={dados} dataKey="valor" nameKey="nome" cx="50%" cy="50%"
-          innerRadius={tamanho * 0.31} outerRadius={tamanho * 0.47}
-          paddingAngle={1} isAnimationActive={false} rootTabIndex={-1}>
-          {dados.map((d, i) => (
-            <Cell key={d.nome} fill={cor(i, d.nome)} stroke="#fff" strokeWidth={1} />
-          ))}
-        </Pie>
-      </PieChart>
-      {/* ⚠ `pointer-events-none` PARA O TEXTO NÃO ROUBAR O HOVER do donut atrás dele. */}
-      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-[9px] uppercase tracking-wide text-muted-foreground">{rotuloTotal}</span>
-        <span className="text-[12px] font-bold leading-tight tabular-nums">{formatMoeda(total)}</span>
-      </div>
-    </div>
-  );
-}
+
 
 /** O tipo de recorte que o painel clicou — muda a frase do rodapé, nunca o cálculo. */
 /**
