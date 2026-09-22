@@ -735,19 +735,9 @@ export function AgriDreLavouraTab() {
               frase à esquerda muda de tamanho com o toggle: com `flex-wrap` ela quebrava para
               uma segunda linha e empurrava a tabela para baixo, que é o A23 quebrando a cada
               clique. Agora a frase trunca e a altura não se move. */}
-          {/* ⚠ A MESMA LINHA DE 28px, OUTRO CRITÉRIO: a lavoura rateia por ÁREA, a pecuária por
-              CABEÇAS no fim do período. Dizer o critério é o que impede o operador de procurar
-              um lançamento que não existe. */}
-          {ehPec && drePec && (
-          <div className="flex h-[28px] items-center text-[10px] text-muted-foreground">
-            <span className="min-w-0 flex-1 truncate">
-              {formatNum(drePec.rateio_adm.pool, 2)} de custos administrativos rateados por cabeças
-              {drePec.rateio_adm.bruto > 0
-                && ` (${formatNum((drePec.rateio_adm.pool / drePec.rateio_adm.bruto) * 100, 1)}% da pecuária)`}
-              {' '}— estimativa, não lançamento.
-            </span>
-          </div>
-          )}
+          {/* ⚠ A PECUÁRIA NÃO TEM ESTA LINHA (DRE-PEC-TELA-02b): a frase do rateio saiu, e a grade
+              sobe. O critério, o pool e a fatia da pecuária moram no modal do rateio, aberto pelo
+              selo "estimado" da própria linha — é lá que a explicação responde a quem perguntou. */}
           {!ehPec && mostraGrade && (
           <div className="flex h-[28px] items-center justify-between gap-2 text-[10px] text-muted-foreground">
             <span className="min-w-0 flex-1 truncate">

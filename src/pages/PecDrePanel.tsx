@@ -130,9 +130,13 @@ const valorDe = (l: DrePecLinhas, c: ChaveLinhaPec): number | null => {
  * ⚠ O DENOMINADOR É `cab_media` (DRE-PEC-TELA-01), a média dos fechamentos do período — o mesmo
  * que a RPC usa no rateio e o PC-100 usa no R$/cab. Dividir pelo fim do período media o ano
  * inteiro pelo rebanho de um mês só: a Pureza fechou agosto/26 com 5.661 e teve 4.968 de média.
+ * ⚠ E É POR MÊS (DRE-PEC-TELA-02b): R$ ÷ cabeça média ÷ meses do período, a regra do PC-100. Sem
+ * dividir pelos meses, oito meses de Nutrição do Agnaldo davam 165 por cabeça — um número que só
+ * se compara com outro período de exatamente oito meses. Por mês, 20,63, e um mês se lê contra um
+ * ano. Vale para toda linha, inclusive as de patrimônio: variação no período, por cabeça, por mês.
  */
-const porCabeca = (v: number | null, cab: number) =>
-  (v == null || !(cab > 0) ? traco : formatNum(v / cab, 2));
+const porCabeca = (v: number | null, cab: number, meses: number) =>
+  (v == null || !(cab > 0) || !(meses > 0) ? traco : formatNum(v / cab / meses, 2));
 
 /**
  * ⚠ BASE ZERO OU NEGATIVA DÁ TRAÇO, NUNCA 0% — a regra do VBP ≤ 0 do DRE gerencial, trazida
@@ -221,6 +225,8 @@ export interface ColunaPec {
   de: string;
   ate: string;
   cenario: CenarioPec;
+  /** Os meses do período DESTA coluna (`periodo.meses` do JSON dela) — o divisor do R$/cab/mês. */
+  meses: number;
   /** O realizado do período da tela: só ele abre o modal da VPB e o do rateio (decisão 4). */
   atual: boolean;
   /** A coluna Meta: as linhas de patrimônio saem em "—". */
@@ -240,7 +246,7 @@ export interface EntradaVisoes {
   anos: readonly { de: string; ate: string; dre: DrePecuaria | null; carregando: boolean }[];
 }
 
-const subCab = (l: DrePecLinhas) => `${formatNum(l.patrimonio.cab_media, 0)} cab`;
+const subCab = (l: DrePecLinhas) => `${formatNum(l.patrimonio.cab_media, 0)} cab med.`;
 
 /**
  * AS COLUNAS DE CADA VISÃO. ⚠ Nenhuma conta aqui: cada coluna é um JSON da RPC inteiro; a única
@@ -248,9 +254,10 @@ const subCab = (l: DrePecLinhas) => `${formatNum(l.patrimonio.cab_media, 0)} cab
  */
 export function colunasDaVisao(e: EntradaVisoes): ColunaPec[] {
   const { real, de, ate } = e;
+  const meses = real.periodo.meses;
   const totalReal: ColunaPec = {
     chave: '__total__', nome: 'Total', sub: subCab(real.total), fazendaId: null, linhas: real.total,
-    total: true, tipo: 'valor', unidade: 'cab', de, ate, cenario: 'realizado', atual: true,
+    total: true, tipo: 'valor', unidade: 'cab', de, ate, cenario: 'realizado', meses, atual: true,
   };
   if (e.visao === 'global') return [totalReal];
 
@@ -260,7 +267,7 @@ export function colunasDaVisao(e: EntradaVisoes): ColunaPec[] {
     return [totalReal, ...real.fazendas.map((f): ColunaPec => ({
       chave: f.fazenda_id, nome: f.nome, sub: subCab(f.linhas), fazendaId: f.fazenda_id,
       linhas: f.linhas, total: false, tipo: 'valor', unidade: 'cab', de, ate, cenario: 'realizado',
-      atual: true,
+      meses, atual: true,
     }))];
   }
 
@@ -272,12 +279,13 @@ export function colunasDaVisao(e: EntradaVisoes): ColunaPec[] {
       {
         chave: '__meta__', nome: 'Meta', sub: semMeta ? 'sem meta no período' : '', fazendaId: null,
         linhas: e.carregandoMeta ? null : (e.meta?.total ?? real.total), total: false, tipo: 'valor',
-        unidade: null, de, ate, cenario: 'meta', atual: false, semPatrimonio: true, semDado: semMeta,
+        unidade: null, de, ate, cenario: 'meta', meses: e.meta?.periodo.meses ?? meses, atual: false,
+        semPatrimonio: true, semDado: semMeta,
       },
       {
         chave: '__delta__', nome: 'Δ', sub: 'real − meta', fazendaId: null,
         linhas: e.carregandoMeta ? null : real.total, ref: semMeta ? null : (e.meta?.total ?? null),
-        total: false, tipo: 'delta', unidade: 'pct', de, ate, cenario: 'realizado', atual: false,
+        total: false, tipo: 'delta', unidade: 'pct', de, ate, cenario: 'realizado', meses, atual: false,
       },
     ];
   }
@@ -288,7 +296,8 @@ export function colunasDaVisao(e: EntradaVisoes): ColunaPec[] {
     ...e.anos.map((a, i): ColunaPec => ({
       chave: `__ano${i + 1}__`, nome: rotuloCurtoPeriodo(a.de, a.ate), sub: '', fazendaId: null,
       linhas: a.carregando ? null : (a.dre?.total ?? real.total), total: false, tipo: 'valor',
-      unidade: null, de: a.de, ate: a.ate, cenario: 'realizado', atual: false,
+      unidade: null, de: a.de, ate: a.ate, cenario: 'realizado', meses: a.dre?.periodo.meses ?? meses,
+      atual: false,
       /* ⚠ ANO SEM DADO É COLUNA DE "—", não coluna escondida: sumir faria "2023" parecer igual a
          "nunca houve 2023". Sem fazenda na resposta = nem fechamento nem lançamento naquele ano. */
       semDado: !a.carregando && (!a.dre || a.dre.fazendas.length === 0),
@@ -424,7 +433,7 @@ export function PecDrePanel({ colunas, alturaCartao, cartaoRef, onAbrirLista, on
                     style={c.total
                       ? { top: 26, left: W_FAZENDA + W_RS_TOTAL, backgroundColor: NAVY_TOTAL }
                       : { top: 26 }}>
-                    {c.unidade === 'cab' ? 'R$/cab med.' : 'Δ %'}
+                    {c.unidade === 'cab' ? 'R$/cab/mês' : 'Δ %'}
                   </th>
                 )}
               </Fragment>
@@ -514,6 +523,10 @@ function LinhaPec({ def, colunas, centros, aberto, onAlternar, onAbrirLista, onA
      que traz o peso 500 sem mudar o tamanho. O mapa é um só de propósito: o dia em que o subtotal
      mudar de tamanho, ele muda nas duas telas. */
   const regua = REGUA_LINHA[tipoDaLinha(def.destaque, temFilhas)];
+  /* ⚠ O RÓTULO DO RATEIO ABRE O MODAL (DRE-PEC-TELA-02b): a frase que explicava o rateio acima da
+     grade saiu, e o selo "estimado" é a porta para a explicação — pool, critério e a fatia da
+     pecuária. Só quando a primeira coluna é o realizado do período da tela, o único que o modal lê. */
+  const abrirRateioDoRotulo = def.rateio && onAbrirRateio && colunas[0]?.atual ? onAbrirRateio : undefined;
 
   /**
    * O QUE ACONTECE AO CLICAR NUMA CÉLULA — §5.
@@ -551,9 +564,9 @@ function LinhaPec({ def, colunas, centros, aberto, onAlternar, onAbrirLista, onA
   return (
     <tr className={cn(fundo, regua.peso)} style={{ height: regua.altura }}>
       <td className={cn('sticky left-0 z-30 truncate py-px', fundo,
-        'border-r border-border/60', corLinha, temFilhas && 'cursor-pointer')}
-        title={def.rotulo}
-        onClick={temFilhas ? onAlternar : undefined}
+        'border-r border-border/60', corLinha, (temFilhas || abrirRateioDoRotulo) && 'cursor-pointer')}
+        title={abrirRateioDoRotulo ? 'ver como o rateio foi feito' : def.rotulo}
+        onClick={temFilhas ? onAlternar : abrirRateioDoRotulo}
         style={{ fontSize: regua.fonte, paddingLeft: 7 + regua.recuo, paddingRight: 7 }}>
         {temFilhas && (
           <ChevronRight className={cn('mr-0.5 inline h-3 w-3 align-[-2px] transition-transform',
@@ -584,7 +597,7 @@ function LinhaPec({ def, colunas, centros, aberto, onAlternar, onAbrirLista, onA
           && (col.linhas.sem_p0 || col.linhas.sem_p1);
         const abrir = abrirDaColuna(col);
         const unidade = col.unidade === 'cab'
-          ? (jurosDeFazenda ? '' : porCabeca(v, col.linhas.patrimonio.cab_media))
+          ? (jurosDeFazenda ? '' : porCabeca(v, col.linhas.patrimonio.cab_media, col.meses))
           : col.unidade === 'pct'
             ? pctDelta(v, col.ref ? valorDe(col.ref, def.chave) : null)
             : null;
@@ -701,7 +714,7 @@ function LinhaCentro({ def, centro, colunas, bloco, onAbrirLista }: {
             de: col.de, ate: col.ate, cenario: col.cenario,
           })
           : undefined;
-        const unidade = col.unidade === 'cab' ? porCabeca(v, col.linhas.patrimonio.cab_media)
+        const unidade = col.unidade === 'cab' ? porCabeca(v, col.linhas.patrimonio.cab_media, col.meses)
           : col.unidade === 'pct' ? pctDelta(v, m) : null;
         return (
           <Fragment key={col.chave}>
