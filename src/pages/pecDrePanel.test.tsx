@@ -22,6 +22,9 @@ const linhas = (o: Partial<DrePecLinhas>): DrePecLinhas => ({
   custo_fixo: 0, rateio_adm: 0, resultado_operacional: 0, juros: null, resultado_periodo: 0,
   efeito_mercado: 0, resultado_com_mercado: 0, investimento: 0, a_pagar: 0,
   patrimonio: { v_ini_p0: 0, v_fim_p0: 0, v_fim_p1: 0, cab_ini: 0, cab_fim: 0, cab_media: 0 },
+  /* ⚠ ÁREA NASCE NULA no fixture, e de propósito: é o estado de quem não tem fechamento de área, e
+     a sub-coluna tem de dizer "—". Quem quer número o põe explicitamente. */
+  producao: { ha_medio: null, at_produzida: null, at_desfrutada: null, cab_desfrutada: null, at_comprada: null, cab_comprada: null },
   sem_p0: false, sem_p1: false, centros: [], centros_juros: [], ...o,
 });
 
@@ -37,6 +40,9 @@ const DRE: DrePecuaria = {
         /* ⚠ `cab_fim` ≠ `cab_media` DE PROPÓSITO: é o que prova qual dos dois divide o R$/cab.
            Iguais, o teste passaria verde lendo o denominador errado. */
         patrimonio: { v_ini_p0: 0, v_fim_p0: 0, v_fim_p1: 0, cab_ini: 0, cab_fim: 3000, cab_media: 2500 },
+        /* ⚠ A ÁREA É O DIVISOR DO R$/ha e é DIFERENTE da cabeça média de propósito: iguais, o teste
+           passaria verde dividindo pelo número errado. 9.000.000 / 3.000 ha = 3.000,00. */
+        producao: { ha_medio: 3000, at_produzida: null, at_desfrutada: null, cab_desfrutada: null, at_comprada: null, cab_comprada: null },
         centros: [{ bloco: 'variavel', centro: 'Nutrição', valor: 3000000, a_pagar: 0 }],
       }),
     },
@@ -66,6 +72,9 @@ const DRE: DrePecuaria = {
     receita_liquida: 17900865.27, reposicao: 1866408.21,
     vbp: 15841219.06, custo_variavel: 6669221.73, margem: 9171997.33,
     patrimonio: { v_ini_p0: 0, v_fim_p0: 0, v_fim_p1: 0, cab_ini: 0, cab_fim: 12000, cab_media: 10000 },
+    /* ⚠ 5.000 ha NO TOTAL, e ela não é a soma das fazendas do fixture de propósito: a RPC devolve
+       a área do total à parte, e a sub-coluna do Total divide por ELA. */
+    producao: { ha_medio: 5000, at_produzida: null, at_desfrutada: null, cab_desfrutada: null, at_comprada: null, cab_comprada: null },
     /* ⚠ OS JUROS SÓ NO TOTAL, com a lista própria — os números do NJ jan-ago/26. */
     juros: 58633.56,
     centros_juros: [{ bloco: 'juros', centro: 'Juros de Financiamento Pecuária', valor: 58633.56, a_pagar: 0 }],
@@ -248,35 +257,45 @@ describe('a cascata do DRE da pecuária', () => {
   });
 
   /**
-   * ⚠ O R$/cab DIVIDE PELA CABEÇA MÉDIA, não pela do fim — o denominador da RPC e do PC-100 — e
-   * pelos MESES do período (DRE-PEC-TELA-02b). Pureza: 9.000.000 / 2.500 / 12 = 300,00. Por
-   * `cab_fim` (3.000) daria 250,00, e sem os meses 3.600,00: são esses os números que este caso
-   * recusa. O cabeçalho mostra a mesma média.
+   * ⚠ O R$/ha DIVIDE PELA ÁREA DA PRÓPRIA COLUNA — TELA-03a, e o fixture separa os números de
+   * propósito: a Pureza tem 3.000 ha e 2.500 cabeças médias, então 9.000.000 de vendas dão
+   * 3.000,00 por hectare. Pela cabeça média daria 3.600,00 e, com o divisor de meses do R$/cab
+   * antigo, 300,00 — são esses dois números que este caso recusa.
+   * ⚠ E NÃO DIVIDE PELOS MESES: hectare é do período inteiro.
    */
-  it('R$/cab/mês e o cabeçalho usam cab_media', () => {
+  it('R$/ha divide pela área da coluna, sem dividir pelos meses', () => {
     montar();
-    expect(linhaDe('Vendas')?.cells[4]?.textContent).toBe('300,00');
-    expect(screen.getByText('2.500 cab med.')).toBeTruthy();
-    expect(screen.queryByText('3.000 cab med.')).toBeNull();
-    expect(screen.getByText('10.000 cab med.')).toBeTruthy();
+    expect(linhaDe('Vendas')?.cells[4]?.textContent).toBe('3.000,00');
+    expect(document.body.textContent).toContain('R$/ha');
+    expect(document.body.textContent).not.toContain('R$/cab');
   });
 
   /**
-   * ⚠ O DIVISOR DE MESES É O DA COLUNA — `periodo.meses` do JSON. Oito meses, mil cabeças, oito mil
-   * reais: um real por cabeça por mês. É o número que o PC-100 mostra e o único que se compara entre
-   * períodos de tamanhos diferentes.
+   * ⚠ A CASCATA TEM DE FECHAR NA SUB-COLUNA, e fecha porque o divisor é UM SÓ para todas as
+   * linhas: VBP = receita líquida + variação por produção − reposição, e dividir os quatro pelo
+   * mesmo hectare preserva a identidade. Com 5.000 ha no Total:
+   * 3.580,17 − 38,65 − 373,28 = 3.168,24 — o mesmo que 15.841.219,06 / 5.000.
    */
-  it('R$/cab/mês divide pelos meses do período da coluna', () => {
-    const OITO: DrePecuaria = {
-      ...DRE,
-      periodo: { de: '2026-01', ate: '2026-08', p0: '2025-12', meses: 8 },
-      total: linhas({ vendas: 8000,
-        patrimonio: { v_ini_p0: 0, v_fim_p0: 0, v_fim_p1: 0, cab_ini: 0, cab_fim: 0, cab_media: 1000 } }),
-    };
-    render(<PecDrePanel colunas={colunasDaVisao({ visao: 'global', de: '2026-01', ate: '2026-08', real: OITO,
-      meta: null, carregandoMeta: false, anos: [] })} alturaCartao={null} cartaoRef={{ current: null }} />);
-    expect(linhaDe('Vendas')?.cells[2]?.textContent).toBe('1,00');
-    expect(document.body.textContent).toContain('R$/cab/mês');
+  it('R$/ha: a cascata fecha na sub-coluna (VBP = receita líquida + variação − reposição)', () => {
+    montar();
+    const sub = (rotulo: string) => linhaDe(rotulo)?.cells[2]?.textContent ?? '';
+    expect(sub('= Receita líquida')).toBe('3.580,17');
+    expect(sub('Variação por produção')).toBe('-38,65');
+    expect(sub('(−) Reposição')).toBe('373,28');
+    expect(sub('= VBP')).toBe('3.168,24');
+    /* A identidade, nos números crus: o arredondamento da soma bate com a soma arredondada. */
+    expect(Number((17900865.27 - 193238 - 1866408.21) / 5000).toFixed(2)).toBe('3168.24');
+  });
+
+  /**
+   * ⚠ COLUNA SEM ÁREA DIZ "—", NUNCA UM NÚMERO EMPRESTADO: a fazenda sem fechamento de área tem
+   * `ha_medio` nulo, e dividir pela área da vizinha faria o R$/ha falar de outra terra. É a mesma
+   * regra do `null` das variações — ausência é traço.
+   */
+  it('R$/ha: coluna sem área mostra traço em vez de número', () => {
+    montar();
+    /* Sto. Expedito: `producao.ha_medio` nulo no fixture. */
+    expect(linhaDe('= Resultado do período')?.cells[6]?.textContent).toBe('—');
   });
 });
 
@@ -292,6 +311,10 @@ const META: DrePecuaria = {
   total: linhas({
     vendas: 451560, resultado_periodo: 400000, vpb_operacional: -193238, juros: 0,
     patrimonio: { v_ini_p0: 0, v_fim_p0: 0, v_fim_p1: 0, cab_ini: 0, cab_fim: 12000, cab_media: 10000 },
+    /* ⚠ A ÁREA DA META É DIFERENTE DA DO REALIZADO (4.000 contra 5.000) DE PROPÓSITO: é o que
+       prova que a coluna Meta divide pela área DELA. Com a do realizado o R$/ha daria 90,31;
+       com a dela, 112,89 — e é esse o número que o caso exige. */
+    producao: { ha_medio: 4000, at_produzida: null, at_desfrutada: null, cab_desfrutada: null, at_comprada: null, cab_comprada: null },
   }),
 };
 const SEM_META: DrePecuaria = { ...META, total: linhas({ juros: 0 }) };
@@ -320,19 +343,33 @@ describe('as quatro visões', () => {
     expect(h[1]).toContain('Realizado');
     expect(h[2]).toContain('Meta');
     expect(h[3]).toContain('real − meta');
-    /* rótulo 0 · Realizado R$ 1 e R$/cab 2 · Meta R$ 3 · Δ R$ 4 e Δ% 5 */
+    /* ⚠ OS ÍNDICES ANDARAM PORQUE A META GANHOU SUB-COLUNA — TELA-03a. Antes: rótulo 0 ·
+       Realizado R$ 1 e R$/cab 2 · Meta R$ 3 · Δ R$ 4 e Δ% 5. Agora: rótulo 0 · Realizado R$ 1 e
+       R$/ha 2 · Meta R$ 3 e R$/ha 4 · Δ R$ 5 e Δ% 6. */
     const vendas = linhaDe('Vendas');
     expect(vendas?.cells[3]?.textContent).toBe('451.560,00');
-    expect(vendas?.cells[4]?.textContent).toBe('17.417.440,08');
-    /* ⚠ A VPB DA META É A MESMA DO REALIZADO NO JSON — e a coluna diz "—", o delta também. */
+    /* ⚠ A META DIVIDE PELA ÁREA DELA, 4.000 ha: 451.560 / 4.000 = 112,89. Pela área do realizado
+       (5.000) daria 90,31 — o número que este caso recusa. */
+    expect(vendas?.cells[4]?.textContent).toBe('112,89');
+    expect(vendas?.cells[5]?.textContent).toBe('17.417.440,08');
+    /* ⚠ A VPB DA META É A MESMA DO REALIZADO NO JSON — e a coluna diz "—" no R$, no R$/ha e no
+       delta: traço não vira número ao mudar de unidade. */
     const vpb = linhaDe('Variação por produção');
     expect(vpb?.cells[3]?.textContent).toBe('—');
     expect(vpb?.cells[4]?.textContent).toBe('—');
+    expect(vpb?.cells[5]?.textContent).toBe('—');
 
     if (vendas) fireEvent.click(vendas.cells[3]);
     expect(abrir).toHaveBeenCalledWith(expect.objectContaining({ cenario: 'meta', bloco: 'venda', fazendaId: null }));
+    /* ⚠ A SUB-COLUNA ABRE O MESMO DRILL DO R$ ao lado — é a mesma linha noutra unidade, e o
+       operador clica onde o olho está. */
     abrir.mockClear();
     if (vendas) fireEvent.click(vendas.cells[4]);
+    expect(abrir).toHaveBeenCalledWith(expect.objectContaining({ cenario: 'meta', bloco: 'venda' }));
+    /* ⚠ O DELTA NÃO ABRE NADA, e agora ele é a célula 5 (a Meta ganhou sub-coluna): uma diferença
+       não tem lançamento para listar. */
+    abrir.mockClear();
+    if (vendas) fireEvent.click(vendas.cells[5]);
     expect(abrir).not.toHaveBeenCalled();
   });
 
@@ -351,14 +388,18 @@ describe('as quatro visões', () => {
       { de: '2023-07', ate: '2024-06', dre: { ...DRE, fazendas: [] }, carregando: false },
     ] })} alturaCartao={null} cartaoRef={{ current: null }} onAbrirLista={abrir} />);
     expect(cabecalhos().slice(1)).toEqual(['jul/25-jun/26\u00a0', 'jul/24-jun/25\u00a0', 'jul/23-jun/24\u00a0']);
-    /* Só R$: sem sub-coluna por cabeça nesta visão. */
-    expect(document.body.textContent).not.toContain('R$/cab/mês');
+    /* ⚠ AGORA TEM SUB-COLUNA — TELA-03a: cada ano divide pela própria área, e a visão deixou de
+       sair só em R$. */
+    expect(document.body.textContent).toContain('R$/ha');
+    /* ⚠ ÍNDICES REMAPEADOS — cada ano passou a ocupar DUAS células (R$ e R$/ha): atual R$ 1 e
+       R$/ha 2 · ano−1 R$ 3 e R$/ha 4 · ano−2 R$ 5 e R$/ha 6. */
     const vendas = linhaDe('Vendas');
     expect(vendas?.cells[1]?.textContent).toBe('17.869.000,08');
-    expect(vendas?.cells[2]?.textContent).toBe('15.000.000,00');
-    expect(vendas?.cells[3]?.textContent).toBe('—');
+    expect(vendas?.cells[2]?.textContent).toBe('3.573,80');
+    expect(vendas?.cells[3]?.textContent).toBe('15.000.000,00');
+    expect(vendas?.cells[5]?.textContent).toBe('—');
     /* O drill da coluna de um ano abre aquele ano. */
-    if (vendas) fireEvent.click(vendas.cells[2]);
+    if (vendas) fireEvent.click(vendas.cells[3]);
     expect(abrir).toHaveBeenCalledWith(expect.objectContaining({ de: '2024-07', ate: '2025-06', cenario: 'realizado' }));
   });
 
@@ -403,9 +444,11 @@ describe('as quatro visões', () => {
       { de: '2020-07', ate: '2021-06', dre: { ...DRE, fazendas: [] }, carregando: false }];
     render(<PecDrePanel colunas={colunas('anos', { anos })} alturaCartao={null} cartaoRef={{ current: null }} />);
     expect(cabecalhos()).toHaveLength(7);
+    /* ⚠ SEIS COLUNAS × DUAS CÉLULAS: o R$ da coluna k (0 = atual) está em 1 + 2k. O ano de
+       12.000.000 é a quinta coluna (k = 4) → célula 9; o ano sem dado é k = 5 → célula 11. */
     const vendas = linhaDe('Vendas');
-    expect(vendas?.cells[5]?.textContent).toBe('12.000.000,00');
-    expect(vendas?.cells[6]?.textContent).toBe('—');
+    expect(vendas?.cells[9]?.textContent).toBe('12.000.000,00');
+    expect(vendas?.cells[11]?.textContent).toBe('—');
     expect(document.querySelectorAll('.animate-pulse')).toHaveLength(0);
   });
 });

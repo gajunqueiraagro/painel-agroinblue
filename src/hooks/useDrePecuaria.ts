@@ -51,6 +51,26 @@ export interface DrePecLinhas {
      */
     cab_media: number;
   };
+  /**
+   * O QUE A COLUNA PRODUZIU — o bloco `producao` da RPC, que este leitor descartava até o TELA-03a.
+   *
+   * ⚠ `ha_medio` É O DIVISOR DO R$/ha, E É DA PRÓPRIA COLUNA: a RPC o monta por cenário —
+   * realizado pela área dos fechamentos de pasto, meta pela `planejamento_area_meta` — e cada
+   * coluna (Realizado, Meta, cada Ano) traz o seu. Medido em 22/09 na NJ 2026: 4.824,3 ha no
+   * realizado e 4.813,6 na meta. Emprestar a área de uma coluna para outra faria o R$/ha da meta
+   * mentir sobre a meta.
+   * ⚠ TUDO AQUI É `number | null` DE PROPÓSITO: cliente sem área no período vem nulo (o Teste
+   * Cliente vem, nos dois cenários), e `num()` faria isso virar 0 — que dividiria por zero ou,
+   * pior, afirmaria "zero hectare" onde a resposta é "não sei". Ausência é traço.
+   */
+  producao: {
+    ha_medio: number | null;
+    at_produzida: number | null;
+    at_desfrutada: number | null;
+    cab_desfrutada: number | null;
+    at_comprada: number | null;
+    cab_comprada: number | null;
+  };
   sem_p0: boolean;
   sem_p1: boolean;
   /** Os centros de custo de TODOS os blocos desta coluna — a tela filtra por bloco. */
@@ -149,6 +169,7 @@ function lerCentros(v: unknown): CentroPec[] {
 function lerLinhas(x: unknown): DrePecLinhas {
   const o = (x ?? {}) as Record<string, unknown>;
   const p = (o.patrimonio ?? {}) as Record<string, unknown>;
+  const pr = (o.producao ?? {}) as Record<string, unknown>;
   return {
     vendas: num(o.vendas),
     outras_receitas: num(o.outras_receitas),
@@ -172,6 +193,14 @@ function lerLinhas(x: unknown): DrePecLinhas {
     patrimonio: {
       v_ini_p0: num(p.v_ini_p0), v_fim_p0: num(p.v_fim_p0), v_fim_p1: num(p.v_fim_p1),
       cab_ini: num(p.cab_ini), cab_fim: num(p.cab_fim), cab_media: num(p.cab_media),
+    },
+    producao: {
+      ha_medio: numOuNulo(pr.ha_medio),
+      at_produzida: numOuNulo(pr.at_produzida),
+      at_desfrutada: numOuNulo(pr.at_desfrutada),
+      cab_desfrutada: numOuNulo(pr.cab_desfrutada),
+      at_comprada: numOuNulo(pr.at_comprada),
+      cab_comprada: numOuNulo(pr.cab_comprada),
     },
     sem_p0: o.sem_p0 === true,
     sem_p1: o.sem_p1 === true,

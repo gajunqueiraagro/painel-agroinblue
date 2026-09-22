@@ -2,8 +2,8 @@
  * DRE DA PECUÁRIA — a grade por fazenda, num período de meses.
  *
  * ⚠⚠ NENHUM CÁLCULO AQUI. `fn_dre_pecuaria` devolve cada linha por fazenda e no total; as únicas
- * contas são `valor / cab_media` e o percentual sobre a base — as duas de APRESENTAÇÃO, a mesma
- * licença que o `/ha` tem na lavoura.
+ * contas são `valor / producao.ha_medio` e o percentual sobre a base — as duas de APRESENTAÇÃO, a
+ * mesma licença que o `/ha` tem na lavoura.
  *
  * ⚠ ELE NÃO É A `Grade` DA LAVOURA, e a razão é estrutural, não preguiça. Aquela grade é feita de
  * grupos expansíveis, centros de custo, ponto de rateio, etiquetas e TRÊS sub-colunas por
@@ -39,8 +39,8 @@ import {
 
 /** A coluna de rótulos: mais estreita que a da lavoura, que carrega caret e etiquetas. */
 const W_FAZENDA = 190;
-/** R$/cab — o mesmo lugar do R$/ha da lavoura. */
-const W_CAB = 76;
+/** A sub-coluna R$/ha — o mesmo lugar e a mesma largura que o R$/cab ocupava (TELA-03a). */
+const W_SUB = 76;
 
 /**
  * A BASE DO PERCENTUAL É O VBP — decisão do Gabriel, 16/09, e ela tem história.
@@ -126,17 +126,29 @@ const valorDe = (l: DrePecLinhas, c: ChaveLinhaPec): number | null => {
 };
 
 /**
- * ⚠ A ÚNICA DIVISÃO DE UNIDADE, e é de apresentação. Sem cabeça, traço — nunca Infinity.
- * ⚠ O DENOMINADOR É `cab_media` (DRE-PEC-TELA-01), a média dos fechamentos do período — o mesmo
- * que a RPC usa no rateio e o PC-100 usa no R$/cab. Dividir pelo fim do período media o ano
- * inteiro pelo rebanho de um mês só: a Pureza fechou agosto/26 com 5.661 e teve 4.968 de média.
- * ⚠ E É POR MÊS (DRE-PEC-TELA-02b): R$ ÷ cabeça média ÷ meses do período, a regra do PC-100. Sem
- * dividir pelos meses, oito meses de Nutrição do Agnaldo davam 165 por cabeça — um número que só
- * se compara com outro período de exatamente oito meses. Por mês, 20,63, e um mês se lê contra um
- * ano. Vale para toda linha, inclusive as de patrimônio: variação no período, por cabeça, por mês.
+ * ⚠ A ÚNICA DIVISÃO DE UNIDADE, e é de apresentação. Sem área, traço — nunca Infinity.
+ *
+ * ⚠ O R$/cab/mês SAIU DAQUI — TELA-03a, decisão do Gabriel em 22/09. A sub-coluna do DRE passa a
+ * ser R$/ha e só ela; o por cabeça vai para a tela de análise (ANALISE-PEC-01), onde convive com
+ * @ e outras unidades. Uma grade de dezoito linhas responde a uma pergunta por vez.
+ * ⚠ O DENOMINADOR É `producao.ha_medio` DA PRÓPRIA COLUNA: a RPC o monta por cenário — realizado
+ * pela área dos fechamentos de pasto, meta pela `planejamento_area_meta` — e cada coluna traz o
+ * seu. Medido em 22/09 na NJ 2026: 4.824,3 ha no realizado e 4.813,6 na meta. Dividir a meta pela
+ * área do realizado faria o R$/ha da meta falar de outro pedaço de terra.
+ * ⚠ E É NO PERÍODO, NÃO POR MÊS, ao contrário do que o R$/cab fazia: hectare não se consome mês a
+ * mês como cabeça, e a pergunta é quanto aquela terra rendeu no recorte inteiro. Dividir também
+ * pelos meses responderia outra coisa.
+ * ⚠ ÁREA NULA DÁ TRAÇO, e zero também: `null` é "não sei" e zero dividiria por nada. Coluna sem
+ * área não pega emprestada a da vizinha.
  */
-const porCabeca = (v: number | null, cab: number, meses: number) =>
-  (v == null || !(cab > 0) || !(meses > 0) ? traco : formatNum(v / cab / meses, 2));
+const porHectare = (v: number | null, ha: number | null) =>
+  (v == null || ha == null || !(ha > 0) ? traco : formatNum(v / ha, 2));
+
+/** O que o cabeçalho da sub-coluna explica: a unidade, o período e a ÁREA que dividiu. */
+const tituloHa = (c: ColunaPec) => {
+  const ha = c.linhas?.producao.ha_medio;
+  return `R$ por hectare produtivo no período${ha != null && ha > 0 ? ` · área média ${formatNum(ha, 2)} ha` : ' · sem área no período'}`;
+};
 
 /**
  * ⚠ BASE ZERO OU NEGATIVA DÁ TRAÇO, NUNCA 0% — a regra do VBP ≤ 0 do DRE gerencial, trazida
@@ -218,8 +230,8 @@ export interface ColunaPec {
   /** A primeira coluna: congelada à esquerda, fundo cinza, borda de 2px. */
   total: boolean;
   tipo: 'valor' | 'delta';
-  /** A sub-coluna ao lado do R$: por cabeça média, percentual do delta, ou nenhuma. */
-  unidade: 'cab' | 'pct' | null;
+  /** A sub-coluna ao lado do R$: por hectare produtivo, percentual do delta, ou nenhuma. */
+  unidade: 'ha' | 'pct' | null;
   /** Só no delta: a meta contra a qual `linhas` (o realizado) se compara. `null` = sem meta. */
   ref?: DrePecLinhas | null;
   de: string;
@@ -257,7 +269,7 @@ export function colunasDaVisao(e: EntradaVisoes): ColunaPec[] {
   const meses = real.periodo.meses;
   const totalReal: ColunaPec = {
     chave: '__total__', nome: 'Total', sub: subCab(real.total), fazendaId: null, linhas: real.total,
-    total: true, tipo: 'valor', unidade: 'cab', de, ate, cenario: 'realizado', meses, atual: true,
+    total: true, tipo: 'valor', unidade: 'ha', de, ate, cenario: 'realizado', meses, atual: true,
   };
   if (e.visao === 'global') return [totalReal];
 
@@ -266,7 +278,7 @@ export function colunasDaVisao(e: EntradaVisoes): ColunaPec[] {
        ordena é a tela, e é aqui que a decisão fica visível. */
     return [totalReal, ...real.fazendas.map((f): ColunaPec => ({
       chave: f.fazenda_id, nome: f.nome, sub: subCab(f.linhas), fazendaId: f.fazenda_id,
-      linhas: f.linhas, total: false, tipo: 'valor', unidade: 'cab', de, ate, cenario: 'realizado',
+      linhas: f.linhas, total: false, tipo: 'valor', unidade: 'ha', de, ate, cenario: 'realizado',
       meses, atual: true,
     }))];
   }
@@ -277,9 +289,14 @@ export function colunasDaVisao(e: EntradaVisoes): ColunaPec[] {
     return [
       { ...totalReal, nome: 'Realizado' },
       {
+        /* ⚠ A META GANHOU A SUB-COLUNA — TELA-03a. Ela não tinha nenhuma, e comparar R$ com R$/ha
+           obrigava o olho a pular de largura. O divisor é o DELA (`producao.ha_medio` do JSON de
+           meta: 4.813,6 ha contra 4.824,3 do realizado, na NJ 2026). Quando a meta não existe,
+           `semDado` apaga a coluna inteira — então o `?? real.total` nunca vira número na tela;
+           ele é esqueleto de layout, não empréstimo de dado. */
         chave: '__meta__', nome: 'Meta', sub: semMeta ? 'sem meta no período' : '', fazendaId: null,
         linhas: e.carregandoMeta ? null : (e.meta?.total ?? real.total), total: false, tipo: 'valor',
-        unidade: null, de, ate, cenario: 'meta', meses: e.meta?.periodo.meses ?? meses, atual: false,
+        unidade: 'ha', de, ate, cenario: 'meta', meses: e.meta?.periodo.meses ?? meses, atual: false,
         semPatrimonio: true, semDado: semMeta,
       },
       {
@@ -290,13 +307,17 @@ export function colunasDaVisao(e: EntradaVisoes): ColunaPec[] {
     ];
   }
 
-  /* ANOS — o atual à esquerda, depois ano−1, ano−2… Só R$: o denominador de cada ano vem no TELA-03. */
+  /* ANOS — o atual à esquerda, depois ano−1, ano−2…
+     ⚠ CADA ANO COM O DIVISOR DELE — TELA-03a, que é o que faltava para esta visão sair do só-R$:
+     até aqui ela vinha com `unidade: null` e o comentário "o denominador de cada ano vem no
+     TELA-03". Vem agora, e é o hectare do JSON de cada ano — usar o do ano corrente compararia
+     2024 com a área de 2026. Ano sem dado já é coluna de traço pelo `semDado`. */
   return [
-    { ...totalReal, nome: rotuloCurtoPeriodo(de, ate), sub: '', unidade: null },
+    { ...totalReal, nome: rotuloCurtoPeriodo(de, ate), sub: '' },
     ...e.anos.map((a, i): ColunaPec => ({
       chave: `__ano${i + 1}__`, nome: rotuloCurtoPeriodo(a.de, a.ate), sub: '', fazendaId: null,
       linhas: a.carregando ? null : (a.dre?.total ?? real.total), total: false, tipo: 'valor',
-      unidade: null, de: a.de, ate: a.ate, cenario: 'realizado', meses: a.dre?.periodo.meses ?? meses,
+      unidade: 'ha', de: a.de, ate: a.ate, cenario: 'realizado', meses: a.dre?.periodo.meses ?? meses,
       atual: false,
       /* ⚠ ANO SEM DADO É COLUNA DE "—", não coluna escondida: sumir faria "2023" parecer igual a
          "nunca houve 2023". Sem fazenda na resposta = nem fechamento nem lançamento naquele ano. */
@@ -338,7 +359,7 @@ const corDoDelta = (def: DefPec, v: number | null): string => {
 
 /** As larguras de cada coluna — fixas por TIPO, nunca pelo dado. */
 const larguraRs = (c: ColunaPec) => (c.total ? W_RS_TOTAL : W_RS);
-const larguraUn = (c: ColunaPec) => (c.total ? W_HA : W_CAB);
+const larguraUn = (c: ColunaPec) => (c.total ? W_HA : W_SUB);
 
 /** As duas células congeladas do Total, na régua da linha. */
 const estiloTotalRs = { position: 'sticky' as const, left: W_FAZENDA, zIndex: 20 };
@@ -428,12 +449,16 @@ export function PecDrePanel({ colunas, alturaCartao, cartaoRef, onAbrirLista, on
                   {c.tipo === 'delta' ? 'Δ R$' : 'R$'}
                 </th>
                 {c.unidade && (
+                  /* ⚠ O `title` DIZ A ÁREA QUE DIVIDIU, e é ele que torna a sub-coluna auditável:
+                     sem o número do denominador à mão, o operador não tem como refazer a conta
+                     (Art. 19). Coluna sem área diz isso com todas as letras, em vez de calar. */
                   <th className={cn(!c.total && CINZA_CABECALHO, 'sticky px-[7px] text-right text-[10px] font-normal text-white',
                     c.total ? 'z-40' : 'z-20')}
+                    title={c.unidade === 'ha' ? tituloHa(c) : undefined}
                     style={c.total
                       ? { top: 26, left: W_FAZENDA + W_RS_TOTAL, backgroundColor: NAVY_TOTAL }
                       : { top: 26 }}>
-                    {c.unidade === 'cab' ? 'R$/cab/mês' : 'Δ %'}
+                    {c.unidade === 'ha' ? 'R$/ha' : 'Δ %'}
                   </th>
                 )}
               </Fragment>
@@ -596,8 +621,8 @@ function LinhaPec({ def, colunas, centros, aberto, onAlternar, onAbrirLista, onA
           && (def.chave === 'vpb_operacional' || def.chave === 'efeito_mercado')
           && (col.linhas.sem_p0 || col.linhas.sem_p1);
         const abrir = abrirDaColuna(col);
-        const unidade = col.unidade === 'cab'
-          ? (jurosDeFazenda ? '' : porCabeca(v, col.linhas.patrimonio.cab_media, col.meses))
+        const unidade = col.unidade === 'ha'
+          ? (jurosDeFazenda ? '' : porHectare(v, col.linhas.producao.ha_medio))
           : col.unidade === 'pct'
             ? pctDelta(v, col.ref ? valorDe(col.ref, def.chave) : null)
             : null;
@@ -714,7 +739,7 @@ function LinhaCentro({ def, centro, colunas, bloco, onAbrirLista }: {
             de: col.de, ate: col.ate, cenario: col.cenario,
           })
           : undefined;
-        const unidade = col.unidade === 'cab' ? porCabeca(v, col.linhas.patrimonio.cab_media, col.meses)
+        const unidade = col.unidade === 'ha' ? porHectare(v, col.linhas.producao.ha_medio)
           : col.unidade === 'pct' ? pctDelta(v, m) : null;
         return (
           <Fragment key={col.chave}>
