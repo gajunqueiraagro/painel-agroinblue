@@ -16,7 +16,6 @@ import DrillDownMacro from '@/components/financeiro/DrillDownMacro';
 import { useFinanceiro, type FinanceiroLancamento } from '@/hooks/useFinanceiro';
 import { useFluxoCaixa, type FluxoMensal } from '@/hooks/useFluxoCaixa';
 import { useFinanceiroV2 } from '@/hooks/useFinanceiroV2';
-import { useIndicadoresZootecnicos } from '@/hooks/useIndicadoresZootecnicos';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { usePastos } from '@/hooks/usePastos';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -230,12 +229,14 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
   );
 
   const anoAtual = new Date().getFullYear();
-  const mesAtual = new Date().getMonth() + 1;
 
-  const zooOficial = useIndicadoresZootecnicos(
-    fazendaId, anoAtual, mesAtual,
-    lancamentosPecuarios, saldosIniciais, pastos, categorias,
-  );
+  /* ⚠ `useIndicadoresZootecnicos` SAIU DAQUI — PERF-PLANEJAMENTO-02. O resultado era
+     atribuido a `zooOficial` e NUNCA lido: uma unica ocorrencia no arquivo, a propria
+     atribuicao, e nenhum filho o recebia. Ele montava tres `useRebanhoOficial` (ano,
+     ano-1, ano-2), e cada um dispara uma `vw_zoot_fazenda_mensal`, uma
+     `fn_zoot_categoria_mensal` e o overlay de `fechamento_pasto_itens` — 9 leituras por
+     abertura, ~25 s de rede somados, medidos em 22/09. Nao ha conserto de tipo nem
+     supressao aqui: e' codigo morto apagado. O hook segue vivo para quem o le. */
 
   // Available years from lancamentos
   const anosDisponiveis = useMemo(() => {
