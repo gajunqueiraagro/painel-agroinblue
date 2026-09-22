@@ -11,6 +11,7 @@
  * que é a cascata da lavoura; o segundo só a faixa usa.
  */
 import type { CSSProperties, ReactNode } from 'react';
+import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatNum, formatMoeda } from '@/lib/calculos/formatters';
 
@@ -240,6 +241,10 @@ export interface CaixaFaixa {
   unidade?: string;
   cor?: string;
   title?: string;
+  /** A chave da caixa quando ela é SELETOR (DRE-PEC-TELA-02). Sem `onEscolher`, ignorada. */
+  chave?: string;
+  /** O número ainda não chegou: spinner no lugar dele — nunca "—", que é dado ausente. */
+  carregando?: boolean;
 }
 
 /**
@@ -252,9 +257,67 @@ export interface CaixaFaixa {
  * ⚠ E O QUE EXPLICA VAI PARA O `title`: "a pagar 136.277,79" dentro da caixa disputava espaço com
  * o número que a caixa existe para mostrar.
  */
-export function Caixas({ caixas }: { caixas: CaixaFaixa[] }) {
+export function Caixas({ caixas, colunas = 6, selecionada, onEscolher, grande }: {
+  caixas: CaixaFaixa[];
+  /** Quantas por linha. A lavoura usa 6; os seletores de visão da pecuária, 4. */
+  colunas?: number;
+  /**
+   * ⚠ CAIXA SELETORA — DRE-PEC-TELA-02. Com `onEscolher`, cada caixa vira um botão e a de `chave`
+   * igual a `selecionada` fica em navy com texto branco: a mesma resposta visual do `Segmentado`
+   * para a mesma pergunta ("qual está aberta?"). Sem `onEscolher`, a caixa é a de sempre, e é
+   * assim que a lavoura continua a vê-la.
+   */
+  selecionada?: string;
+  onEscolher?: (chave: string) => void;
+  /**
+   * RÓTULO 11px E NÚMERO 20px, ALTURA FIXA DE 52px — a régua dos seletores. ⚠ Fixa, não mínima:
+   * um número que demora, um "sem meta no período" ou um spinner não podem mexer na altura da
+   * faixa (lei de estabilidade).
+   */
+  grande?: boolean;
+}) {
+  if (onEscolher) {
+    return (
+      <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${colunas}, minmax(0, 1fr))` }}>
+        {caixas.map(c => {
+          const chave = c.chave ?? c.rotulo;
+          const ativa = chave === selecionada;
+          return (
+            <button key={chave} type="button" aria-pressed={ativa} title={c.title}
+              onClick={() => onEscolher(chave)}
+              className={cn('flex min-w-0 flex-col items-center justify-center gap-[2px] rounded-md border',
+                'transition-colors',
+                ativa ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-border/60 bg-card hover:bg-muted')}
+              style={{ padding: '6px 8px', height: grande ? 52 : undefined }}>
+              <div className={cn('w-full truncate text-center', grande ? 'text-[11px]' : 'text-[10px]',
+                ativa ? 'text-primary-foreground' : 'text-muted-foreground')}
+                style={{ lineHeight: 1.2 }} title={c.titleRotulo}>
+                {c.rotulo}
+              </div>
+              <div className="flex max-w-full items-baseline gap-1 whitespace-nowrap" style={{ lineHeight: 1.2 }}>
+                {c.carregando ? (
+                  <Loader2 className={cn('animate-spin', grande ? 'h-4 w-4' : 'h-3 w-3',
+                    ativa ? 'text-primary-foreground' : 'text-muted-foreground')} />
+                ) : (
+                  <>
+                    <span className={cn('truncate font-medium tabular-nums', grande ? 'text-[20px]' : 'text-[13px]',
+                      ativa ? 'text-primary-foreground' : c.cor)}>{c.valor}</span>
+                    {c.unidade && (
+                      <span className={cn('truncate text-[10px]',
+                        ativa ? 'text-primary-foreground/80' : 'text-muted-foreground')}>{c.unidade}</span>
+                    )}
+                  </>
+                )}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
   return (
-    <div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(6, minmax(0, 1fr))' }}>
+    <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${colunas}, minmax(0, 1fr))` }}>
       {caixas.map(c => (
         /* ⚠ SEM ALTURA FIXA (§2), e é conserto de corte: 32px não cabem rótulo de 9px mais valor
            de 13px com entrelinha de verdade (1,2 → 10,8 + 15,6 = 26,4) somados a 12px de padding

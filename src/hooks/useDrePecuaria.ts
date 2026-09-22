@@ -11,7 +11,7 @@
  * ⚠ `sem_p0` / `sem_p1` SÃO DADO: fazenda sem fechamento numa das pontas vem com as duas
  * variações NULAS, e a tela mostra "—". Zero ali afirmaria que o rebanho não mudou.
  */
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
 /** As 18 linhas da cascata, na ordem em que a RPC as nomeia. */
@@ -186,45 +186,110 @@ function lerLinhas(x: unknown): DrePecLinhas {
  */
 export type CenarioPec = 'realizado' | 'meta';
 
+/** A chave de cache de uma leitura do DRE — a mesma em `useDrePecuaria` e em `useDrePecuariaLista`,
+    para que o ano anterior buscado pelo card seja o mesmo que a visão x Anos lê. */
+const chaveDre = (clienteId: string | null | undefined, de: string | null, ate: string | null, cenario: CenarioPec) =>
+  ['dre-pecuaria', clienteId ?? '', de ?? '', ate ?? '', cenario];
+
+async function buscarDrePecuaria(
+  clienteId: string | null | undefined, de: string | null, ate: string | null, cenario: CenarioPec,
+): Promise<DrePecuaria | null> {
+  const { data: r, error: err } = await (supabase as any).rpc('fn_dre_pecuaria', {
+    p_cliente: clienteId, p_de: de, p_ate: ate, p_cenario: cenario,
+  });
+  if (err) throw err;
+  const o = (r ?? null) as Record<string, unknown> | null;
+  if (!o) return null;
+  const per = (o.periodo ?? {}) as Record<string, unknown>;
+  const ra = (o.rateio_adm ?? {}) as Record<string, unknown>;
+  return {
+    periodo: {
+      de: String(per.de ?? ''), ate: String(per.ate ?? ''),
+      p0: String(per.p0 ?? ''), meses: num(per.meses),
+    },
+    rateio_adm: {
+      pool: num(ra.pool), bruto: num(ra.bruto), criterio: String(ra.criterio ?? ''),
+    },
+    fazendas: (Array.isArray(o.fazendas) ? o.fazendas : []).map((f: Record<string, unknown>) => ({
+      fazenda_id: String(f?.fazenda_id ?? ''),
+      nome: String(f?.nome ?? '—'),
+      linhas: lerLinhas(f?.linhas),
+    })),
+    total: lerLinhas(o.total),
+  };
+}
+
 export function useDrePecuaria(
   clienteId: string | null | undefined, de: string | null, ate: string | null,
   cenario: CenarioPec = 'realizado',
 ) {
   const queryClient = useQueryClient();
   /* ⚠ O CENÁRIO ENTRA NA CHAVE: sem ele, trocar para meta mostraria o realizado em cache. */
-  const chave = ['dre-pecuaria', clienteId ?? '', de ?? '', ate ?? '', cenario];
+  const chave = chaveDre(clienteId, de, ate, cenario);
   const { data, isLoading, error } = useQuery({
     queryKey: chave,
     enabled: !!clienteId && !!de && !!ate,
-    queryFn: async (): Promise<DrePecuaria | null> => {
-      const { data: r, error: err } = await (supabase as any).rpc('fn_dre_pecuaria', {
-        p_cliente: clienteId, p_de: de, p_ate: ate, p_cenario: cenario,
-      });
-      if (err) throw err;
-      const o = (r ?? null) as Record<string, unknown> | null;
-      if (!o) return null;
-      const per = (o.periodo ?? {}) as Record<string, unknown>;
-      const ra = (o.rateio_adm ?? {}) as Record<string, unknown>;
-      return {
-        periodo: {
-          de: String(per.de ?? ''), ate: String(per.ate ?? ''),
-          p0: String(per.p0 ?? ''), meses: num(per.meses),
-        },
-        rateio_adm: {
-          pool: num(ra.pool), bruto: num(ra.bruto), criterio: String(ra.criterio ?? ''),
-        },
-        fazendas: (Array.isArray(o.fazendas) ? o.fazendas : []).map((f: Record<string, unknown>) => ({
-          fazenda_id: String(f?.fazenda_id ?? ''),
-          nome: String(f?.nome ?? '—'),
-          linhas: lerLinhas(f?.linhas),
-        })),
-        total: lerLinhas(o.total),
-      };
-    },
+    queryFn: () => buscarDrePecuaria(clienteId, de, ate, cenario),
   });
 
   const recarregar = () => queryClient.invalidateQueries({ queryKey: chave });
   return { dre: data ?? null, carregando: isLoading, erro: error as Error | null, recarregar };
+}
+
+/** Um recorte de tempo e cenário que vira uma coluna — a visão x Anos pede N deles. */
+export interface PeriodoPec {
+  de: string;
+  ate: string;
+  cenario: CenarioPec;
+}
+
+/**
+ * N LEITURAS DO DRE EM PARALELO — DRE-PEC-TELA-02, visão x Anos.
+ *
+ * ⚠ `useQueries` E NÃO N `useQuery`: o número de anos muda (1 a 5) e um hook não pode ser chamado
+ * um número variável de vezes. Quem varia é a LISTA, nunca a quantidade de chamadas de hook.
+ * ⚠ Cada item carrega sozinho: a coluna que falta mostra esqueleto e as outras já aparecem.
+ */
+export function useDrePecuariaLista(clienteId: string | null | undefined, periodos: readonly PeriodoPec[]) {
+  const resultados = useQueries({
+    queries: periodos.map(p => ({
+      queryKey: chaveDre(clienteId, p.de, p.ate, p.cenario),
+      enabled: !!clienteId,
+      queryFn: () => buscarDrePecuaria(clienteId, p.de, p.ate, p.cenario),
+    })),
+  });
+  return resultados.map((r, i) => ({
+    periodo: periodos[i],
+    dre: r.data ?? null,
+    carregando: r.isLoading,
+    erro: r.error as Error | null,
+  }));
+}
+
+/**
+ * O MESMO RECORTE, k ANOS ANTES — `'2026-08'` com k=2 → `'2024-08'`.
+ *
+ * ⚠ É −12·k MESES, e em ano-mês isso é só o ano: o mês não muda, então Mês, Ano, Safra (jul→jun)
+ * e Personalizado deslocam do mesmo jeito, sem caso especial.
+ */
+export function anoMesAntes(am: string, k: number): string {
+  return `${Number(am.slice(0, 4)) - k}${am.slice(4)}`;
+}
+
+const MES3 = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+
+/**
+ * O RÓTULO CURTO DE UMA COLUNA DE ANO — "jan-ago/26", "ago/26", "jul/25-jun/26".
+ *
+ * ⚠ CURTO PORQUE É CABEÇALHO: a coluna tem a largura de um número. O ano aparece uma vez quando as
+ * duas pontas são do mesmo ano, e nas duas quando não são (a safra jul→jun).
+ */
+export function rotuloCurtoPeriodo(de: string, ate: string): string {
+  const m = (am: string) => MES3[Number(am.slice(5, 7)) - 1] ?? '?';
+  const a = (am: string) => am.slice(2, 4);
+  if (de === ate) return `${m(de)}/${a(de)}`;
+  if (de.slice(0, 4) === ate.slice(0, 4)) return `${m(de)}-${m(ate)}/${a(ate)}`;
+  return `${m(de)}/${a(de)}-${m(ate)}/${a(ate)}`;
 }
 
 /* ══════════════ AS LISTAS POR TRÁS DE CADA CÉLULA — §5 ══════════════ */
@@ -258,6 +323,14 @@ export interface RecortePec {
   /** `null` = o bloco inteiro; `'(sem)'` é um centro de verdade, não ausência. */
   centro: string | null;
   rotulo: string;
+  /**
+   * O PERÍODO E O CENÁRIO DA COLUNA CLICADA — DRE-PEC-TELA-02. Na visão x Anos a coluna de 2024
+   * tem de abrir os lançamentos de 2024, e a coluna Meta os de meta. Ausentes, vale o período da
+   * tela e o realizado — o comportamento de antes.
+   */
+  de?: string;
+  ate?: string;
+  cenario?: CenarioPec;
 }
 
 export function useDrePecuariaLancamentos(
@@ -267,21 +340,25 @@ export function useDrePecuariaLancamentos(
   ate: string | null,
   cenario: CenarioPec = 'realizado',
 ) {
+  /* ⚠ A COLUNA MANDA: se o recorte traz período e cenário, são eles que a lista lê. */
+  const deEf = recorte?.de ?? de;
+  const ateEf = recorte?.ate ?? ate;
+  const cenarioEf = recorte?.cenario ?? cenario;
   const { data, isLoading, error, refetch } = useQuery({
     /* ⚠ O RECORTE INTEIRO ENTRA NA CHAVE: duas células diferentes do mesmo bloco (Total e uma
        fazenda) são duas listas, e uma chave só faria a segunda mostrar a primeira. */
     queryKey: ['dre-pec-lancamentos', clienteId ?? '', recorte?.fazendaId ?? '',
-      recorte?.bloco ?? '', recorte?.centro ?? '', de ?? '', ate ?? '', cenario],
-    enabled: !!clienteId && !!recorte && !!de && !!ate,
+      recorte?.bloco ?? '', recorte?.centro ?? '', deEf ?? '', ateEf ?? '', cenarioEf],
+    enabled: !!clienteId && !!recorte && !!deEf && !!ateEf,
     queryFn: async (): Promise<LancamentoPec[]> => {
       const { data: r, error: err } = await (supabase as any).rpc('fn_dre_pecuaria_lancamentos', {
         p_cliente: clienteId,
         p_fazenda: recorte?.fazendaId ?? null,
         p_bloco: recorte?.bloco ?? null,
         p_centro: recorte?.centro ?? null,
-        p_de: de,
-        p_ate: ate,
-        p_cenario: cenario,
+        p_de: deEf,
+        p_ate: ateEf,
+        p_cenario: cenarioEf,
       });
       if (err) throw err;
       return (Array.isArray(r) ? r : []).map((x: unknown) => {

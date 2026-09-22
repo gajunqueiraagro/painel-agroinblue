@@ -11,7 +11,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { PecDrePanel } from '@/pages/PecDrePanel';
+import { PecDrePanel, FaixaVisoesPec, colunasDaVisao, type EntradaVisoes, type VisaoPec } from '@/pages/PecDrePanel';
 import type { DrePecuaria, DrePecLinhas } from '@/hooks/useDrePecuaria';
 
 const linhas = (o: Partial<DrePecLinhas>): DrePecLinhas => ({
@@ -79,8 +79,13 @@ const DRE: DrePecuaria = {
   }),
 };
 
+/** As colunas de uma visão sobre o fixture — a mesma função que a tela usa. */
+const colunas = (visao: VisaoPec, extra: Partial<EntradaVisoes> = {}) => colunasDaVisao({
+  visao, de: '2025-07', ate: '2026-06', real: DRE, meta: null, carregandoMeta: false, anos: [], ...extra,
+});
+/* ⚠ OS CASOS ANTIGOS SÃO DA VISÃO "Por fazenda": ela é a grade de antes, sem mudança. */
 const montar = () => render(
-  <PecDrePanel dre={DRE} alturaCartao={null} cartaoRef={{ current: null }} />,
+  <PecDrePanel colunas={colunas('fazenda')} alturaCartao={null} cartaoRef={{ current: null }} />,
 );
 const linhasDaTabela = () => [...document.querySelectorAll<HTMLTableRowElement>('tbody tr')];
 /* ⚠ O RÓTULO VEM COLADO NA ETIQUETA no `textContent` — "Efeito de mercadoestimado". Comparar por
@@ -229,7 +234,7 @@ describe('a cascata do DRE da pecuária', () => {
    */
   it('juros de fazenda é "—", sem R$/cab e sem clique; no Total, número e clique', () => {
     const abrir = vi.fn();
-    render(<PecDrePanel dre={DRE} alturaCartao={null} cartaoRef={{ current: null }} onAbrirLista={abrir} />);
+    render(<PecDrePanel colunas={colunas('fazenda')} alturaCartao={null} cartaoRef={{ current: null }} onAbrirLista={abrir} />);
     const juros = linhaDe('(−) Despesas financeiras (juros)');
     expect(juros?.cells[3]?.textContent).toBe('—');
     expect(juros?.cells[4]?.textContent).toBe('');
@@ -253,5 +258,114 @@ describe('a cascata do DRE da pecuária', () => {
     expect(screen.getByText('2.500 cab')).toBeTruthy();
     expect(screen.queryByText('3.000 cab')).toBeNull();
     expect(screen.getByText('10.000 cab')).toBeTruthy();
+  });
+});
+
+/* ══════════════ AS QUATRO VISÕES — DRE-PEC-TELA-02 ══════════════ */
+
+/** A meta do fixture: vendas de fevereiro do NJ e um resultado planejado. ⚠ A variação de rebanho
+    vem IGUAL à do realizado, como a RPC a devolve (patrimônio não tem cenário) — é ela que prova que
+    a coluna Meta a esconde. */
+const META: DrePecuaria = {
+  ...DRE,
+  fazendas: [],
+  rateio_adm: { pool: 0, bruto: 0, criterio: 'cabecas medias no periodo' },
+  total: linhas({
+    vendas: 451560, resultado_periodo: 400000, vpb_operacional: -193238, juros: 0,
+    patrimonio: { v_ini_p0: 0, v_fim_p0: 0, v_fim_p1: 0, cab_ini: 0, cab_fim: 12000, cab_media: 10000 },
+  }),
+};
+const SEM_META: DrePecuaria = { ...META, total: linhas({ juros: 0 }) };
+
+const cabecalhos = () => Array.from(document.querySelectorAll<HTMLTableCellElement>('thead tr:first-child th'))
+  .map(th => th.textContent ?? '');
+
+describe('as quatro visões', () => {
+  it('Global: uma coluna só, o Total, com o rateio administrativo inteiro', () => {
+    render(<PecDrePanel colunas={colunas('global')} alturaCartao={null} cartaoRef={{ current: null }} />);
+    const h = cabecalhos();
+    expect(h).toHaveLength(2);
+    expect(h[1]).toContain('Total');
+    expect(h[1]).toContain('10.000 cab');
+    expect(linhaDe('= Resultado do período')?.cells[1]?.textContent).toBe('2.994.408,81');
+    /* O rateio aparece como linha também no Global: é custo da pecuária, só não se divide aqui. */
+    expect(linhaDe('(−) Rateio administrativo')).toBeTruthy();
+  });
+
+  it('× Meta: Realizado | Meta | Δ — meta nunca soma, patrimônio sem meta, drill com o cenário', () => {
+    const abrir = vi.fn();
+    render(<PecDrePanel colunas={colunas('meta', { meta: META })} alturaCartao={null}
+      cartaoRef={{ current: null }} onAbrirLista={abrir} />);
+    const h = cabecalhos();
+    expect(h).toHaveLength(4);
+    expect(h[1]).toContain('Realizado');
+    expect(h[2]).toContain('Meta');
+    expect(h[3]).toContain('real − meta');
+    /* rótulo 0 · Realizado R$ 1 e R$/cab 2 · Meta R$ 3 · Δ R$ 4 e Δ% 5 */
+    const vendas = linhaDe('Vendas');
+    expect(vendas?.cells[3]?.textContent).toBe('451.560,00');
+    expect(vendas?.cells[4]?.textContent).toBe('17.417.440,08');
+    /* ⚠ A VPB DA META É A MESMA DO REALIZADO NO JSON — e a coluna diz "—", o delta também. */
+    const vpb = linhaDe('Variação por produção');
+    expect(vpb?.cells[3]?.textContent).toBe('—');
+    expect(vpb?.cells[4]?.textContent).toBe('—');
+
+    if (vendas) fireEvent.click(vendas.cells[3]);
+    expect(abrir).toHaveBeenCalledWith(expect.objectContaining({ cenario: 'meta', bloco: 'venda', fazendaId: null }));
+    abrir.mockClear();
+    if (vendas) fireEvent.click(vendas.cells[4]);
+    expect(abrir).not.toHaveBeenCalled();
+  });
+
+  it('× Meta sem meta no período: a coluna fica, toda em "—", e diz por quê', () => {
+    render(<PecDrePanel colunas={colunas('meta', { meta: SEM_META })} alturaCartao={null} cartaoRef={{ current: null }} />);
+    expect(cabecalhos()[2]).toContain('sem meta no período');
+    expect(linhaDe('Vendas')?.cells[3]?.textContent).toBe('—');
+    expect(linhaDe('Vendas')?.cells[4]?.textContent).toBe('—');
+  });
+
+  it('× Anos: atual primeiro, depois os anteriores; ano sem dado é coluna de "—", não some', () => {
+    const abrir = vi.fn();
+    const ANO1: DrePecuaria = { ...DRE, total: linhas({ vendas: 15000000 }) };
+    render(<PecDrePanel colunas={colunas('anos', { anos: [
+      { de: '2024-07', ate: '2025-06', dre: ANO1, carregando: false },
+      { de: '2023-07', ate: '2024-06', dre: { ...DRE, fazendas: [] }, carregando: false },
+    ] })} alturaCartao={null} cartaoRef={{ current: null }} onAbrirLista={abrir} />);
+    expect(cabecalhos().slice(1)).toEqual(['jul/25-jun/26\u00a0', 'jul/24-jun/25\u00a0', 'jul/23-jun/24\u00a0']);
+    /* Só R$: sem sub-coluna por cabeça nesta visão. */
+    expect(document.body.textContent).not.toContain('R$/cab med.');
+    const vendas = linhaDe('Vendas');
+    expect(vendas?.cells[1]?.textContent).toBe('17.869.000,08');
+    expect(vendas?.cells[2]?.textContent).toBe('15.000.000,00');
+    expect(vendas?.cells[3]?.textContent).toBe('—');
+    /* O drill da coluna de um ano abre aquele ano. */
+    if (vendas) fireEvent.click(vendas.cells[2]);
+    expect(abrir).toHaveBeenCalledWith(expect.objectContaining({ de: '2024-07', ate: '2025-06', cenario: 'realizado' }));
+  });
+
+  it('Por fazenda: Total + uma coluna por fazenda, R$ e R$/cab em cada', () => {
+    montar();
+    const h = cabecalhos();
+    expect(h).toHaveLength(4);
+    expect(h[2]).toContain('Pureza');
+    expect(h[3]).toContain('Sto. Expedito');
+  });
+
+  /**
+   * ⚠ OS QUATRO CARDS: um número cada, o selecionado marcado, e carregando é spinner — nunca "—",
+   * que diria que o dado não existe.
+   */
+  it('os cards: quatro, o selecionado pressionado, e o que carrega não mostra "—"', () => {
+    const escolher = vi.fn();
+    render(<FaixaVisoesPec visao="meta" onVisao={escolher} real={DRE} meta={null} carregandoMeta
+      anoAnterior={null} carregandoAnoAnterior={false} nAnos={3} onNAnos={() => {}} />);
+    const botoes = Array.from(document.querySelectorAll<HTMLButtonElement>('button[aria-pressed]'));
+    expect(botoes).toHaveLength(4);
+    expect(botoes.filter(b => b.getAttribute('aria-pressed') === 'true').map(b => b.textContent)).toEqual(['× Meta']);
+    /* O de meta está carregando: só o rótulo, nenhum número nem traço. */
+    expect(botoes[1]?.textContent).toBe('× Meta');
+    expect(botoes[0]?.textContent).toContain('2.994.408,81');
+    fireEvent.click(botoes[3]);
+    expect(escolher).toHaveBeenCalledWith('fazenda');
   });
 });

@@ -46,15 +46,20 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { usePeriodoUrl } from '@/v2/hooks/usePeriodoUrl';
 import { anoMes, descreverPeriodo } from '@/v2/lib/periodo';
 import {
-  useDrePecuaria, useDrePecuariaLancamentos, useDrePecuariaPatrimonio, type RecortePec,
+  useDrePecuaria, useDrePecuariaLancamentos, useDrePecuariaPatrimonio, useDrePecuariaLista,
+  anoMesAntes, type RecortePec, type PeriodoPec,
 } from '@/hooks/useDrePecuaria';
+import { useFiltroUrl } from '@/v2/hooks/useFiltroUrl';
 import {
   SeletorPeriodoPecuaria, safraCorrentePecuaria, useSafraDeAbertura,
 } from '@/components/agri/SeletorPeriodoPecuaria';
 import { PecLancamentosModal } from '@/components/agri/PecLancamentosModal';
 import { PecPatrimonioModal } from '@/components/agri/PecPatrimonioModal';
 import { PecRateioAdmModal } from '@/components/agri/PecRateioAdmModal';
-import { PecDrePanel, FaixaPecuaria } from '@/pages/PecDrePanel';
+import {
+  PecDrePanel, FaixaVisoesPec, colunasDaVisao, lerVisaoPec, escreverVisaoPec, lerNAnosPec,
+  escreverNAnosPec, N_ANOS_PADRAO, type VisaoPec,
+} from '@/pages/PecDrePanel';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useFinanceiroV2, type LancamentoV2 } from '@/hooks/useFinanceiroV2';
 import { usePainelSafra, useComparativoSafras } from '@/hooks/usePainelSafra';
@@ -260,6 +265,41 @@ export function AgriDreLavouraTab() {
   } = useDrePecuariaLancamentos(clienteId, recortePec, pecDe, pecAte);
   const { patrimonio: patPec, carregando: carregandoPatPec } = useDrePecuariaPatrimonio(
     clienteId, didatico?.fazendaId ?? null, pecDe, pecAte, !!didatico);
+
+  /* ════════ AS QUATRO VISÕES DA PECUÁRIA — DRE-PEC-TELA-02 ════════ */
+  /* ⚠ NA URL, COMO O PERÍODO: F5 e link copiado reabrem a mesma visão. `useFiltroUrl` não grava o
+     padrão ("global", 3 anos), então endereço limpo continua sendo "tela padrão". */
+  const [visaoPec, setVisaoPec] = useFiltroUrl<VisaoPec>('f_visao', 'global', lerVisaoPec, escreverVisaoPec);
+  const [nAnosPec, setNAnosPec] = useFiltroUrl<number>('f_anos', N_ANOS_PADRAO, lerNAnosPec, escreverNAnosPec);
+  /* ⚠ A META E O ANO ANTERIOR SÃO BUSCADOS SEMPRE (decisão 2): os cards "× Meta" e "× Anos" mostram
+     o delta em qualquer visão. São leituras em cache do react-query — trocar de visão não refaz. */
+  const { dre: drePecMeta, carregando: carregandoPecMeta } = useDrePecuaria(
+    ehPec ? clienteId : null, pecDe, pecAte, 'meta');
+  /* ⚠ A LISTA VARIA, O HOOK NÃO: fora da visão x Anos só o ano−1 (o do card); nela, 1..N. */
+  const periodosAnosPec = useMemo((): PeriodoPec[] => {
+    if (!pecDe || !pecAte) return [];
+    const n = visaoPec === 'anos' ? nAnosPec : 1;
+    return Array.from({ length: n }, (_, i): PeriodoPec => ({
+      de: anoMesAntes(pecDe, i + 1), ate: anoMesAntes(pecAte, i + 1), cenario: 'realizado',
+    }));
+  }, [pecDe, pecAte, visaoPec, nAnosPec]);
+  const anosPec = useDrePecuariaLista(ehPec ? clienteId : null, periodosAnosPec);
+  const colunasPec = useMemo(() => (drePec && pecDe && pecAte
+    ? colunasDaVisao({
+      visao: visaoPec, de: pecDe, ate: pecAte, real: drePec,
+      meta: drePecMeta, carregandoMeta: carregandoPecMeta,
+      anos: anosPec.map(a => ({ de: a.periodo.de, ate: a.periodo.ate, dre: a.dre, carregando: a.carregando })),
+    })
+    : []), [drePec, pecDe, pecAte, visaoPec, drePecMeta, carregandoPecMeta, anosPec]);
+  /* ⚠ O MODAL DE LANÇAMENTOS DIZ DE QUE COLUNA VEIO: a lista da coluna de 2024 não pode aparecer
+     sob o rótulo do período da tela, nem a de meta sob o do realizado. */
+  const rotuloRecortePec = useMemo(() => {
+    const ponto = (am: string) => ({ ano: Number(am.slice(0, 4)), mes: Number(am.slice(5, 7)) });
+    const base = recortePec?.de && recortePec?.ate
+      ? descreverPeriodo({ de: ponto(recortePec.de), ate: ponto(recortePec.ate) })
+      : descreverPeriodo(periodo);
+    return recortePec?.cenario === 'meta' ? `${base} · meta` : base;
+  }, [recortePec, periodo]);
 
   /* ⚠ TRÊS CONTROLES DE APRESENTAÇÃO, e nenhum deles refaz consulta: o payload já traz `direto`,
      `rateado` e `valor` em cada linha. Trocar de modo é escolher qual ler. */
@@ -655,7 +695,12 @@ export function AgriDreLavouraTab() {
             </div>
           </div>
 
-          {ehPec ? (drePec ? <FaixaPecuaria dre={drePec} /> : null)
+          {ehPec ? (drePec ? (
+            <FaixaVisoesPec visao={visaoPec} onVisao={setVisaoPec} real={drePec}
+              meta={drePecMeta} carregandoMeta={carregandoPecMeta}
+              anoAnterior={anosPec[0]?.dre ?? null} carregandoAnoAnterior={anosPec[0]?.carregando ?? true}
+              nAnos={nAnosPec} onNAnos={setNAnosPec} />
+          ) : null)
             : culturaAberta ? <FaixaCultura c={culturaAberta} />
               : <Faixa dre={dre} />}
 
@@ -771,7 +816,7 @@ export function AgriDreLavouraTab() {
             <Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin align-[-2px]" /> Carregando…
           </div>
         ) : (
-          <PecDrePanel dre={drePec} alturaCartao={alturaCartao} cartaoRef={cartao}
+          <PecDrePanel colunas={colunasPec} alturaCartao={alturaCartao} cartaoRef={cartao}
             onAbrirLista={setRecortePec}
             onAbrirDidatico={(fazendaId, nome, qual) => setDidatico({ fazendaId, nome, qual })}
             onAbrirRateio={() => setRateioPecAberto(true)} />
@@ -786,7 +831,7 @@ export function AgriDreLavouraTab() {
           recorte={recortePec}
           lancamentos={lancPec}
           carregando={carregandoLancPec}
-          periodoRotulo={descreverPeriodo(periodo)}
+          periodoRotulo={rotuloRecortePec}
           onFechar={() => setRecortePec(null)}
           /* ⚠ O MESMO CAMINHO DA LAVOURA (PR-05): `abrirLancamento` usa o
              `buscarLancamentoPorId` do Financeiro, e os quatro catálogos já foram carregados no
