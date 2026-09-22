@@ -57,7 +57,7 @@ import { PecLancamentosModal } from '@/components/agri/PecLancamentosModal';
 import { PecPatrimonioModal } from '@/components/agri/PecPatrimonioModal';
 import { PecRateioAdmModal } from '@/components/agri/PecRateioAdmModal';
 import {
-  PecDrePanel, FaixaVisoesPec, colunasDaVisao, lerVisaoPec, escreverVisaoPec, lerNAnosPec,
+  PecDrePanel, FaixaVisoesPec, SeletorAnosPec, colunasDaVisao, lerVisaoPec, escreverVisaoPec, lerNAnosPec,
   escreverNAnosPec, N_ANOS_PADRAO, type VisaoPec,
 } from '@/pages/PecDrePanel';
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -653,40 +653,52 @@ export function AgriDreLavouraTab() {
               {/* ⚠ O MESMO SLOT, OUTRA PERGUNTA: a lavoura fecha por SAFRA (o ciclo), a pecuária
                   por PERÍODO DE MESES (o rebanho não tem safra). É o seletor do Financeiro, não
                   um terceiro — "Ano safra" se faz nele pelo Personalizado jul→jun. */}
-              {ehPec ? (
-                <SeletorPeriodoPecuaria clienteId={clienteId}
-                  periodo={periodo} onPeriodoChange={setPeriodo} />
-              ) : (
-                <Select value={safraId} onValueChange={setSafraId}>
-                  <SelectTrigger className="h-[22px] w-[130px] text-[10px]">
-                    <SelectValue placeholder="Safra" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {safras.map(s => (
-                      <SelectItem key={s.id} value={s.id} className="text-[12px]">
-                        {s.codigo || s.nome}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
+              {/* ⚠ SLOT DE 250px NAS DUAS ABAS — DRE-PADRAO-01a. Medido em 22/09: o seletor da
+                  pecuária ocupa 250 e o da lavoura 130, e a diferença empurrava o seletor de
+                  atividade 120px para a esquerda ao trocar de aba — a tela inteira andava. Agora o
+                  slot é o mesmo e o conteúdo se alinha à esquerda dentro dele; na lavoura sobram
+                  120px de espaço reservado, que é o preço de a régua não se mexer. */}
+              <div className="flex w-[250px] shrink-0 items-center justify-start">
+                {ehPec ? (
+                  <SeletorPeriodoPecuaria clienteId={clienteId}
+                    periodo={periodo} onPeriodoChange={setPeriodo} />
+                ) : (
+                  <Select value={safraId} onValueChange={setSafraId}>
+                    <SelectTrigger className="h-[22px] w-[130px] text-[10px]">
+                      <SelectValue placeholder="Safra" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {safras.map(s => (
+                        <SelectItem key={s.id} value={s.id} className="text-[12px]">
+                          {s.codigo || s.nome}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
               {/* ⚠ O SLOT DE CULTURA SÓ APARECE NO DRILL: na raiz todas as culturas já estão na
                   grade, e um seletor ali significaria filtrar a comparação — que é o oposto do
                   que a raiz existe para fazer. */}
-              {!ehPec && culturaAberta && (
-                <Select value={cultura} onValueChange={abrirCultura}>
-                  <SelectTrigger className="h-[22px] w-[130px] text-[10px]">
-                    <SelectValue placeholder="Cultura" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {culturas.map(c => (
-                      <SelectItem key={c.cultura} value={c.cultura} className="text-[12px]">
-                        {labelDaCultura(c.cultura)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
+              {/* ⚠ O SLOT DA CULTURA TAMBÉM É RESERVADO — DRE-PADRAO-01a: ele só tem conteúdo no
+                  drill da lavoura, mas se aparecesse do nada empurraria o Ampliar 138px. Vazio na
+                  pecuária e na raiz da lavoura, ele guarda o lugar. */}
+              <div className="flex w-[130px] shrink-0 items-center justify-start">
+                {!ehPec && culturaAberta && (
+                  <Select value={cultura} onValueChange={abrirCultura}>
+                    <SelectTrigger className="h-[22px] w-[130px] text-[10px]">
+                      <SelectValue placeholder="Cultura" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {culturas.map(c => (
+                        <SelectItem key={c.cultura} value={c.cultura} className="text-[12px]">
+                          {labelDaCultura(c.cultura)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
               <button type="button" onClick={() => setAmpliado(true)}
                 title="Ampliar a grade (só a tabela)"
                 className="inline-flex h-[22px] items-center gap-1 rounded-md border px-2 text-[10px] hover:bg-muted">
@@ -735,11 +747,27 @@ export function AgriDreLavouraTab() {
               frase à esquerda muda de tamanho com o toggle: com `flex-wrap` ela quebrava para
               uma segunda linha e empurrava a tabela para baixo, que é o A23 quebrando a cada
               clique. Agora a frase trunca e a altura não se move. */}
-          {/* ⚠ A PECUÁRIA NÃO TEM ESTA LINHA (DRE-PEC-TELA-02b): a frase do rateio saiu, e a grade
-              sobe. O critério, o pool e a fatia da pecuária moram no modal do rateio, aberto pelo
-              selo "estimado" da própria linha — é lá que a explicação responde a quem perguntou. */}
-          {!ehPec && mostraGrade && (
+          {/* ⚠ A PECUÁRIA VOLTOU A TER ESTA LINHA — DRE-PADRAO-01a. Ela tinha saído no
+              DRE-PEC-TELA-02b, e o efeito medido em 22/09 foi a tabela começar 28px mais alto na
+              pecuária do que na lavoura: trocar de aba fazia a grade pular. O slot é o mesmo nas
+              duas, com a mesma altura de 28px.
+              ⚠ E A FRASE DA PECUÁRIA NÃO INVENTA CÁLCULO: ela diz o pool e o critério que a RPC já
+              devolve em `rateio_adm` — os mesmos que o `PecRateioAdmModal` mostra. Não há, na
+              pecuária, o "custos diretos × com rateio nos centros" da lavoura; por isso o lado
+              direito fica vazio, e não com um seletor que não comandaria nada. */}
+          {mostraGrade && (
           <div className="flex h-[28px] items-center justify-between gap-2 text-[10px] text-muted-foreground">
+            {ehPec ? (<>
+              <span className="min-w-0 flex-1 truncate">
+                {drePec?.rateio_adm
+                  ? `${formatNum(drePec.rateio_adm.pool, 2)} em custos administrativos rateados por ${drePec.rateio_adm.criterio || 'critério não informado'} — estimativa, não lançamento.`
+                  : ''}
+              </span>
+              {/* ⚠ O SELETOR DE ANOS VEIO PARA CÁ — DRE-PADRAO-01a: na faixa de caixas ele roubava
+                  123px da grade e deixava as caixas da pecuária 21px mais estreitas que as da
+                  lavoura. Aqui ele ocupa o mesmo lugar que os controles da grade ocupam na lavoura. */}
+              <SeletorAnosPec visao={visaoPec} nAnos={nAnosPec} onNAnos={setNAnosPec} />
+            </>) : (<>
             <span className="min-w-0 flex-1 truncate">
               {formatNum(poolTotal, 2)} em custos comuns rateados por área — estimativa, não lançamento.
               {rateioDentro && <> {' · '}<span className="text-amber-700">●</span> ao lado do nome = tem rateio dentro.</>}
@@ -761,6 +789,7 @@ export function AgriDreLavouraTab() {
                 <Label className="text-[10px] font-normal">/ha e /sc</Label>
               </span>
             </span>
+            </>)}
           </div>
           )}
           </div>

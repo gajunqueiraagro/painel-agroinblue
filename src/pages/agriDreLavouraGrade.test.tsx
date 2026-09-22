@@ -262,11 +262,25 @@ describe('quais células da grade abrem a lista de lançamentos', () => {
  * ⚠ OS 9px DA FILHA SÃO A ÚNICA EXCEÇÃO ao piso de 10px do projeto, declarada no CLAUDE.md.
  */
 describe('a régua tipográfica da grade', () => {
+  /* ⚠ A RÉGUA DESCEU UM PONTO EM 22/09/2026 — DRE-PADRAO-01a, decisão do Gabriel: subtotal 12→11,
+     grupo e simples 10→9, filha inalterada. As ALTURAS não mudaram, e é por isso que os três casos
+     seguintes continuam valendo palavra por palavra: a fonte menor sobra dentro da mesma altura, e
+     a grade não cresce nem encolhe. */
   it('os quatro papéis têm fonte, peso, altura e recuo declarados', () => {
-    expect(REGUA_LINHA.subtotal).toEqual({ fonte: 12, peso: 'font-medium', altura: 20, recuo: 0 });
-    expect(REGUA_LINHA.grupo).toEqual({ fonte: 10, peso: 'font-medium', altura: 16, recuo: 8 });
-    expect(REGUA_LINHA.simples).toEqual({ fonte: 10, peso: 'font-normal', altura: 16, recuo: 8 });
+    expect(REGUA_LINHA.subtotal).toEqual({ fonte: 11, peso: 'font-medium', altura: 20, recuo: 0 });
+    expect(REGUA_LINHA.grupo).toEqual({ fonte: 9, peso: 'font-medium', altura: 16, recuo: 8 });
+    expect(REGUA_LINHA.simples).toEqual({ fonte: 9, peso: 'font-normal', altura: 16, recuo: 8 });
     expect(REGUA_LINHA.filha).toEqual({ fonte: 9, peso: 'font-normal', altura: 14, recuo: 16 });
+  });
+
+  /* ⚠ E A HIERARQUIA CONTINUA EXISTINDO, que é o que a régua existe para dar: três degraus de
+     fonte (11 no subtotal, 9 nas linhas, 9,5 na sub-coluna) e dois de peso. Descer o subtotal ao
+     nível das linhas comuns apagaria onde a conta fecha — foi esse o defeito que o mock B corrigiu
+     em 16/09, e ele não pode voltar por um ajuste de densidade. */
+  it('o subtotal continua acima das linhas comuns', () => {
+    expect(REGUA_LINHA.subtotal.fonte).toBeGreaterThan(REGUA_LINHA.simples.fonte);
+    expect(REGUA_LINHA.subtotal.peso).toBe('font-medium');
+    expect(REGUA_LINHA.simples.peso).toBe('font-normal');
   });
 
   /* ⚠ SÓ O SUBTOTAL PODE PASSAR DOS 18px de antes, e ele passa de propósito: é o único que a

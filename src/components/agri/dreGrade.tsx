@@ -36,14 +36,23 @@ export type TipoLinha = 'subtotal' | 'grupo' | 'simples' | 'filha';
  * ⚠ O ESPAÇO SOBRA PORQUE `leading-none` DEIXA A ALTURA MANDAR: um subtotal de 12px ocupa 14px
  * com o padding, e cabe folgado em 20; a filha de 9px ocupa 12 com a borda tracejada, e cabe em
  * 14. Encurtar mais bateria no conteúdo — é o piso, não uma escolha de gosto.
- * ⚠ OS 9px DA FILHA SÃO EXCEÇÃO DECLARADA ao piso de 10px do projeto — a única, registrada no
- * CLAUDE.md. Nenhum outro texto do sistema desce de 10.
+ * ⚠ A RÉGUA DESCEU UM PONTO EM 22/09/2026 — DRE-PADRAO-01a, decisão do Gabriel. Subtotal 12→11,
+ * grupo e simples 10→9, filha inalterada em 9, e a sub-coluna passou a 9,5 (ver `CelulaUnit`). O
+ * alvo era duplo: aproximar a densidade das duas abas do DRE e fazer a visão x Anos caber em 1440
+ * sem rolagem lateral — com as larguras de 96/64 abaixo, seis colunas somam exatamente 1200, que
+ * é o container a 1440.
+ * ⚠ AS ALTURAS NÃO MUDARAM (20/16/16/14), e isso é deliberado: a fonte menor sobra dentro delas
+ * (`leading-none` deixa a altura mandar), então a grade não encolhe nem cresce — o que muda é a
+ * respiração de cada linha, não o tamanho da tabela.
+ * ⚠ O DRE INTEIRO DESCE DO PISO DE 10px, e é exceção declarada por decisão do Gabriel, não
+ * descuido: antes só a filha (9px) era exceção. Fora do DRE, 10px continua sendo o piso — e
+ * 9,5px, o da casa desde 17/09. Está registrado no CLAUDE.md com esta data.
  */
 export const REGUA_LINHA: Record<TipoLinha,
   { fonte: number; peso: string; altura: number; recuo: number }> = {
-  subtotal: { fonte: 12, peso: 'font-medium', altura: 20, recuo: 0 },
-  grupo: { fonte: 10, peso: 'font-medium', altura: 16, recuo: 8 },
-  simples: { fonte: 10, peso: 'font-normal', altura: 16, recuo: 8 },
+  subtotal: { fonte: 11, peso: 'font-medium', altura: 20, recuo: 0 },
+  grupo: { fonte: 9, peso: 'font-medium', altura: 16, recuo: 8 },
+  simples: { fonte: 9, peso: 'font-normal', altura: 16, recuo: 8 },
   filha: { fonte: 9, peso: 'font-normal', altura: 14, recuo: 16 },
 };
 
@@ -82,10 +91,16 @@ export function PontoRateio({ title = 'tem rateio dentro' }: { title?: string })
   );
 }
 
-export const W_RS = 104;      // R$ por cultura
-export const W_HA = 76;       // R$/ha
+/* ⚠ AS LARGURAS DESCERAM COM A RÉGUA — DRE-PADRAO-01a (22/09/2026), e o critério é medido: a
+   visão x Anos da pecuária com o ano corrente mais cinco anteriores soma, a 1440 (container de
+   1200px = 1440 − 224 do menu − 16 de respiro), 240 do rótulo + 6 × (96 + 64) = 1200. Com as
+   larguras antigas (104 + 76) davam 1274 e a tela rolava para o lado.
+   ⚠ E O NÚMERO CABE, conferido com a fonte nova: "9.998.280,79" mede 73px a 11px/500 e 67px a
+   9px/400; com os 14px de padding da célula, sobram 9px na linha de subtotal e 15px na comum. */
+export const W_RS = 96;       // R$ por cultura
+export const W_HA = 64;       // R$/ha
 export const W_UN = 60;       // R$/unidade
-export const W_RS_TOTAL = 108;
+export const W_RS_TOTAL = 96;
 
 /**
  * O VERDE DOS VALORES POSITIVOS — e ele NÃO é `text-success`.
@@ -224,7 +239,10 @@ export function CelulaUnit({ texto, cor, destaque, filha, fundo, estilo, total, 
          valor cheio ele tem de ceder. No subtotal ele É o número que se lê. */
       sub ? cor : cor === VERDE ? VERDE_70
         : cor === VERMELHO ? VERMELHO_70 : cor)}
-      style={{ ...(fonte ? { fontSize: Math.max(9, fonte - 1) } : {}),
+      /* ⚠ A SUB-COLUNA VAI A 9,5px — DRE-PADRAO-01a: com a régua nova, `fonte - 1` levaria a
+         linha comum (9px) para 8, abaixo de qualquer piso. O piso passa a ser 9,5, e o subtotal
+         (11px) segue um ponto abaixo do valor, em 10. */
+      style={{ ...(fonte ? { fontSize: Math.max(9.5, fonte - 1) } : {}),
         ...(total ? { backgroundColor: FUNDO_TOTAL } : {}), ...estilo }}>
       {texto}
     </td>

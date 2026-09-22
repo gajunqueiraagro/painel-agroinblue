@@ -527,8 +527,14 @@ preview que o cabecalho nao sai da tela ao rolar.
   (centros de custo dentro de Custeio, Pos-colheita, Custo fixo e Investimento)
   vao a 9px com altura 16 — decisao do Gabriel em 16/09, mock B do
   PR-DRE-LAVOURA-10. A regua inteira mora em `REGUA_LINHA`
-  (`src/components/agri/dreGrade.tsx`): subtotal 12/500/20/recuo 0, grupo
-  10/500/16/recuo 8, simples 10/400/16/recuo 8, filha 9/400/14/recuo 16.
+  (`src/components/agri/dreGrade.tsx`): subtotal 11/500/20/recuo 0, grupo
+  9/500/16/recuo 8, simples 9/400/16/recuo 8, filha 9/400/14/recuo 16, e a
+  sub-coluna (R$/ha, /sc, /t) em 9,5 — DESCEU UM PONTO em 22/09/2026, decisao do
+  Gabriel no DRE-PADRAO-01a; ate' entao era 12/10/10/9. O DRE INTEIRO passou a ser
+  excecao ao piso de 9,5px, e so' ele: era excecao so' a filha. As ALTURAS nao
+  mudaram (20/16/16/14) — a fonte menor sobra dentro delas, entao a grade nao
+  cresce nem encolhe; o que se ganhou foi a visao x Anos caber em 1440 sem rolagem
+  (240 de rotulo + 6 x (96 + 64) = 1200, o container exato).
   ⚠ AS ALTURAS NAO SAO AS DO MOCK, E ISSO FOI MEDIDO: com 22/18/18/16 nenhum tipo
   de linha encolhia (subtotal +4, filha +1, resto igual) e a grade CRESCIA de 287
   para 307px na raiz — o oposto do alvo. Fontes e recuos ficaram como o mock

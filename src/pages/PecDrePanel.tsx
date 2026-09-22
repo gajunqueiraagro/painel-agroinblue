@@ -37,10 +37,11 @@ import {
   type CenarioPec,
 } from '@/hooks/useDrePecuaria';
 
-/** A coluna de rótulos: mais estreita que a da lavoura, que carrega caret e etiquetas. */
-const W_FAZENDA = 190;
-/** A sub-coluna R$/ha — o mesmo lugar e a mesma largura que o R$/cab ocupava (TELA-03a). */
-const W_SUB = 76;
+/* ⚠ 240px NO RÓTULO — DRE-PADRAO-01a: a mesma largura da coluna de rótulos da lavoura, para as
+   duas abas começarem a tabela no mesmo x. Era 190. */
+const W_FAZENDA = 240;
+/** A sub-coluna R$/ha — a mesma largura da lavoura (`W_HA`), que desceu a 64 no DRE-PADRAO-01a. */
+const W_SUB = W_HA;
 
 /**
  * A BASE DO PERCENTUAL É O VBP — decisão do Gabriel, 16/09, e ela tem história.
@@ -800,18 +801,35 @@ export function FaixaVisoesPec({ visao, onVisao, real, meta, carregandoMeta, ano
     { chave: 'fazenda', rotulo: 'Por fazenda', valor: String(nFaz), unidade: nFaz === 1 ? 'fazenda' : 'fazendas',
       title: 'Qual fazenda carrega o resultado?' },
   ];
+  /* ⚠ SEIS COLUNAS E A RÉGUA DA LAVOURA — DRE-PADRAO-01a. Eram 4 caixas `grande` (52px de altura,
+     rótulo 11px) contra as 6 da lavoura (44px, rótulo 10px): trocar de aba mudava a altura da faixa
+     e, com ela, o y da tabela. Agora a grade é de 6 e as caixas 5 e 6 ficam VAZIAS — sem borda, sem
+     texto, nada clicável: são espaço reservado.
+     ⚠ E O SELETOR DE ANOS SAIU DAQUI, para a linha de rateio. Ele dividia esta linha com a grade e
+     roubava 123px: as caixas da pecuária mediam 122 contra as 143 da lavoura, e a grade de 6 não
+     resolvia isso sozinha. Na linha de rateio ele fica onde a lavoura já põe os controles da
+     grade — e as caixas passam a ter a MESMA largura nas duas abas. */
   return (
-    <div className="flex items-center gap-2">
-      <div className="min-w-0 flex-1">
-        <Caixas caixas={caixas} colunas={4} grande selecionada={visao}
-          onEscolher={ch => { const v = VISOES.find(x => x === ch); if (v) onVisao(v); }} />
-      </div>
-      <div className={cn('flex shrink-0 flex-col items-center gap-0.5', visao !== 'anos' && 'invisible')}
-        aria-hidden={visao !== 'anos'}>
-        <span className="text-[10px] text-muted-foreground">anos anteriores</span>
-        <Segmentado altura={22} valor={String(nAnos)} onEscolher={v => onNAnos(Number(v))}
-          opcoes={['1', '2', '3', '4', '5'].map(n => ({ valor: n, rotulo: n }))} />
-      </div>
-    </div>
+    <Caixas caixas={caixas} colunas={6} selecionada={visao}
+      onEscolher={ch => { const v = VISOES.find(x => x === ch); if (v) onVisao(v); }} />
+  );
+}
+
+/**
+ * O SELETOR DE QUANTOS ANOS ANTERIORES — mora na linha de rateio, ao lado direito.
+ *
+ * ⚠ ELE FICA VISÍVEL SÓ NA VISÃO x ANOS, mas OCUPA O LUGAR sempre (`invisible`, não removido): é a
+ * mesma lei que mantém a coluna de ações do drill — some o conteúdo, não o espaço.
+ */
+export function SeletorAnosPec({ visao, nAnos, onNAnos }: {
+  visao: VisaoPec; nAnos: number; onNAnos: (n: number) => void;
+}) {
+  return (
+    <span className={cn('flex shrink-0 items-center gap-1.5 whitespace-nowrap',
+      visao !== 'anos' && 'invisible')} aria-hidden={visao !== 'anos'}>
+      anos anteriores
+      <Segmentado altura={22} valor={String(nAnos)} onEscolher={v => onNAnos(Number(v))}
+        opcoes={['1', '2', '3', '4', '5'].map(n => ({ valor: n, rotulo: n }))} />
+    </span>
   );
 }
