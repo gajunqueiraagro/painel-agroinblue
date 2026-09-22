@@ -194,7 +194,16 @@ export function useMetaValorRebanhoPrecos(anoMes: string, fazendaId?: string) {
      `cenario = 'meta'`, que e' onde o plano de fato existe.
 
      ⚠ UMA consulta a mais por ANO, dentro deste callback — nao por render. A
-     tela ja consultava aqui; o custo e' a segunda query da mesma chamada. */
+     tela ja consultava aqui; o custo e' a segunda query da mesma chamada.
+
+     ⚠ O CONJUNTO SAI DE `zoot_mensal_cache`, NAO DA VIEW — PERF-PLANEJAMENTO-01.
+     A view monta a cadeia recursiva de TODOS os clientes (12.024 linhas) e so'
+     depois filtra: 11.950 ms por leitura, medido em 22/09. O cache responde a
+     mesma pergunta em 1,5 ms pelo indice, e o conjunto (ano_mes, fazenda_id) do
+     plano meta bateu com a view em 731 x 731 pares, todos os clientes. E' a
+     fonte e o filtro do `fn_dre_pecuaria` (PERF-DRE-01). A dependencia e' o
+     `refresh_zoot_cache`: os triggers de lancamentos/saldos/fechamento so'
+     APAGAM a fazenda-ano do cache, e ela so' volta quando alguem reconstroi. */
   const loadStatusAno = useCallback(async (ano: string) => {
     if (!clienteId) return;
     const meses = Array.from({ length: 12 }, (_, i) => `${ano}-${String(i + 1).padStart(2, '0')}`);
@@ -205,7 +214,7 @@ export function useMetaValorRebanhoPrecos(anoMes: string, fazendaId?: string) {
         .eq('cliente_id', clienteId)
         .in('ano_mes', meses),
       supabase
-        .from('vw_zoot_categoria_mensal' as any)
+        .from('zoot_mensal_cache')
         .select('ano_mes, fazenda_id')
         .eq('cliente_id', clienteId)
         .eq('cenario', 'meta')

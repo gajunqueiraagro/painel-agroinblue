@@ -192,7 +192,12 @@ export function MetaPrecoTab({ onBack }: Props) {
     return a;
   }, []);
 
-  useEffect(() => { loadStatusAno(ano); }, [ano, loadStatusAno, statusMes]);
+  /* ⚠ A REGUA RODA UMA VEZ POR (cliente, ano) — PERF-PLANEJAMENTO-01. Ela dependia
+     de `statusMes`, que `loadData` grava como objeto NOVO a cada carga: a abertura
+     disparava duas leituras (a primeira descartada) e cada troca de mes, mais uma,
+     sem o ano mudar. O que a dependencia fazia de util — repintar a regua depois de
+     validar ou reabrir — agora e' chamada explicita em `handleSalvar` e no Reabrir. */
+  useEffect(() => { loadStatusAno(ano); }, [ano, loadStatusAno]);
 
   // Local prices state
   const [precosLocal, setPrecosLocal] = useState<Record<string, number>>({});
@@ -444,6 +449,7 @@ export function MetaPrecoTab({ onBack }: Props) {
       }
 
       await salvar(items, status);
+      loadStatusAno(ano);
     } catch (e: any) {
       console.error('Erro ao salvar valor_rebanho_meta:', e);
       window.alert('Erro ao salvar valor do rebanho META');
@@ -544,7 +550,7 @@ export function MetaPrecoTab({ onBack }: Props) {
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction onClick={reabrir}>Reabrir</AlertDialogAction>
+                  <AlertDialogAction onClick={async () => { await reabrir(); loadStatusAno(ano); }}>Reabrir</AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
