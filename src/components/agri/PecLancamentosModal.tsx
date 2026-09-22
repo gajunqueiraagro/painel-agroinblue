@@ -101,8 +101,11 @@ export function PecLancamentosModal({
                   Nenhum lançamento neste recorte.
                 </td></tr>
               )}
-              {lancamentos.map(l => (
-                <tr key={l.id} className="border-t border-slate-100 bg-card odd:bg-[#1e3a5f]/[0.03]">
+              {/* ⚠ A CHAVE NÃO PODE SER O `id`: as linhas de meta calculada vêm com `id` nulo, e
+                  doze delas na mesma lista davam doze chaves iguais ao React. Origem + índice é
+                  única e estável dentro do recorte. */}
+              {lancamentos.map((l, i) => (
+                <tr key={`${l.origem}-${l.id ?? i}`} className="border-t border-slate-100 bg-card odd:bg-[#1e3a5f]/[0.03]">
                   <td className={cn(TD, 'whitespace-nowrap tabular-nums')}>{dataBR(l.data)}</td>
                   <td className={TD} title={l.descricao ?? undefined}>{l.descricao || '—'}</td>
                   <td className={TD} title={l.favorecido ?? undefined}>{l.favorecido || '—'}</td>
@@ -114,14 +117,29 @@ export function PecLancamentosModal({
                     {formatNum(l.valor, 2)}
                   </td>
                   <td className={TD}><Status s={l.status} /></td>
+                  {/* ⚠ REGRA POSITIVA, E O ESPAÇO DO BOTÃO FICA: só a linha que VEIO da
+                      `financeiro_lancamentos_v2` abre o Editar — as de planejamento e as de meta
+                      calculada não são lançamento, e o lápis nelas chamava `buscarLancamentoPorId`
+                      com um id que não existe lá: clique morto, sem mensagem. Escrever a regra pelo
+                      que PODE (origem === 'lancamento') e não pelo que não pode é o que impede a
+                      próxima origem de nascer editável por acidente.
+                      ⚠ O BOTÃO SOME MAS A CÉLULA NÃO ENCOLHE: `invisible` mantém o nó no lugar, e a
+                      coluna de valores não se mexe entre linhas de origens diferentes. */}
                   <td className={cn(TD, 'text-right')}>
-                    {onAbrirLancamento && (
-                      <button type="button" title="Abrir o lançamento para corrigir"
-                        className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                        onClick={() => onAbrirLancamento(l.id)}>
-                        <Pencil className="h-3 w-3" />
-                      </button>
-                    )}
+                    {onAbrirLancamento && (() => {
+                      const idEditavel = l.origem === 'lancamento' ? l.id : null;
+                      return (
+                        <button type="button" title="Abrir o lançamento para corrigir"
+                          aria-hidden={idEditavel === null} tabIndex={idEditavel === null ? -1 : undefined}
+                          className={cn(
+                            'rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground',
+                            idEditavel === null && 'invisible',
+                          )}
+                          onClick={idEditavel === null ? undefined : () => onAbrirLancamento(idEditavel)}>
+                          <Pencil className="h-3 w-3" />
+                        </button>
+                      );
+                    })()}
                   </td>
                 </tr>
               ))}

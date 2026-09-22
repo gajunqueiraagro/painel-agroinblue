@@ -298,13 +298,28 @@ export function rotuloCurtoPeriodo(de: string, ate: string): string {
 /* ══════════════ AS LISTAS POR TRÁS DE CADA CÉLULA — §5 ══════════════ */
 
 /**
+ * De onde a linha do drill veio — TELA-03b.
+ *
+ * ⚠ `'lancamento'` É NOME DO FRONT, NÃO DA RPC. Medido em 22/09 em
+ * `fn_dre_pecuaria_lancamentos` (md5 a3f9174d): o ramo `pl` manda `'origem': 'planejamento'` e o
+ * `pc` manda `'calculado'`, mas o ramo `ln` — o dos lançamentos de verdade — NÃO MANDA A CHAVE.
+ * A ausência é o sinal, e este é o único lugar do sistema que lhe dá nome. A RPC fica intocada.
+ * ⚠ `'desconhecida'` É PORTA DE ENTRADA FECHADA: uma origem nova na RPC cai aqui e NÃO ganha o
+ * lápis por acidente. Só `'lancamento'` abre o Editar.
+ */
+export type OrigemLancamentoPec = 'lancamento' | 'planejamento' | 'calculado' | 'desconhecida';
+
+/**
  * Um lançamento como `fn_dre_pecuaria_lancamentos` o devolve.
  *
  * ⚠ `id` É O QUE IMPORTA MAIS: é por ele que a linha abre o Editar Lançamento, e é lá que o
  * Gabriel corrige a fazenda ou o plano — o gesto que faz a coluna errada devolver o valor.
+ * ⚠ E ELE É NULO NAS LINHAS DE META: as calculadas vêm com `id` nulo da RPC, e o parser deixava
+ * isso virar `''` — o tipo dizia `string` e prometia mais do que o dado tem.
  */
 export interface LancamentoPec {
-  id: string;
+  origem: OrigemLancamentoPec;
+  id: string | null;
   data: string | null;
   descricao: string | null;
   favorecido: string | null;
@@ -334,6 +349,22 @@ export interface RecortePec {
   de?: string;
   ate?: string;
   cenario?: CenarioPec;
+}
+
+/**
+ * A origem da linha, lida da RPC — nunca deduzida.
+ *
+ * ⚠ AUSÊNCIA É O RAMO `ln`, e só ela vira `'lancamento'`. Deduzir pela descrição "(meta
+ * calculada)" ou pelo `id` nulo seria uma segunda dona do mesmo dado; o que manda é a coluna.
+ * Valor que a RPC passe a devolver e este mapa não conheça vira `'desconhecida'` com aviso: sem
+ * lápis, porque abrir o Editar Lançamento com um id que não é da `financeiro_lancamentos_v2` é
+ * exatamente o clique morto que esta frente veio consertar.
+ */
+function lerOrigem(v: unknown): OrigemLancamentoPec {
+  if (v == null) return 'lancamento';
+  if (v === 'planejamento' || v === 'calculado') return v;
+  console.warn('[useDrePecuariaLancamentos] origem desconhecida vinda da RPC — linha sem Editar', { origem: v });
+  return 'desconhecida';
 }
 
 export function useDrePecuariaLancamentos(
@@ -367,7 +398,8 @@ export function useDrePecuariaLancamentos(
       return (Array.isArray(r) ? r : []).map((x: unknown) => {
         const o = objeto(x);
         return {
-          id: String(o.id ?? ''),
+          origem: lerOrigem(o.origem),
+          id: o.id == null ? null : String(o.id),
           data: o.data == null ? null : String(o.data),
           descricao: o.descricao == null ? null : String(o.descricao),
           favorecido: o.favorecido == null ? null : String(o.favorecido),
