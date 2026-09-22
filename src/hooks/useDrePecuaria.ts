@@ -232,7 +232,10 @@ export function useDrePecuaria(
     queryFn: () => buscarDrePecuaria(clienteId, de, ate, cenario),
   });
 
-  const recarregar = () => queryClient.invalidateQueries({ queryKey: chave });
+  /* ⚠ O PREFIXO, NÃO A `chave`: realizado, meta e os anos anteriores (`useDrePecuariaLista`) são
+     todos 'dre-pecuaria'. Invalidar só a chave exata derrubava o realizado corrente e deixava meta
+     e anos com o número velho até o F5 (DRE-REFRESH-01). */
+  const recarregar = () => queryClient.invalidateQueries({ queryKey: ['dre-pecuaria'] });
   return { dre: data ?? null, carregando: isLoading, erro: error as Error | null, recarregar };
 }
 
