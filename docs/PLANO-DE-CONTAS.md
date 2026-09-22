@@ -1,6 +1,6 @@
 # Plano de Contas — AGROinBLUE
 
-> **GERADO do banco em 21/09/2026 (após PLANO-ADM-06).
+> **GERADO do banco em 22/09/2026 (após PLANO-ADM-07).
 > Não editar à mão: migration primeiro, regeração depois.**
 
 Fonte: `public.financeiro_plano_contas` no Supabase **proto** (`binbcdfbisgscrifztia`).
@@ -8,7 +8,7 @@ Hierarquia: **tipo de operação › macro custo › grupo de custo › centro d
 Dentro de cada grupo, as linhas saem em `centro a-z > subcentro a-z` — a mesma ordem que
 `ordem_exibicao` materializa (PLANO-ORDEM-01).
 
-**223 linhas**: 215 globais (`cliente_id` nulo, valem para todos) e 8 de um cliente só, todas
+**226 linhas**: 218 globais (`cliente_id` nulo, valem para todos) e 8 de um cliente só, todas
 no grupo Dividendos. A coluna **origem** diz qual é qual.
 
 Legenda das colunas: **DRE** = `compoe_dre` · **LCDPR** = `gera_lcdpr` · **bloco** = `bloco_dre`
@@ -328,6 +328,14 @@ de decisão, não `false`.
 | 15030 | Compra de Bovinos | Investimento Frete/Comissão Compra Bovinos | pecuaria | sim | — | reposicao | global |
 
 ### Investimento na Fazenda
+
+#### Investimento Administrativo
+
+| ordem | centro | subcentro | escopo | DRE | LCDPR | bloco | origem |
+|---:|---|---|---|:-:|:-:|---|---|
+| 22010 | Infraestrutura | Investimento Instalações Administrativo | administrativo | sim | — | investimento | global |
+| 22020 | Máquinas | Investimento Equipamentos e Informática Administrativo | administrativo | sim | — | investimento | global |
+| 22030 | Máquinas | Investimento Veículos Administrativo | administrativo | sim | — | investimento | global |
 
 #### Investimento Agricultura
 
