@@ -685,28 +685,6 @@ export function AgriDreLavouraTab() {
                   </Select>
                 )}
               </div>
-              {/* ⚠ O SLOT DE CULTURA SÓ APARECE NO DRILL: na raiz todas as culturas já estão na
-                  grade, e um seletor ali significaria filtrar a comparação — que é o oposto do
-                  que a raiz existe para fazer. */}
-              {/* ⚠ O SLOT DA CULTURA TAMBÉM É RESERVADO — DRE-PADRAO-01a: ele só tem conteúdo no
-                  drill da lavoura, mas se aparecesse do nada empurraria o Ampliar 138px. Vazio na
-                  pecuária e na raiz da lavoura, ele guarda o lugar. */}
-              <div className="flex w-[130px] shrink-0 items-center justify-start">
-                {!ehPec && culturaAberta && (
-                  <Select value={cultura} onValueChange={abrirCultura}>
-                    <SelectTrigger className="h-[22px] w-[130px] text-[10px]">
-                      <SelectValue placeholder="Cultura" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {culturas.map(c => (
-                        <SelectItem key={c.cultura} value={c.cultura} className="text-[12px]">
-                          {labelDaCultura(c.cultura)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              </div>
               <button type="button" onClick={() => setAmpliado(true)}
                 title="Ampliar a grade (só a tabela)"
                 className="inline-flex h-[22px] items-center gap-1 rounded-md border px-2 text-[10px] hover:bg-muted">
@@ -767,6 +745,31 @@ export function AgriDreLavouraTab() {
               pecuária e `valorDaLinha` aqui. */}
           {mostraGrade && (
           <div className="flex h-[28px] items-center justify-between gap-2 text-[10px] text-muted-foreground">
+            {/* ⚠ O SELETOR DE CULTURA DESCEU PARA CÁ — DRE-PADRAO-01a-3. Ele vivia no cabeçalho, e
+                o slot de 130px que guardava o lugar dele era justamente o espaço que faltava ao
+                subtítulo: a 1126 o subtítulo precisava de 252px (pecuária) ou 259 (lavoura) e tinha
+                177. Aqui ele ocupa o lado esquerdo desta linha, que ficou vazio quando as frases de
+                rateio saíram no 01a-2.
+                ⚠ E O SLOT CONTINUA RESERVADO NAS DUAS ABAS: vazio na pecuária e na raiz da lavoura.
+                Sem ele, abrir o drill empurraria os controles da direita 130px — trocar a régua de
+                lugar não pode ser o preço de abrir uma cultura.
+                ⚠ SÓ MUDOU DE LUGAR: mesmas opções, mesmo estado, mesmo efeito no drill. */}
+            <div className="flex w-[130px] shrink-0 items-center justify-start">
+              {!ehPec && culturaAberta && (
+                <Select value={cultura} onValueChange={abrirCultura}>
+                  <SelectTrigger className="h-[22px] w-[130px] text-[10px]">
+                    <SelectValue placeholder="Cultura" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {culturas.map(c => (
+                      <SelectItem key={c.cultura} value={c.cultura} className="text-[12px]">
+                        {labelDaCultura(c.cultura)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
             <span className="min-w-0 flex-1 truncate">
               {!ehPec && rateioDentro && <><span className="text-amber-700">●</span> ao lado do nome = tem rateio dentro.</>}
             </span>
