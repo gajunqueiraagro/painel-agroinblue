@@ -17,7 +17,10 @@ import { useFinanceiro, type FinanceiroLancamento } from '@/hooks/useFinanceiro'
 import { useFluxoCaixa, type FluxoMensal } from '@/hooks/useFluxoCaixa';
 import { useFinanceiroV2 } from '@/hooks/useFinanceiroV2';
 import { useFazenda } from '@/contexts/FazendaContext';
+import { useCliente } from '@/contexts/ClienteContext';
 import { usePastos } from '@/hooks/usePastos';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FazendaSelector } from '@/components/FazendaSelector';
 import { ArrowLeft, Loader2, Filter, X, Beef } from 'lucide-react';
@@ -88,15 +91,31 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
   const [drillDown, setDrillDown] = useState<(DrillDownPayload & { ano: string; mes: number }) | null>(null);
   const [drillMacro, setDrillMacro] = useState<string | null>(null);
   const { fazendaAtual, fazendas } = useFazenda();
+  const { clienteAtual } = useCliente();
   const { pastos, categorias } = usePastos();
   const fazendaId = fazendaAtual?.id;
   const isGlobal = fazendaId === '__global__';
+
+  /* ⚠ O FILTRO SOBE PARA CA' — PERF-PLANEJAMENTO-02b. `localAno` morava abaixo, e o
+     `useFinanceiro` nao podia le-lo: `const` em TDZ estoura no render. Ele so' mudou de
+     lugar; o valor inicial e o efeito que o segue sao os mesmos. */
+  // Filtro único — herdado do Resumo, ajustável localmente
+  const [localAno, setLocalAno] = useState(filtroAnoInicial || String(new Date().getFullYear()));
+  const [localMes, setLocalMes] = useState(filtroMesInicial || new Date().getMonth() + 1);
+
+  /* ⚠ O ANO ENTRA NO `useFinanceiro` — PERF-PLANEJAMENTO-02b. Sem ele o hook lia a fazenda
+     INTEIRA, todos os anos, `select *` paginado de 1.000 com await por pagina: na NJ/Pureza
+     eram 26 paginas e ~25 mil linhas (12 da fazenda + 14 do Administrativo do rateio), ~24 s
+     medidos em 22/09 — e a grade da META, que so' precisa de ~2 s, esperava por tudo isso no
+     `{loading ? ...}` abaixo. Com o ano: 1.693 linhas, 1 pagina, 41 ms no banco.
+     O unico consumidor que precisava de TODOS os anos era o seletor de ano, e ele passou a
+     ter fonte propria (`fn_financeiro_anos_realizado`, logo abaixo). */
   const {
     importacoes, lancamentos, centrosCusto, contasBancarias, indicadores,
     rateioADM, rateioConferencia, fazendasSemRebanho, fazendaMapForImport,
     loading, confirmarImportacao, excluirImportacao, buscarDetalhesLote, fazendaADM,
     totalLancamentosADM, reloadData,
-  } = useFinanceiro();
+  } = useFinanceiro({ ano: Number(localAno) });
 
   // V2 hook for editing lancamentos from audit modal
   const v2Hook = useFinanceiroV2(1);
@@ -214,10 +233,6 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
     return ok;
   }, [v2Hook, reloadData]);
 
-  // Filtro único — herdado do Resumo, ajustável localmente
-  const [localAno, setLocalAno] = useState(filtroAnoInicial || String(new Date().getFullYear()));
-  const [localMes, setLocalMes] = useState(filtroMesInicial || new Date().getMonth() + 1);
-
   useEffect(() => {
     if (filtroAnoInicial) setLocalAno(filtroAnoInicial);
     if (filtroMesInicial) setLocalMes(filtroMesInicial);
@@ -238,21 +253,44 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
      abertura, ~25 s de rede somados, medidos em 22/09. Nao ha conserto de tipo nem
      supressao aqui: e' codigo morto apagado. O hook segue vivo para quem o le. */
 
-  // Available years from lancamentos
+  /* ⚠ OS ANOS VEM DO BANCO, NAO DA LISTA CARREGADA — PERF-PLANEJAMENTO-02b. Este seletor era
+     o UNICO consumidor que precisava de todos os anos, e era ele que obrigava o
+     `useFinanceiro` acima a ler a fazenda inteira. A `fn_financeiro_anos_realizado` leva ao
+     banco o MESMO predicado que a varredura aplicava em memoria (cenario realizado, status
+     realizado, nao cancelado, com movimento de caixa) e une o ano de `data_pagamento` com o
+     de `ano_mes`, como o codigo antigo fazia.
+     ⚠ O ESCOPO REPETE O DO HOOK: em Global, todas as fazendas do cliente; com uma fazenda
+     escolhida, ela mais a do rateio (codigo_importacao = 'ADM'), que e' a segunda cadeia que
+     o `useFinanceiro` carrega. */
+  const fazendaIdsDosAnos = useMemo(() => {
+    const reais = fazendas.filter(f => f.id !== '__global__').map(f => f.id);
+    if (isGlobal || !fazendaId) return reais;
+    const adm = fazendas.find(f => (f.codigo_importacao || '').toUpperCase() === 'ADM');
+    return adm && adm.id !== fazendaId ? [fazendaId, adm.id] : [fazendaId];
+  }, [fazendas, fazendaId, isGlobal]);
+
+  const anosQuery = useQuery({
+    queryKey: ['fin-anos-realizado', clienteAtual?.id, fazendaIdsDosAnos.slice().sort().join(',')],
+    queryFn: async (): Promise<number[]> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+      const { data, error } = await (supabase as any).rpc('fn_financeiro_anos_realizado', {
+        p_cliente: clienteAtual?.id,
+        p_fazenda_ids: fazendaIdsDosAnos,
+      });
+      if (error) throw error;
+      return (data as number[] | null) ?? [];
+    },
+    enabled: Boolean(clienteAtual?.id) && fazendaIdsDosAnos.length > 0,
+    staleTime: 5 * 60 * 1000,
+  });
+
   const anosDisponiveis = useMemo(() => {
     const anos = new Set<string>();
     anos.add(String(anoAtual));
     if (filtroAnoInicial) anos.add(filtroAnoInicial);
-    lancamentos.forEach(l => {
-      if (l.data_pagamento && l.data_pagamento.length >= 4) {
-        anos.add(l.data_pagamento.substring(0, 4));
-      }
-      if (l.ano_mes && l.ano_mes.length >= 4) {
-        anos.add(l.ano_mes.substring(0, 4));
-      }
-    });
+    (anosQuery.data ?? []).forEach(a => anos.add(String(a)));
     return Array.from(anos).sort().reverse();
-  }, [lancamentos, anoAtual, filtroAnoInicial]);
+  }, [anosQuery.data, anoAtual, filtroAnoInicial]);
 
   const tabs: { id: SubTab; label: string }[] = [
     { id: 'dashboard', label: 'Dashboard' },
