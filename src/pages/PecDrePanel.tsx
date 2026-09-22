@@ -37,9 +37,11 @@ import {
   type CenarioPec,
 } from '@/hooks/useDrePecuaria';
 
-/* ⚠ 240px NO RÓTULO — DRE-PADRAO-01a: a mesma largura da coluna de rótulos da lavoura, para as
-   duas abas começarem a tabela no mesmo x. Era 190. */
-const W_FAZENDA = 240;
+/* ⚠ 200px NO RÓTULO — DRE-PADRAO-01a-2: a mesma largura da coluna de rótulos da lavoura, para as
+   duas abas começarem a tabela no mesmo x. Era 190 antes do 01a, subiu a 240 e desceu a 200 na
+   homologação do Gabriel — com a régua de 9px o rótulo mais longo cabe, e os 40px voltam para as
+   colunas de número. */
+const W_FAZENDA = 200;
 /** A sub-coluna R$/ha — a mesma largura da lavoura (`W_HA`), que desceu a 64 no DRE-PADRAO-01a. */
 const W_SUB = W_HA;
 
@@ -341,6 +343,38 @@ function valorNaColuna(col: ColunaPec, chave: ChaveLinhaPec): number | null {
 }
 
 /**
+ * AS LINHAS QUE O RATEIO ADMINISTRATIVO ATRAVESSA — DRE-PADRAO-01a-2.
+ *
+ * ⚠ SÃO TRÊS, E SAEM DA FÓRMULA DA RPC, não de escolha: `fn_dre_pecuaria` monta
+ * `resultado_operacional = margem − custo_fixo − rateio_adm`, e o `resultado_periodo` e o
+ * `resultado_com_mercado` descendem dele. A margem NÃO entra: ela fecha antes do rateio.
+ * ⚠ NA PECUÁRIA A RPC NÃO TRAZ O PAR `valor`/`direto` QUE A LAVOURA TEM — lá o banco devolve os
+ * dois números e a tela escolhe um. Aqui o modo "Custos diretos" SOMA o rateio de volta aos três
+ * subtotais, que é a mesma conta ao contrário. Nenhum custo é recalculado: o rateio continua
+ * existindo, só deixa de ser descontado.
+ */
+const ATRAVESSADAS_PELO_RATEIO: ReadonlySet<ChaveLinhaPec> = new Set<ChaveLinhaPec>([
+  'resultado_operacional', 'resultado_periodo', 'resultado_com_mercado',
+]);
+
+/**
+ * O valor da linha no modo escolhido.
+ *
+ * ⚠ "CUSTOS DIRETOS" NÃO MUDA CUSTO NENHUM: a linha do rateio vira traço (ausência declarada, não
+ * zero — zero diria "não houve rateio") e os três subtotais abaixo dela voltam a ser o que seriam
+ * sem ele. É a mesma leitura que a lavoura oferece, e a conta fecha nas duas: resultado com rateio
+ * + rateio = resultado sem rateio.
+ */
+function valorNoModo(col: ColunaPec, chave: ChaveLinhaPec, rateioDentro: boolean): number | null {
+  const v = valorNaColuna(col, chave);
+  if (rateioDentro || col.tipo === 'delta') return v;
+  if (chave === 'rateio_adm') return null;
+  if (!ATRAVESSADAS_PELO_RATEIO.has(chave) || v == null) return v;
+  const rat = valorNaColuna(col, 'rateio_adm');
+  return rat == null ? v : v + rat;
+}
+
+/**
  * O PERCENTUAL DO DELTA — delta ÷ |meta|. ⚠ Meta zero dá traço (não há do que ser percentual).
  * ⚠ O MÓDULO NO DENOMINADOR: com meta negativa (um resultado planejado de prejuízo), dividir pelo
  * valor com sinal inverteria o sentido — melhorar sobre a meta apareceria como percentual negativo.
@@ -357,6 +391,21 @@ const corDoDelta = (def: DefPec, v: number | null): string => {
   const bom = def.tom === 'custo' ? v < 0 : v > 0;
   return bom ? VERDE : VERMELHO;
 };
+
+/**
+ * O TÍTULO DA COLUNA DE RÓTULOS — DRE-PADRAO-01a-2, decisão do Gabriel.
+ *
+ * ⚠ "FAZENDA" SÓ ERA VERDADE NUMA DAS QUATRO VISÕES. Nas outras, a coluna lista cenários (Realizado
+ * e Meta), períodos (2026, 2025, 2024) ou uma linha só de consolidado — chamar tudo de "Fazenda"
+ * fazia o cabeçalho descrever a exceção. O nome sai das colunas que a visão montou, não de um
+ * estado à parte: é o mesmo dado que desenha a grade.
+ */
+function tituloDaPrimeiraColuna(colunas: readonly ColunaPec[]): string {
+  if (colunas.some(c => c.chave === '__meta__')) return 'Cenário';
+  if (colunas.some(c => c.chave.startsWith('__ano'))) return 'Período';
+  if (colunas.some(c => c.fazendaId !== null)) return 'Fazenda';
+  return 'Global';
+}
 
 /** As larguras de cada coluna — fixas por TIPO, nunca pelo dado. */
 const larguraRs = (c: ColunaPec) => (c.total ? W_RS_TOTAL : W_RS);
@@ -380,14 +429,26 @@ function CelulaCarregando({ total, fundo, estilo }: { total?: boolean; fundo?: s
 const centrosDoBloco = (l: DrePecLinhas, bloco: string): readonly CentroPec[] =>
   (bloco === 'juros' ? l.centros_juros : l.centros.filter(c => c.bloco === bloco));
 
-export function PecDrePanel({ colunas, alturaCartao, cartaoRef, onAbrirLista, onAbrirDidatico, onAbrirRateio }: {
+export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef, rateioDentro = true,
+  mostrarUnitarios = true, onAbrirLista, onAbrirDidatico, onAbrirRateio }: {
   colunas: readonly ColunaPec[];
+  /** ⚠ `true` É O PADRÃO e é o comportamento de sempre: os subtotais já vêm com o rateio dentro. */
+  rateioDentro?: boolean;
+  /** A sub-coluna R$/ha — some por inteiro quando desligada, como as da lavoura. */
+  mostrarUnitarios?: boolean;
   alturaCartao: number | null;
   cartaoRef: React.RefObject<HTMLDivElement>;
   onAbrirLista?: (r: RecortePec) => void;
   onAbrirDidatico?: (fazendaId: string | null, fazendaNome: string, qual: 'vpb' | 'efeito') => void;
   onAbrirRateio?: () => void;
 }) {
+  /* ⚠ DESLIGAR O "/ha" TIRA A COLUNA, não esconde o texto — é o que a lavoura faz com o /ha e /sc
+     (`mostrarUnitarios` some com as colunas no `colgroup`), e a largura da tabela acompanha. O
+     delta (`pct`) não entra nessa conta: ele não é unitário. */
+  const colunas = useMemo(
+    () => (mostrarUnitarios ? colunasCruas
+      : colunasCruas.map(c => (c.unidade === 'ha' ? { ...c, unidade: null } : c))),
+    [colunasCruas, mostrarUnitarios]);
   const larguras = useMemo(() => {
     const cols: number[] = [W_FAZENDA];
     colunas.forEach(c => { cols.push(larguraRs(c)); if (c.unidade) cols.push(larguraUn(c)); });
@@ -420,7 +481,7 @@ export function PecDrePanel({ colunas, alturaCartao, cartaoRef, onAbrirLista, on
             <th rowSpan={2}
               className={cn(CINZA_CABECALHO, 'sticky left-0 top-0 z-40 px-[7px] text-left',
                 'text-[10px] font-medium text-white')}>
-              Fazenda
+              {tituloDaPrimeiraColuna(colunas)}
             </th>
             {/* ⚠ O TOTAL TAMBÉM GRUDA À ESQUERDA, colado na coluna de rótulos: ele é a referência
                 contra a qual cada coluna se lê, e rolar para comparar obrigaria a decorá-lo. */}
@@ -505,7 +566,7 @@ export function PecDrePanel({ colunas, alturaCartao, cartaoRef, onAbrirLista, on
                     })}
                   </tr>
                 )}
-                <LinhaPec def={def} colunas={colunas} centros={centros}
+                <LinhaPec def={def} colunas={colunas} centros={centros} rateioDentro={rateioDentro}
                   aberto={aberto} onAlternar={() => alternar(def.chave)}
                   onAbrirLista={onAbrirLista} onAbrirDidatico={onAbrirDidatico}
                   onAbrirRateio={onAbrirRateio} />
@@ -514,7 +575,7 @@ export function PecDrePanel({ colunas, alturaCartao, cartaoRef, onAbrirLista, on
                     altura 14. Ela não é uma linha do DRE — é a mesma linha vista noutra unidade,
                     e por isso não ganha nem cor de sinal nem clique. */}
                 {COM_PERCENTUAL.has(def.chave) && (
-                  <LinhaPercentual def={def} colunas={colunas} />
+                  <LinhaPercentual def={def} colunas={colunas} rateioDentro={rateioDentro} />
                 )}
 
                 {/* As filhas: um centro por linha, na régua `filha` (9px/14px, recuo 16). */}
@@ -531,11 +592,12 @@ export function PecDrePanel({ colunas, alturaCartao, cartaoRef, onAbrirLista, on
   );
 }
 
-function LinhaPec({ def, colunas, centros, aberto, onAlternar, onAbrirLista, onAbrirDidatico, onAbrirRateio }: {
+function LinhaPec({ def, colunas, centros, aberto, rateioDentro, onAlternar, onAbrirLista, onAbrirDidatico, onAbrirRateio }: {
   def: DefPec;
   colunas: readonly ColunaPec[];
   centros: readonly CentroPec[];
   aberto: boolean;
+  rateioDentro: boolean;
   onAlternar: () => void;
   onAbrirLista?: (r: RecortePec) => void;
   onAbrirDidatico?: (fazendaId: string | null, fazendaNome: string, qual: 'vpb' | 'efeito') => void;
@@ -611,7 +673,7 @@ function LinhaPec({ def, colunas, centros, aberto, onAlternar, onAbrirLista, onA
             </Fragment>
           );
         }
-        const v = valorNaColuna(col, def.chave);
+        const v = valorNoModo(col, def.chave, rateioDentro);
         const cor = col.tipo === 'delta' ? corDoDelta(def, v)
           : def.corPorSinal ? corDoSinal(v) : corLinha;
         /* ⚠ JUROS DE FAZENDA: "—" no R$ (é ausência, não zero) e nada no R$/cab. */
@@ -654,7 +716,9 @@ function LinhaPec({ def, colunas, centros, aberto, onAlternar, onAbrirLista, onA
  * mas SEM recuo — recuar sugeriria que ela é um item dentro do subtotal, e ela não é.
  * ⚠ NO DELTA ELA FICA VAZIA: "% do VBP" de uma diferença não é leitura de nada.
  */
-function LinhaPercentual({ def, colunas }: { def: DefPec; colunas: readonly ColunaPec[] }) {
+function LinhaPercentual({ def, colunas, rateioDentro }: {
+  def: DefPec; colunas: readonly ColunaPec[]; rateioDentro: boolean;
+}) {
   const fundo = fundoDaLinha(def.destaque);
   return (
     <tr className={cn(fundo, 'font-normal')} style={{ height: 14 }}>
@@ -665,7 +729,10 @@ function LinhaPercentual({ def, colunas }: { def: DefPec; colunas: readonly Colu
       </td>
       {colunas.map(col => {
         const texto = !col.linhas || col.tipo === 'delta' ? ''
-          : percentual(valorNaColuna(col, def.chave), valorNaColuna(col, BASE_DO_PERCENTUAL) ?? 0);
+          /* ⚠ O NUMERADOR SEGUE O MODO, A BASE NÃO: o VBP fecha antes do rateio administrativo,
+             então ele é o mesmo nos dois modos — e é isso que faz o percentual mudar junto com o
+             número de cima, sem mudar a régua de comparação. */
+          : percentual(valorNoModo(col, def.chave, rateioDentro), valorNaColuna(col, BASE_DO_PERCENTUAL) ?? 0);
         return (
           <Fragment key={col.chave}>
             <td className={cn('truncate px-[7px] text-right tabular-nums text-muted-foreground', fundo)}

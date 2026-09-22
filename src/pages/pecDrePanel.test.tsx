@@ -105,6 +105,54 @@ const indiceDe = (rot: string) => rotulos().findIndex(r => r.startsWith(rot));
 const linhaDe = (rot: string) =>
   linhasDaTabela().find(tr => ((tr.cells[0]?.textContent ?? '').trim()).startsWith(rot));
 
+/* ══════════════ O MODO "CUSTOS DIRETOS" — DRE-PADRAO-01a-2 ══════════════ */
+
+describe('o rateio administrativo nos dois modos', () => {
+  /* ⚠ A RPC DA PECUÁRIA NÃO TRAZ O PAR `valor`/`direto` QUE A LAVOURA TEM: lá o banco devolve os
+     dois números e a tela escolhe um; aqui o modo "Custos diretos" SOMA o rateio de volta aos três
+     subtotais que ele atravessa. Este caso é o que prova que a conta fecha — e que a soma usa o
+     rateio DAQUELA coluna, não um número solto. */
+  const COM_RATEIO: DrePecuaria = {
+    ...DRE,
+    fazendas: [],
+    total: linhas({
+      margem: 1000000, custo_fixo: 200000, rateio_adm: 120000,
+      resultado_operacional: 680000, resultado_periodo: 680000,
+      efeito_mercado: 20000, resultado_com_mercado: 700000,
+      producao: { ha_medio: 1000, at_produzida: null, at_desfrutada: null, cab_desfrutada: null, at_comprada: null, cab_comprada: null },
+    }),
+  };
+  const montarModo = (rateioDentro: boolean) => render(
+    <PecDrePanel colunas={colunasDaVisao({ visao: 'global', de: '2025-07', ate: '2026-06',
+      real: COM_RATEIO, meta: null, carregandoMeta: false, anos: [] })}
+      alturaCartao={null} cartaoRef={{ current: null }} rateioDentro={rateioDentro} />,
+  );
+
+  it('com rateio nos centros: os números são os da RPC, sem tocar em nada', () => {
+    montarModo(true);
+    expect(linhaDe('(−) Rateio administrativo')?.cells[1]?.textContent).toBe('120.000,00');
+    expect(linhaDe('= Resultado operacional')?.cells[1]?.textContent).toBe('680.000,00');
+    expect(linhaDe('= Resultado do período')?.cells[1]?.textContent).toBe('680.000,00');
+    expect(linhaDe('= Resultado com mercado')?.cells[1]?.textContent).toBe('700.000,00');
+  });
+
+  it('custos diretos: o rateio vira traço e os três subtotais voltam a somá-lo', () => {
+    montarModo(false);
+    /* ⚠ TRAÇO, NÃO ZERO: zero diria "não houve rateio", e houve — ele só não está sendo descontado. */
+    expect(linhaDe('(−) Rateio administrativo')?.cells[1]?.textContent).toBe('—');
+    expect(linhaDe('= Resultado operacional')?.cells[1]?.textContent).toBe('800.000,00');
+    expect(linhaDe('= Resultado do período')?.cells[1]?.textContent).toBe('800.000,00');
+    expect(linhaDe('= Resultado com mercado')?.cells[1]?.textContent).toBe('820.000,00');
+    /* A identidade que o modo promete: com rateio + rateio = sem rateio. */
+    expect(680000 + 120000).toBe(800000);
+  });
+
+  it('custos diretos: a margem NÃO muda — ela fecha antes do rateio', () => {
+    montarModo(false);
+    expect(linhaDe('= Margem de contribuição')?.cells[1]?.textContent).toBe('1.000.000,00');
+  });
+});
+
 describe('a cascata do DRE da pecuária', () => {
   it('as dezoito linhas saem na ordem do DRE, com a seção antes do investimento', () => {
     montar();

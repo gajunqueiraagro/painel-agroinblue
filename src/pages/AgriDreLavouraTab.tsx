@@ -91,7 +91,8 @@ import {
  * etiqueta "[estimado]" apagaria a ressalva que a linha existe para fazer. Em 210 sobram 3,2px.
  * ⚠ ERA 240, e os 33px que sobravam eram largura roubada das colunas de número.
  */
-const W_CULTURA = 210;
+/* ⚠ 200px — DRE-PADRAO-01a-2: a mesma da pecuária, para as duas tabelas começarem no mesmo x. */
+const W_CULTURA = 200;
 
 /* ⚠ OS DOIS MÍNIMOS DA GRADE DE DUAS COLUNAS (§3), medidos: abaixo de 380px os cartões perdem a
    coluna de número e os valores quebram linha; abaixo de 450px a tabela não mostra nem a coluna
@@ -303,7 +304,14 @@ export function AgriDreLavouraTab() {
 
   /* ⚠ TRÊS CONTROLES DE APRESENTAÇÃO, e nenhum deles refaz consulta: o payload já traz `direto`,
      `rateado` e `valor` em cada linha. Trocar de modo é escolher qual ler. */
-  const [rateioDentro, setRateioDentro] = useState(false);
+  /* ⚠ UMA ESCOLHA POR ABA, e os padrões são DIFERENTES de propósito: a lavoura abre em "Custos
+     diretos" (como sempre abriu) e a pecuária em "Com rateio nos centros", que são os números que
+     ela mostra hoje — trocar de aba não pode mudar o que a outra já mostrava. Guardar um estado só
+     faria a escolha de uma aba vazar para a outra. */
+  const [rateioDentroLav, setRateioDentroLav] = useState(false);
+  const [rateioDentroPec, setRateioDentroPec] = useState(true);
+  const rateioDentro = ehPec ? rateioDentroPec : rateioDentroLav;
+  const setRateioDentro = (v: boolean) => (ehPec ? setRateioDentroPec(v) : setRateioDentroLav(v));
   const [mostrarUnitarios, setMostrarUnitarios] = useState(true);
   const [ampliado, setAmpliado] = useState(false);
   const [abertos, setAbertos] = useState<Record<string, boolean>>({});
@@ -747,30 +755,20 @@ export function AgriDreLavouraTab() {
               frase à esquerda muda de tamanho com o toggle: com `flex-wrap` ela quebrava para
               uma segunda linha e empurrava a tabela para baixo, que é o A23 quebrando a cada
               clique. Agora a frase trunca e a altura não se move. */}
-          {/* ⚠ A PECUÁRIA VOLTOU A TER ESTA LINHA — DRE-PADRAO-01a. Ela tinha saído no
-              DRE-PEC-TELA-02b, e o efeito medido em 22/09 foi a tabela começar 28px mais alto na
-              pecuária do que na lavoura: trocar de aba fazia a grade pular. O slot é o mesmo nas
-              duas, com a mesma altura de 28px.
-              ⚠ E A FRASE DA PECUÁRIA NÃO INVENTA CÁLCULO: ela diz o pool e o critério que a RPC já
-              devolve em `rateio_adm` — os mesmos que o `PecRateioAdmModal` mostra. Não há, na
-              pecuária, o "custos diretos × com rateio nos centros" da lavoura; por isso o lado
-              direito fica vazio, e não com um seletor que não comandaria nada. */}
+          {/* ⚠ A LINHA DE RATEIO EXISTE NAS DUAS ABAS E ESTÁ NO MESMO y — DRE-PADRAO-01a. Ela tinha
+              saído da pecuária no DRE-PEC-TELA-02b, e o efeito medido em 22/09 foi a tabela começar
+              28px mais alto ali: trocar de aba fazia a grade pular.
+              ⚠ AS FRASES SAÍRAM DAS DUAS — DRE-PADRAO-01a-2, decisão do Gabriel na homologação: o
+              "X em custos comuns rateados por área — estimativa" e o equivalente da pecuária
+              disputavam a linha com os controles e diziam, em prosa, o que o selo `estimado` da
+              própria linha do rateio já diz. Quem quer o número abre o modal do rateio.
+              ⚠ O CONTROLE É O MESMO NAS DUAS, e é o ponto do PR: mesmo componente, mesma posição,
+              mesmos rótulos. O que muda é de onde sai o número — ver `valorNoModo` no painel da
+              pecuária e `valorDaLinha` aqui. */}
           {mostraGrade && (
           <div className="flex h-[28px] items-center justify-between gap-2 text-[10px] text-muted-foreground">
-            {ehPec ? (<>
-              <span className="min-w-0 flex-1 truncate">
-                {drePec?.rateio_adm
-                  ? `${formatNum(drePec.rateio_adm.pool, 2)} em custos administrativos rateados por ${drePec.rateio_adm.criterio || 'critério não informado'} — estimativa, não lançamento.`
-                  : ''}
-              </span>
-              {/* ⚠ O SELETOR DE ANOS VEIO PARA CÁ — DRE-PADRAO-01a: na faixa de caixas ele roubava
-                  123px da grade e deixava as caixas da pecuária 21px mais estreitas que as da
-                  lavoura. Aqui ele ocupa o mesmo lugar que os controles da grade ocupam na lavoura. */}
-              <SeletorAnosPec visao={visaoPec} nAnos={nAnosPec} onNAnos={setNAnosPec} />
-            </>) : (<>
             <span className="min-w-0 flex-1 truncate">
-              {formatNum(poolTotal, 2)} em custos comuns rateados por área — estimativa, não lançamento.
-              {rateioDentro && <> {' · '}<span className="text-amber-700">●</span> ao lado do nome = tem rateio dentro.</>}
+              {!ehPec && rateioDentro && <><span className="text-amber-700">●</span> ao lado do nome = tem rateio dentro.</>}
             </span>
             <span className="flex shrink-0 items-center gap-2 whitespace-nowrap">
               Rateio compartilhado:
@@ -786,11 +784,13 @@ export function AgriDreLavouraTab() {
               <span className="flex items-center gap-1">
                 <Checkbox checked={mostrarUnitarios}
                   onCheckedChange={c => setMostrarUnitarios(c === true)} />
-                <Label className="text-[10px] font-normal">/ha e /sc</Label>
+                <Label className="text-[10px] font-normal">{ehPec ? '/ha' : '/ha e /sc'}</Label>
               </span>
-            </span>
-            </>)}
-          </div>
+              {/* ⚠ O SELETOR DE ANOS VEIO PARA CÁ — DRE-PADRAO-01a: na faixa de caixas ele roubava
+                  123px da grade e deixava as caixas da pecuária mais estreitas que as da lavoura.
+                  Fora do x Anos ele fica invisível, mas ocupa o lugar. */}
+              {ehPec && <SeletorAnosPec visao={visaoPec} nAnos={nAnosPec} onNAnos={setNAnosPec} />}
+            </span>          </div>
           )}
           </div>
         </>
@@ -836,6 +836,7 @@ export function AgriDreLavouraTab() {
           </div>
         ) : (
           <PecDrePanel colunas={colunasPec} alturaCartao={alturaCartao} cartaoRef={cartao}
+            rateioDentro={rateioDentro} mostrarUnitarios={mostrarUnitarios}
             onAbrirLista={setRecortePec}
             onAbrirDidatico={(fazendaId, nome, qual) => setDidatico({ fazendaId, nome, qual })}
             onAbrirRateio={() => setRateioPecAberto(true)} />

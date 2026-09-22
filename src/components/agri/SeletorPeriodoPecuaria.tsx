@@ -132,7 +132,11 @@ export function SeletorPeriodoPecuaria({ clienteId, periodo, onPeriodoChange }: 
   const safras = useSafrasPecuaria(clienteId);
   const de = anoMes(periodo.de);
   const ate = anoMes(periodo.ate);
-  const modo = modoDoPeriodo(de, ate, safras);
+  const modoCru = modoDoPeriodo(de, ate, safras);
+  /* ⚠ UM LINK ANTIGO DE UM MÊS SÓ NÃO PODE VIRAR ERRO NEM MUDAR O PERÍODO: sem botão de "Mês", o
+     modo deduzido cai em Personalizado, que mostra "jan/2026 → jan/2026" — o mesmo recorte, com
+     outro nome. Trocar o período por uma safra aqui mudaria os números sem ninguém pedir. */
+  const modo: Modo = modoCru === 'mes' ? 'personalizado' : modoCru;
   const [aberto, setAberto] = useState<Modo | null>(null);
 
   const hoje = new Date();
@@ -159,40 +163,15 @@ export function SeletorPeriodoPecuaria({ clienteId, periodo, onPeriodoChange }: 
 
   /* Os quatro rótulos: o ativo mostra o VALOR, os outros mostram o nome do modo. */
   const rotulo = {
-    mes: modo === 'mes' ? `Mês ${rotuloMes(de)}` : 'Mês',
     ano: modo === 'ano' ? `Ano ${de.slice(0, 4)}` : 'Ano',
     safra: modo === 'safra' ? `Safra ${safraAtual?.codigo ?? ''}`.trim() : 'Safra',
     personalizado: modo === 'personalizado' ? `${rotuloMes(de)} → ${rotuloMes(ate)}` : 'Personalizado…',
   };
 
   const painel = (m: Modo) => {
-    if (m === 'mes') {
-      const ano = Number(de.slice(0, 4));
-      return (
-        <div className="w-[190px] p-1">
-          <div className="mb-1 flex items-center justify-between px-1">
-            <button type="button" className="px-1 text-[12px] text-muted-foreground hover:text-foreground"
-              onClick={() => aplicar(`${ano - 1}-${de.slice(5, 7)}`, `${ano - 1}-${de.slice(5, 7)}`)}>‹</button>
-            <span className="text-[11px] font-medium tabular-nums">{ano}</span>
-            <button type="button" className="px-1 text-[12px] text-muted-foreground hover:text-foreground"
-              onClick={() => aplicar(`${ano + 1}-${de.slice(5, 7)}`, `${ano + 1}-${de.slice(5, 7)}`)}>›</button>
-          </div>
-          <div className="grid grid-cols-3 gap-0.5">
-            {MESES.map((nome, i) => {
-              const am = `${ano}-${String(i + 1).padStart(2, '0')}`;
-              return (
-                <button key={nome} type="button"
-                  onClick={() => { onPeriodoChange(mesUnico(ano, i + 1)); setAberto(null); }}
-                  className={cn('rounded px-1 py-1 text-[10px] hover:bg-muted',
-                    am === de && am === ate && 'bg-primary text-primary-foreground hover:bg-primary')}>
-                  {nome}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      );
-    }
+    /* ⚠ O PAINEL DE MESES SAIU COM O BOTÃO — DRE-PADRAO-01a-2: sem "Mês" na régua, ele não tinha
+       como abrir, e o TSC o denunciou como comparação impossível. Código morto apagado, não
+       silenciado. */
     if (m === 'ano') {
       return (
         <div className="max-h-[220px] w-[110px] overflow-auto p-1">
@@ -250,7 +229,12 @@ export function SeletorPeriodoPecuaria({ clienteId, periodo, onPeriodoChange }: 
        slot troca de conteúdo ao mudar de atividade e NADA pode mudar de altura (A23). */
     <div className="flex shrink-0 overflow-hidden rounded-md border"
       style={{ height: 22, width: LARGURA_CONTROLE }}>
-      {(['mes', 'ano', 'safra', 'personalizado'] as const).map(m => (
+      {/* ⚠ O "MÊS" SAIU — DRE-PADRAO-01a-2, decisão do Gabriel: um DRE de um mês só compara mal
+          (a variação de patrimônio de trinta dias é ruído) e o botão custava 56px na régua, que é
+          justamente o espaço que faltava para o subtítulo caber inteiro. O modo continua existindo
+          em `Modo` e em `modoDoPeriodo` porque um link antigo com de = até ainda chega aqui — ele
+          cai em Personalizado (ver `modoVisivel`), conservando o período que o operador tinha. */}
+      {(['ano', 'safra', 'personalizado'] as const).map(m => (
         <Popover key={m} open={aberto === m} onOpenChange={o => setAberto(o ? m : null)}>
           <PopoverTrigger asChild>
             {/* ⚠ O EMBRULHO HERDA O FLEX DO BOTÃO: sem `flex` e `min-w-0` aqui, o `flex-1` do
