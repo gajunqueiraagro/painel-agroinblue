@@ -304,14 +304,7 @@ export function AgriDreLavouraTab() {
 
   /* ⚠ TRÊS CONTROLES DE APRESENTAÇÃO, e nenhum deles refaz consulta: o payload já traz `direto`,
      `rateado` e `valor` em cada linha. Trocar de modo é escolher qual ler. */
-  /* ⚠ UMA ESCOLHA POR ABA, e os padrões são DIFERENTES de propósito: a lavoura abre em "Custos
-     diretos" (como sempre abriu) e a pecuária em "Com rateio nos centros", que são os números que
-     ela mostra hoje — trocar de aba não pode mudar o que a outra já mostrava. Guardar um estado só
-     faria a escolha de uma aba vazar para a outra. */
-  const [rateioDentroLav, setRateioDentroLav] = useState(false);
-  const [rateioDentroPec, setRateioDentroPec] = useState(true);
-  const rateioDentro = ehPec ? rateioDentroPec : rateioDentroLav;
-  const setRateioDentro = (v: boolean) => (ehPec ? setRateioDentroPec(v) : setRateioDentroLav(v));
+  const [rateioDentro, setRateioDentro] = useState(false);
   const [mostrarUnitarios, setMostrarUnitarios] = useState(true);
   const [ampliado, setAmpliado] = useState(false);
   const [abertos, setAbertos] = useState<Record<string, boolean>>({});
@@ -774,6 +767,19 @@ export function AgriDreLavouraTab() {
               {!ehPec && rateioDentro && <><span className="text-amber-700">●</span> ao lado do nome = tem rateio dentro.</>}
             </span>
             <span className="flex shrink-0 items-center gap-2 whitespace-nowrap">
+              {/* ⚠ O SELETOR DE RATEIO É SÓ DA LAVOURA — DRE-RATEIO-FIX-01. Ele chegou à pecuária
+                  no 2665e9c7 com um modo "Custos diretos" que SOMAVA o rateio administrativo de
+                  volta aos resultados: mostrava lucro que não existe. O custo administrativo é
+                  real e sai do resultado em qualquer leitura; na lavoura o seletor não mexe no
+                  resultado — só muda ONDE o custo aparece (linha própria ou distribuído nos
+                  centros), e a RPC de lá devolve os dois números para isso. A pecuária ainda não
+                  tem a distribuição por centro, então não tem o que escolher.
+                  ⚠ O ESPAÇO FICA RESERVADO, com o conteúdo invisível: assim a largura é a mesma
+                  medida do controle real, e o "/ha" e o "anos anteriores" não andam ao trocar de
+                  aba. Nada aqui é clicável na pecuária. */}
+              <span className={cn('flex items-center gap-2', ehPec && 'invisible')}
+                aria-hidden={ehPec || undefined}
+                style={ehPec ? { pointerEvents: 'none' } : undefined}>
               Rateio compartilhado:
               <Segmentado valor={rateioDentro ? 'dentro' : 'propria'}
                 onEscolher={v => setRateioDentro(v === 'dentro')}
@@ -784,6 +790,7 @@ export function AgriDreLavouraTab() {
                   { valor: 'propria', rotulo: 'Custos diretos' },
                   { valor: 'dentro', rotulo: 'Com rateio nos centros' },
                 ]} />
+              </span>
               <span className="flex items-center gap-1">
                 <Checkbox checked={mostrarUnitarios}
                   onCheckedChange={c => setMostrarUnitarios(c === true)} />
@@ -839,7 +846,7 @@ export function AgriDreLavouraTab() {
           </div>
         ) : (
           <PecDrePanel colunas={colunasPec} alturaCartao={alturaCartao} cartaoRef={cartao}
-            rateioDentro={rateioDentro} mostrarUnitarios={mostrarUnitarios}
+            mostrarUnitarios={mostrarUnitarios}
             onAbrirLista={setRecortePec}
             onAbrirDidatico={(fazendaId, nome, qual) => setDidatico({ fazendaId, nome, qual })}
             onAbrirRateio={() => setRateioPecAberto(true)} />

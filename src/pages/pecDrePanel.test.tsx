@@ -105,13 +105,17 @@ const indiceDe = (rot: string) => rotulos().findIndex(r => r.startsWith(rot));
 const linhaDe = (rot: string) =>
   linhasDaTabela().find(tr => ((tr.cells[0]?.textContent ?? '').trim()).startsWith(rot));
 
-/* ══════════════ O MODO "CUSTOS DIRETOS" — DRE-PADRAO-01a-2 ══════════════ */
+/* ══════════════ O RATEIO ADMINISTRATIVO — DRE-RATEIO-FIX-01 ══════════════ */
 
-describe('o rateio administrativo nos dois modos', () => {
-  /* ⚠ A RPC DA PECUÁRIA NÃO TRAZ O PAR `valor`/`direto` QUE A LAVOURA TEM: lá o banco devolve os
-     dois números e a tela escolhe um; aqui o modo "Custos diretos" SOMA o rateio de volta aos três
-     subtotais que ele atravessa. Este caso é o que prova que a conta fecha — e que a soma usa o
-     rateio DAQUELA coluna, não um número solto. */
+describe('o rateio administrativo da pecuária', () => {
+  /* ⚠ NÃO EXISTE MODO QUE TIRE O RATEIO DO RESULTADO, e este caso está aqui porque ele já existiu:
+     o 2665e9c7 trouxe da lavoura um "Custos diretos" que somava o rateio de volta aos subtotais —
+     e isso mostrava lucro que não existe. O custo administrativo é real e sai do resultado em
+     qualquer leitura. Na lavoura o seletor não mexe no resultado: muda só ONDE o custo aparece, e
+     a RPC de lá devolve os dois números para isso. Aqui a tela mostra o que a RPC mandou.
+     ⚠ O FIXTURE É COERENTE DE PROPÓSITO: 1.000.000 de margem − 200.000 de custo fixo − 120.000 de
+     rateio = 680.000, como a RPC o monta. Um fixture em que a conta não fecha deixaria passar
+     justamente a soma indevida que este caso recusa. */
   const COM_RATEIO: DrePecuaria = {
     ...DRE,
     fazendas: [],
@@ -122,34 +126,17 @@ describe('o rateio administrativo nos dois modos', () => {
       producao: { ha_medio: 1000, at_produzida: null, at_desfrutada: null, cab_desfrutada: null, at_comprada: null, cab_comprada: null },
     }),
   };
-  const montarModo = (rateioDentro: boolean) => render(
-    <PecDrePanel colunas={colunasDaVisao({ visao: 'global', de: '2025-07', ate: '2026-06',
-      real: COM_RATEIO, meta: null, carregandoMeta: false, anos: [] })}
-      alturaCartao={null} cartaoRef={{ current: null }} rateioDentro={rateioDentro} />,
-  );
 
-  it('com rateio nos centros: os números são os da RPC, sem tocar em nada', () => {
-    montarModo(true);
+  it('o resultado é o da RPC, com o rateio descontado e visível na própria linha', () => {
+    render(<PecDrePanel colunas={colunasDaVisao({ visao: 'global', de: '2025-07', ate: '2026-06',
+      real: COM_RATEIO, meta: null, carregandoMeta: false, anos: [] })}
+      alturaCartao={null} cartaoRef={{ current: null }} />);
     expect(linhaDe('(−) Rateio administrativo')?.cells[1]?.textContent).toBe('120.000,00');
     expect(linhaDe('= Resultado operacional')?.cells[1]?.textContent).toBe('680.000,00');
     expect(linhaDe('= Resultado do período')?.cells[1]?.textContent).toBe('680.000,00');
     expect(linhaDe('= Resultado com mercado')?.cells[1]?.textContent).toBe('700.000,00');
-  });
-
-  it('custos diretos: o rateio vira traço e os três subtotais voltam a somá-lo', () => {
-    montarModo(false);
-    /* ⚠ TRAÇO, NÃO ZERO: zero diria "não houve rateio", e houve — ele só não está sendo descontado. */
-    expect(linhaDe('(−) Rateio administrativo')?.cells[1]?.textContent).toBe('—');
-    expect(linhaDe('= Resultado operacional')?.cells[1]?.textContent).toBe('800.000,00');
-    expect(linhaDe('= Resultado do período')?.cells[1]?.textContent).toBe('800.000,00');
-    expect(linhaDe('= Resultado com mercado')?.cells[1]?.textContent).toBe('820.000,00');
-    /* A identidade que o modo promete: com rateio + rateio = sem rateio. */
-    expect(680000 + 120000).toBe(800000);
-  });
-
-  it('custos diretos: a margem NÃO muda — ela fecha antes do rateio', () => {
-    montarModo(false);
-    expect(linhaDe('= Margem de contribuição')?.cells[1]?.textContent).toBe('1.000.000,00');
+    /* O que este caso proíbe: o resultado somado de volta ao rateio (800.000) em qualquer célula. */
+    expect(document.body.textContent).not.toContain('800.000,00');
   });
 });
 
