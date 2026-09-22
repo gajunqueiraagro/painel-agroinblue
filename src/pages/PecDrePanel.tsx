@@ -2,7 +2,7 @@
  * DRE DA PECUÁRIA — a grade por fazenda, num período de meses.
  *
  * ⚠⚠ NENHUM CÁLCULO AQUI. `fn_dre_pecuaria` devolve cada linha por fazenda e no total; as únicas
- * contas são `valor / cab_fim` e o percentual sobre a base — as duas de APRESENTAÇÃO, a mesma
+ * contas são `valor / cab_media` e o percentual sobre a base — as duas de APRESENTAÇÃO, a mesma
  * licença que o `/ha` tem na lavoura.
  *
  * ⚠ ELE NÃO É A `Grade` DA LAVOURA, e a razão é estrutural, não preguiça. Aquela grade é feita de
@@ -123,7 +123,12 @@ const valorDe = (l: DrePecLinhas, c: ChaveLinhaPec): number | null => {
   return typeof v === 'number' ? v : null;
 };
 
-/** ⚠ A ÚNICA DIVISÃO DE UNIDADE, e é de apresentação. Sem cabeça no fim, traço — nunca Infinity. */
+/**
+ * ⚠ A ÚNICA DIVISÃO DE UNIDADE, e é de apresentação. Sem cabeça, traço — nunca Infinity.
+ * ⚠ O DENOMINADOR É `cab_media` (DRE-PEC-TELA-01), a média dos fechamentos do período — o mesmo
+ * que a RPC usa no rateio e o PC-100 usa no R$/cab. Dividir pelo fim do período media o ano
+ * inteiro pelo rebanho de um mês só: a Pureza fechou agosto/26 com 5.661 e teve 4.968 de média.
+ */
 const porCabeca = (v: number | null, cab: number) =>
   (v == null || !(cab > 0) ? traco : formatNum(v / cab, 2));
 
@@ -209,39 +214,32 @@ export function PecDrePanel({ dre, alturaCartao, cartaoRef, onAbrirLista, onAbri
               style={{ left: W_FAZENDA, backgroundColor: NAVY_TOTAL, borderLeft: BORDA_TOTAL }}>
               <div className="text-[10px] font-medium leading-[12px]">Total</div>
               <div className="whitespace-nowrap text-[10px] font-normal leading-[12px] text-white">
-                {formatNum(dre.total.patrimonio.cab_fim, 0)} cab
+                {formatNum(dre.total.patrimonio.cab_media, 0)} cab
               </div>
             </th>
-            {dre.fazendas.map(f => {
-              /* ⚠ A COLUNA "Admin" APARECE, e é de propósito: ela é lançamento de pecuária sem
-                 fazenda produtiva — lixo visível. Escondê-la faria o Total não fechar com a soma
-                 das colunas, e ninguém saberia por quê. */
-              const admin = /admin/i.test(f.nome);
-              return (
-                <th key={f.fazenda_id} colSpan={2}
-                  title={admin ? 'lançamentos de pecuária sem fazenda produtiva' : undefined}
-                  className={cn(CINZA_CABECALHO, 'sticky top-0 z-20 px-[7px] text-center',
-                    'align-middle text-white')}
-                  style={{ borderLeft: '1px solid rgba(255,255,255,.22)' }}>
-                  <div className="truncate text-[10px] font-medium leading-[12px]">{f.nome}</div>
-                  <div className="whitespace-nowrap text-[10px] font-normal leading-[12px] text-white">
-                    {formatNum(f.linhas.patrimonio.cab_fim, 0)} cab
-                  </div>
-                </th>
-              );
-            })}
+            {dre.fazendas.map(f => (
+              <th key={f.fazenda_id} colSpan={2}
+                className={cn(CINZA_CABECALHO, 'sticky top-0 z-20 px-[7px] text-center',
+                  'align-middle text-white')}
+                style={{ borderLeft: '1px solid rgba(255,255,255,.22)' }}>
+                <div className="truncate text-[10px] font-medium leading-[12px]">{f.nome}</div>
+                <div className="whitespace-nowrap text-[10px] font-normal leading-[12px] text-white">
+                  {formatNum(f.linhas.patrimonio.cab_media, 0)} cab
+                </div>
+              </th>
+            ))}
           </tr>
           <tr style={{ height: 14 }}>
             <th className="sticky z-40 px-[7px] text-right text-[10px] font-normal text-white"
               style={{ top: 26, left: W_FAZENDA, backgroundColor: NAVY_TOTAL, borderLeft: BORDA_TOTAL }}>R$</th>
             <th className="sticky z-40 px-[7px] text-right text-[10px] font-normal text-white"
-              style={{ top: 26, left: W_FAZENDA + W_RS_TOTAL, backgroundColor: NAVY_TOTAL }}>R$/cab</th>
+              style={{ top: 26, left: W_FAZENDA + W_RS_TOTAL, backgroundColor: NAVY_TOTAL }}>R$/cab med.</th>
             {dre.fazendas.map(f => (
               <Fragment key={f.fazenda_id}>
                 <th className={cn(CINZA_CABECALHO, 'sticky z-20 px-[7px] text-right text-[10px] font-normal text-white')}
                   style={{ top: 26, borderLeft: '1px solid rgba(255,255,255,.22)' }}>R$</th>
                 <th className={cn(CINZA_CABECALHO, 'sticky z-20 px-[7px] text-right text-[10px] font-normal text-white')}
-                  style={{ top: 26 }}>R$/cab</th>
+                  style={{ top: 26 }}>R$/cab med.</th>
               </Fragment>
             ))}
           </tr>
@@ -254,8 +252,14 @@ export function PecDrePanel({ dre, alturaCartao, cartaoRef, onAbrirLista, onAbri
             /* ⚠ AS FILHAS SAEM DA COLUNA TOTAL, e é ela que manda: um centro que só existe numa
                fazenda tem de aparecer na lista de todos, senão a linha some conforme a coluna que
                se olha. O Total é a união por construção — a RPC o monta agrupando `finc` inteiro. */
+            /* ⚠ OS JUROS TÊM LISTA PRÓPRIA (`centros_juros`, DRE-PEC-RPC-02): são da atividade, não
+               de uma fazenda. Se `centros` também trouxer a linha de juros, ela é ignorada lá — ler
+               as duas duplicaria a filha. Hoje a linha de juros não expande (§4); a leitura fica
+               certa para o dia em que expandir. */
             const centros = def.expande && bloco
-              ? dre.total.centros.filter(c => c.bloco === bloco)
+              ? (bloco === 'juros'
+                ? dre.total.centros_juros
+                : dre.total.centros.filter(c => c.bloco === bloco))
               : [];
             return (
               <Fragment key={def.chave}>
@@ -332,6 +336,10 @@ function LinhaPec({ def, colunas, centros, aberto, onAlternar, onAbrirLista, onA
    * inventar qual dos termos mostrar.
    */
   const abrirDaColuna = (col: ColunaPec) => {
+    /* ⚠ JUROS NUMA FAZENDA NÃO ABRE NADA: a RPC não os divide por fazenda, a célula é "—" e uma
+       lista ali mostraria os juros que o lançamento carimbou na fazenda — justamente a divisão que
+       a RPC deixou de fazer. No Total, abre como sempre (`p_fazenda` nulo traz todos). */
+    if (def.chave === 'juros' && !col.total) return undefined;
     if (def.didatico) return onAbrirDidatico ? () => onAbrirDidatico(col.fazendaId, col.nome, def.didatico!) : undefined;
     if (def.rateio) return onAbrirRateio;
     if (!bloco || !onAbrirLista) return undefined;
@@ -361,8 +369,10 @@ function LinhaPec({ def, colunas, centros, aberto, onAlternar, onAbrirLista, onA
 
       {colunas.map(col => {
         const v = valorDe(col.linhas, def.chave);
-        const cab = col.linhas.patrimonio.cab_fim;
+        const cab = col.linhas.patrimonio.cab_media;
         const cor = def.corPorSinal ? corDoSinal(v) : corLinha;
+        /* ⚠ JUROS DE FAZENDA: "—" no R$ (é ausência, não zero) e nada no R$/cab. */
+        const jurosDeFazenda = def.chave === 'juros' && !col.total;
         /* ⚠ SEM FECHAMENTO A CÉLULA DIZ POR QUÊ: as duas linhas de variação vêm nulas, e o
            `title` é o que separa "não mudou" de "não sei". */
         const semFech = (def.chave === 'vpb_operacional' || def.chave === 'efeito_mercado')
@@ -375,7 +385,7 @@ function LinhaPec({ def, colunas, centros, aberto, onAlternar, onAbrirLista, onA
               onAbrir={abrir}
               estilo={col.total ? estiloTotalRs : undefined}
               title={semFech ? 'sem fechamento' : undefined} />
-            <CelulaUnit texto={porCabeca(v, cab)} cor={cor} destaque={def.destaque}
+            <CelulaUnit texto={jurosDeFazenda ? '' : porCabeca(v, cab)} cor={cor} destaque={def.destaque}
               fonte={regua.fonte} total={col.total} fundo={fundo} onAbrir={abrir}
               estilo={col.total ? estiloTotalCab : undefined} />
           </Fragment>
@@ -451,7 +461,7 @@ function LinhaCentro({ def, centro, colunas, bloco, onAbrirLista }: {
       {colunas.map(col => {
         const achou = col.linhas.centros.find(c => c.bloco === bloco && c.centro === centro.centro);
         const v = achou ? achou.valor : null;
-        const cab = col.linhas.patrimonio.cab_fim;
+        const cab = col.linhas.patrimonio.cab_media;
         const abrir = onAbrirLista
           ? () => onAbrirLista({
             fazendaId: col.fazendaId, fazendaNome: col.nome, bloco,
@@ -478,7 +488,8 @@ function LinhaCentro({ def, centro, colunas, bloco, onAbrirLista }: {
 export function FaixaPecuaria({ dre }: { dre: DrePecuaria }) {
   const t = dre.total;
   const caixas: CaixaFaixa[] = [
-    { rotulo: 'Cabeças', valor: formatNum(t.patrimonio.cab_fim, 0), unidade: 'cab' },
+    { rotulo: 'Cabeças (média)', valor: formatNum(t.patrimonio.cab_media, 0), unidade: 'cab',
+      title: 'Média dos fechamentos mensais do período, incluindo o mês anterior ao início.' },
     { rotulo: 'Receita líquida', valor: numeroDaCelula(t.receita_liquida), unidade: 'R$', cor: VERDE },
     { rotulo: 'VBP', valor: numeroDaCelula(t.vbp), unidade: 'R$', cor: corDoSinal(t.vbp),
       titleRotulo: 'Valor bruto da produção' },

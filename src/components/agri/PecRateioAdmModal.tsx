@@ -27,7 +27,11 @@ export function PecRateioAdmModal({ aberto, dre, periodoRotulo, onFechar }: {
   onFechar: () => void;
 }) {
   const { pool, bruto, criterio } = dre.rateio_adm;
-  const cabTotal = dre.total.patrimonio.cab_fim;
+  /* ⚠ O PESO É POR CABEÇA MÉDIA (DRE-PEC-TELA-01), o mesmo denominador com que a RPC corta o pool
+     ('cabecas medias no periodo'). Pesar por `cab_fim` aqui explicaria uma divisão que o banco não
+     fez: a fatia ao lado sairia de uma conta e o percentual de outra. O peso é só leitura — a
+     fatia continua sendo a `rateio_adm` que a RPC devolve. */
+  const cabTotal = dre.total.patrimonio.cab_media;
   /* ⚠ O PERCENTUAL É DERIVADO PARA LEITURA, não para conta: `pool` e `bruto` já vêm prontos, e
      esta razão só diz ao operador QUE FATIA do administrativo a pecuária carrega. Bruto zero dá
      traço — nunca 0%, que afirmaria que a pecuária não carrega nada. */
@@ -66,14 +70,14 @@ export function PecRateioAdmModal({ aberto, dre, periodoRotulo, onFechar }: {
               <thead>
                 <tr className="bg-card shadow-[0_1px_0_0_rgba(0,0,0,.08)]">
                   <th className={cn(TH, 'text-left')}>Fazenda</th>
-                  <th className={cn(TH, 'text-right')}>Cabeças</th>
+                  <th className={cn(TH, 'text-right')}>Cabeças (média)</th>
                   <th className={cn(TH, 'text-right')}>Peso</th>
                   <th className={cn(TH, 'text-right')}>Fatia</th>
                 </tr>
               </thead>
               <tbody>
                 {dre.fazendas.map(f => {
-                  const cab = f.linhas.patrimonio.cab_fim;
+                  const cab = f.linhas.patrimonio.cab_media;
                   const peso = cabTotal > 0 ? (cab / cabTotal) * 100 : null;
                   return (
                     <tr key={f.fazenda_id} className="border-t border-slate-100 odd:bg-[#1e3a5f]/[0.03]">

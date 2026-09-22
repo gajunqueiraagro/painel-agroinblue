@@ -2,7 +2,7 @@
  * O DRE DA PECUÁRIA — por fazenda, num período de meses.
  *
  * ⚠⚠ NENHUM CÁLCULO AQUI. `fn_dre_pecuaria` devolve cada linha já arredondada, por fazenda e no
- * total, e a tela RENDERIZA. A única divisão que fica com o consumidor é `valor / cab_fim`, e
+ * total, e a tela RENDERIZA. A única divisão que fica com o consumidor é `valor / cab_media`, e
  * ela é de apresentação.
  * ⚠ DUAS VARIAÇÕES, E ELAS NÃO SE SOMAM. `vpb_operacional` = o rebanho mudou, a preço CONGELADO
  * do fechamento anterior; `efeito_mercado` = o preço mudou, rebanho congelado. Fundi-las numa
@@ -30,7 +30,12 @@ export interface DrePecLinhas {
   custo_fixo: number;
   rateio_adm: number;
   resultado_operacional: number;
-  juros: number;
+  /**
+   * ⚠ `null` NAS FAZENDAS, número só no TOTAL — DRE-PEC-RPC-02. Juros são da atividade, não de uma
+   * fazenda: a RPC os soma sem filtro de fazenda e devolve `null` em cada coluna. `num()` faria o
+   * `null` virar 0, e 0 afirmaria "esta fazenda não pagou juros", que é outra frase.
+   */
+  juros: number | null;
   resultado_periodo: number;
   /** `null` sem fechamento numa das pontas. */
   efeito_mercado: number | null;
@@ -40,11 +45,21 @@ export interface DrePecLinhas {
   patrimonio: {
     v_ini_p0: number; v_fim_p0: number; v_fim_p1: number;
     cab_ini: number; cab_fim: number;
+    /**
+     * A MÉDIA DOS FECHAMENTOS MENSAIS de P0 até o fim, arredondada a 0 casas — o denominador do
+     * R$/cab e do rateio administrativo (a regra do PC-100). No total, a soma das médias.
+     */
+    cab_media: number;
   };
   sem_p0: boolean;
   sem_p1: boolean;
   /** Os centros de custo de TODOS os blocos desta coluna — a tela filtra por bloco. */
   centros: CentroPec[];
+  /**
+   * Os centros do bloco 'juros' — só o TOTAL os tem (`total.centros_juros`); nas fazendas vem
+   * vazio. São eles que as filhas da linha de juros leem.
+   */
+  centros_juros: CentroPec[];
 }
 
 /**
@@ -148,7 +163,7 @@ function lerLinhas(x: unknown): DrePecLinhas {
     custo_fixo: num(o.custo_fixo),
     rateio_adm: num(o.rateio_adm),
     resultado_operacional: num(o.resultado_operacional),
-    juros: num(o.juros),
+    juros: numOuNulo(o.juros),
     resultado_periodo: num(o.resultado_periodo),
     efeito_mercado: numOuNulo(o.efeito_mercado),
     resultado_com_mercado: num(o.resultado_com_mercado),
@@ -156,25 +171,34 @@ function lerLinhas(x: unknown): DrePecLinhas {
     a_pagar: num(o.a_pagar),
     patrimonio: {
       v_ini_p0: num(p.v_ini_p0), v_fim_p0: num(p.v_fim_p0), v_fim_p1: num(p.v_fim_p1),
-      cab_ini: num(p.cab_ini), cab_fim: num(p.cab_fim),
+      cab_ini: num(p.cab_ini), cab_fim: num(p.cab_fim), cab_media: num(p.cab_media),
     },
     sem_p0: o.sem_p0 === true,
     sem_p1: o.sem_p1 === true,
     centros: lerCentros(o.centros),
+    centros_juros: lerCentros(o.centros_juros),
   };
 }
 
+/**
+ * O CENÁRIO DO DRE — DRE-PEC-RPC-02. `realizado` é o padrão da RPC e daqui; `meta` é o mesmo DRE
+ * sobre os lançamentos de meta. ⚠ Os dois nunca se somam: cada um é uma leitura inteira.
+ */
+export type CenarioPec = 'realizado' | 'meta';
+
 export function useDrePecuaria(
   clienteId: string | null | undefined, de: string | null, ate: string | null,
+  cenario: CenarioPec = 'realizado',
 ) {
   const queryClient = useQueryClient();
-  const chave = ['dre-pecuaria', clienteId ?? '', de ?? '', ate ?? ''];
+  /* ⚠ O CENÁRIO ENTRA NA CHAVE: sem ele, trocar para meta mostraria o realizado em cache. */
+  const chave = ['dre-pecuaria', clienteId ?? '', de ?? '', ate ?? '', cenario];
   const { data, isLoading, error } = useQuery({
     queryKey: chave,
     enabled: !!clienteId && !!de && !!ate,
     queryFn: async (): Promise<DrePecuaria | null> => {
       const { data: r, error: err } = await (supabase as any).rpc('fn_dre_pecuaria', {
-        p_cliente: clienteId, p_de: de, p_ate: ate,
+        p_cliente: clienteId, p_de: de, p_ate: ate, p_cenario: cenario,
       });
       if (err) throw err;
       const o = (r ?? null) as Record<string, unknown> | null;
@@ -241,12 +265,13 @@ export function useDrePecuariaLancamentos(
   recorte: RecortePec | null,
   de: string | null,
   ate: string | null,
+  cenario: CenarioPec = 'realizado',
 ) {
   const { data, isLoading, error, refetch } = useQuery({
     /* ⚠ O RECORTE INTEIRO ENTRA NA CHAVE: duas células diferentes do mesmo bloco (Total e uma
        fazenda) são duas listas, e uma chave só faria a segunda mostrar a primeira. */
     queryKey: ['dre-pec-lancamentos', clienteId ?? '', recorte?.fazendaId ?? '',
-      recorte?.bloco ?? '', recorte?.centro ?? '', de ?? '', ate ?? ''],
+      recorte?.bloco ?? '', recorte?.centro ?? '', de ?? '', ate ?? '', cenario],
     enabled: !!clienteId && !!recorte && !!de && !!ate,
     queryFn: async (): Promise<LancamentoPec[]> => {
       const { data: r, error: err } = await (supabase as any).rpc('fn_dre_pecuaria_lancamentos', {
@@ -256,6 +281,7 @@ export function useDrePecuariaLancamentos(
         p_centro: recorte?.centro ?? null,
         p_de: de,
         p_ate: ate,
+        p_cenario: cenario,
       });
       if (err) throw err;
       return (Array.isArray(r) ? r : []).map((x: unknown) => {

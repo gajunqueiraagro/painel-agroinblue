@@ -17,29 +17,33 @@ import type { DrePecuaria, DrePecLinhas } from '@/hooks/useDrePecuaria';
 const linhas = (o: Partial<DrePecLinhas>): DrePecLinhas => ({
   vendas: 0, outras_receitas: 0, receita_bruta: 0, deducoes: 0, receita_liquida: 0,
   vpb_operacional: 0, reposicao: 0, vbp: 0, custo_variavel: 0, margem: 0,
-  custo_fixo: 0, rateio_adm: 0, resultado_operacional: 0, juros: 0, resultado_periodo: 0,
+  /* ⚠ JUROS NASCEM `null` — é o que a RPC devolve em toda coluna de fazenda desde a RPC-02. Só o
+     Total tem número, e o fixture do Total o põe explicitamente. */
+  custo_fixo: 0, rateio_adm: 0, resultado_operacional: 0, juros: null, resultado_periodo: 0,
   efeito_mercado: 0, resultado_com_mercado: 0, investimento: 0, a_pagar: 0,
-  patrimonio: { v_ini_p0: 0, v_fim_p0: 0, v_fim_p1: 0, cab_ini: 0, cab_fim: 0 },
-  sem_p0: false, sem_p1: false, centros: [], ...o,
+  patrimonio: { v_ini_p0: 0, v_fim_p0: 0, v_fim_p1: 0, cab_ini: 0, cab_fim: 0, cab_media: 0 },
+  sem_p0: false, sem_p1: false, centros: [], centros_juros: [], ...o,
 });
 
 const DRE: DrePecuaria = {
   periodo: { de: '2025-07', ate: '2026-06', p0: '2025-06', meses: 12 },
-  rateio_adm: { pool: 720000, bruto: 2880000, criterio: 'cabecas no fim do periodo' },
+  rateio_adm: { pool: 720000, bruto: 2880000, criterio: 'cabecas medias no periodo' },
   fazendas: [
     {
       fazenda_id: 'f1', nome: 'Pureza',
       linhas: linhas({
         vendas: 9000000, vpb_operacional: 844774.72, resultado_periodo: 1500000,
         custo_variavel: 3000000,
-        patrimonio: { v_ini_p0: 0, v_fim_p0: 0, v_fim_p1: 0, cab_ini: 0, cab_fim: 3000 },
+        /* ⚠ `cab_fim` ≠ `cab_media` DE PROPÓSITO: é o que prova qual dos dois divide o R$/cab.
+           Iguais, o teste passaria verde lendo o denominador errado. */
+        patrimonio: { v_ini_p0: 0, v_fim_p0: 0, v_fim_p1: 0, cab_ini: 0, cab_fim: 3000, cab_media: 2500 },
         centros: [{ bloco: 'variavel', centro: 'Nutrição', valor: 3000000, a_pagar: 0 }],
       }),
     },
     /* ⚠ A FAZENDA SEM FECHAMENTO É CASO DE TESTE, não borda rara: sem P0 ou sem P1 as duas
        variações vêm NULAS, e a tela tem de dizer "—" nas duas — nunca 0,00. */
     {
-      fazenda_id: 'f2', nome: 'Administrativo',
+      fazenda_id: 'f2', nome: 'Sto. Expedito',
       linhas: linhas({
         resultado_periodo: -3208702.24, vpb_operacional: null, efeito_mercado: null,
         sem_p0: true, sem_p1: true,
@@ -61,7 +65,10 @@ const DRE: DrePecuaria = {
      */
     receita_liquida: 17900865.27, reposicao: 1866408.21,
     vbp: 15841219.06, custo_variavel: 6669221.73, margem: 9171997.33,
-    patrimonio: { v_ini_p0: 0, v_fim_p0: 0, v_fim_p1: 0, cab_ini: 0, cab_fim: 12000 },
+    patrimonio: { v_ini_p0: 0, v_fim_p0: 0, v_fim_p1: 0, cab_ini: 0, cab_fim: 12000, cab_media: 10000 },
+    /* ⚠ OS JUROS SÓ NO TOTAL, com a lista própria — os números do NJ jan-ago/26. */
+    juros: 58633.56,
+    centros_juros: [{ bloco: 'juros', centro: 'Juros de Financiamento Pecuária', valor: 58633.56, a_pagar: 0 }],
     /* ⚠ OS CENTROS DO §CHECKS — dois dos sete do NJ, e é a coluna TOTAL que os lista: um centro
        que só existe numa fazenda tem de aparecer para todas, senão a filha some conforme a coluna
        que se olha. */
@@ -163,8 +170,8 @@ describe('a cascata do DRE da pecuária', () => {
   });
 
   /**
-   * ⚠ VBP ≤ 0 DÁ TRAÇO, NUNCA 0% — a regra do DRE gerencial, trazida inteira. A fazenda
-   * "Administrativo" do fixture tem VBP zero, e é ela que prova a regra.
+   * ⚠ VBP ≤ 0 DÁ TRAÇO, NUNCA 0% — a regra do DRE gerencial, trazida inteira. A segunda fazenda
+   * do fixture tem VBP zero, e é ela que prova a regra.
    */
   it('sem VBP positivo o percentual é traço, não 0%', () => {
     montar();
@@ -200,10 +207,51 @@ describe('a cascata do DRE da pecuária', () => {
     expect(textos().some(r => r.includes('Pastagem'))).toBe(true);
   });
 
-  /* ⚠ A COLUNA "Administrativo" APARECE: ela é lançamento de pecuária sem fazenda produtiva, e
-     escondê-la faria o Total não fechar com a soma das colunas sem ninguém saber por quê. */
-  it('a coluna Administrativo existe e diz o que é', () => {
+  /**
+   * ⚠ A COLUNA "Administrativo" SAIU COM A RPC-02 — e com ela o `title` que a explicava.
+   *
+   * Ela entrava por juros carimbados na fazenda e por lançamentos cancelados; a RPC deixou de
+   * devolvê-la. Este caso trava que a tela não volte a marcar coluna nenhuma como "sem fazenda
+   * produtiva": se a frase reaparecer, é porque alguém trouxe de volta a explicação de uma coluna
+   * que não existe mais.
+   */
+  it('nenhuma coluna é marcada como "sem fazenda produtiva"', () => {
     montar();
-    expect(screen.getByTitle('lançamentos de pecuária sem fazenda produtiva')).toBeTruthy();
+    expect(screen.queryByTitle('lançamentos de pecuária sem fazenda produtiva')).toBeNull();
+    /* A prova de que a busca sabe achar: o cabeçalho das fazendas está lá. */
+    expect(screen.getByText('Sto. Expedito')).toBeTruthy();
+  });
+
+  /**
+   * ⚠ JUROS SÃO DA ATIVIDADE — DRE-PEC-RPC-02. Nas fazendas a RPC devolve `null`, e a célula diz
+   * "—" (ausência), nunca "0,00" (valor). O R$/cab fica vazio e a célula não abre lista: no
+   * Total, o número e o clique continuam.
+   */
+  it('juros de fazenda é "—", sem R$/cab e sem clique; no Total, número e clique', () => {
+    const abrir = vi.fn();
+    render(<PecDrePanel dre={DRE} alturaCartao={null} cartaoRef={{ current: null }} onAbrirLista={abrir} />);
+    const juros = linhaDe('(−) Despesas financeiras (juros)');
+    expect(juros?.cells[3]?.textContent).toBe('—');
+    expect(juros?.cells[4]?.textContent).toBe('');
+    expect(juros?.cells[CEL_FAZ2_RS]?.textContent).toBe('—');
+    expect(juros?.cells[CEL_TOTAL_RS]?.textContent).toBe('58.633,56');
+
+    if (juros) fireEvent.click(juros.cells[3]);
+    expect(abrir).not.toHaveBeenCalled();
+    if (juros) fireEvent.click(juros.cells[CEL_TOTAL_RS]);
+    expect(abrir).toHaveBeenCalledWith(expect.objectContaining({ fazendaId: null, bloco: 'juros' }));
+  });
+
+  /**
+   * ⚠ O R$/cab DIVIDE PELA CABEÇA MÉDIA, não pela do fim — o denominador da RPC e do PC-100.
+   * Pureza: 9.000.000 / 2.500 = 3.600,00. Por `cab_fim` (3.000) daria 3.000,00, e é esse o número
+   * que este caso recusa. O cabeçalho mostra a mesma média.
+   */
+  it('R$/cab e o cabeçalho usam cab_media', () => {
+    montar();
+    expect(linhaDe('Vendas')?.cells[4]?.textContent).toBe('3.600,00');
+    expect(screen.getByText('2.500 cab')).toBeTruthy();
+    expect(screen.queryByText('3.000 cab')).toBeNull();
+    expect(screen.getByText('10.000 cab')).toBeTruthy();
   });
 });
