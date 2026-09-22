@@ -253,8 +253,8 @@ no mesmo arquivo.
       npx madge --circular --extensions ts,tsx --ts-config tsconfig.app.json src/
   O `--ts-config` NAO e' opcional: sem ele o madge nao resolve o alias
   `@/`, pula 521 imports e devolve uma lista quase vazia — falso "esta
-  limpo". Com ele: 1 warning (pdf.worker) e 21 ciclos conhecidos em
-  2026-09-06. Dois deles sao frente aberta [ABATE-CICLOS-MODAIS]:
+  limpo". Com ele: 1 warning (pdf.worker) e 23 ciclos conhecidos em
+  2026-09-22 (eram 21 em 2026-09-06; o numero ficou parado, nao subiu num PR so'). Dois deles sao frente aberta [ABATE-CICLOS-MODAIS]:
   AbaLotesAbate <-> ModalNegociarLote (fecha em `BlocoResumoLote`) e
   AbaLotesAbate <-> ModalResumoLotes (fecha em `temNegociacao`). Ambos
   fecham em `export function` (hoisted), entao NAO produzem TDZ hoje —
@@ -429,6 +429,10 @@ no mesmo arquivo.
   ⚠ E A CAUSA MAIOR ERA DA RPC, nao do front: `fn_classificacao_apply_row` zerava
   `conta_destino_id` sempre que o tipo efetivo nao era transferencia (`ELSE NULL` incondicional).
   Corrigida na migration 20261027121700, com a simetria que ja existia em `conta_bancaria_id`.
+  De 1530 para 1709 em 2026-09-22, medido no DRE-UNIDADES-01c. ⚠ NAO E' O GANHO DE UM PR: esta
+  linha ficou parada enquanto a frente do DRE acrescentava casos (1702 medidos em c504d451, 1708
+  no 01b com os 6 da largura de grupo, 1709 aqui com o Total em traco da Lavoura). Os 22 skipped
+  e as 3 falhas pre-existentes seguem iguais.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 

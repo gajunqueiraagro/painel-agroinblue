@@ -297,8 +297,16 @@ export function semMovimento(d: DrePecuaria): boolean {
 export interface ColunaPec {
   chave: string;
   nome: string;
-  /** A segunda linha do cabeçalho do grupo — "6.233 cab", "sem meta no período", "real − meta". */
+  /** A segunda linha do cabeçalho do grupo — "6.233 cab", "sem meta", "real − meta". */
   sub: string;
+  /**
+   * O `sub` por extenso, para o `title` — DRE-UNIDADES-01c.
+   *
+   * ⚠ ELE EXISTE PORQUE O PISO DESCEU: com o grupo em 104px, "sem meta no período" (100,1px de
+   * texto) não cabia e virava reticências. O que se lê na tela encurtou para "sem meta"; a frase
+   * inteira não se perdeu, mudou de lugar. Sem isso, encurtar seria apagar.
+   */
+  subLongo?: string;
   fazendaId: string | null;
   /** `null` = ainda carregando: esqueleto SÓ nesta coluna, a grade não espera por ela. */
   linhas: DrePecLinhas | null;
@@ -369,7 +377,8 @@ export function colunasDaVisao(e: EntradaVisoes): ColunaPec[] {
            meta: 4.813,6 ha contra 4.824,3 do realizado, na NJ 2026). Quando a meta não existe,
            `semDado` apaga a coluna inteira — então o `?? real.total` nunca vira número na tela;
            ele é esqueleto de layout, não empréstimo de dado. */
-        chave: '__meta__', nome: 'Meta', sub: semMeta ? 'sem meta no período' : '', fazendaId: null,
+        chave: '__meta__', nome: 'Meta', sub: semMeta ? 'sem meta' : '',
+        subLongo: semMeta ? 'sem meta no período' : undefined, fazendaId: null,
         linhas: e.carregandoMeta ? null : (e.meta?.total ?? real.total), total: false, tipo: 'valor',
         unidade: 'ha', de, ate, cenario: 'meta', meses: e.meta?.periodo.meses ?? meses, atual: false,
         semPatrimonio: true, semDado: semMeta,
@@ -559,7 +568,7 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
                   : { borderLeft: '1px solid rgba(255,255,255,.22)' }}>
                 <div className="truncate text-[10px] font-medium leading-[12px]" title={c.nome}>{c.nome}</div>
                 <div className="truncate whitespace-nowrap text-[10px] font-normal leading-[12px] text-white"
-                  title={c.sub || undefined}>
+                  title={c.subLongo || c.sub || undefined}>
                   {c.sub || '\u00a0'}
                 </div>
               </th>

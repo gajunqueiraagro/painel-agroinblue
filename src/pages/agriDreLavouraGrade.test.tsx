@@ -330,13 +330,34 @@ describe('a largura mínima do grupo de coluna na lavoura', () => {
   const largurasDoColgroup = () =>
     [...document.querySelectorAll<HTMLTableColElement>('colgroup col')].map(c => c.style.width);
 
-  it('com um chip só, a cultura e o Total continuam com 160px', () => {
+  it('com um chip só, a cultura e o Total vão ao piso de 104px', () => {
     montar({ unidades: ['ha'] });
-    /* Cultura + amendoim (160) + Total (160). */
-    expect(largurasDoColgroup()).toEqual(['200px', '160px', '160px']);
+    /* Cultura + amendoim (104) + Total (104). */
+    expect(largurasDoColgroup()).toEqual(['200px', '104px', '104px']);
   });
 
-  it('o padrão de abertura é o próprio piso e não se mexe', () => {
+  /* ⚠ O TOTAL SEM NENHUMA UNIDADE SOMÁVEL — DRE-UNIDADES-01c, e é o achado do 01b. Com só o
+     R$/sc marcado, `colsTotal` dava 0 e o cabeçalho saía `<th colSpan={0}>`: em HTML isso é
+     "todas as colunas restantes", nunca "nenhuma". Agora ele tem UMA coluna, em traço, e diz por
+     quê — a tela declara o limite em vez de esconder o dado (Art. 19). */
+  it('só R$/sc: o Total fica com uma coluna em traço, e explica por quê', () => {
+    montar({ unidades: ['un'] });
+    expect(largurasDoColgroup()).toEqual(['200px', '104px', '104px']);
+    /* ⚠ O `th` DO TOTAL CARREGA DUAS LINHAS ("Total" e a área), então a busca é por prefixo — por
+       igualdade ela não acha nada e o `?.` faz o caso passar verde sem olhar. */
+    const cabecalho = [...document.querySelectorAll('thead th')]
+      .find(th => th.textContent?.trim().startsWith('Total'));
+    expect(cabecalho).toBeDefined();
+    expect(cabecalho?.getAttribute('colspan')).toBe('1');
+    /* ⚠ E A EXPLICAÇÃO ESTÁ EM TODA LINHA, não só no cabeçalho: são as 15 da cascata mais as
+       filhas dos grupos abertos, todas em traço. Uma célula vazia e muda seria o mesmo buraco de
+       antes, com outra largura. */
+    const tds = [...document.querySelectorAll('td[title="sc e t não somam entre culturas"]')];
+    expect(tds.length).toBeGreaterThanOrEqual(15);
+    expect(tds.every(td => td.textContent === '—')).toBe(true);
+  });
+
+  it('o padrão de abertura não se mexe', () => {
     montar({ unidades: ['rs', 'ha'] });
     expect(largurasDoColgroup()).toEqual(['200px', '96px', '64px', '96px', '64px']);
   });

@@ -110,13 +110,16 @@ export const W_RS_TOTAL = 96;
  * (a fazenda, a cultura, o ano, o cenário), e ele não encolhe quando o produtor desmarca um
  * chip. Medido a 1126 com só o R$/@ marcado: o grupo caía a 64px, sobravam 49px de caixa de
  * texto e "Faz. Sto. Expedito" mede 85,9px a 10px/500 — o nome saía cortado em toda coluna.
- * ⚠ O PISO É O PADRÃO DE ABERTURA (96 + 64 = 160), não um número escolhido: é a largura que a
- * tela já tinha com R$ + R$/ha, a mesma em que os nomes foram medidos e cabem.
- * ⚠ E A SOBRA SE DIVIDE POR IGUAL entre as colunas do grupo, nunca encostada numa só: duas
- * unidades de 64 viram 80 + 80, e o par de números fica centrado sob o nome que o governa.
- * O resto inteiro vai para a primeira, que é onde a vírgula dos milhões precisa de mais espaço.
+ * ⚠ O PISO É O TÍTULO MAIS LONGO, NÃO O PADRÃO DE ABERTURA. Começou em 160 (96 + 64, a largura
+ * de R$ + R$/ha) e desceu a 104 na homologação do Gabriel, 22/09 18:38: com um chip só, 160
+ * deixava a coluna larga demais para o número que ela mostra, e a grade ficava rala. 104 são os
+ * 85,9px de "Faz. Sto. Expedito" (o nome mais longo medido, a 10px/500) mais os 14 de padding e
+ * uma folga de 4 — o piso é o que o CABEÇALHO precisa, e o número se acomoda nele.
+ * ⚠ E A SOBRA SE DIVIDE POR IGUAL entre as colunas do grupo, nunca encostada numa só, com o
+ * resto inteiro na primeira. Com 104 isso quase nunca acontece: duas unidades de 64 já somam
+ * 128 e ficam como são. A regra vale para o grupo de coluna única.
  */
-export const W_GRUPO_MIN = W_RS + W_HA;
+export const W_GRUPO_MIN = 104;
 
 export function larguraDoGrupo(cols: readonly number[]): number[] {
   const soma = cols.reduce((a, b) => a + b, 0);
@@ -241,7 +244,7 @@ export function Celula({ valor, cor, destaque, bordaEsquerda, onAbrir, filha, fu
 }
 
 /** A célula de /ha e /unidade — mais clara que a de R$, porque ela é derivada, não lançada. */
-export function CelulaUnit({ texto, cor, destaque, filha, fundo, estilo, total, bordaEsquerda, onAbrir, fonte }: {
+export function CelulaUnit({ texto, cor, destaque, filha, fundo, estilo, total, bordaEsquerda, onAbrir, fonte, title }: {
   texto: string; cor: string; destaque?: DestaqueLinha;
   /** ⚠ O UNITÁRIO FICA UM PONTO ABAIXO DO VALOR, sempre: ele é leitura de apoio. */
   fonte?: number;
@@ -255,12 +258,19 @@ export function CelulaUnit({ texto, cor, destaque, filha, fundo, estilo, total, 
   bordaEsquerda?: boolean;
   /** §5: na raiz, /ha e /sc abrem a mesma lista que a célula de R$ — é a mesma linha. */
   onAbrir?: () => void;
+  /**
+   * O porquê de um traço — DRE-UNIDADES-01c.
+   *
+   * ⚠ ELE NUNCA GANHA DE "ver os lançamentos": a célula que abre lista tem número; a que precisa
+   * se explicar está em traço e não abre nada. Os dois nunca disputam a mesma célula.
+   */
+  title?: string;
 }) {
   const sub = destaque === 'subtotal' || destaque === 'sub';
   const clicavel = !!onAbrir && texto !== traco;
   return (
     <td onClick={clicavel ? onAbrir : undefined}
-      title={clicavel ? 'ver os lançamentos' : undefined}
+      title={clicavel ? 'ver os lançamentos' : title}
       className={cn('whitespace-nowrap px-[7px] py-px text-right text-[10px] tabular-nums',
       total ? 'font-medium' : sub ? 'bg-muted' : 'bg-muted/40',
       bordaEsquerda && !total && 'border-l border-border/60',

@@ -169,25 +169,26 @@ describe('as unidades da pecuária', () => {
     expect(linhaDe('Vendas')?.cells[1]?.textContent).toBe('1.000,00');
   });
 
-  /* ⚠ O PISO DE 160px É DO GRUPO — DRE-UNIDADES-01b. Medido a 1126 antes do conserto: com só o
-     R$/@ marcado o grupo caía a 64px e "Faz. Sto. Expedito" (85,9px a 10px/500) saía cortado em
-     toda coluna. O nome do cabeçalho não depende de quantas unidades o produtor quis ver.
+  /* ⚠ O PISO DE 104px É DO GRUPO — DRE-UNIDADES-01b, ajustado no 01c. Medido a 1126 antes do
+     conserto: com só o R$/@ marcado o grupo caía a 64px e "Faz. Sto. Expedito" (85,9px a
+     10px/500) saía cortado em toda coluna. O nome do cabeçalho não depende de quantas unidades o
+     produtor quis ver — e 104 é o que ELE precisa (85,9 + 14 de padding + folga), não o padrão de
+     abertura: com 160 a coluna ficava larga demais para o número que mostra.
      ⚠ E O TESTE OLHA O `<colgroup>`, não o `th`: com `table-layout: fixed` é ele a única
      autoridade sobre largura, e é onde um piso mal distribuído apareceria. */
   const largurasDoColgroup = () =>
     [...document.querySelectorAll<HTMLTableColElement>('colgroup col')].map(c => c.style.width);
 
-  it('com um chip só, o grupo continua com 160px', () => {
+  it('com um chip só, o grupo vai ao piso de 104px — nem 64, nem 160', () => {
     montarCom(['arroba']);
-    expect(largurasDoColgroup()).toEqual(['200px', '160px']);
+    expect(largurasDoColgroup()).toEqual(['200px', '104px']);
   });
 
-  it('duas unidades estreitas dividem os 160px por igual, e o par de 160 fica intacto', () => {
+  it('duas unidades já passam do piso e ficam como são; o padrão de abertura não muda', () => {
     const { unmount } = montarCom(['ha', 'cab']);
-    /* 64 + 64 = 128 < 160 → 80 + 80, e não 96 + 64 nem 160 + 64. */
-    expect(largurasDoColgroup()).toEqual(['200px', '80px', '80px']);
+    /* 64 + 64 = 128 ≥ 104 → intactas. Com o piso de 160 elas viravam 80 + 80. */
+    expect(largurasDoColgroup()).toEqual(['200px', '64px', '64px']);
     unmount();
-    /* O padrão de abertura JÁ é o piso: ele não pode ser mexido por causa da regra nova. */
     montarCom(['rs', 'ha']);
     expect(largurasDoColgroup()).toEqual(['200px', '96px', '64px']);
   });
@@ -501,9 +502,13 @@ describe('as quatro visões', () => {
     expect(abrir).not.toHaveBeenCalled();
   });
 
+  /* ⚠ O SUBTÍTULO ENCURTOU NO 01c e a frase inteira foi para o `title`: com o grupo em 104px,
+     "sem meta no período" (100,1px de texto) virava reticências. Encurtar sem guardar o longo
+     seria apagar — por isso o teste cobra os DOIS. */
   it('× Meta sem meta no período: a coluna fica, toda em "—", e diz por quê', () => {
     render(<PecDrePanel colunas={colunas('meta', { meta: SEM_META })} alturaCartao={null} cartaoRef={{ current: null }} />);
-    expect(cabecalhos()[2]).toContain('sem meta no período');
+    expect(cabecalhos()[2]).toContain('sem meta');
+    expect(document.querySelector('[title="sem meta no período"]')).not.toBeNull();
     expect(linhaDe('Vendas')?.cells[3]?.textContent).toBe('—');
     expect(linhaDe('Vendas')?.cells[4]?.textContent).toBe('—');
   });

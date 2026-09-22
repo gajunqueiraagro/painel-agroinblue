@@ -30,7 +30,7 @@ import { cn } from '@/lib/utils';
 import { Segmentado } from '@/components/ui/segmentado';
 import { CINZA_CABECALHO } from '@/lib/idiomaVisual';
 import {
-  W_RS, W_HA, W_UN, W_RS_TOTAL, larguraDoGrupo, VERDE, VERDE_70, VERMELHO, VERMELHO_70, AMBAR,
+  W_RS, W_HA, W_UN, W_RS_TOTAL, W_GRUPO_MIN, larguraDoGrupo, VERDE, VERDE_70, VERMELHO, VERMELHO_70, AMBAR,
   NAVY_TOTAL, BORDA_TOTAL, FUNDO_TOTAL, traco, corDoSinal, numeroDaCelula, porUnidade,
   Etiqueta, Celula, CelulaUnit, Caixas, ChipsUnidade, PontoRateio, REGUA_LINHA, tipoDaLinha, fundoDaLinha,
   type CaixaFaixa, type DestaqueLinha,
@@ -1200,6 +1200,21 @@ const GRUPO_DO_DRAWER: Partial<Record<ChaveLinha, string>> = {
 /** Divisória entre grupos de coluna — a mesma nas duas linhas do cabeçalho e no corpo. */
 const DIVISOR = '1px solid rgba(255,255,255,.22)';
 
+/**
+ * O QUE O TOTAL SABE SOMAR — DRE-UNIDADES-01c.
+ *
+ * ⚠ O /sc NÃO ENTRA, e a razão é aritmética, não de layout: a safra inteira mistura culturas, e
+ * somar saca de amendoim com tonelada de mandioca não dá número nenhum.
+ * ⚠ MAS A COLUNA NÃO SOME. Com só o R$/sc marcado, `colsTotal` dava 0 e o cabeçalho saía como
+ * `<th colSpan={0}>` — que em HTML significa "todas as colunas restantes", não "nenhuma". Ele
+ * rendia 0px, o título "Total" ficava ilegível e a grade terminava numa coluna fantasma. Agora o
+ * Total tem SEMPRE ao menos uma coluna: quando nada é somável, ela vem em traço e o `title` diz
+ * por quê (Art. 19 — a tela declara o limite em vez de esconder o dado).
+ */
+const TOTAL_SEM_SOMA = 'sc e t não somam entre culturas';
+const unidadesDoTotal = (u: readonly UnidadeLav[]): readonly UnidadeLav[] => u.filter(x => x !== 'un');
+const totalEmTraco = (u: readonly UnidadeLav[]) => unidadesDoTotal(u).length === 0;
+
 
 
 /**
@@ -1224,19 +1239,20 @@ export function Grade({
     if (unidades.includes('rs')) daCultura.push(W_RS);
     if (unidades.includes('ha')) daCultura.push(W_HA);
     if (unidades.includes('un')) daCultura.push(W_UN);
+    /* ⚠ E O TOTAL SEM NENHUMA UNIDADE SOMÁVEL TEM UMA COLUNA, não zero: é a do traço. */
     const doTotal: number[] = [];
     if (unidades.includes('rs')) doTotal.push(W_RS_TOTAL);
     if (unidades.includes('ha')) doTotal.push(W_HA);
 
     const cols: number[] = [W_CULTURA];
     culturas.forEach(() => cols.push(...larguraDoGrupo(daCultura)));
-    if (!semTotal) cols.push(...larguraDoGrupo(doTotal));
+    if (!semTotal) cols.push(...larguraDoGrupo(doTotal.length ? doTotal : [W_GRUPO_MIN]));
     return cols;
   }, [culturas, unidades, semTotal]);
   const larguraMin = larguras.reduce((a, b) => a + b, 0);
-  /* ⚠ A COLUNA TOTAL NÃO TEM /sc: a safra inteira mistura culturas, e somar sacas de amendoim com
-     toneladas de mandioca não é número. Ela leva o R$ e o R$/ha que estiverem marcados. */
-  const colsTotal = unidades.filter(u => u !== 'un').length;
+  /* ⚠ A COLUNA TOTAL NÃO TEM /sc (ver `unidadesDoTotal`): ela leva o R$ e o R$/ha que estiverem
+     marcados, e NUNCA menos de uma coluna — `colSpan={0}` é "todas as restantes" em HTML. */
+  const colsTotal = Math.max(1, unidadesDoTotal(unidades).length);
 
   const alterna = (k: string) => setAbertos(a => ({ ...a, [k]: !a[k] }));
 
@@ -1324,6 +1340,13 @@ export function Grade({
               <th className="sticky z-20 px-[7px] text-right text-[10px] font-normal text-white"
                 style={{ top: 26, backgroundColor: NAVY_TOTAL,
                   ...(unidades.includes('rs') ? {} : { borderLeft: BORDA_TOTAL }) }}>R$/ha</th>
+            )}
+            {/* ⚠ A CÉLULA DA UNIDADE FICA VAZIA, não escrita: a coluna não tem unidade nenhuma —
+                é só o lugar onde o traço mora. Quem explica é o `title` do traço, na linha. */}
+            {totalEmTraco(unidades) && (
+              <th className="sticky z-20 px-[7px] text-right text-[10px] font-normal text-white"
+                title={TOTAL_SEM_SOMA}
+                style={{ top: 26, backgroundColor: NAVY_TOTAL, borderLeft: BORDA_TOTAL }} />
             )}
           </>}
         </tr>
@@ -1547,6 +1570,10 @@ function LinhaDre({
             destaque={def.destaque} fonte={regua.fonte}
             total />
         )}
+        {totalEmTraco(unidades) && (
+          <CelulaUnit texto={traco} cor="" destaque={def.destaque} fonte={regua.fonte}
+            total title={TOTAL_SEM_SOMA} />
+        )}
       </>}
     </tr>
   );
@@ -1627,6 +1654,10 @@ function LinhaRateioDoGrupo({ chave, dre, culturas, unidades, semTotal, abrir }:
           <CelulaUnit filha texto={porUnidade(totalRateado, dre.total.area_ha)} cor={VERMELHO}
             fonte={REGUA_LINHA.filha.fonte} total fundo="bg-card" />
         )}
+        {totalEmTraco(unidades) && (
+          <CelulaUnit filha texto={traco} cor="" fonte={REGUA_LINHA.filha.fonte}
+            total fundo="bg-card" title={TOTAL_SEM_SOMA} />
+        )}
       </>}
     </tr>
   );
@@ -1698,6 +1729,10 @@ function LinhaCentro({ centro, culturas, rateioDentro, unidades, areaTotal, abri
         {unidades.includes('ha') && (
           <CelulaUnit filha texto={porUnidade(totalCentro, areaTotal)} cor={VERMELHO}
             fonte={regua.fonte} total fundo={fundo} estilo={estilo} />
+        )}
+        {totalEmTraco(unidades) && (
+          <CelulaUnit filha texto={traco} cor="" fonte={regua.fonte}
+            total fundo={fundo} estilo={estilo} title={TOTAL_SEM_SOMA} />
         )}
       </>}
     </tr>
