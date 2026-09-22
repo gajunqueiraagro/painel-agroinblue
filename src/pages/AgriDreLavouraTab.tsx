@@ -30,7 +30,7 @@ import { cn } from '@/lib/utils';
 import { Segmentado } from '@/components/ui/segmentado';
 import { CINZA_CABECALHO } from '@/lib/idiomaVisual';
 import {
-  W_RS, W_HA, W_UN, W_RS_TOTAL, VERDE, VERDE_70, VERMELHO, VERMELHO_70, AMBAR,
+  W_RS, W_HA, W_UN, W_RS_TOTAL, larguraDoGrupo, VERDE, VERDE_70, VERMELHO, VERMELHO_70, AMBAR,
   NAVY_TOTAL, BORDA_TOTAL, FUNDO_TOTAL, traco, corDoSinal, numeroDaCelula, porUnidade,
   Etiqueta, Celula, CelulaUnit, Caixas, ChipsUnidade, PontoRateio, REGUA_LINHA, tipoDaLinha, fundoDaLinha,
   type CaixaFaixa, type DestaqueLinha,
@@ -1215,17 +1215,22 @@ export function Grade({
   /* ⚠ A RÉGUA NASCE UMA VEZ E SERVE AO `<colgroup>` E À LARGURA MÍNIMA. Escrever as larguras no
      `<col>` e repeti-las no `style` de cada `<td>` é o caminho conhecido para as duas listas
      divergirem — com `table-layout: fixed` o `<colgroup>` já é a única autoridade. */
+  /* ⚠ E A RÉGUA SE MONTA POR GRUPO, não coluna a coluna — DRE-UNIDADES-01b: o piso de 160px é do
+     CABEÇALHO (a cultura, o Total), então a lista tem de saber onde um grupo acaba e o outro
+     começa. Somar as colunas soltas e aplicar o piso no fim daria um número certo e uma divisão
+     errada. */
   const larguras = useMemo(() => {
+    const daCultura: number[] = [];
+    if (unidades.includes('rs')) daCultura.push(W_RS);
+    if (unidades.includes('ha')) daCultura.push(W_HA);
+    if (unidades.includes('un')) daCultura.push(W_UN);
+    const doTotal: number[] = [];
+    if (unidades.includes('rs')) doTotal.push(W_RS_TOTAL);
+    if (unidades.includes('ha')) doTotal.push(W_HA);
+
     const cols: number[] = [W_CULTURA];
-    culturas.forEach(() => {
-      if (unidades.includes('rs')) cols.push(W_RS);
-      if (unidades.includes('ha')) cols.push(W_HA);
-      if (unidades.includes('un')) cols.push(W_UN);
-    });
-    if (!semTotal) {
-      if (unidades.includes('rs')) cols.push(W_RS_TOTAL);
-      if (unidades.includes('ha')) cols.push(W_HA);
-    }
+    culturas.forEach(() => cols.push(...larguraDoGrupo(daCultura)));
+    if (!semTotal) cols.push(...larguraDoGrupo(doTotal));
     return cols;
   }, [culturas, unidades, semTotal]);
   const larguraMin = larguras.reduce((a, b) => a + b, 0);
@@ -1276,10 +1281,17 @@ export function Grade({
               className={cn(CINZA_CABECALHO, 'sticky top-0 z-20 px-[7px] text-center',
                 'align-middle text-white', onAbrirCultura ? 'cursor-pointer' : 'cursor-default')}
               style={{ borderLeft: DIVISOR }}>
+              {/* ⚠ UMA LINHA CADA, SEMPRE — DRE-UNIDADES-01b: `truncate` traz o `nowrap` junto, e é
+                  ele que impede a segunda linha de nascer e empurrar o cabeçalho para além dos
+                  26px. A área tinha `nowrap` sem `truncate`: não quebrava, mas TRANSBORDAVA por
+                  cima da coluna vizinha quando o grupo encolhia.
+                  ⚠ E O `title` DA CULTURA FICA NO `th`, não aqui: ele já diz o nome ("abrir o
+                  painel de Amendoim") e ainda anuncia o clique. Repeti-lo na `div` apagaria a
+                  segunda metade justamente onde o ponteiro passa. */}
               <div className="truncate text-[10px] font-medium leading-[12px]">
                 {labelDaCultura(c.cultura)}
               </div>
-              <div className="whitespace-nowrap text-[10px] font-normal leading-[12px] text-white">
+              <div className="truncate whitespace-nowrap text-[10px] font-normal leading-[12px] text-white">
                 {formatNum(c.area_ha, 1)} ha
               </div>
             </th>
@@ -1288,8 +1300,11 @@ export function Grade({
             <th colSpan={colsTotal}
               className="sticky top-0 z-20 px-[7px] text-center text-white"
               style={{ backgroundColor: NAVY_TOTAL, borderLeft: BORDA_TOTAL }}>
-              <div className="text-[10px] font-medium leading-[12px]">Total</div>
-              <div className="whitespace-nowrap text-[10px] font-normal leading-[12px] text-white">
+              {/* ⚠ AQUI O `title` É NECESSÁRIO: este `th` não abre nada, então não tem `title`
+                  próprio — sem ele, área cortada seria dado perdido, não dado escondido. */}
+              <div className="truncate text-[10px] font-medium leading-[12px]">Total</div>
+              <div className="truncate whitespace-nowrap text-[10px] font-normal leading-[12px] text-white"
+                title={`${formatNum(dre.total.area_ha, 1)} ha`}>
                 {formatNum(dre.total.area_ha, 1)} ha
               </div>
             </th>

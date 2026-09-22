@@ -25,7 +25,7 @@ import { cn } from '@/lib/utils';
 import { CINZA_CABECALHO } from '@/lib/idiomaVisual';
 import { formatNum } from '@/lib/calculos/formatters';
 import {
-  W_RS, W_HA, W_RS_TOTAL, VERDE, VERMELHO, NAVY_TOTAL, BORDA_TOTAL, FUNDO_TOTAL, traco,
+  W_RS, W_HA, W_RS_TOTAL, larguraDoGrupo, VERDE, VERMELHO, NAVY_TOTAL, BORDA_TOTAL, FUNDO_TOTAL, traco,
   corDoSinal, numeroDaCelula, Celula, CelulaUnit, Etiqueta, Caixas, REGUA_LINHA, tipoDaLinha,
   fundoDaLinha,
   type CaixaFaixa,
@@ -465,9 +465,28 @@ const larguraSlot = (s: SlotPec, c: ColunaPec) => (s === 'rs' ? larguraRs(c) : l
 const rotuloSlot = (s: SlotPec, c: ColunaPec) =>
   (s === 'pct' ? 'Δ %' : s === 'rs' ? (c.tipo === 'delta' ? 'Δ R$' : 'R$') : ROTULO_UNIDADE[s]);
 
-/** As duas células congeladas do Total, na régua da linha. */
+/**
+ * AS LARGURAS DE UMA COLUNA JÁ COM O PISO DO GRUPO — DRE-UNIDADES-01b.
+ *
+ * ⚠ É FUNÇÃO PURA DE (coluna, chips) DE PROPÓSITO, e não um valor calculado no topo e passado
+ * para baixo: as três linhas da grade (a comum, a de %, a da filha) precisam da MESMA conta para
+ * congelar o Total no lugar certo, e três componentes recebendo um número por prop é três lugares
+ * onde ele pode chegar velho. Aqui todos chamam a mesma função com o que já têm em mãos.
+ */
+const largurasDaColuna = (c: ColunaPec, unidades: readonly UnidadePec[]): number[] =>
+  larguraDoGrupo(slotsDaColuna(c, unidades).map(sl => larguraSlot(sl, c)));
+
+/**
+ * As duas células congeladas do Total, na régua da linha.
+ *
+ * ⚠ O SEGUNDO `left` NÃO É MAIS `W_RS_TOTAL`: com o piso de grupo, a primeira célula do Total
+ * mede 160 quando há um chip só e 80 quando há duas unidades de 64 — o offset tem de ser a
+ * largura que o `<colgroup>` deu àquela célula, senão a segunda coluna congelada cobre a
+ * primeira (ou deixa uma fresta) exatamente na coluna que se veio conferir.
+ */
 const estiloTotalRs = { position: 'sticky' as const, left: W_FAZENDA, zIndex: 20 };
-const estiloTotalCab = { position: 'sticky' as const, left: W_FAZENDA + W_RS_TOTAL, zIndex: 20 };
+const estiloTotalCab = (c: ColunaPec, unidades: readonly UnidadePec[]) =>
+  ({ position: 'sticky' as const, left: W_FAZENDA + largurasDaColuna(c, unidades)[0], zIndex: 20 });
 
 /** A célula que ainda não chegou: um traço pulsando, só nela — a grade não espera. */
 function CelulaCarregando({ total, fundo, estilo }: { total?: boolean; fundo?: string; estilo?: CSSProperties }) {
@@ -497,7 +516,7 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
   const colunas = colunasCruas;
   const larguras = useMemo(() => {
     const cols: number[] = [W_FAZENDA];
-    colunas.forEach(c => slotsDaColuna(c, unidades).forEach(sl => cols.push(larguraSlot(sl, c))));
+    colunas.forEach(c => largurasDaColuna(c, unidades).forEach(w => cols.push(w)));
     return cols;
   }, [colunas, unidades]);
   const larguraMin = larguras.reduce((a, b) => a + b, 0);
@@ -562,7 +581,7 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
                     style={c.total
                       ? { top: 26, backgroundColor: NAVY_TOTAL,
                           ...(i === 0 ? { left: W_FAZENDA, borderLeft: BORDA_TOTAL }
-                            : i === 1 ? { left: W_FAZENDA + W_RS_TOTAL } : {}) }
+                            : i === 1 ? { left: W_FAZENDA + largurasDaColuna(c, unidades)[0] } : {}) }
                       : { top: 26, ...(i === 0 ? { borderLeft: '1px solid rgba(255,255,255,.22)' } : {}) }}>
                     {rotuloSlot(sl, c)}
                   </th>
@@ -605,7 +624,7 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
                       const congelada = primeira?.total && (i === 0 || (i === 1 && !!primeira.unidade));
                       return (
                         <td key={i} className="border-t border-border/60 bg-card"
-                          style={congelada ? { position: 'sticky', left: i === 0 ? W_FAZENDA : W_FAZENDA + W_RS_TOTAL, zIndex: 20, backgroundColor: FUNDO_TOTAL } : undefined} />
+                          style={congelada ? { position: 'sticky', left: i === 0 ? W_FAZENDA : W_FAZENDA + largurasDaColuna(primeira, unidades)[0], zIndex: 20, backgroundColor: FUNDO_TOTAL } : undefined} />
                       );
                     })}
                   </tr>
@@ -711,7 +730,7 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, onAlternar, onAbrir
       {colunas.map(col => {
         const slots = slotsDaColuna(col, unidades);
         const estiloDoSlot = (i: number) => (!col.total ? undefined
-          : i === 0 ? estiloTotalRs : i === 1 ? estiloTotalCab : undefined);
+          : i === 0 ? estiloTotalRs : i === 1 ? estiloTotalCab(col, unidades) : undefined);
         if (!col.linhas) {
           return (
             <Fragment key={col.chave}>
@@ -791,7 +810,7 @@ function LinhaPercentual({ def, colunas, unidades }: {
                 ausentes: a coluna não pode encolher só nesta linha. */}
             {slotsDaColuna(col, unidades).slice(1).map((sl, i) => (
               <td key={sl} className={cn(fundo)}
-                style={col.total && i === 0 ? { ...estiloTotalCab, backgroundColor: FUNDO_TOTAL } : undefined} />
+                style={col.total && i === 0 ? { ...estiloTotalCab(col, unidades), backgroundColor: FUNDO_TOTAL } : undefined} />
             ))}
           </Fragment>
         );
@@ -831,7 +850,7 @@ function LinhaCentro({ def, centro, colunas, bloco, unidades, onAbrirLista }: {
       {colunas.map(col => {
         const slots = slotsDaColuna(col, unidades);
         const estiloDoSlot = (i: number) => (!col.total ? undefined
-          : i === 0 ? estiloTotalRs : i === 1 ? estiloTotalCab : undefined);
+          : i === 0 ? estiloTotalRs : i === 1 ? estiloTotalCab(col, unidades) : undefined);
         if (!col.linhas) {
           return (
             <Fragment key={col.chave}>

@@ -104,6 +104,29 @@ export const W_UN = 60;       // R$/unidade
 export const W_RS_TOTAL = 96;
 
 /**
+ * A LARGURA MÍNIMA DE UM GRUPO DE COLUNA — DRE-UNIDADES-01b.
+ *
+ * ⚠ O GRUPO É O CABEÇALHO, NÃO A UNIDADE: quem manda na largura é o nome que fica por cima
+ * (a fazenda, a cultura, o ano, o cenário), e ele não encolhe quando o produtor desmarca um
+ * chip. Medido a 1126 com só o R$/@ marcado: o grupo caía a 64px, sobravam 49px de caixa de
+ * texto e "Faz. Sto. Expedito" mede 85,9px a 10px/500 — o nome saía cortado em toda coluna.
+ * ⚠ O PISO É O PADRÃO DE ABERTURA (96 + 64 = 160), não um número escolhido: é a largura que a
+ * tela já tinha com R$ + R$/ha, a mesma em que os nomes foram medidos e cabem.
+ * ⚠ E A SOBRA SE DIVIDE POR IGUAL entre as colunas do grupo, nunca encostada numa só: duas
+ * unidades de 64 viram 80 + 80, e o par de números fica centrado sob o nome que o governa.
+ * O resto inteiro vai para a primeira, que é onde a vírgula dos milhões precisa de mais espaço.
+ */
+export const W_GRUPO_MIN = W_RS + W_HA;
+
+export function larguraDoGrupo(cols: readonly number[]): number[] {
+  const soma = cols.reduce((a, b) => a + b, 0);
+  if (cols.length === 0 || soma >= W_GRUPO_MIN) return [...cols];
+  const base = Math.floor(W_GRUPO_MIN / cols.length);
+  const resto = W_GRUPO_MIN - base * cols.length;
+  return cols.map((_, i) => base + (i < resto ? 1 : 0));
+}
+
+/**
  * O VERDE DOS VALORES POSITIVOS — e ele NÃO é `text-success`.
  *
  * ⚠ MEDIDO: `--success` é hsl(145 63% 42%) = rgb(40,175,96), um verde claro que, em 11px sobre

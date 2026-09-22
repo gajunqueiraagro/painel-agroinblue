@@ -91,14 +91,19 @@ const valorDaLinhaComoNaTela = (rateioDentro: boolean) =>
 
 function montar(opts: {
   onDrill?: ReturnType<typeof vi.fn>; abrir?: ReturnType<typeof vi.fn>; rateioDentro?: boolean;
+  unidades?: readonly ('rs' | 'ha' | 'un')[];
 } = {}) {
   const onDrill = opts.onDrill ?? vi.fn();
   const abrir = opts.abrir ?? vi.fn();
   const rateioDentro = opts.rateioDentro ?? false;
+  /* ⚠ AS TRÊS UNIDADES SÃO O PADRÃO DESTE HARNESS, não o da tela (que abre com R$ e R$/ha): os
+     casos de clique conferem as três células da mesma linha. Quem precisa de outro conjunto passa
+     o seu, e `colsPorCultura` acompanha — na tela ele é `unidadesLav.length`. */
+  const unidades = opts.unidades ?? ['rs', 'ha', 'un'];
   render(
     <Grade dre={DRE} culturas={DRE.culturas} abertos={{ custeio: true, investimento: true, fixo: true }}
       setAbertos={vi.fn()}
-      rateioDentro={rateioDentro} unidades={['rs', 'ha', 'un']} colsPorCultura={3}
+      rateioDentro={rateioDentro} unidades={unidades} colsPorCultura={unidades.length}
       centrosDoBloco={b => DRE.centros.filter(c => c.bloco === b)}
       valorDaLinha={valorDaLinhaComoNaTela(rateioDentro)}
       abrir={abrir} onDrill={onDrill} onAbrirCultura={vi.fn()} />,
@@ -310,5 +315,37 @@ describe('a régua tipográfica da grade', () => {
       + (N - SUB) * REGUA_LINHA.simples.altura + SECAO;
     expect(depois).toBeLessThan(antes);
     expect(depois + FILHAS * REGUA_LINHA.filha.altura).toBeLessThan(antes + FILHAS * 15);
+  });
+});
+
+/* ══════════════ A LARGURA MÍNIMA DO GRUPO — DRE-UNIDADES-01b ══════════════ */
+
+/**
+ * ⚠ O PISO É DO CABEÇALHO, NÃO DA UNIDADE. Com só o R$/sc marcado o grupo da cultura caía a 60px
+ * — 46px de caixa de texto depois do padding —, e "Amendoim" mede 51,5px a 10px/500: o nome da
+ * cultura saía cortado em toda coluna da grade. O piso de 160 é a largura de abertura (96 + 64),
+ * a mesma em que os nomes foram medidos e cabem.
+ */
+describe('a largura mínima do grupo de coluna na lavoura', () => {
+  const largurasDoColgroup = () =>
+    [...document.querySelectorAll<HTMLTableColElement>('colgroup col')].map(c => c.style.width);
+
+  it('com um chip só, a cultura e o Total continuam com 160px', () => {
+    montar({ unidades: ['ha'] });
+    /* Cultura + amendoim (160) + Total (160). */
+    expect(largurasDoColgroup()).toEqual(['200px', '160px', '160px']);
+  });
+
+  it('o padrão de abertura é o próprio piso e não se mexe', () => {
+    montar({ unidades: ['rs', 'ha'] });
+    expect(largurasDoColgroup()).toEqual(['200px', '96px', '64px', '96px', '64px']);
+  });
+
+  /* ⚠ O TOTAL NÃO TEM /sc (a safra mistura culturas), então com as três unidades marcadas os dois
+     grupos têm formas diferentes — e é aí que um piso aplicado à lista inteira, em vez de grupo a
+     grupo, daria a soma certa e a divisão errada. */
+  it('com as três unidades, a cultura passa do piso e o Total é medido sozinho', () => {
+    montar({ unidades: ['rs', 'ha', 'un'] });
+    expect(largurasDoColgroup()).toEqual(['200px', '96px', '64px', '60px', '96px', '64px']);
   });
 });

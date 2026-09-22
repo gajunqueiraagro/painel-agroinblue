@@ -168,6 +168,34 @@ describe('as unidades da pecuária', () => {
     expect(document.body.textContent).toContain('R$/ha');
     expect(linhaDe('Vendas')?.cells[1]?.textContent).toBe('1.000,00');
   });
+
+  /* ⚠ O PISO DE 160px É DO GRUPO — DRE-UNIDADES-01b. Medido a 1126 antes do conserto: com só o
+     R$/@ marcado o grupo caía a 64px e "Faz. Sto. Expedito" (85,9px a 10px/500) saía cortado em
+     toda coluna. O nome do cabeçalho não depende de quantas unidades o produtor quis ver.
+     ⚠ E O TESTE OLHA O `<colgroup>`, não o `th`: com `table-layout: fixed` é ele a única
+     autoridade sobre largura, e é onde um piso mal distribuído apareceria. */
+  const largurasDoColgroup = () =>
+    [...document.querySelectorAll<HTMLTableColElement>('colgroup col')].map(c => c.style.width);
+
+  it('com um chip só, o grupo continua com 160px', () => {
+    montarCom(['arroba']);
+    expect(largurasDoColgroup()).toEqual(['200px', '160px']);
+  });
+
+  it('duas unidades estreitas dividem os 160px por igual, e o par de 160 fica intacto', () => {
+    const { unmount } = montarCom(['ha', 'cab']);
+    /* 64 + 64 = 128 < 160 → 80 + 80, e não 96 + 64 nem 160 + 64. */
+    expect(largurasDoColgroup()).toEqual(['200px', '80px', '80px']);
+    unmount();
+    /* O padrão de abertura JÁ é o piso: ele não pode ser mexido por causa da regra nova. */
+    montarCom(['rs', 'ha']);
+    expect(largurasDoColgroup()).toEqual(['200px', '96px', '64px']);
+  });
+
+  it('acima do piso ninguém é esticado: três unidades somam 192 e ficam como são', () => {
+    montarCom(['ha', 'cab', 'arroba']);
+    expect(largurasDoColgroup()).toEqual(['200px', '64px', '64px', '64px']);
+  });
 });
 
 /* ══════════════ O RATEIO ADMINISTRATIVO — DRE-RATEIO-FIX-01 ══════════════ */
