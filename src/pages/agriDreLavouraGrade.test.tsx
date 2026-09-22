@@ -98,7 +98,7 @@ function montar(opts: {
   render(
     <Grade dre={DRE} culturas={DRE.culturas} abertos={{ custeio: true, investimento: true, fixo: true }}
       setAbertos={vi.fn()}
-      rateioDentro={rateioDentro} mostrarUnitarios colsPorCultura={3}
+      rateioDentro={rateioDentro} unidades={['rs', 'ha', 'un']} colsPorCultura={3}
       centrosDoBloco={b => DRE.centros.filter(c => c.bloco === b)}
       valorDaLinha={valorDaLinhaComoNaTela(rateioDentro)}
       abrir={abrir} onDrill={onDrill} onAbrirCultura={vi.fn()} />,

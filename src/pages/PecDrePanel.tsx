@@ -147,6 +147,78 @@ const valorDe = (l: DrePecLinhas, c: ChaveLinhaPec): number | null => {
 const porHectare = (v: number | null, ha: number | null) =>
   (v == null || ha == null || !(ha > 0) ? traco : formatNum(v / ha, 2));
 
+/**
+ * AS UNIDADES QUE O DRE SABE MOSTRAR — DRE-UNIDADES-01.
+ *
+ * ⚠ A ORDEM É FIXA e é esta: o R$ primeiro, depois as unidades da mais geral para a mais
+ * específica. Deixar o operador reordenar faria a mesma tela ter duas leituras.
+ */
+export const UNIDADES_PEC = ['rs', 'ha', 'cab', 'arroba'] as const;
+export type UnidadePec = typeof UNIDADES_PEC[number];
+
+export const ROTULO_UNIDADE: Record<UnidadePec, string> = {
+  rs: 'R$', ha: 'R$/ha', cab: 'R$/cab/mês', arroba: 'R$/@',
+};
+
+/**
+ * R$ POR CABEÇA MÉDIA, POR MÊS — o cálculo que saiu no TELA-03a e volta aqui como chip.
+ *
+ * ⚠ O CORPO É O DE ANTES, palavra por palavra (`git show e91ff15a`): cabeça MÉDIA (não a do fim do
+ * período — a Pureza fechou agosto/26 com 5.661 e teve 4.968 de média) e dividido pelos MESES da
+ * coluna, que é a regra do PC-100. Sem os meses, oito meses de Nutrição do Agnaldo davam 165 por
+ * cabeça, um número que só se compara com outro período de exatamente oito meses.
+ */
+const porCabeca = (v: number | null, cab: number, meses: number) =>
+  (v == null || !(cab > 0) || !(meses > 0) ? traco : formatNum(v / cab / meses, 2));
+
+/**
+ * A BASE DO R$/@ MUDA POR LINHA, e por isso ela é declarada aqui, linha a linha.
+ *
+ * ⚠ NÃO HÁ LINHA SEM BASE: receita e deduções se leem pela arroba VENDIDA (foi ela que gerou o
+ * dinheiro), a reposição pela COMPRADA (foi ela que o consumiu) e todo o resto pela PRODUZIDA (o
+ * que a fazenda fabricou no período). Uma linha sem entrada aqui viraria traço silencioso.
+ * ⚠ E POR ISSO A COLUNA NÃO SOMA: três divisores diferentes na mesma coluna significam que somar
+ * duas células dela não dá a terceira. O `title` do cabeçalho diz isso ao operador.
+ */
+type BaseArroba = 'vendida' | 'comprada' | 'produzida';
+const BASE_DO_ARROBA: Record<ChaveLinhaPec, BaseArroba> = {
+  vendas: 'vendida', outras_receitas: 'vendida', receita_bruta: 'vendida',
+  deducoes: 'vendida', receita_liquida: 'vendida',
+  reposicao: 'comprada',
+  vpb_operacional: 'produzida', vbp: 'produzida', custo_variavel: 'produzida',
+  margem: 'produzida', custo_fixo: 'produzida', rateio_adm: 'produzida',
+  resultado_operacional: 'produzida', juros: 'produzida', resultado_periodo: 'produzida',
+  efeito_mercado: 'produzida', resultado_com_mercado: 'produzida', investimento: 'produzida',
+  /* As chaves que não são linha da cascata — nunca chegam a pedir base, mas o Record as exige. */
+  patrimonio: 'produzida', producao: 'produzida', sem_p0: 'produzida', sem_p1: 'produzida',
+  centros: 'produzida', centros_juros: 'produzida', a_pagar: 'produzida',
+};
+
+const arrobaDaBase = (l: DrePecLinhas, b: BaseArroba): number | null =>
+  (b === 'vendida' ? l.producao.at_desfrutada
+    : b === 'comprada' ? l.producao.at_comprada
+      : l.producao.at_produzida);
+
+/** ⚠ BASE NULA OU ZERO DÁ TRAÇO: a @ produzida da meta vem nula da RPC, e emprestar a do realizado
+    faria o custo da meta se ler por uma produção que não é dela. */
+const porArroba = (v: number | null, l: DrePecLinhas, chave: ChaveLinhaPec) => {
+  const base = arrobaDaBase(l, BASE_DO_ARROBA[chave]);
+  return (v == null || base == null || !(base > 0) ? traco : formatNum(v / base, 2));
+};
+
+/** O valor de uma célula na unidade pedida — `rs` não passa por aqui (é a célula de dinheiro). */
+const valorNaUnidade = (u: UnidadePec, v: number | null, col: ColunaPec, chave: ChaveLinhaPec): string => {
+  const l = col.linhas;
+  if (!l) return traco;
+  if (u === 'ha') return porHectare(v, l.producao.ha_medio);
+  if (u === 'cab') return porCabeca(v, l.patrimonio.cab_media, col.meses);
+  return porArroba(v, l, chave);
+};
+
+const TITULO_ARROBA = 'Divisor por linha: receita e deduções pela @ vendida, reposição pela @ comprada, '
+  + 'demais pela @ produzida. Esta coluna não soma.';
+const TITULO_CAB = 'R$ por cabeça média do período, por mês';
+
 /** O que o cabeçalho da sub-coluna explica: a unidade, o período e a ÁREA que dividiu. */
 const tituloHa = (c: ColunaPec) => {
   const ha = c.linhas?.producao.ha_medio;
@@ -379,6 +451,20 @@ function tituloDaPrimeiraColuna(colunas: readonly ColunaPec[]): string {
 const larguraRs = (c: ColunaPec) => (c.total ? W_RS_TOTAL : W_RS);
 const larguraUn = (c: ColunaPec) => (c.total ? W_HA : W_SUB);
 
+/**
+ * AS CÉLULAS DE UMA COLUNA — DRE-UNIDADES-01.
+ *
+ * ⚠ CADA CHIP MARCADO É UMA CÉLULA, na ordem fixa de `UNIDADES_PEC`, e o R$ é um chip como os
+ * outros: desmarcá-lo deixa a coluna só com as unidades. O delta não entra nessa conta — ele é
+ * "Δ R$ + Δ %" e sempre foi.
+ */
+type SlotPec = UnidadePec | 'pct';
+const slotsDaColuna = (c: ColunaPec, unidades: readonly UnidadePec[]): readonly SlotPec[] =>
+  (c.tipo === 'delta' ? ['rs', 'pct'] : c.unidade === null ? ['rs'] : unidades);
+const larguraSlot = (s: SlotPec, c: ColunaPec) => (s === 'rs' ? larguraRs(c) : larguraUn(c));
+const rotuloSlot = (s: SlotPec, c: ColunaPec) =>
+  (s === 'pct' ? 'Δ %' : s === 'rs' ? (c.tipo === 'delta' ? 'Δ R$' : 'R$') : ROTULO_UNIDADE[s]);
+
 /** As duas células congeladas do Total, na régua da linha. */
 const estiloTotalRs = { position: 'sticky' as const, left: W_FAZENDA, zIndex: 20 };
 const estiloTotalCab = { position: 'sticky' as const, left: W_FAZENDA + W_RS_TOTAL, zIndex: 20 };
@@ -398,28 +484,22 @@ const centrosDoBloco = (l: DrePecLinhas, bloco: string): readonly CentroPec[] =>
   (bloco === 'juros' ? l.centros_juros : l.centros.filter(c => c.bloco === bloco));
 
 export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
-  mostrarUnitarios = true, onAbrirLista, onAbrirDidatico, onAbrirRateio }: {
+  unidades = ['rs', 'ha'], onAbrirLista, onAbrirDidatico, onAbrirRateio }: {
   colunas: readonly ColunaPec[];
-  /** A sub-coluna R$/ha — some por inteiro quando desligada, como as da lavoura. */
-  mostrarUnitarios?: boolean;
+  /** ⚠ AS UNIDADES MARCADAS, na ordem de `UNIDADES_PEC`. O padrão é o que a tela abre: R$ e R$/ha. */
+  unidades?: readonly UnidadePec[];
   alturaCartao: number | null;
   cartaoRef: React.RefObject<HTMLDivElement>;
   onAbrirLista?: (r: RecortePec) => void;
   onAbrirDidatico?: (fazendaId: string | null, fazendaNome: string, qual: 'vpb' | 'efeito') => void;
   onAbrirRateio?: () => void;
 }) {
-  /* ⚠ DESLIGAR O "/ha" TIRA A COLUNA, não esconde o texto — é o que a lavoura faz com o /ha e /sc
-     (`mostrarUnitarios` some com as colunas no `colgroup`), e a largura da tabela acompanha. O
-     delta (`pct`) não entra nessa conta: ele não é unitário. */
-  const colunas = useMemo(
-    () => (mostrarUnitarios ? colunasCruas
-      : colunasCruas.map(c => (c.unidade === 'ha' ? { ...c, unidade: null } : c))),
-    [colunasCruas, mostrarUnitarios]);
+  const colunas = colunasCruas;
   const larguras = useMemo(() => {
     const cols: number[] = [W_FAZENDA];
-    colunas.forEach(c => { cols.push(larguraRs(c)); if (c.unidade) cols.push(larguraUn(c)); });
+    colunas.forEach(c => slotsDaColuna(c, unidades).forEach(sl => cols.push(larguraSlot(sl, c))));
     return cols;
-  }, [colunas]);
+  }, [colunas, unidades]);
   const larguraMin = larguras.reduce((a, b) => a + b, 0);
   const primeira = colunas[0];
 
@@ -452,7 +532,7 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
             {/* ⚠ O TOTAL TAMBÉM GRUDA À ESQUERDA, colado na coluna de rótulos: ele é a referência
                 contra a qual cada coluna se lê, e rolar para comparar obrigaria a decorá-lo. */}
             {colunas.map(c => (
-              <th key={c.chave} colSpan={c.unidade ? 2 : 1}
+              <th key={c.chave} colSpan={slotsDaColuna(c, unidades).length}
                 className={cn(!c.total && CINZA_CABECALHO, 'sticky top-0 px-[7px] text-center align-middle text-white',
                   c.total ? 'z-40' : 'z-20')}
                 style={c.total
@@ -469,26 +549,24 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
           <tr style={{ height: 14 }}>
             {colunas.map(c => (
               <Fragment key={c.chave}>
-                <th className={cn(!c.total && CINZA_CABECALHO, 'sticky px-[7px] text-right text-[10px] font-normal text-white',
-                  c.total ? 'z-40' : 'z-20')}
-                  style={c.total
-                    ? { top: 26, left: W_FAZENDA, backgroundColor: NAVY_TOTAL, borderLeft: BORDA_TOTAL }
-                    : { top: 26, borderLeft: '1px solid rgba(255,255,255,.22)' }}>
-                  {c.tipo === 'delta' ? 'Δ R$' : 'R$'}
-                </th>
-                {c.unidade && (
-                  /* ⚠ O `title` DIZ A ÁREA QUE DIVIDIU, e é ele que torna a sub-coluna auditável:
-                     sem o número do denominador à mão, o operador não tem como refazer a conta
-                     (Art. 19). Coluna sem área diz isso com todas as letras, em vez de calar. */
-                  <th className={cn(!c.total && CINZA_CABECALHO, 'sticky px-[7px] text-right text-[10px] font-normal text-white',
-                    c.total ? 'z-40' : 'z-20')}
-                    title={c.unidade === 'ha' ? tituloHa(c) : undefined}
+                {slotsDaColuna(c, unidades).map((sl, i) => (
+                  /* ⚠ O `title` DIZ O DIVISOR, e é ele que torna a sub-coluna auditável: sem o
+                     denominador à mão, o operador não tem como refazer a conta (Art. 19). O R$/@
+                     avisa ali que muda de base por linha e que a coluna NÃO SOMA.
+                     ⚠ SÓ AS DUAS PRIMEIRAS CÉLULAS DO TOTAL CONGELAM, como antes: congelar as
+                     quatro comeria 288px da largura visível, e a coluna Total viraria a tela. */
+                  <th key={sl}
+                    className={cn(!c.total && CINZA_CABECALHO, 'sticky px-[7px] text-right text-[10px] font-normal text-white',
+                      c.total ? 'z-40' : 'z-20')}
+                    title={sl === 'ha' ? tituloHa(c) : sl === 'arroba' ? TITULO_ARROBA : sl === 'cab' ? TITULO_CAB : undefined}
                     style={c.total
-                      ? { top: 26, left: W_FAZENDA + W_RS_TOTAL, backgroundColor: NAVY_TOTAL }
-                      : { top: 26 }}>
-                    {c.unidade === 'ha' ? 'R$/ha' : 'Δ %'}
+                      ? { top: 26, backgroundColor: NAVY_TOTAL,
+                          ...(i === 0 ? { left: W_FAZENDA, borderLeft: BORDA_TOTAL }
+                            : i === 1 ? { left: W_FAZENDA + W_RS_TOTAL } : {}) }
+                      : { top: 26, ...(i === 0 ? { borderLeft: '1px solid rgba(255,255,255,.22)' } : {}) }}>
+                    {rotuloSlot(sl, c)}
                   </th>
-                )}
+                ))}
               </Fragment>
             ))}
           </tr>
@@ -532,7 +610,7 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
                     })}
                   </tr>
                 )}
-                <LinhaPec def={def} colunas={colunas} centros={centros}
+                <LinhaPec def={def} colunas={colunas} centros={centros} unidades={unidades}
                   aberto={aberto} onAlternar={() => alternar(def.chave)}
                   onAbrirLista={onAbrirLista} onAbrirDidatico={onAbrirDidatico}
                   onAbrirRateio={onAbrirRateio} />
@@ -541,12 +619,12 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
                     altura 14. Ela não é uma linha do DRE — é a mesma linha vista noutra unidade,
                     e por isso não ganha nem cor de sinal nem clique. */}
                 {COM_PERCENTUAL.has(def.chave) && (
-                  <LinhaPercentual def={def} colunas={colunas} />
+                  <LinhaPercentual def={def} colunas={colunas} unidades={unidades} />
                 )}
 
                 {/* As filhas: um centro por linha, na régua `filha` (9px/14px, recuo 16). */}
                 {aberto && centros.map(c => (
-                  <LinhaCentro key={`${def.chave}-${c.centro}`} def={def} centro={c}
+                  <LinhaCentro key={`${def.chave}-${c.centro}`} def={def} centro={c} unidades={unidades}
                     colunas={colunas} bloco={bloco ?? ''} onAbrirLista={onAbrirLista} />
                 ))}
               </Fragment>
@@ -558,11 +636,12 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
   );
 }
 
-function LinhaPec({ def, colunas, centros, aberto, onAlternar, onAbrirLista, onAbrirDidatico, onAbrirRateio }: {
+function LinhaPec({ def, colunas, centros, aberto, unidades, onAlternar, onAbrirLista, onAbrirDidatico, onAbrirRateio }: {
   def: DefPec;
   colunas: readonly ColunaPec[];
   centros: readonly CentroPec[];
   aberto: boolean;
+  unidades: readonly UnidadePec[];
   onAlternar: () => void;
   onAbrirLista?: (r: RecortePec) => void;
   onAbrirDidatico?: (fazendaId: string | null, fazendaNome: string, qual: 'vpb' | 'efeito') => void;
@@ -630,18 +709,22 @@ function LinhaPec({ def, colunas, centros, aberto, onAlternar, onAbrirLista, onA
       </td>
 
       {colunas.map(col => {
+        const slots = slotsDaColuna(col, unidades);
+        const estiloDoSlot = (i: number) => (!col.total ? undefined
+          : i === 0 ? estiloTotalRs : i === 1 ? estiloTotalCab : undefined);
         if (!col.linhas) {
           return (
             <Fragment key={col.chave}>
-              <CelulaCarregando total={col.total} fundo={fundo} estilo={col.total ? estiloTotalRs : undefined} />
-              {col.unidade && <CelulaCarregando total={col.total} fundo={fundo} estilo={col.total ? estiloTotalCab : undefined} />}
+              {slots.map((sl, i) => (
+                <CelulaCarregando key={sl} total={col.total} fundo={fundo} estilo={estiloDoSlot(i)} />
+              ))}
             </Fragment>
           );
         }
         const v = valorNaColuna(col, def.chave);
         const cor = col.tipo === 'delta' ? corDoDelta(def, v)
           : def.corPorSinal ? corDoSinal(v) : corLinha;
-        /* ⚠ JUROS DE FAZENDA: "—" no R$ (é ausência, não zero) e nada no R$/cab. */
+        /* ⚠ JUROS DE FAZENDA: "—" no R$ (é ausência, não zero) e nada nas unidades. */
         const jurosDeFazenda = def.chave === 'juros' && col.fazendaId !== null;
         /* ⚠ SEM FECHAMENTO A CÉLULA DIZ POR QUÊ: as duas linhas de variação vêm nulas, e o
            `title` é o que separa "não mudou" de "não sei". */
@@ -649,23 +732,22 @@ function LinhaPec({ def, colunas, centros, aberto, onAlternar, onAbrirLista, onA
           && (def.chave === 'vpb_operacional' || def.chave === 'efeito_mercado')
           && (col.linhas.sem_p0 || col.linhas.sem_p1);
         const abrir = abrirDaColuna(col);
-        const unidade = col.unidade === 'ha'
-          ? (jurosDeFazenda ? '' : porHectare(v, col.linhas.producao.ha_medio))
-          : col.unidade === 'pct'
-            ? pctDelta(v, col.ref ? valorDe(col.ref, def.chave) : null)
-            : null;
         return (
           <Fragment key={col.chave}>
-            <Celula valor={v} cor={cor} destaque={def.destaque} fonte={regua.fonte}
-              bordaEsquerda={!col.total} total={col.total} fundo={fundo}
-              onAbrir={abrir}
-              estilo={col.total ? estiloTotalRs : undefined}
-              title={semFech ? 'sem fechamento' : undefined} />
-            {unidade !== null && (
-              <CelulaUnit texto={unidade} cor={cor} destaque={def.destaque}
+            {slots.map((sl, i) => (sl === 'rs' ? (
+              <Celula key={sl} valor={v} cor={cor} destaque={def.destaque} fonte={regua.fonte}
+                bordaEsquerda={!col.total && i === 0} total={col.total} fundo={fundo}
+                onAbrir={abrir}
+                estilo={estiloDoSlot(i)}
+                title={semFech ? 'sem fechamento' : undefined} />
+            ) : (
+              <CelulaUnit key={sl}
+                texto={sl === 'pct' ? pctDelta(v, col.ref ? valorDe(col.ref, def.chave) : null)
+                  : jurosDeFazenda ? '' : valorNaUnidade(sl, v, col, def.chave)}
+                cor={cor} destaque={def.destaque}
                 fonte={regua.fonte} total={col.total} fundo={fundo} onAbrir={abrir}
-                estilo={col.total ? estiloTotalCab : undefined} />
-            )}
+                estilo={estiloDoSlot(i)} />
+            )))}
           </Fragment>
         );
       })}
@@ -681,7 +763,9 @@ function LinhaPec({ def, colunas, centros, aberto, onAlternar, onAbrirLista, onA
  * mas SEM recuo — recuar sugeriria que ela é um item dentro do subtotal, e ela não é.
  * ⚠ NO DELTA ELA FICA VAZIA: "% do VBP" de uma diferença não é leitura de nada.
  */
-function LinhaPercentual({ def, colunas }: { def: DefPec; colunas: readonly ColunaPec[] }) {
+function LinhaPercentual({ def, colunas, unidades }: {
+  def: DefPec; colunas: readonly ColunaPec[]; unidades: readonly UnidadePec[];
+}) {
   const fundo = fundoDaLinha(def.destaque);
   return (
     <tr className={cn(fundo, 'font-normal')} style={{ height: 14 }}>
@@ -702,11 +786,13 @@ function LinhaPercentual({ def, colunas }: { def: DefPec; colunas: readonly Colu
               }}>
               {texto}
             </td>
-            {/* A sub-coluna fica vazia: percentual não tem por-cabeça. */}
-            {col.unidade && (
-              <td className={cn(fundo)}
-                style={col.total ? { ...estiloTotalCab, backgroundColor: FUNDO_TOTAL } : undefined} />
-            )}
+            {/* ⚠ AS CÉLULAS DE UNIDADE FICAM VAZIAS: um percentual não se divide por hectare, por
+                cabeça nem por arroba — ele já é a linha de cima noutra unidade. Vazias, não
+                ausentes: a coluna não pode encolher só nesta linha. */}
+            {slotsDaColuna(col, unidades).slice(1).map((sl, i) => (
+              <td key={sl} className={cn(fundo)}
+                style={col.total && i === 0 ? { ...estiloTotalCab, backgroundColor: FUNDO_TOTAL } : undefined} />
+            ))}
           </Fragment>
         );
       })}
@@ -723,11 +809,12 @@ function LinhaPercentual({ def, colunas }: { def: DefPec; colunas: readonly Colu
  * ⚠ E O `'(sem)'` VIAJA INTEIRO ATÉ A RPC — ele é um centro de verdade ("lançamento sem centro"),
  * não ausência. Mandar `null` no lugar dele traria o bloco todo.
  */
-function LinhaCentro({ def, centro, colunas, bloco, onAbrirLista }: {
+function LinhaCentro({ def, centro, colunas, bloco, unidades, onAbrirLista }: {
   def: DefPec;
   centro: CentroPec;
   colunas: readonly ColunaPec[];
   bloco: string;
+  unidades: readonly UnidadePec[];
   onAbrirLista?: (r: RecortePec) => void;
 }) {
   const regua = REGUA_LINHA.filha;
@@ -742,11 +829,15 @@ function LinhaCentro({ def, centro, colunas, bloco, onAbrirLista }: {
         {centro.centro === '(sem)' ? 'sem centro' : centro.centro}
       </td>
       {colunas.map(col => {
+        const slots = slotsDaColuna(col, unidades);
+        const estiloDoSlot = (i: number) => (!col.total ? undefined
+          : i === 0 ? estiloTotalRs : i === 1 ? estiloTotalCab : undefined);
         if (!col.linhas) {
           return (
             <Fragment key={col.chave}>
-              <CelulaCarregando total={col.total} fundo="bg-card" estilo={col.total ? estiloTotalRs : undefined} />
-              {col.unidade && <CelulaCarregando total={col.total} fundo="bg-card" estilo={col.total ? estiloTotalCab : undefined} />}
+              {slots.map((sl, i) => (
+                <CelulaCarregando key={sl} total={col.total} fundo="bg-card" estilo={estiloDoSlot(i)} />
+              ))}
             </Fragment>
           );
         }
@@ -767,18 +858,22 @@ function LinhaCentro({ def, centro, colunas, bloco, onAbrirLista }: {
             de: col.de, ate: col.ate, cenario: col.cenario,
           })
           : undefined;
-        const unidade = col.unidade === 'ha' ? porHectare(v, col.linhas.producao.ha_medio)
-          : col.unidade === 'pct' ? pctDelta(v, m) : null;
+        /* ⚠ A FILHA SEGUE OS MESMOS CHIPS DA MÃE, e o R$/@ dela usa a base da LINHA (o bloco a
+           que o centro pertence): um centro de custo variável se lê pela arroba produzida, como o
+           subtotal acima dele. */
         return (
           <Fragment key={col.chave}>
-            <Celula valor={v} cor={cor} fonte={regua.fonte} filha
-              bordaEsquerda={!col.total} total={col.total} fundo="bg-card" onAbrir={abrir}
-              estilo={col.total ? estiloTotalRs : undefined} />
-            {unidade !== null && (
-              <CelulaUnit texto={unidade} cor={cor} fonte={regua.fonte} filha
+            {slots.map((sl, i) => (sl === 'rs' ? (
+              <Celula key={sl} valor={v} cor={cor} fonte={regua.fonte} filha
+                bordaEsquerda={!col.total && i === 0} total={col.total} fundo="bg-card" onAbrir={abrir}
+                estilo={estiloDoSlot(i)} />
+            ) : (
+              <CelulaUnit key={sl}
+                texto={sl === 'pct' ? pctDelta(v, m) : valorNaUnidade(sl, v, col, def.chave)}
+                cor={cor} fonte={regua.fonte} filha
                 total={col.total} fundo="bg-card" onAbrir={abrir}
-                estilo={col.total ? estiloTotalCab : undefined} />
-            )}
+                estilo={estiloDoSlot(i)} />
+            )))}
           </Fragment>
         );
       })}
@@ -848,12 +943,17 @@ export function FaixaVisoesPec({ visao, onVisao, real, meta, carregandoMeta, ano
  * ⚠ ELE FICA VISÍVEL SÓ NA VISÃO x ANOS, mas OCUPA O LUGAR sempre (`invisible`, não removido): é a
  * mesma lei que mantém a coluna de ações do drill — some o conteúdo, não o espaço.
  */
-export function SeletorAnosPec({ visao, nAnos, onNAnos }: {
+export function SeletorAnosPec({ visao, nAnos, onNAnos, reservado }: {
   visao: VisaoPec; nAnos: number; onNAnos: (n: number) => void;
+  /** ⚠ NA LAVOURA ELE SÓ GUARDA O LUGAR — DRE-UNIDADES-01: sem a reserva, os chips de unidade
+      andavam ao trocar de aba, porque só a pecuária tem o seletor de anos. */
+  reservado?: boolean;
 }) {
+  const escondido = reservado || visao !== 'anos';
   return (
     <span className={cn('flex shrink-0 items-center gap-1.5 whitespace-nowrap',
-      visao !== 'anos' && 'invisible')} aria-hidden={visao !== 'anos'}>
+      escondido && 'invisible')} aria-hidden={escondido || undefined}
+      style={escondido ? { pointerEvents: 'none' } : undefined}>
       anos anteriores
       <Segmentado altura={22} valor={String(nAnos)} onEscolher={v => onNAnos(Number(v))}
         opcoes={['1', '2', '3', '4', '5'].map(n => ({ valor: n, rotulo: n }))} />

@@ -13,6 +13,7 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { formatNum, formatMoeda } from '@/lib/calculos/formatters';
 
 /** O destaque de uma linha — subtotal, sub, ou nenhum. */
@@ -217,12 +218,18 @@ export function Celula({ valor, cor, destaque, bordaEsquerda, onAbrir, filha, fu
 }
 
 /** A célula de /ha e /unidade — mais clara que a de R$, porque ela é derivada, não lançada. */
-export function CelulaUnit({ texto, cor, destaque, filha, fundo, estilo, total, onAbrir, fonte }: {
+export function CelulaUnit({ texto, cor, destaque, filha, fundo, estilo, total, bordaEsquerda, onAbrir, fonte }: {
   texto: string; cor: string; destaque?: DestaqueLinha;
   /** ⚠ O UNITÁRIO FICA UM PONTO ABAIXO DO VALOR, sempre: ele é leitura de apoio. */
   fonte?: number;
   filha?: boolean; fundo?: string; estilo?: CSSProperties;
   total?: boolean;
+  /**
+   * ⚠ A DIVISA DO GRUPO DE COLUNAS — DRE-UNIDADES-01. Ela morava só na célula de R$, que era
+   * sempre a primeira; com os chips, o R$ pode estar desmarcado e a primeira célula da cultura
+   * passa a ser uma unidade. Sem isso, as colunas de duas culturas encostariam sem divisa.
+   */
+  bordaEsquerda?: boolean;
   /** §5: na raiz, /ha e /sc abrem a mesma lista que a célula de R$ — é a mesma linha. */
   onAbrir?: () => void;
 }) {
@@ -233,6 +240,7 @@ export function CelulaUnit({ texto, cor, destaque, filha, fundo, estilo, total, 
       title={clicavel ? 'ver os lançamentos' : undefined}
       className={cn('whitespace-nowrap px-[7px] py-px text-right text-[10px] tabular-nums',
       total ? 'font-medium' : sub ? 'bg-muted' : 'bg-muted/40',
+      bordaEsquerda && !total && 'border-l border-border/60',
       filha ? 'border-t border-dashed border-border/60' : '',
       clicavel && 'cursor-pointer hover:underline hover:decoration-dotted',
       /* ⚠ 70% NAS LINHAS COMUNS, 100% NOS SUBTOTAIS: o unitário é leitura de apoio, e ao lado do
@@ -246,6 +254,48 @@ export function CelulaUnit({ texto, cor, destaque, filha, fundo, estilo, total, 
         ...(total ? { backgroundColor: FUNDO_TOTAL } : {}), ...estilo }}>
       {texto}
     </td>
+  );
+}
+
+/**
+ * OS CHIPS DE UNIDADE — DRE-UNIDADES-01, e são os mesmos nas duas abas do DRE.
+ *
+ * ⚠ SELEÇÃO MÚLTIPLA, COM UM PISO DE UM: cada chip marcado é uma coluna por grupo, e clicar no
+ * ÚLTIMO marcado não faz nada — uma grade sem nenhuma unidade não é leitura de coisa alguma. O
+ * botão não fica desabilitado de propósito: desabilitado ensina "aqui não se clica", e o que se
+ * quer ensinar é "este é o último". Quem explica é o `title`.
+ * ⚠ A MARCAÇÃO É O NAVY DA CASA (regra permanente do CLAUDE.md), e não o cinza do `ToggleGroup`
+ * do shadcn: selecionado = `bg-primary` + texto branco, como o `Segmentado` e o item ativo do
+ * menu. O componente é o do shadcn; só a marcação veste a régua daqui.
+ */
+export function ChipsUnidade<T extends string>({ valor, onEscolher, opcoes }: {
+  valor: readonly T[];
+  onEscolher: (v: readonly T[]) => void;
+  opcoes: readonly { valor: T; rotulo: string }[];
+}) {
+  return (
+    <ToggleGroup type="multiple" className="gap-1" value={[...valor]}
+      onValueChange={(v: string[]) => {
+        /* ⚠ O RADIX JÁ DEVOLVE A LISTA NOVA: se ela vier vazia, o clique foi no último marcado e
+           a resposta é não mexer em nada. */
+        if (v.length === 0) return;
+        const ordenada = opcoes.map(o => o.valor).filter(u => v.includes(u));
+        onEscolher(ordenada);
+      }}>
+      {opcoes.map(o => {
+        const marcado = valor.includes(o.valor);
+        const ultimo = marcado && valor.length === 1;
+        return (
+          <ToggleGroupItem key={o.valor} value={o.valor} aria-label={o.rotulo}
+            title={ultimo ? 'Ao menos uma unidade fica visível' : o.rotulo}
+            className={cn('h-[22px] rounded-md border border-border/60 px-1.5 text-[10px] font-normal',
+              'data-[state=on]:bg-primary data-[state=on]:text-primary-foreground',
+              'data-[state=off]:bg-card data-[state=off]:text-muted-foreground hover:bg-muted')}>
+            {o.rotulo}
+          </ToggleGroupItem>
+        );
+      })}
+    </ToggleGroup>
   );
 }
 

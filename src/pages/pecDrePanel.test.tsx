@@ -105,6 +105,71 @@ const indiceDe = (rot: string) => rotulos().findIndex(r => r.startsWith(rot));
 const linhaDe = (rot: string) =>
   linhasDaTabela().find(tr => ((tr.cells[0]?.textContent ?? '').trim()).startsWith(rot));
 
+/* ══════════════ OS CHIPS DE UNIDADE — DRE-UNIDADES-01 ══════════════ */
+
+describe('as unidades da pecuária', () => {
+  /* ⚠ O FIXTURE SEPARA OS QUATRO DIVISORES DE PROPÓSITO — área 1.000 ha, 500 cabeças médias, 12
+     meses, 2.000 @ vendidas, 1.000 @ produzidas e 100 @ compradas. Com números iguais, um teste
+     passaria verde dividindo pela base errada, que é exatamente o defeito que o R$/@ pode ter. */
+  const BASES: DrePecuaria = {
+    ...DRE,
+    fazendas: [],
+    total: linhas({
+      vendas: 1000000, custo_variavel: 400000, reposicao: 50000,
+      patrimonio: { v_ini_p0: 0, v_fim_p0: 0, v_fim_p1: 0, cab_ini: 0, cab_fim: 0, cab_media: 500 },
+      producao: { ha_medio: 1000, at_produzida: 1000, at_desfrutada: 2000, cab_desfrutada: null,
+        at_comprada: 100, cab_comprada: null },
+    }),
+  };
+  const montarCom = (unidades: readonly ('rs' | 'ha' | 'cab' | 'arroba')[], dre = BASES) => render(
+    <PecDrePanel colunas={colunasDaVisao({ visao: 'global', de: '2025-07', ate: '2026-06',
+      real: dre, meta: null, carregandoMeta: false, anos: [] })}
+      alturaCartao={null} cartaoRef={{ current: null }} unidades={unidades} />,
+  );
+
+  it('R$/cab/mês divide pela cabeça média e pelos meses da coluna', () => {
+    montarCom(['rs', 'cab']);
+    /* 1.000.000 / 500 cab / 12 meses = 166,67. Sem os meses daria 2.000,00. */
+    expect(linhaDe('Vendas')?.cells[2]?.textContent).toBe('166,67');
+  });
+
+  it('R$/@ usa a @ VENDIDA na receita, a COMPRADA na reposição e a PRODUZIDA no custo', () => {
+    montarCom(['rs', 'arroba']);
+    /* Receita: 1.000.000 / 2.000 @ vendidas = 500,00 (pela produzida daria 1.000,00). */
+    expect(linhaDe('Vendas')?.cells[2]?.textContent).toBe('500,00');
+    /* Reposição: 50.000 / 100 @ compradas = 500,00. */
+    expect(linhaDe('(−) Reposição')?.cells[2]?.textContent).toBe('500,00');
+    /* Custo: 400.000 / 1.000 @ produzidas = 400,00 (pela vendida daria 200,00). */
+    expect(linhaDe('(−) Custo variável')?.cells[2]?.textContent).toBe('400,00');
+  });
+
+  /* ⚠ A @ PRODUZIDA DA META VEM NULA DA RPC (medido em 22/09: `prod` só é preenchida no
+     realizado), e emprestar a do realizado faria o custo da meta se ler por uma produção que não é
+     dela. Traço é a resposta honesta. */
+  it('sem @ produzida, o custo sai em traço — nunca com a base de outra coluna', () => {
+    const SEM_PRODUZIDA: DrePecuaria = {
+      ...BASES,
+      total: linhas({ ...BASES.total, producao: { ...BASES.total.producao, at_produzida: null } }),
+    };
+    montarCom(['rs', 'arroba'], SEM_PRODUZIDA);
+    expect(linhaDe('(−) Custo variável')?.cells[2]?.textContent).toBe('—');
+    /* A receita continua, porque a base dela (@ vendida) existe. */
+    expect(linhaDe('Vendas')?.cells[2]?.textContent).toBe('500,00');
+  });
+
+  it('cada chip marcado é uma coluna, na ordem fixa, e o R$ pode ficar de fora', () => {
+    const { unmount } = montarCom(['rs', 'ha']);
+    expect([...document.querySelectorAll('colgroup col')]).toHaveLength(3);
+    unmount();
+    montarCom(['ha', 'cab', 'arroba']);
+    /* Sem o R$: rótulo + três unidades. */
+    const cols = [...document.querySelectorAll('colgroup col')];
+    expect(cols).toHaveLength(4);
+    expect(document.body.textContent).toContain('R$/ha');
+    expect(linhaDe('Vendas')?.cells[1]?.textContent).toBe('1.000,00');
+  });
+});
+
 /* ══════════════ O RATEIO ADMINISTRATIVO — DRE-RATEIO-FIX-01 ══════════════ */
 
 describe('o rateio administrativo da pecuária', () => {

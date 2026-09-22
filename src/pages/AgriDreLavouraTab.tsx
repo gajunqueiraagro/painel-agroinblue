@@ -32,7 +32,7 @@ import { CINZA_CABECALHO } from '@/lib/idiomaVisual';
 import {
   W_RS, W_HA, W_UN, W_RS_TOTAL, VERDE, VERDE_70, VERMELHO, VERMELHO_70, AMBAR,
   NAVY_TOTAL, BORDA_TOTAL, FUNDO_TOTAL, traco, corDoSinal, numeroDaCelula, porUnidade,
-  Etiqueta, Celula, CelulaUnit, Caixas, PontoRateio, REGUA_LINHA, tipoDaLinha, fundoDaLinha,
+  Etiqueta, Celula, CelulaUnit, Caixas, ChipsUnidade, PontoRateio, REGUA_LINHA, tipoDaLinha, fundoDaLinha,
   type CaixaFaixa, type DestaqueLinha,
 } from '@/components/agri/dreGrade';
 import { supabase } from '@/integrations/supabase/client';
@@ -58,6 +58,7 @@ import { PecPatrimonioModal } from '@/components/agri/PecPatrimonioModal';
 import { PecRateioAdmModal } from '@/components/agri/PecRateioAdmModal';
 import {
   PecDrePanel, FaixaVisoesPec, SeletorAnosPec, colunasDaVisao, lerVisaoPec, escreverVisaoPec, lerNAnosPec,
+  UNIDADES_PEC, ROTULO_UNIDADE, type UnidadePec,
   escreverNAnosPec, N_ANOS_PADRAO, type VisaoPec,
 } from '@/pages/PecDrePanel';
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -93,6 +94,20 @@ import {
  */
 /* ⚠ 200px — DRE-PADRAO-01a-2: a mesma da pecuária, para as duas tabelas começarem no mesmo x. */
 const W_CULTURA = 200;
+
+/**
+ * AS UNIDADES DA LAVOURA — DRE-UNIDADES-01, na ordem fixa em que as colunas saem.
+ *
+ * ⚠ `un` É "SACA OU TONELADA", e o símbolo é da CULTURA, não da tela: mandioca fecha em tonelada e
+ * amendoim em saca (ver `simboloDaUnidade`). Um rótulo fixo faria a coluna da mandioca mentir
+ * sobre a própria grandeza — por isso o chip diz "R$/sc ou t" e o cabeçalho de cada cultura diz o
+ * símbolo dela.
+ */
+const UNIDADES_LAV = ['rs', 'ha', 'un'] as const;
+type UnidadeLav = typeof UNIDADES_LAV[number];
+const ROTULO_UNIDADE_LAV: Record<UnidadeLav, string> = {
+  rs: 'R$', ha: 'R$/ha', un: 'R$/sc ou t',
+};
 
 /* ⚠ OS DOIS MÍNIMOS DA GRADE DE DUAS COLUNAS (§3), medidos: abaixo de 380px os cartões perdem a
    coluna de número e os valores quebram linha; abaixo de 450px a tabela não mostra nem a coluna
@@ -305,7 +320,10 @@ export function AgriDreLavouraTab() {
   /* ⚠ TRÊS CONTROLES DE APRESENTAÇÃO, e nenhum deles refaz consulta: o payload já traz `direto`,
      `rateado` e `valor` em cada linha. Trocar de modo é escolher qual ler. */
   const [rateioDentro, setRateioDentro] = useState(false);
-  const [mostrarUnitarios, setMostrarUnitarios] = useState(true);
+  /* ⚠ AS UNIDADES SÃO ESCOLHA MÚLTIPLA — DRE-UNIDADES-01, e cada aba tem a sua lista: a lavoura
+     fecha em saca ou tonelada, a pecuária em cabeça e arroba. As duas abrem com R$ e R$/ha. */
+  const [unidadesLav, setUnidadesLav] = useState<readonly UnidadeLav[]>(['rs', 'ha']);
+  const [unidadesPec, setUnidadesPec] = useState<readonly UnidadePec[]>(['rs', 'ha']);
   const [ampliado, setAmpliado] = useState(false);
   const [abertos, setAbertos] = useState<Record<string, boolean>>({});
   /* ⚠ A ABA É ESTADO DE TELA, não de URL: ela não muda o QUE se vê (a safra e a cultura mudam),
@@ -536,7 +554,7 @@ export function AgriDreLavouraTab() {
     return l.direto ?? l.valor;
   };
 
-  const colsPorCultura = mostrarUnitarios ? 3 : 1;
+  const colsPorCultura = unidadesLav.length;
 
   /** O que aparece no cartão: a grade só some quando o drill está em Produção ou Histórico. */
   const mostraGrade = !culturaAberta || aba === 'resultado' || ampliado;
@@ -587,7 +605,7 @@ export function AgriDreLavouraTab() {
     medir();
     window.addEventListener('resize', medir);
     return () => window.removeEventListener('resize', medir);
-  }, [ampliado, culturaAberta, aba, mostrarUnitarios, rateioDentro, dre]);
+  }, [ampliado, culturaAberta, aba, unidadesLav, unidadesPec, rateioDentro, dre]);
 
 
   if (!ehPec && !dre && !carregando && !erro) return null;
@@ -791,15 +809,29 @@ export function AgriDreLavouraTab() {
                   { valor: 'dentro', rotulo: 'Com rateio nos centros' },
                 ]} />
               </span>
-              <span className="flex items-center gap-1">
-                <Checkbox checked={mostrarUnitarios}
-                  onCheckedChange={c => setMostrarUnitarios(c === true)} />
-                <Label className="text-[10px] font-normal">{ehPec ? '/ha' : '/ha e /sc'}</Label>
+              {/* ⚠ OS CHIPS DE UNIDADE — DRE-UNIDADES-01, e são seleção MÚLTIPLA: cada um marcado
+                  é uma coluna a mais em cada grupo. O antigo "/ha e /sc" era um interruptor só
+                  para duas unidades, e não havia como ver a saca sem o hectare.
+                  ⚠ O R$ TAMBÉM DESMARCA, e é o ponto: quem compara produtividade entre culturas
+                  quer a tela inteira em R$/ha. O que não se pode é ficar sem nenhuma — o último
+                  marcado não responde ao clique, e o `title` diz por quê. */}
+              {/* ⚠ SLOT DE 192px E CONTEÚDO À ESQUERDA: a pecuária tem quatro chips e a lavoura
+                  três, e sem o slot o grupo inteiro (ancorado à direita da linha) começava em x
+                  diferente — medido em 22/09: 717 na pecuária contra 771 na lavoura. 192 é a
+                  largura do maior dos dois grupos, medida na tela. */}
+              <span className="flex w-[192px] shrink-0 items-center justify-start">
+                {ehPec
+                  ? <ChipsUnidade valor={unidadesPec} onEscolher={setUnidadesPec}
+                      opcoes={UNIDADES_PEC.map(u => ({ valor: u, rotulo: ROTULO_UNIDADE[u] }))} />
+                  : <ChipsUnidade valor={unidadesLav} onEscolher={setUnidadesLav}
+                      opcoes={UNIDADES_LAV.map(u => ({ valor: u, rotulo: ROTULO_UNIDADE_LAV[u] }))} />}
               </span>
               {/* ⚠ O SELETOR DE ANOS VEIO PARA CÁ — DRE-PADRAO-01a: na faixa de caixas ele roubava
                   123px da grade e deixava as caixas da pecuária mais estreitas que as da lavoura.
-                  Fora do x Anos ele fica invisível, mas ocupa o lugar. */}
-              {ehPec && <SeletorAnosPec visao={visaoPec} nAnos={nAnosPec} onNAnos={setNAnosPec} />}
+                  ⚠ E O ESPAÇO DELE É RESERVADO NAS DUAS ABAS — DRE-UNIDADES-01: só a pecuária o
+                  tem, e sem a reserva os chips andavam 176px ao trocar de aba. */}
+              <SeletorAnosPec visao={ehPec ? visaoPec : 'global'} nAnos={nAnosPec}
+                onNAnos={setNAnosPec} reservado={!ehPec} />
             </span>          </div>
           )}
           </div>
@@ -846,7 +878,7 @@ export function AgriDreLavouraTab() {
           </div>
         ) : (
           <PecDrePanel colunas={colunasPec} alturaCartao={alturaCartao} cartaoRef={cartao}
-            mostrarUnitarios={mostrarUnitarios}
+            unidades={unidadesPec}
             onAbrirLista={setRecortePec}
             onAbrirDidatico={(fazendaId, nome, qual) => setDidatico({ fazendaId, nome, qual })}
             onAbrirRateio={() => setRateioPecAberto(true)} />
@@ -936,7 +968,7 @@ export function AgriDreLavouraTab() {
           <Grade dre={dre} culturas={culturaAberta ? [culturaAberta] : culturas}
             semTotal={!!culturaAberta}
             abertos={abertos} setAbertos={setAbertos}
-            rateioDentro={rateioDentro} mostrarUnitarios={mostrarUnitarios}
+            rateioDentro={rateioDentro} unidades={unidadesLav}
             colsPorCultura={colsPorCultura} centrosDoBloco={centrosDoBloco}
             valorDaLinha={valorDaLinha} abrir={abrir}
             onAbrirCultura={culturaAberta ? undefined : abrirCultura}
@@ -1133,7 +1165,7 @@ interface PropsGrade {
   abertos: Record<string, boolean>;
   setAbertos: (f: (a: Record<string, boolean>) => Record<string, boolean>) => void;
   rateioDentro: boolean;
-  mostrarUnitarios: boolean;
+  unidades: readonly UnidadeLav[];
   colsPorCultura: number;
   centrosDoBloco: (b: Bloco) => DreCentro[];
   valorDaLinha: (l: DreValor, def: DefLinha) => number | null;
@@ -1177,7 +1209,7 @@ const DIVISOR = '1px solid rgba(255,255,255,.22)';
  * teste consegue travar sem subir a aplicação inteira com sessão e dados.
  */
 export function Grade({
-  dre, culturas, abertos, setAbertos, rateioDentro, mostrarUnitarios,
+  dre, culturas, abertos, setAbertos, rateioDentro, unidades,
   colsPorCultura, centrosDoBloco, valorDaLinha, abrir, semTotal, onAbrirCultura, onDrill,
 }: PropsGrade) {
   /* ⚠ A RÉGUA NASCE UMA VEZ E SERVE AO `<colgroup>` E À LARGURA MÍNIMA. Escrever as larguras no
@@ -1186,17 +1218,20 @@ export function Grade({
   const larguras = useMemo(() => {
     const cols: number[] = [W_CULTURA];
     culturas.forEach(() => {
-      cols.push(W_RS);
-      if (mostrarUnitarios) cols.push(W_HA, W_UN);
+      if (unidades.includes('rs')) cols.push(W_RS);
+      if (unidades.includes('ha')) cols.push(W_HA);
+      if (unidades.includes('un')) cols.push(W_UN);
     });
     if (!semTotal) {
-      cols.push(W_RS_TOTAL);
-      if (mostrarUnitarios) cols.push(W_HA);
+      if (unidades.includes('rs')) cols.push(W_RS_TOTAL);
+      if (unidades.includes('ha')) cols.push(W_HA);
     }
     return cols;
-  }, [culturas, mostrarUnitarios, semTotal]);
+  }, [culturas, unidades, semTotal]);
   const larguraMin = larguras.reduce((a, b) => a + b, 0);
-  const colsTotal = mostrarUnitarios ? 2 : 1;
+  /* ⚠ A COLUNA TOTAL NÃO TEM /sc: a safra inteira mistura culturas, e somar sacas de amendoim com
+     toneladas de mandioca não é número. Ela leva o R$ e o R$/ha que estiverem marcados. */
+  const colsTotal = unidades.filter(u => u !== 'un').length;
 
   const alterna = (k: string) => setAbertos(a => ({ ...a, [k]: !a[k] }));
 
@@ -1263,14 +1298,17 @@ export function Grade({
         </tr>
         <tr style={{ height: 14 }}>
           {culturas.map(c => (
-            <ThUnidade key={c.cultura} cultura={c.cultura} mostrarUnitarios={mostrarUnitarios} />
+            <ThUnidade key={c.cultura} cultura={c.cultura} unidades={unidades} />
           ))}
           {!semTotal && <>
-            <th className="sticky z-20 px-[7px] text-right text-[10px] font-normal text-white"
-              style={{ top: 26, backgroundColor: NAVY_TOTAL, borderLeft: BORDA_TOTAL }}>R$</th>
-            {mostrarUnitarios && (
+            {unidades.includes('rs') && (
               <th className="sticky z-20 px-[7px] text-right text-[10px] font-normal text-white"
-                style={{ top: 26, backgroundColor: NAVY_TOTAL }}>R$/ha</th>
+                style={{ top: 26, backgroundColor: NAVY_TOTAL, borderLeft: BORDA_TOTAL }}>R$</th>
+            )}
+            {unidades.includes('ha') && (
+              <th className="sticky z-20 px-[7px] text-right text-[10px] font-normal text-white"
+                style={{ top: 26, backgroundColor: NAVY_TOTAL,
+                  ...(unidades.includes('rs') ? {} : { borderLeft: BORDA_TOTAL }) }}>R$/ha</th>
             )}
           </>}
         </tr>
@@ -1299,12 +1337,12 @@ export function Grade({
                 </tr>
               )}
               <LinhaDre def={def} dre={dre} culturas={culturas} rateioDentro={rateioDentro}
-                mostrarUnitarios={mostrarUnitarios} aberto={!!(def.bloco && abertos[def.bloco])}
+                unidades={unidades} aberto={!!(def.bloco && abertos[def.bloco])}
                 onAlternar={def.bloco ? () => alterna(def.bloco as string) : undefined}
                 valorDaLinha={valorDaLinha} abrir={abrir} semTotal={semTotal} onDrill={onDrill} />
               {filhas.map(ct => (
                 <LinhaCentro key={`${def.chave}:${ct.centro}`} centro={ct} culturas={culturas}
-                  rateioDentro={rateioDentro} mostrarUnitarios={mostrarUnitarios}
+                  rateioDentro={rateioDentro} unidades={unidades}
                   areaTotal={dre.total.area_ha} abrir={abrir} semTotal={semTotal} />
               ))}
               {/* ⚠ A ÚLTIMA FILHA É O RATEIO DO GRUPO (§2), e ela existe para a conta fechar à
@@ -1322,7 +1360,7 @@ export function Grade({
                 && BLOCOS_SEM_LINHA_PROPRIA.includes(def.bloco)
                 && culturas.some(c => (c.linhas[def.chave].rateado ?? 0) > 0) && (
                 <LinhaRateioDoGrupo key={`${def.chave}:rateio`} chave={def.chave} dre={dre}
-                  culturas={culturas} mostrarUnitarios={mostrarUnitarios} semTotal={semTotal}
+                  culturas={culturas} unidades={unidades} semTotal={semTotal}
                   abrir={abrir} />
               )}
             </Fragment>
@@ -1334,19 +1372,27 @@ export function Grade({
 }
 
 /** A segunda linha do cabeçalho de UMA cultura — separada porque a unidade é dela, não da tela. */
-function ThUnidade({ cultura, mostrarUnitarios }: { cultura: string; mostrarUnitarios: boolean }) {
+function ThUnidade({ cultura, unidades }: { cultura: string; unidades: readonly UnidadeLav[] }) {
   const cls = cn(CINZA_CABECALHO, 'sticky z-20 px-[7px] text-right text-[10px] font-normal text-white');
+  /* ⚠ A BORDA DE DIVISÃO É DA PRIMEIRA CÉLULA QUE EXISTIR: com o R$ desmarcado, ela passa para a
+     unidade seguinte — senão o grupo de colunas da cultura perderia a divisa. */
+  const primeira = unidades[0];
   return (
     <>
-      <th className={cls} style={{ top: 26, borderLeft: DIVISOR }}>R$</th>
-      {mostrarUnitarios && <>
-        <th className={cls} style={{ top: 26 }}>R$/ha</th>
+      {unidades.includes('rs') && (
+        <th className={cls} style={{ top: 26, borderLeft: DIVISOR }}>R$</th>
+      )}
+      {unidades.includes('ha') && (
+        <th className={cls} style={{ top: 26, ...(primeira === 'ha' ? { borderLeft: DIVISOR } : {}) }}>R$/ha</th>
+      )}
+      {unidades.includes('un') && <>
         {/* ⚠ A UNIDADE É DA CULTURA, não da tela: mandioca fecha em tonelada e amendoim em saca,
             e um "/sc" fixo faria a coluna da mandioca mentir sobre a própria grandeza.
             ⚠ E É O SÍMBOLO CURTO: a coluna tem 60px e "R$/sc 25kg" quebrava em duas linhas,
             empurrando a segunda linha do cabeçalho para além dos 14px. O peso foi para o
             `title`, onde não custa largura. */}
-        <th className={cls} style={{ top: 26 }} title={descricaoDaUnidade(cultura)}>
+        <th className={cls} style={{ top: 26, ...(primeira === 'un' ? { borderLeft: DIVISOR } : {}) }}
+          title={descricaoDaUnidade(cultura)}>
           <span className="whitespace-nowrap">R$/{simboloDaUnidade(cultura)}</span>
         </th>
       </>}
@@ -1362,11 +1408,11 @@ function ThUnidade({ cultura, mostrarUnitarios }: { cultura: string; mostrarUnit
 
 
 function LinhaDre({
-  def, dre, culturas, rateioDentro, mostrarUnitarios, aberto, onAlternar, valorDaLinha, abrir,
+  def, dre, culturas, rateioDentro, unidades, aberto, onAlternar, valorDaLinha, abrir,
   semTotal, onDrill,
 }: {
   def: DefLinha; dre: DreLavoura; culturas: DreCultura[];
-  rateioDentro: boolean; mostrarUnitarios: boolean;
+  rateioDentro: boolean; unidades: readonly UnidadeLav[];
   aberto: boolean; onAlternar?: () => void;
   valorDaLinha: (l: DreValor, def: DefLinha) => number | null;
   abrir: AbrirRateio;
@@ -1449,14 +1495,22 @@ function LinhaDre({
             {/* ⚠ AS TRÊS CÉLULAS ABREM A MESMA LISTA (§5), e não só a de R$: são a MESMA linha
                 lida em três unidades. Clicar em "16.046,42 /ha" e nada acontecer ensina que a
                 tabela é inerte — e o operador para de tentar na célula que funcionaria. */}
-            <Celula valor={v} cor={cor} destaque={def.destaque} fonte={regua.fonte}
-              bordaEsquerda onAbrir={aoAbrir} />
-            {mostrarUnitarios && <>
+            {/* ⚠ CADA CHIP MARCADO É UMA CÉLULA — DRE-UNIDADES-01. A divisa do grupo de colunas
+                vai na PRIMEIRA que existir: com o R$ desmarcado, ela passa para o R$/ha. */}
+            {unidades.includes('rs') && (
+              <Celula valor={v} cor={cor} destaque={def.destaque} fonte={regua.fonte}
+                bordaEsquerda onAbrir={aoAbrir} />
+            )}
+            {unidades.includes('ha') && (
               <CelulaUnit texto={porUnidade(v, c.area_ha)} cor={cor} destaque={def.destaque}
+                bordaEsquerda={unidades[0] === 'ha'}
                 fonte={regua.fonte} onAbrir={aoAbrir} />
+            )}
+            {unidades.includes('un') && (
               <CelulaUnit texto={porUnidade(v, c.producao)} cor={cor} destaque={def.destaque}
+                bordaEsquerda={unidades[0] === 'un'}
                 fonte={regua.fonte} onAbrir={aoAbrir} />
-            </>}
+            )}
           </Fragment>
         );
       })}
@@ -1468,9 +1522,11 @@ function LinhaDre({
           estava lendo como mais um grupo de cultura. O fundo é do `style` e não de classe porque
           precisa perder para a zebra e para o `bg-muted` do subtotal, que vêm na linha. */}
       {!semTotal && <>
-        <Celula valor={valorDaLinha(tot, def)} cor={def.corPorSinal ? corDoSinal(valorDaLinha(tot, def)) : corLinha}
-          destaque={def.destaque} fonte={regua.fonte} total />
-        {mostrarUnitarios && (
+        {unidades.includes('rs') && (
+          <Celula valor={valorDaLinha(tot, def)} cor={def.corPorSinal ? corDoSinal(valorDaLinha(tot, def)) : corLinha}
+            destaque={def.destaque} fonte={regua.fonte} total />
+        )}
+        {unidades.includes('ha') && (
           <CelulaUnit texto={porUnidade(valorDaLinha(tot, def), dre.total.area_ha)}
             cor={def.corPorSinal ? corDoSinal(valorDaLinha(tot, def)) : corLinha}
             destaque={def.destaque} fonte={regua.fonte}
@@ -1500,11 +1556,11 @@ const BLOCO_NO_TITULO: Partial<Record<ChaveLinha, string>> = {
   investimento: 'Investimento',
 };
 
-function LinhaRateioDoGrupo({ chave, dre, culturas, mostrarUnitarios, semTotal, abrir }: {
+function LinhaRateioDoGrupo({ chave, dre, culturas, unidades, semTotal, abrir }: {
   chave: ChaveLinha;
   dre: DreLavoura;
   culturas: DreCultura[];
-  mostrarUnitarios: boolean;
+  unidades: readonly UnidadeLav[];
   semTotal?: boolean;
   abrir: AbrirRateio;
 }) {
@@ -1526,25 +1582,33 @@ function LinhaRateioDoGrupo({ chave, dre, culturas, mostrarUnitarios, semTotal, 
         const r = c.linhas[chave].rateado ?? 0;
         return (
           <Fragment key={c.cultura}>
-            <Celula filha valor={r} cor={VERMELHO} fonte={REGUA_LINHA.filha.fonte}
-              bordaEsquerda fundo="bg-card"
-              onAbrir={tipo ? () => abrir(tipo, null, rotulo, c.cultura) : undefined} />
-            {mostrarUnitarios && <>
+            {unidades.includes('rs') && (
+              <Celula filha valor={r} cor={VERMELHO} fonte={REGUA_LINHA.filha.fonte}
+                bordaEsquerda fundo="bg-card"
+                onAbrir={tipo ? () => abrir(tipo, null, rotulo, c.cultura) : undefined} />
+            )}
+            {unidades.includes('ha') && (
               <CelulaUnit filha texto={porUnidade(r, c.area_ha)} cor={VERMELHO}
+                bordaEsquerda={unidades[0] === 'ha'}
                 fonte={REGUA_LINHA.filha.fonte} fundo="bg-card"
                 onAbrir={tipo ? () => abrir(tipo, null, rotulo, c.cultura) : undefined} />
+            )}
+            {unidades.includes('un') && (
               <CelulaUnit filha texto={porUnidade(r, c.producao)} cor={VERMELHO}
+                bordaEsquerda={unidades[0] === 'un'}
                 fonte={REGUA_LINHA.filha.fonte} fundo="bg-card"
                 onAbrir={tipo ? () => abrir(tipo, null, rotulo, c.cultura) : undefined} />
-            </>}
+            )}
           </Fragment>
         );
       })}
 
       {!semTotal && <>
-        <Celula filha valor={totalRateado} cor={VERMELHO} fonte={REGUA_LINHA.filha.fonte}
-          total fundo="bg-card" />
-        {mostrarUnitarios && (
+        {unidades.includes('rs') && (
+          <Celula filha valor={totalRateado} cor={VERMELHO} fonte={REGUA_LINHA.filha.fonte}
+            total fundo="bg-card" />
+        )}
+        {unidades.includes('ha') && (
           <CelulaUnit filha texto={porUnidade(totalRateado, dre.total.area_ha)} cor={VERMELHO}
             fonte={REGUA_LINHA.filha.fonte} total fundo="bg-card" />
         )}
@@ -1554,9 +1618,9 @@ function LinhaRateioDoGrupo({ chave, dre, culturas, mostrarUnitarios, semTotal, 
 }
 
 /** Uma filha: o centro de custo dentro do grupo aberto. */
-function LinhaCentro({ centro, culturas, rateioDentro, mostrarUnitarios, areaTotal, abrir, semTotal }: {
+function LinhaCentro({ centro, culturas, rateioDentro, unidades, areaTotal, abrir, semTotal }: {
   centro: DreCentro; culturas: DreCultura[];
-  rateioDentro: boolean; mostrarUnitarios: boolean; areaTotal: number; abrir: AbrirRateio;
+  rateioDentro: boolean; unidades: readonly UnidadeLav[]; areaTotal: number; abrir: AbrirRateio;
   semTotal?: boolean;
 }) {
   /* ⚠ SOLO DESTACADO, e só ele: é a formação de área — o dinheiro que vira terra plantável e
@@ -1594,23 +1658,29 @@ function LinhaCentro({ centro, culturas, rateioDentro, mostrarUnitarios, areaTot
                 ficavam em cinza herdado, e Infraestrutura com 5,9 milhões lia como nota de
                 rodapé ao lado dos custeios vermelhos. Investimento é dinheiro que saiu.
                 ⚠ O FUNDO ÂMBAR DO SOLO NÃO MUDA — ele marca a formação de área, não o sinal. */}
-            <Celula filha valor={v} cor={VERMELHO} fonte={regua.fonte}
-              bordaEsquerda fundo={fundo} estilo={estilo}
-              onAbrir={() => abrir(tipo, centro.centro, centro.centro, c.cultura)} />
-            {mostrarUnitarios && <>
+            {unidades.includes('rs') && (
+              <Celula filha valor={v} cor={VERMELHO} fonte={regua.fonte}
+                bordaEsquerda fundo={fundo} estilo={estilo}
+                onAbrir={() => abrir(tipo, centro.centro, centro.centro, c.cultura)} />
+            )}
+            {unidades.includes('ha') && (
               <CelulaUnit filha texto={porUnidade(v, c.area_ha)} cor={VERMELHO} fonte={regua.fonte}
-                fundo={fundo} estilo={estilo} />
+                bordaEsquerda={unidades[0] === 'ha'} fundo={fundo} estilo={estilo} />
+            )}
+            {unidades.includes('un') && (
               <CelulaUnit filha texto={porUnidade(v, c.producao)} cor={VERMELHO} fonte={regua.fonte}
-                fundo={fundo} estilo={estilo} />
-            </>}
+                bordaEsquerda={unidades[0] === 'un'} fundo={fundo} estilo={estilo} />
+            )}
           </Fragment>
         );
       })}
 
       {!semTotal && <>
-        <Celula filha valor={totalCentro} cor={VERMELHO} fonte={regua.fonte}
-          total fundo={fundo} estilo={estilo} />
-        {mostrarUnitarios && (
+        {unidades.includes('rs') && (
+          <Celula filha valor={totalCentro} cor={VERMELHO} fonte={regua.fonte}
+            total fundo={fundo} estilo={estilo} />
+        )}
+        {unidades.includes('ha') && (
           <CelulaUnit filha texto={porUnidade(totalCentro, areaTotal)} cor={VERMELHO}
             fonte={regua.fonte} total fundo={fundo} estilo={estilo} />
         )}
