@@ -25,8 +25,8 @@ import { cn } from '@/lib/utils';
 import { CINZA_CABECALHO } from '@/lib/idiomaVisual';
 import { formatNum } from '@/lib/calculos/formatters';
 import {
-  W_RS, W_HA, W_RS_TOTAL, larguraDoGrupo, FAIXA_TOTAL, VERDE, VERDE_70, VERMELHO, VERMELHO_70, NAVY_TOTAL, BORDA_TOTAL, FUNDO_TOTAL, traco,
-  corDoSinal, numeroDaCelula, Celula, CelulaUnit, Etiqueta, Caixas, REGUA_LINHA, tipoDaLinha,
+  W_RS, W_HA, W_RS_TOTAL, larguraDoGrupo, FAIXA_TOTAL, VERDE, VERDE_70, VERMELHO, VERMELHO_70, NAVY_TOTAL, BORDA_TOTAL, BORDA_TOTAL_CAB, FUNDO_TOTAL, traco,
+  corDoSinal, corDoTotal, corDoApoio, marcadorDoTotal, Marcador, numeroDaCelula, Celula, CelulaUnit, Etiqueta, Caixas, REGUA_LINHA, tipoDaLinha,
   fundoDaLinha,
   type CaixaFaixa,
 } from '@/components/agri/dreGrade';
@@ -161,7 +161,16 @@ export interface EntradaVisoes {
   refDelta?: 'meta' | 'ano';
 }
 
-const subCab = (l: DrePecLinhas) => `${formatNum(l.patrimonio.cab_media, 0)} cab med.`;
+/**
+ * ⚠ O "N cab med." SAIU DO CABEÇALHO — 03b-fix1/adendo item 9. Ele custava uma LINHA INTEIRA de
+ * cabeçalho em toda coluna para responder uma pergunta que não é a do DRE: quantas cabeças a
+ * fazenda teve em média. Quem precisa do número o tem no PC-100, no modal de rateio (é o critério)
+ * e no modal de histórico; `cab_media` continua sendo lida nos três — o que saiu foi o subtítulo.
+ * ⚠ E A LINHA DOS SUBTÍTULOS AGORA SÓ EXISTE QUANDO ALGUÉM A USA (ver `temSub`): sem o "cab med.",
+ * na leitura mais comum — Global, sem Δ — nenhuma coluna tem subtítulo, e a linha desaparece com
+ * ele. Onde o subtítulo EXPLICA a coluna ("real − meta", "sem meta"), ela volta: apagá-lo ali
+ * deixaria um "Δ" sem dizer de quê.
+ */
 
 /**
  * AS COLUNAS DE CADA VISÃO. ⚠ Nenhuma conta aqui: cada coluna é um JSON da RPC inteiro; a única
@@ -171,7 +180,7 @@ export function colunasDaVisao(e: EntradaVisoes): ColunaPec[] {
   const { real, de, ate } = e;
   const meses = real.periodo.meses;
   const totalReal: ColunaPec = {
-    chave: '__total__', nome: 'Total', sub: subCab(real.total), fazendaId: null, linhas: real.total,
+    chave: '__total__', nome: 'Total', sub: '', fazendaId: null, linhas: real.total,
     total: true, tipo: 'valor', unidade: 'ha', de, ate, cenario: 'realizado', meses, atual: true,
   };
   if (e.visao === 'global') {
@@ -219,7 +228,7 @@ export function colunasDaVisao(e: EntradaVisoes): ColunaPec[] {
     /* ⚠ O TOTAL ENTRA NA FRENTE (§2a). A RPC devolve as fazendas e o total separados; quem os
        ordena é a tela, e é aqui que a decisão fica visível. */
     return [totalReal, ...real.fazendas.map((f): ColunaPec => ({
-      chave: f.fazenda_id, nome: f.nome, sub: subCab(f.linhas), fazendaId: f.fazenda_id,
+      chave: f.fazenda_id, nome: f.nome, sub: '', fazendaId: f.fazenda_id,
       linhas: f.linhas, total: false, tipo: 'valor', unidade: 'ha', de, ate, cenario: 'realizado',
       meses, atual: true,
     }))];
@@ -437,15 +446,30 @@ const estiloTotalCab = (c: ColunaPec, unidades: readonly UnidadePec[]) =>
  * ícone abre o histórico. Três gestos, três alvos — `stopPropagation` garante que o clique no
  * ícone não alterna o grupo por baixo.
  */
+/**
+ * A COLUNA DO ÍCONE — 14px na borda esquerda da célula de rótulo (adendo do 03b-fix1, item 6).
+ *
+ * ⚠ TODA LINHA A RESERVA, tenha ícone ou não: a filha, o "% do VBP" e o "Lucro por hectare" não
+ * abrem histórico, e sem a reserva o nome deles começaria 14px à esquerda do nome das outras — três
+ * réguas diferentes na mesma coluna. Os 7px de antes continuam sendo o padding da célula; o que
+ * mudou é que o recuo da hierarquia passou a valer depois do ícone, não antes.
+ */
+const RECUO_ICONE = 7;
+const L_ICONE = 14;
+
 function BotaoHistorico({ onAbrir }: { onAbrir?: () => void }) {
   return (
     <button type="button" title="Ver histórico" aria-label="Ver histórico"
       aria-hidden={!onAbrir} tabIndex={onAbrir ? undefined : -1}
       onClick={onAbrir ? e => { e.stopPropagation(); onAbrir(); } : undefined}
-      /* ⚠ O GLIFO DESCEU A 10px E A CAIXA FICOU EM 12 — homologação de 22/09, item 8. A largura
-         reservada é a mesma de antes de propósito: encolher a caixa moveria o nome de TODAS as
-         linhas dois pixels para a esquerda, e a coluna de rótulos é a régua de onde o olho parte. */
-      className={cn('mr-0.5 inline-block w-3 text-center align-[-2px] text-muted-foreground hover:text-primary',
+      /* ⚠ O GLIFO DESCEU A 10px E A CAIXA FICOU EM 12 — homologação de 22/09, item 8.
+         ⚠ E A CAIXA VIROU UMA COLUNA DE 14px NA BORDA ESQUERDA — 03b-fix1/adendo item 6. Antes o
+         ícone vinha DEPOIS do recuo da linha, então ele andava com o nome: 7px no subtotal, 15 no
+         grupo, 23 na filha. A coluna de ícones ficava serrilhada justamente onde o olho desce
+         procurando o próximo histórico. Agora o recuo é do CONTEÚDO (ver `RECUO`), e o ícone tem x
+         fixo; 12 + os 2 do `mr-0.5` de antes dão os mesmos 14, então o nome do subtotal não se
+         moveu um pixel. */
+      className={cn('inline-block w-[14px] text-center align-[-2px] text-muted-foreground hover:text-primary',
         !onAbrir && 'invisible')}>
       <BarChart3 className="inline h-2.5 w-2.5" />
     </button>
@@ -504,6 +528,11 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
     return cols;
   }, [colunas, unidades]);
   const larguraMin = larguras.reduce((a, b) => a + b, 0);
+  /* ⚠ A LINHA DOS SUBTÍTULOS É CONDICIONAL — item 9. Ela some quando NENHUMA coluna tem o que
+     dizer, e o cabeçalho passa de 40px para 28: 26+14 vira 14+14. O `top` da segunda linha
+     acompanha, senão o `sticky` dela grudaria 12px abaixo de onde ela está. */
+  const temSub = colunas.some(c => !!c.sub);
+  const ALTURA_NOME = temSub ? 26 : 14;
   const primeira = colunas[0];
 
   /** Quais grupos estão abertos. Fechados por padrão (§4) — e o estado pode vir de fora. */
@@ -530,7 +559,7 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
         <colgroup>{larguras.map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>
 
         <thead>
-          <tr style={{ height: 26 }}>
+          <tr style={{ height: temSub ? 26 : 14 }}>
             <th rowSpan={2}
               className={cn(CINZA_CABECALHO, 'sticky left-0 top-0 z-40 px-[7px] text-left',
                 'text-[10px] font-medium text-white')}>
@@ -546,13 +575,15 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
                   c.total ? 'z-40' : 'z-20')}
                 style={c.total
                   ? { ...(congelada(c, colunas) ? { left: W_FAZENDA } : {}),
-                      backgroundColor: NAVY_TOTAL, borderLeft: BORDA_TOTAL }
+                      backgroundColor: NAVY_TOTAL, borderLeft: BORDA_TOTAL_CAB }
                   : { borderLeft: '1px solid rgba(255,255,255,.22)' }}>
                 <div className="truncate text-[10px] font-medium leading-[12px]" title={c.nome}>{c.nome}</div>
-                <div className="truncate whitespace-nowrap text-[10px] font-normal leading-[12px] text-white"
-                  title={c.subLongo || c.sub || undefined}>
-                  {c.sub || '\u00a0'}
-                </div>
+                {temSub && (
+                  <div className="truncate whitespace-nowrap text-[10px] font-normal leading-[12px] text-white"
+                    title={c.subLongo || c.sub || undefined}>
+                    {c.sub || '\u00a0'}
+                  </div>
+                )}
               </th>
             ))}
           </tr>
@@ -570,13 +601,13 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
                       c.total ? 'z-40' : 'z-20')}
                     title={sl === 'ha' ? tituloHa(c) : sl === 'arroba' ? TITULO_ARROBA : sl === 'cab' ? TITULO_CAB : undefined}
                     style={c.total
-                      ? { top: 26, backgroundColor: NAVY_TOTAL,
-                          ...(i === 0 ? { borderLeft: BORDA_TOTAL } : {}),
+                      ? { top: ALTURA_NOME, backgroundColor: NAVY_TOTAL,
+                          ...(i === 0 ? { borderLeft: BORDA_TOTAL_CAB } : {}),
                           ...(congelada(c, colunas)
                             ? (i === 0 ? { left: W_FAZENDA }
                               : i === 1 ? { left: W_FAZENDA + largurasDaColuna(c, unidades)[0] } : {})
                             : {}) }
-                      : { top: 26, ...(i === 0 ? { borderLeft: '1px solid rgba(255,255,255,.22)' } : {}) }}>
+                      : { top: ALTURA_NOME, ...(i === 0 ? { borderLeft: '1px solid rgba(255,255,255,.22)' } : {}) }}>
                     {rotuloSlot(sl, c)}
                   </th>
                 ))}
@@ -659,9 +690,14 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, onAlternar, onAbrir
   onAbrirRateio?: () => void;
   onAbrirHistorico?: (r: RecorteHistoricoPec) => void;
 }) {
-  /* ⚠ A FAIXA MANDA NO FUNDO E NA COR — DRE-CASCATA-03b: num total, o destaque é a faixa, e pintar
-     o número de verde ou vermelho por cima dela seria dois sinais para a mesma coisa. O sinal do
-     número continua aparecendo nas linhas COMUNS, que é onde ele informa. */
+  /* ⚠ A FAIXA MANDA NO FUNDO; A COR, NÃO — e este parágrafo já disse o contrário (03b). A regra
+     antiga era "num total o destaque é a faixa, e pintar o número de verde ou vermelho por cima
+     dela seria dois sinais para a mesma coisa". A homologação mostrou o custo: o `= Resultado com
+     mercado` de −1,4 milhão do Agnaldo 22/23 saía na mesma cor de um resultado positivo, e a faixa
+     — que marca a IMPORTÂNCIA da linha, não o sinal dela — é igual nos dois casos. Deu e não deu
+     passaram a ter a mesma cara justamente na linha que existe para responder isso.
+     A cor do sinal agora vale em TODA faixa; é `corDoTotal` que a escolhe, porque no azul cheio ela
+     precisa de um tom claro para se ler. */
   const daFaixa = def.faixa ? FAIXA_TOTAL[def.faixa] : null;
   const fundo = daFaixa ? daFaixa.fundo : fundoDaLinha(def.destaque);
   const corLinha = daFaixa ? (daFaixa.texto ?? '') : corDoTom(def.tom);
@@ -678,6 +714,10 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, onAlternar, onAbrir
      grade saiu, e o selo "estimado" é a porta para a explicação — pool, critério e a fatia da
      pecuária. Só quando a primeira coluna é o realizado do período da tela, o único que o modal lê. */
   const abrirRateioDoRotulo = def.rateio && onAbrirRateio && colunas[0]?.atual ? onAbrirRateio : undefined;
+  /* ⚠ O MARCADOR É DO VALOR, NÃO DO Δ (item 13): a diferença tem sinal próprio e uma seta ali diria
+     "lucro" onde se lê "variação". Fora do azul cheio ele não existe — lá o número já é colorido. */
+  const marcador = (col: ColunaPec, v: number | null) =>
+    (def.faixa && col.tipo !== 'delta' ? marcadorDoTotal(def.faixa, v) : undefined);
 
   /**
    * O QUE ACONTECE AO CLICAR NUMA CÉLULA — §5.
@@ -716,9 +756,9 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, onAlternar, onAbrir
     <tr className={cn(fundo, regua.peso)} style={{ height: regua.altura }}>
       <td className={cn('sticky left-0 z-30 truncate py-px', fundo,
         'border-r border-border/60', corLinha, (temFilhas || abrirRateioDoRotulo) && 'cursor-pointer')}
-        title={abrirRateioDoRotulo ? 'ver como o rateio foi feito' : def.rotulo}
+        title={def.title ?? (abrirRateioDoRotulo ? 'ver como o rateio foi feito' : def.rotulo)}
         onClick={temFilhas ? onAlternar : abrirRateioDoRotulo}
-        style={{ fontSize: regua.fonte, paddingLeft: 7 + regua.recuo, paddingRight: 7 }}>
+        style={{ fontSize: regua.fonte, paddingLeft: RECUO_ICONE, paddingRight: 7 }}>
         {/* ⚠ O ESCOPO É O DA PRIMEIRA COLUNA — o Total nas visões globais, a fazenda na visão por
             fazenda. É a mesma coluna que o clique na célula usa para abrir a lista. */}
         <BotaoHistorico onAbrir={onAbrirHistorico && colunas[0]
@@ -726,22 +766,26 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, onAlternar, onAbrir
             chave: def.chave, centro: null, rotulo: def.rotulo,
             fazendaId: colunas[0].fazendaId, fazendaNome: colunas[0].nome,
           }) : undefined} />
-        {temFilhas && (
-          <ChevronRight className={cn('mr-0.5 inline h-3 w-3 align-[-2px] transition-transform',
-            aberto && 'rotate-90')} />
-        )}
-        {def.rotulo}
-        {def.sufixo && (
-          <span className="ml-1 font-normal text-muted-foreground" style={{ fontSize: 9 }}>{def.sufixo}</span>
-        )}
-        {def.etiqueta && <Etiqueta texto={def.etiqueta} />}
-        {/* ⚠ O SELO DOS JUROS É CONDICIONAL AO DADO, não à linha: ele só aparece quando há parcela
-            rateada, e o `title` diz quanto e por qual critério. Numa fazenda cujos juros são todos
-            próprios, marcar "estimado" seria mentir sobre um número exato. */}
-        {def.chave === 'juros' && jurosRateados > 0 && (
-          <Etiqueta texto="estimado"
-            title={`inclui ${formatNum(jurosRateados, 2)} rateados do Administrativo por cabeça média`} />
-        )}
+        {/* ⚠ O RECUO DA HIERARQUIA É DAQUI PARA A DIREITA — item 6: ele continua sendo o mesmo de
+            `REGUA_LINHA`, só deixou de empurrar o ícone junto. */}
+        <span style={{ marginLeft: regua.recuo }}>
+          {temFilhas && (
+            <ChevronRight className={cn('mr-0.5 inline h-3 w-3 align-[-2px] transition-transform',
+              aberto && 'rotate-90')} />
+          )}
+          {def.rotulo}
+          {def.sufixo && (
+            <span className="ml-1 font-normal text-muted-foreground" style={{ fontSize: 9 }}>{def.sufixo}</span>
+          )}
+          {def.etiqueta && <Etiqueta texto={def.etiqueta} title={def.tituloEtiqueta} />}
+          {/* ⚠ O SELO DOS JUROS É CONDICIONAL AO DADO, não à linha: ele só aparece quando há parcela
+              rateada, e o `title` diz quanto e por qual critério. Numa fazenda cujos juros são todos
+              próprios, marcar "estimado" seria mentir sobre um número exato. */}
+          {def.chave === 'juros' && jurosRateados > 0 && (
+            <Etiqueta texto="estimado"
+              title={`inclui ${formatNum(jurosRateados, 2)} rateados do Administrativo por cabeça média`} />
+          )}
+        </span>
       </td>
 
       {colunas.map(col => {
@@ -764,8 +808,10 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, onAlternar, onAbrir
           );
         }
         const v = valorDaLinha(col, def);
-        const cor = daFaixa ? corLinha
-          : col.tipo === 'delta' ? corDoDelta(def, v)
+        /* ⚠ O Δ FICA FORA DISSO, dentro ou fora de faixa: a cor dele já é orientada pelo que a
+           linha quer (cair um custo é verde), e `corDoTotal` leria o sinal cru da diferença. */
+        const cor = col.tipo === 'delta' ? (daFaixa ? corLinha : corDoDelta(def, v))
+          : def.faixa ? corDoTotal(def.faixa, v)
             : def.corPorSinal ? corDoSinal(v) : corLinha;
         /* ⚠ JUROS DE FAZENDA: "—" no R$ (é ausência, não zero) e nada nas unidades. */
         const jurosDeFazenda = def.chave === 'juros' && col.fazendaId !== null;
@@ -781,6 +827,7 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, onAlternar, onAbrir
               <Celula key={sl} valor={v} cor={col.comparacao && !daFaixa ? 'text-muted-foreground' : cor}
                 destaque={def.destaque} fonte={col.comparacao ? REGUA_LINHA.simples.fonte : regua.fonte}
                 bordaEsquerda={!col.total && i === 0} total={col.total} fundo={fundo}
+                faixa={daFaixa?.fundo} marcador={marcador(col, v)}
                 onAbrir={abrir}
                 estilo={estiloDoSlot(i)}
                 title={semFech ? 'sem fechamento' : undefined} />
@@ -789,7 +836,9 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, onAlternar, onAbrir
                 texto={sl === 'pct' ? pctDelta(v, col.ref ? valorDe(col.ref, def.chave) : null)
                   : jurosDeFazenda ? '' : valorNaUnidade(sl, v, col, def.chave)}
                 cor={cor} destaque={def.destaque}
-                fonte={regua.fonte} total={col.total} fundo={fundo} onAbrir={abrir}
+                fonte={regua.fonte} total={col.total} fundo={fundo}
+                faixa={daFaixa?.fundo} marcador={sl === 'pct' ? undefined : marcador(col, v)}
+                onAbrir={abrir}
                 estilo={estiloDoSlot(i)} />
             )))}
           </Fragment>
@@ -800,34 +849,59 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, onAlternar, onAbrir
 }
 
 /**
+ * A FAIXA DE UMA LINHA DE APOIO — "% do VBP" e "Lucro por hectare" (03b-fix1/adendo item 12).
+ *
+ * ⚠ ELAS ENTRARAM NA FAIXA DO TOTAL A QUE PERTENCEM, e isso é o que elas sempre foram: a mesma
+ * linha dita noutra unidade. Fora da faixa, o "Lucro por hectare" ficava numa tira branca logo
+ * abaixo do azul do Lucro líquido — lia-se como uma linha NOVA da cascata, e o olho parava nela
+ * procurando de que conta ela é a soma. Dentro, é a segunda linha do mesmo total.
+ * ⚠ O FUNDO DA COLUNA TOTAL TEM DE SAIR JUNTO: ele é `backgroundColor` inline e ganharia da faixa,
+ * deixando a tira azul com um retângulo branco no meio — o mesmo defeito do item 10, uma linha
+ * abaixo. `semFundo` o remove passando `undefined`, que o React omite.
+ */
+function faixaDoApoio(def: DefPec) {
+  const da = def.faixa ? FAIXA_TOTAL[def.faixa] : null;
+  return {
+    fundo: da ? da.fundo : fundoDaLinha(def.destaque),
+    /* ⚠ O RÓTULO CONTINUA SENDO O TEXTO DE APOIO — muted fora do azul, e uma versão suave do branco
+       dentro dele: quem manda na linha é o valor. */
+    corRotulo: da?.texto ? 'text-primary-foreground/80' : 'text-muted-foreground',
+    corValor: (v: number | null | undefined) => corDoApoio(v, def.faixa),
+    marcador: (v: number | null | undefined) => (def.faixa ? marcadorDoTotal(def.faixa, v) : undefined),
+    semFundo: (e: CSSProperties): CSSProperties => (da ? { ...e, backgroundColor: undefined } : e),
+  };
+}
+
+/**
  * A LINHA DE PERCENTUAL — §3.
  *
- * ⚠ ELA NÃO É UMA LINHA DO DRE. Não entra em soma nenhuma, não tem cor de sinal e não abre lista:
- * é a linha de cima dita em outra unidade. Por isso a régua dela é a de `filha` (9px, altura 14),
+ * ⚠ ELA NÃO É UMA LINHA DO DRE. Não entra em soma nenhuma e não abre lista: é a linha de cima dita
+ * em outra unidade. De cor ela só tem o vermelho do negativo (ver `corDoApoio`). Por isso a régua dela é a de `filha` (9px, altura 14),
  * mas SEM recuo — recuar sugeriria que ela é um item dentro do subtotal, e ela não é.
  * ⚠ NO DELTA ELA FICA VAZIA: "% do VBP" de uma diferença não é leitura de nada.
  */
 function LinhaPercentual({ def, colunas, unidades }: {
   def: DefPec; colunas: readonly ColunaPec[]; unidades: readonly UnidadePec[];
 }) {
-  const fundo = fundoDaLinha(def.destaque);
+  const apoio = faixaDoApoio(def);
   return (
-    <tr className={cn(fundo, 'font-normal')} style={{ height: 14 }}>
-      <td className={cn('sticky left-0 z-30 truncate border-r border-border/60 py-px text-muted-foreground', fundo)}
-        style={{ fontSize: 9, paddingLeft: 7, paddingRight: 7 }}
+    <tr className={cn(apoio.fundo, 'font-normal')} style={{ height: 14 }}>
+      <td className={cn('sticky left-0 z-30 truncate border-r border-border/60 py-px', apoio.corRotulo, apoio.fundo)}
+        style={{ fontSize: 9, paddingLeft: RECUO_ICONE + L_ICONE, paddingRight: 7 }}
         title={`${def.rotulo} em ${ROTULO_DA_BASE}`}>
         {ROTULO_DA_BASE}
       </td>
       {colunas.map(col => {
+        const bruto = col.linhas && col.tipo !== 'delta' ? valorNaColuna(col, def.chave) : null;
         const texto = !col.linhas || col.tipo === 'delta' ? ''
-          : percentual(valorNaColuna(col, def.chave), valorNaColuna(col, BASE_DO_PERCENTUAL) ?? 0);
+          : percentual(bruto, valorNaColuna(col, BASE_DO_PERCENTUAL) ?? 0);
         return (
           <Fragment key={col.chave}>
-            <td className={cn('truncate px-[7px] text-right tabular-nums text-muted-foreground', fundo)}
+            <td className={cn('truncate px-[7px] text-right tabular-nums', apoio.corValor(bruto), apoio.fundo)}
               style={{
                 fontSize: 9,
-                ...(col.total ? { backgroundColor: FUNDO_TOTAL, borderLeft: BORDA_TOTAL } : {}),
-                ...(congelada(col, colunas) ? estiloTotalRs : {}),
+                ...(col.total ? { ...apoio.semFundo({ backgroundColor: FUNDO_TOTAL }), borderLeft: BORDA_TOTAL } : {}),
+                ...(congelada(col, colunas) ? apoio.semFundo(estiloTotalRs) : {}),
               }}>
               {texto}
             </td>
@@ -835,9 +909,9 @@ function LinhaPercentual({ def, colunas, unidades }: {
                 cabeça nem por arroba — ele já é a linha de cima noutra unidade. Vazias, não
                 ausentes: a coluna não pode encolher só nesta linha. */}
             {slotsDaColuna(col, unidades).slice(1).map((sl, i) => (
-              <td key={sl} className={cn(fundo)}
+              <td key={sl} className={cn(apoio.fundo)}
                 style={col.total && i === 0
-                  ? { ...(congelada(col, colunas) ? estiloTotalCab(col, unidades) : {}), backgroundColor: FUNDO_TOTAL }
+                  ? apoio.semFundo({ ...(congelada(col, colunas) ? estiloTotalCab(col, unidades) : {}), backgroundColor: FUNDO_TOTAL })
                   : undefined} />
             ))}
           </Fragment>
@@ -850,9 +924,9 @@ function LinhaPercentual({ def, colunas, unidades }: {
 /**
  * O LUCRO POR HECTARE — DRE-CASCATA-03a.
  *
- * ⚠ ELE É A MESMA LINHA DE CIMA NOUTRA UNIDADE, como o "% do VBP": não entra em soma nenhuma, não
- * tem cor de sinal e não abre lista. Por isso reusa a régua da `LinhaPercentual` — 9px, muted,
- * altura 14, sem recuo — e não vira uma linha da cascata.
+ * ⚠ ELE É A MESMA LINHA DE CIMA NOUTRA UNIDADE, como o "% do VBP": não entra em soma nenhuma e não
+ * abre lista. Por isso reusa a régua da `LinhaPercentual` — 9px, muted, altura 14, sem recuo — e o
+ * mesmo `corDoApoio`, que só marca o negativo; não vira uma linha da cascata.
  * ⚠ O DIVISOR É O `ha_medio` DA PRÓPRIA COLUNA, o mesmo do chip R$/ha: cada fazenda tem a sua
  * área, e usar a do Total faria a coluna da Pureza falar do hectare do conjunto.
  * ⚠ SEM ÁREA, TRAÇO — nunca zero: fazenda sem fechamento de área não tem lucro por hectare, e
@@ -861,11 +935,11 @@ function LinhaPercentual({ def, colunas, unidades }: {
 function LinhaPorHectare({ def, colunas, unidades }: {
   def: DefPec; colunas: readonly ColunaPec[]; unidades: readonly UnidadePec[];
 }) {
-  const fundo = fundoDaLinha(def.destaque);
+  const apoio = faixaDoApoio(def);
   return (
-    <tr className={cn(fundo, 'font-normal')} style={{ height: 14 }}>
-      <td className={cn('sticky left-0 z-30 truncate border-r border-border/60 py-px text-muted-foreground', fundo)}
-        style={{ fontSize: 9, paddingLeft: 7, paddingRight: 7 }}
+    <tr className={cn(apoio.fundo, 'font-normal')} style={{ height: 14 }}>
+      <td className={cn('sticky left-0 z-30 truncate border-r border-border/60 py-px', apoio.corRotulo, apoio.fundo)}
+        style={{ fontSize: 9, paddingLeft: RECUO_ICONE + L_ICONE, paddingRight: 7 }}
         title={`${def.rotulo} dividido pela área produtiva média do período`}>
         {ROTULO_POR_HECTARE}
       </td>
@@ -876,18 +950,19 @@ function LinhaPorHectare({ def, colunas, unidades }: {
           : v == null || ha == null || !(ha > 0) ? traco : `R$ ${formatNum(v / ha, 2)}/ha`;
         return (
           <Fragment key={col.chave}>
-            <td className={cn('truncate px-[7px] text-right tabular-nums text-muted-foreground', fundo)}
+            <td className={cn('truncate px-[7px] text-right tabular-nums', apoio.corValor(v), apoio.fundo)}
               style={{
                 fontSize: 9,
-                ...(col.total ? { backgroundColor: FUNDO_TOTAL, borderLeft: BORDA_TOTAL } : {}),
-                ...(congelada(col, colunas) ? estiloTotalRs : {}),
+                ...(col.total ? { ...apoio.semFundo({ backgroundColor: FUNDO_TOTAL }), borderLeft: BORDA_TOTAL } : {}),
+                ...(congelada(col, colunas) ? apoio.semFundo(estiloTotalRs) : {}),
               }}>
+              {texto !== '' && texto !== traco && <Marcador marcador={apoio.marcador(v)} />}
               {texto}
             </td>
             {slotsDaColuna(col, unidades).slice(1).map((sl, i) => (
-              <td key={sl} className={cn(fundo)}
+              <td key={sl} className={cn(apoio.fundo)}
                 style={col.total && i === 0
-                  ? { ...(congelada(col, colunas) ? estiloTotalCab(col, unidades) : {}), backgroundColor: FUNDO_TOTAL }
+                  ? apoio.semFundo({ ...(congelada(col, colunas) ? estiloTotalCab(col, unidades) : {}), backgroundColor: FUNDO_TOTAL })
                   : undefined} />
             ))}
           </Fragment>
@@ -926,7 +1001,7 @@ function LinhaCentro({ def, centro, colunas, bloco, unidades, onAbrirLista }: {
   return (
     <tr className={cn('bg-card', regua.peso)} style={{ height: regua.altura }}>
       <td className="sticky left-0 z-30 truncate border-r border-border/60 bg-card py-px"
-        style={{ fontSize: regua.fonte, paddingLeft: 7 + regua.recuo, paddingRight: 7 }}
+        style={{ fontSize: regua.fonte, paddingLeft: RECUO_ICONE + L_ICONE + regua.recuo, paddingRight: 7 }}
         title={centro.centro}>
         {/* ⚠ A FILHA NÃO TEM ÍCONE — DRE-CASCATA-03b. Numa grade aberta eram dezenas de ícones
             repetidos na coluna de rótulos, e o que eles abrem já se alcança de dentro do modal: a

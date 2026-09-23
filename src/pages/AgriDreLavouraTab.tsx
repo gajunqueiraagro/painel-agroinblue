@@ -31,7 +31,7 @@ import { Segmentado } from '@/components/ui/segmentado';
 import { CINZA_CABECALHO } from '@/lib/idiomaVisual';
 import {
   W_RS, W_HA, W_UN, W_RS_TOTAL, W_GRUPO_MIN, larguraDoGrupo, VERDE, VERDE_70, VERMELHO, VERMELHO_70, AMBAR,
-  NAVY_TOTAL, BORDA_TOTAL, FUNDO_TOTAL, FAIXA_TOTAL, traco, corDoSinal, numeroDaCelula, porUnidade,
+  NAVY_TOTAL, BORDA_TOTAL, BORDA_TOTAL_CAB, FUNDO_TOTAL, FAIXA_TOTAL, traco, corDoSinal, corDoTotal, marcadorDoTotal, Marcador, numeroDaCelula, porUnidade,
   Etiqueta, Celula, CelulaUnit, Caixas, ChipsUnidade, PontoRateio, REGUA_LINHA, tipoDaLinha, fundoDaLinha,
   type CaixaFaixa, type DestaqueLinha, type TomFaixa,
 } from '@/components/agri/dreGrade';
@@ -66,7 +66,7 @@ import {
 /* ⚠ AS UNIDADES VÊM DA RÉGUA, não mais da tela — DRE-HISTORICO-LINHA-01a. Mesma lista, mesmo
    rótulo; só o arquivo mudou. */
 import {
-  UNIDADES_PEC, ROTULO_UNIDADE, LINHAS_DO_MODO, type UnidadePec, type ModoDre,
+  UNIDADES_PEC_GRADE, ROTULO_UNIDADE, LINHAS_DO_MODO, type UnidadePec, type ModoDre,
 } from '@/components/agri/drePecRegua';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useFinanceiroV2, type LancamentoV2 } from '@/hooks/useFinanceiroV2';
@@ -780,6 +780,20 @@ export function AgriDreLavouraTab() {
                   { valor: 'pecuaria', rotulo: 'Pecuária' },
                   { valor: 'consolidado', rotulo: 'Consolidado', desabilitada: true, title: 'em breve' },
                 ]} />
+              {/* ⚠ O MODO MORA NO CABEÇALHO — 03b-fix1, e é uma questão de alcance: "Resumido" e
+                  "Detalhado" não mudam uma coluna nem uma unidade, mudam QUANTAS LINHAS a cascata
+                  tem. Na linha de toggles ele se lia como mais um filtro da grade, ao lado do
+                  rateio e dos chips de unidade; aqui, junto do período e da atividade, ele fica
+                  entre as escolhas que definem O QUE a tela mostra.
+                  ⚠ SÓ A PECUÁRIA O TEM (a lavoura não tem cascata resumida), e o slot é reservado
+                  do mesmo tamanho nas duas abas pela mesma lei do seletor de período: sem a
+                  reserva, o seletor de período e o botão Ampliar andariam ao trocar de aba. */}
+              <span className="flex w-[148px] shrink-0 items-center justify-end">
+                {ehPec && (
+                  <Segmentado altura={22} valor={modoPec} onEscolher={setModoPec}
+                    opcoes={[{ valor: 'resumido', rotulo: 'Resumido' }, { valor: 'detalhado', rotulo: 'Detalhado' }]} />
+                )}
+              </span>
               {/* ⚠ O MESMO SLOT, OUTRA PERGUNTA: a lavoura fecha por SAFRA (o ciclo), a pecuária
                   por PERÍODO DE MESES (o rebanho não tem safra). É o seletor do Financeiro, não
                   um terceiro — "Ano safra" se faz nele pelo Personalizado jul→jun. */}
@@ -933,7 +947,7 @@ export function AgriDreLavouraTab() {
               <span className="flex w-[192px] shrink-0 items-center justify-start">
                 {ehPec
                   ? <ChipsUnidade valor={unidadesPec} onEscolher={setUnidadesPec}
-                      opcoes={UNIDADES_PEC.map(u => ({ valor: u, rotulo: ROTULO_UNIDADE[u] }))} />
+                      opcoes={UNIDADES_PEC_GRADE.map(u => ({ valor: u, rotulo: ROTULO_UNIDADE[u] }))} />
                   : <ChipsUnidade valor={unidadesLav} onEscolher={setUnidadesLav}
                       opcoes={UNIDADES_LAV.map(u => ({ valor: u, rotulo: ROTULO_UNIDADE_LAV[u] }))} />}
               </span>
@@ -943,26 +957,38 @@ export function AgriDreLavouraTab() {
                   tem, e sem a reserva os chips andavam 176px ao trocar de aba. */}
               <SeletorAnosPec visao={ehPec ? visaoPec : 'global'} nAnos={nAnosPec}
                 onNAnos={setNAnosPec} reservado={!ehPec} />
-              {/* ⚠ OS CHIPS DE Δ E A REFERÊNCIA — só a pecuária, com o espaço reservado na lavoura
-                  pela mesma lei do seletor de anos. O seletor de referência aparece na visão
-                  Global, que é onde a comparação vira coluna. */}
-              <span className="flex w-[168px] shrink-0 items-center justify-end gap-1.5">
+              {/* ⚠ A COMPARAÇÃO VIROU UM GRUPO COM NOME — 03b-fix1. Soltos na régua, "Δ R$",
+                  "Δ %" e o par "meta | ano ant." eram três controles vizinhos de outros três que
+                  não têm nada a ver com eles (unidade, anos, rateio), e nada dizia que os três
+                  respondem à MESMA pergunta: comparar com o quê, e mostrar a diferença como.
+                  A barra vertical e a palavra "Comparar:" são o que transforma vizinhança em
+                  grupo — é a leitura que muda, não o comportamento.
+                  ⚠ O PAR VIROU LISTA (`Meta ▾`) porque ele vai crescer: hoje são duas referências,
+                  e um `Segmentado` de duas opções que amanhã tem quatro vira uma régua de 200px.
+                  ⚠ SLOT FIXO E RESERVADO NA LAVOURA, a mesma lei do seletor de anos; e o slot do
+                  seletor DENTRO do grupo também é fixo, porque a referência só existe na visão
+                  Global — sem ele, a palavra "Comparar:" andaria ao trocar de visão. */}
+              <span className="flex w-[262px] shrink-0 items-center justify-end gap-1.5">
                 {ehPec && <>
+                  <span className="h-[14px] w-px shrink-0 bg-border" aria-hidden />
+                  <span className="shrink-0 whitespace-nowrap text-[10px] text-muted-foreground">Comparar:</span>
+                  <span className="flex w-[104px] shrink-0 items-center justify-start">
+                    {visaoPec === 'global' && deltasPec.length > 0 && (
+                      <Select value={refDeltaPec} onValueChange={v => setRefDeltaPec(v as 'meta' | 'ano')}>
+                        <SelectTrigger className="h-[22px] w-[104px] text-[10px]"
+                          title="Compara o realizado com a meta ou com o período anterior">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="meta" className="text-[12px]">Meta</SelectItem>
+                          <SelectItem value="ano" className="text-[12px]">Ano anterior</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </span>
                   <ChipsUnidade valor={deltasPec} onEscolher={setDeltasPec} permiteVazio
                     opcoes={[{ valor: 'rs', rotulo: 'Δ R$' }, { valor: 'pct', rotulo: 'Δ %' }]} />
-                  {visaoPec === 'global' && deltasPec.length > 0 && (
-                    <Segmentado altura={22} valor={refDeltaPec} onEscolher={setRefDeltaPec}
-                      opcoes={[{ valor: 'meta', rotulo: 'meta' }, { valor: 'ano', rotulo: 'ano ant.' }]} />
-                  )}
                 </>}
-              </span>
-              {/* ⚠ SLOT FIXO DE 148px PARA O MODO: só a pecuária o tem, e sem a reserva o "abrir
-                  tudo" andaria ao trocar de aba — a mesma lei do seletor de anos. */}
-              <span className="flex w-[148px] shrink-0 items-center justify-end">
-                {ehPec && (
-                  <Segmentado altura={22} valor={modoPec} onEscolher={setModoPec}
-                    opcoes={[{ valor: 'resumido', rotulo: 'Resumido' }, { valor: 'detalhado', rotulo: 'Detalhado' }]} />
-                )}
               </span>
               {/* ⚠ UM BOTÃO SÓ, QUE DIZ O QUE VAI FAZER: "abrir tudo" quando há grupo fechado,
                   "fechar tudo" quando todos estão abertos. Dois botões lado a lado obrigariam a
@@ -1478,7 +1504,7 @@ export function Grade({
           {!semTotal && (
             <th colSpan={colsTotal}
               className="sticky top-0 z-20 px-[7px] text-center text-white"
-              style={{ backgroundColor: NAVY_TOTAL, borderLeft: BORDA_TOTAL }}>
+              style={{ backgroundColor: NAVY_TOTAL, borderLeft: BORDA_TOTAL_CAB }}>
               {/* ⚠ AQUI O `title` É NECESSÁRIO: este `th` não abre nada, então não tem `title`
                   próprio — sem ele, área cortada seria dado perdido, não dado escondido. */}
               <div className="truncate text-[10px] font-medium leading-[12px]">Total</div>
@@ -1497,19 +1523,19 @@ export function Grade({
           {!semTotal && <>
             {unidades.includes('rs') && (
               <th className="sticky z-20 px-[7px] text-right text-[10px] font-normal text-white"
-                style={{ top: 26, backgroundColor: NAVY_TOTAL, borderLeft: BORDA_TOTAL }}>R$</th>
+                style={{ top: 26, backgroundColor: NAVY_TOTAL, borderLeft: BORDA_TOTAL_CAB }}>R$</th>
             )}
             {unidades.includes('ha') && (
               <th className="sticky z-20 px-[7px] text-right text-[10px] font-normal text-white"
                 style={{ top: 26, backgroundColor: NAVY_TOTAL,
-                  ...(unidades.includes('rs') ? {} : { borderLeft: BORDA_TOTAL }) }}>R$/ha</th>
+                  ...(unidades.includes('rs') ? {} : { borderLeft: BORDA_TOTAL_CAB }) }}>R$/ha</th>
             )}
             {/* ⚠ A CÉLULA DA UNIDADE FICA VAZIA, não escrita: a coluna não tem unidade nenhuma —
                 é só o lugar onde o traço mora. Quem explica é o `title` do traço, na linha. */}
             {totalEmTraco(unidades) && (
               <th className="sticky z-20 px-[7px] text-right text-[10px] font-normal text-white"
                 title={TOTAL_SEM_SOMA}
-                style={{ top: 26, backgroundColor: NAVY_TOTAL, borderLeft: BORDA_TOTAL }} />
+                style={{ top: 26, backgroundColor: NAVY_TOTAL, borderLeft: BORDA_TOTAL_CAB }} />
             )}
           </>}
         </tr>
@@ -1611,29 +1637,39 @@ function LinhaPorHectareLav({ dre, culturas, unidades, semTotal }: {
   dre: DreLavoura; culturas: DreCultura[]; unidades: readonly UnidadeLav[]; semTotal?: boolean;
 }) {
   const celula = (v: number | null | undefined) => (v == null ? traco : `R$ ${formatNum(v, 2)}/ha`);
+  /* ⚠ ELA MORA NA FAIXA DO LUCRO LÍQUIDO — item 12: é a mesma linha noutra unidade, e a tira branca
+     que ela era logo abaixo do azul se lia como uma linha nova da cascata. O fundo, a cor do texto
+     e o marcador ▲/▼ são os do t4, os mesmos da linha de cima. */
+  const t4 = FAIXA_TOTAL.t4;
   const vazias = (n: number) => Array.from({ length: n }).map((_, i) => (
-    <td key={i} className="bg-muted/40" />
+    <td key={i} className={t4.fundo} />
   ));
+  const valor = (v: number | null | undefined) => (
+    <>
+      {v != null && <Marcador marcador={marcadorDoTotal('t4', v)} />}
+      {celula(v)}
+    </>
+  );
   return (
-    <tr className="bg-muted font-normal" style={{ height: 14 }}>
-      <td className="sticky left-0 z-10 truncate border-r border-border/60 bg-muted py-px text-muted-foreground"
+    <tr className={cn(t4.fundo, 'font-normal')} style={{ height: 14 }}>
+      <td className={cn('sticky left-0 z-10 truncate border-r border-border/60 py-px text-primary-foreground/80', t4.fundo)}
         style={{ fontSize: 9, paddingLeft: 7, paddingRight: 7 }}
         title="Lucro líquido dividido pela área plantada da cultura">
         Lucro por hectare
       </td>
       {culturas.map(c => (
         <Fragment key={c.cultura}>
-          <td className="truncate bg-muted px-[7px] text-right tabular-nums text-muted-foreground"
+          <td className={cn('truncate px-[7px] text-right tabular-nums', t4.fundo, t4.texto)}
             style={{ fontSize: 9, borderLeft: '1px solid hsl(var(--border))' }}>
-            {celula(c.linhas.lucro_liquido.por_ha)}
+            {valor(c.linhas.lucro_liquido.por_ha)}
           </td>
           {vazias(unidades.length - 1)}
         </Fragment>
       ))}
       {!semTotal && <>
-        <td className="truncate bg-muted px-[7px] text-right tabular-nums text-muted-foreground"
+        <td className={cn('truncate px-[7px] text-right tabular-nums', t4.fundo, t4.texto)}
           style={{ fontSize: 9, borderLeft: BORDA_TOTAL }}>
-          {celula(dre.total.linhas.lucro_liquido.por_ha)}
+          {valor(dre.total.linhas.lucro_liquido.por_ha)}
         </td>
         {vazias(unidades.filter(u => u !== 'un').length - 1)}
       </>}
@@ -1653,8 +1689,10 @@ function LinhaDre({
   semTotal?: boolean;
   onDrill?: (chave: string, rotulo: string, cultura: string) => void;
 }) {
-  /* ⚠ A FAIXA MANDA NO FUNDO E NA COR — DRE-CASCATA-03b, a mesma regra da pecuária: num total o
-     destaque é a faixa, e pintar o número por cima dela seria dois sinais para a mesma coisa. */
+  /* ⚠ A FAIXA MANDA NO FUNDO; A COR É DO SINAL — 03b-fix1, a mesma correção da pecuária. A regra
+     do 03b dizia o contrário ("num total o destaque é a faixa"), e o efeito foi um total de
+     −1,4 milhão com a mesma cara de um positivo: a faixa marca a IMPORTÂNCIA da linha, que é igual
+     nos dois casos, e não o resultado dela. `corDoTotal` escolhe o tom certo para cada faixa. */
   const daFaixa = def.faixa ? FAIXA_TOTAL[def.faixa] : null;
   const fundo = daFaixa ? daFaixa.fundo : fundoDaLinha(def.destaque);
   /* ⚠ TRÊS PESOS, E A REGRA É A HIERARQUIA DO DRE: subtotal e grupo em 500, filha em 400. O 600
@@ -1666,6 +1704,13 @@ function LinhaDre({
   const peso = regua.peso;
   const corLinha = daFaixa ? (daFaixa.texto ?? '') : corDoTom(def.tom);
   const tot = dre.total.linhas[def.chave];
+  /* ⚠ A COLUNA TOTAL SEGUE A MESMA REGRA das culturas, com o valor DELA: o sinal do total da safra
+     não é o de nenhuma cultura em particular. */
+  const corDoTotalDaSafra = def.faixa ? corDoTotal(def.faixa, valorDaLinha(tot, def))
+    : def.corPorSinal ? corDoSinal(valorDaLinha(tot, def)) : corLinha;
+  /* ⚠ O MARCADOR SÓ EXISTE NO AZUL CHEIO (item 13): nas outras faixas o próprio número é azul ou
+     vermelho, e o glifo seria o mesmo recado duas vezes. */
+  const marcador = (v: number | null) => (def.faixa ? marcadorDoTotal(def.faixa, v) : undefined);
   /* ⚠ O RATEIO DO GRUPO SE MEDE NAS CULTURAS MOSTRADAS, não no total da safra: no drill só há
      uma coluna, e o total traria o rateio de culturas que não estão na tela. */
   const temRateio = def.bloco
@@ -1713,8 +1758,8 @@ function LinhaDre({
         const l = c.linhas[def.chave];
         const v = valorDaLinha(l, def);
         const rat = def.bloco && rateioDentro ? (l.rateado ?? 0) : 0;
-        /* ⚠ NA FAIXA O NÚMERO NÃO GANHA COR: o azul já diz que é um total. */
-        const cor = daFaixa ? corLinha : def.corPorSinal ? corDoSinal(v) : corLinha;
+        const cor = def.faixa ? corDoTotal(def.faixa, v)
+          : def.corPorSinal ? corDoSinal(v) : corLinha;
         /* ⚠ A LINHA DO RATEIO COMPARTILHADO ABRE O POOL INTEIRO (§2), com `p_chave` nulo. Ela só
            existe no modo "Custos diretos" — no outro o rateio está dentro dos centros e a linha
            some, junto com a pergunta que ela responde. */
@@ -1737,16 +1782,19 @@ function LinhaDre({
                 vai na PRIMEIRA que existir: com o R$ desmarcado, ela passa para o R$/ha. */}
             {unidades.includes('rs') && (
               <Celula valor={v} cor={cor} destaque={def.destaque} fonte={regua.fonte}
+                faixa={daFaixa?.fundo} marcador={marcador(v)}
                 bordaEsquerda onAbrir={aoAbrir} />
             )}
             {unidades.includes('ha') && (
               <CelulaUnit texto={porUnidade(v, c.area_ha)} cor={cor} destaque={def.destaque}
                 bordaEsquerda={unidades[0] === 'ha'}
+                faixa={daFaixa?.fundo} marcador={marcador(v)}
                 fonte={regua.fonte} onAbrir={aoAbrir} />
             )}
             {unidades.includes('un') && (
               <CelulaUnit texto={porUnidade(v, c.producao)} cor={cor} destaque={def.destaque}
                 bordaEsquerda={unidades[0] === 'un'}
+                faixa={daFaixa?.fundo} marcador={marcador(v)}
                 fonte={regua.fonte} onAbrir={aoAbrir} />
             )}
           </Fragment>
@@ -1761,17 +1809,20 @@ function LinhaDre({
           precisa perder para a zebra e para o `bg-muted` do subtotal, que vêm na linha. */}
       {!semTotal && <>
         {unidades.includes('rs') && (
-          <Celula valor={valorDaLinha(tot, def)} cor={daFaixa ? corLinha : def.corPorSinal ? corDoSinal(valorDaLinha(tot, def)) : corLinha}
+          <Celula valor={valorDaLinha(tot, def)} cor={corDoTotalDaSafra}
+            faixa={daFaixa?.fundo} marcador={marcador(valorDaLinha(tot, def))}
             destaque={def.destaque} fonte={regua.fonte} total />
         )}
         {unidades.includes('ha') && (
           <CelulaUnit texto={porUnidade(valorDaLinha(tot, def), dre.total.area_ha)}
-            cor={daFaixa ? corLinha : def.corPorSinal ? corDoSinal(valorDaLinha(tot, def)) : corLinha}
+            cor={corDoTotalDaSafra}
+            faixa={daFaixa?.fundo} marcador={marcador(valorDaLinha(tot, def))}
             destaque={def.destaque} fonte={regua.fonte}
             total />
         )}
         {totalEmTraco(unidades) && (
           <CelulaUnit texto={traco} cor="" destaque={def.destaque} fonte={regua.fonte}
+            faixa={daFaixa?.fundo}
             total title={TOTAL_SEM_SOMA} />
         )}
       </>}

@@ -156,12 +156,64 @@ export function larguraDoGrupo(cols: readonly number[]): number[] {
  * ⚠ O ÚLTIMO É O `bg-primary` DE VERDADE (opaco, sem alfa) e inverte o texto: navy cheio com
  * texto escuro não se lê.
  */
-export const FAIXA_TOTAL: Record<'t1' | 't2' | 't3' | 't4', { fundo: string; texto?: string }> = {
+export const FAIXA_TOTAL: Record<'t1' | 't2' | 't3' | 't4',
+  { fundo: string; texto?: string; positivo?: string; negativo?: string }> = {
   t1: { fundo: 'bg-[#e9eff6]' },
   t2: { fundo: 'bg-[#d3e0ed]' },
   t3: { fundo: 'bg-[#b6cade]' },
+  /**
+   * ⚠ NO AZUL CHEIO O NÚMERO É BRANCO, SEMPRE — item 13, e ele substitui duas tentativas anteriores.
+   * A primeira deixou o número preto (a faixa "já destaca"): um prejuízo de 6,2 milhões saía da
+   * mesma cor de um lucro. A segunda pintou o sinal em tom claro: `text-red-300` sobre o navy dá
+   * contraste baixo e o número mais importante da tela ficava o mais difícil de ler. Branco tem o
+   * contraste máximo que esta faixa permite, e o sinal passou a ser um MARCADOR ao lado do número
+   * (ver `marcadorDoTotal`) — um glifo colorido não precisa ser lido, só visto.
+   */
   t4: { fundo: 'bg-primary', texto: 'text-primary-foreground' },
 };
+
+/** ⚠ O POSITIVO DE UM TOTAL É AZUL ESCURO, não verde (item 12): o verde é a cor da NATUREZA
+    "receita" nas linhas comuns, e usá-lo também para "deu lucro" faria a mesma cor responder a duas
+    perguntas na mesma coluna. */
+export const AZUL_TOTAL = 'text-primary';
+/** Os dois tons claros do marcador do t4 — literais, e é sobre o navy que eles foram escolhidos. */
+export const MARCADOR_POSITIVO = '#8AE0B5';
+export const MARCADOR_NEGATIVO = '#F4A9A9';
+
+/**
+ * A COR DE UM TOTAL — pelo SINAL, em qualquer faixa (03b-fix1, itens 12 e 13).
+ *
+ * ⚠ ELES ESTAVAM PRETOS, e era decisão minha: achei que a faixa bastava para destacar e neutralizei
+ * o número. A homologação mostrou o custo disso — o "= Resultado com mercado" de −1,4 milhão do
+ * Agnaldo saía na mesma cor de um resultado positivo, e a linha mais importante da tela deixava de
+ * dizer a única coisa que ela precisa dizer de longe: deu ou não deu.
+ */
+export function corDoTotal(faixa: keyof typeof FAIXA_TOTAL, v: number | null): string {
+  const f = FAIXA_TOTAL[faixa];
+  if (f.texto) return f.texto;
+  return v != null && v < 0 ? VERMELHO : AZUL_TOTAL;
+}
+
+/**
+ * O MARCADOR DE SINAL DO AZUL CHEIO — ▲ ou ▼ à frente do número (item 13).
+ *
+ * ⚠ SÓ NO t4, e só ali porque só ali o número não pode mudar de cor. Nas outras faixas o próprio
+ * número é azul ou vermelho, e um glifo a mais seria o mesmo recado duas vezes.
+ * ⚠ ZERO E AUSÊNCIA NÃO TÊM MARCADOR: "não deu nem perdeu" e "não sei" não são sinal.
+ */
+export function marcadorDoTotal(faixa: keyof typeof FAIXA_TOTAL, v: number | null | undefined) {
+  if (faixa !== 't4' || v == null || v === 0) return undefined;
+  return v < 0 ? { glifo: '▼', cor: MARCADOR_NEGATIVO } : { glifo: '▲', cor: MARCADOR_POSITIVO };
+}
+
+/** O marcador desenhado — 9px, à frente do número, sem participar do alinhamento do tabular-nums. */
+export function Marcador({ marcador }: { marcador?: { glifo: string; cor: string } }) {
+  if (!marcador) return null;
+  return (
+    <span aria-hidden className="mr-[3px] align-[1px]"
+      style={{ fontSize: 9, color: marcador.cor }}>{marcador.glifo}</span>
+  );
+}
 export type TomFaixa = keyof typeof FAIXA_TOTAL;
 
 export const VERDE = 'text-green-700';
@@ -200,8 +252,33 @@ export const porUnidade = (v: number | null | undefined, den: number) =>
    célula em cinza claro e uma borda de 2px à esquerda. Ela é a resposta da safra inteira e estava
    se lendo como só mais um grupo de cultura. O cinza é claro de propósito — a zebra e os fundos
    de subtotal continuam passando por cima. */
+/**
+ * A COR DAS LINHAS DE APOIO — "% do VBP" e "Lucro por hectare", nas duas telas (item 12).
+ *
+ * ⚠ ELAS DEIXARAM DE SER CINZA, e a razão é que elas deixaram de ser um rodapé: agora moram DENTRO
+ * da faixa do total a que pertencem, como a segunda linha dele. Cinza dentro de uma faixa azul lê
+ * como texto desligado — e o "Lucro por hectare" é justamente o número que o produtor procura
+ * primeiro. Quem continua cinza é o RÓTULO; o valor segue o sinal, como o total acima dele.
+ * ⚠ NO t4 A COR É A DA FAIXA (branco), e o sinal vem pelo marcador — ver `marcadorDoTotal`.
+ */
+export const corDoApoio = (v: number | null | undefined, faixa?: keyof typeof FAIXA_TOTAL) => {
+  if (faixa && FAIXA_TOTAL[faixa].texto) return FAIXA_TOTAL[faixa].texto as string;
+  return v != null && v < 0 ? VERMELHO : AZUL_TOTAL;
+};
+
 export const NAVY_TOTAL = '#2b3750';
-export const BORDA_TOTAL = '2px solid #cbd5e1';
+/**
+ * ⚠ A BORDA DO TOTAL VOLTOU A SER A DIVISÓRIA DA CASA (03b-fix1), de `2px solid #cbd5e1` para a
+ * mesma `border-border/60` que separa todo grupo de coluna. A razão é de posição, não de gosto: no
+ * §9 o Total era a ÚLTIMA coluna e os 2px marcavam o fim da grade; desde a §2a ele é a PRIMEIRA, e
+ * a borda passou a encostar na `border-r` da coluna de rótulos — duas linhas somando 3px, mais
+ * grossa e mais escura que qualquer outra divisória da tela, no lugar mais visível dela.
+ * O peso próprio do Total continua existindo: fundo `FUNDO_TOTAL`, cabeçalho em navy escuro e
+ * `font-medium`. Era a borda que sobrava.
+ */
+export const BORDA_TOTAL = '1px solid hsl(var(--border) / .6)';
+/** A mesma divisória, do lado de dentro do cabeçalho navy — ali o que se lê é branco a 22%. */
+export const BORDA_TOTAL_CAB = '1px solid rgba(255,255,255,.22)';
 export const FUNDO_TOTAL = '#f1f5f9';
 
 /**
@@ -232,12 +309,27 @@ export const AMBAR = '#b45309';
  * transborda e é visível; faltando, o operador vê e a régua se ajusta. Só a coluna Cultura
  * trunca, porque ali o corte tem `title` para desfazer.
  */
-export function Celula({ valor, cor, destaque, bordaEsquerda, onAbrir, filha, fundo, estilo, total, title, fonte }: {
+export function Celula({ valor, cor, destaque, bordaEsquerda, onAbrir, filha, fundo, estilo, total, title, fonte, faixa, marcador }: {
   valor: number | null; cor: string; destaque?: DestaqueLinha;
   bordaEsquerda?: boolean;
   onAbrir?: () => void; filha?: boolean; fundo?: string; estilo?: CSSProperties;
-  /** A coluna Total: cinza claro, borda de 2px e peso 500. */
+  /**
+   * A CLASSE DE FUNDO DA FAIXA, quando a linha é um total — e ela VENCE o fundo da célula
+   * (03b-fix1/adendo item 10).
+   *
+   * ⚠ NASCE DE UMA FAIXA PELA METADE: o azul parava na coluna Total, que fica branca, porque o
+   * `FUNDO_TOTAL` é `backgroundColor` INLINE e não há classe que ganhe de estilo inline. A linha do
+   * Lucro líquido saía azul até a penúltima célula — justamente a coluna que responde pela safra
+   * inteira ficava de fora da faixa que a marca.
+   * ⚠ NÃO DÁ PARA RESOLVER PELA ORDEM DAS CLASSES: `bg-muted` e `bg-[#e9eff6]` têm a mesma
+   * especificidade, e quem vence é a que o Tailwind emitiu por último no CSS — a ordem no atributo
+   * `class` não decide nada. Por isso a faixa SUBSTITUI o fundo, em vez de tentar cobri-lo.
+   */
+  faixa?: string;
+  /** A coluna Total: cinza claro, a divisória da casa à esquerda e peso 500. */
   total?: boolean;
+  /** O ▲/▼ do azul cheio — ver `marcadorDoTotal`. */
+  marcador?: { glifo: string; cor: string };
   /** Um porquê para a célula — "sem fechamento" na pecuária. Só quando há o que dizer. */
   title?: string;
   /** ⚠ O VALOR SEGUE A FONTE DA LINHA (PR-10): subtotal em 12, filha em 9. Um número de 11px ao
@@ -255,21 +347,22 @@ export function Celula({ valor, cor, destaque, bordaEsquerda, onAbrir, filha, fu
       className={cn('whitespace-nowrap px-[7px] py-px text-right tabular-nums',
       filha ? 'border-t border-dashed border-border/60' : '',
       total && 'font-medium',
-      clicavel && 'cursor-pointer hover:underline hover:decoration-dotted', fundo, cor)}
+      clicavel && 'cursor-pointer hover:underline hover:decoration-dotted', faixa ?? fundo, cor)}
       style={{
         ...(fonte ? { fontSize: fonte } : {}),
-        ...(total ? { backgroundColor: FUNDO_TOTAL } : {}),
+        ...(total && !faixa ? { backgroundColor: FUNDO_TOTAL } : {}),
         ...estilo,
         ...(total ? { borderLeft: BORDA_TOTAL }
           : bordaEsquerda ? { borderLeft: '1px solid hsl(var(--border) / .6)' } : {}),
       }}>
+      <Marcador marcador={marcador} />
       {numeroDaCelula(valor)}
     </td>
   );
 }
 
 /** A célula de /ha e /unidade — mais clara que a de R$, porque ela é derivada, não lançada. */
-export function CelulaUnit({ texto, cor, destaque, filha, fundo, estilo, total, bordaEsquerda, onAbrir, fonte, title }: {
+export function CelulaUnit({ texto, cor, destaque, filha, fundo, estilo, total, bordaEsquerda, onAbrir, fonte, title, faixa, marcador }: {
   texto: string; cor: string; destaque?: DestaqueLinha;
   /** ⚠ O UNITÁRIO FICA UM PONTO ABAIXO DO VALOR, sempre: ele é leitura de apoio. */
   fonte?: number;
@@ -290,6 +383,12 @@ export function CelulaUnit({ texto, cor, destaque, filha, fundo, estilo, total, 
    * se explicar está em traço e não abre nada. Os dois nunca disputam a mesma célula.
    */
   title?: string;
+  /** A classe de fundo da faixa — vence o `bg-muted/40` da sub-coluna e o `FUNDO_TOTAL` inline.
+      Ver a nota em `Celula`; aqui o fundo próprio é CLASSE, e por isso ele é substituído, não
+      sobreposto. */
+  faixa?: string;
+  /** O ▲/▼ do azul cheio — ver `marcadorDoTotal`. */
+  marcador?: { glifo: string; cor: string };
 }) {
   const sub = destaque === 'subtotal' || destaque === 'sub';
   const clicavel = !!onAbrir && texto !== traco;
@@ -297,7 +396,8 @@ export function CelulaUnit({ texto, cor, destaque, filha, fundo, estilo, total, 
     <td onClick={clicavel ? onAbrir : undefined}
       title={clicavel ? 'ver os lançamentos' : title}
       className={cn('whitespace-nowrap px-[7px] py-px text-right text-[10px] tabular-nums',
-      total ? 'font-medium' : sub ? 'bg-muted' : 'bg-muted/40',
+      total && 'font-medium',
+      faixa ?? (total ? '' : sub ? 'bg-muted' : 'bg-muted/40'),
       bordaEsquerda && !total && 'border-l border-border/60',
       filha ? 'border-t border-dashed border-border/60' : '',
       clicavel && 'cursor-pointer hover:underline hover:decoration-dotted',
@@ -309,7 +409,8 @@ export function CelulaUnit({ texto, cor, destaque, filha, fundo, estilo, total, 
          linha comum (9px) para 8, abaixo de qualquer piso. O piso passa a ser 9,5, e o subtotal
          (11px) segue um ponto abaixo do valor, em 10. */
       style={{ ...(fonte ? { fontSize: Math.max(9.5, fonte - 1) } : {}),
-        ...(total ? { backgroundColor: FUNDO_TOTAL } : {}), ...estilo }}>
+        ...(total && !faixa ? { backgroundColor: FUNDO_TOTAL } : {}), ...estilo }}>
+      <Marcador marcador={marcador} />
       {texto}
     </td>
   );

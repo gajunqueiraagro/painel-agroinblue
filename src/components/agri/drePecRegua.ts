@@ -132,6 +132,10 @@ export interface DefPec {
   /** A cor sai do próprio número, coluna a coluna. */
   corPorSinal?: boolean;
   etiqueta?: string;
+  /** O que a etiqueta curta diz por extenso, ao passar o mouse. */
+  tituloEtiqueta?: string;
+  /** O rótulo por extenso, quando o da tela precisou encurtar para caber nos 200px. */
+  title?: string;
   /**
    * A linha abre em centros de custo (§4).
    *
@@ -218,13 +222,18 @@ export const LINHAS_PEC_RESUMIDO: DefPec[] = [
   { chave: 'receita_bruta', rotulo: 'Receita bruta', faixa: 't1', tom: 'receita' },
   { chave: 'deducoes', rotulo: '(−) Deduções', tom: 'custo' },
   { chave: 'receita_liquida', rotulo: '= Receita líquida', faixa: 't1', tom: 'receita', destaque: 'subtotal' },
-  { chave: 'vpb_operacional', rotulo: 'Variação do estoque por produção', tom: 'neutro',
+  /* ⚠ ROTULO CURTO E O INTEIRO NO `title` — homologação de 23/09: "Variação do estoque por
+     produção" com o selo "estimado" ao lado não cabe nos 200px da coluna de rótulos, e saía com
+     reticências. A coluna não alarga (a largura é a régua das duas abas); o nome é que encurta. */
+  { chave: 'vpb_operacional', rotulo: 'Variação do estoque', tom: 'neutro',
+    title: 'Variação do estoque por produção = variação por produção − reposição',
     corPorSinal: true, etiqueta: 'estimado', didatico: 'vpb',
     compor: { mais: ['vpb_operacional'], menos: ['reposicao'] } },
   { chave: 'vbp', rotulo: '= VBP', sufixo: '(valor bruto de produção)', faixa: 't2', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
   { chave: 'custo_variavel', rotulo: '(−) Custo variável', tom: 'custo', expande: true },
   { chave: 'margem', rotulo: '= Margem de contribuição', faixa: 't2', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
-  { chave: 'custo_fixo', rotulo: '(−) Custo fixo', tom: 'custo', expande: true, etiqueta: 'inclui rateio adm · estimado',
+  { chave: 'custo_fixo', rotulo: '(−) Custo fixo', tom: 'custo', expande: true, etiqueta: 'c/ rateio',
+    tituloEtiqueta: 'inclui rateio administrativo estimado',
     compor: { mais: ['custo_fixo', 'rateio_adm'] } },
   { chave: 'resultado_operacional', rotulo: '= Resultado operacional', faixa: 't3', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
   { chave: 'juros', rotulo: '(−) Despesas financeiras', tom: 'custo' },
@@ -277,6 +286,19 @@ export type UnidadePec = typeof UNIDADES_PEC[number];
 export const ROTULO_UNIDADE: Record<UnidadePec, string> = {
   rs: 'R$', ha: 'R$/ha', cab: 'R$/cab/mês', arroba: 'R$/@',
 };
+
+/**
+ * AS UNIDADES QUE A GRADE OFERECE — 03b-fix1/adendo item 7.
+ *
+ * ⚠ DUAS, NÃO QUATRO: R$/cab/mês e R$/@ saíram dos chips da grade. Elas não deixaram de existir —
+ * o módulo continua calculando as duas, o modal de histórico continua oferecendo as quatro, e é lá
+ * que elas respondem alguma coisa: uma unidade de PRODUÇÃO se lê comparando períodos, não lendo a
+ * cascata de um só. Na grade, cada chip marcado é uma coluna a mais em CADA fazenda, e as duas
+ * dobravam a largura para uma leitura que ninguém fazia ali.
+ * ⚠ A LISTA É SEPARADA de `UNIDADES_PEC` de propósito: o tipo, a ordem e os rótulos continuam
+ * sendo um só, e o dia em que a grade voltar a oferecer as quatro é uma linha, não uma frente.
+ */
+export const UNIDADES_PEC_GRADE = ['rs', 'ha'] as const satisfies readonly UnidadePec[];
 
 /**
  * R$ POR CABEÇA MÉDIA, POR MÊS — o cálculo que saiu no TELA-03a e volta aqui como chip.

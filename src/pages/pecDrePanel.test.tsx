@@ -10,7 +10,7 @@
  * ordem. Se alguém reordenar `LINHAS_PEC`, é aqui que aparece.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { PecDrePanel, FaixaVisoesPec, colunasDaVisao, type EntradaVisoes, type VisaoPec } from '@/pages/PecDrePanel';
 import { LINHAS_PEC_RESUMIDO } from '@/components/agri/drePecRegua';
 import type { DrePecuaria, DrePecLinhas } from '@/hooks/useDrePecuaria';
@@ -477,7 +477,12 @@ describe('as quatro visões', () => {
     const h = cabecalhos();
     expect(h).toHaveLength(2);
     expect(h[1]).toContain('Total');
-    expect(h[1]).toContain('10.000 cab');
+    /* ⚠ O "10.000 cab med." SAIU DO CABEÇALHO — 03b-fix1/adendo item 9: ele custava uma LINHA de
+       cabeçalho em toda coluna para responder uma pergunta que não é a do DRE. O caso continua
+       cobrando o que restou (o nome da coluna) e passou a AFIRMAR a ausência, para que devolvê-lo
+       ao cabeçalho por engano falhe aqui. `cab_media` segue lida — o rateio administrativo é por
+       cabeça média, e o caso do rateio, logo abaixo, é quem prova isso. */
+    expect(h[1]).not.toContain('cab med.');
     expect(linhaDe('= Resultado do período')?.cells[1]?.textContent).toBe('2.994.408,81');
     /* O rateio aparece como linha também no Global: é custo da pecuária, só não se divide aqui. */
     expect(linhaDe('(−) Rateio administrativo')).toBeTruthy();
@@ -543,7 +548,10 @@ describe('as quatro visões', () => {
       { de: '2024-07', ate: '2025-06', dre: ANO1, carregando: false },
       { de: '2023-07', ate: '2024-06', dre: { ...DRE, fazendas: [] }, carregando: false },
     ] })} alturaCartao={null} cartaoRef={{ current: null }} onAbrirLista={abrir} />);
-    expect(cabecalhos().slice(1)).toEqual(['jul/23-jun/24\u00a0', 'jul/24-jun/25\u00a0', 'jul/25-jun/26\u00a0']);
+    /* ⚠ O `\u00a0` DE CADA CABEÇALHO ERA A LINHA DE SUBTÍTULO VAZIA, e ela não existe mais (item
+       9): sem nenhuma coluna com subtítulo, a linha inteira deixa de ser renderizada. O que este
+       caso trava é a ORDEM CRONOLÓGICA, e ela continua inteira aqui. */
+    expect(cabecalhos().slice(1)).toEqual(['jul/23-jun/24', 'jul/24-jun/25', 'jul/25-jun/26']);
     /* ⚠ AGORA TEM SUB-COLUNA — TELA-03a: cada ano divide pela própria área, e a visão deixou de
        sair só em R$. */
     expect(document.body.textContent).toContain('R$/ha');
@@ -745,5 +753,113 @@ describe('a comparação na visão Global', () => {
     const vendas = linhaDe('Vendas');
     expect(vendas?.cells[5]?.textContent).toBe('7.869.000,08');
     expect(vendas?.cells[6]?.textContent).toContain('%');
+  });
+});
+
+/* ══════════════ A COR E A FAIXA DOS TOTAIS — 03b-fix1, itens 10, 12 e 13 ══════════════ */
+
+/**
+ * ⚠ ESTE BLOCO NASCE DE TRÊS CORREÇÕES SEGUIDAS NA MESMA REGRA, e é por isso que ele existe: no
+ * 03b o total ficou PRETO ("a faixa já destaca"), e um prejuízo de milhões saía da cor de um lucro;
+ * no fix1 ele ganhou verde e vermelho, e o verde brigou com a cor da natureza "receita"; no adendo
+ * ele virou azul escuro e vermelho, com o azul cheio respondendo por marcador. Cada volta dessas
+ * passou pelos sete gates sem que nenhum dissesse nada — cor não tem gate. Estes casos são o gate.
+ */
+describe('a cor e a faixa de um total', () => {
+  const montar = (l: Partial<DrePecLinhas>) => {
+    const dre: DrePecuaria = { ...DRE, fazendas: [],
+      total: linhas({ vbp: 1000000, producao: { ...linhas({}).producao, ha_medio: 1000 }, ...l }) };
+    render(<PecDrePanel colunas={colunas('global', { real: dre })}
+      alturaCartao={null} cartaoRef={{ current: null }} unidades={['rs', 'ha']} />);
+  };
+
+  /* ⚠ O NÚMERO DO AZUL CHEIO É BRANCO NOS DOIS SINAIS: quem diz "deu" ou "não deu" ali é o ▲/▼.
+     Um `text-red-300` sobre o navy tem contraste baixo justamente no número mais importante. */
+  it('t4 (Lucro líquido): número branco e marcador ▼ quando negativo', () => {
+    montar({ lucro_liquido: -1959802.35 });
+    const tr = linhaDe('= Lucro líquido')!;
+    expect(tr.cells[1].className).toContain('text-primary-foreground');
+    expect(tr.cells[1].textContent).toContain('▼');
+    /* O R$/ha segue o mesmo sinal — é o mesmo número noutra unidade. */
+    expect(tr.cells[2].textContent).toContain('▼');
+    expect(tr.cells[1].className).not.toContain('text-red');
+  });
+
+  it('t4: o marcador vira ▲ no positivo e some no zero', () => {
+    montar({ lucro_liquido: 1200000 });
+    expect(linhaDe('= Lucro líquido')!.cells[1].textContent).toContain('▲');
+    cleanup();
+    montar({ lucro_liquido: 0 });
+    const zero = linhaDe('= Lucro líquido')!.cells[1].textContent ?? '';
+    expect(zero).not.toContain('▲');
+    expect(zero).not.toContain('▼');
+  });
+
+  /* ⚠ AZUL ESCURO, NÃO VERDE (item 12): o verde é a cor da natureza "receita" nas linhas comuns, e
+     usá-lo também para "deu lucro" faria a mesma cor responder a duas perguntas na mesma coluna. */
+  it('nas outras faixas o total é azul escuro no positivo e vermelho no negativo', () => {
+    montar({ resultado_periodo: 2994408.81, resultado_com_mercado: -1400000 });
+    expect(linhaDe('= Resultado do período')!.cells[1].className).toContain('text-primary');
+    expect(linhaDe('= Resultado do período')!.cells[1].className).not.toContain('text-green');
+    expect(linhaDe('= Resultado com mercado')!.cells[1].className).toContain('text-red');
+  });
+
+  /**
+   * ⚠ A FAIXA TEM DE IR DE CABO A RABO (item 10), e o defeito era invisível para qualquer teste de
+   * número: a coluna Total pinta `FUNDO_TOTAL` por `backgroundColor` INLINE, e nenhuma classe ganha
+   * de estilo inline — a tira azul do Lucro líquido parava na penúltima célula. O caso afirma que a
+   * célula do Total NÃO tem fundo inline numa linha de faixa, que é a única forma de a classe valer.
+   */
+  it('numa linha de faixa nenhuma célula tem fundo próprio — nem a coluna Total', () => {
+    montar({ lucro_liquido: -1959802.35 });
+    const tr = linhaDe('= Lucro líquido')!;
+    for (const td of Array.from(tr.cells)) {
+      expect(td.style.backgroundColor).toBe('');
+      expect(td.className).toContain('bg-primary');
+    }
+  });
+
+  /* ⚠ E A LINHA DE APOIO É A SEGUNDA LINHA DO MESMO TOTAL (item 12): fora da faixa, o "Lucro por
+     hectare" era uma tira branca logo abaixo do azul e se lia como uma linha NOVA da cascata. */
+  it('"Lucro por hectare" mora na faixa do total a que pertence', () => {
+    const real: DrePecuaria = { ...DRE, fazendas: [],
+      total: linhas({ resultado_com_mercado: -1400000, lucro_liquido: -1959802.35,
+        producao: { ...linhas({}).producao, ha_medio: 4803 } }) };
+    render(<PecDrePanel colunas={colunas('global', { real })}
+      alturaCartao={null} cartaoRef={{ current: null }} unidades={['rs']} />);
+    /* ⚠ SÃO DUAS, e é justamente por isso que o caso as separa: a mesma linha de apoio aparece sob
+       "= Resultado com mercado" (t3) e sob "= Lucro líquido" (t4), e cada uma tem de herdar a faixa
+       do SEU total. Pegar a primeira e chamá-la de "a linha" esconderia metade da regra. */
+    const apoios = linhasDaTabela().filter(tr => (tr.cells[0]?.textContent ?? '').trim().startsWith('Lucro por hectare'));
+    expect(apoios).toHaveLength(2);
+    const [t3, t4] = apoios;
+    expect(t3.className).toContain('bg-[#b6cade]');
+    expect(t3.cells[1].className).toContain('text-red');
+    expect(t4.className).toContain('bg-primary');
+    expect(t4.cells[1].textContent).toContain('▼');
+    expect(t4.cells[1].style.backgroundColor).toBe('');
+  });
+});
+
+/* ══════════════ A COLUNA DO ÍCONE — item 6 ══════════════ */
+
+/**
+ * ⚠ O jsdom NÃO TEM LAYOUT, então não dá para medir o x do ícone aqui — a medição está no relatório
+ * (15 ícones, todos em x=232). O que este caso trava é a CAUSA do desalinhamento: o ícone era o
+ * primeiro filho de uma célula cujo `padding-left` mudava com o recuo da linha, então ele andava
+ * com o nome. Agora o padding é o mesmo em toda linha e o recuo vive num `span` depois do ícone.
+ */
+describe('a coluna do ícone de histórico', () => {
+  it('toda célula de rótulo começa no mesmo padding, com ou sem ícone', () => {
+    render(<PecDrePanel colunas={colunas('global')} alturaCartao={null} cartaoRef={{ current: null }}
+      onAbrirHistorico={() => {}} />);
+    const rotulos = linhasDaTabela().map(tr => tr.cells[0]).filter(Boolean);
+    const comIcone = rotulos.filter(td => td.querySelector('button[aria-label="Ver histórico"]'));
+    expect(comIcone.length).toBeGreaterThan(5);
+    /* Os 7px do padding da célula — o mesmo no subtotal, no grupo e na linha solta. */
+    for (const td of comIcone) expect(td.style.paddingLeft).toBe('7px');
+    /* E quem não tem ícone reserva a coluna dele: 7 + 14. */
+    const semIcone = rotulos.filter(td => !td.querySelector('button[aria-label="Ver histórico"]'));
+    for (const td of semIcone) expect(td.style.paddingLeft).not.toBe('7px');
   });
 });
