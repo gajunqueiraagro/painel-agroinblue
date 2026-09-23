@@ -31,6 +31,11 @@ import { DatePicker } from '@/components/ui/date-picker';
 import type { Categoria } from '@/types/cattle';
 import { META_VISUAL } from '@/lib/statusOperacional';
 import { LancamentoModalEnvelope } from '@/components/lancamento/LancamentoModalEnvelope';
+import { SearchableSelect } from '@/components/ui/searchable-select';
+import { useStatusPilares } from '@/hooks/useStatusPilares';
+import { ReabrirP1Dialog } from '@/components/ReabrirP1Dialog';
+import { anoMesDaData, mesFechadoMotivo } from '@/lib/zootecnico/mesFechadoP1';
+import { useMemo, useState } from 'react';
 
 /* Par rotulo-valor do resumo lateral do Nascimento — mesmo idioma do `Linha` de
    ResumoLateralOC (A17): rotulo cinza a esquerda, valor a direita, traco no vazio.
@@ -114,6 +119,18 @@ export function NascimentoModalShell({
      shells. O que sobra e' o que muda POR TIPO: rotulo de data, titulo do resumo,
      texto do botao e a linha "Cenário". */
   const isMeta = cenario === 'meta';
+  /* ─── MÊS FECHADO (P1) — FAZ-ATIVIDADE-01c ───────────────────────────────────
+     Idioma dos três precedentes (Abate, Venda OC, Compra OC): a pergunta é pelo mês da DATA
+     DIGITADA cruzado com a FAZENDA ESCOLHIDA aqui dentro — não com a do cabeçalho.
+     ⚠ NA EDIÇÃO A FAZENDA NÃO MUDA e o seletor não existe, mas `nascFazendaId` continua
+       apontando para ela: a pergunta segue válida e o lançamento segue sendo daquele mês.
+     ⚠ META NÃO É BARRADA: planejar depois do fechamento é exatamente o que se faz. */
+  const anoMes = anoMesDaData(data);
+  const pilares = useStatusPilares(nascFazendaId || undefined, anoMes, !!nascFazendaId && !!anoMes);
+  const motivoMesFechado = mesFechadoMotivo(
+    !isMeta && pilares.status.p1_mapa_pastos.status === 'oficial', anoMes, nascFazendaNome);
+  const [reabrirP1Aberto, setReabrirP1Aberto] = useState(false);
+  const opcoesFazenda = useMemo(() => fazendasOC.map(f => ({ value: f.id, label: f.nome })), [fazendasOC]);
   /* ── RESUMO DO NASCIMENTO (PR-UI-NASCIMENTO-SHELL-02) ────────────────────────
      ⚠ AUSENCIA E' TRACO. `nascPesoTotal` e' NULL quando falta quantidade ou peso —
      nao zero. "Peso total: 0,00 kg" afirmaria que se multiplicou e deu zero, quando o
@@ -180,9 +197,12 @@ export function NascimentoModalShell({
             {/* ⚠ O BOTAO DIZ O QUE FAZ. Registrar cria um lancamento que nao existia;
                 salvar altera um que ja esta gravado. Mesmo botao com o mesmo texto nos
                 dois modos faria a edicao parecer que registra de novo. */}
-            <Button type="button" onClick={handleRequestRegister} disabled={submitting || nascFazendaFalta}
+            {/* ⚠ O MÊS FECHADO VEM ANTES DOS OUTROS MOTIVOS, como no Abate: não adianta dizer
+                "selecione a fazenda" se, selecionada, o mês recusa. E o motivo é UM só — o mesmo
+                valor governa o `disabled` e o `title`, então não há como travar em silêncio. */}
+            <Button type="button" onClick={handleRequestRegister} disabled={submitting || nascFazendaFalta || !!motivoMesFechado}
               className="bg-white text-primary hover:bg-white/90 font-bold disabled:opacity-60"
-              title={nascFazendaFalta ? 'Selecione a fazenda do lançamento' : isEdicao ? 'Salvar as alterações do nascimento' : 'Registrar o nascimento'}
+              title={motivoMesFechado ? `${motivoMesFechado} — reabra o período para lançar` : nascFazendaFalta ? 'Selecione a fazenda do lançamento' : isEdicao ? 'Salvar as alterações do nascimento' : 'Registrar o nascimento'}
               aria-label={isEdicao ? 'Salvar alterações' : 'Registrar nascimento'}>
               {isEdicao
                 ? (submitting ? 'Salvando…' : 'Salvar alterações')
@@ -227,14 +247,15 @@ export function NascimentoModalShell({
                       <Input readOnly value={nascFazendaNome ?? '—'} title="A fazenda do lançamento não muda por aqui"
                         className={`mt-[3px] h-8 px-2.5 text-[12px] ${CAMPO_TRAVADO}`} />
                     ) : (
-                    <Select value={nascFazendaId} onValueChange={setNascFazendaId}>
-                      <SelectTrigger className={`mt-[3px] h-8 px-2.5 text-[12px] ${nascFazendaFalta ? 'border-destructive' : ''}`}>
-                        <SelectValue placeholder="Selecione a fazenda" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {fazendasOC.map(f => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                      value={nascFazendaId || '__all__'}
+                      onValueChange={v => setNascFazendaId(v === '__all__' ? '' : v)}
+                      options={opcoesFazenda}
+                      placeholder="Buscar fazenda…"
+                      allLabel="Selecione a fazenda"
+                      allValue="__all__"
+                      className={`mt-[3px] [&_button]:h-8 [&_button]:px-2.5 [&_button]:text-[12px] ${nascFazendaFalta ? '[&_button]:border-destructive' : ''}`}
+                    />
                     )}
                     {nascFazendaFalta && (
                       <p className="mt-[3px] text-[10px] text-destructive">Selecione a fazenda do lançamento.</p>
@@ -245,6 +266,21 @@ export function NascimentoModalShell({
                     {/* A20 — DatePicker do sistema, nunca `<input type="date">`. */}
                     <DatePicker value={data} onChange={setData} className="mt-[3px] h-8 px-2.5 text-[12px]" />
                   </div>
+                  {/* ⚠ LARGURA CHEIA, ABAIXO DA DATA: a grade é de 2 colunas e o aviso fala da
+                      data, não de um dos campos. `lg:col-span-2` o tira do fluxo das colunas sem
+                      desalinhar nenhum rótulo — o mesmo recurso do `lg:col-span-3` no Abate. */}
+                  {motivoMesFechado && (
+                    <div className="min-w-0 lg:col-span-2 flex items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+                      <span>
+                        <b className="font-semibold">{motivoMesFechado}.</b>{' '}
+                        Lançamentos nesse mês só depois de reabrir o período.
+                      </span>
+                      <Button type="button" variant="outline" size="sm"
+                        className="h-6 shrink-0 text-[10px]" onClick={() => setReabrirP1Aberto(true)}>
+                        Reabrir mês…
+                      </Button>
+                    </div>
+                  )}
                   <div className="min-w-0">
                     <Label className="text-[10px] text-muted-foreground">Quantidade <span className="text-destructive">*</span></Label>
                     <Input inputMode="numeric" value={qtdInput.displayValue} onChange={qtdInput.onChange} onBlur={qtdInput.onBlur} onFocus={qtdInput.onFocus}
@@ -271,6 +307,12 @@ export function NascimentoModalShell({
                   </div>
                 </div>
               </div>
+      {/* ⚠ REABRIR SEM FECHAR O MODAL: o `onReaberto` refaz a pergunta e o Salvar destrava ali
+          mesmo, com o formulário preenchido. Fechar para reabrir custaria o que já foi digitado. */}
+      {nascFazendaId && anoMes && (
+        <ReabrirP1Dialog open={reabrirP1Aberto} onOpenChange={setReabrirP1Aberto}
+          fazendaId={nascFazendaId} anoMes={anoMes} onReaberto={pilares.refetch} />
+      )}
     </LancamentoModalEnvelope>
   );
 }

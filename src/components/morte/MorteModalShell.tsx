@@ -27,7 +27,7 @@
  * meta tem caminho próprio. A pílula do cabeçalho é ROTULO, não controle — e por isso
  * ela diz o cenário REAL (ver `cenarioRotulo`), nunca um "Realizado" cravado.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -38,6 +38,10 @@ import { CampoMoeda, brl } from '@/components/ui/campo-moeda';
 import type { Categoria } from '@/types/cattle';
 import { META_VISUAL } from '@/lib/statusOperacional';
 import { LancamentoModalEnvelope } from '@/components/lancamento/LancamentoModalEnvelope';
+import { SearchableSelect } from '@/components/ui/searchable-select';
+import { useStatusPilares } from '@/hooks/useStatusPilares';
+import { ReabrirP1Dialog } from '@/components/ReabrirP1Dialog';
+import { anoMesDaData, mesFechadoMotivo } from '@/lib/zootecnico/mesFechadoP1';
 
 /* Par rotulo-valor do resumo lateral — mesmo idioma do `Linha` de ResumoLateralOC
    (A17): rotulo cinza a esquerda, valor a direita, traco no vazio.
@@ -131,6 +135,15 @@ export function MorteModalShell({
      shells. O que sobra e' o que muda POR TIPO: rotulo de data, titulo do resumo,
      texto do botao e a linha "Cenário". */
   const isMeta = cenario === 'meta';
+  /* ─── MÊS FECHADO (P1) — FAZ-ATIVIDADE-01c ───────────────────────────────────
+     Mesmo idioma de Abate/Venda/Compra: mês da DATA DIGITADA × FAZENDA ESCOLHIDA aqui dentro.
+     Meta não é barrada — planejar depois do fechamento é o uso normal do cenário. */
+  const anoMes = anoMesDaData(data);
+  const pilares = useStatusPilares(morteFazendaId || undefined, anoMes, !!morteFazendaId && !!anoMes);
+  const motivoMesFechado = mesFechadoMotivo(
+    !isMeta && pilares.status.p1_mapa_pastos.status === 'oficial', anoMes, morteFazendaNome);
+  const [reabrirP1Aberto, setReabrirP1Aberto] = useState(false);
+  const opcoesFazenda = useMemo(() => fazendasOC.map(f => ({ value: f.id, label: f.nome })), [fazendasOC]);
 
   /* ⚠ AUSENCIA E' TRACO. Sem quantidade ou sem peso nao ha peso total — nao ha "peso
      total de zero". Nenhum `?? 0` no caminho.
@@ -243,9 +256,12 @@ export function MorteModalShell({
       </>}
       acao={<>
         {/* O botao diz o que faz: registrar cria, salvar altera. */}
-        <Button type="button" onClick={handleRequestRegister} disabled={submitting || morteFazendaFalta || motivoFalta || pesoFalta || qtdFalta}
+        {/* ⚠ O MÊS FECHADO VEM PRIMEIRO na cadeia de motivos: não adianta pedir o motivo da
+            morte se, preenchido tudo, o período recusa. */}
+        <Button type="button" onClick={handleRequestRegister} disabled={submitting || morteFazendaFalta || motivoFalta || pesoFalta || qtdFalta || !!motivoMesFechado}
           className="bg-white text-primary hover:bg-white/90 font-bold disabled:opacity-60"
-          title={morteFazendaFalta ? 'Selecione a fazenda do lançamento'
+          title={motivoMesFechado ? `${motivoMesFechado} — reabra o período para lançar`
+            : morteFazendaFalta ? 'Selecione a fazenda do lançamento'
             : motivoFalta ? 'Informe o motivo da morte'
             : pesoFalta ? 'Informe o peso médio'
             : qtdFalta ? 'Informe a quantidade'
@@ -292,14 +308,15 @@ export function MorteModalShell({
                   <Input readOnly value={morteFazendaNome ?? '—'} title="A fazenda do lançamento não muda por aqui"
                     className={`mt-[3px] h-8 px-2.5 text-[12px] ${CAMPO_TRAVADO}`} />
                 ) : (
-                  <Select value={morteFazendaId} onValueChange={setMorteFazendaId}>
-                    <SelectTrigger className={`mt-[3px] h-8 px-2.5 text-[12px] ${morteFazendaFalta ? 'border-destructive' : ''}`}>
-                      <SelectValue placeholder="Selecione a fazenda" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {fazendasOC.map(f => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    value={morteFazendaId || '__all__'}
+                    onValueChange={v => setMorteFazendaId(v === '__all__' ? '' : v)}
+                    options={opcoesFazenda}
+                    placeholder="Buscar fazenda…"
+                    allLabel="Selecione a fazenda"
+                    allValue="__all__"
+                    className={`mt-[3px] [&_button]:h-8 [&_button]:px-2.5 [&_button]:text-[12px] ${morteFazendaFalta ? '[&_button]:border-destructive' : ''}`}
+                  />
                 )}
                 {morteFazendaFalta && (
                   <p className="mt-[3px] text-[10px] text-destructive">Selecione a fazenda do lançamento.</p>
@@ -310,6 +327,20 @@ export function MorteModalShell({
                 {/* A20 — DatePicker do sistema, nunca `<input type="date">`. */}
                 <DatePicker value={data} onChange={setData} className="mt-[3px] h-8 px-2.5 text-[12px]" />
               </div>
+              {/* ⚠ LARGURA CHEIA ABAIXO DA DATA — a grade é de 3 colunas e o aviso fala da data,
+                  não de um campo. `lg:col-span-3` o tira do fluxo sem desalinhar rótulo nenhum. */}
+              {motivoMesFechado && (
+                <div className="min-w-0 lg:col-span-3 flex items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+                  <span>
+                    <b className="font-semibold">{motivoMesFechado}.</b>{' '}
+                    Lançamentos nesse mês só depois de reabrir o período.
+                  </span>
+                  <Button type="button" variant="outline" size="sm"
+                    className="h-6 shrink-0 text-[10px]" onClick={() => setReabrirP1Aberto(true)}>
+                    Reabrir mês…
+                  </Button>
+                </div>
+              )}
               <div className="min-w-0">
                 {/* ⚠ O AVISO ACOMPANHA O BLOQUEIO. A quantidade sempre foi exigida pelo
                     funil e agora tambem trava o botao, porque a conversao "por cabeca"
@@ -398,6 +429,11 @@ export function MorteModalShell({
               </div>
             </div>
           </div>
+      {/* Reabrir sem fechar o modal: o refetch destrava o Salvar com o formulário preenchido. */}
+      {morteFazendaId && anoMes && (
+        <ReabrirP1Dialog open={reabrirP1Aberto} onOpenChange={setReabrirP1Aberto}
+          fazendaId={morteFazendaId} anoMes={anoMes} onReaberto={pilares.refetch} />
+      )}
     </LancamentoModalEnvelope>
   );
 }

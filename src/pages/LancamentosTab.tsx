@@ -18,6 +18,7 @@ import {
   type TipoPesoAbate,
 } from '@/types/cattle';
 import { useStatusPilares } from '@/hooks/useStatusPilares';
+import { mesFechadoMotivo } from '@/lib/zootecnico/mesFechadoP1';
 import { ReabrirP1Dialog } from '@/components/ReabrirP1Dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -634,7 +635,28 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   // PR-NAV-CONTEXTO-FAZENDA-01A — seletor de Fazenda do envelope OC (CompraModalShell): critério ÚNICO
   //   do domínio pecuário (isFazendaPecuaria) — sem Global, sem administrativas, apenas aptas. Inclui a
   //   fazenda atual quando ela própria é válida; a atual gravada só permanece se continuar no domínio.
-  const fazendasOC = useMemo(() => fazendas.filter(isFazendaPecuaria), [fazendas]);
+  /* FAZ-ATIVIDADE-01c — e AGORA SÓ AS ATIVAS. `isFazendaPecuaria` responde "tem pecuária?";
+     `status_operacional` responde "ainda opera?". São perguntas diferentes e o seletor precisa das
+     duas: uma fazenda encerrada continua tendo tido rebanho, e continuava aparecendo para lançar.
+     ⚠ `null` CONTA COMO ATIVA, de propósito. A coluna é `text` nullable com default 'ativa' e hoje
+        tem 0 linhas nulas — tratar a ausência como inativa faria uma fazenda sumir do seletor por
+        um campo que ninguém preencheu. Ausência não é encerramento (sentinela do CLAUDE.md).
+     ⚠ MEDIDO ANTES DE ESCREVER: nas 19 fazendas do banco, este filtro não tira NENHUMA hoje — as 11
+        com `tem_pecuaria = true` são todas 'ativa', e as 6 'inativa' são `Administrativo` com
+        `tem_pecuaria = false`, já fora pela primeira regra. Ele é guarda do futuro, não correção. */
+  const fazendasOC = useMemo(
+    () => fazendas.filter(f => isFazendaPecuaria(f) && (f.status_operacional ?? 'ativa') === 'ativa'),
+    [fazendas]
+  );
+  /* A MESMA LISTA NO FORMATO DO `SearchableSelect` — FAZ-ATIVIDADE-01c. Os oito seletores de
+     fazenda dos modais zootécnicos passaram de `<Select>` a combobox com busca, o mesmo idioma
+     dos campos de fornecedor/frigorífico/comprador que já estão ao lado deles.
+     ⚠ DERIVA DE `fazendasOC`, nunca de `fazendas`: a regra de quem pode receber lançamento mora
+       num lugar só, e o formato da opção não é lugar para decidir isso de novo. */
+  const opcoesFazendaOC = useMemo(
+    () => fazendasOC.map(f => ({ value: f.id, label: f.nome })),
+    [fazendasOC]
+  );
 
   const [aba, setAba] = useState<Aba>(abaInicial || 'entrada');
   // Etapa 1 — modal envolve o formulário; aberto por clique nos cards de tipo.
@@ -676,8 +698,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     if (!data) return undefined;
     return data.slice(0, 7);
   }, [data]);
-  const { status: statusPilaresForm, refetch: refetchPilares } = useStatusPilares(fazendaAtual?.id, formAnoMes);
-  const p1Oficial = statusPilaresForm.p1_mapa_pastos.status === 'oficial';
+  /* ⚠ FAZ-ATIVIDADE-01c — O HOOK QUE MORAVA AQUI SAIU, e não foi substituído: ele perguntava pela
+     fazenda do CABEÇALHO, e seus dois únicos consumidores (o banner da tela de tipos e a trava do
+     save) passaram a perguntar pela fazenda ESCOLHIDA no modal. A pergunta agora é feita uma vez
+     só, em `pilaresDoLancamento`, logo abaixo de `fazendaEscolhidaId` — que é onde a resposta
+     finalmente existe. Duas fontes para "este mês está fechado?" era o desenho anterior, não uma
+     dívida deste PR. */
   const [showReabrirP1, setShowReabrirP1] = useState(false);
 
   // Snapshot completo do contexto operacional ao abrir uma edição. Restaurado
@@ -1352,6 +1378,31 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
        : isVenda ? vendaFazendaId : compraFazendaId)
     : '';
   const fazendaEscolhidaNome = fazendasOC.find(f => f.id === fazendaEscolhidaId)?.nome ?? null;
+
+  /* ─── MÊS FECHADO (P1) DENTRO DO MODAL — FAZ-ATIVIDADE-01c ───────────────────────────
+     A fazenda de que o formulário genérico fala: a ESCOLHIDA no seletor quando existe um, e a do
+     cabeçalho quando não existe (Transferência, Consumo fora de Global, abate/venda legados).
+     ⚠ EM GLOBAL NÃO HÁ FAZENDA: `'__global__'` é sentinela de navegação, não id de fazenda, e
+       perguntar o status dele devolveria `pendente` para sempre — um "mês aberto" falso. Vazio faz
+       o hook não perguntar, e o guard de Global no save (`escolheFazenda`) já recusa antes disso.
+     ⚠ POR QUE UM SEGUNDO HOOK, e não trocar o argumento do de cima: `fazendaEscolhidaId` só existe
+       aqui, e não 670 linhas acima, onde o hook antigo morava: ela depende de `escolheFazenda` e
+       dos cinco states de seletor, que só existem a esta altura do arquivo. O hook de cima foi
+       APAGADO no mesmo PR — não há duas fontes, há uma, e ela é a que o save usa. */
+  const fazendaDoLancamentoId = fazendaEscolhidaId
+    || (fazendaAtual?.id && fazendaAtual.id !== '__global__' ? fazendaAtual.id : '');
+  const fazendaDoLancamentoNome = fazendaEscolhidaNome ?? (fazendaAtual?.id !== '__global__' ? fazendaAtual?.nome ?? null : null);
+  const pilaresDoLancamento = useStatusPilares(
+    fazendaDoLancamentoId || undefined,
+    formAnoMes,
+    !!fazendaDoLancamentoId && !!formAnoMes,
+  );
+  /* ⚠ O CENÁRIO META NÃO É BARRADO, como nos três precedentes: meta é planejamento, e planejar
+     depois do fechamento é exatamente o que se faz. O `!isCenarioMeta` vinha do banner antigo e
+     continua valendo. */
+  const mesFechadoNoForm = !isCenarioMeta
+    && pilaresDoLancamento.status.p1_mapa_pastos.status === 'oficial';
+  const motivoMesFechado = mesFechadoMotivo(mesFechadoNoForm, formAnoMes, fazendaDoLancamentoNome);
   const morteFazendaFalta = isMorte && !morteFazendaId;
   const morteQtd = parseNumericValue(quantidade) || 0;
   const mortePeso = parseDecimalInput(pesoKg) ?? 0;
@@ -3401,8 +3452,14 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       if (ocStatusComercial === 'fechada') { void salvarDadosOperacaoOC(); return; }
       void salvarOperacaoOC(); return;
     }
-    // ── P1 governance: selective block (NÃO se aplica ao cenário META) ──
-    if (p1Oficial && !isCenarioMeta) {
+    /* ── P1 governance: selective block (NÃO se aplica ao cenário META) ──
+       ⚠ FAZ-ATIVIDADE-01c — A TRAVA E O BANNER LEEM A MESMA FONTE. Era `p1Oficial`, que pergunta
+         pela fazenda do CABEÇALHO; agora é `mesFechadoNoForm`, que pergunta pela fazenda que este
+         save vai de fato gravar. Com seletor no modal as duas divergem: em Global o cabeçalho é
+         `'__global__'` e nunca respondia nada, então lançar numa fazenda com o mês fechado passava
+         direto; e escolhendo a fazenda B com o cabeçalho na A, travava pelo mês da A.
+       ⚠ `mesFechadoNoForm` JÁ INCLUI o `!isCenarioMeta` — a condição não sumiu, mudou de lugar. */
+    if (mesFechadoNoForm) {
       const isEditing = !!editingAbateId;
       if (!isEditing) {
         // New entries are always blocked when P1 is closed
@@ -5077,6 +5134,27 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       </>
       )}
 
+      {/* ── MÊS FECHADO (P1) — FAZ-ATIVIDADE-01c ──
+          ⚠ AQUI, E NÃO NA TELA DE TIPOS. Ele fica LOGO ABAIXO da linha que contém o campo Data,
+            porque é a data digitada que faz a pergunta — e fora da grade de 5 colunas, em largura
+            cheia, para não roubar a coluna de nenhum campo nem desalinhar os rótulos.
+          ⚠ MESMO IDIOMA DOS TRÊS PRECEDENTES (Abate, Venda OC, Compra OC): âmbar, 11px, frase +
+            "Reabrir mês…". Mês fechado não é erro do operador — é estado do período, com caminho.
+          ⚠ E O BOTÃO ABRE O DIÁLOGO QUE JÁ EXISTE no fim deste arquivo, o mesmo `showReabrirP1`:
+            uma peça para todas as superfícies, que pede motivo e audita. */}
+      {motivoMesFechado && (
+        <div className="flex items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+          <span>
+            <b className="font-semibold">{motivoMesFechado}.</b>{' '}
+            Lançamentos nesse mês só depois de reabrir o período.
+          </span>
+          <Button type="button" variant="outline" size="sm"
+            className="h-6 shrink-0 text-[10px]" onClick={() => setShowReabrirP1(true)}>
+            Reabrir mês…
+          </Button>
+        </div>
+      )}
+
       {/* Motivo da Morte */}
       {isMorte && (
         <div>
@@ -5109,16 +5187,17 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     com o nome do FILTRO, e mostrava "Global": um valor que não é fazenda
                     nenhuma. O preço de estoque do consumo é por fazenda, então sem uma de
                     verdade não há o que buscar. Mesmo gesto das Chuvas em Global. */
-                <Select value={consumoFazendaId} onValueChange={setConsumoFazendaId}>
-                  <SelectTrigger className={`mt-0.5 h-7 text-[11px] ${consumoFazendaId ? '' : 'border-destructive'}`}>
-                    <SelectValue placeholder="Escolha a fazenda" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {fazendasOC.map(f => (
-                      <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                /* FAZ-ATIVIDADE-01c — busca no lugar da lista rolante, como nos campos de
+                   fornecedor/frigorífico/comprador desta mesma tela. */
+                <SearchableSelect
+                  value={consumoFazendaId || '__all__'}
+                  onValueChange={v => setConsumoFazendaId(v === '__all__' ? '' : v)}
+                  options={opcoesFazendaOC}
+                  placeholder="Buscar fazenda…"
+                  allLabel="Escolha a fazenda"
+                  allValue="__all__"
+                  className={`mt-0.5 [&_button]:h-7 [&_button]:text-[11px] ${consumoFazendaId ? '' : '[&_button]:border-destructive'}`}
+                />
               ) : campos.origem.auto ? (
                 <Input value={campos.origem.value} readOnly className="mt-0.5 h-7 text-[11px] bg-muted cursor-not-allowed" />
               ) : (campos.origem as any).useSelect && outrasFazendas.length > 0 ? (
@@ -5750,27 +5829,18 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       {/* Master lock banner — derivado da data atual do form */}
       {data && <MasterLockBanner anoMes={data.slice(0, 7)} className="mb-2" />}
 
-      {/* ── P1 governance banner ──
-          ⚠ AMBAR, NAO VERMELHO — uniformizado com as tres OCs. Mes fechado nao e' erro do
-          operador nem falha do sistema: e' estado do periodo, com caminho para resolver.
-          Vermelho aqui e ambar ao lado ensinava que sao dois estados diferentes. */}
-      {p1Oficial && !isCenarioMeta && (
-        <div className="bg-amber-50 border border-amber-300 rounded-md px-3 py-2 mb-2 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="text-[11px]">
-              <span className="font-bold text-amber-800">Mês fechado (P1).</span>{' '}
-              <span className="text-muted-foreground">
-                {editingAbateId
-                  ? 'Campos zootécnicos estruturais estão bloqueados. Campos financeiros/comerciais podem ser editados.'
-                  : 'Reabra o período para alterar campos estruturais ou registrar novos lançamentos.'}
-              </span>
-            </div>
-          </div>
-          <Button variant="outline" size="sm" className="text-[10px] h-6 shrink-0 ml-2" onClick={() => setShowReabrirP1(true)}>
-            Reabrir
-          </Button>
-        </div>
-      )}
+      {/* FAZ-ATIVIDADE-01c — O AVISO DE "MÊS FECHADO (P1)" SAIU DAQUI, e a razão é de lugar, não
+          de conteúdo: ele morava na TELA DE TIPOS, antes de `renderTipoCards()` e fora do
+          `<Dialog>`, e falava de um mês que o operador nunca escolheu.
+          ⚠ A SEMENTE É `new Date()` (o `useState` de `data`, no topo do arquivo), não o período
+            global. Quem abria a tela em setembro via o aviso de setembro mesmo querendo lançar em
+            agosto — e quem queria lançar em setembro num mês aberto não via nada. A pergunta
+            "este mês está fechado?" só tem resposta depois que existe uma data digitada E uma
+            fazenda escolhida, e as duas só existem DENTRO do modal.
+          ⚠ ELE NÃO FOI APAGADO, FOI MUDADO DE CASA: cada modal agora faz a mesma pergunta com a
+            fazenda que ele próprio vai gravar, no idioma que Abate/Venda/Compra já usavam.
+          ⚠ O `ReabrirP1Dialog` do fim do arquivo CONTINUA aqui e continua sendo o único — os
+            modais o abrem pelo mesmo `setShowReabrirP1`. */}
 
       {/* ── P1 selective block inline message ── */}
       {p1BloqueioMsg && (
@@ -6486,14 +6556,21 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         }}
       />
 
-      {/* Reabertura P1 dialog */}
-      {fazendaAtual?.id && formAnoMes && (
+      {/* Reabertura P1 dialog
+          ⚠ FAZ-ATIVIDADE-01c — A FAZENDA É A DO LANÇAMENTO, não a do cabeçalho. Enquanto o aviso
+            morava na tela de tipos as duas eram a mesma coisa; com o aviso dentro do modal, quem
+            escolhe "Faz. Sta. Rita" no seletor e clica em "Reabrir mês…" tem de reabrir Sta. Rita.
+            Com `fazendaAtual` ele reabriria a do cabeçalho — outro mês, de outra fazenda, com
+            motivo auditado e tudo — e voltaria para um Salvar que continuaria travado.
+          ⚠ E O `onReaberto` É O QUE LIBERA O BOTÃO SEM FECHAR O MODAL: o refetch refaz a
+            pergunta, `motivoMesFechado` vira null e o Salvar destrava ali mesmo. */}
+      {fazendaDoLancamentoId && formAnoMes && (
         <ReabrirP1Dialog
           open={showReabrirP1}
           onOpenChange={setShowReabrirP1}
-          fazendaId={fazendaAtual.id}
+          fazendaId={fazendaDoLancamentoId}
           anoMes={formAnoMes}
-          onReaberto={refetchPilares}
+          onReaberto={pilaresDoLancamento.refetch}
         />
       )}
       {evolucaoSugestao && (

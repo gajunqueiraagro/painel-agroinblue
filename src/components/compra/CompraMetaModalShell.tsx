@@ -30,6 +30,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { DatePicker } from '@/components/ui/date-picker';
+import { useMemo } from 'react';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { FornecedorSelect } from '@/components/shared/FornecedorSelect';
 import type { Categoria } from '@/types/cattle';
@@ -133,6 +134,10 @@ export function CompraMetaModalShell({
   compraQtd, compraPeso, valorPrevisto, submitting,
   handleRequestRegister, fecharModalOCComAutosave,
 }: CompraMetaModalShellProps) {
+  /* A lista de fazendas no formato do combobox — FAZ-ATIVIDADE-01c. Deriva de `fazendasOC`, que já
+     carrega a regra de quem pode receber lançamento; o formato da opção não redecide isso. */
+  const opcoesFazenda = useMemo(() => fazendasOC.map(f => ({ value: f.id, label: f.nome })), [fazendasOC]);
+
   /* ⚠ AUSENCIA E' TRACO. Sem quantidade ou sem peso nao ha peso total — nao ha "peso
      total de zero". Nenhum `?? 0` no caminho.
      ⚠ ARROBA POR PESO VIVO: peso total / 30. A divisao por 15 e' de CARCACA e vale so
@@ -234,14 +239,15 @@ export function CompraMetaModalShell({
               <Input readOnly value={compraFazendaNome ?? '—'} title="A fazenda do lançamento não muda por aqui"
                 className="mt-[3px] h-8 px-2.5 text-[12px] bg-muted border-border/60 text-muted-foreground" />
             ) : (
-            <Select value={compraFazendaId} onValueChange={setCompraFazendaId}>
-              <SelectTrigger className={`mt-[3px] h-8 px-2.5 text-[12px] ${compraFazendaFalta ? 'border-destructive' : ''}`}>
-                <SelectValue placeholder="Selecione a fazenda" />
-              </SelectTrigger>
-              <SelectContent>
-                {fazendasOC.map(f => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              value={compraFazendaId || '__all__'}
+              onValueChange={v => setCompraFazendaId(v === '__all__' ? '' : v)}
+              options={opcoesFazenda}
+              placeholder="Buscar fazenda…"
+              allLabel="Selecione a fazenda"
+              allValue="__all__"
+              className={`mt-[3px] [&_button]:h-8 [&_button]:px-2.5 [&_button]:text-[12px] ${compraFazendaFalta ? '[&_button]:border-destructive' : ''}`}
+            />
             )}
             {compraFazendaFalta && (
               <p className="mt-[3px] text-[10px] text-destructive">Selecione a fazenda do lançamento.</p>

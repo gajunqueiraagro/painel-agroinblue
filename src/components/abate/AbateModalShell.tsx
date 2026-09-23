@@ -32,7 +32,6 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { DatePicker } from '@/components/ui/date-picker';
 import { SearchableSelect } from '@/components/ui/searchable-select';
@@ -257,6 +256,10 @@ export function AbateModalShell({
   quantidadeNum, pesoKgNum, submitting, onSalvarOperacao, onSalvarNegociacao, semAlteracoes = false,
   onConcluirNegociacao, onReabrirNegociacao, onFechar,
 }: AbateModalShellProps) {
+  /* A lista de fazendas no formato do combobox — FAZ-ATIVIDADE-01c. Deriva de `fazendasOC`, que já
+     carrega a regra de quem pode receber lançamento; o formato da opção não redecide isso. */
+  const opcoesFazenda = useMemo(() => fazendasOC.map(f => ({ value: f.id, label: f.nome })), [fazendasOC]);
+
   /* ⚠ 'abate', NAO 'venda'. O clone do VendaModalShell trouxe a aba inicial da venda, e
      como `rodapeTemSalvar` pergunta `abaAtiva === 'abate'`, o rodape nascia SEM o Salvar —
      ele so' aparecia depois de trocar de aba e voltar. Nenhuma aba deste shell se chama
@@ -1020,14 +1023,16 @@ export function AbateModalShell({
                 <div className="min-w-0">
                   {/* ⚠ ORIGEM, e nao destino: numa venda o gado SAI da fazenda. */}
                   <Label className="text-[10px] text-muted-foreground">Fazenda de origem <span className="text-destructive">*</span></Label>
-                  <Select value={abateFazendaId} onValueChange={setAbateFazendaId}>
-                    <SelectTrigger className={`mt-[3px] h-8 px-2.5 text-[12px] ${fazendaFalta ? 'border-destructive' : ''}`}>
-                      <SelectValue placeholder="Selecione a fazenda" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {fazendasOC.map(f => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    value={abateFazendaId || '__all__'}
+                    onValueChange={v => setAbateFazendaId(v === '__all__' ? '' : v)}
+                    options={opcoesFazenda}
+                    placeholder="Buscar fazenda…"
+                    allLabel="Selecione a fazenda"
+                    allValue="__all__"
+                    dense
+                    className={`mt-[3px] [&_button]:h-8 [&_button]:px-2.5 [&_button]:text-[12px] ${fazendaFalta ? '[&_button]:border-destructive' : ''}`}
+                  />
                   {fazendaFalta && (
                     <p className="mt-[3px] text-[10px] text-destructive">Selecione a fazenda de origem.</p>
                   )}

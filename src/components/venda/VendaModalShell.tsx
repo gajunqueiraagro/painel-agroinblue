@@ -229,6 +229,10 @@ export function VendaModalShell({
   quantidadeNum, pesoKgNum, submitting, onSalvarOperacao, onSalvarNegociacao, semAlteracoes = false,
   onConcluirNegociacao, onReabrirNegociacao, onFechar,
 }: VendaModalShellProps) {
+  /* A lista de fazendas no formato do combobox — FAZ-ATIVIDADE-01c. Deriva de `fazendasOC`, que já
+     carrega a regra de quem pode receber lançamento; o formato da opção não redecide isso. */
+  const opcoesFazenda = useMemo(() => fazendasOC.map(f => ({ value: f.id, label: f.nome })), [fazendasOC]);
+
   const [abaAtiva, setAbaAtiva] = useState<string>('venda');
   /* PR-OC-VENDA-REABRIR-NEG-01 — o dialogo de reabertura. Estado local: e' um gesto da
      tela, nao da operacao. */
@@ -907,14 +911,15 @@ export function VendaModalShell({
               <div className="min-w-0">
                 {/* ⚠ ORIGEM, e nao destino: numa venda o gado SAI da fazenda. */}
                 <Label className="text-[10px] text-muted-foreground">Fazenda de origem <span className="text-destructive">*</span></Label>
-                <Select value={vendaFazendaId} onValueChange={setVendaFazendaId}>
-                  <SelectTrigger className={`mt-[3px] h-8 px-2.5 text-[12px] ${fazendaFalta ? 'border-destructive' : ''}`}>
-                    <SelectValue placeholder="Selecione a fazenda" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {fazendasOC.map(f => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={vendaFazendaId || '__all__'}
+                  onValueChange={v => setVendaFazendaId(v === '__all__' ? '' : v)}
+                  options={opcoesFazenda}
+                  placeholder="Buscar fazenda…"
+                  allLabel="Selecione a fazenda"
+                  allValue="__all__"
+                  className={`mt-[3px] [&_button]:h-8 [&_button]:px-2.5 [&_button]:text-[12px] ${fazendaFalta ? '[&_button]:border-destructive' : ''}`}
+                />
                 {fazendaFalta && (
                   <p className="mt-[3px] text-[10px] text-destructive">Selecione a fazenda de origem.</p>
                 )}

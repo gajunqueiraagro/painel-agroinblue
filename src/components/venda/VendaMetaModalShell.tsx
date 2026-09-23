@@ -23,6 +23,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { DatePicker } from '@/components/ui/date-picker';
+import { useMemo } from 'react';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { FornecedorSelect } from '@/components/shared/FornecedorSelect';
 import { CampoPrecoVenda } from '@/components/venda/CampoPrecoVenda';
@@ -111,6 +112,10 @@ export function VendaMetaModalShell({
   vendaQtd, vendaPeso, valorPrevisto, submitting,
   handleRequestRegister, fecharModalOCComAutosave,
 }: VendaMetaModalShellProps) {
+  /* A lista de fazendas no formato do combobox — FAZ-ATIVIDADE-01c. Deriva de `fazendasOC`, que já
+     carrega a regra de quem pode receber lançamento; o formato da opção não redecide isso. */
+  const opcoesFazenda = useMemo(() => fazendasOC.map(f => ({ value: f.id, label: f.nome })), [fazendasOC]);
+
   const isEdicao = modo === 'edicao';
   /* ⚠ AUSENCIA E' TRACO. Sem quantidade ou sem peso nao ha peso total.
      ⚠ ARROBA POR PESO VIVO: peso total / 30. A divisao por 15 e' de carcaca, so' no abate. */
@@ -204,14 +209,15 @@ export function VendaMetaModalShell({
               <Input readOnly value={vendaFazendaNome ?? '—'} title="A fazenda do lançamento não muda por aqui"
                 className={`mt-[3px] h-8 px-2.5 text-[12px] ${CAMPO_TRAVADO}`} />
             ) : (
-              <Select value={vendaFazendaId} onValueChange={setVendaFazendaId}>
-                <SelectTrigger className={`mt-[3px] h-8 px-2.5 text-[12px] ${vendaFazendaFalta ? 'border-destructive' : ''}`}>
-                  <SelectValue placeholder="Selecione a fazenda" />
-                </SelectTrigger>
-                <SelectContent>
-                  {fazendasOC.map(f => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                value={vendaFazendaId || '__all__'}
+                onValueChange={v => setVendaFazendaId(v === '__all__' ? '' : v)}
+                options={opcoesFazenda}
+                placeholder="Buscar fazenda…"
+                allLabel="Selecione a fazenda"
+                allValue="__all__"
+                className={`mt-[3px] [&_button]:h-8 [&_button]:px-2.5 [&_button]:text-[12px] ${vendaFazendaFalta ? '[&_button]:border-destructive' : ''}`}
+              />
             )}
             {vendaFazendaFalta && (
               <p className="mt-[3px] text-[10px] text-destructive">Selecione a fazenda do lançamento.</p>

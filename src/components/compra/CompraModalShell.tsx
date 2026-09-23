@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, type ChangeEvent } from 'react';
+import { useState, useEffect, useRef, useMemo, type ChangeEvent } from 'react';
 import { useStatusPilares } from '@/hooks/useStatusPilares';
 import { ReabrirP1Dialog } from '@/components/ReabrirP1Dialog';
 import { Button } from '@/components/ui/button';
@@ -164,6 +164,10 @@ const MESES_EXTENSO = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
 export function CompraModalShell(api: CompraModalShellProps) {
+  /* A lista de fazendas no formato do combobox — FAZ-ATIVIDADE-01c. Deriva de `api.fazendas`, que já
+     carrega a regra de quem pode receber lançamento; o formato da opção não redecide isso. */
+  const opcoesFazenda = useMemo(() => api.fazendas.map(f => ({ value: f.id, label: f.nome })), [api.fazendas]);
+
   // Aba inicial: 'compra' por padrão; quando aberto pelo Financeiro V2 (?oc_aba=financeiro em modo OC),
   //   abre já na aba Financeiro. Só aceita abas que existem no modo OC.
   const [reabrirP1Aberto, setReabrirP1Aberto] = useState(false);
@@ -594,12 +598,17 @@ export function CompraModalShell(api: CompraModalShellProps) {
                 {/* PR-NAV-CONTEXTO-FAZENDA-01A — `api.fazendas` já vem filtrada ao domínio pecuário na
                     origem (critério único isFazendaPecuaria: sem Global, sem administrativas, só aptas).
                     A fazenda gravada só aparece selecionada se continuar válida para o domínio. */}
-                <Select value={api.fazendaDestinoId} onValueChange={api.setFazendaDestinoId} disabled={permissoes.negociacaoReadOnly}>
-                  <SelectTrigger className={`mt-[3px] h-8 px-2.5 text-[12px] ${permissoes.negociacaoReadOnly ? CAMPO_TRAVADO : ''}`}><SelectValue placeholder="Selecione a fazenda" /></SelectTrigger>
-                  <SelectContent className={DARK_SELECT_CONTENT}>
-                    {api.fazendas.map(f => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={api.fazendaDestinoId || '__all__'}
+                  onValueChange={v => api.setFazendaDestinoId(v === '__all__' ? '' : v)}
+                  options={opcoesFazenda}
+                  placeholder="Buscar fazenda…"
+                  allLabel="Selecione a fazenda"
+                  allValue="__all__"
+                  disabled={permissoes.negociacaoReadOnly}
+                  dense
+                  className={`mt-[3px] [&_button]:h-8 [&_button]:px-2.5 [&_button]:text-[12px] ${permissoes.negociacaoReadOnly ? `[&_button]:${CAMPO_TRAVADO.split(' ').join(' [&_button]:')}` : ''}`}
+                />
                 {api.modoOC && !permissoes.negociacaoReadOnly && api.ocFazendaValida === false && (
                   <p className="mt-[3px] text-[10px] text-destructive">Selecione a fazenda da operação.</p>
                 )}
