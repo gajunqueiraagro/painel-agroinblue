@@ -500,10 +500,22 @@ export interface CaixaFaixa {
  * ⚠ E O QUE EXPLICA VAI PARA O `title`: "a pagar 136.277,79" dentro da caixa disputava espaço com
  * o número que a caixa existe para mostrar.
  */
-export function Caixas({ caixas, colunas = 6, selecionada, onEscolher, grande }: {
+export function Caixas({ caixas, colunas = 6, selecionada, onEscolher, grande, extra }: {
   caixas: CaixaFaixa[];
   /** Quantas por linha. A lavoura usa 6; os seletores de visão da pecuária, 4. */
   colunas?: number;
+  /**
+   * OS CONTROLES DA GRADE, NAS COLUNAS QUE SOBRAM — DRE-CASCATA-03b-fix2.
+   *
+   * ⚠ ELES MORAVAM NUMA LINHA PRÓPRIA E SUMIAM DA TELA. A régua de controles media 1068px num
+   * contêiner de 887: o grupo "Comparar" começava em x=1105 e ficava FORA da área visível — para o
+   * operador, ele não existia. Aqui eles ocupam o espaço que a faixa de cards já reservava vazio
+   * (a pecuária tem 3 cards numa grade de 6), a linha de 28px deixa de existir e a tabela sobe.
+   * ⚠ E O LUGAR NÃO É ARBITRÁRIO: o card "Por fazenda" e os chips de unidade respondem à mesma
+   * pergunta — o que a grade mostra. Separá-los por uma linha em branco era o que os fazia
+   * parecer dois assuntos.
+   */
+  extra?: ReactNode;
   /**
    * ⚠ CAIXA SELETORA — DRE-PEC-TELA-02. Com `onEscolher`, cada caixa vira um botão e a de `chave`
    * igual a `selecionada` fica em navy com texto branco: a mesma resposta visual do `Segmentado`
@@ -563,6 +575,15 @@ export function Caixas({ caixas, colunas = 6, selecionada, onEscolher, grande }:
             </button>
           );
         })}
+        {/* ⚠ ELE OCUPA TODAS AS COLUNAS QUE SOBRAM, não uma: com `span` fixo, acrescentar um card
+            um dia deixaria os controles por cima dele. E fica ALINHADO À DIREITA, encostado na
+            borda do cartão, que é onde a régua de controles sempre esteve. */}
+        {extra && (
+          <div className="flex min-w-0 items-center justify-end gap-2"
+            style={{ gridColumn: `span ${Math.max(1, colunas - caixas.length)}` }}>
+            {extra}
+          </div>
+        )}
       </div>
     );
   }

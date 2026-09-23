@@ -19,7 +19,7 @@
  * ficava atrás de uma barra de rolagem. À esquerda, ele fica congelado junto da coluna de rótulos
  * e as fazendas passam por baixo dele.
  */
-import { Fragment, useMemo, useState, type CSSProperties } from 'react';
+import { Fragment, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { ChevronRight, BarChart3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CINZA_CABECALHO } from '@/lib/idiomaVisual';
@@ -1073,7 +1073,7 @@ function LinhaCentro({ def, centro, colunas, bloco, unidades, onAbrirLista }: {
  * ele encolheria os quatro cards a cada troca — a lei de estabilidade.
  */
 export function FaixaVisoesPec({ visao, onVisao, real, meta, carregandoMeta, anoAnterior,
-  carregandoAnoAnterior, nAnos, onNAnos, deltas = [], refDelta = 'meta' }: {
+  carregandoAnoAnterior, nAnos, onNAnos, deltas = [], refDelta = 'meta', controles }: {
   visao: VisaoPec;
   onVisao: (v: VisaoPec) => void;
   real: DrePecuaria;
@@ -1086,6 +1086,8 @@ export function FaixaVisoesPec({ visao, onVisao, real, meta, carregandoMeta, ano
   /** Os chips de Δ ligados na tela — a nota do card Global só existe quando há algum. */
   deltas?: readonly ('rs' | 'pct')[];
   refDelta?: 'meta' | 'ano';
+  /** Os controles da grade — ver `Caixas.extra`. Eles entram nas três colunas vazias. */
+  controles?: ReactNode;
 }) {
   const rp = real.total.resultado_periodo;
   const delta = (outro: DrePecuaria) => rp - outro.total.resultado_periodo;
@@ -1119,7 +1121,7 @@ export function FaixaVisoesPec({ visao, onVisao, real, meta, carregandoMeta, ano
      resolvia isso sozinha. Na linha de rateio ele fica onde a lavoura já põe os controles da
      grade — e as caixas passam a ter a MESMA largura nas duas abas. */
   return (
-    <Caixas caixas={caixas} colunas={6} selecionada={visao}
+    <Caixas caixas={caixas} colunas={6} selecionada={visao} extra={controles}
       onEscolher={ch => { const v = VISOES.find(x => x === ch); if (v) onVisao(v); }} />
   );
 }

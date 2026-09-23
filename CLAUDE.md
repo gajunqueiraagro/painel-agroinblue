@@ -439,6 +439,23 @@ no mesmo arquivo.
   sentidos, rotulo do negativo embaixo, zero na base sem negativos), o delta em pontos
   percentuais, o piso do "k" da tabela e a troca de referencia do delta pelo cabecalho. Os 22
   skipped e as 3 falhas pre-existentes seguem iguais.
+  De 1745 para 1753 em 2026-09-23, e de novo SEM PR PROPRIO: a linha ficou parada durante o
+  DRE-CASCATA-02, o 03a e o 03b, que acrescentaram 8 casos ao longo da frente. O 1753 foi medido no
+  HEAD 67a79233, em arvore limpa, e e' a partir dele que a conta abaixo comeca.
+  De 1753 para 1759 no DRE-CASCATA-03b-fix1 (commit 204b2cc4), +6 e TODOS em
+  `src/pages/pecDrePanel.test.tsx`, que foi de 35 para 41 casos. Cinco sao a COR e a FAIXA de um
+  total — o numero branco com marcador ▼/▲ no azul cheio, o marcador que some no zero, o azul
+  escuro em vez de verde no positivo, a faixa cobrindo TODAS as celulas da linha (inclusive a
+  coluna Total, cujo fundo e' inline e ganhava da classe) e as duas linhas de apoio herdando cada
+  uma a faixa do SEU total. O sexto e' a coluna do icone de historico.
+  ⚠ ELES NASCEM DE TRES VOLTAS NA MESMA REGRA, e e' o que justifica o arquivo: no 03b o total ficou
+  PRETO ("a faixa ja destaca"), no fix1 ganhou verde e vermelho (e o verde brigou com a cor da
+  natureza "receita"), e so' no adendo virou azul escuro e vermelho com marcador no t4. As tres
+  voltas passaram pelos sete gates sem que nenhum dissesse nada — COR NAO TEM GATE, e agora tem.
+  ⚠ E DOIS CASOS EXISTENTES FALHARAM ANTES DE SEREM ATUALIZADOS, pela razao certa: o cabecalho
+  perdeu a linha do "N cab med." (adendo item 9) e os dois liam o subtitulo — um cobrava a string
+  "10.000 cab", o outro o `\u00a0` da linha vazia. Foram atualizados para o contrato novo e o
+  primeiro passou a AFIRMAR a ausencia (`not.toContain('cab med.')`), nunca afrouxados para passar.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 

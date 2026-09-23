@@ -437,6 +437,68 @@ export function AgriDreLavouraTab() {
     const novo = Object.fromEntries(gruposDaAba.map(g => [g, alvo]));
     if (ehPec) setAbertosPec(novo); else setAbertos(novo);
   };
+  /**
+   * OS CONTROLES DA GRADE DA PECUÁRIA — DRE-CASCATA-03b-fix2.
+   *
+   * ⚠ ELES SAÍRAM DA LINHA PRÓPRIA PORQUE ELA NÃO CABIA NA TELA. Medido em 23/09: a régua de
+   * controles somava 1068px dentro de um cartão de 887, e o grupo "Comparar" começava em x=1105 —
+   * fora da área visível, sem barra de rolagem que o alcançasse. Um controle que o operador não vê
+   * não existe. Aqui eles ocupam as três colunas que a faixa de cards já deixava vazias (a
+   * pecuária tem 3 cards numa grade de 6), e a linha de 28px deixou de existir na aba.
+   * ⚠ O SLOT DA VISÃO É EXCLUSIVO E DE LARGURA FIXA: Global mostra "Comparar", x Anos mostra
+   * "anos anteriores", Por fazenda não mostra nada — e os três ocupam os MESMOS 247px, que é a
+   * largura do maior. Sem a largura fixa, trocar de visão moveria os chips de unidade e o "abrir
+   * tudo", que não têm nada com a visão.
+   * ⚠ E A EXCLUSIVIDADE TEM UMA CONSEQUÊNCIA QUE FICA REGISTRADA: os chips de Δ também governam a
+   * visão x Anos (lá cada ano ganha uma coluna de Δ contra o período da tela). Ligados no Global e
+   * trocando para x Anos, as colunas de Δ aparecem sem que o chip esteja à mão para desligá-las —
+   * volta-se ao Global para isso. Foi decisão do briefing ("nunca os dois juntos"), não descuido.
+   */
+  const controlesPec = (
+    <>
+      <ChipsUnidade valor={unidadesPec} onEscolher={setUnidadesPec}
+        opcoes={UNIDADES_PEC_GRADE.map(u => ({ valor: u, rotulo: ROTULO_UNIDADE[u] }))} />
+      <span className="flex w-[247px] shrink-0 items-center justify-end gap-1.5">
+        {visaoPec === 'global' && <>
+          {/* ⚠ A BARRA VERTICAL MORA DENTRO DO SLOT, não antes dele: o conteúdo é ancorado à
+              direita, então ela acompanha o grupo e nada se move quando o slot fica vazio. */}
+          <span className="h-[14px] w-px shrink-0 bg-border" aria-hidden />
+          <span className="shrink-0 whitespace-nowrap text-[10px] text-muted-foreground">Comparar:</span>
+          {/* ⚠ O SELETOR SÓ EXISTE COM Δ LIGADO — sem diferença na tela ele não governa nada —, mas
+              o LUGAR dele é reservado sempre: senão a palavra "Comparar:" andaria 104px ao ligar o
+              primeiro chip. */}
+          <span className="flex w-[104px] shrink-0 items-center justify-start">
+            {deltasPec.length > 0 && (
+              <Select value={refDeltaPec} onValueChange={v => setRefDeltaPec(v as 'meta' | 'ano')}>
+                <SelectTrigger className="h-[22px] w-[104px] text-[10px]"
+                  title="Compara o realizado com a meta ou com o período anterior">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="meta" className="text-[12px]">Meta</SelectItem>
+                  <SelectItem value="ano" className="text-[12px]">Ano anterior</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+          </span>
+          <ChipsUnidade valor={deltasPec} onEscolher={setDeltasPec} permiteVazio
+            opcoes={[{ valor: 'rs', rotulo: 'Δ R$' }, { valor: 'pct', rotulo: 'Δ %' }]} />
+        </>}
+        {visaoPec === 'anos' && <>
+          <span className="h-[14px] w-px shrink-0 bg-border" aria-hidden />
+          <SeletorAnosPec visao={visaoPec} nAnos={nAnosPec} onNAnos={setNAnosPec} />
+        </>}
+      </span>
+      {/* ⚠ UM BOTÃO SÓ, QUE DIZ O QUE VAI FAZER — o mesmo da linha de antes, palavra por palavra. */}
+      <button type="button" onClick={alternarTudo}
+        className="shrink-0 whitespace-nowrap rounded border px-2 text-[10px] text-muted-foreground
+          hover:bg-muted hover:text-foreground"
+        style={{ height: 22 }}>
+        {tudoAberto ? 'fechar tudo' : 'abrir tudo'}
+      </button>
+    </>
+  );
+
   /* ⚠ A ABA É ESTADO DE TELA, não de URL: ela não muda o QUE se vê (a safra e a cultura mudam),
      só o ângulo. Pôr mais um parâmetro na barra por causa dela seria ruído no link que o
      operador copia. Volta a 'resultado' ao trocar de cultura — ver o efeito abaixo. */
@@ -833,7 +895,7 @@ export function AgriDreLavouraTab() {
             <FaixaVisoesPec deltas={deltasPec} refDelta={refDeltaPec} visao={visaoPec} onVisao={setVisaoPec} real={drePec}
               meta={drePecMeta} carregandoMeta={carregandoPecMeta}
               anoAnterior={anosPec[0]?.dre ?? null} carregandoAnoAnterior={anosPec[0]?.carregando ?? true}
-              nAnos={nAnosPec} onNAnos={setNAnosPec} />
+              nAnos={nAnosPec} onNAnos={setNAnosPec} controles={controlesPec} />
           ) : null)
             : culturaAberta ? <FaixaCultura c={culturaAberta} />
               : <Faixa dre={dre} />}
@@ -879,7 +941,13 @@ export function AgriDreLavouraTab() {
               ⚠ O CONTROLE É O MESMO NAS DUAS, e é o ponto do PR: mesmo componente, mesma posição,
               mesmos rótulos. O que muda é de onde sai o número — ver `valorNoModo` no painel da
               pecuária e `valorDaLinha` aqui. */}
-          {mostraGrade && (
+          {/* ⚠ ESTA LINHA É SÓ DA LAVOURA DESDE O fix2. Na pecuária ela deixou de existir — os
+              controles subiram para as colunas vazias da faixa de cards (ver `controlesPec`), e a
+              tabela subiu os 28px dela mais o gap. Os ramos `ehPec` daqui para baixo ficaram
+              inalcançáveis; não foram apagados porque a Lavoura ainda não fez a mesma mudança (a
+              decisão de reduzir os 6 cards dela está com o Gabriel), e é neles que a régua de
+              reservas está escrita. */}
+          {!ehPec && mostraGrade && (
           <div className="flex h-[28px] items-center justify-between gap-2 text-[10px] text-muted-foreground">
             {/* ⚠ O SELETOR DE CULTURA DESCEU PARA CÁ — DRE-PADRAO-01a-3. Ele vivia no cabeçalho, e
                 o slot de 130px que guardava o lugar dele era justamente o espaço que faltava ao
