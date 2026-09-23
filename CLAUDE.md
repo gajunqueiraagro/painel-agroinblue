@@ -622,6 +622,25 @@ migration e' REGISTRO HISTORICO, nao se reaplica).
     divergencias. Ela e' GUARDA, nao conserto: o conserto do dado foi a 20261027131700. A prova
     funcional e' que refechar fev/23 do Bom Retiro no Eucalipto dava 878 com a funcao velha e da'
     439 com a nova.
+- PATRIMONIO-TOTAL-01 — FECHADA em 23/09/2026 pela migration 20261027132000.
+  `fn_dre_pecuaria_patrimonio` com `p_fazenda = null` agregava SO' por categoria, somando as
+  fazendas ANTES do preco medio ponderado; `fn_dre_pecuaria` agrega por FAZENDA x categoria e so'
+  entao soma. Divergiam no `v1_p0` — o valor do MEIO, que e' o que separa a variacao por producao
+  do efeito de mercado.
+  ⚠ O ESTRAGO ERA SIMETRICO E POR ISSO INVISIVEL: a SOMA das duas variacoes batia e o que divergia
+    era a REPARTICAO. NJ jul/22-jun/23: grade 275.077,50 / -7.042.962,86; modal 284.977,50 /
+    -7.052.862,86 — 9.900,00 a mais numa e a menos na outra. Nenhum gate ve' isso.
+  ⚠ E SO' APARECEU quando o modal v7 pos os tres numeros lado a lado com a grade. A divida existia
+    desde que o modal nasceu; o PR que a revelou nao foi o que a criou.
+  ⚠ UM SEGUNDO DEFEITO VEIO JUNTO, e este era do POR-FAZENDA: categoria com QUANTIDADE ZERO na
+    ponta inicial e PRECO declarado perdia o preco, porque `sum(q*pm*pk)/sum(q*pm)` tem denominador
+    zero. O `coalesce(p0.pk, p1.pk)` usava entao o preco do FIM — justamente o que o efeito de
+    mercado existe para isolar. Medido: `mamotes_m` no Sto. Expedito, 7 cab x 30 kg, 14,00 no
+    inicio e 16,00 no fim; 420,00 iam parar no VPB. Corrigido com `else avg(preco_kg)`.
+  ⚠ FICA UMA DIVERGENCIA DE FONTE, nao de numero: em SR civil 2022 a grade diz `p0_fonte = 'zero'`
+    e o modal diz `'fechamento'`. A regra de resumo e' a mesma; o que difere e' QUAIS fazendas
+    entram — a grade percorre a lista do periodo e da' 'zero' a quem nao tem linha, o modal so' ve'
+    quem tem. A fonte e' informativa e nao decide numero.
 - CACHE-X-FECHAMENTO-01 — `zoot_mensal_cache.saldo_final` e `valor_rebanho_fechamento_itens` NAO
   CONCORDAM em 20 dos 655 meses com fechamento (medido 23/09/2026). Sao as duas fontes do rebanho,
   e desde o VPB-REGRA-UNICA-01 o DRE le' as duas — o fechamento com precedencia, o cache como

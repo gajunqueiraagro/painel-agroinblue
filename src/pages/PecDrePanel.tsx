@@ -582,7 +582,9 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
   alturaCartao: number | null;
   cartaoRef: React.RefObject<HTMLDivElement>;
   onAbrirLista?: (r: RecortePec) => void;
-  onAbrirDidatico?: (fazendaId: string | null, fazendaNome: string, qual: 'vpb' | 'efeito') => void;
+  /** ⚠ `de`/`ate` SÃO DA COLUNA, não da tela — é o que faz o modal abrir no ano clicado. */
+  onAbrirDidatico?: (fazendaId: string | null, fazendaNome: string, qual: 'vpb' | 'efeito',
+    de: string, ate: string) => void;
   onAbrirRateio?: () => void;
   /** ⚠ A GRADE NÃO MONTA O MODAL: ela avisa QUAL linha, e quem lê os cinco anos é a página. */
   onAbrirHistorico?: (r: RecorteHistoricoPec) => void;
@@ -797,7 +799,9 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, base, onAlternar, o
   base?: boolean;
   onAlternar: () => void;
   onAbrirLista?: (r: RecortePec) => void;
-  onAbrirDidatico?: (fazendaId: string | null, fazendaNome: string, qual: 'vpb' | 'efeito') => void;
+  /** ⚠ `de`/`ate` SÃO DA COLUNA, não da tela — é o que faz o modal abrir no ano clicado. */
+  onAbrirDidatico?: (fazendaId: string | null, fazendaNome: string, qual: 'vpb' | 'efeito',
+    de: string, ate: string) => void;
   onAbrirRateio?: () => void;
   onAbrirHistorico?: (r: RecorteHistoricoPec) => void;
 }) {
@@ -853,8 +857,13 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, base, onAlternar, o
    * ⚠ LINHA DE SOMA NÃO ABRE NADA. `= Receita bruta`, `= VBP`, `= Margem` e os resultados não têm
    * lançamento próprio: eles são a conta das linhas de cima, e abrir uma lista ali teria de
    * inventar qual dos termos mostrar.
-   * ⚠ DELTA NÃO ABRE NADA (é derivado), e os dois modais só abrem no realizado do período da tela
-   * (`atual`): eles leem o período da tela, e abri-los na coluna de 2024 mostraria outro ano.
+   * ⚠ DELTA NÃO ABRE NADA (é derivado). O modal do RATEIO segue preso ao período da tela (`atual`),
+   * porque é ele que lê o pool da tela; o das DUAS VARIAÇÕES deixou de estar —
+   * VARIACAO-REBANHO-MODAL-01.
+   * ⚠ ELE ERA PRESO POR UM MOTIVO REAL, e a solução foi tirar o motivo: a célula não passava
+   * `de`/`ate`, então quem chamava a RPC usava o período da TELA, e abrir na coluna de 2022
+   * mostraria 2026. Travar o clique escondia o defeito em vez de corrigi-lo — o operador clicava
+   * na Variação de 2022 e nada acontecia, sem explicação. Agora a coluna manda o SEU período.
    */
   const abrirDaColuna = (col: ColunaPec) => {
     if (!col.linhas || col.semDado || col.tipo === 'delta') return undefined;
@@ -863,7 +872,9 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, base, onAlternar, o
        a RPC deixou de fazer. No Total, abre como sempre (`p_fazenda` nulo traz todos). */
     if (def.chave === 'juros' && col.fazendaId !== null) return undefined;
     if (def.didatico) {
-      return col.atual && onAbrirDidatico ? () => onAbrirDidatico(col.fazendaId, col.nome, def.didatico!) : undefined;
+      return onAbrirDidatico
+        ? () => onAbrirDidatico(col.fazendaId, col.nome, def.didatico!, col.de, col.ate)
+        : undefined;
     }
     if (def.rateio) return col.atual ? onAbrirRateio : undefined;
     if (!bloco || !onAbrirLista) return undefined;

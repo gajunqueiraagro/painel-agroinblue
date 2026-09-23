@@ -337,7 +337,7 @@ export function AgriDreLavouraTab() {
   /** O recorte da célula clicada. `null` = nenhuma lista aberta. */
   const [recortePec, setRecortePec] = useState<RecortePec | null>(null);
   const [didatico, setDidatico] = useState<
-    { fazendaId: string | null; nome: string; qual: 'vpb' | 'efeito' } | null>(null);
+    { fazendaId: string | null; nome: string; qual: 'vpb' | 'efeito'; de: string; ate: string } | null>(null);
   const [rateioPecAberto, setRateioPecAberto] = useState(false);
   const [historicoPec, setHistoricoPec] = useState<RecorteHistoricoPec | null>(null);
   /**
@@ -407,7 +407,7 @@ export function AgriDreLavouraTab() {
     lancamentos: lancPec, carregando: carregandoLancPec, recarregar: recarregarLancPec,
   } = useDrePecuariaLancamentos(clienteId, recortePec, pecDe, pecAte);
   const { patrimonio: patPec, carregando: carregandoPatPec } = useDrePecuariaPatrimonio(
-    clienteId, didatico?.fazendaId ?? null, pecDe, pecAte, !!didatico);
+    clienteId, didatico?.fazendaId ?? null, didatico?.de ?? null, didatico?.ate ?? null, !!didatico);
 
   /* ════════ AS QUATRO VISÕES DA PECUÁRIA — DRE-PEC-TELA-02 ════════ */
   /* ⚠ NA URL, COMO O PERÍODO: F5 e link copiado reabrem a mesma visão. `useFiltroUrl` não grava o
@@ -1156,7 +1156,10 @@ export function AgriDreLavouraTab() {
             unidades={unidadesPec}
             modo={modoPec} abertos={abertosPec} onAbertos={f => setAbertosPec(f)}
             onAbrirLista={setRecortePec}
-            onAbrirDidatico={(fazendaId, nome, qual) => setDidatico({ fazendaId, nome, qual })}
+            /* ⚠ O PERÍODO VEM DA COLUNA — VARIACAO-REBANHO-MODAL-01. Guardá-lo aqui é o que permite
+               abrir a Variação de 2022 e ver 2022: o hook abaixo passou a ler `didatico.de/ate` em
+               vez de `pecDe/pecAte`, que são os da tela. */
+            onAbrirDidatico={(fazendaId, nome, qual, de, ate) => setDidatico({ fazendaId, nome, qual, de, ate })}
             onAbrirRateio={() => setRateioPecAberto(true)}
             onAbrirHistorico={setHistoricoPec} />
         )
@@ -1186,14 +1189,11 @@ export function AgriDreLavouraTab() {
           qual={didatico.qual}
           patrimonio={patPec}
           carregando={carregandoPatPec}
-          /* ⚠ A FONTE VEM DA GRADE, não de uma segunda consulta: `fn_dre_pecuaria` já disse de
-             onde saiu cada ponta, e o modal só a traduz em frase. */
-          p0Fonte={(didatico.fazendaId
-            ? drePec.fazendas.find(f => f.fazenda_id === didatico.fazendaId)?.linhas.p0_fonte
-            : drePec.total.p0_fonte) ?? null}
-          p1Fonte={(didatico.fazendaId
-            ? drePec.fazendas.find(f => f.fazenda_id === didatico.fazendaId)?.linhas.p1_fonte
-            : drePec.total.p1_fonte) ?? null}
+          /* ⚠ A FONTE VEM DO PRÓPRIO PATRIMÔNIO, não da grade — VARIACAO-REBANHO-MODAL-01. Ela
+             vinha de `drePec`, que é o DRE do período da TELA: com o modal abrindo em qualquer
+             coluna, isso daria a fonte de 2026 num modal de 2022. A `fn_dre_pecuaria_patrimonio`
+             já devolve `p0_fonte`/`p1_fonte` do MESMO período que o modal pediu. */
+          periodo={{ de: didatico.de, ate: didatico.ate }}
           onFechar={() => setDidatico(null)}
         />
       )}

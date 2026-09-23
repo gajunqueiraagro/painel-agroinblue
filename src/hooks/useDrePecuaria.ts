@@ -531,6 +531,16 @@ export interface CategoriaPatrimonio {
 export interface PatrimonioPec {
   p0: string;
   p1: string;
+  /**
+   * DE ONDE VEIO CADA PONTA — VARIACAO-REBANHO-MODAL-01.
+   *
+   * ⚠ ELAS VÊM DAQUI, NÃO DA GRADE, e isso é o que faz o modal abrir numa coluna de ANO ANTERIOR.
+   * A `fn_dre_pecuaria_patrimonio` já as devolve desde o VPB-REGRA-UNICA-01, para o MESMO período
+   * que o modal pediu. Lê-las do `drePec` da tela daria a fonte do período ERRADO — a do ano
+   * corrente, num modal que fala de 2022.
+   */
+  p0_fonte: 'fechamento' | 'cadastro' | 'zero' | null;
+  p1_fonte: 'fechamento' | 'cadastro' | 'zero' | null;
   categorias: CategoriaPatrimonio[];
   total: {
     q0: number; v0: number; q1: number;
@@ -560,6 +570,10 @@ export function useDrePecuariaPatrimonio(
       return {
         p0: String(o.p0 ?? ''),
         p1: String(o.p1 ?? ''),
+        p0_fonte: o.p0_fonte === 'fechamento' || o.p0_fonte === 'cadastro' || o.p0_fonte === 'zero'
+          ? o.p0_fonte : null,
+        p1_fonte: o.p1_fonte === 'fechamento' || o.p1_fonte === 'cadastro' || o.p1_fonte === 'zero'
+          ? o.p1_fonte : null,
         categorias: (Array.isArray(o.categorias) ? o.categorias : []).map((x: unknown) => {
           const c = objeto(x);
           return {
