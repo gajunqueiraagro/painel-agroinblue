@@ -1,6 +1,6 @@
 # Plano de Contas — AGROinBLUE
 
-> **GERADO do banco em 22/09/2026 (após PLANO-ADM-07).
+> **GERADO do banco em 23/09/2026 (após PLANO-HEDGE-01).
 > Não editar à mão: migration primeiro, regeração depois.**
 
 Fonte: `public.financeiro_plano_contas` no Supabase **proto** (`binbcdfbisgscrifztia`).
@@ -8,7 +8,13 @@ Hierarquia: **tipo de operação › macro custo › grupo de custo › centro d
 Dentro de cada grupo, as linhas saem em `centro a-z > subcentro a-z` — a mesma ordem que
 `ordem_exibicao` materializa (PLANO-ORDEM-01).
 
-**226 linhas**: 218 globais (`cliente_id` nulo, valem para todos) e 8 de um cliente só, todas
+> ⚠ **O PASSO DE 10 É IDEAL; `ordem_exibicao` É IDENTIFICADOR.** Subcentro novo entra no VÃO
+> (5025, 1055), nunca renumerando os vizinhos. Medido em 23/09/2026: `fn_meta_calculada_pecuaria`
+> cita `5030`, `1110`, `1120`, `1130`, `1140`, `1150`, `1010`, `1020`, `15010`, `15020`, `8045` e
+> `8140` como LITERAIS, e `fn_dre_pecuaria` junta por `p.ordem_exibicao = c.ordem`. Renumerar faria
+> a meta apontar para outro subcentro **sem erro nenhum** — o join acharia outra linha do plano.
+
+**228 linhas**: 220 globais (`cliente_id` nulo, valem para todos) e 8 de um cliente só, todas
 no grupo Dividendos. A coluna **origem** diz qual é qual.
 
 Legenda das colunas: **DRE** = `compoe_dre` · **LCDPR** = `gera_lcdpr` · **bloco** = `bloco_dre`
@@ -67,6 +73,7 @@ de decisão, não `false`.
 | 1030 | Arrendamento | Receita de Arrendamento de Pasto | pecuaria | sim | — | receita | global |
 | 1040 | Venda Ativos | Venda de Máquinas Pecuária | pecuaria | sim | — | receita | global |
 | 1050 | Venda Geral | Consumo Interno e Doações | pecuaria | sim | não | venda | global |
+| 1055 | Venda Geral | Ganho com Mercado Futuro | pecuaria | sim | não | venda | global |
 | 1060 | Venda Geral | Venda de Tropa | pecuaria | sim | — | venda | global |
 | 1070 | Venda Insumos | Venda de Madeira | pecuaria | sim | — | receita | global |
 | 1080 | Venda Insumos | Venda de Nutrição | pecuaria | sim | — | receita | global |
@@ -278,6 +285,7 @@ de decisão, não `false`.
 | ordem | centro | subcentro | escopo | DRE | LCDPR | bloco | origem |
 |---:|---|---|---|:-:|:-:|---|---|
 | 5020 | Ajustes | Deduções Outras Operações Pecuária | pecuaria | sim | — | deducao | global |
+| 5025 | Ajustes | Resultado com Mercado Futuro | pecuaria | sim | não | deducao | global |
 | 5030 | Impostos | Impostos e Despesas de Abates e Vendas | pecuaria | sim | — | deducao | global |
 
 #### Deduções Silvicultura

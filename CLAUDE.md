@@ -622,6 +622,15 @@ migration e' REGISTRO HISTORICO, nao se reaplica).
     divergencias. Ela e' GUARDA, nao conserto: o conserto do dado foi a 20261027131700. A prova
     funcional e' que refechar fev/23 do Bom Retiro no Eucalipto dava 878 com a funcao velha e da'
     439 com a nova.
+- PLANO-ORDEM-01 — REGRA FIRMADA em 23/09/2026: dentro de um grupo, `ordem_exibicao` numera de 10
+  em 10 em `centro a-z > subcentro a-z`. O passo de 10 e' IDEAL; `ordem_exibicao` e' IDENTIFICADOR.
+  ⚠ SUBCENTRO NOVO ENTRA NO VAO, NUNCA RENUMERA. Medido: `fn_meta_calculada_pecuaria` cita `5030`,
+    `1110`, `1120`, `1130`, `1140`, `1150`, `1010`, `1020`, `15010`, `15020`, `8045` e `8140` como
+    LITERAIS no corpo, e `fn_dre_pecuaria` junta por `p.ordem_exibicao = c.ordem`. Renumerar faz a
+    meta apontar para OUTRO subcentro sem erro nenhum — o join acha outra linha do plano e o DRE de
+    meta soma a linha errada. Nenhum gate ve' isso.
+  ⚠ FOI O QUE DECIDIU O PLANO-HEDGE-01: a regra a-z poria os dois subcentros novos entre 5020/5030
+    e 1050/1060, renumerando 11 — seis deles travados na meta. Entraram como 5025 e 1055.
 - PATRIMONIO-TOTAL-01 — FECHADA em 23/09/2026 pela migration 20261027132000.
   `fn_dre_pecuaria_patrimonio` com `p_fazenda = null` agregava SO' por categoria, somando as
   fazendas ANTES do preco medio ponderado; `fn_dre_pecuaria` agrega por FAZENDA x categoria e so'
