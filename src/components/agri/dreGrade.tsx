@@ -95,16 +95,24 @@ export function PontoRateio({ title = 'tem rateio dentro' }: { title?: string })
   );
 }
 
-/* ⚠ AS LARGURAS DESCERAM COM A RÉGUA — DRE-PADRAO-01a (22/09/2026), e o critério é medido: a
-   visão x Anos da pecuária com o ano corrente mais cinco anteriores soma, a 1440 (container de
-   1200px = 1440 − 224 do menu − 16 de respiro), 240 do rótulo + 6 × (96 + 64) = 1200. Com as
-   larguras antigas (104 + 76) davam 1274 e a tela rolava para o lado.
-   ⚠ E O NÚMERO CABE, conferido com a fonte nova: "9.998.280,79" mede 73px a 11px/500 e 67px a
-   9px/400; com os 14px de padding da célula, sobram 9px na linha de subtotal e 15px na comum. */
-export const W_RS = 96;       // R$ por cultura
-export const W_HA = 64;       // R$/ha
-export const W_UN = 60;       // R$/unidade
-export const W_RS_TOTAL = 96;
+/* AS LARGURAS SÃO O PIOR NÚMERO MEDIDO + 8 DE FOLGA + 14 DE PADDING — fix6 (23/09/2026).
+   ⚠ AS DE ANTES ESTAVAM CALIBRADAS PARA O NÚMERO ERRADO. O DRE-PADRAO-01a (22/09) as mediu com
+   "9.998.280,79" — sem sinal e sem marcador —, e no mesmo dia entraram a faixa t4 (67a79233) e o
+   marcador ▲/▼ (204b2cc4), nenhum deles recalculando nada. O "= Lucro líquido" da Lavoura 25/26
+   media 90,2px de texto numa caixa de 82 e invadia a coluna vizinha.
+   ⚠ E O R$/ha JÁ ESTOURAVA SEM MARCADOR: "15.628,42" na Receita líquida media 50,7 numa caixa de
+   50. O marcador agravou um defeito que a calibragem da coluna R$ não tinha visto na de R$/ha.
+   ⚠ O PIOR CASO INCLUI O SLOT DO MARCADOR, que hoje é reservado em toda célula de valor (ver
+   `L_MARCADOR`): uma coluna precisa caber o maior entre "número com marcador" e "número sem
+   marcador + o slot vazio".
+   ⚠ CUSTO ACEITO, decisão do Gabriel de 23/09: a x Anos da pecuária com cinco anos anteriores
+   passa de 1080 para 1313 e rola na horizontal a 1440 (container de 1200). Quatro anos dão 1131 e
+   todas as outras visões cabem. A conta antiga registrada aqui — 240 + 6 × (96+64) = 1200 — já
+   estava desatualizada: o rótulo é 200 desde o 01a e a coluna de comparação é `W_REFERENCIA`. */
+export const W_RS = 114;      // R$ por cultura
+export const W_HA = 90;       // R$/ha
+export const W_UN = 74;       // R$/unidade
+export const W_RS_TOTAL = 114;
 
 /**
  * A LARGURA MÍNIMA DE UM GRUPO DE COLUNA — DRE-UNIDADES-01b.
@@ -206,12 +214,34 @@ export function marcadorDoTotal(faixa: keyof typeof FAIXA_TOTAL, v: number | nul
   return v < 0 ? { glifo: '▼', cor: MARCADOR_NEGATIVO } : { glifo: '▲', cor: MARCADOR_POSITIVO };
 }
 
-/** O marcador desenhado — 9px, à frente do número, sem participar do alinhamento do tabular-nums. */
-export function Marcador({ marcador }: { marcador?: { glifo: string; cor: string } }) {
-  if (!marcador) return null;
+/**
+ * A LARGURA DO SLOT DO MARCADOR — fix6.
+ *
+ * ⚠ ELE É RESERVADO, NÃO ACRESCENTADO. Medido no preview, o glifo a 9px mais os 3px de respiro dão
+ * 10,1px; sem reserva, esses 10px saíam do número justamente na linha do Lucro líquido, que é a
+ * mais comprida da grade. Com o slot fixo, o número tem a MESMA caixa em toda linha da coluna —
+ * com marcador, sem marcador ou em traço — e a largura da coluna pode ser calculada uma vez.
+ */
+export const L_MARCADOR = 10;
+
+/**
+ * O marcador desenhado — 9px, à frente do número, sem participar do alinhamento do tabular-nums.
+ *
+ * ⚠ O SLOT FICA VAZIO onde o marcador não veio, e essa é a REGRA, não a exceção: numa coluna de
+ * valor todas as linhas o reservam e só as de t4 o preenchem. Por isso o padrão é reservar e quem
+ * não quer pede `semSlot` — a coluna de Δ é a única: ali o marcador nunca existe em linha nenhuma,
+ * e 10px de vão seriam espaço comprado e não usado.
+ */
+export function Marcador({ marcador, semSlot }: {
+  marcador?: { glifo: string; cor: string };
+  semSlot?: boolean;
+}) {
+  if (!marcador && semSlot) return null;
   return (
-    <span aria-hidden className="mr-[3px] align-[1px]"
-      style={{ fontSize: 9, color: marcador.cor }}>{marcador.glifo}</span>
+    <span aria-hidden className="inline-block text-center align-[1px]"
+      style={{ fontSize: 9, width: L_MARCADOR, color: marcador?.cor }}>
+      {marcador?.glifo ?? ''}
+    </span>
   );
 }
 export type TomFaixa = keyof typeof FAIXA_TOTAL;
@@ -309,7 +339,7 @@ export const AMBAR = '#b45309';
  * transborda e é visível; faltando, o operador vê e a régua se ajusta. Só a coluna Cultura
  * trunca, porque ali o corte tem `title` para desfazer.
  */
-export function Celula({ valor, cor, destaque, bordaEsquerda, onAbrir, filha, fundo, estilo, total, title, fonte, faixa, marcador }: {
+export function Celula({ valor, cor, destaque, bordaEsquerda, onAbrir, filha, fundo, estilo, total, title, fonte, faixa, marcador, semSlotMarcador }: {
   valor: number | null; cor: string; destaque?: DestaqueLinha;
   bordaEsquerda?: boolean;
   onAbrir?: () => void; filha?: boolean; fundo?: string; estilo?: CSSProperties;
@@ -330,6 +360,8 @@ export function Celula({ valor, cor, destaque, bordaEsquerda, onAbrir, filha, fu
   total?: boolean;
   /** O ▲/▼ do azul cheio — ver `marcadorDoTotal`. */
   marcador?: { glifo: string; cor: string };
+  /** ⚠ DESLIGA O SLOT DO MARCADOR — ver `Marcador`. Só a coluna de Δ, e por coluna inteira. */
+  semSlotMarcador?: boolean;
   /** Um porquê para a célula — "sem fechamento" na pecuária. Só quando há o que dizer. */
   title?: string;
   /** ⚠ O VALOR SEGUE A FONTE DA LINHA (PR-10): subtotal em 12, filha em 9. Um número de 11px ao
@@ -355,14 +387,17 @@ export function Celula({ valor, cor, destaque, bordaEsquerda, onAbrir, filha, fu
         ...(total ? { borderLeft: BORDA_TOTAL }
           : bordaEsquerda ? { borderLeft: '1px solid hsl(var(--border) / .6)' } : {}),
       }}>
-      <Marcador marcador={marcador} />
+      {/* ⚠ TRAÇO NÃO TEM SETA — fix6. A célula sem valor mostra "—", e um ▼ ao lado dele afirmaria
+          a direção de um dado que não se sabe: é a sentinela do CLAUDE.md ("— significa ausente")
+          contrariada por um glifo. O slot continua reservado, vazio. */}
+      <Marcador marcador={valor == null ? undefined : marcador} semSlot={semSlotMarcador} />
       {numeroDaCelula(valor)}
     </td>
   );
 }
 
 /** A célula de /ha e /unidade — mais clara que a de R$, porque ela é derivada, não lançada. */
-export function CelulaUnit({ texto, cor, destaque, filha, fundo, estilo, total, bordaEsquerda, onAbrir, fonte, title, faixa, marcador }: {
+export function CelulaUnit({ texto, cor, destaque, filha, fundo, estilo, total, bordaEsquerda, onAbrir, fonte, title, faixa, marcador, semSlotMarcador }: {
   texto: string; cor: string; destaque?: DestaqueLinha;
   /** ⚠ O UNITÁRIO FICA UM PONTO ABAIXO DO VALOR, sempre: ele é leitura de apoio. */
   fonte?: number;
@@ -389,6 +424,8 @@ export function CelulaUnit({ texto, cor, destaque, filha, fundo, estilo, total, 
   faixa?: string;
   /** O ▲/▼ do azul cheio — ver `marcadorDoTotal`. */
   marcador?: { glifo: string; cor: string };
+  /** ⚠ DESLIGA O SLOT DO MARCADOR — ver `Marcador`. Só a coluna de Δ, e por coluna inteira. */
+  semSlotMarcador?: boolean;
 }) {
   const sub = destaque === 'subtotal' || destaque === 'sub';
   const clicavel = !!onAbrir && texto !== traco;
@@ -410,7 +447,11 @@ export function CelulaUnit({ texto, cor, destaque, filha, fundo, estilo, total, 
          (11px) segue um ponto abaixo do valor, em 10. */
       style={{ ...(fonte ? { fontSize: Math.max(9.5, fonte - 1) } : {}),
         ...(total && !faixa ? { backgroundColor: FUNDO_TOTAL } : {}), ...estilo }}>
-      <Marcador marcador={marcador} />
+      {/* ⚠ TRAÇO NÃO TEM SETA — fix6, e foi AQUI que o defeito aparecia: a x Anos mostrava
+          "▼—" porque o marcador se decide pelo valor em R$ e a sub-coluna cai em traço quando
+          falta o divisor. A seta afirmava a direção de um número que a célula nem exibe. */}
+      <Marcador marcador={texto === traco || texto === '' ? undefined : marcador}
+        semSlot={semSlotMarcador} />
       {texto}
     </td>
   );

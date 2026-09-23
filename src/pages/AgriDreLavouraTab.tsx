@@ -1731,7 +1731,10 @@ function LinhaPorHectareLav({ dre, culturas, unidades, semTotal }: {
   ));
   const valor = (v: number | null | undefined) => (
     <>
-      {v != null && <Marcador marcador={marcadorDoTotal('t4', v)} />}
+      {/* ⚠ O SLOT FICA RESERVADO MESMO SEM VALOR — fix6: esta linha divide a coluna com o Lucro
+          líquido logo acima, e o número tem de começar no mesmo x nas duas. Sem marcador quando o
+          valor não existe, que é a mesma regra do traço nas células. */}
+      <Marcador marcador={v == null ? undefined : marcadorDoTotal('t4', v)} />
       {celula(v)}
     </>
   );

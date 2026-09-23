@@ -366,7 +366,7 @@ describe('a largura mínima do grupo de coluna na lavoura', () => {
 
   it('o padrão de abertura não se mexe', () => {
     montar({ unidades: ['rs', 'ha'] });
-    expect(largurasDoColgroup()).toEqual(['200px', '96px', '64px', '96px', '64px']);
+    expect(largurasDoColgroup()).toEqual(['200px', '114px', '90px', '114px', '90px']);
   });
 
   /* ⚠ O TOTAL NÃO TEM /sc (a safra mistura culturas), então com as três unidades marcadas os dois
@@ -374,7 +374,7 @@ describe('a largura mínima do grupo de coluna na lavoura', () => {
      grupo, daria a soma certa e a divisão errada. */
   it('com as três unidades, a cultura passa do piso e o Total é medido sozinho', () => {
     montar({ unidades: ['rs', 'ha', 'un'] });
-    expect(largurasDoColgroup()).toEqual(['200px', '96px', '64px', '60px', '96px', '64px']);
+    expect(largurasDoColgroup()).toEqual(['200px', '114px', '90px', '74px', '114px', '90px']);
   });
 });
 

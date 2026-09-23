@@ -197,16 +197,16 @@ describe('as unidades da pecuária', () => {
 
   it('duas unidades já passam do piso e ficam como são; o padrão de abertura não muda', () => {
     const { unmount } = montarCom(['ha', 'cab']);
-    /* 64 + 64 = 128 ≥ 104 → intactas. Com o piso de 160 elas viravam 80 + 80. */
-    expect(largurasDoColgroup()).toEqual(['200px', '64px', '64px']);
+    /* 90 + 90 = 180 ≥ 104 → intactas. Com o piso de 160 elas viravam 80 + 80. */
+    expect(largurasDoColgroup()).toEqual(['200px', '90px', '90px']);
     unmount();
     montarCom(['rs', 'ha']);
-    expect(largurasDoColgroup()).toEqual(['200px', '96px', '64px']);
+    expect(largurasDoColgroup()).toEqual(['200px', '114px', '90px']);
   });
 
-  it('acima do piso ninguém é esticado: três unidades somam 192 e ficam como são', () => {
+  it('acima do piso ninguém é esticado: três unidades somam 270 e ficam como são', () => {
     montarCom(['ha', 'cab', 'arroba']);
-    expect(largurasDoColgroup()).toEqual(['200px', '64px', '64px', '64px']);
+    expect(largurasDoColgroup()).toEqual(['200px', '90px', '90px', '90px']);
   });
 });
 

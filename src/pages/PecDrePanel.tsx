@@ -378,11 +378,15 @@ const larguraUn = (c: ColunaPec) => (c.total ? W_HA : W_SUB);
 type SlotPec = UnidadePec | 'pct';
 const slotsDaColuna = (c: ColunaPec, unidades: readonly UnidadePec[]): readonly SlotPec[] =>
   (c.tipo === 'delta' ? (c.deltaSlots ?? ['rs', 'pct']) : c.unidade === null ? ['rs'] : unidades);
-/* ⚠ A COLUNA DE Δ TEM LARGURA PRÓPRIA (78): ela carrega "▲ 12,3 %" ou um valor abreviado, nunca
-   os milhões de uma coluna de R$, e 96 ali seria espaço comprado e não usado. */
-const W_DELTA_RS = 78;
-const W_DELTA_PCT = 64;
-const W_REFERENCIA = 80;
+/* ⚠ A COLUNA DE Δ TEM LARGURA PRÓPRIA: ela carrega "▲ 12,3 %" ou um valor abreviado, nunca os
+   milhões de uma coluna de R$ — mas a premissa de que ela é sempre menor ESTAVA ERRADA. Medido no
+   fix6: o Δ do Lucro líquido é "-13.899.298,16", 71,4px numa caixa de 64, e o Δ é a diferença de
+   dois números grandes — ele pode ser MAIOR que qualquer um deles. Os 78 vêm de 94, e é a única
+   coluna que não reserva o slot do marcador: o Δ nunca o teve (`marcadorDoTotal` só decide sobre
+   uma coluna de valor), e reservá-lo ali custaria 10px em toda linha para nada. */
+const W_DELTA_RS = 94;
+const W_DELTA_PCT = 70;
+const W_REFERENCIA = 98;
 const larguraSlot = (s: SlotPec, c: ColunaPec) => {
   if (c.tipo === 'delta') return s === 'pct' ? W_DELTA_PCT : W_DELTA_RS;
   if (c.comparacao) return s === 'rs' ? W_REFERENCIA : larguraUn(c);
@@ -914,6 +918,7 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, base, onAlternar, o
                    1px venceria. Aqui a coluna Meta abre mão dela e recebe a sua por `estiloDoSlot`. */
                 bordaEsquerda={!col.total && i === 0 && !ehMeta(col)} total={col.total} fundo={fundo}
                 faixa={daFaixa?.fundo} marcador={marcador(col, v)}
+                semSlotMarcador={col.tipo === 'delta'}
                 onAbrir={abrir}
                 estilo={estiloDoSlot(i)}
                 title={semFech ? 'sem fechamento' : undefined} />
@@ -924,6 +929,7 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, base, onAlternar, o
                 cor={cor} destaque={def.destaque}
                 fonte={regua.fonte} total={col.total} fundo={fundo}
                 faixa={daFaixa?.fundo} marcador={sl === 'pct' ? undefined : marcador(col, v)}
+                semSlotMarcador={col.tipo === 'delta'}
                 onAbrir={abrir}
                 estilo={estiloDoSlot(i)} />
             )))}
@@ -990,6 +996,9 @@ function LinhaPercentual({ def, colunas, unidades, base }: {
                 ...(congelada(col, colunas) ? apoio.semFundo(estiloTotalRs) : {}),
                 ...bordaDaMeta(col, 0, slotsDaColuna(col, unidades).length, base ? { base: true } : undefined),
               }}>
+              {/* ⚠ MESMO SLOT DA LINHA DE CIMA — o "% do VBP" divide a coluna com o total que ele
+                  descreve, e o percentual desalinhado do número faria a coluna parecer torta. */}
+              {texto !== '' && <Marcador semSlot={col.tipo === 'delta'} />}
               {texto}
             </td>
             {/* ⚠ AS CÉLULAS DE UNIDADE FICAM VAZIAS: um percentual não se divide por hectare, por
@@ -1047,7 +1056,11 @@ function LinhaPorHectare({ def, colunas, unidades, base }: {
                 ...(congelada(col, colunas) ? apoio.semFundo(estiloTotalRs) : {}),
                 ...bordaDaMeta(col, 0, slotsDaColuna(col, unidades).length, base ? { base: true } : undefined),
               }}>
-              {texto !== '' && texto !== traco && <Marcador marcador={apoio.marcador(v)} />}
+              {/* ⚠ A LINHA DE APOIO RESERVA O SLOT COMO AS OUTRAS: ela mora na MESMA coluna do
+                  Lucro líquido, e sem a reserva o "Lucro por hectare" ficaria 10px à direita do
+                  número que ele explica. No traço o slot fica vazio, como em toda parte. */}
+              {texto !== '' && <Marcador marcador={texto === traco ? undefined : apoio.marcador(v)}
+                semSlot={col.tipo === 'delta'} />}
               {texto}
             </td>
             {slotsDaColuna(col, unidades).slice(1).map((sl, i) => (
@@ -1145,12 +1158,14 @@ function LinhaCentro({ def, centro, colunas, bloco, unidades, base, onAbrirLista
             {slots.map((sl, i) => (sl === 'rs' ? (
               <Celula key={sl} valor={v} cor={cor} fonte={regua.fonte} filha
                 bordaEsquerda={!col.total && i === 0 && !ehMeta(col)} total={col.total} fundo="bg-card" onAbrir={abrir}
+                semSlotMarcador={col.tipo === 'delta'}
                 estilo={estiloDoSlot(i)} />
             ) : (
               <CelulaUnit key={sl}
                 texto={sl === 'pct' ? pctDelta(v, m) : valorNaUnidade(sl, v, col, def.chave)}
                 cor={cor} fonte={regua.fonte} filha
                 total={col.total} fundo="bg-card" onAbrir={abrir}
+                semSlotMarcador={col.tipo === 'delta'}
                 estilo={estiloDoSlot(i)} />
             )))}
           </Fragment>

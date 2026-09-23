@@ -589,8 +589,33 @@ preview que o cabecalho nao sai da tela ao rolar.
   Gabriel no DRE-PADRAO-01a; ate' entao era 12/10/10/9. O DRE INTEIRO passou a ser
   excecao ao piso de 9,5px, e so' ele: era excecao so' a filha. As ALTURAS nao
   mudaram (20/16/16/14) — a fonte menor sobra dentro delas, entao a grade nao
-  cresce nem encolhe; o que se ganhou foi a visao x Anos caber em 1440 sem rolagem
-  (240 de rotulo + 6 x (96 + 64) = 1200, o container exato).
+  cresce nem encolhe.
+  ⚠ A CONTA DE LARGURA QUE MORAVA AQUI ESTA REVOGADA. Ela dizia que a x Anos cabia em
+  1440 sem rolagem — "240 de rotulo + 6 x (96 + 64) = 1200, o container exato" — e ja'
+  estava errada em dois termos quando foi escrita: o rotulo e' 200 desde o proprio
+  01a, e a coluna de comparacao usa `W_REFERENCIA`, nao `W_RS`. A soma real era 1080.
+  ⚠ E AS LARGURAS FORAM RECALIBRADAS no DRE-CASCATA-03b-fix6 (23/09/2026), porque as do
+  01a foram medidas com "9.998.280,79" — numero SEM sinal e SEM marcador. No mesmo dia
+  entraram a faixa t4 (67a79233) e o marcador ▲/▼ (204b2cc4) sem que ninguem refizesse
+  a conta, e o "= Lucro liquido" da Lavoura 25/26 passou a invadir a coluna vizinha:
+  90,2px de texto numa caixa de 82. O R$/ha ja' estourava ANTES do marcador (Receita
+  liquida, "15.628,42": 50,7 numa caixa de 50) — a calibragem do 01a olhou a coluna R$
+  e nao a de R$/ha.
+  A regra nova, medida celula a celula no preview: LARGURA = pior texto + 8 de folga +
+  14 de padding, e o pior texto inclui o SLOT DO MARCADOR, hoje reservado em toda
+  celula de valor (`L_MARCADOR`, 10px). Valores em `dreGrade.tsx` (W_RS 96->114,
+  W_HA 64->90, W_UN 60->74, W_RS_TOTAL 96->114) e em `PecDrePanel.tsx`
+  (W_REFERENCIA 80->98, W_DELTA_RS 78->94, W_DELTA_PCT 64->70). Menor folga medida em
+  14 estados: 8,3px.
+  ⚠ A x ANOS COM 5 ANOS PASSA A ROLAR NA HORIZONTAL a 1440: ela vai de 1080 para 1344,
+  contra um container de 1200. Decisao do Gabriel em 23/09 — custo aceito, porque a
+  alternativa era esconder digito do resultado final da cascata. Quatro anos dao 1131 e
+  todas as outras visoes cabem: Lavoura com 3 chips e 2 culturas da' 960, a Comparacao
+  com Δ da' 756.
+  ⚠ QUEM MEXER EM LARGURA MEDE O TEXTO RENDERIZADO, nao estima pela contagem de digitos:
+  as tres calibragens erradas desta lista sairam de conta feita no olho. O metodo que
+  achou o defeito foi um `Range` sobre o conteudo de cada `td` comparado com o
+  `clientWidth` menos o padding, varrendo todos os estados dos chips e das visoes.
   ⚠ AS ALTURAS NAO SAO AS DO MOCK, E ISSO FOI MEDIDO: com 22/18/18/16 nenhum tipo
   de linha encolhia (subtotal +4, filha +1, resto igual) e a grade CRESCIA de 287
   para 307px na raiz — o oposto do alvo. Fontes e recuos ficaram como o mock
