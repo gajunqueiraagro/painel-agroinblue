@@ -12,6 +12,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { PecDrePanel, FaixaVisoesPec, colunasDaVisao, type EntradaVisoes, type VisaoPec } from '@/pages/PecDrePanel';
+import { LINHAS_PEC_RESUMIDO } from '@/components/agri/drePecRegua';
 import type { DrePecuaria, DrePecLinhas } from '@/hooks/useDrePecuaria';
 
 const linhas = (o: Partial<DrePecLinhas>): DrePecLinhas => ({
@@ -570,18 +571,33 @@ describe('as quatro visões', () => {
    * ⚠ OS QUATRO CARDS: um número cada, o selecionado marcado, e carregando é spinner — nunca "—",
    * que diria que o dado não existe.
    */
-  it('os cards: quatro, o selecionado pressionado, e o que carrega não mostra "—"', () => {
+  /**
+   * ⚠ SÃO TRÊS CARDS DESDE O ADENDO DE 23/09: o "× Meta" saiu e a comparação com a meta virou
+   * COLUNA da visão Global, ligada pelos chips de Δ. Este caso mudou de contrato por isso — ele
+   * afirmava quatro cards e o "× Meta" pressionado. Falha certa, pela razão certa.
+   * ⚠ E O NÚMERO QUE O CARD MOSTRAVA NÃO SE PERDEU: ele vem como NOTA sob o resultado do Global
+   * quando há Δ ligado, e é isso que a segunda metade do caso trava.
+   */
+  it('os cards: três, o selecionado pressionado, e o Δ vira nota do Global', () => {
     const escolher = vi.fn();
-    render(<FaixaVisoesPec visao="meta" onVisao={escolher} real={DRE} meta={null} carregandoMeta
-      anoAnterior={null} carregandoAnoAnterior={false} nAnos={3} onNAnos={() => {}} />);
+    const { unmount } = render(<FaixaVisoesPec visao="global" onVisao={escolher} real={DRE} meta={null}
+      carregandoMeta anoAnterior={null} carregandoAnoAnterior={false} nAnos={3} onNAnos={() => {}} />);
     const botoes = Array.from(document.querySelectorAll<HTMLButtonElement>('button[aria-pressed]'));
-    expect(botoes).toHaveLength(4);
-    expect(botoes.filter(b => b.getAttribute('aria-pressed') === 'true').map(b => b.textContent)).toEqual(['× Meta']);
-    /* O de meta está carregando: só o rótulo, nenhum número nem traço. */
-    expect(botoes[1]?.textContent).toBe('× Meta');
+    expect(botoes).toHaveLength(3);
+    expect(botoes.filter(b => b.getAttribute('aria-pressed') === 'true').map(b => b.textContent))
+      .toEqual([expect.stringContaining('Global')]);
     expect(botoes[0]?.textContent).toContain('2.994.408,81');
-    fireEvent.click(botoes[3]);
+    /* Sem Δ ligado, nenhuma nota — o card do Global mostra só o resultado. */
+    expect(botoes[0]?.textContent).not.toContain('Δ');
+    fireEvent.click(botoes[2]);
     expect(escolher).toHaveBeenCalledWith('fazenda');
+    unmount();
+
+    /* Com o Δ ligado e sem meta no período, a nota diz a ausência em vez de um número inventado. */
+    render(<FaixaVisoesPec visao="global" onVisao={escolher} real={DRE} meta={null}
+      carregandoMeta={false} anoAnterior={null} carregandoAnoAnterior={false} nAnos={3}
+      onNAnos={() => {}} deltas={['rs']} refDelta="meta" />);
+    expect(document.querySelector('button[aria-pressed]')?.textContent).toContain('sem meta no período');
   });
   /**
    * ⚠ × ANOS COM CINCO: SEIS COLUNAS, TODAS RESOLVIDAS — o defeito da homologação de 22/09 (anos 2..N
@@ -607,5 +623,127 @@ describe('as quatro visões', () => {
     expect(vendas?.cells[3]?.textContent).toBe('12.000.000,00');
     expect(vendas?.cells[11]?.textContent).toBe('17.869.000,08');
     expect(document.querySelectorAll('.animate-pulse')).toHaveLength(0);
+  });
+});
+
+/* ══════════════ RESUMIDO × DETALHADO — DRE-CASCATA-03b ══════════════ */
+
+/**
+ * ⚠ O RESUMIDO SOMA, NÃO RECALCULA, e é isto que este bloco trava: as duas linhas compostas
+ * ("Variação do estoque por produção" e "(−) Custo fixo") têm de dar exatamente o que o Detalhado
+ * mostra em duas linhas. Se alguém as transformar num subtotal próprio, o DRE passa a ter duas
+ * verdades e a diferença aparece aqui.
+ */
+describe('o DRE resumido', () => {
+  /* ⚠ OS NÚMEROS SÃO DESIGUAIS DE PROPÓSITO: com valores iguais, uma soma trocada daria o mesmo. */
+  const BASE: DrePecuaria = {
+    ...DRE,
+    fazendas: [],
+    total: linhas({
+      vendas: 1000, outras_receitas: 300, receita_bruta: 1300,
+      vpb_operacional: 900, reposicao: 200,
+      custo_fixo: 500, rateio_adm: 120,
+      producao: { ha_medio: 100, at_produzida: 10, at_desfrutada: 10, cab_desfrutada: null,
+        at_comprada: 1, cab_comprada: null },
+    }),
+  };
+  const montarModo = (modo: 'resumido' | 'detalhado') => render(
+    <PecDrePanel modo={modo} colunas={colunasDaVisao({ visao: 'global', de: '2025-07', ate: '2026-06',
+      real: BASE, meta: null, carregandoMeta: false, anos: [] })}
+      alturaCartao={null} cartaoRef={{ current: null }} />,
+  );
+
+  it('são quinze linhas, e as de detalhe não aparecem', () => {
+    montarModo('resumido');
+    const r = rotulos().filter(x => x !== '% do VBP' && x !== 'Lucro por hectare');
+    expect(r).toHaveLength(LINHAS_PEC_RESUMIDO.length);
+    expect(r.some(x => x === 'Vendas')).toBe(false);
+    expect(r.some(x => x === '(−) Reposição')).toBe(false);
+    expect(r.some(x => x.startsWith('(−) Rateio administrativo'))).toBe(false);
+    expect(r[0]).toBe('Receita bruta');
+  });
+
+  it('a linha composta da variação é a variação MENOS a reposição', () => {
+    montarModo('resumido');
+    /* 900 − 200 = 700, e não 900 (só a variação) nem 1.100 (somando). */
+    expect(linhaDe('Variação do estoque')?.cells[1]?.textContent).toBe('700,00');
+  });
+
+  it('o custo fixo do resumido inclui o rateio administrativo', () => {
+    montarModo('resumido');
+    /* 500 + 120 = 620 — o mesmo que o Detalhado mostra em duas linhas. */
+    expect(linhaDe('(−) Custo fixo')?.cells[1]?.textContent).toBe('620,00');
+    const { unmount } = { unmount: () => {} };
+    unmount();
+  });
+
+  it('no detalhado as duas voltam a ser duas, e a soma bate', () => {
+    montarModo('detalhado');
+    expect(linhaDe('Variação por produção')?.cells[1]?.textContent).toBe('900,00');
+    expect(linhaDe('(−) Reposição')?.cells[1]?.textContent).toBe('200,00');
+    expect(linhaDe('(−) Custo fixo')?.cells[1]?.textContent).toBe('500,00');
+    expect(linhaDe('(−) Rateio administrativo')?.cells[1]?.textContent).toBe('120,00');
+  });
+
+  /* ⚠ E A RECEITA BRUTA DO RESUMIDO NÃO É SOMA DO FRONT: ela é a chave `receita_bruta`, que a RPC
+     já devolve. Somar vendas + outras receitas aqui criaria a segunda dona do mesmo número. */
+  it('a receita bruta vem da RPC, não de uma soma da tela', () => {
+    montarModo('resumido');
+    expect(linhaDe('Receita bruta')?.cells[1]?.textContent).toBe('1.300,00');
+  });
+});
+
+/* ══════════════ O Δ NA VISÃO GLOBAL — adendo do 03b ══════════════ */
+
+/**
+ * ⚠ A ORDEM É A LEI DO TEMPO (A28): a referência à ESQUERDA, o realizado à direita, o Δ depois. Com
+ * a meta à direita, o olho lia a diferença antes do número que a produziu.
+ * ⚠ E OS NÚMEROS SÃO OS DA ANTIGA VISÃO "× Meta": ela deixou de existir como card, não como
+ * resposta — é isso que este bloco prova.
+ */
+describe('a comparação na visão Global', () => {
+  const META: DrePecuaria = { ...DRE, total: linhas({ vendas: 10000000, resultado_periodo: 2000000 }) };
+  const montarGlobal = (deltas: readonly ('rs' | 'pct')[], refDelta: 'meta' | 'ano' = 'meta') => render(
+    <PecDrePanel colunas={colunasDaVisao({
+      visao: 'global', de: '2025-07', ate: '2026-06', real: DRE, meta: META, carregandoMeta: false,
+      anos: [{ de: '2024-07', ate: '2025-06', dre: { ...DRE, total: linhas({ vendas: 12000000 }) }, carregando: false }],
+      deltas, refDelta,
+    })} alturaCartao={null} cartaoRef={{ current: null }} />,
+  );
+
+  it('sem chip, só o realizado; com Δ R$, a meta entra à esquerda e o Δ à direita', () => {
+    const { unmount } = montarGlobal([]);
+    /* Uma coluna só: o Total do período. A cabeça média é a do fixture do arquivo. */
+    expect(cabecalhos()).toHaveLength(2);
+    expect(cabecalhos()[1]).toContain('Total');
+    unmount();
+
+    montarGlobal(['rs']);
+    const cab = cabecalhos();
+    expect(cab[1]).toContain('Meta');
+    expect(cab[2]).toContain('Total');
+    expect(cab[3]).toContain('Δ');
+    /* Vendas: meta 10.000.000, realizado 17.869.000,08, Δ = 7.869.000,08. */
+    const vendas = linhaDe('Vendas');
+    expect(vendas?.cells[1]?.textContent).toBe('10.000.000,00');
+    expect(vendas?.cells[3]?.textContent).toBe('17.869.000,08');
+    expect(vendas?.cells[5]?.textContent).toBe('7.869.000,08');
+  });
+
+  it('trocar a referência para o ano anterior troca a coluna da esquerda e o Δ', () => {
+    montarGlobal(['rs'], 'ano');
+    expect(cabecalhos()[1]).toContain('jul/24-jun/25');
+    const vendas = linhaDe('Vendas');
+    expect(vendas?.cells[1]?.textContent).toBe('12.000.000,00');
+    /* 17.869.000,08 − 12.000.000 = 5.869.000,08 — e não os 7,8 mi da meta. */
+    expect(vendas?.cells[5]?.textContent).toBe('5.869.000,08');
+  });
+
+  /* ⚠ O CHIP Δ % NÃO É OUTRA UNIDADE DO MESMO NÚMERO: ele é a segunda célula da coluna de Δ. */
+  it('os dois chips dão duas células de Δ na mesma coluna', () => {
+    montarGlobal(['rs', 'pct']);
+    const vendas = linhaDe('Vendas');
+    expect(vendas?.cells[5]?.textContent).toBe('7.869.000,08');
+    expect(vendas?.cells[6]?.textContent).toContain('%');
   });
 });

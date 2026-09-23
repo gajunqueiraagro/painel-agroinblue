@@ -25,7 +25,7 @@ import { cn } from '@/lib/utils';
 import { CINZA_CABECALHO } from '@/lib/idiomaVisual';
 import { formatNum } from '@/lib/calculos/formatters';
 import {
-  W_RS, W_HA, W_RS_TOTAL, larguraDoGrupo, VERDE, VERMELHO, NAVY_TOTAL, BORDA_TOTAL, FUNDO_TOTAL, traco,
+  W_RS, W_HA, W_RS_TOTAL, larguraDoGrupo, FAIXA_TOTAL, VERDE, VERDE_70, VERMELHO, VERMELHO_70, NAVY_TOTAL, BORDA_TOTAL, FUNDO_TOTAL, traco,
   corDoSinal, numeroDaCelula, Celula, CelulaUnit, Etiqueta, Caixas, REGUA_LINHA, tipoDaLinha,
   fundoDaLinha,
   type CaixaFaixa,
@@ -35,9 +35,9 @@ import { Segmentado } from '@/components/ui/segmentado';
    tipo da coluna moram em `drePecRegua`, porque o modal do histórico precisa das MESMAS, e ele é
    montado por esta tela: importar de volta fecharia um ciclo. Nada mudou de corpo. */
 import {
-  LINHAS_PEC, COM_PERCENTUAL, COM_POR_HECTARE, ROTULO_POR_HECTARE, BASE_DO_PERCENTUAL, ROTULO_DA_BASE, corDoTom, valorDe,
+  LINHAS_DO_MODO, COM_PERCENTUAL, COM_POR_HECTARE, ROTULO_POR_HECTARE, BASE_DO_PERCENTUAL, ROTULO_DA_BASE, corDoTom, valorDe,
   valorNaUnidade, percentual, centrosDoBloco, UNIDADES_PEC, ROTULO_UNIDADE,
-  type DefPec, type ColunaPec, type UnidadePec,
+  type DefPec, type ColunaPec, type UnidadePec, type ModoDre,
 } from '@/components/agri/drePecRegua';
 import type { RecorteHistoricoPec } from '@/components/agri/PecHistoricoLinhaModal';
 import {
@@ -80,10 +80,21 @@ const tituloHa = (c: ColunaPec) => {
  *   fazenda — qual fazenda carrega o resultado?
  */
 export type VisaoPec = 'global' | 'meta' | 'anos' | 'fazenda';
-const VISOES: readonly VisaoPec[] = ['global', 'meta', 'anos', 'fazenda'];
+const VISOES: readonly VisaoPec[] = ['global', 'anos', 'fazenda'];
+/**
+ * ⚠ 'meta' SAIU DOS CARDS mas CONTINUA SENDO LIDA DA URL — DRE-CASCATA-03b/adendo: a comparação
+ * com a meta virou coluna da visão Global, ligada pelos chips de Δ. Um link antigo com
+ * `f_visao=meta` não pode abrir numa visão que não existe mais; ele cai no Global, e a página liga
+ * o Δ meta ao ver o parâmetro.
+ */
+const VISOES_URL: readonly string[] = ['global', 'meta', 'anos', 'fazenda'];
 
 /** `f_visao` na URL. ⚠ Constantes de módulo: o `useFiltroUrl` as usa nas dependências. */
-export const lerVisaoPec = (bruto: string): VisaoPec => VISOES.find(v => v === bruto) ?? 'global';
+export const lerVisaoPec = (bruto: string): VisaoPec =>
+  (bruto === 'meta' ? 'global' : (VISOES.find(v => v === bruto) ?? 'global'));
+/** O link antigo pedia a comparação com a meta — a página liga o chip ao ver isto. */
+export const ehVisaoMetaLegada = (bruto: string | null) => bruto === 'meta';
+export { VISOES_URL };
 export const escreverVisaoPec = (v: VisaoPec): string => v;
 /** `f_anos` na URL — de 1 a 5, padrão 3. Fora da faixa volta ao padrão, nunca quebra a tela. */
 export const N_ANOS_PADRAO = 3;
@@ -131,6 +142,23 @@ export interface EntradaVisoes {
   carregandoMeta: boolean;
   /** Os anos anteriores, do mais recente ao mais antigo (k = 1..N). */
   anos: readonly { de: string; ate: string; dre: DrePecuaria | null; carregando: boolean }[];
+  /**
+   * OS CHIPS DE Δ — DRE-CASCATA-03b. Vazio (o padrão) = nenhuma coluna de comparação.
+   *
+   * ⚠ A COMPARAÇÃO É SEMPRE CONTRA O PERÍODO DA TELA: cada ano anterior (ou a Meta) ganha, à
+   * DIREITA, o quanto mudou até hoje. Pôr o Δ à esquerda faria ler a diferença antes do número
+   * que a produziu.
+   */
+  deltas?: readonly ('rs' | 'pct')[];
+  /**
+   * CONTRA O QUE O Δ DA VISÃO GLOBAL COMPARA — a meta, ou o ano anterior.
+   *
+   * ⚠ ELE SUBSTITUIU O CARD "× Meta" (decisão do Gabriel, 23/09 08:57): a comparação deixou de ser
+   * uma visão à parte e virou uma COLUNA da visão Global, ligada pelos chips. Uma tela que
+   * respondia "e a meta?" só depois de trocar de visão fazia o operador perder o número que estava
+   * lendo.
+   */
+  refDelta?: 'meta' | 'ano';
 }
 
 const subCab = (l: DrePecLinhas) => `${formatNum(l.patrimonio.cab_media, 0)} cab med.`;
@@ -146,7 +174,46 @@ export function colunasDaVisao(e: EntradaVisoes): ColunaPec[] {
     chave: '__total__', nome: 'Total', sub: subCab(real.total), fazendaId: null, linhas: real.total,
     total: true, tipo: 'valor', unidade: 'ha', de, ate, cenario: 'realizado', meses, atual: true,
   };
-  if (e.visao === 'global') return [totalReal];
+  if (e.visao === 'global') {
+    const deltas = e.deltas ?? [];
+    if (deltas.length === 0) return [totalReal];
+    /* ⚠ A REFERÊNCIA FICA À ESQUERDA DO REALIZADO — DRE-CASCATA-03b/adendo, e é a mesma lei do A28:
+       o tempo corre da esquerda para a direita e a comparação vem DEPOIS do que compara. Com a
+       meta à direita, o olho lia a diferença antes do número que a produziu. */
+    const anoAnterior = e.anos[0] ?? null;
+    const daMeta = e.refDelta !== 'ano';
+    const semRef = daMeta ? (!e.meta || semMovimento(e.meta)) : !anoAnterior?.dre;
+    const refLinhas = daMeta ? (e.meta?.total ?? null) : (anoAnterior?.dre?.total ?? null);
+    const referencia: ColunaPec = daMeta
+      ? {
+        chave: '__ref_meta__', nome: 'Meta', sub: semRef ? 'sem meta' : '',
+        subLongo: semRef ? 'sem meta no período' : undefined,
+        fazendaId: null, linhas: e.carregandoMeta ? null : (refLinhas ?? real.total),
+        total: false, tipo: 'valor', unidade: 'ha', de, ate, cenario: 'meta',
+        meses: e.meta?.periodo.meses ?? meses, atual: false, semPatrimonio: true, semDado: semRef,
+        comparacao: true,
+      }
+      : {
+        chave: '__ref_ano__',
+        nome: anoAnterior ? rotuloCurtoPeriodo(anoAnterior.de, anoAnterior.ate) : 'Ano anterior',
+        sub: '', fazendaId: null,
+        linhas: anoAnterior?.carregando ? null : (refLinhas ?? real.total),
+        total: false, tipo: 'valor', unidade: 'ha',
+        de: anoAnterior?.de ?? de, ate: anoAnterior?.ate ?? ate, cenario: 'realizado',
+        meses: anoAnterior?.dre?.periodo.meses ?? meses, atual: false, semDado: semRef,
+        comparacao: true,
+      };
+    return [
+      referencia,
+      totalReal,
+      {
+        ...totalReal, chave: '__delta__', nome: 'Δ',
+        sub: daMeta ? 'real − meta' : `real − ${referencia.nome}`,
+        total: false, tipo: 'delta', unidade: 'pct',
+        ref: semRef ? null : refLinhas, deltaSlots: deltas, comparacao: true,
+      },
+    ];
+  }
 
   if (e.visao === 'fazenda') {
     /* ⚠ O TOTAL ENTRA NA FRENTE (§2a). A RPC devolve as fazendas e o total separados; quem os
@@ -161,7 +228,7 @@ export function colunasDaVisao(e: EntradaVisoes): ColunaPec[] {
   if (e.visao === 'meta') {
     /* ⚠ META NUNCA SE SOMA AO REALIZADO: dois JSONs, duas colunas, e o delta é a diferença. */
     const semMeta = !e.carregandoMeta && (!e.meta || semMovimento(e.meta));
-    return [
+    const colsMeta: ColunaPec[] = [
       { ...totalReal, nome: 'Realizado' },
       {
         /* ⚠ A META GANHOU A SUB-COLUNA — TELA-03a. Ela não tinha nenhuma, e comparar R$ com R$/ha
@@ -179,8 +246,12 @@ export function colunasDaVisao(e: EntradaVisoes): ColunaPec[] {
         chave: '__delta__', nome: 'Δ', sub: 'real − meta', fazendaId: null,
         linhas: e.carregandoMeta ? null : real.total, ref: semMeta ? null : (e.meta?.total ?? null),
         total: false, tipo: 'delta', unidade: 'pct', de, ate, cenario: 'realizado', meses, atual: false,
+        /* ⚠ A x META ABRE COM OS DOIS Δ LIGADOS (`deltas` chega preenchido dela) para não perder o
+           que a tela já mostrava; desmarcar o chip agora a esconde, o que antes não era possível. */
+        deltaSlots: e.deltas ?? ['rs', 'pct'],
       },
     ];
+    return colsMeta.filter(c => c.tipo !== 'delta' || (c.deltaSlots?.length ?? 0) > 0);
   }
 
   /* ANOS — o atual à esquerda, depois ano−1, ano−2…
@@ -207,7 +278,18 @@ export function colunasDaVisao(e: EntradaVisoes): ColunaPec[] {
       semDado: !a.carregando && (!a.dre || a.dre.fazendas.length === 0),
     })),
     { ...totalReal, nome: rotuloCurtoPeriodo(de, ate), sub: '' },
-  ];
+  ].flatMap((c): ColunaPec[] => {
+    /* ⚠ O Δ VEM À DIREITA DO ANO QUE ELE COMPARA, e compara SEMPRE contra o período da tela: é a
+       pergunta "quanto mudou de lá para cá". A coluna do próprio período não ganha Δ — ela é a
+       referência, e um Δ contra si mesma seria zero em toda linha. */
+    const deltas = e.deltas ?? [];
+    if (deltas.length === 0 || c.total || c.semDado) return [c];
+    return [c, {
+      ...c, chave: `${c.chave}-delta`, nome: 'Δ', sub: `atual − ${c.nome}`,
+      linhas: real.total, ref: c.linhas, tipo: 'delta', unidade: 'pct',
+      deltaSlots: deltas, semDado: false,
+    }];
+  });
 }
 
 /** O valor de uma linha numa coluna — ou o delta, se a coluna é o delta. */
@@ -224,6 +306,28 @@ function valorNaColuna(col: ColunaPec, chave: ChaveLinhaPec): number | null {
 }
 
 /**
+ * O VALOR DE UMA LINHA — com a composição do modo Resumido, quando houver.
+ *
+ * ⚠ SOMA DE NÚMEROS JÁ LIDOS, não conta nova: as parcelas são chaves que a RPC devolveu, e o
+ * resultado é o que o Detalhado mostra em duas linhas. Se qualquer parcela for ausente, o todo é
+ * ausente — somar tratando `null` como zero afirmaria um total que não se sabe.
+ */
+function valorDaLinha(col: ColunaPec, def: DefPec): number | null {
+  if (!def.compor) return valorNaColuna(col, def.chave);
+  const parcelas = [
+    ...def.compor.mais.map(k => ({ k, sinal: 1 })),
+    ...(def.compor.menos ?? []).map(k => ({ k, sinal: -1 })),
+  ];
+  let total = 0;
+  for (const p of parcelas) {
+    const v = valorNaColuna(col, p.k);
+    if (v == null) return null;
+    total += v * p.sinal;
+  }
+  return total;
+}
+
+/**
  * O PERCENTUAL DO DELTA — delta ÷ |meta|. ⚠ Meta zero dá traço (não há do que ser percentual).
  * ⚠ O MÓDULO NO DENOMINADOR: com meta negativa (um resultado planejado de prejuízo), dividir pelo
  * valor com sinal inverteria o sentido — melhorar sobre a meta apareceria como percentual negativo.
@@ -235,10 +339,15 @@ const pctDelta = (delta: number | null, meta: number | null): string =>
  * A COR DO DELTA É O SINAL DO NÚMERO, NÃO JUÍZO — mas o sinal de "bom" depende da linha: em receita
  * e resultado, acima da meta é verde; em custo, gastar MENOS que a meta é verde.
  */
+/**
+ * ⚠ O Δ SE PINTA EM TOM APAGADO (70%) — DRE-CASCATA-03b/adendo: ele é apoio, e no mesmo verde do
+ * número da tela as duas colunas disputariam a mesma atenção. A regra do SINAL não muda: custo que
+ * sobe é vermelho, receita que sobe é verde.
+ */
 const corDoDelta = (def: DefPec, v: number | null): string => {
   if (v == null || v === 0) return '';
   const bom = def.tom === 'custo' ? v < 0 : v > 0;
-  return bom ? VERDE : VERMELHO;
+  return bom ? VERDE_70 : VERMELHO_70;
 };
 
 /**
@@ -269,8 +378,17 @@ const larguraUn = (c: ColunaPec) => (c.total ? W_HA : W_SUB);
  */
 type SlotPec = UnidadePec | 'pct';
 const slotsDaColuna = (c: ColunaPec, unidades: readonly UnidadePec[]): readonly SlotPec[] =>
-  (c.tipo === 'delta' ? ['rs', 'pct'] : c.unidade === null ? ['rs'] : unidades);
-const larguraSlot = (s: SlotPec, c: ColunaPec) => (s === 'rs' ? larguraRs(c) : larguraUn(c));
+  (c.tipo === 'delta' ? (c.deltaSlots ?? ['rs', 'pct']) : c.unidade === null ? ['rs'] : unidades);
+/* ⚠ A COLUNA DE Δ TEM LARGURA PRÓPRIA (78): ela carrega "▲ 12,3 %" ou um valor abreviado, nunca
+   os milhões de uma coluna de R$, e 96 ali seria espaço comprado e não usado. */
+const W_DELTA_RS = 78;
+const W_DELTA_PCT = 64;
+const W_REFERENCIA = 80;
+const larguraSlot = (s: SlotPec, c: ColunaPec) => {
+  if (c.tipo === 'delta') return s === 'pct' ? W_DELTA_PCT : W_DELTA_RS;
+  if (c.comparacao) return s === 'rs' ? W_REFERENCIA : larguraUn(c);
+  return s === 'rs' ? larguraRs(c) : larguraUn(c);
+};
 const rotuloSlot = (s: SlotPec, c: ColunaPec) =>
   (s === 'pct' ? 'Δ %' : s === 'rs' ? (c.tipo === 'delta' ? 'Δ R$' : 'R$') : ROTULO_UNIDADE[s]);
 
@@ -347,7 +465,8 @@ function CelulaCarregando({ total, fundo, estilo }: { total?: boolean; fundo?: s
 
 
 export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
-  unidades = ['rs', 'ha'], onAbrirLista, onAbrirDidatico, onAbrirRateio, onAbrirHistorico }: {
+  unidades = ['rs', 'ha'], modo = 'detalhado', abertos, onAbertos,
+  onAbrirLista, onAbrirDidatico, onAbrirRateio, onAbrirHistorico }: {
   colunas: readonly ColunaPec[];
   /** ⚠ AS UNIDADES MARCADAS, na ordem de `UNIDADES_PEC`. O padrão é o que a tela abre: R$ e R$/ha. */
   unidades?: readonly UnidadePec[];
@@ -358,6 +477,25 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
   onAbrirRateio?: () => void;
   /** ⚠ A GRADE NÃO MONTA O MODAL: ela avisa QUAL linha, e quem lê os cinco anos é a página. */
   onAbrirHistorico?: (r: RecorteHistoricoPec) => void;
+  /**
+   * RESUMIDO OU DETALHADO — DRE-CASCATA-03b.
+   *
+   * ⚠ SÃO DUAS PERGUNTAS: "como fechou o período" (quinze linhas, cabe na tela) e "onde o dinheiro
+   * entrou e saiu" (as dezenove de sempre).
+   * ⚠ O PADRÃO AQUI É `detalhado`, E QUEM ABRE EM RESUMIDO É A TELA. A grade não tem opinião sobre
+   * com qual pergunta o operador começa — ela desenha a lista que lhe derem. Fosse o contrário,
+   * montar `<PecDrePanel>` num teste traria um modo escolhido por outra camada.
+   */
+  modo?: ModoDre;
+  /**
+   * QUAIS GRUPOS ESTÃO ABERTOS — agora de fora, DRE-CASCATA-03b.
+   *
+   * ⚠ ELE SUBIU PARA A PÁGINA porque o "abrir tudo" mora na linha dos chips, que é dela: com o
+   * estado aqui dentro, o botão lá fora não teria o que alternar. Sem as props, a grade continua
+   * guardando o seu — é o que mantém os testes montando `<PecDrePanel>` sozinho.
+   */
+  abertos?: Record<string, boolean>;
+  onAbertos?: (f: (a: Record<string, boolean>) => Record<string, boolean>) => void;
 }) {
   const colunas = colunasCruas;
   const larguras = useMemo(() => {
@@ -368,9 +506,13 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
   const larguraMin = larguras.reduce((a, b) => a + b, 0);
   const primeira = colunas[0];
 
-  /** Quais grupos estão abertos. Fechados por padrão (§4). */
-  const [abertos, setAbertos] = useState<Record<string, boolean>>({});
-  const alternar = (c: ChaveLinhaPec) => setAbertos(a => ({ ...a, [c]: !a[c] }));
+  /** Quais grupos estão abertos. Fechados por padrão (§4) — e o estado pode vir de fora. */
+  const [abertosLocal, setAbertosLocal] = useState<Record<string, boolean>>({});
+  const expandidos = abertos ?? abertosLocal;
+  const alternar = (c: ChaveLinhaPec) => {
+    const f = (a: Record<string, boolean>) => ({ ...a, [c]: !a[c] });
+    if (onAbertos) onAbertos(f); else setAbertosLocal(f);
+  };
 
   return (
     /* ⚠ A ROLAGEM HORIZONTAL É DESTE CARTÃO, NUNCA DA PÁGINA (§2b). `min-w-0` é o que garante
@@ -444,9 +586,9 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
         </thead>
 
         <tbody>
-          {LINHAS_PEC.map(def => {
+          {LINHAS_DO_MODO(modo).map(def => {
             const bloco = BLOCO_DA_LINHA[def.chave];
-            const aberto = !!abertos[def.chave];
+            const aberto = !!expandidos[def.chave];
             /* ⚠ AS FILHAS SÃO A UNIÃO DAS COLUNAS DE TOTAL, e é ela que manda: um centro que só
                existe numa fazenda (ou só na meta, ou só em 2024) tem de aparecer para todas, senão a
                linha some conforme a coluna que se olha. As colunas de fazenda não entram na união:
@@ -462,6 +604,12 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
                   if (!vistos.has(x.centro)) { vistos.add(x.centro); centros.push(x); }
                 });
               });
+              /* ⚠ NO RESUMIDO O RATEIO ADMINISTRATIVO É A ÚLTIMA FILHA DO CUSTO FIXO — DRE-CASCATA-03b.
+                 Ele não é um centro de custo: é uma parcela estimada que a linha composta já soma,
+                 e escondê-la faria o total do custo fixo não bater com a soma das filhas visíveis. */
+              if (def.compor?.mais.includes('rateio_adm')) {
+                centros.push({ bloco: 'rateio_adm', centro: 'Rateio administrativo', valor: 0, a_pagar: 0 });
+              }
             }
             return (
               <Fragment key={def.chave}>
@@ -488,8 +636,7 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
                 {/* As filhas: um centro por linha, na régua `filha` (9px/14px, recuo 16). */}
                 {aberto && centros.map(c => (
                   <LinhaCentro key={`${def.chave}-${c.centro}`} def={def} centro={c} unidades={unidades}
-                    colunas={colunas} bloco={bloco ?? ''} onAbrirLista={onAbrirLista}
-                    onAbrirHistorico={onAbrirHistorico} />
+                    colunas={colunas} bloco={bloco ?? ''} onAbrirLista={onAbrirLista} />
                 ))}
               </Fragment>
             );
@@ -512,8 +659,12 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, onAlternar, onAbrir
   onAbrirRateio?: () => void;
   onAbrirHistorico?: (r: RecorteHistoricoPec) => void;
 }) {
-  const fundo = fundoDaLinha(def.destaque);
-  const corLinha = corDoTom(def.tom);
+  /* ⚠ A FAIXA MANDA NO FUNDO E NA COR — DRE-CASCATA-03b: num total, o destaque é a faixa, e pintar
+     o número de verde ou vermelho por cima dela seria dois sinais para a mesma coisa. O sinal do
+     número continua aparecendo nas linhas COMUNS, que é onde ele informa. */
+  const daFaixa = def.faixa ? FAIXA_TOTAL[def.faixa] : null;
+  const fundo = daFaixa ? daFaixa.fundo : fundoDaLinha(def.destaque);
+  const corLinha = daFaixa ? (daFaixa.texto ?? '') : corDoTom(def.tom);
   const bloco = BLOCO_DA_LINHA[def.chave];
   const temFilhas = def.expande && centros.length > 0;
   /* ⚠ O RATEADO DA PRIMEIRA COLUNA manda no selo: é ela que a linha de rótulo descreve (o Total
@@ -595,8 +746,14 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, onAlternar, onAbrir
 
       {colunas.map(col => {
         const slots = slotsDaColuna(col, unidades);
-        const estiloDoSlot = (i: number) => (!congelada(col, colunas) ? undefined
-          : i === 0 ? estiloTotalRs : i === 1 ? estiloTotalCab(col, unidades) : undefined);
+        /* ⚠ NUMA LINHA DE FAIXA O CINZA DO TOTAL SAI DE CENA: ele é um `backgroundColor` inline e
+           cobriria o azul justamente na coluna de referência. `undefined` remove a propriedade —
+           o React a omite —, e a classe da faixa, que é opaca, fica valendo. */
+        const estiloDoSlot = (i: number) => {
+          const base = !congelada(col, colunas) ? undefined
+            : i === 0 ? estiloTotalRs : i === 1 ? estiloTotalCab(col, unidades) : undefined;
+          return daFaixa ? { ...(base ?? {}), backgroundColor: undefined } : base;
+        };
         if (!col.linhas) {
           return (
             <Fragment key={col.chave}>
@@ -606,9 +763,10 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, onAlternar, onAbrir
             </Fragment>
           );
         }
-        const v = valorNaColuna(col, def.chave);
-        const cor = col.tipo === 'delta' ? corDoDelta(def, v)
-          : def.corPorSinal ? corDoSinal(v) : corLinha;
+        const v = valorDaLinha(col, def);
+        const cor = daFaixa ? corLinha
+          : col.tipo === 'delta' ? corDoDelta(def, v)
+            : def.corPorSinal ? corDoSinal(v) : corLinha;
         /* ⚠ JUROS DE FAZENDA: "—" no R$ (é ausência, não zero) e nada nas unidades. */
         const jurosDeFazenda = def.chave === 'juros' && col.fazendaId !== null;
         /* ⚠ SEM FECHAMENTO A CÉLULA DIZ POR QUÊ: as duas linhas de variação vêm nulas, e o
@@ -620,7 +778,8 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, onAlternar, onAbrir
         return (
           <Fragment key={col.chave}>
             {slots.map((sl, i) => (sl === 'rs' ? (
-              <Celula key={sl} valor={v} cor={cor} destaque={def.destaque} fonte={regua.fonte}
+              <Celula key={sl} valor={v} cor={col.comparacao && !daFaixa ? 'text-muted-foreground' : cor}
+                destaque={def.destaque} fonte={col.comparacao ? REGUA_LINHA.simples.fonte : regua.fonte}
                 bordaEsquerda={!col.total && i === 0} total={col.total} fundo={fundo}
                 onAbrir={abrir}
                 estilo={estiloDoSlot(i)}
@@ -747,30 +906,32 @@ function LinhaPorHectare({ def, colunas, unidades }: {
  * ⚠ E O `'(sem)'` VIAJA INTEIRO ATÉ A RPC — ele é um centro de verdade ("lançamento sem centro"),
  * não ausência. Mandar `null` no lugar dele traria o bloco todo.
  */
-function LinhaCentro({ def, centro, colunas, bloco, unidades, onAbrirLista, onAbrirHistorico }: {
+function LinhaCentro({ def, centro, colunas, bloco, unidades, onAbrirLista }: {
   def: DefPec;
   centro: CentroPec;
   colunas: readonly ColunaPec[];
   bloco: string;
   unidades: readonly UnidadePec[];
   onAbrirLista?: (r: RecortePec) => void;
-  onAbrirHistorico?: (r: RecorteHistoricoPec) => void;
 }) {
   const regua = REGUA_LINHA.filha;
   const corLinha = corDoTom(def.tom);
-  const achar = (l: DrePecLinhas | null | undefined) =>
-    (l ? centrosDoBloco(l, bloco).find(c => c.centro === centro.centro)?.valor ?? null : null);
+  /* ⚠ A FILHA DO RATEIO NÃO VEM DE `centros`: ela é a linha `rateio_adm` da própria coluna, posta
+     como filha do Custo fixo no modo Resumido. Procurá-la entre os centros devolveria nulo. */
+  const achar = (l: DrePecLinhas | null | undefined) => {
+    if (!l) return null;
+    if (centro.bloco === 'rateio_adm') return valorDe(l, 'rateio_adm');
+    return centrosDoBloco(l, bloco).find(c => c.centro === centro.centro)?.valor ?? null;
+  };
   return (
     <tr className={cn('bg-card', regua.peso)} style={{ height: regua.altura }}>
       <td className="sticky left-0 z-30 truncate border-r border-border/60 bg-card py-px"
         style={{ fontSize: regua.fonte, paddingLeft: 7 + regua.recuo, paddingRight: 7 }}
         title={centro.centro}>
-        <BotaoHistorico onAbrir={onAbrirHistorico && colunas[0]
-          ? () => onAbrirHistorico({
-            chave: def.chave, centro: centro.centro,
-            rotulo: centro.centro === '(sem)' ? 'sem centro' : centro.centro,
-            fazendaId: colunas[0].fazendaId, fazendaNome: colunas[0].nome,
-          }) : undefined} />
+        {/* ⚠ A FILHA NÃO TEM ÍCONE — DRE-CASCATA-03b. Numa grade aberta eram dezenas de ícones
+            repetidos na coluna de rótulos, e o que eles abrem já se alcança de dentro do modal: a
+            legenda do donut do pai navega para cada filha, e entre irmãs. O ícone fica onde a
+            pergunta nasce — no grupo, no total e nas linhas soltas de topo. */}
         {centro.centro === '(sem)' ? 'sem centro' : centro.centro}
       </td>
       {colunas.map(col => {
@@ -837,7 +998,7 @@ function LinhaCentro({ def, centro, colunas, bloco, unidades, onAbrirLista, onAb
  * ele encolheria os quatro cards a cada troca — a lei de estabilidade.
  */
 export function FaixaVisoesPec({ visao, onVisao, real, meta, carregandoMeta, anoAnterior,
-  carregandoAnoAnterior, nAnos, onNAnos }: {
+  carregandoAnoAnterior, nAnos, onNAnos, deltas = [], refDelta = 'meta' }: {
   visao: VisaoPec;
   onVisao: (v: VisaoPec) => void;
   real: DrePecuaria;
@@ -847,6 +1008,9 @@ export function FaixaVisoesPec({ visao, onVisao, real, meta, carregandoMeta, ano
   carregandoAnoAnterior: boolean;
   nAnos: number;
   onNAnos: (n: number) => void;
+  /** Os chips de Δ ligados na tela — a nota do card Global só existe quando há algum. */
+  deltas?: readonly ('rs' | 'pct')[];
+  refDelta?: 'meta' | 'ano';
 }) {
   const rp = real.total.resultado_periodo;
   const delta = (outro: DrePecuaria) => rp - outro.total.resultado_periodo;
@@ -855,13 +1019,16 @@ export function FaixaVisoesPec({ visao, onVisao, real, meta, carregandoMeta, ano
   const dMeta = semMeta || !meta ? null : delta(meta);
   const dAno = semAno || !anoAnterior ? null : delta(anoAnterior);
   const nFaz = real.fazendas.length;
+  const dRef = refDelta === 'meta' ? dMeta : dAno;
+  const notaDelta = deltas.length === 0 ? undefined
+    : dRef == null ? (refDelta === 'meta' ? 'sem meta no período' : 'sem ano anterior')
+      : `Δ ${refDelta === 'meta' ? 'meta' : 'ano ant.'} ${numeroDaCelula(dRef)}`;
   const caixas: CaixaFaixa[] = [
+    /* ⚠ O CARD "× Meta" SAIU (adendo de 23/09): a comparação virou coluna do Global. O número que
+       ele mostrava não se perdeu — vem aqui embaixo, como nota, quando o Δ está ligado. */
     { chave: 'global', rotulo: 'Global', valor: numeroDaCelula(rp), unidade: 'R$', cor: corDoSinal(rp),
-      title: 'Resultado do período — quanto a pecuária ganhou.' },
-    { chave: 'meta', rotulo: '× Meta', carregando: carregandoMeta,
-      valor: semMeta ? 'sem meta no período' : numeroDaCelula(dMeta),
-      unidade: semMeta ? undefined : 'R$', cor: semMeta ? 'text-muted-foreground' : corDoSinal(dMeta),
-      title: 'Resultado do período menos o da meta — ganhou o que planejou?' },
+      title: 'Resultado do período — quanto a pecuária ganhou.',
+      nota: notaDelta },
     { chave: 'anos', rotulo: '× Anos', carregando: carregandoAnoAnterior,
       valor: numeroDaCelula(dAno), unidade: dAno == null ? undefined : 'R$', cor: corDoSinal(dAno),
       title: 'Resultado do período menos o do mesmo período do ano anterior.' },

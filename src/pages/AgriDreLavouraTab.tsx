@@ -31,9 +31,9 @@ import { Segmentado } from '@/components/ui/segmentado';
 import { CINZA_CABECALHO } from '@/lib/idiomaVisual';
 import {
   W_RS, W_HA, W_UN, W_RS_TOTAL, W_GRUPO_MIN, larguraDoGrupo, VERDE, VERDE_70, VERMELHO, VERMELHO_70, AMBAR,
-  NAVY_TOTAL, BORDA_TOTAL, FUNDO_TOTAL, traco, corDoSinal, numeroDaCelula, porUnidade,
+  NAVY_TOTAL, BORDA_TOTAL, FUNDO_TOTAL, FAIXA_TOTAL, traco, corDoSinal, numeroDaCelula, porUnidade,
   Etiqueta, Celula, CelulaUnit, Caixas, ChipsUnidade, PontoRateio, REGUA_LINHA, tipoDaLinha, fundoDaLinha,
-  type CaixaFaixa, type DestaqueLinha,
+  type CaixaFaixa, type DestaqueLinha, type TomFaixa,
 } from '@/components/agri/dreGrade';
 import { supabase } from '@/integrations/supabase/client';
 import { RateioDetalheModal, type RateioDetalhe, type TipoRateio } from '@/components/agri/RateioDetalheModal';
@@ -61,11 +61,13 @@ import {
 } from '@/components/agri/PecHistoricoLinhaModal';
 import {
   PecDrePanel, FaixaVisoesPec, SeletorAnosPec, colunasDaVisao, lerVisaoPec, escreverVisaoPec, lerNAnosPec,
-  escreverNAnosPec, N_ANOS_PADRAO, type VisaoPec,
+  escreverNAnosPec, N_ANOS_PADRAO, ehVisaoMetaLegada, type VisaoPec,
 } from '@/pages/PecDrePanel';
 /* ⚠ AS UNIDADES VÊM DA RÉGUA, não mais da tela — DRE-HISTORICO-LINHA-01a. Mesma lista, mesmo
    rótulo; só o arquivo mudou. */
-import { UNIDADES_PEC, ROTULO_UNIDADE, type UnidadePec } from '@/components/agri/drePecRegua';
+import {
+  UNIDADES_PEC, ROTULO_UNIDADE, LINHAS_DO_MODO, type UnidadePec, type ModoDre,
+} from '@/components/agri/drePecRegua';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useFinanceiroV2, type LancamentoV2 } from '@/hooks/useFinanceiroV2';
 import { usePainelSafra, useComparativoSafras } from '@/hooks/usePainelSafra';
@@ -137,6 +139,8 @@ interface DefLinha {
   tom: 'receita' | 'custo' | 'neutro';
   /** Subtotal: fundo, peso 600. `sinal` = a cor vem do próprio número, por cultura. */
   destaque?: 'subtotal' | 'sub' | null;
+  /** O tom da faixa azul quando a linha é um total — a mesma escala da pecuária (03b). */
+  faixa?: TomFaixa;
   corPorSinal?: boolean;
   /** Grupo que abre em centros. */
   bloco?: Bloco;
@@ -149,27 +153,27 @@ interface DefLinha {
 const LINHAS: DefLinha[] = [
   { chave: 'receita_bruta',          rotulo: 'Receita bruta',                   tom: 'receita' },
   { chave: 'deducoes',               rotulo: '(−) Deduções',                    tom: 'custo' },
-  { chave: 'receita_liquida',        rotulo: '= Receita líquida',               tom: 'receita', destaque: 'subtotal' },
+  { chave: 'receita_liquida',        rotulo: '= Receita líquida',               faixa: 't1', tom: 'receita', destaque: 'subtotal' },
   { chave: 'custeio',                rotulo: '(−) Custeio da lavoura',          tom: 'custo', bloco: 'custeio' },
   { chave: 'pos_colheita',           rotulo: '(−) Pós-colheita',                tom: 'custo', bloco: 'pos_colheita' },
   { chave: 'rateio_compartilhado',   rotulo: '(−) Rateio compartilhado',        tom: 'custo', etiqueta: 'estimado', someComRateioDentro: true },
-  { chave: 'custo_variavel',         rotulo: '= Custo variável',                tom: 'custo', destaque: 'sub' },
-  { chave: 'margem_contribuicao',    rotulo: '= Margem de contribuição',        tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
+  { chave: 'custo_variavel',         rotulo: '= Custo variável',                faixa: 't1', tom: 'custo', destaque: 'sub' },
+  { chave: 'margem_contribuicao',    rotulo: '= Margem de contribuição',        faixa: 't2', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
   { chave: 'custo_fixo',             rotulo: '(−) Custo fixo da lavoura',       tom: 'custo', bloco: 'fixo' },
   { chave: 'rateio_admin',           rotulo: '(−) Rateio administrativo',       tom: 'custo', etiqueta: 'estimado' },
-  { chave: 'resultado_operacional',  rotulo: '= Resultado operacional',         tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
+  { chave: 'resultado_operacional',  rotulo: '= Resultado operacional',         faixa: 't3', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
   { chave: 'juros',                  rotulo: '(−) Despesas financeiras (juros)', tom: 'custo' },
   /* ⚠ O NOME MUDOU, A CHAVE NÃO — DRE-CASCATA-03a: "Resultado do período" é como a pecuária já
      chamava a mesma linha, e duas atividades do mesmo DRE não podem ter dois nomes para a mesma
      pergunta. A chave `resultado_caixa` fica: renomeá-la quebraria o histórico da lavoura (que
      dele deriva o `resultado_ha`) e o PC-100, em silêncio. */
-  { chave: 'resultado_caixa',        rotulo: '= Resultado do período',           tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
+  { chave: 'resultado_caixa',        rotulo: '= Resultado do período',           faixa: 't3', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
   /* ⚠ O INVESTIMENTO ENTROU NA CASCATA — DRE-CASCATA-03a. Ele era vermelho e ficava "abaixo da
      linha de caixa": a faixa dizia que não entrava no resultado do período, e era verdade — mas o
      dinheiro saiu, e a conta que o produtor faz é a que sobra DEPOIS dele. Agora a cascata segue
      até o lucro líquido e a faixa não existe mais. A depreciação continua reservada, sem valor. */
   { chave: 'investimento',           rotulo: '(−) Investimento no período',     tom: 'custo', bloco: 'investimento' },
-  { chave: 'lucro_liquido',          rotulo: '= Lucro líquido',                 tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
+  { chave: 'lucro_liquido',          rotulo: '= Lucro líquido',                 faixa: 't4', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
   { chave: 'depreciacao',            rotulo: 'Depreciação (reservada · o custo operacional total = efetivo + depreciação nasce aqui)', tom: 'custo' },
 ];
 
@@ -372,13 +376,26 @@ export function AgriDreLavouraTab() {
   }, [historicoPec, pecDe, pecAte]);
   const anosHistoricoPec = useDrePecuariaLista(
     historicoPec ? clienteId : null, periodosHistoricoPec);
+  const [modoPec, setModoPec] = useState<ModoDre>('resumido');
+  /**
+   * OS CHIPS DE Δ E A REFERÊNCIA — DRE-CASCATA-03b/adendo.
+   *
+   * ⚠ ABREM DESLIGADOS: a tela responde primeiro "como fechou o período"; a comparação é o passo
+   * seguinte, e ela custa duas colunas de largura.
+   * ⚠ EXCETO PELO LINK ANTIGO: `f_visao=meta` apontava para um card que não existe mais, e quem o
+   * colou queria a comparação com a meta — então ele abre no Global com o Δ meta ligado.
+   */
+  const [deltasPec, setDeltasPec] = useState<readonly ('rs' | 'pct')[]>(
+    () => (ehVisaoMetaLegada(searchParams.get('f_visao')) ? ['rs', 'pct'] : []));
+  const [refDeltaPec, setRefDeltaPec] = useState<'meta' | 'ano'>('meta');
   const colunasPec = useMemo(() => (drePec && pecDe && pecAte
     ? colunasDaVisao({
       visao: visaoPec, de: pecDe, ate: pecAte, real: drePec,
       meta: drePecMeta, carregandoMeta: carregandoPecMeta,
       anos: anosPec.map(a => ({ de: a.periodo.de, ate: a.periodo.ate, dre: a.dre, carregando: a.carregando })),
+      deltas: deltasPec, refDelta: refDeltaPec,
     })
-    : []), [drePec, pecDe, pecAte, visaoPec, drePecMeta, carregandoPecMeta, anosPec]);
+    : []), [drePec, pecDe, pecAte, visaoPec, drePecMeta, carregandoPecMeta, anosPec, deltasPec, refDeltaPec]);
   /* ⚠ O MODAL DE LANÇAMENTOS DIZ DE QUE COLUNA VEIO: a lista da coluna de 2024 não pode aparecer
      sob o rótulo do período da tela, nem a de meta sob o do realizado. */
   const rotuloRecortePec = useMemo(() => {
@@ -398,6 +415,28 @@ export function AgriDreLavouraTab() {
   const [unidadesPec, setUnidadesPec] = useState<readonly UnidadePec[]>(['rs', 'ha']);
   const [ampliado, setAmpliado] = useState(false);
   const [abertos, setAbertos] = useState<Record<string, boolean>>({});
+  /**
+   * O DRE ABRE FECHADO E RESUMIDO — DRE-CASCATA-03b.
+   *
+   * ⚠ FECHADO JÁ ERA O COMPORTAMENTO (as duas grades nascem com `{}`); o que faltava era o
+   * controle para abrir tudo de uma vez, e ele mora aqui porque a linha dos chips é da página.
+   * ⚠ E A EXPANSÃO DA PECUÁRIA SUBIU PARA CÁ pelo mesmo motivo: o botão precisa de algo para
+   * alternar. A da lavoura já morava aqui (`abertos`).
+   */
+
+  const [abertosPec, setAbertosPec] = useState<Record<string, boolean>>({});
+  /* ⚠ OS GRUPOS QUE EXISTEM EM CADA ABA, para o "abrir tudo" saber o que abrir. Na pecuária eles
+     dependem do modo: o Resumido tem três (custo variável, custo fixo e investimento). */
+  const gruposDaAba = useMemo(() => (ehPec
+    ? LINHAS_DO_MODO(modoPec).filter(d => d.expande).map(d => d.chave as string)
+    : ['custeio', 'pos_colheita', 'fixo', 'investimento']), [ehPec, modoPec]);
+  const expandidos = ehPec ? abertosPec : abertos;
+  const tudoAberto = gruposDaAba.length > 0 && gruposDaAba.every(g => expandidos[g]);
+  const alternarTudo = () => {
+    const alvo = !tudoAberto;
+    const novo = Object.fromEntries(gruposDaAba.map(g => [g, alvo]));
+    if (ehPec) setAbertosPec(novo); else setAbertos(novo);
+  };
   /* ⚠ A ABA É ESTADO DE TELA, não de URL: ela não muda o QUE se vê (a safra e a cultura mudam),
      só o ângulo. Pôr mais um parâmetro na barra por causa dela seria ruído no link que o
      operador copia. Volta a 'resultado' ao trocar de cultura — ver o efeito abaixo. */
@@ -777,7 +816,7 @@ export function AgriDreLavouraTab() {
           </div>
 
           {ehPec ? (drePec ? (
-            <FaixaVisoesPec visao={visaoPec} onVisao={setVisaoPec} real={drePec}
+            <FaixaVisoesPec deltas={deltasPec} refDelta={refDeltaPec} visao={visaoPec} onVisao={setVisaoPec} real={drePec}
               meta={drePecMeta} carregandoMeta={carregandoPecMeta}
               anoAnterior={anosPec[0]?.dre ?? null} carregandoAnoAnterior={anosPec[0]?.carregando ?? true}
               nAnos={nAnosPec} onNAnos={setNAnosPec} />
@@ -904,6 +943,36 @@ export function AgriDreLavouraTab() {
                   tem, e sem a reserva os chips andavam 176px ao trocar de aba. */}
               <SeletorAnosPec visao={ehPec ? visaoPec : 'global'} nAnos={nAnosPec}
                 onNAnos={setNAnosPec} reservado={!ehPec} />
+              {/* ⚠ OS CHIPS DE Δ E A REFERÊNCIA — só a pecuária, com o espaço reservado na lavoura
+                  pela mesma lei do seletor de anos. O seletor de referência aparece na visão
+                  Global, que é onde a comparação vira coluna. */}
+              <span className="flex w-[168px] shrink-0 items-center justify-end gap-1.5">
+                {ehPec && <>
+                  <ChipsUnidade valor={deltasPec} onEscolher={setDeltasPec} permiteVazio
+                    opcoes={[{ valor: 'rs', rotulo: 'Δ R$' }, { valor: 'pct', rotulo: 'Δ %' }]} />
+                  {visaoPec === 'global' && deltasPec.length > 0 && (
+                    <Segmentado altura={22} valor={refDeltaPec} onEscolher={setRefDeltaPec}
+                      opcoes={[{ valor: 'meta', rotulo: 'meta' }, { valor: 'ano', rotulo: 'ano ant.' }]} />
+                  )}
+                </>}
+              </span>
+              {/* ⚠ SLOT FIXO DE 148px PARA O MODO: só a pecuária o tem, e sem a reserva o "abrir
+                  tudo" andaria ao trocar de aba — a mesma lei do seletor de anos. */}
+              <span className="flex w-[148px] shrink-0 items-center justify-end">
+                {ehPec && (
+                  <Segmentado altura={22} valor={modoPec} onEscolher={setModoPec}
+                    opcoes={[{ valor: 'resumido', rotulo: 'Resumido' }, { valor: 'detalhado', rotulo: 'Detalhado' }]} />
+                )}
+              </span>
+              {/* ⚠ UM BOTÃO SÓ, QUE DIZ O QUE VAI FAZER: "abrir tudo" quando há grupo fechado,
+                  "fechar tudo" quando todos estão abertos. Dois botões lado a lado obrigariam a
+                  ler qual está disponível. */}
+              <button type="button" onClick={alternarTudo}
+                className="shrink-0 whitespace-nowrap rounded border px-2 text-[10px] text-muted-foreground
+                  hover:bg-muted hover:text-foreground"
+                style={{ height: 22 }}>
+                {tudoAberto ? 'fechar tudo' : 'abrir tudo'}
+              </button>
             </span>          </div>
           )}
           </div>
@@ -951,6 +1020,7 @@ export function AgriDreLavouraTab() {
         ) : (
           <PecDrePanel colunas={colunasPec} alturaCartao={alturaCartao} cartaoRef={cartao}
             unidades={unidadesPec}
+            modo={modoPec} abertos={abertosPec} onAbertos={f => setAbertosPec(f)}
             onAbrirLista={setRecortePec}
             onAbrirDidatico={(fazendaId, nome, qual) => setDidatico({ fazendaId, nome, qual })}
             onAbrirRateio={() => setRateioPecAberto(true)}
@@ -1583,7 +1653,10 @@ function LinhaDre({
   semTotal?: boolean;
   onDrill?: (chave: string, rotulo: string, cultura: string) => void;
 }) {
-  const fundo = fundoDaLinha(def.destaque);
+  /* ⚠ A FAIXA MANDA NO FUNDO E NA COR — DRE-CASCATA-03b, a mesma regra da pecuária: num total o
+     destaque é a faixa, e pintar o número por cima dela seria dois sinais para a mesma coisa. */
+  const daFaixa = def.faixa ? FAIXA_TOTAL[def.faixa] : null;
+  const fundo = daFaixa ? daFaixa.fundo : fundoDaLinha(def.destaque);
   /* ⚠ TRÊS PESOS, E A REGRA É A HIERARQUIA DO DRE: subtotal e grupo em 500, filha em 400. O 600
      de antes fazia os cinco subtotais competirem entre si e com o cabeçalho — com 500 eles
      continuam destacados das linhas comuns sem virar cinco títulos empilhados. */
@@ -1591,7 +1664,7 @@ function LinhaDre({
      `REGUA_LINHA` pelo PAPEL da linha, e é o que mantém a lavoura e a pecuária iguais. */
   const regua = REGUA_LINHA[tipoDaLinha(def.destaque, !!def.bloco)];
   const peso = regua.peso;
-  const corLinha = corDoTom(def.tom);
+  const corLinha = daFaixa ? (daFaixa.texto ?? '') : corDoTom(def.tom);
   const tot = dre.total.linhas[def.chave];
   /* ⚠ O RATEIO DO GRUPO SE MEDE NAS CULTURAS MOSTRADAS, não no total da safra: no drill só há
      uma coluna, e o total traria o rateio de culturas que não estão na tela. */
@@ -1640,7 +1713,8 @@ function LinhaDre({
         const l = c.linhas[def.chave];
         const v = valorDaLinha(l, def);
         const rat = def.bloco && rateioDentro ? (l.rateado ?? 0) : 0;
-        const cor = def.corPorSinal ? corDoSinal(v) : corLinha;
+        /* ⚠ NA FAIXA O NÚMERO NÃO GANHA COR: o azul já diz que é um total. */
+        const cor = daFaixa ? corLinha : def.corPorSinal ? corDoSinal(v) : corLinha;
         /* ⚠ A LINHA DO RATEIO COMPARTILHADO ABRE O POOL INTEIRO (§2), com `p_chave` nulo. Ela só
            existe no modo "Custos diretos" — no outro o rateio está dentro dos centros e a linha
            some, junto com a pergunta que ela responde. */
@@ -1687,12 +1761,12 @@ function LinhaDre({
           precisa perder para a zebra e para o `bg-muted` do subtotal, que vêm na linha. */}
       {!semTotal && <>
         {unidades.includes('rs') && (
-          <Celula valor={valorDaLinha(tot, def)} cor={def.corPorSinal ? corDoSinal(valorDaLinha(tot, def)) : corLinha}
+          <Celula valor={valorDaLinha(tot, def)} cor={daFaixa ? corLinha : def.corPorSinal ? corDoSinal(valorDaLinha(tot, def)) : corLinha}
             destaque={def.destaque} fonte={regua.fonte} total />
         )}
         {unidades.includes('ha') && (
           <CelulaUnit texto={porUnidade(valorDaLinha(tot, def), dre.total.area_ha)}
-            cor={def.corPorSinal ? corDoSinal(valorDaLinha(tot, def)) : corLinha}
+            cor={daFaixa ? corLinha : def.corPorSinal ? corDoSinal(valorDaLinha(tot, def)) : corLinha}
             destaque={def.destaque} fonte={regua.fonte}
             total />
         )}

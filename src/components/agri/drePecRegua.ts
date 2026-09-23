@@ -16,7 +16,7 @@
  * cabeçalho de sub-coluna, não conta.
  */
 import { formatNum } from '@/lib/calculos/formatters';
-import { traco, VERDE, VERMELHO } from '@/components/agri/dreGrade';
+import { traco, VERDE, VERMELHO, type TomFaixa } from '@/components/agri/dreGrade';
 import type {
   ChaveLinhaPec, DrePecLinhas, CentroPec, CenarioPec,
 } from '@/hooks/useDrePecuaria';
@@ -63,6 +63,22 @@ export interface ColunaPec {
   semPatrimonio?: boolean;
   /** Ano sem dado ou período sem meta: a coluna inteira em "—" — ela não some. */
   semDado?: boolean;
+  /**
+   * QUAIS CÉLULAS UMA COLUNA DE Δ MOSTRA — DRE-CASCATA-03b.
+   *
+   * ⚠ ELA NÃO OBEDECE AOS CHIPS DE UNIDADE, e por isso tem lista própria: "Δ R$" e "Δ %" são
+   * outra pergunta (quanto mudou), não outra unidade do mesmo número. Vazia, a coluna de Δ não é
+   * montada — é assim que os chips a ligam e desligam.
+   */
+  deltaSlots?: readonly ('rs' | 'pct')[];
+  /**
+   * A COLUNA É DE COMPARAÇÃO — a referência (meta/ano) ou o Δ.
+   *
+   * ⚠ ELA SE LÊ MAIS BAIXO QUE O REALIZADO, de propósito: o número da tela é o do período, e a
+   * comparação é apoio. Em 11px, lado a lado, as três disputavam a mesma atenção e o operador
+   * tinha de procurar qual era o dado.
+   */
+  comparacao?: boolean;
 }
 
 /**
@@ -136,34 +152,91 @@ export interface DefPec {
   didatico?: 'vpb' | 'efeito';
   /** Abre o modal do rateio administrativo (§5, último parágrafo). */
   rateio?: boolean;
+  /**
+   * O TOM DA FAIXA quando a linha é um total — t1 (mais claro) a t4 (azul cheio).
+   *
+   * ⚠ ELE É DA LINHA, não do `destaque`: "Receita bruta" e "Receita líquida" fecham a primeira
+   * parte da conta e dividem o tom mais claro; o lucro líquido, que fecha tudo, fica sozinho no
+   * azul cheio. Derivar o tom da posição faria a escala mudar quando uma linha entrasse no meio.
+   */
+  faixa?: TomFaixa;
+  /**
+   * A LINHA É A SOMA DE OUTRAS — DRE-CASCATA-03b, e só o modo Resumido a usa.
+   *
+   * ⚠ NÃO É SUBTOTAL NOVO: as sete linhas "=" continuam vindo prontas da RPC, como sempre. Isto
+   * junta duas linhas que o Detalhado mostra separadas — "Variação do estoque" é a variação por
+   * produção menos a reposição; "Custo fixo" inclui o rateio administrativo. É apresentação:
+   * soma de números que a tela já tem, não uma segunda conta de resultado.
+   * ⚠ E É POR ISSO QUE ELE NÃO PODE APARECER NUMA LINHA DE "=": um subtotal composto no front
+   * divergiria do da RPC no primeiro arredondamento, e o DRE teria duas verdades.
+   */
+  compor?: { mais: ChaveLinhaPec[]; menos?: ChaveLinhaPec[] };
 }
 
 export const LINHAS_PEC: DefPec[] = [
   { chave: 'vendas', rotulo: 'Vendas', tom: 'receita', expande: true },
   { chave: 'outras_receitas', rotulo: 'Outras receitas', tom: 'receita', expande: true },
-  { chave: 'receita_bruta', rotulo: '= Receita bruta', tom: 'receita', destaque: 'sub' },
+  { chave: 'receita_bruta', rotulo: '= Receita bruta', faixa: 't1', tom: 'receita', destaque: 'sub' },
   { chave: 'deducoes', rotulo: '(−) Deduções', tom: 'custo', expande: true },
-  { chave: 'receita_liquida', rotulo: '= Receita líquida', tom: 'receita', destaque: 'subtotal' },
+  { chave: 'receita_liquida', rotulo: '= Receita líquida', faixa: 't1', tom: 'receita', destaque: 'subtotal' },
   /* ⚠ A VARIAÇÃO POR PRODUÇÃO É O REBANHO QUE MUDOU A PREÇO CONGELADO — pode ser negativa numa
      safra de venda, e negativa aqui não é prejuízo: é boi que saiu da fazenda. Cor pelo sinal. */
   { chave: 'vpb_operacional', rotulo: 'Variação por produção', tom: 'neutro', corPorSinal: true, etiqueta: 'estimado', didatico: 'vpb' },
   { chave: 'reposicao', rotulo: '(−) Reposição', tom: 'custo' },
-  { chave: 'vbp', rotulo: '= VBP', sufixo: '(valor bruto de produção)', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
+  { chave: 'vbp', rotulo: '= VBP', sufixo: '(valor bruto de produção)', faixa: 't2', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
   { chave: 'custo_variavel', rotulo: '(−) Custo variável', tom: 'custo', expande: true },
-  { chave: 'margem', rotulo: '= Margem de contribuição', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
+  { chave: 'margem', rotulo: '= Margem de contribuição', faixa: 't2', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
   { chave: 'custo_fixo', rotulo: '(−) Custo fixo', tom: 'custo', expande: true },
   { chave: 'rateio_adm', rotulo: '(−) Rateio administrativo', tom: 'custo', etiqueta: 'estimado', rateio: true },
-  { chave: 'resultado_operacional', rotulo: '= Resultado operacional', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
+  { chave: 'resultado_operacional', rotulo: '= Resultado operacional', faixa: 't3', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
   { chave: 'juros', rotulo: '(−) Despesas financeiras', tom: 'custo' },
-  { chave: 'resultado_periodo', rotulo: '= Resultado do período', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
+  { chave: 'resultado_periodo', rotulo: '= Resultado do período', faixa: 't3', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
   { chave: 'efeito_mercado', rotulo: 'Efeito de mercado', tom: 'neutro', corPorSinal: true, etiqueta: 'estimado', didatico: 'efeito' },
-  { chave: 'resultado_com_mercado', rotulo: '= Resultado com mercado', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
+  { chave: 'resultado_com_mercado', rotulo: '= Resultado com mercado', faixa: 't3', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
   { chave: 'investimento', rotulo: '(−) Investimento no período', tom: 'custo', expande: true },
   /* ⚠ A CASCATA FECHA AQUI — DRE-CASCATA-03a. O investimento deixou de ser nota de rodapé "abaixo
      da linha de caixa" e entrou na conta: o que sobra depois dele é o lucro líquido, e é ele que
      as duas atividades passam a mostrar com o mesmo nome. */
-  { chave: 'lucro_liquido', rotulo: '= Lucro líquido', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
+  { chave: 'lucro_liquido', rotulo: '= Lucro líquido', faixa: 't4', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
 ];
+
+/**
+ * O DRE RESUMIDO — quinze linhas, decisão do Gabriel em 23/09.
+ *
+ * ⚠ ELE RESPONDE OUTRA PERGUNTA, e é por isso que não é "o mesmo com menos linhas": o Detalhado
+ * responde "ONDE o dinheiro entrou e saiu" e precisa das dezenove; o Resumido responde "COMO
+ * fechou o período" e precisa caber numa tela sem rolagem, senão a resposta se perde no meio do
+ * caminho.
+ * ⚠ AS CHAVES SÃO AS MESMAS, e isso é deliberado: o `%` do VBP, o lucro por hectare, o histórico,
+ * o drill e as filhas continuam funcionando sem saber em que modo a tela está. O que muda é
+ * quais defs a grade percorre.
+ * ⚠ AS DUAS LINHAS COMPOSTAS ESTÃO MARCADAS COM `compor`, e nenhuma delas é um "=": "Variação do
+ * estoque por produção" junta a variação e a reposição (as duas metades do mesmo fato — o rebanho
+ * que ficou), e "(−) Custo fixo" traz o rateio administrativo junto, com o selo dizendo isso.
+ */
+export const LINHAS_PEC_RESUMIDO: DefPec[] = [
+  { chave: 'receita_bruta', rotulo: 'Receita bruta', faixa: 't1', tom: 'receita' },
+  { chave: 'deducoes', rotulo: '(−) Deduções', tom: 'custo' },
+  { chave: 'receita_liquida', rotulo: '= Receita líquida', faixa: 't1', tom: 'receita', destaque: 'subtotal' },
+  { chave: 'vpb_operacional', rotulo: 'Variação do estoque por produção', tom: 'neutro',
+    corPorSinal: true, etiqueta: 'estimado', didatico: 'vpb',
+    compor: { mais: ['vpb_operacional'], menos: ['reposicao'] } },
+  { chave: 'vbp', rotulo: '= VBP', sufixo: '(valor bruto de produção)', faixa: 't2', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
+  { chave: 'custo_variavel', rotulo: '(−) Custo variável', tom: 'custo', expande: true },
+  { chave: 'margem', rotulo: '= Margem de contribuição', faixa: 't2', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
+  { chave: 'custo_fixo', rotulo: '(−) Custo fixo', tom: 'custo', expande: true, etiqueta: 'inclui rateio adm · estimado',
+    compor: { mais: ['custo_fixo', 'rateio_adm'] } },
+  { chave: 'resultado_operacional', rotulo: '= Resultado operacional', faixa: 't3', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
+  { chave: 'juros', rotulo: '(−) Despesas financeiras', tom: 'custo' },
+  { chave: 'resultado_periodo', rotulo: '= Resultado do período', faixa: 't3', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
+  { chave: 'efeito_mercado', rotulo: 'Efeito de mercado', tom: 'neutro', corPorSinal: true, etiqueta: 'estimado', didatico: 'efeito' },
+  { chave: 'resultado_com_mercado', rotulo: '= Resultado com mercado', faixa: 't3', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
+  { chave: 'investimento', rotulo: '(−) Investimento no período', tom: 'custo', expande: true },
+  { chave: 'lucro_liquido', rotulo: '= Lucro líquido', faixa: 't4', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
+];
+
+export type ModoDre = 'resumido' | 'detalhado';
+export const LINHAS_DO_MODO = (m: ModoDre) => (m === 'resumido' ? LINHAS_PEC_RESUMIDO : LINHAS_PEC);
 
 export const corDoTom = (t: DefPec['tom']) => (t === 'receita' ? VERDE : t === 'custo' ? VERMELHO : '');
 

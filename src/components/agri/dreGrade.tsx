@@ -142,6 +142,28 @@ export function larguraDoGrupo(cols: readonly number[]): number[] {
  * ⚠ `--success` CONTINUA VÁLIDO NA CASA e não foi tocado: a troca é desta grade, onde o tamanho
  * da fonte é o problema, não do token.
  */
+/**
+ * AS FAIXAS DOS TOTAIS — azul progressivo, DRE-CASCATA-03b.
+ *
+ * ⚠ A CASCATA TEM DEGRAUS, e a faixa os mostra sem precisar ler: quanto mais fundo na conta, mais
+ * escuro o azul, até o lucro líquido em azul cheio. Antes os oito subtotais dividiam um `bg-muted`
+ * só e o olho tinha de LER para saber onde a conta fecha.
+ * ⚠ SÃO TONS SÓLIDOS, NÃO `bg-primary/10`, e a razão é o `sticky`: a coluna de rótulos e a do
+ * Total flutuam sobre as outras ao rolar, e a regra permanente do CLAUDE.md exige fundo OPACO ali
+ * — com 10% de opacidade o conteúdo passa por baixo do número que se está conferindo. As três
+ * primeiras são o navy do `--primary` (213 52% 24%) clareado em L, calculado uma vez e escrito
+ * como hex, no mesmo idioma de `NAVY_TOTAL` e `FUNDO_TOTAL`, que já são hex por este motivo.
+ * ⚠ O ÚLTIMO É O `bg-primary` DE VERDADE (opaco, sem alfa) e inverte o texto: navy cheio com
+ * texto escuro não se lê.
+ */
+export const FAIXA_TOTAL: Record<'t1' | 't2' | 't3' | 't4', { fundo: string; texto?: string }> = {
+  t1: { fundo: 'bg-[#e9eff6]' },
+  t2: { fundo: 'bg-[#d3e0ed]' },
+  t3: { fundo: 'bg-[#b6cade]' },
+  t4: { fundo: 'bg-primary', texto: 'text-primary-foreground' },
+};
+export type TomFaixa = keyof typeof FAIXA_TOTAL;
+
 export const VERDE = 'text-green-700';
 export const VERDE_70 = 'text-green-700/70';
 /* ⚠ `text-red-600` E NÃO `text-destructive`: o token da casa é o vermelho de ERRO, e aqui o
@@ -304,17 +326,25 @@ export function CelulaUnit({ texto, cor, destaque, filha, fundo, estilo, total, 
  * do shadcn: selecionado = `bg-primary` + texto branco, como o `Segmentado` e o item ativo do
  * menu. O componente é o do shadcn; só a marcação veste a régua daqui.
  */
-export function ChipsUnidade<T extends string>({ valor, onEscolher, opcoes }: {
+export function ChipsUnidade<T extends string>({ valor, onEscolher, opcoes, permiteVazio = false }: {
   valor: readonly T[];
   onEscolher: (v: readonly T[]) => void;
   opcoes: readonly { valor: T; rotulo: string }[];
+  /**
+   * DESMARCAR TODOS É PERMITIDO — opt-in, DRE-CASCATA-03b.
+   *
+   * ⚠ O PISO DE UM CHIP EXISTE PARA AS UNIDADES: uma grade sem nenhuma unidade não mostra número
+   * nenhum. Os chips de Δ são outra coisa — eles LIGAM colunas de comparação, e "nenhuma" é o
+   * estado normal da tela. Sem esta porta, o operador não conseguiria desligar o que ligou.
+   */
+  permiteVazio?: boolean;
 }) {
   return (
     <ToggleGroup type="multiple" className="gap-1" value={[...valor]}
       onValueChange={(v: string[]) => {
         /* ⚠ O RADIX JÁ DEVOLVE A LISTA NOVA: se ela vier vazia, o clique foi no último marcado e
            a resposta é não mexer em nada. */
-        if (v.length === 0) return;
+        if (v.length === 0 && !permiteVazio) return;
         const ordenada = opcoes.map(o => o.valor).filter(u => v.includes(u));
         onEscolher(ordenada);
       }}>
@@ -347,6 +377,14 @@ export interface CaixaFaixa {
   title?: string;
   /** A chave da caixa quando ela é SELETOR (DRE-PEC-TELA-02). Sem `onEscolher`, ignorada. */
   chave?: string;
+  /**
+   * UMA SEGUNDA LINHA, 9px muted, sob o número — DRE-CASCATA-03b/adendo.
+   *
+   * ⚠ ELA NASCEU COM A SAÍDA DO CARD "× Meta": o Δ contra a meta deixou de ter card próprio e
+   * passou a viver sob o resultado do Global, que é o número que ele compara. Sem ela, ligar o Δ
+   * na grade não teria eco na faixa e o operador perderia o total da comparação.
+   */
+  nota?: string;
   /** O número ainda não chegou: spinner no lugar dele — nunca "—", que é dado ausente. */
   carregando?: boolean;
 }
@@ -413,6 +451,13 @@ export function Caixas({ caixas, colunas = 6, selecionada, onEscolher, grande }:
                     )}
                   </>
                 )}
+              </div>
+              {/* ⚠ ALTURA RESERVADA SEMPRE: a linha existe com ou sem nota, senão ligar o Δ faria a
+                  faixa inteira crescer e a tabela descer (lei de estabilidade). */}
+              <div className={cn('w-full truncate text-center text-[9px] leading-[11px]',
+                ativa ? 'text-primary-foreground/80' : 'text-muted-foreground')}
+                style={{ minHeight: 11 }}>
+                {c.nota ?? '\u00a0'}
               </div>
             </button>
           );
