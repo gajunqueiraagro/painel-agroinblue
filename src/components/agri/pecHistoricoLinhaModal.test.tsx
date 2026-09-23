@@ -21,6 +21,9 @@ const linhas = (o: Partial<DrePecLinhas>): DrePecLinhas => ({
   vpb_operacional: 0, reposicao: 0, vbp: 0, custo_variavel: 0, margem: 0,
   custo_fixo: 0, rateio_adm: 0, resultado_operacional: 0, juros: null, resultado_periodo: 0,
   efeito_mercado: 0, resultado_com_mercado: 0, investimento: 0, a_pagar: 0,
+  /* ⚠ AS TRÊS CHAVES DA CASCATA-02: o lucro líquido e os juros repartidos entre próprios e
+     rateados. Zero no fixture; quem precisa do número o põe explicitamente. */
+  lucro_liquido: 0, juros_proprio: 0, juros_rateado: 0,
   patrimonio: { v_ini_p0: 0, v_fim_p0: 0, v_fim_p1: 0, cab_ini: 0, cab_fim: 0, cab_media: 1000 },
   producao: { ha_medio: 2000, at_produzida: 5000, at_desfrutada: 4000, cab_desfrutada: null,
     at_comprada: 500, cab_comprada: null },

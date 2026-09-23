@@ -159,11 +159,17 @@ const LINHAS: DefLinha[] = [
   { chave: 'rateio_admin',           rotulo: '(−) Rateio administrativo',       tom: 'custo', etiqueta: 'estimado' },
   { chave: 'resultado_operacional',  rotulo: '= Resultado operacional',         tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
   { chave: 'juros',                  rotulo: '(−) Despesas financeiras (juros)', tom: 'custo' },
-  { chave: 'resultado_caixa',        rotulo: '= Resultado de caixa',            tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
-  /* ⚠ INVESTIMENTO E DEPRECIAÇÃO SÃO SAÍDA, e por isso vermelhos: ficar "abaixo da linha de
-     caixa" diz que não entram no RESULTADO do período, não que o dinheiro não saiu. Em cinza,
-     6,3 milhões de investimento pareciam uma nota de rodapé. */
-  { chave: 'investimento',           rotulo: 'Investimento no período',         tom: 'custo', bloco: 'investimento' },
+  /* ⚠ O NOME MUDOU, A CHAVE NÃO — DRE-CASCATA-03a: "Resultado do período" é como a pecuária já
+     chamava a mesma linha, e duas atividades do mesmo DRE não podem ter dois nomes para a mesma
+     pergunta. A chave `resultado_caixa` fica: renomeá-la quebraria o histórico da lavoura (que
+     dele deriva o `resultado_ha`) e o PC-100, em silêncio. */
+  { chave: 'resultado_caixa',        rotulo: '= Resultado do período',           tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
+  /* ⚠ O INVESTIMENTO ENTROU NA CASCATA — DRE-CASCATA-03a. Ele era vermelho e ficava "abaixo da
+     linha de caixa": a faixa dizia que não entrava no resultado do período, e era verdade — mas o
+     dinheiro saiu, e a conta que o produtor faz é a que sobra DEPOIS dele. Agora a cascata segue
+     até o lucro líquido e a faixa não existe mais. A depreciação continua reservada, sem valor. */
+  { chave: 'investimento',           rotulo: '(−) Investimento no período',     tom: 'custo', bloco: 'investimento' },
+  { chave: 'lucro_liquido',          rotulo: '= Lucro líquido',                 tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
   { chave: 'depreciacao',            rotulo: 'Depreciação (reservada · o custo operacional total = efetivo + depreciação nasce aqui)', tom: 'custo' },
 ];
 
@@ -173,9 +179,6 @@ const LINHAS: DefLinha[] = [
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 const dataCurta = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}`;
 const mesCurto = (d: string) => `${MESES[Number(d.slice(5, 7)) - 1] ?? '—'}/${d.slice(0, 4)}`;
-
-/** Onde entra a faixa "abaixo da linha de caixa". */
-const APOS_CAIXA: ChaveLinha = 'resultado_caixa';
 
 /** As chaves que o modal do Painel sabe abrir, e com que `tipo`. */
 const TIPO_DO_MODAL: Partial<Record<ChaveLinha, 'admin'>> = { rateio_admin: 'admin' };
@@ -1221,7 +1224,9 @@ function Faixa({ dre }: { dre: DreLavoura | null }) {
       unidade: 'R$', cor: 'text-destructive',
       title: t.a_pagar.operacional > 0
         ? `a pagar ${formatMoeda(t.a_pagar.operacional)}` : undefined },
-    { rotulo: 'Resultado de caixa', valor: numeroDaCelula(res), unidade: 'R$', cor: corDoSinal(res) },
+    /* ⚠ O NOME ACOMPANHA A LINHA — DRE-CASCATA-03a: a grade passou a chamá-la "Resultado do
+       período", e a caixa que a resume não pode chamá-la de outra coisa dez pixels acima. */
+    { rotulo: 'Resultado do período', valor: numeroDaCelula(res), unidade: 'R$', cor: corDoSinal(res) },
     { rotulo: 'Resultado por hectare', valor: numeroDaCelula(resHa),
       unidade: resHa == null ? undefined : 'R$/ha', cor: corDoSinal(resHa) },
     /* ⚠ AQUI É O `pct_direto` DO TOTAL (66 no NJ 25/26), não o de uma cultura (70 no amendoim).
@@ -1446,26 +1451,16 @@ export function Grade({
           const filhas = def.bloco && abertos[def.bloco] ? centrosDoBloco(def.bloco) : [];
           return (
             <Fragment key={def.chave}>
-              {/* ⚠ O TEXTO MORA NO `td` DA COLUNA CULTURA, congelado como todos os outros (§2).
-                  Era um `colSpan` da largura inteira, e um `colSpan` NÃO GRUDA: rolando a tabela
-                  para a direita, a frase saía andando enquanto a coluna Cultura ficava parada ao
-                  lado dela. As outras células ficam vazias, só carregando o mesmo fundo. */}
-              {def.chave === 'investimento' && (
-                <tr className="bg-card" style={{ height: 17 }}>
-                  <td className="sticky left-0 z-10 truncate border-r border-t border-border/60 bg-card
-                    px-[7px] text-[10px] text-muted-foreground"
-                    title="Abaixo da linha de caixa — não entra no resultado do período">
-                    Abaixo da linha de caixa
-                  </td>
-                  {Array.from({ length: larguras.length - 1 }).map((_, i) => (
-                    <td key={i} className="border-t border-border/60 bg-card" />
-                  ))}
-                </tr>
-              )}
               <LinhaDre def={def} dre={dre} culturas={culturas} rateioDentro={rateioDentro}
                 unidades={unidades} aberto={!!(def.bloco && abertos[def.bloco])}
                 onAlternar={def.bloco ? () => alterna(def.bloco as string) : undefined}
                 valorDaLinha={valorDaLinha} abrir={abrir} semTotal={semTotal} onDrill={onDrill} />
+              {/* ⚠ O LUCRO POR HECTARE É LEITURA DE APOIO, na régua da linha de % da pecuária: 9px,
+                  muted, altura 14, sem cor de sinal e sem clique. Ele some quando o chip R$/ha está
+                  marcado — ali a sub-coluna já responde. */}
+              {def.chave === 'lucro_liquido' && !unidades.includes('ha') && (
+                <LinhaPorHectareLav dre={dre} culturas={culturas} unidades={unidades} semTotal={semTotal} />
+              )}
               {filhas.map(ct => (
                 <LinhaCentro key={`${def.chave}:${ct.centro}`} centro={ct} culturas={culturas}
                   rateioDentro={rateioDentro} unidades={unidades}
@@ -1532,6 +1527,49 @@ function ThUnidade({ cultura, unidades }: { cultura: string; unidades: readonly 
 
 
 
+
+/**
+ * O LUCRO POR HECTARE DA LAVOURA — DRE-CASCATA-03a.
+ *
+ * ⚠ O NÚMERO VEM PRONTO DA RPC (`lucro_liquido.por_ha`), não é dividido aqui: a área da cultura é
+ * a que a `fn_dre_lavoura` usou para o `resultado_caixa`, e refazer a conta no front criaria a
+ * segunda dona dela — que diverge no primeiro ajuste de área.
+ * ⚠ SEM ÁREA, TRAÇO: a RPC devolve `por_ha` nulo quando não há hectare, e "R$ 0,00/ha" afirmaria
+ * que a cultura não lucrou.
+ */
+function LinhaPorHectareLav({ dre, culturas, unidades, semTotal }: {
+  dre: DreLavoura; culturas: DreCultura[]; unidades: readonly UnidadeLav[]; semTotal?: boolean;
+}) {
+  const celula = (v: number | null | undefined) => (v == null ? traco : `R$ ${formatNum(v, 2)}/ha`);
+  const vazias = (n: number) => Array.from({ length: n }).map((_, i) => (
+    <td key={i} className="bg-muted/40" />
+  ));
+  return (
+    <tr className="bg-muted font-normal" style={{ height: 14 }}>
+      <td className="sticky left-0 z-10 truncate border-r border-border/60 bg-muted py-px text-muted-foreground"
+        style={{ fontSize: 9, paddingLeft: 7, paddingRight: 7 }}
+        title="Lucro líquido dividido pela área plantada da cultura">
+        Lucro por hectare
+      </td>
+      {culturas.map(c => (
+        <Fragment key={c.cultura}>
+          <td className="truncate bg-muted px-[7px] text-right tabular-nums text-muted-foreground"
+            style={{ fontSize: 9, borderLeft: '1px solid hsl(var(--border))' }}>
+            {celula(c.linhas.lucro_liquido.por_ha)}
+          </td>
+          {vazias(unidades.length - 1)}
+        </Fragment>
+      ))}
+      {!semTotal && <>
+        <td className="truncate bg-muted px-[7px] text-right tabular-nums text-muted-foreground"
+          style={{ fontSize: 9, borderLeft: BORDA_TOTAL }}>
+          {celula(dre.total.linhas.lucro_liquido.por_ha)}
+        </td>
+        {vazias(unidades.filter(u => u !== 'un').length - 1)}
+      </>}
+    </tr>
+  );
+}
 
 function LinhaDre({
   def, dre, culturas, rateioDentro, unidades, aberto, onAlternar, valorDaLinha, abrir,

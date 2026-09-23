@@ -21,7 +21,11 @@ const CHAVES: (keyof DreLinhas)[] = [
   'receita_bruta', 'deducoes', 'receita_liquida', 'custeio', 'pos_colheita',
   'rateio_compartilhado', 'custo_variavel', 'margem_contribuicao', 'custo_fixo',
   'rateio_admin', 'resultado_operacional', 'juros', 'resultado_caixa', 'investimento',
-  'depreciacao',
+  /* ⚠ A CHAVE NOVA ENTRA AQUI TAMBÉM — DRE-CASCATA-03a, e a falha que a trouxe é a armadilha das
+     DUAS LISTAS da lavoura: a cascata da tela (`LINHAS`) e o contrato do parser (`CHAVES`) são
+     independentes, e uma linha que existe numa e não na outra estoura em `linhas[chave].valor`.
+     Foi o que aconteceu: catorze casos caíram com "Cannot read properties of undefined". */
+  'lucro_liquido', 'depreciacao',
 ];
 
 const linhas = (receita: number, deducoes: number, juros: number, rateio: number,
@@ -29,7 +33,10 @@ const linhas = (receita: number, deducoes: number, juros: number, rateio: number
   const base = Object.fromEntries(CHAVES.map(k => [k, v(0)])) as unknown as DreLinhas;
   return { ...base, receita_bruta: v(receita), deducoes: v(deducoes), juros: v(juros),
     rateio_compartilhado: v(rateio), custo_fixo: fixo, investimento: inv,
-    resultado_operacional: v(opEr), resultado_caixa: v(caixa) };
+    resultado_operacional: v(opEr), resultado_caixa: v(caixa),
+    /* O lucro líquido do fixture é a conta que a RPC faz: o resultado menos o investimento. */
+    lucro_liquido: { valor: caixa - inv.valor, direto: caixa - inv.valor, rateado: 0,
+      por_ha: undefined } };
 };
 
 const AMENDOIM: DreCultura = {

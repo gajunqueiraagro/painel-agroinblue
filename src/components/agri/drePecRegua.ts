@@ -90,6 +90,19 @@ export const COM_PERCENTUAL: ReadonlySet<ChaveLinhaPec> = new Set<ChaveLinhaPec>
 ]);
 
 /**
+ * AS LINHAS QUE GANHAM O LUCRO POR HECTARE logo abaixo — DRE-CASCATA-03a.
+ *
+ * ⚠ SÃO DUAS, E NÃO TODAS: o resultado com mercado e o lucro líquido. Hectare é o denominador da
+ * TERRA, e só faz pergunta em linha que fecha conta — "quanto esta fazenda rendeu por hectare".
+ * Pôr o mesmo denominador embaixo de Vendas ou de Nutrição encheria a grade de números que
+ * ninguém compara.
+ */
+export const COM_POR_HECTARE: ReadonlySet<ChaveLinhaPec> = new Set<ChaveLinhaPec>([
+  'resultado_com_mercado', 'lucro_liquido',
+]);
+export const ROTULO_POR_HECTARE = 'Lucro por hectare';
+
+/**
  * A CASCATA, declarada — e a diferença entre as linhas é DADO.
  *
  * ⚠ A ORDEM É O DRE, e ela mora AQUI: a RPC devolve um objeto de chaves sem ordem, porque JSON
@@ -111,6 +124,14 @@ export interface DefPec {
    * produtor reconheça. Elas continuam clicáveis; só não têm filhas.
    */
   expande?: boolean;
+  /**
+   * O que vai em 9px muted ao lado do nome — DRE-CASCATA-03a.
+   *
+   * ⚠ NÃO É ETIQUETA: a `Etiqueta` é uma cápsula com borda, para ressalva ("estimado"). Isto é
+   * glossário — "VBP" é sigla, e a tela escreve por extenso ao lado dela em vez de exigir que o
+   * produtor a decore.
+   */
+  sufixo?: string;
   /** Abre o modal didático em vez da lista de lançamentos (§6). */
   didatico?: 'vpb' | 'efeito';
   /** Abre o modal do rateio administrativo (§5, último parágrafo). */
@@ -127,17 +148,21 @@ export const LINHAS_PEC: DefPec[] = [
      safra de venda, e negativa aqui não é prejuízo: é boi que saiu da fazenda. Cor pelo sinal. */
   { chave: 'vpb_operacional', rotulo: 'Variação por produção', tom: 'neutro', corPorSinal: true, etiqueta: 'estimado', didatico: 'vpb' },
   { chave: 'reposicao', rotulo: '(−) Reposição', tom: 'custo' },
-  { chave: 'vbp', rotulo: '= VBP', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
+  { chave: 'vbp', rotulo: '= VBP', sufixo: '(valor bruto de produção)', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
   { chave: 'custo_variavel', rotulo: '(−) Custo variável', tom: 'custo', expande: true },
   { chave: 'margem', rotulo: '= Margem de contribuição', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
   { chave: 'custo_fixo', rotulo: '(−) Custo fixo', tom: 'custo', expande: true },
   { chave: 'rateio_adm', rotulo: '(−) Rateio administrativo', tom: 'custo', etiqueta: 'estimado', rateio: true },
   { chave: 'resultado_operacional', rotulo: '= Resultado operacional', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
-  { chave: 'juros', rotulo: '(−) Despesas financeiras (juros)', tom: 'custo' },
+  { chave: 'juros', rotulo: '(−) Despesas financeiras', tom: 'custo' },
   { chave: 'resultado_periodo', rotulo: '= Resultado do período', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
   { chave: 'efeito_mercado', rotulo: 'Efeito de mercado', tom: 'neutro', corPorSinal: true, etiqueta: 'estimado', didatico: 'efeito' },
   { chave: 'resultado_com_mercado', rotulo: '= Resultado com mercado', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
-  { chave: 'investimento', rotulo: 'Investimento no período', tom: 'custo', expande: true },
+  { chave: 'investimento', rotulo: '(−) Investimento no período', tom: 'custo', expande: true },
+  /* ⚠ A CASCATA FECHA AQUI — DRE-CASCATA-03a. O investimento deixou de ser nota de rodapé "abaixo
+     da linha de caixa" e entrou na conta: o que sobra depois dele é o lucro líquido, e é ele que
+     as duas atividades passam a mostrar com o mesmo nome. */
+  { chave: 'lucro_liquido', rotulo: '= Lucro líquido', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
 ];
 
 export const corDoTom = (t: DefPec['tom']) => (t === 'receita' ? VERDE : t === 'custo' ? VERMELHO : '');
@@ -209,6 +234,7 @@ export const BASE_DO_ARROBA: Record<ChaveLinhaPec, BaseArroba> = {
   margem: 'produzida', custo_fixo: 'produzida', rateio_adm: 'produzida',
   resultado_operacional: 'produzida', juros: 'produzida', resultado_periodo: 'produzida',
   efeito_mercado: 'produzida', resultado_com_mercado: 'produzida', investimento: 'produzida',
+  lucro_liquido: 'produzida', juros_proprio: 'produzida', juros_rateado: 'produzida',
   /* As chaves que não são linha da cascata — nunca chegam a pedir base, mas o Record as exige. */
   patrimonio: 'produzida', producao: 'produzida', sem_p0: 'produzida', sem_p1: 'produzida',
   centros: 'produzida', centros_juros: 'produzida', a_pagar: 'produzida',

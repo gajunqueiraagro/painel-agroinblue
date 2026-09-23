@@ -136,6 +136,14 @@ export interface PainelSafra {
   rateio_admin: number;
   /** `resultado_caixa` do DRE — não recalculado aqui. */
   saldo: number;
+  /**
+   * O `lucro_liquido` do DRE — o saldo depois do investimento, também sem recalcular aqui.
+   *
+   * ⚠ ELE CHEGOU NUMA MIGRATION PRÓPRIA (DRE-CASCATA-03a): `fn_painel_safra` monta o JSON dela com
+   * chaves NOMEADAS, então a chave nova da `fn_dre_agricola_por_safra` parava no caminho — existia
+   * no DRE e não chegava aqui, sem erro nenhum.
+   */
+  lucro_liquido: number;
   /** Fora do resultado, por decisão de modelo. Detalhe é a fatia B. */
   investimento: number;
   /** O investimento quebrado por subcentro — Formação de Área, Máquinas. */
@@ -229,6 +237,7 @@ export function usePainelSafra(
         rateio_compartilhado: num(j.rateio_compartilhado),
         rateio_admin: num(j.rateio_admin),
         saldo: num(j.saldo),
+        lucro_liquido: num(j.lucro_liquido),
         investimento: num(j.investimento),
         investimento_tipos: (Array.isArray(j.investimento_tipos) ? j.investimento_tipos : [])
           .map((x: Record<string, unknown>) => ({

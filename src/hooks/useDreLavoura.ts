@@ -27,7 +27,7 @@ export interface DreValor {
   por_ha?: number;
 }
 
-/** As 15 linhas, na ordem do DRE (padrão Conab). A ordem da tela mora na tela. */
+/** As 16 linhas, na ordem do DRE (padrão Conab). A ordem da tela mora na tela. */
 export interface DreLinhas {
   receita_bruta: DreValor;
   deducoes: DreValor;
@@ -43,6 +43,12 @@ export interface DreLinhas {
   juros: DreValor;
   resultado_caixa: DreValor;
   investimento: DreValor;
+  /**
+   * O QUE SOBRA DEPOIS DE INVESTIR — DRE-CASCATA-02, e ele vem com `por_ha` pronto da RPC, como o
+   * `resultado_caixa`: a divisão é pela área da cultura (ou a da safra, no total), e refazê-la no
+   * front criaria a segunda dona do mesmo número.
+   */
+  lucro_liquido: DreValor;
   depreciacao: DreValor;
 }
 
@@ -120,7 +126,7 @@ const CHAVES: ChaveLinha[] = [
   'receita_bruta', 'deducoes', 'receita_liquida', 'custeio', 'pos_colheita',
   'rateio_compartilhado', 'custo_variavel', 'margem_contribuicao', 'custo_fixo',
   'rateio_admin', 'resultado_operacional', 'juros', 'resultado_caixa',
-  'investimento', 'depreciacao',
+  'investimento', 'lucro_liquido', 'depreciacao',
 ];
 
 const lerLinhas = (x: unknown): DreLinhas => {

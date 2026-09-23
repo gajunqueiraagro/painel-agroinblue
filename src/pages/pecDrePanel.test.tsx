@@ -21,6 +21,9 @@ const linhas = (o: Partial<DrePecLinhas>): DrePecLinhas => ({
      Total tem número, e o fixture do Total o põe explicitamente. */
   custo_fixo: 0, rateio_adm: 0, resultado_operacional: 0, juros: null, resultado_periodo: 0,
   efeito_mercado: 0, resultado_com_mercado: 0, investimento: 0, a_pagar: 0,
+  /* ⚠ AS TRÊS CHAVES DA CASCATA-02: o lucro líquido e os juros repartidos entre próprios e
+     rateados. Zero no fixture; quem precisa do número o põe explicitamente. */
+  lucro_liquido: 0, juros_proprio: 0, juros_rateado: 0,
   patrimonio: { v_ini_p0: 0, v_fim_p0: 0, v_fim_p1: 0, cab_ini: 0, cab_fim: 0, cab_media: 0 },
   /* ⚠ ÁREA NASCE NULA no fixture, e de propósito: é o estado de quem não tem fechamento de área, e
      a sub-coluna tem de dizer "—". Quem quer número o põe explicitamente. */
@@ -235,15 +238,24 @@ describe('o rateio administrativo da pecuária', () => {
 });
 
 describe('a cascata do DRE da pecuária', () => {
-  it('as dezoito linhas saem na ordem do DRE, com a seção antes do investimento', () => {
+  /**
+   * ⚠ A CASCATA FECHA NO LUCRO LÍQUIDO — DRE-CASCATA-03a, e este caso mudou de contrato por isso:
+   * ele afirmava que a faixa "Abaixo da linha de caixa" vinha logo antes do Investimento. A faixa
+   * NÃO EXISTE MAIS — o investimento entrou na conta, e o que vem depois dele é o lucro líquido.
+   * Falha certa, pela razão certa; atualizado, nunca afrouxado.
+   */
+  it('a cascata sai na ordem do DRE e fecha no lucro líquido, sem faixa no meio', () => {
     montar();
     const r = rotulos();
     expect(r[0]).toBe('Vendas');
     expect(indiceDe('= Receita líquida')).toBeLessThan(indiceDe('= VBP'));
     expect(indiceDe('= VBP')).toBeLessThan(indiceDe('= Margem de contribuição'));
     expect(indiceDe('= Resultado do período')).toBeLessThan(indiceDe('Efeito de mercado'));
-    /* ⚠ INVESTIMENTO FICA ABAIXO DA LINHA, e a faixa que o anuncia vem imediatamente antes. */
-    expect(r[indiceDe('Investimento no período') - 1]).toBe('Abaixo da linha de caixa');
+    /* O investimento é linha da cascata, e o lucro líquido vem depois dele. */
+    expect(indiceDe('(−) Investimento no período')).toBeLessThan(indiceDe('= Lucro líquido'));
+    expect(r.some(x => x === 'Abaixo da linha de caixa')).toBe(false);
+    /* ⚠ E O VBP DIZ O QUE É: a sigla vem com o nome por extenso ao lado, não decorada. */
+    expect(r.find(x => x.startsWith('= VBP'))).toContain('valor bruto de produção');
   });
 
   /**
@@ -370,10 +382,17 @@ describe('a cascata do DRE da pecuária', () => {
    * "—" (ausência), nunca "0,00" (valor). O R$/cab fica vazio e a célula não abre lista: no
    * Total, o número e o clique continuam.
    */
-  it('juros de fazenda é "—", sem R$/cab e sem clique; no Total, número e clique', () => {
+  /**
+   * ⚠ OS JUROS PASSARAM A TER NÚMERO POR FAZENDA — DRE-CASCATA-02/03a, e este caso mudou com eles:
+   * ele afirmava que a célula da fazenda era "—" porque a RPC mandava `null`. Agora ela manda o
+   * valor (próprio + a parcela rateada do Administrativo), e o traço voltaria a ser mentira.
+   * ⚠ O FIXTURE NÃO TEM JUROS POR FAZENDA (segue `null`), e é isso que este caso continua travando:
+   * sem dado, traço — o que mudou é que agora é O DADO que decide, não a linha.
+   */
+  it('juros: a célula segue o dado da coluna — traço quando não há, número quando há', () => {
     const abrir = vi.fn();
     render(<PecDrePanel colunas={colunas('fazenda')} alturaCartao={null} cartaoRef={{ current: null }} onAbrirLista={abrir} />);
-    const juros = linhaDe('(−) Despesas financeiras (juros)');
+    const juros = linhaDe('(−) Despesas financeiras');
     expect(juros?.cells[3]?.textContent).toBe('—');
     expect(juros?.cells[4]?.textContent).toBe('');
     expect(juros?.cells[CEL_FAZ2_RS]?.textContent).toBe('—');

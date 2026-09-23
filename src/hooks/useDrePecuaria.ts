@@ -41,6 +41,22 @@ export interface DrePecLinhas {
   efeito_mercado: number | null;
   resultado_com_mercado: number;
   investimento: number;
+  /**
+   * O QUE SOBRA DEPOIS DE INVESTIR — DRE-CASCATA-02. É a cascata inteira menos o investimento, e é
+   * ele que fecha o DRE nas duas atividades: antes a pecuária parava no "Resultado com mercado" e
+   * a lavoura no "Resultado de caixa", cada uma com um nome para uma pergunta diferente.
+   */
+  lucro_liquido: number;
+  /**
+   * OS JUROS DA FAZENDA, separados do que ela recebeu de rateio.
+   *
+   * ⚠ QUASE TUDO É RATEADO, e por isso os dois vêm apartados: 99,9% dos juros da casa estão
+   * lançados na fazenda "Administrativo", que não é coluna do DRE. A RPC os reparte por cabeça
+   * média (o critério do rateio administrativo) e diz quanto de cada fazenda é dela e quanto é
+   * estimativa — a tela precisa da separação para marcar o selo.
+   */
+  juros_proprio: number;
+  juros_rateado: number;
   a_pagar: number;
   patrimonio: {
     v_ini_p0: number; v_fim_p0: number; v_fim_p1: number;
@@ -189,6 +205,9 @@ function lerLinhas(x: unknown): DrePecLinhas {
     efeito_mercado: numOuNulo(o.efeito_mercado),
     resultado_com_mercado: num(o.resultado_com_mercado),
     investimento: num(o.investimento),
+    lucro_liquido: num(o.lucro_liquido),
+    juros_proprio: num(o.juros_proprio),
+    juros_rateado: num(o.juros_rateado),
     a_pagar: num(o.a_pagar),
     patrimonio: {
       v_ini_p0: num(p.v_ini_p0), v_fim_p0: num(p.v_fim_p0), v_fim_p1: num(p.v_fim_p1),

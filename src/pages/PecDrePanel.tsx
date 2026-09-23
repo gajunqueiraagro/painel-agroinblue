@@ -35,7 +35,7 @@ import { Segmentado } from '@/components/ui/segmentado';
    tipo da coluna moram em `drePecRegua`, porque o modal do histórico precisa das MESMAS, e ele é
    montado por esta tela: importar de volta fecharia um ciclo. Nada mudou de corpo. */
 import {
-  LINHAS_PEC, COM_PERCENTUAL, BASE_DO_PERCENTUAL, ROTULO_DA_BASE, corDoTom, valorDe,
+  LINHAS_PEC, COM_PERCENTUAL, COM_POR_HECTARE, ROTULO_POR_HECTARE, BASE_DO_PERCENTUAL, ROTULO_DA_BASE, corDoTom, valorDe,
   valorNaUnidade, percentual, centrosDoBloco, UNIDADES_PEC, ROTULO_UNIDADE,
   type DefPec, type ColunaPec, type UnidadePec,
 } from '@/components/agri/drePecRegua';
@@ -465,23 +465,6 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
             }
             return (
               <Fragment key={def.chave}>
-                {def.chave === 'investimento' && (
-                  <tr className="bg-card" style={{ height: 17 }}>
-                    <td className="sticky left-0 z-20 truncate border-r border-t border-border/60 bg-card
-                      px-[7px] text-[10px] text-muted-foreground"
-                      title="Abaixo da linha de caixa — não entra no resultado do período">
-                      Abaixo da linha de caixa
-                    </td>
-                    {Array.from({ length: larguras.length - 1 }).map((_, i) => {
-                      const congela = !!primeira && congelada(primeira, colunas)
-                        && (i === 0 || (i === 1 && !!primeira.unidade));
-                      return (
-                        <td key={i} className="border-t border-border/60 bg-card"
-                          style={congela ? { position: 'sticky', left: i === 0 ? W_FAZENDA : W_FAZENDA + largurasDaColuna(primeira!, unidades)[0], zIndex: 20, backgroundColor: FUNDO_TOTAL } : undefined} />
-                      );
-                    })}
-                  </tr>
-                )}
                 <LinhaPec def={def} colunas={colunas} centros={centros} unidades={unidades}
                   aberto={aberto} onAlternar={() => alternar(def.chave)}
                   onAbrirLista={onAbrirLista} onAbrirDidatico={onAbrirDidatico}
@@ -492,6 +475,14 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
                     e por isso não ganha nem cor de sinal nem clique. */}
                 {COM_PERCENTUAL.has(def.chave) && (
                   <LinhaPercentual def={def} colunas={colunas} unidades={unidades} />
+                )}
+
+                {/* ⚠ O LUCRO POR HECTARE É LEITURA DE APOIO, como o % do VBP: mesma régua (9px,
+                    muted, altura 14), sem cor de sinal e sem clique. Ele some quando o chip R$/ha
+                    está marcado — ali a sub-coluna já responde, e repetir a mesma conta duas vezes
+                    na mesma linha é ruído. */}
+                {COM_POR_HECTARE.has(def.chave) && !unidades.includes('ha') && (
+                  <LinhaPorHectare def={def} colunas={colunas} unidades={unidades} />
                 )}
 
                 {/* As filhas: um centro por linha, na régua `filha` (9px/14px, recuo 16). */}
@@ -525,6 +516,9 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, onAlternar, onAbrir
   const corLinha = corDoTom(def.tom);
   const bloco = BLOCO_DA_LINHA[def.chave];
   const temFilhas = def.expande && centros.length > 0;
+  /* ⚠ O RATEADO DA PRIMEIRA COLUNA manda no selo: é ela que a linha de rótulo descreve (o Total
+     nas visões globais, a fazenda na visão por fazenda), e é dela que sai o número do `title`. */
+  const jurosRateados = colunas[0]?.linhas?.juros_rateado ?? 0;
   /* ⚠ A MESMA RÉGUA DA LAVOURA (PR-10): o papel de grupo entra quando a linha expande, e é ela
      que traz o peso 500 sem mudar o tamanho. O mapa é um só de propósito: o dia em que o subtotal
      mudar de tamanho, ele muda nas duas telas. */
@@ -586,7 +580,17 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, onAlternar, onAbrir
             aberto && 'rotate-90')} />
         )}
         {def.rotulo}
+        {def.sufixo && (
+          <span className="ml-1 font-normal text-muted-foreground" style={{ fontSize: 9 }}>{def.sufixo}</span>
+        )}
         {def.etiqueta && <Etiqueta texto={def.etiqueta} />}
+        {/* ⚠ O SELO DOS JUROS É CONDICIONAL AO DADO, não à linha: ele só aparece quando há parcela
+            rateada, e o `title` diz quanto e por qual critério. Numa fazenda cujos juros são todos
+            próprios, marcar "estimado" seria mentir sobre um número exato. */}
+        {def.chave === 'juros' && jurosRateados > 0 && (
+          <Etiqueta texto="estimado"
+            title={`inclui ${formatNum(jurosRateados, 2)} rateados do Administrativo por cabeça média`} />
+        )}
       </td>
 
       {colunas.map(col => {
@@ -671,6 +675,56 @@ function LinhaPercentual({ def, colunas, unidades }: {
             {/* ⚠ AS CÉLULAS DE UNIDADE FICAM VAZIAS: um percentual não se divide por hectare, por
                 cabeça nem por arroba — ele já é a linha de cima noutra unidade. Vazias, não
                 ausentes: a coluna não pode encolher só nesta linha. */}
+            {slotsDaColuna(col, unidades).slice(1).map((sl, i) => (
+              <td key={sl} className={cn(fundo)}
+                style={col.total && i === 0
+                  ? { ...(congelada(col, colunas) ? estiloTotalCab(col, unidades) : {}), backgroundColor: FUNDO_TOTAL }
+                  : undefined} />
+            ))}
+          </Fragment>
+        );
+      })}
+    </tr>
+  );
+}
+
+/**
+ * O LUCRO POR HECTARE — DRE-CASCATA-03a.
+ *
+ * ⚠ ELE É A MESMA LINHA DE CIMA NOUTRA UNIDADE, como o "% do VBP": não entra em soma nenhuma, não
+ * tem cor de sinal e não abre lista. Por isso reusa a régua da `LinhaPercentual` — 9px, muted,
+ * altura 14, sem recuo — e não vira uma linha da cascata.
+ * ⚠ O DIVISOR É O `ha_medio` DA PRÓPRIA COLUNA, o mesmo do chip R$/ha: cada fazenda tem a sua
+ * área, e usar a do Total faria a coluna da Pureza falar do hectare do conjunto.
+ * ⚠ SEM ÁREA, TRAÇO — nunca zero: fazenda sem fechamento de área não tem lucro por hectare, e
+ * "R$ 0,00/ha" afirmaria que ela não lucrou.
+ */
+function LinhaPorHectare({ def, colunas, unidades }: {
+  def: DefPec; colunas: readonly ColunaPec[]; unidades: readonly UnidadePec[];
+}) {
+  const fundo = fundoDaLinha(def.destaque);
+  return (
+    <tr className={cn(fundo, 'font-normal')} style={{ height: 14 }}>
+      <td className={cn('sticky left-0 z-30 truncate border-r border-border/60 py-px text-muted-foreground', fundo)}
+        style={{ fontSize: 9, paddingLeft: 7, paddingRight: 7 }}
+        title={`${def.rotulo} dividido pela área produtiva média do período`}>
+        {ROTULO_POR_HECTARE}
+      </td>
+      {colunas.map(col => {
+        const v = col.linhas && col.tipo !== 'delta' ? valorNaColuna(col, def.chave) : null;
+        const ha = col.linhas?.producao.ha_medio ?? null;
+        const texto = !col.linhas || col.tipo === 'delta' ? ''
+          : v == null || ha == null || !(ha > 0) ? traco : `R$ ${formatNum(v / ha, 2)}/ha`;
+        return (
+          <Fragment key={col.chave}>
+            <td className={cn('truncate px-[7px] text-right tabular-nums text-muted-foreground', fundo)}
+              style={{
+                fontSize: 9,
+                ...(col.total ? { backgroundColor: FUNDO_TOTAL, borderLeft: BORDA_TOTAL } : {}),
+                ...(congelada(col, colunas) ? estiloTotalRs : {}),
+              }}>
+              {texto}
+            </td>
             {slotsDaColuna(col, unidades).slice(1).map((sl, i) => (
               <td key={sl} className={cn(fundo)}
                 style={col.total && i === 0
