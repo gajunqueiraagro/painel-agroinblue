@@ -60,8 +60,9 @@ import {
   PecHistoricoLinhaModal, type RecorteHistoricoPec,
 } from '@/components/agri/PecHistoricoLinhaModal';
 import {
-  PecDrePanel, FaixaVisoesPec, SeletorAnosPec, colunasDaVisao, deltasDaVisao, lerVisaoPec, escreverVisaoPec, lerNAnosPec,
-  escreverNAnosPec, N_ANOS_PADRAO, ehVisaoMetaLegada, type VisaoPec,
+  PecDrePanel, FaixaVisoesPec, colunasDaVisao, lerVisaoPec, escreverVisaoPec, lerNAnosPec,
+  escreverNAnosPec, N_ANOS_PADRAO, ehVisaoMetaLegada, visaoDaUrl,
+  type VisaoPec, type VisaoUrlPec, type ReferenciaPec,
 } from '@/pages/PecDrePanel';
 /* ⚠ AS UNIDADES VÊM DA RÉGUA, não mais da tela — DRE-HISTORICO-LINHA-01a. Mesma lista, mesmo
    rótulo; só o arquivo mudou. */
@@ -371,21 +372,34 @@ export function AgriDreLavouraTab() {
 
   /* ════════ AS QUATRO VISÕES DA PECUÁRIA — DRE-PEC-TELA-02 ════════ */
   /* ⚠ NA URL, COMO O PERÍODO: F5 e link copiado reabrem a mesma visão. `useFiltroUrl` não grava o
-     padrão ("global", 3 anos), então endereço limpo continua sendo "tela padrão". */
-  const [visaoPec, setVisaoPec] = useFiltroUrl<VisaoPec>('f_visao', 'global', lerVisaoPec, escreverVisaoPec);
+     padrão (comparação, 1 ano), então endereço limpo continua sendo "tela padrão".
+     ⚠ A REFERÊNCIA É `f_anos` MAIS O VALOR 'meta' DE `f_visao` — fix4, e é o que a torna linkável
+     sem inventar parâmetro: 1..5 é o n, e 'meta' na visão diz que a referência é o planejado. Os
+     links antigos caem exatamente onde a pergunta deles foi parar (ver `lerVisaoPec`). */
+  const [visaoUrl, setVisaoUrl] = useFiltroUrl<VisaoUrlPec>('f_visao', 'comparacao', lerVisaoPec, escreverVisaoPec);
   const [nAnosPec, setNAnosPec] = useFiltroUrl<number>('f_anos', N_ANOS_PADRAO, lerNAnosPec, escreverNAnosPec);
+  const visaoPec = visaoDaUrl(visaoUrl);
+  const referenciaPec: ReferenciaPec = visaoUrl === 'meta' ? 'meta' : nAnosPec;
+  /* ⚠ E O QUE SOBREVIVE A "Por fazenda" É O NÚMERO DE ANOS, não a Meta — medido na tela: a
+     referência Meta mora no MESMO parâmetro que a visão (`f_visao`), então ir para "Por fazenda"
+     a sobrescreve e a volta reabre na referência por anos, com o `f_anos` que estava guardado.
+     Fica registrado porque é o preço de a Meta ser linkável sem um parâmetro novo. */
+  const escolherVisao = useCallback((v: VisaoPec) => {
+    setVisaoUrl(v === 'fazenda' ? 'fazenda' : (referenciaPec === 'meta' ? 'meta' : 'comparacao'));
+  }, [setVisaoUrl, referenciaPec]);
   /* ⚠ A META E O ANO ANTERIOR SÃO BUSCADOS SEMPRE (decisão 2): os cards "× Meta" e "× Anos" mostram
      o delta em qualquer visão. São leituras em cache do react-query — trocar de visão não refaz. */
   const { dre: drePecMeta, carregando: carregandoPecMeta } = useDrePecuaria(
     ehPec ? clienteId : null, pecDe, pecAte, 'meta');
-  /* ⚠ A LISTA VARIA, O HOOK NÃO: fora da visão x Anos só o ano−1 (o do card); nela, 1..N. */
+  /* ⚠ A LISTA VARIA, O HOOK NÃO: são tantos anos quantos a referência pedir, e nunca menos de 1 —
+     o primeiro anterior é o padrão da tela. */
   const periodosAnosPec = useMemo((): PeriodoPec[] => {
     if (!pecDe || !pecAte) return [];
-    const n = visaoPec === 'anos' ? nAnosPec : 1;
+    const n = Math.max(1, nAnosPec);
     return Array.from({ length: n }, (_, i): PeriodoPec => ({
       de: anoMesAntes(pecDe, i + 1), ate: anoMesAntes(pecAte, i + 1), cenario: 'realizado',
     }));
-  }, [pecDe, pecAte, visaoPec, nAnosPec]);
+  }, [pecDe, pecAte, nAnosPec]);
   const anosPec = useDrePecuariaLista(ehPec ? clienteId : null, periodosAnosPec);
   /**
    * OS CINCO ANOS DO HISTÓRICO — DRE-HISTORICO-LINHA-01a.
@@ -409,25 +423,37 @@ export function AgriDreLavouraTab() {
    * OS CHIPS DE Δ E A REFERÊNCIA — DRE-CASCATA-03b/adendo.
    *
    * ⚠ ABREM DESLIGADOS: a tela responde primeiro "como fechou o período"; a comparação é o passo
-   * seguinte, e ela custa duas colunas de largura.
+   * seguinte, e ela custa uma coluna de largura.
    * ⚠ EXCETO PELO LINK ANTIGO: `f_visao=meta` apontava para um card que não existe mais, e quem o
-   * colou queria a comparação com a meta — então ele abre no Global com o Δ meta ligado.
+   * colou queria a comparação com a meta — então ele abre com a referência Meta e o Δ ligado.
+   * ⚠ E É UM ESTADO SÓ desde o fix4: o par Global/x Anos acabou junto com os dois cards, e com ele
+   * o `deltasAnos`. Uma referência, um Δ.
    */
   const [deltasPec, setDeltasPec] = useState<readonly ('rs' | 'pct')[]>(
     () => (ehVisaoMetaLegada(searchParams.get('f_visao')) ? ['rs', 'pct'] : []));
-  const [refDeltaPec, setRefDeltaPec] = useState<'meta' | 'ano'>('meta');
-  /* ⚠ O Δ DO x ANOS TEM ESTADO PRÓPRIO — fix3, e nasce DESLIGADO: ver `deltasDaVisao`. Ele governa
-     as colunas de Δ que cada ano ganha contra o período da tela, que é outra pergunta que a do
-     Global (realizado x meta). */
-  const [deltasAnos, setDeltasAnos] = useState<readonly ('rs' | 'pct')[]>([]);
+  /**
+   * ESCOLHER A REFERÊNCIA — e o Δ vem junto, porque ele depende dela.
+   *
+   * ⚠ COM DOIS OU MAIS ANOS O Δ SE DESLIGA, não se esconde: "a diferença" precisa de UMA
+   * referência, e com três anos na tela seriam três colunas de Δ — que foi exatamente como o Δ
+   * passou a nascer no meio da grade antes do fix4. Desligar é o que mantém o chip dizendo a
+   * verdade sobre o que está na tela.
+   */
+  const escolherReferencia = useCallback((r: ReferenciaPec) => {
+    setVisaoUrl(r === 'meta' ? 'meta' : 'comparacao');
+    if (r !== 'meta') {
+      setNAnosPec(r);
+      if (r > 1) setDeltasPec([]);
+    }
+  }, [setNAnosPec, setVisaoUrl]);
   const colunasPec = useMemo(() => (drePec && pecDe && pecAte
     ? colunasDaVisao({
       visao: visaoPec, de: pecDe, ate: pecAte, real: drePec,
       meta: drePecMeta, carregandoMeta: carregandoPecMeta,
       anos: anosPec.map(a => ({ de: a.periodo.de, ate: a.periodo.ate, dre: a.dre, carregando: a.carregando })),
-      deltas: deltasDaVisao(visaoPec, deltasPec, deltasAnos), refDelta: refDeltaPec,
+      deltas: deltasPec, referencia: referenciaPec,
     })
-    : []), [drePec, pecDe, pecAte, visaoPec, drePecMeta, carregandoPecMeta, anosPec, deltasPec, deltasAnos, refDeltaPec]);
+    : []), [drePec, pecDe, pecAte, visaoPec, drePecMeta, carregandoPecMeta, anosPec, deltasPec, referenciaPec]);
   /* ⚠ O MODAL DE LANÇAMENTOS DIZ DE QUE COLUNA VEIO: a lista da coluna de 2024 não pode aparecer
      sob o rótulo do período da tela, nem a de meta sob o do realizado. */
   const rotuloRecortePec = useMemo(() => {
@@ -477,51 +503,27 @@ export function AgriDreLavouraTab() {
    * fora da área visível, sem barra de rolagem que o alcançasse. Um controle que o operador não vê
    * não existe. Aqui eles ocupam as três colunas que a faixa de cards já deixava vazias (a
    * pecuária tem 3 cards numa grade de 6), e a linha de 28px deixou de existir na aba.
-   * ⚠ O SLOT DA VISÃO É EXCLUSIVO E DE LARGURA FIXA: Global mostra "Comparar", x Anos mostra
-   * "anos anteriores", Por fazenda não mostra nada — e os três ocupam os MESMOS 247px, que é a
-   * largura do maior. Sem a largura fixa, trocar de visão moveria os chips de unidade e o "abrir
-   * tudo", que não têm nada com a visão.
-   * ⚠ E A EXCLUSIVIDADE TEM UMA CONSEQUÊNCIA QUE FICA REGISTRADA: os chips de Δ também governam a
-   * visão x Anos (lá cada ano ganha uma coluna de Δ contra o período da tela). Ligados no Global e
-   * trocando para x Anos, as colunas de Δ aparecem sem que o chip esteja à mão para desligá-las —
-   * volta-se ao Global para isso. Foi decisão do briefing ("nunca os dois juntos"), não descuido.
+   * ⚠ O SLOT DO MEIO TEM LARGURA FIXA, e é o que segura a régua: o que mora nele mudou três vezes
+   * em três dias (o par "Comparar", o seletor de anos, agora só os chips de Δ) e os chips de
+   * unidade e o "abrir tudo" nunca se moveram um pixel.
    */
+  /* ⚠ O Δ PRECISA DE UMA REFERÊNCIA SÓ — ver `escolherReferencia`. */
+  const deltaIndisponivel = referenciaPec !== 'meta' && referenciaPec > 1;
   const controlesPec = (
     <>
       <ChipsUnidade valor={unidadesPec} onEscolher={setUnidadesPec}
         opcoes={UNIDADES_PEC_GRADE.map(u => ({ valor: u, rotulo: ROTULO_UNIDADE[u] }))} />
       <span className="flex w-[247px] shrink-0 items-center justify-end gap-1.5">
-        {visaoPec === 'global' && <>
+        {visaoPec === 'comparacao' && <>
           {/* ⚠ A BARRA VERTICAL MORA DENTRO DO SLOT, não antes dele: o conteúdo é ancorado à
               direita, então ela acompanha o grupo e nada se move quando o slot fica vazio. */}
           <span className="h-[14px] w-px shrink-0 bg-border" aria-hidden />
-          <span className="shrink-0 whitespace-nowrap text-[10px] text-muted-foreground">Comparar:</span>
-          {/* ⚠ O SELETOR SÓ EXISTE COM Δ LIGADO — sem diferença na tela ele não governa nada —, mas
-              o LUGAR dele é reservado sempre: senão a palavra "Comparar:" andaria 104px ao ligar o
-              primeiro chip. */}
-          <span className="flex w-[104px] shrink-0 items-center justify-start">
-            {deltasPec.length > 0 && (
-              <Select value={refDeltaPec} onValueChange={v => setRefDeltaPec(v as 'meta' | 'ano')}>
-                <SelectTrigger className="h-[22px] w-[104px] text-[10px]"
-                  title="Compara o realizado com a meta ou com o período anterior">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="meta" className="text-[12px]">Meta</SelectItem>
-                  <SelectItem value="ano" className="text-[12px]">Ano anterior</SelectItem>
-                </SelectContent>
-              </Select>
-            )}
-          </span>
+          {/* ⚠ DESABILITADOS, NÃO ESCONDIDOS, com dois anos ou mais: sumir ensinaria que o Δ não
+              existe nesta tela; apagado com o porquê no `title` ensina que ele depende da
+              referência — e o caminho de volta é um clique no card. */}
           <ChipsUnidade valor={deltasPec} onEscolher={setDeltasPec} permiteVazio
-            opcoes={[{ valor: 'rs', rotulo: 'Δ R$' }, { valor: 'pct', rotulo: 'Δ %' }]} />
-        </>}
-        {visaoPec === 'anos' && <>
-          <span className="h-[14px] w-px shrink-0 bg-border" aria-hidden />
-          <SeletorAnosPec visao={visaoPec} nAnos={nAnosPec} onNAnos={setNAnosPec} curto />
-          {/* ⚠ CHIPS PRÓPRIOS, não os do Global — ver `deltasDaVisao`. Aqui o Δ é "quanto mudou
-              daquele ano para cá", e cada ano ganha uma coluna ao lado da sua. */}
-          <ChipsUnidade valor={deltasAnos} onEscolher={setDeltasAnos} permiteVazio
+            desabilitado={deltaIndisponivel}
+            titleDesabilitado="Disponível ao comparar com a meta ou com 1 ano"
             opcoes={[{ valor: 'rs', rotulo: 'Δ R$' }, { valor: 'pct', rotulo: 'Δ %' }]} />
         </>}
       </span>
@@ -925,10 +927,11 @@ export function AgriDreLavouraTab() {
           </div>
 
           {ehPec ? (drePec ? (
-            <FaixaVisoesPec deltas={deltasPec} refDelta={refDeltaPec} visao={visaoPec} onVisao={setVisaoPec} real={drePec}
+            <FaixaVisoesPec visao={visaoPec} onVisao={escolherVisao} real={drePec}
               meta={drePecMeta} carregandoMeta={carregandoPecMeta}
               anoAnterior={anosPec[0]?.dre ?? null} carregandoAnoAnterior={anosPec[0]?.carregando ?? true}
-              nAnos={nAnosPec} onNAnos={setNAnosPec} controles={controlesPec} />
+              referencia={referenciaPec} onReferencia={escolherReferencia}
+              controles={controlesPec} />
           ) : null)
             : culturaAberta ? <FaixaCultura c={culturaAberta} />
               : <Faixa dre={dre} />}

@@ -11,7 +11,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
-import { PecDrePanel, FaixaVisoesPec, colunasDaVisao, deltasDaVisao, type EntradaVisoes, type VisaoPec } from '@/pages/PecDrePanel';
+import { PecDrePanel, FaixaVisoesPec, colunasDaVisao, type EntradaVisoes, type VisaoPec } from '@/pages/PecDrePanel';
 import { LINHAS_PEC_RESUMIDO } from '@/components/agri/drePecRegua';
 import type { DrePecuaria, DrePecLinhas } from '@/hooks/useDrePecuaria';
 
@@ -96,6 +96,13 @@ const DRE: DrePecuaria = {
 const colunas = (visao: VisaoPec, extra: Partial<EntradaVisoes> = {}) => colunasDaVisao({
   visao, de: '2025-07', ate: '2026-06', real: DRE, meta: null, carregandoMeta: false, anos: [], ...extra,
 });
+/* ⚠ A COMPARAÇÃO É UMA VISÃO SÓ DESDE O fix4, com a referência por parâmetro: 'meta' ou o número de
+   anos anteriores. Os três atalhos abaixo leem como as três visões antigas para quem conhece a
+   tela, mas montam pela MESMA função — que é o ponto do PR. */
+const comMeta = (extra: Partial<EntradaVisoes> = {}) =>
+  colunas('comparacao', { referencia: 'meta', ...extra });
+const comAnos = (n: number, extra: Partial<EntradaVisoes> = {}) =>
+  colunas('comparacao', { referencia: n, ...extra });
 /* ⚠ OS CASOS ANTIGOS SÃO DA VISÃO "Por fazenda": ela é a grade de antes, sem mudança. */
 const montar = () => render(
   <PecDrePanel colunas={colunas('fazenda')} alturaCartao={null} cartaoRef={{ current: null }} />,
@@ -126,7 +133,7 @@ describe('as unidades da pecuária', () => {
     }),
   };
   const montarCom = (unidades: readonly ('rs' | 'ha' | 'cab' | 'arroba')[], dre = BASES) => render(
-    <PecDrePanel colunas={colunasDaVisao({ visao: 'global', de: '2025-07', ate: '2026-06',
+    <PecDrePanel colunas={colunasDaVisao({ visao: 'comparacao', de: '2025-07', ate: '2026-06',
       real: dre, meta: null, carregandoMeta: false, anos: [] })}
       alturaCartao={null} cartaoRef={{ current: null }} unidades={unidades} />,
   );
@@ -226,7 +233,7 @@ describe('o rateio administrativo da pecuária', () => {
   };
 
   it('o resultado é o da RPC, com o rateio descontado e visível na própria linha', () => {
-    render(<PecDrePanel colunas={colunasDaVisao({ visao: 'global', de: '2025-07', ate: '2026-06',
+    render(<PecDrePanel colunas={colunasDaVisao({ visao: 'comparacao', de: '2025-07', ate: '2026-06',
       real: COM_RATEIO, meta: null, carregandoMeta: false, anos: [] })}
       alturaCartao={null} cartaoRef={{ current: null }} />);
     expect(linhaDe('(−) Rateio administrativo')?.cells[1]?.textContent).toBe('120.000,00');
@@ -471,12 +478,14 @@ const SEM_META: DrePecuaria = { ...META, total: linhas({ juros: 0 }) };
 const cabecalhos = () => Array.from(document.querySelectorAll<HTMLTableCellElement>('thead tr:first-child th'))
   .map(th => th.textContent ?? '');
 
-describe('as quatro visões', () => {
-  it('Global: uma coluna só, o Total, com o rateio administrativo inteiro', () => {
-    render(<PecDrePanel colunas={colunas('global')} alturaCartao={null} cartaoRef={{ current: null }} />);
+describe('as duas visões', () => {
+  /* ⚠ SEM ANO ANTERIOR NA RESPOSTA, a comparação por anos mostra só o período da tela — e é o
+     estado em que a grade nasce enquanto a lista de anos não chegou. */
+  it('comparação sem ano anterior: uma coluna só, com o rateio administrativo inteiro', () => {
+    render(<PecDrePanel colunas={comAnos(1)} alturaCartao={null} cartaoRef={{ current: null }} />);
     const h = cabecalhos();
     expect(h).toHaveLength(2);
-    expect(h[1]).toContain('Total');
+    expect(h[1]).toContain('jul/25-jun/26');
     /* ⚠ O "10.000 cab med." SAIU DO CABEÇALHO — 03b-fix1/adendo item 9: ele custava uma LINHA de
        cabeçalho em toda coluna para responder uma pergunta que não é a do DRE. O caso continua
        cobrando o que restou (o nome da coluna) e passou a AFIRMAR a ausência, para que devolvê-lo
@@ -488,37 +497,40 @@ describe('as quatro visões', () => {
     expect(linhaDe('(−) Rateio administrativo')).toBeTruthy();
   });
 
-  it('× Meta: Realizado | Meta | Δ — meta nunca soma, patrimônio sem meta, drill com o cenário', () => {
+  /* ⚠ A REFERÊNCIA FICA À ESQUERDA DO ATUAL desde o fix4 — era "Realizado | Meta | Δ" e virou
+     "Meta | Atual | Δ", a mesma lei do A28: a comparação vem DEPOIS do que compara. Os índices
+     andaram com ela, e este caso foi atualizado para o contrato novo, nunca afrouxado. */
+  it('referência Meta: Meta | Atual | Δ — meta nunca soma, patrimônio sem meta, drill com o cenário', () => {
     const abrir = vi.fn();
-    render(<PecDrePanel colunas={colunas('meta', { meta: META })} alturaCartao={null}
+    render(<PecDrePanel colunas={comMeta({ meta: META, deltas: ['rs', 'pct'] })} alturaCartao={null}
       cartaoRef={{ current: null }} onAbrirLista={abrir} />);
     const h = cabecalhos();
     expect(h).toHaveLength(4);
-    expect(h[1]).toContain('Realizado');
-    expect(h[2]).toContain('Meta');
+    expect(h[1]).toContain('Meta');
+    expect(h[2]).toContain('Atual');
     expect(h[3]).toContain('real − meta');
-    /* ⚠ OS ÍNDICES ANDARAM PORQUE A META GANHOU SUB-COLUNA — TELA-03a. Antes: rótulo 0 ·
-       Realizado R$ 1 e R$/cab 2 · Meta R$ 3 · Δ R$ 4 e Δ% 5. Agora: rótulo 0 · Realizado R$ 1 e
-       R$/ha 2 · Meta R$ 3 e R$/ha 4 · Δ R$ 5 e Δ% 6. */
+    /* rótulo 0 · Meta R$ 1 e R$/ha 2 · Atual R$ 3 e R$/ha 4 · Δ R$ 5 e Δ% 6. */
     const vendas = linhaDe('Vendas');
-    expect(vendas?.cells[3]?.textContent).toBe('451.560,00');
+    expect(vendas?.cells[1]?.textContent).toBe('451.560,00');
     /* ⚠ A META DIVIDE PELA ÁREA DELA, 4.000 ha: 451.560 / 4.000 = 112,89. Pela área do realizado
        (5.000) daria 90,31 — o número que este caso recusa. */
-    expect(vendas?.cells[4]?.textContent).toBe('112,89');
+    expect(vendas?.cells[2]?.textContent).toBe('112,89');
+    expect(vendas?.cells[3]?.textContent).toBe('17.869.000,08');
+    /* O Δ é a diferença: 17.869.000,08 − 451.560,00. */
     expect(vendas?.cells[5]?.textContent).toBe('17.417.440,08');
     /* ⚠ A VPB DA META É A MESMA DO REALIZADO NO JSON — e a coluna diz "—" no R$, no R$/ha e no
        delta: traço não vira número ao mudar de unidade. */
     const vpb = linhaDe('Variação por produção');
-    expect(vpb?.cells[3]?.textContent).toBe('—');
-    expect(vpb?.cells[4]?.textContent).toBe('—');
+    expect(vpb?.cells[1]?.textContent).toBe('—');
+    expect(vpb?.cells[2]?.textContent).toBe('—');
     expect(vpb?.cells[5]?.textContent).toBe('—');
 
-    if (vendas) fireEvent.click(vendas.cells[3]);
+    if (vendas) fireEvent.click(vendas.cells[1]);
     expect(abrir).toHaveBeenCalledWith(expect.objectContaining({ cenario: 'meta', bloco: 'venda', fazendaId: null }));
     /* ⚠ A SUB-COLUNA ABRE O MESMO DRILL DO R$ ao lado — é a mesma linha noutra unidade, e o
        operador clica onde o olho está. */
     abrir.mockClear();
-    if (vendas) fireEvent.click(vendas.cells[4]);
+    if (vendas) fireEvent.click(vendas.cells[2]);
     expect(abrir).toHaveBeenCalledWith(expect.objectContaining({ cenario: 'meta', bloco: 'venda' }));
     /* ⚠ O DELTA NÃO ABRE NADA, e agora ele é a célula 5 (a Meta ganhou sub-coluna): uma diferença
        não tem lançamento para listar. */
@@ -530,21 +542,21 @@ describe('as quatro visões', () => {
   /* ⚠ O SUBTÍTULO ENCURTOU NO 01c e a frase inteira foi para o `title`: com o grupo em 104px,
      "sem meta no período" (100,1px de texto) virava reticências. Encurtar sem guardar o longo
      seria apagar — por isso o teste cobra os DOIS. */
-  it('× Meta sem meta no período: a coluna fica, toda em "—", e diz por quê', () => {
-    render(<PecDrePanel colunas={colunas('meta', { meta: SEM_META })} alturaCartao={null} cartaoRef={{ current: null }} />);
-    expect(cabecalhos()[2]).toContain('sem meta');
+  it('referência Meta sem meta no período: a coluna fica, toda em "—", e diz por quê', () => {
+    render(<PecDrePanel colunas={comMeta({ meta: SEM_META })} alturaCartao={null} cartaoRef={{ current: null }} />);
+    expect(cabecalhos()[1]).toContain('sem meta');
     expect(document.querySelector('[title="sem meta no período"]')).not.toBeNull();
-    expect(linhaDe('Vendas')?.cells[3]?.textContent).toBe('—');
-    expect(linhaDe('Vendas')?.cells[4]?.textContent).toBe('—');
+    expect(linhaDe('Vendas')?.cells[1]?.textContent).toBe('—');
+    expect(linhaDe('Vendas')?.cells[2]?.textContent).toBe('—');
   });
 
   /* ⚠ ORDEM CRONOLÓGICA — DRE-PERIODO-01: o mais ANTIGO à esquerda e o período da tela à direita,
      como se lê uma série temporal e como o modal de histórico já fazia. Era o contrário, e o teste
      que travava a ordem antiga foi atualizado para o contrato novo, nunca afrouxado. */
-  it('× Anos: cronológico — o mais antigo à esquerda, o atual à direita; ano sem dado é "—"', () => {
+  it('referência 2 anos: cronológico — o mais antigo à esquerda, o atual à direita; ano sem dado é "—"', () => {
     const abrir = vi.fn();
     const ANO1: DrePecuaria = { ...DRE, total: linhas({ vendas: 15000000 }) };
-    render(<PecDrePanel colunas={colunas('anos', { anos: [
+    render(<PecDrePanel colunas={comAnos(2, { anos: [
       { de: '2024-07', ate: '2025-06', dre: ANO1, carregando: false },
       { de: '2023-07', ate: '2024-06', dre: { ...DRE, fazendas: [] }, carregando: false },
     ] })} alturaCartao={null} cartaoRef={{ current: null }} onAbrirLista={abrir} />);
@@ -576,36 +588,62 @@ describe('as quatro visões', () => {
   });
 
   /**
-   * ⚠ OS QUATRO CARDS: um número cada, o selecionado marcado, e carregando é spinner — nunca "—",
-   * que diria que o dado não existe.
+   * OS CARDS — DOIS DESDE O fix4, e a contagem é a menor parte do que mudou.
+   *
+   * ⚠ ERAM QUATRO, DEPOIS TRÊS, AGORA DOIS, e cada corte veio da mesma constatação: "Global",
+   * "× Meta" e "× Anos" respondiam todas "comparado com o quê?" — três cards, três números e três
+   * controles em lugares diferentes para uma pergunta só. Agora a pergunta é o card "Comparação" e
+   * a referência é um seletor DENTRO dele.
+   * ⚠ E O CARD DA COMPARAÇÃO NÃO TEM NÚMERO, de propósito: os números que os três mostravam
+   * (resultado, Δ meta, Δ ano) não eram a resposta da tela — a resposta é a GRADE, dez pixels
+   * abaixo. Este caso trava justamente isso, porque é o que um "melhoramento" futuro desfaria
+   * primeiro.
+   * ⚠ ELE NÃO É UM `<button>`: o seletor de referência é feito de botões, e botão dentro de botão
+   * é HTML inválido — o navegador desaninha a árvore e o seletor sai FORA do card. Por isso a
+   * busca abaixo é por `[aria-pressed]`, não por `button[aria-pressed]`.
    */
-  /**
-   * ⚠ SÃO TRÊS CARDS DESDE O ADENDO DE 23/09: o "× Meta" saiu e a comparação com a meta virou
-   * COLUNA da visão Global, ligada pelos chips de Δ. Este caso mudou de contrato por isso — ele
-   * afirmava quatro cards e o "× Meta" pressionado. Falha certa, pela razão certa.
-   * ⚠ E O NÚMERO QUE O CARD MOSTRAVA NÃO SE PERDEU: ele vem como NOTA sob o resultado do Global
-   * quando há Δ ligado, e é isso que a segunda metade do caso trava.
-   */
-  it('os cards: três, o selecionado pressionado, e o Δ vira nota do Global', () => {
+  it('os cards: dois, o selecionado pressionado, e a Comparação sem número', () => {
     const escolher = vi.fn();
-    const { unmount } = render(<FaixaVisoesPec visao="global" onVisao={escolher} real={DRE} meta={null}
-      carregandoMeta anoAnterior={null} carregandoAnoAnterior={false} nAnos={3} onNAnos={() => {}} />);
-    const botoes = Array.from(document.querySelectorAll<HTMLButtonElement>('button[aria-pressed]'));
-    expect(botoes).toHaveLength(3);
-    expect(botoes.filter(b => b.getAttribute('aria-pressed') === 'true').map(b => b.textContent))
-      .toEqual([expect.stringContaining('Global')]);
-    expect(botoes[0]?.textContent).toContain('2.994.408,81');
-    /* Sem Δ ligado, nenhuma nota — o card do Global mostra só o resultado. */
-    expect(botoes[0]?.textContent).not.toContain('Δ');
-    fireEvent.click(botoes[2]);
-    expect(escolher).toHaveBeenCalledWith('fazenda');
-    unmount();
+    const escolherRef = vi.fn();
+    render(<FaixaVisoesPec visao="comparacao" onVisao={escolher} real={DRE} meta={null}
+      carregandoMeta anoAnterior={null} carregandoAnoAnterior={false}
+      referencia={1} onReferencia={escolherRef} />);
+    const cards = Array.from(document.querySelectorAll<HTMLElement>('[aria-pressed]'));
+    expect(cards).toHaveLength(2);
+    expect(cards[0]?.textContent).toContain('Comparação');
+    expect(cards[1]?.textContent).toContain('Por fazenda');
+    expect(cards.filter(b => b.getAttribute('aria-pressed') === 'true').map(b => b.tagName))
+      .toEqual(['DIV']);
+    /* ⚠ SEM O RESULTADO DO PERÍODO NO CARD: ele está na grade, na linha que se chama assim. */
+    expect(cards[0]?.textContent).not.toContain('2.994.408,81');
+    /* As seis referências moram dentro do card, e escolher uma seleciona a visão junto. */
+    const refs = Array.from(cards[0].querySelectorAll('button')).map(b => b.textContent);
+    expect(refs).toEqual(['Meta', '1', '2', '3', '4', '5']);
+    /**
+     * ⚠ UM GESTO, UM ESCRITOR — e este caso é o gate de um defeito medido na tela: o clique numa
+     * referência SUBIA para o `onClick` do card, então `onVisao` e `onReferencia` disparavam
+     * juntos, duas escritas de URL caíam no mesmo tique do React e a segunda se perdia. Clicar em
+     * "Meta" não fazia absolutamente nada. Quem seleciona a visão ao escolher a referência é o
+     * handler da referência, na página; o clique no RESTO do card continua selecionando.
+     */
+    fireEvent.click(cards[0].querySelectorAll('button')[3]);
+    expect(escolherRef).toHaveBeenCalledWith(3);
+    expect(escolher).not.toHaveBeenCalled();
 
-    /* Com o Δ ligado e sem meta no período, a nota diz a ausência em vez de um número inventado. */
-    render(<FaixaVisoesPec visao="global" onVisao={escolher} real={DRE} meta={null}
-      carregandoMeta={false} anoAnterior={null} carregandoAnoAnterior={false} nAnos={3}
-      onNAnos={() => {}} deltas={['rs']} refDelta="meta" />);
-    expect(document.querySelector('button[aria-pressed]')?.textContent).toContain('sem meta no período');
+    fireEvent.click(cards[1]);
+    expect(escolher).toHaveBeenCalledWith('fazenda');
+  });
+
+  /* ⚠ SEM META NO PERÍODO A OPÇÃO CONTINUA CLICÁVEL, e o `title` é que avisa: escondê-la faria a
+     pergunta sumir junto com a resposta, e a coluna em traço é o sentinela certo para "não sei". */
+  it('sem meta no período, a opção Meta fica e o title diz por quê', () => {
+    render(<FaixaVisoesPec visao="comparacao" onVisao={() => {}} real={DRE} meta={null}
+      carregandoMeta={false} anoAnterior={null} carregandoAnoAnterior={false}
+      referencia="meta" onReferencia={() => {}} />);
+    const meta = Array.from(document.querySelectorAll('button')).find(b => b.textContent === 'Meta');
+    expect(meta).toBeTruthy();
+    expect(meta?.getAttribute('title')).toBe('sem meta no período');
+    expect(meta?.hasAttribute('disabled')).toBe(false);
   });
   /**
    * ⚠ × ANOS COM CINCO: SEIS COLUNAS, TODAS RESOLVIDAS — o defeito da homologação de 22/09 (anos 2..N
@@ -614,14 +652,14 @@ describe('as quatro visões', () => {
    * vezes. Este caso trava o lado da grade: coluna que chegou tem número, ano sem dado tem "—", e
    * nenhuma fica pulsando.
    */
-  it('× Anos com cinco anos: seis colunas resolvidas, ano sem dado em "—", nenhum esqueleto', () => {
+  it('referência 5 anos: seis colunas resolvidas, ano sem dado em "—", nenhum esqueleto', () => {
     const ano = (k: number, vendas: number) => ({
       de: `${2025 - k + 1}-07`, ate: `${2026 - k + 1}-06`,
       dre: { ...DRE, total: linhas({ vendas }) }, carregando: false,
     });
     const anos = [ano(1, 15000000), ano(2, 14000000), ano(3, 13000000), ano(4, 12000000),
       { de: '2020-07', ate: '2021-06', dre: { ...DRE, fazendas: [] }, carregando: false }];
-    render(<PecDrePanel colunas={colunas('anos', { anos })} alturaCartao={null} cartaoRef={{ current: null }} />);
+    render(<PecDrePanel colunas={comAnos(5, { anos })} alturaCartao={null} cartaoRef={{ current: null }} />);
     expect(cabecalhos()).toHaveLength(7);
     /* ⚠ SEIS COLUNAS × DUAS CÉLULAS, EM ORDEM CRONOLÓGICA: a coluna 0 é o ano MAIS ANTIGO (o sem
        dado) e a última é o período da tela. O R$ da coluna k está em 1 + 2k: o ano sem dado é k=0
@@ -656,7 +694,7 @@ describe('o DRE resumido', () => {
     }),
   };
   const montarModo = (modo: 'resumido' | 'detalhado') => render(
-    <PecDrePanel modo={modo} colunas={colunasDaVisao({ visao: 'global', de: '2025-07', ate: '2026-06',
+    <PecDrePanel modo={modo} colunas={colunasDaVisao({ visao: 'comparacao', de: '2025-07', ate: '2026-06',
       real: BASE, meta: null, carregandoMeta: false, anos: [] })}
       alturaCartao={null} cartaoRef={{ current: null }} />,
   );
@@ -709,47 +747,65 @@ describe('o DRE resumido', () => {
  * ⚠ E OS NÚMEROS SÃO OS DA ANTIGA VISÃO "× Meta": ela deixou de existir como card, não como
  * resposta — é isso que este bloco prova.
  */
-describe('a comparação na visão Global', () => {
+describe('a comparação, por referência', () => {
   const META: DrePecuaria = { ...DRE, total: linhas({ vendas: 10000000, resultado_periodo: 2000000 }) };
-  const montarGlobal = (deltas: readonly ('rs' | 'pct')[], refDelta: 'meta' | 'ano' = 'meta') => render(
+  const ANOS = [
+    { de: '2024-07', ate: '2025-06', dre: { ...DRE, total: linhas({ vendas: 12000000 }) }, carregando: false },
+    { de: '2023-07', ate: '2024-06', dre: { ...DRE, total: linhas({ vendas: 11000000 }) }, carregando: false },
+    { de: '2022-07', ate: '2023-06', dre: { ...DRE, total: linhas({ vendas: 10500000 }) }, carregando: false },
+  ];
+  const montar = (referencia: 'meta' | number, deltas: readonly ('rs' | 'pct')[] = []) => render(
     <PecDrePanel colunas={colunasDaVisao({
-      visao: 'global', de: '2025-07', ate: '2026-06', real: DRE, meta: META, carregandoMeta: false,
-      anos: [{ de: '2024-07', ate: '2025-06', dre: { ...DRE, total: linhas({ vendas: 12000000 }) }, carregando: false }],
-      deltas, refDelta,
+      visao: 'comparacao', de: '2025-07', ate: '2026-06', real: DRE, meta: META, carregandoMeta: false,
+      anos: ANOS, deltas, referencia,
     })} alturaCartao={null} cartaoRef={{ current: null }} />,
   );
 
-  it('sem chip, só o realizado; com Δ R$, a meta entra à esquerda e o Δ à direita', () => {
-    const { unmount } = montarGlobal([]);
-    /* Uma coluna só: o Total do período. A cabeça média é a do fixture do arquivo. */
-    expect(cabecalhos()).toHaveLength(2);
-    expect(cabecalhos()[1]).toContain('Total');
-    unmount();
-
-    montarGlobal(['rs']);
+  /* ⚠ A REFERÊNCIA SEMPRE À ESQUERDA, O Δ SEMPRE DEPOIS DO ATUAL — fix4, e é a correção de um
+     defeito de leitura: na visão x Anos o Δ nascia COLADO ao ano que comparava, no meio da grade,
+     e com um ano só a tela ficava "2025 | Δ | 2026" — a diferença antes do número que a produziu. */
+  it('Meta: Meta | Atual | Δ, nesta ordem', () => {
+    montar('meta', ['rs']);
     const cab = cabecalhos();
     expect(cab[1]).toContain('Meta');
-    expect(cab[2]).toContain('Total');
+    expect(cab[2]).toContain('Atual');
     expect(cab[3]).toContain('Δ');
-    /* Vendas: meta 10.000.000, realizado 17.869.000,08, Δ = 7.869.000,08. */
+    /* Vendas: meta 10.000.000, atual 17.869.000,08, Δ = 7.869.000,08. */
     const vendas = linhaDe('Vendas');
     expect(vendas?.cells[1]?.textContent).toBe('10.000.000,00');
     expect(vendas?.cells[3]?.textContent).toBe('17.869.000,08');
     expect(vendas?.cells[5]?.textContent).toBe('7.869.000,08');
   });
 
-  it('trocar a referência para o ano anterior troca a coluna da esquerda e o Δ', () => {
-    montarGlobal(['rs'], 'ano');
-    expect(cabecalhos()[1]).toContain('jul/24-jun/25');
+  it('1 ano: o anterior | o atual | Δ, e o Δ é contra aquele ano', () => {
+    montar(1, ['rs']);
+    const cab = cabecalhos();
+    expect(cab[1]).toContain('jul/24-jun/25');
+    expect(cab[2]).toContain('jul/25-jun/26');
+    expect(cab[3]).toContain('Δ');
     const vendas = linhaDe('Vendas');
     expect(vendas?.cells[1]?.textContent).toBe('12.000.000,00');
     /* 17.869.000,08 − 12.000.000 = 5.869.000,08 — e não os 7,8 mi da meta. */
     expect(vendas?.cells[5]?.textContent).toBe('5.869.000,08');
   });
 
+  /**
+   * ⚠ COM DOIS OU MAIS ANOS NÃO HÁ Δ, e não é esquecimento: "a diferença" precisa de UMA
+   * referência. Com três anos seriam três colunas de Δ intercaladas — exatamente como o Δ passou a
+   * nascer no meio da grade antes do fix4. Os chips ficam desabilitados na tela, e este caso trava
+   * o lado das colunas.
+   */
+  it('3 anos: quatro colunas cronológicas e nenhuma de Δ, mesmo com os chips ligados', () => {
+    montar(3, ['rs', 'pct']);
+    expect(cabecalhos().slice(1)).toEqual([
+      'jul/22-jun/23', 'jul/23-jun/24', 'jul/24-jun/25', 'jul/25-jun/26',
+    ]);
+    expect(cabecalhos().filter(c => c.includes('Δ'))).toHaveLength(0);
+  });
+
   /* ⚠ O CHIP Δ % NÃO É OUTRA UNIDADE DO MESMO NÚMERO: ele é a segunda célula da coluna de Δ. */
   it('os dois chips dão duas células de Δ na mesma coluna', () => {
-    montarGlobal(['rs', 'pct']);
+    montar('meta', ['rs', 'pct']);
     const vendas = linhaDe('Vendas');
     expect(vendas?.cells[5]?.textContent).toBe('7.869.000,08');
     expect(vendas?.cells[6]?.textContent).toContain('%');
@@ -769,7 +825,7 @@ describe('a cor e a faixa de um total', () => {
   const montar = (l: Partial<DrePecLinhas>) => {
     const dre: DrePecuaria = { ...DRE, fazendas: [],
       total: linhas({ vbp: 1000000, producao: { ...linhas({}).producao, ha_medio: 1000 }, ...l }) };
-    render(<PecDrePanel colunas={colunas('global', { real: dre })}
+    render(<PecDrePanel colunas={colunas('comparacao', { real: dre })}
       alturaCartao={null} cartaoRef={{ current: null }} unidades={['rs', 'ha']} />);
   };
 
@@ -825,7 +881,7 @@ describe('a cor e a faixa de um total', () => {
     const real: DrePecuaria = { ...DRE, fazendas: [],
       total: linhas({ resultado_com_mercado: -1400000, lucro_liquido: -1959802.35,
         producao: { ...linhas({}).producao, ha_medio: 4803 } }) };
-    render(<PecDrePanel colunas={colunas('global', { real })}
+    render(<PecDrePanel colunas={colunas('comparacao', { real })}
       alturaCartao={null} cartaoRef={{ current: null }} unidades={['rs']} />);
     /* ⚠ SÃO DUAS, e é justamente por isso que o caso as separa: a mesma linha de apoio aparece sob
        "= Resultado com mercado" (t3) e sob "= Lucro líquido" (t4), e cada uma tem de herdar a faixa
@@ -851,7 +907,7 @@ describe('a cor e a faixa de um total', () => {
  */
 describe('a coluna do ícone de histórico', () => {
   it('toda célula de rótulo começa no mesmo padding, com ou sem ícone', () => {
-    render(<PecDrePanel colunas={colunas('global')} alturaCartao={null} cartaoRef={{ current: null }}
+    render(<PecDrePanel colunas={colunas('comparacao')} alturaCartao={null} cartaoRef={{ current: null }}
       onAbrirHistorico={() => {}} />);
     const rotulos = linhasDaTabela().map(tr => tr.cells[0]).filter(Boolean);
     const comIcone = rotulos.filter(td => td.querySelector('button[aria-label="Ver histórico"]'));
@@ -861,49 +917,5 @@ describe('a coluna do ícone de histórico', () => {
     /* E quem não tem ícone reserva a coluna dele: 7 + 14. */
     const semIcone = rotulos.filter(td => !td.querySelector('button[aria-label="Ver histórico"]'));
     for (const td of semIcone) expect(td.style.paddingLeft).not.toBe('7px');
-  });
-});
-
-/* ══════════════ DE QUEM SÃO OS CHIPS DE Δ — 03b-fix3 ══════════════ */
-
-/**
- * ⚠ O ESTADO ERA UM SÓ PARA DUAS PERGUNTAS, e a fusão só não incomodava enquanto os chips viviam
- * numa régua sempre visível. No Global o Δ compara o realizado com a meta; no x Anos ele compara
- * CADA ano com o período da tela. Desde o fix2 o slot dos controles é exclusivo por visão — no x
- * Anos aparece o seletor de anos —, então ligar o Δ no Global fazia nascer colunas de Δ no x Anos
- * sem chip à mão para desligá-las. É esse vazamento que estes casos travam.
- */
-describe('os chips de Δ de cada visão', () => {
-  it('o Global lê os chips dele; o x Anos, os dele', () => {
-    expect(deltasDaVisao('global', ['rs'], [])).toEqual(['rs']);
-    expect(deltasDaVisao('anos', ['rs'], [])).toEqual([]);
-    expect(deltasDaVisao('anos', [], ['rs', 'pct'])).toEqual(['rs', 'pct']);
-  });
-
-  /* ⚠ A x META LEGADA CONTINUA LENDO A DO GLOBAL, que é a que ela sempre leu: ela é a visão que
-     abre com os dois Δ ligados por link antigo, e trocá-la de dono mudaria um comportamento que
-     este PR não tem por que tocar. */
-  it('por fazenda e a x Meta legada seguem o Global', () => {
-    expect(deltasDaVisao('fazenda', ['pct'], ['rs'])).toEqual(['pct']);
-    expect(deltasDaVisao('meta', ['pct'], ['rs'])).toEqual(['pct']);
-  });
-
-  /**
-   * ⚠ E O CASO QUE PROVA O ESTRAGO, não só a regra: com o Δ ligado só no Global, a visão x Anos
-   * não pode ganhar UMA coluna de Δ. Sem a separação eram três (uma por ano anterior) — colunas
-   * que o operador via aparecer sem ter pedido e sem ter como fechar.
-   */
-  it('ligado no Global, o x Anos não ganha coluna de Δ nenhuma', () => {
-    const anos = [
-      { de: '2024-07', ate: '2025-06', dre: DRE, carregando: false },
-      { de: '2023-07', ate: '2024-06', dre: DRE, carregando: false },
-    ];
-    const doGlobal: readonly ('rs' | 'pct')[] = ['rs'];
-    const dosAnos: readonly ('rs' | 'pct')[] = [];
-    const cols = colunas('anos', { anos, deltas: deltasDaVisao('anos', doGlobal, dosAnos) });
-    expect(cols.filter(c => c.tipo === 'delta')).toHaveLength(0);
-    /* E a prova de que a busca sabe achar: com os chips DA VISÃO ligados, elas aparecem. */
-    const comDelta = colunas('anos', { anos, deltas: deltasDaVisao('anos', doGlobal, ['rs']) });
-    expect(comDelta.filter(c => c.tipo === 'delta')).toHaveLength(2);
   });
 });

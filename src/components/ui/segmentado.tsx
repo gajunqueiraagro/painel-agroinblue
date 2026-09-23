@@ -24,7 +24,7 @@ export interface OpcaoSegmentada<T extends string> {
 }
 
 export function Segmentado<T extends string>({
-  valor, onEscolher, opcoes, altura = 26, className,
+  valor, onEscolher, opcoes, altura = 26, fonte, className,
 }: {
   valor: T;
   /* ⚠ `NoInfer` AQUI TAMBÉM, e pelo mesmo motivo: um `setState` chega como
@@ -39,8 +39,11 @@ export function Segmentado<T extends string>({
    * uma opção com chave errada vira erro de compilação em vez de um botão que não seleciona.
    */
   opcoes: ReadonlyArray<OpcaoSegmentada<NoInfer<T>>>;
-  /** 26 é o padrão (abas e linhas de controle); 22 para as réguas de cabeçalho. */
-  altura?: 22 | 26;
+  /** 26 é o padrão (abas e linhas de controle); 22 para as réguas de cabeçalho; 20 dentro de um
+      card da faixa, onde ele ocupa o lugar do número (DRE-CASCATA-03b-fix4). */
+  altura?: 20 | 22 | 26;
+  /** ⚠ 9px SÓ DENTRO DO CARD, e é a exceção declarada do DRE: fora dela o piso da casa é 9,5. */
+  fonte?: number;
   className?: string;
 }) {
   return (
@@ -53,6 +56,7 @@ export function Segmentado<T extends string>({
         return (
           <button key={o.valor} type="button" disabled={o.desabilitada} title={o.title}
             onClick={() => { if (!o.desabilitada) onEscolher(o.valor); }}
+            style={fonte ? { fontSize: fonte, paddingLeft: 5, paddingRight: 5 } : undefined}
             className={cn('whitespace-nowrap px-2 text-[10px] font-medium transition-colors',
               ativa
                 ? 'bg-primary text-primary-foreground'

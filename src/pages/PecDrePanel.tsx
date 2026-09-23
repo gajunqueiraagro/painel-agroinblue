@@ -73,31 +73,58 @@ const tituloHa = (c: ColunaPec) => {
 /* ══════════════ AS QUATRO VISÕES — DRE-PEC-TELA-02 ══════════════ */
 
 /**
- * AS QUATRO PERGUNTAS DA GRADE, uma por card (Art. 19 da Constituição nº 2):
- *   global  — quanto a pecuária ganhou no período?
- *   meta    — ganhou o que planejou?
- *   anos    — está melhor ou pior que nos anos anteriores?
- *   fazenda — qual fazenda carrega o resultado?
+ * AS DUAS PERGUNTAS DA GRADE, uma por card (Art. 19 da Constituição nº 2):
+ *   comparacao — contra o que este período se lê? (a meta, ou N anos anteriores)
+ *   fazenda    — qual fazenda carrega o resultado?
+ *
+ * ⚠ ERAM QUATRO, E TRÊS ERAM A MESMA — DRE-CASCATA-03b-fix4, decisão do Gabriel: "Global",
+ * "× Meta" e "× Anos" respondiam todas "comparado com o quê?", e cada uma tinha o seu controle em
+ * lugar diferente (chips de Δ no Global, card próprio na Meta, seletor de anos no × Anos). O
+ * operador trocava de VISÃO para trocar de REFERÊNCIA, e perdia o número que estava lendo.
+ * A referência virou um seletor DENTRO do card, e a visão passou a ser só onde a grade se corta:
+ * por período (comparação) ou por fazenda.
  */
-export type VisaoPec = 'global' | 'meta' | 'anos' | 'fazenda';
-const VISOES: readonly VisaoPec[] = ['global', 'anos', 'fazenda'];
+export type VisaoPec = 'comparacao' | 'fazenda';
+const VISOES: readonly VisaoPec[] = ['comparacao', 'fazenda'];
+
 /**
- * ⚠ 'meta' SAIU DOS CARDS mas CONTINUA SENDO LIDA DA URL — DRE-CASCATA-03b/adendo: a comparação
- * com a meta virou coluna da visão Global, ligada pelos chips de Δ. Um link antigo com
- * `f_visao=meta` não pode abrir numa visão que não existe mais; ele cai no Global, e a página liga
- * o Δ meta ao ver o parâmetro.
+ * CONTRA O QUE O PERÍODO DA TELA SE LÊ — 'meta' ou quantos anos anteriores entram.
+ *
+ * ⚠ UM NÚMERO, NÃO UMA LISTA: 1 é "o ano anterior", 3 é "os três anteriores, em ordem". Ele é o
+ * mesmo `f_anos` de sempre, agora com o papel explícito de referência.
  */
-const VISOES_URL: readonly string[] = ['global', 'meta', 'anos', 'fazenda'];
+export type ReferenciaPec = 'meta' | number;
+
+/**
+ * ⚠ OS TRÊS VALORES ANTIGOS DE `f_visao` CONTINUAM VALENDO, e cada um cai onde a pergunta dele
+ * virou: 'global' e 'anos' viram a comparação por anos (o n sai de `f_anos`), e 'meta' vira a
+ * comparação com a meta — ela deixou de ser visão e virou referência, mas o link antigo pedia
+ * exatamente isso. 'fazenda' não mudou.
+ */
+const VISOES_URL: readonly string[] = ['comparacao', 'global', 'meta', 'anos', 'fazenda'];
+
+/**
+ * O QUE `f_visao` GUARDA — a visão E, quando ela é a comparação com o planejado, a referência.
+ *
+ * ⚠ 'meta' É UM VALOR DE `f_visao`, e é o que torna a referência linkável sem inventar parâmetro:
+ * com ela na barra, `f_anos` segue sendo só o n. E não por acaso: 'meta' já era um valor válido
+ * antes do fix4, quando a comparação com o planejado era uma VISÃO — o link antigo continua abrindo
+ * exatamente a tela que pedia.
+ */
+export type VisaoUrlPec = 'comparacao' | 'meta' | 'fazenda';
 
 /** `f_visao` na URL. ⚠ Constantes de módulo: o `useFiltroUrl` as usa nas dependências. */
-export const lerVisaoPec = (bruto: string): VisaoPec =>
-  (bruto === 'meta' ? 'global' : (VISOES.find(v => v === bruto) ?? 'global'));
-/** O link antigo pedia a comparação com a meta — a página liga o chip ao ver isto. */
+export const lerVisaoPec = (bruto: string): VisaoUrlPec =>
+  (bruto === 'fazenda' ? 'fazenda' : bruto === 'meta' ? 'meta' : 'comparacao');
+export const escreverVisaoPec = (v: VisaoUrlPec): string => v;
+/** A visão que a grade monta — 'meta' é comparação, com outra referência. */
+export const visaoDaUrl = (v: VisaoUrlPec): VisaoPec => (v === 'fazenda' ? 'fazenda' : 'comparacao');
+/** O link antigo pedia a comparação com a meta COM o Δ à vista — a página liga os chips ao ver isto. */
 export const ehVisaoMetaLegada = (bruto: string | null) => bruto === 'meta';
 export { VISOES_URL };
-export const escreverVisaoPec = (v: VisaoPec): string => v;
-/** `f_anos` na URL — de 1 a 5, padrão 3. Fora da faixa volta ao padrão, nunca quebra a tela. */
-export const N_ANOS_PADRAO = 3;
+/** `f_anos` na URL — de 1 a 5, padrão 1. Fora da faixa volta ao padrão, nunca quebra a tela.
+    ⚠ ERA 3 ATÉ O fix4: agora ele É a referência, e a tela abre comparando com o ano anterior. */
+export const N_ANOS_PADRAO = 1;
 export const lerNAnosPec = (bruto: string): number => {
   const n = Number(bruto);
   return Number.isInteger(n) && n >= 1 && n <= 5 ? n : N_ANOS_PADRAO;
@@ -151,14 +178,12 @@ export interface EntradaVisoes {
    */
   deltas?: readonly ('rs' | 'pct')[];
   /**
-   * CONTRA O QUE O Δ DA VISÃO GLOBAL COMPARA — a meta, ou o ano anterior.
+   * CONTRA O QUE ESTE PERÍODO SE LÊ — 'meta' ou o número de anos anteriores (fix4).
    *
-   * ⚠ ELE SUBSTITUIU O CARD "× Meta" (decisão do Gabriel, 23/09 08:57): a comparação deixou de ser
-   * uma visão à parte e virou uma COLUNA da visão Global, ligada pelos chips. Uma tela que
-   * respondia "e a meta?" só depois de trocar de visão fazia o operador perder o número que estava
-   * lendo.
+   * ⚠ ELE ABSORVEU O `refDelta` E A VISÃO 'anos': eram dois controles para a mesma escolha, em
+   * lugares diferentes da tela. Agora é um só, e ele mora no card "Comparação".
    */
-  refDelta?: 'meta' | 'ano';
+  referencia?: ReferenciaPec;
 }
 
 /**
@@ -173,28 +198,15 @@ export interface EntradaVisoes {
  */
 
 /**
- * DE QUEM SÃO OS CHIPS DE Δ DA TELA — 03b-fix3.
+ * AS COLUNAS DA GRADE — uma montagem só, por (visão, referência, Δ). DRE-CASCATA-03b-fix4.
  *
- * ⚠ ERAM UM SÓ ESTADO PARA DUAS PERGUNTAS DIFERENTES, e a fusão só não incomodava enquanto os
- * chips viviam numa régua sempre visível. No Global, o Δ compara o realizado com a meta (ou com o
- * ano anterior); na visão x Anos, ele compara CADA ano com o período da tela. Desde o fix2 o slot
- * dos controles é exclusivo por visão — no x Anos aparece "anos anteriores" —, então ligar o Δ no
- * Global fazia nascer colunas de Δ no x Anos sem que houvesse chip à mão para desligá-las.
- * ⚠ E É UM ESTADO POR VISÃO, NÃO UM ESTADO "ESPERTO": trocar de visão não carrega o Δ de uma para
- * a outra, e voltar encontra a de antes como foi deixada. A visão x Meta legada continua lendo a
- * do Global, que é a que ela sempre leu.
- */
-export function deltasDaVisao(
-  visao: VisaoPec,
-  doGlobal: readonly ('rs' | 'pct')[],
-  dosAnos: readonly ('rs' | 'pct')[],
-): readonly ('rs' | 'pct')[] {
-  return visao === 'anos' ? dosAnos : doGlobal;
-}
-
-/**
- * AS COLUNAS DE CADA VISÃO. ⚠ Nenhuma conta aqui: cada coluna é um JSON da RPC inteiro; a única
- * aritmética da tela é o delta, e ela mora na célula.
+ * ⚠ ERAM QUATRO MONTAGENS PARALELAS ('global', 'meta', 'anos', 'fazenda'), e três delas montavam a
+ * MESMA coisa com regras ligeiramente diferentes: a 'global' punha a referência à esquerda e o Δ
+ * depois do atual; a 'anos' punha o Δ ENTRE as colunas, colado ao ano que ele compara; a 'meta'
+ * chamava a coluna do período de "Realizado" e as outras de "Total". Três respostas visuais para a
+ * mesma pergunta, e a do meio era defeito: com UM ano anterior, o Δ nascia no meio da grade.
+ * ⚠ Nenhuma conta aqui: cada coluna é um JSON da RPC inteiro; a única aritmética da tela é o
+ * delta, e ela mora na célula.
  */
 export function colunasDaVisao(e: EntradaVisoes): ColunaPec[] {
   const { real, de, ate } = e;
@@ -203,46 +215,6 @@ export function colunasDaVisao(e: EntradaVisoes): ColunaPec[] {
     chave: '__total__', nome: 'Total', sub: '', fazendaId: null, linhas: real.total,
     total: true, tipo: 'valor', unidade: 'ha', de, ate, cenario: 'realizado', meses, atual: true,
   };
-  if (e.visao === 'global') {
-    const deltas = e.deltas ?? [];
-    if (deltas.length === 0) return [totalReal];
-    /* ⚠ A REFERÊNCIA FICA À ESQUERDA DO REALIZADO — DRE-CASCATA-03b/adendo, e é a mesma lei do A28:
-       o tempo corre da esquerda para a direita e a comparação vem DEPOIS do que compara. Com a
-       meta à direita, o olho lia a diferença antes do número que a produziu. */
-    const anoAnterior = e.anos[0] ?? null;
-    const daMeta = e.refDelta !== 'ano';
-    const semRef = daMeta ? (!e.meta || semMovimento(e.meta)) : !anoAnterior?.dre;
-    const refLinhas = daMeta ? (e.meta?.total ?? null) : (anoAnterior?.dre?.total ?? null);
-    const referencia: ColunaPec = daMeta
-      ? {
-        chave: '__ref_meta__', nome: 'Meta', sub: semRef ? 'sem meta' : '',
-        subLongo: semRef ? 'sem meta no período' : undefined,
-        fazendaId: null, linhas: e.carregandoMeta ? null : (refLinhas ?? real.total),
-        total: false, tipo: 'valor', unidade: 'ha', de, ate, cenario: 'meta',
-        meses: e.meta?.periodo.meses ?? meses, atual: false, semPatrimonio: true, semDado: semRef,
-        comparacao: true,
-      }
-      : {
-        chave: '__ref_ano__',
-        nome: anoAnterior ? rotuloCurtoPeriodo(anoAnterior.de, anoAnterior.ate) : 'Ano anterior',
-        sub: '', fazendaId: null,
-        linhas: anoAnterior?.carregando ? null : (refLinhas ?? real.total),
-        total: false, tipo: 'valor', unidade: 'ha',
-        de: anoAnterior?.de ?? de, ate: anoAnterior?.ate ?? ate, cenario: 'realizado',
-        meses: anoAnterior?.dre?.periodo.meses ?? meses, atual: false, semDado: semRef,
-        comparacao: true,
-      };
-    return [
-      referencia,
-      totalReal,
-      {
-        ...totalReal, chave: '__delta__', nome: 'Δ',
-        sub: daMeta ? 'real − meta' : `real − ${referencia.nome}`,
-        total: false, tipo: 'delta', unidade: 'pct',
-        ref: semRef ? null : refLinhas, deltaSlots: deltas, comparacao: true,
-      },
-    ];
-  }
 
   if (e.visao === 'fazenda') {
     /* ⚠ O TOTAL ENTRA NA FRENTE (§2a). A RPC devolve as fazendas e o total separados; quem os
@@ -254,71 +226,67 @@ export function colunasDaVisao(e: EntradaVisoes): ColunaPec[] {
     }))];
   }
 
-  if (e.visao === 'meta') {
-    /* ⚠ META NUNCA SE SOMA AO REALIZADO: dois JSONs, duas colunas, e o delta é a diferença. */
+  const ref = e.referencia ?? 1;
+  const deltas = e.deltas ?? [];
+
+  /* ⚠ META NUNCA SE SOMA AO REALIZADO: dois JSONs, duas colunas, e o delta é a diferença.
+     ⚠ E A COLUNA DE META TEM DIVISOR PRÓPRIO — TELA-03a: o `producao.ha_medio` do JSON DELA
+     (4.813,6 ha contra 4.824,3 do realizado, na NJ 2026). Quando a meta não existe, `semDado` apaga
+     a coluna inteira — então o `?? real.total` nunca vira número na tela; é esqueleto de layout,
+     não empréstimo de dado. */
+  if (ref === 'meta') {
     const semMeta = !e.carregandoMeta && (!e.meta || semMovimento(e.meta));
-    const colsMeta: ColunaPec[] = [
-      { ...totalReal, nome: 'Realizado' },
-      {
-        /* ⚠ A META GANHOU A SUB-COLUNA — TELA-03a. Ela não tinha nenhuma, e comparar R$ com R$/ha
-           obrigava o olho a pular de largura. O divisor é o DELA (`producao.ha_medio` do JSON de
-           meta: 4.813,6 ha contra 4.824,3 do realizado, na NJ 2026). Quando a meta não existe,
-           `semDado` apaga a coluna inteira — então o `?? real.total` nunca vira número na tela;
-           ele é esqueleto de layout, não empréstimo de dado. */
-        chave: '__meta__', nome: 'Meta', sub: semMeta ? 'sem meta' : '',
-        subLongo: semMeta ? 'sem meta no período' : undefined, fazendaId: null,
-        linhas: e.carregandoMeta ? null : (e.meta?.total ?? real.total), total: false, tipo: 'valor',
-        unidade: 'ha', de, ate, cenario: 'meta', meses: e.meta?.periodo.meses ?? meses, atual: false,
-        semPatrimonio: true, semDado: semMeta,
-      },
-      {
-        chave: '__delta__', nome: 'Δ', sub: 'real − meta', fazendaId: null,
-        linhas: e.carregandoMeta ? null : real.total, ref: semMeta ? null : (e.meta?.total ?? null),
-        total: false, tipo: 'delta', unidade: 'pct', de, ate, cenario: 'realizado', meses, atual: false,
-        /* ⚠ A x META ABRE COM OS DOIS Δ LIGADOS (`deltas` chega preenchido dela) para não perder o
-           que a tela já mostrava; desmarcar o chip agora a esconde, o que antes não era possível. */
-        deltaSlots: e.deltas ?? ['rs', 'pct'],
-      },
-    ];
-    return colsMeta.filter(c => c.tipo !== 'delta' || (c.deltaSlots?.length ?? 0) > 0);
+    const referencia: ColunaPec = {
+      chave: '__meta__', nome: 'Meta', sub: semMeta ? 'sem meta' : '',
+      subLongo: semMeta ? 'sem meta no período' : undefined, fazendaId: null,
+      linhas: e.carregandoMeta ? null : (e.meta?.total ?? real.total),
+      total: false, tipo: 'valor', unidade: 'ha', de, ate, cenario: 'meta',
+      meses: e.meta?.periodo.meses ?? meses, atual: false,
+      semPatrimonio: true, semDado: semMeta, comparacao: true,
+    };
+    /* ⚠ A REFERÊNCIA FICA À ESQUERDA DO ATUAL — a mesma lei do A28: o tempo corre da esquerda para
+       a direita e a comparação vem DEPOIS do que compara. Com a meta à direita, o olho lia a
+       diferença antes do número que a produziu. */
+    const cols: ColunaPec[] = [referencia, { ...totalReal, nome: 'Atual' }];
+    if (deltas.length > 0) {
+      cols.push({
+        ...totalReal, chave: '__delta__', nome: 'Δ', sub: 'real − meta',
+        total: false, tipo: 'delta', unidade: 'pct',
+        ref: semMeta ? null : (e.meta?.total ?? null), deltaSlots: deltas, comparacao: true,
+      });
+    }
+    return cols;
   }
 
-  /* ANOS — o atual à esquerda, depois ano−1, ano−2…
-     ⚠ CADA ANO COM O DIVISOR DELE — TELA-03a, que é o que faltava para esta visão sair do só-R$:
-     até aqui ela vinha com `unidade: null` e o comentário "o denominador de cada ano vem no
-     TELA-03". Vem agora, e é o hectare do JSON de cada ano — usar o do ano corrente compararia
-     2024 com a área de 2026. Ano sem dado já é coluna de traço pelo `semDado`. */
   /* ⚠ ORDEM CRONOLÓGICA — DRE-PERIODO-01, decisão do Gabriel: o mais antigo à ESQUERDA e o período
-     da tela à DIREITA, como o modal de histórico já fazia e como se lê uma série temporal. Era o
-     contrário (atual primeiro, anteriores descendo), e as duas telas do mesmo DRE liam o tempo em
-     direções opostas.
-     ⚠ OS DADOS NÃO MUDARAM: `e.anos` continua chegando do mais recente para o mais antigo, como
+     da tela à DIREITA, como o modal de histórico já fazia e como se lê uma série temporal.
+     ⚠ OS DADOS NÃO MUDARAM: `e.anos` chega do mais recente para o mais antigo, como
      `useDrePecuariaLista` devolve; quem inverte é a APRESENTAÇÃO. E o `__ano{k}__` segue nomeando a
-     distância em anos (1 = o anterior), não a posição na tela — é ele que casa com "anos
-     anteriores 1..5". */
-  return [
-    ...[...e.anos].reverse().map((a, i): ColunaPec => ({
-      chave: `__ano${e.anos.length - i}__`, nome: rotuloCurtoPeriodo(a.de, a.ate), sub: '', fazendaId: null,
-      linhas: a.carregando ? null : (a.dre?.total ?? real.total), total: false, tipo: 'valor',
-      unidade: 'ha', de: a.de, ate: a.ate, cenario: 'realizado', meses: a.dre?.periodo.meses ?? meses,
-      atual: false,
-      /* ⚠ ANO SEM DADO É COLUNA DE "—", não coluna escondida: sumir faria "2023" parecer igual a
-         "nunca houve 2023". Sem fazenda na resposta = nem fechamento nem lançamento naquele ano. */
-      semDado: !a.carregando && (!a.dre || a.dre.fazendas.length === 0),
-    })),
-    { ...totalReal, nome: rotuloCurtoPeriodo(de, ate), sub: '' },
-  ].flatMap((c): ColunaPec[] => {
-    /* ⚠ O Δ VEM À DIREITA DO ANO QUE ELE COMPARA, e compara SEMPRE contra o período da tela: é a
-       pergunta "quanto mudou de lá para cá". A coluna do próprio período não ganha Δ — ela é a
-       referência, e um Δ contra si mesma seria zero em toda linha. */
-    const deltas = e.deltas ?? [];
-    if (deltas.length === 0 || c.total || c.semDado) return [c];
-    return [c, {
-      ...c, chave: `${c.chave}-delta`, nome: 'Δ', sub: `atual − ${c.nome}`,
-      linhas: real.total, ref: c.linhas, tipo: 'delta', unidade: 'pct',
-      deltaSlots: deltas, semDado: false,
-    }];
-  });
+     distância em anos (1 = o anterior), não a posição na tela.
+     ⚠ CADA ANO COM O DIVISOR DELE — TELA-03a: o hectare do JSON de cada ano; usar o do ano corrente
+     compararia 2024 com a área de 2026. */
+  const anos = [...e.anos].slice(0, Math.max(1, ref)).reverse();
+  const colunasAno = anos.map((a, i): ColunaPec => ({
+    chave: `__ano${anos.length - i}__`, nome: rotuloCurtoPeriodo(a.de, a.ate), sub: '', fazendaId: null,
+    linhas: a.carregando ? null : (a.dre?.total ?? real.total), total: false, tipo: 'valor',
+    unidade: 'ha', de: a.de, ate: a.ate, cenario: 'realizado', meses: a.dre?.periodo.meses ?? meses,
+    atual: false, comparacao: true,
+    /* ⚠ ANO SEM DADO É COLUNA DE "—", não coluna escondida: sumir faria "2023" parecer igual a
+       "nunca houve 2023". Sem fazenda na resposta = nem fechamento nem lançamento naquele ano. */
+    semDado: !a.carregando && (!a.dre || a.dre.fazendas.length === 0),
+  }));
+  const atual: ColunaPec = { ...totalReal, nome: rotuloCurtoPeriodo(de, ate), sub: '' };
+
+  /* ⚠ O Δ SÓ EXISTE COM UMA REFERÊNCIA SÓ — fix4. Com dois ou mais anos na tela, "a diferença" não
+     tem sujeito: seriam N colunas de Δ, uma por ano, e foi assim que o Δ passou a nascer no MEIO da
+     grade. Os chips ficam desabilitados lá, e a tela diz por quê. */
+  if (ref > 1 || deltas.length === 0) return [...colunasAno, atual];
+  const anterior = colunasAno[0];
+  return [anterior, atual, {
+    ...totalReal, chave: '__delta__', nome: 'Δ', sub: `atual − ${anterior.nome}`,
+    total: false, tipo: 'delta', unidade: 'pct',
+    ref: anterior.semDado ? null : anterior.linhas, deltaSlots: deltas, comparacao: true,
+  }];
 }
 
 /** O valor de uma linha numa coluna — ou o delta, se a coluna é o delta. */
@@ -389,9 +357,11 @@ const corDoDelta = (def: DefPec, v: number | null): string => {
  */
 function tituloDaPrimeiraColuna(colunas: readonly ColunaPec[]): string {
   if (colunas.some(c => c.chave === '__meta__')) return 'Cenário';
-  if (colunas.some(c => c.chave.startsWith('__ano'))) return 'Período';
   if (colunas.some(c => c.fazendaId !== null)) return 'Fazenda';
-  return 'Global';
+  /* ⚠ 'Período' É O PADRÃO DA COMPARAÇÃO desde o fix4: a grade se corta por período em toda
+     referência que não seja a meta, mesmo quando só o período da tela está na tela. O 'Global' que
+     havia aqui nomeava um card que não existe mais. */
+  return 'Período';
 }
 
 /** As larguras de cada coluna — fixas por TIPO, nunca pelo dado. */
@@ -1093,7 +1063,7 @@ function LinhaCentro({ def, centro, colunas, bloco, unidades, onAbrirLista }: {
  * ele encolheria os quatro cards a cada troca — a lei de estabilidade.
  */
 export function FaixaVisoesPec({ visao, onVisao, real, meta, carregandoMeta, anoAnterior,
-  carregandoAnoAnterior, nAnos, onNAnos, deltas = [], refDelta = 'meta', controles }: {
+  carregandoAnoAnterior, referencia, onReferencia, controles }: {
   visao: VisaoPec;
   onVisao: (v: VisaoPec) => void;
   real: DrePecuaria;
@@ -1101,75 +1071,55 @@ export function FaixaVisoesPec({ visao, onVisao, real, meta, carregandoMeta, ano
   carregandoMeta: boolean;
   anoAnterior: DrePecuaria | null;
   carregandoAnoAnterior: boolean;
-  nAnos: number;
-  onNAnos: (n: number) => void;
-  /** Os chips de Δ ligados na tela — a nota do card Global só existe quando há algum. */
-  deltas?: readonly ('rs' | 'pct')[];
-  refDelta?: 'meta' | 'ano';
-  /** Os controles da grade — ver `Caixas.extra`. Eles entram nas três colunas vazias. */
+  /** A referência escolhida — 'meta' ou 1..5 anos. Ela mora DENTRO do card, no lugar do número. */
+  referencia: ReferenciaPec;
+  onReferencia: (r: ReferenciaPec) => void;
+  /** Os controles da grade — ver `Caixas.extra`. Eles entram nas colunas vazias. */
   controles?: ReactNode;
 }) {
-  const rp = real.total.resultado_periodo;
-  const delta = (outro: DrePecuaria) => rp - outro.total.resultado_periodo;
-  const semMeta = !meta || semMovimento(meta);
-  const semAno = !anoAnterior || anoAnterior.fazendas.length === 0;
-  const dMeta = semMeta || !meta ? null : delta(meta);
-  const dAno = semAno || !anoAnterior ? null : delta(anoAnterior);
   const nFaz = real.fazendas.length;
-  const dRef = refDelta === 'meta' ? dMeta : dAno;
-  const notaDelta = deltas.length === 0 ? undefined
-    : dRef == null ? (refDelta === 'meta' ? 'sem meta no período' : 'sem ano anterior')
-      : `Δ ${refDelta === 'meta' ? 'meta' : 'ano ant.'} ${numeroDaCelula(dRef)}`;
+  const semMeta = !carregandoMeta && (!meta || semMovimento(meta));
+  const semAno = !carregandoAnoAnterior && (!anoAnterior || anoAnterior.fazendas.length === 0);
+  /* ⚠ O CARD DE COMPARAÇÃO NÃO TEM NÚMERO, e é o que ele tem de melhor: os três cards que ele
+     substituiu mostravam três números — o resultado, o Δ meta e o Δ ano —, e nenhum deles era a
+     resposta da tela; a resposta está na GRADE, que fica dez pixels abaixo. Aqui mora a pergunta
+     ("comparado com o quê?"), e a grade responde.
+     ⚠ E O `title` DE CADA OPÇÃO DIZ QUANDO ELA NÃO TEM DADO: 'Meta' sem meta no período e o ano
+     anterior sem fechamento continuam clicáveis — a coluna aparece em traço, que é o sentinela
+     certo para "não sei", e some-la esconderia a pergunta junto com a resposta. */
+  const opcoesRef = [
+    { valor: 'meta', rotulo: 'Meta',
+      title: semMeta ? 'sem meta no período' : 'Comparar com a meta do período' },
+    ...['1', '2', '3', '4', '5'].map(n => ({
+      valor: n,
+      rotulo: n,
+      title: n === '1' && semAno ? 'sem ano anterior'
+        : `Comparar com ${n === '1' ? 'o ano anterior' : `os ${n} anos anteriores`}`,
+    })),
+  ];
   const caixas: CaixaFaixa[] = [
-    /* ⚠ O CARD "× Meta" SAIU (adendo de 23/09): a comparação virou coluna do Global. O número que
-       ele mostrava não se perdeu — vem aqui embaixo, como nota, quando o Δ está ligado. */
-    { chave: 'global', rotulo: 'Global', valor: numeroDaCelula(rp), unidade: 'R$', cor: corDoSinal(rp),
-      title: 'Resultado do período — quanto a pecuária ganhou.',
-      nota: notaDelta },
-    { chave: 'anos', rotulo: '× Anos', carregando: carregandoAnoAnterior,
-      valor: numeroDaCelula(dAno), unidade: dAno == null ? undefined : 'R$', cor: corDoSinal(dAno),
-      title: 'Resultado do período menos o do mesmo período do ano anterior.' },
+    {
+      chave: 'comparacao', rotulo: 'Comparação', valor: '',
+      title: 'Contra o que este período se lê.',
+      conteudo: (
+        <Segmentado altura={20} fonte={9}
+          valor={referencia === 'meta' ? 'meta' : String(referencia)}
+          /* ⚠ UM GESTO, UM ESCRITOR: escolher a referência JÁ seleciona a comparação — quem o faz é
+             `escolherReferencia`, na página. Chamar `onVisao` aqui também punha dois `setParams` no
+             mesmo tique do React, e a segunda escrita se perdia: clicar em "Meta" não fazia nada.
+             Medido na tela em 23/09. */
+          onEscolher={v => onReferencia(v === 'meta' ? 'meta' : Number(v))}
+          opcoes={opcoesRef} />
+      ),
+    },
     { chave: 'fazenda', rotulo: 'Por fazenda', valor: String(nFaz), unidade: nFaz === 1 ? 'fazenda' : 'fazendas',
       title: 'Qual fazenda carrega o resultado?' },
   ];
-  /* ⚠ SEIS COLUNAS E A RÉGUA DA LAVOURA — DRE-PADRAO-01a. Eram 4 caixas `grande` (52px de altura,
-     rótulo 11px) contra as 6 da lavoura (44px, rótulo 10px): trocar de aba mudava a altura da faixa
-     e, com ela, o y da tabela. Agora a grade é de 6 e as caixas 5 e 6 ficam VAZIAS — sem borda, sem
-     texto, nada clicável: são espaço reservado.
-     ⚠ E O SELETOR DE ANOS SAIU DAQUI, para a linha de rateio. Ele dividia esta linha com a grade e
-     roubava 123px: as caixas da pecuária mediam 122 contra as 143 da lavoura, e a grade de 6 não
-     resolvia isso sozinha. Na linha de rateio ele fica onde a lavoura já põe os controles da
-     grade — e as caixas passam a ter a MESMA largura nas duas abas. */
+  /* ⚠ SEIS COLUNAS E A RÉGUA DA LAVOURA — DRE-PADRAO-01a: a grade é de 6 e as colunas que sobram
+     ficam com os controles (ver `Caixas.extra`). Com dois cards em vez de três, sobram quatro. */
   return (
     <Caixas caixas={caixas} colunas={6} selecionada={visao} extra={controles}
       onEscolher={ch => { const v = VISOES.find(x => x === ch); if (v) onVisao(v); }} />
   );
 }
 
-/**
- * O SELETOR DE QUANTOS ANOS ANTERIORES — mora na linha de rateio, ao lado direito.
- *
- * ⚠ ELE FICA VISÍVEL SÓ NA VISÃO x ANOS, mas OCUPA O LUGAR sempre (`invisible`, não removido): é a
- * mesma lei que mantém a coluna de ações do drill — some o conteúdo, não o espaço.
- */
-export function SeletorAnosPec({ visao, nAnos, onNAnos, reservado, curto }: {
-  visao: VisaoPec; nAnos: number; onNAnos: (n: number) => void;
-  /** ⚠ NA LAVOURA ELE SÓ GUARDA O LUGAR — DRE-UNIDADES-01: sem a reserva, os chips de unidade
-      andavam ao trocar de aba, porque só a pecuária tem o seletor de anos. */
-  reservado?: boolean;
-  /** ⚠ "anos" EM VEZ DE "anos anteriores" — fix3: no slot de 247px da faixa de cards ele divide o
-      lugar com os chips de Δ, e a frase inteira não cabia. O `title` guarda o que o rótulo perdeu. */
-  curto?: boolean;
-}) {
-  const escondido = reservado || visao !== 'anos';
-  return (
-    <span className={cn('flex shrink-0 items-center gap-1.5 whitespace-nowrap',
-      escondido && 'invisible')} aria-hidden={escondido || undefined}
-      title={curto ? 'quantos anos anteriores entram na comparação' : undefined}
-      style={escondido ? { pointerEvents: 'none' } : undefined}>
-      {curto ? 'anos' : 'anos anteriores'}
-      <Segmentado altura={22} valor={String(nAnos)} onEscolher={v => onNAnos(Number(v))}
-        opcoes={['1', '2', '3', '4', '5'].map(n => ({ valor: n, rotulo: n }))} />
-    </span>
-  );
-}

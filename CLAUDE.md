@@ -470,6 +470,21 @@ no mesmo arquivo.
   ⚠ NASCE DE UM DEFEITO VISIVEL: Lavoura > Amendoim > Historico > Pecuaria deixava o historico da
   CULTURA na tela, acima da tabela do rebanho. Os dois paineis do drill checavam so' `cultura` e
   `aba`, e nenhum dos dois sabe de que atividade a tela fala.
+  De 1765 para 1764 no DRE-CASCATA-03b-fix4, e a queda de 1 e' toda de `pecDrePanel.test.tsx`
+  (44 -> 43): SAIRAM os 3 casos de `deltasDaVisao`, que morreu com a funcao — o par de estados
+  Global/x Anos acabou junto com os dois cards que os separavam, e uma referencia so' tem um Δ. Nao
+  e' perda de cobertura: cobertura se perde quando o codigo fica sem teste, nao quando os dois saem
+  juntos (a mesma regra ja' registrada no PR-DRE-LAVOURA-02).
+  ENTRARAM 2: as quatro colunas cronologicas SEM Δ na referencia de 3 anos, e o `title` da opcao
+  Meta quando nao ha' meta no periodo (ela continua clicavel — esconder faria a pergunta sumir junto
+  com a resposta).
+  ⚠ E SEIS CASOS EXISTENTES FORAM ATUALIZADOS AO CONTRATO NOVO, nunca afrouxados: a referencia passou
+  a ficar a' ESQUERDA do atual ("Meta | Atual | Δ", nao "Realizado | Meta | Δ"), os tres nomes de
+  visao viraram dois, e os indices das celulas andaram com a ordem. Falha certa, pela razao certa.
+  ⚠ UM DOS CASOS NOVOS E' GATE DE DEFEITO MEDIDO NA TELA: o clique numa referencia SUBIA para o
+  `onClick` do card, entao `onVisao` e `onReferencia` disparavam juntos, duas escritas de URL caiam
+  no mesmo tique do React e a segunda se perdia — clicar em "Meta" nao fazia absolutamente nada.
+  O caso trava que escolher a referencia NAO chama `onVisao`.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 

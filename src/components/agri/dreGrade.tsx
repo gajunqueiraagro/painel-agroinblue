@@ -427,7 +427,9 @@ export function CelulaUnit({ texto, cor, destaque, filha, fundo, estilo, total, 
  * do shadcn: selecionado = `bg-primary` + texto branco, como o `Segmentado` e o item ativo do
  * menu. O componente é o do shadcn; só a marcação veste a régua daqui.
  */
-export function ChipsUnidade<T extends string>({ valor, onEscolher, opcoes, permiteVazio = false }: {
+export function ChipsUnidade<T extends string>({
+  valor, onEscolher, opcoes, permiteVazio = false, desabilitado, titleDesabilitado,
+}: {
   valor: readonly T[];
   onEscolher: (v: readonly T[]) => void;
   opcoes: readonly { valor: T; rotulo: string }[];
@@ -439,9 +441,19 @@ export function ChipsUnidade<T extends string>({ valor, onEscolher, opcoes, perm
    * estado normal da tela. Sem esta porta, o operador não conseguiria desligar o que ligou.
    */
   permiteVazio?: boolean;
+  /**
+   * APAGADO E VISÍVEL — DRE-CASCATA-03b-fix4.
+   *
+   * ⚠ ESCONDER SERIA PIOR: o Δ depende da referência escolhida no card, e um chip que some ensina
+   * que ele não existe nesta tela. Apagado, com o porquê no `title`, ele ensina que a porta está
+   * ali e qual é a chave.
+   */
+  desabilitado?: boolean;
+  /** O porquê do apagado — obrigatório na prática: um controle inerte sem explicação é um defeito. */
+  titleDesabilitado?: string;
 }) {
   return (
-    <ToggleGroup type="multiple" className="gap-1" value={[...valor]}
+    <ToggleGroup type="multiple" className="gap-1" value={[...valor]} disabled={desabilitado}
       onValueChange={(v: string[]) => {
         /* ⚠ O RADIX JÁ DEVOLVE A LISTA NOVA: se ela vier vazia, o clique foi no último marcado e
            a resposta é não mexer em nada. */
@@ -454,10 +466,16 @@ export function ChipsUnidade<T extends string>({ valor, onEscolher, opcoes, perm
         const ultimo = marcado && valor.length === 1;
         return (
           <ToggleGroupItem key={o.valor} value={o.valor} aria-label={o.rotulo}
-            title={ultimo ? 'Ao menos uma unidade fica visível' : o.rotulo}
+            /* ⚠ O AVISO DO ÚLTIMO CHIP É DA REGRA DO PISO, e só vale onde o piso existe: com
+               `permiteVazio` o chip PODE ser desmarcado, e dizer "ao menos uma unidade fica
+               visível" sobre um Δ ligado era o controle mentindo sobre o que ele faz. Medido na
+               tela em 23/09, no fix4. */
+            title={desabilitado ? titleDesabilitado
+              : ultimo && !permiteVazio ? 'Ao menos uma unidade fica visível' : o.rotulo}
             className={cn('h-[22px] rounded-md border border-border/60 px-1.5 text-[10px] font-normal',
               'data-[state=on]:bg-primary data-[state=on]:text-primary-foreground',
-              'data-[state=off]:bg-card data-[state=off]:text-muted-foreground hover:bg-muted')}>
+              'data-[state=off]:bg-card data-[state=off]:text-muted-foreground hover:bg-muted',
+              desabilitado && 'cursor-default opacity-50 hover:bg-card')}>
             {o.rotulo}
           </ToggleGroupItem>
         );
@@ -467,6 +485,15 @@ export function ChipsUnidade<T extends string>({ valor, onEscolher, opcoes, perm
 }
 
 export interface CaixaFaixa {
+  /**
+   * UM CONTROLE NO LUGAR DO NÚMERO — DRE-CASCATA-03b-fix4.
+   *
+   * ⚠ O CARD "Comparação" NÃO TEM NÚMERO: ele carrega a PERGUNTA (comparado com o quê?), e a
+   * resposta está na grade dez pixels abaixo. Com `conteudo`, a caixa deixa de ser um `<button>` e
+   * vira um `<div role="button">` — botão dentro de botão é HTML inválido, e o seletor de
+   * referência é feito de botões.
+   */
+  conteudo?: ReactNode;
   /** Curto, para caber na janela real. O nome inteiro vai em `titleRotulo`. */
   rotulo: string;
   /** O rótulo por extenso — só onde a abreviação esconde alguma coisa. */
@@ -537,10 +564,16 @@ export function Caixas({ caixas, colunas = 6, selecionada, onEscolher, grande, e
         {caixas.map(c => {
           const chave = c.chave ?? c.rotulo;
           const ativa = chave === selecionada;
+          /* ⚠ COM CONTROLE DENTRO, A CAIXA NÃO É UM BOTÃO: `<button>` dentro de `<button>` é HTML
+             inválido, e o navegador desaninha a árvore — o seletor de referência sairia FORA do
+             card. `div` com `role="button"` mantém o clique no card inteiro (escolher a referência
+             já seleciona a visão) sem aninhar nada. */
+          const Caixa = (c.conteudo ? 'div' : 'button') as 'div';
           return (
-            <button key={chave} type="button" aria-pressed={ativa} title={c.title}
+            <Caixa key={chave} {...(c.conteudo ? { role: 'button' } : { type: 'button' as const })}
+              aria-pressed={ativa} title={c.title}
               onClick={() => onEscolher(chave)}
-              className={cn('flex min-w-0 flex-col items-center justify-center gap-[2px] rounded-md border',
+              className={cn('flex min-w-0 cursor-pointer flex-col items-center justify-center gap-[2px] rounded-md border',
                 'transition-colors',
                 ativa ? 'border-primary bg-primary text-primary-foreground'
                   : 'border-border/60 bg-card hover:bg-muted')}
@@ -551,7 +584,14 @@ export function Caixas({ caixas, colunas = 6, selecionada, onEscolher, grande, e
                 {c.rotulo}
               </div>
               <div className="flex max-w-full items-baseline gap-1 whitespace-nowrap" style={{ lineHeight: 1.2 }}>
-                {c.carregando ? (
+                {/* ⚠ O CONTROLE NÃO DEIXA O CLIQUE SUBIR: sem isto, escolher uma referência
+                    disparava TAMBÉM o `onClick` do card, e as duas escritas de URL caíam no mesmo
+                    tique do React — a segunda se perdia e clicar em "Meta" não fazia nada. Quem
+                    seleciona a visão ao escolher a referência é o handler da referência, na
+                    página; o clique no RESTO do card segue selecionando. */}
+                {c.conteudo
+                  ? <span onClick={ev => ev.stopPropagation()}>{c.conteudo}</span>
+                  : (c.carregando ? (
                   <Loader2 className={cn('animate-spin', grande ? 'h-4 w-4' : 'h-3 w-3',
                     ativa ? 'text-primary-foreground' : 'text-muted-foreground')} />
                 ) : (
@@ -563,7 +603,7 @@ export function Caixas({ caixas, colunas = 6, selecionada, onEscolher, grande, e
                         ativa ? 'text-primary-foreground/80' : 'text-muted-foreground')}>{c.unidade}</span>
                     )}
                   </>
-                )}
+                  ))}
               </div>
               {/* ⚠ ALTURA RESERVADA SEMPRE: a linha existe com ou sem nota, senão ligar o Δ faria a
                   faixa inteira crescer e a tabela descer (lei de estabilidade). */}
@@ -572,7 +612,7 @@ export function Caixas({ caixas, colunas = 6, selecionada, onEscolher, grande, e
                 style={{ minHeight: 11 }}>
                 {c.nota ?? '\u00a0'}
               </div>
-            </button>
+            </Caixa>
           );
         })}
         {/* ⚠ ELE OCUPA TODAS AS COLUNAS QUE SOBRAM, não uma: com `span` fixo, acrescentar um card
