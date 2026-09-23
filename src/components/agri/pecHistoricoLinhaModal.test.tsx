@@ -247,8 +247,45 @@ describe('a navegação para a filha, no mesmo modal', () => {
     expect(titulo()).toBe('Custo variável · histórico');
   });
 
-  /* ⚠ SÓ O GRUPO NAVEGA: o anel de um subtotal mostra o VBP, que não é linha da cascata — clicar
-     ali não leva a lugar nenhum, e por isso não vira mão. */
+  /**
+   * ⚠ DE UMA IRMÃ PARA A OUTRA, SEM SUBIR — o conserto do fix2. A regra anterior ("andar de lado
+   * não navega") era do Chat e a homologação a derrubou: dentro de Nutrição a legenda lista
+   * Sanidade e Pastagem com o nome escrito, e clicar nelas não fazia nada. Quem compara centros vai
+   * de um a outro; o dado das duas já está na mesma leitura.
+   * ⚠ E A UNIDADE E A SAFRA ATRAVESSAM A TROCA: mudar de irmã é mudar de linha, não recomeçar o
+   * modal. Quem estava lendo R$/cab/mês de 24/25 continua ali.
+   */
+  it('dentro de uma filha, clicar numa irmã troca a folha do caminho', () => {
+    montarGrupo();
+    const clicarNaLegenda = (nome: string) => {
+      const item = [...document.querySelectorAll('div')]
+        .find(d => d.className.includes('cursor-pointer') && d.textContent?.trim() === nome);
+      expect(item).toBeDefined();
+      fireEvent.click(item as Element);
+    };
+    clicarNaLegenda('Nutrição');
+    expect(titulo()).toBe('Custo variável›Nutrição · histórico');
+
+    /* A unidade escolhida DEPOIS de descer tem de sobreviver à troca de irmã. */
+    const chip = [...document.querySelectorAll('button')].find(b => b.textContent === 'R$/cab/mês');
+    fireEvent.click(chip as Element);
+
+    clicarNaLegenda('Sanidade');
+    expect(titulo()).toBe('Custo variável›Sanidade · histórico');
+    clicarNaLegenda('Pastagem');
+    expect(titulo()).toBe('Custo variável›Pastagem · histórico');
+    /* ⚠ O `Segmentado` MARCA COM NAVY, não com `data-state`: quem diz o que está escolhido é a
+       classe `bg-primary` — a regra permanente do CLAUDE.md. */
+    expect([...document.querySelectorAll('button')]
+      .find(b => b.textContent === 'R$/cab/mês')?.className).toContain('bg-primary');
+
+    /* E o pai continua sendo a porta de volta, de qualquer irmã. */
+    fireEvent.click([...document.querySelectorAll('h2 button')][0]);
+    expect(titulo()).toBe('Custo variável · histórico');
+  });
+
+  /* ⚠ O QUE CONTINUA SEM CLIQUE: o anel de um subtotal mostra o VBP, e "restante do VBP" não é
+     linha da cascata — não há para onde ir, então não vira mão. */
   it('subtotal "=": a legenda não é clicável', () => {
     render(
       <PecHistoricoLinhaModal aberto

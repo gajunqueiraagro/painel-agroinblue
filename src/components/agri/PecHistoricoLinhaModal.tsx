@@ -394,12 +394,19 @@ export function PecHistoricoLinhaModal({
     ? () => setNavegado({ ...alvo, centro: null, rotulo: def.rotulo })
     : null;
   /**
-   * ⚠ SÓ O GRUPO NAVEGA: o anel de uma filha mostra as irmãs (ir para uma irmã seria caminhar de
-   * lado, não para dentro) e o de um subtotal mostra o VBP, que não é uma linha da cascata. O
-   * cursor só vira mão onde há para onde ir — um ponteiro que não leva a lugar nenhum é promessa
-   * quebrada, a mesma regra do cabeçalho de cultura da lavoura.
+   * QUEM NAVEGA É QUEM TEM CENTROS — o grupo E as filhas dele.
+   *
+   * ⚠ A REGRA ANTERIOR ("só o grupo desce; andar de lado não navega") ERA MINHA E ESTAVA ERRADA,
+   * e a homologação de 23/09 mostrou onde: dentro de Nutrição a legenda lista Sanidade e Pastagem,
+   * com o nome escrito e a cor ao lado, e clicar nelas não fazia nada. Quem está comparando centros
+   * quer ir de um a outro — obrigá-lo a subir ao pai e descer de novo é fazer duas viagens onde o
+   * dado já está em memória. Legenda que mostra um nome navegável navega.
+   * ⚠ O QUE CONTINUA SEM CLIQUE é o anel que não lista linha nenhuma da cascata: o do subtotal e o
+   * do topo sem filhas mostram o VBP, e "restante do VBP" não é lugar nenhum. Ali a fatia não tem
+   * `centro`, e é isso — não o tipo da linha — que decide. O cursor só vira mão onde há para onde
+   * ir; um ponteiro que não leva a lugar nenhum é promessa quebrada.
    */
-  const podeNavegar = alvo.centro === null && !!def?.expande;
+  const podeNavegar = !!def?.expande;
   const abrirFilha = (centro: string | undefined) => {
     if (!podeNavegar || !centro) return;
     setNavegado({
@@ -519,8 +526,14 @@ export function PecHistoricoLinhaModal({
                         onClick={navegavel ? () => abrirFilha(f.centro) : undefined}>
                         <span className="h-[7px] w-[7px] shrink-0 rounded-[2px]"
                           style={{ backgroundColor: corDaFatia(i, f.nome) }} />
+                        {/* ⚠ SEM O "=" TAMBÉM AQUI: era o resíduo do item 5 do fix1 — a fatia da
+                            própria linha, num subtotal, entrava na legenda com o prefixo da
+                            cascata ("= Margem de contribuição"). O dado guarda o rótulo como a
+                            grade o escreve; quem tira o sinal é a apresentação. */}
                         <span className="truncate whitespace-nowrap"
-                          title={navegavel ? `ver o histórico de ${f.nome}` : f.nome}>{f.nome}</span>
+                          title={navegavel ? `ver o histórico de ${semPrefixo(f.nome)}` : semPrefixo(f.nome)}>
+                          {semPrefixo(f.nome)}
+                        </span>
                       </div>
                     );
                   })}
