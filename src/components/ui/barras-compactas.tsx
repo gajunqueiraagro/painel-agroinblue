@@ -36,6 +36,16 @@ export interface BarraCompacta {
    */
   meta?: boolean;
   /**
+   * O rótulo por extenso, para o `title` — opt-in.
+   *
+   * ⚠ SEM ELE O `title` É O PRÓPRIO RÓTULO, como sempre foi. Ele existe para o eixo poder mostrar
+   * "26" e ainda dizer "jul/2025 → jun/2026" ao passar o mouse: o espaço debaixo de uma barra de
+   * 22px não cabe um período inteiro, e truncá-lo daria sete colunas com o mesmo texto.
+   */
+  rotuloLongo?: string;
+  /** O que o `title` da BARRA diz — o número completo, quando o de cima está abreviado. */
+  title?: string;
+  /**
    * A cor do NÚMERO acima da barra. Sem ela, o cinza de sempre.
    *
    * ⚠ ELE ERA SEMPRE `muted`, e num gráfico de UMA linha do DRE isso apaga o sinal: o valor de um
@@ -163,7 +173,8 @@ export function BarrasCompactas({
                   /* ⚠ A META É CONTORNO, NÃO PREENCHIMENTO — e a classe é literal, nunca montada
                      por interpolação: o Tailwind varre o código em busca do nome inteiro, e
                      `border-${cor}` não existe no CSS gerado. */
-                  <div className={cn('relative rounded-sm', distribuir ? 'mx-auto' : 'w-full',
+                  <div title={b.title}
+                    className={cn('relative rounded-sm', distribuir ? 'mx-auto' : 'w-full',
                     b.meta ? 'border border-dashed border-amber-500 bg-transparent'
                       : (b.cor ?? 'bg-primary'))}
                     style={{ height: `${pct}%`, width: distribuir ? larguraBarra : undefined }}>
@@ -180,7 +191,8 @@ export function BarrasCompactas({
       <div className={cn('mt-1 flex', trilhoClasse)}>
         {barras.map((b, i) => (
           <div key={`r-${b.rotulo}-${i}`} className={cn('text-center', colClasse)} style={colEstilo}>
-            <div className="truncate text-[8px] leading-tight text-muted-foreground" title={b.rotulo}>
+            <div className="truncate text-[8px] leading-tight text-muted-foreground"
+              title={b.rotuloLongo ?? b.rotulo}>
               {b.rotulo}
             </div>
             {/* ⚠ A NOTA OCUPA ALTURA SEMPRE, com ou sem texto: uma safra marcada e outra não

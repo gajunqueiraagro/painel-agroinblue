@@ -8,9 +8,10 @@
  * nutrição. É a única regra do modal que um teste de render não pegaria por acidente.
  */
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import {
-  PecHistoricoLinhaModal, baseDoDonut, deltaMeta, type RecorteHistoricoPec,
+  PecHistoricoLinhaModal, baseDoDonut, deltaMeta, abreviar, semPrefixo, rotuloCurtoDoAno,
+  type RecorteHistoricoPec,
 } from '@/components/agri/PecHistoricoLinhaModal';
 import { LINHAS_PEC } from '@/components/agri/drePecRegua';
 import type { DrePecuaria, DrePecLinhas } from '@/hooks/useDrePecuaria';
@@ -51,6 +52,8 @@ describe('a base do donut — uma por tipo de linha', () => {
     expect(b?.valorLinha).toBe(2000);
     expect(b?.destaque).toBe('Nutrição');
     expect(b?.fatias.map(f => f.nome)).toEqual(['Nutrição', 'Pastagem', 'Sanidade']);
+    /* ⚠ E O CENTRO CRU VIAJA JUNTO — é ele que a navegação usa, não o nome exibido. */
+    expect(b?.fatias.map(f => f.centro)).toEqual(['Nutrição', 'Pastagem', 'Sanidade']);
     /* ⚠ A PROPORÇÃO DOS ARCOS É A PROPORÇÃO DOS VALORES: é isso que o donut desenha. */
     const soma = (b?.fatias ?? []).reduce((a, f) => a + f.valor, 0);
     expect(soma).toBe(4000);
@@ -75,6 +78,9 @@ describe('a base do donut — uma por tipo de linha', () => {
       { nome: '= Margem de contribuição', valor: 6000 },
       { nome: 'restante do VBP', valor: 4000 },
     ]);
+    /* ⚠ O PREFIXO SAI NA APRESENTAÇÃO, não no dado: a fatia guarda o rótulo como a cascata o
+       escreve, e quem tira o "=" é `semPrefixo`, na hora de escrever a frase. */
+    expect(semPrefixo(b?.fatias[0].nome ?? '')).toBe('Margem de contribuição');
   });
 
   /* ⚠ SEM LINHAS NÃO HÁ DONUT: ano sem dado não vira anel vazio nem 0% — vira nada. */
@@ -149,7 +155,111 @@ describe('o modal montado', () => {
   it('o título diz a linha, e o subtítulo diz dentro de quem ela está', () => {
     montar(null);
     expect(screen.getByText('Nutrição · histórico')).toBeDefined();
-    expect(screen.getByText(/dentro de/)).toBeDefined();
+    /* ⚠ SEM O "(−)": dentro do modal o pai é um nome, não uma linha de cascata. */
+    expect(screen.getByText(/dentro de Custo variável/)).toBeDefined();
     expect(screen.getByText(/NJ Pecuária/)).toBeDefined();
+  });
+});
+
+/* ══════════════ O QUE SE MOSTRA — fix1 da homologação ══════════════ */
+
+/**
+ * ⚠ O FORMATADOR NASCE DE SOBREPOSIÇÃO MEDIDA (print da Santa Rita, 19:38): sete barras de 22px com
+ * "2.699.794,84" em cima viram uma faixa de números encavalados. Abreviar é para o olho comparar —
+ * a tabela embaixo continua com o centavo, e o `title` da barra também.
+ */
+describe('o valor abreviado da barra', () => {
+  it('milhão vira "mi", milhar vira "k", e abaixo de mil nada muda', () => {
+    expect(abreviar('1.281.157,87')).toBe('1,3 mi');
+    expect(abreviar('439.668,55')).toBe('439,7 k');
+    expect(abreviar('971,74')).toBe('971,74');
+  });
+
+  /* ⚠ O TRAÇO ATRAVESSA INTEIRO: "sem dado" não é número pequeno. */
+  it('traço e texto não numérico passam sem mexer', () => {
+    expect(abreviar('—')).toBe('—');
+    expect(abreviar('')).toBe('');
+  });
+
+  /* ⚠ E O SINAL SOBREVIVE: um resultado negativo abreviado ainda é negativo. */
+  it('o negativo continua negativo', () => {
+    expect(abreviar('-2.699.794,84')).toBe('-2,7 mi');
+    expect(abreviar('-1.500,00')).toBe('-1,5 k');
+  });
+});
+
+describe('o rótulo curto do eixo', () => {
+  /* ⚠ UM ANO CIVIL É UM NÚMERO, UMA SAFRA SÃO DOIS — o critério é o dado, não o modo da tela. */
+  it('ano civil vira dois dígitos; safra vira "24/25"', () => {
+    expect(rotuloCurtoDoAno('2026-01', '2026-08')).toBe('26');
+    expect(rotuloCurtoDoAno('2021-01', '2021-12')).toBe('21');
+    expect(rotuloCurtoDoAno('2024-07', '2025-06')).toBe('24/25');
+  });
+});
+
+describe('o nome da linha dentro do modal', () => {
+  it('sai sem o "(−)" e sem o "="', () => {
+    expect(semPrefixo('(−) Custo variável')).toBe('Custo variável');
+    expect(semPrefixo('= Margem de contribuição')).toBe('Margem de contribuição');
+    expect(semPrefixo('= VBP')).toBe('VBP');
+    expect(semPrefixo('Nutrição')).toBe('Nutrição');
+  });
+});
+
+/* ══════════════ NAVEGAR PELO DONUT — adendo do fix1, item 11 ══════════════ */
+
+/**
+ * ⚠ O CAMINHO É A PORTA DE VOLTA. Sem ele, entrar numa filha pelo donut seria uma viagem só de ida:
+ * o operador teria de fechar e reabrir o modal na linha certa, e perderia a unidade e a safra que
+ * tinha escolhido.
+ */
+describe('a navegação para a filha, no mesmo modal', () => {
+  const dre = (l: DrePecLinhas): DrePecuaria => ({
+    periodo: { de: '2025-07', ate: '2026-06', p0: '2025-06', meses: 12 },
+    rateio_adm: { pool: 0, bruto: 0, criterio: '' },
+    fazendas: [], total: l,
+  });
+  const montarGrupo = () => render(
+    <PecHistoricoLinhaModal aberto recorte={recorte({})}
+      atual={dre(LINHAS_NJ)} meta={null}
+      anos={[{ de: '2024-07', ate: '2025-06', dre: dre(LINHAS_NJ), carregando: false }]}
+      periodoRotulo="Safra 25/26" clienteNome="NJ Pecuária" unidadeInicial="rs"
+      onFechar={() => {}} />,
+  );
+  const titulo = () => document.querySelector('h2')?.textContent ?? '';
+
+  it('clicar na legenda de uma filha abre a filha, com o caminho; clicar no pai volta', () => {
+    montarGrupo();
+    expect(titulo()).toBe('Custo variável · histórico');
+
+    /* A legenda do grupo lista as filhas — "Nutrição" é a maior delas. */
+    const item = [...document.querySelectorAll('span')]
+      .find(s => s.textContent === 'Nutrição' && s.className.includes('truncate'));
+    expect(item).toBeDefined();
+    fireEvent.click(item as Element);
+    expect(titulo()).toBe('Custo variável›Nutrição · histórico');
+
+    /* E o pai no caminho é um botão: clicar nele desfaz a descida. */
+    const voltar = [...document.querySelectorAll('h2 button')]
+      .find(b => b.textContent === 'Custo variável');
+    expect(voltar).toBeDefined();
+    fireEvent.click(voltar as Element);
+    expect(titulo()).toBe('Custo variável · histórico');
+  });
+
+  /* ⚠ SÓ O GRUPO NAVEGA: o anel de um subtotal mostra o VBP, que não é linha da cascata — clicar
+     ali não leva a lugar nenhum, e por isso não vira mão. */
+  it('subtotal "=": a legenda não é clicável', () => {
+    render(
+      <PecHistoricoLinhaModal aberto
+        recorte={recorte({ chave: 'margem', rotulo: '= Margem de contribuição' })}
+        atual={dre(LINHAS_NJ)} meta={null} anos={[]}
+        periodoRotulo="Safra 25/26" clienteNome="NJ Pecuária" unidadeInicial="rs"
+        onFechar={() => {}} />,
+    );
+    const legenda = [...document.querySelectorAll('div')]
+      .filter(d => d.className.includes('text-[9px]') && d.className.includes('items-center'));
+    expect(legenda.length).toBeGreaterThan(0);
+    expect(legenda.every(d => !d.className.includes('cursor-pointer'))).toBe(true);
   });
 });

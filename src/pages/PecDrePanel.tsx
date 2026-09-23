@@ -304,9 +304,12 @@ function BotaoHistorico({ onAbrir }: { onAbrir?: () => void }) {
     <button type="button" title="Ver histórico" aria-label="Ver histórico"
       aria-hidden={!onAbrir} tabIndex={onAbrir ? undefined : -1}
       onClick={onAbrir ? e => { e.stopPropagation(); onAbrir(); } : undefined}
-      className={cn('mr-0.5 align-[-2px] text-muted-foreground hover:text-primary',
+      /* ⚠ O GLIFO DESCEU A 10px E A CAIXA FICOU EM 12 — homologação de 22/09, item 8. A largura
+         reservada é a mesma de antes de propósito: encolher a caixa moveria o nome de TODAS as
+         linhas dois pixels para a esquerda, e a coluna de rótulos é a régua de onde o olho parte. */
+      className={cn('mr-0.5 inline-block w-3 text-center align-[-2px] text-muted-foreground hover:text-primary',
         !onAbrir && 'invisible')}>
-      <BarChart3 className="inline h-3 w-3" />
+      <BarChart3 className="inline h-2.5 w-2.5" />
     </button>
   );
 }

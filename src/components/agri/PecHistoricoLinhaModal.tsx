@@ -43,7 +43,10 @@ export interface RecorteHistoricoPec {
 /** Um ponto da série — uma safra, o período da tela, ou a meta. */
 interface Ponto {
   chave: string;
+  /** O que aparece no eixo e no cabeçalho da tabela: o ano, ou a safra. */
   rotulo: string;
+  /** O período por extenso — vai para o `title`, onde não custa largura. */
+  rotuloLongo: string;
   linhas: DrePecLinhas | null;
   meses: number;
   meta?: boolean;
@@ -69,6 +72,23 @@ const CORES = {
   },
 } as const;
 export type Natureza = keyof typeof CORES;
+
+/**
+ * O DENOMINADOR DE CADA UNIDADE, por extenso — e ele é OBRIGAÇÃO, não cortesia.
+ *
+ * ⚠ SEM O DIVISOR À MÃO o operador não refaz a conta (Art. 19), e o rodapé que o dizia saiu na
+ * homologação de 22/09: a faixa de duas linhas comia a altura do gráfico. O texto não morreu com
+ * ela — mudou para o `title` da célula que nomeia a unidade, que é onde a dúvida aparece.
+ * ⚠ O DA @ É O MAIS IMPORTANTE DOS TRÊS: a base muda POR LINHA, e é por isso que aquela coluna não
+ * soma. Era a única frase que o rodapé tinha de carregar de qualquer jeito.
+ */
+const DIVISOR_DA_UNIDADE: Record<UnidadePec, string> = {
+  rs: 'Reais do período, como a RPC os devolve',
+  ha: 'R$ ÷ área média do período (hectare produtivo)',
+  cab: 'R$ ÷ cabeça média do período ÷ meses do período',
+  arroba: 'Divisor por linha: receita e deduções pela @ vendida, reposição pela @ comprada, '
+    + 'demais pela @ produzida. Esta coluna não soma — e a meta costuma vir sem @ produzida, daí o traço.',
+};
 
 /**
  * AS CORES DAS OUTRAS FATIAS — separadas entre si, nunca cinza.
@@ -108,6 +128,65 @@ const comoColuna = (l: DrePecLinhas | null, meses: number): ColunaPec => ({
   tipo: 'valor', unidade: 'ha', de: '', ate: '', cenario: 'realizado', meses, atual: false,
 });
 
+/**
+ * O NOME DA LINHA SEM O PREFIXO DA CASCATA — fix1 da homologação.
+ *
+ * ⚠ "(−)" E "=" SÃO GRAMÁTICA DA GRADE, não do nome: ali eles mostram para onde a conta anda. Numa
+ * frase ("dentro de Custo variável", "do VBP") viram ruído, e "= Margem de contribuição · histórico"
+ * lê como se faltasse o lado esquerdo da igualdade.
+ * ⚠ A EXPRESSÃO É A MESMA que a grade já usa para mandar o rótulo ao drill (`PecDrePanel`), não uma
+ * segunda: o mesmo nome tem de chegar igual aos dois modais.
+ */
+export const semPrefixo = (r: string) => r.replace(/^[=(−)\s-]+/, '').trim();
+
+/**
+ * O NÚMERO DE VOLTA, a partir do texto que a tela mostra.
+ *
+ * ⚠ O CAMINHO É ESTE DE PROPÓSITO, e a alternativa era pior: dividir o valor pelos divisores aqui
+ * faria deste arquivo a SEGUNDA dona da conta de R$/ha, R$/cab/mês e R$/@ — exatamente o que o
+ * módulo `drePecRegua` nasceu para impedir. O que se lê de volta é o número que o operador vê.
+ * ⚠ E A PERDA É DE CENTAVO, não de leitura: o texto vem com duas casas, e o que se faz com ele é
+ * altura de barra e percentual de variação. Nenhum dos dois muda com a terceira casa.
+ */
+export const numeroDoTexto = (t: string): number | null => {
+  const n = Number(t.replace(/\./g, '').replace(',', '.'));
+  return Number.isFinite(n) ? n : null;
+};
+
+/**
+ * O VALOR ABREVIADO ACIMA DA BARRA — fix1 da homologação (print da Santa Rita, 19:38).
+ *
+ * ⚠ ELE NASCE DE SOBREPOSIÇÃO MEDIDA: "2.699.794,84" em sete barras de 22px vira uma faixa de
+ * números encavalados, e o gráfico deixa de ser legível justamente onde deveria comparar. Abreviado,
+ * cada número cabe sobre a sua barra.
+ * ⚠ A TABELA CONTINUA INTEIRA (A19): quem quer o centavo olha embaixo, e o `title` da barra traz o
+ * número completo. Abreviar é para o olho comparar, nunca para esconder.
+ * ⚠ ABAIXO DE MIL NADA MUDA: "971,74" já cabe, e arredondá-lo tiraria precisão sem ganhar espaço.
+ */
+export const abreviar = (t: string): string => {
+  const n = numeroDoTexto(t);
+  if (n == null) return t;
+  const abs = Math.abs(n);
+  if (abs >= 1e6) return `${formatNum(n / 1e6, 1)} mi`;
+  if (abs >= 1e3) return `${formatNum(n / 1e3, 1)} k`;
+  return t;
+};
+
+/**
+ * O RÓTULO CURTO DO EIXO — só o ano, ou a safra.
+ *
+ * ⚠ "jul/2025 → jun/2026" DEBAIXO DE UMA BARRA DE 22px não cabe em lugar nenhum: ele truncava em
+ * "jul…" e sete colunas ficavam com o mesmo rótulo. O ano de dois dígitos identifica a coluna, e o
+ * período inteiro vai para o `title`.
+ * ⚠ UM ANO CIVIL É UM NÚMERO, UMA SAFRA SÃO DOIS: o critério não é o modo da tela, é o dado — se o
+ * recorte começa e termina no mesmo ano, um número basta; se atravessa, "24/25" é o que o produtor
+ * chama aquela safra.
+ */
+export const rotuloCurtoDoAno = (de: string, ate: string): string => {
+  const aa = (am: string) => am.slice(2, 4);
+  return de.slice(0, 4) === ate.slice(0, 4) ? aa(de) : `${aa(de)}/${aa(ate)}`;
+};
+
 /** ⚠ O R$ NÃO PASSA POR `valorNaUnidade` — ele é a célula de dinheiro, com milhar e 2 casas (A19). */
 const texto = (u: UnidadePec, v: number | null, p: Ponto, chave: ChaveLinhaPec): string => {
   if (!p.linhas) return traco;
@@ -141,7 +220,12 @@ export interface BaseDonut {
   rotuloBase: string;
   total: number;
   valorLinha: number | null;
-  fatias: Array<{ nome: string; valor: number }>;
+  /**
+   * ⚠ O `centro` VIAJA CRU ao lado do nome exibido, e não é redundância: "(sem)" aparece como
+   * "sem centro" na tela, e é o valor CRU que a navegação e a RPC entendem. Sem ele, quem clicasse
+   * na fatia teria de desfazer a tradução — e a tradução passaria a existir em dois lugares.
+   */
+  fatias: Array<{ nome: string; valor: number; centro?: string }>;
   /** A fatia que É a linha clicada — pintada na cor da natureza. */
   destaque: string | null;
 }
@@ -176,7 +260,9 @@ export function baseDoDonut(
       return {
         rotuloBase: def?.rotulo ?? '', total,
         valorLinha: minha,
-        fatias: irmas.map(c => ({ nome: c.centro === '(sem)' ? 'sem centro' : c.centro, valor: Math.abs(c.valor) })),
+        fatias: irmas.map(c => ({
+          nome: c.centro === '(sem)' ? 'sem centro' : c.centro, valor: Math.abs(c.valor), centro: c.centro,
+        })),
         destaque: recorte.centro === '(sem)' ? 'sem centro' : recorte.centro,
       };
     }
@@ -186,7 +272,9 @@ export function baseDoDonut(
       return {
         rotuloBase: '= VBP', total: vbp == null ? 0 : Math.abs(vbp),
         valorLinha: valorDe(l, recorte.chave),
-        fatias: filhas.map(c => ({ nome: c.centro === '(sem)' ? 'sem centro' : c.centro, valor: Math.abs(c.valor) })),
+        fatias: filhas.map(c => ({
+          nome: c.centro === '(sem)' ? 'sem centro' : c.centro, valor: Math.abs(c.valor), centro: c.centro,
+        })),
         destaque: null,
       };
     }
@@ -221,15 +309,26 @@ export function PecHistoricoLinhaModal({
      `useMemo` abaixo dela é o React #310 que derrubou duas telas em 21/09. */
   const [unidade, setUnidade] = useState<UnidadePec>(unidadeInicial);
   const [selecionada, setSelecionada] = useState<string | null>(null);
+  /**
+   * A LINHA QUE O MODAL ESTÁ MOSTRANDO, que pode não ser a que a grade abriu — item 11.
+   *
+   * ⚠ NAVEGAR É TROCAR DE ESTADO, NÃO DE MODAL: clicar numa fatia do donut abre a filha AQUI, com
+   * a mesma leitura já em memória. Um segundo modal por cima custaria uma remontagem, perderia a
+   * unidade e a safra escolhidas e empilharia caixas sobre caixas.
+   * ⚠ E A PROFUNDIDADE É A DA GRADE: grupo › filha, nunca mais. Uma filha não tem filhas.
+   */
+  const [navegado, setNavegado] = useState<RecorteHistoricoPec | null>(null);
+  const alvo = navegado ?? recorte;
 
-  /* ⚠ ABRIR É RECOMEÇAR: a unidade volta à do DRE e a safra ao período da tela. Sem isso, o modal
-     da segunda linha abriria na unidade que o operador escolheu na primeira. */
+  /* ⚠ ABRIR É RECOMEÇAR: a unidade volta à do DRE, a safra ao período da tela e o caminho à linha
+     que a grade clicou. Sem isso, o modal da segunda linha abriria onde o operador parou na
+     primeira. */
   useEffect(() => {
-    if (aberto) { setUnidade(unidadeInicial); setSelecionada(null); }
+    if (aberto) { setUnidade(unidadeInicial); setSelecionada(null); setNavegado(null); }
   }, [aberto, unidadeInicial, recorte?.chave, recorte?.centro]);
 
   const def = useMemo(
-    () => LINHAS_PEC.find(d => d.chave === recorte?.chave) ?? null, [recorte?.chave]);
+    () => LINHAS_PEC.find(d => d.chave === alvo?.chave) ?? null, [alvo?.chave]);
   const natureza: Natureza = def?.tom === 'custo' ? 'custo' : 'receita';
   const cores = CORES[natureza];
 
@@ -237,30 +336,36 @@ export function PecHistoricoLinhaModal({
   const pontos = useMemo((): Ponto[] => {
     const anteriores = [...anos].reverse().map((a, i): Ponto => ({
       chave: `ano-${i}`,
-      rotulo: rotuloCurtoPeriodo(a.de, a.ate),
-      linhas: linhasDoEscopo(a.dre, recorte?.fazendaId ?? null),
+      rotulo: rotuloCurtoDoAno(a.de, a.ate),
+      rotuloLongo: rotuloCurtoPeriodo(a.de, a.ate),
+      linhas: linhasDoEscopo(a.dre, alvo?.fazendaId ?? null),
       meses: a.dre?.periodo.meses ?? 0,
     }));
+    /* ⚠ O EIXO DO PERÍODO DA TELA SAI DO `periodo` DA RPC, não do rótulo que a página escreveu: é o
+       mesmo par (de, ate) que gerou as colunas anteriores, então as sete colunas falam a mesma
+       língua. O rótulo bonito da página vira o `title`. */
     const doAtual: Ponto = {
-      chave: 'atual', rotulo: periodoRotulo,
-      linhas: linhasDoEscopo(atual, recorte?.fazendaId ?? null),
+      chave: 'atual',
+      rotulo: atual ? rotuloCurtoDoAno(atual.periodo.de, atual.periodo.ate) : periodoRotulo,
+      rotuloLongo: periodoRotulo,
+      linhas: linhasDoEscopo(atual, alvo?.fazendaId ?? null),
       meses: atual?.periodo.meses ?? 0,
     };
     const daMeta: Ponto = {
-      chave: 'meta', rotulo: 'Meta',
-      linhas: linhasDoEscopo(meta, recorte?.fazendaId ?? null),
+      chave: 'meta', rotulo: 'Meta', rotuloLongo: `Meta · ${periodoRotulo}`,
+      linhas: linhasDoEscopo(meta, alvo?.fazendaId ?? null),
       meses: meta?.periodo.meses ?? doAtual.meses, meta: true,
     };
     return [...anteriores, doAtual, daMeta];
-  }, [anos, atual, meta, periodoRotulo, recorte?.fazendaId]);
+  }, [anos, atual, meta, periodoRotulo, alvo?.fazendaId]);
 
   const escolhida = selecionada ?? 'atual';
   const pontoEscolhido = useMemo(
     () => pontos.find(p => p.chave === escolhida) ?? null, [pontos, escolhida]);
 
   const donut = useMemo(
-    () => baseDoDonut(pontoEscolhido?.linhas ?? null, recorte, def),
-    [pontoEscolhido, recorte, def]);
+    () => baseDoDonut(pontoEscolhido?.linhas ?? null, alvo, def),
+    [pontoEscolhido, alvo, def]);
 
 
   /** As fatias desenhadas: as 5 maiores mais "Outros" — um anel de vinte fatias não se lê. */
@@ -278,20 +383,46 @@ export function PecHistoricoLinhaModal({
     return [...base, { nome: 'Outros', valor: destaqueFora ? somaCauda : cauda }];
   }, [donut]);
 
-  if (!aberto || !recorte) return null;
+  if (!aberto || !alvo) return null;
 
-  const chave = recorte.chave;
-  const paiRotulo = recorte.centro !== null ? (def?.rotulo ?? '') : null;
-  const valorAtual = valorDoRecorte(pontos.find(p => p.chave === 'atual')?.linhas ?? null, recorte);
-  const valorMeta = valorDoRecorte(pontos.find(p => p.chave === 'meta')?.linhas ?? null, recorte);
+  const chave = alvo.chave;
+  /* ⚠ DENTRO DO MODAL OS NOMES SÃO NOMES: sem "(−)" e sem "=", que são gramática da cascata. */
+  const nomeDaLinha = semPrefixo(alvo.rotulo);
+  const paiRotulo = alvo.centro !== null ? semPrefixo(def?.rotulo ?? '') : null;
+  /** O caminho: só a linha, ou "pai › filha" — e o pai é clicável, que é a volta. */
+  const voltarAoPai = alvo.centro !== null && def
+    ? () => setNavegado({ ...alvo, centro: null, rotulo: def.rotulo })
+    : null;
+  /**
+   * ⚠ SÓ O GRUPO NAVEGA: o anel de uma filha mostra as irmãs (ir para uma irmã seria caminhar de
+   * lado, não para dentro) e o de um subtotal mostra o VBP, que não é uma linha da cascata. O
+   * cursor só vira mão onde há para onde ir — um ponteiro que não leva a lugar nenhum é promessa
+   * quebrada, a mesma regra do cabeçalho de cultura da lavoura.
+   */
+  const podeNavegar = alvo.centro === null && !!def?.expande;
+  const abrirFilha = (centro: string | undefined) => {
+    if (!podeNavegar || !centro) return;
+    setNavegado({
+      chave: alvo.chave, centro,
+      rotulo: centro === '(sem)' ? 'sem centro' : centro,
+      fazendaId: alvo.fazendaId, fazendaNome: alvo.fazendaNome,
+    });
+  };
 
+  /**
+   * ⚠ A ALTURA DA BARRA É O NÚMERO QUE ESTÁ ESCRITO NELA, não o R$ por trás dele — e isto era um
+   * defeito: a altura vinha de `v` (sempre reais) enquanto o rótulo mostrava R$/ha. Como cada ano
+   * tem a sua área, a proporção das barras não era a proporção dos números em nenhuma unidade
+   * senão o R$. Agora as duas saem do mesmo texto.
+   */
   const barras: BarraCompacta[] = pontos.map(p => {
-    const v = valorDoRecorte(p.linhas, recorte);
-    const t = texto(unidade, v, p, chave);
+    const t = texto(unidade, valorDoRecorte(p.linhas, alvo), p, chave);
     return {
       rotulo: p.rotulo,
-      valor: t === traco ? null : v,
-      texto: t,
+      rotuloLongo: p.rotuloLongo,
+      valor: t === traco ? null : numeroDoTexto(t),
+      texto: abreviar(t),
+      title: t === traco ? 'sem dado' : `${p.rotuloLongo} · ${ROTULO_UNIDADE[unidade]} ${t}`,
       meta: p.meta,
       cor: p.meta ? undefined : (p.chave === escolhida ? cores.barra : cores.barraFraca),
       corTexto: p.meta ? 'text-amber-600' : cores.texto,
@@ -307,9 +438,6 @@ export function PecHistoricoLinhaModal({
     return CORES_FATIA[i % CORES_FATIA.length];
   };
 
-  const semArrobaNaMeta = unidade === 'arroba'
-    && (pontos.find(p => p.chave === 'meta')?.linhas?.producao.at_produzida ?? null) == null;
-
   return (
     <Dialog open={aberto} onOpenChange={o => { if (!o) onFechar(); }}>
       {/* ⚠ LARGURA FIXA: trocar unidade ou safra não pode mexer no tamanho de nada — o operador
@@ -318,9 +446,23 @@ export function PecHistoricoLinhaModal({
         {/* ⚠ O CABEÇALHO AZUL É O DO `PecLancamentosModal`, o vizinho desta mesma tela. */}
         <div className="flex items-start justify-between gap-2 bg-primary px-4 py-2.5 text-primary-foreground">
           <div className="min-w-0">
-            <h2 className="truncate text-[13px] font-medium leading-tight">{recorte.rotulo} · histórico</h2>
+            {/* ⚠ O TÍTULO É O CAMINHO, e o pai é um botão: quem entrou numa filha pelo donut precisa
+                de uma porta de volta que não seja fechar e reabrir o modal. O "›" é separador, não
+                texto clicável. */}
+            <h2 className="truncate text-[13px] font-medium leading-tight">
+              {voltarAoPai && (
+                <>
+                  <button type="button" onClick={voltarAoPai}
+                    className="underline-offset-2 hover:underline" title={`voltar a ${paiRotulo}`}>
+                    {paiRotulo}
+                  </button>
+                  <span className="px-1 text-primary-foreground/70">›</span>
+                </>
+              )}
+              {nomeDaLinha} · histórico
+            </h2>
             <div className="mt-0.5 truncate text-[11px] text-primary-foreground/80">
-              {[clienteNome, recorte.fazendaId === null ? 'Global' : recorte.fazendaNome,
+              {[clienteNome, alvo.fazendaId === null ? 'Global' : alvo.fazendaNome,
                 paiRotulo ? `dentro de ${paiRotulo}` : null].filter(Boolean).join(' · ')}
             </div>
           </div>
@@ -339,23 +481,28 @@ export function PecHistoricoLinhaModal({
           {/* ⚠ DUAS METADES IGUAIS, topo alinhado: as barras e o donut respondem perguntas
               diferentes sobre a MESMA linha, e nenhuma manda na outra. */}
           <div className="grid grid-cols-2 items-start gap-3">
-            <BarrasCompactas barras={barras} titulo={`${recorte.rotulo} · ${ROTULO_UNIDADE[unidade]}`}
+            <BarrasCompactas barras={barras} titulo={`${nomeDaLinha} · ${ROTULO_UNIDADE[unidade]}`}
               altura={150} larguraMax={330} preencherLargura larguraBarra={22} fonteValor={9}
               onClickBarra={i => setSelecionada(pontos[i]?.chave ?? null)} />
 
             <div className="flex flex-col gap-1">
               <div className="flex items-baseline justify-between gap-2">
+                {/* ⚠ O SÍMBOLO VEM ANTES DO NÚMERO E A UNIDADE DEPOIS, colada: "R$ 33,73/cab/mês".
+                    Era "Custo fixo R$/cab/mês 33,73" — o denominador no meio separava o nome do
+                    número que ele qualifica. `ROTULO_UNIDADE` já traz "R$/cab/mês"; o que vai
+                    adiante é o que vem depois do "R$". */}
                 <span className={cn('truncate text-[13px] font-medium', cores.texto)}>
-                  {recorte.rotulo} {texto(unidade, valorDonut, pontoEscolhido ?? pontos[0], chave)}
-                  <span className="ml-1 text-[11px] font-normal">{ROTULO_UNIDADE[unidade]}</span>
+                  {nomeDaLinha} · R$ {texto(unidade, valorDonut, pontoEscolhido ?? pontos[0], chave)}
+                  <span className="text-[11px] font-normal">{ROTULO_UNIDADE[unidade].slice(2)}</span>
                 </span>
-                <span className="shrink-0 text-[11px] text-muted-foreground">{pontoEscolhido?.rotulo ?? ''}</span>
-              </div>
-              <div className="text-[11px] text-muted-foreground">
-                de {donut ? formatNum(donut.total, 2) : traco} {ROTULO_UNIDADE.rs} do{' '}
-                {donut?.rotuloBase ?? traco}
+                <span className="shrink-0 text-[11px] text-muted-foreground"
+                  title={pontoEscolhido?.rotuloLongo ?? ''}>{pontoEscolhido?.rotuloLongo ?? ''}</span>
               </div>
               <div className="flex items-center gap-2">
+                {/* ⚠ O ANEL INTEIRO É A PORTA quando há filhas: clicar numa fatia abre aquela linha
+                    aqui mesmo. O `recharts` não devolve qual fatia foi clicada sem um `onClick` por
+                    `Cell`, e o `Donut` é compartilhado — então quem navega é a LEGENDA, que tem o
+                    nome escrito e é onde o dedo vai. A fatia segue mostrando a cor e a proporção. */}
                 <Donut dados={fatias} cor={corDaFatia} total={donut?.total ?? 0} rotuloTotal=""
                   tamanho={140}
                   centro={<span className="text-[15px] font-medium tabular-nums">{pctDonut}</span>} />
@@ -363,31 +510,34 @@ export function PecHistoricoLinhaModal({
                     quebraria a linha e empurraria o donut para cima — o modal mudaria de altura ao
                     trocar de safra, que é o oposto do que se pede dele. */}
                 <div className="flex w-[130px] shrink-0 flex-col gap-0.5">
-                  {fatias.map((f, i) => (
-                    <div key={f.nome} className="flex items-center gap-1 text-[9px] leading-[12px]">
-                      <span className="h-[7px] w-[7px] shrink-0 rounded-[2px]"
-                        style={{ backgroundColor: corDaFatia(i, f.nome) }} />
-                      <span className="truncate whitespace-nowrap" title={f.nome}>{f.nome}</span>
-                    </div>
-                  ))}
+                  {fatias.map((f, i) => {
+                    const navegavel = podeNavegar && !!f.centro;
+                    return (
+                      <div key={f.nome}
+                        className={cn('flex items-center gap-1 text-[9px] leading-[12px]',
+                          navegavel && 'cursor-pointer hover:underline')}
+                        onClick={navegavel ? () => abrirFilha(f.centro) : undefined}>
+                        <span className="h-[7px] w-[7px] shrink-0 rounded-[2px]"
+                          style={{ backgroundColor: corDaFatia(i, f.nome) }} />
+                        <span className="truncate whitespace-nowrap"
+                          title={navegavel ? `ver o histórico de ${f.nome}` : f.nome}>{f.nome}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
           </div>
 
-          <TabelaHistorico pontos={pontos} recorte={recorte} chave={chave} escolhida={escolhida}
+          <TabelaHistorico pontos={pontos} recorte={alvo} chave={chave} escolhida={escolhida}
             unidade={unidade} cores={cores} natureza={natureza}
-            paiRotulo={donut?.rotuloBase ?? null}
-            valorAtual={valorAtual} valorMeta={valorMeta} />
+            paiRotulo={donut?.rotuloBase ?? null} />
         </div>
 
-        {/* ⚠ O RODAPÉ DECLARA O DIVISOR (Art. 19): sem o denominador à mão, o operador não tem como
-            refazer a conta que a tela mostra. */}
-        <div className="bg-primary px-4 py-1.5 text-[11px] leading-[14px] text-primary-foreground/80">
-          R$/ha ÷ área média do período · R$/cab/mês ÷ cabeça média ÷ meses · R$/@ ÷ @ vendida
-          (receita e deduções), comprada (reposição) ou produzida (demais)
-          {semArrobaNaMeta && ' · meta sem @ produzida no banco (traço)'}
-        </div>
+        {/* ⚠ O RODAPÉ AZUL SAIU (homologação de 22/09, item 9): uma faixa de duas linhas para
+            declarar três divisores comia a altura do gráfico que se veio ver. A DECLARAÇÃO NÃO SAIU
+            COM ELE — ela mudou de lugar: cada linha de unidade da tabela leva o seu divisor no
+            `title`, que é onde a pergunta nasce (Art. 19). */}
       </DialogContent>
     </Dialog>
   );
@@ -396,7 +546,7 @@ export function PecHistoricoLinhaModal({
 /* ⚠ A TABELA É A PROVA DO GRÁFICO: as quatro unidades do mesmo número, safra a safra. Quem
    desconfiar da barra confere aqui — e é ela que leva o Δ contra a meta. */
 function TabelaHistorico({
-  pontos, recorte, chave, escolhida, unidade, cores, natureza, paiRotulo, valorAtual, valorMeta,
+  pontos, recorte, chave, escolhida, unidade, cores, natureza, paiRotulo,
 }: {
   pontos: readonly Ponto[];
   recorte: RecorteHistoricoPec;
@@ -406,13 +556,23 @@ function TabelaHistorico({
   cores: typeof CORES[Natureza];
   natureza: Natureza;
   paiRotulo: string | null;
-  valorAtual: number | null;
-  valorMeta: number | null;
 }) {
-  const W_UNIDADE = 96;
-  const W_PONTO = 78;
-  const W_DELTA = 74;
-  const delta = deltaMeta(valorAtual, valorMeta, natureza);
+  /* ⚠ LARGURAS DECLARADAS, e a primeira cabe "R$/cab/mês" com folga: com `table-layout: fixed` o
+     `<colgroup>` é a única autoridade, e um cabeçalho truncado ali é dado escondido. */
+  const W_UNIDADE = 88;
+  const W_PONTO = 72;
+  const W_DELTA = 78;
+  const doPonto = (chavePonto: string, u: UnidadePec) => {
+    const p = pontos.find(x => x.chave === chavePonto);
+    return p ? texto(u, valorDoRecorte(p.linhas, recorte), p, chave) : traco;
+  };
+  /**
+   * ⚠ O Δ É DE CADA UNIDADE, não o do R$ repetido — fix1 da homologação. Ele muda de linha para
+   * linha porque a meta tem os DIVISORES dela: 4.813,6 ha contra 4.824,3 do realizado na NJ 2026.
+   * Mostrar o Δ do R$ na linha do R$/ha afirmaria uma variação que aquela divisão não produz.
+   */
+  const deltaDaUnidade = (u: UnidadePec) => deltaMeta(
+    numeroDoTexto(doPonto('atual', u)), numeroDoTexto(doPonto('meta', u)), natureza);
   const semMeta = pontos.find(p => p.chave === 'meta');
   const largura = W_UNIDADE + pontos.length * W_PONTO + W_DELTA;
 
@@ -437,13 +597,13 @@ function TabelaHistorico({
         </colgroup>
         <thead>
           <tr style={{ height: 18 }} className="bg-muted">
-            <th className="truncate px-[7px] text-left text-[9px] font-medium text-muted-foreground">Unidade</th>
+            <th className="truncate whitespace-nowrap px-[7px] text-left text-[9px] font-medium text-muted-foreground">Unidade</th>
             {pontos.map(p => (
               <th key={p.chave}
                 className={cn('truncate px-[7px] text-right text-[9px] font-medium',
                   p.meta ? 'text-amber-600' : 'text-muted-foreground',
                   p.chave === escolhida && !p.meta && cores.coluna)}
-                title={p.rotulo}>
+                title={p.rotuloLongo}>
                 {p.rotulo}
               </th>
             ))}
@@ -454,7 +614,10 @@ function TabelaHistorico({
         <tbody>
           {UNIDADES_PEC.map(u => (
             <tr key={u} style={{ height: 16 }} className="border-t border-border/60">
-              <td className={cn('truncate px-[7px] text-[9px]', u === unidade ? 'font-medium' : 'text-muted-foreground')}>
+              {/* ⚠ O DIVISOR SE DECLARA AQUI desde que o rodapé saiu (Art. 19): é a célula que nomeia
+                  a unidade, e é onde a pergunta "dividido por quê?" nasce. */}
+              <td title={DIVISOR_DA_UNIDADE[u]}
+                className={cn('truncate px-[7px] text-[9px]', u === unidade ? 'font-medium' : 'text-muted-foreground')}>
                 {ROTULO_UNIDADE[u]}
               </td>
               {pontos.map(p => (
@@ -466,10 +629,13 @@ function TabelaHistorico({
                   {texto(u, valorDoRecorte(p.linhas, recorte), p, chave)}
                 </td>
               ))}
+              {/* ⚠ TODAS AS LINHAS TÊM Δ: o operador compara a unidade que escolheu, mas a pergunta
+                  "e nas outras?" é a seguinte, e antes ela exigia trocar o chip para descobrir. */}
               <td className="truncate px-[7px] text-right text-[9px] tabular-nums text-muted-foreground">
-                {u === unidade && delta
-                  ? <span className={delta.cor}>{delta.texto}</span>
-                  : u === unidade ? traco : ''}
+                {(() => {
+                  const d = deltaDaUnidade(u);
+                  return d ? <span className={d.cor}>{d.texto}</span> : traco;
+                })()}
               </td>
             </tr>
           ))}
