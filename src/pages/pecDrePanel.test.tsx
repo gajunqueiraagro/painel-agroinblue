@@ -513,25 +513,28 @@ describe('as quatro visões', () => {
     expect(linhaDe('Vendas')?.cells[4]?.textContent).toBe('—');
   });
 
-  it('× Anos: atual primeiro, depois os anteriores; ano sem dado é coluna de "—", não some', () => {
+  /* ⚠ ORDEM CRONOLÓGICA — DRE-PERIODO-01: o mais ANTIGO à esquerda e o período da tela à direita,
+     como se lê uma série temporal e como o modal de histórico já fazia. Era o contrário, e o teste
+     que travava a ordem antiga foi atualizado para o contrato novo, nunca afrouxado. */
+  it('× Anos: cronológico — o mais antigo à esquerda, o atual à direita; ano sem dado é "—"', () => {
     const abrir = vi.fn();
     const ANO1: DrePecuaria = { ...DRE, total: linhas({ vendas: 15000000 }) };
     render(<PecDrePanel colunas={colunas('anos', { anos: [
       { de: '2024-07', ate: '2025-06', dre: ANO1, carregando: false },
       { de: '2023-07', ate: '2024-06', dre: { ...DRE, fazendas: [] }, carregando: false },
     ] })} alturaCartao={null} cartaoRef={{ current: null }} onAbrirLista={abrir} />);
-    expect(cabecalhos().slice(1)).toEqual(['jul/25-jun/26\u00a0', 'jul/24-jun/25\u00a0', 'jul/23-jun/24\u00a0']);
+    expect(cabecalhos().slice(1)).toEqual(['jul/23-jun/24\u00a0', 'jul/24-jun/25\u00a0', 'jul/25-jun/26\u00a0']);
     /* ⚠ AGORA TEM SUB-COLUNA — TELA-03a: cada ano divide pela própria área, e a visão deixou de
        sair só em R$. */
     expect(document.body.textContent).toContain('R$/ha');
-    /* ⚠ ÍNDICES REMAPEADOS — cada ano passou a ocupar DUAS células (R$ e R$/ha): atual R$ 1 e
-       R$/ha 2 · ano−1 R$ 3 e R$/ha 4 · ano−2 R$ 5 e R$/ha 6. */
+    /* ⚠ ÍNDICES REMAPEADOS COM A ORDEM — cada ano ocupa DUAS células: ano−2 (sem dado) R$ 1 ·
+       ano−1 R$ 3 · atual R$ 5 e R$/ha 6. */
     const vendas = linhaDe('Vendas');
-    expect(vendas?.cells[1]?.textContent).toBe('17.869.000,08');
-    expect(vendas?.cells[2]?.textContent).toBe('3.573,80');
+    expect(vendas?.cells[1]?.textContent).toBe('—');
     expect(vendas?.cells[3]?.textContent).toBe('15.000.000,00');
-    expect(vendas?.cells[5]?.textContent).toBe('—');
-    /* O drill da coluna de um ano abre aquele ano. */
+    expect(vendas?.cells[5]?.textContent).toBe('17.869.000,08');
+    expect(vendas?.cells[6]?.textContent).toBe('3.573,80');
+    /* O drill da coluna de um ano abre aquele ano — e o ano−1 agora é a terceira coluna. */
     if (vendas) fireEvent.click(vendas.cells[3]);
     expect(abrir).toHaveBeenCalledWith(expect.objectContaining({ de: '2024-07', ate: '2025-06', cenario: 'realizado' }));
   });
@@ -577,11 +580,13 @@ describe('as quatro visões', () => {
       { de: '2020-07', ate: '2021-06', dre: { ...DRE, fazendas: [] }, carregando: false }];
     render(<PecDrePanel colunas={colunas('anos', { anos })} alturaCartao={null} cartaoRef={{ current: null }} />);
     expect(cabecalhos()).toHaveLength(7);
-    /* ⚠ SEIS COLUNAS × DUAS CÉLULAS: o R$ da coluna k (0 = atual) está em 1 + 2k. O ano de
-       12.000.000 é a quinta coluna (k = 4) → célula 9; o ano sem dado é k = 5 → célula 11. */
+    /* ⚠ SEIS COLUNAS × DUAS CÉLULAS, EM ORDEM CRONOLÓGICA: a coluna 0 é o ano MAIS ANTIGO (o sem
+       dado) e a última é o período da tela. O R$ da coluna k está em 1 + 2k: o ano sem dado é k=0
+       → célula 1; o de 12.000.000 (ano−4) é k=1 → célula 3; o atual é k=5 → célula 11. */
     const vendas = linhaDe('Vendas');
-    expect(vendas?.cells[9]?.textContent).toBe('12.000.000,00');
-    expect(vendas?.cells[11]?.textContent).toBe('—');
+    expect(vendas?.cells[1]?.textContent).toBe('—');
+    expect(vendas?.cells[3]?.textContent).toBe('12.000.000,00');
+    expect(vendas?.cells[11]?.textContent).toBe('17.869.000,08');
     expect(document.querySelectorAll('.animate-pulse')).toHaveLength(0);
   });
 });

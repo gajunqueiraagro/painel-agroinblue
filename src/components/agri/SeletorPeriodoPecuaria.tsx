@@ -79,18 +79,41 @@ function useSafrasPecuaria(clienteId: string | null | undefined) {
 }
 
 /**
+ * O PERÍODO QUE O BOTÃO "Ano" ENTREGA — decisão do Gabriel, 23/09.
+ *
+ * ⚠ ANO CORRENTE VAI ATÉ O MÊS FECHADO, não até dezembro: em setembro, "Ano" agora é jan→ago. O
+ * mês em curso não tem nem lançamento completo nem fechamento de rebanho, e incluí-lo punha uma
+ * fatia pela metade no meio da comparação — o DRE mostrava um mês que ainda está acontecendo.
+ * ⚠ ANO PASSADO CONTINUA INTEIRO: ele fechou, e cortá-lo no mês de hoje compararia doze meses com
+ * oito por um acidente de calendário.
+ * ⚠ JANEIRO FICA COMO ESTAVA (jan→dez), E É DECISÃO PENDENTE: no primeiro mês do ano não há mês
+ * fechado nenhum dentro dele, e a regra não tem resposta. Reportado ao Gabriel; até a decisão, o
+ * comportamento é o de hoje — mudar por conta própria seria escolher por ele.
+ */
+export function periodoDoAno(ano: number, hoje = new Date()): Periodo {
+  const mesAnterior = hoje.getMonth(); // 0-based: em setembro dá 8, que é agosto em base 1
+  if (ano !== hoje.getFullYear() || mesAnterior < 1) return anoInteiro(ano);
+  return { de: { ano, mes: 1 }, ate: { ano, mes: mesAnterior } };
+}
+
+/**
  * De que modo este par de/até veio?
  *
  * ⚠ A DEDUÇÃO É POR FORMA, não por memória: um mês só é "Mês"; janeiro a dezembro do mesmo ano é
  * "Ano"; o intervalo idêntico ao de uma safra cadastrada é "Safra"; o resto é Personalizado.
  * Guardar o modo num estado à parte faria o link copiado reabrir noutro modo que o da URL.
  */
-function modoDoPeriodo(de: string, ate: string, safras: readonly SafraPec[]): Modo {
+function modoDoPeriodo(de: string, ate: string, safras: readonly SafraPec[], hoje = new Date()): Modo {
   if (de === ate) return 'mes';
   if (safras.some(s => s.de === de && s.ate === ate)) return 'safra';
   const [a1, m1] = de.split('-');
   const [a2, m2] = ate.split('-');
   if (a1 === a2 && m1 === '01' && m2 === '12') return 'ano';
+  /* ⚠ E O ANO CORRENTE CORTADO NO MÊS FECHADO TAMBÉM É "Ano" — senão o próprio botão devolveria um
+     período que a régua chamaria de Personalizado, e o modo mudaria de nome sozinho ao ser
+     clicado. A conta é a mesma de `periodoDoAno`, não uma segunda. */
+  const doAno = periodoDoAno(Number(a1), hoje);
+  if (de === anoMes(doAno.de) && ate === anoMes(doAno.ate)) return 'ano';
   return 'personalizado';
 }
 
@@ -178,7 +201,7 @@ export function SeletorPeriodoPecuaria({ clienteId, periodo, onPeriodoChange }: 
           {anos.map(a => (
             <button key={a} type="button" className={cn(ITEM, 'tabular-nums',
               modo === 'ano' && String(a) === de.slice(0, 4) && 'bg-primary text-primary-foreground')}
-              onClick={() => { onPeriodoChange(anoInteiro(a)); setAberto(null); }}>
+              onClick={() => { onPeriodoChange(periodoDoAno(a)); setAberto(null); }}>
               {a}
             </button>
           ))}
@@ -234,7 +257,10 @@ export function SeletorPeriodoPecuaria({ clienteId, periodo, onPeriodoChange }: 
           justamente o espaço que faltava para o subtítulo caber inteiro. O modo continua existindo
           em `Modo` e em `modoDoPeriodo` porque um link antigo com de = até ainda chega aqui — ele
           cai em Personalizado (ver `modoVisivel`), conservando o período que o operador tinha. */}
-      {(['ano', 'safra', 'personalizado'] as const).map(m => (
+      {/* ⚠ SAFRA PRIMEIRO — decisão do Gabriel, 23/09: é o recorte em que a tela abre e o que o
+          produtor pede primeiro. O Personalizado fica ao lado do Ano porque é dele que ele
+          deriva — quem quer um intervalo à mão está refinando um ano, não uma safra. */}
+      {(['safra', 'ano', 'personalizado'] as const).map(m => (
         <Popover key={m} open={aberto === m} onOpenChange={o => setAberto(o ? m : null)}>
           <PopoverTrigger asChild>
             {/* ⚠ O EMBRULHO HERDA O FLEX DO BOTÃO: sem `flex` e `min-w-0` aqui, o `flex-1` do

@@ -216,8 +216,11 @@ export function AgriDreLavouraTab() {
   const safraId = searchParams.get('safra') ?? '';
   const [cultura, setCultura] = useState('');
   /* ⚠ O SEGMENTO É ESTADO DA TELA, como a cultura: trocar de atividade não é navegação, e
-     guardá-lo entre entradas traria de volta o defeito que o PR-08 consertou. */
-  const [segmento, setSegmento] = useState<'lavoura' | 'pecuaria' | 'consolidado'>('lavoura');
+     guardá-lo entre entradas traria de volta o defeito que o PR-08 consertou.
+     ⚠ E A TELA ABRE NA PECUÁRIA — DRE-PERIODO-01, decisão do Gabriel, 23/09. Era a Lavoura, que é
+     onde a grade nasceu; hoje a pergunta que traz o produtor ao DRE é a do rebanho, e abrir na
+     lavoura obrigava um clique antes de toda leitura. */
+  const [segmento, setSegmento] = useState<'lavoura' | 'pecuaria' | 'consolidado'>('pecuaria');
   /* ⚠ O PERÍODO DA PECUÁRIA É O DA CASA (`f_de`/`f_ate`), o mesmo do Financeiro — não um
      seletor novo. Ele mora na URL porque é filtro de período, e é assim que o resto do
      sistema o trata. Abre no mês corrente. */
@@ -273,6 +276,49 @@ export function AgriDreLavouraTab() {
    */
   const aberturaPec = useSafraDeAbertura(ehPec ? clienteId : null);
   const [aberturaAplicada, setAberturaAplicada] = useState(false);
+
+  /**
+   * O DRE NÃO HERDA O RECORTE DE OUTRA VISITA — DRE-PERIODO-01.
+   *
+   * ⚠ O ESTADO MORA NA URL, e era isso que o fazia sobreviver ao que não devia: sair para o
+   * Financeiro e voltar, ou trocar de cliente, mantinha `f_de`/`f_ate` do que se estava vendo
+   * antes — a tela reabria no período de OUTRO cliente, sem erro nenhum, só com números menores.
+   * ⚠ A LIMPEZA É NA SAÍDA, NÃO NA ENTRADA, e a diferença é o link colado: no momento em que a
+   * tela monta, um `f_de` vindo de um link e um `f_de` esquecido pela visita anterior são
+   * indistinguíveis. Limpando ao sair, a visita seguinte encontra o endereço limpo e aplica o
+   * padrão, enquanto o link continua valendo — quem o cola monta com o parâmetro na mão.
+   * ⚠ O `safra` DA LAVOURA NÃO ENTRA: ele é o seletor próprio dela, que o briefing manda não
+   * tocar, e o drill por URL depende dele.
+   */
+  const limparFiltrosDoDre = useCallback(() => {
+    setSearchParams(atual => {
+      const p = new URLSearchParams(atual);
+      ['f_de', 'f_ate', 'f_visao', 'f_anos'].forEach(k => p.delete(k));
+      return p;
+    }, { replace: true });
+  }, [setSearchParams]);
+
+  /* ⚠ A LIMPEZA É NA SAÍDA DE VERDADE, e a dependência tem de ser VAZIA — medido na tela: com
+     `[limparFiltrosDoDre]` o efeito se refazia toda vez que o `setSearchParams` do react-router
+     trocava de identidade (o que acontece a cada mudança de endereço), e a função de limpeza
+     rodava ali mesmo. Escolher um ano gravava `f_de`/`f_ate` e o próprio efeito os apagava no
+     render seguinte: o botão "Ano" não fazia nada. A `ref` mantém a versão fresca da limpeza sem
+     dar ao efeito um motivo para renascer. */
+  const limparRef = useRef(limparFiltrosDoDre);
+  limparRef.current = limparFiltrosDoDre;
+  useEffect(() => () => { limparRef.current(); }, []);
+
+  /* ⚠ TROCAR DE CLIENTE É COMEÇAR DE NOVO: a atividade volta à Pecuária, o recorte sai da URL e a
+     abertura se rearma para achar a safra DAQUELE cliente. O primeiro render não conta — é ele que
+     honra o link colado. */
+  const clienteAnterior = useRef(clienteId);
+  useEffect(() => {
+    if (clienteAnterior.current === clienteId) return;
+    clienteAnterior.current = clienteId;
+    setSegmento('pecuaria');
+    setAberturaAplicada(false);
+    limparFiltrosDoDre();
+  }, [clienteId, limparFiltrosDoDre]);
   useEffect(() => {
     if (!ehPec || aberturaAplicada || !aberturaPec) return;
     setAberturaAplicada(true);

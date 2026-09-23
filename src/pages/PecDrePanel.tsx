@@ -188,10 +188,17 @@ export function colunasDaVisao(e: EntradaVisoes): ColunaPec[] {
      até aqui ela vinha com `unidade: null` e o comentário "o denominador de cada ano vem no
      TELA-03". Vem agora, e é o hectare do JSON de cada ano — usar o do ano corrente compararia
      2024 com a área de 2026. Ano sem dado já é coluna de traço pelo `semDado`. */
+  /* ⚠ ORDEM CRONOLÓGICA — DRE-PERIODO-01, decisão do Gabriel: o mais antigo à ESQUERDA e o período
+     da tela à DIREITA, como o modal de histórico já fazia e como se lê uma série temporal. Era o
+     contrário (atual primeiro, anteriores descendo), e as duas telas do mesmo DRE liam o tempo em
+     direções opostas.
+     ⚠ OS DADOS NÃO MUDARAM: `e.anos` continua chegando do mais recente para o mais antigo, como
+     `useDrePecuariaLista` devolve; quem inverte é a APRESENTAÇÃO. E o `__ano{k}__` segue nomeando a
+     distância em anos (1 = o anterior), não a posição na tela — é ele que casa com "anos
+     anteriores 1..5". */
   return [
-    { ...totalReal, nome: rotuloCurtoPeriodo(de, ate), sub: '' },
-    ...e.anos.map((a, i): ColunaPec => ({
-      chave: `__ano${i + 1}__`, nome: rotuloCurtoPeriodo(a.de, a.ate), sub: '', fazendaId: null,
+    ...[...e.anos].reverse().map((a, i): ColunaPec => ({
+      chave: `__ano${e.anos.length - i}__`, nome: rotuloCurtoPeriodo(a.de, a.ate), sub: '', fazendaId: null,
       linhas: a.carregando ? null : (a.dre?.total ?? real.total), total: false, tipo: 'valor',
       unidade: 'ha', de: a.de, ate: a.ate, cenario: 'realizado', meses: a.dre?.periodo.meses ?? meses,
       atual: false,
@@ -199,6 +206,7 @@ export function colunasDaVisao(e: EntradaVisoes): ColunaPec[] {
          "nunca houve 2023". Sem fazenda na resposta = nem fechamento nem lançamento naquele ano. */
       semDado: !a.carregando && (!a.dre || a.dre.fazendas.length === 0),
     })),
+    { ...totalReal, nome: rotuloCurtoPeriodo(de, ate), sub: '' },
   ];
 }
 
@@ -265,6 +273,18 @@ const slotsDaColuna = (c: ColunaPec, unidades: readonly UnidadePec[]): readonly 
 const larguraSlot = (s: SlotPec, c: ColunaPec) => (s === 'rs' ? larguraRs(c) : larguraUn(c));
 const rotuloSlot = (s: SlotPec, c: ColunaPec) =>
   (s === 'pct' ? 'Δ %' : s === 'rs' ? (c.tipo === 'delta' ? 'Δ R$' : 'R$') : ROTULO_UNIDADE[s]);
+
+/**
+ * CONGELA-SE A PRIMEIRA COLUNA, NÃO "A DO TOTAL" — DRE-PERIODO-01.
+ *
+ * ⚠ ATÉ AQUI OS DOIS ERAM A MESMA COISA: o Total abria a grade em todas as visões, e `c.total`
+ * respondia por duas perguntas ao mesmo tempo — "é a coluna de referência?" (navy, fundo, borda) e
+ * "ela gruda à esquerda?". Com a x Anos em ordem cronológica o período da tela passou a ser a
+ * ÚLTIMA coluna, e grudar a última à esquerda a faria cobrir as primeiras ao rolar.
+ * ⚠ O DESTAQUE CONTINUA SENDO DO TOTAL, onde quer que ele esteja; o congelamento passa a ser da
+ * POSIÇÃO. São duas perguntas diferentes, e agora têm duas respostas.
+ */
+const congelada = (col: ColunaPec, colunas: readonly ColunaPec[]) => col.total && colunas[0] === col;
 
 /**
  * AS LARGURAS DE UMA COLUNA JÁ COM O PISO DO GRUPO — DRE-UNIDADES-01b.
@@ -374,14 +394,17 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
                 'text-[10px] font-medium text-white')}>
               {tituloDaPrimeiraColuna(colunas)}
             </th>
-            {/* ⚠ O TOTAL TAMBÉM GRUDA À ESQUERDA, colado na coluna de rótulos: ele é a referência
-                contra a qual cada coluna se lê, e rolar para comparar obrigaria a decorá-lo. */}
+            {/* ⚠ O TOTAL GRUDA À ESQUERDA QUANDO É A PRIMEIRA COLUNA, colado na de rótulos: ele é a
+                referência contra a qual cada coluna se lê, e rolar para comparar obrigaria a
+                decorá-lo. Na x Anos, em ordem cronológica, ele é a ÚLTIMA — ali o destaque fica e o
+                congelamento sai (ver `congelada`). */}
             {colunas.map(c => (
               <th key={c.chave} colSpan={slotsDaColuna(c, unidades).length}
                 className={cn(!c.total && CINZA_CABECALHO, 'sticky top-0 px-[7px] text-center align-middle text-white',
                   c.total ? 'z-40' : 'z-20')}
                 style={c.total
-                  ? { left: W_FAZENDA, backgroundColor: NAVY_TOTAL, borderLeft: BORDA_TOTAL }
+                  ? { ...(congelada(c, colunas) ? { left: W_FAZENDA } : {}),
+                      backgroundColor: NAVY_TOTAL, borderLeft: BORDA_TOTAL }
                   : { borderLeft: '1px solid rgba(255,255,255,.22)' }}>
                 <div className="truncate text-[10px] font-medium leading-[12px]" title={c.nome}>{c.nome}</div>
                 <div className="truncate whitespace-nowrap text-[10px] font-normal leading-[12px] text-white"
@@ -406,8 +429,11 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
                     title={sl === 'ha' ? tituloHa(c) : sl === 'arroba' ? TITULO_ARROBA : sl === 'cab' ? TITULO_CAB : undefined}
                     style={c.total
                       ? { top: 26, backgroundColor: NAVY_TOTAL,
-                          ...(i === 0 ? { left: W_FAZENDA, borderLeft: BORDA_TOTAL }
-                            : i === 1 ? { left: W_FAZENDA + largurasDaColuna(c, unidades)[0] } : {}) }
+                          ...(i === 0 ? { borderLeft: BORDA_TOTAL } : {}),
+                          ...(congelada(c, colunas)
+                            ? (i === 0 ? { left: W_FAZENDA }
+                              : i === 1 ? { left: W_FAZENDA + largurasDaColuna(c, unidades)[0] } : {})
+                            : {}) }
                       : { top: 26, ...(i === 0 ? { borderLeft: '1px solid rgba(255,255,255,.22)' } : {}) }}>
                     {rotuloSlot(sl, c)}
                   </th>
@@ -447,10 +473,11 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
                       Abaixo da linha de caixa
                     </td>
                     {Array.from({ length: larguras.length - 1 }).map((_, i) => {
-                      const congelada = primeira?.total && (i === 0 || (i === 1 && !!primeira.unidade));
+                      const congela = !!primeira && congelada(primeira, colunas)
+                        && (i === 0 || (i === 1 && !!primeira.unidade));
                       return (
                         <td key={i} className="border-t border-border/60 bg-card"
-                          style={congelada ? { position: 'sticky', left: i === 0 ? W_FAZENDA : W_FAZENDA + largurasDaColuna(primeira, unidades)[0], zIndex: 20, backgroundColor: FUNDO_TOTAL } : undefined} />
+                          style={congela ? { position: 'sticky', left: i === 0 ? W_FAZENDA : W_FAZENDA + largurasDaColuna(primeira!, unidades)[0], zIndex: 20, backgroundColor: FUNDO_TOTAL } : undefined} />
                       );
                     })}
                   </tr>
@@ -564,7 +591,7 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, onAlternar, onAbrir
 
       {colunas.map(col => {
         const slots = slotsDaColuna(col, unidades);
-        const estiloDoSlot = (i: number) => (!col.total ? undefined
+        const estiloDoSlot = (i: number) => (!congelada(col, colunas) ? undefined
           : i === 0 ? estiloTotalRs : i === 1 ? estiloTotalCab(col, unidades) : undefined);
         if (!col.linhas) {
           return (
@@ -636,7 +663,8 @@ function LinhaPercentual({ def, colunas, unidades }: {
             <td className={cn('truncate px-[7px] text-right tabular-nums text-muted-foreground', fundo)}
               style={{
                 fontSize: 9,
-                ...(col.total ? { ...estiloTotalRs, backgroundColor: FUNDO_TOTAL, borderLeft: BORDA_TOTAL } : {}),
+                ...(col.total ? { backgroundColor: FUNDO_TOTAL, borderLeft: BORDA_TOTAL } : {}),
+                ...(congelada(col, colunas) ? estiloTotalRs : {}),
               }}>
               {texto}
             </td>
@@ -645,7 +673,9 @@ function LinhaPercentual({ def, colunas, unidades }: {
                 ausentes: a coluna não pode encolher só nesta linha. */}
             {slotsDaColuna(col, unidades).slice(1).map((sl, i) => (
               <td key={sl} className={cn(fundo)}
-                style={col.total && i === 0 ? { ...estiloTotalCab(col, unidades), backgroundColor: FUNDO_TOTAL } : undefined} />
+                style={col.total && i === 0
+                  ? { ...(congelada(col, colunas) ? estiloTotalCab(col, unidades) : {}), backgroundColor: FUNDO_TOTAL }
+                  : undefined} />
             ))}
           </Fragment>
         );
@@ -691,7 +721,7 @@ function LinhaCentro({ def, centro, colunas, bloco, unidades, onAbrirLista, onAb
       </td>
       {colunas.map(col => {
         const slots = slotsDaColuna(col, unidades);
-        const estiloDoSlot = (i: number) => (!col.total ? undefined
+        const estiloDoSlot = (i: number) => (!congelada(col, colunas) ? undefined
           : i === 0 ? estiloTotalRs : i === 1 ? estiloTotalCab(col, unidades) : undefined);
         if (!col.linhas) {
           return (

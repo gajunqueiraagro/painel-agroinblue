@@ -868,3 +868,25 @@ reticências e mostra o inteiro no `title` — nunca empurra o layout.
 **Onde nasceu:** o cabeçalho do card Resumo da Conciliação (PR-CONCILIA-TOPO-01) andava
 quando o nome da conta quebrava em duas linhas — "Banco Bradesco" cabia em ~32px, "Banco
 Bradesco Tito" subia para ~47px e desalinhava o card dos vizinhos Status e Saldos.
+
+---
+
+## A28 — O tempo corre da esquerda para a direita, e a comparação fica à direita do que compara
+
+**Regra:** numa grade ou num gráfico com eixo de tempo, o recorte **mais antigo fica à
+esquerda** e o **mais recente à direita** — inclusive quando o mais recente é o período que
+a tela está mostrando. Quando houver uma coluna de comparação (Δ, variação, meta), ela vem
+**depois** das colunas que compara, nunca antes.
+
+**Por quê:** ler uma série é acompanhar uma linha; começá-la pelo fim obriga a decodificar
+a ordem antes de ler o dado. Foi o que aconteceu no DRE da pecuária: a visão × Anos listava
+o período atual primeiro e os anteriores descendo, enquanto o modal de histórico da mesma
+linha desenhava as barras em ordem cronológica. As duas telas do mesmo DRE liam o tempo em
+direções opostas.
+
+**Consequência de layout que não se pode esquecer:** a coluna de referência (fundo navy,
+destaque) deixa de ser a primeira. Congelar (`sticky`) é da **posição**, não do papel — uma
+coluna congelada à esquerda que está no fim da tabela cobre as primeiras ao rolar. No DRE,
+`c.total` diz "é a referência" e `congelada()` diz "gruda", e são duas perguntas diferentes.
+
+**Onde nasceu:** DRE-PERIODO-01 (23/09/2026), decisão do Gabriel.
