@@ -392,6 +392,72 @@ const rotuloSlot = (s: SlotPec, c: ColunaPec) =>
   (s === 'pct' ? 'Δ %' : s === 'rs' ? (c.tipo === 'delta' ? 'Δ R$' : 'R$') : ROTULO_UNIDADE[s]);
 
 /**
+ * A COLUNA META SE MARCA PELA FORMA, NÃO PELA COR — fix5, decisão do Gabriel de 23/09.
+ *
+ * ⚠ TRACEJADO PORQUE COR NENHUMA SOBREVIVE ÀS QUATRO FAIXAS. O contorno atravessa sete fundos (o
+ * cabeçalho `#3a4864`, a linha branca, o `bg-muted` e as faixas t1..t4), e a medição da FASE 0
+ * mostrou que nenhum laranja passa dos 3:1 em todos: o t3 (`#b6cade`) apaga os tons claros e o
+ * cabeçalho e o t4 apagam os escuros. O `--meta` fica em 3,78 sobre branco e 2,25 sobre o t3 —
+ * é o traço que o olho pega ali, não o contraste.
+ * ⚠ E A COR É A DA CASA: `--meta` é o token do A11 (`docs/PADROES-UI.md:182-193`), laranja escuro
+ * com nome semântico. Não se abre uma quarta convenção de Meta neste PR.
+ */
+const BORDA_META = '2px dashed hsl(var(--meta))';
+/**
+ * ⚠ A RESERVA É O QUE SEGURA A LEI DA ESTABILIDADE. As laterais não precisam dela — com
+ * `table-layout: fixed` a largura vem do `<colgroup>` e a borda é desenhada PARA DENTRO, então 1px
+ * de divisória e 2px de tracejado ocupam a mesma coluna. As horizontais precisam: um `borderTop` de
+ * 2px numa tabela `border-collapse` cresce a altura, e ela sumiria ao trocar [Meta] por [1]. Por
+ * isso a primeira coluna reserva topo e base TRANSPARENTES em toda referência, e só a cor muda.
+ */
+const BORDA_RESERVA = '2px dashed transparent';
+const ehMeta = (c: ColunaPec) => c.chave === '__meta__';
+
+/**
+ * As bordas de uma célula da coluna Meta — laterais na primeira e na última sub-coluna, topo e base
+ * nas pontas da grade. `base` só é verdadeiro na ÚLTIMA linha renderizada — quem a escolhe é o
+ * objeto `base` montado no `tbody`.
+ */
+const bordaDaMeta = (col: ColunaPec, i: number, n: number,
+  pontas?: { topo?: boolean; base?: boolean }): CSSProperties => {
+  const meta = ehMeta(col);
+  /* ⚠ A PONTA SÓ EXISTE ONDE O CHAMADOR DIZ QUE EXISTE: `topo` só é declarado no cabeçalho e `base`
+     só na última linha. Declarada, ela vira tracejado na Meta e reserva transparente em toda outra
+     referência — é a igualdade entre os estados que a lei da estabilidade cobra.
+     ⚠ E A PONTA VALE PARA TODA SUB-COLUNA, não só a primeira: com os chips R$ e R$/ha marcados a
+     Meta ocupa duas células por linha, e fechar só a de R$ deixava a base tracejada na metade
+     esquerda da coluna — medido no preview antes de existir este parágrafo. */
+  const ponta = (v: boolean | undefined) =>
+    (v === undefined ? undefined : v && meta ? BORDA_META : BORDA_RESERVA);
+  const topo = ponta(pontas?.topo);
+  const base = ponta(pontas?.base);
+  return {
+    ...(topo ? { borderTop: topo } : {}),
+    ...(base ? { borderBottom: base } : {}),
+    ...(meta && i === 0 ? { borderLeft: BORDA_META } : {}),
+    ...(meta && i === n - 1 ? { borderRight: BORDA_META } : {}),
+  };
+};
+
+/**
+ * A PALAVRA "META" EM LARANJA CLARO — fix5, item B.
+ *
+ * ⚠ CLARO, E NÃO O `--meta`: estes rótulos são brancos sobre `CINZA_CABECALHO` (`#3a4864`), e ali o
+ * `--meta` dá 2,42:1 — abaixo de qualquer piso para texto de 10px. O `amber-400` dá 5,49:1 sobre o
+ * mesmo fundo. O token não tem variante clara (`--meta-foreground` é branco, a cor de texto SOBRE o
+ * laranja, não um laranja claro), por isso a classe é literal — e literal ESTÁTICA, que é o que o
+ * Tailwind consegue emitir.
+ * ⚠ SÓ A PALAVRA: "real − meta" fica branco com "meta" em âmbar, como o pedido diz.
+ */
+const MetaRealcada = ({ texto }: { texto: string }) => (
+  <>
+    {texto.split(/(meta)/i).map((p, i) => (/^meta$/i.test(p)
+      ? <span key={i} className="text-amber-400">{p}</span>
+      : <Fragment key={i}>{p}</Fragment>))}
+  </>
+);
+
+/**
  * CONGELA-SE A PRIMEIRA COLUNA, NÃO "A DO TOTAL" — DRE-PERIODO-01.
  *
  * ⚠ ATÉ AQUI OS DOIS ERAM A MESMA COISA: o Total abria a grade em todas as visões, e `c.total`
@@ -524,6 +590,9 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
   const temSub = colunas.some(c => !!c.sub);
   const ALTURA_NOME = temSub ? 26 : 14;
   const primeira = colunas[0];
+  /* ⚠ O REALCE É DA REFERÊNCIA, NÃO DA COLUNA: quem cita a meta é o cabeçalho dela E o "real − meta"
+     do Δ, que é outra coluna. Por isso a pergunta é feita à grade inteira, uma vez. */
+  const temMeta = colunas.some(ehMeta);
 
   /** Quais grupos estão abertos. Fechados por padrão (§4) — e o estado pode vir de fora. */
   const [abertosLocal, setAbertosLocal] = useState<Record<string, boolean>>({});
@@ -566,12 +635,17 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
                 style={c.total
                   ? { ...(congelada(c, colunas) ? { left: W_FAZENDA } : {}),
                       backgroundColor: NAVY_TOTAL, borderLeft: BORDA_TOTAL_CAB }
-                  : { borderLeft: '1px solid rgba(255,255,255,.22)' }}>
-                <div className="truncate text-[10px] font-medium leading-[12px]" title={c.nome}>{c.nome}</div>
+                  : { borderLeft: '1px solid rgba(255,255,255,.22)',
+                      /* ⚠ O `colSpan` JÁ COBRE A COLUNA INTEIRA: aqui o topo do contorno fecha de
+                         uma vez, e por isso a chamada é (0, 1) — uma célula só. */
+                      ...bordaDaMeta(c, 0, 1, { topo: true }) }}>
+                <div className="truncate text-[10px] font-medium leading-[12px]" title={c.nome}>
+                  {temMeta ? <MetaRealcada texto={c.nome} /> : c.nome}
+                </div>
                 {temSub && (
                   <div className="truncate whitespace-nowrap text-[10px] font-normal leading-[12px] text-white"
                     title={c.subLongo || c.sub || undefined}>
-                    {c.sub || '\u00a0'}
+                    {c.sub ? (temMeta ? <MetaRealcada texto={c.sub} /> : c.sub) : '\u00a0'}
                   </div>
                 )}
               </th>
@@ -597,7 +671,8 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
                             ? (i === 0 ? { left: W_FAZENDA }
                               : i === 1 ? { left: W_FAZENDA + largurasDaColuna(c, unidades)[0] } : {})
                             : {}) }
-                      : { top: ALTURA_NOME, ...(i === 0 ? { borderLeft: '1px solid rgba(255,255,255,.22)' } : {}) }}>
+                      : { top: ALTURA_NOME, ...(i === 0 ? { borderLeft: '1px solid rgba(255,255,255,.22)' } : {}),
+                          ...bordaDaMeta(c, i, slotsDaColuna(c, unidades).length) }}>
                     {rotuloSlot(sl, c)}
                   </th>
                 ))}
@@ -607,7 +682,7 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
         </thead>
 
         <tbody>
-          {LINHAS_DO_MODO(modo).map(def => {
+          {LINHAS_DO_MODO(modo).map((def, iDef, defs) => {
             const bloco = BLOCO_DA_LINHA[def.chave];
             const aberto = !!expandidos[def.chave];
             /* ⚠ AS FILHAS SÃO A UNIÃO DAS COLUNAS DE TOTAL, e é ela que manda: um centro que só
@@ -632,32 +707,47 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
                 centros.push({ bloco: 'rateio_adm', centro: 'Rateio administrativo', valor: 0, a_pagar: 0 });
               }
             }
+            /* ⚠ QUEM FECHA A GRADE NÃO É SEMPRE A ÚLTIMA `def` — é a última linha RENDERIZADA dela, e
+               a ordem de render manda: filhas > Lucro por hectare > % do VBP > a própria linha. No
+               `lucro_liquido`, que hoje encerra os dois modos, a base pula para o "Lucro por hectare"
+               quando o chip R$/ha está desmarcado, porque é ele que aparece embaixo. */
+            const ultima = iDef === defs.length - 1;
+            const comPercentual = COM_PERCENTUAL.has(def.chave);
+            const comPorHectare = COM_POR_HECTARE.has(def.chave) && !unidades.includes('ha');
+            const comFilhas = aberto && centros.length > 0;
+            const base = {
+              filha: ultima && comFilhas,
+              porHectare: ultima && !comFilhas && comPorHectare,
+              percentual: ultima && !comFilhas && !comPorHectare && comPercentual,
+              linha: ultima && !comFilhas && !comPorHectare && !comPercentual,
+            };
             return (
               <Fragment key={def.chave}>
                 <LinhaPec def={def} colunas={colunas} centros={centros} unidades={unidades}
-                  aberto={aberto} onAlternar={() => alternar(def.chave)}
+                  aberto={aberto} onAlternar={() => alternar(def.chave)} base={base.linha}
                   onAbrirLista={onAbrirLista} onAbrirDidatico={onAbrirDidatico}
                   onAbrirRateio={onAbrirRateio} onAbrirHistorico={onAbrirHistorico} />
 
                 {/* ⚠ A LINHA DE % VEM LOGO ABAIXO e é leitura de apoio: 9px, muted, sem recuo,
                     altura 14. Ela não é uma linha do DRE — é a mesma linha vista noutra unidade,
                     e por isso não ganha nem cor de sinal nem clique. */}
-                {COM_PERCENTUAL.has(def.chave) && (
-                  <LinhaPercentual def={def} colunas={colunas} unidades={unidades} />
+                {comPercentual && (
+                  <LinhaPercentual def={def} colunas={colunas} unidades={unidades} base={base.percentual} />
                 )}
 
                 {/* ⚠ O LUCRO POR HECTARE É LEITURA DE APOIO, como o % do VBP: mesma régua (9px,
                     muted, altura 14), sem cor de sinal e sem clique. Ele some quando o chip R$/ha
                     está marcado — ali a sub-coluna já responde, e repetir a mesma conta duas vezes
                     na mesma linha é ruído. */}
-                {COM_POR_HECTARE.has(def.chave) && !unidades.includes('ha') && (
-                  <LinhaPorHectare def={def} colunas={colunas} unidades={unidades} />
+                {comPorHectare && (
+                  <LinhaPorHectare def={def} colunas={colunas} unidades={unidades} base={base.porHectare} />
                 )}
 
                 {/* As filhas: um centro por linha, na régua `filha` (9px/14px, recuo 16). */}
-                {aberto && centros.map(c => (
+                {aberto && centros.map((c, iC) => (
                   <LinhaCentro key={`${def.chave}-${c.centro}`} def={def} centro={c} unidades={unidades}
-                    colunas={colunas} bloco={bloco ?? ''} onAbrirLista={onAbrirLista} />
+                    colunas={colunas} bloco={bloco ?? ''} onAbrirLista={onAbrirLista}
+                    base={base.filha && iC === centros.length - 1} />
                 ))}
               </Fragment>
             );
@@ -668,12 +758,14 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
   );
 }
 
-function LinhaPec({ def, colunas, centros, aberto, unidades, onAlternar, onAbrirLista, onAbrirDidatico, onAbrirRateio, onAbrirHistorico }: {
+function LinhaPec({ def, colunas, centros, aberto, unidades, base, onAlternar, onAbrirLista, onAbrirDidatico, onAbrirRateio, onAbrirHistorico }: {
   def: DefPec;
   colunas: readonly ColunaPec[];
   centros: readonly CentroPec[];
   aberto: boolean;
   unidades: readonly UnidadePec[];
+  /** ⚠ A ÚLTIMA LINHA DA GRADE FECHA O CONTORNO DA META embaixo — ver `bordaDaMeta`. */
+  base?: boolean;
   onAlternar: () => void;
   onAbrirLista?: (r: RecortePec) => void;
   onAbrirDidatico?: (fazendaId: string | null, fazendaNome: string, qual: 'vpb' | 'efeito') => void;
@@ -783,10 +875,11 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, onAlternar, onAbrir
         /* ⚠ NUMA LINHA DE FAIXA O CINZA DO TOTAL SAI DE CENA: ele é um `backgroundColor` inline e
            cobriria o azul justamente na coluna de referência. `undefined` remove a propriedade —
            o React a omite —, e a classe da faixa, que é opaca, fica valendo. */
-        const estiloDoSlot = (i: number) => {
-          const base = !congelada(col, colunas) ? undefined
+        const estiloDoSlot = (i: number): CSSProperties => {
+          const fixo = !congelada(col, colunas) ? undefined
             : i === 0 ? estiloTotalRs : i === 1 ? estiloTotalCab(col, unidades) : undefined;
-          return daFaixa ? { ...(base ?? {}), backgroundColor: undefined } : base;
+          const sem = daFaixa ? { ...(fixo ?? {}), backgroundColor: undefined } : fixo;
+          return { ...(sem ?? {}), ...bordaDaMeta(col, i, slots.length, base ? { base: true } : undefined) };
         };
         if (!col.linhas) {
           return (
@@ -816,7 +909,10 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, onAlternar, onAbrir
             {slots.map((sl, i) => (sl === 'rs' ? (
               <Celula key={sl} valor={v} cor={col.comparacao && !daFaixa ? 'text-muted-foreground' : cor}
                 destaque={def.destaque} fonte={col.comparacao ? REGUA_LINHA.simples.fonte : regua.fonte}
-                bordaEsquerda={!col.total && i === 0} total={col.total} fundo={fundo}
+                /* ⚠ A DIVISÓRIA DE 1px SAI ONDE O TRACEJADO ENTRA: na `Celula` o bloco de borda é
+                   aplicado DEPOIS do `estilo`, então os dois disputariam o mesmo `borderLeft` e o
+                   1px venceria. Aqui a coluna Meta abre mão dela e recebe a sua por `estiloDoSlot`. */
+                bordaEsquerda={!col.total && i === 0 && !ehMeta(col)} total={col.total} fundo={fundo}
                 faixa={daFaixa?.fundo} marcador={marcador(col, v)}
                 onAbrir={abrir}
                 estilo={estiloDoSlot(i)}
@@ -870,8 +966,8 @@ function faixaDoApoio(def: DefPec) {
  * mas SEM recuo — recuar sugeriria que ela é um item dentro do subtotal, e ela não é.
  * ⚠ NO DELTA ELA FICA VAZIA: "% do VBP" de uma diferença não é leitura de nada.
  */
-function LinhaPercentual({ def, colunas, unidades }: {
-  def: DefPec; colunas: readonly ColunaPec[]; unidades: readonly UnidadePec[];
+function LinhaPercentual({ def, colunas, unidades, base }: {
+  def: DefPec; colunas: readonly ColunaPec[]; unidades: readonly UnidadePec[]; base?: boolean;
 }) {
   const apoio = faixaDoApoio(def);
   return (
@@ -892,6 +988,7 @@ function LinhaPercentual({ def, colunas, unidades }: {
                 fontSize: 9,
                 ...(col.total ? { ...apoio.semFundo({ backgroundColor: FUNDO_TOTAL }), borderLeft: BORDA_TOTAL } : {}),
                 ...(congelada(col, colunas) ? apoio.semFundo(estiloTotalRs) : {}),
+                ...bordaDaMeta(col, 0, slotsDaColuna(col, unidades).length, base ? { base: true } : undefined),
               }}>
               {texto}
             </td>
@@ -900,9 +997,12 @@ function LinhaPercentual({ def, colunas, unidades }: {
                 ausentes: a coluna não pode encolher só nesta linha. */}
             {slotsDaColuna(col, unidades).slice(1).map((sl, i) => (
               <td key={sl} className={cn(apoio.fundo)}
-                style={col.total && i === 0
-                  ? apoio.semFundo({ ...(congelada(col, colunas) ? estiloTotalCab(col, unidades) : {}), backgroundColor: FUNDO_TOTAL })
-                  : undefined} />
+                style={{
+                  ...(col.total && i === 0
+                    ? apoio.semFundo({ ...(congelada(col, colunas) ? estiloTotalCab(col, unidades) : {}), backgroundColor: FUNDO_TOTAL })
+                    : {}),
+                  ...bordaDaMeta(col, i + 1, slotsDaColuna(col, unidades).length, base ? { base: true } : undefined),
+                }} />
             ))}
           </Fragment>
         );
@@ -922,8 +1022,8 @@ function LinhaPercentual({ def, colunas, unidades }: {
  * ⚠ SEM ÁREA, TRAÇO — nunca zero: fazenda sem fechamento de área não tem lucro por hectare, e
  * "R$ 0,00/ha" afirmaria que ela não lucrou.
  */
-function LinhaPorHectare({ def, colunas, unidades }: {
-  def: DefPec; colunas: readonly ColunaPec[]; unidades: readonly UnidadePec[];
+function LinhaPorHectare({ def, colunas, unidades, base }: {
+  def: DefPec; colunas: readonly ColunaPec[]; unidades: readonly UnidadePec[]; base?: boolean;
 }) {
   const apoio = faixaDoApoio(def);
   return (
@@ -945,15 +1045,19 @@ function LinhaPorHectare({ def, colunas, unidades }: {
                 fontSize: 9,
                 ...(col.total ? { ...apoio.semFundo({ backgroundColor: FUNDO_TOTAL }), borderLeft: BORDA_TOTAL } : {}),
                 ...(congelada(col, colunas) ? apoio.semFundo(estiloTotalRs) : {}),
+                ...bordaDaMeta(col, 0, slotsDaColuna(col, unidades).length, base ? { base: true } : undefined),
               }}>
               {texto !== '' && texto !== traco && <Marcador marcador={apoio.marcador(v)} />}
               {texto}
             </td>
             {slotsDaColuna(col, unidades).slice(1).map((sl, i) => (
               <td key={sl} className={cn(apoio.fundo)}
-                style={col.total && i === 0
-                  ? apoio.semFundo({ ...(congelada(col, colunas) ? estiloTotalCab(col, unidades) : {}), backgroundColor: FUNDO_TOTAL })
-                  : undefined} />
+                style={{
+                  ...(col.total && i === 0
+                    ? apoio.semFundo({ ...(congelada(col, colunas) ? estiloTotalCab(col, unidades) : {}), backgroundColor: FUNDO_TOTAL })
+                    : {}),
+                  ...bordaDaMeta(col, i + 1, slotsDaColuna(col, unidades).length, base ? { base: true } : undefined),
+                }} />
             ))}
           </Fragment>
         );
@@ -971,12 +1075,13 @@ function LinhaPorHectare({ def, colunas, unidades }: {
  * ⚠ E O `'(sem)'` VIAJA INTEIRO ATÉ A RPC — ele é um centro de verdade ("lançamento sem centro"),
  * não ausência. Mandar `null` no lugar dele traria o bloco todo.
  */
-function LinhaCentro({ def, centro, colunas, bloco, unidades, onAbrirLista }: {
+function LinhaCentro({ def, centro, colunas, bloco, unidades, base, onAbrirLista }: {
   def: DefPec;
   centro: CentroPec;
   colunas: readonly ColunaPec[];
   bloco: string;
   unidades: readonly UnidadePec[];
+  base?: boolean;
   onAbrirLista?: (r: RecortePec) => void;
 }) {
   const regua = REGUA_LINHA.filha;
@@ -1001,8 +1106,11 @@ function LinhaCentro({ def, centro, colunas, bloco, unidades, onAbrirLista }: {
       </td>
       {colunas.map(col => {
         const slots = slotsDaColuna(col, unidades);
-        const estiloDoSlot = (i: number) => (!congelada(col, colunas) ? undefined
-          : i === 0 ? estiloTotalRs : i === 1 ? estiloTotalCab(col, unidades) : undefined);
+        const estiloDoSlot = (i: number): CSSProperties => ({
+          ...(!congelada(col, colunas) ? {}
+            : i === 0 ? estiloTotalRs : i === 1 ? estiloTotalCab(col, unidades) : {}),
+          ...bordaDaMeta(col, i, slots.length, base ? { base: true } : undefined),
+        });
         if (!col.linhas) {
           return (
             <Fragment key={col.chave}>
@@ -1036,7 +1144,7 @@ function LinhaCentro({ def, centro, colunas, bloco, unidades, onAbrirLista }: {
           <Fragment key={col.chave}>
             {slots.map((sl, i) => (sl === 'rs' ? (
               <Celula key={sl} valor={v} cor={cor} fonte={regua.fonte} filha
-                bordaEsquerda={!col.total && i === 0} total={col.total} fundo="bg-card" onAbrir={abrir}
+                bordaEsquerda={!col.total && i === 0 && !ehMeta(col)} total={col.total} fundo="bg-card" onAbrir={abrir}
                 estilo={estiloDoSlot(i)} />
             ) : (
               <CelulaUnit key={sl}
