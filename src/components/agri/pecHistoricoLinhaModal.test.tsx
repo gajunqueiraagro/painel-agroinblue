@@ -226,7 +226,10 @@ describe('a navegação para a filha, no mesmo modal', () => {
       periodoRotulo="Safra 25/26" clienteNome="NJ Pecuária" unidadeInicial="rs"
       onFechar={() => {}} />,
   );
-  const titulo = () => document.querySelector('h2')?.textContent ?? '';
+  /* ⚠ O `h2` PASSOU A CARREGAR O BOTÃO "Voltar" (fix3), e os três casos abaixo falharam por isso —
+     falha certa, pela razão certa: o contrato do cabeçalho mudou. O que eles querem ler é o
+     CAMINHO, então o controle sai da leitura em vez de os casos serem afrouxados. */
+  const titulo = () => (document.querySelector('h2')?.textContent ?? '').replace(/^\s*Voltar/, '');
 
   it('clicar na legenda de uma filha abre a filha, com o caminho; clicar no pai volta', () => {
     montarGrupo();
@@ -245,6 +248,43 @@ describe('a navegação para a filha, no mesmo modal', () => {
     expect(voltar).toBeDefined();
     fireEvent.click(voltar as Element);
     expect(titulo()).toBe('Custo variável · histórico');
+  });
+
+  /**
+   * ⚠ DUAS PORTAS PARA A MESMA VOLTA — fix3. Medido na tela em 23/09: o nome do pai no caminho
+   * tinha 60×15px, a mesma cor e o mesmo peso do resto do título; o clique FUNCIONAVA em cima do
+   * texto e não fazia nada um pixel fora. Um controle que só existe depois que o ponteiro o
+   * encontra é, para quem usa, um controle que não existe — daí o botão "Voltar" ao lado.
+   * ⚠ O TESTE COBRA AS DUAS, e o `aria-label` é o contrato: ele é o que um leitor de tela ouve e o
+   * que este teste procura, em vez do texto, que é decoração.
+   */
+  it('as duas portas de volta levam ao mesmo lugar', () => {
+    const descer = () => {
+      const item = [...document.querySelectorAll('div')]
+        .find(d => d.className.includes('cursor-pointer') && d.textContent?.trim() === 'Nutrição');
+      fireEvent.click(item as Element);
+    };
+    const portas = () => [...document.querySelectorAll('h2 button')]
+      .filter(b => b.getAttribute('aria-label') === 'Voltar para Custo variável');
+    const legendaTem = (n: string) => [...document.querySelectorAll('span')]
+      .some(x => x.textContent === n && x.className.includes('truncate'));
+
+    montarGrupo();
+    descer();
+    expect(titulo()).toBe('Custo variável›Nutrição · histórico');
+    /* São duas: o botão "Voltar" e o nome do pai no caminho. */
+    expect(portas()).toHaveLength(2);
+
+    fireEvent.click(portas()[0]);
+    expect(titulo()).toBe('Custo variável · histórico');
+    /* E o pai reabre INTEIRO: a legenda volta a ser a das filhas. */
+    expect(legendaTem('Pastagem')).toBe(true);
+    expect(legendaTem('Sanidade')).toBe(true);
+
+    descer();
+    fireEvent.click(portas()[1]);
+    expect(titulo()).toBe('Custo variável · histórico');
+    expect(legendaTem('Pastagem')).toBe(true);
   });
 
   /**

@@ -13,7 +13,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { X } from 'lucide-react';
+import { X, ChevronLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatNum } from '@/lib/calculos/formatters';
 import { Segmentado } from '@/components/ui/segmentado';
@@ -453,20 +453,36 @@ export function PecHistoricoLinhaModal({
         {/* ⚠ O CABEÇALHO AZUL É O DO `PecLancamentosModal`, o vizinho desta mesma tela. */}
         <div className="flex items-start justify-between gap-2 bg-primary px-4 py-2.5 text-primary-foreground">
           <div className="min-w-0">
-            {/* ⚠ O TÍTULO É O CAMINHO, e o pai é um botão: quem entrou numa filha pelo donut precisa
-                de uma porta de volta que não seja fechar e reabrir o modal. O "›" é separador, não
-                texto clicável. */}
-            <h2 className="truncate text-[13px] font-medium leading-tight">
+            {/* ⚠ O TÍTULO É O CAMINHO, e o pai é um botão — mas ELE NÃO PARECIA UM, e foi isso que a
+                homologação de 23/09 pegou. Medido na tela: o alvo tinha 60×15px, mesma cor e mesmo
+                peso do resto do título, sublinhado só no hover. O clique FUNCIONAVA em cima do
+                texto; fora dele, nada — e um controle que só existe depois que o ponteiro o
+                encontra é, para quem usa, um controle que não existe.
+                ⚠ AGORA ELE SE ANUNCIA: sublinhado pontilhado em repouso, sólido no hover, e o alvo
+                cresce com `px-1 py-0.5` puxado de volta por `-mx-1`, para o texto não andar. O "›"
+                segue sendo separador, não alvo. */}
+            <h2 className="flex items-center gap-1 truncate text-[13px] font-medium leading-tight">
               {voltarAoPai && (
                 <>
+                  {/* ⚠ E UM BOTÃO "‹ Voltar" AO LADO, com o chevron da casa: quem volta não deveria
+                      precisar mirar no nome do pai. Os dois fazem a mesma coisa; o que muda é que
+                      este se acha sem procurar. */}
                   <button type="button" onClick={voltarAoPai}
-                    className="underline-offset-2 hover:underline" title={`voltar a ${paiRotulo}`}>
+                    aria-label={`Voltar para ${paiRotulo}`} title={`Voltar para ${paiRotulo}`}
+                    className="-ml-1 flex shrink-0 items-center gap-0.5 rounded px-1 py-0.5 text-[11px]
+                      font-normal text-primary-foreground/80 hover:bg-white/10 hover:text-primary-foreground">
+                    <ChevronLeft className="h-3 w-3" /> Voltar
+                  </button>
+                  <button type="button" onClick={voltarAoPai}
+                    aria-label={`Voltar para ${paiRotulo}`} title={`Voltar para ${paiRotulo}`}
+                    className="-mx-1 shrink-0 rounded px-1 py-0.5 underline decoration-dotted
+                      underline-offset-2 hover:bg-white/10 hover:decoration-solid">
                     {paiRotulo}
                   </button>
-                  <span className="px-1 text-primary-foreground/70">›</span>
+                  <span className="shrink-0 text-primary-foreground/70">›</span>
                 </>
               )}
-              {nomeDaLinha} · histórico
+              <span className="truncate">{nomeDaLinha} · histórico</span>
             </h2>
             <div className="mt-0.5 truncate text-[11px] text-primary-foreground/80">
               {[clienteNome, alvo.fazendaId === null ? 'Global' : alvo.fazendaNome,
