@@ -60,7 +60,7 @@ function Cartao({ titulo, linhas }: {
 }
 
 export function PecPatrimonioModal({
-  aberto, fazendaNome, qual, patrimonio, carregando, semP0, p0Origem, onFechar,
+  aberto, fazendaNome, qual, patrimonio, carregando, semP0, p0Origem, p1Origem, p1DivergenciaCab, onFechar,
 }: {
   aberto: boolean;
   /** A coluna clicada. "Total" quando é a coluna de todas. */
@@ -78,6 +78,13 @@ export function PecPatrimonioModal({
    * "sem fechamento" aqui.
    */
   p0Origem: 'fechamento' | 'estoque_inicial' | null;
+  /**
+   * A PONTA FINAL — VPB-ENCERRAMENTO-01. 'encerrada' é a fazenda que parou de ser fechada porque o
+   * gado acabou: o estoque final é zero e a tabela MOSTRA isso, categoria por categoria.
+   */
+  p1Origem: 'fechamento' | 'encerrada' | null;
+  /** O que o zootécnico ainda registra depois do encerramento, em cabeças. Aviso, não bloqueio. */
+  p1DivergenciaCab: number | null;
   onFechar: () => void;
 }) {
   const [aba, setAba] = useState<'pontas' | 'categorias'>('pontas');
@@ -120,6 +127,19 @@ export function PecPatrimonioModal({
               Início do histórico: a ponta inicial é o <strong className="font-medium">rebanho de
               partida</strong> do primeiro mês (estoque inicial), valorado ao preço do primeiro
               fechamento. Vacas de descarte entram como vacas.
+            </div>
+          )}
+
+          {/* ⚠ ENCERRADA NÃO É "SEM DADO": o estoque final é zero porque a atividade acabou, e a
+              tabela continua visível — é nela que se vê o rebanho indo a zero categoria a
+              categoria. A divergência do zootécnico, quando existe, vem junto. */}
+          {p1Origem === 'encerrada' && (
+            <div className="rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-[10px] text-muted-foreground">
+              Fazenda encerrada em {rotuloMes(p1)}: <strong className="font-medium">estoque final
+              zero</strong> — a atividade terminou no período.
+              {p1DivergenciaCab != null && p1DivergenciaCab > 0 && (
+                <> Zootécnico registra {p1DivergenciaCab} cab após o encerramento — corrigir o lançamento.</>
+              )}
             </div>
           )}
 

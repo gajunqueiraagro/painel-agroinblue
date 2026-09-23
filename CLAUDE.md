@@ -499,6 +499,13 @@ no mesmo arquivo.
   nao aparecia no DRE de 2020 porque na visao Comparacao a coluna e' o TOTAL do cliente, e ali a
   RPC responde com `p0_origem_estreia` (booleano), nao com `p0_origem`. Os numeros estavam certos e
   a procedencia, invisivel — o tipo de defeito que so' a tela mostra.
+  De 1774 para 1778 no VPB-ENCERRAMENTO-01: mesmo arquivo, +4 — a ponta FINAL (`p1_origem`).
+  ⚠ NASCE DO EFEITO COLATERAL DO PR ANTERIOR, visto na homologacao: com a ausencia propagando, uma
+  fazenda que PAROU de ser fechada zerava o ano inteiro do cliente (o total e' nulo se qualquer
+  parcela for nula). Quatro periodos ficaram sem numero — NJ civil 2023, NJ 23/24, SR civil 2023 e
+  SR 23/24. Um dos quatro casos trava que divergencia ZERO nao vira null: Sta. Luzia zerou de
+  verdade (0) e Bom Retiro nao (4 cabecas no cache), e tratar 0 como "sem divergencia" apagaria a
+  diferenca entre as duas.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 

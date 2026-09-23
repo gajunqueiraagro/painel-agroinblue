@@ -101,6 +101,19 @@ export interface DrePecLinhas {
    * ele (não `sem_p0`) que a RPC usa para decidir o traço.
    */
   p0_origem: 'fechamento' | 'estoque_inicial' | null;
+  /**
+   * DE ONDE VEIO O P1 — VPB-ENCERRAMENTO-01. 'fechamento' é a ponta final normal; 'encerrada' é a
+   * fazenda que parou de ser fechada porque o gado acabou, e cujo estoque final é zero por fato,
+   * não por suposição; `null` é não haver fonte (período ainda em aberto), e aí segue traço.
+   */
+  p1_origem: 'fechamento' | 'encerrada' | null;
+  /**
+   * ⚠ O ZOOTÉCNICO DISCORDANDO DO FECHAMENTO, em cabeças. A RPC preenche só quando o P1 é
+   * 'encerrada' e o cache ainda registra saldo depois do último fechamento — Bom Retiro tem 4. É
+   * AVISO, não bloqueio: o DRE fecha com zero e o número vai para o `title`, porque esconder a
+   * divergência afirmaria uma concordância que não existe.
+   */
+  p1_divergencia_cab: number | null;
   sem_p1: boolean;
   /** Os centros de custo de TODOS os blocos desta coluna — a tela filtra por bloco. */
   centros: CentroPec[];
@@ -253,6 +266,11 @@ export function lerLinhas(x: unknown): DrePecLinhas {
     p0_origem: o.p0_origem === 'fechamento' || o.p0_origem === 'estoque_inicial' ? o.p0_origem
       : o.p0_origem_estreia === true ? 'estoque_inicial'
         : o.p0_origem_estreia === false ? 'fechamento' : null,
+    /* Mesma tradução do total: por fazenda vem a origem, no total vem a flag. */
+    p1_origem: o.p1_origem === 'fechamento' || o.p1_origem === 'encerrada' ? o.p1_origem
+      : o.p1_origem_encerrada === true ? 'encerrada'
+        : o.p1_origem_encerrada === false ? 'fechamento' : null,
+    p1_divergencia_cab: numOuNulo(o.p1_divergencia_cab),
     centros: lerCentros(o.centros),
     centros_juros: lerCentros(o.centros_juros),
   };
