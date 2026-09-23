@@ -556,6 +556,27 @@ migration e' REGISTRO HISTORICO, nao se reaplica).
   passa a devolver MENOS linhas, e sem erro — a lista so' encolhe. Nenhum gate pega isso.
   Antes de culpar a RPC por um numero que baixou, conferir se a tela le direto e sem tenant.
 
+## DIVIDAS DE DADO E DE MOTOR (abertas, nao tratadas)
+- SALDO-INICIAL-MES-01 — `saldos_iniciais` tem coluna `mes`, e NINGUEM a le'.
+  `fn_zoot_categoria_mensal` (md5 a3e6eb6b) busca o saldo em
+  `WHERE si.fazenda_id = ? AND si.ano = ?` (prosrc :7-8, sem `si.mes`) e a recursao da
+  serie ancora em `WHERE e.mes = 1` (:263). Medido: as 458 linhas das 11 fazendas tem
+  todas `mes = 1` — o campo nunca foi usado com outro valor.
+  ⚠ POR ISSO O SELETOR DE MES DO `SaldoInicialForm` ESTA DESABILITADO (FAZ-ATIVIDADE-01a)
+  e o save grava `mesFinal = 1` fixo: um campo que aceita 6 e grava uma linha que o motor
+  nunca le' e' pior que um campo travado — ele existiria na tabela, apareceria na lista da
+  tela e nao entraria em conta nenhuma. Destravar exige mexer nas DUAS linhas da RPC, e a
+  segunda e' a ancora da serie anual inteira: nao e' troca de constante.
+- ZOOT-CACHE-CATEGORIA-01 — a categoria que existe SO' no LATERAL de
+  `fechamento_pasto_itens` nao chega ao `zoot_mensal_cache`. Medido no Bom Retiro,
+  jan/2022: os 8 `bois` estavam em `fechamento_pasto_itens` e a linha NAO existia no
+  cache; as outras 6 categorias apareciam, com o saldo batendo. A categoria nao entra em
+  `all_cat_bases` e o LATERAL so' e' avaliado para quem ja' esta' la'. Pre-existente.
+- USO-TERRA-ARRENDADO-01 — nao ha' tipo de uso "arrendado a terceiro" no fechamento de
+  area. O Bom Retiro teve a terra arrendada em jan-mai/2022 (receita no financeiro) e os
+  cinco meses estavam com `tipo_uso_mes = 'recria'`, que e' falso. A saida foi APAGAR o
+  mes (FAZ-ATIVIDADE-01a); o certo seria poder declarar o arrendamento.
+
 ## TRABALHO PARKED (nao tocar)
 Working tree pode conter trabalho estacionado de outros PRs (ex: P3.4
 desconsiderar OFX). Arquivos modificados/untracked que nao pertencem ao

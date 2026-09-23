@@ -14,10 +14,17 @@ import { agruparPastosPorFamilia } from '@/lib/pastos/agruparPorFamilia';
 import { formatarAreaBR, parseAreaBR } from '@/lib/areaBR';
 import { FazendasList } from '@/components/FazendasList';
 import { formatNum } from '@/lib/calculos/formatters';
+import { SaldoInicialForm } from '@/components/SaldoInicialForm';
+import { useLancamentos } from '@/hooks/useLancamentos';
 
 // 'area' virou a aba "Cadastro" (Dados + Área fundidos). A CHAVE continua 'area'
 // para não mexer no default de activeTab nem nos blocos condicionais.
-type TabKey = 'area' | 'pastos';
+/* ⚠ 'rebanho' É A TERCEIRA — FAZ-ATIVIDADE-01a. O rebanho de partida da fazenda não tinha onde ser
+   cadastrado: o `SaldoInicialForm` existia, gravava certo em `saldos_iniciais`, e só era montado
+   por `pages/Index.tsx`, que saiu das rotas no PR-BARRA-UNICA-01a. Ficou órfão — código vivo sem
+   pai, como o `ResumoPastosTab`. Ele volta aqui, ao lado de Pastos, porque é a mesma pergunta:
+   o que esta fazenda tem. Nenhum formulário novo foi escrito. */
+type TabKey = 'area' | 'pastos' | 'rebanho';
 
 interface CadastroRow {
   id?: string;
@@ -546,6 +553,7 @@ export function V2Fazendas() {
   const TABS: { key: TabKey; label: string }[] = [
     { key: 'area', label: 'Cadastro' },
     { key: 'pastos', label: 'Pastos' },
+    { key: 'rebanho', label: 'Rebanho inicial' },
   ];
 
   // ── Derivação por família/destino ───────────────────────────────────────────
@@ -972,6 +980,102 @@ export function V2Fazendas() {
 
       {activeTab === 'pastos' && <PastosTab hostBarra={hostBarra} />}
 
+      {activeTab === 'rebanho' && <AbaRebanhoInicial />}
+
+    </div>
+  );
+}
+
+/**
+ * O REBANHO DE PARTIDA DA FAZENDA — FAZ-ATIVIDADE-01a.
+ *
+ * ⚠ NENHUM FORMULÁRIO NOVO: o `SaldoInicialForm` já existia, já gravava em `saldos_iniciais` pelo
+ * `setSaldoInicial` do `useLancamentos`, e estava órfão desde que `pages/Index.tsx` saiu das rotas.
+ * O que faltava era um pai. Duplicar o upsert criaria a segunda dona da mesma escrita — e duas
+ * cópias divergem no primeiro ajuste.
+ * ⚠ A LISTA VEM ANTES DO BOTÃO porque a primeira pergunta do operador é "o que já está lá?". Vazia,
+ * ela diz "—", que é ausência declarada; some, seria "não existe tela".
+ */
+function AbaRebanhoInicial() {
+  const { fazendaAtual, isGlobal } = useFazenda();
+  const { saldosIniciais, setSaldoInicial } = useLancamentos();
+
+  /* ⚠ O QUE A FAZENDA JÁ TEM, por (ano, mês): o hook traz o recorte da fazenda selecionada. */
+  const porPeriodo = useMemo(() => {
+    const mapa = new Map<string, { ano: number; mes: number; cab: number; valor: number }>();
+    for (const s of saldosIniciais) {
+      const mes = s.mes || 1;
+      const k = `${s.ano}-${String(mes).padStart(2, '0')}`;
+      const atual = mapa.get(k) ?? { ano: s.ano, mes, cab: 0, valor: 0 };
+      atual.cab += s.quantidade;
+      /* ⚠ SÓ SOMA VALOR QUANDO HÁ PESO E PREÇO: sem um dos dois o produto seria zero, e zero aqui
+         leria como "rebanho sem valor" em vez de "valor não informado". */
+      atual.valor += (s.pesoMedioKg ?? 0) * (s.precoKg ?? 0) * s.quantidade;
+      mapa.set(k, atual);
+    }
+    return [...mapa.values()].sort((a, b) => (a.ano - b.ano) || (a.mes - b.mes));
+  }, [saldosIniciais]);
+
+  /* ⚠ SÓ O PRIMEIRO É O INÍCIO DO HISTÓRICO — os demais são a abertura de cada ano, derivada do
+     fechamento de dezembro anterior. Marcar todos diria que a fazenda estreia sete vezes. */
+  const chaveDoInicio = porPeriodo.length > 0
+    ? `${porPeriodo[0].ano}-${String(porPeriodo[0].mes).padStart(2, '0')}` : null;
+
+  if (isGlobal || !fazendaAtual) {
+    return (
+      <div className="px-4 py-6 text-[11px] text-muted-foreground">
+        Selecione uma fazenda para cadastrar o rebanho de partida.
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-4 py-3 space-y-3">
+      <div className="flex items-baseline justify-between gap-3">
+        <div>
+          <div className="text-[12px] font-medium">Rebanho inicial · {fazendaAtual.nome}</div>
+          <div className="text-[10px] text-muted-foreground">
+            O rebanho de partida da fazenda, por categoria. Onde já existe fechamento do mês, o
+            fechamento prevalece.
+          </div>
+        </div>
+        <SaldoInicialForm saldosIniciais={saldosIniciais} onSetSaldo={setSaldoInicial} alwaysVisible />
+      </div>
+
+      <div className="rounded-lg border border-border/60 bg-card overflow-hidden">
+        <table className="w-full border-collapse text-[11px] leading-none">
+          <thead>
+            <tr className="bg-[#3a4864]" style={{ height: 22 }}>
+              <th className="px-[7px] text-left text-[10px] font-medium text-white">Período</th>
+              <th className="px-[7px] text-right text-[10px] font-medium text-white">Cabeças</th>
+              <th className="px-[7px] text-right text-[10px] font-medium text-white">Valor</th>
+            </tr>
+          </thead>
+          <tbody>
+            {porPeriodo.length === 0 ? (
+              <tr style={{ height: 20 }}>
+                <td colSpan={3} className="px-[7px] text-center text-muted-foreground" style={{ fontSize: 10 }}>
+                  —
+                </td>
+              </tr>
+            ) : porPeriodo.map(p => (
+              <tr key={`${p.ano}-${p.mes}`} className="bg-card" style={{ height: 20 }}>
+                <td className="px-[7px] truncate" style={{ fontSize: 11 }}>
+                  {String(p.mes).padStart(2, '0')}/{p.ano}
+                  <span className="ml-1 text-muted-foreground" style={{ fontSize: 9 }}>
+                    · {`${p.ano}-${String(p.mes).padStart(2, '0')}` === chaveDoInicio
+                      ? 'início do histórico' : 'abertura do ano'}
+                  </span>
+                </td>
+                <td className="px-[7px] text-right tabular-nums" style={{ fontSize: 11 }}>{formatNum(p.cab, 0)}</td>
+                <td className="px-[7px] text-right tabular-nums text-muted-foreground" style={{ fontSize: 10 }}>
+                  {p.valor > 0 ? formatNum(p.valor, 2) : '—'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

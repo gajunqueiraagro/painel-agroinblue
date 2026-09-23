@@ -99,7 +99,12 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase, totalLan
     if (salvando) return;
     setSalvando(true);
     const anoFinal = Number(anoSelecionado);
-    const mesFinal = Number(mesSelecionado);
+    /* ⚠ SEMPRE JANEIRO — FAZ-ATIVIDADE-01a. O seletor de mês está desabilitado porque
+       `fn_zoot_categoria_mensal` lê `saldos_iniciais` só por `ano` e ancora a série em `mes = 1`.
+       Gravar outro mês criaria uma linha que o motor nunca leria: um dado que existe na tabela,
+       aparece na lista da tela e não entra em conta nenhuma. Enquanto a RPC não muda
+       (SALDO-INICIAL-MES-01), o que se grava é o que se lê. */
+    const mesFinal = 1;
 
     try {
       for (const c of CATEGORIAS) {
@@ -315,8 +320,17 @@ function SaldoInicialDialogContent({
           <div className="space-y-2">
             <Label className="text-xs font-bold">Mês e Ano Base (início do histórico)</Label>
             <div className="flex gap-2">
-              <Select value={mesSelecionado} onValueChange={setMesSelecionado}>
-                <SelectTrigger className="h-9 text-sm font-bold w-[120px]">
+              {/* ⚠ O MÊS ESTÁ DESABILITADO PORQUE O MOTOR NÃO O LÊ — FAZ-ATIVIDADE-01a, e isto foi
+                  medido, não suposto: `fn_zoot_categoria_mensal` busca o saldo por
+                  `WHERE si.fazenda_id = ? AND si.ano = ?` (sem `si.mes`) e a recursão da série
+                  ancora em `WHERE e.mes = 1`. Gravar mês 6 não teria efeito NENHUM — o saldo
+                  entraria em janeiro do mesmo jeito, calado. Confirmado no dado: as 458 linhas
+                  das 11 fazendas têm todas `mes = 1`; o campo nunca foi usado com outro valor.
+                  ⚠ DESABILITADO E VISÍVEL, com o porquê no `title`: escondê-lo faria o operador
+                  supor que o saldo vale do mês em que ele cadastrou. Ver SALDO-INICIAL-MES-01. */}
+              <Select value={mesSelecionado} onValueChange={setMesSelecionado} disabled>
+                <SelectTrigger className="h-9 text-sm font-bold w-[120px]"
+                  title="Saldo inicial vale a partir de janeiro do ano; mês livre em breve.">
                   <SelectValue placeholder="Mês" />
                 </SelectTrigger>
                 <SelectContent>

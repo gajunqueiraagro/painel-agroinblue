@@ -4442,8 +4442,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   // Em edição com lançamento carregado, liberar UI APENAS quando em Global.
   // Administrativo NUNCA libera (nem edição), por design conceitual.
   // PR-NAV-CONTEXTO-FAZENDA-01A — Global deixa de substituir a tela por "Lançamento bloqueado":
-  //   a fazenda passa a ser exigida na PERSISTÊNCIA (formulário/save), não na abertura. Fazendas
-  //   administrativas (tem_pecuaria=false) seguem bloqueadas por design (não fazem zootécnico).
+  //   a fazenda passa a ser exigida na PERSISTÊNCIA (formulário/save), não na abertura. Fazenda
+  //   com tem_pecuaria=false segue bloqueada (não faz zootécnico).
+  // ⚠ O TEXTO DEIXOU DE CHAMÁ-LA DE "ADMINISTRATIVA" — FAZ-ATIVIDADE-01a. O critério é a flag
+  //   `tem_pecuaria`, e ela responde "tem gado HOJE?", não "é administrativa?": a Faz. Bom Retiro
+  //   (Santa Rita) teve pecuária de 2022 a 2023, virou eucalipto, e a tela a acusava de ser
+  //   administrativa — mandando o operador procurar no lugar errado. A mensagem passa a dizer o
+  //   que de fato acontece e ONDE se resolve. O critério em si muda no 01b (atividade por período).
   if (
     isAdministrativo &&
     (aba === 'entrada' || aba === 'saida' || aba === 'reclassificacao')
@@ -4462,7 +4467,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             <h3 className="font-semibold text-foreground text-sm">Lançamento bloqueado</h3>
           </div>
           <p className="text-[11px] text-muted-foreground leading-snug">
-            Fazendas administrativas não permitem lançamentos zootécnicos.
+            Esta fazenda está cadastrada sem pecuária. Ajuste em Cadastros &gt; Fazendas para lançar.
           </p>
         </div>
       </div>

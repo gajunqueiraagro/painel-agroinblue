@@ -310,7 +310,7 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
             <AlertTriangle className="h-10 w-10 text-amber-500 mx-auto" />
             <h2 className="text-lg font-bold text-foreground">Sem dados zootécnicos</h2>
             <p className="text-sm text-muted-foreground">
-              A fazenda <strong>{fazendaAtual.nome}</strong> é classificada como administrativa e não possui dados de rebanho.
+              A fazenda <strong>{fazendaAtual.nome}</strong> está cadastrada sem pecuária. Ajuste em Cadastros &gt; Fazendas para ver o rebanho.
             </p>
             <p className="text-xs text-muted-foreground">
               Para visualizar indicadores zootécnicos, selecione uma fazenda com pecuária ativa.

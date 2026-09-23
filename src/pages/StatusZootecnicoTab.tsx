@@ -531,7 +531,7 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
           <Building2 className="h-16 w-16 text-muted-foreground/40 mb-4" />
           <h2 className="text-lg font-bold text-foreground mb-2">Sem dados de rebanho</h2>
           <p className="text-sm text-muted-foreground max-w-xs">
-            Fazenda administrativa — utilizada apenas para rateio financeiro
+            Fazenda cadastrada sem pecuária — ajuste em Cadastros &gt; Fazendas
           </p>
         </div>
       </div>
