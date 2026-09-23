@@ -1186,6 +1186,7 @@ export function AgriDreLavouraTab() {
         <PecPatrimonioModal
           aberto
           fazendaNome={didatico.nome}
+          clienteNome={clienteAtual?.nome ?? '—'}
           qual={didatico.qual}
           patrimonio={patPec}
           carregando={carregandoPatPec}
