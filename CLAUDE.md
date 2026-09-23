@@ -517,6 +517,17 @@ no mesmo arquivo.
   novo — afirmam o grupo VAZIO **e** o rotulo 'Δ R$' presente na segunda linha —, nunca afrouxados.
   Afirmar so' a ausencia passaria verde tambem se a coluna inteira tivesse sumido (a mesma licao do
   auto-teste do `check:tdz`).
+  De 1780 para 1774 no VPB-REGRA-UNICA-01: `src/hooks/dreP0Estreia.test.ts` foi de 14 para 8 casos.
+  SAIRAM 10 e ENTRARAM 4. Os dez cobriam `p0_origem`, `p1_origem`, `sem_p0`, `sem_p1`,
+  `p1_divergencia_cab` e a traducao de `p0_origem_estreia`/`p1_origem_encerrada` — o vocabulario
+  das DUAS EXCECOES que este PR substituiu por uma regra so'. Cobertura nao se perde quando o
+  codigo e o teste saem juntos (a mesma regra do PR-DRE-LAVOURA-02).
+  Os quatro que entraram travam `p0_fonte`/`p1_fonte`: os tres valores validos de cada, o valor
+  fora do contrato caindo para null, e o total lendo a MESMA chave da fazenda.
+  ⚠ UM DELES AFIRMA QUE O VOCABULARIO VELHO NAO PASSA ('estoque_inicial', 'encerrada'): sem ele,
+  uma RPC antiga conviveria em silencio com a tela nova, e o selo mentiria em vez de sumir.
+  ⚠ OS QUATRO CASOS DO `lerLinhas` FICARAM — o parse ainda propaga null quando a RPC manda null,
+  e isso continua valendo para o cenario `meta`, que nao mudou.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -611,6 +622,40 @@ migration e' REGISTRO HISTORICO, nao se reaplica).
     divergencias. Ela e' GUARDA, nao conserto: o conserto do dado foi a 20261027131700. A prova
     funcional e' que refechar fev/23 do Bom Retiro no Eucalipto dava 878 com a funcao velha e da'
     439 com a nova.
+- CACHE-X-FECHAMENTO-01 — `zoot_mensal_cache.saldo_final` e `valor_rebanho_fechamento_itens` NAO
+  CONCORDAM em 20 dos 655 meses com fechamento (medido 23/09/2026). Sao as duas fontes do rebanho,
+  e desde o VPB-REGRA-UNICA-01 o DRE le' as duas — o fechamento com precedencia, o cache como
+  fallback. Enquanto divergirem, trocar a precedencia MUDA numero homologado.
+  ⚠ FOI ELA QUE DECIDIU A SAIDA DO VPB-REGRA-UNICA-01: a versao que lia so' o cache mudou NJ 2020
+    (−54.729,05), NJ civil 2023 (+5.200,00), NJ 25/26 (+20,38) e SR 22/23 (−1.182.940,26).
+    cliente             fazenda              mes       fechamento   cache    dif
+    Agnaldo Cedenho     Faz. Sta. Maria      2026-04         980      853   -127
+    Agnaldo Cedenho     Faz. Sta. Maria      2026-05         851      829    -22
+    Agnaldo Cedenho     Faz. Sta. Maria      2026-06         653      631    -22
+    Agnaldo Cedenho     Faz. Sta. Tereza     2020-04         746      743     -3
+    Agnaldo Cedenho     Faz. Sta. Tereza     2020-05         635      669    +34
+    Agnaldo Cedenho     Faz. Sta. Tereza     2026-04         857      821    -36
+    NJ Pecuaria         Faz. Pureza          2026-05       4.650    4.648     -2
+    NJ Pecuaria         Faz. Sto. Expedito   2025-03       1.659    1.245   -414
+    NJ Pecuaria         Faz. Sto. Expedito   2025-07       1.222    1.445   +223
+    NJ Pecuaria         Faz. Sto. Expedito   2025-08       1.445    1.658   +213
+    NJ Pecuaria         Faz. Sto. Expedito   2025-09       1.658    1.819   +161
+    NJ Pecuaria         Faz. Sto. Expedito   2025-10       1.819    1.869    +50
+    NJ Pecuaria         Faz. Sto. Expedito   2025-11       1.869    1.873     +4
+    NJ Pecuaria         Faz. Sto. Expedito   2025-12       1.873    1.869     -4
+    Santa Rita Agro     Faz. Bom Retiro      2023-01         438        0   -438
+    Santa Rita Agro     Faz. Bom Retiro      2023-02         439        0   -439
+    Santa Rita Agro     Faz. Bom Retiro      2023-03         441        0   -441
+    Santa Rita Agro     Faz. Bom Retiro      2023-04         442        0   -442
+    Santa Rita Agro     Faz. Bom Retiro      2023-05         412        0   -412
+    Santa Rita Agro     Faz. Bom Retiro      2023-06         374        0   -374
+  ⚠ AS SEIS DO BOM RETIRO NAO SAO DIVERGENCIA DE DADO: o cache de 2023 estava DESMATERIALIZADO —
+    zero linhas —, e a medicao acima foi feita antes do refresh. Depois dele sao 51 linhas e as
+    seis somem da lista. Ficam registradas porque mostram o OUTRO risco do cache como fonte: ele
+    pode estar vazio sem que nada avise, e ai' "sem linha = zero" afirma um rebanho que existe.
+  ⚠ AS CATORZE RESTANTES SAO DIVERGENCIA DE VERDADE e nao foram investigadas. A do Sto. Expedito em
+    2025-03 (414 cabecas) e a maior. Quem for consertar decide QUAL das duas fontes estava errada —
+    e ate' la' o DRE mostra a do fechamento, que e' a oficial.
 - PASTO-DIVERGENCIA-01 — o pasto `⚠️ Divergencia do Campeiro` (`tipo_uso = 'divergencia'`) existe
   em 5 fazendas de 4 clientes e carrega 440 cabecas: Sta. Maria 380, Pureza 23, Ursa Maior 20,
   Baia Grande 13, Sto. Expedito 4 (medido 23/09/2026). Ele e' `ativo = true` e esta' DENTRO da

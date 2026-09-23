@@ -1142,20 +1142,14 @@ export function AgriDreLavouraTab() {
           qual={didatico.qual}
           patrimonio={patPec}
           carregando={carregandoPatPec}
-          /* ⚠ A AUSÊNCIA VEM DA GRADE, não de uma segunda consulta: `fn_dre_pecuaria` já disse
-             quais fazendas não têm fechamento na ponta inicial. */
-          semP0={(didatico.fazendaId
-            ? drePec.fazendas.find(f => f.fazenda_id === didatico.fazendaId)?.linhas.sem_p0
-            : drePec.total.sem_p0) === true}
-          p0Origem={(didatico.fazendaId
-            ? drePec.fazendas.find(f => f.fazenda_id === didatico.fazendaId)?.linhas.p0_origem
-            : drePec.total.p0_origem) ?? null}
-          p1Origem={(didatico.fazendaId
-            ? drePec.fazendas.find(f => f.fazenda_id === didatico.fazendaId)?.linhas.p1_origem
-            : drePec.total.p1_origem) ?? null}
-          p1DivergenciaCab={(didatico.fazendaId
-            ? drePec.fazendas.find(f => f.fazenda_id === didatico.fazendaId)?.linhas.p1_divergencia_cab
-            : drePec.total.p1_divergencia_cab) ?? null}
+          /* ⚠ A FONTE VEM DA GRADE, não de uma segunda consulta: `fn_dre_pecuaria` já disse de
+             onde saiu cada ponta, e o modal só a traduz em frase. */
+          p0Fonte={(didatico.fazendaId
+            ? drePec.fazendas.find(f => f.fazenda_id === didatico.fazendaId)?.linhas.p0_fonte
+            : drePec.total.p0_fonte) ?? null}
+          p1Fonte={(didatico.fazendaId
+            ? drePec.fazendas.find(f => f.fazenda_id === didatico.fazendaId)?.linhas.p1_fonte
+            : drePec.total.p1_fonte) ?? null}
           onFechar={() => setDidatico(null)}
         />
       )}

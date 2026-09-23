@@ -23,7 +23,7 @@ const linhaRpc = (o: Record<string, unknown> = {}) => ({
   juros_proprio: 5, juros_rateado: 0, a_pagar: 0,
   patrimonio: { v_ini_p0: 1, v_fim_p0: 2, v_fim_p1: 3, cab_ini: 4, cab_fim: 5, cab_media: 4 },
   producao: { ha_medio: 10, at_produzida: 1, at_desfrutada: 1, cab_desfrutada: 1, at_comprada: 0, cab_comprada: 0 },
-  sem_p0: false, sem_p1: false, p0_origem: 'fechamento', p1_origem: 'fechamento', p1_divergencia_cab: null,
+  p0_fonte: 'fechamento', p1_fonte: 'fechamento',
   centros: [], centros_juros: [],
   ...o,
 });
@@ -72,82 +72,44 @@ describe('o VPB ausente não vira zero na cascata', () => {
   });
 });
 
-describe('p0_origem diz de onde veio a ponta inicial', () => {
-  it('estreia: a fonte é o rebanho de partida e sem_p0 é falso', () => {
-    const l = lerLinhas(linhaRpc({ p0_origem: 'estoque_inicial', sem_p0: false }));
-    expect(l.p0_origem).toBe('estoque_inicial');
-    expect(l.sem_p0).toBe(false);
+describe('a fonte de cada ponta — VPB-REGRA-UNICA-01', () => {
+  /* ⚠ ELA É INFORMATIVA, NUNCA GATILHO DE TRAÇO. Até este PR a origem da ponta DECIDIA se a
+     variação saía em número ou em "—", e para isso precisava adivinhar quando a ausência de
+     fechamento era estreia da fazenda, fim da atividade ou trabalho por fazer. Errar essa
+     adivinhação apagava a cascata inteira do cliente. Agora ausência de gado vale ZERO, o VPB é
+     sempre P1 − P0, e a fonte só alimenta o selo e o `title`. */
+  it('as três fontes do P0 passam', () => {
+    for (const f of ['fechamento', 'cadastro', 'zero'] as const) {
+      expect(lerLinhas(linhaRpc({ p0_fonte: f })).p0_fonte).toBe(f);
+    }
   });
 
-  it('sem fonte nenhuma: p0_origem nulo', () => {
-    const l = lerLinhas(linhaRpc({ p0_origem: null, sem_p0: true, vpb_operacional: null }));
-    expect(l.p0_origem).toBeNull();
-    expect(l.sem_p0).toBe(true);
+  it('as três fontes do P1 passam', () => {
+    for (const f of ['fechamento', 'cadastro', 'zero'] as const) {
+      expect(lerLinhas(linhaRpc({ p1_fonte: f })).p1_fonte).toBe(f);
+    }
   });
 
-  /* ⚠ VALOR DESCONHECIDO NÃO PASSA. `p0_origem` governa o selo e a frase do modal; deixar entrar
-     um terceiro valor faria a tela decidir sozinha o que mostrar. */
-  it('valor fora do contrato cai para null', () => {
-    expect(lerLinhas(linhaRpc({ p0_origem: 'chute' })).p0_origem).toBeNull();
-    expect(lerLinhas(linhaRpc({ p0_origem: undefined })).p0_origem).toBeNull();
-  });
-});
-
-/**
- * O TOTAL FALA OUTRA LÍNGUA — e é por isso que o selo sumia.
- *
- * ⚠ MEDIDO NA TELA, não deduzido: com o parse lendo só `p0_origem`, o DRE do NJ em 2020 mostrava os
- * números certos e NENHUM selo, porque na visão Comparação a coluna é o TOTAL do cliente e a RPC
- * responde ali com `p0_origem_estreia` (booleano), não com a origem. O selo só apareceria na visão
- * Por fazenda — justamente onde o operador não está quando abre a tela.
- */
-describe('o total traduz p0_origem_estreia para a mesma chave das fazendas', () => {
-  it('total com estreia vira estoque_inicial', () => {
-    const l = lerLinhas({ ...linhaRpc(), p0_origem: undefined, p0_origem_estreia: true });
-    expect(l.p0_origem).toBe('estoque_inicial');
+  /* ⚠ VALOR FORA DO CONTRATO CAI PARA null: a fonte governa o selo e a frase do modal, e deixar
+     entrar um quarto valor faria a tela decidir sozinha o que mostrar. */
+  it('valor fora do contrato, ausente ou do vocabulário ANTIGO cai para null', () => {
+    expect(lerLinhas(linhaRpc({ p0_fonte: 'chute' })).p0_fonte).toBeNull();
+    expect(lerLinhas(linhaRpc({ p0_fonte: undefined })).p0_fonte).toBeNull();
+    /* ⚠ O VOCABULÁRIO VELHO NÃO PASSA, e este caso é o que trava a troca: 'estoque_inicial' e
+       'encerrada' eram os valores das duas exceções que este PR apagou. Aceitá-los faria uma RPC
+       antiga conviver em silêncio com a tela nova. */
+    expect(lerLinhas(linhaRpc({ p0_fonte: 'estoque_inicial' })).p0_fonte).toBeNull();
+    expect(lerLinhas(linhaRpc({ p1_fonte: 'encerrada' })).p1_fonte).toBeNull();
   });
 
-  it('total sem estreia vira fechamento', () => {
-    const l = lerLinhas({ ...linhaRpc(), p0_origem: undefined, p0_origem_estreia: false });
-    expect(l.p0_origem).toBe('fechamento');
-  });
-
-  /* ⚠ A ORIGEM DA FAZENDA GANHA da flag do total: quando as duas chaves vêm juntas, quem manda é a
-     específica — senão uma fazenda 'fechamento' dentro de um total com estreia herdaria o selo. */
-  it('p0_origem explícito ganha de p0_origem_estreia', () => {
-    const l = lerLinhas({ ...linhaRpc(), p0_origem: 'fechamento', p0_origem_estreia: true });
-    expect(l.p0_origem).toBe('fechamento');
-  });
-});
-
-/**
- * A PONTA FINAL DA FAZENDA QUE ENCERROU — VPB-ENCERRAMENTO-01.
- *
- * ⚠ NASCE DO EFEITO COLATERAL DO PR ANTERIOR, medido na homologação: com a ausência propagando,
- * uma fazenda que parou de ser fechada zerava o ano INTEIRO do cliente — quatro períodos ficaram
- * sem número (NJ civil 2023, NJ 23/24, SR civil 2023, SR 23/24). O estoque final dela é zero por
- * fato (o gado acabou), e é isso que a RPC passa a dizer com `p1_origem = 'encerrada'`.
- */
-describe('p1_origem diz como a ponta final terminou', () => {
-  it('encerrada: a fonte é o fim da atividade', () => {
-    const l = lerLinhas(linhaRpc({ p1_origem: 'encerrada', p1_divergencia_cab: 4 }));
-    expect(l.p1_origem).toBe('encerrada');
-    expect(l.p1_divergencia_cab).toBe(4);
-  });
-
-  /* ⚠ A DIVERGÊNCIA É NÚMERO, E ZERO É NÚMERO: Sta. Luzia zerou de verdade (0) e Bom Retiro não
-     (4). Tratar 0 como "sem divergência" apagaria a diferença entre as duas. */
-  it('divergência zero não vira null', () => {
-    expect(lerLinhas(linhaRpc({ p1_origem: 'encerrada', p1_divergencia_cab: 0 })).p1_divergencia_cab).toBe(0);
-    expect(lerLinhas(linhaRpc({ p1_divergencia_cab: null })).p1_divergencia_cab).toBeNull();
-  });
-
-  it('o total traduz p1_origem_encerrada, como faz com a estreia', () => {
-    expect(lerLinhas({ ...linhaRpc(), p1_origem: undefined, p1_origem_encerrada: true }).p1_origem).toBe('encerrada');
-    expect(lerLinhas({ ...linhaRpc(), p1_origem: undefined, p1_origem_encerrada: false }).p1_origem).toBe('fechamento');
-  });
-
-  it('valor fora do contrato cai para null', () => {
-    expect(lerLinhas(linhaRpc({ p1_origem: 'chute' })).p1_origem).toBeNull();
+  /* ⚠ UMA CHAVE SÓ, NA FAZENDA E NO TOTAL — e é o defeito que o PR anterior teve de consertar de
+     véspera: a RPC mandava `p0_origem` por fazenda e `p0_origem_estreia` (booleano) no total, o
+     hook traduzia uma na outra, e o selo sumia da visão Comparação porque ela lê o TOTAL. Agora as
+     duas pontas mandam a mesma chave, e este caso prova que não sobrou tradução nenhuma. */
+  it('o total lê a MESMA chave da fazenda — sem tradução de booleano', () => {
+    expect(lerLinhas({ ...linhaRpc(), p0_fonte: 'cadastro' }).p0_fonte).toBe('cadastro');
+    /* a flag antiga do total não tem mais efeito */
+    expect(lerLinhas({ ...linhaRpc(), p0_fonte: undefined, p0_origem_estreia: true }).p0_fonte).toBeNull();
+    expect(lerLinhas({ ...linhaRpc(), p1_fonte: undefined, p1_origem_encerrada: true }).p1_fonte).toBeNull();
   });
 });

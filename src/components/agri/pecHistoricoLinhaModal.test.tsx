@@ -27,7 +27,7 @@ const linhas = (o: Partial<DrePecLinhas>): DrePecLinhas => ({
   patrimonio: { v_ini_p0: 0, v_fim_p0: 0, v_fim_p1: 0, cab_ini: 0, cab_fim: 0, cab_media: 1000 },
   producao: { ha_medio: 2000, at_produzida: 5000, at_desfrutada: 4000, cab_desfrutada: null,
     at_comprada: 500, cab_comprada: null },
-  sem_p0: false, sem_p1: false, p0_origem: 'fechamento', p1_origem: 'fechamento', p1_divergencia_cab: null,
+  p0_fonte: 'fechamento', p1_fonte: 'fechamento',
   centros: [], centros_juros: [], ...o,
 });
 

@@ -8,8 +8,13 @@
  * do fechamento anterior; `efeito_mercado` = o preço mudou, rebanho congelado. Fundi-las numa
  * "variação de patrimônio" esconderia qual das duas respondeu pelo resultado — que é a pergunta
  * que o produtor faz quando o número sobe sem ele ter vendido nada.
- * ⚠ `sem_p0` / `sem_p1` SÃO DADO: fazenda sem fechamento numa das pontas vem com as duas
- * variações NULAS, e a tela mostra "—". Zero ali afirmaria que o rebanho não mudou.
+ * ⚠ AUSÊNCIA DE FECHAMENTO VALE ZERO, NÃO TRAÇO — VPB-REGRA-UNICA-01, e isto REVERTE o que este
+ * comentário dizia. As duas variações vinham NULAS quando faltava fechamento numa das pontas, e o
+ * raciocínio era "zero afirmaria que o rebanho não mudou". Medido: o traço apagava a cascata
+ * INTEIRA de 16 períodos em 4 clientes — fazenda que comprou gado no meio do ano, fazenda que
+ * acabou o gado, ano que começa antes do primeiro fechamento. Sem fechamento não é "não sei quanto
+ * havia": é não haver gado, e zero é o número certo para isso. Quem diz de onde veio cada ponta são
+ * `p0_fonte` / `p1_fonte`, que informam o selo e NÃO decidem mais nada.
  */
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -94,27 +99,21 @@ export interface DrePecLinhas {
     at_comprada: number | null;
     cab_comprada: number | null;
   };
-  sem_p0: boolean;
   /**
-   * DE ONDE VEIO O P0 — VPB-INICIO-01. 'fechamento' é o mês anterior, como sempre foi;
-   * 'estoque_inicial' é o rebanho de partida da ESTREIA da fazenda; `null` é não haver fonte, e é
-   * ele (não `sem_p0`) que a RPC usa para decidir o traço.
+   * DE ONDE VEIO CADA PONTA — VPB-REGRA-UNICA-01.
+   *
+   * 'fechamento' é o fechamento oficial (mês anterior no P0, o próprio mês no P1); 'cadastro' é o
+   * `zoot_mensal_cache` com gado mas sem fechamento — na prática o rebanho de partida da fazenda;
+   * 'zero' é não haver gado.
+   *
+   * ⚠ ELAS SÃO INFORMATIVAS, NUNCA GATILHO DE TRAÇO, e essa é a mudança que importa. As chaves que
+   * moravam aqui — `sem_p0`, `sem_p1`, `p0_origem`, `p1_origem`, `p1_divergencia_cab` — nasceram de
+   * duas EXCEÇÕES (a estreia do VPB-INICIO-01 e o encerramento do VPB-ENCERRAMENTO-01), e cada uma
+   * tinha de adivinhar quando a ausência de fechamento era estreia, fim, ou trabalho por fazer.
+   * Agora ausência de gado vale ZERO e o VPB é sempre P1 − P0: sobrou só dizer de onde veio.
    */
-  p0_origem: 'fechamento' | 'estoque_inicial' | null;
-  /**
-   * DE ONDE VEIO O P1 — VPB-ENCERRAMENTO-01. 'fechamento' é a ponta final normal; 'encerrada' é a
-   * fazenda que parou de ser fechada porque o gado acabou, e cujo estoque final é zero por fato,
-   * não por suposição; `null` é não haver fonte (período ainda em aberto), e aí segue traço.
-   */
-  p1_origem: 'fechamento' | 'encerrada' | null;
-  /**
-   * ⚠ O ZOOTÉCNICO DISCORDANDO DO FECHAMENTO, em cabeças. A RPC preenche só quando o P1 é
-   * 'encerrada' e o cache ainda registra saldo depois do último fechamento — Bom Retiro tem 4. É
-   * AVISO, não bloqueio: o DRE fecha com zero e o número vai para o `title`, porque esconder a
-   * divergência afirmaria uma concordância que não existe.
-   */
-  p1_divergencia_cab: number | null;
-  sem_p1: boolean;
+  p0_fonte: 'fechamento' | 'cadastro' | 'zero' | null;
+  p1_fonte: 'fechamento' | 'cadastro' | 'zero' | null;
   /** Os centros de custo de TODOS os blocos desta coluna — a tela filtra por bloco. */
   centros: CentroPec[];
   /**
@@ -252,25 +251,22 @@ export function lerLinhas(x: unknown): DrePecLinhas {
       at_comprada: numOuNulo(pr.at_comprada),
       cab_comprada: numOuNulo(pr.cab_comprada),
     },
-    sem_p0: o.sem_p0 === true,
-    sem_p1: o.sem_p1 === true,
+
     /**
-     * A FONTE DO P0 — 'fechamento', 'estoque_inicial' (estreia da fazenda) ou `null` (não há).
+     * A FONTE DE CADA PONTA — VPB-REGRA-UNICA-01.
      *
-     * ⚠ O TOTAL NÃO TEM ESTA CHAVE, TEM `p0_origem_estreia`: por fazenda a origem é uma só, mas o
-     * total soma fazendas que podem ter origens diferentes, e a RPC responde ali a pergunta que a
-     * tela faz — "alguma destas veio do rebanho de partida?". Traduzir as duas para o mesmo campo é
-     * o que faz o selo da linha aparecer também na coluna do Total; sem isto ele só apareceria na
-     * visão Por fazenda, que é justamente onde o operador não está quando abre o DRE.
+     * ⚠ UMA CHAVE SÓ, NA FAZENDA E NO TOTAL. Antes a RPC respondia com `p0_origem` por fazenda e
+     * `p0_origem_estreia` (booleano) no total, e o hook traduzia uma na outra — foi assim que o
+     * selo sumiu do DRE de 2020 do NJ, porque a visão Comparação lê o TOTAL e a tradução faltava.
+     * Agora as duas pontas mandam a mesma chave, e o total já resume a fonte MENOS forte das
+     * fazendas: basta ler.
+     * ⚠ VALOR FORA DO CONTRATO CAI PARA `null`: a fonte governa o selo e a frase do modal, e deixar
+     * entrar um quarto valor faria a tela decidir sozinha o que mostrar.
      */
-    p0_origem: o.p0_origem === 'fechamento' || o.p0_origem === 'estoque_inicial' ? o.p0_origem
-      : o.p0_origem_estreia === true ? 'estoque_inicial'
-        : o.p0_origem_estreia === false ? 'fechamento' : null,
-    /* Mesma tradução do total: por fazenda vem a origem, no total vem a flag. */
-    p1_origem: o.p1_origem === 'fechamento' || o.p1_origem === 'encerrada' ? o.p1_origem
-      : o.p1_origem_encerrada === true ? 'encerrada'
-        : o.p1_origem_encerrada === false ? 'fechamento' : null,
-    p1_divergencia_cab: numOuNulo(o.p1_divergencia_cab),
+    p0_fonte: o.p0_fonte === 'fechamento' || o.p0_fonte === 'cadastro' || o.p0_fonte === 'zero'
+      ? o.p0_fonte : null,
+    p1_fonte: o.p1_fonte === 'fechamento' || o.p1_fonte === 'cadastro' || o.p1_fonte === 'zero'
+      ? o.p1_fonte : null,
     centros: lerCentros(o.centros),
     centros_juros: lerCentros(o.centros_juros),
   };

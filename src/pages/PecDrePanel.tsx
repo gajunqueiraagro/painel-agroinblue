@@ -435,19 +435,10 @@ const ehMeta = (c: ColunaPec) => c.chave === '__meta__';
  * O QUE O P0 DA ESTREIA É — VPB-INICIO-01, e a frase diz as três coisas que o operador precisa para
  * refazer a conta: de onde veio a quantidade, de onde veio o preço e o que foi simplificado.
  */
-const TITULO_ESTREIA = 'Rebanho de partida do primeiro mês (estoque inicial); preço do primeiro '
-  + 'fechamento. Vacas de descarte valoradas como vacas.';
-
-/**
- * O FIM DA ATIVIDADE NA FAZENDA — VPB-ENCERRAMENTO-01.
- *
- * ⚠ A DIVERGÊNCIA ENTRA NA MESMA FRASE, quando há: o DRE fecha com estoque zero porque é o fim da
- * atividade, mas o zootécnico pode ainda registrar cabeças depois do último fechamento (Bom Retiro
- * tem 4). Calar isso afirmaria uma concordância que não existe.
- */
-const tituloEncerrada = (cab: number | null) =>
-  'Fazenda encerrada: estoque final zero.'
-  + (cab && cab > 0 ? ` Zootécnico registra ${cab} cab após o encerramento — corrigir o lançamento.` : '');
+const TITULO_INICIO_CADASTRO = 'Início sem fechamento anterior: o estoque de partida é o rebanho '
+  + 'cadastrado no primeiro mês; preço do primeiro fechamento.';
+const TITULO_INICIO_ZERO = 'Início sem gado: o período começa com estoque zero.';
+const TITULO_FIM_ZERO = 'Fim sem gado: o período termina com estoque zero.';
 
 /**
  * As bordas de uma célula da coluna Meta — laterais na primeira e na última sub-coluna, topo e base
@@ -835,14 +826,17 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, base, onAlternar, o
   /* ⚠ SÓ NAS DUAS LINHAS QUE O P0 PRODUZ: o selo explica de onde saiu a variação de patrimônio, e
      pendurá-lo numa linha de venda ou de custo diria que o rebanho de partida a influenciou. */
   const daVariacaoNaLinha = def.chave === 'vpb_operacional' || def.chave === 'efeito_mercado';
-  const estreiaNaLinha = daVariacaoNaLinha
-    && colunas.some(c => c.tipo === 'valor' && !c.semDado && c.linhas?.p0_origem === 'estoque_inicial');
-  /* ⚠ A PONTA FINAL TEM SELO PRÓPRIO, e ele não disputa com o da estreia: uma fazenda não estreia e
-     encerra no mesmo período — se estreasse, teria fechamento em `p_ate`. */
-  const encerradaNaLinha = daVariacaoNaLinha && !estreiaNaLinha
-    && colunas.some(c => c.tipo === 'valor' && !c.semDado && c.linhas?.p1_origem === 'encerrada');
-  const divergenciaEncerrada = !encerradaNaLinha ? null
-    : colunas.reduce<number | null>((m, c) => Math.max(m ?? 0, c.linhas?.p1_divergencia_cab ?? 0) || null, null);
+  /* ⚠ O SELO DIZ QUE A PONTA NÃO VEIO DE FECHAMENTO — VPB-REGRA-UNICA-01, e isso é INFORMAÇÃO, não
+     aviso de falta: o número existe e está certo. "início" quando o P0 é cadastro ou zero; "fim"
+     quando o P1 é zero. */
+  const fonteP0 = !daVariacaoNaLinha ? null
+    : colunas.find(c => c.tipo === 'valor' && !c.semDado
+        && (c.linhas?.p0_fonte === 'cadastro' || c.linhas?.p0_fonte === 'zero'))?.linhas?.p0_fonte ?? null;
+  const inicioNaLinha = fonteP0 !== null;
+  /* ⚠ A PONTA FINAL NÃO DISPUTA COM A INICIAL: com as duas fora do fechamento, quem manda é a de
+     início — é ela que explica de onde a variação partiu. */
+  const fimNaLinha = daVariacaoNaLinha && !inicioNaLinha
+    && colunas.some(c => c.tipo === 'valor' && !c.semDado && c.linhas?.p1_fonte === 'zero');
   /* ⚠ O MARCADOR É DO VALOR, NÃO DO Δ (item 13): a diferença tem sinal próprio e uma seta ali diria
      "lucro" onde se lê "variação". Fora do azul cheio ele não existe — lá o número já é colorido. */
   const marcador = (col: ColunaPec, v: number | null) =>
@@ -913,14 +907,14 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, base, onAlternar, o
               ⚠ NADA SE PERDE: o `title` acumula as duas frases, e é dele que o operador tira a
               conta. É o mesmo remédio do PR-06, quando "inclui rateio compartilhado" virou
               "rateio" e a frase inteira foi para o `title`. */}
-          {estreiaNaLinha
-            ? <Etiqueta texto="início" title={`${def.tituloEtiqueta ? def.tituloEtiqueta + ' ' : ''}${TITULO_ESTREIA}`} />
-            : encerradaNaLinha
+          {inicioNaLinha
+            ? <Etiqueta texto="início" title={`${def.tituloEtiqueta ? def.tituloEtiqueta + ' ' : ''}${fonteP0 === 'cadastro' ? TITULO_INICIO_CADASTRO : TITULO_INICIO_ZERO}`} />
+            : fimNaLinha
               /* ⚠ AQUI A PALAVRA INTEIRA CABE, e foi medido antes de escolher: "encerrada" deixa 14px
                  de folga no pior caso (Detalhado, "Variação por produção") e 24 no Resumido. O
                  selo da estreia teve de encurtar para "início" porque ele CONVIVIA com o
                  "estimado"; este o substitui, e a largura sobra. */
-              ? <Etiqueta texto="encerrada" title={`${def.tituloEtiqueta ? def.tituloEtiqueta + ' ' : ''}${tituloEncerrada(divergenciaEncerrada)}`} />
+              ? <Etiqueta texto="fim" title={`${def.tituloEtiqueta ? def.tituloEtiqueta + ' ' : ''}${TITULO_FIM_ZERO}`} />
               : def.etiqueta && <Etiqueta texto={def.etiqueta} title={def.tituloEtiqueta} />}
           {/* ⚠ O SELO DOS JUROS É CONDICIONAL AO DADO, não à linha: ele só aparece quando há parcela
               rateada, e o `title` diz quanto e por qual critério. Numa fazenda cujos juros são todos
@@ -960,16 +954,14 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, base, onAlternar, o
             : def.corPorSinal ? corDoSinal(v) : corLinha;
         /* ⚠ JUROS DE FAZENDA: "—" no R$ (é ausência, não zero) e nada nas unidades. */
         const jurosDeFazenda = def.chave === 'juros' && col.fazendaId !== null;
-        /* ⚠ SEM FECHAMENTO A CÉLULA DIZ POR QUÊ, E QUAL PONTA FALTA — VPB-INICIO-01. As duas
-           pontas produzem o mesmo traço e pedem providências opostas: sem P0 falta a foto do
-           começo, sem P1 falta a do fim. Dizer só "sem fechamento" mandava o operador procurar no
-           lugar errado metade das vezes. */
+        /* ⚠ A CÉLULA DIZ DE ONDE VEIO A PONTA — VPB-REGRA-UNICA-01. O `title` deixou de explicar um
+           TRAÇO (que não existe mais em realizado) e passou a explicar um NÚMERO: quando uma das
+           pontas não veio de fechamento, o operador precisa saber disso para ler a variação. */
         const daVariacao = def.chave === 'vpb_operacional' || def.chave === 'efeito_mercado';
         const porqueDoTraco = col.tipo !== 'valor' || col.semDado || !daVariacao ? undefined
-          : col.linhas.p0_origem === null ? 'Sem fechamento no início do período'
-            : col.linhas.p1_origem === 'encerrada' ? tituloEncerrada(col.linhas.p1_divergencia_cab)
-              : col.linhas.sem_p1 ? 'Sem fechamento no fim do período'
-                : col.linhas.p0_origem === 'estoque_inicial' ? TITULO_ESTREIA : undefined;
+          : col.linhas.p0_fonte === 'cadastro' ? TITULO_INICIO_CADASTRO
+            : col.linhas.p0_fonte === 'zero' ? TITULO_INICIO_ZERO
+              : col.linhas.p1_fonte === 'zero' ? TITULO_FIM_ZERO : undefined;
         const abrir = abrirDaColuna(col);
         return (
           <Fragment key={col.chave}>

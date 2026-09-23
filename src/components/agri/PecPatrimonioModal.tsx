@@ -60,7 +60,7 @@ function Cartao({ titulo, linhas }: {
 }
 
 export function PecPatrimonioModal({
-  aberto, fazendaNome, qual, patrimonio, carregando, semP0, p0Origem, p1Origem, p1DivergenciaCab, onFechar,
+  aberto, fazendaNome, qual, patrimonio, carregando, p0Fonte, p1Fonte, onFechar,
 }: {
   aberto: boolean;
   /** A coluna clicada. "Total" quando é a coluna de todas. */
@@ -69,22 +69,16 @@ export function PecPatrimonioModal({
   qual: 'vpb' | 'efeito';
   patrimonio: PatrimonioPec | null;
   carregando: boolean;
-  /** A fazenda não tem fonte nenhuma na ponta inicial — a variação não existe. */
-  semP0: boolean;
   /**
-   * DE ONDE VEIO O P0 — VPB-INICIO-01. Na ESTREIA da fazenda não há mês anterior, e o P0 passa a
-   * ser o rebanho de partida: a tabela existe e os números são bons, então o modal a MOSTRA e só
-   * troca a frase do topo. Sem isto, a mesma tela que ganhou número na grade continuaria dizendo
-   * "sem fechamento" aqui.
+   * DE ONDE VEIO CADA PONTA — VPB-REGRA-UNICA-01.
+   *
+   * ⚠ NENHUMA DAS DUAS ESCONDE A TABELA, e essa é a mudança. O modal tinha um estado "sem P0" que
+   * trocava a grade por uma frase — "sem a foto do rebanho na ponta inicial não há variação a
+   * calcular". Não há mais esse caso: ausência de fechamento vale ZERO e a conta existe sempre. O
+   * que a fonte faz é explicar de onde o número saiu, acima de uma tabela que continua visível.
    */
-  p0Origem: 'fechamento' | 'estoque_inicial' | null;
-  /**
-   * A PONTA FINAL — VPB-ENCERRAMENTO-01. 'encerrada' é a fazenda que parou de ser fechada porque o
-   * gado acabou: o estoque final é zero e a tabela MOSTRA isso, categoria por categoria.
-   */
-  p1Origem: 'fechamento' | 'encerrada' | null;
-  /** O que o zootécnico ainda registra depois do encerramento, em cabeças. Aviso, não bloqueio. */
-  p1DivergenciaCab: number | null;
+  p0Fonte: 'fechamento' | 'cadastro' | 'zero' | null;
+  p1Fonte: 'fechamento' | 'cadastro' | 'zero' | null;
   onFechar: () => void;
 }) {
   const [aba, setAba] = useState<'pontas' | 'categorias'>('pontas');
@@ -120,37 +114,30 @@ export function PecPatrimonioModal({
               { valor: 'categorias', rotulo: 'Por categoria' },
             ]} />
 
-          {/* ⚠ NA ESTREIA A CONTA EXISTE, e a frase diz de onde ela veio. O P0 é o rebanho de
-              partida do primeiro mês, não um fechamento de dezembro que ninguém fez. */}
-          {p0Origem === 'estoque_inicial' && (
+          {/* ⚠ A FRASE EXPLICA UM NÚMERO, não justifica uma ausência: a tabela abaixo está lá nos
+              três casos, e é nela que se vê o rebanho partindo de zero ou indo a zero, categoria a
+              categoria. */}
+          {p0Fonte === 'cadastro' && (
             <div className="rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-[10px] text-muted-foreground">
-              Início do histórico: a ponta inicial é o <strong className="font-medium">rebanho de
-              partida</strong> do primeiro mês (estoque inicial), valorado ao preço do primeiro
+              Sem fechamento em {rotuloMes(p0)}: a ponta inicial é o <strong className="font-medium">rebanho
+              cadastrado</strong> no primeiro mês do período, valorado ao preço do primeiro
               fechamento. Vacas de descarte entram como vacas.
             </div>
           )}
-
-          {/* ⚠ ENCERRADA NÃO É "SEM DADO": o estoque final é zero porque a atividade acabou, e a
-              tabela continua visível — é nela que se vê o rebanho indo a zero categoria a
-              categoria. A divergência do zootécnico, quando existe, vem junto. */}
-          {p1Origem === 'encerrada' && (
+          {p0Fonte === 'zero' && (
             <div className="rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-[10px] text-muted-foreground">
-              Fazenda encerrada em {rotuloMes(p1)}: <strong className="font-medium">estoque final
-              zero</strong> — a atividade terminou no período.
-              {p1DivergenciaCab != null && p1DivergenciaCab > 0 && (
-                <> Zootécnico registra {p1DivergenciaCab} cab após o encerramento — corrigir o lançamento.</>
-              )}
+              Sem gado em {rotuloMes(p0)}: o período começa com <strong className="font-medium">estoque
+              zero</strong> — a variação é tudo o que entrou.
+            </div>
+          )}
+          {p1Fonte === 'zero' && (
+            <div className="rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-[10px] text-muted-foreground">
+              Sem gado em {rotuloMes(p1)}: o período termina com <strong className="font-medium">estoque
+              zero</strong> — a atividade não tinha rebanho no fim.
             </div>
           )}
 
-          {/* ⚠ SEM FECHAMENTO NA PONTA INICIAL A CONTA NÃO EXISTE — e o modal diz QUAL ponta
-              falta, em vez de mostrar uma tabela de zeros que pareceria "não mudou nada". */}
-          {semP0 ? (
-            <div className="rounded-md border bg-card px-3 py-6 text-center text-[11px] text-muted-foreground">
-              Sem fechamento em {rotuloMes(p0)} — sem a foto do rebanho na ponta inicial não há
-              variação a calcular.
-            </div>
-          ) : carregando || !patrimonio || !t ? (
+          {carregando || !patrimonio || !t ? (
             <div className="rounded-md border bg-card px-3 py-6 text-center text-[11px] text-muted-foreground">
               <Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin align-[-2px]" /> Carregando…
             </div>
