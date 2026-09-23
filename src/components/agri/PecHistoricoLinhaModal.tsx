@@ -17,6 +17,9 @@ import { X, ChevronLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatNum } from '@/lib/calculos/formatters';
 import { Segmentado } from '@/components/ui/segmentado';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { BarrasCompactas, type BarraCompacta } from '@/components/ui/barras-compactas';
 import { Donut, traco, VERDE, VERMELHO } from '@/components/agri/dreGrade';
 import {
@@ -74,6 +77,20 @@ const CORES = {
 export type Natureza = keyof typeof CORES;
 
 /**
+ * A COR DE UM VALOR NEGATIVO INVERTE A NATUREZA — decisão do Gabriel, item B do 01c.
+ *
+ * ⚠ UM RESULTADO NEGATIVO É VERMELHO, mesmo numa linha "de receita": a natureza diz o que a linha
+ * costuma ser, o sinal diz o que ela foi naquele ano. Pintar de verde um prejuízo de 303 mil
+ * porque "resultado é linha verde" é o tipo de coerência que mente.
+ * ⚠ E UM CUSTO NEGATIVO É VERDE pelo mesmo motivo: custo abaixo de zero é devolução, estorno,
+ * crédito — dinheiro que voltou.
+ * ⚠ É A MESMA REGRA DA GRADE (`corPorSinal` em `LINHAS_PEC`), não uma segunda: lá as sete linhas
+ * de "=" já se pintam pelo próprio número, coluna a coluna.
+ */
+const coresDoSinal = (v: number | null, natureza: Natureza) =>
+  CORES[v != null && v < 0 ? (natureza === 'custo' ? 'receita' : 'custo') : natureza];
+
+/**
  * O DENOMINADOR DE CADA UNIDADE, por extenso — e ele é OBRIGAÇÃO, não cortesia.
  *
  * ⚠ SEM O DIVISOR À MÃO o operador não refaz a conta (Art. 19), e o rodapé que o dizia saiu na
@@ -89,6 +106,29 @@ const DIVISOR_DA_UNIDADE: Record<UnidadePec, string> = {
   arroba: 'Divisor por linha: receita e deduções pela @ vendida, reposição pela @ comprada, '
     + 'demais pela @ produzida. Esta coluna não soma — e a meta costuma vir sem @ produzida, daí o traço.',
 };
+
+/**
+ * A REFERÊNCIA DA COLUNA Δ — a meta, ou o ano imediatamente anterior.
+ *
+ * ⚠ SÃO DUAS PERGUNTAS DIFERENTES E AMBAS LEGÍTIMAS: "cumpri o que planejei?" e "estou melhor que
+ * no ano passado?". Uma coluna fixa em meta respondia só a primeira, e a segunda exigia ler duas
+ * colunas e fazer a conta de cabeça.
+ */
+export type RefDelta = 'meta' | 'ano';
+const ROTULO_REF: Record<RefDelta, string> = { meta: 'Δ meta', ano: 'Δ ano ant.' };
+
+/**
+ * AS LINHAS DE RESULTADO — as sete do "=" da cascata.
+ *
+ * ⚠ ELAS PEDEM OUTRA LEITURA, e é por isso que ganham outra apresentação: um resultado não se
+ * divide por hectare nem por arroba para ser entendido (isso é leitura de custo), e não tem
+ * composição para um anel mostrar. O que ele pede é a evolução em dinheiro ao lado do PESO no VBP
+ * — o companheiro obrigatório do Art. 19, que diz se o número é grande ou só parece.
+ * ⚠ O CRITÉRIO É O `destaque` DA CASCATA, não uma segunda lista: quem decide o que é subtotal já é
+ * `LINHAS_PEC`, e duplicar os sete nomes aqui criaria a chance de eles divergirem.
+ */
+const ehLinhaDeResultado = (def: DefPec | null, centro: string | null) =>
+  centro === null && !!def?.destaque;
 
 /**
  * AS CORES DAS OUTRAS FATIAS — separadas entre si, nunca cinza.
@@ -162,15 +202,21 @@ export const numeroDoTexto = (t: string): number | null => {
  * ⚠ A TABELA CONTINUA INTEIRA (A19): quem quer o centavo olha embaixo, e o `title` da barra traz o
  * número completo. Abreviar é para o olho comparar, nunca para esconder.
  * ⚠ ABAIXO DE MIL NADA MUDA: "971,74" já cabe, e arredondá-lo tiraria precisão sem ganhar espaço.
+ * ⚠ O PISO DO "k" É PARÂMETRO, e não há um segundo formatador: a BARRA abrevia a partir de mil
+ * (22px de largura não cabem mais que isso), a TABELA só a partir de cem mil, porque ali a coluna
+ * tem 72px e "87.430,55" ainda cabe inteiro. Mesma regra, dois espaços diferentes.
  */
-export const abreviar = (t: string): string => {
+export const abreviar = (t: string, pisoK = 1e3): string => {
   const n = numeroDoTexto(t);
   if (n == null) return t;
   const abs = Math.abs(n);
   if (abs >= 1e6) return `${formatNum(n / 1e6, 1)} mi`;
-  if (abs >= 1e3) return `${formatNum(n / 1e3, 1)} k`;
+  if (abs >= pisoK) return `${formatNum(n / 1e3, 1)} k`;
   return t;
 };
+
+/** O piso do "k" na TABELA do histórico — abaixo dele o centavo cabe e fica. */
+export const PISO_K_TABELA = 1e5;
 
 /**
  * O RÓTULO CURTO DO EIXO — só o ano, ou a safra.
@@ -193,6 +239,81 @@ const texto = (u: UnidadePec, v: number | null, p: Ponto, chave: ChaveLinhaPec):
   if (u === 'rs') return v == null ? traco : formatNum(v, 2);
   return valorNaUnidade(u, v, comoColuna(p.linhas, p.meses), chave);
 };
+
+/** ⚠ O TEXTO DO PERCENTUAL VEM COM " %" COLADO; para virar número, ele sai. */
+const soNumeroPct = (t: string) => t.replace(' %', '');
+
+/**
+ * O Δ DE UM PERCENTUAL É EM PONTOS, NÃO EM POR CENTO.
+ *
+ * ⚠ 40 % CONTRA 20 % NÃO É "100 % A MAIS" NESTA LEITURA: são 20 pontos percentuais. A variação
+ * relativa de uma razão é matematicamente correta e engana quem compara margens — o operador lê
+ * "dobrou" onde a margem subiu vinte pontos. A cor segue a natureza, como no outro Δ.
+ */
+export function deltaEmPontos(atual: number | null, ref: number | null, natureza: Natureza) {
+  if (atual == null || ref == null) return null;
+  const pp = atual - ref;
+  if (pp === 0) return { texto: '0,0 pp', cor: '' };
+  const ruim = natureza === 'custo' ? pp > 0 : pp < 0;
+  return {
+    texto: `${pp > 0 ? '▲' : '▼'} ${formatNum(Math.abs(pp), 1)} pp`,
+    cor: ruim ? VERMELHO : VERDE,
+  };
+}
+
+/**
+ * UMA LINHA DA TABELA — o mesmo desenho para as unidades e para o modo resultado.
+ *
+ * ⚠ ELA EXISTE PARA NÃO HAVER DUAS TABELAS: o cabeçalho, as larguras, a coluna da safra escolhida e
+ * o Δ são os mesmos nos dois modos, e só o conteúdo das linhas muda.
+ */
+function LinhaDaTabela({
+  rotulo, pontos, escolhida, cores, valor, delta, forte, referencia, title, abreviarValor, natureza,
+}: {
+  rotulo: string;
+  pontos: readonly Ponto[];
+  escolhida: string;
+  cores: typeof CORES[Natureza];
+  valor: (p: Ponto) => string;
+  delta: { texto: string; cor: string } | null;
+  /** A linha principal do modo: 9,5px e peso 500, como a unidade escolhida no outro modo. */
+  forte?: boolean;
+  natureza: Natureza;
+  /** Linha de referência (o VBP): cinza e sem Δ — ela não é o assunto, é o denominador. */
+  referencia?: boolean;
+  /** Linha em R$: abrevia a partir de cem mil e guarda o valor inteiro no `title`. */
+  abreviarValor?: boolean;
+  title?: string;
+}) {
+  return (
+    <tr style={{ height: 16 }} className={cn('border-t border-border/60', referencia && 'bg-muted/40')}>
+      <td title={title} className={cn('truncate px-[7px] text-[9px]',
+        forte ? 'font-medium' : 'text-muted-foreground')}>{rotulo}</td>
+      {pontos.map(p => {
+        const completo = valor(p);
+        /* ⚠ ABREVIA NA CÉLULA, GUARDA O INTEIRO NO `title` — adendo do 01c: "2.588.458,09" não cabe
+           em 72px e saía cortado, que é pior que abreviado (o operador não sabe o que falta). O
+           centavo continua a um hover de distância, e na GRADE do DRE ele segue na tela (A19). */
+        const mostrado = abreviarValor ? abreviar(completo, PISO_K_TABELA) : completo;
+        /* ⚠ A CÉLULA SEGUE O SINAL, como a barra e como a grade: um número negativo numa linha de
+           resultado sai em vermelho ainda que a linha seja "verde". */
+        const corDaCelula = coresDoSinal(numeroDoTexto(completo), natureza).texto;
+        return (
+          <td key={p.chave} title={mostrado === completo ? undefined : completo}
+            className={cn('truncate px-[7px] text-right tabular-nums',
+              forte ? 'text-[9.5px] font-medium' : 'text-[9px] font-normal',
+              referencia ? 'text-muted-foreground' : p.meta ? 'text-amber-600' : corDaCelula,
+              p.chave === escolhida && !p.meta && cores.coluna)}>
+            {mostrado}
+          </td>
+        );
+      })}
+      <td className="truncate px-[7px] text-right text-[9px] tabular-nums text-muted-foreground">
+        {delta ? <span className={delta.cor}>{delta.texto}</span> : (referencia ? '' : traco)}
+      </td>
+    </tr>
+  );
+}
 
 /**
  * O Δ CONTRA A META — e o sinal da COR depende da natureza, não do sinal do número.
@@ -319,12 +440,22 @@ export function PecHistoricoLinhaModal({
    */
   const [navegado, setNavegado] = useState<RecorteHistoricoPec | null>(null);
   const alvo = navegado ?? recorte;
+  /**
+   * CONTRA O QUE A ÚLTIMA COLUNA COMPARA — DRE-HISTORICO-LINHA-01c.
+   *
+   * ⚠ O SELETOR MORA NO CABEÇALHO DA PRÓPRIA COLUNA, não numa barra de controles: a pergunta
+   * "comparado com o quê?" nasce olhando aquele número, e um controle longe dali faria o operador
+   * procurar o que ele acabou de ler.
+   * ⚠ E A ESCOLHA ATRAVESSA A NAVEGAÇÃO: quem está comparando filhas contra o ano anterior quer
+   * seguir comparando ao trocar de irmã. Ela volta a "meta" quando o modal abre de novo.
+   */
+  const [refDelta, setRefDelta] = useState<RefDelta>('meta');
 
   /* ⚠ ABRIR É RECOMEÇAR: a unidade volta à do DRE, a safra ao período da tela e o caminho à linha
      que a grade clicou. Sem isso, o modal da segunda linha abriria onde o operador parou na
      primeira. */
   useEffect(() => {
-    if (aberto) { setUnidade(unidadeInicial); setSelecionada(null); setNavegado(null); }
+    if (aberto) { setUnidade(unidadeInicial); setSelecionada(null); setNavegado(null); setRefDelta('meta'); }
   }, [aberto, unidadeInicial, recorte?.chave, recorte?.centro]);
 
   const def = useMemo(
@@ -388,6 +519,7 @@ export function PecHistoricoLinhaModal({
   const chave = alvo.chave;
   /* ⚠ DENTRO DO MODAL OS NOMES SÃO NOMES: sem "(−)" e sem "=", que são gramática da cascata. */
   const nomeDaLinha = semPrefixo(alvo.rotulo);
+  const ehResultado = ehLinhaDeResultado(def, alvo.centro);
   const paiRotulo = alvo.centro !== null ? semPrefixo(def?.rotulo ?? '') : null;
   /** O caminho: só a linha, ou "pai › filha" — e o pai é clicável, que é a volta. */
   const voltarAoPai = alvo.centro !== null && def
@@ -422,19 +554,47 @@ export function PecHistoricoLinhaModal({
    * tem a sua área, a proporção das barras não era a proporção dos números em nenhuma unidade
    * senão o R$. Agora as duas saem do mesmo texto.
    */
-  const barras: BarraCompacta[] = pontos.map(p => {
-    const t = texto(unidade, valorDoRecorte(p.linhas, alvo), p, chave);
+  /* ⚠ UMA FÁBRICA SÓ PARA AS DUAS METADES: a barra de R$ e a de % do VBP diferem no TEXTO, não na
+     regra — mesma cor, mesma seleção, mesmo tracejado de meta, mesma razão. Duas listas escritas à
+     mão divergiriam no primeiro ajuste. */
+  const fazerBarras = (
+    valor: (p: Ponto) => string, sufixo: string, abreviarTexto = true,
+  ): BarraCompacta[] => pontos.map(p => {
+    const t = valor(p);
+    const n = t === traco ? null : numeroDoTexto(t);
+    const c = coresDoSinal(n, natureza);
     return {
       rotulo: p.rotulo,
       rotuloLongo: p.rotuloLongo,
-      valor: t === traco ? null : numeroDoTexto(t),
-      texto: abreviar(t),
-      title: t === traco ? 'sem dado' : `${p.rotuloLongo} · ${ROTULO_UNIDADE[unidade]} ${t}`,
+      valor: n,
+      texto: abreviarTexto ? abreviar(t) : t,
+      title: t === traco ? 'sem dado' : `${p.rotuloLongo} · ${sufixo} ${t}`,
       meta: p.meta,
-      cor: p.meta ? undefined : (p.chave === escolhida ? cores.barra : cores.barraFraca),
-      corTexto: p.meta ? 'text-amber-600' : cores.texto,
+      cor: p.meta ? undefined : (p.chave === escolhida ? c.barra : c.barraFraca),
+      corTexto: p.meta ? 'text-amber-600' : c.texto,
     };
   });
+
+  const barras = fazerBarras(
+    p => texto(unidade, valorDoRecorte(p.linhas, alvo), p, chave), ROTULO_UNIDADE[unidade]);
+
+  /* ⚠ O % DO VBP VEM DA MESMA CONTA DA GRADE (`percentual`, do módulo neutro), não de uma divisão
+     escrita aqui: é a linha "% do VBP" que o DRE já mostra embaixo dos subtotais. */
+  const pctDoVbp = (p: Ponto): string => {
+    if (!p.linhas) return traco;
+    const v = valorDoRecorte(p.linhas, alvo);
+    const base = valorDe(p.linhas, BASE_DO_PERCENTUAL);
+    return v == null || base == null ? traco : percentual(v, base);
+  };
+  /* ⚠ O TEXTO DO PERCENTUAL VEM COM " %" COLADO, e o número de volta tem de vir sem ele — senão a
+     barra não tem altura e o gráfico inteiro fica raso. */
+  /* ⚠ O NÚMERO VAI PARA A ALTURA, O SÍMBOLO VOLTA PARA O RÓTULO: sem tirar o " %", a barra não
+     tem altura (o texto não vira número); sem devolvê-lo, o gráfico mostra "57,3" e o operador não
+     sabe se é percentual, reais ou arroba. */
+  const barrasPct = fazerBarras(p => soNumeroPct(pctDoVbp(p)), '% do VBP', false)
+    .map(b => ({ ...b, texto: b.valor == null ? traco : `${b.texto} %` }));
+  const barrasRs = fazerBarras(
+    p => texto('rs', valorDoRecorte(p.linhas, alvo), p, chave), 'R$');
 
   const valorDonut = donut?.valorLinha ?? null;
   const pctDonut = donut && donut.total > 0 && valorDonut != null
@@ -496,13 +656,33 @@ export function PecHistoricoLinhaModal({
         </div>
 
         <div className="max-h-[75vh] overflow-auto px-4 py-3">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <Segmentado altura={22} valor={unidade} onEscolher={setUnidade}
-              opcoes={UNIDADES_PEC.map(u => ({ valor: u, rotulo: ROTULO_UNIDADE[u] }))} />
+          {/* ⚠ SEM CHIPS NO MODO RESULTADO: um resultado não se lê por hectare nem por arroba — essa
+              é leitura de custo. O espaço fica reservado para a altura não mudar entre os dois
+              modos do mesmo modal. */}
+          <div className="mb-2 flex items-center justify-between gap-2" style={{ minHeight: 22 }}>
+            {!ehResultado && (
+              <Segmentado altura={22} valor={unidade} onEscolher={setUnidade}
+                opcoes={UNIDADES_PEC.map(u => ({ valor: u, rotulo: ROTULO_UNIDADE[u] }))} />
+            )}
           </div>
 
-          {/* ⚠ DUAS METADES IGUAIS, topo alinhado: as barras e o donut respondem perguntas
-              diferentes sobre a MESMA linha, e nenhuma manda na outra. */}
+          {/* ⚠ DUAS METADES IGUAIS, topo alinhado: elas respondem perguntas diferentes sobre a MESMA
+              linha, e nenhuma manda na outra. No modo resultado são dinheiro e peso no VBP; nos
+              demais, a evolução e a composição. */}
+          {ehResultado ? (
+            <div className="grid grid-cols-2 items-start gap-3">
+              {/* ⚠ EIXO ZERO NAS DUAS: um resultado desce abaixo de zero, e desenhar isso como
+                  barra curta para cima seria mostrar prejuízo como lucro pequeno. */}
+              <BarrasCompactas barras={barrasRs} titulo={`${nomeDaLinha} · R$`}
+                altura={150} larguraMax={330} preencherLargura larguraBarra={22} fonteValor={9}
+                eixoZero onClickBarra={i => setSelecionada(pontos[i]?.chave ?? null)}
+                legenda={`${pontoEscolhido?.rotuloLongo ?? ''} · R$ ${texto('rs', valorDoRecorte(pontoEscolhido?.linhas ?? null, alvo), pontoEscolhido ?? pontos[0], chave)}`} />
+              <BarrasCompactas barras={barrasPct} titulo={`${nomeDaLinha} · % do VBP`}
+                altura={150} larguraMax={330} preencherLargura larguraBarra={22} fonteValor={9}
+                eixoZero onClickBarra={i => setSelecionada(pontos[i]?.chave ?? null)}
+                legenda={`${pontoEscolhido?.rotuloLongo ?? ''} · ${pontoEscolhido ? pctDoVbp(pontoEscolhido) : traco}`} />
+            </div>
+          ) : (
           <div className="grid grid-cols-2 items-start gap-3">
             <BarrasCompactas barras={barras} titulo={`${nomeDaLinha} · ${ROTULO_UNIDADE[unidade]}`}
               altura={150} larguraMax={330} preencherLargura larguraBarra={22} fonteValor={9}
@@ -557,10 +737,13 @@ export function PecHistoricoLinhaModal({
               </div>
             </div>
           </div>
+          )}
 
           <TabelaHistorico pontos={pontos} recorte={alvo} chave={chave} escolhida={escolhida}
             unidade={unidade} cores={cores} natureza={natureza}
-            paiRotulo={donut?.rotuloBase ?? null} />
+            paiRotulo={donut?.rotuloBase ?? null}
+            modo={ehResultado ? 'resultado' : 'unidades'}
+            refDelta={refDelta} onRefDelta={setRefDelta} />
         </div>
 
         {/* ⚠ O RODAPÉ AZUL SAIU (homologação de 22/09, item 9): uma faixa de duas linhas para
@@ -576,6 +759,7 @@ export function PecHistoricoLinhaModal({
    desconfiar da barra confere aqui — e é ela que leva o Δ contra a meta. */
 function TabelaHistorico({
   pontos, recorte, chave, escolhida, unidade, cores, natureza, paiRotulo,
+  modo, refDelta, onRefDelta,
 }: {
   pontos: readonly Ponto[];
   recorte: RecorteHistoricoPec;
@@ -585,6 +769,10 @@ function TabelaHistorico({
   cores: typeof CORES[Natureza];
   natureza: Natureza;
   paiRotulo: string | null;
+  /** `'resultado'` troca as quatro unidades por R$ · % do VBP · VBP. */
+  modo: 'unidades' | 'resultado';
+  refDelta: RefDelta;
+  onRefDelta: (r: RefDelta) => void;
 }) {
   /* ⚠ LARGURAS DECLARADAS, e a primeira cabe "R$/cab/mês" com folga: com `table-layout: fixed` o
      `<colgroup>` é a única autoridade, e um cabeçalho truncado ali é dado escondido. */
@@ -596,12 +784,33 @@ function TabelaHistorico({
     return p ? texto(u, valorDoRecorte(p.linhas, recorte), p, chave) : traco;
   };
   /**
+   * ⚠ O ANO ANTERIOR É O VIZINHO DA ESQUERDA, não "o primeiro da lista": com a série em ordem
+   * cronológica, o que vem imediatamente antes do período da tela é o ano anterior — e é assim que
+   * ele continua certo se o número de anos mudar.
+   */
+  const iAtual = pontos.findIndex(p => p.chave === 'atual');
+  const chaveRef = refDelta === 'meta' ? 'meta' : (pontos[iAtual - 1]?.chave ?? '');
+  const pctDoPontoPorChave = (chavePonto: string) => {
+    const p = pontos.find(x => x.chave === chavePonto);
+    return p ? pctDoVbp(p) : traco;
+  };
+  const pctDoVbp = (p: Ponto): string => {
+    if (!p.linhas) return traco;
+    const v = valorDoRecorte(p.linhas, recorte);
+    const base = valorDe(p.linhas, BASE_DO_PERCENTUAL);
+    return v == null || base == null ? traco : percentual(v, base);
+  };
+  const vbpDoPonto = (p: Ponto) => {
+    const b = p.linhas ? valorDe(p.linhas, BASE_DO_PERCENTUAL) : null;
+    return b == null ? traco : formatNum(b, 2);
+  };
+  /**
    * ⚠ O Δ É DE CADA UNIDADE, não o do R$ repetido — fix1 da homologação. Ele muda de linha para
    * linha porque a meta tem os DIVISORES dela: 4.813,6 ha contra 4.824,3 do realizado na NJ 2026.
    * Mostrar o Δ do R$ na linha do R$/ha afirmaria uma variação que aquela divisão não produz.
    */
   const deltaDaUnidade = (u: UnidadePec) => deltaMeta(
-    numeroDoTexto(doPonto('atual', u)), numeroDoTexto(doPonto('meta', u)), natureza);
+    numeroDoTexto(doPonto('atual', u)), numeroDoTexto(doPonto(chaveRef, u)), natureza);
   const semMeta = pontos.find(p => p.chave === 'meta');
   const largura = W_UNIDADE + pontos.length * W_PONTO + W_DELTA;
 
@@ -636,40 +845,70 @@ function TabelaHistorico({
                 {p.rotulo}
               </th>
             ))}
-            <th className="truncate px-[7px] text-right text-[9px] font-medium text-muted-foreground"
-              title="o período da tela contra a meta">Δ meta</th>
+            {/* ⚠ O CABEÇALHO É O CONTROLE — DRE-HISTORICO-LINHA-01c: a pergunta "comparado com o
+                quê?" nasce olhando a coluna, e um seletor noutro canto faria procurar o que se
+                acabou de ler. O menu é o `DropdownMenu` da casa; nada novo foi desenhado. */}
+            <th className="truncate px-[7px] text-right text-[9px] font-medium text-muted-foreground">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button type="button"
+                    title={refDelta === 'meta'
+                      ? 'o período da tela contra a meta — clique para trocar a referência'
+                      : 'o período da tela contra o ano anterior — clique para trocar a referência'}
+                    className="rounded px-0.5 underline decoration-dotted underline-offset-2
+                      hover:bg-muted hover:decoration-solid">
+                    {ROTULO_REF[refDelta]} ▾
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-[128px]">
+                  <DropdownMenuItem className="text-[10px]" onClick={() => onRefDelta('meta')}>
+                    {ROTULO_REF.meta}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="text-[10px]" onClick={() => onRefDelta('ano')}>
+                    {ROTULO_REF.ano}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </th>
           </tr>
         </thead>
         <tbody>
-          {UNIDADES_PEC.map(u => (
-            <tr key={u} style={{ height: 16 }} className="border-t border-border/60">
-              {/* ⚠ O DIVISOR SE DECLARA AQUI desde que o rodapé saiu (Art. 19): é a célula que nomeia
-                  a unidade, e é onde a pergunta "dividido por quê?" nasce. */}
-              <td title={DIVISOR_DA_UNIDADE[u]}
-                className={cn('truncate px-[7px] text-[9px]', u === unidade ? 'font-medium' : 'text-muted-foreground')}>
-                {ROTULO_UNIDADE[u]}
-              </td>
-              {pontos.map(p => (
-                <td key={p.chave}
-                  className={cn('truncate px-[7px] text-right tabular-nums',
-                    u === unidade ? 'text-[9.5px] font-medium' : 'text-[9px] font-normal',
-                    p.meta ? 'text-amber-600' : cores.texto,
-                    p.chave === escolhida && !p.meta && cores.coluna)}>
-                  {texto(u, valorDoRecorte(p.linhas, recorte), p, chave)}
-                </td>
-              ))}
-              {/* ⚠ TODAS AS LINHAS TÊM Δ: o operador compara a unidade que escolheu, mas a pergunta
-                  "e nas outras?" é a seguinte, e antes ela exigia trocar o chip para descobrir. */}
-              <td className="truncate px-[7px] text-right text-[9px] tabular-nums text-muted-foreground">
-                {(() => {
-                  const d = deltaDaUnidade(u);
-                  return d ? <span className={d.cor}>{d.texto}</span> : traco;
-                })()}
-              </td>
-            </tr>
+          {/* ⚠ O MODO RESULTADO TROCA AS LINHAS, NÃO A TABELA: o cabeçalho, as larguras, o seletor
+              de Δ e a coluna da safra escolhida são os mesmos — o que muda é o que cada linha diz.
+              Duas tabelas escritas à parte divergiriam na primeira mudança de régua. */}
+          {modo === 'resultado' && <>
+            <LinhaDaTabela rotulo="R$" forte abreviarValor pontos={pontos} escolhida={escolhida} cores={cores} natureza={natureza}
+              valor={p => texto('rs', valorDoRecorte(p.linhas, recorte), p, chave)}
+              delta={deltaMeta(numeroDoTexto(doPonto('atual', 'rs')), numeroDoTexto(doPonto(chaveRef, 'rs')), natureza)} />
+            {/* ⚠ O Δ DE UM PERCENTUAL É EM PONTOS PERCENTUAIS, e por isso ele não passa por
+                `deltaMeta`: 40 % contra 20 % não é "100 % a mais" nesta leitura — são 20 pontos. A
+                variação relativa de uma razão engana quem compara margens. */}
+            <LinhaDaTabela rotulo="% do VBP" pontos={pontos} escolhida={escolhida} cores={cores} natureza={natureza}
+              title="quanto esta linha pesa no Valor Bruto da Produção do mesmo período"
+              valor={pctDoVbp}
+              delta={deltaEmPontos(
+                numeroDoTexto(soNumeroPct(pctDoPontoPorChave('atual'))),
+                numeroDoTexto(soNumeroPct(pctDoPontoPorChave(chaveRef))), natureza)} />
+            {/* ⚠ O VBP ENTRA COMO REFERÊNCIA, sem Δ: ele é o denominador da linha de cima, e sem
+                ele o percentual não se refaz (Art. 19). Comparar o denominador com a meta seria
+                outra pergunta, de outra linha do DRE. */}
+            <LinhaDaTabela rotulo="VBP" referencia abreviarValor pontos={pontos} escolhida={escolhida} cores={cores} natureza={natureza}
+              title="o denominador do percentual acima — o VBP daquele período"
+              valor={vbpDoPonto} delta={null} />
+          </>}
+          {/* ⚠ AS QUATRO UNIDADES USAM A MESMA LINHA DO MODO RESULTADO — o divisor no `title` da
+              primeira célula (Art. 19, desde que o rodapé saiu), o Δ de CADA uma e a abreviação só
+              na de R$, que é a única que chega aos milhões. */}
+          {modo === 'unidades' && UNIDADES_PEC.map(u => (
+            <LinhaDaTabela key={u} rotulo={ROTULO_UNIDADE[u]} title={DIVISOR_DA_UNIDADE[u]}
+              forte={u === unidade} abreviarValor={u === 'rs'}
+              pontos={pontos} escolhida={escolhida} cores={cores} natureza={natureza}
+              valor={p => texto(u, valorDoRecorte(p.linhas, recorte), p, chave)}
+              delta={deltaDaUnidade(u)} />
           ))}
           {/* ⚠ A ÚLTIMA LINHA É O PESO, e ela fecha a pergunta do modal: a evolução acima, o peso
-              aqui, na mesma tabela e safra a safra. */}
+              aqui, na mesma tabela e safra a safra. No modo resultado ela já é a linha do meio. */}
+          {modo === 'unidades' && (
           <tr style={{ height: 16 }} className="border-t border-border/60 bg-muted/40">
             <td className="truncate px-[7px] text-[9px] text-muted-foreground"
               title={paiRotulo ?? undefined}>
@@ -684,6 +923,7 @@ function TabelaHistorico({
             ))}
             <td />
           </tr>
+          )}
         </tbody>
       </table>
       {!semMeta && <div className="mt-1 text-[9px] text-muted-foreground">sem meta no período</div>}

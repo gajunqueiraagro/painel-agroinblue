@@ -113,3 +113,57 @@ describe('as props opt-in do histórico', () => {
     expect(document.querySelectorAll('.cursor-pointer')).toHaveLength(0);
   });
 });
+
+/* ══════════════ O EIXO ZERO — DRE-HISTORICO-LINHA-01c ══════════════ */
+
+/**
+ * ⚠ SEM ELE O COMPONENTE NÃO SABIA NEGATIVO, e não sabia CALADO: a escala é `Math.max(…, 0)` e o
+ * piso de 2% transformava um prejuízo numa barrinha para CIMA — desenhava perda como lucro pequeno.
+ * Nunca apareceu porque os consumidores até hoje só tinham produção e custo; o resultado do DRE
+ * desce de zero.
+ */
+describe('o eixo zero', () => {
+  const alturasDe = () => [...document.querySelectorAll<HTMLElement>('[style*="height"]')]
+    .map(e => e.style.height)
+    .filter(h => h.endsWith('%') && h !== '0%');
+
+  it('a razão vale nos dois sentidos: a altura é proporcional ao MÓDULO', () => {
+    render(<BarrasCompactas titulo="teste" eixoZero altura={150} barras={[
+      { rotulo: 'a', valor: 1000, texto: '1,0 k' },
+      { rotulo: 'b', valor: -500, texto: '-500' },
+      { rotulo: 'c', valor: 500, texto: '500' },
+    ]} />);
+    /* As metades: a de cima vale 1.000 da faixa de 1.500 (66,7%), a de baixo 500 (33,3%). E DENTRO
+       de cada metade a barra é proporcional ao seu extremo: 1.000/1.000, 500/1.000 e 500/500. */
+    const h = alturasDe();
+    expect(h).toContain('100%');            // o maior positivo enche a metade de cima
+    expect(h).toContain('50%');             // 500 é metade de 1.000, no mesmo lado
+    expect(h.filter(x => x === '100%')).toHaveLength(2); // e o -500 enche a metade de baixo
+  });
+
+  /* ⚠ SEM NEGATIVO, NADA MUDA: a linha do zero cai na base e o desenho é o de sempre. */
+  it('sem negativos, a linha do zero fica na base', () => {
+    render(<BarrasCompactas titulo="teste" eixoZero barras={[
+      { rotulo: 'a', valor: 800, texto: '800' },
+      { rotulo: 'b', valor: 400, texto: '400' },
+    ]} />);
+    const metades = [...document.querySelectorAll<HTMLElement>('[style*="height: 100%"]')];
+    expect(metades.length).toBeGreaterThan(0);
+    /* A metade de baixo tem altura zero: não há para onde descer. */
+    expect([...document.querySelectorAll<HTMLElement>('[style*="height: 0%"]')].length)
+      .toBeGreaterThan(0);
+  });
+
+  /* ⚠ E O RÓTULO TROCA DE LADO COM O SINAL: em cima da barra positiva, embaixo da negativa. Fixo
+     em cima, ele ficaria sobre a linha do zero, longe da barra que representa. */
+  it('o rótulo do negativo fica embaixo da barra', () => {
+    render(<BarrasCompactas titulo="teste" eixoZero barras={[
+      { rotulo: 'a', valor: 100, texto: '100' },
+      { rotulo: 'b', valor: -100, texto: '-100' },
+    ]} />);
+    const rotulo = (t: string) => [...document.querySelectorAll('span')]
+      .find(s => s.textContent === t)?.className ?? '';
+    expect(rotulo('100')).toContain('bottom-full');
+    expect(rotulo('-100')).toContain('top-full');
+  });
+});

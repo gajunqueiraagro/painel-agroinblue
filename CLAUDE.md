@@ -429,13 +429,16 @@ no mesmo arquivo.
   ⚠ E A CAUSA MAIOR ERA DA RPC, nao do front: `fn_classificacao_apply_row` zerava
   `conta_destino_id` sempre que o tipo efetivo nao era transferencia (`ELSE NULL` incondicional).
   Corrigida na migration 20261027121700, com a simetria que ja existia em `conta_bancaria_id`.
-  De 1530 para 1738 em 2026-09-23, medido no DRE-PERIODO-01 (era 1709 em 22/09, no DRE-UNIDADES-01c). ⚠ NAO E' O GANHO DE UM PR: esta
+  De 1530 para 1745 em 2026-09-23, medido no DRE-HISTORICO-LINHA-01c (era 1709 em 22/09, no DRE-UNIDADES-01c). ⚠ NAO E' O GANHO DE UM PR: esta
   linha ficou parada enquanto a frente do DRE acrescentava casos (1702 medidos em c504d451, 1708
   no 01b com os 6 da largura de grupo, 1709 no 01c com o Total em traco da Lavoura). De 1709 para
   1738 vieram do DRE-HISTORICO-LINHA-01a e dos tres fix dele: o primeiro teste do
   `BarrasCompactas` (a lei da razao), o modal do historico (base do donut, delta por natureza,
   formatador abreviado, navegacao entre filhas e as duas portas de volta) e o periodo do botao
-  Ano. Os 22 skipped e as 3 falhas pre-existentes seguem iguais.
+  Ano. De 1738 para 1745 no DRE-HISTORICO-LINHA-01c: o eixo zero das barras (razao nos dois
+  sentidos, rotulo do negativo embaixo, zero na base sem negativos), o delta em pontos
+  percentuais, o piso do "k" da tabela e a troca de referencia do delta pelo cabecalho. Os 22
+  skipped e as 3 falhas pre-existentes seguem iguais.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 

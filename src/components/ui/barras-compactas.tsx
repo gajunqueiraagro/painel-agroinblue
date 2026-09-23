@@ -55,9 +55,66 @@ export interface BarraCompacta {
   corTexto?: string;
 }
 
+/**
+ * UMA COLUNA COM EIXO ZERO — a barra sai da linha do zero, para cima ou para baixo.
+ *
+ * ⚠ A ESCALA É A MESMA NOS DOIS SENTIDOS: a altura é `|valor| / faixa`, onde a faixa vai do menor
+ * negativo ao maior positivo. Escalar cada lado pelo próprio extremo faria uma perda de 100 mil
+ * parecer do tamanho de um lucro de 2 milhões.
+ * ⚠ O RÓTULO TROCA DE LADO COM O SINAL: em cima da barra positiva, embaixo da negativa. Fixo em
+ * cima, ele ficaria sobre a linha do zero, longe da barra que representa.
+ */
+function ColunaEixoZero({ barra, faixa, max, minimo, pctAcima, fonteValor, largura, centrado }: {
+  barra: BarraCompacta;
+  faixa: number; max: number; minimo: number; pctAcima: number;
+  fonteValor: number; largura?: number; centrado?: boolean;
+}) {
+  const v = barra.valor;
+  const negativo = v != null && v < 0;
+  /* ⚠ A ALTURA É SOBRE A METADE EM QUE A BARRA MORA: `|v| / max` no lado de cima e `|v| / |min|`
+     no de baixo, porque cada metade já tem a altura proporcional à sua parte da faixa. O piso de
+     2% continua valendo, e só para quem tem valor. */
+  const referencia = negativo ? Math.abs(minimo) : max;
+  const pct = v == null || faixa <= 0 || referencia <= 0 ? 0 : Math.max(2, (Math.abs(v) / referencia) * 100);
+  const classe = cn('relative rounded-sm', centrado ? 'mx-auto' : 'w-full',
+    barra.meta ? 'border border-dashed border-amber-500 bg-transparent' : (barra.cor ?? 'bg-primary'));
+  const estilo = { height: `${pct}%`, width: centrado ? largura : undefined };
+  const rotulo = (
+    <span className={cn('absolute left-1/2 -translate-x-1/2 whitespace-nowrap leading-none tabular-nums',
+      negativo ? 'top-full pt-[2px]' : 'bottom-full pb-[2px]', barra.corTexto ?? 'text-muted-foreground')}
+      style={{ fontSize: fonteValor }}>{barra.texto}</span>
+  );
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      {/* ⚠ O `paddingTop`/`paddingBottom` RESERVA O LUGAR DO RÓTULO em cada lado: sem ele, o número
+          da barra que bate no extremo sairia por cima do título ou do eixo. */}
+      <div className="relative flex items-end" style={{ height: `${pctAcima}%`, paddingTop: fonteValor + 4 }}>
+        {v == null ? (
+          <div className={cn('relative rounded-sm border border-dashed border-muted-foreground/40',
+            centrado ? 'mx-auto' : 'w-full')}
+            style={{ height: 6, width: centrado ? largura : undefined }} title="Sem dado">
+            <span className="absolute bottom-full left-1/2 -translate-x-1/2 whitespace-nowrap pb-[2px]
+              leading-none tabular-nums text-muted-foreground"
+              style={{ fontSize: fonteValor }}>{barra.texto}</span>
+          </div>
+        ) : !negativo ? (
+          <div title={barra.title} className={classe} style={estilo}>{rotulo}</div>
+        ) : null}
+      </div>
+      {/* ⚠ A LINHA DO ZERO É VISÍVEL: sem ela, uma barra curta para baixo lê como barra curta para
+          cima num gráfico sem referência. */}
+      <div className="h-px w-full bg-border" />
+      <div className="relative flex items-start"
+        style={{ height: `${100 - pctAcima}%`, paddingBottom: fonteValor + 4 }}>
+        {negativo && <div title={barra.title} className={classe} style={estilo}>{rotulo}</div>}
+      </div>
+    </div>
+  );
+}
+
 export function BarrasCompactas({
   barras, titulo, legenda, larguraMax = 340, altura = 96, preencherLargura = false,
-  larguraBarra = 22, fonteValor = 8, distribuir = false, onClickBarra,
+  larguraBarra = 22, fonteValor = 8, distribuir = false, onClickBarra, eixoZero = false,
 }: {
   barras: readonly BarraCompacta[];
   titulo: string;
@@ -111,6 +168,20 @@ export function BarrasCompactas({
    * valor pequeno tem poucos pixels de altura, e mirar nela seria trabalho de precisão.
    */
   onClickBarra?: (i: number) => void;
+  /**
+   * O EIXO ZERO — opt-in, DRE-HISTORICO-LINHA-01c.
+   *
+   * ⚠ SEM ELE O COMPONENTE NÃO SABE NEGATIVO, e não sabia calado: a escala é `Math.max(…, 0)` e o
+   * piso de 2% transformava qualquer valor negativo numa barrinha PARA CIMA de 2% — um prejuízo
+   * desenhado como lucro pequeno. Isso nunca apareceu porque os consumidores até hoje só tinham
+   * produção e custo, que não descem de zero; o resultado do DRE desce.
+   * ⚠ COM ELE A LINHA DO ZERO FICA ONDE OS DADOS PEDEM: sem negativos, na base (idêntico ao de
+   * hoje); com negativos, na proporção entre o maior positivo e o menor negativo. A barra cresce a
+   * partir dela, para cima ou para baixo, e o rótulo acompanha o lado.
+   * ⚠ A RAZÃO CONTINUA SENDO A LEI: a altura é proporcional ao MÓDULO do valor sobre a mesma
+   * escala; o sinal decide o sentido, nunca o tamanho.
+   */
+  eixoZero?: boolean;
 }) {
   /**
    * ⚠ A ESCALA IGNORA OS NULOS e nunca é zero: com todas as barras sem dado, ou com um único
@@ -119,6 +190,11 @@ export function BarrasCompactas({
    */
   const valores = barras.map(b => b.valor).filter((v): v is number => v != null);
   const max = valores.length > 0 ? Math.max(...valores, 0) : 0;
+  /* ⚠ A FAIXA DO EIXO ZERO vai do menor negativo ao maior positivo, e o zero entra sempre: sem
+     negativos ela é [0, max] e a linha do zero cai na base — o desenho de hoje, sem exceção. */
+  const minimo = valores.length > 0 ? Math.min(...valores, 0) : 0;
+  const faixa = max - minimo;
+  const pctAcima = faixa > 0 ? (max / faixa) * 100 : 100;
 
   /* ⚠ UMA CLASSE SÓ PARA OS DOIS TRILHOS — o da barra e o do rótulo. Se divergirem, o rótulo
      deixa de ficar embaixo da sua barra, que é o defeito mais silencioso que um gráfico pode ter. */
@@ -158,6 +234,14 @@ export function BarrasCompactas({
                   não, e a razão entre elas deixava de ser a razão entre os números.
                   ⚠ O `paddingTop` do trilho reserva o lugar do número mais alto: sem ele, o valor
                   da barra de 100% sairia por cima do título do card. */}
+              {eixoZero ? (
+                /* ⚠ DUAS METADES E UMA LINHA ENTRE ELAS: a de cima cresce para cima a partir do
+                    zero, a de baixo para baixo. Elas dividem a altura na proporção da faixa, e é
+                    isso que põe a linha do zero onde os dados pedem. */
+                <ColunaEixoZero barra={b} faixa={faixa} max={max} minimo={minimo}
+                  pctAcima={pctAcima} fonteValor={fonteValor}
+                  largura={distribuir ? larguraBarra : undefined} centrado={distribuir} />
+              ) : (
               <div className="relative flex min-h-0 flex-1 items-end"
                 style={{ paddingTop: fonteValor + 4 }}>
                 {b.valor == null ? (
@@ -184,6 +268,7 @@ export function BarrasCompactas({
                   </div>
                 )}
               </div>
+              )}
             </div>
           );
         })}

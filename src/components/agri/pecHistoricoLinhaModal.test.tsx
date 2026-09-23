@@ -10,8 +10,8 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import {
-  PecHistoricoLinhaModal, baseDoDonut, deltaMeta, abreviar, semPrefixo, rotuloCurtoDoAno,
-  type RecorteHistoricoPec,
+  PecHistoricoLinhaModal, baseDoDonut, deltaMeta, deltaEmPontos, abreviar, semPrefixo,
+  rotuloCurtoDoAno, PISO_K_TABELA, type RecorteHistoricoPec,
 } from '@/components/agri/PecHistoricoLinhaModal';
 import { LINHAS_PEC } from '@/components/agri/drePecRegua';
 import type { DrePecuaria, DrePecLinhas } from '@/hooks/useDrePecuaria';
@@ -324,9 +324,13 @@ describe('a navegação para a filha, no mesmo modal', () => {
     expect(titulo()).toBe('Custo variável · histórico');
   });
 
-  /* ⚠ O QUE CONTINUA SEM CLIQUE: o anel de um subtotal mostra o VBP, e "restante do VBP" não é
-     linha da cascata — não há para onde ir, então não vira mão. */
-  it('subtotal "=": a legenda não é clicável', () => {
+  /**
+   * ⚠ O SUBTOTAL DEIXOU DE TER DONUT — DRE-HISTORICO-LINHA-01c, e este caso mudou de contrato por
+   * isso: até aqui ele afirmava que a legenda do anel não era clicável; agora não há anel nenhum.
+   * Um resultado não tem composição para um anel mostrar, e o que ele pede é dinheiro ao lado do
+   * peso no VBP. Falha certa, pela razão certa — o teste foi atualizado, não afrouxado.
+   */
+  it('subtotal "=": modal de resultado — sem chips, sem donut, com as três linhas', () => {
     render(
       <PecHistoricoLinhaModal aberto
         recorte={recorte({ chave: 'margem', rotulo: '= Margem de contribuição' })}
@@ -334,9 +338,95 @@ describe('a navegação para a filha, no mesmo modal', () => {
         periodoRotulo="Safra 25/26" clienteNome="NJ Pecuária" unidadeInicial="rs"
         onFechar={() => {}} />,
     );
-    const legenda = [...document.querySelectorAll('div')]
-      .filter(d => d.className.includes('text-[9px]') && d.className.includes('items-center'));
-    expect(legenda.length).toBeGreaterThan(0);
-    expect(legenda.every(d => !d.className.includes('cursor-pointer'))).toBe(true);
+    /* Sem anel: nenhuma legenda de fatia. */
+    expect([...document.querySelectorAll('div')]
+      .filter(d => d.className.includes('text-[9px]') && d.className.includes('items-center'))).toHaveLength(0);
+    /* Sem chips de unidade. */
+    expect([...document.querySelectorAll('button')].some(b => b.textContent === 'R$/cab/mês')).toBe(false);
+    /* E as três linhas, nesta ordem: o dinheiro, o peso e o denominador dele. */
+    const rotulos = [...document.querySelectorAll<HTMLTableRowElement>('tbody tr')]
+      .map(tr => tr.cells[0]?.textContent);
+    expect(rotulos).toEqual(['R$', '% do VBP', 'VBP']);
+  });
+});
+
+/* ══════════════ O Δ SELECIONÁVEL E O MODO RESULTADO — 01c ══════════════ */
+
+describe('o Δ em pontos percentuais', () => {
+  /* ⚠ 40 % CONTRA 20 % SÃO VINTE PONTOS, não "100 % a mais": a variação relativa de uma razão é
+     correta e engana quem compara margens. */
+  it('a diferença de dois percentuais sai em pp, com a cor da natureza', () => {
+    expect(deltaEmPontos(40, 20, 'receita')?.texto).toBe('▲ 20,0 pp');
+    expect(deltaEmPontos(40, 20, 'receita')?.cor).toBe('text-green-700');
+    /* Custo que sobe é ruim, mesmo em pontos. */
+    expect(deltaEmPontos(40, 20, 'custo')?.cor).toBe('text-red-600');
+    expect(deltaEmPontos(20, 40, 'custo')?.texto).toBe('▼ 20,0 pp');
+  });
+
+  it('sem uma das pontas não há diferença nenhuma', () => {
+    expect(deltaEmPontos(null, 20, 'custo')).toBeNull();
+    expect(deltaEmPontos(40, null, 'custo')).toBeNull();
+  });
+});
+
+describe('a abreviação da tabela', () => {
+  /* ⚠ PISO MAIS ALTO QUE O DA BARRA, e é o mesmo formatador: a coluna da tabela tem 72px e
+     "87.430,55" cabe inteiro; a barra tem 22 e não cabe. */
+  it('a tabela só abrevia a partir de cem mil; a barra, a partir de mil', () => {
+    expect(abreviar('2.588.458,09', PISO_K_TABELA)).toBe('2,6 mi');
+    expect(abreviar('326.153,40', PISO_K_TABELA)).toBe('326,2 k');
+    expect(abreviar('87.430,55', PISO_K_TABELA)).toBe('87.430,55');
+    expect(abreviar('87.430,55')).toBe('87,4 k');
+  });
+});
+
+describe('a coluna Δ e o modal de resultado', () => {
+  const dreDe = (l: DrePecLinhas): DrePecuaria => ({
+    periodo: { de: '2025-07', ate: '2026-06', p0: '2025-06', meses: 12 },
+    rateio_adm: { pool: 0, bruto: 0, criterio: '' },
+    fazendas: [], total: l,
+  });
+  /* ⚠ OS TRÊS NÚMEROS SÃO DIFERENTES DE PROPÓSITO: atual 6.000, ano anterior 4.000 e meta 5.000.
+     Com dois iguais, um Δ lendo a referência errada daria o mesmo resultado do certo. */
+  const ATUAL = linhas({ ...LINHAS_NJ, margem: 6000 });
+  const ANTERIOR = linhas({ ...LINHAS_NJ, margem: 4000 });
+  const META = linhas({ ...LINHAS_NJ, margem: 5000 });
+
+  const montarResultado = () => render(
+    <PecHistoricoLinhaModal aberto
+      recorte={recorte({ chave: 'margem', rotulo: '= Margem de contribuição' })}
+      atual={dreDe(ATUAL)} meta={dreDe(META)}
+      anos={[{ de: '2024-07', ate: '2025-06', dre: dreDe(ANTERIOR), carregando: false }]}
+      periodoRotulo="Safra 25/26" clienteNome="NJ Pecuária" unidadeInicial="rs"
+      onFechar={() => {}} />,
+  );
+  const linhaR$ = () => [...document.querySelectorAll<HTMLTableRowElement>('tbody tr')]
+    .find(tr => tr.cells[0]?.textContent === 'R$');
+  /* ⚠ O Δ É A ÚLTIMA CÉLULA, lida por posição a partir do fim: o número de colunas muda com o de
+     anos, e um índice fixo leria a Meta em um cenário e o Δ noutro. */
+  const deltaDaLinha = () => { const c = linhaR$()?.cells; return c ? c[c.length - 1].textContent : ''; };
+
+  it('abre em Δ meta e troca para o ano anterior pelo cabeçalho', () => {
+    montarResultado();
+    const cabecalho = () => [...document.querySelectorAll('thead button')]
+      .find(b => b.textContent?.includes('Δ'));
+    expect(cabecalho()?.textContent).toContain('Δ meta');
+    /* 6.000 contra a meta 5.000 = +20 %. */
+    expect(deltaDaLinha()).toContain('20,0 %');
+
+    /* ⚠ O MENU ABRE PELO TECLADO NESTE HARNESS, e isso foi MEDIDO, não escolhido: o `DropdownMenu`
+       do Radix abre no `pointerdown`, e o jsdom não entrega `PointerEvent` com o que ele espera —
+       depois do `fireEvent.pointerDown` o gatilho continua `data-state="closed"`. Com `Enter` ele
+       abre. O caminho do teclado é o mesmo do mouse do lado de cá: o item recebe o clique e o
+       estado muda. */
+    fireEvent.keyDown(cabecalho() as Element, { key: 'Enter' });
+    const opcao = [...document.querySelectorAll('[role=menuitem]')]
+      .find(x => x.textContent?.includes('ano ant.'));
+    expect(opcao).toBeDefined();
+    fireEvent.click(opcao as Element);
+
+    expect(cabecalho()?.textContent).toContain('Δ ano ant.');
+    /* 6.000 contra o ano anterior 4.000 = +50 %, e não mais os 20 % da meta. */
+    expect(deltaDaLinha()).toContain('50,0 %');
   });
 });
