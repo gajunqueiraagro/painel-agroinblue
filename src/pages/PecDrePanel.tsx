@@ -418,6 +418,13 @@ const BORDA_RESERVA = '2px dashed transparent';
 const ehMeta = (c: ColunaPec) => c.chave === '__meta__';
 
 /**
+ * O QUE O P0 DA ESTREIA É — VPB-INICIO-01, e a frase diz as três coisas que o operador precisa para
+ * refazer a conta: de onde veio a quantidade, de onde veio o preço e o que foi simplificado.
+ */
+const TITULO_ESTREIA = 'Rebanho de partida do primeiro mês (estoque inicial); preço do primeiro '
+  + 'fechamento. Vacas de descarte valoradas como vacas.';
+
+/**
  * As bordas de uma célula da coluna Meta — laterais na primeira e na última sub-coluna, topo e base
  * nas pontas da grade. `base` só é verdadeiro na ÚLTIMA linha renderizada — quem a escolhe é o
  * objeto `base` montado no `tbody`.
@@ -800,6 +807,10 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, base, onAlternar, o
      grade saiu, e o selo "estimado" é a porta para a explicação — pool, critério e a fatia da
      pecuária. Só quando a primeira coluna é o realizado do período da tela, o único que o modal lê. */
   const abrirRateioDoRotulo = def.rateio && onAbrirRateio && colunas[0]?.atual ? onAbrirRateio : undefined;
+  /* ⚠ SÓ NAS DUAS LINHAS QUE O P0 PRODUZ: o selo explica de onde saiu a variação de patrimônio, e
+     pendurá-lo numa linha de venda ou de custo diria que o rebanho de partida a influenciou. */
+  const estreiaNaLinha = (def.chave === 'vpb_operacional' || def.chave === 'efeito_mercado')
+    && colunas.some(c => c.tipo === 'valor' && !c.semDado && c.linhas?.p0_origem === 'estoque_inicial');
   /* ⚠ O MARCADOR É DO VALOR, NÃO DO Δ (item 13): a diferença tem sinal próprio e uma seta ali diria
      "lucro" onde se lê "variação". Fora do azul cheio ele não existe — lá o número já é colorido. */
   const marcador = (col: ColunaPec, v: number | null) =>
@@ -863,7 +874,16 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, base, onAlternar, o
           {def.sufixo && (
             <span className="ml-1 font-normal text-muted-foreground" style={{ fontSize: 9 }}>{def.sufixo}</span>
           )}
-          {def.etiqueta && <Etiqueta texto={def.etiqueta} title={def.tituloEtiqueta} />}
+          {/* ⚠ UM SELO SÓ, E NA ESTREIA ELE É O DA ESTREIA — VPB-INICIO-01, e foi medido: estas duas
+              linhas já carregam "estimado", e um segundo selo estoura os 200px da coluna de rótulo
+              (192px de texto numa caixa de 186 com "início"; com "início do histórico", muito
+              mais). O rótulo sairia cortado — exatamente o que o fix6 acabou de tirar da grade.
+              ⚠ NADA SE PERDE: o `title` acumula as duas frases, e é dele que o operador tira a
+              conta. É o mesmo remédio do PR-06, quando "inclui rateio compartilhado" virou
+              "rateio" e a frase inteira foi para o `title`. */}
+          {estreiaNaLinha
+            ? <Etiqueta texto="início" title={`${def.tituloEtiqueta ? def.tituloEtiqueta + ' ' : ''}${TITULO_ESTREIA}`} />
+            : def.etiqueta && <Etiqueta texto={def.etiqueta} title={def.tituloEtiqueta} />}
           {/* ⚠ O SELO DOS JUROS É CONDICIONAL AO DADO, não à linha: ele só aparece quando há parcela
               rateada, e o `title` diz quanto e por qual critério. Numa fazenda cujos juros são todos
               próprios, marcar "estimado" seria mentir sobre um número exato. */}
@@ -902,11 +922,15 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, base, onAlternar, o
             : def.corPorSinal ? corDoSinal(v) : corLinha;
         /* ⚠ JUROS DE FAZENDA: "—" no R$ (é ausência, não zero) e nada nas unidades. */
         const jurosDeFazenda = def.chave === 'juros' && col.fazendaId !== null;
-        /* ⚠ SEM FECHAMENTO A CÉLULA DIZ POR QUÊ: as duas linhas de variação vêm nulas, e o
-           `title` é o que separa "não mudou" de "não sei". */
-        const semFech = col.tipo === 'valor' && !col.semDado
-          && (def.chave === 'vpb_operacional' || def.chave === 'efeito_mercado')
-          && (col.linhas.sem_p0 || col.linhas.sem_p1);
+        /* ⚠ SEM FECHAMENTO A CÉLULA DIZ POR QUÊ, E QUAL PONTA FALTA — VPB-INICIO-01. As duas
+           pontas produzem o mesmo traço e pedem providências opostas: sem P0 falta a foto do
+           começo, sem P1 falta a do fim. Dizer só "sem fechamento" mandava o operador procurar no
+           lugar errado metade das vezes. */
+        const daVariacao = def.chave === 'vpb_operacional' || def.chave === 'efeito_mercado';
+        const porqueDoTraco = col.tipo !== 'valor' || col.semDado || !daVariacao ? undefined
+          : col.linhas.p0_origem === null ? 'Sem fechamento no início do período'
+            : col.linhas.sem_p1 ? 'Sem fechamento no fim do período'
+              : col.linhas.p0_origem === 'estoque_inicial' ? TITULO_ESTREIA : undefined;
         const abrir = abrirDaColuna(col);
         return (
           <Fragment key={col.chave}>
@@ -921,7 +945,7 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, base, onAlternar, o
                 semSlotMarcador={col.tipo === 'delta'}
                 onAbrir={abrir}
                 estilo={estiloDoSlot(i)}
-                title={semFech ? 'sem fechamento' : undefined} />
+                title={porqueDoTraco} />
             ) : (
               <CelulaUnit key={sl}
                 texto={sl === 'pct' ? pctDelta(v, col.ref ? valorDe(col.ref, def.chave) : null)

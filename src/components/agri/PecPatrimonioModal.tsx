@@ -60,7 +60,7 @@ function Cartao({ titulo, linhas }: {
 }
 
 export function PecPatrimonioModal({
-  aberto, fazendaNome, qual, patrimonio, carregando, semP0, onFechar,
+  aberto, fazendaNome, qual, patrimonio, carregando, semP0, p0Origem, onFechar,
 }: {
   aberto: boolean;
   /** A coluna clicada. "Total" quando é a coluna de todas. */
@@ -69,8 +69,15 @@ export function PecPatrimonioModal({
   qual: 'vpb' | 'efeito';
   patrimonio: PatrimonioPec | null;
   carregando: boolean;
-  /** A fazenda não tem fechamento na ponta inicial — a variação não existe. */
+  /** A fazenda não tem fonte nenhuma na ponta inicial — a variação não existe. */
   semP0: boolean;
+  /**
+   * DE ONDE VEIO O P0 — VPB-INICIO-01. Na ESTREIA da fazenda não há mês anterior, e o P0 passa a
+   * ser o rebanho de partida: a tabela existe e os números são bons, então o modal a MOSTRA e só
+   * troca a frase do topo. Sem isto, a mesma tela que ganhou número na grade continuaria dizendo
+   * "sem fechamento" aqui.
+   */
+  p0Origem: 'fechamento' | 'estoque_inicial' | null;
   onFechar: () => void;
 }) {
   const [aba, setAba] = useState<'pontas' | 'categorias'>('pontas');
@@ -105,6 +112,16 @@ export function PecPatrimonioModal({
               { valor: 'pontas', rotulo: 'Início e fim' },
               { valor: 'categorias', rotulo: 'Por categoria' },
             ]} />
+
+          {/* ⚠ NA ESTREIA A CONTA EXISTE, e a frase diz de onde ela veio. O P0 é o rebanho de
+              partida do primeiro mês, não um fechamento de dezembro que ninguém fez. */}
+          {p0Origem === 'estoque_inicial' && (
+            <div className="rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-[10px] text-muted-foreground">
+              Início do histórico: a ponta inicial é o <strong className="font-medium">rebanho de
+              partida</strong> do primeiro mês (estoque inicial), valorado ao preço do primeiro
+              fechamento. Vacas de descarte entram como vacas.
+            </div>
+          )}
 
           {/* ⚠ SEM FECHAMENTO NA PONTA INICIAL A CONTA NÃO EXISTE — e o modal diz QUAL ponta
               falta, em vez de mostrar uma tabela de zeros que pareceria "não mudou nada". */}

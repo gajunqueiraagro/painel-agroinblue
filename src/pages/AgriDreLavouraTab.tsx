@@ -1147,6 +1147,9 @@ export function AgriDreLavouraTab() {
           semP0={(didatico.fazendaId
             ? drePec.fazendas.find(f => f.fazenda_id === didatico.fazendaId)?.linhas.sem_p0
             : drePec.total.sem_p0) === true}
+          p0Origem={(didatico.fazendaId
+            ? drePec.fazendas.find(f => f.fazenda_id === didatico.fazendaId)?.linhas.p0_origem
+            : drePec.total.p0_origem) ?? null}
           onFechar={() => setDidatico(null)}
         />
       )}

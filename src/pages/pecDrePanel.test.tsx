@@ -29,7 +29,7 @@ const linhas = (o: Partial<DrePecLinhas>): DrePecLinhas => ({
   /* ⚠ ÁREA NASCE NULA no fixture, e de propósito: é o estado de quem não tem fechamento de área, e
      a sub-coluna tem de dizer "—". Quem quer número o põe explicitamente. */
   producao: { ha_medio: null, at_produzida: null, at_desfrutada: null, cab_desfrutada: null, at_comprada: null, cab_comprada: null },
-  sem_p0: false, sem_p1: false, centros: [], centros_juros: [], ...o,
+  sem_p0: false, sem_p1: false, p0_origem: 'fechamento', centros: [], centros_juros: [], ...o,
 });
 
 const DRE: DrePecuaria = {
@@ -56,7 +56,7 @@ const DRE: DrePecuaria = {
       fazenda_id: 'f2', nome: 'Sto. Expedito',
       linhas: linhas({
         resultado_periodo: -3208702.24, vpb_operacional: null, efeito_mercado: null,
-        sem_p0: true, sem_p1: true,
+        sem_p0: true, sem_p1: true, p0_origem: null,
       }),
     },
   ],

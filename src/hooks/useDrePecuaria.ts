@@ -24,29 +24,36 @@ export interface DrePecLinhas {
   /** `null` sem fechamento numa das pontas. */
   vpb_operacional: number | null;
   reposicao: number;
-  vbp: number;
+  /**
+   * ⚠ DAQUI PARA BAIXO A CASCATA HERDA O `null` DO VPB — VPB-INICIO-01. Em `realizado`, uma fazenda
+   * sem P0 nem estoque inicial (ou sem P1) não tem variação de patrimônio, e sem ela não há VBP,
+   * margem nem resultado: a RPC manda `null` e a tela mostra "—". Antes estes campos eram `number`
+   * e o `num()` do parse transformava a ausência em 0 — o Lucro líquido de 2020 saía calculado com
+   * VPB zero, sem aviso. Em `meta` seguem numéricos, porque lá o `coalesce` continua.
+   */
+  vbp: number | null;
   custo_variavel: number;
-  margem: number;
+  margem: number | null;
   custo_fixo: number;
   rateio_adm: number;
-  resultado_operacional: number;
+  resultado_operacional: number | null;
   /**
    * ⚠ `null` NAS FAZENDAS, número só no TOTAL — DRE-PEC-RPC-02. Juros são da atividade, não de uma
    * fazenda: a RPC os soma sem filtro de fazenda e devolve `null` em cada coluna. `num()` faria o
    * `null` virar 0, e 0 afirmaria "esta fazenda não pagou juros", que é outra frase.
    */
   juros: number | null;
-  resultado_periodo: number;
+  resultado_periodo: number | null;
   /** `null` sem fechamento numa das pontas. */
   efeito_mercado: number | null;
-  resultado_com_mercado: number;
+  resultado_com_mercado: number | null;
   investimento: number;
   /**
    * O QUE SOBRA DEPOIS DE INVESTIR — DRE-CASCATA-02. É a cascata inteira menos o investimento, e é
    * ele que fecha o DRE nas duas atividades: antes a pecuária parava no "Resultado com mercado" e
    * a lavoura no "Resultado de caixa", cada uma com um nome para uma pergunta diferente.
    */
-  lucro_liquido: number;
+  lucro_liquido: number | null;
   /**
    * OS JUROS DA FAZENDA, separados do que ela recebeu de rateio.
    *
@@ -88,6 +95,12 @@ export interface DrePecLinhas {
     cab_comprada: number | null;
   };
   sem_p0: boolean;
+  /**
+   * DE ONDE VEIO O P0 — VPB-INICIO-01. 'fechamento' é o mês anterior, como sempre foi;
+   * 'estoque_inicial' é o rebanho de partida da ESTREIA da fazenda; `null` é não haver fonte, e é
+   * ele (não `sem_p0`) que a RPC usa para decidir o traço.
+   */
+  p0_origem: 'fechamento' | 'estoque_inicial' | null;
   sem_p1: boolean;
   /** Os centros de custo de TODOS os blocos desta coluna — a tela filtra por bloco. */
   centros: CentroPec[];
@@ -182,7 +195,12 @@ function lerCentros(v: unknown): CentroPec[] {
   });
 }
 
-function lerLinhas(x: unknown): DrePecLinhas {
+/**
+ * ⚠ EXPORTADA PARA O TESTE — VPB-INICIO-01. O que ela decide (ausência vira "—", não 0) é
+ * justamente o que nenhum dos sete gates via: TSC e build ficam mudos porque `num()` compila, e a
+ * tela só mostraria o defeito com um cliente cujo histórico começa no período aberto.
+ */
+export function lerLinhas(x: unknown): DrePecLinhas {
   const o = (x ?? {}) as Record<string, unknown>;
   const p = (o.patrimonio ?? {}) as Record<string, unknown>;
   const pr = (o.producao ?? {}) as Record<string, unknown>;
@@ -194,18 +212,18 @@ function lerLinhas(x: unknown): DrePecLinhas {
     receita_liquida: num(o.receita_liquida),
     vpb_operacional: numOuNulo(o.vpb_operacional),
     reposicao: num(o.reposicao),
-    vbp: num(o.vbp),
+    vbp: numOuNulo(o.vbp),
     custo_variavel: num(o.custo_variavel),
-    margem: num(o.margem),
+    margem: numOuNulo(o.margem),
     custo_fixo: num(o.custo_fixo),
     rateio_adm: num(o.rateio_adm),
-    resultado_operacional: num(o.resultado_operacional),
+    resultado_operacional: numOuNulo(o.resultado_operacional),
     juros: numOuNulo(o.juros),
-    resultado_periodo: num(o.resultado_periodo),
+    resultado_periodo: numOuNulo(o.resultado_periodo),
     efeito_mercado: numOuNulo(o.efeito_mercado),
-    resultado_com_mercado: num(o.resultado_com_mercado),
+    resultado_com_mercado: numOuNulo(o.resultado_com_mercado),
     investimento: num(o.investimento),
-    lucro_liquido: num(o.lucro_liquido),
+    lucro_liquido: numOuNulo(o.lucro_liquido),
     juros_proprio: num(o.juros_proprio),
     juros_rateado: num(o.juros_rateado),
     a_pagar: num(o.a_pagar),
@@ -223,6 +241,18 @@ function lerLinhas(x: unknown): DrePecLinhas {
     },
     sem_p0: o.sem_p0 === true,
     sem_p1: o.sem_p1 === true,
+    /**
+     * A FONTE DO P0 — 'fechamento', 'estoque_inicial' (estreia da fazenda) ou `null` (não há).
+     *
+     * ⚠ O TOTAL NÃO TEM ESTA CHAVE, TEM `p0_origem_estreia`: por fazenda a origem é uma só, mas o
+     * total soma fazendas que podem ter origens diferentes, e a RPC responde ali a pergunta que a
+     * tela faz — "alguma destas veio do rebanho de partida?". Traduzir as duas para o mesmo campo é
+     * o que faz o selo da linha aparecer também na coluna do Total; sem isto ele só apareceria na
+     * visão Por fazenda, que é justamente onde o operador não está quando abre o DRE.
+     */
+    p0_origem: o.p0_origem === 'fechamento' || o.p0_origem === 'estoque_inicial' ? o.p0_origem
+      : o.p0_origem_estreia === true ? 'estoque_inicial'
+        : o.p0_origem_estreia === false ? 'fechamento' : null,
     centros: lerCentros(o.centros),
     centros_juros: lerCentros(o.centros_juros),
   };

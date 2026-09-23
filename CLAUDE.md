@@ -485,6 +485,20 @@ no mesmo arquivo.
   `onClick` do card, entao `onVisao` e `onReferencia` disparavam juntos, duas escritas de URL caiam
   no mesmo tique do React e a segunda se perdia — clicar em "Meta" nao fazia absolutamente nada.
   O caso trava que escolher a referencia NAO chama `onVisao`.
+  De 1764 para 1774 no VPB-INICIO-01: entrou `src/hooks/dreP0Estreia.test.ts` (+10) — a ausencia do
+  VPB chega a tela como "—" e NUNCA como zero, e a fonte do P0 (`p0_origem`).
+  ⚠ NASCE DE UM DEFEITO QUE OS SETE GATES NAO VIAM. A RPC mandava `vpb_operacional: null` para a
+  fazenda sem P0 e o hook passava `vbp`, `margem` e `lucro_liquido` por `num()`, que devolve 0 para
+  qualquer coisa nao finita: o Lucro liquido de 2020 do NJ era calculado com VPB zero e a tela o
+  mostrava como apurado. TSC e build ficam MUDOS porque `num()` compila; a suite passava porque
+  nenhum fixture tinha um cliente cujo historico comeca dentro do periodo aberto.
+  ⚠ E DOIS CASOS AFIRMAM O CONTRARIO DE PROPOSITO: "VPB zero e valor, nao ausencia" e a string "0"
+  da RPC virando o numero 0. A regra e "ausencia e traco"; ela nao pode engolir o zero, que e
+  resposta legitima. Sem esses dois, um parse com `if (!v)` passaria verde e apagaria zeros reais.
+  ⚠ E TRES DOS DEZ NASCERAM DE UM DEFEITO VISTO NA TELA, depois do resto pronto: o selo "inicio"
+  nao aparecia no DRE de 2020 porque na visao Comparacao a coluna e' o TOTAL do cliente, e ali a
+  RPC responde com `p0_origem_estreia` (booleano), nao com `p0_origem`. Os numeros estavam certos e
+  a procedencia, invisivel — o tipo de defeito que so' a tela mostra.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 

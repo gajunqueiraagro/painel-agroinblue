@@ -332,6 +332,7 @@ export const BASE_DO_ARROBA: Record<ChaveLinhaPec, BaseArroba> = {
   lucro_liquido: 'produzida', juros_proprio: 'produzida', juros_rateado: 'produzida',
   /* As chaves que não são linha da cascata — nunca chegam a pedir base, mas o Record as exige. */
   patrimonio: 'produzida', producao: 'produzida', sem_p0: 'produzida', sem_p1: 'produzida',
+  p0_origem: 'produzida',
   centros: 'produzida', centros_juros: 'produzida', a_pagar: 'produzida',
 };
 
