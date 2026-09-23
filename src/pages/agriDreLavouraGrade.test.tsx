@@ -108,7 +108,14 @@ function montar(opts: {
      o seu, e `colsPorCultura` acompanha — na tela ele é `unidadesLav.length`. */
   const unidades = opts.unidades ?? ['rs', 'ha', 'un'];
   render(
-    <Grade dre={DRE} culturas={DRE.culturas} abertos={{ custeio: true, investimento: true, fixo: true }}
+    /* ⚠ OS DOIS PAIS ENTRAM AQUI — fix8 item A. "Custo variável" e "Custo fixo" viraram grupos, e
+       Custeio, Pós-colheita, Rateio compartilhado, Custo fixo da lavoura e Rateio administrativo
+       passaram a ser FILHAS deles. Sem `g:custo_variavel` e `g:g_custo_fixo` abertos, este harness
+       renderiza uma grade sem as linhas que os casos conferem — que foi exatamente como as cinco
+       falharam. O estado "tudo aberto" é o que eles sempre assumiram; só ganhou dois níveis. */
+    <Grade dre={DRE} culturas={DRE.culturas}
+      abertos={{ custeio: true, investimento: true, fixo: true,
+        'g:custo_variavel': true, 'g:g_custo_fixo': true }}
       setAbertos={vi.fn()}
       rateioDentro={rateioDentro} unidades={unidades} colsPorCultura={unidades.length}
       centrosDoBloco={b => DRE.centros.filter(c => c.bloco === b)}
@@ -152,7 +159,7 @@ describe('o invariante do PR-08 — o modo não muda total nenhum', () => {
   it('em "Custos diretos" há três linhas de rateio, com os valores do NJ', () => {
     montar({ rateioDentro: false });
     const rateios = linhasDaTabela()
-      .filter(tr => (tr.cells[0]?.textContent ?? '').includes('Rateio compartilhado'))
+      .filter(tr => (tr.cells[0]?.textContent ?? '').match(/rateio compartilhado/i))
       .map(tr => tr.cells[1]?.textContent ?? '');
     expect(rateios).toEqual(['532.913,78', '76.544,30', '155.295,94']);
   });
@@ -166,7 +173,7 @@ describe('o invariante do PR-08 — o modo não muda total nenhum', () => {
        filha de rateio mostram o MESMO 76.544,30 — e um `getByText` acha os dois. As três linhas
        de rateio vêm na ordem da cascata: custeio, custo fixo, investimento. */
     const rateios = linhasDaTabela()
-      .filter(tr => (tr.cells[0]?.textContent ?? '').includes('Rateio compartilhado'));
+      .filter(tr => (tr.cells[0]?.textContent ?? '').match(/rateio compartilhado/i));
     expect(rateios).toHaveLength(3);
 
     clicar(rateios[1].cells[1]);
@@ -181,14 +188,18 @@ describe('o invariante do PR-08 — o modo não muda total nenhum', () => {
        pós-colheita, que é outro bloco e outro número. */
     clicar(rateios[0].cells[1]);
     expect(abrir).toHaveBeenCalledWith(
-      'natureza', null, '(−) Rateio compartilhado', 'amendoim');
+      /* ⚠ CONTRATO NOVO — fix8 item A: a linha deixou de ser a terceira PARCELA do custo variável
+         e virou MEMO do que o grupo já contém, com o rótulo em minúscula e sem o "(−)". Medido:
+         a soma dos centros de Custeio da 25/26 do NJ é 2.446.692,91, dos quais 637.894,28 são
+         rateio — ela nunca somou, sempre recortou. O clique continua abrindo o mesmo pool. */
+      'natureza', null, 'dos quais rateio compartilhado', 'amendoim');
   });
 
   /* ⚠ E NENHUMA DELAS NO OUTRO MODO: lá o rateio está dentro das filhas, com o ponto âmbar. */
   it('com rateio nos centros não sobra nenhuma linha de rateio', () => {
     montar({ rateioDentro: true });
     const rateios = linhasDaTabela()
-      .filter(tr => (tr.cells[0]?.textContent ?? '').includes('Rateio compartilhado'));
+      .filter(tr => (tr.cells[0]?.textContent ?? '').match(/rateio compartilhado/i));
     expect(rateios).toHaveLength(0);
   });
 });
@@ -251,7 +262,7 @@ describe('quais células da grade abrem a lista de lançamentos', () => {
   it('a linha de rateio compartilhado abre o pool, com chave nula', () => {
     const { abrir, onDrill } = montar();
     clicar(celulaCom('532.913,78'));
-    expect(abrir).toHaveBeenCalledWith('natureza', null, '(−) Rateio compartilhado', 'amendoim');
+    expect(abrir).toHaveBeenCalledWith('natureza', null, 'dos quais rateio compartilhado', 'amendoim');
     expect(onDrill).not.toHaveBeenCalled();
   });
 

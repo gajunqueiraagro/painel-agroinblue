@@ -86,7 +86,7 @@ import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialo
 import { NIVEIS_DRILL, type ItemDrill } from '@/lib/analise/drillEconomico';
 import {
   useDreLavoura,
-  type ChaveLinha, type DreCentro, type DreCultura, type DreLavoura, type DreValor,
+  type ChaveLinha, type DreCentro, type DreCultura, type DreLavoura, type DreValor, type DreLinhas,
 } from '@/hooks/useDreLavoura';
 
 /* ─────────────────────────── A RÉGUA DAS COLUNAS ───────────────────────────
@@ -134,6 +134,14 @@ type Bloco = DreCentro['bloco'];
  * esquecido para uma delas mentir sobre o sinal. Aqui a diferença entre elas é DADO.
  */
 interface DefLinha {
+  /**
+   * A IDENTIDADE DA LINHA NA TELA, quando ela não pode ser a `chave`.
+   *
+   * ⚠ O PAI DO CUSTO FIXO REPETE A CHAVE de uma das filhas (`custo_fixo`), porque a RPC não tem um
+   * total próprio para ele. Sem um `id`, as duas linhas colidiriam na `key` do React e uma delas
+   * sumiria — em silêncio, que é como esse defeito costuma aparecer.
+   */
+  id?: string;
   chave: ChaveLinha;
   rotulo: string;
   /** `custo` pinta de vermelho, `receita` de verde, `neutro` não pinta. */
@@ -149,19 +157,50 @@ interface DefLinha {
   etiqueta?: string;
   /** Some no modo "dentro dos centros" — o rateio passa a viver dentro dos grupos. */
   someComRateioDentro?: boolean;
+  /**
+   * A LINHA É UM GRUPO PAI — fix8 item A. Ela ganha seta, recuo de pai e só mostra os filhos
+   * quando aberta. A chave da expansão é `g:<chave>`, fora do espaço dos `bloco` para não colidir
+   * com o drill de centros que os filhos já têm um nível abaixo.
+   *
+   * ⚠ NASCE DE UMA FAIXA QUE MENTIA: "= Custo variável" saía em faixa azul t1, a mesma do
+   * "= Receita líquida", e uma faixa azul num total de CUSTO lê como soma positiva. Agora ele é o
+   * que sempre foi — a soma de Custeio e Pós-colheita —, em vermelho e com a forma de grupo que a
+   * pecuária já usa.
+   */
+  paiGrupo?: boolean;
+  /** A linha só aparece com este pai aberto, e desenha-se na régua de filha. É o `id` do pai
+   *  (ou a `chave`, quando ele não precisa de `id`). */
+  filhoDe?: string;
+  /**
+   * MEMO: não é parcela, é recorte do que o PAI já contém.
+   *
+   * ⚠ E ISSO FOI MEDIDO, não suposto: a soma dos centros de Custeio no total da 25/26 do NJ é
+   * 2.446.692,91, dos quais 637.894,28 são rateio — exatamente o valor da linha
+   * `rateio_compartilhado`. Ela nunca foi uma quarta parcela; sempre foi o pedaço rateado que já
+   * está dentro do grupo. Sem "(−)" e em cinza, porque somá-la contaria duas vezes.
+   */
+  memo?: boolean;
+  /** O pai soma estas chaves DA PRÓPRIA RPC — nunca uma conta nova. Ver o Custo fixo. */
+  somaDe?: ChaveLinha[];
 }
 
 const LINHAS: DefLinha[] = [
   { chave: 'receita_bruta',          rotulo: 'Receita bruta',                   tom: 'receita' },
   { chave: 'deducoes',               rotulo: '(−) Deduções',                    tom: 'custo' },
   { chave: 'receita_liquida',        rotulo: '= Receita líquida',               faixa: 't1', tom: 'receita', destaque: 'subtotal' },
-  { chave: 'custeio',                rotulo: '(−) Custeio da lavoura',          tom: 'custo', bloco: 'custeio' },
-  { chave: 'pos_colheita',           rotulo: '(−) Pós-colheita',                tom: 'custo', bloco: 'pos_colheita' },
-  { chave: 'rateio_compartilhado',   rotulo: '(−) Rateio compartilhado',        tom: 'custo', etiqueta: 'estimado', someComRateioDentro: true },
-  { chave: 'custo_variavel',         rotulo: '= Custo variável',                faixa: 't1', tom: 'custo', destaque: 'sub' },
+  { chave: 'custo_variavel',         rotulo: '(−) Custo variável',              tom: 'custo', destaque: 'sub', paiGrupo: true },
+  { chave: 'custeio',                rotulo: '(−) Custeio da lavoura',          tom: 'custo', bloco: 'custeio', filhoDe: 'custo_variavel' },
+  { chave: 'pos_colheita',           rotulo: '(−) Pós-colheita',                tom: 'custo', bloco: 'pos_colheita', filhoDe: 'custo_variavel' },
+  { chave: 'rateio_compartilhado',   rotulo: 'dos quais rateio compartilhado',  tom: 'neutro', etiqueta: 'estimado', someComRateioDentro: true, filhoDe: 'custo_variavel', memo: true },
   { chave: 'margem_contribuicao',    rotulo: '= Margem de contribuição',        faixa: 't2', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
-  { chave: 'custo_fixo',             rotulo: '(−) Custo fixo da lavoura',       tom: 'custo', bloco: 'fixo' },
-  { chave: 'rateio_admin',           rotulo: '(−) Rateio administrativo',       tom: 'custo', etiqueta: 'estimado' },
+  /* ⚠ O PAI DO CUSTO FIXO É AGREGAÇÃO DE EXIBIÇÃO, e isso fica dito: a RPC NÃO tem uma chave com
+     o total — `custo_fixo` é o direto da lavoura e `rateio_admin` vem separado. A soma é das DUAS
+     CHAVES DA PRÓPRIA RPC, sem conta nova, e por isso o `somaDe` em vez de uma `chave` própria.
+     Corrigir de raiz é acrescentar `custo_fixo_total` na `fn_dre_lavoura` — frente própria. */
+  { id: 'g_custo_fixo', chave: 'custo_fixo', rotulo: '(−) Custo fixo',          tom: 'custo', destaque: 'sub', paiGrupo: true,
+    somaDe: ['custo_fixo', 'rateio_admin'] },
+  { chave: 'custo_fixo',             rotulo: '(−) Custo fixo da lavoura',       tom: 'custo', bloco: 'fixo', filhoDe: 'g_custo_fixo' },
+  { chave: 'rateio_admin',           rotulo: '(−) Rateio administrativo',       tom: 'custo', etiqueta: 'estimado', filhoDe: 'g_custo_fixo' },
   { chave: 'resultado_operacional',  rotulo: '= Resultado operacional',         faixa: 't3', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
   { chave: 'juros',                  rotulo: '(−) Despesas financeiras (juros)', tom: 'custo' },
   /* ⚠ O NOME MUDOU, A CHAVE NÃO — DRE-CASCATA-03a: "Resultado do período" é como a pecuária já
@@ -487,7 +526,10 @@ export function AgriDreLavouraTab() {
      dependem do modo: o Resumido tem três (custo variável, custo fixo e investimento). */
   const gruposDaAba = useMemo(() => (ehPec
     ? LINHAS_DO_MODO(modoPec).filter(d => d.expande).map(d => d.chave as string)
-    : ['custeio', 'pos_colheita', 'fixo', 'investimento']), [ehPec, modoPec]);
+    /* ⚠ OS DOIS PAIS ENTRAM NO "abrir tudo" — fix8: sem eles, o botão abria os centros de grupos
+       que continuavam escondidos dentro de um pai fechado, e a tela não mudava. */
+    : ['g:custo_variavel', 'g:g_custo_fixo', 'custeio', 'pos_colheita', 'fixo', 'investimento']),
+  [ehPec, modoPec]);
   const expandidos = ehPec ? abertosPec : abertos;
   const tudoAberto = gruposDaAba.length > 0 && gruposDaAba.every(g => expandidos[g]);
   const alternarTudo = () => {
@@ -754,6 +796,8 @@ export function AgriDreLavouraTab() {
    * A23 proíbe, e a coluna deixava de fechar.
    */
   const valorDaLinha = (l: DreValor, def: DefLinha): number | null => {
+    /* ⚠ `somaDe` NÃO CHEGA AQUI: ele precisa do objeto de LINHAS inteiro, não de um `DreValor`
+       solto, e por isso é resolvido em `LinhaDre` (ver `valorDoPai`). */
     if (!def.bloco) return l.valor;
     if (rateioDentro) return l.valor;
     if (BLOCOS_SEM_LINHA_PROPRIA.includes(def.bloco)) return l.valor;
@@ -1632,13 +1676,27 @@ export function Grade({
       <tbody>
         {LINHAS.map(def => {
           if (def.someComRateioDentro && rateioDentro) return null;
+          /* ⚠ FILHO SÓ EXISTE COM O PAI ABERTO — fix8 item A. A chave do pai é `g:<id>`, fora do
+             espaço dos `bloco`, porque Custeio e Pós-colheita continuam sendo grupos próprios um
+             nível abaixo: o mesmo `abertos` guarda os dois níveis sem se atrapalhar. */
+          const idDaLinha = def.id ?? def.chave;
+          if (def.filhoDe && !abertos[`g:${def.filhoDe}`]) return null;
+          const ehPai = !!def.paiGrupo;
+          const chaveExp = ehPai ? `g:${idDaLinha}` : def.bloco;
           const filhas = def.bloco && abertos[def.bloco] ? centrosDoBloco(def.bloco) : [];
           return (
-            <Fragment key={def.chave}>
+            <Fragment key={idDaLinha}>
               <LinhaDre def={def} dre={dre} culturas={culturas} rateioDentro={rateioDentro}
-                unidades={unidades} aberto={!!(def.bloco && abertos[def.bloco])}
-                onAlternar={def.bloco ? () => alterna(def.bloco as string) : undefined}
+                unidades={unidades} aberto={!!(chaveExp && abertos[chaveExp])}
+                onAlternar={chaveExp ? () => alterna(chaveExp as string) : undefined}
                 valorDaLinha={valorDaLinha} abrir={abrir} semTotal={semTotal} onDrill={onDrill} />
+              {/* ⚠ O % VEM SOB OS TRÊS RESULTADOS, na régua da linha de % da pecuária. A base é a
+                  RECEITA LÍQUIDA: a lavoura não tem VBP, e a receita líquida é o que as três
+                  linhas consomem. Ver `LinhaPercentualLav`. */}
+              {COM_PERCENTUAL_LAV.has(def.chave) && (
+                <LinhaPercentualLav chave={def.chave} dre={dre} culturas={culturas}
+                  unidades={unidades} semTotal={semTotal} />
+              )}
               {/* ⚠ O LUCRO POR HECTARE É LEITURA DE APOIO, na régua da linha de % da pecuária: 9px,
                   muted, altura 14, sem cor de sinal e sem clique. Ele some quando o chip R$/ha está
                   marcado — ali a sub-coluna já responde. */}
@@ -1721,6 +1779,58 @@ function ThUnidade({ cultura, unidades }: { cultura: string; unidades: readonly 
  * ⚠ SEM ÁREA, TRAÇO: a RPC devolve `por_ha` nulo quando não há hectare, e "R$ 0,00/ha" afirmaria
  * que a cultura não lucrou.
  */
+/**
+ * AS TRÊS LINHAS QUE GANHAM O % — fix8 item A, espelho do `COM_PERCENTUAL` da pecuária.
+ *
+ * ⚠ A BASE É A RECEITA LÍQUIDA, e não há escolha a fazer: a lavoura não tem VBP. Na pecuária o
+ * denominador é o VBP porque a variação de estoque entra na cascata DEPOIS da receita, e dividir
+ * por ela compararia tamanhos diferentes; aqui não há variação de estoque, e a receita líquida é
+ * exatamente o que as três linhas consomem.
+ * ⚠ RECEITA ≤ 0 DÁ TRAÇO, NUNCA 0% — a mesma regra do `percentual` da pecuária: sem base não há
+ * percentual, e 0% afirmaria que a linha não consumiu nada.
+ */
+const COM_PERCENTUAL_LAV: ReadonlySet<ChaveLinha> = new Set<ChaveLinha>([
+  'margem_contribuicao', 'resultado_operacional', 'resultado_caixa',
+]);
+
+function LinhaPercentualLav({ chave, dre, culturas, unidades, semTotal }: {
+  chave: ChaveLinha; dre: DreLavoura; culturas: DreCultura[];
+  unidades: readonly UnidadeLav[]; semTotal?: boolean;
+}) {
+  const pct = (l: DreLinhas) => {
+    const base = l.receita_liquida.valor;
+    const v = l[chave].valor;
+    if (base == null || v == null || base <= 0) return traco;
+    return `${formatNum((v / base) * 100, 1)} %`;
+  };
+  const vazias = (n: number) => Array.from({ length: n }).map((_, i) => <td key={i} className="bg-card" />);
+  return (
+    <tr className="bg-card font-normal" style={{ height: 14 }}>
+      <td className="sticky left-0 z-10 truncate border-r border-border/60 bg-card py-px text-muted-foreground"
+        style={{ fontSize: 9, paddingLeft: 15, paddingRight: 7 }}
+        title="Percentual da receita líquida da cultura">
+        % da receita líquida
+      </td>
+      {culturas.map(c => (
+        <Fragment key={c.cultura}>
+          <td className="truncate bg-card px-[7px] text-right tabular-nums text-muted-foreground"
+            style={{ fontSize: 9, borderLeft: '1px solid hsl(var(--border))' }}>
+            {pct(c.linhas)}
+          </td>
+          {vazias(unidades.length - 1)}
+        </Fragment>
+      ))}
+      {!semTotal && <>
+        <td className="truncate bg-card px-[7px] text-right tabular-nums text-muted-foreground"
+          style={{ fontSize: 9, borderLeft: BORDA_TOTAL }}>
+          {pct(dre.total.linhas)}
+        </td>
+        {vazias(unidades.filter(u => u !== 'un').length - 1)}
+      </>}
+    </tr>
+  );
+}
+
 function LinhaPorHectareLav({ dre, culturas, unidades, semTotal }: {
   dre: DreLavoura; culturas: DreCultura[]; unidades: readonly UnidadeLav[]; semTotal?: boolean;
 }) {
@@ -1791,14 +1901,31 @@ function LinhaDre({
      continuam destacados das linhas comuns sem virar cinco títulos empilhados. */
   /* ⚠ A RÉGUA VEM DO MÓDULO, não de literais aqui: tamanho, peso, altura e recuo saem de
      `REGUA_LINHA` pelo PAPEL da linha, e é o que mantém a lavoura e a pecuária iguais. */
-  const regua = REGUA_LINHA[tipoDaLinha(def.destaque, !!def.bloco)];
+  /* ⚠ O PAPEL DA LINHA MUDOU COM A HIERARQUIA — fix8 item A. O pai de grupo desenha-se como
+     GRUPO (10px/500, recuo 8) e as filhas como FILHA (9px/400, recuo 16), que é a régua
+     DRE-GRADE-TIPOGRAFIA que a pecuária já usa. `temBloco` sozinho não bastava: Custeio tem
+     `bloco` e agora é FILHA de "Custo variável". */
+  const papel = def.paiGrupo ? 'grupo' : def.filhoDe ? 'filha' : tipoDaLinha(def.destaque, !!def.bloco);
+  const regua = REGUA_LINHA[papel];
   const peso = regua.peso;
-  const corLinha = daFaixa ? (daFaixa.texto ?? '') : corDoTom(def.tom);
+  /* ⚠ O MEMO NÃO TEM COR DE CUSTO: ele não é uma parcela a subtrair, é um recorte do que o pai já
+     contém. Vermelho ali faria o olho somá-lo de novo. */
+  const corLinha = def.memo ? 'text-muted-foreground'
+    : daFaixa ? (daFaixa.texto ?? '') : corDoTom(def.tom);
   const tot = dre.total.linhas[def.chave];
   /* ⚠ A COLUNA TOTAL SEGUE A MESMA REGRA das culturas, com o valor DELA: o sinal do total da safra
      não é o de nenhuma cultura em particular. */
-  const corDoTotalDaSafra = def.faixa ? corDoTotal(def.faixa, valorDaLinha(tot, def))
-    : def.corPorSinal ? corDoSinal(valorDaLinha(tot, def)) : corLinha;
+  /* ⚠ O PAI QUE SOMA DUAS CHAVES DA RPC — ver `somaDe`. Nenhuma conta nova: as duas parcelas
+     vêm prontas do payload, e somá-las é o que a linha mostra. Se qualquer uma faltar, o todo
+     falta: somar tratando `null` como zero afirmaria um total que não se sabe. */
+  const valorDe = (l: DreLinhas): number | null => {
+    if (!def.somaDe) return valorDaLinha(l[def.chave], def);
+    let t = 0;
+    for (const k of def.somaDe) { const v = l[k].valor; if (v == null) return null; t += v; }
+    return t;
+  };
+  const corDoTotalDaSafra = def.faixa ? corDoTotal(def.faixa, valorDe(dre.total.linhas))
+    : def.corPorSinal ? corDoSinal(valorDe(dre.total.linhas)) : corLinha;
   /* ⚠ O MARCADOR SÓ EXISTE NO AZUL CHEIO (item 13): nas outras faixas o próprio número é azul ou
      vermelho, e o glifo seria o mesmo recado duas vezes. */
   const marcador = (v: number | null) => (def.faixa ? marcadorDoTotal(def.faixa, v) : undefined);
@@ -1847,7 +1974,7 @@ function LinhaDre({
 
       {culturas.map(c => {
         const l = c.linhas[def.chave];
-        const v = valorDaLinha(l, def);
+        const v = valorDe(c.linhas);
         const rat = def.bloco && rateioDentro ? (l.rateado ?? 0) : 0;
         const cor = def.faixa ? corDoTotal(def.faixa, v)
           : def.corPorSinal ? corDoSinal(v) : corLinha;
@@ -1900,14 +2027,14 @@ function LinhaDre({
           precisa perder para a zebra e para o `bg-muted` do subtotal, que vêm na linha. */}
       {!semTotal && <>
         {unidades.includes('rs') && (
-          <Celula valor={valorDaLinha(tot, def)} cor={corDoTotalDaSafra}
-            faixa={daFaixa?.fundo} marcador={marcador(valorDaLinha(tot, def))}
+          <Celula valor={valorDe(dre.total.linhas)} cor={corDoTotalDaSafra}
+            faixa={daFaixa?.fundo} marcador={marcador(valorDe(dre.total.linhas))}
             destaque={def.destaque} fonte={regua.fonte} total />
         )}
         {unidades.includes('ha') && (
-          <CelulaUnit texto={porUnidade(valorDaLinha(tot, def), dre.total.area_ha)}
+          <CelulaUnit texto={porUnidade(valorDe(dre.total.linhas), dre.total.area_ha)}
             cor={corDoTotalDaSafra}
-            faixa={daFaixa?.fundo} marcador={marcador(valorDaLinha(tot, def))}
+            faixa={daFaixa?.fundo} marcador={marcador(valorDe(dre.total.linhas))}
             destaque={def.destaque} fonte={regua.fonte}
             total />
         )}

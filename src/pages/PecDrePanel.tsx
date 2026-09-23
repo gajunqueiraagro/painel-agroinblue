@@ -410,25 +410,27 @@ const rotuloSlot = (s: SlotPec, c: ColunaPec) =>
   (s === 'pct' ? 'Δ %' : s === 'rs' ? (c.tipo === 'delta' ? 'Δ R$' : 'R$') : ROTULO_UNIDADE[s]);
 
 /**
- * A COLUNA META SE MARCA PELA FORMA, NÃO PELA COR — fix5, decisão do Gabriel de 23/09.
+ * A COLUNA META SE MARCA POR UM CONTORNO FINO E CONTÍNUO — fix8, decisão do Gabriel de 23/09.
  *
- * ⚠ TRACEJADO PORQUE COR NENHUMA SOBREVIVE ÀS QUATRO FAIXAS. O contorno atravessa sete fundos (o
- * cabeçalho `#3a4864`, a linha branca, o `bg-muted` e as faixas t1..t4), e a medição da FASE 0
- * mostrou que nenhum laranja passa dos 3:1 em todos: o t3 (`#b6cade`) apaga os tons claros e o
- * cabeçalho e o t4 apagam os escuros. O `--meta` fica em 3,78 sobre branco e 2,25 sobre o t3 —
- * é o traço que o olho pega ali, não o contraste.
- * ⚠ E A COR É A DA CASA: `--meta` é o token do A11 (`docs/PADROES-UI.md:182-193`), laranja escuro
- * com nome semântico. Não se abre uma quarta convenção de Meta neste PR.
+ * ⚠ ERA TRACEJADO DE 2px, E O TRACEJADO PESAVA DEMAIS: ele foi escolhido no fix5 porque nenhum
+ * laranja passa de 3:1 em todos os sete fundos que a coluna atravessa, e a aposta foi no TRAÇO em
+ * vez do contraste. Na tela, 2px pontilhados leem como "seleção provisória", não como identidade
+ * de coluna.
+ * ⚠ 1px BASTA, E ISSO FOI MEDIDO: `--meta` (`hsl(25 85% 45%)` = `rgb(212,98,17)`) dá **2,24:1**
+ * sobre o t3 (`#b6cade`), que é o pior fundo da grade, e 3,76:1 sobre branco. O piso deste PR é
+ * 1,5:1 para um contorno (não é texto), e 2,24 passa com folga — por isso 1px, e não 1,5px.
+ * ⚠ E A COR CONTINUA SENDO A DA CASA: `--meta` é o token do A11 (`docs/PADROES-UI.md:182-193`),
+ * laranja escuro com nome semântico.
  */
-const BORDA_META = '2px dashed hsl(var(--meta))';
+const BORDA_META = '1px solid hsl(var(--meta))';
 /**
  * ⚠ A RESERVA É O QUE SEGURA A LEI DA ESTABILIDADE. As laterais não precisam dela — com
- * `table-layout: fixed` a largura vem do `<colgroup>` e a borda é desenhada PARA DENTRO, então 1px
- * de divisória e 2px de tracejado ocupam a mesma coluna. As horizontais precisam: um `borderTop` de
- * 2px numa tabela `border-collapse` cresce a altura, e ela sumiria ao trocar [Meta] por [1]. Por
- * isso a primeira coluna reserva topo e base TRANSPARENTES em toda referência, e só a cor muda.
+ * `table-layout: fixed` a largura vem do `<colgroup>` e a borda é desenhada PARA DENTRO, então a
+ * divisória e o contorno ocupam a mesma coluna. As horizontais precisam: um `borderTop` numa tabela
+ * `border-collapse` cresce a altura, e ela sumiria ao trocar [Meta] por [1]. Por isso a primeira
+ * coluna reserva topo e base TRANSPARENTES em toda referência, e só a cor muda.
  */
-const BORDA_RESERVA = '2px dashed transparent';
+const BORDA_RESERVA = '1px solid transparent';
 const ehMeta = (c: ColunaPec) => c.chave === '__meta__';
 
 /**
@@ -966,7 +968,15 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, base, onAlternar, o
         return (
           <Fragment key={col.chave}>
             {slots.map((sl, i) => (sl === 'rs' ? (
-              <Celula key={sl} valor={v} cor={col.comparacao && !daFaixa ? 'text-muted-foreground' : cor}
+              /* ⚠ A COR É DA LINHA, EM TODA COLUNA — fix8 item B. A coluna de comparação (a meta ou
+                 o ano anterior) saía em `text-muted-foreground`: receita, custo e resultado ficavam
+                 todos cinzas, e o operador perdia justamente na coluna que existe para comparar o
+                 sinal que a torna legível. Veio do 67a79233, quando a comparação entrou no Global e
+                 a referência foi apagada para destacar o período da tela.
+                 ⚠ O DESTAQUE DA COLUNA ATUAL NÃO SE PERDE: ele é o TAMANHO da fonte (a linha
+                 abaixo), que a comparação já lê menor. Apagar a cor era um segundo sinal para a
+                 mesma pergunta — e custava a informação. */
+              <Celula key={sl} valor={v} cor={cor}
                 destaque={def.destaque} fonte={col.comparacao ? REGUA_LINHA.simples.fonte : regua.fonte}
                 /* ⚠ A DIVISÓRIA DE 1px SAI ONDE O TRACEJADO ENTRA: na `Celula` o bloco de borda é
                    aplicado DEPOIS do `estilo`, então os dois disputariam o mesmo `borderLeft` e o
