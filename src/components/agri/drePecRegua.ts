@@ -52,6 +52,21 @@ export interface ColunaPec {
   unidade: 'ha' | 'pct' | null;
   /** Só no delta: a meta contra a qual `linhas` (o realizado) se compara. `null` = sem meta. */
   ref?: DrePecLinhas | null;
+  /**
+   * A REFERÊNCIA DO Δ NÃO TEM PATRIMÔNIO — fix7 item C.
+   *
+   * ⚠ NASCE DE UM Δ EM TRAÇO COM OS DOIS NÚMEROS NA TELA. As três linhas de patrimônio
+   * (`vpb_operacional`, `efeito_mercado`, `resultado_com_mercado`) saem em "—" na coluna de Δ
+   * porque a RPC não filtra patrimônio por cenário — e isso é CERTO quando a referência é a META.
+   * Quando ela é o ANO ANTERIOR, os dois lados são realizado, a variação existe nos dois, e o Δ é
+   * uma subtração comum. O fix4 trocou a referência padrão para o ano anterior e a regra do
+   * patrimônio ficou onde estava: o Efeito de mercado do Agnaldo mostrava "—" tendo
+   * -1.738.199,93 de um lado e -567.053,09 do outro.
+   * ⚠ A FLAG É DA REFERÊNCIA, não da coluna: `semPatrimonio` já descreve a coluna Meta; esta
+   * descreve o que o Δ compara CONTRA. Reusar aquela faria a coluna de Δ afirmar que ela própria
+   * não tem patrimônio, que é outra coisa.
+   */
+  refSemPatrimonio?: boolean;
   de: string;
   ate: string;
   cenario: CenarioPec;

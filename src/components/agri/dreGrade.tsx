@@ -599,6 +599,14 @@ export function Caixas({ caixas, colunas = 6, selecionada, onEscolher, grande, e
    */
   grande?: boolean;
 }) {
+  /* ⚠ A LINHA DA NOTA SÓ EXISTE SE ALGUÉM A USA — fix7 item A. Ela era reservada SEMPRE, e a
+     reserva custava 13px por card (11 de linha + 2 de gap) numa faixa em que NENHUM card tem nota:
+     o `nota` nasceu para o card "Global", que o fix4 apagou, e hoje não há um só chamador de
+     `Caixas` que o passe (conferido por grep em 23/09). O card media 63px e passa a medir 50.
+     ⚠ A LEI DE ESTABILIDADE CONTINUA VALENDO, e é por isso que a decisão é POR FAIXA e não por
+     card: se um card tiver nota, TODOS reservam a linha, e ligar o Δ não pode mudar quem tem nota
+     dentro da mesma faixa. O que sai é a reserva para o caso que não existe. */
+  const temNota = caixas.some(c => c.nota !== undefined);
   if (onEscolher) {
     return (
       <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${colunas}, minmax(0, 1fr))` }}>
@@ -646,13 +654,16 @@ export function Caixas({ caixas, colunas = 6, selecionada, onEscolher, grande, e
                   </>
                   ))}
               </div>
-              {/* ⚠ ALTURA RESERVADA SEMPRE: a linha existe com ou sem nota, senão ligar o Δ faria a
-                  faixa inteira crescer e a tabela descer (lei de estabilidade). */}
-              <div className={cn('w-full truncate text-center text-[9px] leading-[11px]',
-                ativa ? 'text-primary-foreground/80' : 'text-muted-foreground')}
-                style={{ minHeight: 11 }}>
-                {c.nota ?? '\u00a0'}
-              </div>
+              {/* ⚠ ALTURA RESERVADA QUANDO ALGUÉM NA FAIXA TEM NOTA: aí a linha existe em TODOS os
+                  cards, com ou sem nota, senão ligar o Δ faria a faixa crescer e a tabela descer
+                  (lei de estabilidade). Sem nota nenhuma na faixa, ela não é desenhada. */}
+              {temNota && (
+                <div className={cn('w-full truncate text-center text-[9px] leading-[11px]',
+                  ativa ? 'text-primary-foreground/80' : 'text-muted-foreground')}
+                  style={{ minHeight: 11 }}>
+                  {c.nota ?? '\u00a0'}
+                </div>
+              )}
             </Caixa>
           );
         })}

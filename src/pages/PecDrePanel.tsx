@@ -249,10 +249,20 @@ export function colunasDaVisao(e: EntradaVisoes): ColunaPec[] {
        diferença antes do número que a produziu. */
     const cols: ColunaPec[] = [referencia, { ...totalReal, nome: 'Atual' }];
     if (deltas.length > 0) {
+      /* ⚠ SEM NOME E SEM SUB — fix7 item B. O cabeçalho da coluna trazia três linhas
+         ("Δ" / "real − meta" / "Δ R$"), e as duas primeiras repetiam o que as colunas ao lado já
+         dizem: elas se chamam "Meta" e "Atual". O rótulo do slot ("Δ R$", "Δ %") basta, e é ele
+         que nomeia a célula que o operador lê.
+         ⚠ E ISSO ENCOLHE O CABEÇALHO INTEIRO: `temSub` é verdadeiro quando QUALQUER coluna tem
+         sub, e nesta visão só o Δ tinha — sem ele a primeira linha do thead cai de 26 para 14.
+         O aviso "sem meta" continua sendo sub da coluna Meta e continua segurando os 26 quando
+         faz falta. */
       cols.push({
-        ...totalReal, chave: '__delta__', nome: 'Δ', sub: 'real − meta',
+        ...totalReal, chave: '__delta__', nome: '', sub: '',
         total: false, tipo: 'delta', unidade: 'pct',
         ref: semMeta ? null : (e.meta?.total ?? null), deltaSlots: deltas, comparacao: true,
+        /* ⚠ AQUI O TRAÇO DO PATRIMÔNIO É CERTO: a meta não tem variação de rebanho. */
+        refSemPatrimonio: true,
       });
     }
     return cols;
@@ -283,9 +293,11 @@ export function colunasDaVisao(e: EntradaVisoes): ColunaPec[] {
   if (ref > 1 || deltas.length === 0) return [...colunasAno, atual];
   const anterior = colunasAno[0];
   return [anterior, atual, {
-    ...totalReal, chave: '__delta__', nome: 'Δ', sub: `atual − ${anterior.nome}`,
+    ...totalReal, chave: '__delta__', nome: '', sub: '',
     total: false, tipo: 'delta', unidade: 'pct',
     ref: anterior.semDado ? null : anterior.linhas, deltaSlots: deltas, comparacao: true,
+    /* ⚠ E AQUI NÃO: os dois lados são realizado, o patrimônio existe nos dois e o Δ é uma
+       subtração comum. Ver `refSemPatrimonio` em `drePecRegua.ts`. */
   }];
 }
 
@@ -293,7 +305,9 @@ export function colunasDaVisao(e: EntradaVisoes): ColunaPec[] {
 function valorNaColuna(col: ColunaPec, chave: ChaveLinhaPec): number | null {
   if (!col.linhas || col.semDado) return null;
   if (col.tipo === 'delta') {
-    if (SEM_META.has(chave) || !col.ref) return null;
+    /* ⚠ `SEM_META` SÓ VALE CONTRA A META — fix7 item C. Contra o ano anterior os dois lados são
+       realizado, e a variação de rebanho é subtraível como qualquer outra linha. */
+    if ((col.refSemPatrimonio && SEM_META.has(chave)) || !col.ref) return null;
     const r = valorDe(col.linhas, chave);
     const m = valorDe(col.ref, chave);
     return r == null || m == null ? null : r - m;

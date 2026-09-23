@@ -506,6 +506,17 @@ no mesmo arquivo.
   SR 23/24. Um dos quatro casos trava que divergencia ZERO nao vira null: Sta. Luzia zerou de
   verdade (0) e Bom Retiro nao (4 cabecas no cache), e tratar 0 como "sem divergencia" apagaria a
   diferenca entre as duas.
+  De 1778 para 1780 no DRE-CASCATA-03b-fix7: `src/pages/pecDrePanel.test.tsx` foi de 43 para 45 —
+  o Δ do PATRIMONIO existe contra o ANO e nao existe contra a META.
+  ⚠ OS DOIS CASOS ANDAM JUNTOS DE PROPOSITO, e e' o que justifica serem dois: afirmar so' o numero
+  novo passaria verde tambem se alguem apagasse a regra inteira, e ai' a coluna Meta voltaria a
+  mentir que ha' meta de rebanho. O fixture da meta leva `efeito_mercado: 999999` justamente para
+  provar que o traco NAO vem de zero.
+  ⚠ E TRES CASOS EXISTENTES FALHARAM ANTES DE SEREM ATUALIZADOS, pela razao certa: eles cobravam
+  'Δ' e 'real − meta' no cabecalho do grupo, que o item B apagou. Foram atualizados para o contrato
+  novo — afirmam o grupo VAZIO **e** o rotulo 'Δ R$' presente na segunda linha —, nunca afrouxados.
+  Afirmar so' a ausencia passaria verde tambem se a coluna inteira tivesse sumido (a mesma licao do
+  auto-teste do `check:tdz`).
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 

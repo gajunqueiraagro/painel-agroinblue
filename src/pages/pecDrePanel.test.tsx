@@ -479,6 +479,16 @@ const SEM_META: DrePecuaria = { ...META, total: linhas({ juros: 0 }) };
 const cabecalhos = () => Array.from(document.querySelectorAll<HTMLTableCellElement>('thead tr:first-child th'))
   .map(th => th.textContent ?? '');
 
+/**
+ * A SEGUNDA LINHA DO CABEÇALHO — os rótulos de sub-coluna ("R$", "R$/ha", "Δ R$", "Δ %").
+ *
+ * ⚠ ELE EXISTE PORQUE O GRUPO DO Δ EMUDECEU no fix7: afirmar só que o grupo está vazio passaria
+ * verde também se a coluna inteira tivesse sumido. Os casos afirmam as DUAS coisas — o grupo sem
+ * texto E o rótulo "Δ R$" presente —, que é a mesma lição do auto-teste do `check:tdz`.
+ */
+const rotulosDeSlot = () => Array.from(document.querySelectorAll<HTMLTableCellElement>('thead tr:nth-child(2) th'))
+  .map(th => th.textContent ?? '');
+
 describe('as duas visões', () => {
   /* ⚠ SEM ANO ANTERIOR NA RESPOSTA, a comparação por anos mostra só o período da tela — e é o
      estado em que a grade nasce enquanto a lista de anos não chegou. */
@@ -509,7 +519,11 @@ describe('as duas visões', () => {
     expect(h).toHaveLength(4);
     expect(h[1]).toContain('Meta');
     expect(h[2]).toContain('Atual');
-    expect(h[3]).toContain('real − meta');
+    /* ⚠ CONTRATO NOVO — fix7 item B: o grupo do Δ não tem mais nome nem sub. "Δ" e "real − meta"
+       repetiam o que as colunas ao lado já dizem ("Meta", "Atual"), em três linhas de cabeçalho.
+       O rótulo da sub-coluna ("Δ R$", "Δ %") é quem nomeia a célula, e é o único que ficou. */
+    expect(h[3]).toBe('');
+    expect(rotulosDeSlot()).toContain('Δ R$');
     /* rótulo 0 · Meta R$ 1 e R$/ha 2 · Atual R$ 3 e R$/ha 4 · Δ R$ 5 e Δ% 6. */
     const vendas = linhaDe('Vendas');
     expect(vendas?.cells[1]?.textContent).toBe('451.560,00');
@@ -770,7 +784,9 @@ describe('a comparação, por referência', () => {
     const cab = cabecalhos();
     expect(cab[1]).toContain('Meta');
     expect(cab[2]).toContain('Atual');
-    expect(cab[3]).toContain('Δ');
+    /* fix7 item B: o grupo do Δ é mudo; quem diz "Δ R$" é o rótulo da sub-coluna. */
+    expect(cab[3]).toBe('');
+    expect(rotulosDeSlot()).toContain('Δ R$');
     /* Vendas: meta 10.000.000, atual 17.869.000,08, Δ = 7.869.000,08. */
     const vendas = linhaDe('Vendas');
     expect(vendas?.cells[1]?.textContent).toBe('10.000.000,00');
@@ -783,11 +799,54 @@ describe('a comparação, por referência', () => {
     const cab = cabecalhos();
     expect(cab[1]).toContain('jul/24-jun/25');
     expect(cab[2]).toContain('jul/25-jun/26');
-    expect(cab[3]).toContain('Δ');
+    /* fix7 item B: sem "Δ" e sem "atual − jul/24-jun/25" — a referência já está no cabeçalho ao
+       lado, e repeti-la custava 12px de altura em TODA a grade. */
+    expect(cab[3]).toBe('');
+    expect(rotulosDeSlot()).toContain('Δ R$');
     const vendas = linhaDe('Vendas');
     expect(vendas?.cells[1]?.textContent).toBe('12.000.000,00');
     /* 17.869.000,08 − 12.000.000 = 5.869.000,08 — e não os 7,8 mi da meta. */
     expect(vendas?.cells[5]?.textContent).toBe('5.869.000,08');
+  });
+
+  /**
+   * O PATRIMÔNIO TEM Δ CONTRA O ANO, E NÃO TEM CONTRA A META — fix7 item C.
+   *
+   * ⚠ NASCE DE UM TRAÇO COM OS DOIS NÚMEROS NA TELA. As três linhas de patrimônio saíam em "—" na
+   * coluna de Δ SEMPRE, porque a RPC não filtra patrimônio por cenário — regra certa para a META,
+   * que não tem variação de rebanho. O fix4 trocou a referência padrão para o ANO ANTERIOR e a
+   * regra ficou onde estava: no Agnaldo, o Efeito de mercado mostrava "—" tendo -1.738.199,93 de
+   * um lado e -567.053,09 do outro.
+   * ⚠ OS DOIS CASOS ANDAM JUNTOS DE PROPÓSITO: afirmar só o número novo passaria verde também se
+   * alguém apagasse a regra inteira, e aí a coluna Meta voltaria a mentir que há meta de rebanho.
+   */
+  const comAnoAnterior = (efeitoAnterior: number, referencia: 'meta' | number) => render(
+    <PecDrePanel colunas={colunasDaVisao({
+      visao: 'comparacao', de: '2025-07', ate: '2026-06', real: DRE,
+      meta: { ...DRE, total: linhas({ vendas: 10000000, efeito_mercado: 999999 }) }, carregandoMeta: false,
+      anos: [{ de: '2024-07', ate: '2025-06', carregando: false,
+        dre: { ...DRE, total: linhas({ vendas: 12000000, efeito_mercado: efeitoAnterior }) } }],
+      deltas: ['rs'], referencia,
+    })} alturaCartao={null} cartaoRef={{ current: null }} />,
+  );
+
+  it('contra o ano anterior, o Δ do Efeito de mercado é número, não traço', () => {
+    comAnoAnterior(1000000, 1);
+    const efeito = linhaDe('Efeito de mercado');
+    /* o ano anterior traz 1.000.000 e o atual 2.618.562 — a diferença é subtraível. */
+    expect(efeito?.cells[1]?.textContent).toBe('1.000.000,00');
+    expect(efeito?.cells[3]?.textContent).toBe('2.618.562,00');
+    expect(efeito?.cells[5]?.textContent).toBe('1.618.562,00');
+    expect(efeito?.cells[5]?.textContent).not.toBe('—');
+  });
+
+  it('contra a meta, o Δ do Efeito de mercado continua em traço', () => {
+    comAnoAnterior(1000000, 'meta');
+    const efeito = linhaDe('Efeito de mercado');
+    /* ⚠ A COLUNA META TAMBÉM É TRAÇO, e é o que torna o Δ coerente: sem meta de rebanho não há do
+       que subtrair. Os 999.999 do fixture existem só para provar que o traço NÃO vem de zero. */
+    expect(efeito?.cells[1]?.textContent).toBe('—');
+    expect(efeito?.cells[5]?.textContent).toBe('—');
   });
 
   /**
