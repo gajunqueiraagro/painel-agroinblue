@@ -1016,10 +1016,16 @@ function AbaRebanhoInicial() {
     return [...mapa.values()].sort((a, b) => (a.ano - b.ano) || (a.mes - b.mes));
   }, [saldosIniciais]);
 
-  /* ⚠ SÓ O PRIMEIRO É O INÍCIO DO HISTÓRICO — os demais são a abertura de cada ano, derivada do
-     fechamento de dezembro anterior. Marcar todos diria que a fazenda estreia sete vezes. */
-  const chaveDoInicio = porPeriodo.length > 0
-    ? `${porPeriodo[0].ano}-${String(porPeriodo[0].mes).padStart(2, '0')}` : null;
+  /* ⚠ SÓ O PRIMEIRO ANO APARECE — ZOOT-CACHE-DOBRO-01, adendo 2 item 8c.
+     Saldo inicial se CADASTRA uma vez, no primeiro mês da fazenda no sistema. O janeiro dos anos
+     seguintes é o saldo de dezembro anterior, MATERIALIZADO por
+     `propagar_saldo_inicial_pos_dezembro` — é resultado do motor, não cadastro. Listá-lo aqui
+     convidava a editar o que o fechamento já decidiu, e a edição duraria até o próximo dezembro.
+     ⚠ ESCONDER, NUNCA APAGAR: as linhas dos anos seguintes continuam no banco porque são elas que
+       `fn_zoot_categoria_mensal` lê para abrir cada ano. Some da tela, fica no motor.
+     ⚠ E O SELO PERDEU A ALTERNATIVA: com uma linha só, "abertura do ano" virou ramo inalcançável e
+       saiu. Quem voltar a listar vários anos precisa dele de volta. */
+  const linhasDoCadastro = porPeriodo.length > 0 ? [porPeriodo[0]] : [];
 
   if (isGlobal || !fazendaAtual) {
     return (
@@ -1052,19 +1058,18 @@ function AbaRebanhoInicial() {
             </tr>
           </thead>
           <tbody>
-            {porPeriodo.length === 0 ? (
+            {linhasDoCadastro.length === 0 ? (
               <tr style={{ height: 20 }}>
                 <td colSpan={3} className="px-[7px] text-center text-muted-foreground" style={{ fontSize: 10 }}>
                   —
                 </td>
               </tr>
-            ) : porPeriodo.map(p => (
+            ) : linhasDoCadastro.map(p => (
               <tr key={`${p.ano}-${p.mes}`} className="bg-card" style={{ height: 20 }}>
                 <td className="px-[7px] truncate" style={{ fontSize: 11 }}>
                   {String(p.mes).padStart(2, '0')}/{p.ano}
                   <span className="ml-1 text-muted-foreground" style={{ fontSize: 9 }}>
-                    · {`${p.ano}-${String(p.mes).padStart(2, '0')}` === chaveDoInicio
-                      ? 'início do histórico' : 'abertura do ano'}
+                    · início do histórico
                   </span>
                 </td>
                 <td className="px-[7px] text-right tabular-nums" style={{ fontSize: 11 }}>{formatNum(p.cab, 0)}</td>

@@ -48,12 +48,21 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase, totalLan
   const [anoSelecionado, setAnoSelecionado] = useState(String(saldoBase.ano));
   const [mesSelecionado, setMesSelecionado] = useState(String(saldoBase.mes));
 
+  /* ⚠ SÓ O PRIMEIRO ANO É ALCANÇÁVEL — ZOOT-CACHE-DOBRO-01 item 6. A lista ia de 2010 até o ano
+     corrente, e com ela o operador editava o janeiro de QUALQUER ano. Mas saldo inicial se cadastra
+     uma vez, no primeiro mês da fazenda no sistema: o janeiro dos anos seguintes é o saldo de
+     dezembro anterior, MATERIALIZADO pelo motor (`propagar_saldo_inicial_pos_dezembro`). Editá-lo
+     aqui sobrescreveria, sem aviso, o que o fechamento já decidiu — e o próximo fechamento de
+     dezembro sobrescreveria de volta.
+     ⚠ A FAIXA INTEIRA FICA ENQUANTO NÃO HÁ SALDO: aí não há "primeiro ano" ainda, e é justamente a
+       escolha do operador que o define. Depois de existir, ele é o único. */
   const anoOptions = useMemo(() => {
+    if (hasSaldo) return [String(saldoBase.ano)];
     const current = new Date().getFullYear();
     const anos: string[] = [];
     for (let y = current; y >= 2010; y--) anos.push(String(y));
     return anos;
-  }, []);
+  }, [hasSaldo, saldoBase.ano]);
 
   const mesOptions = useMemo(() => MESES_CURTOS.map((label, i) => ({ value: String(i + 1), label })), []);
 

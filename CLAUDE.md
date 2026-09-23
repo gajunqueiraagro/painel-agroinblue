@@ -576,6 +576,36 @@ migration e' REGISTRO HISTORICO, nao se reaplica).
   area. O Bom Retiro teve a terra arrendada em jan-mai/2022 (receita no financeiro) e os
   cinco meses estavam com `tipo_uso_mes = 'recria'`, que e' falso. A saida foi APAGAR o
   mes (FAZ-ATIVIDADE-01a); o certo seria poder declarar o arrendamento.
+- PASTO-VIGENCIA-MOTOR-01 — `fn_zoot_categoria_mensal` (md5 a3e6eb6b95cdd6dd91af6ba72f6a6b76) e
+  `get_status_pilares_fechamento` devem IGNORAR fechamento de pasto inativo ou fora da vigencia.
+  Medido: a RPC NAO faz join com `pastos`, NAO le' `ativo` e NAO le' `data_inicio`/`data_fim` —
+  ela soma `fechamento_pasto_itens` por mes. A regra do PR-PASTO-VIGENCIA-02 ("vigencia + ativo
+  e' a regra unica") NAO ALCANCA este caminho.
+  ⚠ ATE' LA, REFECHAR UM MES NUM PASTO NOVO DOBRA O REBANHO, e em silencio. Foi o que aconteceu
+    no Bom Retiro em 23/09/2026: o pasto "Geral" da importacao ficou INVISIVEL na tela quando
+    vigencia e tipos de uso entraram (`ativo = false`, sem `data_inicio`), o operador refez
+    2022-06..2023-01 no pasto certo ("Eucalipto"), e os oito meses passaram a ter DOIS
+    cabecalhos com o rebanho inteiro — 473 + 473 = 946. Corrigido o DADO de UMA fazenda na
+    migration 20261027131700; a causa continua aqui.
+  ⚠ E O ESTRAGO NAO APARECE ONDE SE OLHA. `valor_rebanho_fechamento(_itens)` e
+    `valor_rebanho_realizado_validado` sao por FAZENDA, nao por pasto: ficaram com 1 cabecalho e
+    os numeros certos o tempo todo. A tela de valor do rebanho mostrava 473 enquanto a Evolucao
+    no Ano mostrava 946 — duas telas, dois numeros, nenhum erro visivel.
+- SALDO-INICIAL-VIRADA-01 — `fn_zoot_categoria_mensal` deveria ler DEZEMBRO ANTERIOR (cache ou
+  fechamento) quando nao ha linha do ano em `saldos_iniciais`, e a tabela guardar so' o CADASTRO
+  inicial. Hoje a RPC ancora a serie em `WHERE e.mes = 1` e busca o saldo em
+  `si.fazenda_id = ? AND si.ano = ?`, sem olhar dezembro: a virada de ano so' funciona porque o
+  trigger `trg_propagar_saldo_dezembro` (`propagar_saldo_inicial_pos_dezembro`, md5
+  f28dff1c9def8b65c930b9f95da6a8a0) MATERIALIZA a linha do ano seguinte.
+  ⚠ E O TRIGGER TEM UM BURACO MEDIDO: ele e' `AFTER UPDATE` com `OLD.status <> 'fechado'`.
+    Dezembro que NASCE fechado, num INSERT, nao dispara nada — foi o caso do Eucalipto de
+    dez/2022, criado ja' 'fechado' em 23/09, e por isso as 9 linhas de 2023 do Bom Retiro
+    estavam todas em `quantidade = 0` com o `peso_medio_kg` certo de dezembro. O ano abria em
+    ZERO, calado. Escrito a mao na migration 20261027131700.
+  ⚠ REGRA DE PRODUTO QUE GOVERNA A TELA (Gabriel, 23/09): saldo inicial se CADASTRA uma vez, no
+    primeiro mes da fazenda no sistema. Janeiro dos anos seguintes e' materializacao do motor,
+    nao cadastro — por isso a aba Rebanho inicial lista SO' o primeiro ano e o seletor de ano do
+    `SaldoInicialForm` so' oferece a faixa completa enquanto nao existe saldo nenhum.
 
 ## TRABALHO PARKED (nao tocar)
 Working tree pode conter trabalho estacionado de outros PRs (ex: P3.4

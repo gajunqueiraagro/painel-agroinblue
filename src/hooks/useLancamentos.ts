@@ -793,7 +793,20 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
   const setSaldoInicial = async (ano: number, mes: number, categoria: SaldoInicial['categoria'], quantidade: number, pesoMedioKg?: number, precoKg?: number) => {
     if (!fazendaId || fazendaId === '__global__') return;
 
-    if (true) {
+    /* ⚠ ZERO APAGA A LINHA — ZOOT-CACHE-DOBRO-01 item 6. Esta condição era `if (true)`, e o `if`
+       constante deixava TODO o ramo de DELETE abaixo INALCANÇÁVEL: gravar zero fazia upsert de uma
+       linha com `quantidade = 0`, nunca a remoção. O ramo morto já estava escrito, completo e com
+       invalidação de cache — faltava a condição que o alcança.
+       ⚠ E ISSO TEM DEFEITO MEDIDO NO BANCO, não é limpeza de estilo: em 23/09/2026, 19:11 UTC, um
+         "apagar" pela tela de Rebanho inicial do Bom Retiro zerou as 9 categorias e CRIOU uma linha
+         `garrotes` que não existia — `quantidade 0`, `peso_medio_kg` nulo —, porque o formulário
+         percorre todas as categorias e manda zero para as vazias. A linha entrou em
+         `saldos_iniciais`, apareceu na lista da tela e não representava rebanho nenhum.
+       ⚠ ZERO NÃO É AUSÊNCIA EM TODO LUGAR, e aqui é: uma categoria com zero cabeças no rebanho de
+         PARTIDA é uma categoria que a fazenda não tinha. O fechamento é quem diz "havia e acabou";
+         o cadastro inicial só diz o que existia. (`fn_completar_categorias_saldo_inicial` recria a
+         linha zerada se algum INSERT futuro precisar dela.) */
+    if (quantidade > 0) {
       const payload = {
         fazenda_id: fazendaId,
         cliente_id: clienteId!,
