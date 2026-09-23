@@ -576,21 +576,49 @@ migration e' REGISTRO HISTORICO, nao se reaplica).
   area. O Bom Retiro teve a terra arrendada em jan-mai/2022 (receita no financeiro) e os
   cinco meses estavam com `tipo_uso_mes = 'recria'`, que e' falso. A saida foi APAGAR o
   mes (FAZ-ATIVIDADE-01a); o certo seria poder declarar o arrendamento.
-- PASTO-VIGENCIA-MOTOR-01 — `fn_zoot_categoria_mensal` (md5 a3e6eb6b95cdd6dd91af6ba72f6a6b76) e
-  `get_status_pilares_fechamento` devem IGNORAR fechamento de pasto inativo ou fora da vigencia.
-  Medido: a RPC NAO faz join com `pastos`, NAO le' `ativo` e NAO le' `data_inicio`/`data_fim` —
-  ela soma `fechamento_pasto_itens` por mes. A regra do PR-PASTO-VIGENCIA-02 ("vigencia + ativo
-  e' a regra unica") NAO ALCANCA este caminho.
-  ⚠ ATE' LA, REFECHAR UM MES NUM PASTO NOVO DOBRA O REBANHO, e em silencio. Foi o que aconteceu
-    no Bom Retiro em 23/09/2026: o pasto "Geral" da importacao ficou INVISIVEL na tela quando
-    vigencia e tipos de uso entraram (`ativo = false`, sem `data_inicio`), o operador refez
-    2022-06..2023-01 no pasto certo ("Eucalipto"), e os oito meses passaram a ter DOIS
-    cabecalhos com o rebanho inteiro — 473 + 473 = 946. Corrigido o DADO de UMA fazenda na
-    migration 20261027131700; a causa continua aqui.
-  ⚠ E O ESTRAGO NAO APARECE ONDE SE OLHA. `valor_rebanho_fechamento(_itens)` e
+- PASTO-VIGENCIA-MOTOR-01 — FECHADA em 23/09/2026 pela migration 20261027131800.
+  O motor somava `fechamento_pasto_itens` de TODOS os pastos do mes; a regra do
+  PR-PASTO-VIGENCIA-02 ("vigencia + ativo e' a regra unica") vivia so' no front.
+  ⚠ REFECHAR UM MES NUM PASTO NOVO DOBRAVA O REBANHO, e em silencio. Bom Retiro, 23/09/2026: o
+    pasto "Geral" da importacao ficou INVISIVEL na tela quando vigencia e tipos de uso entraram
+    (`ativo = false`, sem `data_inicio`), o operador refez 2022-06..2023-01 no "Eucalipto", e os
+    oito meses ficaram com DOIS cabecalhos e o rebanho inteiro em cada — 473 + 473 = 946.
+  ⚠ E O ESTRAGO NAO APARECIA ONDE SE OLHA. `valor_rebanho_fechamento(_itens)` e
     `valor_rebanho_realizado_validado` sao por FAZENDA, nao por pasto: ficaram com 1 cabecalho e
     os numeros certos o tempo todo. A tela de valor do rebanho mostrava 473 enquanto a Evolucao
     no Ano mostrava 946 — duas telas, dois numeros, nenhum erro visivel.
+  A regra virou `fn_pasto_vigente_no_mes(ativo, data_inicio, data_fim, ano_mes)` — predicado
+  IMMUTABLE, espelho EXATO de `usePastos.ts:49-77` — e entrou em tres somas por mes:
+  `fn_zoot_categoria_mensal` (a3e6eb6b -> 5358f873), `propagar_saldo_inicial_pos_dezembro` e
+  `fn_saldo_inicial_pasto`. `get_status_pilares_fechamento` NAO tinha o furo: le' so' o
+  cabecalho, ja' faz join com `pastos` e ja' le' vigencia.
+  ⚠ A EXCECAO E' PARTE DA REGRA: "vigente se houver; SENAO o que existe". Sem ela, o Bom Retiro
+    de 2023-02 a 2023-12 (11 meses, 2.108 cab, so' o pasto morto) viraria ZERO — e zero num
+    rebanho e' numero que o operador soma, nao ausencia que ele investiga.
+  ⚠ EFEITO LIQUIDO NO DIA DA APLICACAO: NENHUM, e foi MEDIDO antes de escrever — 19 fazendas x
+    2020-2026, 710 meses comparados em saldo inicial, saldo final e `fonte_oficial_mes`, ZERO
+    divergencias. Ela e' GUARDA, nao conserto: o conserto do dado foi a 20261027131700. A prova
+    funcional e' que refechar fev/23 do Bom Retiro no Eucalipto dava 878 com a funcao velha e da'
+    439 com a nova.
+- PASTO-DIVERGENCIA-01 — o pasto `⚠️ Divergencia do Campeiro` (`tipo_uso = 'divergencia'`) existe
+  em 5 fazendas de 4 clientes e carrega 440 cabecas: Sta. Maria 380, Pureza 23, Ursa Maior 20,
+  Baia Grande 13, Sto. Expedito 4 (medido 23/09/2026). Ele e' `ativo = true` e esta' DENTRO da
+  vigencia — entao a regra de vigencia nao o toca, e ele CONTINUA contando como rebanho.
+  ⚠ E' DECISAO DE PRODUTO EM ABERTO, nao defeito: o pasto e' balde de ajuste de conciliacao, e a
+    pergunta "a divergencia conta como rebanho?" nunca foi respondida. `fn_cards_componentes_mes`
+    e `fn_composicao_componentes_categoria_mes` ja' o marcam (`eh_ajuste`,
+    `tipo_entidade = 'ajuste_conciliacao'`), o que sugere que a tela quer mostra-lo.
+  ⚠ QUEM DECIDIR MEDE ANTES: excluir esses 440 muda numero de 4 clientes, inclusive a Pureza
+    dentro de 25/26.
+- PASTOS-APLICAVEIS-ESPELHO-01 — `usePastos.ts` (`isPastoAtivoNoMes` + `pastosAtivosNoMes`) e
+  `fn_pastos_aplicaveis_mes` (md5 d2f64f93ec3daa4fbb2f63348a3a17ee) SE DECLARAM ESPELHO e NAO
+  SAO: o comentario do front diz "As duas implementam a MESMA regra e precisam mudar juntas", e a
+  de SQL tem `tipo_uso IS DISTINCT FROM 'divergencia'` a mais.
+  ⚠ A DIVERGENCIA NAO E' TEORICA: e' exatamente ela que separa "o PR nao muda nada" de "o PR move
+    440 cabecas em 4 clientes" (ver PASTO-DIVERGENCIA-01). O PASTO-VIGENCIA-MOTOR-01 adotou a
+    regra DO FRONT, sem `tipo_uso`, por decisao do Gabriel em 23/09.
+  ⚠ HOJE SAO TRES ESPELHOS, nao dois: entrou `fn_pasto_vigente_no_mes`, que e' fiel ao front.
+    Reconciliar os tres e' frente propria; enquanto nao for, quem mexer em um confere os outros.
 - SALDO-INICIAL-VIRADA-01 — `fn_zoot_categoria_mensal` deveria ler DEZEMBRO ANTERIOR (cache ou
   fechamento) quando nao ha linha do ano em `saldos_iniciais`, e a tabela guardar so' o CADASTRO
   inicial. Hoje a RPC ancora a serie em `WHERE e.mes = 1` e busca o saldo em
