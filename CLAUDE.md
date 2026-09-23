@@ -456,6 +456,20 @@ no mesmo arquivo.
   perdeu a linha do "N cab med." (adendo item 9) e os dois liam o subtitulo — um cobrava a string
   "10.000 cab", o outro o `\u00a0` da linha vazia. Foram atualizados para o contrato novo e o
   primeiro passou a AFIRMAR a ausencia (`not.toContain('cab med.')`), nunca afrouxados para passar.
+  De 1759 para 1762 no DRE-CASCATA-03b-fix3, +3 e de novo em `src/pages/pecDrePanel.test.tsx`
+  (41 -> 44): de quem sao os chips de Δ. O Global le' os dele, o x Anos le' os dele, e a x Meta
+  legada segue o Global.
+  ⚠ O TERCEIRO CASO E' O QUE JUSTIFICA OS OUTROS DOIS: ele prova o ESTRAGO, nao a regra — com o Δ
+  ligado so' no Global, o x Anos nao pode ganhar coluna de Δ nenhuma; sem a separacao eram tres,
+  uma por ano anterior, que o operador via nascer sem ter pedido e sem ter como fechar (o slot de
+  controles e' exclusivo por visao desde o fix2, entao o chip nem estava a' mao). E o caso fecha com
+  a mesma licao do auto-teste do `check:tdz`: liga os chips DA VISAO e confirma que as duas colunas
+  aparecem, porque uma assercao de "nenhuma" passa verde tambem quando a busca esta quebrada.
+  De 1762 para 1765 no mesmo fix3, adendo item 3: `src/pages/agriDreLavouraGrade.test.tsx` foi de 19
+  para 22 casos, com o guard `painelDoDrill` — de que ATIVIDADE e' o drill de uma cultura.
+  ⚠ NASCE DE UM DEFEITO VISIVEL: Lavoura > Amendoim > Historico > Pecuaria deixava o historico da
+  CULTURA na tela, acima da tabela do rebanho. Os dois paineis do drill checavam so' `cultura` e
+  `aba`, e nenhum dos dois sabe de que atividade a tela fala.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 

@@ -60,7 +60,7 @@ import {
   PecHistoricoLinhaModal, type RecorteHistoricoPec,
 } from '@/components/agri/PecHistoricoLinhaModal';
 import {
-  PecDrePanel, FaixaVisoesPec, SeletorAnosPec, colunasDaVisao, lerVisaoPec, escreverVisaoPec, lerNAnosPec,
+  PecDrePanel, FaixaVisoesPec, SeletorAnosPec, colunasDaVisao, deltasDaVisao, lerVisaoPec, escreverVisaoPec, lerNAnosPec,
   escreverNAnosPec, N_ANOS_PADRAO, ehVisaoMetaLegada, type VisaoPec,
 } from '@/pages/PecDrePanel';
 /* ⚠ AS UNIDADES VÊM DA RÉGUA, não mais da tela — DRE-HISTORICO-LINHA-01a. Mesma lista, mesmo
@@ -228,6 +228,12 @@ export function AgriDreLavouraTab() {
      onde a grade nasceu; hoje a pergunta que traz o produtor ao DRE é a do rebanho, e abrir na
      lavoura obrigava um clique antes de toda leitura. */
   const [segmento, setSegmento] = useState<'lavoura' | 'pecuaria' | 'consolidado'>('pecuaria');
+  /* ⚠ A ABA É ESTADO DE TELA, não de URL: ela não muda o QUE se vê (a safra e a cultura mudam),
+     só o ângulo. Pôr mais um parâmetro na barra por causa dela seria ruído no link que o
+     operador copia. Volta a 'resultado' ao trocar de cultura — ver o efeito abaixo.
+     ⚠ SUBIU PARA CÁ no 03b-fix3: `trocarSegmento` precisa zerá-la, e ela era declarada 280 linhas
+     abaixo. Só a ordem mudou. */
+  const [aba, setAbaDrill] = useState<'resultado' | 'producao' | 'historico'>('resultado');
   /* ⚠ O PERÍODO DA PECUÁRIA É O DA CASA (`f_de`/`f_ate`), o mesmo do Financeiro — não um
      seletor novo. Ele mora na URL porque é filtro de período, e é assim que o resto do
      sistema o trata. Abre no mês corrente. */
@@ -251,6 +257,24 @@ export function AgriDreLavouraTab() {
   }, [mexerNaUrl]);
   const abrirCultura = useCallback((c: string) => { setCultura(c); }, []);
   const voltarParaRaiz = useCallback(() => { setCultura(''); }, []);
+  /**
+   * TROCAR DE ATIVIDADE FECHA O DRILL — 03b-fix3/adendo item 3.
+   *
+   * ⚠ ELE SOBREVIVIA À TROCA, e o estrago era visível: Lavoura > Amendoim > Histórico > Pecuária
+   * deixava o histórico da cultura NA TELA, acima da tabela da pecuária. A causa é que `cultura` e
+   * `aba` são estado da tela e ninguém os zerava — `setSegmento` mexia só no segmento.
+   * ⚠ ZERAR NÃO BASTA, e por isso o render também é guardado (ver `painelDoDrill`): estado limpo
+   * conserta o caminho conhecido; o guard conserta qualquer caminho que apareça depois.
+   * ⚠ E A LAVOURA VOLTA NA RAIZ, que é o padrão de entrada do PERIODO-01: quem troca de atividade
+   * está trocando de pergunta, não guardando o lugar.
+   */
+  const trocarSegmento = useCallback((s: 'lavoura' | 'pecuaria' | 'consolidado') => {
+    setSegmento(s);
+    setCultura('');
+    setAbaDrill('resultado');
+  }, []);
+
+  useEffect(() => { setAbaDrill('resultado'); }, [cultura]);
 
   useEffect(() => {
     if (!safraId && safras.length > 0) setSafraId(safras[safras.length - 1].id);
@@ -260,6 +284,10 @@ export function AgriDreLavouraTab() {
   /* ⚠ SÓ CONSULTA QUANDO A PECUÁRIA ESTÁ ABERTA: o `enabled` do hook mantém a lavoura numa
      chamada só, e é o segmento que liga a segunda. */
   const ehPec = segmento === 'pecuaria';
+  /* ⚠ O DRILL É DA LAVOURA, e a pergunta é essa — não "não é pecuária". Hoje `consolidado` está
+     desabilitado e os dois dariam o mesmo; o dia em que ele existir, `!ehPec` deixaria o drill de
+     uma cultura aparecer numa tela consolidada. */
+  const ehLavoura = segmento === 'lavoura';
   const {
     dre: drePec, carregando: carregandoPec, erro: erroPec, recarregar: recarregarPec,
   } = useDrePecuaria(
@@ -388,14 +416,18 @@ export function AgriDreLavouraTab() {
   const [deltasPec, setDeltasPec] = useState<readonly ('rs' | 'pct')[]>(
     () => (ehVisaoMetaLegada(searchParams.get('f_visao')) ? ['rs', 'pct'] : []));
   const [refDeltaPec, setRefDeltaPec] = useState<'meta' | 'ano'>('meta');
+  /* ⚠ O Δ DO x ANOS TEM ESTADO PRÓPRIO — fix3, e nasce DESLIGADO: ver `deltasDaVisao`. Ele governa
+     as colunas de Δ que cada ano ganha contra o período da tela, que é outra pergunta que a do
+     Global (realizado x meta). */
+  const [deltasAnos, setDeltasAnos] = useState<readonly ('rs' | 'pct')[]>([]);
   const colunasPec = useMemo(() => (drePec && pecDe && pecAte
     ? colunasDaVisao({
       visao: visaoPec, de: pecDe, ate: pecAte, real: drePec,
       meta: drePecMeta, carregandoMeta: carregandoPecMeta,
       anos: anosPec.map(a => ({ de: a.periodo.de, ate: a.periodo.ate, dre: a.dre, carregando: a.carregando })),
-      deltas: deltasPec, refDelta: refDeltaPec,
+      deltas: deltasDaVisao(visaoPec, deltasPec, deltasAnos), refDelta: refDeltaPec,
     })
-    : []), [drePec, pecDe, pecAte, visaoPec, drePecMeta, carregandoPecMeta, anosPec, deltasPec, refDeltaPec]);
+    : []), [drePec, pecDe, pecAte, visaoPec, drePecMeta, carregandoPecMeta, anosPec, deltasPec, deltasAnos, refDeltaPec]);
   /* ⚠ O MODAL DE LANÇAMENTOS DIZ DE QUE COLUNA VEIO: a lista da coluna de 2024 não pode aparecer
      sob o rótulo do período da tela, nem a de meta sob o do realizado. */
   const rotuloRecortePec = useMemo(() => {
@@ -486,7 +518,11 @@ export function AgriDreLavouraTab() {
         </>}
         {visaoPec === 'anos' && <>
           <span className="h-[14px] w-px shrink-0 bg-border" aria-hidden />
-          <SeletorAnosPec visao={visaoPec} nAnos={nAnosPec} onNAnos={setNAnosPec} />
+          <SeletorAnosPec visao={visaoPec} nAnos={nAnosPec} onNAnos={setNAnosPec} curto />
+          {/* ⚠ CHIPS PRÓPRIOS, não os do Global — ver `deltasDaVisao`. Aqui o Δ é "quanto mudou
+              daquele ano para cá", e cada ano ganha uma coluna ao lado da sua. */}
+          <ChipsUnidade valor={deltasAnos} onEscolher={setDeltasAnos} permiteVazio
+            opcoes={[{ valor: 'rs', rotulo: 'Δ R$' }, { valor: 'pct', rotulo: 'Δ %' }]} />
         </>}
       </span>
       {/* ⚠ UM BOTÃO SÓ, QUE DIZ O QUE VAI FAZER — o mesmo da linha de antes, palavra por palavra. */}
@@ -499,11 +535,6 @@ export function AgriDreLavouraTab() {
     </>
   );
 
-  /* ⚠ A ABA É ESTADO DE TELA, não de URL: ela não muda o QUE se vê (a safra e a cultura mudam),
-     só o ângulo. Pôr mais um parâmetro na barra por causa dela seria ruído no link que o
-     operador copia. Volta a 'resultado' ao trocar de cultura — ver o efeito abaixo. */
-  const [aba, setAba] = useState<'resultado' | 'producao' | 'historico'>('resultado');
-  useEffect(() => { setAba('resultado'); }, [cultura]);
 
   /* ─────────────────── O MODAL DO PAINEL, REUSADO COMO ESTÁ ───────────────────
    * ⚠ NENHUM MODAL NOVO: o `RateioDetalheModal` do Painel da Safra já responde às três chaves
@@ -729,6 +760,8 @@ export function AgriDreLavouraTab() {
 
   const colsPorCultura = unidadesLav.length;
 
+  /* ⚠ O DRILL É DA LAVOURA, E O RENDER TAMBÉM PERGUNTA ISSO — ver `painelDoDrill`. */
+  const painelDrill = painelDoDrill(segmento, cultura, aba, ampliado);
   /** O que aparece no cartão: a grade só some quando o drill está em Produção ou Histórico. */
   const mostraGrade = !culturaAberta || aba === 'resultado' || ampliado;
   /** Os cartões são do drill, da aba Resultado, e somem no Ampliar. */
@@ -817,7 +850,7 @@ export function AgriDreLavouraTab() {
               ⚠ O `PageHeader` SAIU DESTA TELA: ele põe o contexto ABAIXO do título, em duas
               linhas, e aqui as duas alturas têm de fechar em 30px com a faixa no mesmo y. */}
           <div className="flex h-[30px] items-center gap-2">
-            {!ehPec && culturaAberta && (
+            {ehLavoura && culturaAberta && (
               <button type="button" onClick={voltarParaRaiz} title="Voltar para todas as culturas"
                 className="inline-flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-md border hover:bg-muted">
                 <ChevronLeft className="h-3.5 w-3.5" />
@@ -836,7 +869,7 @@ export function AgriDreLavouraTab() {
               {/* ⚠ O PARÂMETRO DE TIPO EXPLÍCITO porque as outras duas opções ainda não existem
                   como estado: sem ele o `T` sairia de `valor="lavoura"` e as opções desligadas
                   seriam erro de compilação — o que é o comportamento certo do componente. */}
-              <Segmentado altura={22} valor={segmento} onEscolher={setSegmento}
+              <Segmentado altura={22} valor={segmento} onEscolher={trocarSegmento}
                 opcoes={[
                   { valor: 'lavoura', rotulo: 'Lavoura' },
                   { valor: 'pecuaria', rotulo: 'Pecuária' },
@@ -910,7 +943,7 @@ export function AgriDreLavouraTab() {
               nada". Juntos, o gap da pilha é pago uma vez pelos dois, e a diferença entre raiz e
               drill passa a ser a altura da barra de abas e nada mais. */}
           <div>
-          {!ehPec && culturaAberta && (
+          {ehLavoura && culturaAberta && (
             /* ⚠ A ALTURA É DO CONTÊINER, NÃO DOS BOTÕES, e o 1px da divisória mora DENTRO dela.
                Com `h-[26px]` nos botões e a borda no pai, a barra media 27 — e o cartão do drill
                descia 27 em vez de 26. `box-border` (padrão do Tailwind) faz a borda caber na
@@ -918,7 +951,7 @@ export function AgriDreLavouraTab() {
             /* ⚠ O SUBLINHADO SAIU (regra de UI do PR-04): estas abas marcavam a selecionada com
                uma linha embaixo enquanto o seletor de atividade, dez pixels acima, marcava com
                navy. Duas marcações para a mesma pergunta na MESMA régua. */
-            <Segmentado valor={aba} onEscolher={setAba}
+            <Segmentado valor={aba} onEscolher={setAbaDrill}
               opcoes={[
                 { valor: 'resultado', rotulo: 'Resultado' },
                 { valor: 'producao', rotulo: 'Produção' },
@@ -959,7 +992,7 @@ export function AgriDreLavouraTab() {
                 lugar não pode ser o preço de abrir uma cultura.
                 ⚠ SÓ MUDOU DE LUGAR: mesmas opções, mesmo estado, mesmo efeito no drill. */}
             <div className="flex w-[130px] shrink-0 items-center justify-start">
-              {!ehPec && culturaAberta && (
+              {culturaAberta && (
                 <Select value={cultura} onValueChange={abrirCultura}>
                   <SelectTrigger className="h-[22px] w-[130px] text-[10px]">
                     <SelectValue placeholder="Cultura" />
@@ -975,7 +1008,7 @@ export function AgriDreLavouraTab() {
               )}
             </div>
             <span className="min-w-0 flex-1 truncate">
-              {!ehPec && rateioDentro && <><span className="text-amber-700">●</span> ao lado do nome = tem rateio dentro.</>}
+              {rateioDentro && <><span className="text-amber-700">●</span> ao lado do nome = tem rateio dentro.</>}
             </span>
             <span className="flex shrink-0 items-center gap-2 whitespace-nowrap">
               {/* ⚠ O SELETOR DE RATEIO É SÓ DA LAVOURA — DRE-RATEIO-FIX-01. Ele chegou à pecuária
@@ -985,12 +1018,9 @@ export function AgriDreLavouraTab() {
                   resultado — só muda ONDE o custo aparece (linha própria ou distribuído nos
                   centros), e a RPC de lá devolve os dois números para isso. A pecuária ainda não
                   tem a distribuição por centro, então não tem o que escolher.
-                  ⚠ O ESPAÇO FICA RESERVADO, com o conteúdo invisível: assim a largura é a mesma
-                  medida do controle real, e o "/ha" e o "anos anteriores" não andam ao trocar de
-                  aba. Nada aqui é clicável na pecuária. */}
-              <span className={cn('flex items-center gap-2', ehPec && 'invisible')}
-                aria-hidden={ehPec || undefined}
-                style={ehPec ? { pointerEvents: 'none' } : undefined}>
+                  ⚠ E A RESERVA INVISÍVEL SAIU NO fix3: esta linha inteira é da Lavoura desde o
+                  fix2, então não há mais aba nenhuma com quem alinhar. */}
+              <span className="flex items-center gap-2">
               Rateio compartilhado:
               <Segmentado valor={rateioDentro ? 'dentro' : 'propria'}
                 onEscolher={v => setRateioDentro(v === 'dentro')}
@@ -1008,56 +1038,19 @@ export function AgriDreLavouraTab() {
                   ⚠ O R$ TAMBÉM DESMARCA, e é o ponto: quem compara produtividade entre culturas
                   quer a tela inteira em R$/ha. O que não se pode é ficar sem nenhuma — o último
                   marcado não responde ao clique, e o `title` diz por quê. */}
-              {/* ⚠ SLOT DE 192px E CONTEÚDO À ESQUERDA: a pecuária tem quatro chips e a lavoura
-                  três, e sem o slot o grupo inteiro (ancorado à direita da linha) começava em x
-                  diferente — medido em 22/09: 717 na pecuária contra 771 na lavoura. 192 é a
-                  largura do maior dos dois grupos, medida na tela. */}
+              {/* ⚠ O SLOT DE 192px FICA, mesmo sem a pecuária com quem alinhar: os três chips da
+                  lavoura mudam de largura com o rótulo da unidade da cultura ("R$/sc" ou "R$/t"),
+                  e sem ele o "abrir tudo" andaria ao trocar de cultura. */}
               <span className="flex w-[192px] shrink-0 items-center justify-start">
-                {ehPec
-                  ? <ChipsUnidade valor={unidadesPec} onEscolher={setUnidadesPec}
-                      opcoes={UNIDADES_PEC_GRADE.map(u => ({ valor: u, rotulo: ROTULO_UNIDADE[u] }))} />
-                  : <ChipsUnidade valor={unidadesLav} onEscolher={setUnidadesLav}
-                      opcoes={UNIDADES_LAV.map(u => ({ valor: u, rotulo: ROTULO_UNIDADE_LAV[u] }))} />}
+                <ChipsUnidade valor={unidadesLav} onEscolher={setUnidadesLav}
+                  opcoes={UNIDADES_LAV.map(u => ({ valor: u, rotulo: ROTULO_UNIDADE_LAV[u] }))} />
               </span>
-              {/* ⚠ O SELETOR DE ANOS VEIO PARA CÁ — DRE-PADRAO-01a: na faixa de caixas ele roubava
-                  123px da grade e deixava as caixas da pecuária mais estreitas que as da lavoura.
-                  ⚠ E O ESPAÇO DELE É RESERVADO NAS DUAS ABAS — DRE-UNIDADES-01: só a pecuária o
-                  tem, e sem a reserva os chips andavam 176px ao trocar de aba. */}
-              <SeletorAnosPec visao={ehPec ? visaoPec : 'global'} nAnos={nAnosPec}
-                onNAnos={setNAnosPec} reservado={!ehPec} />
-              {/* ⚠ A COMPARAÇÃO VIROU UM GRUPO COM NOME — 03b-fix1. Soltos na régua, "Δ R$",
-                  "Δ %" e o par "meta | ano ant." eram três controles vizinhos de outros três que
-                  não têm nada a ver com eles (unidade, anos, rateio), e nada dizia que os três
-                  respondem à MESMA pergunta: comparar com o quê, e mostrar a diferença como.
-                  A barra vertical e a palavra "Comparar:" são o que transforma vizinhança em
-                  grupo — é a leitura que muda, não o comportamento.
-                  ⚠ O PAR VIROU LISTA (`Meta ▾`) porque ele vai crescer: hoje são duas referências,
-                  e um `Segmentado` de duas opções que amanhã tem quatro vira uma régua de 200px.
-                  ⚠ SLOT FIXO E RESERVADO NA LAVOURA, a mesma lei do seletor de anos; e o slot do
-                  seletor DENTRO do grupo também é fixo, porque a referência só existe na visão
-                  Global — sem ele, a palavra "Comparar:" andaria ao trocar de visão. */}
-              <span className="flex w-[262px] shrink-0 items-center justify-end gap-1.5">
-                {ehPec && <>
-                  <span className="h-[14px] w-px shrink-0 bg-border" aria-hidden />
-                  <span className="shrink-0 whitespace-nowrap text-[10px] text-muted-foreground">Comparar:</span>
-                  <span className="flex w-[104px] shrink-0 items-center justify-start">
-                    {visaoPec === 'global' && deltasPec.length > 0 && (
-                      <Select value={refDeltaPec} onValueChange={v => setRefDeltaPec(v as 'meta' | 'ano')}>
-                        <SelectTrigger className="h-[22px] w-[104px] text-[10px]"
-                          title="Compara o realizado com a meta ou com o período anterior">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="meta" className="text-[12px]">Meta</SelectItem>
-                          <SelectItem value="ano" className="text-[12px]">Ano anterior</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    )}
-                  </span>
-                  <ChipsUnidade valor={deltasPec} onEscolher={setDeltasPec} permiteVazio
-                    opcoes={[{ valor: 'rs', rotulo: 'Δ R$' }, { valor: 'pct', rotulo: 'Δ %' }]} />
-                </>}
-              </span>
+              {/* ⚠ AS DUAS RESERVAS SAÍRAM AQUI — fix3, e elas custavam 455px numa linha que já não
+                  cabia: 193 para o seletor de anos e 262 para o grupo "Comparar", ambos controles da
+                  PECUÁRIA, guardados nesta linha só para que os chips da lavoura não andassem ao
+                  trocar de aba. Desde o fix2 a pecuária não tem mais esta linha — não havia o que
+                  alinhar, e o que sobrava era espaço vazio empurrando o "abrir tudo" 327px para fora
+                  do cartão. Os dois controles seguem vivos, na faixa de cards da pecuária. */}
               {/* ⚠ UM BOTÃO SÓ, QUE DIZ O QUE VAI FAZER: "abrir tudo" quando há grupo fechado,
                   "fechar tudo" quando todos estão abertos. Dois botões lado a lado obrigariam a
                   ler qual está disponível. */}
@@ -1075,11 +1068,11 @@ export function AgriDreLavouraTab() {
 
       {/* ⚠ PRODUÇÃO E HISTÓRICO NÃO ENTRAM NO CARTÃO DA GRADE: cada um traz as próprias tabelas,
           com o próprio scroll. Empilhá-los dentro do cartão do DRE daria dois scrollports. */}
-      {culturaAberta && aba === 'producao' && !ampliado && (
+      {painelDrill === 'producao' && (
         <ProducaoSafraPanel painel={painel} totaisTalhoes={totaisTalhoes}
           comparadas={comparadas} safraId={safraId || null} cultura={cultura} />
       )}
-      {culturaAberta && aba === 'historico' && !ampliado && (
+      {painelDrill === 'historico' && (
         <HistoricoCultura safras={historico} carregando={carregandoHist}
           cultura={cultura} safraAtual={safraAtual?.codigo || safraAtual?.nome || ''}
           onEscolher={cod => {
@@ -1453,6 +1446,27 @@ const GRUPO_DO_DRAWER: Partial<Record<ChaveLinha, string>> = {
   deducoes: 'Deduções Agricultura',
   juros: 'Juros de Financiamento Agricultura',
 };
+
+/**
+ * O QUE O DRILL DE UMA CULTURA MOSTRA — 03b-fix3/adendo item 3.
+ *
+ * ⚠ ELE NÃO PERGUNTAVA PELA ATIVIDADE, e era esse o defeito: os dois painéis do drill checavam só
+ * `cultura` e `aba`, então Lavoura > Amendoim > Histórico > Pecuária deixava o histórico da
+ * cultura na tela, acima da tabela do rebanho. O estado agora é zerado ao trocar de segmento
+ * (`trocarSegmento`), e este guard é a segunda tranca: estado limpo conserta o caminho conhecido,
+ * o guard conserta o caminho que ainda não existe.
+ * ⚠ `null` É "NENHUM PAINEL DE DRILL", não "erro": a aba Resultado não tem painel próprio — ela é
+ * a grade, que o cartão desenha.
+ */
+export function painelDoDrill(
+  segmento: 'lavoura' | 'pecuaria' | 'consolidado',
+  cultura: string,
+  aba: 'resultado' | 'producao' | 'historico',
+  ampliado: boolean,
+): 'producao' | 'historico' | null {
+  if (segmento !== 'lavoura' || !cultura || ampliado) return null;
+  return aba === 'resultado' ? null : aba;
+}
 
 /** Divisória entre grupos de coluna — a mesma nas duas linhas do cabeçalho e no corpo. */
 const DIVISOR = '1px solid rgba(255,255,255,.22)';

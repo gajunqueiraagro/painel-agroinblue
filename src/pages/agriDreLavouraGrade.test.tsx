@@ -11,7 +11,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
-import { Grade } from '@/pages/AgriDreLavouraTab';
+import { Grade, painelDoDrill } from '@/pages/AgriDreLavouraTab';
 import { REGUA_LINHA } from '@/components/agri/dreGrade';
 import type { DreLavoura, DreCultura, DreCentro, DreValor, DreLinhas } from '@/hooks/useDreLavoura';
 
@@ -375,5 +375,36 @@ describe('a largura mínima do grupo de coluna na lavoura', () => {
   it('com as três unidades, a cultura passa do piso e o Total é medido sozinho', () => {
     montar({ unidades: ['rs', 'ha', 'un'] });
     expect(largurasDoColgroup()).toEqual(['200px', '96px', '64px', '60px', '96px', '64px']);
+  });
+});
+
+/* ══════════════ O DRILL É DA LAVOURA — 03b-fix3/adendo item 3 ══════════════ */
+
+/**
+ * ⚠ O DEFEITO ERA VISÍVEL E CALADO: Lavoura > Amendoim > Histórico > Pecuária deixava o histórico
+ * da CULTURA na tela, acima da tabela do rebanho. Os dois painéis do drill checavam só `cultura` e
+ * `aba` — nenhum dos dois sabe de que atividade a tela está falando.
+ * ⚠ E O TESTE É DA REGRA, NÃO DO DOM, pela mesma razão que o arquivo inteiro: a tela quer sessão,
+ * react-query, router e três contextos. `painelDoDrill` é o guard que os dois `&&` do render usam;
+ * o que ela devolve é literalmente o que aparece.
+ */
+describe('qual painel do drill aparece', () => {
+  it('na pecuária não aparece nenhum, mesmo com cultura e aba do drill em pé', () => {
+    expect(painelDoDrill('pecuaria', 'amendoim', 'historico', false)).toBeNull();
+    expect(painelDoDrill('pecuaria', 'amendoim', 'producao', false)).toBeNull();
+    expect(painelDoDrill('consolidado', 'amendoim', 'historico', false)).toBeNull();
+  });
+
+  it('na lavoura com cultura aberta, cada aba traz o seu', () => {
+    expect(painelDoDrill('lavoura', 'amendoim', 'producao', false)).toBe('producao');
+    expect(painelDoDrill('lavoura', 'amendoim', 'historico', false)).toBe('historico');
+  });
+
+  /* ⚠ A ABA RESULTADO NÃO TEM PAINEL PRÓPRIO — ela É a grade, que o cartão desenha. E o Ampliar
+     é ver a grade: nele o drill não mostra nada, em aba nenhuma. */
+  it('resultado, raiz e ampliar não trazem painel nenhum', () => {
+    expect(painelDoDrill('lavoura', 'amendoim', 'resultado', false)).toBeNull();
+    expect(painelDoDrill('lavoura', '', 'historico', false)).toBeNull();
+    expect(painelDoDrill('lavoura', 'amendoim', 'historico', true)).toBeNull();
   });
 });

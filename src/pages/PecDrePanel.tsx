@@ -173,6 +173,26 @@ export interface EntradaVisoes {
  */
 
 /**
+ * DE QUEM SÃO OS CHIPS DE Δ DA TELA — 03b-fix3.
+ *
+ * ⚠ ERAM UM SÓ ESTADO PARA DUAS PERGUNTAS DIFERENTES, e a fusão só não incomodava enquanto os
+ * chips viviam numa régua sempre visível. No Global, o Δ compara o realizado com a meta (ou com o
+ * ano anterior); na visão x Anos, ele compara CADA ano com o período da tela. Desde o fix2 o slot
+ * dos controles é exclusivo por visão — no x Anos aparece "anos anteriores" —, então ligar o Δ no
+ * Global fazia nascer colunas de Δ no x Anos sem que houvesse chip à mão para desligá-las.
+ * ⚠ E É UM ESTADO POR VISÃO, NÃO UM ESTADO "ESPERTO": trocar de visão não carrega o Δ de uma para
+ * a outra, e voltar encontra a de antes como foi deixada. A visão x Meta legada continua lendo a
+ * do Global, que é a que ela sempre leu.
+ */
+export function deltasDaVisao(
+  visao: VisaoPec,
+  doGlobal: readonly ('rs' | 'pct')[],
+  dosAnos: readonly ('rs' | 'pct')[],
+): readonly ('rs' | 'pct')[] {
+  return visao === 'anos' ? dosAnos : doGlobal;
+}
+
+/**
  * AS COLUNAS DE CADA VISÃO. ⚠ Nenhuma conta aqui: cada coluna é um JSON da RPC inteiro; a única
  * aritmética da tela é o delta, e ela mora na célula.
  */
@@ -1132,18 +1152,22 @@ export function FaixaVisoesPec({ visao, onVisao, real, meta, carregandoMeta, ano
  * ⚠ ELE FICA VISÍVEL SÓ NA VISÃO x ANOS, mas OCUPA O LUGAR sempre (`invisible`, não removido): é a
  * mesma lei que mantém a coluna de ações do drill — some o conteúdo, não o espaço.
  */
-export function SeletorAnosPec({ visao, nAnos, onNAnos, reservado }: {
+export function SeletorAnosPec({ visao, nAnos, onNAnos, reservado, curto }: {
   visao: VisaoPec; nAnos: number; onNAnos: (n: number) => void;
   /** ⚠ NA LAVOURA ELE SÓ GUARDA O LUGAR — DRE-UNIDADES-01: sem a reserva, os chips de unidade
       andavam ao trocar de aba, porque só a pecuária tem o seletor de anos. */
   reservado?: boolean;
+  /** ⚠ "anos" EM VEZ DE "anos anteriores" — fix3: no slot de 247px da faixa de cards ele divide o
+      lugar com os chips de Δ, e a frase inteira não cabia. O `title` guarda o que o rótulo perdeu. */
+  curto?: boolean;
 }) {
   const escondido = reservado || visao !== 'anos';
   return (
     <span className={cn('flex shrink-0 items-center gap-1.5 whitespace-nowrap',
       escondido && 'invisible')} aria-hidden={escondido || undefined}
+      title={curto ? 'quantos anos anteriores entram na comparação' : undefined}
       style={escondido ? { pointerEvents: 'none' } : undefined}>
-      anos anteriores
+      {curto ? 'anos' : 'anos anteriores'}
       <Segmentado altura={22} valor={String(nAnos)} onEscolher={v => onNAnos(Number(v))}
         opcoes={['1', '2', '3', '4', '5'].map(n => ({ valor: n, rotulo: n }))} />
     </span>

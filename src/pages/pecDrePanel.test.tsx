@@ -11,7 +11,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
-import { PecDrePanel, FaixaVisoesPec, colunasDaVisao, type EntradaVisoes, type VisaoPec } from '@/pages/PecDrePanel';
+import { PecDrePanel, FaixaVisoesPec, colunasDaVisao, deltasDaVisao, type EntradaVisoes, type VisaoPec } from '@/pages/PecDrePanel';
 import { LINHAS_PEC_RESUMIDO } from '@/components/agri/drePecRegua';
 import type { DrePecuaria, DrePecLinhas } from '@/hooks/useDrePecuaria';
 
@@ -861,5 +861,49 @@ describe('a coluna do ícone de histórico', () => {
     /* E quem não tem ícone reserva a coluna dele: 7 + 14. */
     const semIcone = rotulos.filter(td => !td.querySelector('button[aria-label="Ver histórico"]'));
     for (const td of semIcone) expect(td.style.paddingLeft).not.toBe('7px');
+  });
+});
+
+/* ══════════════ DE QUEM SÃO OS CHIPS DE Δ — 03b-fix3 ══════════════ */
+
+/**
+ * ⚠ O ESTADO ERA UM SÓ PARA DUAS PERGUNTAS, e a fusão só não incomodava enquanto os chips viviam
+ * numa régua sempre visível. No Global o Δ compara o realizado com a meta; no x Anos ele compara
+ * CADA ano com o período da tela. Desde o fix2 o slot dos controles é exclusivo por visão — no x
+ * Anos aparece o seletor de anos —, então ligar o Δ no Global fazia nascer colunas de Δ no x Anos
+ * sem chip à mão para desligá-las. É esse vazamento que estes casos travam.
+ */
+describe('os chips de Δ de cada visão', () => {
+  it('o Global lê os chips dele; o x Anos, os dele', () => {
+    expect(deltasDaVisao('global', ['rs'], [])).toEqual(['rs']);
+    expect(deltasDaVisao('anos', ['rs'], [])).toEqual([]);
+    expect(deltasDaVisao('anos', [], ['rs', 'pct'])).toEqual(['rs', 'pct']);
+  });
+
+  /* ⚠ A x META LEGADA CONTINUA LENDO A DO GLOBAL, que é a que ela sempre leu: ela é a visão que
+     abre com os dois Δ ligados por link antigo, e trocá-la de dono mudaria um comportamento que
+     este PR não tem por que tocar. */
+  it('por fazenda e a x Meta legada seguem o Global', () => {
+    expect(deltasDaVisao('fazenda', ['pct'], ['rs'])).toEqual(['pct']);
+    expect(deltasDaVisao('meta', ['pct'], ['rs'])).toEqual(['pct']);
+  });
+
+  /**
+   * ⚠ E O CASO QUE PROVA O ESTRAGO, não só a regra: com o Δ ligado só no Global, a visão x Anos
+   * não pode ganhar UMA coluna de Δ. Sem a separação eram três (uma por ano anterior) — colunas
+   * que o operador via aparecer sem ter pedido e sem ter como fechar.
+   */
+  it('ligado no Global, o x Anos não ganha coluna de Δ nenhuma', () => {
+    const anos = [
+      { de: '2024-07', ate: '2025-06', dre: DRE, carregando: false },
+      { de: '2023-07', ate: '2024-06', dre: DRE, carregando: false },
+    ];
+    const doGlobal: readonly ('rs' | 'pct')[] = ['rs'];
+    const dosAnos: readonly ('rs' | 'pct')[] = [];
+    const cols = colunas('anos', { anos, deltas: deltasDaVisao('anos', doGlobal, dosAnos) });
+    expect(cols.filter(c => c.tipo === 'delta')).toHaveLength(0);
+    /* E a prova de que a busca sabe achar: com os chips DA VISÃO ligados, elas aparecem. */
+    const comDelta = colunas('anos', { anos, deltas: deltasDaVisao('anos', doGlobal, ['rs']) });
+    expect(comDelta.filter(c => c.tipo === 'delta')).toHaveLength(2);
   });
 });
