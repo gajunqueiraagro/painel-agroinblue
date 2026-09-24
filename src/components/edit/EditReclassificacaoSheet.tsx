@@ -47,8 +47,9 @@ export function EditReclassificacaoSheet({
   // useReclassificacaoState exige onAdicionar (modo criação). Em edit nunca é chamado.
   const reclassState = useReclassificacaoState({
     onAdicionar: async () => undefined,
+    /* ⚠ SEM AUTO-SUGESTAO NA EDICAO: ver o comentario em `Props.autoSugerir`. */
+    autoSugerir: false,
     dataInicial: lancamento.data,
-    lancamentos: [],
   });
 
   const [hidrated, setHidrated] = useState(false);
@@ -70,7 +71,10 @@ export function EditReclassificacaoSheet({
     reclassState.setData(lancamento.data);
     reclassState.setQuantidade(String(lancamento.quantidade));
     reclassState.setPesoKg(lancamento.pesoMedioKg ? String(lancamento.pesoMedioKg) : '');
-    reclassState.setPesoAutoFilled(true);
+    /* ⚠ O PESO HIDRATADO E' DADO GRAVADO, NAO SUGESTAO. Aqui havia um `setPesoAutoFilled(true)`,
+       que na era do peso opcional so' pintava um icone; com `autoSugerir` ele passaria a AUTORIZAR
+       o efeito a trocar o valor salvo pelo do mes. Vira `false`. */
+    reclassState.setPesoAutoFilled(false);
     reclassState.setStatusOp(
       lancamento.cenario === 'meta'
         ? 'meta'
@@ -128,10 +132,10 @@ export function EditReclassificacaoSheet({
     }
   };
 
-  const canRegister = !!(
-    Number(reclassState.quantidade) > 0 &&
-    reclassState.categoriaOrigem !== reclassState.categoriaDestino
-  );
+  /* A trava e o motivo vivem no hook desde o RECLASS-PESO-01 — fonte unica para as tres telas,
+     e a unica que olha o PESO. Aqui ela vale tambem na EDICAO: salvar um lancamento antigo
+     apagando o peso recriaria o defeito que o BACKFILL-01 acabou de corrigir. */
+  const canRegister = reclassState.podeSalvar;
 
   return (
     <EditLancamentoSheet

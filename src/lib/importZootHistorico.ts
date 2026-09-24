@@ -73,7 +73,12 @@ export const CAMPOS_OBRIGATORIOS: Record<TipoImportavel, CampoReq[]> = {
   abate:               ['fazenda', 'data', 'categoria', 'quantidade'],
   morte:               ['fazenda', 'data', 'categoria', 'quantidade'],
   transferencia_saida: ['fazenda', 'data', 'categoria', 'quantidade', 'fazenda_destino'],
-  reclassificacao:     ['fazenda', 'data', 'categoria', 'quantidade', 'categoria_destino'],
+  /* ⚠ `peso_medio_kg` E' OBRIGATORIO NA RECLASSIFICACAO — RECLASS-PESO-01. Ela era o unico tipo
+     que move animal entre categorias, e sem o peso o motor do rebanho move a CABECA e nao o peso:
+     o que chega na categoria de destino vira producao e o que sai fica encalhado. Foi assim que
+     146 dos 516 lancamentos corrigidos pelo BACKFILL-01 entraram — todos numa importacao so',
+     em 23/04/2026. O template abaixo ensinava a omitir. */
+  reclassificacao:     ['fazenda', 'data', 'categoria', 'quantidade', 'categoria_destino', 'peso_medio_kg'],
   consumo:             ['fazenda', 'data', 'categoria', 'quantidade'],
   ajuste:              ['fazenda', 'data', 'categoria', 'quantidade'],
 };
@@ -207,11 +212,13 @@ export function validarLinhas(
       for (const campo of reqs) {
         const v = l[campo];
         if (v === null || v === undefined || v === '' || v === 0) {
-          // quantidade 0 também é inválida
-          if (campo === 'quantidade' && v === 0) {
-            erros.push(`"${campo}" não pode ser zero.`);
+          /* ⚠ ZERO E' AUSENCIA NUM CAMPO NUMERICO OBRIGATORIO, e ate' aqui so' `quantidade` dizia
+             isso: um `peso_medio_kg` igual a 0 caia no `if` de fora e NAO casava nenhum ramo de
+             dentro — passava calado. O ramo agora vale para qualquer campo numerico. */
+          if (typeof v === 'number' && v === 0) {
+            erros.push(`Linha ${l.linha}: "${campo}" não pode ser zero (tipo "${l.tipo}").`);
           } else if (v === null || v === undefined || v === '') {
-            erros.push(`"${campo}" é obrigatório para tipo "${l.tipo}".`);
+            erros.push(`Linha ${l.linha}: "${campo}" é obrigatório para tipo "${l.tipo}".`);
           }
         }
       }
@@ -351,7 +358,9 @@ export function gerarTemplateHistorico() {
     { data: '15/04/2020', fazenda: 'Fazenda A', tipo: 'abate', categoria: 'bois', quantidade: 20, peso_medio_kg: 550, peso_carcaca_kg: 302, preco_arroba: 330, valor_total: 132000, cenario: 'realizado' },
     { data: '01/05/2020', fazenda: 'Fazenda A', tipo: 'morte', categoria: 'vacas', quantidade: 2, cenario: 'realizado', observacao: 'Picada de cobra' },
     { data: '10/06/2020', fazenda: 'Fazenda A', tipo: 'transferencia_saida', categoria: 'garrotes', quantidade: 40, fazenda_destino: 'Fazenda B', cenario: 'realizado' },
-    { data: '01/07/2020', fazenda: 'Fazenda A', tipo: 'reclassificacao', categoria: 'garrotes', categoria_destino: 'bois', quantidade: 60, cenario: 'realizado' },
+    // ⚠ COM PESO: reclassificar move o animal de categoria, e o peso vai junto. Sem ele o motor
+    //   do rebanho transforma o peso que chega em producao (RECLASS-PESO-01).
+    { data: '01/07/2020', fazenda: 'Fazenda A', tipo: 'reclassificacao', categoria: 'garrotes', categoria_destino: 'bois', quantidade: 60, peso_medio_kg: 380, cenario: 'realizado' },
   ];
 
   return { headers, exemplos };

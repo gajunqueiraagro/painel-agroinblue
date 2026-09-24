@@ -879,13 +879,12 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
       return id;
     },
     dataInicial: dataInicialReclass,
-    lancamentos,
-    ano: Number(anoFiltro),
   });
   const [reclassSubmitting, setReclassSubmitting] = useState(false);
   const reclassPesoNum = parseFloat((reclassState.pesoKg || '0').replace(',', '.')) || 0;
   const reclassQtdNum = Number(reclassState.quantidade) || 0;
-  const reclassCanRegister = reclassQtdNum > 0 && reclassState.categoriaOrigem !== reclassState.categoriaDestino;
+  /* A trava e o motivo vivem no hook desde o RECLASS-PESO-01 — fonte unica para as tres telas. */
+  const reclassCanRegister = reclassState.podeSalvar;
 
   if (isGlobal) return <div className="p-6 text-center text-muted-foreground">Selecione uma fazenda para o fechamento.</div>;
 

@@ -729,7 +729,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const { canEditMeta } = usePermissions();
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const reclassState = useReclassificacaoState({ onAdicionar, dataInicial, lancamentos, ano: Number(anoFiltro) });
+  const reclassState = useReclassificacaoState({ onAdicionar, dataInicial });
   // Pré-seleciona cenário da Reclassificação quando navegado da Evolução por Categoria
   useEffect(() => {
     if (initialReclassCenario && abaInicial === 'reclassificacao') {
@@ -6105,7 +6105,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                 }
               }}
               submitting={submitting}
-              canRegister={!!(Number(reclassState.quantidade) > 0 && reclassState.categoriaOrigem !== reclassState.categoriaDestino)}
+              canRegister={reclassState.podeSalvar}
               onBack={editingReclassId ? undefined : onBackToConciliacao}
               backLabel={backLabel}
               isEditing={!!editingReclassId}

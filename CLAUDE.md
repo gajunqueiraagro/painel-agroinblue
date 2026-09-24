@@ -1120,3 +1120,27 @@ preview que o cabecalho nao sai da tela ao rolar.
   BACKFILL-01 (eram 460): 341 linhas no NJ e 141 no Agnaldo, mais Santa Rita 188, RRCC 91,
   Vera 78, Raul 73. GMD e' indicador de capa do PC-100 e do Fechamento, e fora dessa faixa ele
   nao descreve boi nenhum. Divida de DADO, nao de motor — a formula ja' esta' certa.
+- ⚠ VALOR SUGERIDO E' VALOR ACEITO (regra permanente, RECLASS-PESO-01, 24/09/2026).
+  Campo que a tela preenche sozinha nao e' ajuda: e' AFIRMACAO. O operador confere o que digitou e
+  aceita o que ja estava la'. Entao a sugestao responde pelo numero como se fosse digitada, e a
+  barra de qualidade dela e' a mesma do dado.
+  ⚠ NASCE DE UMA SUGESTAO QUE ERRAVA ATE' 381 %, e ela viveu anos sem incomodar ninguem: o
+  `ReclassificacaoForm` sugeria o peso medio dos LANCAMENTOS da categoria (vendas, compras,
+  nascimentos, mortes), ignorando o mes, em vez do peso do REBANHO. Medido em ago/25:
+    Pureza      mamotes_m   sugeria 147,2 kg   rebanho  30,6 kg   +381 %
+    Pureza      mamotes_f   sugeria 135,6 kg   rebanho  30,3 kg   +348 %
+    Sta. Rita   mamotes_m   sugeria 117,8 kg   rebanho  31,8 kg   +270 %
+    Sta. Maria  bois        sugeria 510,5 kg   rebanho 365,6 kg    +40 %
+    3 Muchachas novilhas    sugeria 361,5 kg   rebanho 454,6 kg    -21 %
+  Nos bezerros ela sugeria CINCO VEZES o animal. Passava porque o campo era OPCIONAL — sugestao
+  ruim em campo opcional e' ruido, o operador apaga. No dia em que o campo virou obrigatorio ela
+  viraria a resposta, e o RECLASS-PESO-BACKFILL-01 ja' tinha provado que esse peso entra inteiro
+  em `producao_biologica`. Por isso a sugestao velha MORREU, sem ficar de fallback.
+  ⚠ E A REGRA TEM UM SEGUNDO LADO, medido na mesma tela no mesmo dia: SUGESTAO NAO ENTRA EM
+  REGISTRO JA' GRAVADO. A versao nova reabriu um lancamento de 450,00 kg mostrando 144,65 — o
+  efeito de sugestao rodava depois da hidratacao e trocava o dado salvo. E' a mesma armadilha da
+  carga de mandioca ("formulario que reabre sem ler APAGA"). Conserto: `autoSugerir: false` na
+  edicao, e o valor hidratado marcado como DIGITADO, nunca como sugerido.
+  ⚠ COMO SE MARCA: sugerido tem fundo ambar e uma linha de 10px dizendo que e' sugestao; o valor
+  digitado (ou gravado) e' branco. Sem a marca, o numero que a tela escreveu e o que o operador
+  escreveu ficam identicos — e e' exatamente essa diferenca que ele precisa ver.
