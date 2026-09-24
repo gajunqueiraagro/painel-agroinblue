@@ -1,3 +1,4 @@
+import { useValorRebanhoInicio, type RebanhoInicio } from '@/hooks/useValorRebanhoInicio';
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -7,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
 import { Save, Copy, Info, Lock, Unlock, AlertTriangle, TrendingUp, TrendingDown, Minus, ArrowLeft } from 'lucide-react';
-import { Lancamento, SaldoInicial } from '@/types/cattle';
+import { Lancamento, SaldoInicial, CATEGORIAS, kgToArrobas } from '@/types/cattle';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useRedirecionarPecuaria } from '@/hooks/useRedirecionarPecuaria';
 import { usePastos } from '@/hooks/usePastos';
@@ -103,6 +104,32 @@ const MESES_SHORT = [
 ];
 
 const CHART_LABELS = ['I', 'J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
+/**
+ * AS RÉGUAS DA EVOLUÇÃO PATRIMONIAL — VALOR-REBANHO-COMPACTO-02 (mock v1).
+ *
+ * ⚠ SÃO MEDIDAS, não as do mock: as do mock (70|40|46|40|48|56|76 e 78|72|56|62) foram desenhadas
+ * antes de ver os números do SR, que têm oito dígitos em "Valor total" e "15.824.817" no
+ * indicador. A régua da casa é pior texto + 8 de folga + 12 de padding, e o método é o `Range`
+ * sobre o conteúdo contra o `clientWidth` — o mesmo que já corrigiu o DRE três vezes.
+ * ⚠ A COLUNA R$/kg É A EDITÁVEL e não encolhe abaixo do input: ela carrega um `<input>` de
+ * verdade, não texto.
+ */
+/* Medido na tela, SR ago/21, com os grupos e o total à vista. As três da direita estouravam:
+     R$/@         "R$ 312,39"        50,8 numa caixa de 44  (faltavam  6,7)
+     R$/cab       "R$ 2.937,67"      59,9 numa caixa de 50  (faltavam  9,9)
+     Valor total  "R$ 12.255.963,06" 88,5 numa caixa de 72  (faltavam 16,5)
+   E "R$/kg" estava em folga ZERO — no limite, que é o mesmo que cortar no próximo número. */
+/* ⚠ R$/kg FOI A 64 numa segunda passada: ela media folga ZERO com "15,00" — e zero é o mesmo que
+     cortar no próximo número. A célula do TOTAL tem padding de 12 e as de dados, de 4 (é a coluna
+     do `<input>`), então a coluna tem de caber a MAIOR das duas leituras. */
+/* ⚠ SEGUNDA PASSADA, com o mês ABERTO (onde aparecem o "*" da origem do peso e os 100,0% de
+     variação): "Peso" media 42,1 em 44 ("140,00 *") e "vs mês" estourava por 0,9 em "100,0%".
+   ⚠ E UM FALSO POSITIVO DO MEU MEDIDOR fica registrado: a coluna R$/kg dá folga ZERO porque a
+     célula do total é um `<span className="block">`, e um bloco sempre mede a largura do
+     container — não o texto dentro dele. Não é corte; é o `Range` medindo a caixa. */
+const COLS_CAT_VR = [74, 50, 64, 64, 72, 80, 110] as const;
+const COLS_IND_VR = [82, 74, 64, 64] as const;
+
 const CHART_FULL_LABELS = ['Inicial', 'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
 function mapFonteToOrigem(fonte?: string): OrigemPeso {
@@ -335,18 +362,186 @@ function VariacaoBadge({ valor, label, showLabel }: { valor: number | null; labe
   );
 }
 
+/**
+ * O CARD "INÍCIO" — o retrato de 1º de janeiro (mock v2).
+ *
+ * ⚠ ELE NÃO É UM MÊS, É A BASE: o ponto de partida contra o qual os doze meses se comparam. Por
+ * isso a pílula diz "Base" e não "Fechado", não há Reabrir nem desbloqueio — não há o que fechar
+ * num retrato que já veio fechado de dezembro.
+ *
+ * ⚠ AS COMPARAÇÕES SAEM EM "—", e isso é a sentinela funcionando: "vs mês" e "vs início do ano"
+ * não existem para o próprio início. Zero ali afirmaria estabilidade onde não há termo de
+ * comparação.
+ *
+ * ⚠ E OS GRÁFICOS NÃO RENDERIZAM, em vez de aparecerem vazios: uma série de um ponto não é uma
+ * série. A área some inteira — o corpo não se move porque nada dela tinha altura reservada.
+ *
+ * ⚠ A FAIXA DIZ A ORIGEM em 9px, e é o que impede a pergunta seguinte: "fechamento de dez/20" ou
+ * "saldo inicial do cadastro". As duas fontes são as MESMAS que o P0 do DRE usa, nessa ordem.
+ */
+function CardInicio({ ano, inicio, carregando, fazendaNome }: {
+  ano: number;
+  inicio: RebanhoInicio | null;
+  carregando: boolean;
+  fazendaNome: string;
+}) {
+  const traco = '—';
+  const nz = (v: number | null | undefined, casas = 0) =>
+    (v == null ? traco : v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas }));
+
+  const origem = inicio?.origem === 'fechamento'
+    ? `fechamento de ${rotuloMesCurto(inicio.mesBase)}`
+    : inicio?.origem === 'cadastro' ? 'saldo inicial do cadastro' : null;
+
+  const pesoMedio = inicio && inicio.cabecas > 0 ? (inicio.arrobas * 30) / inicio.cabecas : null;
+  const precoAt = inicio && inicio.arrobas > 0 ? inicio.valor / inicio.arrobas : null;
+  const precoCab = inicio && inicio.cabecas > 0 ? inicio.valor / inicio.cabecas : null;
+
+  const cel = (txt: string, esq?: boolean, forte?: boolean) => (
+    <td className={`truncate px-1.5 py-0 tabular-nums ${esq ? 'text-left' : 'text-right'} ${forte ? 'font-medium' : ''}`}
+      style={{ fontSize: 9, lineHeight: 1 }}>{txt}</td>
+  );
+
+  return (
+    <div className="space-y-1.5">
+      {/* A faixa do Início: informativa, nunca de bloqueio. */}
+      <div className="flex items-center justify-between gap-2 rounded border px-2"
+        style={{ height: 22, backgroundColor: '#EEF3F8', borderColor: '#B5D4F4', color: '#0C447C' }}>
+        <span className="truncate" style={{ fontSize: 9 }}>
+          Retrato de 1º de janeiro de {ano} · saldo inicial do ano
+          {origem && <span className="opacity-80"> · {origem}</span>}
+        </span>
+        <span className="shrink-0 rounded px-1.5 font-medium"
+          style={{ fontSize: 9, lineHeight: '16px', backgroundColor: '#0C447C', color: '#fff' }}>Base</span>
+      </div>
+
+      {carregando ? (
+        <div className="rounded border bg-card px-2 py-6 text-center text-[10px] text-muted-foreground">
+          Carregando o retrato de 1º de janeiro…
+        </div>
+      ) : !inicio || inicio.origem === 'vazio' ? (
+        /* ⚠ VAZIO É TRAÇO E EXPLICAÇÃO, nunca zero: um rebanho de zero cabeças é uma afirmação. */
+        <div className="rounded border bg-card px-2 py-6 text-center text-[10px] text-muted-foreground">
+          {fazendaNome === 'Global'
+            ? `O retrato de 1º de janeiro é por FAZENDA: escolha uma no seletor. Somá-las aqui seria
+               uma terceira fonte para o mesmo dado, ao lado do fechamento e do cadastro.`
+            : `Sem fechamento de dezembro/${ano - 1} e sem saldo inicial no cadastro — não há
+               retrato de 1º de janeiro de ${ano} para esta fazenda.`}
+        </div>
+      ) : (
+        <div className="grid gap-2" style={{ gridTemplateColumns: '376px 268px' }}>
+          <div className="overflow-hidden rounded border bg-card">
+            <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
+              <colgroup>{[70, 40, 46, 40, 48, 56, 76].map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>
+              <thead>
+                <tr style={{ height: 16 }}>
+                  {['Categoria', 'Qtd', 'Peso', 'R$/kg', 'R$/@', 'R$/cab', 'Valor total'].map((r, i) => (
+                    <th key={r} className={`truncate px-1.5 py-0 font-semibold text-white ${i === 0 ? 'text-left' : 'text-right'}`}
+                      style={{ backgroundColor: '#2C3E5C', fontSize: 9, lineHeight: 1 }}>{r}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {inicio.categorias.map((c, i) => {
+                  const at = c.pesoMedioKg == null ? null : kgToArrobas(c.pesoMedioKg);
+                  return (
+                    <tr key={c.categoria} style={{ height: 13, backgroundColor: i % 2 === 0 ? '#F5F4F0' : undefined }}>
+                      {cel(nomeDaCategoria(c.categoria), true)}
+                      {cel(nz(c.quantidade))}
+                      {cel(nz(c.pesoMedioKg, 1))}
+                      {cel(nz(c.precoKg, 2))}
+                      {cel(at == null || c.precoKg == null ? traco : nz(at * c.precoKg, 2))}
+                      {cel(c.quantidade === 0 ? traco : nz(c.valor / c.quantidade))}
+                      {cel(nz(c.valor))}
+                    </tr>
+                  );
+                })}
+                <tr style={{ height: 16, backgroundColor: '#D6D4CC' }}>
+                  {cel('Total', true, true)}
+                  {cel(nz(inicio.cabecas), false, true)}
+                  {cel(nz(pesoMedio, 1), false, true)}
+                  {cel(traco, false, true)}
+                  {cel(nz(precoAt, 2), false, true)}
+                  {cel(nz(precoCab), false, true)}
+                  {cel(nz(inicio.valor), false, true)}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div className="overflow-hidden rounded border bg-card">
+            <div className="truncate px-1.5 py-0 font-medium"
+              style={{ height: 16, lineHeight: '16px', fontSize: 9, backgroundColor: '#E9EFF6', color: '#0C447C' }}>
+              Valor do rebanho · 1º jan/{String(ano).slice(2)} · {fazendaNome}
+            </div>
+            <div className="flex items-baseline justify-between gap-2 px-1.5" style={{ height: 22 }}>
+              <span className="truncate font-medium tabular-nums" style={{ fontSize: 14 }}>{nz(inicio.valor)}</span>
+              {/* ⚠ AS DUAS COMPARAÇÕES EM TRAÇO: o início não tem mês anterior nem início de ano. */}
+              <span className="shrink-0 text-muted-foreground" style={{ fontSize: 9 }}>{traco} mês · {traco} ano</span>
+            </div>
+            <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
+              <colgroup>{[78, 72, 56, 62].map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>
+              <thead>
+                <tr style={{ height: 16 }}>
+                  {['', 'Valor', 'vs mês', 'vs ini. ano'].map((r, i) => (
+                    <th key={r} className={`truncate px-1.5 py-0 font-semibold text-white ${i === 0 ? 'text-left' : 'text-right'}`}
+                      style={{ backgroundColor: '#2C3E5C', fontSize: 9, lineHeight: 1 }}>{r}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {([
+                  ['Cabeças', nz(inicio.cabecas)],
+                  ['Peso médio', nz(pesoMedio, 1)],
+                  ['R$/@', nz(precoAt, 2)],
+                  ['R$/cab', nz(precoCab)],
+                  ['@ em estoque', nz(inicio.arrobas, 2)],
+                ] as const).map(([rot, val]) => (
+                  <tr key={rot} style={{ height: 16 }}>
+                    {cel(rot, true)}
+                    {cel(val)}
+                    {cel(traco)}
+                    {cel(traco)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** "2020-12" -> "dez/20". */
+function rotuloMesCurto(am: string) {
+  const M = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  const [a, m] = (am || '').split('-');
+  const i = Number(m) - 1;
+  return i >= 0 && i < 12 ? `${M[i]}/${a.slice(2)}` : am;
+}
+
+/** ⚠ O NOME DA CASA, NUNCA O CÓDIGO — a mesma lista dos lançamentos. */
+function nomeDaCategoria(cod: string) {
+  return CATEGORIAS.find(c => c.value === cod)?.label ?? cod;
+}
+
 function MiniChart({ data, color, title, unit }: { data: { label: string; fullLabel?: string; value: number | null }[]; color: string; title: string; unit?: 'currency' | 'arroba' }) {
   // Strip leading null points so the chart renders from the first real value (e.g. Jan)
   const firstRealIdx = data.findIndex(d => d.value !== null);
   const visibleData = firstRealIdx > 0 ? data.slice(firstRealIdx) : data;
 
   return (
+    /* ⚠ 60px DE ALTURA — VALOR-REBANHO-COMPACTO-02. Eram 150, e três deles empurravam a tabela e
+       os indicadores para fora da primeira tela. A série é a MESMA; o que encolheu foi o desenho.
+       ⚠ E O TÍTULO DEIXOU DE SER CAIXA-ALTA MUTED: 9px/500 em navy, como as capas das duas tabelas
+       acima. Três tipografias para três caixas irmãs era o que fazia a tela parecer remendada. */
     <div className="flex-1 min-w-0">
-      <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5 truncate text-center">{title}</p>
-      <div className="h-[150px] w-full">
+      <p className="mb-0.5 truncate text-center font-medium" style={{ fontSize: 9, color: '#0C447C' }}>{title}</p>
+      <div className="h-[60px] w-full">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={visibleData} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
-            <XAxis dataKey="label" tick={{ fontSize: 8 }} interval={0} tickLine={false} axisLine={false} />
+            <XAxis dataKey="label" tick={{ fontSize: 6 }} interval={0} tickLine={false} axisLine={false} />
             <YAxis hide domain={['auto', 'auto']} />
             <RechartsTooltip
               contentStyle={{ fontSize: 9, padding: '2px 6px' }}
@@ -358,7 +553,7 @@ function MiniChart({ data, color, title, unit }: { data: { label: string; fullLa
                 return [formatNum(v, 1), ''];
               }}
             />
-            <Line type="monotone" dataKey="value" stroke={color} strokeWidth={1.5} dot={{ r: 2.5, fill: color, strokeWidth: 0 }} activeDot={{ r: 4 }} connectNulls={false} />
+            <Line type="monotone" dataKey="value" stroke={color} strokeWidth={1.2} dot={{ r: 1.5, fill: color, strokeWidth: 0 }} activeDot={{ r: 3 }} connectNulls={false} />
           </LineChart>
         </ResponsiveContainer>
       </div>
@@ -391,6 +586,14 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const [anoFiltro, setAnoFiltro] = useState(filtroAnoInicial || String(new Date().getFullYear()));
   const mesAtual = filtroMesInicial ? String(filtroMesInicial).padStart(2, '0') : String(new Date().getMonth() + 1).padStart(2, '0');
   const [mesFiltro, setMesFiltro] = useState(mesAtual);
+  /**
+   * O CARD "INÍCIO" — VALOR-REBANHO-COMPACTO-01.
+   *
+   * ⚠ ESTADO PRÓPRIO, NÃO UM MÊS '00': o `anoMes` alimenta uma dúzia de hooks e queries, e um mês
+   * que não existe no calendário viraria `2021-00` em todas elas. O Início é uma VISTA do mesmo
+   * ano, não um décimo terceiro mês.
+   */
+  const [verInicio, setVerInicio] = useState(false);
 
   useEffect(() => {
     if (filtroAnoInicial) setAnoFiltro(filtroAnoInicial);
@@ -398,6 +601,9 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   }, [filtroAnoInicial, filtroMesInicial]);
 
   const anoMes = `${anoFiltro}-${mesFiltro}`;
+  /* ⚠ SEMPRE CHAMADO, nunca dentro de `if`: hook condicional derruba a tela (check:hooks). Quando o
+     card está fechado ele lê e ninguém olha — é uma consulta por ano, não por clique. */
+  const { inicio, carregando: carregandoInicio } = useValorRebanhoInicio(Number(anoFiltro), fazendaId);
   const isDezembro = mesFiltro === '12';
 
   // Regra temporal: mês atual, passado ou futuro
@@ -1108,46 +1314,60 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
 
   return (
     <div className="p-2 w-full space-y-1.5 animate-fade-in pb-16">
-      {!isGlobal && <MasterLockBanner anoMes={anoMes} />}
+      {/* ⚠ O INÍCIO NÃO RECEBE O CADEADO DO MÊS: ele não é um mês, é a base. O banner falava de
+          "2021-09 fechado" sobre um retrato de 1º de janeiro, e o overlay o deixava esmaecido como
+          se houvesse algo a editar ali. */}
+      {/* ⚠ A LINHA DE 22px FICA RESERVADA quando o mês está aberto (A23): sem ela, fechar um mês
+          empurrava a tela inteira 22px para baixo, e o operador perdia o lugar onde estava lendo. */}
+      {!verInicio && (
+        isGlobal
+          ? <div style={{ height: 22 }} aria-hidden />
+          : <div style={{ minHeight: 22 }}><MasterLockBanner anoMes={anoMes} compacto /></div>
+      )}
       <div className="flex gap-1.5 items-center flex-wrap">
         {onBack && (
           <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={onBack}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
         )}
-        {!filtroAnoInicial && (
-        <Select value={anoFiltro} onValueChange={setAnoFiltro}>
-          <SelectTrigger className="w-20 h-7 text-xs font-bold">
-            <SelectValue placeholder="Ano" />
-          </SelectTrigger>
-          <SelectContent>
-            {anosDisponiveis.map(a => (
-              <SelectItem key={a} value={a}>{a}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        )}
+        {/* ⚠ O SELETOR DE ANO APARECE SEMPRE — VALOR-REBANHO-COMPACTO-01, e é MUDANÇA DE
+            COMPORTAMENTO. Ele era escondido por `{!filtroAnoInicial && …}`: quem chegava pelo link
+            "Corrigir preços" do DRE ficava preso no ano que o link mandou, justamente quem mais
+            precisa navegar para conferir o ano vizinho. A prop continua SEMEANDO o estado na
+            montagem; ela nunca foi uma segunda fonte, só escondia o controle. */}
+        <div className="flex h-5 shrink-0 items-center gap-0.5 rounded border bg-card px-0.5">
+          <button type="button" aria-label="Ano anterior"
+            onClick={() => setAnoFiltro(a => String(Number(a) - 1))}
+            className="px-1 text-[11px] leading-none text-muted-foreground hover:text-foreground">◂</button>
+          <span className="min-w-[30px] text-center text-[10px] font-semibold tabular-nums">{anoFiltro}</span>
+          <button type="button" aria-label="Próximo ano"
+            onClick={() => setAnoFiltro(a => String(Number(a) + 1))}
+            className="px-1 text-[11px] leading-none text-muted-foreground hover:text-foreground">▸</button>
+        </div>
 
-        {uCanEdit && !isGlobal && (
+        {!verInicio && uCanEdit && !isGlobal && (
           <Button variant="outline" size="sm" onClick={handleCopiarMesAnterior} className="gap-1 h-7 text-xs px-2">
             <Copy className="h-3 w-3" /> Mês anterior
           </Button>
         )}
 
-        {isMesFuturo && (
+        {!verInicio && isMesFuturo && (
           <Badge variant="outline" className="gap-1 text-xs text-muted-foreground">
             <Lock className="h-3 w-3" /> Futuro
           </Badge>
         )}
 
-        {!isMesFuturo && uMesFechado && (
+        {/* ⚠ AS PÍLULAS DE ESTADO DO MÊS SOMEM NO INÍCIO — VALOR-REBANHO-COMPACTO-01. "Fechado",
+            "Live", "Reabrir" e "Salvar e Fechar" falam de um MÊS que se pode abrir e fechar; o
+            retrato de 1º de janeiro não é um. A do Início é "Base", e mora na faixa dele. */}
+        {!verInicio && !isMesFuturo && uMesFechado && (
           <Badge variant="secondary" className="gap-1 text-xs">
             <Lock className="h-3 w-3" /> Fechado
             {isGlobal && ` (${globalData.fazendasFechadas}/${globalData.fazendasTotal})`}
           </Badge>
         )}
 
-        {!isMesFuturo && !uMesFechado && (
+        {!verInicio && !isMesFuturo && !uMesFechado && (
           <Badge variant="outline" className="gap-1 text-xs">
             <Info className="h-3 w-3" /> Live
           </Badge>
@@ -1160,12 +1380,12 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         )}
 
         <div className="ml-auto flex gap-1.5">
-          {!isGlobal && !isMesFuturo && mesSelecionadoFechado && isAdmin && (
+          {!verInicio && !isGlobal && !isMesFuturo && mesSelecionadoFechado && isAdmin && (
             <Button variant="outline" size="sm" onClick={reabrirFechamento} className="gap-1 h-7 text-xs px-2">
               <Unlock className="h-3 w-3" /> Reabrir
             </Button>
           )}
-          {uCanEdit && !isGlobal && (
+          {!verInicio && uCanEdit && !isGlobal && (
             <Button size="sm" onClick={handleSalvar} disabled={saving} className="gap-1 h-7 text-xs px-3">
               <Save className="h-3 w-3" />
               {saving ? 'Salvando...' : 'Salvar e Fechar'}
@@ -1174,11 +1394,23 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         </div>
       </div>
 
+      {/* ⚠ O INÍCIO É O PRIMEIRO DA RÉGUA, e fica nela e não fora: ele é o ponto de partida da
+          mesma série que os doze meses continuam. Um controle à parte o faria parecer outra tela. */}
       <div className="flex gap-0.5 bg-muted/30 rounded-md p-0.5 border">
+        <button type="button" onClick={() => setVerInicio(true)}
+          title="Retrato de 1º de janeiro — o saldo inicial do ano"
+          className={`shrink-0 rounded px-2 text-center text-[10px] font-semibold transition-colors
+            ${verInicio ? 'bg-primary text-primary-foreground shadow-sm'
+              : 'bg-card text-muted-foreground hover:bg-muted'}`}
+          style={{ flex: 1.3, paddingTop: 4, paddingBottom: 4 }}>
+          Início
+        </button>
         {MESES_SHORT.map(m => {
           const mesKey = `${anoFiltro}-${m.key}`;
           const isClosed = isGlobal ? !!uHistoricoPorMes[mesKey] : !!historicoPorMes[mesKey];
-          const isSelected = mesFiltro === m.key;
+          /* ⚠ NO INÍCIO NENHUM MÊS FICA ACESO: dois navy na mesma régua diriam que a tela
+             mostra os dois. O mês escolhido é LEMBRADO — trocar de ano o mantém. */
+          const isSelected = !verInicio && mesFiltro === m.key;
           const mesN = Number(m.key);
           const isFuturo = anoNumFiltro > anoAtualSistema || (anoNumFiltro === anoAtualSistema && mesN > mesAtualSistema);
           const mesSnapStatus = !isGlobal ? getSnapStatus(mesN) : 'sem_snapshot';
@@ -1186,7 +1418,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           return (
             <button
               key={m.key}
-              onClick={() => setMesFiltro(m.key)}
+              onClick={() => { setMesFiltro(m.key); setVerInicio(false); }}
               title={isComprometido ? (mesSnapStatus === 'invalidado' ? 'Snapshot invalidado' : 'Cadeia quebrada') : undefined}
               className={`flex-1 text-center text-[11px] font-semibold py-1 rounded transition-colors
                 ${isSelected
@@ -1217,6 +1449,12 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         })}
       </div>
 
+      {/* ⚠ O INÍCIO SUBSTITUI O CORPO, não convive com ele: os dois mostram o MESMO tipo de tabela
+          para datas diferentes, e empilhá-los faria o operador somar as duas. */}
+      {verInicio ? (
+        <CardInicio ano={Number(anoFiltro)} inicio={inicio} carregando={carregandoInicio}
+          fazendaNome={isGlobal ? 'Global' : (fazendaAtual?.nome ?? '—')} />
+      ) : (
       <div className="relative">
         <div className={mostrarOverlayP1 ? 'opacity-40 pointer-events-none' : ''}>
 
@@ -1284,18 +1522,19 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
             <p className="text-[10px] text-muted-foreground/70">Apenas o mês vigente pode ser alimentado.</p>
           </div>
         )}
-      <div className="flex flex-col lg:flex-row gap-3 items-start">
-        <div className="w-full lg:flex-1 lg:max-w-[50%] min-w-0 bg-card rounded-lg shadow-sm border overflow-x-auto">
-          <table className="w-full text-[11px]">
+      {/* ⚠ GRID DE LARGURA FIXA — VALOR-REBANHO-COMPACTO-02. Era `flex-1 max-w-[50%]`: a tabela
+          mudava de largura conforme o conteúdo dos indicadores ao lado, então trocar de mês movia
+          as colunas. A lei de estabilidade pede que nada ande ao trocar mês, ano ou fazenda. */}
+      <div className="flex flex-wrap gap-2 items-start">
+        <div className="shrink-0 bg-card rounded border overflow-hidden" style={{ width: COLS_CAT_VR.reduce((a, w) => a + w, 0) }}>
+          <table className="border-collapse" style={{ tableLayout: 'fixed', width: '100%' }}>
+            <colgroup>{COLS_CAT_VR.map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>
             <thead>
-              <tr className="border-b bg-primary/15">
-                <th className="text-center px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider bg-primary/25">Categoria</th>
-                <th className="text-center px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider">Qtd</th>
-                <th className="text-center px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider">Peso</th>
-                <th className="text-center px-1 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider w-[60px]">R$/kg</th>
-                <th className="text-center px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider">R$/@</th>
-                <th className="text-center px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider">R$/cab</th>
-                <th className="text-center px-1.5 py-1 font-semibold text-foreground text-[10px] uppercase tracking-wider">Valor Total</th>
+              <tr style={{ height: 16 }}>
+                {['Categoria', 'Qtd', 'Peso', 'R$/kg', 'R$/@', 'R$/cab', 'Valor total'].map((r, i) => (
+                  <th key={r} className={`truncate px-1.5 py-0 font-semibold text-white ${i === 0 ? 'text-left' : 'text-right'}`}
+                    style={{ backgroundColor: '#2C3E5C', fontSize: 9, lineHeight: 1 }}>{r}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -1309,14 +1548,15 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                 </tr>
               ) : (
                 uRows.map((r, i) => (
-                  <tr key={r.codigo} className={`border-b ${i % 2 === 0 ? '' : 'bg-muted/20'}`}>
-                    <td className="px-1.5 py-0.5 text-foreground text-[9.5px] italic whitespace-nowrap bg-primary/10">
+                  <tr key={r.codigo} style={{ height: 13, backgroundColor: i % 2 === 0 ? '#F5F4F0' : undefined }}>
+                    <td className="truncate px-1.5 py-0 text-left" title={r.nome}
+                      style={{ fontSize: 9, lineHeight: 1 }}>
                       {r.nome}
                     </td>
-                    <td className="px-1.5 py-0.5 text-right text-foreground tabular-nums italic text-[9.5px]">
+                    <td className="truncate px-1.5 py-0 text-right tabular-nums" style={{ fontSize: 9, lineHeight: 1 }}>
                       {r.saldo > 0 ? formatNum(r.saldo, 0) : '-'}
                     </td>
-                    <td className="px-1.5 py-0.5 text-right tabular-nums italic text-[9.5px]">
+                    <td className="truncate px-1.5 py-0 text-right tabular-nums" style={{ fontSize: 9, lineHeight: 1 }}>
                       {r.saldo > 0 && r.pesoMedio > 0 ? (
                         (uTabelaUsaSnapshot || isGlobal) ? (
                           <span className="text-foreground">{formatNum(r.pesoMedio, 2)}</span>
@@ -1335,9 +1575,16 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                         )
                       ) : '-'}
                     </td>
-                    <td className="px-0.5 py-0.5 w-[60px]">
+                    {/* ⚠ A CÉLULA EDITÁVEL SÓ MUDA DE TAMANHO — o `handlePrecoChange`, o
+                        `handlePrecoBlur`, o `value` e o `disabled` são os MESMOS. Ela é a única da
+                        tabela que carrega um `<input>`, e por isso a coluna não encolhe abaixo
+                        dele: 11px de altura de caixa dentro de uma linha de 13. */}
+                    {/* ⚠ A `td` PRECISA DO PRÓPRIO `fontSize`/`lineHeight`: sem eles ela herda os
+                        16px/24px do documento, e 24 de line-height fixa a linha em 18 mesmo com o
+                        input em 12. Medido — o input não era o culpado. */}
+                    <td className="px-0.5 py-0" style={{ fontSize: 9, lineHeight: 1 }}>
                       {(uTabelaUsaSnapshot || isGlobal) ? (
-                        <span className="block text-right text-[9.5px] italic text-foreground tabular-nums px-1">
+                        <span className="block truncate px-1 text-right tabular-nums" style={{ fontSize: 9, lineHeight: 1 }}>
                           {r.saldo > 0 && r.precoKg > 0 ? formatNum(r.precoKg, 2) : '-'}
                         </span>
                       ) : r.saldo > 0 ? (
@@ -1346,7 +1593,11 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                             <Input
                               type="text"
                               inputMode="decimal"
-                              className={`h-5 text-right !text-[9px] leading-none tabular-nums italic px-1 w-full ${r.isSugerido ? 'border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20' : ''}`}
+                              /* ⚠ 12px E `py-0`: com 11 declarado o input renderizava 14 (borda mais
+                                 o padding do componente) e a LINHA ia a 18, contra os 13 das linhas
+                                 sem input — mês aberto e mês fechado com réguas diferentes. Medido
+                                 na tela em 24/09. */
+                              className={`h-3 py-0 text-right !text-[9px] leading-none tabular-nums px-1 w-full ${r.isSugerido ? 'border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20' : ''}`}
                               placeholder="0,00"
                               value={precosDisplay[r.codigo] !== undefined ? precosDisplay[r.codigo] : fmtKg(r.precoKg)}
                               onChange={e => handlePrecoChange(r.codigo, e.target.value)}
@@ -1361,16 +1612,16 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                           )}
                         </Tooltip>
                       ) : (
-                        <span className="block text-center text-[9.5px] italic text-muted-foreground">-</span>
+                        <span className="block text-right text-muted-foreground" style={{ fontSize: 9, lineHeight: 1 }}>-</span>
                       )}
                     </td>
-                    <td className="px-1.5 py-0.5 text-right text-foreground tabular-nums italic text-[9.5px]">
+                    <td className="truncate px-1.5 py-0 text-right tabular-nums" style={{ fontSize: 9, lineHeight: 1 }}>
                       {r.precoArroba > 0 ? formatMoeda(r.precoArroba) : '-'}
                     </td>
-                    <td className="px-1.5 py-0.5 text-right text-foreground tabular-nums italic text-[9.5px]">
+                    <td className="truncate px-1.5 py-0 text-right tabular-nums" style={{ fontSize: 9, lineHeight: 1 }}>
                       {r.valorCabeca > 0 ? formatMoeda(r.valorCabeca) : '-'}
                     </td>
-                    <td className="px-1.5 py-0.5 text-right text-foreground tabular-nums italic text-[9.5px]">
+                    <td className="truncate px-1.5 py-0 text-right tabular-nums" style={{ fontSize: 9, lineHeight: 1 }}>
                       {r.valorTotal > 0 ? formatMoeda(r.valorTotal) : '-'}
                     </td>
                   </tr>
@@ -1378,16 +1629,16 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
               )}
             </tbody>
             <tfoot>
-              <tr className="border-t-2 bg-primary/25">
-                <td className="px-1.5 py-1 font-bold text-foreground text-[11px] italic bg-primary/30">TOTAL</td>
-                <td className="px-1.5 py-1 text-right font-bold text-foreground tabular-nums italic text-[11px]">{formatNumNullable(uMetricasTabela.cabecas, 0)}</td>
-                <td className="px-1.5 py-1 text-right text-foreground tabular-nums italic text-[11px]">{formatNumNullable(uMetricasTabela.pesoMedio, 2)}</td>
-                <td className="px-1 py-1 text-center text-foreground tabular-nums italic text-[11px] w-[60px]">
+              <tr style={{ height: 16, backgroundColor: '#D6D4CC' }}>
+                <td className="truncate px-1.5 py-0 text-left font-medium" style={{ fontSize: 10, lineHeight: 1 }}>Total</td>
+                <td className="truncate px-1.5 py-0 text-right font-medium tabular-nums" style={{ fontSize: 10, lineHeight: 1 }}>{formatNumNullable(uMetricasTabela.cabecas, 0)}</td>
+                <td className="truncate px-1.5 py-0 text-right font-medium tabular-nums" style={{ fontSize: 10, lineHeight: 1 }}>{formatNumNullable(uMetricasTabela.pesoMedio, 2)}</td>
+                <td className="truncate px-1.5 py-0 text-right font-medium tabular-nums" style={{ fontSize: 10, lineHeight: 1 }}>
                   {formatNumNullable(uMetricasTabela.precoKg, 2)}
                 </td>
-                <td className="px-1.5 py-1 text-right text-foreground tabular-nums italic text-[11px]">{formatMoedaNullable(uMetricasTabela.precoArroba)}</td>
-                <td className="px-1.5 py-1 text-right text-foreground tabular-nums italic text-[11px]">{formatMoedaNullable(uMetricasTabela.valorCabeca)}</td>
-                <td className="px-1.5 py-1 text-right font-bold text-foreground tabular-nums italic text-[11px]">{formatMoedaNullable(uMetricasTabela.valor)}</td>
+                <td className="truncate px-1.5 py-0 text-right font-medium tabular-nums" style={{ fontSize: 10, lineHeight: 1 }}>{formatMoedaNullable(uMetricasTabela.precoArroba)}</td>
+                <td className="truncate px-1.5 py-0 text-right font-medium tabular-nums" style={{ fontSize: 10, lineHeight: 1 }}>{formatMoedaNullable(uMetricasTabela.valorCabeca)}</td>
+                <td className="truncate px-1.5 py-0 text-right font-medium tabular-nums" style={{ fontSize: 10, lineHeight: 1 }}>{formatMoedaNullable(uMetricasTabela.valor)}</td>
               </tr>
             </tfoot>
           </table>
@@ -1439,62 +1690,68 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
             </Card>
           ) : (
           <>
-          <Card className="bg-primary/5 border-primary/20">
-            <CardContent className="p-2.5">
-              <div className="flex gap-3">
-                <div className="shrink-0">
-                  <p className="text-[9px] text-muted-foreground font-medium uppercase tracking-wider">
-                    Valor do Rebanho — {mesLabel}/{anoFiltro}
-                  </p>
-                  {uFazendaNome && (
-                    <p className="text-[9px] text-muted-foreground font-medium">{uFazendaNome}</p>
-                  )}
-                  <p className="text-xl font-extrabold text-foreground leading-tight mt-0.5">{formatMoedaNullable(uMetricas.valor)}</p>
-                  <div className="flex flex-col gap-0 mt-0.5">
-                    <VariacaoBadge valor={uVarValorMes} label="vs mês ant." showLabel />
-                    {uBaseInicialIncompleta
-                      ? <span className="text-[8px] font-semibold text-amber-600 dark:text-amber-400">Base incompleta</span>
-                      : <VariacaoBadge valor={uVarValorAno} label="vs ini. ano" showLabel />
-                    }
-                  </div>
-                </div>
+          {/* ⚠ OS INDICADORES VIRARAM TABELA — VALOR-REBANHO-COMPACTO-02, e é a mesma forma da
+              tabela ao lado: cabeçalho escuro, faixa de título azul-clara, números à direita. Eram
+              um card com número de 20px e um grid de spans, que ocupava o dobro da altura para
+              dizer o mesmo. Os VALORES e as VARIAÇÕES são os mesmos — `uMetricas` e os `uVar*`
+              intactos; o `VariacaoBadge` continua sendo quem pinta o sinal. */}
+          <div className="shrink-0 overflow-hidden rounded border bg-card"
+            style={{ width: COLS_IND_VR.reduce((x, w) => x + w, 0) }}>
+            <div className="truncate px-1.5 py-0 font-medium"
+              style={{ height: 16, lineHeight: '16px', fontSize: 9, backgroundColor: '#E9EFF6', color: '#0C447C' }}>
+              Valor do rebanho · {mesLabel}/{String(anoFiltro).slice(2)}{uFazendaNome ? ` · ${uFazendaNome}` : ''}
+            </div>
+            <div className="flex items-baseline justify-between gap-1 px-1.5" style={{ height: 22 }}>
+              <span className="truncate font-medium tabular-nums" style={{ fontSize: 14 }}>
+                {formatMoedaNullable(uMetricas.valor)}
+              </span>
+              <span className="flex shrink-0 items-baseline gap-1.5" style={{ fontSize: 9 }}>
+                <VariacaoBadge valor={uVarValorMes} label="mês" showLabel />
+                {uBaseInicialIncompleta
+                  ? <span className="font-semibold text-amber-600 dark:text-amber-400">base incompleta</span>
+                  : <VariacaoBadge valor={uVarValorAno} label="ano" showLabel />}
+              </span>
+            </div>
+            <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
+              <colgroup>{COLS_IND_VR.map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>
+              <thead>
+                <tr style={{ height: 16 }}>
+                  {['', 'Valor', 'vs mês', 'vs ini. ano'].map((r, i) => (
+                    <th key={r} className={`truncate px-1.5 py-0 font-semibold text-white ${i === 0 ? 'text-left' : 'text-right'}`}
+                      style={{ backgroundColor: '#2C3E5C', fontSize: 9, lineHeight: 1 }}>{r}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  { label: 'Cabeças', value: formatNumNullable(uMetricas.cabecas, 0), varMes: uVarCabMes, varAno: uVarCabAno },
+                  { label: 'Peso médio', value: uMetricas.pesoMedio === null ? '—' : `${formatNum(uMetricas.pesoMedio, 2)} kg`, varMes: uVarPesoMes, varAno: uVarPesoAno },
+                  { label: 'R$/@', value: formatMoedaNullable(uMetricas.precoArroba), varMes: uVarArrobaMes, varAno: uVarArrobaAno },
+                  { label: 'R$/cab', value: formatMoedaNullable(uMetricas.valorCabeca), varMes: uVarCabValorMes, varAno: uVarCabValorAno },
+                  { label: '@ em estoque', value: formatNumNullable(uMetricas.totalArrobas, 2), varMes: uVarArrobasEstoqueMes, varAno: uVarArrobasEstoqueAno },
+                ].map(ind => (
+                  <tr key={ind.label} style={{ height: 16 }}>
+                    <td className="truncate px-1.5 py-0 text-left text-muted-foreground" style={{ fontSize: 9, lineHeight: 1 }}>{ind.label}</td>
+                    <td className="truncate px-1.5 py-0 text-right tabular-nums" style={{ fontSize: 9, lineHeight: 1 }}>{ind.value}</td>
+                    <td className="truncate px-1.5 py-0 text-right" style={{ fontSize: 9, lineHeight: 1 }}>
+                      <VariacaoBadge valor={ind.varMes} label="" />
+                    </td>
+                    <td className="truncate px-1.5 py-0 text-right" style={{ fontSize: 9, lineHeight: 1 }}>
+                      {/* ⚠ TRAÇO QUANDO A BASE DO ANO ESTÁ INCOMPLETA: sem o 1º de janeiro inteiro
+                          não há contra o que comparar, e um número ali seria comparação com meia
+                          base. É a mesma regra do card Início. */}
+                      {uBaseInicialIncompleta ? '—' : <VariacaoBadge valor={ind.varAno} label="" />}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-                <div className="flex-1 min-w-0 text-[10px] ml-7">
-                  <div className="grid grid-cols-[auto_70px_56px_56px] gap-x-2 items-center">
-                    <span className="text-[8px] text-muted-foreground font-medium">Indicador</span>
-                    <span className="text-[8px] text-muted-foreground font-medium text-right">Valor</span>
-                    <span className="text-[8px] text-muted-foreground font-medium text-right">vs mês</span>
-                    <span className="text-[8px] text-muted-foreground font-medium text-right">vs ini. ano</span>
-
-                    {[
-                      { label: 'Cabeças', value: formatNumNullable(uMetricas.cabecas, 0), varMes: uVarCabMes, varAno: uVarCabAno },
-                      { label: 'Peso médio', value: uMetricas.pesoMedio === null ? '—' : `${formatNum(uMetricas.pesoMedio, 2)} kg`, varMes: uVarPesoMes, varAno: uVarPesoAno },
-                      { label: 'R$/@ médio', value: formatMoedaNullable(uMetricas.precoArroba), varMes: uVarArrobaMes, varAno: uVarArrobaAno },
-                      { label: 'R$/cab', value: formatMoedaNullable(uMetricas.valorCabeca), varMes: uVarCabValorMes, varAno: uVarCabValorAno },
-                      { label: '@s estoque', value: formatNumNullable(uMetricas.totalArrobas, 2), varMes: uVarArrobasEstoqueMes, varAno: uVarArrobasEstoqueAno },
-                    ].map(ind => (
-                      <React.Fragment key={ind.label}>
-                        <span className="text-muted-foreground text-[9px] truncate">{ind.label}</span>
-                        <span className="text-right font-semibold text-foreground tabular-nums">{ind.value}</span>
-                        <span className="text-right"><VariacaoBadge valor={ind.varMes} label="" /></span>
-                        <span className="text-right">
-                          {uBaseInicialIncompleta
-                            ? <span className="text-[7px] text-amber-600 dark:text-amber-400">—</span>
-                            : <VariacaoBadge valor={ind.varAno} label="" />
-                          }
-                        </span>
-                      </React.Fragment>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <div className="flex gap-3">
-            <MiniChart data={uChartDataValor} color="hsl(var(--primary))" title="Valor do Rebanho" unit="currency" />
-            <MiniChart data={uChartDataArrobas} color="hsl(142, 71%, 45%)" title="Arrobas em Estoque" unit="arroba" />
-            <MiniChart data={uChartDataPrecoArroba} color="hsl(217, 91%, 60%)" title="R$/@ Médio" unit="currency" />
+          <div className="flex w-full gap-2">
+            <MiniChart data={uChartDataValor} color="hsl(var(--primary))" title="Valor do rebanho" unit="currency" />
+            <MiniChart data={uChartDataArrobas} color="hsl(142, 71%, 45%)" title="Arrobas em estoque" unit="arroba" />
+            <MiniChart data={uChartDataPrecoArroba} color="hsl(217, 91%, 60%)" title="R$/@ médio" unit="currency" />
           </div>
           </>
           )}
@@ -1521,6 +1778,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           </div>
         )}
       </div>
+      )}
 
       {/* Footer de atalhos do fluxo de fechamento */}
       {(onNavigateToFechamentoPastos || onNavigateToMovimentacoes) && (

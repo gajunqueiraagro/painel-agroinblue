@@ -1011,7 +1011,13 @@ export default function V2Index() {
                quando quem a chamou sabia o ano. É o mesmo idioma de `MapaPastosTab` e
                `AnaliseEconomica`. Ela só é lida na MONTAGEM, e basta — a section remonta. */
             filtroAnoInicial={String(ano)}
-            onBack={() => { const o = voltarParaOrigem(); setSection(o ?? 'rebanho-home'); }}
+            /* ⚠ A SETA SÓ EXISTE QUANDO HÁ ORIGEM PARA VOLTAR — VALOR-REBANHO-COMPACTO-01. O
+               `onBack` era passado SEMPRE, então quem chegava pelo menu via um "voltar" que caía na
+               Home: um caminho que ele não percorreu. É o mesmo idioma que a faixa de pendências já
+               usa logo abaixo. */
+            onBack={origemPendenciaRef.current
+              ? () => { const o = voltarParaOrigem(); setSection(o ?? 'rebanho-home'); }
+              : undefined}
           />
         )}
       </V2ZootWrapper>

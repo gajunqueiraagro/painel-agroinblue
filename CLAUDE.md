@@ -809,6 +809,20 @@ migration e' REGISTRO HISTORICO, nao se reaplica).
   ⚠ E NAO E' DEFEITO DE TELA: o dado do financeiro e' que nao tem a contrapartida da compra
   zootecnica. Quem for consertar decide se o lancamento faltou ou se a compra foi por outro
   caminho (permuta, transferencia entre clientes). Ate' la', "—".
+- VALOR-REBANHO-SELETOR-ANO-01 — MUDANCA DE COMPORTAMENTO registrada em 24/09/2026: o seletor de
+  ano da Evolucao Patrimonial (`ValorRebanhoTab`) passou a aparecer SEMPRE.
+  ⚠ ELE ERA ESCONDIDO por `{!filtroAnoInicial && (<Select .../>)}`: quem chegava pela tela com o ano
+  vindo de fora — hoje o link "Corrigir precos" do modal do DRE — ficava PRESO naquele ano, sem
+  controle nenhum para sair. Justamente quem mais precisa navegar, porque veio conferir um preco e
+  quer ver o ano vizinho.
+  ⚠ NAO HAVIA SEGUNDA FONTE A REMOVER, e isso foi conferido: `anoFiltro` sempre foi o unico estado;
+  a prop `filtroAnoInicial` apenas o SEMEIA na montagem (`useState(prop || ano corrente)` mais um
+  `useEffect` que reage a prop). O que o `{!filtroAnoInicial && ...}` fazia era esconder o
+  CONTROLE, nao evitar conflito de fonte.
+  ⚠ E A SETA DE VOLTAR SEGUIU O CAMINHO INVERSO no mesmo PR: ela aparecia SEMPRE (o V2Index passava
+  `onBack` incondicionalmente), entao quem chegava pelo menu via um "voltar" que caia na Home — um
+  caminho que ele nao percorreu. Agora o `onBack` so' existe quando `origemPendenciaRef` tem origem,
+  que e' o idioma que a faixa de pendencias ja' usava.
 - PK-INI-PONDERADO-01 — `pk_ini` le' `max(preco_kg)` do mes, e deveria ler o PONDERADO POR KG.
   Ela aparece em `fn_dre_pecuaria` e em `fn_dre_pecuaria_patrimonio`, no mesmo formato:
   `select fazenda_id, categoria, max(preco_kg) pk ... where ano_mes = left(p_de,7) group by 1,2`.
