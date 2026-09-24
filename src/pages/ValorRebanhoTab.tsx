@@ -1,4 +1,5 @@
 import { useValorRebanhoInicio, type RebanhoInicio } from '@/hooks/useValorRebanhoInicio';
+import { useCliente } from '@/contexts/ClienteContext';
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -128,7 +129,15 @@ const CHART_LABELS = ['I', 'J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N'
      célula do total é um `<span className="block">`, e um bloco sempre mede a largura do
      container — não o texto dentro dele. Não é corte; é o `Range` medindo a caixa. */
 const COLS_CAT_VR = [74, 50, 64, 64, 72, 80, 110] as const;
-const COLS_IND_VR = [82, 74, 64, 64] as const;
+/**
+ * ⚠ OS INDICADORES OCUPAM A COLUNA, E A COLUNA É O QUE SOBRA — COMPACTO-03. Eram 284px num espaço
+ * maior, e o vazio à direita fazia a tela parecer inacabada. Mas 590 TRANSBORDAVA: o container
+ * mede 920px a 1128 de viewport (medido, não estimado), e 514 da tabela mais 8 de gap deixam 398.
+ * As quatro colunas somam 374 e cabem com folga — na viewport estreita, que é a que aperta.
+ * ⚠ A RÉGUA É A MESMA (pior texto + 8 + 12), agora com fonte de 11px em vez de 9: "R$ 12.255.963,06"
+ * e "@ em estoque" crescem junto com ela.
+ */
+const COLS_IND_VR = [100, 116, 78, 80] as const;
 
 const CHART_FULL_LABELS = ['Inicial', 'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
@@ -422,11 +431,11 @@ function CardInicio({ ano, inicio, carregando, fazendaNome }: {
       ) : !inicio || inicio.origem === 'vazio' ? (
         /* ⚠ VAZIO É TRAÇO E EXPLICAÇÃO, nunca zero: um rebanho de zero cabeças é uma afirmação. */
         <div className="rounded border bg-card px-2 py-6 text-center text-[10px] text-muted-foreground">
-          {fazendaNome === 'Global'
-            ? `O retrato de 1º de janeiro é por FAZENDA: escolha uma no seletor. Somá-las aqui seria
-               uma terceira fonte para o mesmo dado, ao lado do fechamento e do cadastro.`
-            : `Sem fechamento de dezembro/${ano - 1} e sem saldo inicial no cadastro — não há
-               retrato de 1º de janeiro de ${ano} para esta fazenda.`}
+          {/* ⚠ O GLOBAL PASSOU A TER RETRATO no COMPACTO-03 — ele lê a agregação do DRE. A
+              mensagem de "escolha uma fazenda" saiu junto: ela descrevia um limite que não existe
+              mais, e mensagem velha é pior que mensagem nenhuma. */}
+          {`Sem fechamento de dezembro/${ano - 1} e sem saldo inicial no cadastro — não há retrato
+            de 1º de janeiro de ${ano} ${fazendaNome === 'Global' ? 'para este cliente' : 'para esta fazenda'}.`}
         </div>
       ) : (
         <div className="grid gap-2" style={{ gridTemplateColumns: '376px 268px' }}>
@@ -526,23 +535,33 @@ function nomeDaCategoria(cod: string) {
   return CATEGORIAS.find(c => c.value === cod)?.label ?? cod;
 }
 
-function MiniChart({ data, color, title, unit }: { data: { label: string; fullLabel?: string; value: number | null }[]; color: string; title: string; unit?: 'currency' | 'arroba' }) {
+function MiniChart({ data, color, title, unit, serie2, rotulo1, rotulo2 }: {
+  data: { label: string; fullLabel?: string; value: number | null; value2?: number | null }[];
+  color: string; title: string; unit?: 'currency' | 'arroba';
+  /** A segunda linha — cinza tracejada. Só o 4º gráfico a usa. */
+  serie2?: boolean; rotulo1?: string; rotulo2?: string;
+}) {
   // Strip leading null points so the chart renders from the first real value (e.g. Jan)
   const firstRealIdx = data.findIndex(d => d.value !== null);
   const visibleData = firstRealIdx > 0 ? data.slice(firstRealIdx) : data;
 
   return (
-    /* ⚠ 60px DE ALTURA — VALOR-REBANHO-COMPACTO-02. Eram 150, e três deles empurravam a tabela e
-       os indicadores para fora da primeira tela. A série é a MESMA; o que encolheu foi o desenho.
-       ⚠ E O TÍTULO DEIXOU DE SER CAIXA-ALTA MUTED: 9px/500 em navy, como as capas das duas tabelas
-       acima. Três tipografias para três caixas irmãs era o que fazia a tela parecer remendada. */
+    /* ⚠ 140px E LINHA INTEIRA — COMPACTO-03. Eram 60px espremidos ao lado dos indicadores, e uma
+       série de treze pontos em 60px não se lê. Descendo para uma faixa própria, os quatro cabem
+       lado a lado com altura para o eixo aparecer.
+       ⚠ E O EIXO Y GANHOU TRÊS RÓTULOS: sem eles o desenho mostrava a FORMA da curva e escondia a
+       ordem de grandeza — duas telas iguais para 8 e para 15 milhões. */
     <div className="flex-1 min-w-0">
-      <p className="mb-0.5 truncate text-center font-medium" style={{ fontSize: 9, color: '#0C447C' }}>{title}</p>
-      <div className="h-[60px] w-full">
+      <p className="mb-0.5 truncate text-center font-medium" style={{ fontSize: 10, color: '#0C447C' }}>{title}</p>
+      <div className="h-[140px] w-full">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={visibleData} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
-            <XAxis dataKey="label" tick={{ fontSize: 6 }} interval={0} tickLine={false} axisLine={false} />
-            <YAxis hide domain={['auto', 'auto']} />
+            <XAxis dataKey="label" tick={{ fontSize: 7 }} interval={0} tickLine={false} axisLine={false} />
+            <YAxis width={34} tick={{ fontSize: 8 }} tickLine={false} axisLine={false} tickCount={3}
+              domain={['auto', 'auto']}
+              tickFormatter={(v: number) => (Math.abs(v) >= 1_000_000
+                ? `${formatNum(v / 1_000_000, 1)}mi`
+                : Math.abs(v) >= 1000 ? `${formatNum(v / 1000, 0)}k` : formatNum(v, 0))} />
             <RechartsTooltip
               contentStyle={{ fontSize: 9, padding: '2px 6px' }}
               labelStyle={{ fontSize: 8 }}
@@ -553,15 +572,33 @@ function MiniChart({ data, color, title, unit }: { data: { label: string; fullLa
                 return [formatNum(v, 1), ''];
               }}
             />
-            <Line type="monotone" dataKey="value" stroke={color} strokeWidth={1.2} dot={{ r: 1.5, fill: color, strokeWidth: 0 }} activeDot={{ r: 3 }} connectNulls={false} />
+            <Line type="monotone" dataKey="value" stroke={color} strokeWidth={1.5} dot={{ r: 2, fill: color, strokeWidth: 0 }} activeDot={{ r: 3.5 }} connectNulls={false} />
+            {/* ⚠ A TRACEJADA É O MESMO REBANHO AO PREÇO DE JANEIRO: a distância até a cheia é o
+                efeito de mercado acumulado, e ela sozinha é a produção. */}
+            {serie2 && (
+              <Line type="monotone" dataKey="value2" stroke="#8A8880" strokeWidth={1.5}
+                strokeDasharray="4 3" dot={{ r: 2, fill: '#8A8880', strokeWidth: 0 }}
+                activeDot={{ r: 3.5 }} connectNulls={false} />
+            )}
           </LineChart>
         </ResponsiveContainer>
       </div>
+      {serie2 && (
+        <div className="flex items-center justify-center gap-3" style={{ fontSize: 8 }}>
+          <span className="flex items-center gap-1">
+            <span className="inline-block" style={{ width: 10, height: 2, backgroundColor: color }} />{rotulo1}
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block" style={{ width: 10, height: 0, borderTop: '2px dashed #8A8880' }} />{rotulo2}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
 
 export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAnoInicial, filtroMesInicial, onNavigateToFechamentoPastos, onNavigateToMovimentacoes }: Props) {
+  const { clienteAtual } = useCliente();
   const { fazendaAtual, isGlobal, fazendas } = useFazenda();
   const { bloqueado } = useRedirecionarPecuaria();
   const { categorias } = usePastos();
@@ -603,7 +640,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const anoMes = `${anoFiltro}-${mesFiltro}`;
   /* ⚠ SEMPRE CHAMADO, nunca dentro de `if`: hook condicional derruba a tela (check:hooks). Quando o
      card está fechado ele lê e ninguém olha — é uma consulta por ano, não por clique. */
-  const { inicio, carregando: carregandoInicio } = useValorRebanhoInicio(Number(anoFiltro), fazendaId);
+  const { inicio, carregando: carregandoInicio } = useValorRebanhoInicio(Number(anoFiltro), fazendaId, clienteAtual?.id);
   const isDezembro = mesFiltro === '12';
 
   // Regra temporal: mês atual, passado ou futuro
@@ -1125,6 +1162,44 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
       return metrics?.precoArroba ?? null;
     });
   }, [buildChartData, anoFiltro, mesNum, metricasSelecionado.precoArroba, buildFrozenMetrics, metricasDezBase]);
+
+  /**
+   * O QUARTO GRÁFICO — o rebanho a preço de JANEIRO, contra o real.
+   *
+   * ⚠ A DISTÂNCIA ENTRE AS DUAS LINHAS É O EFEITO DE MERCADO ACUMULADO, e a tracejada sozinha é a
+   * PRODUÇÃO: o mesmo rebanho de cada mês, sempre ao preço do começo do ano. É a decomposição que
+   * o DRE faz em duas linhas, desenhada.
+   *
+   * ⚠ CONTA DE EXIBIÇÃO, SEM CONSULTA NOVA: `historicoDetalhadoPorMes` já traz os doze meses por
+   * categoria (é o que alimenta os MiniChart de hoje), e o preço de janeiro sai do próprio mês 01.
+   * Uma segunda consulta de preço abriria a porta para dois preços de janeiro na mesma tela.
+   *
+   * ⚠ MÊS SEM SNAPSHOT DETALHADO VIRA PONTO NULO, nunca zero: o detalhado por categoria só existe
+   * onde houve fechamento com itens, e o `connectNulls={false}` já corta a linha ali. Inventar o
+   * ponto afirmaria um rebanho que a tela não tem como saber.
+   */
+  const chartDataPrecoJaneiro = useMemo(() => {
+    const itensDe = (mes: number) => historicoDetalhadoPorMes[`${anoFiltro}-${String(mes).padStart(2, '0')}`] ?? [];
+    const precoJan = new Map<string, number>();
+    for (const it of itensDe(1)) {
+      const q = Number(it.quantidade) || 0;
+      const pm = Number(it.peso_medio_kg) || 0;
+      const v = Number(it.valor_total_categoria) || 0;
+      if (q > 0 && pm > 0) precoJan.set(String(it.categoria), v / (q * pm));
+    }
+    return buildChartData(mes => {
+      if (mes === 0 || precoJan.size === 0) return null;
+      const itens = itensDe(mes);
+      if (itens.length === 0) return null;
+      let total = 0;
+      for (const it of itens) {
+        const pk = precoJan.get(String(it.categoria));
+        if (pk == null) continue;
+        total += (Number(it.quantidade) || 0) * (Number(it.peso_medio_kg) || 0) * pk;
+      }
+      return total > 0 ? total : null;
+    });
+  }, [buildChartData, historicoDetalhadoPorMes, anoFiltro]);
 
   const handlePrecoChange = (codigo: string, value: string) => {
     const sanitized = value.replace(/[^0-9.,]/g, '');
@@ -1701,8 +1776,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
               style={{ height: 16, lineHeight: '16px', fontSize: 9, backgroundColor: '#E9EFF6', color: '#0C447C' }}>
               Valor do rebanho · {mesLabel}/{String(anoFiltro).slice(2)}{uFazendaNome ? ` · ${uFazendaNome}` : ''}
             </div>
-            <div className="flex items-baseline justify-between gap-1 px-1.5" style={{ height: 22 }}>
-              <span className="truncate font-medium tabular-nums" style={{ fontSize: 14 }}>
+            <div className="flex items-baseline justify-between gap-1 px-1.5" style={{ height: 24 }}>
+              <span className="truncate font-medium tabular-nums" style={{ fontSize: 16 }}>
                 {formatMoedaNullable(uMetricas.valor)}
               </span>
               <span className="flex shrink-0 items-baseline gap-1.5" style={{ fontSize: 9 }}>
@@ -1730,13 +1805,13 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                   { label: 'R$/cab', value: formatMoedaNullable(uMetricas.valorCabeca), varMes: uVarCabValorMes, varAno: uVarCabValorAno },
                   { label: '@ em estoque', value: formatNumNullable(uMetricas.totalArrobas, 2), varMes: uVarArrobasEstoqueMes, varAno: uVarArrobasEstoqueAno },
                 ].map(ind => (
-                  <tr key={ind.label} style={{ height: 16 }}>
-                    <td className="truncate px-1.5 py-0 text-left text-muted-foreground" style={{ fontSize: 9, lineHeight: 1 }}>{ind.label}</td>
-                    <td className="truncate px-1.5 py-0 text-right tabular-nums" style={{ fontSize: 9, lineHeight: 1 }}>{ind.value}</td>
-                    <td className="truncate px-1.5 py-0 text-right" style={{ fontSize: 9, lineHeight: 1 }}>
+                  <tr key={ind.label} style={{ height: 18 }}>
+                    <td className="truncate px-1.5 py-0 text-left text-muted-foreground" style={{ fontSize: 11, lineHeight: 1 }}>{ind.label}</td>
+                    <td className="truncate px-1.5 py-0 text-right tabular-nums" style={{ fontSize: 11, lineHeight: 1 }}>{ind.value}</td>
+                    <td className="truncate px-1.5 py-0 text-right" style={{ fontSize: 11, lineHeight: 1 }}>
                       <VariacaoBadge valor={ind.varMes} label="" />
                     </td>
-                    <td className="truncate px-1.5 py-0 text-right" style={{ fontSize: 9, lineHeight: 1 }}>
+                    <td className="truncate px-1.5 py-0 text-right" style={{ fontSize: 11, lineHeight: 1 }}>
                       {/* ⚠ TRAÇO QUANDO A BASE DO ANO ESTÁ INCOMPLETA: sem o 1º de janeiro inteiro
                           não há contra o que comparar, e um número ali seria comparação com meia
                           base. É a mesma regra do card Início. */}
@@ -1748,11 +1823,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
             </table>
           </div>
 
-          <div className="flex w-full gap-2">
-            <MiniChart data={uChartDataValor} color="hsl(var(--primary))" title="Valor do rebanho" unit="currency" />
-            <MiniChart data={uChartDataArrobas} color="hsl(142, 71%, 45%)" title="Arrobas em estoque" unit="arroba" />
-            <MiniChart data={uChartDataPrecoArroba} color="hsl(217, 91%, 60%)" title="R$/@ médio" unit="currency" />
-          </div>
+          {/* ⚠ OS GRÁFICOS SAÍRAM DE DENTRO DO GRID — COMPACTO-03: aqui fica só a marca do lugar,
+              e a faixa deles é irmã do grid, logo abaixo. Ver o bloco `graficos`. */}
           </>
           )}
         </div>
@@ -1778,6 +1850,20 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           </div>
         )}
       </div>
+      )}
+
+      {/* ⚠ A FAIXA DOS GRÁFICOS É IRMÃ DO GRID, não filha dos indicadores — COMPACTO-03. Ela some
+          inteira no Início: uma série de um ponto não é uma série, e o corpo não se move porque
+          nada dela tinha altura reservada. */}
+      {!verInicio && !uAvisoSnapshotIncompleto && (
+        <div className="flex w-full gap-2">
+          <MiniChart data={uChartDataValor} color="hsl(var(--primary))" title="Valor do rebanho (R$)" unit="currency" />
+          <MiniChart data={uChartDataArrobas} color="hsl(142, 71%, 45%)" title="Arrobas em estoque" unit="arroba" />
+          <MiniChart data={uChartDataPrecoArroba} color="hsl(217, 91%, 60%)" title="R$/@ médio" unit="currency" />
+          <MiniChart title="Valor: real × a preço de janeiro" unit="currency"
+            color="#0C447C" serie2 rotulo1="real" rotulo2="a preço de janeiro"
+            data={uChartDataValor.map((d, i) => ({ ...d, value2: chartDataPrecoJaneiro[i]?.value ?? null }))} />
+        </div>
       )}
 
       {/* Footer de atalhos do fluxo de fechamento */}

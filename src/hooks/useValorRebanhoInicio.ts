@@ -40,14 +40,66 @@ export interface RebanhoInicio {
 const VAZIO = (mesBase: string): RebanhoInicio =>
   ({ categorias: [], cabecas: 0, arrobas: 0, valor: 0, origem: 'vazio', mesBase });
 
-export function useValorRebanhoInicio(ano: number, fazendaId: string | undefined) {
+export function useValorRebanhoInicio(
+  ano: number,
+  fazendaId: string | undefined,
+  clienteId?: string | null,
+) {
   const [dados, setDados] = useState<RebanhoInicio | null>(null);
   const [carregando, setCarregando] = useState(false);
 
   useEffect(() => {
-    /* ⚠ O GLOBAL NÃO TEM RETRATO PRÓPRIO: `__global__` não é fazenda, e somar as fazendas aqui
-       seria uma terceira fonte. O card fica vazio e a faixa diz. */
-    if (!fazendaId || fazendaId === '__global__' || !Number.isFinite(ano)) { setDados(null); return; }
+    if (!Number.isFinite(ano)) { setDados(null); return; }
+    /**
+     * ⚠ O GLOBAL LÊ A FONTE DO DRE, NÃO SOMA AS FAZENDAS AQUI — COMPACTO-03. Somar seria a
+     * terceira versão do mesmo 1º de janeiro, ao lado do fechamento e do cache. A
+     * `fn_dre_pecuaria_patrimonio` com `p_fazenda` nulo já agrega o cliente, e é dela que o modal
+     * da variação e o DRE tiram os números — medido no SR 2021: 3.607 cab, 35.201,84 @,
+     * R$ 8.643.826,74.
+     * ⚠ A QUEBRA POR CATEGORIA VEM DE `categorias[]`, não de `movimentos.inicio`: medido, este
+     * traz só `cabecas`, `arrobas` e `valor` — é o total. As duas leituras são do MESMO payload.
+     */
+    if (fazendaId === '__global__') {
+      if (!clienteId) { setDados(null); return; }
+      let vivoG = true;
+      setCarregando(true);
+      (async () => {
+        try {
+          const { data } = await (supabase as any).rpc('fn_dre_pecuaria_patrimonio', {
+            p_cliente: clienteId, p_fazenda: null,
+            p_de: `${ano}-01`, p_ate: `${ano}-01`,
+          });
+          if (!vivoG) return;
+          const o = (data ?? {}) as Record<string, unknown>;
+          const cats = Array.isArray(o.categorias) ? o.categorias : [];
+          const mov = (o.movimentos ?? {}) as Record<string, unknown>;
+          const ini = (mov.inicio ?? {}) as Record<string, unknown>;
+          const linhas: CategoriaInicio[] = cats.map((x: Record<string, unknown>) => {
+            const q = Number(x.q0) || 0;
+            const pm = x.pm0 == null ? null : Number(x.pm0);
+            const pk = x.pk0 == null ? null : Number(x.pk0);
+            return { categoria: String(x.categoria), quantidade: q, pesoMedioKg: pm, precoKg: pk,
+              valor: Number(x.v0) || 0 };
+          }).filter((l: CategoriaInicio) => l.quantidade !== 0);
+          if (!vivoG) return;
+          setDados(linhas.length === 0 && !Number(ini.cabecas) ? VAZIO(`${ano - 1}-12`) : {
+            categorias: linhas.sort((a, b) => a.categoria.localeCompare(b.categoria)),
+            /* ⚠ O TOTAL VEM DE `movimentos.inicio`, não da soma das linhas: é o número que o DRE
+               mostra, e recalcular abriria divergência no primeiro arredondamento. */
+            cabecas: Number(ini.cabecas) || 0,
+            arrobas: Number(ini.arrobas) || 0,
+            valor: Number(ini.valor) || 0,
+            origem: 'fechamento', mesBase: `${ano - 1}-12`,
+          });
+        } catch {
+          if (vivoG) setDados(VAZIO(`${ano - 1}-12`));
+        } finally {
+          if (vivoG) setCarregando(false);
+        }
+      })();
+      return () => { vivoG = false; };
+    }
+    if (!fazendaId) { setDados(null); return; }
     let vivo = true;
     const dez = `${ano - 1}-12`;
     const jan = `${ano}-01`;
@@ -104,7 +156,7 @@ export function useValorRebanhoInicio(ano: number, fazendaId: string | undefined
       }
     })();
     return () => { vivo = false; };
-  }, [ano, fazendaId]);
+  }, [ano, fazendaId, clienteId]);
 
   return { inicio: dados, carregando };
 }
