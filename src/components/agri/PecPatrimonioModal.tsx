@@ -24,7 +24,7 @@
  * ⚠ NÃO HÁ ABA "LANÇAMENTOS", e isso é dado, não omissão: patrimônio não tem lançamento. Ele sai do
  * fechamento do rebanho — a foto do mês.
  */
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { X, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -141,72 +141,40 @@ function somar(cs: readonly Cat[], nome: string): Cat {
 }
 
 /**
- * AS COLUNAS DE CADA ABA — em proporção, para nada cortar nem rolar na horizontal.
+ * A TABELA DE CATEGORIAS — mock v17c.
  *
- * ⚠ `bloco` abre um bloco de leitura, e o divisor de 1px o separa do anterior. Os blocos são
- * "quantas cabeças", "quantas arrobas", "a que preço" e "quanto vale": cada um é uma pergunta, e o
- * par início/fim dentro dele é a resposta.
+ * ⚠ QUATRO PARES, E A MESMA TABELA NAS TRÊS ABAS. Cada par é uma pergunta — quantas cabeças,
+ * quantas arrobas, a que preço, quanto vale — e dentro dele as duas pontas respondem. Até o fix5 a
+ * aba Produção tinha UMA coluna de preço e a Mercado nenhuma coluna de início, pelo princípio de
+ * "nenhuma coluna de ficção"; agora as três mostram as duas pontas, e o que distingue as abas é a
+ * leitura do topo e a nota do rodapé, não o recorte da tabela.
+ *
+ * ⚠ O CABEÇALHO TEM DUAS LINHAS PORQUE "Cab dez/20" NÃO CABE EM 52px. Repetir o mês em cada par é
+ * o que permite as colunas estreitas: o nome da grandeza sobe para a linha de cima e vale para as
+ * duas debaixo dela.
+ *
+ * ⚠ E A DIFERENÇA MORA SOB A COLUNA DE FIM, não numa coluna própria: ela é a leitura da segunda
+ * ponta contra a primeira, e uma quinta coluna por par dobraria a largura para dizer o que a
+ * sublinha diz no lugar certo.
  */
-interface Col { chave: string; rot: string; pc: number; bloco?: boolean }
-/** ⚠ SÓ AS TRÊS DE CATEGORIA TÊM COLUNA: as duas da ponte desenham a tabela delas. */
-type AbaCat = 'resumo' | 'producao' | 'mercado';
-const COLS: Record<AbaCat, readonly Col[]> = {
-  resumo: [
-    { chave: 'nome', rot: '', pc: 17 },
-    { chave: 'q0', rot: 'Cab. início', pc: 8, bloco: true }, { chave: 'q1', rot: 'Cab. fim', pc: 8 },
-    { chave: 'at0', rot: '@ início', pc: 10, bloco: true }, { chave: 'at1', rot: '@ fim', pc: 10 },
-    { chave: 'pk0', rot: 'R$/@ início', pc: 9, bloco: true }, { chave: 'pk1', rot: 'R$/@ fim', pc: 9 },
-    { chave: 'v0', rot: 'Valor início', pc: 14, bloco: true }, { chave: 'v1p1', rot: 'Valor fim', pc: 15 },
-  ],
-  /* ⚠ UM PREÇO SÓ, e é o do início: na Produção o valor muda apenas pelas arrobas. Uma segunda
-     coluna de preço repetiria o mesmo número e voltaria a ser ficção. */
-  producao: [
-    { chave: 'nome', rot: '', pc: 19 },
-    { chave: 'q0', rot: 'Cab. início', pc: 9, bloco: true }, { chave: 'q1', rot: 'Cab. fim', pc: 9 },
-    { chave: 'at0', rot: '@ início', pc: 11, bloco: true }, { chave: 'at1', rot: '@ fim', pc: 11 },
-    { chave: 'pk0', rot: 'R$/@ do início', pc: 11, bloco: true },
-    { chave: 'v0', rot: 'Valor início', pc: 15, bloco: true }, { chave: 'v1p0', rot: 'Valor fim', pc: 15 },
-  ],
-  /* ⚠ SÓ NÚMERO DE FIM em cabeça e arroba: o rebanho do Mercado é um só, o do fim. */
-  mercado: [
-    { chave: 'nome', rot: '', pc: 21 },
-    { chave: 'q1', rot: 'Cabeças fim', pc: 11, bloco: true },
-    { chave: 'at1', rot: 'Arrobas fim', pc: 12, bloco: true },
-    { chave: 'pk0', rot: 'R$/@ início', pc: 11, bloco: true }, { chave: 'pk1', rot: 'R$/@ fim', pc: 11 },
-    { chave: 'v1p0', rot: 'Valor a pr. início', pc: 17, bloco: true },
-    { chave: 'v1p1', rot: 'Valor a pr. fim', pc: 17 },
-  ],
-};
-
-/** Quais colunas ganham Variação e % — só as que de fato variam naquela aba. */
-const VARIAM: Record<AbaCat, ReadonlySet<string>> = {
-  resumo: new Set(['q1', 'at1', 'pk1', 'v1p1']),
-  producao: new Set(['q1', 'at1', 'v1p0']),
-  mercado: new Set(['pk1', 'v1p1']),
-};
-
-const valorDe = (c: Cat, chave: string): number | null => {
-  switch (chave) {
-    case 'q0': return c.q0; case 'q1': return c.q1;
-    case 'at0': return c.at0; case 'at1': return c.at1;
-    case 'pk0': return c.pk0; case 'pk1': return c.pk1;
-    case 'v0': return c.v0; case 'v1p0': return c.v1p0; case 'v1p1': return c.v1p1;
-    default: return null;
-  }
-};
-const casasDe = (chave: string) => (chave.startsWith('q') ? 0 : 2);
-
-/** A variação de uma coluna: o par início→fim daquela aba. */
-function variacaoDe(t: Cat, chave: string, aba: AbaCat): { d: number | null; base: number | null } {
-  if (chave === 'q1') return { d: t.q1 - t.q0, base: t.q0 };
-  if (chave === 'at1') return { d: t.at1 - t.at0, base: t.at0 };
-  if (chave === 'pk1') return { d: t.pk1 == null || t.pk0 == null ? null : t.pk1 - t.pk0, base: t.pk0 };
-  if (chave === 'v1p0') return { d: t.dProd, base: t.v0 };
-  if (chave === 'v1p1') {
-    return aba === 'mercado' ? { d: t.dMerc, base: t.v1p0 } : { d: t.dTotal, base: t.v0 };
-  }
-  return { d: null, base: null };
-}
+/**
+ * ⚠ DUAS LARGURAS SAÍRAM DO MOCK, E A SOMA DE 640 FICOU. Medido célula a célula com um `Range`
+ * contra o `clientWidth` menos o padding, com os grupos abertos: o rótulo de 88px CORTAVA "Total
+ * do rebanho" — 80,7px de texto numa caixa de 76, faltando 4,6. As duas colunas de Valor, ao
+ * contrário, sobravam 37,3 e 30,8. Os 14px foram de onde sobrava para onde faltava, e o total
+ * continua 640. Menor folga depois: 3,0px, na coluna de cabeças do fim ("+15,7 %").
+ */
+const COLS_CAT = [102, 52, 52, 66, 66, 58, 58, 93, 93] as const;
+const PARES = [
+  { rot: 'Cabeças', casas: 0 as const, a: (c: Cat) => c.q0, b: (c: Cat) => c.q1 },
+  { rot: 'Arrobas', casas: 0 as const, a: (c: Cat) => c.at0, b: (c: Cat) => c.at1 },
+  { rot: 'R$/@', casas: 2 as const, a: (c: Cat) => c.pk0, b: (c: Cat) => c.pk1 },
+  { rot: 'Valor', casas: 0 as const, a: (c: Cat) => c.v0, b: (c: Cat) => c.v1p1 },
+];
+const BORDA_PAR = '1px solid #BEBCB4';
+const FUNDO_TOTAL = '#D6D4CC';
+const FUNDO_GRUPO = '#E8E6DF';
+const ZEBRA_CAT = '#F5F4F0';
 
 /**
  * A TABELA DO TOPO — mock v16b.
@@ -243,7 +211,8 @@ const COLS_TOPO = [70, 72, 78, 78, 62, 8, 98, 104, 78, 78] as const;
 const H_CAP = 16, H_CAB = 16, H_LIN = 16;
 
 export function PecPatrimonioModal({
-  aberto, fazendaNome, clienteNome, qual, patrimonio, carregando, periodo, reposicao, onFechar,
+  aberto, fazendaNome, clienteNome, qual, patrimonio, carregando, periodo, reposicao,
+  onFechar, onCorrigirPrecos,
 }: {
   aberto: boolean;
   fazendaNome: string;
@@ -269,11 +238,36 @@ export function PecPatrimonioModal({
    */
   reposicao: number | null;
   onFechar: () => void;
+  /**
+   * "CORRIGIR PREÇOS DE {ano}" — fecha o modal e vai para a tela Valor do Rebanho naquele ano.
+   *
+   * ⚠ O ANO É O DE P1, inclusive em período de safra: a tela de destino filtra por ANO CIVIL e o
+   * preço que o operador vem corrigir é o do FIM — o que move o efeito de mercado. Passar o de P0
+   * o levaria a editar o ano que ele acabou de ver como ponto de partida.
+   * ⚠ A FAZENDA NÃO MUDA: ela vem do contexto global (o seletor da sidebar), e trocá-la aqui
+   * deixaria a aplicação inteira noutra fazenda depois que ele voltasse.
+   * ⚠ OPCIONAL: sem o callback o link não aparece. Quem monta o modal fora do DRE não fica com um
+   * atalho que não leva a lugar nenhum.
+   */
+  onCorrigirPrecos?: (ano: number) => void;
 }) {
   const [aba, setAba] = useState<Aba>(qual === 'ponte' ? 'movimentos' : 'resumo');
+  /**
+   * OS GRUPOS ABREM FECHADOS, e o estado é do MODAL, não da URL.
+   *
+   * ⚠ FECHADO PORQUE A PERGUNTA É O TOTAL: o operador vem da grade querendo saber quanto o rebanho
+   * variou, não quanto cada uma das nove categorias variou. Abrir tudo faria a resposta nascer
+   * empurrada para fora da tela pela decomposição.
+   * ⚠ E FORA DA URL de propósito: a URL é do que se LINKA (o período, a vista), e "eu tinha aberto
+   * Adultos" não é um estado que alguém manda para outra pessoa. Trocar de aba não perde.
+   */
+  const [abertos, setAbertos] = useState<Record<string, boolean>>({});
 
   const p0 = patrimonio?.p0 ?? '';
   const p1 = patrimonio?.p1 ?? '';
+  /* ⚠ O ANO SAI DE P1 E SÓ EXISTE SE P1 EXISTIR: sem o payload não há ano a corrigir, e o link
+     some em vez de apontar para o ano corrente, que não é o do modal. */
+  const anoP1 = /^\d{4}-\d{2}$/.test(p1) ? Number(p1.slice(0, 4)) : null;
   const cats = useMemo(() => montar(patrimonio?.categorias ?? []), [patrimonio]);
   const jovens = useMemo(() => cats.filter(c => c.jovem), [cats]);
   const adultos = useMemo(() => cats.filter(c => !c.jovem), [cats]);
@@ -281,11 +275,6 @@ export function PecPatrimonioModal({
   const tAdu = useMemo(() => somar(adultos, 'Total adultos'), [adultos]);
   const T = useMemo(() => somar(cats, 'Total do rebanho'), [cats]);
 
-  /* ⚠ A ABA MANDA NAS COLUNAS, e as duas da ponte não têm coluna de categoria nenhuma: elas caem
-     no conjunto do Resumo só para o `cols` existir, e o bloco delas nem chega a montar a tabela. */
-  const abaDeCategoria: AbaCat = aba === 'movimentos' || aba === 'grafico' ? 'resumo' : aba;
-  const cols = COLS[abaDeCategoria];
-  const variam = VARIAM[abaDeCategoria];
   const dAt = T.at1 - T.at0;
   /* ⚠ AS VARIAÇÕES POR GRUPO SAÍRAM COM OS TOPOS DE Produção E Mercado (mock v16b): elas só
      alimentavam aqueles dois cards. Os grupos continuam na TABELA, com os totais próprios. */
@@ -375,74 +364,87 @@ export function PecPatrimonioModal({
       : 'O rebanho do fim, valorado ao preço do início e ao do fim. A diferença é só o preço.';
 
 
-  /** As três linhas de fecho de um grupo: o total, a variação e o %. */
-  const linhasDeTotal = (t: Cat, fundo: string, fecha: boolean) => ([
-    <tr key={`${t.cod}:t`} style={{ backgroundColor: fundo, height: 22, borderTop: '1px solid #9a988f' }}>
-      {cols.map(c => (
-        <td key={c.chave} title={c.chave === 'nome' ? t.nome : undefined}
-          className={cn('truncate px-1.5 py-0 text-[11px] font-medium leading-[1.3] tabular-nums',
-            c.chave === 'nome' ? 'text-left' : 'text-right')}
-          style={{ borderLeft: c.bloco ? DIVISOR : undefined }}>
-          {c.chave === 'nome' ? t.nome : n(valorDe(t, c.chave), casasDe(c.chave))}
-        </td>
-      ))}
-    </tr>,
-    <tr key={`${t.cod}:v`} style={{ backgroundColor: fundo, height: 18 }}>
-      {cols.map(c => {
-        const { d } = variacaoDe(t, c.chave, abaDeCategoria);
-        const mostra = variam.has(c.chave);
-        return (
-          <td key={c.chave}
-            className={cn('truncate px-1.5 py-0 text-[10px] leading-none tabular-nums',
-              c.chave === 'nome' ? 'pl-3.5 text-left text-muted-foreground' : 'text-right',
-              mostra && corSinal(d))}
-            style={{ borderLeft: c.bloco ? DIVISOR : undefined }}>
-            {c.chave === 'nome' ? 'Variação' : mostra ? comSinal(d, casasDe(c.chave)) : ''}
-          </td>
-        );
+  /* ─── A TABELA DE CATEGORIAS — mock v17c ─── */
+  /** Uma célula de valor: a borda do par vem no `bl`. */
+  const cCat = (txt: string, bl: boolean, fs: number, forte: boolean, cor?: string) => (
+    <td className={cn('truncate px-1.5 py-0 text-right tabular-nums', forte && 'font-medium', cor)}
+      style={{ fontSize: fs, lineHeight: 1, borderLeft: bl ? BORDA_PAR : undefined }}>{txt}</td>
+  );
+
+  /**
+   * AS DUAS SUBLINHAS DE UM TOTAL — a diferença e o percentual, sob a coluna de FIM de cada par.
+   *
+   * ⚠ A CÉLULA DE INÍCIO FICA VAZIA de propósito: a diferença é a leitura da segunda ponta contra
+   * a primeira, e repeti-la nas duas colunas diria que cada uma varia por si.
+   */
+  const sublinhas = (t: Cat, fundo: string) => ([
+    <tr key={`${t.cod}:d`} style={{ height: 12, backgroundColor: fundo }}>
+      <td className="truncate py-0 pl-2 pr-1.5 text-left text-muted-foreground"
+        style={{ fontSize: 9, lineHeight: 1 }}>Dif.</td>
+      {PARES.flatMap(p => {
+        const x = p.a(t); const y = p.b(t);
+        const d = x == null || y == null ? null : y - x;
+        return [
+          <td key={`${p.rot}:a`} style={{ borderLeft: BORDA_PAR }} />,
+          cCat(comSinal(d, p.casas), false, 9, false, corSinal(d)),
+        ];
       })}
     </tr>,
-    <tr key={`${t.cod}:p`}
-      style={{ backgroundColor: fundo, height: 18, borderBottom: fecha ? '1px solid #9a988f' : undefined }}>
-      {cols.map(c => {
-        const { d, base } = variacaoDe(t, c.chave, abaDeCategoria);
-        const mostra = variam.has(c.chave);
-        return (
-          <td key={c.chave}
-            className={cn('truncate px-1.5 py-0 text-[10px] leading-none tabular-nums',
-              c.chave === 'nome' ? 'pl-3.5 text-left text-muted-foreground' : 'text-right',
-              mostra && corSinal(d))}
-            style={{ borderLeft: c.bloco ? DIVISOR : undefined }}>
-            {c.chave === 'nome' ? '%' : mostra ? pctDe(d, base) : ''}
-          </td>
-        );
+    <tr key={`${t.cod}:p`} style={{ height: 12, backgroundColor: fundo }}>
+      <td className="truncate py-0 pl-2 pr-1.5 text-left text-muted-foreground"
+        style={{ fontSize: 9, lineHeight: 1 }}>Dif. %</td>
+      {PARES.flatMap(p => {
+        const x = p.a(t); const y = p.b(t);
+        const d = x == null || y == null ? null : y - x;
+        return [
+          <td key={`${p.rot}:a`} style={{ borderLeft: BORDA_PAR }} />,
+          cCat(pctDe(d, x), false, 9, false, corSinal(d)),
+        ];
       })}
     </tr>,
   ]);
 
-  /** ⚠ GRUPO SEM CATEGORIA SOME INTEIRO — faixa, linhas e total. Um bloco de zeros não responde nada. */
-  const bloco = (titulo: string, lista: readonly Cat[], total: Cat) => {
+  /** A linha de um total (o rebanho inteiro ou um grupo), com as duas sublinhas. */
+  const linhaTotal = (t: Cat, fundo: string, grupo?: { aberto: boolean; alternar: () => void }) => ([
+    <tr key={`${t.cod}:t`} style={{ height: 16, backgroundColor: fundo }}
+      className={grupo ? 'cursor-pointer' : undefined}
+      onClick={grupo?.alternar}>
+      <td className="truncate px-1.5 py-0 text-left font-medium" style={{ fontSize: 10, lineHeight: 1 }}>
+        {grupo && (
+          <span className="mr-0.5 inline-block align-[-1px]" style={{ fontSize: 8 }} aria-hidden>
+            {grupo.aberto ? '▾' : '▸'}
+          </span>
+        )}
+        {t.nome}
+      </td>
+      {PARES.flatMap(p => [
+        cCat(n(p.a(t), p.casas), true, 10, true),
+        cCat(n(p.b(t), p.casas), false, 10, true),
+      ])}
+    </tr>,
+    ...sublinhas(t, fundo),
+  ]);
+
+  /** ⚠ GRUPO SEM CATEGORIA SOME INTEIRO. Um bloco de zeros não responde pergunta nenhuma. */
+  const grupoDe = (titulo: string, lista: readonly Cat[], total: Cat) => {
     if (lista.length === 0) return null;
+    const aberto = abertos[titulo] ?? false;
     return (
-      <>
-        <tr style={{ backgroundColor: AZUL_FAIXA, height: 18 }}>
-          <td colSpan={cols.length} className="truncate px-1.5 py-0 text-[11px] font-medium leading-none"
-            style={{ color: NAVY }}>{titulo}</td>
-        </tr>
-        {lista.map((c, i) => (
-          <tr key={c.cod} style={{ backgroundColor: i % 2 === 1 ? ZEBRA : undefined, height: 22 }}>
-            {cols.map(col => (
-              <td key={col.chave} title={col.chave === 'nome' ? c.nome : undefined}
-                className={cn('truncate px-1.5 py-0 text-[11px] leading-[1.3] tabular-nums',
-                  col.chave === 'nome' ? 'text-left' : 'text-right')}
-                style={{ borderLeft: col.bloco ? DIVISOR : undefined }}>
-                {col.chave === 'nome' ? c.nome : n(valorDe(c, col.chave), casasDe(col.chave))}
-              </td>
-            ))}
+      <Fragment key={titulo}>
+        {linhaTotal({ ...total, nome: titulo }, FUNDO_GRUPO, {
+          aberto, alternar: () => setAbertos(a => ({ ...a, [titulo]: !aberto })),
+        })}
+        {aberto && lista.map((c, i) => (
+          <tr key={c.cod} style={{ height: 13, backgroundColor: i % 2 === 0 ? ZEBRA_CAT : undefined }}>
+            <td className="truncate py-0 pr-1.5 text-left" title={c.nome}
+              style={{ fontSize: 9, lineHeight: 1, paddingLeft: 16 }}>{c.nome}</td>
+            {PARES.flatMap(p => [
+              cCat(n(p.a(c), p.casas), true, 9, false),
+              cCat(n(p.b(c), p.casas), false, 9, false),
+            ])}
           </tr>
         ))}
-        {linhasDeTotal(total, AZUL_CLARO, false)}
-      </>
+      </Fragment>
     );
   };
 
@@ -467,6 +469,16 @@ export function PecPatrimonioModal({
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-1">
+            {/* ⚠ À ESQUERDA DO SEGMENTADO, e é o lugar certo: ele não é uma aba (não mostra outra
+                leitura do mesmo número) — é uma saída da tela. Pô-lo entre as abas o faria parecer
+                uma sexta, e o operador clicaria esperando voltar. */}
+            {onCorrigirPrecos && anoP1 != null && (
+              <button type="button" onClick={() => { onFechar(); onCorrigirPrecos(anoP1); }}
+                className="mr-1 shrink-0 text-[10px] underline underline-offset-2 hover:opacity-80"
+                style={{ color: '#B5D4F4' }}>
+                Corrigir preços de {anoP1}
+              </button>
+            )}
             {ABAS.map(([v, r]) => (
               <button key={v} type="button" onClick={() => setAba(v)}
                 className={cn('rounded px-2 py-0.5 text-[11px] font-medium leading-[18px] transition-colors',
@@ -510,30 +522,53 @@ export function PecPatrimonioModal({
                   os quatro números que a caminhada agora mostra em coluna, um embaixo do outro. Duas
                   frases e uma tabela para a mesma conta era o que fazia o modal crescer. */}
               <div className="min-h-0 flex-1 overflow-auto rounded-md border bg-card">
-                <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
-                  <colgroup>{cols.map(c => <col key={c.chave} style={{ width: `${c.pc}%` }} />)}</colgroup>
+                <table className="border-collapse"
+                  style={{ tableLayout: 'fixed', width: COLS_CAT.reduce((x, w) => x + w, 0) }}>
+                  <colgroup>{COLS_CAT.map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>
                   <thead>
-                    <tr style={{ height: 20 }}>
-                      {cols.map(c => (
-                        <th key={c.chave} title={c.rot}
-                          className={cn('sticky top-0 z-10 truncate px-1.5 py-0 text-[10px] font-semibold leading-none text-white',
-                            c.chave === 'nome' ? 'text-left' : 'text-right')}
-                          style={{ backgroundColor: CAB_TABELA, borderLeft: c.bloco ? DIVISOR : undefined }}>
-                          {c.rot}
+                    {/* ⚠ DUAS LINHAS DE CABEÇALHO porque "Cab dez/20" não cabe em 52px: a grandeza
+                        sobe e o mês fica embaixo, valendo para as duas colunas do par. */}
+                    <tr style={{ height: 16 }}>
+                      <th className="sticky top-0 z-10" style={{ backgroundColor: CAB_TABELA }} />
+                      {PARES.map(p => (
+                        <th key={p.rot} colSpan={2}
+                          className="sticky top-0 z-10 truncate px-1.5 py-0 text-center font-semibold text-white"
+                          style={{ backgroundColor: CAB_TABELA, fontSize: 9, lineHeight: 1,
+                            borderLeft: BORDA_PAR }}>
+                          {p.rot}
                         </th>
                       ))}
+                    </tr>
+                    <tr style={{ height: 16 }}>
+                      <th className="sticky z-10" style={{ top: 16, backgroundColor: CAB_TABELA }} />
+                      {PARES.flatMap(p => ([
+                        <th key={`${p.rot}:0`}
+                          className="sticky z-10 truncate px-1.5 py-0 text-right font-semibold text-white"
+                          style={{ top: 16, backgroundColor: CAB_TABELA, fontSize: 9, lineHeight: 1,
+                            borderLeft: BORDA_PAR }}>
+                          {rotuloMes(p0)}
+                        </th>,
+                        <th key={`${p.rot}:1`}
+                          className="sticky z-10 truncate px-1.5 py-0 text-right font-semibold text-white"
+                          style={{ top: 16, backgroundColor: CAB_TABELA, fontSize: 9, lineHeight: 1 }}>
+                          {rotuloMes(p1)}
+                        </th>,
+                      ]))}
                     </tr>
                   </thead>
                   <tbody>
                     {cats.length === 0 ? (
-                      <tr style={{ height: 20 }}>
-                        <td colSpan={cols.length} className="px-1.5 text-center text-[10px] text-muted-foreground">—</td>
+                      <tr style={{ height: 16 }}>
+                        <td colSpan={COLS_CAT.length}
+                          className="px-1.5 text-center text-[10px] text-muted-foreground">—</td>
                       </tr>
                     ) : (
                       <>
-                        {bloco('Jovens', jovens, tJov)}
-                        {bloco('Adultos', adultos, tAdu)}
-                        {linhasDeTotal(T, CINZA_TOTAL, true)}
+                        {/* ⚠ O TOTAL VEM PRIMEIRO, como na grade do DRE: a resposta antes da
+                            decomposição, e os grupos abrem embaixo dela. */}
+                        {linhaTotal(T, FUNDO_TOTAL)}
+                        {grupoDe('Jovens', jovens, tJov)}
+                        {grupoDe('Adultos', adultos, tAdu)}
                       </>
                     )}
                   </tbody>

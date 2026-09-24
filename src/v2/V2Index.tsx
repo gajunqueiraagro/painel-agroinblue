@@ -865,7 +865,14 @@ export default function V2Index() {
        residual de quem estava numa delas quando o deploy subiu. Rota morta devolveria tela
        branca; aqui o operador cai na tela que responde a mesma pergunta. */
     if (section === 'dre' || section === 'dre-cultura' || section === 'painel-safra') {
-      return <AgriDreLavouraTab />;
+      /* ⚠ A IDA REGISTRA A ORIGEM, como a faixa de pendências faz: sem `origemPendenciaRef` o
+         `onBack` do Valor do Rebanho cairia na Home, e o operador perderia o DRE de onde saiu. O
+         PERÍODO se preserva sozinho — ele mora na URL (`f_de`/`f_ate`), que esta troca não toca. */
+      return <AgriDreLavouraTab onCorrigirPrecos={(a) => {
+        setAno(String(a));
+        origemPendenciaRef.current = section;
+        setSection('valor-rebanho');
+      }} />;
     }
     if (section === 'painel-consultor') return (
       <PainelConsultorTab
@@ -1000,6 +1007,10 @@ export default function V2Index() {
           <ValorRebanhoTab
             lancamentos={lancamentos}
             saldosIniciais={saldosIniciais}
+            /* ⚠ A PROP JÁ EXISTIA E NUNCA ERA PASSADA: a tela abria sempre no ano corrente, mesmo
+               quando quem a chamou sabia o ano. É o mesmo idioma de `MapaPastosTab` e
+               `AnaliseEconomica`. Ela só é lida na MONTAGEM, e basta — a section remonta. */
+            filtroAnoInicial={String(ano)}
             onBack={() => { const o = voltarParaOrigem(); setSection(o ?? 'rebanho-home'); }}
           />
         )}

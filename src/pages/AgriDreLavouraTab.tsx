@@ -237,7 +237,14 @@ const corDoTom = (tom: DefLinha['tom']) =>
 
 
 
-export function AgriDreLavouraTab() {
+export function AgriDreLavouraTab({ onCorrigirPrecos }: {
+  /**
+   * ⚠ QUEM TROCA DE SECTION É O V2Index, não esta página: `section` é um `useState` dele e não
+   * está na URL. O modal precisa de uma saída para a tela Valor do Rebanho, e o caminho é este
+   * callback — a página não conhece as seções, e não deve.
+   */
+  onCorrigirPrecos?: (ano: number) => void;
+} = {}) {
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id ?? null;
   const { safras } = useSafrasLavoura(clienteId);
@@ -389,7 +396,18 @@ export function AgriDreLavouraTab() {
      dar ao efeito um motivo para renascer. */
   const limparRef = useRef(limparFiltrosDoDre);
   limparRef.current = limparFiltrosDoDre;
-  useEffect(() => () => { limparRef.current(); }, []);
+  /**
+   * ⚠ A IDA-E-VOLTA DO "Corrigir preços" NÃO LIMPA, e é a única exceção.
+   *
+   * A limpeza existe para que a PRÓXIMA VISITA não herde o período de outro cliente ou de outra
+   * tela. Sair para corrigir um preço e voltar é a MESMA visita: o operador quer reencontrar o
+   * período que estava lendo. Sem esta exceção ele voltava ao DRE no padrão — medido na tela em
+   * 24/09, a URL vinha vazia depois de clicar no link.
+   * ⚠ UMA `ref`, NÃO UM ESTADO: o valor é lido na DESMONTAGEM, quando um `useState` já não
+   * provoca render nenhum e o efeito de cleanup enxergaria o valor do último render.
+   */
+  const voltaPrevistaRef = useRef(false);
+  useEffect(() => () => { if (!voltaPrevistaRef.current) limparRef.current(); }, []);
 
   /* ⚠ TROCAR DE CLIENTE É COMEÇAR DE NOVO: a atividade volta à Pecuária, o recorte sai da URL e a
      abertura se rearma para achar a safra DAQUELE cliente. O primeiro render não conta — é ele que
@@ -1227,6 +1245,8 @@ export function AgriDreLavouraTab() {
           periodo={{ de: didatico.de, ate: didatico.ate }}
           reposicao={didatico.reposicao}
           onFechar={() => setDidatico(null)}
+          onCorrigirPrecos={onCorrigirPrecos
+            && (ano => { voltaPrevistaRef.current = true; onCorrigirPrecos(ano); })}
         />
       )}
       {ehPec && drePec && rateioPecAberto && (
