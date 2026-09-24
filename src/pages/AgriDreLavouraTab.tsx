@@ -62,6 +62,7 @@ import {
 } from '@/components/agri/PecHistoricoLinhaModal';
 import {
   PecDrePanel, FaixaVisoesPec, colunasDaVisao, lerVisaoPec, escreverVisaoPec, lerNAnosPec,
+  type InsumosDidaticos,
   escreverNAnosPec, N_ANOS_PADRAO, ehVisaoMetaLegada, visaoDaUrl,
   type VisaoPec, type VisaoUrlPec, type ReferenciaPec,
 } from '@/pages/PecDrePanel';
@@ -352,7 +353,7 @@ export function AgriDreLavouraTab({ onCorrigirPrecos }: {
    */
   const [didatico, setDidatico] = useState<
     { fazendaId: string | null; nome: string; qual: 'vpb' | 'efeito' | 'ponte';
-      de: string; ate: string; reposicao: number | null } | null>(null);
+      de: string; ate: string; insumos: InsumosDidaticos } | null>(null);
   const [rateioPecAberto, setRateioPecAberto] = useState(false);
   const [historicoPec, setHistoricoPec] = useState<RecorteHistoricoPec | null>(null);
   /**
@@ -1203,8 +1204,8 @@ export function AgriDreLavouraTab({ onCorrigirPrecos }: {
             /* ⚠ O PERÍODO VEM DA COLUNA — VARIACAO-REBANHO-MODAL-01. Guardá-lo aqui é o que permite
                abrir a Variação de 2022 e ver 2022: o hook abaixo passou a ler `didatico.de/ate` em
                vez de `pecDe/pecAte`, que são os da tela. */
-            onAbrirDidatico={(fazendaId, nome, qual, de, ate, reposicao) =>
-              setDidatico({ fazendaId, nome, qual, de, ate, reposicao })}
+            onAbrirDidatico={(fazendaId, nome, qual, de, ate, insumos) =>
+              setDidatico({ fazendaId, nome, qual, de, ate, insumos })}
             onAbrirRateio={() => setRateioPecAberto(true)}
             onAbrirHistorico={setHistoricoPec} />
         )
@@ -1243,7 +1244,7 @@ export function AgriDreLavouraTab({ onCorrigirPrecos }: {
              coluna, isso daria a fonte de 2026 num modal de 2022. A `fn_dre_pecuaria_patrimonio`
              já devolve `p0_fonte`/`p1_fonte` do MESMO período que o modal pediu. */
           periodo={{ de: didatico.de, ate: didatico.ate }}
-          reposicao={didatico.reposicao}
+          insumos={didatico.insumos}
           onFechar={() => setDidatico(null)}
           onCorrigirPrecos={onCorrigirPrecos
             && (ano => { voltaPrevistaRef.current = true; onCorrigirPrecos(ano); })}

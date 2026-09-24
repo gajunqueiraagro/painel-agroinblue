@@ -20,11 +20,20 @@
 import { describe, it, expect } from 'vitest';
 import { caminhadaDoValor } from '@/components/agri/PecPatrimonioModal';
 
-/** Os números medidos no SR jan-ago/21, cliente inteiro. */
+/**
+ * Os números medidos no SR jan-ago/21, cliente inteiro.
+ *
+ * ⚠ O P1 MUDOU DE FONTE EM 24/09, e os números com ele: o Gabriel FECHOU jun e ago/2021 na
+ * homologação, e o que vinha do cache (`p1c`, 12.031.963,06) passou a vir do fechamento (`p1f`,
+ * 12.255.963,06) — R$ 224.000,00 de diferença, registrada em CACHE-X-FECHAMENTO-01. Os dois
+ * números estavam certos, cada um para a sua fonte; o de referência agora é o do fechamento.
+ * ⚠ E A PRODUÇÃO NÃO SE MEXEU: `v1_p0` é o rebanho do fim a preço do INÍCIO, e o fechamento não
+ * tocou no preço de dez/20. Só o efeito de mercado andou — que é exatamente o que ele mede.
+ */
 const SR = {
   at0: 35201.84, at1: 39233.20,
-  v0: 8643826.74, v1p0: 9680105.46, v1p1: 12031963.06,
-  dProd: 1036278.72, dMerc: 2351857.60, dTotal: 3388136.32,
+  v0: 8643826.74, v1p0: 9680105.46, v1p1: 12255963.06,
+  dProd: 1036278.72, dMerc: 2575857.60, dTotal: 3612136.32,
 };
 
 /** O que a tela mostra: arrobas sem casas, preço com duas. */
@@ -57,7 +66,11 @@ describe('caminhadaDoValor', () => {
     const p = caminhadaDoValor(SR);
     expect(arred(p[0].preco!, 2)).toBe(245.55);
     expect(arred(p[1].preco!, 2)).toBe(246.73);
-    expect(arred(p[2].preco!, 2)).toBe(306.68);
+    /* ⚠ 312,39 E NÃO 306,68: o preço do FIM andou quando ago/21 passou a vir do fechamento em vez
+       do cache (CACHE-X-FECHAMENTO-01). Os outros dois não se mexeram — eles são preço de dez/20, e
+       o fechamento de agosto não toca nele. É a decomposição certa de uma mudança de fonte: só a
+       ponta que trocou é que muda. */
+    expect(arred(p[2].preco!, 2)).toBe(312.39);
   });
 
   it('o preço da Produção NÃO é o R$/@ do início — e a diferença é real', () => {
@@ -70,6 +83,25 @@ describe('caminhadaDoValor', () => {
        linha que a tela manda multiplicar. Sem este caso, "consertar" a divergência passaria verde. */
     const errado = arred(SR.at1, 0) * arred(pkInicio, 2);
     expect(Math.abs(errado - SR.v1p0)).toBeGreaterThan(40000);
+  });
+
+  /**
+   * ⚠ AS DUAS ABAS SOMAM O RESUMO, AO REAL — e é a razão de existirem separadas. Produção é o
+   * rebanho que mudou com o preço congelado no início (`v1_p0 − v0`); Mercado é o preço que mudou
+   * com as arrobas congeladas no fim (`v1_p1 − v1_p0`). O valor do MEIO é o que as torna
+   * distinguíveis: sem ele as duas seriam a mesma subtração.
+   */
+  it('Produção + Mercado = a variação do Resumo, ao real', () => {
+    const p = caminhadaDoValor(SR);
+    const difProducao = p[1].valor - p[0].valor;   // v1_p0 − v0
+    const difMercado = p[2].valor - p[1].valor;    // v1_p1 − v1_p0
+    expect(Math.round(difProducao)).toBe(Math.round(SR.dProd));
+    expect(Math.round(difMercado)).toBe(Math.round(SR.dMerc));
+    expect(Math.round(difProducao + difMercado)).toBe(Math.round(SR.dTotal));
+    /* ⚠ E O MEIO É O QUE AS SEPARA: com `v1_p0 = v1_p1` o Mercado zeraria e a Produção engoliria a
+       variação inteira. Sem este trecho, um payload que perdesse o valor do meio passaria verde. */
+    const semMeio = caminhadaDoValor({ ...SR, v1p0: SR.v1p1 });
+    expect(semMeio[2].valor - semMeio[1].valor).toBe(0);
   });
 
   it('rebanho zerado no fim não inventa preço', () => {

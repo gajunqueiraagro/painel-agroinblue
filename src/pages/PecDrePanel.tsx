@@ -326,6 +326,24 @@ function valorNaColuna(col: ColunaPec, chave: ChaveLinhaPec): number | null {
 /* ⚠ EXPORTADA PARA A CASCATA — DRE-CASCATA-GRAFICO-01. A vista Gráfico desenha as MESMAS quinze
    linhas do Resumido, e o valor de cada barra tem de ser o mesmo da grade, inclusive as duas
    compostas. Recalcular a composição lá seria ter duas verdades ao primeiro arredondamento. */
+/**
+ * OS NÚMEROS DO DRE QUE VIAJAM COM O CLIQUE — DRE-CASCATA/fix7.
+ *
+ * ⚠ ELES VÃO JUNTO EM VEZ DE SEREM LIDOS DE NOVO: a aba Movimentos mostra o R$/@ REAL de cada
+ * linha, e o numerador de todos eles é do DRE DAQUELA COLUNA. Uma segunda leitura traria os da
+ * tela, e o modal de 2021 mostraria o custo de 2026.
+ */
+export interface InsumosDidaticos {
+  /** `total.reposicao` — o custo das compras. Zero com compra real significa lançamento faltando. */
+  reposicao: number | null;
+  /** Custo variável + custo fixo, a definição de custeio do PC-100. */
+  custeio: number | null;
+  /** `producao.at_produzida`, em @ viva. */
+  atProduzida: number | null;
+  /** `total.vendas` — a receita do desfrute. */
+  vendas: number | null;
+}
+
 export function valorDaLinha(col: ColunaPec, def: DefPec): number | null {
   if (!def.compor) return valorNaColuna(col, def.chave);
   const parcelas = [
@@ -595,7 +613,7 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
    * fechar com o número que ESTA coluna mostra, e uma segunda leitura traria o da tela.
    */
   onAbrirDidatico?: (fazendaId: string | null, fazendaNome: string, qual: 'vpb' | 'efeito' | 'ponte',
-    de: string, ate: string, reposicao: number | null) => void;
+    de: string, ate: string, insumos: InsumosDidaticos) => void;
   onAbrirRateio?: () => void;
   /** ⚠ A GRADE NÃO MONTA O MODAL: ela avisa QUAL linha, e quem lê os cinco anos é a página. */
   onAbrirHistorico?: (r: RecorteHistoricoPec) => void;
@@ -812,7 +830,7 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, base, onAlternar, o
   onAbrirLista?: (r: RecortePec) => void;
   /** ⚠ `de`/`ate` SÃO DA COLUNA, e `qual` tem três valores — ver a prop homônima em `PecDrePanel`. */
   onAbrirDidatico?: (fazendaId: string | null, fazendaNome: string, qual: 'vpb' | 'efeito' | 'ponte',
-    de: string, ate: string, reposicao: number | null) => void;
+    de: string, ate: string, insumos: InsumosDidaticos) => void;
   onAbrirRateio?: () => void;
   onAbrirHistorico?: (r: RecorteHistoricoPec) => void;
 }) {
@@ -888,8 +906,16 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, base, onAlternar, o
          reposição. Ler o `modo` aqui faria a grade depender de um estado que não é dela. */
       const qual = def.compor && def.didatico === 'vpb' ? 'ponte' as const : def.didatico;
       return onAbrirDidatico
-        ? () => onAbrirDidatico(col.fazendaId, col.nome, qual, col.de, col.ate,
-            col.linhas?.reposicao ?? null)
+        ? () => onAbrirDidatico(col.fazendaId, col.nome, qual, col.de, col.ate, {
+            reposicao: col.linhas?.reposicao ?? null,
+            /* ⚠ O CUSTEIO É O DO PC-100 — custo variável + custo fixo, SEM o rateio
+               administrativo: é a definição de `custeioPec` em `buildMonthlyDataFromView`
+               ("NÃO inclui Juros, Agri, Investimentos"). Medido no SR jan-ago/21:
+               (560.088,31 + 699.138,11) / 9.117,54 @ = R$ 138,11/@. Com o rateio daria 148,68. */
+            custeio: col.linhas == null ? null : col.linhas.custo_variavel + col.linhas.custo_fixo,
+            atProduzida: col.linhas?.producao.at_produzida ?? null,
+            vendas: col.linhas?.vendas ?? null,
+          })
         : undefined;
     }
     if (def.rateio) return col.atual ? onAbrirRateio : undefined;

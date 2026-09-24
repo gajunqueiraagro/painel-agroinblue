@@ -581,6 +581,26 @@ no mesmo arquivo.
   o primeiro e' P0 ponderado pelo rebanho do inicio, o segundo e' P0 ponderado pelo rebanho do FIM,
   e a mistura de categorias mudou no meio do periodo. Sem ele, "consertar" a divergencia igualando
   os dois passaria verde — e o caso mede o estrago (R$ 45.944) para dizer por que nao.
+  De 1790 para 1792 no VARIACAO-REBANHO-MODAL-01-fix7: `pecPonteAbas.test.tsx` foi de 6 para 8
+  casos, com a regra nova do R$/@ REAL da aba Movimentos. Ate' o fix3 tudo era valorado ao preco do
+  REBANHO no mes do movimento — coerente entre si e falso em cada linha: a arroba produzida custa o
+  CUSTEIO, nao o preco de mercado. Um caso trava os quatro precos (produzidas e nascimentos pelo
+  custeio do PC-100, compradas pela reposicao, vendas pelo desfrute em @ viva) e o traco das
+  mortes; o outro trava que "Produzidas" NAO tem cabeca — e' ganho de PESO, e o traco ali e'
+  resposta, nao dado faltando.
+  ⚠ QUATRO CASOS EXISTENTES FALHARAM ANTES DE SEREM ATUALIZADOS, pela razao certa: o contrato da
+  aba mudou (rotulos, colunas e a assinatura, que passou a receber os numeros do DRE). Foram
+  atualizados ao contrato novo, nunca afrouxados — e o de Ajustes passou a AFIRMAR que ele nao tem
+  cabeca, nem preco, nem valor, onde antes cobrava os +1.487.257 que eram residuo de CRITERIO
+  travestido de dinheiro.
+  De 1792 para 1793 no mesmo fix7: `pecPatrimonioModal.test.ts` ganhou o caso que trava
+  Producao + Mercado = a variacao do Resumo, ao real — a razao de as duas abas existirem separadas.
+  ⚠ ELE FECHA PROVANDO O QUE AS SEPARA: com `v1_p0 = v1_p1` o Mercado zera e a Producao engole a
+  variacao inteira. Sem esse trecho, um payload que perdesse o valor do MEIO passaria verde.
+  ⚠ E UM CASO DE `pecPatrimonioModal.test.ts` MUDOU DE NUMERO SEM MUDAR DE REGRA: o R$/@ do fim do
+  SR jan-ago/21 foi de 306,68 para 312,39 quando ago/21 passou a vir do fechamento
+  (CACHE-X-FECHAMENTO-01). Os outros dois precos do caso NAO se mexeram, e e' isso que prova que a
+  mudanca foi de FONTE e nao de conta: eles sao preco de dez/20.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -734,6 +754,25 @@ migration e' REGISTRO HISTORICO, nao se reaplica).
     zero linhas —, e a medicao acima foi feita antes do refresh. Depois dele sao 51 linhas e as
     seis somem da lista. Ficam registradas porque mostram o OUTRO risco do cache como fonte: ele
     pode estar vazio sem que nada avise, e ai' "sem linha = zero" afirma um rebanho que existe.
+  ⚠ ACRESCENTADA EM 24/09/2026, e esta e' de VALOR, nao de cabeca: SR, ago/2021.
+    cache        R$ 12.031.963,06
+    fechamento   R$ 12.255.963,06
+    diferenca    R$    224.000,00
+  O Gabriel FECHOU jun e ago/2021 do SR na homologacao do modal da variacao, e o P1 do periodo
+  jan-ago/21 trocou de fonte — de `p1c` (cache) para `p1f` (fechamento). Os DOIS numeros estavam
+  certos, cada um para a sua fonte; o de referencia a partir daqui e' o do FECHAMENTO, que e' a
+  oficial. Numeros de referencia do modal: P1 = 12.255.963,06 · efeito de mercado 2.575.858 ·
+  producao 1.036.279.
+  ⚠ A ORIGEM DA DIFERENCA NAO FOI MEDIDA e fica como FASE 0 de quem retomar. O que JA' se sabe, por
+  decomposicao: a PRODUCAO nao se mexeu (1.036.278,72 antes e depois) porque `v1_p0` e' o rebanho
+  do fim a preco de dez/20, e fechar agosto nao toca no preco de dezembro. Andou so' o EFEITO DE
+  MERCADO (2.351.857,60 -> 2.575.857,60), que e' exatamente o que ele mede: a mesma @ a outro
+  preco. Entao a diferenca esta' no PRECO de ago/21, nao no rebanho — e o rebanho conferiu
+  (39.233,20 @ nas duas leituras).
+  ⚠ E O MODO COMO ISSO APARECEU vale mais que o numero: a aba Movimentos mostrou "Total final
+  12.255.963" e o Resumo, "12.031.963", na MESMA tela. Nao era defeito de nenhum dos dois — era uma
+  leitura feita antes e outra depois do fechamento. Duas telas com fontes diferentes para a mesma
+  ponta nao avisam quando uma delas muda; foi a aritmetica que denunciou.
   ⚠ AS CATORZE RESTANTES SAO DIVERGENCIA DE VERDADE e nao foram investigadas. A do Sto. Expedito em
     2025-03 (414 cabecas) e a maior. Quem for consertar decide QUAL das duas fontes estava errada —
     e ate' la' o DRE mostra a do fechamento, que e' a oficial.

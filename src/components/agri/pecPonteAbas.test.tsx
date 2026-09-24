@@ -53,10 +53,14 @@ const NJ: PatrimonioPec = {
    modal da variação, então o teste monta os COMPONENTES DAS ABAS direto. Some com o `fireEvent`
    no botão "Gráfico" (não há mais botão aqui) e com a leitura via `document.body` por causa do
    portal do Radix — o que se lê agora é o `container` do próprio render. */
-const montar = (over?: Partial<PatrimonioPec>, reposicao: number | null = 1866408.21) =>
+/* ⚠ OS INSUMOS SÃO DO DRE DA COLUNA — fix7. O R$/@ de cada linha deixou de ser o preço do rebanho
+   (regra do fix3) e passou a ser o REAL: custeio ÷ @ produzidas, reposição ÷ @ compradas,
+   vendas ÷ @ desfrutadas. Números do NJ 25/26. */
+const INSUMOS = { reposicao: 1866408.21, custeio: 5000000, atProduzida: 39288.01, vendas: 16000000 };
+const montar = (over?: Partial<PatrimonioPec>, insumos: Partial<typeof INSUMOS> = {}) =>
   render(
-    <PecPonteTabela m={{ ...NJ, ...over }.movimentos} reposicao={reposicao}
-      efeito={{ ...NJ, ...over }.total.efeito} />,
+    <PecPonteTabela m={{ ...NJ, ...over }.movimentos} insumos={{ ...INSUMOS, ...insumos }}
+      efeito={{ ...NJ, ...over }.total.efeito} p0="2025-06" p1="2026-06" />,
   );
 const montarGrafico = (over?: Partial<PatrimonioPec>) =>
   render(<PecPonteGrafico m={{ ...NJ, ...over }.movimentos} />);
@@ -79,24 +83,55 @@ describe('PecPonteTabela / PecPonteGrafico', () => {
     /* ⚠ E AS TRÊS PARCELAS TÊM DE ESTAR NA TELA, não só o resultado: um total certo com parcelas
        erradas passaria verde, e é justamente a parcela que o operador veio conferir. */
     expect(linha('Variação do valor (a preços de cada data)')!.cells[1].textContent).toBe('+2.425.324');
-    expect(linha('(−) Efeito do preço (mercado)')!.cells[1].textContent).toBe('-2.618.562');
-    expect(linha('(−) Reposição comprada')!.cells[1].textContent).toBe('-1.866.408');
+    expect(linha('(−) Efeito de mercado')!.cells[1].textContent).toBe('-2.618.562');
+    expect(linha('(−) Reposição (compras)')!.cells[1].textContent).toBe('-1.866.408');
   });
 
   it('sem reposição na coluna, a linha do DRE é traço e nunca zero', () => {
-    montar(undefined, null);
-    expect(linha('(−) Reposição comprada')!.cells[1].textContent).toBe('—');
+    montar(undefined, { reposicao: null as unknown as number });
+    expect(linha('(−) Reposição (compras)')!.cells[1].textContent).toBe('—');
     expect(linha('= Variação do estoque (linha do DRE)')!.cells[1].textContent).toBe('—');
   });
 
-  it('a linha de Ajustes não mostra R$/@', () => {
+  /* ⚠ O R$/@ REAL É A MUDANÇA DE REGRA DO fix7, e o caso trava as quatro respostas de uma vez. */
+  it('cada linha traz o SEU R$/@ real, e traço onde não há preço', () => {
+    montar();
+    const cel = (rot: string, i: number) =>
+      [...document.querySelectorAll<HTMLTableRowElement>('tbody tr')]
+        .find(tr => tr.cells[0]?.textContent?.includes(rot))!.cells[i].textContent;
+    // custeio 5.000.000 / 39.288,01 @ produzidas = 127,27
+    expect(cel('Produzidas', 3)).toBe('127,27');
+    /* ⚠ NASCIMENTO CUSTA O MESMO QUE A ARROBA PRODUZIDA: o bezerro nasce do mesmo custeio. */
+    expect(cel('Nascimentos', 3)).toBe('127,27');
+    // reposição 1.866.408,21 / 4.171,50 @ compradas = 447,42
+    expect(cel('Compradas', 3)).toBe('447,42');
+    // vendas 16.000.000 / 45.515,04 @ vivas = 351,53
+    expect(cel('Vendidas e abatidas', 3)).toBe('351,53');
+    /* ⚠ MORTE EM TRAÇO POR FALTA DE DADO, não por regra: o valor LANÇADO não vem no payload, e
+       722 das 1.646 mortes do banco não têm valor nenhum. */
+    expect(cel('Mortes', 3)).toBe('—');
+  });
+
+  /* ⚠ "Produzidas" NÃO MOVE CABEÇA: é ganho de PESO. O traço ali é resposta, não dado faltando. */
+  it('Produzidas não tem cabeças', () => {
+    montar();
+    const l = [...document.querySelectorAll<HTMLTableRowElement>('tbody tr')]
+      .find(tr => tr.cells[0]?.textContent?.includes('Produzidas'))!;
+    expect(l.cells[1].textContent).toBe('—');
+    expect(l.cells[2].textContent).toBe('+39.288');
+  });
+
+  it('Ajustes mostra só as arrobas: sem cabeças, sem preço, sem valor', () => {
     montar();
     const l = [...document.querySelectorAll<HTMLTableRowElement>('tbody tr')]
       .find(tr => tr.cells[0]?.textContent?.includes('Ajustes'));
     expect(l).toBeTruthy();
-    expect(l!.cells[1].textContent).toBe('-96');     // arrobas
-    expect(l!.cells[2].textContent).toBe('—');       // R$/@ — não é preço de nada
-    expect(l!.cells[3].textContent).toBe('+1.487.257'); // e o valor tem sinal OPOSTO, de propósito
+    expect(l!.cells[1].textContent).toBe('—');   // cabeças
+    expect(l!.cells[2].textContent).toBe('-96'); // arrobas — o resíduo declarado
+    /* ⚠ RESÍDUO NÃO TEM PREÇO NEM VALOR. No fix3 ele levava +1.487.257, que era o resíduo de
+       CRITÉRIO (pontas a preço de rebanho, movimentos a preço do mês) travestido de dinheiro. */
+    expect(l!.cells[3].textContent).toBe('—');
+    expect(l!.cells[4].textContent).toBe('—');
   });
 
   it('a transferência some quando o líquido é zero e fica quando não é', () => {
