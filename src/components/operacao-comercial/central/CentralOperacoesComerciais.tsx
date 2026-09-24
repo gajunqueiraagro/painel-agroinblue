@@ -76,6 +76,12 @@ const fmtData = (iso: string): string => {
 };
 const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0, maximumFractionDigits: 0 });
 const kg = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 0 });
+/* ⚠ O NUMERO SEM "R$" E SEM CENTAVOS e' o que a CELULA mostra; `brlCent` e' o que o `title`
+   guarda. Os dois existem porque a coluna serve para COMPARAR grandezas linha a linha, e o
+   centavo nao se perde — muda de lugar. `Math.round` antes do locale para o sinal do negativo
+   sair junto do numero, e nao do arredondamento. */
+const num0 = (n: number) => Math.round(n).toLocaleString('pt-BR');
+const brlCent = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 /* ⚠ A DIVISÓRIA VERTICAL É BORDA DE CÉLULA, em todo `th` e `td` menos o último: com ela a
    linha de 26px deixa de ser uma faixa de texto solta e vira grade — o olho desce a coluna
@@ -93,7 +99,7 @@ const DIV = 'border-r border-border/60 last:border-r-0';
 /* ⚠ `normal-case` EXPLÍCITO: o `uppercase` não morava aqui, mora no primitivo
    `TableHead` (ui/table.tsx). Só tirar a classe desta string deixaria o versalete intacto —
    quem desfaz é a classe oposta, que o `twMerge` resolve a favor da última. */
-const TH = `px-1.5 py-1 text-[9px] font-medium normal-case tracking-wide text-primary-foreground whitespace-nowrap overflow-hidden text-ellipsis ${DIV}`;
+const TH = `px-1 h-4 py-0 leading-none text-[8px] font-medium normal-case tracking-wide text-primary-foreground whitespace-nowrap overflow-hidden text-ellipsis ${DIV}`;
 /* ⚠ `TD` NÃO DECLARA TAMANHO, de propósito. Com `text-[11px]` aqui, um `text-[10px]` na
    célula NÃO vence: as duas são classes arbitrárias e quem ganha é a ordem no CSS gerado,
    não a ordem na string — medido, as células de OC e Data saíam em 11px. A régua fica no
@@ -103,7 +109,18 @@ const TH = `px-1.5 py-1 text-[9px] font-medium normal-case tracking-wide text-pr
 /* ⚠ `py-[2px]` E NÃO `py-[3px]` — PR-OC-LISTA-02 item 3, e a conta é a mesma de antes com
    outra régua: a pílula caiu para 9px (17px de altura) e 2+2 fecham a linha em 21, dentro
    dos 22 pedidos. Com 3+3 e a pílula de 10px eram 25/26. */
-const TD = `px-1.5 py-[2px] align-middle ${DIV}`;
+const TD = `px-1 h-[18px] py-0 align-middle text-[9px] leading-none ${DIV}`;
+
+/* ⚠ PILULA DE LARGURA FIXA — OC-LISTA-COMPACTA-01. A largura sai da COLUNA, nao do texto:
+   com `px` a pilula de "Paga" nascia menor que a de "Parcial" e a coluna inteira parecia
+   desalinhada linha a linha. Os rotulos ficaram em <= 7 caracteres para caber nos 44px. */
+const PILULA_FIXA = 'inline-block rounded text-[8px] font-medium leading-[12px] text-center align-middle w-[44px] overflow-hidden';
+const PILULA_RASC = 'inline-block rounded text-[8px] font-medium leading-[12px] text-center align-middle w-[34px] overflow-hidden';
+/* ⚠ PADDING MENOR NAS COLUNAS DE PILULA, e a conta explica: a coluna tem 50px e a pilula 44;
+   com os 8px de `px-1` sobram 42 e a pilula NAO CABE. Medido na tela (Agnaldo): as celulas
+   de Entrega e Pagto vinham com `scrollWidth` 52-62 contra `clientWidth` 49. Com `px-0.5`
+   sobram 46 e a pilula entra com 2px de folga. */
+const TD_PIL = `px-0.5 h-[18px] py-0 align-middle text-[9px] leading-none overflow-hidden ${DIV}`;
 
 /* Rollup soberano do recebimento a partir do estado por lote (nunca soma quantidades).
    A coluna responde UMA pergunta: os animais chegaram?
@@ -144,6 +161,17 @@ const TOM_NEUTRO = 'bg-muted text-muted-foreground';
    Precisa ficar DEPOIS dos TOM_* — const de modulo lida antes da declaracao e' TDZ.
    'Com diferença' leva o ATENCAO_FORTE pela mesma logica do excedente: divergencia
    nao e' sucesso, ainda que a entrega tenha acontecido. */
+/* ⚠ OS ROTULOS ENCURTARAM, OS ESTADOS NAO — OC-LISTA-COMPACTA-01. A chave continua sendo o
+   que `recStatus` devolve; so' o texto cabe em 7 caracteres. 'Com diferença' -> 'Difer.'
+   MANTEM o TOM_ATENCAO_FORTE com anel: ali o tom E' o dado, e foi por isso que ele nasceu
+   diferente dos outros tres. */
+const REC_CURTO: Record<string, string> = {
+  'Concluído': 'OK', Parcial: 'Parcial', 'Não iniciado': 'Pend.', 'Com diferença': 'Difer.',
+};
+/* O estagio do compromisso na coluna Financeiro — outro eixo que o estado de pagamento. */
+const FIN_CURTO: Record<string, string> = {
+  liquidado: 'Liquid.', 'lançado': 'Lançado', programado: 'Progr.', 'obrigação': 'Obrig.',
+};
 const REC_TONE: Record<string, string> = {
   'Não iniciado': TOM_NEUTRO,
   Parcial: TOM_ATENCAO,
@@ -210,13 +238,17 @@ function finResumo(f: FinRow | undefined): { valor: number; rotulo: string; prog
    tambem como `value` do filtro e no mapa de gravidade abaixo. So o texto muda.
    ⚠ Muda JUNTO com `ESTADO_LABEL` de AbaLiquidacaoOC: e' o mesmo estado da mesma
    fonte, e chamar de "paga" num lugar e "quitada" no outro seria pior que o jargao. */
+/* ⚠ ENCURTADO PARA A PILULA DE 44px, SEM TROCAR CHAVE — OC-LISTA-COMPACTA-01. As chaves sao
+   o vocabulario publicado da view e tambem o `value` do filtro; mexer nelas repetiria o
+   defeito do `nao_iniciada` documentado logo acima. */
 const LIQ_LABEL: Record<string, string> = {
-  quitada: 'Paga', parcial: 'Parcial', excedente: 'Excedente',
-  nao_liquidada: 'Não paga', base_indefinida: 'Base indefinida', sem_base: 'Base indefinida', em_aberto: 'Em aberto',
+  quitada: 'Paga', parcial: 'Parcial', excedente: 'Exced.',
+  nao_liquidada: 'N/ paga', base_indefinida: 'S/ base', sem_base: 'S/ base', em_aberto: 'Aberto',
 };
 function liqLabel(estado: string | null | undefined): string {
   if (!estado) return '—';
-  return LIQ_LABEL[estado] ?? (estado.charAt(0).toUpperCase() + estado.slice(1).replace(/_/g, ' '));
+  /* Estado novo da view: primeiras 7 letras, que e' o que a pilula comporta. */
+  return LIQ_LABEL[estado] ?? (estado.charAt(0).toUpperCase() + estado.slice(1).replace(/_/g, ' ')).slice(0, 7);
 }
 
 /* ORDEM DOS EIXOS POR GRAVIDADE, nunca alfabetica: alfabetica poria "Liquidada"
@@ -294,7 +326,7 @@ function ThOrd({ col, rotulo, ord, onOrdenar, direita }: {
       tabIndex={0}
       aria-sort={dirAtiva === 'asc' ? 'ascending' : dirAtiva === 'desc' ? 'descending' : 'none'}
     >
-      <span className="inline-flex items-center gap-0.5">
+      <span className="inline-flex items-center gap-0.5 leading-none align-middle">
         {rotulo}
         {dirAtiva === 'asc' && <ArrowUp className="h-2.5 w-2.5" />}
         {dirAtiva === 'desc' && <ArrowDown className="h-2.5 w-2.5" />}
@@ -309,11 +341,18 @@ function BadgeComercial({ status, rascunho }: { status: string; rascunho: boolea
     status === 'fechada' ? TOM_SUCESSO
     : status === 'cancelada' ? TOM_NEUTRO
     : 'bg-secondary text-secondary-foreground';
-  const label = status === 'fechada' ? 'Fechada' : status === 'cancelada' ? 'Cancelada' : 'Programada';
+  /* Rotulos de <= 7 caracteres, para a pilula fixa de 44px. */
+  const label = status === 'fechada' ? 'Fechada' : status === 'cancelada' ? 'Cancel.' : 'Progr.';
+  /* ⚠ DUAS PILULAS, E O ESPACO DA SEGUNDA E' RESERVADO SEMPRE — OC-LISTA-COMPACTA-01. Rascunho
+     e' EIXO SEPARADO do estado comercial (uma OC programada pode ser rascunho), entao colapsar
+     os dois numa pilula so' apagaria um dos dois. A grade fixa 44+34 faz a celula ter a mesma
+     largura com e sem rascunho: nada pula ao ordenar ou filtrar. */
   return (
-    <span className="inline-flex items-center gap-1 whitespace-nowrap">
-      <span className={`${PILULA} ${cor}`}>{label}</span>
-      {rascunho && <span className={`${PILULA} ${TOM_ATENCAO}`}>Rascunho</span>}
+    <span className="grid grid-cols-[44px_34px] items-center gap-1 whitespace-nowrap">
+      <span className={`${PILULA_FIXA} ${cor}`} title={status}>{label}</span>
+      {rascunho
+        ? <span className={`${PILULA_RASC} ${TOM_ATENCAO}`} title="Rascunho">Rasc.</span>
+        : <span />}
     </span>
   );
 }
@@ -782,50 +821,49 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
             vence classe no pai. É a MESMA régua 9/10/21 de `<Table density="dense">`; a
             tabela aqui é crua por causa do scrollport do `thead sticky`, não por régua. */}
         <TableDensityContext.Provider value="dense">
-        <table className="w-full min-w-[1000px] table-fixed caption-bottom text-[10px]">
+        <table className="w-full min-w-[760px] table-fixed caption-bottom text-[9px]">
+          {/* ⚠ MEDIDO NO DOM, nao estimado — OC-LISTA-COMPACTA-01. Cada largura e' o maior
+              entre o rotulo (8px) e o conteudo (9px). Somam 610 fixos; com o piso de 760 do
+              `<table>` sobram >= 150 para a Contraparte, acima do minimo de 130.
+              ⚠ FINANCEIRO SUBIU PARA JUNTO DO VALOR e os TRES estados ficaram juntos no fim:
+              dinheiro com dinheiro, estado com estado. Antes o Comercial separava os dois
+              numeros e o olho pulava a coluna do meio para comparar. */}
           <colgroup>
-            {/* Medido no DOM (Chrome, 10px/9px desta tela), nao estimado: cada largura e' o
-                maior entre o rotulo do cabecalho e o conteudo mais largo do corpo. Quem
-                manda em Fazenda e Recebimento e' o CABECALHO ("FAZENDA", "RECEBIMENTO"),
-                nao a celula — por isso nao encolhem mais do que isto. */}
-            {/* ⚠ AS LARGURAS CAÍRAM COM A RÉGUA — item 3. Cada uma é o maior entre o rótulo
-                do cabeçalho (agora 9px em caixa normal, não versalete) e o conteúdo mais
-                largo do corpo em 10px. Somam 852px; com o piso de 1000px do `<table>`,
-                sobram ao menos 148 para a Contraparte, que é a coluna flexível. */}
-            <col className="w-[62px]" />{/* OC — "#" + 8 hex mono em 9px */}
-            <col className="w-[52px]" />{/* Data — 31/07/26 em 9px */}
-            <col className="w-[88px]" />{/* Tipo — "Venda em Pé" em 10px */}
-            <col />{/* Contraparte — TODA a sobra, e nunca menos que 148px */}
-            <col className="w-[48px]" />{/* Fazenda — a sigla cabe em 40; quem pede 48 é o rótulo */}
-            <col className="w-[96px]" />{/* Animais — "24 cab · 10.240 kg" em 10px */}
-            <col className="w-[72px]" />{/* Valor — R$ 1.234.567 */}
-            <col className="w-[64px]" />{/* Comercial — pílula de 9px */}
-            <col className="w-[92px]" />{/* Receb./Envio — pílula 9px + cadeado */}
-            {/* ⚠ 150px É A CONTA DO ITEM 2: 1fr para o valor + 76px fixos da pílula + 12 de
-                padding. A pílula deixa de flutuar atrás de um valor curto e passa a nascer
-                sempre na mesma coluna, linha após linha. */}
-            <col className="w-[150px]" />{/* Financeiro — valor à direita · pílula em coluna fixa */}
-            <col className="w-[88px]" />{/* Pagamento — "aguardando pgto" em 10px */}
-            <col className="w-[40px]" />{/* Ações */}
+            <col className="w-[46px]" />{/* OC — 8 hex mono em 8px, sem "#" */}
+            <col className="w-[44px]" />{/* Data — 31/07/26 em 8px */}
+            <col className="w-[68px]" />{/* Tipo — "Venda em Pé" mede 64 em 9px; 68 com o padding */}
+            <col />{/* Contraparte — TODA a sobra, e nunca menos que 130px */}
+            <col className="w-[28px]" />{/* Faz — a sigla (PUR/SM/LUZ) */}
+            <col className="w-[70px]" />{/* Cab · kg — "24 · 10.240 kg" em 9px */}
+            <col className="w-[58px]" />{/* Valor — 1.234.567, sem R$ nem centavos */}
+            <col className="w-[104px]" />{/* Financ. — valor 58 + pilula 44 + gap */}
+            <col className="w-[84px]" />{/* Comerc. — pilula 44 + "Rasc." 34 + gap */}
+            {/* ⚠ 60, NAO 50 — MEDIDO. A pilula de 44 mais o cadeado de 8 mais o gap nao cabem em
+                50: a celula vinha com `scrollWidth` 58 contra 49. O cadeado e' eixo SEPARADO
+                (encerramento, nao chegada) e nao pode sumir para a coluna fechar. Os 10px saem
+                da Contraparte, que tem 283 e precisa de 130. */}
+            <col className="w-[60px]" />{/* Entrega — pilula 44 + gap + cadeado 8 */}
+            <col className="w-[50px]" />{/* Pagto — pilula 44 */}
+            <col className="w-[14px]" />{/* Ações */}
           </colgroup>
           <TableHeader className="sticky top-0 z-10 bg-primary">
-            <TableRow className="hover:bg-primary">
+            {/* ⚠ A ALTURA VAI NA `<tr>`, NAO NA `<th>` — medido: com `h-4` na celula o
+                cabecalho media 21px; na linha, obedece. Vale para o corpo tambem. */}
+            <TableRow className="h-4 hover:bg-primary">
               <ThOrd col="oc" rotulo="OC" ord={ord} onOrdenar={alternarOrd} />
               <ThOrd col="data" rotulo="Data" ord={ord} onOrdenar={alternarOrd} />
               <ThOrd col="tipo" rotulo="Tipo" ord={ord} onOrdenar={alternarOrd} />
               <ThOrd col="contraparte" rotulo="Contraparte" ord={ord} onOrdenar={alternarOrd} />
-              <ThOrd col="fazenda" rotulo="Fazenda" ord={ord} onOrdenar={alternarOrd} />
-              <ThOrd col="animais" rotulo="Animais" ord={ord} onOrdenar={alternarOrd} direita />
+              <ThOrd col="fazenda" rotulo="Faz" ord={ord} onOrdenar={alternarOrd} />
+              <ThOrd col="animais" rotulo="Cab · kg" ord={ord} onOrdenar={alternarOrd} direita />
               <ThOrd col="valor" rotulo="Valor" ord={ord} onOrdenar={alternarOrd} direita />
-              <ThOrd col="comercial" rotulo="Comercial" ord={ord} onOrdenar={alternarOrd} />
-              {/* ⚠ "RECEB./ENVIO" — decisao do Gabriel, B-08 item 5b. O eixo e' o mesmo
-                  para os dois sentidos do animal: na COMPRA os animais chegam (recebimento),
-                  na VENDA eles saem (envio). O rotulo dizia so' metade, e a Central lista
-                  os dois tipos na mesma coluna. */}
-              <ThOrd col="recebimento" rotulo="Receb./Envio" ord={ord} onOrdenar={alternarOrd} />
-              <ThOrd col="financeiro" rotulo="Financeiro" ord={ord} onOrdenar={alternarOrd} />
-              <ThOrd col="liquidacao" rotulo="Pagamento" ord={ord} onOrdenar={alternarOrd} />
-              <TableHead className={`${TH} text-right`}>Ações</TableHead>
+              <ThOrd col="financeiro" rotulo="Financ." ord={ord} onOrdenar={alternarOrd} />
+              <ThOrd col="comercial" rotulo="Comerc." ord={ord} onOrdenar={alternarOrd} />
+              {/* ⚠ "Entrega" cobre os dois sentidos do animal — na COMPRA ele chega, na VENDA
+                  ele sai. O rotulo longo ("Receb./Envio") nao cabe em 50px e dizia o mesmo. */}
+              <ThOrd col="recebimento" rotulo="Entrega" ord={ord} onOrdenar={alternarOrd} />
+              <ThOrd col="liquidacao" rotulo="Pagto" ord={ord} onOrdenar={alternarOrd} />
+              <TableHead className={`${TH} text-right`} />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -843,6 +881,7 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
               const valorOp = r.valor_acordado ?? r.valor_total ?? 0;
               return (
                 <TableRow key={r.id}
+                  className={abrePorTipo(r.tipo_operacao) ? 'h-[18px] cursor-pointer' : 'h-[18px]'}
                   /* PR-OC-EDICAO-POS-FECHAMENTO-02 — a LINHA abre a operacao, padrao do
                      resto do sistema. O menu de tres pontos fica para as acoes
                      destrutivas. Cursor e clique valem para o que de fato abre — hoje
@@ -852,106 +891,115 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
                      tres vezes — aqui no clique, aqui no cursor e no item do menu — e o
                      PR-OC-VENDA-REABRIR-01 ensinou so' a funcao central a abrir venda. As
                      tres copias e' que fizeram o defeito. */
-                  onClick={abrePorTipo(r.tipo_operacao) ? () => abrirOperacaoPorTipo(r) : undefined}
-                  className={abrePorTipo(r.tipo_operacao) ? 'cursor-pointer' : undefined}>
+                  onClick={abrePorTipo(r.tipo_operacao) ? () => abrirOperacaoPorTipo(r) : undefined}>
                   {/* Identificador e data são CONTEXTO, não conteúdo: quem varre a lista
-                      procura contraparte e valor. Recuam para 10px muted. */}
-                  <TableCell className={`${TD} font-mono whitespace-nowrap text-[9px] text-muted-foreground`} title={r.id}>#{r.id.slice(0, 8)}</TableCell>
-                  <TableCell className={`${TD} whitespace-nowrap text-[9px] text-muted-foreground`}>{fmtData(r.data_operacao)}</TableCell>
-                  <TableCell className={`${TD} whitespace-nowrap`}>{TIPO_LABEL[r.tipo_operacao] ?? r.tipo_operacao}</TableCell>
+                      procura contraparte e valor. Recuam para 8px muted. */}
+                  <TableCell className={`${TD} font-mono whitespace-nowrap text-[8px] text-muted-foreground`} title={r.id}>{r.id.slice(0, 8)}</TableCell>
+                  <TableCell className={`${TD} whitespace-nowrap text-[8px] text-muted-foreground`}>{fmtData(r.data_operacao)}</TableCell>
+                  <TableCell className={`${TD} whitespace-nowrap overflow-hidden`}>{TIPO_LABEL[r.tipo_operacao] ?? r.tipo_operacao}</TableCell>
+                  {/* ⚠ A UNICA COLUNA QUE PODE NAO CABER, e por isso a unica com `truncate` e
+                      `title`: todas as outras tem largura maior que o pior conteudo medido. */}
                   <TableCell className={`${TD} truncate`} title={nomeContraparte(r)}>{nomeContraparte(r)}</TableCell>
-                  <TableCell className={`${TD} truncate`} title={nomeFazenda(r)}>{siglaFazenda(r)}</TableCell>
-                  <TableCell className={`${TD} text-right whitespace-nowrap tabular-nums`}>
-                    {/* Uma linha só, pelo mesmo motivo do Financeiro: cabeça e peso são a mesma
-                        resposta, e empilhá-los dobrava a altura da tabela inteira. */}
+                  <TableCell className={`${TD} whitespace-nowrap overflow-hidden`} title={nomeFazenda(r)}>{siglaFazenda(r)}</TableCell>
+                  <TableCell className={`${TD} text-right whitespace-nowrap tabular-nums overflow-hidden`}>
+                    {/* Uma linha só: cabeça e peso são a mesma resposta, e empilhá-los dobrava
+                        a altura da tabela inteira. O "cab" saiu do numero — o cabecalho ja' diz. */}
                     <span className="whitespace-nowrap">
-                      <span className="text-[10px]">{r.qtd_negociada != null ? `${r.qtd_negociada} cab` : '—'}</span>
+                      <span>{r.qtd_negociada != null ? r.qtd_negociada : '—'}</span>
                       {r.peso_total_negociado_kg != null && r.peso_total_negociado_kg > 0 && (
-                        <span className="text-[9px] text-muted-foreground">{' · '}{kg(r.peso_total_negociado_kg)} kg</span>
+                        <span className="text-muted-foreground">{' · '}{kg(r.peso_total_negociado_kg)} kg</span>
                       )}
                     </span>
                   </TableCell>
-                  <TableCell className={`${TD} text-right whitespace-nowrap tabular-nums font-medium`}>{valorOp > 0 ? brl(valorOp) : '—'}</TableCell>
-                  <TableCell className={TD}><BadgeComercial status={r.status_comercial} rascunho={r.rascunho} /></TableCell>
-                  <TableCell className={TD}>
-                    {/* Cadeado = EIXO SEPARADO, ao lado da pilula e nunca dentro dela: o
-                        encerramento nao responde "chegou?", so "ainda mexe?". Por isso
-                        aparece igual sobre 'Concluído', 'Parcial' ou '—'. O `title` vai no
-                        span, nao no svg: em <svg> o atributo nao vira tooltip confiavel. */}
-                    <span className="inline-flex items-center gap-1 whitespace-nowrap">
-                      {rec
-                        ? <span className={`${PILULA} ${REC_TONE[rec] ?? TOM_NEUTRO}`}>{rec}</span>
-                        : <span className="text-muted-foreground">—</span>}
-                      {r.entrega_encerrada && (
-                        <span title="Entrega encerrada" className="text-muted-foreground">
-                          <Lock className="h-2.5 w-2.5" />
-                        </span>
-                      )}
-                    </span>
+                  {/* ⚠ SEM "R$" E SEM CENTAVOS na celula, os centavos no `title`: a coluna existe
+                      para COMPARAR ordens de grandeza linha a linha, e o simbolo repetido doze
+                      vezes rouba a largura que o digito precisa. O centavo nao se perde. */}
+                  <TableCell className={`${TD} text-right whitespace-nowrap tabular-nums font-medium overflow-hidden`}
+                    title={valorOp > 0 ? brlCent(valorOp) : undefined}>
+                    {valorOp > 0 ? num0(valorOp) : '—'}
                   </TableCell>
-                  <TableCell className={`${TD} whitespace-nowrap`}>
-                    {/* ⚠ O SEGUNDO NÚMERO SAIU. Era "lançado R$ 1.234.567" em texto, e repetia
-                        em miniatura o valor de cima gastando a largura da coluna: quem lê a
-                        linha quer saber QUANTO e EM QUE PÉ, não os dois valores. Fica o valor
-                        e uma pílula com o estágio. */}
+                  <TableCell className={`${TD} whitespace-nowrap overflow-hidden`}>
+                    {/* ⚠ GRADE, NÃO `inline-flex`: em linha, a pílula começava onde o valor
+                        terminava e a coluna inteira parecia desalinhada. Valor à direita do seu
+                        espaço, pílula numa faixa fixa — o olho desce a coluna em linha reta. */}
                     {fin && fin.rotulo
                       ? (() => {
                           const est = liqMap[r.id]?.estado_liquidacao;
                           const pilula = est === 'parcial'
-                            ? { texto: 'parcial', tom: TOM_ATENCAO }
+                            ? { texto: 'Parcial', tom: TOM_ATENCAO }
                             : fin.rotulo === 'liquidado'
-                              ? { texto: 'liquidado', tom: TOM_SUCESSO }
-                              : { texto: fin.rotulo, tom: TOM_NEUTRO };
-                          /* ⚠ AO LADO, NÃO ABAIXO: empilhar dois textos põe a linha em 38px, e a
-                             régua é 26. Valor e estágio na mesma linha respondem juntos
-                             "quanto" e "em que pé" sem custar altura. */
-                          /* ⚠ GRADE, NÃO `inline-flex` — item 2. Em linha, a pílula começava
-                             onde o valor terminava: com "R$ 8.100" ela nascia 40px à
-                             esquerda de onde nascia com "R$ 1.234.567", e a coluna inteira
-                             parecia desalinhada. Valor à direita do seu espaço, pílula numa
-                             faixa fixa de 76px — o olho desce a coluna em linha reta. */
+                              ? { texto: FIN_CURTO.liquidado, tom: TOM_SUCESSO }
+                              : { texto: FIN_CURTO[fin.rotulo] ?? fin.rotulo, tom: TOM_NEUTRO };
                           return (
-                            <span className="grid grid-cols-[1fr_76px] items-baseline gap-1 whitespace-nowrap">
-                              <span className={`text-right text-[10px] font-medium tabular-nums ${fin.valor < 0 ? 'text-destructive' : 'text-success'}`}>
-                                {brl(fin.valor)}
+                            <span className="grid grid-cols-[1fr_44px] items-center gap-1 whitespace-nowrap">
+                              <span className={`text-right tabular-nums font-medium ${fin.valor < 0 ? 'text-destructive' : 'text-success'}`}
+                                title={brlCent(fin.valor)}>
+                                {num0(fin.valor)}
                               </span>
-                              <span className={`${PILULA} ${pilula.tom} justify-self-start`}>{pilula.texto}</span>
+                              <span className={`${PILULA_FIXA} ${pilula.tom}`}>{pilula.texto}</span>
                             </span>
                           );
                         })()
                       : (
-                        <span className="grid grid-cols-[1fr_76px] items-baseline gap-1 whitespace-nowrap">
+                        /* ⚠ "S/ lanc." E' DO EIXO FINANCEIRO, nao do pagamento: ela diz que a
+                           operacao nao tem compromisso NENHUM, o que e' diferente de ter e nao
+                           ter pago. Sem ela, as duas ausencias virariam a mesma celula vazia. */
+                        <span className="grid grid-cols-[1fr_44px] items-center gap-1 whitespace-nowrap">
                           <span />
-                          <span className={`${PILULA} ${TOM_NEUTRO} justify-self-start`}>sem lançamento</span>
+                          <span className={`${PILULA_FIXA} ${TOM_NEUTRO}`} title="Sem lançamento financeiro">S/ lanc.</span>
                         </span>
                       )}
                   </TableCell>
-                  <TableCell className={`${TD} whitespace-nowrap`}>{(() => {
+                  <TableCell className={TD_PIL}><BadgeComercial status={r.status_comercial} rascunho={r.rascunho} /></TableCell>
+                  <TableCell className={TD_PIL}>
+                    {/* Cadeado = EIXO SEPARADO, ao lado da pilula e nunca dentro dela: o
+                        encerramento nao responde "chegou?", so "ainda mexe?". Por isso
+                        aparece igual sobre 'OK', 'Parcial' ou '—'. */}
+                    <span className="inline-flex items-center gap-0.5 whitespace-nowrap">
+                      {rec
+                        ? <span className={`${PILULA_FIXA} ${REC_TONE[rec] ?? TOM_NEUTRO}`} title={rec}>{REC_CURTO[rec] ?? rec}</span>
+                        : <span className="text-muted-foreground">—</span>}
+                      {r.entrega_encerrada && (
+                        <span title="Entrega encerrada" className="text-muted-foreground">
+                          <Lock className="h-2 w-2" />
+                        </span>
+                      )}
+                    </span>
+                  </TableCell>
+                  <TableCell className={TD_PIL}>{(() => {
                     const est = liqMap[r.id]?.estado_liquidacao;
                     // Sem estado = a fonte não classifica: '—' de texto, NUNCA pílula colorida.
                     if (!est) return <span className="text-muted-foreground">—</span>;
                     /* ⚠ "NÃO PAGA" ERA UMA ACUSAÇÃO onde havia só uma espera. A operação
                         recém-fechada não está inadimplente: está aguardando. Texto muted, sem
-                        pílula — pílula é para estado que exige leitura, e esperar não exige. */
+                        pílula — pílula é para estado que exige leitura, e esperar não exige.
+                        Decisão mantida em OC-LISTA-COMPACTA-01; só o texto encurtou. */
                     if (est === 'nao_liquidada') {
-                      return <span className="text-muted-foreground">aguardando pgto</span>;
+                      return <span className="text-[8px] text-muted-foreground" title="Aguardando pagamento">aguardando</span>;
                     }
-                    if (est === 'quitada') return <span className={`${PILULA} ${TOM_SUCESSO}`}>paga</span>;
+                    if (est === 'quitada') return <span className={`${PILULA_FIXA} ${TOM_SUCESSO}`}>Paga</span>;
                     if (est === 'parcial') {
                       /* A porcentagem sai do MESMO dado que a coluna Financeiro já leu — nenhuma
-                         consulta a mais. Sem obrigação conhecida, a pílula não inventa número. */
+                         consulta a mais. Sem obrigação conhecida, o title não inventa número.
+                         ⚠ O % SAIU DA PÍLULA POR LARGURA, não por escolha de conteúdo: "paga 87%"
+                         tem 9 caracteres e a pílula fixa comporta 7. Ele vive no `title`. */
                       const f = finMap[r.id];
                       const pct = f && f.obrigacao_total > 0
                         ? Math.round((f.total_liquidado / f.obrigacao_total) * 100) : null;
-                      return <span className={`${PILULA} ${TOM_ATENCAO}`}>{pct == null ? 'paga em parte' : `paga ${pct}%`}</span>;
+                      return <span className={`${PILULA_FIXA} ${TOM_ATENCAO}`}
+                        title={pct == null ? 'Paga em parte' : `Paga ${pct}%`}>Parcial</span>;
                     }
-                    return <span className={`${PILULA} ${LIQ_TOM[est] ?? TOM_NEUTRO}`}>{liqLabel(est)}</span>;
+                    return <span className={`${PILULA_FIXA} ${LIQ_TOM[est] ?? TOM_NEUTRO}`} title={est}>{liqLabel(est)}</span>;
                   })()}</TableCell>
                   {/* stopPropagation: sem isto, abrir o menu abriria a operacao junto. */}
-                  <TableCell className={`${TD} text-right`} onClick={e => e.stopPropagation()}>
+                  {/* ⚠ O BOTAO MANDAVA NA ALTURA DA LINHA INTEIRA. Com `h-6` (24px) a `<tr>`
+                      media 25px por mais que as outras onze celulas coubessem em 18: numa
+                      tabela, a celula mais alta rege a linha, e `h-[18px]` na `<td>` e' MINIMO,
+                      nao maximo — a mesma armadilha do `leading-none` no resumo do abate. */}
+                  <TableCell className={`${TD_PIL} !px-0 text-right`} onClick={e => e.stopPropagation()}>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-6 w-6"><MoreVertical className="h-3.5 w-3.5" /></Button>
+                        <Button variant="ghost" size="icon" className="h-[14px] w-[14px] min-w-0 p-0"><MoreVertical className="h-2.5 w-2.5" /></Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         {abrePorTipo(r.tipo_operacao)
