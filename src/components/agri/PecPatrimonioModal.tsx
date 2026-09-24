@@ -59,6 +59,7 @@ const VERMELHO = 'text-destructive';
 const corSinal = (v: number | null) => (v == null || v === 0 ? '' : v > 0 ? VERDE : VERMELHO);
 
 /** ⚠ AUSÊNCIA É TRAÇO, ZERO É NÚMERO — a sentinela do projeto. */
+const traco = '—';
 const n = (v: number | null | undefined, casas = 2) => (v == null ? '—' : formatNum(v, casas));
 const comSinal = (v: number | null, casas = 2) =>
   (v == null ? '—' : `${v > 0 ? '+' : ''}${formatNum(v, casas)}`);
@@ -204,10 +205,12 @@ function variacaoDe(t: Cat, chave: string, aba: Aba): { d: number | null; base: 
  * coluna "Rebanho" fecha DE CIMA PARA BAIXO e a última linha dela é o mesmo número do "Valor" do
  * fim, à esquerda. É assim que o leigo confere que a conta fecha, sem precisar somar nada.
  *
- * ⚠ E A COLUNA "ARROBAS × R$/@" É LEITURA, NÃO CONTA. O valor de cada linha vem do payload
- * (`v0`, `v1_p0`, `v1_p1`), que soma CATEGORIA A CATEGORIA; o produto dos dois agregados dá outro
- * número — medido no SR jan-ago/21: 39.233 × 245,55 = 9.634.161 contra os 9.680.106 reais. A
- * coluna diz de onde o número veio; ela não o calcula.
+ * ⚠ E A COLUNA "ARROBAS × R$/@" FECHA NA CALCULADORA — fix5. O preço de cada linha é o DELA:
+ * `valor_da_linha / arrobas_da_linha`, e não um preço emprestado de outra. O da Produção é o preço
+ * de P0 PONDERADO PELO REBANHO DO FIM (246,73 no SR jan-ago/21) e não o R$/@ de dez/20 da metade
+ * esquerda (245,55), que é ponderado pelo rebanho do INÍCIO: são dois preços médios do mesmo mês
+ * sobre misturas de categoria diferentes. Emprestar o da esquerda fazia o produto dar 9.634.161
+ * contra os 9.680.106 da linha — 45 mil de diferença numa coluna que o operador multiplica.
  */
 /**
  * ⚠ AS LARGURAS SÃO AS MEDIDAS, NÃO AS DO MOCK, e a diferença foi medida célula a célula com um
@@ -268,18 +271,16 @@ export function PecPatrimonioModal({
   );
   const vazio = <td className="px-0" />;
 
-  /* As quatro linhas da caminhada. "Rebanho" é o valor soberano do payload; "Arrobas × R$/@" é a
-     leitura de onde ele veio. */
-  const direita: { rot: string; leitura: string; rebanho: string; varTxt: string; varV: number | null }[] = [
-    { rot: `Valia em ${rotuloMes(p0)}`, leitura: `${n(T.at0, 0)} × ${n(T.pk0)}`,
-      rebanho: n(T.v0, 0), varTxt: '', varV: null },
-    { rot: '+ Produção', leitura: `${n(T.at1, 0)} × ${n(T.pk0)}`,
-      rebanho: n(T.v1p0, 0), varTxt: comSinal(T.dProd, 0), varV: T.dProd },
-    { rot: '+ Mercado', leitura: `${n(T.at1, 0)} × ${n(T.pk1)}`,
-      rebanho: n(T.v1p1, 0), varTxt: comSinal(T.dMerc, 0), varV: T.dMerc },
-    { rot: `Vale em ${rotuloMes(p1)}`, leitura: pctDe(T.dTotal, T.v0),
-      rebanho: n(T.v1p1, 0), varTxt: comSinal(T.dTotal, 0), varV: T.dTotal },
-  ];
+  const passos = useMemo(() => caminhadaDoValor(T), [T]);
+  const direita = passos.map((p, i) => ({
+    rot: i === 0 ? `Valia em ${rotuloMes(p0)}` : i === 3 ? `Vale em ${rotuloMes(p1)}` : p.rot,
+    leitura: p.arrobas == null ? traco
+      : i === 3 ? pctDe(T.dTotal, T.v0)
+        : `${n(p.arrobas, 0)} × ${n(p.preco)}`,
+    rebanho: n(p.valor, 0),
+    varTxt: p.variacao == null ? '' : comSinal(p.variacao, 0),
+    varV: p.variacao,
+  }));
 
   const esquerda: { rot: string; a: string; b: string; d: string; p: string; v: number | null }[] = [
     { rot: 'Cabeças', a: n(T.q0, 0), b: n(T.q1, 0), d: comSinal(T.q1 - T.q0, 0),
@@ -467,6 +468,7 @@ export function PecPatrimonioModal({
               <div className="shrink-0 text-[9px] leading-[12px] text-muted-foreground">
                 Produção: as arrobas a mais, ainda ao preço de {rotuloMes(p0)}.
                 Mercado: o rebanho do fim, do preço de {rotuloMes(p0)} para o de {rotuloMes(p1)}.
+                {' '}R$/@ da Produção: preço de {rotuloMes(p0)} ponderado pelo rebanho de {rotuloMes(p1)}.
               </div>
 
               {/* ⚠ A FRASE DE LEITURA LONGA SAIU COM OS CARDS, e não é perda: ela repetia em prosa
@@ -514,4 +516,42 @@ export function PecPatrimonioModal({
       </DialogContent>
     </Dialog>
   );
+}
+
+/**
+ * A CAMINHADA DO VALOR — as quatro linhas da metade direita do topo (mock v16b, fix5).
+ *
+ * ⚠ O PREÇO DE CADA LINHA É O DELA: `valor / arrobas`, e não um preço emprestado de outra. O da
+ * Produção é o preço de P0 PONDERADO PELO REBANHO DO FIM e difere do R$/@ do início da metade
+ * esquerda, que é ponderado pelo rebanho do INÍCIO — são dois preços médios do mesmo mês sobre
+ * misturas de categoria diferentes. Medido no SR jan-ago/21: 246,73 contra 245,55, e emprestar o
+ * da esquerda fazia o produto dar 9.634.161 no lugar dos 9.680.106 da linha.
+ *
+ * ⚠ E É ISSO QUE A COLUNA PROMETE: o operador multiplica o que lê e chega no que lê. O que sobra é
+ * só o arredondamento — das duas casas do preço e das zero casas das arrobas.
+ */
+export interface PassoValor {
+  rot: string;
+  arrobas: number | null;
+  preco: number | null;
+  valor: number;
+  /** `null` na primeira linha: não há variação antes de começar. */
+  variacao: number | null;
+}
+
+export function caminhadaDoValor(t: {
+  at0: number; at1: number; v0: number; v1p0: number; v1p1: number;
+  dProd: number; dMerc: number; dTotal: number;
+}): PassoValor[] {
+  const preco = (valor: number, at: number) => (at === 0 ? null : valor / at);
+  return [
+    { rot: 'Valia', arrobas: t.at0 === 0 ? null : t.at0, preco: preco(t.v0, t.at0),
+      valor: t.v0, variacao: null },
+    { rot: '+ Produção', arrobas: t.at1 === 0 ? null : t.at1, preco: preco(t.v1p0, t.at1),
+      valor: t.v1p0, variacao: t.dProd },
+    { rot: '+ Mercado', arrobas: t.at1 === 0 ? null : t.at1, preco: preco(t.v1p1, t.at1),
+      valor: t.v1p1, variacao: t.dMerc },
+    { rot: 'Vale', arrobas: t.at1 === 0 ? null : t.at1, preco: preco(t.v1p1, t.at1),
+      valor: t.v1p1, variacao: t.dTotal },
+  ];
 }

@@ -323,7 +323,10 @@ function valorNaColuna(col: ColunaPec, chave: ChaveLinhaPec): number | null {
  * resultado é o que o Detalhado mostra em duas linhas. Se qualquer parcela for ausente, o todo é
  * ausente — somar tratando `null` como zero afirmaria um total que não se sabe.
  */
-function valorDaLinha(col: ColunaPec, def: DefPec): number | null {
+/* ⚠ EXPORTADA PARA A CASCATA — DRE-CASCATA-GRAFICO-01. A vista Gráfico desenha as MESMAS quinze
+   linhas do Resumido, e o valor de cada barra tem de ser o mesmo da grade, inclusive as duas
+   compostas. Recalcular a composição lá seria ter duas verdades ao primeiro arredondamento. */
+export function valorDaLinha(col: ColunaPec, def: DefPec): number | null {
   if (!def.compor) return valorNaColuna(col, def.chave);
   const parcelas = [
     ...def.compor.mais.map(k => ({ k, sinal: 1 })),

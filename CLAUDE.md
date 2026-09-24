@@ -555,6 +555,32 @@ no mesmo arquivo.
   ⚠ E O CASO DAS TRANSFERENCIAS AFIRMA OS DOIS LADOS de proposito: elas somem com liquido ZERO e
   FICAM com liquido diferente de zero. Afirmar so' a ausencia passaria verde tambem se alguem
   apagasse as duas linhas de vez (a mesma licao do auto-teste do `check:tdz`).
+  De 1780 para 1785 no DRE-CASCATA-GRAFICO-01: entrou
+  `src/components/agri/pecCascataView.test.ts` (+5) — a LEI DO GRAFICO da cascata do DRE, testada
+  na funcao `montarBarras` e nao no SVG.
+  ⚠ SAO DUAS LEIS, e uma sem a outra nao prova ponte nenhuma: a RAZAO (a altura de uma barra,
+  `ate - de`, e' o MODULO do valor dela — numa escala linear isso e' a proporcionalidade inteira) e
+  o ENCAIXE (subtotal sai do ZERO, passo FLUTUA do acumulado, e cada subtotal cai exatamente onde
+  os passos anteriores o deixaram). So' a primeira passaria verde num grafico de barras comum.
+  ⚠ UM CASO E' DO SINAL, e ele existe porque o sinal NAO vem do numero: "(−) Deducoes" chega
+  POSITIVA da RPC e tem de subtrair. Ler o sinal do valor faria um estorno somar duas vezes.
+  ⚠ E O ANO DE PREJUIZO E' CASO PROPRIO (SR civil 2025, lucro -3.496.515,22): e' ele que exercita
+  `chao < 0`, o eixo negativo e a barra final abaixo do zero. Ele fecha afirmando que no ano BOM o
+  chao e' ZERO — sem isso, uma escala quebrada que sempre descesse passaria verde.
+  De 1785 para 1790 no mesmo PR, com o fix5: entrou
+  `src/components/agri/pecPatrimonioModal.test.ts` (+5) — a coluna "Arrobas x R$/@" do modal FECHA
+  NA CALCULADORA. Ela promete uma multiplicacao e o operador vai faze-la; ate' o fix5 a linha da
+  Producao usava o R$/@ do INICIO da metade esquerda (245,55, ponderado pelo rebanho do inicio)
+  sobre as arrobas do FIM, e 39.233 x 245,55 dava 9.634.161 contra os 9.680.106 impressos na celula
+  ao lado. Quarenta e cinco mil numa coluna que existe para ser conferida.
+  ⚠ A TOLERANCIA E' `0,005 x arrobas`, E O NUMERO NAO E' ESCOLHIDO: e' exatamente o que arredondar
+  o preco a DUAS CASAS pode custar — meio centavo por arroba. O briefing pedia `0,0005 x @`, dez
+  vezes menos, e NENHUMA implementacao correta passaria; medido, os tres deltas do SR jan-ago/21
+  sao +24,36 / -147,37 / +13,38 contra limites teoricos de 176 / 196 / 196.
+  ⚠ E UM CASO AFIRMA QUE OS DOIS PRECOS DO MESMO MES SAO DIFERENTES DE PROPOSITO (245,55 e 246,73):
+  o primeiro e' P0 ponderado pelo rebanho do inicio, o segundo e' P0 ponderado pelo rebanho do FIM,
+  e a mistura de categorias mudou no meio do periodo. Sem ele, "consertar" a divergencia igualando
+  os dois passaria verde — e o caso mede o estrago (R$ 45.944) para dizer por que nao.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -730,6 +756,20 @@ migration e' REGISTRO HISTORICO, nao se reaplica).
     regra DO FRONT, sem `tipo_uso`, por decisao do Gabriel em 23/09.
   ⚠ HOJE SAO TRES ESPELHOS, nao dois: entrou `fn_pasto_vigente_no_mes`, que e' fiel ao front.
     Reconciliar os tres e' frente propria; enquanto nao for, quem mexer em um confere os outros.
+- REPOSICAO-SEM-CUSTO-01 — o Santa Rita COMPRA gado e o DRE nao tem custo de reposicao NENHUM.
+  Medido em 24/09/2026, cliente inteiro, realizado, seis periodos: `reposicao` = 0,00 em TODOS,
+  enquanto `producao.cab_comprada` e `at_comprada` mostram compra de verdade —
+    civil 2021   6 cab / 90,00 @    reposicao 0,00
+    safra 21/22  32 cab / 362,33 @  reposicao 0,00
+    safra 24/25  1 cab / 20,00 @    reposicao 0,00
+  (civil 2025 e safra 25/26 nao tiveram compra: `at_comprada` vem NULL, que e' outra coisa.)
+  ⚠ O ESTRAGO E' NO AGIO, e por isso a tela trata: "agio sobre R$/@ do desfrute" e'
+  `R$/@ compra / R$/@ desfrute - 1`, e com `reposicao = 0` o R$/@ da compra da' ZERO e o agio sai
+  em -100% em toda a tela do SR. A faixa da cascata mostra "—" nas duas celulas quando
+  `reposicao` e' zero E houve compra — zero ali nao e' preco, e' lancamento que falta.
+  ⚠ E NAO E' DEFEITO DE TELA: o dado do financeiro e' que nao tem a contrapartida da compra
+  zootecnica. Quem for consertar decide se o lancamento faltou ou se a compra foi por outro
+  caminho (permuta, transferencia entre clientes). Ate' la', "—".
 - PK-INI-PONDERADO-01 — `pk_ini` le' `max(preco_kg)` do mes, e deveria ler o PONDERADO POR KG.
   Ela aparece em `fn_dre_pecuaria` e em `fn_dre_pecuaria_patrimonio`, no mesmo formato:
   `select fazenda_id, categoria, max(preco_kg) pk ... where ano_mes = left(p_de,7) group by 1,2`.

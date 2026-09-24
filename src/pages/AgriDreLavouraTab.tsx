@@ -56,6 +56,7 @@ import {
 import { PecLancamentosModal } from '@/components/agri/PecLancamentosModal';
 import { PecPatrimonioModal } from '@/components/agri/PecPatrimonioModal';
 import { PecEstoquePonteModal } from '@/components/agri/PecEstoquePonteModal';
+import { PecCascataView } from '@/components/agri/PecCascataView';
 import { PecRateioAdmModal } from '@/components/agri/PecRateioAdmModal';
 import {
   PecHistoricoLinhaModal, type RecorteHistoricoPec,
@@ -513,6 +514,15 @@ export function AgriDreLavouraTab() {
 
   /* ⚠ TRÊS CONTROLES DE APRESENTAÇÃO, e nenhum deles refaz consulta: o payload já traz `direto`,
      `rateado` e `valor` em cada linha. Trocar de modo é escolher qual ler. */
+  /**
+   * TABELA OU GRÁFICO — DRE-CASCATA-GRAFICO-01, e o estado mora na URL.
+   *
+   * ⚠ LINKÁVEL PELO MESMO MOTIVO DOS OUTROS FILTROS: o consultor manda o link da cascata de 2021
+   * para o produtor, e ele abre na cascata de 2021. Um `useState` daria a grade.
+   * ⚠ SÓ NA PECUÁRIA neste PR — a lavoura fica para depois, por decisão do briefing.
+   */
+  const [vistaPec, setVistaPec] = useFiltroUrl<'tabela' | 'grafico'>(
+    'f_vista', 'tabela', b => (b === 'grafico' ? 'grafico' : 'tabela'), v => v);
   const [rateioDentro, setRateioDentro] = useState(false);
   /* ⚠ AS UNIDADES SÃO ESCOLHA MÚLTIPLA — DRE-UNIDADES-01, e cada aba tem a sua lista: a lavoura
      fecha em saca ou tonelada, a pecuária em cabeça e arroba. As duas abrem com R$ e R$/ha. */
@@ -584,6 +594,10 @@ export function AgriDreLavouraTab() {
         style={{ height: 22 }}>
         {tudoAberto ? 'fechar tudo' : 'abrir tudo'}
       </button>
+      {/* ⚠ AO LADO DO "abrir tudo", NO MESMO SLOT DA DIREITA: a régua de 22px é a dos chips, e o
+          segmentado navy é o marcador único de seleção da casa (PR-DRE-LAVOURA-04). */}
+      <Segmentado altura={22} valor={vistaPec} onEscolher={setVistaPec}
+        opcoes={[{ valor: 'tabela', rotulo: 'Tabela' }, { valor: 'grafico', rotulo: 'Gráfico' }]} />
     </>
   );
 
@@ -1159,6 +1173,11 @@ export function AgriDreLavouraTab() {
           <div className="rounded-lg border border-border/60 bg-card px-3 py-8 text-center text-[11px] text-muted-foreground">
             <Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin align-[-2px]" /> Carregando…
           </div>
+        ) : vistaPec === 'grafico' ? (
+          /* ⚠ A MESMA ÁREA, O MESMO `cartaoRef` E A MESMA ALTURA MEDIDA: trocar de vista não pode
+             mover os cards nem os controles acima — é o que o segmentado promete ao ficar parado. */
+          <PecCascataView colunas={colunasPec} clienteId={clienteId}
+            alturaCartao={alturaCartao} cartaoRef={cartao} />
         ) : (
           <PecDrePanel colunas={colunasPec} alturaCartao={alturaCartao} cartaoRef={cartao}
             unidades={unidadesPec}
