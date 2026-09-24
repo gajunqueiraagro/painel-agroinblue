@@ -81,9 +81,24 @@ interface Props {
   eventos: readonly EventoTrilha[];
   /** O que dizer quando não há nada — cada tela tem a sua frase. */
   vazio: string;
+  /**
+   * ⚠ DUAS ESCALAS, DEFAULT `'tela'` — MOVIMENTACOES-PADRAO-01b. Mesmo contrato do
+   * `BlocoTopoAba`: quem não passa a prop não muda de tamanho. Ver A18 "escala de modal".
+   * ⚠ OS DOIS CONSUMIDORES SAO MODAIS (`AbaAuditoriaOC` e `AbaAuditoriaLancamento`), mas só
+   * o primeiro passa `'modal'` neste PR — o modal do lançamento tem régua própria e mexer
+   * nele aqui seria mudar uma tela que ninguém pediu. O default protege isso.
+   */
+  escala?: 'tela' | 'modal';
 }
 
-export function TrilhaAuditoria({ eventos, vazio }: Props) {
+export function TrilhaAuditoria({ eventos, vazio, escala = 'tela' }: Props) {
+  const modal = escala === 'modal';
+  /* Linha de 15px no modal contra ~19px na tela: hora mais estreita, frase um ponto menor e
+     sem padding vertical — a altura passa a ser a própria `leading`. */
+  const cxLinha = modal ? 'px-2 py-0 leading-[15px]' : 'px-3.5 py-0.5 leading-[1.4]';
+  const cxHora = modal ? 'w-[30px]' : 'w-[34px]';
+  const cxFrase = modal ? 'text-[10px]' : 'text-[11px]';
+  const cxFaixa = modal ? 'px-2' : 'px-3.5';
   const [abertoId, setAbertoId] = useState<string | null>(null);
 
   /* Agrupa por DIA preservando a ordem que veio do banco (mais recente primeiro). */
@@ -108,7 +123,7 @@ export function TrilhaAuditoria({ eventos, vazio }: Props) {
       )}
       {dias.map(([dia, doDia]) => (
         <div key={dia}>
-          <div className="bg-muted/40 px-3.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <div className={`bg-muted/40 ${cxFaixa} py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground`}>
             {rotuloDia(dia)}
           </div>
           {doDia.map((e) => {
@@ -123,13 +138,13 @@ export function TrilhaAuditoria({ eventos, vazio }: Props) {
                      aguenta o que uma linha de documento nao aguentaria. `py-0.5` com
                      `leading-[1.4]` da ~19px por evento contra ~26px antes: cabem cerca
                      de sete linhas a mais por tela, que e' o ponto de uma trilha. */
-                  className={`flex w-full items-baseline gap-2 px-3.5 py-0.5 text-left leading-[1.4] hover:bg-muted/30 ${aberto ? 'bg-muted/30' : ''}`}>
-                  <span className="w-[34px] shrink-0 text-[10px] tabular-nums text-muted-foreground">{hora(e.quando)}</span>
+                  className={`flex w-full items-baseline gap-2 text-left hover:bg-muted/30 ${cxLinha} ${aberto ? 'bg-muted/30' : ''}`}>
+                  <span className={`${cxHora} shrink-0 text-[10px] tabular-nums text-muted-foreground`}>{hora(e.quando)}</span>
                   {mostrarAutor && (
                     <span className="w-[62px] shrink-0 truncate text-[10px] text-muted-foreground"
                       title={e.autor ?? 'Autor não identificado nesta sessão'}>{e.autor ?? '—'}</span>
                   )}
-                  <span className="min-w-0 flex-1 truncate text-[11px] text-foreground">
+                  <span className={`min-w-0 flex-1 truncate ${cxFrase} text-foreground`}>
                     {e.frase}
                     {e.detalhe && <span className="ml-1.5 text-muted-foreground">{e.detalhe}</span>}
                   </span>

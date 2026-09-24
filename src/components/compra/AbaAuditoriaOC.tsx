@@ -109,6 +109,7 @@ export function AbaAuditoriaOC({ api, operacaoPronta, fornecedores, lotes }: Pro
       </div>
 
       <TrilhaAuditoria
+        escala="modal"
         eventos={linhas}
         vazio={api.loading ? 'Carregando…' : 'Nenhum registro ainda. Cada ação nesta operação entra aqui.'}
       />
