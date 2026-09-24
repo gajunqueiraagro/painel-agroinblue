@@ -203,20 +203,34 @@ const LINHAS: DefLinha[] = [
     somaDe: ['custo_fixo', 'rateio_admin'] },
   { chave: 'custo_fixo',             rotulo: '(−) Custo fixo da lavoura',       tom: 'custo', bloco: 'fixo', filhoDe: 'g_custo_fixo' },
   { chave: 'rateio_admin',           rotulo: '(−) Rateio administrativo',       tom: 'custo', etiqueta: 'estimado', filhoDe: 'g_custo_fixo' },
-  { chave: 'resultado_operacional',  rotulo: '= Resultado operacional',         faixa: 't3', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
+  /* ⚠ t4 E O NOME NOVO — DRE-DESTAQUE-LAVOURA-01, espelho do que a pecuária ganhou no -02. O
+     lucro operacional é a linha que compara operação com operação, antes do endividamento; ela
+     ganha a faixa navy, o "% da receita líquida" que já tinha e o "por hectare" que a
+     `fn_dre_lavoura` passou a devolver (migration 20261027142000). */
+  { chave: 'resultado_operacional',  rotulo: '= Lucro operacional',              faixa: 't4', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
   { chave: 'juros',                  rotulo: '(−) Despesas financeiras (juros)', tom: 'custo' },
   /* ⚠ O NOME MUDOU, A CHAVE NÃO — DRE-CASCATA-03a: "Resultado do período" é como a pecuária já
      chamava a mesma linha, e duas atividades do mesmo DRE não podem ter dois nomes para a mesma
      pergunta. A chave `resultado_caixa` fica: renomeá-la quebraria o histórico da lavoura (que
      dele deriva o `resultado_ha`) e o PC-100, em silêncio. */
-  { chave: 'resultado_caixa',        rotulo: '= Resultado do período',           faixa: 't3', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
+  /* ⚠ O NOME "= Lucro líquido" MUDOU DE DONO, e a chave não: era o rótulo de `lucro_liquido`, que
+     sai da grade logo abaixo, e passa a ser o de `resultado_caixa` — exatamente a troca que a
+     pecuária fez no -01/-02. `resultado_caixa` continua sendo a chave, porque renomeá-la quebraria
+     o histórico da lavoura e o PC-100 em silêncio. */
+  { chave: 'resultado_caixa',        rotulo: '= Lucro líquido',                  faixa: 't4', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
   /* ⚠ O INVESTIMENTO ENTROU NA CASCATA — DRE-CASCATA-03a. Ele era vermelho e ficava "abaixo da
      linha de caixa": a faixa dizia que não entrava no resultado do período, e era verdade — mas o
      dinheiro saiu, e a conta que o produtor faz é a que sobra DEPOIS dele. Agora a cascata segue
      até o lucro líquido e a faixa não existe mais. A depreciação continua reservada, sem valor. */
-  { chave: 'investimento',           rotulo: '(−) Investimento no período',     tom: 'custo', bloco: 'investimento' },
-  { chave: 'lucro_liquido',          rotulo: '= Lucro líquido',                 faixa: 't4', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
+  /* ⚠ A DEPRECIAÇÃO SUBIU — DRE-DESTAQUE-LAVOURA-01: ela é nota informativa (reservada, sem
+     valor) e ficava DEPOIS do lucro líquido. Com o lucro líquido fora da grade, ela é que passaria
+     a encerrá-la, e a grade tem de terminar no Investimento — como na pecuária. */
   { chave: 'depreciacao',            rotulo: 'Depreciação (reservada · o custo operacional total = efetivo + depreciação nasce aqui)', tom: 'custo' },
+  /* ⚠ O INVESTIMENTO FECHA A GRADE, E SAIU DA CONTA: o "= Lucro líquido" que vinha depois dele
+     (chave `lucro_liquido`) foi removido. Investimento tem payback longo e depreciação; o que
+     sobra depois dele não é o resultado DO PERÍODO, e encerrar a grade ali fazia um ano ser lido
+     pela lente de uma compra que dura dez. A chave da RPC continua existindo — só não tem linha. */
+  { chave: 'investimento',           rotulo: '(−) Investimento no período',     tom: 'custo', bloco: 'investimento' },
 ];
 
 /* ⚠ DATAS FATIADAS DA STRING, NUNCA POR `new Date('2025-11-10')`: essa forma é interpretada
@@ -1753,8 +1767,14 @@ export function Grade({
               {/* ⚠ O LUCRO POR HECTARE É LEITURA DE APOIO, na régua da linha de % da pecuária: 9px,
                   muted, altura 14, sem cor de sinal e sem clique. Ele some quando o chip R$/ha está
                   marcado — ali a sub-coluna já responde. */}
-              {def.chave === 'lucro_liquido' && !unidades.includes('ha') && (
-                <LinhaPorHectareLav dre={dre} culturas={culturas} unidades={unidades} semTotal={semTotal} />
+              {/* ⚠ SOB AS DUAS LINHAS DE FAIXA t4 — DRE-DESTAQUE-LAVOURA-01: Lucro operacional e
+                  Lucro líquido. Era só sob o antigo `lucro_liquido`, que saiu da grade. E segue
+                  valendo a regra de antes: com o chip `ha` ligado o número já é uma COLUNA, e a
+                  sub-linha seria o mesmo dado duas vezes. */}
+              {(def.chave === 'resultado_operacional' || def.chave === 'resultado_caixa')
+                && !unidades.includes('ha') && (
+                <LinhaPorHectareLav chave={def.chave} dre={dre} culturas={culturas}
+                  unidades={unidades} semTotal={semTotal} />
               )}
               {filhas.map(ct => (
                 <LinhaCentro key={`${def.chave}:${ct.centro}`} centro={ct} culturas={culturas}
@@ -1884,7 +1904,11 @@ function LinhaPercentualLav({ chave, dre, culturas, unidades, semTotal }: {
   );
 }
 
-function LinhaPorHectareLav({ dre, culturas, unidades, semTotal }: {
+/* ⚠ A CHAVE VEM DE FORA — DRE-DESTAQUE-LAVOURA-01. Ela estava fixa em `lucro_liquido`, em dois
+   pontos do corpo, e com o lucro líquido fora da grade a linha precisava servir DUAS outras:
+   `resultado_operacional` e `resultado_caixa`, que são as que ganharam a faixa t4. */
+function LinhaPorHectareLav({ chave, dre, culturas, unidades, semTotal }: {
+  chave: ChaveLinha;
   dre: DreLavoura; culturas: DreCultura[]; unidades: readonly UnidadeLav[]; semTotal?: boolean;
 }) {
   const celula = (v: number | null | undefined) => (v == null ? traco : `R$ ${formatNum(v, 2)}/ha`);
@@ -1908,14 +1932,14 @@ function LinhaPorHectareLav({ dre, culturas, unidades, semTotal }: {
     <tr className={cn(t4.fundo, 'font-normal')} style={{ height: 14 }}>
       <td className={cn('sticky left-0 z-10 truncate border-r border-border/60 py-px text-primary-foreground/80', t4.fundo)}
         style={{ fontSize: 9, paddingLeft: 7, paddingRight: 7 }}
-        title="Lucro líquido dividido pela área plantada da cultura">
-        Lucro por hectare
+        title="O total desta linha dividido pela área plantada da cultura">
+        por hectare
       </td>
       {culturas.map(c => (
         <Fragment key={c.cultura}>
           <td className={cn('truncate px-[7px] text-right tabular-nums', t4.fundo, t4.texto)}
             style={{ fontSize: 9, borderLeft: '1px solid hsl(var(--border))' }}>
-            {valor(c.linhas.lucro_liquido.por_ha)}
+            {valor(c.linhas[chave].por_ha)}
           </td>
           {vazias(unidades.length - 1)}
         </Fragment>
@@ -1923,7 +1947,7 @@ function LinhaPorHectareLav({ dre, culturas, unidades, semTotal }: {
       {!semTotal && <>
         <td className={cn('truncate px-[7px] text-right tabular-nums', t4.fundo, t4.texto)}
           style={{ fontSize: 9, borderLeft: BORDA_TOTAL }}>
-          {valor(dre.total.linhas.lucro_liquido.por_ha)}
+          {valor(dre.total.linhas[chave].por_ha)}
         </td>
         {vazias(unidades.filter(u => u !== 'un').length - 1)}
       </>}

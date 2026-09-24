@@ -146,7 +146,10 @@ describe('o invariante do PR-08 — o modo não muda total nenhum', () => {
      não dava o Resultado operacional impresso na linha de baixo. Um número de APRESENTAÇÃO
      mudando o total é o A23 quebrado e a coluna deixando de fechar. */
   it('custo fixo, investimento e os dois resultados são iguais nos dois modos', () => {
-    for (const alvo of ['76.544,30', '6.360.202,63', '379.499,54', '235.792,40']) {
+    /* ⚠ OS DOIS RESULTADOS VÊM COM O MARCADOR ▲ — DRE-DESTAQUE-LAVOURA-01: `resultado_operacional`
+       e `resultado_caixa` ganharam a faixa t4, que traz o ▲/▼ por sinal. Os dois são positivos no
+       fixture do NJ. Custo fixo e investimento seguem sem marcador, fora da faixa. */
+    for (const alvo of ['76.544,30', '6.360.202,63', '▲379.499,54', '▲235.792,40']) {
       cleanup(); montar({ rateioDentro: false });
       expect(valoresDoAmendoim(), `${alvo} em Custos diretos`).toContain(alvo);
       cleanup(); montar({ rateioDentro: true });
