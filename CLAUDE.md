@@ -1144,3 +1144,23 @@ preview que o cabecalho nao sai da tela ao rolar.
   ⚠ COMO SE MARCA: sugerido tem fundo ambar e uma linha de 10px dizendo que e' sugestao; o valor
   digitado (ou gravado) e' branco. Sem a marca, o numero que a tela escreveu e o que o operador
   escreveu ficam identicos — e e' exatamente essa diferenca que ele precisa ver.
+- RECLASS-PESO-01 — FECHADA em 24/09/2026. Reclassificacao sem peso nao entra mais por caminho
+  nenhum: tela (`ReclassificacaoForm`, trava unica no hook), importacao (`peso_medio_kg`
+  obrigatorio + template corrigido) e BANCO — migration `reclass_peso_guard_01`
+  (arquivo `supabase/migrations/20261027141000_reclass_peso_guard_01.sql`; ⚠ registrada como
+  `20260924152829`, de novo com o timestamp de hoje e nao com o do nome — ver a nota igual no
+  BACKFILL-01).
+  `validate_lancamento_campos_por_tipo`: md5 be162b71 -> 1d5018ca (3.345 -> 3.571 chars).
+  Provado em rollback E depois no proto: insert SEM peso BLOQUEIA, insert COM peso passa, update
+  de existente passa. As 1.184 reclassificacoes atuais tem todas peso.
+  ⚠ A GUARDA NAO ALCANCA O CENARIO META — frente META-VALIDACAO-01. A funcao inteira desiste
+  antes do `CASE`:
+      IF NEW.cenario = 'meta' THEN RETURN NEW; END IF;
+  e as CTEs `rcl_*_meta` de `fn_zoot_categoria_mensal` tem o MESMO `COALESCE(peso_medio_kg, 0)`
+  das `rcl_*_real`. O furo existe igual no planejamento; so' nao contamina numero realizado.
+  ⚠ E ELE NAO FOI PROVADO NA TELA, so' na leitura do codigo: a tentativa de inserir uma
+  reclassificacao 'meta' sem peso foi barrada por OUTRA guarda (`guard_meta_admin_only`, que exige
+  consultor), entao o ramo do peso nem chegou a ser avaliado. Quem for fechar a frente mede com
+  credencial de consultor antes de afirmar o tamanho do buraco.
+  ⚠ CONSERTAR O META NAO E' ACRESCENTAR UM `IF`: mexer naquele `RETURN NEW` muda a validacao de
+  TODOS os tipos de lancamento de uma vez. E' frente propria, com medicao propria.
