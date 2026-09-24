@@ -169,7 +169,7 @@ export function PecEstoquePonteModal({
   /* ─────────── A TABELA ─────────── */
   const LARG = ['46%', '17%', '16%', '21%'];
   const celula = (txt: string, cor?: string, forte?: boolean) => (
-    <td className={cn('truncate px-2 py-0.5 text-right text-[11px] tabular-nums', cor, forte && 'font-medium')}>
+    <td className={cn('truncate px-2 py-0 text-right text-[11px] leading-[1.3] tabular-nums', cor, forte && 'font-medium')}>
       {txt}
     </td>
   );
@@ -186,8 +186,8 @@ export function PecEstoquePonteModal({
     const at = x.dir === -1 ? -x.p.arrobas : x.p.arrobas;
     const preco = x.semPreco ? null : porAt(x.p.valor, x.p.arrobas);
     return (
-      <tr key={x.chave} style={{ height: solto ? 20 : 19 }}>
-        <td className={cn('truncate py-0.5 pr-2 text-left text-[11px]',
+      <tr key={x.chave} style={{ height: solto ? 22 : 20 }}>
+        <td className={cn('truncate py-0 pr-2 text-left text-[11px] leading-[1.3]',
           solto ? 'px-2 font-medium' : 'pl-5 italic text-muted-foreground')}
           title={x.title}>{x.rotulo}</td>
         {celula(sinalInt(at), corSinal(at))}
@@ -198,8 +198,8 @@ export function PecEstoquePonteModal({
   };
 
   const linhaGrupo = (rot: string, at: number, valor: number, sinal: 1 | -1) => (
-    <tr style={{ height: 20 }}>
-      <td className="truncate px-2 py-0.5 text-left text-[11px] font-medium">{rot}</td>
+    <tr style={{ height: 22 }}>
+      <td className="truncate px-2 py-0 text-left text-[11px] font-medium leading-[1.3]">{rot}</td>
       {celula(sinalInt(sinal * at), corSinal(sinal * at), true)}
       {celula(traco)}
       {celula(sinalInt(sinal * valor), corSinal(sinal * valor), true)}
@@ -210,7 +210,7 @@ export function PecEstoquePonteModal({
     if (!x) return null;
     const preco = porAt(x.p.valor, x.p.arrobas);
     return (
-      <tr style={{ height: 21, backgroundColor: navy ? NAVY : AZUL_CLARO }}>
+      <tr style={{ height: 22, backgroundColor: navy ? NAVY : AZUL_CLARO }}>
         <td className={cn('truncate px-2 py-0.5 text-left text-[11px] font-medium', navy && 'text-white')}>
           {x.rotulo}
         </td>
@@ -222,10 +222,10 @@ export function PecEstoquePonteModal({
   };
 
   const linhaConcil = (rot: string, valor: number | null, navy?: boolean) => (
-    <tr style={{ height: 19, backgroundColor: navy ? NAVY : AZUL_CLARO }}>
-      <td colSpan={3} className={cn('truncate px-2 py-0.5 text-left text-[11px]',
+    <tr style={{ height: 18, backgroundColor: navy ? NAVY : AZUL_CLARO }}>
+      <td colSpan={3} className={cn('truncate px-2 py-0 text-left text-[10px] leading-none',
         navy ? 'font-medium text-white' : 'text-muted-foreground')}>{rot}</td>
-      <td className={cn('truncate px-2 py-0.5 text-right text-[11px] tabular-nums',
+      <td className={cn('truncate px-2 py-0 text-right text-[10px] leading-none tabular-nums',
         navy ? 'font-medium text-white' : corSinal(valor ?? null))}>
         {valor == null ? traco : sinalInt(valor)}
       </td>
@@ -254,7 +254,15 @@ export function PecEstoquePonteModal({
   /* ⚠ A ALTURA É MEDIDA, NÃO ESCOLHIDA: o corpo do modal tem 468, menos os 24 de padding, os ~26
      da legenda com a conta e os 16 do card — sobram 380 para o desenho. Com os 210 de antes o card
      ficava METADE VAZIO e a ponte se espremia no topo (visto na tela em 24/09). */
-  const H = 380, PAD_TOPO = 18, PAD_BASE = 34;
+  /* ⚠ O viewBox TEM LARGURA FIXA E O EIXO TEM MARGEM DE VERDADE — fix4. Antes ele era
+     `n * 84` de largura com os rótulos do eixo em `x = 2`: esticado por `preserveAspectRatio="none"`,
+     uma unidade valia menos de um pixel e os números do eixo saíam CORTADOS na borda esquerda
+     (medido na homologação de 24/09). Com largura fixa de 880 — a do card a 1440 — uma unidade vale
+     um pixel, e os 60 de margem são 60px de verdade. */
+  const W = 880, MARG_ESQ = 60, MARG_DIR = 10;
+  const H = 260, PAD_TOPO = 14, PAD_BASE = 30;
+  const FAIXA = W - MARG_ESQ - MARG_DIR;
+  const passo = grafico ? FAIXA / grafico.barras.length : 0;
   const escalaY = (v: number) => {
     if (!grafico || grafico.topo === grafico.chao) return H - PAD_BASE;
     return PAD_TOPO + (grafico.topo - v) / (grafico.topo - grafico.chao) * (H - PAD_TOPO - PAD_BASE);
@@ -262,13 +270,15 @@ export function PecEstoquePonteModal({
 
   return (
     <Dialog open={aberto} onOpenChange={o => { if (!o) onFechar(); }}>
-      <DialogContent className="max-w-4xl gap-0 overflow-hidden p-0 [&>button.absolute]:hidden">
-        <div className="flex items-start justify-between gap-3 px-4 py-2.5 text-white" style={{ backgroundColor: NAVY }}>
+      {/* ⚠ ALTURA PELO CONTEÚDO, TETO EM 82vh — fix4, a mesma regra do modal irmão. */}
+      <DialogContent className="flex max-h-[82vh] max-w-4xl flex-col gap-0 overflow-hidden p-0 [&>button.absolute]:hidden">
+        {/* ⚠ 44px DE CABEÇALHO — ver o mesmo bloco em `PecPatrimonioModal`. */}
+        <div className="flex items-start justify-between gap-3 px-3 py-[5px] text-white" style={{ backgroundColor: NAVY }}>
           <div className="min-w-0">
-            <h2 className="truncate text-[15px] font-bold leading-tight">
+            <h2 className="truncate text-[13px] font-semibold leading-[17px]">
               Variação do estoque · evolução de arrobas
             </h2>
-            <div className="mt-0.5 truncate text-[11px] text-white/80">
+            <div className="truncate text-[11px] leading-[15px] text-white/80">
               {[clienteNome, fazendaNome, p0 && p1 ? `${rotuloMes(p0)} → ${rotuloMes(p1)}`
                 : `${periodo.de} → ${periodo.ate}`].filter(Boolean).join(' · ')}
             </div>
@@ -276,33 +286,40 @@ export function PecEstoquePonteModal({
           <div className="flex shrink-0 items-center gap-1">
             {([['tabela', 'Tabela'], ['grafico', 'Gráfico']] as const).map(([v, r]) => (
               <button key={v} type="button" onClick={() => setAba(v)}
-                className={cn('rounded px-2 py-1 text-[11px] font-medium transition-colors',
+                className={cn('rounded px-2 py-0.5 text-[11px] font-medium leading-[18px] transition-colors',
                   aba === v ? 'bg-white text-[#0C447C]' : 'text-white/80 hover:bg-white/10')}>
                 {r}
               </button>
             ))}
             <button type="button" onClick={onFechar} aria-label="Fechar"
-              className="ml-1 text-white/80 hover:text-white">
-              <X className="h-5 w-5" />
+              className="ml-0.5 text-white/80 hover:text-white">
+              <X className="h-4 w-4" />
             </button>
           </div>
         </div>
 
-        {/* ⚠ ALTURA FIXA NAS DUAS ABAS: trocar de Tabela para Gráfico não pode mover o modal. */}
-        <div className="flex flex-col gap-2 bg-muted/30 p-3" style={{ height: 468 }}>
+        {/* ⚠ O `minHeight` É O QUE MANTÉM O TAMANHO AO TROCAR DE ABA, e substitui a altura fixa de
+            468 que fazia o modal nascer maior que a tela. */}
+        <div className="flex min-h-0 flex-1 flex-col gap-1.5 bg-muted/30 p-2" style={{ minHeight: 300 }}>
           {carregando || !m ? (
             <div className="flex flex-1 items-center justify-center text-[11px] text-muted-foreground">
               <Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin align-[-2px]" /> Carregando…
             </div>
-          ) : aba === 'tabela' ? (
-            <>
+          ) : (
+            /* ⚠ AS DUAS ABAS FICAM MONTADAS, SOBREPOSTAS NA MESMA CÉLULA DE GRID, e a escondida só
+               perde a visibilidade. É o que dá TAMANHO FIXO ao trocar de aba sem número mágico: a
+               altura do grid é a da MAIOR das duas, medida pelo próprio navegador. Com `minHeight`
+               chutado o modal encolhia de 451 para 376px ao ir para o Gráfico — visto em 24/09. */
+            <div className="grid min-h-0 flex-1 [&>*]:col-start-1 [&>*]:row-start-1">
+            <div className={cn('flex min-h-0 flex-col gap-1.5',
+              aba !== 'tabela' && 'invisible pointer-events-none')}>
               <div className="min-h-0 flex-1 overflow-auto rounded-md border bg-card">
                 <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
                   <colgroup>{LARG.map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>
                   <thead>
-                    <tr style={{ height: 22 }}>
+                    <tr style={{ height: 20 }}>
                       {['', 'Qtde @', 'R$/@', 'Valor do estoque (R$)'].map((r, i) => (
-                        <th key={i} className={cn('sticky top-0 z-10 truncate px-2 py-0.5 text-[10px] font-semibold text-white',
+                        <th key={i} className={cn('sticky top-0 z-10 truncate px-2 py-0 text-[10px] font-semibold leading-none text-white',
                           i === 0 ? 'text-left' : 'text-right')} style={{ backgroundColor: CAB_TABELA }}>
                           {r}
                         </th>
@@ -320,13 +337,13 @@ export function PecEstoquePonteModal({
                     {saidas.map(x => linhaMov(x))}
                     {ajuste && linhaMov(ajuste, true)}
                     {linhaPonta(passos.find(x => x.chave === 'fim'), true)}
-                    <tr style={{ height: 21, backgroundColor: AZUL_CLARO, borderTop: '1px solid #9a988f' }}>
-                      <td className="truncate px-2 py-0.5 text-left text-[11px] font-medium">Diferença no período</td>
+                    <tr style={{ height: 22, backgroundColor: AZUL_CLARO, borderTop: '1px solid #9a988f' }}>
+                      <td className="truncate px-2 py-0 text-left text-[11px] font-medium leading-[1.3]">Diferença no período</td>
                       {celula(sinalInt(dAt), corSinal(dAt), true)}
                       {celula(sinalDec(dPk), corSinal(dPk), true)}
                       {celula(sinalInt(dVal), corSinal(dVal), true)}
                     </tr>
-                    <tr style={{ height: 16, backgroundColor: AZUL_CLARO }}>
+                    <tr style={{ height: 18, backgroundColor: AZUL_CLARO }}>
                       <td />
                       {celula(pct(dAt, m.inicio.arrobas), corSinal(dAt))}
                       {celula(pct(dPk, pk0), corSinal(dPk))}
@@ -342,7 +359,7 @@ export function PecEstoquePonteModal({
                 </table>
               </div>
 
-              <div className="shrink-0 text-[10px] leading-snug text-muted-foreground">
+              <div className="shrink-0 text-[10px] leading-[13px] text-muted-foreground">
                 No início o estoque era de <strong className="font-medium tabular-nums">{int(m.inicio.arrobas)}</strong> @ a
                 R$ <strong className="font-medium tabular-nums">{dec(pk0)}</strong> (R$ {mi(m.inicio.valor)}).
                 Entraram <strong className="font-medium tabular-nums">{int(somaEnt)}</strong> @
@@ -359,7 +376,7 @@ export function PecEstoquePonteModal({
               </div>
 
               <div className="flex shrink-0 items-baseline justify-between gap-2">
-                <span className="truncate text-[9px] text-muted-foreground">
+                <span className="truncate text-[9px] leading-[12px] text-muted-foreground">
                   A diferença de R$ é a linha Variação do estoque do DRE; o efeito do preço fica em
                   Efeito de mercado. Compras e vendas em dinheiro seguem nas linhas Reposição e Vendas.
                 </span>
@@ -368,36 +385,44 @@ export function PecEstoquePonteModal({
                   Ver por categoria <ChevronRight className="h-3 w-3" />
                 </button>
               </div>
-            </>
-          ) : (
-            <>
+            </div>
+            <div className={cn('flex min-h-0 flex-col gap-1.5',
+              aba !== 'grafico' && 'invisible pointer-events-none')}>
               <div className="flex min-h-0 flex-1 items-stretch rounded-md border bg-card p-2">
                 {grafico && (
-                  <svg width="100%" height="100%" viewBox={`0 0 ${grafico.barras.length * 84} ${H}`}
+                  <svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`}
                     preserveAspectRatio="none" role="img" aria-label="Ponte de arrobas">
-                    {/* grade do eixo Y, em arrobas */}
-                    {[0, 0.25, 0.5, 0.75, 1].map(f => {
-                      const v = grafico.chao + (grafico.topo - grafico.chao) * f;
+                    {[0, 0.25, 0.5, 0.75, 1].map(fr => {
+                      const v = grafico.chao + (grafico.topo - grafico.chao) * fr;
                       return (
-                        <g key={f}>
-                          <line x1={0} x2={grafico.barras.length * 84} y1={escalaY(v)} y2={escalaY(v)}
+                        <g key={fr}>
+                          <line x1={MARG_ESQ} x2={W - MARG_DIR} y1={escalaY(v)} y2={escalaY(v)}
                             stroke="#E3E1D9" strokeWidth={1} />
-                          <text x={2} y={escalaY(v) - 2} fontSize={8} fill="#8A8880">{formatNum(v, 0)}</text>
+                          <text x={MARG_ESQ - 5} y={escalaY(v) + 3} fontSize={9} textAnchor="end"
+                            fill="#8A8880">{formatNum(v, 0)}</text>
                         </g>
                       );
                     })}
+                    {/* ⚠ A LINHA DO ZERO É PRETA E SÓ APARECE QUANDO HÁ NEGATIVO: sem negativo ela
+                        coincide com a base da grade e seria um traço a mais dizendo o mesmo. */}
+                    {grafico.chao < 0 && (
+                      <>
+                        <line x1={MARG_ESQ} x2={W - MARG_DIR} y1={escalaY(0)} y2={escalaY(0)}
+                          stroke="#2C2C2A" strokeWidth={1} />
+                        <text x={MARG_ESQ - 5} y={escalaY(0) + 3} fontSize={9} textAnchor="end" fill="#2C2C2A">0</text>
+                      </>
+                    )}
                     {grafico.barras.map((b, i) => {
-                      const x = i * 84 + 18, larg = 48;
+                      const cx = MARG_ESQ + i * passo, larg = Math.min(passo * 0.58, 46);
+                      const x = cx + (passo - larg) / 2;
                       const y = escalaY(b.ate), alt = Math.max(escalaY(b.de) - escalaY(b.ate), 1);
                       const val = b.x.chave === 'ajustes' ? b.x.p.arrobas
                         : b.x.dir === 0 ? b.x.p.arrobas : b.x.dir * b.x.p.arrobas;
                       return (
                         <g key={b.x.chave}>
-                          {/* ⚠ A TRACEJADA LIGA O TOPO ACUMULADO de uma barra à seguinte — é ela que
-                              faz o olho ver a conta andando, e não seis barras soltas. */}
                           {i > 0 && (
-                            <line x1={x - 18} x2={x} y1={escalaY(b.flutua ? b.de : b.ate)}
-                              y2={escalaY(b.flutua ? b.de : b.ate)}
+                            <line x1={cx - passo + (passo + larg) / 2} x2={x}
+                              y1={escalaY(b.flutua ? b.de : b.ate)} y2={escalaY(b.flutua ? b.de : b.ate)}
                               stroke="#B9B6AC" strokeWidth={1} strokeDasharray="3 2" />
                           )}
                           <rect x={x} y={y} width={larg} height={alt} fill={b.x.cor} rx={1}>
@@ -412,7 +437,7 @@ export function PecEstoquePonteModal({
                             else ls.push(w);
                             return ls;
                           }, []).slice(0, 2).map((linha, j) => (
-                            <text key={j} x={x + larg / 2} y={H - 18 + j * 9} fontSize={8}
+                            <text key={j} x={x + larg / 2} y={H - PAD_BASE + 12 + j * 9} fontSize={8.5}
                               textAnchor="middle" fill="#6B6862">{linha}</text>
                           ))}
                         </g>
@@ -436,11 +461,12 @@ export function PecEstoquePonteModal({
                   {' '}= {int(m.fim.arrobas)}
                 </span>
               </div>
-            </>
+            </div>
+            </div>
           )}
         </div>
 
-        <div className="px-4 py-1.5 text-[10px] text-white/80" style={{ backgroundColor: NAVY }}>
+        <div className="shrink-0 truncate px-3 text-[9px] leading-[22px] text-white/80" style={{ backgroundColor: NAVY }}>
           Valores estimados · preço da categoria no mês de cada movimento · arrobas = kg vivo ÷ 30
         </div>
       </DialogContent>

@@ -192,39 +192,37 @@ function variacaoDe(t: Cat, chave: string, aba: Aba): { d: number | null; base: 
   return { d: null, base: null };
 }
 
-/** Uma linha rótulo-à-esquerda / valor-à-direita dos cards (A17/A18). */
-function Par({ rot, val, cor }: { rot: string; val: string; cor?: string }) {
-  return (
-    <div className="flex items-baseline justify-between gap-2 whitespace-nowrap leading-tight">
-      <span className="truncate text-[10px] text-muted-foreground">{rot}</span>
-      <span className={cn('shrink-0 text-[10px] font-medium tabular-nums', cor)}>{val}</span>
-    </div>
-  );
-}
-/** ⚠ O % VAI NUMA LINHA SÓ DELE, à direita: ao lado do valor, ele quebrava a linha a 1440. */
-function PctLinha({ txt, cor }: { txt: string; cor?: string }) {
-  return <div className={cn('text-right text-[10px] leading-tight tabular-nums', cor)}>{txt}</div>;
-}
-
-function Card({ titulo, grande, corGrande, pct, children }: {
-  titulo: string; grande: string; corGrande?: string; pct?: string; children?: React.ReactNode;
-}) {
-  return (
-    <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-md border bg-card">
-      <div className="truncate px-2 py-1 text-[11px] font-medium"
-        style={{ backgroundColor: AZUL_CLARO, color: NAVY }}>
-        {titulo}
-      </div>
-      <div className="flex-1 px-2 py-1.5">
-        <div className={cn('truncate text-[16px] font-medium leading-none tabular-nums', corGrande)}>{grande}</div>
-        {pct !== undefined && (
-          <div className={cn('mt-0.5 text-[12px] leading-none tabular-nums', corGrande)}>{pct}</div>
-        )}
-        <div className="mt-1.5 space-y-0.5">{children}</div>
-      </div>
-    </div>
-  );
-}
+/**
+ * A TABELA DO TOPO — mock v16b.
+ *
+ * ⚠ É UMA TABELA SÓ, NÃO DUAS LADO A LADO, e a diferença é o ponto do desenho: as linhas das duas
+ * metades são FISICAMENTE as mesmas, então "Arrobas" à esquerda e "+ Produção" à direita ficam
+ * exatamente na mesma altura. Com dois `<table>` irmãos isso só valeria por coincidência de
+ * régua — e deixaria de valer no primeiro número que mudasse de altura.
+ *
+ * ⚠ A METADE DIREITA É UMA CAMINHADA, não um resumo: valia · + produção · + mercado · vale. A
+ * coluna "Rebanho" fecha DE CIMA PARA BAIXO e a última linha dela é o mesmo número do "Valor" do
+ * fim, à esquerda. É assim que o leigo confere que a conta fecha, sem precisar somar nada.
+ *
+ * ⚠ E A COLUNA "ARROBAS × R$/@" É LEITURA, NÃO CONTA. O valor de cada linha vem do payload
+ * (`v0`, `v1_p0`, `v1_p1`), que soma CATEGORIA A CATEGORIA; o produto dos dois agregados dá outro
+ * número — medido no SR jan-ago/21: 39.233 × 245,55 = 9.634.161 contra os 9.680.106 reais. A
+ * coluna diz de onde o número veio; ela não o calcula.
+ */
+/**
+ * ⚠ AS LARGURAS SÃO AS MEDIDAS, NÃO AS DO MOCK, e a diferença foi medida célula a célula com um
+ * `Range` sobre o conteúdo contra o `clientWidth` menos o padding — o método que o CLAUDE.md fixou
+ * depois das três calibragens erradas da grade do DRE. As do mock (56/66/74/70/56/8/78/100/64/68)
+ * foram desenhadas com números menores; no SR jan-ago/21 quatro colunas estouram:
+ *   rótulo esq. "Valor (R$)"      48,2 numa caixa de 44
+ *   rótulo dir. "Valia em dez/20" 76,4 numa caixa de 66
+ *   Rebanho     "12.031.963"      57,3 numa caixa de 52
+ *   Variação    "+1.036.279"      57,3 numa caixa de 56
+ * A régua é a mesma da grade: pior texto + 8 de folga + 12 de padding. Soma 726px, contra 1112
+ * disponíveis no modal — sobra de 386.
+ */
+const COLS_TOPO = [70, 72, 78, 78, 62, 8, 98, 104, 78, 78] as const;
+const H_CAP = 16, H_CAB = 16, H_LIN = 16;
 
 export function PecPatrimonioModal({
   aberto, fazendaNome, clienteNome, patrimonio, carregando, periodo, onFechar,
@@ -256,80 +254,87 @@ export function PecPatrimonioModal({
   const cols = COLS[aba];
   const variam = VARIAM[aba];
   const dAt = T.at1 - T.at0;
-  const dAtJ = tJov.at1 - tJov.at0;
-  const dAtA = tAdu.at1 - tAdu.at0;
+  /* ⚠ AS VARIAÇÕES POR GRUPO SAÍRAM COM OS TOPOS DE Produção E Mercado (mock v16b): elas só
+     alimentavam aqueles dois cards. Os grupos continuam na TABELA, com os totais próprios. */
   const dPk = T.pk1 == null || T.pk0 == null ? null : T.pk1 - T.pk0;
-  const dPkJ = tJov.pk1 == null || tJov.pk0 == null ? null : tJov.pk1 - tJov.pk0;
-  const dPkA = tAdu.pk1 == null || tAdu.pk0 == null ? null : tAdu.pk1 - tAdu.pk0;
 
-  /* ─── OS CARDS DO TOPO ─── */
-  /* ⚠ OS OPERADORES `+ + =` SÃO O CONTEÚDO, não enfeite: eles dizem que as quatro caixas formam uma
-     conta, e é a conta inteira do modal numa linha. */
-  const cardsResumo = (
-    <div className="flex items-stretch gap-1.5">
-      <Card titulo={`Valia em ${rotuloMes(p0)}`} grande={`R$ ${n(T.v0, 0)}`}>
-        <Par rot="Cabeças" val={n(T.q0, 0)} />
-        <Par rot="Arrobas" val={n(T.at0, 0)} />
-        <Par rot="R$/@ médio" val={n(T.pk0)} />
-      </Card>
-      <div className="flex shrink-0 items-center text-[14px] text-muted-foreground">+</div>
-      <Card titulo="Produção" grande={`R$ ${comSinal(T.dProd, 0)}`} corGrande={corSinal(T.dProd)}
-        pct={pctDe(T.dProd, T.v0)}>
-        <Par rot="Arrobas a mais" val={`${comSinal(dAt, 0)} @`} cor={corSinal(dAt)} />
-        <PctLinha txt={pctDe(dAt, T.at0)} cor={corSinal(dAt)} />
-        <Par rot="ao preço do início" val={`${n(T.pk0)} R$/@`} />
-      </Card>
-      <div className="flex shrink-0 items-center text-[14px] text-muted-foreground">+</div>
-      <Card titulo="Mercado" grande={`R$ ${comSinal(T.dMerc, 0)}`} corGrande={corSinal(T.dMerc)}
-        pct={pctDe(T.dMerc, T.v1p0)}>
-        <Par rot={dPk != null && dPk < 0 ? 'Arroba caiu' : 'Arroba subiu'}
-          val={`${comSinal(dPk)} R$/@`} cor={corSinal(dPk)} />
-        <PctLinha txt={pctDe(dPk, T.pk0)} cor={corSinal(dPk)} />
-        <Par rot="sobre o rebanho do fim" val={`${n(T.at1, 0)} @`} />
-      </Card>
-      <div className="flex shrink-0 items-center text-[14px] text-muted-foreground">=</div>
-      <Card titulo={`Vale em ${rotuloMes(p1)}`} grande={`R$ ${n(T.v1p1, 0)}`}>
-        <Par rot="Cabeças" val={n(T.q1, 0)} />
-        <Par rot="Arrobas" val={n(T.at1, 0)} />
-        <Par rot="R$/@ médio" val={n(T.pk1)} />
-      </Card>
-    </div>
+  /* ─── A TABELA DO TOPO — a mesma nas três abas ─── */
+  const cor = (v: number | null) => corSinal(v) || undefined;
+
+  /** Uma célula da faixa: 10px, número à direita, cor opcional. */
+  const cTopo = (txt: string, corTxt?: string, esq?: boolean, forte?: boolean) => (
+    <td className={cn('truncate px-1.5 py-0 text-[10px] leading-none tabular-nums',
+      esq ? 'text-left' : 'text-right', forte && 'font-medium', corTxt)}>{txt}</td>
   );
+  const vazio = <td className="px-0" />;
 
-  const cardsProducao = (
-    <div className="flex items-stretch gap-1.5">
-      <Card titulo="Variação por produção" grande={`${comSinal(dAt, 0)} @`} corGrande={corSinal(dAt)}
-        pct={pctDe(dAt, T.at0)}>
-        <Par rot="Arrobas no início" val={n(T.at0, 0)} />
-        <Par rot="Arrobas no fim" val={n(T.at1, 0)} />
-        <Par rot="Valor da produção" val={`R$ ${comSinal(T.dProd, 0)}`} cor={corSinal(T.dProd)} />
-        <PctLinha txt={pctDe(T.dProd, T.v0)} cor={corSinal(T.dProd)} />
-      </Card>
-      <Card titulo="Onde a produção aconteceu" grande={`${comSinal(dAt, 0)} @`} corGrande={corSinal(dAt)}>
-        <Par rot="Jovens" val={`${comSinal(dAtJ, 0)} @`} cor={corSinal(dAtJ)} />
-        <PctLinha txt={pctDe(dAtJ, tJov.at0)} cor={corSinal(dAtJ)} />
-        <Par rot="Adultos" val={`${comSinal(dAtA, 0)} @`} cor={corSinal(dAtA)} />
-        <PctLinha txt={pctDe(dAtA, tAdu.at0)} cor={corSinal(dAtA)} />
-      </Card>
-    </div>
-  );
+  /* As quatro linhas da caminhada. "Rebanho" é o valor soberano do payload; "Arrobas × R$/@" é a
+     leitura de onde ele veio. */
+  const direita: { rot: string; leitura: string; rebanho: string; varTxt: string; varV: number | null }[] = [
+    { rot: `Valia em ${rotuloMes(p0)}`, leitura: `${n(T.at0, 0)} × ${n(T.pk0)}`,
+      rebanho: n(T.v0, 0), varTxt: '', varV: null },
+    { rot: '+ Produção', leitura: `${n(T.at1, 0)} × ${n(T.pk0)}`,
+      rebanho: n(T.v1p0, 0), varTxt: comSinal(T.dProd, 0), varV: T.dProd },
+    { rot: '+ Mercado', leitura: `${n(T.at1, 0)} × ${n(T.pk1)}`,
+      rebanho: n(T.v1p1, 0), varTxt: comSinal(T.dMerc, 0), varV: T.dMerc },
+    { rot: `Vale em ${rotuloMes(p1)}`, leitura: pctDe(T.dTotal, T.v0),
+      rebanho: n(T.v1p1, 0), varTxt: comSinal(T.dTotal, 0), varV: T.dTotal },
+  ];
 
-  const cardsMercado = (
-    <div className="flex items-stretch gap-1.5">
-      <Card titulo="Efeito de mercado" grande={`${comSinal(dPk)} R$/@`} corGrande={corSinal(dPk)}
-        pct={pctDe(dPk, T.pk0)}>
-        <Par rot="R$/@ no início" val={n(T.pk0)} />
-        <Par rot="R$/@ no fim" val={n(T.pk1)} />
-        <Par rot="Valor do efeito" val={`R$ ${comSinal(T.dMerc, 0)}`} cor={corSinal(T.dMerc)} />
-        <PctLinha txt={pctDe(T.dMerc, T.v1p0)} cor={corSinal(T.dMerc)} />
-      </Card>
-      <Card titulo="O preço por grupo" grande={`${comSinal(dPk)} R$/@`} corGrande={corSinal(dPk)}>
-        <Par rot="Jovens" val={`${n(tJov.pk0)} → ${n(tJov.pk1)}`} />
-        <PctLinha txt={pctDe(dPkJ, tJov.pk0)} cor={corSinal(dPkJ)} />
-        <Par rot="Adultos" val={`${n(tAdu.pk0)} → ${n(tAdu.pk1)}`} />
-        <PctLinha txt={pctDe(dPkA, tAdu.pk0)} cor={corSinal(dPkA)} />
-      </Card>
-    </div>
+  const esquerda: { rot: string; a: string; b: string; d: string; p: string; v: number | null }[] = [
+    { rot: 'Cabeças', a: n(T.q0, 0), b: n(T.q1, 0), d: comSinal(T.q1 - T.q0, 0),
+      p: pctDe(T.q1 - T.q0, T.q0), v: T.q1 - T.q0 },
+    { rot: 'Arrobas', a: n(T.at0, 0), b: n(T.at1, 0), d: comSinal(dAt, 0),
+      p: pctDe(dAt, T.at0), v: dAt },
+    { rot: 'R$/@', a: n(T.pk0), b: n(T.pk1), d: comSinal(dPk), p: pctDe(dPk, T.pk0), v: dPk },
+    { rot: 'Valor (R$)', a: n(T.v0, 0), b: n(T.v1p1, 0), d: comSinal(T.dTotal, 0),
+      p: pctDe(T.dTotal, T.v0), v: T.dTotal },
+  ];
+
+  const topo = (
+    <table className="border-collapse" style={{ tableLayout: 'fixed', width: COLS_TOPO.reduce((a, w) => a + w, 0) }}>
+      <colgroup>{COLS_TOPO.map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>
+      <tbody>
+        <tr style={{ height: H_CAP }}>
+          <td colSpan={5} className="truncate px-1.5 py-0 text-[10px] font-medium leading-none"
+            style={{ backgroundColor: AZUL_CLARO, color: NAVY }}>Rebanho</td>
+          {vazio}
+          <td colSpan={4} className="truncate px-1.5 py-0 text-[10px] font-medium leading-none"
+            style={{ backgroundColor: AZUL_CLARO, color: NAVY }}>De onde veio a variação</td>
+        </tr>
+        <tr style={{ height: H_CAB }}>
+          {['', rotuloMes(p0), rotuloMes(p1), 'Dif.', 'Dif. %'].map((r, i) => (
+            <th key={i} className={cn('truncate px-1.5 py-0 text-[9px] font-semibold leading-none text-white',
+              i === 0 ? 'text-left' : 'text-right')} style={{ backgroundColor: CAB_TABELA }}>{r}</th>
+          ))}
+          {vazio}
+          {['', 'Arrobas × R$/@', 'Rebanho', 'Variação'].map((r, i) => (
+            <th key={i} className={cn('truncate px-1.5 py-0 text-[9px] font-semibold leading-none text-white',
+              i === 0 ? 'text-left' : 'text-right')} style={{ backgroundColor: CAB_TABELA }}>{r}</th>
+          ))}
+        </tr>
+        {esquerda.map((e, i) => {
+          const d = direita[i];
+          /* ⚠ A ÚLTIMA LINHA É TOTAL NAS DUAS METADES — é ela que mostra os dois números iguais. */
+          const total = i === esquerda.length - 1;
+          const fundo = total ? AZUL_CLARO : undefined;
+          return (
+            <tr key={e.rot} style={{ height: H_LIN, backgroundColor: fundo }}>
+              {cTopo(e.rot, undefined, true, total)}
+              {cTopo(e.a, undefined, false, total)}
+              {cTopo(e.b, undefined, false, total)}
+              {cTopo(e.d, cor(e.v), false, total)}
+              {cTopo(e.p, cor(e.v), false, total)}
+              <td className="px-0" style={{ backgroundColor: undefined }} />
+              {cTopo(d.rot, undefined, true, total)}
+              {cTopo(d.leitura, total ? cor(T.dTotal) : undefined, false, total)}
+              {cTopo(d.rebanho, undefined, false, total)}
+              {cTopo(d.varTxt, cor(d.varV), false, total)}
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
   );
 
   const nota = aba === 'resumo'
@@ -340,10 +345,10 @@ export function PecPatrimonioModal({
 
   /** As três linhas de fecho de um grupo: o total, a variação e o %. */
   const linhasDeTotal = (t: Cat, fundo: string, fecha: boolean) => ([
-    <tr key={`${t.cod}:t`} style={{ backgroundColor: fundo, height: 20, borderTop: '1px solid #9a988f' }}>
+    <tr key={`${t.cod}:t`} style={{ backgroundColor: fundo, height: 22, borderTop: '1px solid #9a988f' }}>
       {cols.map(c => (
         <td key={c.chave} title={c.chave === 'nome' ? t.nome : undefined}
-          className={cn('truncate px-1.5 py-0.5 text-[11px] font-medium tabular-nums',
+          className={cn('truncate px-1.5 py-0 text-[11px] font-medium leading-[1.3] tabular-nums',
             c.chave === 'nome' ? 'text-left' : 'text-right')}
           style={{ borderLeft: c.bloco ? DIVISOR : undefined }}>
           {c.chave === 'nome' ? t.nome : n(valorDe(t, c.chave), casasDe(c.chave))}
@@ -356,7 +361,7 @@ export function PecPatrimonioModal({
         const mostra = variam.has(c.chave);
         return (
           <td key={c.chave}
-            className={cn('truncate px-1.5 py-0.5 text-[11px] tabular-nums',
+            className={cn('truncate px-1.5 py-0 text-[10px] leading-none tabular-nums',
               c.chave === 'nome' ? 'pl-3.5 text-left text-muted-foreground' : 'text-right',
               mostra && corSinal(d))}
             style={{ borderLeft: c.bloco ? DIVISOR : undefined }}>
@@ -372,7 +377,7 @@ export function PecPatrimonioModal({
         const mostra = variam.has(c.chave);
         return (
           <td key={c.chave}
-            className={cn('truncate px-1.5 py-0.5 text-[11px] tabular-nums',
+            className={cn('truncate px-1.5 py-0 text-[10px] leading-none tabular-nums',
               c.chave === 'nome' ? 'pl-3.5 text-left text-muted-foreground' : 'text-right',
               mostra && corSinal(d))}
             style={{ borderLeft: c.bloco ? DIVISOR : undefined }}>
@@ -388,15 +393,15 @@ export function PecPatrimonioModal({
     if (lista.length === 0) return null;
     return (
       <>
-        <tr style={{ backgroundColor: AZUL_FAIXA, height: 20 }}>
-          <td colSpan={cols.length} className="truncate px-1.5 py-0.5 text-[11px] font-medium"
+        <tr style={{ backgroundColor: AZUL_FAIXA, height: 18 }}>
+          <td colSpan={cols.length} className="truncate px-1.5 py-0 text-[11px] font-medium leading-none"
             style={{ color: NAVY }}>{titulo}</td>
         </tr>
         {lista.map((c, i) => (
-          <tr key={c.cod} style={{ backgroundColor: i % 2 === 1 ? ZEBRA : undefined, height: 20 }}>
+          <tr key={c.cod} style={{ backgroundColor: i % 2 === 1 ? ZEBRA : undefined, height: 22 }}>
             {cols.map(col => (
               <td key={col.chave} title={col.chave === 'nome' ? c.nome : undefined}
-                className={cn('truncate px-1.5 py-0.5 text-[11px] tabular-nums',
+                className={cn('truncate px-1.5 py-0 text-[11px] leading-[1.3] tabular-nums',
                   col.chave === 'nome' ? 'text-left' : 'text-right')}
                 style={{ borderLeft: col.bloco ? DIVISOR : undefined }}>
                 {col.chave === 'nome' ? c.nome : n(valorDe(c, col.chave), casasDe(col.chave))}
@@ -411,13 +416,20 @@ export function PecPatrimonioModal({
 
   return (
     <Dialog open={aberto} onOpenChange={o => { if (!o) onFechar(); }}>
-      <DialogContent className="max-w-6xl gap-0 overflow-hidden p-0 [&>button.absolute]:hidden">
+      {/* ⚠ ALTURA PELO CONTEÚDO, TETO EM 82vh — fix4. A altura FIXA de 520 no corpo fazia o modal
+          medir 606px numa viewport de 579 (105%): ele nascia maior que a tela. Agora quem manda é o
+          conteúdo, e só a TABELA rola quando não couber. O `minHeight` do corpo é o que mantém o
+          tamanho ESTÁVEL ao trocar de aba — a exigência do fix2 continua valendo. */}
+      <DialogContent className="flex max-h-[82vh] max-w-6xl flex-col gap-0 overflow-hidden p-0 [&>button.absolute]:hidden">
         {/* ⚠ AS ABAS MORAM NO CABEÇALHO, à direita — e a ordem é [Resumo][Produção][Mercado], que é a
             ordem da conta: o total primeiro, depois as duas parcelas que o explicam. */}
-        <div className="flex items-start justify-between gap-3 px-4 py-2.5 text-white" style={{ backgroundColor: NAVY }}>
+        {/* ⚠ 44px DE CABEÇALHO, medido: 13px de título sobre 11px de subtítulo, com 5px de folga em
+            cima e embaixo. Os 57px de antes vinham de um título de 15px e `py-2.5` — 13px num modal
+            cujo corpo inteiro é 10 e 11px era o único texto grande da tela. */}
+        <div className="flex items-start justify-between gap-3 px-3 py-[5px] text-white" style={{ backgroundColor: NAVY }}>
           <div className="min-w-0">
-            <h2 className="truncate text-[15px] font-bold leading-tight">Variação do valor do rebanho</h2>
-            <div className="mt-0.5 truncate text-[11px] text-white/80">
+            <h2 className="truncate text-[13px] font-semibold leading-[17px]">Variação do valor do rebanho</h2>
+            <div className="truncate text-[11px] leading-[15px] text-white/80">
               {[clienteNome, fazendaNome, p0 && p1 ? `${rotuloMes(p0)} → ${rotuloMes(p1)}`
                 : `${periodo.de} → ${periodo.ate}`].filter(Boolean).join(' · ')}
             </div>
@@ -425,14 +437,14 @@ export function PecPatrimonioModal({
           <div className="flex shrink-0 items-center gap-1">
             {([['resumo', 'Resumo'], ['producao', 'Produção'], ['mercado', 'Mercado']] as const).map(([v, r]) => (
               <button key={v} type="button" onClick={() => setAba(v)}
-                className={cn('rounded px-2 py-1 text-[11px] font-medium transition-colors',
+                className={cn('rounded px-2 py-0.5 text-[11px] font-medium leading-[18px] transition-colors',
                   aba === v ? 'bg-white text-[#0C447C]' : 'text-white/80 hover:bg-white/10')}>
                 {r}
               </button>
             ))}
             <button type="button" onClick={onFechar} aria-label="Fechar"
-              className="ml-1 text-white/80 hover:text-white">
-              <X className="h-5 w-5" />
+              className="ml-0.5 text-white/80 hover:text-white">
+              <X className="h-4 w-4" />
             </button>
           </div>
         </div>
@@ -440,37 +452,34 @@ export function PecPatrimonioModal({
         {/* ⚠ ALTURA FIXA, IGUAL NAS TRÊS ABAS, e é o que impede o modal de pular quando o operador
             troca de aba para comparar. O que sobra ou falta é absorvido pela tabela, que é a única
             que rola — UM SCROLLPORT SÓ (A21). */}
-        <div className="flex flex-col gap-2 bg-muted/30 p-3" style={{ height: 520 }}>
+        <div className="flex min-h-0 flex-1 flex-col gap-1.5 bg-muted/30 p-2" style={{ minHeight: 300 }}>
           {carregando || !patrimonio ? (
             <div className="flex flex-1 items-center justify-center text-[11px] text-muted-foreground">
               <Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin align-[-2px]" /> Carregando…
             </div>
           ) : (
             <>
-              <div className="shrink-0">
-                {aba === 'resumo' ? cardsResumo : aba === 'producao' ? cardsProducao : cardsMercado}
+              {/* ⚠ A MESMA TABELA NAS TRÊS ABAS — mock v16b. Antes cada aba tinha o topo dela, e
+                  como elas não tinham a mesma altura o modal PULAVA ao trocar. Um topo só resolve
+                  os dois problemas de uma vez: a caminhada do valor é a mesma pergunta em qualquer
+                  aba, e a altura deixa de depender de qual está aberta. */}
+              <div className="shrink-0">{topo}</div>
+              <div className="shrink-0 text-[9px] leading-[12px] text-muted-foreground">
+                Produção: as arrobas a mais, ainda ao preço de {rotuloMes(p0)}.
+                Mercado: o rebanho do fim, do preço de {rotuloMes(p0)} para o de {rotuloMes(p1)}.
               </div>
 
-              {aba === 'resumo' && (
-                <div className="shrink-0 text-[10px] leading-snug text-muted-foreground">
-                  O rebanho valia <strong className="font-medium tabular-nums">R$ {n(T.v0, 0)}</strong> e
-                  vale <strong className="font-medium tabular-nums">R$ {n(T.v1p1, 0)}</strong> ({pctDe(T.dTotal, T.v0)}).
-                  Dessa diferença, <strong className="font-medium tabular-nums">R$ {comSinal(T.dProd, 0)}</strong> vieram
-                  de produzir <strong className="font-medium tabular-nums">{comSinal(dAt, 0)}</strong> arrobas,
-                  e <strong className="font-medium tabular-nums">R$ {comSinal(T.dMerc, 0)}</strong> vieram
-                  de a arroba {dPk != null && dPk < 0 ? 'cair' : 'subir'}{' '}
-                  <strong className="font-medium tabular-nums">{comSinal(dPk)}</strong> R$/@.
-                </div>
-              )}
-
+              {/* ⚠ A FRASE DE LEITURA LONGA SAIU COM OS CARDS, e não é perda: ela repetia em prosa
+                  os quatro números que a caminhada agora mostra em coluna, um embaixo do outro. Duas
+                  frases e uma tabela para a mesma conta era o que fazia o modal crescer. */}
               <div className="min-h-0 flex-1 overflow-auto rounded-md border bg-card">
                 <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
                   <colgroup>{cols.map(c => <col key={c.chave} style={{ width: `${c.pc}%` }} />)}</colgroup>
                   <thead>
-                    <tr style={{ height: 22 }}>
+                    <tr style={{ height: 20 }}>
                       {cols.map(c => (
                         <th key={c.chave} title={c.rot}
-                          className={cn('sticky top-0 z-10 truncate px-1.5 py-0.5 text-[10px] font-semibold text-white',
+                          className={cn('sticky top-0 z-10 truncate px-1.5 py-0 text-[10px] font-semibold leading-none text-white',
                             c.chave === 'nome' ? 'text-left' : 'text-right')}
                           style={{ backgroundColor: CAB_TABELA, borderLeft: c.bloco ? DIVISOR : undefined }}>
                           {c.rot}
@@ -494,12 +503,12 @@ export function PecPatrimonioModal({
                 </table>
               </div>
 
-              <div className="shrink-0 px-0.5 text-[10px] leading-snug text-muted-foreground">{nota}</div>
+              <div className="shrink-0 px-0.5 text-[9px] leading-[12px] text-muted-foreground">{nota}</div>
             </>
           )}
         </div>
 
-        <div className="px-4 py-1.5 text-[10px] text-white/80" style={{ backgroundColor: NAVY }}>
+        <div className="shrink-0 truncate px-3 text-[9px] leading-[22px] text-white/80" style={{ backgroundColor: NAVY }}>
           Valores estimados · preços do valor do rebanho de cada mês · arrobas = kg vivo ÷ 30
         </div>
       </DialogContent>
