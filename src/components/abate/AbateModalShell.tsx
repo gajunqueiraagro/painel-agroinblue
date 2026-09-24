@@ -143,15 +143,17 @@ function LinhaResumo({ rotulo, valor, cor, forte, selo, empilhado }: {
   /**
    * Rotulo em cima, valor embaixo a direita — MOVIMENTACOES-PADRAO-01a.
    *
-   * ⚠ NAO E' ESTILO, E' O QUE SOBRA QUANDO O PAR NAO CABE. Com o aside a 200px, tres
-   * rotulos estouram a linha em 10px, MEDIDO no NJ 16/04/2026 (Range sobre o conteudo
-   * contra o `clientWidth` menos o padding, descontando a escala 0,95 do Radix):
-   *     "por @ · por cabeca"      precisa 214,8  cabe 182  -> -32,8
-   *     "Carcaca · RC"            precisa 185,0  cabe 182  ->  -3,0
-   *     "A receber da industria"  precisa 183,0  cabe 182  ->  -1,0
+   * ⚠ NAO E' ESTILO, E' O QUE SOBRA QUANDO O PAR NAO CABE. Medido no NJ 16/04/2026 (Range
+   * sobre o conteudo contra o `clientWidth` menos o padding, descontando a escala 0,95 do
+   * Radix), em 10px:
+   *                              precisa   com 200px (182 uteis)   com 240px (218 uteis)
+   *     "por @ · por cabeca"      214,8          -32,8                   +3,2
+   *     "Carcaca · RC"            185,0           -3,0                  +33,0
+   *     "A receber da industria"  183,0           -1,0                  +35,0
+   * O aside foi a 240px no fix1 e as duas ultimas voltaram a UMA linha. So' "por @ · por
+   * cabeca" segue empilhada: +3,2px nao e' folga, e' sorte — o proximo digito a consome.
    * As tres saidas proibidas estao proibidas por um motivo cada: truncate esconde digito
-   * de dinheiro, 9px quebra o piso do A18, e alargar o aside rouba do corpo. Empilhar e' a
-   * unica que nao mente.
+   * de dinheiro, 9px quebra o piso do A18, e alargar mais o aside rouba do corpo.
    */
   empilhado?: boolean;
 }) {
@@ -159,7 +161,7 @@ function LinhaResumo({ rotulo, valor, cor, forte, selo, empilhado }: {
     /* ⚠ O PADDING MORA NA LINHA, nao no container — A17. Cada item e' uma linha so', com
        o valor a direita e sem quebra; `py-px` da' ~16px por linha, e e' o que faz as
        quatro secoes caberem sem rolar. Empilhada, a linha vai a ~26px. */
-    <div className={`px-2 py-px leading-tight ${empilhado ? '' : 'flex items-baseline justify-between gap-1.5'}`}>
+    <div className={`px-2.5 py-px leading-tight ${empilhado ? '' : 'flex items-baseline justify-between gap-1.5'}`}>
       <span className={`text-muted-foreground ${empilhado ? 'block' : 'shrink-0'}`}>{rotulo}</span>
       <span className={`flex items-baseline gap-1.5 min-w-0 ${empilhado ? 'justify-end' : ''}`}>
         {selo}
@@ -770,7 +772,7 @@ export function AbateModalShell({
       {/* ⚠ O RESUMO COMECA NO CABECALHO E VAI ATE O RODAPE: as abas ficam DENTRO da
           coluna da esquerda. Com as abas por cima das duas colunas, o resumo perdia os
           44px delas e cortava no fim — e a barra de abas nao diz nada sobre o resumo. */}
-      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[1fr_200px]">
+      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[1fr_240px]">
         <div className="flex min-h-0 flex-col">
         {/* BARRA DE ABAS — template do CompraModalShell (bg-card, border-b, px-6 py-3). */}
         <div className="shrink-0 bg-card border-b px-2 py-1 flex items-center gap-1">
@@ -1097,20 +1099,20 @@ export function AbateModalShell({
             {/* ⚠ O STATUS MORA NO CABECALHO DO RESUMO, nao numa linha da lista: e' a
                 primeira pergunta ("em que pe esta esta operacao?") e ela nao deve disputar
                 espaco com numeros. */}
-            <div className="shrink-0 border-b border-border bg-accent/40 flex items-center gap-2 px-2 py-[5px] text-[10px] font-medium uppercase tracking-wide text-primary">
+            <div className="shrink-0 border-b border-border bg-accent/40 flex items-center gap-2 px-2.5 py-[5px] text-[10px] font-medium uppercase tracking-wide text-primary">
               Resumo da operação
               <span className={`ml-auto rounded-full px-1.5 py-px text-[10px] font-normal normal-case ${TOM_STATUS[ocStatusComercial ?? 'rascunho'] ?? TOM_STATUS.rascunho}`}>
                 {ROTULO_STATUS[ocStatusComercial ?? 'rascunho'] ?? 'Rascunho'}
               </span>
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto pb-1">
-              <div className="bg-primary/10 border-y border-primary/15 px-2 py-1 mt-0.5 first:mt-0 mb-0.5">
+              <div className="bg-primary/10 border-y border-primary/15 px-2.5 py-1 mt-0.5 first:mt-0 mb-0.5">
                 <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Identificação</span>
               </div>
               {/* ⚠ SEM ROTULOS AQUI. "Comprador: Fortunceres" gasta metade da largura
                   para dizer o que o nome ja' diz — e nesta secao o dado É a identidade. Os
                   rotulos continuam nas outras, onde o numero sozinho nao se explica. */}
-              <div className="px-2 py-1 leading-tight">
+              <div className="px-2.5 py-1 leading-tight">
                 <div className="truncate text-[11px] font-semibold text-foreground">{frigorificoNome ?? '—'}</div>
                 {frigorificoDoc && <div className="truncate text-[10px] text-muted-foreground">CNPJ {frigorificoDoc}</div>}
                 <div className="truncate text-[10px] text-muted-foreground">
@@ -1118,7 +1120,7 @@ export function AbateModalShell({
                 </div>
               </div>
 
-              <div className="bg-primary/10 border-y border-primary/15 px-2 py-1 mt-0.5 mb-0.5">
+              <div className="bg-primary/10 border-y border-primary/15 px-2.5 py-1 mt-0.5 mb-0.5">
                 <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Negociação</span>
               </div>
               {/* ⚠ ESTES CAMPOS NUNCA ESTIVERAM LIGADOS — B-08 item 4. Nao eram fonte
@@ -1143,7 +1145,7 @@ export function AbateModalShell({
                 {/* ⚠ CADA LINHA RESPONDE UMA PERGUNTA INTEIRA. "Carcaça · RC" junta o peso
                     com o rendimento que o explica; "Arrobas" junta o total do lote com a
                     média, que é o que se compara com o preço. */}
-                <LinhaResumo empilhado rotulo="Carcaça · RC" valor={totaisAbate.carcaca > 0
+                <LinhaResumo rotulo="Carcaça · RC" valor={totaisAbate.carcaca > 0
                   ? `${num2(totaisAbate.carcacaCab)} kg/cab · ${num2(totaisAbate.rc)}%` : null} />
                 <LinhaResumo rotulo="Arrobas" valor={totaisAbate.arrobas > 0
                   ? `${num2(totaisAbate.arrobas)} @ · ${num2(totaisAbate.arrobaCab)} @/cab` : null} />
@@ -1175,7 +1177,7 @@ export function AbateModalShell({
                 )}
               </div>
 
-              <div className="bg-primary/10 border-y border-primary/15 px-2 py-1 mt-0.5 mb-0.5">
+              <div className="bg-primary/10 border-y border-primary/15 px-2.5 py-1 mt-0.5 mb-0.5">
                 <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Entrega</span>
               </div>
               {/* ⚠ MESMO CASO, MESMA CURA. A fonte e' `recebimentoApi.lotes`, consolidada
@@ -1193,7 +1195,7 @@ export function AbateModalShell({
 
               {/* ⚠ A RECEBER, e nao "Lancado". Numa venda o dinheiro ENTRA — o vocabulario
                   do financeiro inverte junto com o sentido da operacao. */}
-              <div className="bg-primary/10 border-y border-primary/15 px-2 py-1 mt-0.5 mb-0.5">
+              <div className="bg-primary/10 border-y border-primary/15 px-2.5 py-1 mt-0.5 mb-0.5">
                 <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Financeiro</span>
               </div>
               {/* ⚠ O ACERTO DO BOITEL NAO EXISTE NO ABATE. Aqui a venda lista as sete
@@ -1218,7 +1220,7 @@ export function AbateModalShell({
                     o número ("R$ x, agendado para dd/mm"), e uma linha só para ela custava
                     a mesma altura de um dado inteiro. Âmbar enquanto é promessa; sem
                     compromisso, o traço vem com a causa escrita. */}
-                <LinhaResumo empilhado rotulo="A receber da indústria"
+                <LinhaResumo rotulo="A receber da indústria"
                   valor={finAReceber == null ? null : formatMoeda(finAReceber)}
                   selo={finAReceber == null
                     ? <span className="text-[10px] text-muted-foreground">grava ao concluir</span>

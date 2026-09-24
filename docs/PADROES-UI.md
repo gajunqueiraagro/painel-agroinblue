@@ -462,7 +462,7 @@ resumo para fora da tela num modal de `100vh − 32px`.
 | resumo lateral (base) | — | **10px** |
 
 Cabeçalho do modal 36px, barra de abas 28px com botão de 20px, rodapé 32px com botões de
-22px, `aside` de 200px. Decisão do Gabriel em 24/09/2026 (MOVIMENTACOES-PADRAO-01a), com o
+22px, `aside` de 240px. Decisão do Gabriel em 24/09/2026 (MOVIMENTACOES-PADRAO-01a), com o
 `AbateModalShell` como molde dos oito modais de movimentação.
 
 ⚠ **O piso de 9,5px continua valendo.** A escala de modal desce até 10px e para ali; 9px
