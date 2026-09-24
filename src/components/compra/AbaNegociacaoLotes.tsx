@@ -265,7 +265,7 @@ function NegociacaoOC({
             de estados de 00d164b7 esta' preservada; so' mudou de endereco. */}
         {linhaMagra && lotes.length === 0 && (
           <div className="min-w-0">
-            <div className="text-[11px] font-normal text-muted-foreground leading-none whitespace-nowrap">Lote</div>
+            <div className="text-[10px] font-normal text-muted-foreground leading-none whitespace-nowrap">Lote</div>
             <div className="mt-1 flex items-center gap-2">
               <span className="text-[22px] font-medium leading-none text-muted-foreground">—</span>
               {!fisicoRO && (
@@ -280,7 +280,7 @@ function NegociacaoOC({
         )}
         {!linhaMagra && (
         <div className="flex items-baseline justify-between gap-3">
-          <span className={`text-[15px] font-medium text-foreground min-w-0 truncate ${linhaMagra ? 'sr-only' : ''}`}>Negociação dos Lotes</span>
+          <span className={`text-[12px] font-medium text-foreground min-w-0 truncate ${linhaMagra ? 'sr-only' : ''}`}>Negociação dos Lotes</span>
           <div className="flex items-baseline gap-3 shrink-0">
             {/* A contagem SAIU do bloco de numeros: "3" nao e' grandeza que se compare
                 com peso e valor, e' quantas linhas ha logo abaixo. Aqui ela custa
@@ -315,23 +315,26 @@ function NegociacaoOC({
             ⚠ AUSENCIA E' TRACO. `brl` devolve 'R$ —' para valor nao positivo e
             `fmtKg` devolve '—'; sem lote nenhum os quatro imprimem traco sozinhos,
             sem `?? 0` tapando buraco. */}
+        {/* ⚠ A MESMA REGUA DO `BlocoTopoAba escala="modal"` (rotulo 10, valor 15, px-[9px]
+            py-1.5), escrita a mao porque este bloco tem `text-primary` no quarto numero e o
+            componente nao tem essa variante. Se um dia tiver, este bloco vira uma linha. */}
         {!linhaMagra && (
-        <div className="grid grid-cols-4 gap-2 rounded-md border bg-muted/20 px-3.5 py-[11px]">
+        <div className="grid grid-cols-4 gap-2 rounded-md border bg-muted/20 px-[9px] py-1.5">
           <div className="min-w-0">
-            <div className="text-[11px] font-normal text-muted-foreground leading-none">Animais</div>
-            <div className="mt-1 text-[20px] font-medium tabular-nums leading-none">{totais.animais || '—'}</div>
+            <div className="text-[10px] font-normal text-muted-foreground leading-none">Animais</div>
+            <div className="mt-0.5 text-[15px] font-medium tabular-nums leading-none">{totais.animais || '—'}</div>
           </div>
           <div className="min-w-0">
-            <div className="text-[11px] font-normal text-muted-foreground leading-none">Peso médio</div>
-            <div className="mt-1 text-[20px] font-medium tabular-nums leading-none">{pesoMedio == null ? '—' : fmtKg(pesoMedio)}</div>
+            <div className="text-[10px] font-normal text-muted-foreground leading-none">Peso médio</div>
+            <div className="mt-0.5 text-[15px] font-medium tabular-nums leading-none">{pesoMedio == null ? '—' : fmtKg(pesoMedio)}</div>
           </div>
           <div className="min-w-0">
-            <div className="text-[11px] font-normal text-muted-foreground leading-none">R$/kg</div>
-            <div className="mt-1 text-[20px] font-medium tabular-nums leading-none">{valorKg == null ? '—' : brl(valorKg)}</div>
+            <div className="text-[10px] font-normal text-muted-foreground leading-none">R$/kg</div>
+            <div className="mt-0.5 text-[15px] font-medium tabular-nums leading-none">{valorKg == null ? '—' : brl(valorKg)}</div>
           </div>
           <div className="min-w-0">
-            <div className="text-[11px] font-normal text-muted-foreground leading-none">Valor principal</div>
-            <div className="mt-1 text-[20px] font-medium tabular-nums leading-none text-primary">{brl(totais.valorNegociado)}</div>
+            <div className="text-[10px] font-normal text-muted-foreground leading-none">Valor principal</div>
+            <div className="mt-0.5 text-[15px] font-medium tabular-nums leading-none text-primary">{brl(totais.valorNegociado)}</div>
           </div>
         </div>
         )}
@@ -340,7 +343,7 @@ function NegociacaoOC({
       {!operacaoPronta ? (
         <div className="rounded-md border border-dashed bg-muted/10 px-3 py-5 text-center space-y-2">
           <div className="text-[11px] text-muted-foreground">{rotulos?.salveIdentificacao ?? 'Salve a identificação da compra para adicionar os lotes da negociação.'}</div>
-          <Button type="button" variant="outline" size="sm" className="h-7 text-[11px]" onClick={onVoltarCompra}>{rotulos?.voltarParaIdentificacao ?? 'Voltar para Compra'}</Button>
+          <Button type="button" variant="outline" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium " onClick={onVoltarCompra}>{rotulos?.voltarParaIdentificacao ?? 'Voltar para Compra'}</Button>
         </div>
       ) : lotes.length === 0 ? (
         linhaMagra ? null : (
@@ -365,14 +368,16 @@ function NegociacaoOC({
             const pt = q * pm;
             const total = loteTotal(l.criterioValor, l.quantidade, l.pesoMedioKg, l.valorInformado);
             const semPeso = pm <= 0;
+            /* ⚠ SEPARADOR EM VEZ DE ESPACO — a lista e' UMA, nao um card por lote. A regua de
+               modal poe a linha em 30px: identidade 11px em cima, contexto 10px embaixo. */
             return (
-              <div key={l.idLocal} className="flex items-center gap-2">
+              <div key={l.idLocal} className="flex items-center gap-1 border-b border-border/60 last:border-b-0">
                 <button type="button" onClick={() => setEditandoId(l.idLocal)}
                   aria-label={`Editar lote ${rotuloCategoria(l.categoria)}`}
                   title="Editar este lote"
                   className={linhaMagra
                     ? 'min-w-0 text-left cursor-pointer'
-                    : 'min-w-0 flex-1 px-3.5 py-1.5 text-left leading-[1.35] hover:bg-muted/30 cursor-pointer'}>
+                    : 'min-w-0 flex-1 px-2 py-0.5 text-left leading-[1.25] hover:bg-muted/30 cursor-pointer'}>
                   {/* ─── LINHA MAGRA (venda boitel) ─────────────────────────────────
                       UMA altura: "LOTE" e a identidade do embarque, com o valor por
                       cabeca. Peso, R$/kg e valor total NAO se repetem — os tres ja estao
@@ -385,9 +390,9 @@ function NegociacaoOC({
                       fazia a linha magra existir sem ter o que dizer de proprio. */}
                   {linhaMagra ? (
                     <div className="min-w-0">
-                      <div className="text-[11px] font-normal text-muted-foreground leading-none whitespace-nowrap">Lote</div>
+                      <div className="text-[10px] font-normal text-muted-foreground leading-none whitespace-nowrap">Lote</div>
                       <div className="mt-1 flex items-center gap-1.5">
-                        <span className="min-w-0 truncate text-[22px] font-medium leading-none text-foreground">
+                        <span className="min-w-0 truncate text-[15px] font-medium leading-none text-foreground">
                           {rotuloCategoria(l.categoria)}
                         </span>
                         {semPeso && <span className="text-[11px] text-destructive shrink-0">sem peso</span>}
@@ -397,14 +402,14 @@ function NegociacaoOC({
                   ) : (
                   <>
                   <div className="flex items-baseline justify-between gap-3">
-                    <span className="min-w-0 truncate text-[12px] font-medium text-foreground">
+                    <span className="min-w-0 truncate text-[11px] font-medium text-foreground">
                       {rotuloCategoria(l.categoria)}
                       {q > 0 && <span className="font-normal"> · {q} cab</span>}
                       {/* O lote invalido se anuncia na LISTA: quem tem cinco precisa ver
                           qual esta pendente sem abrir os cinco. */}
                       {semPeso && <span className="font-normal text-destructive"> · sem peso</span>}
                     </span>
-                    <span className="shrink-0 text-[12px] font-medium tabular-nums text-foreground">{brl(total)}</span>
+                    <span className="shrink-0 text-[11px] font-medium tabular-nums text-foreground">{brl(total)}</span>
                   </div>
                   <div className="truncate text-[10px] font-normal text-muted-foreground">
                     <span className={semPeso ? 'text-destructive' : ''}>{fmtKg(pm)}</span>
@@ -426,8 +431,8 @@ function NegociacaoOC({
                       if (exclusaoOC && l.id) setExcluindoLote(l);
                       else removerLote(l.idLocal);
                     }}
-                    className="mr-3.5 shrink-0 text-muted-foreground/60 hover:text-destructive">
-                    <Trash2 className="h-3.5 w-3.5" />
+                    className="mr-2 shrink-0 text-muted-foreground/60 hover:text-destructive">
+                    <Trash2 className="h-3 w-3" />
                   </button>
                 )}
               </div>

@@ -213,7 +213,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
     return (
       <div className="rounded-md border border-dashed bg-muted/10 px-3 py-5 text-center space-y-2">
         <div className="text-[11px] text-muted-foreground">Salve a operação e informe os lotes na aba Negociação.</div>
-        {onVoltarNegociacao && <Button type="button" variant="outline" size="sm" className="h-7 text-[11px]" onClick={onVoltarNegociacao}>Voltar para Negociação</Button>}
+        {onVoltarNegociacao && <Button type="button" variant="outline" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium " onClick={onVoltarNegociacao}>Voltar para Negociação</Button>}
       </div>
     );
   }
@@ -223,7 +223,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
   if (!concluida && !encerrada) {
     return (
       <div className="rounded-md border border-dashed bg-muted/10 px-3 py-5 text-center space-y-1">
-        <div className="text-[12px] font-semibold text-foreground">{rotulos?.indisponivelTitulo ?? 'Recebimento indisponível — negociação ainda não concluída'}</div>
+        <div className="text-[11px] font-semibold text-foreground">{rotulos?.indisponivelTitulo ?? 'Recebimento indisponível — negociação ainda não concluída'}</div>
         <div className="text-[11px] text-muted-foreground">{rotulos?.indisponivelDetalhe ?? 'Conclua a negociação (botão “Concluir negociação”) para registrar o recebimento físico.'}</div>
       </div>
     );
@@ -340,7 +340,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
               aparecem ao rolar. So no eixo vertical. */}
           <div className="sticky top-0 z-10 -mt-1.5 space-y-1.5 border-b bg-card pt-1.5 pb-1.5">
             <div className="flex items-baseline justify-between gap-3">
-              <span className="text-[15px] font-medium text-foreground min-w-0 truncate">{rotulos?.tituloSecao ?? 'Recebimento por lote na fazenda'}</span>
+              <span className="text-[12px] font-medium text-foreground min-w-0 truncate">{rotulos?.tituloSecao ?? 'Recebimento por lote na fazenda'}</span>
               <span className="text-[11px] font-normal text-muted-foreground shrink-0">encerrado</span>
             </div>
             {/* ── DOIS NUMEROS ────────────────────────────────────────────────
@@ -353,7 +353,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
               <div className="min-w-0">
                 <div className="text-[11px] font-normal text-muted-foreground leading-none">{rotulos?.rotuloTotalTopo ?? 'Recebido'}</div>
                 <div className="mt-1 flex items-baseline gap-2">
-                  <span className="text-[20px] font-medium tabular-nums leading-none">
+                  <span className="text-[15px] font-medium tabular-nums leading-none">
                     {semLote ? '—' : `${totalRecebido} / ${totalNegociado}`}
                   </span>
                   {estadoGeral && (
@@ -365,7 +365,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
               </div>
               <div className="min-w-0">
                 <div className="text-[11px] font-normal text-muted-foreground leading-none">Cabeças</div>
-                <div className="mt-1 text-[20px] font-medium tabular-nums leading-none">
+                <div className="mt-0.5 text-[15px] font-medium tabular-nums leading-none">
                   {semLote ? '—' : `${totalNegociado} negociadas`}
                 </div>
               </div>
@@ -411,7 +411,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
                 return (
                   <div key={l.loteId} className="px-3.5 py-1.5 leading-[1.35]">
                     <div className="flex items-baseline justify-between gap-3">
-                      <span className="min-w-0 truncate text-[12px] font-medium text-foreground">{catLabel(l.categoria)}</span>
+                      <span className="min-w-0 truncate text-[11px] font-medium text-foreground">{catLabel(l.categoria)}</span>
                       <span className={`shrink-0 rounded-full px-1.5 py-px text-[10px] font-normal ${TONE[l.estado]}`}>
                         {LABEL[l.estado]}
                       </span>
@@ -431,7 +431,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
               `-mt-1.5 pt-1.5` porque o cartao desta aba e' `p-1.5`, nao `p-2`. */}
           <div className="sticky top-0 z-10 -mt-1.5 space-y-1.5 border-b bg-card pt-1.5 pb-1.5">
             <div className="flex items-baseline justify-between gap-3">
-              <span className="text-[15px] font-medium text-foreground min-w-0 truncate">{rotulos?.tituloSecao ?? 'Recebimento por lote na fazenda'}</span>
+              <span className="text-[12px] font-medium text-foreground min-w-0 truncate">{rotulos?.tituloSecao ?? 'Recebimento por lote na fazenda'}</span>
               {/* ATALHO DO CASO COMUM: resolve a entrega conforme negociada sem abrir
                   modal nenhum. Some quando nao ha saldo — acao que nao faz nada e' pior
                   que acao ausente. */}
@@ -450,7 +450,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
                 <div className="mt-1 flex items-baseline gap-2">
                   {/* ⚠ RECEBIDO ZERO E' AUSENCIA, NAO NUMERO. "0 / 10" afirma que se
                       contou e deu zero; "— / 10" diz que ainda nao comecou. */}
-                  <span className="text-[20px] font-medium tabular-nums leading-none">
+                  <span className="text-[15px] font-medium tabular-nums leading-none">
                     {semLote ? '—' : `${totalRecebido === 0 ? '—' : totalRecebido} / ${totalNegociado}`}
                   </span>
                   {estadoGeral && (
@@ -462,7 +462,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
               </div>
               <div className="min-w-0">
                 <div className="text-[11px] font-normal text-muted-foreground leading-none">Cabeças</div>
-                <div className="mt-1 text-[20px] font-medium tabular-nums leading-none">
+                <div className="mt-0.5 text-[15px] font-medium tabular-nums leading-none">
                   {semLote ? '—' : `${totalNegociado} negociadas`}
                 </div>
               </div>
@@ -514,7 +514,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
                 return (
                   <div key={l.loteId} className="flex items-center gap-3 px-3.5 py-1.5 leading-[1.35]">
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-[12px] font-medium text-foreground">{catLabel(l.categoria)}</div>
+                      <div className="truncate text-[11px] font-medium text-foreground">{catLabel(l.categoria)}</div>
                       <div className={`truncate text-[10px] font-normal ${atencao ? 'text-amber-700 dark:text-amber-500' : 'text-muted-foreground'}`}>
                         {contexto}
                       </div>
@@ -609,7 +609,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
 
       {!readOnly && (
         <div className="flex justify-end pt-1">
-          <Button type="button" variant="outline" size="sm" className="h-7 text-[11px] gap-1" disabled={api.saving}
+          <Button type="button" variant="outline" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium gap-1" disabled={api.saving}
             onClick={() => { setMotivoEncerrar(''); setEncerrarOpen(true); }}>
             <Lock className="h-3 w-3" /> Encerrar recebimento
           </Button>
@@ -619,7 +619,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
           Não altera a negociação — se programada, após reabrir volta a "indisponível" pelos gates. */}
       {encerrada && !somenteLeitura && (
         <div className="flex justify-end pt-1">
-          <Button type="button" variant="outline" size="sm" className="h-7 text-[11px] gap-1" disabled={api.saving}
+          <Button type="button" variant="outline" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium gap-1" disabled={api.saving}
             onClick={() => { setMotivoReabrir(''); setReabrirOpen(true); }}>
             <Undo2 className="h-3 w-3" /> Reabrir recebimento
           </Button>
