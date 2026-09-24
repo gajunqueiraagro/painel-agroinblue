@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
+import { cascataAbate } from '@/lib/calculos/abate';
 import { useNavigate } from 'react-router-dom';
 import {
   Lancamento,
@@ -413,8 +414,8 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
     // Helper for a detail row
     const Row = ({ label, value, className = '' }: { label: string; value: React.ReactNode; className?: string }) => (
       <div className={className}>
-        <p className="text-[9px] text-muted-foreground leading-none mb-0.5">{label}</p>
-        <p className="font-bold text-foreground text-[11px] leading-tight tabular-nums">{value}</p>
+        <p className="text-[10px] text-muted-foreground leading-none mb-0.5">{label}</p>
+        <p className="font-bold text-foreground text-[12px] leading-tight tabular-nums">{value}</p>
       </div>
     );
 
@@ -449,43 +450,73 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
      *  correcoes entre eles, e leem-se um degrau abaixo.
      *  ⚠ NADA DESCE DE 11px. O piso do projeto e' 10px, mas aqui nao ha por que chegar
      *  la — encolher para caber e' justamente o que a largura de coluna evita. */
-    const LinhaResultado = ({ rotulo, valor, sinal = '', tom = 'neutro', familia = 'ajuste', totalDestaque = false }: {
+    const LinhaResultado = ({ rotulo, valor, sinal = '', tom = 'neutro', familia = 'ajuste', variante = 'normal', zebra = false }: {
       rotulo: string; valor: number | null;
       sinal?: '' | '+' | '-';
       tom?: 'neutro' | 'soma' | 'subtrai';
       familia?: 'principal' | 'ajuste';
-      /** So' o total do Valor Liquido: o unico numero grande do bloco. */
-      totalDestaque?: boolean;
+      /** `bruto` e `liquido` sao os dois marcos da cascata; o resto e' `normal`. */
+      variante?: 'normal' | 'bruto' | 'liquido';
+      /** Faixa clara das linhas pares — so' vale em `normal`. */
+      zebra?: boolean;
     }) => {
       /* Classes de estado ja usadas neste arquivo — nenhum hex novo. Totalizadora fica
          sem cor de sinal de proposito: ela nao soma nem subtrai, ela conclui. */
       const cor = tom === 'soma' ? 'text-green-600 dark:text-green-400'
         : tom === 'subtrai' ? 'text-destructive' : '';
-      /* ⚠ SEM PESO 700. Negrito cheio num bloco de seis linhas competia com o card
-         inteiro, que nao usa esse peso em canto nenhum. Marco fica em 500, e so' o
-         total do liquido sobe a 600. */
-      const tamanho = familia === 'principal' ? 'text-[12px]' : 'text-[11px]';
+      /* ⚠ O TAMANHO DEIXOU DE SAIR DA `familia`: a tabela tem tres alturas fixas
+         (17 / 19 / 22px) e uma fonte por variante. `familia` sobrou governando so' o PESO do
+         rotulo nas linhas comuns — Valor Base e' marco, Bonus e Descontos sao correcoes. */
       const pesoRotulo = familia === 'principal' ? 'font-medium' : 'font-normal';
       const celula = (v: number | null) => v === null ? '—' : `${sinal}${formatMoeda(v)}`;
+      /* ⚠ AS LARGURAS VIVEM NO `colgroup`, nao na linha — ABATE-RESUMO-TABELA-01. Com
+         `table-layout: fixed` a coluna nao muda de largura quando o numero muda de tamanho:
+         e' a lei de estabilidade aplicada a uma tabela de dinheiro, onde o olho compara
+         colunas na vertical e uma coluna que respira desalinha as quatro. */
+      /* ⚠ `leading-none` JUNTO COM A ALTURA, sempre. `h-[17px]` numa `<tr>` e' MINIMO, nao
+         maximo: com o line-height padrao, 11px de fonte ocupam 20px e a linha cresce sozinha —
+         medido, as tres alturas saiam 20/20/22 em vez de 17/19/22. */
+      const alturaLinha = variante === 'liquido' ? 'h-[22px] leading-none'
+        : variante === 'bruto' ? 'h-[19px] leading-none' : 'h-[17px] leading-none';
+      const fundo = variante === 'liquido' ? 'bg-primary text-primary-foreground border-t border-border'
+        : variante === 'bruto' ? 'bg-[#E8E6DF] border-t border-border'
+        : zebra ? 'bg-[#F5F4F0]' : '';
+      const fonte = variante === 'liquido' ? 'text-[12px] font-bold'
+        : variante === 'bruto' ? 'text-[11px] font-medium' : 'text-[11px]';
+      /* No navy a cor de sinal sumiria contra o branco — a linha conclui, nao soma. */
+      const corCelula = variante === 'liquido' ? '' : cor;
+      const cel = (v: number | null) => (
+        <td className={`px-1.5 text-right tabular-nums ${fonte} ${corCelula}`}>{celula(v)}</td>
+      );
       return (
-        <div className="grid grid-cols-[1fr_100px_84px_66px_70px] gap-x-1.5 items-baseline">
-          <span className={`${tamanho} ${pesoRotulo} ${cor || 'text-muted-foreground'}`}>{rotulo}</span>
-          <span className={`text-right tabular-nums ${totalDestaque ? 'text-[13px] font-semibold' : tamanho} ${cor}`}>{celula(valor)}</span>
-          <span className={`text-right tabular-nums ${tamanho} ${cor}`}>{celula(porBase(valor, baseCab))}</span>
-          <span className={`text-right tabular-nums ${tamanho} ${cor}`}>{celula(porBase(valor, baseKg))}</span>
-          <span className={`text-right tabular-nums ${tamanho} ${cor}`}>{celula(porBase(valor, baseArroba))}</span>
-        </div>
+        <tr className={`${alturaLinha} ${fundo}`}>
+          <td className={`px-1.5 ${fonte} ${variante === 'liquido' ? '' : (cor || 'text-muted-foreground')} ${variante === 'normal' ? pesoRotulo : ''}`}>{rotulo}</td>
+          {cel(valor)}
+          {cel(porBase(valor, baseCab))}
+          {cel(porBase(valor, baseKg))}
+          {cel(porBase(valor, baseArroba))}
+        </tr>
       );
     };
 
     const CabecalhoResultado = () => (
-      <div className="grid grid-cols-[1fr_100px_84px_66px_70px] gap-x-1.5 text-[11px] text-muted-foreground">
-        <span />
-        <span className="text-right">total</span>
-        <span className="text-right">por cab.</span>
-        <span className="text-right">por kg</span>
-        <span className="text-right">por @</span>
-      </div>
+      <thead>
+        <tr className="h-[18px] bg-[#E8E6DF] border-b border-border text-[10px] text-muted-foreground">
+          <th className="px-1.5 font-normal" />
+          <th className="px-1.5 text-right font-normal">total</th>
+          <th className="px-1.5 text-right font-normal">por cab.</th>
+          <th className="px-1.5 text-right font-normal">por kg</th>
+          <th className="px-1.5 text-right font-normal">por @</th>
+        </tr>
+      </thead>
+    );
+
+    /** As cinco larguras da tabela do resultado: 140+120+100+90+110 = 560. */
+    const ColunasResultado = () => (
+      <colgroup>
+        <col style={{ width: 140 }} /><col style={{ width: 120 }} /><col style={{ width: 100 }} />
+        <col style={{ width: 90 }} /><col style={{ width: 110 }} />
+      </colgroup>
     );
 
     return (
@@ -594,7 +625,6 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                     const snapCalc = snap?.calculation;
                     const valorBase = snapCalc?.valorBase ?? ((totalArrobas || 0) * (lancamento.precoArroba || 0));
                     const funruralTotal = snapCalc?.funruralTotal ?? (lancamento.descontoFunrural || 0);
-                    const valorBruto = snapCalc?.valorBruto ?? (valorBase - funruralTotal);
                     /* ⚠ AUSENCIA E' TRACO, ZERO E' VALOR. Bonus e desconto que nao existem
                        tem de sair como '—'; um que existe e vale R$ 0,04 divide-se, arredonda
                        para R$ 0,00 e mostra zero — porque zero ali e' resultado medido.
@@ -604,26 +634,57 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                       vs.every(v => v === null || v === undefined) ? null : vs.reduce((a: number, v) => a + (v || 0), 0);
                     const bonusTotal = snapCalc?.totalBonus ?? somaOuNull(lancamento.bonusPrecoce, lancamento.bonusQualidade, lancamento.bonusListaTrace);
                     const descontosTotal = snapCalc?.totalDescontos ?? somaOuNull(lancamento.descontoQualidade, lancamento.outrosDescontos);
+                    /**
+                     * ⚠ O FALLBACK DIZIA `valorBase - funruralTotal`, E ISSO NAO E' BRUTO.
+                     * Ele fazia duas coisas erradas de uma vez: ignorava o bonus e subtraia o
+                     * funrural, que e' justamente o que separa bruto de liquido. O resultado era
+                     * o funrural entrando DUAS vezes na leitura — dentro do "Valor Bruto" e de
+                     * novo na linha abaixo — e o Liquido saindo MAIOR que o Bruto, o que com
+                     * funrural positivo e' impossivel.
+                     * Medido na OC 8a6295f0 (NJ, Pureza, 14/08/2026, 18 vacas):
+                     *     base 104.883,89 · bonus 2.499,01 · funrural 209,77
+                     *     mostrava  104.674,12  (= base - funrural)
+                     *     correto   107.382,90  (= base + bonus)
+                     * ⚠ A CONTA NAO E' REESCRITA AQUI: `cascataAbate` e' a MESMA funcao que o
+                     * `buildAbateCalculation` usa desde esta correcao, e ela recebe TOTAIS EM R$.
+                     * Nao da' para chamar `buildAbateCalculation` direto porque a entrada dele tem
+                     * `bonusPrecoce` em R$/@ e `bonusPrecoceReais` em R$, enquanto a COLUNA
+                     * `lancamentos.bonus_precoce` guarda o TOTAL em R$ — nome igual, semantica
+                     * invertida, e mapear errado multiplicaria o bonus por 304.
+                     * ⚠ SO' O FALLBACK MUDOU: quem tem `detalhes_snapshot.calculation` continua
+                     * lendo o snapshot. Medido: 625 de 863 abates NAO o tem.
+                     */
+                    const valorBruto = snapCalc?.valorBruto
+                      ?? cascataAbate(valorBase, bonusTotal || 0, descontosTotal || 0, funruralTotal).valorBruto;
+                    /* ⚠ O LIQUIDO CONTINUA SENDO O GRAVADO, nao a cascata: `valorTotalCalc` e' o
+                       `valor_total` do lancamento, que e' o numero da NF. Na OC 8a6295f0 a
+                       cascata daria 107.173,13 e o gravado e' 107.174,97 — R$ 1,84 de
+                       arredondamento do `preco_arroba` (344,8676 gravado x 344,8736 implicito).
+                       Trocar a fonte do liquido mexeria em numero homologado; ver
+                       ABATE-BRUTO-DUAS-FONTES-01 no CLAUDE.md. */
                     const valorLiquido = snapCalc?.valorLiquido ?? valorTotalCalc;
                     return (
                       <>
-                        <div className="space-y-0.5 text-[12px]">
+                        <table className="w-[560px] table-fixed border-collapse">
+                          <ColunasResultado />
                           <CabecalhoResultado />
+                          <tbody>
                           <LinhaResultado rotulo="Valor Base" valor={valorBase} familia="principal" />
-                          <LinhaResultado rotulo="Bônus" valor={bonusTotal} sinal="+" tom="soma" />
+                          <LinhaResultado rotulo="Bônus" valor={bonusTotal} sinal="+" tom="soma" zebra />
                           <LinhaResultado rotulo="Descontos" valor={descontosTotal} sinal="-" tom="subtrai" />
-                          <LinhaResultado rotulo="Valor Bruto" valor={valorBruto} familia="principal" />
+                          <LinhaResultado rotulo="Valor Bruto" valor={valorBruto} variante="bruto" />
                           {funruralTotal > 0 && (
-                            <LinhaResultado rotulo="Funrural" valor={funruralTotal} sinal="-" tom="subtrai" />
+                            <LinhaResultado rotulo="Funrural" valor={funruralTotal} sinal="-" tom="subtrai" zebra />
                           )}
                           {/* ⚠ ULTIMA LINHA DA TABELA, e nao mais um bloco separado abaixo:
                               R$/cab, R$/kg e R$/@ liquidos sao exatamente as tres colunas
                               desta linha. O bloco de indicadores que os repetia saiu. */}
-                          <LinhaResultado rotulo="Valor Líquido (NF)" valor={valorLiquido} familia="principal" totalDestaque />
-                        </div>
+                          <LinhaResultado rotulo="Valor Líquido (NF)" valor={valorLiquido} variante="liquido" />
+                          </tbody>
+                        </table>
                         {/* LINHA DE BASE — obrigatoria. Sem ela, R$/kg e R$/@ no abate
                             parecem incoerentes entre si, porque nao dividem o mesmo peso. */}
-                        <p className="text-[11px] text-muted-foreground">
+                        <p className="mt-1 text-[10px] text-muted-foreground">
                           {lancamento.quantidade} cab · {formatKg(baseKg)} vivo{baseArroba > 0 ? ` · ${formatArroba(baseArroba)} de carcaça` : ''}
                         </p>
                       </>

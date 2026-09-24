@@ -105,6 +105,30 @@ export function formatCurrencyInput(value: string | number | null | undefined): 
   return formatted ? `R$ ${formatted}` : '';
 }
 
+/**
+ * A CASCATA DO ABATE — bruto e liquido a partir dos quatro totais, em REAIS.
+ *
+ * ⚠ ELA SAIU DE DENTRO DO `buildAbateCalculation` PARA TER UM DONO SO'.
+ * `LancamentoDetalhe` precisava da mesma conta no caminho em que nao ha
+ * `detalhes_snapshot.calculation` (625 dos 863 abates), e escreveu a dela — errada:
+ * `valorBase - funrural`, que ignora o bonus E subtrai o funrural, deixando o Liquido MAIOR
+ * que o Bruto. Duas copias de uma conta divergem na primeira mudanca; esta e' a unica.
+ *
+ * ⚠ OS QUATRO ARGUMENTOS SAO TOTAIS EM R$, NAO R$/@. E' de proposito que ela nao receba as
+ * entradas cruas: na `AbateCalculationInput`, `bonusPrecoce` e' R$/@ e `bonusPrecoceReais` e'
+ * R$, enquanto a coluna `lancamentos.bonus_precoce` guarda o TOTAL em R$. Nome igual,
+ * semantica invertida — quem chama esta funcao ja' resolveu essa traducao.
+ *
+ * ⚠ SEM ARREDONDAR: o `buildAbateCalculation` arredonda so' na saida, e mudar isso aqui
+ * moveria centavos em toda a tela do abate.
+ */
+export function cascataAbate(
+  valorBase: number, totalBonus: number, totalDescontos: number, funruralTotal: number,
+): { valorBruto: number; valorLiquido: number } {
+  const valorBruto = valorBase + totalBonus - totalDescontos;
+  return { valorBruto, valorLiquido: valorBruto - funruralTotal };
+}
+
 export function buildAbateCalculation(input: AbateCalculationInput): AbateCalculation {
   const quantidade = roundValue(parseNumericValue(input.quantidade), 0);
   const pesoKg = parseNumericValue(input.pesoKg);
@@ -149,8 +173,8 @@ export function buildAbateCalculation(input: AbateCalculationInput): AbateCalcul
   const descOutrosTotalRaw = outrosDescontosArroba > 0 ? outrosDescontosArroba * totalArrobasRaw : outrosDescontos;
 
   const totalDescontosRaw = descQualidadeTotalRaw + descOutrosTotalRaw;
-  const valorBrutoRaw = valorBaseRaw + totalBonusRaw - totalDescontosRaw;
-  const valorLiquidoRaw = valorBrutoRaw - funruralTotalRaw;
+  const { valorBruto: valorBrutoRaw, valorLiquido: valorLiquidoRaw } =
+    cascataAbate(valorBaseRaw, totalBonusRaw, totalDescontosRaw, funruralTotalRaw);
 
   const liqArrobaRaw = totalArrobasRaw > 0 ? valorLiquidoRaw / totalArrobasRaw : 0;
   const liqCabecaRaw = quantidade > 0 ? valorLiquidoRaw / quantidade : 0;

@@ -465,6 +465,24 @@ Cabeçalho do modal 36px, barra de abas 28px com botão de 20px, rodapé 32px co
 22px, `aside` de 240px. Decisão do Gabriel em 24/09/2026 (MOVIMENTACOES-PADRAO-01a), com o
 `AbateModalShell` como molde dos oito modais de movimentação.
 
+#### Como se mede isso, porque errar a medida é fácil
+
+Duas armadilhas, as duas medidas nesta frente:
+
+1. **`getBoundingClientRect()` mente dentro de um diálogo.** A animação do Radix
+   (`zoom-in-95`) termina *sem* voltar a escala 1 — o `transform` fica em `matrix3d(0.95, …)`
+   para sempre. Todo rect vem 5% menor. Medir tamanho com **`offsetWidth`/`offsetHeight`**; para
+   largura de texto via `Range`, dividir o rect por `0.95`. A regra completa está no CLAUDE.md
+   como **DIALOG-ZOOM-95-01**.
+2. **`scrollHeight` só mede conteúdo enquanto há rolagem.** Quando o conteúdo passa a caber, ele
+   devolve a altura do **container** e não avisa. Altura de conteúdo = **soma dos `offsetHeight`
+   dos filhos** mais o padding do próprio container.
+
+⚠ **NASCE DE UM ERRO MEU, 24/09/2026, no 01a-fix1.** Reportei "altura do resumo 488 → 477px" e o
+477 era o container: assim que o resumo parou de rolar, `scrollHeight` virou `clientHeight`. O
+número foi para a mensagem do commit. O conteúdo real era ~407px, e depois do fix2 são 383px —
+uma queda de 21%, não de 2%. Número de relatório vale o que vale a consulta que o gerou.
+
 ⚠ **O piso de 9,5px continua valendo.** A escala de modal desce até 10px e para ali; 9px
 segue sendo exceção exclusiva da Grade do DRE (ver CLAUDE.md). Quando uma linha do resumo
 não couber em 10px, ela vira **duas sublinhas** — nunca 9px, nunca truncate, nunca um

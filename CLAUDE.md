@@ -892,6 +892,31 @@ migration e' REGISTRO HISTORICO, nao se reaplica).
   ⚠ E HA' UM ESCRITOR CONCORRENTE EM 1150, achado no B2: `origem_tipo = 'boitel:receita'`, duas
     linhas da Vera em `previsto` (642.056,67 e 594.573,33), fora da OC. Quem implementar a PARTE A
     confere se ele e o novo caminho contam a MESMA receita duas vezes.
+- ABATE-BRUTO-DUAS-FONTES-01 — o "Valor bruto" do abate tem DUAS origens que nao fecham.
+  O resumo lateral do modal OC deriva do liquido gravado (`valor_total + funrural`) e a cascata
+  de `src/lib/calculos/abate.ts` soma (`base + bonus - descontos`). Medido na OC 8a6295f0
+  (NJ · Faz. Pureza · 14/08/2026 · 18 vacas), 24/09/2026:
+    resumo lateral   107.384,74   = 107.174,97 + 209,77
+    cascata          107.382,90   = 104.883,89 + 2.499,01
+    diferenca             1,84
+  ⚠ A DIFERENCA E' ARREDONDAMENTO DO PRECO DA ARROBA, nao erro de conta: `preco_arroba` gravado
+    e' 344,8676 e o implicito no liquido e' 344,8736 — 0,006/@ x 304,128 @ = 1,84.
+  ⚠ MEDIDA NOS CINCO CLIENTES, e ela nao e' sempre pequena: -1,10 (Agnaldo, 155 cab), -1,84 (NJ),
+    +55,25 (RRCC, 58 cab), -0,01 (SR), +1,72 (Vera). Cresce com a cabecada.
+  ⚠ QUAL E' SOBERANO NAO FOI DECIDIDO. O ABATE-RESUMO-TABELA-01 manteve o LIQUIDO lendo o
+    `valor_total` gravado de proposito — trocar a fonte do liquido mexe em numero homologado.
+- ABATE-CALCULATION-NULL-01 — 625 dos 863 lancamentos de abate NAO tem
+  `detalhes_snapshot.calculation` (medido 24/09/2026), entao o resumo deles cai nos fallbacks do
+  `LancamentoDetalhe` em vez de ler o snapshot.
+  ⚠ FOI ISSO QUE DEIXOU UM FALLBACK ERRADO VIVER ANOS: `valorBruto = valorBase - funruralTotal`
+    ignorava o bonus E subtraia o funrural, e o Liquido saia MAIOR que o Bruto. Corrigido no
+    ABATE-RESUMO-TABELA-01 com `cascataAbate`, a mesma funcao que o `buildAbateCalculation` usa.
+  ⚠ 31 DOS 625 TINHAM BONUS OU FUNRURAL e exibiam o numero errado — Agnaldo 10, NJ 10, SR 5,
+    Vera 5, RRCC 1. Nos outros 594 o defeito estava DORMENTE porque os dois termos eram zero, e
+    `base - 0` coincide com o bruto. E' o mesmo padrao do PK-INI-PONDERADO-01: errado por
+    construcao, invisivel porque o termo e' zero.
+  ⚠ O BACKFILL DO `calculation` NAO FOI FEITO e continua aberto. Enquanto nao for, o fallback e'
+    o caminho REAL de 72% dos abates — tratar como caminho principal, nao como excecao.
 - OC-IMPORT-MORTO-01 — `src/components/abate/AbateModalShell.tsx:57` importa
   `subcentroVendaPorCategoria` de `@/hooks/useOperacaoLiquidacao` e NUNCA a chama (o
   `SUBCENTRO_ADIANTAMENTO_BOITEL` do mesmo import e' usado). Anterior ao OC-BOITEL-VALOR-01,
