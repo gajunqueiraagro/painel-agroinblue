@@ -1164,3 +1164,23 @@ preview que o cabecalho nao sai da tela ao rolar.
   credencial de consultor antes de afirmar o tamanho do buraco.
   ⚠ CONSERTAR O META NAO E' ACRESCENTAR UM `IF`: mexer naquele `RETURN NEW` muda a validacao de
   TODOS os tipos de lancamento de uma vez. E' frente propria, com medicao propria.
+- PERF-VALOR-REBANHO-02 — DUPLICATAS DE REQUEST no /v2, medidas em 24/09/2026 e NAO tratadas.
+  Ao abrir a Evolucao Patrimonial (NJ, Global): `saldos_iniciais` 4x (dois pares IDENTICOS),
+  `zoo_operacao_movimentacoes` 4x (o segundo par dispara 5s depois, quando `lancamentos` termina
+  de paginar), `profiles` 2x, `valor_rebanho_mensal` 2x. Na troca de ano, `fechamento_pasto_itens`
+  2x identicas.
+  ⚠ VALEM ~4 REQUESTS, NAO SEGUNDOS: nenhuma esta no caminho critico. Prioridade baixa — o que
+  custava tempo era a view (PERF-VALOR-REBANHO-01) e a paginacao serial.
+- ⚠ PAGINACAO DE LISTA GRANDE: PARALELA COM `count`, NUNCA `while` COM `await` DENTRO
+  (regra permanente, PERF-VALOR-REBANHO-01, 24/09/2026).
+  `fetchLancamentosPaginated` (`src/hooks/useLancamentos.ts`) pedia pagina, esperava, pedia a
+  proxima. Medido no NJ (2.177 linhas): as tres paginas em 0 / +2.727 / +4.343 ms, terminando em
+  5.603 ms. Com a primeira pagina trazendo `count: 'exact'` e as demais em `Promise.all`:
+  +2.270 / +2.303 / +2.305 ms, janela de 1.355 ms. Mesmas linhas, mesmas colunas, 4x mais rapido.
+  ⚠ E ELA E' DO SHELL DO /v2 (`V2Index.tsx:182`, `useLancamentos()` sem argumento), nao de uma
+  tela: o encadeamento estava no caminho critico de TODAS as telas do /v2.
+  ⚠ FILTRAR POR ANO SERIA MAIOR GANHO E ESTA' PROIBIDO AQUI, pela mesma razao: o hook alimenta
+  todas as telas, e estreitar o periodo mudaria o que as outras veem. Frente propria.
+  ⚠ SEM `count`, VOLTA AO SERIAL DE PROPOSITO. `count ?? rows.length` daria `total = 1000` e a
+  funcao devolveria a PRIMEIRA PAGINA como se fosse tudo — truncagem silenciosa. O ramo de
+  fallback existe para isso e nao deve ser "simplificado".

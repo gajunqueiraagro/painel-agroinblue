@@ -32,13 +32,12 @@ async function fetchLancamentosPaginated(params: {
   ano?: number;
 }) {
   const { cenario, clienteId, fazendaId, fazendaIds, ano } = params;
-  const rows: any[] = [];
-  let from = 0;
 
-  while (true) {
+  /* Monta a MESMA consulta para qualquer página: a paginação não pode mudar o filtro. */
+  const montar = () => {
     let query = supabase
       .from('lancamentos')
-      .select('*')
+      .select('*', { count: 'exact' })
       .eq('cancelado', false)
       .eq('cenario', cenario);
 
@@ -58,19 +57,66 @@ async function fetchLancamentosPaginated(params: {
         .lte('data', `${ano}-12-31`);
     }
 
-    const { data, error } = await query
+    return query
       .order('data', { ascending: false })
-      .order('id', { ascending: false })
-      .range(from, from + LANCAMENTOS_PAGE_SIZE - 1);
+      .order('id', { ascending: false });
+  };
 
-    if (error) throw error;
-    if (!data || data.length === 0) break;
+  /**
+   * PÁGINAS EM PARALELO — PERF-VALOR-REBANHO-01.
+   *
+   * ⚠ ERAM SERIAIS, e o encadeamento estava no caminho crítico de TODA tela do /v2: o
+   * `while (true)` com `await` dentro fazia a página 2 começar 47 ms depois de a 1 terminar, e a
+   * 3, 38 ms depois da 2. Medido no NJ (2.177 linhas, 4,4 MB): 2.677 + 1.578 + 1.260 = 5,6 s de
+   * fila indiana, quando a mais lenta sozinha leva 2,7 s.
+   * ⚠ A PRIMEIRA PÁGINA JÁ TRAZ O `count`, então não é preciso descobrir o fim tentando: com o
+   * total em mãos, as demais saem juntas. São 2 idas ao servidor em vez de N.
+   * ⚠ E NÃO SE FILTRA POR ANO AQUI, por mais tentador que seja: este hook é do SHELL do /v2
+   * (`V2Index.tsx:182`) e alimenta todas as telas. Estreitar o período mudaria o que as outras
+   * veem — é outra frente, com outra medição.
+   */
+  const primeira = await montar().range(0, LANCAMENTOS_PAGE_SIZE - 1);
+  if (primeira.error) throw primeira.error;
 
-    rows.push(...data);
+  const rows: any[] = [...(primeira.data ?? [])];
+  if (rows.length < LANCAMENTOS_PAGE_SIZE) return rows;
 
-    if (data.length < LANCAMENTOS_PAGE_SIZE) break;
-    from += LANCAMENTOS_PAGE_SIZE;
+  /**
+   * ⚠ SEM `count`, VOLTA A SER SERIAL — e isso é proposital. Se o PostgREST não devolver o total
+   * (header ausente, proxy que o remove), confiar em `count ?? rows.length` daria `total = 1000` e
+   * a função retornaria a PRIMEIRA PÁGINA como se fosse tudo: truncagem silenciosa de um conjunto
+   * que alimenta o /v2 inteiro. Lento é recuperável; faltar lançamento não é.
+   */
+  if (primeira.count == null) {
+    let from = LANCAMENTOS_PAGE_SIZE;
+    while (true) {
+      const { data, error } = await montar().range(from, from + LANCAMENTOS_PAGE_SIZE - 1);
+      if (error) throw error;
+      const pagina = data ?? [];
+      rows.push(...pagina);
+      if (pagina.length < LANCAMENTOS_PAGE_SIZE) break;
+      from += LANCAMENTOS_PAGE_SIZE;
+    }
+    return rows;
   }
+
+  const total = primeira.count;
+  if (rows.length >= total) return rows;
+
+  const faixas: [number, number][] = [];
+  for (let from = LANCAMENTOS_PAGE_SIZE; from < total; from += LANCAMENTOS_PAGE_SIZE) {
+    faixas.push([from, Math.min(from + LANCAMENTOS_PAGE_SIZE, total) - 1]);
+  }
+
+  const restantes = await Promise.all(
+    faixas.map(async ([de, ate]) => {
+      const { data, error } = await montar().range(de, ate);
+      if (error) throw error;
+      return data ?? [];
+    }),
+  );
+  /* A ordem das faixas é a ordem do resultado: `Promise.all` preserva o índice. */
+  for (const pagina of restantes) rows.push(...pagina);
 
   return rows;
 }
