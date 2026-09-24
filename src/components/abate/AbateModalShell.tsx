@@ -134,7 +134,7 @@ const MESES_EXTENSO = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho
 /** Duas casas, como em toda a tela do abate. */
 const num2 = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-function LinhaResumo({ rotulo, valor, cor, forte, selo, empilhado }: {
+function LinhaResumo({ rotulo, valor, cor, forte, selo, empilhado, seloAbaixo }: {
   rotulo: string; valor: string | null;
   /* ⚠ A COR VEM DE FORA — B-11. O resumo passou a mostrar dois mundos (projecao ambar,
      realizado solido) e a mesma linha serve aos dois; cravar a cor aqui obrigaria a um
@@ -156,19 +156,33 @@ function LinhaResumo({ rotulo, valor, cor, forte, selo, empilhado }: {
    * de dinheiro, 9px quebra o piso do A18, e alargar mais o aside rouba do corpo.
    */
   empilhado?: boolean;
+  /**
+   * O selo desce para uma sublinha propria, a direita — fix2.
+   *
+   * ⚠ ELE DISPUTAVA A LINHA COM O DINHEIRO E GANHAVA. "A receber da industria" leva o selo
+   * "agendado 13/09/2026"; com os dois no mesmo `flex`, o `truncate` do valor cortava o
+   * NUMERO — "R$ ..." — enquanto a data continuava inteira. O selo e' contexto, o valor e'
+   * a resposta: quem encolhe e' o contexto.
+   * ⚠ SEM SELO A LINHA NAO CRESCE: a sublinha so' existe quando ha selo, entao a linha
+   * segue em 16px no caso comum.
+   */
+  seloAbaixo?: boolean;
 }) {
   return (
     /* ⚠ O PADDING MORA NA LINHA, nao no container — A17. Cada item e' uma linha so', com
        o valor a direita e sem quebra; `py-px` da' ~16px por linha, e e' o que faz as
        quatro secoes caberem sem rolar. Empilhada, a linha vai a ~26px. */
-    <div className={`px-2.5 py-px leading-tight ${empilhado ? '' : 'flex items-baseline justify-between gap-1.5'}`}>
-      <span className={`text-muted-foreground ${empilhado ? 'block' : 'shrink-0'}`}>{rotulo}</span>
-      <span className={`flex items-baseline gap-1.5 min-w-0 ${empilhado ? 'justify-end' : ''}`}>
-        {selo}
-        <span className={`text-right tabular-nums ${empilhado ? 'whitespace-nowrap' : 'truncate'} ${forte ? 'font-bold' : 'font-medium'} ${valor ? (cor ?? '') : ''}`}>
-          {valor || '—'}
+    <div className={`px-2.5 py-px leading-tight ${empilhado || seloAbaixo ? '' : 'flex items-baseline justify-between gap-1.5'}`}>
+      <div className={empilhado || !seloAbaixo ? 'contents' : 'flex items-baseline justify-between gap-1.5'}>
+        <span className={`text-muted-foreground ${empilhado ? 'block' : 'shrink-0'}`}>{rotulo}</span>
+        <span className={`flex items-baseline gap-1.5 min-w-0 ${empilhado ? 'justify-end' : ''}`}>
+          {!seloAbaixo && selo}
+          <span className={`text-right tabular-nums ${empilhado || seloAbaixo ? 'whitespace-nowrap' : 'truncate'} ${forte ? 'font-bold' : 'font-medium'} ${valor ? (cor ?? '') : ''}`}>
+            {valor || '—'}
+          </span>
         </span>
-      </span>
+      </div>
+      {seloAbaixo && selo && <div className="flex justify-end leading-none">{selo}</div>}
     </div>
   );
 }
@@ -1172,8 +1186,8 @@ export function AbateModalShell({
                 )}
                 {/* Por @ antes de por cabeça: é a unidade em que o preço foi negociado. */}
                 {totaisAbate.liquido > 0 && (
-                  <LinhaResumo empilhado rotulo="por @ · por cabeça"
-                    valor={`${formatMoeda(totaisAbate.arrobas > 0 ? totaisAbate.liquido / totaisAbate.arrobas : 0)} · ${formatMoeda(totaisAbate.cabecas > 0 ? totaisAbate.liquido / totaisAbate.cabecas : 0)}`} />
+                  <LinhaResumo rotulo="por @"
+                    valor={formatMoeda(totaisAbate.arrobas > 0 ? totaisAbate.liquido / totaisAbate.arrobas : 0)} />
                 )}
               </div>
 
@@ -1220,7 +1234,7 @@ export function AbateModalShell({
                     o número ("R$ x, agendado para dd/mm"), e uma linha só para ela custava
                     a mesma altura de um dado inteiro. Âmbar enquanto é promessa; sem
                     compromisso, o traço vem com a causa escrita. */}
-                <LinhaResumo rotulo="A receber da indústria"
+                <LinhaResumo seloAbaixo rotulo="A receber da indústria"
                   valor={finAReceber == null ? null : formatMoeda(finAReceber)}
                   selo={finAReceber == null
                     ? <span className="text-[10px] text-muted-foreground">grava ao concluir</span>
@@ -1241,8 +1255,8 @@ export function AbateModalShell({
                     nao a diferenca das duas linhas de cima. */}
                 <LinhaResumo rotulo="Falta receber" valor={finFaltaReceber == null ? null : formatMoeda(finFaltaReceber)} />
                 {finLiquidoProdutor != null && totaisAbate.arrobas > 0 && (
-                  <LinhaResumo empilhado rotulo="por @ · por cabeça"
-                    valor={`${formatMoeda(finLiquidoProdutor / totaisAbate.arrobas)} · ${formatMoeda(totaisAbate.cabecas > 0 ? finLiquidoProdutor / totaisAbate.cabecas : 0)}`} />
+                  <LinhaResumo rotulo="por @"
+                    valor={formatMoeda(finLiquidoProdutor / totaisAbate.arrobas)} />
                 )}
               </div>
             </div>
