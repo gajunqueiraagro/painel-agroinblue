@@ -54,6 +54,15 @@ const nomeDe = (cod: string) => NOME_CAT.get(cod) ?? cod;
 export const JOVENS = new Set(['mamotes_m', 'mamotes_f', 'desmama_m', 'desmama_f']);
 export const ehJovem = (codigo: string) => JOVENS.has(codigo);
 
+/**
+ * A LARGURA DO MODAL — a da aba mais larga, mais o cromo, mais 24px de respiro VISÍVEL.
+ *
+ * ⚠ A CONTA TEM TRÊS PARCELAS, e a do meio é a que se esquece: 726 (a soma de `COLS_TOPO`) + 18 de
+ * cromo (borda 1+1 e o `p-2` 8+8 do corpo) + 24 de folga = 768. Com 750 — a leitura literal de
+ * "conteúdo + 24" — sobravam 6px de folga real, porque os 18 do cromo comem o resto.
+ */
+const LARGURA_MODAL = 768;
+
 const NAVY = '#0C447C';
 const CAB_TABELA = '#2C3E5C';
 const AZUL_CLARO = '#E9EFF6';
@@ -518,7 +527,14 @@ export function PecPatrimonioModal({
           medir 606px numa viewport de 579 (105%): ele nascia maior que a tela. Agora quem manda é o
           conteúdo, e só a TABELA rola quando não couber. O `minHeight` do corpo é o que mantém o
           tamanho ESTÁVEL ao trocar de aba — a exigência do fix2 continua valendo. */}
-      <DialogContent className="flex max-h-[82vh] max-w-6xl flex-col gap-0 overflow-hidden p-0 [&>button.absolute]:hidden">
+      {/* ⚠ A LARGURA É A DA ABA MAIS LARGA + 24 — fix8, e o número é MEDIDO, não escolhido: as três
+          abas de categoria usam `COLS_TOPO`, que soma 726px (70+72+78+78+62+8+98+104+78+78). Com
+          `max-w-6xl` o modal abria em 1.128px e sobravam 402px de vazio ao lado da tabela — um
+          modal do tamanho da tela para um conteúdo que cabe em dois terços dela.
+          ⚠ AS OUTRAS DUAS SÃO MAIS ESTREITAS DE PROPÓSITO (Movimentos 500, Gráfico 640): quem manda
+          na largura é a mais larga, e as demais centralizam dentro dela. */}
+        <DialogContent style={{ maxWidth: LARGURA_MODAL }}
+          className="flex max-h-[82vh] flex-col gap-0 overflow-hidden p-0 [&>button.absolute]:hidden">
         {/* ⚠ AS ABAS MORAM NO CABEÇALHO, à direita — e a ordem é [Resumo][Produção][Mercado], que é a
             ordem da conta: o total primeiro, depois as duas parcelas que o explicam. */}
         {/* ⚠ 44px DE CABEÇALHO, medido: 13px de título sobre 11px de subtítulo, com 5px de folga em
@@ -528,8 +544,10 @@ export function PecPatrimonioModal({
           <div className="min-w-0">
             <h2 className="truncate text-[13px] font-semibold leading-[17px]">Variação do valor do rebanho</h2>
             <div className="truncate text-[11px] leading-[15px] text-white/80">
-              {[clienteNome, fazendaNome, p0 && p1 ? `${rotuloMes(p0)} → ${rotuloMes(p1)}`
-                : `${periodo.de} → ${periodo.ate}`].filter(Boolean).join(' · ')}
+              {/* ⚠ SEM O INTERVALO DE MESES — fix8: "dez/20 → ago/21" repetia o que os cabeçalhos
+                  das tabelas já dizem em cada coluna, e era o texto mais longo de um subtítulo que
+                  precisa caber em 750px. Fica o cliente e o recorte da coluna que foi clicada. */}
+              {[clienteNome, fazendaNome].filter(Boolean).join(' · ')}
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-1">

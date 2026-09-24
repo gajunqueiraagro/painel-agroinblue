@@ -1199,3 +1199,16 @@ preview que o cabecalho nao sai da tela ao rolar.
   suspeitar da rede.
   ⚠ NAO E' DESTA FRENTE: e' do banco, e mexer em policy muda quem ve' o que. Frente propria, com
   medicao de acesso antes e depois.
+- ⚠ DIALOG-ZOOM-95-01 — O `DialogContent` RENDERIZA A 95%, E A ESCALA E' PERMANENTE
+  (regra permanente, descoberta no VARIACAO-REBANHO-MODAL-01-fix8, 24/09/2026).
+  A animacao de entrada do Radix (`data-[state=open]:zoom-in-95`) termina SEM voltar a escala 1:
+  `getComputedStyle(dialog).transform` fica em `matrix3d(0.95, ...)` depois de aberto.
+  ⚠ MEDIR COM `offsetWidth`, NUNCA COM `getBoundingClientRect()`: o rect vem ESCALADO e erra 5 %
+  para menos. Medido no modal da variacao: rect dizia 713 / 690 / 292 quando o layout era
+  750 / 726 / 359 — e a leitura errada me fez quase reportar "a tabela esta sendo comprimida",
+  quando ela cabia com folga.
+  ⚠ E TODO TEXTO SAI MENOR DO QUE FOI PEDIDO: `fontSize: 9` aparece como 8,55px na tela. Quem
+  calibrar tipografia dentro de um dialogo desconta isso — ou a fonte "de 9" nao e' de 9.
+  ⚠ NAO FOI CORRIGIDO: tirar o zoom mexe na animacao de TODOS os dialogos do sistema. Fica como
+  fato conhecido; quem quiser a escala 1 abre frente propria e mede o que muda de tamanho na tela
+  inteira.

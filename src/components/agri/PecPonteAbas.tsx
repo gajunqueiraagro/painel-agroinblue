@@ -341,11 +341,14 @@ export function PecPonteGrafico({ m, p0 = '', p1 = '' }: {
      uma unidade valia menos de um pixel e os números do eixo saíam CORTADOS na borda esquerda
      (medido na homologação de 24/09). Com largura fixa de 880 — a do card a 1440 — uma unidade vale
      um pixel, e os 60 de margem são 60px de verdade. */
-  /* ⚠ 420 x 150 E CENTRALIZADO — mock v18. O desenho não precisa da largura do modal: ele tem oito
-     posições e um eixo, e esticá-lo até 880 só afastava as barras umas das outras. Com 420 a ponte
-     se lê de uma vez, e o que sobra dos lados é margem. */
-  const W = 420, MARG_ESQ = 40, MARG_DIR = 6;
-  const H = 150, PAD_TOPO = 14, PAD_BASE = 26;
+  /* ⚠ 640 x 300 E CENTRALIZADO — fix8. Eram 420 x 150 do mock v18, escolhidos quando o modal
+     tinha 1.128px e a aba sobrava de largura; com o modal estreitado para 750 o desenho ficou
+     pequeno DENTRO do corpo, que tem 292px de altura útil. Agora ele ocupa essa altura com ~40px
+     de respiro em cima e embaixo, e a ponte se lê sem apertar os olhos.
+     ⚠ E O viewBox SEGUE EM PIXELS REAIS: com `preserveAspectRatio="none"` tudo que está dentro
+     escala junto, inclusive a fonte — a lição da ponte, da cascata e da composição. */
+  const W = 640, MARG_ESQ = 52, MARG_DIR = 8;
+  const H = 300, PAD_TOPO = 20, PAD_BASE = 44;
   const FAIXA = W - MARG_ESQ - MARG_DIR;
   const passo = grafico ? FAIXA / grafico.barras.length : 0;
   const escalaY = (v: number) => {
@@ -372,7 +375,7 @@ export function PecPonteGrafico({ m, p0 = '', p1 = '' }: {
                             stroke="#ECEAE4" strokeWidth={0.5} />
                           {/* ⚠ O EIXO É ABREVIADO ("10 mil") porque 40px não cabem "10.423": o
                               número exato de cada barra está em cima dela. */}
-                          <text x={MARG_ESQ - 4} y={escalaY(v) + 2.5} fontSize={7.5} textAnchor="end"
+                          <text x={MARG_ESQ - 5} y={escalaY(v) + 3} fontSize={9} textAnchor="end"
                             fill="#8A8880">{abrevEixo(v)}</text>
                         </g>
                       );
@@ -406,7 +409,7 @@ export function PecPonteGrafico({ m, p0 = '', p1 = '' }: {
                           <rect x={x} y={y} width={larg} height={alt} fill={b.x.cor} rx={1}>
                             <title>{`${b.x.rotulo}: ${formatNum(val, 0)} @`}</title>
                           </rect>
-                          <text x={x + larg / 2} y={y - 2.5} fontSize={7.5} textAnchor="middle"
+                          <text x={x + larg / 2} y={y - 3} fontSize={9} textAnchor="middle"
                             fill={b.x.dir === 1 ? '#2E7D57' : b.x.dir === -1 ? '#B23A3A' : '#3A3833'}>
                             {b.x.dir === 0 && b.x.chave !== 'ajustes' ? int(val) : sinalInt(val)}
                           </text>
@@ -416,7 +419,7 @@ export function PecPonteGrafico({ m, p0 = '', p1 = '' }: {
                             else ls.push(w);
                             return ls;
                           }, []).slice(0, 2).map((linha, j) => (
-                            <text key={j} x={x + larg / 2} y={H - PAD_BASE + 9 + j * 7.5} fontSize={7}
+                            <text key={j} x={x + larg / 2} y={H - PAD_BASE + 11 + j * 9.5} fontSize={9}
                               textAnchor="middle" fill="#6B6862">{linha}</text>
                           ))}
                         </g>
