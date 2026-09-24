@@ -892,6 +892,19 @@ migration e' REGISTRO HISTORICO, nao se reaplica).
   ⚠ E HA' UM ESCRITOR CONCORRENTE EM 1150, achado no B2: `origem_tipo = 'boitel:receita'`, duas
     linhas da Vera em `previsto` (642.056,67 e 594.573,33), fora da OC. Quem implementar a PARTE A
     confere se ele e o novo caminho contam a MESMA receita duas vezes.
+- OC-DOC-ESPECIE-01 — a `especie` de `zoo_operacao_documentos` e' preenchida A MAO e erra.
+  Medido em 24/09/2026, no OC-PDF-ORIGEM-NF-01:
+    · a NF do boitel da Vera (OC b58bf556) esta' cadastrada como `outro` ("NF_Abate - Boitel"),
+      entao aquela OC conta ZERO `nf_principal` mesmo tendo nota;
+    · a venda 581d075c tem DUAS `nf_principal` com `numero` NULO, entre 12 anexos que incluem
+      recibos, contratos e comprovantes de pagamento.
+  ⚠ NAO HA GATE, E NAO DA' PARA ADIVINHAR. Inferir NF pelo nome do arquivo poria contrato e
+    romaneio na coluna da nota — pior que o traco. Quem le NF FILTRA por `especie` e tolera o
+    que vier: sem numero, a nota e' ignorada; sem nenhuma, "—". Quem corrige e' o operador, na
+    aba Documentos.
+  ⚠ E "2+ DOCUMENTOS" NAO E' "2+ NFs", erro que eu mesmo cometi na primeira contagem: dos 109
+    lancamentos de OC, 31 tem 2+ documentos mas so' 9 tem 2+ `nf_principal`. Contar anexo conta
+    contrato.
 - ABATE-BRUTO-DUAS-FONTES-01 — o "Valor bruto" do abate tem DUAS origens que nao fecham.
   O resumo lateral do modal OC deriva do liquido gravado (`valor_total + funrural`) e a cascata
   de `src/lib/calculos/abate.ts` soma (`base + bonus - descontos`). Medido na OC 8a6295f0

@@ -11,6 +11,8 @@ import logoUrl from '@/assets/logo.png';
 /* `addLogoToDoc` saiu daqui para `src/lib/pdf/` — PR-OC-RESUMO-01. */
 import { addLogoToDoc } from '@/lib/pdf/pdfChassi';
 import { fmtValor, formatMoeda, formatKg, formatArroba, formatPercent } from '@/lib/calculos/formatters';
+import { supabase } from '@/integrations/supabase/client';
+import { celulaNF, origemDaLinha, type NFdaOperacao } from '@/lib/financeiro/nfDaOperacao';
 import { calcIndicadoresLancamento } from '@/lib/calculos/economicos';
 
 // Load logo as base64 for jsPDF
@@ -207,6 +209,58 @@ function agregarLancs(lancs: Lancamento[]) {
   };
 }
 
+/**
+ * As NFs da Operacao Comercial de cada lancamento, em DUAS consultas para o lote inteiro.
+ *
+ * ⚠ O NUMERO DA NOTA NAO ESTA NO LANCAMENTO quando ele nasce de OC: medido em 24/09/2026,
+ * `numero_documento` e' nulo em 109 de 109 lancamentos de OC. Ele vive em
+ * `zoo_operacao_documentos`, ligado pelo elo `zoo_operacao_movimentacoes`.
+ *
+ * ⚠ FALHA AQUI NAO DERRUBA O PDF: devolve mapa vazio e cada celula cai no legado ou no traco.
+ * A coluna NF e' um dado a mais no relatorio, nao a razao dele existir.
+ */
+async function carregarNFsDasOperacoes(lancamentoIds: string[]): Promise<Map<string, NFdaOperacao[]>> {
+  const vazio = new Map<string, NFdaOperacao[]>();
+  if (lancamentoIds.length === 0) return vazio;
+  try {
+    const { data: elos } = await (supabase as any)
+      .from('zoo_operacao_movimentacoes')
+      .select('movimentacao_id, operacao_id')
+      .in('movimentacao_id', lancamentoIds);
+    const porOperacao = new Map<string, string[]>();
+    for (const e of (elos ?? []) as { movimentacao_id: string; operacao_id: string }[]) {
+      if (!e.operacao_id || !e.movimentacao_id) continue;
+      const lista = porOperacao.get(e.operacao_id) ?? [];
+      lista.push(e.movimentacao_id);
+      porOperacao.set(e.operacao_id, lista);
+    }
+    if (porOperacao.size === 0) return vazio;
+
+    /* ⚠ `especie = 'nf_principal'` E' O FILTRO, e ele erra as vezes — ver OC-DOC-ESPECIE-01 no
+       CLAUDE.md. O filtro fica assim mesmo: adivinhar NF por nome do arquivo poria contrato e
+       romaneio na coluna da nota. Quem corrige a especie e' o operador, na aba Documentos. */
+    const { data: docs } = await (supabase as any)
+      .from('zoo_operacao_documentos')
+      .select('operacao_id, numero')
+      .in('operacao_id', Array.from(porOperacao.keys()))
+      .eq('especie', 'nf_principal')
+      .eq('cancelado', false);
+
+    const saida = new Map<string, NFdaOperacao[]>();
+    for (const d of (docs ?? []) as { operacao_id: string; numero: string | null }[]) {
+      for (const lancId of porOperacao.get(d.operacao_id) ?? []) {
+        const lista = saida.get(lancId) ?? [];
+        lista.push({ numero: d.numero });
+        saida.set(lancId, lista);
+      }
+    }
+    return saida;
+  } catch (e) {
+    console.error('[FinanceiroExportMenu] nao foi possivel carregar as NFs das operacoes:', e);
+    return vazio;
+  }
+}
+
 async function gerarPDFTabela(lancamentos: Lancamento[], subAba: SubAba, ano: string, fazendaMap: Map<string, string>, fazendaNome?: string, isGlobal?: boolean) {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const pageW = doc.internal.pageSize.getWidth();
@@ -254,6 +308,13 @@ async function gerarPDFTabela(lancamentos: Lancamento[], subAba: SubAba, ano: st
     doc.setFont('helvetica', 'normal');
   };
 
+  /* ⚠ UMA CONSULTA PARA O LOTE INTEIRO, nunca uma por linha — OC-PDF-ORIGEM-NF-01. O PDF do NJ
+     2026 tem 47 linhas; por linha seriam 94 idas ao banco (movimentacao + documentos) para
+     montar uma coluna. Duas consultas resolvem o conjunto: lancamento -> operacao, operacao ->
+     NFs. Falha de rede NAO derruba o PDF: o mapa fica vazio e a celula cai no legado/traco —
+     um relatorio sem a coluna NF e' melhor que relatorio nenhum. */
+  const nfsPorLancamento = await carregarNFsDasOperacoes(lancamentos.map(l => l.id));
+
   // ─── Agregados ────────────────────────────────────────────
   const agg = agregarLancs(lancamentos);
 
@@ -288,7 +349,7 @@ async function gerarPDFTabela(lancamentos: Lancamento[], subAba: SubAba, ano: st
         : (l.compradorFornecedor || l.fornecedorNomeSnapshot || '—');
     const origem = isCompra
       ? (l.fornecedorNomeSnapshot || l.compradorFornecedor || '—')
-      : (l.fazendaOrigem || '—');
+      : origemDaLinha(fazendaMap, l.fazendaId, l.fazendaOrigem);
     return [
       format(parseISO(l.data), 'dd/MM/yy'),
       String(l.quantidade),
@@ -302,7 +363,7 @@ async function gerarPDFTabela(lancamentos: Lancamento[], subAba: SubAba, ano: st
       fmtValor(c.valorFinal),
       fmtValor(c.liqCabeca),
       fmtValor(c.liqKg),
-      l.notaFiscal || '—',
+      celulaNF(l.notaFiscal, nfsPorLancamento.get(l.id)),
     ];
   });
 
@@ -357,6 +418,11 @@ async function gerarPDFTabela(lancamentos: Lancamento[], subAba: SubAba, ano: st
     },
     columnStyles: {
       0: { halign: 'left' },
+      /* ⚠ A CELULA NF QUEBRA, NAO CORTA. Com 2 NFs ela leva 23 caracteres
+         ("000.007.998 · 000.008.301"); truncar esconderia metade de um numero de nota, que e'
+         o unico jeito de achar o papel. `linebreak` e' o default do autotable e esta' aqui
+         escrito de proposito, para ninguem trocar por `ellipsize` sem ler isto. */
+      [head[0].length - 1]: { overflow: 'linebreak', cellWidth: 26 },
     },
     didParseCell: (data) => {
       const colHeader = head[0][data.column.index] || '';
