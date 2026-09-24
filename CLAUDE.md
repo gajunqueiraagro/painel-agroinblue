@@ -1011,3 +1011,29 @@ preview que o cabecalho nao sai da tela ao rolar.
   NOVA: arquivo fora da lista, ou arquivo da lista com MAIS do que a
   baseline. Reduzir e' sempre aceito; atualize a baseline no mesmo PR com
   `node scripts/check-ui-nativo.mjs --baseline`.
+- ⚠ SVG COM `preserveAspectRatio="none"`: O viewBox VAI EM PIXELS REAIS, NUNCA EM UNIDADES
+  NORMALIZADAS. Com `none` o desenho e' ESTICADO ate' a caixa, e o fator de escala se aplica a
+  TUDO que esta' dentro — inclusive a `fontSize` e a espessura do traco. Um `viewBox="0 0 100 140"`
+  numa caixa de 220px faz `fontSize={8}` renderizar a 17,6px: os rotulos se sobrepoem, os numeros
+  do eixo saem cortados na borda, e o codigo que os escreveu esta' certo. Com o viewBox em pixels,
+  uma unidade vale um pixel e o que se escreve e' o que se ve'.
+  ⚠ NENHUM DOS SETE GATES VE' ISSO. TSC e build ficam mudos porque e' aritmetica dentro de um
+  atributo; a suite tambem, porque `jsdom` nao faz layout — `getBoundingClientRect` devolve zero,
+  entao um teste de sobreposicao passa verde sempre. So' a tela mostra.
+  ⚠ DUAS OCORRENCIAS MEDIDAS, as duas na homologacao de 24/09/2026:
+    `PecPonteAbas` (fix4) — viewBox de `n * 84` com os rotulos do eixo em `x = 2`; uma unidade
+       valia menos de um pixel e os numeros saiam CORTADOS a esquerda. Corrigido com largura fixa.
+    `GraficoComposicao` em `ValorRebanhoTab` (COMPACTO-03b) — o caso dos 17,6px acima; os rotulos
+       de % viraram `"67935592522559450"` na tela. Corrigido com `W = 240`.
+  ⚠ E A "TERCEIRA OCORRENCIA" QUE EU RELATEI NAO EXISTE — a correcao vale mais que o numero.
+  Escrevi no relatorio do 03b que era a terceira vez, "ponte, cascata e agora a composicao";
+  conferido no historico (`git log -L`), a `PecCascataView` NASCEU com `W = 1180` em c06c89e1 e
+  nunca teve o defeito. Ela e' a REFERENCIA de como se faz, nao um caso dele. Contar ocorrencia de
+  memoria conta a impressao; a conta se faz no historico.
+  ⚠ HA' UMA TERCEIRA SAIDA, e ela esta' viva no repo: `V2AreasMeta` usa `viewBox="0 0 100 H"` de
+  proposito e NAO poe texto nenhum dentro do SVG — os valores do eixo sao HTML posicionado por
+  cima, e todo traco leva `vectorEffect="non-scaling-stroke"`. Quem precisar de unidade normalizada
+  faz assim: o que nao pode e' texto ou espessura DENTRO de um SVG esticado, sem defesa.
+  ⚠ FICA REGISTRADO, e nao e' defeito: o sparkline de `ResOpDashboard` estica um `polyline` de
+  `strokeWidth 1.5` sem `vectorEffect`. Nao ha' texto ali e a caixa tem 26px de altura — a
+  distorcao do traco e' real e invisivel. Quem tocar o arquivo acrescenta o `vectorEffect`.

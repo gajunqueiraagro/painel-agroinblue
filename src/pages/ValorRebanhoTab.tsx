@@ -1,4 +1,5 @@
 import { useValorRebanhoInicio, type RebanhoInicio } from '@/hooks/useValorRebanhoInicio';
+import { ehJovem } from '@/components/agri/PecPatrimonioModal';
 import { useCliente } from '@/contexts/ClienteContext';
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -413,17 +414,8 @@ function CardInicio({ ano, inicio, carregando, fazendaNome }: {
 
   return (
     <div className="space-y-1.5">
-      {/* A faixa do Início: informativa, nunca de bloqueio. */}
-      <div className="flex items-center justify-between gap-2 rounded border px-2"
-        style={{ height: 22, backgroundColor: '#EEF3F8', borderColor: '#B5D4F4', color: '#0C447C' }}>
-        <span className="truncate" style={{ fontSize: 9 }}>
-          Retrato de 1º de janeiro de {ano} · saldo inicial do ano
-          {origem && <span className="opacity-80"> · {origem}</span>}
-        </span>
-        <span className="shrink-0 rounded px-1.5 font-medium"
-          style={{ fontSize: 9, lineHeight: '16px', backgroundColor: '#0C447C', color: '#fff' }}>Base</span>
-      </div>
-
+      {/* ⚠ A FAIXA SUBIU PARA O TOPO DA TELA (A23): aqui ela era um bloco que o mês não tinha, e
+          fazia o Início nascer 36px acima. Ver o bloco dos três estados em `ValorRebanhoTab`. */}
       {carregando ? (
         <div className="rounded border bg-card px-2 py-6 text-center text-[10px] text-muted-foreground">
           Carregando o retrato de 1º de janeiro…
@@ -438,10 +430,15 @@ function CardInicio({ ano, inicio, carregando, fazendaNome }: {
             de 1º de janeiro de ${ano} ${fazendaNome === 'Global' ? 'para este cliente' : 'para esta fazenda'}.`}
         </div>
       ) : (
-        <div className="grid gap-2" style={{ gridTemplateColumns: '376px 268px' }}>
-          <div className="overflow-hidden rounded border bg-card">
+        /* ⚠ A MESMA RÉGUA DO MÊS — A23. O card tinha um grid próprio (376|268) e colunas próprias,
+           e por isso os indicadores do Início nasciam 2px acima dos do mês: duas estruturas para a
+           mesma fila. Agora as duas tabelas usam `COLS_CAT_VR`/`COLS_IND_VR` e o mesmo
+           `flex gap-2`. */
+        <div className="flex flex-wrap items-start gap-2">
+          <div className="shrink-0 overflow-hidden rounded border bg-card"
+            style={{ width: COLS_CAT_VR.reduce((a, w) => a + w, 0) }}>
             <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
-              <colgroup>{[70, 40, 46, 40, 48, 56, 76].map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>
+              <colgroup>{COLS_CAT_VR.map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>
               <thead>
                 <tr style={{ height: 16 }}>
                   {['Categoria', 'Qtd', 'Peso', 'R$/kg', 'R$/@', 'R$/cab', 'Valor total'].map((r, i) => (
@@ -478,18 +475,19 @@ function CardInicio({ ano, inicio, carregando, fazendaNome }: {
             </table>
           </div>
 
-          <div className="overflow-hidden rounded border bg-card">
+          <div className="shrink-0 overflow-hidden rounded border bg-card"
+            style={{ width: COLS_IND_VR.reduce((a, w) => a + w, 0) }}>
             <div className="truncate px-1.5 py-0 font-medium"
               style={{ height: 16, lineHeight: '16px', fontSize: 9, backgroundColor: '#E9EFF6', color: '#0C447C' }}>
               Valor do rebanho · 1º jan/{String(ano).slice(2)} · {fazendaNome}
             </div>
-            <div className="flex items-baseline justify-between gap-2 px-1.5" style={{ height: 22 }}>
-              <span className="truncate font-medium tabular-nums" style={{ fontSize: 14 }}>{nz(inicio.valor)}</span>
+            <div className="flex items-baseline justify-between gap-2 px-1.5" style={{ height: 24 }}>
+              <span className="truncate font-medium tabular-nums" style={{ fontSize: 16 }}>{nz(inicio.valor)}</span>
               {/* ⚠ AS DUAS COMPARAÇÕES EM TRAÇO: o início não tem mês anterior nem início de ano. */}
               <span className="shrink-0 text-muted-foreground" style={{ fontSize: 9 }}>{traco} mês · {traco} ano</span>
             </div>
             <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
-              <colgroup>{[78, 72, 56, 62].map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>
+              <colgroup>{COLS_IND_VR.map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>
               <thead>
                 <tr style={{ height: 16 }}>
                   {['', 'Valor', 'vs mês', 'vs ini. ano'].map((r, i) => (
@@ -506,11 +504,11 @@ function CardInicio({ ano, inicio, carregando, fazendaNome }: {
                   ['R$/cab', nz(precoCab)],
                   ['@ em estoque', nz(inicio.arrobas, 2)],
                 ] as const).map(([rot, val]) => (
-                  <tr key={rot} style={{ height: 16 }}>
-                    {cel(rot, true)}
-                    {cel(val)}
-                    {cel(traco)}
-                    {cel(traco)}
+                  <tr key={rot} style={{ height: 18 }}>
+                    <td className="truncate px-1.5 py-0 text-left text-muted-foreground" style={{ fontSize: 11, lineHeight: 1 }}>{rot}</td>
+                    <td className="truncate px-1.5 py-0 text-right tabular-nums" style={{ fontSize: 11, lineHeight: 1 }}>{val}</td>
+                    <td className="truncate px-1.5 py-0 text-right" style={{ fontSize: 11, lineHeight: 1 }}>{traco}</td>
+                    <td className="truncate px-1.5 py-0 text-right" style={{ fontSize: 11, lineHeight: 1 }}>{traco}</td>
                   </tr>
                 ))}
               </tbody>
@@ -533,6 +531,73 @@ function rotuloMesCurto(am: string) {
 /** ⚠ O NOME DA CASA, NUNCA O CÓDIGO — a mesma lista dos lançamentos. */
 function nomeDaCategoria(cod: string) {
   return CATEGORIAS.find(c => c.value === cod)?.label ?? cod;
+}
+
+/**
+ * A COMPOSIÇÃO DO REBANHO — colunas de 100 % empilhadas, mês a mês.
+ *
+ * ⚠ SVG PRÓPRIO E NÃO RECHARTS: são duas séries que sempre somam 100, e o `BarChart` empilhado
+ * pediria escala, eixo e tooltip para desenhar dois retângulos por mês. Aqui a altura É o
+ * percentual — não há escala a acertar.
+ * ⚠ O RÓTULO SÓ APARECE A PARTIR DE 15 %: abaixo disso ele não cabe dentro da faixa e sai por
+ * cima da vizinha. Quem quiser o número pequeno tem o `title` da coluna.
+ * ⚠ MÊS SEM DADO É COLUNA VAZIA, e é o ponto: não saber a composição não é ter só adultos.
+ */
+function GraficoComposicao({ dados, title }: {
+  dados: { label: string; fullLabel?: string; jovens: number | null; adultos: number | null }[];
+  title: string;
+}) {
+  /* ⚠ O viewBox TEM LARGURA EM PIXELS, NÃO 100 — a mesma lição da ponte: com 100 unidades
+     esticadas para ~220px de tela, `preserveAspectRatio="none"` escala TUDO que está dentro,
+     `fontSize={8}` virava 17,6px reais e os rótulos de dois dígitos se sobrepunham (visto na tela
+     em 24/09). Com 240, uma unidade vale um pixel. A `PecCascataView` é a referência de como se
+     faz: nasceu com `W = 1180` e nunca teve o defeito. */
+  const W = 240, H = 140, PAD_BASE = 16, PAD_TOPO = 4;
+  const alt = H - PAD_BASE - PAD_TOPO;
+  const larg = W / dados.length;
+  return (
+    <div className="flex-1 min-w-0">
+      <p className="mb-0.5 truncate text-center font-medium" style={{ fontSize: 10, color: '#0C447C' }}>{title}</p>
+      <div className="h-[140px] w-full">
+        <svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={title}>
+          {dados.map((d, i) => {
+            const x = i * larg + larg * 0.15, w = larg * 0.7;
+            if (d.jovens == null || d.adultos == null) return null;
+            const hJ = (d.jovens / 100) * alt, hA = (d.adultos / 100) * alt;
+            return (
+              <g key={d.label}>
+                <title>{`${d.fullLabel ?? d.label}: ${formatNum(d.jovens, 1)} % jovens · ${formatNum(d.adultos, 1)} % adultos`}</title>
+                <rect x={x} y={PAD_TOPO} width={w} height={hA} fill="#2C3E5C" />
+                <rect x={x} y={PAD_TOPO + hA} width={w} height={hJ} fill="#639922" />
+                {d.adultos >= 15 && (
+                  <text x={x + w / 2} y={PAD_TOPO + hA / 2 + 3} fontSize={8} textAnchor="middle" fill="#fff">
+                    {formatNum(d.adultos, 0)}
+                  </text>
+                )}
+                {d.jovens >= 15 && (
+                  <text x={x + w / 2} y={PAD_TOPO + hA + hJ / 2 + 3} fontSize={8} textAnchor="middle" fill="#fff">
+                    {formatNum(d.jovens, 0)}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+          {dados.map((d, i) => (
+            <text key={`l${d.label}`} x={i * larg + larg / 2} y={H - 4} fontSize={7}
+              textAnchor="middle" fill="#6B6862">{d.label}</text>
+          ))}
+        </svg>
+      </div>
+      <div className="flex items-center justify-center gap-3" style={{ fontSize: 8 }}>
+        <span className="flex items-center gap-1">
+          <span className="inline-block h-2 w-2 rounded-[1px]" style={{ backgroundColor: '#639922' }} />jovens
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block h-2 w-2 rounded-[1px]" style={{ backgroundColor: '#2C3E5C' }} />adultos
+        </span>
+      </div>
+    </div>
+  );
 }
 
 function MiniChart({ data, color, title, unit, serie2, rotulo1, rotulo2 }: {
@@ -1201,6 +1266,50 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     });
   }, [buildChartData, historicoDetalhadoPorMes, anoFiltro]);
 
+  /**
+   * O QUINTO GRÁFICO — o R$/@ sem o mercado.
+   *
+   * ⚠ É O QUARTO DIVIDIDO PELAS ARROBAS DO MÊS, e por isso a tracejada aqui não é "o preço de
+   * janeiro": é o preço MÉDIO que o rebanho teria se nenhum preço tivesse mudado — ele sobe e
+   * desce só porque a MISTURA de categorias muda. A distância até a linha real é o mercado.
+   */
+  /* ⚠ USA `chartDataArrobas`, NÃO O `u*`: o do Global é declarado 100 linhas abaixo, e ler daqui
+     dava TDZ (o TSC acusou). E a quebra por categoria — de onde sai a série de janeiro — só existe
+     por fazenda, então no Global as duas pontas desta conta seriam nulas de qualquer forma. */
+  const chartDataPrecoArrobaJaneiro = useMemo(() => buildChartData(mes => {
+    const valorJan = chartDataPrecoJaneiro[mes]?.value ?? null;
+    const arrobas = chartDataArrobas[mes]?.value ?? null;
+    return valorJan == null || arrobas == null || arrobas === 0 ? null : valorJan / arrobas;
+  }), [buildChartData, chartDataPrecoJaneiro, chartDataArrobas]);
+
+  /**
+   * O SEXTO — a composição do rebanho em % de cabeças, mês a mês.
+   *
+   * ⚠ O GRUPO VEM DO MODAL DA VARIAÇÃO (`ehJovem`), não de uma lista nova: a mesma pergunta já
+   * tinha resposta no sistema, e duas listas iguais em dois arquivos ficam iguais só até alguém
+   * mexer numa delas.
+   * ⚠ MÊS SEM DADO É COLUNA VAZIA, nunca 0/100: não saber a composição não é o mesmo que ter só
+   * adultos. A série sai de `rawCategorias`, que a tela já carrega para os MiniChart.
+   */
+  const chartComposicao = useMemo(() => {
+    const linhas = viewDataAnoAtual || [];
+    return CHART_LABELS.map((label, idx) => {
+      const fullLabel = CHART_FULL_LABELS[idx];
+      if (idx === 0 || idx > mesNum) return { label, fullLabel, jovens: null, adultos: null };
+      const doMes = linhas.filter(r => r.mes === idx);
+      if (doMes.length === 0) return { label, fullLabel, jovens: null, adultos: null };
+      let j = 0; let a = 0;
+      for (const r of doMes) {
+        const q = Number(r.saldo_final) || 0;
+        if (ehJovem(String(r.categoria_codigo))) j += q; else a += q;
+      }
+      const tot = j + a;
+      return tot === 0
+        ? { label, fullLabel, jovens: null, adultos: null }
+        : { label, fullLabel, jovens: (j / tot) * 100, adultos: (a / tot) * 100 };
+    });
+  }, [viewDataAnoAtual, mesNum]);
+
   const handlePrecoChange = (codigo: string, value: string) => {
     const sanitized = value.replace(/[^0-9.,]/g, '');
     setPrecosDisplay(prev => ({ ...prev, [codigo]: sanitized }));
@@ -1392,14 +1501,35 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
       {/* ⚠ O INÍCIO NÃO RECEBE O CADEADO DO MÊS: ele não é um mês, é a base. O banner falava de
           "2021-09 fechado" sobre um retrato de 1º de janeiro, e o overlay o deixava esmaecido como
           se houvesse algo a editar ali. */}
-      {/* ⚠ A LINHA DE 22px FICA RESERVADA quando o mês está aberto (A23): sem ela, fechar um mês
-          empurrava a tela inteira 22px para baixo, e o operador perdia o lugar onde estava lendo. */}
-      {!verInicio && (
-        isGlobal
-          ? <div style={{ height: 22 }} aria-hidden />
-          : <div style={{ minHeight: 22 }}><MasterLockBanner anoMes={anoMes} compacto /></div>
+      {/**
+        * ⚠ A LINHA DE 22px EXISTE NOS TRÊS ESTADOS — A23, e foi MEDIDO que ela faltava: sem a faixa,
+        * o Início nascia 36px acima do mês (meses a 66 contra 102), e clicar nele fazia a tela
+        * inteira pular. Agora ela sempre ocupa os 22: com o cadeado no mês fechado, com o retrato
+        * no Início, e vazia no mês aberto.
+        * ⚠ E A FAIXA DO INÍCIO SUBIU PARA CÁ em vez de morar dentro do card: lá embaixo ela era um
+        * bloco a mais que o mês não tinha, e era justamente ela que criava o degrau.
+        */}
+      {verInicio ? (
+        <div className="flex items-center justify-between gap-2 rounded border px-2"
+          style={{ height: 22, backgroundColor: '#EEF3F8', borderColor: '#B5D4F4', color: '#0C447C' }}>
+          <span className="truncate" style={{ fontSize: 9 }}>
+            Retrato de 1º de janeiro de {anoFiltro} · saldo inicial do ano
+            {inicio?.origem === 'fechamento' && <span className="opacity-80"> · fechamento de {rotuloMesCurto(inicio.mesBase)}</span>}
+            {inicio?.origem === 'cadastro' && <span className="opacity-80"> · saldo inicial do cadastro</span>}
+          </span>
+          <span className="shrink-0 rounded px-1.5 font-medium"
+            style={{ fontSize: 9, lineHeight: '16px', backgroundColor: '#0C447C', color: '#fff' }}>Base</span>
+        </div>
+      ) : isGlobal ? (
+        <div style={{ height: 22 }} aria-hidden />
+      ) : (
+        <div style={{ height: 22 }}><MasterLockBanner anoMes={anoMes} compacto /></div>
       )}
-      <div className="flex gap-1.5 items-center flex-wrap">
+      {/* ⚠ A LINHA DE ESTADO TEM 18px FIXOS — A23. Ela media 28 no mês (por causa dos botões `h-7`)
+          e 20 no Início, e essa diferença de 8px descia por toda a tela: a régua de meses, a
+          tabela e os gráficos nasciam em alturas diferentes conforme o que estava aberto. O
+          `flex-wrap` também saiu: envolver era outra forma de crescer. */}
+      <div className="flex items-center gap-1.5 overflow-hidden" style={{ height: 18 }}>
         {onBack && (
           <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={onBack}>
             <ArrowLeft className="h-4 w-4" />
@@ -1410,7 +1540,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
             "Corrigir preços" do DRE ficava preso no ano que o link mandou, justamente quem mais
             precisa navegar para conferir o ano vizinho. A prop continua SEMEANDO o estado na
             montagem; ela nunca foi uma segunda fonte, só escondia o controle. */}
-        <div className="flex h-5 shrink-0 items-center gap-0.5 rounded border bg-card px-0.5">
+        <div className="flex h-[18px] shrink-0 items-center gap-0.5 rounded border bg-card px-0.5">
           <button type="button" aria-label="Ano anterior"
             onClick={() => setAnoFiltro(a => String(Number(a) - 1))}
             className="px-1 text-[11px] leading-none text-muted-foreground hover:text-foreground">◂</button>
@@ -1421,13 +1551,13 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         </div>
 
         {!verInicio && uCanEdit && !isGlobal && (
-          <Button variant="outline" size="sm" onClick={handleCopiarMesAnterior} className="gap-1 h-7 text-xs px-2">
+          <Button variant="outline" size="sm" onClick={handleCopiarMesAnterior} className="gap-1 h-[18px] !text-[9px] px-1.5">
             <Copy className="h-3 w-3" /> Mês anterior
           </Button>
         )}
 
         {!verInicio && isMesFuturo && (
-          <Badge variant="outline" className="gap-1 text-xs text-muted-foreground">
+          <Badge variant="outline" className="h-[18px] gap-1 px-1.5 text-[9px] text-muted-foreground">
             <Lock className="h-3 w-3" /> Futuro
           </Badge>
         )}
@@ -1436,32 +1566,32 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
             "Live", "Reabrir" e "Salvar e Fechar" falam de um MÊS que se pode abrir e fechar; o
             retrato de 1º de janeiro não é um. A do Início é "Base", e mora na faixa dele. */}
         {!verInicio && !isMesFuturo && uMesFechado && (
-          <Badge variant="secondary" className="gap-1 text-xs">
+          <Badge variant="secondary" className="h-[18px] gap-1 px-1.5 text-[9px]">
             <Lock className="h-3 w-3" /> Fechado
             {isGlobal && ` (${globalData.fazendasFechadas}/${globalData.fazendasTotal})`}
           </Badge>
         )}
 
         {!verInicio && !isMesFuturo && !uMesFechado && (
-          <Badge variant="outline" className="gap-1 text-xs">
+          <Badge variant="outline" className="h-[18px] gap-1 px-1.5 text-[9px]">
             <Info className="h-3 w-3" /> Live
           </Badge>
         )}
 
         {isGlobal && globalData.fonteMes === 'misto' && (
-          <Badge variant="outline" className="gap-1 text-xs border-amber-500/50 text-amber-700 dark:text-amber-400">
+          <Badge variant="outline" className="h-[18px] gap-1 px-1.5 text-[9px] border-amber-500/50 text-amber-700 dark:text-amber-400">
             <AlertTriangle className="h-3 w-3" /> Misto ({globalData.fazendasFechadas}/{globalData.fazendasTotal} fechadas)
           </Badge>
         )}
 
         <div className="ml-auto flex gap-1.5">
           {!verInicio && !isGlobal && !isMesFuturo && mesSelecionadoFechado && isAdmin && (
-            <Button variant="outline" size="sm" onClick={reabrirFechamento} className="gap-1 h-7 text-xs px-2">
+            <Button variant="outline" size="sm" onClick={reabrirFechamento} className="gap-1 h-[18px] !text-[9px] px-1.5">
               <Unlock className="h-3 w-3" /> Reabrir
             </Button>
           )}
           {!verInicio && uCanEdit && !isGlobal && (
-            <Button size="sm" onClick={handleSalvar} disabled={saving} className="gap-1 h-7 text-xs px-3">
+            <Button size="sm" onClick={handleSalvar} disabled={saving} className="gap-1 h-[18px] !text-[9px] px-2">
               <Save className="h-3 w-3" />
               {saving ? 'Salvando...' : 'Salvar e Fechar'}
             </Button>
@@ -1856,14 +1986,25 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           inteira no Início: uma série de um ponto não é uma série, e o corpo não se move porque
           nada dela tinha altura reservada. */}
       {!verInicio && !uAvisoSnapshotIncompleto && (
-        <div className="flex w-full gap-2">
-          <MiniChart data={uChartDataValor} color="hsl(var(--primary))" title="Valor do rebanho (R$)" unit="currency" />
-          <MiniChart data={uChartDataArrobas} color="hsl(142, 71%, 45%)" title="Arrobas em estoque" unit="arroba" />
-          <MiniChart data={uChartDataPrecoArroba} color="hsl(217, 91%, 60%)" title="R$/@ médio" unit="currency" />
-          <MiniChart title="Valor: real × a preço de janeiro" unit="currency"
-            color="#0C447C" serie2 rotulo1="real" rotulo2="a preço de janeiro"
-            data={uChartDataValor.map((d, i) => ({ ...d, value2: chartDataPrecoJaneiro[i]?.value ?? null }))} />
-        </div>
+        <>
+          {/* ⚠ 2 × 3, e a ordem é a da leitura: em cima as três grandezas puras (valor, arrobas,
+              preço); embaixo as três que EXPLICAM — as duas contra o preço de janeiro e a
+              composição. A segunda linha só faz sentido depois da primeira. */}
+          <div className="flex w-full gap-2">
+            <MiniChart data={uChartDataValor} color="hsl(var(--primary))" title="Valor do rebanho (R$)" unit="currency" />
+            <MiniChart data={uChartDataArrobas} color="hsl(142, 71%, 45%)" title="Arrobas em estoque" unit="arroba" />
+            <MiniChart data={uChartDataPrecoArroba} color="hsl(217, 91%, 60%)" title="R$/@ médio" unit="currency" />
+          </div>
+          <div className="flex w-full gap-2">
+            <MiniChart title="Valor: real × a preço de janeiro" unit="currency"
+              color="#0C447C" serie2 rotulo1="real" rotulo2="a preço de janeiro"
+              data={uChartDataValor.map((d, i) => ({ ...d, value2: chartDataPrecoJaneiro[i]?.value ?? null }))} />
+            <MiniChart title="R$/@: real × a preço de janeiro" unit="currency"
+              color="hsl(217, 91%, 60%)" serie2 rotulo1="real" rotulo2="a preço de jan (só composição)"
+              data={uChartDataPrecoArroba.map((d, i) => ({ ...d, value2: chartDataPrecoArrobaJaneiro[i]?.value ?? null }))} />
+            <GraficoComposicao dados={chartComposicao} title="Composição do rebanho (% cab)" />
+          </div>
+        </>
       )}
 
       {/* Footer de atalhos do fluxo de fechamento */}

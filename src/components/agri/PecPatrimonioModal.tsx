@@ -46,7 +46,13 @@ const NOME_CAT = new Map(CATEGORIAS.map(c => [c.value as string, c.label]));
 const nomeDe = (cod: string) => NOME_CAT.get(cod) ?? cod;
 
 /** Jovens = mamotes e desmama; adultos = o resto. */
-const JOVENS = new Set(['mamotes_m', 'mamotes_f', 'desmama_m', 'desmama_f']);
+/**
+ * ⚠ EXPORTADO PARA NÃO SER REDEFINIDO — COMPACTO-03b. A Evolução Patrimonial passou a desenhar a
+ * composição jovens × adultos, e duas listas iguais em dois arquivos ficam iguais só até alguém
+ * mexer numa delas. A pergunta "este bicho é jovem?" tem uma resposta só no sistema.
+ */
+export const JOVENS = new Set(['mamotes_m', 'mamotes_f', 'desmama_m', 'desmama_f']);
+export const ehJovem = (codigo: string) => JOVENS.has(codigo);
 
 const NAVY = '#0C447C';
 const CAB_TABELA = '#2C3E5C';
