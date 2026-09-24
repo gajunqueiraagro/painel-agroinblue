@@ -21,9 +21,9 @@
  * diferença entre os dois critérios e pode ter SINAL OPOSTO ao das arrobas. No fixture (os números
  * reais do NJ 25/26) isso daria −15.508 R$/@ impresso na tela como se fosse preço.
  */
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { PecEstoquePonteModal } from '@/components/agri/PecEstoquePonteModal';
+import { describe, it, expect } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { PecPonteTabela, PecPonteGrafico } from '@/components/agri/PecPonteAbas';
 import type { PatrimonioPec, ParcelaMov } from '@/hooks/useDrePecuaria';
 
 const p = (cabecas: number, arrobas: number, valor: number): ParcelaMov => ({ cabecas, arrobas, valor });
@@ -49,14 +49,17 @@ const NJ: PatrimonioPec = {
   },
 };
 
+/* ⚠ SEM MODAL E SEM PORTAL — MODAL-UNICO-01. A ponte deixou de ser um modal e virou duas abas do
+   modal da variação, então o teste monta os COMPONENTES DAS ABAS direto. Some com o `fireEvent`
+   no botão "Gráfico" (não há mais botão aqui) e com a leitura via `document.body` por causa do
+   portal do Radix — o que se lê agora é o `container` do próprio render. */
 const montar = (over?: Partial<PatrimonioPec>, reposicao: number | null = 1866408.21) =>
   render(
-    <PecEstoquePonteModal
-      aberto clienteNome="NJ Pecuária" fazendaNome="Global"
-      patrimonio={{ ...NJ, ...over }} carregando={false}
-      periodo={{ de: '2025-07', ate: '2026-06' }} reposicao={reposicao}
-      onFechar={vi.fn()} onVerPorCategoria={vi.fn()} />,
+    <PecPonteTabela m={{ ...NJ, ...over }.movimentos} reposicao={reposicao}
+      efeito={{ ...NJ, ...over }.total.efeito} />,
   );
+const montarGrafico = (over?: Partial<PatrimonioPec>) =>
+  render(<PecPonteGrafico m={{ ...NJ, ...over }.movimentos} />);
 
 /** O texto de uma linha da tabela, pela primeira célula. */
 /* ⚠ O GENÉRICO DO `querySelectorAll`, NÃO UM `as`: sem ele o retorno é `Element` e `.cells` não
@@ -65,7 +68,7 @@ const linha = (rot: string) =>
   [...document.querySelectorAll<HTMLTableRowElement>('tbody tr')]
     .find(tr => tr.cells[0]?.textContent?.trim() === rot);
 
-describe('PecEstoquePonteModal', () => {
+describe('PecPonteTabela / PecPonteGrafico', () => {
   it('concilia com a linha do DRE Resumido, ao centavo', () => {
     montar();
     /* (v1 − v0) − efeito − reposição = a linha "Variação do estoque" do Resumido. */
@@ -109,11 +112,7 @@ describe('PecEstoquePonteModal', () => {
   });
 
   it('a ponte fecha na conta impressa sob o gráfico', () => {
-    montar();
-    /* ⚠ `fireEvent`, NUNCA `element.click()`: o clique cru dispara fora do `act()` do React e a
-       asserção roda antes do re-render. E a leitura é de `document`, não do `container` do render —
-       o Dialog do Radix monta em PORTAL, e o container do teste volta vazio. */
-    fireEvent.click(screen.getByText('Gráfico'));
+    montarGrafico();
     // 67.928 + 45.723 − 46.094 − 96 = 67.461
     const conta = document.body.textContent ?? '';
     expect(conta).toContain('67.928');
@@ -121,8 +120,7 @@ describe('PecEstoquePonteModal', () => {
   });
 
   it('LEI DO GRÁFICO: a altura é proporcional ao valor e o topo é o acumulado', () => {
-    montar();
-    fireEvent.click(screen.getByText('Gráfico'));
+    montarGrafico();
 
     const rects = [...document.querySelectorAll('svg rect')];
     expect(rects.length).toBeGreaterThan(4);

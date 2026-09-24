@@ -1,7 +1,13 @@
 /**
- * VARIAÇÃO DO ESTOQUE · EVOLUÇÃO DE ARROBAS — o modal do DRE Resumido (mock v4).
+ * A PONTE DE ARROBAS — as abas "Movimentos" e "Gráfico" do modal da variação.
  *
- * ⚠ ELE EXISTE PORQUE A LINHA DO RESUMIDO É COMPOSTA. "Variação do estoque" ali é
+ * ⚠ ELA ERA UM MODAL SEPARADO ATÉ O MODAL-UNICO-01, e deixou de ser por decisão do Gabriel: a
+ * mesma linha do DRE abria duas janelas diferentes conforme o MODO da grade, com um botão ligando
+ * uma à outra. Agora é um modal só, e a ponte são duas de suas cinco abas. O conteúdo não mudou
+ * uma coluna — o que saiu foi o envelope (o Dialog, o cabeçalho navy e o rodapé), que agora é do
+ * modal que as hospeda.
+ *
+ * ⚠ E ELA CONTINUA EXISTINDO PORQUE A LINHA DO RESUMIDO É COMPOSTA. "Variação do estoque" ali é
  * `vpb_operacional − reposicao` (ver `compor` em `drePecRegua`), e o modal por categoria explica
  * só `vpb_operacional`: no NJ 25/26 ele mostraria −193.238 debaixo de um número de −2.059.646. A
  * ponte de arrobas concilia os dois, e o rodapé mostra a conta inteira — por isso o Detalhado, onde
@@ -23,12 +29,10 @@
  * +R$ 1.487.256,52 contra −95,90 @. Dividir um pelo outro daria −15.508 R$/@, que não é preço de
  * coisa nenhuma. "—" é a sentinela certa: não há preço a saber, e não é zero.
  */
-import { useMemo, useState } from 'react';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { X, Loader2, ChevronRight } from 'lucide-react';
+import { useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { formatNum } from '@/lib/calculos/formatters';
-import type { PatrimonioPec, ParcelaMov } from '@/hooks/useDrePecuaria';
+import type { MovimentosPec, ParcelaMov } from '@/hooks/useDrePecuaria';
 
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 const rotuloMes = (am: string) => {
@@ -61,8 +65,6 @@ const mi = (v: number) => `${formatNum(v / 1_000_000, 1)} mi`;
 /** R$/@ de uma linha: o valor dela dividido pelas arrobas dela. */
 const porAt = (valor: number, at: number) => (at === 0 ? null : valor / at);
 
-type Aba = 'tabela' | 'grafico';
-
 interface Passo {
   chave: string;
   rotulo: string;
@@ -75,17 +77,51 @@ interface Passo {
   title?: string;
 }
 
-export function PecEstoquePonteModal({
-  aberto, clienteNome, fazendaNome, patrimonio, carregando, periodo, reposicao,
-  onFechar, onVerPorCategoria,
-}: {
-  aberto: boolean;
-  clienteNome: string;
-  /** O nome da fazenda, ou "Global" quando a coluna é o total do cliente. */
-  fazendaNome: string;
-  patrimonio: PatrimonioPec | null;
-  carregando: boolean;
-  periodo: { de: string; ate: string };
+/**
+ * OS PASSOS DA PONTE — a lista que a tabela e o gráfico percorrem, na mesma ordem.
+ *
+ * ⚠ UMA FONTE PARA AS DUAS ABAS: se cada uma montasse a sua, a primeira transferência que sumisse
+ * numa e ficasse na outra passaria despercebida até alguém somar as colunas na mão.
+ *
+ * ⚠ NO GLOBAL AS TRANSFERÊNCIAS SE ANULAM E SOMEM: entre fazendas do mesmo cliente o que sai de
+ * uma entra na outra, e duas barras de mesma altura em sentidos opostos só ocupam espaço. Some
+ * quando o LÍQUIDO é zero, não quando a tela é a Global — uma transferência para fora do cliente
+ * apareceria, e deve.
+ */
+export function montarPassos(m: MovimentosPec | null): Passo[] {
+  if (!m) return [];
+  const liquidoTransf = m.transf_entrada.arrobas - m.transf_saida.arrobas;
+  const mostraTransf = liquidoTransf !== 0;
+  const ajPct = m.inicio.arrobas > 0
+    ? Math.abs(m.ajustes.arrobas) / m.inicio.arrobas * 100 : null;
+  const base: Passo[] = [
+    { chave: 'inicio', rotulo: 'Total de arrobas iniciais', dir: 0, p: m.inicio, cor: '#9AA6B2' },
+    { chave: 'produzidas', rotulo: '(+) Produzidas', dir: 1, p: m.produzidas, cor: '#2E7D57' },
+    { chave: 'nascimentos', rotulo: '(+) Nascimentos', dir: 1, p: m.nascimentos, cor: '#2E7D57' },
+    { chave: 'compradas', rotulo: '(+) Compradas', dir: 1, p: m.compradas, cor: '#2E7D57' },
+    ...(mostraTransf
+      ? [{ chave: 'transf_entrada', rotulo: '(+) Transf. entrada', dir: 1 as const,
+           p: m.transf_entrada, cor: '#2E7D57' }] : []),
+    { chave: 'vendas_abates', rotulo: '(−) Vendidas e abatidas', dir: -1, p: m.vendas_abates, cor: '#B23A3A' },
+    { chave: 'mortes', rotulo: '(−) Mortes', dir: -1, p: m.mortes, cor: '#B23A3A' },
+    ...(mostraTransf
+      ? [{ chave: 'transf_saida', rotulo: '(−) Transf. saída', dir: -1 as const,
+           p: m.transf_saida, cor: '#B23A3A' }] : []),
+    { chave: 'ajustes', rotulo: '(±) Ajustes', dir: 0, p: m.ajustes, cor: CINZA_AJUSTE, semPreco: true,
+      title: ajPct != null && ajPct > 1
+        ? `reclassificação de categoria e arredondamento mensal — ${formatNum(ajPct, 1)} % do estoque inicial`
+        : 'reclassificação de categoria e arredondamento mensal' },
+    { chave: 'fim', rotulo: 'Total de arrobas finais', dir: 0, p: m.fim, cor: '#9AA6B2' },
+  ];
+  /* ⚠ MOVIMENTO QUE NÃO ACONTECEU SOME DA TABELA E DO GRÁFICO — mas as PONTAS e o AJUSTE ficam
+     sempre: a ponta zerada é informação (o rebanho começou do nada) e o ajuste em zero é a prova
+     de que a ponte fechou sem resíduo. */
+  return base.filter(x => x.dir === 0 || x.p.arrobas !== 0 || x.p.cabecas !== 0);
+}
+
+/** A aba "Movimentos": a evolução de arrobas e a conciliação com a linha do DRE. */
+export function PecPonteTabela({ m, reposicao, efeito }: {
+  m: MovimentosPec | null;
   /**
    * A REPOSIÇÃO DA COLUNA CLICADA — ela viaja com o clique, não é lida de novo.
    *
@@ -94,55 +130,10 @@ export function PecEstoquePonteModal({
    * o rodapé mostra traço em vez de fingir zero.
    */
   reposicao: number | null;
-  onFechar: () => void;
-  /** Abre o modal POR CATEGORIA no mesmo período — o "Ver por categoria →" da nota. */
-  onVerPorCategoria: () => void;
+  /** ⚠ DO PRÓPRIO PAYLOAD, do MESMO período que o modal pediu. */
+  efeito: number;
 }) {
-  const [aba, setAba] = useState<Aba>('tabela');
-
-  const m = patrimonio?.movimentos ?? null;
-  const p0 = patrimonio?.p0 ?? '';
-  const p1 = patrimonio?.p1 ?? '';
-  /** ⚠ O EFEITO DE MERCADO VEM DO PRÓPRIO PAYLOAD, do MESMO período que o modal pediu. */
-  const efeito = patrimonio?.total.efeito ?? 0;
-
-  /* ⚠ NO GLOBAL AS TRANSFERÊNCIAS SE ANULAM E SOMEM: entre fazendas do mesmo cliente o que sai de
-     uma entra na outra, e duas barras de mesma altura em sentidos opostos só ocupam espaço. Some
-     quando o LÍQUIDO é zero, não quando a tela é a Global — uma transferência para fora do cliente
-     apareceria, e deve. */
-  const passos = useMemo<Passo[]>(() => {
-    if (!m) return [];
-    const liquidoTransf = m.transf_entrada.arrobas - m.transf_saida.arrobas;
-    const temTransf = liquidoTransf !== 0
-      || m.transf_entrada.arrobas !== 0 || m.transf_saida.arrobas !== 0;
-    const mostraTransf = temTransf && liquidoTransf !== 0;
-    const ajPct = m.inicio.arrobas > 0
-      ? Math.abs(m.ajustes.arrobas) / m.inicio.arrobas * 100 : null;
-    const base: Passo[] = [
-      { chave: 'inicio', rotulo: 'Total de arrobas iniciais', dir: 0, p: m.inicio, cor: '#9AA6B2' },
-      { chave: 'produzidas', rotulo: '(+) Produzidas', dir: 1, p: m.produzidas, cor: '#2E7D57' },
-      { chave: 'nascimentos', rotulo: '(+) Nascimentos', dir: 1, p: m.nascimentos, cor: '#2E7D57' },
-      { chave: 'compradas', rotulo: '(+) Compradas', dir: 1, p: m.compradas, cor: '#2E7D57' },
-      ...(mostraTransf
-        ? [{ chave: 'transf_entrada', rotulo: '(+) Transf. entrada', dir: 1 as const,
-             p: m.transf_entrada, cor: '#2E7D57' }] : []),
-      { chave: 'vendas_abates', rotulo: '(−) Vendidas e abatidas', dir: -1, p: m.vendas_abates, cor: '#B23A3A' },
-      { chave: 'mortes', rotulo: '(−) Mortes', dir: -1, p: m.mortes, cor: '#B23A3A' },
-      ...(mostraTransf
-        ? [{ chave: 'transf_saida', rotulo: '(−) Transf. saída', dir: -1 as const,
-             p: m.transf_saida, cor: '#B23A3A' }] : []),
-      { chave: 'ajustes', rotulo: '(±) Ajustes', dir: 0, p: m.ajustes, cor: CINZA_AJUSTE, semPreco: true,
-        title: ajPct != null && ajPct > 1
-          ? `reclassificação de categoria e arredondamento mensal — ${formatNum(ajPct, 1)} % do estoque inicial`
-          : 'reclassificação de categoria e arredondamento mensal' },
-      { chave: 'fim', rotulo: 'Total de arrobas finais', dir: 0, p: m.fim, cor: '#9AA6B2' },
-    ];
-    /* ⚠ MOVIMENTO QUE NÃO ACONTECEU SOME DA TABELA E DO GRÁFICO — mas as PONTAS e o AJUSTE ficam
-       sempre: a ponta zerada é informação (o rebanho começou do nada) e o ajuste em zero é a prova
-       de que a ponte fechou sem resíduo. */
-    return base.filter(x => x.dir === 0 || x.p.arrobas !== 0 || x.p.cabecas !== 0);
-  }, [m]);
-
+  const passos = useMemo(() => montarPassos(m), [m]);
   const entradas = passos.filter(x => x.dir === 1);
   const saidas = passos.filter(x => x.dir === -1);
   const somaEnt = entradas.reduce((a, x) => a + x.p.arrobas, 0);
@@ -232,87 +223,10 @@ export function PecEstoquePonteModal({
     </tr>
   );
 
-  /* ─────────── O GRÁFICO — ponte de arrobas ─────────── */
-  const grafico = useMemo(() => {
-    if (passos.length === 0) return null;
-    /* Cada passo vira uma barra flutuante: as pontas saem do zero, os movimentos saem do
-       acumulado. ⚠ A LEI DA RAZÃO: a ALTURA é proporcional ao VALOR, e o topo de uma barra de
-       movimento é o acumulado depois dela. Sem isso a ponte vira um gráfico de barras qualquer. */
-    let acc = 0;
-    const barras = passos.map(x => {
-      if (x.chave === 'inicio') { acc = x.p.arrobas; return { x, de: 0, ate: acc, flutua: false }; }
-      if (x.chave === 'fim') return { x, de: 0, ate: x.p.arrobas, flutua: false };
-      const delta = x.chave === 'ajustes' ? x.p.arrobas : x.dir * x.p.arrobas;
-      const de = acc; acc += delta;
-      return { x, de: Math.min(de, acc), ate: Math.max(de, acc), flutua: true };
-    });
-    const topo = Math.max(...barras.map(b => b.ate), 0);
-    const chao = Math.min(...barras.map(b => b.de), 0);
-    return { barras, topo, chao };
-  }, [passos]);
-
-  /* ⚠ A ALTURA É MEDIDA, NÃO ESCOLHIDA: o corpo do modal tem 468, menos os 24 de padding, os ~26
-     da legenda com a conta e os 16 do card — sobram 380 para o desenho. Com os 210 de antes o card
-     ficava METADE VAZIO e a ponte se espremia no topo (visto na tela em 24/09). */
-  /* ⚠ O viewBox TEM LARGURA FIXA E O EIXO TEM MARGEM DE VERDADE — fix4. Antes ele era
-     `n * 84` de largura com os rótulos do eixo em `x = 2`: esticado por `preserveAspectRatio="none"`,
-     uma unidade valia menos de um pixel e os números do eixo saíam CORTADOS na borda esquerda
-     (medido na homologação de 24/09). Com largura fixa de 880 — a do card a 1440 — uma unidade vale
-     um pixel, e os 60 de margem são 60px de verdade. */
-  const W = 880, MARG_ESQ = 60, MARG_DIR = 10;
-  const H = 260, PAD_TOPO = 14, PAD_BASE = 30;
-  const FAIXA = W - MARG_ESQ - MARG_DIR;
-  const passo = grafico ? FAIXA / grafico.barras.length : 0;
-  const escalaY = (v: number) => {
-    if (!grafico || grafico.topo === grafico.chao) return H - PAD_BASE;
-    return PAD_TOPO + (grafico.topo - v) / (grafico.topo - grafico.chao) * (H - PAD_TOPO - PAD_BASE);
-  };
-
+  if (!m) return null;
   return (
-    <Dialog open={aberto} onOpenChange={o => { if (!o) onFechar(); }}>
-      {/* ⚠ ALTURA PELO CONTEÚDO, TETO EM 82vh — fix4, a mesma regra do modal irmão. */}
-      <DialogContent className="flex max-h-[82vh] max-w-4xl flex-col gap-0 overflow-hidden p-0 [&>button.absolute]:hidden">
-        {/* ⚠ 44px DE CABEÇALHO — ver o mesmo bloco em `PecPatrimonioModal`. */}
-        <div className="flex items-start justify-between gap-3 px-3 py-[5px] text-white" style={{ backgroundColor: NAVY }}>
-          <div className="min-w-0">
-            <h2 className="truncate text-[13px] font-semibold leading-[17px]">
-              Variação do estoque · evolução de arrobas
-            </h2>
-            <div className="truncate text-[11px] leading-[15px] text-white/80">
-              {[clienteNome, fazendaNome, p0 && p1 ? `${rotuloMes(p0)} → ${rotuloMes(p1)}`
-                : `${periodo.de} → ${periodo.ate}`].filter(Boolean).join(' · ')}
-            </div>
-          </div>
-          <div className="flex shrink-0 items-center gap-1">
-            {([['tabela', 'Tabela'], ['grafico', 'Gráfico']] as const).map(([v, r]) => (
-              <button key={v} type="button" onClick={() => setAba(v)}
-                className={cn('rounded px-2 py-0.5 text-[11px] font-medium leading-[18px] transition-colors',
-                  aba === v ? 'bg-white text-[#0C447C]' : 'text-white/80 hover:bg-white/10')}>
-                {r}
-              </button>
-            ))}
-            <button type="button" onClick={onFechar} aria-label="Fechar"
-              className="ml-0.5 text-white/80 hover:text-white">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
+    <>
 
-        {/* ⚠ O `minHeight` É O QUE MANTÉM O TAMANHO AO TROCAR DE ABA, e substitui a altura fixa de
-            468 que fazia o modal nascer maior que a tela. */}
-        <div className="flex min-h-0 flex-1 flex-col gap-1.5 bg-muted/30 p-2" style={{ minHeight: 300 }}>
-          {carregando || !m ? (
-            <div className="flex flex-1 items-center justify-center text-[11px] text-muted-foreground">
-              <Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin align-[-2px]" /> Carregando…
-            </div>
-          ) : (
-            /* ⚠ AS DUAS ABAS FICAM MONTADAS, SOBREPOSTAS NA MESMA CÉLULA DE GRID, e a escondida só
-               perde a visibilidade. É o que dá TAMANHO FIXO ao trocar de aba sem número mágico: a
-               altura do grid é a da MAIOR das duas, medida pelo próprio navegador. Com `minHeight`
-               chutado o modal encolhia de 451 para 376px ao ir para o Gráfico — visto em 24/09. */
-            <div className="grid min-h-0 flex-1 [&>*]:col-start-1 [&>*]:row-start-1">
-            <div className={cn('flex min-h-0 flex-col gap-1.5',
-              aba !== 'tabela' && 'invisible pointer-events-none')}>
               <div className="min-h-0 flex-1 overflow-auto rounded-md border bg-card">
                 <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
                   <colgroup>{LARG.map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>
@@ -375,19 +289,67 @@ export function PecEstoquePonteModal({
                   : 'Produziu e comprou mais do que vendeu: o estoque cresceu.'}
               </div>
 
-              <div className="flex shrink-0 items-baseline justify-between gap-2">
-                <span className="truncate text-[9px] leading-[12px] text-muted-foreground">
-                  A diferença de R$ é a linha Variação do estoque do DRE; o efeito do preço fica em
-                  Efeito de mercado. Compras e vendas em dinheiro seguem nas linhas Reposição e Vendas.
-                </span>
-                <button type="button" onClick={onVerPorCategoria}
-                  className="flex shrink-0 items-center gap-0.5 text-[10px] font-medium text-primary hover:underline">
-                  Ver por categoria <ChevronRight className="h-3 w-3" />
-                </button>
+              {/* ⚠ O "Ver por categoria" SUMIU COM O MODAL SEPARADO — MODAL-UNICO-01. Ele existia
+                  para saltar de uma janela para a outra; com as cinco abas no mesmo cabeçalho, a
+                  visão por categoria está a um clique dali, e um link para a aba vizinha seria um
+                  segundo caminho para o mesmo lugar. */}
+              <div className="shrink-0 text-[9px] leading-[12px] text-muted-foreground">
+                A diferença de R$ é a linha Variação do estoque do DRE; o efeito do preço fica em
+                Efeito de mercado. Compras e vendas em dinheiro seguem nas linhas Reposição e Vendas.
               </div>
-            </div>
-            <div className={cn('flex min-h-0 flex-col gap-1.5',
-              aba !== 'grafico' && 'invisible pointer-events-none')}>
+    </>
+  );
+}
+
+/** A aba "Gráfico": a ponte de arrobas em SVG. */
+export function PecPonteGrafico({ m }: { m: MovimentosPec | null }) {
+  const passos = useMemo(() => montarPassos(m), [m]);
+  const entradas = passos.filter(x => x.dir === 1);
+  const saidas = passos.filter(x => x.dir === -1);
+  const somaEnt = entradas.reduce((a, x) => a + x.p.arrobas, 0);
+  const somaSai = saidas.reduce((a, x) => a + x.p.arrobas, 0);
+  const ajuste = passos.find(x => x.chave === 'ajustes');
+
+  /* ─────────── O GRÁFICO — ponte de arrobas ─────────── */
+  const grafico = useMemo(() => {
+    if (passos.length === 0) return null;
+    /* Cada passo vira uma barra flutuante: as pontas saem do zero, os movimentos saem do
+       acumulado. ⚠ A LEI DA RAZÃO: a ALTURA é proporcional ao VALOR, e o topo de uma barra de
+       movimento é o acumulado depois dela. Sem isso a ponte vira um gráfico de barras qualquer. */
+    let acc = 0;
+    const barras = passos.map(x => {
+      if (x.chave === 'inicio') { acc = x.p.arrobas; return { x, de: 0, ate: acc, flutua: false }; }
+      if (x.chave === 'fim') return { x, de: 0, ate: x.p.arrobas, flutua: false };
+      const delta = x.chave === 'ajustes' ? x.p.arrobas : x.dir * x.p.arrobas;
+      const de = acc; acc += delta;
+      return { x, de: Math.min(de, acc), ate: Math.max(de, acc), flutua: true };
+    });
+    const topo = Math.max(...barras.map(b => b.ate), 0);
+    const chao = Math.min(...barras.map(b => b.de), 0);
+    return { barras, topo, chao };
+  }, [passos]);
+
+  /* ⚠ A ALTURA É MEDIDA, NÃO ESCOLHIDA: o corpo do modal tem 468, menos os 24 de padding, os ~26
+     da legenda com a conta e os 16 do card — sobram 380 para o desenho. Com os 210 de antes o card
+     ficava METADE VAZIO e a ponte se espremia no topo (visto na tela em 24/09). */
+  /* ⚠ O viewBox TEM LARGURA FIXA E O EIXO TEM MARGEM DE VERDADE — fix4. Antes ele era
+     `n * 84` de largura com os rótulos do eixo em `x = 2`: esticado por `preserveAspectRatio="none"`,
+     uma unidade valia menos de um pixel e os números do eixo saíam CORTADOS na borda esquerda
+     (medido na homologação de 24/09). Com largura fixa de 880 — a do card a 1440 — uma unidade vale
+     um pixel, e os 60 de margem são 60px de verdade. */
+  const W = 880, MARG_ESQ = 60, MARG_DIR = 10;
+  const H = 260, PAD_TOPO = 14, PAD_BASE = 30;
+  const FAIXA = W - MARG_ESQ - MARG_DIR;
+  const passo = grafico ? FAIXA / grafico.barras.length : 0;
+  const escalaY = (v: number) => {
+    if (!grafico || grafico.topo === grafico.chao) return H - PAD_BASE;
+    return PAD_TOPO + (grafico.topo - v) / (grafico.topo - grafico.chao) * (H - PAD_TOPO - PAD_BASE);
+  };
+
+  if (!m) return null;
+  return (
+    <>
+
               <div className="flex min-h-0 flex-1 items-stretch rounded-md border bg-card p-2">
                 {grafico && (
                   <svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`}
@@ -461,15 +423,6 @@ export function PecEstoquePonteModal({
                   {' '}= {int(m.fim.arrobas)}
                 </span>
               </div>
-            </div>
-            </div>
-          )}
-        </div>
-
-        <div className="shrink-0 truncate px-3 text-[9px] leading-[22px] text-white/80" style={{ backgroundColor: NAVY }}>
-          Valores estimados · preço da categoria no mês de cada movimento · arrobas = kg vivo ÷ 30
-        </div>
-      </DialogContent>
-    </Dialog>
+    </>
   );
 }

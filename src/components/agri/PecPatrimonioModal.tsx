@@ -31,6 +31,7 @@ import { cn } from '@/lib/utils';
 import { formatNum } from '@/lib/calculos/formatters';
 import { kgToArrobas, CATEGORIAS } from '@/types/cattle';
 import type { PatrimonioPec, CategoriaPatrimonio } from '@/hooks/useDrePecuaria';
+import { PecPonteTabela, PecPonteGrafico } from '@/components/agri/PecPonteAbas';
 
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 const rotuloMes = (am: string) => {
@@ -68,7 +69,19 @@ const pctDe = (v: number | null, base: number | null) =>
     ? '—'
     : `${v / base > 0 ? '+' : ''}${formatNum((v / Math.abs(base)) * 100, 1)} %`);
 
-type Aba = 'resumo' | 'producao' | 'mercado';
+/**
+ * AS CINCO ABAS — MODAL-UNICO-01.
+ *
+ * ⚠ ERAM DOIS MODAIS PARA A MESMA LINHA DO DRE, e qual deles abria dependia do MODO da grade:
+ * Resumido dava a ponte de arrobas, Detalhado dava a visão por categoria, e um botão ligava um ao
+ * outro. O operador tinha de saber em que modo estava para saber o que ia ver. Agora é um modal
+ * só, igual nos dois modos, e o que muda é a aba.
+ */
+type Aba = 'resumo' | 'producao' | 'mercado' | 'movimentos' | 'grafico';
+const ABAS: readonly (readonly [Aba, string])[] = [
+  ['resumo', 'Resumo'], ['producao', 'Produção'], ['mercado', 'Mercado'],
+  ['movimentos', 'Movimentos'], ['grafico', 'Gráfico'],
+];
 
 /** Uma categoria já nas unidades da tela — tudo derivado do payload por soma, subtração e divisão. */
 interface Cat {
@@ -135,7 +148,9 @@ function somar(cs: readonly Cat[], nome: string): Cat {
  * par início/fim dentro dele é a resposta.
  */
 interface Col { chave: string; rot: string; pc: number; bloco?: boolean }
-const COLS: Record<Aba, readonly Col[]> = {
+/** ⚠ SÓ AS TRÊS DE CATEGORIA TÊM COLUNA: as duas da ponte desenham a tabela delas. */
+type AbaCat = 'resumo' | 'producao' | 'mercado';
+const COLS: Record<AbaCat, readonly Col[]> = {
   resumo: [
     { chave: 'nome', rot: '', pc: 17 },
     { chave: 'q0', rot: 'Cab. início', pc: 8, bloco: true }, { chave: 'q1', rot: 'Cab. fim', pc: 8 },
@@ -164,7 +179,7 @@ const COLS: Record<Aba, readonly Col[]> = {
 };
 
 /** Quais colunas ganham Variação e % — só as que de fato variam naquela aba. */
-const VARIAM: Record<Aba, ReadonlySet<string>> = {
+const VARIAM: Record<AbaCat, ReadonlySet<string>> = {
   resumo: new Set(['q1', 'at1', 'pk1', 'v1p1']),
   producao: new Set(['q1', 'at1', 'v1p0']),
   mercado: new Set(['pk1', 'v1p1']),
@@ -182,7 +197,7 @@ const valorDe = (c: Cat, chave: string): number | null => {
 const casasDe = (chave: string) => (chave.startsWith('q') ? 0 : 2);
 
 /** A variação de uma coluna: o par início→fim daquela aba. */
-function variacaoDe(t: Cat, chave: string, aba: Aba): { d: number | null; base: number | null } {
+function variacaoDe(t: Cat, chave: string, aba: AbaCat): { d: number | null; base: number | null } {
   if (chave === 'q1') return { d: t.q1 - t.q0, base: t.q0 };
   if (chave === 'at1') return { d: t.at1 - t.at0, base: t.at0 };
   if (chave === 'pk1') return { d: t.pk1 == null || t.pk0 == null ? null : t.pk1 - t.pk0, base: t.pk0 };
@@ -228,22 +243,34 @@ const COLS_TOPO = [70, 72, 78, 78, 62, 8, 98, 104, 78, 78] as const;
 const H_CAP = 16, H_CAB = 16, H_LIN = 16;
 
 export function PecPatrimonioModal({
-  aberto, fazendaNome, clienteNome, patrimonio, carregando, periodo, onFechar,
+  aberto, fazendaNome, clienteNome, qual, patrimonio, carregando, periodo, reposicao, onFechar,
 }: {
   aberto: boolean;
   fazendaNome: string;
   clienteNome: string;
-  /** Qual linha do DRE abriu. ⚠ NÃO escolhe mais a aba: o modal abre SEMPRE no Resumo (mock v14). */
-  qual: 'vpb' | 'efeito';
+  /**
+   * QUAL LINHA DO DRE ABRIU — e agora ela escolhe a ABA INICIAL, não o modal.
+   *
+   * ⚠ `ponte` É A LINHA COMPOSTA DO RESUMIDO ("Variação do estoque" = variação − reposição), e é a
+   * aba Movimentos que a concilia, ao centavo, no rodapé. Abrir no Resumo mostraria a variação
+   * pura debaixo de um número que soma a reposição — o desencontro que fez os dois modais
+   * existirem. As outras duas abrem no Resumo, como antes.
+   */
+  qual: 'vpb' | 'efeito' | 'ponte';
   patrimonio: PatrimonioPec | null;
   carregando: boolean;
   /** O período DA COLUNA clicada — ver `onAbrirDidatico` em `PecDrePanel`. */
   periodo: { de: string; ate: string };
+  /**
+   * A REPOSIÇÃO DA COLUNA CLICADA — só a aba Movimentos a usa, e sem ela a conciliação não fecha.
+   *
+   * ⚠ ELA VIAJA COM O CLIQUE em vez de ser lida de novo: a conta do rodapé tem de bater com o
+   * número que AQUELA coluna mostra, e uma segunda leitura traria o da tela.
+   */
+  reposicao: number | null;
   onFechar: () => void;
 }) {
-  /* ⚠ ABRE EM RESUMO, sempre. O Resumo responde "quanto meu rebanho valia e quanto vale"; as outras
-     duas explicam a diferença, e não fazem sentido antes dela. */
-  const [aba, setAba] = useState<Aba>('resumo');
+  const [aba, setAba] = useState<Aba>(qual === 'ponte' ? 'movimentos' : 'resumo');
 
   const p0 = patrimonio?.p0 ?? '';
   const p1 = patrimonio?.p1 ?? '';
@@ -254,8 +281,11 @@ export function PecPatrimonioModal({
   const tAdu = useMemo(() => somar(adultos, 'Total adultos'), [adultos]);
   const T = useMemo(() => somar(cats, 'Total do rebanho'), [cats]);
 
-  const cols = COLS[aba];
-  const variam = VARIAM[aba];
+  /* ⚠ A ABA MANDA NAS COLUNAS, e as duas da ponte não têm coluna de categoria nenhuma: elas caem
+     no conjunto do Resumo só para o `cols` existir, e o bloco delas nem chega a montar a tabela. */
+  const abaDeCategoria: AbaCat = aba === 'movimentos' || aba === 'grafico' ? 'resumo' : aba;
+  const cols = COLS[abaDeCategoria];
+  const variam = VARIAM[abaDeCategoria];
   const dAt = T.at1 - T.at0;
   /* ⚠ AS VARIAÇÕES POR GRUPO SAÍRAM COM OS TOPOS DE Produção E Mercado (mock v16b): elas só
      alimentavam aqueles dois cards. Os grupos continuam na TABELA, com os totais próprios. */
@@ -344,6 +374,7 @@ export function PecPatrimonioModal({
       ? 'Um preço só por categoria, o do início. O valor muda apenas pelas arrobas.'
       : 'O rebanho do fim, valorado ao preço do início e ao do fim. A diferença é só o preço.';
 
+
   /** As três linhas de fecho de um grupo: o total, a variação e o %. */
   const linhasDeTotal = (t: Cat, fundo: string, fecha: boolean) => ([
     <tr key={`${t.cod}:t`} style={{ backgroundColor: fundo, height: 22, borderTop: '1px solid #9a988f' }}>
@@ -358,7 +389,7 @@ export function PecPatrimonioModal({
     </tr>,
     <tr key={`${t.cod}:v`} style={{ backgroundColor: fundo, height: 18 }}>
       {cols.map(c => {
-        const { d } = variacaoDe(t, c.chave, aba);
+        const { d } = variacaoDe(t, c.chave, abaDeCategoria);
         const mostra = variam.has(c.chave);
         return (
           <td key={c.chave}
@@ -374,7 +405,7 @@ export function PecPatrimonioModal({
     <tr key={`${t.cod}:p`}
       style={{ backgroundColor: fundo, height: 18, borderBottom: fecha ? '1px solid #9a988f' : undefined }}>
       {cols.map(c => {
-        const { d, base } = variacaoDe(t, c.chave, aba);
+        const { d, base } = variacaoDe(t, c.chave, abaDeCategoria);
         const mostra = variam.has(c.chave);
         return (
           <td key={c.chave}
@@ -436,7 +467,7 @@ export function PecPatrimonioModal({
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-1">
-            {([['resumo', 'Resumo'], ['producao', 'Produção'], ['mercado', 'Mercado']] as const).map(([v, r]) => (
+            {ABAS.map(([v, r]) => (
               <button key={v} type="button" onClick={() => setAba(v)}
                 className={cn('rounded px-2 py-0.5 text-[11px] font-medium leading-[18px] transition-colors',
                   aba === v ? 'bg-white text-[#0C447C]' : 'text-white/80 hover:bg-white/10')}>
@@ -450,16 +481,20 @@ export function PecPatrimonioModal({
           </div>
         </div>
 
-        {/* ⚠ ALTURA FIXA, IGUAL NAS TRÊS ABAS, e é o que impede o modal de pular quando o operador
-            troca de aba para comparar. O que sobra ou falta é absorvido pela tabela, que é a única
-            que rola — UM SCROLLPORT SÓ (A21). */}
+        {/* ⚠ AS CINCO ABAS FICAM MONTADAS, SOBREPOSTAS NA MESMA CÉLULA DE GRID, e a escondida só
+            perde a visibilidade. É o que dá TAMANHO FIXO ao trocar de aba sem número mágico: a
+            altura do grid é a da MAIOR delas, medida pelo próprio navegador. A tabela é o único
+            scrollport (A21). */}
         <div className="flex min-h-0 flex-1 flex-col gap-1.5 bg-muted/30 p-2" style={{ minHeight: 300 }}>
           {carregando || !patrimonio ? (
             <div className="flex flex-1 items-center justify-center text-[11px] text-muted-foreground">
               <Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin align-[-2px]" /> Carregando…
             </div>
           ) : (
-            <>
+            <div className="grid min-h-0 flex-1 [&>*]:col-start-1 [&>*]:row-start-1">
+            <div className={cn('flex min-h-0 flex-col gap-1.5',
+              aba !== 'resumo' && aba !== 'producao' && aba !== 'mercado'
+                && 'invisible pointer-events-none')}>
               {/* ⚠ A MESMA TABELA NAS TRÊS ABAS — mock v16b. Antes cada aba tinha o topo dela, e
                   como elas não tinham a mesma altura o modal PULAVA ao trocar. Um topo só resolve
                   os dois problemas de uma vez: a caminhada do valor é a mesma pergunta em qualquer
@@ -506,7 +541,21 @@ export function PecPatrimonioModal({
               </div>
 
               <div className="shrink-0 px-0.5 text-[9px] leading-[12px] text-muted-foreground">{nota}</div>
-            </>
+            </div>
+
+            {/* ⚠ A PONTE NÃO REPETE O TOPO DA CAMINHADA: ela tem as próprias pontas, na própria
+                tabela. Dois blocos com os mesmos quatro números na mesma tela é o que o operador
+                soma por engano. */}
+            <div className={cn('flex min-h-0 flex-col gap-1.5',
+              aba !== 'movimentos' && 'invisible pointer-events-none')}>
+              <PecPonteTabela m={patrimonio.movimentos} reposicao={reposicao}
+                efeito={patrimonio.total.efeito} />
+            </div>
+            <div className={cn('flex min-h-0 flex-col gap-1.5',
+              aba !== 'grafico' && 'invisible pointer-events-none')}>
+              <PecPonteGrafico m={patrimonio.movimentos} />
+            </div>
+            </div>
           )}
         </div>
 

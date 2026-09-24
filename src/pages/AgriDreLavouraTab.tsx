@@ -55,7 +55,6 @@ import {
 } from '@/components/agri/SeletorPeriodoPecuaria';
 import { PecLancamentosModal } from '@/components/agri/PecLancamentosModal';
 import { PecPatrimonioModal } from '@/components/agri/PecPatrimonioModal';
-import { PecEstoquePonteModal } from '@/components/agri/PecEstoquePonteModal';
 import { PecCascataView } from '@/components/agri/PecCascataView';
 import { PecRateioAdmModal } from '@/components/agri/PecRateioAdmModal';
 import {
@@ -1210,10 +1209,10 @@ export function AgriDreLavouraTab() {
           onAbrirLancamento={catalogosProntos ? id => { void abrirLancamento(id); } : undefined}
         />
       )}
-      {/* ⚠ DOIS MODAIS PARA A MESMA COLUNA, e a escolha é do MODO: no Detalhado a linha é pura e o
-          modal por categoria a explica; no Resumido ela soma a reposição e só a ponte de arrobas
-          fecha. Montar os dois e esconder um faria a RPC ser lida duas vezes por clique. */}
-      {ehPec && didatico && didatico.qual !== 'ponte' && drePec && (
+      {/* ⚠ UM MODAL SÓ PARA A MESMA COLUNA — MODAL-UNICO-01. Eram dois, e qual abria dependia do
+          MODO da grade: o operador tinha de saber em que modo estava para saber o que ia ver. As
+          cinco abas trazem as duas leituras, e `qual` sobrevive só para escolher a aba INICIAL. */}
+      {ehPec && didatico && drePec && (
         <PecPatrimonioModal
           aberto
           fazendaNome={didatico.nome}
@@ -1226,22 +1225,8 @@ export function AgriDreLavouraTab() {
              coluna, isso daria a fonte de 2026 num modal de 2022. A `fn_dre_pecuaria_patrimonio`
              já devolve `p0_fonte`/`p1_fonte` do MESMO período que o modal pediu. */
           periodo={{ de: didatico.de, ate: didatico.ate }}
-          onFechar={() => setDidatico(null)}
-        />
-      )}
-      {ehPec && didatico && didatico.qual === 'ponte' && (
-        <PecEstoquePonteModal
-          aberto
-          clienteNome={clienteAtual?.nome ?? '—'}
-          fazendaNome={didatico.nome}
-          patrimonio={patPec}
-          carregando={carregandoPatPec}
-          periodo={{ de: didatico.de, ate: didatico.ate }}
           reposicao={didatico.reposicao}
           onFechar={() => setDidatico(null)}
-          /* ⚠ "Ver por categoria" TROCA O MODAL SEM TROCAR O PERÍODO: o `didatico` já tem `de`/`ate`
-             da coluna, e o hook está ligado a eles — mudar só o `qual` não dispara leitura nova. */
-          onVerPorCategoria={() => setDidatico(d => (d ? { ...d, qual: 'vpb' } : d))}
         />
       )}
       {ehPec && drePec && rateioPecAberto && (
