@@ -1212,3 +1212,27 @@ preview que o cabecalho nao sai da tela ao rolar.
   ⚠ NAO FOI CORRIGIDO: tirar o zoom mexe na animacao de TODOS os dialogos do sistema. Fica como
   fato conhecido; quem quiser a escala 1 abre frente propria e mede o que muda de tamanho na tela
   inteira.
+- ⚠ MIGRATION DE CORPO GRANDE: PATCH GUARDADO POR md5, ALTERNATIVA AO prosrc INTEGRAL
+  (aprovado pelo Gabriel em 24/09/2026, no DRE-DESTAQUE-LAVOURA-01).
+  A regra segue sendo o corpo INTEGRAL no arquivo — ela existe porque um `replace` cego depende do
+  estado vivo e faz coisa diferente em outro banco. Mas transcrever 14.107 caracteres a mao tem o
+  risco que o proprio CLAUDE.md nomeia em "CODIGO MOVIDO = COPIADO VERBATIM": uma constante
+  alterada em silencio.
+  A alternativa aceita para corpos GRANDES e' o patch que se PROVA sozinho:
+    1. le' o `prosrc` e ABORTA se o md5 de origem nao for o esperado;
+    2. exige que CADA ancora case exatamente 1x, e aborta se nao casar;
+    3. aplica com `replace` e CONFERE o md5 do resultado, abortando se divergir.
+  Reexecutar sobre um corpo ja' corrigido FALHA na guarda de origem — que e' o comportamento certo
+  para migration de corpo. Exemplo vivo: `20261027142000_dre_lavoura_res_oper_por_ha.sql`.
+  ⚠ E ELA SO' VALE COM AS TRES GUARDAS. Sem a de origem, roda sobre qualquer corpo; sem a contagem
+  de ancoras, patcheia um bloco e esquece outro; sem a de destino, nao prova o que fez.
+- ⚠ ANCORA QUE CASA 1x PODE SER A ANCORA ERRADA (DRE-DESTAQUE-LAVOURA-01, 24/09/2026).
+  Em `fn_dre_lavoura`, o `jsonb_build_object` de `resultado_operacional` aparece DUAS vezes — uma
+  no bloco da CULTURA e outra no do TOTAL — e elas diferem por UM ESPACO depois da virgula:
+      'resultado_operacional',jsonb_build_object(...)    <- cultura
+      'resultado_operacional', jsonb_build_object(...)   <- total
+  A ancora tirada do grep casava EXATAMENTE 1x e teria passado em qualquer verificacao de
+  "casa uma vez so'", deixando a coluna Total sem a chave nova enquanto as culturas a tinham.
+  ⚠ "CASA 1x" PROVA UNICIDADE DAQUELE TEXTO, NAO COBERTURA DO CASO. Antes de patchear por texto,
+  conte as ocorrencias do CONCEITO (aqui: `grep 'resultado_operacional.*jsonb'`), nao as da string
+  que voce escreveu.
