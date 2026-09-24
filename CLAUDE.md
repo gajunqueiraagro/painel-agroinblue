@@ -1037,3 +1037,28 @@ preview que o cabecalho nao sai da tela ao rolar.
   ⚠ FICA REGISTRADO, e nao e' defeito: o sparkline de `ResOpDashboard` estica um `polyline` de
   `strokeWidth 1.5` sem `vectorEffect`. Nao ha' texto ali e a caixa tem 26px de altura — a
   distorcao do traco e' real e invisivel. Quem tocar o arquivo acrescenta o `vectorEffect`.
+- ⚠ EVOLUCAO PATRIMONIAL — CONTRATO DA TRACEJADA "sem efeito de mercado" (03c, 24/09/2026).
+  A tracejada dos graficos "Valor do rebanho" e "R$/@ medio" e' o MESMO rebanho de cada mes ao
+  preco da categoria no INICIO. A distancia ate' a linha cheia e' o efeito de mercado acumulado;
+  a tracejada sozinha e' a producao. E' a decomposicao que o DRE faz em duas linhas, desenhada.
+  ⚠ ELA EXISTE EM TODO MES COM DADO NA VIEW, NAO SO' EM MES COM SNAPSHOT FECHADO. Ate' o 03b a
+  fonte era `historicoDetalhadoPorMes` — consulta POR FAZENDA, zerada de proposito no Global —,
+  entao a tracejada simplesmente NAO EXISTIA no Global e morria no primeiro mes sem fechamento.
+  Passou a sair de `viewDataAnoAtual` (quantidade e peso por categoria e por mes, todas as
+  fazendas) x o preco por categoria de `useValorRebanhoInicio`. Uma fonte para o mes, uma para o
+  preco, e as duas ja' resolvem Global por dentro.
+  ⚠ CATEGORIA SEM PRECO NO INICIO FICA DE FORA DA SOMA, e a tracejada SUBESTIMA nessa medida.
+  Dar a ela o preco do FIM seria por mercado dentro da linha que existe para nao ter mercado — o
+  mesmo defeito que a PATRIMONIO-TOTAL-01 registra no `coalesce(p0.pk, p1.pk)`. Medido em
+  SR 2021: `garrotes` nao tem preco em dez/2020 e responde por 0,18 % do peso em janeiro e
+  0,03 % de abril em diante. Pequeno aqui, nunca zero por construcao.
+- ⚠ O 1o DE JANEIRO DA EVOLUCAO PATRIMONIAL TEM UMA FONTE SO' (03c): `useValorRebanhoInicio`.
+  Ela serve ao MESMO tempo o card "Inicio", a base de "vs ini. ano", o "vs mes" de JANEIRO e o
+  ponto "I" dos graficos. Eram QUATRO leituras da mesma data.
+  ⚠ A QUARTA MENTIA CALADA: a base das comparacoes era `buildFrozenMetrics(dez/{ano-1})`, que sem
+  fechamento de dezembro cai na view e multiplica por um preco `0` default. Com `valor = 0`,
+  `calcVariacaoNullable` devolve `null` em `anterior === 0` — entao Valor, R$/@ e R$/cab saiam em
+  "—" e Cabecas e @, que nao dependem de preco, apareciam. MEIA LINHA VAZIA NAO SE LE' COMO
+  DEFEITO; le-se como "nao tem dado". Era o caso do Global antes do -03, onde o Inicio nem existia.
+  ⚠ `origem === 'vazio'` VIRA `null`, nunca zero: o "—" diz que nao ha' retrato, e nao que o
+  rebanho valia zero.

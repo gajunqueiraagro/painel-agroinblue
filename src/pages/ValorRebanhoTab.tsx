@@ -407,9 +407,13 @@ function CardInicio({ ano, inicio, carregando, fazendaNome }: {
   const precoAt = inicio && inicio.arrobas > 0 ? inicio.valor / inicio.arrobas : null;
   const precoCab = inicio && inicio.cabecas > 0 ? inicio.valor / inicio.cabecas : null;
 
+  /* ⚠ `forte` É A LINHA TOTAL, E ELA VAI A 10px COMO A DO MÊS — 03c. Estava em 9, e era a única
+     medida que ainda separava as duas tabelas: com cabeçalho, categoria e indicadores idênticos,
+     a linha mais lida da tela encolhia um ponto ao trocar de Início para mês. Fonte é tamanho, e
+     o A23 vale para ela também. */
   const cel = (txt: string, esq?: boolean, forte?: boolean) => (
     <td className={`truncate px-1.5 py-0 tabular-nums ${esq ? 'text-left' : 'text-right'} ${forte ? 'font-medium' : ''}`}
-      style={{ fontSize: 9, lineHeight: 1 }}>{txt}</td>
+      style={{ fontSize: forte ? 10 : 9, lineHeight: 1 }}>{txt}</td>
   );
 
   return (
@@ -565,7 +569,7 @@ function GraficoComposicao({ dados, title }: {
             if (d.jovens == null || d.adultos == null) return null;
             const hJ = (d.jovens / 100) * alt, hA = (d.adultos / 100) * alt;
             return (
-              <g key={d.label}>
+              <g key={i}>
                 <title>{`${d.fullLabel ?? d.label}: ${formatNum(d.jovens, 1)} % jovens · ${formatNum(d.adultos, 1)} % adultos`}</title>
                 <rect x={x} y={PAD_TOPO} width={w} height={hA} fill="#2C3E5C" />
                 <rect x={x} y={PAD_TOPO + hA} width={w} height={hJ} fill="#639922" />
@@ -582,8 +586,14 @@ function GraficoComposicao({ dados, title }: {
               </g>
             );
           })}
+          {/* ⚠ A CHAVE É O ÍNDICE, NUNCA O RÓTULO — 03c. `CHART_LABELS` tem letra repetida ('J' em
+              Jan/Jun/Jul, 'M' em Mar/Mai, 'A' em Abr/Ago), e chave duplicada faz o React ACUMULAR
+              nós a cada re-render: medido no 03b, 32 grupos e 64 rects onde cabiam 8 e 16. As
+              cópias caíam exatamente umas sobre as outras, então o desenho parecia certo — quem
+              denunciava era o `<title>`, entregando o mês errado no hover. A régua tem 13 posições
+              fixas, então o índice é chave estável. */}
           {dados.map((d, i) => (
-            <text key={`l${d.label}`} x={i * larg + larg / 2} y={H - 4} fontSize={7}
+            <text key={i} x={i * larg + larg / 2} y={H - 4} fontSize={7}
               textAnchor="middle" fill="#6B6862">{d.label}</text>
           ))}
         </svg>
@@ -599,6 +609,13 @@ function GraficoComposicao({ dados, title }: {
     </div>
   );
 }
+
+/**
+ * A cor da linha "sem efeito de mercado" — laranja, nunca o cinza de antes.
+ * ⚠ ELA É UMA RESPOSTA, NÃO UM APOIO. Em cinza tracejado ela lia como grade de fundo; a pergunta
+ * "quanto do meu valor é rebanho e quanto é preço?" merece uma cor que se vê.
+ */
+const COR_SEM_MERCADO = '#D97706';
 
 function MiniChart({ data, color, title, unit, serie2, rotulo1, rotulo2 }: {
   data: { label: string; fullLabel?: string; value: number | null; value2?: number | null }[];
@@ -638,11 +655,11 @@ function MiniChart({ data, color, title, unit, serie2, rotulo1, rotulo2 }: {
               }}
             />
             <Line type="monotone" dataKey="value" stroke={color} strokeWidth={1.5} dot={{ r: 2, fill: color, strokeWidth: 0 }} activeDot={{ r: 3.5 }} connectNulls={false} />
-            {/* ⚠ A TRACEJADA É O MESMO REBANHO AO PREÇO DE JANEIRO: a distância até a cheia é o
+            {/* ⚠ A TRACEJADA É O MESMO REBANHO AO PREÇO DO INÍCIO: a distância até a cheia é o
                 efeito de mercado acumulado, e ela sozinha é a produção. */}
             {serie2 && (
-              <Line type="monotone" dataKey="value2" stroke="#8A8880" strokeWidth={1.5}
-                strokeDasharray="4 3" dot={{ r: 2, fill: '#8A8880', strokeWidth: 0 }}
+              <Line type="monotone" dataKey="value2" stroke={COR_SEM_MERCADO} strokeWidth={1.5}
+                strokeDasharray="3 2" dot={{ r: 2, fill: COR_SEM_MERCADO, strokeWidth: 0 }}
                 activeDot={{ r: 3.5 }} connectNulls={false} />
             )}
           </LineChart>
@@ -654,7 +671,7 @@ function MiniChart({ data, color, title, unit, serie2, rotulo1, rotulo2 }: {
             <span className="inline-block" style={{ width: 10, height: 2, backgroundColor: color }} />{rotulo1}
           </span>
           <span className="flex items-center gap-1">
-            <span className="inline-block" style={{ width: 10, height: 0, borderTop: '2px dashed #8A8880' }} />{rotulo2}
+            <span className="inline-block" style={{ width: 10, height: 0, borderTop: `2px dashed ${COR_SEM_MERCADO}` }} />{rotulo2}
           </span>
         </div>
       )}
@@ -1144,18 +1161,31 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     return aggregateMetricsFromTableRows(snapshotRowsSelecionado);
   }, [fonteMes, metricasLiveSelecionado, snapshotRowsSelecionado]);
 
+  /**
+   * O 1º DE JANEIRO TEM UMA FONTE SÓ — 03c. É a do card (`useValorRebanhoInicio`), e ela serve ao
+   * mesmo tempo o card, a base de "vs ini. ano", o "vs mês" de janeiro e o ponto "I" dos gráficos.
+   *
+   * ⚠ ERAM QUATRO FONTES PARA A MESMA DATA, e a quarta mentia calada. A base das comparações era
+   * `buildFrozenMetrics(dez/{ano−1})`, que sem fechamento de dezembro cai na view e multiplica por
+   * um preço `0` default — `valor = 0`. O `calcVariacaoNullable` devolve `null` em `anterior === 0`,
+   * então Valor, R$/@ e R$/cab saíam em "—" enquanto Cabeças e @ (que não dependem de preço)
+   * apareciam. Meia linha vazia não se lê como defeito; lê-se como "não tem dado". Medido no
+   * Global antes do -03, onde o Início nem existia.
+   * ⚠ E ZERO NÃO É AUSÊNCIA: `origem === 'vazio'` vira `null` aqui de propósito, para o "—" dizer
+   * que não há retrato — e não que o rebanho valia zero.
+   */
+  const metricasInicio = useMemo((): MetricasExibicao | null => {
+    if (!inicio || inicio.origem === 'vazio') return null;
+    return buildMetricsFromTotals(inicio.valor, inicio.cabecas, inicio.arrobas * 30);
+  }, [inicio]);
+
+  /* ⚠ EM JANEIRO O "MÊS ANTERIOR" É O INÍCIO, e não dez/{ano−1} lido por outro caminho: são a
+     mesma data, e ter duas leituras dela é o que este PR veio acabar. */
   const metricasMesAnterior = useMemo(() => {
+    if (mesNum === 1) return metricasInicio;
     if (fonteMes === 'live') return metricasMesAnteriorLive;
     return buildFrozenMetrics(anoMesAnterior);
-  }, [fonteMes, metricasMesAnteriorLive, buildFrozenMetrics, anoMesAnterior]);
-
-  // Base "Dez anterior" unificada: no ano inicial, saldos_iniciais substitui completamente
-  const metricasDezBase = useMemo(() => {
-    if (isAnoInicial) return metricasSaldosIniciais;
-    return buildFrozenMetrics(anoMesDezAnterior);
-  }, [isAnoInicial, metricasSaldosIniciais, buildFrozenMetrics, anoMesDezAnterior]);
-
-  // metricasInicioAno removido — usar metricasDezBase diretamente
+  }, [mesNum, metricasInicio, fonteMes, metricasMesAnteriorLive, buildFrozenMetrics, anoMesAnterior]);
 
   const rowsExibicao = fonteMes === 'snapshot' ? snapshotRowsSelecionado : liveRows;
   const metricasTabela = useMemo(() => {
@@ -1201,86 +1231,96 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
 
   const chartDataValor = useMemo(() => {
     return buildChartData((mes) => {
-      if (mes === 0) return metricasDezBase?.valor ?? null;
+      if (mes === 0) return metricasInicio?.valor ?? null;
       const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;
       if (mes === mesNum) return metricasSelecionado.valor;
       return buildFrozenMetrics(key)?.valor ?? null;
     });
-  }, [buildChartData, anoFiltro, mesNum, metricasSelecionado.valor, buildFrozenMetrics, metricasDezBase]);
+  }, [buildChartData, anoFiltro, mesNum, metricasSelecionado.valor, buildFrozenMetrics, metricasInicio]);
 
   const chartDataArrobas = useMemo(() => {
     return buildChartData((mes) => {
-      if (mes === 0) return metricasDezBase?.totalArrobas ?? null;
+      if (mes === 0) return metricasInicio?.totalArrobas ?? null;
       const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;
       if (mes === mesNum) return metricasSelecionado.totalArrobas;
       const vm = getViewMetricsForMonth(key);
       return vm ? vm.pesoKg / 30 : null;
     });
-  }, [buildChartData, anoFiltro, mesNum, metricasSelecionado.totalArrobas, getViewMetricsForMonth, metricasDezBase]);
+  }, [buildChartData, anoFiltro, mesNum, metricasSelecionado.totalArrobas, getViewMetricsForMonth, metricasInicio]);
 
   const chartDataPrecoArroba = useMemo(() => {
     return buildChartData((mes) => {
-      if (mes === 0) return metricasDezBase?.precoArroba ?? null;
+      if (mes === 0) return metricasInicio?.precoArroba ?? null;
       const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;
       if (mes === mesNum) return metricasSelecionado.precoArroba;
       const metrics = buildFrozenMetrics(key);
       return metrics?.precoArroba ?? null;
     });
-  }, [buildChartData, anoFiltro, mesNum, metricasSelecionado.precoArroba, buildFrozenMetrics, metricasDezBase]);
+  }, [buildChartData, anoFiltro, mesNum, metricasSelecionado.precoArroba, buildFrozenMetrics, metricasInicio]);
 
   /**
-   * O QUARTO GRÁFICO — o rebanho a preço de JANEIRO, contra o real.
+   * A TRACEJADA — o mesmo rebanho, sempre ao preço do INÍCIO.
    *
-   * ⚠ A DISTÂNCIA ENTRE AS DUAS LINHAS É O EFEITO DE MERCADO ACUMULADO, e a tracejada sozinha é a
-   * PRODUÇÃO: o mesmo rebanho de cada mês, sempre ao preço do começo do ano. É a decomposição que
-   * o DRE faz em duas linhas, desenhada.
+   * ⚠ A DISTÂNCIA ATÉ A LINHA CHEIA É O EFEITO DE MERCADO ACUMULADO, e a tracejada sozinha é a
+   * PRODUÇÃO: é a decomposição que o DRE faz em duas linhas, desenhada.
    *
-   * ⚠ CONTA DE EXIBIÇÃO, SEM CONSULTA NOVA: `historicoDetalhadoPorMes` já traz os doze meses por
-   * categoria (é o que alimenta os MiniChart de hoje), e o preço de janeiro sai do próprio mês 01.
-   * Uma segunda consulta de preço abriria a porta para dois preços de janeiro na mesma tela.
+   * ⚠ A FONTE É A VIEW, NÃO O SNAPSHOT — 03c, decisão (b) do Gabriel. Até aqui ela saía de
+   * `historicoDetalhadoPorMes`, que é consulta POR FAZENDA e é zerada de propósito no Global: as
+   * duas tracejadas simplesmente não existiam lá. `viewDataAnoAtual` já traz quantidade e peso por
+   * categoria e por mês, de todas as fazendas, e o preço por categoria do Início vem do mesmo hook
+   * que alimenta o card. Uma fonte para o mês, uma para o preço.
+   * ⚠ E O CONTRATO DO GRÁFICO MUDOU COM ISSO, para mais: a tracejada existe em TODO mês com dado
+   * na view, não só em mês com snapshot fechado. Registrado no CLAUDE.md.
    *
-   * ⚠ MÊS SEM SNAPSHOT DETALHADO VIRA PONTO NULO, nunca zero: o detalhado por categoria só existe
-   * onde houve fechamento com itens, e o `connectNulls={false}` já corta a linha ali. Inventar o
-   * ponto afirmaria um rebanho que a tela não tem como saber.
+   * ⚠ CATEGORIA QUE NÃO EXISTIA NO INÍCIO NÃO TEM PREÇO DE INÍCIO, e fica de fora da soma. Dar a
+   * ela o preço do FIM seria contrabandear mercado para dentro da linha que existe justamente para
+   * não ter mercado — é o defeito que a PATRIMONIO-TOTAL-01 registra no `coalesce(p0.pk, p1.pk)`.
+   * ⚠ E ISSO FAZ A TRACEJADA SUBESTIMAR, DE PROPÓSITO, O TANTO QUE FOI MEDIDO: em SR 2021 a
+   * categoria `garrotes` não tem preço em dez/2020 e fica fora, valendo de 0,18 % do peso do
+   * rebanho em jan a 0,03 % de abr em diante (1 a 6 cabeças de 3.758 a 4.182). É pequeno aqui e
+   * não é zero em lugar nenhum — quem ler a distância entre as duas linhas como "efeito de
+   * mercado" está lendo com essa margem dentro.
    */
-  const chartDataPrecoJaneiro = useMemo(() => {
-    const itensDe = (mes: number) => historicoDetalhadoPorMes[`${anoFiltro}-${String(mes).padStart(2, '0')}`] ?? [];
-    const precoJan = new Map<string, number>();
-    for (const it of itensDe(1)) {
-      const q = Number(it.quantidade) || 0;
-      const pm = Number(it.peso_medio_kg) || 0;
-      const v = Number(it.valor_total_categoria) || 0;
-      if (q > 0 && pm > 0) precoJan.set(String(it.categoria), v / (q * pm));
+  const precoKgInicioPorCategoria = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const c of (inicio?.categorias ?? [])) {
+      if (c.precoKg != null && c.precoKg > 0) m.set(c.categoria, c.precoKg);
     }
+    return m;
+  }, [inicio]);
+
+  const chartDataSemMercado = useMemo(() => {
+    const linhas = viewDataAnoAtual || [];
     return buildChartData(mes => {
-      if (mes === 0 || precoJan.size === 0) return null;
-      const itens = itensDe(mes);
-      if (itens.length === 0) return null;
+      if (precoKgInicioPorCategoria.size === 0) return null;
+      /* O ponto "I" é o próprio Início: o rebanho do começo ao preço do começo. */
+      if (mes === 0) return inicio?.valor ?? null;
+      const doMes = linhas.filter(r => r.mes === mes);
+      if (doMes.length === 0) return null;
       let total = 0;
-      for (const it of itens) {
-        const pk = precoJan.get(String(it.categoria));
+      for (const r of doMes) {
+        const pk = precoKgInicioPorCategoria.get(String(r.categoria_codigo));
         if (pk == null) continue;
-        total += (Number(it.quantidade) || 0) * (Number(it.peso_medio_kg) || 0) * pk;
+        total += (Number(r.saldo_final) || 0) * (Number(r.peso_medio_final) || 0) * pk;
       }
       return total > 0 ? total : null;
     });
-  }, [buildChartData, historicoDetalhadoPorMes, anoFiltro]);
+  }, [buildChartData, viewDataAnoAtual, precoKgInicioPorCategoria, inicio]);
 
   /**
-   * O QUINTO GRÁFICO — o R$/@ sem o mercado.
+   * O R$/@ sem o mercado — a tracejada de cima dividida pelas arrobas do mês.
    *
-   * ⚠ É O QUARTO DIVIDIDO PELAS ARROBAS DO MÊS, e por isso a tracejada aqui não é "o preço de
-   * janeiro": é o preço MÉDIO que o rebanho teria se nenhum preço tivesse mudado — ele sobe e
-   * desce só porque a MISTURA de categorias muda. A distância até a linha real é o mercado.
+   * ⚠ ELA NÃO É "O PREÇO DO INÍCIO": é o preço MÉDIO que o rebanho teria se nenhum preço tivesse
+   * mudado. Sobe e desce só porque a MISTURA de categorias muda — e a distância até a real é o
+   * mercado.
    */
   /* ⚠ USA `chartDataArrobas`, NÃO O `u*`: o do Global é declarado 100 linhas abaixo, e ler daqui
-     dava TDZ (o TSC acusou). E a quebra por categoria — de onde sai a série de janeiro — só existe
-     por fazenda, então no Global as duas pontas desta conta seriam nulas de qualquer forma. */
-  const chartDataPrecoArrobaJaneiro = useMemo(() => buildChartData(mes => {
-    const valorJan = chartDataPrecoJaneiro[mes]?.value ?? null;
+     dava TDZ (o TSC acusou). As duas pontas desta conta já são globais por dentro. */
+  const chartDataPrecoSemMercado = useMemo(() => buildChartData(mes => {
+    const valorIni = chartDataSemMercado[mes]?.value ?? null;
     const arrobas = chartDataArrobas[mes]?.value ?? null;
-    return valorJan == null || arrobas == null || arrobas === 0 ? null : valorJan / arrobas;
-  }), [buildChartData, chartDataPrecoJaneiro, chartDataArrobas]);
+    return valorIni == null || arrobas == null || arrobas === 0 ? null : valorIni / arrobas;
+  }), [buildChartData, chartDataSemMercado, chartDataArrobas]);
 
   /**
    * O SEXTO — a composição do rebanho em % de cabeças, mês a mês.
@@ -1290,25 +1330,31 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
    * mexer numa delas.
    * ⚠ MÊS SEM DADO É COLUNA VAZIA, nunca 0/100: não saber a composição não é o mesmo que ter só
    * adultos. A série sai de `rawCategorias`, que a tela já carrega para os MiniChart.
+   * ⚠ O PONTO "I" SAI DO INÍCIO — 03c, e das categorias dele, não do total: a composição é uma
+   * razão entre grupos, e o total do card não sabe quem é jovem.
    */
   const chartComposicao = useMemo(() => {
     const linhas = viewDataAnoAtual || [];
+    const repartir = (pares: { codigo: string; q: number }[]) => {
+      let j = 0; let a = 0;
+      for (const p of pares) { if (ehJovem(p.codigo)) j += p.q; else a += p.q; }
+      const tot = j + a;
+      return tot === 0 ? null : { jovens: (j / tot) * 100, adultos: (a / tot) * 100 };
+    };
     return CHART_LABELS.map((label, idx) => {
       const fullLabel = CHART_FULL_LABELS[idx];
-      if (idx === 0 || idx > mesNum) return { label, fullLabel, jovens: null, adultos: null };
-      const doMes = linhas.filter(r => r.mes === idx);
-      if (doMes.length === 0) return { label, fullLabel, jovens: null, adultos: null };
-      let j = 0; let a = 0;
-      for (const r of doMes) {
-        const q = Number(r.saldo_final) || 0;
-        if (ehJovem(String(r.categoria_codigo))) j += q; else a += q;
+      const vazio = { label, fullLabel, jovens: null, adultos: null };
+      if (idx === 0) {
+        const r = repartir((inicio?.categorias ?? [])
+          .map(c => ({ codigo: c.categoria, q: Number(c.quantidade) || 0 })));
+        return r ? { label, fullLabel, ...r } : vazio;
       }
-      const tot = j + a;
-      return tot === 0
-        ? { label, fullLabel, jovens: null, adultos: null }
-        : { label, fullLabel, jovens: (j / tot) * 100, adultos: (a / tot) * 100 };
+      if (idx > mesNum) return vazio;
+      const r = repartir(linhas.filter(l => l.mes === idx)
+        .map(l => ({ codigo: String(l.categoria_codigo), q: Number(l.saldo_final) || 0 })));
+      return r ? { label, fullLabel, ...r } : vazio;
     });
-  }, [viewDataAnoAtual, mesNum]);
+  }, [viewDataAnoAtual, mesNum, inicio]);
 
   const handlePrecoChange = (codigo: string, value: string) => {
     const sanitized = value.replace(/[^0-9.,]/g, '');
@@ -1374,8 +1420,14 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
 
   const uRows = isGlobal ? globalData.rows : rowsExibicao;
   const uMetricas = isGlobal ? globalData.metricas : metricasSelecionado;
-  const uMetricasMesAnt = isGlobal ? globalData.metricasMesAnterior : metricasMesAnterior;
-  const uMetricasInicioAno = isGlobal ? globalData.metricasInicioAno : metricasDezBase;
+  /* ⚠ O INÍCIO NÃO TEM RAMO DE GLOBAL AQUI — 03c. `metricasInicio` já sai de
+     `useValorRebanhoInicio`, que resolve Global por dentro (`fn_dre_pecuaria_patrimonio` com
+     `p_fazenda` nulo). Repetir o ternário reabriria a segunda fonte que este PR fechou — e era
+     justamente no Global que o janeiro saía vazio. */
+  const uMetricasMesAnt = isGlobal
+    ? (mesNum === 1 ? metricasInicio : globalData.metricasMesAnterior)
+    : metricasMesAnterior;
+  const uMetricasInicioAno = metricasInicio;
   const uBaseInicialIncompleta = isGlobal ? false : (isAnoInicial && baseInicialIncompleta);
   const uFonteMes = isGlobal ? globalData.fonteMes : fonteMes;
   const uHistoricoPorMes = isGlobal ? globalData.historicoPorMes : historicoPorMes;
@@ -1987,21 +2039,18 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           nada dela tinha altura reservada. */}
       {!verInicio && !uAvisoSnapshotIncompleto && (
         <>
-          {/* ⚠ 2 × 3, e a ordem é a da leitura: em cima as três grandezas puras (valor, arrobas,
-              preço); embaixo as três que EXPLICAM — as duas contra o preço de janeiro e a
-              composição. A segunda linha só faz sentido depois da primeira. */}
+          {/* ⚠ QUATRO EM UMA LINHA — 03c. Eram seis em 2 × 3, e os dois de baixo repetiam os de
+              cima só para pôr a tracejada ao lado: a comparação virou a PRÓPRIA linha do gráfico
+              que ela explica, e dois cards deixaram de existir. Valor e R$/@ trazem a tracejada;
+              arrobas é grandeza física e não tem efeito de mercado para separar. */}
           <div className="flex w-full gap-2">
-            <MiniChart data={uChartDataValor} color="hsl(var(--primary))" title="Valor do rebanho (R$)" unit="currency" />
+            <MiniChart title="Valor do rebanho (R$)" unit="currency"
+              color="hsl(var(--primary))" serie2 rotulo1="com mercado" rotulo2="sem efeito de mercado"
+              data={uChartDataValor.map((d, i) => ({ ...d, value2: chartDataSemMercado[i]?.value ?? null }))} />
             <MiniChart data={uChartDataArrobas} color="hsl(142, 71%, 45%)" title="Arrobas em estoque" unit="arroba" />
-            <MiniChart data={uChartDataPrecoArroba} color="hsl(217, 91%, 60%)" title="R$/@ médio" unit="currency" />
-          </div>
-          <div className="flex w-full gap-2">
-            <MiniChart title="Valor: real × a preço de janeiro" unit="currency"
-              color="#0C447C" serie2 rotulo1="real" rotulo2="a preço de janeiro"
-              data={uChartDataValor.map((d, i) => ({ ...d, value2: chartDataPrecoJaneiro[i]?.value ?? null }))} />
-            <MiniChart title="R$/@: real × a preço de janeiro" unit="currency"
-              color="hsl(217, 91%, 60%)" serie2 rotulo1="real" rotulo2="a preço de jan (só composição)"
-              data={uChartDataPrecoArroba.map((d, i) => ({ ...d, value2: chartDataPrecoArrobaJaneiro[i]?.value ?? null }))} />
+            <MiniChart title="R$/@ médio" unit="currency"
+              color="hsl(217, 91%, 60%)" serie2 rotulo1="com mercado" rotulo2="sem efeito de mercado"
+              data={uChartDataPrecoArroba.map((d, i) => ({ ...d, value2: chartDataPrecoSemMercado[i]?.value ?? null }))} />
             <GraficoComposicao dados={chartComposicao} title="Composição do rebanho (% cab)" />
           </div>
         </>
