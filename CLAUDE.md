@@ -868,6 +868,30 @@ migration e' REGISTRO HISTORICO, nao se reaplica).
     principal e trouxe os componentes junto. Nenhum gate ve' duplicata de lancamento — nao ha'
     unique sobre (operacao, componente, valor), e nem deveria haver: duas parcelas iguais sao
     legitimas. So' o olho na lista acha.
+- ⚠ BOITEL E' VENDA DE PESO VIVO COM RECEBIMENTO FUTURO (regra de produto, Gabriel, 24/09/2026
+  15:44 — governa a PARTE A do OC-BOITEL-VALOR-01, ainda NAO implementada).
+  Ao financeiro e ao DRE (subcentro 1150, `Venda em Boitel`) vai **SO' O LIQUIDO DO ACERTO**.
+  Faturamento do abate, diarias e sanidade NAO sao linhas do financeiro: ficam no MODAL, como
+  discriminacao do acerto. `R$/@ de venda = liquido / arrobas VIVAS que sairam da fazenda`.
+  ⚠ ELA CORRIGE A REGRA DE 15:26, e a diferenca nao e' de detalhe: a versao anterior mandava o
+    BRUTO (`valor_total_abate`) para 1150 e as diarias como custo variavel proprio. Bruto no DRE
+    faria o boitel parecer receita de R$ 3,4 mi onde o produtor recebeu R$ 2,5 mi, e a @ de venda
+    sairia pelo peso de CARCACA de um animal que saiu vivo da fazenda. Quem ler o historico desta
+    frente encontra as duas versoes; vale esta.
+  ⚠ A2 (o que `oc_salvar_lotes` passa a fazer): com acerto realizado,
+    `valor_informado`/`valor_acordado` = SALDO LIQUIDO DO ACERTO, que a OC ja' calcula —
+    automatico, sem digitacao. Hoje a funcao CONGELA `valor_informado` quando existe boitel
+    realizado (`THEN valor_informado`, linhas 96-101): protege contra o front e nunca adota o
+    realizado, entao nem o motor nem o operador conseguem po'r o numero certo.
+  ⚠ A3: aviso quando o DIGITADO diverge do saldo do acerto, com os dois numeros.
+  ⚠ GABARITO SAO AS DUAS OCs DA VERA (`b58bf556`, 13/05/2026; `7f7de76f`, 14/05/2026) — as unicas
+    com `acerto_papel` preenchido (688.383,46 e 305.371,67) e adiantamento. Medido em 24/09: a
+    parcela que o operador digitou ja' e' aproximadamente o liquido (abate menos diarias), com
+    delta de -7.566,57 e -157,60 — ou seja, a regra nova FORMALIZA o que ele ja' fazia a mao. O
+    residuo desses deltas NAO foi medido e e' FASE 0 da PARTE A.
+  ⚠ E HA' UM ESCRITOR CONCORRENTE EM 1150, achado no B2: `origem_tipo = 'boitel:receita'`, duas
+    linhas da Vera em `previsto` (642.056,67 e 594.573,33), fora da OC. Quem implementar a PARTE A
+    confere se ele e o novo caminho contam a MESMA receita duas vezes.
 - OC-IMPORT-MORTO-01 — `src/components/abate/AbateModalShell.tsx:57` importa
   `subcentroVendaPorCategoria` de `@/hooks/useOperacaoLiquidacao` e NUNCA a chama (o
   `SUBCENTRO_ADIANTAMENTO_BOITEL` do mesmo import e' usado). Anterior ao OC-BOITEL-VALOR-01,

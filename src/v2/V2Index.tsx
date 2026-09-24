@@ -1182,7 +1182,10 @@ export default function V2Index() {
         } : undefined}
         lancamentoIdAlvo={flancIdAlvo}
         ocEditFavorecido={flancOcEdit}
-        onAbrirOperacaoOCFinanceiro={(ocId: string) => abrirOperacaoOC(ocId, 'financeiro')}
+        /* ⚠ O TIPO VAI JUNTO — OC-BOITEL-VALOR-01 · B3. Sem ele `abrirOperacaoOC` cai no
+           default 'compra' e uma VENDA volta com `oc_compra=1`, que a hidratacao recusa. Era
+           por isso que o link "Abrir" do modal so' aparecia em compra. */
+        onAbrirOperacaoOCFinanceiro={(ocId: string, tipo?: string | null) => abrirOperacaoOC(ocId, 'financeiro', tipo ?? 'compra')}
         onLancamentoAlvoConsumido={() => { setFlancIdAlvo(null); setFlancOcEdit(false); }}
         onCloseDialog={() => {
           if (drillReturn) {

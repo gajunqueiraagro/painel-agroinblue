@@ -209,7 +209,7 @@ interface Props {
   ocEditFavorecido?: boolean;
   /** PR-OC-FIN-EDIT-FIX-02 — abre a OC vinculada na aba Financeiro (navegação SPA), preservando os
    *  filtros atuais do Financeiro V2 (salvos em sessionStorage para restauração no retorno). */
-  onAbrirOperacaoOCFinanceiro?: (operacaoId: string) => void;
+  onAbrirOperacaoOCFinanceiro?: (operacaoId: string, tipo?: string | null) => void;
 }
 
 
@@ -912,7 +912,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
 
   // PR-OC-FIN-EDIT-FIX-02 — abre a OC vinculada na aba Financeiro preservando os filtros atuais
   //   (salvos no mesmo mecanismo já consumido pela restauração de retorno). Sem novo mecanismo.
-  const abrirOCFinanceiro = (operacaoId: string) => {
+  const abrirOCFinanceiro = (operacaoId: string, tipo?: string | null) => {
     try {
       sessionStorage.setItem('financeirov2_return_filters', JSON.stringify({
         fazendaId, anosSelecionados, mesesSelecionados, statusSelecionados, tipoOperacao,
@@ -922,7 +922,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     } catch (e) {
       console.error('[FinanceiroV2Tab] erro ao salvar filtros de retorno:', e);
     }
-    onAbrirOperacaoOCFinanceiro?.(operacaoId);
+    onAbrirOperacaoOCFinanceiro?.(operacaoId, tipo);
   };
 
   /* O código da safra por id, como a fazenda e o fornecedor: mapa dos catálogos já

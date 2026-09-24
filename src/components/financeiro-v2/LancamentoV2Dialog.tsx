@@ -95,7 +95,7 @@ interface Props {
   //   da OC (ação Editar da Programação). Default false = bloqueado no Financeiro V2 direto.
   permiteEditarFavorecidoOC?: boolean;
   // navegação SPA para abrir a OC vinculada na aba Financeiro (preserva contexto; substitui o reload).
-  onAbrirOperacaoOC?: (operacaoId: string) => void;
+  onAbrirOperacaoOC?: (operacaoId: string, tipo?: string | null) => void;
   prefill?: {
     fazenda_id?: string;
     conta_bancaria_id?: string;
@@ -514,7 +514,12 @@ export function LancamentoV2Dialog({
   // ainda não têm abridor de operação OC → botão NÃO é exibido (evita botão morto).
   const [operacaoId, setOperacaoId] = useState<string | null>(null);
   const [operacaoTipo, setOperacaoTipo] = useState<string | null>(null);
-  const operacaoAbrivel = !!operacaoId && operacaoTipo === 'compra';
+  /* ⚠ ERA `operacaoTipo === 'compra'` — OC-BOITEL-VALOR-01 · B3. A restricao existia porque
+     `abrirOperacaoOC` assume COMPRA por omissao (V2Index: `tipo: string = 'compra'`), e abrir uma
+     venda por ali devolvia `oc_compra=1`, que a hidratacao recusa. O conserto foi passar o TIPO
+     que este modal ja resolve, em vez de esconder o link: numa venda de boitel — justamente a que
+     motivou esta frente — o operador via "classificacao pertence a OC" e nao tinha como chegar la. */
+  const operacaoAbrivel = !!operacaoId && !!operacaoTipo;
   const [tipoOperacao, setTipoOperacao] = useState('2-Saídas');
   const [statusTransacao, setStatusTransacao] = useState<string>(STATUS_FINANCEIRO_INICIAL);   // PR-FIN-STATUS-UX-03A-1 — inicial 'previsto' (era 'meta')
   // PR-FIN-STATUS-UX-03A-1 — anti-reclassificação silenciosa do legado 'meta':
@@ -1586,7 +1591,7 @@ export function LancamentoV2Dialog({
                       if (!operacaoId) return;
                       // PR-OC-FIN-EDIT-FIX-02 — navegação SPA na aba Financeiro (preserva contexto/filtros);
                       //   fallback para o reload legado quando o caller não fornece o handler.
-                      if (onAbrirOperacaoOC) onAbrirOperacaoOC(operacaoId);
+                      if (onAbrirOperacaoOC) onAbrirOperacaoOC(operacaoId, operacaoTipo);
                       else window.location.assign(`/v2?oc_id=${encodeURIComponent(operacaoId)}`);
                     }}
                   >
@@ -1812,6 +1817,35 @@ export function LancamentoV2Dialog({
               travado={subcentroTravado}
               subcentroDesabilitado={isOCTitulo || subcentroTravado}
             />
+
+            {/* ⚠ O MOTIVO MORA AO LADO DO CAMPO, nao so' no aviso do topo — OC-BOITEL-VALOR-01 · B3.
+                O banner de origem ja' dizia "classificacao ... somente leitura (ajuste na OC)", a
+                trinta linhas dali; quem chegava ao campo achava um Select cinza e nenhuma razao. O
+                caso que originou a regra: a venda de boitel do NJ, classificada em 1140, foi
+                corrigida CANCELANDO a parte e recriando — porque o campo nao explicava nem
+                oferecia caminho.
+                ⚠ E O CAMINHO E' A OC, NAO O FINANCEIRO. A classificacao do titulo espelha
+                `zoo_operacao_partes`; deixar edita-la aqui criaria duas verdades sobre o mesmo
+                lancamento — a parte diria 1140 e o titulo 1150, calados. E' a mesma familia do
+                "duas telas, dois numeros, nenhum erro visivel". */}
+            {isOCTitulo && (
+              <p className="text-[10px] text-muted-foreground -mt-1 flex items-center gap-1">
+                Classificação pertence à operação.
+                {operacaoAbrivel && (
+                  <button
+                    type="button"
+                    className="underline underline-offset-2 hover:text-foreground"
+                    onClick={() => {
+                      if (!operacaoId) return;
+                      if (onAbrirOperacaoOC) onAbrirOperacaoOC(operacaoId, operacaoTipo);
+                      else window.location.assign(`/v2?oc_id=${encodeURIComponent(operacaoId)}`);
+                    }}
+                  >
+                    corrigir na operação
+                  </button>
+                )}
+              </p>
+            )}
 
             {/* "Compõe DRE" (SOMENTE LEITURA) — PR-FIN-MODAL-02C #6, corrigido em PR-FIN-DRE-BADGE-01.
                 ⚠ ELE MOSTRAVA O PASSADO ENQUANTO O OPERADOR MUDAVA O PRESENTE. Lia só
