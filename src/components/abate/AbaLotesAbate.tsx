@@ -261,7 +261,7 @@ export function AbaLotesAbate({
           Nenhum lote nesta operação. Use “Adicionar lote” para informar os animais abatidos.
         </p>
       ) : (
-        <div className="grid grid-cols-1 gap-1.5 overflow-auto p-2 sm:grid-cols-2 lg:grid-cols-[repeat(4,minmax(0,1fr))]">
+        <div className="grid grid-cols-1 gap-1.5 overflow-auto p-1.5 sm:grid-cols-2 lg:grid-cols-[repeat(4,minmax(0,1fr))]">
           {lotes.map(lote => {
             const linha = linhas.get(lote.id);
             const c = calculos.get(lote.id)!;

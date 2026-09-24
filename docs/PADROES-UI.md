@@ -478,6 +478,12 @@ Duas armadilhas, as duas medidas nesta frente:
    devolve a altura do **container** e não avisa. Altura de conteúdo = **soma dos `offsetHeight`
    dos filhos** mais o padding do próprio container.
 
+3. **`h-[Npx]` numa `<td>` é mínimo, não máximo** — e a célula mais alta rege a linha inteira.
+   A altura de linha vai na **`<tr>`**, com `leading-none` no conteúdo; e **nenhum botão dentro
+   da célula pode passar da altura da linha**. Medido duas vezes: no resumo do abate as linhas
+   saíam 20px onde o mock pedia 17 (line-height padrão), e na lista de Operações Comerciais a
+   linha media 25px porque o botão de ações tinha `h-6` — as outras onze células cabiam em 18.
+
 ⚠ **NASCE DE UM ERRO MEU, 24/09/2026, no 01a-fix1.** Reportei "altura do resumo 488 → 477px" e o
 477 era o container: assim que o resumo parou de rolar, `scrollHeight` virou `clientHeight`. O
 número foi para a mensagem do commit. O conteúdo real era ~407px, e depois do fix2 são 383px —

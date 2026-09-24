@@ -816,7 +816,7 @@ export function AbateModalShell({
                 dois lados, e por isso nenhum rotulo de CAMPO entra no dicionario. */}
             {abaAtiva === 'entrega' && recebimentoApi ? (
               <div className="space-y-2">
-              <BlocoTopoAba itens={[
+              <BlocoTopoAba escala="modal" itens={[
                 { rotulo: 'Entregue', valor: entrega.recebido == null ? null
                     : `${entrega.recebido} / ${entrega.negociado ?? '—'} cab` },
                 { rotulo: 'Saldo a entregar', valor: entrega.diferenca == null ? null
@@ -891,7 +891,7 @@ export function AbateModalShell({
                 recarregarFornecedores={liquidacaoApi?.recarregar} />
             ) : abaAtiva === 'auditoria' && eventosApi ? (
               <div className="space-y-2">
-              <BlocoTopoAba itens={[
+              <BlocoTopoAba escala="modal" itens={[
                 { rotulo: 'Eventos', valor: auditoria.eventos > 0 ? String(auditoria.eventos) : null,
                   contexto: eventosApi.temMais ? 'há mais além dos carregados' : null },
                 { rotulo: 'Pessoas', valor: auditoria.eventos > 0 ? String(auditoria.pessoas) : null,
@@ -906,7 +906,7 @@ export function AbateModalShell({
               <div className="space-y-2">
               {/* As mesmas três linhas do resumo lateral, e pela mesma fonte — a view, que
                   resolve o sentido pelo plano de contas. */}
-              <BlocoTopoAba itens={[
+              <BlocoTopoAba escala="modal" itens={[
                 { rotulo: 'A receber', valor: finAReceber == null ? null : formatMoeda(finAReceber) },
                 { rotulo: 'Recebido', valor: finRecebido == null ? null : formatMoeda(finRecebido) },
                 { rotulo: 'Falta receber', valor: finFaltaReceber == null ? null : formatMoeda(finFaltaReceber),
