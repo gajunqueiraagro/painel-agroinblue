@@ -64,9 +64,14 @@ interface Params {
   versao: number | null;
   onVersaoChange: (v: number) => void;
   enabled: boolean;
+  /**
+   * Reabre a negociação — usado SÓ na ação inline do toast de "negociação fechada".
+   * Opcional: quem não passa recebe o toast sem botão, como antes.
+   */
+  onReabrir?: () => void | Promise<unknown>;
 }
 
-export function useCompraLotes({ operacaoId, clienteId, versao, onVersaoChange, enabled }: Params): CompraLotesApi {
+export function useCompraLotes({ operacaoId, clienteId, versao, onVersaoChange, enabled, onReabrir }: Params): CompraLotesApi {
   const [lotes, setLotes] = useState<LoteForm[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -169,12 +174,25 @@ export function useCompraLotes({ operacaoId, clienteId, versao, onVersaoChange, 
       await carregar();
       return novaVersao;
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Falha ao salvar negociação.');
+      const msg = e instanceof Error ? e.message : 'Falha ao salvar negociação.';
+      /* ⚠ A RECUSA PASSA A CARREGAR A SAIDA — OC-COMPRA-REVALOR-01. `oc_salvar_lotes:23`
+         responde "Negociacao fechada; reabra para editar (oc_reabrir)": diz o que fazer e
+         nao diz ONDE. O botao de reabrir mora no rodape da aba de identificacao, sob
+         `status === 'fechada'` — e quem esta' na Negociacao nao o ve'. Medido na OC
+         f56c50d3 (NJ, 24/09): o operador reabriu, confirmou de novo sem perceber que
+         Confirmar FECHA, e voltou a bater na mesma recusa sem achar a saida.
+         ⚠ SO' NESTA RECUSA: as outras (peso faltando, conflito de versao, quantidade)
+         nao se resolvem reabrindo, e oferecer o botao nelas ensinaria a clicar por reflexo. */
+      if (onReabrir && /reabra para editar/i.test(msg)) {
+        toast.error(msg, { action: { label: 'Reabrir', onClick: () => { void onReabrir(); } } });
+      } else {
+        toast.error(msg);
+      }
       return null;
     } finally {
       setSaving(false);
     }
-  }, [operacaoId, clienteId, versao, lotes, onVersaoChange, carregar]);
+  }, [operacaoId, clienteId, versao, lotes, onVersaoChange, carregar, onReabrir]);
 
   const totais = useMemo(() => {
     let animais = 0, pesoTotal = 0, valorNegociado = 0;

@@ -888,7 +888,14 @@ export function CompraModalShell(api: CompraModalShellProps) {
                             disabled={!!api.acaoOcLoading || !!api.lotesApi?.saving || !!api.ocRascunho}
                             onClick={() => setAcaoConfirm('confirmar')}
                             className="bg-white text-primary font-bold gap-1.5 hover:bg-white/90 disabled:opacity-60">
-                            <Check className="h-4 w-4" /> {api.acaoOcLoading === 'confirmar' ? 'Confirmando...' : 'Confirmar negociação e seguir'}
+                            {/* ⚠ "FECHAR" ENTROU NO ROTULO — OC-COMPRA-REVALOR-01. Ele dizia
+                                "e seguir", que informa a navegacao e cala o efeito: este botao
+                                GRAVA a aba e FECHA a negociacao (`salvarOperacaoOC` +
+                                `oc_confirmar`, LancamentosTab:3384-3386). Medido na OC f56c50d3:
+                                o operador clicou aqui para salvar uma correcao, a negociacao
+                                fechou, e a recusa seguinte ("reabra para editar") chegou sem ele
+                                saber o que a tinha fechado. O dialogo ja' avisava; o botao, nao. */}
+                            <Check className="h-4 w-4" /> {api.acaoOcLoading === 'confirmar' ? 'Confirmando...' : 'Confirmar, fechar e seguir'}
                           </Button>
                         </span>
                       </TooltipTrigger>

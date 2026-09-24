@@ -892,6 +892,32 @@ migration e' REGISTRO HISTORICO, nao se reaplica).
   ⚠ E HA' UM ESCRITOR CONCORRENTE EM 1150, achado no B2: `origem_tipo = 'boitel:receita'`, duas
     linhas da Vera em `previsto` (642.056,67 e 594.573,33), fora da OC. Quem implementar a PARTE A
     confere se ele e o novo caminho contam a MESMA receita duas vezes.
+- OC-COMPRA-REVALOR-01 — ⚠ O DEFEITO BRIEFADO NAO EXISTIA, e o registro e' sobre o metodo.
+  Sintoma (NJ, compra f56c50d3, 24/09/2026): o Gabriel corrigiu o valor do lote para
+  896.644,48, o financeiro e o documento seguiram com 892.645, e a Negociacao recusava com
+  "Negociacao fechada; reabra para editar" enquanto a tela aparentava aberta e sem botao de
+  reabrir. O briefing concluiu, da trilha, que `salvar_rascunho` disparava `fechar` 135 ms
+  depois e mandou tirar o auto-fechar.
+  ⚠ MEDIDO: NAO HA AUTO-FECHAR. O par de eventos sai de `confirmarOperacaoOC`
+  (`LancamentosTab:3378`), que e' o botao CONFIRMAR — ato explicito. A ordem e' a inversa da
+  suposta: ele GRAVA antes de fechar, e a razao esta' escrita em :3371 desde o
+  PR-OC-AUTOSAVE-01 — "quem editasse e clicasse em Confirmar PERDIA a edicao sem aviso
+  nenhum". Tirar aquele `salvarOperacaoOC()` reabriria o defeito antigo.
+  ⚠ E O `oc_salvar_lotes` COM 896.644,48 NUNCA RODOU: a trilha tem UM `salvar_lotes`, o das
+  21:52, com 892.645. `valor_acordado`, soma dos lotes, compromisso (cancelado) e o
+  lancamento zootecnico `da74e900` estao TODOS com 892.645 — nao e' "o documento ficou
+  para tras", e' que o valor novo nunca foi gravado.
+  ⚠ O STATUS TAMBEM JA' ERA FRESCO: `confirmarOperacaoOC`, `reabrirOperacaoOC` e
+  `concluirNegociacao` chamam `recarregarOperacaoOC()` / `onStatusChange`, e este faz
+  `setOcStatusComercial`. O segundo defeito briefado tambem nao existia.
+  ⚠ A LICAO E' DE METODO, e ela vale para os dois lados: a trilha de eventos mostra O QUE
+  aconteceu e nao POR QUE — dois eventos a 135 ms sugerem causa e podem ser um clique so'
+  com duas RPCs. Briefar conserto a partir de trilha, sem reproduzir na tela nem ler o
+  chamador, produz um PR que apagaria uma protecao existente. O que restou de real era de
+  UX, e entrou: a recusa ganhou o botao "Reabrir" inline (o texto dizia o que fazer e nao
+  ONDE — o botao mora no rodape da aba de identificacao, sob `status === 'fechada'`, e quem
+  esta' na Negociacao nao o ve'), e o rotulo "Confirmar negociacao e seguir" virou
+  "Confirmar, fechar e seguir", porque ele informava a navegacao e calava o efeito.
 - OC-DOC-ESPECIE-01 — a `especie` de `zoo_operacao_documentos` e' preenchida A MAO e erra.
   Medido em 24/09/2026, no OC-PDF-ORIGEM-NF-01:
     · a NF do boitel da Vera (OC b58bf556) esta' cadastrada como `outro` ("NF_Abate - Boitel"),

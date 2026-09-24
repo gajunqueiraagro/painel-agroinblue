@@ -511,6 +511,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     versao: ocVersao,
     onVersaoChange: setOcVersao,
     enabled: modoOCCompra || ocVendaParam || ocAbateParam,
+    /* ⚠ ARROW, NAO A REFERENCIA DIRETA: `reabrirOperacaoOC` e' `const` declarada ~2.900
+       linhas abaixo, e citar o identificador aqui no corpo seria TDZ. Dentro da arrow o uso
+       e' diferido para o clique, quando ela ja' existe — a mesma regra do `check:tdz`. */
+    onReabrir: () => reabrirOperacaoOC('Reabrir para editar a negociação'),
   });
   const recebimentoApi = useOperacaoRecebimento({
     operacaoId: ocOperacaoId,
@@ -3022,7 +3026,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     const clienteId = clienteAtual?.id;
     if (!ocOperacaoId || !clienteId) { toast.error('Salve a operação na aba Abate primeiro.'); return false; }
     if (ocStatusComercial === 'fechada') {
-      toast.error('Operação fechada. Reabra a negociação para editar — o botão está aqui no rodapé.');
+      toast.error('Operação fechada. Reabra a negociação para editar.',
+        { action: { label: 'Reabrir', onClick: () => { void reabrirOperacaoOC('Reabrir para editar a negociação'); } } });
       return false;
     }
     /* ⚠ `salvar` DEVOLVE A VERSAO NOVA, nao um booleano — `Promise<number | null>`.
@@ -3194,9 +3199,15 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
        perdida. */
     if (ocStatusComercial === 'fechada') {
       const temSaidaViva = (recebimentoApi.movimentacoes ?? []).some(m => !m.cancelado);
-      toast.error(temSaidaViva
-        ? 'Operação fechada e com saída registrada. Para alterar a projeção: estorne a saída na aba Entrega, reabra a negociação, edite e salve, conclua e registre a saída novamente.'
-        : 'Operação fechada. Reabra a negociação para editar — o botão está aqui no rodapé.');
+      /* ⚠ COM SAIDA VIVA NAO HA BOTAO: reabrir nao basta (o lote nao se revaloriza com
+         movimentacao viva), e oferecer o atalho levaria ao segundo guard. A instrucao
+         inteira fica no texto; o botao so' aparece onde ele RESOLVE. */
+      if (temSaidaViva) {
+        toast.error('Operação fechada e com saída registrada. Para alterar a projeção: estorne a saída na aba Entrega, reabra a negociação, edite e salve, conclua e registre a saída novamente.');
+      } else {
+        toast.error('Operação fechada. Reabra a negociação para editar.',
+          { action: { label: 'Reabrir', onClick: () => { void reabrirOperacaoOC('Reabrir para editar a negociação'); } } });
+      }
       return false;
     }
     setSubmitting(true);
