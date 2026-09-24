@@ -601,6 +601,19 @@ no mesmo arquivo.
   SR jan-ago/21 foi de 306,68 para 312,39 quando ago/21 passou a vir do fechamento
   (CACHE-X-FECHAMENTO-01). Os outros dois precos do caso NAO se mexeram, e e' isso que prova que a
   mudanca foi de FONTE e nao de conta: eles sao preco de dez/20.
+  De 1793 para 1825 no OC-BOITEL-REALIZADO-01, e 26 dos 32 NAO sao deste PR — a linha ficou
+  PARADA durante os PRs de 24/09 e a divida de registro e' minha. Medido agora, por arquivo:
+    +9  src/lib/financeiro/nfDaOperacao.test.ts    (6e67e9ca, OC-PDF-ORIGEM-NF-01)
+    +6  src/lib/financeiro/subcentroVenda.test.ts  (7223af46, OC-BOITEL-VALOR-01 B1)
+    +5  src/lib/calculos/cascataAbate.test.ts      (0c1594f7, ABATE-RESUMO-TABELA-01)
+    +5  src/lib/zootecnico/areasDaBase.test.ts     (fc830225, VALOR-REBANHO-GRAFICOS-BASE-01)
+    +1  liquido entre `pecDrePanel.test.tsx` (beb51d9b) e `agriDreLavouraGrade.test.tsx` (70e9dbe9)
+    +6  src/lib/oc/aplicarComRollback.test.ts      (ESTE PR)
+  ⚠ E O NUMERO DE HEAD NAO FOI MEDIDO EM WORKTREE, ao contrario do que a regra pede: a arvore
+  destacada colhe 25 arquivos a menos porque o `node_modules` simbolico nao resolve o alias `@/`,
+  e 1563 ali nao e' baseline, e' erro de coleta. O 1819 de HEAD e' ARITMETICA — 1825 medidos no
+  checkout principal menos os 6 casos que este PR acrescenta, num diff que nao toca teste nenhum
+  que ja existia. Quem for medir de verdade instala as dependencias na worktree.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -1343,3 +1356,36 @@ preview que o cabecalho nao sai da tela ao rolar.
   ⚠ "CASA 1x" PROVA UNICIDADE DAQUELE TEXTO, NAO COBERTURA DO CASO. Antes de patchear por texto,
   conte as ocorrencias do CONCEITO (aqui: `grep 'resultado_operacional.*jsonb'`), nao as da string
   que voce escreveu.
+- ⚠ ESTADO DE DADO SO' DEPOIS QUE A GRAVACAO PASSA (regra permanente, OC-BOITEL-REALIZADO-01,
+  24/09/2026). `setAlgo(novo)` ANTES do `try`, com um `catch` que so' mostra toast, deixa a tela
+  afirmando um dado que o banco recusou. Quem escreve estado de DADO escreve tambem o caminho de
+  volta: `src/lib/oc/aplicarComRollback.ts` (aplica, grava, RESTAURA o anterior e relanca).
+  ⚠ NASCE DE UM CARD QUE DIZIA DUAS VERDADES AO MESMO TEMPO. OC 6a808c4c (NJ · venda boitel JBS
+  Guaicara · 03/04/2020 · 200 garrotes): o operador aplicou o realizado com a negociacao fechada,
+  `oc_salvar_boitel` recusou, e o card ficou mostrando os deltas (+0,025 kg · +14 dias · +1,00 pp)
+  enquanto GMD, Dias e RC saiam "—". Os deltas a tela CALCULA do que ele digitou; os tres tracos
+  ela LE' da linha `cenario = 'realizado'`, que nunca existiu. Meia tela do state local, meia tela
+  do banco — e o operador nao tem como saber qual metade e' a verdadeira.
+  ⚠ A RECUSA ESTAVA CERTA: `oc_salvar_boitel` recusa `status_comercial = 'fechada'` de proposito
+  (P0001, "Negociacao fechada; reabra para editar"), e a operacao ficou fechada por 48 segundos
+  entre o `fechar` (22:38:27) e o `reabrir` (22:39:15). O defeito nunca foi a recusa — foi o
+  estado nao voltar atras.
+  ⚠ RESTAURA O ANTERIOR, NUNCA LIMPA. Zerar trocaria um defeito por outro: apagaria da tela um
+  realizado que JA' estava gravado, porque a recusa e' da edicao nova e nao do que existia. O
+  teste tem caso proprio para isso (`aplicarComRollback.test.ts`), e um teste que so' afirmasse
+  "voltou a null" passaria verde numa funcao que limpasse.
+  ⚠ FLAG DE UI E' OUTRA COISA e continua indo antes do `await`: `setSubmitting(true)` descreve o
+  GESTO, nao o dado, e se desfaz no `finally`.
+  ⚠ MEDIDO NO REPO INTEIRO antes de abrir divida, e por isso [STATE-ANTES-DO-TRY-01] NAO NASCEU:
+  a varredura de `set*()` seguido de `try { … await }` deu 151 flags de UI (`Loading`, `Saving`,
+  `Submitting`, `Hidratando`, `Ocupado`, `Gerando`, `Importando`…), mais guardas de saida
+  antecipada (`if (!clienteId) { setRows([]); return; }` — nao ha' await depois), limpezas para
+  `null`/`[]` e ids de linha ocupada. Estado de DADO antes do `try` havia UM: este. A unica
+  familia proxima sao os tres importadores que fazem `setArquivo(file)` antes de parsear
+  (`MesaClassificacaoTab:461`, `useImportarClassificacao:145`, `ExcelImportDialog:252`), e ali
+  manter o arquivo escolhido depois do erro e' CERTO — a mensagem fala dele.
+  ⚠ E A CHECAGEM DE "fechada" NO `catch` E' PELA MENSAGEM DO SERVIDOR, nao pelo `ocStatusComercial`
+  do render: foi justamente uma janela de 48 segundos que produziu o defeito. O status do render
+  pode estar velho; a resposta do servidor, nunca. O `toastNegociacaoFechada` (helper unico dos
+  tres caminhos — abate, venda e boitel) poe o botao "Reabrir" inline, porque mandar "reabra para
+  editar" sem dizer onde e' meia instrucao.

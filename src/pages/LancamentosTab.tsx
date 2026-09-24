@@ -80,6 +80,8 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { useIntegerInput, useDecimalInput, parseDecimalInput } from '@/hooks/useFormattedNumber';
 import { toast } from 'sonner';
 import { decidirHidratacao, vaiHidratar } from '@/lib/oc/hidratacaoOC';
+import { aplicarComRollback } from '@/lib/oc/aplicarComRollback';
+import { toastNegociacaoFechada } from '@/lib/oc/toastNegociacaoFechada';
 import { useMasterLock } from '@/hooks/useMasterLock';
 import { MasterLockBanner } from '@/components/MasterLockBanner';
 import { MorteLoteMetaDialog } from '@/components/MorteLoteMetaDialog';
@@ -2908,61 +2910,91 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const aplicarRealizadoBoitel = async (proximo: BoitelEdicao) => {
     const clienteId = clienteAtual?.id;
     if (!clienteId || !ocOperacaoId) return;
-    setOcBoitelReal(proximo);
+    /* ⚠ O ANTERIOR SE GUARDA ANTES DE QUALQUER COISA — OC-BOITEL-REALIZADO-01. Lê-lo
+       dentro do `catch` leria o state do MESMO render (o valor velho, por sorte), mas a
+       leitura certa não pode depender de sorte: o que se restaura é o que existia quando
+       este gesto começou. */
+    const anterior = ocBoitelReal;
     try {
-      let v = ocVersao;
-      const envB = await ocRpc.salvarBoitel(ocOperacaoId, clienteId, v, 'realizado', payloadBoitel(proximo));
-      v = envB.versao;
-      setOcVersao(v);
-
-      /* ⚠ A DOUTRINA DOS DOIS MUNDOS, O LADO QUE ESCREVE — B-04 (o outro lado esta' em
-         `bolsoDaVendaBoitel`). Esta chamada grava o liquido REAL em
-         `zoo_operacao_lotes.valor_informado`, e e' ela que torna aquele slot
-         REALIZADO-SOBERANO. Isso e' DESEJADO e foi decidido pelo Gabriel em 858ee073: o
-         valor oficial da operacao passa a ser o do abate, e o rebanho se corrige sozinho.
-         O card do lote e o resumo lateral leem esse slot e mostram o real — certo.
-         ⚠ E POR ISSO A PROJECAO NAO PODE LER DAQUI. O lote e' UM SO' para os dois
-         cenarios (`zoo_operacao_lotes` nao tem coluna de cenario, medido), entao esta
-         escrita apaga a promessa do slot dela. A promessa nao se guarda em segundo lugar
-         — ela se DERIVA da linha `projetado`, que esta escrita e intacta. Enquanto o topo
-         ambar lia este slot, um rascunho de realizado fazia a tela anunciar 595.071,81
-         como projecao; corrigido em B-04 mudando o ENDERECO DE LEITURA, nao esta escrita.
-         ⚠ NENHUM CAMPO DA LINHA REALIZADO ENTRA EM CONTA DE PROJECAO: a projecao e'
-         historica e imutavel depois do abate — o realizado compara COM ela, nunca a
-         reescreve. */
-      const liquidoReal = liquidoDaVendaBoitel(proximo);
-      const loteId = lotesApi.lotes[0]?.id;
-      if (liquidoReal != null && liquidoReal > 0 && loteId) {
-        const envL = await ocRpc.revalorarLote(ocOperacaoId, clienteId, v, loteId, liquidoReal,
-          'realizado do abate');
-        v = envL.operacao_versao;
+      await aplicarComRollback(anterior, proximo, setOcBoitelReal, async () => {
+        let v = ocVersao;
+        const envB = await ocRpc.salvarBoitel(ocOperacaoId, clienteId, v, 'realizado', payloadBoitel(proximo));
+        v = envB.versao;
         setOcVersao(v);
-        /* ⚠ O ESTADO LOCAL DOS LOTES FICOU VELHO — B-12. `oc_revalorar_lote` gravou o valor
-           real DIRETO no banco, por fora do `useCompraLotes`; sem reler, o proximo "Salvar
-           negociacao" mandaria de volta o valor que a tela ainda tem em memoria — que e' o
-           projetado. Era metade da regressao que o produtor pegou em 31/08.
-           ⚠ A OUTRA METADE E A MURALHA, e ela nao depende deste await: `oc_salvar_lotes`
-           passou a RECUSAR o rebaixamento quando ha realizado completo (migration
-           20260831140238). Esta linha conserta o fluxo feliz — estado fresco na tela —, e a
-           RPC protege o caso da tela aberta ANTES do abate, que nenhuma releitura alcanca.
-           ⚠ ANTES do `onRealizadoAplicado`: aquele invalida o cache zootecnico e pode
-           disparar re-render; chegar la' com os lotes ja frescos evita a tela mostrar por um
-           instante o valor velho ao lado do novo. */
-        await lotesApi.recarregar();
-        /* ⚠ O CACHE ZOOTECNICO PRECISA SABER. `oc_revalorar_lote` corrige
-           `lancamentos.valor_total` no BANCO, fora do `useLancamentos` — sem invalidar, a
-           tela seguiria com o retrato antigo, que e' pior que dado errado nos dois lados.
-           A prop vem do dono do hook; decidir as chaves aqui seria a segunda copia da
-           lista. Nao ha rebuild manual: o trigger do banco cuida da derivacao. */
-        await onRealizadoAplicado?.();
-        toast.success(envL.lancamentos_afetados > 0
-          ? `Realizado lançado. Lote revalorado e ${envL.lancamentos_afetados} lançamento${envL.lancamentos_afetados > 1 ? 's' : ''} do rebanho corrigido${envL.lancamentos_afetados > 1 ? 's' : ''}.`
-          : 'Realizado lançado. Lote revalorado.');
-      } else {
-        toast.success('Realizado do abate lançado.');
-      }
+
+        /* ⚠ A DOUTRINA DOS DOIS MUNDOS, O LADO QUE ESCREVE — B-04 (o outro lado esta' em
+           `bolsoDaVendaBoitel`). Esta chamada grava o liquido REAL em
+           `zoo_operacao_lotes.valor_informado`, e e' ela que torna aquele slot
+           REALIZADO-SOBERANO. Isso e' DESEJADO e foi decidido pelo Gabriel em 858ee073: o
+           valor oficial da operacao passa a ser o do abate, e o rebanho se corrige sozinho.
+           O card do lote e o resumo lateral leem esse slot e mostram o real — certo.
+           ⚠ E POR ISSO A PROJECAO NAO PODE LER DAQUI. O lote e' UM SO' para os dois
+           cenarios (`zoo_operacao_lotes` nao tem coluna de cenario, medido), entao esta
+           escrita apaga a promessa do slot dela. A promessa nao se guarda em segundo lugar
+           — ela se DERIVA da linha `projetado`, que esta escrita e intacta. Enquanto o topo
+           ambar lia este slot, um rascunho de realizado fazia a tela anunciar 595.071,81
+           como projecao; corrigido em B-04 mudando o ENDERECO DE LEITURA, nao esta escrita.
+           ⚠ NENHUM CAMPO DA LINHA REALIZADO ENTRA EM CONTA DE PROJECAO: a projecao e'
+           historica e imutavel depois do abate — o realizado compara COM ela, nunca a
+           reescreve. */
+        const liquidoReal = liquidoDaVendaBoitel(proximo);
+        const loteId = lotesApi.lotes[0]?.id;
+        if (liquidoReal != null && liquidoReal > 0 && loteId) {
+          const envL = await ocRpc.revalorarLote(ocOperacaoId, clienteId, v, loteId, liquidoReal,
+            'realizado do abate');
+          v = envL.operacao_versao;
+          setOcVersao(v);
+          /* ⚠ O ESTADO LOCAL DOS LOTES FICOU VELHO — B-12. `oc_revalorar_lote` gravou o valor
+             real DIRETO no banco, por fora do `useCompraLotes`; sem reler, o proximo "Salvar
+             negociacao" mandaria de volta o valor que a tela ainda tem em memoria — que e' o
+             projetado. Era metade da regressao que o produtor pegou em 31/08.
+             ⚠ A OUTRA METADE E A MURALHA, e ela nao depende deste await: `oc_salvar_lotes`
+             passou a RECUSAR o rebaixamento quando ha realizado completo (migration
+             20260831140238). Esta linha conserta o fluxo feliz — estado fresco na tela —, e a
+             RPC protege o caso da tela aberta ANTES do abate, que nenhuma releitura alcanca.
+             ⚠ ANTES do `onRealizadoAplicado`: aquele invalida o cache zootecnico e pode
+             disparar re-render; chegar la' com os lotes ja frescos evita a tela mostrar por um
+             instante o valor velho ao lado do novo. */
+          await lotesApi.recarregar();
+          /* ⚠ O CACHE ZOOTECNICO PRECISA SABER. `oc_revalorar_lote` corrige
+             `lancamentos.valor_total` no BANCO, fora do `useLancamentos` — sem invalidar, a
+             tela seguiria com o retrato antigo, que e' pior que dado errado nos dois lados.
+             A prop vem do dono do hook; decidir as chaves aqui seria a segunda copia da
+             lista. Nao ha rebuild manual: o trigger do banco cuida da derivacao. */
+          await onRealizadoAplicado?.();
+          toast.success(envL.lancamentos_afetados > 0
+            ? `Realizado lançado. Lote revalorado e ${envL.lancamentos_afetados} lançamento${envL.lancamentos_afetados > 1 ? 's' : ''} do rebanho corrigido${envL.lancamentos_afetados > 1 ? 's' : ''}.`
+            : 'Realizado lançado. Lote revalorado.');
+        } else {
+          toast.success('Realizado do abate lançado.');
+        }
+      });
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Falha ao lançar o realizado.');
+      /* ⚠ O ESTADO JA' VOLTOU — quem o restaurou foi o `aplicarComRollback`, antes de
+         relançar. O que sobra aqui é DIZER o que houve, e as três razões pedem três
+         respostas diferentes. */
+
+      /* 40001 — outra ação mexeu na operação entre o render e o clique. `let v = ocVersao`
+         lê a versão do RENDER, e insistir com ela só repetiria o erro; o operador precisa
+         ver o estado real. Mesma conduta de `editarDadosOperacaoOC` (:2740). */
+      if (e instanceof OcRpcError && e.code === '40001') {
+        toast.error('Esta operação mudou em outro lugar. Recarregamos os dados — confira e lance de novo.');
+        await recarregarOperacaoOC();
+        return;
+      }
+
+      /* ⚠ "Negociacao fechada; reabra para editar (oc_reabrir)" — o texto é do banco
+         (`oc_salvar_boitel`, P0001), e a checagem é pela MENSAGEM e não pelo
+         `ocStatusComercial`: foi exatamente uma janela de 48 segundos entre o `fechar` e o
+         `reabrir` que produziu o defeito da OC 6a808c4c. O status do render pode estar
+         velho; a resposta do servidor, nunca. */
+      const msg = e instanceof Error ? e.message : '';
+      if (/reabra para editar/i.test(msg)) {
+        toastNegociacaoFechada(() => reabrirNegociacaoVendaOC('Reabrir para lançar o realizado do abate'));
+        return;
+      }
+
+      toast.error(msg || 'Falha ao lançar o realizado.');
     }
   };
 
@@ -3026,8 +3058,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     const clienteId = clienteAtual?.id;
     if (!ocOperacaoId || !clienteId) { toast.error('Salve a operação na aba Abate primeiro.'); return false; }
     if (ocStatusComercial === 'fechada') {
-      toast.error('Operação fechada. Reabra a negociação para editar.',
-        { action: { label: 'Reabrir', onClick: () => { void reabrirOperacaoOC('Reabrir para editar a negociação'); } } });
+      toastNegociacaoFechada(() => reabrirOperacaoOC('Reabrir para editar a negociação'));
       return false;
     }
     /* ⚠ `salvar` DEVOLVE A VERSAO NOVA, nao um booleano — `Promise<number | null>`.
@@ -3205,8 +3236,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       if (temSaidaViva) {
         toast.error('Operação fechada e com saída registrada. Para alterar a projeção: estorne a saída na aba Entrega, reabra a negociação, edite e salve, conclua e registre a saída novamente.');
       } else {
-        toast.error('Operação fechada. Reabra a negociação para editar.',
-          { action: { label: 'Reabrir', onClick: () => { void reabrirOperacaoOC('Reabrir para editar a negociação'); } } });
+        toastNegociacaoFechada(() => reabrirOperacaoOC('Reabrir para editar a negociação'));
       }
       return false;
     }
