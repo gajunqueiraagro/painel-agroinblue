@@ -485,8 +485,8 @@ function CardInicio({ ano, inicio, carregando, fazendaNome }: {
               style={{ height: 16, lineHeight: '16px', fontSize: 9, backgroundColor: '#E9EFF6', color: '#0C447C' }}>
               Valor do rebanho · 1º jan/{String(ano).slice(2)} · {fazendaNome}
             </div>
-            <div className="flex items-baseline justify-between gap-2 px-1.5" style={{ height: 24 }}>
-              <span className="truncate font-medium tabular-nums" style={{ fontSize: 16 }}>{nz(inicio.valor)}</span>
+            <div className="flex items-baseline justify-between gap-2 px-1.5" style={{ height: 22 }}>
+              <span className="truncate font-medium tabular-nums" style={{ fontSize: 14 }}>{nz(inicio.valor)}</span>
               {/* ⚠ AS DUAS COMPARAÇÕES EM TRAÇO: o início não tem mês anterior nem início de ano. */}
               <span className="shrink-0 text-muted-foreground" style={{ fontSize: 9 }}>{traco} mês · {traco} ano</span>
             </div>
@@ -508,11 +508,11 @@ function CardInicio({ ano, inicio, carregando, fazendaNome }: {
                   ['R$/cab', nz(precoCab)],
                   ['@ em estoque', nz(inicio.arrobas, 2)],
                 ] as const).map(([rot, val]) => (
-                  <tr key={rot} style={{ height: 18 }}>
-                    <td className="truncate px-1.5 py-0 text-left text-muted-foreground" style={{ fontSize: 11, lineHeight: 1 }}>{rot}</td>
-                    <td className="truncate px-1.5 py-0 text-right tabular-nums" style={{ fontSize: 11, lineHeight: 1 }}>{val}</td>
-                    <td className="truncate px-1.5 py-0 text-right" style={{ fontSize: 11, lineHeight: 1 }}>{traco}</td>
-                    <td className="truncate px-1.5 py-0 text-right" style={{ fontSize: 11, lineHeight: 1 }}>{traco}</td>
+                  <tr key={rot} style={{ height: 16 }}>
+                    <td className="truncate px-1.5 py-0 text-left text-muted-foreground" style={{ fontSize: 10, lineHeight: 1 }}>{rot}</td>
+                    <td className="truncate px-1.5 py-0 text-right tabular-nums" style={{ fontSize: 10, lineHeight: 1 }}>{val}</td>
+                    <td className="truncate px-1.5 py-0 text-right" style={{ fontSize: 10, lineHeight: 1 }}>{traco}</td>
+                    <td className="truncate px-1.5 py-0 text-right" style={{ fontSize: 10, lineHeight: 1 }}>{traco}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1204,15 +1204,32 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
 
   // (variações individuais movidas para bloco unificado abaixo)
 
+  /**
+   * MÊS SEM FECHAMENTO NÃO TEM PONTO — 03d, e a regra vale para TODAS as séries.
+   *
+   * ⚠ ELAS DIVERGIAM, e dava para ver no desenho: a azul parava em agosto (o último mês fechado) e
+   * a tracejada seguia até setembro, porque uma lia o snapshot e a outra lia a view, que tem o mês
+   * aberto em cálculo live. Medido no NJ 2026 Global: azul com 9 pontos, laranja com 10, e o ponto
+   * a mais valia 463 R$/@ contra 297 em agosto — um salto de 55 % que não é preço, é mês pela
+   * metade dividido por rebanho inteiro.
+   * ⚠ E MÊS ABERTO NÃO É DADO INCOMPLETO A SER MOSTRADO COM RESSALVA: num gráfico, o último ponto
+   * é o que o olho lê como tendência. Meio mês ali mente com mais força do que a ausência dele.
+   */
+  const mesTemFechamento = useCallback((mes: number) => {
+    if (mes < 1 || mes > 12) return false;
+    const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;
+    return isGlobal ? !!globalData.historicoPorMes[key] : !!historicoPorMes[key];
+  }, [anoFiltro, isGlobal, globalData.historicoPorMes, historicoPorMes]);
+
   const buildChartData = useCallback((getValue: (mes: number) => number | null) => {
     return CHART_LABELS.map((label, idx) => {
       const fullLabel = CHART_FULL_LABELS[idx];
       if (idx === 0) return { label, fullLabel, value: getValue(0) };
       const mes = idx;
-      if (mes > mesNum) return { label, fullLabel, value: null };
+      if (mes > mesNum || !mesTemFechamento(mes)) return { label, fullLabel, value: null };
       return { label, fullLabel, value: getValue(mes) };
     });
-  }, [mesNum]);
+  }, [mesNum, mesTemFechamento]);
 
   // Helper: get view-based physical metrics for a given month key
   const getViewMetricsForMonth = useCallback((mesKey: string): { cabecas: number; pesoKg: number } | null => {
@@ -1289,23 +1306,41 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     return m;
   }, [inicio]);
 
-  const chartDataSemMercado = useMemo(() => {
+  /**
+   * ⚠ NUMERADOR E DENOMINADOR SAEM DO MESMO CONJUNTO DE CATEGORIAS — 03d. Este memo devolve os
+   * DOIS: o valor a preço do Início e as arrobas DAQUELAS MESMAS categorias.
+   *
+   * ⚠ ANTES O DENOMINADOR ERA O REBANHO INTEIRO, e a tracejada de R$/@ subestimava na proporção
+   * do que ficava de fora. Medido no NJ ago/2026: `desmama_m` tem 10.059,2 @ (930 cab) e nenhum
+   * preço em dez/2025, então entrava no divisor e não no dividendo — 20.752.513 ÷ 70.392,4 = 294,8
+   * em vez de 20.752.513 ÷ 60.333,2 = 344,0. Quase 50 R$/@ de erro, 14 % do rebanho.
+   * ⚠ A SUBESTIMAÇÃO DO GRÁFICO DE VALOR CONTINUA, e é outra coisa: lá o total é menor mesmo,
+   * porque falta o valor daquelas cabeças. O que não pode é a DIVISÃO misturar os dois conjuntos.
+   */
+  const chartSemMercadoPar = useMemo(() => {
     const linhas = viewDataAnoAtual || [];
+    const doMes = (mes: number) => {
+      let valor = 0; let kg = 0;
+      for (const r of linhas.filter(x => x.mes === mes)) {
+        const pk = precoKgInicioPorCategoria.get(String(r.categoria_codigo));
+        if (pk == null) continue;
+        const peso = (Number(r.saldo_final) || 0) * (Number(r.peso_medio_final) || 0);
+        valor += peso * pk; kg += peso;
+      }
+      return { valor, kg };
+    };
+    return { doMes };
+  }, [viewDataAnoAtual, precoKgInicioPorCategoria]);
+
+  const chartDataSemMercado = useMemo(() => {
     return buildChartData(mes => {
       if (precoKgInicioPorCategoria.size === 0) return null;
       /* O ponto "I" é o próprio Início: o rebanho do começo ao preço do começo. */
       if (mes === 0) return inicio?.valor ?? null;
-      const doMes = linhas.filter(r => r.mes === mes);
-      if (doMes.length === 0) return null;
-      let total = 0;
-      for (const r of doMes) {
-        const pk = precoKgInicioPorCategoria.get(String(r.categoria_codigo));
-        if (pk == null) continue;
-        total += (Number(r.saldo_final) || 0) * (Number(r.peso_medio_final) || 0) * pk;
-      }
-      return total > 0 ? total : null;
+      const { valor } = chartSemMercadoPar.doMes(mes);
+      return valor > 0 ? valor : null;
     });
-  }, [buildChartData, viewDataAnoAtual, precoKgInicioPorCategoria, inicio]);
+  }, [buildChartData, chartSemMercadoPar, precoKgInicioPorCategoria, inicio]);
 
   /**
    * O R$/@ sem o mercado — a tracejada de cima dividida pelas arrobas do mês.
@@ -1317,10 +1352,14 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   /* ⚠ USA `chartDataArrobas`, NÃO O `u*`: o do Global é declarado 100 linhas abaixo, e ler daqui
      dava TDZ (o TSC acusou). As duas pontas desta conta já são globais por dentro. */
   const chartDataPrecoSemMercado = useMemo(() => buildChartData(mes => {
-    const valorIni = chartDataSemMercado[mes]?.value ?? null;
-    const arrobas = chartDataArrobas[mes]?.value ?? null;
-    return valorIni == null || arrobas == null || arrobas === 0 ? null : valorIni / arrobas;
-  }), [buildChartData, chartDataSemMercado, chartDataArrobas]);
+    if (mes === 0) {
+      /* No Início as duas pontas são o mesmo retrato, então a razão é o R$/@ dele. */
+      const v = inicio?.valor ?? null; const a = inicio?.arrobas ?? null;
+      return v == null || !a ? null : v / a;
+    }
+    const { valor, kg } = chartSemMercadoPar.doMes(mes);
+    return valor > 0 && kg > 0 ? valor / (kg / 30) : null;
+  }), [buildChartData, chartSemMercadoPar, inicio]);
 
   /**
    * O SEXTO — a composição do rebanho em % de cabeças, mês a mês.
@@ -1349,12 +1388,13 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           .map(c => ({ codigo: c.categoria, q: Number(c.quantidade) || 0 })));
         return r ? { label, fullLabel, ...r } : vazio;
       }
-      if (idx > mesNum) return vazio;
+      /* ⚠ MESMA REGRA DAS LINHAS — 03d: mês sem fechamento é coluna VAZIA, não meia coluna. */
+      if (idx > mesNum || !mesTemFechamento(idx)) return vazio;
       const r = repartir(linhas.filter(l => l.mes === idx)
         .map(l => ({ codigo: String(l.categoria_codigo), q: Number(l.saldo_final) || 0 })));
       return r ? { label, fullLabel, ...r } : vazio;
     });
-  }, [viewDataAnoAtual, mesNum, inicio]);
+  }, [viewDataAnoAtual, mesNum, inicio, mesTemFechamento]);
 
   const handlePrecoChange = (codigo: string, value: string) => {
     const sanitized = value.replace(/[^0-9.,]/g, '');
@@ -1477,14 +1517,12 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
       const fullLabel = CHART_FULL_LABELS[idx];
       if (idx === 0) return { label, fullLabel, value: uHistoricoPorMes[dezKey]?.valor ?? null };
       const mes = idx;
-      if (mes > mesNum) return { label, fullLabel, value: null };
+      /* ⚠ MESMA REGRA DO `buildChartData`: sem fechamento, sem ponto — 03d. */
+      if (mes > mesNum || !mesTemFechamento(mes)) return { label, fullLabel, value: null };
       const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;
-      if (mes === mesNum && globalData.fonteMes === 'live') {
-        return { label, fullLabel, value: uMetricas.valor };
-      }
       return { label, fullLabel, value: uHistoricoPorMes[key]?.valor ?? null };
     });
-  }, [isGlobal, chartDataValor, anoFiltro, mesNum, globalData.fonteMes, uMetricas.valor, uHistoricoPorMes]);
+  }, [isGlobal, chartDataValor, anoFiltro, mesNum, mesTemFechamento, uHistoricoPorMes]);
 
   const uChartDataArrobas = useMemo(() => {
     if (!isGlobal) return chartDataArrobas;
@@ -1496,15 +1534,13 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         return { label, fullLabel, value: frozen ? frozen.pesoKg / 30 : null };
       }
       const mes = idx;
-      if (mes > mesNum) return { label, fullLabel, value: null };
+      /* ⚠ MESMA REGRA DO `buildChartData`: sem fechamento, sem ponto — 03d. */
+      if (mes > mesNum || !mesTemFechamento(mes)) return { label, fullLabel, value: null };
       const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;
-      if (mes === mesNum && globalData.fonteMes === 'live') {
-        return { label, fullLabel, value: uMetricas.totalArrobas };
-      }
       const frozen = uHistoricoPorMes[key];
       return { label, fullLabel, value: frozen ? frozen.pesoKg / 30 : null };
     });
-  }, [isGlobal, chartDataArrobas, anoFiltro, mesNum, globalData.fonteMes, uMetricas.totalArrobas, uHistoricoPorMes]);
+  }, [isGlobal, chartDataArrobas, anoFiltro, mesNum, mesTemFechamento, uHistoricoPorMes]);
 
   const uChartDataPrecoArroba = useMemo(() => {
     if (!isGlobal) return chartDataPrecoArroba;
@@ -1516,15 +1552,13 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         return { label, fullLabel, value: frozen && frozen.pesoKg > 0 ? frozen.valor / (frozen.pesoKg / 30) : null };
       }
       const mes = idx;
-      if (mes > mesNum) return { label, fullLabel, value: null };
+      /* ⚠ MESMA REGRA DO `buildChartData`: sem fechamento, sem ponto — 03d. */
+      if (mes > mesNum || !mesTemFechamento(mes)) return { label, fullLabel, value: null };
       const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;
-      if (mes === mesNum && globalData.fonteMes === 'live') {
-        return { label, fullLabel, value: uMetricas.precoArroba };
-      }
       const frozen = uHistoricoPorMes[key];
       return { label, fullLabel, value: frozen && frozen.pesoKg > 0 ? frozen.valor / (frozen.pesoKg / 30) : null };
     });
-  }, [isGlobal, chartDataPrecoArroba, anoFiltro, mesNum, globalData.fonteMes, uMetricas.precoArroba, uHistoricoPorMes]);
+  }, [isGlobal, chartDataPrecoArroba, anoFiltro, mesNum, mesTemFechamento, uHistoricoPorMes]);
 
   const mesLabel = MESES_COLS.find(m => m.key === mesFiltro)?.label || mesFiltro;
 
@@ -1571,6 +1605,22 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           </span>
           <span className="shrink-0 rounded px-1.5 font-medium"
             style={{ fontSize: 9, lineHeight: '16px', backgroundColor: '#0C447C', color: '#fff' }}>Base</span>
+        </div>
+      ) : uFonteMes === 'live' && !isMesFuturo ? (
+        /* ⚠ O AVISO DO MÊS ABERTO MORA AQUI, NA MESMA FAIXA — 03d. Ele era uma linha a MAIS, logo
+           abaixo, e empurrava meses, tabela, indicadores e gráficos para baixo: trocar de Ago
+           (fechado) para Set (aberto) fazia a tela inteira descer. Faixa é uma só; o que muda é a
+           cor e o texto, nunca a altura. */
+        <div className="flex items-center gap-1.5 rounded border px-2 text-amber-700 dark:text-amber-400"
+          style={{ height: 22, fontSize: 9, backgroundColor: 'rgba(245,158,11,0.10)', borderColor: 'rgba(245,158,11,0.30)' }}>
+          <Info className="h-3 w-3 shrink-0" />
+          <span className="truncate">
+            {isMesAtual
+              ? 'Mês atual em andamento — valores parciais até o fechamento oficial.'
+              : isGlobal
+                ? 'Mês aberto: valores consolidados de todas as fazendas em cálculo live.'
+                : 'Mês aberto: tabela, card e gráficos exibem cálculo live até o fechamento oficial.'}
+          </span>
         </div>
       ) : isGlobal ? (
         <div style={{ height: 22 }} aria-hidden />
@@ -1734,19 +1784,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         />
       )}
 
-      {isMesAtual && !isMesFuturo && uFonteMes === 'live' && (
-        <div className="flex items-center gap-1.5 text-[10px] bg-amber-500/10 text-amber-700 dark:text-amber-400 rounded px-2 py-1 border border-amber-500/30">
-          <Info className="h-3 w-3 shrink-0" />
-          <span>Mês atual em andamento — valores parciais até o fechamento oficial.</span>
-        </div>
-      )}
-
-      {uFonteMes === 'live' && !isMesFuturo && !isMesAtual && (
-        <div className="flex items-center gap-1.5 text-[10px] bg-muted/40 text-muted-foreground rounded px-2 py-1 border">
-          <Info className="h-3 w-3 shrink-0" />
-          <span>{isGlobal ? 'Mês aberto: valores consolidados de todas as fazendas em cálculo live.' : 'Mês aberto: tabela, card e gráficos exibem cálculo live até o fechamento oficial.'}</span>
-        </div>
-      )}
+      {/* ⚠ OS DOIS AVISOS DE MÊS ABERTO SAÍRAM DAQUI — 03d: subiram para a faixa de 22px do topo.
+          Eram eles que empurravam a tela para baixo ao trocar de mês fechado para aberto. */}
 
       {uAvisoSnapshotIncompleto && (
         <div className="flex items-center gap-1.5 text-[10px] bg-amber-500/10 text-amber-700 dark:text-amber-400 rounded px-2 py-1 border border-amber-500/30">
@@ -1782,7 +1821,14 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
       {/* ⚠ GRID DE LARGURA FIXA — VALOR-REBANHO-COMPACTO-02. Era `flex-1 max-w-[50%]`: a tabela
           mudava de largura conforme o conteúdo dos indicadores ao lado, então trocar de mês movia
           as colunas. A lei de estabilidade pede que nada ande ao trocar mês, ano ou fazenda. */}
-      <div className="flex flex-wrap gap-2 items-start">
+      {/* ⚠ ALTURA RESERVADA, NÃO DERIVADA DO CONTEÚDO — A23, 03d. O grid tomava
+          `max(tabela, indicadores)`, e a TABELA muda de altura com o número de categorias: medido
+          151px em agosto (11 linhas), 125 no Início (9) e 34 num mês aberto sem linhas (2). Os
+          gráficos subiam 15px ao trocar de mês, mesmo com a faixa já resolvida.
+          ⚠ O TETO É ARITMÉTICO, não um número escolhido: cabeçalho 16 + 9 categorias × 13 +
+          Total 16 + 2 de borda = 151. São 9 porque `CATEGORIAS` tem 9 — se a taxonomia crescer,
+          esta conta cresce com ela. */}
+      <div className="flex flex-wrap gap-2 items-start" style={{ minHeight: 16 + CATEGORIAS.length * 13 + 16 + 2 }}>
         <div className="shrink-0 bg-card rounded border overflow-hidden" style={{ width: COLS_CAT_VR.reduce((a, w) => a + w, 0) }}>
           <table className="border-collapse" style={{ tableLayout: 'fixed', width: '100%' }}>
             <colgroup>{COLS_CAT_VR.map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>
@@ -1958,8 +2004,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
               style={{ height: 16, lineHeight: '16px', fontSize: 9, backgroundColor: '#E9EFF6', color: '#0C447C' }}>
               Valor do rebanho · {mesLabel}/{String(anoFiltro).slice(2)}{uFazendaNome ? ` · ${uFazendaNome}` : ''}
             </div>
-            <div className="flex items-baseline justify-between gap-1 px-1.5" style={{ height: 24 }}>
-              <span className="truncate font-medium tabular-nums" style={{ fontSize: 16 }}>
+            <div className="flex items-baseline justify-between gap-1 px-1.5" style={{ height: 22 }}>
+              <span className="truncate font-medium tabular-nums" style={{ fontSize: 14 }}>
                 {formatMoedaNullable(uMetricas.valor)}
               </span>
               <span className="flex shrink-0 items-baseline gap-1.5" style={{ fontSize: 9 }}>
@@ -1987,13 +2033,13 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                   { label: 'R$/cab', value: formatMoedaNullable(uMetricas.valorCabeca), varMes: uVarCabValorMes, varAno: uVarCabValorAno },
                   { label: '@ em estoque', value: formatNumNullable(uMetricas.totalArrobas, 2), varMes: uVarArrobasEstoqueMes, varAno: uVarArrobasEstoqueAno },
                 ].map(ind => (
-                  <tr key={ind.label} style={{ height: 18 }}>
-                    <td className="truncate px-1.5 py-0 text-left text-muted-foreground" style={{ fontSize: 11, lineHeight: 1 }}>{ind.label}</td>
-                    <td className="truncate px-1.5 py-0 text-right tabular-nums" style={{ fontSize: 11, lineHeight: 1 }}>{ind.value}</td>
-                    <td className="truncate px-1.5 py-0 text-right" style={{ fontSize: 11, lineHeight: 1 }}>
+                  <tr key={ind.label} style={{ height: 16 }}>
+                    <td className="truncate px-1.5 py-0 text-left text-muted-foreground" style={{ fontSize: 10, lineHeight: 1 }}>{ind.label}</td>
+                    <td className="truncate px-1.5 py-0 text-right tabular-nums" style={{ fontSize: 10, lineHeight: 1 }}>{ind.value}</td>
+                    <td className="truncate px-1.5 py-0 text-right" style={{ fontSize: 10, lineHeight: 1 }}>
                       <VariacaoBadge valor={ind.varMes} label="" />
                     </td>
-                    <td className="truncate px-1.5 py-0 text-right" style={{ fontSize: 11, lineHeight: 1 }}>
+                    <td className="truncate px-1.5 py-0 text-right" style={{ fontSize: 10, lineHeight: 1 }}>
                       {/* ⚠ TRAÇO QUANDO A BASE DO ANO ESTÁ INCOMPLETA: sem o 1º de janeiro inteiro
                           não há contra o que comparar, e um número ali seria comparação com meia
                           base. É a mesma regra do card Início. */}
