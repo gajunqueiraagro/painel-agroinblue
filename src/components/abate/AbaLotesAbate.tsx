@@ -19,7 +19,8 @@
  */
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Pencil, Ban, Plus, ChevronRight, AlertTriangle } from 'lucide-react';
+import { Pencil, Ban, ChevronRight, AlertTriangle } from 'lucide-react';
+import { BotaoAdicionarLote } from '@/components/ui/botao-adicionar-lote';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { buildAbateCalculation, type AbateCalculation } from '@/lib/calculos/abate';
 import { LoteDialog } from '@/components/compra/AbaNegociacaoLotes';
@@ -177,7 +178,24 @@ export function AbaLotesAbate({
      Perder este aviso ao trocar de tela seria trocar uma protecao por um layout. */
   const semSubcentro = lotes.filter(l => !subcentroAbatePorCategoria(l.categoria ?? ''));
 
-  const abrirNovo = () => setEditandoId(lotesApi.adicionarLote());
+  /* ⚠ QUEM CANCELOU NAO QUER LOTE — OC-BOITEL-CRIAR-LOTE-01, e o comentario acima FICOU
+     INVERTIDO de proposito. Ele dizia que o lote vazio era aceitavel porque
+     `oc_salvar_lotes` o recusa; a recusa e' exatamente o problema — ela derruba a gravacao
+     INTEIRA da negociacao por causa de uma linha que o operador criou sem querer e nao
+     sabe que existe. O fantasma que a RPC recusa e' pior do que nada.
+     ⚠ SO' O QUE NASCEU NESTE GESTO: cancelar a edicao de um lote que ja existia nao o
+     remove — ali "cancelar" quer dizer "esquece o que eu digitei". */
+  const [nascidoAgora, setNascidoAgora] = useState<string | null>(null);
+  const abrirNovo = () => {
+    const id = lotesApi.adicionarLote();
+    setNascidoAgora(id);
+    setEditandoId(id);
+  };
+  const fecharDialogo = () => {
+    if (editandoId && editandoId === nascidoAgora) lotesApi.removerLote(editandoId);
+    setNascidoAgora(null);
+    setEditandoId(null);
+  };
   const emEdicao = editandoId ? lotesApi.lotes.find(l => l.idLocal === editandoId) ?? null : null;
   const negociando = negociandoId ? lotes.find(l => l.id === negociandoId) ?? null : null;
   const removendo = removendoId ? lotes.find(l => l.id === removendoId) ?? null : null;
@@ -217,13 +235,10 @@ export function AbaLotesAbate({
         {/* A RPC recusa adicionar OU remover lote depois do recebimento ("nao e possivel
             adicionar ou remover lotes. Estorne o recebimento primeiro"), e a recusa derruba
             a operação inteira. Oferecer o que o banco recusa é pior que não oferecer. */}
-        <Button type="button" size="sm" className="h-[22px] shrink-0 gap-1 px-[9px] text-[10px]"
+        <BotaoAdicionarLote onClick={abrirNovo}
           disabled={somenteLeitura || !!fisicoBloqueado}
           title={fisicoBloqueado && !somenteLeitura
-            ? 'não se adiciona lote depois do recebimento; estorne o recebimento para alterar' : undefined}
-          onClick={abrirNovo}>
-          <Plus className="h-3 w-3" /> Adicionar lote
-        </Button>
+            ? 'não se adiciona lote depois do recebimento; estorne o recebimento para alterar' : undefined} />
       </div>
 
       {/* ── BLOCO DE TOPO ─────────────────────────────────────────────────────── */}
@@ -413,9 +428,10 @@ export function AbaLotesAbate({
           comObservacao
           somenteLeitura={!!somenteLeitura}
           onReabrirParaEditar={onReabrirParaEditar}
-          onAplicar={(patch) => { lotesApi.editarLote(emEdicao.idLocal, patch); setEditandoId(null); }}
+          /* Aplicar CONFIRMA o nascimento: o lote deixa de ser "recem-criado". */
+          onAplicar={(patch) => { lotesApi.editarLote(emEdicao.idLocal, patch); setNascidoAgora(null); setEditandoId(null); }}
           onAplicarEAdicionar={(patch) => { lotesApi.editarLote(emEdicao.idLocal, patch); abrirNovo(); }}
-          onFechar={() => setEditandoId(null)}
+          onFechar={fecharDialogo}
         />
       )}
     </div>

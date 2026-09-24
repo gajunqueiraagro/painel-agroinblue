@@ -9,7 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2, Pencil } from 'lucide-react';
+import { Trash2, Pencil } from 'lucide-react';
+import { BotaoAdicionarLote } from '@/components/ui/botao-adicionar-lote';
 import { parseNumericValue } from '@/lib/calculos/abate';
 import { pesoMedioPorCabeca, valorPorKgNegociado } from '@/hooks/useCompraLotes';
 import type { CompraLotesApi, CriterioValor, LoteForm } from '@/hooks/useCompraLotes';
@@ -240,7 +241,25 @@ function NegociacaoOC({
      devolve o id. Antes isso passava por um efeito que observava a lista crescer, e
      na homologacao o modal simplesmente nao abriu: o operador via a linha vazia
      aparecer e nao tinha como saber que precisava clicar nela. */
-  const abrirNovo = () => setEditandoId(adicionarLote());
+  /* ⚠ QUEM CANCELOU NAO QUER LOTE — OC-BOITEL-CRIAR-LOTE-01. O lote nasce em MEMORIA
+     antes do dialogo (`adicionarLote` e' `setLotes`, sem RPC), entao cancelar precisa
+     desfazer o nascimento. Sem isso fica na lista um lote sem categoria e sem peso que
+     `oc_salvar_lotes` RECUSA — e a recusa derruba a gravacao inteira da negociacao, por
+     causa de uma linha que o operador criou sem querer e nao sabe que existe.
+     ⚠ SO' O QUE NASCEU NESTE GESTO. Cancelar a edicao de um lote que ja existia nao o
+     remove: ali "cancelar" quer dizer "esquece o que eu digitei", nunca "apague o lote".
+     E' o que este id separa — sem ele as duas intencoes ficariam com o mesmo botao. */
+  const [nascidoAgora, setNascidoAgora] = useState<string | null>(null);
+  const abrirNovo = () => {
+    const id = adicionarLote();
+    setNascidoAgora(id);
+    setEditandoId(id);
+  };
+  const fecharDialogo = () => {
+    if (editandoId && editandoId === nascidoAgora) removerLote(editandoId);
+    setNascidoAgora(null);
+    setEditandoId(null);
+  };
 
   const rotuloCategoria = (slug: string) =>
     categoriasDisponiveis.find(c => c.value === slug)?.label || slug || 'Sem categoria';
@@ -265,15 +284,15 @@ function NegociacaoOC({
             de estados de 00d164b7 esta' preservada; so' mudou de endereco. */}
         {linhaMagra && lotes.length === 0 && (
           <div className="min-w-0">
-            <div className="text-[10px] font-normal text-muted-foreground leading-none whitespace-nowrap">Lote</div>
-            <div className="mt-1 flex items-center gap-2">
-              <span className="text-[22px] font-medium leading-none text-muted-foreground">—</span>
+            {/* ⚠ O ROTULO "Lote" E O "—" SAIRAM daqui — OC-BOITEL-CRIAR-LOTE-01. Um traco
+                de 22px com um link de 11px ao lado anuncia AUSENCIA e esconde a acao: o
+                olho le' o numero grande, que nao e' numero. Sem lote o bloco diz o que
+                falta em texto miudo e po'e a acao em botao. */}
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-normal text-muted-foreground leading-none">Nenhum lote nesta venda</span>
               {!fisicoRO && (
-                <button type="button" onClick={abrirNovo} disabled={!operacaoPronta}
-                  title={!operacaoPronta ? (rotulos?.salveOperacaoPrimeiro ?? 'Salve a operação primeiro') : 'Criar o lote desta venda'}
-                  className="text-[11px] font-normal text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline">
-                  + criar
-                </button>
+                <BotaoAdicionarLote onClick={abrirNovo} disabled={!operacaoPronta}
+                  title={!operacaoPronta ? (rotulos?.salveOperacaoPrimeiro ?? 'Salve a operação primeiro') : 'Criar o lote desta venda'} />
               )}
             </div>
           </div>
@@ -290,15 +309,12 @@ function NegociacaoOC({
                 : lotes.length === 0 ? 'nenhum lote' : `${lotes.length} lote${lotes.length > 1 ? 's' : ''}`}
             </span>
             {!fisicoRO && (
-              <button type="button" onClick={abrirNovo}
+              <BotaoAdicionarLote onClick={abrirNovo}
                 disabled={!operacaoPronta || (!!loteUnico && lotes.length >= 1)}
                 title={!operacaoPronta ? (rotulos?.salveOperacaoPrimeiro ?? 'Salve a operação na aba Compra primeiro')
                   : (loteUnico && lotes.length >= 1) ? loteUnico.motivo
                   : 'Adicionar lote à negociação'}
-                aria-label={(loteUnico && lotes.length >= 1) ? loteUnico.motivo : 'Adicionar lote'}
-                className="text-[11px] font-normal text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline">
-                + Adicionar lote
-              </button>
+                ariaLabel={(loteUnico && lotes.length >= 1) ? loteUnico.motivo : 'Adicionar lote'} />
             )}
           </div>
         </div>
@@ -456,10 +472,12 @@ function NegociacaoOC({
           somenteLeitura={somenteLeitura}
           onReabrirParaEditar={onReabrirParaEditar}
           rotuloCategoria={rotuloCategoria}
-          onAplicar={(patch) => { editarLote(emEdicao.idLocal, patch); setEditandoId(null); }}
+          /* Aplicar CONFIRMA o nascimento: o lote deixa de ser "recem-criado" e um
+             cancelamento posterior nao o alcanca mais. */
+          onAplicar={(patch) => { editarLote(emEdicao.idLocal, patch); setNascidoAgora(null); setEditandoId(null); }}
           onAplicarEAdicionar={(patch) => { editarLote(emEdicao.idLocal, patch); abrirNovo(); }}
           valorProjetado={valorProjetado}
-          onFechar={() => setEditandoId(null)}
+          onFechar={fecharDialogo}
         />
       )}
 
