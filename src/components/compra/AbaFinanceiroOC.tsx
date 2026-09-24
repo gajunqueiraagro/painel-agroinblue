@@ -80,13 +80,13 @@ export function AbaFinanceiroOC(props: Props) {
 
   if (!operacaoId || !clienteId) return legado;
   if (ocApi.loading && !ocApi.resumoOperacao) {
-    return <div className="py-10 text-center text-[12px] text-muted-foreground">Carregando…</div>;
+    return <div className="py-10 text-center text-[11px] text-muted-foreground">Carregando…</div>;
   }
   if (modo === 'legado') return legado;
   if (modo === 'misto_inconsistente') {
     return (
       <div className="space-y-3 min-w-0">
-        <div className="rounded-md border border-amber-500 bg-amber-50 dark:bg-amber-950/30 p-2 text-[12px] text-amber-800 dark:text-amber-200 flex items-center gap-2">
+        <div className="rounded-md border border-amber-500 bg-amber-50 dark:bg-amber-950/30 p-2 text-[11px] text-amber-800 dark:text-amber-200 flex items-center gap-2">
           <AlertTriangle className="h-4 w-4 shrink-0" /> Operação inconsistente (compromissos e partes legadas). Visão somente leitura.
         </div>
         <AbaCompromissosOC ocApi={ocApi} bloqueado clienteId={clienteId} tipoOperacao={api.tipoOperacao} fornecedores={api.fornecedores} ehBoitel={props.ehBoitel}

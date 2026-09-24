@@ -1074,7 +1074,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
       <div className="rounded-md border bg-card p-1.5 shadow-sm space-y-1.5">
         <div className="sticky top-0 z-10 -mt-1.5 space-y-1.5 border-b bg-card pt-1.5 pb-1.5">
           <div className="flex items-baseline justify-between gap-3">
-            <span className="text-[15px] font-medium text-foreground min-w-0 truncate">Compromissos</span>
+            <span className="text-[12px] font-medium text-foreground min-w-0 truncate">Compromissos</span>
             <div className="flex items-baseline gap-3 shrink-0">
               {(qtdCancelados > 0 || qtdParcelasCanceladas > 0) && (
                 <label className="flex items-center gap-1 text-[10px] text-muted-foreground cursor-pointer">
@@ -1138,7 +1138,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
                   <div className="text-[11px] font-normal text-muted-foreground leading-none">
                     {temEntradas ? 'A receber' : 'Obrigação'}
                   </div>
-                  <div className="mt-1 text-[20px] font-medium tabular-nums leading-none">
+                  <div className="mt-0.5 text-[15px] font-medium tabular-nums leading-none">
                     {semCompromisso ? '—'
                       : brl(temEntradas ? resumoOperacao.entradaObrigacao : resumoOperacao.obrigacaoTotal)}
                   </div>
@@ -1147,7 +1147,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
                   <div className="text-[11px] font-normal text-muted-foreground leading-none">
                     {temEntradas ? 'Recebido' : 'Pago'}
                   </div>
-                  <div className="mt-1 text-[20px] font-medium tabular-nums leading-none">
+                  <div className="mt-0.5 text-[15px] font-medium tabular-nums leading-none">
                     {semCompromisso ? '—'
                       : brl(temEntradas ? resumoOperacao.entradaLiquidado : resumoOperacao.totalLiquidado)}
                   </div>
@@ -1160,13 +1160,13 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
                 {temEntradas && (<>
                   <div className="min-w-0">
                     <div className="text-[11px] font-normal text-muted-foreground leading-none">Despesas</div>
-                    <div className="mt-1 text-[20px] font-medium tabular-nums leading-none text-destructive">
+                    <div className="mt-0.5 text-[15px] font-medium tabular-nums leading-none text-destructive">
                       {resumoOperacao.saidaObrigacao > TOL_CENTAVO ? brl(resumoOperacao.saidaObrigacao) : '—'}
                     </div>
                   </div>
                   <div className="min-w-0">
                     <div className="text-[11px] font-normal text-muted-foreground leading-none">Pagas</div>
-                    <div className="mt-1 text-[20px] font-medium tabular-nums leading-none text-destructive">
+                    <div className="mt-0.5 text-[15px] font-medium tabular-nums leading-none text-destructive">
                       {resumoOperacao.saidaLiquidado > TOL_CENTAVO ? brl(resumoOperacao.saidaLiquidado) : '—'}
                     </div>
                   </div>
@@ -1174,7 +1174,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
                 {!temEntradas && mostrarAProgramar && (
                   <div className="min-w-0">
                     <div className="text-[11px] font-normal text-muted-foreground leading-none">A programar</div>
-                    <div className="mt-1 text-[20px] font-medium tabular-nums leading-none text-amber-700 dark:text-amber-500">
+                    <div className="mt-0.5 text-[15px] font-medium tabular-nums leading-none text-amber-700 dark:text-amber-500">
                       {brl(totalAProgramar)}
                     </div>
                   </div>
@@ -1344,7 +1344,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
           {selecionado && (
           <div className="space-y-2">
           <DialogHeader>
-            <DialogTitle className="text-[13px]">
+            <DialogTitle className="text-[12px]">
               {rotuloCompromisso(selecionado)} — {brl(selecionado.valorCompromisso)}
             </DialogTitle>
             <DialogDescription className="text-[11px]">
@@ -1718,8 +1718,8 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
                 herda a escala de um modal de página inteira dentro de uma tela de 10-12px, e
                 foi assim que estes três diálogos ficaram fora do padrão sem ninguém escrever
                 um tamanho errado. */}
-            <DialogHeader><DialogTitle className="text-[13px]">Lançar parcela</DialogTitle></DialogHeader>
-            <div className="text-[13px]">Gerar título de <b>{brl(confirmarParcela.valor)}</b> com vencimento <b>{fmtData(confirmarParcela.vencimento)}</b>?</div>
+            <DialogHeader><DialogTitle className="text-[12px]">Lançar parcela</DialogTitle></DialogHeader>
+            <div className="text-[11px]">Gerar título de <b>{brl(confirmarParcela.valor)}</b> com vencimento <b>{fmtData(confirmarParcela.vencimento)}</b>?</div>
             {/* ⚠ SEM CONTA NÃO SE MATERIALIZA — OC-PARCELA-CONTA (125d). O título nasce
                 ligado a uma conta bancária; parcela sem conta gerava lançamento sem conta,
                 e a tela não oferecia onde arrumar. As parcelas criadas antes do cabeçalho
@@ -1732,7 +1732,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
                   value={contaParaMaterializar}
                   onValueChange={setContaParaMaterializar}
                   contas={contasDoCliente}
-                  className="[&>button]:h-8 [&>button]:text-[12px]" />
+                  className="[&>button]:h-6 [&>button]:text-[11px]" />
                 <p className="text-[10px] text-muted-foreground">
                   Esta parcela foi criada sem conta. Escolha a conta do título.
                 </p>
@@ -1760,7 +1760,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
             onInteractOutside={(e) => { if (estRodando) e.preventDefault(); }}
             onEscapeKeyDown={(e) => { if (estRodando) e.preventDefault(); }}>
             <DialogHeader>
-              <DialogTitle className="text-[13px]">
+              <DialogTitle className="text-[12px]">
                 {estAlvo.nivel === 'materializacao' ? 'Estornar lançamento'
                 : estAlvo.nivel === 'programacao' ? 'Cancelar programação'
                 : 'Cancelar compromisso'}
@@ -2053,7 +2053,7 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
           padding proprio; sem isso o azul flutuaria com moldura branca em volta. */}
       <DialogContent className="max-w-md">
         <DialogHeader className="-mx-6 -mt-6 mb-1 space-y-0 bg-primary px-6 py-3">
-          <DialogTitle className="text-[15px] text-primary-foreground">Novo compromisso</DialogTitle>
+          <DialogTitle className="text-[12px] text-primary-foreground">Novo compromisso</DialogTitle>
         </DialogHeader>
         {avisoBaseCoberta && (
           <div className="rounded-md border border-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2 py-1.5 text-[11px] leading-snug text-amber-800 dark:text-amber-200">
@@ -2065,7 +2065,7 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
             <div>
               <Label className="text-[11px]">Natureza</Label>
               <Select value={natureza} onValueChange={(v) => setNatureza(v === 'principal' ? 'principal' : 'obrigacao')}>
-                <SelectTrigger className="mt-0.5 h-8 text-[12px]"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="mt-0.5 h-6 text-[11px]"><SelectValue /></SelectTrigger>
                 <SelectContent className={darkSelectClass}>
                   <SelectItem value="principal">principal</SelectItem>
                   <SelectItem value="obrigacao">obrigacao</SelectItem>
@@ -2075,7 +2075,7 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
             <div>
               <Label className="text-[11px]">Componente</Label>
               <Select value={componente || '__none__'} onValueChange={(v) => setComponente(v === '__none__' ? '' : v)}>
-                <SelectTrigger className="mt-0.5 h-8 text-[12px]"><SelectValue placeholder="—" /></SelectTrigger>
+                <SelectTrigger className="mt-0.5 h-6 text-[11px]"><SelectValue placeholder="—" /></SelectTrigger>
                 <SelectContent className={darkSelectClass}>
                   {componenteOptions.map(c => <SelectItem key={c.codigo} value={c.codigo}>{c.nome}</SelectItem>)}
                 </SelectContent>
@@ -2101,7 +2101,7 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
               <SearchableSelect
                 value={loteId || '__none__'} onValueChange={(v) => setLoteId(v === '__none__' ? '' : v)}
                 options={loteOptions} placeholder="Selecione o lote"
-                allLabel="— operação inteira —" allValue="__none__" dense className="[&>button]:h-8 [&>button]:text-[12px]"
+                allLabel="— operação inteira —" allValue="__none__" dense className="[&>button]:h-6 [&>button]:text-[11px]"
               />
               {loteOptions.length > 1 && (
                 <label className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer">
@@ -2126,13 +2126,13 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
             <SearchableSelect
               value={subcentro || '__none__'} onValueChange={(v) => setSubcentro(v === '__none__' ? '' : v)}
               options={subcentroOptions} placeholder="Selecione o subcentro"
-              allLabel="— selecione —" allValue="__none__" dense className="[&>button]:h-8 [&>button]:text-[12px]"
+              allLabel="— selecione —" allValue="__none__" dense className="[&>button]:h-6 [&>button]:text-[11px]"
             />
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
               <Label className="text-[11px]">Valor total *</Label>
-              <CampoMoeda valor={valor} onChange={setValor} placeholder="R$ 0,00" className="mt-0.5 h-8 text-[12px]" />
+              <CampoMoeda valor={valor} onChange={setValor} placeholder="R$ 0,00" className="mt-0.5 h-6 text-[11px]" />
             </div>
             <div>
               <Label className="text-[11px]">Favorecido</Label>
@@ -2145,11 +2145,11 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
                   <SearchableSelect
                     value={favorecidoId || '__none__'} onValueChange={(v) => setFavorecidoId(v === '__none__' ? '' : v)}
                     options={fornecedores.map(f => ({ value: f.id, label: f.nome }))} placeholder="Opcional"
-                    allLabel="— nenhum —" allValue="__none__" dense className="[&>button]:h-8 [&>button]:text-[12px]"
+                    allLabel="— nenhum —" allValue="__none__" dense className="[&>button]:h-6 [&>button]:text-[11px]"
                   />
                 </div>
                 {onCriarFornecedor && (
-                  <Button type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0 mt-0.5"
+                  <Button type="button" variant="outline" size="icon" className="h-6 w-6 shrink-0 mt-0.5"
                     aria-label="Novo favorecido" title="Cadastrar favorecido"
                     onClick={() => setNovoFornecedorOpen(true)}>
                     <Plus className="h-3.5 w-3.5" />
@@ -2319,7 +2319,7 @@ function ProgramarDialog({ onClose, onSubmit, saving, clienteId, valorCompromiss
               o operador nao sabia qual estava programando sem fechar e reabrir.
               ITEM 9 — mesma faixa azul do Novo compromisso e do CompraModalShell. */}
           <DialogHeader className="-mx-6 -mt-6 mb-1 space-y-0 bg-primary px-6 py-3">
-            <DialogTitle className="text-[15px] text-primary-foreground">{titulo}</DialogTitle>
+            <DialogTitle className="text-[12px] text-primary-foreground">{titulo}</DialogTitle>
             <DialogDescription className="text-[11px] text-primary-foreground/80">
               {identificacao ?? naturezaComponente} · {brl(valorCompromisso)}
               {identificacao ? ` · ${naturezaComponente}` : ''}
@@ -2352,7 +2352,7 @@ function ProgramarDialog({ onClose, onSubmit, saving, clienteId, valorCompromiss
                 <div className="text-[11px] text-muted-foreground pb-2">{i + 1}</div>
                 <div>
                   <Label className="text-[10px]">Valor</Label>
-                  <CampoMoeda valor={l.valor} onChange={(n) => setLinha(l.idLocal, { valor: n })} placeholder="R$ 0,00" className="mt-0.5 h-8 text-[12px]" />
+                  <CampoMoeda valor={l.valor} onChange={(n) => setLinha(l.idLocal, { valor: n })} placeholder="R$ 0,00" className="mt-0.5 h-6 text-[11px]" />
                 </div>
                 <div>
                   <Label className="text-[10px]">Vencimento</Label>
@@ -2365,10 +2365,10 @@ function ProgramarDialog({ onClose, onSubmit, saving, clienteId, valorCompromiss
                     onValueChange={(v) => setLinha(l.idLocal, { contaId: v === '__none__' ? '' : v })}
                     contas={contas}
                     prependItems={[{ value: '__none__', label: '— definir depois —' }]}
-                    className="h-8 text-[11px]"
+                    className="h-6 text-[11px]"
                   />
                 </div>
-                <Button variant="ghost" size="sm" className="h-8 w-8 p-0" disabled={linhas.length === 1}
+                <Button variant="ghost" size="sm" className="h-6 w-6 p-0" disabled={linhas.length === 1}
                   onClick={() => removerLinha(l.idLocal)} aria-label="remover parcela">
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
@@ -2418,8 +2418,8 @@ function ProgramarDialog({ onClose, onSubmit, saving, clienteId, valorCompromiss
       {confirmarParcial && (
         <Dialog open onOpenChange={(o) => { if (!o) setConfirmarParcial(false); }}>
           <DialogContent className="max-w-sm">
-            <DialogHeader><DialogTitle className="text-[13px]">Programação parcial</DialogTitle></DialogHeader>
-            <div className="text-[13px]">
+            <DialogHeader><DialogTitle className="text-[12px]">Programação parcial</DialogTitle></DialogHeader>
+            <div className="text-[11px]">
               As parcelas somam <b>{brl(soma)}</b> de <b>{brl(tetoCompromisso)}</b>. Restarão <b>{brl(restanteCompromisso)}</b> a programar. Confirmar programação parcial?
             </div>
             <DialogFooter>

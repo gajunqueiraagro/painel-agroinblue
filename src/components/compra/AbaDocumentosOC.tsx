@@ -181,7 +181,7 @@ export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedo
               <span className="text-[10px] text-muted-foreground">{contagem.join(' · ')}</span>
             )}
             {!somenteLeitura && (
-              <Button type="button" variant="outline" size="sm" className="h-7 text-[11px] gap-1" onClick={abrirNovo}><Plus className="h-3 w-3" /> Novo documento</Button>
+              <Button type="button" variant="outline" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium gap-1" onClick={abrirNovo}><Plus className="h-3 w-3" /> Novo documento</Button>
             )}
           </div>
         </div>
@@ -199,11 +199,11 @@ export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedo
         <div className="grid grid-cols-2 gap-2 rounded-md border bg-muted/20 px-3 py-1.5">
           <div className="min-w-0">
             <div className="text-[11px] text-muted-foreground leading-none">Total documentado</div>
-            <div className="mt-1 text-[20px] font-medium tabular-nums leading-none">{brl(totalDocumentado)}</div>
+            <div className="mt-0.5 text-[15px] font-medium tabular-nums leading-none">{brl(totalDocumentado)}</div>
           </div>
           <div className="min-w-0">
             <div className="text-[11px] text-muted-foreground leading-none">Negociado</div>
-            <div className="mt-1 text-[20px] font-medium tabular-nums leading-none">
+            <div className="mt-0.5 text-[15px] font-medium tabular-nums leading-none">
               {valorNegociado == null ? <span className="text-muted-foreground">—</span> : brl(valorNegociado)}
               {confronto && (
                 <span className={`ml-2 text-[11px] font-normal ${confronto.ok
@@ -259,17 +259,17 @@ export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedo
           const semArquivo = !d.url && !d.cancelado;
           return (
             <div key={d.documentoId}
-              className={`flex items-center gap-3 px-3.5 py-[7px] ${d.cancelado ? 'opacity-60' : ''}`}>
-              <div className="min-w-0 flex-1 leading-[1.35]">
-                <div className="text-[12px] font-medium text-foreground truncate">{identidade}</div>
+              className={`flex items-center gap-2 border-b border-border/60 px-2 py-0.5 last:border-b-0 ${d.cancelado ? 'opacity-60' : ''}`}>
+              <div className="min-w-0 flex-1 leading-[1.25]">
+                <div className="text-[11px] font-medium text-foreground truncate">{identidade}</div>
                 <div className={`text-[10px] truncate ${semArquivo
                   ? 'text-amber-700 dark:text-amber-500'
                   : 'text-muted-foreground'}`} title={semArquivo ? undefined : contexto}>
                   {semArquivo ? 'Sem arquivo anexado' : contexto}
                 </div>
               </div>
-              <div className="text-[12px] font-medium tabular-nums shrink-0">{brl(d.valorLiquido)}</div>
-              <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${d.cancelado
+              <div className="text-[11px] font-medium tabular-nums shrink-0">{brl(d.valorLiquido)}</div>
+              <span className={`shrink-0 rounded px-[5px] py-0 text-[10px] leading-[12px] ${d.cancelado
                 ? 'bg-rose-100 text-rose-700'
                 : 'bg-emerald-100 text-emerald-700'}`}>
                 {d.situacao === 'cancelado' ? 'Cancelado' : 'Ativo'}
@@ -303,7 +303,7 @@ export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedo
       {cancelId && (
         <div className="rounded-md border border-rose-200 bg-rose-50 p-2 space-y-1">
           <div className="text-[11px] font-semibold text-rose-700">Cancelar documento (lógico — permanece visível)</div>
-          <Input value={cancelMotivo} onChange={e => setCancelMotivo(e.target.value)} placeholder="Motivo do cancelamento (obrigatório)" className="h-7 text-[11px]" />
+          <Input value={cancelMotivo} onChange={e => setCancelMotivo(e.target.value)} placeholder="Motivo do cancelamento (obrigatório)" className="h-6 text-[11px]" />
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" size="sm" className="h-6 text-[11px]" onClick={() => { setCancelId(null); setCancelMotivo(''); }}>Voltar</Button>
             <Button type="button" variant="destructive" size="sm" className="h-6 text-[11px]" disabled={api.saving || !cancelMotivo.trim() || somenteLeitura} onClick={() => void confirmarCancelamento()}>Confirmar cancelamento</Button>
