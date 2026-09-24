@@ -481,11 +481,23 @@ const bordaDaMeta = (col: ColunaPec, i: number, n: number,
     (v === undefined ? undefined : v && meta ? BORDA_META : BORDA_RESERVA);
   const topo = ponta(pontas?.topo);
   const base = ponta(pontas?.base);
+  /**
+   * ⚠ OS LADOS SAO `box-shadow`, NAO `border` — DRE-DESTAQUE-02, e o motivo e' a regra do
+   * `border-collapse`. O `borderLeft` laranja ESTAVA sendo aplicado (medido: a celula da Meta
+   * tinha `1px rgb(212,98,17)`), mas some na tela: numa tabela colapsada, duas bordas vizinhas de
+   * mesma largura e mesmo estilo que diferem so' na COR sao resolvidas pela posicao, e vence a da
+   * celula mais a ESQUERDA — a do rotulo, que e' cinza. O contorno ficava aberto de um lado so'.
+   * ⚠ `box-shadow` NAO ENTRA NA COLAPSAGEM: desenha no mesmo pixel, com a mesma espessura, e nao
+   * disputa com o vizinho. Topo e base seguem em `border` porque ali o vizinho e' outra celula da
+   * PROPRIA Meta — mesma cor, empate sem prejuizo.
+   */
+  const sombras: string[] = [];
+  if (meta && i === 0) sombras.push('inset 1px 0 0 hsl(var(--meta))');
+  if (meta && i === n - 1) sombras.push('inset -1px 0 0 hsl(var(--meta))');
   return {
     ...(topo ? { borderTop: topo } : {}),
     ...(base ? { borderBottom: base } : {}),
-    ...(meta && i === 0 ? { borderLeft: BORDA_META } : {}),
-    ...(meta && i === n - 1 ? { borderRight: BORDA_META } : {}),
+    ...(sombras.length ? { boxShadow: sombras.join(', ') } : {}),
   };
 };
 

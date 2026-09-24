@@ -328,7 +328,7 @@ export function PecCascataView({ colunas, clienteId, alturaCartao, cartaoRef }: 
           ))}
         </span>
         <span className={cn('truncate font-medium tabular-nums', corSinal(grafico?.lucro ?? null))}>
-          Resultado com mercado R$ {grafico ? formatNum(grafico.lucro, 2) : traco}
+          Resultado econômico R$ {grafico ? formatNum(grafico.lucro, 2) : traco}
         </span>
       </div>
     </div>

@@ -132,9 +132,12 @@ export const COM_PERCENTUAL: ReadonlySet<ChaveLinhaPec> = new Set<ChaveLinhaPec>
    hectare" que pendurava. O denominador da terra segue embaixo da linha que fecha a conta do
    periodo — agora o resultado com mercado. */
 export const COM_POR_HECTARE: ReadonlySet<ChaveLinhaPec> = new Set<ChaveLinhaPec>([
-  'resultado_com_mercado',
+  'resultado_operacional', 'resultado_com_mercado',
 ]);
-export const ROTULO_POR_HECTARE = 'Lucro por hectare';
+/* ⚠ "por hectare", nao "Lucro por hectare" — DRE-DESTAQUE-02: com a linha de cima podendo ser o
+   Lucro operacional OU o Resultado economico, dizer "Lucro" ali nomeava a conta errada em metade
+   dos casos. A sublinha diz a UNIDADE; quem tem nome e' o total acima dela. */
+export const ROTULO_POR_HECTARE = 'por hectare';
 
 /**
  * A CASCATA, declarada — e a diferença entre as linhas é DADO.
@@ -210,15 +213,22 @@ export const LINHAS_PEC: DefPec[] = [
   { chave: 'margem', rotulo: '= Margem de contribuição', faixa: 't2', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
   { chave: 'custo_fixo', rotulo: '(−) Custo fixo', tom: 'custo', expande: true },
   { chave: 'rateio_adm', rotulo: '(−) Rateio administrativo', tom: 'custo', etiqueta: 'estimado', rateio: true },
-  { chave: 'resultado_operacional', rotulo: '= Resultado operacional', faixa: 't3', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
+  { chave: 'resultado_operacional', rotulo: '= Lucro operacional', faixa: 't4', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
   { chave: 'juros', rotulo: '(−) Despesas financeiras', tom: 'custo' },
-  { chave: 'resultado_periodo', rotulo: '= Resultado do período', faixa: 't3', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
+  { chave: 'resultado_periodo', rotulo: '= Lucro líquido', faixa: 't3', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
   { chave: 'efeito_mercado', rotulo: 'Efeito de mercado', tom: 'neutro', corPorSinal: true, etiqueta: 'estimado', didatico: 'efeito' },
   /* ⚠ A CASCATA FECHA AQUI — DRE-DESTAQUE-01, e o `t4` (a faixa navy com ▲/▼) mudou de linha:
      era do lucro líquido, é do resultado com mercado. Investimento tem payback longo e
      depreciação; o que sobra depois dele não é o resultado DO PERÍODO, e encerrar a grade ali
      fazia o olho ler um ano inteiro pela lente de uma compra que dura dez. */
-  { chave: 'resultado_com_mercado', rotulo: '= Resultado com mercado', faixa: 't4', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
+  { chave: 'resultado_com_mercado', rotulo: '= Resultado econômico',
+    /* ⚠ A CONTA VAI NO `title`, NAO NA TELA — DRE-DESTAQUE-02, e a razao foi MEDIDA: a
+       celula do rotulo tem 200px (~186 uteis), "= Resultado economico" ja' ocupa 125 e o
+       texto pedia 170. Sobravam ~55px e a tela mostrava "(lucro l..." — um sufixo que nao
+       informa. E encurtar nao resolvia: "(+ valorizacao do rebanho)" da' 115 e
+       "(com valorizacao)" da' 77, os dois ainda estouram. Texto que nao cabe nao e' texto. */
+    title: 'Lucro líquido + valorização do rebanho',
+    faixa: 't4', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
   /* ⚠ O INVESTIMENTO FICA, E FICA POR ÚLTIMO: ele não sai da tela, sai da CONTA. Continua com o
      drill, continua sendo custo — só deixou de ter um subtotal depois de si. */
   { chave: 'investimento', rotulo: '(−) Investimento no período', tom: 'custo', expande: true },
@@ -255,11 +265,18 @@ export const LINHAS_PEC_RESUMIDO: DefPec[] = [
   { chave: 'custo_fixo', rotulo: '(−) Custo fixo', tom: 'custo', expande: true, etiqueta: 'c/ rateio',
     tituloEtiqueta: 'inclui rateio administrativo estimado',
     compor: { mais: ['custo_fixo', 'rateio_adm'] } },
-  { chave: 'resultado_operacional', rotulo: '= Resultado operacional', faixa: 't3', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
+  { chave: 'resultado_operacional', rotulo: '= Lucro operacional', faixa: 't4', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
   { chave: 'juros', rotulo: '(−) Despesas financeiras', tom: 'custo' },
-  { chave: 'resultado_periodo', rotulo: '= Resultado do período', faixa: 't3', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
+  { chave: 'resultado_periodo', rotulo: '= Lucro líquido', faixa: 't3', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
   { chave: 'efeito_mercado', rotulo: 'Efeito de mercado', tom: 'neutro', corPorSinal: true, etiqueta: 'estimado', didatico: 'efeito' },
-  { chave: 'resultado_com_mercado', rotulo: '= Resultado com mercado', faixa: 't4', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
+  { chave: 'resultado_com_mercado', rotulo: '= Resultado econômico',
+    /* ⚠ A CONTA VAI NO `title`, NAO NA TELA — DRE-DESTAQUE-02, e a razao foi MEDIDA: a
+       celula do rotulo tem 200px (~186 uteis), "= Resultado economico" ja' ocupa 125 e o
+       texto pedia 170. Sobravam ~55px e a tela mostrava "(lucro l..." — um sufixo que nao
+       informa. E encurtar nao resolvia: "(+ valorizacao do rebanho)" da' 115 e
+       "(com valorizacao)" da' 77, os dois ainda estouram. Texto que nao cabe nao e' texto. */
+    title: 'Lucro líquido + valorização do rebanho',
+    faixa: 't4', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
   { chave: 'investimento', rotulo: '(−) Investimento no período', tom: 'custo', expande: true },
 ];
 
