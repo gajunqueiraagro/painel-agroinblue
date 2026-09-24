@@ -143,7 +143,7 @@ function ReceberLoteDialog({ lote, rotulo, pesoSugerido, hoje, isCompra, saving,
   return (
     <Dialog open onOpenChange={o => { if (!o) onFechar(); }}>
       <DialogContent className="max-w-sm">
-        <DialogHeader><DialogTitle className="text-[13px]">{r?.tituloDialogo ? r.tituloDialogo(rotulo) : `Receber · ${rotulo}`}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle className="text-[12px]">{r?.tituloDialogo ? r.tituloDialogo(rotulo) : `Receber · ${rotulo}`}</DialogTitle></DialogHeader>
         <div className="text-[11px] text-muted-foreground">
           negociado {lote.qtdNegociada ?? '—'} · {r?.jaMovimentado ?? 'já recebido'} {lote.qtdRecebida === 0 ? '—' : lote.qtdRecebida}
         </div>
@@ -152,7 +152,7 @@ function ReceberLoteDialog({ lote, rotulo, pesoSugerido, hoje, isCompra, saving,
           <div>
             <label className="text-[10px] text-muted-foreground">Quantidade</label>
             <Input inputMode="numeric" value={quantidade} onChange={e => setQuantidade(e.target.value)}
-              placeholder="0" className="mt-0.5 h-8 text-[12px] text-right tabular-nums" />
+              placeholder="0" className="mt-0.5 h-6 text-[11px] text-right tabular-nums" />
           </div>
           {/* A15 — peso em kg com duas casas; o sugerido e' o peso medio NEGOCIADO do
               lote, e e' EDITAVEL: o embarque real diverge do negociado com frequencia.
@@ -165,16 +165,16 @@ function ReceberLoteDialog({ lote, rotulo, pesoSugerido, hoje, isCompra, saving,
             <label className="text-[10px] text-muted-foreground">Peso médio (kg)</label>
             <Input inputMode="decimal" value={pesoMedio} onChange={e => setPesoMedio(e.target.value)}
               onBlur={() => { const n = parseNumericValue(pesoMedio); if (n) setPesoMedio(formatMed2(n)); }}
-              placeholder="—" className="mt-0.5 h-8 text-[12px] text-right tabular-nums" />
+              placeholder="—" className="mt-0.5 h-6 text-[11px] text-right tabular-nums" />
           </div>
           <div className="col-span-2">
             <label className="text-[10px] text-muted-foreground">Data</label>
-            <DatePicker value={data} onChange={setData} className="mt-0.5 h-8 text-[12px]" />
+            <DatePicker value={data} onChange={setData} className="mt-0.5 h-6 text-[11px]" />
           </div>
         </div>
         <DialogFooter>
-          <Button type="button" variant="ghost" size="sm" onClick={onFechar}>Cancelar</Button>
-          <Button type="button" size="sm" disabled={!podeGravar}
+          <Button type="button" variant="ghost" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium " onClick={onFechar}>Cancelar</Button>
+          <Button type="button" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium " disabled={!podeGravar}
             title={podeGravar ? undefined : (r?.informeQuantidade ?? 'Informe a quantidade recebida')}
             aria-label={`Registrar recebimento do lote ${rotulo}`}
             onClick={() => onGravar({ quantidade, pesoMedio, data })}>
@@ -630,8 +630,8 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
           há diferença ou zero recebido; alerta forte + botão destrutivo quando nada foi recebido. */}
       <Dialog open={encerrarOpen} onOpenChange={o => { if (!o) setEncerrarOpen(false); }}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle className="text-[13px]">{rotulos?.tituloEncerrar ?? 'Encerrar recebimento'}</DialogTitle></DialogHeader>
-          <div className="space-y-2 text-[12px]">
+          <DialogHeader><DialogTitle className="text-[12px]">{rotulos?.tituloEncerrar ?? 'Encerrar recebimento'}</DialogTitle></DialogHeader>
+          <div className="space-y-2 text-[11px]">
             <div className="grid grid-cols-3 gap-1.5">
               <div className="rounded border bg-muted/30 px-1.5 py-1"><div className="text-[10px] text-muted-foreground">Negociado</div><div className="font-semibold tabular-nums">{totalNegociado}</div></div>
               <div className="rounded border bg-muted/30 px-1.5 py-1"><div className="text-[10px] text-muted-foreground">{rotulos?.rotuloTotal ?? 'Recebido'}</div><div className="font-semibold tabular-nums">{totalRecebido}</div></div>
@@ -650,12 +650,12 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
             <div>
               <div className="text-[11px] font-medium">Motivo{motivoEncerrarObrigatorio ? ' *' : ' (opcional)'}</div>
               <Textarea value={motivoEncerrar} onChange={e => setMotivoEncerrar(e.target.value)} rows={2}
-                className="mt-0.5 text-[12px]" placeholder={motivoEncerrarObrigatorio ? (rotulos?.placeholderJustificativa ?? 'Justifique a diferença / ausência de recebimento') : 'Opcional'} />
+                className="mt-0.5 text-[11px]" placeholder={motivoEncerrarObrigatorio ? (rotulos?.placeholderJustificativa ?? 'Justifique a diferença / ausência de recebimento') : 'Opcional'} />
             </div>
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" size="sm" onClick={() => setEncerrarOpen(false)}>Cancelar</Button>
-            <Button type="button" size="sm" variant={zeroRecebido ? 'destructive' : 'default'} disabled={!podeEncerrar} onClick={submitEncerrar}>
+            <Button type="button" variant="outline" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium " onClick={() => setEncerrarOpen(false)}>Cancelar</Button>
+            <Button type="button" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium " variant={zeroRecebido ? 'destructive' : 'default'} disabled={!podeEncerrar} onClick={submitEncerrar}>
               Encerrar entrega
             </Button>
           </DialogFooter>
@@ -665,20 +665,20 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
       {/* Reabertura AUDITADA da entrega (não altera a negociação). Motivo obrigatório. */}
       <Dialog open={reabrirOpen} onOpenChange={o => { if (!o) setReabrirOpen(false); }}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle className="text-[13px]">{rotulos?.tituloReabrir ?? 'Reabrir recebimento'}</DialogTitle></DialogHeader>
-          <div className="space-y-2 text-[12px]">
+          <DialogHeader><DialogTitle className="text-[12px]">{rotulos?.tituloReabrir ?? 'Reabrir recebimento'}</DialogTitle></DialogHeader>
+          <div className="space-y-2 text-[11px]">
             <div className="text-[11px] text-muted-foreground">
               {rotulos?.avisoReabrir ? rotulos.avisoReabrir : (<>Esta ação é <b>auditada</b>: reabre a entrega para novos recebimentos e fica registrada com o motivo informado. <b>Não</b> altera a negociação — se a operação estiver programada, o recebimento seguirá indisponível até a negociação ser concluída.</>)}
             </div>
             <div>
               <div className="text-[11px] font-medium">Motivo *</div>
               <Textarea value={motivoReabrir} onChange={e => setMotivoReabrir(e.target.value)} rows={2}
-                className="mt-0.5 text-[12px]" placeholder="Justifique a reabertura" />
+                className="mt-0.5 text-[11px]" placeholder="Justifique a reabertura" />
             </div>
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" size="sm" onClick={() => setReabrirOpen(false)}>Cancelar</Button>
-            <Button type="button" size="sm" disabled={!podeReabrir} onClick={submitReabrir}>Reabrir</Button>
+            <Button type="button" variant="outline" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium " onClick={() => setReabrirOpen(false)}>Cancelar</Button>
+            <Button type="button" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium " disabled={!podeReabrir} onClick={submitReabrir}>Reabrir</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

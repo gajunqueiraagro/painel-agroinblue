@@ -50,7 +50,10 @@ import type { LinhaAbate, CenarioAbate } from '@/hooks/useOperacaoAbate';
    isso, 4500 / 18 = 250,00000000000003 volta ao campo e o operador vê o número mudar. */
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-const H = 'h-8 text-xs';
+/* ⚠ REGUA DE MODAL (A18): campo de 24px e 11px. As tres constantes sao o unico lugar onde
+   o tamanho dos campos vive neste modal — mudar aqui muda os cenarios todos de uma vez, e e'
+   por isso que nenhum valor de fonte ou altura foi procurado linha a linha. */
+const H = 'h-6 text-[11px]';
 const LBL = 'text-[10px] text-muted-foreground';
 
 
@@ -87,14 +90,16 @@ function Toggle({ valor, opcoes, onChange, somenteLeitura, largura = 'w-[96px]',
 }
 
 /** A19 + A22: dinheiro alinhado à direita, uma linha só, encolhendo antes de quebrar. */
-const CAMPO = 'h-[30px] text-right text-[12px] whitespace-nowrap overflow-hidden min-w-0';
+const CAMPO = 'h-6 text-right text-[11px] whitespace-nowrap overflow-hidden min-w-0';
 
-/** Derivado sem card: rótulo à esquerda, valor 14px/600, nada quebra (A22). */
+/** Derivado sem card: rótulo à esquerda, valor em negrito, nada quebra (A22).
+ *  ⚠ 11px, NAO 14: o aside deste modal segue a regua do resumo lateral (linha 16px, rotulo
+ *  10px, forte 11px). Ver A18 "escala de modal". */
 function Derivado({ rotulo, valor }: { rotulo: string; valor: string }) {
   return (
     <>
-      <span className="whitespace-nowrap text-[11px] text-muted-foreground">{rotulo}</span>
-      <b className="whitespace-nowrap text-[14px] font-semibold tabular-nums">{valor}</b>
+      <span className="whitespace-nowrap text-[10px] text-muted-foreground">{rotulo}</span>
+      <b className="whitespace-nowrap text-[11px] font-semibold tabular-nums">{valor}</b>
     </>
   );
 }
@@ -247,14 +252,26 @@ export function ModalNegociarLote({ lote, linha, cenario, onAplicar, onFechar, s
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onFechar(); }}>
-      <DialogContent className="flex h-[400px] max-w-[820px] flex-col p-0 gap-0 overflow-hidden">
-        <div className="shrink-0 bg-primary px-4 py-2.5 text-primary-foreground flex items-center gap-3">
-          <DialogTitle className="text-[14px] font-semibold">
+      {/* ⚠ `h-auto` COM PISO, E NAO ALTURA FIXA: com `h-[400px]` o modal reservava a altura do
+          pior cenario e sobrava branco nos outros. O piso de 300 evita o pulo entre abas. */}
+      {/* ⚠ A LARGURA FICA EM 820 — O BRIEFING PEDIA 640 E NAO CABE, e isto foi MEDIDO, nao
+          estimado. A aba "Bonus, descontos e impostos" tem `grid-cols-3`, e dentro de cada
+          coluna o campo divide espaco com o toggle de unidade (46px). Com o modal em 680 a
+          esquerda ficava com 348, cada coluna com 104 e o input com 54 — enquanto o valor
+          digitado pede 86. Faltavam 34px POR COLUNA, 102 no total.
+          ⚠ O GANHO DESTE PR E' DE ALTURA E DE REGUA, nao de largura: `h-[400px]` fixo virou
+          `h-auto` com piso de 300 (o modal mede 302 em Desempenho e 333 em Bonus, em vez de
+          400 sempre), os campos foram de 30px/12px para 24px/11px e os botoes para 22px/10px.
+          Encolher a largura exigiria tirar uma coluna da grade de bonus — o que e' mudar
+          layout de campo, nao regua. */}
+      <DialogContent className="flex max-w-[820px] min-h-[300px] flex-col p-0 gap-0 overflow-hidden">
+        <div className="h-9 shrink-0 bg-primary px-3 text-primary-foreground flex items-center gap-2">
+          <DialogTitle className="text-[12px] font-semibold">
             Negociar lote · {lote.categoriaLabel} · {lote.quantidade} cab
           </DialogTitle>
-          <span className="ml-auto text-[12px] text-white/90">Cenário <b className="capitalize">{cenario}</b></span>
+          <span className="ml-auto text-[10px] text-white/90">Cenário <b className="capitalize">{cenario}</b></span>
           <button type="button" onClick={onFechar} title="Fechar" aria-label="Fechar"
-            className="text-white/80 hover:text-white"><X className="h-4 w-4" /></button>
+            className="text-white/80 hover:text-white"><X className="h-3.5 w-3.5" /></button>
         </div>
         <DialogDescription className="sr-only">
           Informe carcaça, preço, bônus e descontos deste lote no cenário {cenario}.
@@ -277,13 +294,16 @@ export function ModalNegociarLote({ lote, linha, cenario, onAplicar, onFechar, s
           </div>
         )}
 
+        {/* ⚠ 330 NO ASIDE, NAO 220 — MEDIDO. A tabela de derivados tem tres colunas de dinheiro
+              ("Preço base · R$ 104.885,73 · R$ 344,87") e precisa de 324px; em 220 ela rolava na
+              horizontal dentro do modal, que e' rolagem dupla. */}
         <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[1fr_330px]">
           {/* ── ESQUERDA: as três abas ─────────────────────────────────────── */}
           <div className="flex min-h-0 flex-col">
-            <div className="flex shrink-0 gap-1 border-b bg-card px-3.5 pt-2">
+            <div className="flex shrink-0 gap-1 border-b bg-card px-2 pt-1">
               {ABAS.map(a => (
                 <button key={a.v} type="button" onClick={() => setAba(a.v)}
-                  className={`rounded-t-md px-3 py-1.5 text-[12px] font-medium ${
+                  className={`rounded-t-md px-[7px] py-1 text-[10px] font-medium ${
                     aba === a.v ? 'bg-primary text-primary-foreground'
                     : 'text-muted-foreground hover:bg-muted/50'}`}>
                   {a.label}
@@ -291,7 +311,7 @@ export function ModalNegociarLote({ lote, linha, cenario, onAplicar, onFechar, s
               ))}
             </div>
 
-            <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-3.5 py-3">
+            <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto px-2 py-2">
               {aba === 'desempenho' && (<>
                 <div className="grid grid-cols-[130px_96px] items-end gap-2">
                   <div className="flex flex-col gap-[3px]">
@@ -451,11 +471,11 @@ export function ModalNegociarLote({ lote, linha, cenario, onAplicar, onFechar, s
           </div>
         </div>
 
-        <div className="shrink-0 flex items-center justify-between gap-2 border-t bg-card px-4 py-2">
-          <span className="text-[11px] text-muted-foreground">Líquido é derivado e gravado, nunca digitado.</span>
-          <div className="flex items-center gap-2">
-            <Button type="button" variant="ghost" onClick={onFechar}>Cancelar</Button>
-            <Button type="button" disabled={somenteLeitura}
+        <div className="h-8 shrink-0 flex items-center justify-between gap-2 border-t bg-card px-2">
+          <span className="text-[10px] text-muted-foreground">Líquido é derivado e gravado, nunca digitado.</span>
+          <div className="flex items-center gap-1.5">
+            <Button type="button" variant="ghost" className="h-[22px] px-[9px] text-[10px] font-medium " onClick={onFechar}>Cancelar</Button>
+            <Button type="button" className="h-[22px] px-[9px] text-[10px] font-medium " disabled={somenteLeitura}
               onClick={() => { onAplicar(atual); onFechar(); }}>Aplicar</Button>
           </div>
         </div>

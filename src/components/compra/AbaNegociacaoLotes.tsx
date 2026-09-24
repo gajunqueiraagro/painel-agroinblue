@@ -593,9 +593,9 @@ export function LoteDialog({
       {/* Cabecalho AZUL, o mesmo dos demais modais do sistema (CompraModalShell).
           `p-0 gap-0` + faixa propria: o padding default do DialogContent deixaria a
           faixa flutuando dentro de uma borda branca. */}
-      <DialogContent className="max-w-lg p-0 gap-0 overflow-hidden">
+      <DialogContent className="max-w-[480px] p-0 gap-0 overflow-hidden">
         <DialogHeader className="bg-primary px-4 py-2.5 space-y-0.5">
-          <DialogTitle className="text-[13px] text-primary-foreground">{rotuloCategoria(categoria)}</DialogTitle>
+          <DialogTitle className="text-[12px] text-primary-foreground">{rotuloCategoria(categoria)}</DialogTitle>
           <DialogDescription className="text-[11px] text-primary-foreground/80">
             {somenteLeitura
               ? (onReabrirParaEditar
@@ -619,8 +619,8 @@ export function LoteDialog({
             </p>
             <div className="flex items-center gap-2">
               <Input value={motivoReabrir} onChange={e => setMotivoReabrir(e.target.value)}
-                placeholder="Motivo da reabertura" className="h-7 flex-1 text-[11px]" />
-              <Button type="button" size="sm" className="h-7 shrink-0 text-[11px]"
+                placeholder="Motivo da reabertura" className="h-6 flex-1 text-[11px]" />
+              <Button type="button" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium shrink-0"
                 disabled={!motivoReabrir.trim() || reabrindo}
                 title={motivoReabrir.trim() ? 'Reabrir a negociação e editar' : 'Informe o motivo da reabertura.'}
                 onClick={async () => {
@@ -646,7 +646,7 @@ export function LoteDialog({
             <div>
               <Label className="text-[10px]">Categoria <span className="text-destructive">*</span></Label>
               <Select value={categoria || undefined} onValueChange={setCategoria} disabled={somenteLeitura}>
-                <SelectTrigger className="h-8 text-[12px] mt-0.5"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectTrigger className="h-6 text-[11px] mt-0.5"><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent className={`${darkSelectClass} max-h-[60vh] overflow-y-auto`}>
                   {categoriasDisponiveis.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
                 </SelectContent>
@@ -656,7 +656,7 @@ export function LoteDialog({
               <Label className="text-[10px]">Quantidade <span className="text-destructive">*</span></Label>
               <Input inputMode="numeric" value={quantidade} onChange={e => setQuantidade(e.target.value)} placeholder="0"
                 disabled={fisicoRO} title={bloqueadoPorRecebimento ? TITLE_POS_RECEBIMENTO : undefined}
-                className="h-8 text-[12px] mt-0.5 text-right tabular-nums" />
+                className="h-6 text-[11px] mt-0.5 text-right tabular-nums" />
             </div>
           </div>
 
@@ -666,7 +666,7 @@ export function LoteDialog({
               <Input inputMode="decimal" value={pesoMedioKg} onChange={e => setPesoMedioKg(e.target.value)}
                 onBlur={() => { const n = parseNumericValue(pesoMedioKg); if (n) setPesoMedioKg(n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })); }}
                 placeholder="0,00" disabled={fisicoRO} title={titleFisico}
-                className={`h-8 text-[12px] mt-0.5 text-right tabular-nums ${semPeso ? 'border-destructive focus-visible:ring-destructive' : ''}`} />
+                className={`h-6 text-[11px] mt-0.5 text-right tabular-nums ${semPeso ? 'border-destructive focus-visible:ring-destructive' : ''}`} />
             </div>
             {!semValor && (<>
             <div>
@@ -674,12 +674,12 @@ export function LoteDialog({
               {/* ⚠ COM PROJECAO, O CRITERIO E' "TOTAL" E NAO SE ESCOLHE: o liquido do
                   boitel e' o valor cheio do embarque, nao uma taxa por kg ou por cabeca. */}
               {valorProjetado ? (
-                <div className="h-8 mt-0.5 px-2.5 flex items-center rounded-md border border-border/60 bg-muted text-[12px] text-muted-foreground">
+                <div className="h-6 mt-0.5 px-2.5 flex items-center rounded-md border border-border/60 bg-muted text-[11px] text-muted-foreground">
                   Valor total
                 </div>
               ) : (
               <Select value={criterioValor} onValueChange={v => setCriterioValor(v as CriterioValor)} disabled={somenteLeitura}>
-                <SelectTrigger className="h-8 text-[12px] mt-0.5"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-6 text-[11px] mt-0.5"><SelectValue /></SelectTrigger>
                 <SelectContent className={darkSelectClass}>
                   {CRITERIOS.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
                 </SelectContent>
@@ -693,14 +693,14 @@ export function LoteDialog({
                     AbaLiquidacaoOC): `bg-muted border-border/60 text-muted-foreground`.
                     A19 — dinheiro sempre formatado; "—" quando ainda nao ha projecao. */}
                 {valorProjetado ? (
-                  <div className="h-8 px-2.5 flex items-center justify-end rounded-md border border-border/60 bg-muted text-[12px] tabular-nums text-muted-foreground"
+                  <div className="h-6 px-2.5 flex items-center justify-end rounded-md border border-border/60 bg-muted text-[11px] tabular-nums text-muted-foreground"
                     title={valorProjetado.explicacao}>
                     {valorProjetado.valor == null ? '—' : formatMoeda(valorProjetado.valor)}
                   </div>
                 ) : (
                 /* Regra (b) — a altura vem daqui, nao do componente. */
                 <ValorInput value={valorInformado} onChange={setValorInformado} placeholder={unidade}
-                  disabled={somenteLeitura} className="h-8 text-[12px] text-right tabular-nums" />
+                  disabled={somenteLeitura} className="h-6 text-[11px] text-right tabular-nums" />
                 )}
               </div>
               {valorProjetado && (
@@ -716,7 +716,7 @@ export function LoteDialog({
               <Input value={observacao} onChange={e => setObservacao(e.target.value)}
                 placeholder="Ex.: OC 7914 — como o frigorífico identifica o lote"
                 disabled={somenteLeitura}
-                className="h-8 text-[12px] mt-0.5" />
+                className="h-6 text-[11px] mt-0.5" />
             </div>
           )}
 
@@ -732,7 +732,7 @@ export function LoteDialog({
             <ParLote rotulo="R$/kg" valor={pesoTotal > 0 ? brl(total / pesoTotal) : '—'} />
             <div className="flex items-baseline justify-between gap-2 border-t pt-1 mt-1">
               <span className="text-[10px] text-muted-foreground">Total do lote</span>
-              <span className="text-[13px] font-bold text-primary tabular-nums">{brl(total)}</span>
+              <span className="text-[12px] font-bold text-primary tabular-nums">{brl(total)}</span>
             </div>
             </>)}
           </div>
@@ -740,18 +740,20 @@ export function LoteDialog({
           {semPeso && <div className="text-[10px] text-destructive leading-tight">{motivoBloqueio}</div>}
         </div>
 
-        <DialogFooter className="gap-1.5 sm:gap-1.5 px-4 pb-4 pt-3">
+        {/* ⚠ REGUA DE MODAL: botoes de 22px/10px, os mesmos do rodape do shell. Mesmos tres
+            botoes, mesmos handlers, mesma ordem — so' o tamanho. */}
+        <DialogFooter className="gap-1.5 sm:gap-1.5 px-4 pb-3 pt-2">
           <span className="mr-auto text-[10px] text-muted-foreground leading-tight self-center">
             Gravado ao salvar a negociação.
           </span>
-          <Button variant="outline" size="sm" onClick={onFechar}>Cancelar</Button>
+          <Button variant="outline" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium " onClick={onFechar}>Cancelar</Button>
           {!fisicoRO && (
-            <Button variant="secondary" size="sm" disabled={!podeAplicar} title={motivoBloqueio}
+            <Button variant="secondary" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium " disabled={!podeAplicar} title={motivoBloqueio}
               onClick={() => onAplicarEAdicionar(patch)}>
               Aplicar e adicionar outro
             </Button>
           )}
-          <Button size="sm" disabled={!podeAplicar} title={motivoBloqueio} onClick={() => onAplicar(patch)}>Aplicar</Button>
+          <Button size="sm" className="h-[22px] px-[9px] text-[10px] font-medium " disabled={!podeAplicar} title={motivoBloqueio} onClick={() => onAplicar(patch)}>Aplicar</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
