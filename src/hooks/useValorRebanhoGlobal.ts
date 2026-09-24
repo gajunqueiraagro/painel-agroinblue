@@ -14,6 +14,7 @@ import type { Lancamento, SaldoInicial } from '@/types/cattle';
 import type { CategoriaRebanho } from '@/hooks/usePastos';
 import type { SnapshotDetalheCategoria } from '@/hooks/useValorRebanho';
 import type { OrigemPeso } from '@/hooks/useFechamentoCategoria';
+import type { ZootCategoriaMensal } from '@/hooks/useZootCategoriaMensal';
 
 // ---------------------------------------------------------------------------
 // Tipos
@@ -152,6 +153,24 @@ export function useValorRebanhoGlobal(
   categorias: CategoriaRebanho[],
   anoFiltro: string,
   mesFiltro: string,
+  /**
+   * As linhas por categoria/mes que a TELA JA CARREGOU via `useRebanhoOficial` —
+   * PERF-VALOR-REBANHO-01 A(ii).
+   *
+   * ⚠ ANTES ESTE HOOK CONSULTAVA `vw_zoot_categoria_mensal` POR CONTA PROPRIA, e essa view
+   * custava 9,6 s no banco: ela ignora o filtro de ano (aplica `ano = X` DEPOIS da CTE
+   * recursiva, descartando 11.239 de 11.940 linhas para devolver 701) e varre
+   * `fechamento_pasto_itens` 363.691 vezes — 872.629 buffers. Enquanto ela rodava, as outras
+   * consultas ficavam na fila: `fechamento_pasto_itens`, que sozinha leva 0,374 ms, chegava a
+   * 8,6 s na tela. Uma consulta matando de fome as demais.
+   * ⚠ E O DADO JA ESTAVA EM MEMORIA: `rawCategorias` e' a mesma informacao, vinda de
+   * `zoot_mensal_cache` com o ensure-on-partial de `useZootCategoriaMensal` — a mesma fonte das
+   * tracejadas desta tela. Receber em vez de consultar tira 1 request e nao cria fonte nova.
+   * ⚠ ONDE O CACHE NAO COBRE, A LINHA FICA SEM DADO, e isso e' proposital: medido em 24/09,
+   * a unica divergencia do banco inteiro e' Bom Retiro 2023 (CACHE-X-FECHAMENTO-01). Cache
+   * ausente nao pode virar zero — zero num rebanho e' numero que o operador soma.
+   */
+  zootCategorias: ZootCategoriaMensal[],
 ): ValorRebanhoGlobalResult {
   const [loading, setLoading] = useState(false);
 
@@ -160,7 +179,24 @@ export function useValorRebanhoGlobal(
   const [snapshotItems, setSnapshotItems] = useState<Record<string, Record<string, SnapshotDetalheCategoria[]>>>({});
   const [precosAllFarms, setPrecosAllFarms] = useState<Record<string, Record<string, Record<string, number>>>>({});
   const [pesosPastosPorFazenda, setPesosPastosPorFazenda] = useState<Record<string, Record<string, number>>>({});
-  const [zootData, setZootData] = useState<Map<string, Map<number, Array<{ categoria_codigo: string; saldo_final: number; peso_medio_final: number | null }>>>>(new Map());
+  /* Derivado do que a tela ja' tem — nao e' estado, nao e' consulta. */
+  const zootData = useMemo(() => {
+    const permitidas = new Set(fazendaIds);
+    const porFazendaMes = new Map<string, Map<number, Array<{ categoria_codigo: string; saldo_final: number; peso_medio_final: number | null }>>>();
+    for (const r of zootCategorias) {
+      if (r.ano !== Number(anoFiltro) || r.cenario !== 'realizado') continue;
+      if (!permitidas.has(r.fazenda_id)) continue;
+      if (!porFazendaMes.has(r.fazenda_id)) porFazendaMes.set(r.fazenda_id, new Map());
+      const doMes = porFazendaMes.get(r.fazenda_id)!;
+      if (!doMes.has(r.mes)) doMes.set(r.mes, []);
+      doMes.get(r.mes)!.push({
+        categoria_codigo: r.categoria_codigo,
+        saldo_final: r.saldo_final,
+        peso_medio_final: r.peso_medio_final,
+      });
+    }
+    return porFazendaMes;
+  }, [zootCategorias, fazendaIds.join(','), anoFiltro]);
 
   const anoMes = `${anoFiltro}-${mesFiltro}`;
   const mesNum = Number(mesFiltro);
@@ -182,7 +218,7 @@ export function useValorRebanhoGlobal(
         ...Array.from({ length: 12 }, (_, i) => `${anoFiltro}-${String(i + 1).padStart(2, '0')}`),
       ];
 
-      const [headersRes, itensRes, precosRes, zootViewRes] = await Promise.all([
+      const [headersRes, itensRes, precosRes] = await Promise.all([
         supabase
           .from('valor_rebanho_fechamento')
           .select('fazenda_id, ano_mes, valor_total, peso_total_kg, status')
@@ -199,13 +235,6 @@ export function useValorRebanhoGlobal(
           .select('fazenda_id, ano_mes, categoria, preco_kg')
           .in('fazenda_id', fazendaIds)
           .in('ano_mes', anoMeses),
-        // FONTE OFICIAL: vw_zoot_categoria_mensal para dados físicos
-        supabase
-          .from('vw_zoot_categoria_mensal' as any)
-          .select('fazenda_id, mes, categoria_codigo, saldo_final, peso_medio_final')
-          .in('fazenda_id', fazendaIds)
-          .eq('ano', Number(anoFiltro))
-          .eq('cenario', 'realizado'),
       ]);
 
       // Parse headers: fazendaId -> anoMes -> {valor, pesoKg}
@@ -243,20 +272,9 @@ export function useValorRebanhoGlobal(
       });
       setPrecosAllFarms(pMap);
 
-      // Build zoot view data per farm per month
-      const zootRows = ((zootViewRes.data || []) as unknown as Array<{ fazenda_id: string; mes: number; categoria_codigo: string; saldo_final: number; peso_medio_final: number | null }>);
-      const zootByFarmMes = new Map<string, Map<number, Array<{ categoria_codigo: string; saldo_final: number; peso_medio_final: number | null }>>>();
-      zootRows.forEach(r => {
-        if (!zootByFarmMes.has(r.fazenda_id)) zootByFarmMes.set(r.fazenda_id, new Map());
-        const farmMap = zootByFarmMes.get(r.fazenda_id)!;
-        if (!farmMap.has(r.mes)) farmMap.set(r.mes, []);
-        farmMap.get(r.mes)!.push({ categoria_codigo: r.categoria_codigo, saldo_final: r.saldo_final, peso_medio_final: r.peso_medio_final });
-      });
-
-      // Store in state for computeLiveRowsForFarm
-      setPesosPastosPorFazenda({}); // Clear old state
-      // Store zoot data in a ref-like state
-      setZootData(zootByFarmMes);
+      /* ⚠ `zootData` NAO SE MONTA MAIS AQUI — A(ii): ele e' derivado de `zootCategorias`, que a
+         tela ja' carregou. Ver o comentario no parametro. */
+      setPesosPastosPorFazenda({});
     } catch (err) {
       console.error('Erro ao carregar dados globais de valor do rebanho:', err);
     } finally {

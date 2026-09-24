@@ -1184,3 +1184,18 @@ preview que o cabecalho nao sai da tela ao rolar.
   ⚠ SEM `count`, VOLTA AO SERIAL DE PROPOSITO. `count ?? rows.length` daria `total = 1000` e a
   funcao devolveria a PRIMEIRA PAGINA como se fosse tudo — truncagem silenciosa. O ramo de
   fallback existe para isso e nao deve ser "simplificado".
+- PERF-RLS-FECHAMENTO-PASTO-ITENS-01 — a politica de tenant de `fechamento_pasto_itens` e' uma
+  SUBCONSULTA CORRELACIONADA POR LINHA, e e' o que sobra entre 7 s e 1,5 s na troca de ano da
+  Evolucao Patrimonial (medido 24/09/2026):
+      tenant_ok((SELECT p.cliente_id FROM fechamento_pastos p
+                 WHERE p.id = fechamento_pasto_itens.fechamento_id))
+  A tabela tem 7.041 linhas e 2,5 MB — pequena. Mas cada linha paga uma subconsulta MAIS uma
+  chamada de `tenant_ok()`. Medido no navegador: 6.559 / 7.863 / 8.160 ms em tres trocas de ano
+  seguidas, sempre a request mais lenta da tela.
+  ⚠ E O JEITO DE MEDIR E' PARTE DO ACHADO. No FASE 0 eu declarei esta tabela "vitima" de outra
+  consulta lenta, porque `explain analyze` pelo MCP deu 0,374 ms. O canal MCP NAO PASSA PELA RLS;
+  o navegador passa. Medicao de performance feita por fora da politica nao descreve a tela — se o
+  numero do banco e o do navegador discordam em ordens de grandeza, suspeite da RLS antes de
+  suspeitar da rede.
+  ⚠ NAO E' DESTA FRENTE: e' do banco, e mexer em policy muda quem ve' o que. Frente propria, com
+  medicao de acesso antes e depois.

@@ -749,17 +749,21 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     reabrirFechamento,
   } = useValorRebanho(anoMes);
 
+  // FONTE OFICIAL: useRebanhoOficial (camada única obrigatória)
+  /* ⚠ SUBIU PARA CIMA DO `useValorRebanhoGlobal` — PERF-VALOR-REBANHO-01 A(ii): o hook do Global
+     passou a RECEBER estas linhas em vez de consultar `vw_zoot_categoria_mensal` por conta
+     própria. A ordem dos hooks não muda entre renders; só a posição no arquivo. */
+  const { rawCategorias: viewDataAnoAtual } = useRebanhoOficial({ ano: Number(anoFiltro), cenario: 'realizado' });
+  const { rawCategorias: viewDataAnoAnterior } = useRebanhoOficial({ ano: Number(anoFiltro) - 1, cenario: 'realizado' });
+
   // Global hook — sempre chamado para manter ordem dos hooks
   const globalData = useValorRebanhoGlobal(
     isGlobal ? fazendaIdsPecuaria : [],
     lancamentos, saldosIniciais, categorias, anoFiltro, mesFiltro,
+    viewDataAnoAtual,
   );
 
   const { itens: precosMercado } = usePrecoMercado(anoMes);
-
-  // FONTE OFICIAL: useRebanhoOficial (camada única obrigatória)
-  const { rawCategorias: viewDataAnoAtual } = useRebanhoOficial({ ano: Number(anoFiltro), cenario: 'realizado' });
-  const { rawCategorias: viewDataAnoAnterior } = useRebanhoOficial({ ano: Number(anoFiltro) - 1, cenario: 'realizado' });
 
   // Governança do snapshot
   const { getStatusByMonth: getSnapStatus } = useSnapshotStatus(Number(anoFiltro));
