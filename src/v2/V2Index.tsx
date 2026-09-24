@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { LancamentosTab } from '@/pages/LancamentosTab';
 import { CentralOperacoesComerciais } from '@/components/operacao-comercial/central/CentralOperacoesComerciais';
+import { paramsAberturaOC } from '@/lib/oc/paramsAberturaOC';
 import { useLancamentos } from '@/hooks/useLancamentos';
 import { useLancamento } from '@/hooks/useLancamento';
 import type { Lancamento } from '@/types/cattle';
@@ -531,38 +532,33 @@ export default function V2Index() {
      ⚠ UM APAGA O OUTRO, como em `abrirNovaCompraOC`/`abrirNovaVendaOC`: os dois booleanos
      nao podem coexistir, e a impossibilidade e' garantida por quem ABRE. */
 
-  const abrirOperacaoOC = useCallback((ocId: string, aba?: string, tipo: string = 'compra') => {
-    const p = new URLSearchParams(window.location.search);
-    /* ⚠ TRES TIPOS, TRES PARAMETROS MUTUAMENTE EXCLUSIVOS. Apagar os outros dois nao e'
-       higiene: `modoOCVenda`/`modoOCAbate` sao lidos do MESMO query string, e dois
-       parametros ligados ao mesmo tempo abririam dois shells no mesmo render. */
-    if (tipo === 'venda') { p.set('oc_venda', '1'); p.delete('oc_compra'); p.delete('oc_abate'); }
-    else if (tipo === 'abate') { p.set('oc_abate', '1'); p.delete('oc_compra'); p.delete('oc_venda'); }
-    else { p.set('oc_compra', '1'); p.delete('oc_venda'); p.delete('oc_abate'); }
-    p.set('oc_id', ocId);
-    // PR-OC-FIN-EDIT-FIX-02 — aba inicial opcional (ex.: 'financeiro' quando aberto pelo Financeiro V2).
-    if (aba) p.set('oc_aba', aba); else p.delete('oc_aba');
+  /* ⚠ `retorno` — A ORIGEM VEM DE QUEM CLICA, NAO DA URL (OC-ABRIR-PERDE-ID-01). Omitido,
+     vale a secao corrente (`sectionRef.current`), que e' onde o clique aconteceu. */
+  const abrirOperacaoOC = useCallback((ocId: string, aba?: string, tipo: string = 'compra', retorno?: string) => {
     /* ── oc_return E' A ORIGEM, NAO O DESTINO (PR-OC-FIX-RETORNO-02) ─────────────
-       Antes: `if (aba === 'financeiro') p.set('oc_return','financeiro-lanc')`. O valor
-       saia do DESTINO, entao QUALQUER abertura na aba financeira carimbava "voltar ao
-       Financeiro" — inclusive a volta do drill, que reabre a OC com aba='financeiro'.
-       Quem entrava pela Central perdia a Central no caminho de volta: fechar a OC
-       largava o usuario nos lancamentos financeiros, um nivel abaixo de onde comecou.
-       ⚠ GRAVA UMA VEZ E PRESERVA. `oc_return` ja existente NAO e' reescrito, porque na
-       volta do drill `sectionRef.current` e' 'financeiro-lanc' e derivar da origem
-       carimbaria o mesmo erro por outro caminho. O parametro SOBREVIVE a ida ao
-       Financeiro: `editarTitulo` (AbaCompromissosOC) apaga `oc_compra` e `oc_id` e nao
-       toca neste — e' isso que faz a preservacao bastar.
-       ⚠ A CENTRAL PASSA A REGISTRAR ORIGEM TAMBEM. Antes ela apagava `oc_return`, e
-       "sem valor" era indistinguivel de "nunca houve" — a volta do drill preenchia o
-       vazio com o destino. Registrando `operacoes-comerciais`, ha o que preservar.
-       `fecharOperacaoOC` nao conhece esse valor e cai no fallback, que e' a Central:
-       o destino certo, pelo caminho do default.
-       ⚠ Mesmo mecanismo de `abrirNovaCompraOC`, logo abaixo — nao ha convencao nova. */
-    if (!p.get('oc_return')) {
-      const origem = sectionRef.current;
-      if (origem) p.set('oc_return', origem);
-    }
+       O valor diz DE ONDE o usuario veio, para o fecho devolve-lo ao mesmo lugar. Derivar
+       do DESTINO carimbava "voltar ao Financeiro" em qualquer abertura na aba financeira.
+
+       ⚠ A PRESERVACAO CAIU — OC-ABRIR-PERDE-ID-01, 24/09/2026. Ate' aqui havia um
+       `if (!p.get('oc_return'))`: um valor ja existente na URL NAO era reescrito. Ele
+       transformava o parametro em CARONA — sobrevivia a aberturas seguintes e respondia
+       por um clique que nunca aconteceu.
+       ⚠ O ESTRAGO MEDIDO: com `oc_return=lancamentos-zoot` preso de uma abertura anterior
+       (e' o que `abrirNovaVendaOC` grava quando a venda nasce em "Lancar movimentacao"),
+       clicar numa OC na Central levava o usuario para "Lancar movimentacao", SEM MODAL e
+       SEM TOAST — porque `fecharOperacaoOC` le' esse valor e `'lancamentos-zoot'` E' uma
+       secao conhecida, enquanto `'operacoes-comerciais'` cai no fallback. A tela do clique
+       nunca abriu e nada explicou por que.
+       ⚠ E O MOTIVO ORIGINAL DA PRESERVACAO CONTINUA VALENDO — por isso ela virou EXPLICITA
+       em vez de sumir. Na volta do drill do Financeiro, `sectionRef.current` e'
+       'financeiro-lanc', e deixar a funcao adivinhar apagaria a Central de quem entrou por
+       ela. Quem precisa preservar agora PASSA o valor (ver o call site do drill): a
+       intencao fica escrita no chamador, que e' o unico que a conhece.
+       ⚠ A MONTAGEM MORA EM `paramsAberturaOC` (src/lib/oc/paramsAberturaOC.ts): era regra
+       de navegacao sem teste possivel dentro de um `useCallback`. */
+    const p = paramsAberturaOC(window.location.search, {
+      ocId, aba, tipo, retorno: retorno ?? sectionRef.current ?? undefined,
+    });
     setSearchParams(p, { replace: true });
     setSection('lancamentos-zoot');
   }, [setSearchParams]);
@@ -1121,7 +1117,9 @@ export default function V2Index() {
            ⚠ O TSC NAO PEGA ISSO: dois parametros `string` opcionais em sequencia sao
            estruturalmente compativeis. Por isso o prop na Central passou a ser tipado com o
            contrato real — o proximo desencontro e' erro de compilacao, nao toast. */
-        onAbrirOperacao={(ocId, tipo) => abrirOperacaoOC(ocId, undefined, tipo)}
+        /* A Central e' a origem, e ela o DIZ — OC-ABRIR-PERDE-ID-01. Antes dependia de
+           `sectionRef`, que so' acertava quando nenhum `oc_return` velho estava na URL. */
+        onAbrirOperacao={(ocId, tipo) => abrirOperacaoOC(ocId, undefined, tipo, 'operacoes-comerciais')}
       />
     );
     if (section === 'lancamentos-zoot') return (
@@ -1185,7 +1183,15 @@ export default function V2Index() {
         /* ⚠ O TIPO VAI JUNTO — OC-BOITEL-VALOR-01 · B3. Sem ele `abrirOperacaoOC` cai no
            default 'compra' e uma VENDA volta com `oc_compra=1`, que a hidratacao recusa. Era
            por isso que o link "Abrir" do modal so' aparecia em compra. */
-        onAbrirOperacaoOCFinanceiro={(ocId: string, tipo?: string | null) => abrirOperacaoOC(ocId, 'financeiro', tipo ?? 'compra')}
+        /* ⚠ O UNICO QUE PRESERVA, E AGORA POR ESCRITO — OC-ABRIR-PERDE-ID-01. Esta e' a
+           VOLTA do drill: o usuario ja estava dentro da OC, foi ao Financeiro e volta. A
+           origem verdadeira e' a de quem abriu a OC la' atras (a Central, tipicamente), e
+           nao 'financeiro-lanc', que e' so' onde ele esta' de passagem. `editarTitulo`
+           (AbaCompromissosOC) apaga `oc_compra` e `oc_id` e NAO toca em `oc_return` — e'
+           por isso que ainda ha o que preservar aqui. */
+        onAbrirOperacaoOCFinanceiro={(ocId: string, tipo?: string | null) => abrirOperacaoOC(
+          ocId, 'financeiro', tipo ?? 'compra',
+          new URLSearchParams(window.location.search).get('oc_return') ?? undefined)}
         onLancamentoAlvoConsumido={() => { setFlancIdAlvo(null); setFlancOcEdit(false); }}
         onCloseDialog={() => {
           if (drillReturn) {

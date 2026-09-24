@@ -614,6 +614,16 @@ no mesmo arquivo.
   e 1563 ali nao e' baseline, e' erro de coleta. O 1819 de HEAD e' ARITMETICA — 1825 medidos no
   checkout principal menos os 6 casos que este PR acrescenta, num diff que nao toca teste nenhum
   que ja existia. Quem for medir de verdade instala as dependencias na worktree.
+  De 1825 para 1835 no OC-ABRIR-PERDE-ID-01: entrou `src/lib/oc/paramsAberturaOC.test.ts`
+  (+10) — a URL que abre uma OC. Quatro casos sao do `oc_return` (o do chamador ganha do que
+  estava na URL; sem retorno o velho e' APAGADO; os filtros da tela atravessam; o drill do
+  Financeiro preserva porque PASSA o valor), quatro dos tres tipos mutuamente exclusivos e
+  dois do `oc_aba`.
+  ⚠ O CASO QUE JUSTIFICA O ARQUIVO E' O DO APAGAMENTO: "sem retorno, o velho e' apagado".
+  Um teste que so' afirmasse "o chamador ganha" passaria verde numa funcao que continuasse
+  herdando quando o chamador nao diz nada — e era exatamente esse o defeito.
+  ⚠ E O DOS TRES TIPOS AFIRMA A IMPOSSIBILIDADE, nao o caso feliz: varre os tres sentidos e
+  conta quantos ficaram ligados, porque dois ligados montariam dois shells no mesmo render.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -1389,3 +1399,30 @@ preview que o cabecalho nao sai da tela ao rolar.
   pode estar velho; a resposta do servidor, nunca. O `toastNegociacaoFechada` (helper unico dos
   tres caminhos — abate, venda e boitel) poe o botao "Reabrir" inline, porque mandar "reabra para
   editar" sem dizer onde e' meia instrucao.
+- ⚠ PARAMETRO DE NAVEGACAO NA URL SE ESCREVE SEMPRE, NUNCA SE PRESERVA (regra permanente,
+  OC-ABRIR-PERDE-ID-01, 24/09/2026). Quem abre uma tela GRAVA a origem do clique; herdar o
+  valor que ja estava na query faz um parametro responder por um clique que nao aconteceu.
+  A montagem mora em `src/lib/oc/paramsAberturaOC.ts`, com teste.
+  ⚠ O DEFEITO: `abrirOperacaoOC` (V2Index) tinha `if (!p.get('oc_return'))` — so' gravava
+  quando o parametro estava ausente. Um `oc_return=lancamentos-zoot`, que `abrirNovaVendaOC`
+  grava quando a venda nasce em "Lancar movimentacao", SOBREVIVIA na URL. Depois, clicar
+  numa OC na Central (medido na 8b211cae, NJ, venda boitel) levava o operador para "Lancar
+  movimentacao" com os filtros intactos e SEM `oc_venda`/`oc_id`.
+  ⚠ E O SINTOMA ERA MUDO, que e' o que o torna caro: sem modal, sem toast, sem erro de
+  console. A tela do clique simplesmente nao abria. `fecharOperacaoOC` obedecia ao valor
+  velho porque `'lancamentos-zoot'` E' secao conhecida enquanto `'operacoes-comerciais'`
+  NAO esta' no `SECTION_TO_GROUP` (V2Index:348-351) e cai no fallback — que por acaso
+  tambem e' a Central. A assimetria escondia metade dos casos.
+  ⚠ A PRESERVACAO TINHA UM MOTIVO REAL, e ele nao morreu: na volta do drill do Financeiro
+  `sectionRef.current` e' 'financeiro-lanc', e deixar a funcao adivinhar apagaria a Central
+  de quem entrou por ela (era o PR-OC-FIX-RETORNO-02). A saida foi trocar IMPLICITO por
+  EXPLICITO: a assinatura ganhou `retorno`, o drill PASSA o valor que quer preservar, e
+  todo o resto declara a propria origem. Intencao escrita no chamador, que e' quem a conhece.
+  ⚠ DIAGNOSTICO: o que separou este caminho do OUTRO que produz sintoma IDENTICO foi UMA
+  pergunta — apareceu toast? `limparParamsOC` (LancamentosTab:418) apaga os mesmos seis
+  parametros, tambem preserva os filtros e tambem deixa o usuario em "Lancar movimentacao",
+  mas SEMPRE com `toast.error` antes (recusa de hidratacao). Silencio = `fecharOperacaoOC`
+  com `oc_return` contaminado. Dois caminhos, uma pergunta binaria.
+  ⚠ E NAO HA FECHAMENTO SILENCIOSO NA ABERTURA — conferido: `fecharModalOC`
+  (LancamentosTab:2673) e' o unico invocador de `onFecharOperacaoOC`, e so' por Esc, X ou o
+  botao Fechar; os seis `limparParamsOC` tem `toast.error` imediatamente antes.
