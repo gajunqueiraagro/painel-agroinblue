@@ -57,15 +57,38 @@ const coluna = (v: Record<string, number>): ColunaPec => ({
 });
 
 describe('montarBarras — a lei do gráfico da cascata', () => {
-  it('desenha as quinze linhas do Resumido, na ordem', () => {
+  it('desenha as catorze linhas do Resumido, terminando no investimento', () => {
     const g = montarBarras(coluna(SR2021))!;
-    expect(g.barras).toHaveLength(15);
+    /* ⚠ CATORZE DESDE O DRE-DESTAQUE-01: o lucro líquido saiu da cascata. */
+    expect(g.barras).toHaveLength(14);
     expect(g.barras[0].chave).toBe('receita_bruta');
-    expect(g.barras[14].chave).toBe('lucro_liquido');
+    expect(g.barras.some(b => b.chave === 'lucro_liquido')).toBe(false);
+    /* A última é o investimento, e ele é INFORMATIVO: desenha, não soma. */
+    expect(g.barras[13].chave).toBe('investimento');
+    expect(g.barras[13].informativa).toBe(true);
+    expect(g.barras[13].subtotal).toBe(false);
+    expect(g.barras[13].cor).toBe('#8A8880');
     /* ⚠ E OS DOIS QUE FECHAM BLOCO SAEM EM 500 — o resto, não. Sem isto o olho perde onde a
-       cascata dobra de assunto. */
+       cascata dobra de assunto. O segundo passou a ser o resultado com mercado. */
     expect(g.barras.filter(b => b.forte).map(b => b.chave))
-      .toEqual(['resultado_operacional', 'lucro_liquido']);
+      .toEqual(['resultado_operacional', 'resultado_com_mercado']);
+  });
+
+  /**
+   * ⚠ O INVESTIMENTO NÃO PODE MOVER O ACUMULADO, e este caso existe para provar o ESTRAGO de
+   * voltar atrás: com ele somando, a cascata do SR 2021 fecharia em 3.158.734,97 (o antigo lucro
+   * líquido) em vez de 4.795.167,27. São 1,6 milhão de diferença numa barra que o olho lê como
+   * o fim da conta.
+   */
+  it('o investimento desenha a partir do acumulado mas NÃO entra nele', () => {
+    const g = montarBarras(coluna(SR2021))!;
+    const inv = g.barras.find(b => b.chave === 'investimento')!;
+    const rcm = g.barras.find(b => b.chave === 'resultado_com_mercado')!;
+    /* Flutua a partir de onde o resultado com mercado parou — mostra quanto pesaria. */
+    expect(Math.max(inv.de, inv.ate)).toBeCloseTo(rcm.valor, 2);
+    expect(inv.ate - inv.de).toBeCloseTo(SR2021.investimento, 2);
+    /* E o número do rodapé é o do resultado com mercado, não o do investimento. */
+    expect(g.lucro).toBeCloseTo(SR2021.resultado_com_mercado, 2);
   });
 
   it('RAZÃO: a altura de cada barra é o módulo do valor dela', () => {
@@ -87,6 +110,11 @@ describe('montarBarras — a lei do gráfico da cascata', () => {
         expect(Math.max(0, b.valor)).toBeCloseTo(b.ate, 2);
         expect(acc).toBeCloseTo(b.valor, 2);
         acc = b.valor;
+      } else if (b.informativa) {
+        /* ⚠ INFORMATIVA FLUTUA E NÃO ANDA: desenha a partir do acumulado e o deixa como estava. */
+        const antes = acc, depois = acc + b.valor;
+        expect(b.de).toBeCloseTo(Math.min(antes, depois), 2);
+        expect(b.ate).toBeCloseTo(Math.max(antes, depois), 2);
       } else {
         /* O passo vai do acumulado ANTES ao acumulado DEPOIS — `de` é o menor dos dois e `ate`, o
            maior. É isso que faz uma barra que desce nascer no topo da anterior. */
@@ -96,7 +124,8 @@ describe('montarBarras — a lei do gráfico da cascata', () => {
         acc = depois;
       }
     }
-    expect(acc).toBeCloseTo(SR2021.lucro_liquido, 2);
+    /* ⚠ A CASCATA FECHA NO RESULTADO COM MERCADO — o investimento não a move. */
+    expect(acc).toBeCloseTo(SR2021.resultado_com_mercado, 2);
   });
 
   it('o sinal vem da LINHA do DRE, não do número', () => {
@@ -113,13 +142,18 @@ describe('montarBarras — a lei do gráfico da cascata', () => {
 
   it('ano de prejuízo: a escala desce abaixo do zero e o lucro fecha negativo', () => {
     const g = montarBarras(coluna(SR2025))!;
-    expect(g.lucro).toBeCloseTo(-3496515.22, 2);
+    /* ⚠ O RODAPÉ PASSOU A SER O RESULTADO COM MERCADO (977.525,43), não o lucro líquido. */
+    expect(g.lucro).toBeCloseTo(SR2025.resultado_com_mercado, 2);
     /* ⚠ É ISTO QUE LIGA O EIXO NEGATIVO: sem `chao < 0` a linha do zero não é desenhada. */
     expect(g.chao).toBeLessThan(0);
     expect(g.topo).toBeGreaterThan(0);
-    const lucro = g.barras[14];
-    expect(lucro.de).toBeCloseTo(-3496515.22, 2);
-    expect(lucro.ate).toBeCloseTo(0, 2);
+    /* ⚠ E QUEM DESCE ABAIXO DO ZERO AGORA É O INVESTIMENTO, não o lucro: ele flutua a partir do
+       resultado com mercado (977.525,43) e desce 4.474.040,65, chegando a -3.496.515,22 — o
+       mesmo fundo de antes, por outra barra. O eixo negativo não se perdeu com a linha. */
+    const inv = g.barras.find(b => b.chave === 'investimento')!;
+    expect(inv.informativa).toBe(true);
+    expect(inv.de).toBeCloseTo(-3496515.22, 2);
+    expect(inv.ate).toBeCloseTo(SR2025.resultado_com_mercado, 2);
 
     /* ⚠ E A PROVA DE QUE A BUSCA SABE ACHAR: no ano BOM o chão é zero, então afirmar "chao < 0"
        sozinho passaria verde também numa escala quebrada que sempre descesse. */

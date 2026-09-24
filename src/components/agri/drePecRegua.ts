@@ -128,8 +128,11 @@ export const COM_PERCENTUAL: ReadonlySet<ChaveLinhaPec> = new Set<ChaveLinhaPec>
  * Pôr o mesmo denominador embaixo de Vendas ou de Nutrição encheria a grade de números que
  * ninguém compara.
  */
+/* ⚠ UMA SO' DESDE O DRE-DESTAQUE-01: o lucro liquido saiu da grade, e com ele o "Lucro por
+   hectare" que pendurava. O denominador da terra segue embaixo da linha que fecha a conta do
+   periodo — agora o resultado com mercado. */
 export const COM_POR_HECTARE: ReadonlySet<ChaveLinhaPec> = new Set<ChaveLinhaPec>([
-  'resultado_com_mercado', 'lucro_liquido',
+  'resultado_com_mercado',
 ]);
 export const ROTULO_POR_HECTARE = 'Lucro por hectare';
 
@@ -211,12 +214,14 @@ export const LINHAS_PEC: DefPec[] = [
   { chave: 'juros', rotulo: '(−) Despesas financeiras', tom: 'custo' },
   { chave: 'resultado_periodo', rotulo: '= Resultado do período', faixa: 't3', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
   { chave: 'efeito_mercado', rotulo: 'Efeito de mercado', tom: 'neutro', corPorSinal: true, etiqueta: 'estimado', didatico: 'efeito' },
-  { chave: 'resultado_com_mercado', rotulo: '= Resultado com mercado', faixa: 't3', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
+  /* ⚠ A CASCATA FECHA AQUI — DRE-DESTAQUE-01, e o `t4` (a faixa navy com ▲/▼) mudou de linha:
+     era do lucro líquido, é do resultado com mercado. Investimento tem payback longo e
+     depreciação; o que sobra depois dele não é o resultado DO PERÍODO, e encerrar a grade ali
+     fazia o olho ler um ano inteiro pela lente de uma compra que dura dez. */
+  { chave: 'resultado_com_mercado', rotulo: '= Resultado com mercado', faixa: 't4', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
+  /* ⚠ O INVESTIMENTO FICA, E FICA POR ÚLTIMO: ele não sai da tela, sai da CONTA. Continua com o
+     drill, continua sendo custo — só deixou de ter um subtotal depois de si. */
   { chave: 'investimento', rotulo: '(−) Investimento no período', tom: 'custo', expande: true },
-  /* ⚠ A CASCATA FECHA AQUI — DRE-CASCATA-03a. O investimento deixou de ser nota de rodapé "abaixo
-     da linha de caixa" e entrou na conta: o que sobra depois dele é o lucro líquido, e é ele que
-     as duas atividades passam a mostrar com o mesmo nome. */
-  { chave: 'lucro_liquido', rotulo: '= Lucro líquido', faixa: 't4', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
 ];
 
 /**
@@ -254,9 +259,8 @@ export const LINHAS_PEC_RESUMIDO: DefPec[] = [
   { chave: 'juros', rotulo: '(−) Despesas financeiras', tom: 'custo' },
   { chave: 'resultado_periodo', rotulo: '= Resultado do período', faixa: 't3', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
   { chave: 'efeito_mercado', rotulo: 'Efeito de mercado', tom: 'neutro', corPorSinal: true, etiqueta: 'estimado', didatico: 'efeito' },
-  { chave: 'resultado_com_mercado', rotulo: '= Resultado com mercado', faixa: 't3', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
+  { chave: 'resultado_com_mercado', rotulo: '= Resultado com mercado', faixa: 't4', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
   { chave: 'investimento', rotulo: '(−) Investimento no período', tom: 'custo', expande: true },
-  { chave: 'lucro_liquido', rotulo: '= Lucro líquido', faixa: 't4', tom: 'neutro', destaque: 'subtotal', corPorSinal: true },
 ];
 
 export type ModoDre = 'resumido' | 'detalhado';

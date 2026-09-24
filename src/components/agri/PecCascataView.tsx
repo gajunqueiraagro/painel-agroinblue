@@ -30,6 +30,9 @@ const AZUL_CLARO = '#E9EFF6';
 const SUBTOTAL = '#2C3E5C';
 const SOMA = '#639922';
 const SUBTRAI = '#E24B4A';
+/* ⚠ O CINZA DO INVESTIMENTO — DRE-DESTAQUE-01. Ele nao e' soma nem subtracao da cascata: e'
+   informacao ao lado dela. Cor neutra para o olho nao o somar. */
+const INFORMATIVA = '#8A8880';
 
 const VERDE = 'text-emerald-700';
 const VERMELHO = 'text-destructive';
@@ -66,6 +69,8 @@ export interface Barra {
   /** Os dois que fecham blocos inteiros — em 500. */
   forte: boolean;
   de: number; ate: number; cor: string;
+  /** Fora da conta: desenha, mas nao move o acumulado e nao tem subtotal depois. */
+  informativa?: boolean;
 }
 
 /**
@@ -316,14 +321,14 @@ export function PecCascataView({ colunas, clienteId, alturaCartao, cartaoRef }: 
 
       <div className="flex shrink-0 items-baseline justify-between gap-3 text-[10px] text-muted-foreground">
         <span className="flex items-center gap-3">
-          {([['Subtotal', SUBTOTAL], ['Soma', SOMA], ['Subtrai', SUBTRAI]] as const).map(([r, c]) => (
+          {([['Subtotal', SUBTOTAL], ['Soma', SOMA], ['Subtrai', SUBTRAI], ['Investimento', INFORMATIVA]] as const).map(([r, c]) => (
             <span key={r} className="flex items-center gap-1">
               <span className="inline-block h-2 w-2 rounded-[1px]" style={{ backgroundColor: c }} />{r}
             </span>
           ))}
         </span>
         <span className={cn('truncate font-medium tabular-nums', corSinal(grafico?.lucro ?? null))}>
-          Lucro líquido R$ {grafico ? formatNum(grafico.lucro, 2) : traco}
+          Resultado com mercado R$ {grafico ? formatNum(grafico.lucro, 2) : traco}
         </span>
       </div>
     </div>
@@ -359,7 +364,19 @@ export function montarBarras(col: ColunaPec | null) {
     const subtotal = def.destaque === 'subtotal' || def.destaque === 'sub';
     const subtrai = def.rotulo.trimStart().startsWith('(−)');
     const delta = subtotal ? 0 : subtrai ? -v : v;
-    const forte = def.chave === 'resultado_operacional' || def.chave === 'lucro_liquido';
+    const forte = def.chave === 'resultado_operacional' || def.chave === 'resultado_com_mercado';
+    /**
+     * ⚠ O INVESTIMENTO DESENHA MAS NAO ANDA — DRE-DESTAQUE-01. Ele flutua a partir do acumulado,
+     * para mostrar QUANTO pesaria, e nao altera `acc`: a cascata fecha no resultado com mercado.
+     * Payback longo e depreciacao nao cabem num periodo; somar aqui fazia um ano inteiro ser lido
+     * pela lente de uma compra que dura dez.
+     */
+    if (def.chave === 'investimento') {
+      const de = acc, ate = acc + delta;
+      barras.push({ chave: def.chave, rotulo: def.rotulo, valor: delta, subtotal: false, forte: false,
+        de: Math.min(de, ate), ate: Math.max(de, ate), cor: INFORMATIVA, informativa: true });
+      continue;
+    }
     if (subtotal) {
       acc = v;
       barras.push({ chave: def.chave, rotulo: def.rotulo, valor: v, subtotal: true, forte,
@@ -373,5 +390,8 @@ export function montarBarras(col: ColunaPec | null) {
   if (barras.length === 0) return null;
   const topo = Math.max(...barras.map(b => b.ate), 0);
   const chao = Math.min(...barras.map(b => b.de), 0);
-  return { barras, topo, chao, lucro: barras[barras.length - 1]?.valor ?? 0 };
+  /* ⚠ O NUMERO DO RODAPE E' O ULTIMO SUBTOTAL, nao a ultima barra: a ultima virou o investimento,
+     que e' informativa. Sem isto o rodape passaria a anunciar o investimento como resultado. */
+  const ultimoSubtotal = [...barras].reverse().find(b => b.subtotal);
+  return { barras, topo, chao, lucro: ultimoSubtotal?.valor ?? 0 };
 }

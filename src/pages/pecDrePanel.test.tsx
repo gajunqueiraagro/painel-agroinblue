@@ -240,7 +240,9 @@ describe('o rateio administrativo da pecuária', () => {
     expect(linhaDe('(−) Rateio administrativo')?.cells[1]?.textContent).toBe('120.000,00');
     expect(linhaDe('= Resultado operacional')?.cells[1]?.textContent).toBe('680.000,00');
     expect(linhaDe('= Resultado do período')?.cells[1]?.textContent).toBe('680.000,00');
-    expect(linhaDe('= Resultado com mercado')?.cells[1]?.textContent).toBe('700.000,00');
+    /* ⚠ COM O MARCADOR ▲ DESDE O DRE-DESTAQUE-01: a faixa `t4` mudou de linha, e ela traz o
+       ▲/▼ por sinal. O número é o mesmo; o que mudou foi quem carrega o destaque. */
+    expect(linhaDe('= Resultado com mercado')?.cells[1]?.textContent).toBe('▲700.000,00');
     /* O que este caso proíbe: o resultado somado de volta ao rateio (800.000) em qualquer célula. */
     expect(document.body.textContent).not.toContain('800.000,00');
   });
@@ -253,15 +255,25 @@ describe('a cascata do DRE da pecuária', () => {
    * NÃO EXISTE MAIS — o investimento entrou na conta, e o que vem depois dele é o lucro líquido.
    * Falha certa, pela razão certa; atualizado, nunca afrouxado.
    */
-  it('a cascata sai na ordem do DRE e fecha no lucro líquido, sem faixa no meio', () => {
+  it('a cascata sai na ordem do DRE e fecha no investimento, sem lucro líquido', () => {
     montar();
     const r = rotulos();
     expect(r[0]).toBe('Vendas');
     expect(indiceDe('= Receita líquida')).toBeLessThan(indiceDe('= VBP'));
     expect(indiceDe('= VBP')).toBeLessThan(indiceDe('= Margem de contribuição'));
     expect(indiceDe('= Resultado do período')).toBeLessThan(indiceDe('Efeito de mercado'));
-    /* O investimento é linha da cascata, e o lucro líquido vem depois dele. */
-    expect(indiceDe('(−) Investimento no período')).toBeLessThan(indiceDe('= Lucro líquido'));
+    /**
+     * ⚠ O LUCRO LÍQUIDO SAIU DA GRADE — DRE-DESTAQUE-01, e o investimento passou a ser a ÚLTIMA
+     * linha. Investimento tem payback longo e depreciação: o que sobra depois dele não é o
+     * resultado do período, e encerrar a grade ali fazia um ano ser lido pela lente de uma compra
+     * que dura dez.
+     * ⚠ AFIRMAR SÓ A AUSÊNCIA NÃO BASTA: sem o `indiceDe('= Resultado com mercado')` abaixo, este
+     * caso passaria verde também se a grade inteira tivesse sumido.
+     */
+    expect(r.some(x => x === '= Lucro líquido')).toBe(false);
+    expect(r.some(x => x === 'Lucro por hectare')).toBe(false);
+    expect(indiceDe('= Resultado com mercado')).toBeLessThan(indiceDe('(−) Investimento no período'));
+    expect(indiceDe('(−) Investimento no período')).toBe(r.length - 1);
     expect(r.some(x => x === 'Abaixo da linha de caixa')).toBe(false);
     /* ⚠ E O VBP DIZ O QUE É: a sigla vem com o nome por extenso ao lado, não decorada. */
     expect(r.find(x => x.startsWith('= VBP'))).toContain('valor bruto de produção');
@@ -891,9 +903,9 @@ describe('a cor e a faixa de um total', () => {
 
   /* ⚠ O NÚMERO DO AZUL CHEIO É BRANCO NOS DOIS SINAIS: quem diz "deu" ou "não deu" ali é o ▲/▼.
      Um `text-red-300` sobre o navy tem contraste baixo justamente no número mais importante. */
-  it('t4 (Lucro líquido): número branco e marcador ▼ quando negativo', () => {
-    montar({ lucro_liquido: -1959802.35 });
-    const tr = linhaDe('= Lucro líquido')!;
+  it('t4 (Resultado com mercado): número branco e marcador ▼ quando negativo', () => {
+    montar({ resultado_com_mercado: -1959802.35 });
+    const tr = linhaDe('= Resultado com mercado')!;
     expect(tr.cells[1].className).toContain('text-primary-foreground');
     expect(tr.cells[1].textContent).toContain('▼');
     /* O R$/ha segue o mesmo sinal — é o mesmo número noutra unidade. */
@@ -902,11 +914,11 @@ describe('a cor e a faixa de um total', () => {
   });
 
   it('t4: o marcador vira ▲ no positivo e some no zero', () => {
-    montar({ lucro_liquido: 1200000 });
-    expect(linhaDe('= Lucro líquido')!.cells[1].textContent).toContain('▲');
+    montar({ resultado_com_mercado: 1200000 });
+    expect(linhaDe('= Resultado com mercado')!.cells[1].textContent).toContain('▲');
     cleanup();
-    montar({ lucro_liquido: 0 });
-    const zero = linhaDe('= Lucro líquido')!.cells[1].textContent ?? '';
+    montar({ resultado_com_mercado: 0 });
+    const zero = linhaDe('= Resultado com mercado')!.cells[1].textContent ?? '';
     expect(zero).not.toContain('▲');
     expect(zero).not.toContain('▼');
   });
@@ -914,10 +926,12 @@ describe('a cor e a faixa de um total', () => {
   /* ⚠ AZUL ESCURO, NÃO VERDE (item 12): o verde é a cor da natureza "receita" nas linhas comuns, e
      usá-lo também para "deu lucro" faria a mesma cor responder a duas perguntas na mesma coluna. */
   it('nas outras faixas o total é azul escuro no positivo e vermelho no negativo', () => {
-    montar({ resultado_periodo: 2994408.81, resultado_com_mercado: -1400000 });
+    /* ⚠ A LINHA DE EXEMPLO DO NEGATIVO MUDOU: `resultado_com_mercado` virou t4 (azul cheio, número
+       branco), então quem prova o vermelho agora é o `resultado_operacional`, que segue em t3. */
+    montar({ resultado_periodo: 2994408.81, resultado_operacional: -1400000 });
     expect(linhaDe('= Resultado do período')!.cells[1].className).toContain('text-primary');
     expect(linhaDe('= Resultado do período')!.cells[1].className).not.toContain('text-green');
-    expect(linhaDe('= Resultado com mercado')!.cells[1].className).toContain('text-red');
+    expect(linhaDe('= Resultado operacional')!.cells[1].className).toContain('text-red');
   });
 
   /**
@@ -927,8 +941,8 @@ describe('a cor e a faixa de um total', () => {
    * célula do Total NÃO tem fundo inline numa linha de faixa, que é a única forma de a classe valer.
    */
   it('numa linha de faixa nenhuma célula tem fundo próprio — nem a coluna Total', () => {
-    montar({ lucro_liquido: -1959802.35 });
-    const tr = linhaDe('= Lucro líquido')!;
+    montar({ resultado_com_mercado: -1959802.35 });
+    const tr = linhaDe('= Resultado com mercado')!;
     for (const td of Array.from(tr.cells)) {
       expect(td.style.backgroundColor).toBe('');
       expect(td.className).toContain('bg-primary');
@@ -939,18 +953,17 @@ describe('a cor e a faixa de um total', () => {
      hectare" era uma tira branca logo abaixo do azul e se lia como uma linha NOVA da cascata. */
   it('"Lucro por hectare" mora na faixa do total a que pertence', () => {
     const real: DrePecuaria = { ...DRE, fazendas: [],
-      total: linhas({ resultado_com_mercado: -1400000, lucro_liquido: -1959802.35,
+      total: linhas({ resultado_com_mercado: -1959802.35,
         producao: { ...linhas({}).producao, ha_medio: 4803 } }) };
     render(<PecDrePanel colunas={colunas('comparacao', { real })}
       alturaCartao={null} cartaoRef={{ current: null }} unidades={['rs']} />);
-    /* ⚠ SÃO DUAS, e é justamente por isso que o caso as separa: a mesma linha de apoio aparece sob
-       "= Resultado com mercado" (t3) e sob "= Lucro líquido" (t4), e cada uma tem de herdar a faixa
-       do SEU total. Pegar a primeira e chamá-la de "a linha" esconderia metade da regra. */
+    /* ⚠ AGORA É UMA SÓ — DRE-DESTAQUE-01. Eram duas (sob t3 e sob t4) porque o lucro líquido
+       também a tinha; com ele fora da grade, a linha de apoio sobrou só sob o resultado com
+       mercado, que herdou o t4. O caso continua afirmando o que importa: ela herda a faixa do SEU
+       total, com o fundo da faixa e sem fundo inline. */
     const apoios = linhasDaTabela().filter(tr => (tr.cells[0]?.textContent ?? '').trim().startsWith('Lucro por hectare'));
-    expect(apoios).toHaveLength(2);
-    const [t3, t4] = apoios;
-    expect(t3.className).toContain('bg-[#b6cade]');
-    expect(t3.cells[1].className).toContain('text-red');
+    expect(apoios).toHaveLength(1);
+    const [t4] = apoios;
     expect(t4.className).toContain('bg-primary');
     expect(t4.cells[1].textContent).toContain('▼');
     expect(t4.cells[1].style.backgroundColor).toBe('');
