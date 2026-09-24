@@ -1,7 +1,8 @@
 import { useValorRebanhoInicio, type RebanhoInicio } from '@/hooks/useValorRebanhoInicio';
 import { ehJovem } from '@/components/agri/PecPatrimonioModal';
+import { areasDaBase } from '@/lib/zootecnico/areasDaBase';
 import { useCliente } from '@/contexts/ClienteContext';
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useId } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
@@ -24,7 +25,7 @@ import { useRebanhoOficial, type ZootCategoriaMensal } from '@/hooks/useRebanhoO
 import { supabase } from '@/integrations/supabase/client';
 import { useSnapshotStatus } from '@/hooks/useSnapshotStatus';
 import { SnapshotStatusBanner } from '@/components/SnapshotStatusBanner';
-import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
+import { ComposedChart, Line, Area, ReferenceLine, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { MesAnteriorAvisoIcon } from '@/components/MesAnteriorAvisoIcon';
 import { FluxoFechamentoFooter } from '@/components/FluxoFechamentoFooter';
 import { useMasterLock } from '@/hooks/useMasterLock';
@@ -622,6 +623,40 @@ function GraficoComposicao({ dados, title }: {
  */
 const COR_SEM_MERCADO = '#D97706';
 
+/**
+ * A BASE É O INÍCIO, e a área contra ela é a resposta — VALOR-REBANHO-GRAFICOS-BASE-01.
+ *
+ * ⚠ A LINHA SOZINHA MOSTRAVA A FORMA E ESCONDIA O SINAL: para saber se o rebanho está acima ou
+ * abaixo de onde começou, o olho tinha de achar o primeiro ponto e segui-lo até o fim. Com a
+ * horizontal do Início e a área pintada, isso é uma olhada.
+ */
+const COR_BASE = '#8A8880';
+const COR_ACIMA = '#2A7FE0';
+const COR_ABAIXO = '#E24B4A';
+const OPACIDADE_AREA = 0.14;
+/** A mesma opacidade em hex, para o miolo do quadradinho da legenda (0,14 x 255 = 36 = 0x24). */
+const ALFA_HEX = Math.round(OPACIDADE_AREA * 255).toString(16).padStart(2, '0');
+
+/**
+ * O corte de cor sai de um gradiente VERTICAL com dois stops no mesmo offset — e não de dois
+ * polígonos calculados à mão.
+ *
+ * ⚠ É O QUE FAZ A ÁREA GRUDAR NA LINHA. A borda da área é a MESMA curva `monotone` da série, e o
+ * x em que a cor troca é o x em que essa curva corta a base — exato por construção, sem segundo
+ * desenho que possa divergir do primeiro. Calcular os polígonos daria bordas RETAS sob uma linha
+ * curva, e a lasca entre as duas apareceria na tela.
+ */
+function GradienteDaBase({ id, fracao }: { id: string; fracao: number }) {
+  return (
+    <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+      <stop offset={0} stopColor={COR_ACIMA} stopOpacity={OPACIDADE_AREA} />
+      <stop offset={fracao} stopColor={COR_ACIMA} stopOpacity={OPACIDADE_AREA} />
+      <stop offset={fracao} stopColor={COR_ABAIXO} stopOpacity={OPACIDADE_AREA} />
+      <stop offset={1} stopColor={COR_ABAIXO} stopOpacity={OPACIDADE_AREA} />
+    </linearGradient>
+  );
+}
+
 function MiniChart({ data, color, title, unit, serie2, rotulo1, rotulo2 }: {
   data: { label: string; fullLabel?: string; value: number | null; value2?: number | null }[];
   color: string; title: string; unit?: 'currency' | 'arroba';
@@ -631,6 +666,14 @@ function MiniChart({ data, color, title, unit, serie2, rotulo1, rotulo2 }: {
   // Strip leading null points so the chart renders from the first real value (e.g. Jan)
   const firstRealIdx = data.findIndex(d => d.value !== null);
   const visibleData = firstRealIdx > 0 ? data.slice(firstRealIdx) : data;
+
+  const uid = useId().replace(/[^a-zA-Z0-9]/g, '');
+  /* ⚠ A BASE É O PONTO "I", NÃO O PRIMEIRO PONTO VISÍVEL. Sem Início não há base: nem a
+     horizontal, nem as áreas. Ver `areasDaBase` — ausência não vira zero. */
+  const base = data[0]?.label === 'I' && data[0].value != null && Number.isFinite(data[0].value)
+    ? data[0].value : null;
+  const r1 = base == null ? null : areasDaBase(visibleData.map(d => d.value), base);
+  const r2 = base == null || !serie2 ? null : areasDaBase(visibleData.map(d => d.value2), base);
 
   return (
     /* ⚠ 140px E LINHA INTEIRA — COMPACTO-03. Eram 60px espremidos ao lado dos indicadores, e uma
@@ -642,7 +685,11 @@ function MiniChart({ data, color, title, unit, serie2, rotulo1, rotulo2 }: {
       <p className="mb-0.5 truncate text-center font-medium" style={{ fontSize: 10, color: '#0C447C' }}>{title}</p>
       <div className="h-[140px] w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={visibleData} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
+          <ComposedChart data={visibleData} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
+            <defs>
+              {r1?.fracaoDaBase != null && <GradienteDaBase id={`base1-${uid}`} fracao={r1.fracaoDaBase} />}
+              {r2?.fracaoDaBase != null && <GradienteDaBase id={`base2-${uid}`} fracao={r2.fracaoDaBase} />}
+            </defs>
             <XAxis dataKey="label" tick={{ fontSize: 7 }} interval={0} tickLine={false} axisLine={false} />
             <YAxis width={34} tick={{ fontSize: 8 }} tickLine={false} axisLine={false} tickCount={3}
               domain={['auto', 'auto']}
@@ -659,6 +706,21 @@ function MiniChart({ data, color, title, unit, serie2, rotulo1, rotulo2 }: {
                 return [formatNum(v, 1), ''];
               }}
             />
+            {/* ⚠ AS ÁREAS VÊM ANTES DAS LINHAS: o recharts desenha na ordem dos filhos, e elas
+                passam POR BAIXO. Cada série tem a sua; onde se sobrepõem, sobrepõem. */}
+            {r1?.fracaoDaBase != null && base != null && (
+              <Area type="monotone" dataKey="value" baseValue={base} stroke="none"
+                fill={`url(#base1-${uid})`} connectNulls={false} isAnimationActive={false}
+                activeDot={false} tooltipType="none" legendType="none" />
+            )}
+            {r2?.fracaoDaBase != null && base != null && (
+              <Area type="monotone" dataKey="value2" baseValue={base} stroke="none"
+                fill={`url(#base2-${uid})`} connectNulls={false} isAnimationActive={false}
+                activeDot={false} tooltipType="none" legendType="none" />
+            )}
+            {base != null && (
+              <ReferenceLine y={base} stroke={COR_BASE} strokeWidth={0.8} strokeDasharray="2 3" />
+            )}
             <Line type="monotone" dataKey="value" stroke={color} strokeWidth={1.5} dot={{ r: 2, fill: color, strokeWidth: 0 }} activeDot={{ r: 3.5 }} connectNulls={false} />
             {/* ⚠ A TRACEJADA É O MESMO REBANHO AO PREÇO DO INÍCIO: a distância até a cheia é o
                 efeito de mercado acumulado, e ela sozinha é a produção. */}
@@ -667,17 +729,45 @@ function MiniChart({ data, color, title, unit, serie2, rotulo1, rotulo2 }: {
                 strokeDasharray="3 2" dot={{ r: 2, fill: COR_SEM_MERCADO, strokeWidth: 0 }}
                 activeDot={{ r: 3.5 }} connectNulls={false} />
             )}
-          </LineChart>
+          </ComposedChart>
         </ResponsiveContainer>
       </div>
-      {serie2 && (
-        <div className="flex items-center justify-center gap-3" style={{ fontSize: 8 }}>
-          <span className="flex items-center gap-1">
-            <span className="inline-block" style={{ width: 10, height: 2, backgroundColor: color }} />{rotulo1}
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="inline-block" style={{ width: 10, height: 0, borderTop: `2px dashed ${COR_SEM_MERCADO}` }} />{rotulo2}
-          </span>
+      {(serie2 || base != null) && (
+        <div className="flex flex-wrap items-center justify-center gap-x-2" style={{ fontSize: 8 }}>
+          {serie2 && (
+            <>
+              <span className="flex items-center gap-1">
+                <span className="inline-block" style={{ width: 10, height: 2, backgroundColor: color }} />{rotulo1}
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block" style={{ width: 10, height: 0, borderTop: `2px dashed ${COR_SEM_MERCADO}` }} />{rotulo2}
+              </span>
+            </>
+          )}
+          {base != null && (
+            /* ⚠ SÓ O SÍMBOLO, E O NOME NO `title`. Medido: com os rótulos escritos, os cinco itens
+               somavam 294,5px numa caixa de 220 — não cabiam em uma linha nem com espaçamento
+               zero, e a faixa dos gráficos crescia 12px. O símbolo aqui NÃO é abreviação de um
+               texto: a linha tracejada cinza e os dois quadradinhos são exatamente o que está
+               desenhado logo acima, e quem precisar do nome tem o `title`. */
+            /* Os três andam juntos e mais apertados que os itens de texto: são UM assunto. */
+            <div className="flex items-center" style={{ columnGap: 3 }}>
+              <span className="flex items-center gap-1" title="base: início">
+                <span className="inline-block" style={{ width: 10, height: 0, borderTop: `1px dashed ${COR_BASE}` }} />
+              </span>
+              {/* ⚠ O QUADRADINHO LEVA A BORDA SÓLIDA E O MIOLO A 14 %: no preenchimento da área
+                  essa opacidade é legível porque ela cobre altura; num quadrado de 8px ela
+                  sumiria, e uma legenda sólida mentiria sobre a cor que está no gráfico. */}
+              <span className="flex items-center gap-1" title="acima do início">
+                <span className="inline-block h-2 w-2 rounded-[1px]"
+                  style={{ backgroundColor: `${COR_ACIMA}${ALFA_HEX}`, outline: `1px solid ${COR_ACIMA}` }} />
+              </span>
+              <span className="flex items-center gap-1" title="abaixo do início">
+                <span className="inline-block h-2 w-2 rounded-[1px]"
+                  style={{ backgroundColor: `${COR_ABAIXO}${ALFA_HEX}`, outline: `1px solid ${COR_ABAIXO}` }} />
+              </span>
+            </div>
+          )}
         </div>
       )}
     </div>
