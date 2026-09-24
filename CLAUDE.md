@@ -776,6 +776,11 @@ migration e' REGISTRO HISTORICO, nao se reaplica).
   ⚠ AS CATORZE RESTANTES SAO DIVERGENCIA DE VERDADE e nao foram investigadas. A do Sto. Expedito em
     2025-03 (414 cabecas) e a maior. Quem for consertar decide QUAL das duas fontes estava errada —
     e ate' la' o DRE mostra a do fechamento, que e' a oficial.
+  ⚠ E ELA E' O QUE SOBRA DO RESIDUO DA PONTE, desde o RECLASS-PESO-BACKFILL-01 (24/09/2026): o
+    residuo do NJ jan-ago/25 caiu de -25.735,7 para -556,2 @, e esses -556,2 sao EXATAMENTE a
+    divergencia do Sto. Expedito em ago/25 — fechamento 17.527,1 @ contra cache 18.083,3 @.
+    Enquanto ela existir, a ponte NAO fecha em zero, e o que sobra nao e' erro novo: e' esta divida.
+    Quem a resolver fecha a ponte junto.
 - PASTO-DIVERGENCIA-01 — o pasto `⚠️ Divergencia do Campeiro` (`tipo_uso = 'divergencia'`) existe
   em 5 fazendas de 4 clientes e carrega 440 cabecas: Sta. Maria 380, Pureza 23, Ursa Maior 20,
   Baia Grande 13, Sto. Expedito 4 (medido 23/09/2026). Ele e' `ativo = true` e esta' DENTRO da
@@ -1062,3 +1067,56 @@ preview que o cabecalho nao sai da tela ao rolar.
   DEFEITO; le-se como "nao tem dado". Era o caso do Global antes do -03, onde o Inicio nem existia.
   ⚠ `origem === 'vazio'` VIRA `null`, nunca zero: o "—" diz que nao ha' retrato, e nao que o
   rebanho valia zero.
+- RECLASS-PESO-BACKFILL-01 — FECHADA em 24/09/2026 pela migration `reclass_peso_backfill_01`
+  (arquivo `supabase/migrations/20261027140000_reclass_peso_backfill_01.sql`; ⚠ o
+  `apply_migration` REGISTROU com o timestamp de hoje, `20260924145414`, e nao com o do nome do
+  arquivo — os dois nao batem, e quem for auditar o historico procura pelo NOME).
+  516 lancamentos de `reclassificacao` de 4 clientes estavam gravados sem `peso_medio_kg`
+  (NJ 368 · Agnaldo 146 · RRCC 1 · Vera 1; 46.586 cabecas). Santa Rita e Raul tinham ZERO.
+  ⚠ A FORMULA DO MOTOR SEMPRE ESTEVE CERTA, e por isso ninguem a procurou:
+    `producao_biologica = peso_fin - peso_ini - p_ent + p_sai - p_evol_ent + p_evol_sai`
+  ja subtrai a reclassificacao. O furo era o INSUMO — a CTE que alimenta `p_evol_*` usa
+  `COALESCE(l.peso_medio_kg, 0)`: o lancamento entrava com a QUANTIDADE e com peso ZERO. Sem
+  nada para subtrair, o peso que CHEGAVA na categoria de destino virava producao e o que SAIA
+  ficava encalhado numa linha com `saldo_final = 0`.
+  ⚠ E O `fp_peso_total_final` FECHAVA A ARMADILHA: `peso_fin_calc = COALESCE(fp_peso_total_final,
+  ...)`, entao no mes com fechamento o destino recebia o peso REAL contado e a diferenca inteira
+  era declarada producao. Os dois lados do mesmo buraco.
+  REGRA APLICADA: peso da categoria de ORIGEM no fechamento do mes anterior (503); senao o
+  fechamento mais recente ate 3 meses antes ou o `peso_medio_inicial` que o cache ja guardava
+  (13); a regra do DESTINO nunca foi exercida (0). Os 13 sao 10 de jan/2020 — primeiro mes da
+  serie, nao existe mes anterior.
+  MEDIDO, antes -> depois:
+    NJ residuo da ponte jan-ago/25   -25.735,7 @  ->  -556,2 @   (32,6% -> 0,7% do inicial)
+    NJ at_produzida jan-ago/25        48.907,0 @  ->  23.727,5 @
+    NJ producao de nov/25            -18.955,2 @  ->  +6.979,7 @
+    Pureza GMD de ago/25                  21,34   ->      1,71
+    peso encalhado (6 clientes)      117.747 @    ->   ~4.400 @  (113 linhas -> 72)
+    meses-fazenda com GMD fora de 0-2     460     ->     434
+    linhas do cache                     4.703     ->    4.703    (conjunto identico)
+  ⚠ TODO INDICADOR POR @ PRODUZIDA DO NJ E DO AGNALDO MUDOU — para o certo. Custo por arroba,
+  @/ha, kg vivo/ha, GMD e a aba Movimentos da ponte liam a producao inflada; a do NJ caiu pela
+  METADE. O DRE DOS DOIS PRECISA DE RE-HOMOLOGACAO: numero homologado antes de 24/09 saiu com o
+  denominador errado. VPB, efeito de mercado e lucro NAO mudaram — saem das pontas
+  (`valor_rebanho_fechamento_itens`), que esta migration nao toca.
+  ⚠ SANTA RITA E RAUL SAO O GRUPO DE CONTROLE e nao se moveram em nada (788/188/1.010 e
+  524/73/520, iguais antes e depois). E' o que prova que a correcao foi cirurgica.
+  ⚠ `set_lancamento_audit` FOI DESLIGADA DENTRO DA MIGRATION e religada no fim: ela e' BEFORE
+  UPDATE e grava `updated_by = auth.uid()`, que numa migration e' NULO — sem isso o backfill
+  APAGARIA o autor de 370 das 516 linhas. O `trg_audit_lancamentos` ficou LIGADO de proposito:
+  as 516 linhas estao em `audit_log` com o JSON de antes e depois.
+- RECLASS-INVERSA-01 — 20 lancamentos / 69 cabecas de reclassificacao PARA TRAS, achados pela
+  sanidade do BACKFILL-01: `vacas -> mamotes_f` (6 lanc., 38 cab), `novilhas -> mamotes_f` (5/7),
+  `garrotes -> mamotes_f` (3/4), `vacas -> mamotes_m` (3/14), `desmama_m -> mamotes_f` (3/6).
+  Uma vaca virando bezerra.
+  ⚠ A MASSA CONTINUA SE CONSERVANDO — o peso que sai de vacas entra em mamotes —, entao a ponte
+  e o residuo NAO se importam e nenhum gate ve. O que fica errado e' a CATEGORIA, e com ela o
+  peso medio das duas pontas. Nao investigada.
+  ⚠ E O CRITERIO QUE A ACHOU NAO MEDE O QUE PARECE: a faixa "peso da origem entre 0,5x e 2x o
+  peso medio do destino" reprovou 108 de 484, e a maioria e' legitima — um `desmama -> garrotes`
+  entra abaixo da media do destino porque a media e' dominada por quem ja estava la'. O sinal
+  util foram so' as inversoes.
+- GMD-FORA-DE-FAIXA-01 — sobram 434 meses-fazenda com GMD fora de 0-2 kg/dia depois do
+  BACKFILL-01 (eram 460): 341 linhas no NJ e 141 no Agnaldo, mais Santa Rita 188, RRCC 91,
+  Vera 78, Raul 73. GMD e' indicador de capa do PC-100 e do Fechamento, e fora dessa faixa ele
+  nao descreve boi nenhum. Divida de DADO, nao de motor — a formula ja' esta' certa.
