@@ -528,6 +528,39 @@ export interface CategoriaPatrimonio {
   vpb: number; efeito: number;
 }
 
+/** Uma parcela da ponte de arrobas, nas três unidades. */
+export interface ParcelaMov { cabecas: number; arrobas: number; valor: number }
+
+/**
+ * A PONTE DE ARROBAS DO ESTOQUE — PATRIMONIO-MOVIMENTOS-01.
+ *
+ * ⚠ ELA NÃO É FEITA DAS ARROBAS DO DRE, e a razão é de unidade: `at_desfrutada` de
+ * `fn_dre_pecuaria` está em @ de CARCAÇA (÷15, com rendimento 50% presumido nas vendas em pé),
+ * enquanto o estoque está em @ VIVA (÷30). Somá-las misturaria duas grandezas. E mortes não
+ * existem lá. Por isso o bloco tem fonte própria: os lançamentos, em peso vivo.
+ *
+ * ⚠ SÃO OITO MOVIMENTOS, NÃO QUATRO. Medido: sem nascimento e sem as duas transferências o
+ * resíduo da Pureza em 25/26 seria −10.846 @; com eles, +22,01 @ (0,04%). Nascimento NÃO está
+ * dentro de `producao_biologica`.
+ *
+ * ⚠ E `ajustes` É RESÍDUO DECLARADO, não número escondido: ele é `@1 − (@0 + entradas − saídas)`,
+ * e com ele a identidade fecha EXATA nas três unidades, por construção. Absorve reclassificação
+ * de categoria (que muda o peso médio sem mover cabeça), arredondamento mensal do cache, e 91
+ * mortes e 41 nascimentos que não têm peso nenhum no lançamento — esses entram em cabeças e não
+ * em arrobas.
+ *
+ * ⚠ O `valor` DE CADA MOVIMENTO É A @ AO PREÇO DO MÊS DO MOVIMENTO, e o das pontas é a preço da
+ * ponta. Por isso `ajustes.valor` pode ter SINAL OPOSTO a `ajustes.arrobas` (medido no NJ 25/26:
+ * +R$ 1.487.256,52 contra −95,90 @): ele absorve também a diferença entre os dois critérios. A
+ * linha de Ajustes não tem R$/@ — dividir um pelo outro não é preço de coisa nenhuma.
+ */
+export interface MovimentosPec {
+  inicio: ParcelaMov; fim: ParcelaMov;
+  produzidas: ParcelaMov; nascimentos: ParcelaMov; compradas: ParcelaMov; transf_entrada: ParcelaMov;
+  vendas_abates: ParcelaMov; mortes: ParcelaMov; transf_saida: ParcelaMov;
+  ajustes: ParcelaMov;
+}
+
 export interface PatrimonioPec {
   p0: string;
   p1: string;
@@ -546,7 +579,30 @@ export interface PatrimonioPec {
     q0: number; v0: number; q1: number;
     v1_p0: number; v1_p1: number; vpb: number; efeito: number;
   };
+  movimentos: MovimentosPec;
 }
+
+/**
+ * ⚠ PARCELA AUSENTE É ZERO, E AQUI ISSO NÃO FERE A SENTINELA. A RPC omite o movimento que não
+ * aconteceu — um período sem compra nenhuma não traz `compradas`. "Não comprou" é ZERO comprado,
+ * não "não se sabe quanto comprou": a ausência do lançamento É a informação. O traço fica para a
+ * ponta do estoque, onde não haver fechamento realmente não diz quantas cabeças existem.
+ */
+const parcela = (x: unknown): ParcelaMov => {
+  const p = objeto(x);
+  return { cabecas: num(p.cabecas), arrobas: num(p.arrobas), valor: num(p.valor) };
+};
+
+const lerMovimentos = (x: unknown): MovimentosPec => {
+  const m = objeto(x);
+  return {
+    inicio: parcela(m.inicio), fim: parcela(m.fim),
+    produzidas: parcela(m.produzidas), nascimentos: parcela(m.nascimentos),
+    compradas: parcela(m.compradas), transf_entrada: parcela(m.transf_entrada),
+    vendas_abates: parcela(m.vendas_abates), mortes: parcela(m.mortes),
+    transf_saida: parcela(m.transf_saida), ajustes: parcela(m.ajustes),
+  };
+};
 
 export function useDrePecuariaPatrimonio(
   clienteId: string | null | undefined,
@@ -588,6 +644,7 @@ export function useDrePecuariaPatrimonio(
           q0: num(t.q0), v0: num(t.v0), q1: num(t.q1),
           v1_p0: num(t.v1_p0), v1_p1: num(t.v1_p1), vpb: num(t.vpb), efeito: num(t.efeito),
         },
+        movimentos: lerMovimentos(o.movimentos),
       };
     },
   });

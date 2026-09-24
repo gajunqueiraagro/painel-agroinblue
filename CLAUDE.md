@@ -241,6 +241,19 @@ no mesmo arquivo.
     5. REDUZIR e' permitido e desejavel. Ao reduzir, atualizar este numero
        no mesmo PR e listar quais erros sairam.
   Rodar e REPORTAR o numero em TODO ciclo, sem excecao.
+- PROVA DE IDENTIDADE REPORTA O TAMANHO DO CONJUNTO COMPARADO. "Zero divergencias" sem dizer
+  QUANTAS linhas foram comparadas nao e' prova — e conjunto VAZIO e' prova INVALIDA, nao prova
+  forte.
+  ⚠ NASCE DE UM ERRO MEU, 24/09/2026, no CATEGORIA-DESCARTE-01. Reportei "6 periodos x 3 fazendas,
+  zero divergencia em v_ini_p0/v_fim_p0/v_fim_p1" e o merge MUDOU o DRE do NJ civil 2020 (Lucro
+  liquido 8.873.420,14 -> 8.873.657,32). A replica que eu comparei lia o P0 de
+  `valor_rebanho_fechamento_itens` em dez/19 — mes em que NENHUMA fazenda do NJ tem fechamento.
+  Comparei dois conjuntos VAZIOS e o `where` da divergencia nao devolveu linha nenhuma. Quem achou
+  o defeito foi a homologacao na tela, nao a prova.
+  ⚠ E' A MESMA LEI DO AUTO-TESTE DO `check:tdz` e do `check:hooks`, aplicada a prova de migration:
+  antes de afirmar "nenhum", a busca tem de provar que sabe achar. Na pratica: contar as linhas dos
+  DOIS lados, reprovar quando a contagem for zero, e preferir comparar a saida da RPC REAL a uma
+  replica do SQL dela — a replica pode divergir justamente no ramo que importa.
 - Zero-cast: proibido `as` / `as any` em codigo novo. Unica excecao:
   o idioma existente `(supabase as any).rpc`.
 - Build verde obrigatorio antes de qualquer commit, e o comando e
@@ -528,6 +541,20 @@ no mesmo arquivo.
   uma RPC antiga conviveria em silencio com a tela nova, e o selo mentiria em vez de sumir.
   ⚠ OS QUATRO CASOS DO `lerLinhas` FICARAM — o parse ainda propaga null quando a RPC manda null,
   e isso continua valendo para o cenario `meta`, que nao mudou.
+  De 1774 para 1780 no VARIACAO-REBANHO-MODAL-01-fix3: entrou
+  `src/components/agri/pecEstoquePonteModal.test.tsx` (+6) — o modal da PONTE DE ARROBAS do DRE
+  Resumido. Quatro deles travam a CONCILIACAO com a grade (as tres parcelas e o total, com os
+  numeros medidos no NJ 25/26), o traco quando a coluna nao tem reposicao, o "—" do R$/@ dos
+  Ajustes e as transferencias que somem no Global.
+  ⚠ O SEXTO E' A LEI DO GRAFICO, e nenhum outro gate a ve': numa PONTE a altura de uma barra tem de
+  ser proporcional ao valor E o topo de cada movimento tem de ser o acumulado depois dele. Ele
+  afirma a RAZAO (altura/altura = @/@), o ENCAIXE (a base de uma e' o topo da anterior) e que a
+  barra do FIM sai do zero como a do inicio. Um waterfall cujas barras nao encaixam vira grafico de
+  barras comum, e o olho deixa de ver a conta andando — TSC e build ficam MUDOS, porque altura e'
+  aritmetica dentro de um `rect`.
+  ⚠ E O CASO DAS TRANSFERENCIAS AFIRMA OS DOIS LADOS de proposito: elas somem com liquido ZERO e
+  FICAM com liquido diferente de zero. Afirmar so' a ausencia passaria verde tambem se alguem
+  apagasse as duas linhas de vez (a mesma licao do auto-teste do `check:tdz`).
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -703,6 +730,19 @@ migration e' REGISTRO HISTORICO, nao se reaplica).
     regra DO FRONT, sem `tipo_uso`, por decisao do Gabriel em 23/09.
   ⚠ HOJE SAO TRES ESPELHOS, nao dois: entrou `fn_pasto_vigente_no_mes`, que e' fiel ao front.
     Reconciliar os tres e' frente propria; enquanto nao for, quem mexer em um confere os outros.
+- PK-INI-PONDERADO-01 — `pk_ini` le' `max(preco_kg)` do mes, e deveria ler o PONDERADO POR KG.
+  Ela aparece em `fn_dre_pecuaria` e em `fn_dre_pecuaria_patrimonio`, no mesmo formato:
+  `select fazenda_id, categoria, max(preco_kg) pk ... where ano_mes = left(p_de,7) group by 1,2`.
+  E' o preco de partida de quem NAO tem fechamento no mes P0 e cai no cadastro (`p0c`).
+  ⚠ `max` NAO E' MEDIA, e com duas linhas da mesma (fazenda, categoria) no mes ele escolhe a mais
+  CARA — o P0 nasce mais alto que o rebanho real, o VPB sai menor e o efeito de mercado, maior.
+  Enquanto houve `vacas_descarte` isso era visivel: Sta. Luzia, jan/2020, `vacas` a 5,58 e descarte
+  a 5,39; o `max` pegava 5,58 e o ponderado e' 5,495295. O certo e'
+  `sum(quantidade*peso_medio_kg*preco_kg)/sum(quantidade*peso_medio_kg)`, que e' o idioma que as
+  proprias `pf0`/`pf1` ja' usam duas linhas abaixo.
+  ⚠ HOJE O DEFEITO ESTA' DORMENTE, e por isso e' divida e nao P0: depois do CATEGORIA-DESCARTE-01
+  nao ha' mais categoria duplicada em (fazenda, categoria, mes) — medido, zero. O `max` volta a
+  mentir no dia em que uma duplicata reaparecer, e nenhum gate ve' isso.
 - SALDO-INICIAL-VIRADA-01 — `fn_zoot_categoria_mensal` deveria ler DEZEMBRO ANTERIOR (cache ou
   fechamento) quando nao ha linha do ano em `saldos_iniciais`, e a tabela guardar so' o CADASTRO
   inicial. Hoje a RPC ancora a serie em `WHERE e.mes = 1` e busca o saldo em

@@ -55,6 +55,7 @@ import {
 } from '@/components/agri/SeletorPeriodoPecuaria';
 import { PecLancamentosModal } from '@/components/agri/PecLancamentosModal';
 import { PecPatrimonioModal } from '@/components/agri/PecPatrimonioModal';
+import { PecEstoquePonteModal } from '@/components/agri/PecEstoquePonteModal';
 import { PecRateioAdmModal } from '@/components/agri/PecRateioAdmModal';
 import {
   PecHistoricoLinhaModal, type RecorteHistoricoPec,
@@ -336,8 +337,15 @@ export function AgriDreLavouraTab() {
   /* ════════ OS TRÊS DESTINOS DE UM CLIQUE NA GRADE DA PECUÁRIA (§5 e §6) ════════ */
   /** O recorte da célula clicada. `null` = nenhuma lista aberta. */
   const [recortePec, setRecortePec] = useState<RecortePec | null>(null);
+  /**
+   * ⚠ `qual` TEM TRÊS VALORES e `reposicao` viaja junto — VARIACAO-REBANHO-MODAL-01-fix3. A linha
+   * "Variação do estoque" do RESUMIDO é composta (`vpb_operacional − reposicao`), e quem a explica
+   * é a PONTE DE ARROBAS, não o modal por categoria. A reposição vem do clique porque a
+   * conciliação da ponte tem de fechar com o número daquela COLUNA — relê-la traria o da tela.
+   */
   const [didatico, setDidatico] = useState<
-    { fazendaId: string | null; nome: string; qual: 'vpb' | 'efeito'; de: string; ate: string } | null>(null);
+    { fazendaId: string | null; nome: string; qual: 'vpb' | 'efeito' | 'ponte';
+      de: string; ate: string; reposicao: number | null } | null>(null);
   const [rateioPecAberto, setRateioPecAberto] = useState(false);
   const [historicoPec, setHistoricoPec] = useState<RecorteHistoricoPec | null>(null);
   /**
@@ -1159,7 +1167,8 @@ export function AgriDreLavouraTab() {
             /* ⚠ O PERÍODO VEM DA COLUNA — VARIACAO-REBANHO-MODAL-01. Guardá-lo aqui é o que permite
                abrir a Variação de 2022 e ver 2022: o hook abaixo passou a ler `didatico.de/ate` em
                vez de `pecDe/pecAte`, que são os da tela. */
-            onAbrirDidatico={(fazendaId, nome, qual, de, ate) => setDidatico({ fazendaId, nome, qual, de, ate })}
+            onAbrirDidatico={(fazendaId, nome, qual, de, ate, reposicao) =>
+              setDidatico({ fazendaId, nome, qual, de, ate, reposicao })}
             onAbrirRateio={() => setRateioPecAberto(true)}
             onAbrirHistorico={setHistoricoPec} />
         )
@@ -1182,7 +1191,10 @@ export function AgriDreLavouraTab() {
           onAbrirLancamento={catalogosProntos ? id => { void abrirLancamento(id); } : undefined}
         />
       )}
-      {ehPec && didatico && drePec && (
+      {/* ⚠ DOIS MODAIS PARA A MESMA COLUNA, e a escolha é do MODO: no Detalhado a linha é pura e o
+          modal por categoria a explica; no Resumido ela soma a reposição e só a ponte de arrobas
+          fecha. Montar os dois e esconder um faria a RPC ser lida duas vezes por clique. */}
+      {ehPec && didatico && didatico.qual !== 'ponte' && drePec && (
         <PecPatrimonioModal
           aberto
           fazendaNome={didatico.nome}
@@ -1196,6 +1208,21 @@ export function AgriDreLavouraTab() {
              já devolve `p0_fonte`/`p1_fonte` do MESMO período que o modal pediu. */
           periodo={{ de: didatico.de, ate: didatico.ate }}
           onFechar={() => setDidatico(null)}
+        />
+      )}
+      {ehPec && didatico && didatico.qual === 'ponte' && (
+        <PecEstoquePonteModal
+          aberto
+          clienteNome={clienteAtual?.nome ?? '—'}
+          fazendaNome={didatico.nome}
+          patrimonio={patPec}
+          carregando={carregandoPatPec}
+          periodo={{ de: didatico.de, ate: didatico.ate }}
+          reposicao={didatico.reposicao}
+          onFechar={() => setDidatico(null)}
+          /* ⚠ "Ver por categoria" TROCA O MODAL SEM TROCAR O PERÍODO: o `didatico` já tem `de`/`ate`
+             da coluna, e o hook está ligado a eles — mudar só o `qual` não dispara leitura nova. */
+          onVerPorCategoria={() => setDidatico(d => (d ? { ...d, qual: 'vpb' } : d))}
         />
       )}
       {ehPec && drePec && rateioPecAberto && (

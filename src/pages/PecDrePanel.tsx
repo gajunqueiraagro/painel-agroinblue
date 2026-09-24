@@ -582,9 +582,17 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
   alturaCartao: number | null;
   cartaoRef: React.RefObject<HTMLDivElement>;
   onAbrirLista?: (r: RecortePec) => void;
-  /** ⚠ `de`/`ate` SÃO DA COLUNA, não da tela — é o que faz o modal abrir no ano clicado. */
-  onAbrirDidatico?: (fazendaId: string | null, fazendaNome: string, qual: 'vpb' | 'efeito',
-    de: string, ate: string) => void;
+  /**
+   * ⚠ `de`/`ate` SÃO DA COLUNA, não da tela — é o que faz o modal abrir no ano clicado.
+   * ⚠ E `qual` TEM TRÊS VALORES, não dois: a linha "Variação do estoque" do RESUMIDO é COMPOSTA
+   * (`vpb_operacional − reposicao`, ver `compor` em `drePecRegua`), e um modal que explicasse só
+   * `vpb_operacional` mostraria −193.238 debaixo de um número de −2.059.646. Ela abre a PONTE DE
+   * ARROBAS, que concilia os dois. O Detalhado, onde a linha é pura, segue no modal por categoria.
+   * ⚠ E `reposicao` VIAJA COM O CLIQUE em vez de ser lida de novo: a conciliação da ponte tem de
+   * fechar com o número que ESTA coluna mostra, e uma segunda leitura traria o da tela.
+   */
+  onAbrirDidatico?: (fazendaId: string | null, fazendaNome: string, qual: 'vpb' | 'efeito' | 'ponte',
+    de: string, ate: string, reposicao: number | null) => void;
   onAbrirRateio?: () => void;
   /** ⚠ A GRADE NÃO MONTA O MODAL: ela avisa QUAL linha, e quem lê os cinco anos é a página. */
   onAbrirHistorico?: (r: RecorteHistoricoPec) => void;
@@ -799,9 +807,9 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, base, onAlternar, o
   base?: boolean;
   onAlternar: () => void;
   onAbrirLista?: (r: RecortePec) => void;
-  /** ⚠ `de`/`ate` SÃO DA COLUNA, não da tela — é o que faz o modal abrir no ano clicado. */
-  onAbrirDidatico?: (fazendaId: string | null, fazendaNome: string, qual: 'vpb' | 'efeito',
-    de: string, ate: string) => void;
+  /** ⚠ `de`/`ate` SÃO DA COLUNA, e `qual` tem três valores — ver a prop homônima em `PecDrePanel`. */
+  onAbrirDidatico?: (fazendaId: string | null, fazendaNome: string, qual: 'vpb' | 'efeito' | 'ponte',
+    de: string, ate: string, reposicao: number | null) => void;
   onAbrirRateio?: () => void;
   onAbrirHistorico?: (r: RecorteHistoricoPec) => void;
 }) {
@@ -872,8 +880,13 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, base, onAlternar, o
        a RPC deixou de fazer. No Total, abre como sempre (`p_fazenda` nulo traz todos). */
     if (def.chave === 'juros' && col.fazendaId !== null) return undefined;
     if (def.didatico) {
+      /* ⚠ QUEM DECIDE O MODAL É A DEF, NÃO O MODO DA TELA, e é a mesma informação por outro
+         caminho: só a linha do Resumido tem `compor`, e é só ela que soma a variação com a
+         reposição. Ler o `modo` aqui faria a grade depender de um estado que não é dela. */
+      const qual = def.compor && def.didatico === 'vpb' ? 'ponte' as const : def.didatico;
       return onAbrirDidatico
-        ? () => onAbrirDidatico(col.fazendaId, col.nome, def.didatico!, col.de, col.ate)
+        ? () => onAbrirDidatico(col.fazendaId, col.nome, qual, col.de, col.ate,
+            col.linhas?.reposicao ?? null)
         : undefined;
     }
     if (def.rateio) return col.atual ? onAbrirRateio : undefined;
