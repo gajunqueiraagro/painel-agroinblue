@@ -452,20 +452,25 @@ function CardInicio({ ano, inicio, carregando, fazendaNome }: {
                 </tr>
               </thead>
               <tbody>
-                {inicio.categorias.map((c, i) => {
-                  const at = c.pesoMedioKg == null ? null : kgToArrobas(c.pesoMedioKg);
-                  return (
+                {inicio.categorias.map((c, i) => (
                     <tr key={c.categoria} style={{ height: 13, backgroundColor: i % 2 === 0 ? '#F5F4F0' : undefined }}>
                       {cel(nomeDaCategoria(c.categoria), true)}
                       {cel(nz(c.quantidade))}
                       {cel(nz(c.pesoMedioKg, 1))}
                       {cel(nz(c.precoKg, 2))}
-                      {cel(at == null || c.precoKg == null ? traco : nz(at * c.precoKg, 2))}
+                      {/* ⚠ R$/@ É O R$/kg VEZES 30, NÃO O R$/cab DIVIDIDO POR 30 — 03e. A conta
+                          antiga era `(peso_médio/30) × preço_kg`, que é `R$/cab ÷ 30`: uma arroba
+                          do PESO MÉDIO DO ANIMAL, não a arroba de preço. Medido no SR 2025,
+                          Desmama F a 13,00/kg: saía 104,00 onde o certo é 390,00 — o erro é o
+                          peso médio da categoria dividido por 30, então ele cresce com o bicho.
+                          ⚠ A TELA DO MÊS SEMPRE ESTEVE CERTA: lá é `valorTotal / arrobasLinha`,
+                          que se reduz a `preço_kg × 30`. Era o Início que destoava.
+                          ⚠ E O TOTAL NÃO MUDA: continua `valor / arrobas`, que é o ponderado. */}
+                      {cel(c.precoKg == null ? traco : nz(c.precoKg * 30, 2))}
                       {cel(c.quantidade === 0 ? traco : nz(c.valor / c.quantidade))}
                       {cel(nz(c.valor))}
                     </tr>
-                  );
-                })}
+                ))}
                 <tr style={{ height: 16, backgroundColor: '#D6D4CC' }}>
                   {cel('Total', true, true)}
                   {cel(nz(inicio.cabecas), false, true)}
