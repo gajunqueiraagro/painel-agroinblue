@@ -245,6 +245,23 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
   const origemDoV2 = () => { try { return sessionStorage.getItem('v2:section') ?? ''; } catch { return ''; } };
   const sufixoRetorno = () => { const o = origemDoV2(); return o ? `&oc_return=${o}` : ''; };
 
+  /**
+   * A NAVEGACAO ATE A OC — uma so', para o Editar e para a porta do modal.
+   *
+   * ⚠ ELA ESTAVA ESCRITA TRES VEZES e as tres discordavam na ABA: a compra ia sem `oc_aba`
+   * (de proposito, ver a nota do `handleEditClick`), a venda em `negociacao`, e a porta do
+   * `LancamentoZooModal` mandava `negociacao` para os TRES — inclusive a compra, contra a regra
+   * que o proprio arquivo documenta. Agora a aba sai do TIPO, num lugar so'.
+   * ⚠ O ABATE ABRE NA ABA ABATE, e nao em negociacao: e' de la' que o lancamento vem. A venda
+   * segue em `negociacao` porque na OC dela o lancamento E' o lote.
+   */
+  const abrirOperacaoDoLancamento = (ocId: string, tipo: string) => {
+    const param = tipo === 'venda' ? 'oc_venda' : tipo === 'abate' ? 'oc_abate' : 'oc_compra';
+    const aba = tipo === 'abate' ? 'abate' : tipo === 'venda' ? 'negociacao' : '';
+    window.location.assign(
+      `/v2?${param}=1&oc_id=${ocId}${aba ? `&oc_aba=${aba}` : ''}${sufixoRetorno()}`);
+  };
+
   const handleEditClick = () => {
     // Fonte única de edição de Compra (PR-OC-ENTRYPOINT-UNIFY-01): decisão pelo VÍNCULO OFICIAL da
     //   ponte (operacaoId), nunca por heurística. Com OC → CompraModalShell (modal novo), mesma
@@ -257,7 +274,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
            regra, mesmas duas linhas — quem sai por aqui volta por onde entrou.
            ⚠ SEM `oc_aba`, e de proposito: a compra nunca definiu aba de abertura, e
            acrescentar uma seria mudar o destino a pretexto de consertar a volta. */
-        window.location.assign(`/v2?oc_compra=1&oc_id=${lancamento.operacaoId}${sufixoRetorno()}`);
+        abrirOperacaoDoLancamento(lancamento.operacaoId, 'compra');
         return;
       }
       if (lancamento.origemRegistro === 'operacao_comercial') {
@@ -278,8 +295,21 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
        ⚠ `oc_aba=negociacao` porque e' de la' que o numero da venda vem — na OC, o
        lancamento e' o lote. */
     if (lancamento.tipo === 'venda' && lancamento.operacaoId) {
-      window.location.assign(`/v2?oc_venda=1&oc_id=${lancamento.operacaoId}&oc_aba=negociacao${sufixoRetorno()}`);
+      abrirOperacaoDoLancamento(lancamento.operacaoId, 'venda');
       return;
+    }
+    /* ⚠ O ABATE FICOU DE FORA ATE AQUI — ABATE-RESUMO-EDITAR-OC-01. Compra e venda de OC ja'
+       pulavam direto para a operacao; o abate caia no `LancamentoZooModal`, que detectava a OC
+       e abria um dialogo INTERMEDIARIO ("Lancamento de operacao comercial") so' para oferecer
+       um botao "Abrir operacao". Um passo a mais para dizer o que o clique ja' queria dizer.
+       ⚠ MESMA RECUSA DA COMPRA quando a OC nao e' localizavel: nao cair no legado, que gravaria
+       por fora das regras da operacao. */
+    if (lancamento.tipo === 'abate') {
+      if (lancamento.operacaoId) { abrirOperacaoDoLancamento(lancamento.operacaoId, 'abate'); return; }
+      if (lancamento.origemRegistro === 'operacao_comercial') {
+        toast.error('Não foi possível localizar a Operação Comercial de origem.');
+        return;
+      }
     }
     setZooModalOpen(true);
   };
@@ -814,7 +844,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
 
               {/* ── Histórico (compacto) ── */}
               <div className="bg-muted/30 rounded px-2 py-1 space-y-px">
-                <p className="text-[8px] text-muted-foreground font-semibold uppercase tracking-wider">Histórico</p>
+                <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Histórico</p>
                 <p className="text-[9px] text-muted-foreground leading-tight">
                   <span className="font-semibold">ID:</span> {lancamento.id.slice(0, 8)}
                   {lancamento.createdAt && (
@@ -858,10 +888,10 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
               <div className="flex gap-2 pt-0.5">
                 {!isTransferenciaEntrada && !metaLocked && (
                   <>
-                    <Button variant="default" size="sm" className="flex-1 h-7 text-[10px] font-bold" onClick={handleEditClick}>
+                    <Button variant="default" size="sm" className="flex-1 h-[26px] text-[11px] font-bold" onClick={handleEditClick}>
                       <Pencil className="h-3 w-3 mr-1" /> Editar
                     </Button>
-                    <Button variant="destructive" size="sm" className="h-7 text-[10px]" onClick={handleRemoverClick} disabled={checkingVinculos || effectiveP1Oficial}>
+                    <Button variant="destructive" size="sm" className="h-[26px] text-[11px]" onClick={handleRemoverClick} disabled={checkingVinculos || effectiveP1Oficial}>
                       <Trash2 className="h-3 w-3 mr-1" /> Apagar
                     </Button>
                   </>
@@ -1103,13 +1133,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
           /* A porta do aviso — B-17 item 2. Ver a nota em `LancamentoZooModal`. */
           onAbrirOperacao={(ocId, tipo) => {
             setZooModalOpen(false);
-            /* ⚠ `oc_return` LEVA A ORIGEM — B-17 adendo. `window.location.assign` RECARREGA a
-               pagina, e a `section` do /v2 e' estado interno que NAO vive na URL: sem este
-               parametro o fechar da OC cairia na Central, largando o operador no resumo em
-               vez da lista de onde saiu. O V2Index espelha a section em
-               `sessionStorage['v2:section']` justamente para atravessar o reload. Vazio
-               (aba nova, storage bloqueado) = sem parametro = Central, como hoje. */
-            window.location.assign(`/v2?${tipo === 'venda' ? 'oc_venda' : tipo === 'abate' ? 'oc_abate' : 'oc_compra'}=1&oc_id=${ocId}&oc_aba=negociacao${sufixoRetorno()}`);
+            abrirOperacaoDoLancamento(ocId, tipo);
           }}
           onEditSuccess={() => {
             // Cache invalidado pelo useLancamentos.editarLancamento internamente.

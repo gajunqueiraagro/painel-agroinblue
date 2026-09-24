@@ -314,18 +314,20 @@ export function AbateShareButtons({ lancamento, fazendaNome }: { lancamento: Lan
 
   return (
     <div className="flex gap-2">
-      <Button variant="outline" size="sm" className="gap-1.5 text-[10px] h-7" onClick={async () => {
+      {/* ⚠ REGUA DE MODAL (A18): 26px de altura, 11px de fonte, icone 12px — os mesmos do par
+          Editar/Apagar logo abaixo, porque os quatro vivem na mesma faixa de acoes. */}
+      <Button variant="outline" size="sm" className="gap-1.5 text-[11px] h-[26px]" onClick={async () => {
         if (isConfirmado) await pdfConfirmado(lancamento, fazendaNome);
         else await pdfRealizado(lancamento, fazendaNome);
         toast.success('PDF exportado!');
       }}>
-        <FileText className="h-3.5 w-3.5 text-destructive" /> PDF {label}
+        <FileText className="h-3 w-3 text-destructive" /> PDF {label}
       </Button>
-      <Button variant="outline" size="sm" className="gap-1.5 text-[10px] h-7" onClick={() => {
+      <Button variant="outline" size="sm" className="gap-1.5 text-[11px] h-[26px]" onClick={() => {
         if (isConfirmado) shareWhatsApp(textoConfirmado(lancamento, fazendaNome));
         else shareWhatsApp(textoRealizado(lancamento, fazendaNome));
       }}>
-        <MessageCircle className="h-3.5 w-3.5 text-green-600" /> WhatsApp
+        <MessageCircle className="h-3 w-3 text-green-600" /> WhatsApp
       </Button>
     </div>
   );
