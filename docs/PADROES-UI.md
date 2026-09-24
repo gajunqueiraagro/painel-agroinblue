@@ -484,6 +484,19 @@ Duas armadilhas, as duas medidas nesta frente:
    saíam 20px onde o mock pedia 17 (line-height padrão), e na lista de Operações Comerciais a
    linha media 25px porque o botão de ações tinha `h-6` — as outras onze células cabiam em 18.
 
+#### Duas armadilhas de EDIÇÃO, não de medição (24/09/2026, no 01b)
+
+4. **Comentário `{/* … */}` só vale onde já existe contexto JSX.** Logo depois de `return (` ou
+   de `{condicao && (` ainda se está numa **expressão**, e o comentário quebra o build
+   (`TS1005: ')' expected`). Ali ele vai como comentário JS `/* … */`, **fora** do parêntese.
+   Errado duas vezes no mesmo arquivo, no mesmo turno.
+
+5. **Substituição por ÂNCORA DE TEXTO com contagem, nunca por intervalo de linhas.** Trocar
+   classes num intervalo (`linhas 501-810`) vazou para o componente vizinho — `NegociacaoLegado`
+   começava na 761, e cinco linhas fora do escopo mudaram de tamanho em silêncio. Com âncora +
+   `assert count == esperado`, a conta **parou a escrita duas vezes** por encontrar 2 ocorrências
+   onde se esperava 1. O que o intervalo teria feito calado, a contagem denuncia antes.
+
 ⚠ **NASCE DE UM ERRO MEU, 24/09/2026, no 01a-fix1.** Reportei "altura do resumo 488 → 477px" e o
 477 era o container: assim que o resumo parou de rolar, `scrollHeight` virou `clientHeight`. O
 número foi para a mensagem do commit. O conteúdo real era ~407px, e depois do fix2 são 383px —
