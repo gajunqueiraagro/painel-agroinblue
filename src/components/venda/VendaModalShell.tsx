@@ -316,7 +316,10 @@ export function VendaModalShell({
       .map(l => ({ cat: l.categoria, q: Number(l.quantidade) || 0 }))
       .filter(x => !!x.cat)
       .sort((a, b) => b.q - a.q)[0]?.cat ?? '';
-    const subEntrada = subcentroVendaPorCategoria(catDominante);
+    /* ⚠ `true` NAO E' CONSTANTE SOLTA: este bloco inteiro so' roda quando `ehBoitel`, pelo
+       return de tres linhas acima. Era exatamente aqui que a receita do boitel vestia
+       'Venda de Machos Adultos' — as quatro OCs medidas em 24/09 saem deste `useMemo`. */
+    const subEntrada = subcentroVendaPorCategoria(catDominante, true);
     /* ⚠ SEM CLASSIFICACAO NAO HA PREVISAO. O writer recusa subcentro que nao exista no
        plano; gerar tres linhas e engasgar na quarta deixaria a operacao pela metade. */
     if (!subEntrada) return undefined;
@@ -737,6 +740,7 @@ export function VendaModalShell({
               ocApiExterno={ocCompromissosApi}
               dataOperacao={data}
               linhasPrevisao={linhasPrevisao}
+              ehBoitel={ehBoitel}
               rotulos={rotulosCompromissos}
               seloProjecao={ehBoitel ? <PilulaCenario cenario="projetado" /> : undefined}
               onIrParaDocumentos={() => setAbaAtiva('documentos')}

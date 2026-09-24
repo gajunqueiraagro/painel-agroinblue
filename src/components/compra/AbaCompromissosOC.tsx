@@ -45,6 +45,10 @@ interface Props {
   bloqueado: boolean;                 // gate de escrita do modelo novo (rascunho/cancelada/legado/misto)
   clienteId: string | null;
   tipoOperacao: string | null;        // 'compra'
+  /* ⚠ A VENDA POR BOITEL CLASSIFICA A PRINCIPAL EM 1150 — OC-BOITEL-VALOR-01. Vem do
+     shell da venda, porque e' la' que a aba do boitel mora; sem ela, `false`, e a
+     classificacao e' a de sempre. */
+  ehBoitel?: boolean;
   /* ⚠ PREVISAO AUTOMATICA, SEM DIALOGO — PR-OC-VENDA-FIN-PREVISAO-01. "Gerar previsao"
      NAO pergunta nada: cria as linhas prontas do motor. O veto ao "gerar sem olhar" caiu
      porque previsao NAO MATERIALIZA — nao pede conta, nao programa, nao gera titulo. O
@@ -224,7 +228,7 @@ const ROTULOS_PADRAO: RotulosCompromissos = {
   mostrarBaseDaOperacao: true, mostrarSentidoDoDinheiro: false,
 };
 
-export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, fornecedores, valorAcordado, lotes, contraparteId, dataOperacao, dataChegada, darkSelectClass, recarregarDados, linhasPrevisao, seloProjecao, propostasExtras, abrirGerarAoMontar, rotulos = ROTULOS_PADRAO }: Props) {
+export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, ehBoitel, fornecedores, valorAcordado, lotes, contraparteId, dataOperacao, dataChegada, darkSelectClass, recarregarDados, linhasPrevisao, seloProjecao, propostasExtras, abrirGerarAoMontar, rotulos = ROTULOS_PADRAO }: Props) {
   const { resumoOperacao, compromissos, parcelas, versao, saving } = ocApi;
   const [searchParams, setSearchParams] = useSearchParams();
   /* ⚠ OS DOIS CATALOGOS SUBIRAM PARA CA — PR-OC-VENDA-FIN-PREVISAO-01D (adendo 2). Eles
@@ -548,7 +552,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
       compromissos.filter(c => c.natureza === 'principal' && c.status !== 'cancelado' && c.loteId)
         .map(c => c.loteId as string),
     );
-    const c = classificarLotesPorLado(lotes, tipoOperacao);
+    const c = classificarLotesPorLado(lotes, tipoOperacao, !!ehBoitel);
     const principais: PropostaCompromisso[] = c.status !== 'ok' ? [] : c.itens
       .filter(i => !jaTemPrincipal.has(i.lote.id) && i.valorBruto > 0)
       .map(i => ({
@@ -565,7 +569,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
     /* As extras já vêm prontas de quem as conhece; filtradas pelo mesmo critério. */
     const extras = (propostasExtras ?? []).filter(p => !p.loteId || !jaTemPrincipal.has(p.loteId));
     return [...principais, ...extras];
-  }, [compromissos, lotes, tipoOperacao, propostasExtras]);
+  }, [compromissos, lotes, tipoOperacao, ehBoitel, propostasExtras]);
 
   /* ─── O SENTIDO DO DINHEIRO, POR LINHA ────────────────────────────────────────
      PR-OC-VENDA-FIN-PREVISAO-01D (adendo 2). Numa venda boitel convivem quatro linhas —
@@ -719,7 +723,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
    * percebe.
    */
   const sugestaoSubcentro = useMemo(() => {
-    const c = classificarLotesPorLado(lotes, tipoOperacao);
+    const c = classificarLotesPorLado(lotes, tipoOperacao, !!ehBoitel);
     if (c.status !== 'ok') return '';
     const subs = new Set(c.itens.map(i => i.subcentro).filter(Boolean));
     /* ⚠ SUBCENTROS DIVERGENTES NÃO SUGEREM NADA, nos dois lados: um lote de
@@ -727,7 +731,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
        classificaria metade da operação errado. Em branco o operador escolhe;
        sugerido errado ele não percebe. */
     return subs.size === 1 ? Array.from(subs)[0] : '';
-  }, [lotes, tipoOperacao]);
+  }, [lotes, tipoOperacao, ehBoitel]);
 
   // Lotes prontos = há quantidade negociada carregada. Guarda contra criar compromisso PRINCIPAL
   // com o fallback "Compra principal" (lotes stale/vazios). Ver descricaoDefault + NovoCompromissoDialog.
@@ -1617,7 +1621,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
       {novoAberto && (
         <NovoCompromissoDialog
           onClose={() => { setNovoAberto(false); setAvisoBaseCoberta(''); }} onSubmit={criar} saving={saving}
-          clienteId={clienteId} tipoOperacao={tipoOperacao} fornecedores={fornecedores} darkSelectClass={darkSelectClass}
+          clienteId={clienteId} tipoOperacao={tipoOperacao} ehBoitel={ehBoitel} fornecedores={fornecedores} darkSelectClass={darkSelectClass}
           onCriarFornecedor={criarFornecedor}
           valorAcordado={valorAcordado} sugestaoSubcentro={sugestaoSubcentro} descricaoDefault={descricaoDefault}
           contraparteId={contraparteId} lotesProntos={lotesProntos} lotes={lotes}
@@ -1816,9 +1820,9 @@ function ResumoCard({ rotulo, valor }: { rotulo: string; valor: number }) {
 }
 
 // ===== Dialog: Novo compromisso =====
-function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOperacao, fornecedores, darkSelectClass, valorAcordado, sugestaoSubcentro, descricaoDefault, contraparteId, lotesProntos, lotes, avisoBaseCoberta, onCriarFornecedor, plano, comps }: {
+function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOperacao, ehBoitel, fornecedores, darkSelectClass, valorAcordado, sugestaoSubcentro, descricaoDefault, contraparteId, lotesProntos, lotes, avisoBaseCoberta, onCriarFornecedor, plano, comps }: {
   onClose: () => void; onSubmit: (p: CriarCompromissoPayload[]) => void; saving: boolean;
-  clienteId: string | null; tipoOperacao: string | null; fornecedores: { id: string; nome: string }[]; darkSelectClass: string;
+  clienteId: string | null; tipoOperacao: string | null; ehBoitel?: boolean; fornecedores: { id: string; nome: string }[]; darkSelectClass: string;
   valorAcordado: number | null; sugestaoSubcentro: string; descricaoDefault: string; contraparteId: string | null; lotesProntos: boolean;
   onCriarFornecedor?: (nome: string, cpfCnpj: string) => Promise<{ id: string; nome: string } | null>;
   lotes: LoteOC[]; avisoBaseCoberta: string;
@@ -1863,9 +1867,9 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
    * campo divergente — duas verdades sobre o mesmo lote.
    */
   const itensLote = useMemo(() => {
-    const c = classificarLotesPorLado(lotes, tipoOperacao);
+    const c = classificarLotesPorLado(lotes, tipoOperacao, !!ehBoitel);
     return c.status === 'ok' ? c.itens : [];
-  }, [lotes, tipoOperacao]);
+  }, [lotes, tipoOperacao, ehBoitel]);
   const loteOptions = useMemo(() => itensLote.map(i => ({
     value: i.lote.id,
     label: `${CATEGORIAS.find(c => c.value === i.lote.categoria)?.label ?? i.lote.categoria} · ${i.lote.qtd ?? 0} cab · ${brl(i.valorBruto)}`,

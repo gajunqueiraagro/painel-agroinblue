@@ -856,6 +856,25 @@ migration e' REGISTRO HISTORICO, nao se reaplica).
     primeiro mes da fazenda no sistema. Janeiro dos anos seguintes e' materializacao do motor,
     nao cadastro — por isso a aba Rebanho inicial lista SO' o primeiro ano e o seletor de ano do
     `SaldoInicialForm` so' oferece a faixa completa enquanto nao existe saldo nenhum.
+- VERA-FUNDERSUL-DUP-01 — a OC `b58bf556-4dfd-4ab9-b6fe-60a4f1598d21` (Vera Ligia Milani, venda
+  boitel de 13/05/2026) tem DOIS lancamentos Fundersul IDENTICOS: R$ 1.929,38 cada, mesma
+  descricao ("Boitel 110 Garrotes - Fundersul"), mesmo componente `taxas_impostos`, os dois
+  `realizado` e nenhum cancelado. Medido em 24/09/2026, na FASE 0 do OC-BOITEL-VALOR-01.
+  ⚠ NAO FOI INVESTIGADO SE E' DUPLICATA OU DOIS FATOS. Fundersul e' taxa por cabeca e a operacao
+    tem um lote so' — duas linhas de valor identico ao centavo cheiram a dois cliques, mas nao
+    medi. Quem for tratar confere antes de apagar: cancelar um lancamento realizado mexe em
+    numero homologado.
+  ⚠ E ELA APARECEU DE CARONA, o que vale mais que o caso: a varredura procurava o SUBCENTRO da
+    principal e trouxe os componentes junto. Nenhum gate ve' duplicata de lancamento — nao ha'
+    unique sobre (operacao, componente, valor), e nem deveria haver: duas parcelas iguais sao
+    legitimas. So' o olho na lista acha.
+- OC-IMPORT-MORTO-01 — `src/components/abate/AbateModalShell.tsx:57` importa
+  `subcentroVendaPorCategoria` de `@/hooks/useOperacaoLiquidacao` e NUNCA a chama (o
+  `SUBCENTRO_ADIANTAMENTO_BOITEL` do mesmo import e' usado). Anterior ao OC-BOITEL-VALOR-01,
+  medido em 24/09/2026.
+  ⚠ TSC E BUILD FICAM MUDOS — import nao usado nao e' erro de tipo, e o `npm run lint` inteiro
+    nao e' gate (1.316 erros, ver check:hooks). Fica como divida de UMA LINHA, para quem tocar o
+    arquivo. Nao apaguei por conta propria: nao estava no escopo do PR que o achou.
 
 ## TRABALHO PARKED (nao tocar)
 Working tree pode conter trabalho estacionado de outros PRs (ex: P3.4

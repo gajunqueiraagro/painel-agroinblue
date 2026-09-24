@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { CATEGORIAS } from '@/types/cattle';
+import { subcentroDaVenda } from '@/lib/financeiro/subcentroVenda';
 
 // Liquidação da Operação Comercial (PR-OC-LIQ-UI-01). Consome EXCLUSIVAMENTE os contratos
 //   homologados no PR-OC-LIQ-MODEL-01: views vw_oc_operacao_liquidacao / vw_oc_obrigacoes /
@@ -40,26 +41,19 @@ export const CENTRO_CUSTO_COMPRA_BOVINOS = 'Compra de Bovinos';
    ⚠ `mamotes_*` CAI EM DESMAMA, e e' a unica aproximacao do mapa: mamote nao e'
    desmama, mas o plano nao tem faixa mais nova. Decisao do Gabriel, com registro —
    caso raro, e a classificacao segue editavel pelo compromisso manual.
-   ⚠ 'Venda em Boitel' EXISTE NO PLANO E FICOU ORFAO. O recebimento do boitel passou a
-   classificar por sexo como qualquer outra venda; nenhum escritor usa aquele subcentro
-   hoje. Registrado para a curadoria do plano — nao apagar por conta propria. */
-const SUBCENTRO_VENDA_POR_CATEGORIA: Record<string, string> = {
-  mamotes_m: 'Venda de Desmama Machos',
-  desmama_m: 'Venda de Desmama Machos',
-  mamotes_f: 'Venda de Desmama Fêmeas',
-  desmama_f: 'Venda de Desmama Fêmeas',
-  garrotes:  'Venda de Machos Adultos',
-  bois:      'Venda de Machos Adultos',
-  touros:    'Venda de Machos Adultos',
-  novilhas:  'Venda de Fêmeas Adultas',
-  vacas:     'Venda de Fêmeas Adultas',
-};
+   ⚠ O MAPA SAIU DAQUI — OC-BOITEL-VALOR-01. Ele vivia aqui E dentro de
+   `usePlanejamentoFinanceiro.mapRebanhoSubcentro`, e as duas copias discordavam: o
+   Planejamento ja' classificava o boitel em 'Venda em Boitel' e a OC, nao. Agora os dois
+   consomem `@/lib/financeiro/subcentroVenda`, que tem o eixo do boitel ANTES da
+   categoria. */
 
-/* O subcentro de ENTRADA de uma venda, pela categoria do lote. Categoria fora do mapa
-   devolve `null` — nunca um palpite: o `oc_criar_compromisso` recusa subcentro que nao
-   exista no plano, e inventar um so' trocaria o erro de lugar. */
-export function subcentroVendaPorCategoria(categoria: string): string | null {
-  return SUBCENTRO_VENDA_POR_CATEGORIA[categoria] ?? null;
+/* O subcentro de ENTRADA de uma venda, pela categoria do lote e pelo boitel. Categoria
+   fora do mapa devolve `null` — nunca um palpite: o `oc_criar_compromisso` recusa
+   subcentro que nao exista no plano, e inventar um so' trocaria o erro de lugar.
+   ⚠ `temBoitel` NASCE `false` de proposito: os chamadores que nao sabem da existencia do
+   boitel classificam como sempre classificaram. Quem sabe, informa. */
+export function subcentroVendaPorCategoria(categoria: string, temBoitel = false): string | null {
+  return subcentroDaVenda(categoria, temBoitel);
 }
 
 /* O subcentro de SAIDA das despesas que o produtor paga por fora do boitel (hoje, o
@@ -189,7 +183,7 @@ export function classificarLotesCompra(
  * exista no plano, e inventar um só trocaria o erro de lugar.
  */
 export function classificarLotesPorLado(
-  lotes: LoteOC[], tipoOperacao: string | null | undefined,
+  lotes: LoteOC[], tipoOperacao: string | null | undefined, temBoitel = false,
 ): ClassificacaoLotes {
   /* ⚠ NO ABATE, "VALOR NÃO DERIVÁVEL" NÃO SE APLICA — OC-NOVO-COMPROMISSO-LOTE.
      `classificarLotesCompra` exige `valorLoteOC(l) != null`, e esse valor sai de
@@ -210,7 +204,7 @@ export function classificarLotesPorLado(
       status: 'ok',
       itens: c.itens.map((i) => ({
         ...i,
-        subcentro: subcentroVendaPorCategoria(i.lote.categoria ?? '') ?? '',
+        subcentro: subcentroVendaPorCategoria(i.lote.categoria ?? '', temBoitel) ?? '',
       })),
     };
   }

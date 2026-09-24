@@ -10,6 +10,7 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useFinanceiro, type FinanceiroLancamento } from '@/hooks/useFinanceiro';
+import { subcentroDaVenda } from '@/lib/financeiro/subcentroVenda';
 
 export interface PlanejamentoFinanceiroRow {
   id: string;
@@ -64,12 +65,14 @@ function mapRebanhoSubcentro(tipo: string, categoria: string, hasBoitel: boolean
     if (['touros','bois','garrotes','machos','bezerros_m','mamotes_m','desmama_m'].includes(categoria)) return 'Abates de Machos';
     if (['vacas','novilhas','bezerras_f','desmama_f','femeas','mamotes_f'].includes(categoria)) return 'Abates de Fêmeas';
   }
+  /* ⚠ A VENDA SAIU DAQUI — OC-BOITEL-VALOR-01. Esta tabela e a de `useOperacaoLiquidacao`
+     eram a MESMA regra escrita duas vezes, e discordavam: aqui o boitel classificava em
+     1150 e la' nao, e `mamotes_*` caia em Adulto aqui e em Desmama la'. A fonte unica
+     ficou em `@/lib/financeiro/subcentroVenda`, com a regra da OC para o mamote — a que
+     tinha o porque escrito. Abate e compra seguem abaixo: os mapas deles tambem divergem
+     dos da OC, e cada divergencia pede decisao propria. */
   if (tipo === 'venda') {
-    if (hasBoitel) return 'Venda em Boitel';
-    if (['desmama_m','bezerros_m'].includes(categoria)) return 'Venda de Desmama Machos';
-    if (['desmama_f','bezerras_f'].includes(categoria)) return 'Venda de Desmama Fêmeas';
-    if (['garrotes','touros','bois','machos_adultos','mamotes_m'].includes(categoria)) return 'Venda de Machos Adultos';
-    if (['novilhas','vacas','femeas_adultas','mamotes_f'].includes(categoria)) return 'Venda de Fêmeas Adultas';
+    return subcentroDaVenda(categoria, hasBoitel);
   }
   if (tipo === 'compra') {
     if (['garrotes','touros','bois','machos','bezerros_m','mamotes_m','desmama_m'].includes(categoria)) return 'Investimento Compra Bovinos Machos';

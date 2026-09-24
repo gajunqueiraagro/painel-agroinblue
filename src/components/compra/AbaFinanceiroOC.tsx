@@ -31,6 +31,9 @@ interface Props {
      identica: nao ha botao de gerar, nem selo, nem dicionario. Este roteador apenas
      repassa; quem sabe da previsao e' o shell da venda. */
   linhasPrevisao?: LinhaPrevisao[];
+  /** A venda é por boitel? Decide o subcentro da principal (1150, não 1140) — só o shell
+      da venda sabe, e este roteador apenas repassa. */
+  ehBoitel?: boolean;
   /** Obrigações que só o tipo sabe montar — repassadas à aba de compromissos. */
   propostasExtras?: PropostaCompromisso[];
   /** Vindo do rodapé: acabou de concluir, ofereça a geração. */
@@ -86,7 +89,7 @@ export function AbaFinanceiroOC(props: Props) {
         <div className="rounded-md border border-amber-500 bg-amber-50 dark:bg-amber-950/30 p-2 text-[12px] text-amber-800 dark:text-amber-200 flex items-center gap-2">
           <AlertTriangle className="h-4 w-4 shrink-0" /> Operação inconsistente (compromissos e partes legadas). Visão somente leitura.
         </div>
-        <AbaCompromissosOC ocApi={ocApi} bloqueado clienteId={clienteId} tipoOperacao={api.tipoOperacao} fornecedores={api.fornecedores}
+        <AbaCompromissosOC ocApi={ocApi} bloqueado clienteId={clienteId} tipoOperacao={api.tipoOperacao} fornecedores={api.fornecedores} ehBoitel={props.ehBoitel}
           valorAcordado={api.valorAcordado} lotes={api.lotes} contraparteId={api.contraparteId} dataOperacao={props.dataOperacao ?? null} dataChegada={props.dataChegada ?? null}
           darkSelectClass={props.darkSelectClass} recarregarDados={api.recarregar}
           seloProjecao={props.seloProjecao} propostasExtras={props.propostasExtras}
@@ -96,7 +99,7 @@ export function AbaFinanceiroOC(props: Props) {
   }
   // nova_vazia | novo_modelo — gate do modelo novo vem PRONTO do shell (financeiroNovoReadOnly).
   return (
-    <AbaCompromissosOC ocApi={ocApi} bloqueado={props.financeiroNovoReadOnly} clienteId={clienteId} tipoOperacao={api.tipoOperacao} fornecedores={api.fornecedores}
+    <AbaCompromissosOC ocApi={ocApi} bloqueado={props.financeiroNovoReadOnly} clienteId={clienteId} tipoOperacao={api.tipoOperacao} fornecedores={api.fornecedores} ehBoitel={props.ehBoitel}
       valorAcordado={api.valorAcordado} lotes={api.lotes} contraparteId={api.contraparteId} dataOperacao={props.dataOperacao ?? null} dataChegada={props.dataChegada ?? null}
       darkSelectClass={props.darkSelectClass} recarregarDados={api.recarregar}
       linhasPrevisao={props.linhasPrevisao} seloProjecao={props.seloProjecao}
