@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { LinhaResumo } from '@/components/ui/linha-resumo';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { pesoMedioPorCabeca, valorPorKgNegociado, type CompraLotesApi } from '@/hooks/useCompraLotes';
 import type { LoteRecebimento, EstadoRecebimento } from '@/hooks/useOperacaoRecebimento';
@@ -130,41 +131,41 @@ export function ResumoLateralOC({
       </div>
       <div className="pb-1">
         <BlocoHead titulo="Identificação" />
-        <div className="px-3 space-y-0.5">
-          <Linha rotulo="Tipo" valor={TIPO_LABEL[tipoLabel ?? ''] ?? null} />
-          <Linha rotulo="Contraparte" valor={fornecedorNome || null} />
-          <Linha rotulo="Data" valor={dataLabel || null} />
-          <Linha rotulo="Fazenda" valor={fazendaNome || null} />
+        <div>
+          <LinhaResumo rotulo="Tipo" valor={TIPO_LABEL[tipoLabel ?? ''] ?? null} />
+          <LinhaResumo rotulo="Contraparte" valor={fornecedorNome || null} />
+          <LinhaResumo rotulo="Data" valor={dataLabel || null} />
+          <LinhaResumo rotulo="Fazenda" valor={fazendaNome || null} />
         </div>
 
         <BlocoHead titulo="Negociação" />
-        <div className="px-3 space-y-0.5">
+        <div>
           {/* O QUE se comprou antes de QUANTO custou. */}
-          <Linha rotulo="Animais" valor={temNegociacao ? `${nOr(negociacaoTotais!.animais)} cab` : null} />
-          <Linha rotulo="Peso médio" valor={kgOr(pesoMedio)} />
-          <Linha rotulo="Valor por kg" valor={moneyOr(valorKg)} />
-          <Linha rotulo="Valor total" valor={temNegociacao ? moneyOr(negociacaoTotais!.valorNegociado) : null} valorClassName="text-primary" />
+          <LinhaResumo rotulo="Animais" valor={temNegociacao ? `${nOr(negociacaoTotais!.animais)} cab` : null} />
+          <LinhaResumo rotulo="Peso médio" valor={kgOr(pesoMedio)} />
+          <LinhaResumo rotulo="Valor por kg" valor={moneyOr(valorKg)} />
+          <LinhaResumo rotulo="Valor total" valor={temNegociacao ? moneyOr(negociacaoTotais!.valorNegociado) : null} cor="text-primary" />
         </div>
 
         <BlocoHead titulo="Recebimento" />
-        <div className="px-3 space-y-0.5">
+        <div>
           {/* ATENCAO DESTACA O VALOR, nao a linha: parcial e excedente sao estados
               que pedem o olho, mas o rotulo continua neutro como nos demais. */}
-          <Linha rotulo="Situação" valor={recEstadoLabel} valorClassName={recRealce} />
-          <Linha rotulo="Recebido" valor={rec.recebido == null ? null : `${nOr(rec.recebido)} / ${nOr(rec.negociado)} cab`} />
+          <LinhaResumo rotulo="Situação" valor={recEstadoLabel} cor={recRealce} />
+          <LinhaResumo rotulo="Recebido" valor={rec.recebido == null ? null : `${nOr(rec.recebido)} / ${nOr(rec.negociado)} cab`} />
         </div>
 
         <BlocoHead titulo="Financeiro" />
-        <div className="px-3 space-y-0.5">
-          <Linha rotulo="Lançado" valor={temFinanceiro ? moneyOr(finLancado) : null} />
-          <Linha rotulo="Liquidado" valor={temFinanceiro ? moneyOr(finLiquidado) : null} />
-          <Linha rotulo="Saldo" valor={temFinanceiro ? moneyOr(finSaldo) : null}
-            valorClassName={finSaldo > 0.005 ? 'text-amber-700 dark:text-amber-500' : undefined} />
+        <div>
+          <LinhaResumo rotulo="Lançado" valor={temFinanceiro ? moneyOr(finLancado) : null} />
+          <LinhaResumo rotulo="Liquidado" valor={temFinanceiro ? moneyOr(finLiquidado) : null} />
+          <LinhaResumo rotulo="Saldo" valor={temFinanceiro ? moneyOr(finSaldo) : null}
+            cor={finSaldo > 0.005 ? 'text-amber-700 dark:text-amber-500' : undefined} />
         </div>
 
         <BlocoHead titulo="Documentos" />
-        <div className="px-3 space-y-0.5">
-          <Linha rotulo="Situação" valor={doc ? doc.situacao : null} />
+        <div>
+          <LinhaResumo rotulo="Situação" valor={doc ? doc.situacao : null} />
         </div>
       </div>
     </aside>
@@ -182,14 +183,6 @@ function BlocoHead({ titulo }: { titulo: string }) {
   return (
     <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 first:mt-0 mb-0.5">
       <span className="text-[9px] font-bold uppercase tracking-wide text-primary/90 leading-none">{titulo}</span>
-    </div>
-  );
-}
-function Linha({ rotulo, valor, valorClassName }: { rotulo: string; valor: string | null; valorClassName?: string }) {
-  return (
-    <div className="flex items-baseline justify-between gap-1.5 leading-tight">
-      <span className="text-muted-foreground shrink-0">{rotulo}</span>
-      <span className={`font-medium text-right truncate ${valorClassName ?? ''}`}>{valor || '—'}</span>
     </div>
   );
 }

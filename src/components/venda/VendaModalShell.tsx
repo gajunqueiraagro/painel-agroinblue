@@ -56,6 +56,7 @@ import type { LiquidacaoApi } from '@/hooks/useOperacaoLiquidacao';
 import { BoitelTopoNegociacao, liquidoDaVendaBoitel, bolsoDaVendaBoitel, unitariosDoLiquido, derivadosBoitel, PilulaCenario } from '@/components/venda/BoitelNegociacaoDerivado';
 import { BoitelBlocosModais, BoitelAnaliseFaixa, faltamDosCinco, type BoitelEdicao } from '@/components/venda/BoitelBlocosModais';
 import { pesoMedioPorCabeca } from '@/hooks/useCompraLotes';
+import { LinhaResumo } from '@/components/ui/linha-resumo';
 import { consolidarRecebimento } from '@/components/compra/ResumoLateralOC';
 import { formatMoeda } from '@/lib/calculos/formatters';
 
@@ -105,28 +106,6 @@ function DicaBotao({ texto }: { texto: string | null | undefined }) {
     <span className="text-[10px] font-normal text-white/80 leading-snug max-w-[15rem] text-right">
       {texto}
     </span>
-  );
-}
-
-/* Par rotulo-valor do resumo lateral — idioma do `Linha` de ResumoLateralOC (A17).
-   ⚠ SEXTA COPIA deste par. Sai na mesma extracao que levar o resumo para lugar unico. */
-function LinhaResumo({ rotulo, valor, cor, forte, selo }: {
-  rotulo: string; valor: string | null;
-  /* ⚠ A COR VEM DE FORA — B-11. O resumo passou a mostrar dois mundos (projecao ambar,
-     realizado solido) e a mesma linha serve aos dois; cravar a cor aqui obrigaria a um
-     segundo `LinhaResumo`, que e' como dois pares rotulo-valor comecam a divergir. */
-  cor?: string; forte?: boolean; selo?: ReactNode;
-}) {
-  return (
-    <div className="flex items-baseline justify-between gap-1.5 leading-tight">
-      <span className="text-muted-foreground shrink-0">{rotulo}</span>
-      <span className="flex items-baseline gap-1.5 min-w-0">
-        {selo}
-        <span className={`text-right truncate tabular-nums ${forte ? 'font-bold' : 'font-medium'} ${valor ? (cor ?? '') : ''}`}>
-          {valor || '—'}
-        </span>
-      </span>
-    </div>
   );
 }
 
@@ -965,7 +944,7 @@ export function VendaModalShell({
               <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 first:mt-0 mb-0.5">
                 <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Identificação</span>
               </div>
-              <div className="px-3 space-y-0.5">
+              <div>
                 <LinhaResumo rotulo="Comprador" valor={compradorNome} />
                 <LinhaResumo rotulo="Data" valor={data ? data.split('-').reverse().join('/') : null} />
                 <LinhaResumo rotulo="Fazenda" valor={fazendaNome} />
@@ -986,7 +965,7 @@ export function VendaModalShell({
                   REALIZADO-SOBERANO: depois do abate ele mostra o real, e esta' certo —
                   ver a doutrina dos dois mundos em `bolsoDaVendaBoitel`. A promessa vive
                   na faixa de analise, derivada da linha projetada. */}
-              <div className="px-3 space-y-0.5">
+              <div>
                 <LinhaResumo rotulo="Lotes" valor={lotesApi && lotesApi.totais.lotes > 0
                   ? `${lotesApi.totais.lotes} · ${lotesApi.totais.animais} cab` : null} />
                 <LinhaResumo rotulo="Valor acordado"
@@ -1005,7 +984,7 @@ export function VendaModalShell({
                   ⚠ AUSENCIA CONTINUA SENDO TRACO: sem lotes de entrega o helper devolve
                   `null` nos tres, e as duas linhas imprimem "—". O que mudou nao foi a
                   sentinela — foi passar a existir dado por tras dela. */}
-              <div className="px-3 space-y-0.5">
+              <div>
                 <LinhaResumo rotulo="Entregue" valor={entrega.recebido == null ? null
                   : `${entrega.recebido} / ${entrega.negociado ?? '—'} cab`} />
                 <LinhaResumo rotulo="Saldo a entregar" valor={entrega.diferenca == null ? null
@@ -1033,7 +1012,7 @@ export function VendaModalShell({
                     {!topoNoRealizado && <PilulaCenario cenario="projetado" />}
                   </div>
                 </div>
-                <div className="px-3 space-y-0.5">
+                <div>
                   {linhasAcerto.map(l => (
                     <LinhaResumo key={l.rotulo} rotulo={l.rotulo} cor={corMundo}
                       valor={`${l.sinal === '−' ? '− ' : ''}${formatMoeda(l.valor)}`} />
@@ -1058,7 +1037,7 @@ export function VendaModalShell({
 
               {/* ⚠ SEM COMPROMISSOS OS TRES SAO TRACO, e nao zero: operacao sem financeiro
                   lancado nao "recebeu zero", ela ainda nao tem financeiro. */}
-              <div className="px-3 space-y-0.5">
+              <div>
                 <LinhaResumo rotulo="A receber" valor={finAReceber == null ? null : formatMoeda(finAReceber)} />
                 <LinhaResumo rotulo="Recebido" valor={finRecebido == null ? null : formatMoeda(finRecebido)} />
                 <LinhaResumo rotulo="Saldo" valor={finSaldo == null ? null : formatMoeda(finSaldo)} />

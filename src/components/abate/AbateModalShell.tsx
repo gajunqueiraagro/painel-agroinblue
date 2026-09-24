@@ -27,6 +27,7 @@
 import { useState, useMemo } from 'react';
 import { useStatusPilares } from '@/hooks/useStatusPilares';
 import { BlocoTopoAba } from '@/components/ui/bloco-topo-aba';
+import { LinhaResumo } from '@/components/ui/linha-resumo';
 import { ReabrirP1Dialog } from '@/components/ReabrirP1Dialog';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -133,59 +134,6 @@ const MESES_EXTENSO = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho
 
 /** Duas casas, como em toda a tela do abate. */
 const num2 = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-function LinhaResumo({ rotulo, valor, cor, forte, selo, empilhado, seloAbaixo }: {
-  rotulo: string; valor: string | null;
-  /* ⚠ A COR VEM DE FORA — B-11. O resumo passou a mostrar dois mundos (projecao ambar,
-     realizado solido) e a mesma linha serve aos dois; cravar a cor aqui obrigaria a um
-     segundo `LinhaResumo`, que e' como dois pares rotulo-valor comecam a divergir. */
-  cor?: string; forte?: boolean; selo?: ReactNode;
-  /**
-   * Rotulo em cima, valor embaixo a direita — MOVIMENTACOES-PADRAO-01a.
-   *
-   * ⚠ NAO E' ESTILO, E' O QUE SOBRA QUANDO O PAR NAO CABE. Medido no NJ 16/04/2026 (Range
-   * sobre o conteudo contra o `clientWidth` menos o padding, descontando a escala 0,95 do
-   * Radix), em 10px:
-   *                              precisa   com 200px (182 uteis)   com 240px (218 uteis)
-   *     "por @ · por cabeca"      214,8          -32,8                   +3,2
-   *     "Carcaca · RC"            185,0           -3,0                  +33,0
-   *     "A receber da industria"  183,0           -1,0                  +35,0
-   * O aside foi a 240px no fix1 e as duas ultimas voltaram a UMA linha. So' "por @ · por
-   * cabeca" segue empilhada: +3,2px nao e' folga, e' sorte — o proximo digito a consome.
-   * As tres saidas proibidas estao proibidas por um motivo cada: truncate esconde digito
-   * de dinheiro, 9px quebra o piso do A18, e alargar mais o aside rouba do corpo.
-   */
-  empilhado?: boolean;
-  /**
-   * O selo desce para uma sublinha propria, a direita — fix2.
-   *
-   * ⚠ ELE DISPUTAVA A LINHA COM O DINHEIRO E GANHAVA. "A receber da industria" leva o selo
-   * "agendado 13/09/2026"; com os dois no mesmo `flex`, o `truncate` do valor cortava o
-   * NUMERO — "R$ ..." — enquanto a data continuava inteira. O selo e' contexto, o valor e'
-   * a resposta: quem encolhe e' o contexto.
-   * ⚠ SEM SELO A LINHA NAO CRESCE: a sublinha so' existe quando ha selo, entao a linha
-   * segue em 16px no caso comum.
-   */
-  seloAbaixo?: boolean;
-}) {
-  return (
-    /* ⚠ O PADDING MORA NA LINHA, nao no container — A17. Cada item e' uma linha so', com
-       o valor a direita e sem quebra; `py-px` da' ~16px por linha, e e' o que faz as
-       quatro secoes caberem sem rolar. Empilhada, a linha vai a ~26px. */
-    <div className={`px-2.5 py-px leading-tight ${empilhado || seloAbaixo ? '' : 'flex items-baseline justify-between gap-1.5'}`}>
-      <div className={empilhado || !seloAbaixo ? 'contents' : 'flex items-baseline justify-between gap-1.5'}>
-        <span className={`text-muted-foreground ${empilhado ? 'block' : 'shrink-0'}`}>{rotulo}</span>
-        <span className={`flex items-baseline gap-1.5 min-w-0 ${empilhado ? 'justify-end' : ''}`}>
-          {!seloAbaixo && selo}
-          <span className={`text-right tabular-nums ${empilhado || seloAbaixo ? 'whitespace-nowrap' : 'truncate'} ${forte ? 'font-bold' : 'font-medium'} ${valor ? (cor ?? '') : ''}`}>
-            {valor || '—'}
-          </span>
-        </span>
-      </div>
-      {seloAbaixo && selo && <div className="flex justify-end leading-none">{selo}</div>}
-    </div>
-  );
-}
 
 export interface AbateModalShellProps {
   data: string;
