@@ -134,22 +134,36 @@ const MESES_EXTENSO = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho
 /** Duas casas, como em toda a tela do abate. */
 const num2 = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-function LinhaResumo({ rotulo, valor, cor, forte, selo }: {
+function LinhaResumo({ rotulo, valor, cor, forte, selo, empilhado }: {
   rotulo: string; valor: string | null;
   /* ⚠ A COR VEM DE FORA — B-11. O resumo passou a mostrar dois mundos (projecao ambar,
      realizado solido) e a mesma linha serve aos dois; cravar a cor aqui obrigaria a um
      segundo `LinhaResumo`, que e' como dois pares rotulo-valor comecam a divergir. */
   cor?: string; forte?: boolean; selo?: ReactNode;
+  /**
+   * Rotulo em cima, valor embaixo a direita — MOVIMENTACOES-PADRAO-01a.
+   *
+   * ⚠ NAO E' ESTILO, E' O QUE SOBRA QUANDO O PAR NAO CABE. Com o aside a 200px, tres
+   * rotulos estouram a linha em 10px, MEDIDO no NJ 16/04/2026 (Range sobre o conteudo
+   * contra o `clientWidth` menos o padding, descontando a escala 0,95 do Radix):
+   *     "por @ · por cabeca"      precisa 214,8  cabe 182  -> -32,8
+   *     "Carcaca · RC"            precisa 185,0  cabe 182  ->  -3,0
+   *     "A receber da industria"  precisa 183,0  cabe 182  ->  -1,0
+   * As tres saidas proibidas estao proibidas por um motivo cada: truncate esconde digito
+   * de dinheiro, 9px quebra o piso do A18, e alargar o aside rouba do corpo. Empilhar e' a
+   * unica que nao mente.
+   */
+  empilhado?: boolean;
 }) {
   return (
     /* ⚠ O PADDING MORA NA LINHA, nao no container — A17. Cada item e' uma linha so', com
-       o valor a direita e sem quebra; `py-[3px]` da' ~21px por linha, e e' o que faz as
-       quatro secoes caberem sem rolar. */
-    <div className="flex items-baseline justify-between gap-1.5 px-3 py-[3px] leading-tight">
-      <span className="text-muted-foreground shrink-0">{rotulo}</span>
-      <span className="flex items-baseline gap-1.5 min-w-0">
+       o valor a direita e sem quebra; `py-px` da' ~16px por linha, e e' o que faz as
+       quatro secoes caberem sem rolar. Empilhada, a linha vai a ~26px. */
+    <div className={`px-2 py-px leading-tight ${empilhado ? '' : 'flex items-baseline justify-between gap-1.5'}`}>
+      <span className={`text-muted-foreground ${empilhado ? 'block' : 'shrink-0'}`}>{rotulo}</span>
+      <span className={`flex items-baseline gap-1.5 min-w-0 ${empilhado ? 'justify-end' : ''}`}>
         {selo}
-        <span className={`text-right truncate tabular-nums ${forte ? 'font-bold' : 'font-medium'} ${valor ? (cor ?? '') : ''}`}>
+        <span className={`text-right tabular-nums ${empilhado ? 'whitespace-nowrap' : 'truncate'} ${forte ? 'font-bold' : 'font-medium'} ${valor ? (cor ?? '') : ''}`}>
           {valor || '—'}
         </span>
       </span>
@@ -737,36 +751,36 @@ export function AbateModalShell({
           ⚠ NUNCA UUID NA TELA, nem abreviado: "OC #a1b2c3d4" nao identifica nada para o
           operador — ele conhece a operacao pelo numero do documento. Sem documento, so'
           "OC", que ja' diz o que e'. */}
-      <div className="h-11 shrink-0 bg-primary text-primary-foreground px-4 flex items-center gap-3">
-        <h2 className="shrink-0 text-[16px] font-semibold leading-none">Abate de animais</h2>
-        <span className="shrink-0 rounded-md border border-white/40 px-2 py-0.5 text-[11px] leading-none">
+      <div className="h-9 shrink-0 bg-primary text-primary-foreground px-4 flex items-center gap-3">
+        <h2 className="shrink-0 text-[13px] font-semibold leading-none">Abate de animais</h2>
+        <span className="shrink-0 rounded-md border border-white/40 px-2 py-px text-[10px] leading-none">
           {numeroDocumento ? `OC ${numeroDocumento}` : 'OC'}
         </span>
-        <span className="flex min-w-0 items-center gap-1 whitespace-nowrap text-[12px] text-white/85">
-          <Calendar className="h-3.5 w-3.5 shrink-0" /> {data ? data.split('-').reverse().join('/') : '—'}
+        <span className="flex min-w-0 items-center gap-1 whitespace-nowrap text-[11px] text-white/85">
+          <Calendar className="h-3 w-3 shrink-0" /> {data ? data.split('-').reverse().join('/') : '—'}
         </span>
-        <span className="flex min-w-0 items-center gap-1 truncate whitespace-nowrap text-[12px] text-white/85">
-          <Building2 className="h-3.5 w-3.5 shrink-0" /> {fazendaNome ?? '—'}
+        <span className="flex min-w-0 items-center gap-1 truncate whitespace-nowrap text-[11px] text-white/85">
+          <Building2 className="h-3 w-3 shrink-0" /> {fazendaNome ?? '—'}
         </span>
         <span className="ml-auto shrink-0 text-[11px] capitalize text-white/85">{ocStatusComercial ?? 'rascunho'}</span>
         <button type="button" onClick={onFechar} className="shrink-0 text-white/80 hover:text-white"
-          title="Fechar" aria-label="Fechar"><X className="h-4 w-4" /></button>
+          title="Fechar" aria-label="Fechar"><X className="h-3.5 w-3.5" /></button>
       </div>
 
       {/* ⚠ O RESUMO COMECA NO CABECALHO E VAI ATE O RODAPE: as abas ficam DENTRO da
           coluna da esquerda. Com as abas por cima das duas colunas, o resumo perdia os
           44px delas e cortava no fim — e a barra de abas nao diz nada sobre o resumo. */}
-      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[1fr_300px]">
+      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[1fr_200px]">
         <div className="flex min-h-0 flex-col">
         {/* BARRA DE ABAS — template do CompraModalShell (bg-card, border-b, px-6 py-3). */}
-        <div className="shrink-0 bg-card border-b px-6 py-3 flex items-center gap-1">
+        <div className="shrink-0 bg-card border-b px-2 py-1 flex items-center gap-1">
           {abasDoAbate(!!ocOperacaoId).map(a => {
             const active = a.key === abaAtiva && a.enabled;
             return (
               <button key={a.key} type="button" disabled={!a.enabled}
                 onClick={() => a.enabled && setAbaAtiva(a.key)}
                 title={a.motivo}
-                className={`h-8 px-3 rounded-md text-[12px] font-medium transition-colors ${
+                className={`h-5 px-[7px] rounded-md text-[10px] font-medium transition-colors ${
                   active ? 'bg-primary/10 text-primary'
                   : a.enabled ? 'text-muted-foreground hover:bg-muted/50'
                   : 'text-muted-foreground/40 cursor-not-allowed'}`}>
@@ -775,7 +789,7 @@ export function AbateModalShell({
             );
           })}
         </div>
-          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto bg-muted/30 p-4">
+          <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto bg-muted/30 p-2">
             {/* ── ENTREGA ────────────────────────────────────────────────────────────
                 ⚠ A MESMA GRADE DA COMPRA, com o vocabulario trocado por dicionario. O gesto
                 e' o mesmo — dizer quantos animais de cada lote se moveram, em que dia —, e o
@@ -957,33 +971,33 @@ export function AbateModalShell({
               </div>
             ) : (
             <div className="rounded-md border bg-card p-2 shadow-sm space-y-2 min-w-0">
-              <div className="text-[15px] font-medium text-foreground">Identificação do abate</div>
+              <div className="text-[12px] font-medium text-foreground">Identificação do abate</div>
 
               {/* FAIXA DE TOPO — rotulo 11px/400, valor 20px/500. */}
               {/* ⚠ O COMPRADOR OCUPA O QUE SOBRA (A22): em tres colunas iguais, "Fortunceres
                   S.A. - Minerva" cortava enquanto Data sobrava espaco. Data e Fazenda tem
                   largura fixa porque o conteudo delas e' previsivel; o nome, nao. */}
-              <div className="grid grid-cols-[1fr_150px_220px] gap-3 rounded-md border bg-muted/20 px-3.5 py-[11px]">
+              <div className="grid grid-cols-[1fr_100px_150px] gap-2 rounded-md border bg-muted/20 px-[9px] py-1.5">
                 <div className="min-w-0">
-                  <div className="text-[11px] font-normal text-muted-foreground leading-none">Comprador</div>
-                  <div className="mt-1 truncate whitespace-nowrap text-[clamp(16px,1.6vw,20px)] font-medium leading-none">{frigorificoNome ?? '—'}</div>
+                  <div className="text-[10px] font-normal text-muted-foreground leading-none">Comprador</div>
+                  <div className="mt-0.5 truncate whitespace-nowrap text-[15px] font-medium leading-none">{frigorificoNome ?? '—'}</div>
                   {/* ⚠ SO' APARECE QUANDO EXISTE: uma linha "CNPJ —" fixa diria que o
                       documento falta no cadastro, quando o que falta e' a carga que o traz. */}
                   {frigorificoDoc && (
-                    <div className="mt-0.5 text-[11px] text-muted-foreground leading-none truncate">
+                    <div className="mt-0.5 text-[10px] text-muted-foreground leading-none truncate">
                       CNPJ {frigorificoDoc}
                     </div>
                   )}
                 </div>
                 <div className="min-w-0">
-                  <div className="text-[11px] font-normal text-muted-foreground leading-none">Data do abate</div>
-                  <div className="mt-1 text-[20px] font-medium tabular-nums leading-none">
+                  <div className="text-[10px] font-normal text-muted-foreground leading-none">Data do abate</div>
+                  <div className="mt-0.5 text-[15px] font-medium tabular-nums leading-none">
                     {data ? data.split('-').reverse().join('/') : <span className="text-muted-foreground">—</span>}
                   </div>
                 </div>
                 <div className="min-w-0">
-                  <div className="text-[11px] font-normal text-muted-foreground leading-none">Fazenda de origem</div>
-                  <div className="mt-1 text-[20px] font-medium leading-none truncate">{fazendaNome ?? '—'}</div>
+                  <div className="text-[10px] font-normal text-muted-foreground leading-none">Fazenda de origem</div>
+                  <div className="mt-0.5 text-[15px] font-medium leading-none truncate">{fazendaNome ?? '—'}</div>
                 </div>
               </div>
               <Separator />
@@ -1061,9 +1075,9 @@ export function AbateModalShell({
                   </div>
                 )}
                 <div className="min-w-0 lg:col-span-3">
-                  <Label className="text-[10px] text-muted-foreground">Observações / Lote</Label>
+                  <Label className="text-[12px] font-medium text-muted-foreground">Observações / Lote</Label>
                   <Input value={observacao} onChange={e => setObservacao(e.target.value)} placeholder="Opcional"
-                    className="mt-[3px] h-8 px-2.5 text-[12px]" />
+                    className="mt-[3px] h-[22px] px-2.5 text-[10px]" />
                 </div>
               </div>
             </div>
@@ -1079,32 +1093,32 @@ export function AbateModalShell({
               antes do cartao. Com `h-full` + `flex-col` o cabecalho fica preso no topo, a
               lista ganha o resto e so' ela rola; `min-h-0` no meio e' o que permite a
               lista encolher em vez de esticar o card para fora da coluna. */}
-          <aside className="flex h-full flex-col bg-card rounded-md border shadow-sm overflow-hidden text-[11px]">
+          <aside className="flex h-full flex-col bg-card rounded-md border shadow-sm overflow-hidden text-[10px]">
             {/* ⚠ O STATUS MORA NO CABECALHO DO RESUMO, nao numa linha da lista: e' a
                 primeira pergunta ("em que pe esta esta operacao?") e ela nao deve disputar
                 espaco com numeros. */}
-            <div className="h-8 shrink-0 border-b border-border bg-accent/40 flex items-center gap-2 px-3 text-[11px] font-medium uppercase tracking-wide text-primary">
+            <div className="shrink-0 border-b border-border bg-accent/40 flex items-center gap-2 px-2 py-[5px] text-[10px] font-medium uppercase tracking-wide text-primary">
               Resumo da operação
               <span className={`ml-auto rounded-full px-1.5 py-px text-[10px] font-normal normal-case ${TOM_STATUS[ocStatusComercial ?? 'rascunho'] ?? TOM_STATUS.rascunho}`}>
                 {ROTULO_STATUS[ocStatusComercial ?? 'rascunho'] ?? 'Rascunho'}
               </span>
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto pb-1">
-              <div className="bg-primary/10 border-y border-primary/15 px-3 py-1 mt-0.5 first:mt-0 mb-0.5">
+              <div className="bg-primary/10 border-y border-primary/15 px-2 py-1 mt-0.5 first:mt-0 mb-0.5">
                 <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Identificação</span>
               </div>
               {/* ⚠ SEM ROTULOS AQUI. "Comprador: Fortunceres" gasta metade da largura
                   para dizer o que o nome ja' diz — e nesta secao o dado É a identidade. Os
                   rotulos continuam nas outras, onde o numero sozinho nao se explica. */}
-              <div className="px-3 py-1.5 leading-tight">
-                <div className="truncate text-[13px] font-semibold text-foreground">{frigorificoNome ?? '—'}</div>
-                {frigorificoDoc && <div className="truncate text-[11px] text-muted-foreground">CNPJ {frigorificoDoc}</div>}
-                <div className="truncate text-[11px] text-muted-foreground">
+              <div className="px-2 py-1 leading-tight">
+                <div className="truncate text-[11px] font-semibold text-foreground">{frigorificoNome ?? '—'}</div>
+                {frigorificoDoc && <div className="truncate text-[10px] text-muted-foreground">CNPJ {frigorificoDoc}</div>}
+                <div className="truncate text-[10px] text-muted-foreground">
                   {[data ? data.split('-').reverse().join('/') : null, fazendaNome].filter(Boolean).join(' · ') || '—'}
                 </div>
               </div>
 
-              <div className="bg-primary/10 border-y border-primary/15 px-3 py-1 mt-0.5 mb-0.5">
+              <div className="bg-primary/10 border-y border-primary/15 px-2 py-1 mt-0.5 mb-0.5">
                 <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Negociação</span>
               </div>
               {/* ⚠ ESTES CAMPOS NUNCA ESTIVERAM LIGADOS — B-08 item 4. Nao eram fonte
@@ -1129,7 +1143,7 @@ export function AbateModalShell({
                 {/* ⚠ CADA LINHA RESPONDE UMA PERGUNTA INTEIRA. "Carcaça · RC" junta o peso
                     com o rendimento que o explica; "Arrobas" junta o total do lote com a
                     média, que é o que se compara com o preço. */}
-                <LinhaResumo rotulo="Carcaça · RC" valor={totaisAbate.carcaca > 0
+                <LinhaResumo empilhado rotulo="Carcaça · RC" valor={totaisAbate.carcaca > 0
                   ? `${num2(totaisAbate.carcacaCab)} kg/cab · ${num2(totaisAbate.rc)}%` : null} />
                 <LinhaResumo rotulo="Arrobas" valor={totaisAbate.arrobas > 0
                   ? `${num2(totaisAbate.arrobas)} @ · ${num2(totaisAbate.arrobaCab)} @/cab` : null} />
@@ -1156,12 +1170,12 @@ export function AbateModalShell({
                 )}
                 {/* Por @ antes de por cabeça: é a unidade em que o preço foi negociado. */}
                 {totaisAbate.liquido > 0 && (
-                  <LinhaResumo rotulo="por @ · por cabeça"
+                  <LinhaResumo empilhado rotulo="por @ · por cabeça"
                     valor={`${formatMoeda(totaisAbate.arrobas > 0 ? totaisAbate.liquido / totaisAbate.arrobas : 0)} · ${formatMoeda(totaisAbate.cabecas > 0 ? totaisAbate.liquido / totaisAbate.cabecas : 0)}`} />
                 )}
               </div>
 
-              <div className="bg-primary/10 border-y border-primary/15 px-3 py-1 mt-0.5 mb-0.5">
+              <div className="bg-primary/10 border-y border-primary/15 px-2 py-1 mt-0.5 mb-0.5">
                 <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Entrega</span>
               </div>
               {/* ⚠ MESMO CASO, MESMA CURA. A fonte e' `recebimentoApi.lotes`, consolidada
@@ -1179,7 +1193,7 @@ export function AbateModalShell({
 
               {/* ⚠ A RECEBER, e nao "Lancado". Numa venda o dinheiro ENTRA — o vocabulario
                   do financeiro inverte junto com o sentido da operacao. */}
-              <div className="bg-primary/10 border-y border-primary/15 px-3 py-1 mt-0.5 mb-0.5">
+              <div className="bg-primary/10 border-y border-primary/15 px-2 py-1 mt-0.5 mb-0.5">
                 <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Financeiro</span>
               </div>
               {/* ⚠ O ACERTO DO BOITEL NAO EXISTE NO ABATE. Aqui a venda lista as sete
@@ -1204,7 +1218,7 @@ export function AbateModalShell({
                     o número ("R$ x, agendado para dd/mm"), e uma linha só para ela custava
                     a mesma altura de um dado inteiro. Âmbar enquanto é promessa; sem
                     compromisso, o traço vem com a causa escrita. */}
-                <LinhaResumo rotulo="A receber da indústria"
+                <LinhaResumo empilhado rotulo="A receber da indústria"
                   valor={finAReceber == null ? null : formatMoeda(finAReceber)}
                   selo={finAReceber == null
                     ? <span className="text-[10px] text-muted-foreground">grava ao concluir</span>
@@ -1225,7 +1239,7 @@ export function AbateModalShell({
                     nao a diferenca das duas linhas de cima. */}
                 <LinhaResumo rotulo="Falta receber" valor={finFaltaReceber == null ? null : formatMoeda(finFaltaReceber)} />
                 {finLiquidoProdutor != null && totaisAbate.arrobas > 0 && (
-                  <LinhaResumo rotulo="por @ · por cabeça"
+                  <LinhaResumo empilhado rotulo="por @ · por cabeça"
                     valor={`${formatMoeda(finLiquidoProdutor / totaisAbate.arrobas)} · ${formatMoeda(totaisAbate.cabecas > 0 ? finLiquidoProdutor / totaisAbate.cabecas : 0)}`} />
                 )}
               </div>
@@ -1237,13 +1251,13 @@ export function AbateModalShell({
       {/* ⚠ RODAPE FIXO E PRESENTE EM TODA ABA. `justify-between` poe o Fechar a esquerda e
           os botoes da aba a direita; antes era `justify-end` e o Fechar viajava junto dos
           outros, mudando de lugar conforme a aba tivesse ou nao Salvar. */}
-      <div className="shrink-0 bg-primary px-6 py-2 flex items-center justify-between gap-3">
+      <div className="h-8 shrink-0 bg-primary px-2 flex items-center justify-between gap-2">
         <Button type="button" variant="ghost" onClick={onFechar}
-          className="text-white/90 hover:bg-white/10 hover:text-white" title="Fechar sem salvar" aria-label="Fechar">
+          className="h-[22px] px-[9px] text-[10px] text-white/90 hover:bg-white/10 hover:text-white" title="Fechar sem salvar" aria-label="Fechar">
           Fechar
         </Button>
         {/* Os botoes da aba vivem juntos a direita; o Fechar fica sozinho a esquerda. */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
         {/* ⚠ A VENDA NAO TINHA COMO CONCLUIR — PR-OC-VENDA-ENTREGA-01B. A aba Entrega
             exige `status='fechada'` e dizia "conclua a negociação", mas o gatilho nao
             existia em lugar nenhum do shell: o operador salvava achando que concluia.
@@ -1260,10 +1274,10 @@ export function AbateModalShell({
             'fechada' mandando "reabra para editar". A venda nao tinha por onde reabrir:
             instrucao certa, destino ausente — o mesmo defeito que o Concluir teve. */}
         {naNegociacao && !!ocOperacaoId && ocStatusComercial === 'fechada' && (
-          <Button type="button" variant="secondary" className="gap-1.5" disabled={submitting}
+          <Button type="button" variant="secondary" className="h-[22px] px-[9px] text-[10px] gap-1" disabled={submitting}
             title="Reabrir devolve a operação para programada e libera a edição. Fica registrado na Auditoria com o motivo."
             onClick={() => { setMotivoReabrir(''); setReabrirAberto(true); }}>
-            <RotateCcw className="h-4 w-4" /> Reabrir negociação
+            <RotateCcw className="h-3 w-3" /> Reabrir negociação
           </Button>
         )}
         {/* ⚠ ORDEM E DESTAQUE: Salvar antes, Concluir depois e em `bg-cta`. O ato
@@ -1282,7 +1296,7 @@ export function AbateModalShell({
             if (criando && gravou) setAbaAtiva('negociacao');
           }}
           disabled={submitting || !podeSalvar || semAlteracoes || ocStatusComercial === 'cancelada'}
-          variant="secondary" className="gap-1.5 disabled:opacity-60"
+          variant="secondary" className="h-[22px] px-[9px] text-[10px] gap-1 disabled:opacity-60"
           title={motivoNaoSalva ?? (semAlteracoes ? 'Nada alterado desde o último salvamento' : undefined)}>
           {/* O TEXTO VOLTOU AO DO MOCKUP em PR-OC-VENDA-ABA-NEGOCIACAO-01, porque agora
               ha para onde ir. Ele ficou em "Salvar operação" enquanto a Negociacao nao
@@ -1291,12 +1305,12 @@ export function AbateModalShell({
           {submitting ? 'Salvando...'
             : naNegociacao ? 'Salvar negociação'
             : ocOperacaoId ? 'Salvar abate'
-            : (<>Salvar e continuar para Negociação <ArrowRight className="h-4 w-4" /></>)}
+            : (<>Salvar e continuar para Negociação <ArrowRight className="h-3 w-3" /></>)}
         </Button>
         </>)}
         {naNegociacao && !!ocOperacaoId && ocStatusComercial === 'programada' && recebimentoApi && (<>
           <DicaBotao texto={concluirTravadoPor} />
-          <Button type="button" className="gap-1.5"
+          <Button type="button" className="h-[22px] px-[9px] text-[10px] gap-1"
             /* ⚠ O CONCLUIR NAO ESTAVA QUEBRADO — ele ACORDAVA depois do Salvar. O defeito
                era o SILENCIO: cinza, sem dizer o que faltava, e o operador concluia que o
                botao nao funcionava. Correcao do Gabriel, B-09 item 1.
@@ -1341,7 +1355,7 @@ export function AbateModalShell({
               setOfereceGerarCompromissos(true);
               setAbaAtiva('financeiro');
             }}>
-            <Check className="h-4 w-4" /> Concluir negociação
+            <Check className="h-3 w-3" /> Concluir negociação
           </Button>
         </>)}
         </div>

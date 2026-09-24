@@ -446,6 +446,30 @@ consequência do que a linha *não* carrega, não uma escolha estética separada
 Não confundir com o **A17**: lá o par rótulo-valor serve para **comparar** grandezas de
 um mesmo registro; aqui a linha serve para **escolher** um registro entre vários.
 
+### Escala de modal (24/09/2026)
+
+O A18 passa a ter **duas escalas**, e a diferença não é gosto: em tela cheia a régua
+compete com o navegador; dentro de um modal ela compete com o **rodapé fixo e o resumo
+lateral**, que não podem rolar. A mesma tipografia que respira numa página empurra o
+resumo para fora da tela num modal de `100vh − 32px`.
+
+| papel | tela cheia | **dentro de modal** |
+|---|---|---|
+| valor do bloco de topo | 20px/500 | **15px/500** |
+| rótulo do bloco de topo | 11px/400 muted | **10px/400 muted** |
+| título de seção | 15px/500 | **12px/500** |
+| linha de lista (identidade / contexto) | 12/11px | **11/10px** |
+| resumo lateral (base) | — | **10px** |
+
+Cabeçalho do modal 36px, barra de abas 28px com botão de 20px, rodapé 32px com botões de
+22px, `aside` de 200px. Decisão do Gabriel em 24/09/2026 (MOVIMENTACOES-PADRAO-01a), com o
+`AbateModalShell` como molde dos oito modais de movimentação.
+
+⚠ **O piso de 9,5px continua valendo.** A escala de modal desce até 10px e para ali; 9px
+segue sendo exceção exclusiva da Grade do DRE (ver CLAUDE.md). Quando uma linha do resumo
+não couber em 10px, ela vira **duas sublinhas** — nunca 9px, nunca truncate, nunca um
+`aside` mais largo.
+
 ---
 
 ## A19 — Valor monetário nunca aparece cru
