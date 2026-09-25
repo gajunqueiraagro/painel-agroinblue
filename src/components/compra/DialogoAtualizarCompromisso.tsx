@@ -20,7 +20,7 @@ const brl = (n: number | null) =>
   n == null ? '—' : n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 export function DialogoAtualizarCompromisso({
-  api, loteId, rotulo, versao, onFechar, onAtualizado,
+  api, loteId, rotulo, versao, onFechar, onAtualizado, motivoReabertura = null,
 }: {
   api: ReprogramarCompromissoApi;
   loteId: string;
@@ -29,9 +29,18 @@ export function DialogoAtualizarCompromisso({
   versao: number | null;
   onFechar: () => void;
   onAtualizado: (versaoNova: number) => void;
+  /**
+   * FIN-V2-CANCEL-MOTIVO-01 (b) — o motivo da reabertura desta sessao da OC (venda/abate).
+   * ⚠ VALOR SUGERIDO E' VALOR ACEITO: nasce no campo, EDITAVEL, e marcado em ambar enquanto for
+   * a sugestao intocada — o operador ve' que nao foi ele quem escreveu. Nada grava sem o clique.
+   * ⚠ NAO FUNDE AS DUAS PERGUNTAS: entre reabrir e atualizar o operador edita o lote; sao duas
+   * decisoes, com dois registros. Omitido (compra) = campo vazio, como sempre.
+   */
+  motivoReabertura?: string | null;
 }) {
   const [simulacao, setSimulacao] = useState<SimulacaoReprogramacao | null>(null);
-  const [motivo, setMotivo] = useState('');
+  const [motivo, setMotivo] = useState(motivoReabertura ?? '');
+  const motivoESugestao = !!motivoReabertura && motivo === motivoReabertura;
 
   useEffect(() => {
     let vivo = true;
@@ -93,7 +102,13 @@ export function DialogoAtualizarCompromisso({
               </ul>
             </div>
             <Textarea rows={2} value={motivo} onChange={e => setMotivo(e.target.value)}
-              placeholder="Motivo da atualização" className="text-[12px]" />
+              placeholder="Motivo da atualização" data-testid="motivo-atualizar"
+              className={`text-[12px] ${motivoESugestao ? 'bg-amber-50 border-amber-300 dark:bg-amber-950/30 dark:border-amber-800' : ''}`} />
+            {motivoESugestao && (
+              <div className="text-[10px] leading-tight text-amber-800 dark:text-amber-300" data-testid="motivo-sugerido">
+                motivo da reabertura — confirme ou troque
+              </div>
+            )}
           </div>
         )}
 

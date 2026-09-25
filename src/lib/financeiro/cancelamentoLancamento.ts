@@ -45,3 +45,38 @@ export function bloqueiaCancelamentoPeloFinanceiro(l: LinhaCancelavel): boolean 
   const ehCaixa = l.sem_movimentacao_caixa !== true;
   return (status === 'realizado' || status === 'agendado') && ehCaixa;
 }
+
+/* ─── FIN-V2-CANCEL-MOTIVO-01 ─────────────────────────────────────────────────────────── */
+
+/**
+ * O MOTIVO E' OBRIGATORIO NO HOOK, nao so' no botao. Ate' aqui a obrigatoriedade morava na tela
+ * (`LancamentoV2Dialog`, botao desabilitado sem texto) e o `excluirLancamento` gravava o motivo
+ * "so' se viesse": outro chamador cancelava sem nada. Uma frase so', para nao haver duas redacoes.
+ */
+export const MOTIVO_OBRIGATORIO = 'Informe o motivo do cancelamento.';
+
+/** Texto aparado, ou `null` quando nao ha' motivo de verdade (vazio ou so' espacos). */
+export function motivoInformado(m: string | null | undefined): string | null {
+  const t = (m ?? '').trim();
+  return t === '' ? null : t;
+}
+
+/**
+ * TITULO COM PARTE VIVA DE OC NAO SE CANCELA PELO FINANCEIRO. O caminho e' o "Desfazer
+ * compromisso" da OC, que desfaz titulo, programacao e compromisso juntos e RECUSA titulo
+ * realizado ou conciliado. Pelo Financeiro, o titulo morria e a parte ficava viva apontando
+ * para ele — foi o que produziu e8032b0d (7f7de76f, 02/09) e f489abd9 (c80ebe9e, 18/09).
+ * ⚠ "PARTE VIVA", NAO `origem_lancamento`: um lancamento manual vinculado a OC
+ * (VINCULAR-LANC-OC-01, ou o 91e6a216 a mao) tem parte viva e origem 'manual'.
+ */
+export const MOTIVO_BLOQUEIO_TITULO_OC = 'Título de operação comercial — desfaça pelo Desfazer compromisso';
+
+/** O lote separa o que cancela do que pula, sem perder a ordem pedida. */
+export function separarTitulosOC(ids: readonly string[], comParteViva: ReadonlySet<string>): {
+  cancelaveis: string[]; puladosOC: string[];
+} {
+  return {
+    cancelaveis: ids.filter(id => !comParteViva.has(id)),
+    puladosOC: ids.filter(id => comParteViva.has(id)),
+  };
+}

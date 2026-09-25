@@ -20,7 +20,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import {
-  bloqueiaCancelamentoPeloFinanceiro, MOTIVO_BLOQUEIO_REBANHO,
+  bloqueiaCancelamentoPeloFinanceiro,
 } from '@/lib/financeiro/cancelamentoLancamento';
 import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -62,6 +62,7 @@ import {
 } from '@/lib/agri/rateioLancamento';
 import { useCulturasDaSafra } from '@/hooks/useAreaPlantada';
 import { VincularOperacaoDialog } from '@/components/financeiro-v2/VincularOperacaoDialog';
+import { RodapeCancelamento } from '@/components/financeiro-v2/RodapeCancelamento';
 import { podeOferecerVinculo, subcentrosVinculaveis, lancamentoTemParteOC } from '@/lib/oc/vincularLancamento';
 
 interface Props {
@@ -989,6 +990,35 @@ export function LancamentoV2Dialog({
   /* VINCULAR-LANC-OC-01 — "Vincular à operação" so' onde o banco aceitaria: subcentro no mapa
      (`_oc_vinculo_mapa`), lancamento salvo, nao cancelado e sem parte de OC. E' espelho para
      esconder o botao; a RPC recusa de novo se algo mudar no meio. */
+  /* FIN-V2-CANCEL-MOTIVO-01 — TITULO COM PARTE VIVA DE OC NAO SE CANCELA PELO FINANCEIRO. Pela
+     PARTE, nao pela `origem_lancamento`: um lancamento manual vinculado a OC tem parte viva e
+     origem 'manual'. Guarda a OC e o tipo para o "Abrir OC" no lugar do botao. */
+  const [parteOCViva, setParteOCViva] = useState<{ operacaoId: string; tipo: string | null } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setParteOCViva(null);
+    if (!open || !isEdit || !lancamento?.id) return;
+    const id = lancamento.id;
+    (async () => {
+      const { data: parte } = await supabase
+        .from('zoo_operacao_partes')
+        .select('operacao_id')
+        .eq('financeiro_lancamento_id', id)
+        .eq('cancelada', false)
+        .limit(1)
+        .maybeSingle();
+      if (cancelled || !parte?.operacao_id) return;
+      const { data: op } = await supabase
+        .from('zoo_operacoes_comerciais')
+        .select('tipo_operacao')
+        .eq('id', parte.operacao_id)
+        .maybeSingle();
+      if (cancelled) return;
+      setParteOCViva({ operacaoId: parte.operacao_id, tipo: op?.tipo_operacao ?? null });
+    })();
+    return () => { cancelled = true; };
+  }, [open, isEdit, lancamento?.id]);
+
   const [vinculoDisponivel, setVinculoDisponivel] = useState(false);
   const [vincularAberto, setVincularAberto] = useState(false);
   useEffect(() => {
@@ -2227,20 +2257,16 @@ export function LancamentoV2Dialog({
                 <Link2 className="h-3.5 w-3.5" /> Vincular à operação
               </Button>
             )}
-            {isEdit && onDelete && lancamento && bloqueiaCancelamentoPeloFinanceiro(lancamento) && (
-              <span className="text-[11px] text-muted-foreground">{MOTIVO_BLOQUEIO_REBANHO}</span>
-            )}
-            {isEdit && onDelete && lancamento && !bloqueiaCancelamentoPeloFinanceiro(lancamento) && (
-              <Button
-                variant="ghost"
-                size="sm"
-                /* ⚠ `ghost`, NÃO `destructive`: cancelar é ação rara e não compete com Salvar,
-                   que é o que o operador veio fazer. A cor destrutiva fica no texto. */
-                className="px-3 text-[11px] text-destructive hover:bg-destructive/10 hover:text-destructive"
-                onClick={() => { setMotivoCancelamento(''); setConfirmandoCancelamento(true); }}
-              >
-                Cancelar lançamento
-              </Button>
+            {isEdit && onDelete && lancamento && (
+              <RodapeCancelamento
+                tituloOC={parteOCViva}
+                bloqueioRebanho={bloqueiaCancelamentoPeloFinanceiro(lancamento)}
+                onCancelar={() => { setMotivoCancelamento(''); setConfirmandoCancelamento(true); }}
+                onAbrirOC={(opId, tipo) => {
+                  if (onAbrirOperacaoOC) onAbrirOperacaoOC(opId, tipo);
+                  else window.location.assign(`/v2?oc_id=${encodeURIComponent(opId)}`);
+                }}
+              />
             )}
             <Button tabIndex={17} onClick={handleSubmit} disabled={saving || !canSave} className="px-8 font-semibold shadow-md shadow-primary/25 ring-1 ring-primary/20">
               {getSubmitLabel()}

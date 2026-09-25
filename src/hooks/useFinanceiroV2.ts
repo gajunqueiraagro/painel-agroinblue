@@ -12,12 +12,11 @@ import { STATUS_FINANCEIRO_INICIAL, type StatusFiltroFinanceiro } from '@/lib/fi
 import { reportarErro, normalizarErro, ErroUsuarioSeguro } from '@/lib/erroOperacional';
 import { montarPlanoBaseV2, mesesDoRecorte, anosDoRecorte } from '@/lib/financeiro/filtrosBaseV2';
 import { FEATURE_FLAGS } from '@/lib/featureFlags';
+import { MOTIVO_OBRIGATORIO, MOTIVO_BLOQUEIO_TITULO_OC, motivoInformado, separarTitulosOC } from '@/lib/financeiro/cancelamentoLancamento';
 import {
   consultarPagina,
   consultarTotais,
   buscarConjuntoCompleto,
-  prepararCancelamentoEmLote,
-  lotesDeCancelamento,
   faixaDaPagina,
   totaisNoCliente,
   filtrarSeisNoCliente,
@@ -1174,6 +1173,20 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
    * Um UPDATE cru deixaria o extrato marcado como conciliado contra um lançamento morto.
    */
   const excluirLancamento = useCallback(async (id: string, motivo?: string) => {
+    /* FIN-V2-CANCEL-MOTIVO-01 — o motivo e' obrigatorio AQUI, nao so' no botao da tela: outro
+       chamador do hook cancelava sem nada. E titulo com parte viva de OC nao se cancela por esta
+       porta — o caminho e' o "Desfazer compromisso" da OC. */
+    const motivoOk = motivoInformado(motivo);
+    if (!motivoOk) { toast.error(MOTIVO_OBRIGATORIO); return false; }
+    const { data: parteViva, error: erroParte } = await supabase
+      .from('zoo_operacao_partes')
+      .select('id')
+      .eq('financeiro_lancamento_id', id)
+      .eq('cancelada', false)
+      .limit(1);
+    if (erroParte) { reportarErro(erroParte, 'excluirLancamento:parteOC', toast.error); return false; }
+    if ((parteViva ?? []).length > 0) { toast.error(MOTIVO_BLOQUEIO_TITULO_OC); return false; }
+
     // PR-STATUS-SYNC-01: ANTES de cancelar, coletar os extratos com vínculo ATIVO
     // deste lançamento (após o cancelamento o trigger trg_cbi_desfazer_on_cancelamento
     // desfaz os cbi, e ninguém recomputa o status neste caminho).
@@ -1193,9 +1206,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
         cancelado: true,
         cancelado_em: new Date().toISOString(),
         cancelado_por: user?.id ?? null,
-        /* Sem motivo, a coluna não é tocada: apagar um motivo anterior por omissão seria
-           perder auditoria num caminho que não pediu para mexer nela. */
-        ...(motivo ? { cancelado_motivo: motivo } : {}),
+        cancelado_motivo: motivoOk,
         updated_at: new Date().toISOString(),
         updated_by: user?.id ?? null,
       })
@@ -1216,8 +1227,28 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     return true;
   }, [user]);
 
-  const excluirLancamentosEmLote = useCallback(async (ids: string[]): Promise<{ excluidos: number; bloqueados: string[] }> => {
-    if (ids.length === 0) return { excluidos: 0, bloqueados: [] };
+  /**
+   * ⚠ FIN-V2-CANCEL-MOTIVO-01 — UM motivo para o lote, gravado com o autor em cada linha, como no
+   * individual. E o lote PULA titulo com parte viva de OC e devolve quais pulou (`puladosOC`): o
+   * caminho deles e' o "Desfazer compromisso" da OC.
+   */
+  const excluirLancamentosEmLote = useCallback(async (ids: string[], motivo?: string): Promise<{ excluidos: number; bloqueados: string[]; puladosOC: string[] }> => {
+    if (ids.length === 0) return { excluidos: 0, bloqueados: [], puladosOC: [] };
+    const motivoOk = motivoInformado(motivo);
+    if (!motivoOk) { toast.error(MOTIVO_OBRIGATORIO); return { excluidos: 0, bloqueados: [], puladosOC: [] }; }
+
+    /* Quem tem parte viva de OC sai do lote ANTES de qualquer escrita. */
+    const comParte = new Set<string>();
+    for (let i = 0; i < ids.length; i += 100) {
+      const { data, error } = await supabase
+        .from('zoo_operacao_partes')
+        .select('financeiro_lancamento_id')
+        .in('financeiro_lancamento_id', ids.slice(i, i + 100))
+        .eq('cancelada', false);
+      if (error) { reportarErro(error, 'excluirEmLote:partesOC', toast.error); return { excluidos: 0, bloqueados: [], puladosOC: [] }; }
+      for (const r of data ?? []) if (r.financeiro_lancamento_id) comParte.add(r.financeiro_lancamento_id);
+    }
+    const { cancelaveis, puladosOC } = separarTitulosOC(ids, comParte);
 
     // PR-STATUS-SYNC-01: acumula os extratos com vínculo ATIVO dos lançamentos-alvo,
     // DEDUPLICADOS (recompute uma vez por extrato ao final, mesmo com dezenas de
@@ -1226,8 +1257,8 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
 
     // Universal soft delete in batches of 100 - no origin-based blocking
     let totalExcluidos = 0;
-    for (let i = 0; i < ids.length; i += 100) {
-      const batch = ids.slice(i, i + 100);
+    for (let i = 0; i < cancelaveis.length; i += 100) {
+      const batch = cancelaveis.slice(i, i + 100);
 
       // coletar ANTES do cancelamento deste batch (depois o trigger desfaz os cbi)
       const { data: vincAntes } = await supabase
@@ -1245,6 +1276,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
           cancelado: true,
           cancelado_em: new Date().toISOString(),
           cancelado_por: user?.id ?? null,
+          cancelado_motivo: motivoOk,
           updated_at: new Date().toISOString(),
           updated_by: user?.id ?? null,
         })
@@ -1264,58 +1296,9 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       await recomputarStatusExtrato(extratoId);
     }
 
-    return { excluidos: totalExcluidos, bloqueados: [] };
+    return { excluidos: totalExcluidos, bloqueados: [], puladosOC };
   }, [user]);
 
-  /**
-   * PR-FIN-LISTA-VENCIMENTO-03 · 2C-3 — cancela em lote os "realizado" importados
-   * do filtro. Cancelamento e IRREVERSIVEL pela tela, entao a regra aqui e dura:
-   *
-   *   1. o conjunto e lido INTEIRO antes de qualquer escrita. Nenhuma mutacao
-   *      comeca enquanto a leitura nao terminou — se a leitura falhar, nada e
-   *      cancelado, e o erro sobe;
-   *   2. o conjunto vem da MESMA semantica server-side da lista, com os seis
-   *      filtros. Sem isso, o cancelamento atingiria linhas que o operador
-   *      filtrou e nao esta vendo;
-   *   3. ids sao deduplicados. Um id repetido nao vira operacao repetida;
-   *   4. conjunto elegivel vazio nao dispara escrita alguma;
-   *   5. `sinal` aborta a preparacao se o filtro mudar no meio dela, em vez de
-   *      cancelar um conjunto que ja nao corresponde ao que esta na tela.
-   *
-   * Elegibilidade preservada: status 'realizado', com lote de importacao, nao
-   * cancelado. Lotes de 100 e a parada no primeiro erro tambem sao preservados —
-   * `cancelados` devolve o parcial ja persistido, nunca zera.
-   */
-  const cancelarRealizadosImportados = useCallback(async (
-    filtros: FiltrosV2,
-    opcoes: OpcoesConjunto = {},
-  ): Promise<{ cancelados: number; elegiveis: number }> => {
-    if (!clienteId) return { cancelados: 0, elegiveis: 0 };
-
-    // LEITURA COMPLETA PRIMEIRO, com elegibilidade e deduplicacao. Qualquer falha
-    // aqui levanta e a mutacao nem comeca. E a MESMA funcao que os testes exercitam.
-    const ids = await prepararCancelamentoEmLote(abrirView, clienteId, filtros, opcoes);
-
-    if (ids.length === 0) return { cancelados: 0, elegiveis: 0 };
-    if (opcoes.sinal?.aborted) return { cancelados: 0, elegiveis: ids.length };
-
-    let totalCancelados = 0;
-    let offset = 0;
-    for (const batch of lotesDeCancelamento(ids)) {
-      const { error } = await supabase
-        .from('financeiro_lancamentos_v2')
-        .update({ cancelado: true, cancelado_em: new Date().toISOString() } as any)
-        .in('id', batch);
-      if (error) {
-        reportarErro(error, `cancelarEmLote[offset=${offset}]`, toast.error);
-        break;
-      }
-      totalCancelados += batch.length;
-      offset += batch.length;
-    }
-
-    return { cancelados: totalCancelados, elegiveis: ids.length };
-  }, [clienteId, abrirView]);
 
   /**
    * PR-FIN-V2-AÇÕES-LOTE-01 — marca múltiplos lançamentos como 'realizado' em lote,
@@ -1368,63 +1351,6 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     return { atualizados };
   }, [clienteId, user]);
 
-  /** Cancel migration records for a specific year */
-  const cancelarMigracao = useCallback(async (ano: string): Promise<{ cancelados: number; restantes: { origem: string; qtd: number }[] }> => {
-    if (!clienteId) return { cancelados: 0, restantes: [] };
-
-    // Fetch IDs of migration+realizado records for the year
-    let allIds: string[] = [];
-    let from = 0;
-    const PAGE = 1000;
-    while (true) {
-      const { data, error } = await supabase
-        .from('financeiro_lancamentos_v2')
-        .select('id')
-        .eq('cliente_id', clienteId)
-        .like('ano_mes', `${ano}-%`)
-        .eq('cancelado', false)
-        .eq('origem_lancamento', 'migracao')
-        .eq('status_transacao', 'realizado')
-        .range(from, from + PAGE - 1);
-      if (error) { console.error(normalizarErro(error, 'listarMigracaoParaCancelar').diagnostico); break; }
-      if (!data || data.length === 0) break;
-      allIds = allIds.concat(data.map(d => d.id));
-      if (data.length < PAGE) break;
-      from += PAGE;
-    }
-
-    if (allIds.length === 0) return { cancelados: 0, restantes: [] };
-
-    let totalCancelados = 0;
-    for (let i = 0; i < allIds.length; i += 200) {
-      const batch = allIds.slice(i, i + 200);
-      const { error } = await supabase
-        .from('financeiro_lancamentos_v2')
-        .update({ cancelado: true, cancelado_em: new Date().toISOString() } as any)
-        .in('id', batch);
-      if (error) {
-        reportarErro(error, `cancelarMigracaoEmLote[offset=${i}]`, toast.error);
-        break;
-      }
-      totalCancelados += batch.length;
-    }
-
-    // Fetch remaining records summary
-    const { data: remaining } = await supabase
-      .from('financeiro_lancamentos_v2')
-      .select('origem_lancamento')
-      .eq('cliente_id', clienteId)
-      .like('ano_mes', `${ano}-%`)
-      .eq('cancelado', false);
-
-    const countByOrigem: Record<string, number> = {};
-    (remaining || []).forEach((r: any) => {
-      countByOrigem[r.origem_lancamento] = (countByOrigem[r.origem_lancamento] || 0) + 1;
-    });
-    const restantes = Object.entries(countByOrigem).map(([origem, qtd]) => ({ origem, qtd }));
-
-    return { cancelados: totalCancelados, restantes };
-  }, [clienteId]);
 
   const duplicarLancamento = useCallback(async (lanc: LancamentoV2) => {
     if (!clienteId || !user) return false;
@@ -1730,8 +1656,6 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     excluirLancamentosEmLote,
     marcarRealizadoEmLote,
     duplicarLancamento,
-    cancelarRealizadosImportados,
-    cancelarMigracao,
     loadAnosDisponiveis,
     setPage,
     /**

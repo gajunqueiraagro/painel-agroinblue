@@ -23,6 +23,8 @@ import { cn } from '@/lib/utils';
 import { SearchableSelect, limparBuscasLembradas } from '@/components/ui/searchable-select';
 import { apenasAtivos, guardarFiltros, lerFiltros, esquecerFiltros } from '@/lib/financeiro/filtrosPersistidos';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { MOTIVO_BLOQUEIO_TITULO_OC } from '@/lib/financeiro/cancelamentoLancamento';
 import { Input } from '@/components/ui/input';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -557,6 +559,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   // Bulk selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  /* FIN-V2-CANCEL-MOTIVO-01 — UM motivo para o lote inteiro; nasce vazio a cada abertura. */
+  const [motivoLote, setMotivoLote] = useState('');
   const [bulkDeleting, setBulkDeleting] = useState(false);
   // PR-FIN-V2-AÇÕES-LOTE-01 — "Marcar realizado" em lote.
   const [confirmRealizarOpen, setConfirmRealizarOpen] = useState(false);
@@ -1336,7 +1340,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     setBulkDeleting(true);
     try {
       const ids = bloqueadosInfo.deletaveis.map(l => l.id);
-      const result = await hook.excluirLancamentosEmLote(ids);
+      const result = await hook.excluirLancamentosEmLote(ids, motivoLote);
+      if (result.puladosOC.length > 0) {
+        /* O lote PULOU e diz por que: titulo de OC sai pelo "Desfazer compromisso". */
+        toast.warning(`${result.puladosOC.length} título${result.puladosOC.length !== 1 ? 's' : ''} de operação comercial não ${result.puladosOC.length !== 1 ? 'foram cancelados' : 'foi cancelado'}. ${MOTIVO_BLOQUEIO_TITULO_OC}.`);
+      }
       if (result.excluidos > 0) {
         toast.success(`${result.excluidos} lançamento${result.excluidos !== 1 ? 's' : ''} excluído${result.excluidos !== 1 ? 's' : ''}`);
       }
@@ -2760,7 +2768,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
               >
                 <CheckCircle2 className="h-3 w-3" /> Marcar realizado{realizarInfo.elegiveis.length > 0 ? ` (${realizarInfo.elegiveis.length})` : ''}
               </Button>
-              <Button size="sm" variant="destructive" className="h-6 text-[10px] gap-1 px-2" onClick={() => setConfirmDeleteOpen(true)}>
+              <Button size="sm" variant="destructive" className="h-6 text-[10px] gap-1 px-2" onClick={() => { setMotivoLote(''); setConfirmDeleteOpen(true); }}>
                 <Trash2 className="h-3 w-3" /> Excluir selecionados
               </Button>
               <Button size="sm" variant="ghost" className="h-6 text-[10px] gap-1 px-2" onClick={() => setSelectedIds(new Set())}>
@@ -2822,6 +2830,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 <p><strong>{selectedIds.size}</strong> lançamento{selectedIds.size !== 1 ? 's' : ''} selecionado{selectedIds.size !== 1 ? 's' : ''}.</p>
                 <p><strong>{bloqueadosInfo.deletaveis.length}</strong> lançamento{bloqueadosInfo.deletaveis.length !== 1 ? 's serão' : ' será'} cancelado{bloqueadosInfo.deletaveis.length !== 1 ? 's' : ''} (exclusão lógica).</p>
                 <p className="text-[11px] text-muted-foreground">Origens: {bloqueadosInfo.origens.join(', ')}</p>
+                <p className="text-[11px] text-muted-foreground">Títulos de operação comercial serão pulados — o caminho deles é o Desfazer compromisso na OC.</p>
+                <Textarea value={motivoLote} onChange={e => setMotivoLote(e.target.value)} rows={2}
+                  data-testid="motivo-lote" placeholder="Motivo do cancelamento (obrigatório — um para o lote)"
+                  className="text-[12px]" />
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -2829,7 +2841,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
             <AlertDialogCancel disabled={bulkDeleting}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleBulkDelete}
-              disabled={bulkDeleting || bloqueadosInfo.deletaveis.length === 0}
+              disabled={bulkDeleting || bloqueadosInfo.deletaveis.length === 0 || motivoLote.trim() === ''}
+              title={motivoLote.trim() === '' ? 'Informe o motivo do cancelamento' : undefined}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {bulkDeleting ? 'Excluindo...' : `Excluir ${bloqueadosInfo.deletaveis.length} lançamento${bloqueadosInfo.deletaveis.length !== 1 ? 's' : ''}`}

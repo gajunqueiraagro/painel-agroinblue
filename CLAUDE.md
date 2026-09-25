@@ -707,6 +707,16 @@ no mesmo arquivo.
   ⚠ PROVADO: com o filtro de fazenda desligado, 3 dos 6 caem pela razao certa.
   ⚠ BrowserRouter + `history`, nao MemoryRouter: `useFiltroUrl` le' `window.location.search` na escrita, e o
   MemoryRouter nao o move — toda escrita pareceria "nada mudou" e o teste de pagina passaria a falhar calado.
+  De 1914 para 1924 no FIN-V2-CANCEL-MOTIVO-01, em dois arquivos novos. `src/hooks/useFinanceiroV2.cancelMotivo.test.ts`
+  (+6): o individual recusa motivo vazio e so' espacos, recusa titulo com parte viva de OC, e grava motivo
+  aparado + autor; o lote sem motivo nao grava, com motivo grava motivo + autor e PULA os titulos de OC
+  devolvendo quais (os ids do fixture sao e8032b0d e f489abd9), e as duas funcoes sem chamador sumiram do hook.
+  `src/components/financeiro-v2/cancelTituloOC.test.tsx` (+4): o rodape com o aviso e o "Abrir OC" no lugar do
+  botao, a precedencia OC > rebanho > botao, e o "Atualizar compromisso" com o motivo da reabertura
+  pre-preenchido em ambar, editavel (editar tira a marca e grava o editado) — e a compra com o campo vazio.
+  ⚠ PROVADO: com as travas do hook, a separacao do lote, o rodape e a semente do motivo desligados, 6 dos 10
+  caem; os 4 que ficam verdes sao os de controle (gravacao com motivo, compra vazia, funcoes removidas) e o
+  do lote sem motivo, cuja trava nao entrou na mutacao.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -1142,15 +1152,60 @@ migration e' REGISTRO HISTORICO, nao se reaplica).
   ⚠ EVOLUCAO REGISTRADA, NAO FEITA: `oc_desfazer_compromisso` em transacao unica, se um dia a
     atomicidade for necessaria. Com o `estorno_id` compartilhado a auditoria fica igual nos dois
     desenhos — a troca pode vir sem mudar a trilha.
-- FIN-V2-CANCEL-MOTIVO-01 — pendencia, nao tratada (25/09/2026, FASE 0 do OC-MOTIVO-UNICO-01).
-  (1) O cancelamento de lancamento pelo Financeiro V2 (`excluirLancamento`, `useFinanceiroV2`) aceita
-  motivo VAZIO no hook: a obrigatoriedade e' so' do front (`LancamentoV2Dialog`, botao desabilitado sem
-  texto), e o hook grava `cancelado_motivo` apenas se vier. Outro chamador do hook cancela sem motivo.
-  (2) Reabrir a operacao e depois "Atualizar compromisso" (`DialogoAtualizarCompromisso`) sao duas
-  perguntas de motivo no mesmo gesto quando o reabrir pede o seu. Hoje o reabrir do realizado usa motivo
-  FIXO ("reaberta para lancar o realizado do abate"), o revalorar tambem ("realizado do abate"), e o
-  "Lancar realizado" monta o seu ("ajustado ao realizado…"). Quem tratar mede todos os caminhos que
-  pedem motivo antes de escolher onde ele nasce.
+- ⚠ FIN-V2-CANCEL-MOTIVO-01 — CANCELAR PELO FINANCEIRO V2 EXIGE MOTIVO NO HOOK, E TITULO DE OC NAO SE
+  CANCELA POR ESTA PORTA (25/09/2026; a pendencia de mesmo nome, aberta na FASE 0 do OC-MOTIVO-UNICO-01,
+  esta' BAIXADA).
+  (1) `excluirLancamento(id, motivo)` e `excluirLancamentosEmLote(ids, motivo)` recusam motivo vazio
+  (`motivoInformado`, `MOTIVO_OBRIGATORIO` em `src/lib/financeiro/cancelamentoLancamento.ts`) e gravam
+  `cancelado_motivo` + `cancelado_por` SEMPRE. Antes o motivo era obrigatorio so' no botao do dialogo, e o
+  lote nem o pedia: medido na FASE 0, ~14,1 mil dos ~14,4 mil cancelados do banco estao sem motivo. O
+  dialogo de exclusao em lote da `FinanceiroV2Tab` ganhou o campo, com o botao travado e dizendo por que.
+  ⚠ SAIRAM `cancelarRealizadosImportados` e `cancelarMigracao` do hook — zero chamadores, conferido por
+    import antes de apagar. Os helpers que so' elas usavam, `prepararCancelamentoEmLote` e
+    `lotesDeCancelamento` (`src/lib/financeiro/listaPaginadaV2.ts`), FICARAM: tem teste proprio
+    (`exportacaoLista.test.ts`, bloco E7) e agora nao tem chamador em `src/`. Divida de limpeza, fora do escopo.
+  (2) TITULO COM PARTE VIVA DE OC (`zoo_operacao_partes.cancelada = false`) nao se cancela pelo Financeiro —
+  nem no dialogo, nem no lote, nem no hook. O caminho e' o "Desfazer compromisso" da OC, que desfaz titulo,
+  programacao e compromisso juntos e recusa titulo realizado ou conciliado. No lugar do botao, o
+  `RodapeCancelamento` poe "Titulo de operacao comercial — desfaca pelo Desfazer compromisso" e "Abrir OC".
+  O lote PULA esses ids (`separarTitulosOC`) e diz quantos e por que; o resto do lote segue.
+  ⚠ "PARTE VIVA", NAO `origem_lancamento`: um lancamento manual vinculado a OC (VINCULAR-LANC-OC-01) tem
+    parte viva e origem 'manual'. O criterio e' o que a OC enxerga.
+  ⚠ A TELA E' CORTESIA, O HOOK E' A TRAVA: o dialogo consulta a parte para esconder o botao, e o hook
+    consulta de novo antes de gravar. Nao ha' guarda no banco para isso (ver CANCEL-MOTIVO-BANCO-01).
+  (3) REABRIR -> ATUALIZAR COMPROMISSO NAO FUNDE AS DUAS PERGUNTAS. Se o operador reabriu na MESMA sessao da
+  OC (venda e abate), o `DialogoAtualizarCompromisso` nasce com o motivo da reabertura no campo, EDITAVEL e
+  marcado em ambar ("motivo da reabertura — confirme ou troque") enquanto for a sugestao intocada. Nada grava
+  sem o clique. A sessao zera quando troca a OC (`ocOperacaoId`). COMPRA SEM MUDANCA: o shell dela nao passa
+  o motivo, e o campo nasce vazio como antes.
+  ⚠ O UNICO CASO REAL DA SEQUENCIA no banco (FASE 0): OC 2b44889d, reabriu e reprogramou em 2 minutos, com
+    dois motivos diferentes. Sao duas decisoes — entre elas o operador edita o lote —, e a regra "valor
+    sugerido e' valor aceito" pede a marca, nao a fusao.
+- ⚠ DOIS TITULOS DE OC CANCELADOS PELO FINANCEIRO COM A PARTE VIVA — DECISAO DO GABRIEL, nao tocados
+  (medido 25/09/2026, na FASE 0 do FIN-V2-CANCEL-MOTIVO-01). Dos 33 titulos de OC cancelados, 31 sairam pelas
+  RPCs da OC; estes dois sairam por fora, estavam `realizado` e nao tem motivo:
+    lancamento  OC        componente              valor      cancelado em
+    e8032b0d    7f7de76f  Iagro                       32,54  02/09/2026
+    f489abd9    c80ebe9e  adiantamento devolvido   5.056,00  18/09/2026
+  ⚠ A PARTE DA OC CONTINUA VIVA apontando para um titulo morto: a OC acha que tem um titulo que o financeiro
+    nao mostra. Foi exatamente o que a trava (2) passou a impedir; estes dois sao anteriores a ela.
+  ⚠ QUEM DECIDIR escolhe entre reativar o titulo ou desfazer a parte pela OC — e o titulo era realizado, entao
+    qualquer das duas mexe em numero de caixa.
+- CANCEL-MOTIVO-BANCO-01 — pendencia, nao tratada: NAO HA CONSTRAINT de motivo no banco, e ela NAO deve
+  entrar agora. Travar `cancelado = true => cancelado_motivo IS NOT NULL` hoje QUEBRARIA os escritores que
+  cancelam sem motivo (medido 25/09/2026, na FASE 0 do FIN-V2-CANCEL-MOTIVO-01):
+    funcoes (11): agri_carga_mandioca_cancelar, cancel_financeiro_importacao_v2, fn_classificacao_apply_row,
+      fn_classificacao_composicao_sugerida, fn_classificacao_resolver_ambiguo,
+      fn_classificacao_resolver_proximos, fn_classificacao_split_substituir,
+      fn_reconciliar_parcela_financiamento, oc_excluir_lote, oc_reprogramar_compromisso_do_lote, oc_sincronizar
+    front (10): CompraFinanceiroPanel, AbateFinanceiroPanel, VendaFinanceiroPanel, ModalBaixaParcela,
+      useBoitelOperacoes, useLancamentos, useFinanceiro, parcelaMirror, AuditoriaDuplicidadeTab,
+      FinanciamentoDetalhe
+  ⚠ A FASE 0 CONTOU 22 (12 + 10): a 12a funcao do grep, `audit_trigger_financeiro_v2`, e' o trigger de
+    AUDITORIA — ela le' `cancelado`, nao o escreve. Escritores reais sao 21.
+  ⚠ REGRA: TRAVA SO' DEPOIS QUE CADA ESCRITOR GRAVAR MOTIVO. Um por um, cada qual com o seu motivo (fixo ou
+    pedido), e so' entao a constraint — com a contagem de linhas novas sem motivo em ZERO antes de ligar.
+    O passado (~14,1 mil sem motivo) fica como esta': a constraint vale para o que entra, `NOT VALID`.
 - OC-COMPRA-REVALOR-01 — ⚠ O DEFEITO BRIEFADO NAO EXISTIA, e o registro e' sobre o metodo.
   Sintoma (NJ, compra f56c50d3, 24/09/2026): o Gabriel corrigiu o valor do lote para
   896.644,48, o financeiro e o documento seguiram com 892.645, e a Negociacao recusava com

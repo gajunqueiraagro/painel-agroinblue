@@ -24,7 +24,7 @@
  * `CompraLotesApi`, `CompraPermissoesPorEixo`, o diálogo de detalhes e os gates por eixo
  * — nenhum deles tem consumidor nesta aba. Entram quando a aba que precisar deles chegar.
  */
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useStatusPilares } from '@/hooks/useStatusPilares';
 import { ReabrirP1Dialog } from '@/components/ReabrirP1Dialog';
 import { Button } from '@/components/ui/button';
@@ -219,6 +219,11 @@ export function VendaModalShell({
   const [reabrirP1Aberto, setReabrirP1Aberto] = useState(false);
   const [ofereceGerarCompromissos, setOfereceGerarCompromissos] = useState(false);
   const [motivoReabrir, setMotivoReabrir] = useState('');
+  /* FIN-V2-CANCEL-MOTIVO-01 (b) — o motivo da REABERTURA desta sessao da OC vira SUGESTAO no
+     "Atualizar compromisso" (editavel, marcado em ambar). Nao funde as duas perguntas: entre elas
+     o operador edita o lote, e sao duas decisoes. Zera ao trocar de OC. */
+  const [motivoReaberturaSessao, setMotivoReaberturaSessao] = useState<string | null>(null);
+  useEffect(() => { setMotivoReaberturaSessao(null); }, [ocOperacaoId]);
   const compradorNome = contrapartes.find(f => f.id === compradorId)?.nome ?? null;
   const fazendaNome = fazendasOC.find(f => f.id === vendaFazendaId)?.nome ?? null;
 
@@ -765,6 +770,7 @@ export function VendaModalShell({
                 pelo `verboOC`, e o filtro de centro de custo da compra se desliga sozinho.
                 O vazio honesto sai: agora ha o que mostrar. */
             <AbaFinanceiroOC
+              motivoReabertura={motivoReaberturaSessao}
               abrirGerarAoMontar={ofereceGerarCompromissos}
               api={liquidacaoApi}
               operacaoPronta={!!ocOperacaoId}
@@ -1227,7 +1233,7 @@ export function VendaModalShell({
             <Button variant="ghost" size="sm" onClick={() => setReabrirAberto(false)}>Voltar</Button>
             <Button size="sm" disabled={motivoReabrir.trim() === '' || submitting}
               title={motivoReabrir.trim() === '' ? 'Informe o motivo da reabertura' : undefined}
-              onClick={async () => { const m = motivoReabrir.trim(); setReabrirAberto(false); await onReabrirNegociacao?.(m); }}>
+              onClick={async () => { const m = motivoReabrir.trim(); setReabrirAberto(false); const ok = await onReabrirNegociacao?.(m); if (ok !== false) setMotivoReaberturaSessao(m); }}>
               Reabrir
             </Button>
           </DialogFooter>

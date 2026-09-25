@@ -70,6 +70,8 @@ interface Props {
   /** Selo a exibir nas linhas que ainda sao previsao. `ReactNode` para o chamador
    *  decidir a marca sem que este arquivo (da compra) importe nada da venda. */
   seloProjecao?: ReactNode;
+  /** FIN-V2-CANCEL-MOTIVO-01 (b) — sugestao para o motivo do "Atualizar compromisso"; so' venda/abate a mandam. */
+  motivoReabertura?: string | null;
   /** Vocabulario por tipo. Omitido = texto da compra. */
   rotulos?: RotulosCompromissos;
   fornecedores: { id: string; nome: string }[];
@@ -430,7 +432,7 @@ const ROTULOS_PADRAO: RotulosCompromissos = {
   mostrarBaseDaOperacao: true, mostrarSentidoDoDinheiro: false,
 };
 
-export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, ehBoitel, fornecedores, valorAcordado, lotes, contraparteId, dataOperacao, dataChegada, darkSelectClass, recarregarDados, linhasPrevisao, bloqueioPrevisao = null, seloProjecao, propostasExtras, abrirGerarAoMontar, rotulos = ROTULOS_PADRAO }: Props) {
+export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, ehBoitel, fornecedores, valorAcordado, lotes, contraparteId, dataOperacao, dataChegada, darkSelectClass, recarregarDados, linhasPrevisao, bloqueioPrevisao = null, seloProjecao, propostasExtras, abrirGerarAoMontar, rotulos = ROTULOS_PADRAO, motivoReabertura = null }: Props) {
   const { resumoOperacao, compromissos, parcelas, versao, saving } = ocApi;
   const [searchParams, setSearchParams] = useSearchParams();
   /* ⚠ OS DOIS CATALOGOS SUBIRAM PARA CA — PR-OC-VENDA-FIN-PREVISAO-01D (adendo 2). Eles
@@ -1970,6 +1972,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
       {atualizandoLoteId && (
         <DialogoAtualizarCompromisso
           api={reprogramarApi}
+          motivoReabertura={motivoReabertura}
           loteId={atualizandoLoteId}
           rotulo={(() => {
             const l = lotes.find(x => x.id === atualizandoLoteId);

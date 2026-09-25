@@ -41,6 +41,8 @@ interface Props {
   /** Vindo do rodapé: acabou de concluir, ofereça a geração. */
   abrirGerarAoMontar?: boolean;
   seloProjecao?: ReactNode;
+  /** FIN-V2-CANCEL-MOTIVO-01 (b) — motivo da reabertura desta sessao (venda/abate), sugerido no "Atualizar compromisso". */
+  motivoReabertura?: string | null;
   rotulos?: RotulosCompromissos;
   /* ⚠ A INSTANCIA VEM DE FORA QUANDO O SHELL JA A TEM — B-10 item 4. O resumo lateral da
      venda precisa dos mesmos totais por sentido que esta aba consome, e montar o hook nos
@@ -106,6 +108,6 @@ export function AbaFinanceiroOC(props: Props) {
       darkSelectClass={props.darkSelectClass} recarregarDados={api.recarregar}
       linhasPrevisao={props.linhasPrevisao} bloqueioPrevisao={props.bloqueioPrevisao} seloProjecao={props.seloProjecao}
       propostasExtras={props.propostasExtras} abrirGerarAoMontar={props.abrirGerarAoMontar}
-      rotulos={props.rotulos} />
+      rotulos={props.rotulos} motivoReabertura={props.motivoReabertura ?? null} />
   );
 }
