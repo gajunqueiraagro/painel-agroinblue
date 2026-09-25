@@ -51,9 +51,12 @@ const cabecalhosPdf = () => autotable.mock.calls.map(c => (c[1] as { head: strin
 
 beforeEach(() => { autotable.mockReset(); planilhas.length = 0; });
 
+const parcelaFrete = { operacao_id: '744c520e', vencimento: '2025-07-15', descricao: 'Venda 066 G', fornecedor: 'Transp.',
+  sequencia: 1, totalParcelas: 1, gado: 'entrou 30/06', valor: 20615, situacao: 'a vencer', tomSituacao: 'aberto' as const, diasVencida: 0 };
+
 describe('Resumo com Despesas', () => {
   it('previa de abate: Recebido, Falta receber e Despesas, com os numeros pelo lado', async () => {
-    blocos = [{ tipo: 'abate', entrou: [linhaVenda], naoEntrou: [], faltaPagar: [] }];
+    blocos = [{ tipo: 'abate', entrou: [linhaVenda], naoEntrou: [], faltaPagar: [], despesasEmAberto: [] }];
     montar();
     await waitFor(() => expect(screen.getAllByText('Despesas').length).toBeGreaterThan(0));
     expect(screen.getAllByText('Recebido').length).toBeGreaterThan(0);
@@ -63,7 +66,7 @@ describe('Resumo com Despesas', () => {
   });
 
   it('PDF: as duas tabelas de linhas tem Recebido, Falta receber e Despesas; a de parcelas nao muda', async () => {
-    blocos = [{ tipo: 'abate', entrou: [linhaVenda], naoEntrou: [linhaVenda], faltaPagar: [] }];
+    blocos = [{ tipo: 'abate', entrou: [linhaVenda], naoEntrou: [linhaVenda], faltaPagar: [], despesasEmAberto: [] }];
     montar();
     fireEvent.click(await screen.findByText('PDF'));
     await waitFor(() => expect(autotable).toHaveBeenCalledTimes(3));
@@ -77,7 +80,7 @@ describe('Resumo com Despesas', () => {
   });
 
   it('PDF de compra: Pago e Falta pagar, como sempre', async () => {
-    blocos = [{ tipo: 'compra', entrou: [linhaCompra], naoEntrou: [], faltaPagar: [] }];
+    blocos = [{ tipo: 'compra', entrou: [linhaCompra], naoEntrou: [], faltaPagar: [], despesasEmAberto: [] }];
     montar();
     fireEvent.click(await screen.findByText('PDF'));
     await waitFor(() => expect(autotable).toHaveBeenCalled());
@@ -85,7 +88,7 @@ describe('Resumo com Despesas', () => {
   });
 
   it('Excel: coluna Despesas nas abas de linhas, com o numero e o total', async () => {
-    blocos = [{ tipo: 'abate', entrou: [linhaVenda], naoEntrou: [], faltaPagar: [] }];
+    blocos = [{ tipo: 'abate', entrou: [linhaVenda], naoEntrou: [], faltaPagar: [], despesasEmAberto: [] }];
     montar();
     fireEvent.click(await screen.findByText('Excel'));
     const [entrou, nao] = planilhas;
@@ -94,5 +97,27 @@ describe('Resumo com Despesas', () => {
     expect(nao[0]).toContain('Despesas');
     expect(entrou[1][col]).toBe(5772.83);
     expect(entrou[2][col]).toBe(5772.83); // a linha de TOTAL
+  });
+
+  it('OC-STATUS-LADO-01: despesas em aberto em lista, secao de PDF e aba de Excel proprias', async () => {
+    blocos = [{ tipo: 'venda', entrou: [linhaVenda], naoEntrou: [], faltaPagar: [], despesasEmAberto: [parcelaFrete] }];
+    montar();
+    await waitFor(() => expect(screen.getByText('Despesas em aberto')).toBeTruthy());
+    fireEvent.click(screen.getByText('PDF'));
+    await waitFor(() => expect(autotable).toHaveBeenCalledTimes(4));
+    const corpoDesp = (autotable.mock.calls[3][1] as { body: unknown[][] }).body[0];
+    expect(JSON.stringify(corpoDesp)).toContain('20.615,00');
+    fireEvent.click(screen.getByText('Excel'));
+    const abaDesp = planilhas.find(a => a.some(l => l.includes(20615)));
+    expect(abaDesp?.[0]).toEqual(['Tipo', 'Vence', 'Operação', 'Fornecedor', 'Gado', 'Valor', 'Situação']);
+  });
+
+  it('sem despesa em aberto, a lista nao aparece (e a busca sabe achar: a de cima continua)', async () => {
+    blocos = [{ tipo: 'venda', entrou: [linhaVenda], naoEntrou: [], faltaPagar: [parcelaFrete], despesasEmAberto: [] }];
+    montar();
+    await waitFor(() => expect(screen.getAllByText('Falta receber').length).toBeGreaterThan(0));
+    /* A busca sabe achar: a parcela do lado esta' na lista de cima. */
+    expect(screen.getAllByText('20.615,00').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Despesas em aberto')).toBeNull();
   });
 });

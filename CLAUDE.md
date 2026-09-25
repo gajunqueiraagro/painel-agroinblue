@@ -734,6 +734,14 @@ no mesmo arquivo.
   sem compromisso no caminho antigo, e os totais. `resumoDespesas.test.tsx` (+4): previa, PDF (venda e compra) e
   Excel com a coluna Despesas e os rotulos por lado — jsPDF/autotable/xlsx trocados por espioes.
   ⚠ PROVADO: com o Resumo voltando a somar os dois lados e sem "Despesas" no PDF, 4 casos caem.
+  De 1951 para 1965 no OC-STATUS-LADO-01. `src/lib/oc/estadoPeloLado.test.ts` (+7): as 8 OCs com os numeros da
+  view aplicada (sete mudaram de estado; quatro com despesa pendente; "Paga X%" pelo lado; filtro), e a
+  parcela de que lado — compra no espelho. `src/v2/lib/ocResumo.parcelas.test.ts` (+2): o frete de 744c520e
+  sai de "Falta receber" para as despesas; a compra no espelho. `centralDespesasPendentes.test.tsx` (+3): a
+  marca ambar so' onde ha' despesa, o estado do lado na pilula, e o filtro pela URL (`f_liq`).
+  `resumoDespesas.test.tsx` foi de 4 para 6 — a lista/PDF/Excel das despesas em aberto e a lista ausente sem
+  elas; as quatro fixtures antigas ganharam `despesasEmAberto: []` (o contrato do bloco mudou).
+  ⚠ PROVADO: sem a marca, sem a separacao de lado e com o filtro aceitando tudo, 8 casos caem.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -1122,6 +1130,9 @@ migration e' REGISTRO HISTORICO, nao se reaplica).
   ⚠ A DA VERA E' O MESMO DEFEITO DA 8b211cae, um mes antes: revalorada para 593.145 as 11:49 de
     31/08, desfeita por um `salvar_lotes` as 12:31 — antes de a trava do CAMINHO B existir (ela
     entrou as 14:02 daquele dia). A RRCC nunca teve `revalorar_lote`.
+  ⚠ DESDE O OC-STATUS-LADO-01 (25/09/2026) O ESTADO DA da0b8577 E' "quitada", NAO "excedente": a base do lado
+    passou a ser o COMPROMISSO (466.030,10, pago), nao o lote (410.836,79). A divergencia lote x acerto CONTINUA
+    aqui, intacta — so' deixou de aparecer como estado da OC.
   ⚠ A 8b211cae NAO ESTA' AQUI porque nao tem compromisso: reaplicar o realizado a corrige (com a
     saida ja' registrada, o Confirmar cai no CAMINHO B, que ja' preservava).
   ⚠ A TELA JA' MOSTRA O SALDO nas duas (o "Valor acordado" do resumo le' o realizado), enquanto o
@@ -1301,7 +1312,42 @@ migration e' REGISTRO HISTORICO, nao se reaplica).
      ⚠ O ESTADO DA OC NAO MUDOU — e' o OC-STATUS-LADO-01. A situacao continua lendo `estado_liquidacao` da
        view; so' a porcentagem ja' le' o lado, entao b58bf556 mostra "paga 0%" ate' la'.
      ⚠ FICOU COMO ESTAVA a lista de parcelas em aberto do resumo ("Falta receber" por parcela), que junta
-       parcelas dos dois lados.
+       parcelas dos dois lados. (FEITO no OC-STATUS-LADO-01: a lista separa o lado das despesas.)
+- ⚠ OC-STATUS-LADO-01 — O ESTADO DE LIQUIDACAO DA OC OLHA O LADO DA OPERACAO; O OUTRO LADO VIRA DESPESA
+  (25/09/2026, decisao do Gabriel; ADR-2026-20, que referencia a 16 e a 19 sem edita-las — a 19 manda
+  "mudanca conceitual = novo ADR"). Migration `20261027150000_oc_status_lado_01.sql` (⚠ registrada como
+  `20260925212116`).
+  `vw_oc_operacao_liquidacao`: mesmas colunas, na mesma ordem, pelo LADO (venda/abate: entradas; compra:
+  saidas). base = obrigacao do lado pelo COMPROMISSO (`vw_oc_operacao_compromissos_resumo`, a fonte do
+  modal e do Resumo); liquidado = liquidacoes de natureza do lado (confiavel desde o OC-LIQ-SINAL-01; bate
+  com o liquidado por compromisso nas 78 OCs com compromisso); `base_origem = 'compromisso_lado'`. Tres
+  colunas novas no fim: `despesas_obrigacao`, `despesas_liquidado`, `despesas_pendentes`. A regua
+  `_oc_estado_liquidacao` INTACTA.
+  ⚠ SEM COMPROMISSO NO SEU LADO, A CONTA DE ANTES (lote + obrigacoes x tudo), despesas NULL. E' a guarda
+    contra um "quitada" falso: venda com so' o frete cadastrado teria base do lado zero e liquidado zero.
+    Medido: zero OCs vivas nessa condicao; as 23 sem compromisso ficaram IDENTICAS.
+  ⚠ O REPLACE LEVOU `WITH (security_invoker = true)` e ele foi conferido depois (`pg_class.reloptions`).
+  PROVA EM ROLLBACK (a view inteira antes x depois): mudaram de estado EXATAMENTE sete, nenhuma outra —
+    8a6295f0, b58bf556, 7f7de76f, 581d075c, 2d39d7e9  parcial -> nao_liquidada (so' despesa paga)
+    744c520e  parcial -> quitada   (principal recebido; frete de 20.615 vira despesa pendente)
+    da0b8577  excedente -> quitada (base do lote 416.836,79 -> do compromisso 466.030,10; frete 6.000 pendente)
+  02be1a41 nao muda de estado e ganha o indicador (Fundersul 2.165,49). Outras 11 OCs mudam base/liquidado
+  sem mudar de estado — as obrigacoes do outro lado sairam dos dois termos. A compra CANCELADA cfdc86ae cai de
+  145.500 para 71.900 porque os compromissos dela nao cobrem o acordado: e' o efeito de "base pelo
+  compromisso", numa OC que a Central nem mostra.
+  FRONT: Central — a pilula de Pagamento le o estado novo; ponto ambar NO CANTO da celula (absoluto) quando
+  `despesas_pendentes` > 0,01, valor no `title`. ⚠ A PRIMEIRA VERSAO PUNHA O PONTO EM LINHA e o preview mostrou
+  que ele sumia: celula de 49px, "aguardando" + ponto = 58px, `overflow-hidden` — presente no DOM, cortado na
+  tela. jsdom nao faz layout, entao o teste passava; so' a tela via; "Paga X%" divide o liquidado do lado pela base do lado (antes, tudo por tudo:
+  b58bf556 "Paga 14%"); o filtro "Pagamento" ganhou "Despesas pendentes" (`src/lib/oc/estadoPeloLado.ts`).
+  Resumo — a situacao le o estado novo pela view; a lista de parcelas em aberto separa o lado das
+  "Despesas em aberto" (lista, secao de PDF e aba de Excel proprias), pela conta do plano do compromisso.
+  ⚠ DIVERGENCIA DO BRIEFING, NAO ADAPTADA: a `AbaLiquidacaoOC` so' monta em modo LEGADO (sem compromissos —
+    ver `AbaFinanceiroOC`), e hoje ha ZERO OCs ativas nesse modo (77 novo_modelo, 3 nova_vazia). Para OC sem
+    compromisso nao ha lado, e a view mantem a conta antiga; o badge e o confronto ja' leem a view. O bloco
+    de despesas pedido nao teria o que mostrar e nao foi feito.
+  ⚠ `oc_derivar_status` E' CODIGO MORTO — zero chamadores no front e no banco (medido). NAO foi alinhada: seria
+    uma segunda copia desta regra. Quem a achar nao a religa; le' a view.
 - OC-COMPRA-REVALOR-01 — ⚠ O DEFEITO BRIEFADO NAO EXISTIA, e o registro e' sobre o metodo.
   Sintoma (NJ, compra f56c50d3, 24/09/2026): o Gabriel corrigiu o valor do lote para
   896.644,48, o financeiro e o documento seguiram com 892.645, e a Negociacao recusava com

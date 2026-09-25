@@ -230,6 +230,23 @@ export function ResumoOperacoesModal({
         foot: ['', 'TOTAL', '', '', num(totalFalta), ''],
       });
 
+      /* OC-STATUS-LADO-01 — as despesas do outro lado em secao propria, com a mesma cara da de cima. */
+      if (bloco.despesasEmAberto.length > 0) {
+        const totalDesp = bloco.despesasEmAberto.reduce((a, p) => a + p.valor, 0);
+        secoes.push({
+          titulo: `Despesas em aberto — ${bloco.despesasEmAberto.length} parcelas · R$ ${num(totalDesp)}`,
+          head: ['Vence', 'Operação', 'Fornecedor', 'Gado', 'Valor', 'Situação'],
+          body: bloco.despesasEmAberto.map((p) => [
+            pintado(dataBR(p.vencimento), p.tomSituacao),
+            p.descricao + (p.totalParcelas > 1 && p.sequencia != null ? ` · ${p.sequencia}/${p.totalParcelas}` : ''),
+            p.fornecedor, p.gado,
+            pintado(num(p.valor), p.tomSituacao),
+            pintado(p.situacao, p.tomSituacao),
+          ]),
+          foot: ['', 'TOTAL', '', '', num(totalDesp), ''],
+        });
+      }
+
       for (const sec of secoes) {
         /* ⚠ TÍTULO NUNCA ÓRFÃO: se não cabem o título e ao menos duas linhas, a seção começa
            na página seguinte. Um título sozinho no rodapé é uma promessa que a folha não
@@ -288,6 +305,7 @@ export function ResumoOperacoesModal({
     const abaEntrou: (string | number)[][] = [['Tipo', 'Data', 'Operação', 'Fornecedor', 'Cab', 'Cab receb.', 'Data receb.', 'Valor', 'Recebido / pago', 'Falta', 'Despesas', 'Situação']];
     const abaNao: (string | number)[][] = [['Tipo', 'Data', 'Operação', 'Fornecedor', 'Cab', 'Valor', 'Recebido / pago', 'Falta', 'Despesas', 'Situação']];
     const abaFalta: (string | number)[][] = [['Tipo', 'Vence', 'Operação', 'Fornecedor', 'Gado', 'Valor', 'Situação']];
+    const abaDespesas: (string | number)[][] = [['Tipo', 'Vence', 'Operação', 'Fornecedor', 'Gado', 'Valor', 'Situação']];
 
     for (const b of resumo.blocos) {
       const rot = PLURAL[b.tipo] ?? b.tipo;
@@ -301,6 +319,9 @@ export function ResumoOperacoesModal({
 
       for (const p of b.faltaPagar) abaFalta.push([rot, dataBR(p.vencimento), p.descricao + (p.totalParcelas > 1 && p.sequencia != null ? ` · ${p.sequencia}/${p.totalParcelas}` : ''), p.fornecedor, p.gado, p.valor, p.situacao]);
       if (b.faltaPagar.length) abaFalta.push([rot, '', 'TOTAL', '', '', b.faltaPagar.reduce((a, p) => a + p.valor, 0), '']);
+
+      for (const p of b.despesasEmAberto) abaDespesas.push([rot, dataBR(p.vencimento), p.descricao + (p.totalParcelas > 1 && p.sequencia != null ? ` · ${p.sequencia}/${p.totalParcelas}` : ''), p.fornecedor, p.gado, p.valor, p.situacao]);
+      if (b.despesasEmAberto.length) abaDespesas.push([rot, '', 'TOTAL', '', '', b.despesasEmAberto.reduce((a, p) => a + p.valor, 0), '']);
     }
 
     /* ⚠ A ABA "FILTROS" NÃO É ENFEITE: uma planilha sem o recorte que a gerou vira número sem
@@ -317,6 +338,7 @@ export function ResumoOperacoesModal({
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(abaEntrou), 'Entrou');
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(abaNao), 'Nao entrou');
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(abaFalta), 'Falta pagar');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(abaDespesas), 'Despesas em aberto');
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(abaFiltros), 'Filtros');
     XLSX.writeFile(wb, nomeArquivo('xlsx'));
   };
@@ -333,6 +355,44 @@ export function ResumoOperacoesModal({
   );
   const Td = ({ children, right, cls }: { children?: React.ReactNode; right?: boolean; cls?: string }) => (
     <td className={cn('px-1.5 py-1 align-middle truncate', right && 'text-right tabular-nums', cls)}>{children}</td>
+  );
+
+  /**
+   * A TABELA DE PARCELAS EM ABERTO — OC-STATUS-LADO-01. MOVIDA do bloco da prévia (antes inline, uma vez so')
+   * para servir as DUAS listas: o lado da operação e as despesas do outro lado. Unica troca: `b.faltaPagar`
+   * virou a prop `faltaPagar`.
+   */
+  const TabelaParcelas = ({ faltaPagar, totalFalta }: { faltaPagar: OcResumoParcela[]; totalFalta: number }) => (
+    <table className="w-full table-fixed border-collapse text-[11px]">
+      <colgroup>
+        <col className="w-[9%]" /><col className="w-[20%]" /><col className="w-[24%]" />
+        <col className="w-[16%]" /><col className="w-[12%]" /><col className="w-[19%]" />
+      </colgroup>
+      <thead><tr>
+        <Th>Vence</Th><Th>Operação</Th><Th>Fornecedor</Th><Th>Gado</Th><Th right>Valor</Th><Th>Situação</Th>
+      </tr></thead>
+      <tbody>
+        {faltaPagar.map((p, i) => (
+          <tr key={`${p.operacao_id}-${p.sequencia ?? i}`} className="border-b h-[21px]">
+            {/* ⚠ VENCIDA EM VERMELHO, A VENCER EM LARANJA — item 2. A data, o
+                valor e a situação vão juntos: são a mesma resposta. */}
+            <Td cls={p.tomSituacao === 'vencido' ? TEXTO_VENCIDO : p.tomSituacao === 'aberto' ? TEXTO_A_VENCER : undefined}>{dataBR(p.vencimento)}</Td>
+            <Td>{p.descricao}{p.totalParcelas > 1 && p.sequencia != null && <span className="text-muted-foreground">{` · ${p.sequencia}/${p.totalParcelas}`}</span>}</Td>
+            <Td>{p.fornecedor}</Td>
+            <Td><span className={cn(PILULA, p.gado === 'não entrou' ? 'bg-muted text-muted-foreground' : p.gado.startsWith('entrou ') && p.gado.includes(' de ') ? 'bg-warning text-warning-foreground' : 'bg-muted text-muted-foreground')}>{p.gado}</span></Td>
+            <Td right cls={cn('tabular-nums',
+              p.tomSituacao === 'vencido' ? `${TEXTO_VENCIDO} font-semibold`
+              : p.tomSituacao === 'aberto' ? TEXTO_A_VENCER : undefined)}>{num(p.valor)}</Td>
+            <Td><span className={cn(PILULA, PILULA_TOM[p.tomSituacao])}>{p.situacao}</span></Td>
+          </tr>
+        ))}
+        {faltaPagar.length > 0 && (
+          <tr className="bg-primary/15 font-semibold h-[21px]">
+            <Td /><Td>TOTAL</Td><Td /><Td /><Td right>{num(totalFalta)}</Td><Td />
+          </tr>
+        )}
+      </tbody>
+    </table>
   );
 
   return (
@@ -384,6 +444,7 @@ export function ResumoOperacoesModal({
             const tE = totalLinhas(b.entrou);
             const tN = totalLinhas(b.naoEntrou);
             const totalFalta = b.faltaPagar.reduce((a, p) => a + p.valor, 0);
+            const totalDespesas = b.despesasEmAberto.reduce((a, p) => a + p.valor, 0);
             const plural = PLURAL[b.tipo]?.toLowerCase() ?? b.tipo;
             return (
               <div key={b.tipo} className="space-y-3">
@@ -472,37 +533,18 @@ export function ResumoOperacoesModal({
 
                 <Lista titulo={rotuloFalta(b.tipo)} tom="warning"
                   total={`${b.faltaPagar.length} parcelas · R$ ${num(totalFalta)}`}>
-                  <table className="w-full table-fixed border-collapse text-[11px]">
-                    <colgroup>
-                      <col className="w-[9%]" /><col className="w-[20%]" /><col className="w-[24%]" />
-                      <col className="w-[16%]" /><col className="w-[12%]" /><col className="w-[19%]" />
-                    </colgroup>
-                    <thead><tr>
-                      <Th>Vence</Th><Th>Operação</Th><Th>Fornecedor</Th><Th>Gado</Th><Th right>Valor</Th><Th>Situação</Th>
-                    </tr></thead>
-                    <tbody>
-                      {b.faltaPagar.map((p, i) => (
-                        <tr key={`${p.operacao_id}-${p.sequencia ?? i}`} className="border-b h-[21px]">
-                          {/* ⚠ VENCIDA EM VERMELHO, A VENCER EM LARANJA — item 2. A data, o
-                              valor e a situação vão juntos: são a mesma resposta. */}
-                          <Td cls={p.tomSituacao === 'vencido' ? TEXTO_VENCIDO : p.tomSituacao === 'aberto' ? TEXTO_A_VENCER : undefined}>{dataBR(p.vencimento)}</Td>
-                          <Td>{p.descricao}{p.totalParcelas > 1 && p.sequencia != null && <span className="text-muted-foreground">{` · ${p.sequencia}/${p.totalParcelas}`}</span>}</Td>
-                          <Td>{p.fornecedor}</Td>
-                          <Td><span className={cn(PILULA, p.gado === 'não entrou' ? 'bg-muted text-muted-foreground' : p.gado.startsWith('entrou ') && p.gado.includes(' de ') ? 'bg-warning text-warning-foreground' : 'bg-muted text-muted-foreground')}>{p.gado}</span></Td>
-                          <Td right cls={cn('tabular-nums',
-                            p.tomSituacao === 'vencido' ? `${TEXTO_VENCIDO} font-semibold`
-                            : p.tomSituacao === 'aberto' ? TEXTO_A_VENCER : undefined)}>{num(p.valor)}</Td>
-                          <Td><span className={cn(PILULA, PILULA_TOM[p.tomSituacao])}>{p.situacao}</span></Td>
-                        </tr>
-                      ))}
-                      {b.faltaPagar.length > 0 && (
-                        <tr className="bg-primary/15 font-semibold h-[21px]">
-                          <Td /><Td>TOTAL</Td><Td /><Td /><Td right>{num(totalFalta)}</Td><Td />
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
+                  <TabelaParcelas faltaPagar={b.faltaPagar} totalFalta={totalFalta} />
                 </Lista>
+
+                {/* OC-STATUS-LADO-01 — O OUTRO LADO EM LISTA PROPRIA: numa venda, frete, taxas e adiantamento
+                    que a OC ainda paga; numa compra, o que ainda entra. Juntas, a lista de cima somava o que a
+                    operacao deve pagar ao que ela ainda recebe. Sem despesa em aberto, a lista nao aparece. */}
+                {b.despesasEmAberto.length > 0 && (
+                  <Lista titulo="Despesas em aberto" tom="warning"
+                    total={`${b.despesasEmAberto.length} parcelas · R$ ${num(totalDespesas)}`}>
+                    <TabelaParcelas faltaPagar={b.despesasEmAberto} totalFalta={totalDespesas} />
+                  </Lista>
+                )}
               </div>
             );
           })}

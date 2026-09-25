@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ResumoOperacoesModal, type FiltrosResumo } from '@/components/operacao-comercial/central/ResumoOperacoesModal';
 import { supabase } from '@/integrations/supabase/client';
@@ -26,6 +26,7 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { MoreVertical, Search, Eye, Filter, Ban, ArrowUp, ArrowDown, Lock, Trash2, FileText } from 'lucide-react';
 import { normalizarErroRpc } from '@/hooks/useOcCompromissos';
 import { useFiltroUrl } from '@/v2/hooks/useFiltroUrl';
+import { FILTRO_DESPESAS_PENDENTES, passaFiltroPagamento, temDespesaPendente, pctPagoPeloLado } from '@/lib/oc/estadoPeloLado';
 
 // Central de Operações Comerciais — PR-OC-CENTRAL-UX-01 (UX/operacional; sem backend novo).
 //   Lê em LOTE (ZERO N+1): operações + 3 views soberanas + nomes, filtradas por cliente, mapeadas por
@@ -58,7 +59,11 @@ interface FinRow {
   entrada_materializado: number; saida_materializado: number;
   entrada_programado: number; saida_programado: number;
 }
-interface LiqRow { operacao_id: string; estado_liquidacao: string | null; }
+/* OC-STATUS-LADO-01: o estado, a base e o liquidado sao do LADO da OC; `despesas_pendentes` e' o outro lado. */
+interface LiqRow {
+  operacao_id: string; estado_liquidacao: string | null;
+  base: number | null; total_liquidado_valido: number | null; despesas_pendentes: number | null;
+}
 /* Fazenda na coluna e' o CODIGO (SM, ST, PUR...): o nome inteiro empurra a tabela
    para o scroll horizontal e nao acrescenta nada a quem opera. Nome completo no
    title. `codigo` NULL cai no nome — celula vazia nunca. */
@@ -430,7 +435,7 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
     const chips: string[] = [];
     if (busca.trim()) chips.push(`busca: ${busca.trim()}`);
     if (fComercial !== '__all__') chips.push(`comercial: ${fComercial}`);
-    if (fLiquidacao !== '__all__') chips.push(`pagamento: ${fLiquidacao}`);
+    if (fLiquidacao !== '__all__') chips.push(`pagamento: ${fLiquidacao === FILTRO_DESPESAS_PENDENTES ? 'despesas pendentes' : fLiquidacao}`);
     if (fRecebimento !== '__all__') chips.push(`recebimento: ${fRecebimento}`);
     if (mostrarRascunhos) chips.push('inclui rascunhos');
     const br = (iso: string) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '');
@@ -493,7 +498,7 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
         sb.from('vw_oc_operacao_compromissos_resumo')
           .select('operacao_id, modo, n_compromissos, obrigacao_total, total_programado, total_materializado, total_liquidado, tem_compromissos, tem_partes_legadas, entrada_obrigacao, saida_obrigacao, entrada_liquidado, saida_liquidado, entrada_materializado, saida_materializado, entrada_programado, saida_programado')
           .eq('cliente_id', clienteId).in('operacao_id', operacaoIds),
-        sb.from('vw_oc_operacao_liquidacao').select('operacao_id, estado_liquidacao').eq('cliente_id', clienteId).in('operacao_id', operacaoIds),
+        sb.from('vw_oc_operacao_liquidacao').select('operacao_id, estado_liquidacao, base, total_liquidado_valido, despesas_pendentes').eq('cliente_id', clienteId).in('operacao_id', operacaoIds),
         sb.from('vw_oc_lotes_recebimento').select('operacao_id, estado_recebimento').eq('cliente_id', clienteId).in('operacao_id', operacaoIds),
       ]);
 
@@ -551,7 +556,7 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
       /* ⚠ OC SEM FAZENDA (`fazenda_id` nulo): aparece em Global e some com uma fazenda
          escolhida — o criterio da Lista. 0 casos em 25/09/2026, e o schema os permite. */
       if (fazendaSel && r.fazenda_id !== fazendaSel) return false;
-      if (fLiquidacao !== '__all__' && (liqMap[r.id]?.estado_liquidacao ?? '') !== fLiquidacao) return false;
+      if (!passaFiltroPagamento(fLiquidacao, liqMap[r.id])) return false;
       if (fRecebimento !== '__all__' && (recStatus(recMap[r.id]) ?? '') !== fRecebimento) return false;
       /* data_operacao e' 'yyyy-MM-dd' e o DatePicker devolve o mesmo formato:
          comparacao de string ja e' cronologica, sem Date nem fuso no meio.
@@ -771,6 +776,8 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
             <SelectContent>
               <SelectItem value="__all__">Toda liquidação</SelectItem>
               {liquidacaoOptions.map(e => <SelectItem key={e} value={e}>{liqLabel(e)}</SelectItem>)}
+              {/* OC-STATUS-LADO-01: nao e' estado — e' o OUTRO lado (frete, taxas, adiantamento) em aberto. */}
+              <SelectItem value={FILTRO_DESPESAS_PENDENTES}>Despesas pendentes</SelectItem>
             </SelectContent>
           </Select>
           <Button variant={mostrarRascunhos ? 'secondary' : 'outline'} size="sm" className="h-8 gap-1 text-[11px]"
@@ -976,30 +983,41 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
                       )}
                     </span>
                   </TableCell>
-                  <TableCell className={TD_PIL}>{(() => {
+                  <TableCell className={`${TD_PIL} relative`}>{(() => {
                     const est = liqMap[r.id]?.estado_liquidacao;
                     // Sem estado = a fonte não classifica: '—' de texto, NUNCA pílula colorida.
                     if (!est) return <span className="text-muted-foreground">—</span>;
+                    /* ⚠ OC-STATUS-LADO-01 (ADR-2026-20): o estado e' do LADO da OC. O que a OC deve pagar
+                       do outro lado (frete, taxas, adiantamento, devolucao) nao move a pilula — ganha a
+                       marca ambar ao lado, com o valor no `title`. Eixo separado, como o cadeado. */
+                    /* ⚠ NO CANTO, ABSOLUTO — medido no preview: a celula tem 49px e "aguardando" + o ponto
+                       em linha davam 58px; com o `overflow-hidden` da coluna o ponto saia CORTADO, invisivel
+                       e presente no DOM. Absoluto ele nao disputa largura com a pilula. */
+                    const desp = temDespesaPendente(liqMap[r.id])
+                      ? <span data-testid="despesa-pendente" className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-amber-500"
+                          title={`Despesas pendentes: ${brlCent(Number(liqMap[r.id]?.despesas_pendentes ?? 0))}`} />
+                      : null;
+                    const comMarca = (pil: ReactNode) => (desp ? <>{pil}{desp}</> : pil);
                     /* ⚠ "NÃO PAGA" ERA UMA ACUSAÇÃO onde havia só uma espera. A operação
                         recém-fechada não está inadimplente: está aguardando. Texto muted, sem
                         pílula — pílula é para estado que exige leitura, e esperar não exige.
                         Decisão mantida em OC-LISTA-COMPACTA-01; só o texto encurtou. */
                     if (est === 'nao_liquidada') {
-                      return <span className="text-[8px] text-muted-foreground" title="Aguardando pagamento">aguardando</span>;
+                      return comMarca(<span className="text-[8px] text-muted-foreground" title="Aguardando pagamento">aguardando</span>);
                     }
-                    if (est === 'quitada') return <span className={`${PILULA_FIXA} ${TOM_SUCESSO}`}>Paga</span>;
+                    if (est === 'quitada') return comMarca(<span className={`${PILULA_FIXA} ${TOM_SUCESSO}`}>Paga</span>);
                     if (est === 'parcial') {
                       /* A porcentagem sai do MESMO dado que a coluna Financeiro já leu — nenhuma
                          consulta a mais. Sem obrigação conhecida, o title não inventa número.
                          ⚠ O % SAIU DA PÍLULA POR LARGURA, não por escolha de conteúdo: "paga 87%"
                          tem 9 caracteres e a pílula fixa comporta 7. Ele vive no `title`. */
-                      const f = finMap[r.id];
-                      const pct = f && f.obrigacao_total > 0
-                        ? Math.round((f.total_liquidado / f.obrigacao_total) * 100) : null;
-                      return <span className={`${PILULA_FIXA} ${TOM_ATENCAO}`}
-                        title={pct == null ? 'Paga em parte' : `Paga ${pct}%`}>Parcial</span>;
+                      /* OC-STATUS-LADO-01: liquidado do lado ÷ base do lado, os dois da view. Dividia
+                         tudo por tudo, e a venda de boitel com so' o adiantamento pago saia "Paga 14%". */
+                      const pct = pctPagoPeloLado(liqMap[r.id]);
+                      return comMarca(<span className={`${PILULA_FIXA} ${TOM_ATENCAO}`}
+                        title={pct == null ? 'Paga em parte' : `Paga ${pct}%`}>Parcial</span>);
                     }
-                    return <span className={`${PILULA_FIXA} ${LIQ_TOM[est] ?? TOM_NEUTRO}`} title={est}>{liqLabel(est)}</span>;
+                    return comMarca(<span className={`${PILULA_FIXA} ${LIQ_TOM[est] ?? TOM_NEUTRO}`} title={est}>{liqLabel(est)}</span>);
                   })()}</TableCell>
                   {/* stopPropagation: sem isto, abrir o menu abriria a operacao junto. */}
                   {/* ⚠ O BOTAO MANDAVA NA ALTURA DA LINHA INTEIRA. Com `h-6` (24px) a `<tr>`

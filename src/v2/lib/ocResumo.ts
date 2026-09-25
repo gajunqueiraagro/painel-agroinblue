@@ -57,7 +57,14 @@ export interface OcResumoBloco {
   tipo: string;
   entrou: OcResumoLinha[];
   naoEntrou: OcResumoLinha[];
+  /** Parcelas em aberto do LADO da operação (venda/abate: a receber; compra: a pagar). */
   faltaPagar: OcResumoParcela[];
+  /**
+   * Parcelas em aberto do OUTRO lado — OC-STATUS-LADO-01: frete, taxas, adiantamento, devolução numa
+   * venda. Juntas com as do lado, a lista "Falta receber" somava o que a OC ainda paga ao que ela ainda
+   * recebe.
+   */
+  despesasEmAberto: OcResumoParcela[];
 }
 
 export interface OcResumo {
@@ -183,7 +190,7 @@ export async function carregarResumoOC(
       .select('operacao_id, valor_total, total_liquidado_valido, saldo_operacao, estado_liquidacao')
       .eq('cliente_id', clienteId).in('operacao_id', ids),
     (supabase as any).from('vw_oc_parcelas_materializacao')
-      .select('operacao_id, sequencia, valor, vencimento, saldo_titulo, status, titulo_status_transacao')
+      .select('operacao_id, compromisso_id, sequencia, valor, vencimento, saldo_titulo, status, titulo_status_transacao')
       .eq('cliente_id', clienteId).in('operacao_id', ids),
     (supabase as any).from('zoo_operacao_movimentacoes')
       .select('operacao_id, movimentacao_id').in('operacao_id', ids),
@@ -218,13 +225,34 @@ export async function carregarResumoOC(
     ((rLanc.data ?? []) as { id: string; data: string | null }[]).map((l) => [l.id, l.data]),
   );
 
+  /* OC-STATUS-LADO-01: de que LADO e' cada parcela — pela conta do plano do compromisso dela, a mesma
+     regra de `vw_oc_operacao_compromissos_resumo`. Duas viagens a mais, com `in`, nunca por linha. */
+  const compIds = Array.from(new Set(((rParc.data ?? []) as { compromisso_id: string | null }[])
+    .map((p) => p.compromisso_id).filter((x): x is string => !!x)));
+  /* eslint-disable @typescript-eslint/no-explicit-any -- a view nao esta em types.ts */
+  const rComp = compIds.length
+    ? await (supabase as any).from('vw_oc_compromissos_resumo').select('compromisso_id, plano_conta_id').in('compromisso_id', compIds)
+    : { data: [] };
+  /* eslint-enable @typescript-eslint/no-explicit-any */
+  const planoPorComp = new Map(((rComp.data ?? []) as { compromisso_id: string; plano_conta_id: string | null }[])
+    .map((c) => [c.compromisso_id, c.plano_conta_id]));
+  const planoIds = Array.from(new Set(Array.from(planoPorComp.values()).filter((x): x is string => !!x)));
+  const rPlano = planoIds.length
+    ? await supabase.from('financeiro_plano_contas').select('id, tipo_operacao').in('id', planoIds)
+    : { data: [] };
+  const dirPorPlano = new Map(((rPlano.data ?? []) as { id: string; tipo_operacao: string }[]).map((pc) => [pc.id, pc.tipo_operacao]));
+  const direcaoDoCompromisso = (compromissoId: string | null): string | null => {
+    const plano = compromissoId ? planoPorComp.get(compromissoId) : null;
+    return plano ? (dirPorPlano.get(plano) ?? null) : null;
+  };
+
   const lotes = (rLotes.data ?? []) as { operacao_id: string; categoria_negociada: string | null; qtd_negociada: number; qtd_recebida: number }[];
   const liq = (rLiq.data ?? []) as {
     operacao_id: string; valor_total: number; total_liquidado_valido: number;
     saldo_operacao: number; estado_liquidacao: string | null;
   }[];
   const parcelas = (rParc.data ?? []) as {
-    operacao_id: string; sequencia: number | null; valor: number; vencimento: string | null;
+    operacao_id: string; compromisso_id: string | null; sequencia: number | null; valor: number; vencimento: string | null;
     saldo_titulo: number; status: string | null; titulo_status_transacao: string | null;
   }[];
   const movs = (rMov.data ?? []) as { operacao_id: string; movimentacao_id: string | null }[];
@@ -348,6 +376,7 @@ export async function carregarResumoOC(
     const naoEntrou = linhas.filter((l) => l.qtdRecebida === 0);
 
     const emAberto: OcResumoParcela[] = [];
+    const despesasEmAberto: OcResumoParcela[] = [];
     for (const op of ops) {
       const lista = (parcPorOp.get(op.id) ?? []).filter((p) => Number(p.saldo_titulo ?? 0) > 0);
       const total = (parcPorOp.get(op.id) ?? []).length;
@@ -362,7 +391,8 @@ export async function carregarResumoOC(
            `titulo_status_transacao` — que é o enum do título financeiro ('programado',
            'realizado') e responde outra pergunta que não a desta coluna. */
         const sit = situacaoDaParcela(Number(p.saldo_titulo ?? 0), p.vencimento, diasVencida);
-        emAberto.push({
+        const destino = ehDoLadoDaOperacao(op.tipo_operacao, direcaoDoCompromisso(p.compromisso_id)) ? emAberto : despesasEmAberto;
+        destino.push({
           operacao_id: op.id,
           vencimento: p.vencimento,
           descricao: descricaoPadrao(op, lotesPorOp.get(op.id) ?? []),
@@ -378,9 +408,12 @@ export async function carregarResumoOC(
       }
     }
     /* ⚠ ORDENADA POR VENCIMENTO, sempre: a pergunta desta lista é "o que vence primeiro". */
-    emAberto.sort((a, b) => (a.vencimento ?? '') < (b.vencimento ?? '') ? -1 : (a.vencimento ?? '') > (b.vencimento ?? '') ? 1 : 0);
+    const porVencimento = (a: OcResumoParcela, b: OcResumoParcela) =>
+      (a.vencimento ?? '') < (b.vencimento ?? '') ? -1 : (a.vencimento ?? '') > (b.vencimento ?? '') ? 1 : 0;
+    emAberto.sort(porVencimento);
+    despesasEmAberto.sort(porVencimento);
 
-    blocos.push({ tipo, entrou, naoEntrou, faltaPagar: emAberto });
+    blocos.push({ tipo, entrou, naoEntrou, faltaPagar: emAberto, despesasEmAberto });
   });
 
   /* Ordem fixa dos blocos — nunca a de chegada do banco. */
@@ -401,6 +434,16 @@ export function totalLinhas(linhas: readonly OcResumoLinha[]) {
     falta: a.falta + l.faltaPagar,
     despesas: a.despesas + (l.despesas ?? 0),
   }), { n: 0, cab: 0, cabReceb: 0, valor: 0, pago: 0, falta: 0, despesas: 0 });
+}
+
+/**
+ * A PARCELA E' DO LADO DA OPERACAO? — OC-STATUS-LADO-01. Venda/abate: entrada; compra: saida. Direcao
+ * desconhecida (compromisso sem conta do plano — zero casos medidos em 25/09/2026) fica no lado da
+ * operacao, que e' onde ela sempre esteve.
+ */
+export function ehDoLadoDaOperacao(tipo: string, direcao: string | null): boolean {
+  if (!direcao) return true;
+  return direcao === (tipo === 'compra' ? '2-Saídas' : '1-Entradas');
 }
 
 /** Os totais por lado que `vw_oc_operacao_compromissos_resumo` devolve (o que o modal da OC já lê). */
