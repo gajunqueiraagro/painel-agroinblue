@@ -4,6 +4,7 @@ import { ResumoOperacoesModal, type FiltrosResumo } from '@/components/operacao-
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useCliente } from '@/contexts/ClienteContext';
+import { useFazenda } from '@/contexts/FazendaContext';
 import { useOperacaoComercial } from '@/hooks/useOperacaoComercial';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -374,6 +375,14 @@ interface CentralOperacoesComerciaisProps {
 export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: CentralOperacoesComerciaisProps = {}) {
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id ?? '';
+  /* OC-FAZENDA-GLOBAL-01 — A CENTRAL SEGUE O SELETOR LATERAL, como o Lancar movimentacao e a
+     Lista (`useLancamentos`): fazenda escolhida -> so' as OCs dela; Global -> todas. O filtro
+     proprio `f_fazenda` saiu — eram duas perguntas de fazenda na mesma tela, e a do seletor ja'
+     valia para as outras.
+     ⚠ NO NAVEGADOR, sobre a carga por cliente: trocar de fazenda e' instantaneo e nao faz
+     consulta nova. `fazendaAtual` ainda nulo (contexto carregando) conta como Global. */
+  const { fazendaAtual, isGlobal } = useFazenda();
+  const fazendaSel: string | null = !isGlobal && fazendaAtual?.id ? fazendaAtual.id : null;
   const rpc = useOperacaoComercial();
 
   const [rows, setRows] = useState<OpRow[]>([]);
@@ -387,7 +396,17 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
   const [busca, setBusca] = useFiltroUrl('f_busca', '', TEXTO.ler, TEXTO.escrever);
   const [fTipo, setFTipo] = useFiltroUrl('f_tipo', '__all__', TEXTO.ler, TEXTO.escrever);
   const [fComercial, setFComercial] = useFiltroUrl('f_comercial', '__all__', TEXTO.ler, TEXTO.escrever);
-  const [fFazenda, setFFazenda] = useFiltroUrl('f_fazenda', '__all__', TEXTO.ler, TEXTO.escrever);
+  /* ⚠ LINK ANTIGO COM `f_fazenda`: o parametro e' IGNORADO e sai da URL na montagem, para nao
+     parecer que filtra. NAO vira troca do seletor lateral — a fazenda do seletor vale para as
+     outras telas, e mudá-la calada por causa de um link seria o operador perder o contexto. */
+  const [searchParamsUrl, setSearchParamsUrl] = useSearchParams();
+  useEffect(() => {
+    if (!searchParamsUrl.has('f_fazenda')) return;
+    const p = new URLSearchParams(searchParamsUrl);
+    p.delete('f_fazenda');
+    setSearchParamsUrl(p, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- so' na montagem
+  }, []);
   /* ⚠ O FILTRO PROMETIA MAIS DO QUE ENTREGAVA. Rotulado "Situação", filtrava so
      `status_comercial` enquanto a tabela mostra QUATRO eixos: quem escolhia
      "Programada" achava que filtrava a operacao e filtrava um eixo so. Agora o
@@ -415,9 +434,7 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
     if (fRecebimento !== '__all__') chips.push(`recebimento: ${fRecebimento}`);
     if (mostrarRascunhos) chips.push('inclui rascunhos');
     const br = (iso: string) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '');
-    const nomeFaz = fFazenda !== '__all__'
-      ? (fazendas[fFazenda]?.nome ?? fFazenda)
-      : 'todas as fazendas';
+    const nomeFaz = fazendaSel ? (fazendaAtual?.nome ?? '—') : 'todas as fazendas';
     return {
       produtor: clienteAtual?.nome ?? '—',
       fazenda: nomeFaz,
@@ -426,7 +443,7 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
       tipo: fTipo === '__all__' ? 'todas as operações' : (TIPO_LABEL[fTipo] ?? fTipo),
       chips,
     };
-  }, [busca, fComercial, fLiquidacao, fRecebimento, mostrarRascunhos, fFazenda, fazendas, dtIni, dtFim, fTipo, clienteAtual]);
+  }, [busca, fComercial, fLiquidacao, fRecebimento, mostrarRascunhos, fazendaSel, fazendaAtual?.nome, dtIni, dtFim, fTipo, clienteAtual]);
   const [page, setPage] = useFiltroUrl('f_pag', 1, NUM.ler, NUM.escrever);
 
   // Ação de escrita (menu): cancelar/reabrir com motivo obrigatório e saving anti-duplo-clique.
@@ -508,11 +525,7 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
 
   useEffect(() => { carregar(); }, [carregar]);
 
-  const fazendaOptions = useMemo(
-    () => Array.from(new Set(rows.map(r => r.fazenda_id).filter((v): v is string => !!v))),
-    [rows],
-  );
-  /* Opcoes derivadas do que FOI CARREGADO, mesmo idioma do fazendaOptions: lista
+  /* Opcoes derivadas do que FOI CARREGADO: lista
      fixa criaria opcao morta (estado que a base nao tem) e esconderia estado novo. */
   const liquidacaoOptions = useMemo(
     () => Array.from(new Set(Object.values(liqMap).map(l => l.estado_liquidacao).filter((v): v is string => !!v))).sort(),
@@ -535,7 +548,9 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
       if (r.status_comercial === 'cancelada' && fComercial !== 'cancelada') return false;
       if (fTipo !== '__all__' && r.tipo_operacao !== fTipo) return false;
       if (fComercial !== '__all__' && r.status_comercial !== fComercial) return false;
-      if (fFazenda !== '__all__' && r.fazenda_id !== fFazenda) return false;
+      /* ⚠ OC SEM FAZENDA (`fazenda_id` nulo): aparece em Global e some com uma fazenda
+         escolhida — o criterio da Lista. 0 casos em 25/09/2026, e o schema os permite. */
+      if (fazendaSel && r.fazenda_id !== fazendaSel) return false;
       if (fLiquidacao !== '__all__' && (liqMap[r.id]?.estado_liquidacao ?? '') !== fLiquidacao) return false;
       if (fRecebimento !== '__all__' && (recStatus(recMap[r.id]) ?? '') !== fRecebimento) return false;
       /* data_operacao e' 'yyyy-MM-dd' e o DatePicker devolve o mesmo formato:
@@ -549,7 +564,7 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
       }
       return true;
     });
-  }, [rows, busca, fTipo, fComercial, fFazenda, fLiquidacao, fRecebimento, dtIni, dtFim, mostrarRascunhos, contrapartes, liqMap, recMap]);
+  }, [rows, busca, fTipo, fComercial, fazendaSel, fLiquidacao, fRecebimento, dtIni, dtFim, mostrarRascunhos, contrapartes, liqMap, recMap]);
 
   const nomeContraparte = (r: OpRow) => (r.contraparte_id ? contrapartes[r.contraparte_id] ?? '—' : '—');
   const fazendaRef = (r: OpRow): FazendaRef | null => (r.fazenda_id ? fazendas[r.fazenda_id] ?? null : null);
@@ -631,7 +646,7 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
        rodar a cada mudança de URL — inclusive na que o próprio `setPage` provoca — e
        zeraria a página que este PR existe para preservar. */
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [busca, fTipo, fComercial, fFazenda, fLiquidacao, fRecebimento, dtIni, dtFim, mostrarRascunhos, ord]);
+  }, [busca, fTipo, fComercial, fazendaSel, fLiquidacao, fRecebimento, dtIni, dtFim, mostrarRascunhos, ord]);
 
   /* Abertura soberana por tipo. Compra e VENDA vao para o parent, cada uma para o seu
      modal; abate segue indisponivel na Central, como antes.
@@ -733,13 +748,6 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
             <Input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Contraparte…" className="h-8 w-40 pl-7 text-[11px]" />
           </div>
-          <Select value={fFazenda} onValueChange={setFFazenda}>
-            <SelectTrigger className="h-8 w-36 text-[11px]"><SelectValue placeholder="Fazenda" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">Todas as fazendas</SelectItem>
-              {fazendaOptions.map(id => <SelectItem key={id} value={id}>{fazendas[id]?.nome ?? id}</SelectItem>)}
-            </SelectContent>
-          </Select>
         </div>
         <div className="flex items-center gap-1.5">
           <Select value={fComercial} onValueChange={setFComercial}>
@@ -833,7 +841,9 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
             <col className="w-[44px]" />{/* Data — 31/07/26 em 8px */}
             <col className="w-[68px]" />{/* Tipo — "Venda em Pé" mede 64 em 9px; 68 com o padding */}
             <col />{/* Contraparte — TODA a sobra, e nunca menos que 130px */}
-            <col className="w-[28px]" />{/* Faz — a sigla (PUR/SM/LUZ) */}
+            {/* Faz — a sigla (PUR/SM/LUZ). SO' EM GLOBAL, como a Lista (FinanceiroTab:381): com uma
+                fazenda escolhida a coluna repetiria a mesma sigla em toda linha. */}
+            {!fazendaSel && <col className="w-[28px]" />}
             <col className="w-[70px]" />{/* Cab · kg — "24 · 10.240 kg" em 9px */}
             <col className="w-[58px]" />{/* Valor — 1.234.567, sem R$ nem centavos */}
             <col className="w-[104px]" />{/* Financ. — valor 58 + pilula 44 + gap */}
@@ -854,7 +864,7 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
               <ThOrd col="data" rotulo="Data" ord={ord} onOrdenar={alternarOrd} />
               <ThOrd col="tipo" rotulo="Tipo" ord={ord} onOrdenar={alternarOrd} />
               <ThOrd col="contraparte" rotulo="Contraparte" ord={ord} onOrdenar={alternarOrd} />
-              <ThOrd col="fazenda" rotulo="Faz" ord={ord} onOrdenar={alternarOrd} />
+              {!fazendaSel && <ThOrd col="fazenda" rotulo="Faz" ord={ord} onOrdenar={alternarOrd} />}
               <ThOrd col="animais" rotulo="Cab · kg" ord={ord} onOrdenar={alternarOrd} direita />
               <ThOrd col="valor" rotulo="Valor" ord={ord} onOrdenar={alternarOrd} direita />
               <ThOrd col="financeiro" rotulo="Financ." ord={ord} onOrdenar={alternarOrd} />
@@ -900,7 +910,7 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
                   {/* ⚠ A UNICA COLUNA QUE PODE NAO CABER, e por isso a unica com `truncate` e
                       `title`: todas as outras tem largura maior que o pior conteudo medido. */}
                   <TableCell className={`${TD} truncate`} title={nomeContraparte(r)}>{nomeContraparte(r)}</TableCell>
-                  <TableCell className={`${TD} whitespace-nowrap overflow-hidden`} title={nomeFazenda(r)}>{siglaFazenda(r)}</TableCell>
+                  {!fazendaSel && <TableCell className={`${TD} whitespace-nowrap overflow-hidden`} title={nomeFazenda(r)}>{siglaFazenda(r)}</TableCell>}
                   <TableCell className={`${TD} text-right whitespace-nowrap tabular-nums overflow-hidden`}>
                     {/* Uma linha só: cabeça e peso são a mesma resposta, e empilhá-los dobrava
                         a altura da tabela inteira. O "cab" saiu do numero — o cabecalho ja' diz. */}

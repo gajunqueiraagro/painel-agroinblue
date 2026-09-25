@@ -699,6 +699,14 @@ no mesmo arquivo.
   depois da escolha, o resumo com o dobro de rebanho em vermelho e a diferenca do principal em ambar (Vera
   010db5b2 x 2d39d7e9), motivo vazio bloqueando, e o sucesso avisando a lista — a falha, nao.
   ⚠ A RPC E' MOCKADA: a regra mora no banco e foi provada la'. O arquivo trava o que a TELA faz com a resposta.
+  De 1908 para 1914 no OC-FAZENDA-GLOBAL-01: entrou
+  `src/components/operacao-comercial/central/centralFazendaGlobal.test.tsx` (+6) — a Central segue o seletor
+  lateral: Global mostra todas (inclusive a OC sem fazenda), fazenda escolhida so' as dela, coluna Faz so' em
+  Global, o resumo com o nome da fazenda do seletor, `f_fazenda` de link antigo ignorado e removido sem tocar
+  o seletor, e a troca de fazenda voltando para a pagina 1 (a montagem nao zera).
+  ⚠ PROVADO: com o filtro de fazenda desligado, 3 dos 6 caem pela razao certa.
+  ⚠ BrowserRouter + `history`, nao MemoryRouter: `useFiltroUrl` le' `window.location.search` na escrita, e o
+  MemoryRouter nao o move — toda escrita pareceria "nada mudou" e o teste de pagina passaria a falhar calado.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -1649,6 +1657,7 @@ preview que o cabecalho nao sai da tela ao rolar.
        `oc_*` sobreviviam e voltar a "Lancar movimentacao" reabria o modal sozinho.
     b) O PERIODO NAO ATRAVESSA entre as telas. Nada mudou nos filtros.
     c) A FAZENDA FICA FORA — frente propria, OC-FAZENDA-GLOBAL-01 (a Central ignora a fazenda global).
+       ⚠ FEITA em 25/09/2026 — ver o bloco OC-FAZENDA-GLOBAL-01: a Central passou a seguir o seletor.
   ⚠ "MENU LATERAL" SAO TRES PORTAS, e as tres limpam: os itens do painel de cada grupo (`handleSelect`),
     os atalhos diretos da sidebar ("Visao Geral", "Configuracoes") e a barra do celular — estas duas iam
     direto a `setSection` e escapariam. Passam por `navegarPeloMenu`, que so' acrescenta a limpeza.
@@ -1708,6 +1717,24 @@ preview que o cabecalho nao sai da tela ao rolar.
   Por cliente: NJ 36, Vera 12, Santa Rita 11, RRCC 3 (Agnaldo 40 e Raul 10 nao tem candidata nenhuma).
   ⚠ O VINCULO NAO MEXE NO REBANHO: ele solta o elo financeiro (D4) e avisa em vermelho. Quem decidir mede
     antes qual dos dois movimentos fica — cancelar movimento zootecnico muda saldo de rebanho homologado.
+- ⚠ OC-FAZENDA-GLOBAL-01 — A CENTRAL DE OPERACOES COMERCIAIS SEGUE O SELETOR LATERAL, como o Lancar
+  movimentacao e a Lista (25/09/2026, decisao do Gabriel). `CentralOperacoesComerciais` le' `useFazenda()`:
+  fazenda escolhida -> so' as OCs dela; Global -> todas. O filtro proprio `f_fazenda` e a caixa de fazenda da
+  barra SAIRAM — eram duas perguntas de fazenda na mesma tela.
+  ⚠ O PADRAO COPIADO E' O DA LISTA (`useLancamentos`: Global = todas as fazendas do cliente; fazenda = `.eq`)
+    e o da `FinanceiroTab` para a coluna: "Faz" SO' EM GLOBAL (:381/:411) — com uma fazenda escolhida ela
+    repetiria a mesma sigla em toda linha.
+  ⚠ NO NAVEGADOR, sobre a carga por cliente que ja' existia: trocar de fazenda e' instantaneo e nao faz
+    consulta nova. `fazendaAtual` ainda nulo (contexto carregando) conta como Global — filtro e coluna juntos.
+  ⚠ OC SEM FAZENDA (`fazenda_id` nulo, o schema permite): aparece em Global, some com uma fazenda escolhida.
+    0 casos em 25/09/2026 (98 OCs). E nenhuma OC tem movimento em fazenda diferente da sua (70 com movimento):
+    a fazenda da OC mora so' no cabecalho — lotes e movimentacoes nao tem coluna de fazenda.
+  ⚠ RESUMO, PDF E EXCEL herdam: `filtrosDoResumo.fazenda` = nome da fazenda do seletor, ou "todas as fazendas".
+  ⚠ LINK ANTIGO COM `f_fazenda`: ignorado e removido da URL na montagem. NAO muda o seletor lateral — a
+    fazenda dele vale para as outras telas, e trocá-la calada por causa de um link tiraria o operador do
+    contexto. Custo aceito: quem guardou link filtrado por fazenda abre na fazenda do seletor.
+  ⚠ A TROCA DE FAZENDA VOLTA PARA A PAGINA 1 (entrou no lugar do `fFazenda` no efeito de `setPage(1)`); a
+    montagem continua sem zerar, pela regra do PR-OC-LISTA-01.
 - ⚠ PARAMETRO DE NAVEGACAO NA URL SE ESCREVE SEMPRE, NUNCA SE PRESERVA (regra permanente,
   OC-ABRIR-PERDE-ID-01, 24/09/2026). Quem abre uma tela GRAVA a origem do clique; herdar o
   valor que ja estava na query faz um parametro responder por um clique que nao aconteceu.
