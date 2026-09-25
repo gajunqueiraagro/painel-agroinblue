@@ -30,16 +30,14 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { Paperclip, Pencil, Ban, Plus, X } from 'lucide-react';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import {
-  ESPECIES_LANC_DOC, especieValida, type EspecieLancDoc, type LancDocumento, type LancDocPayload,
-  type LancamentoDocumentosApi,
+  ESPECIES_LANC_DOC, especieValida, rotuloEspecieDoc, type EspecieLancDoc, type LancDocumento, type LancDocPayload,
+  type LancamentoDocumentosApi, type DestinoDocumento,
 } from '@/hooks/useLancamentoDocumentos';
-
-const rotuloEspecie = (e: EspecieLancDoc) =>
-  ESPECIES_LANC_DOC.find(x => x.value === e)?.label ?? 'Outro';
 
 /** A identidade da linha — A18: sem número próprio, o rótulo do tipo SOBE para cá. */
 function identidade(d: LancDocumento): string {
-  const base = d.especie === 'nf' ? 'NF' : rotuloEspecie(d.especie);
+  /* OC-DOC-ESPECIE-01: das duas origens — a NF da OC aparecia "Outro", e a complementar some sem a crua. */
+  const base = rotuloEspecieDoc(d);
   if (!d.numero) return base;
   return d.serie ? `${base} ${d.numero} · série ${d.serie}` : `${base} ${d.numero}`;
 }
@@ -254,9 +252,13 @@ function FormDocumento({ api, documento, fornecedores, onFechar }: {
   /* O documento que está sendo criado/editado pertence à OC? Documento novo segue o
      lançamento (`api.operacaoId`); documento existente segue a própria origem. */
   const destinoOC = documento ? documento.origem === 'operacao' : !!api.operacaoId;
+  /* ⚠ DOCUMENTO DA OC: ESPECIE SO' LEITURA AQUI — OC-DOC-ESPECIE-01. O vocabulario da OC distingue NF
+     principal de complementar, e o daqui nao; mandar a traducao por cima rebaixaria a complementar.
+     Quem troca a especie de documento da OC e' a aba da OC. Sem `especie` no payload, o banco preserva. */
+  const especieSoLeitura = documento?.origem === 'operacao';
 
   const payload = (): LancDocPayload => ({
-    especie,
+    especie: especieSoLeitura ? undefined : especie,
     numero: numero.trim() || null,
     serie: serie.trim() || null,
     /* A chave só existe em nota fiscal — guardá-la noutra espécie seria dado sem dono. */
@@ -277,15 +279,22 @@ function FormDocumento({ api, documento, fornecedores, onFechar }: {
     try {
       let id = documento?.id ?? null;
       let versao = documento?.versao ?? 1;
+      /* ⚠ O ENDERECO DO DOCUMENTO VAI EXPLICITO PARA O ANEXO — OC-DOC-ESPECIE-01: o do documento em
+         edicao, ou o que o `registrar` devolveu. Nunca a lista em memoria, que neste clique ainda e' a
+         do render anterior e nao conhece o documento que acabou de nascer. */
+      let destino: DestinoDocumento | null = documento
+        ? { origem: documento.origem, operacaoId: documento.operacaoId } : null;
       if (documento) {
         await api.editar(documento.id, documento.versao, payload());
         versao = documento.versao + 1;
       } else {
-        id = await api.registrar(payload());
-        if (!id) { toast.error('Não foi possível registrar o documento.'); return; }
+        const criado = await api.registrar(payload());
+        if (!criado) { toast.error('Não foi possível registrar o documento.'); return; }
+        id = criado.id;
+        destino = { origem: criado.origem, operacaoId: criado.operacaoId };
         versao = 1;
       }
-      if (arquivo && id) await api.anexar(id, versao, arquivo);
+      if (arquivo && id && destino) await api.anexar(id, versao, arquivo, destino);
       toast.success(documento ? 'Documento atualizado.' : 'Documento registrado.');
       onFechar();
     } catch (e) {
@@ -315,7 +324,7 @@ function FormDocumento({ api, documento, fornecedores, onFechar }: {
         <div className="grid grid-cols-2 gap-2 px-4 py-3">
           <div>
             <Label className="text-[10px]">Espécie <span className="text-destructive">*</span></Label>
-            <Select value={especie} onValueChange={v => setEspecie(especieValida(v))}>
+            <Select value={especie} onValueChange={v => setEspecie(especieValida(v))} disabled={especieSoLeitura}>
               <SelectTrigger className="h-8 text-[12px] mt-0.5"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {ESPECIES_LANC_DOC.map(e => (
@@ -327,7 +336,12 @@ function FormDocumento({ api, documento, fornecedores, onFechar }: {
                 Lá só existem `nf_principal`, `nf_complementar`, `recibo` e `outro`: boleto e
                 comprovante viram "Outro", e a espécie escolhida se perde. Avisar aqui é
                 mais barato que descobrir abrindo a operação. */}
-            {destinoOC && (especie === 'boleto' || especie === 'comprovante') && (
+            {especieSoLeitura && (
+              <p className="mt-0.5 text-[10px] leading-tight text-muted-foreground" data-testid="especie-da-oc">
+                {documento ? `${rotuloEspecieDoc(documento)} · a espécie de documento da operação se troca na aba da OC` : null}
+              </p>
+            )}
+            {destinoOC && !especieSoLeitura && (especie === 'boleto' || especie === 'comprovante') && (
               <p className="mt-0.5 text-[10px] leading-tight text-amber-700 dark:text-amber-300">
                 Na operação comercial esta espécie é registrada como "Outro".
               </p>

@@ -52,6 +52,12 @@ export interface LancDocumento {
   /** A operação dona, quando `origem === 'operacao'`. É o endereço do drill para a OC. */
   operacaoId: string | null;
   especie: EspecieLancDoc;
+  /**
+   * A espécie CRUA do documento da OC (`nf_principal`, `nf_complementar`, `recibo`, `outro`) —
+   * OC-DOC-ESPECIE-01. `especie` acima é a tradução para o vocabulário do lançamento, e perde a
+   * diferença entre NF principal e complementar; o rótulo lê daqui. `null` no documento próprio.
+   */
+  especieOC: string | null;
   nome: string;
   numero: string | null;
   serie: string | null;
@@ -81,7 +87,12 @@ export interface Confronto {
 }
 
 export interface LancDocPayload {
-  especie: EspecieLancDoc;
+  /**
+   * ⚠ OPCIONAL NA EDIÇÃO, e é de propósito — OC-DOC-ESPECIE-01. Quem não fala da espécie a
+   * PRESERVA: o documento da OC tem a espécie só leitura na aba do lançamento, e mandar uma
+   * tradução por cima rebaixaria uma NF complementar a principal. No registro ela é exigida.
+   */
+  especie?: EspecieLancDoc;
   nome?: string;
   numero?: string | null;
   serie?: string | null;
@@ -113,13 +124,25 @@ export interface LancamentoDocumentosApi {
   operacaoId: string | null;
   /** 'compra' | 'venda' | 'abate' — o parâmetro certo para reabrir a OC. */
   operacaoTipo: string | null;
-  registrar: (p: LancDocPayload) => Promise<string | null>;
+  /** Devolve ONDE o documento nasceu — é o endereço que o `anexar` usa, sem perguntar à lista. */
+  registrar: (p: LancDocPayload) => Promise<DocumentoCriado | null>;
   editar: (documentoId: string, versaoEsperada: number, p: LancDocPayload) => Promise<boolean>;
   cancelar: (documentoId: string, motivo: string) => Promise<boolean>;
-  anexar: (documentoId: string, versaoEsperada: number, file: File) => Promise<boolean>;
+  anexar: (documentoId: string, versaoEsperada: number, file: File, destino: DestinoDocumento) => Promise<boolean>;
   urlAssinada: (caminho: string, origem?: OrigemLancDoc) => Promise<string | null>;
   recarregar: () => Promise<void>;
 }
+
+/**
+ * O ENDEREÇO DE UM DOCUMENTO — OC-DOC-ESPECIE-01. Quem chama o `anexar` diz de onde o documento é:
+ * o `registrar` acabou de criá-lo (e sabe onde), ou o formulário está editando um que já existe.
+ * ⚠ NUNCA DA LISTA EM MEMÓRIA: o `anexar` roda no MESMO clique do `registrar`, com a lista do render
+ * anterior — o documento recém-criado ainda não está nela. Era isso que mandava `especie: 'outro'`
+ * por cima da escolha do operador (13 documentos, 05/09 a 25/09/2026) e subia o arquivo da OC no
+ * bucket do lançamento.
+ */
+export interface DestinoDocumento { origem: OrigemLancDoc; operacaoId: string | null }
+export interface DocumentoCriado extends DestinoDocumento { id: string }
 
 const BUCKET = 'fin-documentos';
 const BUCKET_OC = 'oc-documentos';
@@ -134,7 +157,7 @@ const BUCKET_OC = 'oc-documentos';
  * ⚠ `nf_complementar` NUNCA é escolhida daqui: ela exige `documento_origem_id`, que é uma
  * decisão sobre qual NF ela complementa — pergunta que só a aba da OC sabe fazer.
  */
-export function especieParaOC(e: EspecieLancDoc): string {
+export function especieParaOC(e: EspecieLancDoc | undefined): string {
   return e === 'nf' ? 'nf_principal' : e === 'recibo' ? 'recibo' : 'outro';
 }
 /** 10 MB — o limite é do produto; o bucket tem o seu, e a recusa aqui é a que explica. */
@@ -143,12 +166,14 @@ export const TIPOS_ACEITOS = ['application/pdf', 'image/jpeg', 'image/png'];
 
 /** Só as chaves presentes sobem: `editar` altera o que recebe e preserva o resto. */
 function paraJson(p: LancDocPayload): Record<string, Json> {
-  const j: Record<string, Json> = { especie: p.especie };
+  const j: Record<string, Json> = {};
   const por = (chave: string, v: string | number | null | undefined) => {
     /* `undefined` NÃO sobe: é assim que `editar` altera só o que recebeu. `null` sobe, e
        significa apagar — as duas ausências dizem coisas diferentes. */
     if (v !== undefined) j[chave] = v;
   };
+  /* OC-DOC-ESPECIE-01: a espécie segue a mesma regra — ausente, preservada. */
+  por('especie', p.especie);
   por('nome', p.nome);
   por('numero', p.numero);
   por('serie', p.serie);
@@ -175,6 +200,24 @@ function paraJson(p: LancDocPayload): Record<string, Json> {
 export const especieValida = (e: unknown): EspecieLancDoc =>
   e === 'nf' || e === 'boleto' || e === 'recibo' || e === 'comprovante' ? e : 'outro';
 
+/**
+ * Espécie da OC → vocabulário do lançamento, NA LEITURA — OC-DOC-ESPECIE-01. A view entrega a
+ * espécie da OC crua, e `especieValida` sozinha transformava `nf_principal` em "outro": a NF da OC
+ * aparecia como "Outro" na aba do lançamento.
+ */
+export const especieDaOCNoLancamento = (e: unknown): EspecieLancDoc =>
+  e === 'nf_principal' || e === 'nf_complementar' ? 'nf' : especieValida(e);
+
+const ROTULO_ESPECIE_OC: Record<string, string> = {
+  nf_principal: 'NF', nf_complementar: 'NF complementar', recibo: 'Recibo', outro: 'Outro',
+};
+/** O rótulo curto da espécie de um documento, das DUAS origens (a da OC distingue a complementar). */
+export function rotuloEspecieDoc(d: Pick<LancDocumento, 'origem' | 'especie' | 'especieOC'>): string {
+  if (d.origem === 'operacao' && d.especieOC) return ROTULO_ESPECIE_OC[d.especieOC] ?? 'Outro';
+  if (d.especie === 'nf') return 'NF';
+  return ESPECIES_LANC_DOC.find(x => x.value === d.especie)?.label ?? 'Outro';
+}
+
 /** Texto do banco → origem do vocabulário, sem cast. Desconhecido vira `'lancamento'`,
  *  que é o caminho conservador: o writer do próprio lançamento recusa o que não é dele. */
 const origemValida = (o: unknown): OrigemLancDoc => (o === 'operacao' ? 'operacao' : 'lancamento');
@@ -186,7 +229,8 @@ function daLinha(r: DocRow): LancDocumento {
     id: String(r.documento_id),
     origem: origemValida(r.origem),
     operacaoId: s(r.operacao_id),
-    especie: especieValida(r.especie),
+    especie: origemValida(r.origem) === 'operacao' ? especieDaOCNoLancamento(r.especie) : especieValida(r.especie),
+    especieOC: origemValida(r.origem) === 'operacao' ? s(r.especie) : null,
     nome: String(r.nome ?? ''),
     numero: s(r.numero), serie: s(r.serie), chaveAcesso: s(r.chave_acesso),
     dataEmissao: s(r.data_emissao), valorDocumento: n(r.valor_documento),
@@ -320,7 +364,7 @@ export function useLancamentoDocumentos(
     return env;
   };
 
-  const registrar = useCallback(async (p: LancDocPayload): Promise<string | null> => {
+  const registrar = useCallback(async (p: LancDocPayload): Promise<DocumentoCriado | null> => {
     if (!habilitado) return null;
     setSaving(true);
     try {
@@ -335,17 +379,20 @@ export function useLancamentoDocumentos(
             p_payload: { ...paraJson(p), especie: especieParaOC(p.especie), valor_documento: undefined },
           })
         : await supabase.rpc('fin_documento_registrar', {
-            p_lancamento_id: lancamentoId!, p_cliente_id: clienteId!, p_payload: paraJson(p),
+            p_lancamento_id: lancamentoId!, p_cliente_id: clienteId!, p_payload: { ...paraJson(p), especie: p.especie ?? 'outro' },
           });
       if (error) throw error;
       const env = aplicarEnvelope(data);
       await recarregar();
       const id = env?.documento_id;
-      return id ? String(id) : null;
+      /* O endereço vai junto: foi AQUI que se decidiu entre OC e lançamento. */
+      return id ? { id: String(id), origem: operacaoId ? 'operacao' : 'lancamento', operacaoId: operacaoId ?? null } : null;
     } finally {
       if (montado.current) setSaving(false);
     }
-  }, [lancamentoId, clienteId, habilitado, recarregar]);
+  /* OC-DOC-ESPECIE-01: `operacaoId` entra nas dependencias — ele decide ONDE o documento nasce, e
+     sem ele o `registrar` guardava o da primeira carga. */
+  }, [lancamentoId, clienteId, habilitado, recarregar, operacaoId]);
 
   /* Quem governa o documento é a origem DELE, não a do lançamento: um lançamento de OC
      pode ter, no futuro, documento próprio; e o writer errado recusaria — ou pior,
@@ -364,7 +411,7 @@ export function useLancamentoDocumentos(
         ? await supabase.rpc('oc_documento_editar', {
             p_documento_id: documentoId, p_cliente_id: clienteId,
             p_versao_esperada: versaoEsperada,
-            p_payload: { ...paraJson(p), especie: especieParaOC(p.especie), valor_documento: undefined },
+            p_payload: { ...paraJson(p), ...(p.especie !== undefined ? { especie: especieParaOC(p.especie) } : {}), valor_documento: undefined },
           })
         : await supabase.rpc('fin_documento_editar', {
             p_documento_id: documentoId, p_cliente_id: clienteId,
@@ -377,7 +424,10 @@ export function useLancamentoDocumentos(
     } finally {
       if (montado.current) setSaving(false);
     }
-  }, [clienteId, recarregar]);
+  /* OC-DOC-ESPECIE-01: `origemDoDocumento` entra nas dependencias. Sem ela a funcao guardava a lista
+     VAZIA da primeira carga, todo documento parecia do lancamento, e editar ou cancelar a NF da OC por
+     esta aba batia no writer errado (`fin_documento_*`), que nao a conhece. Achado pelo teste. */
+  }, [clienteId, recarregar, origemDoDocumento]);
 
   const cancelar = useCallback(async (documentoId: string, motivo: string) => {
     if (!clienteId) return false;
@@ -397,7 +447,10 @@ export function useLancamentoDocumentos(
     } finally {
       if (montado.current) setSaving(false);
     }
-  }, [clienteId, recarregar]);
+  /* OC-DOC-ESPECIE-01: `origemDoDocumento` entra nas dependencias. Sem ela a funcao guardava a lista
+     VAZIA da primeira carga, todo documento parecia do lancamento, e editar ou cancelar a NF da OC por
+     esta aba batia no writer errado (`fin_documento_*`), que nao a conhece. Achado pelo teste. */
+  }, [clienteId, recarregar, origemDoDocumento]);
 
   /**
    * Sobe o arquivo e grava a URL no documento que já existe.
@@ -407,15 +460,17 @@ export function useLancamentoDocumentos(
    * upload viesse antes do registro, uma falha no meio deixaria arquivo no bucket sem
    * nenhuma linha apontando para ele — lixo invisível, que ninguém acha para limpar.
    */
-  const anexar = useCallback(async (documentoId: string, versaoEsperada: number, file: File) => {
-    if (!habilitado) return false;
+  const anexar = useCallback(async (documentoId: string, versaoEsperada: number, file: File, destino: DestinoDocumento) => {
+    if (!habilitado || !clienteId) return false;
     const ext = extensaoDoArquivo(file);
     if (!ext || !TIPOS_ACEITOS.includes(file.type)) throw new Error('Formato não aceito. Envie PDF, JPG ou PNG.');
     if (file.size > TAMANHO_MAXIMO) throw new Error('Arquivo acima de 10 MB.');
+    /* ⚠ O DESTINO VEM DE QUEM CHAMA — OC-DOC-ESPECIE-01. Procurar o documento na lista em memoria
+       era o defeito: no clique que registra e anexa, a lista ainda e' a do render anterior. */
+    const daOC = destino.origem === 'operacao';
+    if (daOC && !destino.operacaoId) throw new Error('Documento da operação sem a operação: não é possível anexar.');
     setSaving(true);
     try {
-      const doc = documentos.find(d => d.id === documentoId);
-      const daOC = doc?.origem === 'operacao';
       /* ⚠ CADA BUCKET COM O SEU CAMINHO. O da OC é `{cliente}/{operacao}/{documento}.ext` —
          a convenção de `caminhoDocumentoOC`, e é dela que a policy por cliente depende
          (`foldername[1]`). Subir o arquivo da OC no caminho do lançamento passaria na
@@ -426,20 +481,33 @@ export function useLancamentoDocumentos(
          No lançamento o `Date.now()` continua, depois do id: o mesmo documento pode receber
          um arquivo novo pela edição, e com `upsert: false` a chave repetida recusaria.
          As chaves antigas (com o nome) não mudam: a leitura usa o `url` gravado. */
-      const caminho = daOC && doc?.operacaoId
-        ? `${clienteId}/${doc.operacaoId}/${documentoId}.${ext}`
+      const caminho = daOC
+        ? `${clienteId}/${destino.operacaoId}/${documentoId}.${ext}`
         : `${clienteId}/${lancamentoId}/${documentoId}-${Date.now()}.${ext}`;
       const up = await supabase.storage.from(daOC ? BUCKET_OC : BUCKET)
         .upload(caminho, file, { upsert: false });
       if (up.error) throw up.error;
-      return await editar(documentoId, versaoEsperada, {
-        especie: doc?.especie ?? 'outro',
-        url: caminho, tipo: file.type, tamanhoBytes: file.size,
-      });
+      /* ⚠ O ANEXO SO' FALA DO ARQUIVO — nunca da especie. Mandar `especie` aqui era sobrescrever a
+         escolha do operador com o que a lista velha dizia ('outro', quando nem achava o documento).
+         Na OC, so' a `url` — o mesmo payload do `anexarArquivo` da aba da OC. */
+      const { data, error } = daOC
+        ? await supabase.rpc('oc_documento_editar', {
+            p_documento_id: documentoId, p_cliente_id: clienteId,
+            p_versao_esperada: versaoEsperada, p_payload: { url: caminho },
+          })
+        : await supabase.rpc('fin_documento_editar', {
+            p_documento_id: documentoId, p_cliente_id: clienteId,
+            p_versao_esperada: versaoEsperada,
+            p_payload: { url: caminho, tipo: file.type, tamanho_bytes: file.size },
+          });
+      if (error) throw error;
+      aplicarEnvelope(data);
+      await recarregar();
+      return true;
     } finally {
       if (montado.current) setSaving(false);
     }
-  }, [habilitado, clienteId, lancamentoId, documentos, editar]);
+  }, [habilitado, clienteId, lancamentoId, recarregar]);
 
   /* ⚠ O ARQUIVO MORA NO BUCKET DA ORIGEM. Assinar no bucket errado devolve 404 e a tela
      diria "não foi possível abrir" sobre um arquivo que existe. A policy de leitura do

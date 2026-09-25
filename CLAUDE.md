@@ -742,6 +742,14 @@ no mesmo arquivo.
   `resumoDespesas.test.tsx` foi de 4 para 6 — a lista/PDF/Excel das despesas em aberto e a lista ausente sem
   elas; as quatro fixtures antigas ganharam `despesasEmAberto: []` (o contrato do bloco mudou).
   ⚠ PROVADO: sem a marca, sem a separacao de lado e com o filtro aceitando tudo, 8 casos caem.
+  De 1965 para 1976 no OC-DOC-ESPECIE-01: entrou `src/hooks/useLancamentoDocumentos.especie.test.ts` (+11) —
+  as cinco especies criadas com arquivo num gesto so' (com a API capturada ANTES do clique, como o
+  formulario), editar trocando a especie e anexando, o destino OC (bucket `oc-documentos`, so' `url`), a
+  edicao do documento da OC preservando `nf_complementar`, o cancelar indo ao writer da OC, a leitura de
+  `nf_principal` como "NF", e a guarda do banco falso — que RECUSA especie no anexo e na edicao de
+  documento da OC.
+  ⚠ PROVADO: com o anexo lendo a especie da lista 6 casos caem; sem a traducao da leitura, 1; sem
+    `origemDoDocumento` nas dependencias, 2; com o arquivo da OC no bucket do lancamento, 1.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -1375,6 +1383,14 @@ migration e' REGISTRO HISTORICO, nao se reaplica).
   esta' na Negociacao nao o ve'), e o rotulo "Confirmar negociacao e seguir" virou
   "Confirmar, fechar e seguir", porque ele informava a navegacao e calava o efeito.
 - OC-DOC-ESPECIE-01 — a `especie` de `zoo_operacao_documentos` e' preenchida A MAO e erra.
+  ⚠ CORRIGIDO EM 25/09/2026: O "OUTRO" EM MASSA ERA DEFEITO DE CODIGO, NAO PREENCHIMENTO — e morava no
+    FINANCEIRO, nao na OC. A aba Documentos do lancamento sobrescrevia a especie no anexo (ver o bloco
+    OC-DOC-ESPECIE-01 — CONSERTO, logo abaixo), e 13 documentos ficaram em 'outro' com o nome dizendo nf,
+    recibo ou comprovante. O registro abaixo culpava o operador por um padrao que o sistema produzia.
+  ⚠ OS DOIS EXEMPLOS DA OC, POREM, CONTINUAM SENDO ESCOLHA MANUAL — medido: o nome automatico e'
+    `especie || ' ' || numero`, e a NF da Vera se chama "outro NF_Abate - Boitel" (d9984ade, 30/08). O
+    prefixo e' a especie escolhida NA CRIACAO, na aba da OC, que nunca teve o defeito. A regra abaixo
+    (filtrar por `especie`, tolerar, o operador corrige) segue valendo para a OC.
   Medido em 24/09/2026, no OC-PDF-ORIGEM-NF-01:
     · a NF do boitel da Vera (OC b58bf556) esta' cadastrada como `outro` ("NF_Abate - Boitel"),
       entao aquela OC conta ZERO `nf_principal` mesmo tendo nota;
@@ -1387,6 +1403,47 @@ migration e' REGISTRO HISTORICO, nao se reaplica).
   ⚠ E "2+ DOCUMENTOS" NAO E' "2+ NFs", erro que eu mesmo cometi na primeira contagem: dos 109
     lancamentos de OC, 31 tem 2+ documentos mas so' 9 tem 2+ `nf_principal`. Contar anexo conta
     contrato.
+- ⚠ OC-DOC-ESPECIE-01 — CONSERTO: O ANEXO SO' FALA DO ARQUIVO, NUNCA DA ESPECIE (25/09/2026).
+  `useLancamentoDocumentos.anexar` manda `url`, `tipo` e `tamanho_bytes` (na OC, so' `url` — o mesmo
+  payload do `anexarArquivo` da aba da OC) e recebe o ENDERECO do documento de quem chama
+  (`DestinoDocumento`): do `registrar`, que devolve onde o criou, ou do documento em edicao. Nunca da
+  lista em memoria.
+  ⚠ O DEFEITO: o `salvar` do formulario chama `registrar` e `anexar` no MESMO clique, com a API do render
+    anterior. O `anexar` procurava o documento naquela lista — que nao o tinha — e mandava
+    `especie: doc?.especie ?? 'outro'`. Presente desde 4ccaadd2 (05/09/2026). Tres sintomas: (1) criar com
+    arquivo gravava 'outro' qualquer que fosse a escolha; (2) editar trocando a especie E anexando voltava
+    a especie velha; (3) com destino OC, o arquivo subia no bucket do LANCAMENTO e o `fin_documento_editar`
+    recebia um id da OC.
+  ⚠ E A LEITURA TAMBEM MENTIA: `especieValida` transformava o `nf_principal` da OC em 'outro' — a NF da
+    OC aparecia como "Outro" na aba do lancamento. Agora `especieDaOCNoLancamento` traduz, `especieOC`
+    guarda a crua e `rotuloEspecieDoc` mostra "NF" / "NF complementar". A especie de documento da OC e'
+    SO' LEITURA nesta aba (troca-se na aba da OC), e a edicao NAO a manda — `LancDocPayload.especie`
+    virou opcional, e ausente e' preservada.
+  ⚠ MAIS DOIS FECHAMENTOS VELHOS, da mesma familia: o `registrar` nao tinha `operacaoId` nas dependencias
+    (guardava o da primeira carga), e `editar`/`cancelar` nao tinham `origemDoDocumento` — guardavam a
+    lista VAZIA da primeira carga, entao editar ou cancelar a NF da OC por esta aba batia em
+    `fin_documento_*`, que nao a conhece. Este ultimo nao estava no briefing: ACHADO PELO TESTE, na
+    primeira rodada, e ja' existia em HEAD.
+  ⚠ BACKFILL DOS 13 (migration `20261027151000_oc_doc_especie_01_backfill.sql`, ⚠ registrada como
+    `20260925220111`): por ID, com guarda (em 'outro', vivo, nome medido; senao aborta) e trilha em
+    `audit_log` (de 'outro' para X, "OC-DOC-ESPECIE-01: especie sobrescrita no anexo"). 11 nf, 1 recibo,
+    1 comprovante — Agnaldo 1, NJ 8, Vera 4. Documentos com especie diferente do nome mas fora de 'outro'
+    (escolha posterior do operador) e documentos da OC NAO foram tocados.
+  ⚠ UM 14o NASCEU DEPOIS DA FASE 0: 3be1da9a ("nf 119306", Vera, 25/09 18:52) — o mesmo defeito, enquanto
+    o conserto nao subia. Entrou pelo MESMO criterio, decisao do Gabriel, na migration
+    `20261027151100_oc_doc_especie_01_backfill_b.sql` (⚠ registrada como `20260925222129`): mesma guarda,
+    mesma trilha, 'outro' -> 'nf'. Antes dela, a varredura ('outro', vivo, nome de outra especie) devolvia
+    SO' ele. TOTAL: 14 documentos, 12 nf, 1 recibo, 1 comprovante.
+  ⚠ O DOCUMENTO DE TESTE da homologacao (abbc0dfa, "boleto TESTE-ESPECIE-01", no "Lancamento teste"
+    8a8cf9c8 do Agnaldo) ficou `boleto` depois do anexo e foi CANCELADO pela tela
+    (`fin_documento_cancelar`), motivo "teste do OC-DOC-ESPECIE-01".
+  ⚠ O DOCUMENTO DA OC SEM ARQUIVO desde 06/09 (58334bd9, Agnaldo, OC c5bb32e5, "outro NPR", 21/09) NAO e'
+    este caso: o unico evento dele e' o `documento_registrar`, e nenhum objeto do storage tem o id dele. O
+    defeito deixaria o arquivo ORFAO no bucket do lancamento; aqui nunca houve arquivo.
+- OC-SALDO-MODAL-01 — pendencia, nao tratada (registrada a pedido do Gabriel no commit seguinte ao
+  OC-STATUS-LADO-01): o resumo lateral do modal da OC mostra "Saldo" pela conta ANTIGA, somando os dois
+  lados — b58bf556 (Vera, venda boitel): -107.150,94. A Central, o Resumo e a aba Liquidacao ja' leem pelo
+  lado (ADR-2026-20); o resumo lateral ficou para tras.
 - ABATE-BRUTO-DUAS-FONTES-01 — o "Valor bruto" do abate tem DUAS origens que nao fecham.
   O resumo lateral do modal OC deriva do liquido gravado (`valor_total + funrural`) e a cascata
   de `src/lib/calculos/abate.ts` soma (`base + bonus - descontos`). Medido na OC 8a6295f0
