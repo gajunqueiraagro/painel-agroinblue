@@ -40,7 +40,7 @@ import { VendaMetaModalShell } from '@/components/venda/VendaMetaModalShell';
 import { VendaModalShell } from '@/components/venda/VendaModalShell';
 import { AbateModalShell } from '@/components/abate/AbateModalShell';
 import { boitelVazio, payloadBoitel, boitelDeLinha, type BoitelEdicao } from '@/components/venda/BoitelBlocosModais';
-import { liquidoDaVendaBoitel } from '@/components/venda/BoitelNegociacaoDerivado';
+import { liquidoDaVendaBoitel, realizadoAplicadoNoLote } from '@/components/venda/BoitelNegociacaoDerivado';
 import { ReclassificacaoFormFields, useReclassificacaoState } from '@/components/ReclassificacaoForm';
 import { ReclassificacaoResumoPanel } from '@/components/ReclassificacaoResumoPanel';
 import { CompraDetalhesDialog, CompraDetalhes, EMPTY_COMPRA_DETALHES } from '@/components/compra/CompraDetalhesDialog';
@@ -3253,7 +3253,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
          ⚠ INTEGRAL, SEM RATEIO: boitel e' UM lote por OC. Com mais de um, nao se grava
          valor em nenhum — ratear a projecao exigiria um criterio que ninguem definiu. */
       let sobrescritos: typeof lotesApi.lotes | undefined;
-      if (vendaTipoVenda === 'boitel' && boitelDaVenda) {
+      /* ⚠ COM O REALIZADO APLICADO, O LOTE NAO E' MAIS DA PROJECAO — OC-BOITEL-VALOR-01 A2.
+         O valor dele e' o liquido do acerto, gravado por `oc_revalorar_lote`; sobrescreve-lo
+         aqui foi o que fez o Confirmar da 8b211cae desfazer o realizado 15 s depois de
+         aplicado. O lote vai como esta' (a RPC tambem o preserva, nos dois caminhos). */
+      if (vendaTipoVenda === 'boitel' && boitelDaVenda && !realizadoAplicadoNoLote(ocBoitelReal)) {
         const liquido = liquidoDaVendaBoitel(boitelDaVenda);
         if (lotesApi.lotes.length > 1) {
           toast.warning(`Esta venda de boitel tem ${lotesApi.lotes.length} lotes. O valor projetado não foi gravado em nenhum: no boitel a operação é um embarque só, e ratear a projeção entre lotes exigiria um critério que não existe. Deixe um lote para o valor voltar a ser gravado.`);

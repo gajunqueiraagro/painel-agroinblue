@@ -53,7 +53,7 @@ import type { RecebimentoApi } from '@/hooks/useOperacaoRecebimento';
 import type { DocumentosApi } from '@/hooks/useOperacaoDocumentos';
 import type { EventosApi } from '@/hooks/useOperacaoEventos';
 import type { LiquidacaoApi } from '@/hooks/useOperacaoLiquidacao';
-import { BoitelTopoNegociacao, liquidoDaVendaBoitel, bolsoDaVendaBoitel, unitariosDoLiquido, derivadosBoitel, PilulaCenario } from '@/components/venda/BoitelNegociacaoDerivado';
+import { BoitelTopoNegociacao, liquidoDaVendaBoitel, bolsoDaVendaBoitel, unitariosDoLiquido, derivadosBoitel, PilulaCenario, realizadoAplicadoNoLote } from '@/components/venda/BoitelNegociacaoDerivado';
 import { BoitelBlocosModais, BoitelAnaliseFaixa, faltamDosCinco, type BoitelEdicao } from '@/components/venda/BoitelBlocosModais';
 import { pesoMedioPorCabeca } from '@/hooks/useCompraLotes';
 import { LinhaResumo } from '@/components/ui/linha-resumo';
@@ -566,10 +566,17 @@ export function VendaModalShell({
       /* ⚠ SO NA VENDA BOITEL. Numa venda comum e numa compra as duas props sao nulas e a
          grade e' exatamente a de antes: valor digitavel, criterio livre, quantos lotes
          quiser. */
-      valorProjetado={ehBoitel ? {
+      /* ⚠ COM O REALIZADO APLICADO O VALOR E' O DO ACERTO — OC-BOITEL-VALOR-01 A2. E' o
+         numero que `oc_revalorar_lote` gravou no lote e que `oc_salvar_lotes` passou a
+         preservar; mostrar a projecao aqui seria o dialogo discordando do "Valor acordado"
+         do resumo lateral, que ja' le' o realizado. O switch e' o MESMO predicado do banco. */
+      valorProjetado={!ehBoitel ? null : realizadoAplicadoNoLote(boitelReal) ? {
+        valor: liquidoDaVendaBoitel(boitelReal),
+        explicacao: 'Derivado do acerto com o boitel: faturamento do abate menos o que o boitel desconta no acerto. Não se digita.',
+      } : {
         valor: liquidoDaVendaBoitel(boitelData),
         explicacao: 'Valor projetado do boitel: faturamento menos o custo do boitel e as despesas de abate. Vem do planejamento, não se digita.',
-      } : null}
+      }}
       loteUnico={ehBoitel ? {
         motivo: 'Boitel é um embarque só: a operação comercial é o lote. Para negociar outro embarque, crie outra venda.',
       } : null}

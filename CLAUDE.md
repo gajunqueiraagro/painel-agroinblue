@@ -636,6 +636,12 @@ no mesmo arquivo.
   ⚠ E O ESPIAO DE `replaceState` ENTRA DEPOIS DA MONTAGEM: o react-router chama `replaceState`
   uma vez ao montar, para carimbar o indice do historico. Espiar antes mede o router, nao o
   hook — foi o que reprovou a primeira versao do caso.
+  De 1841 para 1845 no OC-BOITEL-VALOR-01 A2: entrou
+  `src/components/venda/realizadoAplicadoNoLote.test.ts` (+4) — QUANDO o valor do lote deixa de
+  ser da projecao. O predicado e' o de `oc_salvar_lotes` (os dois fatos do papel), e o caso que
+  justifica o arquivo e' o do RASCUNHO: `iniciarRealizadoBoitel` semeia uma copia da projecao, e
+  conta-la como realizado travaria o lote sem o operador ter lancado nada. Um caso afirma que ZERO
+  conta como preenchido, porque o banco testa `IS NOT NULL`.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -913,11 +919,29 @@ migration e' REGISTRO HISTORICO, nao se reaplica).
     faria o boitel parecer receita de R$ 3,4 mi onde o produtor recebeu R$ 2,5 mi, e a @ de venda
     sairia pelo peso de CARCACA de um animal que saiu vivo da fazenda. Quem ler o historico desta
     frente encontra as duas versoes; vale esta.
-  ⚠ A2 (o que `oc_salvar_lotes` passa a fazer): com acerto realizado,
-    `valor_informado`/`valor_acordado` = SALDO LIQUIDO DO ACERTO, que a OC ja' calcula —
-    automatico, sem digitacao. Hoje a funcao CONGELA `valor_informado` quando existe boitel
-    realizado (`THEN valor_informado`, linhas 96-101): protege contra o front e nunca adota o
-    realizado, entao nem o motor nem o operador conseguem po'r o numero certo.
+  ⚠ A2 — FEITA em 25/09/2026, e NAO como estava descrita aqui. O texto antigo dizia que nada
+    levava o saldo do acerto ao lote; MEDIDO, levava: `aplicarRealizadoBoitel` (LancamentosTab)
+    chama `oc_revalorar_lote` com `liquidoDaVendaBoitel(realizado)` — que e' EXATAMENTE o
+    "(=) Saldo do acerto" do resumo lateral (`fba - descontoDoAcerto`, a mesma conta) — e ela
+    grava lote, `valor_acordado` E `lancamentos.valor_total` do rebanho.
+    O defeito era o caminho de VOLTA. Trilha da OC 8b211cae (NJ, venda boitel, 25/09):
+      09:14:08.7  revalorar_lote    848.713,32 -> 882.608,62   (o realizado chegou)
+      09:14:23.3  salvar_lotes      payload 848.713,32          (o CONFIRMAR grava antes de fechar)
+      09:14:23.7  fechar
+      09:14:53    registrar_movimentacao — o lancamento 6e52056c nasce com 848.713,32
+    Dois furos somados: `salvarNegociacaoVendaOC` sobrescrevia o lote com a PROJECAO sempre, e a
+    trava de `oc_salvar_lotes` so' existia no CAMINHO B (com saida registrada) — a saida veio 30 s
+    depois do Confirmar, entao o `salvar_lotes` caiu no CAMINHO A, sem trava.
+    Conserto: migration 20261027145000 (md5 33f47101 -> cc94c75d) poe o MESMO predicado no
+    CAMINHO A; o front nao sobrescreve com realizado aplicado (`realizadoAplicadoNoLote`, espelho
+    do predicado do banco) e o LoteDialog mostra o valor "derivado do acerto". Provado em rollback
+    na 8b211cae: funcao velha no CAMINHO A desfaz (848.713,32); nova preserva 882.608,62 nos dois
+    caminhos, no lote, no `valor_acordado` e no lancamento.
+    ⚠ A FORMULA NAO FOI PARA O SQL, de proposito: `oc_salvar_boitel` calculando o saldo seria a
+    segunda copia de `derivadosBoitel` (flags, fato x derivado, mortes, abatidas), e o UPDATE
+    proposto nao corrigiria o lancamento do rebanho — o `oc_revalorar_lote` corrige.
+    ⚠ `acerto_papel` NAO E' O SALDO: e' o "A RECEBER DO BOITEL", com o adiantamento dentro.
+    Vera b58bf556: 593.139,96 + 95.243,50 = 688.383,46.
   ⚠ A3: aviso quando o DIGITADO diverge do saldo do acerto, com os dois numeros.
   ⚠ GABARITO SAO AS DUAS OCs DA VERA (`b58bf556`, 13/05/2026; `7f7de76f`, 14/05/2026) — as unicas
     com `acerto_papel` preenchido (688.383,46 e 305.371,67) e adiantamento. Medido em 24/09: a
@@ -927,6 +951,18 @@ migration e' REGISTRO HISTORICO, nao se reaplica).
   ⚠ E HA' UM ESCRITOR CONCORRENTE EM 1150, achado no B2: `origem_tipo = 'boitel:receita'`, duas
     linhas da Vera em `previsto` (642.056,67 e 594.573,33), fora da OC. Quem implementar a PARTE A
     confere se ele e o novo caminho contam a MESMA receita duas vezes.
+- OC-BOITEL-DELTA-ANTIGO-01 — duas OCs de boitel com realizado cujo lote NAO esta' no saldo do
+  acerto, as duas com compromisso ja' gerado (medido 25/09/2026). DECISAO DO GABRIEL, nao tratada:
+    OC                lote/acordado   saldo do acerto   delta        compromisso vivo
+    RRCC da0b8577     410.836,79      473.884,10        +63.047,31   466.030,10
+    Vera b58bf556     565.217,00      593.139,96        +27.922,96   (17 partes)
+  ⚠ A DA VERA E' O MESMO DEFEITO DA 8b211cae, um mes antes: revalorada para 593.145 as 11:49 de
+    31/08, desfeita por um `salvar_lotes` as 12:31 — antes de a trava do CAMINHO B existir (ela
+    entrou as 14:02 daquele dia). A RRCC nunca teve `revalorar_lote`.
+  ⚠ A 8b211cae NAO ESTA' AQUI porque nao tem compromisso: reaplicar o realizado a corrige (com a
+    saida ja' registrada, o Confirmar cai no CAMINHO B, que ja' preservava).
+  ⚠ A TELA JA' MOSTRA O SALDO nas duas (o "Valor acordado" do resumo le' o realizado), enquanto o
+    lote, o financeiro e o rebanho tem outro numero. Duas verdades na mesma OC ate' a decisao.
 - OC-COMPRA-REVALOR-01 — ⚠ O DEFEITO BRIEFADO NAO EXISTIA, e o registro e' sobre o metodo.
   Sintoma (NJ, compra f56c50d3, 24/09/2026): o Gabriel corrigiu o valor do lote para
   896.644,48, o financeiro e o documento seguiram com 892.645, e a Negociacao recusava com

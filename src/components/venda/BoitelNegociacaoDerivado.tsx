@@ -477,6 +477,24 @@ export function liquidoDaVendaBoitel(d: BoitelEdicao | null): number | null {
   return Math.round((x.fba - x.descontoDoAcerto) * 100) / 100;
 }
 
+/* ─── O REALIZADO JA' MANDA NO LOTE? ───────────────────────────────────────────
+   OC-BOITEL-VALOR-01 A2. Com o acerto do boitel aplicado, o valor do lote e' o LIQUIDO DO
+   ACERTO, gravado por `oc_revalorar_lote` — e nem a tela nem o Confirmar podem rebaixa-lo
+   de volta a projecao.
+   ⚠ O PREDICADO E' O DO BANCO, letra por letra: `oc_salvar_lotes` preserva o
+   `valor_informado` quando existe linha `realizado` com `qtd_abatida` e `valor_total_abate`
+   preenchidos (nos DOIS caminhos, desde a migration 20261027145000). Um predicado diferente
+   aqui faria a tela mostrar um valor editavel que o banco ignora — ou o contrario.
+   ⚠ NASCE DE UMA TRILHA MEDIDA (OC 8b211cae, 25/09/2026): o realizado revalorou o lote para
+   882.608,62 as 09:14:08, e o Confirmar das 09:14:23 regravou a projecao (848.713,32) porque
+   `salvarNegociacaoVendaOC` sobrescrevia o lote SEMPRE, e a operacao ainda nao tinha saida.
+   ⚠ O RASCUNHO DO REALIZADO NAO CONTA: `iniciarRealizadoBoitel` semeia uma copia da
+   projecao, que nao tem `qtdAbatida` nem `valorTotalAbate` — esses dois so' chegam pela
+   linha do banco ou por uma gravacao que passou (`aplicarComRollback`). */
+export function realizadoAplicadoNoLote(d: BoitelEdicao | null): boolean {
+  return d != null && d.qtdAbatida != null && d.valorTotalAbate != null;
+}
+
 /* ─── O BOLSO DA VENDA BOITEL ──────────────────────────────────────────────────
    PR-OC-VENDA-TOPO-PROJECAO-01. Funcao irma de `liquidoDaVendaBoitel`, mesma guarda e
    mesmo contrato: le `derivadosBoitel` e nao reescreve nada.
