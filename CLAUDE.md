@@ -663,6 +663,11 @@ no mesmo arquivo.
   verificacao se comporta igual nos dois (o save vale, a linha fica como estava). PROVADO: contra o
   hook de antes, o caso de OC falha e os outros dois passam. O supabase e' um construtor falso que
   conta as consultas de lista, e a carga inicial prova que a contagem sabe achar uma.
+  De 1864 para 1867 no FIN-V2-REFRESH-02: entrou `src/hooks/useFinanceiroV2.notificacao.test.ts` (+3) —
+  o parcelamento e a troca de favorecido no modal zootecnico, gravando por fora do hook, recarregam a
+  instancia inscrita com os ULTIMOS filtros (a instancia carrega 2025 e depois 2026, e a recarga tem de
+  repetir 2026), e a falha de cada gravacao nao notifica. PROVADO: sem as duas notificacoes, os dois
+  casos de gravacao falham e o de falha passa.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -1004,6 +1009,17 @@ migration e' REGISTRO HISTORICO, nao se reaplica).
     funcao velha revalora o lote e deixa o compromisso em 848.713,32 e solto; nova, SEM programacao,
     atualiza para 882.608,62 e liga ao lote (uma principal ativa, trilha gravada); COM programacao,
     `pendente` e nada muda; repetida, idempotente.
+- CONCIL-DESFAZER-STATUS-01 — desfazer uma conciliacao NAO devolve o lancamento a "programado".
+  DECISAO DO GABRIEL, nao tratada. Medido em 25/09/2026, na FASE 0 do FIN-V2-REFRESH-02:
+  conciliar dispara `trg_promover_lancamento_realizado_ao_conciliar` (AFTER INSERT em
+  `conciliacao_bancaria_itens`), que poe o lancamento em 'realizado' e preenche `data_pagamento` com
+  a data do extrato quando estava vazia. Desfazer e' UPDATE nos itens (`fn_desfazer_vinculo_extrato`,
+  md5 07af033c; `fn_desfazer_grupo_conciliacao`, md5 06558026) e mexe so' nos itens e no status do
+  extrato — nenhum gatilho dispara sobre o lancamento, que continua realizado e com a data que a
+  conciliacao escreveu.
+  ⚠ NAO E' DEFEITO DE TELA: a lista do Financeiro V2 mostra o "conciliado" pelos vinculos, que
+    recarregam. E' regra de dado — quem decidir mede antes quantos lancamentos foram promovidos por
+    conciliacao e depois desfeitos, e se a data de pagamento veio do extrato ou do operador.
 - OC-BOITEL-DELTA-ANTIGO-01 — duas OCs de boitel com realizado cujo lote NAO esta' no saldo do
   acerto, as duas com compromisso ja' gerado (medido 25/09/2026). DECISAO DO GABRIEL, nao tratada:
     OC                lote/acordado   saldo do acerto   delta        compromisso vivo
@@ -1503,7 +1519,10 @@ preview que o cabecalho nao sai da tela ao rolar.
 - ⚠ FINANCEIRO V2 — TODO RAMO DE `editarLancamento` REMENDA A LINHA COM O QUE O BANCO DEVOLVEU
   (FIN-V2-REFRESH-01, 25/09/2026). A lista não recarrega na edição (PR-FIN-SAVE-LENTO-01); quem
   mostra o gravado é o `remendarComOBanco`, chamado pelo ramo comum e pelo do título de OC. Ramo novo
-  que grave e não o chame deixa a tela na versão velha até o F5.
+  que grave e não o chame deixa a tela na versão velha até o F5. E escrita feita POR FORA do hook
+  (RPC, UPDATE direto em outro modal) chama `notificarLancamentosMudaram(clienteId)` depois de gravar,
+  só no sucesso — FIN-V2-REFRESH-02: o parcelamento do `LancamentoV2Dialog` e a troca de favorecido
+  no `LancamentoZooModal` gravavam e a lista só as via no F5.
 - ⚠ PARAMETRO DE NAVEGACAO NA URL SE ESCREVE SEMPRE, NUNCA SE PRESERVA (regra permanente,
   OC-ABRIR-PERDE-ID-01, 24/09/2026). Quem abre uma tela GRAVA a origem do clique; herdar o
   valor que ja estava na query faz um parametro responder por um clique que nao aconteceu.

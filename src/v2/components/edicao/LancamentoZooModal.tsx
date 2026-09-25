@@ -49,6 +49,7 @@ import type { CompraFinanceiroPanelRef } from '@/components/CompraFinanceiroPane
 import { SincronizacaoFornecedorDialog, type ParcelaInfo } from './SincronizacaoFornecedorDialog';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
 
 import { ZooMovShell } from './_blocos/ZooMovShell';
 import { BlocoDadosMovimentacao } from './_blocos/BlocoDadosMovimentacao';
@@ -67,6 +68,31 @@ import { CompraCustosOperacao } from './_blocos/CompraCustosOperacao';
 import { VendaDadosZootecnicos, EMPTY_VENDA_COMERCIAL, type VendaComercialState } from './_blocos/VendaDadosZootecnicos';
 import { VendaCustosOperacao } from './_blocos/VendaCustosOperacao';
 import { buildVendaCalculation, type VendaCalculation, type TipoPrecoVenda } from '@/lib/calculos/venda';
+
+/**
+ * TROCA O FAVORECIDO DAS PARCELAS E AVISA QUEM MOSTRA LANCAMENTOS — FIN-V2-REFRESH-02.
+ *
+ * ⚠ SAIU DO `handleAtualizarSincronizaveis` SO' PARA SER TESTAVEL: o mesmo UPDATE, a mesma
+ * mensagem de falha e o mesmo retorno antecipado — agora como `false`. O componente e o teste
+ * chamam esta funcao; nao ha segunda copia.
+ */
+export async function sincronizarFavorecidoDasParcelas(
+  ids: string[], favorecidoId: string | null, clienteId: string,
+): Promise<boolean> {
+  const { error } = await supabase
+    .from('financeiro_lancamentos_v2')
+    .update({ favorecido_id: favorecidoId })
+    .in('id', ids);
+  if (error) {
+    toast.error('Falha ao atualizar parcelas. Zoo NÃO foi salvo.');
+    return false;
+  }
+  /* ⚠ ESTE UPDATE E' NO FINANCEIRO, POR FORA DO `useFinanceiroV2` — FIN-V2-REFRESH-02. Aberto
+     a partir do Financeiro V2, o modal trocava o favorecido das parcelas e a lista seguia com
+     o antigo ate' o F5. So' no sucesso: o `return false` acima barra a falha. */
+  if (clienteId) notificarLancamentosMudaram(clienteId);
+  return true;
+}
 
 /** Linha de financeiro_lancamentos_v2 vinculada à movimentação (compra).
  *  Lift state (Opção A): resolvido no modal e compartilhado entre o
@@ -772,19 +798,12 @@ export function LancamentoZooModal({
     if (!syncData) return;
     const ids = syncData.parcelas.sincronizaveis.map(p => p.id);
     if (ids.length > 0) {
-      const { error } = await supabase
-        .from('financeiro_lancamentos_v2')
-        .update({ favorecido_id: fornecedorIdEdit })
-        .in('id', ids);
-      if (error) {
-        toast.error('Falha ao atualizar parcelas. Zoo NÃO foi salvo.');
-        return;
-      }
+      if (!(await sincronizarFavorecidoDasParcelas(ids, fornecedorIdEdit, clienteIdLancamento))) return;
     }
     await doSaveZoo();
     setModalSyncAberto(false);
     setSyncData(null);
-  }, [syncData, fornecedorIdEdit, doSaveZoo]);
+  }, [syncData, fornecedorIdEdit, doSaveZoo, clienteIdLancamento]);
 
   const handleNaoTocarParcelas = useCallback(async () => {
     await doSaveZoo();

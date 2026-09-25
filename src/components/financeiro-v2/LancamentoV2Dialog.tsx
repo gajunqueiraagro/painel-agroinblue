@@ -45,6 +45,7 @@ import { useQueryClient } from '@tanstack/react-query';
 /* PAR-02 — a montagem do payload e a previa, compartilhadas com a tela de Parcelamentos. */
 import { montarPayloadParcelamento, preverParcelas } from '@/lib/financiamentos/montarPayloadParcelamento';
 import type { LancamentoV2, LancamentoV2Form, ContaBancariaV2, ClassificacaoItem, FornecedorV2, Safra } from '@/hooks/useFinanceiroV2';
+import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
 import type { Fazenda } from '@/contexts/FazendaContext';
 import { NovoFornecedorDialog } from './NovoFornecedorDialog';
 import { formatMoeda } from '@/lib/calculos/formatters';
@@ -190,6 +191,32 @@ const ABAS_TAB: { value: AbaVisual; label: string }[] = [
 // PR-FIN-STATUS-UX-03A-1 — opções do modal e deriveStatus vêm do domínio único
 //   (statusFinanceiro.ts): previsto/agendado/programado/realizado; sem Meta, sem Conciliado.
 const STATUS_OPTIONS = STATUS_FINANCEIRO_OPCOES_MODAL;
+
+/**
+ * GRAVA O PARCELAMENTO E AVISA QUEM MOSTRA LANCAMENTOS — FIN-V2-REFRESH-02.
+ *
+ * ⚠ SAIU DO CORPO DO `handleSubmit` SO' PARA SER TESTAVEL: e' o mesmo trecho, na mesma ordem
+ * (RPC, recusa, invalidacao, notificacao). O teste chama ESTA funcao, e o componente tambem —
+ * nao ha segunda copia do caminho.
+ */
+export async function gravarParcelamento(
+  payload: ReturnType<typeof montarPayloadParcelamento>, clienteId: string, invalidar: () => Promise<unknown>,
+): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+  const { error } = await (supabase as any).rpc('fn_parcelamento_cadastrar', { p_payload: payload });
+  if (error) throw error;
+  /* ⚠ INVALIDAÇÃO AMPLA, e é deliberado: este modal é montado por DEZ telas diferentes,
+     cada uma com o seu `onSave` e a sua forma de recarregar, e o parcelamento não passa
+     por nenhum deles — quem grava agora é a RPC. Escolher chaves aqui exigiria este
+     componente conhecer as dez. */
+  await invalidar();
+  /* ⚠ E A LISTA DO FINANCEIRO V2 NAO E' REACT-QUERY — FIN-V2-REFRESH-02. O `invalidateQueries`
+     acima nao a alcanca (e' `useState` dentro do `useFinanceiroV2`): as N parcelas nasciam
+     no banco e so' apareciam no F5. A notificacao do hook e' o canal que ja existe para
+     escrita feita POR FORA dele — cada instancia inscrita relê com os filtros que esta'
+     mostrando. So' no sucesso: quem chegou aqui passou pelo `if (error) throw`. */
+  notificarLancamentosMudaram(clienteId);
+}
 
 function formatNotaFiscal(raw: string): string {
   const digits = raw.replace(/\D/g, '').slice(0, 9);
@@ -1267,14 +1294,7 @@ export function LancamentoV2Dialog({
             fase: faseParaGravar(atividade, fase),
           },
         );
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
-        const { error } = await (supabase as any).rpc('fn_parcelamento_cadastrar', { p_payload: payload });
-        if (error) throw error;
-        /* ⚠ INVALIDAÇÃO AMPLA, e é deliberado: este modal é montado por DEZ telas diferentes,
-           cada uma com o seu `onSave` e a sua forma de recarregar, e o parcelamento não passa
-           por nenhum deles — quem grava agora é a RPC. Escolher chaves aqui exigiria este
-           componente conhecer as dez. */
-        await qc.invalidateQueries();
+        await gravarParcelamento(payload, clienteAtual.id, () => qc.invalidateQueries());
         toast.success(`Parcelamento criado: ${numParcelas} parcelas`);
         onClose();
       } catch (e) {
