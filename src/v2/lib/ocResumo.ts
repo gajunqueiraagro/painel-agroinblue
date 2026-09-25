@@ -27,6 +27,12 @@ export interface OcResumoLinha {
   valor: number;
   pago: number;
   faltaPagar: number;
+  /**
+   * O que a operação paga do OUTRO lado — OC-LIQ-SINAL-01 (B). Numa venda/abate: frete, Fundersul,
+   * comissão, adiantamento do boitel, devolução ao comprador (as saídas). Numa compra: as entradas
+   * (raras). `null` = a operação não tem compromisso — traço, não zero.
+   */
+  despesas: number | null;
   /** Já em português de operador — nunca o enum cru. */
   situacao: string;
   tomSituacao: TomSituacao;
@@ -192,7 +198,8 @@ export async function carregarResumoOC(
        `valor_acordado`, inclusive na Compra de 110 (R$ 315.000). Ela é a obrigação que a
        operação de fato gerou — a mesma que o Financeiro cobra. */
     (supabase as any).from('vw_oc_operacao_compromissos_resumo')
-      .select('operacao_id, obrigacao_total').eq('cliente_id', clienteId).in('operacao_id', ids),
+      .select('operacao_id, obrigacao_total, entrada_obrigacao, saida_obrigacao, entrada_liquidado, saida_liquidado')
+      .eq('cliente_id', clienteId).in('operacao_id', ids),
   ]);
 
   /* ⚠ A DATA VEM NUMA SEGUNDA VIAGEM, e não num embed. A coluna é `movimentacao_id` (não
@@ -221,8 +228,9 @@ export async function carregarResumoOC(
     saldo_titulo: number; status: string | null; titulo_status_transacao: string | null;
   }[];
   const movs = (rMov.data ?? []) as { operacao_id: string; movimentacao_id: string | null }[];
-  const obrigacoes = (rObr.data ?? []) as { operacao_id: string; obrigacao_total: number | null }[];
+  const obrigacoes = (rObr.data ?? []) as ({ operacao_id: string } & LadosDaOperacao)[];
   const obrPorOp = new Map(obrigacoes.map((o) => [o.operacao_id, Number(o.obrigacao_total ?? 0)]));
+  const ladosPorOp = new Map(obrigacoes.map((o) => [o.operacao_id, o]));
 
   /* Recebimento: a view é por LOTE; a operação soma os lotes dela. É contagem de cabeça,
      não de dinheiro — a regra que proíbe somar no React vale para valor, não para bicho. */
@@ -291,15 +299,22 @@ export async function carregarResumoOC(
     const rec = recebido.get(op.id) ?? { negociada: 0, recebida: 0 };
     const l = liqPorOp.get(op.id);
     const ds = (datasMov.get(op.id) ?? []).sort();
-    const valor = valorDaOperacao(op);
-    const pago = Number(l?.total_liquidado_valido ?? 0);
+    /* OC-LIQ-SINAL-01 (B): com compromisso, PELO LADO DA OC (`valoresPeloLado`); sem, o caminho de
+       antes, que segue abaixo intacto. */
+    const lado = valoresPeloLado(op.tipo_operacao, ladosPorOp.get(op.id));
+    const valorAntigo = valorDaOperacao(op);
+    const pagoAntigo = Number(l?.total_liquidado_valido ?? 0);
     const saldo = Number(l?.saldo_operacao ?? 0);
     /* ⚠ SALDO ZERO COM VALOR EM PÉ É SUSPEITA, NÃO RESPOSTA — item C. Quando a base da
        dívida não responde, "falta pagar 0,00" ao lado de "valor 315.000,00 · pago 0,00"
        diria que a operação está quitada. O que resta a pagar é então a subtração dos dois
        números que a tela mostra — e nunca menos que zero, porque pagar a mais não é dever
        negativo. Quando o saldo responde, ele manda: é a régua do banco. */
-    const faltaPagar = saldo !== 0 ? saldo : Math.max(0, valor - pago);
+    const faltaAntiga = saldo !== 0 ? saldo : Math.max(0, valorAntigo - pagoAntigo);
+    const valor = lado ? lado.valor : valorAntigo;
+    const pago = lado ? lado.pago : pagoAntigo;
+    const faltaPagar = lado ? lado.falta : faltaAntiga;
+    const despesas = lado ? lado.despesas : null;
     const prox = proximoEmAberto(op.id);
     const sit = situacaoDaOperacao(l?.estado_liquidacao ?? null, valor, pago, prox.vencimento, prox.diasVencida);
     return {
@@ -314,6 +329,7 @@ export async function carregarResumoOC(
       valor,
       pago,
       faltaPagar,
+      despesas,
       situacao: sit.texto,
       tomSituacao: sit.tom,
     };
@@ -383,5 +399,41 @@ export function totalLinhas(linhas: readonly OcResumoLinha[]) {
     valor: a.valor + l.valor,
     pago: a.pago + l.pago,
     falta: a.falta + l.faltaPagar,
-  }), { n: 0, cab: 0, cabReceb: 0, valor: 0, pago: 0, falta: 0 });
+    despesas: a.despesas + (l.despesas ?? 0),
+  }), { n: 0, cab: 0, cabReceb: 0, valor: 0, pago: 0, falta: 0, despesas: 0 });
+}
+
+/** Os totais por lado que `vw_oc_operacao_compromissos_resumo` devolve (o que o modal da OC já lê). */
+export interface LadosDaOperacao {
+  obrigacao_total: number | null;
+  entrada_obrigacao: number | null;
+  saida_obrigacao: number | null;
+  entrada_liquidado: number | null;
+  saida_liquidado: number | null;
+}
+
+/**
+ * O RESUMO LÊ PELO LADO DA OPERAÇÃO — OC-LIQ-SINAL-01 (B), a mesma leitura do modal da OC.
+ *
+ * ⚠ O DEFEITO: "Valor" era `obrigacao_total` e "Pago" era a soma de TODAS as liquidações — os dois
+ *   lados somados como se fossem um. Numa venda de boitel com o adiantamento pago (Vera b58bf556) o
+ *   resumo dizia "paga 14%" sem um real recebido; na c80ebe9e, Valor 113.140,29 e Pago 108.084,29
+ *   numa venda de 102.311,46.
+ * ⚠ O LADO VEM DA VIEW, que o resolve pela conta do plano de cada compromisso — a tela não decide de
+ *   que lado cada coisa está. Venda/abate: o lado é ENTRADA; compra: SAÍDA. O outro lado vira
+ *   "Despesas", numa coluna própria.
+ * ⚠ SEM COMPROMISSO (`obrigacao_total` zero ou ausente) DEVOLVE `null`: o chamador segue o caminho de
+ *   antes (valor acordado e a base da view), porque não há lado a ler.
+ * ⚠ O ESTADO DA OC NÃO MUDA AQUI — isso é o OC-STATUS-LADO-01. Muda o que o resumo mostra.
+ */
+export function valoresPeloLado(tipo: string, l: LadosDaOperacao | undefined):
+  { valor: number; pago: number; falta: number; despesas: number } | null {
+  if (!l || !(Number(l.obrigacao_total ?? 0) > 0)) return null;
+  const compra = tipo === 'compra';
+  const valor = Number((compra ? l.saida_obrigacao : l.entrada_obrigacao) ?? 0);
+  const pago = Number((compra ? l.saida_liquidado : l.entrada_liquidado) ?? 0);
+  const despesas = Number((compra ? l.entrada_obrigacao : l.saida_obrigacao) ?? 0);
+  /* Pagar a mais não é dever negativo — a mesma regra do caminho de antes. */
+  const falta = Math.max(0, Math.round((valor - pago) * 100) / 100);
+  return { valor, pago, falta, despesas };
 }

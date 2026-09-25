@@ -38,6 +38,10 @@ const TITULO: Record<string, string> = {
 const rotuloEntrou = (tipo: string) => (tipo === 'compra' ? 'Já entrou na fazenda' : 'Já saiu');
 const rotuloNaoEntrou = (tipo: string) => (tipo === 'compra' ? 'Ainda não entrou' : 'Ainda não saiu');
 const rotuloFalta = (tipo: string) => (tipo === 'compra' ? 'Falta pagar' : 'Falta receber');
+/* OC-LIQ-SINAL-01 (B): a coluna diz de que lado ela fala. Numa venda/abate o resumo lê as ENTRADAS
+   ("Recebido"); numa compra, as SAÍDAS ("Pago"). O outro lado vai para "Despesas". */
+const rotuloPago = (tipo: string) => (tipo === 'compra' ? 'Pago' : 'Recebido');
+const numOuTraco = (v: number | null) => (v == null ? '—' : num(v));
 
 /** Uma célula do autotable: texto simples ou texto com estilo próprio. */
 type CelulaPdf = string | number | { content: string; styles: Record<string, unknown> };
@@ -182,31 +186,31 @@ export function ResumoOperacoesModal({
     for (const bloco of resumo.blocos) {
       const secoes: { titulo: string; head: string[]; body: CelulaPdf[][]; foot?: CelulaPdf[] }[] = [];
 
-      const cabLinhas = ['Data', 'Operação', 'Fornecedor', 'Cab', 'Cab receb.', 'Data receb.', 'Valor', 'Pago', 'Falta pagar', 'Situação'];
+      const cabLinhas = ['Data', 'Operação', 'Fornecedor', 'Cab', 'Cab receb.', 'Data receb.', 'Valor', rotuloPago(bloco.tipo), rotuloFalta(bloco.tipo), 'Despesas', 'Situação'];
       const corpoEntrou = bloco.entrou.map((l) => [
         dataBR(l.data), l.descricao, l.fornecedor,
         l.qtdNegociada == null ? '—' : inteiro(l.qtdNegociada),
         inteiro(l.qtdRecebida),
         l.dataRecebimento.primeira ? ddmm(l.dataRecebimento.primeira) + (l.dataRecebimento.n > 1 ? ` (+${l.dataRecebimento.n - 1})` : '') : '—',
-        num(l.valor), num(l.pago), num(l.faltaPagar), pintado(l.situacao, l.tomSituacao),
+        num(l.valor), num(l.pago), num(l.faltaPagar), numOuTraco(l.despesas), pintado(l.situacao, l.tomSituacao),
       ]);
       const tEntrou = totalLinhas(bloco.entrou);
       secoes.push({
-        titulo: `${rotuloEntrou(bloco.tipo)} — ${tEntrou.n} ${PLURAL[bloco.tipo]?.toLowerCase() ?? ''} · ${inteiro(tEntrou.cabReceb)} de ${inteiro(tEntrou.cab)} cabeças · R$ ${num(tEntrou.valor)} · pago R$ ${num(tEntrou.pago)} · falta pagar R$ ${num(tEntrou.falta)}`,
+        titulo: `${rotuloEntrou(bloco.tipo)} — ${tEntrou.n} ${PLURAL[bloco.tipo]?.toLowerCase() ?? ''} · ${inteiro(tEntrou.cabReceb)} de ${inteiro(tEntrou.cab)} cabeças · R$ ${num(tEntrou.valor)} · ${rotuloPago(bloco.tipo).toLowerCase()} R$ ${num(tEntrou.pago)} · ${rotuloFalta(bloco.tipo).toLowerCase()} R$ ${num(tEntrou.falta)}`,
         head: cabLinhas, body: corpoEntrou,
-        foot: ['', 'TOTAL', '', inteiro(tEntrou.cab), inteiro(tEntrou.cabReceb), '', num(tEntrou.valor), num(tEntrou.pago), num(tEntrou.falta), ''],
+        foot: ['', 'TOTAL', '', inteiro(tEntrou.cab), inteiro(tEntrou.cabReceb), '', num(tEntrou.valor), num(tEntrou.pago), num(tEntrou.falta), num(tEntrou.despesas), ''],
       });
 
       const tNao = totalLinhas(bloco.naoEntrou);
       secoes.push({
-        titulo: `${rotuloNaoEntrou(bloco.tipo)} — ${tNao.n} · ${inteiro(tNao.cab)} cabeças · R$ ${num(tNao.valor)} · falta pagar R$ ${num(tNao.falta)}`,
-        head: ['Data', 'Operação', 'Fornecedor', 'Cab', 'Valor', 'Pago', 'Falta pagar', 'Situação'],
+        titulo: `${rotuloNaoEntrou(bloco.tipo)} — ${tNao.n} · ${inteiro(tNao.cab)} cabeças · R$ ${num(tNao.valor)} · ${rotuloFalta(bloco.tipo).toLowerCase()} R$ ${num(tNao.falta)}`,
+        head: ['Data', 'Operação', 'Fornecedor', 'Cab', 'Valor', rotuloPago(bloco.tipo), rotuloFalta(bloco.tipo), 'Despesas', 'Situação'],
         body: bloco.naoEntrou.map((l) => [
           dataBR(l.data), l.descricao, l.fornecedor,
           l.qtdNegociada == null ? '—' : inteiro(l.qtdNegociada),
-          num(l.valor), num(l.pago), num(l.faltaPagar), pintado(l.situacao, l.tomSituacao),
+          num(l.valor), num(l.pago), num(l.faltaPagar), numOuTraco(l.despesas), pintado(l.situacao, l.tomSituacao),
         ]),
-        foot: ['', 'TOTAL', '', inteiro(tNao.cab), num(tNao.valor), num(tNao.pago), num(tNao.falta), ''],
+        foot: ['', 'TOTAL', '', inteiro(tNao.cab), num(tNao.valor), num(tNao.pago), num(tNao.falta), num(tNao.despesas), ''],
       });
 
       const totalFalta = bloco.faltaPagar.reduce((a, p) => a + p.valor, 0);
@@ -279,19 +283,21 @@ export function ResumoOperacoesModal({
   const exportarExcel = () => {
     if (!resumo) return;
     const wb = XLSX.utils.book_new();
-    const abaEntrou: (string | number)[][] = [['Tipo', 'Data', 'Operação', 'Fornecedor', 'Cab', 'Cab receb.', 'Data receb.', 'Valor', 'Pago', 'Falta pagar', 'Situação']];
-    const abaNao: (string | number)[][] = [['Tipo', 'Data', 'Operação', 'Fornecedor', 'Cab', 'Valor', 'Pago', 'Falta pagar', 'Situação']];
+    /* OC-LIQ-SINAL-01 (B): a planilha junta tipos numa aba so', entao o cabecalho diz os dois
+       vocabularios ("Recebido / pago") e a coluna Tipo diz qual vale em cada linha. */
+    const abaEntrou: (string | number)[][] = [['Tipo', 'Data', 'Operação', 'Fornecedor', 'Cab', 'Cab receb.', 'Data receb.', 'Valor', 'Recebido / pago', 'Falta', 'Despesas', 'Situação']];
+    const abaNao: (string | number)[][] = [['Tipo', 'Data', 'Operação', 'Fornecedor', 'Cab', 'Valor', 'Recebido / pago', 'Falta', 'Despesas', 'Situação']];
     const abaFalta: (string | number)[][] = [['Tipo', 'Vence', 'Operação', 'Fornecedor', 'Gado', 'Valor', 'Situação']];
 
     for (const b of resumo.blocos) {
       const rot = PLURAL[b.tipo] ?? b.tipo;
-      for (const l of b.entrou) abaEntrou.push([rot, dataBR(l.data), l.descricao, l.fornecedor, l.qtdNegociada ?? 0, l.qtdRecebida, l.dataRecebimento.primeira ? ddmm(l.dataRecebimento.primeira) : '—', l.valor, l.pago, l.faltaPagar, l.situacao]);
+      for (const l of b.entrou) abaEntrou.push([rot, dataBR(l.data), l.descricao, l.fornecedor, l.qtdNegociada ?? 0, l.qtdRecebida, l.dataRecebimento.primeira ? ddmm(l.dataRecebimento.primeira) : '—', l.valor, l.pago, l.faltaPagar, l.despesas ?? '—', l.situacao]);
       const tE = totalLinhas(b.entrou);
-      if (b.entrou.length) abaEntrou.push([rot, '', 'TOTAL', '', tE.cab, tE.cabReceb, '', tE.valor, tE.pago, tE.falta, '']);
+      if (b.entrou.length) abaEntrou.push([rot, '', 'TOTAL', '', tE.cab, tE.cabReceb, '', tE.valor, tE.pago, tE.falta, tE.despesas, '']);
 
-      for (const l of b.naoEntrou) abaNao.push([rot, dataBR(l.data), l.descricao, l.fornecedor, l.qtdNegociada ?? 0, l.valor, l.pago, l.faltaPagar, l.situacao]);
+      for (const l of b.naoEntrou) abaNao.push([rot, dataBR(l.data), l.descricao, l.fornecedor, l.qtdNegociada ?? 0, l.valor, l.pago, l.faltaPagar, l.despesas ?? '—', l.situacao]);
       const tN = totalLinhas(b.naoEntrou);
-      if (b.naoEntrou.length) abaNao.push([rot, '', 'TOTAL', '', tN.cab, tN.valor, tN.pago, tN.falta, '']);
+      if (b.naoEntrou.length) abaNao.push([rot, '', 'TOTAL', '', tN.cab, tN.valor, tN.pago, tN.falta, tN.despesas, '']);
 
       for (const p of b.faltaPagar) abaFalta.push([rot, dataBR(p.vencimento), p.descricao + (p.totalParcelas > 1 && p.sequencia != null ? ` · ${p.sequencia}/${p.totalParcelas}` : ''), p.fornecedor, p.gado, p.valor, p.situacao]);
       if (b.faltaPagar.length) abaFalta.push([rot, '', 'TOTAL', '', '', b.faltaPagar.reduce((a, p) => a + p.valor, 0), '']);
@@ -384,20 +390,21 @@ export function ResumoOperacoesModal({
                 {resumo.blocos.length > 1 && <div className="text-[12px] font-semibold">{PLURAL[b.tipo] ?? b.tipo}</div>}
 
                 <Lista titulo={`${rotuloEntrou(b.tipo)}`} tom="success"
-                  total={`${tE.n} ${plural} · ${inteiro(tE.cabReceb)} de ${inteiro(tE.cab)} cabeças · R$ ${num(tE.valor)} · pago R$ ${num(tE.pago)} · falta pagar R$ ${num(tE.falta)}`}>
+                  total={`${tE.n} ${plural} · ${inteiro(tE.cabReceb)} de ${inteiro(tE.cab)} cabeças · R$ ${num(tE.valor)} · ${rotuloPago(b.tipo).toLowerCase()} R$ ${num(tE.pago)} · ${rotuloFalta(b.tipo).toLowerCase()} R$ ${num(tE.falta)}`}>
                   <table className="w-full table-fixed border-collapse text-[11px]">
                     {/* ⚠ AS LARGURAS SOMAM 100% — item 5, e é isso que impede o título de
                         cortar: sem `colgroup` a tabela repartia pelo conteúdo e um nome de
                         fornecedor longo espremia "Falta pagar" até virar "Falta p…". */}
                     <colgroup>
-                      <col className="w-[7%]" /><col className="w-[13%]" /><col className="w-[18%]" />
-                      <col className="w-[5%]" /><col className="w-[7%]" /><col className="w-[7%]" />
-                      <col className="w-[10%]" /><col className="w-[9%]" /><col className="w-[10%]" />
-                      <col className="w-[14%]" />
+                      <col className="w-[7%]" /><col className="w-[12%]" /><col className="w-[15%]" />
+                      <col className="w-[5%]" /><col className="w-[6%]" /><col className="w-[7%]" />
+                      <col className="w-[10%]" /><col className="w-[9%]" /><col className="w-[9%]" />
+                      <col className="w-[8%]" /><col className="w-[12%]" />
                     </colgroup>
                     <thead><tr>
                       <Th>Data</Th><Th>Operação</Th><Th>Fornecedor</Th><Th right>Cab</Th><Th right>Cab receb.</Th>
-                      <Th>Data receb.</Th><Th right>Valor</Th><Th right>Pago</Th><Th right>Falta pagar</Th><Th>Situação</Th>
+                      <Th>Data receb.</Th><Th right>Valor</Th><Th right>{rotuloPago(b.tipo)}</Th><Th right>{rotuloFalta(b.tipo)}</Th>
+                      <Th right>Despesas</Th><Th>Situação</Th>
                     </tr></thead>
                     <tbody>
                       {b.entrou.map((l) => {
@@ -413,6 +420,7 @@ export function ResumoOperacoesModal({
                             <Td right>{num(l.valor)}</Td>
                             <Td right>{num(l.pago)}</Td>
                             <Td right>{num(l.faltaPagar)}</Td>
+                            <Td right>{numOuTraco(l.despesas)}</Td>
                             <Td><span className={cn(PILULA, PILULA_TOM[l.tomSituacao])}>{l.situacao}</span></Td>
                           </tr>
                         );
@@ -421,7 +429,8 @@ export function ResumoOperacoesModal({
                         <tr className="bg-primary/15 font-semibold h-[21px]">
                           <Td /><Td>TOTAL</Td><Td /><Td right>{inteiro(tE.cab)}</Td>
                           <Td right cls={tE.cabReceb < tE.cab ? 'text-amber-600' : undefined}>{inteiro(tE.cabReceb)}</Td>
-                          <Td /><Td right>{num(tE.valor)}</Td><Td right>{num(tE.pago)}</Td><Td right>{num(tE.falta)}</Td><Td />
+                          <Td /><Td right>{num(tE.valor)}</Td><Td right>{num(tE.pago)}</Td><Td right>{num(tE.falta)}</Td>
+                          <Td right>{num(tE.despesas)}</Td><Td />
                         </tr>
                       )}
                     </tbody>
@@ -429,16 +438,16 @@ export function ResumoOperacoesModal({
                 </Lista>
 
                 <Lista titulo={rotuloNaoEntrou(b.tipo)} tom="warning"
-                  total={`${tN.n} ${plural} · ${inteiro(tN.cab)} cabeças · R$ ${num(tN.valor)} · falta pagar R$ ${num(tN.falta)}`}>
+                  total={`${tN.n} ${plural} · ${inteiro(tN.cab)} cabeças · R$ ${num(tN.valor)} · ${rotuloFalta(b.tipo).toLowerCase()} R$ ${num(tN.falta)}`}>
                   <table className="w-full table-fixed border-collapse text-[11px]">
                     <colgroup>
-                      <col className="w-[8%]" /><col className="w-[15%]" /><col className="w-[22%]" />
-                      <col className="w-[6%]" /><col className="w-[12%]" /><col className="w-[11%]" />
-                      <col className="w-[12%]" /><col className="w-[14%]" />
+                      <col className="w-[8%]" /><col className="w-[14%]" /><col className="w-[19%]" />
+                      <col className="w-[6%]" /><col className="w-[11%]" /><col className="w-[10%]" />
+                      <col className="w-[11%]" /><col className="w-[9%]" /><col className="w-[12%]" />
                     </colgroup>
                     <thead><tr>
                       <Th>Data</Th><Th>Operação</Th><Th>Fornecedor</Th><Th right>Cab</Th>
-                      <Th right>Valor</Th><Th right>Pago</Th><Th right>Falta pagar</Th><Th>Situação</Th>
+                      <Th right>Valor</Th><Th right>{rotuloPago(b.tipo)}</Th><Th right>{rotuloFalta(b.tipo)}</Th><Th right>Despesas</Th><Th>Situação</Th>
                     </tr></thead>
                     <tbody>
                       {b.naoEntrou.map((l) => (
@@ -446,13 +455,15 @@ export function ResumoOperacoesModal({
                           <Td>{dataBR(l.data)}</Td><Td>{l.descricao}</Td><Td>{l.fornecedor}</Td>
                           <Td right>{l.qtdNegociada == null ? '—' : inteiro(l.qtdNegociada)}</Td>
                           <Td right>{num(l.valor)}</Td><Td right>{num(l.pago)}</Td><Td right>{num(l.faltaPagar)}</Td>
+                          <Td right>{numOuTraco(l.despesas)}</Td>
                           <Td><span className={cn(PILULA, PILULA_TOM[l.tomSituacao])}>{l.situacao}</span></Td>
                         </tr>
                       ))}
                       {b.naoEntrou.length > 0 && (
                         <tr className="bg-primary/15 font-semibold h-[21px]">
                           <Td /><Td>TOTAL</Td><Td /><Td right>{inteiro(tN.cab)}</Td>
-                          <Td right>{num(tN.valor)}</Td><Td right>{num(tN.pago)}</Td><Td right>{num(tN.falta)}</Td><Td />
+                          <Td right>{num(tN.valor)}</Td><Td right>{num(tN.pago)}</Td><Td right>{num(tN.falta)}</Td>
+                          <Td right>{num(tN.despesas)}</Td><Td />
                         </tr>
                       )}
                     </tbody>

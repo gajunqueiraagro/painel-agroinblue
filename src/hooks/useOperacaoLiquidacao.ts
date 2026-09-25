@@ -671,7 +671,10 @@ export function useOperacaoLiquidacao({ operacaoId, clienteId, enabled }: Params
 
   const registrarLiquidacao = useCallback(async (input: RegistrarLiquidacaoInput): Promise<boolean> => {
     if (!guard()) return false;
-    const nat = tipoOperacao === 'compra' ? 'pagamento' : 'recebimento';
+    /* OC-LIQ-SINAL-01: com titulo, a natureza e' a DIRECAO dele (uma saida numa venda e' pagamento), e
+       quem a conhece e' o banco — o front manda NULL e `oc_registrar_liquidacao` deriva. Sem titulo
+       (permuta), o lado da operacao, como sempre. */
+    const nat = input.financeiroLancamentoId ? null : (tipoOperacao === 'compra' ? 'pagamento' : 'recebimento');
     setSaving(true);
     try {
       const payload: Record<string, unknown> = {

@@ -728,6 +728,12 @@ no mesmo arquivo.
   para no titulo vivo realizado — com banco falso aplicando a regra do D2, provada de verdade em rollback.
   ⚠ PROVADO: com o filtro `cancelada` do hook, a chave do plano no dialogo, o criterio de titulo vivo e o ramo
   "reduzido" desligados, 5 casos caem, um por mutacao, pela razao certa.
+  De 1940 para 1951 no OC-LIQ-SINAL-01, em dois arquivos novos. `src/v2/lib/ocResumo.lado.test.ts` (+7): o Resumo
+  pelo lado com os numeros do proto (c80ebe9e: 107.367,46 / 102.311,46 / despesas 5.772,83, e NAO os 113.140,29 /
+  108.084,29 de antes; b58bf556: nada recebido, adiantamento nas despesas), compra sem mudanca de sentido, OC
+  sem compromisso no caminho antigo, e os totais. `resumoDespesas.test.tsx` (+4): previa, PDF (venda e compra) e
+  Excel com a coluna Despesas e os rotulos por lado — jsPDF/autotable/xlsx trocados por espioes.
+  ⚠ PROVADO: com o Resumo voltando a somar os dois lados e sem "Despesas" no PDF, 4 casos caem.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -1264,16 +1270,38 @@ migration e' REGISTRO HISTORICO, nao se reaplica).
   Desfazer da Graxaria antes (recusa) e depois do D2 (tudo cancelado); guarda ainda recusando titulo vivo.
   ⚠ NAO FOI EXECUTADO NA c80ebe9e REAL — o Gabriel faz pela tela. O estado final pedido sai de DOIS gestos:
     Desvincular a saida a5c1c61a (com "Pagamento Estornado") e Desfazer a Graxaria 73a183eb.
-- OC-LIQ-SINAL-01 — pendencia, nao tratada: `oc_sincronizar_liquidacao_de_financeiro` escolhe a natureza da
-  liquidacao automatica pelo TIPO DA OC (compra = 'pagamento', resto = 'recebimento') e grava `abs(valor)`.
-  Uma DEVOLUCAO ao comprador numa venda/abate entra como RECEBIMENTO e SOMA: c80ebe9e dizia "recebido
-  107.367,46" com nota de 102.311,46 e 5.056 devolvidos. O sentido do dinheiro esta' no sinal do titulo, e a
-  ponte o descarta.
-  ⚠ E NAO E' SO' DEVOLUCAO: TODA SAIDA vinculada a venda/abate soma no recebido. Medido na mesma OC, no mesmo
-    dia: o Gabriel vinculou o Fundersul de 716,83 (2-Saidas, 67d3215b, 20:51) e o recebido foi a 108.084,29.
-    Depois do desvinculo dos 5.056 ele fica 103.028,29 — nao os 102.311,46 do estado final pedido — ate' esta
-    pendencia ser tratada. O desvinculo esta' certo; a conta do recebido e' que esta' errada. ⚠ MEDIR ANTES DE MEXER: quantas OCs tem liquidacao automatica de titulo cujo sinal contraria
-  a natureza (saida em venda/abate, entrada em compra), e se a tela de recebido as soma. Nao medido aqui.
+- ⚠ OC-LIQ-SINAL-01 — A NATUREZA DA LIQUIDACAO SEGUE A DIRECAO DO TITULO, E O RESUMO DA CENTRAL LE
+  PELO LADO DA OC (25/09/2026). Migration `20261027149000_oc_liq_sinal_01.sql` (⚠ registrada como
+  `20260925210751`).
+  ⚠ A PREMISSA DO BRIEFING ESTAVA ERRADA, E O ERRO FOI MEU. Eu reportei "recebido 107.367,46" e depois
+    "108.084,29" da c80ebe9e — era a soma CRUA das liquidacoes, feita por mim no SQL. O modal da OC ja'
+    separava os lados pela conta do plano do compromisso (`vw_oc_operacao_compromissos_resumo`): "Recebido"
+    102.311,46 o tempo todo. O "recebido" que eu cunhei nao existia em tela nenhuma.
+  ⚠ E A NATUREZA NAO ENTRAVA EM CONTA NENHUMA: nenhuma funcao, view ou tela soma ou exibe por ela
+    (`vw_oc_operacao_liquidacao` e `oc_derivar_status` somam TODAS as liquidacoes vivas, pelo modelo da
+    ADR-19 — "liquidacao nao e' dinheiro, e' satisfacao de obrigacao"). Provado em rollback: com a natureza
+    corrigida, liquidado, saldo e estado das 14 OCs ficaram IDENTICOS.
+  (A) `oc_sincronizar_liquidacao_de_financeiro` (538b8706 -> d139826a): entrada = 'recebimento', saida =
+     'pagamento', pelo `tipo_operacao` do titulo. Backfill das 35 automaticas (32 vivas, 3 estornadas; 14
+     OCs; R$ 228.258,77 vivos). 28 das 32 eram obrigacoes MATERIALIZADAS PELA PROPRIA OC (adiantamento do
+     boitel 183.937,00, taxas 21.892,36, frete 12.009,50, devolucao 5.056,00); 3 do Vincular; 1 frete manual.
+     Lancamentos e vinculos bancarios identicos por md5 (137 e 41 linhas).
+     ⚠ AS DUAS FONTES DE DIRECAO CONCORDAM — a conta do plano do compromisso e o titulo — em 130 de 130.
+     ⚠ O ESCRITOR MANUAL ALINHOU (e4e7f0ab -> 430a34dd): `oc_registrar_liquidacao` exigia a natureza do TIPO
+       DA OC, e a `AbaLiquidacaoOC` liquida qualquer obrigacao com titulo — o defeito voltaria por ali. Com
+       titulo, a natureza e' a direcao dele; sem titulo (permuta), o lado da OC; NULL e' derivado; natureza
+       informada e errada continua recusada. O front (`useOperacaoLiquidacao`) manda NULL quando ha' titulo.
+       Zero liquidacoes manuais existiam.
+  (B) O RESUMO DA CENTRAL (`src/v2/lib/ocResumo.ts` -> modal, PDF, Excel) lia "Valor" = `obrigacao_total` e
+     "Pago" = todas as liquidacoes: os dois lados somados. c80ebe9e saia Valor 113.140,29 / Pago 108.084,29
+     numa venda de 102.311,46; b58bf556 saia "paga 14%" sem um real recebido do boitel. Agora
+     `valoresPeloLado`: venda/abate = ENTRADAS, compra = SAIDAS, o outro lado na coluna "Despesas"; a coluna do
+     dinheiro diz "Recebido"/"Falta receber" (venda, abate) ou "Pago"/"Falta pagar" (compra). Sem compromisso,
+     o caminho de antes (despesas "—"). Nenhuma migration.
+     ⚠ O ESTADO DA OC NAO MUDOU — e' o OC-STATUS-LADO-01. A situacao continua lendo `estado_liquidacao` da
+       view; so' a porcentagem ja' le' o lado, entao b58bf556 mostra "paga 0%" ate' la'.
+     ⚠ FICOU COMO ESTAVA a lista de parcelas em aberto do resumo ("Falta receber" por parcela), que junta
+       parcelas dos dois lados.
 - OC-COMPRA-REVALOR-01 — ⚠ O DEFEITO BRIEFADO NAO EXISTIA, e o registro e' sobre o metodo.
   Sintoma (NJ, compra f56c50d3, 24/09/2026): o Gabriel corrigiu o valor do lote para
   896.644,48, o financeiro e o documento seguiram com 892.645, e a Negociacao recusava com
