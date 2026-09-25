@@ -862,6 +862,121 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
   ) => {
     if (!clienteId || !user) return false;
 
+    const anoMes = form.data_pagamento
+      ? form.data_pagamento.substring(0, 7)
+      : form.data_competencia.substring(0, 7);
+    const sinal = (form.tipo_operacao || '').startsWith('1') ? 1 : -1;
+
+    /* ⚠ OS DOIS RAMOS REMENDAM A LINHA COM O QUE O BANCO DEVOLVEU — FIN-V2-REFRESH-01.
+       O select de verificacao e o patch moravam so' no ramo comum; o ramo do titulo de OC
+       gravava e retornava, e a lista seguia com a linha velha ate' o F5 (8b211cae, 25/09: o
+       Gabriel marcou Realizado com data de pagamento, o banco gravou e a linha continuou
+       "Programado"). O bloco abaixo foi MOVIDO do ramo comum sem mudar uma linha — so' ganhou a
+       indentacao da funcao — e `anoMes`/`sinal`, que ele usa de fallback, subiram junto porque
+       so' dependem do form.
+       ⚠ FALHA DO SELECT NAO E' FALHA DO SALVAR, nos dois ramos igual: o UPDATE ja passou, o
+       `verify` volta nulo, a linha nao e' remendada e o save continua devolvendo `true`. */
+    const remendarComOBanco = async () => {
+      /* ⚠ O SELECT DE VERIFICAÇÃO PASSOU A TRAZER A LINHA INTEIRA — PR-FIN-SAVE-LENTO-01, e
+         NÃO custa uma requisição nova: ele já existia aqui, lendo quatro colunas. Devolvê-lo
+         ao chamador deixa a tela atualizar a linha sem recarregar a lista, e com o que os
+         TRIGGERS gravaram — o form não sabe o subcentro que a chave do plano resolveu. */
+      const { data: verify } = await supabase.from('financeiro_lancamentos_v2')
+        .select('*')
+        .eq('id', id)
+        .single();
+      /* ⚠ O PATCH MORA AQUI, NÃO NO CHAMADOR — PR-FIN-SAVE-LENTO-01. A tela não pode receber
+         a linha crua: o `LancamentoV2` MENTE sobre a tabela em `sinal` (`text` no banco,
+         `number` no tipo) e `dados_pagamento` (`jsonb` × `string`), e devolvê-la alargaria o
+         contrato `onSave: Promise<boolean>` de outras três montagens do modal. Dentro do hook
+         o estado é local e os campos abaixo são todos texto ou booleano — nenhum cast.
+         ⚠ E SÃO EXATAMENTE OS CAMPOS QUE OS TRIGGERS REESCREVEM. O form não sabe o subcentro
+         que a chave do plano resolveu, nem o macro/grupo/centro que vieram com ele; pintar o
+         form de volta mostraria o que foi digitado, e a diferença só apareceria no F5. */
+      if (verify) {
+        /* ⚠ O TIPO É `Omit<LancamentoV2, 'dados_pagamento'>` DE PROPÓSITO, e é a peça inteira
+           desta correção. Antes isto era uma lista de dezenove campos ESCOLHIDOS, e uma lista
+           escolhida esquece: `fazenda_id` ficou de fora, então trocar a fazenda gravava no
+           banco e a lista seguia mostrando a anterior até o F5 (caso Vera, 11/09, "Seguro
+           Hilux"). Com a anotação, esquecer um campo é ERRO DE COMPILAÇÃO — o defeito deixa
+           de depender de alguém lembrar.
+           ⚠ `dados_pagamento` É A ÚNICA EXCEÇÃO, e sai por mentira de tipo: `jsonb` no banco,
+           `string | null` aqui. Não é lida na lista; converter exigiria decidir uma
+           serialização, que é outra frente. Fica a de `l`, como já ficava.
+           ⚠ `?? l.x` SÓ ONDE O NOSSO TIPO NÃO ACEITA NULO. Nos campos que aceitam, o valor vem
+           DIRETO: `verify.safra_id ?? l.safra_id` manteria a safra anterior quando o operador
+           a apaga — e apagar safra é exatamente o que o FIN-SAFRA-ADM-01 faz em todo
+           lançamento administrativo. O `??` defensivo escondia a própria gravação. */
+        const doBanco: Omit<LancamentoV2, 'dados_pagamento'> = {
+          id: verify.id ?? id,
+          cliente_id: verify.cliente_id ?? clienteId,
+          fazenda_id: verify.fazenda_id ?? form.fazenda_id,
+          conta_bancaria_id: verify.conta_bancaria_id,
+          data_competencia: verify.data_competencia ?? form.data_competencia,
+          data_pagamento: verify.data_pagamento,
+          data_vencimento: verify.data_vencimento,
+          valor: verify.valor,
+          /* Texto no banco ('-1' | '0' | '1'), número aqui. A conversão é explícita e o nulo
+             não vira zero: sem valor, fica o que a linha já tinha. */
+          sinal: verify.sinal != null ? Number(verify.sinal) : sinal,
+          tipo_operacao: verify.tipo_operacao ?? form.tipo_operacao,
+          status_transacao: verify.status_transacao,
+          descricao: verify.descricao,
+          macro_custo: verify.macro_custo,
+          grupo_custo: verify.grupo_custo,
+          centro_custo: verify.centro_custo,
+          subcentro: verify.subcentro,
+          escopo_negocio: verify.escopo_negocio,
+          observacao: verify.observacao,
+          ano_mes: verify.ano_mes ?? anoMes,
+          documento: verify.documento,
+          historico: verify.historico,
+          numero_documento: verify.numero_documento,
+          favorecido_id: verify.favorecido_id,
+          conta_destino_id: verify.conta_destino_id,
+          origem_lancamento: verify.origem_lancamento ?? 'manual',
+          lote_importacao_id: verify.lote_importacao_id,
+          forma_pagamento: verify.forma_pagamento,
+          cancelado: verify.cancelado ?? false,
+          conciliado_em: verify.conciliado_em,
+          editado_manual: verify.editado_manual ?? true,
+          created_by: verify.created_by,
+          created_at: verify.created_at,
+          updated_at: verify.updated_at,
+          movimentacao_rebanho_id: verify.movimentacao_rebanho_id,
+          recorrencia_id: verify.recorrencia_id,
+          safra_id: verify.safra_id,
+          plano_conta_id: verify.plano_conta_id,
+          compoe_dre: verify.compoe_dre,
+        };
+        /**
+         * ⚠ CULTURA E FASE VÊM DO FORM, NÃO DO `verify` — AGRI-MODAL-CULTURA-04.
+         *
+         * A falta delas era um defeito de EXIBIÇÃO com cara de defeito de gravação: o banco
+         * recebia `cultura = 'mandioca'`, a linha em memória seguia com o valor antigo, e
+         * reabrir o modal — que lê da LISTA, não do banco — mostrava "Todas (rateia)". O
+         * operador via o próprio trabalho desaparecer.
+         * ⚠ DO FORM PORQUE O `verify` NÃO AS TEM NO TIPO: `types.ts` é anterior ao AGRI-04A e
+         * não conhece as duas colunas, então `verify.cultura` não compila. Ler do form é fiel
+         * aqui — ao contrário de subcentro/macro/grupo, nenhum trigger reescreve estas duas.
+         * ⚠ E A REGRA É A MESMA DO UPDATE: quem não fala do campo (`undefined`) PRESERVA o que
+         * a linha já tinha. Escrever `null` cegamente apagaria da tela um valor que continua no
+         * banco — o defeito de origem ao contrário.
+         * ⚠ O `Omit<LancamentoV2, 'dados_pagamento'>` NÃO COBROU A FALTA, e vale saber por quê:
+         * ele obriga a listar os campos OBRIGATÓRIOS, e `cultura?`/`fase?` são opcionais, como
+         * `safra_id?` e `plano_conta_id?`. Campo opcional ausente não é erro — a proteção do
+         * tipo é real, mas alcança menos do que o comentário dela promete.
+         */
+        setLancamentos((atual) => atual.map((l) => (l.id !== id ? l : {
+          ...l,
+          ...doBanco,
+          cultura: form.cultura !== undefined ? (form.cultura || null) : l.cultura,
+          fase: form.fase !== undefined ? (form.fase || null) : l.fase,
+        })));
+      }
+      return verify;
+    };
+
     // PR-SAFE-0 — proteção de títulos originados da Operação Comercial. Detecção
     //   ESTRUTURAL (marcador de proveniência persistido + vínculo reverso em
     //   zoo_operacao_partes), nunca por texto de UI. Campos que compõem a obrigação
@@ -938,15 +1053,13 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
           opts?.onErro?.(n.mensagem);
           return false;
         }
+        /* ⚠ A MESMA RELEITURA DO RAMO COMUM — FIN-V2-REFRESH-01. O que o ramo pode GRAVAR
+           continua restrito acima; o que muda e' so' a tela passar a mostrar o que ficou. */
+        await remendarComOBanco();
         if (!opts?.silent) toast.success('Lançamento atualizado');
         return true;
       }
     }
-
-    const anoMes = form.data_pagamento
-      ? form.data_pagamento.substring(0, 7)
-      : form.data_competencia.substring(0, 7);
-    const sinal = (form.tipo_operacao || '').startsWith('1') ? 1 : -1;
 
     // Auto-derive escopo_negocio from plano de contas if not explicitly set
     const escopo = form.escopo_negocio || deriveEscopoFromSubcentro(form.subcentro) || null;
@@ -1026,14 +1139,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       return false;
     }
 
-    /* ⚠ O SELECT DE VERIFICAÇÃO PASSOU A TRAZER A LINHA INTEIRA — PR-FIN-SAVE-LENTO-01, e
-       NÃO custa uma requisição nova: ele já existia aqui, lendo quatro colunas. Devolvê-lo
-       ao chamador deixa a tela atualizar a linha sem recarregar a lista, e com o que os
-       TRIGGERS gravaram — o form não sabe o subcentro que a chave do plano resolveu. */
-    const { data: verify } = await supabase.from('financeiro_lancamentos_v2')
-      .select('*')
-      .eq('id', id)
-      .single();
+    const verify = await remendarComOBanco();
     // Antes imprimia a linha inteira relida do banco (id + duas contas, todos
     // UUID). O objetivo era confirmar que o destino persistiu — booleano basta.
     console.log(
@@ -1054,95 +1160,6 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     }
 
     if (!opts?.silent) toast.success('Lançamento atualizado');
-    /* ⚠ O PATCH MORA AQUI, NÃO NO CHAMADOR — PR-FIN-SAVE-LENTO-01. A tela não pode receber
-       a linha crua: o `LancamentoV2` MENTE sobre a tabela em `sinal` (`text` no banco,
-       `number` no tipo) e `dados_pagamento` (`jsonb` × `string`), e devolvê-la alargaria o
-       contrato `onSave: Promise<boolean>` de outras três montagens do modal. Dentro do hook
-       o estado é local e os campos abaixo são todos texto ou booleano — nenhum cast.
-       ⚠ E SÃO EXATAMENTE OS CAMPOS QUE OS TRIGGERS REESCREVEM. O form não sabe o subcentro
-       que a chave do plano resolveu, nem o macro/grupo/centro que vieram com ele; pintar o
-       form de volta mostraria o que foi digitado, e a diferença só apareceria no F5. */
-    if (verify) {
-      /* ⚠ O TIPO É `Omit<LancamentoV2, 'dados_pagamento'>` DE PROPÓSITO, e é a peça inteira
-         desta correção. Antes isto era uma lista de dezenove campos ESCOLHIDOS, e uma lista
-         escolhida esquece: `fazenda_id` ficou de fora, então trocar a fazenda gravava no
-         banco e a lista seguia mostrando a anterior até o F5 (caso Vera, 11/09, "Seguro
-         Hilux"). Com a anotação, esquecer um campo é ERRO DE COMPILAÇÃO — o defeito deixa
-         de depender de alguém lembrar.
-         ⚠ `dados_pagamento` É A ÚNICA EXCEÇÃO, e sai por mentira de tipo: `jsonb` no banco,
-         `string | null` aqui. Não é lida na lista; converter exigiria decidir uma
-         serialização, que é outra frente. Fica a de `l`, como já ficava.
-         ⚠ `?? l.x` SÓ ONDE O NOSSO TIPO NÃO ACEITA NULO. Nos campos que aceitam, o valor vem
-         DIRETO: `verify.safra_id ?? l.safra_id` manteria a safra anterior quando o operador
-         a apaga — e apagar safra é exatamente o que o FIN-SAFRA-ADM-01 faz em todo
-         lançamento administrativo. O `??` defensivo escondia a própria gravação. */
-      const doBanco: Omit<LancamentoV2, 'dados_pagamento'> = {
-        id: verify.id ?? id,
-        cliente_id: verify.cliente_id ?? clienteId,
-        fazenda_id: verify.fazenda_id ?? form.fazenda_id,
-        conta_bancaria_id: verify.conta_bancaria_id,
-        data_competencia: verify.data_competencia ?? form.data_competencia,
-        data_pagamento: verify.data_pagamento,
-        data_vencimento: verify.data_vencimento,
-        valor: verify.valor,
-        /* Texto no banco ('-1' | '0' | '1'), número aqui. A conversão é explícita e o nulo
-           não vira zero: sem valor, fica o que a linha já tinha. */
-        sinal: verify.sinal != null ? Number(verify.sinal) : sinal,
-        tipo_operacao: verify.tipo_operacao ?? form.tipo_operacao,
-        status_transacao: verify.status_transacao,
-        descricao: verify.descricao,
-        macro_custo: verify.macro_custo,
-        grupo_custo: verify.grupo_custo,
-        centro_custo: verify.centro_custo,
-        subcentro: verify.subcentro,
-        escopo_negocio: verify.escopo_negocio,
-        observacao: verify.observacao,
-        ano_mes: verify.ano_mes ?? anoMes,
-        documento: verify.documento,
-        historico: verify.historico,
-        numero_documento: verify.numero_documento,
-        favorecido_id: verify.favorecido_id,
-        conta_destino_id: verify.conta_destino_id,
-        origem_lancamento: verify.origem_lancamento ?? 'manual',
-        lote_importacao_id: verify.lote_importacao_id,
-        forma_pagamento: verify.forma_pagamento,
-        cancelado: verify.cancelado ?? false,
-        conciliado_em: verify.conciliado_em,
-        editado_manual: verify.editado_manual ?? true,
-        created_by: verify.created_by,
-        created_at: verify.created_at,
-        updated_at: verify.updated_at,
-        movimentacao_rebanho_id: verify.movimentacao_rebanho_id,
-        recorrencia_id: verify.recorrencia_id,
-        safra_id: verify.safra_id,
-        plano_conta_id: verify.plano_conta_id,
-        compoe_dre: verify.compoe_dre,
-      };
-      /**
-       * ⚠ CULTURA E FASE VÊM DO FORM, NÃO DO `verify` — AGRI-MODAL-CULTURA-04.
-       *
-       * A falta delas era um defeito de EXIBIÇÃO com cara de defeito de gravação: o banco
-       * recebia `cultura = 'mandioca'`, a linha em memória seguia com o valor antigo, e
-       * reabrir o modal — que lê da LISTA, não do banco — mostrava "Todas (rateia)". O
-       * operador via o próprio trabalho desaparecer.
-       * ⚠ DO FORM PORQUE O `verify` NÃO AS TEM NO TIPO: `types.ts` é anterior ao AGRI-04A e
-       * não conhece as duas colunas, então `verify.cultura` não compila. Ler do form é fiel
-       * aqui — ao contrário de subcentro/macro/grupo, nenhum trigger reescreve estas duas.
-       * ⚠ E A REGRA É A MESMA DO UPDATE: quem não fala do campo (`undefined`) PRESERVA o que
-       * a linha já tinha. Escrever `null` cegamente apagaria da tela um valor que continua no
-       * banco — o defeito de origem ao contrário.
-       * ⚠ O `Omit<LancamentoV2, 'dados_pagamento'>` NÃO COBROU A FALTA, e vale saber por quê:
-       * ele obriga a listar os campos OBRIGATÓRIOS, e `cultura?`/`fase?` são opcionais, como
-       * `safra_id?` e `plano_conta_id?`. Campo opcional ausente não é erro — a proteção do
-       * tipo é real, mas alcança menos do que o comentário dela promete.
-       */
-      setLancamentos((atual) => atual.map((l) => (l.id !== id ? l : {
-        ...l,
-        ...doBanco,
-        cultura: form.cultura !== undefined ? (form.cultura || null) : l.cultura,
-        fase: form.fase !== undefined ? (form.fase || null) : l.fase,
-      })));
-    }
     return true;
   }, [clienteId, user, classificacoes]);
 

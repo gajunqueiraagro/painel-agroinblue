@@ -657,6 +657,12 @@ no mesmo arquivo.
   comparar centavos inteiros; e o caso de DOIS centavos existe para uma tolerancia frouxa nao
   passar verde. A atualizacao do compromisso pelo revalorar e' regra de BANCO e nao cabe no vitest:
   a prova dela e' o rollback de quatro cenarios registrado no bloco A3.
+  De 1861 para 1864 no FIN-V2-REFRESH-01: entrou `src/hooks/useFinanceiroV2.remendo.test.ts` (+3) —
+  todo ramo de `editarLancamento` remenda a linha com o que o banco devolveu. Titulo de OC e titulo
+  comum saem de "programado" para "realizado" com data SEM recarregar a lista, e a falha do select de
+  verificacao se comporta igual nos dois (o save vale, a linha fica como estava). PROVADO: contra o
+  hook de antes, o caso de OC falha e os outros dois passam. O supabase e' um construtor falso que
+  conta as consultas de lista, e a carga inicial prova que a contagem sabe achar uma.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -1494,6 +1500,10 @@ preview que o cabecalho nao sai da tela ao rolar.
   pode estar velho; a resposta do servidor, nunca. O `toastNegociacaoFechada` (helper unico dos
   tres caminhos — abate, venda e boitel) poe o botao "Reabrir" inline, porque mandar "reabra para
   editar" sem dizer onde e' meia instrucao.
+- ⚠ FINANCEIRO V2 — TODO RAMO DE `editarLancamento` REMENDA A LINHA COM O QUE O BANCO DEVOLVEU
+  (FIN-V2-REFRESH-01, 25/09/2026). A lista não recarrega na edição (PR-FIN-SAVE-LENTO-01); quem
+  mostra o gravado é o `remendarComOBanco`, chamado pelo ramo comum e pelo do título de OC. Ramo novo
+  que grave e não o chame deixa a tela na versão velha até o F5.
 - ⚠ PARAMETRO DE NAVEGACAO NA URL SE ESCREVE SEMPRE, NUNCA SE PRESERVA (regra permanente,
   OC-ABRIR-PERDE-ID-01, 24/09/2026). Quem abre uma tela GRAVA a origem do clique; herdar o
   valor que ja estava na query faz um parametro responder por um clique que nao aconteceu.
