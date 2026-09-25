@@ -37,7 +37,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { computeValidacaoModal, type AbaFinanceira } from './lancamentoDialogTabs';
 import { AbaAuditoriaLancamento } from '@/components/financeiro-v2/AbaAuditoriaLancamento';
-import { AlertCircle, AlertTriangle, Copy, KeyRound, RefreshCw, DollarSign, FileText, Beef, Repeat, Loader2 } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Copy, KeyRound, RefreshCw, DollarSign, FileText, Beef, Repeat, Loader2, Link2 } from 'lucide-react';
 import { LancamentoZooModal } from '@/v2/components/edicao/LancamentoZooModal';
 import { toast } from 'sonner';
 import { mensagemDoErro } from '@/lib/supabase/mensagemDoErro';
@@ -61,6 +61,8 @@ import {
   culturaParaGravar, faseParaGravar,
 } from '@/lib/agri/rateioLancamento';
 import { useCulturasDaSafra } from '@/hooks/useAreaPlantada';
+import { VincularOperacaoDialog } from '@/components/financeiro-v2/VincularOperacaoDialog';
+import { podeOferecerVinculo, subcentrosVinculaveis, lancamentoTemParteOC } from '@/lib/oc/vincularLancamento';
 
 interface Props {
   open: boolean;
@@ -983,6 +985,27 @@ export function LancamentoV2Dialog({
     })();
     return () => { cancelled = true; };
   }, [open, isOCTitulo, lancamento?.id]);
+
+  /* VINCULAR-LANC-OC-01 — "Vincular à operação" so' onde o banco aceitaria: subcentro no mapa
+     (`_oc_vinculo_mapa`), lancamento salvo, nao cancelado e sem parte de OC. E' espelho para
+     esconder o botao; a RPC recusa de novo se algo mudar no meio. */
+  const [vinculoDisponivel, setVinculoDisponivel] = useState(false);
+  const [vincularAberto, setVincularAberto] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    setVinculoDisponivel(false);
+    if (!open || !isEdit || isOCTitulo || !lancamento?.id) return;
+    const id = lancamento.id;
+    Promise.all([subcentrosVinculaveis(), lancamentoTemParteOC(id)])
+      .then(([subcentros, temParte]) => {
+        if (cancelled) return;
+        setVinculoDisponivel(podeOferecerVinculo({
+          lancamentoId: id, subcentro: lancamento.subcentro, cancelado: lancamento.cancelado, temParte, subcentros,
+        }));
+      })
+      .catch(() => { /* sem o mapa, sem o botao: nao ha' o que oferecer */ });
+    return () => { cancelled = true; };
+  }, [open, isEdit, isOCTitulo, lancamento?.id, lancamento?.subcentro, lancamento?.cancelado]);
 
   // Regenerate parcela rows when key inputs change
   const valorNum = parseBRL(valorDisplay);
@@ -2193,6 +2216,17 @@ export function LancamentoV2Dialog({
                 dele vai a frase que diz por onde se faz.
                 ⚠ E O ESPELHO NÃO É O CONTROLE: a RPC continua sendo a autoridade, e se a
                 corrida acontecer o erro dela aparece no toast do chamador. */}
+            {isEdit && vinculoDisponivel && lancamento && clienteAtual?.id && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="px-3 text-[11px] gap-1"
+                onClick={() => setVincularAberto(true)}
+                data-testid="acao-vincular-oc"
+              >
+                <Link2 className="h-3.5 w-3.5" /> Vincular à operação
+              </Button>
+            )}
             {isEdit && onDelete && lancamento && bloqueiaCancelamentoPeloFinanceiro(lancamento) && (
               <span className="text-[11px] text-muted-foreground">{MOTIVO_BLOQUEIO_REBANHO}</span>
             )}
@@ -2340,6 +2374,17 @@ export function LancamentoV2Dialog({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* VINCULAR-LANC-OC-01 — por cima do detalhe; vinculado, fecha os dois (a lista ja' foi avisada). */}
+      {vincularAberto && lancamento?.id && clienteAtual?.id && (
+        <VincularOperacaoDialog
+          open
+          lancamentoId={lancamento.id}
+          clienteId={clienteAtual.id}
+          onClose={() => setVincularAberto(false)}
+          onVinculado={onClose}
+        />
+      )}
 
       {/* FASE 1 zoo-fin: modal soberano zoo aberto após V2Dialog fechar. */}
       {zooModalId && (

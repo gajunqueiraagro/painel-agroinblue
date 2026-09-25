@@ -691,6 +691,14 @@ no mesmo arquivo.
   secao certa, a barra sem atalho igual a' de antes, a regra de limpar os `oc_*` na SAIDA de "Lancar
   movimentacao" (e so' nela), o limpador tirando os seis e deixando o periodo, e a Lista sem o aviso de
   OCs — este lido da FONTE, porque montar a Lista inteira exige a pilha do rebanho.
+  De 1899 para 1908 no VINCULAR-LANC-OC-01: entrou `src/components/financeiro-v2/vincularOperacao.test.tsx`
+  (+9), com os casos provados em rollback no proto: a acao so' aparece onde o banco aceitaria (subcentro no
+  mapa, sem parte, nao cancelado), a OC de valor identico em 1o e ja' selecionada (Vera 57f5ce96 x 02be1a41),
+  nenhuma pre-selecao sem valor exato, a linha de titulo conciliado nao selecionavel com os dois titulos no
+  `title` (SR c76720c3 x bb51bb9a), a lista de "escolher compromisso" indo para a simulacao e ficando na tela
+  depois da escolha, o resumo com o dobro de rebanho em vermelho e a diferenca do principal em ambar (Vera
+  010db5b2 x 2d39d7e9), motivo vazio bloqueando, e o sucesso avisando a lista — a falha, nao.
+  ⚠ A RPC E' MOCKADA: a regra mora no banco e foi provada la'. O arquivo trava o que a TELA faz com a resposta.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -1650,6 +1658,56 @@ preview que o cabecalho nao sai da tela ao rolar.
     celular, e a barra nao quebra em duas linhas. Nao foi medido em que largura exata ele deixaria de caber.
   ⚠ COM A OC ABERTA O ATALHO NAO RECEBE CLIQUE: o fundo do modal cobre a barra. A limpeza vale para
     quando a URL fica com `oc_*` sem o modal a' frente, e para o menu.
+- ⚠ VINCULAR-LANC-OC-01 — UM LANCAMENTO QUE JA EXISTE PASSA A SER O TITULO DE UM ITEM DA OC (25/09/2026).
+  Migration `supabase/migrations/20261027147000_vincular_lanc_oc_01.sql` (⚠ registrada como
+  `20260925190101`, timestamp do dia, como as outras de apply_migration). Quatro funcoes NOVAS, nenhuma
+  existente alterada: `oc_vincular_lancamento` (SECDEF), `oc_candidatas_vinculo` (INVOKER, com a RLS de
+  quem chama), `_oc_vinculo_mapa` e `_oc_vinculo_sugerir_componente`; EXECUTE so' authenticated e
+  service_role. Tela: "Vincular à operação" no rodape do `LancamentoV2Dialog` → `VincularOperacaoDialog`
+  (`src/lib/oc/vincularLancamento.ts`).
+  Regras do Gabriel: o financeiro conciliado manda no VALOR; a data da OC manda na COMPETENCIA; nunca somar;
+  um motivo por gesto.
+  ⚠ MODELO VIVO, NAO O ADOTAR ANTIGO: o titulo adotado fica como todo titulo de OC pago fica — parcela
+    `materializada` (o estado `paga` nao e' escrito por funcao nenhuma), parte `origem='programacao'` com
+    `programacao_parcela_id`, valor da parte = parcela = titulo. `oc_adotar_titulo_financeiro` gravava parte
+    sem parcela (a OC virava `misto_inconsistente`), recusava saida em venda/abate e nao tinha chamador.
+    O precedente manual e' o 91e6a216 ("curativo maio", 31/08).
+  D1 titulo vivo da OC no item: o lancamento SUBSTITUI — o da OC e' cancelado com o motivo do gesto, SO' se
+     nao liquidado. `agendado` conta como aberto e e' substituido. Realizado, conciliado ou com liquidacao
+     ativa -> recusa `titulo_oc_liquidado`, devolvendo os dois, sem escrever nada.
+  D2 o componente vem confirmado pelo operador; a sugestao (pelo subcentro, ou pela descricao: Fundersul,
+     Iagro/GTA, Funrural/Senar -> `taxas_impostos`; ICMS -> `taxa_aquisicao`; frete; comissao) e' so' sugestao.
+     ⚠ COMPONENTE NAO E' UNICO POR OC (12 `taxas_impostos` repetidos, 14 parcelados) e nem e' usado
+     uniforme (o Fundersul da 02be1a41 esta' como `taxa_aquisicao`): varios -> `escolher_compromisso`;
+     nenhum do componente mas outro que cabe -> `escolher_compromisso` tambem, e criar novo so' com
+     `p_criar_novo` (acao explicita "Criar compromisso novo"). Sem isso, a sugestao criaria o dobro.
+  D3 importados: a competencia muda e o hash fica — POR CONSTRUCAO: `compute_financeiro_lancamento_v2_hash`
+     RECEBE `_data_competencia` e NAO A USA. A RPC confere o invariante e aborta se o hash mudar.
+  D4 `movimentacao_rebanho_id` e' solto (como no AGNALDO-DEDUP-01b), com o id antigo na trilha; o
+     zootecnico nao se mexe. OC com movimento proprio -> aviso `movimento_duplicado` (ver ZOO-DOBRO-OC-LEGADO).
+  Decisoes da FASE 1a: ordem das candidatas = VALOR EXATO AO CENTAVO primeiro (compromisso que cabe com o
+  valor do lancamento), depois mesma fazenda, menor distancia, OC sem titulo vivo, valor mais proximo; a
+  parte copia a classificacao do lancamento, e compromisso existente mantem a sua com o aviso
+  `classificacao_diverge_do_compromisso`.
+  ⚠ O "O QUE VAI ACONTECER" E' A PROPRIA RPC COM `p_simular`: ela percorre o caminho da gravacao e o desfaz
+    no fim (`EXCEPTION WHEN SQLSTATE 'OCSIM'` no bloco da funcao — subtransacao; as variaveis sobrevivem e o
+    envelope volta). Provado: envelope da simulacao = envelope da gravacao, e nada gravado. O resumo nao
+    tem regra copiada no front. Sem motivo nem versao na simulacao, como `oc_reprogramar_compromisso_do_lote`.
+  ⚠ DUAS CORRECOES DA FASE 0, e as duas foram leitura de menos:
+    1. "mudar competencia troca o hash" — FALSO. A FASE 0 leu a lista de argumentos da funcao de hash e nao
+       o corpo. Medido na prova: UPDATE cru da competencia de um importado deixa o hash identico. E a
+       reimportacao do Excel nem usa o hash (reconhece pela regua `classificar_nivel_duplicidade`).
+    2. as plausiveis contavam RASCUNHO (5 OCs vazias do NJ em 16/04/2026 eram "candidatas"). Sem rascunho:
+       364 lancamentos com candidata, 273 de 2026, 169 conciliados.
+  ⚠ ACHADOS DE CARONA, nao tratados: duas partes vivas apontam titulo cancelado (7f7de76f Iagro e
+    c80ebe9e) — o vinculo trata esse titulo como aberto e o substitui.
+- ZOO-DOBRO-OC-LEGADO — rebanho possivelmente em DOBRO nos lancamentos do modal antigo. DECISAO DO GABRIEL,
+  nao tratada. Medido em 25/09/2026 com `oc_candidatas_vinculo`: dos 141 lancamentos financeiros ativos com
+  `movimentacao_rebanho_id` nos subcentros do mapa, 64 tem OC candidata e 62 desses dao `movimento_duplicado`
+  — o movimento zootecnico antigo E o movimento da OC (`zoo_operacao_movimentacoes`) descrevem o mesmo gado.
+  Por cliente: NJ 36, Vera 12, Santa Rita 11, RRCC 3 (Agnaldo 40 e Raul 10 nao tem candidata nenhuma).
+  ⚠ O VINCULO NAO MEXE NO REBANHO: ele solta o elo financeiro (D4) e avisa em vermelho. Quem decidir mede
+    antes qual dos dois movimentos fica — cancelar movimento zootecnico muda saldo de rebanho homologado.
 - ⚠ PARAMETRO DE NAVEGACAO NA URL SE ESCREVE SEMPRE, NUNCA SE PRESERVA (regra permanente,
   OC-ABRIR-PERDE-ID-01, 24/09/2026). Quem abre uma tela GRAVA a origem do clique; herdar o
   valor que ja estava na query faz um parametro responder por um clique que nao aconteceu.
