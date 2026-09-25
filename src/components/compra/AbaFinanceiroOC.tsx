@@ -31,6 +31,8 @@ interface Props {
      identica: nao ha botao de gerar, nem selo, nem dicionario. Este roteador apenas
      repassa; quem sabe da previsao e' o shell da venda. */
   linhasPrevisao?: LinhaPrevisao[];
+  /** Repassado a `AbaCompromissosOC` — ver a nota la' (OC-BOITEL-VALOR-01 A3). */
+  bloqueioPrevisao?: string | null;
   /** A venda é por boitel? Decide o subcentro da principal (1150, não 1140) — só o shell
       da venda sabe, e este roteador apenas repassa. */
   ehBoitel?: boolean;
@@ -102,7 +104,7 @@ export function AbaFinanceiroOC(props: Props) {
     <AbaCompromissosOC ocApi={ocApi} bloqueado={props.financeiroNovoReadOnly} clienteId={clienteId} tipoOperacao={api.tipoOperacao} fornecedores={api.fornecedores} ehBoitel={props.ehBoitel}
       valorAcordado={api.valorAcordado} lotes={api.lotes} contraparteId={api.contraparteId} dataOperacao={props.dataOperacao ?? null} dataChegada={props.dataChegada ?? null}
       darkSelectClass={props.darkSelectClass} recarregarDados={api.recarregar}
-      linhasPrevisao={props.linhasPrevisao} seloProjecao={props.seloProjecao}
+      linhasPrevisao={props.linhasPrevisao} bloqueioPrevisao={props.bloqueioPrevisao} seloProjecao={props.seloProjecao}
       propostasExtras={props.propostasExtras} abrirGerarAoMontar={props.abrirGerarAoMontar}
       rotulos={props.rotulos} />
   );

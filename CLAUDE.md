@@ -648,6 +648,15 @@ no mesmo arquivo.
   afirmando 902.853,55 E que ele NAO e' 532.527,95, porque um fixture com rateio zero passaria verde
   com o modal lendo so' a chave. Os outros tres travam o segmentado, o rotulo "do VBP" do anel e o
   Detalhado sem segmentado. PROVADO: com a soma composta desligada no modal, 3 dos 4 falham.
+  De 1849 para 1861 no OC-BOITEL-VALOR-01 A3: entrou `src/components/venda/valorDaVendaBoitel.test.tsx`
+  (+12), com os numeros da 8b211cae (slot 848.713,32, acerto 882.608,62): o helper, a previsao
+  principal lendo o slot com `lote_id` e recusando na divergencia, o LoteDialog com slot e aviso, e
+  Documentos e Gerar compromissos montados lendo o slot.
+  ⚠ DUAS FALHAS DA PRIMEIRA RODADA ERAM DO CODIGO, NAO DO TESTE: a tolerancia de um centavo
+  comparava reais em ponto flutuante (`882608.63 - 882608.62` = 0,0100000009 > 0,01) e passou a
+  comparar centavos inteiros; e o caso de DOIS centavos existe para uma tolerancia frouxa nao
+  passar verde. A atualizacao do compromisso pelo revalorar e' regra de BANCO e nao cabe no vitest:
+  a prova dela e' o rollback de quatro cenarios registrado no bloco A3.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -957,6 +966,38 @@ migration e' REGISTRO HISTORICO, nao se reaplica).
   ⚠ E HA' UM ESCRITOR CONCORRENTE EM 1150, achado no B2: `origem_tipo = 'boitel:receita'`, duas
     linhas da Vera em `previsto` (642.056,67 e 594.573,33), fora da OC. Quem implementar a PARTE A
     confere se ele e o novo caminho contam a MESMA receita duas vezes.
+- ⚠ OC-BOITEL-VALOR-01 A3 — O VALOR DA OPERACAO E' O SLOT; A TELA NUNCA O CALCULA (regra
+  permanente, 25/09/2026). Fonte unica = `zoo_operacao_lotes.valor_informado` (soma =
+  `zoo_operacoes_comerciais.valor_acordado`). Sem realizado o slot guarda a projecao gravada; com
+  realizado aplicado, o liquido do acerto (`oc_revalorar_lote`), e a trava da A2 impede a projecao de
+  voltar por cima. Resumo lateral, LoteDialog, Documentos, Gerar compromissos e a previsao leem o
+  slot; o helper e' `valorDaVendaBoitel` (`BoitelNegociacaoDerivado.tsx`).
+  ⚠ NASCE DE UMA HOMOLOGACAO QUE "FALHOU" SEM TER FALHADO. Na 8b211cae o resumo e o LoteDialog diziam
+    882.608,62 — DERIVADOS da linha realizada — enquanto lote, `valor_acordado`, rebanho, Documentos e
+    Gerar compromissos diziam 848.713,32, que era o GRAVADO: o Realizado nunca tinha sido reaplicado
+    depois da trava. As telas certas pareciam o erro, e a errada escondia o estado do banco. O B-11
+    tinha feito o resumo derivar "para ficar imune ao rebaixamento"; a imunidade agora mora no banco.
+  ⚠ O ACERTO E' CONFERENCIA, NAO VALOR: com o realizado aplicado e o slot a mais de um centavo de
+    `liquidoDaVendaBoitel(realizado)`, a tela mostra os dois — linha ambar "Acerto do boitel R$ X ·
+    reaplique o Realizado" no resumo e no LoteDialog — e o "Gerar previsao" RECUSA, com a mesma frase.
+  ⚠ A PREVISAO NAO SAI — decisao do Gabriel: o boitel paga 3-4 meses depois, e o "a receber" alimenta
+    financeiro e fechamento. O defeito era ela nascer SOLTA (`lote_id` nulo), da PROJECAO, e nunca ser
+    atualizada. Agora nasce do slot e LIGADA AO LOTE, e `oc_revalorar_lote` (migration 20261027146000,
+    md5 96556ae0 -> cd372556) atualiza o MESMO compromisso — nunca um segundo, nunca orfao:
+      aberto e sem programacao -> valor novo + `lote_id`, trilha 'ajustar_valor_compromisso' com
+        origem 'realizado aplicado' (de X para Y), sem pedir motivo;
+      sem lote (previsao antiga) -> adotado quando a operacao tem UM lote e UMA principal ativa solta;
+      com programacao, titulo ou baixa -> NAO mexe; a resposta devolve `compromisso.acao = 'pendente'`
+        e o caminho e' `oc_reprogramar_compromisso_do_lote` (com motivo). DECISAO EM ABERTO.
+  ⚠ MORA NO BANCO PORQUE UMA RPC E' UMA TRANSACAO: no front, uma falha entre o revalorar e o ajuste
+    deixaria o lote no realizado e o "a receber" na projecao — o estado exato que esta frente conserta.
+  ⚠ E A ACL FECHOU JUNTO: `oc_revalorar_lote` estava com EXECUTE para PUBLIC (SECDEF que escreve).
+  ⚠ FICAM DA PROJECAO, e e' decisao pendente: as linhas de ADIANTAMENTO e de DESPESAS FORA DO BOITEL
+    da previsao saem de `derivadosBoitel(boitelData)` (a linha `projetado`) mesmo com realizado.
+  ⚠ PROVADO EM ROLLBACK na 8b211cae, com uma previsao solta de 848.713,32 criada pelo writer real:
+    funcao velha revalora o lote e deixa o compromisso em 848.713,32 e solto; nova, SEM programacao,
+    atualiza para 882.608,62 e liga ao lote (uma principal ativa, trilha gravada); COM programacao,
+    `pendente` e nada muda; repetida, idempotente.
 - OC-BOITEL-DELTA-ANTIGO-01 — duas OCs de boitel com realizado cujo lote NAO esta' no saldo do
   acerto, as duas com compromisso ja' gerado (medido 25/09/2026). DECISAO DO GABRIEL, nao tratada:
     OC                lote/acordado   saldo do acerto   delta        compromisso vivo

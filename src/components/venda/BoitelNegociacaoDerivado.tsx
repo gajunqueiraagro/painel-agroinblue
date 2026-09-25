@@ -495,6 +495,82 @@ export function realizadoAplicadoNoLote(d: BoitelEdicao | null): boolean {
   return d != null && d.qtdAbatida != null && d.valorTotalAbate != null;
 }
 
+/* ─── O VALOR DA VENDA BOITEL, UMA FONTE ───────────────────────────────────────
+   OC-BOITEL-VALOR-01 A3. O valor da operacao e' o SLOT — `zoo_operacao_lotes.valor_informado`,
+   cuja soma e' `zoo_operacoes_comerciais.valor_acordado`. Sem realizado ele guarda a projecao
+   (gravada ao salvar a negociacao); com realizado aplicado, o liquido do acerto (gravado por
+   `oc_revalorar_lote`, e a trava da A2 impede a projecao de voltar por cima).
+   ⚠ A TELA NUNCA CALCULA O VALOR DA OPERACAO. Ate' a A3 o "Valor acordado" do resumo e o
+   LoteDialog DERIVAVAM o numero da linha realizada — e foi isso que escondeu o defeito da
+   8b211cae: as duas telas diziam 882.608,62 enquanto lote, `valor_acordado`, lancamento do
+   rebanho e o compromisso gerado tinham 848.713,32. Documentos e Gerar compromissos, que leem o
+   banco, diziam a verdade e pareciam o erro.
+   ⚠ O ACERTO CONTINUA SENDO CALCULADO, mas como CONFERENCIA: com o realizado aplicado,
+   `liquidoDaVendaBoitel(realizado)` e' o que o slot DEVERIA ter. Se nao tem, a tela mostra os
+   dois numeros e manda reaplicar — nao escolhe um em silencio.
+   ⚠ A TOLERANCIA E' UM CENTAVO, a mesma de `TOL_CENTAVO` do financeiro da OC: o slot e' gravado
+   com duas casas (`round(p_novo_valor, 2)`), e o acerto vem arredondado a duas casas do motor. */
+export interface ValorDaVendaBoitel {
+  /** O valor da operacao: o slot gravado. `null` sem lote ou sem valor no lote. */
+  valor: number | null;
+  /** O liquido do acerto, so' com o realizado aplicado — a conferencia do slot. */
+  acerto: number | null;
+  /** A projecao pura (linha `projetado`) — analise, nunca valor gravado. */
+  projecao: number | null;
+  realizadoAplicado: boolean;
+  /** Realizado aplicado e slot diferente do acerto por mais de um centavo. */
+  divergente: boolean;
+}
+
+export const TOL_ACERTO = 0.01;
+
+export function valorDaVendaBoitel({ slot, realizado, projetado }: {
+  slot: number | null;
+  realizado: BoitelEdicao | null;
+  projetado: BoitelEdicao | null;
+}): ValorDaVendaBoitel {
+  const realizadoAplicado = realizadoAplicadoNoLote(realizado);
+  const acerto = realizadoAplicado ? liquidoDaVendaBoitel(realizado) : null;
+  /* ⚠ EM CENTAVOS INTEIROS, nao em reais: `882608.63 - 882608.62` da' 0,0100000009 em ponto
+     flutuante, e um centavo — que a regra diz nao ser divergencia — passaria a ser. Medido no teste. */
+  const centavos = (x: number) => Math.round(x * 100);
+  const divergente = realizadoAplicado && acerto != null
+    && (slot == null || Math.abs(centavos(slot) - centavos(acerto)) > centavos(TOL_ACERTO));
+  return { valor: slot, acerto, projecao: liquidoDaVendaBoitel(projetado), realizadoAplicado, divergente };
+}
+
+/** A frase da divergencia — uma so', para o resumo, o LoteDialog e a recusa da previsao. */
+export const avisoAcertoDivergente = (acerto: number) =>
+  `Acerto do boitel ${acerto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} · reaplique o Realizado`;
+
+/**
+ * A LINHA PRINCIPAL DA PREVISAO — o "a receber" do boitel — OC-BOITEL-VALOR-01 A3.
+ *
+ * ⚠ NASCE DO SLOT E LIGADA AO LOTE. Era `liquidoDaVendaBoitel(projetado)` com `lote_id` nulo:
+ * solta, ninguem a achava para atualizar quando o realizado chegava.
+ * ⚠ `null` = nao ha linha a gerar: sem slot gravado, ou realizado aplicado com o slot
+ * divergindo do acerto (quem diz por que e' `avisoAcertoDivergente`, no botao).
+ * ⚠ LOTE SO' QUANDO E' UM: boitel e' um embarque por operacao; com dois lotes, ligar a um so'
+ * afirmaria que o valor inteiro e' dele.
+ */
+export function principalDaPrevisaoBoitel(
+  v: ValorDaVendaBoitel | null, loteIds: readonly string[],
+): { valor: number; loteId: string | null } | null {
+  if (!v || v.divergente || v.valor == null || !(v.valor > 0)) return null;
+  return { valor: v.valor, loteId: loteIds.length === 1 ? loteIds[0] : null };
+}
+
+/** O Valor do LoteDialog da venda boitel: o slot, a frase de origem e o aviso de divergencia. */
+export function valorDoLoteBoitel(v: ValorDaVendaBoitel): { valor: number | null; explicacao: string; aviso: string | null } {
+  return {
+    valor: v.valor,
+    explicacao: v.realizadoAplicado
+      ? 'Derivado do acerto com o boitel: faturamento do abate menos o que o boitel desconta no acerto. Não se digita.'
+      : 'Valor projetado do boitel: faturamento menos o custo do boitel e as despesas de abate. Vem do planejamento, não se digita.',
+    aviso: v.divergente && v.acerto != null ? avisoAcertoDivergente(v.acerto) : null,
+  };
+}
+
 /* ─── O BOLSO DA VENDA BOITEL ──────────────────────────────────────────────────
    PR-OC-VENDA-TOPO-PROJECAO-01. Funcao irma de `liquidoDaVendaBoitel`, mesma guarda e
    mesmo contrato: le `derivadosBoitel` e nao reescreve nada.

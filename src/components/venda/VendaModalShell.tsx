@@ -53,7 +53,7 @@ import type { RecebimentoApi } from '@/hooks/useOperacaoRecebimento';
 import type { DocumentosApi } from '@/hooks/useOperacaoDocumentos';
 import type { EventosApi } from '@/hooks/useOperacaoEventos';
 import type { LiquidacaoApi } from '@/hooks/useOperacaoLiquidacao';
-import { BoitelTopoNegociacao, liquidoDaVendaBoitel, bolsoDaVendaBoitel, unitariosDoLiquido, derivadosBoitel, PilulaCenario, realizadoAplicadoNoLote } from '@/components/venda/BoitelNegociacaoDerivado';
+import { BoitelTopoNegociacao, bolsoDaVendaBoitel, unitariosDoLiquido, derivadosBoitel, PilulaCenario, valorDaVendaBoitel, avisoAcertoDivergente, principalDaPrevisaoBoitel, valorDoLoteBoitel } from '@/components/venda/BoitelNegociacaoDerivado';
 import { BoitelBlocosModais, BoitelAnaliseFaixa, faltamDosCinco, type BoitelEdicao } from '@/components/venda/BoitelBlocosModais';
 import { pesoMedioPorCabeca } from '@/hooks/useCompraLotes';
 import { LinhaResumo } from '@/components/ui/linha-resumo';
@@ -286,6 +286,20 @@ export function VendaModalShell({
      entao ja nao ha como classificar por lote aqui. Medido: as vendas boitel existentes
      tem um lote so'. Quem ler um dia uma venda boitel de lotes mistos precisa saber que
      a classificacao seguiu a maioria. */
+  /* ─── O VALOR DA OPERACAO E' O SLOT — OC-BOITEL-VALOR-01 A3 ─────────────────────
+     `zoo_operacao_lotes.valor_informado` somado, lido de `useCompraLotes` (a mesma fonte do card
+     do lote). Resumo, LoteDialog e a previsao principal leem DAQUI; a projecao e o acerto sao
+     calculados so' para conferencia. Ver `valorDaVendaBoitel`.
+     ⚠ SOMA ZERO E' SLOT VAZIO, nao valor: `totais.valorNegociado` soma 0 para lote sem
+     `valor_informado`, e uma venda boitel nao vale zero — vale "ainda nao gravado". */
+  const slotBoitel = lotesApi && lotesApi.totais.lotes > 0 && lotesApi.totais.valorNegociado > 0
+    ? lotesApi.totais.valorNegociado : null;
+  const vendaBoitel = ehBoitel
+    ? valorDaVendaBoitel({ slot: slotBoitel, realizado: boitelReal ?? null, projetado: boitelData ?? null })
+    : null;
+  const avisoDivergencia = vendaBoitel?.divergente && vendaBoitel.acerto != null
+    ? avisoAcertoDivergente(vendaBoitel.acerto) : null;
+
   const linhasPrevisao = useMemo<LinhaPrevisao[] | undefined>(() => {
     if (!ehBoitel || !boitelData || faltamDosCinco(boitelData).length > 0) return undefined;
     const qtd = boitelData.qtdCabecas || 0;
@@ -308,7 +322,17 @@ export function VendaModalShell({
        no boitel. E' previsao, e o "~" do rotulo da linha diz isso ao operador. */
     const dataAbate = dataMaisDias(data, boitelData.dias);
     const antecipado = derivadosBoitel(boitelData).valorTotalAntecipadoCalc;
-    const liquido = liquidoDaVendaBoitel(boitelData);
+    /* ⚠ A PRINCIPAL LE O SLOT, NAO A PROJECAO — OC-BOITEL-VALOR-01 A3. Era
+       `liquidoDaVendaBoitel(boitelData)` SEMPRE, com realizado ou sem: o 0fdec0eb da 8b211cae
+       nasceu assim, com 848.713,32, depois de o acerto ter dito 882.608,62. Sem realizado o slot
+       JA E' a projecao (gravada ao salvar a negociacao) — o numero nao muda nesse caso, muda a
+       FONTE. Em divergencia a linha nao sai: quem recusa e' `bloqueioPrevisao`, com a razao. */
+    /* ⚠ `id` DO LOTE E' OPCIONAL (lote ainda nao gravado nao tem), e o TSC com `strict: false`
+       nao reclamaria de um `undefined` no meio da lista. Lote sem id nao conta como lote para
+       ligar — e com um so' deles sem id a lista encolhe e a linha nasce solta, que e' o seguro. */
+    const idsDosLotes = (lotesApi?.lotes ?? []).map(l => l.id);
+    const principal = principalDaPrevisaoBoitel(vendaBoitel,
+      idsDosLotes.every(id => !!id) ? idsDosLotes.filter((id): id is string => !!id) : []);
 
     const linhas: LinhaPrevisao[] = [];
     if (boitelData.possuiAdiantamento && antecipado > 0) linhas.push({
@@ -338,14 +362,15 @@ export function VendaModalShell({
       favorecidoId: compradorId || null,
       vencimentoPrevisto: data || null,
     });
-    if (liquido != null && liquido > 0) linhas.push({
+    if (principal) linhas.push({
       natureza: 'principal', componente: 'principal',
       subcentro: subEntrada,
-      valor: liquido,
+      valor: principal.valor,
       rotulo: 'Recebimento ref. operação',
       descricao: rot,
       favorecidoId: compradorId || null,
       vencimentoPrevisto: dataAbate,
+      loteId: principal.loteId,
     });
     if (antecipado > 0) linhas.push({
       natureza: 'obrigacao', componente: 'adiantamento_devolvido',
@@ -357,7 +382,7 @@ export function VendaModalShell({
       vencimentoPrevisto: dataAbate,
     });
     return linhas.length > 0 ? linhas : undefined;
-  }, [ehBoitel, boitelData, compradorId, data, lotesApi?.lotes]);
+  }, [ehBoitel, boitelData, compradorId, data, lotesApi?.lotes, vendaBoitel?.valor, vendaBoitel?.divergente]);
 
   /* ⚠ O VOCABULARIO DA COMPRA NO RODAPE DO RESUMO. `AbaCompromissosOC` escrevia
      "Compra {data} · Chegada {data}" literalmente — numa venda de 13/05 o grupo dizia
@@ -452,9 +477,14 @@ export function VendaModalShell({
      ⚠ SO' NO BOITEL. Numa venda comum nao ha dois mundos: o acordado e' o acordado, e uma
      pilula "projecao" ali marcaria como promessa um numero que e' fato. */
   const derAcerto = ehBoitel ? derivadosBoitel(topoNoRealizado ? (boitelReal ?? boitelData!) : boitelData!) : null;
+  /* ⚠ NO BOITEL TAMBEM E' O SLOT — OC-BOITEL-VALOR-01 A3, e isto DESFAZ a escolha do B-11 descrita
+     acima. Derivar da linha realizada tornava o resumo "imune ao rebaixamento" — e cego a ele: na
+     8b211cae o resumo dizia 882.608,62 enquanto lote, `valor_acordado`, rebanho e o compromisso
+     gerado tinham 848.713,32. A imunidade agora mora no banco (a trava da A2), e o resumo mostra
+     o que esta' gravado; se o gravado nao e' o acerto, a linha ambar abaixo diz os dois. */
   const valorAcordadoMostrado = !ehBoitel
     ? (lotesApi && lotesApi.totais.lotes > 0 ? lotesApi.totais.valorNegociado : null)
-    : (topoNoRealizado ? liquidoDaVendaBoitel(boitelReal ?? null) : liquidoDaVendaBoitel(boitelData));
+    : (vendaBoitel?.valor ?? null);
   const corMundo = topoNoRealizado ? 'text-foreground' : 'text-[#854F0B] dark:text-amber-500';
 
   /* ⚠ AS SETE LINHAS DO ACERTO SAEM DO MOTOR — B-11 item 2. `dAcerto*` sao as parcelas que
@@ -570,13 +600,11 @@ export function VendaModalShell({
          numero que `oc_revalorar_lote` gravou no lote e que `oc_salvar_lotes` passou a
          preservar; mostrar a projecao aqui seria o dialogo discordando do "Valor acordado"
          do resumo lateral, que ja' le' o realizado. O switch e' o MESMO predicado do banco. */
-      valorProjetado={!ehBoitel ? null : realizadoAplicadoNoLote(boitelReal) ? {
-        valor: liquidoDaVendaBoitel(boitelReal),
-        explicacao: 'Derivado do acerto com o boitel: faturamento do abate menos o que o boitel desconta no acerto. Não se digita.',
-      } : {
-        valor: liquidoDaVendaBoitel(boitelData),
-        explicacao: 'Valor projetado do boitel: faturamento menos o custo do boitel e as despesas de abate. Vem do planejamento, não se digita.',
-      }}
+      /* ⚠ E O VALOR MOSTRADO E' O SLOT — OC-BOITEL-VALOR-01 A3. Na A2 ele mostrava
+         `liquidoDaVendaBoitel(boitelReal)`, uma conta, com a nota "derivado do acerto" — e na
+         8b211cae a nota afirmava um numero que o lote gravado nao tinha. Agora o numero e' o
+         gravado, e a divergencia vira aviso em vez de ser escondida. */
+      valorProjetado={vendaBoitel ? valorDoLoteBoitel(vendaBoitel) : null}
       loteUnico={ehBoitel ? {
         motivo: 'Boitel é um embarque só: a operação comercial é o lote. Para negociar outro embarque, crie outra venda.',
       } : null}
@@ -726,6 +754,7 @@ export function VendaModalShell({
               ocApiExterno={ocCompromissosApi}
               dataOperacao={data}
               linhasPrevisao={linhasPrevisao}
+              bloqueioPrevisao={avisoDivergencia}
               ehBoitel={ehBoitel}
               rotulos={rotulosCompromissos}
               seloProjecao={ehBoitel ? <PilulaCenario cenario="projetado" /> : undefined}
@@ -968,10 +997,12 @@ export function VendaModalShell({
                   "nao sei" sobre numeros que a mesma tela ja tinha em maos.
                   ⚠ A FONTE E A SOBERANA, e a mesma do rodape da aba e do card do lote:
                   `lotesApi.totais`, de `useCompraLotes`. Nao ha segunda conta aqui.
-                  ⚠ "VALOR ACORDADO" E O SLOT OFICIAL (`valor_informado` somado), que e'
-                  REALIZADO-SOBERANO: depois do abate ele mostra o real, e esta' certo —
-                  ver a doutrina dos dois mundos em `bolsoDaVendaBoitel`. A promessa vive
-                  na faixa de analise, derivada da linha projetada. */}
+                  ⚠ "VALOR ACORDADO" E O SLOT OFICIAL (`valor_informado` somado) TAMBEM NO
+                  BOITEL — e ate' a A3 este comentario mentia: no boitel o numero era DERIVADO
+                  da linha realizada (`liquidoDaVendaBoitel`), nao lido do slot. Agora e' o slot
+                  nos dois casos (`vendaBoitel.valor`); o acerto e' so' conferencia, e quando
+                  diverge aparece na linha ambar logo abaixo. A promessa continua na faixa de
+                  analise, derivada da linha projetada. */}
               <div>
                 <LinhaResumo rotulo="Lotes" valor={lotesApi && lotesApi.totais.lotes > 0
                   ? `${lotesApi.totais.lotes} · ${lotesApi.totais.animais} cab` : null} />
@@ -980,6 +1011,11 @@ export function VendaModalShell({
                   cor={ehBoitel ? corMundo : undefined}
                   /* A pilula so' existe onde ha dois mundos — ver a nota em `derAcerto`. */
                   selo={ehBoitel && !topoNoRealizado ? <PilulaCenario cenario="projetado" /> : undefined} />
+                {avisoDivergencia && (
+                  <div className="px-3 pb-0.5 text-[10px] leading-snug text-amber-700 dark:text-amber-500">
+                    {avisoDivergencia}
+                  </div>
+                )}
               </div>
 
               <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 mb-0.5">

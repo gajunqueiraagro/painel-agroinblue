@@ -56,6 +56,15 @@ interface Props {
      acontece. Previsao nao anda de banco.
      ⚠ ADITIVO: sem a prop, nao ha botao e a compra fica identica. */
   linhasPrevisao?: LinhaPrevisao[];
+  /**
+   * POR QUE A PREVISAO NAO PODE SER GERADA AGORA — OC-BOITEL-VALOR-01 A3.
+   *
+   * ⚠ HOJE SO' UM MOTIVO: o realizado do boitel esta' aplicado e o valor gravado no lote nao e'
+   * o acerto. Gerar ali gravaria no financeiro um "a receber" que o proprio acerto desmente.
+   * ⚠ FONTE UNICA de `disabled`, `title` e da linha ambar ao lado do botao — o botao
+   * desabilitado diz por que, com as mesmas palavras nos tres lugares.
+   */
+  bloqueioPrevisao?: string | null;
   /** Selo a exibir nas linhas que ainda sao previsao. `ReactNode` para o chamador
    *  decidir a marca sem que este arquivo (da compra) importe nada da venda. */
   seloProjecao?: ReactNode;
@@ -210,6 +219,17 @@ export interface LinhaPrevisao {
   /** Data PREVISTA do movimento. Nao vai no compromisso — o banco nao tem onde guarda-la
    *  (vencimento vive na PROGRAMACAO). Serve para semear o "Lancar realizado". */
   vencimentoPrevisto: string | null;
+  /**
+   * O LOTE A QUE A LINHA PERTENCE — OC-BOITEL-VALOR-01 A3.
+   *
+   * ⚠ A PREVISAO PRINCIPAL NASCE LIGADA AO LOTE, e isso nao e' cosmetico: e' pelo `lote_id` que
+   * `oc_revalorar_lote` acha o compromisso para atualiza-lo quando o realizado e' aplicado. Solta
+   * (`lote_id` nulo), ela ficava para sempre com a projecao — foi o 0fdec0eb da 8b211cae, gravado
+   * com 848.713,32 enquanto o acerto do boitel dizia 882.608,62.
+   * ⚠ AUSENTE = `null`, o comportamento de antes, para as linhas que nao sao de lote
+   * (adiantamento, despesas fora do boitel).
+   */
+  loteId?: string | null;
 }
 
 /* Vocabulario por tipo de operacao. ADITIVO: sem a prop, os defaults sao o texto de hoje
@@ -243,7 +263,7 @@ const ROTULOS_PADRAO: RotulosCompromissos = {
   mostrarBaseDaOperacao: true, mostrarSentidoDoDinheiro: false,
 };
 
-export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, ehBoitel, fornecedores, valorAcordado, lotes, contraparteId, dataOperacao, dataChegada, darkSelectClass, recarregarDados, linhasPrevisao, seloProjecao, propostasExtras, abrirGerarAoMontar, rotulos = ROTULOS_PADRAO }: Props) {
+export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, ehBoitel, fornecedores, valorAcordado, lotes, contraparteId, dataOperacao, dataChegada, darkSelectClass, recarregarDados, linhasPrevisao, bloqueioPrevisao = null, seloProjecao, propostasExtras, abrirGerarAoMontar, rotulos = ROTULOS_PADRAO }: Props) {
   const { resumoOperacao, compromissos, parcelas, versao, saving } = ocApi;
   const [searchParams, setSearchParams] = useSearchParams();
   /* ⚠ OS DOIS CATALOGOS SUBIRAM PARA CA — PR-OC-VENDA-FIN-PREVISAO-01D (adendo 2). Eles
@@ -901,7 +921,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
      propria transacao. O que ja entrou permanece e aparece na lista; o toast final diz
      quantas linhas passaram, para o operador ver onde parou e mandar de novo. */
   async function gerarPrevisao() {
-    if (versao == null || !linhasPrevisao?.length || gerando) return;
+    if (versao == null || !linhasPrevisao?.length || gerando || bloqueioPrevisao) return;
     setGerando(true);
     setAvisoPrevisao('');
     let v = versao;
@@ -930,7 +950,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
           valor_total: linha.valor,
           subcentro: linha.subcentro,
           favorecido_id: linha.favorecidoId,
-          lote_id: null,
+          lote_id: linha.loteId ?? null,
           descricao: linha.descricao,
         });
         v = r.operacaoVersao;
@@ -1103,13 +1123,21 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
               {/* ⚠ ZERO PERGUNTA — PR-OC-VENDA-FIN-PREVISAO-01. Nao abre dialogo: cria as
                   linhas prontas do motor. So aparece com previsao (venda com planejamento
                   boitel completo). */}
-              {!!linhasPrevisao?.length && (
-                <button type="button" disabled={!podeEscrever || gerando} onClick={gerarPrevisao}
-                  title={podeEscrever ? 'Criar as linhas de previsão de caixa a partir do planejamento' : undefined}
-                  aria-label="Gerar previsão"
-                  className="text-[11px] font-normal text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline">
-                  {gerando ? 'Gerando…' : 'Gerar previsão'}
-                </button>
+              {/* ⚠ COM BLOQUEIO O BOTAO APARECE MESMO SEM LINHAS — medido na 8b211cae: sem adiantamento
+                  e sem despesa fora do boitel, a principal recusada deixava a lista VAZIA e o botao
+                  sumia. Sumir e' recusar calado; aqui ele fica, desabilitado, com a razao ao lado. */}
+              {(!!linhasPrevisao?.length || !!bloqueioPrevisao) && (
+                <>
+                  <button type="button" disabled={!podeEscrever || gerando || !!bloqueioPrevisao} onClick={gerarPrevisao}
+                    title={bloqueioPrevisao ?? (podeEscrever ? 'Criar as linhas de previsão de caixa a partir do planejamento' : undefined)}
+                    aria-label="Gerar previsão"
+                    className="text-[11px] font-normal text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline">
+                    {gerando ? 'Gerando…' : 'Gerar previsão'}
+                  </button>
+                  {bloqueioPrevisao && (
+                    <span className="text-[10px] text-amber-700 dark:text-amber-500">{bloqueioPrevisao}</span>
+                  )}
+                </>
               )}
               {/* ⚠ SO' ENQUANTO NAO HA COMPROMISSO. Ele existe para a operacao que fechou
                   sem financeiro — as antigas e as que passaram pelo Concluir antes desta

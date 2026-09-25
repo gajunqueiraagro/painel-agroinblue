@@ -69,7 +69,7 @@ interface Props {
      digitado: numa venda de boitel ele E' a projecao, e digitar por cima seria oferecer
      ao operador contradizer a propria conta que a tela acabou de mostrar.
      `valor` nulo significa "ainda nao ha projecao" — a tela mostra "—", nunca zero. */
-  valorProjetado?: { valor: number | null; explicacao: string } | null;
+  valorProjetado?: { valor: number | null; explicacao: string; aviso?: string | null } | null;
   /** Boitel e' UM embarque: a operacao E' o lote. Desabilita o "+ Adicionar lote". */
   loteUnico?: { motivo: string } | null;
   /* ⚠ ADITIVO, so' a venda boitel passa — PR-OC-VENDA-LAYOUT-NEG-01. La' os mesmos
@@ -537,7 +537,7 @@ export function LoteDialog({
   onAplicar: (patch: Partial<NonNullable<Props['lotesApi']>['lotes'][number]>) => void;
   onAplicarEAdicionar: (patch: Partial<NonNullable<Props['lotesApi']>['lotes'][number]>) => void;
   onFechar: () => void;
-  valorProjetado?: { valor: number | null; explicacao: string } | null;
+  valorProjetado?: { valor: number | null; explicacao: string; aviso?: string | null } | null;
   /**
    * Reabrir a operação sem sair do modal — [OC-EDITAR-LOTE-FECHADA] (128b).
    *
@@ -728,6 +728,12 @@ export function LoteDialog({
               </div>
               {valorProjetado && (
                 <p className="mt-1 text-[10px] text-muted-foreground leading-snug">{valorProjetado.explicacao}</p>
+              )}
+              {/* ⚠ O VALOR GRAVADO NAO E' O ACERTO — OC-BOITEL-VALOR-01 A3. O campo mostra o slot
+                  (o que esta' no banco); quando o realizado aplicado diz outra coisa, a tela diz os
+                  dois em vez de escolher um em silencio. Ausente: nada muda para compra e venda. */}
+              {valorProjetado?.aviso && (
+                <p className="mt-0.5 text-[10px] text-amber-700 dark:text-amber-500 leading-snug">{valorProjetado.aviso}</p>
               )}
             </div>
             </>)}
