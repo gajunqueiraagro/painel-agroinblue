@@ -50,3 +50,27 @@ export function paramsAberturaOC(searchAtual: string, { ocId, aba, tipo = 'compr
 
   return p;
 }
+
+/**
+ * A QUERY STRING SEM NENHUM PARÂMETRO DE OC — ATALHOS-PRODUCAO-01.
+ *
+ * ⚠ SAIU DO `fecharOperacaoOC` (V2Index), com os mesmos seis parâmetros e na mesma ordem, para
+ * ser o limpador ÚNICO: o fechar da OC e a SAÍDA de "Lançar movimentação" (pelo atalho da barra
+ * ou pelo menu lateral) passam por aqui. Sair com a OC aberta deixava os `oc_*` na URL, e voltar
+ * a "Lançar movimentação" por qualquer caminho reabria o modal sozinho.
+ * ⚠ OS FILTROS FICAM: só os `oc_*` saem, como no fechar.
+ */
+export function semParamsOC(searchAtual: string): URLSearchParams {
+  const p = new URLSearchParams(searchAtual);
+  p.delete('oc_compra');
+  p.delete('oc_venda');
+  p.delete('oc_abate');
+  p.delete('oc_id');
+  p.delete('oc_aba');
+  p.delete('oc_return');
+  return p;
+}
+
+/** A URL tem algum parâmetro que abre uma OC? */
+export const temParamsOC = (searchAtual: string): boolean =>
+  ['oc_compra', 'oc_venda', 'oc_abate', 'oc_id'].some(k => new URLSearchParams(searchAtual).has(k));

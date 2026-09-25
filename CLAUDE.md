@@ -686,6 +686,11 @@ no mesmo arquivo.
   pula o nivel ja' desfeito com o mesmo id; a recusa E3 para e diz feito e falta; "ja' desfeito" do
   banco e' idempotencia; motivo vazio nao executa nada. O banco falso tem as mesmas guardas de ordem, e
   o teste falha se a cadeia pular um nivel.
+  De 1890 para 1899 no ATALHOS-PRODUCAO-01: entrou `src/v2/lib/atalhosProducao.test.tsx` (+9) — o atalho
+  so' nas tres secoes de Producao e ausente nas outras, a ativa marcada com o navy, o clique devolvendo a
+  secao certa, a barra sem atalho igual a' de antes, a regra de limpar os `oc_*` na SAIDA de "Lancar
+  movimentacao" (e so' nela), o limpador tirando os seis e deixando o periodo, e a Lista sem o aviso de
+  OCs — este lido da FONTE, porque montar a Lista inteira exige a pilha do rebanho.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -1621,6 +1626,30 @@ preview que o cabecalho nao sai da tela ao rolar.
   (RPC, UPDATE direto em outro modal) chama `notificarLancamentosMudaram(clienteId)` depois de gravar,
   só no sucesso — FIN-V2-REFRESH-02: o parcelamento do `LancamentoV2Dialog` e a troca de favorecido
   no `LancamentoZooModal` gravavam e a lista só as via no F5.
+- ⚠ ATALHOS-PRODUCAO-01 — O ATALHO ENTRE AS TRES TELAS DE PRODUCAO (25/09/2026, mock opcao A aprovado
+  pelo Gabriel). NOME NOVO DE PROPOSITO: o PR-NAV-PRODUCAO-01 que ja' existia e' o do menu "Producao"
+  (`navGrupos.ts`); este e' o da barra de topo.
+  Na `BarraSecao`, a' direita e colado no nome do usuario, o `Segmentado` da casa (altura 22, `bg-card`
+  para ler sobre a barra azul) com "Operações Comerciais | Lançar movimentação | Lançamentos", a ativa
+  sendo a secao atual. SO' em `operacoes-comerciais`, `lancamentos-zoot` e `conferencia-lancamentos`;
+  nas demais a barra fica como era. A barra nao conhece as telas: ela ganhou um encaixe (`atalho`), e
+  quem monta o controle e troca a secao e' o `V2Index` (`src/v2/lib/atalhosProducao.ts`).
+  ⚠ DECISOES DO GABRIEL:
+    a) SAIR DE "LANCAR MOVIMENTACAO" COM OC ABERTA LIMPA OS `oc_*` DA URL — pelo atalho E pelo menu
+       lateral. O limpador e' UM so': `semParamsOC` (`src/lib/oc/paramsAberturaOC.ts`), que saiu do
+       `fecharOperacaoOC` com os mesmos seis parametros; o fechar da OC passou a usa-lo. Sem isto, os
+       `oc_*` sobreviviam e voltar a "Lancar movimentacao" reabria o modal sozinho.
+    b) O PERIODO NAO ATRAVESSA entre as telas. Nada mudou nos filtros.
+    c) A FAZENDA FICA FORA — frente propria, OC-FAZENDA-GLOBAL-01 (a Central ignora a fazenda global).
+  ⚠ "MENU LATERAL" SAO TRES PORTAS, e as tres limpam: os itens do painel de cada grupo (`handleSelect`),
+    os atalhos diretos da sidebar ("Visao Geral", "Configuracoes") e a barra do celular — estas duas iam
+    direto a `setSection` e escapariam. Passam por `navegarPeloMenu`, que so' acrescenta a limpeza.
+  ⚠ A LISTA PERDEU O AVISO "N OPERACOES COMERCIAIS EM ANDAMENTO" + "Ver Operacoes Comerciais": o atalho e'
+    a porta. A contagem (`useOperacoesComerciaisEmAndamento`) nao tinha outro leitor e o arquivo saiu.
+  ⚠ ABAIXO DE md O ATALHO SOME (`hidden md:inline-flex`): tres rotulos nao cabem numa barra de 32px no
+    celular, e a barra nao quebra em duas linhas. Nao foi medido em que largura exata ele deixaria de caber.
+  ⚠ COM A OC ABERTA O ATALHO NAO RECEBE CLIQUE: o fundo do modal cobre a barra. A limpeza vale para
+    quando a URL fica com `oc_*` sem o modal a' frente, e para o menu.
 - ⚠ PARAMETRO DE NAVEGACAO NA URL SE ESCREVE SEMPRE, NUNCA SE PRESERVA (regra permanente,
   OC-ABRIR-PERDE-ID-01, 24/09/2026). Quem abre uma tela GRAVA a origem do clique; herdar o
   valor que ja estava na query faz um parametro responder por um clique que nao aconteceu.

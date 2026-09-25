@@ -16,6 +16,7 @@
  * havendo uma porta só — o que mudou foi qual: a sidebar não existe no mobile, e ali o
  * operador ficava sem saída.
  */
+import type { ReactNode } from 'react';
 import { LogOut } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProfileAtual } from '@/v2/hooks/useProfileAtual';
@@ -25,9 +26,16 @@ export interface BarraSecaoProps {
   area: string;
   /** O segundo nível: onde se está. */
   secao: string;
+  /**
+   * UM CONTROLE À DIREITA, antes do nome — ATALHOS-PRODUCAO-01.
+   *
+   * ⚠ A BARRA NÃO CONHECE AS TELAS: quem monta o atalho (e decide em quais seções ele existe e o
+   * que o clique faz) é o `V2Index`. Aqui é só o encaixe. Ausente, a barra fica como sempre foi.
+   */
+  atalho?: ReactNode;
 }
 
-export function BarraSecao({ area, secao }: BarraSecaoProps) {
+export function BarraSecao({ area, secao, atalho }: BarraSecaoProps) {
   const { nome } = useProfileAtual();
   const { signOut } = useAuth();
   return (
@@ -60,6 +68,9 @@ export function BarraSecao({ area, secao }: BarraSecaoProps) {
         <span className="mx-1 font-semibold text-white/40">/</span>
         <span className="font-normal text-white/90">{secao}</span>
       </p>
+      {/* ⚠ `ml-auto` NO ATALHO: com o `justify-between` da barra e tres filhos, a margem
+          automatica e' o que o gruda a' direita, colado no nome — em vez de flutuar no meio. */}
+      {atalho && <span className="ml-auto flex shrink-0 items-center">{atalho}</span>}
       <span className="flex shrink-0 items-center" style={{ gap: '8px' }}>
         <span className="max-w-[260px] truncate text-[10px] font-normal text-white/65" title={nome}>{nome}</span>
         {/* ⚠ "SAIR" PASSA A VIVER AQUI — adendo do 01c. Ele estava no rodapé da sidebar, que

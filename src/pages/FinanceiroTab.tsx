@@ -14,7 +14,6 @@ import { fmtValor, formatMoeda, formatKg, formatArroba, formatPercent, formatCab
 import { MESES_OPTIONS } from '@/lib/calculos/labels';
 import { calcIndicadoresLancamento, calcValorTotal } from '@/lib/calculos/economicos';
 import { useAnosDisponiveis } from '@/hooks/useAnosDisponiveis';
-import { useOperacoesComerciaisEmAndamento } from '@/hooks/useOperacoesComerciaisEmAndamento';
 import { useValorEmProjecao } from '@/hooks/useValorEmProjecao';
 import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
 import { FiltroMultiplo } from '@/v2/components/FiltroMultiplo';
@@ -44,8 +43,6 @@ interface Props {
   onEditarReclass?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; periodo: Periodo }) => void;
   onEditarMorte?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; periodo: Periodo }) => void;
   onEditarConsumo?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; periodo: Periodo }) => void;
-  /** Alerta contextual → navega para a Central de Operações Comerciais. */
-  onVerOperacoes?: () => void;
   /**
    * O host garante altura e NÃO rola — ZOOT-LISTA-02.
    *
@@ -609,9 +606,8 @@ function getTopTabFromSubAba(subAba?: SubAba): TopTab {
   return 'entradas';
 }
 
-export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial, modoMovimentacao, filtroAnoInicial, filtroMesInicial, filtroStatusInicial, filtroCategoriaInicial, onBack, drillDownLabel, onEditarAbate, onEditarVenda, onEditarCompra, onEditarTransferencia, onEditarReclass, onEditarMorte, onEditarConsumo, onVerOperacoes, emAppShell }: Props) {
+export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial, modoMovimentacao, filtroAnoInicial, filtroMesInicial, filtroStatusInicial, filtroCategoriaInicial, onBack, drillDownLabel, onEditarAbate, onEditarVenda, onEditarCompra, onEditarTransferencia, onEditarReclass, onEditarMorte, onEditarConsumo, emAppShell }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
-  const { count: opsEmAndamento } = useOperacoesComerciaisEmAndamento();
   const fazendaMap = useMemo(() => {
     const m = new Map<string, string>();
     fazendas.forEach(f => m.set(f.id, f.nome));
@@ -1010,20 +1006,10 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
           ))}
         </div>
         </div>
-          {onVerOperacoes && opsEmAndamento > 0 && (
-            <div className="hidden md:flex ml-auto max-w-sm flex-col items-end gap-1 text-right">
-              <div className="flex items-start gap-1.5">
-                <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary-foreground/80" />
-                <span className="text-[11px] leading-snug text-primary-foreground/90">
-                  <span className="font-semibold">{opsEmAndamento} {opsEmAndamento === 1 ? 'operação comercial em andamento' : 'operações comerciais em andamento'}</span>
-                  <span className="text-primary-foreground/70"> — Consulte rascunhos e operações ainda não concluídas.</span>
-                </span>
-              </div>
-              <Button size="sm" variant="secondary" className="h-6 shrink-0 px-2 text-[11px]" onClick={onVerOperacoes}>
-                Ver Operações Comerciais
-              </Button>
-            </div>
-          )}
+          {/* ⚠ O AVISO "N OPERACOES COMERCIAIS EM ANDAMENTO" + "Ver Operacoes Comerciais" SAIU —
+              ATALHOS-PRODUCAO-01. O atalho da barra de topo leva as tres telas de Producao, e com
+              ele o botao daqui virou a segunda porta para o mesmo lugar. A contagem que o alimentava
+              (`useOperacoesComerciaisEmAndamento`) nao tinha outro leitor e saiu junto. */}
         </div>
 
         {/* Sub-type tabs */}

@@ -1,7 +1,9 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { LancamentosTab } from '@/pages/LancamentosTab';
 import { CentralOperacoesComerciais } from '@/components/operacao-comercial/central/CentralOperacoesComerciais';
-import { paramsAberturaOC } from '@/lib/oc/paramsAberturaOC';
+import { paramsAberturaOC, semParamsOC } from '@/lib/oc/paramsAberturaOC';
+import { OPCOES_ATALHO_PRODUCAO, secaoDoAtalho, saiDoLancarComOC, type SecaoAtalhoProducao } from '@/v2/lib/atalhosProducao';
+import { Segmentado } from '@/components/ui/segmentado';
 import { useLancamentos } from '@/hooks/useLancamentos';
 import { useLancamento } from '@/hooks/useLancamento';
 import type { Lancamento } from '@/types/cattle';
@@ -589,17 +591,12 @@ export default function V2Index() {
   //   cai aqui no fallback de propósito: o destino é o mesmo, e a lista branca segue sendo a de
   //   seções que precisam de tratamento próprio. Valor desconhecido → Central, como sempre.
   const fecharOperacaoOC = useCallback(() => {
-    const p = new URLSearchParams(window.location.search);
-    const retorno = p.get('oc_return');
-    p.delete('oc_compra');
-    p.delete('oc_venda');
+    const retorno = new URLSearchParams(window.location.search).get('oc_return');
     /* ⚠ O TERCEIRO IRMAO — OC-ABATE-01. Fechar a OC tem de limpar os TRES, senao um
-       parametro sobrevivente reabre o modal errado no proximo render. */
-    p.delete('oc_abate');
-    p.delete('oc_id');
-    p.delete('oc_aba');
-    p.delete('oc_return');
-    setSearchParams(p, { replace: true });
+       parametro sobrevivente reabre o modal errado no proximo render.
+       ⚠ A LIMPEZA MORA EM `semParamsOC` desde o ATALHOS-PRODUCAO-01 — os mesmos seis, na mesma
+       ordem —, porque a saida de "Lancar movimentacao" (atalho e menu) limpa pelo MESMO caminho. */
+    setSearchParams(semParamsOC(window.location.search), { replace: true });
     /* PR-OC-NAVEGACAO-RETORNO-02 — destino = seção de origem quando conhecida; fallback
        Central quando não há origem registrada.
        ⚠ A LISTA BRANCA DE DUAS SECOES CAIU — B-17 adendo, e a medicao mostrou por que: o
@@ -1061,7 +1058,6 @@ export default function V2Index() {
                 alguem escreva um segundo criterio quando a hora chegar. */
             onEditarAbate={(l) => abrirEdicaoZootOuOC(l)}
             onEditarVenda={(l) => abrirEdicaoZootOuOC(l)}
-            onVerOperacoes={() => setSection('operacoes-comerciais')}
           />
         )}
       </V2ZootWrapper>
@@ -1395,7 +1391,32 @@ export default function V2Index() {
   const clienteSelector = clientes.length > 1 ? <ClienteSelector /> : undefined;
   const fazendaSelector = fazendas.length > 1 ? <FazendaSelector /> : undefined;
 
+  /* ⚠ SAIR DE "LANCAR MOVIMENTACAO" COM OC ABERTA LIMPA OS `oc_*` — ATALHOS-PRODUCAO-01, decisao do
+     Gabriel. Pelo menu e pelo atalho, o mesmo limpador do fechar da OC (`semParamsOC`). Sem isto,
+     os parametros sobreviviam e reabriam o modal sozinho na volta. */
+  function limparOCAoSairDoLancar(para: V2Section) {
+    if (saiDoLancarComOC(sectionRef.current, para, window.location.search)) {
+      setSearchParams(semParamsOC(window.location.search), { replace: true });
+    }
+  }
+
+  /* O clique do atalho da barra — a mesma via do antigo "Ver Operações Comerciais": o V2Index troca
+     a secao; a barra so' avisa qual. */
+  function irPeloAtalho(s: SecaoAtalhoProducao) {
+    limparOCAoSairDoLancar(s);
+    setSection(s);
+  }
+
+  /* ⚠ OS ATALHOS DIRETOS DA SIDEBAR ("Visao Geral", "Configuracoes") E A BARRA DO CELULAR TAMBEM SAO
+     MENU LATERAL, e iam direto a `setSection` — escapavam da limpeza. Passam por aqui, e so' ganham
+     isso: nada mais do `handleSelect` (drawer, intensivo, origem do mapa) muda para eles. */
+  function navegarPeloMenu(s: V2Section) {
+    limparOCAoSairDoLancar(s);
+    setSection(s);
+  }
+
   function handleSelect(s: V2Section) {
+    limparOCAoSairDoLancar(s);
     setSection(s);
     setDrawerAtivo(null);
     setIntensivo(false);
@@ -1430,7 +1451,7 @@ export default function V2Index() {
       {!intensivo && (
         <V2Sidebar
           activeSection={section}
-          onNavigate={setSection}
+          onNavigate={navegarPeloMenu}
           drawerAtivo={drawerAtivo}
           onDrawerToggle={setDrawerAtivo}
           clienteSelector={clienteSelector}
@@ -1467,7 +1488,18 @@ export default function V2Index() {
             criando o seu ao lado — o filtro duplo que este envelope veio desmontar.
             ⚠ O QUE FICA É O ENDEREÇO: "Grupo / Tela", com os rótulos saindo do MESMO
             `navGrupos` que desenha o menu. O período passou a ser da tela. */}
-        <BarraSecao area={rotulo.area} secao={rotulo.secao} />
+        {/* ⚠ O ATALHO SO' EXISTE NAS TRES TELAS DE PRODUCAO — ATALHOS-PRODUCAO-01 (mock opcao A).
+            `bg-card` para ler sobre a barra azul. ABAIXO DE md ELE SOME (`hidden md:inline-flex`):
+            tres rotulos nao cabem numa barra de 32px no celular, e a regra e' nao quebrar a barra em
+            duas linhas. */}
+        <BarraSecao area={rotulo.area} secao={rotulo.secao}
+          atalho={(() => {
+            const ativa = secaoDoAtalho(section);
+            return ativa ? (
+              <Segmentado altura={22} valor={ativa} onEscolher={irPeloAtalho}
+                opcoes={OPCOES_ATALHO_PRODUCAO} className="hidden bg-card md:inline-flex" />
+            ) : undefined;
+          })()} />
 
         {/* SUB-NAV FINANCEIRO — desktop apenas */}
         {['financeiro-dashboard', 'fluxo-caixa', 'rateio-adm', 'importacao-extratos'].includes(section) && (
@@ -1534,7 +1566,7 @@ export default function V2Index() {
       </div>
 
       {/* MOBILE BOTTOM NAV — fixed bottom-0 + md:hidden internos no componente */}
-      <V2MobileNav activeSection={section} onNavigate={setSection} />
+      <V2MobileNav activeSection={section} onNavigate={navegarPeloMenu} />
 
       {/* Atalho arquitetural: modal soberano de edição zoo. Disponível em
           qualquer section. Carrega pelo lancamento.id — fazendaAtual não é
