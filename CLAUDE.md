@@ -624,6 +624,18 @@ no mesmo arquivo.
   herdando quando o chamador nao diz nada — e era exatamente esse o defeito.
   ⚠ E O DOS TRES TIPOS AFIRMA A IMPOSSIBILIDADE, nao o caso feliz: varre os tres sentidos e
   conta quantos ficaram ligados, porque dois ligados montariam dois shells no mesmo render.
+  De 1835 para 1841 no OC-URL-RAJADA-01: entrou `src/v2/hooks/useFiltroUrl.test.tsx` (+6) —
+  o filtro da URL nao pode alimentar o proprio render. Tres casos travam a IDENTIDADE do valor
+  (codec que devolve objeto mantem a referencia; ela MUDA quando o parametro muda; o padrao e'
+  estavel) e tres a GUARDA de igualdade (gravar o que ja' esta' la' nao navega; gravar
+  diferente navega; voltar ao padrao apaga o parametro).
+  ⚠ OS PARES ANDAM JUNTOS DE PROPOSITO. "Mantem a referencia" sozinho passaria verde num memo
+  que CONGELASSE o filtro, e "nao navega" sozinho passaria verde numa guarda que bloqueasse
+  toda escrita — em ambos os casos a tela pararia de responder. Cada regra tem o caso que
+  mede o estrago da correcao exagerada.
+  ⚠ E O ESPIAO DE `replaceState` ENTRA DEPOIS DA MONTAGEM: o react-router chama `replaceState`
+  uma vez ao montar, para carimbar o indice do historico. Espiar antes mede o router, nao o
+  hook — foi o que reprovou a primeira versao do caso.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -1426,3 +1438,36 @@ preview que o cabecalho nao sai da tela ao rolar.
   ⚠ E NAO HA FECHAMENTO SILENCIOSO NA ABERTURA — conferido: `fecharModalOC`
   (LancamentosTab:2673) e' o unico invocador de `onFecharOperacaoOC`, e so' por Esc, X ou o
   botao Fechar; os seis `limparParamsOC` tem `toast.error` imediatamente antes.
+- ⚠ VALOR LIDO DA URL SE MEMOIZA; ESCRITA QUE NAO MUDA NADA NAO SE FAZ (regra permanente,
+  OC-URL-RAJADA-01, 25/09/2026). `src/v2/hooks/useFiltroUrl.ts`.
+  ⚠ NASCE DE "CLIQUEI E NAO ABRIU", e a causa nao estava em quem abre. Medido na Central de
+  Operacoes Comerciais com `?f_ord=data:asc` no endereco: FECHAR uma OC disparava de 30 a 200
+  reescritas de URL em ~4 s, e a linha da lista so' reaparecia aos 3993 ms. Clicar numa linha
+  dentro dessa janela escrevia `oc_venda`/`oc_id` e a reescrita seguinte os APAGAVA — a tela
+  trocava de secao e o modal nunca montava, sem toast, sem erro de console, sem nada.
+  Depois: 1 escrita, linha de volta em 991 ms, clique imediato abre.
+  ⚠ A CAUSA ERA IDENTIDADE, NAO CLOSURE — e eu persegui o closure primeiro. `ORD.ler` devolve
+  `{col, dir}`, objeto NOVO a cada chamada, e o hook recalculava o valor em todo render. O
+  `useEffect` que zera a pagina (`CentralOperacoesComerciais.tsx:626`) lista `ord` nas
+  dependencias: identidade nova a cada render = efeito a cada render = escrita na URL = render
+  seguinte. Sem `f_ord` o valor e' o padrao `null`, primitivo e estavel, e a rajada nao existia.
+  Era exatamente essa a diferenca entre o endereco que falhava e o que funcionava.
+  ⚠ A GUARDA DE IGUALDADE E' SEGUNDA LINHA, nao o conserto: `definir` agora compara a query
+  resultante com a atual e desiste se forem iguais. Ela existe para o proximo efeito mal
+  calibrado custar UM render em vez de duzentos.
+  ⚠ COMO SE ACHA UM DESTES, porque nenhum dos sete gates ve': instrumentar
+  `history.replaceState` no navegador, capturar `new Error().stack` nas primeiras escritas e
+  MAPEAR as posicoes com o sourcemap (`build.sourcemap` temporario + `@jridgewell/trace-mapping`).
+  A pilha crua so' tem nomes minificados; mapeada, ela nomeia arquivo e linha em um passo. Foi
+  o que separou `V2Index:602` (a escrita legitima do Fechar) de `useFiltroUrl:53` chamado por
+  `CentralOperacoesComerciais:628`.
+  ⚠ DUAS LICOES DE DIAGNOSTICO FICAM, e as duas sao erros meus deste dia:
+    1. CORRELACAO NAO E' CAUSA, e a ordem dos cliques fabrica correlacao. Reportei que OC
+       `fechada` nao abria e `programada` abria — 2x2 perfeito. Era artefato: as duas fechadas
+       tinham sido clicadas logo apos um Fechar, dentro da rajada. `ceabd850` (fechada) abre
+       quando a pagina esta quieta, e o abate fechado tambem.
+    2. "EM SILENCIO" TEM DE SER MEDIDO, nao suposto. Declarei um clique "em silencio" depois de
+       esperar 6 s; a rajada ainda corria, porque a propria montagem da Central a redisparava.
+       Contar as escritas na janela ANTES do clique e' o que torna a palavra verificavel — e foi
+       isso que revelou que `6a808c4c`, que eu ja' tinha separado como defeito proprio
+       (OC-6A808C4C-NAO-ABRE-02), era o MESMO defeito. A frente nao precisa nascer.
