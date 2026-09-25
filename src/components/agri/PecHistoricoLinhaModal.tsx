@@ -24,7 +24,7 @@ import { BarrasCompactas, type BarraCompacta } from '@/components/ui/barras-comp
 import { Donut, traco, VERDE, VERMELHO } from '@/components/agri/dreGrade';
 import {
   LINHAS_PEC, BASE_DO_PERCENTUAL, ROTULO_UNIDADE, UNIDADES_PEC,
-  centrosDoBloco, percentual, valorDe, valorNaUnidade,
+  centrosDoBloco, percentual, valorDe, valorNaUnidade, somaComposta,
   type ColunaPec, type UnidadePec, type DefPec,
 } from '@/components/agri/drePecRegua';
 import {
@@ -41,7 +41,19 @@ export interface RecorteHistoricoPec {
   rotulo: string;
   fazendaId: string | null;
   fazendaNome: string;
+  /**
+   * A COMPOSIÇÃO DA LINHA NA GRADE QUE ABRIU O MODAL — DRE-MODAL-CUSTO-FIXO-RATEIO-01.
+   *
+   * ⚠ O MODAL SOMA AS MESMAS CHAVES QUE A GRADE: no Resumido, "(−) Custo fixo" é
+   * `custo_fixo + rateio_adm` e "Variação do estoque" é `vpb_operacional − reposicao`. Lendo só a
+   * chave pura, o modal do Agnaldo jan-ago/26 mostrava 532.527,95 debaixo de uma grade que dizia
+   * 902.853,55. Ausente = a linha é a própria chave (o Detalhado e as filhas).
+   */
+  compor?: DefPec['compor'];
 }
+
+/** Quanto do Custo fixo o modal mostra — só vale para a linha que traz o rateio junto. */
+type Parcela = 'total' | 'direto';
 
 /** Um ponto da série — uma safra, o período da tela, ou a meta. */
 interface Ponto {
@@ -137,6 +149,11 @@ const ehLinhaDeResultado = (def: DefPec | null, centro: string | null) =>
  * leria como ausência, quando é o irmão que está ali com valor próprio.
  */
 const CORES_FATIA = ['#0d9488', '#7c3aed', '#d97706', '#2563eb', '#db2777', '#65a30d'];
+/* ⚠ A FATIA FIXA (o rateio administrativo) TEM COR PRÓPRIA, fora da paleta — medido na tela em
+   25/09: os centros ocupam até seis posições (cinco + "Outros"), a sétima voltava ao início e o
+   rateio saía com o MESMO verde de "Mão de Obra", as duas maiores fatias do anel. Índigo, e não
+   cinza: cinza nesta casa é "sem dado". */
+const COR_FATIA_FIXA = '#312e81';
 const MAX_FATIAS = 5;
 
 /** O escopo da coluna que abriu o modal: o total, ou uma fazenda. */
@@ -149,7 +166,7 @@ const linhasDoEscopo = (d: DrePecuaria | null, fazendaId: string | null): DrePec
 /** O valor da linha (ou da filha) num ponto. ⚠ `null` é ausência — nunca zero. */
 const valorDoRecorte = (l: DrePecLinhas | null, r: RecorteHistoricoPec): number | null => {
   if (!l) return null;
-  if (r.centro === null) return valorDe(l, r.chave);
+  if (r.centro === null) return r.compor ? somaComposta(r.compor, k => valorDe(l, k)) : valorDe(l, r.chave);
   const bloco = BLOCO_DA_LINHA[r.chave];
   if (!bloco) return null;
   return centrosDoBloco(l, bloco).find(c => c.centro === r.centro)?.valor ?? null;
@@ -346,7 +363,7 @@ export interface BaseDonut {
    * "sem centro" na tela, e é o valor CRU que a navegação e a RPC entendem. Sem ele, quem clicasse
    * na fatia teria de desfazer a tradução — e a tradução passaria a existir em dois lugares.
    */
-  fatias: Array<{ nome: string; valor: number; centro?: string }>;
+  fatias: Array<{ nome: string; valor: number; centro?: string; fixa?: boolean }>;
   /** A fatia que É a linha clicada — pintada na cor da natureza. */
   destaque: string | null;
 }
@@ -389,17 +406,26 @@ export function baseDoDonut(
     }
     if (mostrarFilhas && bloco) {
       const filhas = centrosDoBloco(l, bloco);
-      const total = filhas.reduce((a, c) => a + Math.abs(c.valor), 0);
+      /* ⚠ O RATEIO É A ÚLTIMA FATIA QUANDO A LINHA O SOMA — a mesma regra da grade, que o põe como
+         última filha do Custo fixo no Resumido. Sem ele, o anel mostraria seis grupos que somam
+         532.527,95 ao lado de um centro que mede 902.853,55. Ele não tem `centro`: não é centro de
+         custo, e a legenda não navega para ele. `fixa` o tira do corte das cinco maiores — ele é a
+         parcela que distingue os dois modos, e sumir em "Outros" apagaria a diferença. */
+      const comRateio = !!recorte.compor?.mais.includes('rateio_adm');
+      const rateio = comRateio ? valorDe(l, 'rateio_adm') : null;
       return {
         rotuloBase: '= VBP', total: vbp == null ? 0 : Math.abs(vbp),
-        valorLinha: valorDe(l, recorte.chave),
-        fatias: filhas.map(c => ({
-          nome: c.centro === '(sem)' ? 'sem centro' : c.centro, valor: Math.abs(c.valor), centro: c.centro,
-        })),
+        valorLinha: valorDoRecorte(l, recorte),
+        fatias: [
+          ...filhas.map(c => ({
+            nome: c.centro === '(sem)' ? 'sem centro' : c.centro, valor: Math.abs(c.valor), centro: c.centro,
+          })),
+          ...(comRateio ? [{ nome: 'Rateio administrativo', valor: Math.abs(rateio ?? 0), fixa: true }] : []),
+        ],
         destaque: null,
       };
     }
-    const v = valorDe(l, recorte.chave);
+    const v = valorDoRecorte(l, recorte);
     const base = vbp == null ? 0 : Math.abs(vbp);
     const resto = Math.max(0, base - Math.abs(v ?? 0));
     return {
@@ -439,7 +465,22 @@ export function PecHistoricoLinhaModal({
    * ⚠ E A PROFUNDIDADE É A DA GRADE: grupo › filha, nunca mais. Uma filha não tem filhas.
    */
   const [navegado, setNavegado] = useState<RecorteHistoricoPec | null>(null);
-  const alvo = navegado ?? recorte;
+  /**
+   * DIRETO DA FAZENDA OU TOTAL COM RATEIO — DRE-MODAL-CUSTO-FIXO-RATEIO-01.
+   *
+   * ⚠ ABRE EM "TOTAL", que é o número da grade: o modal nasce concordando com a linha clicada. O
+   * "direto" é a segunda pergunta — quanto a fazenda gastou sem a parcela estimada do escritório —
+   * e ela continua a um clique.
+   */
+  const [parcela, setParcela] = useState<Parcela>('total');
+  const alvoNavegado = navegado ?? recorte;
+  const temRateio = alvoNavegado?.centro === null && !!alvoNavegado.compor?.mais.includes('rateio_adm');
+  /* ⚠ O ALVO JÁ CARREGA A COMPOSIÇÃO EFETIVA: barras, tabela, donut e percentual leem todos dele, e
+     o segmentado muda UM campo em vez de cada leitura decidir sozinha. */
+  const alvo = useMemo((): RecorteHistoricoPec | null => (
+    alvoNavegado && temRateio && parcela === 'direto'
+      ? { ...alvoNavegado, compor: undefined } : alvoNavegado
+  ), [alvoNavegado, temRateio, parcela]);
   /**
    * CONTRA O QUE A ÚLTIMA COLUNA COMPARA — DRE-HISTORICO-LINHA-01c.
    *
@@ -455,7 +496,7 @@ export function PecHistoricoLinhaModal({
      que a grade clicou. Sem isso, o modal da segunda linha abriria onde o operador parou na
      primeira. */
   useEffect(() => {
-    if (aberto) { setUnidade(unidadeInicial); setSelecionada(null); setNavegado(null); setRefDelta('meta'); }
+    if (aberto) { setUnidade(unidadeInicial); setSelecionada(null); setNavegado(null); setRefDelta('meta'); setParcela('total'); }
   }, [aberto, unidadeInicial, recorte?.chave, recorte?.centro]);
 
   const def = useMemo(
@@ -502,8 +543,11 @@ export function PecHistoricoLinhaModal({
   /** As fatias desenhadas: as 5 maiores mais "Outros" — um anel de vinte fatias não se lê. */
   const fatias = useMemo(() => {
     if (!donut) return [];
-    const ordenadas = [...donut.fatias].filter(f => f.valor > 0).sort((a, b) => b.valor - a.valor);
-    if (ordenadas.length <= MAX_FATIAS + 1) return ordenadas;
+    /* ⚠ A FATIA FIXA (o rateio) FICA FORA DO CORTE e entra por último: ela não disputa lugar com os
+       centros, e ficar sempre no fim da legenda a acha sem procurar. */
+    const fixas = donut.fatias.filter(f => f.fixa && f.valor > 0);
+    const ordenadas = [...donut.fatias].filter(f => !f.fixa && f.valor > 0).sort((a, b) => b.valor - a.valor);
+    if (ordenadas.length <= MAX_FATIAS + 1) return [...ordenadas, ...fixas];
     const cabeca = ordenadas.slice(0, MAX_FATIAS);
     const cauda = ordenadas.slice(MAX_FATIAS).reduce((a, f) => a + f.valor, 0);
     /* ⚠ A FATIA CLICADA NUNCA VAI PARA "Outros": ela é o motivo do modal estar aberto. */
@@ -511,7 +555,7 @@ export function PecHistoricoLinhaModal({
       ? ordenadas.find(f => f.nome === donut.destaque) : null;
     const base = destaqueFora ? [...cabeca.slice(0, MAX_FATIAS - 1), destaqueFora] : cabeca;
     const somaCauda = ordenadas.filter(f => !base.includes(f)).reduce((a, f) => a + f.valor, 0);
-    return [...base, { nome: 'Outros', valor: destaqueFora ? somaCauda : cauda }];
+    return [...base, { nome: 'Outros', valor: destaqueFora ? somaCauda : cauda }, ...fixas];
   }, [donut]);
 
   if (!aberto || !alvo) return null;
@@ -523,7 +567,7 @@ export function PecHistoricoLinhaModal({
   const paiRotulo = alvo.centro !== null ? semPrefixo(def?.rotulo ?? '') : null;
   /** O caminho: só a linha, ou "pai › filha" — e o pai é clicável, que é a volta. */
   const voltarAoPai = alvo.centro !== null && def
-    ? () => setNavegado({ ...alvo, centro: null, rotulo: def.rotulo })
+    ? () => setNavegado({ ...alvo, centro: null, rotulo: def.rotulo, compor: recorte?.compor })
     : null;
   /**
    * QUEM NAVEGA É QUEM TEM CENTROS — o grupo E as filhas dele.
@@ -599,8 +643,13 @@ export function PecHistoricoLinhaModal({
   const valorDonut = donut?.valorLinha ?? null;
   const pctDonut = donut && donut.total > 0 && valorDonut != null
     ? percentual(Math.abs(valorDonut), donut.total) : traco;
+  /* ⚠ O NÚMERO DO MEIO DIZ DE QUÊ ELE É PERCENTUAL — homologação de 25/09: o anel mostrava "31,6 %"
+     sozinho, na frente do cliente, e ninguém sabia se era do custo, da receita ou do período. A
+     base é a do donut: o VBP no grupo e no topo, o bloco do pai numa filha. */
+  const baseDoPct = donut ? (donut.rotuloBase === '= VBP' ? 'VBP' : semPrefixo(donut.rotuloBase)) : 'VBP';
   const corDaFatia = (_i: number, nome: string) => {
     if (donut?.destaque && nome === donut.destaque) return cores.fatia;
+    if (fatias.some(f => f.nome === nome && 'fixa' in f && f.fixa)) return COR_FATIA_FIXA;
     const i = fatias.findIndex(f => f.nome === nome);
     return CORES_FATIA[i % CORES_FATIA.length];
   };
@@ -664,6 +713,15 @@ export function PecHistoricoLinhaModal({
               <Segmentado altura={22} valor={unidade} onEscolher={setUnidade}
                 opcoes={UNIDADES_PEC.map(u => ({ valor: u, rotulo: ROTULO_UNIDADE[u] }))} />
             )}
+            {/* ⚠ SÓ NA LINHA QUE TRAZ O RATEIO JUNTO (o Custo fixo do Resumido). No Detalhado o rateio
+                é linha própria, e o Custo fixo ali já é o direto — um seletor sem o que alternar. */}
+            {temRateio && (
+              <Segmentado altura={22} valor={parcela} onEscolher={setParcela}
+                opcoes={[
+                  { valor: 'direto', rotulo: 'Direto da fazenda' },
+                  { valor: 'total', rotulo: 'Total c/ rateio' },
+                ]} />
+            )}
           </div>
 
           {/* ⚠ DUAS METADES IGUAIS, topo alinhado: elas respondem perguntas diferentes sobre a MESMA
@@ -699,7 +757,7 @@ export function PecHistoricoLinhaModal({
                   <span className="text-[11px] font-normal">{ROTULO_UNIDADE[unidade].slice(2)}</span>
                 </span>
                 <span className="shrink-0 text-[11px] text-muted-foreground"
-                  title={pontoEscolhido?.rotuloLongo ?? ''}>{pontoEscolhido?.rotuloLongo ?? ''}</span>
+                  title={pontoEscolhido?.rotuloLongo ?? ''}>{pontoEscolhido?.rotuloLongo ?? ''} · % do {baseDoPct}</span>
               </div>
               <div className="flex items-center gap-2">
                 {/* ⚠ O ANEL INTEIRO É A PORTA quando há filhas: clicar numa fatia abre aquela linha
@@ -708,7 +766,10 @@ export function PecHistoricoLinhaModal({
                     nome escrito e é onde o dedo vai. A fatia segue mostrando a cor e a proporção. */}
                 <Donut dados={fatias} cor={corDaFatia} total={donut?.total ?? 0} rotuloTotal=""
                   tamanho={140}
-                  centro={<span className="text-[15px] font-medium tabular-nums">{pctDonut}</span>} />
+                  centro={<>
+                    <span className="text-[15px] font-medium leading-tight tabular-nums">{pctDonut}</span>
+                    <span className="text-[10px] leading-tight text-muted-foreground">do {baseDoPct}</span>
+                  </>} />
                 {/* ⚠ LEGENDA DE LARGURA FIXA E UMA LINHA POR ITEM: um nome de centro comprido
                     quebraria a linha e empurraria o donut para cima — o modal mudaria de altura ao
                     trocar de safra, que é o oposto do que se pede dele. */}

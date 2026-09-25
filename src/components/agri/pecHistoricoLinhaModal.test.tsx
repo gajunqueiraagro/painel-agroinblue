@@ -13,7 +13,9 @@ import {
   PecHistoricoLinhaModal, baseDoDonut, deltaMeta, deltaEmPontos, abreviar, semPrefixo,
   rotuloCurtoDoAno, PISO_K_TABELA, type RecorteHistoricoPec,
 } from '@/components/agri/PecHistoricoLinhaModal';
-import { LINHAS_PEC } from '@/components/agri/drePecRegua';
+import { LINHAS_PEC, LINHAS_PEC_RESUMIDO, type ColunaPec, type DefPec } from '@/components/agri/drePecRegua';
+import { valorDaLinha } from '@/pages/PecDrePanel';
+import { formatNum } from '@/lib/calculos/formatters';
 import type { DrePecuaria, DrePecLinhas } from '@/hooks/useDrePecuaria';
 
 const linhas = (o: Partial<DrePecLinhas>): DrePecLinhas => ({
@@ -432,5 +434,103 @@ describe('a coluna Δ e o modal de resultado', () => {
     expect(cabecalho()?.textContent).toContain('Δ ano ant.');
     /* 6.000 contra o ano anterior 4.000 = +50 %, e não mais os 20 % da meta. */
     expect(deltaDaLinha()).toContain('50,0 %');
+  });
+});
+
+/* ══════════════ DRE-MODAL-CUSTO-FIXO-RATEIO-01 — o modal soma o que a grade soma ══════════════ */
+
+/**
+ * ⚠ NASCE DE UMA APRESENTAÇÃO AO CLIENTE (25/09/2026): no Resumido do Agnaldo, jan-ago/26, a grade
+ * mostrava "(−) Custo fixo" 902.853,55 — seis grupos (532.527,95) + rateio administrativo
+ * (370.325,60) — e o modal de histórico da MESMA linha mostrava 532.527,95. A "Variação do
+ * estoque" tinha o mesmo furo (−862.422,04 no modal contra −2.882.281,45 na grade). Os números
+ * abaixo são os da RPC real daquele período.
+ * ⚠ O CASO QUE JUSTIFICA O ARQUIVO PERCORRE TODAS AS LINHAS DO RESUMIDO — todas têm o ícone — e
+ * compara o total do modal com o `valorDaLinha` da GRADE, a função que desenha a célula. Afirmar
+ * só o Custo fixo passaria verde se a próxima linha composta nascesse com o mesmo defeito.
+ */
+describe('o modal soma as mesmas chaves que a grade', () => {
+  const AGNALDO = linhas({
+    vbp: 1684331.73, vpb_operacional: -862422.04, reposicao: 2019859.41,
+    custo_fixo: 532527.95, rateio_adm: 370325.60,
+    receita_bruta: 3000000, receita_liquida: 2900000, custo_variavel: 700000, margem: 984331.73,
+    resultado_operacional: 81478.18, resultado_periodo: 50000, resultado_com_mercado: 60000,
+    centros: [
+      { bloco: 'fixo', centro: 'Mão de Obra', valor: 250149.30, a_pagar: 0 },
+      { bloco: 'fixo', centro: 'Máquinas', valor: 173814.47, a_pagar: 0 },
+      { bloco: 'fixo', centro: 'Manutenção Fazenda', valor: 55417.98, a_pagar: 0 },
+      { bloco: 'fixo', centro: 'Administração', valor: 46153.57, a_pagar: 0 },
+      { bloco: 'fixo', centro: 'Outros', valor: 3801.52, a_pagar: 0 },
+      { bloco: 'fixo', centro: 'Impostos', valor: 3191.11, a_pagar: 0 },
+    ],
+  });
+  const dre: DrePecuaria = {
+    periodo: { de: '2026-01', ate: '2026-08', p0: '2025-12', meses: 8 },
+    rateio_adm: { pool: 0, bruto: 0, criterio: '' },
+    fazendas: [], total: AGNALDO,
+  };
+  /* A coluna do Total da grade, na forma que `valorDaLinha` pede. */
+  const colunaTotal: ColunaPec = {
+    chave: 'total', nome: 'Total', sub: '', fazendaId: null, linhas: AGNALDO, total: true,
+    tipo: 'valor', unidade: 'ha', de: '2026-01', ate: '2026-08', cenario: 'realizado', meses: 8, atual: true,
+  };
+  const montarLinha = (d: DefPec) => render(
+    <PecHistoricoLinhaModal aberto
+      recorte={{ chave: d.chave, centro: null, rotulo: d.rotulo, fazendaId: null, fazendaNome: 'Total', compor: d.compor }}
+      atual={dre} meta={null} anos={[]}
+      periodoRotulo="jan → ago/2026" clienteNome="Agnaldo Cedenho" unidadeInicial="rs"
+      onFechar={() => {}} />,
+  );
+  /* ⚠ A TABELA ABREVIA A PARTIR DE CEM MIL e guarda o inteiro no `title`: é ele que se compara. */
+  const totalDoModal = () => {
+    const c = [...document.querySelectorAll<HTMLTableRowElement>('tbody tr')]
+      .find(tr => tr.cells[0]?.textContent === 'R$')?.cells[1];
+    return c?.getAttribute('title') ?? c?.textContent ?? null;
+  };
+
+  it('em TODAS as linhas do Resumido, o total do modal é o valor da célula da grade', () => {
+    for (const d of LINHAS_PEC_RESUMIDO) {
+      const { unmount } = montarLinha(d);
+      const grade = valorDaLinha(colunaTotal, d);
+      expect(totalDoModal(), d.chave).toBe(grade == null ? '—' : formatNum(grade, 2));
+      unmount();
+    }
+    /* ⚠ E A BUSCA PROVA QUE SABE ACHAR: as duas linhas compostas têm de dar o número COMPOSTO, que
+       é diferente da chave pura. Sem isto, um fixture em que as parcelas extras fossem zero
+       passaria verde com o modal ainda lendo só a chave. */
+    const cf = LINHAS_PEC_RESUMIDO.find(d => d.chave === 'custo_fixo') as DefPec;
+    montarLinha(cf);
+    expect(totalDoModal()).toBe('902.853,55');
+    expect(totalDoModal()).not.toBe('532.527,95');
+  });
+
+  it('o segmentado troca Total c/ rateio (padrão, o da grade) por Direto da fazenda — e o rateio sai do anel', () => {
+    montarLinha(LINHAS_PEC_RESUMIDO.find(d => d.chave === 'custo_fixo') as DefPec);
+    const legenda = () => [...document.querySelectorAll('span.truncate')].map(s => s.textContent);
+    expect(totalDoModal()).toBe('902.853,55');
+    /* Seis grupos + o rateio: as sete fatias, com o rateio por último. */
+    expect(legenda()).toContain('Rateio administrativo');
+    expect(legenda()).toContain('Impostos');
+
+    fireEvent.click(screen.getByText('Direto da fazenda'));
+    expect(totalDoModal()).toBe('532.527,95');
+    expect(legenda()).not.toContain('Rateio administrativo');
+    expect(legenda()).toContain('Mão de Obra');
+  });
+
+  it('o número do meio do anel diz de quê ele é percentual', () => {
+    montarLinha(LINHAS_PEC_RESUMIDO.find(d => d.chave === 'custo_fixo') as DefPec);
+    /* 902.853,55 / 1.684.331,73 = 53,6 % — com o rateio, que é o número da grade. */
+    /* ⚠ PELO VIZINHO, não por `getByText('53,6 %')`: o mesmo percentual está na linha "% do VBP" da
+       tabela — duas ocorrências certas —, e o que se afirma aqui é que o do ANEL vem com o rótulo. */
+    const rotulo = screen.getByText('do VBP');
+    expect(rotulo.previousElementSibling?.textContent).toBe('53,6 %');
+    expect(screen.getByText(/jan → ago\/2026 · % do VBP/)).toBeDefined();
+  });
+
+  it('no Detalhado o Custo fixo é o direto e não há segmentado — o rateio é linha própria', () => {
+    montarLinha(def('custo_fixo') as DefPec);
+    expect(totalDoModal()).toBe('532.527,95');
+    expect(screen.queryByText('Direto da fazenda')).toBeNull();
   });
 });

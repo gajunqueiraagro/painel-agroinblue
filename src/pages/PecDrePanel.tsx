@@ -36,7 +36,7 @@ import { Segmentado } from '@/components/ui/segmentado';
    montado por esta tela: importar de volta fecharia um ciclo. Nada mudou de corpo. */
 import {
   LINHAS_DO_MODO, COM_PERCENTUAL, COM_POR_HECTARE, ROTULO_POR_HECTARE, BASE_DO_PERCENTUAL, ROTULO_DA_BASE, corDoTom, valorDe,
-  valorNaUnidade, percentual, centrosDoBloco, UNIDADES_PEC, ROTULO_UNIDADE,
+  valorNaUnidade, percentual, centrosDoBloco, UNIDADES_PEC, ROTULO_UNIDADE, somaComposta,
   type DefPec, type ColunaPec, type UnidadePec, type ModoDre,
 } from '@/components/agri/drePecRegua';
 import type { RecorteHistoricoPec } from '@/components/agri/PecHistoricoLinhaModal';
@@ -346,17 +346,9 @@ export interface InsumosDidaticos {
 
 export function valorDaLinha(col: ColunaPec, def: DefPec): number | null {
   if (!def.compor) return valorNaColuna(col, def.chave);
-  const parcelas = [
-    ...def.compor.mais.map(k => ({ k, sinal: 1 })),
-    ...(def.compor.menos ?? []).map(k => ({ k, sinal: -1 })),
-  ];
-  let total = 0;
-  for (const p of parcelas) {
-    const v = valorNaColuna(col, p.k);
-    if (v == null) return null;
-    total += v * p.sinal;
-  }
-  return total;
+  /* ⚠ A SOMA MORA EM `drePecRegua` — DRE-MODAL-CUSTO-FIXO-RATEIO-01: o modal de histórico soma a
+     mesma linha pela mesma função, e duas cópias do loop foram o que deu duas verdades. */
+  return somaComposta(def.compor, k => valorNaColuna(col, k));
 }
 
 /**
@@ -955,6 +947,9 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, base, onAlternar, o
           ? () => onAbrirHistorico({
             chave: def.chave, centro: null, rotulo: def.rotulo,
             fazendaId: colunas[0].fazendaId, fazendaNome: colunas[0].nome,
+            /* ⚠ A COMPOSIÇÃO VIAJA COM O CLIQUE — DRE-MODAL-CUSTO-FIXO-RATEIO-01: o modal tem de
+               somar as MESMAS chaves que esta linha soma, e só a grade sabe em que modo está. */
+            compor: def.compor,
           }) : undefined} />
         {/* ⚠ O RECUO DA HIERARQUIA É DAQUI PARA A DIREITA — item 6: ele continua sendo o mesmo de
             `REGUA_LINHA`, só deixou de empurrar o ícone junto. */}

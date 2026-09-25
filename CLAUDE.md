@@ -642,6 +642,12 @@ no mesmo arquivo.
   justifica o arquivo e' o do RASCUNHO: `iniciarRealizadoBoitel` semeia uma copia da projecao, e
   conta-la como realizado travaria o lote sem o operador ter lancado nada. Um caso afirma que ZERO
   conta como preenchido, porque o banco testa `IS NOT NULL`.
+  De 1845 para 1849 no DRE-MODAL-CUSTO-FIXO-RATEIO-01: `src/components/agri/pecHistoricoLinhaModal.test.tsx`
+  foi de 23 para 27 casos. O que justifica o bloco PERCORRE TODAS AS LINHAS DO RESUMIDO e compara o
+  total do modal com o `valorDaLinha` da GRADE, com os numeros reais do Agnaldo jan-ago/26 — e fecha
+  afirmando 902.853,55 E que ele NAO e' 532.527,95, porque um fixture com rateio zero passaria verde
+  com o modal lendo so' a chave. Os outros tres travam o segmentado, o rotulo "do VBP" do anel e o
+  Detalhado sem segmentado. PROVADO: com a soma composta desligada no modal, 3 dos 4 falham.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -1507,3 +1513,24 @@ preview que o cabecalho nao sai da tela ao rolar.
        Contar as escritas na janela ANTES do clique e' o que torna a palavra verificavel — e foi
        isso que revelou que `6a808c4c`, que eu ja' tinha separado como defeito proprio
        (OC-6A808C4C-NAO-ABRE-02), era o MESMO defeito. A frente nao precisa nascer.
+- ⚠ MODAL DE LINHA DO DRE SOMA AS MESMAS CHAVES DA DEF DA GRADE (regra permanente,
+  DRE-MODAL-CUSTO-FIXO-RATEIO-01, 25/09/2026). Uma fonte: `somaComposta` em
+  `src/components/agri/drePecRegua.ts`, chamada pela grade (`valorDaLinha`, PecDrePanel) e pelo
+  modal de historico. A composicao VIAJA NO CLIQUE (`RecorteHistoricoPec.compor = def.compor`),
+  porque so' a grade sabe em que modo esta' — o modal procurava a def em `LINHAS_PEC` (Detalhado),
+  que nao tem `compor`.
+  ⚠ NASCE DE UMA APRESENTACAO AO CLIENTE: Resumido do Agnaldo, jan-ago/26, Global. A grade dizia
+    "(−) Custo fixo" 902.853,55 (seis grupos 532.527,95 + rateio administrativo 370.325,60) e o
+    modal da MESMA linha, 532.527,95 — em todos os seis anos (jan-ago/21: grade 616.243,76, modal
+    336.252,01). A "Variacao do estoque" tinha o mesmo furo e ninguem tinha visto: modal
+    −862.422,04 contra grade −2.882.281,45 (`vpb_operacional − reposicao`). A meta 816.160,00 e' a
+    mesma nos dois modos: o `rateio_adm` da meta vem 0,00.
+  ⚠ MEDIDO NA TELA depois do conserto: as 14 linhas com icone, grade = modal, ao centavo.
+  ⚠ O MODAL DO CUSTO FIXO ABRE EM "Total c/ rateio" (o numero da grade) e tem "Direto da fazenda"
+    no segmentado; o rateio e' a fatia fixa do anel (fora do corte das cinco maiores, cor propria
+    `#312e81` — a setima cor da paleta voltava ao inicio e pintava o rateio igual a "Mao de Obra").
+    O centro do anel diz a BASE ("do VBP") e o cabecalho do card tambem ("· % do VBP"): "31,6 %"
+    sozinho foi lido pelo cliente sem saber de que. No Total ele e' 53,6 %; 31,6 % e' o Direto.
+  ⚠ NENHUM DOS SETE GATES VIA ISSO: TSC e build compilam uma chave pura tanto quanto uma soma, e a
+    suite so' montava o modal com fixtures sem rateio. O gate agora e' o caso que percorre TODAS
+    as defs do Resumido — linha composta nova herda a cobranca sem ninguem lembrar dela.

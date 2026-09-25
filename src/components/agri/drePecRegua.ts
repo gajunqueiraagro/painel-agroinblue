@@ -280,6 +280,34 @@ export const LINHAS_PEC_RESUMIDO: DefPec[] = [
   { chave: 'investimento', rotulo: '(−) Investimento no período', tom: 'custo', expande: true },
 ];
 
+/**
+ * A SOMA DE UMA LINHA COMPOSTA — DRE-MODAL-CUSTO-FIXO-RATEIO-01.
+ *
+ * ⚠ UMA FONTE PARA A GRADE E PARA O MODAL DE HISTÓRICO. O loop morava em `valorDaLinha`
+ * (`PecDrePanel`) e o modal lia só a chave pura: no Resumido do Agnaldo jan-ago/26 a grade dizia
+ * Custo fixo 902.853,55 (seis grupos + rateio administrativo 370.325,60) e o modal 532.527,95 —
+ * duas verdades para a mesma linha, vistas pelo cliente numa apresentação. Agora os dois somam
+ * as MESMAS chaves pela MESMA função; o que muda entre eles é só de onde a parcela é lida
+ * (`ler`): a coluna da grade (que sabe de Δ e de meta sem patrimônio) ou o ponto da série.
+ * ⚠ UMA PARCELA AUSENTE FAZ O TOTAL AUSENTE: somar o que sobrou afirmaria um número que não é o
+ * da linha. É a regra que já valia na grade.
+ */
+export function somaComposta(
+  compor: NonNullable<DefPec['compor']>, ler: (k: ChaveLinhaPec) => number | null,
+): number | null {
+  const parcelas = [
+    ...compor.mais.map(k => ({ k, sinal: 1 })),
+    ...(compor.menos ?? []).map(k => ({ k, sinal: -1 })),
+  ];
+  let total = 0;
+  for (const p of parcelas) {
+    const v = ler(p.k);
+    if (v == null) return null;
+    total += v * p.sinal;
+  }
+  return total;
+}
+
 export type ModoDre = 'resumido' | 'detalhado';
 export const LINHAS_DO_MODO = (m: ModoDre) => (m === 'resumido' ? LINHAS_PEC_RESUMIDO : LINHAS_PEC);
 
