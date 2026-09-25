@@ -232,6 +232,18 @@ export interface LinhaPrevisao {
   loteId?: string | null;
 }
 
+/**
+ * POR QUE O "+ NOVO COMPROMISSO" RECUSA A PRINCIPAL — OC-BOITEL-VALOR-01 A4.
+ *
+ * ⚠ A MESMA RECUSA DO "GERAR PREVISAO", e com a mesma frase: o `bloqueioPrevisao` do A3 (realizado
+ * do boitel aplicado e o slot diferente do acerto). Sem isto, a porta manual gravava a principal
+ * com o slot que o proprio acerto desmente — exatamente o que o botao da previsao passou a recusar.
+ * ⚠ SO' A PRINCIPAL: obrigacoes manuais sao digitadas e nao dependem do slot.
+ */
+export function recusaDaPrincipalManual(natureza: string, bloqueioPrevisao: string | null | undefined): string | null {
+  return natureza === 'principal' && bloqueioPrevisao ? bloqueioPrevisao : null;
+}
+
 /* Vocabulario por tipo de operacao. ADITIVO: sem a prop, os defaults sao o texto de hoje
    da compra, e a compra fica byte-identica. */
 export interface RotulosCompromissos {
@@ -1691,6 +1703,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
           valorAcordado={valorAcordado} sugestaoSubcentro={sugestaoSubcentro} descricaoDefault={descricaoDefault}
           contraparteId={contraparteId} lotesProntos={lotesProntos} lotes={lotes}
           avisoBaseCoberta={avisoBaseCoberta}
+          bloqueioPrevisao={bloqueioPrevisao}
           plano={plano} comps={comps}
         />
       )}
@@ -1895,8 +1908,10 @@ function ResumoCard({ rotulo, valor }: { rotulo: string; valor: number }) {
 }
 
 // ===== Dialog: Novo compromisso =====
-function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOperacao, ehBoitel, fornecedores, darkSelectClass, valorAcordado, sugestaoSubcentro, descricaoDefault, contraparteId, lotesProntos, lotes, avisoBaseCoberta, onCriarFornecedor, plano, comps }: {
+function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOperacao, ehBoitel, fornecedores, darkSelectClass, valorAcordado, sugestaoSubcentro, descricaoDefault, contraparteId, lotesProntos, lotes, avisoBaseCoberta, onCriarFornecedor, plano, comps, bloqueioPrevisao = null }: {
   onClose: () => void; onSubmit: (p: CriarCompromissoPayload[]) => void; saving: boolean;
+  /** A recusa do A3, repassada — so' a principal a obedece. Ver `recusaDaPrincipalManual`. */
+  bloqueioPrevisao?: string | null;
   clienteId: string | null; tipoOperacao: string | null; ehBoitel?: boolean; fornecedores: { id: string; nome: string }[]; darkSelectClass: string;
   valorAcordado: number | null; sugestaoSubcentro: string; descricaoDefault: string; contraparteId: string | null; lotesProntos: boolean;
   onCriarFornecedor?: (nome: string, cpfCnpj: string) => Promise<{ id: string; nome: string } | null>;
@@ -2099,8 +2114,11 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
     && loteOptions.length > 0 && !loteId;
   /* No modo JUNTO valor/subcentro/descricao saem de cada lote, entao os campos da
      tela deixam de ser requisito — o que precisa existir e' a lista de lotes. */
+  /* ⚠ FONTE UNICA de `disabled`, `title` e da linha ambar do rodape (regra da OC: o botao
+     desabilitado diz por que). */
+  const recusaPrincipal = recusaDaPrincipalManual(natureza, bloqueioPrevisao);
   const podeSubmeter = !!componente && !!(varios ? itensLote.length > 0 : (valor != null && valor > 0 && subcentro))
-    && !saving && !principalSemLotes && !principalSemLoteEscolhido;
+    && !saving && !principalSemLotes && !principalSemLoteEscolhido && !recusaPrincipal;
 
   /* UM payload por lote no modo junto; um so no modo separado. Favorecido e
      componente sao os comuns e se repetem — foi a decisao: separado e' o normal
@@ -2255,14 +2273,16 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
         )}
         <DialogFooter className="items-center gap-2">
           {/* O botao desabilitado diz POR QUE, ao lado e na mesma leitura — regra da OC. */}
-          {principalSemLoteEscolhido && (
+          {recusaPrincipal ? (
+            <span className="mr-auto text-[10px] leading-tight text-amber-700 dark:text-amber-500">{recusaPrincipal}</span>
+          ) : principalSemLoteEscolhido && (
             <span className="mr-auto text-[10px] leading-tight text-muted-foreground">
               Escolha o lote: o compromisso principal é de um lote.
             </span>
           )}
           <Button variant="outline" size="sm" onClick={onClose}>Cancelar</Button>
           <Button size="sm" disabled={!podeSubmeter}
-            title={principalSemLoteEscolhido ? 'Escolha o lote: o compromisso principal é de um lote.' : undefined}
+            title={recusaPrincipal ?? (principalSemLoteEscolhido ? 'Escolha o lote: o compromisso principal é de um lote.' : undefined)}
             onClick={() => { if (podeSubmeter) { const ps = montarPayloads(); if (ps.length > 0) onSubmit(ps); } }}>
             {varios ? `Criar ${itensLote.length}` : 'Criar'}
           </Button>

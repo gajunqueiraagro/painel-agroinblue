@@ -152,6 +152,37 @@ export interface OcRevalorarLoteEnvelope {
   valor_anterior?: number | null;
   lancamentos_afetados: number;
   idempotente?: boolean;
+  /**
+   * O QUE ACONTECEU COM O COMPROMISSO PRINCIPAL DO LOTE — OC-BOITEL-VALOR-01 A3/A4.
+   *
+   * ⚠ A RPC DEVOLVE DESDE O A3 (migration 20261027146000) e o front descartava: sem o campo no
+   * tipo, um `pendente` — compromisso com programacao, titulo ou baixa, que a RPC NAO mexe —
+   * passava em silencio, e o "a receber" ficava no valor antigo sem ninguem saber.
+   * ⚠ AUSENTE na resposta idempotente (a RPC sai antes de olhar o compromisso).
+   */
+  compromisso?: {
+    acao: 'atualizado' | 'ja_no_valor' | 'pendente' | 'sem_compromisso';
+    id: string | null;
+    valor_anterior: number | null;
+    status: string | null;
+  };
+}
+
+/**
+ * O AVISO DO COMPROMISSO QUE O REVALORAR NAO PODE MEXER — OC-BOITEL-VALOR-01 A4.
+ *
+ * ⚠ SEM REGRA AUTOMATICA: programado tem dinheiro datado por tras, e o caminho continua sendo o
+ * "Atualizar compromisso" da aba Financeiro (`DialogoAtualizarCompromisso`, que simula, mostra o
+ * rol e pede motivo). A tela so' passa a DIZER que ele ficou para tras, e em quanto.
+ * ⚠ `null` em qualquer outra acao — atualizado, ja' no valor, sem compromisso — e na resposta
+ * sem o campo.
+ */
+export function avisoDoCompromissoPendente(env: Pick<OcRevalorarLoteEnvelope, 'compromisso'>): string | null {
+  const c = env.compromisso;
+  if (!c || c.acao !== 'pendente') return null;
+  const valor = c.valor_anterior == null ? '—'
+    : c.valor_anterior.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  return `O compromisso programado ficou em ${valor}. Use Atualizar compromisso na aba Financeiro.`;
 }
 
 async function callRpcRevalorar(args: Record<string, unknown>): Promise<OcRevalorarLoteEnvelope> {

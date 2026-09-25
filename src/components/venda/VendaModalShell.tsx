@@ -53,7 +53,7 @@ import type { RecebimentoApi } from '@/hooks/useOperacaoRecebimento';
 import type { DocumentosApi } from '@/hooks/useOperacaoDocumentos';
 import type { EventosApi } from '@/hooks/useOperacaoEventos';
 import type { LiquidacaoApi } from '@/hooks/useOperacaoLiquidacao';
-import { BoitelTopoNegociacao, bolsoDaVendaBoitel, unitariosDoLiquido, derivadosBoitel, PilulaCenario, valorDaVendaBoitel, avisoAcertoDivergente, principalDaPrevisaoBoitel, valorDoLoteBoitel } from '@/components/venda/BoitelNegociacaoDerivado';
+import { BoitelTopoNegociacao, bolsoDaVendaBoitel, unitariosDoLiquido, derivadosBoitel, PilulaCenario, valorDaVendaBoitel, avisoAcertoDivergente, principalDaPrevisaoBoitel, valorDoLoteBoitel, custosDaVendaBoitel } from '@/components/venda/BoitelNegociacaoDerivado';
 import { BoitelBlocosModais, BoitelAnaliseFaixa, faltamDosCinco, type BoitelEdicao } from '@/components/venda/BoitelBlocosModais';
 import { pesoMedioPorCabeca } from '@/hooks/useCompraLotes';
 import { LinhaResumo } from '@/components/ui/linha-resumo';
@@ -321,7 +321,12 @@ export function VendaModalShell({
     /* A data PROJETADA do abate: o gado sai da fazenda na data da operacao e fica `dias`
        no boitel. E' previsao, e o "~" do rotulo da linha diz isso ao operador. */
     const dataAbate = dataMaisDias(data, boitelData.dias);
-    const antecipado = derivadosBoitel(boitelData).valorTotalAntecipadoCalc;
+    /* ⚠ ADIANTAMENTO E DESPESAS FORA DO BOITEL SAEM DA LINHA QUE VALE — OC-BOITEL-VALOR-01 A4.
+       Com o realizado aplicado, a `realizado`; sem ele, a projetada. Liam SEMPRE a projetada, e a
+       Vera 7f7de76f ficou com um "adiantamento devolvido" de 42.416 quando o realizado dizia
+       46.458,50. `custos` so' e' nulo sem linha nenhuma, e `boitelData` ja foi exigido acima. */
+    const custos = custosDaVendaBoitel({ realizado: boitelReal ?? null, projetado: boitelData });
+    const antecipado = custos?.antecipado ?? 0;
     /* ⚠ A PRINCIPAL LE O SLOT, NAO A PROJECAO — OC-BOITEL-VALOR-01 A3. Era
        `liquidoDaVendaBoitel(boitelData)` SEMPRE, com realizado ou sem: o 0fdec0eb da 8b211cae
        nasceu assim, com 848.713,32, depois de o acerto ter dito 882.608,62. Sem realizado o slot
@@ -335,14 +340,15 @@ export function VendaModalShell({
       idsDosLotes.every(id => !!id) ? idsDosLotes.filter((id): id is string => !!id) : []);
 
     const linhas: LinhaPrevisao[] = [];
-    if (boitelData.possuiAdiantamento && antecipado > 0) linhas.push({
+    /* `antecipado` ja' e' zero sem `possuiAdiantamento` (`valorTotalAntecipadoCalc`), na linha que vale. */
+    if (antecipado > 0) linhas.push({
       natureza: 'obrigacao', componente: 'adiantamento',
       subcentro: SUBCENTRO_ADIANTAMENTO_BOITEL,
       valor: antecipado,
       rotulo: 'Adiantamento ao boitel',
       descricao: `${rot} - Adiantamento`,
       favorecidoId: compradorId || null,
-      vencimentoPrevisto: boitelData.dataAdiantamento || null,
+      vencimentoPrevisto: custos?.dados.dataAdiantamento || null,
     });
     /* ⚠ A LINHA OBEDECE AO SELETOR — PR-OC-VENDA-REALIZADO-01A. Ela somava SO' o frete,
        porque "fora do boitel" era regra cravada e o frete era o unico que estava fora.
@@ -352,11 +358,11 @@ export function VendaModalShell({
        ⚠ UMA FONTE SO'. O valor vem do motor, e nao de uma soma repetida aqui: somar
        `custoFrete + custoNotasEnvio + despesasAbate` na tela seria a segunda copia da
        regra, e ela divergiria do liquido no primeiro seletor que alguem virasse. */
-    const foraDoBoitel = derivadosBoitel(boitelData).custosDoProdutor;
+    const foraDoBoitel = custos?.foraDoBoitel ?? 0;
     if (foraDoBoitel > 0) linhas.push({
       natureza: 'obrigacao', componente: 'frete',
       subcentro: SUBCENTRO_DESPESA_VENDA,
-      valor: Math.round(foraDoBoitel * 100) / 100,
+      valor: foraDoBoitel,
       rotulo: 'Despesas fora do boitel',
       descricao: `${rot} - Despesas fora do boitel`,
       favorecidoId: compradorId || null,
@@ -382,7 +388,7 @@ export function VendaModalShell({
       vencimentoPrevisto: dataAbate,
     });
     return linhas.length > 0 ? linhas : undefined;
-  }, [ehBoitel, boitelData, compradorId, data, lotesApi?.lotes, vendaBoitel?.valor, vendaBoitel?.divergente]);
+  }, [ehBoitel, boitelData, boitelReal, compradorId, data, lotesApi?.lotes, vendaBoitel?.valor, vendaBoitel?.divergente]);
 
   /* ⚠ O VOCABULARIO DA COMPRA NO RODAPE DO RESUMO. `AbaCompromissosOC` escrevia
      "Compra {data} · Chegada {data}" literalmente — numa venda de 13/05 o grupo dizia

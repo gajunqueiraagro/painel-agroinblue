@@ -668,6 +668,12 @@ no mesmo arquivo.
   instancia inscrita com os ULTIMOS filtros (a instancia carrega 2025 e depois 2026, e a recarga tem de
   repetir 2026), e a falha de cada gravacao nao notifica. PROVADO: sem as duas notificacoes, os dois
   casos de gravacao falham e o de falha passa.
+  De 1867 para 1876 no OC-BOITEL-VALOR-01 A4: entrou `src/components/venda/custosDaVendaBoitel.test.ts`
+  (+9), com os numeros do proto da Vera 7f7de76f e da RRCC da0b8577: qual linha alimenta adiantamento
+  e despesas fora do boitel (realizado aplicado x rascunho — o numero muda, o que prova a troca de
+  fonte), o realizado que ZERA as despesas da RRCC, o seletor de lado ainda valendo, o aviso do
+  compromisso `pendente` e a recusa da principal no "+ Novo compromisso". O item 2 do A4 (cancelar o
+  item zerado) nao tem teste porque nao foi implementado — ver o bloco A4.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -1020,6 +1026,25 @@ migration e' REGISTRO HISTORICO, nao se reaplica).
   ⚠ NAO E' DEFEITO DE TELA: a lista do Financeiro V2 mostra o "conciliado" pelos vinculos, que
     recarregam. E' regra de dado — quem decidir mede antes quantos lancamentos foram promovidos por
     conciliacao e depois desfeitos, e se a data de pagamento veio do extrato ou do operador.
+- ⚠ OC-BOITEL-VALOR-01 A4 — O REALIZADO VENCE A PROJECAO EM TUDO (decisao do Gabriel, 25/09/2026).
+  Com o realizado aplicado, as linhas de adiantamento, adiantamento devolvido e despesas fora do boitel
+  da previsao saem da linha `realizado` (`custosDaVendaBoitel`, irmao do `valorDaVendaBoitel`, com o
+  MESMO predicado `realizadoAplicadoNoLote`). Liam sempre a projetada: na Vera 7f7de76f o
+  "adiantamento devolvido" ficou em 42.416 com o realizado dizendo 46.458,50.
+  ⚠ AS CONTAS SAO AS DO MOTOR (`valorTotalAntecipadoCalc`, `custosDoProdutor`); so' muda qual linha
+    entra. O seletor de lado (produtor x boitel) continua valendo.
+  ⚠ O REVALORAR `pendente` AGORA E' DITO: `OcRevalorarLoteEnvelope` ganhou `compromisso`, e o
+    `aplicarRealizadoBoitel` avisa "O compromisso programado ficou em R$ X. Use Atualizar compromisso
+    na aba Financeiro." Sem regra automatica; o `DialogoAtualizarCompromisso` segue sendo o caminho.
+  ⚠ O "+ NOVO COMPROMISSO" MANUAL RECUSA A PRINCIPAL na divergencia do A3, com a mesma frase
+    (`recusaDaPrincipalManual`). Obrigacoes manuais nao mudam.
+  ⚠ PARADO — ITEM ZERADO PELO REALIZADO. A decisao e' cancelar, pelo "Gerar previsao", o compromisso
+    aberto e sem programacao do item que o realizado zera (motivo fixo "item zerado pelo realizado"),
+    e por o programado na lista de bloqueadas. O briefing pedia mostrar "no dialogo de previsao, antes
+    de confirmar, o que sera cancelado" — e ESSE DIALOGO NAO EXISTE: o botao executa direto, por
+    decisao registrada no codigo ("ZERO PERGUNTA — PR-OC-VENDA-FIN-PREVISAO-01", `AbaCompromissosOC`).
+    Pela regra de ancora, nao foi inventado. Ate' decidir a forma da previa, o zero continua sem
+    linha, e o compromisso antigo do item fica como esta' (RRCC da0b8577: 6.000 aberto contra zero).
 - OC-BOITEL-DELTA-ANTIGO-01 — duas OCs de boitel com realizado cujo lote NAO esta' no saldo do
   acerto, as duas com compromisso ja' gerado (medido 25/09/2026). DECISAO DO GABRIEL, nao tratada:
     OC                lote/acordado   saldo do acerto   delta        compromisso vivo
@@ -1032,6 +1057,34 @@ migration e' REGISTRO HISTORICO, nao se reaplica).
     saida ja' registrada, o Confirmar cai no CAMINHO B, que ja' preservava).
   ⚠ A TELA JA' MOSTRA O SALDO nas duas (o "Valor acordado" do resumo le' o realizado), enquanto o
     lote, o financeiro e o rebanho tem outro numero. Duas verdades na mesma OC ate' a decisao.
+  ⚠ E AS OBRIGACOES TAMBEM DIVERGEM DO REALIZADO (medido 25/09/2026, na FASE 0 do A4). Nas quatro OCs
+    antigas, os compromissos que nao sao a principal, contra o que a linha realizada daria — o A4 nao
+    as toca (so' codigo, daqui para frente):
+      OC         compromisso  componente              valor      status/titulo           pelo realizado
+      744c520e   dac75bf9     frete (fora do boitel)  20.615,00  aberto, sem programacao  6.400,00
+      da0b8577   1e33fb64     frete (fora do boitel)   6.000,00  aberto, sem programacao  0 (sem linha)
+      7f7de76f   8bf253f2     adiantamento            46.458,50  programado / realizado   46.458,50
+      7f7de76f   6c39d4c4     adiantamento devolvido  42.416,00  programado / agendado    46.458,50
+      7f7de76f   6a7393ae     frete (fora do boitel)   3.991,80  programado / realizado   5.944,13
+      b58bf556   2c959474     adiantamento            95.243,50  programado / realizado   95.243,50
+      b58bf556   22e23486     adiantamento devolvido  95.243,50  programado / agendado    95.243,50
+      b58bf556   8cd035f6     frete (fora do boitel)   7.983,60  programado / realizado   11.907,44
+  ⚠ AS PRINCIPAIS DAS QUATRO SAO SOLTAS (`lote_id` nulo) — 8cf1d1f9 (744c520e), f9b39fa0 (da0b8577),
+    4d274747 (7f7de76f), 22390d7c (b58bf556) — e por isso a divergencia "compromisso x lote" da aba
+    Financeiro (`divergenciaDoLote`) NAO aparece nelas, nem o botao "Atualizar compromisso": os dois so'
+    existem para compromisso ligado ao lote.
+  ⚠ PERGUNTA ABERTA: as "despesas fora do boitel" da Vera (6a7393ae, 8cd035f6) batem com o FRETE
+    sozinho do realizado, sem as notas do envio (1.952,33 e 3.923,84). Nao se sabe se as notas foram
+    lancadas por outro caminho ou se faltam. Medir antes de mexer.
+- OC-MOTIVO-UNICO-01 — desfazer um compromisso pede motivo em cada passo — estornar, cancelar o
+  lancamento, cancelar a programacao. DECISAO DO GABRIEL: um motivo por gesto, propagado a cada
+  registro de auditoria. Nao tratada.
+  ⚠ E HA' UM SEGUNDO CASO, achado na FASE 0 do A4: reabrir a operacao e depois "Atualizar
+    compromisso" (`DialogoAtualizarCompromisso`, que pede motivo) sao duas perguntas no mesmo gesto
+    quando o reabrir pede o seu. Hoje o reabrir do realizado usa motivo FIXO
+    ("reaberta para lancar o realizado do abate") e o revalorar tambem ("realizado do abate"); o
+    "Lancar realizado" do compromisso monta o motivo sozinho ("ajustado ao realizado…"). Quem tratar a
+    frente mede todos os caminhos que pedem motivo antes de escolher onde ele nasce.
 - OC-COMPRA-REVALOR-01 — ⚠ O DEFEITO BRIEFADO NAO EXISTIA, e o registro e' sobre o metodo.
   Sintoma (NJ, compra f56c50d3, 24/09/2026): o Gabriel corrigiu o valor do lote para
   896.644,48, o financeiro e o documento seguiram com 892.645, e a Negociacao recusava com

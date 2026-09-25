@@ -47,7 +47,7 @@ import { CompraDetalhesDialog, CompraDetalhes, EMPTY_COMPRA_DETALHES } from '@/c
 import { CompraResumoPanel } from '@/components/compra/CompraResumoPanel';
 import { CompraModalShell } from '@/components/compra/CompraModalShell';
 import { gerarFinanceiroCompra } from '@/components/compra/gerarFinanceiroCompra';
-import { OcRpcError, useOperacaoComercial } from '@/hooks/useOperacaoComercial';
+import { OcRpcError, useOperacaoComercial, avisoDoCompromissoPendente } from '@/hooks/useOperacaoComercial';
 import { useCompraLotes, pesoMedioPorCabeca } from '@/hooks/useCompraLotes';
 import { useOperacaoRecebimento } from '@/hooks/useOperacaoRecebimento';
 import { useOperacaoDocumentos } from '@/hooks/useOperacaoDocumentos';
@@ -2965,6 +2965,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           toast.success(envL.lancamentos_afetados > 0
             ? `Realizado lançado. Lote revalorado e ${envL.lancamentos_afetados} lançamento${envL.lancamentos_afetados > 1 ? 's' : ''} do rebanho corrigido${envL.lancamentos_afetados > 1 ? 's' : ''}.`
             : 'Realizado lançado. Lote revalorado.');
+          /* ⚠ O COMPROMISSO QUE FICOU PARA TRAS — OC-BOITEL-VALOR-01 A4. Com programacao, titulo
+             ou baixa, a RPC nao o atualiza (devolve `pendente`); dizer isso aqui e' o que impede o
+             "a receber" de ficar no valor antigo em silencio. O caminho e' o dialogo que ja existe. */
+          const avisoPendente = avisoDoCompromissoPendente(envL);
+          if (avisoPendente) toast.warning(avisoPendente);
         } else {
           toast.success('Realizado do abate lançado.');
         }

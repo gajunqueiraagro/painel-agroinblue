@@ -560,6 +560,36 @@ export function principalDaPrevisaoBoitel(
   return { valor: v.valor, loteId: loteIds.length === 1 ? loteIds[0] : null };
 }
 
+/**
+ * AS OUTRAS LINHAS DA PREVISAO — adiantamento e despesas fora do boitel — OC-BOITEL-VALOR-01 A4.
+ *
+ * ⚠ O REALIZADO VENCE A PROJECAO EM TUDO (decisao do Gabriel): com o realizado aplicado,
+ * adiantamento, frete, notas, outros e despesas do abate saem da linha `realizado`. Ate' o A4 as
+ * tres linhas liam SEMPRE a projetada — e as duas linhas existem em `zoo_operacao_boitel` com as
+ * mesmas colunas, editaveis no modal do realizado. Medido na Vera 7f7de76f: adiantamento 42.416 na
+ * projecao e 46.458,50 no realizado; despesas do produtor 7.500 contra 5.944,13.
+ * ⚠ "REALIZADO APLICADO" E' O MESMO PREDICADO DO A3 (`realizadoAplicadoNoLote`), reutilizado —
+ * uma definicao so' para o slot, a principal e estas linhas.
+ * ⚠ AS CONTAS SAO AS DO MOTOR: `valorTotalAntecipadoCalc` e `custosDoProdutor` de
+ * `derivadosBoitel`. Nada e' recalculado aqui; muda so' QUAL linha entra.
+ * ⚠ `null` sem linha nenhuma para ler.
+ */
+export function custosDaVendaBoitel({ realizado, projetado }: {
+  realizado: BoitelEdicao | null;
+  projetado: BoitelEdicao | null;
+}): { antecipado: number; foraDoBoitel: number; fonte: CenarioBoitel; dados: BoitelEdicao } | null {
+  const fonte: CenarioBoitel = realizadoAplicadoNoLote(realizado) ? 'realizado' : 'projetado';
+  const dados = fonte === 'realizado' ? realizado : projetado;
+  if (!dados) return null;
+  const x = derivadosBoitel(dados);
+  return {
+    antecipado: x.valorTotalAntecipadoCalc,
+    foraDoBoitel: Math.round(x.custosDoProdutor * 100) / 100,
+    fonte,
+    dados,
+  };
+}
+
 /** O Valor do LoteDialog da venda boitel: o slot, a frase de origem e o aviso de divergencia. */
 export function valorDoLoteBoitel(v: ValorDaVendaBoitel): { valor: number | null; explicacao: string; aviso: string | null } {
   return {
