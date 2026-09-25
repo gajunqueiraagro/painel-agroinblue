@@ -674,6 +674,11 @@ no mesmo arquivo.
   fonte), o realizado que ZERA as despesas da RRCC, o seletor de lado ainda valendo, o aviso do
   compromisso `pendente` e a recusa da principal no "+ Novo compromisso". O item 2 do A4 (cancelar o
   item zerado) nao tem teste porque nao foi implementado — ver o bloco A4.
+  De 1876 para 1883 no A4b: entrou `src/components/compra/previsaoItemZerado.test.tsx` (+7), com a RRCC
+  da0b8577 (frete 6.000 -> 0, compromisso 1e33fb64): o caso normal sem pergunta, o zerado aberto que
+  pede confirmacao e cancela com o motivo fixo e a versao encadeada, o zerado programado que vai para
+  as bloqueadas sem pergunta, o zerado sem compromisso, e a confirmacao listando componente e valor
+  do cancelado e do gerado — sem campo de motivo — com "Voltar" que nao confirma.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -1038,13 +1043,22 @@ migration e' REGISTRO HISTORICO, nao se reaplica).
     na aba Financeiro." Sem regra automatica; o `DialogoAtualizarCompromisso` segue sendo o caminho.
   ⚠ O "+ NOVO COMPROMISSO" MANUAL RECUSA A PRINCIPAL na divergencia do A3, com a mesma frase
     (`recusaDaPrincipalManual`). Obrigacoes manuais nao mudam.
-  ⚠ PARADO — ITEM ZERADO PELO REALIZADO. A decisao e' cancelar, pelo "Gerar previsao", o compromisso
-    aberto e sem programacao do item que o realizado zera (motivo fixo "item zerado pelo realizado"),
-    e por o programado na lista de bloqueadas. O briefing pedia mostrar "no dialogo de previsao, antes
-    de confirmar, o que sera cancelado" — e ESSE DIALOGO NAO EXISTE: o botao executa direto, por
-    decisao registrada no codigo ("ZERO PERGUNTA — PR-OC-VENDA-FIN-PREVISAO-01", `AbaCompromissosOC`).
-    Pela regra de ancora, nao foi inventado. Ate' decidir a forma da previa, o zero continua sem
-    linha, e o compromisso antigo do item fica como esta' (RRCC da0b8577: 6.000 aberto contra zero).
+  ⚠ A4b — O ITEM QUE O REALIZADO ZERA CANCELA O COMPROMISSO DELE, DEPOIS DE CONFIRMAR (decisao do
+    Gabriel). Com o realizado aplicado, adiantamento, adiantamento devolvido e despesas fora do boitel
+    que vieram zero viram linha marcada (`LinhaPrevisao.zerada`). O "Gerar previsao" PLANEJA antes de
+    gravar (`planejarPrevisao`, pura): zerado com compromisso aberto e sem programacao -> cancelar;
+    zerado com programado -> bloqueadas, com "(zerada pelo realizado)"; zerado sem compromisso ->
+    nada. So' quando o plano cancela abre a `ConfirmacaoPrevisao` — o `AlertDialog` da casa, o mesmo das
+    confirmacoes de lote do Financeiro V2 — listando o que sera cancelado e o que sera gerado, com
+    "Confirmar" e "Voltar". Sem campo de motivo: o gravado e' fixo, "item zerado pelo realizado", pelo
+    mesmo `cancelarCompromisso` do substituir (trilha no banco). O caso normal segue SEM PERGUNTA.
+    ⚠ ERA A DIVERGENCIA DE ANCORA DO A4: o briefing pedia "o dialogo de previsao", que nao existia
+      (ZERO PERGUNTA, PR-OC-VENDA-FIN-PREVISAO-01). A saida foi a do Gabriel — confirmacao so' nesse
+      caso — e o comentario ZERO PERGUNTA registra a excecao.
+    ⚠ `previsaoDe` IGNORA A LINHA ZERADA: ela nao e' previsao de nada, e nao pode pintar a pilula nem
+      semear o vencimento do "Lancar realizado".
+    ⚠ SO' DAQUI PARA FRENTE: a RRCC da0b8577 (1e33fb64, 6.000 aberto) e' exatamente o caso, mas as OCs
+      antigas estao fora do A4 — o cancelamento acontece quando alguem gerar a previsao dela.
 - OC-BOITEL-DELTA-ANTIGO-01 — duas OCs de boitel com realizado cujo lote NAO esta' no saldo do
   acerto, as duas com compromisso ja' gerado (medido 25/09/2026). DECISAO DO GABRIEL, nao tratada:
     OC                lote/acordado   saldo do acerto   delta        compromisso vivo

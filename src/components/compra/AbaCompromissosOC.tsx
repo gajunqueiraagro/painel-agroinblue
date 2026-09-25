@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -230,6 +231,15 @@ export interface LinhaPrevisao {
    * (adiantamento, despesas fora do boitel).
    */
   loteId?: string | null;
+  /**
+   * O REALIZADO ZEROU ESTE ITEM — OC-BOITEL-VALOR-01 A4b.
+   *
+   * ⚠ NAO E' LINHA A CRIAR: e' o aviso de que o item que a projecao previa (adiantamento, despesas
+   * fora do boitel) deixou de existir. Com `valor: 0` e esta marca, o "Gerar previsao" CANCELA o
+   * compromisso aberto e sem programacao desse item, depois de confirmar; programado vai para as
+   * bloqueadas. Caso real: RRCC da0b8577, frete 6.000 na projecao e zero no realizado.
+   */
+  zerada?: boolean;
 }
 
 /**
@@ -242,6 +252,150 @@ export interface LinhaPrevisao {
  */
 export function recusaDaPrincipalManual(natureza: string, bloqueioPrevisao: string | null | undefined): string | null {
   return natureza === 'principal' && bloqueioPrevisao ? bloqueioPrevisao : null;
+}
+
+/* ═══ O PLANO DA PREVISAO — OC-BOITEL-VALOR-01 A4b ════════════════════════════════
+   O "Gerar previsao" decide ANTES de gravar o que vai fazer com cada linha, e so' entao grava.
+   Separar as duas coisas e' o que permite a confirmacao do cancelamento: a pergunta so' existe
+   se o plano tiver o que perguntar. As regras de cada linha sao as de sempre (substituir o que
+   ainda e' previsao pura, bloquear o programado, manter o igual) mais a do item ZERADO. */
+export const MOTIVO_ITEM_ZERADO = 'item zerado pelo realizado';
+
+type CompromissoParaPlano = Pick<CompromissoResumo,
+  'natureza' | 'componente' | 'status' | 'compromissoId' | 'temProgramacaoAtiva' | 'valorCompromisso'>;
+
+export type AcaoPrevisao =
+  | { tipo: 'criar'; linha: LinhaPrevisao }
+  | { tipo: 'substituir'; linha: LinhaPrevisao; compromissoId: string; valorAnterior: number }
+  | { tipo: 'manter'; linha: LinhaPrevisao }
+  | { tipo: 'bloquear'; linha: LinhaPrevisao; rotulo: string }
+  | { tipo: 'cancelar_zerado'; linha: LinhaPrevisao; compromissoId: string; valorAnterior: number }
+  | { tipo: 'ignorar'; linha: LinhaPrevisao };
+
+/** O que fazer com cada linha — PURA: nao grava, nao pergunta. */
+export function planejarPrevisao(
+  linhas: readonly LinhaPrevisao[], compromissos: readonly CompromissoParaPlano[],
+): AcaoPrevisao[] {
+  return linhas.map((linha): AcaoPrevisao => {
+    const existente = compromissos.find(
+      c => c.natureza === linha.natureza && c.componente === linha.componente && c.status !== 'cancelado',
+    );
+    /* ⚠ PREVISAO PURA = aberto E sem programacao ativa, a mesma regra do substituir: programado
+       ou lancado nunca e' tocado por este botao. */
+    const previsaoPura = !!existente?.compromissoId && existente.status === 'aberto' && !existente.temProgramacaoAtiva;
+    if (linha.zerada) {
+      if (!existente) return { tipo: 'ignorar', linha };
+      if (!previsaoPura || !existente.compromissoId) {
+        return { tipo: 'bloquear', linha, rotulo: `${linha.rotulo} (zerada pelo realizado)` };
+      }
+      return { tipo: 'cancelar_zerado', linha, compromissoId: existente.compromissoId, valorAnterior: existente.valorCompromisso };
+    }
+    if (!existente) return { tipo: 'criar', linha };
+    if (!previsaoPura || !existente.compromissoId) return { tipo: 'bloquear', linha, rotulo: linha.rotulo };
+    if (Math.abs(existente.valorCompromisso - linha.valor) <= TOL_CENTAVO) return { tipo: 'manter', linha };
+    return { tipo: 'substituir', linha, compromissoId: existente.compromissoId, valorAnterior: existente.valorCompromisso };
+  });
+}
+
+/** A pergunta so' existe quando o plano CANCELA compromisso de item zerado. */
+export const planoPedeConfirmacao = (acoes: readonly AcaoPrevisao[]) => acoes.some(a => a.tipo === 'cancelar_zerado');
+
+export interface ContagemPrevisao { criadas: number; substituidas: number; mantidas: number; canceladas: number; bloqueadas: string[] }
+
+/**
+ * GRAVA O PLANO — com a versao encadeada pelo retorno de cada escrita.
+ *
+ * ⚠ A CONTAGEM E' MUTADA DURANTE A EXECUCAO, e nao devolvida no fim: se uma escrita falha no meio,
+ * quem chamou precisa saber quantas ja' entraram (cada RPC e' sua propria transacao).
+ * ⚠ O CANCELAMENTO DO ZERADO USA O MESMO CAMINHO DO SUBSTITUIR (`cancelarCompromisso`, com trilha
+ * no banco), com o motivo FIXO — o operador ja' confirmou o que ia ser cancelado.
+ */
+export async function executarPlanoPrevisao(
+  acoes: readonly AcaoPrevisao[], versaoInicial: number,
+  deps: {
+    criar: (v: number, payload: CriarCompromissoPayload) => Promise<number>;
+    cancelar: (v: number, compromissoId: string, motivo: string) => Promise<number>;
+  },
+  contagem: ContagemPrevisao,
+): Promise<number> {
+  let v = versaoInicial;
+  const payload = (l: LinhaPrevisao): CriarCompromissoPayload => ({
+    natureza: l.natureza, componente: l.componente, valor_total: l.valor, subcentro: l.subcentro,
+    favorecido_id: l.favorecidoId, lote_id: l.loteId ?? null, descricao: l.descricao,
+  });
+  for (const a of acoes) {
+    if (a.tipo === 'bloquear') { contagem.bloqueadas.push(a.rotulo); continue; }
+    if (a.tipo === 'manter') { contagem.mantidas++; continue; }
+    if (a.tipo === 'ignorar') continue;
+    if (a.tipo === 'cancelar_zerado') {
+      v = await deps.cancelar(v, a.compromissoId, MOTIVO_ITEM_ZERADO);
+      contagem.canceladas++;
+      continue;
+    }
+    if (a.tipo === 'substituir') {
+      v = await deps.cancelar(v, a.compromissoId, 'substituído por nova geração da previsão');
+      v = await deps.criar(v, payload(a.linha));
+      contagem.substituidas++;
+      continue;
+    }
+    v = await deps.criar(v, payload(a.linha));
+    contagem.criadas++;
+  }
+  return v;
+}
+
+const brlPrevisao = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+/**
+ * A CONFIRMACAO DO CANCELAMENTO — so' quando o plano cancela item zerado (A4b, decisao do Gabriel).
+ *
+ * ⚠ E' O `AlertDialog` DA CASA (`@/components/ui/alert-dialog`), o mesmo das confirmacoes de lote
+ * do Financeiro V2 — nada desenhado do zero. SEM campo de motivo: o gravado e' fixo
+ * (`MOTIVO_ITEM_ZERADO`), e perguntar seria mais uma pergunta de motivo no mesmo gesto
+ * (OC-MOTIVO-UNICO-01).
+ * ⚠ "VOLTAR" NAO GRAVA NADA: fecha e deixa a lista como estava.
+ */
+export function ConfirmacaoPrevisao({ acoes, gravando, onConfirmar, onVoltar }: {
+  acoes: readonly AcaoPrevisao[]; gravando: boolean; onConfirmar: () => void; onVoltar: () => void;
+}) {
+  const cancelar = acoes.filter((a): a is Extract<AcaoPrevisao, { tipo: 'cancelar_zerado' }> => a.tipo === 'cancelar_zerado');
+  const gerar = acoes.filter(a => a.tipo === 'criar' || a.tipo === 'substituir');
+  return (
+    <AlertDialog open onOpenChange={o => { if (!o && !gravando) onVoltar(); }}>
+      <AlertDialogContent className="max-w-md">
+        <AlertDialogHeader>
+          <AlertDialogTitle className="text-[14px]">Cancelar itens zerados pelo realizado?</AlertDialogTitle>
+          <AlertDialogDescription className="text-[11px]">
+            O realizado do boitel zerou estes itens. Os compromissos deles ainda são previsão e serão cancelados.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <div className="space-y-2 text-[11px]">
+          <div>
+            <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Será cancelado</div>
+            {cancelar.map(a => (
+              <div key={a.compromissoId} className="flex justify-between gap-2" data-acao="cancelar">
+                <span>{a.linha.rotulo}</span><span className="tabular-nums">{brlPrevisao(a.valorAnterior)}</span>
+              </div>
+            ))}
+          </div>
+          {gerar.length > 0 && (
+            <div>
+              <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Será gerado</div>
+              {gerar.map(a => (
+                <div key={`${a.linha.natureza}:${a.linha.componente}`} className="flex justify-between gap-2" data-acao="gerar">
+                  <span>{a.linha.rotulo}</span><span className="tabular-nums">{brlPrevisao(a.linha.valor)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={gravando} onClick={onVoltar}>Voltar</AlertDialogCancel>
+          <AlertDialogAction disabled={gravando} onClick={e => { e.preventDefault(); onConfirmar(); }}>Confirmar</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
 }
 
 /* Vocabulario por tipo de operacao. ADITIVO: sem a prop, os defaults sao o texto de hoje
@@ -295,6 +449,8 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
      N escritas encadeadas por versao, e uma segunda entrada no meio quebraria a cadeia
      com 40001. */
   const [gerando, setGerando] = useState(false);
+  /** O plano que espera confirmacao — so' existe quando ele cancela item zerado (A4b). */
+  const [planoAConfirmar, setPlanoAConfirmar] = useState<AcaoPrevisao[] | null>(null);
   /* O compromisso cujo REALIZADO esta sendo lancado. `null` = dialogo fechado. */
   const [realizarAlvo, setRealizarAlvo] = useState<CompromissoResumo | null>(null);
   /* Aviso da GERACAO — irmao do `avisoBaseCoberta`, mas de outra superficie: aquele vive
@@ -723,7 +879,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
      (natureza, componente) — ver a nota em `LinhaPrevisao`. Sem `linhasPrevisao` isto
      devolve null para tudo, e a compra segue exatamente como era. */
   const previsaoDe = (c: CompromissoResumo): LinhaPrevisao | null =>
-    linhasPrevisao?.find(l => l.natureza === c.natureza && l.componente === c.componente) ?? null;
+    linhasPrevisao?.find(l => !l.zerada && l.natureza === c.natureza && l.componente === c.componente) ?? null;
 
   /* ⚠ A PILULA APAGA QUANDO O DINHEIRO ACONTECE, e o marco e' o TITULO — nao a
      programacao. Programar e' so' dizer quando se espera; enquanto nao ha titulo, o
@@ -934,47 +1090,35 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
      quantas linhas passaram, para o operador ver onde parou e mandar de novo. */
   async function gerarPrevisao() {
     if (versao == null || !linhasPrevisao?.length || gerando || bloqueioPrevisao) return;
+    /* ⚠ PLANEJA ANTES DE GRAVAR — A4b. Se o plano cancela item zerado, pergunta primeiro; senao
+       segue como sempre, sem pergunta nenhuma. */
+    const acoes = planejarPrevisao(linhasPrevisao, compromissos);
+    if (planoPedeConfirmacao(acoes)) { setPlanoAConfirmar(acoes); return; }
+    await executarPrevisao(acoes);
+  }
+
+  async function executarPrevisao(acoes: AcaoPrevisao[]) {
+    if (versao == null) return;
     setGerando(true);
     setAvisoPrevisao('');
-    let v = versao;
-    let criadas = 0, substituidas = 0, mantidas = 0;
-    const bloqueadas: string[] = [];
+    const contagem: ContagemPrevisao = { criadas: 0, substituidas: 0, mantidas: 0, canceladas: 0, bloqueadas: [] };
     try {
       /* O mesmo cuidado do "Novo compromisso": esperar o refresh da OC antes de compor,
          para nao gerar sobre um retrato velho dos compromissos. */
       try { await recarregarDados?.(); } catch { /* segue com o que ha em maos */ }
-      for (const linha of linhasPrevisao) {
-        const existente = compromissos.find(
-          c => c.natureza === linha.natureza && c.componente === linha.componente && c.status !== 'cancelado',
-        );
-        if (existente) {
-          if (!existente.compromissoId || existente.status !== 'aberto' || existente.temProgramacaoAtiva) {
-            bloqueadas.push(linha.rotulo);
-            continue;
-          }
-          if (Math.abs(existente.valorCompromisso - linha.valor) <= TOL_CENTAVO) { mantidas++; continue; }
-          v = await estorno.cancelarCompromisso(v, existente.compromissoId, 'substituído por nova geração da previsão');
-          substituidas++;
-        }
-        const r = await ocApi.criarCompromisso(v, {
-          natureza: linha.natureza,
-          componente: linha.componente,
-          valor_total: linha.valor,
-          subcentro: linha.subcentro,
-          favorecido_id: linha.favorecidoId,
-          lote_id: linha.loteId ?? null,
-          descricao: linha.descricao,
-        });
-        v = r.operacaoVersao;
-        if (!existente) criadas++;
-      }
+      await executarPlanoPrevisao(acoes, versao, {
+        criar: async (v, payload) => (await ocApi.criarCompromisso(v, payload)).operacaoVersao,
+        cancelar: (v, id, motivo) => estorno.cancelarCompromisso(v, id, motivo),
+      }, contagem);
       await ocApi.recarregar();
       /* ⚠ UM RESUMO DO QUE ACONTECEU, e nao so' "pronto". Com quatro linhas em regras
          diferentes, o operador precisa saber quais foram trocadas e quais o sistema se
          recusou a tocar — senao ele conclui que a regeracao nao funcionou. */
+      const { criadas, substituidas, mantidas, canceladas, bloqueadas } = contagem;
       const partes: string[] = [];
       if (criadas) partes.push(`${criadas} criada${criadas > 1 ? 's' : ''}`);
       if (substituidas) partes.push(`${substituidas} substituída${substituidas > 1 ? 's' : ''}`);
+      if (canceladas) partes.push(`${canceladas} cancelada${canceladas > 1 ? 's' : ''} (zerada${canceladas > 1 ? 's' : ''} pelo realizado)`);
       if (mantidas) partes.push(`${mantidas} sem alteração`);
       toast.success(partes.length ? `Previsão gerada: ${partes.join(', ')}.` : 'Previsão já estava em dia.');
       if (bloqueadas.length > 0) {
@@ -985,7 +1129,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      const feito = criadas + substituidas;
+      const feito = contagem.criadas + contagem.substituidas + contagem.canceladas;
       if (/excede a base da opera/i.test(msg)) {
         setAvisoPrevisao(
           'O banco recusou uma das linhas: a soma dos compromissos PRINCIPAIS não pode passar da base da '
@@ -1134,7 +1278,11 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
                   a diferenca que nao existe. */}
               {/* ⚠ ZERO PERGUNTA — PR-OC-VENDA-FIN-PREVISAO-01. Nao abre dialogo: cria as
                   linhas prontas do motor. So aparece com previsao (venda com planejamento
-                  boitel completo). */}
+                  boitel completo).
+                  ⚠ UMA EXCECAO, E SO' UMA — OC-BOITEL-VALOR-01 A4b: quando o plano CANCELA o
+                  compromisso de um item que o realizado zerou (aberto, sem programacao), abre a
+                  `ConfirmacaoPrevisao` antes de gravar, listando o que sera cancelado e o que sera
+                  gerado. Sem campo de motivo (o gravado e' fixo). O caso normal segue sem pergunta. */}
               {/* ⚠ COM BLOQUEIO O BOTAO APARECE MESMO SEM LINHAS — medido na 8b211cae: sem adiantamento
                   e sem despesa fora do boitel, a principal recusada deixava a lista VAZIA e o botao
                   sumia. Sumir e' recusar calado; aqui ele fica, desabilitado, com a razao ao lado. */}
@@ -1681,6 +1829,15 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
           cancelar o anterior no mesmo gesto" e a caixa NUNCA foi renderizada —
           `setSubstituirAnterior` nao tinha um so' chamador em f1e0389f. O texto apontava
           para um controle inexistente. */}
+      {planoAConfirmar && (
+        <ConfirmacaoPrevisao acoes={planoAConfirmar} gravando={gerando}
+          onVoltar={() => setPlanoAConfirmar(null)}
+          onConfirmar={async () => {
+            const acoes = planoAConfirmar;
+            await executarPrevisao(acoes);
+            setPlanoAConfirmar(null);
+          }} />
+      )}
       {gerarAberto && (
         <DialogoGerarCompromissos
           tipoOperacao={tipoOperacao ?? 'compra'}

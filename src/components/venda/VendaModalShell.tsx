@@ -387,6 +387,23 @@ export function VendaModalShell({
       favorecidoId: compradorId || null,
       vencimentoPrevisto: dataAbate,
     });
+    /* ⚠ O ITEM QUE O REALIZADO ZERA VIRA LINHA MARCADA — OC-BOITEL-VALOR-01 A4b. So' com o
+       realizado aplicado: sem ele, zero e' so' "a projecao nao previa", e nao ha o que desfazer.
+       A linha nao cria nada; ela diz ao "Gerar previsao" que o compromisso desse item, se ainda for
+       previsao pura, deve ser cancelado — depois de o operador confirmar. */
+    if (custos?.fonte === 'realizado') {
+      const zerada = (componente: string, subcentro: string, rotulo: string, descricao: string): LinhaPrevisao => ({
+        natureza: 'obrigacao', componente, subcentro, valor: 0, rotulo, descricao,
+        favorecidoId: compradorId || null, vencimentoPrevisto: null, zerada: true,
+      });
+      if (!(antecipado > 0)) {
+        linhas.push(zerada('adiantamento', SUBCENTRO_ADIANTAMENTO_BOITEL, 'Adiantamento ao boitel', `${rot} - Adiantamento`));
+        linhas.push(zerada('adiantamento_devolvido', subEntrada, 'Recebimento ref. adiantamento', `${rot} - Adiantamento devolvido`));
+      }
+      if (!(foraDoBoitel > 0)) {
+        linhas.push(zerada('frete', SUBCENTRO_DESPESA_VENDA, 'Despesas fora do boitel', `${rot} - Despesas fora do boitel`));
+      }
+    }
     return linhas.length > 0 ? linhas : undefined;
   }, [ehBoitel, boitelData, boitelReal, compradorId, data, lotesApi?.lotes, vendaBoitel?.valor, vendaBoitel?.divergente]);
 
