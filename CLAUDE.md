@@ -679,6 +679,13 @@ no mesmo arquivo.
   pede confirmacao e cancela com o motivo fixo e a versao encadeada, o zerado programado que vai para
   as bloqueadas sem pergunta, o zerado sem compromisso, e a confirmacao listando componente e valor
   do cancelado e do gerado — sem campo de motivo — com "Voltar" que nao confirma.
+  De 1883 para 1890 no OC-MOTIVO-UNICO-01: entrou `src/lib/oc/desfazerCompromisso.test.ts` (+7), com a
+  trilha real do 0fdec0eb como molde (parcela ba90d4c8, programacao d7182dd1, 848.713,32, versao 14):
+  a cadeia completa com UM motivo e UM `estorno_id` nas tres chamadas e a versao pelo retorno; so'
+  programado pula o estorno; so' aberto vai direto ao cancelamento; a retomada depois de falha no meio
+  pula o nivel ja' desfeito com o mesmo id; a recusa E3 para e diz feito e falta; "ja' desfeito" do
+  banco e' idempotencia; motivo vazio nao executa nada. O banco falso tem as mesmas guardas de ordem, e
+  o teste falha se a cadeia pular um nivel.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -1090,15 +1097,39 @@ migration e' REGISTRO HISTORICO, nao se reaplica).
   ⚠ PERGUNTA ABERTA: as "despesas fora do boitel" da Vera (6a7393ae, 8cd035f6) batem com o FRETE
     sozinho do realizado, sem as notas do envio (1.952,33 e 3.923,84). Nao se sabe se as notas foram
     lancadas por outro caminho ou se faltam. Medir antes de mexer.
-- OC-MOTIVO-UNICO-01 — desfazer um compromisso pede motivo em cada passo — estornar, cancelar o
-  lancamento, cancelar a programacao. DECISAO DO GABRIEL: um motivo por gesto, propagado a cada
-  registro de auditoria. Nao tratada.
-  ⚠ E HA' UM SEGUNDO CASO, achado na FASE 0 do A4: reabrir a operacao e depois "Atualizar
-    compromisso" (`DialogoAtualizarCompromisso`, que pede motivo) sao duas perguntas no mesmo gesto
-    quando o reabrir pede o seu. Hoje o reabrir do realizado usa motivo FIXO
-    ("reaberta para lancar o realizado do abate") e o revalorar tambem ("realizado do abate"); o
-    "Lancar realizado" do compromisso monta o motivo sozinho ("ajustado ao realizado…"). Quem tratar a
-    frente mede todos os caminhos que pedem motivo antes de escolher onde ele nasce.
+- ⚠ OC-MOTIVO-UNICO-01 — UM GESTO DE DESFAZER = UM MOTIVO + UM `estorno_id` EM TODOS OS EVENTOS
+  (regra permanente, 25/09/2026; a pendencia do A4 esta' BAIXADA). O "Cancelar compromisso" do menu
+  da linha virou "Desfazer compromisso" (`AbaCompromissosOC`): o mesmo dialogo de duas etapas lista o
+  rol inteiro (titulos a estornar com valor e vencimento, a programacao, o compromisso) e pede o motivo
+  UMA vez. A cadeia (`src/lib/oc/desfazerCompromisso.ts`) chama as tres RPCs que ja' existiam, na ordem
+  FOLHA -> RAIZ que as guardas impoem — `oc_estornar_materializacao` (cada parcela materializada),
+  `oc_cancelar_programacao`, `oc_cancelar_compromisso` — com o MESMO motivo e o MESMO `p_estorno_id`
+  gerado no front (as tres ja' o aceitavam; ninguem mandava). Versao pelo retorno de cada escrita.
+  ⚠ NASCE DE TRES "erro" DIGITADOS EM 13 SEGUNDOS: o 0fdec0eb da 8b211cae (25/09, 12:47:20, :25 e :33)
+    teve tres dialogos, seis confirmacoes e tres `estorno_id` diferentes — a trilha nem dizia que eram um
+    gesto so'. A causa era `abrirEstorno` zerar o motivo a cada abertura.
+  ⚠ NAO E' TRANSACAO, e por isso RELE O BANCO ANTES DE CADA NIVEL (`lerEstadoDoDesfazer`, direto das
+    tabelas): o que ja' esta' desfeito e' pulado e o mesmo botao retoma uma cadeia interrompida, com o
+    MESMO `estorno_id` (ele nasce na abertura do dialogo). "Ja' desfeito" do banco e' idempotencia, nao
+    erro.
+  ⚠ RECUSA DO BANCO PARA A CADEIA (E3: titulo realizado, conciliado, liquidacao ativa): o dialogo mostra
+    a mensagem da RPC, o que ja' foi e o que falta. Nada e' contornado; nenhuma guarda mudou.
+  ⚠ QUEM INICIA O GESTO CONTINUA OBRIGADO A DAR O MOTIVO (front e RPC). So' a repeticao sumiu. Motivo
+    vazio nao executa nada, nem a leitura.
+  ⚠ OS GESTOS AVULSOS FICAM COMO ESTAVAM — "Estornar lancamento" e "Cancelar programacao", cada um com
+    o seu motivo e sem `p_estorno_id` (decisao do briefing: so' o gesto em cadeia manda o id).
+  ⚠ EVOLUCAO REGISTRADA, NAO FEITA: `oc_desfazer_compromisso` em transacao unica, se um dia a
+    atomicidade for necessaria. Com o `estorno_id` compartilhado a auditoria fica igual nos dois
+    desenhos — a troca pode vir sem mudar a trilha.
+- FIN-V2-CANCEL-MOTIVO-01 — pendencia, nao tratada (25/09/2026, FASE 0 do OC-MOTIVO-UNICO-01).
+  (1) O cancelamento de lancamento pelo Financeiro V2 (`excluirLancamento`, `useFinanceiroV2`) aceita
+  motivo VAZIO no hook: a obrigatoriedade e' so' do front (`LancamentoV2Dialog`, botao desabilitado sem
+  texto), e o hook grava `cancelado_motivo` apenas se vier. Outro chamador do hook cancela sem motivo.
+  (2) Reabrir a operacao e depois "Atualizar compromisso" (`DialogoAtualizarCompromisso`) sao duas
+  perguntas de motivo no mesmo gesto quando o reabrir pede o seu. Hoje o reabrir do realizado usa motivo
+  FIXO ("reaberta para lancar o realizado do abate"), o revalorar tambem ("realizado do abate"), e o
+  "Lancar realizado" monta o seu ("ajustado ao realizado…"). Quem tratar mede todos os caminhos que
+  pedem motivo antes de escolher onde ele nasce.
 - OC-COMPRA-REVALOR-01 — ⚠ O DEFEITO BRIEFADO NAO EXISTIA, e o registro e' sobre o metodo.
   Sintoma (NJ, compra f56c50d3, 24/09/2026): o Gabriel corrigiu o valor do lote para
   896.644,48, o financeiro e o documento seguiram com 892.645, e a Negociacao recusava com

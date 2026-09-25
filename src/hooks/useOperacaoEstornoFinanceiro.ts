@@ -2,6 +2,14 @@ import { useCallback, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { OcCompromissoError, normalizarErroRpc } from './useOcCompromissos';
+import { REGEX_JA_DESFEITO } from '@/lib/oc/desfazerCompromisso';
+
+/**
+ * OPCOES DA CADEIA "DESFAZER COMPROMISSO" — OC-MOTIVO-UNICO-01. Os gestos avulsos nao passam nada e
+ * ficam identicos. `estornoId` vai como `p_estorno_id` (as RPCs ja' o aceitavam) e amarra os eventos
+ * de um mesmo gesto; `silencioso` cala o toast de sucesso de cada passo — quem fala e' a cadeia, uma vez.
+ */
+export interface OpcoesEstorno { estornoId?: string; silencioso?: boolean }
 
 /* ESTORNO FINANCEIRO DA OC — os tres writers que desfazem o modelo novo, um por
    nivel. O backend ja os tinha inteiros; nenhum estava ligado a interface, e por
@@ -36,11 +44,11 @@ import { OcCompromissoError, normalizarErroRpc } from './useOcCompromissos';
 export interface EstornoFinanceiroApi {
   saving: boolean;
   /** Parcela materializada -> prevista. Devolve a versao nova da operacao. */
-  estornarMaterializacao: (versaoEsperada: number, programacaoId: string, parcelaId: string, motivo: string) => Promise<number>;
+  estornarMaterializacao: (versaoEsperada: number, programacaoId: string, parcelaId: string, motivo: string, opts?: OpcoesEstorno) => Promise<number>;
   /** Programacao ativa -> cancelada; compromisso volta a aberto. */
-  cancelarProgramacao: (versaoEsperada: number, programacaoId: string, motivo: string) => Promise<number>;
+  cancelarProgramacao: (versaoEsperada: number, programacaoId: string, motivo: string, opts?: OpcoesEstorno) => Promise<number>;
   /** Compromisso sem efeitos -> cancelado. */
-  cancelarCompromisso: (versaoEsperada: number, compromissoId: string, motivo: string) => Promise<number>;
+  cancelarCompromisso: (versaoEsperada: number, compromissoId: string, motivo: string, opts?: OpcoesEstorno) => Promise<number>;
 }
 
 interface Params {
@@ -58,7 +66,7 @@ export function useOperacaoEstornoFinanceiro({ operacaoId, clienteId, onSucesso 
      argumentos proprios. Repetir o try/catch tres vezes faria as mensagens
      divergirem no primeiro ajuste. */
   const executar = useCallback(async (
-    fn: string, args: Record<string, unknown>, motivo: string, sucesso: string,
+    fn: string, args: Record<string, unknown>, motivo: string, sucesso: string, opts?: OpcoesEstorno,
   ): Promise<number> => {
     if (!operacaoId || !clienteId) {
       const e = new OcCompromissoError('operacao_inexistente', 'Operação não iniciada.');
@@ -74,13 +82,14 @@ export function useOperacaoEstornoFinanceiro({ operacaoId, clienteId, onSucesso 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: RPC fora de types.ts
       const { data, error } = await (supabase as any).rpc(fn, {
         p_operacao_id: operacaoId, p_cliente_id: clienteId, ...args, p_motivo: m,
+        ...(opts?.estornoId ? { p_estorno_id: opts.estornoId } : {}),
       });
       if (error) throw normalizarErroRpc(error);
       const nova = Number(data?.operacao_versao);
       if (!Number.isFinite(nova)) {
         throw new OcCompromissoError('erro_desconhecido', 'A operação foi estornada, mas a nova versão não voltou. Recarregue antes de continuar.');
       }
-      toast.success(sucesso);
+      if (!opts?.silencioso) toast.success(sucesso);
       await onSucesso();
       return nova;
     } catch (e) {
@@ -97,7 +106,7 @@ export function useOperacaoEstornoFinanceiro({ operacaoId, clienteId, onSucesso 
            'Compromisso ja cancelado'
          Nao confundir com 'Operacao cancelada; recupere-a antes', que nao tem
          'ja' e continua sendo erro de verdade. */
-      if (/j[áa] (est[áa] estornad|cancelad)/i.test(norm.message)) {
+      if (REGEX_JA_DESFEITO.test(norm.message)) {
         toast.warning(norm.message);
         await onSucesso();
       } else {
@@ -109,24 +118,24 @@ export function useOperacaoEstornoFinanceiro({ operacaoId, clienteId, onSucesso 
   }, [operacaoId, clienteId, onSucesso]);
 
   const estornarMaterializacao = useCallback(
-    (versaoEsperada: number, programacaoId: string, parcelaId: string, motivo: string) =>
+    (versaoEsperada: number, programacaoId: string, parcelaId: string, motivo: string, opts?: OpcoesEstorno) =>
       executar('oc_estornar_materializacao',
         { p_versao_esperada: versaoEsperada, p_programacao_id: programacaoId, p_parcela_id: parcelaId },
-        motivo, 'Materialização estornada: a parcela voltou a prevista.'),
+        motivo, 'Materialização estornada: a parcela voltou a prevista.', opts),
     [executar]);
 
   const cancelarProgramacao = useCallback(
-    (versaoEsperada: number, programacaoId: string, motivo: string) =>
+    (versaoEsperada: number, programacaoId: string, motivo: string, opts?: OpcoesEstorno) =>
       executar('oc_cancelar_programacao',
         { p_versao_esperada: versaoEsperada, p_programacao_id: programacaoId },
-        motivo, 'Programação cancelada: o compromisso voltou a aberto.'),
+        motivo, 'Programação cancelada: o compromisso voltou a aberto.', opts),
     [executar]);
 
   const cancelarCompromisso = useCallback(
-    (versaoEsperada: number, compromissoId: string, motivo: string) =>
+    (versaoEsperada: number, compromissoId: string, motivo: string, opts?: OpcoesEstorno) =>
       executar('oc_cancelar_compromisso',
         { p_versao_esperada: versaoEsperada, p_compromisso_id: compromissoId },
-        motivo, 'Compromisso cancelado.'),
+        motivo, 'Compromisso cancelado.', opts),
     [executar]);
 
   return useMemo(() => ({ saving, estornarMaterializacao, cancelarProgramacao, cancelarCompromisso }),

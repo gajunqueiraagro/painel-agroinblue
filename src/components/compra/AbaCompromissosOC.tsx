@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { executarDesfazerCompromisso, lerEstadoDoDesfazer, rolDoEstado, ErroDesfazer, type TituloADesfazer } from '@/lib/oc/desfazerCompromisso';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { SearchableSelect } from '@/components/ui/searchable-select';
@@ -590,12 +591,18 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
     onSucesso: ocApi.recarregar,
   });
   /* Qual estorno esta em confirmacao, e em que etapa. `null` fechado. */
+  /* ⚠ `desfazer` E' O GESTO EM CADEIA — OC-MOTIVO-UNICO-01: `rol` e' o que a etapa 1 lista, e
+     `estornoId` nasce na ABERTURA e vale ate' fechar, para uma retomada depois de recusa continuar o
+     MESMO gesto na auditoria. */
   const [estAlvo, setEstAlvo] = useState<null | {
-    nivel: 'materializacao' | 'programacao' | 'compromisso';
+    nivel: 'materializacao' | 'programacao' | 'compromisso' | 'desfazer';
     programacaoId?: string; parcelaId?: string; compromissoId?: string; descricao: string;
+    rol?: string[]; estornoId?: string;
   }>(null);
   const [estEtapa, setEstEtapa] = useState<1 | 2>(1);
   const [estMotivo, setEstMotivo] = useState('');
+  /** O que a cadeia fez e o que falta, quando o banco a recusou no meio. */
+  const [estResultado, setEstResultado] = useState<{ erro: string; feito: string[]; falta: string[] } | null>(null);
   /* ⚠ ESTADO PROPRIO, NAO `estorno.saving`. As guardas de Esc/clique-fora e o
      botao Voltar leem esta flag; se ela ficar presa em true o dialogo modal
      recusa QUALQUER fechamento e a pagina inteira fica inerte sob o overlay —
@@ -637,16 +644,28 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
      o mesmo predicado do guard. Por LINHA, para a acao viver na propria linha
      da tabela — com tres compromissos, uma acao no bloco de detalhe nao diz
      sobre qual deles ela age. */
-  const gateCancelarCompromisso = (c: CompromissoResumo): Gate => {
+  /**
+   * O QUE "DESFAZER COMPROMISSO" VAI FAZER — OC-MOTIVO-UNICO-01. Era `gateCancelarCompromisso`, que
+   * RECUSAVA com programacao ou titulo ("cancele a programacao antes"), e o operador fazia tres gestos
+   * com tres motivos. Agora o gate diz O QUE sera desfeito, na ordem que o banco exige, e o gesto faz.
+   * ⚠ O ROL SAI DOS DADOS DA TELA; a execucao rele o banco antes de cada nivel.
+   */
+  const titulosDoCompromisso = (c: CompromissoResumo): TituloADesfazer[] => parcelas
+    .filter(p => p.compromissoId === c.compromissoId && parcelaComEfeito(p) && !!p.programacaoId && !!p.parcelaId)
+    .map(p => ({ programacaoId: p.programacaoId ?? '', parcelaId: p.parcelaId ?? '', sequencia: p.sequencia, valor: p.valor, vencimento: p.vencimento }));
+  const rolDoDesfazer = (c: CompromissoResumo): string[] => rolDoEstado({
+    titulos: titulosDoCompromisso(c),
+    programacaoAtivaId: c.temProgramacaoAtiva ? (c.programacaoAtivaId ?? 'ativa') : null,
+    compromissoCancelado: c.status === 'cancelado',
+  });
+  const gateDesfazerCompromisso = (c: CompromissoResumo): Gate => {
     if (!podeEscrever || c.status === 'cancelado') return { pode: false, motivo: '' };
-    if (c.temProgramacaoAtiva) return { pode: false, motivo: 'Cancele a programação antes de cancelar o compromisso.' };
-    const suas = parcelas.filter(p => p.compromissoId === c.compromissoId);
-    if (suas.some(parcelaComEfeito)) return { pode: false, motivo: 'Estorne o lançamento da parcela antes de cancelar o compromisso.' };
-    return { pode: true, motivo: '' };
+    const rol = rolDoDesfazer(c);
+    return { pode: true, motivo: rol.length > 1 ? `Vai ${rol.join(', depois ')}.` : '' };
   };
 
   const abrirEstorno = (alvo: NonNullable<typeof estAlvo>) => {
-    setEstMotivo(''); setEstEtapa(1); setEstAlvo(alvo);
+    setEstMotivo(''); setEstEtapa(1); setEstResultado(null); setEstAlvo(alvo);
   };
   const confirmarEstorno = async () => {
     if (!estAlvo || versao == null) return;
@@ -658,6 +677,28 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
         await estorno.cancelarProgramacao(versao, estAlvo.programacaoId, estMotivo.trim());
       } else if (estAlvo.nivel === 'compromisso' && estAlvo.compromissoId) {
         await estorno.cancelarCompromisso(versao, estAlvo.compromissoId, estMotivo.trim());
+      } else if (estAlvo.nivel === 'desfazer' && estAlvo.compromissoId && estAlvo.estornoId && resumoOperacao?.operacaoId) {
+        /* ⚠ UM MOTIVO, UM `estorno_id`, TRES NIVEIS — OC-MOTIVO-UNICO-01. Os passos vao calados
+           (`silencioso`); o resumo sai uma vez no fim. Recusa do banco vira `ErroDesfazer`, que o
+           dialogo mostra com o que ja' foi e o que falta — e o mesmo botao retoma. */
+        const opId = resumoOperacao.operacaoId;
+        const compId = estAlvo.compromissoId;
+        const opts = { estornoId: estAlvo.estornoId, silencioso: true };
+        try {
+          const { feito } = await executarDesfazerCompromisso({
+            compromissoId: compId, motivo: estMotivo, estornoId: estAlvo.estornoId,
+            deps: {
+              lerEstado: () => lerEstadoDoDesfazer(opId, compId),
+              estornar: (v, prog, parc, m) => estorno.estornarMaterializacao(v, prog, parc, m, opts),
+              cancelarProgramacao: (v, prog, m) => estorno.cancelarProgramacao(v, prog, m, opts),
+              cancelarCompromisso: (v, id, m) => estorno.cancelarCompromisso(v, id, m, opts),
+            },
+          });
+          toast.success(feito.length ? `Compromisso desfeito: ${feito.join(', ')}.` : 'Nada a desfazer: o compromisso já estava cancelado.');
+        } catch (e) {
+          if (e instanceof ErroDesfazer) { setEstResultado({ erro: e.message, feito: e.feito, falta: e.falta }); }
+          throw e;
+        }
       }
       setEstAlvo(null);
     } catch {
@@ -1071,8 +1112,10 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
      ⚠ REGERAR SUBSTITUI SO' O QUE AINDA E' PREVISAO PURA — `aberto` E sem programacao
      ativa. Programada ou lancada nunca e' tocada por este botao: o caminho dela e' o
      "Cancelar programação", que o operador precisa pedir de proposito. Isto espelha
-     literalmente o `gateCancelarCompromisso`, que ja recusa cancelar compromisso com
-     programacao ativa — se as duas divergirem, quem manda e' o gate.
+     literalmente a guarda de `oc_cancelar_compromisso`, que recusa cancelar compromisso com
+     programacao ativa — se as duas divergirem, quem manda e' o banco. (Espelhava o
+     `gateCancelarCompromisso`, que saiu no OC-MOTIVO-UNICO-01: o menu passou a "Desfazer
+     compromisso", que percorre a cadeia em vez de recusar.)
 
      ⚠ VALOR IGUAL NAO REGERA. Cancelar e recriar pelo mesmo numero enche a auditoria de
      ruido e troca o id do compromisso por nada. `CompromissoResumo` nao traz subcentro
@@ -1431,7 +1474,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
                  — entre "vence em 28/02" e "falta pagar R$ 1.500", quem opera precisa do
                  segundo. O `title` guarda o par natureza/componente, como antes. */
               const contexto = [favNome || null, fmtData(proximoVencimento(c.compromissoId)), extra].filter(Boolean).join(' · ');
-              const g = gateCancelarCompromisso(c);
+              const g = gateDesfazerCompromisso(c);
               return (
                 <div key={c.compromissoId ?? ''} role="button" tabIndex={0}
                   aria-label={`Abrir o compromisso ${rotuloCompromisso(c)}`}
@@ -1517,12 +1560,16 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
                         <DropdownMenuItem
                           disabled={!g.pode || estRodando}
                           title={g.motivo || undefined}
-                          onSelect={() => abrirEstorno({ nivel: 'compromisso', compromissoId: c.compromissoId ?? undefined,
-                            descricao: `o compromisso ${c.natureza ?? ''}/${c.componente ?? ''} de ${brl(c.valorCompromisso)} é cancelado` })}>
-                          Cancelar compromisso
+                          onSelect={() => abrirEstorno({ nivel: 'desfazer', compromissoId: c.compromissoId ?? undefined,
+                            descricao: `o compromisso ${c.natureza ?? ''}/${c.componente ?? ''} de ${brl(c.valorCompromisso)}`,
+                            rol: rolDoDesfazer(c), estornoId: crypto.randomUUID() })}>
+                          Desfazer compromisso
                         </DropdownMenuItem>
+                        {/* ⚠ `text-zinc-300`, NAO `text-muted-foreground` — OC-MOTIVO-UNICO-01, medido na tela:
+                            o menu e' escuro (`bg-zinc-950/55`) e o cinza-500 sumia nele. Com o "Desfazer",
+                            esta linha passou a aparecer SEMPRE que ha' o que desfazer — e e' ela que diz o rol. */}
                         {g.motivo !== '' && (
-                          <div className="px-2 py-1 text-[10px] text-muted-foreground max-w-[220px] leading-tight">{g.motivo}</div>
+                          <div className="px-2 py-1 text-[10px] text-zinc-300 max-w-[220px] leading-tight">{g.motivo}</div>
                         )}
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -1998,6 +2045,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
               <DialogTitle className="text-[12px]">
                 {estAlvo.nivel === 'materializacao' ? 'Estornar lançamento'
                 : estAlvo.nivel === 'programacao' ? 'Cancelar programação'
+                : estAlvo.nivel === 'desfazer' ? 'Desfazer compromisso'
                 : 'Cancelar compromisso'}
               </DialogTitle>
               <DialogDescription className="text-[11px]">
@@ -2007,7 +2055,16 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
               </DialogDescription>
             </DialogHeader>
 
-            {estEtapa === 1 && (
+            {estEtapa === 1 && estAlvo.nivel === 'desfazer' && (
+              <div className="text-[12px] space-y-1.5 leading-snug">
+                <p>Será desfeito {estAlvo.descricao}, nesta ordem:</p>
+                <ol className="list-decimal pl-5 space-y-0.5" data-rol="desfazer">
+                  {(estAlvo.rol ?? []).map(item => <li key={item}>{item}</li>)}
+                </ol>
+                <p className="text-muted-foreground">Um motivo só, registrado em cada passo.</p>
+              </div>
+            )}
+            {estEtapa === 1 && estAlvo.nivel !== 'desfazer' && (
               <div className="text-[12px] space-y-1.5 leading-snug">
                 <p>Será desfeito: {estAlvo.descricao}.</p>
                 <p className="text-muted-foreground">A operação permanece aberta e o passo pode ser refeito.</p>
@@ -2023,6 +2080,16 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
                 placeholder="Motivo (obrigatório)"
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm"
               />
+            )}
+            {/* ⚠ A CADEIA PAROU NO MEIO — o banco recusou um nivel (E3: titulo realizado, conciliado,
+                liquidacao ativa). Diz o que ja' foi e o que falta; o mesmo "Confirmar" retoma, pulando
+                o que ja' esta' desfeito. */}
+            {estResultado && (
+              <div className="rounded-md border border-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2 py-1.5 text-[11px] leading-snug text-amber-800 dark:text-amber-200" data-resultado="desfazer">
+                <p className="font-medium">{estResultado.erro}</p>
+                {estResultado.feito.length > 0 && <p>Já desfeito: {estResultado.feito.join(', ')}.</p>}
+                {estResultado.falta.length > 0 && <p>Falta: {estResultado.falta.join(', ')}.</p>}
+              </div>
             )}
 
             <DialogFooter className="gap-2">
