@@ -1002,6 +1002,10 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
           .from('zoo_operacao_partes')
           .select('id')
           .eq('financeiro_lancamento_id', id)
+          /* OC-DESVINCULAR-01: so' parte VIVA prende o titulo. A parte cancelada continua apontando
+             o lancamento (e' historia), e sem este filtro um lancamento desvinculado seguiria com a
+             classificacao travada para sempre. */
+          .eq('cancelada', false)
           .limit(1)
           .maybeSingle();
         vinculoOC = !!parteVinc?.id;

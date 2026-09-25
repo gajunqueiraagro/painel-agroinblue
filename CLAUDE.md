@@ -717,6 +717,17 @@ no mesmo arquivo.
   ⚠ PROVADO: com as travas do hook, a separacao do lote, o rodape e a semente do motivo desligados, 6 dos 10
   caem; os 4 que ficam verdes sao os de controle (gravacao com motivo, compra vazia, funcoes removidas) e o
   do lote sem motivo, cuja trava nao entrou na mutacao.
+  De 1924 para 1940 no OC-DESVINCULAR-01, em quatro arquivos novos. `src/lib/oc/desvincularLancamento.test.ts` (+7):
+  o resumo lido da simulacao (parcela unica cancela, varias reduzem, reclassificacao com fazenda/safra/DRE que
+  a conta arrasta, conciliacao "mantida") e quando o gesto aparece (so' titulo VIVO no menu da linha — o orfao
+  fica fora —, compromisso cancelado nada, Financeiro V2 so' com parte viva). `desvincularOperacao.test.tsx`
+  (+5): simula ao abrir sem gravar, o seletor filtra pela direcao, escolher a conta re-simula com a CHAVE do
+  plano e "manter a atual" volta, grava com a versao da simulacao e avisa a lista, a falha nao avisa.
+  `useFinanceiroV2.desvinculo.test.ts` (+2): parte cancelada libera o subcentro, parte viva continua travando.
+  `desfazerTituloCancelado.test.ts` (+2): a cadeia do Desfazer passa pela Graxaria (titulo ja' cancelado) e
+  para no titulo vivo realizado — com banco falso aplicando a regra do D2, provada de verdade em rollback.
+  ⚠ PROVADO: com o filtro `cancelada` do hook, a chave do plano no dialogo, o criterio de titulo vivo e o ramo
+  "reduzido" desligados, 5 casos caem, um por mutacao, pela razao certa.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -1191,6 +1202,8 @@ migration e' REGISTRO HISTORICO, nao se reaplica).
     nao mostra. Foi exatamente o que a trava (2) passou a impedir; estes dois sao anteriores a ela.
   ⚠ QUEM DECIDIR escolhe entre reativar o titulo ou desfazer a parte pela OC — e o titulo era realizado, entao
     qualquer das duas mexe em numero de caixa.
+  ⚠ DECIDIDO (OC-DESVINCULAR-01, D2): desfazer pela OC. O "Desfazer compromisso" passou a limpar os dois — a
+    guarda do estornar ignora titulo JA' cancelado —, e o Gabriel o faz pela tela. Provado em rollback nos dois.
 - CANCEL-MOTIVO-BANCO-01 — pendencia, nao tratada: NAO HA CONSTRAINT de motivo no banco, e ela NAO deve
   entrar agora. Travar `cancelado = true => cancelado_motivo IS NOT NULL` hoje QUEBRARIA os escritores que
   cancelam sem motivo (medido 25/09/2026, na FASE 0 do FIN-V2-CANCEL-MOTIVO-01):
@@ -1206,6 +1219,61 @@ migration e' REGISTRO HISTORICO, nao se reaplica).
   ⚠ REGRA: TRAVA SO' DEPOIS QUE CADA ESCRITOR GRAVAR MOTIVO. Um por um, cada qual com o seu motivo (fixo ou
     pedido), e so' entao a constraint — com a contagem de linhas novas sem motivo em ZERO antes de ligar.
     O passado (~14,1 mil sem motivo) fica como esta': a constraint vale para o que entra, `NOT VALID`.
+- ⚠ OC-DESVINCULAR-01 — UM LANCAMENTO SAI DA OC SEM MORRER (25/09/2026). O inverso do vincular:
+  `oc_desvincular_lancamento` (migration `20261027148000_oc_desvincular_01.sql`, ⚠ registrada como
+  `20260925204312`; md5 do corpo 1b667a26, banco = arquivo). SECURITY DEFINER, EXECUTE so' authenticated e
+  service_role, versao, motivo unico, `p_simular` pelo mesmo caminho desfeito (SQLSTATE 'OCSIM'), evento
+  'desvincular_lancamento' com antes/depois e o id da parte. Gesto "Desvincular" no menu da linha da aba
+  Financeiro da OC (um item por titulo VIVO) e no rodape do `LancamentoV2Dialog` (so' com parte viva); dialogo
+  `DesvincularOperacaoDialog`, nascido do do vincular (as pecas comuns foram MOVIDAS verbatim para
+  `modalVinculoOC.tsx`).
+  O que a RPC faz: cancela a parte; ESTORNA a liquidacao automatica do titulo; cancela a parcela e, sem parcela
+  viva, programacao e compromisso (senao o compromisso vale a soma das vivas); `origem_lancamento
+  'operacao_comercial'` -> 'manual' e `origem_tipo 'oc:'` -> NULL. Valor, pagamento, conta, competencia e
+  conciliacao NAO se tocam.
+  ⚠ O GATILHO NAO ESTORNA A LIQUIDACAO SOZINHO, e foi MEDIDO: cancelar a parte dispara
+    `oc_sincronizar_liquidacao_de_financeiro`, que sem parte ativa e com titulo liquidado nao faz nada. Sem o
+    estorno explicito, o "recebido" da c80ebe9e continuaria 107.367,46.
+  DECISOES DO GABRIEL:
+  D1 `zoo_operacao_partes_titulo_uniq` virou INDICE PARCIAL (`WHERE cancelada = false`). ⚠ ERA CONSTRAINT UNIQUE,
+     nao indice solto — a primeira prova falhou no `DROP INDEX` (2BP01); saiu o constraint e entrou o indice
+     com o mesmo nome. Nenhuma FK o referenciava e nenhum ON CONFLICT o usava. A parte cancelada continua
+     apontando o titulo. ⚠ QUEM LE PARTE POR LANCAMENTO FILTRA `cancelada = false` — acompanharam o
+     `useFinanceiroV2` (trava da classificacao), o `lancamentoTemParteOC` (botao Vincular), `oc_candidatas_vinculo`
+     E `oc_vincular_lancamento` (este fora da letra do briefing: sem ele a candidata diria "elegivel" e a RPC
+     recusaria "ja esta ligado"). Ficam conservadores, e ja' contam parte cancelada como vinculo:
+     `useImportLancamentosExcel:812` (a reimportacao trata o desvinculado como titulo de OC) e tres EXISTS no
+     banco (`fn_contrato_editar_e_regenerar`, `oc_limpar_operacao_teste`, `oc_adotar_titulo_financeiro`).
+  D2 `oc_estornar_materializacao`: status realizado/conciliado e `conciliado_em` NAO contam em titulo JA
+     CANCELADO. Liquidacao ativa e vinculo bancario vivo continuam recusando em qualquer titulo (dinheiro vivo;
+     num titulo cancelado seriam estado inconsistente). E' o que deixa o Desfazer limpar a Graxaria 73a183eb e os
+     orfaos e8032b0d/f489abd9. Provado: a guarda segue recusando o principal 3e05fd75 (realizado) e o 09b8c62d
+     (conciliado).
+  D3 "valor da OC recalculado" = RECEBIDO (liquidacoes vivas) e TOTAL DOS COMPROMISSOS. `valor_acordado` nao muda.
+  D4 Desvincular NUNCA cancela o lancamento. "Reclassificar para" e' opcional (`p_plano_conta_id`): conta ativa,
+     global ou do cliente, e com a MESMA direcao do lancamento; grava a chave e as copias da linha do plano no
+     mesmo gesto, com o mesmo motivo, de/para no evento.
+     ⚠ A "REGRA 9 DO PLANO DE CONTAS" DO BRIEFING NAO EXISTE EM ARQUIVO NENHUM (docs/, Constituicao, ADRs,
+       memoria). O alinhamento seguido e' o do gatilho `resolve_classificacao_from_plano` (PR-FIN-PLANO-CHAVE-02).
+     ⚠ CONTA ADMINISTRATIVA LEVA A FAZENDA JUNTO: o gatilho aplica FIN-FAZENDA-ADM-01 — fazenda "Administrativo" e
+       safra nula. Medido: e' o que aconteceu com a entrada de 5.056 (a721d5ca) quando o Gabriel a reclassificou
+       para "Estorno Recebido". O resumo da simulacao diz fazenda, safra e DRE de/para antes do clique.
+  PROVAS EM ROLLBACK (no cabecalho da migration): c80ebe9e / a5c1c61a com e sem conta (recebido 107.367,46 ->
+  102.311,46, lancamento igual salvo origem; com "Pagamento Estornado", fazenda Administrativo e fora do DRE);
+  varias parcelas (4c5e8c86: 380.000 -> 80.000); controle conciliado 09b8c62d (1 vinculo antes e depois);
+  Desfazer da Graxaria antes (recusa) e depois do D2 (tudo cancelado); guarda ainda recusando titulo vivo.
+  ⚠ NAO FOI EXECUTADO NA c80ebe9e REAL — o Gabriel faz pela tela. O estado final pedido sai de DOIS gestos:
+    Desvincular a saida a5c1c61a (com "Pagamento Estornado") e Desfazer a Graxaria 73a183eb.
+- OC-LIQ-SINAL-01 — pendencia, nao tratada: `oc_sincronizar_liquidacao_de_financeiro` escolhe a natureza da
+  liquidacao automatica pelo TIPO DA OC (compra = 'pagamento', resto = 'recebimento') e grava `abs(valor)`.
+  Uma DEVOLUCAO ao comprador numa venda/abate entra como RECEBIMENTO e SOMA: c80ebe9e dizia "recebido
+  107.367,46" com nota de 102.311,46 e 5.056 devolvidos. O sentido do dinheiro esta' no sinal do titulo, e a
+  ponte o descarta.
+  ⚠ E NAO E' SO' DEVOLUCAO: TODA SAIDA vinculada a venda/abate soma no recebido. Medido na mesma OC, no mesmo
+    dia: o Gabriel vinculou o Fundersul de 716,83 (2-Saidas, 67d3215b, 20:51) e o recebido foi a 108.084,29.
+    Depois do desvinculo dos 5.056 ele fica 103.028,29 — nao os 102.311,46 do estado final pedido — ate' esta
+    pendencia ser tratada. O desvinculo esta' certo; a conta do recebido e' que esta' errada. ⚠ MEDIR ANTES DE MEXER: quantas OCs tem liquidacao automatica de titulo cujo sinal contraria
+  a natureza (saida em venda/abate, entrada em compra), e se a tela de recebido as soma. Nao medido aqui.
 - OC-COMPRA-REVALOR-01 — ⚠ O DEFEITO BRIEFADO NAO EXISTIA, e o registro e' sobre o metodo.
   Sintoma (NJ, compra f56c50d3, 24/09/2026): o Gabriel corrigiu o valor do lote para
   896.644,48, o financeiro e o documento seguiram com 892.645, e a Negociacao recusava com

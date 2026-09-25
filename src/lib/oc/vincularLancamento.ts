@@ -190,7 +190,10 @@ export async function lancamentoTemParteOC(lancamentoId: string): Promise<boolea
   const { count, error } = await supabase
     .from('zoo_operacao_partes')
     .select('id', { count: 'exact', head: true })
-    .eq('financeiro_lancamento_id', lancamentoId);
+    .eq('financeiro_lancamento_id', lancamentoId)
+    /* OC-DESVINCULAR-01 (D1): o indice de parte por titulo virou parcial (`cancelada = false`). Parte
+       cancelada e' historia; o lancamento desvinculado pode ser vinculado de novo. */
+    .eq('cancelada', false);
   if (error) throw error;
   return (count ?? 0) > 0;
 }
@@ -199,7 +202,7 @@ export async function lancamentoTemParteOC(lancamentoId: string): Promise<boolea
 
 /**
  * A ACAO SO' APARECE ONDE O BANCO ACEITARIA: subcentro no mapa, lancamento salvo, nao cancelado
- * e sem parte de OC (nem cancelada — o indice unico de parte por titulo inclui as canceladas).
+ * e sem parte VIVA de OC (o indice unico de parte por titulo e' parcial desde o OC-DESVINCULAR-01).
  * ⚠ E' ESPELHO PARA ESCONDER O BOTAO, nao o controle: a RPC recusa de novo se algo mudar.
  */
 export function podeOferecerVinculo(p: {

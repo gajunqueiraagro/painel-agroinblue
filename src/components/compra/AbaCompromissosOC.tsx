@@ -4,6 +4,8 @@ import { useOperacaoEstornoFinanceiro } from '@/hooks/useOperacaoEstornoFinancei
 import type { OcCompromissosApi, CompromissoResumo, ParcelaMaterializacao, CriarCompromissoPayload, ProgramarParcelaInput } from '@/hooks/useOcCompromissos';
 import { useReprogramarCompromissoLote } from '@/hooks/useReprogramarCompromissoLote';
 import { DialogoAtualizarCompromisso } from '@/components/compra/DialogoAtualizarCompromisso';
+import { DesvincularOperacaoDialog } from '@/components/financeiro-v2/DesvincularOperacaoDialog';
+import { titulosDesvinculaveis } from '@/lib/oc/desvincularLancamento';
 import { DialogoGerarCompromissos, type PropostaCompromisso } from '@/components/compra/DialogoGerarCompromissos';
 import { classificarLotesPorLado, valorLoteOC, SUBCENTRO_OBRIGACAO_COMPRA, SUBCENTRO_DESPESA_VENDA, CENTRO_CUSTO_COMPRA_BOVINOS, type LoteOC } from '@/hooks/useOperacaoLiquidacao';
 import { usePlanoContasOC } from '@/hooks/usePlanoContasOC';
@@ -665,6 +667,10 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
     const rol = rolDoDesfazer(c);
     return { pode: true, motivo: rol.length > 1 ? `Vai ${rol.join(', depois ')}.` : '' };
   };
+
+  /* OC-DESVINCULAR-01 — o lancamento cujo "Desvincular" esta' aberto (a regra de quem entra no menu e'
+     `titulosDesvinculaveis`, em `src/lib/oc/desvincularLancamento.ts`). */
+  const [desvAlvo, setDesvAlvo] = useState<string | null>(null);
 
   const abrirEstorno = (alvo: NonNullable<typeof estAlvo>) => {
     setEstMotivo(''); setEstEtapa(1); setEstResultado(null); setEstAlvo(alvo);
@@ -1573,6 +1579,16 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
                         {g.motivo !== '' && (
                           <div className="px-2 py-1 text-[10px] text-zinc-300 max-w-[220px] leading-tight">{g.motivo}</div>
                         )}
+                        {/* OC-DESVINCULAR-01 — um item por TITULO VIVO do compromisso: o lancamento fica,
+                            sai a ligacao. Com mais de um titulo, o rotulo diz a parcela e o valor. */}
+                        {titulosDesvinculaveis(c, parcelas).map((t, _i, todos) => (
+                          <DropdownMenuItem key={t.lancamentoId} disabled={!podeEscrever || estRodando}
+                            data-testid="acao-desvincular-linha"
+                            title="O lançamento fica (valor, pagamento, conciliação); ele deixa de pertencer a esta operação."
+                            onSelect={() => setDesvAlvo(t.lancamentoId)}>
+                            {todos.length > 1 ? `Desvincular lançamento ${t.sequencia}ª · ${brl(t.valor)}` : 'Desvincular lançamento'}
+                          </DropdownMenuItem>
+                        ))}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
@@ -1967,6 +1983,19 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
           ajuda="Informe como o dinheiro de fato aconteceu. Ao confirmar, a parcela é programada e o título é gerado na mesma ação — pronto para conciliar."
           modoRealizado
           mostrarBaseOperacao={rotulos.mostrarBaseDaOperacao}
+        />
+      )}
+      {/* OC-DESVINCULAR-01 — o mesmo dialogo do Financeiro V2. Depois de gravar, RELER basta: o
+          `recarregar` le' a versao da operacao e a propaga (o mesmo caminho do "Atualizar compromisso"
+          abaixo), e `recarregarDados` traz o recebido novo da negociacao. */}
+      {desvAlvo && resumoOperacao?.operacaoId && clienteId && (
+        <DesvincularOperacaoDialog
+          open
+          lancamentoId={desvAlvo}
+          operacaoId={resumoOperacao.operacaoId}
+          clienteId={clienteId}
+          onClose={() => setDesvAlvo(null)}
+          onDesvinculado={() => { void ocApi.recarregar(); void recarregarDados?.(); }}
         />
       )}
       {atualizandoLoteId && (

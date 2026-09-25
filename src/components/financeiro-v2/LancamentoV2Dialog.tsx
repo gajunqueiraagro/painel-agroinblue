@@ -37,7 +37,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { computeValidacaoModal, type AbaFinanceira } from './lancamentoDialogTabs';
 import { AbaAuditoriaLancamento } from '@/components/financeiro-v2/AbaAuditoriaLancamento';
-import { AlertCircle, AlertTriangle, Copy, KeyRound, RefreshCw, DollarSign, FileText, Beef, Repeat, Loader2, Link2 } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Copy, KeyRound, RefreshCw, DollarSign, FileText, Beef, Repeat, Loader2, Link2, Unlink } from 'lucide-react';
 import { LancamentoZooModal } from '@/v2/components/edicao/LancamentoZooModal';
 import { toast } from 'sonner';
 import { mensagemDoErro } from '@/lib/supabase/mensagemDoErro';
@@ -64,6 +64,8 @@ import { useCulturasDaSafra } from '@/hooks/useAreaPlantada';
 import { VincularOperacaoDialog } from '@/components/financeiro-v2/VincularOperacaoDialog';
 import { RodapeCancelamento } from '@/components/financeiro-v2/RodapeCancelamento';
 import { podeOferecerVinculo, subcentrosVinculaveis, lancamentoTemParteOC } from '@/lib/oc/vincularLancamento';
+import { podeOferecerDesvinculo } from '@/lib/oc/desvincularLancamento';
+import { DesvincularOperacaoDialog } from '@/components/financeiro-v2/DesvincularOperacaoDialog';
 
 interface Props {
   open: boolean;
@@ -1021,6 +1023,7 @@ export function LancamentoV2Dialog({
 
   const [vinculoDisponivel, setVinculoDisponivel] = useState(false);
   const [vincularAberto, setVincularAberto] = useState(false);
+  const [desvincularAberto, setDesvincularAberto] = useState(false);
   useEffect(() => {
     let cancelled = false;
     setVinculoDisponivel(false);
@@ -2257,6 +2260,20 @@ export function LancamentoV2Dialog({
                 <Link2 className="h-3.5 w-3.5" /> Vincular à operação
               </Button>
             )}
+            {/* OC-DESVINCULAR-01 — o inverso, SO' com parte VIVA de OC (a mesma leitura do rodape
+                de cancelamento). O lancamento fica; sai a ligacao. */}
+            {isEdit && lancamento && clienteAtual?.id && parteOCViva
+              && podeOferecerDesvinculo({ lancamentoId: lancamento.id, cancelado: lancamento.cancelado, temParteViva: true }) && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="px-3 text-[11px] gap-1"
+                onClick={() => setDesvincularAberto(true)}
+                data-testid="acao-desvincular-oc"
+              >
+                <Unlink className="h-3.5 w-3.5" /> Desvincular da operação
+              </Button>
+            )}
             {isEdit && onDelete && lancamento && (
               <RodapeCancelamento
                 tituloOC={parteOCViva}
@@ -2409,6 +2426,17 @@ export function LancamentoV2Dialog({
           clienteId={clienteAtual.id}
           onClose={() => setVincularAberto(false)}
           onVinculado={onClose}
+        />
+      )}
+      {/* OC-DESVINCULAR-01 — por cima do detalhe; desvinculado, fecha os dois (a lista ja' foi avisada). */}
+      {desvincularAberto && lancamento?.id && clienteAtual?.id && parteOCViva && (
+        <DesvincularOperacaoDialog
+          open
+          lancamentoId={lancamento.id}
+          operacaoId={parteOCViva.operacaoId}
+          clienteId={clienteAtual.id}
+          onClose={() => setDesvincularAberto(false)}
+          onDesvinculado={onClose}
         />
       )}
 

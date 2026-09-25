@@ -19,10 +19,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
+import { TOM_SELO, Selo, Secao, Par } from '@/components/financeiro-v2/modalVinculoOC';
 import {
   buscarCandidatasVinculo, vincularLancamentoOC, situacaoDaCandidata, candidataInicial,
   compromissoDoItem, rotuloComponente, resumoDoVinculo, textoDoAviso, rotuloOC, dataBr, mensagemDeErro, ehRecusa, ehVinculo,
-  type RespostaCandidatas, type RespostaVinculo, type OperacaoCandidata, type TomSelo, type VinculoRecusado,
+  type RespostaCandidatas, type RespostaVinculo, type OperacaoCandidata, type VinculoRecusado,
 } from '@/lib/oc/vincularLancamento';
 
 interface Props {
@@ -37,46 +38,11 @@ interface Props {
 const brl = (n: number | null | undefined) =>
   n == null ? '—' : n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-const TOM_SELO: Record<TomSelo, string> = {
-  verde: 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900',
-  ambar: 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900',
-  vermelho: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900',
-};
-
 const ROTULO_ORIGEM: Record<string, string> = {
   manual: 'Manual', ofx: 'OFX', extrato: 'Extrato', importacao_incremental: 'Importação',
   importacao_historica: 'Importação histórica', movimentacao_rebanho: 'Modal antigo do rebanho',
   conciliacao: 'Conciliação', mesa_excel: 'Mesa (Excel)', mesa_split: 'Mesa (divisão)',
 };
-
-function Selo({ tom, children, title }: { tom: TomSelo; children: React.ReactNode; title?: string }) {
-  return (
-    <span title={title} className={cn('inline-flex items-center rounded border px-1.5 py-px text-[10px] leading-tight whitespace-nowrap', TOM_SELO[tom])}>
-      {children}
-    </span>
-  );
-}
-
-function Secao({ titulo, children, extra }: { titulo: string; children: React.ReactNode; extra?: React.ReactNode }) {
-  return (
-    <section className="space-y-1.5">
-      <div className="flex items-center gap-2">
-        <h3 className="text-[12px] font-medium text-foreground">{titulo}</h3>
-        {extra}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function Par({ rotulo, valor }: { rotulo: string; valor: React.ReactNode }) {
-  return (
-    <div className="min-w-0">
-      <div className="text-[10px] text-muted-foreground leading-tight">{rotulo}</div>
-      <div className="truncate text-[11px] leading-tight">{valor}</div>
-    </div>
-  );
-}
 
 export function VincularOperacaoDialog({ open, lancamentoId, clienteId, onClose, onVinculado }: Props) {
   const [resp, setResp] = useState<RespostaCandidatas | null>(null);
