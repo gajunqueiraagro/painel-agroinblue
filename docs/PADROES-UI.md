@@ -951,3 +951,42 @@ coluna congelada à esquerda que está no fim da tabela cobre as primeiras ao ro
 `c.total` diz "é a referência" e `congelada()` diz "gruda", e são duas perguntas diferentes.
 
 **Onde nasceu:** DRE-PERIODO-01 (23/09/2026), decisão do Gabriel.
+
+## A29 — UX-OBRIGATORIOS-01: com pendência, Salvar / Seguir / Aplicar não fecha e não grava
+
+**Regra:** botão que grava, avança ou aplica, com campo obrigatório pendente, **não fecha e
+não grava**. Cada campo pendente fica com **borda vermelha e a mensagem embaixo** (10px,
+`text-destructive`), o primeiro recebe o **foco** (o `focus()` já o rola até a vista dentro
+do corpo que rola), e o obrigatório vem marcado com `*` **antes** de qualquer tentativa.
+A marcação só aparece depois da primeira tentativa e, daí em diante, é **viva**: o campo
+preenchido sai do vermelho enquanto se digita.
+
+**Por quê:** fechar e deixar a recusa chegar depois — de outro bloco, de outro lugar — obriga o
+operador a adivinhar onde está o problema. Um diálogo que só se cobra do que ele mostra,
+campo a campo, diz onde mexer.
+
+**Consequências:**
+- cada bloco se cobra só dos **próprios** campos; o que nunca foi aberto se cobra no
+  botão que grava (com bloco e campo escritos ao lado dele — ver a `DicaBotao`);
+- campo de **fato** que está vazio aparece **vazio**: nem o número de uma projeção, nem
+  "R$ 0,00" (zero é valor, não ausência — sentinelas de dado);
+- o botão continua clicável: desabilitar esconderia **quais** campos faltam.
+
+**Onde nasceu:** OC-BOITEL-REALIZADO-UX-01 (26/09/2026), decisão do Gabriel. Exemplo vivo:
+`DialogoGrupo` e `faltamDoRealizado` em `src/components/venda/BoitelBlocosModais.tsx`.
+
+## A30 — UX-TOAST-01: validação e erro de preenchimento nunca em toast no canto
+
+**Regra:** recusa de validação ou de gravação que o operador precisa **corrigir** vai junto do
+campo ou do botão que a provocou, escrita — nunca num toast no canto da tela. O toast que
+sobrar (sucesso, aviso informativo) tem **X** e **não cobre área de digitação**.
+
+**Por quê:** o toast some sozinho, aparece longe do campo e cobre o que o operador está
+digitando. Na venda boitel, a recusa do realizado chegava num toast depois de o diálogo já
+ter fechado — a mensagem falava de campos que não estavam mais na tela.
+
+**Consequência:** a recusa não desfaz o que foi digitado — o rascunho fica na tela, para
+corrigir e salvar de novo. Exemplo vivo: `erroRealizado` ao lado do "Salvar negociação" do
+`VendaModalShell`.
+
+**Onde nasceu:** OC-BOITEL-REALIZADO-UX-01 (26/09/2026), decisão do Gabriel.

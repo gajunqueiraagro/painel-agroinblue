@@ -23,7 +23,7 @@
  * altura de campo), A17 (par rótulo-valor), A18 (linha densa de duas alturas), A19
  * (dinheiro sempre formatado), A20 (DatePicker, nunca `input type=date`).
  */
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -260,8 +260,12 @@ export function boitelVazio(): BoitelEdicao {
    e linha derivada continuam morando neste invólucro, num lugar so'.
    ⚠ O NAO-MONETARIO (dias, GMD, percentuais) continua no caminho de sempre: `casas` e
    `toLocaleString`. Dinheiro tem campo proprio; contagem e percentual nao. */
-export function CampoNum({ label, valor, onChange, casas = 2, sufixo, obrigatorio, derivado, desabilitado, titulo, moeda, extra, previsto, separador }: {
-  label: string; valor: number; onChange: (v: number) => void; casas?: number;
+export function CampoNum({ label, valor, onChange, casas = 2, sufixo, obrigatorio, derivado, desabilitado, titulo, moeda, extra, previsto, separador, erro }: {
+  /* `null` = sem dado: o campo fica VAZIO. Zero e' valor e aparece como zero — no moeda,
+     "R$ 0,00" —, entao ausencia nao pode chegar aqui como 0 (sentinelas de dado). */
+  label: string; valor: number | null; onChange: (v: number) => void; casas?: number;
+  /** Pendencia do campo (UX-OBRIGATORIOS-01): borda vermelha e a mensagem embaixo. */
+  erro?: string | null;
   sufixo?: string; obrigatorio?: boolean; derivado?: string | null; desabilitado?: boolean;
   /** Campo de dinheiro: usa o `CampoMoeda` do sistema, com o R$ dentro do valor. */
   moeda?: boolean;
@@ -283,7 +287,7 @@ export function CampoNum({ label, valor, onChange, casas = 2, sufixo, obrigatori
      Omitido, o proprio label serve de titulo: nunca fica sem. */
   titulo?: string;
 }) {
-  const fmt = (v: number) => v ? v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas }) : '';
+  const fmt = (v: number | null) => v ? v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas }) : '';
   /* ⚠ `rascunho` E' NULO QUANDO NAO SE ESTA DIGITANDO, e ai o campo mostra o valor
      formatado. Guardar o texto sempre exigiria sincronizar estado com prop — e' o
      caminho que leva a `setState` durante o render. Aqui nao ha o que sincronizar:
@@ -309,7 +313,7 @@ export function CampoNum({ label, valor, onChange, casas = 2, sufixo, obrigatori
      veredito: e' texto de APOIO sob um numero que ja esta' no campo, e nunca carrega
      informacao que so' exista ali. */
   return (
-      <div className={`min-w-0${separador ? ' border-b border-border/60 pb-2' : ''}`}>
+      <div className={`min-w-0${separador ? ' border-b border-border/60 pb-2' : ''}`} data-campo-erro={erro ? '' : undefined}>
         <Label title={titulo ?? label}
           className="block text-[10px] font-medium text-foreground/90 leading-none whitespace-nowrap overflow-hidden text-ellipsis">
           {label}{obrigatorio && <span className="text-destructive"> *</span>}
@@ -317,18 +321,19 @@ export function CampoNum({ label, valor, onChange, casas = 2, sufixo, obrigatori
         <div className="mt-1 flex items-center gap-1">
           {moeda ? (
             <CampoMoeda valor={valor} onChange={(n) => onChange(n ?? 0)} disabled={desabilitado}
-              className="h-8 w-[120px] px-2 text-[12px] tabular-nums text-right bg-card" />
+              className={`h-8 w-[120px] px-2 text-[12px] tabular-nums text-right bg-card${erro ? ' border-destructive' : ''}`} />
           ) : (
             <Input
               value={rascunho ?? fmt(valor)} disabled={desabilitado} inputMode="decimal"
               onChange={e => { setRascunho(e.target.value); onChange(parse(e.target.value)); }}
               onFocus={() => setRascunho(valor ? String(valor).replace('.', ',') : '')}
               onBlur={() => { if (rascunho !== null) onChange(parse(rascunho)); setRascunho(null); }}
-              className="h-8 w-[90px] px-2 text-[12px] tabular-nums text-right bg-card"
+              className={`h-8 w-[90px] px-2 text-[12px] tabular-nums text-right bg-card${erro ? ' border-destructive' : ''}`}
             />
           )}
           {sufixo && <span className="text-[10px] text-muted-foreground shrink-0 whitespace-nowrap">{sufixo}</span>}
         </div>
+        {erro && <div className="mt-0.5 text-[10px] text-destructive leading-snug">{erro}</div>}
         {derivado !== undefined && (
           <div className="mt-0.5 text-[9px] text-muted-foreground tabular-nums leading-snug">
             {derivado ?? '—'}
@@ -359,9 +364,12 @@ export function CampoNum({ label, valor, onChange, casas = 2, sufixo, obrigatori
    ⚠ O TOGGLE NAO PERSISTE: e' modo de leitura, e comeca sempre em `total` — o formato do
    fato. Estado local, module-level, sem tocar o `BoitelEdicao`. */
 function CampoTotalOuMedia({ label, titulo, total, divisor, onChangeTotal, sufixoTotal, sufixoMedia,
-  casasMedia = 5, moeda, desabilitado, obrigatorio, previsto, contexto, separador }: {
+  casasMedia = 5, moeda, desabilitado, obrigatorio, previsto, contexto, separador, erro }: {
   label: string; titulo?: string;
-  total: number;
+  /** Pendencia do campo — mesmo contrato do `CampoNum`. */
+  erro?: string | null;
+  /** `null` = o papel ainda nao disse: campo vazio e ajuda em traco, nunca zero. */
+  total: number | null;
   /** Cabecas abatidas — ou cabecas x dias, no caso das diarias. */
   divisor: number;
   onChangeTotal: (v: number) => void;
@@ -374,11 +382,11 @@ function CampoTotalOuMedia({ label, titulo, total, divisor, onChangeTotal, sufix
   separador?: boolean;
 }) {
   const [modo, setModo] = useState<'total' | 'cab'>('total');
-  const media = divisor > 0 ? total / divisor : 0;
+  const media = divisor > 0 && total != null ? total / divisor : null;
   const nMedia = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: casasMedia, maximumFractionDigits: casasMedia });
 
   return (
-    <div className={`min-w-0${separador ? ' border-b border-border/60 pb-2' : ''}`}>
+    <div className={`min-w-0${separador ? ' border-b border-border/60 pb-2' : ''}`} data-campo-erro={erro ? '' : undefined}>
       <div className="flex items-center gap-1.5">
         <Label title={titulo ?? label}
           className="block text-[10px] font-medium text-foreground/90 leading-none whitespace-nowrap overflow-hidden text-ellipsis">
@@ -398,16 +406,17 @@ function CampoTotalOuMedia({ label, titulo, total, divisor, onChangeTotal, sufix
       <div className="mt-1">
         {modo === 'total' ? (
           <CampoNumBase valor={total} onChange={onChangeTotal} casas={2} moeda={moeda}
-            sufixo={sufixoTotal} desabilitado={desabilitado} />
+            sufixo={sufixoTotal} desabilitado={desabilitado} invalido={!!erro} />
         ) : (
           /* ⚠ A MEDIA ESCREVE O TOTAL, e nao um campo proprio: `media x divisor`, e o que
              desce para o banco continua sendo o total. */
           <CampoNumBase valor={media} onChange={v => onChangeTotal(Math.round(v * divisor * 100) / 100)}
-            casas={casasMedia} moeda={moeda} sufixo={sufixoMedia} desabilitado={desabilitado} />
+            casas={casasMedia} moeda={moeda} sufixo={sufixoMedia} desabilitado={desabilitado} invalido={!!erro} />
         )}
       </div>
+      {erro && <div className="mt-0.5 text-[10px] text-destructive leading-snug">{erro}</div>}
       <div className="mt-0.5 text-[9px] text-muted-foreground tabular-nums leading-snug">
-        {divisor > 0
+        {divisor > 0 && total != null && media != null
           ? (modo === 'total'
               ? `${nMedia(media)}${sufixoMedia ? ' ' + sufixoMedia : ''}${contexto ? ' · ' + contexto : ''}`
               : `total ${moeda ? formatMoeda(total) : n2(total)}${contexto ? ' · ' + contexto : ''}`)
@@ -424,11 +433,13 @@ function CampoTotalOuMedia({ label, titulo, total, divisor, onChangeTotal, sufix
 
 /* O input nu, sem rotulo nem ajuda — o miolo que `CampoNum` e `CampoTotalOuMedia`
    compartilham. Extraido para o toggle nao reimplementar virgula-no-foco e blur-format. */
-function CampoNumBase({ valor, onChange, casas, sufixo, moeda, desabilitado }: {
-  valor: number; onChange: (v: number) => void; casas: number;
+function CampoNumBase({ valor, onChange, casas, sufixo, moeda, desabilitado, invalido }: {
+  valor: number | null; onChange: (v: number) => void; casas: number;
   sufixo?: string; moeda?: boolean; desabilitado?: boolean;
+  /** Borda vermelha — a mensagem mora em quem chama. */
+  invalido?: boolean;
 }) {
-  const fmt = (v: number) => v ? v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas }) : '';
+  const fmt = (v: number | null) => v ? v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas }) : '';
   const [rascunho, setRascunho] = useState<string | null>(null);
   const parse = (t: string) => {
     let limpo = t.replace(/%/g, '').trim();
@@ -440,13 +451,13 @@ function CampoNumBase({ valor, onChange, casas, sufixo, moeda, desabilitado }: {
     <div className="flex items-center gap-1">
       {moeda && casas === 2 ? (
         <CampoMoeda valor={valor} onChange={n => onChange(n ?? 0)} disabled={desabilitado}
-          className="h-8 w-[120px] px-2 text-[12px] tabular-nums text-right bg-card" />
+          className={`h-8 w-[120px] px-2 text-[12px] tabular-nums text-right bg-card${invalido ? ' border-destructive' : ''}`} />
       ) : (
         <Input value={rascunho ?? fmt(valor)} disabled={desabilitado} inputMode="decimal"
           onChange={e => { setRascunho(e.target.value); onChange(parse(e.target.value)); }}
           onFocus={() => setRascunho(valor ? String(valor).replace('.', ',') : '')}
           onBlur={() => { if (rascunho !== null) onChange(parse(rascunho)); setRascunho(null); }}
-          className={`h-8 ${casas > 2 ? 'w-[120px]' : 'w-[110px]'} px-2 text-[12px] tabular-nums text-right bg-card`} />
+          className={`h-8 ${casas > 2 ? 'w-[120px]' : 'w-[110px]'} px-2 text-[12px] tabular-nums text-right bg-card${invalido ? ' border-destructive' : ''}`} />
       )}
       {sufixo && <span className="text-[10px] text-muted-foreground shrink-0 whitespace-nowrap">{sufixo}</span>}
     </div>
@@ -599,6 +610,48 @@ const TITULO_CARD: Record<IdCard, string> = {
   B: 'Comercialização e Adiantamento',
 };
 
+/* ─── OS SEIS FATOS DO REALIZADO — OC-BOITEL-REALIZADO-UX-01 ─────────────────────
+   A MESMA LISTA da trava de `oc_salvar_boitel` no cenario 'realizado', com os MESMOS
+   rotulos (os da tela). O banco continua sendo quem recusa; esta lista existe para o
+   Aplicar de cada bloco dizer o que falta ANTES, campo a campo (UX-OBRIGATORIOS-01).
+   ⚠ SO' FATO CONTA: um numero que a tela DERIVA da projecao nao preenche o campo — o
+   cartao do realizado nasce copiando a projecao, e contar a copia como fato gravaria a
+   promessa no lugar do papel.
+   ⚠ A ORDEM E' A DA TELA, dentro de cada bloco: e' ela que decide qual campo recebe o foco. */
+export type CampoFatoRealizado =
+  'qtdAbatida' | 'dias' | 'pesoVivoTotalAbate' | 'arrobasTotaisAbate' | 'valorTotalDiarias' | 'valorTotalAbate';
+const FATOS_DO_REALIZADO: { campo: CampoFatoRealizado; rotulo: string; card: IdCard; tem: (d: BoitelEdicao) => boolean }[] = [
+  { campo: 'qtdAbatida',         rotulo: 'Cabeças abatidas',     card: 'A', tem: d => (d.qtdAbatida ?? 0) > 0 },
+  { campo: 'dias',               rotulo: 'Dias confinamento',    card: 'A', tem: d => d.dias > 0 },
+  { campo: 'pesoVivoTotalAbate', rotulo: 'Peso vivo',            card: 'A', tem: d => (d.pesoVivoTotalAbate ?? 0) > 0 },
+  { campo: 'arrobasTotaisAbate', rotulo: 'Arrobas',              card: 'A', tem: d => (d.arrobasTotaisAbate ?? 0) > 0 },
+  { campo: 'valorTotalDiarias',  rotulo: 'Diárias',              card: 'A', tem: d => (d.valorTotalDiarias ?? 0) > 0 },
+  { campo: 'valorTotalAbate',    rotulo: 'Valor total do abate', card: 'B', tem: d => (d.valorTotalAbate ?? 0) > 0 },
+];
+
+export interface FatoFaltando { campo: CampoFatoRealizado; rotulo: string; card: IdCard; bloco: string }
+
+/** Os fatos do realizado que faltam — de um bloco (`card`) ou de todos. */
+export function faltamDoRealizado(d: BoitelEdicao | null, card?: IdCard): FatoFaltando[] {
+  if (!d) return [];
+  return FATOS_DO_REALIZADO
+    .filter(f => (card == null || f.card === card) && !f.tem(d))
+    .map(f => ({ campo: f.campo, rotulo: f.rotulo, card: f.card, bloco: TITULO_CARD[f.card] }));
+}
+
+/** A frase do rodape: bloco e campo, na ordem da tela. `null` sem pendencia. */
+export function pendenciaDoRealizado(d: BoitelEdicao | null): string | null {
+  const f = faltamDoRealizado(d);
+  if (f.length === 0) return null;
+  const porBloco = (['A', 'B'] as const)
+    .map(c => ({ bloco: TITULO_CARD[c], campos: f.filter(x => x.card === c).map(x => x.rotulo) }))
+    .filter(b => b.campos.length > 0)
+    .map(b => `${b.bloco}: ${b.campos.join(', ')}`);
+  return `Realizado incompleto — ${porBloco.join(' · ')}.`;
+}
+
+const MSG_OBRIGATORIO = 'Obrigatório no realizado — informe o valor do papel.';
+
 /* Os INDICADORES de cada cartao — o que a aba mostra sem abrir nada.
    ⚠ SEIS E DOIS, e nao um por grupo. Ate' aqui cada cartao trazia UMA frase por grupo
    ("GMD 1,500 · 110 dias · RC 55,00%"), herdada da linha fechada do acordeao. Frase
@@ -729,7 +782,13 @@ function indicadoresDoBoitel(d: BoitelEdicao, modoRealizado?: boolean, projetado
    disfarcada de layout. */
 function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: K, v: BoitelEdicao[K]) => void,
   onChange: (proximo: BoitelEdicao) => void, somenteLeitura?: boolean,
-  modoRealizado?: boolean, projetado?: BoitelEdicao | null, dataEntrada?: string | null) {
+  modoRealizado?: boolean, projetado?: BoitelEdicao | null, dataEntrada?: string | null,
+  erros?: Partial<Record<CampoFatoRealizado, string>>) {
+  /* ⚠ NO REALIZADO OS SEIS FATOS MOSTRAM SO' O FATO — OC-BOITEL-REALIZADO-UX-01. Cabecas
+     abatidas, peso vivo, arrobas, diarias e valor do abate mostravam, quando vazios, o numero
+     que a PROJECAO daria; o campo parecia preenchido e o banco o recusava como ausente. Valor
+     que a tela escreve e' afirmacao (VALOR SUGERIDO E' VALOR ACEITO): vazio agora aparece
+     vazio, e a projecao continua a um olhar, no "previsto: X" ambar embaixo de cada um. */
   const der = derivadosBoitel(d);
   /* ⚠ AS ABATIDAS MANDAM NOS DERIVADOS POR CABECA — 02E. Com abate parcial, dividir pelo
      que SAIU do boitel daria peso medio e valor/cab de um rebanho que nao foi abatido.
@@ -762,7 +821,7 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
                ⚠ ELA MANDA NOS DERIVADOS POR CABECA: e' o rebanho que de fato foi a'
                balanca. Vazia, vale `sairam`, o comportamento de sempre. */
             <CampoNum desabilitado={somenteLeitura} label="Cabeças abatidas" titulo="Cabeças efetivamente abatidas — do papel do frigorífico"
-              valor={d.qtdAbatida ?? der.sairam} casas={0} obrigatorio
+              valor={d.qtdAbatida ?? null} casas={0} obrigatorio erro={erros?.qtdAbatida}
               onChange={v => set('qtdAbatida', v)}
               derivado={`previsto: ${d.qtdCabecas || 0}${(d.morteQuantidade || 0) > 0 ? ` · ${d.morteQuantidade} mortes no período` : ''}`} />
           )}
@@ -779,7 +838,7 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
               ⚠ MANUAL VENCE, e a ajuda diz que venceu: quem digitou por cima tinha razao
               para isso — reentrada, contagem diferente do boitel — e sobrescrever a
               escolha dele a cada render seria o campo brigando com o operador. */}
-          <CampoNum previsto={prev(p => String(p.dias))} desabilitado={somenteLeitura} label="Dias confinamento" titulo="Dias de confinamento" valor={d.dias} onChange={v => onChange({ ...d, dias: v, diasEditadoManual: true })} casas={0} obrigatorio
+          <CampoNum previsto={prev(p => String(p.dias))} desabilitado={somenteLeitura} label="Dias confinamento" titulo="Dias de confinamento" valor={d.dias} onChange={v => onChange({ ...d, dias: v, diasEditadoManual: true })} casas={0} obrigatorio erro={erros?.dias}
             derivado={modoRealizado ? (diasDaData != null
               ? (d.diasEditadoManual ? `editado · pela data seriam ${diasDaData}` : `${diasDaData} dias entre entrada e abate`)
               : 'informe a data do abate para derivar') : undefined} />
@@ -806,10 +865,10 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
                ⚠ O DENOMINADOR E `sairam` (negociadas menos mortes), e nao as negociadas:
                e' o rebanho que de fato foi para a balanca. */
             <CampoTotalOuMedia label="Peso vivo" titulo="Peso vivo na balança — do papel do frigorífico"
-              total={der.pvTotal} divisor={cabAbate}
+              total={d.pesoVivoTotalAbate ?? null} divisor={cabAbate}
               onChangeTotal={v => set('pesoVivoTotalAbate', v)}
-              sufixoTotal="kg" sufixoMedia="kg/cab" desabilitado={somenteLeitura} obrigatorio
-              contexto={cabAbate > 0 ? `${cabAbate} cab · GMD ${n3(der.gmdEfetivo)} kg/dia` : null}
+              sufixoTotal="kg" sufixoMedia="kg/cab" desabilitado={somenteLeitura} obrigatorio erro={erros?.pesoVivoTotalAbate}
+              contexto={cabAbate > 0 && (d.pesoVivoTotalAbate ?? 0) > 0 ? `${cabAbate} cab · GMD ${n3(der.gmdEfetivo)} kg/dia` : null}
               previsto={prev((_, x) => `${n2(x.pvTotal)} kg`)} />
           ) : (
             /* ⚠ AS AJUDAS SAEM DO MOTOR, e nenhuma e' conta escrita aqui: `ganho`, `ple`,
@@ -839,10 +898,10 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
                ⚠ E O RC FECHA DE FATO: ele deixa de ser premissa digitada e passa a ser
                consequencia de dois numeros do papel. */
             <CampoTotalOuMedia label="Arrobas" titulo="Arrobas do abate (@) — do papel do frigorífico"
-              total={der.aTS} divisor={cabAbate}
+              total={d.arrobasTotaisAbate ?? null} divisor={cabAbate}
               onChangeTotal={v => set('arrobasTotaisAbate', v)}
-              sufixoTotal="@" sufixoMedia="@/cab" desabilitado={somenteLeitura} obrigatorio
-              contexto={der.aTS > 0 ? `${n2(der.aTS * 15)} kg carcaça · RC ${n2(der.rcEfetivo)}%` : null}
+              sufixoTotal="@" sufixoMedia="@/cab" desabilitado={somenteLeitura} obrigatorio erro={erros?.arrobasTotaisAbate}
+              contexto={(d.arrobasTotaisAbate ?? 0) > 0 ? `${n2(der.aTS * 15)} kg carcaça · RC ${n2(der.rcEfetivo)}%` : null}
               previsto={prev((_, x) => `${n2(x.aTS)} @`)} />
           ) : (
             <CampoNum desabilitado={somenteLeitura} label="Rend. saída" titulo="Rendimento de saída" valor={d.rendimento} onChange={v => set('rendimento', v)} sufixo="%" obrigatorio
@@ -909,10 +968,10 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
               deriva dela. Mesmo campo, dois sentidos, como o peso de abate ja fazia. */}
           {modoRealizado ? (
             <CampoTotalOuMedia separador={modoRealizado} label="Diárias" titulo="Valor total das diárias (R$) — do papel do acerto"
-              total={d.valorTotalDiarias ?? der.cDT} divisor={cabAbate * d.dias} moeda
+              total={d.valorTotalDiarias ?? null} divisor={cabAbate * d.dias} moeda
               onChangeTotal={v => onChange({ ...d, valorTotalDiarias: v,
                 custoDiaria: (cabAbate * d.dias) > 0 ? Math.round((v / (cabAbate * d.dias)) * 100) / 100 : 0 })}
-              sufixoTotal="R$" sufixoMedia="/cab/dia" desabilitado={somenteLeitura} obrigatorio
+              sufixoTotal="R$" sufixoMedia="/cab/dia" desabilitado={somenteLeitura} obrigatorio erro={erros?.valorTotalDiarias}
               contexto={(cabAbate * d.dias) > 0 ? `${cabAbate} cab × ${d.dias} dias` : null}
               previsto={prev((_, x) => formatMoeda(x.cDT))} />
           ) : (
@@ -1011,10 +1070,10 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
                ele vai para `valor_total_abate`; o preco da arroba SEGUE derivando dele,
                porque preco e' consequencia e total e' fato. */
             <CampoNum desabilitado={somenteLeitura} label="Valor total do abate" titulo="Valor total do abate (R$) — já líquido de bônus, tributos e descontos do frigorífico"
-              moeda valor={d.valorTotalAbate ?? Math.round(der.aTS * d.precoVendaArroba * 100) / 100}
+              moeda valor={d.valorTotalAbate ?? null} obrigatorio erro={erros?.valorTotalAbate}
               onChange={v => onChange({ ...d, valorTotalAbate: v,
                 precoVendaArroba: der.aTS > 0 ? Math.round((v / der.aTS) * 100) / 100 : 0 })}
-              derivado={der.aTS > 0 ? `${formatMoeda(d.precoVendaArroba)}/@` : null}
+              derivado={der.aTS > 0 && (d.valorTotalAbate ?? 0) > 0 ? `${formatMoeda(d.precoVendaArroba)}/@` : null}
               previsto={prev((p, x) => formatMoeda(Math.round(x.aTS * p.precoVendaArroba * 100) / 100))} />
           ) : (
             <CampoNum desabilitado={somenteLeitura} label="Preço de venda" moeda valor={d.precoVendaArroba} onChange={v => set('precoVendaArroba', v)} sufixo="/@" obrigatorio />
@@ -1212,7 +1271,36 @@ function DialogoGrupo({ card, valor, somenteLeitura, onAplicar, onFechar, modoRe
      divergencia que estava la', em vez de um campo vazio que apaga o que se sabia. */
   const [acertoPapel, setAcertoPapel] = useState(valor.acertoPapel ?? 0);
   const set = <K extends keyof BoitelEdicao>(k: K, v: BoitelEdicao[K]) => setLocal(a => ({ ...a, [k]: v }));
-  const corpos = corposDoBoitel(local, set, setLocal, somenteLeitura, modoRealizado, projetado, dataEntrada);
+  /* ─── O APLICAR VALIDA SO' ESTE BLOCO — OC-BOITEL-REALIZADO-UX-01 ─────────────
+     UX-OBRIGATORIOS-01: com pendencia o Aplicar NAO fecha e NAO devolve nada; cada campo que
+     falta fica vermelho com a mensagem embaixo, e o primeiro recebe o foco. So' os fatos
+     DESTE bloco — o outro bloco se cobra no Aplicar dele, e o que nunca foi aberto, no
+     Salvar do rodape.
+     ⚠ O APLICAR NAO GRAVA: ele troca o RASCUNHO do realizado na memoria. Quem grava e' o
+     Salvar da negociacao, num ponto so'.
+     ⚠ A MARCACAO SO' APARECE DEPOIS DA PRIMEIRA TENTATIVA, e dai' em diante e' viva: o
+     campo preenchido deixa de ser vermelho enquanto se digita. Abrir o dialogo ja' pintado
+     de vermelho acusaria o operador antes de ele fazer qualquer coisa. */
+  const [tentouAplicar, setTentouAplicar] = useState(false);
+  const [tentativa, setTentativa] = useState(0);
+  const corpoRef = useRef<HTMLDivElement>(null);
+  const faltamNoBloco = modoRealizado ? faltamDoRealizado(local, card) : [];
+  const erros: Partial<Record<CampoFatoRealizado, string>> | undefined = tentouAplicar
+    ? Object.fromEntries(faltamNoBloco.map(f => [f.campo, MSG_OBRIGATORIO]))
+    : undefined;
+  useEffect(() => {
+    if (tentativa === 0) return;
+    const alvo = corpoRef.current?.querySelector<HTMLInputElement>('[data-campo-erro] input');
+    /* `focus()` ja' rola o campo ate' a vista dentro do corpo que rola (A21) — um
+       `scrollIntoView` a mais seria segunda ordem para o mesmo movimento. */
+    alvo?.focus();
+  }, [tentativa]);
+  const aplicar = () => {
+    if (faltamNoBloco.length > 0) { setTentouAplicar(true); setTentativa(t => t + 1); return; }
+    onAplicar(local);
+    onFechar();
+  };
+  const corpos = corposDoBoitel(local, set, setLocal, somenteLeitura, modoRealizado, projetado, dataEntrada, erros);
   const ids = (Object.keys(GRUPOS) as IdGrupo[]).filter(id => GRUPOS[id].card === card);
   /* O veredito do painel de Custos, no proprio titulo — ver a nota em `Painel`. */
   const derLocal = derivadosBoitel(local);
@@ -1268,7 +1356,7 @@ function DialogoGrupo({ card, valor, somenteLeitura, onAplicar, onFechar, modoRe
             espremeriam o campo — exatamente o defeito que o 01E corrigiu. Uma coluna por
             grupo, dois grupos por modal: a altura cai pela metade e nenhum campo encolhe.
             ⚠ `items-start` para o grupo curto nao esticar ate' a altura do longo. */}
-        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
+        <div ref={corpoRef} className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-5 items-start">
           {ids.map(id => (
             <Painel key={id} titulo={GRUPOS[id].titulo} tom={GRUPOS[id].tom}
@@ -1343,10 +1431,14 @@ function DialogoGrupo({ card, valor, somenteLeitura, onAplicar, onFechar, modoRe
             </div>
           </div>
         )}
-        <DialogFooter className="shrink-0 border-t bg-card px-5 py-3">
+        <DialogFooter className="shrink-0 border-t bg-card px-5 py-3 sm:items-center">
+          {erros && faltamNoBloco.length > 0 && (
+            <span className="mr-auto text-[10px] text-destructive leading-snug">
+              Falta {faltamNoBloco.map(f => f.rotulo).join(', ')}.
+            </span>
+          )}
           <Button variant="outline" size="sm" onClick={onFechar}>Cancelar</Button>
-          <Button size="sm" disabled={somenteLeitura}
-            onClick={() => { onAplicar(local); onFechar(); }}>Aplicar</Button>
+          <Button size="sm" disabled={somenteLeitura} onClick={aplicar}>Aplicar</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

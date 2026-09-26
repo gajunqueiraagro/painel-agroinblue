@@ -772,6 +772,13 @@ no mesmo arquivo.
   nunca afrouxados: o "(c) item todo pago", o "pago nunca bloqueia", o do Iagro e o dos tres iguais cobravam o ambar
   "criar novo" e o aviso "Já existe ... outro pagamento"; agora cobram o neutro "criar item" e a AUSENCIA do aviso
   (`[data-aviso]` nulo e o texto fora do resumo). PROVADO: com "criar item" ambar ou vermelho, 5 casos caem.
+  De 1986 para 1994 no OC-BOITEL-REALIZADO-UX-01: entrou `src/components/venda/realizadoPorBloco.test.tsx` (+8) —
+  `faltamDoRealizado` (a semente copiada da projecao nao tem fato; zero continua faltando; a frase com bloco e campo)
+  e o Aplicar do bloco do realizado (com pendencia nao fecha nem devolve, marca SO' os campos do bloco e foca o
+  primeiro; a marca e' viva; bloco completo devolve e fecha mesmo com o outro bloco pendente; fato vazio aparece vazio,
+  nunca "R$ 0,00"; a projecao nao valida nada). As quatro derivacoes e a recusa por fato sao regra de BANCO e estao em
+  `supabase/tests/oc_boitel_realizado_ux_01_test.sql`, rodado em rollback contra a funcao aplicada (termina em `OK`).
+  ⚠ PROVADO: com a validacao do Aplicar desligada, 3 casos caem; com o valor do abate voltando a mostrar a projecao, 1.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -1604,6 +1611,15 @@ preview que o cabecalho nao sai da tela ao rolar.
   ⚠ ELE NAO SUBSTITUI O `Tabs` DO RADIX onde ha conteudo a governar: entra no
   lugar da `TabsList`, e o `TabsContent` continua lendo o valor do contexto.
   Aba nova em qualquer tela usa este componente.
+- ⚠ UX-OBRIGATORIOS-01 (regra permanente, Gabriel, 26/09/2026): Salvar/Seguir/Aplicar com pendencia NAO
+  fecha e NAO grava; cada campo pendente fica vermelho com a mensagem embaixo, o primeiro recebe o foco, e o
+  obrigatorio vem marcado (`*`) antes. Cada bloco se cobra dos PROPRIOS campos; o bloco nunca aberto se
+  cobra no botao que grava, com bloco e campo escritos ao lado. Detalhe: A29 do docs/PADROES-UI.md.
+- ⚠ UX-TOAST-01 (regra permanente, Gabriel, 26/09/2026): validacao e erro de preenchimento NUNCA em toast no
+  canto — vao junto do campo ou do botao; toast que sobrar tem X e nao cobre area de digitacao. A recusa nao
+  desfaz o digitado. Detalhe: A30 do docs/PADROES-UI.md.
+  ⚠ SO' A RECUSA DO REALIZADO DO BOITEL FOI MIGRADA ate' aqui (OC-BOITEL-REALIZADO-UX-01). Os outros toasts de
+    erro do sistema, e o X nos que sobram, NAO foram tocados — frente propria.
 - ⚠ FIXAR O CABECALHO E' PO'R A ROLAGEM NO NIVEL CERTO, nao acrescentar
   `sticky`. Ja aconteceu duas vezes de o `sticky` existir e nao grudar:
   a lista de movimentacoes (ZOOT-LISTA-01/02) e a previa do custeio. O
@@ -2106,6 +2122,44 @@ preview que o cabecalho nao sai da tela ao rolar.
   de volta em "Abates de Femeas", c80ebe9e segue candidata (lista 73a183eb, 0119442b) e o compromisso de saida
   6b349b87 posto no mesmo subcentro fica fora da lista e, forcado, e' recusado ("Direcao do compromisso (2-Saídas)
   nao confere com a do lancamento (1-Entradas)").
+- ⚠ OC-BOITEL-REALIZADO-UX-01 — O REALIZADO DO BOITEL SE COBRA POR FATO E SE GRAVA NUM PONTO SO' (26/09/2026,
+  decisao do Gabriel). Migration `supabase/migrations/20261027153000_oc_boitel_realizado_ux_01.sql` (⚠ registrada
+  como `20260926093822`), corpo INTEGRAL: `oc_salvar_boitel` md5(prosrc) 6fbb63f1 -> c428ef90 (banco = arquivo).
+  (1) BANCO: no cenario 'realizado' a trava cobra os SEIS FATOS — dias, `qtd_abatida`, `peso_vivo_total_abate`,
+     `arrobas_totais_abate`, `valor_total_diarias`, `valor_total_abate` — com os rotulos da tela ("Dias confinamento",
+     "Cabeças abatidas", "Peso vivo", "Arrobas", "Diárias", "Valor total do abate"), e depois DERIVA os quatro
+     drivers: preco = round(valor/arrobas, 2); diaria = round(diarias/(qtd_abatida x dias), 2); rendimento =
+     arrobas x 15 / peso vivo x 100; gmd = (peso vivo/qtd_abatida - peso_saida_fazenda_kg)/dias, so' com peso de
+     saida > 0. Derivar (e nao so' deixar de cobrar) porque o FRONT le' os quatro no realizado: `exigencias()`
+     sustenta `liquidoDaVendaBoitel` -> o valor do `oc_revalorar_lote`. Nenhuma funcao SQL nem view os le'.
+     `qtd_abatida` entrou como 6o fato por decisao do Gabriel: sem ela nao ha a diaria por cabeca, e a trava da A2
+     (`qtd_abatida IS NOT NULL AND valor_total_abate IS NOT NULL`) deixaria de proteger o lote.
+     ⚠ O PROJETADO NAO MUDOU: o diff do prosrc e' SO' INSERCAO (as cinco linhas de sempre viraram o ELSE, byte a
+       byte). Provado em rollback: linha do projetado identica depois de salvar, e "Falta GMD" como sempre.
+     ⚠ 3260d1c8 E 8b211cae PASSAM A SER RECUSADAS no proximo salvar do realizado ate' completarem peso vivo,
+       arrobas e diarias (efeito aceito pelo Gabriel). Os outros cinco realizados tem os seis fatos.
+     ⚠ A ACL FECHOU JUNTO: estava EXECUTE para PUBLIC (anon = true) e sem grant a authenticated. Agora
+       `{postgres, service_role, authenticated}`; anon = false, authenticated = true, conferidos depois.
+  (2) TELA: o Aplicar de cada bloco valida SO' os fatos daquele bloco (UX-OBRIGATORIOS-01) e troca o RASCUNHO na
+     memoria — nao grava. O realizado se grava no Salvar da negociacao: lotes -> projetado -> realizado -> revalorar,
+     so' com rascunho SUJO (payload diferente do salvo). Recusa: frase ao lado do Salvar (UX-TOAST-01), rascunho na
+     tela, sem "Negociação salva.", `false` (o Concluir nao segue). Pendencia no rascunho trava Salvar e Concluir
+     com bloco e campo escritos.
+     ⚠ RASCUNHO x SALVO: `ocBoitelReal` e' o rascunho (cartao e dialogos); `ocBoitelRealSalvo` e' o que o banco tem,
+       e e' ele que o resumo, a previsao, `valorDaVendaBoitel`, `custosDaVendaBoitel`, o bolso, o topo, a analise e
+       a trava do lote em `salvarNegociacaoVendaOC` leem. Sem a separacao, `realizadoAplicadoNoLote` diria
+       "aplicado" para um rascunho, e o "Gerar previsao" leria numero que nao foi gravado.
+     ⚠ O RASCUNHO NAO NASCE NO "Lancar realizado" (o `iniciarRealizadoBoitel` deixou de semear): o dialogo ja' nasce
+       da projecao, e semear fazia o Cancelar deixar um realizado pela metade que o Salvar passaria a cobrar.
+     ⚠ FATO VAZIO APARECE VAZIO: os seis campos mostravam, vazios, o numero que a PROJECAO daria — o campo parecia
+       preenchido e o banco o recusava. Agora vazio e' vazio (o "previsto: X" ambar continua embaixo), e o moeda
+       aceita `null` para nao escrever "R$ 0,00" em dado ausente.
+  ⚠ PENDENTE (c) do OK do Gabriel — GUARDA DE ALTERACAO NAO SALVA NA VENDA: NAO FEITA, parada pela regra do proprio
+    pedido. `ocVendaAssinaturaSalva` nasce NULA ao abrir uma venda (por desenho, PR-OC-VENDA-REABRIR-01E), entao
+    "assinatura atual diferente da salva" e' verdade em TODO fechamento de venda nao tocada. Fazer certo exige uma
+    assinatura de BASE capturada quando a hidratacao termina (lotes e boitel chegam em momentos diferentes) — mais
+    que "disparo no fechar + AlertDialog". Hoje, fechar com rascunho do realizado nao salvo PERDE o rascunho sem
+    aviso.
 - BOITEL-DATA-ENVIO-01 — pendencia, so' medir depois (decisao do Gabriel, 26/09/2026): `zoo_operacao_boitel.data_envio`
   esta' VAZIO nos 15 registros (8 projetado, 7 realizado; medido em 25/09). A janela do vincular cai no fallback (a
   data da OC). Quem retomar mede ONDE a tela deveria gravar o envio e POR QUE nao grava — o `data_abate` do realizado

@@ -100,10 +100,10 @@ function abasDaVenda(temOperacao: boolean) {
    visivel, como as ajudas de 9px do `CampoNum`.
    ⚠ SO' APARECE COM MOTIVO. Botao habilitado nao ganha linha vazia, e botao desabilitado
    sem motivo declarado e' defeito de quem o escreveu — nao de quem o le. */
-function DicaBotao({ texto }: { texto: string | null | undefined }) {
+function DicaBotao({ texto, erro }: { texto: string | null | undefined; erro?: boolean }) {
   if (!texto) return null;
   return (
-    <span className="text-[10px] font-normal text-white/80 leading-snug max-w-[15rem] text-right">
+    <span className={`text-[10px] leading-snug max-w-[15rem] text-right ${erro ? 'font-medium text-red-200' : 'font-normal text-white/80'}`}>
       {texto}
     </span>
   );
@@ -151,6 +151,16 @@ export interface VendaModalShellProps {
   boitelReal?: BoitelEdicao | null;
   onAplicarRealizado?: (proximo: BoitelEdicao) => void | Promise<void>;
   onIniciarRealizado?: () => Promise<boolean>;
+  /* ─── RASCUNHO x SALVO — OC-BOITEL-REALIZADO-UX-01 ──────────────────────────
+     `boitelReal` e' o RASCUNHO: o Aplicar de cada bloco so' o altera na memoria, e ele
+     alimenta o cartao e os dialogos. `boitelRealSalvo` e' a linha como o banco a tem, e
+     e' ela que o resumo, a previsao, o topo e a analise leem — um rascunho nao pode virar
+     "a receber" nem valor da operacao antes de o Salvar passar. */
+  boitelRealSalvo?: BoitelEdicao | null;
+  /** O que falta no rascunho do realizado, com bloco e campo. Trava o Salvar e o Concluir. */
+  pendenciaRealizado?: string | null;
+  /** A recusa do banco ao gravar o realizado — escrita ao lado do Salvar, nunca em toast. */
+  erroRealizado?: string | null;
   categoria: string;
   categoriasDisponiveis: { value: string; label: string }[];
   quantidadeNum: number;
@@ -203,6 +213,7 @@ export function VendaModalShell({
   ocOperacaoId, ocVersao, onOcVersaoChange, ocStatusComercial, lotesApi, exclusaoLoteOC = null,
   onReabrirLoteParaEditar = null, boitelData = null, onBoitelChange,
   boitelReal = null, onAplicarRealizado, onIniciarRealizado,
+  boitelRealSalvo = null, pendenciaRealizado = null, erroRealizado = null,
   documentosApi, eventosApi, liquidacaoApi, recebimentoApi, ocEntregaEncerrada = false,
   categoria, categoriasDisponiveis,
   quantidadeNum, pesoKgNum, submitting, onSalvarOperacao, onSalvarNegociacao, semAlteracoes = false,
@@ -300,7 +311,7 @@ export function VendaModalShell({
   const slotBoitel = lotesApi && lotesApi.totais.lotes > 0 && lotesApi.totais.valorNegociado > 0
     ? lotesApi.totais.valorNegociado : null;
   const vendaBoitel = ehBoitel
-    ? valorDaVendaBoitel({ slot: slotBoitel, realizado: boitelReal ?? null, projetado: boitelData ?? null })
+    ? valorDaVendaBoitel({ slot: slotBoitel, realizado: boitelRealSalvo, projetado: boitelData ?? null })
     : null;
   const avisoDivergencia = vendaBoitel?.divergente && vendaBoitel.acerto != null
     ? avisoAcertoDivergente(vendaBoitel.acerto) : null;
@@ -330,7 +341,7 @@ export function VendaModalShell({
        Com o realizado aplicado, a `realizado`; sem ele, a projetada. Liam SEMPRE a projetada, e a
        Vera 7f7de76f ficou com um "adiantamento devolvido" de 42.416 quando o realizado dizia
        46.458,50. `custos` so' e' nulo sem linha nenhuma, e `boitelData` ja foi exigido acima. */
-    const custos = custosDaVendaBoitel({ realizado: boitelReal ?? null, projetado: boitelData });
+    const custos = custosDaVendaBoitel({ realizado: boitelRealSalvo, projetado: boitelData });
     const antecipado = custos?.antecipado ?? 0;
     /* ⚠ A PRINCIPAL LE O SLOT, NAO A PROJECAO — OC-BOITEL-VALOR-01 A3. Era
        `liquidoDaVendaBoitel(boitelData)` SEMPRE, com realizado ou sem: o 0fdec0eb da 8b211cae
@@ -410,7 +421,7 @@ export function VendaModalShell({
       }
     }
     return linhas.length > 0 ? linhas : undefined;
-  }, [ehBoitel, boitelData, boitelReal, compradorId, data, lotesApi?.lotes, vendaBoitel?.valor, vendaBoitel?.divergente]);
+  }, [ehBoitel, boitelData, boitelRealSalvo, compradorId, data, lotesApi?.lotes, vendaBoitel?.valor, vendaBoitel?.divergente]);
 
   /* ⚠ O VOCABULARIO DA COMPRA NO RODAPE DO RESUMO. `AbaCompromissosOC` escrevia
      "Compra {data} · Chegada {data}" literalmente — numa venda de 13/05 o grupo dizia
@@ -444,7 +455,7 @@ export function VendaModalShell({
      ⚠ UMA CHAMADA, e ela alimenta os tres: o cenario do topo, os dois numeros do topo e a
      cascata gemea. Derivar de novo abriria a porta para o cabecalho dizer "realizado" e o
      numero ao lado ainda ser o projetado. */
-  const bolsoRealizado = ehBoitel ? bolsoDaVendaBoitel(boitelReal ?? null) : null;
+  const bolsoRealizado = ehBoitel ? bolsoDaVendaBoitel(boitelRealSalvo) : null;
   /* O bloco Entrega do resumo lateral — MESMO helper da compra, nao uma segunda soma. */
   const entrega = consolidarRecebimento(recebimentoApi?.lotes ?? null);
 
@@ -504,7 +515,7 @@ export function VendaModalShell({
      projecao/realizado se DERIVAM das suas linhas.
      ⚠ SO' NO BOITEL. Numa venda comum nao ha dois mundos: o acordado e' o acordado, e uma
      pilula "projecao" ali marcaria como promessa um numero que e' fato. */
-  const derAcerto = ehBoitel ? derivadosBoitel(topoNoRealizado ? (boitelReal ?? boitelData!) : boitelData!) : null;
+  const derAcerto = ehBoitel ? derivadosBoitel(topoNoRealizado ? (boitelRealSalvo ?? boitelData!) : boitelData!) : null;
   /* ⚠ NO BOITEL TAMBEM E' O SLOT — OC-BOITEL-VALOR-01 A3, e isto DESFAZ a escolha do B-11 descrita
      acima. Derivar da linha realizada tornava o resumo "imune ao rebaixamento" — e cego a ele: na
      8b211cae o resumo dizia 882.608,62 enquanto lote, `valor_acordado`, rebanho e o compromisso
@@ -557,7 +568,7 @@ export function VendaModalShell({
      conseguia nem CRIAR a operacao, porque os cinco campos moram na aba de Negociacao —
      que so' existe depois da operacao criada. */
   const podeSalvar = naNegociacao
-    ? !!ocOperacaoId && faltamBoitel.length === 0
+    ? !!ocOperacaoId && faltamBoitel.length === 0 && !pendenciaRealizado
     : identificacaoPronta;
   /* ⚠ NAO E' O MESMO QUE "NAO PODE": o botao pode estar apto e nao ter o que gravar. Por
      isso o motivo tem precedencia — quem NAO PODE precisa saber o que falta; quem so' nao
@@ -582,6 +593,7 @@ export function VendaModalShell({
 
   const concluirTravadoPor: string | null =
     mesFechadoMotivo ? `${mesFechadoMotivo} — reabra o período`
+    : pendenciaRealizado ? pendenciaRealizado
     : submitting ? 'salvando…'
     : recebimentoApi?.saving ? 'aguarde a entrega terminar'
     : null;
@@ -590,7 +602,9 @@ export function VendaModalShell({
     : naNegociacao
     ? (!ocOperacaoId ? 'Salve a operação na aba Venda primeiro'
        : faltamBoitel.length > 0 ? `Planejamento do boitel incompleto. Falta ${faltamBoitel.join(', ')}.`
-       : undefined)
+       /* ⚠ UX-OBRIGATORIOS-01: com pendencia no realizado o Salvar NAO grava, e diz o bloco
+          e o campo. Cada bloco ja' se valida no Aplicar; isto pega o bloco nunca aberto. */
+       : pendenciaRealizado ?? undefined)
     : (identificacaoPronta ? undefined : 'Informe comprador, data, fazenda e tipo de venda');
   /* Mesma regra aplicada ao Salvar — B-09 item 1c. O motivo ja existia no `title` desde
      sempre; o que faltava era ele estar ESCRITO ao lado.
@@ -841,7 +855,7 @@ export function VendaModalShell({
                   cabecas={lotesApi?.totais.animais ?? 0}
                   pesoMedioKg={lotesApi ? pesoMedioPorCabeca(lotesApi.totais) : null}
                   valorPorKg={topoNoRealizado
-                    ? unitariosDoLiquido(boitelReal ?? null, bolsoRealizado).porKg
+                    ? unitariosDoLiquido(boitelRealSalvo, bolsoRealizado).porKg
                     : unitariosDoLiquido(boitelData, bolsoProjetado).porKg}
                   valorTotal={(topoNoRealizado ? bolsoRealizado : bolsoProjetado) ?? 0}
                   cenario={topoNoRealizado ? 'realizado' : 'projetado'}
@@ -899,7 +913,7 @@ export function VendaModalShell({
                     `BoitelAnaliseFaixa`.
                     ⚠ A CATEGORIA E AS CABECAS VEM DO LOTE, como tudo que e' fato nesta
                     aba: sao o cabecalho do modal ("Analise do envio · Garrotes 110"). */}
-                <BoitelAnaliseFaixa projetado={boitelData} realizado={boitelReal}
+                <BoitelAnaliseFaixa projetado={boitelData} realizado={boitelRealSalvo}
                   categoria={lotesApi?.lotes[0]?.categoria ?? null}
                   cabecas={lotesApi?.totais.animais ?? 0} />
               </div>
@@ -1189,6 +1203,9 @@ export function VendaModalShell({
           </Button>
         </>)}
         {rodapeTemSalvar && (<>
+        {/* ⚠ UX-TOAST-01: a recusa do banco ao realizado mora AQUI, ao lado do botao que a
+            provocou — e o rascunho continua na tela para corrigir e salvar de novo. */}
+        <DicaBotao texto={erroRealizado} erro />
         <DicaBotao texto={salvarTravadoPor} />
         <Button type="button"
           onClick={async () => {
