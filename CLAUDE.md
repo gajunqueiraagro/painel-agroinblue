@@ -787,6 +787,11 @@ no mesmo arquivo.
   lote vem do BANCO depois do Salvar dos lotes (OC nova: o lote nasce no mesmo Salvar e o revalorar recebe o id dele),
   OC com lote existente igual, sem lote NAO diz "lancado", falhas de leitura/revalorar/boitel voltam erro, e sem liquido
   positivo o comportamento de antes. ⚠ PROVADO: com "sem lote" voltando a dizer lancado, 1 caso cai.
+  De 2004 para 2011 no BOITEL-ABATE-PRODUTOR-01 (B-01): entrou `src/components/venda/previsaoBoitel.test.ts` (+6) — a
+  previsao da A de sempre (e o frigorifico gravado nao muda nada nela), a B com acerto_boitel (1155, boitel) ANTES do
+  principal (1150, frigorifico) nos numeros da 77d963be, sem "a receber do boitel" nem adiantamento, um centavo de
+  divergencia segurando o principal com a frase no botao, e o resumo da B; `realizadoPorBloco.test.tsx` foi de 12 para 13
+  (na B o bloco Comercializacao cobra o Frigorifico). ⚠ PROVADO: com o ramo B da previsao desligado, 3 casos caem.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -2188,6 +2193,36 @@ preview que o cabecalho nao sai da tela ao rolar.
     assinatura de BASE capturada quando a hidratacao termina (lotes e boitel chegam em momentos diferentes) — mais
     que "disparo no fechar + AlertDialog". Hoje, fechar com rascunho do realizado nao salvo PERDE o rascunho sem
     aviso.
+- ⚠ BOITEL-ABATE-PRODUTOR-01 (B-01) — DUAS MODALIDADES DE VENDA EM BOITEL (26/09/2026, decisoes do Gabriel).
+  A ('boitel', a de sempre): o boitel abate no nome dele e repassa o liquido. B ('produtor'): o gado abate EM NOME DO
+  PRODUTOR — o frigorifico paga o produtor (principal, 1150, favorecido = frigorifico) e o boitel cobra as despesas em
+  boleto (obrigacao `acerto_boitel`, subcentro NOVO 1155 "Acerto de Boitel (despesas)", favorecido = boitel). A conta e' a
+  MESMA do motor (`fba - descontoDoAcerto`); o slot (valor da operacao) e' o LIQUIDO nas duas.
+  Migration `supabase/migrations/20261027154000_boitel_abate_produtor_01.sql` (⚠ registrada como `20260926113750`), patch
+  guardado por md5 em 7 funcoes: `zoo_operacao_boitel.quem_abate`/`frigorifico_id`; 1155 no plano (o PRIMEIRO centro com
+  entrada e saida, opcao C); `fn_dre_pecuaria` e `fn_dre_pecuaria_lancamentos` passam a ABATER saida no bloco venda;
+  guarda do principal na B = slot + acertos (sem tolerancia, 1 centavo recusa); revalorar na B nao toca o principal;
+  frigorifico obrigatorio no realizado da B; 1155 -> acerto_boitel no vincular.
+  ⚠ PROVAS: DRE dos 7 clientes x 27 periodos x 2 cenarios (378 saidas) identico; diferenca semantica dos predicados
+    sobre 37.873 lancamentos e 1.888 linhas de planejamento = 0; A das 14 OCs identica (revalorar e guarda); B provada em
+    rollback (ver o cabecalho da migration).
+  ⚠ FRONT: seletor "Quem abate" (Segmentado) no bloco Comercializacao; Frigorifico com o `SearchableSelect` do Comprador
+    (mesma lista de favorecidos ATIVOS — o `FavorecidoSelect` do financeiro pede `FornecedorV2` com dados de pagamento que a
+    OC nao carrega). A previsao saiu do `VendaModalShell` para `src/components/venda/previsaoBoitel.ts` (movida, diff -w so'
+    com os tres ajustes de parametro) e ganhou o ramo B; o resumo lateral da B e' "(+) Recebido do frigorifico · (−) Pago ao
+    boitel · (=) Liquido".
+  ⚠ DIVIDAS DO B-01 (registradas a pedido do Gabriel):
+    (1) o rodape de conferencia DENTRO do dialogo do realizado (Comercializacao) ainda diz "= A repassar pelo boitel"
+        tambem na B, onde nao ha repasse — o resumo lateral ja' fala "(=) Liquido";
+    (2) o card do DRE (composicao recebido - pago, cabecas, R$/cab das diarias) e' o B-02, com mock;
+    (3) o conteudo APLICADO da migration (`schema_migrations`, 20260926113750) leva um CABECALHO RESUMIDO, e o arquivo
+        leva o cabecalho completo com as provas — os comandos sao os mesmos e os sete md5 de destino conferem; quem
+        comparar texto a texto encontra so' a diferenca de comentario.
+  ⚠ docs/PLANO-DE-CONTAS.md ganhou o 1155 A MAO, com a excecao dita no cabecalho da propria doc (conferido: 229 linhas,
+    221 globais).
+  ⚠ DADOS AGUARDANDO OK (nada gravado): 77d963be -> B com JBS, boleto 41eda416 de 5010 para 1155 (DRE do RRCC: civil 2023
+    vendas 1.791.708,52 -> 1.482.830,55; lucro -419.319,66 -> -728.197,63); cd4c54b0 so' tem o LIQUIDO no financeiro
+    (b51bc0fa, 516.459,04) — nao ha recebido do frigorifico nem boleto lancados.
 - BOITEL-DATA-ENVIO-01 — pendencia, so' medir depois (decisao do Gabriel, 26/09/2026): `zoo_operacao_boitel.data_envio`
   esta' VAZIO nos 15 registros (8 projetado, 7 realizado; medido em 25/09). A janela do vincular cai no fallback (a
   data da OC). Quem retomar mede ONDE a tela deveria gravar o envio e POR QUE nao grava — o `data_abate` do realizado

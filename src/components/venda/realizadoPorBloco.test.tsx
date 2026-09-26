@@ -119,6 +119,19 @@ describe('Aplicar do bloco do realizado', () => {
     expect(screen.getAllByText(/Obrigatório no realizado/)).toHaveLength(1);
   });
 
+  it('BOITEL-ABATE-PRODUTOR-01: na B o bloco Comercializacao cobra o Frigorifico; na A, nao', () => {
+    montar({ ...SEMENTE, quemAbate: 'produtor', frigorificoId: '' });
+    abrirRealizado('Comercialização e Adiantamento');
+    expect(screen.getByRole('button', { name: 'Abate em nome do produtor' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Aplicar' }));
+    expect(screen.getByText('Falta Frigorífico, Valor total do abate.')).toBeTruthy();
+    /* na A o mesmo bloco nao tem campo de frigorifico — so' o valor do abate falta */
+    const { onChangeRealizado } = montar({ ...SEMENTE, ...FATOS });
+    expect(onChangeRealizado).not.toHaveBeenCalled();
+    expect(faltamDoRealizado({ ...SEMENTE, ...FATOS }).map(f => f.rotulo)).toEqual([]);
+    expect(faltamDoRealizado({ ...SEMENTE, ...FATOS, quemAbate: 'produtor' }).map(f => f.rotulo)).toEqual(['Frigorífico']);
+  });
+
   it('na PROJECAO nada disso vale: o Aplicar devolve e fecha como sempre', () => {
     const { onChange } = montar(SEMENTE);
     fireEvent.click(screen.getAllByRole('button', { name: 'Editar Desempenho e Custos' })[0]);

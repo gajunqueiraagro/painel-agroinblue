@@ -2,6 +2,9 @@
 
 > **GERADO do banco em 23/09/2026 (após PLANO-HEDGE-01).
 > Não editar à mão: migration primeiro, regeração depois.**
+> ⚠ Exceção registrada: a linha **1155** (BOITEL-ABATE-PRODUTOR-01, 26/09/2026) foi acrescentada à mão a pedido
+> do Gabriel, DEPOIS da migration `20261027154000` e conferida contra o banco (229 linhas, 221 globais). A próxima
+> regeração a absorve sem diferença.
 
 Fonte: `public.financeiro_plano_contas` no Supabase **proto** (`binbcdfbisgscrifztia`).
 Hierarquia: **tipo de operação › macro custo › grupo de custo › centro de custo › subcentro**.
@@ -14,7 +17,7 @@ Dentro de cada grupo, as linhas saem em `centro a-z > subcentro a-z` — a mesma
 > `8140` como LITERAIS, e `fn_dre_pecuaria` junta por `p.ordem_exibicao = c.ordem`. Renumerar faria
 > a meta apontar para outro subcentro **sem erro nenhum** — o join acharia outra linha do plano.
 
-**228 linhas**: 220 globais (`cliente_id` nulo, valem para todos) e 8 de um cliente só, todas
+**229 linhas**: 221 globais (`cliente_id` nulo, valem para todos) e 8 de um cliente só, todas
 no grupo Dividendos. A coluna **origem** diz qual é qual.
 
 Legenda das colunas: **DRE** = `compoe_dre` · **LCDPR** = `gera_lcdpr` · **bloco** = `bloco_dre`
@@ -379,6 +382,20 @@ de decisão, não `false`.
 | 20620 | Infraestrutura | Investimento em Estradas e Aceiros Silvicultura | silvicultura | não | — | — | global |
 | 20630 | Máquinas | Investimento Máquinas e Equip. Silvicultura | silvicultura | não | — | — | global |
 | 20640 | RH | Investimento Treinamentos e EPI Silvicultura | silvicultura | não | — | — | global |
+
+### Receita Operacional
+
+#### Receita Pecuária
+
+> ⚠ **O PRIMEIRO CENTRO COM ENTRADA E SAÍDA** (opção C do Gabriel, BOITEL-ABATE-PRODUTOR-01). Na venda em boitel
+> com abate em nome do produtor, o frigorífico paga o produtor (1150, entrada) e o boitel cobra as despesas em
+> boleto (1155, saída). As duas caem no mesmo centro e no bloco `venda`: o DRE **abate** a saída da venda, e a
+> linha mostra o líquido — igual à modalidade em que o boitel repassa o líquido. `fn_dre_pecuaria` e
+> `fn_dre_pecuaria_lancamentos` passaram a somar saída de bloco `venda` com sinal negativo.
+
+| ordem | centro | subcentro | escopo | DRE | LCDPR | bloco | origem |
+|---:|---|---|---|:-:|:-:|---|---|
+| 1155 | Venda Peso Vivo | Acerto de Boitel (despesas) | pecuaria | sim | — | venda | global |
 
 ### Saída Financeira
 

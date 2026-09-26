@@ -233,6 +233,8 @@ const ROTULO_COMPONENTE: Record<string, string> = {
   taxa_aquisicao: 'Taxa de aquisição',
   adiantamento: 'Adiantamento ao Boitel',
   adiantamento_devolvido: 'Adiantamento devolvido',
+  /* BOITEL-ABATE-PRODUTOR-01 — o boleto do boitel na modalidade B (subcentro 1155). */
+  acerto_boitel: 'Acerto de boitel (despesas)',
 };
 export const rotuloComponente = (c: string) => ROTULO_COMPONENTE[c] ?? c;
 

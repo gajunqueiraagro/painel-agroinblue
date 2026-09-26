@@ -46,15 +46,13 @@ import { AbaFinanceiroOC } from '@/components/compra/AbaFinanceiroOC';
 import { useOcCompromissos } from '@/hooks/useOcCompromissos';
 import type { ReactNode } from 'react';
 import type { LinhaPrevisao, RotulosCompromissos } from '@/components/compra/AbaCompromissosOC';
-import { siglaCategoria } from '@/lib/financeiro/produtoOC';
-import { subcentroVendaPorCategoria, SUBCENTRO_DESPESA_VENDA, SUBCENTRO_ADIANTAMENTO_BOITEL } from '@/hooks/useOperacaoLiquidacao';
-import { addDays, format, parseISO } from 'date-fns';
 import type { RecebimentoApi } from '@/hooks/useOperacaoRecebimento';
 import type { DocumentosApi } from '@/hooks/useOperacaoDocumentos';
 import type { EventosApi } from '@/hooks/useOperacaoEventos';
 import type { LiquidacaoApi } from '@/hooks/useOperacaoLiquidacao';
-import { BoitelTopoNegociacao, bolsoDaVendaBoitel, unitariosDoLiquido, derivadosBoitel, PilulaCenario, valorDaVendaBoitel, avisoAcertoDivergente, principalDaPrevisaoBoitel, valorDoLoteBoitel, custosDaVendaBoitel } from '@/components/venda/BoitelNegociacaoDerivado';
+import { BoitelTopoNegociacao, bolsoDaVendaBoitel, unitariosDoLiquido, derivadosBoitel, PilulaCenario, valorDaVendaBoitel, avisoAcertoDivergente, valorDoLoteBoitel } from '@/components/venda/BoitelNegociacaoDerivado';
 import { BoitelBlocosModais, BoitelAnaliseFaixa, faltamDosCinco, type BoitelEdicao } from '@/components/venda/BoitelBlocosModais';
+import { linhasPrevisaoBoitel, avisoBoitelProdutor, linhasResumoProdutor } from '@/components/venda/previsaoBoitel';
 import { pesoMedioPorCabeca } from '@/hooks/useCompraLotes';
 import { LinhaResumo } from '@/components/ui/linha-resumo';
 import { consolidarRecebimento } from '@/components/compra/ResumoLateralOC';
@@ -191,16 +189,6 @@ export interface VendaModalShellProps {
   onFechar: () => void;
 }
 
-/* Data ISO + N dias, em ISO. `null` quando nao da' para responder — data vazia, data
-   malformada ou prazo nao informado. ⚠ NUNCA LANCA: um throw dentro do `useMemo` que
-   monta a previsao apagaria o modal inteiro, e `parseISO` de uma string invalida devolve
-   Invalid Date, que faz `format` estourar RangeError. */
-function dataMaisDias(iso: string | null | undefined, dias: number): string | null {
-  if (!iso || !(dias > 0)) return null;
-  const base = parseISO(iso);
-  if (Number.isNaN(base.getTime())) return null;
-  return format(addDays(base, dias), 'yyyy-MM-dd');
-}
 
 const MESES_EXTENSO = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
@@ -257,51 +245,6 @@ export function VendaModalShell({
      botao poder impedir ANTES da chamada — a licao de 45a7352b, onde o operador so'
      descobria o impedimento no fim. Se as duas divergirem, quem manda e' a RPC, e o texto
      que o operador veria seria o dela. */
-  /* ─── A PREVISAO DE CAIXA DO BOITEL ───────────────────────────────────────────
-     PR-OC-VENDA-FIN-PREVISAO-01, e e' um MODELO NOVO, nao um ajuste do anterior.
-
-     A NEGOCIACAO cuida da OPERACAO — faturamento bruto, custo do boitel, margem. Aqueles
-     numeros vivem no painel como analise e NAO viram linha financeira: sao "sem caixa".
-     A aba Financeiro cuida SO do que ATRAVESSA O CAIXA, e sao quatro movimentos:
-
-       1. Adiantamento ao boitel        SAI    (o produtor paga na entrada)
-       2. Despesas fora do boitel       SAI    (hoje, o frete — custo do produtor)
-       3. Recebimento ref. operacao     ENTRA  (o acerto, ja liquido do que o boitel cobra)
-       4. Recebimento ref. adiantamento ENTRA  (o adiantamento volta no acerto)
-
-     ⚠ DUAS LINHAS DE RECEBIMENTO, e nao uma soma — decisao do Gabriel: "duas linhas e'
-     melhor de entender". 3 + 4 = `saldoReceberBase`, o mesmo numero do painel; separa-las
-     nao muda o total, so' diz de onde ele vem.
-
-     ⚠ A LINHA 4 E' `obrigacao` DESCREVENDO UM RECEBIMENTO, e isso e' proposital. O
-     `oc_criar_compromisso` limita a SOMA dos compromissos `principal` a base da operacao
-     (medido: base 565.217,00 na b58bf556, que a linha 3 consome inteira), entao um
-     segundo principal de 96.783,50 seria RECUSADO pelo banco. Como o sentido do dinheiro
-     passou a vir do PLANO DE CONTAS (PR-OC-SENTIDO-POR-PLANO-01), uma obrigacao com
-     subcentro de '1-Entradas' materializa como ENTRADA — o resultado no caixa e' o certo
-     e o teto do principal fica integro. A palavra "obrigacao" descrevendo um recebimento
-     e' divida ESTETICA, registrada para o acabamento; nao ha divida de valor.
-
-     ⚠ NENHUM VALOR E' CONGELADO. Tudo sai do motor a cada render — editar o planejamento
-     e regerar da os numeros novos, nunca os do dia da primeira geracao.
-
-     ⚠ O ANTECIPADO SAI DO MOTOR, como todo o resto — `valorTotalAntecipadoCalc`. Esta
-     linha ja leu uma funcao de tela (`antecipadoTotal`), e vale registrar por que:
-     ate' PR-OC-VENDA-BOITEL-ANTECIPADO-NO-MOTOR-01 o motor rederivava o adiantamento de
-     `pctAdiantamentoDiarias`, um campo que a tabela da OC nao guarda — a previsao dizia
-     96.783,50 e o painel dizia 1.540,00 na mesma tela. Corrigido o motor, a funcao de
-     tela virou copia identica dele (md5 `bae60d01…` nas duas) e deixou de existir.
-     Uma verdade so': se o antecipado mudar de regra um dia, muda em UM lugar.
-
-     ⚠ A CATEGORIA VEM DOS LOTES, e nao do campo `categoria` do formulario simples. Esse
-     campo NUNCA e' preenchido numa OC de venda (a hidratacao nao o seta, e nem poderia:
-     uma OC tem N lotes com N categorias), e era por isso que a descricao saia "Boitel
-     110" sem sigla — `siglaCategoria('')` devolve string vazia.
-     ⚠ LOTES MISTOS: vale o lote de MAIOR numero de cabecas. O boitel guarda UM
-     planejamento por operacao (uma linha em `zoo_operacao_boitel`, nao uma por lote),
-     entao ja nao ha como classificar por lote aqui. Medido: as vendas boitel existentes
-     tem um lote so'. Quem ler um dia uma venda boitel de lotes mistos precisa saber que
-     a classificacao seguiu a maioria. */
   /* ─── O VALOR DA OPERACAO E' O SLOT — OC-BOITEL-VALOR-01 A3 ─────────────────────
      `zoo_operacao_lotes.valor_informado` somado, lido de `useCompraLotes` (a mesma fonte do card
      do lote). Resumo, LoteDialog e a previsao principal leem DAQUI; a projecao e o acerto sao
@@ -316,112 +259,11 @@ export function VendaModalShell({
   const avisoDivergencia = vendaBoitel?.divergente && vendaBoitel.acerto != null
     ? avisoAcertoDivergente(vendaBoitel.acerto) : null;
 
-  const linhasPrevisao = useMemo<LinhaPrevisao[] | undefined>(() => {
-    if (!ehBoitel || !boitelData || faltamDosCinco(boitelData).length > 0) return undefined;
-    const qtd = boitelData.qtdCabecas || 0;
-
-    /* O lote de maior rebanho decide a sigla e a classificacao — ver a nota acima. */
-    const catDominante = (lotesApi?.lotes ?? [])
-      .map(l => ({ cat: l.categoria, q: Number(l.quantidade) || 0 }))
-      .filter(x => !!x.cat)
-      .sort((a, b) => b.q - a.q)[0]?.cat ?? '';
-    /* ⚠ `true` NAO E' CONSTANTE SOLTA: este bloco inteiro so' roda quando `ehBoitel`, pelo
-       return de tres linhas acima. Era exatamente aqui que a receita do boitel vestia
-       'Venda de Machos Adultos' — as quatro OCs medidas em 24/09 saem deste `useMemo`. */
-    const subEntrada = subcentroVendaPorCategoria(catDominante, true);
-    /* ⚠ SEM CLASSIFICACAO NAO HA PREVISAO. O writer recusa subcentro que nao exista no
-       plano; gerar tres linhas e engasgar na quarta deixaria a operacao pela metade. */
-    if (!subEntrada) return undefined;
-
-    const rot = `Boitel ${String(qtd).padStart(3, '0')} ${siglaCategoria(catDominante)}`.trim();
-    /* A data PROJETADA do abate: o gado sai da fazenda na data da operacao e fica `dias`
-       no boitel. E' previsao, e o "~" do rotulo da linha diz isso ao operador. */
-    const dataAbate = dataMaisDias(data, boitelData.dias);
-    /* ⚠ ADIANTAMENTO E DESPESAS FORA DO BOITEL SAEM DA LINHA QUE VALE — OC-BOITEL-VALOR-01 A4.
-       Com o realizado aplicado, a `realizado`; sem ele, a projetada. Liam SEMPRE a projetada, e a
-       Vera 7f7de76f ficou com um "adiantamento devolvido" de 42.416 quando o realizado dizia
-       46.458,50. `custos` so' e' nulo sem linha nenhuma, e `boitelData` ja foi exigido acima. */
-    const custos = custosDaVendaBoitel({ realizado: boitelRealSalvo, projetado: boitelData });
-    const antecipado = custos?.antecipado ?? 0;
-    /* ⚠ A PRINCIPAL LE O SLOT, NAO A PROJECAO — OC-BOITEL-VALOR-01 A3. Era
-       `liquidoDaVendaBoitel(boitelData)` SEMPRE, com realizado ou sem: o 0fdec0eb da 8b211cae
-       nasceu assim, com 848.713,32, depois de o acerto ter dito 882.608,62. Sem realizado o slot
-       JA E' a projecao (gravada ao salvar a negociacao) — o numero nao muda nesse caso, muda a
-       FONTE. Em divergencia a linha nao sai: quem recusa e' `bloqueioPrevisao`, com a razao. */
-    /* ⚠ `id` DO LOTE E' OPCIONAL (lote ainda nao gravado nao tem), e o TSC com `strict: false`
-       nao reclamaria de um `undefined` no meio da lista. Lote sem id nao conta como lote para
-       ligar — e com um so' deles sem id a lista encolhe e a linha nasce solta, que e' o seguro. */
-    const idsDosLotes = (lotesApi?.lotes ?? []).map(l => l.id);
-    const principal = principalDaPrevisaoBoitel(vendaBoitel,
-      idsDosLotes.every(id => !!id) ? idsDosLotes.filter((id): id is string => !!id) : []);
-
-    const linhas: LinhaPrevisao[] = [];
-    /* `antecipado` ja' e' zero sem `possuiAdiantamento` (`valorTotalAntecipadoCalc`), na linha que vale. */
-    if (antecipado > 0) linhas.push({
-      natureza: 'obrigacao', componente: 'adiantamento',
-      subcentro: SUBCENTRO_ADIANTAMENTO_BOITEL,
-      valor: antecipado,
-      rotulo: 'Adiantamento ao boitel',
-      descricao: `${rot} - Adiantamento`,
-      favorecidoId: compradorId || null,
-      vencimentoPrevisto: custos?.dados.dataAdiantamento || null,
-    });
-    /* ⚠ A LINHA OBEDECE AO SELETOR — PR-OC-VENDA-REALIZADO-01A. Ela somava SO' o frete,
-       porque "fora do boitel" era regra cravada e o frete era o unico que estava fora.
-       Agora cada despesa declara o lado, e `custosDoProdutor` e' o complemento exato do
-       `descontoDoAcerto`: entra aqui o que o operador marcou como "produtor", sai o que
-       ele marcou como "boitel" — que nao tem caixa proprio, e' desconto no repasse.
-       ⚠ UMA FONTE SO'. O valor vem do motor, e nao de uma soma repetida aqui: somar
-       `custoFrete + custoNotasEnvio + despesasAbate` na tela seria a segunda copia da
-       regra, e ela divergiria do liquido no primeiro seletor que alguem virasse. */
-    const foraDoBoitel = custos?.foraDoBoitel ?? 0;
-    if (foraDoBoitel > 0) linhas.push({
-      natureza: 'obrigacao', componente: 'frete',
-      subcentro: SUBCENTRO_DESPESA_VENDA,
-      valor: foraDoBoitel,
-      rotulo: 'Despesas fora do boitel',
-      descricao: `${rot} - Despesas fora do boitel`,
-      favorecidoId: compradorId || null,
-      vencimentoPrevisto: data || null,
-    });
-    if (principal) linhas.push({
-      natureza: 'principal', componente: 'principal',
-      subcentro: subEntrada,
-      valor: principal.valor,
-      rotulo: 'Recebimento ref. operação',
-      descricao: rot,
-      favorecidoId: compradorId || null,
-      vencimentoPrevisto: dataAbate,
-      loteId: principal.loteId,
-    });
-    if (antecipado > 0) linhas.push({
-      natureza: 'obrigacao', componente: 'adiantamento_devolvido',
-      subcentro: subEntrada,
-      valor: antecipado,
-      rotulo: 'Recebimento ref. adiantamento',
-      descricao: `${rot} - Adiantamento devolvido`,
-      favorecidoId: compradorId || null,
-      vencimentoPrevisto: dataAbate,
-    });
-    /* ⚠ O ITEM QUE O REALIZADO ZERA VIRA LINHA MARCADA — OC-BOITEL-VALOR-01 A4b. So' com o
-       realizado aplicado: sem ele, zero e' so' "a projecao nao previa", e nao ha o que desfazer.
-       A linha nao cria nada; ela diz ao "Gerar previsao" que o compromisso desse item, se ainda for
-       previsao pura, deve ser cancelado — depois de o operador confirmar. */
-    if (custos?.fonte === 'realizado') {
-      const zerada = (componente: string, subcentro: string, rotulo: string, descricao: string): LinhaPrevisao => ({
-        natureza: 'obrigacao', componente, subcentro, valor: 0, rotulo, descricao,
-        favorecidoId: compradorId || null, vencimentoPrevisto: null, zerada: true,
-      });
-      if (!(antecipado > 0)) {
-        linhas.push(zerada('adiantamento', SUBCENTRO_ADIANTAMENTO_BOITEL, 'Adiantamento ao boitel', `${rot} - Adiantamento`));
-        linhas.push(zerada('adiantamento_devolvido', subEntrada, 'Recebimento ref. adiantamento', `${rot} - Adiantamento devolvido`));
-      }
-      if (!(foraDoBoitel > 0)) {
-        linhas.push(zerada('frete', SUBCENTRO_DESPESA_VENDA, 'Despesas fora do boitel', `${rot} - Despesas fora do boitel`));
-      }
-    }
-    return linhas.length > 0 ? linhas : undefined;
-  }, [ehBoitel, boitelData, boitelRealSalvo, compradorId, data, lotesApi?.lotes, vendaBoitel?.valor, vendaBoitel?.divergente]);
+  /* A previsao mora em `previsaoBoitel.ts` (movida no BOITEL-ABATE-PRODUTOR-01) — ver o comentario la'. */
+  const linhasPrevisao = useMemo<LinhaPrevisao[] | undefined>(() => (ehBoitel
+    ? linhasPrevisaoBoitel({ boitelData: boitelData ?? null, boitelRealSalvo, compradorId, data, lotes: lotesApi?.lotes ?? [], vendaBoitel })
+    : undefined),
+  [ehBoitel, boitelData, boitelRealSalvo, compradorId, data, lotesApi?.lotes, vendaBoitel?.valor, vendaBoitel?.divergente]);
 
   /* ⚠ O VOCABULARIO DA COMPRA NO RODAPE DO RESUMO. `AbaCompromissosOC` escrevia
      "Compra {data} · Chegada {data}" literalmente — numa venda de 13/05 o grupo dizia
@@ -548,7 +390,14 @@ export function VendaModalShell({
   ];
   /* Zero nao entra: custo que o contrato pos do lado do produtor vale zero aqui, e uma
      linha zerada afirmaria que o boitel cobrou nada — quando ele nao cobrou. */
-  const linhasAcerto = acertoTodas.filter(l => l.sinal === '+' || l.valor > 0);
+  /* ─── MODALIDADE B NO RESUMO — BOITEL-ABATE-PRODUTOR-01 ──────────────────────────────────
+     Na B nao ha "a receber do boitel": o frigorifico paga o produtor e o boitel cobra por boleto. O bloco vira
+     "(+) Recebido do frigorifico · (−) Pago ao boitel · (=) Liquido" — os MESMOS numeros do motor (`fba`,
+     `descontoDoAcerto`), da mesma linha que o topo le'. Na A nada muda. */
+  const ehProdutorResumo = ehBoitel
+    && (topoNoRealizado ? (boitelRealSalvo ?? boitelData) : boitelData)?.quemAbate === 'produtor';
+  const resumoProdutor = ehProdutorResumo && derAcerto ? linhasResumoProdutor(derAcerto) : null;
+  const linhasAcerto = resumoProdutor ? resumoProdutor.linhas : acertoTodas.filter(l => l.sinal === '+' || l.valor > 0);
 
   const faltamBoitel = ehBoitel ? faltamDosCinco(boitelData) : [];
   const naNegociacao = abaAtiva === 'negociacao';
@@ -797,7 +646,8 @@ export function VendaModalShell({
               ocApiExterno={ocCompromissosApi}
               dataOperacao={data}
               linhasPrevisao={linhasPrevisao}
-              bloqueioPrevisao={avisoDivergencia}
+              /* BOITEL-ABATE-PRODUTOR-01: na B o slot tem de ser exatamente recebido - pago; sem isso o principal nao sai. */
+              bloqueioPrevisao={avisoDivergencia ?? (ehBoitel ? avisoBoitelProdutor({ boitelData: boitelData ?? null, boitelRealSalvo, compradorId, data, lotes: lotesApi?.lotes ?? [], vendaBoitel }) : null)}
               ehBoitel={ehBoitel}
               rotulos={rotulosCompromissos}
               seloProjecao={ehBoitel ? <PilulaCenario cenario="projetado" /> : undefined}
@@ -901,6 +751,8 @@ export function VendaModalShell({
                           da OC: medido, `data_envio` do boitel esta' nula em 3 de 3
                           registros. No papel vivo, 13/05 -> 25/08 = 104 dias. */
                       dataEntrada={data}
+                      /* BOITEL-ABATE-PRODUTOR-01 — o Frigorifico da B usa a MESMA lista do Comprador (favorecidos ativos). */
+                      frigorificos={contrapartes}
                     />
                   )}
                 </div>
@@ -1094,7 +946,7 @@ export function VendaModalShell({
               {ehBoitel && derAcerto && linhasAcerto.length > 0 && (<>
                 <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 mb-0.5">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Acerto com o boitel</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">{resumoProdutor ? 'Abate em nome do produtor' : 'Acerto com o boitel'}</span>
                     {!topoNoRealizado && <PilulaCenario cenario="projetado" />}
                   </div>
                 </div>
@@ -1103,6 +955,11 @@ export function VendaModalShell({
                     <LinhaResumo key={l.rotulo} rotulo={l.rotulo} cor={corMundo}
                       valor={`${l.sinal === '−' ? '− ' : ''}${formatMoeda(l.valor)}`} />
                   ))}
+                  {resumoProdutor ? (
+                    <div className="border-t pt-0.5 mt-0.5">
+                      <LinhaResumo rotulo="(=) Líquido" forte cor={corMundo} valor={formatMoeda(resumoProdutor.liquido)} />
+                    </div>
+                  ) : (<>
                   <div className="border-t pt-0.5 mt-0.5">
                     <LinhaResumo rotulo="(=) Saldo do acerto" cor={corMundo}
                       valor={formatMoeda(derAcerto.fba - derAcerto.descontoDoAcerto)} />
@@ -1115,6 +972,7 @@ export function VendaModalShell({
                     <LinhaResumo rotulo="(=) A RECEBER DO BOITEL" forte cor={corMundo}
                       valor={formatMoeda(derAcerto.saldoReceberBase)} />
                   </div>
+                  </>)}
                   <div className="pt-0.5 text-[9px] text-muted-foreground leading-snug">
                     gastos diretos do produtor (frete e notas do envio) não entram neste acerto — vivem no financeiro
                   </div>

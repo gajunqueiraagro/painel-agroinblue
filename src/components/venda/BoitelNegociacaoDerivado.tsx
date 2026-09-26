@@ -42,7 +42,17 @@ import type { BoitelData } from '@/components/BoitelPlanningDialog';
    nele — `BoitelPlanningDialog` nao muda. Vieram de `BoitelBlocosModais` para cá em
    PR-OC-VENDA-BOITEL-FIX-ARROBAS-MORTE-01, porque as contas abaixo passaram a precisar
    deles e o outro arquivo importa deste: manter lá criaria ciclo. */
+/* ─── QUEM ABATE — BOITEL-ABATE-PRODUTOR-01 ──────────────────────────────────────
+   'boitel' (A, a de sempre): o boitel abate no nome dele e repassa o liquido. 'produtor' (B): o gado abate
+   EM NOME DO PRODUTOR, o frigorifico paga o produtor e o boitel cobra as despesas em boleto. A conta do motor
+   e' a MESMA nas duas (`fba - descontoDoAcerto`); muda so' por quais titulos o dinheiro passa. */
+export type QuemAbate = 'boitel' | 'produtor';
+
 export interface BoitelEdicao extends BoitelData {
+  /** BOITEL-ABATE-PRODUTOR-01. Ausente = 'boitel' (o padrao do banco). */
+  quemAbate?: QuemAbate;
+  /** BOITEL-ABATE-PRODUTOR-01. Na B, quem paga o produtor — o favorecido do principal. '' = nenhum. */
+  frigorificoId?: string;
   morteQuantidade?: number;
   morteValorIndenizacao?: number;
   /* ─── DE QUE LADO DO ACERTO MORA CADA DESPESA ────────────────────────────────

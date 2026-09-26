@@ -29,13 +29,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DatePicker } from '@/components/ui/date-picker';
+import { Segmentado } from '@/components/ui/segmentado';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { CampoMoeda } from '@/components/ui/campo-moeda';
 import type { CenarioBoitel } from '@/components/venda/BoitelNegociacaoDerivado';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Pencil, TrendingUp, Wallet, Tag, Banknote, BarChart3, ImageDown } from 'lucide-react';
 import { formatMoeda, formatKg, formatArroba } from '@/lib/calculos/formatters';
 import type { BoitelData } from '@/components/BoitelPlanningDialog';
-import { derivadosBoitel, cabecasQueSairam, liquidoDaVendaBoitel, bolsoDaVendaBoitel, unitariosDoLiquido, comparativoOportunidade, PilulaCenario, type BoitelEdicao, type UnitariosLiquido } from '@/components/venda/BoitelNegociacaoDerivado';
+import { derivadosBoitel, cabecasQueSairam, liquidoDaVendaBoitel, bolsoDaVendaBoitel, unitariosDoLiquido, comparativoOportunidade, PilulaCenario, type BoitelEdicao, type UnitariosLiquido, type QuemAbate } from '@/components/venda/BoitelNegociacaoDerivado';
 
 const n2 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const n3 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
@@ -146,6 +148,12 @@ const MAPA_BOITEL: CampoBoitel[] = [
      seria descartado em silencio com a auditoria dizendo que gravou. */
   { col: 'peso_vivo_total_abate',        campo: 'pesoVivoTotalAbate',          tipo: 'num', zeroEValor: true },
   { col: 'arrobas_totais_abate',         campo: 'arrobasTotaisAbate',          tipo: 'num', zeroEValor: true },
+  /* ─── QUEM ABATE — BOITEL-ABATE-PRODUTOR-01 (mapa 37 -> 39) ─────────────────────
+     ⚠ 'texto' NOS DOIS: vazio vira NULL no payload, e a RPC le' NULL de `quem_abate` como 'boitel' (o padrao
+     da coluna). Na volta, o NOT NULL do banco garante que `quemAbate` sempre chega preenchido.
+     ⚠ E ESTAO NA LISTA DA RPC (migration 20261027154000): coluna e lista andam em par. */
+  { col: 'quem_abate',                   campo: 'quemAbate',                   tipo: 'texto' },
+  { col: 'frigorifico_id',               campo: 'frigorificoId',               tipo: 'texto' },
 ];
 
 /** O payload de `oc_salvar_boitel` — a IDA, derivada do mapa. */
@@ -211,6 +219,8 @@ export function boitelVazio(): BoitelEdicao {
     possuiAdiantamento: false, dataAdiantamento: '', pctAdiantamentoDiarias: 0,
     valorAdiantamentoDiarias: 0, valorAdiantamentoSanitario: 0, valorAdiantamentoOutros: 0,
     valorTotalAntecipado: 0, adiantamentoObservacao: '',
+    /* BOITEL-ABATE-PRODUTOR-01 — o padrao do banco: a A de sempre, sem frigorifico. */
+    quemAbate: 'boitel', frigorificoId: '',
     /* ⚠ OS DEFAULTS SAO OS DO BANCO, letra por letra — PR-OC-VENDA-REALIZADO-01A. Uma
        venda boitel NOVA nasce aqui, antes de existir linha em `zoo_operacao_boitel`; se
        estes valores divergissem dos `DEFAULT` da tabela, a tela mostraria uma composicao
@@ -630,13 +640,15 @@ const TITULO_CARD: Record<IdCard, string> = {
    promessa no lugar do papel.
    ⚠ A ORDEM E' A DA TELA, dentro de cada bloco: e' ela que decide qual campo recebe o foco. */
 export type CampoFatoRealizado =
-  'qtdAbatida' | 'dias' | 'pesoVivoTotalAbate' | 'arrobasTotaisAbate' | 'valorTotalDiarias' | 'valorTotalAbate';
+  'qtdAbatida' | 'dias' | 'pesoVivoTotalAbate' | 'arrobasTotaisAbate' | 'valorTotalDiarias' | 'frigorificoId' | 'valorTotalAbate';
 const FATOS_DO_REALIZADO: { campo: CampoFatoRealizado; rotulo: string; card: IdCard; tem: (d: BoitelEdicao) => boolean }[] = [
   { campo: 'qtdAbatida',         rotulo: 'Cabeças abatidas',     card: 'A', tem: d => (d.qtdAbatida ?? 0) > 0 },
   { campo: 'dias',               rotulo: 'Dias confinamento',    card: 'A', tem: d => d.dias > 0 },
   { campo: 'pesoVivoTotalAbate', rotulo: 'Peso vivo',            card: 'A', tem: d => (d.pesoVivoTotalAbate ?? 0) > 0 },
   { campo: 'arrobasTotaisAbate', rotulo: 'Arrobas',              card: 'A', tem: d => (d.arrobasTotaisAbate ?? 0) > 0 },
   { campo: 'valorTotalDiarias',  rotulo: 'Diárias',              card: 'A', tem: d => (d.valorTotalDiarias ?? 0) > 0 },
+  /* BOITEL-ABATE-PRODUTOR-01: na B o realizado precisa dizer QUEM pagou — a mesma trava de `oc_salvar_boitel`. */
+  { campo: 'frigorificoId',      rotulo: 'Frigorífico',          card: 'B', tem: d => d.quemAbate !== 'produtor' || !!d.frigorificoId },
   { campo: 'valorTotalAbate',    rotulo: 'Valor total do abate', card: 'B', tem: d => (d.valorTotalAbate ?? 0) > 0 },
 ];
 
@@ -794,7 +806,9 @@ function indicadoresDoBoitel(d: BoitelEdicao, modoRealizado?: boolean, projetado
 function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: K, v: BoitelEdicao[K]) => void,
   onChange: (proximo: BoitelEdicao) => void, somenteLeitura?: boolean,
   modoRealizado?: boolean, projetado?: BoitelEdicao | null, dataEntrada?: string | null,
-  erros?: Partial<Record<CampoFatoRealizado, string>>) {
+  erros?: Partial<Record<CampoFatoRealizado, string>>,
+  /** Os favorecidos ATIVOS do cliente — a mesma lista do Comprador. Opcoes do Frigorifico (B). */
+  frigorificos?: ReadonlyArray<{ id: string; nome: string }>) {
   /* ⚠ NO REALIZADO OS SEIS FATOS MOSTRAM SO' O FATO — OC-BOITEL-REALIZADO-UX-01. Cabecas
      abatidas, peso vivo, arrobas, diarias e valor do abate mostravam, quando vazios, o numero
      que a PROJECAO daria; o campo parecia preenchido e o banco o recusava como ausente. Valor
@@ -1069,6 +1083,42 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
             precisa daquela informacao esta' na aba Financeiro, olhando a linha. */}
         </>),
     comercializacao: (<><div className="grid grid-cols-2 gap-x-3 gap-y-2.5">
+          {/* ─── QUEM ABATE — BOITEL-ABATE-PRODUTOR-01 ─────────────────────────────────
+              ⚠ NO TOPO DA COMERCIALIZACAO porque ela decide por onde o dinheiro passa: na A o boitel recebe e
+              repassa o liquido; na B o frigorifico paga o produtor e o boitel cobra as despesas. A conta e' a
+              mesma — o seletor muda os titulos da previsao e o texto do resumo, nunca um numero. */}
+          <LinhaCampo label="Quem abate" largura="w-fit" span>
+            <Segmentado<QuemAbate> valor={d.quemAbate ?? 'boitel'} altura={26}
+              onEscolher={v => { if (!somenteLeitura) onChange({ ...d, quemAbate: v }); }}
+              opcoes={[
+                { valor: 'boitel', rotulo: 'Boitel abate (acerto líquido)', desabilitada: somenteLeitura },
+                { valor: 'produtor', rotulo: 'Abate em nome do produtor', desabilitada: somenteLeitura },
+              ]} />
+          </LinhaCampo>
+          {(d.quemAbate ?? 'boitel') === 'produtor' && (
+            /* ⚠ O SELETOR DA CASA DO PROPRIO MODAL — o `SearchableSelect` do Comprador, com a MESMA lista de
+               favorecidos ATIVOS do cliente (busca + so' ativos). Obrigatorio so' no realizado: e' ali que o
+               papel diz quem pagou, e e' ali que a RPC o exige. */
+            <div className="min-w-0 col-span-2" data-campo-erro={erros?.frigorificoId ? '' : undefined}>
+              <Label className="block text-[10px] font-medium text-foreground/90 leading-none whitespace-nowrap">
+                Frigorífico{modoRealizado && <span className="text-destructive"> *</span>}
+              </Label>
+              <div className={`mt-1 w-[280px] ${erros?.frigorificoId ? '[&_button]:border-destructive' : ''}`}>
+                <SearchableSelect
+                  value={d.frigorificoId || '__nenhum__'}
+                  onValueChange={v => set('frigorificoId', v === '__nenhum__' ? '' : v)}
+                  options={(frigorificos ?? []).map(f => ({ value: f.id, label: f.nome }))}
+                  placeholder="Selecione o frigorífico"
+                  allLabel="Nenhum selecionado"
+                  allValue="__nenhum__"
+                  disabled={somenteLeitura}
+                  className="[&_button]:h-8 [&_button]:text-[12px] [&_button]:px-2.5 [&_button]:bg-card"
+                />
+              </div>
+              {erros?.frigorificoId && <div className="mt-0.5 text-[10px] text-destructive leading-snug">{erros.frigorificoId}</div>}
+              <div className="mt-0.5 text-[9px] text-muted-foreground leading-snug">quem paga o produtor — o favorecido do recebimento</div>
+            </div>
+          )}
           {modoRealizado ? (
             /* ⚠ O VALOR TOTAL E O FATO DO PAPEL; o preco da arroba e' que deriva dele.
                ⚠ JA LIQUIDO do que o frigorifico somou e tirou — bonus, tributos e
@@ -1263,8 +1313,10 @@ const ICONE_GRUPO: Record<IdGrupo, React.ReactNode> = {
   adiantamento: <Banknote className="h-3.5 w-3.5 shrink-0" />,
 };
 
-function DialogoGrupo({ card, valor, somenteLeitura, onAplicar, onFechar, modoRealizado, projetado, dataEntrada }: {
+function DialogoGrupo({ card, valor, somenteLeitura, onAplicar, onFechar, modoRealizado, projetado, dataEntrada, frigorificos }: {
   card: IdCard;
+  /** Opcoes do Frigorifico (B) — os favorecidos ativos do cliente. */
+  frigorificos?: ReadonlyArray<{ id: string; nome: string }>;
   valor: BoitelEdicao;
   somenteLeitura?: boolean;
   /** Modo realizado: peso de abate digitado, data do abate, "previsto: X" nos campos. */
@@ -1301,7 +1353,9 @@ function DialogoGrupo({ card, valor, somenteLeitura, onAplicar, onFechar, modoRe
     : undefined;
   useEffect(() => {
     if (tentativa === 0) return;
-    const alvo = corpoRef.current?.querySelector<HTMLInputElement>('[data-campo-erro] input');
+    /* o primeiro campo pendente: o input dele, ou o botao do seletor (o Frigorifico da B) */
+    const campo = corpoRef.current?.querySelector('[data-campo-erro]');
+    const alvo = campo?.querySelector<HTMLElement>('input') ?? campo?.querySelector<HTMLElement>('button');
     /* `focus()` ja' rola o campo ate' a vista dentro do corpo que rola (A21) — um
        `scrollIntoView` a mais seria segunda ordem para o mesmo movimento. */
     alvo?.focus();
@@ -1311,7 +1365,7 @@ function DialogoGrupo({ card, valor, somenteLeitura, onAplicar, onFechar, modoRe
     onAplicar(local);
     onFechar();
   };
-  const corpos = corposDoBoitel(local, set, setLocal, somenteLeitura, modoRealizado, projetado, dataEntrada, erros);
+  const corpos = corposDoBoitel(local, set, setLocal, somenteLeitura, modoRealizado, projetado, dataEntrada, erros, frigorificos);
   const ids = (Object.keys(GRUPOS) as IdGrupo[]).filter(id => GRUPOS[id].card === card);
   /* O veredito do painel de Custos, no proprio titulo — ver a nota em `Painel`. */
   const derLocal = derivadosBoitel(local);
@@ -1459,8 +1513,10 @@ function DialogoGrupo({ card, valor, somenteLeitura, onAplicar, onFechar, modoRe
 /* ═══ O COMPONENTE ═══════════════════════════════════════════════════════════════ */
 
 export function BoitelBlocosModais({ valor, onChange, somenteLeitura, cenario, detalheCenario, bolsoFormatado,
-  realizado = null, onChangeRealizado, onIniciarRealizado, dataEntrada }: {
+  realizado = null, onChangeRealizado, onIniciarRealizado, dataEntrada, frigorificos }: {
   valor: BoitelEdicao; onChange: (proximo: BoitelEdicao) => void; somenteLeitura?: boolean;
+  /** BOITEL-ABATE-PRODUTOR-01 — os favorecidos ATIVOS do cliente, opcoes do Frigorifico na B. */
+  frigorificos?: ReadonlyArray<{ id: string; nome: string }>;
   /** Marca de projecao — UMA por cartao, no titulo. Ver `GrupoIndicadores`. */
   cenario?: CenarioBoitel;
   /** Texto que acompanha a pilula (mockup: "enviada em 13/05"). */
@@ -1583,6 +1639,7 @@ export function BoitelBlocosModais({ valor, onChange, somenteLeitura, cenario, d
           modoRealizado={editando.modo === 'realizado'}
           projetado={editando.modo === 'realizado' ? valor : null}
           dataEntrada={dataEntrada}
+          frigorificos={frigorificos}
           onAplicar={editando.modo === 'realizado' ? (onChangeRealizado ?? onChange) : onChange}
           onFechar={() => setEditando(null)}
         />
