@@ -792,6 +792,11 @@ no mesmo arquivo.
   principal (1150, frigorifico) nos numeros da 77d963be, sem "a receber do boitel" nem adiantamento, um centavo de
   divergencia segurando o principal com a frase no botao, e o resumo da B; `realizadoPorBloco.test.tsx` foi de 12 para 13
   (na B o bloco Comercializacao cobra o Frigorifico). ⚠ PROVADO: com o ramo B da previsao desligado, 3 casos caem.
+  De 2011 para 2014 no BOITEL-ABATE-PRODUTOR-01b: `realizadoPorBloco.test.tsx` foi de 13 para 16 — o dialogo
+  Comercializacao na A x B: a B esconde o Adiantamento e a A o mostra; o rodape da B ("(+) Recebido do frigorifico",
+  "(−) Pago ao boitel", "(=) Liquido", "Boleto do boitel (papel)") contra o da A ("= A repassar pelo boitel"); e a opcao
+  do Frigorifico com a paleta do combobox da casa (texto claro, sem `bg-card`). ⚠ PROVADO: com o Adiantamento forcado
+  visivel na B, 1 caso cai.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -2212,14 +2217,27 @@ preview que o cabecalho nao sai da tela ao rolar.
     com os tres ajustes de parametro) e ganhou o ramo B; o resumo lateral da B e' "(+) Recebido do frigorifico · (−) Pago ao
     boitel · (=) Liquido".
   ⚠ DIVIDAS DO B-01 (registradas a pedido do Gabriel):
-    (1) o rodape de conferencia DENTRO do dialogo do realizado (Comercializacao) ainda diz "= A repassar pelo boitel"
-        tambem na B, onde nao ha repasse — o resumo lateral ja' fala "(=) Liquido";
+    (1) BAIXADA no 01b (abaixo): o rodape do dialogo dizia "= A repassar pelo boitel" tambem na B;
     (2) o card do DRE (composicao recebido - pago, cabecas, R$/cab das diarias) e' o B-02, com mock;
     (3) o conteudo APLICADO da migration (`schema_migrations`, 20260926113750) leva um CABECALHO RESUMIDO, e o arquivo
         leva o cabecalho completo com as provas — os comandos sao os mesmos e os sete md5 de destino conferem; quem
         comparar texto a texto encontra so' a diferenca de comentario.
   ⚠ docs/PLANO-DE-CONTAS.md ganhou o 1155 A MAO, com a excecao dita no cabecalho da propria doc (conferido: 229 linhas,
     221 globais).
+  ⚠ 01b — O DIALOGO "Comercializacao e Adiantamento" (homologacao de 26/09, 09:04, na 77d963be):
+    (a) O FRIGORIFICO SAIA ILEGIVEL, e o erro foi meu no B-01: `[&_button]:bg-card` no `SearchableSelect` vaza para as
+        OPCOES (o painel nao e' portal e cada opcao e' um `<button>` de texto `zinc-100`) — branco sobre branco. Virou o
+        `FavorecidoSelect` do financeiro, com `opcoesDeFavorecido` levando {id, nome} a `FornecedorV2` (demais campos
+        nulos): mesmo painel, busca e densidade. ⚠ O briefing dizia painel "bg-popover claro"; o do financeiro e' o
+        vidro ESCURO (`COMBOBOX_PALETA`). Valeu "identico ao do financeiro".
+        ⚠ O Comprador usa as MESMAS classes `[&_button]` e esta' legivel (sem `bg-card`), mas elas inflam as opcoes para
+        32px/12px. Nao mexido — fora do escopo.
+    (b) "Quem abate" saiu do topo da Comercializacao e virou painel proprio na coluna da direita; na B o Adiantamento
+        some (nao ha adiantamento na B) e o Frigorifico mora ali. Medido (altura necessaria x teto de 85vh = 680px a
+        800 de altura): realizado B 515, A 517, A com adiantamento "Sim" 568; projetado 392 nas duas — nada rola.
+    (c) Rodape da B: "(+) Recebido do frigorifico · (−) Pago ao boitel" (diarias e notas no boitel na sublinha) ·
+        "(=) Liquido"; o campo de papel e' "Boleto do boitel (papel)", conferido contra o PAGO (`descontoDoAcerto`),
+        nao contra o liquido. A A nao mudou.
   ⚠ DADOS AGUARDANDO OK (nada gravado): 77d963be -> B com JBS, boleto 41eda416 de 5010 para 1155 (DRE do RRCC: civil 2023
     vendas 1.791.708,52 -> 1.482.830,55; lucro -419.319,66 -> -728.197,63); cd4c54b0 so' tem o LIQUIDO no financeiro
     (b51bc0fa, 516.459,04) — nao ha recebido do frigorifico nem boleto lancados.

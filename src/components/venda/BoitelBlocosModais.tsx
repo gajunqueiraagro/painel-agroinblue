@@ -30,11 +30,12 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Segmentado } from '@/components/ui/segmentado';
-import { SearchableSelect } from '@/components/ui/searchable-select';
+import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
+import type { FornecedorV2 } from '@/hooks/useFinanceiroV2';
 import { CampoMoeda } from '@/components/ui/campo-moeda';
 import type { CenarioBoitel } from '@/components/venda/BoitelNegociacaoDerivado';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Pencil, TrendingUp, Wallet, Tag, Banknote, BarChart3, ImageDown } from 'lucide-react';
+import { Pencil, TrendingUp, Wallet, Tag, Banknote, BarChart3, ImageDown, Factory } from 'lucide-react';
 import { formatMoeda, formatKg, formatArroba } from '@/lib/calculos/formatters';
 import type { BoitelData } from '@/components/BoitelPlanningDialog';
 import { derivadosBoitel, cabecasQueSairam, liquidoDaVendaBoitel, bolsoDaVendaBoitel, unitariosDoLiquido, comparativoOportunidade, PilulaCenario, type BoitelEdicao, type UnitariosLiquido, type QuemAbate } from '@/components/venda/BoitelNegociacaoDerivado';
@@ -675,6 +676,20 @@ export function pendenciaDoRealizado(d: BoitelEdicao | null): string | null {
 
 const MSG_OBRIGATORIO = 'Obrigatório no realizado — informe o valor do papel.';
 
+/** O que o Frigorifico da B precisa: as opcoes (favorecidos ATIVOS do cliente) e a busca controlada. */
+interface SeletorFrigorifico { opcoes: FornecedorV2[]; busca: string; setBusca: (s: string) => void }
+
+/* ⚠ ADAPTADOR SEM CAST — BOITEL-ABATE-PRODUTOR-01b. A OC carrega os favorecidos ATIVOS do cliente so' com
+   id/nome (a lista do Comprador); o `FavorecidoSelect` le' so' nome, documento e `ativo`, e os dados de
+   pagamento ficam nulos — o seletor nao os usa e esta tela nao os grava. */
+function opcoesDeFavorecido(lista: ReadonlyArray<{ id: string; nome: string }>): FornecedorV2[] {
+  return lista.map(f => ({
+    id: f.id, nome: f.nome, cpf_cnpj: null, fazenda_id: null, ativo: true,
+    tipo_recebimento: null, pix_tipo_chave: null, pix_chave: null, banco: null, agencia: null, conta: null,
+    tipo_conta: null, cpf_cnpj_pagamento: null, nome_favorecido: null, observacao_pagamento: null,
+  }));
+}
+
 /* Os INDICADORES de cada cartao — o que a aba mostra sem abrir nada.
    ⚠ SEIS E DOIS, e nao um por grupo. Ate' aqui cada cartao trazia UMA frase por grupo
    ("GMD 1,500 · 110 dias · RC 55,00%"), herdada da linha fechada do acordeao. Frase
@@ -807,8 +822,8 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
   onChange: (proximo: BoitelEdicao) => void, somenteLeitura?: boolean,
   modoRealizado?: boolean, projetado?: BoitelEdicao | null, dataEntrada?: string | null,
   erros?: Partial<Record<CampoFatoRealizado, string>>,
-  /** Os favorecidos ATIVOS do cliente — a mesma lista do Comprador. Opcoes do Frigorifico (B). */
-  frigorificos?: ReadonlyArray<{ id: string; nome: string }>) {
+  /** O Frigorifico da B: os favorecidos ATIVOS do cliente e a busca do seletor (estado do `DialogoGrupo`). */
+  frig?: SeletorFrigorifico) {
   /* ⚠ NO REALIZADO OS SEIS FATOS MOSTRAM SO' O FATO — OC-BOITEL-REALIZADO-UX-01. Cabecas
      abatidas, peso vivo, arrobas, diarias e valor do abate mostravam, quando vazios, o numero
      que a PROJECAO daria; o campo parecia preenchido e o banco o recusava como ausente. Valor
@@ -1083,42 +1098,6 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
             precisa daquela informacao esta' na aba Financeiro, olhando a linha. */}
         </>),
     comercializacao: (<><div className="grid grid-cols-2 gap-x-3 gap-y-2.5">
-          {/* ─── QUEM ABATE — BOITEL-ABATE-PRODUTOR-01 ─────────────────────────────────
-              ⚠ NO TOPO DA COMERCIALIZACAO porque ela decide por onde o dinheiro passa: na A o boitel recebe e
-              repassa o liquido; na B o frigorifico paga o produtor e o boitel cobra as despesas. A conta e' a
-              mesma — o seletor muda os titulos da previsao e o texto do resumo, nunca um numero. */}
-          <LinhaCampo label="Quem abate" largura="w-fit" span>
-            <Segmentado<QuemAbate> valor={d.quemAbate ?? 'boitel'} altura={26}
-              onEscolher={v => { if (!somenteLeitura) onChange({ ...d, quemAbate: v }); }}
-              opcoes={[
-                { valor: 'boitel', rotulo: 'Boitel abate (acerto líquido)', desabilitada: somenteLeitura },
-                { valor: 'produtor', rotulo: 'Abate em nome do produtor', desabilitada: somenteLeitura },
-              ]} />
-          </LinhaCampo>
-          {(d.quemAbate ?? 'boitel') === 'produtor' && (
-            /* ⚠ O SELETOR DA CASA DO PROPRIO MODAL — o `SearchableSelect` do Comprador, com a MESMA lista de
-               favorecidos ATIVOS do cliente (busca + so' ativos). Obrigatorio so' no realizado: e' ali que o
-               papel diz quem pagou, e e' ali que a RPC o exige. */
-            <div className="min-w-0 col-span-2" data-campo-erro={erros?.frigorificoId ? '' : undefined}>
-              <Label className="block text-[10px] font-medium text-foreground/90 leading-none whitespace-nowrap">
-                Frigorífico{modoRealizado && <span className="text-destructive"> *</span>}
-              </Label>
-              <div className={`mt-1 w-[280px] ${erros?.frigorificoId ? '[&_button]:border-destructive' : ''}`}>
-                <SearchableSelect
-                  value={d.frigorificoId || '__nenhum__'}
-                  onValueChange={v => set('frigorificoId', v === '__nenhum__' ? '' : v)}
-                  options={(frigorificos ?? []).map(f => ({ value: f.id, label: f.nome }))}
-                  placeholder="Selecione o frigorífico"
-                  allLabel="Nenhum selecionado"
-                  allValue="__nenhum__"
-                  disabled={somenteLeitura}
-                  className="[&_button]:h-8 [&_button]:text-[12px] [&_button]:px-2.5 [&_button]:bg-card"
-                />
-              </div>
-              {erros?.frigorificoId && <div className="mt-0.5 text-[10px] text-destructive leading-snug">{erros.frigorificoId}</div>}
-              <div className="mt-0.5 text-[9px] text-muted-foreground leading-snug">quem paga o produtor — o favorecido do recebimento</div>
-            </div>
-          )}
           {modoRealizado ? (
             /* ⚠ O VALOR TOTAL E O FATO DO PAPEL; o preco da arroba e' que deriva dele.
                ⚠ JA LIQUIDO do que o frigorifico somou e tirou — bonus, tributos e
@@ -1163,6 +1142,42 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
             nas métricas por cabeça; o que muda é a diária, cobrada de {sairam} que saíram.
           </p>
         </div></>),
+    /* ─── QUEM ABATE — BOITEL-ABATE-PRODUTOR-01 / 01b ─────────────────────────────────
+       Painel proprio na COLUNA DIREITA do dialogo de Comercializacao (01b): no topo da Comercializacao ele empurrava
+       os campos e o dialogo passou a rolar. Decide por onde o dinheiro passa — na A o boitel recebe e repassa o
+       liquido; na B o frigorifico paga o produtor e o boitel cobra as despesas. A conta e' a mesma.
+       ⚠ O FRIGORIFICO E' O `FavorecidoSelect` DO FINANCEIRO (01b): o mesmo gatilho, a mesma lista em portal (Popover,
+         `COMBOBOX_CONTENT`), a mesma busca e a mesma densidade. No B-01 era o `SearchableSelect` com
+         `[&_button]:bg-card` — e como o painel dele NAO e' portal, a regra pintava de branco TAMBEM os itens da
+         lista, que tem texto claro: opcoes ilegiveis. */
+    quemAbate: (<div className="space-y-2.5">
+          <Segmentado<QuemAbate> valor={d.quemAbate ?? 'boitel'} altura={26}
+            onEscolher={v => { if (!somenteLeitura) onChange({ ...d, quemAbate: v }); }}
+            opcoes={[
+              { valor: 'boitel', rotulo: 'Boitel abate (acerto líquido)', desabilitada: somenteLeitura },
+              { valor: 'produtor', rotulo: 'Abate em nome do produtor', desabilitada: somenteLeitura },
+            ]} />
+          {(d.quemAbate ?? 'boitel') === 'produtor' && (
+            <div className="min-w-0" data-campo-erro={erros?.frigorificoId ? '' : undefined}>
+              <Label className="block text-[10px] font-medium text-foreground/90 leading-none whitespace-nowrap">
+                Frigorífico{modoRealizado && <span className="text-destructive"> *</span>}
+              </Label>
+              <div className="mt-1 max-w-[300px]">
+                <FavorecidoSelect
+                  value={d.frigorificoId ?? ''}
+                  onChange={id => set('frigorificoId', id)}
+                  fornecedores={frig?.opcoes ?? []}
+                  search={frig?.busca ?? ''}
+                  onSearchChange={s => frig?.setBusca(s)}
+                  disabled={somenteLeitura}
+                  triggerClassName={`bg-card${erros?.frigorificoId ? ' border-destructive' : ''}`}
+                />
+              </div>
+              {erros?.frigorificoId && <div className="mt-0.5 text-[10px] text-destructive leading-snug">{erros.frigorificoId}</div>}
+              <div className="mt-0.5 text-[9px] text-muted-foreground leading-snug">quem paga o produtor — o favorecido do recebimento</div>
+            </div>
+          )}
+        </div>),
     adiantamento: (<><div className="flex items-center gap-2">
           <span className="text-[10px] text-muted-foreground">Houve adiantamento:</span>
           <Button type="button" size="sm" variant={d.possuiAdiantamento ? 'default' : 'outline'} disabled={somenteLeitura}
@@ -1344,6 +1359,8 @@ function DialogoGrupo({ card, valor, somenteLeitura, onAplicar, onFechar, modoRe
      ⚠ A MARCACAO SO' APARECE DEPOIS DA PRIMEIRA TENTATIVA, e dai' em diante e' viva: o
      campo preenchido deixa de ser vermelho enquanto se digita. Abrir o dialogo ja' pintado
      de vermelho acusaria o operador antes de ele fazer qualquer coisa. */
+  const [buscaFrigorifico, setBuscaFrigorifico] = useState('');
+  const opcoesFrigorifico = useMemo(() => opcoesDeFavorecido(frigorificos ?? []), [frigorificos]);
   const [tentouAplicar, setTentouAplicar] = useState(false);
   const [tentativa, setTentativa] = useState(0);
   const corpoRef = useRef<HTMLDivElement>(null);
@@ -1365,7 +1382,9 @@ function DialogoGrupo({ card, valor, somenteLeitura, onAplicar, onFechar, modoRe
     onAplicar(local);
     onFechar();
   };
-  const corpos = corposDoBoitel(local, set, setLocal, somenteLeitura, modoRealizado, projetado, dataEntrada, erros, frigorificos);
+  const corpos = corposDoBoitel(local, set, setLocal, somenteLeitura, modoRealizado, projetado, dataEntrada, erros,
+    { opcoes: opcoesFrigorifico, busca: buscaFrigorifico, setBusca: setBuscaFrigorifico });
+  const ehProdutor = (local.quemAbate ?? 'boitel') === 'produtor';
   const ids = (Object.keys(GRUPOS) as IdGrupo[]).filter(id => GRUPOS[id].card === card);
   /* O veredito do painel de Custos, no proprio titulo — ver a nota em `Painel`. */
   const derLocal = derivadosBoitel(local);
@@ -1382,6 +1401,8 @@ function DialogoGrupo({ card, valor, somenteLeitura, onAplicar, onFechar, modoRe
      tudo. Duas perguntas, dois numeros. */
   const faturamentoConferencia = derLocal.fba;
   const acertoCalculado = Math.round((faturamentoConferencia - derLocal.descontoDoAcerto + derLocal.valorTotalAntecipadoCalc) * 100) / 100;
+  /* BOITEL-ABATE-PRODUTOR-01b — na B o papel que se confere e' o BOLETO do boitel (o pago), nao o repasse. */
+  const alvoPapel = ehProdutor ? Math.round(derLocal.descontoDoAcerto * 100) / 100 : acertoCalculado;
   const qtdLocal = local.qtdCabecas || 0;
   const extraCustos = qtdLocal > 0 && derLocal.custoTotalBoitel > 0 ? (
     <span className="shrink-0 text-[11px] tabular-nums text-[#854F0B] dark:text-amber-500">
@@ -1423,7 +1444,25 @@ function DialogoGrupo({ card, valor, somenteLeitura, onAplicar, onFechar, modoRe
             ⚠ `items-start` para o grupo curto nao esticar ate' a altura do longo. */}
         <div ref={corpoRef} className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-5 items-start">
-          {ids.map(id => (
+          {card === 'B' ? (<>
+            {/* ─── COMERCIALIZACAO: QUEM ABATE NA COLUNA DIREITA — BOITEL-ABATE-PRODUTOR-01b ─────────
+                A esquerda fica como era antes do B-01 (Comercializacao). A direita recebe o painel "Quem abate";
+                na A o Adiantamento continua embaixo dele, na B ele SOME (adiantamento fora da B neste corte).
+                Sem isto os dois campos entravam no topo da Comercializacao e o dialogo rolava. */}
+            <Painel titulo={GRUPOS.comercializacao.titulo} tom={GRUPOS.comercializacao.tom} icone={ICONE_GRUPO.comercializacao}>
+              {corpos.comercializacao}
+            </Painel>
+            <div className="min-w-0 space-y-5">
+              <Painel titulo="Quem abate" tom="cinza" icone={<Factory className="h-3.5 w-3.5 shrink-0" />}>
+                {corpos.quemAbate}
+              </Painel>
+              {!ehProdutor && (
+                <Painel titulo={GRUPOS.adiantamento.titulo} tom={GRUPOS.adiantamento.tom} icone={ICONE_GRUPO.adiantamento}>
+                  {corpos.adiantamento}
+                </Painel>
+              )}
+            </div>
+          </>) : ids.map(id => (
             <Painel key={id} titulo={GRUPOS[id].titulo} tom={GRUPOS[id].tom}
               icone={ICONE_GRUPO[id]}
               extra={id === 'custos' ? extraCustos : undefined}>
@@ -1450,12 +1489,32 @@ function DialogoGrupo({ card, valor, somenteLeitura, onAplicar, onFechar, modoRe
                 o pior caso da conferencia (oito linhas itemizadas) passava 19px do teto de
                 85vh em viewport de 800px. Medido antes e depois; ver o relatorio. */}
             <div className="mb-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-              <span className="text-[11px] font-medium text-foreground leading-none shrink-0">Acerto com o boitel</span>
+              <span className="text-[11px] font-medium text-foreground leading-none shrink-0">{ehProdutor ? 'Abate em nome do produtor' : 'Acerto com o boitel'}</span>
               <span className="text-[10px] text-muted-foreground leading-snug">
                 gastos diretos do produtor (frete e notas do envio) não entram neste acerto — vivem no financeiro
               </span>
             </div>
             <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
+              {ehProdutor ? (
+                /* ─── A CONFERENCIA DA B — BOITEL-ABATE-PRODUTOR-01b ────────────────────────────────────
+                   Na B nao ha repasse: o frigorifico paga o produtor e o boitel cobra por boleto. As linhas sao as do
+                   resumo lateral — recebido = `fba`, pago = `descontoDoAcerto` — e a sublinha discrimina o pago pelas
+                   MESMAS parcelas `dAcerto*` da A (so' as que valem > 0). */
+              <div className="min-w-0 w-fit">
+                <LinhaConferencia direcao="entra" rotulo="(+) Recebido do frigorífico" valor={formatMoeda(faturamentoConferencia)} />
+                <LinhaConferencia direcao="sai" rotulo="(−) Pago ao boitel" valor={`− ${formatMoeda(derLocal.descontoDoAcerto)}`} />
+                <div className="pl-3 text-[10px] text-muted-foreground tabular-nums leading-snug">
+                  {([
+                    ['diárias', derLocal.dAcertoDiarias], ['sanidade', derLocal.dAcertoSanidade], ['outros', derLocal.dAcertoOutros],
+                    ['frete do envio', derLocal.dAcertoFrete], ['notas do envio', derLocal.dAcertoNotas], ['notas/docs do abate', derLocal.dAcertoAbate],
+                  ] satisfies [string, number][]).filter(([, v]) => v > 0).map(([r, v]) => `${r} ${formatMoeda(v)}`).join(' · ') || '—'}
+                </div>
+                <div className="mt-1 border-t pt-1 flex items-baseline justify-between gap-6">
+                  <span className="text-[11px] font-medium text-foreground whitespace-nowrap">(=) Líquido</span>
+                  <span className="text-[13px] font-medium tabular-nums whitespace-nowrap text-foreground">{formatMoeda(faturamentoConferencia - derLocal.descontoDoAcerto)}</span>
+                </div>
+              </div>
+              ) : (
               <div className="min-w-0 w-fit">
                 <LinhaConferencia direcao="entra" rotulo="Faturamento do frigorífico" valor={formatMoeda(faturamentoConferencia)} />
                 {derLocal.dAcertoDiarias > 0 && <LinhaConferencia direcao="sai" rotulo="− Diárias do período" valor={`− ${formatMoeda(derLocal.dAcertoDiarias)}`} />}
@@ -1475,21 +1534,23 @@ function DialogoGrupo({ card, valor, somenteLeitura, onAplicar, onFechar, modoRe
                   <span className="text-[13px] font-medium tabular-nums whitespace-nowrap text-foreground">{formatMoeda(acertoCalculado)}</span>
                 </div>
               </div>
+              )}
               <div className="min-w-0">
-                <CampoNum label="Acerto do boitel (papel)" titulo="O valor que o boitel informou no acerto"
+                <CampoNum label={ehProdutor ? 'Boleto do boitel (papel)' : 'Acerto do boitel (papel)'}
+                  titulo={ehProdutor ? 'O valor do boleto que o boitel cobrou (diárias e demais despesas do lado dele)' : 'O valor que o boitel informou no acerto'}
                   moeda valor={acertoPapel} desabilitado={somenteLeitura}
                   onChange={(v) => { setAcertoPapel(v); setLocal(a => ({ ...a, acertoPapel: v })); }} />
               </div>
               <div className="min-w-0 max-w-[18rem]">
                 {acertoPapel <= 0 ? (
                   <span className="text-[10px] text-muted-foreground leading-snug">
-                    Informe o acerto do papel para conferir.
+                    {ehProdutor ? 'Informe o boleto do papel para conferir.' : 'Informe o acerto do papel para conferir.'}
                   </span>
-                ) : Math.abs(acertoPapel - acertoCalculado) <= 0.005 ? (
+                ) : Math.abs(acertoPapel - alvoPapel) <= 0.005 ? (
                   <span className="text-[11px] font-medium text-success leading-snug">Confere com o papel.</span>
                 ) : (
                   <span className="text-[11px] leading-snug text-amber-700 dark:text-amber-500">
-                    Difere em <b className="tabular-nums">{formatMoeda(Math.abs(acertoPapel - acertoCalculado))}</b> — confira preço, arrobas ou custos.
+                    Difere em <b className="tabular-nums">{formatMoeda(Math.abs(acertoPapel - alvoPapel))}</b> — confira preço, arrobas ou custos.
                   </span>
                 )}
               </div>

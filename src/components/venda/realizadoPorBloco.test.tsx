@@ -56,11 +56,12 @@ describe('faltamDoRealizado — so fato conta', () => {
 
 /* O cartao do realizado ja existe (rascunho semeado); o botao "Editar ..." do cartao REALIZADO e' o
    segundo de cada titulo — o primeiro e' o da projecao. */
+const FRIGORIFICOS = [{ id: 'jbs', nome: 'JBS' }, { id: 'jbs-anastacio', nome: 'JBS - Anastacio' }];
 function montar(realizado: BoitelEdicao) {
   const onChange = vi.fn();
   const onChangeRealizado = vi.fn();
   render(
-    <BoitelBlocosModais valor={PROJETADO} onChange={onChange} cenario="projetado"
+    <BoitelBlocosModais valor={PROJETADO} onChange={onChange} cenario="projetado" frigorificos={FRIGORIFICOS}
       realizado={realizado} onChangeRealizado={onChangeRealizado} onIniciarRealizado={() => Promise.resolve(true)} />,
   );
   return { onChange, onChangeRealizado };
@@ -177,5 +178,43 @@ describe('aviso ao fechar a venda — realizado nao salvo', () => {
     expect(fonte).toContain('Realizado do boitel não salvo');
     expect(fonte).toContain('>Continuar editando</AlertDialogCancel>');
     expect(fonte).toContain('>Descartar e fechar</AlertDialogAction>');
+  });
+});
+
+/* BOITEL-ABATE-PRODUTOR-01b — o dialogo de Comercializacao da B, homologado pelo Gabriel na 77d963be (26/09 09:04). */
+describe('dialogo Comercializacao — A x B (01b)', () => {
+  it('B: o Adiantamento some e "Quem abate" fica na coluna direita; A: os dois paineis', () => {
+    montar({ ...SEMENTE, ...FATOS, quemAbate: 'produtor', frigorificoId: 'jbs' });
+    abrirRealizado('Comercialização e Adiantamento');
+    const dlg = within(screen.getByRole('dialog'));
+    expect(dlg.getByText('Quem abate')).toBeTruthy();
+    expect(dlg.queryByText('Adiantamento')).toBeNull();
+    /* a A, no mesmo dialogo: a busca sabe achar o Adiantamento */
+    fireEvent.click(dlg.getByRole('button', { name: 'Boitel abate (acerto líquido)' }));
+    expect(dlg.getByText('Adiantamento')).toBeTruthy();
+  });
+
+  it('B: rodape Recebido - Pago = Liquido, pago discriminado, e o papel e o BOLETO; A: o rodape de sempre', () => {
+    montar({ ...SEMENTE, ...FATOS, quemAbate: 'produtor', frigorificoId: 'jbs' });
+    abrirRealizado('Comercialização e Adiantamento');
+    const dlg = within(screen.getByRole('dialog'));
+    expect(dlg.getByText('(+) Recebido do frigorífico')).toBeTruthy();
+    expect(dlg.getByText('(−) Pago ao boitel')).toBeTruthy();
+    expect(dlg.getByText(/diárias R\$\s214\.590,48/)).toBeTruthy();
+    expect(dlg.getByText('(=) Líquido')).toBeTruthy();
+    expect(dlg.getByTitle(/O valor do boleto que o boitel cobrou/)).toBeTruthy();
+    expect(dlg.queryByText('= A repassar pelo boitel')).toBeNull();
+    fireEvent.click(dlg.getByRole('button', { name: 'Boitel abate (acerto líquido)' }));
+    expect(dlg.getByText('= A repassar pelo boitel')).toBeTruthy();
+    expect(dlg.getByTitle('O valor que o boitel informou no acerto')).toBeTruthy();
+  });
+
+  it('Frigorifico: o seletor do financeiro, com as opcoes SEM o bg-card que as apagava', () => {
+    montar({ ...SEMENTE, ...FATOS, quemAbate: 'produtor', frigorificoId: '' });
+    abrirRealizado('Comercialização e Adiantamento');
+    fireEvent.click(screen.getByRole('combobox'));
+    const opcao = screen.getByRole('button', { name: /JBS - Anastacio/ });
+    expect(opcao.className).toContain('text-zinc-100');
+    expect(opcao.className).not.toContain('bg-card');
   });
 });
