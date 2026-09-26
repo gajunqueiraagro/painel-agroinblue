@@ -35,7 +35,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { DatePicker } from '@/components/ui/date-picker';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { Calendar, Building2, X, Plus, ArrowRight, Check, RotateCcw } from 'lucide-react';
+import { Calendar, Building2, X, Plus, ArrowRight, Check, RotateCcw, Lock } from 'lucide-react';
 import type { Categoria } from '@/types/cattle';
 import type { CompraLotesApi } from '@/hooks/useCompraLotes';
 import { AbaNegociacaoLotes, type ExclusaoLoteOC } from '@/components/compra/AbaNegociacaoLotes';
@@ -98,6 +98,10 @@ function abasDaVenda(temOperacao: boolean) {
    visivel, como as ajudas de 9px do `CampoNum`.
    ⚠ SO' APARECE COM MOTIVO. Botao habilitado nao ganha linha vazia, e botao desabilitado
    sem motivo declarado e' defeito de quem o escreveu — nao de quem o le. */
+/* OC-EDITAR-CADASTRAL-01 — o idioma de campo travado da casa (`CompraModalShell`, `MorteModalShell`): com a OC
+   fechada o que mexe em valor, quantidade, data ou competencia ja' nasce assim, e o motivo mora no selo do titulo. */
+const CAMPO_TRAVADO = 'bg-muted border-border/60 text-muted-foreground';
+
 function DicaBotao({ texto, erro }: { texto: string | null | undefined; erro?: boolean }) {
   if (!texto) return null;
   return (
@@ -187,6 +191,8 @@ export interface VendaModalShellProps {
   /** `oc_reabrir` — devolve a operacao a 'programada'. O motivo vai para a auditoria. */
   onReabrirNegociacao?: (motivo: string) => void | Promise<unknown>;
   onFechar: () => void;
+  /** OC-EDITAR-CADASTRAL-01 — a recusa do Salvar, escrita ao lado dele (UX-TOAST-01). */
+  erroSalvar?: string | null;
 }
 
 
@@ -205,7 +211,7 @@ export function VendaModalShell({
   documentosApi, eventosApi, liquidacaoApi, recebimentoApi, ocEntregaEncerrada = false,
   categoria, categoriasDisponiveis,
   quantidadeNum, pesoKgNum, submitting, onSalvarOperacao, onSalvarNegociacao, semAlteracoes = false,
-  onConcluirNegociacao, onReabrirNegociacao, onFechar,
+  onConcluirNegociacao, onReabrirNegociacao, onFechar, erroSalvar = null,
 }: VendaModalShellProps) {
   /* A lista de fazendas no formato do combobox — FAZ-ATIVIDADE-01c. Deriva de `fazendasOC`, que já
      carrega a regra de quem pode receber lançamento; o formato da opção não redecide isso. */
@@ -231,7 +237,15 @@ export function VendaModalShell({
      guardado — muda apenas ONDE vai aparecer, e sera' dentro da Negociacao. */
 
   const fazendaFalta = !vendaFazendaId;
-  const identificacaoPronta = !!compradorId && !!vendaFazendaId && !!data && !!vendaTipoVenda;
+  /* OC-EDITAR-CADASTRAL-01 — com a OC FECHADA so' os cadastrais se editam (comprador, observacoes, NF, documentos);
+     data, fazenda, tipo de venda, lotes e boitel ficam travados, e cancelada trava tudo. O Salvar da aba Venda
+     grava pelo `oc_editar_dados_operacao` e so' precisa do comprador: o tipo de venda nao e' gravado na OC, e a
+     venda comum reabre sem ele — exigi-lo aqui prenderia o comprador atras de um campo travado. */
+  const fechada = ocStatusComercial === 'fechada';
+  const operacionalTravado = fechada || ocStatusComercial === 'cancelada';
+  const identificacaoPronta = fechada
+    ? !!compradorId
+    : !!compradorId && !!vendaFazendaId && !!data && !!vendaTipoVenda;
 
   /* ⚠ A BIFURCACAO DA NEGOCIACAO, de PR-OC-VENDA-BOITEL-01A. O boitel NAO tem aba
      propria: ele e' a Negociacao com mais coisa. Venda comum mostra os lotes como
@@ -422,7 +436,7 @@ export function VendaModalShell({
      conseguia nem CRIAR a operacao, porque os cinco campos moram na aba de Negociacao —
      que so' existe depois da operacao criada. */
   const podeSalvar = naNegociacao
-    ? !!ocOperacaoId && faltamBoitel.length === 0 && !pendenciaRealizado
+    ? !!ocOperacaoId && !fechada && faltamBoitel.length === 0 && !pendenciaRealizado
     : identificacaoPronta;
   /* ⚠ NAO E' O MESMO QUE "NAO PODE": o botao pode estar apto e nao ter o que gravar. Por
      isso o motivo tem precedencia — quem NAO PODE precisa saber o que falta; quem so' nao
@@ -451,15 +465,19 @@ export function VendaModalShell({
     : submitting ? 'salvando…'
     : recebimentoApi?.saving ? 'aguarde a entrega terminar'
     : null;
-  const motivoNaoSalva = mesFechadoMotivo
+  /* OC-EDITAR-CADASTRAL-01 — o mes fechado (P1) trava o que e' OPERACIONAL; o Salvar da OC fechada grava so'
+     cadastral, entao ele nao trava ali. A negociacao da OC fechada diz o caminho, sem esperar o clique. */
+  const motivoNaoSalva = mesFechadoMotivo && !fechada
     ? `${mesFechadoMotivo} — reabra o período para lançar`
+    : naNegociacao && fechada
+    ? 'Operação fechada · reabra para editar'
     : naNegociacao
     ? (!ocOperacaoId ? 'Salve a operação na aba Venda primeiro'
        : faltamBoitel.length > 0 ? `Planejamento do boitel incompleto. Falta ${faltamBoitel.join(', ')}.`
        /* ⚠ UX-OBRIGATORIOS-01: com pendencia no realizado o Salvar NAO grava, e diz o bloco
           e o campo. Cada bloco ja' se valida no Aplicar; isto pega o bloco nunca aberto. */
        : pendenciaRealizado ?? undefined)
-    : (identificacaoPronta ? undefined : 'Informe comprador, data, fazenda e tipo de venda');
+    : (identificacaoPronta ? undefined : fechada ? 'Selecione o comprador' : 'Informe comprador, data, fazenda e tipo de venda');
   /* Mesma regra aplicada ao Salvar — B-09 item 1c. O motivo ja existia no `title` desde
      sempre; o que faltava era ele estar ESCRITO ao lado.
      ⚠ `submitting` FICA DE FORA: ali o proprio rotulo do botao vira "Salvando...", e uma
@@ -487,7 +505,7 @@ export function VendaModalShell({
       modoOC
       operacaoPronta={!!ocOperacaoId}
       lotesApi={lotesApi}
-      somenteLeitura={ocStatusComercial === 'cancelada'}
+      somenteLeitura={operacionalTravado}
       onVoltarCompra={() => setAbaAtiva('venda')}
       /* ⚠ SO NA VENDA BOITEL. Numa venda comum e numa compra as duas props sao nulas e a
          grade e' exatamente a de antes: valor digitavel, criterio livre, quantos lotes
@@ -737,7 +755,11 @@ export function VendaModalShell({
                     <BoitelBlocosModais
                       valor={boitelData}
                       onChange={onBoitelChange}
-                      somenteLeitura={ocStatusComercial === 'cancelada'}
+                      somenteLeitura={operacionalTravado}
+                      /* ⚠ EXCECAO: "Lancar realizado" continua com a OC fechada — o iniciar REABRE antes de abrir o
+                         dialogo (`iniciarRealizadoBoitel`), e depois disso nada mais esta' travado. */
+                      podeLancarRealizado={ocStatusComercial !== 'cancelada'}
+                      motivoTravado={fechada ? 'Operação fechada · reabra para editar' : null}
                       cenario="projetado"
                       /* ⚠ "enviada em 13/05" — desde quando a projecao corre. Sem isso a
                           pilula diz QUE e' projecao e nao diz de QUANDO, que e' o que
@@ -778,7 +800,16 @@ export function VendaModalShell({
             ) : abaLotes
           ) : (
           <div className="rounded-md border bg-card p-2 shadow-sm space-y-2 min-w-0">
-            <div className="text-[15px] font-medium text-foreground">Identificação da venda</div>
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="text-[15px] font-medium text-foreground">Identificação da venda</div>
+              {/* OC-EDITAR-CADASTRAL-01 — o selo com cadeado de `LancamentoZooModal`. */}
+              {fechada && (
+                <span className="shrink-0 px-2 py-0.5 rounded-md bg-amber-50 border border-amber-300 flex items-center gap-1.5">
+                  <Lock className="w-3 h-3 text-amber-700" />
+                  <span className="text-[10px] text-amber-800 leading-none">Operação fechada · reabra para editar</span>
+                </span>
+              )}
+            </div>
 
             {/* FAIXA DE TOPO — rotulo 11px/400, valor 20px/500. */}
             <div className="grid grid-cols-2 gap-2 rounded-md border bg-muted/20 px-3.5 py-[11px]">
@@ -816,9 +847,13 @@ export function VendaModalShell({
                 </div>
               </div>
               <div className="min-w-0">
-                <Label className="text-[10px] text-muted-foreground">Data da venda <span className="text-destructive">*</span></Label>
+                <Label className="text-[10px] text-muted-foreground flex items-center gap-1">
+                  Data da venda <span className="text-destructive">*</span>
+                  {operacionalTravado && <Lock className="w-3 h-3 text-amber-700" />}
+                </Label>
                 {/* A20 — DatePicker do sistema, nunca `<input type="date">`. */}
-                <DatePicker value={data} onChange={setData} className="mt-[3px] h-8 px-2.5 text-[12px]" />
+                <DatePicker value={data} onChange={setData} disabled={operacionalTravado}
+                  className={`mt-[3px] h-8 px-2.5 text-[12px] ${operacionalTravado ? CAMPO_TRAVADO : ''}`} />
                 {/* Âmbar: estado do período, não erro do operador — e no instante da data. */}
                 {mesFechadoMotivo && (
                   <div className="mt-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-[10px] leading-snug text-amber-800">
@@ -830,7 +865,10 @@ export function VendaModalShell({
               </div>
               <div className="min-w-0">
                 {/* ⚠ ORIGEM, e nao destino: numa venda o gado SAI da fazenda. */}
-                <Label className="text-[10px] text-muted-foreground">Fazenda de origem <span className="text-destructive">*</span></Label>
+                <Label className="text-[10px] text-muted-foreground flex items-center gap-1">
+                  Fazenda de origem <span className="text-destructive">*</span>
+                  {operacionalTravado && <Lock className="w-3 h-3 text-amber-700" />}
+                </Label>
                 <SearchableSelect
                   value={vendaFazendaId || '__all__'}
                   onValueChange={v => setVendaFazendaId(v === '__all__' ? '' : v)}
@@ -838,9 +876,10 @@ export function VendaModalShell({
                   placeholder="Buscar fazenda…"
                   allLabel="Selecione a fazenda"
                   allValue="__all__"
-                  className={`mt-[3px] [&_button]:h-8 [&_button]:px-2.5 [&_button]:text-[12px] ${fazendaFalta ? '[&_button]:border-destructive' : ''}`}
+                  disabled={operacionalTravado}
+                  className={`mt-[3px] [&_button]:h-8 [&_button]:px-2.5 [&_button]:text-[12px] ${fazendaFalta ? '[&_button]:border-destructive' : ''} ${operacionalTravado ? `[&_button]:${CAMPO_TRAVADO.split(' ').join(' [&_button]:')}` : ''}`}
                 />
-                {fazendaFalta && (
+                {fazendaFalta && !operacionalTravado && (
                   <p className="mt-[3px] text-[10px] text-destructive">Selecione a fazenda de origem.</p>
                 )}
               </div>
@@ -850,9 +889,12 @@ export function VendaModalShell({
                   className="mt-[3px] h-8 px-2.5 text-[12px]" />
               </div>
               <div className="min-w-0">
-                <Label className="text-[10px] text-muted-foreground">Tipo de venda <span className="text-destructive">*</span></Label>
-                <Select value={vendaTipoVenda} onValueChange={setVendaTipoVenda}>
-                  <SelectTrigger className="mt-[3px] h-8 px-2.5 text-[12px]"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                <Label className="text-[10px] text-muted-foreground flex items-center gap-1">
+                  Tipo de venda <span className="text-destructive">*</span>
+                  {operacionalTravado && <Lock className="w-3 h-3 text-amber-700" />}
+                </Label>
+                <Select value={vendaTipoVenda} onValueChange={setVendaTipoVenda} disabled={operacionalTravado}>
+                  <SelectTrigger className={`mt-[3px] h-8 px-2.5 text-[12px] ${operacionalTravado ? CAMPO_TRAVADO : ''}`}><SelectValue placeholder="Selecione..." /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="gado_adulto">Gado adulto</SelectItem>
                     <SelectItem value="desmama">Desmama</SelectItem>
@@ -1070,6 +1112,7 @@ export function VendaModalShell({
         {/* ⚠ UX-TOAST-01: a recusa do banco ao realizado mora AQUI, ao lado do botao que a
             provocou — e o rascunho continua na tela para corrigir e salvar de novo. */}
         <DicaBotao texto={erroRealizado} erro />
+        <DicaBotao texto={erroSalvar} erro />
         <DicaBotao texto={salvarTravadoPor} />
         <Button type="button"
           onClick={async () => {

@@ -36,7 +36,7 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { DatePicker } from '@/components/ui/date-picker';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { Calendar, Building2, X, Plus, ArrowRight, Check, RotateCcw } from 'lucide-react';
+import { Calendar, Building2, X, Plus, ArrowRight, Check, RotateCcw, Lock } from 'lucide-react';
 import type { Categoria } from '@/types/cattle';
 import type { CompraLotesApi } from '@/hooks/useCompraLotes';
 import type { ExclusaoLoteOC } from '@/components/compra/AbaNegociacaoLotes';
@@ -105,14 +105,17 @@ function abasDoAbate(temOperacao: boolean) {
    visivel, como as ajudas de 9px do `CampoNum`.
    ⚠ SO' APARECE COM MOTIVO. Botao habilitado nao ganha linha vazia, e botao desabilitado
    sem motivo declarado e' defeito de quem o escreveu — nao de quem o le. */
-function DicaBotao({ texto }: { texto: string | null | undefined }) {
+function DicaBotao({ texto, erro }: { texto: string | null | undefined; erro?: boolean }) {
   if (!texto) return null;
   return (
-    <span className="text-[10px] font-normal text-white/80 leading-snug max-w-[15rem] text-right">
+    <span className={`text-[10px] leading-snug max-w-[15rem] text-right ${erro ? 'font-medium text-red-200' : 'font-normal text-white/80'}`}>
       {texto}
     </span>
   );
 }
+
+/* OC-EDITAR-CADASTRAL-01 — o idioma de campo travado da casa (`CompraModalShell`, `MorteModalShell`). */
+const CAMPO_TRAVADO = 'bg-muted border-border/60 text-muted-foreground';
 
 /* Par rotulo-valor do resumo lateral — idioma do `Linha` de ResumoLateralOC (A17).
    ⚠ SEXTA COPIA deste par. Sai na mesma extracao que levar o resumo para lugar unico. */
@@ -208,6 +211,8 @@ export interface AbateModalShellProps {
   /** `oc_reabrir` — devolve a operacao a 'programada'. O motivo vai para a auditoria. */
   onReabrirNegociacao?: (motivo: string) => void | Promise<unknown>;
   onFechar: () => void;
+  /** OC-EDITAR-CADASTRAL-01 — a recusa do Salvar, escrita ao lado dele (UX-TOAST-01). */
+  erroSalvar?: string | null;
 }
 
 /* Data ISO + N dias, em ISO. `null` quando nao da' para responder — data vazia, data
@@ -232,7 +237,7 @@ export function AbateModalShell({
   documentosApi, eventosApi, liquidacaoApi, recebimentoApi, ocEntregaEncerrada = false,
   categoria, categoriasDisponiveis,
   quantidadeNum, pesoKgNum, submitting, onSalvarOperacao, onSalvarNegociacao, semAlteracoes = false,
-  onConcluirNegociacao, onReabrirNegociacao, onFechar,
+  onConcluirNegociacao, onReabrirNegociacao, onFechar, erroSalvar = null,
 }: AbateModalShellProps) {
   /* A lista de fazendas no formato do combobox — FAZ-ATIVIDADE-01c. Deriva de `fazendasOC`, que já
      carrega a regra de quem pode receber lançamento; o formato da opção não redecide isso. */
@@ -287,7 +292,11 @@ export function AbateModalShell({
      era a UNICA coisa que o campo governava — nao ia a payload nenhum. Deixa-lo na
      expressao depois de remover o `Select` travaria a tela para sempre, com a dica
      pedindo um campo que nao existe mais. */
-  const identificacaoPronta = !!frigorificoId && !!abateFazendaId && !!data;
+  /* OC-EDITAR-CADASTRAL-01 — com a OC FECHADA so' comprador e observacoes se editam (e documentos, na aba deles);
+     data e fazenda travam, e o Salvar grava pelo `oc_editar_dados_operacao`. */
+  const fechada = ocStatusComercial === 'fechada';
+  const operacionalTravado = fechada || ocStatusComercial === 'cancelada';
+  const identificacaoPronta = fechada ? !!frigorificoId : !!frigorificoId && !!abateFazendaId && !!data;
 
   /* ⚠ A BIFURCACAO DA NEGOCIACAO, de PR-OC-VENDA-BOITEL-01A. O boitel NAO tem aba
      propria: ele e' a Negociacao com mais coisa. Venda comum mostra os lotes como
@@ -529,7 +538,7 @@ export function AbateModalShell({
      campos do planejamento do boitel; o abate nao tem planejamento previo — o detalhe
      (carcaca, rendimento, preco da @) e' o proprio conteudo da negociacao, e exigi-lo
      para salvar impediria de salvar pela metade, que e' como o operador trabalha. */
-  const podeSalvar = naNegociacao ? !!ocOperacaoId : identificacaoPronta;
+  const podeSalvar = naNegociacao ? !!ocOperacaoId && !fechada : identificacaoPronta;
   /* ⚠ NAO E' O MESMO QUE "NAO PODE": o botao pode estar apto e nao ter o que gravar. Por
      isso o motivo tem precedencia — quem NAO PODE precisa saber o que falta; quem so' nao
      tem alteracao precisa saber que ja' esta' salvo. */
@@ -539,11 +548,12 @@ export function AbateModalShell({
      silencio por construcao. */
   /* ⚠ O MES FECHADO TRAVA OS DOIS BOTOES, e vem ANTES dos outros motivos: nao adianta
      dizer "informe a fazenda" se, informada a fazenda, o mes recusa. */
-  const motivoNaoSalva = mesFechadoMotivo
+  /* OC-EDITAR-CADASTRAL-01 — o mes fechado (P1) trava o OPERACIONAL; o Salvar da OC fechada grava so' cadastral. */
+  const motivoNaoSalva = mesFechadoMotivo && !fechada
     ? `${mesFechadoMotivo} — reabra o período para lançar`
     : naNegociacao
-      ? (!ocOperacaoId ? 'Salve a operação na aba Abate primeiro' : undefined)
-      : (identificacaoPronta ? undefined : 'Informe frigorífico, data e fazenda');
+      ? (!ocOperacaoId ? 'Salve a operação na aba Abate primeiro' : fechada ? 'Operação fechada · reabra para editar' : undefined)
+      : (identificacaoPronta ? undefined : fechada ? 'Selecione o comprador' : 'Informe frigorífico, data e fazenda');
   /* Mesma regra aplicada ao Salvar — B-09 item 1c. O motivo ja existia no `title` desde
      sempre; o que faltava era ele estar ESCRITO ao lado.
      ⚠ `submitting` FICA DE FORA: ali o proprio rotulo do botao vira "Salvando...", e uma
@@ -941,7 +951,16 @@ export function AbateModalShell({
               </div>
             ) : (
             <div className="rounded-md border bg-card p-2 shadow-sm space-y-2 min-w-0">
-              <div className="text-[12px] font-medium text-foreground">Identificação do abate</div>
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="text-[12px] font-medium text-foreground">Identificação do abate</div>
+                {/* OC-EDITAR-CADASTRAL-01 — o selo com cadeado de `LancamentoZooModal`. */}
+                {fechada && (
+                  <span className="shrink-0 px-2 py-0.5 rounded-md bg-amber-50 border border-amber-300 flex items-center gap-1.5">
+                    <Lock className="w-3 h-3 text-amber-700" />
+                    <span className="text-[10px] text-amber-800 leading-none">Operação fechada · reabra para editar</span>
+                  </span>
+                )}
+              </div>
 
               {/* FAIXA DE TOPO — rotulo 11px/400, valor 20px/500. */}
               {/* ⚠ O COMPRADOR OCUPA O QUE SOBRA (A22): em tres colunas iguais, "Fortunceres
@@ -1000,13 +1019,20 @@ export function AbateModalShell({
                   </div>
                 </div>
                 <div className="min-w-0">
-                  <Label className="text-[10px] text-muted-foreground">Data do abate <span className="text-destructive">*</span></Label>
+                  <Label className="text-[10px] text-muted-foreground flex items-center gap-1">
+                    Data do abate <span className="text-destructive">*</span>
+                    {operacionalTravado && <Lock className="w-3 h-3 text-amber-700" />}
+                  </Label>
                   {/* A20 — DatePicker do sistema, nunca `<input type="date">`. */}
-                  <DatePicker value={data} onChange={setData} className="mt-[3px] h-8 px-2.5 text-[12px]" />
+                  <DatePicker value={data} onChange={setData} disabled={operacionalTravado}
+                    className={`mt-[3px] h-8 px-2.5 text-[12px] ${operacionalTravado ? CAMPO_TRAVADO : ''}`} />
                 </div>
                 <div className="min-w-0">
                   {/* ⚠ ORIGEM, e nao destino: numa venda o gado SAI da fazenda. */}
-                  <Label className="text-[10px] text-muted-foreground">Fazenda de origem <span className="text-destructive">*</span></Label>
+                  <Label className="text-[10px] text-muted-foreground flex items-center gap-1">
+                    Fazenda de origem <span className="text-destructive">*</span>
+                    {operacionalTravado && <Lock className="w-3 h-3 text-amber-700" />}
+                  </Label>
                   <SearchableSelect
                     value={abateFazendaId || '__all__'}
                     onValueChange={v => setAbateFazendaId(v === '__all__' ? '' : v)}
@@ -1015,9 +1041,10 @@ export function AbateModalShell({
                     allLabel="Selecione a fazenda"
                     allValue="__all__"
                     dense
-                    className={`mt-[3px] [&_button]:h-8 [&_button]:px-2.5 [&_button]:text-[12px] ${fazendaFalta ? '[&_button]:border-destructive' : ''}`}
+                    disabled={operacionalTravado}
+                    className={`mt-[3px] [&_button]:h-8 [&_button]:px-2.5 [&_button]:text-[12px] ${fazendaFalta ? '[&_button]:border-destructive' : ''} ${operacionalTravado ? `[&_button]:${CAMPO_TRAVADO.split(' ').join(' [&_button]:')}` : ''}`}
                   />
-                  {fazendaFalta && (
+                  {fazendaFalta && !operacionalTravado && (
                     <p className="mt-[3px] text-[10px] text-destructive">Selecione a fazenda de origem.</p>
                   )}
                 </div>
@@ -1255,6 +1282,7 @@ export function AbateModalShell({
             Entrega; salvar e' o passo intermediario. Invertido, o olho encontrava o
             branco (Salvar) e procurava o proximo passo onde ele nao estava. */}
         {rodapeTemSalvar && (<>
+        <DicaBotao texto={erroSalvar} erro />
         <DicaBotao texto={salvarTravadoPor} />
         <Button type="button"
           onClick={async () => {

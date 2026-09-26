@@ -109,6 +109,7 @@ export interface CompraModalShellProps {
   ocFazendaValida?: boolean;            // PR-NAV-CONTEXTO-FAZENDA-01A — há fazenda real p/ persistir (bloqueia Salvar)
   acaoOcLoading?: 'confirmar' | 'cancelar' | 'reabrir' | null;
   ocDadosSujos?: boolean;               // ha edicao nao gravada nos dados da operacao
+  erroSalvarOC?: string | null;         // OC-EDITAR-CADASTRAL-01 — recusa do Salvar, escrita ao lado dele (UX-TOAST-01)
   onAutoSalvarOC?: () => void;          // grava sozinho ao trocar de aba (fatia 4)
   onConfirmarOC?: () => void | Promise<boolean>;   // devolve true quando a operacao fechou de verdade
   onCancelarOC?: (motivo: string) => void;
@@ -249,6 +250,8 @@ export function CompraModalShell(api: CompraModalShellProps) {
     financeiroLegadoReadOnly: somenteLeituraDownstream,
     financeiroNovoReadOnly: api.ocRascunho === true || api.ocStatusComercial === 'cancelada',
   };
+  /* OC-EDITAR-CADASTRAL-01 (decisao a) — a data da compra e' operacional: trava com a OC fechada ou cancelada. */
+  const dataTravada = permissoes.dadosOperacaoReadOnly || api.ocStatusComercial === 'fechada';
   // FIX-01 item 6 — data de chegada = 1ª movimentação de recebimento (referência de contexto).
   const dataChegada = (api.recebimentoApi?.movimentacoes ?? []).map(m => m.data).filter(Boolean).sort()[0] ?? null;
   const [fluxoNeg, setFluxoNeg] = useState<null | 'salvando' | 'concluindo'>(null);   // fluxo "Concluir lotes e continuar"
@@ -499,7 +502,17 @@ export function CompraModalShell(api: CompraModalShellProps) {
                 AbaDocumentosOC; `-mt-2 pt-2` cobre o padding do cartao. */}
             <div className="sticky top-0 z-10 -mt-2 space-y-2 border-b bg-card pt-2 pb-2">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[15px] font-medium text-foreground min-w-0 truncate">Identificação da compra</span>
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="text-[15px] font-medium text-foreground min-w-0 truncate">Identificação da compra</span>
+                  {/* OC-EDITAR-CADASTRAL-01 — o selo com cadeado de `LancamentoZooModal`: com a OC fechada o que
+                      mexe em valor, quantidade, data ou competencia ja' nasce travado, e o motivo esta' escrito. */}
+                  {api.ocStatusComercial === 'fechada' && (
+                    <span className="shrink-0 px-2 py-0.5 rounded-md bg-amber-50 border border-amber-300 flex items-center gap-1.5">
+                      <Lock className="w-3 h-3 text-amber-700" />
+                      <span className="text-[10px] text-amber-800 leading-none">Operação fechada · reabra para editar</span>
+                    </span>
+                  )}
+                </div>
                 {/* ⚠ O ESTADO A DIREITA E' O PROPRIO SELETOR, nao um selo ao lado dele.
                     O desenho tirou "Status" da lista de campos, mas ele e' EDITAVEL — e' por
                     ele que se troca Realizado/Meta. Vira-lo em enfeite tiraria da tela a
@@ -576,10 +589,15 @@ export function CompraModalShell(api: CompraModalShellProps) {
               </div>
 
               <div className="min-w-0">
-                <Label className="text-[10px]">Data da compra <span className="text-destructive">*</span></Label>
-                <div className={`mt-[3px] ${permissoes.dadosOperacaoReadOnly ? 'pointer-events-none' : ''}`}>
-                  <DatePicker value={api.data} onChange={api.setData}
-                    className={`px-2.5 ${permissoes.dadosOperacaoReadOnly ? CAMPO_TRAVADO : ''}`} />
+                {/* OC-EDITAR-CADASTRAL-01 (decisao a) — a data e' OPERACIONAL: vira competencia no Vincular, semeia o
+                    vencimento e decide o mes do P1. Trava com a OC FECHADA (e cancelada), nao com o titulo. */}
+                <Label className="text-[10px] flex items-center gap-1">
+                  Data da compra <span className="text-destructive">*</span>
+                  {dataTravada && !permissoes.dadosOperacaoReadOnly && <Lock className="w-3 h-3 text-amber-700" />}
+                </Label>
+                <div className={`mt-[3px] ${dataTravada ? 'pointer-events-none' : ''}`}>
+                  <DatePicker value={api.data} onChange={api.setData} disabled={dataTravada}
+                    className={`px-2.5 ${dataTravada ? CAMPO_TRAVADO : ''}`} />
                 </div>
                 {/* ⚠ AMBAR E LOGO ABAIXO DA DATA: e' estado do periodo, nao erro do
                     operador, e aparece no instante em que a data cai no mes fechado — nao
@@ -594,7 +612,10 @@ export function CompraModalShell(api: CompraModalShellProps) {
               </div>
 
               <div className="min-w-0">
-                <Label className="text-[10px]">Fazenda <span className="text-destructive">*</span></Label>
+                <Label className="text-[10px] flex items-center gap-1">
+                  Fazenda <span className="text-destructive">*</span>
+                  {permissoes.negociacaoReadOnly && !permissoes.dadosOperacaoReadOnly && <Lock className="w-3 h-3 text-amber-700" />}
+                </Label>
                 {/* PR-NAV-CONTEXTO-FAZENDA-01A — `api.fazendas` já vem filtrada ao domínio pecuário na
                     origem (critério único isFazendaPecuaria: sem Global, sem administrativas, só aptas).
                     A fazenda gravada só aparece selecionada se continuar válida para o domínio. */}
@@ -645,7 +666,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
                 <p className="text-[10px] text-muted-foreground leading-tight">Operação cancelada — somente leitura.</p>
               ) : (
                 <p className="text-[10px] text-muted-foreground leading-tight">
-                  Fornecedor, data e observação seguem editáveis. Categoria, quantidade e peso
+                  Fornecedor e observação seguem editáveis. Categoria, quantidade e peso
                   exigem estorno do recebimento; valores e lotes têm caminho próprio.
                 </p>
               )
@@ -833,6 +854,9 @@ export function CompraModalShell(api: CompraModalShellProps) {
                   ⚠ Desabilitado quando NAO ha alteracao pendente: e' o que impede a
                   versao de subir e a auditoria de encher de evento vazio. Sem titulo
                   aqui: os quatro campos nao tocam a base economica. */}
+              {api.ocStatusComercial === 'fechada' && abaAtiva === 'compra' && api.erroSalvarOC && (
+                <span className="text-[10px] leading-snug max-w-[15rem] text-right font-medium text-red-200">{api.erroSalvarOC}</span>
+              )}
               {api.ocStatusComercial === 'fechada' && abaAtiva === 'compra' && (
                 <Button onClick={api.handleRequestRegister}
                   disabled={api.submitting || !!api.acaoOcLoading || !api.ocDadosSujos}

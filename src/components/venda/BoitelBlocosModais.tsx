@@ -1328,8 +1328,10 @@ const ICONE_GRUPO: Record<IdGrupo, React.ReactNode> = {
   adiantamento: <Banknote className="h-3.5 w-3.5 shrink-0" />,
 };
 
-function DialogoGrupo({ card, valor, somenteLeitura, onAplicar, onFechar, modoRealizado, projetado, dataEntrada, frigorificos }: {
+function DialogoGrupo({ card, valor, somenteLeitura, motivoTravado = null, onAplicar, onFechar, modoRealizado, projetado, dataEntrada, frigorificos }: {
   card: IdCard;
+  /** OC-EDITAR-CADASTRAL-01 — por que o dialogo esta' travado, escrito ao lado do Aplicar. */
+  motivoTravado?: string | null;
   /** Opcoes do Frigorifico (B) — os favorecidos ativos do cliente. */
   frigorificos?: ReadonlyArray<{ id: string; nome: string }>;
   valor: BoitelEdicao;
@@ -1563,6 +1565,9 @@ function DialogoGrupo({ card, valor, somenteLeitura, onAplicar, onFechar, modoRe
               Falta {faltamNoBloco.map(f => f.rotulo).join(', ')}.
             </span>
           )}
+          {somenteLeitura && motivoTravado && (
+            <span className="mr-auto text-[10px] text-muted-foreground leading-snug">{motivoTravado}</span>
+          )}
           <Button variant="outline" size="sm" onClick={onFechar}>Cancelar</Button>
           <Button size="sm" disabled={somenteLeitura} onClick={aplicar}>Aplicar</Button>
         </DialogFooter>
@@ -1574,8 +1579,16 @@ function DialogoGrupo({ card, valor, somenteLeitura, onAplicar, onFechar, modoRe
 /* ═══ O COMPONENTE ═══════════════════════════════════════════════════════════════ */
 
 export function BoitelBlocosModais({ valor, onChange, somenteLeitura, cenario, detalheCenario, bolsoFormatado,
-  realizado = null, onChangeRealizado, onIniciarRealizado, dataEntrada, frigorificos }: {
+  realizado = null, onChangeRealizado, onIniciarRealizado, dataEntrada, frigorificos,
+  podeLancarRealizado, motivoTravado = null }: {
   valor: BoitelEdicao; onChange: (proximo: BoitelEdicao) => void; somenteLeitura?: boolean;
+  /**
+   * OC-EDITAR-CADASTRAL-01 — o "Lancar realizado do abate" com a OC FECHADA. Os blocos travam (`somenteLeitura`), mas o
+   * lancamento continua: o iniciar REABRE a operacao antes de o dialogo abrir. Ausente = `!somenteLeitura`, o de antes.
+   */
+  podeLancarRealizado?: boolean;
+  /** Por que os blocos estao travados — vai ao lado do Aplicar do dialogo. */
+  motivoTravado?: string | null;
   /** BOITEL-ABATE-PRODUTOR-01 — os favorecidos ATIVOS do cliente, opcoes do Frigorifico na B. */
   frigorificos?: ReadonlyArray<{ id: string; nome: string }>;
   /** Marca de projecao — UMA por cartao, no titulo. Ver `GrupoIndicadores`. */
@@ -1676,7 +1689,7 @@ export function BoitelBlocosModais({ valor, onChange, somenteLeitura, cenario, d
             <p className="text-[11px] text-muted-foreground text-center leading-snug max-w-[16rem]">
               Será lançado no acerto do abate.
             </p>
-            {onIniciarRealizado && !somenteLeitura && (
+            {onIniciarRealizado && (podeLancarRealizado ?? !somenteLeitura) && (
               <Button type="button" size="sm" variant="outline" className="h-7 text-[11px]"
                 onClick={() => abrir('A', 'realizado')}>
                 Lançar realizado do abate
@@ -1697,6 +1710,7 @@ export function BoitelBlocosModais({ valor, onChange, somenteLeitura, cenario, d
           card={editando.card}
           valor={editando.modo === 'realizado' ? (realizado ?? valor) : valor}
           somenteLeitura={somenteLeitura}
+          motivoTravado={motivoTravado}
           modoRealizado={editando.modo === 'realizado'}
           projetado={editando.modo === 'realizado' ? valor : null}
           dataEntrada={dataEntrada}

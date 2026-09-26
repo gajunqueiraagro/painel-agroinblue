@@ -81,7 +81,7 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { useIntegerInput, useDecimalInput, parseDecimalInput } from '@/hooks/useFormattedNumber';
 import { toast } from 'sonner';
 import { decidirHidratacao, vaiHidratar } from '@/lib/oc/hidratacaoOC';
-import { toastNegociacaoFechada } from '@/lib/oc/toastNegociacaoFechada';
+import { caminhoDoSalvarOC, soCadastrais } from '@/lib/oc/edicaoCadastralOC';
 import { gravarRealizadoBoitel as gravarRealizadoNoBanco, type ResultadoRealizado } from '@/lib/oc/gravarRealizadoBoitel';
 import { useMasterLock } from '@/hooks/useMasterLock';
 import { MasterLockBanner } from '@/components/MasterLockBanner';
@@ -828,6 +828,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [ocBoitelRealSalvo, setOcBoitelRealSalvo] = useState<BoitelEdicao | null>(null);
   /** A recusa do banco ao gravar o realizado — vai escrita ao lado do Salvar, nunca em toast. */
   const [erroRealizado, setErroRealizado] = useState<string | null>(null);
+  /* OC-EDITAR-CADASTRAL-01 — a recusa do Salvar da OC (venda/abate/compra) mora AO LADO do botao, nunca em toast
+     (UX-TOAST-01). Hoje: pendencia do cadastral com a OC fechada e a negociacao chamada com a OC fechada. */
+  const [erroSalvarOC, setErroSalvarOC] = useState<string | null>(null);
   /* PR-OC-VENDA-REABRIR-01E — A ASSINATURA DO QUE FOI GRAVADO NA ULTIMA VEZ.
      ⚠ O botao da venda ficava aceso para sempre: nao havia estado de sujo/pristino, entao
      "Salvar alteracoes" parecia prometer que havia algo a salvar mesmo logo depois de
@@ -1023,6 +1026,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         setObservacao(op.observacoes ?? '');
         setNotaFiscal(op.numero_documento ?? '');
         setStatusOp(op.cenario === 'meta' ? 'meta' : 'realizado');
+        /* OC-EDITAR-CADASTRAL-01 — o snapshot dos cadastrais nasce na carga, como na compra: e' ele que diz
+           o que ficou sujo quando a OC fechada grava por `oc_editar_dados_operacao`. */
+        ocSnapshotRef.current = {
+          contraparte_id: op.contraparte_id ?? '', data_operacao: op.data_operacao ?? '',
+          observacoes: op.observacoes ?? '', numero_documento: op.numero_documento ?? '',
+        };
         setOcOperacaoId(op.id);
         setOcVersao(op.versao);
         setOcStatusComercial(op.status_comercial);
@@ -1127,6 +1136,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         setObservacao(op.observacoes ?? '');
         setNotaFiscal(op.numero_documento ?? '');
         setStatusOp(op.cenario === 'meta' ? 'meta' : 'realizado');
+        /* OC-EDITAR-CADASTRAL-01 — mesmo snapshot da compra e da venda. */
+        ocSnapshotRef.current = {
+          contraparte_id: op.contraparte_id ?? '', data_operacao: op.data_operacao ?? '',
+          observacoes: op.observacoes ?? '', numero_documento: op.numero_documento ?? '',
+        };
         setOcOperacaoId(op.id);
         setOcVersao(op.versao);
         setOcStatusComercial(op.status_comercial);
@@ -2627,6 +2641,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setOcBoitelReal(null);
     setOcBoitelRealSalvo(null);
     setErroRealizado(null);
+    setErroSalvarOC(null);
     // As flags da OC — mesmas quatro da compra.
     setOcAberturaExistente(false); setOcTemTitulo(false); setOcRascunho(false); setOcHidratacaoErro(null);
   }, []);
@@ -2641,6 +2656,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setAbateFrigorificoId(''); setAbateFazendaId('');
     setAbateLinhas(new Map()); setCenarioAbate('realizado');
     setOcAbateAssinaturaSalva(null);
+    setErroSalvarOC(null);
     setOcAberturaExistente(false); setOcTemTitulo(false); setOcRascunho(false); setOcHidratacaoErro(null);
   }, []);
 
@@ -2705,10 +2721,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      Recalculado a cada render de proposito: sao quatro comparacoes de string, e
      memorizar traria o risco de dependencia esquecida — caro justamente aqui, onde
      errar significa gravar (ou nao gravar) sem o usuario perceber. */
+  /* OC-EDITAR-CADASTRAL-01 — a contraparte mora num estado diferente em cada modal (fornecedor, comprador,
+     frigorifico); o detector e o snapshot leem a do modal aberto. */
+  const contraparteDoModoOC = modoOCVenda ? vendaDestinoFornecedorId : modoOCAbate ? abateFrigorificoId : compraFornecedorId;
   const camposSujosOC = (): Record<string, string | null> => {
     const snap = ocSnapshotRef.current;
     const sujo: Record<string, string | null> = {};
-    if ((compraFornecedorId || '') !== snap.contraparte_id)   sujo.contraparte_id   = compraFornecedorId || null;
+    if ((contraparteDoModoOC || '') !== snap.contraparte_id)  sujo.contraparte_id   = contraparteDoModoOC || null;
     if ((data || '')               !== snap.data_operacao)    sujo.data_operacao    = data || null;
     if ((observacao || '')         !== snap.observacoes)      sujo.observacoes      = observacao || null;
     if ((notaFiscal || '')         !== snap.numero_documento) sujo.numero_documento = notaFiscal || null;
@@ -2718,7 +2737,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   const marcarSnapshotOCComoSalvo = () => {
     ocSnapshotRef.current = {
-      contraparte_id: compraFornecedorId || '', data_operacao: data || '',
+      contraparte_id: contraparteDoModoOC || '', data_operacao: data || '',
       observacoes: observacao || '', numero_documento: notaFiscal || '',
     };
   };
@@ -2731,13 +2750,18 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const salvarDadosOperacaoOC = async (): Promise<boolean> => {
     const clienteId = clienteAtual?.id;
     if (!ocOperacaoId || !clienteId || ocVersao == null) return false;
-    const sujo = camposSujosOC();
+    /* OC-EDITAR-CADASTRAL-01 — SO OS CADASTRAIS VAO. A data deixou a lista da RPC (decisao a do Gabriel) e ja
+       aparece travada com a OC fechada; filtrar aqui garante que nenhuma chave operacional chegue ao banco. */
+    const sujo = soCadastrais(camposSujosOC());
     // Nada mudou => nao chama a RPC. E' o que impede a versao de subir e a auditoria
     // de encher de evento vazio a cada navegacao.
-    if (Object.keys(sujo).length === 0) { toast.info('Nenhuma alteração pendente.'); return true; }
-    // Mesmos obrigatorios do outro caminho — a regra de produto nao muda com o status.
-    if ('data_operacao' in sujo && !sujo.data_operacao) { toast.error('Informe a data da compra.'); return false; }
-    if ('contraparte_id' in sujo && !sujo.contraparte_id) { toast.error('Selecione o fornecedor.'); return false; }
+    if (Object.keys(sujo).length === 0) { setErroSalvarOC(null); return true; }
+    // Mesmo obrigatorio do outro caminho — a regra de produto nao muda com o status. Inline (UX-TOAST-01).
+    if ('contraparte_id' in sujo && !sujo.contraparte_id) {
+      setErroSalvarOC(modoOCVenda || modoOCAbate ? 'Selecione o comprador.' : 'Selecione o fornecedor.');
+      return false;
+    }
+    setErroSalvarOC(null);
     setSubmitting(true);
     try {
       const env = await ocRpc.editarDadosOperacao(ocOperacaoId, clienteId, ocVersao, sujo);
@@ -2757,8 +2781,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         await recarregarOperacaoOC();
       } else {
         // P0001 e demais: a mensagem da RPC e' escrita para ser lida, inclusive a que
-        // NOMEIA a chave recusada. Exibir integral.
-        toast.error(e instanceof Error ? e.message : 'Falha ao salvar os dados da operação.');
+        // NOMEIA a chave recusada. Exibir integral — ao lado do Salvar (UX-TOAST-01).
+        setErroSalvarOC(e instanceof Error ? e.message : 'Falha ao salvar os dados da operação.');
       }
       return false;
     } finally {
@@ -3044,6 +3068,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       setOcOperacaoId(env.operacao_id);
       setOcVersao(env.versao);
       if (env.status_comercial) setOcStatusComercial(env.status_comercial);
+      marcarSnapshotOCComoSalvo();
+      setErroSalvarOC(null);
       if (criando) toast.success('Operação de abate criada. Agora informe os lotes abatidos.');
       return { operacaoId: env.operacao_id, versao: env.versao };
     } catch (e) {
@@ -3071,8 +3097,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const salvarNegociacaoAbateOC = async (): Promise<number | false> => {
     const clienteId = clienteAtual?.id;
     if (!ocOperacaoId || !clienteId) { toast.error('Salve a operação na aba Abate primeiro.'); return false; }
+    /* OC-EDITAR-CADASTRAL-01 — com a OC fechada a grade ja' esta' travada e o Salvar da negociacao nao aparece
+       habilitado; se algum caminho chegar aqui, a recusa e' escrita ao lado do Salvar, nunca em toast. */
     if (ocStatusComercial === 'fechada') {
-      toastNegociacaoFechada(() => reabrirOperacaoOC('Reabrir para editar a negociação'));
+      setErroSalvarOC('Operação fechada · reabra para editar');
       return false;
     }
     /* ⚠ `salvar` DEVOLVE A VERSAO NOVA, nao um booleano — `Promise<number | null>`.
@@ -3162,6 +3190,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       setOcOperacaoId(env.operacao_id);
       setOcVersao(env.versao);
       if (env.status_comercial) setOcStatusComercial(env.status_comercial);
+      marcarSnapshotOCComoSalvo();
+      setErroSalvarOC(null);
 
       /* ⚠ O BOITEL NAO GRAVA MAIS AQUI. Ele e' editado na aba de Negociacao, e passou a
          gravar junto com os lotes, em `salvarNegociacaoVendaOC`. Ficar aqui obrigava o
@@ -3250,11 +3280,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       /* ⚠ COM SAIDA VIVA NAO HA BOTAO: reabrir nao basta (o lote nao se revaloriza com
          movimentacao viva), e oferecer o atalho levaria ao segundo guard. A instrucao
          inteira fica no texto; o botao so' aparece onde ele RESOLVE. */
-      if (temSaidaViva) {
-        toast.error('Operação fechada e com saída registrada. Para alterar a projeção: estorne a saída na aba Entrega, reabra a negociação, edite e salve, conclua e registre a saída novamente.');
-      } else {
-        toastNegociacaoFechada(() => reabrirOperacaoOC('Reabrir para editar a negociação'));
-      }
+      /* OC-EDITAR-CADASTRAL-01 — lotes e boitel ja' aparecem travados com a OC fechada; a recusa que sobrar vai
+         ao lado do Salvar (UX-TOAST-01), com o caminho inteiro quando ha' saida viva. */
+      setErroSalvarOC(temSaidaViva
+        ? 'Operação fechada e com saída registrada. Para alterar a projeção: estorne a saída na aba Entrega, reabra a negociação, edite e salve, conclua e registre a saída novamente.'
+        : 'Operação fechada · reabra para editar');
       return false;
     }
     setSubmitting(true);
@@ -3401,6 +3431,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      que falta e o que se perde. So aparece no caso raro de haver pendencia que NAO
      pode ser gravada; com tudo valido, grava e fecha sem interromper. */
   const [fecharPendente, setFecharPendente] = useState<string | null>(null);
+  /* OC-EDITAR-CADASTRAL-01 — a recusa inline fala do status em que nasceu; reabrir ou fechar a apaga. */
+  useEffect(() => { setErroSalvarOC(null); }, [ocStatusComercial]);
   /* OC-BOITEL-REALIZADO-UX-01b — na VENDA so' o realizado do boitel pergunta ao fechar. E' o
      unico rascunho da venda com estado sujo EXATO (`realizadoSujo`: o salvo vem da carga); a
      assinatura geral nasce nula ao abrir e perguntaria em todo fechamento. Sem autosave: o
@@ -3408,6 +3440,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [fecharRealizadoPendente, setFecharRealizadoPendente] = useState(false);
   const fecharModalOCComAutosave = useCallback(() => {
     if (modoOCVenda && realizadoSujo) { setFecharRealizadoPendente(true); return; }
+    /* OC-EDITAR-CADASTRAL-01 — venda e abate FECHADOS gravam os cadastrais sujos ao fechar, pelo mesmo caminho da
+       compra. Comprador vazio nao grava: pergunta, como a compra. Aberta, a venda e o abate seguem como antes. */
+    if ((modoOCVenda || modoOCAbate) && ocStatusComercial === 'fechada' && ocDadosSujos) {
+      if (!contraparteDoModoOC) { setFecharPendente('Selecione o comprador.'); return; }
+      void salvarDadosOperacaoOC();
+    }
     if (modoOCCompra && ocDadosSujos && ocStatusComercial !== 'cancelada') {
       const impedimento = motivoImpedeSalvarOC();
       if (impedimento) { setFecharPendente(impedimento); return; }
@@ -3415,7 +3453,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     }
     fecharModalOC();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modoOCCompra, modoOCVenda, realizadoSujo, ocDadosSujos, ocStatusComercial, fecharModalOC, data, ocFazendaId, compraFornecedorId, clienteAtual?.id]);
+  }, [modoOCCompra, modoOCVenda, modoOCAbate, realizadoSujo, ocDadosSujos, ocStatusComercial, fecharModalOC, data, ocFazendaId, compraFornecedorId, contraparteDoModoOC, clienteAtual?.id]);
 
   // PR-OC-EDIT-01B — recarrega a OP aberta pelo backend (SOBERANO) após uma ação de ciclo, sem fechar
   //   o modal. Re-hidrata status/versão/título → a editabilidade volta a ser derivada pelas regras do 01A.
@@ -3523,7 +3561,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     /* ⚠ A VENDA NA OC SAI AQUI, como a compra: quem grava e' a RPC, e o funil legado nao
        roda. Sem isso o `handleSubmit` criaria tambem um lancamento zootecnico. */
     if (modoOCVenda && isVenda) {
-      void salvarOperacaoVendaOC();
+      /* OC-EDITAR-CADASTRAL-01 — o status escolhe o caminho, como na compra logo abaixo. */
+      const caminho = caminhoDoSalvarOC(ocStatusComercial);
+      if (caminho === 'nenhum') return;
+      void (caminho === 'editar_dados' ? salvarDadosOperacaoOC() : salvarOperacaoVendaOC());
       return;
     }
     if (modoOCCompra && isCompra) {
@@ -5783,6 +5824,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     aberturaExistente: ocAberturaExistente,
     // PR-OC-EDICAO-POS-FECHAMENTO-02 — ha edicao nao gravada nos dados da operacao?
     ocDadosSujos,
+    erroSalvarOC,
     // PR-NAV-CONTEXTO-FAZENDA-01A — há fazenda real para persistir a OC? (Global exige escolha no modal).
     ocFazendaValida: !!ocFazendaId,
     // PR-OC-EDIT-01B — ações de ciclo (RPCs oficiais) + título materializado (explicação/gating).
@@ -6028,7 +6070,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           frigorificoId={abateFrigorificoId} setFrigorificoId={setAbateFrigorificoId}
           contrapartes={abateFornecedores}
           numeroDocumento={notaFiscal || null}
-          semAlteracoes={ocAbateSemAlteracoes}
+          semAlteracoes={ocStatusComercial === 'fechada' ? !ocDadosSujos : ocAbateSemAlteracoes}
           onNovoFrigorifico={() => setNovoFornecedorCompraOpen(true)}
           abateFazendaId={abateFazendaId} setAbateFazendaId={setAbateFazendaId}
           fazendasOC={fazendasOC}
@@ -6056,7 +6098,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           quantidadeNum={parseNumericValue(quantidade) || 0}
           pesoKgNum={parseNumericValue(pesoKg) || 0}
           submitting={submitting}
-          onSalvarOperacao={() => salvarOperacaoAbateOC()}
+          /* OC-EDITAR-CADASTRAL-01 — com a OC fechada o Salvar grava SO os cadastrais, por `oc_editar_dados_operacao`;
+             nunca mais `oc_salvar_rascunho` numa OC fechada. */
+          onSalvarOperacao={() => (caminhoDoSalvarOC(ocStatusComercial) === 'editar_dados' ? salvarDadosOperacaoOC() : salvarOperacaoAbateOC())}
+          erroSalvar={erroSalvarOC}
           onSalvarNegociacao={() => salvarNegociacaoAbateOC()}
           documentosApi={documentosApi}
           eventosApi={eventosApi}
@@ -6113,9 +6158,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           quantidadeNum={parseNumericValue(quantidade) || 0}
           pesoKgNum={parseNumericValue(pesoKg) || 0}
           submitting={submitting}
-          onSalvarOperacao={() => salvarOperacaoVendaOC()}
+          /* OC-EDITAR-CADASTRAL-01 — mesmo roteamento do abate e da compra. */
+          onSalvarOperacao={() => (caminhoDoSalvarOC(ocStatusComercial) === 'editar_dados' ? salvarDadosOperacaoOC() : salvarOperacaoVendaOC())}
           onSalvarNegociacao={() => salvarNegociacaoVendaOC()}
-          semAlteracoes={ocVendaSemAlteracoes}
+          semAlteracoes={ocStatusComercial === 'fechada' ? !ocDadosSujos : ocVendaSemAlteracoes}
+          erroSalvar={erroSalvarOC}
           /* As tres apis, no mesmo idioma da compra. A venda as MONTA; nao as edita. */
           documentosApi={documentosApi}
           eventosApi={eventosApi}

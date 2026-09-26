@@ -803,6 +803,11 @@ no mesmo arquivo.
   com sentido e favorecido por linha e "Gerar 2 compromissos", o centavo que APARECE, o bloqueio que trava e a ordem da
   gravacao, e o dialogo da A como sempre. ⚠ PROVADO: com o modo por linha desligado, 3 casos caem; e o HTML do dialogo
   na A, na compra, no abate com obrigacao e vazio e' IDENTICO ao do HEAD (6 de 6 casos, teste descartavel).
+  De 2020 para 2029 no OC-EDITAR-CADASTRAL-01: entrou `src/lib/oc/edicaoCadastralOC.test.tsx` (+9) — o caminho do Salvar
+  pelo status (fechada -> editar_dados, cancelada -> nada), o filtro que so' deixa passar contraparte, observacoes e NF,
+  a venda e o abate FECHADOS renderizados (data, fazenda e tipo travados; comprador e observacao livres; o Salvar grava e
+  o P1 nao o trava; o erro ao lado) e ABERTOS como sempre, e o "Lancar realizado" do boitel que continua com a OC fechada.
+  ⚠ PROVADO: com o `fechada` da venda desligado, 2 casos caem; sem a excecao do "Lancar realizado", 1.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -2259,6 +2264,44 @@ preview que o cabecalho nao sai da tela ao rolar.
   ⚠ DADOS AGUARDANDO OK (nada gravado): 77d963be -> B com JBS, boleto 41eda416 de 5010 para 1155 (DRE do RRCC: civil 2023
     vendas 1.791.708,52 -> 1.482.830,55; lucro -419.319,66 -> -728.197,63); cd4c54b0 so' tem o LIQUIDO no financeiro
     (b51bc0fa, 516.459,04) — nao ha recebido do frigorifico nem boleto lancados.
+- ⚠ OC-EDITAR-CADASTRAL-01 — COM A OC FECHADA SO' O CADASTRAL SE EDITA, E SEM REABRIR (26/09/2026, decisoes do Gabriel).
+  CADASTRAIS: contraparte (comprador/fornecedor), observacoes, NF (`numero_documento`) e documentos. TODO O RESTO e'
+  operacional e ja' nasce TRAVADO com a OC fechada (`CAMPO_TRAVADO` + cadeado no rotulo + selo "Operacao fechada · reabra
+  para editar" no titulo, o selo de `LancamentoZooModal`): data (decisao a, inclusive na compra), fazenda, tipo de venda,
+  lotes e boitel (Quem abate, Frigorifico e blocos).
+  ⚠ O DEFEITO: o caminho existia desde 30/08 (`oc_editar_dados_operacao`, PR-OC-EDICAO-POS-FECHAMENTO-01) e SO' A COMPRA o
+    usava — venda e abate mandavam o cabecalho sempre para `oc_salvar_rascunho`, que recusa "Negociacao fechada; reabra
+    para editar (oc_reabrir)". Caso real: da0b8577 (RRCC, 29/07/2025), o Gabriel teve de reabrir para trocar o comprador.
+  BANCO: migration `supabase/migrations/20261027155000_oc_editar_cadastral_01.sql` (⚠ registrada como `20260926132939`),
+  corpo INTEGRAL: `oc_editar_dados_operacao` md5(prosrc) ba017ed7 -> 3caddc14 (arquivo = banco). (a) `data_operacao` SAIU da
+  lista; (b) na troca de contraparte, o compromisso NAO CANCELADO, SEM TITULO VIVO, cujo favorecido era a contraparte
+  ANTERIOR passa para a nova, e o evento `editar_dados` leva `compromissos` de/para. "Aberto" da decisao e' "sem titulo",
+  nao o status literal (144 `programado`, 1 `aberto`). Titulo, parte, vinculo e hash nunca sao tocados. proacl
+  `{postgres, service_role, authenticated}`, anon = false.
+  ⚠ PROVA EM ROLLBACK na da0b8577 (funcao aplicada): data recusada; S1 aberto e S3 programado-sem-titulo foram para a nova;
+    S2 com favorecido proprio e o principal com titulo (tambem com o favorecido forcado para a contraparte atual) ficaram;
+    titulos da OC (1), hash, financeiro do RRCC (3.114), vinculos do banco inteiro (4.855, 41 de titulos de OC), partes
+    (197), rebanho do RRCC (418), 178 compromissos e `fn_dre_pecuaria` civil 2025 e 25/26 — IDENTICOS.
+    ⚠ A PRIMEIRA RODADA MEDIU VINCULOS SO' DO RRCC, e o RRCC tem ZERO: md5 de conjunto vazio e' nulo e deu "MUDARAM". E' a
+      lei do "PROVA DE IDENTIDADE REPORTA O TAMANHO DO CONJUNTO" — refeita no banco inteiro.
+  TELA: `src/lib/oc/edicaoCadastralOC.ts` decide o caminho pelo status e filtra so' os cadastrais; `salvarDadosOperacaoOC`
+  (LancamentosTab) serve os tres modais, com o snapshot preenchido na carga dos tres e a contraparte do modal aberto. Venda
+  e abate FECHADOS gravam os cadastrais no Salvar e ao fechar o modal; abertos, como antes.
+  ⚠ "LANCAR REALIZADO" DO BOITEL CONTINUA com a OC fechada (`podeLancarRealizado`): o iniciar reabre antes do dialogo.
+  ⚠ P1: o Salvar da OC fechada grava so' cadastral e o motivo do mes fechado nao aparece nele; aberta, segue como antes. E
+    na venda e no abate o P1 NUNCA desabilitou o Salvar — so' escrevia o motivo ao lado; quem trava e' o Concluir.
+  ⚠ OS TOASTS DE "FECHADA" SAIRAM (venda e abate): a recusa que sobrar vai AO LADO do Salvar (`erroSalvarOC`), inclusive a
+    da compra. O helper `toastNegociacaoFechada` ficou sem chamador e foi apagado.
+  ⚠ DADOS (item 8, so' listado): 14 compromissos em 13 OCs tem favorecido = uma contraparte anterior e diferente da atual —
+    TODOS com titulo (a da0b8577 inclusive: o principal f9b39fa0 e' `programado` com titulo realizado de 466.030,10). Pela
+    decisao (b) nenhum e' elegivel; nada a gravar.
+- FORNECEDOR-UUID-CRU-01 — achado, nao tratado (26/09/2026, nos prints do OC-EDITAR-CADASTRAL-01): a compra 69115ef9 (NJ)
+  mostra o UUID cru `276efb08…` no seletor de fornecedor e "Contraparte —" no resumo. O fornecedor (Carlos Pacheco) EXISTE,
+  esta' ATIVO e e' do NJ; a lista carregada pela tela e' que nao o traz. Causa nao medida (lista carregada antes da troca de
+  cliente, filtro ou limite da consulta) — FASE 0 de quem retomar.
+- PROPRIEDADE-DESTINO-ORIGEM-01 — divida registrada a pedido do Gabriel (26/09/2026): "Propriedade de destino" (venda) e
+  "Propriedade de origem" (compra) APARECEM na tela e NAO sao gravados em lugar nenhum — nao ha coluna na OC. Na venda ela
+  so' entra na assinatura de "alterado"; na compra, o modo leitura a mostra vazia ("—", OPEN-01).
 - BOITEL-DATA-ENVIO-01 — pendencia, so' medir depois (decisao do Gabriel, 26/09/2026): `zoo_operacao_boitel.data_envio`
   esta' VAZIO nos 15 registros (8 projetado, 7 realizado; medido em 25/09). A janela do vincular cai no fallback (a
   data da OC). Quem retomar mede ONDE a tela deveria gravar o envio e POR QUE nao grava — o `data_abate` do realizado
