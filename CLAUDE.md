@@ -783,6 +783,10 @@ no mesmo arquivo.
   (abrir e fechar sem tocar nao avisa: mesmo objeto da carga, sem realizado, copia identica; sujo avisa; depois do Salvar
   nao avisa) e a ligacao no fechamento, lida da FONTE: `fecharModalOCComAutosave` pergunta ANTES do `fecharModalOC()`.
   ⚠ PROVADO: sem a linha do gatilho, 1 caso cai; com a comparacao quebrada, 1.
+  De 1998 para 2004 no OC-BOITEL-REALIZADO-UX-01c: entrou `src/lib/oc/gravarRealizadoBoitel.test.ts` (+6) — o id do
+  lote vem do BANCO depois do Salvar dos lotes (OC nova: o lote nasce no mesmo Salvar e o revalorar recebe o id dele),
+  OC com lote existente igual, sem lote NAO diz "lancado", falhas de leitura/revalorar/boitel voltam erro, e sem liquido
+  positivo o comportamento de antes. ⚠ PROVADO: com "sem lote" voltando a dizer lancado, 1 caso cai.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -2166,6 +2170,18 @@ preview que o cabecalho nao sai da tela ao rolar.
      ⚠ DIVIDA: lotes, projetado e demais campos da venda NAO sao cobertos — a assinatura geral
        (`ocVendaAssinaturaSalva`) nasce nula ao abrir, e cobri-los exige uma assinatura de BASE capturada quando a
        hidratacao termina. Frente propria.
+  (4) 01c — O REVALORAR LE O ID DO LOTE DO BANCO (26/09/2026). Achado na FASE 0 do BOITEL-ABATE-PRODUTOR-01: o id vinha
+     de `lotesApi.lotes[0]?.id`, o estado do clique; numa OC NOVA o lote nasce no `oc_salvar_lotes` do mesmo Salvar e
+     ainda nao tinha id ali, entao o revalorar era PULADO em silencio com "Realizado do abate lancado". Agora
+     `src/lib/oc/gravarRealizadoBoitel.ts` le o lote de `zoo_operacao_lotes` depois do Salvar dos lotes; sem lote,
+     erro ao lado do Salvar e `false`, nunca "lancado".
+     ⚠ 77d963be (RRCC, 05/07/2023, 193 garrotes) FICA COM O LOTE EM 628.569,35 ATE' A BOITEL-ABATE-PRODUTOR-01 (decisao
+       do Gabriel): o acerto pelos fatos e' 656.957,17, mas a OC ja' tem os tres lancamentos reais vinculados (principal
+       965.835,15 no lote, boleto 308.877,97, frete 6.000) e a saida registrada (rebanho 3161998e a 628.569,35) — o
+       revalorar mexeria no rebanho, e o caso e' da modalidade B.
+     ⚠ VARREDURA (motor real sobre as 10 OCs de boitel com realizado): 3 divergencias lote x acerto — 77d963be
+       (+28.387,82, este defeito), da0b8577 (+63.047,31) e b58bf556 (+27.922,96); as duas ultimas ja' estao em
+       OC-BOITEL-DELTA-ANTIGO-01. As outras 7 batem ao centavo.
   ⚠ (HISTORICO) O item (c) do OK do Gabriel — GUARDA DE ALTERACAO NAO SALVA NA VENDA — parou no 01 pela regra do proprio
     pedido e virou o 01b acima, restrito ao realizado. `ocVendaAssinaturaSalva` nasce NULA ao abrir uma venda (por desenho, PR-OC-VENDA-REABRIR-01E), entao
     "assinatura atual diferente da salva" e' verdade em TODO fechamento de venda nao tocada. Fazer certo exige uma

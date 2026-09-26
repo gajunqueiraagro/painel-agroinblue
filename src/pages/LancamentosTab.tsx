@@ -82,6 +82,7 @@ import { useIntegerInput, useDecimalInput, parseDecimalInput } from '@/hooks/use
 import { toast } from 'sonner';
 import { decidirHidratacao, vaiHidratar } from '@/lib/oc/hidratacaoOC';
 import { toastNegociacaoFechada } from '@/lib/oc/toastNegociacaoFechada';
+import { gravarRealizadoBoitel as gravarRealizadoNoBanco, type ResultadoRealizado } from '@/lib/oc/gravarRealizadoBoitel';
 import { useMasterLock } from '@/hooks/useMasterLock';
 import { MasterLockBanner } from '@/components/MasterLockBanner';
 import { MorteLoteMetaDialog } from '@/components/MorteLoteMetaDialog';
@@ -2959,72 +2960,56 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      ⚠ NENHUMA RECUSA VAI PARA TOAST (UX-TOAST-01): volta como texto, e quem chama a escreve
      ao lado do Salvar. O rascunho fica na tela — a recusa e' da gravacao, nao do que o
      operador digitou. */
-  type ResultadoRealizado =
-    | { ok: true; versao: number; sucesso: string; avisoPendente: string | null }
-    | { ok: false; erro: string };
+  /* O nucleo mora em `src/lib/oc/gravarRealizadoBoitel.ts` (01c); aqui so' se ligam as escritas. */
   const gravarRealizadoBoitel = async (clienteId: string, versao: number): Promise<ResultadoRealizado> => {
     const proximo = boitelRealDaVenda;
-    if (!ocOperacaoId || !proximo) return { ok: true, versao, sucesso: 'Negociação salva.', avisoPendente: null };
-    let v = versao;
-    try {
-      const envB = await ocRpc.salvarBoitel(ocOperacaoId, clienteId, v, 'realizado', payloadBoitel(proximo));
-      v = envB.versao;
-      setOcVersao(v);
-    } catch (e) {
-      /* 40001 — outra acao mexeu na operacao entre o render e o clique. Recarregar aqui
-         apagaria o rascunho; a frase manda conferir antes de salvar de novo. */
-      if (e instanceof OcRpcError && e.code === '40001') {
-        return { ok: false, erro: 'Realizado não gravado: esta operação mudou em outro lugar. Feche, reabra e confira antes de salvar de novo.' };
-      }
-      return { ok: false, erro: `Realizado não gravado: ${e instanceof Error ? e.message : 'falha ao gravar.'}` };
-    }
-
+    const operacaoId = ocOperacaoId;
+    if (!operacaoId || !proximo) return { ok: true, versao, sucesso: 'Negociação salva.', avisoPendente: null };
     /* ⚠ A DOUTRINA DOS DOIS MUNDOS, O LADO QUE ESCREVE — B-04 (o outro lado esta' em
-       `bolsoDaVendaBoitel`). Esta chamada grava o liquido REAL em
-       `zoo_operacao_lotes.valor_informado`, e e' ela que torna aquele slot
+       `bolsoDaVendaBoitel`). O revalorar grava o liquido REAL em
+       `zoo_operacao_lotes.valor_informado`, e e' ele que torna aquele slot
        REALIZADO-SOBERANO. Isso e' DESEJADO e foi decidido pelo Gabriel em 858ee073: o
        valor oficial da operacao passa a ser o do abate, e o rebanho se corrige sozinho.
-       O card do lote e o resumo lateral leem esse slot e mostram o real — certo.
        ⚠ E POR ISSO A PROJECAO NAO PODE LER DAQUI. O lote e' UM SO' para os dois
-       cenarios (`zoo_operacao_lotes` nao tem coluna de cenario, medido), entao esta
-       escrita apaga a promessa do slot dela. A promessa nao se guarda em segundo lugar
-       — ela se DERIVA da linha `projetado`, que esta escrita e intacta.
-       ⚠ NENHUM CAMPO DA LINHA REALIZADO ENTRA EM CONTA DE PROJECAO: a projecao e'
-       historica e imutavel depois do abate — o realizado compara COM ela, nunca a
-       reescreve. */
-    const liquidoReal = liquidoDaVendaBoitel(proximo);
-    const loteId = lotesApi.lotes[0]?.id;
-    if (liquidoReal != null && liquidoReal > 0 && loteId) {
-      try {
-        const envL = await ocRpc.revalorarLote(ocOperacaoId, clienteId, v, loteId, liquidoReal,
-          'realizado do abate');
-        v = envL.operacao_versao;
-        setOcVersao(v);
-        /* ⚠ O ESTADO LOCAL DOS LOTES FICOU VELHO — B-12. `oc_revalorar_lote` gravou o valor
-           real DIRETO no banco, por fora do `useCompraLotes`; sem reler, o proximo "Salvar
-           negociacao" mandaria de volta o valor que a tela ainda tem em memoria — que e' o
-           projetado. A muralha do banco (`oc_salvar_lotes` preserva o realizado) protege o
-           caso da tela aberta antes do abate, que nenhuma releitura alcanca. */
-        await lotesApi.recarregar();
-        /* ⚠ O CACHE ZOOTECNICO PRECISA SABER: `oc_revalorar_lote` corrige
-           `lancamentos.valor_total` no BANCO, fora do `useLancamentos`. */
-        await onRealizadoAplicado?.();
-        setOcBoitelRealSalvo(ocBoitelReal);
+       cenarios (`zoo_operacao_lotes` nao tem coluna de cenario, medido); a promessa se
+       DERIVA da linha `projetado`, que esta escrita deixa intacta. */
+    const r = await gravarRealizadoNoBanco(versao, liquidoDaVendaBoitel(proximo), {
+      salvarBoitel: async (v) => {
+        const envB = await ocRpc.salvarBoitel(operacaoId, clienteId, v, 'realizado', payloadBoitel(proximo));
+        setOcVersao(envB.versao);
+        return envB.versao;
+      },
+      /* ⚠ DO BANCO, NUNCA DE `lotesApi.lotes` — 01c: numa OC nova o lote nasceu no
+         `oc_salvar_lotes` deste mesmo Salvar e o estado do clique nao tem o id dele. */
+      idDoLote: async () => {
+        const { data, error } = await supabase
+          .from('zoo_operacao_lotes').select('id')
+          .eq('operacao_id', operacaoId).eq('cliente_id', clienteId)
+          .order('ordem', { ascending: true }).limit(1);
+        if (error) throw error;
+        return data?.[0]?.id ?? null;
+      },
+      revalorar: async (v, loteId, valor) => {
+        const envL = await ocRpc.revalorarLote(operacaoId, clienteId, v, loteId, valor, 'realizado do abate');
+        setOcVersao(envL.operacao_versao);
         return {
-          ok: true, versao: v,
-          sucesso: envL.lancamentos_afetados > 0
-            ? `Realizado lançado. Lote revalorado e ${envL.lancamentos_afetados} lançamento${envL.lancamentos_afetados > 1 ? 's' : ''} do rebanho corrigido${envL.lancamentos_afetados > 1 ? 's' : ''}.`
-            : 'Realizado lançado. Lote revalorado.',
-          /* ⚠ O COMPROMISSO QUE FICOU PARA TRAS — OC-BOITEL-VALOR-01 A4. Com programacao,
-             titulo ou baixa, a RPC nao o atualiza (devolve `pendente`). */
+          versao: envL.operacao_versao,
+          lancamentosAfetados: envL.lancamentos_afetados,
           avisoPendente: avisoDoCompromissoPendente(envL),
         };
-      } catch (e) {
-        return { ok: false, erro: `Realizado gravado, mas o lote não foi revalorado: ${e instanceof Error ? e.message : 'falha ao revalorar.'} Salve de novo.` };
-      }
-    }
-    setOcBoitelRealSalvo(ocBoitelReal);
-    return { ok: true, versao: v, sucesso: 'Realizado do abate lançado.', avisoPendente: null };
+      },
+      depoisDeRevalorar: async () => {
+        /* ⚠ O ESTADO LOCAL DOS LOTES FICOU VELHO — B-12: sem reler, o proximo Salvar mandaria
+           de volta o valor da projecao. E o cache zootecnico precisa saber: o revalorar corrige
+           `lancamentos.valor_total` no banco, fora do `useLancamentos`. */
+        await lotesApi.recarregar();
+        await onRealizadoAplicado?.();
+      },
+      ehConflitoDeVersao: (e) => e instanceof OcRpcError && e.code === '40001',
+    });
+    /* ESTADO DE DADO SO' DEPOIS QUE A GRAVACAO PASSA: o salvo so' anda no sucesso inteiro. */
+    if (r.ok) setOcBoitelRealSalvo(ocBoitelReal);
+    return r;
   };
 
   /* ─── A OPERACAO DE ABATE — OC-ABATE-01 T1 ───────────────────────────────────
