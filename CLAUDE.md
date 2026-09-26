@@ -779,6 +779,10 @@ no mesmo arquivo.
   nunca "R$ 0,00"; a projecao nao valida nada). As quatro derivacoes e a recusa por fato sao regra de BANCO e estao em
   `supabase/tests/oc_boitel_realizado_ux_01_test.sql`, rodado em rollback contra a funcao aplicada (termina em `OK`).
   ⚠ PROVADO: com a validacao do Aplicar desligada, 3 casos caem; com o valor do abate voltando a mostrar a projecao, 1.
+  De 1994 para 1998 no OC-BOITEL-REALIZADO-UX-01b: `realizadoPorBloco.test.tsx` foi de 8 para 12 — `realizadoNaoSalvo`
+  (abrir e fechar sem tocar nao avisa: mesmo objeto da carga, sem realizado, copia identica; sujo avisa; depois do Salvar
+  nao avisa) e a ligacao no fechamento, lida da FONTE: `fecharModalOCComAutosave` pergunta ANTES do `fecharModalOC()`.
+  ⚠ PROVADO: sem a linha do gatilho, 1 caso cai; com a comparacao quebrada, 1.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -2154,8 +2158,16 @@ preview que o cabecalho nao sai da tela ao rolar.
      ⚠ FATO VAZIO APARECE VAZIO: os seis campos mostravam, vazios, o numero que a PROJECAO daria — o campo parecia
        preenchido e o banco o recusava. Agora vazio e' vazio (o "previsto: X" ambar continua embaixo), e o moeda
        aceita `null` para nao escrever "R$ 0,00" em dado ausente.
-  ⚠ PENDENTE (c) do OK do Gabriel — GUARDA DE ALTERACAO NAO SALVA NA VENDA: NAO FEITA, parada pela regra do proprio
-    pedido. `ocVendaAssinaturaSalva` nasce NULA ao abrir uma venda (por desenho, PR-OC-VENDA-REABRIR-01E), entao
+  (3) 01b — AVISO AO FECHAR A VENDA SO' COM O REALIZADO DO BOITEL SUJO (26/09/2026, decisao do Gabriel). X, Fechar e
+     ESC passam por `fecharModalOCComAutosave` (o clique fora ja' era bloqueado); com `realizadoNaoSalvo(rascunho,
+     salvo)` verdadeiro, abre o AlertDialog da casa ("Realizado do boitel não salvo"), "Continuar editando" como padrao
+     e "Descartar e fechar". Realizado limpo, venda comum e pos-Salvar fecham sem aviso. O Salvar e o aviso leem a
+     MESMA funcao. Sem autosave. Conferido na tela na 8b211cae, sem gravar nada.
+     ⚠ DIVIDA: lotes, projetado e demais campos da venda NAO sao cobertos — a assinatura geral
+       (`ocVendaAssinaturaSalva`) nasce nula ao abrir, e cobri-los exige uma assinatura de BASE capturada quando a
+       hidratacao termina. Frente propria.
+  ⚠ (HISTORICO) O item (c) do OK do Gabriel — GUARDA DE ALTERACAO NAO SALVA NA VENDA — parou no 01 pela regra do proprio
+    pedido e virou o 01b acima, restrito ao realizado. `ocVendaAssinaturaSalva` nasce NULA ao abrir uma venda (por desenho, PR-OC-VENDA-REABRIR-01E), entao
     "assinatura atual diferente da salva" e' verdade em TODO fechamento de venda nao tocada. Fazer certo exige uma
     assinatura de BASE capturada quando a hidratacao termina (lotes e boitel chegam em momentos diferentes) — mais
     que "disparo no fechar + AlertDialog". Hoje, fechar com rascunho do realizado nao salvo PERDE o rascunho sem

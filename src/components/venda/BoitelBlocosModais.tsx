@@ -168,6 +168,17 @@ export function payloadBoitel(d: BoitelEdicao): Record<string, unknown> {
  *  ⚠ CABECAS E PESO SAO SOBRESCRITOS PELOS LOTES depois disto (ver `boitelDaVenda` em
  *  LancamentosTab). O peso vem no mapa porque a coluna existe e é gravada; lê-lo aqui é
  *  inofensivo, e omiti-lo criaria a assimetria que o mapa existe para impedir. */
+/* ─── O REALIZADO TEM ALTERACAO NAO SALVA? — OC-BOITEL-REALIZADO-UX-01 / 01b ──────
+   Rascunho diferente do salvo, comparados pelo PAYLOAD — e' o que o Salvar mandaria, e nao a
+   identidade do objeto. Decide duas coisas e as duas precisam da MESMA resposta: se o Salvar
+   grava o realizado (e cobra os fatos) e se fechar a venda pede confirmacao.
+   ⚠ E' EXATO SEM BASE CAPTURADA: o salvo nasce da carga no mesmo `set` que o rascunho, entao
+   abrir e fechar sem tocar da' `false`; sem rascunho (venda sem realizado) tambem. */
+export function realizadoNaoSalvo(rascunho: BoitelEdicao | null, salvo: BoitelEdicao | null): boolean {
+  if (!rascunho) return false;
+  return JSON.stringify(payloadBoitel(rascunho)) !== JSON.stringify(salvo ? payloadBoitel(salvo) : null);
+}
+
 export function boitelDeLinha(linha: Record<string, unknown> | null | undefined): BoitelEdicao | null {
   if (!linha) return null;
   /* ⚠ SEM `as`. O patch é acumulado num parcial e aplicado por `Object.assign` sobre o

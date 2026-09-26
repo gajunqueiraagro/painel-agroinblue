@@ -39,7 +39,8 @@ import { CompraMetaModalShell } from '@/components/compra/CompraMetaModalShell';
 import { VendaMetaModalShell } from '@/components/venda/VendaMetaModalShell';
 import { VendaModalShell } from '@/components/venda/VendaModalShell';
 import { AbateModalShell } from '@/components/abate/AbateModalShell';
-import { boitelVazio, payloadBoitel, boitelDeLinha, pendenciaDoRealizado, type BoitelEdicao } from '@/components/venda/BoitelBlocosModais';
+import { boitelVazio, payloadBoitel, boitelDeLinha, pendenciaDoRealizado, realizadoNaoSalvo, type BoitelEdicao } from '@/components/venda/BoitelBlocosModais';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { liquidoDaVendaBoitel, realizadoAplicadoNoLote } from '@/components/venda/BoitelNegociacaoDerivado';
 import { ReclassificacaoFormFields, useReclassificacaoState } from '@/components/ReclassificacaoForm';
 import { ReclassificacaoResumoPanel } from '@/components/ReclassificacaoResumoPanel';
@@ -2864,8 +2865,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      payload que o Salvar mandaria. So' com rascunho sujo o Salvar grava o realizado, e so'
      ele cobra os fatos — um realizado gravado antigo, incompleto (3260d1c8, 8b211cae), nao
      trava a negociacao de quem nem abriu o realizado. */
-  const realizadoSujo = vendaTipoVenda === 'boitel' && ocBoitelReal != null
-    && JSON.stringify(payloadBoitel(ocBoitelReal)) !== JSON.stringify(ocBoitelRealSalvo ? payloadBoitel(ocBoitelRealSalvo) : null);
+  const realizadoSujo = vendaTipoVenda === 'boitel' && realizadoNaoSalvo(ocBoitelReal, ocBoitelRealSalvo);
   const pendenciaRealizado = realizadoSujo ? pendenciaDoRealizado(boitelRealDaVenda) : null;
 
   /* A assinatura do que esta' na tela AGORA. Recalculada a cada render de proposito — sao
@@ -3416,7 +3416,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      que falta e o que se perde. So aparece no caso raro de haver pendencia que NAO
      pode ser gravada; com tudo valido, grava e fecha sem interromper. */
   const [fecharPendente, setFecharPendente] = useState<string | null>(null);
+  /* OC-BOITEL-REALIZADO-UX-01b — na VENDA so' o realizado do boitel pergunta ao fechar. E' o
+     unico rascunho da venda com estado sujo EXATO (`realizadoSujo`: o salvo vem da carga); a
+     assinatura geral nasce nula ao abrir e perguntaria em todo fechamento. Sem autosave: o
+     realizado so' se grava pelo Salvar da negociacao, e fechar pergunta se descarta. */
+  const [fecharRealizadoPendente, setFecharRealizadoPendente] = useState(false);
   const fecharModalOCComAutosave = useCallback(() => {
+    if (modoOCVenda && realizadoSujo) { setFecharRealizadoPendente(true); return; }
     if (modoOCCompra && ocDadosSujos && ocStatusComercial !== 'cancelada') {
       const impedimento = motivoImpedeSalvarOC();
       if (impedimento) { setFecharPendente(impedimento); return; }
@@ -3424,7 +3430,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     }
     fecharModalOC();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modoOCCompra, ocDadosSujos, ocStatusComercial, fecharModalOC, data, ocFazendaId, compraFornecedorId, clienteAtual?.id]);
+  }, [modoOCCompra, modoOCVenda, realizadoSujo, ocDadosSujos, ocStatusComercial, fecharModalOC, data, ocFazendaId, compraFornecedorId, clienteAtual?.id]);
 
   // PR-OC-EDIT-01B — recarrega a OP aberta pelo backend (SOBERANO) após uma ação de ciclo, sem fechar
   //   o modal. Re-hidrata status/versão/título → a editabilidade volta a ser derivada pelas regras do 01A.
@@ -5976,6 +5982,25 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* OC-BOITEL-REALIZADO-UX-01b — o AlertDialog da casa (o mesmo do A4b). "Continuar editando"
+          e' o padrao: o Cancel do Radix recebe o foco, e ESC/fora so' fecham ESTE dialogo. Os
+          tres caminhos de fechar a venda (X, Fechar, ESC) passam por `fecharModalOCComAutosave`;
+          o clique fora do modal ja' e' bloqueado. */}
+      <AlertDialog open={fecharRealizadoPendente} onOpenChange={(o) => { if (!o) setFecharRealizadoPendente(false); }}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-[14px]">Realizado do boitel não salvo</AlertDialogTitle>
+            <AlertDialogDescription className="text-[12px]">
+              Você aplicou dados do realizado que ainda não foram salvos. Se fechar agora, eles serão descartados.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setFecharRealizadoPendente(false)}>Continuar editando</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setFecharRealizadoPendente(false); fecharModalOC(); }}>Descartar e fechar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={lancModalOpen} onOpenChange={(open) => { if (open) setLancModalOpen(true); else fecharModalOCComAutosave(); }}>
       <DialogContent

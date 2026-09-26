@@ -10,8 +10,9 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
 import {
-  BoitelBlocosModais, boitelVazio, faltamDoRealizado, pendenciaDoRealizado,
+  BoitelBlocosModais, boitelVazio, faltamDoRealizado, pendenciaDoRealizado, realizadoNaoSalvo,
 } from '@/components/venda/BoitelBlocosModais';
 import type { BoitelEdicao } from '@/components/venda/BoitelNegociacaoDerivado';
 
@@ -124,5 +125,44 @@ describe('Aplicar do bloco do realizado', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Aplicar' }));
     expect(onChange).toHaveBeenCalledTimes(1);
     expect(screen.queryAllByText(/Obrigatório no realizado/)).toHaveLength(0);
+  });
+});
+
+/* OC-BOITEL-REALIZADO-UX-01b — fechar a venda so' pergunta com o realizado SUJO. A decisao e'
+   `realizadoNaoSalvo`; montar a `LancamentosTab` inteira para clicar no X exigiria a pilha da
+   OC toda, entao a ligacao no fechamento e' lida da FONTE (como em atalhosProducao.test). */
+describe('aviso ao fechar a venda — realizado nao salvo', () => {
+  const GRAVADO: BoitelEdicao = { ...SEMENTE, ...FATOS };
+
+  it('abrir e fechar sem tocar nao avisa: com realizado (o mesmo objeto da carga), sem realizado, e com copia identica', () => {
+    expect(realizadoNaoSalvo(GRAVADO, GRAVADO)).toBe(false);
+    expect(realizadoNaoSalvo(null, null)).toBe(false);
+    expect(realizadoNaoSalvo(null, GRAVADO)).toBe(false);
+    /* identidade nao conta, so' o payload: a carga e o enxerto dos lotes criam objetos novos */
+    expect(realizadoNaoSalvo({ ...GRAVADO }, GRAVADO)).toBe(false);
+  });
+
+  it('sujo avisa: um Aplicar trocou um fato, ou criou o realizado que o banco nao tinha', () => {
+    expect(realizadoNaoSalvo({ ...GRAVADO, arrobasTotaisAbate: 2251.68 }, GRAVADO)).toBe(true);
+    expect(realizadoNaoSalvo(GRAVADO, null)).toBe(true);
+  });
+
+  it('depois do Salvar (salvo = rascunho) nao avisa mais', () => {
+    const rascunho = { ...GRAVADO, valorTotalAbate: 813771.02 };
+    expect(realizadoNaoSalvo(rascunho, GRAVADO)).toBe(true);
+    const salvoDepois = rascunho;           // `setOcBoitelRealSalvo(ocBoitelReal)` no sucesso
+    expect(realizadoNaoSalvo(rascunho, salvoDepois)).toBe(false);
+  });
+
+  it('o fechamento da venda consulta o realizado sujo ANTES de fechar, e so' + "'" + ' na venda', () => {
+    const fonte = readFileSync('src/pages/LancamentosTab.tsx', 'utf8');
+    const corpo = fonte.slice(fonte.indexOf('const fecharModalOCComAutosave = useCallback('));
+    const bloco = corpo.slice(0, corpo.indexOf('}, ['));
+    expect(bloco).toMatch(/if \(modoOCVenda && realizadoSujo\) \{ setFecharRealizadoPendente\(true\); return; \}/);
+    /* a pergunta vem ANTES do `fecharModalOC()` — senao o modal fecha e o aviso chega tarde */
+    expect(bloco.indexOf('setFecharRealizadoPendente(true)')).toBeLessThan(bloco.indexOf('fecharModalOC();'));
+    expect(fonte).toContain('Realizado do boitel não salvo');
+    expect(fonte).toContain('>Continuar editando</AlertDialogCancel>');
+    expect(fonte).toContain('>Descartar e fechar</AlertDialogAction>');
   });
 });
