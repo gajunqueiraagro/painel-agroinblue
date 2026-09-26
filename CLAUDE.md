@@ -750,6 +750,23 @@ no mesmo arquivo.
   documento da OC.
   ⚠ PROVADO: com o anexo lendo a especie da lista 6 casos caem; sem a traducao da leitura, 1; sem
     `origemDoDocumento` nas dependencias, 2; com o arquivo da OC no bucket do lancamento, 1.
+  De 1976 para 1983 no VINCULAR-FIX-01. `src/components/financeiro-v2/vincularOperacao.test.tsx` foi de 9 para 13 — a
+  linha da candidata (o Iagro f93f1a2b, com fazenda e cab, sem "OC de"; boitel e ausencias) e o compromisso a
+  compromisso (a Graxaria: o exato de outro componente vence e vai para a simulacao; um pago so' bloqueia se forem
+  todos). Dois casos existentes foram atualizados ao contrato novo, nunca afrouxados: o da OC conciliada ganhou
+  `todos_liquidados: true` (e' o banco que diz agora), e o de "escolher compromisso" deixou de ter compromisso exato
+  (com um exato, ele ja' vai escolhido e a RPC nao pergunta). Entrou `src/hooks/useLancamentosComOC.test.ts` (+3): o
+  vinculado tem icone e o desvinculado nao, o icone some quando a parte cancela e a notificacao chega, o tooltip pelo
+  tipo. A direcao, a janela do boitel e o hash sao regra de banco, provados em rollback (bloco VINCULAR-FIX-01).
+  ⚠ PROVADO: sem o filtro de parte viva, sem o "exato vence", com um pago bloqueando, com a linha no `rotuloOC` e com
+    o tooltip fixo, cada mutacao derruba 1 ou 2 casos.
+  De 1983 para 1985 no VINCULAR-FIX-01b: `vincularOperacao.test.tsx` foi de 13 para 15 — a regra (c) com o Iagro
+  (ambar, simula criando, o resumo avisa "Já existe Taxas e Impostos de R$ 541,84 liquidado nesta OC; este é outro
+  pagamento" e o Vincular grava) e os tres iguais (dois pagos do mesmo valor nao bloqueiam; com um livre, ele vai
+  primeiro). ⚠ DOIS CASOS QUE ESPERAVAM BLOQUEIO mudaram de contrato, nunca afrouxados: "(c) linha vermelha, nao
+  selecionavel" (OC bb51bb9a, titulo conciliado) virou ambar "criar novo" que seleciona e simula, e "so' TODOS pagos
+  bloqueiam" virou "pago nunca bloqueia". PROVADO: com o item pago voltando a bloquear, 4 casos caem; sem o texto do
+  aviso, 1. A regra do banco (criar com aviso, tres iguais, janela do boitel) esta' provada em rollback.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -1009,10 +1026,10 @@ migration e' REGISTRO HISTORICO, nao se reaplica).
   boitel de 13/05/2026) tem DOIS lancamentos Fundersul IDENTICOS: R$ 1.929,38 cada, mesma
   descricao ("Boitel 110 Garrotes - Fundersul"), mesmo componente `taxas_impostos`, os dois
   `realizado` e nenhum cancelado. Medido em 24/09/2026, na FASE 0 do OC-BOITEL-VALOR-01.
-  ⚠ NAO FOI INVESTIGADO SE E' DUPLICATA OU DOIS FATOS. Fundersul e' taxa por cabeca e a operacao
-    tem um lote so' — duas linhas de valor identico ao centavo cheiram a dois cliques, mas nao
-    medi. Quem for tratar confere antes de apagar: cancelar um lancamento realizado mexe em
-    numero homologado.
+  ⚠ CORRIGIDO EM 26/09/2026 — NAO E' DUPLICATA, E NAO E' PARA TRATAR. Pela regra da pecuaria (Gabriel,
+    26/09: mesmo nome, mesmo valor e mesmo dia e' NORMAL — ver o bloco "PECUARIA: LANCAMENTOS IGUAIS"), duas
+    guias de Fundersul de 1.929,38 sao dois pagamentos. O texto antigo dizia que "cheiravam a dois cliques";
+    estava errado de premissa. NAO cancelar nenhuma.
   ⚠ E ELA APARECEU DE CARONA, o que vale mais que o caso: a varredura procurava o SUBCENTRO da
     principal e trouxe os componentes junto. Nenhum gate ve' duplicata de lancamento — nao ha'
     unique sobre (operacao, componente, valor), e nem deveria haver: duas parcelas iguais sao
@@ -1946,6 +1963,9 @@ preview que o cabecalho nao sai da tela ao rolar.
      `p_criar_novo` (acao explicita "Criar compromisso novo"). Sem isso, a sugestao criaria o dobro.
   D3 importados: a competencia muda e o hash fica — POR CONSTRUCAO: `compute_financeiro_lancamento_v2_hash`
      RECEBE `_data_competencia` e NAO A USA. A RPC confere o invariante e aborta se o hash mudar.
+     ⚠ ERRADO NA PRATICA, corrigido no VINCULAR-FIX-01: a formula nao usa a competencia, mas o GATILHO dispara
+       nela (`UPDATE OF ... data_competencia`) e recalcula; num hash de formula antiga o valor muda. Ver
+       HASH-IMPORT-DEFASADO-01.
   D4 `movimentacao_rebanho_id` e' solto (como no AGNALDO-DEDUP-01b), com o id antigo na trilha; o
      zootecnico nao se mexe. OC com movimento proprio -> aviso `movimento_duplicado` (ver ZOO-DOBRO-OC-LEGADO).
   Decisoes da FASE 1a: ordem das candidatas = VALOR EXATO AO CENTAVO primeiro (compromisso que cabe com o
@@ -1971,6 +1991,99 @@ preview que o cabecalho nao sai da tela ao rolar.
   Por cliente: NJ 36, Vera 12, Santa Rita 11, RRCC 3 (Agnaldo 40 e Raul 10 nao tem candidata nenhuma).
   ⚠ O VINCULO NAO MEXE NO REBANHO: ele solta o elo financeiro (D4) e avisa em vermelho. Quem decidir mede
     antes qual dos dois movimentos fica — cancelar movimento zootecnico muda saldo de rebanho homologado.
+- ⚠ VINCULAR-FIX-01 — CINCO CORRECOES DO VINCULAR relatadas pelo Gabriel (25/09/2026). Migration
+  `supabase/migrations/20261027152000_vincular_fix_01.sql` (⚠ registrada como `20260925223916`), PATCH GUARDADO POR md5:
+  `oc_vincular_lancamento` 72be497d -> 47eced26, `oc_candidatas_vinculo` c6885a66 -> 63b698ee; tres funcoes novas
+  pequenas (`_oc_vinculo_direcao_compromisso`, `_oc_vinculo_dist_janela`, `_oc_vinculo_pista`), EXECUTE so'
+  authenticated e service_role.
+  (1) HASH PRESERVADO (D3). O Iagro 2a8562dd abortava "Vincular mudaria o hash (cc9c2320 -> e6b24dbc)": a formula
+     nao usa a competencia, mas `trg_financeiro_lancamento_v2_hash` e' `BEFORE UPDATE OF ... data_competencia`
+     e RECALCULA — e `cc9c2320` era exatamente a formula de 6 campos anterior a 10/04/2026. Depois do UPDATE, a RPC
+     regrava o original com um UPDATE SO' de `hash_importacao` (fora das listas dos dois gatilhos de hash). Nada
+     desligado; a guarda fica. PROVADO EM ROLLBACK: com o hash antigo, o vinculo grava, a competencia vai de
+     02/08 a 04/08/2024 e a linha segue `cc9c2320`; o controle (UPDATE cru da competencia) da' `e6b24dbc`.
+     ⚠ A FASE 1a "provou" o contrario porque mediu numa linha de hash JA' atual — prova num conjunto que nao
+       exercita o caso e' a mesma licao do "PROVA DE IDENTIDADE REPORTA O TAMANHO DO CONJUNTO".
+  (2) LINHA DA CANDIDATA: "{data} · {Tipo} · {Fazenda} · {N} cab · {contraparte}" (`linhaDaCandidata`), a data de
+     referencia e as cabecas da OC (cabecalho; sem ele, soma dos lotes). SO' na linha — o Desvincular, o botao e o
+     toast mantem `rotuloOC`. A tabela perdeu as colunas Tipo, Data, Fazenda e Contraparte, que viraram a linha.
+  (3) COMPROMISSO A COMPROMISSO + DIRECAO. Entram tambem os compromissos do MESMO subcentro do lancamento, qualquer
+     componente (Graxaria c80ebe9e: 5.056 a receber gravado como `adiantamento_devolvido` no plano "Abates de
+     Femeas" — o mapa so' dava `principal` a esse subcentro, e o exato nem era avaliado). Direcao do PLANO do
+     compromisso = a do lancamento. Valor exato vence (vai escolhido, `p_compromisso_id`, mesmo de outro componente).
+     "Estorno Recebido" NAO entrou no mapa (decisao: o par de estorno fica fora).
+     ⚠ O BLOQUEIO POR `todos_liquidados` DESTA VERSAO FOI REVOGADO NO 01b (abaixo): pago nunca bloqueia.
+     Medido antes: todo compromisso vivo tem plano, e a direcao do plano concorda com o mapa em todos.
+     PROVADO EM ROLLBACK: com a721d5ca de volta em "Abates de Femeas" e na Faz. 3 Muchachas, c80ebe9e vem em 1o,
+     `valor_exato`, com 73a183eb no topo da lista; a simulacao passa; o compromisso de SAIDA 6b349b87 posto no mesmo
+     subcentro some da lista e, forcado, e' recusado ("Direcao do compromisso (2-Saídas) nao confere...").
+     ⚠ HOJE A721D5CA NAO TEM O GESTO: o Gabriel a reclassificou para "Estorno Recebido" (fora do mapa) e a regra
+       FIN-FAZENDA-ADM-01 levou a fazenda para "Administrativo". Voltar os dois e' do operador.
+  (4) ICONE DE OC NA LISTA (`useLancamentosComOC`): criterio = parte VIVA, nao `origem_lancamento`; uma consulta por
+     cliente num mapa (molde do `useLancamentosConciliados`), rele no `inscreverEmLancamentos` — some ao desvincular
+     sem F5. Tooltip pelo tipo (Compra/Venda/Abate/Boitel — antes, "Compra de Animais" em todos); o clique abre a OC
+     (`abrirOCFinanceiro`) sem abrir a linha. Ganharam o icone 5 lancamentos vinculados da Vera.
+  (5) BOITEL: a janela da venda em boitel vai de `zoo_operacao_boitel.data_envio` ate' `data_abate` (+60 dias; antes
+     do envio, fora); pista da descricao no ranking, depois do valor exato ("boitel" numa OC de boitel; o numero de
+     cabecas da OC escrito na descricao). PROVADO EM ROLLBACK com datas sinteticas.
+     ⚠ E HOJE NAO MUDA NADA: `data_envio` esta' VAZIO nas 15 linhas de boitel (8 projetado, 7 realizado), e sem envio
+       a OC cai na regra de antes. E O CASO DE 2025 NAO TEM OC: "Boitel 150 garrotes - Frete" (37a2f86a, 15/05/2025)
+       — as vendas em boitel da Vera sao de 2026 (b58bf556, 110 cab; 7f7de76f, 55 cab), e ela nao tem venda
+       nenhuma de fev a ago/2025. Fica so' o criterio.
+     ⚠ CORRECAO (26/09/2026): o relatorio e este registro diziam que o frete de 2.000 estava DUPLICADO (37a2f86a e
+       9b9e2164). NAO esta': sao duas viagens de frete — regra da pecuaria, bloco "PECUARIA: LANCAMENTOS IGUAIS".
+     ⚠ O "HOJE NAO MUDA NADA" FOI REVOGADO NO 01b: a janela ganhou fallback e passou a valer para todo boitel.
+- ⚠ VINCULAR-FIX-01b — AJUSTE DO GABRIEL ANTES DO COMMIT (26/09/2026). Migration
+  `supabase/migrations/20261027152100_vincular_fix_01b.sql` (⚠ registrada como `20260926082709`), patch guardado
+  por md5 sobre a 01: `oc_vincular_lancamento` 47eced26 -> 9e06563f, `oc_candidatas_vinculo` 63b698ee -> 70231c30;
+  funcao nova `_oc_vinculo_compromisso_liquidado` (o MESMO predicado da coluna `acao_prevista = 'recusar'` das
+  candidatas: parcela unica com titulo realizado, conciliado ou com liquidacao viva).
+  (1) PAGO NUNCA BLOQUEIA — regra por candidata:
+     a) compromisso livre de valor exato -> usa esse (a tela o manda escolhido);
+     b) compromisso livre sem valor exato -> `escolher_compromisso` + "criar compromisso novo". ⚠ ANTES, com dois
+        ou mais livres do item, a resposta nao oferecia criar e `p_criar_novo` era IGNORADO nesse ramo;
+     c) nenhum livre do componente -> CRIA um novo, e a resposta leva o aviso `componente_ja_liquidado` ("Já existe
+        {componente} de R$ X liquidado nesta OC; este é outro pagamento"), ambar no resumo da simulacao; o operador
+        confirma no Vincular. Na lista, ambar "criar novo", selecionavel;
+     d) vermelho SO' por direcao incompativel ou OC cancelada/rascunho — e as duas o banco ja' tira da lista, entao
+        a tela nao tem mais linha vermelha nenhuma.
+     `todos_liquidados` continua no envelope, so' informativo.
+     PROVADO EM ROLLBACK: Iagro 2a8562dd x f93f1a2b, so' com o componente -> `ok`, compromisso `criado`, aviso com o
+     Fundersul 541,84. TRES IGUAIS (tres copias do Iagro, mesmo nome, valor e dia, na mesma OC, com um compromisso
+     livre de 277,68 posto antes): L1 preenche o livre, L2 cria (aviso 541,84 + 277,68), L3 cria (aviso com os
+     tres) — tres partes vivas, quatro compromissos de `taxas_impostos`, nenhum recusado.
+  (2) JANELA DO BOITEL COM FALLBACK: inicio = coalesce(`data_envio`, data da OC); fim = coalesce(`data_abate`,
+     inicio + 150 dias) + a janela de 60. PROVADO EM ROLLBACK com o frete 37a2f86a em tres datas: 20/08/2026 (99
+     dias depois da data da OC — fora pela regra velha) traz b58bf556 e 7f7de76f com distancia 0 e deixa 581d075c
+     fora (comeca depois); 10/10/2026 traz 581d075c (0, sem abate: +150) e as outras duas a 45-46 dias do abate;
+     01/05/2026, antes de qualquer envio, nenhum boitel.
+- ⚠ PECUARIA: LANCAMENTOS IGUAIS SAO NORMAIS (regra permanente, Gabriel, 26/09/2026). Na pecuaria, lancamentos com
+  MESMO NOME, MESMO VALOR e MESMO DIA sao o caso comum: cada GTA, cada guia de Fundersul, cada viagem de frete e' um
+  lancamento. NUNCA tratar como duplicata, nunca sinalizar como suspeita — nem em relatorio, nem em registro, nem em
+  regra de tela. Consequencia de modelo: uma OC pode ter N compromissos do mesmo componente, e "o componente ja'
+  esta' pago" nao bloqueia nada (VINCULAR-FIX-01b).
+  ⚠ NASCE DE DOIS ERROS MEUS: chamei de duplicata os dois fretes de 2.000 da Vera (37a2f86a, 9b9e2164) e, antes,
+    as duas guias de Fundersul de 1.929,38 da b58bf556 (VERA-FUNDERSUL-DUP-01). Os dois registros foram corrigidos.
+  ⚠ NAO CONFUNDIR COM A REGUA DE DUPLICIDADE DA IMPORTACAO (`classificar_nivel_duplicidade`, D1/D2/D3): ela compara
+    a MESMA linha do Excel reimportada contra o banco — outra pergunta, e continua valendo.
+- BOITEL-DATA-ENVIO-01 — pendencia, so' medir depois (decisao do Gabriel, 26/09/2026): `zoo_operacao_boitel.data_envio`
+  esta' VAZIO nos 15 registros (8 projetado, 7 realizado; medido em 25/09). A janela do vincular cai no fallback (a
+  data da OC). Quem retomar mede ONDE a tela deveria gravar o envio e POR QUE nao grava — o `data_abate` do realizado
+  esta' preenchido em 7 de 7, entao o caminho de gravacao existe para uma data e nao para a outra.
+- HASH-IMPORT-DEFASADO-01 — pendencia, sem acao (decisao do Gabriel, 25/09/2026). 63.758 importados guardam
+  `hash_importacao` diferente do que `compute_financeiro_lancamento_v2_hash` daria hoje (~54 mil vivos). 5.828
+  sao a formula de 6 campos anterior a 10/04/2026; os outros 57.930 tem causa so' em parte medida:
+  ⚠ A LISTA DO GATILHO ESTA' INCOMPLETA. `trg_financeiro_lancamento_v2_hash` dispara em `UPDATE OF cliente_id,
+    fazenda_id, data_competencia, data_pagamento, valor, tipo_operacao, conta_bancaria_id, lote_importacao_id`, e a
+    formula usa tambem `descricao`, `favorecido_id` e `numero_documento`. Editar um dos tres deixa o hash velho;
+    a proxima edicao de uma coluna da lista o "cura" calada. 6.109 dos 57.930 tem essa edicao no `audit_log`.
+  ⚠ E A COMPETENCIA ESTA' NA LISTA SEM ESTAR NA FORMULA — foi ela que quebrou o vinculo (VINCULAR-FIX-01).
+  ⚠ QUEM LE O HASH: so' `buscar_duplicados_retroativo` (aba Auditoria de duplicidade). A REIMPORTACAO NAO O USA —
+    conferido: `useImportLancamentosExcel` junta candidatos por cliente + pagamento + valor e decide com
+    `classificar_nivel_duplicidade`, e o gatilho `enforce_financeiro_lancamento_v2_unique_hash` tambem (apesar do
+    nome, compara os campos, nao o hash). Por isso o defasado nao duplica importacao hoje.
+  ⚠ QUEM FOR TRATAR decide entre recalcular tudo (troca a identidade de ~54 mil de uma vez) e completar a lista do
+    gatilho; e mede antes o que a Auditoria de duplicidade passa a mostrar.
 - ⚠ OC-FAZENDA-GLOBAL-01 — A CENTRAL DE OPERACOES COMERCIAIS SEGUE O SELETOR LATERAL, como o Lancar
   movimentacao e a Lista (25/09/2026, decisao do Gabriel). `CentralOperacoesComerciais` le' `useFazenda()`:
   fazenda escolhida -> so' as OCs dela; Global -> todas. O filtro proprio `f_fazenda` e a caixa de fazenda da

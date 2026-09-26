@@ -11,6 +11,7 @@ import {
 import { isTransferenciaTipo } from '@/lib/financeiro/v2Transferencia';
 import { sentidoNaConta, contaEmFoco, formatarValorLinha, type SentidoNaConta } from '@/lib/financeiro/sinalPorConta';
 import { useLancamentosConciliados, desfazerVinculo, desfazerGrupo } from '@/hooks/useConciliacaoDoMes';
+import { useLancamentosComOC, rotuloOrigemOC } from '@/hooks/useLancamentosComOC';
 import { iconeOrigemLancamento, LEGENDA_ICONES } from '@/v2/lib/origemLancamento';
 import { MinimodalOrigemLancamento } from '@/components/financeiro-v2/MinimodalOrigemLancamento';
 import { useCoberturaExtrato } from '@/hooks/useCoberturaExtrato';
@@ -233,6 +234,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
      é o que casa com ela, e trocar de página não repergunta nada. */
   const { clienteAtual } = useCliente();
   const { conciliados, recarregar: recarregarVinculos } = useLancamentosConciliados(clienteAtual?.id ?? null);
+  /* VINCULAR-FIX-01 — o icone de OC da linha sai da PARTE VIVA, nao da origem: um lancamento vinculado
+     (importado ou manual) tambem e' titulo da OC, e o desvinculado deixa de ser. Mesmo molde do mapa acima. */
+  const lancamentosComOC = useLancamentosComOC(clienteAtual?.id ?? null);
 
   const coberturaExtrato = useCoberturaExtrato(clienteAtual?.id);
 
@@ -2628,14 +2632,23 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                               <TooltipContent>Gerado a partir de lançamento zootécnico</TooltipContent>
                             </Tooltip>
                           )}
-                          {l.origem_lancamento === 'operacao_comercial' && (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Beef className="inline h-3 w-3 text-amber-600 dark:text-amber-400 ml-1 shrink-0 align-middle" />
-                              </TooltipTrigger>
-                              <TooltipContent>Origem: Operação Comercial de Compra de Animais</TooltipContent>
-                            </Tooltip>
-                          )}
+                          {(() => {
+                            const oc = lancamentosComOC.get(l.id);
+                            if (!oc) return null;
+                            return (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  {/* O clique abre a OC — e nao a linha: o botao para a propagacao. */}
+                                  <button type="button" data-testid="icone-oc"
+                                    onClick={e => { e.stopPropagation(); abrirOCFinanceiro(oc.operacaoId, oc.tipo); }}
+                                    className="inline-flex align-middle ml-1 shrink-0">
+                                    <Beef className="h-3 w-3 text-amber-600 dark:text-amber-400" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent>{rotuloOrigemOC(oc)} — clique para abrir</TooltipContent>
+                              </Tooltip>
+                            );
+                          })()}
                         </td>
                         <td className="truncate px-1 py-1 align-middle text-[12px] leading-tight text-muted-foreground" title={fornNome || ''}>
                           {fornNome || (!l.favorecido_id ? '-' : <span className="text-warning">n/c</span>)}

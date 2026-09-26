@@ -36,6 +36,8 @@ export interface CompromissoCandidato {
   diferenca: number;
   valor_exato: boolean;
   acao_prevista: AcaoCompromisso;
+  /** VINCULAR-FIX-01: o compromisso e' do MESMO subcentro do lancamento (entra qualquer que seja o componente). */
+  mesmo_subcentro?: boolean;
 }
 
 export interface OperacaoCandidata {
@@ -53,6 +55,12 @@ export interface OperacaoCandidata {
   contraparte_id: string | null;
   contraparte_nome: string | null;
   valor_acordado: number | null;
+  /** VINCULAR-FIX-01: cabecas da OC (a do cabecalho; sem ela, a soma dos lotes). */
+  qtd?: number | null;
+  eh_boitel?: boolean;
+  /** Todos os compromissos que cabem ja' estao liquidados — so' entao a OC fica bloqueada. */
+  todos_liquidados?: boolean;
+  pista_descricao?: number;
   compromissos: CompromissoCandidato[];
   acao_prevista: AcaoCandidata;
   tem_titulo_vivo_do_componente: boolean;
@@ -92,10 +100,13 @@ export interface RespostaCandidatas {
 
 export interface AvisoVinculo {
   codigo: 'movimento_duplicado' | 'competencia_mudou_de_mes' | 'favorecido_diferente'
-    | 'classificacao_diverge_do_compromisso' | 'principal_diverge_da_base' | 'safra_diverge_da_competencia';
+    | 'classificacao_diverge_do_compromisso' | 'principal_diverge_da_base' | 'safra_diverge_da_competencia'
+    | 'componente_ja_liquidado';
   de?: string; para?: string; base?: number | null; soma_principal?: number;
   compromisso?: string; lancamento?: string;
   movimento_antigo?: string; movimentos_da_oc?: string[];
+  /** VINCULAR-FIX-01b, `componente_ja_liquidado`: o componente e os compromissos dele ja' pagos nesta OC. */
+  componente?: string; compromissos?: { id: string; valor_total: number; descricao: string | null }[];
 }
 
 export interface VinculoFeito {
@@ -228,9 +239,18 @@ const ROTULO_COMPONENTE: Record<string, string> = {
 };
 export const rotuloComponente = (c: string) => ROTULO_COMPONENTE[c] ?? c;
 
-/** O compromisso que a linha mostra: o do item escolhido; na falta, o primeiro da lista. */
+/**
+ * O compromisso de VALOR EXATO que ainda aceita o lancamento — VINCULAR-FIX-01. "Valor exato vence": ele
+ * pode ser de outro componente, desde que do mesmo subcentro (Graxaria c80ebe9e: 5.056 a receber gravado
+ * como `adiantamento_devolvido` no plano "Abates de Femeas").
+ */
+export function compromissoExato(c: OperacaoCandidata): CompromissoCandidato | null {
+  return c.compromissos.find(k => k.valor_exato && k.acao_prevista !== 'recusar') ?? null;
+}
+
+/** O compromisso que a linha mostra: o exato; senao o do item escolhido; na falta, o primeiro da lista. */
 export function compromissoDoItem(c: OperacaoCandidata, componente: string | null): CompromissoCandidato | null {
-  return c.compromissos.find(k => k.componente === componente) ?? c.compromissos[0] ?? null;
+  return compromissoExato(c) ?? c.compromissos.find(k => k.componente === componente) ?? c.compromissos[0] ?? null;
 }
 
 export type TomSelo = 'verde' | 'ambar' | 'vermelho';
@@ -240,33 +260,46 @@ const brl = (n: number | null | undefined) =>
   n == null ? '—' : n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 /**
- * O SELO DE CADA CANDIDATA. A ordem importa:
- *  1. titulo do item ja' realizado/conciliado -> vermelho e NAO selecionavel (a RPC recusaria;
- *     o `title` mostra os dois titulos);
- *  2. valor exato ao centavo -> verde "= valor";
+ * O SELO DE CADA CANDIDATA — VINCULAR-FIX-01b. NENHUMA CANDIDATA E' VERMELHA: o vermelho so' existiria por
+ * direcao incompativel ou OC cancelada/rascunho, e as duas o banco ja' tira da lista.
+ * ⚠ REGRA DA PECUARIA (Gabriel, 26/09/2026): mesmo nome, mesmo valor e mesmo dia e' NORMAL — cada GTA, cada guia
+ *   de Fundersul, cada frete e' um lancamento. "O componente ja' esta' pago" NAO bloqueia: e' outro pagamento.
+ * A ordem importa:
+ *  1. compromisso livre de valor exato -> verde "= valor" (vai escolhido);
+ *  2. o item so' tem compromisso pago -> ambar "criar novo", e o `title` diz qual ja' esta' pago;
  *  3. titulo do item vivo e aberto -> ambar, com o status dele (sera' substituido);
- *  4. mais de um compromisso do item -> ambar "escolher compromisso";
+ *  4. mais de um compromisso LIVRE do item -> ambar "escolher compromisso" (a lista oferece criar novo);
  *  5. resto -> verde "sem título do item".
  */
-export function situacaoDaCandidata(c: OperacaoCandidata, componente: string | null, valorLancamento: number): SituacaoCandidata {
+export function situacaoDaCandidata(c: OperacaoCandidata, componente: string | null, _valorLancamento: number): SituacaoCandidata {
   const doItem = c.compromissos.filter(k => k.componente === componente);
-  const alvo = doItem.length === 1 ? doItem[0] : null;
-  if (alvo && alvo.acao_prevista === 'recusar') {
-    const tit = alvo.parcelas.find(p => p.titulo_liquidado || p.titulo_conciliado || p.titulo_status === 'realizado');
-    const conc = !!tit?.titulo_conciliado;
-    return {
-      rotulo: conc ? 'título conciliado' : 'título realizado', tom: 'vermelho', selecionavel: false,
-      title: `Título da OC: ${tit?.titulo_status ?? 'realizado'} ${brl(tit?.valor ?? alvo.valor_total)}${conc ? ' · conciliado' : ''}`
-        + ` — este lançamento: ${brl(valorLancamento)}. Os dois já são dinheiro real; desfaça um antes.`,
-    };
+  const livres = doItem.filter(k => k.acao_prevista !== 'recusar');
+  const alvo = livres.length === 1 ? livres[0] : null;
+  if (compromissoExato(c)) return { rotulo: '= valor', tom: 'verde', selecionavel: true };
+  if (doItem.length > 0 && livres.length === 0) {
+    const pagos = doItem.map(k => brl(k.valor_total)).join(' + ');
+    return { rotulo: 'criar novo', tom: 'ambar', selecionavel: true,
+      title: `Já existe ${rotuloComponente(componente ?? '')} de ${pagos} liquidado nesta OC; este é outro pagamento.` };
   }
-  if (c.valor_exato) return { rotulo: '= valor', tom: 'verde', selecionavel: true };
   if (alvo && alvo.acao_prevista === 'substituir') {
     const st = alvo.parcelas.find(p => p.titulo_id && !p.titulo_cancelado)?.titulo_status ?? 'aberto';
     return { rotulo: `título ${st}`, tom: 'ambar', selecionavel: true };
   }
-  if (doItem.length > 1) return { rotulo: 'escolher compromisso', tom: 'ambar', selecionavel: true };
+  if (livres.length > 1) return { rotulo: 'escolher compromisso', tom: 'ambar', selecionavel: true };
   return { rotulo: 'sem título do item', tom: 'verde', selecionavel: true };
+}
+
+/**
+ * A LINHA DA CANDIDATA — VINCULAR-FIX-01, item 2: "{data} · {Tipo} · {Fazenda} · {N} cab · {contraparte}".
+ * A data e' a de REFERENCIA (abate > embarque > operacao; no boitel, o envio), a mesma da distancia.
+ * ⚠ SO' NA LINHA DA CANDIDATA: o Desvincular, o botao e o toast continuam com `rotuloOC`.
+ * Ausente vira "—", nunca some: a posicao de cada parte na linha e' o que o olho aprende.
+ */
+export function linhaDaCandidata(c: Pick<OperacaoCandidata, 'data_referencia' | 'data_operacao' | 'tipo_operacao'
+  | 'eh_boitel' | 'fazenda_nome' | 'qtd' | 'contraparte_nome'>): string {
+  const tipo = c.eh_boitel ? 'Boitel' : (c.tipo_operacao ? c.tipo_operacao.charAt(0).toUpperCase() + c.tipo_operacao.slice(1) : '—');
+  const cab = c.qtd == null ? '—' : `${Number(c.qtd).toLocaleString('pt-BR')} cab`;
+  return [dataBr(c.data_referencia ?? c.data_operacao), tipo, c.fazenda_nome ?? '—', cab, c.contraparte_nome ?? '—'].join(' · ');
 }
 
 /** Pre-selecao: SO' a primeira, e so' se for valor exato e selecionavel. Senao, nenhuma. */
@@ -301,6 +334,12 @@ export function textoDoAviso(a: AvisoVinculo): AvisoTela {
     case 'classificacao_diverge_do_compromisso':
       return { codigo: a.codigo, tom: 'ambar', texto:
         `O subcentro do lançamento (${a.lancamento ?? '—'}) é diferente do compromisso (${a.compromisso ?? '—'}). Cada um mantém o seu.` };
+    case 'componente_ja_liquidado': {
+      const pagos = (a.compromissos ?? []).map(k => brl(k.valor_total)).join(' + ') || '—';
+      return { codigo: a.codigo, tom: 'ambar', texto:
+        `Já existe ${rotuloComponente(a.componente ?? '')} de ${pagos} liquidado nesta OC; este é outro pagamento `
+        + '(um compromisso novo será criado).' };
+    }
     case 'safra_diverge_da_competencia':
       return { codigo: a.codigo, tom: 'ambar', texto: 'A safra do lançamento não é a sugerida para a nova competência; ela não muda.' };
     default:

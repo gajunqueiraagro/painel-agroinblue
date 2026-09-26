@@ -22,7 +22,7 @@ import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
 import { TOM_SELO, Selo, Secao, Par } from '@/components/financeiro-v2/modalVinculoOC';
 import {
   buscarCandidatasVinculo, vincularLancamentoOC, situacaoDaCandidata, candidataInicial,
-  compromissoDoItem, rotuloComponente, resumoDoVinculo, textoDoAviso, rotuloOC, dataBr, mensagemDeErro, ehRecusa, ehVinculo,
+  compromissoDoItem, compromissoExato, linhaDaCandidata, rotuloComponente, resumoDoVinculo, textoDoAviso, rotuloOC, dataBr, mensagemDeErro, ehRecusa, ehVinculo,
   type RespostaCandidatas, type RespostaVinculo, type OperacaoCandidata, type VinculoRecusado,
 } from '@/lib/oc/vincularLancamento';
 
@@ -76,7 +76,11 @@ export function VincularOperacaoDialog({ open, lancamentoId, clienteId, onClose,
         const comps = r.regra?.componentes ?? [];
         const item = r.componente_sugerido?.codigo ?? (comps.length === 1 ? comps[0] : null);
         setComponente(item);
-        setOcSel(candidataInicial(r.candidatas ?? [], item, r.lancamento?.valor ?? 0));
+        const inicial = candidataInicial(r.candidatas ?? [], item, r.lancamento?.valor ?? 0);
+        setOcSel(inicial);
+        /* VINCULAR-FIX-01: valor exato vence — o compromisso exato vai escolhido, mesmo de outro componente. */
+        const ocInicial = (r.candidatas ?? []).find(c => c.operacao_id === inicial);
+        setCompromissoSel(ocInicial ? compromissoExato(ocInicial)?.id ?? null : null);
       })
       .catch(e => { if (!cancelado) setErroCarga(mensagemDeErro(e)); })
       .finally(() => { if (!cancelado) setCarregando(false); });
@@ -89,7 +93,11 @@ export function VincularOperacaoDialog({ open, lancamentoId, clienteId, onClose,
   const oc = useMemo(() => candidatas.find(c => c.operacao_id === ocSel) ?? null, [candidatas, ocSel]);
 
   /* Trocar de OC ou de item zera as escolhas que dependem deles. */
-  const escolherOC = (id: string) => { setOcSel(id); setCompromissoSel(null); setParcelaSel(null); setCriarNovo(false); setEscolhaPedida(null); };
+  const escolherOC = (id: string) => {
+    const c = candidatas.find(x => x.operacao_id === id);
+    setOcSel(id); setCompromissoSel(c ? compromissoExato(c)?.id ?? null : null);
+    setParcelaSel(null); setCriarNovo(false); setEscolhaPedida(null);
+  };
   const escolherItem = (c: string) => { setComponente(c); setCompromissoSel(null); setParcelaSel(null); setCriarNovo(false); setEscolhaPedida(null); };
 
   /* Simulacao: o "o que vai acontecer" e' a propria RPC, com `p_simular`. */
@@ -218,14 +226,10 @@ export function VincularOperacaoDialog({ open, lancamentoId, clienteId, onClose,
                     <thead>
                       <tr className="border-b text-left text-[10px] text-muted-foreground">
                         <th className="w-6 py-1" />
-                        <th className="py-1 font-normal">OC</th>
-                        <th className="py-1 font-normal">Tipo</th>
-                        <th className="py-1 font-normal">Data</th>
+                        <th className="py-1 font-normal">Operação</th>
                         <th className="py-1 font-normal text-right">Dist.</th>
-                        <th className="py-1 font-normal">Fazenda</th>
-                        <th className="py-1 font-normal">Contraparte</th>
                         <th className="py-1 font-normal text-right">Acordado</th>
-                        <th className="py-1 font-normal">Compromisso do item</th>
+                        <th className="py-1 pl-2 font-normal">Compromisso do item</th>
                         <th className="py-1 font-normal">Situação</th>
                       </tr>
                     </thead>
@@ -335,14 +339,11 @@ function LinhaCandidata({ c, componente, valorLanc, selecionada, onEscolher, esc
           <span role="radio" aria-checked={selecionada} aria-disabled={!sit.selecionavel}
             className={cn('inline-block h-3 w-3 rounded-full border', selecionada ? 'border-primary bg-primary' : 'border-muted-foreground/50')} />
         </td>
-        <td className="py-1 font-medium whitespace-nowrap">{rotuloOC(c)}</td>
-        <td className="py-1 capitalize">{c.tipo_operacao}</td>
-        <td className="py-1 whitespace-nowrap">{dataBr(c.data_referencia)}</td>
+        {/* VINCULAR-FIX-01: data · tipo · fazenda · cab · contraparte numa linha so' (sem "OC de"). */}
+        <td className="py-1 font-medium max-w-[330px] truncate" data-testid="vinc-linha" title={linhaDaCandidata(c)}>{linhaDaCandidata(c)}</td>
         <td className="py-1 text-right tabular-nums">{c.distancia_dias}d</td>
-        <td className="py-1">{c.mesma_fazenda ? 'mesma' : (c.fazenda_nome ? 'outra' : '—')}</td>
-        <td className="py-1 max-w-[140px] truncate">{c.contraparte_nome ?? '—'}</td>
         <td className="py-1 text-right tabular-nums">{brl(c.valor_acordado)}</td>
-        <td className="py-1 max-w-[180px] truncate">
+        <td className="py-1 pl-2 max-w-[180px] truncate">
           {comp ? `${comp.descricao ?? rotuloComponente(comp.componente)} · ${brl(comp.valor_total)}` : 'nenhum (será criado)'}
         </td>
         <td className="py-1"><Selo tom={sit.tom} title={sit.title}>{sit.rotulo}</Selo></td>
@@ -350,7 +351,7 @@ function LinhaCandidata({ c, componente, valorLanc, selecionada, onEscolher, esc
       {selecionada && escolha && (
         <tr className="border-b bg-amber-50/40 dark:bg-amber-950/20" data-testid="vinc-escolha">
           <td />
-          <td colSpan={9} className="py-1.5">
+          <td colSpan={5} className="py-1.5">
             <div className="text-[10px] text-muted-foreground mb-1">
               {escolha.motivo === 'escolher_parcela' ? 'O compromisso tem mais de uma parcela — qual este lançamento paga?' : 'A OC tem mais de um compromisso que cabe — qual é este?'}
             </div>
