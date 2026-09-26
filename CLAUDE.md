@@ -767,6 +767,11 @@ no mesmo arquivo.
   selecionavel" (OC bb51bb9a, titulo conciliado) virou ambar "criar novo" que seleciona e simula, e "so' TODOS pagos
   bloqueiam" virou "pago nunca bloqueia". PROVADO: com o item pago voltando a bloquear, 4 casos caem; sem o texto do
   aviso, 1. A regra do banco (criar com aviso, tres iguais, janela do boitel) esta' provada em rollback.
+  De 1985 para 1986 no VINCULAR-FIX-01c: `vincularOperacao.test.tsx` foi de 15 para 16 — entrou o item 0 (a OC SEM
+  compromisso do item continua candidata, "criar item" neutro, e simula). ⚠ QUATRO CASOS DO 01b MUDARAM DE CONTRATO,
+  nunca afrouxados: o "(c) item todo pago", o "pago nunca bloqueia", o do Iagro e o dos tres iguais cobravam o ambar
+  "criar novo" e o aviso "Já existe ... outro pagamento"; agora cobram o neutro "criar item" e a AUSENCIA do aviso
+  (`[data-aviso]` nulo e o texto fora do resumo). PROVADO: com "criar item" ambar ou vermelho, 5 casos caem.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -2045,6 +2050,8 @@ preview que o cabecalho nao sai da tela ao rolar.
      c) nenhum livre do componente -> CRIA um novo, e a resposta leva o aviso `componente_ja_liquidado` ("Já existe
         {componente} de R$ X liquidado nesta OC; este é outro pagamento"), ambar no resumo da simulacao; o operador
         confirma no Vincular. Na lista, ambar "criar novo", selecionavel;
+        ⚠ REVOGADO NO 01c (26/09/2026): o aviso e o ambar sairam — o vincular NAO julga repeticao. "Criar item" e'
+          neutro. Ver o bloco VINCULAR-FIX-01c.
      d) vermelho SO' por direcao incompativel ou OC cancelada/rascunho — e as duas o banco ja' tira da lista, entao
         a tela nao tem mais linha vermelha nenhuma.
      `todos_liquidados` continua no envelope, so' informativo.
@@ -2066,6 +2073,39 @@ preview que o cabecalho nao sai da tela ao rolar.
     as duas guias de Fundersul de 1.929,38 da b58bf556 (VERA-FUNDERSUL-DUP-01). Os dois registros foram corrigidos.
   ⚠ NAO CONFUNDIR COM A REGUA DE DUPLICIDADE DA IMPORTACAO (`classificar_nivel_duplicidade`, D1/D2/D3): ela compara
     a MESMA linha do Excel reimportada contra o banco — outra pergunta, e continua valendo.
+- ⚠ VINCULAR NAO JULGA REPETICAO (regra permanente, Gabriel, 26/09/2026 05:38). O vincular nao mexe em valor,
+  pagamento nem conciliacao — so' da' uma OC a um lancamento orfao. O operador vincula quantos quiser (5, 10, 20
+  Fundersul/Iagro/frete iguais na mesma OC), sem aviso e sem confirmacao extra. Sem compromisso livre do item,
+  "criar item" e' acao NEUTRA. A UNICA RECUSA e' a DIRECAO do plano de um COMPROMISSO (que sai da lista e, forcado,
+  e' recusado) — nunca da OC, que continua candidata com "criar item". OC cancelada/rascunho nem entra na lista.
+  E' o par da regra "PECUARIA: LANCAMENTOS IGUAIS SAO NORMAIS", logo acima.
+- ⚠ VINCULAR-FIX-01c (26/09/2026). Migration `supabase/migrations/20261027152200_vincular_fix_01c.sql` (⚠ registrada
+  como `20260926085107`): `oc_vincular_lancamento` 9e06563f -> e40fe082 (patch guardado por md5: sai o bloco do aviso,
+  que volta a ser exatamente o de antes do 01b) e `_oc_vinculo_dist_janela` redefinida (md5 83951424).
+  `oc_candidatas_vinculo` NAO mudou (70231c30). Tela: `situacaoDaCandidata` sem ambar de "criar novo" — "criar item" e
+  "escolher compromisso" ganharam o tom `neutro` (`TOM_SELO`, cinza); o texto do aviso saiu de `textoDoAviso`.
+  O resto do 01b fica: contar so' compromisso livre, `p_criar_novo` respeitado com varios livres, lista com "criar item".
+  ⚠ A REGRESSAO RELATADA ("nao aparece NENHUMA candidata, nem abate") NAO SE REPRODUZIU, e o registro diz isso em vez
+    de inventar causa. Medido em 26/09: `oc_candidatas_vinculo('37a2f86a')` devolve os MESMOS 4 abates da BMG (27/04,
+    15/06, 23/06, 18/03/2025) como `postgres` E como `authenticated` com o usuario do Gabriel (RLS e grants valendo), e
+    o preview local mostra os 4 na tela. Os 4 tem so' o principal de ENTRADA — a direcao tira o compromisso e a OC
+    fica com "criar item", que e' exatamente a regra pedida. Seis Fundersul do NJ devolvem 7 candidatas cada.
+    Pergunta aberta: em QUE ambiente e em QUE lancamento o Gabriel viu a lista vazia.
+  ⚠ A REGRESSAO QUE EXISTIA era outra, e a varredura a achou: 45 lancamentos reais de 6 clientes, candidatas das
+    funcoes de ANTES do FIX-01 (reconstruidas em rollback pelo patch reverso dos dois, md5 c6885a66 conferido) x
+    depois. Sumiam 4 pares, TODOS da janela do boitel: `3b2cd648` e `ed4488e1` (Vera, vendas de desmama em
+    04/05/2026) perdiam b58bf556 e 7f7de76f, porque o 01b tirava "antes do inicio" (a data da OC, 9 dias depois) em
+    vez de medir a distancia. Corrigido: antes do inicio a distancia e' ate' o inicio. DEPOIS: 84 pares antes, 87
+    depois, ZERO sumidos (os 3 a mais sao da janela do boitel: 132aef9d ganhou 744c520e e da0b8577; 792c02d0,
+    581d075c).
+    ⚠ A LICAO E' A DO "PROVA DE IDENTIDADE REPORTA O TAMANHO DO CONJUNTO": o FIX-01 e o 01b foram provados em casos
+      escolhidos (a Graxaria, o Iagro, o boitel sintetico) e nenhum media o que SUMIA. So' a varredura antes x depois
+      num conjunto real mostra regressao de filtro.
+  PROVADO EM ROLLBACK contra as funcoes novas: tres iguais (tres copias do Iagro na f93f1a2b, com um livre de 277,68
+  posto antes) -> L1 preenche o livre, L2 e L3 criam, `avisos = []` nos tres, tres partes vivas. DIRECAO: com a721d5ca
+  de volta em "Abates de Femeas", c80ebe9e segue candidata (lista 73a183eb, 0119442b) e o compromisso de saida
+  6b349b87 posto no mesmo subcentro fica fora da lista e, forcado, e' recusado ("Direcao do compromisso (2-Saídas)
+  nao confere com a do lancamento (1-Entradas)").
 - BOITEL-DATA-ENVIO-01 — pendencia, so' medir depois (decisao do Gabriel, 26/09/2026): `zoo_operacao_boitel.data_envio`
   esta' VAZIO nos 15 registros (8 projetado, 7 realizado; medido em 25/09). A janela do vincular cai no fallback (a
   data da OC). Quem retomar mede ONDE a tela deveria gravar o envio e POR QUE nao grava — o `data_abate` do realizado

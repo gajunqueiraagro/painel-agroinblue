@@ -123,10 +123,9 @@ describe('ordem e pre-selecao', () => {
 });
 
 describe('titulo da OC conciliado', () => {
-  /* VINCULAR-FIX-01b — ESTE CASO ESPERAVA BLOQUEIO e mudou de contrato: o titulo conciliado da OC nao impede o
-     vinculo, porque na pecuaria o mesmo componente se repete (outra guia, outro pagamento). A linha fica ambar,
-     selecionavel, e o title diz o que ja' esta' pago. */
-  it('(c) item todo pago: ambar "criar novo", selecionavel, e a simulacao segue', async () => {
+  /* VINCULAR-FIX-01b/01c — ESTE CASO ESPERAVA BLOQUEIO e mudou de contrato duas vezes: o titulo conciliado da OC
+     nao impede o vinculo (01b), e o vincular nao julga repeticao (01c) — a linha e' NEUTRA "criar item", sem aviso. */
+  it('(c) item todo pago: neutro "criar item", selecionavel, sem title de alerta, e a simulacao segue', async () => {
     const conc = candidata({
       operacao_id: 'bb51bb9a', valor_exato: false, acao_prevista: 'usar_compromisso', todos_liquidados: true,
       compromissos: [compromisso({ id: '173a0046', componente: 'taxa_aquisicao', valor_total: 127858.12, valor_exato: false,
@@ -134,8 +133,8 @@ describe('titulo da OC conciliado', () => {
           titulo_id: '321a1eee', titulo_status: 'realizado', titulo_cancelado: false, titulo_conciliado: true, titulo_liquidado: true }] })],
     });
     const sit = situacaoDaCandidata(conc, 'taxa_aquisicao', 2165.49);
-    expect(sit).toMatchObject({ rotulo: 'criar novo', tom: 'ambar', selecionavel: true });
-    expect(sit.title).toMatch(/Já existe Taxa de aquisição de R\$\s127\.858,12 liquidado nesta OC; este é outro pagamento/);
+    expect(sit).toMatchObject({ rotulo: 'criar item', tom: 'neutro', selecionavel: true });
+    expect(sit.title).toBeUndefined();
 
     const simular = vi.fn(() => simOk());
     responder([conc], simular);
@@ -282,53 +281,72 @@ describe('VINCULAR-FIX-01 — compromisso a compromisso', () => {
     expect(el(document, 'tr[data-oc="c80ebe9e"]').textContent).toMatch(/Abate 020 V - Graxaria/);
   });
 
-  /* VINCULAR-FIX-01b — ESTE CASO ESPERAVA BLOQUEIO quando TODOS os compromissos estavam pagos; agora nada bloqueia. */
-  it('pago nunca bloqueia: com outro livre ou com todos pagos, a candidata e\' ambar "criar novo" e selecionavel', () => {
+  /* VINCULAR-FIX-01b/01c — ESTE CASO ESPERAVA BLOQUEIO quando TODOS os compromissos estavam pagos; agora nada bloqueia
+     e nada alerta: "criar item" e' neutro. */
+  it('pago nunca bloqueia nem alerta: com outro livre ou com todos pagos, a candidata e\' neutra "criar item"', () => {
     const livre = compromisso({ id: 'k2', componente: 'adiantamento_devolvido', valor_total: 4000, valor_exato: false, acao_prevista: 'preencher' });
     const umPago = candidata({ valor_exato: false, todos_liquidados: false, compromissos: [principalRecebido, livre] });
-    expect(situacaoDaCandidata(umPago, 'principal', 5056)).toMatchObject({ rotulo: 'criar novo', tom: 'ambar', selecionavel: true });
+    expect(situacaoDaCandidata(umPago, 'principal', 5056)).toMatchObject({ rotulo: 'criar item', tom: 'neutro', selecionavel: true });
     const todosPagos = candidata({ valor_exato: false, todos_liquidados: true, compromissos: [principalRecebido] });
-    expect(situacaoDaCandidata(todosPagos, 'principal', 5056)).toMatchObject({ rotulo: 'criar novo', tom: 'ambar', selecionavel: true });
+    expect(situacaoDaCandidata(todosPagos, 'principal', 5056)).toMatchObject({ rotulo: 'criar item', tom: 'neutro', selecionavel: true });
   });
 });
 
-/* VINCULAR-FIX-01b — a regra da pecuaria: mesmo nome, mesmo valor e mesmo dia e' NORMAL. */
+/* VINCULAR-FIX-01c — o vincular NAO julga repeticao (Gabriel, 26/09/2026 05:38): so' da' uma OC ao lancamento
+   orfao, sem mexer em valor, pagamento ou conciliacao. Vincular 20 guias iguais na mesma OC e' normal. */
 const iagroPago = compromisso({ id: 'f8cd2eb1', componente: 'taxas_impostos', descricao: 'Abate 048 vacas - Fundersul', valor_total: 541.84,
   valor_exato: false, acao_prevista: 'recusar', parcelas: [{ parcela_id: 'pf', sequencia: 1, valor: 541.84, status: 'materializada',
     titulo_id: 'tf', titulo_status: 'realizado', titulo_cancelado: false, titulo_conciliado: true, titulo_liquidado: true }] });
 
-describe('VINCULAR-FIX-01b — regra (c): criar compromisso novo, com aviso e sem bloqueio', () => {
-  it('Iagro 2a8562dd x f93f1a2b: Fundersul 541,84 pago -> ambar, simula criando, o resumo avisa e o Vincular grava', async () => {
+describe('VINCULAR-FIX-01c — criar item e neutro, sem aviso e sem bloqueio', () => {
+  it('item 0 — OC SEM compromisso do item (o frete 37a2f86a x os abates da BMG): continua candidata, com "criar item"', async () => {
+    /* Medido: os 4 abates tem so' o principal de ENTRADA; a direcao tira o compromisso, nunca a OC. */
+    const abate = candidata({ ...iagro, operacao_id: 'df7849b4', valor_exato: false, compromissos: [] });
+    expect(situacaoDaCandidata(abate, 'frete', 2000)).toMatchObject({ rotulo: 'criar item', tom: 'neutro', selecionavel: true });
+    const simular = vi.fn(() => simOk({ compromisso: { id: 'novo', acao: 'criado', valor_anterior: 0, valor_total: 2000 } }));
+    responder([abate], simular);
+    montar();
+    await waitFor(() => expect(linha('df7849b4')).not.toBeNull());
+    const tr = el(document, 'tr[data-oc="df7849b4"]');
+    expect(tr.textContent).toMatch(/nenhum \(será criado\)/);
+    expect(el(tr, 'span[class*="bg-muted"]').textContent).toBe('criar item');
+    fireEvent.click(tr);
+    await waitFor(() => expect(simular).toHaveBeenCalled());
+  });
+
+  it('Iagro 2a8562dd x f93f1a2b: Fundersul 541,84 pago -> neutro, simula criando, o resumo NAO avisa nada e o Vincular grava', async () => {
     const oc = candidata({ ...iagro, valor_exato: false, todos_liquidados: true, compromissos: [iagroPago] });
-    expect(situacaoDaCandidata(oc, 'taxas_impostos', 277.68)).toMatchObject({ rotulo: 'criar novo', tom: 'ambar', selecionavel: true });
-    const aviso = { codigo: 'componente_ja_liquidado' as const, componente: 'taxas_impostos',
-      compromissos: [{ id: 'f8cd2eb1', valor_total: 541.84, descricao: 'Abate 048 vacas - Fundersul' }] };
-    const simular = vi.fn(() => simOk({ compromisso: { id: 'novo', acao: 'criado', valor_anterior: 0, valor_total: 277.68 }, avisos: [aviso] }));
-    const gravar = vi.fn(() => simOk({ compromisso: { id: 'novo', acao: 'criado', valor_anterior: 0, valor_total: 277.68 }, avisos: [aviso] }));
+    expect(situacaoDaCandidata(oc, 'taxas_impostos', 277.68)).toMatchObject({ rotulo: 'criar item', tom: 'neutro', selecionavel: true });
+    const criado = () => simOk({ compromisso: { id: 'novo', acao: 'criado', valor_anterior: 0, valor_total: 277.68 }, avisos: [] });
+    const simular = vi.fn(criado);
+    const gravar = vi.fn(criado);
     responder([oc], simular, gravar);
     const { onVinculado } = montar();
     await waitFor(() => expect(linha('f93f1a2b')).not.toBeNull());
     fireEvent.click(el(document, 'tr[data-oc="f93f1a2b"]'));
     const resumo = await screen.findByTestId('vinc-resumo');
-    const a = await waitFor(() => el(resumo, '[data-aviso="componente_ja_liquidado"]'));
-    expect(a.className).toMatch(/amber/);
-    expect(a.textContent).toMatch(/Já existe Taxas e Impostos de R\$\s541,84 liquidado nesta OC; este é outro pagamento/);
+    await waitFor(() => expect(within(resumo).getByText(/criado · R\$\s277,68/)).toBeTruthy());
+    expect(resumo.querySelector('[data-aviso]')).toBeNull();
+    expect(resumo.textContent).not.toMatch(/Já existe|outro pagamento/);
     fireEvent.change(screen.getByTestId('vinc-motivo'), { target: { value: 'outra guia do Iagro' } });
     fireEvent.click(screen.getByTestId('vinc-confirmar'));
     await waitFor(() => expect(gravar).toHaveBeenCalled());
     await waitFor(() => expect(onVinculado).toHaveBeenCalled());
   });
 
-  it('tres iguais: os tres titulos do mesmo valor e dia no mesmo item nao viram "repetição" — o proximo e\' outro pagamento', () => {
+  it('tres iguais: dois pagos do mesmo valor nao viram repeticao nem alerta — o terceiro e\' "criar item" neutro', () => {
     const igual = (id: string) => compromisso({ id, componente: 'taxas_impostos', valor_total: 277.68, valor_exato: true, acao_prevista: 'recusar' });
-    /* dois iguais ja' pagos: o terceiro, de mesmo valor, nao e' exato "livre" nem bloqueado — cria */
     const oc = candidata({ ...iagro, valor_exato: false, compromissos: [igual('a'), igual('b')] });
     const sit = situacaoDaCandidata(oc, 'taxas_impostos', 277.68);
-    expect(sit).toMatchObject({ rotulo: 'criar novo', tom: 'ambar', selecionavel: true });
-    expect(sit.title).toMatch(/277,68 \+ R\$\s277,68/);
+    expect(sit).toEqual({ rotulo: 'criar item', tom: 'neutro', selecionavel: true });
     /* e com um livre do mesmo valor, ele vai primeiro */
     const comLivre = candidata({ ...iagro, compromissos: [igual('a'), compromisso({ id: 'c', componente: 'taxas_impostos', valor_total: 277.68,
       valor_exato: true, acao_prevista: 'preencher', parcelas: [] })] });
     expect(situacaoDaCandidata(comLivre, 'taxas_impostos', 277.68)).toMatchObject({ rotulo: '= valor', tom: 'verde' });
+    /* varios livres sem exato: escolher — neutro, e' escolha, nao alerta */
+    const doisLivres = candidata({ ...iagro, valor_exato: false, compromissos: [
+      compromisso({ id: 'l1', componente: 'taxas_impostos', valor_total: 100, valor_exato: false, acao_prevista: 'preencher', parcelas: [] }),
+      compromisso({ id: 'l2', componente: 'taxas_impostos', valor_total: 200, valor_exato: false, acao_prevista: 'preencher', parcelas: [] })] });
+    expect(situacaoDaCandidata(doisLivres, 'taxas_impostos', 277.68)).toMatchObject({ rotulo: 'escolher compromisso', tom: 'neutro' });
   });
 });

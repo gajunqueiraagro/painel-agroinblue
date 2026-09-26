@@ -12,6 +12,8 @@ export const TOM_SELO: Record<TomSelo, string> = {
   verde: 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900',
   ambar: 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900',
   vermelho: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900',
+  /* VINCULAR-FIX-01c: "criar item" e "escolher compromisso" sao escolha, nao alerta — sem cor. */
+  neutro: 'bg-muted text-muted-foreground border-border',
 };
 
 export function Selo({ tom, children, title }: { tom: TomSelo; children: React.ReactNode; title?: string }) {
