@@ -38,6 +38,8 @@ interface Props {
   ehBoitel?: boolean;
   /** Obrigações que só o tipo sabe montar — repassadas à aba de compromissos. */
   propostasExtras?: PropostaCompromisso[];
+  /** As linhas do "Gerar compromissos" montadas inteiras pelo tipo — repassadas (BOITEL-ABATE-PRODUTOR-01c). */
+  propostasDoMotor?: PropostaCompromisso[];
   /** Vindo do rodapé: acabou de concluir, ofereça a geração. */
   abrirGerarAoMontar?: boolean;
   seloProjecao?: ReactNode;
@@ -96,7 +98,7 @@ export function AbaFinanceiroOC(props: Props) {
         <AbaCompromissosOC ocApi={ocApi} bloqueado clienteId={clienteId} tipoOperacao={api.tipoOperacao} fornecedores={api.fornecedores} ehBoitel={props.ehBoitel}
           valorAcordado={api.valorAcordado} lotes={api.lotes} contraparteId={api.contraparteId} dataOperacao={props.dataOperacao ?? null} dataChegada={props.dataChegada ?? null}
           darkSelectClass={props.darkSelectClass} recarregarDados={api.recarregar}
-          seloProjecao={props.seloProjecao} propostasExtras={props.propostasExtras}
+          seloProjecao={props.seloProjecao} propostasExtras={props.propostasExtras} propostasDoMotor={props.propostasDoMotor}
           abrirGerarAoMontar={props.abrirGerarAoMontar} rotulos={props.rotulos} />
       </div>
     );
@@ -107,7 +109,7 @@ export function AbaFinanceiroOC(props: Props) {
       valorAcordado={api.valorAcordado} lotes={api.lotes} contraparteId={api.contraparteId} dataOperacao={props.dataOperacao ?? null} dataChegada={props.dataChegada ?? null}
       darkSelectClass={props.darkSelectClass} recarregarDados={api.recarregar}
       linhasPrevisao={props.linhasPrevisao} bloqueioPrevisao={props.bloqueioPrevisao} seloProjecao={props.seloProjecao}
-      propostasExtras={props.propostasExtras} abrirGerarAoMontar={props.abrirGerarAoMontar}
+      propostasExtras={props.propostasExtras} propostasDoMotor={props.propostasDoMotor} abrirGerarAoMontar={props.abrirGerarAoMontar}
       rotulos={props.rotulos} motivoReabertura={props.motivoReabertura ?? null} />
   );
 }

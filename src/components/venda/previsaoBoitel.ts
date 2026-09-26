@@ -12,6 +12,7 @@ import { subcentroVendaPorCategoria, SUBCENTRO_DESPESA_VENDA, SUBCENTRO_ADIANTAM
 import { custosDaVendaBoitel, principalDaPrevisaoBoitel, derivadosBoitel, type ValorDaVendaBoitel } from '@/components/venda/BoitelNegociacaoDerivado';
 import { faltamDosCinco, type BoitelEdicao } from '@/components/venda/BoitelBlocosModais';
 import type { LinhaPrevisao } from '@/components/compra/AbaCompromissosOC';
+import type { PropostaCompromisso } from '@/components/compra/DialogoGerarCompromissos';
 
 /* Data ISO + N dias, em ISO. `null` quando nao da' para responder — data vazia, data
    malformada ou prazo nao informado. ⚠ NUNCA LANCA: um throw dentro do `useMemo` que
@@ -294,4 +295,38 @@ export function linhasResumoProdutor(der: { fba: number; descontoDoAcerto: numbe
     ],
     liquido: der.fba - der.descontoDoAcerto,
   };
+}
+
+/**
+ * AS LINHAS DO "GERAR COMPROMISSOS" NA MODALIDADE B — BOITEL-ABATE-PRODUTOR-01c.
+ *
+ * ⚠ NAO E' UMA SEGUNDA MONTAGEM: sao as linhas de `linhasPrevisaoBoitel`, as MESMAS que o "Gerar previsao" grava,
+ *   so' traduzidas para o formato do dialogo. Entram o acerto do boitel (saida, 1155, favorecido = boitel) e o
+ *   recebimento do frigorifico (entrada, 1150, favorecido = frigorifico), NESTA ORDEM — `oc_criar_compromisso` so'
+ *   aceita o principal acima do slot depois que o acerto existe. As despesas fora do boitel ficam com o "Gerar
+ *   previsao", como na A, onde o dialogo tambem so' propoe o que compoe o valor da operacao.
+ * ⚠ `undefined` NA A (e sem boitel): o dialogo segue na proposta por lote de sempre, byte a byte.
+ * ⚠ COM DIVERGENCIA o principal nao sai de `linhasPrevisaoBoitel`; quem diz por que e' `avisoBoitelProdutor`, que o
+ *   dialogo recebe como bloqueio.
+ */
+export function propostasBoitelProdutor(entrada: EntradaPrevisaoBoitel): PropostaCompromisso[] | undefined {
+  const { boitelData, boitelRealSalvo } = entrada;
+  if (!boitelData) return undefined;
+  const custos = custosDaVendaBoitel({ realizado: boitelRealSalvo, projetado: boitelData });
+  if ((custos?.dados ?? boitelData).quemAbate !== 'produtor') return undefined;
+  return (linhasPrevisaoBoitel(entrada) ?? [])
+    .filter(l => !l.zerada && l.valor > 0 && (l.natureza === 'principal' || l.componente === 'acerto_boitel'))
+    .map(l => ({
+      chave: `${l.natureza}:${l.componente}`,
+      natureza: l.natureza,
+      descricao: l.descricao,
+      rotulo: l.rotulo,
+      caminho: l.subcentro,
+      subcentro: l.subcentro,
+      valor: l.valor,
+      loteId: l.loteId ?? null,
+      componente: l.componente,
+      sentido: l.natureza === 'principal' ? 'entrada' : 'saida',
+      favorecidoId: l.favorecidoId,
+    }));
 }

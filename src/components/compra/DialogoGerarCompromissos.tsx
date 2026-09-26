@@ -39,7 +39,22 @@ export interface PropostaCompromisso {
   valor: number;
   loteId: string | null;
   componente: string;
+  /**
+   * POR LINHA — BOITEL-ABATE-PRODUTOR-01c. Na venda boitel com abate em nome do produtor (modalidade B) as duas
+   * linhas tem sentido e favorecido PROPRIOS: o boitel recebe o acerto (saida) e o frigorifico paga o principal
+   * (entrada). Com `sentido` presente o dialogo passa ao modo por linha — sem o "Pagador" unico no cabecalho, e o
+   * confronto e' o LIQUIDO (entradas - saidas) contra o acordado, em centavos, sem tolerancia.
+   * ⚠ AUSENTES = O DE SEMPRE: favorecido = a contraparte da operacao, dito no cabecalho. Compra, abate, venda comum
+   *   e a modalidade A nao passam nenhum dos quatro.
+   */
+  sentido?: 'entrada' | 'saida';
+  favorecidoId?: string | null;
+  favorecidoNome?: string | null;
+  /** Como a linha se chama na tela ("Pago ao boitel (acerto)"); a `descricao` e' o que se grava. */
+  rotulo?: string;
 }
+
+const centavos = (x: number) => Math.round(x * 100);
 
 
 
@@ -51,7 +66,7 @@ export function vencimentoPadrao(dataOperacao: string | null): string {
 }
 
 export function DialogoGerarCompromissos({
-  tipoOperacao, propostas, valorAcordado, contraparteNome, dataOperacao, saving, contas, onGerar, onFechar,
+  tipoOperacao, propostas, valorAcordado, contraparteNome, dataOperacao, saving, contas, onGerar, onFechar, bloqueio = null,
 }: {
   tipoOperacao: 'compra' | 'venda' | 'abate' | string;
   propostas: PropostaCompromisso[];
@@ -63,6 +78,8 @@ export function DialogoGerarCompromissos({
   /** As contas do cliente, para o cabeçalho — a MESMA lista e o MESMO tipo do resto da aba. */
   contas: ContaSelecionavel[];
   onFechar: () => void;
+  /** Por que as linhas nao podem ser geradas agora — so' o modo por linha a recebe (a mesma frase do "Gerar previsao"). */
+  bloqueio?: string | null;
 }) {
   const [marcadas, setMarcadas] = useState<Set<string>>(() => new Set(propostas.map(p => p.chave)));
   const [vencimento, setVencimento] = useState(() => vencimentoPadrao(dataOperacao));
@@ -81,8 +98,17 @@ export function DialogoGerarCompromissos({
      por fora; somá-las ao total faria a comparação com o acordado nunca fechar. */
   const totalPrincipal = selecionadas.filter(p => p.natureza === 'principal')
     .reduce((s, p) => s + p.valor, 0);
-  const diferenca = valorAcordado == null ? null : totalPrincipal - valorAcordado;
-  const confere = diferenca != null && Math.abs(diferenca) <= 0.01;
+  /* ⚠ MODO POR LINHA (B): o total e' o LIQUIDO — o que entra menos o que sai —, porque e' ele que o slot guarda.
+     Em CENTAVOS e sem tolerancia: a guarda do banco na B nao aceita nem um centavo, e o dialogo nao pode dizer
+     "confere" onde o banco vai recusar. */
+  const porLinha = propostas.some(p => p.sentido != null);
+  const totalProposto = porLinha
+    ? selecionadas.reduce((s, p) => s + (p.sentido === 'saida' ? -centavos(p.valor) : centavos(p.valor)), 0) / 100
+    : totalPrincipal;
+  const diferenca = valorAcordado == null ? null
+    : porLinha ? (centavos(totalProposto) - centavos(valorAcordado)) / 100 : totalPrincipal - valorAcordado;
+  const confere = diferenca != null && (porLinha ? diferenca === 0 : Math.abs(diferenca) <= 0.01);
+  const travado = porLinha && !!bloqueio;
 
   const rotuloTipo = tipoOperacao === 'venda' ? 'Venda' : tipoOperacao === 'abate' ? 'Abate' : 'Compra';
 
@@ -121,7 +147,7 @@ export function DialogoGerarCompromissos({
                 </SelectContent>
               </Select>
             </div>
-            <div className="min-w-0">
+            {!porLinha && <div className="min-w-0">
               {/* Travado: quem paga (ou recebe) é a contraparte da operação, não uma escolha. */}
               <Label className="text-[10px] text-muted-foreground">
                 {tipoOperacao === 'compra' ? 'Favorecido' : 'Pagador'}
@@ -129,14 +155,18 @@ export function DialogoGerarCompromissos({
               <div className="mt-[3px] flex h-8 items-center truncate rounded-md border border-dashed border-border/60 bg-muted px-2.5 text-[12px] text-muted-foreground">
                 {contraparteNome ?? '—'}
               </div>
-            </div>
+            </div>}
           </div>
 
           {/* ── O confronto, antes de confirmar ── */}
           <div className="flex flex-wrap items-end gap-x-8 gap-y-2 rounded-md border bg-muted/20 px-3.5 py-[11px]">
             <div>
-              <div className="text-[11px] text-muted-foreground leading-none">Total proposto</div>
-              <div className="mt-1 text-[20px] font-medium leading-none tabular-nums">{formatMoeda(totalPrincipal)}</div>
+              <div className="text-[11px] text-muted-foreground leading-none">
+                Total proposto{porLinha && <span className="text-[10px]"> · recebido − pago</span>}
+              </div>
+              <div className={`mt-1 text-[20px] font-medium leading-none tabular-nums${totalProposto < 0 ? ' text-destructive' : ''}`}>
+                {formatMoeda(totalProposto)}
+              </div>
             </div>
             <div>
               <div className="text-[11px] text-muted-foreground leading-none">Acordado (NF)</div>
@@ -151,6 +181,7 @@ export function DialogoGerarCompromissos({
                     {formatMoeda(Math.abs(diferenca))} {diferenca > 0 ? 'a mais' : 'a menos'}
                   </div>
             )}
+            {travado && <div data-bloqueio className="basis-full text-[10px] text-amber-700">{bloqueio}</div>}
           </div>
 
           {propostas.length === 0 ? (
@@ -169,13 +200,24 @@ export function DialogoGerarCompromissos({
                       return s;
                     })} />
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-[12px] font-medium text-foreground">{p.descricao}</div>
-                    <div className="truncate text-[10px] text-muted-foreground">{p.caminho}</div>
+                    <div className="truncate text-[12px] font-medium text-foreground">{p.rotulo ?? p.descricao}</div>
+                    <div className="truncate text-[10px] text-muted-foreground">
+                      {p.sentido
+                        ? <><span className={p.sentido === 'saida' ? 'text-destructive' : 'text-emerald-700'}>
+                            {p.sentido === 'saida' ? 'Saída' : 'Entrada'}
+                          </span> · {p.caminho} · {p.favorecidoNome ?? '—'}</>
+                        : p.caminho}
+                    </div>
                   </div>
-                  <div className={`shrink-0 whitespace-nowrap text-[12px] font-medium tabular-nums ${
-                    p.natureza === 'obrigacao' ? 'text-destructive' : ''}`}>
-                    {p.natureza === 'obrigacao' ? `− ${formatMoeda(p.valor)}` : formatMoeda(p.valor)}
-                  </div>
+                  {p.sentido
+                    ? <div className={`shrink-0 whitespace-nowrap text-[12px] font-medium tabular-nums ${
+                        p.sentido === 'saida' ? 'text-destructive' : ''}`}>
+                        {p.sentido === 'saida' ? `− ${formatMoeda(p.valor)}` : `+ ${formatMoeda(p.valor)}`}
+                      </div>
+                    : <div className={`shrink-0 whitespace-nowrap text-[12px] font-medium tabular-nums ${
+                        p.natureza === 'obrigacao' ? 'text-destructive' : ''}`}>
+                        {p.natureza === 'obrigacao' ? `− ${formatMoeda(p.valor)}` : formatMoeda(p.valor)}
+                      </div>}
                 </label>
               ))}
             </div>
@@ -184,8 +226,8 @@ export function DialogoGerarCompromissos({
 
         <div className="shrink-0 flex items-center justify-end gap-2 border-t bg-card px-4 py-2.5">
           <Button type="button" variant="ghost" onClick={onFechar}>Cancelar</Button>
-          <Button type="button" disabled={saving || selecionadas.length === 0}
-            title={selecionadas.length === 0 ? 'Marque ao menos uma linha' : undefined}
+          <Button type="button" disabled={saving || selecionadas.length === 0 || travado}
+            title={travado ? (bloqueio ?? undefined) : selecionadas.length === 0 ? 'Marque ao menos uma linha' : undefined}
             onClick={async () => {
               if (!vencimento) { toast.error('Informe o vencimento.'); return; }
               await onGerar(selecionadas, vencimento, forma, contaBancariaId || null);

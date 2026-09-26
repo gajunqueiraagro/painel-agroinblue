@@ -94,6 +94,15 @@ interface Props {
    */
   propostasExtras?: PropostaCompromisso[];
   /**
+   * AS LINHAS DO "GERAR COMPROMISSOS" QUANDO O MOTOR DO TIPO AS MONTA INTEIRAS — BOITEL-ABATE-PRODUTOR-01c.
+   *
+   * ⚠ SUBSTITUEM a proposta por lote (e as extras), nao somam: na venda boitel com abate em nome do produtor o
+   *   principal NAO e' o valor do lote (e' o que o frigorifico paga, acima do slot) e vem junto do acerto do boitel.
+   *   A fonte e' a MESMA do "Gerar previsao" (`previsaoBoitel.ts`) — uma montagem de linhas so'.
+   * ⚠ AUSENTE = o de sempre (compra, abate, venda comum e a modalidade A).
+   */
+  propostasDoMotor?: PropostaCompromisso[];
+  /**
    * Abre o diálogo "Gerar compromissos" assim que a aba montar.
    *
    * ⚠ É O ACOPLAMENTO RODAPÉ → ABA, e ele é de mão única de propósito: o shell diz
@@ -434,7 +443,7 @@ const ROTULOS_PADRAO: RotulosCompromissos = {
   mostrarBaseDaOperacao: true, mostrarSentidoDoDinheiro: false,
 };
 
-export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, ehBoitel, fornecedores, valorAcordado, lotes, contraparteId, dataOperacao, dataChegada, darkSelectClass, recarregarDados, linhasPrevisao, bloqueioPrevisao = null, seloProjecao, propostasExtras, abrirGerarAoMontar, rotulos = ROTULOS_PADRAO, motivoReabertura = null }: Props) {
+export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, ehBoitel, fornecedores, valorAcordado, lotes, contraparteId, dataOperacao, dataChegada, darkSelectClass, recarregarDados, linhasPrevisao, bloqueioPrevisao = null, seloProjecao, propostasExtras, propostasDoMotor, abrirGerarAoMontar, rotulos = ROTULOS_PADRAO, motivoReabertura = null }: Props) {
   const { resumoOperacao, compromissos, parcelas, versao, saving } = ocApi;
   const [searchParams, setSearchParams] = useSearchParams();
   /* ⚠ OS DOIS CATALOGOS SUBIRAM PARA CA — PR-OC-VENDA-FIN-PREVISAO-01D (adendo 2). Eles
@@ -804,6 +813,17 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
       compromissos.filter(c => c.natureza === 'principal' && c.status !== 'cancelado' && c.loteId)
         .map(c => c.loteId as string),
     );
+    /* ⚠ AS LINHAS DO MOTOR, COM A MESMA IDEMPOTENCIA: principal sai se o lote ja' tem principal (sem lote, se
+       ja' ha' qualquer principal vivo); obrigacao sai se o componente ja' tem compromisso vivo. O nome do
+       favorecido vem da MESMA lista do resto da aba. */
+    if (propostasDoMotor) {
+      const vivos = compromissos.filter(x => x.status !== 'cancelado');
+      return propostasDoMotor
+        .filter(p => p.natureza === 'principal'
+          ? (p.loteId ? !jaTemPrincipal.has(p.loteId) : !vivos.some(x => x.natureza === 'principal'))
+          : !vivos.some(x => x.natureza === p.natureza && x.componente === p.componente))
+        .map(p => ({ ...p, favorecidoNome: (fornecedores ?? []).find(f => f.id === p.favorecidoId)?.nome ?? null }));
+    }
     const c = classificarLotesPorLado(lotes, tipoOperacao, !!ehBoitel);
     const principais: PropostaCompromisso[] = c.status !== 'ok' ? [] : c.itens
       .filter(i => !jaTemPrincipal.has(i.lote.id) && i.valorBruto > 0)
@@ -821,7 +841,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
     /* As extras já vêm prontas de quem as conhece; filtradas pelo mesmo critério. */
     const extras = (propostasExtras ?? []).filter(p => !p.loteId || !jaTemPrincipal.has(p.loteId));
     return [...principais, ...extras];
-  }, [compromissos, lotes, tipoOperacao, ehBoitel, propostasExtras]);
+  }, [compromissos, lotes, tipoOperacao, ehBoitel, propostasExtras, propostasDoMotor, fornecedores]);
 
   /* ─── O SENTIDO DO DINHEIRO, POR LINHA ────────────────────────────────────────
      PR-OC-VENDA-FIN-PREVISAO-01D (adendo 2). Numa venda boitel convivem quatro linhas —
@@ -1058,7 +1078,8 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
           componente: linha.componente,
           valor_total: linha.valor,
           subcentro: linha.subcentro,
-          favorecido_id: contraparteId ?? null,
+          /* Por linha quando o motor o diz (B: boitel no acerto, frigorifico no principal); senao a contraparte. */
+          favorecido_id: linha.favorecidoId !== undefined ? linha.favorecidoId : (contraparteId ?? null),
           lote_id: linha.loteId,
           descricao: linha.descricao,
         });
@@ -1912,6 +1933,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
           dataOperacao={dataOperacao ?? null}
           saving={saving}
           onGerar={gerarPropostas}
+          bloqueio={propostasDoMotor ? bloqueioPrevisao : null}
           contas={contasDoCliente}
           onFechar={() => setGerarAberto(false)}
         />

@@ -797,6 +797,12 @@ no mesmo arquivo.
   "(−) Pago ao boitel", "(=) Liquido", "Boleto do boitel (papel)") contra o da A ("= A repassar pelo boitel"); e a opcao
   do Frigorifico com a paleta do combobox da casa (texto claro, sem `bg-card`). ⚠ PROVADO: com o Adiantamento forcado
   visivel na B, 1 caso cai.
+  De 2014 para 2020 no BOITEL-ABATE-PRODUTOR-01c: entrou `src/components/venda/gerarCompromissosProdutor.test.tsx` (+6) —
+  o "Gerar compromissos" na B le as MESMAS linhas da previsao (acerto 1155 do boitel antes do recebimento 1150 do
+  frigorifico, cada proposta conferida contra a linha de `linhasPrevisaoBoitel`), a A devolve `undefined`, o dialogo da B
+  com sentido e favorecido por linha e "Gerar 2 compromissos", o centavo que APARECE, o bloqueio que trava e a ordem da
+  gravacao, e o dialogo da A como sempre. ⚠ PROVADO: com o modo por linha desligado, 3 casos caem; e o HTML do dialogo
+  na A, na compra, no abate com obrigacao e vazio e' IDENTICO ao do HEAD (6 de 6 casos, teste descartavel).
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -2238,6 +2244,18 @@ preview que o cabecalho nao sai da tela ao rolar.
     (c) Rodape da B: "(+) Recebido do frigorifico · (−) Pago ao boitel" (diarias e notas no boitel na sublinha) ·
         "(=) Liquido"; o campo de papel e' "Boleto do boitel (papel)", conferido contra o PAGO (`descontoDoAcerto`),
         nao contra o liquido. A A nao mudou.
+  ⚠ 01c — O "GERAR COMPROMISSOS" RESPEITA A B (homologacao de 26/09, 09:08, na cd4c54b0). O dialogo montava as linhas
+    pelo LOTE (`AbaCompromissosOC`, memo `propostas` via `classificarLotesPorLado`) e nunca passava por `previsaoBoitel.ts`:
+    na B saia UMA linha de 516.459,04 com a contraparte como pagador. Agora `propostasBoitelProdutor` traduz as linhas de
+    `linhasPrevisaoBoitel` (acerto + recebimento do frigorifico) e a aba as usa NO LUGAR da proposta por lote
+    (`propostasDoMotor`), com a mesma idempotencia; o favorecido vai por linha na gravacao. Na A a prop e' `undefined`.
+    Caminhos de venda boitel: "Gerar previsao" (ja' lia a previsao), "Gerar compromissos" (este conserto) e o "+ Novo
+    compromisso" manual (digitado; a principal ja' obedece o `bloqueioPrevisao`, que inclui o aviso da B).
+    ⚠ O DIALOGO NA B CONFERE O LIQUIDO EM CENTAVOS, SEM TOLERANCIA — a guarda do banco nao aceita um centavo. A A ficou com
+      a regra de sempre (`|dif| <= 0,01` em reais), que por ponto flutuante NAO da' "confere" num centavo exato
+      (656.957,17 − 656.957,16 = 0,0100000001): pre-existente, nao tocado.
+    ⚠ O BOITEL DA cd4c54b0 E' "JBS (boitel)", nao Ricardo Goulart como dizia o briefing: o favorecido do acerto e' a
+      CONTRAPARTE da OC (`compradorId`), e e' ela que esta' gravada. Dado, nao codigo.
   ⚠ DADOS AGUARDANDO OK (nada gravado): 77d963be -> B com JBS, boleto 41eda416 de 5010 para 1155 (DRE do RRCC: civil 2023
     vendas 1.791.708,52 -> 1.482.830,55; lucro -419.319,66 -> -728.197,63); cd4c54b0 so' tem o LIQUIDO no financeiro
     (b51bc0fa, 516.459,04) — nao ha recebido do frigorifico nem boleto lancados.

@@ -52,7 +52,7 @@ import type { EventosApi } from '@/hooks/useOperacaoEventos';
 import type { LiquidacaoApi } from '@/hooks/useOperacaoLiquidacao';
 import { BoitelTopoNegociacao, bolsoDaVendaBoitel, unitariosDoLiquido, derivadosBoitel, PilulaCenario, valorDaVendaBoitel, avisoAcertoDivergente, valorDoLoteBoitel } from '@/components/venda/BoitelNegociacaoDerivado';
 import { BoitelBlocosModais, BoitelAnaliseFaixa, faltamDosCinco, type BoitelEdicao } from '@/components/venda/BoitelBlocosModais';
-import { linhasPrevisaoBoitel, avisoBoitelProdutor, linhasResumoProdutor } from '@/components/venda/previsaoBoitel';
+import { linhasPrevisaoBoitel, avisoBoitelProdutor, linhasResumoProdutor, propostasBoitelProdutor } from '@/components/venda/previsaoBoitel';
 import { pesoMedioPorCabeca } from '@/hooks/useCompraLotes';
 import { LinhaResumo } from '@/components/ui/linha-resumo';
 import { consolidarRecebimento } from '@/components/compra/ResumoLateralOC';
@@ -262,6 +262,11 @@ export function VendaModalShell({
   /* A previsao mora em `previsaoBoitel.ts` (movida no BOITEL-ABATE-PRODUTOR-01) — ver o comentario la'. */
   const linhasPrevisao = useMemo<LinhaPrevisao[] | undefined>(() => (ehBoitel
     ? linhasPrevisaoBoitel({ boitelData: boitelData ?? null, boitelRealSalvo, compradorId, data, lotes: lotesApi?.lotes ?? [], vendaBoitel })
+    : undefined),
+  [ehBoitel, boitelData, boitelRealSalvo, compradorId, data, lotesApi?.lotes, vendaBoitel?.valor, vendaBoitel?.divergente]);
+  /* BOITEL-ABATE-PRODUTOR-01c: na B o "Gerar compromissos" le as MESMAS linhas (acerto + frigorifico); na A, `undefined`. */
+  const propostasDoMotor = useMemo(() => (ehBoitel
+    ? propostasBoitelProdutor({ boitelData: boitelData ?? null, boitelRealSalvo, compradorId, data, lotes: lotesApi?.lotes ?? [], vendaBoitel })
     : undefined),
   [ehBoitel, boitelData, boitelRealSalvo, compradorId, data, lotesApi?.lotes, vendaBoitel?.valor, vendaBoitel?.divergente]);
 
@@ -649,6 +654,7 @@ export function VendaModalShell({
               /* BOITEL-ABATE-PRODUTOR-01: na B o slot tem de ser exatamente recebido - pago; sem isso o principal nao sai. */
               bloqueioPrevisao={avisoDivergencia ?? (ehBoitel ? avisoBoitelProdutor({ boitelData: boitelData ?? null, boitelRealSalvo, compradorId, data, lotes: lotesApi?.lotes ?? [], vendaBoitel }) : null)}
               ehBoitel={ehBoitel}
+              propostasDoMotor={propostasDoMotor}
               rotulos={rotulosCompromissos}
               seloProjecao={ehBoitel ? <PilulaCenario cenario="projetado" /> : undefined}
               onIrParaDocumentos={() => setAbaAtiva('documentos')}
