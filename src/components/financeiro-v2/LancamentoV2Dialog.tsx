@@ -55,6 +55,7 @@ import { planoDeTransferencia, ehTipoTransferencia } from '@/v2/lib/mesa/transfe
 import { ATIVIDADES, lembrarAtividade, ultimaAtividade, type Atividade } from '@/lib/financeiro/ultimaAtividade';
 import { safraSugerida } from '@/lib/agri/safraSugerida';
 import { conflitoSafraEscopo, mensagemConflitoSafraEscopo } from '@/lib/financeiro/safraEscopo';
+import { erroDeDirecao, tipoDaContaNoPlano } from '@/lib/financeiro/validacaoLancamento';
 import { escopoDoSubcentro, fazendaAdministrativa, AVISO_ADMIN_SEM_SAFRA, AVISO_ADMIN_SAFRA_SAI } from '@/lib/financeiro/escopoDoSubcentro';
 import {
   CULTURAS_LANCAMENTO, FASES, SEM_CULTURA, avisoCultura, avisoFase,
@@ -522,6 +523,12 @@ export function LancamentoV2Dialog({
    * saber se o operador MEXEU, e mexer é diferente de divergir do banco.
    */
   const [subcentroDeAbertura, setSubcentroDeAbertura] = useState('');
+  /**
+   * A RECUSA DE DIRECAO, AO LADO DO SUBCENTRO — BOITEL-ABATE-PRODUTOR-01d (UX-TOAST-01).
+   * ⚠ GUARDA O PAR (subcentro, tipo) EM QUE FOI DADA: trocar qualquer um dos dois apaga a frase sem
+   *   efeito nenhum — ela so' aparece enquanto descreve o que esta' na tela.
+   */
+  const [erroDirecao, setErroDirecao] = useState<{ texto: string; subcentro: string; tipo: string } | null>(null);
 
   /* O plano tem escopos que o card não oferece (vazio, e os legados). Marcar uma pílula que
      não existe deixaria o card em branco filtrando por algo — pior que não filtrar. */
@@ -1201,6 +1208,20 @@ export function LancamentoV2Dialog({
       toast.error('Selecione um subcentro oficial do plano de contas antes de salvar.');
       return;
     }
+
+    /* 1a. A direcao do lancamento e' a da CONTA DO PLANO — BOITEL-ABATE-PRODUTOR-01d. Antes do
+       gravar, sem toast: a frase vai para baixo do Subcentro e nada e' desfeito. */
+    const direcao = erroDeDirecao({
+      tipo_operacao: tipoOperacao,
+      macro_custo: classifEncontrada?.macro_custo ?? macroCusto,
+      subcentro: subcentroTrim,
+      tipo_plano: tipoDaContaNoPlano(classificacoes, planoContaId, subcentroTrim),
+    });
+    if (direcao) {
+      setErroDirecao({ texto: direcao, subcentro, tipo: tipoOperacao });
+      return;
+    }
+    setErroDirecao(null);
 
     /* 1b. Safra e subcentro têm de falar da mesma atividade — PR-FIN-SAFRA-ESCOPO-01.
        ⚠ AQUI, E NÃO SÓ NA TELA: a tela limpa a safra quando a ATIVIDADE muda, mas o
@@ -1892,6 +1913,8 @@ export function LancamentoV2Dialog({
               tipoOperacao={tipoOperacao}
               travado={subcentroTravado}
               subcentroDesabilitado={isOCTitulo || subcentroTravado}
+              erroSubcentro={erroDirecao && erroDirecao.subcentro === subcentro && erroDirecao.tipo === tipoOperacao
+                ? erroDirecao.texto : null}
             />
 
             {/* ⚠ O MOTIVO MORA AO LADO DO CAMPO, nao so' no aviso do topo — OC-BOITEL-VALOR-01 · B3.

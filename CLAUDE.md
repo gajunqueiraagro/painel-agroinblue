@@ -816,6 +816,11 @@ no mesmo arquivo.
   entraram 16 — `ratearNoAlvo`, a soma das linhas = a celula na lavoura e na pecuaria (grupo, so rateio, bloco sem rateio),
   as etapas da aba Rateio, o rodape, e a ordenacao estavel. ⚠ PROVADO: com o rateio fora de `valorDaFilha` 1 caso cai; com
   as linhas de rateio sem `ratearNoAlvo`, 3.
+  De 2041 para 2047 no BOITEL-ABATE-PRODUTOR-01d: entrou `src/lib/financeiro/validacaoLancamento.test.tsx` (+6) — a
+  saida no 1155 passa (e, sem o tipo do plano, a macro recusa como antes: a busca sabe achar), a entrada no 1155 recusa no
+  campo Subcentro com a frase da tela, receita 1150 e custo seguem nos dois sentidos, o PLANO MEDIDO (226 linhas x 3
+  tipos) contra a regra antiga copiada — so' os dois pares do 1155 mudam —, a chave ganhando do texto, e a frase como
+  alerta embaixo do Subcentro. ⚠ PROVADO: com o tipo do plano ignorado, 4 casos caem.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -2360,6 +2365,24 @@ preview que o cabecalho nao sai da tela ao rolar.
     855.283,36; RPC do modal 426.301,60 direto + 421.784,27 de rateio = 848.085,87 (diferenca 7.197,49). O modal antigo
     mostrava o MESMO 848.085,87 no cabecalho (`ecoDaCelula`): e' anterior a este PR. Quem retomar mede qual das duas RPCs
     esta' certa — o modal nao reparte ate' a celula da lavoura de proposito, para nao esconder a diferenca.
+- ⚠ BOITEL-ABATE-PRODUTOR-01d — A DIRECAO DO LANCAMENTO E' A DA CONTA DO PLANO, NAO A DA MACRO (27/09/2026). Sem banco.
+  A despesa do 1155 da cd4c54b0 (12e147df, "Boitel 169 G - Acerto boitel", 228.481,96) nao salvava: "Inconsistencia
+  entre tipo de operacao e macro". A frase morava SO' no front (`src/lib/financeiro/validacaoLancamento.ts`, regra 3),
+  com UM chamador (`FinanceiroV2Tab.handleSave`), e comparava o tipo com o "sentido" da MACRO — e o 1155 e' 2-Saidas sob
+  Receita Operacional (opcao C do B-01).
+  ⚠ MEDIDO: das 226 linhas ativas do plano, 220 tem macro checada, 219 com o tipo igual ao sentido da macro e UMA
+    diferente — o 1155, global. As 6 restantes (Tributos 5, Transferencias 1) nunca foram checadas e CONTINUAM sem
+    checagem: o tipo do plano entra NO LUGAR do sentido da macro, so' onde a regra ja' valia (`erroDeDirecao`,
+    `tipoDaContaNoPlano` — a chave ganha do texto; combinacao legada sem `id` cai na macro).
+  ⚠ A RECUSA SAIU DO TOAST: o `LancamentoV2Dialog` confere antes de gravar e a frase vai embaixo do Subcentro
+    (`ClassificacaoLancamento.erroSubcentro`), valendo so' enquanto subcentro e tipo forem os da recusa. A
+    `FinanceiroV2Tab` manda o tipo do plano para nao recusar por toast o que o modal aceitou.
+  ⚠ O BANCO NAO TEM GUARDA DE DIRECAO x CONTA, em conta nenhuma — provado em rollback: uma entrada no 1155 com o sinal
+    coerente e' ACEITA (a unica recusa e' o `chk_sinal_coerente_tipo`, que e' sinal, nao plano). O `resolve_classificacao_
+    from_plano` (md5 2bf6f93b) so' resolve texto/chave. Os OUTROS caminhos de escrita (OC, vincular, conciliacao,
+    importacao, a grade do DRE que abre o mesmo modal) nunca passaram por esta regra. Guarda no banco seria regra NOVA
+    para todo escritor: frente propria, se decidida.
+  ⚠ NADA GRAVADO: a saida realizada em 17/06/2024 passa no banco em rollback; o Gabriel salva pela tela.
 - FORNECEDOR-UUID-CRU-01 — achado, nao tratado (26/09/2026, nos prints do OC-EDITAR-CADASTRAL-01): a compra 69115ef9 (NJ)
   mostra o UUID cru `276efb08…` no seletor de fornecedor e "Contraparte —" no resumo. O fornecedor (Carlos Pacheco) EXISTE,
   esta' ATIVO e e' do NJ; a lista carregada pela tela e' que nao o traz. Causa nao medida (lista carregada antes da troca de

@@ -17,7 +17,7 @@ import { MinimodalOrigemLancamento } from '@/components/financeiro-v2/MinimodalO
 import { useCoberturaExtrato } from '@/hooks/useCoberturaExtrato';
 import { useCliente } from '@/contexts/ClienteContext';
 import { contaSimpleValid } from '@/components/financeiro-v2/lancamentoDialogTabs';
-import { validarLancamento } from '@/lib/financeiro/validacaoLancamento';
+import { validarLancamento, tipoDaContaNoPlano } from '@/lib/financeiro/validacaoLancamento';
 import { formatDocumento } from '@/lib/financeiro/documentoHelper';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -834,7 +834,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     const formParaValidar = id
       ? { ...form, origem_lancamento: undefined, origem: undefined }
       : form;
-    const errosValidacao = validarLancamento(formParaValidar);
+    /* ⚠ O TIPO DA CONTA NO PLANO VAI JUNTO — BOITEL-ABATE-PRODUTOR-01d: sem ele a regra 3 cairia na
+       macro e recusaria aqui, por toast, a saida no 1155 que o modal acabou de aceitar. */
+    const errosValidacao = validarLancamento({
+      ...formParaValidar,
+      tipo_plano: tipoDaContaNoPlano(hook.classificacoes, form.plano_conta_id, form.subcentro),
+    });
     if (errosValidacao.length > 0) {
       errosValidacao.forEach(e => {
         toast.error(e.mensagem);

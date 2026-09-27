@@ -73,7 +73,7 @@ export const atividadeValida = (v: string | null | undefined): Atividade | null 
 
 export function ClassificacaoLancamento({
   value, onChange, classificacoes, safras, dataCompetencia,
-  culturasDaSafra = [], subcentroDesabilitado = false, tipoOperacao, travado = false,
+  culturasDaSafra = [], subcentroDesabilitado = false, tipoOperacao, travado = false, erroSubcentro = null,
 }: {
   value: ClassificacaoValor;
   /**
@@ -107,6 +107,8 @@ export function ClassificacaoLancamento({
    */
   tipoOperacao: string;
   travado?: boolean;
+  /** A recusa do save sobre o subcentro (direcao x conta do plano) — mora embaixo do campo. */
+  erroSubcentro?: string | null;
 }) {
   /* ⚠ O ADAPTADOR QUE FEZ ESTE PR SER UM *MOVE*: com `setClassificacao` aqui e os campos
      desestruturados com os nomes antigos, os handlers e o JSX abaixo entraram VERBATIM, sem uma
@@ -347,6 +349,11 @@ export function ClassificacaoLancamento({
                     sozinho sem explicação parece defeito. Este modal não tem idioma de
                     "obrigatório vazio" (a validação é por toast no save), então a frase ao
                     lado é o idioma que existe aqui. */}
+                {erroSubcentro && (
+                  <div className="mt-0.5 text-[10px] leading-snug text-destructive" role="alert">
+                    {erroSubcentro}
+                  </div>
+                )}
                 {subcentroLimpoPelaAtividade && !subcentro && (
                   <div className="mt-0.5 text-[10px] leading-snug text-destructive">
                     o subcentro anterior era de outra atividade — escolha um novo
