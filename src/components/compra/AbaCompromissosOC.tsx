@@ -488,6 +488,32 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
   const [atualizandoLoteId, setAtualizandoLoteId] = useState<string | null>(null);
   const reprogramarApi = useReprogramarCompromissoLote(resumoOperacao?.operacaoId ?? null, clienteId);
 
+  /* ─── DESCRICAO E CONTA DO TITULO DE CADA PARCELA — OC-PROGRAMACAO-MODAL-01 ─────────────
+     ⚠ UMA CONSULTA POR CARGA DA ABA, e ela so' existe porque o dado NAO vinha: a parcela sai
+     de `vw_oc_parcelas_materializacao`, que traz o `titulo_id` e nada do titulo. Usar o do
+     compromisso no lugar mentiria em linha real — medido em 27/09/2026, dos 167 titulos vivos,
+     28 tem descricao diferente da do compromisso (o sufixo "4/5" da parcela) e 6 tem OUTRA
+     CONTA (ver OC-CLASSIF-ALINHAR-01).
+     ⚠ SEGUE O REFRESH QUE A ABA JA FAZ: `parcelas` nasce de novo a cada recarga do hook, e e'
+     ela a dependencia — um Reclassificar recarrega a aba e a coluna acompanha.
+     ⚠ SEM TITULO VIVO, O COMPROMISSO; titulo ainda nao lido, "—" (dado ausente, nunca o
+     compromisso fingindo ser o titulo). */
+  const [titulosDasParcelas, setTitulosDasParcelas] =
+    useState<ReadonlyMap<string, { descricao: string | null; planoContaId: string | null; cancelado: boolean }> | null>(null);
+  useEffect(() => {
+    const ids = Array.from(new Set(parcelas.map(p => p.tituloId).filter((v): v is string => !!v)));
+    if (ids.length === 0) { setTitulosDasParcelas(new Map()); return; }
+    let cancelado = false;
+    void supabase.from('financeiro_lancamentos_v2').select('id, descricao, plano_conta_id, cancelado').in('id', ids)
+      .then(({ data, error }) => {
+        if (cancelado) return;
+        if (error) { setTitulosDasParcelas(null); return; }
+        setTitulosDasParcelas(new Map((data ?? []).map(t => [t.id, {
+          descricao: t.descricao, planoContaId: t.plano_conta_id, cancelado: !!t.cancelado }])));
+      });
+    return () => { cancelado = true; };
+  }, [parcelas]);
+
   /* PR-OC-UX-LOTE-B-01 — o detalhe virou MODAL. `selectedId` continua existindo e
      seguindo a regra de estabilidade apos refetch (ver acima): e' o que mantem o
      modal aberto e no mesmo compromisso quando uma acao interna recarrega os dados.
@@ -1643,17 +1669,18 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
           A cadeia (obrigacao -> programado -> lancado -> liquidado) mora aqui agora,
           que e' onde ela responde uma pergunta; na tabela ela so se repetia. */}
       <Dialog open={detalheAberto && !!selecionado} onOpenChange={(o) => { if (!o) setDetalheAberto(false); }}>
-        <DialogContent className="max-w-4xl p-0 gap-0 overflow-hidden">
+        {/* O X nativo sobe para o meio da faixa de 32px (era `top-4`, centrado em 24px) e fica branco. */}
+        <DialogContent className="max-w-5xl p-0 gap-0 overflow-hidden [&>button.absolute]:right-3 [&>button.absolute]:top-2 [&>button.absolute]:text-primary-foreground">
           {selecionado && (
           <div className="space-y-1.5">
-          {/* ⚠ FAIXA NAVY DE 36px, o mesmo cabecalho dos shells (A18 escala de modal): titulo e
-              contraparte na MESMA linha. Em duas, o cabecalho comia altura que a tabela de
-              parcelas precisa. */}
-          <DialogHeader className="h-9 shrink-0 bg-primary text-primary-foreground px-3 flex-row items-center gap-2 space-y-0">
-            <DialogTitle className="shrink-0 text-[13px] font-medium leading-none text-primary-foreground">
+          {/* ⚠ FAIXA NAVY DE 32px, titulo 12px — mock v3 do OC-PROGRAMACAO-MODAL-01 (era 36/13px):
+              titulo e contraparte na MESMA linha. Em duas, o cabecalho comia altura que a tabela
+              de parcelas precisa. */}
+          <DialogHeader className="h-8 shrink-0 bg-primary text-primary-foreground px-3 flex-row items-center gap-2 space-y-0">
+            <DialogTitle className="shrink-0 text-[12px] font-semibold leading-none text-primary-foreground">
               {rotuloCompromisso(selecionado)} — {brl(selecionado.valorCompromisso)}
             </DialogTitle>
-            <DialogDescription className="min-w-0 truncate text-[11px] leading-none text-primary-foreground/85">
+            <DialogDescription className="min-w-0 truncate text-[10px] leading-none text-primary-foreground/80">
               {fornecedores.find(f => f.id === selecionado.favorecidoId)?.nome ?? 'Sem favorecido'}
             </DialogDescription>
           </DialogHeader>
@@ -1671,13 +1698,13 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
           </div>
 
           <div className="rounded-md border bg-card p-1.5 shadow-sm">
-          <div className="flex items-center justify-between mb-1">
-            <div className="text-[12px] font-medium text-foreground">
+          <div className="flex h-6 items-center justify-between mb-1">
+            <div className="text-[11px] font-semibold text-foreground">
               Programação
             </div>
             <span className="inline-flex gap-1">
               {!selecionado.temProgramacaoAtiva && selecionado.status === 'aberto' && (
-                <Button size="sm" className="h-[22px] px-[9px] text-[10px] font-medium" disabled={!podeEscrever} onClick={() => setProgramarAberto(true)}>Programar</Button>
+                <Button size="sm" className="h-5 px-2 text-[10px] font-medium" disabled={!podeEscrever} onClick={() => setProgramarAberto(true)}>Programar</Button>
               )}
               {/* VISIVEL e DESABILITADO com o motivo, nunca escondido. O `title` vai no
                   SPAN e nao no Button: botao desabilitado nao dispara evento de mouse
@@ -1689,7 +1716,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
                   pintado de cinza secundario, indistinguivel de uma acao neutra. */}
               {selecionado.programacaoAtivaId && (
                 <span title={podeCancelarProgramacao.motivo || undefined} className="inline-flex">
-                  <Button size="sm" variant="ghost" className="h-[22px] px-[9px] text-[10px] text-destructive hover:text-destructive hover:bg-destructive/10"
+                  <Button size="sm" variant="ghost" className="h-5 px-2 text-[10px] text-destructive hover:text-destructive hover:bg-destructive/10"
                     disabled={!podeCancelarProgramacao.pode || estRodando}
                     onClick={() => abrirEstorno({ nivel: 'programacao', programacaoId: selecionado.programacaoAtivaId ?? undefined,
                       descricao: 'as parcelas previstas são canceladas, a programação é cancelada e o compromisso volta a ABERTO' })}>
@@ -1703,7 +1730,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
           {/* PR-OC-HOMOLOG-01 item 4 — gate de edição do compromisso: após materialização, alteração
               direta é bloqueada; ajustes seguem por renegociação/estorno. */}
           {selecionado.totalMaterializado > 0 && (
-            <div className="mb-1 rounded-md border border-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2 py-1 text-[10px] text-amber-800 dark:text-amber-200 leading-tight">
+            <div className="mb-1 rounded border border-amber-300 bg-amber-50 dark:bg-amber-950/30 px-2 py-0.5 text-[9.5px] text-amber-800 dark:text-amber-200 leading-tight">
               Compromisso lançado. Para alterações utilize renegociação ou estorno.
             </div>
           )}
@@ -1739,23 +1766,29 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
             <table className="w-full table-fixed text-[10px] tabular-nums">
               {/* ⚠ `colgroup` FIXO — a coluna nao muda de largura quando o numero muda de
                   tamanho. Numa tabela de dinheiro o olho compara na VERTICAL, e uma coluna
-                  que respira desalinha as outras sete. Soma 22+86+84+70+96+62+132 = 552
-                  fixos; a ultima (acoes) fica com a sobra. */}
+                  que respira desalinha as outras. Larguras do mock v3 (OC-PROGRAMACAO-MODAL-01):
+                  24+88+160+84+64+104+80+62+112 = 778 fixos; a Descricao fica com a sobra (~216).
+                  ⚠ ACOES 112, NAO 96 COMO NO MOCK: medido, "Editar" com o lapis + "Estornar" a 9,5px
+                  pedem 99,6px, e em 96 (86 uteis) o "Estornar" saia cortado — no proprio mock
+                  tambem. Os 16px sairam da Descricao, a unica coluna elastica. */}
               <colgroup>
-                <col style={{ width: 22 }} /><col style={{ width: 86 }} /><col style={{ width: 84 }} />
-                <col style={{ width: 70 }} /><col style={{ width: 96 }} /><col style={{ width: 62 }} />
-                <col style={{ width: 132 }} /><col />
+                <col style={{ width: 24 }} /><col style={{ width: 88 }} /><col />
+                <col style={{ width: 160 }} /><col style={{ width: 84 }} /><col style={{ width: 64 }} />
+                <col style={{ width: 104 }} /><col style={{ width: 80 }} /><col style={{ width: 62 }} />
+                <col style={{ width: 112 }} />
               </colgroup>
               <thead>
-                <tr className="h-4 text-left text-[9px] leading-none text-muted-foreground border-b">
-                  <th className="px-1 font-normal">Seq</th>
-                  <th className="px-1 font-normal">Vencimento</th>
-                  <th className="px-1 text-right font-normal">Valor</th>
-                  <th className="px-1 font-normal">Forma</th>
-                  <th className="px-1 font-normal">Conta</th>
-                  <th className="px-1 font-normal">Status</th>
-                  <th className="px-1 font-normal">Título</th>
-                  <th className="px-1 font-normal"></th>
+                <tr className="h-5 text-left text-[9.5px] leading-none text-muted-foreground border-b">
+                  <th className="px-[5px] font-medium">Seq</th>
+                  <th className="px-[5px] font-medium">Vencimento</th>
+                  <th className="px-[5px] font-medium">Descrição</th>
+                  <th className="px-[5px] font-medium">Plano de contas</th>
+                  <th className="px-[5px] text-right font-medium">Valor</th>
+                  <th className="px-[5px] font-medium">Forma</th>
+                  <th className="px-[5px] font-medium">Conta</th>
+                  <th className="px-[5px] font-medium">Status</th>
+                  <th className="px-[5px] font-medium">Título</th>
+                  <th className="px-[5px] font-medium"></th>
                 </tr>
               </thead>
               <tbody>
@@ -1774,14 +1807,27 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
                   const parcelaEditavel = podeEscrever && !est.alerta
                     && (est.label === 'Previsto' || est.label === 'Programado');
                   const motivoTravado = parcelaEditavel ? undefined : est.title;
+                  /* DESCRICAO E CONTA: do titulo VIVO; sem titulo (ou titulo cancelado), do
+                     compromisso; titulo ainda nao lido, `null` -> "—". Ver `titulosDasParcelas`. */
+                  const tit = p.tituloId ? titulosDasParcelas?.get(p.tituloId) : undefined;
+                  const doCompromisso = !p.tituloId || (tit?.cancelado ?? false);
+                  const descricaoLinha = doCompromisso ? selecionado.descricao
+                    : tit ? (tit.descricao ?? selecionado.descricao) : null;
+                  const planoIdLinha = doCompromisso ? selecionado.planoContaId
+                    : tit ? (tit.planoContaId ?? selecionado.planoContaId) : null;
+                  const contaDoPlano = planoIdLinha ? plano.rows.find(r => r.id === planoIdLinha) : undefined;
                   /* ⚠ A ALTURA VAI NA `<tr>` COM `leading-none` — `h-[Npx]` numa `<td>` e'
                      MINIMO, e a celula mais alta rege a linha. Ver PADROES-UI, nota de
-                     medicao. Por isso os campos da linha sao de 18px: um de 24 poria a
-                     linha em 24. */
+                     medicao. Linha de 26px e TODOS os campos de 20px (mock v3): um campo mais
+                     alto que os outros poria a linha — e o olho — fora da regua. */
                   return (
-                    <tr key={p.parcelaId ?? ''} className={`h-[22px] leading-none border-b odd:bg-muted/20 ${recemMaterializada === p.parcelaId ? 'bg-green-50 dark:bg-green-950/30' : ''}`}>
-                      <td className="px-1">{p.sequencia}</td>
-                      <td className="px-1">
+                    <tr key={p.parcelaId ?? ''} className={`h-[26px] leading-none border-b even:bg-muted/30 ${recemMaterializada === p.parcelaId ? 'bg-green-50 dark:bg-green-950/30' : ''}`}>
+                      <td className="px-[5px]">{p.sequencia}</td>
+                      {/* ⚠ 2px DE CELULA E `pr-[18px]` NO CAMPO: o botao do calendario ocupa 24px a'
+                          direita (icone 12 + 6 de cada lado), e com a regua de 5px "21/11/2023"
+                          cortava — era o "21/11/2" do print. 18px encosta o texto no icone, sem
+                          passar por baixo dele. Medido: 82 de 84px. */}
+                      <td className="px-[2px]">
                         {parcelaEditavel ? (
                           /* ⚠ O DATEPICKER DA CASA, nunca `<input type="date">` — A20. O
                              nativo abre o calendário do NAVEGADOR: outro idioma visual, outro
@@ -1795,7 +1841,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
                             value={p.vencimento ?? ''}
                             size="compact"
                             disabled={ocApi.saving}
-                            className="h-[18px] w-full text-[10px]"
+                            className="h-5 w-full pl-1 pr-[18px] text-[10px]"
                             onChange={(novo) => {
                               const v = novo || null;
                               if (v === (p.vencimento ?? null) || !p.parcelaId || versao == null) return;
@@ -1805,8 +1851,21 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
                           <span title={motivoTravado} className="cursor-default">{fmtData(p.vencimento)}</span>
                         )}
                       </td>
-                      <td className="px-1 text-right whitespace-nowrap">{brl(p.valor)}</td>
-                      <td className="px-1">
+                      {/* DESCRICAO — longa corta com "…" e aparece inteira no `title`. */}
+                      <td className="px-[5px] truncate" title={descricaoLinha ?? undefined}>{descricaoLinha ?? '—'}</td>
+                      {/* PLANO DE CONTAS — so' o nome do subcentro, SEM o numero (`ordem_exibicao` e'
+                          identificador interno); o grupo na sublinha. SO' LEITURA: trocar e' pelo
+                          "Reclassificar" do menu da linha do compromisso. */}
+                      <td className="px-[5px]" title={contaDoPlano ? `${contaDoPlano.subcentro ?? ''} · ${contaDoPlano.grupo_custo ?? ''}` : undefined}>
+                        {contaDoPlano ? (
+                          <div className="min-w-0 leading-[1.15]">
+                            <div className="truncate text-[10px]">{contaDoPlano.subcentro ?? '—'}</div>
+                            <div className="truncate text-[9.5px] text-muted-foreground">{contaDoPlano.grupo_custo ?? '—'}</div>
+                          </div>
+                        ) : <span className="text-muted-foreground">—</span>}
+                      </td>
+                      <td className="px-[5px] text-right whitespace-nowrap">{brl(p.valor)}</td>
+                      <td className="px-[5px]">
                         {parcelaEditavel ? (
                           /* ⚠ O SELECT DA CASA, não o nativo. A primeira versão usou
                              `<select>` cru alegando densidade — e "não cabe em 10px" é
@@ -1821,7 +1880,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
                               if (v === (p.forma ?? null) || !p.parcelaId || versao == null) return;
                               void ocApi.alterarParcela(versao, p.parcelaId, { forma: v });
                             }}>
-                            <SelectTrigger className="h-[18px] w-full px-1 text-[10px]">
+                            <SelectTrigger className="h-5 w-full px-1.5 text-[10px]">
                               <SelectValue placeholder="—" />
                             </SelectTrigger>
                             <SelectContent className={darkSelectClass}>
@@ -1840,7 +1899,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
                           </span>
                         )}
                       </td>
-                      <td className="px-1">
+                      <td className="px-[5px]">
                         {/* ⚠ CONTA EDITAVEL COMO A FORMA — 125d item 2b. Mesmo gate
                             (`parcelaEditavel`), mesma RPC (`oc_alterar_parcela_programacao`,
                             que ganhou `p_conta_bancaria_id` em 20260906170516) e mesma
@@ -1860,27 +1919,32 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
                             contas={contasDoCliente}
                             disabled={ocApi.saving}
                             placeholder="—"
-                            className="[&>button]:h-6 [&>button]:w-[132px] [&>button]:px-1.5 [&>button]:text-[10px]" />
+                            size="compact"
+                            className="h-5 w-full px-1.5 text-[10px]" />
                         ) : (
-                          <span title={motivoTravado} className="cursor-default text-[10px] text-muted-foreground">
+                          <span title={motivoTravado} className="block truncate cursor-default text-[10px] text-muted-foreground">
                             {nomeConta(p.contaBancariaId)}
                           </span>
                         )}
                       </td>
-                      <td className="px-1">{(() => { const s = statusFinanceiroParcela(p); return (
+                      <td className="px-[5px]">{(() => { const s = statusFinanceiroParcela(p); return (
+                        /* PILULA NUMA LINHA SO' — 16px, `whitespace-nowrap` (quebrava em duas). */
                         <Badge variant={s.alerta ? 'destructive' : badgeStatusParcela(p.status)}
-                          className="w-[56px] justify-center gap-0.5 px-[5px] text-[9px] font-medium leading-[14px]"
+                          className="h-4 whitespace-nowrap justify-center gap-0.5 px-1.5 text-[9.5px] font-semibold leading-none"
                           title={`${s.title} (estado interno: ${p.status})`}>
                           {s.icon ? <span className="text-[10px] leading-none">{s.icon}</span> : null}
                           {PILULA_STATUS_CURTO[s.label] ?? s.label}
                         </Badge>
                       ); })()}</td>
-                      <td className="px-1">
+                      {/* TITULO — so' o codigo curto (mock v3); o valor ja' esta' na coluna Valor. O
+                          valor do titulo segue no `title`, para quem conferir os dois. */}
+                      <td className="px-[5px]">
                         {p.tituloId
-                          ? <span className="font-mono text-[9px] text-muted-foreground" title={p.tituloId}>{p.tituloId.slice(0, 8)}<span className="font-sans"> · {p.tituloValor != null ? brl(p.tituloValor) : '—'}</span></span>
+                          ? <span className="font-mono text-[9.5px] text-muted-foreground"
+                              title={`${p.tituloId} · ${p.tituloValor != null ? brl(p.tituloValor) : '—'}`}>{p.tituloId.slice(0, 8)}</span>
                           : <span className="text-[10px] text-muted-foreground">—</span>}
                       </td>
-                      <td className="px-1 text-right">
+                      <td className="px-[5px] text-right">
                         {/* ⚠ RAMO PELO STATUS CRU, e nao por `p.materializada`. Com o titulo
                             cancelado o derivado e' false e a linha caia em "Materializar",
                             desabilitado pelo gate — a parcela dizia "Sem titulo" e o Estornar,
@@ -1888,15 +1952,15 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
                             EDITAR continua atras do derivado: titulo morto nao se edita. */}
                         {(p.status === 'materializada' || p.status === 'paga')
                           ? (p.parcelaId
-                              ? <span className="inline-flex gap-1">
+                              ? <span className="inline-flex gap-[3px]">
                                   {p.materializada && p.tituloId && (
-                                    <Button size="sm" variant="outline" className="h-5 text-[10px] px-1.5" onClick={() => { if (p.tituloId) editarTitulo(p.tituloId); }}>
-                                      <Pencil className="h-2.5 w-2.5 mr-0.5" /> Editar
+                                    <Button size="sm" variant="outline" className="h-5 gap-0.5 px-1 text-[9.5px] [&_svg]:size-2.5" onClick={() => { if (p.tituloId) editarTitulo(p.tituloId); }}>
+                                      <Pencil className="h-2.5 w-2.5" /> Editar
                                     </Button>
                                   )}
                                   {/* GHOST, e nao `outline` como o Editar: desfazer nao pode ter o
                                       mesmo peso visual de uma acao corriqueira. */}
-                                  <Button size="sm" variant="ghost" className="h-5 text-[10px] px-1.5 text-muted-foreground hover:text-foreground"
+                                  <Button size="sm" variant="ghost" className="h-5 px-1 text-[9.5px] text-muted-foreground hover:text-foreground"
                                     disabled={!podeEscrever || estRodando}
                                     onClick={() => abrirEstorno({ nivel: 'materializacao', programacaoId: p.programacaoId ?? undefined,
                                       parcelaId: p.parcelaId ?? undefined,
@@ -1905,7 +1969,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
                                   </Button>
                                 </span>
                               : <span className="text-[10px] text-green-600">ok</span>)
-                          : <Button size="sm" variant="outline" className="h-5 text-[10px] px-1.5" disabled={!podeMaterializar} onClick={() => { setContaParaMaterializar(''); setConfirmarParcela(p); }}>Lançar</Button>}
+                          : <Button size="sm" variant="outline" className="h-5 px-1 text-[9.5px]" disabled={!podeMaterializar} onClick={() => { setContaParaMaterializar(''); setConfirmarParcela(p); }}>Lançar</Button>}
                       </td>
                     </tr>
                   );
@@ -2193,18 +2257,18 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
 }
 
 /**
- * ⚠ ROTULO E VALOR NA MESMA FONTE (10px) — OC-COMPROMISSO-MODAL-01. Eram 9 e 12: o valor
- * puxava o olho para si, e aqui os seis cards sao UMA cadeia (obrigacao -> programado ->
- * a programar -> lancado -> pago -> saldo) que se le em sequencia, nao um numero de destaque
- * com cinco satelites. Peso 500 no valor basta para separa-lo do rotulo.
+ * ⚠ ROTULO 9,5 E VALOR 12 A' DIREITA, CARD DE 34px — mock v3 do OC-PROGRAMACAO-MODAL-01, decisao
+ * do Gabriel (27/09/2026). O OC-COMPROMISSO-MODAL-01 tinha igualado os dois em 10px ("a cadeia se
+ * le em sequencia"); o mock aprovado volta a separar rotulo e numero. O rotulo vai a 9,5 e nao a 9
+ * como no mock: e' o piso do sistema fora da grade do DRE.
  * ⚠ SEM "R$" NA CELULA, e ele no `title`: seis vezes o simbolo na mesma faixa rouba a largura
  * que o digito precisa. O numero completo, com centavos, continua a um hover.
  */
 function ResumoCard({ rotulo, valor }: { rotulo: string; valor: number }) {
   return (
-    <div className="h-[30px] rounded border bg-muted/30 px-1.5 py-[3px] leading-tight" title={brl(valor)}>
-      <div className="text-[10px] text-muted-foreground leading-none">{rotulo}</div>
-      <div className="text-[10px] font-medium tabular-nums whitespace-nowrap leading-none mt-0.5">
+    <div className="h-[34px] rounded border bg-muted/30 px-[7px] py-[3px] leading-tight" title={brl(valor)}>
+      <div className="text-[9.5px] text-muted-foreground leading-none">{rotulo}</div>
+      <div className="text-[12px] font-semibold text-right tabular-nums whitespace-nowrap leading-tight mt-0.5">
         {valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
       </div>
     </div>

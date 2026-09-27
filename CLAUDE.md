@@ -2441,6 +2441,16 @@ preview que o cabecalho nao sai da tela ao rolar.
     (c) "Saldo" negativo do resumo da venda (Vera b58bf556, -107.150,94) sai SEM VERMELHO -> OC-SALDO-MODAL-01.
     (d) o seletor de comprador da venda mostra o UUID cru por ~1s antes de a lista de contrapartes carregar (ceabd850)
         -> FORNECEDOR-UUID-CRU-01.
+- OC-CLASSIF-ALINHAR-01 — pendencia, NAO corrigir agora (decisao do Gabriel, 27/09/2026, na FASE 0 do
+  OC-PROGRAMACAO-MODAL-01): 6 titulos VIVOS de OC tem conta do plano DIFERENTE da do compromisso — todos anteriores
+  ao OC-RECLASSIFICAR-ITEM-01, que hoje grava os dois juntos.
+    744c520e, 7f7de76f, b58bf556, da0b8577  compromisso em "Venda de Machos Adultos" x titulo em "Venda em Boitel"
+    7f7de76f, b58bf556                      titulo em "Devolucao de Adiantamento de Boitel"
+  ⚠ QUEM ALINHA E' O GABRIEL, caso a caso: alinhar o compromisso pode mudar o DRE (a conta do titulo e' a que o
+    financeiro soma). A coluna "Plano de contas" da programacao do compromisso ja' mostra a do TITULO vivo, nao a do
+    compromisso — a divergencia fica visivel la', e nao escondida.
+  ⚠ E A DESCRICAO DIVERGE EM 28 DOS 167 titulos vivos, mas isso NAO e' inconsistencia: e' o sufixo da parcela
+    ("Compra 200 Novilhas 4/5" contra "Compra 200 Novilhas"). Nao entra nesta pendencia.
 - FORNECEDOR-UUID-CRU-01 — achado, nao tratado (26/09/2026, nos prints do OC-EDITAR-CADASTRAL-01): a compra 69115ef9 (NJ)
   mostra o UUID cru `276efb08…` no seletor de fornecedor e "Contraparte —" no resumo. O fornecedor (Carlos Pacheco) EXISTE,
   esta' ATIVO e e' do NJ; a lista carregada pela tela e' que nao o traz. Causa nao medida (lista carregada antes da troca de

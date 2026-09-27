@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="utf-8"><title>Programação do compromisso — mock v3</title>
+<style>
+:root{--p:#1D3A5D;--bg:#F6F7F9;--fg:#0F1729;--mf:#6B7280;--bd:#E0E2E6;--am:#b45309;--amb:#fffbeb;--amd:#fde68a;--gr:#15803d;--grb:#f0fdf4;--rd:#b91c1c}
+*{box-sizing:border-box}body{margin:0;background:#8a929c;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--fg);padding:20px}
+.lbl{color:#fff;font-size:12px;font-weight:600;margin:0 auto 6px;width:1024px}
+.m{width:1024px;margin:0 auto 22px;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.3)}
+.hd{background:var(--p);color:#fff;height:32px;display:flex;align-items:center;padding:0 12px;gap:8px}
+.hd .t{font-size:12px;font-weight:600}.hd .s{font-size:10px;opacity:.8}.hd .x{margin-left:auto;opacity:.8;font-size:12px}
+.kp{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;padding:6px 10px}
+.k{border:1px solid var(--bd);border-radius:4px;padding:3px 7px;height:34px;background:var(--bg)}
+.k .a{font-size:9px;color:var(--mf)}.k .b{font-size:12px;font-weight:600;text-align:right;font-variant-numeric:tabular-nums;line-height:1.2}
+.sec{margin:0 10px 8px;border:1px solid var(--bd);border-radius:5px}
+.sh{display:flex;align-items:center;height:24px;padding:0 8px;border-bottom:1px solid var(--bd)}
+.sh b{font-size:11px}.sh a{margin-left:auto;font-size:9px;color:var(--rd);text-decoration:none}
+.warn{margin:5px 8px;font-size:9px;background:var(--amb);border:1px solid var(--amd);color:#78350f;border-radius:4px;padding:2px 7px}
+table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:10px}
+th{font-size:9px;color:var(--mf);font-weight:500;text-align:left;padding:0 5px;height:20px;border-bottom:1px solid var(--bd);white-space:nowrap}
+td{padding:0 5px;height:26px;border-bottom:1px solid #f0f1f3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+tr:nth-child(even) td{background:#fafafa}
+.r{text-align:right}
+.in{height:20px;border:1px solid var(--bd);border-radius:3px;display:flex;align-items:center;padding:0 5px;font-size:10px;background:#fff;gap:3px}
+.in .c{margin-left:auto;color:var(--mf);font-size:8px}
+.pill{display:inline-flex;align-items:center;gap:3px;height:16px;padding:0 6px;border-radius:8px;font-size:9px;font-weight:600}
+.pg{background:#e8eef6;color:var(--p)}.pd{background:var(--grb);color:var(--gr)}
+.dot{width:5px;height:5px;border-radius:50%}
+.pl{line-height:1.15;white-space:normal}.pl .n{font-size:10px}.pl .h{font-size:8.5px;color:var(--mf)}
+.tit{font-size:9px;color:var(--mf);font-family:ui-monospace,monospace}
+.ac{display:flex;gap:3px;justify-content:flex-end}
+.bt{height:20px;padding:0 6px;border:1px solid var(--bd);border-radius:3px;font-size:9px;display:flex;align-items:center;background:#fff}
+.bt.g{border-color:transparent;color:var(--mf)}
+.note{width:1024px;margin:0 auto;background:#fff;border-radius:6px;padding:10px 12px;font-size:11px;line-height:1.5}
+</style></head><body>
+
+<div class="lbl">Programação do compromisso — v3: + Descrição e Plano de contas, fontes menores</div>
+<div class="m">
+ <div class="hd"><span class="t">Recebimento ref. operação — R$ 659.634,62</span><span class="s">Ricardo Goulart</span><span class="x">✕</span></div>
+ <div class="kp">
+  <div class="k"><div class="a">Obrigação</div><div class="b">659.634,62</div></div>
+  <div class="k"><div class="a">Programado</div><div class="b">659.634,62</div></div>
+  <div class="k"><div class="a">A programar</div><div class="b">0,00</div></div>
+  <div class="k"><div class="a">Lançado</div><div class="b">659.634,62</div></div>
+  <div class="k"><div class="a">Pago</div><div class="b">0,00</div></div>
+  <div class="k"><div class="a">Saldo</div><div class="b">659.634,62</div></div>
+ </div>
+ <div class="sec">
+  <div class="sh"><b>Programação</b><a href="#">Cancelar programação</a></div>
+  <div class="warn">Compromisso lançado. Para alterações utilize renegociação ou estorno.</div>
+  <table>
+   <colgroup><col style="width:24px"><col style="width:88px"><col><col style="width:160px"><col style="width:84px"><col style="width:64px"><col style="width:104px"><col style="width:80px"><col style="width:62px"><col style="width:96px"></colgroup>
+   <thead><tr><th>Seq</th><th>Vencimento</th><th>Descrição</th><th>Plano de contas</th><th class="r">Valor</th><th>Forma</th><th>Conta</th><th>Status</th><th>Título</th><th></th></tr></thead>
+   <tbody>
+    <tr><td>1</td><td><div class="in">21/11/2023<span class="c">▦</span></div></td><td title="Venda 169 G - Recebimento ref. operação">Venda 169 G - Recebimento ref. operação</td><td class="pl"><div class="n">Venda em Boitel</div><div class="h">Receita Pecuária</div></td><td class="r">659.634,62</td><td><div class="in">PIX<span class="c">▾</span></div></td><td><div class="in">Sicoob Virtual<span class="c">▾</span></div></td><td><span class="pill pg"><span class="dot" style="background:#d97706"></span>Programado</span></td><td class="tit">5461c094</td><td><div class="ac"><span class="bt">✎ Editar</span><span class="bt g">Estornar</span></div></td></tr>
+    <tr><td>2</td><td><div class="in">10/07/2023<span class="c">▦</span></div></td><td title="Venda 193 cab - Frete boitel">Venda 193 cab - Frete boitel</td><td class="pl"><div class="n">Impostos e Despesas de Abates e Vendas</div><div class="h">Deduções Pecuária</div></td><td class="r">6.000,00</td><td><div class="in">—<span class="c">▾</span></div></td><td><div class="in">Sicoob Virtual<span class="c">▾</span></div></td><td><span class="pill pd"><span class="dot" style="background:#16a34a"></span>Pago</span></td><td class="tit">5ef570ec</td><td><div class="ac"><span class="bt">✎ Editar</span><span class="bt g">Estornar</span></div></td></tr>
+   </tbody>
+  </table>
+ </div>
+</div>
+
+<div class="note"><b>Mock v3 (APROVADO 27/09) · OC-PROGRAMACAO-MODAL-01.</b> Novas colunas pedidas: <b>Descrição</b> (do título; texto longo corta com “…” e aparece inteiro ao passar o mouse) e <b>Plano de contas</b> (só o nome do subcentro, sem código; o grupo na sublinha em cinza; só leitura — trocar é pelo “Reclassificar” do “...”).<br>
+• Fontes menores: linha 10px, cabeçalho da tabela 9px, cards 9/12px, título do modal 12px. Linha 26px, campos 20px todos iguais, zebra nas linhas.<br>
+• Título mostra só o código (o valor já está na coluna Valor). Larguras fixas: Venc 88 · Descrição o resto (~160) · Plano 160 · Valor 84 · Forma 64 · Conta 104 · Status 80 · Título 62 · Ações 96. 1024px.<br>
+• 2ª linha só para mostrar outra conta e a pílula “Pago” — números ilustrativos.</div>
+</body></html>
