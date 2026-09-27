@@ -840,6 +840,11 @@ no mesmo arquivo.
   do VBP, as cores pelo sinal (e o Detalhado ainda azul), e o Custeio sem modal nem historico. ⚠ SEIS CASOS EXISTENTES
   mudaram de contrato, nunca afrouxados: os do custo fixo do Resumido passaram a abrir o Custeio antes (ele mora dentro), e
   "sao quinze linhas" passou a contar as defs fora do grupo em `LINHAS_PEC_RESUMIDO_GRADE`.
+  De 2069 para 2073 no DRE-MODAL-REFRESH-01: entrou `src/components/agri/modalValorRefresh.test.tsx` (+4) — editar a descricao
+  atualiza a linha sem perder aba nem ordenacao; reclassificar para outro grupo tira as linhas (direta e de rateio) e os cards vem do
+  DRE relido (600/150/750, nao a foto 1.000/200/1.200); so' salvar uma edicao rele (falha e criacao nao); e a celula relida e'
+  IDENTICA a' que a grade manda no clique, em 10+ celulas por estado, com o rateio nos grupos ligado e desligado.
+  ⚠ PROVADO: com os cards voltando a ler a foto do clique, o caso da reclassificacao cai pela razao certa.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -2547,6 +2552,33 @@ preview que o cabecalho nao sai da tela ao rolar.
   so' pela CHAVE PRINCIPAL da referencia, nao pela soma (`pctDelta(v, valorDe(col.ref, def.chave))` em `LinhaPec`). O Δ R$ ja'
   sai da soma. O Custeio, que nasceu no mesmo PR, ja' divide pela soma (`refDoPct`); estender as duas e' trocar o `agrupa &&`
   daquela funcao por `compor` — muda numero na tela, por isso ficou fora.
+- ⚠ DRE-MODAL-REFRESH-01 — O MODAL DE VALOR DO DRE ACOMPANHA A ESCRITA FEITA A PARTIR DELE (27/09/2026). Relato do
+  Gabriel (Administracao R$ 333.322,65, 455 lancamentos, 293 de rateio adm.): salvar um lancamento aberto pelo modal nao mudava a
+  lista, os cards nem o total — so' fechar e reabrir. A grade atras JA' atualizava (DRE-REFRESH-01); o modal, nao. Sem RPC, schema,
+  layout ou componente novo.
+  TRES CAUSAS, TRES CONSERTOS:
+  (1) CARDS DA PECUARIA liam `recorte.celula`, a FOTOGRAFIA que a grade tira no clique (`celulaDaColuna`). Agora
+     `celulaAtualizada(recorte, dre)` (`RateioDetalheModal.tsx`): a FORMA vem do clique (fazenda, bloco, centro, grupo, se ha
+     direto/rateio) e os NUMEROS do DRE relido, pelas mesmas leituras da grade. Nenhuma soma local; sem DRE da coluna, vale a foto.
+     Um teste trava que, para cada celula clicada na grade, a releitura sobre o mesmo DRE devolve EXATAMENTE a celula do clique.
+  (2) A LISTA DO RATEIO ADM. (`useRateioAdmPec`, linhas "rateio adm." e aba Rateio) nunca era relida — o caso do relato. Ganhou
+     `recarregar` (prefixo `'dre-pec-rateio-adm'`).
+  (3) O MODAL DA LAVOURA guarda no estado da pagina a resposta de `fn_painel_rateio_detalhe` do clique. O estado passou a guardar a
+     `chave`, e `reconsultarRateio` refaz a MESMA chamada trocando so' os `dados`.
+     ⚠ A RECONSULTA DA LAVOURA ESTA' NO CODIGO E NAO FOI PROVADA — nem na tela, nem por teste. Fica para a homologacao do Gabriel.
+  UMA RECARGA SO' (`recarregarFontesDoDre`, AgriDreLavouraTab), chamada pelo `onSave` via `salvarERecarregar`
+  (`src/lib/financeiro/salvarERecarregar.ts`: so' rele se SALVOU uma EDICAO; falha e criacao nao; cancelar e' o `onClose`) E pela
+  inscricao em `inscreverEmLancamentos` — o canal de FIN-V2-REFRESH-02. ⚠ E' ELA QUE COBRE a escrita que NAO passa pelo `onSave`:
+  o editor aberto pelo modal pode DESVINCULAR com "Reclassificar para", VINCULAR ou PARCELAR, e os tres gravam por RPC e avisam por
+  `notificarLancamentosMudaram`. Aba, segmentado e ordenacao ficam: o modal nao remonta.
+  ⚠ NAO HA CAMINHO DE RECLASSIFICACAO VIA OC A PARTIR DO MODAL: o editor e' montado nesta tela sem `onAbrirOperacaoOC`, entao o
+    "corrigir na operação" nao navega. Registrado, nao tratado.
+  ⚠ PROVA NA TELA (RRCC, Custo fixo jan-dez/2026, lancamento 24c4d7a0, uma linha de RATEIO ADM.): descricao "Contabilidade" ->
+    "Contabilidade [teste refresh]" atualizou a linha sem fechar o modal, mesma aba, mesmo segmentado, mesma ordenacao, 161
+    lancamentos; voltou a "Contabilidade", conferido no banco (valor, conta, subcentro, datas e status inalterados). Tempo ate' a
+    lista aparecer, sem cache, 12 celulas: Custo fixo 200-334 ms antes x 209-322 depois; Custo variavel 271-405 x 143-259.
+  ⚠ AO MEDIR TEMPO NUMA ABA EM SEGUNDO PLANO, `setTimeout` e' estrangulado a 1 por segundo: a primeira medicao deu "1000 ms" em
+    tudo. `MutationObserver` registra o instante real.
 - OC-CLASSIF-ALINHAR-01 — pendencia, NAO corrigir agora (decisao do Gabriel, 27/09/2026, na FASE 0 do
   OC-PROGRAMACAO-MODAL-01): 6 titulos VIVOS de OC tem conta do plano DIFERENTE da do compromisso — todos anteriores
   ao OC-RECLASSIFICAR-ITEM-01, que hoje grava os dois juntos.

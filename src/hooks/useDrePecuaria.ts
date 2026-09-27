@@ -533,6 +533,7 @@ export function useRateioAdmPec(
   clienteId: string | null | undefined, de: string | null, ate: string | null,
   cenario: CenarioPec, enabled: boolean,
 ) {
+  const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ['dre-pec-rateio-adm', clienteId ?? '', de ?? '', ate ?? '', cenario],
     enabled: enabled && !!clienteId && !!de && !!ate,
@@ -561,7 +562,10 @@ export function useRateioAdmPec(
       };
     },
   });
-  return { rateio: data ?? null, carregando: isLoading };
+  /* ⚠ O PREFIXO — DRE-MODAL-REFRESH-01: salvar um lancamento administrativo pelo modal mudava a lista do
+     rateio e a aba Rateio, e esta consulta nunca era relida (so' fechar e reabrir o modal). */
+  const recarregar = () => queryClient.invalidateQueries({ queryKey: ['dre-pec-rateio-adm'] });
+  return { rateio: data ?? null, carregando: isLoading, recarregar };
 }
 
 /**

@@ -72,7 +72,8 @@ import {
   UNIDADES_PEC_GRADE, ROTULO_UNIDADE, LINHAS_DO_MODO, type UnidadePec, type ModoDre,
 } from '@/components/agri/drePecRegua';
 import { useFazenda } from '@/contexts/FazendaContext';
-import { useFinanceiroV2, type LancamentoV2 } from '@/hooks/useFinanceiroV2';
+import { useFinanceiroV2, inscreverEmLancamentos, type LancamentoV2 } from '@/hooks/useFinanceiroV2';
+import { salvarERecarregar } from '@/lib/financeiro/salvarERecarregar';
 import { usePainelSafra, useComparativoSafras } from '@/hooks/usePainelSafra';
 import { ProducaoSafraPanel } from '@/components/agri/ProducaoSafraPanel';
 import {
@@ -452,7 +453,7 @@ export function AgriDreLavouraTab({ onCorrigirPrecos }: {
     lancamentos: lancPec, carregando: carregandoLancPec, recarregar: recarregarLancPec,
   } = useDrePecuariaLancamentos(clienteId, recortePec, pecDe, pecAte);
   /* ⚠ A LISTA DO RATEIO ADMINISTRATIVO SÓ SAI COM O MODAL ABERTO NUMA CÉLULA QUE TEM RATEIO. */
-  const { rateio: rateioAdmPec, carregando: carregandoRateioAdmPec } = useRateioAdmPec(
+  const { rateio: rateioAdmPec, carregando: carregandoRateioAdmPec, recarregar: recarregarRateioAdmPec } = useRateioAdmPec(
     clienteId, recortePec?.de ?? pecDe, recortePec?.ate ?? pecAte, recortePec?.cenario ?? 'realizado',
     recortePec?.celula?.rateio != null);
   const { patrimonio: patPec, carregando: carregandoPatPec } = useDrePecuariaPatrimonio(
@@ -681,21 +682,26 @@ export function AgriDreLavouraTab({ onCorrigirPrecos }: {
    * que não é admin significa "não há o que repartir", e aí não se abre modal nenhum. Aqui o
    * caminho alternativo (o drawer) é do PR-02, então o clique simplesmente não abre.
    */
+  /* ⚠ A `chave` FICA GUARDADA — DRE-MODAL-REFRESH-01: os `dados` sao a resposta de UMA consulta, e
+     reconsultar depois de salvar um lancamento exige pedir exatamente o que o clique pediu. */
   const [rateio, setRateio] = useState<
-    { dados: RateioDetalhe; tipo: TipoRateio; rotulo: string; cultura: string; pool: boolean } | null>(null);
+    { dados: RateioDetalhe; tipo: TipoRateio; chave: string | null; rotulo: string; cultura: string; pool: boolean } | null>(null);
 
   /* ⚠ `chave` PODE SER `null` DESDE O PR-07, e é o que abre o POOL: no ramo natureza da
      `fn_painel_rateio_detalhe`, `p_chave` nulo deixou de significar "nenhum centro" e passou a
      significar "todos os centros compartilhados" — os lançamentos sem cultura cujo plano está em
      `bloco_dre in ('custeio','pos_colheita')`. É a RPC que soma; aqui só se pede. */
+  const buscarRateio = async (tipo: TipoRateio, chave: string | null, cultura: string) => {
+    const { data } = await (supabase as any).rpc('fn_painel_rateio_detalhe', {
+      p_cliente: clienteId, p_safra_id: safraId, p_cultura: cultura,
+      p_tipo: tipo, p_chave: chave,
+    });
+    return data as RateioDetalhe | null;
+  };
   const abrir = (tipo: TipoRateio, chave: string | null, rotulo: string, cultura: string) => {
     if (!clienteId || !safraId) return;
     void (async () => {
-      const { data } = await (supabase as any).rpc('fn_painel_rateio_detalhe', {
-        p_cliente: clienteId, p_safra_id: safraId, p_cultura: cultura,
-        p_tipo: tipo, p_chave: chave,
-      });
-      const d = data as RateioDetalhe | null;
+      const d = await buscarRateio(tipo, chave, cultura);
       /* ⚠ O GUARD DE `pool > 0` SAIU (§10), e ele era o defeito. A regra vinha copiada do Painel
          da Safra, onde fazia sentido: lá, pool zero caía no drawer de lançamentos daquele
          centro, então havia PARA ONDE ir. Aqui não havia alternativa nenhuma — o clique em
@@ -705,8 +711,18 @@ export function AgriDreLavouraTab({ onCorrigirPrecos }: {
          ⚠ AGORA QUEM DECIDE É O MODAL, não este guard: ele abre sempre que a RPC responde, e as
          abas de rateio só aparecem quando há rateio para explicar. Um componente, duas formas. */
       if (!d) return;
-      setRateio({ dados: d, tipo, pool: chave === null, rotulo, cultura });
+      setRateio({ dados: d, tipo, chave, pool: chave === null, rotulo, cultura });
     })();
+  };
+  /* ⚠ O MODAL DA LAVOURA ABERTO RELÊ A MESMA CONSULTA — DRE-MODAL-REFRESH-01. So' os `dados` trocam:
+     aba, segmentado e ordenacao moram no modal, que nao remonta (nao ha `key` aqui). A lista e os cards
+     vem da resposta da RPC, nunca de um remendo local. */
+  const reconsultarRateio = async () => {
+    const atual = rateio;
+    if (!atual || !clienteId || !safraId) return;
+    const d = await buscarRateio(atual.tipo, atual.chave, atual.cultura);
+    if (d) setRateio(r => (r && r.tipo === atual.tipo && r.chave === atual.chave && r.cultura === atual.cultura
+      ? { ...r, dados: d } : r));
   };
 
   /* ⚠ `Esc` SAI DO AMPLIAR — o botão flutuante é o caminho do mouse, e quem ampliou com o teclado
@@ -830,6 +846,40 @@ export function AgriDreLavouraTab({ onCorrigirPrecos }: {
     const linha = await fin.buscarLancamentoPorId(id);
     if (linha) setEditando(linha);
   };
+
+  /**
+   * AS FONTES DO DRE, RELIDAS DEPOIS DE UMA ESCRITA — DRE-MODAL-REFRESH-01.
+   *
+   * ⚠ ERA O CORPO DO `onSave`, e faltavam duas: a lista do rateio administrativo da pecuaria
+   *   (`useRateioAdmPec`, a aba Rateio e as linhas "rateio adm." do modal) e a resposta que o modal da
+   *   LAVOURA guarda no estado. As duas ficavam com o numero velho ate' fechar e reabrir o modal.
+   * ⚠ SAO AS MESMAS FONTES DA GRADE E DO MODAL — nenhuma soma local. Os cards da pecuaria se refazem
+   *   sozinhos quando o DRE chega (`celulaAtualizada`, no adaptador do modal).
+   */
+  const recarregarFontesDoDre = async () => {
+    await recarregarLancamentos();
+    await recarregarPainel();
+    await recarregarComparativo();
+    await recarregarDre();
+    await reconsultarRateio();
+    /* ⚠ A PECUÁRIA TAMBÉM: corrigir a fazenda ou o subcentro de um lançamento é justamente o gesto do
+       §5 — a coluna errada perde o valor e a certa o ganha. */
+    if (ehPec) {
+      recarregarPec();
+      await recarregarLancPec();
+      await recarregarRateioAdmPec();
+    }
+  };
+  /* ⚠ E A ESCRITA QUE NAO PASSA PELO `onSave` TAMBEM RELÊ (item e do briefing): o editor aberto pelo
+     modal pode desvincular um titulo da OC com "Reclassificar para", vincular ou parcelar — as tres
+     gravam por RPC e avisam por `notificarLancamentosMudaram`, o canal que ja' existe (FIN-V2-REFRESH-02).
+     A `ref` guarda a versao fresca da recarga sem refazer a inscricao a cada render. */
+  const recarregarFontesRef = useRef(recarregarFontesDoDre);
+  recarregarFontesRef.current = recarregarFontesDoDre;
+  useEffect(() => {
+    if (!clienteId) return;
+    return inscreverEmLancamentos(clienteId, () => { void recarregarFontesRef.current(); });
+  }, [clienteId]);
 
   const culturas = dre?.culturas ?? [];
   /** A cultura aberta, do payload do DRE — é dela que a faixa e a grade do drill vivem. */
@@ -1439,28 +1489,13 @@ export function AgriDreLavouraTab({ onCorrigirPrecos }: {
         open={!!editando}
         carregando={!catalogosProntos}
         onClose={() => setEditando(null)}
-        onSave={async (form, id) => {
-          const ok = id ? await fin.editarLancamento(id, form) : await fin.criarLancamento(form);
-          /* ⚠ AS QUATRO FONTES DESTA TELA, e nenhuma sobra: o DRE é somado por `fn_dre_lavoura`,
-             a lista do drawer vem do PostgREST, a Produção de `fn_painel_safra` mais o
-             comparativo, e o Histórico de `fn_dre_lavoura_historico`. Recarregar algumas é o
-             pior dos mundos — a linha muda e o detalhe dela não, na mesma tela aberta. */
-          if (ok && id) {
-            await recarregarLancamentos();
-            await recarregarPainel();
-            await recarregarComparativo();
-            await recarregarDre();
-            /* ⚠ A PECUÁRIA TAMBÉM, e pelo MESMO motivo das quatro acima: corrigir a fazenda de um
-               lançamento é justamente o gesto do §5 — a coluna errada perde o valor e a certa o
-               ganha. Recarregar só a lista deixaria a grade mostrando o número velho ao lado do
-               detalhe já corrigido, na mesma tela aberta. */
-            if (ehPec) {
-              recarregarPec();
-              await recarregarLancPec();
-            }
-          }
-          return ok;
-        }}
+        /* ⚠ AS FONTES DESTA TELA, e nenhuma sobra: o DRE é somado por `fn_dre_lavoura`, a lista do
+           drawer vem do PostgREST, a Produção de `fn_painel_safra` mais o comparativo, e o Histórico
+           de `fn_dre_lavoura_historico` — mais a pecuária e os dois modais de valor
+           (`recarregarFontesDoDre`). Recarregar algumas é o pior dos mundos — a linha muda e o
+           detalhe dela não, na mesma tela aberta. Cancelar não chega aqui (é o `onClose`). */
+        onSave={(form, id) => salvarERecarregar(
+          () => (id ? fin.editarLancamento(id, form) : fin.criarLancamento(form)), id, recarregarFontesDoDre)}
         lancamento={editando}
         fazendas={fazendas}
         contas={fin.contasBancarias}

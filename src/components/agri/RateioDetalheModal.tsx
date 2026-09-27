@@ -23,9 +23,10 @@ import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
 import { useOrdenacaoTabela, type ColunaOrdenavel } from '@/hooks/useOrdenacaoTabela';
 import { ThOrdenavel } from '@/components/ui/th-ordenavel';
-import { porCabeca, rateioDoGrupo } from '@/components/agri/drePecRegua';
+import { porCabeca, rateioDoGrupo, valorDe, centrosDoBloco, LINHAS_PEC } from '@/components/agri/drePecRegua';
+import { BLOCO_DA_LINHA } from '@/hooks/useDrePecuaria';
 import type {
-  DrePecuaria, LancamentoPec, RateioAdmPec, RecortePec,
+  ChaveLinhaPec, DrePecLinhas, DrePecuaria, LancamentoPec, RateioAdmPec, RecortePec,
 } from '@/hooks/useDrePecuaria';
 
 
@@ -365,6 +366,36 @@ const ROTULO_BLOCO_PEC: Record<string, string> = {
  * ⚠ A REPARTIÇÃO POR FAZENDA DA ABA RATEIO vem do DRE DO MESMO PERÍODO (`dre`), quando a tela o tem;
  *   sem ele, a aba mostra bruto e parte da atividade e não inventa a divisão.
  */
+/**
+ * A CELULA DO CLIQUE, RELIDA NO DRE ATUAL — DRE-MODAL-REFRESH-01.
+ *
+ * ⚠ O DEFEITO: os cards (Direto, Rateio, Total, R$/cab/mes) e o alvo da reparticao do rateio liam
+ *   `recorte.celula`, a FOTOGRAFIA que a grade tirou no clique. Depois de salvar um lancamento pelo
+ *   modal a grade relia o DRE e o modal continuava com o numero velho — so' fechar e reabrir refazia a
+ *   foto. Agora a FORMA vem do clique (qual fazenda, qual bloco, qual centro, se ha direto, se ha
+ *   rateio, de qual grupo) e os NUMEROS vem do DRE que a tela acabou de reler, pelas mesmas leituras
+ *   que a grade faz ao montar a celula (`LinhaPec`/`LinhaCentro`, `celulaDaColuna`).
+ * ⚠ NAO E' CONTA DA TELA: nada e' somado aqui — cada numero e' uma chave ou um centro da RPC.
+ * ⚠ SEM DRE PARA A COLUNA (ainda carregando, ou coluna que a tela nao guarda), vale a foto do clique.
+ */
+/* A linha da cascata dona de um bloco — a mesma `BLOCO_DA_LINHA` que a grade usa, lida ao contrario. */
+const chaveDoBloco = (bloco: string): ChaveLinhaPec | undefined =>
+  LINHAS_PEC.find(d => BLOCO_DA_LINHA[d.chave] === bloco)?.chave;
+export function celulaAtualizada(r: RecortePec, dre: DrePecuaria | null): RecortePec['celula'] {
+  const cel = r.celula;
+  if (!cel || !dre) return cel;
+  const l: DrePecLinhas | undefined = r.fazendaId === null
+    ? dre.total : dre.fazendas.find(f => f.fazenda_id === r.fazendaId)?.linhas;
+  if (!l) return cel;
+  const chave = chaveDoBloco(r.bloco);
+  const direto = cel.direto == null ? null
+    : r.centro === null ? (chave ? valorDe(l, chave) : cel.direto)
+      : centrosDoBloco(l, r.bloco).find(c => c.centro === r.centro)?.valor ?? null;
+  const rateio = cel.rateio == null ? null
+    : cel.grupo ? rateioDoGrupo(l, cel.grupo) : valorDe(l, 'rateio_adm');
+  return { ...cel, direto, rateio, cabMedia: l.patrimonio.cab_media };
+}
+
 export function valorDaPecuaria(o: {
   recorte: RecortePec;
   lancamentos: readonly LancamentoPec[];
@@ -375,7 +406,8 @@ export function valorDaPecuaria(o: {
   const r = o.recorte;
   const diretos = r.soRateio ? [] : o.lancamentos;
   const somaDiretos = diretos.reduce((a, l) => a + l.valor, 0);
-  const cel = r.celula ?? { direto: somaDiretos, rateio: null, grupo: null, cabMedia: 0, meses: 0, comRateio: false };
+  const cel = celulaAtualizada(r, o.dre)
+    ?? { direto: somaDiretos, rateio: null, grupo: null, cabMedia: 0, meses: 0, comRateio: false };
   const grupo = cel.grupo;
   const doGrupo = (o.rateio?.lancamentos ?? []).filter(l => grupo == null || l.grupo === grupo);
   const repartidos = cel.rateio == null ? [] : ratearNoAlvo(doGrupo.map(l => l.parte), cel.rateio);
