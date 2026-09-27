@@ -38,30 +38,21 @@ import { CampoMoeda, brl } from '@/components/ui/campo-moeda';
 import type { Categoria } from '@/types/cattle';
 import { META_VISUAL } from '@/lib/statusOperacional';
 import { LancamentoModalEnvelope } from '@/components/lancamento/LancamentoModalEnvelope';
+import { LinhaResumo, SecaoResumo } from '@/components/ui/linha-resumo';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useStatusPilares } from '@/hooks/useStatusPilares';
 import { ReabrirP1Dialog } from '@/components/ReabrirP1Dialog';
 import { anoMesDaData, mesFechadoMotivo } from '@/lib/zootecnico/mesFechadoP1';
 
-/* Par rotulo-valor do resumo lateral — mesmo idioma do `Linha` de ResumoLateralOC
-   (A17): rotulo cinza a esquerda, valor a direita, traco no vazio.
-   ⚠ TERCEIRA COPIA deste par, junto com a do Nascimento. Sai na mesma extracao do
-   envelope — ver a divida declarada no topo do arquivo. */
-function LinhaResumo({ rotulo, valor }: { rotulo: string; valor: string | null }) {
-  return (
-    <div className="flex items-baseline justify-between gap-1.5 leading-tight">
-      <span className="text-muted-foreground shrink-0">{rotulo}</span>
-      <span className="font-medium text-right truncate">{valor || '—'}</span>
-    </div>
-  );
-}
-
+/* O par rotulo-valor e' o `LinhaResumo` de `ui/linha-resumo` desde o MODAIS-PADRAO-01d — esta copia
+   local saiu (mesma API, mesmo texto). A variante da Fazenda FICA: ela pinta o "—" de vermelho quando a
+   fazenda falta, e o par compartilhado so' colore valor presente. */
 /* A fazenda no resumo tem um estado que os outros pares nao tem: ela pode estar
    FALTANDO e bloquear o registro. Traco cinza diria "ausente, tudo bem"; aqui a
    ausencia e' erro a resolver, e a cor precisa dizer isso. */
 function LinhaResumoFazenda({ valor, falta }: { valor: string | null; falta: boolean }) {
   return (
-    <div className="flex items-baseline justify-between gap-1.5 leading-tight">
+    <div className="px-2.5 py-px flex items-baseline justify-between gap-1.5 leading-tight">
       <span className="text-muted-foreground shrink-0">Fazenda</span>
       <span className={`font-medium text-right truncate ${falta ? 'text-destructive' : ''}`}>{valor || '—'}</span>
     </div>
@@ -210,11 +201,9 @@ export function MorteModalShell({
       fazendaNome={morteFazendaNome}
       onFechar={fecharModalOCComAutosave}
       resumo={<>
-            <div className="pb-1">
-              <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 first:mt-0 mb-0.5">
-                <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Identificação</span>
-              </div>
-              <div className="px-3 space-y-0.5">
+            <div>
+              <SecaoResumo titulo="Identificação" />
+              <div>
                 <LinhaResumo rotulo="Tipo" valor="Morte" />
                 <LinhaResumo rotulo="Data" valor={data ? data.split('-').reverse().join('/') : null} />
                 <LinhaResumoFazenda valor={morteFazendaNome} falta={morteFazendaFalta} />
@@ -222,34 +211,27 @@ export function MorteModalShell({
                 <LinhaResumo rotulo="Motivo" valor={motivoEfetivo} />
                 {/* ⚠ SO EM META — ver o mesmo comentario no NascimentoModalShell. */}
                 {isMeta && (
-                  <div className="flex items-baseline justify-between gap-1.5 leading-tight">
-                    <span className="text-muted-foreground shrink-0">Cenário</span>
-                    <span className={`font-medium text-right ${META_VISUAL.texto}`}>{META_VISUAL.label}</span>
-                  </div>
+                  <LinhaResumo rotulo="Cenário" valor={META_VISUAL.label} cor={META_VISUAL.texto} />
                 )}
               </div>
 
-              <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 mb-0.5">
-                <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Rebanho</span>
-              </div>
-              <div className="px-3 space-y-0.5">
+              <SecaoResumo titulo="Rebanho" />
+              <div>
                 <LinhaResumo rotulo="Cabeças" valor={morteQtd > 0 ? `${morteQtd} cab` : null} />
                 <LinhaResumo rotulo="Peso médio" valor={mortePeso > 0 ? `${fmtNum2(mortePeso)} kg` : null} />
                 <LinhaResumo rotulo="Peso total" valor={mortePesoTotal != null ? `${fmtNum2(mortePesoTotal)} kg` : null} />
                 <LinhaResumo rotulo="Arrobas" valor={mortePesoTotal != null ? `${fmtNum2(mortePesoTotal / 30)} @` : null} />
               </div>
 
-              <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 mb-0.5">
-                <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Financeiro</span>
-              </div>
-              <div className="px-3 space-y-0.5">
+              <SecaoResumo titulo="Financeiro" />
+              <div>
                 {/* ⚠ ZERO E' VALOR, AUSENCIA E' TRACO. Uma morte pode valer R$ 0,00 por
                     decisao de quem lanca; a que nao tem valor informado mostra "—".
                     Das 1.678 mortes ativas, 894 tem valor e as outras nao — e essa
                     diferenca e' informacao, nao ruido. */}
                 <LinhaResumo rotulo="Valor" valor={valorMorte != null ? brl(valorMorte) : null} />
               </div>
-              <div className="px-3 pt-1 text-muted-foreground leading-tight">
+              <div className="px-2.5 pt-1 text-muted-foreground leading-tight">
                 Morte não movimenta caixa nem compõe o DRE.
               </div>
             </div>
@@ -259,7 +241,7 @@ export function MorteModalShell({
         {/* ⚠ O MÊS FECHADO VEM PRIMEIRO na cadeia de motivos: não adianta pedir o motivo da
             morte se, preenchido tudo, o período recusa. */}
         <Button type="button" onClick={handleRequestRegister} disabled={submitting || morteFazendaFalta || motivoFalta || pesoFalta || qtdFalta || !!motivoMesFechado}
-          className="bg-white text-primary hover:bg-white/90 font-bold disabled:opacity-60"
+          className="h-[22px] px-[9px] text-[10px] bg-white text-primary hover:bg-white/90 font-bold disabled:opacity-60"
           title={motivoMesFechado ? `${motivoMesFechado} — reabra o período para lançar`
             : morteFazendaFalta ? 'Selecione a fazenda do lançamento'
             : motivoFalta ? 'Informe o motivo da morte'

@@ -104,13 +104,15 @@ export function AsideResumo({ faixa, children }: { faixa: ReactNode; children: R
   );
 }
 
-export function FaixaTituloResumo({ children }: { children?: ReactNode }) {
+/* `titulo` — MODAIS-PADRAO-01d: o envelope dos lancamentos simples diz "Resumo do lancamento" /
+   "Resumo da meta", e a faixa e' a mesma. Sem ele, o texto de sempre. */
+export function FaixaTituloResumo({ children, titulo = 'Resumo da operação' }: { children?: ReactNode; titulo?: string }) {
   return (
     /* ⚠ O STATUS MORA NO CABECALHO DO RESUMO, nao numa linha da lista: e' a
         primeira pergunta ("em que pe esta esta operacao?") e ela nao deve disputar
         espaco com numeros. Quem tem status o passa em `children`. */
     <div className="shrink-0 border-b border-border bg-accent/40 flex items-center gap-2 px-2.5 py-[5px] text-[10px] font-medium uppercase tracking-wide text-primary">
-      Resumo da operação
+      {titulo}
       {children}
     </div>
   );

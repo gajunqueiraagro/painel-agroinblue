@@ -2441,6 +2441,21 @@ preview que o cabecalho nao sai da tela ao rolar.
     (c) "Saldo" negativo do resumo da venda (Vera b58bf556, -107.150,94) sai SEM VERMELHO -> OC-SALDO-MODAL-01.
     (d) o seletor de comprador da venda mostra o UUID cru por ~1s antes de a lista de contrapartes carregar (ceabd850)
         -> FORNECEDOR-UUID-CRU-01.
+- ⚠ MODAIS-PADRAO-01d — O ENVELOPE DOS LANCAMENTOS SIMPLES NA REGUA DO ABATE (27/09/2026). `LancamentoModalEnvelope`:
+  cabecalho 36/13px, altura `100vh-32` na raiz (era `69vh + 38px` no corpo), resumo 240px esticado com `AsideResumo` /
+  `FaixaTituloResumo` (ganhou `titulo` opcional: "Resumo do lancamento" / "Resumo da meta") / `SecaoResumo`, rodape 32px com
+  botoes 22px. Morte, Nascimento, Venda meta e Compra meta perderam a copia local do par rotulo-valor (usam `LinhaResumo`);
+  as variantes de FAZENDA ficaram locais — pintam o "—" de vermelho quando falta, e o par compartilhado so' colore valor.
+  ⚠ SAO 6 USUARIOS, NAO 7: Morte, Nascimento, Venda meta, Compra meta, `CargaModal` e `CargaMandiocaModal`. O
+    `BarterListaModal` so' CITA o envelope num comentario (tem casca propria). Todo `DialogContent` que monta o envelope leva
+    `max-h-none` — com o teto do tema o rodape ficaria abaixo da borda.
+  ⚠ PROVA: texto do modal antes x depois identico nos 6 (e nas abas das duas cargas); os 4 shells zoot renderizados com
+    dados em 12 estados, 7.017 bytes iguais byte a byte, vermelho da fazenda nos mesmos casos.
+  ACHADOS, nao tratados:
+    (a) a Compra NAO aparece em "Lancar meta" no primeiro carregamento — so' depois que a lista termina de carregar. Quem
+        abre a tela e clica rapido nao ve a opcao. Causa nao medida.
+    (b) os titulos de secao dos resumos de `CargaModal` e `CargaMandiocaModal` estao em 9px, abaixo do piso de 9,5px — e'
+        conteudo daqueles modais, fora do 01d. Varredura UX.
 - OC-CLASSIF-ALINHAR-01 — pendencia, NAO corrigir agora (decisao do Gabriel, 27/09/2026, na FASE 0 do
   OC-PROGRAMACAO-MODAL-01): 6 titulos VIVOS de OC tem conta do plano DIFERENTE da do compromisso — todos anteriores
   ao OC-RECLASSIFICAR-ITEM-01, que hoje grava os dois juntos.

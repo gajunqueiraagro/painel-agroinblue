@@ -229,7 +229,9 @@ export function CargaModal({
       <DialogContent
         onPointerDownOutside={e => e.preventDefault()}
         onInteractOutside={e => e.preventDefault()}
-        className="max-w-5xl gap-0 overflow-hidden p-0 [&>button.absolute]:hidden">
+        className="max-w-5xl max-h-none gap-0 overflow-hidden p-0 [&>button.absolute]:hidden">
+        {/* `max-h-none` — MODAIS-PADRAO-01d: o envelope manda na propria altura (`100vh-32`); com o teto do
+            tema o rodape dele ficaria cortado. */}
         <LancamentoModalEnvelope
           /* ⚠ A SAFRA NO TÍTULO, e não só no resumo: é ela que amarra a carga — a mesma
              cultura no mesmo talhão existe em safras diferentes, e o cabeçalho era a única
@@ -243,8 +245,8 @@ export function CargaModal({
                sobre a faixa azul do envelope, e branco-sobre-branco já custou um "Exportar"
                invisível nesta mesma frente. Verde separa o gesto que GRAVA do resto. */
             <Button type="button" variant="acao" onClick={onSalvar} disabled={salvando}
-              className="gap-1">
-              <Save className="h-4 w-4" /> {salvando ? 'Salvando…' : 'Salvar carga'}
+              className="h-[22px] px-[9px] text-[10px] gap-1">
+              <Save className="h-3 w-3" /> {salvando ? 'Salvando…' : 'Salvar carga'}
             </Button>
           )}
           resumo={(

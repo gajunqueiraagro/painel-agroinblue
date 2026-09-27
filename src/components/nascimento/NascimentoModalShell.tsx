@@ -31,31 +31,22 @@ import { DatePicker } from '@/components/ui/date-picker';
 import type { Categoria } from '@/types/cattle';
 import { META_VISUAL } from '@/lib/statusOperacional';
 import { LancamentoModalEnvelope } from '@/components/lancamento/LancamentoModalEnvelope';
+import { LinhaResumo, SecaoResumo } from '@/components/ui/linha-resumo';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useStatusPilares } from '@/hooks/useStatusPilares';
 import { ReabrirP1Dialog } from '@/components/ReabrirP1Dialog';
 import { anoMesDaData, mesFechadoMotivo } from '@/lib/zootecnico/mesFechadoP1';
 import { useMemo, useState } from 'react';
 
-/* Par rotulo-valor do resumo lateral do Nascimento — mesmo idioma do `Linha` de
-   ResumoLateralOC (A17): rotulo cinza a esquerda, valor a direita, traco no vazio.
-   Copia deliberada: importar de la puxaria um componente de outra tela para dentro
-   deste arquivo, e a unificacao dos resumos e' de PR-UI-LANCAMENTOS-SIMPLES-PADRAO-02. */
-function LinhaResumoNasc({ rotulo, valor }: { rotulo: string; valor: string | null }) {
-  return (
-    <div className="flex items-baseline justify-between gap-1.5 leading-tight">
-      <span className="text-muted-foreground shrink-0">{rotulo}</span>
-      <span className="font-medium text-right truncate">{valor || '—'}</span>
-    </div>
-  );
-}
-
+/* O par rotulo-valor e' o `LinhaResumo` de `ui/linha-resumo` desde o MODAIS-PADRAO-01d — esta copia
+   local saiu (mesma API, mesmo texto). A variante da Fazenda FICA: ela pinta o "—" de vermelho quando a
+   fazenda falta, e o par compartilhado so' colore valor presente. */
 /* A fazenda no resumo tem um estado que os outros pares nao tem: ela pode estar
    FALTANDO e bloquear o registro. Traco cinza diria "ausente, tudo bem"; aqui a
    ausencia e' erro a resolver, e a cor precisa dizer isso. */
 function LinhaResumoNascFazenda({ valor, falta }: { valor: string | null; falta: boolean }) {
   return (
-    <div className="flex items-baseline justify-between gap-1.5 leading-tight">
+    <div className="px-2.5 py-px flex items-baseline justify-between gap-1.5 leading-tight">
       <span className="text-muted-foreground shrink-0">Fazenda</span>
       <span className={`font-medium text-right truncate ${falta ? 'text-destructive' : ''}`}>{valor || '—'}</span>
     </div>
@@ -146,49 +137,39 @@ export function NascimentoModalShell({
       fazendaNome={nascFazendaNome}
       onFechar={fecharModalOCComAutosave}
       resumo={<>
-                {/* ⚠ FAIXA DE BLOCO EM 10px, e NAO nos 9px do ResumoLateralOC. O piso de
-                    leitura do A21 e' 10px, e copiar o idioma nao pode significar copiar
-                    uma violacao — ela se espalharia por cada tela nova. A divergencia de
-                    1px contra a OC esta declarada; quem unificar decide o lado. */}
-                <div className="pb-1">
-                  <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 first:mt-0 mb-0.5">
-                    <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Identificação</span>
-                  </div>
-                  <div className="px-3 space-y-0.5">
-                    <LinhaResumoNasc rotulo="Tipo" valor="Nascimento" />
-                    <LinhaResumoNasc rotulo="Data" valor={data ? data.split('-').reverse().join('/') : null} />
+                {/* ⚠ FAIXA DE BLOCO EM 10px — a `SecaoResumo` do Abate desde o MODAIS-PADRAO-01d. A
+                    divergencia de 1px contra o ResumoLateralOC (9px) que este comentario declarava
+                    acabou no 01a: os dois usam a mesma peca. */}
+                <div>
+                  <SecaoResumo titulo="Identificação" />
+                  <div>
+                    <LinhaResumo rotulo="Tipo" valor="Nascimento" />
+                    <LinhaResumo rotulo="Data" valor={data ? data.split('-').reverse().join('/') : null} />
                     <LinhaResumoNascFazenda valor={nascFazendaNome} falta={nascFazendaFalta} />
-                    <LinhaResumoNasc rotulo="Categoria" valor={categoriasDisponiveis.find(c => c.value === categoria)?.label ?? null} />
+                    <LinhaResumo rotulo="Categoria" valor={categoriasDisponiveis.find(c => c.value === categoria)?.label ?? null} />
                     {/* ⚠ SO EM META. No realizado a linha nao aparece: repetir "Cenário:
                         Realizado" em toda tela vira ruido, e o que precisa de aviso e' o
                         caminho que NAO e' o padrao. */}
                     {isMeta && (
-                      <div className="flex items-baseline justify-between gap-1.5 leading-tight">
-                        <span className="text-muted-foreground shrink-0">Cenário</span>
-                        <span className={`font-medium text-right ${META_VISUAL.texto}`}>{META_VISUAL.label}</span>
-                      </div>
+                      <LinhaResumo rotulo="Cenário" valor={META_VISUAL.label} cor={META_VISUAL.texto} />
                     )}
                   </div>
 
-                  <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 mb-0.5">
-                    <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Rebanho</span>
-                  </div>
+                  <SecaoResumo titulo="Rebanho" />
                   {/* ⚠ AUSENCIA E' TRACO, NUNCA ZERO. Sem quantidade ou sem peso nao ha
-                      peso total — nao ha "peso total de zero". `LinhaResumoNasc` imprime
+                      peso total — nao ha "peso total de zero". `LinhaResumo` imprime
                       "—" para null, e nenhum `?? 0` tapa buraco no caminho.
                       ⚠ ARROBA POR PESO VIVO: peso total / 30. A divisao por 15 e' de
                       CARCACA e vale so no abate; usa-la aqui dobraria o numero. */}
-                  <div className="px-3 space-y-0.5">
-                    <LinhaResumoNasc rotulo="Cabeças" valor={nascQtd > 0 ? `${nascQtd} cab` : null} />
-                    <LinhaResumoNasc rotulo="Peso médio" valor={nascPeso > 0 ? `${fmtNum2(nascPeso)} kg` : null} />
-                    <LinhaResumoNasc rotulo="Peso total" valor={nascPesoTotal != null ? `${fmtNum2(nascPesoTotal)} kg` : null} />
-                    <LinhaResumoNasc rotulo="Arrobas" valor={nascPesoTotal != null ? `${fmtNum2(nascPesoTotal / 30)} @` : null} />
+                  <div>
+                    <LinhaResumo rotulo="Cabeças" valor={nascQtd > 0 ? `${nascQtd} cab` : null} />
+                    <LinhaResumo rotulo="Peso médio" valor={nascPeso > 0 ? `${fmtNum2(nascPeso)} kg` : null} />
+                    <LinhaResumo rotulo="Peso total" valor={nascPesoTotal != null ? `${fmtNum2(nascPesoTotal)} kg` : null} />
+                    <LinhaResumo rotulo="Arrobas" valor={nascPesoTotal != null ? `${fmtNum2(nascPesoTotal / 30)} @` : null} />
                   </div>
 
-                  <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 mb-0.5">
-                    <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Financeiro</span>
-                  </div>
-                  <div className="px-3 text-muted-foreground leading-tight">
+                  <SecaoResumo titulo="Financeiro" />
+                  <div className="px-2.5 text-muted-foreground leading-tight">
                     Nascimento não tem impacto financeiro.
                   </div>
                 </div>
@@ -201,7 +182,7 @@ export function NascimentoModalShell({
                 "selecione a fazenda" se, selecionada, o mês recusa. E o motivo é UM só — o mesmo
                 valor governa o `disabled` e o `title`, então não há como travar em silêncio. */}
             <Button type="button" onClick={handleRequestRegister} disabled={submitting || nascFazendaFalta || !!motivoMesFechado}
-              className="bg-white text-primary hover:bg-white/90 font-bold disabled:opacity-60"
+              className="h-[22px] px-[9px] text-[10px] bg-white text-primary hover:bg-white/90 font-bold disabled:opacity-60"
               title={motivoMesFechado ? `${motivoMesFechado} — reabra o período para lançar` : nascFazendaFalta ? 'Selecione a fazenda do lançamento' : isEdicao ? 'Salvar as alterações do nascimento' : 'Registrar o nascimento'}
               aria-label={isEdicao ? 'Salvar alterações' : 'Registrar nascimento'}>
               {isEdicao

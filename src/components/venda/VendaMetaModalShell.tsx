@@ -29,30 +29,22 @@ import { FornecedorSelect } from '@/components/shared/FornecedorSelect';
 import { CampoPrecoVenda } from '@/components/venda/CampoPrecoVenda';
 import type { Categoria, BasePrecoVenda } from '@/types/cattle';
 import { LancamentoModalEnvelope } from '@/components/lancamento/LancamentoModalEnvelope';
+import { LinhaResumo, SecaoResumo } from '@/components/ui/linha-resumo';
 
 /* A fazenda no resumo pode estar FALTANDO e bloquear o registro — traco cinza diria
    "ausente, tudo bem"; aqui a ausencia e' erro a resolver. */
 function LinhaResumoFazenda({ valor, falta }: { valor: string | null; falta: boolean }) {
   return (
-    <div className="flex items-baseline justify-between gap-1.5 leading-tight">
+    <div className="px-2.5 py-px flex items-baseline justify-between gap-1.5 leading-tight">
       <span className="text-muted-foreground shrink-0">Fazenda</span>
       <span className={`font-medium text-right truncate ${falta ? 'text-destructive' : ''}`}>{valor || '—'}</span>
     </div>
   );
 }
 
-/* Par rotulo-valor do resumo lateral — idioma do `Linha` de ResumoLateralOC (A17).
-   ⚠ QUINTA COPIA deste par (Nascimento, Morte, Compra meta, aqui). Sai na mesma extracao
-   que levar o resumo para o envelope — divida no topo do MorteModalShell. */
-function LinhaResumo({ rotulo, valor }: { rotulo: string; valor: string | null }) {
-  return (
-    <div className="flex items-baseline justify-between gap-1.5 leading-tight">
-      <span className="text-muted-foreground shrink-0">{rotulo}</span>
-      <span className="font-medium text-right truncate">{valor || '—'}</span>
-    </div>
-  );
-}
-
+/* O par rotulo-valor e' o `LinhaResumo` de `ui/linha-resumo` desde o MODAIS-PADRAO-01d — esta copia
+   local saiu (mesma API, mesmo texto). A variante da Fazenda FICA: ela pinta o "—" de vermelho quando a
+   fazenda falta, e o par compartilhado so' colore valor presente. */
 interface MascaraInput {
   displayValue: string;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -133,47 +125,38 @@ export function VendaMetaModalShell({
       fazendaNome={vendaFazendaNome}
       onFechar={fecharModalOCComAutosave}
       resumo={<>
-        <div className="pb-1">
-          <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 first:mt-0 mb-0.5">
-            <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Identificação</span>
-          </div>
-          <div className="px-3 space-y-0.5">
+        <div>
+          <SecaoResumo titulo="Identificação" />
+          <div>
             <LinhaResumo rotulo="Tipo" valor="Venda em pé" />
             <LinhaResumo rotulo="Data" valor={data ? data.split('-').reverse().join('/') : null} />
             <LinhaResumoFazenda valor={vendaFazendaNome} falta={vendaFazendaFalta} />
             <LinhaResumo rotulo="Categoria" valor={categoriasDisponiveis.find(c => c.value === categoria)?.label ?? null} />
             <LinhaResumo rotulo="Comprador" valor={compradorNome} />
             <LinhaResumo rotulo="Tipo de venda" valor={vendaTipoVenda === 'desmama' ? 'Desmama' : vendaTipoVenda === 'gado_adulto' ? 'Gado adulto' : null} />
-            <div className="flex items-baseline justify-between gap-1.5 leading-tight">
-              <span className="text-muted-foreground shrink-0">Cenário</span>
-              <span className="font-medium text-right text-amber-800 dark:text-amber-400">Meta</span>
-            </div>
+            <LinhaResumo rotulo="Cenário" valor="Meta" cor="text-amber-800 dark:text-amber-400" />
           </div>
 
-          <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 mb-0.5">
-            <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Rebanho</span>
-          </div>
-          <div className="px-3 space-y-0.5">
+          <SecaoResumo titulo="Rebanho" />
+          <div>
             <LinhaResumo rotulo="Cabeças" valor={vendaQtd > 0 ? `${vendaQtd} cab` : null} />
             <LinhaResumo rotulo="Peso médio" valor={vendaPeso > 0 ? `${fmtNum2(vendaPeso)} kg` : null} />
             <LinhaResumo rotulo="Peso total" valor={pesoTotal != null ? `${fmtNum2(pesoTotal)} kg` : null} />
             <LinhaResumo rotulo="Arrobas" valor={pesoTotal != null ? `${fmtNum2(pesoTotal / 30)} @` : null} />
           </div>
 
-          <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 mb-0.5">
-            <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Financeiro</span>
-          </div>
-          <div className="px-3 space-y-0.5">
+          <SecaoResumo titulo="Financeiro" />
+          <div>
             <LinhaResumo rotulo="Valor previsto" valor={valorPrevisto != null ? brl(valorPrevisto) : null} />
           </div>
-          <div className="px-3 pt-1 text-muted-foreground leading-tight">
+          <div className="px-2.5 pt-1 text-muted-foreground leading-tight">
             Projeção — não gera lançamento financeiro nem operação comercial.
           </div>
         </div>
       </>}
       acao={<>
         <Button type="button" onClick={handleRequestRegister} disabled={submitting || vendaFazendaFalta}
-          className="bg-white text-primary hover:bg-white/90 font-bold disabled:opacity-60"
+          className="h-[22px] px-[9px] text-[10px] bg-white text-primary hover:bg-white/90 font-bold disabled:opacity-60"
           title={vendaFazendaFalta ? 'Selecione a fazenda do lançamento'
             : isEdicao ? 'Salvar as alterações da venda planejada' : 'Registrar a venda planejada'}
           aria-label={isEdicao ? 'Salvar alterações' : 'Registrar meta'}>
