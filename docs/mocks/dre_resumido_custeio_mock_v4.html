@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="utf-8"><title>DRE Resumido — Custeio de produção — mock v4</title>
+<style>
+tr.sub.s-tot td{background:#E8E6DF;color:#15803d}
+tr.sub.s-tot td:first-child{color:var(--mf)}
+tr.sub.s-grp td{background:#D6D4CC;color:#b91c1c}
+tr.sub.s-grp td:first-child{color:var(--mf)}
+
+:root{--p:#1D3A5D;--fg:#0F1729;--mf:#6B7280;--bd:#E0E2E6;--rd:#b91c1c;--gr:#15803d}
+*{box-sizing:border-box}body{margin:0;background:#8a929c;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--fg);padding:20px}
+.lbl{color:#fff;font-size:12px;font-weight:600;margin:0 auto 6px;width:1088px}
+.card{width:1088px;margin:0 auto 18px;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.3)}
+table{width:100%;border-collapse:collapse;table-layout:fixed;font-variant-numeric:tabular-nums}
+th{background:var(--p);color:#fff;font-size:10px;font-weight:600;height:30px;padding:0 8px;text-align:right;line-height:1.15}
+th:first-child{text-align:left}
+td{padding:0 8px;text-align:right;white-space:nowrap;border-bottom:1px solid #eceae4}
+td:first-child{text-align:left}
+tr.pai td{font-size:10.5px;height:18px}
+tr.tot td{font-size:11px;font-weight:600;height:20px;background:#E8E6DF}
+tr.grp td{font-size:10.5px;font-weight:600;height:18px;background:#D6D4CC}
+tr.fil td{font-size:9.5px;height:15px;background:#F5F4F0}
+tr.fil:nth-of-type(even) td{background:#fff}
+tr.fil td:first-child{padding-left:26px}
+tr.sub td{font-size:9px;height:13px;color:var(--mf);border-bottom:none}
+tr.sub td:first-child{padding-left:22px}
+tr.res td{background:var(--p);color:#fff;font-size:11px;font-weight:600;height:20px;border-bottom:none}
+tr.res.sub td{font-size:9px;font-weight:400;height:13px;color:#dbe4ef}
+.neg{color:var(--rd)} tr.res .neg{color:#fca5a5}
+.pos{color:var(--gr)}
+.tg{font-size:8.5px;border:1px solid currentColor;border-radius:3px;padding:0 3px;margin-left:4px;font-weight:500}
+.car{display:inline-block;width:10px;color:var(--mf)}
+.new{outline:2px solid #d97706;outline-offset:-2px}
+.note{width:1088px;margin:0 auto;background:#fff;border-radius:6px;padding:10px 12px;font-size:11px;line-height:1.55}
+</style></head><body>
+
+<div class="lbl">DRE pecuária · RESUMIDO · RRCC Global · jan–dez · custeio de produção ABERTO (▾)</div>
+<div class="card">
+<table>
+ <colgroup><col style="width:226px"><col><col><col><col><col><col></colgroup>
+ <thead><tr><th>Período</th><th>jan-dez/21<br>R$</th><th>jan-dez/22<br>R$</th><th>jan-dez/23<br>R$</th><th>jan-dez/24<br>R$</th><th>jan-dez/25<br>R$</th><th>jan-dez/26<br>R$</th></tr></thead>
+ <tbody>
+  <tr class="pai"><td>Receita bruta</td><td class="pos">2.874.203,08</td><td class="pos">4.789.357,01</td><td class="pos">1.482.830,55</td><td class="pos">5.221.962,71</td><td class="pos">3.331.948,28</td><td class="pos">1.654.379,56</td></tr>
+  <tr class="pai"><td class="neg">(−) Deduções</td><td class="neg">61.675,28</td><td class="neg">77.160,33</td><td class="neg">55.384,38</td><td class="neg">44.711,32</td><td class="neg">53.155,48</td><td class="neg">71.688,77</td></tr>
+  <tr class="tot"><td>= Receita líquida</td><td class="pos">2.812.527,80</td><td class="pos">4.712.196,68</td><td class="pos">1.427.446,17</td><td class="pos">5.177.251,39</td><td class="pos">3.278.792,80</td><td class="pos">1.582.690,79</td></tr>
+  <tr class="pai"><td>Variação do estoque <span class="tg">estimado</span></td><td class="neg">-1.282.038,33</td><td class="neg">-1.946.518,38</td><td class="neg">-358.840,51</td><td class="neg">-3.010.668,53</td><td class="neg">-2.345.286,44</td><td class="pos">137.389,14</td></tr>
+  <tr class="tot"><td>= VBP <span style="font-weight:400;color:var(--mf);font-size:9px">(valor bruto de produção)</span></td><td class="pos">1.530.489,47</td><td class="pos">2.765.678,30</td><td class="pos">1.068.605,66</td><td class="pos">2.166.582,86</td><td class="pos">933.506,36</td><td class="pos">1.720.079,93</td></tr>
+  <tr class="sub s-tot"><td>por hectare</td><td>R$ 4.512,06/ha</td><td>R$ 8.153,53/ha</td><td>R$ 3.150,37/ha</td><td>R$ 6.387,33/ha</td><td>R$ 2.752,08/ha</td><td>R$ 5.070,99/ha</td></tr>
+
+  <tr class="grp new"><td><span class="car">▾</span><span class="neg">(−) Custeio de produção</span> <span class="tg" style="color:var(--am,#b45309)">c/ rateio</span></td><td class="neg">687.533,85</td><td class="neg">2.090.470,58</td><td class="neg">1.375.538,67</td><td class="neg">1.282.436,61</td><td class="neg">1.061.738,09</td><td class="neg">840.977,25</td></tr>
+  <tr class="sub s-grp"><td>por hectare</td><td>R$ 2.026,93/ha</td><td>R$ 6.162,95/ha</td><td>R$ 4.055,23/ha</td><td>R$ 3.780,76/ha</td><td>R$ 3.130,11/ha</td><td>R$ 2.479,29/ha</td></tr>
+  <tr class="fil"><td><span class="car">▸</span>Custo variável</td><td class="neg">249.420,35</td><td class="neg">1.620.663,18</td><td class="neg">884.766,11</td><td class="neg">886.547,74</td><td class="neg">701.853,53</td><td class="neg">512.299,51</td></tr>
+  <tr class="fil"><td><span class="car">▸</span>Custo fixo <span class="tg" style="color:#b45309">c/ rateio</span></td><td class="neg">438.113,50</td><td class="neg">469.807,40</td><td class="neg">490.772,56</td><td class="neg">395.888,87</td><td class="neg">359.884,56</td><td class="neg">328.677,74</td></tr>
+
+  <tr class="res"><td>= Lucro operacional</td><td>▲ 842.955,62</td><td>▲ 675.207,72</td><td class="neg">▼ -306.933,01</td><td>▲ 884.146,25</td><td class="neg">▼ -128.231,73</td><td>▲ 879.102,68</td></tr>
+  <tr class="res sub"><td>% do VBP</td><td>55,1 %</td><td>24,4 %</td><td>-28,7 %</td><td>40,8 %</td><td>-13,7 %</td><td>51,1 %</td></tr>
+  <tr class="res sub"><td>por hectare</td><td>R$ 2.485,13/ha</td><td>R$ 1.990,59/ha</td><td>R$ -904,87/ha</td><td>R$ 2.606,56/ha</td><td>R$ -378,04/ha</td><td>R$ 2.591,69/ha</td></tr>
+  <tr class="pai"><td class="neg">(−) Despesas financeiras</td><td class="neg">0,00</td><td class="neg">75.500,00</td><td class="neg">33.000,00</td><td class="neg">154.606,77</td><td class="neg">144.119,73</td><td class="neg">118.400,00</td></tr>
+  <tr class="tot"><td>= Lucro líquido</td><td class="pos">842.955,62</td><td class="pos">599.707,72</td><td class="neg">-339.933,01</td><td class="pos">729.539,48</td><td class="neg">-272.351,46</td><td class="pos">760.702,68</td></tr>
+  <tr class="pai"><td>Efeito de mercado <span class="tg">estimado</span></td><td class="pos">360.087,52</td><td class="neg">-628.780,00</td><td class="neg">-367.731,62</td><td class="pos">490.238,57</td><td class="pos">359.906,72</td><td>0,00</td></tr>
+  <tr class="res"><td>= Resultado econômico</td><td>▲ 1.203.043,14</td><td class="neg">▼ -29.072,28</td><td class="neg">▼ -707.664,63</td><td>▲ 1.219.778,05</td><td>▲ 87.555,26</td><td>▲ 760.702,68</td></tr>
+  <tr class="pai"><td class="neg"><span class="car">▸</span>(−) Investimento no período</td><td class="neg">275.162,63</td><td class="neg">198.240,50</td><td class="neg">20.533,00</td><td class="neg">200.177,67</td><td class="neg">131.867,44</td><td class="neg">8.211,43</td></tr>
+ </tbody>
+</table>
+</div>
+
+<div class="note"><b>Mock v4 · DRE-RESUMIDO-CUSTEIO-01 — só o RESUMIDO muda; o DETALHADO fica exatamente como hoje.</b><br>
+• Sai do Resumido: a linha <b>= Margem de contribuição</b> (e o % do VBP dela). Custo variável e Custo fixo deixam de ser linhas soltas.<br>
+• Entra (contorno laranja): <b>(−) Custeio de produção</b> = custo variável + custo fixo (o fixo já com o rateio quando o botão “Rateio nos grupos” estiver ligado), só com <b>R$/ha</b> na sublinha (sem % do VBP: custo não se compara em % do VBP — decisão do Gabriel). Fechado por padrão (▸); aberto (▾) mostra Custo variável e Custo fixo como filhas, cada uma abrindo seus grupos como hoje.<br>
+• <b>Cores pelo sinal, sempre:</b> positivo verde (Receita bruta, Receita líquida, VBP e o R$/ha dele), saída/negativo vermelho (Deduções, Custeio e o R$/ha dele, prejuízos).<br>
+• Sublinhas herdam o <b>fundo da linha de cima</b> (por hectare do VBP no fundo do VBP; do Custeio no fundo do Custeio).<br>
+• <b>VBP</b> ganha a sublinha <b>por hectare</b>. O % do VBP fica só nas linhas de resultado (Lucro operacional), como hoje.<br>
+• Conferência: VBP − Custeio = Lucro operacional em todos os anos (ex.: 2021: 1.530.489,47 − 687.533,85 = 842.955,62).<br>
+• Números reais do seu print (RRCC Global); o R$/ha usa a mesma área do Lucro operacional (339,2 ha).</div>
+</body></html>

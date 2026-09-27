@@ -834,6 +834,12 @@ no mesmo arquivo.
   categoria nasce do caminho: meta grava `statusOperacional` null sem clique, realizado grava 'realizado', sem caminho segue
   realizado, o mesmo preenchimento nos dois cenarios difere SO' em `statusOperacional` (os outros campos comparados um a um),
   e o formulario nao oferece mais Realizado/Meta (com o titulo presente, provando que a busca sabe achar).
+  De 2064 para 2069 no DRE-RESUMIDO-CUSTEIO-01: `src/pages/pecDrePanel.test.tsx` foi de 49 para 54 casos — VBP − Custeio =
+  Lucro operacional ao centavo com o rateio ligado e desligado (numeros do RRCC 2021 do mock), o Custeio nascendo fechado e
+  abrindo as duas filhas (que abrem os centros), a sublinha "por hectare" do VBP e do Custeio no fundo da linha de cima e sem %
+  do VBP, as cores pelo sinal (e o Detalhado ainda azul), e o Custeio sem modal nem historico. ⚠ SEIS CASOS EXISTENTES
+  mudaram de contrato, nunca afrouxados: os do custo fixo do Resumido passaram a abrir o Custeio antes (ele mora dentro), e
+  "sao quinze linhas" passou a contar as defs fora do grupo em `LINHAS_PEC_RESUMIDO_GRADE`.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -2512,6 +2518,35 @@ preview que o cabecalho nao sai da tela ao rolar.
     (b) reclassificacao 2b134b8a (NJ, 2 vacas -> novilhas, data 15/03/2026, criada 17/04/2026 numa sessao de 19 metas e 4
         realizados) e' o UNICO suspeito de meta gravada como realizado. Sem criterio confiavel: "data depois da criacao" da'
         0 entre as 1.184 realizado e 25 entre as 58 meta (a busca sabe achar). O Gabriel confere.
+- ⚠ DRE-RESUMIDO-CUSTEIO-01 — O RESUMIDO DA PECUARIA MOSTRA "(−) Custeio de produção" NO LUGAR DA MARGEM (27/09/2026, mock
+  `docs/mocks/dre_resumido_custeio_mock_v4.html`, decisoes do Gabriel). So' o Resumido muda; o Detalhado ficou IDENTICO.
+  Custeio = custo variavel + custo fixo + rateio administrativo (o custo fixo que o Resumido ja' mostrava), selo "c/ rateio",
+  FECHADO por padrao; aberto, Custo variavel e Custo fixo viram filhas (zebra #F5F4F0/branco, um degrau de recuo) e cada uma
+  abre os seus grupos como antes. Sairam a Margem de contribuicao e o % do VBP dela. VBP e Custeio ganharam a sublinha "por
+  hectare" (mesma `LinhaPorHectare`, mesma area `ha_medio` da coluna), no fundo da linha de cima (faixa t2 / #D6D4CC); o
+  Custeio NAO tem % do VBP. O Custeio nao tem modal nem historico — so' abre e fecha.
+  ⚠ CORES PELO SINAL NO RESUMIDO (`sinalNaFaixa`): Receita bruta, Receita liquida, VBP e Lucro liquido saem VERDES no positivo
+    (eram o azul do total); negativo vermelho. A faixa t4 (navy, ▲/▼) nao mudou; o Detalhado segue no azul (`corDoTotal`).
+  ⚠ O GRAFICO DA CASCATA NAO MUDOU, e foi de proposito: `montarBarras` (PecCascataView) percorre `LINHAS_PEC_RESUMIDO` e desenha
+    a Margem como subtotal. A grade passou a ler uma lista PROPRIA, `LINHAS_PEC_RESUMIDO_GRADE`, derivada daquela; o grafico e o
+    modal de historico seguem na lista original.
+  ⚠ O CUSTEIO NAO TEM CHAVE NA RPC (`agrupa`): o valor e' o `compor`, e a `chave` ('custo_variavel') e' so' o lugar que o tipo
+    exige — a grade pergunta `agrupa` antes de abrir lista, historico e de dividir o Δ% (que usa a SOMA do grupo na referencia).
+  ⚠ O CABECALHO DO GRUPO NAO TEM RECUO, por medicao (desvio aprovado pelo Gabriel): com os 8px da regua, rotulo + seta + selo
+    mediam 172,43px nos 172 uteis da coluna de 200 e o selo saia "c/ ratei…" (reticencia e' proibida). Sem o recuo sobram 7,6px;
+    a seta do Custeio fica 8px a esquerda da do Investimento.
+  ⚠ "abrir tudo" (`AgriDreLavouraTab`, `gruposDaAba`) passou a incluir o grupo pelo `id`; sem ele abriria os centros com o
+    Custeio fechado por cima.
+  ⚠ PROVAS: no banco, VBP − (custo variavel + custo fixo + rateio) = Lucro operacional em 205 de 205 linhas com valor (228
+    comparadas: 7 clientes x 2020-2026 x realizado/meta, total e fazendas), zero divergencias — e SEM o rateio 94 divergem (a
+    busca sabe achar). Rodado pelo canal proto-write em transacao READ ONLY + rollback: o canal de leitura nao tem EXECUTE em
+    `fn_dre_pecuaria`. Na tela (RRCC 2021-2026): Detalhado identico em texto, cor e ordem em 6 estados (208 linhas); Resumido
+    com todo valor igual fora as linhas trocadas; tabela de 834px igual fechada e aberta.
+- DRE-DELTA-SOMA-01 — pendencia, nao tratada (registrada a pedido do Gabriel no DRE-RESUMIDO-CUSTEIO-01): nas linhas SOMADAS do
+  Resumido — "Variação do estoque" (`vpb_operacional − reposicao`) e "(−) Custo fixo" (`custo_fixo + rateio_adm`) — o Δ% divide
+  so' pela CHAVE PRINCIPAL da referencia, nao pela soma (`pctDelta(v, valorDe(col.ref, def.chave))` em `LinhaPec`). O Δ R$ ja'
+  sai da soma. O Custeio, que nasceu no mesmo PR, ja' divide pela soma (`refDoPct`); estender as duas e' trocar o `agrupa &&`
+  daquela funcao por `compor` — muda numero na tela, por isso ficou fora.
 - OC-CLASSIF-ALINHAR-01 — pendencia, NAO corrigir agora (decisao do Gabriel, 27/09/2026, na FASE 0 do
   OC-PROGRAMACAO-MODAL-01): 6 titulos VIVOS de OC tem conta do plano DIFERENTE da do compromisso — todos anteriores
   ao OC-RECLASSIFICAR-ITEM-01, que hoje grava os dois juntos.

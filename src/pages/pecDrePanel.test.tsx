@@ -12,7 +12,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { PecDrePanel, FaixaVisoesPec, colunasDaVisao, type EntradaVisoes, type VisaoPec } from '@/pages/PecDrePanel';
-import { LINHAS_PEC_RESUMIDO } from '@/components/agri/drePecRegua';
+import { LINHAS_PEC_RESUMIDO_GRADE } from '@/components/agri/drePecRegua';
 import type { DrePecuaria, DrePecLinhas } from '@/hooks/useDrePecuaria';
 
 const linhas = (o: Partial<DrePecLinhas>): DrePecLinhas => ({
@@ -116,6 +116,12 @@ const rotulos = () => linhasDaTabela().map(tr => (tr.cells[0]?.textContent ?? ''
 const indiceDe = (rot: string) => rotulos().findIndex(r => r.startsWith(rot));
 const linhaDe = (rot: string) =>
   linhasDaTabela().find(tr => ((tr.cells[0]?.textContent ?? '').trim()).startsWith(rot));
+/* ⚠ NO RESUMIDO O CUSTO VARIÁVEL E O CUSTO FIXO MORAM DENTRO DO CUSTEIO, que nasce fechado —
+   DRE-RESUMIDO-CUSTEIO-01. Quem precisa deles abre o grupo pelo rótulo, como o operador faz. */
+const abrirCusteio = () => {
+  const td = linhaDe('(−) Custeio de produção')?.cells[0];
+  if (td) fireEvent.click(td);
+};
 
 /* ══════════════ OS CHIPS DE UNIDADE — DRE-UNIDADES-01 ══════════════ */
 
@@ -729,10 +735,12 @@ describe('o DRE resumido', () => {
       alturaCartao={null} cartaoRef={{ current: null }} />,
   );
 
-  it('são quinze linhas, e as de detalhe não aparecem', () => {
+  /* ⚠ ERAM QUINZE — DRE-RESUMIDO-CUSTEIO-01: a Margem saiu e Custo variável/Custo fixo viraram filhas do
+     Custeio, que nasce fechado. A contagem é a das defs que não moram num grupo. */
+  it('as linhas do Resumido, com o Custeio fechado, e as de detalhe não aparecem', () => {
     montarModo('resumido');
     const r = rotulos().filter(x => x !== '% do VBP' && x !== 'por hectare');
-    expect(r).toHaveLength(LINHAS_PEC_RESUMIDO.length);
+    expect(r).toHaveLength(LINHAS_PEC_RESUMIDO_GRADE.filter(d => !d.grupo).length);
     expect(r.some(x => x === 'Vendas')).toBe(false);
     expect(r.some(x => x === '(−) Reposição')).toBe(false);
     expect(r.some(x => x.startsWith('(−) Rateio administrativo'))).toBe(false);
@@ -747,6 +755,7 @@ describe('o DRE resumido', () => {
 
   it('o custo fixo do resumido inclui o rateio administrativo', () => {
     montarModo('resumido');
+    abrirCusteio();
     /* 500 + 120 = 620 — o mesmo que o Detalhado mostra em duas linhas. */
     expect(linhaDe('(−) Custo fixo')?.cells[1]?.textContent).toBe('620,00');
     const { unmount } = { unmount: () => {} };
@@ -828,9 +837,11 @@ describe('o rateio adm. nos grupos', () => {
 
   it('o botão não muda o custo fixo total nem o resultado — nos dois modos', () => {
     montarNJ('resumido', false);
+    abrirCusteio();
     const cfOff = valor('(−) Custo fixo'); const roOff = valor('= Lucro operacional');
     cleanup();
     montarNJ('resumido', true);
+    abrirCusteio();
     expect(valor('(−) Custo fixo')).toBe(cfOff);
     expect(cfOff).toBe('4.059.242,55');
     expect(valor('= Lucro operacional')).toBe(roOff);
@@ -851,6 +862,7 @@ describe('o rateio adm. nos grupos', () => {
 
   it('ligado: cada grupo soma o seu rateio, o Financeiro vira filha "só rateio adm." e a soma fecha na mãe', () => {
     montarNJ('resumido', true);
+    abrirCusteio();
     abrirCustoFixo();
     /* 1.249.894,56 direto + 508.689,71 de rateio. */
     expect(valor('Mão de Obra')).toBe('1.758.584,27');
@@ -867,6 +879,7 @@ describe('o rateio adm. nos grupos', () => {
 
   it('desligado: exatamente como antes — a filha do rateio total no Resumido, nenhum "só rateio"', () => {
     montarNJ('resumido', false);
+    abrirCusteio();
     abrirCustoFixo();
     expect(valor('Mão de Obra')).toBe('1.249.894,56');
     expect(valor('Rateio administrativo')).toBe('1.153.283,72');
@@ -880,6 +893,7 @@ describe('o rateio adm. nos grupos', () => {
       colunas={colunasDaVisao({ visao: 'comparacao', de: '2025-07', ate: '2026-06',
         real: NJ, meta: null, carregandoMeta: false, anos: [] })}
       alturaCartao={null} cartaoRef={{ current: null }} />);
+    abrirCusteio();
     abrirCustoFixo();
     const td = linhaDe('Mão de Obra')?.cells[1];
     if (td) fireEvent.click(td);
@@ -892,6 +906,128 @@ describe('o rateio adm. nos grupos', () => {
     expect(onAbrirLista).toHaveBeenLastCalledWith(expect.objectContaining({
       soRateio: true, centro: 'Financeiro', celula: expect.objectContaining({ direto: null, rateio: 11705.73 }),
     }));
+  });
+});
+
+/* ══════════════ O CUSTEIO DE PRODUÇÃO DO RESUMIDO — DRE-RESUMIDO-CUSTEIO-01 ══════════════ */
+
+/**
+ * ⚠ OS NÚMEROS SÃO OS DO RRCC GLOBAL 2021 do mock v4 (VBP 1.530.489,47, custo variável 249.420,35, custo
+ * fixo com rateio 438.113,50, Lucro operacional 842.955,62, 339,2 ha). A divisão do custo fixo entre o
+ * direto e o rateio é de fixture, desigual de propósito: o que se afirma é que a soma com o rateio é a
+ * do Resumido de antes.
+ * ⚠ O LUCRO OPERACIONAL É A CHAVE DA RPC, coerente com as parcelas como a RPC as monta; o teste prova que
+ * a tela não o recalcula e que VBP − Custeio fecha nele ao centavo.
+ */
+describe('o custeio de produção do Resumido', () => {
+  const RRCC21: DrePecuaria = {
+    ...DRE,
+    fazendas: [],
+    total: linhas({
+      receita_bruta: 2874203.08, deducoes: 61675.28, receita_liquida: 2812527.80,
+      vpb_operacional: -1282038.33, reposicao: 0, vbp: 1530489.47,
+      custo_variavel: 249420.35, margem: 1281069.12,
+      custo_fixo: 300000.00, rateio_adm: 138113.50,
+      resultado_operacional: 842955.62, juros: 0, resultado_periodo: 842955.62,
+      producao: { ha_medio: 339.2, at_produzida: null, at_desfrutada: null, cab_desfrutada: null,
+        at_comprada: null, cab_comprada: null },
+      centros: [
+        { bloco: 'variavel', centro: 'Nutrição', valor: 249420.35, a_pagar: 0 },
+        { bloco: 'fixo', centro: 'Mão de Obra', valor: 300000.00, a_pagar: 0 },
+      ],
+    }),
+  };
+  const montarRRCC = (o: { modo?: 'resumido' | 'detalhado'; rateioNosGrupos?: boolean; unidades?: readonly ('rs' | 'ha')[];
+    dre?: DrePecuaria; onAbrirLista?: () => void } = {}) => render(
+    <PecDrePanel modo={o.modo ?? 'resumido'} rateioNosGrupos={o.rateioNosGrupos ?? false}
+      unidades={o.unidades ?? ['rs', 'ha']} onAbrirLista={o.onAbrirLista}
+      colunas={colunasDaVisao({ visao: 'comparacao', de: '2021-01', ate: '2021-12',
+        real: o.dre ?? RRCC21, meta: null, carregandoMeta: false, anos: [] })}
+      alturaCartao={null} cartaoRef={{ current: null }} />,
+  );
+  const num = (t: string | null | undefined) => Number((t ?? '').replace(/[^0-9,-]/g, '').replace(',', '.'));
+  const rs = (rot: string) => linhaDe(rot)?.cells[1]?.textContent ?? null;
+
+  it('VBP − Custeio = Lucro operacional ao centavo, com o botão de rateio ligado e desligado', () => {
+    for (const rateioNosGrupos of [false, true]) {
+      montarRRCC({ rateioNosGrupos });
+      expect(rs('(−) Custeio de produção')).toBe('687.533,85');
+      const conta = Math.round((num(rs('= VBP')) - num(rs('(−) Custeio de produção'))) * 100);
+      expect(conta).toBe(Math.round(num(rs('= Lucro operacional')) * 100));
+      expect(rs('= Lucro operacional')).toContain('842.955,62');
+      cleanup();
+    }
+  });
+
+  it('nasce fechado; aberto mostra Custo variável e Custo fixo como filhas, que abrem os centros', () => {
+    montarRRCC();
+    expect(linhaDe('(−) Custo variável')).toBeUndefined();
+    expect(linhaDe('(−) Custo fixo')).toBeUndefined();
+    expect(linhaDe('= Margem de contribuição')).toBeUndefined();
+    abrirCusteio();
+    /* ⚠ A BUSCA PROVA QUE SABE ACHAR: as duas filhas aparecem depois do clique, com os números do Resumido. */
+    expect(rs('(−) Custo variável')).toBe('249.420,35');
+    expect(rs('(−) Custo fixo')).toBe('438.113,50');
+    expect(indiceDe('(−) Custo variável')).toBeGreaterThan(indiceDe('(−) Custeio de produção'));
+    expect(indiceDe('(−) Custo fixo')).toBeLessThan(indiceDe('= Lucro operacional'));
+    const td = linhaDe('(−) Custo variável')?.cells[0];
+    if (td) fireEvent.click(td);
+    expect(rs('Nutrição')).toBe('249.420,35');
+  });
+
+  it('VBP e Custeio ganham "por hectare", o Custeio sem % do VBP — e a sublinha herda o fundo da linha', () => {
+    montarRRCC({ unidades: ['rs'] });
+    const rot = rotulos();
+    const iVbp = rot.findIndex(r => r.startsWith('= VBP'));
+    const iCusteio = rot.findIndex(r => r.startsWith('(−) Custeio de produção'));
+    expect(rot[iVbp + 1]).toBe('por hectare');
+    expect(rot[iCusteio + 1]).toBe('por hectare');
+    expect(rot[iCusteio + 2]).toBe('= Lucro operacional');
+    const linhas = linhasDaTabela();
+    expect(linhas[iVbp + 1].cells[1].textContent).toContain('R$ 4.512,06/ha');
+    expect(linhas[iCusteio + 1].cells[1].textContent).toContain('R$ 2.026,93/ha');
+    /* O fundo da sublinha é o da linha de cima: a faixa t2 no VBP, o cinza do grupo no Custeio. */
+    expect(linhas[iVbp + 1].className).toContain('bg-[#d3e0ed]');
+    expect(linhas[iCusteio].className).toContain('bg-[#D6D4CC]');
+    expect(linhas[iCusteio + 1].className).toContain('bg-[#D6D4CC]');
+  });
+
+  it('cores pelo sinal: receitas e VBP verdes, Custeio e o R$/ha dele vermelhos, Lucro líquido pelo sinal', () => {
+    montarRRCC({ unidades: ['rs'] });
+    const cor = (rot: string) => linhaDe(rot)?.cells[1]?.className ?? '';
+    expect(cor('Receita bruta')).toContain('text-green-700');
+    expect(cor('= Receita líquida')).toContain('text-green-700');
+    expect(cor('= VBP')).toContain('text-green-700');
+    expect(cor('(−) Custeio de produção')).toContain('text-red-600');
+    expect(cor('= Lucro líquido')).toContain('text-green-700');
+    /* A faixa navy do Lucro operacional segue branca, com o ▲. */
+    expect(cor('= Lucro operacional')).toContain('text-primary-foreground');
+    const rot = rotulos();
+    const linhas = linhasDaTabela();
+    expect(linhas[rot.findIndex(r => r.startsWith('= VBP')) + 1].cells[1].className).toContain('text-green-700');
+    expect(linhas[rot.findIndex(r => r.startsWith('(−) Custeio')) + 1].cells[1].className).toContain('text-red-600');
+    cleanup();
+    /* Prejuízo: o Lucro líquido negativo vira vermelho. E o Detalhado segue no azul do total. */
+    montarRRCC({ unidades: ['rs'], dre: { ...RRCC21, total: { ...RRCC21.total, resultado_periodo: -5000 } } });
+    expect(cor('= Lucro líquido')).toContain('text-red-600');
+    cleanup();
+    montarRRCC({ modo: 'detalhado', unidades: ['rs'] });
+    expect(cor('= VBP')).toContain('text-primary');
+    expect(cor('= VBP')).not.toContain('text-green-700');
+  });
+
+  it('o Custeio não abre modal nem histórico — só abre e fecha', () => {
+    const onAbrirLista = vi.fn();
+    montarRRCC({ onAbrirLista });
+    const linha = linhaDe('(−) Custeio de produção');
+    if (linha?.cells[1]) fireEvent.click(linha.cells[1]);
+    expect(onAbrirLista).not.toHaveBeenCalled();
+    expect(linha?.cells[0]?.querySelector('button[aria-label="Ver histórico"]')?.className).toContain('invisible');
+    /* As filhas mantêm o modal delas: a busca prova que o clique sabe chegar. */
+    abrirCusteio();
+    const cf = linhaDe('(−) Custo fixo')?.cells[1];
+    if (cf) fireEvent.click(cf);
+    expect(onAbrirLista).toHaveBeenCalledWith(expect.objectContaining({ bloco: 'fixo' }));
   });
 });
 

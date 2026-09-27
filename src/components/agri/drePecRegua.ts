@@ -196,6 +196,31 @@ export interface DefPec {
    * divergiria do da RPC no primeiro arredondamento, e o DRE teria duas verdades.
    */
   compor?: { mais: ChaveLinhaPec[]; menos?: ChaveLinhaPec[] };
+  /**
+   * A LINHA E' UM GRUPO DE LINHAS — DRE-RESUMIDO-CUSTEIO-01, e so' o "(−) Custeio de produção" do
+   * Resumido a usa. As filhas sao as defs seguintes com `grupo` igual ao `id` dela.
+   * ⚠ ELA NAO TEM CHAVE PROPRIA NA RPC: o valor sai do `compor` (a mesma soma que as filhas mostram),
+   *   e a `chave` e' so' o lugar que o tipo exige. Por isso ela nao abre lista, historico nem Δ% pela
+   *   chave — a grade pergunta `agrupa` antes de cada um desses.
+   */
+  agrupa?: boolean;
+  /** A identidade da linha no estado de aberto/fechado quando ela nao e' uma chave (o grupo). */
+  id?: string;
+  /** A linha e' filha do grupo de `id` igual — so' aparece com ele aberto. */
+  grupo?: string;
+  /**
+   * A SUBLINHA "por hectare" PELA DEF, e nao pela chave — DRE-RESUMIDO-CUSTEIO-01.
+   * ⚠ POR QUE NAO `COM_POR_HECTARE`: o VBP do Detalhado tem a MESMA chave e nao ganha a sublinha; a
+   *   lista por chave mudaria os dois modos. A cor da sublinha e' a da linha (VBP pelo sinal, custo em
+   *   vermelho), nao a do apoio dos resultados.
+   */
+  porHectare?: boolean;
+  /**
+   * NUMA FAIXA t1–t3 O NUMERO SE PINTA PELO SINAL (verde/vermelho), NAO DE AZUL — DRE-RESUMIDO-CUSTEIO-01.
+   * ⚠ REGRA DO GABRIEL (27/09): cores pelo sinal, sempre. Vale so' no Resumido; o Detalhado segue com
+   *   o azul do total (`corDoTotal`), e a faixa t4 (navy, ▲/▼) nao muda em nenhum dos dois.
+   */
+  sinalNaFaixa?: boolean;
 }
 
 export const LINHAS_PEC: DefPec[] = [
@@ -308,8 +333,44 @@ export function somaComposta(
   return total;
 }
 
+/**
+ * A GRADE DO RESUMIDO — DRE-RESUMIDO-CUSTEIO-01, mock `docs/mocks/dre_resumido_custeio_mock_v4.html`.
+ *
+ * ⚠ E' UMA LISTA A PARTE, E `LINHAS_PEC_RESUMIDO` FICA COMO ESTAVA: o grafico da cascata
+ *   (`montarBarras`, PecCascataView) percorre aquela lista e desenha a Margem de contribuicao como
+ *   subtotal. Trocar a lista mexeria no grafico, e o briefing manda nao mexer.
+ * ⚠ O QUE MUDA SO' AQUI: sai a Margem de contribuicao (e o % do VBP dela); Custo variavel e Custo fixo
+ *   deixam de ser linhas soltas e viram FILHAS de "(−) Custeio de produção" = custo variavel + custo
+ *   fixo + rateio administrativo — o custo fixo que o Resumido ja' mostrava, com o rateio dentro.
+ *   Fechado por padrao; o Custeio nao tem modal proprio, so' abre e fecha.
+ * ⚠ VBP − Custeio = Lucro operacional, e ISSO NAO E' CONTA DA TELA: o Lucro operacional continua a
+ *   chave da RPC (`margem − custo_fixo − rateio_adm`, com `margem = vbp − custo_variavel`). O teste
+ *   trava a igualdade ao centavo.
+ * ⚠ SUBLINHA "por hectare" NO VBP E NO CUSTEIO, e o Custeio NAO tem % do VBP: custo nao se compara em
+ *   % do VBP (decisao do Gabriel).
+ */
+const CUSTEIO: DefPec = {
+  id: 'custeio', agrupa: true,
+  /* ⚠ A CHAVE E' SO' O LUGAR QUE O TIPO EXIGE — ver `agrupa`. `custo_variavel` porque a base do R$/@ e'
+     a mesma (a @ produzida) e porque ela nao tem `didatico`/`rateio` que a grade possa confundir. */
+  chave: 'custo_variavel',
+  rotulo: '(−) Custeio de produção', tom: 'custo', porHectare: true,
+  etiqueta: 'c/ rateio', tituloEtiqueta: 'custo variável + custo fixo, com o rateio administrativo estimado',
+  compor: { mais: ['custo_variavel', 'custo_fixo', 'rateio_adm'] },
+};
+const SINAL_NA_FAIXA: ReadonlySet<ChaveLinhaPec> = new Set<ChaveLinhaPec>([
+  'receita_bruta', 'receita_liquida', 'vbp', 'resultado_periodo',
+]);
+export const LINHAS_PEC_RESUMIDO_GRADE: DefPec[] = LINHAS_PEC_RESUMIDO.flatMap((d): DefPec[] => {
+  if (d.chave === 'margem') return [];
+  const comSinal = SINAL_NA_FAIXA.has(d.chave) ? { ...d, sinalNaFaixa: true } : d;
+  if (d.chave === 'vbp') return [{ ...comSinal, porHectare: true }, CUSTEIO];
+  if (d.chave === 'custo_variavel' || d.chave === 'custo_fixo') return [{ ...d, grupo: 'custeio' }];
+  return [comSinal];
+});
+
 export type ModoDre = 'resumido' | 'detalhado';
-export const LINHAS_DO_MODO = (m: ModoDre) => (m === 'resumido' ? LINHAS_PEC_RESUMIDO : LINHAS_PEC);
+export const LINHAS_DO_MODO = (m: ModoDre) => (m === 'resumido' ? LINHAS_PEC_RESUMIDO_GRADE : LINHAS_PEC);
 
 export const corDoTom = (t: DefPec['tom']) => (t === 'receita' ? VERDE : t === 'custo' ? VERMELHO : '');
 

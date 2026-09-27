@@ -594,7 +594,9 @@ export function AgriDreLavouraTab({ onCorrigirPrecos }: {
   /* ⚠ OS GRUPOS QUE EXISTEM EM CADA ABA, para o "abrir tudo" saber o que abrir. Na pecuária eles
      dependem do modo: o Resumido tem três (custo variável, custo fixo e investimento). */
   const gruposDaAba = useMemo(() => (ehPec
-    ? LINHAS_DO_MODO(modoPec).filter(d => d.expande).map(d => d.chave as string)
+    /* ⚠ O GRUPO DO CUSTEIO ENTRA PELO `id` — DRE-RESUMIDO-CUSTEIO-01: sem ele, "abrir tudo" abriria os
+       centros de Custo variável e Custo fixo com o Custeio fechado por cima, e a tela não mudaria. */
+    ? LINHAS_DO_MODO(modoPec).filter(d => d.expande || d.agrupa).map(d => d.id ?? d.chave)
     /* ⚠ OS DOIS PAIS ENTRAM NO "abrir tudo" — fix8: sem eles, o botão abria os centros de grupos
        que continuavam escondidos dentro de um pai fechado, e a tela não mudava. */
     : ['g:custo_variavel', 'g:g_custo_fixo', 'custeio', 'pos_colheita', 'fixo', 'investimento']),
