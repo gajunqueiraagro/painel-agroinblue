@@ -2295,6 +2295,38 @@ preview que o cabecalho nao sai da tela ao rolar.
   ⚠ DADOS (item 8, so' listado): 14 compromissos em 13 OCs tem favorecido = uma contraparte anterior e diferente da atual —
     TODOS com titulo (a da0b8577 inclusive: o principal f9b39fa0 e' `programado` com titulo realizado de 466.030,10). Pela
     decisao (b) nenhum e' elegivel; nada a gravar.
+- ⚠ DRE-MODAL-VALOR-01a — BANCO DO MODAL DE VALOR DO DRE (26/09/2026, mock dre_modal_valor_mock_v1 do Gabriel). A tela e' o
+  01b. Migration `supabase/migrations/20261027156000_dre_modal_valor_01a.sql` (⚠ registrada como `20260926144505`).
+  NENHUM NUMERO DO DRE MUDOU: tudo e' chave NOVA no jsonb (nenhuma assinatura de retorno muda) mais uma CTE `not materialized`.
+  (1) `fn_dre_pecuaria` (patch guardado por md5, 18742cc2 -> e9b5b5dc): RATEIO ADM ABERTO POR GRUPO — `admg` e' a MESMA
+     formula do `adm` agrupada pelo `centro_custo` do lancamento administrativo (linear: a soma dos grupos e' o pool por
+     construcao); `admfz` reparte cada grupo por fazenda pelas cabecas medias, arredondado a centavo, com o RESIDUO do
+     arredondamento no maior grupo — a soma dos grupos da fazenda e' EXATAMENTE o `rateio_adm` dela. Chaves novas:
+     `rateio_adm.grupos` (pool por grupo), `rateio_adm_grupos` por fazenda e no total. Casamento: Administracao, Impostos,
+     Mao de Obra, Maquinas -> os de mesmo nome do Custo Fixo Pecuaria; Financeiro -> linha propria (sem par). Os cinco
+     centros sao os unicos com saida no pool (medido). Variaveis nao tem rateio.
+  (2) `fn_dre_pecuaria_lancamentos` (3f0e203d -> aa6d090f): a CTE de datas `per` virou `not materialized` — materializada,
+     o filtro de data deixava de ser condicao de indice. NJ 07/2025-06/2026, Total, custo fixo (1.533 linhas):
+     4.074 / 1.647 / 2.915 ms -> 260 / 318 / 409 ms em rollback; aplicada, 217 / 264 / 264 ms como `authenticated`. As
+     linhas ganharam `pagamento`.
+  (3) `fn_painel_rateio_detalhe` (964888bb -> 6f69f1cc), DROP + CREATE: quatro parametros opcionais — `p_atividade`
+     ('agricultura'), `p_de`/`p_ate` (NULL = datas da safra), `p_cenario` ('realizado'). Sem eles, a lavoura e' a de sempre.
+     O ramo admin GENERALIZADO e' a lista do rateio adm da PECUARIA: cada linha com `grupo`, `pct` (do ano), `parte`
+     (valor x pct / 100, sem arredondar) e `origem` (planejamento so' na meta, espelho do `plm`); saem `grupos` e
+     `pct_atividade`. As listas ganharam `pagamento`, `status` e `fazenda`.
+     ⚠ GENERALIZAR E NAO CRIAR: uma funcao nova seria a QUARTA copia da lista de exclusoes do macro_custo
+       (fn_dre_pecuaria tem duas agora — `adm` e `admg` —, fn_painel_rateio_detalhe as outras). Quem mudar a lista muda
+       nas duas funcoes; o casamento de grupos depende disso.
+  ⚠ PROVAS (rollback, com as funcoes antigas em pg_temp na mesma transacao): fn_dre_pecuaria 224/224 saidas identicas
+    sem as chaves novas (7 clientes x 16 periodos x 2 cenarios), grupos = rateio_adm no total, no pool e em 283/283
+    fazendas-periodo; listas da pecuaria 48/48 identicas (20.587 linhas) sem `pagamento`; lavoura 35/35 identicas (5.664
+    linhas); rateio adm da pecuaria pela funcao generalizada: soma das partes = pool, soma dos valores = bruto e soma dos
+    grupos = pool, 28/28 ao centavo.
+  ⚠ LICAO DE METODO, paga nesta frente: rodada que estoura o tempo do canal MCP CONTINUA RODANDO no servidor e segura os
+    locks da funcao que ela redefiniu — as rodadas seguintes ficam ESPERANDO e tambem estouram, e parece lentidao da
+    funcao. `pg_stat_activity` mostrou duas presas; canceladas, a mesma chamada levou 260 ms. Rodada de prova leva
+    `SET LOCAL statement_timeout` abaixo do tempo do canal, e depois de um estouro confere-se o `pg_stat_activity` antes
+    de repetir.
 - FORNECEDOR-UUID-CRU-01 — achado, nao tratado (26/09/2026, nos prints do OC-EDITAR-CADASTRAL-01): a compra 69115ef9 (NJ)
   mostra o UUID cru `276efb08…` no seletor de fornecedor e "Contraparte —" no resumo. O fornecedor (Carlos Pacheco) EXISTE,
   esta' ATIVO e e' do NJ; a lista carregada pela tela e' que nao o traz. Causa nao medida (lista carregada antes da troca de

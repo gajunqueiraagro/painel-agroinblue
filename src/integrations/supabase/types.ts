@@ -14045,9 +14045,13 @@ export type Database = {
       }
       fn_painel_rateio_detalhe: {
         Args: {
+          p_ate?: string
+          p_atividade?: string
+          p_cenario?: string
           p_chave: string
           p_cliente: string
           p_cultura: string
+          p_de?: string
           p_safra_id: string
           p_tipo: string
         }
