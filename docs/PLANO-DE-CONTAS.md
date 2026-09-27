@@ -17,6 +17,15 @@ Dentro de cada grupo, as linhas saem em `centro a-z > subcentro a-z` — a mesma
 > `8140` como LITERAIS, e `fn_dre_pecuaria` junta por `p.ordem_exibicao = c.ordem`. Renumerar faria
 > a meta apontar para outro subcentro **sem erro nenhum** — o join acharia outra linha do plano.
 
+> ⚠ **CLASSIFICAÇÃO = `plano_conta_id`** (DRE-CLASSIF-COPIA-01, 27/09/2026). Num lançamento, a chave é a
+> única fonte; `macro_custo`, `grupo_custo`, `centro_custo`, `subcentro` e `escopo_negocio` são **cópias
+> derivadas desta tabela por gatilho** (`resolve_classificacao_from_plano`, em todo INSERT e UPDATE) e
+> **nunca se editam**: o que vier da tela é sobrescrito pela linha do plano. Mudar uma linha aqui propaga
+> as cópias para os lançamentos da chave (`trg_propagar_plano_para_lancamentos`), sem marcar
+> `editado_manual`. Texto sem linha no plano é recusado.
+> **Exceção:** dividendo (`macro_custo = 'Dividendos'`) com texto fora do plano entra sem chave — são 376
+> hoje. Ela sai quando as linhas por cliente forem criadas e os 376 ligados (pendência DIVIDENDOS-PLANO-01).
+
 **229 linhas**: 221 globais (`cliente_id` nulo, valem para todos) e 8 de um cliente só, todas
 no grupo Dividendos. A coluna **origem** diz qual é qual.
 

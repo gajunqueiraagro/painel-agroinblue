@@ -2389,6 +2389,9 @@ preview que o cabecalho nao sai da tela ao rolar.
     855.283,36; RPC do modal 426.301,60 direto + 421.784,27 de rateio = 848.085,87 (diferenca 7.197,49). O modal antigo
     mostrava o MESMO 848.085,87 no cabecalho (`ecoDaCelula`): e' anterior a este PR. Quem retomar mede qual das duas RPCs
     esta' certa — o modal nao reparte ate' a celula da lavoura de proposito, para nao esconder a diferenca.
+    ⚠ FECHADA em 27/09/2026 pelo DRE-CLASSIF-COPIA-01: as duas RPCs estavam certas, cada uma pela SUA fonte — a grade pela
+      CHAVE, o modal pela COPIA do centro. 7.197,49 = 9.134,98 de lancamentos com texto e chave divergentes x 78,79 %. Depois
+      do backfill, modal = grade: Amendoim 856.117,01 e Mandioca 139.816,26, medido na tela.
 - ⚠ BOITEL-ABATE-PRODUTOR-01d — A DIRECAO DO LANCAMENTO E' A DA CONTA DO PLANO, NAO A DA MACRO (27/09/2026). Sem banco.
   A despesa do 1155 da cd4c54b0 (12e147df, "Boitel 169 G - Acerto boitel", 228.481,96) nao salvava: "Inconsistencia
   entre tipo de operacao e macro". A frase morava SO' no front (`src/lib/financeiro/validacaoLancamento.ts`, regra 3),
@@ -2579,6 +2582,59 @@ preview que o cabecalho nao sai da tela ao rolar.
     lista aparecer, sem cache, 12 celulas: Custo fixo 200-334 ms antes x 209-322 depois; Custo variavel 271-405 x 143-259.
   ⚠ AO MEDIR TEMPO NUMA ABA EM SEGUNDO PLANO, `setTimeout` e' estrangulado a 1 por segundo: a primeira medicao deu "1000 ms" em
     tudo. `MutationObserver` registra o instante real.
+- ⚠ DRE-CLASSIF-COPIA-01 — A CLASSIFICACAO DE UM LANCAMENTO E' A CHAVE; AS COPIAS SAO DERIVADAS (regra permanente, 27/09/2026,
+  decisoes do Gabriel). `financeiro_lancamentos_v2.plano_conta_id` e' a UNICA fonte; `macro_custo`, `grupo_custo`, `centro_custo`,
+  `subcentro` e `escopo_negocio` sao COPIAS da linha do plano, reescritas pelo gatilho em TODO INSERT e UPDATE — o que vier da tela
+  nao prevalece. Migration `supabase/migrations/20261027158000_dre_classif_copia_01.sql` (⚠ registrada como `20260927221721`; md5
+  do conteudo no ledger = md5 do arquivo, 57b2b892).
+  POR QUE: 647 lancamentos ativos incoerentes (642 com o texto diferente da chave, 5 com a chave certa e grupo/centro velhos), por
+  quatro caminhos — o gatilho antigo resolvia pelo texto sem gravar a chave, a FIN-PLANO-CHAVE-01 realinhou pela chave velha, a
+  importacao do Agnaldo de 24/04 e o editor regravando a copia depois que o plano mudou (o gatilho so' agia em 6 colunas). Leitores
+  pela chave e pela copia divergiam: foi a LAVOURA-MODAL-X-GRADE-01.
+  O GATILHO (`resolve_classificacao_from_plano`, 2bf6f93b -> b1be54de, agora `BEFORE INSERT OR UPDATE` sem lista de colunas):
+  (1) com chave, e ela mudou ou o texto nao mudou: as cinco copias vem do plano; (2) sem texto: nada; (3) UPDATE sem chave que nao
+  mexe em chave nem texto: nada; (4) senao o TEXTO resolve a chave (`fn_plano_conta_do_texto`: mesmo subcentro e tipo, ativa, a
+  linha do cliente antes da global, ambiguo = nulo); (5) texto fora do plano: ERRO, exceto `macro_custo = 'Dividendos'` (fica sem
+  chave, regra B1). As regras de escopo (FIN-SAFRA-ADM-03, FIN-FAZENDA-ADM-01, FIN-ESCOPO-SAFRA-01) seguem so' quando uma coluna
+  soberana muda — mudar descricao nao move fazenda.
+  MUDOU O PLANO, MUDAM AS COPIAS: `trg_propagar_plano_para_lancamentos` (`fn_propagar_plano_para_lancamentos`, 6ab44f9d) atualiza
+  os lancamentos da chave. A propagacao NAO marca `editado_manual`: ela liga `app.propagando_plano` so' durante o proprio UPDATE, e
+  `mark_financeiro_lancamento_v2_editado_manual` (74a76d1a -> d71a1583; sem a guarda, o corpo de antes) desiste com a marca ligada.
+  Provado: 0 de 12 importados elegiveis marcados; uma edicao humana logo depois continua marcando.
+  BACKFILL POR LISTA FIXA (md5 canonico 12d5949514cd879e2399050f3380ab4a, conferido DENTRO da migration): 638 pelo TEXTO, 9 pela
+  CHAVE — os 5 da Leva 1 (NJ lavoura), NJ 67ce4107 e as 3 despesas bancarias da Vera 2024. Auditoria LIGADA: 647 linhas em
+  `audit_log`, resumo "DRE-CLASSIF-COPIA-01 | ...", usuario nulo, valores antigos em `dados_anteriores`. So' o `editado_manual`
+  ficou desligado durante o backfill.
+  ⚠ A LISTA ENTROU EM DUAS PARTES (32 combinacoes + 647 pares id/combinacao) para caber no canal do MCP. O conteudo e' o aprovado:
+    a guarda (b) recalcula o md5 da lista montada e aborta se nao for 12d59...; outra guarda confere os md5 dos quatro corpos
+    antes do ACL. As duas passaram na aplicacao.
+  PROVAS COM O DADO REAL (27/09/2026): 647 alteradas; divergencia ativa chave x copia = 0; as 69.590 outras ativas (md5 3e60019b),
+  os 376 sem chave (ff5947b3) e `compoe_dre`/`editado_manual`/fazenda/safra das 84.687 linhas (8ce632d0) IDENTICOS ao antes. ACL
+  das tres funcoes SECDEF `{postgres, service_role}`. DRE Pecuaria realizado, 49 pares cliente x ano: mudaram SO' NJ 2026 (1.318,93
+  de fixo para variavel), Vera 2026 (6.150,00 de fixo para variavel), Santa Rita 2026 (497,22 de fixo para juros: resultado
+  operacional +497,22, resultado do periodo igual) e trocas de centro com total igual (Agnaldo 2022 769.102,14, Agnaldo 2026
+  2.300,00, NJ 2026, Santa Rita 2026 350,00, Vera 2025 2.294,45); Vera 2024 = 0. DRE Pecuaria meta: 0. DRE Lavoura, 9 safras: 0
+  (so' o `gerado_em`). Gatilho: 13 de 13 casos em begin...rollback, sem residuo.
+  NA TELA: o editor do ee728464 mostra "Custeio Produção · Custo Variável Pecuária · Reprodução" (antes: Custo Fixo · Maquinas);
+  Maquinas NJ jan-ago/26 foi de 474.096,82 / 259 lancamentos para 479.055,73 / 258, sem os 2 Semen — que aparecem em Reproducao
+  (179.352,23 -> 181.186,16). O Maquinas SOBE porque recebe as "Manutenção Máquinas Pecuária" que estavam em outro centro.
+  ⚠ A REGRA NAO TROCA OS LEITORES: quem le a copia continua lendo a copia — agora coerente por gatilho. Ver DRE-LEITOR-CHAVE-01.
+- DRE-JUROS-ADM-01 — pendencia, nao tratada (achada no rollback do DRE-CLASSIF-COPIA-01, 27/09/2026): `fn_dre_pecuaria` separa
+  juros PROPRIOS de fazenda da lista (`jurf`) e juros de fazenda FORA da lista rateados por cabecas (`jurx`), e a fronteira e'
+  "a fazenda aparece como coluna". Pelo texto, as 3 despesas bancarias da Vera 2024 (R$ 3,35 no total) virariam custo fixo na
+  fazenda Administrativo; a fazenda entraria como coluna e R$ 49.996,51 de juros deixariam de ser rateados para virar proprios.
+  R$ 3,35 movendo R$ 50 mil: e' descontinuidade da regra, nao do dado. As 3 ficaram pela chave (em Juros) por decisao do Gabriel.
+- LAVOURA-2627-INVISIVEL-01 — pendencia, nao tratada (27/09/2026): o backfill acrescenta R$ 346,50 ao NJ lavoura 26/27, e o DRE
+  da Lavoura nao os mostra — a safra nao tem cultura plantada, entao nao ha coluna onde o valor caia. Nao e' perda: aparece quando
+  houver cultura.
+- DIVIDENDOS-PLANO-01 — pendencia, nao tratada (decisao do Gabriel, 27/09/2026): 376 lancamentos ativos de Dividendos tem texto
+  FORA do plano e nenhuma chave, e o gatilho os aceita pela excecao B1. Caminho: criar as linhas do plano por cliente para os
+  nomes usados, ligar os 376 e SO' ENTAO remover a excecao do gatilho (passo 5 de `resolve_classificacao_from_plano`).
+- DRE-LEITOR-CHAVE-01 — pendencia, fora do escopo do DRE-CLASSIF-COPIA-01: os leitores que ainda leem a COPIA passam a ler a
+  CHAVE — `fn_painel_rateio_detalhe`, `fn_painel_safra`, fluxo de caixa (`useFluxoCaixa`, `FinanceiroCaixaTab`), `AnaliseDRE`,
+  ResOp (`ResOpCentros`), `ExtratoDistribuicaoEconomica`, Conciliacao (`ConciliacaoBancariaTab`) e a linha "Macro · Grupo · Centro"
+  do editor (hidratada do lancamento). Leem a chave: `fn_dre_pecuaria`, `fn_dre_pecuaria_lancamentos`, `fn_dre_lavoura` e o
+  `ExtratoGerencialTab`. As copias so' podem sumir depois que o ultimo leitor migrar.
 - OC-CLASSIF-ALINHAR-01 — pendencia, NAO corrigir agora (decisao do Gabriel, 27/09/2026, na FASE 0 do
   OC-PROGRAMACAO-MODAL-01): 6 titulos VIVOS de OC tem conta do plano DIFERENTE da do compromisso — todos anteriores
   ao OC-RECLASSIFICAR-ITEM-01, que hoje grava os dois juntos.
