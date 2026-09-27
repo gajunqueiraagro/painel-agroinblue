@@ -319,70 +319,39 @@ export function CompraModalShell(api: CompraModalShellProps) {
   const dataLabel = api.data ? api.data.split('-').reverse().join('/') : '—';
 
   return (
-    <div className="flex flex-col">
-      {/* HEADER — template do modal aprovado (bg-primary, px-6 py-4, duas linhas) */}
-      {/* ⚠ MENOS CROMO, MAIS CONTEUDO (PR-OC-MODAL-TAMANHO-01). O padding vertical cai;
-          o conteudo do cabecalho e' o mesmo e `px-6` nao muda. */}
-      <div className="bg-primary text-primary-foreground px-6 py-2.5 flex items-start justify-between">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="text-xl leading-none">🛒</span>
-            <h2 className="text-lg font-bold leading-tight">Compra de Animais</h2>
-            {api.editingId && (
-              <span className="rounded-md border border-white/40 px-2 py-0.5 text-xs">Editando #{api.editingId.slice(0, 8)}</span>
-            )}
-            {api.modoOC && (
-              <span className="rounded-md border border-yellow-400 text-yellow-400 px-2 py-0.5 text-xs" title="Modo OC (isolado) — não cria lançamento nem financeiro">
-                OC{api.ocOperacaoId ? ` #${api.ocOperacaoId.slice(0, 8)}` : ' (novo)'}
-              </span>
-            )}
-          </div>
-          <div className="mt-1 flex items-center gap-3 text-xs text-white/80">
-            <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> {dataLabel}</span>
-            <span className="flex items-center gap-1"><Building2 className="h-3.5 w-3.5" /> {api.fazendaAtualNome || '—'}</span>
-          </div>
-        </div>
-        <div className="flex items-center gap-3 shrink-0">
+    /* ⚠ A CASCA DO ABATE E DA VENDA — MODAIS-PADRAO-01c. Cabecalho 36, abas 20/10px dentro da
+       coluna da esquerda, rodape 32 com botoes 22/10px, e a altura mora AQUI (`100vh-32`), uma vez
+       so': as tres faixas sao `shrink-0` e so' o corpo rola (A21). Antes a altura estava no corpo
+       (`h-[69vh]`) e o resumo tinha 368px contra os 479 do Abate na mesma janela. Conteudo,
+       textos, botoes e travas sao os de antes. */
+    <div className="flex flex-col h-[calc(100vh-32px)]">
+      {/* CABECALHO — uma linha, na medida do Abate (era `px-6 py-2.5` em duas linhas, 63px). */}
+      <div className="h-9 shrink-0 bg-primary text-primary-foreground px-4 flex items-center gap-3">
+        <span className="shrink-0 text-[13px] leading-none">🛒</span>
+        <h2 className="shrink-0 text-[13px] font-semibold leading-none">Compra de Animais</h2>
+        {api.editingId && (
+          <span className="shrink-0 rounded-md border border-white/40 px-2 py-px text-[10px] leading-none">Editando #{api.editingId.slice(0, 8)}</span>
+        )}
+        {api.modoOC && (
+          <span className="shrink-0 rounded-md border border-yellow-400 text-yellow-400 px-2 py-px text-[10px] leading-none" title="Modo OC (isolado) — não cria lançamento nem financeiro">
+            OC{api.ocOperacaoId ? ` #${api.ocOperacaoId.slice(0, 8)}` : ' (novo)'}
+          </span>
+        )}
+        <span className="flex min-w-0 items-center gap-1 whitespace-nowrap text-[11px] text-white/85">
+          <Calendar className="h-3 w-3 shrink-0" /> {dataLabel}
+        </span>
+        <span className="flex min-w-0 items-center gap-1 truncate whitespace-nowrap text-[11px] text-white/85">
+          <Building2 className="h-3 w-3 shrink-0" /> {api.fazendaAtualNome || '—'}
+        </span>
+        <div className="ml-auto flex items-center gap-3 shrink-0">
           {/* Badge de mês fechado NÃO se aplica ao fluxo OC (rascunho/negociação não são bloqueados pelo P1). */}
           {!api.modoOC && api.mesFechadoMsg && (
-            <span className="rounded-md border border-yellow-400 text-yellow-400 px-2 py-1 text-xs flex items-center gap-1" title={api.mesFechadoMsg}>
+            <span className="rounded-md border border-yellow-400 text-yellow-400 px-2 py-px text-[10px] leading-none flex items-center gap-1" title={api.mesFechadoMsg}>
               <Lock className="h-3 w-3" /> Mês fechado
             </span>
           )}
-          <button onClick={api.onClose} className="text-white/80 hover:text-white" aria-label="Fechar"><X className="h-5 w-5" /></button>
+          <button onClick={api.onClose} className="text-white/80 hover:text-white" aria-label="Fechar"><X className="h-3.5 w-3.5" /></button>
         </div>
-      </div>
-
-      {/* BARRA DE ABAS — template (bg-card, border-b, px-6 py-3) */}
-      <div className="bg-card border-b px-6 py-1.5 flex items-center gap-1 overflow-x-auto">
-        {ABAS.map(a => {
-          // Recebimento, Documentos e Financeiro habilitam no modo OC; demais "em breve" seguem como estão.
-          const enabled = a.enabled || ((a.key === 'recebimento' || a.key === 'documentos' || a.key === 'financeiro' || a.key === 'auditoria') && !!api.modoOC);
-          const active = a.key === abaAtiva && enabled;
-          return (
-            <button
-              key={a.key}
-              type="button"
-              disabled={!enabled}
-              onClick={() => enabled && irParaAba(a.key)}
-              title={enabled ? undefined : 'em breve'}
-              className={`shrink-0 px-3 py-1 text-[12px] font-semibold border-b-2 -mb-px transition-colors ${
-                active ? 'border-primary text-primary'
-                : enabled ? 'border-transparent text-muted-foreground hover:text-foreground'
-                : 'border-transparent text-muted-foreground/40 cursor-not-allowed'
-              }`}
-            >
-              {a.label}{!enabled && <span className="ml-1 text-[9px] uppercase tracking-wide">em breve</span>}
-              {/* PR-OC-EDICAO-POS-FECHAMENTO-02 — ponto de pendencia. Marcador, nao parede:
-                  a navegacao NUNCA e' bloqueada; o usuario so precisa saber que deixou
-                  algo por gravar, inclusive olhando de outra aba. */}
-              {a.key === 'compra' && api.ocDadosSujos && (
-                <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-amber-500 align-middle"
-                  title="Há alterações não salvas nesta aba" aria-label="Alterações não salvas" />
-              )}
-            </button>
-          );
-        })}
       </div>
 
       {/* CORPO — altura FIXA (h-[62vh]) para a casca não mudar de tamanho entre abas; só o
@@ -414,8 +383,44 @@ export function CompraModalShell(api: CompraModalShellProps) {
           importa e' a janela BAIXA, onde o modal quase nao cabe. */}
       {/* ⚠ 240px SO' NO MODO OC — MODAIS-PADRAO-01a: e' a largura do resumo do Abate. O legado
           (CompraResumoPanel, outros callers) fica nos 280px de sempre, fora do escopo. */}
-      <div className={`grid grid-cols-1 ${api.modoOC ? 'lg:grid-cols-[1fr_240px]' : 'lg:grid-cols-[1fr_280px]'} lg:grid-rows-[minmax(0,1fr)] gap-3 p-4 h-[69vh] overflow-y-auto lg:overflow-hidden bg-muted/30`}>
-        <div className="space-y-2 min-w-0 lg:min-h-0 lg:overflow-y-auto">
+      <div className={`grid min-h-0 flex-1 grid-cols-1 ${api.modoOC ? 'lg:grid-cols-[1fr_240px]' : 'lg:grid-cols-[1fr_280px]'}`}>
+        <div className="flex min-h-0 min-w-0 flex-col">
+        {/* BARRA DE ABAS — a do Abate e da Venda (botao 20px/10px, barra ~29px), DENTRO da coluna
+            da esquerda: o resumo vai do cabecalho ao rodape. Era `px-6 py-1.5` com botao de 12px e a
+            aba ativa SUBLINHADA — a selecao passou ao navy claro da casa (bg-primary/10), como nas
+            outras duas cascas. */}
+        <div className="shrink-0 bg-card border-b px-2 py-1 flex items-center gap-1 overflow-x-auto">
+        {ABAS.map(a => {
+          // Recebimento, Documentos e Financeiro habilitam no modo OC; demais "em breve" seguem como estão.
+          const enabled = a.enabled || ((a.key === 'recebimento' || a.key === 'documentos' || a.key === 'financeiro' || a.key === 'auditoria') && !!api.modoOC);
+          const active = a.key === abaAtiva && enabled;
+          return (
+            <button
+              key={a.key}
+              type="button"
+              disabled={!enabled}
+              onClick={() => enabled && irParaAba(a.key)}
+              title={enabled ? undefined : 'em breve'}
+              className={`shrink-0 h-5 px-[7px] rounded-md text-[10px] font-medium transition-colors ${
+                active ? 'bg-primary/10 text-primary'
+                : enabled ? 'text-muted-foreground hover:bg-muted/50'
+                : 'text-muted-foreground/40 cursor-not-allowed'
+              }`}
+            >
+              {a.label}{!enabled && <span className="ml-1 text-[10px] uppercase tracking-wide">em breve</span>}
+              {/* PR-OC-EDICAO-POS-FECHAMENTO-02 — ponto de pendencia. Marcador, nao parede:
+                  a navegacao NUNCA e' bloqueada; o usuario so precisa saber que deixou
+                  algo por gravar, inclusive olhando de outra aba. */}
+              {a.key === 'compra' && api.ocDadosSujos && (
+                <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-amber-500 align-middle"
+                  title="Há alterações não salvas nesta aba" aria-label="Alterações não salvas" />
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+        <div className="min-h-0 min-w-0 flex-1 space-y-1.5 overflow-y-auto bg-muted/30 p-2">
           {abaAtiva === 'negociacao' ? (
             <AbaNegociacaoLotes
               exclusaoOC={api.exclusaoLoteOC}
@@ -683,7 +688,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
             <div className="flex items-center justify-between gap-2">
               <div className="text-[12px] font-semibold text-muted-foreground">Animais da Compra</div>
               <Button type="button" variant="outline" size="sm" disabled className="h-7 text-[11px] gap-1 opacity-60 cursor-not-allowed" title="em breve">
-                <Plus className="h-3 w-3" /> Adicionar categoria <span className="text-[9px] uppercase">em breve</span>
+                <Plus className="h-3 w-3" /> Adicionar categoria <span className="text-[10px] uppercase">em breve</span>
               </Button>
             </div>
             <div className="overflow-x-auto">
@@ -712,6 +717,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
           </>
           )}
         </div>
+        </div>
 
         {/* RESUMO LATERAL — coluna de 320px. Modo OC: resumo PERMANENTE das 6 etapas
             (ResumoLateralOC, consumindo as fontes oficiais já montadas). Não-OC (legado):
@@ -737,7 +743,8 @@ export function CompraModalShell(api: CompraModalShellProps) {
             obrigacoes={api.liquidacaoApi?.obrigacoes ?? null}
           />
         ) : (
-          <div className="space-y-2 self-start">
+          /* O legado nao usa o `AsideResumo`: ganha o respiro que o `p-4` do corpo lhe dava. */
+          <div className="space-y-2 self-start p-2">
             <div className="bg-card rounded-md border shadow-sm p-2 space-y-0.5 text-[10px] leading-tight">
               <div className="flex justify-between"><span className="text-muted-foreground">Situação</span><strong>{cenarioAtual.icon} {cenarioAtual.label}</strong></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Fazenda</span><strong className="truncate max-w-[150px]">{api.fazendaAtualNome || '—'}</strong></div>
@@ -763,12 +770,14 @@ export function CompraModalShell(api: CompraModalShellProps) {
       </div>
 
       {/* RODAPÉ — template do modal aprovado (bg-primary, px-6 py-3), FIXO (fora do scroll do corpo) */}
-      <div className="bg-primary px-6 py-2 flex items-center justify-between gap-3">
+      {/* ⚠ 32px COM BOTOES 22px/10px, a medida do Abate e da Venda (era `px-6 py-2`, 48px).
+          Mesmos botoes, mesma ordem, mesmo alinhamento (`justify-between`). */}
+      <div className="h-8 shrink-0 bg-primary px-2 flex items-center justify-between gap-2">
         <div className="min-w-0">
           {api.editingId && (
             <Button variant="outline" onClick={api.handleCancelEdit} disabled={api.submitting}
-              className="border-destructive text-destructive hover:bg-destructive/10 gap-1.5 bg-transparent">
-              <Trash2 className="h-4 w-4" /> Cancelar operação
+              className="h-[22px] px-[9px] text-[10px] border-destructive text-destructive hover:bg-destructive/10 gap-1 bg-transparent">
+              <Trash2 className="h-3 w-3" /> Cancelar operação
             </Button>
           )}
           {/* PR-OC-EDIT-01B — título materializado: negociação bloqueada (ADR Soberania Financeira). */}
@@ -783,19 +792,19 @@ export function CompraModalShell(api: CompraModalShellProps) {
           )}
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" onClick={api.onClose} disabled={fluxoNeg !== null || !!api.acaoOcLoading} className="text-white hover:bg-white/10">Fechar</Button>
+          <Button variant="ghost" onClick={api.onClose} disabled={fluxoNeg !== null || !!api.acaoOcLoading} className="h-[22px] px-[9px] text-[10px] text-white hover:bg-white/10">Fechar</Button>
           {/* Editar Financeiro: só em edição e quando aplicável (composição aprovada do rodapé) */}
           {api.editingId && api.compraDetalhes && (
-            <Button variant="secondary" onClick={() => api.setCompraDialogOpen(true)} disabled={api.submitting} className="gap-1.5">
-              <Edit className="h-4 w-4" /> Editar Financeiro
+            <Button variant="secondary" onClick={() => api.setCompraDialogOpen(true)} disabled={api.submitting} className="h-[22px] px-[9px] text-[10px] gap-1">
+              <Edit className="h-3 w-3" /> Editar Financeiro
             </Button>
           )}
           {/* Concluir negociação (oc_confirmar) — só comercial; habilita o Recebimento (RECEB-01).
               PR-OC-EDIT-01A: NÃO exposto na edição de operação existente (Confirmar = PR-OC-EDIT-01B). */}
           {!api.somenteLeitura && !api.aberturaExistente && api.modoOC && api.ocOperacaoId && api.ocStatusComercial !== 'fechada' && api.recebimentoApi && abaAtiva !== 'negociacao' && (
             <Button type="button" variant="secondary" disabled={api.recebimentoApi.saving}
-              onClick={() => api.recebimentoApi?.concluirNegociacao()} className="gap-1.5">
-              <Check className="h-4 w-4" /> Concluir negociação
+              onClick={() => api.recebimentoApi?.concluirNegociacao()} className="h-[22px] px-[9px] text-[10px] gap-1">
+              <Check className="h-3 w-3" /> Concluir negociação
             </Button>
           )}
           {/* ESTORNAR RECEBIMENTO — discreto de proposito (`ghost`): e' acao de
@@ -812,7 +821,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
             && temRecebimentoAtivo && api.recebimentoApi && (
             <Button type="button" variant="ghost" disabled={!!api.recebimentoApi.saving || estornando !== null}
               onClick={() => { setMotivoEstorno(''); setEstornoEtapa(1); }}
-              className="gap-1.5 text-muted-foreground hover:text-foreground">
+              className="h-[22px] px-[9px] text-[10px] gap-1 text-muted-foreground hover:text-foreground">
               Estornar recebimento
             </Button>
           )}
@@ -835,7 +844,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
                   precisou de chamada direta a RPC, e isso nao escala para o cliente. */}
               {api.ocStatusComercial === 'fechada' && (
                 <Button type="button" variant="secondary" disabled={!!api.acaoOcLoading}
-                  onClick={() => { setMotivoAcao(''); setAcaoConfirm('reabrir'); }} className="gap-1.5">
+                  onClick={() => { setMotivoAcao(''); setAcaoConfirm('reabrir'); }} className="h-[22px] px-[9px] text-[10px] gap-1">
                   {api.acaoOcLoading === 'reabrir' ? 'Reabrindo...' : 'Reabrir operação'}
                 </Button>
               )}
@@ -846,7 +855,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
               {(api.ocStatusComercial === 'programada' || api.ocStatusComercial === 'fechada') && !api.ocTemTitulo && (
                 <Button type="button" variant="outline" disabled={!!api.acaoOcLoading}
                   onClick={() => { setMotivoAcao(''); setAcaoConfirm('cancelar'); }}
-                  className="border-red-300/60 text-red-100 hover:bg-red-500/20 bg-transparent gap-1.5">
+                  className="h-[22px] px-[9px] text-[10px] border-red-300/60 text-red-100 hover:bg-red-500/20 bg-transparent gap-1">
                   {api.acaoOcLoading === 'cancelar' ? 'Cancelando...' : 'Cancelar operação'}
                 </Button>
               )}
@@ -863,8 +872,8 @@ export function CompraModalShell(api: CompraModalShellProps) {
                 <Button onClick={api.handleRequestRegister}
                   disabled={api.submitting || !!api.acaoOcLoading || !api.ocDadosSujos}
                   title={api.ocDadosSujos ? undefined : 'Nenhuma alteração pendente'}
-                  className="bg-white text-primary hover:bg-white/90 font-bold gap-1.5 disabled:opacity-60">
-                  <ShoppingCart className="h-4 w-4" /> {api.submitting ? 'Salvando...' : 'Salvar'}
+                  className="h-[22px] px-[9px] text-[10px] bg-white text-primary hover:bg-white/90 font-bold gap-1 disabled:opacity-60">
+                  <ShoppingCart className="h-3 w-3" /> {api.submitting ? 'Salvando...' : 'Salvar'}
                 </Button>
               )}
               {/* ⚠ SALVAR continua atras do gate de titulo: ele EDITA a negociacao, e
@@ -875,15 +884,15 @@ export function CompraModalShell(api: CompraModalShellProps) {
                   {abaAtiva === 'negociacao' ? (
                     <Button type="button" variant="secondary"
                       disabled={!api.ocOperacaoId || !!api.lotesApi?.saving || !!api.acaoOcLoading}
-                      onClick={() => api.lotesApi?.salvar()} className="gap-1.5">
+                      onClick={() => api.lotesApi?.salvar()} className="h-[22px] px-[9px] text-[10px] gap-1">
                       {api.lotesApi?.saving ? 'Salvando...' : 'Salvar rascunho'}
                     </Button>
                   ) : (abaAtiva === 'recebimento' || abaAtiva === 'documentos' || abaAtiva === 'financeiro') ? null : (
                     <Button onClick={api.handleRequestRegister}
                       disabled={api.submitting || !!api.acaoOcLoading || !api.ocFazendaValida || !!mesFechadoMotivo}
                       title={mesFechadoMotivo ? `${mesFechadoMotivo} — reabra o período para lançar` : undefined}
-                      className="bg-white text-primary hover:bg-white/90 font-bold gap-1.5 disabled:opacity-60">
-                      <ShoppingCart className="h-4 w-4" /> {api.submitting ? 'Salvando...' : 'Salvar'}
+                      className="h-[22px] px-[9px] text-[10px] bg-white text-primary hover:bg-white/90 font-bold gap-1 disabled:opacity-60">
+                      <ShoppingCart className="h-3 w-3" /> {api.submitting ? 'Salvando...' : 'Salvar'}
                     </Button>
                   )}
                 </>
@@ -913,7 +922,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
                           <Button type="button"
                             disabled={!!api.acaoOcLoading || !!api.lotesApi?.saving || !!api.ocRascunho}
                             onClick={() => setAcaoConfirm('confirmar')}
-                            className="bg-white text-primary font-bold gap-1.5 hover:bg-white/90 disabled:opacity-60">
+                            className="h-[22px] px-[9px] text-[10px] bg-white text-primary font-bold gap-1 hover:bg-white/90 disabled:opacity-60">
                             {/* ⚠ "FECHAR" ENTROU NO ROTULO — OC-COMPRA-REVALOR-01. Ele dizia
                                 "e seguir", que informa a navegacao e cala o efeito: este botao
                                 GRAVA a aba e FECHA a negociacao (`salvarOperacaoOC` +
@@ -921,7 +930,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
                                 o operador clicou aqui para salvar uma correcao, a negociacao
                                 fechou, e a recusa seguinte ("reabra para editar") chegou sem ele
                                 saber o que a tinha fechado. O dialogo ja' avisava; o botao, nao. */}
-                            <Check className="h-4 w-4" /> {api.acaoOcLoading === 'confirmar' ? 'Confirmando...' : 'Confirmar, fechar e seguir'}
+                            <Check className="h-3 w-3" /> {api.acaoOcLoading === 'confirmar' ? 'Confirmando...' : 'Confirmar, fechar e seguir'}
                           </Button>
                         </span>
                       </TooltipTrigger>
@@ -948,21 +957,21 @@ export function CompraModalShell(api: CompraModalShellProps) {
               <Button type="button" variant="secondary"
                 disabled={!api.modoOC || !api.ocOperacaoId || !!api.lotesApi?.saving || fluxoNeg !== null}
                 onClick={() => api.lotesApi?.salvar()}
-                className="gap-1.5"
+                className="h-[22px] px-[9px] text-[10px] gap-1"
                 title={api.modoOC ? (api.ocOperacaoId ? undefined : 'Salve a operação na aba Compra primeiro') : 'em breve'}>
                 {(api.lotesApi?.saving && fluxoNeg === null) ? 'Salvando...' : 'Salvar rascunho'}
               </Button>
               <Button type="button"
                 disabled={!api.modoOC || !api.ocOperacaoId || fluxoNeg !== null || !!api.lotesApi?.saving || !!api.recebimentoApi?.saving}
                 onClick={handleConcluirLotesContinuar}
-                className={`bg-white text-primary font-bold gap-1.5 ${(!api.modoOC || !api.ocOperacaoId) ? 'opacity-60 cursor-not-allowed' : 'hover:bg-white/90'}`}
+                className={`h-[22px] px-[9px] text-[10px] bg-white text-primary font-bold gap-1 ${(!api.modoOC || !api.ocOperacaoId) ? 'opacity-60 cursor-not-allowed' : 'hover:bg-white/90'}`}
                 title={api.modoOC ? (api.ocOperacaoId ? undefined : 'Salve a operação na aba Compra primeiro') : 'em breve'}>
-                {fluxoNeg === 'salvando' ? 'Salvando lotes...' : fluxoNeg === 'concluindo' ? 'Concluindo...' : (<>Concluir lotes e continuar <ArrowRight className="h-4 w-4" /></>)}
+                {fluxoNeg === 'salvando' ? 'Salvando lotes...' : fluxoNeg === 'concluindo' ? 'Concluindo...' : (<>Concluir lotes e continuar <ArrowRight className="h-3 w-3" /></>)}
               </Button>
             </>
           ) : (
-            <Button onClick={api.handleRequestRegister} disabled={api.submitting || (!api.modoOC && !api.compraDetalhes) || (!!api.modoOC && !api.ocFazendaValida)} className="bg-white text-primary hover:bg-white/90 font-bold gap-1.5 disabled:opacity-60">
-              <ShoppingCart className="h-4 w-4" />
+            <Button onClick={api.handleRequestRegister} disabled={api.submitting || (!api.modoOC && !api.compraDetalhes) || (!!api.modoOC && !api.ocFazendaValida)} className="h-[22px] px-[9px] text-[10px] bg-white text-primary hover:bg-white/90 font-bold gap-1 disabled:opacity-60">
+              <ShoppingCart className="h-3 w-3" />
               {api.submitting ? 'Salvando...'
                 : api.modoOC ? (api.ocOperacaoId ? 'Salvar alterações' : 'Salvar e continuar para Negociação')
                 : api.editingId ? 'Salvar Alterações' : 'Registrar Compra'}
