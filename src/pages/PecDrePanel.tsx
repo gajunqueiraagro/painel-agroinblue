@@ -35,8 +35,9 @@ import { Segmentado } from '@/components/ui/segmentado';
    tipo da coluna moram em `drePecRegua`, porque o modal do histórico precisa das MESMAS, e ele é
    montado por esta tela: importar de volta fecharia um ciclo. Nada mudou de corpo. */
 import {
-  LINHAS_DO_MODO, COM_PERCENTUAL, COM_POR_HECTARE, ROTULO_POR_HECTARE, BASE_DO_PERCENTUAL, ROTULO_DA_BASE, corDoTom, valorDe,
+  COM_PERCENTUAL, COM_POR_HECTARE, ROTULO_POR_HECTARE, BASE_DO_PERCENTUAL, ROTULO_DA_BASE, corDoTom, valorDe,
   valorNaUnidade, percentual, centrosDoBloco, UNIDADES_PEC, ROTULO_UNIDADE, somaComposta,
+  defsDaGrade, valorDaFilha, celulaDaColuna, rateioDoGrupo, BLOCO_SO_RATEIO,
   type DefPec, type ColunaPec, type UnidadePec, type ModoDre,
 } from '@/components/agri/drePecRegua';
 import type { RecorteHistoricoPec } from '@/components/agri/PecHistoricoLinhaModal';
@@ -599,8 +600,8 @@ function CelulaCarregando({ total, fundo, estilo }: { total?: boolean; fundo?: s
 
 
 export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
-  unidades = ['rs', 'ha'], modo = 'detalhado', abertos, onAbertos,
-  onAbrirLista, onAbrirDidatico, onAbrirRateio, onAbrirHistorico }: {
+  unidades = ['rs', 'ha'], modo = 'detalhado', abertos, onAbertos, rateioNosGrupos = false,
+  onAbrirLista, onAbrirDidatico, onAbrirHistorico }: {
   colunas: readonly ColunaPec[];
   /** ⚠ AS UNIDADES MARCADAS, na ordem de `UNIDADES_PEC`. O padrão é o que a tela abre: R$ e R$/ha. */
   unidades?: readonly UnidadePec[];
@@ -618,7 +619,14 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
    */
   onAbrirDidatico?: (fazendaId: string | null, fazendaNome: string, qual: 'vpb' | 'efeito' | 'ponte',
     de: string, ate: string, insumos: InsumosDidaticos) => void;
-  onAbrirRateio?: () => void;
+  /**
+   * O BOTÃO "Com rateio adm. nos grupos" — DRE-MODAL-VALOR-01b. Ligado, cada grupo do custo fixo
+   * soma o seu rateio administrativo, o grupo sem centro (Financeiro) vira filha própria e a linha
+   * do rateio total sai. Ver `defsDaGrade` e `valorDaFilha`.
+   * ⚠ O RATEIO DEIXOU DE TER MODAL PRÓPRIO: a linha dele abre o modal de valor (via `onAbrirLista`,
+   *   com `soRateio`), em qualquer coluna de valor — não só na do período da tela.
+   */
+  rateioNosGrupos?: boolean;
   /** ⚠ A GRADE NÃO MONTA O MODAL: ela avisa QUAL linha, e quem lê os cinco anos é a página. */
   onAbrirHistorico?: (r: RecorteHistoricoPec) => void;
   /**
@@ -746,7 +754,7 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
         </thead>
 
         <tbody>
-          {LINHAS_DO_MODO(modo).map((def, iDef, defs) => {
+          {defsDaGrade(modo, rateioNosGrupos).map((def, iDef, defs) => {
             const bloco = BLOCO_DA_LINHA[def.chave];
             const aberto = !!expandidos[def.chave];
             /* ⚠ AS FILHAS SÃO A UNIÃO DAS COLUNAS DE TOTAL, e é ela que manda: um centro que só
@@ -767,8 +775,23 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
               /* ⚠ NO RESUMIDO O RATEIO ADMINISTRATIVO É A ÚLTIMA FILHA DO CUSTO FIXO — DRE-CASCATA-03b.
                  Ele não é um centro de custo: é uma parcela estimada que a linha composta já soma,
                  e escondê-la faria o total do custo fixo não bater com a soma das filhas visíveis. */
-              if (def.compor?.mais.includes('rateio_adm')) {
+              if (def.compor?.mais.includes('rateio_adm') && !rateioNosGrupos) {
                 centros.push({ bloco: 'rateio_adm', centro: 'Rateio administrativo', valor: 0, a_pagar: 0 });
+              }
+              /* ⚠ COM O RATEIO NOS GRUPOS, O GRUPO SEM CENTRO VIRA FILHA PRÓPRIA — DRE-MODAL-VALOR-01b.
+                 No NJ é o "Financeiro": o administrativo tem o centro e o custo fixo da fazenda não.
+                 Sem ela, a soma das filhas ficaria abaixo da linha-mãe pelo valor desse grupo. Mesma
+                 regra da união acima: só as colunas de Total entram. */
+              if (rateioNosGrupos && bloco === 'fixo') {
+                colunas.forEach(c => {
+                  if (c.fazendaId !== null || c.tipo !== 'valor' || !c.linhas || c.semDado) return;
+                  (c.linhas.rateio_adm_grupos ?? []).forEach(g => {
+                    if (!vistos.has(g.grupo)) {
+                      vistos.add(g.grupo);
+                      centros.push({ bloco: BLOCO_SO_RATEIO, centro: g.grupo, valor: 0, a_pagar: 0 });
+                    }
+                  });
+                });
               }
             }
             /* ⚠ QUEM FECHA A GRADE NÃO É SEMPRE A ÚLTIMA `def` — é a última linha RENDERIZADA dela, e
@@ -790,7 +813,7 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
                 <LinhaPec def={def} colunas={colunas} centros={centros} unidades={unidades}
                   aberto={aberto} onAlternar={() => alternar(def.chave)} base={base.linha}
                   onAbrirLista={onAbrirLista} onAbrirDidatico={onAbrirDidatico}
-                  onAbrirRateio={onAbrirRateio} onAbrirHistorico={onAbrirHistorico} />
+                  onAbrirHistorico={onAbrirHistorico} />
 
                 {/* ⚠ A LINHA DE % VEM LOGO ABAIXO e é leitura de apoio: 9px, muted, sem recuo,
                     altura 14. Ela não é uma linha do DRE — é a mesma linha vista noutra unidade,
@@ -811,6 +834,7 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
                 {aberto && centros.map((c, iC) => (
                   <LinhaCentro key={`${def.chave}-${c.centro}`} def={def} centro={c} unidades={unidades}
                     colunas={colunas} bloco={bloco ?? ''} onAbrirLista={onAbrirLista}
+                    rateioNosGrupos={rateioNosGrupos}
                     base={base.filha && iC === centros.length - 1} />
                 ))}
               </Fragment>
@@ -822,7 +846,7 @@ export function PecDrePanel({ colunas: colunasCruas, alturaCartao, cartaoRef,
   );
 }
 
-function LinhaPec({ def, colunas, centros, aberto, unidades, base, onAlternar, onAbrirLista, onAbrirDidatico, onAbrirRateio, onAbrirHistorico }: {
+function LinhaPec({ def, colunas, centros, aberto, unidades, base, onAlternar, onAbrirLista, onAbrirDidatico, onAbrirHistorico }: {
   def: DefPec;
   colunas: readonly ColunaPec[];
   centros: readonly CentroPec[];
@@ -835,7 +859,6 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, base, onAlternar, o
   /** ⚠ `de`/`ate` SÃO DA COLUNA, e `qual` tem três valores — ver a prop homônima em `PecDrePanel`. */
   onAbrirDidatico?: (fazendaId: string | null, fazendaNome: string, qual: 'vpb' | 'efeito' | 'ponte',
     de: string, ate: string, insumos: InsumosDidaticos) => void;
-  onAbrirRateio?: () => void;
   onAbrirHistorico?: (r: RecorteHistoricoPec) => void;
 }) {
   /* ⚠ A FAIXA MANDA NO FUNDO; A COR, NÃO — e este parágrafo já disse o contrário (03b). A regra
@@ -851,6 +874,17 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, base, onAlternar, o
   const corLinha = daFaixa ? (daFaixa.texto ?? '') : corDoTom(def.tom);
   const bloco = BLOCO_DA_LINHA[def.chave];
   const temFilhas = def.expande && centros.length > 0;
+  /* ⚠ A LINHA DO RATEIO ADMINISTRATIVO ABRE O MODAL DE VALOR NA ABA RATEIO — DRE-MODAL-VALOR-01b.
+     Era o `PecRateioAdmModal`, preso ao período da tela; agora qualquer coluna de valor abre o seu. */
+  const abrirDaColunaRateio = (col: ColunaPec) => {
+    if (!onAbrirLista || !col.linhas || col.semDado || col.tipo === 'delta') return undefined;
+    const ra = valorDe(col.linhas, 'rateio_adm');
+    return () => onAbrirLista({
+      fazendaId: col.fazendaId, fazendaNome: col.nome, bloco: 'rateio_adm', centro: null,
+      rotulo: 'Rateio administrativo', de: col.de, ate: col.ate, cenario: col.cenario, soRateio: true,
+      celula: celulaDaColuna(col, null, ra, null, true),
+    });
+  };
   /* ⚠ O RATEADO DA PRIMEIRA COLUNA manda no selo: é ela que a linha de rótulo descreve (o Total
      nas visões globais, a fazenda na visão por fazenda), e é dela que sai o número do `title`. */
   const jurosRateados = colunas[0]?.linhas?.juros_rateado ?? 0;
@@ -861,7 +895,8 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, base, onAlternar, o
   /* ⚠ O RÓTULO DO RATEIO ABRE O MODAL (DRE-PEC-TELA-02b): a frase que explicava o rateio acima da
      grade saiu, e o selo "estimado" é a porta para a explicação — pool, critério e a fatia da
      pecuária. Só quando a primeira coluna é o realizado do período da tela, o único que o modal lê. */
-  const abrirRateioDoRotulo = def.rateio && onAbrirRateio && colunas[0]?.atual ? onAbrirRateio : undefined;
+  /* ⚠ DRE-MODAL-VALOR-01b: o rótulo abre o MESMO modal de valor que a célula da primeira coluna. */
+  const abrirRateioDoRotulo = def.rateio && colunas[0] ? abrirDaColunaRateio(colunas[0]) : undefined;
   /* ⚠ SÓ NAS DUAS LINHAS QUE O P0 PRODUZ: o selo explica de onde saiu a variação de patrimônio, e
      pendurá-lo numa linha de venda ou de custo diria que o rebanho de partida a influenciou. */
   const daVariacaoNaLinha = def.chave === 'vpb_operacional' || def.chave === 'efeito_mercado';
@@ -922,8 +957,13 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, base, onAlternar, o
           })
         : undefined;
     }
-    if (def.rateio) return col.atual ? onAbrirRateio : undefined;
+    if (def.rateio) return abrirDaColunaRateio(col);
     if (!bloco || !onAbrirLista) return undefined;
+    const l = col.linhas;
+    /* ⚠ OS NÚMEROS DA CÉLULA VIAJAM COM O CLIQUE — DRE-MODAL-VALOR-01b. No custo fixo o rateio é o
+       `rateio_adm` da coluna, e o segmentado do modal nasce no que a célula mostra: composta (o
+       Resumido, ou o botão ligado) = com rateio. Nos outros blocos não há rateio (`null`, "—"). */
+    const doFixo = bloco === 'fixo';
     return () => onAbrirLista({
       fazendaId: col.fazendaId,
       fazendaNome: col.nome,
@@ -931,6 +971,8 @@ function LinhaPec({ def, colunas, centros, aberto, unidades, base, onAlternar, o
       centro: null,
       rotulo: def.rotulo.replace(/^[=(−)\s-]+/, '').trim(),
       de: col.de, ate: col.ate, cenario: col.cenario,
+      celula: celulaDaColuna(col, valorDe(l, def.chave), doFixo ? valorDe(l, 'rateio_adm') : null, null,
+        doFixo && !!def.compor?.mais.includes('rateio_adm')),
     });
   };
 
@@ -1213,7 +1255,7 @@ function LinhaPorHectare({ def, colunas, unidades, base }: {
  * ⚠ E O `'(sem)'` VIAJA INTEIRO ATÉ A RPC — ele é um centro de verdade ("lançamento sem centro"),
  * não ausência. Mandar `null` no lugar dele traria o bloco todo.
  */
-function LinhaCentro({ def, centro, colunas, bloco, unidades, base, onAbrirLista }: {
+function LinhaCentro({ def, centro, colunas, bloco, unidades, base, onAbrirLista, rateioNosGrupos = false }: {
   def: DefPec;
   centro: CentroPec;
   colunas: readonly ColunaPec[];
@@ -1221,16 +1263,17 @@ function LinhaCentro({ def, centro, colunas, bloco, unidades, base, onAbrirLista
   unidades: readonly UnidadePec[];
   base?: boolean;
   onAbrirLista?: (r: RecortePec) => void;
+  rateioNosGrupos?: boolean;
 }) {
   const regua = REGUA_LINHA.filha;
   const corLinha = corDoTom(def.tom);
   /* ⚠ A FILHA DO RATEIO NÃO VEM DE `centros`: ela é a linha `rateio_adm` da própria coluna, posta
      como filha do Custo fixo no modo Resumido. Procurá-la entre os centros devolveria nulo. */
-  const achar = (l: DrePecLinhas | null | undefined) => {
-    if (!l) return null;
-    if (centro.bloco === 'rateio_adm') return valorDe(l, 'rateio_adm');
-    return centrosDoBloco(l, bloco).find(c => c.centro === centro.centro)?.valor ?? null;
-  };
+  /* ⚠ COM O BOTÃO LIGADO, O GRUPO SOMA O SEU RATEIO — DRE-MODAL-VALOR-01b; a regra mora em
+     `valorDaFilha`, e desligado ela devolve exatamente o que este `achar` devolvia. */
+  const achar = (l: DrePecLinhas | null | undefined) =>
+    (l ? valorDaFilha(l, bloco, centro, rateioNosGrupos) : null);
+  const soRateio = centro.bloco === 'rateio_adm' || centro.bloco === BLOCO_SO_RATEIO;
   return (
     <tr className={cn('bg-card', regua.peso)} style={{ height: regua.altura }}>
       <td className="sticky left-0 z-30 truncate border-r border-border/60 bg-card py-px"
@@ -1241,6 +1284,10 @@ function LinhaCentro({ def, centro, colunas, bloco, unidades, base, onAbrirLista
             legenda do donut do pai navega para cada filha, e entre irmãs. O ícone fica onde a
             pergunta nasce — no grupo, no total e nas linhas soltas de topo. */}
         {centro.centro === '(sem)' ? 'sem centro' : centro.centro}
+        {centro.bloco === BLOCO_SO_RATEIO && (
+          <Etiqueta texto="só rateio adm."
+            title="Grupo do administrativo sem centro de mesmo nome no custo fixo da fazenda: só o rateio" />
+        )}
       </td>
       {colunas.map(col => {
         const slots = slotsDaColuna(col, unidades);
@@ -1267,12 +1314,24 @@ function LinhaCentro({ def, centro, colunas, bloco, unidades, base, onAbrirLista
           v = r == null || m == null ? null : r - m;
         } else v = achar(col.linhas);
         const cor = col.tipo === 'delta' ? corDoDelta(def, v) : corLinha;
+        /* ⚠ A FILHA MANDA OS NÚMEROS DELA — DRE-MODAL-VALOR-01b: o direto do centro e o rateio do grupo
+           de mesmo nome (só no custo fixo). A filha do rateio total e a do grupo sem centro não têm
+           lista direta (`soRateio`). */
+        const l = col.linhas;
+        const diretoDaFilha = soRateio ? null
+          : centrosDoBloco(l, bloco).find(c => c.centro === centro.centro)?.valor ?? null;
+        const rateioDaFilha = centro.bloco === 'rateio_adm' ? valorDe(l, 'rateio_adm')
+          : bloco === 'fixo' ? rateioDoGrupo(l, centro.centro) : null;
         const abrir = onAbrirLista && col.tipo === 'valor' && !col.semDado
           ? () => onAbrirLista({
-            fazendaId: col.fazendaId, fazendaNome: col.nome, bloco,
-            centro: centro.centro,
+            fazendaId: col.fazendaId, fazendaNome: col.nome,
+            bloco: centro.bloco === 'rateio_adm' ? 'rateio_adm' : bloco,
+            centro: centro.bloco === 'rateio_adm' ? null : centro.centro,
             rotulo: centro.centro === '(sem)' ? 'sem centro' : centro.centro,
             de: col.de, ate: col.ate, cenario: col.cenario,
+            ...(soRateio ? { soRateio: true } : {}),
+            celula: celulaDaColuna(col, diretoDaFilha, rateioDaFilha,
+              centro.bloco === 'rateio_adm' ? null : centro.centro, soRateio || rateioNosGrupos),
           })
           : undefined;
         /* ⚠ A FILHA SEGUE OS MESMOS CHIPS DA MÃE, e o R$/@ dela usa a base da LINHA (o bloco a

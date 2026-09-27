@@ -769,6 +769,132 @@ describe('o DRE resumido', () => {
   });
 });
 
+/* ══════════════ O RATEIO ADM. NOS GRUPOS — DRE-MODAL-VALOR-01b ══════════════ */
+
+/**
+ * ⚠ OS NÚMEROS SÃO OS DO NJ 07/2025–06/2026, MEDIDOS NO BANCO em 27/09/2026 (`fn_dre_pecuaria`,
+ * coluna Total): custo fixo 2.905.958,83 em seis centros, rateio administrativo 1.153.283,72 em cinco
+ * grupos — quatro com centro de mesmo nome e o Financeiro sem par. A soma dos grupos é o rateio ao
+ * centavo, como a RPC promete.
+ * ⚠ O RESULTADO OPERACIONAL É DE FIXTURE, e o que importa nele é não mudar com o botão.
+ */
+describe('o rateio adm. nos grupos', () => {
+  const NJ: DrePecuaria = {
+    ...DRE,
+    fazendas: [],
+    total: linhas({
+      margem: 9171997.33, custo_fixo: 2905958.83, rateio_adm: 1153283.72,
+      resultado_operacional: 5112754.78, resultado_periodo: 5054121.22,
+      centros: [
+        { bloco: 'fixo', centro: 'Administração', valor: 182264.64, a_pagar: 0 },
+        { bloco: 'fixo', centro: 'Impostos', valor: 98698.88, a_pagar: 55000 },
+        { bloco: 'fixo', centro: 'Manutenção Fazenda', valor: 591414.62, a_pagar: 10753.52 },
+        { bloco: 'fixo', centro: 'Mão de Obra', valor: 1249894.56, a_pagar: 0 },
+        { bloco: 'fixo', centro: 'Máquinas', valor: 733224.73, a_pagar: 859.84 },
+        { bloco: 'fixo', centro: 'Outros', valor: 50461.4, a_pagar: 0 },
+      ],
+      rateio_adm_grupos: [
+        { grupo: 'Administração', valor: 444505.69 },
+        { grupo: 'Financeiro', valor: 11705.73 },
+        { grupo: 'Impostos', valor: 666.67 },
+        { grupo: 'Mão de Obra', valor: 508689.71 },
+        { grupo: 'Máquinas', valor: 187715.92 },
+      ],
+    }),
+  };
+  const montarNJ = (modo: 'resumido' | 'detalhado', rateioNosGrupos: boolean) => render(
+    <PecDrePanel modo={modo} rateioNosGrupos={rateioNosGrupos}
+      colunas={colunasDaVisao({ visao: 'comparacao', de: '2025-07', ate: '2026-06',
+        real: NJ, meta: null, carregandoMeta: false, anos: [] })}
+      alturaCartao={null} cartaoRef={{ current: null }} />,
+  );
+  const valor = (rot: string) => linhaDe(rot)?.cells[1]?.textContent ?? null;
+  const abrirCustoFixo = () => {
+    const td = linhaDe('(−) Custo fixo')?.cells[0];
+    if (td) fireEvent.click(td);
+  };
+  /* A soma das filhas VISÍVEIS do custo fixo, lida da tela — do rótulo da mãe até o próximo "=". */
+  const somaDasFilhas = () => {
+    const rs = linhasDaTabela();
+    const i = rs.findIndex(tr => (tr.cells[0]?.textContent ?? '').startsWith('(−) Custo fixo'));
+    let soma = 0;
+    for (const tr of rs.slice(i + 1)) {
+      const rot = (tr.cells[0]?.textContent ?? '').trim();
+      if (rot.startsWith('=') || rot.startsWith('(−)') || rot === '% do VBP' || rot === 'por hectare') break;
+      soma += Number((tr.cells[1]?.textContent ?? '0').replace(/\./g, '').replace(',', '.'));
+    }
+    return Math.round(soma * 100) / 100;
+  };
+
+  it('o botão não muda o custo fixo total nem o resultado — nos dois modos', () => {
+    montarNJ('resumido', false);
+    const cfOff = valor('(−) Custo fixo'); const roOff = valor('= Lucro operacional');
+    cleanup();
+    montarNJ('resumido', true);
+    expect(valor('(−) Custo fixo')).toBe(cfOff);
+    expect(cfOff).toBe('4.059.242,55');
+    expect(valor('= Lucro operacional')).toBe(roOff);
+    cleanup();
+    /* No Detalhado a linha do rateio SAI e o custo fixo passa a ser a soma das duas: o total do custo
+       fixo com rateio (custo fixo + rateio) e o resultado são os mesmos. */
+    montarNJ('detalhado', false);
+    expect(valor('(−) Custo fixo')).toBe('2.905.958,83');
+    expect(valor('(−) Rateio administrativo')).toBe('1.153.283,72');
+    const roDet = valor('= Lucro operacional');
+    cleanup();
+    montarNJ('detalhado', true);
+    expect(valor('(−) Custo fixo')).toBe('4.059.242,55');
+    expect(linhaDe('(−) Rateio administrativo')).toBeUndefined();
+    expect(valor('= Lucro operacional')).toBe(roDet);
+    expect(roDet).toBe(roOff);
+  });
+
+  it('ligado: cada grupo soma o seu rateio, o Financeiro vira filha "só rateio adm." e a soma fecha na mãe', () => {
+    montarNJ('resumido', true);
+    abrirCustoFixo();
+    /* 1.249.894,56 direto + 508.689,71 de rateio. */
+    expect(valor('Mão de Obra')).toBe('1.758.584,27');
+    expect(valor('Máquinas')).toBe('920.940,65');
+    /* Centro sem grupo de rateio fica como era. */
+    expect(valor('Manutenção Fazenda')).toBe('591.414,62');
+    const fin = linhaDe('Financeiro');
+    expect(fin?.cells[0]?.textContent).toContain('só rateio adm.');
+    expect(fin?.cells[1]?.textContent).toBe('11.705,73');
+    /* A filha do rateio total sumiu — ele está dentro dos grupos. */
+    expect(linhaDe('Rateio administrativo')).toBeUndefined();
+    expect(somaDasFilhas()).toBe(4059242.55);
+  });
+
+  it('desligado: exatamente como antes — a filha do rateio total no Resumido, nenhum "só rateio"', () => {
+    montarNJ('resumido', false);
+    abrirCustoFixo();
+    expect(valor('Mão de Obra')).toBe('1.249.894,56');
+    expect(valor('Rateio administrativo')).toBe('1.153.283,72');
+    expect(linhaDe('Financeiro')).toBeUndefined();
+    expect(somaDasFilhas()).toBe(4059242.55);
+  });
+
+  it('a célula leva os números dela para o modal (direto, rateio do grupo, cabeças e meses)', () => {
+    const onAbrirLista = vi.fn();
+    render(<PecDrePanel modo="resumido" rateioNosGrupos onAbrirLista={onAbrirLista}
+      colunas={colunasDaVisao({ visao: 'comparacao', de: '2025-07', ate: '2026-06',
+        real: NJ, meta: null, carregandoMeta: false, anos: [] })}
+      alturaCartao={null} cartaoRef={{ current: null }} />);
+    abrirCustoFixo();
+    const td = linhaDe('Mão de Obra')?.cells[1];
+    if (td) fireEvent.click(td);
+    expect(onAbrirLista).toHaveBeenCalledWith(expect.objectContaining({
+      bloco: 'fixo', centro: 'Mão de Obra',
+      celula: expect.objectContaining({ direto: 1249894.56, rateio: 508689.71, grupo: 'Mão de Obra', comRateio: true, meses: 12 }),
+    }));
+    const tdFin = linhaDe('Financeiro')?.cells[1];
+    if (tdFin) fireEvent.click(tdFin);
+    expect(onAbrirLista).toHaveBeenLastCalledWith(expect.objectContaining({
+      soRateio: true, centro: 'Financeiro', celula: expect.objectContaining({ direto: null, rateio: 11705.73 }),
+    }));
+  });
+});
+
 /* ══════════════ O Δ NA VISÃO GLOBAL — adendo do 03b ══════════════ */
 
 /**

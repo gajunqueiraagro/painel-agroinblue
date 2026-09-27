@@ -390,7 +390,7 @@ export const BASE_DO_ARROBA: Record<ChaveLinhaPec, BaseArroba> = {
   deducoes: 'vendida', receita_liquida: 'vendida',
   reposicao: 'comprada',
   vpb_operacional: 'produzida', vbp: 'produzida', custo_variavel: 'produzida',
-  margem: 'produzida', custo_fixo: 'produzida', rateio_adm: 'produzida',
+  margem: 'produzida', custo_fixo: 'produzida', rateio_adm: 'produzida', rateio_adm_grupos: 'produzida',
   resultado_operacional: 'produzida', juros: 'produzida', resultado_periodo: 'produzida',
   efeito_mercado: 'produzida', resultado_com_mercado: 'produzida', investimento: 'produzida',
   lucro_liquido: 'produzida', juros_proprio: 'produzida', juros_rateado: 'produzida',
@@ -435,3 +435,66 @@ export const percentual = (v: number | null, base: number): string => {
 /** Os centros de um bloco numa coluna. ⚠ Juros têm lista própria (`centros_juros`). */
 export const centrosDoBloco = (l: DrePecLinhas, bloco: string): readonly CentroPec[] =>
   (bloco === 'juros' ? l.centros_juros : l.centros.filter(c => c.bloco === bloco));
+
+/* ══════════════ O RATEIO ADMINISTRATIVO NOS GRUPOS — DRE-MODAL-VALOR-01b ══════════════ */
+
+/**
+ * O BLOCO DE UMA FILHA QUE E' SO' RATEIO — o grupo do administrativo sem centro de mesmo nome no
+ * custo fixo da fazenda (no NJ, "Financeiro"). Nao e' um bloco da RPC: e' marcador da grade.
+ */
+export const BLOCO_SO_RATEIO = 'rateio_grupo';
+
+/** O rateio administrativo de um grupo numa coluna. `null` = a coluna nao tem esse grupo. */
+export const rateioDoGrupo = (l: DrePecLinhas, grupo: string): number | null =>
+  l.rateio_adm_grupos?.find(g => g.grupo === grupo)?.valor ?? null;
+
+/**
+ * AS LINHAS QUE A GRADE PERCORRE, com o botao "Com rateio adm. nos grupos".
+ *
+ * ⚠ DESLIGADO E' EXATAMENTE `LINHAS_DO_MODO`: nada muda para quem nao toca no botao.
+ * ⚠ LIGADO, O CUSTO FIXO PASSA A SER A SOMA COMPOSTA DO RESUMIDO (`custo_fixo + rateio_adm`) nos
+ *   dois modos, e a linha "(−) Rateio administrativo" do Detalhado SAI — o rateio foi para dentro
+ *   dos grupos, e mante-la contaria o mesmo dinheiro duas vezes. O resultado nao se mexe: os "="
+ *   vem prontos da RPC e nenhum deles e' composto no front.
+ */
+export function defsDaGrade(modo: ModoDre, rateioNosGrupos: boolean): DefPec[] {
+  const defs = LINHAS_DO_MODO(modo);
+  if (!rateioNosGrupos) return defs;
+  const compor = LINHAS_PEC_RESUMIDO.find(d => d.chave === 'custo_fixo')?.compor;
+  return defs
+    .filter(d => d.chave !== 'rateio_adm')
+    .map(d => (d.chave === 'custo_fixo'
+      ? { ...d, compor, etiqueta: 'c/ rateio', tituloEtiqueta: 'rateio administrativo somado em cada grupo' }
+      : d));
+}
+
+/**
+ * O VALOR DE UMA FILHA NUMA COLUNA — a grade e o teste leem daqui.
+ *
+ * ⚠ LIGADO, O CENTRO DO CUSTO FIXO SOMA O RATEIO DO GRUPO DE MESMO NOME; a filha so' de rateio le'
+ *   so' o grupo. Os grupos somam `rateio_adm` ao centavo (a RPC poe o residuo no maior), entao a soma
+ *   das filhas continua sendo o custo fixo composto da linha-mae.
+ * ⚠ AUSENTE NOS DOIS LADOS E' AUSENTE: um centro que a coluna nao tem e sem grupo de rateio da' "—",
+ *   nunca zero.
+ */
+export function valorDaFilha(
+  l: DrePecLinhas, bloco: string, centro: CentroPec, rateioNosGrupos: boolean,
+): number | null {
+  if (centro.bloco === 'rateio_adm') return valorDe(l, 'rateio_adm');
+  if (centro.bloco === BLOCO_SO_RATEIO) return rateioDoGrupo(l, centro.centro);
+  const direto = centrosDoBloco(l, bloco).find(c => c.centro === centro.centro)?.valor ?? null;
+  if (!rateioNosGrupos || bloco !== 'fixo') return direto;
+  const r = rateioDoGrupo(l, centro.centro);
+  return direto == null && r == null ? null : (direto ?? 0) + (r ?? 0);
+}
+
+/** Os numeros de uma celula que viajam no clique para o modal de valor. */
+export function celulaDaColuna(
+  col: ColunaPec, direto: number | null, rateio: number | null, grupo: string | null, comRateio: boolean,
+) {
+  return {
+    direto, rateio, grupo, comRateio,
+    cabMedia: col.linhas?.patrimonio.cab_media ?? 0,
+    meses: col.meses,
+  };
+}

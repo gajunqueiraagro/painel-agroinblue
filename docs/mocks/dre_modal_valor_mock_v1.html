@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="utf-8"><title>DRE modal de valor — mock v1</title>
+<style>
+:root{--p:#1D3A5D;--bg:#F6F7F9;--fg:#0F1729;--mf:#6B7280;--bd:#E0E2E6;--am:#b45309;--amb:#fffbeb;--gr:#15803d}
+*{box-sizing:border-box}body{margin:0;background:#8a929c;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--fg);padding:20px}
+.lbl{color:#fff;font-size:12px;font-weight:600;margin:0 auto 6px;width:980px}
+.m{width:980px;margin:0 auto 22px;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.3)}
+.hd{background:var(--p);color:#fff;padding:9px 14px;display:flex;align-items:flex-start;gap:12px}
+.hd .t{font-size:15px;font-weight:600}.hd .s{font-size:10px;opacity:.8;margin-top:2px}.hd .x{margin-left:auto;opacity:.8}
+.bar{display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--bd);background:var(--bg)}
+.seg{display:inline-flex;border:1px solid var(--bd);border-radius:6px;overflow:hidden;height:22px;background:#fff}
+.seg span{padding:0 9px;font-size:10px;font-weight:500;display:flex;align-items:center;color:var(--mf)}.seg span.on{background:var(--p);color:#fff}
+.kp{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:10px 14px}
+.k{border:1px solid var(--bd);border-radius:6px;padding:7px 10px}.k .a{font-size:10px;color:var(--mf)}.k .b{font-size:15px;font-weight:600;margin-top:2px}.k .c{font-size:10.5px;color:var(--mf)}
+.k.tot{background:#eef3f9;border-color:#c9d6e6}
+table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:10.5px}
+th{font-size:9.5px;color:var(--mf);font-weight:600;text-align:left;padding:5px 8px;border-bottom:1px solid var(--bd);white-space:nowrap}
+th .o{opacity:.5;margin-left:2px}th.on{color:var(--p)}th.on .o{opacity:1}
+td{padding:4px 8px;border-bottom:1px solid #f0f1f3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.25}
+td.r,th.r{text-align:right}tr:hover td{background:#f7f9fc;cursor:pointer}
+.pill{font-size:9.5px;padding:1px 6px;border-radius:9px;font-weight:600}.re{background:#f0fdf4;color:var(--gr)}.pr{background:#eef3f9;color:var(--p)}
+.adm td{background:#fbfaf6}.tag{font-size:9px;color:var(--am);background:var(--amb);border:1px solid #fde68a;border-radius:4px;padding:0 4px;margin-left:4px}
+.body{height:300px;overflow:auto;padding:0 14px}
+.ft{display:flex;justify-content:space-between;align-items:center;padding:7px 14px;border-top:1px solid var(--bd);font-size:11px;background:var(--bg)}
+.ft b{font-size:12px}
+.grid{width:980px;margin:0 auto 22px;background:#fff;border-radius:8px;padding:10px 14px;font-size:11px}
+.grid table td{padding:4px 8px}.grid .g td:first-child{padding-left:22px}.grid .s td{font-weight:600;background:#eef3f9}
+.note{width:980px;margin:0 auto;background:#fff;border-radius:6px;padding:10px 12px;font-size:11px;line-height:1.5}
+.mut{color:var(--mf)}
+</style></head><body>
+
+<div class="lbl">1 · Grade do DRE pecuária — botão novo "Rateio adm. no grupo" (igual ao da Lavoura)</div>
+<div class="grid">
+ <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px"><b style="font-size:12px">Custo fixo</b>
+  <span class="seg"><span>Custos diretos</span><span class="on">Com rateio adm. nos grupos</span></span>
+  <span class="mut" style="font-size:10px">— variáveis não têm rateio (o administrativo não tem esses centros)</span></div>
+ <table><colgroup><col style="width:44%"><col><col><col></colgroup>
+ <thead><tr><th></th><th class="r">Direto</th><th class="r">Rateio adm.</th><th class="r">Total · R$/cab/mês</th></tr></thead>
+ <tbody>
+ <tr class="s"><td>(−) Custo fixo</td><td class="r">1.080.000</td><td class="r">360.000</td><td class="r">1.440.000 · 20,00</td></tr>
+ <tr class="g"><td>Mão de obra</td><td class="r">540.000</td><td class="r">180.000</td><td class="r">720.000 · 10,00</td></tr>
+ <tr class="g"><td>Máquinas</td><td class="r">216.000</td><td class="r">36.000</td><td class="r">252.000 · 3,50</td></tr>
+ <tr class="g"><td>Administração</td><td class="r">180.000</td><td class="r">72.000</td><td class="r">252.000 · 3,50</td></tr>
+ <tr class="g"><td>Impostos</td><td class="r">144.000</td><td class="r">36.000</td><td class="r">180.000 · 2,50</td></tr>
+ <tr class="g"><td>Financeiro <span class="tag">só rateio adm.</span></td><td class="r">—</td><td class="r">36.000</td><td class="r">36.000 · 0,50</td></tr>
+ </tbody></table>
+</div>
+
+<div class="lbl">2 · Clique no valor "Mão de obra" — aba Lançamentos</div>
+<div class="m">
+ <div class="hd"><div><div class="t">Mão de obra · R$ 720.000,00 · R$ 10,00/cab/mês</div>
+  <div class="s">Custo fixo pecuária · NJ Pecuária · jul/25 → jun/26 · 6.000 cab médias × 12 meses</div></div><div class="x">✕</div></div>
+ <div class="bar"><span class="seg"><span class="on">Lançamentos</span><span>Rateio</span></span>
+  <span class="seg"><span>Direto da fazenda</span><span class="on">Com rateio adm.</span></span>
+  <span class="mut" style="font-size:10px;margin-left:auto">clique na linha abre no Financeiro</span></div>
+ <div class="kp">
+  <div class="k"><div class="a">Direto da fazenda</div><div class="b">R$ 540.000,00</div><div class="c">R$ 7,50/cab/mês · 75%</div></div>
+  <div class="k"><div class="a">Rateio administrativo (Mão de obra adm.)</div><div class="b">R$ 180.000,00</div><div class="c">R$ 2,50/cab/mês · 25%</div></div>
+  <div class="k tot"><div class="a">Total do grupo</div><div class="b">R$ 720.000,00</div><div class="c">R$ 10,00/cab/mês</div></div>
+ </div>
+ <div class="body"><table>
+  <colgroup><col style="width:74px"><col style="width:74px"><col><col style="width:130px"><col style="width:96px"><col style="width:92px"><col style="width:88px"><col style="width:28px"></colgroup>
+  <thead><tr><th class="on">Comp. <span class="o">↓</span></th><th>Pgto <span class="o">↕</span></th><th>Descrição <span class="o">↕</span></th><th>Favorecido <span class="o">↕</span></th><th>Fazenda <span class="o">↕</span></th><th class="r">Valor <span class="o">↕</span></th><th>Status</th><th></th></tr></thead>
+  <tbody>
+  <tr><td>05/06/26</td><td>05/06/26</td><td>Folha de pagamento junho — campo</td><td>Folha NJ</td><td>Retiro</td><td class="r">48.200,00</td><td><span class="pill re">Realizado</span></td><td>✎</td></tr>
+  <tr><td>05/06/26</td><td>05/06/26</td><td>FGTS junho</td><td>Caixa Econômica</td><td>Retiro</td><td class="r">3.856,00</td><td><span class="pill re">Realizado</span></td><td>✎</td></tr>
+  <tr><td>10/06/26</td><td>—</td><td>Rescisão vaqueiro</td><td>João da Silva</td><td>Sta. Luzia</td><td class="r">6.420,00</td><td><span class="pill pr">Programado</span></td><td>✎</td></tr>
+  <tr class="adm"><td>05/06/26</td><td>05/06/26</td><td>Folha escritório junho <span class="tag">rateio adm. 40%</span></td><td>Folha Escritório</td><td>Administrativo</td><td class="r">5.200,00</td><td><span class="pill re">Realizado</span></td><td>✎</td></tr>
+  <tr><td>05/05/26</td><td>05/05/26</td><td>Folha de pagamento maio — campo</td><td>Folha NJ</td><td>Retiro</td><td class="r">47.900,00</td><td><span class="pill re">Realizado</span></td><td>✎</td></tr>
+  <tr class="adm"><td>05/05/26</td><td>05/05/26</td><td>Folha escritório maio <span class="tag">rateio adm. 40%</span></td><td>Folha Escritório</td><td>Administrativo</td><td class="r">5.200,00</td><td><span class="pill re">Realizado</span></td><td>✎</td></tr>
+  <tr><td>20/04/26</td><td>20/04/26</td><td>Diaristas apartação</td><td>Pedro Alves</td><td>Retiro</td><td class="r">2.400,00</td><td><span class="pill re">Realizado</span></td><td>✎</td></tr>
+  </tbody></table></div>
+ <div class="ft"><span>312 lançamentos · 24 de rateio adm. (valor já na parte da pecuária)</span><b>R$ 720.000,00</b></div>
+</div>
+
+<div class="lbl">3 · Mesmo modal — aba Rateio</div>
+<div class="m">
+ <div class="hd"><div><div class="t">Mão de obra · rateio administrativo · R$ 180.000,00</div>
+  <div class="s">Saídas do centro Mão de Obra administrativo × % pecuária do ano → dividido por fazenda pelas cabeças médias</div></div><div class="x">✕</div></div>
+ <div class="bar"><span class="seg"><span>Lançamentos</span><span class="on">Rateio</span></span></div>
+ <div class="body" style="height:auto;padding:10px 14px"><table>
+  <colgroup><col><col style="width:140px"><col style="width:120px"><col style="width:140px"></colgroup>
+  <thead><tr><th>Etapa</th><th class="r">Base</th><th class="r">%</th><th class="r">Valor</th></tr></thead>
+  <tbody>
+  <tr><td>Mão de obra administrativa no período (bruto)</td><td class="r">—</td><td class="r">—</td><td class="r">450.000,00</td></tr>
+  <tr><td>Parte da pecuária (percentual declarado do ano)</td><td class="r">450.000,00</td><td class="r">40%</td><td class="r"><b>180.000,00</b></td></tr>
+  <tr><td style="padding-left:22px">Retiro</td><td class="r">3.900 cab médias</td><td class="r">65%</td><td class="r">117.000,00</td></tr>
+  <tr><td style="padding-left:22px">Sta. Luzia</td><td class="r">2.100 cab médias</td><td class="r">35%</td><td class="r">63.000,00</td></tr>
+  </tbody></table></div>
+ <div class="ft"><span>Mesma conta do DRE: a soma dos grupos fecha no rateio administrativo total</span><b>R$ 180.000,00</b></div>
+</div>
+
+<div class="note"><b>Mock v1 · DRE-MODAL-VALOR-01.</b> Um modal só para Lavoura e Pecuária (partindo do da Lavoura): cabeçalho em 2 linhas (valor + a conta por trás), abas <b>Lançamentos | Rateio</b>, tabela fixa sem rolagem horizontal, ordenável em todas as colunas (Comp., Pgto, Descrição, Favorecido, Fazenda, Valor), clique na linha abre no Financeiro, rodapé com contagem e total. Na Pecuária a unidade é R$/cab/mês; na Lavoura, R$/ha.<br>
+<b>Suas decisões aplicadas:</b> rateio adm. aberto por grupo (Mão de obra, Máquinas, Administração, Impostos) + "Financeiro" como linha própria do custo fixo; botão na grade muda os números dos grupos; variáveis sem rateio.<br>
+<b>Números ilustrativos</b> (não vieram do banco) — só para mostrar a leitura "direto R$ 7,50 + rateio R$ 2,50 = R$ 10,00/cab/mês".</div>
+</body></html>

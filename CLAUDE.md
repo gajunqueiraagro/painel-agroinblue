@@ -808,6 +808,14 @@ no mesmo arquivo.
   a venda e o abate FECHADOS renderizados (data, fazenda e tipo travados; comprador e observacao livres; o Salvar grava e
   o P1 nao o trava; o erro ao lado) e ABERTOS como sempre, e o "Lancar realizado" do boitel que continua com a OC fechada.
   ⚠ PROVADO: com o `fechada` da venda desligado, 2 casos caem; sem a excecao do "Lancar realizado", 1.
+  De 2029 para 2041 no DRE-MODAL-VALOR-01b, em dois arquivos. `src/pages/pecDrePanel.test.tsx` (45 -> 49): o botao
+  "Rateio nos grupos" nao muda o custo fixo total nem o Lucro operacional nos dois modos (numeros do NJ 25/26 medidos no
+  banco), ligado cada grupo soma o seu rateio e o Financeiro vira filha "so rateio adm." com a soma das filhas fechando na
+  mae, desligado exatamente como antes, e a celula levando os numeros dela no clique. `rateioDetalheModal.test.tsx`
+  (16 -> 24): os 8 casos das funcoes puras FICARAM; os 8 de render do modal antigo (tres abas, donuts) SAIRAM com ele e
+  entraram 16 — `ratearNoAlvo`, a soma das linhas = a celula na lavoura e na pecuaria (grupo, so rateio, bloco sem rateio),
+  as etapas da aba Rateio, o rodape, e a ordenacao estavel. ⚠ PROVADO: com o rateio fora de `valorDaFilha` 1 caso cai; com
+  as linhas de rateio sem `ratearNoAlvo`, 3.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -2327,6 +2335,31 @@ preview que o cabecalho nao sai da tela ao rolar.
     funcao. `pg_stat_activity` mostrou duas presas; canceladas, a mesma chamada levou 260 ms. Rodada de prova leva
     `SET LOCAL statement_timeout` abaixo do tempo do canal, e depois de um estouro confere-se o `pg_stat_activity` antes
     de repetir.
+- ⚠ DRE-MODAL-VALOR-01b — UM MODAL DE VALOR PARA A LAVOURA E A PECUARIA, E O RATEIO ADM NOS GRUPOS (27/09/2026, mock
+  `docs/mocks/dre_modal_valor_mock_v1.html`). Sem banco.
+  (1) GRADE DA PECUARIA: botao "Diretos | Rateio nos grupos" (`rateioNosGrupos`, `defsDaGrade`, `valorDaFilha` em
+     `drePecRegua`). Ligado, o custo fixo e' a soma composta (`custo_fixo + rateio_adm`) nos dois modos, cada grupo soma o
+     seu `rateio_adm_grupos`, o grupo sem centro (Financeiro) vira filha "so rateio adm." e a linha/filha do rateio total
+     SAI. Desligado e' `LINHAS_DO_MODO` intacto. Medido na tela, NJ 07/2025-06/2026: custo fixo 3.661.367,52 e Lucro
+     operacional 5.321.717,25 nas duas posicoes; as sete filhas ligadas somam 3.661.367,52.
+     ⚠ NO DETALHADO, LIGADO, A LINHA "(−) Custo fixo" MUDA DE NUMERO (absorve a do rateio, que some). O que e' identico e'
+       custo fixo + rateio e o resultado — e' o mesmo contrato do Resumido.
+     ⚠ OS ROTULOS SAO CURTOS POR MEDICAO: "Custos diretos | Com rateio adm. nos grupos" pedia ~320px e estourava 84px por
+       cima do card "Por fazenda". O botao mora DENTRO do slot fixo de 247px do Δ (botao 154 + 6 + Δ 81 = 241), o texto
+       inteiro no `title`.
+  (2) MODAL UNICO: `ModalValorDre` (`src/components/agri/RateioDetalheModal.tsx`) com dois adaptadores puros,
+     `valorDaLavoura` e `valorDaPecuaria`. SAIRAM `PecLancamentosModal`, `PecRateioAdmModal` (zero import, conferido), o
+     modal de tres abas e os donuts da lavoura, e `ecoDaCelula` (sem chamador). `subtituloDoRateio` e `notaDoRateio` ficam.
+     A linha de rateio vem na parte da CELULA: a `parte` da RPC repartida ate' o rateio da coluna por `ratearNoAlvo`
+     (centavos, residuo na maior) — o rodape fecha na celula. O R$/cab/mes e' o `porCabeca` da grade, com a `cab_media` e
+     os `meses` que viajam no clique (`RecortePec.celula`). A linha do rateio administrativo abre a aba Rateio em QUALQUER
+     coluna de valor (antes, so' o periodo da tela). Lista do rateio da pecuaria: `useRateioAdmPec`, so' com o modal aberto
+     numa celula com rateio.
+  ⚠ LAVOURA-MODAL-X-GRADE-01 — achado, NAO tratado (e' banco): o modal da lavoura fecha no numero da
+    `fn_painel_rateio_detalhe`, que diverge da `fn_dre_lavoura` da grade. NJ 25/26, Amendoim, Operacoes Mecanizadas: grade
+    855.283,36; RPC do modal 426.301,60 direto + 421.784,27 de rateio = 848.085,87 (diferenca 7.197,49). O modal antigo
+    mostrava o MESMO 848.085,87 no cabecalho (`ecoDaCelula`): e' anterior a este PR. Quem retomar mede qual das duas RPCs
+    esta' certa — o modal nao reparte ate' a celula da lavoura de proposito, para nao esconder a diferenca.
 - FORNECEDOR-UUID-CRU-01 — achado, nao tratado (26/09/2026, nos prints do OC-EDITAR-CADASTRAL-01): a compra 69115ef9 (NJ)
   mostra o UUID cru `276efb08…` no seletor de fornecedor e "Contraparte —" no resumo. O fornecedor (Carlos Pacheco) EXISTE,
   esta' ATIVO e e' do NJ; a lista carregada pela tela e' que nao o traz. Causa nao medida (lista carregada antes da troca de

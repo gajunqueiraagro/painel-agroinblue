@@ -41,6 +41,15 @@ export interface DrePecLinhas {
   margem: number | null;
   custo_fixo: number;
   rateio_adm: number;
+  /**
+   * O RATEIO ADMINISTRATIVO ABERTO POR GRUPO — DRE-MODAL-VALOR-01a.
+   *
+   * ⚠ A SOMA DOS GRUPOS E' EXATAMENTE `rateio_adm`, ao centavo: a RPC reparte cada grupo pelas cabecas
+   * medias e poe o residuo do arredondamento no maior grupo. Nenhum grupo e' calculado aqui.
+   * ⚠ O NOME DO GRUPO E' O `centro_custo` DO ADMINISTRATIVO — Administracao, Impostos, Mao de Obra e
+   * Maquinas casam com os centros de mesmo nome do custo fixo; Financeiro nao tem par (linha propria).
+   */
+  rateio_adm_grupos?: RateioGrupoPec[];
   resultado_operacional: number | null;
   /**
    * ⚠ `null` NAS FAZENDAS, número só no TOTAL — DRE-PEC-RPC-02. Juros são da atividade, não de uma
@@ -140,6 +149,20 @@ export interface CentroPec {
 
 export type ChaveLinhaPec = keyof DrePecLinhas;
 
+/** Um grupo do rateio administrativo numa coluna — `valor` ja' e' a parte DAQUELA coluna. */
+export interface RateioGrupoPec {
+  grupo: string;
+  valor: number;
+}
+
+function lerGrupos(v: unknown, campo: 'valor' | 'pool'): RateioGrupoPec[] {
+  if (!Array.isArray(v)) return [];
+  return v.map(x => {
+    const o = objeto(x);
+    return { grupo: String(o.grupo ?? '(sem)'), valor: num(o[campo]) };
+  });
+}
+
 /**
  * O BLOCO DA RPC POR TRÁS DE CADA LINHA QUE EXPANDE.
  *
@@ -166,7 +189,8 @@ export interface DrePecFazenda {
 
 export interface DrePecuaria {
   periodo: { de: string; ate: string; p0: string; meses: number };
-  rateio_adm: { pool: number; bruto: number; criterio: string };
+  /** `grupos`: o pool de cada grupo (antes da divisao por fazenda) — DRE-MODAL-VALOR-01a. */
+  rateio_adm: { pool: number; bruto: number; criterio: string; grupos?: RateioGrupoPec[] };
   fazendas: DrePecFazenda[];
   total: DrePecLinhas;
 }
@@ -229,6 +253,7 @@ export function lerLinhas(x: unknown): DrePecLinhas {
     margem: numOuNulo(o.margem),
     custo_fixo: num(o.custo_fixo),
     rateio_adm: num(o.rateio_adm),
+    rateio_adm_grupos: lerGrupos(o.rateio_adm_grupos, 'valor'),
     resultado_operacional: numOuNulo(o.resultado_operacional),
     juros: numOuNulo(o.juros),
     resultado_periodo: numOuNulo(o.resultado_periodo),
@@ -301,6 +326,7 @@ async function buscarDrePecuaria(
     },
     rateio_adm: {
       pool: num(ra.pool), bruto: num(ra.bruto), criterio: String(ra.criterio ?? ''),
+      grupos: lerGrupos(ra.grupos, 'pool'),
     },
     fazendas: (Array.isArray(o.fazendas) ? o.fazendas : []).map((f: Record<string, unknown>) => ({
       fazenda_id: String(f?.fazenda_id ?? ''),
@@ -413,6 +439,8 @@ export interface LancamentoPec {
   origem: OrigemLancamentoPec;
   id: string | null;
   data: string | null;
+  /** A data de pagamento — DRE-MODAL-VALOR-01a; nula no planejamento e na meta calculada. */
+  pagamento?: string | null;
   descricao: string | null;
   favorecido: string | null;
   valor: number;
@@ -441,6 +469,99 @@ export interface RecortePec {
   de?: string;
   ate?: string;
   cenario?: CenarioPec;
+  /**
+   * SO' O RATEIO ADMINISTRATIVO — DRE-MODAL-VALOR-01b. E' o clique na linha "(−) Rateio administrativo"
+   * do Detalhado: nao ha' lancamento direto a listar, e o modal abre na aba Rateio.
+   */
+  soRateio?: boolean;
+  /**
+   * OS NUMEROS DA CELULA CLICADA — DRE-MODAL-VALOR-01b. O modal fecha as linhas NELES, e o
+   * R$/cab/mes le' a MESMA `cab_media` e os MESMOS `meses` da coluna (o `porCabeca` da grade).
+   * ⚠ `direto` nulo = a linha nao tem parte direta (Financeiro, o rateio administrativo); `rateio`
+   *   nulo = a linha nao tem rateio (os blocos que nao sao custo fixo). Nulo e' "—", nunca zero.
+   * ⚠ `grupo` nulo = todos os grupos do rateio (o custo fixo inteiro ou a linha do rateio).
+   */
+  celula?: {
+    direto: number | null;
+    rateio: number | null;
+    grupo: string | null;
+    cabMedia: number;
+    meses: number;
+    /** O estado do botao da grade no clique — o padrao do segmentado do modal. */
+    comRateio: boolean;
+  };
+}
+
+/**
+ * UM LANCAMENTO ADMINISTRATIVO DO RATEIO DA PECUARIA — `fn_painel_rateio_detalhe` com
+ * `p_atividade = 'pecuaria'` (DRE-MODAL-VALOR-01a).
+ *
+ * ⚠ `parte` JA' E' A PARTE DA PECUARIA (valor x % do ano da atividade), sem arredondar: a soma das
+ *   partes e' o pool do `fn_dre_pecuaria`, provado ao centavo no 01a. A divisao por FAZENDA (cabecas
+ *   medias) nao esta' aqui — ela vem do `rateio_adm_grupos` da coluna, e o modal reparte as linhas
+ *   proporcionalmente para fechar na celula.
+ */
+export interface LancamentoRateioAdmPec {
+  id: string | null;
+  data: string | null;
+  pagamento: string | null;
+  descricao: string | null;
+  favorecido: string | null;
+  fazenda: string | null;
+  status: string | null;
+  valor: number;
+  grupo: string;
+  pct: number;
+  parte: number;
+  origem: 'lancamento' | 'planejamento';
+}
+
+export interface RateioAdmPec {
+  lancamentos: LancamentoRateioAdmPec[];
+  /** Bruto e parte da pecuaria por grupo, no periodo. */
+  grupos: { grupo: string; bruto: number; parte: number }[];
+}
+
+/**
+ * A LISTA DO RATEIO ADMINISTRATIVO DA PECUARIA — DRE-MODAL-VALOR-01b.
+ *
+ * ⚠ E' O MESMO RAMO ADMIN DA LAVOURA (generalizado por atividade no 01a), nao uma consulta nova: a
+ *   lista de exclusoes do macro_custo e o % anual moram na RPC. Aqui so' se le.
+ * ⚠ LIGA SO' COM O MODAL ABERTO (`enabled`): a grade nao precisa dela.
+ */
+export function useRateioAdmPec(
+  clienteId: string | null | undefined, de: string | null, ate: string | null,
+  cenario: CenarioPec, enabled: boolean,
+) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['dre-pec-rateio-adm', clienteId ?? '', de ?? '', ate ?? '', cenario],
+    enabled: enabled && !!clienteId && !!de && !!ate,
+    queryFn: async (): Promise<RateioAdmPec> => {
+      const { data: r, error: err } = await (supabase as any).rpc('fn_painel_rateio_detalhe', {
+        p_cliente: clienteId, p_safra_id: null, p_cultura: null, p_tipo: 'admin', p_chave: null,
+        p_atividade: 'pecuaria', p_de: de, p_ate: ate, p_cenario: cenario,
+      });
+      if (err) throw err;
+      const o = objeto(r);
+      const txt = (v: unknown) => (v == null ? null : String(v));
+      return {
+        lancamentos: (Array.isArray(o.lancamentos) ? o.lancamentos : []).map((x: unknown) => {
+          const l = objeto(x);
+          return {
+            id: txt(l.id), data: txt(l.data), pagamento: txt(l.pagamento), descricao: txt(l.descricao),
+            favorecido: txt(l.favorecido), fazenda: txt(l.fazenda), status: txt(l.status),
+            valor: num(l.valor), grupo: String(l.grupo ?? '(sem)'), pct: num(l.pct), parte: num(l.parte),
+            origem: l.origem === 'planejamento' ? 'planejamento' : 'lancamento',
+          };
+        }),
+        grupos: (Array.isArray(o.grupos) ? o.grupos : []).map((x: unknown) => {
+          const g = objeto(x);
+          return { grupo: String(g.grupo ?? '(sem)'), bruto: num(g.bruto), parte: num(g.parte) };
+        }),
+      };
+    },
+  });
+  return { rateio: data ?? null, carregando: isLoading };
 }
 
 /**
@@ -475,7 +596,9 @@ export function useDrePecuariaLancamentos(
        fazenda) são duas listas, e uma chave só faria a segunda mostrar a primeira. */
     queryKey: ['dre-pec-lancamentos', clienteId ?? '', recorte?.fazendaId ?? '',
       recorte?.bloco ?? '', recorte?.centro ?? '', deEf ?? '', ateEf ?? '', cenarioEf],
-    enabled: !!clienteId && !!recorte && !!deEf && !!ateEf,
+    /* ⚠ RECORTE SO' DE RATEIO NAO TEM LISTA DIRETA — DRE-MODAL-VALOR-01b: o bloco dele nao existe na
+       RPC, e pedir traria uma lista vazia com cara de "nenhum lancamento". */
+    enabled: !!clienteId && !!recorte && !recorte.soRateio && !!deEf && !!ateEf,
     queryFn: async (): Promise<LancamentoPec[]> => {
       const { data: r, error: err } = await (supabase as any).rpc('fn_dre_pecuaria_lancamentos', {
         p_cliente: clienteId,
@@ -493,6 +616,7 @@ export function useDrePecuariaLancamentos(
           origem: lerOrigem(o.origem),
           id: o.id == null ? null : String(o.id),
           data: o.data == null ? null : String(o.data),
+          pagamento: o.pagamento == null ? null : String(o.pagamento),
           descricao: o.descricao == null ? null : String(o.descricao),
           favorecido: o.favorecido == null ? null : String(o.favorecido),
           valor: num(o.valor),

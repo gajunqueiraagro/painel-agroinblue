@@ -16,10 +16,13 @@
  * prova que ela reparte o que a tela vai mostrar.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import {
-  RateioDetalheModal, subtituloDoRateio, notaDoRateio, type RateioDetalhe,
+  ModalValorDre, valorDaLavoura, valorDaPecuaria, ratearNoAlvo, COLUNAS_VALOR_DRE,
+  subtituloDoRateio, notaDoRateio, type RateioDetalhe, type ValorDre, type LinhaValorDre,
 } from '@/components/agri/RateioDetalheModal';
+import { ordenarPorColuna } from '@/hooks/useOrdenacaoTabela';
+import type { LancamentoPec, RateioAdmPec, RecortePec, DrePecuaria, DrePecLinhas } from '@/hooks/useDrePecuaria';
 
 const BASE: RateioDetalhe = {
   pool: 104675.83,
@@ -56,13 +59,15 @@ const BASE: RateioDetalhe = {
  */
 const txt = (t: string) => t.replace(/\u00A0/g, ' ');
 
+/** O modal de valor da lavoura sobre um payload — a mesma chamada da tela. */
 function montar(
   dados: RateioDetalhe, tipo: 'natureza' | 'investimento' | 'admin', rateioDentro?: boolean,
   pool?: boolean,
 ) {
   render(
-    <RateioDetalheModal aberto onFechar={vi.fn()} titulo="Administração · Amendoim · Safra 25/26"
-      dados={dados} tipo={tipo} rateioDentro={rateioDentro} pool={pool} />,
+    <ModalValorDre aberto onFechar={vi.fn()}
+      valor={valorDaLavoura(dados, tipo, { rotulo: 'Administração', cultura: 'amendoim', safra: '25/26', area: 185, pool: !!pool })}
+      comRateioInicial={tipo === 'admin' || !!pool || !!rateioDentro} />,
   );
 }
 
@@ -159,90 +164,198 @@ describe('notaDoRateio — o que muda entre os tipos', () => {
   });
 });
 
-describe('o que a aba aberta mostra', () => {
-  /* ⚠ DUAS LINHAS DESDE O PR-04, e o teste tem de distingui-las: a primeira ECOA a célula
-     clicada, a segunda EXPLICA a conta. Um `getByText` solto achava as duas e falhava dizendo
-     "multiple elements" — a falha certa, pela razão certa. */
-  it('o cabeçalho traz o eco da célula e a conta que o explica', () => {
-    montar(BASE, 'natureza');
-    expect(screen.getByText('R$ 82.484,55 nesta cultura')).toBeTruthy();
-    expect(screen.getByText(/78,8% de R\$ 104\.675,83 por área/)).toBeTruthy();
+/* ══════════════ O MODAL DE VALOR — DRE-MODAL-VALOR-01b ══════════════ */
+
+const soma = (ls: readonly { valor: number }[]) => Math.round(ls.reduce((a, l) => a + l.valor, 0) * 100) / 100;
+
+describe('ratearNoAlvo — a soma é o alvo, ao centavo', () => {
+  it('três terços de 100 fecham em 100,00, com o resíduo na maior linha', () => {
+    const r = ratearNoAlvo([1, 1, 1.0001], 100);
+    expect(Math.round(r.reduce((a, x) => a + x, 0) * 100)).toBe(10000);
+    expect(r[2]).toBe(33.34);
+  });
+  it('peso total zero não inventa proporção', () => {
+    expect(ratearNoAlvo([0, 0], 50)).toEqual([0, 0]);
+  });
+});
+
+describe('lavoura: a soma das linhas é a célula', () => {
+  it('com rateio: direto + o pool repartido pela fatia = direto + fatia, com o selo nas linhas do pool', () => {
+    const v = valorDaLavoura({ ...BASE, direto_cultura: 10000 }, 'natureza',
+      { rotulo: 'Administração', cultura: 'amendoim', safra: '25/26', area: 185, pool: false });
+    expect(soma(v.linhas)).toBe(92484.55);
+    expect(soma(v.linhas.filter(l => l.rateioPct == null))).toBe(10000);
+    expect(v.linhas.filter(l => l.rateioPct != null)).toHaveLength(2);
+    expect(v.porUnidade(92484.55)).toBe('R$ 499,92/ha');
   });
 
-  /* ⚠ O MODAL SEGUE O TOGGLE (§0), e este par é o teste que prova: MESMO centro, MESMA cultura,
-     MESMO payload — só o modo muda, e com ele o número do topo, a existência das abas e a linha
-     que explica a divisão. Era o defeito: o modal respondia sempre com o total, mesmo quando a
-     célula clicada mostrava só o direto. */
-  it('modo "Custos diretos": uma lista, zero abas, sem falar de pool', () => {
+  it('modo "Custos diretos": o cabeçalho ecoa o direto, a lista é só a direta e o rodapé fecha nele', () => {
     montar({ ...BASE, direto_cultura: 10000 }, 'natureza', false);
-    expect(screen.getByText('R$ 10.000,00 nesta cultura')).toBeTruthy();
-    expect(screen.queryByText(/Divisão do rateio/)).toBeNull();
-    expect(screen.queryByText(/A ratear ·/)).toBeNull();
-    expect(screen.queryByText(/por área/)).toBeNull();
+    expect(txt(screen.getByRole('heading').textContent ?? '')).toContain('R$ 10.000,00');
+    expect(screen.queryByText(/rateio 78,8%/)).toBeNull();
+    expect(screen.getByText('1 lançamento')).toBeTruthy();
   });
 
-  it('modo "Com rateio nos centros": três abas e o total no topo', () => {
+  it('com rateio: o total no topo e "N lançamentos · M de rateio"', () => {
     montar({ ...BASE, direto_cultura: 10000 }, 'natureza', true);
-    expect(screen.getByText('R$ 92.484,55 nesta cultura')).toBeTruthy();
-    expect(screen.getByText(/Divisão do rateio/)).toBeTruthy();
-    expect(screen.getByText(/A ratear · 2/)).toBeTruthy();
-    expect(screen.getByText(/78,8% de R\$ 104\.675,83 por área/)).toBeTruthy();
+    expect(txt(screen.getByRole('heading').textContent ?? '')).toContain('R$ 92.484,55');
+    expect(screen.getByText('3 lançamentos · 2 de rateio')).toBeTruthy();
+    /* o segmentado do modal troca a leitura sem fechar */
+    fireEvent.click(screen.getByRole('button', { name: 'Direto da cultura' }));
+    expect(txt(screen.getByRole('heading').textContent ?? '')).toContain('R$ 10.000,00');
   });
 
-  /* ⚠ O POOL TEM DUAS ABAS, NUNCA TRÊS: "custos diretos" de um pool é contradição — se houvesse
-     parte direta, ela não seria compartilhada. E a lista ganha a coluna Centro, porque as linhas
-     vêm de vários (Insumos, Operações Mecanizadas, Serviços…). */
-  it('o pool abre com duas abas, coluna Centro e sem custos diretos', () => {
-    montar({
-      ...BASE, direto_cultura: 0,
-      lancamentos: [
-        { id: 'p1', centro: 'Insumos', data: '2026-01-10', descricao: 'Adubo', favorecido: 'Coop', valor: 5000, compartilhado: true },
-        { id: 'p2', centro: 'Operações Mecanizadas', data: '2026-02-10', descricao: 'Diesel', favorecido: 'Posto', valor: 8000, compartilhado: true },
-      ],
-    }, 'natureza', false, true);
-    expect(screen.getByText(/Divisão do rateio/)).toBeTruthy();
-    expect(screen.getByText(/A ratear · 2/)).toBeTruthy();
-    expect(screen.queryByText(/Custos diretos/)).toBeNull();
-    /* ⚠ A SEGUNDA LINHA É SÓ O PERCENTUAL DO POOL: a cauda "(sem custo direto neste centro)"
-       seria falsa aqui — um pool não tem parte direta por definição. */
-    expect(screen.getByText('78,8% de R$ 104.675,83 por área')).toBeTruthy();
+  it('o pool não tem parte direta: "—" no cartão e o segmentado travado', () => {
+    montar(BASE, 'natureza', false, true);
+    expect(screen.getAllByText('—').length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'Direto da cultura' }).hasAttribute('disabled')).toBe(true);
+    expect(txt(screen.getByRole('heading').textContent ?? '')).toContain('R$ 82.484,55');
   });
 
-  /* ⚠ SEM DIVISÃO NÃO HÁ BARRA DE ABAS (§10c): pool zero, ou uma cultura só na safra, e o modal
-     vira a lista daquele centro. Uma aba só é rótulo, não escolha. */
-  it('sem pool e com uma cultura, abre sem abas e só com os diretos', () => {
-    montar({
-      ...BASE, pool: 0, direto_cultura: 23737.56,
+  it('sem pool: rateio "—", aba Rateio desligada', () => {
+    montar({ ...BASE, pool: 0, direto_cultura: 23737.56,
       fatias: [{ cultura: 'mandioca', area_ha: 49.8, peso: 100, valor: 0, atual: true }],
       lancamentos: [{ id: 'x', data: '2026-02-01', descricao: 'Frete', favorecido: 'Transp', valor: 23737.56, compartilhado: false }],
     }, 'natureza');
-    expect(screen.queryByText(/Divisão do rateio/)).toBeNull();
-    expect(screen.queryByText(/Rateados ·/)).toBeNull();
-    expect(screen.getByText(/Não há rateio a repartir aqui/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Rateio' }).hasAttribute('disabled')).toBe(true);
   });
 
-  /* ⚠ O TOTAL EM 100% É A PROVA de que nenhuma cultura ficou de fora da repartição. */
-  it('a grade fecha em 100% e na soma das áreas', () => {
-    montar(BASE, 'natureza');
-    expect(screen.getByText('100,0%')).toBeTruthy();
-    expect(screen.getByText('234,80')).toBeTruthy();
+  it('a aba Rateio: pool → culturas, a aberta em destaque e as fatias fechando no pool', () => {
+    montar(BASE, 'natureza', true);
+    fireEvent.click(screen.getByRole('button', { name: 'Rateio' }));
+    expect(screen.getByText('Custo compartilhado a ratear')).toBeTruthy();
+    expect(screen.getByText('185,00 ha')).toBeTruthy();
+    expect(screen.getByText('82.484,55')).toBeTruthy();
+    expect(screen.getByText('22.191,28')).toBeTruthy();
   });
 
-  /* ⚠ TRÊS ABAS NO CENTRO, E CADA CONTAGEM É A DA SUA LISTA: a aba única de antes somava direto
-     e rateado no mesmo rolo, e era a soma dela que não fechava com nenhum número do subtítulo. */
-  /* ⚠ SEM O TOGGLE (chamador que não o conhece) o comportamento antigo fica: três abas. */
-  it('o centro mostra as três abas, cada uma com a contagem da sua lista', () => {
-    montar(BASE, 'natureza');
-    expect(screen.getByText(/Custos diretos · 1/)).toBeTruthy();
-    expect(screen.getByText(/Divisão do rateio/)).toBeTruthy();
-    expect(screen.getByText(/A ratear · 2/)).toBeTruthy();
-  });
-
-  /* ⚠ O ADMIN FICA COM DUAS, e é de propósito: lá a lista é o custo do escritório INTEIRO e não
-     se divide em "meu" e "comum" — a repartição dele é por atividade, que é o passo 1. */
-  it('o administrativo continua com duas abas e a lista inteira', () => {
-    montar(ADMIN(25), 'admin');
-    expect(screen.getByText(/Lançamentos · 3/)).toBeTruthy();
-    expect(screen.queryByText(/Custos diretos/)).toBeNull();
+  it('admin: tudo é rateio, repartido até a fatia, com o selo "rateio adm."', () => {
+    const d = { ...ADMIN(25), lancamentos: BASE.lancamentos.map(l => ({ ...l, parte: l.valor * 0.25 })) };
+    const v = valorDaLavoura(d, 'admin', { rotulo: 'Administrativo', cultura: 'amendoim', safra: null, area: 185, pool: false });
+    expect(v.direto).toBeNull();
+    expect(soma(v.linhas)).toBe(82484.55);
+    expect(v.seloRateio).toBe('rateio adm.');
   });
 });
+
+/* ── pecuária ── */
+const lp = (o: Partial<LancamentoPec>): LancamentoPec => ({
+  origem: 'lancamento', id: 'x', data: '2026-01-05', pagamento: '2026-01-05', descricao: 'd', favorecido: 'f',
+  valor: 0, status: 'realizado', fazenda: 'Retiro', fazenda_id: 'f1', centro: 'Mão de Obra', subcentro: null,
+  bloco: 'fixo', documento: null, ...o,
+});
+const RATEIO_PEC: RateioAdmPec = {
+  grupos: [{ grupo: 'Mão de Obra', bruto: 1000, parte: 700 }, { grupo: 'Financeiro', bruto: 100, parte: 70 }],
+  lancamentos: [
+    { id: 'a1', data: '2026-01-05', pagamento: '2026-01-05', descricao: 'Folha escritório', favorecido: 'Folha', fazenda: 'Administrativo',
+      status: 'realizado', valor: 600, grupo: 'Mão de Obra', pct: 70, parte: 420, origem: 'lancamento' },
+    { id: 'a2', data: '2026-02-05', pagamento: null, descricao: 'Folha escritório fev', favorecido: 'Folha', fazenda: 'Administrativo',
+      status: 'programado', valor: 400, grupo: 'Mão de Obra', pct: 70, parte: 280, origem: 'lancamento' },
+    { id: 'a3', data: '2026-02-05', pagamento: null, descricao: 'IOF', favorecido: 'Banco', fazenda: 'Administrativo',
+      status: 'realizado', valor: 100, grupo: 'Financeiro', pct: 70, parte: 70, origem: 'lancamento' },
+  ],
+};
+const linhasPec = (o: Partial<DrePecLinhas>): DrePecLinhas => ({
+  vendas: 0, outras_receitas: 0, receita_bruta: 0, deducoes: 0, receita_liquida: 0, vpb_operacional: 0, reposicao: 0,
+  vbp: 0, custo_variavel: 0, margem: 0, custo_fixo: 0, rateio_adm: 0, resultado_operacional: 0, juros: null,
+  resultado_periodo: 0, efeito_mercado: 0, resultado_com_mercado: 0, investimento: 0, a_pagar: 0,
+  lucro_liquido: 0, juros_proprio: 0, juros_rateado: 0,
+  patrimonio: { v_ini_p0: 0, v_fim_p0: 0, v_fim_p1: 0, cab_ini: 0, cab_fim: 0, cab_media: 0 },
+  producao: { ha_medio: null, at_produzida: null, at_desfrutada: null, cab_desfrutada: null, at_comprada: null, cab_comprada: null },
+  p0_fonte: 'fechamento', p1_fonte: 'fechamento', centros: [], centros_juros: [], ...o,
+});
+const DRE_PEC: DrePecuaria = {
+  periodo: { de: '2025-07', ate: '2026-06', p0: '2025-06', meses: 12 },
+  rateio_adm: { pool: 770, bruto: 1100, criterio: 'cabecas medias no periodo' },
+  fazendas: [
+    { fazenda_id: 'f1', nome: 'Retiro', linhas: linhasPec({ rateio_adm: 500.5,
+      patrimonio: { v_ini_p0: 0, v_fim_p0: 0, v_fim_p1: 0, cab_ini: 0, cab_fim: 0, cab_media: 3900 },
+      rateio_adm_grupos: [{ grupo: 'Mão de Obra', valor: 455 }, { grupo: 'Financeiro', valor: 45.5 }] }) },
+    { fazenda_id: 'f2', nome: 'Sta. Luzia', linhas: linhasPec({ rateio_adm: 269.5,
+      patrimonio: { v_ini_p0: 0, v_fim_p0: 0, v_fim_p1: 0, cab_ini: 0, cab_fim: 0, cab_media: 2100 },
+      rateio_adm_grupos: [{ grupo: 'Mão de Obra', valor: 245 }, { grupo: 'Financeiro', valor: 24.5 }] }) },
+  ],
+  total: linhasPec({}),
+};
+const RECORTE_MO: RecortePec = {
+  fazendaId: 'f1', fazendaNome: 'Retiro', bloco: 'fixo', centro: 'Mão de Obra', rotulo: 'Mão de Obra',
+  de: '2025-07', ate: '2026-06', cenario: 'realizado',
+  celula: { direto: 3000, rateio: 455, grupo: 'Mão de Obra', cabMedia: 3900, meses: 12, comRateio: true },
+};
+const LANC_MO = [lp({ id: 'd1', valor: 1800 }), lp({ id: 'd2', valor: 1200, data: '2026-03-01' })];
+
+describe('pecuária: a soma das linhas é a célula', () => {
+  it('direto + o rateio do grupo repartido até a fazenda = o valor da célula, ao centavo', () => {
+    const v = valorDaPecuaria({ recorte: RECORTE_MO, lancamentos: LANC_MO, rateio: RATEIO_PEC, dre: DRE_PEC, periodoRotulo: 'Safra 25/26' });
+    expect(soma(v.linhas)).toBe(3455);
+    /* só o grupo da linha: o IOF (Financeiro) não entra na Mão de Obra */
+    expect(v.linhas.filter(l => l.rateioPct != null)).toHaveLength(2);
+    expect(soma(v.linhas.filter(l => l.rateioPct != null))).toBe(455);
+    /* R$/cab/mês é o `porCabeca` da grade: 3.455 / 3.900 / 12 */
+    expect(v.porUnidade(3455)).toBe('R$ 0,07/cab/mês');
+    expect(v.contexto).toContain('3.900 cab médias × 12 meses');
+  });
+
+  it('a aba Rateio: bruto → parte da pecuária → fazendas pelas cabeças, a da coluna em destaque', () => {
+    const v = valorDaPecuaria({ recorte: RECORTE_MO, lancamentos: LANC_MO, rateio: RATEIO_PEC, dre: DRE_PEC, periodoRotulo: 'Safra 25/26' });
+    expect(v.etapas.map(e => [e.etapa, e.valor])).toEqual([
+      ['Mão de Obra administrativo no período (bruto)', 1000],
+      ['Parte da pecuária (percentual declarado do ano)', 700],
+      ['Retiro', 455],
+      ['Sta. Luzia', 245],
+    ]);
+    expect(v.etapas[2].destaque).toBe(true);
+    expect(v.etapas[2].pct).toBe(65);
+  });
+
+  it('só rateio (Financeiro): direto "—", nenhuma lista direta, tudo do grupo', () => {
+    const v = valorDaPecuaria({
+      recorte: { ...RECORTE_MO, centro: 'Financeiro', rotulo: 'Financeiro', soRateio: true,
+        celula: { direto: null, rateio: 45.5, grupo: 'Financeiro', cabMedia: 3900, meses: 12, comRateio: true } },
+      lancamentos: LANC_MO, rateio: RATEIO_PEC, dre: DRE_PEC, periodoRotulo: 'Safra 25/26' });
+    expect(v.direto).toBeNull();
+    expect(soma(v.linhas)).toBe(45.5);
+    expect(v.linhas.every(l => l.rateioPct != null)).toBe(true);
+  });
+
+  it('bloco sem rateio (variável): rateio "—" e só as linhas diretas', () => {
+    const v = valorDaPecuaria({
+      recorte: { ...RECORTE_MO, bloco: 'variavel', centro: 'Nutrição',
+        celula: { direto: 3000, rateio: null, grupo: 'Nutrição', cabMedia: 3900, meses: 12, comRateio: false } },
+      lancamentos: LANC_MO, rateio: RATEIO_PEC, dre: DRE_PEC, periodoRotulo: 'Safra 25/26' });
+    expect(v.rateio).toBeNull();
+    expect(v.etapas).toHaveLength(0);
+    expect(soma(v.linhas)).toBe(3000);
+  });
+
+  it('o modal: rodapé "N lançamentos · M de rateio adm." com o total da célula, e o selo na linha', () => {
+    render(<ModalValorDre aberto onFechar={vi.fn()} comRateioInicial
+      valor={valorDaPecuaria({ recorte: RECORTE_MO, lancamentos: LANC_MO, rateio: RATEIO_PEC, dre: DRE_PEC, periodoRotulo: 'Safra 25/26' })} />);
+    expect(screen.getByText('4 lançamentos · 2 de rateio adm.')).toBeTruthy();
+    expect(screen.getByText('R$ 3.455,00', { selector: 'b' })).toBeTruthy();
+    expect(screen.getAllByText(/rateio adm\. \d/).length).toBe(2);
+  });
+});
+
+describe('a ordenação da tabela é estável', () => {
+  const L = (chave: string, competencia: string, valor: number): LinhaValorDre => ({
+    chave, idEditavel: null, competencia, pagamento: null, descricao: chave, favorecido: null, fazenda: null,
+    valor, status: null, rateioPct: null,
+  });
+  const linhas = [L('a', '2026-01-01', 10), L('b', '2026-01-01', 20), L('c', '2026-02-01', 10), L('d', '2026-01-01', 10)];
+  it('empates guardam a ordem de origem, nos dois sentidos e em qualquer coluna', () => {
+    const col = (c: string) => COLUNAS_VALOR_DRE.find(x => x.coluna === c);
+    expect(ordenarPorColuna(linhas, col('comp'), 'asc').map(l => l.chave)).toEqual(['a', 'b', 'd', 'c']);
+    expect(ordenarPorColuna(linhas, col('comp'), 'desc').map(l => l.chave)).toEqual(['c', 'a', 'b', 'd']);
+    expect(ordenarPorColuna(linhas, col('valor'), 'asc').map(l => l.chave)).toEqual(['a', 'c', 'd', 'b']);
+    /* reordenar duas vezes dá o mesmo — a lista não "pisca" */
+    const v1 = ordenarPorColuna(linhas, col('valor'), 'desc').map(l => l.chave);
+    expect(ordenarPorColuna(linhas, col('valor'), 'desc').map(l => l.chave)).toEqual(v1);
+  });
+  it('todas as sete colunas de dado são ordenáveis', () => {
+    expect(COLUNAS_VALOR_DRE.map(c => c.coluna)).toEqual(['comp', 'pgto', 'descricao', 'favorecido', 'fazenda', 'valor', 'status']);
+  });
+});
+
+/* O tipo `ValorDre` é o contrato das duas atividades — este uso garante que ele segue exportado. */
+export type { ValorDre };

@@ -1,37 +1,33 @@
 /**
- * O MODAL DO RATEIO — PR-RATEIO-F1.
+ * O MODAL DE VALOR DO DRE — DRE-MODAL-VALOR-01b. Um só para a Lavoura e para a Pecuária.
  *
- * ⚠ ELE EXISTE PARA RESPONDER UMA PERGUNTA SÓ: "por que a linha do painel mostra ESTE valor, se
- * a nota fiscal diz outro?". A resposta é sempre a mesma — o gasto é compartilhado e foi
- * repartido por área plantada —, e até aqui ela não estava em lugar nenhum da tela. Era a razão
- * de o Rateio administrativo ter ficado sem clique desde a F1.
- *
- * ⚠ SÓ O COMPONENTE (fatia 1). Ele não busca nada: recebe o payload de `fn_painel_rateio_detalhe`
- * pronto. Quem chama a RPC e quem liga no drill é a fatia 3.
- *
- * ⚠ O DONUT É `recharts`, NÃO SVG À MÃO, e isso contraria a letra do briefing de propósito. A
- * condição que ele põe é "se NÃO tiver Chart.js, desenhar em SVG": Chart.js de fato não existe
- * aqui, mas `recharts` existe e é dependência desde sempre — e a casa já desenha ESTE donut, com
- * `innerRadius/outerRadius` numa caixa de tamanho fixo e uma tabela alinhada ao lado, em
- * `ExtratoDistribuicaoEconomica`. Escrever um arco de `stroke-dasharray` aqui criaria a segunda
- * maneira de desenhar a mesma figura, e nenhuma dependência seria evitada.
- * ⚠ A LEI DO GRÁFICO COMPACTO CONTINUA VALENDO: caixa de tamanho declarado, sem `ResponsiveContainer`
- * espalhando o donut pela largura do modal.
+ * ⚠ ELE NASCEU DO MODAL DO RATEIO DA LAVOURA (PR-RATEIO-F1) e responde a mesma pergunta, agora nas
+ *   duas atividades: "de onde sai ESTE número da grade?". Cabeçalho em duas linhas (o número e a
+ *   conta por trás dele), abas Lançamentos | Rateio, três cartões (direto, rateio, total), a lista
+ *   inteira — direto e rateio na mesma tabela, o rateio marcado — e o rodapé com o total.
+ * ⚠ ELE NÃO BUSCA NADA: recebe um `ValorDre` pronto. Os dois adaptadores puros (`valorDaLavoura`,
+ *   `valorDaPecuaria`) moram aqui embaixo e são o que se testa: a soma das linhas FECHA NA CÉLULA.
+ * ⚠ SAÍRAM COM ELE o `PecLancamentosModal` e o `PecRateioAdmModal` (a lista e o rateio da pecuária
+ *   em dois modais), os donuts e as três abas do rateio da lavoura. A conta que o donut desenhava
+ *   virou a aba Rateio — etapa, base, %, valor —, que é a mesma nas duas atividades.
+ * ⚠ A LINHA DE RATEIO JÁ VEM NA PARTE DA CÉLULA: a RPC devolve a parte da atividade (`parte`) e o
+ *   adaptador a reparte até a coluna (fazenda ou cultura) por `ratearNoAlvo`, em centavos, com o
+ *   resíduo na maior linha. Por isso a soma da lista é o número da grade, e não o bruto.
  */
-import { useMemo, useState } from 'react';
-/* ⚠ O `Donut` SAIU DAQUI — DRE-HISTORICO-LINHA-01a: o modal do histórico da linha desenha o mesmo,
-   e ele passou a morar na régua compartilhada do DRE. Mesmo corpo, mesmo tamanho, mesmo centro. */
-import { Donut } from '@/components/agri/dreGrade';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { Segmentado } from '@/components/ui/segmentado';
-import { Button } from '@/components/ui/button';
-import { X } from 'lucide-react';
+import { Loader2, Pencil, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
 import { useOrdenacaoTabela, type ColunaOrdenavel } from '@/hooks/useOrdenacaoTabela';
 import { ThOrdenavel } from '@/components/ui/th-ordenavel';
+import { porCabeca, rateioDoGrupo } from '@/components/agri/drePecRegua';
+import type {
+  DrePecuaria, LancamentoPec, RateioAdmPec, RecortePec,
+} from '@/hooks/useDrePecuaria';
+
 
 /** Uma cultura na repartição do pool. */
 export interface FatiaRateio {
@@ -67,6 +63,17 @@ export interface LancamentoRateio {
   descricao: string | null;
   favorecido: string | null;
   valor: number;
+  /**
+   * DRE-MODAL-VALOR-01a: pagamento, status e fazenda nos dois ramos; `grupo`, `pct` e `parte` no
+   * ramo admin (`parte` = a fatia da atividade, sem arredondar). Opcionais: o payload antigo não os traz.
+   */
+  pagamento?: string | null;
+  status?: string | null;
+  fazenda?: string | null;
+  grupo?: string | null;
+  pct?: number | null;
+  parte?: number | null;
+  origem?: string | null;
   /** `true` = sem cultura marcada, é o que entra no pool compartilhado. */
   compartilhado: boolean;
 }
@@ -108,81 +115,9 @@ export interface RateioDetalhe {
   fatias_atividade?: FatiaAtividade[] | null;
 }
 
-/**
- * ⚠ ORDEM FIXA, NÃO SORTEADA POR HASH: a mesma cultura tem de sair da mesma cor toda vez que o
- * modal abre, senão comparar duas aberturas vira adivinhação. O índice é o da lista de fatias,
- * que a RPC já devolve ordenada por área desc.
- */
-const CORES = ['#2a78d6', '#eb6834', '#2f9e6b', '#b45cd6', '#d6a52a', '#5a6b7a'];
-const corDaFatia = (i: number) => CORES[i % CORES.length];
-
-/**
- * ⚠ A ATIVIDADE TEM COR PRÓPRIA, POR NOME e não por posição: a agricultura é o azul da casa —
- * o mesmo do donut do passo 2 — e as outras duas ficam em tons neutros. É o que liga
- * visualmente a fatia azul do primeiro donut ao total do segundo; com cor por índice, a
- * agricultura mudaria de cor conforme a ordem por valor, e o elo entre os dois passos sumiria.
- */
-const COR_ATIVIDADE: Record<string, string> = {
-  pecuaria: '#888780', agricultura: '#2a78d6', silvicultura: '#c8c6bd',
-};
-const corDaAtividade = (a: string) => COR_ATIVIDADE[a.toLowerCase()] ?? '#5a6b7a';
-const rotuloAtividade = (a: string) => (a ? a.charAt(0).toUpperCase() + a.slice(1) : '—');
 
 const dataBR = (iso: string | null) => (iso && iso.length >= 10
   ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '—');
-
-const TH = 'sticky top-0 z-10 bg-primary px-2 py-1 text-[9px] font-semibold uppercase'
-  + ' tracking-wide text-primary-foreground';
-
-/**
- * O DONUT — um só componente para os dois passos do admin e para o de cultura.
- *
- * ⚠ ELE ILUSTRA, NÃO SELECIONA. Sem `onClick`, sem `activeIndex`, sem `activeShape`: o realce
- * que "prendia" a fatia depois do clique vinha de o recharts assumir seleção onde não há nada
- * para selecionar — quem lista e destaca é a TABELA ao lado.
- * ⚠ E A BORDA FEIA ERA O FOCO DO NAVEGADOR, não o recharts: os setores são `<path>` focáveis
- * (o recharts dá `tabIndex` a eles por acessibilidade), e clicar desenhava o anel de foco do
- * SO por cima do arco. `rootTabIndex={-1}` tira os setores da navegação e o `outline-none`
- * fecha o caso nos navegadores que focam no clique mesmo assim.
- * ⚠ SEM `ResponsiveContainer`: a caixa tem tamanho declarado, então não há o que medir — e ele
- * monta um `ResizeObserver` que o jsdom não tem, derrubando os testes.
- */
-/**
- * AS COLUNAS ORDENÁVEIS — o mesmo contrato de `useOrdenacaoTabela`, que a lista de cargas da
- * colheita já usa. Não há ordenação nova aqui: o hook e o `ThOrdenavel` são os da casa, e a
- * seta invisível que eles reservam em cada cabeçalho é o que impede a tabela de se remexer a
- * cada clique.
- */
-const COLUNAS_ATIVIDADE: Array<ColunaOrdenavel<FatiaAtividade, string> & { h: string }> = [
-  { coluna: 'atividade', h: 'Atividade', tipo: 'texto', valor: f => f.atividade },
-  { coluna: 'pct', h: '%', tipo: 'numero', valor: f => f.valor },
-  { coluna: 'valor', h: 'R$', tipo: 'numero', valor: f => f.valor },
-];
-
-const COLUNAS_FATIA: Array<ColunaOrdenavel<FatiaRateio, string> & { h: string }> = [
-  { coluna: 'cultura', h: 'Cultura', tipo: 'texto', valor: f => f.cultura },
-  { coluna: 'area', h: 'Área ha', tipo: 'numero', valor: f => f.area_ha },
-  { coluna: 'peso', h: '%', tipo: 'numero', valor: f => f.peso },
-  { coluna: 'valor', h: 'R$', tipo: 'numero', valor: f => f.valor },
-];
-
-const COLUNAS_LANC: Array<ColunaOrdenavel<LancamentoRateio, string> & { h: string }> = [
-  { coluna: 'data', h: 'Data', tipo: 'data', valor: l => l.data },
-  { coluna: 'descricao', h: 'Descrição', tipo: 'texto', valor: l => l.descricao },
-  { coluna: 'favorecido', h: 'Favorecido', tipo: 'texto', valor: l => l.favorecido },
-  { coluna: 'valor', h: 'Valor', tipo: 'numero', valor: l => l.valor },
-];
-
-/** As mesmas, com Centro entre Descrição e Favorecido — só a lista do pool a usa. */
-const COLUNAS_LANC_COM_CENTRO: Array<ColunaOrdenavel<LancamentoRateio, string> & { h: string }> = [
-  { coluna: 'data', h: 'Data', tipo: 'data', valor: l => l.data },
-  { coluna: 'descricao', h: 'Descrição', tipo: 'texto', valor: l => l.descricao },
-  { coluna: 'centro', h: 'Centro', tipo: 'texto', valor: l => l.centro ?? '' },
-  { coluna: 'favorecido', h: 'Favorecido', tipo: 'texto', valor: l => l.favorecido },
-  { coluna: 'valor', h: 'Valor', tipo: 'numero', valor: l => l.valor },
-];
-
-
 
 /** O tipo de recorte que o painel clicou — muda a frase do rodapé, nunca o cálculo. */
 /**
@@ -208,27 +143,6 @@ const fatiaAtual = (d: RateioDetalhe) => d.fatias.find(f => f.atual) ?? null;
  * fatia do compartilhado, e um número só somando os dois faria o operador procurar uma nota
  * fiscal de um valor que nunca foi lançado.
  */
-/**
- * A PRIMEIRA LINHA DO SUBTÍTULO — o número que o operador acabou de clicar, e nenhum outro.
- *
- * ⚠ ELA DEPENDE DO TOGGLE DA GRADE, e é esse o ponto: "dentro dos centros" mostra o total
- * (direto + fatia) e "em linha própria" mostra só o direto. O modal precisa dizer o mesmo, ou a
- * primeira coisa que o operador lê já contradiz a célula de onde ele veio.
- * ⚠ SEM O TOGGLE (admin, ou chamada de outra tela) ela dá o total — que é o que o modal sempre
- * disse, e continua certo.
- */
-export function ecoDaCelula(
-  d: RateioDetalhe, tipo: TipoRateio, rateioDentro?: boolean,
-): string {
-  const fatia = fatiaAtual(d)?.valor ?? 0;
-  /* ⚠ NO MODO "Custos diretos" O ECO É O DIRETO E NADA MAIS. A palavra "direto" saiu da frase:
-     o modal inteiro é dos diretos ali, e repetir o adjetivo em cada linha só o esvazia. */
-  if (tipo !== 'admin' && rateioDentro === false) {
-    return `${formatMoeda(d.direto_cultura)} nesta cultura`;
-  }
-  return `${formatMoeda(d.direto_cultura + fatia)} nesta cultura`;
-}
-
 export function subtituloDoRateio(d: RateioDetalhe, tipo: TipoRateio, ehPool?: boolean): string {
   const fatia = fatiaAtual(d)?.valor ?? 0;
   /**
@@ -296,453 +210,461 @@ export function notaDoRateio(d: RateioDetalhe, tipo: TipoRateio): string {
     + '— é esse valor que entra na linha do painel.';
 }
 
-/**
- * A LISTA DE LANÇAMENTOS DE UM RECORTE — usada pelas DUAS abas novas, nunca copiada.
- *
- * ⚠ ELA NASCEU DA ABA "Lançamentos" ÚNICA, que somava direto e rateado no mesmo rolo. Separar em
- * duas listas foi o pedido da homologação, e a razão é de leitura: numa o operador confere a
- * nota fiscal que ele mesmo marcou com a cultura; na outra, o custo comum que a fazenda inteira
- * dividiu. São duas perguntas, e a soma de cada uma bate com um número diferente do subtítulo.
- * ⚠ UM COMPONENTE, DOIS USOS: com duas cópias, a primeira coluna que alguém ajustasse desalinharia
- * as abas irmãs.
- */
-function ListaLancamentos({ linhas, rotuloTotal, onAbrir, comCentro }: {
-  linhas: LancamentoRateio[];
-  rotuloTotal: string;
-  onAbrir?: (id: string) => void;
-  /** A lista do pool vem de vários centros e precisa dizer qual. */
-  comCentro?: boolean;
-}) {
-  const colunas = comCentro ? COLUNAS_LANC_COM_CENTRO : COLUNAS_LANC;
-  const larguras = comCentro
-    ? ['14%', '30%', '20%', '20%', '16%'] : ['16%', '40%', '26%', '18%'];
-  const ord = useOrdenacaoTabela(linhas, colunas, { coluna: 'data', direcao: 'asc' });
-  const total = useMemo(() => linhas.reduce((a, l) => a + l.valor, 0), [linhas]);
-  return (
-    <>
-      {/* ⚠ UM SCROLLPORT SÓ, e é este: a aba não rola, a caixa da tabela rola. Duas barras
-          fariam o cabeçalho grudado ficar parado enquanto a lista anda por dentro. */}
-      <div className="min-h-0 flex-1 overflow-auto rounded-md border">
-        <table className="w-full table-fixed border-collapse">
-          <colgroup>
-            {larguras.map((w, i) => <col key={i} style={{ width: w }} />)}
-          </colgroup>
-          <thead>
-            <tr>
-              {colunas.map(c => (
-                <ThOrdenavel key={c.coluna} coluna={c.coluna} rotulo={c.h}
-                  ordem={ord.ordem} onOrdenar={ord.alternar}
-                  className={TH} alinhaDireita={c.coluna === 'valor'} />
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {linhas.length === 0 && (
-              <tr><td colSpan={colunas.length} className="px-2 py-3 text-center text-[11px] text-muted-foreground">
-                Nenhum lançamento neste recorte.
-              </td></tr>
-            )}
-            {ord.ordenadas.map((l, i) => (
-              <tr key={l.id || `${l.data}-${i}`}
-                onClick={onAbrir ? () => onAbrir(l.id) : undefined}
-                title={onAbrir ? 'abrir o lançamento' : undefined}
-                className={cn('border-t border-slate-100', i % 2 === 1 && 'bg-muted/40',
-                  onAbrir && 'cursor-pointer hover:bg-primary/[0.06]')}>
-                <td className="whitespace-nowrap px-2 py-0.5 text-[10px] tabular-nums">
-                  {dataBR(l.data)}
-                </td>
-                {/* ⚠ `truncate` COM `title`: a descrição é o campo livre do lançamento e
-                    não tem teto de tamanho; deixá-la quebrar faria a linha crescer e a
-                    lista de 418 itens virar um rolo. */}
-                <td className="truncate px-2 py-0.5 text-[10px]" title={l.descricao ?? undefined}>
-                  {l.descricao || '—'}
-                </td>
-                {comCentro && (
-                  <td className="truncate px-2 py-0.5 text-[10px]" title={l.centro ?? undefined}>
-                    {l.centro || '—'}
-                  </td>
-                )}
-                <td className="truncate px-2 py-0.5 text-[10px] text-muted-foreground"
-                  title={l.favorecido ?? undefined}>
-                  {l.favorecido || '—'}
-                </td>
-                <td className="px-2 py-0.5 text-right text-[10px] tabular-nums">
-                  {formatMoeda(l.valor)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+/* ══════════════════════════ O CONTRATO DO MODAL ══════════════════════════ */
 
-      {/* ⚠ O TOTAL FICA FIXO FORA DO SCROLLPORT, não num `tfoot`: com 418 linhas o operador
-          precisa do total à vista enquanto procura a nota, não depois de rolar até o fim. */}
-      <div className="mt-1 flex shrink-0 items-center justify-between gap-2 rounded-md
-        bg-primary px-2 py-1 text-[11px] font-bold text-primary-foreground">
-        <span>{rotuloTotal} ({linhas.length})</span>
-        <span className="tabular-nums">{formatMoeda(total)}</span>
-      </div>
-    </>
+/** Uma linha da tabela — direta ou de rateio (`rateioPct` preenchido). */
+export interface LinhaValorDre {
+  chave: string;
+  /** Só a linha que VEIO de `financeiro_lancamentos_v2` abre o Financeiro (regra do lápis). */
+  idEditavel: string | null;
+  competencia: string | null;
+  pagamento: string | null;
+  descricao: string | null;
+  favorecido: string | null;
+  fazenda: string | null;
+  valor: number;
+  status: string | null;
+  /** % do lançamento original que caiu NESTA célula. `null` = linha direta. */
+  rateioPct: number | null;
+}
+
+/** Uma etapa da aba Rateio: do bruto à parte da coluna. */
+export interface EtapaValorDre {
+  chave: string;
+  etapa: string;
+  base: string;
+  pct: number | null;
+  valor: number | null;
+  /** 0 = etapa da conta; 1 = a repartição (fazenda ou cultura), recuada. */
+  nivel: 0 | 1;
+  /** A etapa que É a célula clicada (a fazenda da coluna, a cultura aberta, a parte da atividade). */
+  destaque?: boolean;
+}
+
+export interface ValorDre {
+  /** O grupo ou a linha — "Mão de Obra", "Administração", "Custo fixo". */
+  titulo: string;
+  /** A conta por trás: atividade · fazenda · período · divisor. */
+  contexto: string;
+  /** R$/cab/mês (pecuária) ou R$/ha (lavoura) — a MESMA conta da grade. */
+  porUnidade: (v: number | null) => string;
+  /** `null` = a linha não tem parte direta ("—"). */
+  direto: number | null;
+  /** `null` = a linha não tem rateio ("—"). */
+  rateio: number | null;
+  rotuloRateio: string;
+  /** "Direto da fazenda" (pecuária) ou "Direto da cultura" (lavoura) — cartão e segmentado. */
+  rotuloDireto: string;
+  /** "rateio adm." ou "rateio" — o selo da linha de rateio. */
+  seloRateio: string;
+  linhas: LinhaValorDre[];
+  etapas: EtapaValorDre[];
+  rodapeRateio: string;
+}
+
+/**
+ * REPARTE UMA LISTA ATÉ UM ALVO, EM CENTAVOS — a soma devolvida é o alvo, exata.
+ *
+ * ⚠ PROPORCIONAL AO PESO DE CADA LINHA, arredondado em centavo, e o RESÍDUO VAI PARA A MAIOR (em
+ *   módulo) — o mesmo idioma da RPC no 01a. Sem isso, 1.119 linhas arredondadas somariam alguns
+ *   centavos longe da célula, e o rodapé "não bateria" por construção.
+ * ⚠ PESO TOTAL ZERO devolve zeros, e o alvo não se distribui: não há proporção a seguir.
+ */
+export function ratearNoAlvo(pesos: readonly number[], alvo: number): number[] {
+  const soma = pesos.reduce((a, p) => a + p, 0);
+  if (pesos.length === 0 || soma === 0) return pesos.map(() => 0);
+  const alvoC = Math.round(alvo * 100);
+  const cents = pesos.map(p => Math.round((p / soma) * alvoC));
+  const residuo = alvoC - cents.reduce((a, c) => a + c, 0);
+  if (residuo !== 0) {
+    let iMax = 0;
+    pesos.forEach((p, i) => { if (Math.abs(p) > Math.abs(pesos[iMax])) iMax = i; });
+    cents[iMax] += residuo;
+  }
+  return cents.map(c => c / 100);
+}
+
+const pctDe = (parte: number, base: number) => (base !== 0 ? (parte / base) * 100 : null);
+
+/* ══════════════════════════ LAVOURA ══════════════════════════ */
+
+/**
+ * O PAYLOAD DE `fn_painel_rateio_detalhe` NA FORMA DO MODAL — Lavoura.
+ *
+ * ⚠ A DIVISÃO É A DA RPC, como sempre foi: `compartilhado` separa o direto da cultura do pool, e a
+ *   linha de pool entra repartida pela fatia da cultura (`ratearNoAlvo` até `fatia.valor`). No
+ *   admin a lista inteira é rateio, e o peso de cada linha é a `parte` da agricultura.
+ * ⚠ SEM DIVISÃO (pool zero), o rateio é `null` — "—", não R$ 0,00 — e a aba Rateio fica desligada.
+ */
+export function valorDaLavoura(d: RateioDetalhe, tipo: TipoRateio, o: {
+  rotulo: string; cultura: string; safra: string | null; area: number | null; pool: boolean;
+}): ValorDre {
+  const f = fatiaAtual(d);
+  const admin = tipo === 'admin';
+  const temRateio = admin || d.pool > 0;
+  const rateio = temRateio ? (f?.valor ?? 0) : null;
+  const direto = admin || o.pool ? null : d.direto_cultura;
+  const diretos = admin ? [] : d.lancamentos.filter(l => !l.compartilhado);
+  const doPool = admin ? d.lancamentos : d.lancamentos.filter(l => l.compartilhado);
+  const repartidos = rateio == null ? [] : ratearNoAlvo(doPool.map(l => l.parte ?? l.valor), rateio);
+  const linha = (l: LancamentoRateio, i: number, valor: number, rateioPct: number | null): LinhaValorDre => ({
+    chave: `${rateioPct == null ? 'd' : 'r'}-${l.id || i}`,
+    idEditavel: l.id && (l.origem == null || l.origem === 'lancamento') ? l.id : null,
+    competencia: l.data, pagamento: l.pagamento ?? null, descricao: l.descricao,
+    favorecido: l.favorecido, fazenda: l.fazenda ?? null, valor, status: l.status ?? null, rateioPct,
+  });
+  const etapas: EtapaValorDre[] = [];
+  if (temRateio) {
+    if (admin) {
+      const bruto = (d.fatias_atividade ?? []).reduce((a, x) => a + x.valor, 0);
+      etapas.push({ chave: 'bruto', etapa: 'Custo administrativo no período (bruto)', base: '—', pct: null, valor: bruto, nivel: 0 });
+      etapas.push({ chave: 'parte', etapa: 'Parte da agricultura (percentual declarado do ano)',
+        base: formatNum(bruto, 2), pct: d.pct_agricultura, valor: d.pool, nivel: 0 });
+    } else {
+      etapas.push({ chave: 'pool', etapa: 'Custo compartilhado a ratear', base: '—', pct: null, valor: d.pool, nivel: 0 });
+    }
+    d.fatias.forEach(x => etapas.push({
+      chave: `c-${x.cultura}`, etapa: labelDaCultura(x.cultura), base: `${formatNum(x.area_ha, 2)} ha`,
+      pct: x.peso, valor: x.valor, nivel: 1, destaque: x.atual,
+    }));
+  }
+  const area = o.area ?? f?.area_ha ?? null;
+  return {
+    titulo: o.rotulo,
+    contexto: [labelDaCultura(o.cultura), o.safra ? `Safra ${o.safra}` : null,
+      subtituloDoRateio(d, tipo, o.pool)].filter(Boolean).join(' · '),
+    porUnidade: v => (v == null || area == null || !(area > 0) ? '—' : `R$ ${formatNum(v / area, 2)}/ha`),
+    direto, rateio,
+    rotuloRateio: admin ? 'Rateio administrativo' : 'Rateio compartilhado',
+    rotuloDireto: 'Direto da cultura',
+    seloRateio: admin ? 'rateio adm.' : 'rateio',
+    linhas: [
+      ...diretos.map((l, i) => linha(l, i, l.valor, null)),
+      ...doPool.map((l, i) => linha(l, i, repartidos[i] ?? 0, pctDe(repartidos[i] ?? 0, l.valor))),
+    ],
+    etapas,
+    rodapeRateio: admin ? 'Mesma conta do DRE: bruto × % da agricultura × % da área'
+      : notaDoRateio(d, tipo),
+  };
+}
+
+/* ══════════════════════════ PECUÁRIA ══════════════════════════ */
+
+const ROTULO_BLOCO_PEC: Record<string, string> = {
+  fixo: 'Custo fixo', variavel: 'Custo variável', investimento: 'Investimento', rateio_adm: 'Rateio administrativo',
+  venda: 'Vendas', outras_receitas: 'Outras receitas', deducoes: 'Deduções', reposicao: 'Reposição', juros: 'Despesas financeiras',
+};
+
+/**
+ * A CÉLULA DA PECUÁRIA NA FORMA DO MODAL.
+ *
+ * ⚠ OS NÚMEROS SÃO OS DA CÉLULA (`recorte.celula`), não uma segunda conta: o direto é o que a RPC
+ *   da lista soma para o recorte, e o rateio das linhas é repartido até o rateio da coluna — o grupo
+ *   (`rateio_adm_grupos`) ou o total (`rateio_adm`).
+ * ⚠ O R$/cab/mês É O `porCabeca` DA GRADE, com a `cab_media` e os `meses` da coluna clicada.
+ * ⚠ A REPARTIÇÃO POR FAZENDA DA ABA RATEIO vem do DRE DO MESMO PERÍODO (`dre`), quando a tela o tem;
+ *   sem ele, a aba mostra bruto e parte da atividade e não inventa a divisão.
+ */
+export function valorDaPecuaria(o: {
+  recorte: RecortePec;
+  lancamentos: readonly LancamentoPec[];
+  rateio: RateioAdmPec | null;
+  dre: DrePecuaria | null;
+  periodoRotulo: string;
+}): ValorDre {
+  const r = o.recorte;
+  const diretos = r.soRateio ? [] : o.lancamentos;
+  const somaDiretos = diretos.reduce((a, l) => a + l.valor, 0);
+  const cel = r.celula ?? { direto: somaDiretos, rateio: null, grupo: null, cabMedia: 0, meses: 0, comRateio: false };
+  const grupo = cel.grupo;
+  const doGrupo = (o.rateio?.lancamentos ?? []).filter(l => grupo == null || l.grupo === grupo);
+  const repartidos = cel.rateio == null ? [] : ratearNoAlvo(doGrupo.map(l => l.parte), cel.rateio);
+  const linhas: LinhaValorDre[] = [
+    ...diretos.map((l, i): LinhaValorDre => ({
+      chave: `d-${l.origem}-${l.id ?? i}`,
+      idEditavel: l.origem === 'lancamento' ? l.id : null,
+      competencia: l.data, pagamento: l.pagamento ?? null, descricao: l.descricao, favorecido: l.favorecido,
+      fazenda: l.fazenda, valor: l.valor, status: l.status, rateioPct: null,
+    })),
+    ...(cel.rateio == null ? [] : doGrupo.map((l, i): LinhaValorDre => ({
+      chave: `r-${l.id ?? i}-${i}`,
+      idEditavel: l.origem === 'lancamento' ? l.id : null,
+      competencia: l.data, pagamento: l.pagamento, descricao: l.descricao, favorecido: l.favorecido,
+      fazenda: l.fazenda, valor: repartidos[i] ?? 0, status: l.status,
+      rateioPct: pctDe(repartidos[i] ?? 0, l.valor),
+    }))),
+  ];
+  const etapas: EtapaValorDre[] = [];
+  if (cel.rateio != null && o.rateio) {
+    const gs = o.rateio.grupos.filter(g => grupo == null || g.grupo === grupo);
+    const bruto = gs.reduce((a, g) => a + g.bruto, 0);
+    const parte = gs.reduce((a, g) => a + g.parte, 0);
+    const nome = grupo == null ? 'Custo administrativo' : `${grupo} administrativo`;
+    etapas.push({ chave: 'bruto', etapa: `${nome} no período (bruto)`, base: '—', pct: null, valor: bruto, nivel: 0 });
+    etapas.push({ chave: 'parte', etapa: 'Parte da pecuária (percentual declarado do ano)',
+      base: formatNum(bruto, 2), pct: pctDe(parte, bruto), valor: parte, nivel: 0, destaque: r.fazendaId === null });
+    const faz = o.dre?.fazendas ?? [];
+    const somaCab = faz.reduce((a, f) => a + f.linhas.patrimonio.cab_media, 0);
+    faz.forEach(f => etapas.push({
+      chave: `f-${f.fazenda_id}`, etapa: f.nome,
+      base: `${formatNum(f.linhas.patrimonio.cab_media, 0)} cab médias`,
+      pct: pctDe(f.linhas.patrimonio.cab_media, somaCab),
+      valor: grupo == null ? f.linhas.rateio_adm : rateioDoGrupo(f.linhas, grupo),
+      nivel: 1, destaque: f.fazenda_id === r.fazendaId,
+    }));
+  }
+  const bloco = ROTULO_BLOCO_PEC[r.bloco] ?? r.bloco;
+  return {
+    titulo: r.rotulo,
+    /* ⚠ NA COLUNA TOTAL O `fazendaNome` É O NOME DA COLUNA — na Comparação, o próprio período — e
+       sairia repetido ao lado do rótulo do período. Medido no preview em 27/09. */
+    contexto: [`${bloco} pecuária`, r.fazendaId === null ? 'Todas as fazendas' : r.fazendaNome, o.periodoRotulo,
+      cel.cabMedia > 0 && cel.meses > 0 ? `${formatNum(cel.cabMedia, 0)} cab médias × ${cel.meses} meses` : null,
+    ].filter(Boolean).join(' · '),
+    porUnidade: v => {
+      const t = porCabeca(v, cel.cabMedia, cel.meses);
+      return v == null || t === '—' ? '—' : `R$ ${t}/cab/mês`;
+    },
+    direto: r.soRateio ? null : cel.direto,
+    rateio: cel.rateio,
+    rotuloRateio: grupo ? `Rateio administrativo (${grupo} adm.)` : 'Rateio administrativo',
+    rotuloDireto: 'Direto da fazenda',
+    seloRateio: 'rateio adm.',
+    linhas,
+    etapas,
+    rodapeRateio: 'Mesma conta do DRE: a soma dos grupos fecha no rateio administrativo total',
+  };
+}
+
+/* ══════════════════════════ O MODAL ══════════════════════════ */
+
+type ColunaLinha = 'comp' | 'pgto' | 'descricao' | 'favorecido' | 'fazenda' | 'valor' | 'status';
+
+/* ⚠ TODAS AS COLUNAS ORDENAM (o lápis não é coluna de dado). As larguras são as do mock, e a
+   Descrição fica com o resto — `table-fixed`, sem rolagem horizontal. */
+export const COLUNAS_VALOR_DRE: Array<ColunaOrdenavel<LinhaValorDre, ColunaLinha> & { h: string; w?: number; direita?: boolean }> = [
+  { coluna: 'comp', h: 'Comp.', w: 74, tipo: 'data', valor: l => l.competencia },
+  { coluna: 'pgto', h: 'Pgto', w: 74, tipo: 'data', valor: l => l.pagamento },
+  { coluna: 'descricao', h: 'Descrição', tipo: 'texto', valor: l => l.descricao },
+  { coluna: 'favorecido', h: 'Favorecido', w: 130, tipo: 'texto', valor: l => l.favorecido },
+  { coluna: 'fazenda', h: 'Fazenda', w: 96, tipo: 'texto', valor: l => l.fazenda },
+  { coluna: 'valor', h: 'Valor', w: 92, tipo: 'numero', valor: l => l.valor, direita: true },
+  { coluna: 'status', h: 'Status', w: 88, tipo: 'texto', valor: l => l.status },
+];
+const W_LAPIS = 28;
+
+const TH = 'sticky top-0 z-10 bg-card px-2 py-1 text-[9.5px] font-semibold text-muted-foreground'
+  + ' shadow-[inset_0_-1px_0_0_hsl(var(--border))] hover:bg-muted';
+const TD = 'px-2 py-[3px] text-[10.5px] leading-[1.25]';
+const SELO = 'ml-1 inline-block shrink-0 whitespace-nowrap rounded-[4px] border border-amber-200 bg-amber-50 px-1'
+  + ' text-[9.5px] leading-[13px] text-amber-700';
+
+/** "Programado" é âmbar, não vermelho: um compromisso ainda não pago não é erro. */
+function Status({ s }: { s: string | null }) {
+  if (!s) return <span className="text-muted-foreground">—</span>;
+  const realizado = s === 'realizado' || s === 'conciliado';
+  return (
+    <span className={cn('inline-block whitespace-nowrap rounded-[9px] px-1.5 text-[9.5px] font-semibold leading-[14px]',
+      realizado ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700')}>
+      {s.charAt(0).toUpperCase() + s.slice(1)}
+    </span>
   );
 }
 
-export function RateioDetalheModal({
-  aberto, onFechar, titulo, subtitulo, dados, tipo, onAbrirLancamento, rateioDentro, pool,
+function Cartao({ rotulo, valor, sub, total }: { rotulo: string; valor: string; sub: string; total?: boolean }) {
+  return (
+    <div className={cn('min-w-0 rounded-md border px-2.5 py-1.5', total && 'border-[#c9d6e6] bg-[#eef3f9]')}>
+      <div className="truncate text-[10px] text-muted-foreground" title={rotulo}>{rotulo}</div>
+      <div className={cn('whitespace-nowrap text-[15px] font-semibold tabular-nums', valor.startsWith('-') && 'text-destructive')}>
+        {valor}
+      </div>
+      <div className="whitespace-nowrap text-[10px] tabular-nums text-muted-foreground">{sub}</div>
+    </div>
+  );
+}
+
+const moedaOuTraco = (v: number | null) => (v == null ? '—' : formatMoeda(v));
+const corValor = (v: number) => (v < 0 ? 'text-destructive' : undefined);
+
+export function ModalValorDre({
+  aberto, onFechar, valor, carregando, comRateioInicial, abaInicial = 'lancamentos', onAbrirLancamento,
 }: {
   aberto: boolean;
   onFechar: () => void;
-  /** "<chave> · <Cultura> · Safra <safra>" — o contexto é de quem abre. */
-  titulo: string;
-  /**
-   * ⚠ OPCIONAL, E O DEFAULT É DERIVADO — decisão consciente contra a letra do briefing, que o
-   * pede por prop. A frase é função PURA do payload (a fatia com `atual`, o `direto_cultura` e o
-   * `pool`), e todos os três já estão aqui dentro. Passá-la de fora obrigaria cada chamador a
-   * refazer a mesma conta, e na segunda tela os dois textos divergiriam. A prop fica para quem
-   * precisar sobrescrever.
-   */
-  subtitulo?: string;
-  dados: RateioDetalhe;
-  /** 'natureza' | 'investimento' | 'admin' — muda a nota do rodapé, não o cálculo. */
-  tipo: TipoRateio;
-  /** Abre o lançamento clicado. Sem ela as listas continuam de leitura, como antes. */
+  valor: ValorDre | null;
+  carregando?: boolean;
+  /** O estado do botão da grade no clique — o modal nasce ecoando a célula. */
+  comRateioInicial: boolean;
+  abaInicial?: 'lancamentos' | 'rateio';
   onAbrirLancamento?: (id: string) => void;
-  /**
-   * O estado do toggle "Rateio compartilhado" da grade que abriu este modal.
-   *
-   * ⚠ ELE EXISTE PARA O TÍTULO ECOAR A CÉLULA CLICADA. Com o toggle desligado a tabela mostra
-   * 1.121.599,85 (só o direto) e o modal abria dizendo 1.172.900,53 — o número certo do centro,
-   * mas não o que o dedo apontou. Dois números certos e discordantes na mesma ação é o começo de
-   * toda desconfiança de relatório.
-   * ⚠ E ELE TAMBÉM ESCOLHE A ABA INICIAL: desligado, o operador veio olhar o direto; ligado,
-   * veio entender a divisão.
-   */
-  rateioDentro?: boolean;
-  /**
-   * O modal está descrevendo o POOL COMPARTILHADO inteiro, não um centro.
-   *
-   * ⚠ ELE MUDA DUAS COISAS E NENHUM CÁLCULO: some a aba "Custos diretos" — `direto_cultura` vem
-   * 0 aqui por construção, e uma aba vazia com nome de conteúdo é pior que aba nenhuma — e a
-   * lista ganha a coluna Centro, porque as linhas vêm de vários.
-   */
-  pool?: boolean;
 }) {
-  const totalArea = useMemo(
-    () => dados.fatias.reduce((a, f) => a + f.area_ha, 0), [dados.fatias]);
-  const passo1 = dados.fatias_atividade ?? [];
-  const totalAtividades = useMemo(
-    () => passo1.reduce((a, f) => a + f.valor, 0), [passo1]);
+  const [aba, setAba] = useState<'lancamentos' | 'rateio'>(abaInicial);
+  const [comRateioEscolha, setComRateio] = useState(comRateioInicial);
+  const semDireto = valor?.direto == null;
+  const semRateio = valor?.rateio == null;
+  /* ⚠ SEM PARTE DIRETA, SÓ HÁ RATEIO A MOSTRAR; SEM RATEIO, SÓ O DIRETO. O segmentado fica, travado. */
+  const comRateio = semDireto ? true : semRateio ? false : comRateioEscolha;
+  const linhas = useMemo(
+    () => (valor?.linhas ?? []).filter(l => comRateio || l.rateioPct == null), [valor, comRateio]);
+  const ord = useOrdenacaoTabela(linhas, COLUNAS_VALOR_DRE, { coluna: 'comp', direcao: 'desc' });
+  const soma = useMemo(() => linhas.reduce((a, l) => a + l.valor, 0), [linhas]);
+  const nRateio = linhas.filter(l => l.rateioPct != null).length;
+  if (!valor) return null;
+  const total = (valor.direto ?? 0) + (valor.rateio ?? 0);
+  const mostrado = comRateio ? total : (valor.direto ?? 0);
+  const pct = (v: number | null) => (v == null || total === 0 ? '' : ` · ${formatNum((v / total) * 100, 0)}%`);
+  const temEtapas = valor.etapas.length > 0;
 
-  /* ⚠ TRÊS ORDENAÇÕES INDEPENDENTES, uma por tabela: ordenar as culturas não pode reordenar os
-     lançamentos, e o hook guarda o estado de cada uma separadamente. */
-  const ordAtv = useOrdenacaoTabela(passo1, COLUNAS_ATIVIDADE, { coluna: 'valor', direcao: 'desc' });
-  const ordFat = useOrdenacaoTabela(dados.fatias, COLUNAS_FATIA, { coluna: 'valor', direcao: 'desc' });
-  /* ⚠ A DIVISÃO É A DA PRÓPRIA RPC, não um critério novo: lá dentro, `comp` é `l.cultura is
-     null`, e é com ele que ela soma `pool` (compartilhado) e `direto_cultura` (o resto). Aqui
-     `compartilhado` é esse mesmo booleano, já no payload — então a soma de cada lista fecha com
-     o número do subtítulo por construção, sem o front refazer conta nenhuma. */
-  const diretos = useMemo(
-    () => dados.lancamentos.filter(l => !l.compartilhado), [dados.lancamentos]);
-  const rateados = useMemo(
-    () => dados.lancamentos.filter(l => l.compartilhado), [dados.lancamentos]);
-  /* ⚠ O ADMIN CONTINUA COM DUAS ABAS. Lá a lista é o custo do escritório INTEIRO e não se divide
-     em "meu" e "comum" — a repartição dele é por atividade, que é o que o passo 1 desenha.
-     Três abas ali inventariam um recorte que o dado não tem. */
-  const admin = tipo === 'admin';
-  /* ⚠ AS ABAS DE RATEIO SÓ EXISTEM QUANDO HÁ RATEIO PARA EXPLICAR (§10): pool zero, ou uma
-     cultura só na safra, e não há divisão nenhuma — o donut teria uma fatia e a tabela uma
-     linha. Nesse caso o modal vira o que o operador foi buscar: a lista daquele centro naquela
-     cultura, sem barra de abas. Mesmo componente, mesma chamada, mesma lista. */
-  const temDivisao = dados.pool > 0 && dados.fatias.length > 1;
-  /* ⚠ O MODAL SEGUE O TOGGLE DA GRADE (§0), e não só no título: no modo "Custos diretos" a
-     célula mostra o direto e o operador veio ver AQUELES lançamentos — abas de rateio ali
-     oferecem uma divisão que a tela de trás não está aplicando. No modo "Com rateio nos centros"
-     a célula é direto + fatia, e a divisão é a explicação do número.
-     ⚠ `rateioDentro === undefined` MANTÉM O COMPORTAMENTO ANTIGO (três abas): o admin e
-     qualquer chamador futuro que não conheça o toggle continuam como estavam. */
-  const mostrarRateio = temDivisao && rateioDentro !== false;
-  /* ⚠ NO POOL SÃO DUAS ABAS, sempre: a divisão e a lista do que há para ratear. Não há "custos
-     diretos" de um pool — se houvesse, ele não seria compartilhado. */
-  const tresAbas = !admin && !pool && mostrarRateio;
-  const semAbas = !admin && !pool && !mostrarRateio;
-
-  /* ⚠ AS ABAS VIRARAM ESTADO CONTROLADO porque a barra deixou de ser a `TabsList` do Radix e
-     passou a ser o `Segmentado` da casa (regra de UI do PR-04). O `Tabs` continua governando o
-     CONTEÚDO — é ele que monta e desmonta cada `TabsContent`; o que mudou foi quem desenha a
-     escolha. */
-  /* ⚠ SEM ABAS SÓ HÁ UMA; COM ABAS ABRE NA DIVISÃO — que é o que o número da célula precisa
-     explicar quando o toggle está em "Com rateio nos centros". */
-  const abaInicial = semAbas ? 'diretos' : 'rateio';
-  const duasAbasDoPool = [
-    { valor: 'rateio', rotulo: 'Divisão do rateio' },
-    { valor: 'rateados', rotulo: `A ratear · ${rateados.length}` },
-  ];
-  const [abaAtual, setAbaAtual] = useState(abaInicial);
-  const opcoesDeAba = pool ? duasAbasDoPool : tresAbas
-    ? [
-      { valor: 'diretos', rotulo: `Custos diretos · ${diretos.length}` },
-      { valor: 'rateio', rotulo: 'Divisão do rateio' },
-      { valor: 'rateados', rotulo: `A ratear · ${rateados.length}` },
-    ]
-    : [
-      { valor: 'rateio', rotulo: 'Rateio' },
-      { valor: 'lancamentos', rotulo: `Lançamentos · ${dados.lancamentos.length}` },
-    ];
+  let corpo: ReactNode;
+  if (aba === 'rateio') {
+    corpo = (
+      <table className="w-full table-fixed border-collapse">
+        <colgroup><col /><col style={{ width: 150 }} /><col style={{ width: 90 }} /><col style={{ width: 130 }} /></colgroup>
+        <thead><tr>
+          <th className={cn(TH, 'text-left hover:bg-card')}>Etapa</th>
+          <th className={cn(TH, 'text-right hover:bg-card')}>Base</th>
+          <th className={cn(TH, 'text-right hover:bg-card')}>%</th>
+          <th className={cn(TH, 'text-right hover:bg-card')}>Valor</th>
+        </tr></thead>
+        <tbody>
+          {valor.etapas.map((e, i) => (
+            <tr key={e.chave} className={cn('border-t border-slate-100',
+              e.nivel === 1 && i % 2 === 1 && 'bg-muted/30', e.destaque && 'font-semibold')}>
+              <td className={cn(TD, 'truncate')} style={{ paddingLeft: e.nivel === 1 ? 22 : 8 }} title={e.etapa}>{e.etapa}</td>
+              <td className={cn(TD, 'whitespace-nowrap text-right tabular-nums')}>{e.base}</td>
+              <td className={cn(TD, 'whitespace-nowrap text-right tabular-nums')}>
+                {e.pct == null ? '—' : `${formatNum(e.pct, 1)}%`}
+              </td>
+              <td className={cn(TD, 'whitespace-nowrap text-right tabular-nums', e.valor != null && corValor(e.valor))}>
+                {e.valor == null ? '—' : formatNum(e.valor, 2)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  } else {
+    corpo = (
+      <table className="w-full table-fixed border-collapse">
+        <colgroup>
+          {COLUNAS_VALOR_DRE.map(c => <col key={c.coluna} style={c.w ? { width: c.w } : undefined} />)}
+          <col style={{ width: W_LAPIS }} />
+        </colgroup>
+        <thead><tr>
+          {COLUNAS_VALOR_DRE.map(c => (
+            <ThOrdenavel key={c.coluna} coluna={c.coluna} rotulo={c.h} ordem={ord.ordem} onOrdenar={ord.alternar}
+              className={TH} alinhaDireita={c.direita} />
+          ))}
+          <th className={cn(TH, 'hover:bg-card')} />
+        </tr></thead>
+        <tbody>
+          {carregando && (
+            <tr><td colSpan={COLUNAS_VALOR_DRE.length + 1} className="px-2 py-6 text-center text-[11px] text-muted-foreground">
+              <Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin align-[-2px]" /> Carregando…
+            </td></tr>
+          )}
+          {!carregando && ord.ordenadas.length === 0 && (
+            <tr><td colSpan={COLUNAS_VALOR_DRE.length + 1} className="px-2 py-6 text-center text-[11px] text-muted-foreground">
+              Nenhum lançamento neste recorte.
+            </td></tr>
+          )}
+          {!carregando && ord.ordenadas.map((l, i) => {
+            const abrir = l.idEditavel && onAbrirLancamento ? () => onAbrirLancamento(l.idEditavel ?? '') : undefined;
+            return (
+              <tr key={l.chave} onClick={abrir} title={abrir ? 'abrir o lançamento no Financeiro' : undefined}
+                className={cn('border-t border-slate-100',
+                  l.rateioPct != null ? 'bg-[#fbfaf6]' : i % 2 === 1 && 'bg-muted/30',
+                  abrir && 'cursor-pointer hover:bg-primary/[0.06]')}>
+                <td className={cn(TD, 'whitespace-nowrap tabular-nums')}>{dataBR(l.competencia)}</td>
+                <td className={cn(TD, 'whitespace-nowrap tabular-nums')}>{dataBR(l.pagamento)}</td>
+                <td className={TD}>
+                  <div className="flex min-w-0 items-center">
+                    <span className="min-w-0 truncate" title={l.descricao ?? undefined}>{l.descricao || '—'}</span>
+                    {l.rateioPct != null && (
+                      <span className={SELO}>{valor.seloRateio} {formatNum(l.rateioPct, 1)}%</span>
+                    )}
+                  </div>
+                </td>
+                <td className={cn(TD, 'truncate text-muted-foreground')} title={l.favorecido ?? undefined}>{l.favorecido || '—'}</td>
+                <td className={cn(TD, 'truncate')} title={l.fazenda ?? undefined}>{l.fazenda || '—'}</td>
+                <td className={cn(TD, 'whitespace-nowrap text-right tabular-nums', corValor(l.valor))}>{formatNum(l.valor, 2)}</td>
+                <td className={TD}><Status s={l.status} /></td>
+                <td className={cn(TD, 'text-center')}>
+                  <Pencil className={cn('inline h-3 w-3 text-muted-foreground', !abrir && 'invisible')} />
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    );
+  }
 
   return (
     <Dialog open={aberto} onOpenChange={o => { if (!o) onFechar(); }}>
-      {/* ⚠ ALTURA FIXA EM 80vh, como o `BarterListaModal`, e NÃO `max-h`: a aba de lançamentos
-          tem de 3 a 418 linhas (medido no admin), e com `max-h` o modal mudaria de tamanho ao
-          trocar de aba — o rodapé saindo do lugar debaixo do cursor.
-          ⚠ O X DO PRIMITIVO FICA ESCONDIDO: quem fecha é o do cabeçalho, como nos outros modais
-          da casa. */}
-      <DialogContent
-        /* ⚠ `calc(100vh - 96px)` NO LUGAR DE `80vh` (§5a): em telas de 800px o modal media 640 e
-           o passo 2 do administrativo — donut mais tabela de culturas — ficava cortado na base.
-           ⚠ CONTINUA ALTURA FIXA, e não `max-h`: a aba de lançamentos tem de 3 a 418 linhas, e
-           com `max-h` o modal mudaria de tamanho ao trocar de aba, com o rodapé saindo debaixo
-           do cursor. O que mudou foi o número, não a natureza da regra. */
-        className={cn('flex h-[calc(100vh-96px)] max-w-3xl flex-col gap-0 overflow-hidden p-0',
-          '[&>button.absolute]:hidden')}>
-        <div className="flex shrink-0 items-start gap-2 bg-primary px-4 py-2.5 text-primary-foreground">
-          {/* ⚠ DUAS LINHAS (§1b): a primeira É O NÚMERO QUE O DEDO APONTOU, em 14px; a segunda é a
-              conta que o explica, em 11px. Antes havia uma só, e ela dava o total com rateio
-              mesmo quando a tabela estava mostrando o direto — o operador clicava em
-              1.121.599,85 e o modal respondia 1.172.900,53. */}
-          <div className="min-w-0">
-            <h2 className="truncate text-[15px] font-bold leading-tight">{titulo}</h2>
-            {subtitulo ? (
-              <p className="mt-0.5 text-[11px] text-primary-foreground/80">{subtitulo}</p>
-            ) : (
-              <>
-                <p className="mt-0.5 truncate text-[14px] font-medium leading-tight">
-                  {ecoDaCelula(dados, tipo, rateioDentro)}
-                </p>
-                {/* ⚠ A SEGUNDA LINHA SÓ EXISTE ONDE HÁ RATEIO A EXPLICAR (§0a): no modo "Custos
-                    diretos" ela falaria de pool e de percentual que a tela de trás não está
-                    usando — informação certa na hora errada. */}
-                {(!semAbas || pool) && (
-                  <p className="mt-0.5 text-[11px] text-primary-foreground/80">
-                    {subtituloDoRateio(dados, tipo, pool)}
-                  </p>
-                )}
-              </>
-            )}
+      {/* ⚠ ALTURA FIXA (lei de estabilidade): trocar de aba ou de segmentado não mexe no modal. Um
+          scrollport só — o corpo; cabeçalho, barra, cartões e rodapé ficam (A21). */}
+      <DialogContent className="flex h-[min(640px,calc(100vh-64px))] max-w-[980px] flex-col gap-0 overflow-hidden p-0
+        [&>button.absolute]:hidden">
+        <div className="flex shrink-0 items-start gap-3 bg-primary px-3.5 py-2 text-primary-foreground">
+          <div className="min-w-0 flex-1">
+            <h2 className="truncate text-[15px] font-semibold leading-tight">
+              {valor.titulo} · <span className="whitespace-nowrap tabular-nums">{formatMoeda(mostrado)}</span>
+              {' · '}<span className="whitespace-nowrap tabular-nums">{valor.porUnidade(mostrado)}</span>
+            </h2>
+            <div className="mt-0.5 truncate text-[10px] text-primary-foreground/80" title={valor.contexto}>{valor.contexto}</div>
           </div>
-          <div className="flex-1" />
-          <Button variant="ghost" size="icon"
-            className="h-7 w-7 shrink-0 text-primary-foreground/90 hover:bg-white/10 hover:text-white"
-            title="Fechar" onClick={onFechar}>
-            <X className="h-4 w-4" />
-          </Button>
+          <button type="button" onClick={onFechar} aria-label="Fechar"
+            className="shrink-0 text-primary-foreground/80 hover:text-primary-foreground">
+            <X className="h-5 w-5" />
+          </button>
         </div>
 
-        {/* ⚠ O `display` DA ABA É CONDICIONADO AO ESTADO, nunca `flex` cru — a lição que o
-            `AgriDreCulturaTab` já pagou: o Radix renderiza a aba inativa como `<div hidden>` e
-            só os FILHOS somem; `[hidden]{display:none}` do preflight perde para `.flex`, e a
-            caixa vazia continuaria repartindo a altura com a aba visível. */}
-        {/* ⚠ A ABA INICIAL SEGUE O TOGGLE DA GRADE (§1c): desligado, o operador estava olhando o
-            direto e é nele que o modal abre; ligado, ele estava olhando o total com rateio
-            dentro, e a divisão é a explicação daquele número. Sem o toggle (admin, ou chamada de
-            outra tela) fica o rateio, como sempre foi. */}
-        <Tabs value={abaAtual} onValueChange={setAbaAtual}
-          className="flex min-h-0 flex-1 flex-col px-3 pb-2 pt-2">
-          {/* ⚠ A ORDEM É DIRETO → DIVISÃO → RATEADO, a mesma da frase do subtítulo: o operador lê
-              "X = Y direto + Z do rateio" e encontra as abas na ordem em que acabou de ler. */}
-          {/* ⚠ SEM BARRA DE ABAS quando não há divisão (§10c): uma aba só é um rótulo, não uma
-              escolha, e desenhá-la só ocuparia 28px dizendo ao operador que existe outro lugar
-              para ir. O conteúdo continua sendo um `TabsContent` — o Radix segue governando. */}
-          {!semAbas && (
-            <Segmentado className="mb-1.5 w-full [&>button]:flex-1" valor={abaAtual}
-              onEscolher={setAbaAtual} opcoes={opcoesDeAba} />
+        <div className="flex shrink-0 items-center gap-2.5 border-b bg-muted/40 px-3.5 py-1.5">
+          <Segmentado altura={22} valor={aba} onEscolher={setAba} opcoes={[
+            { valor: 'lancamentos', rotulo: 'Lançamentos' },
+            { valor: 'rateio', rotulo: 'Rateio', desabilitada: !temEtapas,
+              title: temEtapas ? undefined : 'sem rateio neste recorte' },
+          ]} />
+          {/* ⚠ O SEGUNDO SEGMENTADO SÓ SE ESCONDE (invisível) na aba Rateio: sumir moveria a barra. */}
+          <span className={cn(aba === 'rateio' && 'invisible')}>
+            <Segmentado altura={22} valor={comRateio ? 'com' : 'direto'} onEscolher={v => setComRateio(v === 'com')} opcoes={[
+              { valor: 'direto', rotulo: valor.rotuloDireto, desabilitada: semDireto || semRateio,
+                title: semDireto ? 'esta linha não tem parte direta' : semRateio ? 'esta linha não tem rateio' : undefined },
+              { valor: 'com', rotulo: `Com ${valor.seloRateio}`, desabilitada: semDireto || semRateio },
+            ]} />
+          </span>
+          <span className={cn('ml-auto text-[10px] text-muted-foreground', aba === 'rateio' && 'invisible')}>
+            clique na linha abre no Financeiro
+          </span>
+        </div>
+
+        <div className="grid shrink-0 grid-cols-3 gap-2 px-3.5 py-2">
+          <Cartao rotulo={valor.rotuloDireto} valor={moedaOuTraco(valor.direto)}
+            sub={valor.direto == null ? '—' : `${valor.porUnidade(valor.direto)}${pct(valor.direto)}`} />
+          <Cartao rotulo={valor.rotuloRateio} valor={moedaOuTraco(valor.rateio)}
+            sub={valor.rateio == null ? '—' : `${valor.porUnidade(valor.rateio)}${pct(valor.rateio)}`} />
+          <Cartao total rotulo="Total do grupo" valor={formatMoeda(total)} sub={valor.porUnidade(total)} />
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3.5">{corpo}</div>
+
+        <div className="flex shrink-0 items-center justify-between gap-2 border-t bg-muted/40 px-3.5 py-1.5 text-[11px]">
+          {aba === 'rateio' ? (
+            <>
+              <span className="min-w-0 truncate" title={valor.rodapeRateio}>{valor.rodapeRateio}</span>
+              <b className="whitespace-nowrap text-[12px] tabular-nums">{moedaOuTraco(valor.rateio)}</b>
+            </>
+          ) : (
+            <>
+              <span>
+                {ord.ordenadas.length} lançamento{ord.ordenadas.length === 1 ? '' : 's'}
+                {nRateio > 0 && ` · ${nRateio} de ${valor.seloRateio}`}
+              </span>
+              <b className={cn('whitespace-nowrap text-[12px] tabular-nums', corValor(soma))}>{formatMoeda(soma)}</b>
+            </>
           )}
-
-          {(tresAbas || semAbas) && (
-            <TabsContent value="diretos"
-              className="mt-0 min-h-0 flex-1 flex-col data-[state=active]:flex data-[state=inactive]:hidden">
-              <ListaLancamentos linhas={diretos} rotuloTotal="Direto nesta cultura"
-                onAbrir={onAbrirLancamento} />
-              <p className="mt-1 shrink-0 text-[10px] leading-snug text-muted-foreground">
-                {semAbas
-                  ? 'Lançamentos deste centro nesta cultura. Não há rateio a repartir aqui.'
-                  : 'Lançamentos marcados com esta cultura — é o que soma o "direto" do subtítulo.'}
-              </p>
-            </TabsContent>
-          )}
-
-          {/* ───────────────────────── ABA 1 — O RATEIO ───────────────────────── */}
-          <TabsContent value="rateio"
-            className="mt-0 min-h-0 flex-1 flex-col gap-3 overflow-auto data-[state=active]:flex data-[state=inactive]:hidden">
-
-            {/* ── PASSO 1 — só no administrativo ──
-                ⚠ SÓ O ADMIN TEM DOIS PASSOS. Numa natureza ou num investimento o compartilhado
-                já é da lavoura e vai direto para as culturas; no administrativo o custo é do
-                ESCRITÓRIO, e antes de chegar à cultura ele passa pela atividade. Desenhar um
-                passo 1 vazio nos outros dois inventaria uma etapa que não existe. */}
-            {passo1.length > 0 && (
-              <div>
-                <div className="mb-1.5 text-[11px] font-semibold text-foreground">
-                  Passo 1 — o administrativo do período repartido entre as atividades
-                </div>
-                <div className="flex flex-wrap items-start gap-3">
-                  <Donut dados={passo1.map(f => ({ nome: f.atividade, valor: f.valor }))}
-                    cor={(_, nome) => corDaAtividade(nome)}
-                    total={totalAtividades} rotuloTotal="Admin do período" />
-                  <div className="min-w-[240px] flex-1">
-                    <table className="w-full table-fixed border-collapse">
-                      {/* ⚠ px FIXOS (§5b), não porcentagem: esticada até a borda, a tabela
-                          deixava o R$ a meia tela do nome da atividade e o olho perdia a linha.
-                          A última coluna absorve a sobra. */}
-                      <colgroup>
-                        <col style={{ width: 220 }} />
-                        <col style={{ width: 130 }} />
-                        <col />
-                      </colgroup>
-                      <thead>
-                        <tr>
-                          {COLUNAS_ATIVIDADE.map(c => (
-                            <ThOrdenavel key={c.coluna} coluna={c.coluna} rotulo={c.h}
-                              ordem={ordAtv.ordem} onOrdenar={ordAtv.alternar}
-                              className={TH} alinhaDireita={c.coluna !== 'atividade'} />
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {ordAtv.ordenadas.map(f => (
-                          /* ⚠ A AGRICULTURA FICA DESTACADA porque é a fatia que SEGUE para o
-                             passo 2 — sem isso os dois donuts parecem dois assuntos. */
-                          <tr key={f.atividade}
-                            className={cn('border-t border-slate-100',
-                              f.atividade.toLowerCase() === 'agricultura' && 'bg-accent')}>
-                            <td className="truncate px-2 py-0.5 text-[11px]">
-                              <span className="mr-1.5 inline-block h-2 w-2 shrink-0 rounded-[2px] align-middle"
-                                style={{ backgroundColor: corDaAtividade(f.atividade) }} />
-                              <span className={cn(f.atividade.toLowerCase() === 'agricultura' && 'font-bold')}>
-                                {rotuloAtividade(f.atividade)}
-                              </span>
-                            </td>
-                            <td className="px-2 py-0.5 text-right text-[11px] tabular-nums">
-                              {totalAtividades > 0 ? `${formatNum((f.valor / totalAtividades) * 100, 1)}%` : '—'}
-                            </td>
-                            <td className="px-2 py-0.5 text-right text-[11px] font-medium tabular-nums">
-                              {formatMoeda(f.valor)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* ── PASSO 2 (ou o único, fora do admin) ── */}
-            <div>
-              <div className="mb-1.5 text-[11px] font-semibold text-foreground">
-                {passo1.length > 0
-                  ? `Passo 2 — a parcela da lavoura (${formatMoeda(dados.pool)}) repartida entre as culturas, por área`
-                  : 'Como este valor foi repartido — por área plantada'}
-              </div>
-
-              {/* ⚠ O DIRETO NÃO VIRA FATIA, E ISSO PRECISA ESTAR ESCRITO. O donut mostra só o
-                  POOL, porque só ele se reparte; o gasto já marcado nesta cultura não passa por
-                  rateio nenhum. Sem esta linha, o total do centro (o pool) discordaria do
-                  subtítulo (direto + fração) e pareceria erro — quando é a diferença entre "o
-                  que se reparte" e "o que a cultura tem". */}
-              {dados.direto_cultura > 0 && (
-                <p className="mb-1.5 text-[10px] leading-snug text-muted-foreground">
-                  O que se reparte: <strong>{formatMoeda(dados.pool)}</strong>. O resto,{' '}
-                  <strong>{formatMoeda(dados.direto_cultura)}</strong>, é direto desta cultura e
-                  não se reparte.
-                </p>
-              )}
-
-              <div className="flex flex-wrap items-start gap-3">
-                <Donut dados={dados.fatias.map(f => ({ nome: f.cultura, valor: f.valor }))}
-                  cor={i => corDaFatia(i)}
-                  total={dados.pool} rotuloTotal="A repartir" />
-
-                {/* ⚠ A LEGENDA É UMA TABELA, não uma lista com bolinhas: as quatro colunas se
-                    leem em coluna, e é isso que permite comparar duas culturas sem contar
-                    dígito. */}
-                <div className="min-w-[280px] flex-1">
-                  <table className="w-full table-fixed border-collapse">
-                    {/* ⚠ A MESMA RÉGUA DA TABELA DE CIMA (§5b/§5c): nome 220, área 90, % 70,
-                        R$ 130. As duas ficam uma sob a outra e larguras diferentes fariam o olho
-                        reancorar a cada bloco. */}
-                    <colgroup>
-                      <col style={{ width: 220 }} />
-                      <col style={{ width: 90 }} />
-                      <col style={{ width: 70 }} />
-                      <col style={{ width: 130 }} />
-                    </colgroup>
-                    <thead>
-                      <tr>
-                        {COLUNAS_FATIA.map(c => (
-                          <ThOrdenavel key={c.coluna} coluna={c.coluna} rotulo={c.h}
-                            ordem={ordFat.ordem} onOrdenar={ordFat.alternar}
-                            className={TH} alinhaDireita={c.coluna !== 'cultura'} />
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {ordFat.ordenadas.map(f => (
-                        <tr key={f.cultura}
-                          className={cn('border-t border-slate-100', f.atual && 'bg-accent')}>
-                          <td className="truncate px-2 py-0.5 text-[11px]" title={labelDaCultura(f.cultura)}>
-                            <span className="mr-1.5 inline-block h-2 w-2 shrink-0 rounded-[2px] align-middle"
-                              style={{ backgroundColor: corDaFatia(dados.fatias.indexOf(f)) }} />
-                            <span className={cn(f.atual && 'font-bold')}>{labelDaCultura(f.cultura)}</span>
-                          </td>
-                          <td className="px-2 py-0.5 text-right text-[11px] tabular-nums">
-                            {formatNum(f.area_ha, 2)}
-                          </td>
-                          <td className="px-2 py-0.5 text-right text-[11px] tabular-nums">
-                            {formatNum(f.peso, 1)}%
-                          </td>
-                          <td className="px-2 py-0.5 text-right text-[11px] font-medium tabular-nums">
-                            {formatMoeda(f.valor)}
-                          </td>
-                        </tr>
-                      ))}
-                      {/* ⚠ O TOTAL NA MESMA RÉGUA, e os 100% ESCRITOS: eles são a prova de que
-                          nenhuma cultura ficou de fora da repartição. */}
-                      <tr className="bg-primary text-primary-foreground">
-                        <td className="px-2 py-1 text-[11px] font-bold">Total</td>
-                        <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">
-                          {formatNum(totalArea, 2)}
-                        </td>
-                        <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">100,0%</td>
-                        <td className="px-2 py-1 text-right text-[11px] font-bold tabular-nums">
-                          {formatMoeda(dados.pool)}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          </TabsContent>
-
-          {/* ────────────────────── ABA 2 — OS LANÇAMENTOS ────────────────────── */}
-          {/* ─────────── ABA 3 — OS RATEADOS (ou a lista inteira, no admin) ─────────── */}
-          <TabsContent value={tresAbas || pool ? 'rateados' : 'lancamentos'}
-            className="mt-0 min-h-0 flex-1 flex-col data-[state=active]:flex data-[state=inactive]:hidden">
-            <ListaLancamentos
-              linhas={tresAbas || pool ? rateados : dados.lancamentos}
-              rotuloTotal={tresAbas || pool ? 'Pool compartilhado' : 'Total dos lançamentos'}
-              comCentro={pool}
-              onAbrir={onAbrirLancamento} />
-            <p className="mt-1 shrink-0 text-[10px] leading-snug text-muted-foreground">
-              {tresAbas || pool
-                /* ⚠ A SOMA DESTA LISTA É O POOL INTEIRO, não a fatia da cultura — e dizer isso
-                   aqui é o que impede o operador de somar, achar diferença e concluir que o
-                   sistema errou. A fatia está no subtítulo e na aba do meio. */
-                ? 'Lançamentos sem cultura marcada — o custo comum. A soma é o pool INTEIRO; '
-                  + 'a fatia desta cultura está no subtítulo.'
-                : notaDoRateio(dados, tipo)}
-            </p>
-          </TabsContent>
-        </Tabs>
+        </div>
       </DialogContent>
     </Dialog>
   );

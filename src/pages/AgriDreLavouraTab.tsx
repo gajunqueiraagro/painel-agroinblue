@@ -36,7 +36,9 @@ import {
   type CaixaFaixa, type DestaqueLinha, type TomFaixa,
 } from '@/components/agri/dreGrade';
 import { supabase } from '@/integrations/supabase/client';
-import { RateioDetalheModal, type RateioDetalhe, type TipoRateio } from '@/components/agri/RateioDetalheModal';
+import {
+  ModalValorDre, valorDaLavoura, valorDaPecuaria, type RateioDetalhe, type TipoRateio,
+} from '@/components/agri/RateioDetalheModal';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
 import { simboloDaUnidade, descricaoDaUnidade } from '@/lib/agri/colheita';
@@ -46,17 +48,15 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { usePeriodoUrl } from '@/v2/hooks/usePeriodoUrl';
 import { anoMes, descreverPeriodo } from '@/v2/lib/periodo';
 import {
-  useDrePecuaria, useDrePecuariaLancamentos, useDrePecuariaPatrimonio, useDrePecuariaLista,
+  useDrePecuaria, useDrePecuariaLancamentos, useDrePecuariaPatrimonio, useDrePecuariaLista, useRateioAdmPec,
   anoMesAntes, type RecortePec, type PeriodoPec,
 } from '@/hooks/useDrePecuaria';
 import { useFiltroUrl } from '@/v2/hooks/useFiltroUrl';
 import {
   SeletorPeriodoPecuaria, safraCorrentePecuaria, useSafraDeAbertura,
 } from '@/components/agri/SeletorPeriodoPecuaria';
-import { PecLancamentosModal } from '@/components/agri/PecLancamentosModal';
 import { PecPatrimonioModal } from '@/components/agri/PecPatrimonioModal';
 import { PecCascataView } from '@/components/agri/PecCascataView';
-import { PecRateioAdmModal } from '@/components/agri/PecRateioAdmModal';
 import {
   PecHistoricoLinhaModal, type RecorteHistoricoPec,
 } from '@/components/agri/PecHistoricoLinhaModal';
@@ -368,7 +368,11 @@ export function AgriDreLavouraTab({ onCorrigirPrecos }: {
   const [didatico, setDidatico] = useState<
     { fazendaId: string | null; nome: string; qual: 'vpb' | 'efeito' | 'ponte';
       de: string; ate: string; insumos: InsumosDidaticos } | null>(null);
-  const [rateioPecAberto, setRateioPecAberto] = useState(false);
+  /**
+   * O BOTÃO "Com rateio adm. nos grupos" DA GRADE DA PECUÁRIA — DRE-MODAL-VALOR-01b. Mesmo gesto do
+   * "Com rateio nos centros" da lavoura: muda ONDE o rateio aparece, nunca o resultado.
+   */
+  const [rateioNosGruposPec, setRateioNosGruposPec] = useState(false);
   const [historicoPec, setHistoricoPec] = useState<RecorteHistoricoPec | null>(null);
   /**
    * ONDE A PECUÁRIA ABRE — a última safra com movimento e com fechamento no fim.
@@ -447,6 +451,10 @@ export function AgriDreLavouraTab({ onCorrigirPrecos }: {
   const {
     lancamentos: lancPec, carregando: carregandoLancPec, recarregar: recarregarLancPec,
   } = useDrePecuariaLancamentos(clienteId, recortePec, pecDe, pecAte);
+  /* ⚠ A LISTA DO RATEIO ADMINISTRATIVO SÓ SAI COM O MODAL ABERTO NUMA CÉLULA QUE TEM RATEIO. */
+  const { rateio: rateioAdmPec, carregando: carregandoRateioAdmPec } = useRateioAdmPec(
+    clienteId, recortePec?.de ?? pecDe, recortePec?.ate ?? pecAte, recortePec?.cenario ?? 'realizado',
+    recortePec?.celula?.rateio != null);
   const { patrimonio: patPec, carregando: carregandoPatPec } = useDrePecuariaPatrimonio(
     clienteId, didatico?.fazendaId ?? null, didatico?.de ?? null, didatico?.ate ?? null, !!didatico);
 
@@ -543,6 +551,17 @@ export function AgriDreLavouraTab({ onCorrigirPrecos }: {
       : descreverPeriodo(periodo);
     return recortePec?.cenario === 'meta' ? `${base} · meta` : base;
   }, [recortePec, periodo]);
+  /* ⚠ A REPARTIÇÃO POR FAZENDA DO MODAL DE VALOR LÊ O DRE QUE A TELA JÁ TEM PARA AQUELE PERÍODO —
+     o da tela, o da meta ou um dos anos da comparação. Nenhuma consulta nova; sem ele, a aba Rateio
+     mostra só bruto e parte da atividade. */
+  const drePecDoRecorte = useMemo(() => {
+    if (!recortePec) return null;
+    const cen = recortePec.cenario ?? 'realizado';
+    const de = recortePec.de ?? pecDe; const ate = recortePec.ate ?? pecAte;
+    if (de === pecDe && ate === pecAte) return cen === 'meta' ? drePecMeta : drePec;
+    if (cen !== 'realizado') return null;
+    return anosPec.find(a => a.periodo.de === de && a.periodo.ate === ate)?.dre ?? null;
+  }, [recortePec, pecDe, pecAte, drePec, drePecMeta, anosPec]);
 
   /* ⚠ TRÊS CONTROLES DE APRESENTAÇÃO, e nenhum deles refaz consulta: o payload já traz `direto`,
      `rateado` e `valor` em cada linha. Trocar de modo é escolher qual ler. */
@@ -605,7 +624,23 @@ export function AgriDreLavouraTab({ onCorrigirPrecos }: {
     <>
       <ChipsUnidade valor={unidadesPec} onEscolher={setUnidadesPec}
         opcoes={UNIDADES_PEC_GRADE.map(u => ({ valor: u, rotulo: ROTULO_UNIDADE[u] }))} />
-      <span className="flex w-[247px] shrink-0 items-center justify-end gap-1.5">
+      <span className="flex w-[247px] shrink-0 items-center gap-1.5">
+        {/* ⚠ O BOTÃO DO RATEIO NOS GRUPOS — DRE-MODAL-VALOR-01b. O mock o põe acima do bloco Custo
+            fixo; ele mora na linha de controles da grade (a da lavoura mora na dela), e DENTRO do slot
+            fixo de 247px, à esquerda: o Δ usa 81px dele e fica ancorado à direita (`ml-auto`). Fora
+            do slot a linha estourava 84px por cima do card "Por fazenda" — medido em 27/09. Botão
+            (154) + folga (6) + Δ (81) = 241. Nada anda entre as visões: o botão é sempre o primeiro. */}
+        <Segmentado altura={22} valor={rateioNosGruposPec ? 'grupos' : 'diretos'}
+          onEscolher={v => setRateioNosGruposPec(v === 'grupos')}
+          opcoes={[
+            /* ⚠ RÓTULOS CURTOS, O INTEIRO NO `title`: com "Custos diretos | Com rateio adm. nos grupos" o
+               botão pedia ~320px e a linha de controles (as quatro colunas livres da faixa de cards)
+               estourava por cima do card "Por fazenda" — medido no preview em 27/09. */
+            { valor: 'diretos', rotulo: 'Diretos', title: 'Custos diretos: o rateio administrativo em linha própria' },
+            { valor: 'grupos', rotulo: 'Rateio nos grupos',
+              title: 'Com rateio adm. nos grupos: cada grupo do custo fixo soma o seu rateio; o resultado não muda' },
+          ]} />
+        <span className="ml-auto flex items-center gap-1.5">
         {visaoPec === 'comparacao' && <>
           {/* ⚠ A BARRA VERTICAL MORA DENTRO DO SLOT, não antes dele: o conteúdo é ancorado à
               direita, então ela acompanha o grupo e nada se move quando o slot fica vazio. */}
@@ -618,6 +653,7 @@ export function AgriDreLavouraTab({ onCorrigirPrecos }: {
             titleDesabilitado="Disponível ao comparar com a meta ou com 1 ano"
             opcoes={[{ valor: 'rs', rotulo: 'Δ R$' }, { valor: 'pct', rotulo: 'Δ %' }]} />
         </>}
+        </span>
       </span>
       {/* ⚠ UM BOTÃO SÓ, QUE DIZ O QUE VAI FAZER — o mesmo da linha de antes, palavra por palavra. */}
       <button type="button" onClick={alternarTudo}
@@ -644,7 +680,7 @@ export function AgriDreLavouraTab({ onCorrigirPrecos }: {
    * caminho alternativo (o drawer) é do PR-02, então o clique simplesmente não abre.
    */
   const [rateio, setRateio] = useState<
-    { dados: RateioDetalhe; tipo: TipoRateio; titulo: string; pool: boolean } | null>(null);
+    { dados: RateioDetalhe; tipo: TipoRateio; rotulo: string; cultura: string; pool: boolean } | null>(null);
 
   /* ⚠ `chave` PODE SER `null` DESDE O PR-07, e é o que abre o POOL: no ramo natureza da
      `fn_painel_rateio_detalhe`, `p_chave` nulo deixou de significar "nenhum centro" e passou a
@@ -667,12 +703,7 @@ export function AgriDreLavouraTab({ onCorrigirPrecos }: {
          ⚠ AGORA QUEM DECIDE É O MODAL, não este guard: ele abre sempre que a RPC responde, e as
          abas de rateio só aparecem quando há rateio para explicar. Um componente, duas formas. */
       if (!d) return;
-      const s = safras.find(x => x.id === safraId);
-      setRateio({
-        dados: d, tipo, pool: chave === null,
-        titulo: `${rotulo} · ${labelDaCultura(cultura)}`
-          + (s ? ` · Safra ${s.codigo || s.nome}` : ''),
-      });
+      setRateio({ dados: d, tipo, pool: chave === null, rotulo, cultura });
     })();
   };
 
@@ -1214,31 +1245,35 @@ export function AgriDreLavouraTab({ onCorrigirPrecos }: {
           <PecDrePanel colunas={colunasPec} alturaCartao={alturaCartao} cartaoRef={cartao}
             unidades={unidadesPec}
             modo={modoPec} abertos={abertosPec} onAbertos={f => setAbertosPec(f)}
+            rateioNosGrupos={rateioNosGruposPec}
             onAbrirLista={setRecortePec}
             /* ⚠ O PERÍODO VEM DA COLUNA — VARIACAO-REBANHO-MODAL-01. Guardá-lo aqui é o que permite
                abrir a Variação de 2022 e ver 2022: o hook abaixo passou a ler `didatico.de/ate` em
                vez de `pecDe/pecAte`, que são os da tela. */
             onAbrirDidatico={(fazendaId, nome, qual, de, ate, insumos) =>
               setDidatico({ fazendaId, nome, qual, de, ate, insumos })}
-            onAbrirRateio={() => setRateioPecAberto(true)}
             onAbrirHistorico={setHistoricoPec} />
         )
       )}
 
       {/* ⚠ OS TRÊS MODAIS DA PECUÁRIA SÃO IRMÃOS DA GRADE, nunca filhos de uma célula: assim
           fechar um não desmonta a tabela por baixo, e o estado da expansão dos grupos sobrevive. */}
-      {ehPec && (
-        <PecLancamentosModal
-          aberto={!!recortePec}
-          recorte={recortePec}
-          lancamentos={lancPec}
-          carregando={carregandoLancPec}
-          periodoRotulo={rotuloRecortePec}
+      {/* ⚠ O MODAL DE VALOR — DRE-MODAL-VALOR-01b, o MESMO da lavoura. A `key` remonta a cada célula:
+          aba e segmentado nascem do clique, não do modal anterior. */}
+      {ehPec && recortePec && (
+        <ModalValorDre aberto
+          key={[recortePec.fazendaId, recortePec.bloco, recortePec.centro, recortePec.de, recortePec.ate,
+            recortePec.cenario, recortePec.soRateio ? 's' : ''].join('|')}
+          valor={valorDaPecuaria({
+            recorte: recortePec, lancamentos: lancPec, rateio: rateioAdmPec, dre: drePecDoRecorte,
+            periodoRotulo: rotuloRecortePec,
+          })}
+          carregando={carregandoLancPec || (recortePec.celula?.rateio != null && carregandoRateioAdmPec)}
+          comRateioInicial={recortePec.celula?.comRateio ?? false}
+          abaInicial={recortePec.bloco === 'rateio_adm' ? 'rateio' : 'lancamentos'}
           onFechar={() => setRecortePec(null)}
-          /* ⚠ O MESMO CAMINHO DA LAVOURA (PR-05): `abrirLancamento` usa o
-             `buscarLancamentoPorId` do Financeiro, e os quatro catálogos já foram carregados no
-             efeito do topo. Sem eles o formulário abre com os campos em branco sobre dado
-             preenchido — o defeito que esta frente já pagou quatro vezes. */
+          /* ⚠ O MESMO CAMINHO DA LAVOURA (PR-05): `abrirLancamento` usa o `buscarLancamentoPorId` do
+             Financeiro, com os quatro catálogos já carregados. */
           onAbrirLancamento={catalogosProntos ? id => { void abrirLancamento(id); } : undefined}
         />
       )}
@@ -1263,10 +1298,6 @@ export function AgriDreLavouraTab({ onCorrigirPrecos }: {
           onCorrigirPrecos={onCorrigirPrecos
             && (ano => { voltaPrevistaRef.current = true; onCorrigirPrecos(ano); })}
         />
-      )}
-      {ehPec && drePec && rateioPecAberto && (
-        <PecRateioAdmModal aberto dre={drePec} periodoRotulo={descreverPeriodo(periodo)}
-          onFechar={() => setRateioPecAberto(false)} />
       )}
       {/* ⚠ IRMÃO DA GRADE, como os outros três: fechá-lo não desmonta a tabela nem perde a
           expansão dos grupos. A unidade inicial é a PRIMEIRA marcada nos chips do DRE — o modal
@@ -1366,10 +1397,16 @@ export function AgriDreLavouraTab({ onCorrigirPrecos }: {
         </p>
       )}
 
+      {/* ⚠ O MESMO MODAL DE VALOR DA PECUÁRIA — DRE-MODAL-VALOR-01b. O R$/ha divide pela área da
+          cultura no DRE da safra, a mesma da grade. */}
       {rateio && (
-        <RateioDetalheModal aberto onFechar={() => setRateio(null)}
-          titulo={rateio.titulo} dados={rateio.dados} tipo={rateio.tipo}
-          rateioDentro={rateioDentro} pool={rateio.pool}
+        <ModalValorDre aberto onFechar={() => setRateio(null)}
+          valor={valorDaLavoura(rateio.dados, rateio.tipo, {
+            rotulo: rateio.rotulo, cultura: rateio.cultura, pool: rateio.pool,
+            safra: safraAtual ? (safraAtual.codigo || safraAtual.nome) : null,
+            area: dre?.culturas.find(c => c.cultura === rateio.cultura)?.area_ha ?? null,
+          })}
+          comRateioInicial={rateio.tipo === 'admin' || rateio.pool || rateioDentro}
           onAbrirLancamento={(id) => { void abrirLancamento(id); }} />
       )}
 
