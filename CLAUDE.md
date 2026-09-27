@@ -830,6 +830,10 @@ no mesmo arquivo.
   `src/components/venda/abaInicialOC.test.tsx` (+2): venda e abate abrem na aba de `?oc_aba`, e sem ela na identificacao.
   ⚠ PROVADO: sem a guarda do componente, com o investimento dentro do resultado e sem a limpeza do `drillReturn`, 4 casos
   caem; com a venda ignorando a aba, 1.
+  De 2059 para 2064 no MODAIS-PADRAO-01f: entrou `src/components/reclassificacaoCenario.test.tsx` (+5) — o cenario do Evoluir
+  categoria nasce do caminho: meta grava `statusOperacional` null sem clique, realizado grava 'realizado', sem caminho segue
+  realizado, o mesmo preenchimento nos dois cenarios difere SO' em `statusOperacional` (os outros campos comparados um a um),
+  e o formulario nao oferece mais Realizado/Meta (com o titulo presente, provando que a busca sabe achar).
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -2481,6 +2485,33 @@ preview que o cabecalho nao sai da tela ao rolar.
   ⚠ SEM A PROP NADA MUDA — provado: o HTML do `LinhaResumo` sem `quebra` e' identico ao do HEAD nas 96 combinacoes de
     props (valor, cor, forte, empilhado, seloAbaixo, selo). Abate, Venda, Compra e envelope nao a usam.
   ⚠ E OS OUTROS `truncate` DO SISTEMA NAO FORAM VARRIDOS: a regra vale a partir daqui; a varredura e' frente propria.
+- ⚠ MODAIS-PADRAO-01f — TRANSFERENCIA, CONSUMO E EVOLUIR CATEGORIA NO ENVELOPE DA REGUA (27/09/2026). Os tres sairam do
+  ramo generico do `LancamentosTab` para o `LancamentoModalEnvelope` (cabecalho 36/13 com titulo, cenario, data e fazenda;
+  corpo `100vh-32`; resumo 240 com as pecas de `ui/linha-resumo`; rodape 32 com botoes 22/10). Os botoes de acao sairam
+  dos paineis para o RODAPE — mesmos textos, mesma ordem. O Consumo nao tem resumo: a coluna da direita e' o painel "Valor
+  do consumo" (o envelope ganhou `tituloResumo`), com o miolo copiado verbatim.
+  ⚠ CENARIO FIXO PELO CAMINHO, SEM ESCOLHA: "Lancar movimentacao" = Realizado, "Lancar meta" = Meta; o cenario e' o selo do
+    cabecalho, e a edicao mantem o do registro. Os cards Realizado/Meta sairam dos tres.
+  ⚠ DEFEITO CORRIGIDO NO EVOLUIR CATEGORIA, visto na tela: o estado nascia FIXO em 'realizado' (`ReclassificacaoForm`) e os
+    cards so' checavam a permissao de consultor, ignorando `cenariosPermitidos`. Em "Lancar meta" a evolucao abria como
+    Realizado e seria gravada assim sem clique nenhum; em "Lancar movimentacao" um consultor gravava meta. Agora
+    `useReclassificacaoState({ cenarioInicial })` nasce do `defaultCenario` do caminho (e de novo ao abrir o card), e
+    nenhum caminho deixa trocar — nem para consultor. Os cards sairam do componente, entao sairam TAMBEM do
+    `EditReclassificacaoSheet` (coerente: a edicao mantem o cenario do registro). A prop `hideStatus` morreu; o
+    `FechamentoTab`, unico usuario, perdeu uma linha.
+  ⚠ PROVA: gravacao por teste (`src/components/reclassificacaoCenario.test.tsx`: mesmo preenchimento, os dois cenarios, so'
+    `statusOperacional` muda — null na meta, 'realizado' no realizado — e o formulario sem Realizado/Meta). Transferencia e
+    Consumo por diff: `handleRequestRegister`/`handleSubmit` intocados, ja' guiados pelo caminho (o cliente do Supabase guarda
+    a referencia do `fetch` na criacao, entao o insert nao se intercepta no navegador). Texto antes x depois nos 6 estados
+    (3 modais x realizado/meta): so' sairam os cards, a frase do cenario, o titulo grande (subiu ao cabecalho), "Resumo da
+    Operacao" e "Close"; casca 36/479/32, zero corte, zero rolagem horizontal.
+  ⚠ `TransferenciaResumoPanel.tsx` FOI APAGADO (sem importador). O `ReclassificacaoResumoPanel` FICA: o
+    `EditReclassificacaoSheet` e o `FechamentoTab` ainda o usam.
+  ACHADOS, nao tratados:
+    (a) CENARIO-EDICAO-01 — `EditTransferenciaSheet` e `EditConsumoSheet` ainda deixam TROCAR o cenario na edicao.
+    (b) reclassificacao 2b134b8a (NJ, 2 vacas -> novilhas, data 15/03/2026, criada 17/04/2026 numa sessao de 19 metas e 4
+        realizados) e' o UNICO suspeito de meta gravada como realizado. Sem criterio confiavel: "data depois da criacao" da'
+        0 entre as 1.184 realizado e 25 entre as 58 meta (a busca sabe achar). O Gabriel confere.
 - OC-CLASSIF-ALINHAR-01 — pendencia, NAO corrigir agora (decisao do Gabriel, 27/09/2026, na FASE 0 do
   OC-PROGRAMACAO-MODAL-01): 6 titulos VIVOS de OC tem conta do plano DIFERENTE da do compromisso — todos anteriores
   ao OC-RECLASSIFICAR-ITEM-01, que hoje grava os dois juntos.

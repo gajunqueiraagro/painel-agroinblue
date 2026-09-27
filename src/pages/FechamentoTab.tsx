@@ -1642,7 +1642,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                 <p className="text-[11px] font-medium text-muted-foreground mb-2">
                   Reclassificar — {MESES_COLS[mesFiltro - 1]?.label}/{anoFiltro}
                 </p>
-                <ReclassificacaoFormFields state={reclassState} hideStatus={true} />
+                <ReclassificacaoFormFields state={reclassState} />
               </div>
 
               {/* COL 2: Sugestões */}

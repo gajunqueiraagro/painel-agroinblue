@@ -44,13 +44,17 @@ export interface LancamentoModalEnvelopeProps {
   children: ReactNode;
   /** Miolo do resumo lateral — os blocos, sem a faixa de título. */
   resumo: ReactNode;
+  /** Texto da faixa do card lateral. Sem ele, "Resumo do lançamento" / "Resumo da meta".
+   *  ⚠ MODAIS-PADRAO-01f: o CONSUMO nao tem resumo — a coluna da direita e' o painel "Valor do consumo"
+   *  (decisao do Gabriel), e ele entra no mesmo slot de 240px com o proprio titulo. */
+  tituloResumo?: string;
   /** Botão de ação do rodapé. O "Fechar" já vem no envelope.
    *  ⚠ NA MEDIDA DO RODAPE DE 32px: 22px / 10px (MODAIS-PADRAO-01d). O envelope nao o redimensiona. */
   acao: ReactNode;
 }
 
 export function LancamentoModalEnvelope({
-  titulo, cenario = 'realizado', data, fazendaNome, onFechar, children, resumo, acao,
+  titulo, cenario = 'realizado', data, fazendaNome, onFechar, children, resumo, acao, tituloResumo,
 }: LancamentoModalEnvelopeProps) {
   const isMeta = cenario === 'meta';
   const faixa = isMeta ? META_VISUAL.faixa : 'bg-primary';
@@ -97,7 +101,7 @@ export function LancamentoModalEnvelope({
             {/* RESUMO LATERAL — as pecas do Abate: a faixa de titulo, e o miolo de cada tipo
                 (blocos com `SecaoResumo` e pares `LinhaResumo`) dentro do card que rola. */}
             <div className="lg:min-h-0">
-              <AsideResumo faixa={<FaixaTituloResumo titulo={isMeta ? 'Resumo da meta' : 'Resumo do lançamento'} />}>
+              <AsideResumo faixa={<FaixaTituloResumo titulo={tituloResumo ?? (isMeta ? 'Resumo da meta' : 'Resumo do lançamento')} />}>
                 {resumo}
               </AsideResumo>
             </div>

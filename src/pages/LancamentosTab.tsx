@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { MetaLancamentoPanel, useMetaValidacaoBloqueios, type EvolucaoSugestao, type MetaStepState } from '@/components/MetaLancamentoPanel';
 import { EvolucaoAssistidaDialog } from '@/components/EvolucaoAssistidaDialog';
-import { formatMoeda } from '@/lib/calculos/formatters';
+import { formatMoeda, formatKg, formatArroba } from '@/lib/calculos/formatters';
 import {
   Lancamento,
   CATEGORIAS,
@@ -31,7 +31,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { format, parseISO, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ChevronRight, ChevronDown, ArrowLeft, AlertTriangle, LogIn, LogOut, RefreshCw, Clock, Info, Edit, Calendar, Building2, X } from 'lucide-react';
+import { ChevronRight, ChevronDown, ArrowLeft, AlertTriangle, LogIn, LogOut, RefreshCw, Clock, Info, Edit, Calendar, Building2, X, CheckCircle, ArrowRightLeft } from 'lucide-react';
 import { LancamentoDetalhe } from '@/components/LancamentoDetalhe';
 import { NascimentoModalShell } from '@/components/nascimento/NascimentoModalShell';
 import { MorteModalShell } from '@/components/morte/MorteModalShell';
@@ -43,7 +43,8 @@ import { boitelVazio, payloadBoitel, boitelDeLinha, pendenciaDoRealizado, realiz
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { liquidoDaVendaBoitel, realizadoAplicadoNoLote } from '@/components/venda/BoitelNegociacaoDerivado';
 import { ReclassificacaoFormFields, useReclassificacaoState } from '@/components/ReclassificacaoForm';
-import { ReclassificacaoResumoPanel } from '@/components/ReclassificacaoResumoPanel';
+import { LancamentoModalEnvelope } from '@/components/lancamento/LancamentoModalEnvelope';
+import { LinhaResumo } from '@/components/ui/linha-resumo';
 import { CompraDetalhesDialog, CompraDetalhes, EMPTY_COMPRA_DETALHES } from '@/components/compra/CompraDetalhesDialog';
 import { CompraResumoPanel } from '@/components/compra/CompraResumoPanel';
 import { CompraModalShell } from '@/components/compra/CompraModalShell';
@@ -62,7 +63,6 @@ import { gerarFinanceiroConsumo } from '@/components/consumo/gerarFinanceiroCons
 import { AbateDetalhesDialog, AbateDetalhes, EMPTY_ABATE_DETALHES } from '@/components/abate/AbateDetalhesDialog';
 import { AbateResumoPanel } from '@/components/abate/AbateResumoPanel';
 import { TransferenciaDetalhesDialog, TransferenciaDetalhes, EMPTY_TRANSFERENCIA_DETALHES } from '@/components/transferencia/TransferenciaDetalhesDialog';
-import { TransferenciaResumoPanel } from '@/components/transferencia/TransferenciaResumoPanel';
 import { buildTransferenciaCalculation, buildTransferenciaSnapshot } from '@/lib/calculos/transferencia';
 import { buildAbateCalculation, parseNumericValue, type AbateCalculation } from '@/lib/calculos/abate';
 import { buildVendaCalculation, buildVendaSnapshot, type VendaCalculation } from '@/lib/calculos/venda';
@@ -736,7 +736,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const { canEditMeta } = usePermissions();
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const reclassState = useReclassificacaoState({ onAdicionar, dataInicial });
+  /* ⚠ O CENARIO DA EVOLUCAO NASCE DO CAMINHO — MODAIS-PADRAO-01f. Ele nascia fixo em 'realizado' e os cards
+     do formulario o trocavam; em "Lancar meta" a evolucao saia realizada sem o clique. */
+  const reclassState = useReclassificacaoState({ onAdicionar, dataInicial, cenarioInicial: defaultCenario === 'meta' ? 'meta' : 'realizado' });
   // Pré-seleciona cenário da Reclassificação quando navegado da Evolução por Categoria
   useEffect(() => {
     if (initialReclassCenario && abaInicial === 'reclassificacao') {
@@ -1308,7 +1310,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      sozinho arrastaria o `AbateDetalhesDialog` legado — os 829 abates historicos — para um
      envelope sem padding e sem botao de fechar, e ele nao tem cabecalho proprio. */
   const abateOCNoEnvelope = isAbate && modoOCAbate;
-  const usaEnvelopeProprio = TIPOS_NO_ENVELOPE_PROPRIO.includes(tipo) || vendaMetaNoEnvelope || vendaOCNoEnvelope || abateOCNoEnvelope;
+  /* ⚠ MODAIS-PADRAO-01f — Transferencia (saida), Consumo e Evoluir categoria sairam do ramo generico para o
+     `LancamentoModalEnvelope`, na regua do Abate. A transferencia de ENTRADA fica no generico: nao e' um card
+     de lancamento, so' existe pela edicao de registro antigo. */
+  const envelopeSimples = aba === 'reclassificacao' || tipo === 'transferencia_saida' || isConsumo;
+  const usaEnvelopeProprio = TIPOS_NO_ENVELOPE_PROPRIO.includes(tipo) || vendaMetaNoEnvelope || vendaOCNoEnvelope || abateOCNoEnvelope || envelopeSimples;
   /** Quem escolhe a propria fazenda — governa os cinco pontos: a guarda de Global, os
    *  dois escritores de texto, o `fazendaId` do payload e a confirmacao. */
   const escolheFazenda = TIPOS_COM_SELETOR_DE_FAZENDA.includes(tipo) || vendaMetaNoEnvelope;
@@ -4508,6 +4514,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       setAba(it.aba);
       setTipo(it.value as TipoMovimentacao);
       resetAllFields();
+      /* MODAIS-PADRAO-01f — lancamento NOVO de evolucao volta ao cenario do caminho (uma edicao anterior pode
+         ter deixado o do registro editado). Mesma regra do `setStatusOp(defaultCenario)` do `resetAllFields`. */
+      if (it.aba === 'reclassificacao') reclassState.setStatusOp(defaultCenario === 'meta' ? 'meta' : 'realizado');
       /* ⚠ PESO SUGERIDO DO NASCIMENTO — 30,00 kg, e SO em lancamento novo. Ja existia
          no reset pos-salvamento; faltava na abertura, entao o primeiro nascimento do
          dia comecava vazio e o segundo nao.
@@ -4812,73 +4821,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
        sair do estoque; o que não existe é caixa. O painel deixa de dizer "não gera
        lançamento financeiro" — passava a ser falso — e pede o valor, com o preço de
        estoque da categoria como padrão. */
-    if (isConsumo) {
-      return (
-        /* ⚠ FORMATO DE BLOCO DO RESUMO, não de card — 114c-4. O conteúdo aqui é o que vai
-           virar o bloco lateral do `LancamentoModalEnvelope` quando o shell do Consumo
-           existir (parte 1 do 114c): identidade em cima, o número grande, a faixa embaixo.
-           Escrevê-lo já no formato final é o que faz aquela migração ser um MOVE, e não
-           uma reescrita.
-           ⚠ MEDIDAS A18, explícitas: rótulo 10px, valor 12px, o total em 18px. */
-        <div className="bg-card rounded-md border shadow-sm p-3 space-y-2 self-start">
-          <h3 className="text-[11px] font-bold uppercase tracking-wide text-primary">Valor do consumo</h3>
-          <Separator />
-          <div className="space-y-1.5 py-1">
-            <div>
-              <div className="text-[10px] text-muted-foreground">Total</div>
-              <div className="text-[18px] font-medium leading-none tabular-nums">
-                {consumoValorTotal != null ? brlMoeda(consumoValorTotal) : '—'}
-              </div>
-            </div>
-            <div className="flex items-baseline justify-between gap-2">
-              <Label className="text-[10px] text-muted-foreground">
-                {consumoBase === 'cab' ? 'Valor por cabeça' : 'Valor total'}
-              </Label>
-              {/* Fonte única do padrão, do aviso e do que será gravado. */}
-              <span className="text-[10px] text-muted-foreground">
-                {consumoPrecoKg != null
-                  ? `estoque ${brlMoeda(consumoPrecoKg)}/kg`
-                  : 'sem preço de estoque'}
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              {(['cab', 'total'] as const).map(b => (
-                <button type="button" key={b} onClick={() => setConsumoBase(b)}
-                  className={`rounded-full border px-2 py-px text-[10px] ${
-                    consumoBase === b ? 'border-primary bg-primary text-primary-foreground' : 'text-muted-foreground'}`}>
-                  {b === 'cab' ? 'por cabeça' : 'total'}
-                </button>
-              ))}
-            </div>
-            {/* ⚠ DIGITAR MARCA O CAMPO COMO TOCADO: a partir daí o padrão do estoque não
-                volta por cima do número do operador. */}
-            <CampoMoeda valor={consumoValorDigitado}
-              onChange={(v) => { consumoTocadoRef.current = true; setConsumoValorDigitado(v); }}
-              className="h-8 text-[12px] text-right" />
-            {/* ⚠ AUSÊNCIA DE PREÇO É AUSÊNCIA, NUNCA ZERO — 114c-3. Um consumo a zero
-                diria na DRE que o animal não valia nada. */}
-            {consumoPrecoKg == null && (
-              <p className="rounded border border-amber-400 bg-amber-50 px-2 py-1 text-[10px] leading-tight text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
-                {/* ⚠ A FRASE PRECISA SER LEGÍVEL EM PORTUGUÊS. Com os campos vazios ela
-                    saía "para a categoria em o mês", que é o que o print de 07/09 pegou.
-                    Agora o rótulo da categoria e o mês/ano vêm preenchidos, e sem eles a
-                    frase encurta em vez de emendar preposição com artigo. */}
-                Sem preço de estoque{rotuloCategoriaConsumo ? ` para ${rotuloCategoriaConsumo}` : ''}
-                {mesAnoConsumo ? ` em ${mesAnoConsumo}` : ''}. Informe o valor.
-              </p>
-            )}
-            <p className="text-[10px] leading-tight text-muted-foreground">
-              Entra na DRE como receita interna (Consumo Interno e Doações) e sai do estoque.
-              Não movimenta caixa nem conta bancária.
-            </p>
-          </div>
-          <Separator />
-          <Button type="button" className="w-full h-10 text-[13px] font-bold" onClick={handleRequestRegister} disabled={submitting}>
-            {editingAbateId ? 'Salvar Alterações do Consumo' : 'Registrar Consumo'}
-          </Button>
-        </div>
-      );
-    }
+    /* ⚠ O CONSUMO SAIU DAQUI — MODAIS-PADRAO-01f: o painel "Valor do consumo" e' o card lateral do
+       `LancamentoModalEnvelope` (miolo MOVIDO verbatim) e o "Registrar Consumo" foi para o rodape dele. */
 
     return (
     <div className="bg-card rounded-md border shadow-sm p-3 space-y-2 self-start">
@@ -5115,13 +5059,15 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         </div>
       )}
 
-      {/* Título grande do tipo de lançamento ativo */}
+      {/* Título grande do tipo de lançamento ativo — no envelope ele e' o cabecalho navy (MODAIS-PADRAO-01f). */}
+      {!envelopeSimples && (
       <div className="flex items-center gap-3 pb-1">
         <span className="text-3xl leading-none">{currentTipoIcon}</span>
         <h2 className="text-2xl font-bold text-foreground leading-tight">
           {editingAbateId ? (tipo === 'venda' ? 'Editar Venda' : tipo === 'abate' ? 'Editar Abate' : 'Editar Registro') : currentTipoLabel}
         </h2>
       </div>
+      )}
 
       {/* STATUS — destaque forte: Realizado / META (programado removido no PR-0C) */}
       {/* ⚠ NASCIMENTO NAO ESCOLHE CENARIO (PR-UI-NASCIMENTO-PADRAO-01). Este caminho
@@ -5136,7 +5082,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           conferencia: `statusOp` continua nascendo de `defaultCenario`, montado o
           seletor ou nao. As descricoes de status (STATUS_DESCRIPTIONS_MORTE_CONSUMO)
           seguem existindo para o CONSUMO, que ainda tem o seletor. */}
-      {!isNascimento && !isMorte && (
+      {/* ⚠ E NO ENVELOPE NENHUM TIPO ESCOLHE — MODAIS-PADRAO-01f (decisao do Gabriel): o cenario vem do caminho e
+          vira o selo do cabecalho. `statusOp` segue nascendo de `defaultCenario`, montado o seletor ou nao. */}
+      {!isNascimento && !isMorte && !envelopeSimples && (
       <div className="space-y-2">
         <div className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">Status</div>
         <div className="grid grid-cols-3 gap-2">
@@ -5176,7 +5124,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       </div>
       )}
 
-      <Separator />
+      {!envelopeSimples && <Separator />}
 
       {/* ══ GRADE BIFURCADA POR TIPO (PR-UI-NASCIMENTO-PADRAO-01) ═══════════════
           Esta grade servia SEIS tipos de lancamento com uma linha so de campos. O
@@ -5584,7 +5532,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         </div>
       )}
 
-      {isTransferencia && (
+      {/* No envelope, estes botoes moram no rodape (MODAIS-PADRAO-01f). */}
+      {isTransferencia && !envelopeSimples && (
         <div className="flex items-center gap-2 pt-3 border-t mt-3">
           {editingAbateId && (
             <Button
@@ -5947,6 +5896,46 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     fecharModalOCComAutosave,
   };
 
+  /* MODAIS-PADRAO-01f — o registrar/salvar da evolucao, MOVIDO verbatim do `onRequestRegister` que o
+     `ReclassificacaoResumoPanel` recebia no ramo generico. Uma constante porque o rodape do envelope o usa
+     em dois botoes (Salvar na edicao, Registrar no novo). */
+  const registrarReclass = editingReclassId ? async () => {
+                if (submitting) return;
+                setSubmitting(true);
+                try {
+                  const isMeta = reclassState.statusOp === 'meta';
+                  const pesoMedioKg = parseDecimalInput(reclassState.pesoKg);
+                  const payload = {
+                    data: reclassState.data,
+                    categoria: reclassState.categoriaOrigem,
+                    categoriaDestino: reclassState.categoriaDestino,
+                    quantidade: Number(reclassState.quantidade),
+                    pesoMedioKg: pesoMedioKg ?? null,
+                    pesoMedioArrobas: pesoMedioKg !== undefined ? kgToArrobas(pesoMedioKg) : null,
+                    cenario: isMeta ? 'meta' as const : 'realizado' as const,
+                    statusOperacional: isMeta ? 'previsto' as const : 'realizado' as const,
+                  };
+                  await onEditar(editingReclassId, payload);
+                  toast.success('Reclassificação atualizada com sucesso.');
+                  setEditingReclassId(null);
+                  reclassState.setQuantidade('');
+                  reclassState.setPesoKg('');
+                  reclassState.setPesoAutoFilled(false);
+                  setLancModalOpen(false);
+          restoreEditOrigin();
+                } finally {
+                  setSubmitting(false);
+                }
+              } : async () => {
+                if (submitting) return;
+                setSubmitting(true);
+                try {
+                  await reclassState.handleSubmit();
+                } finally {
+                  setSubmitting(false);
+                }
+              };
+
   return (
     <div className="p-4 animate-fade-in pb-20 max-w-7xl mx-auto">
       {onBackToConciliacao && aba !== 'reclassificacao' && (
@@ -6216,70 +6205,155 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
            Terceiro ramo da bifurcacao. O ramo generico abaixo — Venda, Abate, Consumo
            e Transferencia — segue byte a byte como estava. */
         <MorteModalShell {...morteFormApi} />
-      ) : (
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_22rem] gap-4 items-start overflow-visible">
-        {/* Center: Form or Historico */}
-        {aba === 'reclassificacao' ? (
-          <>
-            <ReclassificacaoFormFields
-              state={reclassState}
-            />
-            <ReclassificacaoResumoPanel
-              quantidade={Number(reclassState.quantidade) || 0}
-              pesoKg={parseDecimalInput(reclassState.pesoKg) || 0}
-              origemLabel={reclassState.origemLabel}
-              destinoLabel={reclassState.destinoLabel}
-              pesoMedioOrigem={reclassState.origemInfo?.pesoMedioKg ?? null}
-              statusOp={reclassState.statusOp}
-              onRequestRegister={editingReclassId ? async () => {
-                if (submitting) return;
-                setSubmitting(true);
-                try {
-                  const isMeta = reclassState.statusOp === 'meta';
-                  const pesoMedioKg = parseDecimalInput(reclassState.pesoKg);
-                  const payload = {
-                    data: reclassState.data,
-                    categoria: reclassState.categoriaOrigem,
-                    categoriaDestino: reclassState.categoriaDestino,
-                    quantidade: Number(reclassState.quantidade),
-                    pesoMedioKg: pesoMedioKg ?? null,
-                    pesoMedioArrobas: pesoMedioKg !== undefined ? kgToArrobas(pesoMedioKg) : null,
-                    cenario: isMeta ? 'meta' as const : 'realizado' as const,
-                    statusOperacional: isMeta ? 'previsto' as const : 'realizado' as const,
-                  };
-                  await onEditar(editingReclassId, payload);
-                  toast.success('Reclassificação atualizada com sucesso.');
-                  setEditingReclassId(null);
-                  reclassState.setQuantidade('');
-                  reclassState.setPesoKg('');
-                  reclassState.setPesoAutoFilled(false);
-                  setLancModalOpen(false);
-          restoreEditOrigin();
-                } finally {
-                  setSubmitting(false);
-                }
-              } : async () => {
-                if (submitting) return;
-                setSubmitting(true);
-                try {
-                  await reclassState.handleSubmit();
-                } finally {
-                  setSubmitting(false);
-                }
-              }}
-              submitting={submitting}
-              canRegister={reclassState.podeSalvar}
-              onBack={editingReclassId ? undefined : onBackToConciliacao}
-              backLabel={backLabel}
-              isEditing={!!editingReclassId}
-              onCancelEdit={() => {
+      ) : envelopeSimples ? (
+        /* ══ TRANSFERENCIA, CONSUMO E EVOLUIR CATEGORIA NO ENVELOPE — MODAIS-PADRAO-01f ═══════════════
+           Os tres sairam do ramo generico para a casca do Abate (cabecalho 36, corpo 100vh-32, resumo 240,
+           rodape 32). O que mudou, e SO' isto (decisoes do Gabriel, 27/09/2026):
+             · os botoes de acao sairam dos paineis e foram para o RODAPE — mesmos botoes, mesmos textos;
+             · a escolha de cenario saiu: ele vem do caminho de entrada e vira o selo do cabecalho;
+             · o CONSUMO nao tem resumo — o card lateral e' o proprio painel "Valor do consumo".
+           ⚠ CAMPOS, CALCULOS E GRAVACAO SAO OS DE SEMPRE: o formulario e' o mesmo `renderForm()` (sem o
+             titulo grande e sem os cards), e os botoes chamam os MESMOS handlers — os da evolucao foram
+             MOVIDOS verbatim do `ReclassificacaoResumoPanel` do ramo generico. */
+        <LancamentoModalEnvelope
+          titulo={aba === 'reclassificacao' ? 'Evoluir categoria' : (editingAbateId ? 'Editar Registro' : currentTipoLabel)}
+          cenario={(aba === 'reclassificacao' ? reclassState.statusOp === 'meta' : isCenarioMeta) ? 'meta' : 'realizado'}
+          data={aba === 'reclassificacao' ? reclassState.data : data}
+          fazendaNome={fazendaEscolhidaNome ?? (fazendaAtual && fazendaAtual.id !== '__global__' ? nomeFazenda : null)}
+          onFechar={fecharModalOCComAutosave}
+          tituloResumo={aba !== 'reclassificacao' && isConsumo ? 'Valor do consumo' : undefined}
+          resumo={aba === 'reclassificacao' ? (<>
+            {/* Os mesmos pares do `ReclassificacaoResumoPanel`, com os mesmos formatos. */}
+            <div>
+              <LinhaResumo rotulo="Origem" valor={reclassState.origemLabel || '-'} quebra />
+              <LinhaResumo rotulo="Destino" valor={reclassState.destinoLabel || '-'} quebra />
+              <LinhaResumo rotulo="Quantidade" valor={`${Number(reclassState.quantidade) || '-'} cab.`} />
+              <LinhaResumo rotulo="Peso médio" valor={parseDecimalInput(reclassState.pesoKg) ? `${(parseDecimalInput(reclassState.pesoKg) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg` : '-'} />
+              {reclassState.origemInfo?.pesoMedioKg ? (
+                <LinhaResumo rotulo="Peso sug. origem" valor={`${reclassState.origemInfo.pesoMedioKg.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg`} cor="text-orange-600" />
+              ) : null}
+            </div>
+            {(parseDecimalInput(reclassState.pesoKg) || 0) > 0 && (Number(reclassState.quantidade) || 0) > 0 && (
+              <div className="mt-0.5 border-t border-border/60 pt-0.5">
+                <LinhaResumo rotulo="Peso Total" valor={`${((Number(reclassState.quantidade) || 0) * (parseDecimalInput(reclassState.pesoKg) || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg`} />
+                <LinhaResumo rotulo="@/cab" valor={((parseDecimalInput(reclassState.pesoKg) || 0) / 30).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} />
+                <LinhaResumo rotulo="Total @" valor={(((Number(reclassState.quantidade) || 0) * (parseDecimalInput(reclassState.pesoKg) || 0)) / 30).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} />
+              </div>
+            )}
+            <div className="mt-0.5 border-t border-border/60 pt-0.5">
+              <LinhaResumo rotulo="Cenário"
+                valor={reclassState.statusOp === 'meta' ? STATUS_LABEL.meta : STATUS_LABEL.realizado}
+                cor={reclassState.statusOp === 'meta' ? 'text-orange-600' : 'text-green-600'}
+                selo={<span className={`h-1.5 w-1.5 rounded-full ${reclassState.statusOp === 'meta' ? 'bg-orange-500' : 'bg-green-500'}`} />} />
+            </div>
+          </>) : isConsumo ? (
+            /* O miolo do painel "Valor do consumo", MOVIDO verbatim de `renderFinancialPanel`; o titulo e' a
+               faixa do card (`tituloResumo`) e o botao foi para o rodape. */
+            <div className="px-2.5">
+          <div className="space-y-1.5 py-1">
+            <div>
+              <div className="text-[10px] text-muted-foreground">Total</div>
+              <div className="text-[18px] font-medium leading-none tabular-nums">
+                {consumoValorTotal != null ? brlMoeda(consumoValorTotal) : '—'}
+              </div>
+            </div>
+            <div className="flex items-baseline justify-between gap-2">
+              <Label className="text-[10px] text-muted-foreground">
+                {consumoBase === 'cab' ? 'Valor por cabeça' : 'Valor total'}
+              </Label>
+              {/* Fonte única do padrão, do aviso e do que será gravado. */}
+              <span className="text-[10px] text-muted-foreground">
+                {consumoPrecoKg != null
+                  ? `estoque ${brlMoeda(consumoPrecoKg)}/kg`
+                  : 'sem preço de estoque'}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              {(['cab', 'total'] as const).map(b => (
+                <button type="button" key={b} onClick={() => setConsumoBase(b)}
+                  className={`rounded-full border px-2 py-px text-[10px] ${
+                    consumoBase === b ? 'border-primary bg-primary text-primary-foreground' : 'text-muted-foreground'}`}>
+                  {b === 'cab' ? 'por cabeça' : 'total'}
+                </button>
+              ))}
+            </div>
+            {/* ⚠ DIGITAR MARCA O CAMPO COMO TOCADO: a partir daí o padrão do estoque não
+                volta por cima do número do operador. */}
+            <CampoMoeda valor={consumoValorDigitado}
+              onChange={(v) => { consumoTocadoRef.current = true; setConsumoValorDigitado(v); }}
+              className="h-8 text-[12px] text-right" />
+            {/* ⚠ AUSÊNCIA DE PREÇO É AUSÊNCIA, NUNCA ZERO — 114c-3. Um consumo a zero
+                diria na DRE que o animal não valia nada. */}
+            {consumoPrecoKg == null && (
+              <p className="rounded border border-amber-400 bg-amber-50 px-2 py-1 text-[10px] leading-tight text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+                {/* ⚠ A FRASE PRECISA SER LEGÍVEL EM PORTUGUÊS. Com os campos vazios ela
+                    saía "para a categoria em o mês", que é o que o print de 07/09 pegou.
+                    Agora o rótulo da categoria e o mês/ano vêm preenchidos, e sem eles a
+                    frase encurta em vez de emendar preposição com artigo. */}
+                Sem preço de estoque{rotuloCategoriaConsumo ? ` para ${rotuloCategoriaConsumo}` : ''}
+                {mesAnoConsumo ? ` em ${mesAnoConsumo}` : ''}. Informe o valor.
+              </p>
+            )}
+            <p className="text-[10px] leading-tight text-muted-foreground">
+              Entra na DRE como receita interna (Consumo Interno e Doações) e sai do estoque.
+              Não movimenta caixa nem conta bancária.
+            </p>
+          </div>
+            </div>
+          ) : (<>
+            {/* Os mesmos pares do `TransferenciaResumoPanel`, com os mesmos formatos. */}
+            <div>
+              <LinhaResumo rotulo="Quantidade" valor={`${parseNumericValue(quantidade) || '-'} cab.`} />
+              <LinhaResumo rotulo="Peso médio" valor={parseNumericValue(pesoKg) ? formatKg(parseNumericValue(pesoKg)) : '-'} />
+              <LinhaResumo rotulo="Categoria" valor={CATEGORIAS.find(c => c.value === categoria)?.label || categoria || '-'} />
+              <LinhaResumo rotulo="Origem" valor={(nomeFazenda || fazendaOrigem) || '-'} quebra />
+              <LinhaResumo rotulo="Destino" valor={fazendaDestino || '-'} quebra />
+            </div>
+            {(transferenciaCalc || transferenciaDetalhes?.calculation) && (() => {
+              const calcT = transferenciaCalc || transferenciaDetalhes?.calculation;
+              if (!calcT) return null;
+              return (<>
+                <div className="mt-0.5 border-t border-border/60 pt-0.5">
+                  <LinhaResumo rotulo="Peso Total" valor={formatKg(calcT.pesoTotalKg)} />
+                  <LinhaResumo rotulo="@/cab" valor={formatArroba(calcT.arrobasCab)} />
+                  <LinhaResumo rotulo="Total @" valor={formatArroba(calcT.totalArrobas)} />
+                </div>
+                {transferenciaDetalhes && calcT.temPrecoReferencia && (
+                  <div className="mt-0.5 border-t border-border/60 pt-0.5">
+                    <LinhaResumo rotulo="R$/@ ref." valor={formatMoeda(calcT.precoReferenciaArroba)} />
+                    <LinhaResumo rotulo="R$/cab ref." valor={formatMoeda(calcT.precoReferenciaCabeca)} />
+                    <LinhaResumo rotulo="Valor Econômico" valor={formatMoeda(calcT.valorEconomicoLote)} forte cor="text-primary" />
+                  </div>
+                )}
+              </>);
+            })()}
+            <div className="px-2.5 pt-1">
+              {!transferenciaDetalhes ? (
+                <div className="flex items-center gap-1 rounded border border-blue-200 bg-blue-50 p-1.5 text-[10px] leading-tight text-blue-600 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-400">
+                  <AlertTriangle className="h-3 w-3 shrink-0" />
+                  <span className="font-medium">Referência econômica não preenchida (opcional)</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1 rounded border border-green-200 bg-green-50 p-1 text-[10px] leading-tight text-green-700 dark:border-green-800 dark:bg-green-950/30 dark:text-green-400">
+                  <CheckCircle className="h-3 w-3 shrink-0" />
+                  <span className="font-medium">Referência econômica preenchida</span>
+                </div>
+              )}
+            </div>
+          </>)}
+          acao={aba === 'reclassificacao' ? (<>
+            {/* Os botoes do `ReclassificacaoResumoPanel`, na mesma ordem, com os handlers MOVIDOS verbatim. */}
+            {editingReclassId ? (<>
+              <Button type="button" variant="ghost" className="h-[22px] px-[9px] text-[10px] text-white/90 hover:bg-white/10 hover:text-white" onClick={() => {
                 setEditingReclassId(null);
                 reclassState.setQuantidade('');
                 reclassState.setPesoKg('');
                 reclassState.setPesoAutoFilled(false);
                 if (onReturnFromEdit) onReturnFromEdit();
-              }}
-              onDelete={editingReclassId ? async () => {
+              }}>
+                Cancelar
+              </Button>
+              <Button type="button" variant="destructive" className="h-[22px] w-[22px] p-0 text-[10px]" onClick={editingReclassId ? async () => {
                 await onRemover(editingReclassId);
                 setEditingReclassId(null);
                 reclassState.setQuantidade('');
@@ -6287,20 +6361,113 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                 reclassState.setPesoAutoFilled(false);
                 toast.success('Reclassificação removida.');
                 if (onReturnFromEdit) await onReturnFromEdit();
-              } : undefined}
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full"
+              } : undefined}>
+                🗑
+              </Button>
+              <Button type="button" className="h-[22px] px-[9px] text-[10px] bg-white text-primary hover:bg-white/90 font-bold disabled:opacity-60" onClick={registrarReclass} disabled={!reclassState.podeSalvar || submitting}>
+                {submitting ? 'Salvando...' : 'Salvar'}
+              </Button>
+            </>) : (
+              <Button type="button" className="h-[22px] px-[9px] text-[10px] bg-white text-primary hover:bg-white/90 font-bold disabled:opacity-60 gap-1" onClick={registrarReclass} disabled={!reclassState.podeSalvar || submitting}>
+                <RefreshCw className="h-3 w-3" />
+                {submitting ? 'Registrando...' : 'Registrar Reclassificação'}
+              </Button>
+            )}
+            {!editingReclassId && onBackToConciliacao && (
+              <Button type="button" variant="secondary" className="h-[22px] px-[9px] text-[10px] gap-1" onClick={onBackToConciliacao}>
+                <ArrowLeft className="h-3 w-3" />
+                {backLabel || 'Retornar à Conciliação'}
+              </Button>
+            )}
+            <Button type="button" variant="secondary" className="h-[22px] px-[9px] text-[10px] gap-1"
               onClick={() => {
                 toast.info('Atualizando rebanho... aguarde ~15s e recarregue a tela.');
-              }}
-            >
+              }}>
               🔄 Atualizar Rebanho
             </Button>
-          </>
-        ) : (
+          </>) : isConsumo ? (
+            <Button type="button" className="h-[22px] px-[9px] text-[10px] bg-white text-primary hover:bg-white/90 font-bold disabled:opacity-60" onClick={handleRequestRegister} disabled={submitting}>
+              {editingAbateId ? 'Salvar Alterações do Consumo' : 'Registrar Consumo'}
+            </Button>
+          ) : (<>
+            {/* Os botoes da Transferencia — os do formulario e os do painel, sem a copia do Registrar que existia
+                nos dois. "Completar Detalhes" traz a dica ao lado quando ainda nao pode abrir. */}
+            {editingAbateId && (
+              <Button type="button" variant="ghost" className="h-[22px] px-[9px] text-[10px] text-white/90 hover:bg-white/10 hover:text-white" onClick={handleCancelEdit} disabled={submitting}>
+                Cancelar
+              </Button>
+            )}
+            {transferenciaDetalhes ? (
+              <Button type="button" variant="secondary" className="h-[22px] px-[9px] text-[10px] gap-1" onClick={() => setTransferenciaDialogOpen(true)} disabled={submitting}>
+                <Edit className="h-3 w-3" />
+                Editar Financeiro
+              </Button>
+            ) : (<>
+              {!(data && quantidade && parseNumericValue(quantidade) > 0 && pesoKg && parseNumericValue(pesoKg) > 0 && categoria && fazendaDestino) && (
+                <span className="max-w-[15rem] text-right text-[10px] leading-snug text-white/80">Preencha Data, Quantidade, Peso, Categoria e Destino</span>
+              )}
+              <Button type="button" variant="secondary" className="h-[22px] px-[9px] text-[10px] gap-1 font-bold"
+                disabled={!(data && quantidade && parseNumericValue(quantidade) > 0 && pesoKg && parseNumericValue(pesoKg) > 0 && categoria && fazendaDestino)}
+                onClick={() => setTransferenciaDialogOpen(true)}>
+                <ArrowRightLeft className="h-3 w-3" />
+                Completar Detalhes
+              </Button>
+            </>)}
+            <Button type="button" className="h-[22px] px-[9px] text-[10px] bg-white text-primary hover:bg-white/90 font-bold disabled:opacity-60" onClick={handleRequestRegister} disabled={submitting}>
+              {submitting ? 'Registrando...' : editingAbateId ? 'Salvar Alterações' : 'Registrar Transferência'}
+            </Button>
+          </>)}
+        >
+          {aba === 'reclassificacao' ? (
+            <ReclassificacaoFormFields state={reclassState} />
+          ) : (<>
+            {renderForm()}
+            {/* O Painel Inteligente META segue montado em meta — ele alimenta a trava do Registrar
+                (`metaStepState`). Mesmas props do ramo generico. */}
+            {isCenarioMeta && (
+              <MetaLancamentoPanel
+                ano={data ? Number(data.slice(0, 4)) : new Date().getFullYear()}
+                mes={data ? Number(data.slice(5, 7)) : new Date().getMonth() + 1}
+                categoria={categoria}
+                tipo={tipo}
+                quantidade={parseNumericValue(quantidade) || 0}
+                pesoKg={parseNumericValue(pesoKg) || 0}
+                clienteId={clienteAtual?.id}
+                lancamentoEmEdicao={metaLancamentoEmEdicao}
+                onSugestaoEvolucao={(info: EvolucaoSugestao) => {
+                  setEvolucaoSugestao(info);
+                  setEvolucaoDialogOpen(true);
+                }}
+                onStepStateChange={setMetaStepState}
+              />
+            )}
+            {tipo === 'transferencia_saida' && (
+              <TransferenciaDetalhesDialog
+                  open={transferenciaDialogOpen}
+                  onClose={() => setTransferenciaDialogOpen(false)}
+                  onSave={(det) => {
+                    setTransferenciaDetalhes(det);
+                    setTransferenciaDialogOpen(false);
+                  }}
+                  initialData={transferenciaDetalhes || EMPTY_TRANSFERENCIA_DETALHES}
+                  quantidade={parseNumericValue(quantidade) || 0}
+                  pesoKg={parseNumericValue(pesoKg) || 0}
+                  categoria={categoria}
+                  fazendaOrigem={nomeFazenda || fazendaOrigem}
+                  fazendaDestino={fazendaDestino}
+                  data={data}
+                  statusOp={effectiveStatusOp}
+                  observacao={observacao}
+                />
+            )}
+          </>)}
+        </LancamentoModalEnvelope>
+      ) : (
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_22rem] gap-4 items-start overflow-visible">
+        {/* Center: Form or Historico */}
+        {/* ⚠ A EVOLUCAO DE CATEGORIA SAIU DAQUI — MODAIS-PADRAO-01f: ela abre no `LancamentoModalEnvelope`, logo
+            acima. Os handlers (registrar, salvar, cancelar, remover) foram MOVIDOS verbatim para o rodape dele. */}
+        {(
           <>
              {renderForm()}
             <div className="space-y-3">
@@ -6549,42 +6716,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                      clienteIdLancamento={clienteAtual?.id}
                    />
                 </div>
-              </>
-            ) : isTransferenciaSaida ? (
-              <>
-                <TransferenciaResumoPanel
-                  quantidade={parseNumericValue(quantidade) || 0}
-                  pesoKg={parseNumericValue(pesoKg) || 0}
-                  categoria={categoria}
-                  fazendaOrigem={nomeFazenda || fazendaOrigem}
-                  fazendaDestino={fazendaDestino}
-                  detalhes={transferenciaDetalhes}
-                  detalhesPreenchidos={!!transferenciaDetalhes}
-                  canOpenModal={!!(data && quantidade && parseNumericValue(quantidade) > 0 && pesoKg && parseNumericValue(pesoKg) > 0 && categoria && fazendaDestino)}
-                  onOpenModal={() => setTransferenciaDialogOpen(true)}
-                  onRequestRegister={handleRequestRegister}
-                  submitting={submitting}
-                  registerLabel={editingAbateId ? 'Salvar Alterações' : 'Registrar Transferência'}
-                  onCancelEdit={editingAbateId ? handleCancelEdit : undefined}
-                  calculation={transferenciaCalc}
-                />
-                <TransferenciaDetalhesDialog
-                  open={transferenciaDialogOpen}
-                  onClose={() => setTransferenciaDialogOpen(false)}
-                  onSave={(det) => {
-                    setTransferenciaDetalhes(det);
-                    setTransferenciaDialogOpen(false);
-                  }}
-                  initialData={transferenciaDetalhes || EMPTY_TRANSFERENCIA_DETALHES}
-                  quantidade={parseNumericValue(quantidade) || 0}
-                  pesoKg={parseNumericValue(pesoKg) || 0}
-                  categoria={categoria}
-                  fazendaOrigem={nomeFazenda || fazendaOrigem}
-                  fazendaDestino={fazendaDestino}
-                  data={data}
-                  statusOp={effectiveStatusOp}
-                  observacao={observacao}
-                />
               </>
             ) : (
               renderFinancialPanel()

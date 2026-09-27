@@ -8,8 +8,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { format } from 'date-fns';
 import { useIntegerInput, useDecimalInput, parseDecimalInput } from '@/hooks/useFormattedNumber';
 import { RefreshCw, ArrowRight, Scale } from 'lucide-react';
-import { STATUS_LABEL, META_VISUAL, type StatusOperacional } from '@/lib/statusOperacional';
-import { usePermissions } from '@/hooks/usePermissions';
 import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
 import { ReclassificacaoResumoPanel } from './ReclassificacaoResumoPanel';
 
@@ -23,42 +21,35 @@ interface Props {
    * reescreve é a mesma armadilha da carga de mandioca.
    */
   autoSugerir?: boolean;
+  /**
+   * O cenario com que a evolucao NASCE — o do caminho de entrada (MODAIS-PADRAO-01f). Sem ele, realizado
+   * (Fechamento, edicao antes da hidratacao). Nao ha mais card para troca-lo depois.
+   */
+  cenarioInicial?: 'realizado' | 'meta';
 }
 
 type StatusOpcao = 'realizado' | 'meta';
-
-const STATUS_DESCRIPTIONS: Record<StatusOpcao, string> = {
-  realizado: 'Operação concluída. Impacta rebanho e financeiro.',
-  meta: META_VISUAL.description,
-};
-
-const STATUS_BUTTONS: { value: StatusOpcao; label: string; dot: string; activeBorder: string; activeBg: string }[] = [
-  { value: 'realizado', label: STATUS_LABEL.realizado, dot: 'bg-green-600', activeBorder: 'border-green-400', activeBg: 'bg-green-50 dark:bg-green-950/30' },
-  { value: 'meta', label: META_VISUAL.label, dot: META_VISUAL.dot, activeBorder: META_VISUAL.activeBorder, activeBg: META_VISUAL.activeBg },
-];
 
 // ── Form Fields Component ──
 
 interface FormFieldsProps {
   state: ReturnType<typeof useReclassificacaoState>;
-  hideStatus?: boolean;
 }
 
 export function ReclassificacaoFormFields(props: FormFieldsProps) {
-  const { state, hideStatus } = props;
+  const { state } = props;
   const {
     categoriaOrigem, setCategoriaOrigem,
     categoriaDestino, setCategoriaDestino,
     data, setData,
     qtdInput, pesoInput,
-    statusOp, setStatusOp,
+    statusOp,
     origemInfo, setPesoKg, pesoAutoFilled, setPesoAutoFilled,
     motivoBloqueio,
   } = state;
 
   const isMeta = statusOp === 'meta';
   const borderAccent = isMeta ? 'border-orange-400' : '';
-  const { canEditMeta } = usePermissions();
 
   const fmtNum = (v: number | null, dec = 1) =>
     v != null ? v.toLocaleString('pt-BR', { minimumFractionDigits: dec, maximumFractionDigits: dec }) : '—';
@@ -72,41 +63,12 @@ export function ReclassificacaoFormFields(props: FormFieldsProps) {
         </div>
       </div>
 
-      {/* Status selector – Realizado / META */}
-      {!hideStatus && (
-      <div className="space-y-1">
-        <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Status da Operação</Label>
-        <div className="grid grid-cols-2 gap-1">
-          {STATUS_BUTTONS.map(s => {
-            const selected = statusOp === s.value;
-            const disabled = s.value === 'meta' && !canEditMeta;
-            return (
-              <button
-                key={s.value}
-                type="button"
-                onClick={() => !disabled && setStatusOp(s.value)}
-                disabled={disabled}
-                className={`flex items-center justify-center gap-1 h-6 rounded-md border transition-all ${
-                  disabled ? 'opacity-40 cursor-not-allowed border-border bg-muted/10' :
-                  selected ? `${s.activeBg} ${s.activeBorder}` : 'border-border bg-muted/10 hover:bg-muted/30'
-                }`}
-                title={disabled ? 'Somente consultores podem criar registros META' : undefined}
-              >
-                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${selected ? s.dot : 'border border-muted-foreground/40 bg-transparent'}`} />
-                <span className={`text-[10px] font-bold ${selected ? 'text-foreground' : 'text-muted-foreground'}`}>{s.label}</span>
-              </button>
-            );
-          })}
-        </div>
-        <div className={`rounded-md border px-2 py-1 text-[9px] leading-snug ${
-          statusOp === 'realizado' ? 'bg-green-50 dark:bg-green-950/20 border-green-300 dark:border-green-800 text-green-800 dark:text-green-300'
-          : 'bg-orange-50 dark:bg-orange-950/20 border-orange-300 dark:border-orange-800 text-orange-800 dark:text-orange-300'
-        }`}>
-          {STATUS_DESCRIPTIONS[statusOp]}
-        </div>
-      </div>
-      )}
-
+      {/* ⚠ O CENARIO NAO SE ESCOLHE AQUI — MODAIS-PADRAO-01f (decisao do Gabriel, 27/09/2026). Os cards
+          Realizado/Meta sairam: o cenario nasce do CAMINHO (Lancar movimentacao = realizado, Lancar meta = meta)
+          e, na edicao, e' o do proprio lancamento. Antes o estado nascia fixo em 'realizado' e estes cards so'
+          checavam a permissao de consultor — em "Lancar meta" a evolucao saia gravada como realizado sem o
+          clique, e em "Lancar movimentacao" um consultor gravava meta. Quem mostra o cenario agora e' o selo do
+          cabecalho do modal. */}
       <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-end">
         <div>
           <Label className="text-[10px] font-semibold">Origem</Label>
@@ -185,7 +147,7 @@ export function ReclassificacaoFormFields(props: FormFieldsProps) {
 
 // ── Hook ──
 
-export function useReclassificacaoState({ onAdicionar, dataInicial, autoSugerir = true }: Props) {
+export function useReclassificacaoState({ onAdicionar, dataInicial, autoSugerir = true, cenarioInicial }: Props) {
   const [categoriaOrigem, setCategoriaOrigem] = useState<Categoria>('garrotes');
   const [categoriaDestino, setCategoriaDestino] = useState<Categoria>('bois');
   const [data, setData] = useState(dataInicial || format(new Date(), 'yyyy-MM-dd'));
@@ -195,7 +157,7 @@ export function useReclassificacaoState({ onAdicionar, dataInicial, autoSugerir 
   const [quantidade, setQuantidade] = useState('');
   const [pesoKg, setPesoKg] = useState('');
   const [pesoAutoFilled, setPesoAutoFilled] = useState(false);
-  const [statusOp, setStatusOp] = useState<StatusOpcao>('realizado');
+  const [statusOp, setStatusOp] = useState<StatusOpcao>(cenarioInicial ?? 'realizado');
 
   const qtdInput = useIntegerInput(quantidade, setQuantidade);
   const pesoInput = useDecimalInput(pesoKg, setPesoKg, 2);
