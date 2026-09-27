@@ -542,48 +542,52 @@ export function VendaModalShell({
   );
 
   return (
-    <div className="flex flex-col">
-      {/* CABECALHO — medidas do CompraModalShell: `px-6 py-2.5`. */}
-      <div className="bg-primary text-primary-foreground px-6 py-2.5 flex items-start justify-between">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <h2 className="text-lg font-bold leading-tight">Venda de animais</h2>
-            {/* ⚠ MESMO TERNARIO DA COMPRA (CompraModalShell:300), palavra por palavra. Ele
-                dizia "(novo)" para sempre — inclusive depois de salva, o que era mentira do
-                rotulo: a operacao ja existia e o cabecalho negava. */}
-            <span className="rounded-md border border-white/40 px-2 py-0.5 text-xs">
-              OC{ocOperacaoId ? ` #${ocOperacaoId.slice(0, 8)}` : ' (novo)'}
-            </span>
-          </div>
-          <div className="mt-1 flex items-center gap-3 text-xs text-white/80">
-            <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> {data ? data.split('-').reverse().join('/') : '—'}</span>
-            <span className="flex items-center gap-1"><Building2 className="h-3.5 w-3.5" /> {fazendaNome ?? '—'}</span>
-          </div>
+    /* ⚠ A CASCA DO ABATE — MODAIS-PADRAO-01b. Cabecalho 36, abas 20/10px, rodape 32 com botoes
+       22/10px, e a altura mora AQUI (`100vh-32`), uma vez so': as tres faixas sao `shrink-0` e so'
+       o corpo rola (A21). Antes a altura estava no corpo (`h-[69vh]`) e o resumo tinha 368px
+       contra os 479 do Abate na mesma janela. Conteudo, textos e botoes sao os de antes. */
+    <div className="flex flex-col h-[calc(100vh-32px)]">
+      {/* CABECALHO — uma linha, na medida do Abate (era `px-6 py-2.5` em duas linhas, 63px). */}
+      <div className="h-9 shrink-0 bg-primary text-primary-foreground px-4 flex items-center gap-3">
+        <h2 className="shrink-0 text-[13px] font-semibold leading-none">Venda de animais</h2>
+        {/* ⚠ MESMO TERNARIO DA COMPRA (CompraModalShell:300), palavra por palavra. Ele
+            dizia "(novo)" para sempre — inclusive depois de salva, o que era mentira do
+            rotulo: a operacao ja existia e o cabecalho negava. */}
+        <span className="shrink-0 rounded-md border border-white/40 px-2 py-px text-[10px] leading-none">
+          OC{ocOperacaoId ? ` #${ocOperacaoId.slice(0, 8)}` : ' (novo)'}
+        </span>
+        <span className="flex min-w-0 items-center gap-1 whitespace-nowrap text-[11px] text-white/85">
+          <Calendar className="h-3 w-3 shrink-0" /> {data ? data.split('-').reverse().join('/') : '—'}
+        </span>
+        <span className="flex min-w-0 items-center gap-1 truncate whitespace-nowrap text-[11px] text-white/85">
+          <Building2 className="h-3 w-3 shrink-0" /> {fazendaNome ?? '—'}
+        </span>
+        <button type="button" onClick={onFechar} className="ml-auto shrink-0 text-white/80 hover:text-white"
+          title="Fechar" aria-label="Fechar"><X className="h-3.5 w-3.5" /></button>
+      </div>
+
+      {/* ⚠ O RESUMO VAI DO CABECALHO AO RODAPE, como no Abate: as abas moram DENTRO da coluna da
+          esquerda. Por cima das duas colunas, elas tiravam a altura da barra do resumo. */}
+      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[1fr_240px]">
+        <div className="flex min-h-0 min-w-0 flex-col">
+        {/* BARRA DE ABAS — a do Abate (botao 20px/10px, barra ~29px; era `px-6 py-3` com h-8 12px). */}
+        <div className="shrink-0 bg-card border-b px-2 py-1 flex items-center gap-1">
+          {abasDaVenda(!!ocOperacaoId).map(a => {
+            const active = a.key === abaAtiva && a.enabled;
+            return (
+              <button key={a.key} type="button" disabled={!a.enabled}
+                onClick={() => a.enabled && setAbaAtiva(a.key)}
+                title={a.motivo}
+                className={`h-5 px-[7px] rounded-md text-[10px] font-medium transition-colors ${
+                  active ? 'bg-primary/10 text-primary'
+                  : a.enabled ? 'text-muted-foreground hover:bg-muted/50'
+                  : 'text-muted-foreground/40 cursor-not-allowed'}`}>
+                {a.label}
+              </button>
+            );
+          })}
         </div>
-        <button type="button" onClick={onFechar} className="text-white/80 hover:text-white shrink-0"
-          title="Fechar" aria-label="Fechar"><X className="h-5 w-5" /></button>
-      </div>
-
-      {/* BARRA DE ABAS — template do CompraModalShell (bg-card, border-b, px-6 py-3). */}
-      <div className="bg-card border-b px-6 py-3 flex items-center gap-1">
-        {abasDaVenda(!!ocOperacaoId).map(a => {
-          const active = a.key === abaAtiva && a.enabled;
-          return (
-            <button key={a.key} type="button" disabled={!a.enabled}
-              onClick={() => a.enabled && setAbaAtiva(a.key)}
-              title={a.motivo}
-              className={`h-8 px-3 rounded-md text-[12px] font-medium transition-colors ${
-                active ? 'bg-primary/10 text-primary'
-                : a.enabled ? 'text-muted-foreground hover:bg-muted/50'
-                : 'text-muted-foreground/40 cursor-not-allowed'}`}>
-              {a.label}
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_240px] lg:grid-rows-[minmax(0,1fr)] gap-3 p-4 h-[69vh] overflow-y-auto lg:overflow-hidden bg-muted/30">
-        <div className="space-y-2 min-w-0 lg:min-h-0 lg:overflow-y-auto">
+        <div className="min-h-0 min-w-0 flex-1 space-y-1.5 overflow-y-auto bg-muted/30 p-2">
           {/* ── ENTREGA ────────────────────────────────────────────────────────────
               ⚠ A MESMA GRADE DA COMPRA, com o vocabulario trocado por dicionario. O gesto
               e' o mesmo — dizer quantos animais de cada lote se moveram, em que dia —, e o
@@ -919,6 +923,7 @@ export function VendaModalShell({
           )}
           </>)}
         </div>
+        </div>
 
         {/* RESUMO LATERAL — as pecas do Abate (`ui/linha-resumo`), MODAIS-PADRAO-01a: 240px e
             esticado ate' o fim do corpo; quem rola e' a lista dentro do card, nao a coluna. */}
@@ -1035,9 +1040,11 @@ export function VendaModalShell({
         </div>
       </div>
 
-      <div className="bg-primary px-6 py-2 flex items-center justify-end gap-3">
+      {/* RODAPE — 32px com botoes 22px/10px, a medida do Abate (era `px-6 py-2`, 48px). Mesmos
+          botoes, mesma ordem, mesmos textos. */}
+      <div className="h-8 shrink-0 bg-primary px-2 flex items-center justify-end gap-2">
         <Button type="button" variant="ghost" onClick={onFechar}
-          className="text-white/90 hover:bg-white/10 hover:text-white" title="Fechar sem salvar" aria-label="Fechar">
+          className="h-[22px] px-[9px] text-[10px] text-white/90 hover:bg-white/10 hover:text-white" title="Fechar sem salvar" aria-label="Fechar">
           Fechar
         </Button>
         {/* ⚠ A VENDA NAO TINHA COMO CONCLUIR — PR-OC-VENDA-ENTREGA-01B. A aba Entrega
@@ -1056,15 +1063,15 @@ export function VendaModalShell({
             'fechada' mandando "reabra para editar". A venda nao tinha por onde reabrir:
             instrucao certa, destino ausente — o mesmo defeito que o Concluir teve. */}
         {naNegociacao && !!ocOperacaoId && ocStatusComercial === 'fechada' && (
-          <Button type="button" variant="secondary" className="gap-1.5" disabled={submitting}
+          <Button type="button" variant="secondary" className="h-[22px] px-[9px] text-[10px] gap-1" disabled={submitting}
             title="Reabrir devolve a operação para programada e libera a edição. Fica registrado na Auditoria com o motivo."
             onClick={() => { setMotivoReabrir(''); setReabrirAberto(true); }}>
-            <RotateCcw className="h-4 w-4" /> Reabrir negociação
+            <RotateCcw className="h-3 w-3" /> Reabrir negociação
           </Button>
         )}
         {naNegociacao && !!ocOperacaoId && ocStatusComercial === 'programada' && recebimentoApi && (<>
           <DicaBotao texto={concluirTravadoPor} />
-          <Button type="button" variant="secondary" className="gap-1.5"
+          <Button type="button" variant="secondary" className="h-[22px] px-[9px] text-[10px] gap-1"
             /* ⚠ O CONCLUIR NAO ESTAVA QUEBRADO — ele ACORDAVA depois do Salvar. O defeito
                era o SILENCIO: cinza, sem dizer o que faltava, e o operador concluia que o
                botao nao funcionava. Correcao do Gabriel, B-09 item 1.
@@ -1101,7 +1108,7 @@ export function VendaModalShell({
               setOfereceGerarCompromissos(true);
               setAbaAtiva('financeiro');
             }}>
-            <Check className="h-4 w-4" /> Concluir negociação
+            <Check className="h-3 w-3" /> Concluir negociação
           </Button>
         </>)}
         {rodapeTemSalvar && (<>
@@ -1120,7 +1127,7 @@ export function VendaModalShell({
             if (criando && gravou) setAbaAtiva('negociacao');
           }}
           disabled={submitting || !podeSalvar || semAlteracoes || ocStatusComercial === 'cancelada'}
-          className="bg-white text-primary hover:bg-white/90 font-bold gap-1.5 disabled:opacity-60"
+          className="h-[22px] px-[9px] text-[10px] bg-white text-primary hover:bg-white/90 font-bold gap-1 disabled:opacity-60"
           title={motivoNaoSalva ?? (semAlteracoes ? 'Nada alterado desde o último salvamento' : undefined)}>
           {/* O TEXTO VOLTOU AO DO MOCKUP em PR-OC-VENDA-ABA-NEGOCIACAO-01, porque agora
               ha para onde ir. Ele ficou em "Salvar operação" enquanto a Negociacao nao
@@ -1129,7 +1136,7 @@ export function VendaModalShell({
           {submitting ? 'Salvando...'
             : naNegociacao ? 'Salvar negociação'
             : ocOperacaoId ? 'Salvar alterações'
-            : (<>Salvar e continuar para Negociação <ArrowRight className="h-4 w-4" /></>)}
+            : (<>Salvar e continuar para Negociação <ArrowRight className="h-3 w-3" /></>)}
         </Button>
         </>)}
       </div>

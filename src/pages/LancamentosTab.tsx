@@ -6047,12 +6047,14 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
              expandido pelo arquiteto. A aba de Negociacao dela carrega DOIS cards de campos
              mais o resumo lateral de 280px; em 1024px sobravam ~100px por coluna de campo e
              os rotulos quebravam palavra a palavra. Compra, Nascimento, Morte e a venda de
-             meta seguem em 1024px — o predicado e' so' da venda OC, conferido. */
-          /* ⚠ O ABATE MANDA NA PROPRIA ALTURA. O `DialogContent` traz `max-h` do tema, e
+             meta seguem em 1024px — o predicado e' so' da venda OC, conferido.
+             ⚠ E VOLTOU A 1024 NO MODAIS-PADRAO-01b (decisao 2 do Gabriel): com a casca do Abate
+             (corpo `p-2`, resumo de 240px) a coluna de campos ganhou o que os 1152 davam. */
+          /* ⚠ ABATE E VENDA MANDAM NA PROPRIA ALTURA. O `DialogContent` traz `max-h` do tema, e
              com ele o `h-[calc(100vh-32px)]` do shell nao passava de 85vh — a aba
-             Negociacao voltava a rolar em tela de 900px. `max-h-none` so' para o abate;
-             compra, nascimento, morte e venda seguem com o teto de sempre. */
-          ? `${vendaOCNoEnvelope ? 'max-w-6xl' : 'max-w-5xl'}${abateOCNoEnvelope ? ' max-h-none' : ''} p-0 gap-0 overflow-hidden [&>button.absolute]:hidden`
+             Negociacao voltava a rolar em tela de 900px. `max-h-none` so' para os dois (a venda
+             desde o MODAIS-PADRAO-01b); compra, nascimento e morte seguem com o teto de sempre. */
+          ? `max-w-5xl${abateOCNoEnvelope || vendaOCNoEnvelope ? ' max-h-none' : ''} p-0 gap-0 overflow-hidden [&>button.absolute]:hidden`
           : 'max-w-full sm:max-w-5xl w-full h-screen sm:h-auto sm:max-h-[92vh] overflow-y-auto p-4 sm:p-5'}
       >
       {isAbate && modoOCAbate ? (

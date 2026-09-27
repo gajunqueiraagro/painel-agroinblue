@@ -1277,7 +1277,12 @@ function GrupoIndicadores({ titulo, itens, onAbrir, solido }: {
         <span className="text-[11px] font-medium text-muted-foreground leading-none truncate">{titulo}</span>
         <Pencil className="h-3.5 w-3.5 shrink-0 text-secondary" />
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3">
+      {/* ⚠ COLUNAS PELO CONTEUDO, COM PISO NO TERCO — MODAIS-PADRAO-01b. Com a venda em 1024px o
+          cartao ficou com 332px uteis e as tres colunas iguais davam 100px: "Faturamento abate proj."
+          pede 112 e o valor embaixo, 109 — cortava. `minmax(max-content, 1fr)` mantem o terco quando
+          cabe (Desempenho segue 100/100/100) e so' alarga a coluna que precisa. Medido: a maior soma
+          de conteudo e' 246 para 300 uteis. */}
+      <div className="grid grid-cols-2 sm:grid-cols-[repeat(3,minmax(max-content,1fr))] gap-x-4 gap-y-3">
         {itens.map(i => (
           <div key={i.rotulo} className="min-w-0">
             <div title={i.titulo ?? i.rotulo}
@@ -1637,7 +1642,11 @@ export function BoitelBlocosModais({ valor, onChange, somenteLeitura, cenario, d
       {/* ─── CARTAO PROJECAO ───────────────────────────────────────────────────── */}
       <section className="rounded-md border-2 border-amber-500/70 bg-card p-3 shadow-sm min-w-0 space-y-3">
         <div className="flex items-center justify-between gap-2 border-b pb-1.5">
-          <div className="flex items-center gap-2 min-w-0">
+          {/* ⚠ QUEBRA EM DUAS SUBLINHAS QUANDO NAO CABE — MODAIS-PADRAO-01b. Em 1024px "enviada em
+              05/07" pedia 86px e tinha 70 ao lado do "Liq. no bolso"; o `truncate` o cortava. Com
+              `flex-wrap` ele desce para baixo do titulo, dentro da altura que o bloco do bolso (duas
+              linhas) ja' ocupa — o cabecalho nao cresce e nada sai do lado a lado. */}
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
             <span className="text-[13px] font-medium text-foreground leading-none">Projeção</span>
             <PilulaCenario cenario={cenario} />
             {detalheCenario && (
