@@ -15,6 +15,7 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { useLancamentoDocumentos } from '@/hooks/useLancamentoDocumentos';
 import { AbaDocumentosLancamento } from '@/components/financeiro-v2/AbaDocumentosLancamento';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AsideResumo, FaixaTituloResumo, SecaoResumo, LinhaResumo } from '@/components/ui/linha-resumo';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -291,28 +292,8 @@ function ExcelCtxConta({
 //   Camada EXCLUSIVAMENTE de apresentação: apenas reflete os valores atuais do formulário.
 //   NÃO infere status/completude (sem semáforo/bolinhas) — indicador de pendência só quando existir
 //   fonte oficial e única de validação (frente futura). Títulos de bloco neutros; vazio → "—".
-// Faixa horizontal discreta de título (ocupa toda a largura interna do aside — que não tem
-// padding horizontal; as linhas é que recebem px-3). Fundo distinto do corpo, altura mínima.
-function ResumoBlocoHead({ titulo }: { titulo: string }) {
-  // PR-FIN-MODAL-02I — densidade funcional do 02G: separação MÍNIMA entre blocos (mt-0.5),
-  // primeiro cabeçalho sem mt (first:mt-0). Altura mínima suficiente (py-0.5). MESMA aparência
-  // e hierarquia: bg-primary/10, borda e tipografia 9px bold uppercase inalteradas.
-  return (
-    <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 first:mt-0 mb-0.5">
-      <span className="text-[9px] font-bold uppercase tracking-wide text-primary/90 leading-none">{titulo}</span>
-    </div>
-  );
-}
-function ResumoRow({ label, value, valueClassName }: { label: string; value: string | null; valueClassName?: string }) {
-  // PR-FIN-MODAL-02I — o ganho de altura do 02H é usado p/ CABER tudo, não p/ tipografia:
-  // volta à densidade do 02G (gap-1.5 + leading-tight; fonte text-[10px] via base do aside).
-  return (
-    <div className="flex items-baseline justify-between gap-1.5 leading-tight">
-      <span className="text-muted-foreground shrink-0">{label}</span>
-      <span className={cn("font-medium text-right truncate", valueClassName)}>{value || '—'}</span>
-    </div>
-  );
-}
+// MODAIS-PADRAO-01e — `ResumoBlocoHead` e `ResumoRow` SAIRAM: a faixa de secao e o par rotulo-valor sao
+// `SecaoResumo` e `LinhaResumo` de `ui/linha-resumo`, as mesmas pecas do Abate, da Venda, da Compra e do envelope.
 
 /** Add N days to a date string (YYYY-MM-DD) */
 function addDays(dateStr: string, days: number): string {
@@ -1483,7 +1464,13 @@ export function LancamentoV2Dialog({
           // PR-FIN-MODAL-02C #1 — ALTURA FIXA (h-[92vh]) além do max: o modal não muda de
           // altura ao trocar de aba; só a região central (TabsContent) rola. Padrão aprovado
           // (MesaPareamentoModal). Header/TabsList/footer permanecem estáveis.
-          "flex flex-col p-0 bg-card dark:bg-card rounded-xl shadow-2xl border border-border overflow-hidden h-[92vh] max-h-[92vh]",
+          "flex flex-col p-0 bg-card dark:bg-card rounded-xl shadow-2xl border border-border overflow-hidden",
+          // ⚠ MODAIS-PADRAO-01e — no fluxo normal, a ALTURA DO ABATE (`100vh-32`, sem o teto do tema): o modal
+          // nao muda de altura ao trocar de aba e so' o corpo rola. O fluxo Excel (Mesa) fica nos 92vh de sempre.
+          // `gap-0`: o `gap-4` do tema abria 16px entre cabecalho, corpo e rodape da grade — 32px que o resumo perdia.
+          excelContext ? "h-[92vh] max-h-[92vh]" : "h-[calc(100vh-32px)] max-h-none gap-0",
+          // O X nativo sobe para o meio da faixa de 36px (era `top-4`, centrado em 24px).
+          "[&>button.absolute]:top-2.5 [&>button.absolute]:right-3",
           // PR-FIN-MODAL-02D — modal 2-colunas (form + painel de resumo à direita) também no fluxo
           // normal; largura acomoda a coluna de ~300px sem aumentar a altura (h-[92vh] fixo).
           "max-w-5xl",
@@ -1495,7 +1482,11 @@ export function LancamentoV2Dialog({
           // inclusive ao lado do rodapé, devolvendo ~1 altura de rodapé ao corpo do resumo
           // (fim da compactação forçada). `grid` sobrepõe `flex` (mesmo grupo display no twMerge);
           // o fluxo Excel permanece flex-col idêntico.
-          !excelContext && "grid grid-cols-[1fr_300px] grid-rows-[auto_minmax(0,1fr)_auto]",
+          // ⚠ MODAIS-PADRAO-01e — a GRADE DO ABATE: resumo de 240px (era 300) SO' na linha do corpo, e o rodape
+          //   de volta a' largura inteira, embaixo das duas colunas. No 02H o resumo descia ao lado do rodape
+          //   para ganhar altura; com a altura pela janela ele ja' tem os 479px do Abate, e as cinco cascas
+          //   passam a ter a mesma forma.
+          !excelContext && "grid grid-cols-[1fr_240px] grid-rows-[auto_minmax(0,1fr)_auto]",
         )}>
           {/* ⚠ UM `fieldset` DESABILITADO COBRE O FORMULÁRIO INTEIRO (§1c), e é de propósito que
               seja o elemento nativo: ele desliga TODO controle que estiver dentro — inclusive os
@@ -1519,10 +1510,12 @@ export function LancamentoV2Dialog({
               PR-FIN-MODAL-02J — padding vertical simétrico (py-2.5) p/ centrar o título em relação
               ao X, e pr-10 de folga p/ o título/subtítulo nunca correrem sob o botão X (que é fixo
               no ui/dialog.tsx compartilhado — não movido nesta frente). Identidade (barra azul) mantida. */}
-          <DialogHeader className={cn("px-5 py-2.5 pr-10 border-b border-primary/20 bg-primary", !excelContext && "col-span-2 row-start-1")}>
-            <DialogTitle className="text-[13px] font-bold tracking-tight text-primary-foreground">{isEdit ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
+          {/* MODAIS-PADRAO-01e — faixa de 36px, uma linha, titulo 13px (era `px-5 py-2.5`, ~46px). No fluxo
+              Excel o subtitulo vem na MESMA linha, depois do titulo. */}
+          <DialogHeader className={cn("h-9 shrink-0 px-4 pr-10 flex-row items-center gap-2 space-y-0 border-b border-primary/20 bg-primary", !excelContext && "col-span-2 row-start-1")}>
+            <DialogTitle className="shrink-0 text-[13px] font-semibold leading-none tracking-tight text-primary-foreground">{isEdit ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
             {excelContext && (
-              <div className="text-[10px] font-normal text-primary-foreground/80 mt-0.5">
+              <div className="min-w-0 truncate text-[10px] font-normal leading-none text-primary-foreground/80">
                 {isEdit
                   ? `Editando lançamento existente · ID ${lancamento?.id?.slice(0, 8)}`
                   : 'Criando a partir do Excel'}
@@ -1537,7 +1530,9 @@ export function LancamentoV2Dialog({
               no fluxo Excel mantém flex-1 (flex-col). O título do resumo saiu daqui e passou
               a ser a faixa de topo do próprio painel (col 2), alinhada a esta TabsList. */}
           <Tabs value={abaAtiva} onValueChange={v => setAbaAtiva(v as AbaFinanceira)} className={cn("flex flex-col min-h-0", excelContext ? "flex-1" : "col-start-1 row-start-2")}>
-            <TabsList className="w-full justify-start gap-0.5 rounded-none border-b border-border bg-accent/40 px-2 h-8 shrink-0">
+            {/* MODAIS-PADRAO-01e — a barra do Abate: botao 20px/10px, barra ~29px, aba ativa em navy claro
+                (bg-primary/10), como as outras cascas. Era h-8 com botao de 24px/12px e a ativa sublinhada. */}
+            <TabsList className="w-full justify-start gap-1 rounded-none border-b border-border bg-card px-2 py-1 h-auto shrink-0">
               {ABAS_TAB.map(({ value, label }) => (
                 // PR-FIN-MODAL-02J — restyle das abas (ERP moderno): inativa discreta
                 // (font-medium/muted, hover suave), ativa evidente sem borda grossa —
@@ -1548,11 +1543,9 @@ export function LancamentoV2Dialog({
                   key={value}
                   value={value}
                   className={cn(
-                    "relative h-6 px-3 text-[12px] font-medium text-muted-foreground rounded-b-none rounded-t-md",
-                    "hover:bg-background/60 hover:text-foreground",
-                    "data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:font-semibold",
-                    "data-[state=active]:border data-[state=active]:border-border data-[state=active]:border-b-transparent data-[state=active]:shadow-sm",
-                    "data-[state=active]:after:absolute data-[state=active]:after:inset-x-0 data-[state=active]:after:-bottom-px data-[state=active]:after:h-px data-[state=active]:after:bg-primary",
+                    "relative h-5 px-[7px] py-0 text-[10px] font-medium text-muted-foreground rounded-md",
+                    "hover:bg-muted/50",
+                    "data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none",
                   )}
                 >
                   {label}
@@ -2248,8 +2241,10 @@ export function LancamentoV2Dialog({
           {/* Sticky footer */}
           {/* PR-FIN-MODAL-02H — no grid (fluxo normal) o rodapé fica na col 1 / linha 3 (sob o
               formulário); o painel de resumo o ladeia. No fluxo Excel permanece full-width. */}
-          <div className={cn("px-5 py-2.5 border-t border-border bg-accent flex items-center gap-2", !excelContext && "col-start-1 row-start-3")}>
-            <Button variant="outline" onClick={onClose} className="px-5" tabIndex={16}>Cancelar</Button>
+          {/* MODAIS-PADRAO-01e — 32px com botoes 22px/10px (era `px-5 py-2.5`, ~52px), na largura inteira
+              como no Abate. Mesmos botoes, mesma ordem, mesmos textos. */}
+          <div className={cn("h-8 shrink-0 px-2 border-t border-border bg-accent flex items-center gap-2", !excelContext && "col-span-2 row-start-3")}>
+            <Button variant="outline" onClick={onClose} className="h-[22px] px-[9px] text-[10px]" tabIndex={16}>Cancelar</Button>
             {/* PR-FIN-MODAL-02B — indicação compacta de pendência + navegação p/ a 1ª aba inválida.
                 Só aparece quando canSave=false E há aba identificável (o clique no Salvar
                 desabilitado não ocorre, então a navegação é oferecida aqui). */}
@@ -2258,9 +2253,9 @@ export function LancamentoV2Dialog({
                 type="button"
                 onClick={handleVerPendencia}
                 title={pendenciaMsg ?? undefined}
-                className="flex items-center gap-1 text-[11px] font-medium text-destructive hover:underline"
+                className="flex items-center gap-1 text-[10px] font-medium text-destructive hover:underline"
               >
-                <AlertCircle className="h-3.5 w-3.5" />
+                <AlertCircle className="h-3 w-3" />
                 {pendenciaMsg ?? 'Ver pendência'}
               </button>
             )}
@@ -2276,11 +2271,11 @@ export function LancamentoV2Dialog({
               <Button
                 variant="outline"
                 size="sm"
-                className="px-3 text-[11px] gap-1"
+                className="h-[22px] px-[9px] text-[10px] gap-1"
                 onClick={() => setVincularAberto(true)}
                 data-testid="acao-vincular-oc"
               >
-                <Link2 className="h-3.5 w-3.5" /> Vincular à operação
+                <Link2 className="h-3 w-3" /> Vincular à operação
               </Button>
             )}
             {/* OC-DESVINCULAR-01 — o inverso, SO' com parte VIVA de OC (a mesma leitura do rodape
@@ -2290,11 +2285,11 @@ export function LancamentoV2Dialog({
               <Button
                 variant="outline"
                 size="sm"
-                className="px-3 text-[11px] gap-1"
+                className="h-[22px] px-[9px] text-[10px] gap-1"
                 onClick={() => setDesvincularAberto(true)}
                 data-testid="acao-desvincular-oc"
               >
-                <Unlink className="h-3.5 w-3.5" /> Desvincular da operação
+                <Unlink className="h-3 w-3" /> Desvincular da operação
               </Button>
             )}
             {isEdit && onDelete && lancamento && (
@@ -2308,7 +2303,7 @@ export function LancamentoV2Dialog({
                 }}
               />
             )}
-            <Button tabIndex={17} onClick={handleSubmit} disabled={saving || !canSave} className="px-8 font-semibold shadow-md shadow-primary/25 ring-1 ring-primary/20">
+            <Button tabIndex={17} onClick={handleSubmit} disabled={saving || !canSave} className="h-[22px] px-[9px] text-[10px] font-semibold shadow-md shadow-primary/25 ring-1 ring-primary/20">
               {getSubmitLabel()}
             </Button>
           </div>
@@ -2319,55 +2314,50 @@ export function LancamentoV2Dialog({
               espelha o formulário em tempo real. Sem rolagem própria, sem acordeão, sem "ver mais".
               Nenhuma lógica/estado/validação — só apresentação. */}
           {!excelContext && (
-            <aside className="col-start-2 row-start-2 row-span-2 border-l border-border bg-muted/20 flex flex-col overflow-hidden">
-              {/* Faixa de título: mesma altura/borda/fundo da TabsList (h-8, border-b, bg-accent/40)
-                  → alinha perfeitamente à faixa das abas na coluna da esquerda. */}
-              <div className="h-8 shrink-0 border-b border-border bg-accent/40 flex items-center px-3 text-[11px] font-bold uppercase tracking-wide text-primary">
-                Resumo do lançamento
-              </div>
-              {/* Corpo do resumo: SEM padding superior — o primeiro bloco (Identificação) encosta
-                  na faixa do título (causa do espaço branco no 02H era o py-1.5 do topo). Densidade
-                  funcional do 02G: text-[10px]; ganho de altura do 02H usado p/ caber todo o conteúdo. */}
-              <div className="flex-1 overflow-hidden pb-1 text-[10px]">
-                <ResumoBlocoHead titulo="Identificação" />
-                <div className="px-3 space-y-0.5">
-                  <ResumoRow label="Tipo" value={resumoTipoLabel} valueClassName={resumoTipoCor} />
-                  <ResumoRow label="Produto" value={descricao} />
-                  <ResumoRow label="Data Competência" value={resumoFmtData(dataCompetencia)} />
-                  <ResumoRow label="Favorecido" value={resumoFavorecido} />
-                  <ResumoRow label="Fazenda" value={resumoFazenda} />
+            /* MODAIS-PADRAO-01e — as pecas do Abate (`ui/linha-resumo`): 240px, so' a linha do corpo (o
+               rodape voltou a' largura inteira), faixa de titulo e secoes de 10px (eram 11px e 9px), pares
+               pelo `LinhaResumo`. Mesmo texto, mesmos valores. */
+            <div className="col-start-2 row-start-2 min-h-0">
+              <AsideResumo faixa={<FaixaTituloResumo titulo="Resumo do lançamento" />}>
+                <SecaoResumo titulo="Identificação" />
+                <div>
+                  <LinhaResumo rotulo="Tipo" valor={resumoTipoLabel} cor={resumoTipoCor} />
+                  <LinhaResumo rotulo="Produto" valor={descricao} quebra />
+                  <LinhaResumo rotulo="Data Competência" valor={resumoFmtData(dataCompetencia)} />
+                  <LinhaResumo rotulo="Favorecido" valor={resumoFavorecido} quebra />
+                  <LinhaResumo rotulo="Fazenda" valor={resumoFazenda} quebra />
                 </div>
 
-                <ResumoBlocoHead titulo="Financeiro" />
-                <div className="px-3 space-y-0.5">
-                  <ResumoRow label="Valor" value={valorNum > 0 ? formatMoeda(valorNum) : null} />
-                  {!isEntrada && <ResumoRow label="Conta origem" value={resumoContaOrigem} />}
-                  {(isEntrada || isTransferencia) && <ResumoRow label="Conta destino" value={resumoContaDestino} />}
-                  <ResumoRow label="Status" value={resumoStatusLabel} />
+                <SecaoResumo titulo="Financeiro" />
+                <div>
+                  <LinhaResumo rotulo="Valor" valor={valorNum > 0 ? formatMoeda(valorNum) : null} />
+                  {!isEntrada && <LinhaResumo rotulo="Conta origem" valor={resumoContaOrigem} quebra />}
+                  {(isEntrada || isTransferencia) && <LinhaResumo rotulo="Conta destino" valor={resumoContaDestino} quebra />}
+                  <LinhaResumo rotulo="Status" valor={resumoStatusLabel} />
                 </div>
 
-                <ResumoBlocoHead titulo="Classificação" />
-                <div className="px-3 space-y-0.5">
-                  <ResumoRow label="Safra" value={resumoSafra} />
-                  <ResumoRow label="Centro" value={centroCusto} />
-                  <ResumoRow label="Subcentro" value={subcentro} />
+                <SecaoResumo titulo="Classificação" />
+                <div>
+                  <LinhaResumo rotulo="Safra" valor={resumoSafra} quebra />
+                  <LinhaResumo rotulo="Centro" valor={centroCusto} quebra />
+                  <LinhaResumo rotulo="Subcentro" valor={subcentro} quebra />
                 </div>
 
-                <ResumoBlocoHead titulo="Pagamento" />
-                <div className="px-3 space-y-0.5">
-                  <ResumoRow label="Pagamento" value={resumoFmtData(dataPagamento)} />
-                  <ResumoRow label="Forma" value={formaPgto} />
-                  <ResumoRow label="Modalidade" value={!isEdit ? (formaPagamentoParc === 'parcelada' ? 'Parcelada' : 'À vista') : null} />
-                  <ResumoRow label="Nº de Parcelas" value={!isEdit && formaPagamentoParc === 'parcelada' ? `${numParcelas}` : null} />
+                <SecaoResumo titulo="Pagamento" />
+                <div>
+                  <LinhaResumo rotulo="Pagamento" valor={resumoFmtData(dataPagamento)} />
+                  <LinhaResumo rotulo="Forma" valor={formaPgto} quebra />
+                  <LinhaResumo rotulo="Modalidade" valor={!isEdit ? (formaPagamentoParc === 'parcelada' ? 'Parcelada' : 'À vista') : null} />
+                  <LinhaResumo rotulo="Nº de Parcelas" valor={!isEdit && formaPagamentoParc === 'parcelada' ? `${numParcelas}` : null} />
                 </div>
 
-                <ResumoBlocoHead titulo="Documento" />
-                <div className="px-3 space-y-0.5">
-                  <ResumoRow label="Tipo" value={tipoDocumento || null} />
-                  <ResumoRow label="Número" value={notaFiscalDisplay || null} />
+                <SecaoResumo titulo="Documento" />
+                <div>
+                  <LinhaResumo rotulo="Tipo" valor={tipoDocumento || null} quebra />
+                  <LinhaResumo rotulo="Número" valor={notaFiscalDisplay || null} quebra />
                 </div>
-              </div>
-            </aside>
+              </AsideResumo>
+            </div>
           )}
           </fieldset>
         </DialogContent>

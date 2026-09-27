@@ -22,7 +22,7 @@
  */
 import type { ReactNode } from 'react';
 
-export function LinhaResumo({ rotulo, valor, cor, forte, selo, empilhado, seloAbaixo }: {
+export function LinhaResumo({ rotulo, valor, cor, forte, selo, empilhado, seloAbaixo, quebra }: {
   rotulo: string; valor: string | null;
   /* ⚠ A COR VEM DE FORA — B-11. O resumo passou a mostrar dois mundos (projecao ambar,
      realizado solido) e a mesma linha serve aos dois; cravar a cor aqui obrigaria a um
@@ -55,18 +55,32 @@ export function LinhaResumo({ rotulo, valor, cor, forte, selo, empilhado, seloAb
    * segue em 16px no caso comum.
    */
   seloAbaixo?: boolean;
+  /**
+   * O VALOR QUEBRA EM ATE' DUAS LINHAS, alinhado a' direita, e NUNCA corta — MODAIS-PADRAO-01e.
+   *
+   * ⚠ REGRA PERMANENTE DO GABRIEL (27/09/2026): texto cortado com reticencia e' proibido; se nao cabe,
+   * quebra. Nasceu do resumo do `LancamentoV2Dialog` a 240px: "Impostos e Despesas de Abates e Vendas"
+   * pedia 200px e tinha 163, e o subcentro mais longo do plano ("Investimento Equipamentos e
+   * Informatica Administrativo", 269px) cortava ate' nos 300px de antes.
+   * ⚠ OPT-IN: sem a prop, a linha e' exatamente a de sempre (uma linha, `truncate`) — nenhum usuario
+   * existente muda. E' para TEXTO livre (produto, favorecido, conta do plano); numero e data seguem
+   * numa linha so', onde quebrar partiria o valor.
+   * ⚠ O ROTULO FICA NA PRIMEIRA LINHA (`items-start`), e a linha so' cresce quando o valor quebra.
+   */
+  quebra?: boolean;
 }) {
+  const quebrar = !!quebra && !empilhado && !seloAbaixo;
   return (
     /* ⚠ O PADDING MORA NA LINHA, nao no container — A17. Cada item e' uma linha so', com
        o valor a direita e sem quebra; `py-px` da' ~16px por linha, e e' o que faz as
        quatro secoes caberem sem rolar. Empilhada, a linha vai a ~26px. */
-    <div className={`px-2.5 py-px leading-tight ${empilhado || seloAbaixo ? '' : 'flex items-baseline justify-between gap-1.5'}`}>
+    <div className={`px-2.5 py-px leading-tight ${empilhado || seloAbaixo ? '' : `flex ${quebrar ? 'items-start' : 'items-baseline'} justify-between gap-1.5`}`}>
       <div className={empilhado || !seloAbaixo ? 'contents' : 'flex items-baseline justify-between gap-1.5'}>
         <span className={`text-muted-foreground ${empilhado ? 'block' : 'shrink-0'}`}>{rotulo}</span>
         <span className={`flex items-baseline gap-1.5 min-w-0 ${empilhado ? 'justify-end' : ''}`}>
           {!seloAbaixo && selo}
           {/* ⚠ FORTE E' 11px, NAO SO' NEGRITO — MODAIS-PADRAO-01a (A18 modal: linha 10, forte 11). */}
-          <span className={`text-right tabular-nums ${empilhado || seloAbaixo ? 'whitespace-nowrap' : 'truncate'} ${forte ? 'font-bold text-[11px]' : 'font-medium'} ${valor ? (cor ?? '') : ''}`}>
+          <span className={`text-right tabular-nums ${empilhado || seloAbaixo ? 'whitespace-nowrap' : quebrar ? 'min-w-0 break-words' : 'truncate'} ${forte ? 'font-bold text-[11px]' : 'font-medium'} ${valor ? (cor ?? '') : ''}`}>
             {valor || '—'}
           </span>
         </span>

@@ -2456,6 +2456,31 @@ preview que o cabecalho nao sai da tela ao rolar.
         abre a tela e clica rapido nao ve a opcao. Causa nao medida.
     (b) os titulos de secao dos resumos de `CargaModal` e `CargaMandiocaModal` estao em 9px, abaixo do piso de 9,5px — e'
         conteudo daqueles modais, fora do 01d. Varredura UX.
+- ⚠ MODAIS-PADRAO-01e — O DIALOGO DE LANCAMENTO DO FINANCEIRO (`LancamentoV2Dialog`) NA REGUA DO ABATE (27/09/2026).
+  Cabecalho 36/13px, abas 20/10px com a ativa em navy claro (era sublinhada), rodape 32px com botoes 22px, altura
+  `100vh-32` sem o teto do tema, X no meio da faixa. Resumo 240px (era 300) com `AsideResumo`/`FaixaTituloResumo`/
+  `SecaoResumo`/`LinhaResumo`; `ResumoBlocoHead` e `ResumoRow` locais sairam.
+  ⚠ O RODAPE VOLTOU A' LARGURA INTEIRA, como no Abate. Desde o 02H o resumo descia ao lado do rodape para ganhar
+    altura; com a altura pela janela ele ja' tem a do corpo, e as cinco cascas ficam com a mesma forma.
+  ⚠ O ESPACO DO TEMA FOI ZERADO (`gap-0`): o `gap-4` do `DialogContent` abria 16px entre cabecalho, corpo e rodape da
+    grade — 32px que o resumo perdia. O resumo mede 477px, e nao os 479 do Abate: aqui a altura esta' no proprio
+    `DialogContent` (a borda de 1px conta dentro), no Abate esta' no filho.
+  ⚠ `RodapeCancelamento` (unico chamador) acompanhou: botao 22px e frases de 10px — a do titulo de OC quebrava em
+    tres linhas e passou a caber numa so' dentro dos 32px.
+  ⚠ MODO EXCEL (Mesa) — a casca nova (cabecalho, abas, rodape) vale nele tambem, porque sao os mesmos elementos; a
+    altura continua 92vh e o painel "Contexto Excel" nao mudou. NAO FOI MEDIDO no navegador.
+  ⚠ PROVA: texto do modal inteiro antes x depois identico nas 4 abas de Novo (saida e entrada), Editar comum e Editar
+    titulo de OC (frete da 77d963be) — 16 telas. A parcela de financiamento nao usa este dialogo.
+- ⚠ TEXTO CORTADO COM RETICENCIA E' PROIBIDO — SE NAO CABE, QUEBRA EM DUAS LINHAS (regra permanente do Gabriel,
+  27/09/2026, no MODAIS-PADRAO-01e). `LinhaResumo` ganhou `quebra` (opt-in): o VALOR ocupa ate' duas linhas, alinhado
+  a' direita, sem "…", e o rotulo fica na primeira. Para TEXTO livre (produto, favorecido, conta, centro, subcentro);
+  numero e data seguem numa linha so'.
+  ⚠ NASCE DE MEDICAO: no resumo de 240px, "Impostos e Despesas de Abates e Vendas" pedia 200px e tinha 163, e o
+    subcentro mais longo do plano ("Investimento Equipamentos e Informatica Administrativo", 269px) cortava ate' nos
+    300px de antes. Com `quebra`, os dois aparecem inteiros em duas linhas (27px).
+  ⚠ SEM A PROP NADA MUDA — provado: o HTML do `LinhaResumo` sem `quebra` e' identico ao do HEAD nas 96 combinacoes de
+    props (valor, cor, forte, empilhado, seloAbaixo, selo). Abate, Venda, Compra e envelope nao a usam.
+  ⚠ E OS OUTROS `truncate` DO SISTEMA NAO FORAM VARRIDOS: a regra vale a partir daqui; a varredura e' frente propria.
 - OC-CLASSIF-ALINHAR-01 — pendencia, NAO corrigir agora (decisao do Gabriel, 27/09/2026, na FASE 0 do
   OC-PROGRAMACAO-MODAL-01): 6 titulos VIVOS de OC tem conta do plano DIFERENTE da do compromisso — todos anteriores
   ao OC-RECLASSIFICAR-ITEM-01, que hoje grava os dois juntos.
