@@ -821,6 +821,15 @@ no mesmo arquivo.
   campo Subcentro com a frase da tela, receita 1150 e custo seguem nos dois sentidos, o PLANO MEDIDO (226 linhas x 3
   tipos) contra a regra antiga copiada — so' os dois pares do 1155 mudam —, a chave ganhando do texto, e a frase como
   alerta embaixo do Subcentro. ⚠ PROVADO: com o tipo do plano ignorado, 4 casos caem.
+  De 2047 para 2059 no OC-RECLASSIFICAR-ITEM-01, em dois arquivos novos. `src/components/financeiro-v2/reclassificarItem.test.tsx`
+  (+10): o seletor recebe a direcao do item e o 5030 pede o componente ANTES de simular; a simulacao com o resumo do DRE
+  ("Hoje fora do DRE → passa a entrar em Deduções: o resultado do período cai R$ 6.000,00"); sem motivo nao grava, com
+  motivo grava e avisa a lista; recusa da gravacao ao lado do botao e da simulacao no aside; o texto do DRE (fora/dentro,
+  troca de linha, investimento fora do resultado) e as opcoes de componente; a volta do drill (`origemDaVolta`) e, lido da
+  FONTE, o `retornarDoDrill` com a origem e o `setDrillReturn(null)` antes de sair pelo link.
+  `src/components/venda/abaInicialOC.test.tsx` (+2): venda e abate abrem na aba de `?oc_aba`, e sem ela na identificacao.
+  ⚠ PROVADO: sem a guarda do componente, com o investimento dentro do resultado e sem a limpeza do `drillReturn`, 4 casos
+  caem; com a venda ignorando a aba, 1.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -2383,6 +2392,33 @@ preview que o cabecalho nao sai da tela ao rolar.
     importacao, a grade do DRE que abre o mesmo modal) nunca passaram por esta regra. Guarda no banco seria regra NOVA
     para todo escritor: frente propria, se decidida.
   ⚠ NADA GRAVADO: a saida realizada em 17/06/2024 passa no banco em rollback; o Gabriel salva pela tela.
+- ⚠ OC-RECLASSIFICAR-ITEM-01 — A CLASSIFICACAO DE UM ITEM DA OC SE CORRIGE PELA OC (27/09/2026, decisoes do Gabriel). No
+  Financeiro ela continua travada. `oc_reclassificar_item(p_compromisso_id, p_plano_conta_id, p_componente, p_motivo,
+  p_simular)` (migration `20261027157000_oc_reclassificar_item_01.sql`, ⚠ registrada como `20260927100323`; md5 ded4a192,
+  banco = arquivo): compromisso + partes vivas (conta, 4 copias, componente) e titulos vivos (SO' `plano_conta_id`; o
+  gatilho resolve as copias e o hash fica) numa transacao; versao + 1; evento `reclassificar_item` com de/para e um motivo.
+  Nao toca valor, datas, pagamento, conciliacao, liquidacao, rebanho nem favorecido.
+  DECISOES: (1) vale com a OC FECHADA; (2) o seletor abre o plano INTEIRO da direcao do item; (3) conta com varios
+  componentes no mapa -> o operador escolhe no mesmo dialogo; conta fora do mapa -> componente fica; (4) retorno a' OC neste PR.
+  ⚠ CONTA DE OUTRA NATUREZA NO MAPA (principal x obrigacao) TAMBEM MANTEM O COMPONENTE: a natureza nao muda por aqui, e um
+    `principal` com componente `frete` seria item que nenhuma tela le'. Nao estava na letra da decisao 3.
+  ⚠ O DRE PODE MUDAR DE VERDADE, e a tela diz antes: 5010 fica FORA do DRE e 5030 entra em Deducoes, entao o frete da
+    77d963be derruba o resultado do RRCC civil 2023 em 6.000,00. Investimento compoe o DRE e NAO o resultado.
+  TELA: "Reclassificar" no menu "..." da linha do compromisso (`AbaCompromissosOC`), dialogo irmao do Desvincular
+  (`ReclassificarItemDialog`), com o seletor da casa, o componente quando a conta pede, o motivo e o aside da simulacao.
+  RETORNO: `retornarDoDrill` passa a origem da URL (`origemDaVolta`) — antes gravava `financeiro-lanc` e fechar a OC caia no
+  Financeiro; sair pelo "Abrir →"/"corrigir na operação" limpa o `drillReturn` (ficava preso); e VENDA e ABATE passaram a
+  honrar `?oc_aba`, como a compra — a volta caia na identificacao. Conferido no preview: Editar o titulo pela OC, Cancelar,
+  volta na OC na aba Financeiro, Fechar, Central.
+  ⚠ EFEITO COLATERAL DO `oc_aba`: os links que JA' mandavam `oc_aba=negociacao` (LancamentoDetalhe, o "i" do zoot,
+    LancamentoV2Dialog) e `documentos` (AbaDocumentosLancamento) para uma VENDA ou ABATE passam a abrir nessa aba — era a
+    intencao escrita neles, que o shell ignorava.
+  ⚠ OC-RETORNO-GERAL-01 — pendencia, nao tratada: o LINK DIRETO `?oc_venda=1&oc_id=...&oc_aba=financeiro` AINDA PERDE O
+    `oc_aba` na carga (a URL volta sem ele e a OC abre na primeira aba) — anterior a este PR, causa nao medida. A volta do
+    drill nao passa por ali.
+  ⚠ VARREDURA UX (pendencia, nao tratada): o modal do Financeiro aberto pela OC ("Editar" do titulo) mostra o campo
+    Subcentro sem sinal de travado, embora a classificacao do titulo de OC seja da operacao. Visto no preview na 77d963be em
+    27/09/2026; nao investigado se o campo esta' de fato editavel ou so' sem o cadeado.
 - FORNECEDOR-UUID-CRU-01 — achado, nao tratado (26/09/2026, nos prints do OC-EDITAR-CADASTRAL-01): a compra 69115ef9 (NJ)
   mostra o UUID cru `276efb08…` no seletor de fornecedor e "Contraparte —" no resumo. O fornecedor (Carlos Pacheco) EXISTE,
   esta' ATIVO e e' do NJ; a lista carregada pela tela e' que nao o traz. Causa nao medida (lista carregada antes da troca de

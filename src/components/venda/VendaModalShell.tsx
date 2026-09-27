@@ -193,6 +193,12 @@ export interface VendaModalShellProps {
   onFechar: () => void;
   /** OC-EDITAR-CADASTRAL-01 — a recusa do Salvar, escrita ao lado dele (UX-TOAST-01). */
   erroSalvar?: string | null;
+  /**
+   * A ABA EM QUE A OC ABRE — `?oc_aba` (OC-RECLASSIFICAR-ITEM-01). So' a compra a honrava: a venda e o abate abriam
+   * sempre na primeira aba, e a volta do drill do Financeiro caia na identificacao em vez da aba Financeiro de onde o
+   * operador saiu. Valor fora das abas deste shell cai na de sempre.
+   */
+  abaInicial?: string | null;
 }
 
 
@@ -211,13 +217,14 @@ export function VendaModalShell({
   documentosApi, eventosApi, liquidacaoApi, recebimentoApi, ocEntregaEncerrada = false,
   categoria, categoriasDisponiveis,
   quantidadeNum, pesoKgNum, submitting, onSalvarOperacao, onSalvarNegociacao, semAlteracoes = false,
-  onConcluirNegociacao, onReabrirNegociacao, onFechar, erroSalvar = null,
+  onConcluirNegociacao, onReabrirNegociacao, onFechar, erroSalvar = null, abaInicial = null,
 }: VendaModalShellProps) {
   /* A lista de fazendas no formato do combobox — FAZ-ATIVIDADE-01c. Deriva de `fazendasOC`, que já
      carrega a regra de quem pode receber lançamento; o formato da opção não redecide isso. */
   const opcoesFazenda = useMemo(() => fazendasOC.map(f => ({ value: f.id, label: f.nome })), [fazendasOC]);
 
-  const [abaAtiva, setAbaAtiva] = useState<string>('venda');
+  const [abaAtiva, setAbaAtiva] = useState<string>(
+    abaInicial && ['negociacao', 'entrega', 'documentos', 'financeiro', 'auditoria'].includes(abaInicial) ? abaInicial : 'venda');
   /* PR-OC-VENDA-REABRIR-NEG-01 — o dialogo de reabertura. Estado local: e' um gesto da
      tela, nao da operacao. */
   const [reabrirAberto, setReabrirAberto] = useState(false);

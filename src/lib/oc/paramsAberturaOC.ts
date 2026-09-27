@@ -74,3 +74,16 @@ export function semParamsOC(searchAtual: string): URLSearchParams {
 /** A URL tem algum parâmetro que abre uma OC? */
 export const temParamsOC = (searchAtual: string): boolean =>
   ['oc_compra', 'oc_venda', 'oc_abate', 'oc_id'].some(k => new URLSearchParams(searchAtual).has(k));
+
+/**
+ * A ORIGEM DE QUEM VOLTA DO DRILL DO FINANCEIRO PARA A OC — OC-RECLASSIFICAR-ITEM-01.
+ *
+ * ⚠ NA VOLTA, A ORIGEM VERDADEIRA E' A QUE AINDA ESTA' NA URL: `editarTitulo` (AbaCompromissosOC) apaga `oc_compra`/
+ *   `oc_venda`/`oc_id` e NAO toca em `oc_return`, que continua dizendo de onde o operador abriu a OC la' atras (a
+ *   Central, "Lancar movimentacao"). Ler a secao CORRENTE nessa hora daria `financeiro-lanc` — so' onde ele esta' de
+ *   passagem — e o fechar da OC o largaria no Financeiro. Era o defeito do `retornarDoDrill`.
+ * ⚠ UMA FUNCAO, OS DOIS CAMINHOS DE VOLTA: o fechar do modal do lancamento (`retornarDoDrill`) e o link "Abrir →" /
+ *   "corrigir na operação" do mesmo modal (`onAbrirOperacaoOCFinanceiro`), que ja' liam a URL assim, por dentro.
+ */
+export const origemDaVolta = (searchAtual: string): string | undefined =>
+  new URLSearchParams(searchAtual).get('oc_return') ?? undefined;

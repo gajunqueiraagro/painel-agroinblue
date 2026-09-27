@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { LancamentosTab } from '@/pages/LancamentosTab';
 import { CentralOperacoesComerciais } from '@/components/operacao-comercial/central/CentralOperacoesComerciais';
-import { paramsAberturaOC, semParamsOC } from '@/lib/oc/paramsAberturaOC';
+import { paramsAberturaOC, semParamsOC, origemDaVolta } from '@/lib/oc/paramsAberturaOC';
 import { OPCOES_ATALHO_PRODUCAO, secaoDoAtalho, saiDoLancarComOC, type SecaoAtalhoProducao } from '@/v2/lib/atalhosProducao';
 import { Segmentado } from '@/components/ui/segmentado';
 import { useLancamentos } from '@/hooks/useLancamentos';
@@ -520,8 +520,11 @@ export default function V2Index() {
     }
     /* OC: `abrirOperacaoOC` ja sabe recompor a URL (oc_compra|oc_venda + oc_id + oc_aba)
        e trocar a secao. Reusar em vez de reescrever — e' a mesma funcao que a Central usa,
-       e o terceiro argumento e' o mesmo que ela passa. */
-    abrirOperacaoOC(ret.id, ret.tab, ret.tipo);
+       e o terceiro argumento e' o mesmo que ela passa.
+       ⚠ E A ORIGEM VAI JUNTO — OC-RECLASSIFICAR-ITEM-01. Sem o quarto argumento a funcao gravava
+       `oc_return = sectionRef.current`, que aqui e' 'financeiro-lanc': a OC reabria, mas fechar a OC
+       largava o operador no Financeiro em vez da Central (ou de onde ele a abriu). */
+    abrirOperacaoOC(ret.id, ret.tab, ret.tipo, origemDaVolta(window.location.search));
   };
 
   const [searchParams, setSearchParams] = useSearchParams();
@@ -1185,9 +1188,13 @@ export default function V2Index() {
            nao 'financeiro-lanc', que e' so' onde ele esta' de passagem. `editarTitulo`
            (AbaCompromissosOC) apaga `oc_compra` e `oc_id` e NAO toca em `oc_return` — e'
            por isso que ainda ha o que preservar aqui. */
-        onAbrirOperacaoOCFinanceiro={(ocId: string, tipo?: string | null) => abrirOperacaoOC(
-          ocId, 'financeiro', tipo ?? 'compra',
-          new URLSearchParams(window.location.search).get('oc_return') ?? undefined)}
+        /* ⚠ SAIR PELO LINK LIMPA O RETORNO PENDENTE — OC-RECLASSIFICAR-ITEM-01. "Abrir →" e "corrigir na
+           operação" levam a OC sem passar pelo `onClose` do modal (a tela troca e o Financeiro desmonta), e o
+           `drillReturn` ficava PRESO: o proximo fechar de QUALQUER lancamento do Financeiro pulava para aquela OC. */
+        onAbrirOperacaoOCFinanceiro={(ocId: string, tipo?: string | null) => {
+          setDrillReturn(null);
+          abrirOperacaoOC(ocId, 'financeiro', tipo ?? 'compra', origemDaVolta(window.location.search));
+        }}
         onLancamentoAlvoConsumido={() => { setFlancIdAlvo(null); setFlancOcEdit(false); }}
         onCloseDialog={() => {
           if (drillReturn) {

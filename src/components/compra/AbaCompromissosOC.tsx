@@ -5,7 +5,9 @@ import type { OcCompromissosApi, CompromissoResumo, ParcelaMaterializacao, Criar
 import { useReprogramarCompromissoLote } from '@/hooks/useReprogramarCompromissoLote';
 import { DialogoAtualizarCompromisso } from '@/components/compra/DialogoAtualizarCompromisso';
 import { DesvincularOperacaoDialog } from '@/components/financeiro-v2/DesvincularOperacaoDialog';
+import { ReclassificarItemDialog } from '@/components/financeiro-v2/ReclassificarItemDialog';
 import { titulosDesvinculaveis } from '@/lib/oc/desvincularLancamento';
+import { rotuloOC } from '@/lib/oc/vincularLancamento';
 import { DialogoGerarCompromissos, type PropostaCompromisso } from '@/components/compra/DialogoGerarCompromissos';
 import { classificarLotesPorLado, valorLoteOC, SUBCENTRO_OBRIGACAO_COMPRA, SUBCENTRO_DESPESA_VENDA, CENTRO_CUSTO_COMPRA_BOVINOS, type LoteOC } from '@/hooks/useOperacaoLiquidacao';
 import { usePlanoContasOC } from '@/hooks/usePlanoContasOC';
@@ -680,6 +682,9 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
   /* OC-DESVINCULAR-01 — o lancamento cujo "Desvincular" esta' aberto (a regra de quem entra no menu e'
      `titulosDesvinculaveis`, em `src/lib/oc/desvincularLancamento.ts`). */
   const [desvAlvo, setDesvAlvo] = useState<string | null>(null);
+  /* OC-RECLASSIFICAR-ITEM-01 — o compromisso cujo "Reclassificar" esta' aberto. A classificacao do item se corrige
+     PELA OC (no Financeiro ela segue travada), e vale com a OC fechada: o gate e' o mesmo `podeEscrever` do menu. */
+  const [reclAlvo, setReclAlvo] = useState<CompromissoResumo | null>(null);
 
   const abrirEstorno = (alvo: NonNullable<typeof estAlvo>) => {
     setEstMotivo(''); setEstEtapa(1); setEstResultado(null); setEstAlvo(alvo);
@@ -1586,6 +1591,15 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="text-[11px]">
+                        {/* OC-RECLASSIFICAR-ITEM-01 — troca a conta do plano do item (compromisso, partes e titulos
+                            juntos); valor, datas, pagamento e conciliacao nao mudam. */}
+                        <DropdownMenuItem
+                          disabled={!podeEscrever || estRodando || c.status === 'cancelado' || !c.compromissoId}
+                          data-testid="acao-reclassificar-linha"
+                          title="Troca a conta do plano deste item — valor, datas, pagamento e conciliação não mudam."
+                          onSelect={() => setReclAlvo(c)}>
+                          Reclassificar
+                        </DropdownMenuItem>
                         <DropdownMenuItem
                           disabled={!g.pode || estRodando}
                           title={g.motivo || undefined}
@@ -2018,6 +2032,18 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
           clienteId={clienteId}
           onClose={() => setDesvAlvo(null)}
           onDesvinculado={() => { void ocApi.recarregar(); void recarregarDados?.(); }}
+        />
+      )}
+      {/* OC-RECLASSIFICAR-ITEM-01 — irmao do Desvincular; depois de gravar, reler traz a versao nova da OC. */}
+      {reclAlvo?.compromissoId && clienteId && (
+        <ReclassificarItemDialog
+          open
+          item={{ compromissoId: reclAlvo.compromissoId, descricao: reclAlvo.descricao, natureza: reclAlvo.natureza,
+            componente: reclAlvo.componente, planoContaId: reclAlvo.planoContaId, valor: reclAlvo.valorCompromisso }}
+          rotuloOperacao={dataOperacao ? rotuloOC({ numero_documento: null, data_operacao: dataOperacao }) : 'esta operação'}
+          clienteId={clienteId}
+          onClose={() => setReclAlvo(null)}
+          onReclassificado={() => { void ocApi.recarregar(); void recarregarDados?.(); }}
         />
       )}
       {atualizandoLoteId && (

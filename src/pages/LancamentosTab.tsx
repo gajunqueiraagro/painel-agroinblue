@@ -6065,6 +6065,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
            tambem servem o abate (`|| ocAbateParam` no `enabled`). Construir outras cinco
            criaria a segunda fonte para o mesmo dado. */
         <AbateModalShell
+          abaInicial={ocSearchParams.get('oc_aba')}
           ocVersao={ocVersao} onOcVersaoChange={setOcVersao}
           data={data} setData={setData}
           frigorificoId={abateFrigorificoId} setFrigorificoId={setAbateFrigorificoId}
@@ -6118,6 +6119,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
            Primeira de seis. Este ramo ADICIONA a OC; o formulario antigo da venda
            continua no `else`, byte a byte, ate o Gabriel decidir a troca. */
         <VendaModalShell
+            abaInicial={ocSearchParams.get('oc_aba')}
             /* ⚠ A FONTE ÚNICA DA VERSÃO — OC-VERSAO-FONTE-UNICA-01. `lotesApi` e
                `recebimentoApi` já saíam daqui ligados a `ocVersao`; o hook de
                compromissos, montado lá dentro, guardava a própria e deixava esta
