@@ -635,7 +635,9 @@ export function CompraModalShell(api: CompraModalShellProps) {
                   allValue="__all__"
                   disabled={permissoes.negociacaoReadOnly}
                   dense
-                  className={`mt-[3px] [&_button]:h-8 [&_button]:px-2.5 [&_button]:text-[12px] ${permissoes.negociacaoReadOnly ? `[&_button]:${CAMPO_TRAVADO.split(' ').join(' [&_button]:')}` : ''}`}
+                  /* TRANSF-FAZENDA-ORIGEM-01 — a borda vermelha do vazio, na MESMA condicao da frase embaixo (os outros
+                     seletores de fazenda ja' a tinham). */
+                  className={`mt-[3px] [&_button]:h-8 [&_button]:px-2.5 [&_button]:text-[12px] ${api.modoOC && !permissoes.negociacaoReadOnly && api.ocFazendaValida === false ? '[&_button]:border-destructive' : ''} ${permissoes.negociacaoReadOnly ? `[&_button]:${CAMPO_TRAVADO.split(' ').join(' [&_button]:')}` : ''}`}
                 />
                 {api.modoOC && !permissoes.negociacaoReadOnly && api.ocFazendaValida === false && (
                   <p className="mt-[3px] text-[10px] text-destructive">Selecione a fazenda da operação.</p>

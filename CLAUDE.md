@@ -845,6 +845,13 @@ no mesmo arquivo.
   DRE relido (600/150/750, nao a foto 1.000/200/1.200); so' salvar uma edicao rele (falha e criacao nao); e a celula relida e'
   IDENTICA a' que a grade manda no clique, em 10+ celulas por estado, com o rateio nos grupos ligado e desligado.
   ⚠ PROVADO: com os cards voltando a ler a foto do clique, o caso da reclassificacao cai pela razao certa.
+  De 2073 para 2092 no TRANSF-FAZENDA-ORIGEM-01: entrou `src/components/fazendaDoFormulario.test.tsx` (+19) — as regras puras
+  (Global nasce vazio e a sentinela nunca vira valor; filtro numa fazenda nasce com ela; Destino = todas menos a Origem; Origem
+  igual ao Destino limpa o Destino; a guarda deixa de recusar em Global com a fazenda escolhida e o vazio e' "falta", nunca
+  "global"), a ligacao da Transferencia e do Consumo no `LancamentosTab` lida da FONTE (ele nao se monta em teste) e a Evoluir
+  categoria montada de verdade (campo vazio, vermelho e com TODAS as fazendas; preenchido e trocavel; travado na edicao; sem
+  fazenda nao grava, com ela o payload leva a escolhida; sem `exigeFazenda` o Fechamento segue igual).
+  ⚠ PROVADO: com o Destino sem filtrar a Origem 1 caso cai; sem a fazenda no `motivoBloqueio`, 1.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -2635,6 +2642,50 @@ preview que o cabecalho nao sai da tela ao rolar.
   ResOp (`ResOpCentros`), `ExtratoDistribuicaoEconomica`, Conciliacao (`ConciliacaoBancariaTab`) e a linha "Macro · Grupo · Centro"
   do editor (hidratada do lancamento). Leem a chave: `fn_dre_pecuaria`, `fn_dre_pecuaria_lancamentos`, `fn_dre_lavoura` e o
   `ExtratoGerencialTab`. As copias so' podem sumir depois que o ultimo leitor migrar.
+- ⚠ TRANSF-FAZENDA-ORIGEM-01 — "GLOBAL NAO E' FAZENDA" NA TRANSFERENCIA, NO CONSUMO E NA EVOLUIR CATEGORIA (regra permanente,
+  Gabriel, 27/09/2026). Todo campo de fazenda de modal e' seletor com todas as fazendas ativas do cliente, com QUALQUER filtro:
+  filtro numa fazenda -> nasce com ela e troca; Global -> nasce VAZIO, obrigatorio, vermelho com "Selecione a fazenda do
+  lançamento." embaixo (sem toast); edicao -> a fazenda GRAVADA, travada (`editarLancamento` nao envia `fazenda_id`). "Global"
+  nunca aparece como valor de campo, de cabecalho nem de resumo. Sem banco nem RPC.
+  O DEFEITO (print do Gabriel): a Transferencia (saida) mostrava "Fazenda Origem: Global" travado e "Origem: Global" no resumo —
+  `getCamposFazenda` punha o NOME DO FILTRO num campo `auto` somente-leitura — e o Registrar era recusado pela guarda de Global
+  depois da tela preenchida. O Consumo tinha seletor SO' em Global (preso na fazenda do filtro fora dele); a Evoluir categoria nem
+  campo tinha (herdava o filtro e, em Global, caia no toast generico "Não foi possível registrar").
+  O CONSERTO E' O CAMINHO QUE JA' EXISTIA: `transferencia_saida` entrou em `TIPOS_COM_SELETOR_DE_FAZENDA` e na cadeia
+  `fazendaEscolhidaId` (payload, guarda, confirmacao, `fazenda_origem`, snapshot e resumo leem dela), com `transfFazendaId` semeado
+  do filtro. O Consumo perdeu o `isGlobal &&`. A Evoluir categoria ganhou o campo no `ReclassificacaoFormFields` (prop
+  `campoFazenda`) e o hook ganhou `fazendaId`/`exigeFazenda` (o Fechamento nao passa nenhum e segue igual). As regras puras moram
+  em `src/lib/zoo/fazendaDoFormulario.ts` (`fazendaSemeada`, `destinosDaTransferencia`, `destinoAposTrocarOrigem`,
+  `bloqueioDaFazenda`).
+  ⚠ O DESTINO DA TRANSFERENCIA e' `fazendasOC` MENOS A ORIGEM ESCOLHIDA (antes: `fazendas` menos a do FILTRO, que em Global nao
+    tirava nada, e incluia fazenda inativa). Trocar a Origem para a mesma do Destino limpa o Destino. Grava o NOME, como sempre.
+  ⚠ A GUARDA VIROU `bloqueioDaFazenda`, com um segundo caso: quem escolhe e deixou vazio nao grava — o foco vai ao campo, sem
+    toast. SO' NO REGISTRO NOVO: a edicao nao envia `fazenda_id`, e o Nascimento em Global edita com o seletor vazio desde sempre.
+  ⚠ O SEMEAR NAO RODA NA EDICAO (`editingAbateId` / `editingReclassId`): o efeito dispara quando `setTipo` vira o tipo, no mesmo
+    render em que a edicao ja' marcou o id, e apagaria a fazenda do registro — o defeito que a venda ja' teve (PR-OC-VENDA-REABRIR-01E).
+  ⚠ O CONSUMO deixou de cair em `fazendaAtual?.id` no preco de estoque e no financeiro (`gerarFinanceiroConsumo`): vale o escolhido.
+  Compra OC ganhou a borda vermelha no campo vazio, na mesma condicao da frase que ja' existia.
+  ⚠ PROVA NA TELA (preview, NJ, filtro Global, nada registrado — 0 lancamentos do NJ nos 30 min da prova): Transferencia vazia e
+    vermelha, as 3 fazendas pecuarias na lista, Origem Faz. Pureza -> cabecalho e resumo "Faz. Pureza", Destino sem a Pureza; Origem
+    trocada para Sta. Luzia (o Destino) -> Destino limpo. Consumo e Evoluir categoria: vazios e vermelhos, cabecalho "—", e com a
+    fazenda escolhida o cabecalho a mostra.
+- FIN-FAZENDA-PADRAO-01 — pendencia, proxima frente (registrada no TRANSF-FAZENDA-ORIGEM-01, 27/09/2026): o `LancamentoV2Dialog`
+  aberto pela `FinanceiroV2Tab` (`FinanceiroV2Tab.tsx:2834`, `fazOperacionais[0]`) e a Mesa de classificacao
+  (`MesaClassificacaoTab.tsx:1130`, a primeira fazenda que nao e' a sentinela) PRE-PREENCHEM A PRIMEIRA FAZENDA OPERACIONAL em
+  Global. Pela regra "Global nao e' fazenda" deveriam vir vazios e obrigatorios: hoje o operador grava na primeira fazenda da lista
+  sem ter escolhido. Causa diferente (padrao fixo, nao o nome do filtro), por isso fora daquela frente.
+- EVOLUIR-PESO-FAZENDA-01 — pendencia, nao tratada (registrada no TRANSF-FAZENDA-ORIGEM-01, 27/09/2026): o peso sugerido da
+  Evoluir categoria (`origemInfo` em `useReclassificacaoState`) sai do rebanho do CLIENTE INTEIRO (`useRebanhoOficial` sem
+  fazenda, ponderado pelo saldo), e nao da fazenda escolhida no campo novo. Visto na tela: 388 kg para garrotes do NJ com a Pureza
+  escolhida. Valor sugerido e' valor aceito (RECLASS-PESO-01), entao o peso de uma fazenda pode sair com a media das outras.
+- FAZENDA-INATIVA-EDICAO-01 — pendencia, nao tratada (TRANSF-FAZENDA-ORIGEM-01): na edicao de um registro cuja fazenda gravada
+  esta' INATIVA, o cabecalho do envelope e o Destino da transferencia nao a mostram — as listas (`fazendasOC`) so' tem as ativas.
+  O campo travado da Origem le' a lista completa e mostra o nome. O nome gravado NAO se perde: salvar reenvia o que estava no estado.
+- LEGADOS-ABATE-VENDA-FAZENDA-01 — so' listado (TRANSF-FAZENDA-ORIGEM-01): o formulario GENERICO do abate e da venda legados
+  (`getCamposFazenda`, `campos.origem.auto`) tem a MESMA causa — Fazenda Origem = nome do filtro, travada. Nao ha registro novo por
+  ali (abate e venda nascem pela OC) e a edicao passa pelo `LancamentoZooModal`, que le a fazenda do registro. Tambem ficaram com o
+  nome do filtro dois pontos da VENDA nesse formulario (`fazendaOrigem: nomeFazenda || fazendaOrigem`, no calculo e no payload do
+  compromisso).
 - OC-CLASSIF-ALINHAR-01 — pendencia, NAO corrigir agora (decisao do Gabriel, 27/09/2026, na FASE 0 do
   OC-PROGRAMACAO-MODAL-01): 6 titulos VIVOS de OC tem conta do plano DIFERENTE da do compromisso — todos anteriores
   ao OC-RECLASSIFICAR-ITEM-01, que hoje grava os dois juntos.

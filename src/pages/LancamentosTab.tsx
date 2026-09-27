@@ -71,6 +71,7 @@ import { VendaResumoPanel } from '@/components/venda/VendaResumoPanel';
 import { AbateExportDialog } from '@/components/AbateExportMenu';
 import { AbateFinanceiroPanel, AbateFinanceiroPanelRef } from '@/components/AbateFinanceiroPanel';
 import { SearchableSelect } from '@/components/ui/searchable-select';
+import { MSG_FAZENDA_OBRIGATORIA, bloqueioDaFazenda, destinoAposTrocarOrigem, destinosDaTransferencia, fazendaSemeada } from '@/lib/zoo/fazendaDoFormulario';
 import { NovoFornecedorDialog } from '@/components/financeiro-v2/NovoFornecedorDialog';
 import { supabase } from '@/integrations/supabase/client';
 import { VendaFinanceiroPanel, VendaFinanceiroPanelRef } from '@/components/VendaFinanceiroPanel';
@@ -184,7 +185,11 @@ import { anoInteiro, dentro, mesUnico, type Periodo } from '@/v2/lib/periodo';
    fazenda —, e o funil o barrava depois de a tela inteira estar preenchida. Pior: o preço
    de estoque do consumo valorado é POR FAZENDA, então sem uma fazenda de verdade não há
    preço a buscar. Com o seletor, o Global deixa de ser porta fechada aqui também. */
-const TIPOS_COM_SELETOR_DE_FAZENDA: TipoMovimentacao[] = ['nascimento', 'morte', 'compra', 'consumo'];
+/* ⚠ A TRANSFERENCIA (SAIDA) ENTROU EM TRANSF-FAZENDA-ORIGEM-01 (27/09/2026), pelo mesmo defeito do Consumo:
+   a Fazenda Origem era o nome do FILTRO num campo travado — em Global, "Global" — e o Registrar era recusado
+   pela guarda depois da tela preenchida. "Global nao e' fazenda" (Gabriel). E o Consumo deixou de ter o seletor
+   SO' em Global: com uma fazenda no filtro ele nascia travado nela, sem como trocar. */
+const TIPOS_COM_SELETOR_DE_FAZENDA: TipoMovimentacao[] = ['nascimento', 'morte', 'compra', 'consumo', 'transferencia_saida'];
 /* ⚠ A COMPRA ENTROU EM PR-ZOO-META-COMPRA-FAZENDA-01, e so' alcanca a compra em META.
    A compra REALIZADA sai do funil antes da guarda: `if (modoOCCompra && isCompra)`
    termina em `return` (linha ~2259), e ela sempre roda em modo OC — o card so' aparece
@@ -738,7 +743,16 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [submitting, setSubmitting] = useState(false);
   /* ⚠ O CENARIO DA EVOLUCAO NASCE DO CAMINHO — MODAIS-PADRAO-01f. Ele nascia fixo em 'realizado' e os cards
      do formulario o trocavam; em "Lancar meta" a evolucao saia realizada sem o clique. */
-  const reclassState = useReclassificacaoState({ onAdicionar, dataInicial, cenarioInicial: defaultCenario === 'meta' ? 'meta' : 'realizado' });
+  /* A fazenda da evolucao de categoria — TRANSF-FAZENDA-ORIGEM-01. Ela nao tinha campo: herdava o filtro, e em
+     Global o `adicionarLancamento` recusava calado e a tela mostrava o toast generico. */
+  const [reclassFazendaId, setReclassFazendaId] = useState<string>('');
+  /* Semeada do filtro (vazia em Global) — a mesma regra dos outros seletores. ⚠ NUNCA NA EDICAO: la' vale a
+     GRAVADA (hidratacao de `reclassParaEditar`), e o filtro que carrega depois nao pode passar por cima dela. */
+  useEffect(() => {
+    if (editingReclassId) return;
+    setReclassFazendaId(fazendaSemeada(fazendaAtual?.id));
+  }, [fazendaAtual?.id, editingReclassId]);
+  const reclassState = useReclassificacaoState({ onAdicionar, dataInicial, cenarioInicial: defaultCenario === 'meta' ? 'meta' : 'realizado', fazendaId: reclassFazendaId, exigeFazenda: true });
   // Pré-seleciona cenário da Reclassificação quando navegado da Evolução por Categoria
   useEffect(() => {
     if (initialReclassCenario && abaInicial === 'reclassificacao') {
@@ -778,6 +792,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   /* A fazenda do consumo, escolhida na tela — 114c-4. Guarda o ID, e não o nome como o
      `fazendaOrigem` legado: o preço de estoque casa por `fazenda_id`. */
   const [consumoFazendaId, setConsumoFazendaId] = useState<string>('');
+  /* A Fazenda Origem da transferencia, escolhida na tela — TRANSF-FAZENDA-ORIGEM-01. O ID, como no Consumo; o
+     Destino continua gravando o NOME (`fazendaDestino`), que e' o que a coluna guarda. */
+  const [transfFazendaId, setTransfFazendaId] = useState<string>('');
   /* ⚠ VALOR DA MORTE — campo NOVO na tela. Ate aqui `valor_total` da morte vinha do
      ramo generico de `valorTotalFinal` (`calc.valorLiquido`), e era isso que explicava
      894 das 1.678 mortes com valor gravado sem que existisse campo. Com o campo, a
@@ -1261,9 +1278,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     isConsumo ? clienteAtual?.id : null,
     /* ⚠ O ID, NUNCA `fazendaOrigem` — 114c-4. Aquele campo guarda o NOME da fazenda (o
        Select da transferência grava `f.nome`), e passá-lo como id fazia a busca do preço
-       não achar linha nenhuma, sempre. Em Global vale o escolhido na tela; fora dele, a
-       fazenda do filtro. */
-    isConsumo ? (consumoFazendaId || fazendaAtual?.id) : null,
+       não achar linha nenhuma, sempre. Vale SEMPRE o escolhido na tela (TRANSF-FAZENDA-ORIGEM-01):
+       ele nasce com a fazenda do filtro e troca; em Global nasce vazio e o preço espera a escolha. */
+    isConsumo ? (consumoFazendaId || null) : null,
     isConsumo && data ? data.slice(0, 7) : null,
     isConsumo ? categoria : null,
   );
@@ -1321,6 +1338,20 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   const isTransferencia = tipo === 'transferencia_entrada' || tipo === 'transferencia_saida';
   const isTransferenciaSaida = tipo === 'transferencia_saida';
+
+  /* ── FAZENDA DA TRANSFERENCIA E DO CONSUMO — TRANSF-FAZENDA-ORIGEM-01 ─────────────
+     O desenho do Nascimento e da Morte: nasce com a do filtro (vazia em Global) e troca.
+     ⚠ NUNCA NA EDICAO (`editingAbateId`): la' vale a GRAVADA, que `load*ForEdit` poe no estado. O efeito dispara
+       quando `setTipo` vira o tipo, no MESMO render em que a edicao ja' marcou o id — sem a guarda ele apagaria a
+       fazenda do registro, o defeito que a venda ja' teve (PR-OC-VENDA-REABRIR-01E). */
+  useEffect(() => {
+    if (!isTransferenciaSaida || editingAbateId) return;
+    setTransfFazendaId(fazendaSemeada(fazendaAtual?.id));
+  }, [isTransferenciaSaida, editingAbateId, fazendaAtual?.id]);
+  useEffect(() => {
+    if (!isConsumo || editingAbateId) return;
+    setConsumoFazendaId(fazendaSemeada(fazendaAtual?.id));
+  }, [isConsumo, editingAbateId, fazendaAtual?.id]);
 
   /* ── FAZENDA DA MORTE (PR-ZOO-MORTE-NO-SHELL-01) ─────────────────────────────
      Mesmo desenho do Nascimento acima, e pelo mesmo motivo: sem seletor, em Global o
@@ -1412,9 +1443,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const fazendaEscolhidaId = escolheFazenda
     ? (isNascimento ? nascFazendaId : isMorte ? morteFazendaId
        : isConsumo ? consumoFazendaId
+       : isTransferenciaSaida ? transfFazendaId
        : isVenda ? vendaFazendaId : compraFazendaId)
     : '';
   const fazendaEscolhidaNome = fazendasOC.find(f => f.id === fazendaEscolhidaId)?.nome ?? null;
+  /* O Destino da transferência de saída: o seletor menos a Origem escolhida. Os outros tipos com Destino por
+     seletor seguem na lista de sempre. */
+  const opcoesDestino = isTransferenciaSaida ? destinosDaTransferencia(fazendasOC, transfFazendaId) : outrasFazendas;
 
   /* ─── MÊS FECHADO (P1) DENTRO DO MODAL — FAZ-ATIVIDADE-01c ───────────────────────────
      A fazenda de que o formulário genérico fala: a ESCOLHIDA no seletor quando existe um, e a do
@@ -1489,7 +1524,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       quantidade: parseNumericValue(quantidade) || 0,
       pesoKg: parseNumericValue(pesoKg) || 0,
       categoria,
-      fazendaOrigem: nomeFazenda || fazendaOrigem,
+      /* A Origem ESCOLHIDA — TRANSF-FAZENDA-ORIGEM-01. Era o nome do filtro, e o calculo vai para o snapshot. */
+      fazendaOrigem: fazendaEscolhidaNome ?? '',
       fazendaDestino,
       data,
       statusOperacional: isCenarioMeta ? null : effectiveStatusOp as StatusOperacional,
@@ -1497,7 +1533,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       precoReferenciaArroba: transferenciaDetalhes?.precoReferenciaArroba || undefined,
       precoReferenciaCabeca: transferenciaDetalhes?.precoReferenciaCabeca || undefined,
     });
-  }, [isTransferenciaSaida, quantidade, pesoKg, categoria, fazendaOrigem, fazendaDestino, data, statusOp, observacao, transferenciaDetalhes, nomeFazenda]);
+  }, [isTransferenciaSaida, quantidade, pesoKg, categoria, fazendaEscolhidaNome, fazendaDestino, data, statusOp, observacao, transferenciaDetalhes]);
 
   // Venda em Pé — unified calc (single source of truth)
   const vendaCalc = useMemo((): VendaCalculation | null => {
@@ -2013,6 +2049,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     if (reclassParaEditar) {
       setAba('reclassificacao');
       setEditingReclassId(reclassParaEditar.id);
+      setReclassFazendaId(reclassParaEditar.fazendaId ?? '');
       reclassState.setCategoriaOrigem(reclassParaEditar.categoria as any);
       reclassState.setCategoriaDestino((reclassParaEditar.categoriaDestino || 'bois') as any);
       reclassState.setData(reclassParaEditar.data);
@@ -2444,6 +2481,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     }
     setAba('saida');
     setTipo('transferencia_saida');
+    setTransfFazendaId(l.fazendaId ?? '');
 
     setData(l.data);
     setCategoria(l.categoria);
@@ -2534,6 +2572,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     }
     setAba('saida');
     setTipo('consumo');
+    setConsumoFazendaId(l.fazendaId ?? '');
     setData(l.data);
     setCategoria(l.categoria);
     setQuantidade(String(l.quantidade));
@@ -3626,8 +3665,19 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
        ⚠ A LISTA E' A AUTORIDADE — ver TIPOS_COM_SELETOR_DE_FAZENDA. Enquanto isto era
        `!isNascimento`, a Morte migrou com seletor e continuou barrada
        (PR-ZOO-FIX-MORTE-GUARDA-GLOBAL-01). */
-    if (isGlobal && !escolheFazenda) {
+    /* ⚠ TRANSF-FAZENDA-ORIGEM-01 — a guarda virou `bloqueioDaFazenda`, com um segundo caso: quem ESCOLHE a
+       fazenda e deixou o campo vazio nao grava. O campo ja' esta' em vermelho com a frase embaixo; aqui so' se
+       leva o foco a ele, sem toast (UX-TOAST-01). Sem isto, o vazio caia em `adicionarLancamento`, que herdava a
+       fazenda do contexto — uma que o operador nao escolheu — ou, em Global, recusava calado.
+       ⚠ SO' NO REGISTRO NOVO: a edicao nao envia `fazenda_id` (a fazenda do registro nao muda por aqui), e o
+       Nascimento em Global edita com o seletor vazio desde sempre. */
+    const bloqueioFazenda = bloqueioDaFazenda({ isGlobal, escolheFazenda, fazendaId: fazendaEscolhidaId });
+    if (bloqueioFazenda === 'global') {
       toast.error('Selecione uma fazenda específica para lançar.');
+      return;
+    }
+    if (bloqueioFazenda === 'falta' && !editingAbateId) {
+      document.getElementById('campo-fazenda-lancamento')?.querySelector('button')?.focus();
       return;
     }
     if (!quantidade || parseNumericValue(quantidade) <= 0) { toast.error('Informe a quantidade'); return; }
@@ -4277,7 +4327,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               /* ⚠ O MESMO ID DO PREÇO, e pelo mesmo motivo: `fazendaOrigem` é NOME. Gravar
                  o nome numa coluna de id faria o lançamento financeiro nascer órfão de
                  fazenda — e o consumo valorado entra na DRE por fazenda. */
-              fazendaId: consumoFazendaId || fazendaAtual?.id || '',
+              fazendaId: consumoFazendaId,
               quantidade: parseNumericValue(quantidade) || 0,
               categoria,
               data,
@@ -5257,23 +5307,41 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         }`}>
           {campos.origem.show && (
             <div>
-              <Label className="font-bold text-[11px]">{campos.origem.label}</Label>
-              {isConsumo && isGlobal ? (
-                /* ⚠ EM GLOBAL, A FAZENDA É ESCOLHIDA — 114c-4. O campo era somente-leitura
-                    com o nome do FILTRO, e mostrava "Global": um valor que não é fazenda
-                    nenhuma. O preço de estoque do consumo é por fazenda, então sem uma de
-                    verdade não há o que buscar. Mesmo gesto das Chuvas em Global. */
-                /* FAZ-ATIVIDADE-01c — busca no lugar da lista rolante, como nos campos de
-                   fornecedor/frigorífico/comprador desta mesma tela. */
-                <SearchableSelect
-                  value={consumoFazendaId || '__all__'}
-                  onValueChange={v => setConsumoFazendaId(v === '__all__' ? '' : v)}
-                  options={opcoesFazendaOC}
-                  placeholder="Buscar fazenda…"
-                  allLabel="Escolha a fazenda"
-                  allValue="__all__"
-                  className={`mt-0.5 [&_button]:h-7 [&_button]:text-[11px] ${consumoFazendaId ? '' : '[&_button]:border-destructive'}`}
-                />
+              <Label className="font-bold text-[11px]">
+                {campos.origem.label}{(isConsumo || isTransferenciaSaida) && !editingAbateId && <span className="text-destructive"> *</span>}
+              </Label>
+              {(isConsumo || isTransferenciaSaida) ? (
+                /* ⚠ A FAZENDA É ESCOLHIDA, com qualquer filtro — TRANSF-FAZENDA-ORIGEM-01. O campo era
+                    somente-leitura com o nome do FILTRO ("Global" em Global); o Consumo já tinha o seletor,
+                    mas SÓ em Global (114c-4) — com uma fazenda no filtro ficava preso nela. Agora nasce com a do
+                    filtro e troca; em Global nasce vazio, em vermelho e com a frase, como o Nascimento.
+                    ⚠ NA EDIÇÃO NÃO HÁ SELETOR: `editarLancamento` não envia `fazenda_id` — oferecer a troca seria
+                    controle que mente. Mostra a GRAVADA (`load*ForEdit`), nunca a do filtro. */
+                editingAbateId ? (
+                  <Input value={fazendas.find(f => f.id === fazendaEscolhidaId)?.nome ?? '—'} readOnly title="A fazenda do lançamento não muda por aqui"
+                    className="mt-0.5 h-7 text-[11px] bg-muted cursor-not-allowed" />
+                ) : (
+                  <div id="campo-fazenda-lancamento">
+                    <SearchableSelect
+                      value={fazendaEscolhidaId || '__all__'}
+                      onValueChange={v => {
+                        const id = v === '__all__' ? '' : v;
+                        if (isConsumo) { setConsumoFazendaId(id); return; }
+                        setTransfFazendaId(id);
+                        /* Origem igual ao Destino limpa o Destino — não há transferência para a mesma fazenda. */
+                        setFazendaDestino(d => destinoAposTrocarOrigem(d, fazendasOC.find(f => f.id === id)?.nome ?? null));
+                      }}
+                      options={opcoesFazendaOC}
+                      placeholder="Buscar fazenda…"
+                      allLabel="Selecione a fazenda"
+                      allValue="__all__"
+                      className={`mt-0.5 [&_button]:h-7 [&_button]:text-[11px] ${fazendaEscolhidaId ? '' : '[&_button]:border-destructive'}`}
+                    />
+                    {!fazendaEscolhidaId && (
+                      <p className="mt-0.5 text-[10px] text-destructive">{MSG_FAZENDA_OBRIGATORIA}</p>
+                    )}
+                  </div>
+                )
               ) : campos.origem.auto ? (
                 <Input value={campos.origem.value} readOnly className="mt-0.5 h-7 text-[11px] bg-muted cursor-not-allowed" />
               ) : (campos.origem as any).useSelect && outrasFazendas.length > 0 ? (
@@ -5445,10 +5513,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               <Label className="font-bold text-[11px]">{campos.destino.label}</Label>
               {campos.destino.auto ? (
                 <Input value={campos.destino.value} readOnly className="mt-0.5 h-7 text-[11px] bg-muted cursor-not-allowed" />
-              ) : (campos.destino as any).useSelect && outrasFazendas.length > 0 ? (
+              ) : (campos.destino as any).useSelect && opcoesDestino.length > 0 ? (
+                /* TRANSF-FAZENDA-ORIGEM-01 — na transferência de saída o Destino é todo o seletor MENOS a Origem
+                   escolhida (antes: menos a fazenda do FILTRO, que em Global não tirava nada). Grava o NOME. */
                 <Select value={fazendaDestino} onValueChange={setFazendaDestino}>
                   <SelectTrigger className="mt-0.5 h-7 text-[11px]"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>{outrasFazendas.map(f => <SelectItem key={f.id} value={f.nome}>{f.nome}</SelectItem>)}</SelectContent>
+                  <SelectContent>{opcoesDestino.map(f => <SelectItem key={f.id} value={f.nome}>{f.nome}</SelectItem>)}</SelectContent>
                 </Select>
               ) : (
                 <Input value={fazendaDestino} onChange={e => setFazendaDestino(e.target.value)} placeholder={campos.destino.placeholder || 'Ex: Faz. Santa Cruz'} className="mt-0.5 h-7 text-[11px]" />
@@ -6219,7 +6289,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           titulo={aba === 'reclassificacao' ? 'Evoluir categoria' : (editingAbateId ? 'Editar Registro' : currentTipoLabel)}
           cenario={(aba === 'reclassificacao' ? reclassState.statusOp === 'meta' : isCenarioMeta) ? 'meta' : 'realizado'}
           data={aba === 'reclassificacao' ? reclassState.data : data}
-          fazendaNome={fazendaEscolhidaNome ?? (fazendaAtual && fazendaAtual.id !== '__global__' ? nomeFazenda : null)}
+          /* A fazenda ESCOLHIDA no campo, nunca a do filtro — TRANSF-FAZENDA-ORIGEM-01. Os tres tipos deste envelope
+             escolhem a fazenda; vazio e' vazio (o campo esta' em vermelho), e nao o nome do filtro por cima. */
+          fazendaNome={aba === 'reclassificacao' ? (fazendasOC.find(f => f.id === reclassFazendaId)?.nome ?? null) : fazendaEscolhidaNome}
           onFechar={fecharModalOCComAutosave}
           tituloResumo={aba !== 'reclassificacao' && isConsumo ? 'Valor do consumo' : undefined}
           resumo={aba === 'reclassificacao' ? (<>
@@ -6306,7 +6378,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               <LinhaResumo rotulo="Quantidade" valor={`${parseNumericValue(quantidade) || '-'} cab.`} />
               <LinhaResumo rotulo="Peso médio" valor={parseNumericValue(pesoKg) ? formatKg(parseNumericValue(pesoKg)) : '-'} />
               <LinhaResumo rotulo="Categoria" valor={CATEGORIAS.find(c => c.value === categoria)?.label || categoria || '-'} />
-              <LinhaResumo rotulo="Origem" valor={(nomeFazenda || fazendaOrigem) || '-'} quebra />
+              {/* A fazenda ESCOLHIDA, nunca o nome do filtro ("Global") — TRANSF-FAZENDA-ORIGEM-01. */}
+              <LinhaResumo rotulo="Origem" valor={fazendaEscolhidaNome ?? '-'} quebra />
               <LinhaResumo rotulo="Destino" valor={fazendaDestino || '-'} quebra />
             </div>
             {(transferenciaCalc || transferenciaDetalhes?.calculation) && (() => {
@@ -6419,7 +6492,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           </>)}
         >
           {aba === 'reclassificacao' ? (
-            <ReclassificacaoFormFields state={reclassState} />
+            <ReclassificacaoFormFields state={reclassState} campoFazenda={{
+              opcoes: opcoesFazendaOC,
+              valor: reclassFazendaId,
+              onChange: setReclassFazendaId,
+              /* Na edição, a GRAVADA e travada — `onEditar` não envia `fazenda_id`. */
+              travada: editingReclassId ? (fazendas.find(f => f.id === reclassFazendaId)?.nome ?? '—') : null,
+            }} />
           ) : (<>
             {renderForm()}
             {/* O Painel Inteligente META segue montado em meta — ele alimenta a trava do Registrar
@@ -6453,7 +6532,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   quantidade={parseNumericValue(quantidade) || 0}
                   pesoKg={parseNumericValue(pesoKg) || 0}
                   categoria={categoria}
-                  fazendaOrigem={nomeFazenda || fazendaOrigem}
+                  fazendaOrigem={fazendaEscolhidaNome ?? ''}
                   fazendaDestino={fazendaDestino}
                   data={data}
                   statusOp={effectiveStatusOp}

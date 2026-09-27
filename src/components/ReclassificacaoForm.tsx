@@ -9,6 +9,8 @@ import { format } from 'date-fns';
 import { useIntegerInput, useDecimalInput, parseDecimalInput } from '@/hooks/useFormattedNumber';
 import { RefreshCw, ArrowRight, Scale } from 'lucide-react';
 import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
+import { SearchableSelect } from '@/components/ui/searchable-select';
+import { MSG_FAZENDA_OBRIGATORIA } from '@/lib/zoo/fazendaDoFormulario';
 import { ReclassificacaoResumoPanel } from './ReclassificacaoResumoPanel';
 
 interface Props {
@@ -26,6 +28,13 @@ interface Props {
    * (Fechamento, edicao antes da hidratacao). Nao ha mais card para troca-lo depois.
    */
   cenarioInicial?: 'realizado' | 'meta';
+  /**
+   * A fazenda ESCOLHIDA na tela — TRANSF-FAZENDA-ORIGEM-01. Vai no payload (`fazendaId`), e o
+   * `adicionarLancamento` a usa no lugar da do contexto. Sem ela (Fechamento), herda o contexto, como sempre.
+   */
+  fazendaId?: string;
+  /** Com `true`, a fazenda e' obrigatoria: sem ela `podeSalvar` e' falso (o Registrar de "Lancar movimentacao"). */
+  exigeFazenda?: boolean;
 }
 
 type StatusOpcao = 'realizado' | 'meta';
@@ -34,10 +43,21 @@ type StatusOpcao = 'realizado' | 'meta';
 
 interface FormFieldsProps {
   state: ReturnType<typeof useReclassificacaoState>;
+  /**
+   * O campo de fazenda — TRANSF-FAZENDA-ORIGEM-01. O mesmo desenho dos seletores do Nascimento e da Morte:
+   * busca sobre as fazendas ativas, vermelho e com a frase quando vazio. `travada` (o nome gravado) na edicao,
+   * porque ela nao envia `fazenda_id`. Sem a prop (Fechamento, que ja' e' de uma fazenda), nao ha campo.
+   */
+  campoFazenda?: {
+    opcoes: { value: string; label: string }[];
+    valor: string;
+    onChange: (id: string) => void;
+    travada: string | null;
+  };
 }
 
 export function ReclassificacaoFormFields(props: FormFieldsProps) {
-  const { state } = props;
+  const { state, campoFazenda } = props;
   const {
     categoriaOrigem, setCategoriaOrigem,
     categoriaDestino, setCategoriaDestino,
@@ -69,6 +89,29 @@ export function ReclassificacaoFormFields(props: FormFieldsProps) {
           checavam a permissao de consultor — em "Lancar meta" a evolucao saia gravada como realizado sem o
           clique, e em "Lancar movimentacao" um consultor gravava meta. Quem mostra o cenario agora e' o selo do
           cabecalho do modal. */}
+      {campoFazenda && (
+        <div>
+          <Label className="text-[10px] font-semibold">
+            Fazenda{!campoFazenda.travada && <span className="text-destructive"> *</span>}
+          </Label>
+          {campoFazenda.travada ? (
+            <Input readOnly value={campoFazenda.travada} title="A fazenda do lançamento não muda por aqui"
+              className="h-7 text-[11px] bg-muted cursor-not-allowed" />
+          ) : (<>
+            <SearchableSelect
+              value={campoFazenda.valor || '__all__'}
+              onValueChange={v => campoFazenda.onChange(v === '__all__' ? '' : v)}
+              options={campoFazenda.opcoes}
+              placeholder="Buscar fazenda…"
+              allLabel="Selecione a fazenda"
+              allValue="__all__"
+              className={`[&_button]:h-7 [&_button]:text-[11px] ${campoFazenda.valor ? '' : '[&_button]:border-destructive'}`}
+            />
+            {!campoFazenda.valor && <p className="mt-0.5 text-[10px] text-destructive">{MSG_FAZENDA_OBRIGATORIA}</p>}
+          </>)}
+        </div>
+      )}
+
       <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-end">
         <div>
           <Label className="text-[10px] font-semibold">Origem</Label>
@@ -133,7 +176,8 @@ export function ReclassificacaoFormFields(props: FormFieldsProps) {
 
       {/* ⚠ O MOTIVO FICA ESCRITO AO LADO, nunca só no `disabled`: botão apagado sem explicação faz
           o operador clicar de novo. Fonte única — o mesmo `motivoBloqueio` desabilita o Registrar. */}
-      {motivoBloqueio && (
+      {/* A falta de fazenda ja' tem a frase embaixo do proprio campo; repeti-la aqui seria a mesma frase duas vezes. */}
+      {motivoBloqueio && motivoBloqueio !== MSG_FAZENDA_OBRIGATORIA && (
         <p className="text-[10px] text-destructive leading-snug">{motivoBloqueio}</p>
       )}
       {!motivoBloqueio && pesoAutoFilled && pesoInput.displayValue && (
@@ -147,7 +191,7 @@ export function ReclassificacaoFormFields(props: FormFieldsProps) {
 
 // ── Hook ──
 
-export function useReclassificacaoState({ onAdicionar, dataInicial, autoSugerir = true, cenarioInicial }: Props) {
+export function useReclassificacaoState({ onAdicionar, dataInicial, autoSugerir = true, cenarioInicial, fazendaId, exigeFazenda = false }: Props) {
   const [categoriaOrigem, setCategoriaOrigem] = useState<Categoria>('garrotes');
   const [categoriaDestino, setCategoriaDestino] = useState<Categoria>('bois');
   const [data, setData] = useState(dataInicial || format(new Date(), 'yyyy-MM-dd'));
@@ -218,7 +262,9 @@ export function useReclassificacaoState({ onAdicionar, dataInicial, autoSugerir 
    * o botão desabilitado poder dizer por quê.
    */
   const pesoValido = (parseDecimalInput(pesoKg) ?? 0) > 0;
-  const motivoBloqueio = !Number(quantidade)
+  const motivoBloqueio = exigeFazenda && !fazendaId
+    ? MSG_FAZENDA_OBRIGATORIA
+    : !Number(quantidade)
     ? 'Informe a quantidade de cabeças'
     : categoriaOrigem === categoriaDestino
       ? 'Origem e destino não podem ser a mesma categoria'
@@ -241,6 +287,8 @@ export function useReclassificacaoState({ onAdicionar, dataInicial, autoSugerir 
     const result = await onAdicionar({
       data,
       tipo: 'reclassificacao',
+      /* A ESCOLHIDA na tela; vazio vira `undefined` e o `adicionarLancamento` herda o contexto (Fechamento). */
+      fazendaId: fazendaId || undefined,
       quantidade: Number(quantidade),
       categoria: categoriaOrigem,
       categoriaDestino,
