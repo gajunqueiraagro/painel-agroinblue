@@ -2419,6 +2419,28 @@ preview que o cabecalho nao sai da tela ao rolar.
   ⚠ VARREDURA UX (pendencia, nao tratada): o modal do Financeiro aberto pela OC ("Editar" do titulo) mostra o campo
     Subcentro sem sinal de travado, embora a classificacao do titulo de OC seja da operacao. Visto no preview na 77d963be em
     27/09/2026; nao investigado se o campo esta' de fato editavel ou so' sem o cadeado.
+- ⚠ MODAIS-PADRAO-01a — UM RESUMO LATERAL SO' PARA VENDA (comum, boitel A/B), ABATE E COMPRA (27/09/2026, mock
+  `docs/mocks/abate_modal_6_abas_compacto_v3.html`). So' layout: nenhum campo, calculo, rotulo ou fluxo mudou.
+  PECAS em `src/components/ui/linha-resumo.tsx`, MOVIDAS do `AbateModalShell` (as classes sao as dele):
+  `AsideResumo` (240px, `flex h-full flex-col`, so' a lista rola dentro do card), `FaixaTituloResumo` (status em
+  `children`) e `SecaoResumo` (10px; `extra` para a `PilulaCenario` do boitel). O `BlocoHead` da Compra saiu.
+  ⚠ `forte` DO `LinhaResumo` PASSOU A 11px NO COMPONENTE COMPARTILHADO (A18 modal: linha 10, forte 11) — vale nos tres
+    asides, os unicos importadores; no Abate cresceram "Acordado (NF)" e "Liquido do produtor".
+  Identificacao em LINHAS nos tres (Abate: Frigorifico, CNPJ onde existe, Data, Fazenda). Nota do boitel 9px -> 10px
+  com o padding da linha. Venda e Compra (so' modo OC) 280 -> 240px.
+  ⚠ SUBLINHAS POR MEDICAO (218 uteis, Inter, pior caso R$ 9.999.999,99): so' "(+) Adiantamento a reembolsar" (-10,4px ja'
+    com R$ 95.243,50) e "(=) A RECEBER DO BOITEL" (-5,8px em milhoes) empilham; as da B cabem (Recebido do frigorifico
+    +5,5, Liquido +69).
+  ⚠ PROVA: texto do aside antes x depois (preview) nas cinco OCs — ceabd850, f56c50d3, da0b8577, 77d963be, dbbac65e —
+    identico; a unica diferenca e' a Identificacao do Abate virando linhas, com os mesmos quatro valores.
+  PENDENCIAS, nao tratadas:
+    (a) ALTURA IGUAL DOS ASIDES DEPENDE DOS SHELLS: o aside estica ate' o corpo, e o corpo e' 69vh na venda e na compra
+        (368px a 579 de altura) contra `100vh-32` no Abate (479px). E' a fatia 2 (venda e compra 69vh -> 100vh-32).
+        Ate' la', os asides dos boiteis rolam dentro do card.
+    (b) o `CompraResumoPanel` LEGADO (modo nao-OC) segue na coluna de 280px — a grade da compra so' vai a 240 no modo OC.
+    (c) "Saldo" negativo do resumo da venda (Vera b58bf556, -107.150,94) sai SEM VERMELHO -> OC-SALDO-MODAL-01.
+    (d) o seletor de comprador da venda mostra o UUID cru por ~1s antes de a lista de contrapartes carregar (ceabd850)
+        -> FORNECEDOR-UUID-CRU-01.
 - FORNECEDOR-UUID-CRU-01 — achado, nao tratado (26/09/2026, nos prints do OC-EDITAR-CADASTRAL-01): a compra 69115ef9 (NJ)
   mostra o UUID cru `276efb08…` no seletor de fornecedor e "Contraparte —" no resumo. O fornecedor (Carlos Pacheco) EXISTE,
   esta' ATIVO e e' do NJ; a lista carregada pela tela e' que nao o traz. Causa nao medida (lista carregada antes da troca de

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { LinhaResumo } from '@/components/ui/linha-resumo';
+import { LinhaResumo, AsideResumo, FaixaTituloResumo, SecaoResumo } from '@/components/ui/linha-resumo';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { pesoMedioPorCabeca, valorPorKgNegociado, type CompraLotesApi } from '@/hooks/useCompraLotes';
 import type { LoteRecebimento, EstadoRecebimento } from '@/hooks/useOperacaoRecebimento';
@@ -124,13 +124,10 @@ export function ResumoLateralOC({
   const finSaldo = obrAtivas.reduce((a, o) => a + (o.saldoAberto || 0), 0);
 
   return (
-    <aside className="bg-card rounded-md border shadow-sm overflow-hidden self-start text-[10px]">
-      {/* Faixa de titulo — mesma altura/fundo/tipografia do aside do LancamentoV2Dialog. */}
-      <div className="h-8 shrink-0 border-b border-border bg-accent/40 flex items-center px-3 text-[11px] font-bold uppercase tracking-wide text-primary">
-        Resumo da operação
-      </div>
-      <div className="pb-1">
-        <BlocoHead titulo="Identificação" />
+    /* As pecas do Abate (`ui/linha-resumo`) — MODAIS-PADRAO-01a: 240px, esticado ate' o fim do
+       corpo, faixa de titulo e secoes na medida do Abate. */
+    <AsideResumo faixa={<FaixaTituloResumo />}>
+        <SecaoResumo titulo="Identificação" />
         <div>
           <LinhaResumo rotulo="Tipo" valor={TIPO_LABEL[tipoLabel ?? ''] ?? null} />
           <LinhaResumo rotulo="Contraparte" valor={fornecedorNome || null} />
@@ -138,7 +135,7 @@ export function ResumoLateralOC({
           <LinhaResumo rotulo="Fazenda" valor={fazendaNome || null} />
         </div>
 
-        <BlocoHead titulo="Negociação" />
+        <SecaoResumo titulo="Negociação" />
         <div>
           {/* O QUE se comprou antes de QUANTO custou. */}
           <LinhaResumo rotulo="Animais" valor={temNegociacao ? `${nOr(negociacaoTotais!.animais)} cab` : null} />
@@ -147,7 +144,7 @@ export function ResumoLateralOC({
           <LinhaResumo rotulo="Valor total" valor={temNegociacao ? moneyOr(negociacaoTotais!.valorNegociado) : null} cor="text-primary" />
         </div>
 
-        <BlocoHead titulo="Recebimento" />
+        <SecaoResumo titulo="Recebimento" />
         <div>
           {/* ATENCAO DESTACA O VALOR, nao a linha: parcial e excedente sao estados
               que pedem o olho, mas o rotulo continua neutro como nos demais. */}
@@ -155,7 +152,7 @@ export function ResumoLateralOC({
           <LinhaResumo rotulo="Recebido" valor={rec.recebido == null ? null : `${nOr(rec.recebido)} / ${nOr(rec.negociado)} cab`} />
         </div>
 
-        <BlocoHead titulo="Financeiro" />
+        <SecaoResumo titulo="Financeiro" />
         <div>
           <LinhaResumo rotulo="Lançado" valor={temFinanceiro ? moneyOr(finLancado) : null} />
           <LinhaResumo rotulo="Liquidado" valor={temFinanceiro ? moneyOr(finLiquidado) : null} />
@@ -163,26 +160,12 @@ export function ResumoLateralOC({
             cor={finSaldo > 0.005 ? 'text-amber-700 dark:text-amber-500' : undefined} />
         </div>
 
-        <BlocoHead titulo="Documentos" />
+        <SecaoResumo titulo="Documentos" />
         <div>
           <LinhaResumo rotulo="Situação" valor={doc ? doc.situacao : null} />
         </div>
-      </div>
-    </aside>
+    </AsideResumo>
   );
 }
 
 const TIPO_LABEL: Record<string, string> = { compra: 'Compra', venda: 'Venda', abate: 'Abate' };
-
-/* Faixa de secao e par rotulo-valor — ESPELHO de `ResumoBlocoHead` / `ResumoRow` do
-   LancamentoV2Dialog (a referencia que o Gabriel definiu). Copiados na aparencia, nao
-   importados: aqueles sao internos daquele arquivo, e exporta-los para ca acoplaria os
-   dois modais por um detalhe visual. Se um dia virarem componente compartilhado, este
-   e' o segundo chamador. */
-function BlocoHead({ titulo }: { titulo: string }) {
-  return (
-    <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 first:mt-0 mb-0.5">
-      <span className="text-[9px] font-bold uppercase tracking-wide text-primary/90 leading-none">{titulo}</span>
-    </div>
-  );
-}

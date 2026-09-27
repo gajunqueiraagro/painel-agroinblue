@@ -54,7 +54,7 @@ import { BoitelTopoNegociacao, bolsoDaVendaBoitel, unitariosDoLiquido, derivados
 import { BoitelBlocosModais, BoitelAnaliseFaixa, faltamDosCinco, type BoitelEdicao } from '@/components/venda/BoitelBlocosModais';
 import { linhasPrevisaoBoitel, avisoBoitelProdutor, linhasResumoProdutor, propostasBoitelProdutor } from '@/components/venda/previsaoBoitel';
 import { pesoMedioPorCabeca } from '@/hooks/useCompraLotes';
-import { LinhaResumo } from '@/components/ui/linha-resumo';
+import { LinhaResumo, AsideResumo, FaixaTituloResumo, SecaoResumo } from '@/components/ui/linha-resumo';
 import { consolidarRecebimento } from '@/components/compra/ResumoLateralOC';
 import { formatMoeda } from '@/lib/calculos/formatters';
 
@@ -582,7 +582,7 @@ export function VendaModalShell({
         })}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] lg:grid-rows-[minmax(0,1fr)] gap-3 p-4 h-[69vh] overflow-y-auto lg:overflow-hidden bg-muted/30">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_240px] lg:grid-rows-[minmax(0,1fr)] gap-3 p-4 h-[69vh] overflow-y-auto lg:overflow-hidden bg-muted/30">
         <div className="space-y-2 min-w-0 lg:min-h-0 lg:overflow-y-auto">
           {/* ── ENTREGA ────────────────────────────────────────────────────────────
               ⚠ A MESMA GRADE DA COMPRA, com o vocabulario trocado por dicionario. O gesto
@@ -920,16 +920,11 @@ export function VendaModalShell({
           </>)}
         </div>
 
-        {/* RESUMO LATERAL — idioma do ResumoLateralOC. */}
-        <div className="lg:min-h-0 lg:overflow-y-auto">
-          <aside className="bg-card rounded-md border shadow-sm overflow-hidden self-start text-[10px]">
-            <div className="h-8 shrink-0 border-b border-border bg-accent/40 flex items-center px-3 text-[11px] font-bold uppercase tracking-wide text-primary">
-              Resumo da operação
-            </div>
-            <div className="pb-1">
-              <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 first:mt-0 mb-0.5">
-                <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Identificação</span>
-              </div>
+        {/* RESUMO LATERAL — as pecas do Abate (`ui/linha-resumo`), MODAIS-PADRAO-01a: 240px e
+            esticado ate' o fim do corpo; quem rola e' a lista dentro do card, nao a coluna. */}
+        <div className="lg:min-h-0">
+          <AsideResumo faixa={<FaixaTituloResumo />}>
+              <SecaoResumo titulo="Identificação" />
               <div>
                 <LinhaResumo rotulo="Comprador" valor={compradorNome} />
                 <LinhaResumo rotulo="Data" valor={data ? data.split('-').reverse().join('/') : null} />
@@ -937,9 +932,7 @@ export function VendaModalShell({
                 <LinhaResumo rotulo="Tipo" valor={vendaTipoVenda === 'gado_adulto' ? 'Gado adulto' : vendaTipoVenda === 'desmama' ? 'Desmama' : vendaTipoVenda === 'boitel' ? 'Boitel' : null} />
               </div>
 
-              <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 mb-0.5">
-                <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Negociação</span>
-              </div>
+              <SecaoResumo titulo="Negociação" />
               {/* ⚠ ESTES CAMPOS NUNCA ESTIVERAM LIGADOS — B-08 item 4. Nao eram fonte
                   morta nem campo pre-frente: os rotulos foram desenhados e os valores
                   ficaram `null` LITERAL no JSX. O "—" que aparecia era a sentinela certa
@@ -962,15 +955,13 @@ export function VendaModalShell({
                   /* A pilula so' existe onde ha dois mundos — ver a nota em `derAcerto`. */
                   selo={ehBoitel && !topoNoRealizado ? <PilulaCenario cenario="projetado" /> : undefined} />
                 {avisoDivergencia && (
-                  <div className="px-3 pb-0.5 text-[10px] leading-snug text-amber-700 dark:text-amber-500">
+                  <div className="px-2.5 pb-0.5 text-[10px] leading-snug text-amber-700 dark:text-amber-500">
                     {avisoDivergencia}
                   </div>
                 )}
               </div>
 
-              <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 mb-0.5">
-                <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Entrega</span>
-              </div>
+              <SecaoResumo titulo="Entrega" />
               {/* ⚠ MESMO CASO, MESMA CURA. A fonte e' `recebimentoApi.lotes`, consolidada
                   pelo helper que a COMPRA ja usa (`consolidarRecebimento`) — reescrever a
                   soma aqui seria a segunda definicao de "entregue" no mesmo sistema.
@@ -986,25 +977,19 @@ export function VendaModalShell({
 
               {/* ⚠ A RECEBER, e nao "Lancado". Numa venda o dinheiro ENTRA — o vocabulario
                   do financeiro inverte junto com o sentido da operacao. */}
-              <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 mb-0.5">
-                <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Financeiro</span>
-              </div>
+              <SecaoResumo titulo="Financeiro" />
               {/* ─── O ACERTO COM O BOITEL — B-11 item 2 ─────────────────────────────
                   ⚠ E O EXTRATO QUE O BOITEL MANDA, linha a linha, e ate' aqui ele so'
                   existia dentro do modal do realizado. Quem abre a operacao para conferir
                   o acerto tinha de entrar no modal, editar, ler e sair sem salvar.
                   ⚠ SEGUE O MELHOR CONHECIMENTO como o resto da tela: realizado solido,
                   projecao ambar com pilula no titulo do bloco.
-                  ⚠ O SUBTITULO EM 9px E PARTE DA INFORMACAO, nao decoracao: sem ele, o
+                  ⚠ O SUBTITULO (10px desde o MODAIS-PADRAO-01a) E PARTE DA INFORMACAO, nao decoracao: sem ele, o
                   operador procura o frete nesta lista e conclui que sumiu. Ele nao sumiu —
                   ele nao e' deste acerto. */}
               {ehBoitel && derAcerto && linhasAcerto.length > 0 && (<>
-                <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 mb-0.5">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">{resumoProdutor ? 'Abate em nome do produtor' : 'Acerto com o boitel'}</span>
-                    {!topoNoRealizado && <PilulaCenario cenario="projetado" />}
-                  </div>
-                </div>
+                <SecaoResumo titulo={resumoProdutor ? 'Abate em nome do produtor' : 'Acerto com o boitel'}
+                  extra={!topoNoRealizado ? <PilulaCenario cenario="projetado" /> : undefined} />
                 <div>
                   {linhasAcerto.map(l => (
                     <LinhaResumo key={l.rotulo} rotulo={l.rotulo} cor={corMundo}
@@ -1020,15 +1005,20 @@ export function VendaModalShell({
                       valor={formatMoeda(derAcerto.fba - derAcerto.descontoDoAcerto)} />
                   </div>
                   {derAcerto.valorTotalAntecipadoCalc > 0 && (
-                    <LinhaResumo rotulo="(+) Adiantamento a reembolsar" cor={corMundo}
+                    /* ⚠ EMPILHADAS POR MEDICAO — MODAIS-PADRAO-01a. Em 240px (218 uteis, Inter 10/11px) esta
+                       nao cabe nem com R$ 95.243,50 (-10,4px) e a "A RECEBER" nao cabe em milhoes (-5,8px com
+                       R$ 9.999.999,99; +8,1 com R$ 473.884,10 — sorte, nao folga). As outras do acerto cabem no
+                       pior caso de milhoes: Faturamento +10,2, Recebido do frigorifico +5,5, Liquido +69. */
+                    <LinhaResumo empilhado rotulo="(+) Adiantamento a reembolsar" cor={corMundo}
                       valor={`+ ${formatMoeda(derAcerto.valorTotalAntecipadoCalc)}`} />
                   )}
                   <div className="border-t pt-0.5 mt-0.5">
-                    <LinhaResumo rotulo="(=) A RECEBER DO BOITEL" forte cor={corMundo}
+                    <LinhaResumo empilhado rotulo="(=) A RECEBER DO BOITEL" forte cor={corMundo}
                       valor={formatMoeda(derAcerto.saldoReceberBase)} />
                   </div>
                   </>)}
-                  <div className="pt-0.5 text-[9px] text-muted-foreground leading-snug">
+                  {/* 10px e com o padding da linha — MODAIS-PADRAO-01a (era 9px, colada na borda). */}
+                  <div className="px-2.5 pt-0.5 text-[10px] text-muted-foreground leading-snug">
                     gastos diretos do produtor (frete e notas do envio) não entram neste acerto — vivem no financeiro
                   </div>
                 </div>
@@ -1041,8 +1031,7 @@ export function VendaModalShell({
                 <LinhaResumo rotulo="Recebido" valor={finRecebido == null ? null : formatMoeda(finRecebido)} />
                 <LinhaResumo rotulo="Saldo" valor={finSaldo == null ? null : formatMoeda(finSaldo)} />
               </div>
-            </div>
-          </aside>
+          </AsideResumo>
         </div>
       </div>
 

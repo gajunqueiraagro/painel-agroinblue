@@ -27,7 +27,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useStatusPilares } from '@/hooks/useStatusPilares';
 import { BlocoTopoAba } from '@/components/ui/bloco-topo-aba';
-import { LinhaResumo } from '@/components/ui/linha-resumo';
+import { LinhaResumo, AsideResumo, FaixaTituloResumo, SecaoResumo } from '@/components/ui/linha-resumo';
 import { ReabrirP1Dialog } from '@/components/ReabrirP1Dialog';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -1090,41 +1090,28 @@ export function AbateModalShell({
           </div>
         </div>
         <div className="lg:min-h-0">
-          {/* ⚠ O CARD OCUPA A COLUNA INTEIRA, e quem rola e' a LISTA dentro dele.
-              Antes o `aside` era `sticky self-start`: ele tinha a altura do CONTEUDO e a
-              COLUNA e' que rolava — entao o cartao cortava no Financeiro e sobrava corpo
-              em branco embaixo. O cartao acabava antes da area, em vez de a area acabar
-              antes do cartao. Com `h-full` + `flex-col` o cabecalho fica preso no topo, a
-              lista ganha o resto e so' ela rola; `min-h-0` no meio e' o que permite a
-              lista encolher em vez de esticar o card para fora da coluna. */}
-          <aside className="flex h-full flex-col bg-card rounded-md border shadow-sm overflow-hidden text-[10px]">
-            {/* ⚠ O STATUS MORA NO CABECALHO DO RESUMO, nao numa linha da lista: e' a
-                primeira pergunta ("em que pe esta esta operacao?") e ela nao deve disputar
-                espaco com numeros. */}
-            <div className="shrink-0 border-b border-border bg-accent/40 flex items-center gap-2 px-2.5 py-[5px] text-[10px] font-medium uppercase tracking-wide text-primary">
-              Resumo da operação
+          {/* O conteiner, a faixa de titulo e a faixa de secao moram em `ui/linha-resumo`
+              desde o MODAIS-PADRAO-01a — os comentarios do `h-full` e do status foram com eles. */}
+          <AsideResumo faixa={
+            <FaixaTituloResumo>
               <span className={`ml-auto rounded-full px-1.5 py-px text-[10px] font-normal normal-case ${TOM_STATUS[ocStatusComercial ?? 'rascunho'] ?? TOM_STATUS.rascunho}`}>
                 {ROTULO_STATUS[ocStatusComercial ?? 'rascunho'] ?? 'Rascunho'}
               </span>
-            </div>
-            <div className="flex-1 min-h-0 overflow-y-auto pb-1">
-              <div className="bg-primary/10 border-y border-primary/15 px-2.5 py-1 mt-0.5 first:mt-0 mb-0.5">
-                <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Identificação</span>
-              </div>
-              {/* ⚠ SEM ROTULOS AQUI. "Comprador: Fortunceres" gasta metade da largura
-                  para dizer o que o nome ja' diz — e nesta secao o dado É a identidade. Os
-                  rotulos continuam nas outras, onde o numero sozinho nao se explica. */}
-              <div className="px-2.5 py-1 leading-tight">
-                <div className="truncate text-[11px] font-semibold text-foreground">{frigorificoNome ?? '—'}</div>
-                {frigorificoDoc && <div className="truncate text-[10px] text-muted-foreground">CNPJ {frigorificoDoc}</div>}
-                <div className="truncate text-[10px] text-muted-foreground">
-                  {[data ? data.split('-').reverse().join('/') : null, fazendaNome].filter(Boolean).join(' · ') || '—'}
-                </div>
+            </FaixaTituloResumo>
+          }>
+              <SecaoResumo titulo="Identificação" />
+              {/* ⚠ EM LINHAS, COMO NA VENDA E NA COMPRA — MODAIS-PADRAO-01a, decisao do Gabriel.
+                  O bloco sem rotulos (nome em 11px, CNPJ e "data · fazenda" embaixo) era a unica
+                  Identificacao diferente das outras; os mesmos quatro dados viraram quatro linhas,
+                  e o CNPJ so' aparece onde existe, como antes. */}
+              <div className="">
+                <LinhaResumo rotulo="Frigorífico" valor={frigorificoNome ?? null} />
+                {frigorificoDoc && <LinhaResumo rotulo="CNPJ" valor={frigorificoDoc} />}
+                <LinhaResumo rotulo="Data" valor={data ? data.split('-').reverse().join('/') : null} />
+                <LinhaResumo rotulo="Fazenda" valor={fazendaNome || null} />
               </div>
 
-              <div className="bg-primary/10 border-y border-primary/15 px-2.5 py-1 mt-0.5 mb-0.5">
-                <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Negociação</span>
-              </div>
+              <SecaoResumo titulo="Negociação" />
               {/* ⚠ ESTES CAMPOS NUNCA ESTIVERAM LIGADOS — B-08 item 4. Nao eram fonte
                   morta nem campo pre-frente: os rotulos foram desenhados e os valores
                   ficaram `null` LITERAL no JSX. O "—" que aparecia era a sentinela certa
@@ -1179,9 +1166,7 @@ export function AbateModalShell({
                 )}
               </div>
 
-              <div className="bg-primary/10 border-y border-primary/15 px-2.5 py-1 mt-0.5 mb-0.5">
-                <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Entrega</span>
-              </div>
+              <SecaoResumo titulo="Entrega" />
               {/* ⚠ MESMO CASO, MESMA CURA. A fonte e' `recebimentoApi.lotes`, consolidada
                   pelo helper que a COMPRA ja usa (`consolidarRecebimento`) — reescrever a
                   soma aqui seria a segunda definicao de "entregue" no mesmo sistema.
@@ -1197,9 +1182,7 @@ export function AbateModalShell({
 
               {/* ⚠ A RECEBER, e nao "Lancado". Numa venda o dinheiro ENTRA — o vocabulario
                   do financeiro inverte junto com o sentido da operacao. */}
-              <div className="bg-primary/10 border-y border-primary/15 px-2.5 py-1 mt-0.5 mb-0.5">
-                <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Financeiro</span>
-              </div>
+              <SecaoResumo titulo="Financeiro" />
               {/* ⚠ O ACERTO DO BOITEL NAO EXISTE NO ABATE. Aqui a venda lista as sete
                   linhas do acerto com o boitel — diarias, sanidade, frete, adiantamento.
                   O abate nao tem intermediario: o frigorifico paga o liquido, e a
@@ -1247,8 +1230,7 @@ export function AbateModalShell({
                     valor={formatMoeda(finLiquidoProdutor / totaisAbate.arrobas)} />
                 )}
               </div>
-            </div>
-          </aside>
+          </AsideResumo>
         </div>
       </div>
 

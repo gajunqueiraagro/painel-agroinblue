@@ -412,7 +412,9 @@ export function CompraModalShell(api: CompraModalShellProps) {
           17px e o total cai 3px. O cromo devolve pixel FIXO e a area de conteudo cresce em
           PROPORCAO — os dois nunca se anulam em toda altura de janela, e o caso que
           importa e' a janela BAIXA, onde o modal quase nao cabe. */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] lg:grid-rows-[minmax(0,1fr)] gap-3 p-4 h-[69vh] overflow-y-auto lg:overflow-hidden bg-muted/30">
+      {/* ⚠ 240px SO' NO MODO OC — MODAIS-PADRAO-01a: e' a largura do resumo do Abate. O legado
+          (CompraResumoPanel, outros callers) fica nos 280px de sempre, fora do escopo. */}
+      <div className={`grid grid-cols-1 ${api.modoOC ? 'lg:grid-cols-[1fr_240px]' : 'lg:grid-cols-[1fr_280px]'} lg:grid-rows-[minmax(0,1fr)] gap-3 p-4 h-[69vh] overflow-y-auto lg:overflow-hidden bg-muted/30`}>
         <div className="space-y-2 min-w-0 lg:min-h-0 lg:overflow-y-auto">
           {abaAtiva === 'negociacao' ? (
             <AbaNegociacaoLotes

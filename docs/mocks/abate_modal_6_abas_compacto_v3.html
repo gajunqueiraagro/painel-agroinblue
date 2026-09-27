@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>MOCK v3 — Abate modal compacto, 6 abas + 3 dialogos (MOVIMENTACOES-PADRAO-01a) · 24/09/2026</title>
+<style>
+:root{--bg:#F5F4F0;--card:#fff;--muted:#6B6A66;--hint:#9A9893;--border:#DDDBD4;--strong:#C9C7BF;--navy:#0C447C;--navy10:#E6F1FB;--green:#3B6D11;--red:#A32D2D;--amber:#854F0B;--zebra:#F5F4F0;--tot:#E8E6DF}
+*{box-sizing:border-box}
+body{margin:0;padding:16px;background:var(--bg);font-family:Inter,system-ui,sans-serif;color:#1E1E1C;font-variant-numeric:tabular-nums}
+h1{font-size:13px;font-weight:500;width:664px;margin:0 auto 10px}h2{font-size:12px;font-weight:500;width:664px;margin:18px auto 6px;color:var(--muted)}
+.m{width:664px;margin:0 auto 14px;border:0.5px solid var(--border);border-radius:6px;overflow:hidden;background:var(--card)}
+.hd{height:36px;background:var(--navy);color:#fff;display:flex;align-items:center;gap:8px;padding:0 10px;font-size:11px}
+.hd b{font-size:13px;font-weight:500}.hd .c{border:0.5px solid rgba(255,255,255,.5);border-radius:4px;padding:1px 5px;font-size:10px}
+.tb{display:flex;gap:2px;padding:4px 8px;border-bottom:0.5px solid var(--border);height:28px}
+.tb span{font-size:10px;font-weight:500;padding:0 7px;height:20px;line-height:20px;border-radius:4px;color:var(--muted)}
+.tb .on{background:var(--navy10);color:var(--navy)}
+.bd{display:grid;grid-template-columns:1fr 200px}
+.mn{padding:6px 8px;min-width:0}.st{font-size:12px;font-weight:500;margin:2px 0 4px}
+.tp{display:grid;gap:8px;padding:6px 9px;background:var(--zebra);border:0.5px solid var(--border);border-radius:4px;margin-bottom:6px}
+.tp .l{font-size:10px;color:var(--muted);line-height:1.2}.tp .v{font-size:15px;font-weight:500;line-height:1.2;white-space:nowrap}
+table{border-collapse:collapse;width:448px;table-layout:fixed}
+th{font-size:10px;font-weight:400;color:var(--muted);text-align:right;padding:2px 4px;border-bottom:0.5px solid var(--border)}
+td{font-size:10px;text-align:right;padding:0 4px;height:16px;line-height:16px;white-space:nowrap;overflow:hidden}
+th:first-child,td:first-child{text-align:left}tr.z td{background:var(--zebra)}tr.t td{font-weight:500;background:var(--tot);height:17px}
+.r2{display:flex;justify-content:space-between;padding:3px 6px;border-bottom:0.5px solid var(--border);line-height:1.3;cursor:pointer}
+.r2 .a{font-size:11px;font-weight:500}.r2 .b{font-size:10px;color:var(--muted)}
+.rs{border-left:0.5px solid var(--border);font-size:10px;display:flex;flex-direction:column}
+.rs .h{display:flex;align-items:center;justify-content:space-between;padding:5px 8px;font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.02em;border-bottom:0.5px solid var(--border)}
+.rs .s{font-size:10px;font-weight:500;text-transform:uppercase;color:#185FA5;padding:4px 8px 1px}
+.rs .k{display:flex;justify-content:space-between;padding:1px 8px;height:16px;line-height:16px}
+.rs .k i{font-style:normal;color:var(--muted)}.rs .k b{font-weight:500}.rs .k .f{font-weight:700;font-size:11px}
+.rs .k.sum{border-top:0.5px solid var(--border)}
+.rs .k2{padding:1px 8px;line-height:12px;height:26px}.rs .k2 i{font-style:normal;color:var(--muted);display:block}.rs .k2 b{font-weight:500;display:block;text-align:right}
+.pl{border-radius:99px;padding:0 5px;font-size:10px;font-weight:400;text-transform:none}
+.ft{height:32px;border-top:0.5px solid var(--border);display:flex;align-items:center;gap:6px;padding:0 8px}
+.bt{height:22px;line-height:22px;font-size:10px;font-weight:500;padding:0 9px;border-radius:4px;border:0.5px solid var(--strong);background:#fff}
+.bt.p{background:var(--navy);color:#fff;border-color:var(--navy)}.bt.g{background:var(--green);color:#fff;border-color:var(--green)}
+.neg{color:var(--red)}.pos{color:var(--green)}.amb{color:var(--amber)}
+.nt{font-size:10px;color:var(--hint);padding:4px 8px;border-top:0.5px dashed var(--border);background:var(--zebra)}
+.ok{background:#EAF3DE;color:#27500A}.ab{background:#FAEEDA;color:#633806}.nv{background:var(--navy10);color:var(--navy)}
+.fld{display:flex;flex-direction:column;gap:2px}.fld .l{font-size:10px;color:var(--muted)}.fld .i{height:24px;border:0.5px solid var(--strong);border-radius:4px;font-size:11px;padding:0 6px;line-height:24px;background:#fff;white-space:nowrap;overflow:hidden}
+.fld .i.n{text-align:right}.fld .i.ro{background:var(--zebra);color:var(--muted);border-color:var(--border)}
+.dg{margin:0 auto 14px;border:0.5px solid var(--border);border-radius:6px;overflow:hidden;background:var(--card)}
+</style>
+</head>
+<body>
+<h1>MOCK v3 — Abate modal compacto. Resumo lateral IDENTICO nas 6 abas (clonado por script). Criterios de valor do lote (Por kg / Por cabeca / Valor total) e todos os campos do Negociar lote INTOCADOS: so a regua muda. Substitui v1 e v2.</h1>
+
+<template id="resumo">
+<div class="rs"><div class="h">Resumo <span class="pl nv st-pl">negociado</span></div>
+<div class="s">Identificação</div>
+<div class="k"><b style="font-size:11px">JBS · Campo Grande</b></div>
+<div class="k"><i>12/09/2026 · Sta. Luzia</i></div>
+<div class="s">Negociação</div>
+<div class="k"><i>Lotes</i><b>2 · 125 cab</b></div>
+<div class="k"><i>Rend. carcaça</i><b>52,0%</b></div>
+<div class="k"><i>Arrobas</i><b>2.242,93 @</b></div>
+<div class="k"><i>Base</i><b>R$ 700.000,00</b></div>
+<div class="k"><i>Bônus</i><b class="pos">+ R$ 25.000,00</b></div>
+<div class="k"><i>Descontos</i><b class="neg">− R$ 7.240,00</b></div>
+<div class="k sum"><i>Valor bruto</i><b>R$ 717.760,00</b></div>
+<div class="k"><i>Funrural</i><b class="neg">− R$ 10.766,40</b></div>
+<div class="k sum"><i>Líquido (a salvar)</i><b class="f">R$ 706.993,60</b></div>
+<div class="k"><i>Acordado (NF)</i><b class="f">R$ 688.013,60</b></div>
+<div class="k2"><i>por @ · por cabeça</i><b>R$ 320,00 · R$ 5.504,11</b></div>
+<div class="s">Entrega</div>
+<div class="k"><i>Entregue</i><b>—</b></div>
+<div class="k"><i>Saldo a entregar</i><b>125 cab</b></div>
+<div class="s">Financeiro</div>
+<div class="k"><i>A receber</i><b>R$ 688.013,60</b></div>
+<div class="k"><i>Recebido</i><b>—</b></div>
+</div>
+</template>
+
+<div class="m">
+<div class="hd"><b>Abate de animais</b><span class="c">OC 007.112</span><span>▣ 12/09/2026</span><span>⌂ Fazenda Sta. Luzia</span><span style="margin-left:auto">negociado</span><span>✕</span></div>
+<div class="tb"><span class="on">Abate</span><span>Negociação</span><span>Entrega</span><span>Documentos</span><span>Financeiro</span><span>Auditoria</span></div>
+<div class="bd"><div class="mn">
+<div class="st">Identificação do abate</div>
+<div class="tp" style="grid-template-columns:1fr 100px 150px"><div style="min-width:0"><div class="l">Comprador</div><div class="v" style="overflow:hidden;text-overflow:ellipsis">JBS · Campo Grande</div><div class="l">CNPJ 02.916.265/0001-60</div></div><div><div class="l">Data do abate</div><div class="v">12/09/2026</div></div><div><div class="l">Fazenda de origem</div><div class="v">Sta. Luzia</div></div></div>
+<div class="st" style="display:flex;justify-content:space-between;align-items:center">Lotes <span style="font-size:10px;color:var(--muted);font-weight:400">2 lotes · 125 cab</span><span class="bt g">+ Adicionar lote</span></div>
+<div class="r2"><div><div class="a">Bois 36+ · 85 cab</div><div class="b">540,00 kg · peso vivo 45.900,00 kg</div></div><div style="text-align:right"><div class="a">R$ 488.077,60</div><div class="b"><span class="pl ok">Negociado</span></div></div></div>
+<div class="r2"><div><div class="a">Vacas · 40 cab</div><div class="b">470,00 kg · peso vivo 18.800,00 kg</div></div><div style="text-align:right"><div class="a">R$ 199.936,00</div><div class="b"><span class="pl ok">Negociado</span></div></div></div>
+<div class="st" style="margin-top:6px">Observações / Lote</div>
+<div style="height:22px;border:0.5px solid var(--strong);border-radius:4px;font-size:10px;color:var(--hint);padding:0 6px;line-height:22px">Opcional</div>
+</div><div class="rs-slot"></div></div>
+<div class="ft"><span class="bt">Cancelar</span><span class="bt p">Salvar</span><span style="margin-left:auto" class="bt">→ Negociação</span></div>
+<div class="nt">cabeçalho 36/13 · abas 28 (botão 20, 10px) · seção 12 · topo 10/15 · lote 11/10 (30px), clique abre "Editar lote" (mesmo LoteDialog) · zero lotes: uma linha de 30px "Nenhum lote nesta operação." · resumo 200px: linha 16, dupla 26, forte 11, traço nos somatórios · rodapé 32/botão 22</div>
+</div>
+
+<div class="m">
+<div class="hd"><b>Abate de animais</b><span class="c">OC 007.112</span><span>▣ 12/09/2026</span><span>⌂ Fazenda Sta. Luzia</span><span style="margin-left:auto">negociado</span><span>✕</span></div>
+<div class="tb"><span>Abate</span><span class="on">Negociação</span><span>Entrega</span><span>Documentos</span><span>Financeiro</span><span>Auditoria</span></div>
+<div class="bd"><div class="mn">
+<div class="tp" style="grid-template-columns:repeat(4,1fr)"><div><div class="l">Animais</div><div class="v">125</div></div><div><div class="l">Peso médio</div><div class="v">517,60 kg</div></div><div><div class="l">R$/@</div><div class="v">R$ 320,00</div></div><div><div class="l">Valor bruto</div><div class="v">R$ 717.760,00</div></div></div>
+<div class="st">Negociação dos lotes <span style="font-size:10px;color:var(--muted);font-weight:400">· clique no lote para negociar</span></div>
+<table><colgroup><col style="width:130px"><col style="width:50px"><col style="width:62px"><col style="width:78px"><col style="width:56px"><col style="width:72px"></colgroup>
+<tr><th>Categoria</th><th>Qtde</th><th>Peso méd.</th><th>Peso total</th><th>R$/@</th><th>Valor</th></tr>
+<tr><td>Bois 36+</td><td>85</td><td>540,00</td><td>45.900,00</td><td>320,00</td><td>488.077,60</td></tr>
+<tr class="z"><td>Vacas</td><td>40</td><td>470,00</td><td>18.800,00</td><td>320,00</td><td>199.936,00</td></tr>
+<tr class="t"><td>Total</td><td>125</td><td>517,60</td><td>64.700,00</td><td>320,00</td><td>717.760,00</td></tr></table>
+</div><div class="rs-slot"></div></div>
+<div class="ft"><span class="bt">Cancelar</span><span class="bt p">Salvar</span></div>
+<div class="nt">tabela 448 fixa · cols 130/50/62/78/56/72 · linha 16/10 · total 17 fundo #E8E6DF · SEM formulário inline: negociar é no diálogo abaixo · um só par de botões no rodapé — 01b</div>
+</div>
+
+<div class="m">
+<div class="hd"><b>Abate de animais</b><span class="c">OC 007.112</span><span>▣ 12/09/2026</span><span>⌂ Fazenda Sta. Luzia</span><span style="margin-left:auto">entregue</span><span>✕</span></div>
+<div class="tb"><span>Abate</span><span>Negociação</span><span class="on">Entrega</span><span>Documentos</span><span>Financeiro</span><span>Auditoria</span></div>
+<div class="bd"><div class="mn">
+<div class="tp" style="grid-template-columns:repeat(3,1fr)"><div><div class="l">Entregue</div><div class="v">125 / 125 cab</div></div><div><div class="l">Saldo a entregar</div><div class="v">0 cab</div></div><div><div class="l">Data da entrega</div><div class="v">12/09/2026</div></div></div>
+<div class="st">Movimentações registradas <span style="font-size:10px;color:var(--muted);font-weight:400">· clique no lote para entregar</span></div>
+<table><colgroup><col style="width:130px"><col style="width:70px"><col style="width:70px"><col style="width:80px"><col style="width:98px"></colgroup>
+<tr><th>Categoria</th><th>Negociado</th><th>Entregue</th><th>Peso méd.</th><th>Diferença</th></tr>
+<tr><td>Bois 36+</td><td>85</td><td>85</td><td>541,20</td><td class="pos">+1,20 kg</td></tr>
+<tr class="z"><td>Vacas</td><td>40</td><td>40</td><td>468,50</td><td class="neg">−1,50 kg</td></tr>
+<tr class="t"><td>Total</td><td>125</td><td>125</td><td>517,94</td><td class="pos">+0,34 kg</td></tr></table>
+<div style="display:flex;gap:6px;margin-top:8px"><span class="bt">↺ Voltar para Negociação</span></div>
+</div><div class="rs-slot"></div></div>
+<div class="ft"><span class="bt">Fechar</span></div>
+<div class="nt">mesma régua da Negociação · diferença em cor · entregar é no diálogo abaixo — 01b</div>
+</div>
+
+<div class="m">
+<div class="hd"><b>Abate de animais</b><span class="c">OC 007.112</span><span>▣ 12/09/2026</span><span>⌂ Fazenda Sta. Luzia</span><span style="margin-left:auto">entregue</span><span>✕</span></div>
+<div class="tb"><span>Abate</span><span>Negociação</span><span>Entrega</span><span class="on">Documentos</span><span>Financeiro</span><span>Auditoria</span></div>
+<div class="bd"><div class="mn">
+<div class="tp" style="grid-template-columns:1fr 1fr 1fr"><div><div class="l">Total documentado</div><div class="v">R$ 688.013,60</div></div><div><div class="l">Negociado (líquido)</div><div class="v">R$ 706.993,60</div></div><div><div class="l">Diferença</div><div class="v amb">− R$ 18.980,00</div></div></div>
+<div class="st" style="display:flex;justify-content:space-between">Documentos <span style="font-size:10px;font-weight:400;color:var(--muted)">2 registros</span></div>
+<div class="r2"><div><div class="a">NF 007.086.649</div><div class="b">JBS S.A. · 12/09/2026 · romaneio 118.402</div></div><div style="text-align:right"><div class="a">R$ 488.077,60</div><div class="b"><span class="pl ok">Ativo</span> 📎 ✎</div></div></div>
+<div class="r2"><div><div class="a">NF 007.086.650</div><div class="b amb">sem arquivo anexado</div></div><div style="text-align:right"><div class="a">R$ 199.936,00</div><div class="b"><span class="pl ok">Ativo</span> 📎 ✎</div></div></div>
+</div><div class="rs-slot"></div></div>
+<div class="ft"><span class="bt g">+ Registrar documento</span></div>
+<div class="nt">A18: linha 11/10, NF com pontos, valor à direita, pílula 10, ícones 12 · divergência em âmbar — 01b</div>
+</div>
+
+<div class="m">
+<div class="hd"><b>Abate de animais</b><span class="c">OC 007.112</span><span>▣ 12/09/2026</span><span>⌂ Fazenda Sta. Luzia</span><span style="margin-left:auto">entregue</span><span>✕</span></div>
+<div class="tb"><span>Abate</span><span>Negociação</span><span>Entrega</span><span>Documentos</span><span class="on">Financeiro</span><span>Auditoria</span></div>
+<div class="bd"><div class="mn">
+<div class="tp" style="grid-template-columns:repeat(3,1fr)"><div><div class="l">A receber</div><div class="v">R$ 688.013,60</div></div><div><div class="l">Recebido</div><div class="v">R$ 344.006,80</div></div><div><div class="l">Falta receber</div><div class="v amb">R$ 344.006,80</div></div></div>
+<div class="st">Lançamentos</div>
+<div class="r2"><div><div class="a">Abate 125 B · 1/2</div><div class="b">Abates de Machos · venc. 27/09/2026 · Sicredi</div></div><div style="text-align:right"><div class="a pos">R$ 344.006,80</div><div class="b"><span class="pl ok">Paga</span></div></div></div>
+<div class="r2"><div><div class="a">Abate 125 B · 2/2</div><div class="b">Abates de Machos · venc. 12/10/2026 · Sicredi</div></div><div style="text-align:right"><div class="a">R$ 344.006,80</div><div class="b"><span class="pl ab">Em aberto</span></div></div></div>
+<div class="r2"><div><div class="a">Abate 125 B · Funrural</div><div class="b">Impostos e Desp. de Abates e Vendas · 12/09/2026</div></div><div style="text-align:right"><div class="a neg">− R$ 10.766,40</div><div class="b"><span class="pl ok">Paga</span></div></div></div>
+</div><div class="rs-slot"></div></div>
+<div class="ft"><span class="bt g">+ Lançar parcela</span></div>
+<div class="nt">A18 + A19 · entrada verde, saída vermelha · subcentro na linha 2 — 01b</div>
+</div>
+
+<div class="m">
+<div class="hd"><b>Abate de animais</b><span class="c">OC 007.112</span><span>▣ 12/09/2026</span><span>⌂ Fazenda Sta. Luzia</span><span style="margin-left:auto">entregue</span><span>✕</span></div>
+<div class="tb"><span>Abate</span><span>Negociação</span><span>Entrega</span><span>Documentos</span><span>Financeiro</span><span class="on">Auditoria</span></div>
+<div class="bd"><div class="mn">
+<div class="tp" style="grid-template-columns:1fr 1fr"><div><div class="l">Eventos</div><div class="v">7</div></div><div><div class="l">Pessoas</div><div class="v">2</div></div></div>
+<div style="font-size:10px;background:var(--zebra);padding:1px 6px;color:var(--muted)">12/09/2026</div>
+<div style="display:grid;grid-template-columns:30px 62px 1fr;font-size:10px;line-height:15px;padding:0 6px"><span>16:02</span><span style="color:var(--muted)">Gabriel</span><span>lançou a parcela 1 · <span style="color:var(--muted)">R$ 344.006,80</span></span></div>
+<div style="display:grid;grid-template-columns:30px 62px 1fr;font-size:10px;line-height:15px;padding:0 6px;background:var(--zebra)"><span>15:40</span><span style="color:var(--muted)">Gabriel</span><span>registrou a NF 007.086.650</span></div>
+<div style="display:grid;grid-template-columns:30px 62px 1fr;font-size:10px;line-height:15px;padding:0 6px"><span>14:11</span><span style="color:var(--muted)">Rafa</span><span>confirmou a entrega · <span style="color:var(--muted)">125 cab</span></span></div>
+<div style="font-size:10px;background:var(--zebra);padding:1px 6px;color:var(--muted)">10/09/2026</div>
+<div style="display:grid;grid-template-columns:30px 62px 1fr;font-size:10px;line-height:15px;padding:0 6px"><span>09:25</span><span style="color:var(--muted)">Gabriel</span><span>negociou 2 lotes · <span style="color:var(--muted)">R$ 717.760,00</span></span></div>
+<div style="display:grid;grid-template-columns:30px 62px 1fr;font-size:10px;line-height:15px;padding:0 6px;background:var(--zebra)"><span>09:12</span><span style="color:var(--muted)">Gabriel</span><span>criou a operação</span></div>
+</div><div class="rs-slot"></div></div>
+<div class="ft"><span class="bt">Fechar</span></div>
+<div class="nt">linha única: hora 30 · nome 62 · frase 10px · linha 15 · faixa de data — 01b</div>
+</div>
+
+<h2>Diálogo 1 — Adicionar / editar lote (LoteDialog, reusado de compra) · 480px</h2>
+<div class="dg" style="width:480px">
+<div class="hd"><b>Adicionar lote</b><span style="margin-left:auto">✕</span></div>
+<div style="padding:8px 10px;display:grid;gap:8px">
+<div style="display:grid;grid-template-columns:1.6fr 1fr;gap:8px"><div class="fld"><div class="l">Categoria</div><div class="i">Bois 36+ ▾</div></div><div class="fld"><div class="l">Quantidade</div><div class="i n">85</div></div></div>
+<div style="display:grid;grid-template-columns:1fr 1.1fr 1.2fr;gap:8px"><div class="fld"><div class="l">Peso méd. (kg)</div><div class="i n">540,00</div></div><div class="fld"><div class="l">Critério</div><div class="i">Por cabeça ▾</div></div><div class="fld"><div class="l">R$/cabeça</div><div class="i n">5.742,09</div></div></div>
+<div style="font-size:10px;color:var(--muted);display:flex;gap:10px"><span>Critério: <b>Por kg</b> (R$/kg) · <b>Por cabeça</b> (R$/cabeça) · <b>Valor total</b> — o rótulo do campo Valor segue o critério.</span></div>
+<div class="fld"><div class="l">Observação</div><div class="i" style="color:var(--hint)">Ex.: OC 7914 — como o frigorífico identifica o lote</div></div>
+<div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;color:var(--muted);border-top:0.5px solid var(--border);padding-top:6px">Total do lote <b style="font-size:11px;color:#1E1E1C">R$ 488.077,60</b></div>
+</div>
+<div class="ft" style="justify-content:flex-end"><span class="bt">Cancelar</span><span class="bt p">Aplicar</span></div>
+<div class="nt">hoje max-w-lg (512) · campos h-8/12px → v3: 480px, campos 24px/11px, rótulo 10px, mesma altura (A16), seletor da casa com busca, Valor via ValorInput (A19), peso 2 casas (A15)</div>
+</div>
+
+<h2>Diálogo 2 — Negociar lote (ModalNegociarLote) · 640×300 (hoje 820×400)</h2>
+<div class="dg" style="width:640px">
+<div class="hd"><b>Negociar lote · Bois 36+ · 85 cab</b><span style="margin-left:auto">✕</span></div>
+<div style="display:grid;grid-template-columns:1fr 220px">
+<div style="padding:8px 10px;display:grid;gap:8px">
+<div class="fld"><div class="l">Cenário</div><div style="display:flex;gap:2px"><span class="bt" style="background:var(--navy10);color:var(--navy);border-color:var(--navy10)">Realizado</span><span class="bt">Programado</span><span class="bt">Meta</span></div></div>
+<div style="display:grid;grid-template-columns:130px 96px 1fr;gap:8px;align-items:end"><div class="fld"><div class="l">Carcaça</div><div class="i n">52,00 %</div></div><div class="fld"><div class="l">= kg</div><div class="i n ro">280,80</div></div><div class="fld"><div class="l">= @ / cab</div><div class="i n ro">18,72</div></div></div>
+<div style="display:grid;grid-template-columns:150px 96px 1fr;gap:8px;align-items:end"><div class="fld"><div class="l">Preço base (R$/@)</div><div class="i n">320,00</div></div><div class="fld"><div class="l">Funrural %</div><div class="i n">1,50</div></div><div class="fld"><div class="l">= base do lote</div><div class="i n ro">R$ 476.640,00</div></div></div>
+<div class="st" style="margin:0">Bônus</div>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px"><div class="fld"><div class="l">Programa (R$/@)</div><div class="i n">8,00</div></div><div class="fld"><div class="l">Idade (R$/@)</div><div class="i n">4,00</div></div><div class="fld"><div class="l">Outros (R$)</div><div class="i n">0,00</div></div></div>
+<div class="st" style="margin:0">Descontos</div>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px"><div class="fld"><div class="l">Contusão (R$)</div><div class="i n">4.240,00</div></div><div class="fld"><div class="l">Frete (R$)</div><div class="i n">0,00</div></div><div class="fld"><div class="l">Outros (R$)</div><div class="i n">0,00</div></div></div>
+</div>
+<div class="rs" style="font-size:10px"><div class="h">Total do lote</div>
+<div class="k"><i>Base</i><b>R$ 476.640,00</b></div><div class="k"><i>Bônus</i><b class="pos">+ R$ 19.104,00</b></div><div class="k"><i>Descontos</i><b class="neg">− R$ 4.240,00</b></div><div class="k sum"><i>Valor bruto</i><b>R$ 491.504,00</b></div><div class="k"><i>Funrural</i><b class="neg">− R$ 7.372,56</b></div><div class="k sum"><i>Líquido</i><b class="f">R$ 484.131,44</b></div><div class="k2"><i>por @ · por cabeça</i><b>R$ 304,32 · R$ 5.695,66</b></div></div>
+</div>
+<div class="ft" style="justify-content:flex-end"><span class="bt">Cancelar</span><span class="bt p">Aplicar</span></div>
+<div class="nt">⚠ os campos de bônus/desconto aqui são ILUSTRATIVOS — o Code lista os campos reais do ModalNegociarLote (calculoDoLote.ts / buildAbateCalculation) e mantém todos; só a régua muda: 640px, aside 220, campos 24/11, rótulo 10, resumo do lote com as mesmas linhas do resumo do modal</div>
+</div>
+
+<h2>Diálogo 3 — Entregar lote (AbaRecebimentoLotes) · 380px</h2>
+<div class="dg" style="width:380px">
+<div class="hd"><b>Entregar · Bois 36+</b><span style="margin-left:auto">✕</span></div>
+<div style="padding:8px 10px;display:grid;gap:8px">
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px"><div class="fld"><div class="l">Quantidade</div><div class="i n">85</div></div><div class="fld"><div class="l">Peso médio (kg)</div><div class="i n">541,20</div></div><div class="fld"><div class="l">Data</div><div class="i">12/09/2026 ▣</div></div></div>
+<div style="font-size:10px;color:var(--muted)">Negociado: 85 cab · 540,00 kg. Diferença vai aparecer na lista.</div>
+</div>
+<div class="ft" style="justify-content:flex-end"><span class="bt">Cancelar</span><span class="bt p">Confirmar entrega</span></div>
+<div class="nt">hoje max-w-sm (384) com grid-cols-2 · v2: 380px, três campos na mesma linha e mesma altura, DatePicker da casa</div>
+</div>
+
+<script>
+const t=document.getElementById('resumo');
+document.querySelectorAll('.rs-slot').forEach((s,i)=>{const c=t.content.cloneNode(true);const m=s.closest('.m');const st=m.querySelector('.hd span[style]').textContent.trim();const pl=c.querySelector('.st-pl');pl.textContent=st;if(st==='entregue'){pl.className='pl ok st-pl';const ks=c.querySelectorAll('.k');ks[13].querySelector('b').textContent='125 cab';ks[14].querySelector('b').textContent='—';}s.replaceWith(c);});
+</script>
+</body>
+</html>

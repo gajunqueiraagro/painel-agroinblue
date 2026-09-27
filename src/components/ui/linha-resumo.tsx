@@ -65,12 +65,62 @@ export function LinhaResumo({ rotulo, valor, cor, forte, selo, empilhado, seloAb
         <span className={`text-muted-foreground ${empilhado ? 'block' : 'shrink-0'}`}>{rotulo}</span>
         <span className={`flex items-baseline gap-1.5 min-w-0 ${empilhado ? 'justify-end' : ''}`}>
           {!seloAbaixo && selo}
-          <span className={`text-right tabular-nums ${empilhado || seloAbaixo ? 'whitespace-nowrap' : 'truncate'} ${forte ? 'font-bold' : 'font-medium'} ${valor ? (cor ?? '') : ''}`}>
+          {/* ⚠ FORTE E' 11px, NAO SO' NEGRITO — MODAIS-PADRAO-01a (A18 modal: linha 10, forte 11). */}
+          <span className={`text-right tabular-nums ${empilhado || seloAbaixo ? 'whitespace-nowrap' : 'truncate'} ${forte ? 'font-bold text-[11px]' : 'font-medium'} ${valor ? (cor ?? '') : ''}`}>
             {valor || '—'}
           </span>
         </span>
       </div>
       {seloAbaixo && selo && <div className="flex justify-end leading-none">{selo}</div>}
+    </div>
+  );
+}
+
+/**
+ * AS TRES PECAS DO RESUMO LATERAL — MODAIS-PADRAO-01a.
+ *
+ * ⚠ MOVIDAS VERBATIM de `AbateModalShell` (o aside compacto homologado, referencia do mock
+ * `docs/mocks/abate_modal_6_abas_compacto_v3.html`): o conteiner de 240px, a faixa de titulo e a
+ * faixa de secao. Venda (comum e boitel A/B) e Compra (`ResumoLateralOC`) tinham a mesma
+ * estrutura com outra medida — faixa de titulo `h-8` em 11px, secao `py-0.5` em 9px/10px,
+ * `px-3`, aside `self-start` — e o resumo de cada modal tinha uma altura diferente.
+ * As classes sao as do Abate; nada foi reescrito na mudanca.
+ */
+export function AsideResumo({ faixa, children }: { faixa: ReactNode; children: ReactNode }) {
+  return (
+    /* ⚠ O CARD OCUPA A COLUNA INTEIRA, e quem rola e' a LISTA dentro dele.
+        Antes o `aside` era `sticky self-start`: ele tinha a altura do CONTEUDO e a
+        COLUNA e' que rolava — entao o cartao cortava no Financeiro e sobrava corpo
+        em branco embaixo. O cartao acabava antes da area, em vez de a area acabar
+        antes do cartao. Com `h-full` + `flex-col` o cabecalho fica preso no topo, a
+        lista ganha o resto e so' ela rola; `min-h-0` no meio e' o que permite a
+        lista encolher em vez de esticar o card para fora da coluna. */
+    <aside className="flex h-full flex-col bg-card rounded-md border shadow-sm overflow-hidden text-[10px]">
+      {faixa}
+      <div className="flex-1 min-h-0 overflow-y-auto pb-1">
+        {children}
+      </div>
+    </aside>
+  );
+}
+
+export function FaixaTituloResumo({ children }: { children?: ReactNode }) {
+  return (
+    /* ⚠ O STATUS MORA NO CABECALHO DO RESUMO, nao numa linha da lista: e' a
+        primeira pergunta ("em que pe esta esta operacao?") e ela nao deve disputar
+        espaco com numeros. Quem tem status o passa em `children`. */
+    <div className="shrink-0 border-b border-border bg-accent/40 flex items-center gap-2 px-2.5 py-[5px] text-[10px] font-medium uppercase tracking-wide text-primary">
+      Resumo da operação
+      {children}
+    </div>
+  );
+}
+
+export function SecaoResumo({ titulo, extra }: { titulo: string; extra?: ReactNode }) {
+  const rotulo = <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">{titulo}</span>;
+  return (
+    <div className="bg-primary/10 border-y border-primary/15 px-2.5 py-1 mt-0.5 first:mt-0 mb-0.5">
+      {extra ? <div className="flex items-center gap-1.5">{rotulo}{extra}</div> : rotulo}
     </div>
   );
 }
