@@ -2777,6 +2777,30 @@ preview que o cabecalho nao sai da tela ao rolar.
     numero errado — foi o que aconteceu no briefing do CACHE-RRCC-2021-01.
   Conserto: renomear as chaves para o vocabulario aprovado, SEM MUDAR NUMERO, com todos os leitores (hooks, modais, testes e as
   provas registradas aqui) acompanhando no mesmo PR.
+- ⚠ ZOOT-CACHE-BURACO-01 — O CACHE DO REBANHO NAO FICA MAIS VAZIO DEPOIS DE UMA GRAVACAO (28/09/2026, opcao (d) do Gabriel; o
+  aviso visual no DRE e' a frente ZOOT-CACHE-AVISO-01). Migration `supabase/migrations/20261027165000_zoot_cache_buraco_01.sql`
+  (⚠ registrada como `20260928123601`; ledger = arquivo sem a quebra final, md5 a94160fe).
+  O DEFEITO (a causa do CACHE-RRCC-2021-01 e do cache apagado da Sta. Rita 2025): os gatilhos `trg_invalidate_zoot_cache*`
+  APAGAVAM o (fazenda, ano) e so' o hook `useZootCategoriaMensal` reconstruia, quando alguem abria o ano. O DRE e ~17 leitores liam
+  o cache sem garantir: editar um lancamento antigo abria um buraco calado, e o P0 caia em 'zero'.
+  AGORA: os quatro gatilhos (lancamentos, fechamento_pastos, fechamento_pasto_itens, saldos_iniciais) MARCAM os mesmos pares em
+  `zoot_cache_sujo` (RLS sem policy, sem grant ao front); o gatilho de constraint `trg_zoot_cache_reconstruir` (DEFERRABLE
+  INITIALLY DEFERRED) reconstroi cada par UMA vez no fim da transacao e desmarca; o cache antigo fica ate' o novo entrar.
+  `refresh_zoot_cache(fazenda, ano)` ganhou `pg_advisory_xact_lock` por par (so' a de dois argumentos). pg_cron
+  `zoot_cache_sujo_reconstruir` (job 4, a cada 5 min, `fn_zoot_cache_reconstruir_sujos`). Sentinela `fn_zoot_cache_buracos(cliente)`
+  (INVOKER, so' leitura): ano sem cache e mes com rebanho no fechamento sem cache. Saiu o gatilho `trg_refresh_cache_reclassificacao`
+  (a funcao fica, sem chamador).
+  md5: trg_fn_invalidate_zoot_cache a99396a9 -> 6cedc89f; _fechamento 12fc80e4 -> bfd007fc; _fechamento_itens 0c9a2252 -> 51f8468f;
+  _saldos_iniciais 30447c9b -> a49a4e0d; refresh_zoot_cache 9d2ef633 -> c6a682c7.
+  ⚠ FALHA NA RECONSTRUCAO NAO DERRUBA A GRAVACAO: o erro vira WARNING, a marca fica e o cron tenta de novo. Apagar nunca falhava;
+    reconstruir pode — por isso o bloco proprio.
+  ⚠ O `useZootCategoriaMensal` CONTINUA garantindo o cache como antes: e' redundante agora, e ficou de proposito.
+  PROVAS (rollback, antes de aplicar; o detalhe esta' no cabecalho da migration): cache intacto enquanto marcado e igual ao limpo
+  depois (lancamento, item de pasto, dezembro -> janeiro); 500 lancamentos = 1 reconstrucao por fazenda-ano (2,0 s); sentinela acha o
+  buraco simulado da Sta. Rita 2025 (ano + 12 meses); DRE NJ 2020 e SR 2025 identicos. Depois de aplicar: sentinela 0 nos 7 clientes,
+  `zoot_cache_sujo` vazio.
+  ⚠ A PROVA DE DUAS SESSOES NAO FOI FEITA: o canal MCP serializa as chamadas e `dblink` nao esta' instalado. Vale a trava no corpo e
+    o erro de chave reproduzido sem ela na FASE 0.
 - ⚠ OC-VENDA-ENTREGAS-01 — UM CONTRATO DE VENDA, N ENTREGAS (frente aberta em 28/09/2026; FASE 0 feita, PASSO A aplicado, FASE 2
   espera o mock do Chat).
   O CASO (Santa Rita, Helder Hofig, desmama 2025): contrato do ano a R$ 12,80/kg (13,00 em jun), 5 embarques de desmama
