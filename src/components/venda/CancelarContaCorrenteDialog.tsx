@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { CATEGORIAS } from '@/types/cattle';
 import { dataCurta, ROTULO_EXPLICACAO } from '@/lib/oc/contaCorrente';
+import { rotuloDaConta } from '@/lib/financeiro/rotuloConta';
 import type { OcContaCorrenteApi, RolCancelamento } from '@/hooks/useOcContaCorrente';
 
 /* OC-VENDA-ENTREGAS-01c, decisao 2 — CANCELAR A VENDA EM CONTA CORRENTE LISTA TUDO ANTES DE CONFIRMAR. O rol e' o do banco
@@ -70,11 +71,11 @@ export function CancelarContaCorrenteDialog({ api, onCancelar, onFechar }: Props
               {rol.entregas.map((e, i) => <li key={i}>{dataCurta(e.data)} · lote {e.loteOrdem ?? '—'} · {formatMoeda(e.valor)}</li>)}
             </Bloco>
             <Bloco titulo="Explicações canceladas" n={rol.explicacoes.length}>
-              {rol.explicacoes.map((e, i) => <li key={i}>{rotuloExplicacao(e.tipo)} · {e.conta ?? '—'} · {formatMoeda(e.valor)}</li>)}
+              {rol.explicacoes.map((e, i) => <li key={i}>{rotuloExplicacao(e.tipo)} · {rotuloDaConta(e.conta) ?? '—'} · {formatMoeda(e.valor)}</li>)}
             </Bloco>
             <Bloco titulo="Recebimentos que voltam à conta original" n={rol.recebimentos.length}>
               {rol.recebimentos.map((r, i) => (
-                <li key={i}>{dataCurta(r.data)} · {formatMoeda(r.valor)} · {r.contaAtual ?? '—'} → <b>{r.contaOriginal ?? '—'}</b></li>
+                <li key={i}>{dataCurta(r.data)} · {formatMoeda(r.valor)} · {rotuloDaConta(r.contaAtual) ?? '—'} → <b>{rotuloDaConta(r.contaOriginal) ?? '—'}</b></li>
               ))}
             </Bloco>
             <Bloco titulo="Saídas adotadas desvinculadas (o gado continua no zootécnico)" n={rol.saidas.length}>

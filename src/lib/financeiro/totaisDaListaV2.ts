@@ -34,19 +34,3 @@ export function totaisDaListaV2(linhas: readonly LinhaTotalizavel[], foco: strin
   }
   return acc;
 }
-
-/**
- * "Tipo" da linha (mock v4): entrega da conta corrente, recebimento, pagamento, sem caixa ou lancamento comum.
- * ⚠ A coluna "Vai para" (DRE / Caixa / Caixa e DRE) SAIU no FIN-V2-VAI-PARA-FORA-01 (pedido do Gabriel: poluia a tabela), e o
- *   `vaiParaDaLinha` saiu com ela. Os totais do topo continuam separando caixa de sem caixa.
- */
-export type TipoDaLinha = 'Entrega' | 'Recebimento' | 'Pagamento' | 'Sem caixa' | 'Lançamento';
-
-export function tipoDaLinha(l: { origem_tipo?: string | null; subcentro?: string | null; sem_movimentacao_caixa?: boolean | null }): TipoDaLinha {
-  if (l.origem_tipo === 'oc:entrega') return 'Entrega';
-  if (l.subcentro === 'Adiantamento de Clientes') return 'Recebimento';
-  if (l.subcentro === 'Adiantamento a Fornecedores') return 'Pagamento';
-  if (l.sem_movimentacao_caixa === true) return 'Sem caixa';
-  return 'Lançamento';
-}
-

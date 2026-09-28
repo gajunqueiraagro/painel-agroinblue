@@ -10,7 +10,8 @@ import {
 } from '@/lib/financeiro/statusFinanceiro';
 import { isTransferenciaTipo } from '@/lib/financeiro/v2Transferencia';
 import { contaEmFoco, formatarValorLinha } from '@/lib/financeiro/sinalPorConta';
-import { totaisDaListaV2, tipoDaLinha } from '@/lib/financeiro/totaisDaListaV2';
+import { totaisDaListaV2 } from '@/lib/financeiro/totaisDaListaV2';
+import { SecaoSemCaixa, CelulaOC, totalSemCaixa } from '@/components/financeiro-v2/SecaoSemCaixa';
 import { useLancamentosConciliados, desfazerVinculo, desfazerGrupo } from '@/hooks/useConciliacaoDoMes';
 import { useLancamentosComOC, rotuloOrigemOC } from '@/hooks/useLancamentosComOC';
 import { iconeOrigemLancamento, LEGENDA_ICONES } from '@/v2/lib/origemLancamento';
@@ -1124,8 +1125,16 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   }, [dataPor]);
 
   // Sorted lancamentos
+  /* FIN-V2-SEM-CAIXA-01 — a lista padrao e' SO' DINHEIRO. O sem caixa (entrega da conta corrente, barter, consumo) entrou no DRE
+     e nao no banco: vai para a secao propria, que so' aparece com a chave. `sortedLancamentos` alimenta a grade, os totais, a
+     contagem e a selecao em lote — todos passam a ver so' caixa. O nulo conta como caixa, como nos totais. */
+  const [mostrarSemCaixa, setMostrarSemCaixa] = useState(false);
+  const semCaixaLocal = useMemo(
+    () => filteredLancamentos.filter(l => l.sem_movimentacao_caixa === true),
+    [filteredLancamentos],
+  );
   const sortedLancamentos = useMemo(() => {
-    const items = [...filteredLancamentos];
+    const items = filteredLancamentos.filter(l => l.sem_movimentacao_caixa !== true);
     items.sort((a, b) => {
       if (sortField === 'default') {
         return compareDefaultOrder(a, b);
@@ -1247,6 +1256,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     hook.carregarPagina(filtrosAplicados, {
       pagina: estadoLista.pagina,
       incluirSemVencimento: incluirSemVencimentoAplicado,
+      caixa: 'com',
     });
   }, [LISTA_V2, filtrosAplicados, estadoLista.pagina, incluirSemVencimentoAplicado]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1285,11 +1295,28 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
 
   // Busca o conjunto inteiro SO no clique de exportar. Nunca na renderizacao.
   const carregarConjuntoExportacao = useCallback(
+    /* A exportacao segue a TELA (decisao do Gabriel): so' caixa com a chave desligada; caixa e sem caixa com ela ligada. */
     () => hook.buscarConjuntoFiltrado(filtrosAplicados, {
       incluirSemVencimento: incluirSemVencimentoAplicado,
+      caixa: mostrarSemCaixa ? undefined : 'com',
     }),
-    [hook.buscarConjuntoFiltrado, filtrosAplicados, incluirSemVencimentoAplicado],
+    [hook.buscarConjuntoFiltrado, filtrosAplicados, incluirSemVencimentoAplicado, mostrarSemCaixa],
   );
+
+  /* A secao sem caixa: no caminho em memoria ja' esta' filtrada (`semCaixaLocal`); no paginado vem do servidor, pelo MESMO plano
+     da lista com `caixa: 'sem'`, so' com a chave ligada. Sem paginacao (poucas linhas). */
+  const [semCaixaServidor, setSemCaixaServidor] = useState<{ linhas: LancamentoV2[]; carregando: boolean; erro: string | null }>(
+    { linhas: [], carregando: false, erro: null });
+  useEffect(() => {
+    if (!LISTA_V2 || !mostrarSemCaixa) return;
+    let vivo = true;
+    setSemCaixaServidor(s => ({ ...s, carregando: true, erro: null }));
+    hook.buscarConjuntoFiltrado(filtrosAplicados, { incluirSemVencimento: incluirSemVencimentoAplicado, caixa: 'sem' })
+      .then(linhas => { if (vivo) setSemCaixaServidor({ linhas, carregando: false, erro: null }); })
+      .catch(e => { if (vivo) setSemCaixaServidor({ linhas: [], carregando: false, erro: e instanceof Error ? e.message : 'Falha ao carregar os lançamentos sem caixa.' }); });
+    return () => { vivo = false; };
+  }, [LISTA_V2, mostrarSemCaixa, filtrosAplicados, incluirSemVencimentoAplicado]); // eslint-disable-line react-hooks/exhaustive-deps
+  const linhasSemCaixa = LISTA_V2 ? semCaixaServidor.linhas : semCaixaLocal;
 
 
   // ── Bulk selection (depends on sortedLancamentos) ──
@@ -2317,17 +2344,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         */}
       {mode === 'list' && (
         <div className="flex h-6 shrink-0 flex-wrap items-center gap-x-2 px-1 text-[10px] tabular-nums">
-          <span className="font-bold text-success" title="Só o que movimenta caixa.">Entradas de caixa: {formatMoeda(totalEntradas)}</span>
+          {/* FIN-V2-SEM-CAIXA-01: no padrao so' dinheiro — Entradas, Saidas, Transf. e a contagem. O total sem caixa so' existe
+              com a chave ligada, e e' o mesmo numero do rodape da secao (`totalSemCaixa`). */}
+          <span className="font-bold text-success" title="Só o que movimenta caixa.">Entradas: {formatMoeda(totalEntradas)}</span>
           <span className="text-muted-foreground/40">|</span>
-          <span className="font-bold text-success/80" title="Receita que não movimenta caixa: entrega da conta corrente, barter, consumo. Vai para o DRE e fica fora das Entradas de caixa.">
-            Receita sem caixa: {formatMoeda(totais.entradasSemCaixa)}
-          </span>
-          <span className="text-muted-foreground/40">|</span>
-          <span className="font-bold text-destructive" title="Só o que movimenta caixa.">Saídas de caixa: {formatMoeda(totalSaidas)}</span>
-          <span className="text-muted-foreground/40">|</span>
-          <span className="font-bold text-destructive/80" title="Despesa que não movimenta caixa: insumo de barter, funrural retido. Vai para o DRE e fica fora das Saídas de caixa.">
-            Despesa sem caixa: {formatMoeda(totais.saidasSemCaixa)}
-          </span>
+          <span className="font-bold text-destructive" title="Só o que movimenta caixa.">Saídas: {formatMoeda(totalSaidas)}</span>
           <span className="text-muted-foreground/40">|</span>
           <span className="font-bold text-sky-700 dark:text-sky-400"
             title="Transferências entre contas do próprio cliente: não são entrada nem saída do caixa, por isso ficam fora dos dois totais.">
@@ -2335,6 +2356,18 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
           </span>
           <span className="text-muted-foreground/40">|</span>
           <span className="text-muted-foreground">{totalLancamentosFiltrados} lanç.</span>
+          {mostrarSemCaixa && (<>
+            <span className="text-muted-foreground/40">|</span>
+            <span className="font-bold text-amber-700 dark:text-amber-500" data-testid="topo-sem-caixa"
+              title="Entrou no DRE e não no banco: entrega da conta corrente, barter, consumo.">
+              Sem caixa (só DRE): {formatMoeda(totalSemCaixa(linhasSemCaixa))}
+            </span>
+          </>)}
+          <label className="ml-auto flex cursor-pointer items-center gap-1 text-[10px] text-muted-foreground">
+            <Checkbox checked={mostrarSemCaixa} onCheckedChange={v => setMostrarSemCaixa(v === true)} className="h-3 w-3"
+              aria-label="Mostrar lançamentos sem caixa (entregas, barter, consumo)" />
+            Mostrar lançamentos sem caixa (entregas, barter, consumo)
+          </label>
         </div>
       )}
 
@@ -2426,8 +2459,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 <col style={{ width: 40 }} />
                 <col style={{ width: 40 }} />
                 <col style={{ width: 40 }} />
-                {/* Tipo (OC-VENDA-ENTREGAS-01b): Entrega / Recebimento / Sem caixa / Lançamento. */}
-                <col style={{ width: 64 }} />
                 {/* Produto 175→150 na lista normal — FIN-LISTA-LAYOUT-01. É a coluna mais
                     larga e a que mais tolera truncar: o texto inteiro está no `title`.
                     ⚠ NO AMPLIADO, 170→140: a célula renderiza a 9px (`.table-financeiro td`
@@ -2443,6 +2474,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 <col style={{ width: 120 }} />
                 <col style={{ width: 80 }} />
                 <col style={{ width: 80 }} />
+                {/* OC (FIN-V2-SEM-CAIXA-01): no lugar da coluna Tipo, que saiu — na lista padrao tudo e' dinheiro. O codigo curto
+                    da OC (8 caracteres, fonte mono) abre a operacao na aba Financeiro. */}
+                <col style={{ width: 58 }} />
                 {/* Fazenda 50→44→38: a célula mostra o CÓDIGO (PUR, RET, ADM), nunca o nome —
                     o nome inteiro está no `title`. Chegou a 30 no FIN-TABELA-GEOMETRIA-01 e
                     voltou junto com as datas, no mesmo revert de geometria. */}
@@ -2507,11 +2541,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       números em oito lugares (th + td). */}
                   <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[82px] z-30 bg-primary" onClick={() => toggleSort('venc')}>Venc.<SortIndicator field="venc" /></th>
                   <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[122px] z-30 bg-primary" onClick={() => toggleSort('pgto')}>Pgto.<SortIndicator field="pgto" /></th>
-                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">Tipo</th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('produto')}>Produto<SortIndicator field="produto" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('fornecedor')}>Fornecedor<SortIndicator field="fornecedor" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">Macro</th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('centro')}>Centro<SortIndicator field="centro" /></th>
+                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">OC</th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground" title="Fazenda">Faz.</th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('safra')}>Safra<SortIndicator field="safra" /></th>
                   {modoIntensivo && (
@@ -2633,7 +2667,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                         <td className={`celula-data font-mono px-0.5 py-1 align-middle leading-tight sticky left-[82px] z-10 bg-background text-center ${vencido ? 'font-semibold text-destructive' : 'text-muted-foreground'}`}
                           title={vencido ? 'Vencido e não pago' : undefined}>{fmtDate(l.data_vencimento)}</td>
                         <td className="celula-data font-mono px-0.5 py-1 align-middle leading-tight sticky left-[122px] z-10 bg-background text-center text-muted-foreground">{fmtDate(l.data_pagamento)}</td>
-                        <td className="px-1 py-1 align-middle text-center text-[10px] leading-tight break-words text-muted-foreground" data-tipo-linha>{tipoDaLinha(l)}</td>
                         <td className="truncate px-1 py-1 align-middle text-[12px] font-medium leading-tight" title={isParcelaFinanciamento ? `Parcela de financiamento (origem automática) — ${descExibida || ''}` : (descExibida || '')}>
                           {isParcelaFinanciamento && <span className="mr-1" title="Parcela de financiamento">🏦</span>}
                           {descExibida || '-'}
@@ -2668,6 +2701,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                         </td>
                         <td className="truncate px-1 py-1 align-middle text-[11px] font-medium leading-tight text-muted-foreground" title={l.macro_custo || ''}>{l.macro_custo || '-'}</td>
                         <td className="truncate px-1 py-1 align-middle text-[11px] leading-tight text-muted-foreground" title={l.centro_custo || ''}>{l.centro_custo || '-'}</td>
+                        <CelulaOC oc={lancamentosComOC.get(l.id)} onAbrir={abrirOCFinanceiro} />
                         <td className="truncate px-1 py-1 align-middle text-[11px] font-medium leading-tight text-muted-foreground" title={fazendaNameMap.get(l.fazenda_id) || ''}>{fazendaCodigoMap.get(l.fazenda_id) || '-'}</td>
                         {/* ⚠ "—" É AUSÊNCIA, e aqui ela é informação: financiamento de
                             investimento e administrativo NÃO têm safra por regra. Um traço
@@ -2780,6 +2814,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
               </tbody>
             </table>
           </div>
+
+          {mostrarSemCaixa && (
+            <SecaoSemCaixa linhas={linhasSemCaixa} carregando={LISTA_V2 && semCaixaServidor.carregando}
+              erro={LISTA_V2 ? semCaixaServidor.erro : null}
+              ocDe={id => lancamentosComOC.get(id)} onAbrirOC={abrirOCFinanceiro} />
+          )}
 
           {/* Bulk action bar */}
           {someSelected && (

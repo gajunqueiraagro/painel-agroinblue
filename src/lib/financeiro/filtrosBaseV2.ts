@@ -114,6 +114,11 @@ const COLUNA_MES: Record<DimensaoDataFinanceiro, 'mes_competencia' | 'mes_vencim
 export interface PlanoBaseV2 {
   readonly clienteId: string;
   readonly fazendaId?: string;
+  /**
+   * FIN-V2-SEM-CAIXA-01 — so' o plano da LISTA (view) o usa: 'com' = so' o que movimenta caixa (`sem_movimentacao_caixa`
+   * falso ou nulo), 'sem' = so' os sem caixa (entregas da conta corrente, barter). Ausente = os dois, como sempre foi.
+   */
+  readonly caixa?: 'com' | 'sem';
   /** `.not(coluna,'is',null)` — dimensão soberana sem faixa. */
   readonly naoNuloDimensao?: 'data_competencia' | 'data_vencimento' | 'data_pagamento';
   readonly orTemporal?: string;

@@ -224,7 +224,7 @@ describe('cancelar a venda em conta corrente', () => {
     const { rerender } = render(<CancelarContaCorrenteDialog api={a} onCancelar={onCancelar} onFechar={onFechar} />);
     const dlg = await screen.findByTestId('dialogo-cancelar-cc');
     await waitFor(() => expect(dlg.textContent).toContain('Recebimentos que voltam à conta original (1)'));
-    expect(dlg.textContent).toContain('Adiantamento de Clientes → Venda de Desmama Machos');
+    expect(dlg.textContent).toContain('Recebimento de vendas → Venda de Desmama Machos'); // FIN-V2-SEM-CAIXA-01: rotulo de tela da conta
     expect(dlg.textContent).toContain('Entregas canceladas (saem do DRE) (1)');
     expect(dlg.textContent).toContain('Permuta / outra despesa · Frete');
     expect(dlg.textContent).toContain('178 cab · Desmama M');

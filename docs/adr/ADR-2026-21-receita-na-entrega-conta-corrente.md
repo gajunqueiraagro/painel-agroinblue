@@ -38,3 +38,19 @@ entre o que saiu da fazenda e o que o comprador pagou.
 - A entrega não gera liquidação: liquidação é satisfação de obrigação (ADR-2026-19), e quem satisfaz é o recebimento.
 - Compra e abate no modelo conta corrente, a programação de recebimento pela OC e a explicação do saldo final ficam para frentes
   próprias.
+
+## Adendo — FIN-V2-SEM-CAIXA-01 (28/09/2026, decisões do Gabriel)
+
+- **O Financeiro V2 mostra só dinheiro por padrão.** Com a conta corrente, a venda aparecia em 11 linhas (7 entregas + 4
+  recebimentos) com "Entradas de caixa" e "Receita sem caixa" iguais, e nem o Gabriel nem o cliente entendiam. A lista padrão
+  (normal e ampliada) traz só o que movimenta caixa; entregas, barter e consumo ficam numa seção separada, "Lançamentos sem
+  caixa · entraram no DRE, não no banco", que só aparece com a chave "Mostrar lançamentos sem caixa". O topo mostra Entradas,
+  Saídas, Transf. e a contagem; o total "Sem caixa (só DRE)" só com a chave. A coluna Tipo saiu e entrou a coluna OC.
+  O substituído aqui: o bullet de Consequências que falava de "Entradas de caixa" x "Receita sem caixa" lado a lado.
+- **Nome de exibição da conta, sem renomear o plano.** "Adiantamento de Clientes" aparece nas telas como **"Recebimento de
+  vendas"**, e "Adiantamento a Fornecedores" como **"Pagamento de compras"** (`rotuloDaConta`, `src/lib/financeiro/rotuloConta.ts`).
+  O plano mantém o nome e o código: seis funções do banco acham a conta pelo nome (`_oc_vincular_recebimento`, `_oc_vinculo_mapa`,
+  `oc_vincular_lancamento`, `oc_explicar_saldo`, `oc_programar_recebimento`, `_oc_cancelar_conta_corrente`), e renomear pediria
+  patchear as seis. Para o cliente, a conta é o dinheiro da venda (ou da compra), com ou sem adiantamento.
+- **Descrição da entrega: "Venda <cab:3> <sigla>"** ("Venda 183 DM", "Venda 006 G"), o mesmo formato dos títulos das OCs, com a
+  sigla oficial (`SIGLA_POR_SLUG`, espelhada no banco em `_oc_sigla_categoria`).

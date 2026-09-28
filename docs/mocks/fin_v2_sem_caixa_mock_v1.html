@@ -1,0 +1,71 @@
+<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Financeiro com OC — mock v1</title><style>
+:root{--p:#1D3A5D;--p2:#2E4B6E;--fg:#0F1729;--mf:#6B7280;--bd:#E0E2E6;--gr:#15803d;--grb:#f0fdf4;--rd:#b91c1c;--am:#b45309;--amb:#fffbeb;--amd:#fde68a;--s:#E8E6DF;--rec:#EAF1F9;--recb:#1d4ed8}
+*{box-sizing:border-box}body{margin:0;background:#8a929c;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--fg);padding:16px}
+.lbl{color:#fff;font-size:12px;font-weight:600;margin:0 auto 6px;width:1100px}
+.m{width:1100px;height:520px;margin:0 auto 18px;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.3);display:flex;flex-direction:column}
+.hd{background:var(--p);color:#fff;height:32px;flex:none;display:flex;align-items:center;gap:12px;padding:0 12px;font-size:12px}
+.hd .pill{border:1px solid rgba(255,255,255,.5);border-radius:10px;padding:0 7px;font-size:10px}
+.tabs{display:flex;gap:4px;padding:4px 10px;border-bottom:1px solid var(--bd);flex:none}
+.tabs span{font-size:10.5px;padding:2px 9px;border-radius:5px;color:var(--mf)}.tabs span.on{background:#e8eef6;color:var(--p);font-weight:600}
+.wrap{flex:1;display:grid;grid-template-columns:1fr 180px;min-height:0}
+.main{display:flex;flex-direction:column;min-height:0;padding:6px 10px;gap:5px}
+.kp{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;flex:none}
+.k{border:1px solid var(--bd);border-radius:4px;padding:2px 7px;display:flex;justify-content:space-between;align-items:center;height:24px}
+.k .a{font-size:9.5px;color:var(--mf)}.k .b{font-size:11.5px;font-weight:700}
+.k.dif{border-color:var(--amd);background:var(--amb)}
+.tb{display:flex;align-items:center;gap:6px;flex:none}
+.tb .t{font-size:10.5px;font-weight:600}.tb .sp{margin-left:auto;display:flex;gap:5px}
+.btn{font-size:10px;border:1px solid var(--bd);border-radius:4px;padding:1px 8px;background:#fff;font-weight:500;white-space:nowrap}.btn.nv{background:var(--p);color:#fff;border-color:var(--p)}
+.scroll{flex:1;overflow:auto;border:1px solid var(--bd);border-radius:4px;min-height:0}
+table{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;font-variant-numeric:tabular-nums}
+thead th{white-space:nowrap;position:sticky;background:var(--p2);color:#fff;font-size:9.5px;font-weight:600;text-align:center;padding:0 5px;height:17px}
+thead tr.g th{top:0;background:var(--p)}thead tr.cth th{top:17px}
+th.dv,td.dv{border-left:2px solid #9aa7b6}
+td{font-size:10px;height:18px;padding:0 5px;border-bottom:1px solid #eceae4;white-space:nowrap}
+tr.ent td{background:#fff}tr.rec td{background:var(--rec)}
+tfoot td{position:sticky;bottom:0;background:var(--s);font-weight:700;height:19px;border-top:2px solid #9aa7b6}
+.r{text-align:right}.c{text-align:center}.pos{color:var(--gr)}.neg{color:var(--rd)}.amb{color:var(--am)}.mf{color:var(--mf)}
+.bg{font-size:8.5px;border-radius:3px;padding:0 5px;font-weight:600}.be{background:var(--grb);color:var(--gr)}.br{background:#dbe7f6;color:var(--recb)}
+.dbar{flex:none;display:flex;align-items:center;gap:8px;border:1px solid var(--amd);background:var(--amb);border-radius:4px;padding:2px 8px;font-size:10.5px;height:24px}
+.aside{border-left:1px solid var(--bd);background:#fafafa;font-size:10px;overflow:auto}
+.aside h4{margin:0;padding:3px 8px;background:var(--s);font-size:9.5px;letter-spacing:.03em}
+.aside .rw{display:flex;justify-content:space-between;padding:1px 8px}.aside .rw span:first-child{color:var(--mf)}
+.foot{flex:none;display:flex;justify-content:flex-end;gap:6px;padding:4px 10px;background:var(--p)}.foot span{font-size:10px;color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:4px;padding:1px 9px}
+.note{width:1100px;margin:0 auto;background:#fff;border-radius:6px;padding:10px 12px;font-size:11.5px;line-height:1.55}
+
+tr.rec2 td{background:#F5F4F0}.lk{color:var(--p);text-decoration:underline;font-weight:600}
+.chip{font-size:8.5px;border-radius:9px;padding:0 6px;font-weight:600}.ok{background:#fffbeb;color:#b45309;border:1px solid #fde68a}
+.tot{display:flex;gap:14px;font-size:11px;font-weight:600;padding:4px 10px;border-bottom:1px solid var(--bd)}
+.tg{margin-left:auto;font-weight:500;color:var(--mf);display:flex;align-items:center;gap:5px}.sw{width:22px;height:12px;border-radius:6px;background:#cbd5e1;position:relative;display:inline-block}.sw i{position:absolute;left:1px;top:1px;width:10px;height:10px;border-radius:50%;background:#fff}
+.sw.on{background:var(--p)}.sw.on i{left:11px}
+</style></head><body>
+<div class="lbl">Financeiro V2 · como o cliente vê (padrão): só dinheiro que entrou ou saiu · a venda aparece pelos 4 recebimentos</div>
+<div class="m" style="height:auto">
+ <div class="tot"><span class="pos">Entradas: 2.365.243,37</span><span class="neg">Saídas: 0,00</span><span style="color:#1d4ed8">Transf.: 0,00</span><span class="mf">4 lanç.</span>
+  <span class="tg"><span class="sw"><i></i></span>Mostrar lançamentos sem caixa (entregas, barter, consumo)</span></div>
+ <div class="scroll" style="flex:none;margin:6px 10px"><table>
+  <colgroup><col style="width:62px"><col style="width:62px"><col style="width:62px"><col><col style="width:110px"><col style="width:150px"><col style="width:72px"><col style="width:40px"><col style="width:80px"><col style="width:96px"></colgroup>
+  <thead><tr class="g"><th>Comp.</th><th>Venc.</th><th>Pgto.</th><th>Descrição</th><th>Fornecedor</th><th>Conta</th><th>OC</th><th>Faz.</th><th>Status</th><th>Valor</th></tr></thead>
+  <tbody><tr class="ent"><td class="c">17/04/25</td><td class="c">17/04/25</td><td class="c">17/04/25</td><td>Venda 317 machos</td><td>Helder Hofig</td><td>Recebimento de vendas</td><td class="c"><span class="lk">232c05aa</span></td><td class="c">SR</td><td class="c"><span class="chip ok">conciliar</span></td><td class="r pos">992.140,99</td></tr><tr class="rec2"><td class="c">22/05/25</td><td class="c">22/05/25</td><td class="c">22/05/25</td><td>Venda 193 machos</td><td>Helder Hofig</td><td>Recebimento de vendas</td><td class="c"><span class="lk">232c05aa</span></td><td class="c">SR</td><td class="c"><span class="chip ok">conciliar</span></td><td class="r pos">574.042,04</td></tr><tr class="ent"><td class="c">21/06/25</td><td class="c">21/06/25</td><td class="c">21/06/25</td><td>Venda 189 machos</td><td>Helder Hofig</td><td>Recebimento de vendas</td><td class="c"><span class="lk">232c05aa</span></td><td class="c">SR</td><td class="c"><span class="chip ok">conciliar</span></td><td class="r pos">567.956,34</td></tr><tr class="rec2"><td class="c">25/07/25</td><td class="c">25/07/25</td><td class="c">25/07/25</td><td>Venda 080 Bzerros</td><td>Helder Hofig</td><td>Recebimento de vendas</td><td class="c"><span class="lk">232c05aa</span></td><td class="c">SR</td><td class="c"><span class="chip ok">conciliar</span></td><td class="r pos">231.104,00</td></tr></tbody>
+  <tfoot><tr><td colspan="9">Total</td><td class="r pos">2.365.243,37</td></tr></tfoot></table></div>
+</div>
+
+<div class="lbl">Clicar em "232c05aa" abre a OC na aba Financeiro (o extrato explica entrega × recebimento)</div>
+<div class="lbl" style="margin-top:14px">Com a chave "Mostrar lançamentos sem caixa" ligada · as entregas aparecem numa seção separada, abaixo</div>
+<div class="m" style="height:auto">
+ <div class="tot"><span class="pos">Entradas: 2.365.243,37</span><span class="neg">Saídas: 0,00</span><span style="color:#1d4ed8">Transf.: 0,00</span><span style="color:#6d28d9">Sem caixa (só DRE): 2.365.243,37</span>
+  <span class="tg"><span class="sw on"><i></i></span>Mostrar lançamentos sem caixa (entregas, barter, consumo)</span></div>
+ <div style="margin:6px 10px;font-size:10.5px;font-weight:600">Lançamentos sem caixa · entraram no DRE, não no banco</div>
+ <div class="scroll" style="flex:none;margin:0 10px 8px"><table><colgroup><col style="width:62px"><col><col style="width:44px"><col style="width:150px"><col style="width:70px"><col style="width:96px"></colgroup>
+  <thead><tr class="g"><th>Comp.</th><th>Descrição</th><th>Cab</th><th>Conta</th><th>OC</th><th>Valor</th></tr></thead>
+  <tbody><tr class="ent"><td class="c">19/03/25</td><td>Venda desmama M</td><td class="r">178</td><td>Venda de desmama machos</td><td class="c"><span class="lk">232c05aa</span></td><td class="r pos">565.521,66</td></tr><tr class="rec2"><td class="c">20/03/25</td><td>Venda desmama M</td><td class="r">139</td><td>Venda de desmama machos</td><td class="c"><span class="lk">232c05aa</span></td><td class="r pos">426.616,58</td></tr><tr class="ent"><td class="c">23/04/25</td><td>Venda desmama M</td><td class="r">193</td><td>Venda de desmama machos</td><td class="c"><span class="lk">232c05aa</span></td><td class="r pos">574.046,85</td></tr><tr class="rec2"><td class="c">21/05/25</td><td>Venda desmama M</td><td class="r">183</td><td>Venda de desmama machos</td><td class="c"><span class="lk">232c05aa</span></td><td class="r pos">549.925,25</td></tr><tr class="ent"><td class="c">21/05/25</td><td>Venda garrotes</td><td class="r">6</td><td>Venda de machos adultos</td><td class="c"><span class="lk">232c05aa</span></td><td class="r pos">18.030,34</td></tr><tr class="rec2"><td class="c">25/06/25</td><td>Venda garrotes</td><td class="r">11</td><td>Venda de machos adultos</td><td class="c"><span class="lk">232c05aa</span></td><td class="r pos">23.698,35</td></tr><tr class="ent"><td class="c">25/06/25</td><td>Venda desmama M</td><td class="r">69</td><td>Venda de desmama machos</td><td class="c"><span class="lk">232c05aa</span></td><td class="r pos">207.404,34</td></tr></tbody>
+  <tfoot><tr><td colspan="2">Total sem caixa</td><td class="r">779</td><td colspan="2"></td><td class="r pos">2.365.243,37</td></tr></tfoot></table></div>
+</div>
+
+<div class="note"><b>Mock v1 · Financeiro com OC em conta corrente (FIN-V2-SEM-CAIXA-01).</b> Caso real da 232c05aa, depois do ajuste do lote 7.<br>
+• <b>Padrão = dinheiro</b>: o Financeiro mostra só o que entrou ou saiu do caixa. A venda do Helder aparece pelos 4 recebimentos, com a coluna OC para abrir a operação. É o que o cliente entende e o que bate com o banco.<br>
+• <b>Entregas somem da lista padrão</b>: elas são a receita do DRE, não dinheiro. Continuam no DRE (modal de valor), na aba Financeiro da OC e, se quiser vê-las aqui, na chave "Mostrar lançamentos sem caixa", numa seção separada, com Descrição, Cab e Conta em colunas separadas.<br>
+• <b>Um total só no topo</b> no padrão (Entradas, Saídas, Transf.); o total "Sem caixa" só aparece com a chave ligada.<br>
+• <b>Nome da conta</b>: "Adiantamento de Clientes" vira "Recebimento de vendas" na tela, que é o que ela é para o cliente (o dinheiro da venda), com ou sem adiantamento.<br>
+• Some a coluna Tipo (Entrega/Recebimento): na lista padrão tudo é dinheiro.</div>
+</body></html>

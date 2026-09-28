@@ -919,6 +919,16 @@ no mesmo arquivo.
   da entrega passando pelo rotulo nas duas escritas. `src/hooks/useOcContaCorrente.lotes.test.ts` (+4): explicar e desfazer releem
   os lotes, a recusa no meio da cadeia tambem rele (o item anterior ja' gravou) e o shell passa a releitura (lido da fonte).
   ⚠ PROVADO: sem a releitura no hook, 3 dos 4 caem.
+  De 2197 para 2205 no FIN-V2-SEM-CAIXA-01, em dois arquivos novos. `src/lib/financeiro/siglaCategoriaEspelho.test.ts` (+3): o
+  `_oc_sigla_categoria` da migration contra `siglaCategoria`, par a par (9), o mesmo fallback fora do mapa e a descricao
+  "Venda <cab:3> <sigla>" sem truncar acima de 999. `src/components/financeiro-v2/secaoSemCaixa.test.tsx` (+5): o filtro de caixa
+  no plano da lista ('com' traz so' caixa com o nulo como caixa, 'sem' so' os sem caixa, ausente os dois), a secao (uma informacao
+  por coluna, Cab das entregas, conta pelo nome de exibicao, OC clicavel, sem checkbox), o total em centavos com o sinal, a celula
+  OC e o rotulo das contas de adiantamento. ⚠ DOIS CASOS EXISTENTES MUDARAM DE CONTRATO, nunca afrouxados: o de
+  `totaisDaListaV2.test.ts` que cobrava a coluna Tipo e os cinco totais passou a cobrar a coluna OC, o topo so' com dinheiro e o
+  total sem caixa so' dentro da chave (sai `tipoDaLinha`, que morreu com a coluna); e o do cancelar em `abaContaCorrente.test.tsx`
+  passou a ler "Recebimento de vendas" no lugar de "Adiantamento de Clientes". ⚠ PROVADO: com o filtro 'com' desligado no plano, 1
+  caso cai.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -3022,6 +3032,26 @@ preview que o cabecalho nao sai da tela ao rolar.
   (A3) Conferido, nada solto: nenhum recebimento do Helder de 2025 fora da OC, nenhum financeiro do modal antigo apontando para as 7
   saidas; os 5 zootecnicos cancelados ligados a OC sao os estornos do PASSO A; as vendas de jul/2025 (ed69c178, b5adc760, 8f0696c7,
   88a90a7d, 87b78082) sao outras vendas. Os 4 recebimentos e as 7 saidas SAO a OC — nada de legado a apagar.
+- ⚠ FIN-V2-SEM-CAIXA-01 — O FINANCEIRO V2 MOSTRA SO' DINHEIRO POR PADRAO (28/09/2026, mock `docs/mocks/fin_v2_sem_caixa_mock_v1.html`,
+  md5 216aa52f; decisoes do Gabriel; adendo no ADR-2026-21). Com a conta corrente, a venda da 232c05aa aparecia em 11 linhas (7
+  entregas + 4 recebimentos) com "Entradas de caixa" e "Receita sem caixa" iguais, e ninguem entendia.
+  LISTA (normal e ampliada): so' o que movimenta caixa (`sem_movimentacao_caixa` falso ou nulo). Saiu a coluna Tipo, entrou OC (codigo
+  curto clicavel que abre a OC na aba Financeiro, `CelulaOC`). Macro, Centro, Safra e Doc. FICARAM (o mock vale para a chave, a secao
+  e o topo, nao para remover colunas). TOPO: Entradas, Saidas, Transf. e contagem; "Receita/Despesa sem caixa" sairam; "Sem caixa (so'
+  DRE)" so' com a chave. CHAVE "Mostrar lancamentos sem caixa (entregas, barter, consumo)", desligada: ligada, a SECAO SEPARADA
+  `SecaoSemCaixa` (Comp. | Descricao | Cab | Conta | OC | Valor, total sem caixa, sem checkbox, sem paginacao, sem rolagem propria).
+  ⚠ SEM BANCO NA LISTA: o plano ganhou o slot `caixa` ('com' | 'sem'); no paginado a contagem e' o total da RPC MENOS a contagem sem
+    caixa do mesmo plano; no caminho em memoria (o que roda no proto — `VITE_LISTA_PAGINADA_V2` nao esta' em env nenhum) o filtro e' na
+    tela. A exportacao segue a tela (so' caixa; com a chave, os dois). A selecao em lote so' ve' caixa.
+  ⚠ A SECAO APERTA A LISTA quando ligada: no Ampliado a 1440 a lista cai para ~6 linhas visiveis. Custo aceito da chave; desligada, nada muda.
+  NOME DE EXIBICAO (item 6, so' rotulo, `rotuloDaConta`): "Adiantamento de Clientes" -> "Recebimento de vendas", "Adiantamento a
+  Fornecedores" -> "Pagamento de compras" — na secao, na aba Financeiro da OC e no dialogo de cancelar. O plano NAO muda: seis funcoes
+  do banco acham a conta pelo nome.
+  DESCRICAO DA ENTREGA (adendo, item 8): "Venda <cab:3> <sigla>" ("Venda 183 DM", "Venda 006 G"), o formato dos titulos das OCs.
+  `_oc_sigla_categoria` (espelho de `siglaCategoria`, com teste) e `oc_sincronizar_entregas` ddfff259 -> de36ab1e (migration
+  `supabase/migrations/20261027170000_fin_v2_sem_caixa_01.sql`, ⚠ registrada como `20260928172954`; ledger = arquivo 2855c8d7). Dado da
+  232c05aa: `20261027170100_fin_v2_sem_caixa_01_dados.sql`, 7 titulos e 7 partes INCLUSIVE a f3ef425a (autorizado), provado em
+  rollback — 0 de 18.755 lancamentos mudam valor, datas, hash, conta, plano ou status; versao igual. Aguarda o OK para aplicar.
 - ⚠ RATEIO-VIGENCIA-01 — O RATEIO ADMINISTRATIVO OLHA QUAIS ATIVIDADES EXISTEM EM CADA MES (28/09/2026, decisoes do Gabriel e do
   Chat). Retroativo, todo o historico, todos os clientes; nada gravado — os DREs recalculam. Migration
   `supabase/migrations/20261027161000_rateio_vigencia_01.sql` (⚠ registrada como `20260928102310`; ledger = arquivo sem a quebra de

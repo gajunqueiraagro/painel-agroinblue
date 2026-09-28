@@ -17,6 +17,8 @@ import {
   consultarPagina,
   consultarTotais,
   buscarConjuntoCompleto,
+  contarConjunto,
+  planoDaLista,
   faixaDaPagina,
   totaisNoCliente,
   filtrarSeisNoCliente,
@@ -1493,9 +1495,10 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       try {
         const todos = await fetchAllLancamentos(filtros);
         if (!vivo()) return;
+        /* FIN-V2-SEM-CAIXA-01: com `caixa`, o caminho em memoria recorta como o plano da view (nulo conta como caixa). */
         const ordenadas = ordenarPorVencimentoNoCliente(
           filtrarSeisNoCliente(todos as unknown as RegistroListaV2[], filtros),
-        );
+        ).filter((l) => !opts.caixa || (opts.caixa === 'sem') === (l.sem_movimentacao_caixa === true));
         const [de] = faixaDaPagina(opts.pagina ?? 0, tamanho);
         const somas = totaisNoCliente(ordenadas);
         setListaPagina(ordenadas.slice(de, de + tamanho) as unknown as LancamentoV2[]);
@@ -1536,9 +1539,18 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       // separa-las em duas chamadas seria varrer a tabela duas vezes para exibir
       // numeros do mesmo rodape. Os dois estados de loading/erro continuam
       // existindo e se movem juntos — que e a verdade do que acontece.
-      consultarTotais(chamarTotais, clienteId, filtros, opts)
-        .then((t) => {
+      /* FIN-V2-SEM-CAIXA-01: a RPC conta caixa e sem caixa juntos. Com a lista so' de caixa, a contagem da pagina e' o total
+         da RPC MENOS a contagem sem caixa do mesmo plano (decisao do Gabriel: sem mudar o banco). Entradas e saidas da RPC
+         ja' sao so' caixa. */
+      Promise.all([
+        consultarTotais(chamarTotais, clienteId, filtros, opts),
+        opts.caixa === 'com'
+          ? contarConjunto(abrir, planoDaLista(clienteId, filtros, { ...opts, caixa: 'sem' }))
+          : Promise.resolve(0),
+      ])
+        .then(([bruto, semCaixa]) => {
           if (!vivo()) return;
+          const t = { ...bruto, total: Math.max(0, bruto.total - semCaixa) };
           setListaTotal(t.total);
           setListaTotais(t);
           setListaExcluidosSemVencimento(t.excluidosSemVencimento);

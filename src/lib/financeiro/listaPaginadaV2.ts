@@ -171,6 +171,10 @@ export function aplicarPlanoNaView(inicial: BuilderView, plano: PlanoBaseV2): Bu
     .neq('cenario', 'meta');
 
   if (plano.fazendaId) q = q.eq('fazenda_id', plano.fazendaId);
+  /* FIN-V2-SEM-CAIXA-01: a lista padrao e' so' dinheiro; os sem caixa vao para a secao propria. O nulo conta como caixa — e' o
+     que os totais (`totaisDaListaV2`, `fn_lista_v2_totais`) ja' faziam. */
+  if (plano.caixa === 'com') q = q.or('sem_movimentacao_caixa.is.null,sem_movimentacao_caixa.eq.false');
+  if (plano.caixa === 'sem') q = q.eq('sem_movimentacao_caixa', true);
   if (plano.naoNuloDimensao) q = q.not(plano.naoNuloDimensao, 'is', null);
   if (plano.orTemporal) q = q.or(plano.orTemporal);
   if (plano.mesesDimensao) {
@@ -217,6 +221,8 @@ export interface OpcoesPagina {
   tamanhoPagina?: number;
   /** Traz de volta, ADITIVAMENTE, as linhas sem vencimento que o período cortou. */
   incluirSemVencimento?: boolean;
+  /** FIN-V2-SEM-CAIXA-01 — ver `PlanoBaseV2.caixa`. Ausente = com e sem caixa juntos. */
+  caixa?: 'com' | 'sem';
 }
 
 export const RAMO_SEM_VENCIMENTO = 'data_vencimento.is.null';
@@ -240,7 +246,8 @@ export function planoDaLista(clienteId: string, filtros: FiltrosV2, opcoes: Opco
   const ramoExtra = opcoes.incluirSemVencimento && !semRecorteDePeriodo(filtros)
     ? RAMO_SEM_VENCIMENTO
     : undefined;
-  return montarPlanoBaseV2(clienteId, filtros, { relacao: 'view', ramoTemporalExtra: ramoExtra });
+  const plano = montarPlanoBaseV2(clienteId, filtros, { relacao: 'view', ramoTemporalExtra: ramoExtra });
+  return opcoes.caixa ? { ...plano, caixa: opcoes.caixa } : plano;
 }
 
 /** Uma página da lista, ordenada pelo contrato e recortada por `range`. */
@@ -312,6 +319,8 @@ export interface OpcoesConjunto {
   /** Abortar quando o pedido deixar de ser o corrente. */
   sinal?: { readonly aborted: boolean };
   incluirSemVencimento?: boolean;
+  /** FIN-V2-SEM-CAIXA-01 — a exportacao segue a tela; a secao sem caixa pede 'sem'. */
+  caixa?: 'com' | 'sem';
 }
 
 /**
@@ -362,6 +371,7 @@ export async function buscarConjuntoCompleto(
   const sinal = opcoes.sinal;
   const plano = planoDaLista(clienteId, filtros, {
     incluirSemVencimento: opcoes.incluirSemVencimento,
+    caixa: opcoes.caixa,
   });
 
   if (sinal?.aborted) throw new ErroConjuntoObsoleto();

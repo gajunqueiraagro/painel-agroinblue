@@ -7,7 +7,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { totaisDaListaV2, tipoDaLinha } from './totaisDaListaV2';
+import { totaisDaListaV2 } from './totaisDaListaV2';
 import { totaisNoCliente } from './listaPaginadaV2';
 
 const ENTREGA = { valor: 565521.66, tipo_operacao: '1-Entradas', sinal: '1', sem_movimentacao_caixa: true, origem_tipo: 'oc:entrega',
@@ -41,21 +41,21 @@ describe('totais do Financeiro V2: caixa x sem caixa', () => {
     expect(t).toEqual({ entradas: 992140.99, saidas: 50000, entradasSemCaixa: 565521.66, saidasSemCaixa: 1000 });
   });
 
-  it('Tipo da linha; a coluna "Vai para" saiu da lista e o Tipo e os cinco totais ficaram (lido da fonte)', () => {
-    expect(tipoDaLinha(ENTREGA)).toBe('Entrega');
-    expect(tipoDaLinha(RECEBIMENTO)).toBe('Recebimento');
-    expect(tipoDaLinha(BARTER_INSUMO)).toBe('Sem caixa');
-    expect(tipoDaLinha({ subcentro: 'Adiantamento a Fornecedores' })).toBe('Pagamento');
-    /* FIN-V2-VAI-PARA-FORA-01: a tela normal e a ampliada sao a MESMA tabela (o Ampliado so' acrescenta C. Origem/C. Destino). */
+  it('FIN-V2-SEM-CAIXA-01: sai a coluna Tipo, entra a OC; no topo so dinheiro, e o sem caixa so com a chave (lido da fonte)', () => {
+    /* a tela normal e a ampliada sao a MESMA tabela (o Ampliado so' acrescenta C. Origem/C. Destino) */
     const tela = readFileSync(resolve(__dirname, '../../pages/FinanceiroV2Tab.tsx'), 'utf8');
-    expect(tela).not.toContain('>Vai para<');
-    expect(tela).not.toContain('data-vai-para');
-    expect(tela).not.toContain('vaiParaDaLinha');
-    /* a busca sabe achar: o cabecalho vizinho e os cinco totais continuam la' */
-    expect(tela).toContain('>Tipo</th>');
-    for (const rotulo of ['Entradas de caixa:', 'Receita sem caixa:', 'Saídas de caixa:', 'Despesa sem caixa:', 'Transf.:']) {
-      expect(tela).toContain(rotulo);
-    }
+    expect(tela).not.toContain('>Tipo</th>');
+    expect(tela).not.toContain('tipoDaLinha');
+    expect(tela).toContain('>OC</th>');
+    expect(tela).toContain('<CelulaOC oc={lancamentosComOC.get(l.id)}');
+    for (const rotulo of ['Entradas:', 'Saídas:', 'Transf.:', 'lanç.']) expect(tela).toContain(rotulo);
+    /* os dois totais sem caixa sairam da faixa padrao; o total sem caixa so' existe dentro de `mostrarSemCaixa &&` */
+    expect(tela).not.toContain('Receita sem caixa:');
+    expect(tela).not.toContain('Despesa sem caixa:');
+    const topo = tela.slice(tela.indexOf('{mostrarSemCaixa && (<>'), tela.indexOf('Mostrar lançamentos sem caixa (entregas, barter, consumo)\n'));
+    expect(topo).toContain('Sem caixa (só DRE):');
+    /* a busca sabe achar: a chave e' a do mock, desligada por padrao */
+    expect(tela).toContain('const [mostrarSemCaixa, setMostrarSemCaixa] = useState(false);');
   });
 
   it('D3: Contas a Pagar e Receber tira o sem caixa SEMPRE (lido da fonte: a consulta nao se monta em teste)', () => {

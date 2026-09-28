@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { CATEGORIAS } from '@/types/cattle';
 import { parseNumericValue } from '@/lib/calculos/abate';
+import { rotuloDaConta } from '@/lib/financeiro/rotuloConta';
 import {
   barraDaDiferenca, contaComNumero, corDoSaldo, dataCurta, efeitoNoSaldo, rotuloDoSaldo, rotuloRecebimento, totalDoRascunho,
   ROTULO_EXPLICACAO, ROTULO_STATUS, type LinhaContaCorrente, type TipoExplicacao,
@@ -208,7 +209,7 @@ function LinhaExtrato({ l, linhas }: { l: LinhaContaCorrente; linhas: readonly L
       <td className={`${NUM}`}>{l.cab ?? ''}</td>
       <td className={`${TD} text-center`}><Selo tipo={l.tipo} /></td>
       <td className={`${TD} whitespace-normal break-words`}>{descricao}</td>
-      <td className={`${TD} whitespace-normal break-words`} title={contaComNumero(l.contaOrdem, l.conta)}>{l.conta ?? '—'}</td>
+      <td className={`${TD} whitespace-normal break-words`} title={contaComNumero(l.contaOrdem, l.conta)}>{rotuloDaConta(l.conta) ?? '—'}</td>
       <td className={`${TD} text-center ${bancoAmbar ? 'text-[#b45309]' : ''}`}>{banco}</td>
       <td className={`${NUM} ${DV} ${COR[corDoSaldo(l.movEntrega)]}`}>{moeda(l.movEntrega)}</td>
       <td className={`${NUM} ${l.noSaldo ? COR[corDoSaldo(l.movRecebido)] : 'text-muted-foreground'}`}>{moeda(l.movRecebido)}</td>
@@ -270,7 +271,7 @@ function DialogoBuscarRecebimento({ api, onFechar }: { api: OcContaCorrenteApi; 
                   </td>
                   <td className={`${TD} text-center`}>{dataCurta(r.data)}</td>
                   <td className={`${TD} whitespace-normal break-words`}>{r.descricao ?? '—'}{!r.mesmoFavorecido ? ' · outro favorecido' : ''}</td>
-                  <td className={`${TD} whitespace-normal break-words`}>{r.subcentro ?? '—'}</td>
+                  <td className={`${TD} whitespace-normal break-words`}>{rotuloDaConta(r.subcentro) ?? '—'}</td>
                   <td className={`${TD} text-center ${r.semContaBancaria ? 'text-[#b45309]' : ''}`}>{r.conciliado ? 'conciliado' : (r.semContaBancaria ? 'sem conta' : (r.status ?? '—'))}</td>
                   <td className={`${NUM} ${COR.pos}`}>{formatMoeda(r.valor)}</td>
                 </tr>
@@ -434,7 +435,7 @@ export function DialogoExplicarDiferenca({ api, somenteLeitura, onFechar }: { ap
                 <tr key={e.parteId} className="bg-[#fffbeb]" data-explicacao={e.tipo}>
                   <td className={TD}>{ROTULO_EXPLICACAO[e.tipo]}</td>
                   <td className={`${TD} text-center`}>{e.loteOrdem ?? ''}</td>
-                  <td className={`${TD} whitespace-normal break-words`}>{contaComNumero(e.contaOrdem, e.conta)}</td>
+                  <td className={`${TD} whitespace-normal break-words`}>{contaComNumero(e.contaOrdem, rotuloDaConta(e.conta))}</td>
                   <td className={`${TD} whitespace-normal break-words`}>{e.motivo ?? ''}</td>
                   <td className={`${NUM} ${COR[corDoSaldo(e.valor)]}`}>{formatMoeda(e.valor)}</td>
                   <td className={`${TD} text-center`}>
