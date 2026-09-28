@@ -245,8 +245,9 @@ no mesmo arquivo.
   QUANTAS linhas foram comparadas nao e' prova — e conjunto VAZIO e' prova INVALIDA, nao prova
   forte.
   ⚠ NASCE DE UM ERRO MEU, 24/09/2026, no CATEGORIA-DESCARTE-01. Reportei "6 periodos x 3 fazendas,
-  zero divergencia em v_ini_p0/v_fim_p0/v_fim_p1" e o merge MUDOU o DRE do NJ civil 2020 (Lucro
-  liquido 8.873.420,14 -> 8.873.657,32). A replica que eu comparei lia o P0 de
+  zero divergencia em v_ini_p0/v_fim_p0/v_fim_p1" e o merge MUDOU o DRE do NJ civil 2020 (a chave
+  `lucro_liquido` da RPC — Resultado economico menos Investimento, sem linha na grade; ver RPC-NOMES-LUCRO-01 —
+  8.873.420,14 -> 8.873.657,32). A replica que eu comparei lia o P0 de
   `valor_rebanho_fechamento_itens` em dez/19 — mes em que NENHUMA fazenda do NJ tem fechamento.
   Comparei dois conjuntos VAZIOS e o `where` da divergencia nao devolveu linha nenhuma. Quem achou
   o defeito foi a homologacao na tela, nao a prova.
@@ -2740,10 +2741,42 @@ preview que o cabecalho nao sai da tela ao rolar.
   convertida para @ viva, em `indicadoresDoAno`); a aba Movimentos do modal da variacao (`PecPonteTabela`) divide pela @ da ponte
   (`movimentos.vendas_abates`, que prefere o peso medio tambem no abate), e o custeio dela e' o do PC-100, SEM o rateio adm.
   Unificar em `indicadoresDoAno` muda numero de modal homologado — so' com decisao do Gabriel, medindo antes quanto cada ano muda.
-- CACHE-RRCC-2021-01 — pendencia, trabalho de DADO (decisao do Chat, 28/09/2026): o `zoot_mensal_cache` do RRCC nao tem NENHUMA linha
-  em 2021 (0 de 12 meses, com 12 meses de fechamento). `at_produzida` vem nulo e o GMD, o custo por @ produzida e a margem do ano
-  saem "—"; na ponte a producao sai "—" e os 3.189 @ dela caem na Diferenca. Mesmo risco ja' registrado em CACHE-X-FECHAMENTO-01
-  (o Bom Retiro 2023). Conserto: rematerializar o cache do RRCC 2021 — e conferir antes quais numeros homologados do ano mudam.
+- ⚠ CACHE-RRCC-2021-01 — FECHADA em 28/09/2026: TRES (fazenda, ano) sem linha nenhuma no `zoot_mensal_cache`, com 12 meses de
+  fechamento cada, rematerializados pela rotina oficial `refresh_zoot_cache(fazenda, ano)` — RRCC Ursa Maior 2021, NJ Sta. Luzia
+  2020 e NJ Sta. Luzia 2022. Migration de DADO `supabase/migrations/20261027162000_cache_rrcc_2021_01.sql` (⚠ registrada como
+  `20260928105343`; ledger = arquivo, md5 cd257cea), com guarda: aborta se qualquer dos tres ja' tiver linha e confere 12 meses
+  realizados em cada um depois.
+  A CAUSA (estrutural, fica para a ZOOT-CACHE-BURACO-01): os gatilhos `trg_invalidate_zoot_cache*` (lancamentos,
+  fechamento_pastos, fechamento_pasto_itens, saldos_iniciais) APAGAM o (fazenda, ano) inteiro e NAO reconstroem; so' o hook
+  `useZootCategoriaMensal` reconstroi, e so' quando alguem abre aquele ano numa tela que o usa; o DRE (`fn_dre_pecuaria`,
+  `fn_dre_pecuaria_patrimonio`) le' o cache SEM garantir. Qualquer edicao de lancamento antigo abre um buraco, calado.
+    RRCC 2021: as duas vendas de 05/06/2021 (174 e 133 garrotes) recriadas pela tela em 26/09, 10:01-11:19.
+    Sta. Luzia 2020: o cancelamento de 25/09 16:35 da venda antiga da OC 6a808c4c (200 garrotes, 03/04/2020).
+    Sta. Luzia 2022: CAUSA EXATA NAO DETERMINADA — nenhuma gravacao auditada de 2022 depois da reconstrucao de 24/09
+      (RECLASS-PESO-BACKFILL-01, que refez o NJ inteiro); o caminho provavel e' um que o audit nao registra (itens de
+      fechamento de pasto, sem `updated_at`, ou o saldo inicial propagado de dezembro).
+  ⚠ MUDOU NUMERO, E PARA O HOMOLOGADO: sem o cache de 2020, o P0 da Sta. Luzia caia em 'zero' e o rebanho inteiro (1.124 cab)
+    virava producao. NJ 2020: VBP 12.800.620,52 -> 10.316.601,75; Lucro operacional 7.853.972,91 -> 5.369.954,15; Lucro liquido
+    (linha da grade, chave `resultado_periodo`) 7.640.138,60 -> 5.156.119,84; Resultado economico (`resultado_com_mercado`)
+    11.603.959,49 -> 9.341.017,11; e a chave `lucro_liquido` (Resultado economico - Investimento, sem linha na grade)
+    11.136.599,70 -> 8.873.657,32, o numero do CATEGORIA-DESCARTE-01; ponte +16.805,21 @ / 1.124 cab -> -3,23 @ / 0 cab.
+    RRCC 2021 (Lucro operacional 842.955,62 igual): producao 3.194,03 @, custo por @ 215,26, GMD 0,419, ponte +3.189,29 -> -4,74 @.
+    NJ 2022 (4.965.105,14 igual): producao 37.872,00 -> 43.885,85 @, ponte +6.039,69 -> +25,84 @. Vizinhos (NJ 2021/2023, RRCC
+    2022): so' `cab_media` e centavos de rateio por fazenda (NJ 2023 Lucro operacional 3.604.289,07 -> 3.604.289,06). Meta igual.
+  ⚠ NOMES: ver RPC-NOMES-LUCRO-01 — a chave `lucro_liquido` NAO e' o "Lucro liquido" da grade.
+  VARREDURA (fazenda x ano com fechamento, lancamento ou saldo inicial e cache < 12 meses), provada pela propria rotina em
+  rollback: so' os tres eram buraco; nos outros 11 a rotina devolveu as MESMAS linhas (ela e' idempotente) — anos de rebanho
+  parcial (Sta. Luzia 2023, Bom Retiro 2022/2023) e pastos sem gado (2024-2026).
+  ⚠ CACHE-BOM-RETIRO-2023 FECHADO: NAO ERA BURACO. O ano tem 7 meses de cache porque o rebanho existe em 6 (jan-jun/23); o
+    refresh devolve as mesmas 51 linhas.
+- RPC-NOMES-LUCRO-01 — pendencia, nao tratada (registrada no CACHE-RRCC-2021-01, 28/09/2026): as chaves de `fn_dre_pecuaria` nao
+  falam o vocabulario da grade aprovado no DRE-DESTAQUE-02. A chave `lucro_liquido` e' o conceito ANTIGO — Resultado economico
+  menos Investimento — e NAO tem linha na grade; a linha "Lucro liquido" da grade le' `resultado_periodo`; o "= Resultado
+  economico" le' `resultado_com_mercado`. NJ 2020: `lucro_liquido` 8.873.657,32 x "Lucro liquido" da grade 5.156.119,84.
+  ⚠ E' ARMADILHA DE PROVA, nao de tela: quem compara a RPC pela chave `lucro_liquido` achando que e' a linha da grade confere o
+    numero errado — foi o que aconteceu no briefing do CACHE-RRCC-2021-01.
+  Conserto: renomear as chaves para o vocabulario aprovado, SEM MUDAR NUMERO, com todos os leitores (hooks, modais, testes e as
+  provas registradas aqui) acompanhando no mesmo PR.
 - ⚠ RATEIO-VIGENCIA-01 — O RATEIO ADMINISTRATIVO OLHA QUAIS ATIVIDADES EXISTEM EM CADA MES (28/09/2026, decisoes do Gabriel e do
   Chat). Retroativo, todo o historico, todos os clientes; nada gravado — os DREs recalculam. Migration
   `supabase/migrations/20261027161000_rateio_vigencia_01.sql` (⚠ registrada como `20260928102310`; ledger = arquivo sem a quebra de
