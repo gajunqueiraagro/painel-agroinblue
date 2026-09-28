@@ -72,6 +72,8 @@ export interface LancamentoV2 {
   favorecido_id: string | null;
   conta_destino_id: string | null;
   origem_lancamento: string;
+  /** OC-VENDA-ENTREGAS-01b: 'oc:entrega' marca a entrega da conta corrente (coluna Tipo). O select e' `*`. */
+  origem_tipo?: string | null;
   lote_importacao_id: string | null;
   forma_pagamento: string | null;
   dados_pagamento: string | null;
@@ -1444,7 +1446,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
   // ───────────────────────────────────────────────────────────────────────────
   const [listaPagina, setListaPagina] = useState<LancamentoV2[]>([]);
   const [listaTotal, setListaTotal] = useState(0);
-  const [listaTotais, setListaTotais] = useState<TotaisLista>({ total: 0, entradas: 0, saidas: 0, excluidosSemVencimento: 0 });
+  const [listaTotais, setListaTotais] = useState<TotaisLista>({ total: 0, entradas: 0, saidas: 0, excluidosSemVencimento: 0, entradasSemCaixa: 0, saidasSemCaixa: 0 });
   const [listaExcluidosSemVencimento, setListaExcluidosSemVencimento] = useState(0);
   const [carregandoLista, setCarregandoLista] = useState(false);
   const [carregandoContagem, setCarregandoContagem] = useState(false);

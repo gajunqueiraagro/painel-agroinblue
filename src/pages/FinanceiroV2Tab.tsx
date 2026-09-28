@@ -9,7 +9,8 @@ import {
   type StatusFiltroFinanceiro,
 } from '@/lib/financeiro/statusFinanceiro';
 import { isTransferenciaTipo } from '@/lib/financeiro/v2Transferencia';
-import { sentidoNaConta, contaEmFoco, formatarValorLinha, type SentidoNaConta } from '@/lib/financeiro/sinalPorConta';
+import { contaEmFoco, formatarValorLinha } from '@/lib/financeiro/sinalPorConta';
+import { totaisDaListaV2, tipoDaLinha, vaiParaDaLinha } from '@/lib/financeiro/totaisDaListaV2';
 import { useLancamentosConciliados, desfazerVinculo, desfazerGrupo } from '@/hooks/useConciliacaoDoMes';
 import { useLancamentosComOC, rotuloOrigemOC } from '@/hooks/useLancamentosComOC';
 import { iconeOrigemLancamento, LEGENDA_ICONES } from '@/v2/lib/origemLancamento';
@@ -1445,17 +1446,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
    * ou saída dela. Sem foco, somá-la a qualquer lado inflaria o mês com dinheiro que apenas
    * mudou de bolso — por isso ela fica à parte, e o rodapé a mostra à parte.
    */
-  const totais = useMemo(() => {
-    const acc = { entradas: 0, saidas: 0, transferencias: 0 };
-    for (const l of sortedLancamentos) {
-      const s: SentidoNaConta = sentidoNaConta(l, foco);
-      const v = Math.abs(l.valor);
-      if (s === 'entrada') acc.entradas += v;
-      else if (s === 'saida') acc.saidas += v;
-      else acc.transferencias += v;
-    }
-    return acc;
-  }, [sortedLancamentos, foco]);
+  /* OC-VENDA-ENTREGAS-01b (D2): "Entradas"/"Saidas" sao SO' CAIXA; o sem caixa (entrega, barter, consumo, funrural) tem
+     total proprio. A regra mora em `totaisDaListaV2` — nada contado duas vezes. */
+  const totais = useMemo(() => totaisDaListaV2(sortedLancamentos, foco), [sortedLancamentos, foco]);
   /* O `foco` é o mesmo dos totais: a linha e o rodapé não podem discordar sobre o que é
      entrada. Uma função só, um foco só. */
   const valorDaLinha = (l: LancamentoV2) => formatarValorLinha(l, foco);
@@ -2324,9 +2317,17 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         */}
       {mode === 'list' && (
         <div className="flex h-6 shrink-0 flex-wrap items-center gap-x-2 px-1 text-[10px] tabular-nums">
-          <span className="font-bold text-success">Entradas: {formatMoeda(totalEntradas)}</span>
+          <span className="font-bold text-success" title="Só o que movimenta caixa.">Entradas de caixa: {formatMoeda(totalEntradas)}</span>
           <span className="text-muted-foreground/40">|</span>
-          <span className="font-bold text-destructive">Saídas: {formatMoeda(totalSaidas)}</span>
+          <span className="font-bold text-success/80" title="Receita que não movimenta caixa: entrega da conta corrente, barter, consumo. Vai para o DRE e fica fora das Entradas de caixa.">
+            Receita sem caixa: {formatMoeda(totais.entradasSemCaixa)}
+          </span>
+          <span className="text-muted-foreground/40">|</span>
+          <span className="font-bold text-destructive" title="Só o que movimenta caixa.">Saídas de caixa: {formatMoeda(totalSaidas)}</span>
+          <span className="text-muted-foreground/40">|</span>
+          <span className="font-bold text-destructive/80" title="Despesa que não movimenta caixa: insumo de barter, funrural retido. Vai para o DRE e fica fora das Saídas de caixa.">
+            Despesa sem caixa: {formatMoeda(totais.saidasSemCaixa)}
+          </span>
           <span className="text-muted-foreground/40">|</span>
           <span className="font-bold text-sky-700 dark:text-sky-400"
             title="Transferências entre contas do próprio cliente: não são entrada nem saída do caixa, por isso ficam fora dos dois totais.">
@@ -2425,6 +2426,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 <col style={{ width: 40 }} />
                 <col style={{ width: 40 }} />
                 <col style={{ width: 40 }} />
+                {/* Tipo (OC-VENDA-ENTREGAS-01b): Entrega / Recebimento / Sem caixa / Lançamento. */}
+                <col style={{ width: 64 }} />
                 {/* Produto 175→150 na lista normal — FIN-LISTA-LAYOUT-01. É a coluna mais
                     larga e a que mais tolera truncar: o texto inteiro está no `title`.
                     ⚠ NO AMPLIADO, 170→140: a célula renderiza a 9px (`.table-financeiro td`
@@ -2469,6 +2472,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     `title`, e o que a coluna precisa responder é QUAL conta, não o nome todo. */}
                 {modoIntensivo && <col style={{ width: 92 }} />}
                 {modoIntensivo && <col style={{ width: 92 }} />}
+                {/* Vai para (OC-VENDA-ENTREGAS-01b): DRE / Caixa / Caixa e DRE — a entrega vai para o DRE, o recebimento para o caixa. */}
+                <col style={{ width: 64 }} />
                 <col style={{ width: 90 }} />
                 {/* Doc: 55 na normal, 90→60 no Ampliado — FIN-LISTA-VISUAL-06.
                     ⚠ A FONTE NÃO MUDA, e o briefing pedia 10px: a célula JÁ renderiza a 9px,
@@ -2504,6 +2509,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       números em oito lugares (th + td). */}
                   <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[82px] z-30 bg-primary" onClick={() => toggleSort('venc')}>Venc.<SortIndicator field="venc" /></th>
                   <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[122px] z-30 bg-primary" onClick={() => toggleSort('pgto')}>Pgto.<SortIndicator field="pgto" /></th>
+                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">Tipo</th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('produto')}>Produto<SortIndicator field="produto" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('fornecedor')}>Fornecedor<SortIndicator field="fornecedor" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">Macro</th>
@@ -2516,6 +2522,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                   {modoIntensivo && (
                     <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">C. Destino</th>
                   )}
+                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">Vai para</th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('valor')}>Valor<SortIndicator field="valor" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('doc')}>Doc.<SortIndicator field="doc" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('status')}>Status<SortIndicator field="status" /></th>
@@ -2525,7 +2532,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
               <tbody className="[&_tr:last-child]:border-0">
                 {linhasDaGrade.length === 0 ? (
                   <tr className="border-b">
-                    <td colSpan={14} className="text-center text-muted-foreground py-4 text-[10px]">
+                    <td colSpan={16} className="text-center text-muted-foreground py-4 text-[10px]">
                       Nenhum lançamento encontrado.
                     </td>
                   </tr>
@@ -2629,6 +2636,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                         <td className={`celula-data font-mono px-0.5 py-1 align-middle leading-tight sticky left-[82px] z-10 bg-background text-center ${vencido ? 'font-semibold text-destructive' : 'text-muted-foreground'}`}
                           title={vencido ? 'Vencido e não pago' : undefined}>{fmtDate(l.data_vencimento)}</td>
                         <td className="celula-data font-mono px-0.5 py-1 align-middle leading-tight sticky left-[122px] z-10 bg-background text-center text-muted-foreground">{fmtDate(l.data_pagamento)}</td>
+                        <td className="px-1 py-1 align-middle text-center text-[10px] leading-tight break-words text-muted-foreground" data-tipo-linha>{tipoDaLinha(l)}</td>
                         <td className="truncate px-1 py-1 align-middle text-[12px] font-medium leading-tight" title={isParcelaFinanciamento ? `Parcela de financiamento (origem automática) — ${descExibida || ''}` : (descExibida || '')}>
                           {isParcelaFinanciamento && <span className="mr-1" title="Parcela de financiamento">🏦</span>}
                           {descExibida || '-'}
@@ -2712,6 +2720,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                             ganha o MESMO fundo das colunas de data — `bg-background`, medido no
                             `LancamentosTabela.tsx` da referência, que é o cinza
                             `--background: 220 17% 97%` sobre o branco do card. */}
+                        <td className="px-1 py-1 align-middle text-center text-[10px] leading-tight break-words text-muted-foreground" data-vai-para>{vaiParaDaLinha(l)}</td>
                         <td className={`celula-valor text-right font-semibold whitespace-nowrap px-1 py-1 align-middle text-[12px] leading-tight bg-background ${valorDaLinha(l).classe}`}>
                           {valorDaLinha(l).texto}
                         </td>

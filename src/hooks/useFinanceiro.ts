@@ -367,8 +367,12 @@ interface UseFinanceiroOptions {
                       `data_pagamento`. A venda conta quando o dinheiro entra.
        competencia -> TODOS os status vivos, recortado por `data_competencia`.
                       A venda conta quando acontece, mesmo a prazo.
-     `cancelado`, `cenario` e `sem_movimentacao_caixa` NAO mudam: o regime
-     decide QUANDO o lancamento conta, nunca O QUE e' valido. */
+     `cancelado` e `cenario` NAO mudam: o regime decide QUANDO o lancamento
+     conta, nunca O QUE e' valido.
+     ⚠ `sem_movimentacao_caixa` MUDA, e so' aqui (OC-VENDA-ENTREGAS-01b, D1): o
+     caixa continua sem ele — nao e' dinheiro —, e a competencia o INCLUI, porque
+     entrega da conta corrente, barter e consumo sao receita/custo do periodo.
+     Medido antes: so' o barter do NJ muda na Home; o Fechamento le' caixa. */
   regime?: 'caixa' | 'competencia';
 }
 
@@ -462,8 +466,8 @@ export function useFinanceiro(options: UseFinanceiroOptions = {}) {
           const [allLancsRaw, ccResult, impResult, contasResult, saldoResult, lancPecResult] = await Promise.all([
             fetchAllPaginated<any>((from, to) => {
               let q = (supabase.from('financeiro_lancamentos_v2').select('*') as any).eq('cliente_id', clienteId).eq('cancelado', false)
-                .eq('sem_movimentacao_caixa', false).eq('cenario', 'realizado');
-              if (!competencia) q = q.eq('status_transacao', 'realizado');
+                .eq('cenario', 'realizado');
+              if (!competencia) q = q.eq('status_transacao', 'realizado').eq('sem_movimentacao_caixa', false);
               if (anoFiltro) q = competencia
                 ? q.gte('data_competencia', `${anoFiltro}-01-01`).lte('data_competencia', `${anoFiltro}-12-31`)
                 : q.gte('data_pagamento', `${anoFiltro}-01-01`).lte('data_pagamento', `${anoFiltro}-12-31`);
@@ -493,8 +497,8 @@ export function useFinanceiro(options: UseFinanceiroOptions = {}) {
 
         const lancPromise = fetchAllPaginated<any>((from, to) => {
           let q = (supabase.from('financeiro_lancamentos_v2').select('*') as any).eq('fazenda_id', fazendaId).eq('cancelado', false)
-              .eq('sem_movimentacao_caixa', false).eq('cenario', 'realizado');
-          if (!competencia) q = q.eq('status_transacao', 'realizado');
+              .eq('cenario', 'realizado');
+          if (!competencia) q = q.eq('status_transacao', 'realizado').eq('sem_movimentacao_caixa', false);
           if (anoFiltro) q = competencia
             ? q.gte('data_competencia', `${anoFiltro}-01-01`).lte('data_competencia', `${anoFiltro}-12-31`)
             : q.gte('data_pagamento', `${anoFiltro}-01-01`).lte('data_pagamento', `${anoFiltro}-12-31`);
@@ -504,8 +508,8 @@ export function useFinanceiro(options: UseFinanceiroOptions = {}) {
         const admPromise = needsRateio
           ? fetchAllPaginated<any>((from, to) => {
               let q = (supabase.from('financeiro_lancamentos_v2').select('*') as any).eq('fazenda_id', fazendaADM.id).eq('cancelado', false)
-              .eq('sem_movimentacao_caixa', false).eq('cenario', 'realizado');
-              if (!competencia) q = q.eq('status_transacao', 'realizado');
+              .eq('cenario', 'realizado');
+              if (!competencia) q = q.eq('status_transacao', 'realizado').eq('sem_movimentacao_caixa', false);
               if (anoFiltro) q = competencia
                 ? q.gte('data_competencia', `${anoFiltro}-01-01`).lte('data_competencia', `${anoFiltro}-12-31`)
                 : q.gte('data_pagamento', `${anoFiltro}-01-01`).lte('data_pagamento', `${anoFiltro}-12-31`);

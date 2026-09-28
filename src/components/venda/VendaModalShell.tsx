@@ -680,6 +680,9 @@ export function VendaModalShell({
               clienteId={liquidacaoApi.clienteId ?? null}
               /* A instancia que o resumo lateral ja monta — uma leitura, dois consumidores. */
               ocApiExterno={ocCompromissosApi}
+              /* OC-VENDA-ENTREGAS-01b — a conta corrente escreve (entregas, recebimento) e encadeia a versao da OC. */
+              ocVersao={ocVersao}
+              onOcVersaoChange={onOcVersaoChange}
               dataOperacao={data}
               linhasPrevisao={linhasPrevisao}
               /* BOITEL-ABATE-PRODUTOR-01: na B o slot tem de ser exatamente recebido - pago; sem isso o principal nao sai. */

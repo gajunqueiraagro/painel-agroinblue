@@ -895,6 +895,16 @@ no mesmo arquivo.
   conciliacao, e a dica quando o bloqueio e' conciliado.
   ⚠ PROVADO: com a versao do render no lugar da devolvida 1 caso cai; sem a trava da selecao vazia, 1; com o `NegociacaoOC`
     aninhado de volta (o arquivo de antes), o caso do re-render cai.
+  De 2161 para 2181 no OC-VENDA-ENTREGAS-01b, em quatro arquivos novos. `src/lib/oc/contaCorrente.test.ts` (+6): a 232c05aa real
+  (saldo 1.357,89 'ele deve', "Recebimento 2 de 4"), D6 (recebimento sem conta bancaria nunca vira conciliado) e os tres saldos
+  do briefing — ADIANTAMENTO (dinheiro antes do gado), PARCIAL (sem saldo final a explicar) e A MAIS — mais o quitado em 0,00.
+  `src/lib/financeiro/totaisDaListaV2.test.ts` (+5): a entrega fora das Entradas de caixa, o recebimento no caixa, a soma dos
+  cinco baldes = a soma das linhas (nada contado duas vezes), a referencia da RPC com o mesmo corte, Tipo/"Vai para", e o filtro
+  do sem caixa no Contas a Pagar e Receber lido da fonte. `src/lib/financeiro/subcentroVendaEspelho.test.ts` (+3): o
+  `_oc_subcentro_venda` da migration contra `POR_CATEGORIA`, par a par (13). `src/components/venda/abaContaCorrente.test.tsx`
+  (+6): colunas do DRE x caixa, status do dado, saldo final so' com entregas concluidas, "Atualizar entregas" com a recusa ao
+  lado, motivo obrigatorio do vincular e somente leitura. Um caso existente de `listaPaginadaV2.test.ts` mudou de contrato
+  (compara os quatro totais, nao dois) e a projecao da view foi de 44 para 46 colunas — nunca afrouxados.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -2902,6 +2912,45 @@ preview que o cabecalho nao sai da tela ao rolar.
   ⚠ COMPETENCIA NAO ENTROU (D2): vai para o 01b, com o vinculo dos 4 titulos; regra ja' decidida — a receita segue cada entrega,
     proporcional ao valor de cada saida, cada parte no mes da saida; parcelas definem so' o caixa. `oc_vincular_lancamento` e' a funcao a
     reaproveitar.
+- ⚠ OC-VENDA-ENTREGAS-01b — MODELO CONTA CORRENTE DA VENDA: A ENTREGA E' A RECEITA, O RECEBIMENTO E' ADIANTAMENTO (28/09/2026,
+  decisoes D1-D7 do Gabriel; ADR-2026-21, que cita o ADR-2026-17; mock `docs/mocks/oc_conta_corrente_mock_v4.html`).
+  Migration `supabase/migrations/20261027167000_oc_venda_entregas_01b.sql` (⚠ registrada como `20260928144001`; ledger = arquivo
+  byte a byte, md5 2a74092b), patch guardado por md5: `oc_vincular_lancamento` 9634b63b -> 9ce51f1f, `oc_sincronizar_liquidacao_
+  de_financeiro` d139826a -> 8175fee1, `_oc_vinculo_mapa` 928535c7 -> 4d830519, `fn_lista_v2_totais` 023c7790 -> e5746a9f
+  (DROP + CREATE, ACL igual), `vw_financeiro_lancamentos_v2_doc` + `sem_movimentacao_caixa` (security_invoker conferido).
+  Novas: `oc_sincronizar_entregas` (idempotente), `_oc_vincular_recebimento` (interna, sem EXECUTE para authenticated),
+  `oc_conta_corrente` e `oc_recebimentos_vinculaveis` (INVOKER, leitura), `_oc_subcentro_venda` (espelho de `subcentroVenda.ts`,
+  com teste). Plano: 3015 Adiantamento de Clientes e 5005 Adiantamento a Fornecedores, sem bloco nem DRE. Catalogo:
+  principal/entrega e principal/recebimento. `modelo_financeiro` na OC ('titulo' padrao) e `entrega_movimentacao_id` + origem
+  'entrega' nas partes.
+  REGRAS: entrega = titulo realizado, sem conta, sem caixa, competencia = pagamento = data da saida, conta pela categoria do lote,
+  valor do lote (D3, D7); recebimento = a conta vira Adiantamento de Clientes, competencia/valor/conta/hash FICAM; saldo =
+  entregue − recebido, CALCULADO; a entrega NAO liquida (ADR-2026-19), o recebimento sim.
+  ⚠ PROVA EM ROLLBACK (estrutura + dado, como o Gabriel): DRE SR 2025 mar +992.138,24 (entregas de 19 e 20/03), abr 574.046,85,
+    mai 567.955,59, jun 232.460,58 dessa OC; ano +1.357,89 em vendas, VBP e resultado operacional; caixa do cliente md5 igual;
+    `oc_conta_corrente` 1.357,89 'ele_deve', 4 'sem_conta_bancaria'; segunda sincronizacao: 7 mantidas.
+  DADO APLICADO com o OK do Gabriel: `20261027167100_oc_venda_entregas_01b_dados.sql` (⚠ registrada como `20260928150203`; ledger =
+    arquivo, md5 79d4f39b). Real = rollback: DRE SR 2025 mar 1.508.322,44 / abr 842.244,81 / mai 567.955,59 / jun 920.716,72 / jul
+    417.955,94; vendas 8.506.161,31; caixa md5 1e61bae9 antes e depois; conta corrente 1.357,89 'ele_deve'; `zoot_cache_sujo` vazio.
+    So' a 232c05aa esta' no modelo conta corrente.
+  ⚠ A HOME NAO MUDA COM O DADO: receita de venda/abate na Home vem do ZOOTECNICO (`SUBCENTROS_RECEITA_PEC_DO_ZOOTECNICO`), nao do
+    financeiro. Depois do dado ela e o `fn_dre_pecuaria` diferem em −4,27 nesta OC (zoot 574.041,83 x lote 574.046,85; 18.031,09 x
+    18.030,34), e agora nos MESMOS meses — antes diferiam em 1.353,62 e em meses diferentes. Fonte duplicada: frente
+    DRE-HOME-FONTE-UNICA, nao tratada.
+  D1 APLICADA com o OK do Gabriel: `useFinanceiro` na COMPETENCIA inclui sem caixa; o CAIXA segue sem ele (os tres fetches do
+    regime: Global, por fazenda e o administrativo). Medido antes: so' o barter do NJ muda na Home (2023 saidas
+    +390.252,59; 2024 +391.034,66/+1.042.295,41; 2025 +1.947.078,30/+812.810,00; 2026 +152.390,00/+27.393,52, entradas/saidas).
+    ⚠ O FECHAMENTO USA O REGIME DE CAIXA (`useFechamentoPeriodoData`), entao a D1 nao o alcanca — incluir sem caixa em caixa seria
+    errado. Divergencia do briefing, reportada.
+  TELA: aba Financeiro da venda em conta corrente (`AbaContaCorrenteOC`, roteada pelo `modelo` do banco antes do `modo`); Financeiro
+  V2 com colunas Tipo e "Vai para" e os totais "Entradas de caixa" | "Receita sem caixa" | "Saídas de caixa" | "Despesa sem caixa"
+  (`totaisDaListaV2`); Contas a Pagar e Receber exclui sem caixa sempre (D3).
+  ⚠ DIVERGENCIAS DO MOCK, pela decisao: recebimentos "sem conta bancária", nao "Banco do Brasil · conciliado" (D6); entrega com
+    pagamento = data da saida, nao "—" (D3).
+  PENDENCIAS: "Programar recebimento" sem gravador (botao desligado, com o porque); "Explicar diferenca" e' o 01c; sincronizar
+  entregas e' botao explicito (saida adotada/estornada depois nao atualiza sozinha — a aba avisa); `oc_cancelar` nao cancela as
+  entregas; o resumo lateral da venda continua lendo compromissos (vazio na conta corrente); `vw_oc_obrigacoes` lista as partes
+  novas (so' o modo legado a le).
 - ⚠ RATEIO-VIGENCIA-01 — O RATEIO ADMINISTRATIVO OLHA QUAIS ATIVIDADES EXISTEM EM CADA MES (28/09/2026, decisoes do Gabriel e do
   Chat). Retroativo, todo o historico, todos os clientes; nada gravado — os DREs recalculam. Migration
   `supabase/migrations/20261027161000_rateio_vigencia_01.sql` (⚠ registrada como `20260928102310`; ledger = arquivo sem a quebra de

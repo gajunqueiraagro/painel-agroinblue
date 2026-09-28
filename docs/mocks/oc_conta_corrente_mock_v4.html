@@ -1,0 +1,93 @@
+<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Conta corrente da OC — mock v3</title><style>
+:root{--p:#1D3A5D;--fg:#0F1729;--mf:#6B7280;--bd:#E0E2E6;--gr:#15803d;--grb:#f0fdf4;--rd:#b91c1c;--am:#b45309;--amb:#fffbeb;--amd:#fde68a;--z:#F5F4F0;--s:#E8E6DF;--bl:#1d4ed8;--blb:#eff6ff}
+*{box-sizing:border-box}body{margin:0;background:#8a929c;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--fg);padding:16px}
+.lbl{color:#fff;font-size:12px;font-weight:600;margin:0 auto 6px;width:1180px}
+.m{width:1180px;margin:0 auto 18px;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.3)}
+.hd{background:var(--p);color:#fff;height:36px;display:flex;align-items:center;gap:12px;padding:0 14px;font-size:13px}
+.hd .pill{border:1px solid rgba(255,255,255,.5);border-radius:10px;padding:0 8px;font-size:11px}
+.tabs{display:flex;gap:4px;padding:5px 12px;border-bottom:1px solid var(--bd)}
+.tabs span{font-size:11.5px;padding:3px 10px;border-radius:5px;color:var(--mf)}.tabs span.on{background:#e8eef6;color:var(--p);font-weight:600}
+.kp{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:10px 12px}
+.k{border:1px solid var(--bd);border-radius:5px;padding:4px 8px}.k .a{font-size:10px;color:var(--mf)}.k .b{font-size:13px;font-weight:600;text-align:right}
+.sec{margin:0 12px 10px;border:1px solid var(--bd);border-radius:6px;overflow:hidden}
+.sec .h{font-size:11px;font-weight:600;padding:5px 10px;background:var(--s)}
+table{width:100%;border-collapse:collapse;table-layout:fixed;font-variant-numeric:tabular-nums}
+th{font-size:10px;color:var(--mf);font-weight:500;height:22px;border-bottom:1px solid var(--bd);text-align:center;padding:0 6px;background:#fafafa}
+th.grp{background:var(--s);color:var(--fg);font-weight:600}
+td{font-size:11px;height:23px;padding:0 6px;border-bottom:1px solid #f0f1f3;white-space:nowrap}
+tr.g1 td{background:#fff}tr.g2 td{background:var(--z)}
+.r{text-align:right}.c{text-align:center}.pos{color:var(--gr)}.neg{color:var(--rd)}.mf{color:var(--mf)}.amb{color:var(--am)}
+.chip{font-size:9.5px;border-radius:9px;padding:1px 7px;font-weight:600}.ok{background:var(--grb);color:var(--gr)}.ent{background:var(--blb);color:var(--bl)}
+.ft td{background:var(--s)!important;font-weight:600}
+.btn{font-size:11px;border:1px solid var(--bd);border-radius:4px;padding:2px 8px;background:#fff;font-weight:500}.btn.nv{background:var(--p);color:#fff;border-color:var(--p)}
+.strip{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:1180px;margin:0 auto 18px}
+.box{background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.3)}
+.box h5{margin:0;padding:6px 10px;background:var(--s);font-size:11px}
+.note{width:1180px;margin:0 auto;background:#fff;border-radius:6px;padding:10px 12px;font-size:11.5px;line-height:1.55}
+</style></head><body>
+<div class="lbl">OC · aba Financeiro · conta corrente do comprador (caso real Sta. Rita 2025)</div>
+<div class="m">
+ <div class="hd"><b>Venda de animais</b><span class="pill">OC #232c05aa</span><span>19/03/2025</span><span>Faz. Sta. Rita</span><span>Helder Hofig</span><span style="margin-left:auto">✕</span></div>
+ <div class="tabs"><span>Venda</span><span>Negociação</span><span>Entrega</span><span>Documentos</span><span class="on">Financeiro</span><span>Auditoria</span></div>
+ <div class="kp">
+  <div class="k"><div class="a">Entregue (vai para o DRE)</div><div class="b pos">2.366.601,26</div></div>
+  <div class="k"><div class="a">Recebido (caixa)</div><div class="b pos">2.365.243,37</div></div>
+  <div class="k"><div class="a">Ele deve</div><div class="b">1.357,89</div></div>
+  <div class="k"><div class="a">Adiantado por ele</div><div class="b">0,00</div></div>
+ </div>
+ <div class="sec"><div class="h">Conta corrente · em ordem de data</div>
+  <table><colgroup><col style="width:95px"><col style="width:50px"><col style="width:55px"><col style="width:120px"><col><col style="width:120px"><col style="width:120px"><col style="width:120px"><col style="width:120px"></colgroup><thead><tr><th colspan="5" class="grp">Evento</th><th colspan="2" class="grp">Movimento</th><th colspan="2" class="grp">Saldo do comprador</th></tr><tr><th>Data</th><th>Lote</th><th>Cab</th><th>Evento</th><th>Descrição</th><th>Entrega (DRE)</th><th>Recebido (caixa)</th><th>Ele deve</th><th>Adiantado por ele</th></tr></thead><tbody><tr class="g1"><td class="c">19/03/2025</td><td class="c">1</td><td class="r">178</td><td>Entrega</td><td>Venda desmama M</td><td class="r pos">565.521,66</td><td class="r pos"></td><td class="r">565.521,66</td><td class="r"></td></tr><tr class="g2"><td class="c">20/03/2025</td><td class="c">2</td><td class="r">139</td><td>Entrega</td><td>Venda desmama M</td><td class="r pos">426.616,58</td><td class="r pos"></td><td class="r">992.138,24</td><td class="r"></td></tr><tr class="g1"><td class="c">17/04/2025</td><td class="c"></td><td class="r"></td><td>Recebimento 1</td><td>Banco do Brasil</td><td class="r pos"></td><td class="r pos">992.140,99</td><td class="r"></td><td class="r">2,75</td></tr><tr class="g2"><td class="c">23/04/2025</td><td class="c">3</td><td class="r">193</td><td>Entrega</td><td>Venda desmama M</td><td class="r pos">574.046,85</td><td class="r pos"></td><td class="r">574.044,10</td><td class="r"></td></tr><tr class="g1"><td class="c">21/05/2025</td><td class="c">4</td><td class="r">183</td><td>Entrega</td><td>Venda desmama M</td><td class="r pos">549.925,25</td><td class="r pos"></td><td class="r">1.123.969,35</td><td class="r"></td></tr><tr class="g2"><td class="c">21/05/2025</td><td class="c">6</td><td class="r">6</td><td>Entrega</td><td>Venda garrotes</td><td class="r pos">18.030,34</td><td class="r pos"></td><td class="r">1.141.999,69</td><td class="r"></td></tr><tr class="g1"><td class="c">22/05/2025</td><td class="c"></td><td class="r"></td><td>Recebimento 2</td><td>Banco do Brasil</td><td class="r pos"></td><td class="r pos">574.042,04</td><td class="r">567.957,65</td><td class="r"></td></tr><tr class="g2"><td class="c">21/06/2025</td><td class="c"></td><td class="r"></td><td>Recebimento 3</td><td>Banco do Brasil</td><td class="r pos"></td><td class="r pos">567.956,34</td><td class="r">1,31</td><td class="r"></td></tr><tr class="g1"><td class="c">25/06/2025</td><td class="c">5</td><td class="r">69</td><td>Entrega</td><td>Venda desmama M</td><td class="r pos">207.404,34</td><td class="r pos"></td><td class="r">207.405,65</td><td class="r"></td></tr><tr class="g2"><td class="c">25/06/2025</td><td class="c">7</td><td class="r">11</td><td>Entrega</td><td>Venda garrotes</td><td class="r pos">25.056,24</td><td class="r pos"></td><td class="r">232.461,89</td><td class="r"></td></tr><tr class="g1"><td class="c">25/07/2025</td><td class="c"></td><td class="r"></td><td>Recebimento 4</td><td>Banco do Brasil</td><td class="r pos"></td><td class="r pos">231.104,00</td><td class="r">1.357,89</td><td class="r"></td></tr>
+   <tr class="ft"><td>Total</td><td></td><td class="r">779</td><td colspan="2"></td><td class="r pos">2.366.601,26</td><td class="r pos">2.365.243,37</td><td class="r">1.357,89</td><td class="r"></td></tr>
+  </tbody></table>
+ </div>
+ <div class="sec" style="border-color:var(--amd)"><div class="h" style="background:var(--amb)">Saldo final a explicar</div>
+  <table><colgroup><col><col style="width:120px"><col style="width:150px"></colgroup>
+  <thead><tr><th>Situação</th><th>Valor</th><th></th></tr></thead><tbody>
+   <tr class="g1"><td>Entregas concluídas e o comprador pagou menos que o entregue · a OC fecha mesmo assim</td><td class="r neg">−1.357,89</td><td class="c"><span class="btn nv">Explicar diferença</span></td></tr>
+  </tbody></table>
+ </div>
+ <div class="sec"><div class="h">Recebimentos · vincular ou lançar</div>
+  <div style="padding:6px 10px;display:flex;gap:8px"><span class="btn">+ Vincular recebimento já lançado</span><span class="btn">+ Programar recebimento</span></div>
+ </div>
+</div>
+
+<div class="lbl">Mesmo modelo com adiantamento antes do gado (exemplo ilustrativo)</div>
+<div class="m">
+ <div class="sec" style="margin-top:10px"><div class="h">Conta corrente · adiantamento de 1.000.000,00 em 01/03</div>
+  <table><colgroup><col style="width:95px"><col style="width:50px"><col style="width:55px"><col style="width:120px"><col><col style="width:120px"><col style="width:120px"><col style="width:120px"><col style="width:120px"></colgroup><thead><tr><th colspan="5" class="grp">Evento</th><th colspan="2" class="grp">Movimento</th><th colspan="2" class="grp">Saldo do comprador</th></tr><tr><th>Data</th><th>Lote</th><th>Cab</th><th>Evento</th><th>Descrição</th><th>Entrega (DRE)</th><th>Recebido (caixa)</th><th>Ele deve</th><th>Adiantado por ele</th></tr></thead><tbody><tr class="g1"><td class="c">01/03/2025</td><td class="c"></td><td class="r"></td><td>Recebimento 1</td><td>Adiantamento</td><td class="r pos"></td><td class="r pos">1.000.000,00</td><td class="r"></td><td class="r">1.000.000,00</td></tr><tr class="g2"><td class="c">19/03/2025</td><td class="c">1</td><td class="r">178</td><td>Entrega</td><td>Venda desmama M</td><td class="r pos">565.521,66</td><td class="r pos"></td><td class="r"></td><td class="r">434.478,34</td></tr><tr class="g1"><td class="c">20/03/2025</td><td class="c">2</td><td class="r">139</td><td>Entrega</td><td>Venda desmama M</td><td class="r pos">426.616,58</td><td class="r pos"></td><td class="r"></td><td class="r">7.861,76</td></tr><tr class="g2"><td class="c">23/04/2025</td><td class="c">3</td><td class="r">193</td><td>Entrega</td><td>Venda desmama M</td><td class="r pos">574.046,85</td><td class="r pos"></td><td class="r">566.185,09</td><td class="r"></td></tr><tr class="g1"><td class="c">22/05/2025</td><td class="c"></td><td class="r"></td><td>Recebimento 2</td><td>Banco do Brasil</td><td class="r pos"></td><td class="r pos">566.185,09</td><td class="r"></td><td class="r"></td></tr></tbody></table>
+ </div>
+</div>
+
+<div class="lbl">Financeiro V2 · as duas linhas da OC · filtro "Tudo"</div>
+<div class="m">
+ <table>
+  <colgroup><col style="width:88px"><col style="width:88px"><col style="width:88px"><col style="width:90px"><col><col style="width:45px"><col style="width:72px"><col style="width:40px"><col style="width:160px"><col style="width:52px"><col style="width:85px"><col style="width:100px"></colgroup>
+  <thead><tr><th>Competência</th><th>Vencimento</th><th>Pagamento</th><th>Tipo</th><th>Descrição</th><th>Cab</th><th>OC</th><th>Lote</th><th>Subcentro</th><th>Vai para</th><th>Status</th><th>Valor</th></tr></thead>
+  <tbody><tr class="g1"><td class="c">19/03/2025</td><td class="c">—</td><td class="c">—</td><td class="c">Entrega</td><td>Venda desmama M</td><td class="r">178</td><td class="c">232c05aa</td><td class="c">1</td><td>Venda de desmama</td><td class="c">DRE</td><td class="c"><span class="chip ent">entregue</span></td><td class="r pos">565.521,66</td></tr><tr class="g2"><td class="c">20/03/2025</td><td class="c">—</td><td class="c">—</td><td class="c">Entrega</td><td>Venda desmama M</td><td class="r">139</td><td class="c">232c05aa</td><td class="c">2</td><td>Venda de desmama</td><td class="c">DRE</td><td class="c"><span class="chip ent">entregue</span></td><td class="r pos">426.616,58</td></tr><tr class="g1"><td class="c">—</td><td class="c">17/04/2025</td><td class="c">17/04/2025</td><td class="c">Recebimento</td><td>Recebimento 1 de 4</td><td class="r"></td><td class="c">232c05aa</td><td class="c"></td><td>Adiantamento de clientes</td><td class="c">Caixa</td><td class="c"><span class="chip ok">conciliado</span></td><td class="r pos">992.140,99</td></tr><tr class="g2"><td class="c">23/04/2025</td><td class="c">—</td><td class="c">—</td><td class="c">Entrega</td><td>Venda desmama M</td><td class="r">193</td><td class="c">232c05aa</td><td class="c">3</td><td>Venda de desmama</td><td class="c">DRE</td><td class="c"><span class="chip ent">entregue</span></td><td class="r pos">574.046,85</td></tr><tr class="g1"><td class="c">21/05/2025</td><td class="c">—</td><td class="c">—</td><td class="c">Entrega</td><td>Venda desmama M</td><td class="r">183</td><td class="c">232c05aa</td><td class="c">4</td><td>Venda de desmama</td><td class="c">DRE</td><td class="c"><span class="chip ent">entregue</span></td><td class="r pos">549.925,25</td></tr><tr class="g2"><td class="c">21/05/2025</td><td class="c">—</td><td class="c">—</td><td class="c">Entrega</td><td>Venda garrotes</td><td class="r">6</td><td class="c">232c05aa</td><td class="c">6</td><td>Venda de garrotes</td><td class="c">DRE</td><td class="c"><span class="chip ent">entregue</span></td><td class="r pos">18.030,34</td></tr><tr class="g1"><td class="c">—</td><td class="c">22/05/2025</td><td class="c">22/05/2025</td><td class="c">Recebimento</td><td>Recebimento 2 de 4</td><td class="r"></td><td class="c">232c05aa</td><td class="c"></td><td>Adiantamento de clientes</td><td class="c">Caixa</td><td class="c"><span class="chip ok">conciliado</span></td><td class="r pos">574.042,04</td></tr><tr class="g2"><td class="c">—</td><td class="c">21/06/2025</td><td class="c">21/06/2025</td><td class="c">Recebimento</td><td>Recebimento 3 de 4</td><td class="r"></td><td class="c">232c05aa</td><td class="c"></td><td>Adiantamento de clientes</td><td class="c">Caixa</td><td class="c"><span class="chip ok">conciliado</span></td><td class="r pos">567.956,34</td></tr><tr class="g1"><td class="c">25/06/2025</td><td class="c">—</td><td class="c">—</td><td class="c">Entrega</td><td>Venda desmama M</td><td class="r">69</td><td class="c">232c05aa</td><td class="c">5</td><td>Venda de desmama</td><td class="c">DRE</td><td class="c"><span class="chip ent">entregue</span></td><td class="r pos">207.404,34</td></tr><tr class="g2"><td class="c">25/06/2025</td><td class="c">—</td><td class="c">—</td><td class="c">Entrega</td><td>Venda garrotes</td><td class="r">11</td><td class="c">232c05aa</td><td class="c">7</td><td>Venda de garrotes</td><td class="c">DRE</td><td class="c"><span class="chip ent">entregue</span></td><td class="r pos">25.056,24</td></tr><tr class="g1"><td class="c">—</td><td class="c">25/07/2025</td><td class="c">25/07/2025</td><td class="c">Recebimento</td><td>Recebimento 4 de 4</td><td class="r"></td><td class="c">232c05aa</td><td class="c"></td><td>Adiantamento de clientes</td><td class="c">Caixa</td><td class="c"><span class="chip ok">conciliado</span></td><td class="r pos">231.104,00</td></tr></tbody>
+ </table>
+</div>
+
+<div class="lbl">Os filtros separam os dois lados sozinhos</div>
+<div class="strip">
+ <div class="box"><h5>Filtro Competência = mar/2025 · só entregas · o DRE de março</h5>
+  <table><colgroup><col style="width:95px"><col><col style="width:50px"><col style="width:110px"></colgroup>
+  <thead><tr><th>Competência</th><th>Descrição</th><th>Cab</th><th>Valor</th></tr></thead><tbody>
+   <tr class="g1"><td class="c">19/03/2025</td><td>Venda desmama M</td><td class="r">178</td><td class="r pos">565.521,66</td></tr>
+   <tr class="g2"><td class="c">20/03/2025</td><td>Venda desmama M</td><td class="r">139</td><td class="r pos">426.616,58</td></tr>
+   <tr class="ft"><td colspan="2">Março</td><td class="r">317</td><td class="r pos">992.138,24</td></tr>
+  </tbody></table></div>
+ <div class="box"><h5>Filtro Pagamento = abr/2025 · só recebimentos · o caixa de abril</h5>
+  <table><colgroup><col style="width:95px"><col><col style="width:110px"></colgroup>
+  <thead><tr><th>Pagamento</th><th>Descrição</th><th>Valor</th></tr></thead><tbody>
+   <tr class="g1"><td class="c">17/04/2025</td><td>Recebimento 1 de 4 · conciliado com o extrato</td><td class="r pos">992.140,99</td></tr>
+   <tr class="ft"><td colspan="2">Abril</td><td class="r pos">992.140,99</td></tr>
+  </tbody></table></div>
+</div>
+
+<div class="note"><b>Mock v4 · conta corrente da OC (OC-VENDA-ENTREGAS-01b).</b> Valores reais da OC 232c05aa; o bloco do adiantamento é exemplo. Nomes de subcentro ilustrativos (saem do plano de contas).<br>
+• <b>Dois lados que não se misturam</b>: a <b>entrega</b> é a receita (competência = data da saída, vai para o DRE, não mexe no caixa); o <b>recebimento</b> é dinheiro (data do pagamento, vai para o caixa e a conciliação, fica em "Adiantamento de clientes", fora do DRE).<br>
+• <b>Saldo do comprador</b> = entregue − recebido, sempre calculado, nunca gravado. "Ele deve" quando o gado saiu antes do dinheiro; "Adiantado por ele" quando o dinheiro veio antes do gado.<br>
+• <b>Conciliação 1 para 1</b>: cada recebimento casa com uma linha do extrato. Não é preciso dizer qual recebimento pagou qual lote.<br>
+• <b>Saldo final</b> com as entregas concluídas é a diferença, explicada no 01c. A OC fecha mesmo sem explicar.<br>
+• Na compra é o espelho: "Adiantamento a fornecedores".</div>
+</body></html>

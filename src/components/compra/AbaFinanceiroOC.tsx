@@ -2,6 +2,8 @@ import { AbaLiquidacaoOC } from './AbaLiquidacaoOC';
 import type { PropostaCompromisso } from '@/components/compra/DialogoGerarCompromissos';
 import { AbaCompromissosOC, type LinhaPrevisao, type RotulosCompromissos } from './AbaCompromissosOC';
 import { useOcCompromissos, type OcCompromissosApi } from '@/hooks/useOcCompromissos';
+import { useOcContaCorrente } from '@/hooks/useOcContaCorrente';
+import { AbaContaCorrenteOC } from '@/components/venda/AbaContaCorrenteOC';
 import { AlertTriangle } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import type { LiquidacaoApi } from '@/hooks/useOperacaoLiquidacao';
@@ -73,6 +75,15 @@ export function AbaFinanceiroOC(props: Props) {
   });
   const ocApi = props.ocApiExterno ?? ocApiProprio;
   const modo = ocApi.resumoOperacao?.modo;
+  /* OC-VENDA-ENTREGAS-01b — o MODELO decide antes do modo: venda em conta corrente nao tem compromisso nem titulo por
+     parcela, tem entregas e recebimentos (ADR-2026-21). O modelo vem do banco (`oc_conta_corrente.modelo`), nunca inferido
+     das partes. Hook sempre chamado; so' liga na venda. */
+  const ccApi = useOcContaCorrente({
+    operacaoId: operacaoId ?? null,
+    enabled: !!operacaoId && api.tipoOperacao === 'venda',
+    versao: props.ocVersao ?? versaoLocal,
+    onVersaoChange: props.onOcVersaoChange ?? setVersaoLocal,
+  });
 
   const legado = (
     <AbaLiquidacaoOC
@@ -85,6 +96,12 @@ export function AbaFinanceiroOC(props: Props) {
   );
 
   if (!operacaoId || !clienteId) return legado;
+  if (ccApi.contaCorrente?.modelo === 'conta_corrente') {
+    return <AbaContaCorrenteOC api={ccApi} somenteLeitura={props.financeiroNovoReadOnly} />;
+  }
+  if (api.tipoOperacao === 'venda' && !ccApi.contaCorrente && !ccApi.erro) {
+    return <div className="py-10 text-center text-[11px] text-muted-foreground">Carregando…</div>;
+  }
   if (ocApi.loading && !ocApi.resumoOperacao) {
     return <div className="py-10 text-center text-[11px] text-muted-foreground">Carregando…</div>;
   }

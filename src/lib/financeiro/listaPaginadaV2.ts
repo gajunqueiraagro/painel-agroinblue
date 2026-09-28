@@ -59,6 +59,9 @@ export const COLUNAS_VIEW_DOC = [
   'cancelado', 'conciliado_em', 'editado_manual', 'created_at', 'updated_at',
   'mes_competencia', 'mes_vencimento', 'mes_pagamento', 'mes_financeira',
   'documento_formatado',
+  /* OC-VENDA-ENTREGAS-01b: a view ganhou `sem_movimentacao_caixa` (os totais separam caixa de sem caixa) e a lista passa a
+     ler `compoe_dre`, que a view ja tinha — as duas alimentam as colunas Tipo e "Vai para". */
+  'compoe_dre', 'sem_movimentacao_caixa',
 ] as const;
 
 /** Linha da view. `sinal` é TEXT no schema, apesar do contrato antigo dizer number. */
@@ -107,6 +110,8 @@ export interface LinhaViewDoc {
   mes_pagamento: number | null;
   mes_financeira: number | null;
   documento_formatado: string;
+  compoe_dre: boolean | null;
+  sem_movimentacao_caixa: boolean | null;
 }
 
 export type ColunaView = keyof LinhaViewDoc & string;
@@ -518,9 +523,12 @@ export function filtrosAplicadosDaLista(base: FiltrosV2, estado: EstadoFiltrosLi
 
 export interface LinhaTotais {
   total: number;
+  /** OC-VENDA-ENTREGAS-01b (D2): so' caixa. O sem caixa vem nas duas colunas do fim. */
   entradas: number;
   saidas: number;
   excluidos_sem_vencimento: number;
+  entradas_sem_caixa: number;
+  saidas_sem_caixa: number;
 }
 
 export interface TotaisLista {
@@ -528,6 +536,8 @@ export interface TotaisLista {
   entradas: number;
   saidas: number;
   excluidosSemVencimento: number;
+  entradasSemCaixa: number;
+  saidasSemCaixa: number;
 }
 
 /** Argumentos da RPC. Nomeados como no SQL — o compilador confere cada um. */
@@ -639,6 +649,8 @@ export async function consultarTotais(
     entradas: Number(linha?.entradas ?? 0),
     saidas: Number(linha?.saidas ?? 0),
     excluidosSemVencimento: Number(linha?.excluidos_sem_vencimento ?? 0),
+    entradasSemCaixa: Number(linha?.entradas_sem_caixa ?? 0),
+    saidasSemCaixa: Number(linha?.saidas_sem_caixa ?? 0),
   };
 }
 
@@ -653,6 +665,7 @@ export interface RegistroListaV2 extends LinhaFiltravel {
   data_vencimento?: string | null;
   numero_documento?: string | null;
   tipo_documento?: string | null;
+  sem_movimentacao_caixa?: boolean | null;
 }
 
 /** Filtro de Documento em memória — a cadeia exata da tela. */
@@ -693,16 +706,22 @@ export function sinalNumerico(sinal?: string | number | null): number {
 }
 
 /** Totais em memória, para o caminho com a flag desligada e para os gates A/B. */
-export function totaisNoCliente(linhas: readonly RegistroListaV2[]): { entradas: number; saidas: number } {
+export function totaisNoCliente(linhas: readonly RegistroListaV2[]): {
+  entradas: number; saidas: number; entradasSemCaixa: number; saidasSemCaixa: number;
+} {
+  /* OC-VENDA-ENTREGAS-01b (D2): o mesmo corte da RPC — sem caixa fora de entradas/saidas, com total proprio. */
   let entradas = 0;
   let saidas = 0;
+  let entradasSemCaixa = 0;
+  let saidasSemCaixa = 0;
   for (const l of linhas) {
     const v = Number(l.valor) || 0;
     const s = sinalNumerico(l.sinal);
-    if (s > 0) entradas += v;
-    else if (s < 0) saidas += v;
+    const semCaixa = l.sem_movimentacao_caixa === true;
+    if (s > 0) { if (semCaixa) entradasSemCaixa += v; else entradas += v; }
+    else if (s < 0) { if (semCaixa) saidasSemCaixa += v; else saidas += v; }
   }
-  return { entradas, saidas };
+  return { entradas, saidas, entradasSemCaixa, saidasSemCaixa };
 }
 
 /** Reexportado para quem monta o ramo de busca fora daqui. */

@@ -32,7 +32,9 @@ export const SUBCENTRO_VENDA_BOITEL = 'Venda em Boitel';
  * Planejamento; deixá-las de fora faria a unificação devolver `null` onde antes havia
  * classificação, e uma linha da meta sumiria da grade sem erro nenhum.
  */
-const POR_CATEGORIA: Record<string, string> = {
+/* ⚠ EXPORTADO SO' PARA O TESTE DO ESPELHO (OC-VENDA-ENTREGAS-01b): `_oc_subcentro_venda` no banco repete este mapa, e
+   `subcentroVendaEspelho.test.ts` compara os dois pelo texto da migration. Mudou aqui, muda la'. */
+export const POR_CATEGORIA: Record<string, string> = {
   mamotes_m: 'Venda de Desmama Machos',
   desmama_m: 'Venda de Desmama Machos',
   bezerros_m: 'Venda de Desmama Machos',

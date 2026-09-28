@@ -307,11 +307,12 @@ describe('E3/E4 — contagem e totais vêm da RPC, não de varredura', () => {
     const chamar: ChamarRpcTotais = async (params) => {
       chamadas.push(params);
       const alvo = referencia(filtros, linhas) as unknown as RegistroListaV2[];
-      const { entradas, saidas } = totaisNoCliente(alvo);
+      const { entradas, saidas, entradasSemCaixa, saidasSemCaixa } = totaisNoCliente(alvo);
       return {
         data: [{
           total: alvo.length, entradas, saidas,
           excluidos_sem_vencimento: 0,
+          entradas_sem_caixa: entradasSemCaixa, saidas_sem_caixa: saidasSemCaixa,
         }],
         error: null,
       };
@@ -329,7 +330,8 @@ describe('E3/E4 — contagem e totais vêm da RPC, não de varredura', () => {
     const { chamar } = rpcSimulada(ACERVO, MARCO);
     const t = await consultarTotais(chamar, CLIENTE, MARCO);
     const esperado = totaisNoCliente(referencia(MARCO) as unknown as RegistroListaV2[]);
-    expect({ entradas: t.entradas, saidas: t.saidas }).toEqual(esperado);
+    /* OC-VENDA-ENTREGAS-01b: o contrato ganhou os dois totais sem caixa; o caso compara os quatro. */
+    expect({ entradas: t.entradas, saidas: t.saidas, entradasSemCaixa: t.entradasSemCaixa, saidasSemCaixa: t.saidasSemCaixa }).toEqual(esperado);
   });
 
   it('UMA chamada, e nenhuma linha trafegada', async () => {
@@ -631,9 +633,10 @@ describe('ruído estrutural nunca aparece', () => {
 });
 
 describe('a projeção da view é nominal e única', () => {
-  it('44 colunas, sem repetição', () => {
-    expect(COLUNAS_VIEW_DOC).toHaveLength(44);
-    expect(new Set(COLUNAS_VIEW_DOC).size).toBe(44);
+  it('46 colunas, sem repetição', () => {
+    /* 44 -> 46 no OC-VENDA-ENTREGAS-01b: `compoe_dre` (a view ja tinha) e `sem_movimentacao_caixa` (entrou na view). */
+    expect(COLUNAS_VIEW_DOC).toHaveLength(46);
+    expect(new Set(COLUNAS_VIEW_DOC).size).toBe(46);
   });
 
   it('não expõe colunas internas', () => {
@@ -730,7 +733,7 @@ describe('flag OFF/ON — as duas vias concordam', () => {
     let linhasTrafegadas = 0;
     const chamar: ChamarRpcTotais = async () => {
       linhasTrafegadas += 0;   // a RPC devolve UMA linha de agregados
-      return { data: [{ total: muitas.length, entradas: 0, saidas: 0, excluidos_sem_vencimento: 0 }], error: null };
+      return { data: [{ total: muitas.length, entradas: 0, saidas: 0, excluidos_sem_vencimento: 0, entradas_sem_caixa: 0, saidas_sem_caixa: 0 }], error: null };
     };
     const t = await consultarTotais(chamar, CLIENTE, MARCO);
     expect(t.total).toBe(5000);

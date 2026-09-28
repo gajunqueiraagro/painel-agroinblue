@@ -372,7 +372,11 @@ export function ContasPagarReceberTab() {
           /* Transferência não é conta a pagar nem a receber: é dinheiro trocando de bolso.
              São DUAS grafias no banco ('3-Transferência' e '3-Transferências'), então o
              corte é pelo prefixo — igualdade deixaria as seis linhas do singular passarem. */
-          .or('tipo_operacao.not.like.3-*');
+          .or('tipo_operacao.not.like.3-*')
+          /* OC-VENDA-ENTREGAS-01b (D3): sem caixa nao e' conta a pagar nem a receber — a entrega da conta corrente, o
+             barter e o consumo nascem `realizado` sem conta e sem dinheiro. Sai SEMPRE, inclusive com o filtro
+             Realizado ligado. NULL conta como caixa, como na lista. */
+          .or('sem_movimentacao_caixa.is.null,sem_movimentacao_caixa.eq.false');
         if (ramo) q = q.or(ramo);
         const { data, error } = await q
           .order('data_vencimento', { ascending: true, nullsFirst: false })

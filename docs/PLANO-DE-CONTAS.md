@@ -5,6 +5,9 @@
 > ⚠ Exceção registrada: a linha **1155** (BOITEL-ABATE-PRODUTOR-01, 26/09/2026) foi acrescentada à mão a pedido
 > do Gabriel, DEPOIS da migration `20261027154000` e conferida contra o banco (229 linhas, 221 globais). A próxima
 > regeração a absorve sem diferença.
+> ⚠ Idem para **3015 Adiantamento de Clientes** e **5005 Adiantamento a Fornecedores** (OC-VENDA-ENTREGAS-01b,
+> 28/09/2026, migration `20261027167000`), no vão de Movimentações Financeiras, sem renumerar — conferido: 231 linhas,
+> 223 globais.
 
 Fonte: `public.financeiro_plano_contas` no Supabase **proto** (`binbcdfbisgscrifztia`).
 Hierarquia: **tipo de operação › macro custo › grupo de custo › centro de custo › subcentro**.
@@ -52,6 +55,7 @@ de decisão, não `false`.
 | ordem | centro | subcentro | escopo | DRE | LCDPR | bloco | origem |
 |---:|---|---|---|:-:|:-:|---|---|
 | 4005 | Ajustes | Estorno Recebido | administrativo | não | — | — | global |
+| 3015 | Movimentações Financeiras | Adiantamento de Clientes | pecuaria | não | — | — | global |
 | 3025 | Movimentações Financeiras | Devolução de Adiantamento - Parceiro Lavoura | agricultura | não | — | — | global |
 | 3020 | Movimentações Financeiras | Devolução de Adiantamento de Boitel | pecuaria | não | — | — | global |
 
@@ -421,6 +425,7 @@ de decisão, não `false`.
 | ordem | centro | subcentro | escopo | DRE | LCDPR | bloco | origem |
 |---:|---|---|---|:-:|:-:|---|---|
 | 16005 | Ajustes | Pagamento Estornado | administrativo | não | — | — | global |
+| 5005 | Movimentações Financeiras | Adiantamento a Fornecedores | pecuaria | não | — | — | global |
 | 10005 | Movimentações Financeiras | Adiantamento a Parceiro - Lavoura | agricultura | não | — | — | global |
 | 5010 | Movimentações Financeiras | Adiantamento de Boitel | pecuaria | não | — | — | global |
 

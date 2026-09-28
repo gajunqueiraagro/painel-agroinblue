@@ -34,6 +34,7 @@ Registro oficial das decisões arquiteturais do projeto.
 | [ADR-2026-18](./ADR-2026-18-soberania-financeira-fronteira-oc-financeiro.md) | Soberania Financeira e Fronteira entre Operação Comercial e Financeiro | Aceito | 27/07/2026 |
 | [ADR-2026-19](./ADR-2026-19-liquidacao-operacional-satisfacao-obrigacoes.md) | Liquidação Operacional e Satisfação das Obrigações | Aceito | 27/07/2026 |
 | [ADR-2026-20](./ADR-2026-20-estado-liquidacao-pelo-lado.md) | Estado de liquidação pelo lado da operação; obrigações do outro lado como despesas | Aceito | 25/09/2026 |
+| [ADR-2026-21](./ADR-2026-21-receita-na-entrega-conta-corrente.md) | Receita na entrega, recebimento como adiantamento: o modelo conta corrente da OC | Proposto | 28/09/2026 |
 
 Nota: a numeração desta pasta inicia em 04; os números 01–03 não possuem
 arquivo nesta pasta (histórico anterior à padronização).
