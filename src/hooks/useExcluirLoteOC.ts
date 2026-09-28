@@ -16,7 +16,6 @@
  * `oc_excluir_lote` avança `zoo_operacoes_comerciais.versao`, e reusar a velha volta 40001.
  */
 import { useCallback, useState } from 'react';
-import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import type { Json } from '@/integrations/supabase/types';
 
@@ -27,7 +26,7 @@ export interface ItemDoRol {
   id: string | null;
 }
 
-/** O que impede a exclusão. Hoje só existe `conciliado`. */
+/** O que impede a exclusão: `conciliado`, `saida_adotada` ou `saida_ativa` (OC-VENDA-ENTREGAS-01a-fix). */
 export interface Bloqueio {
   tipo: string;
   descricao: string;
@@ -49,6 +48,8 @@ export interface ResultadoExclusao {
 export interface ExcluirLoteApi {
   simulando: boolean;
   excluindo: boolean;
+  /** A falha da ultima chamada, para o DIALOGO mostrar ao lado do botao — sem toast (UX-TOAST-01). */
+  erro: string | null;
   simular: (loteId: string) => Promise<SimulacaoExclusao | null>;
   excluir: (loteId: string, versaoEsperada: number, motivo: string) => Promise<ResultadoExclusao | null>;
 }
@@ -84,10 +85,12 @@ export function useExcluirLoteOC(
 ): ExcluirLoteApi {
   const [simulando, setSimulando] = useState(false);
   const [excluindo, setExcluindo] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
 
   const simular = useCallback(async (loteId: string): Promise<SimulacaoExclusao | null> => {
     if (!operacaoId || !clienteId) return null;
     setSimulando(true);
+    setErro(null);
     try {
       const { data, error } = await supabase.rpc('oc_excluir_lote', {
         p_operacao_id: operacaoId, p_cliente_id: clienteId,
@@ -104,7 +107,7 @@ export function useExcluirLoteOC(
         bloqueios: lerBloqueios(env.bloqueios),
       };
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Falha ao simular a exclusão do lote.');
+      setErro(e instanceof Error ? e.message : 'Falha ao simular a exclusão do lote.');
       return null;
     } finally {
       setSimulando(false);
@@ -116,6 +119,7 @@ export function useExcluirLoteOC(
   ): Promise<ResultadoExclusao | null> => {
     if (!operacaoId || !clienteId) return null;
     setExcluindo(true);
+    setErro(null);
     try {
       const { data, error } = await supabase.rpc('oc_excluir_lote', {
         p_operacao_id: operacaoId, p_cliente_id: clienteId,
@@ -138,12 +142,12 @@ export function useExcluirLoteOC(
         valorAcordado: Number.isFinite(acordado) ? acordado : null,
       };
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Falha ao excluir o lote.');
+      setErro(e instanceof Error ? e.message : 'Falha ao excluir o lote.');
       return null;
     } finally {
       setExcluindo(false);
     }
   }, [operacaoId, clienteId]);
 
-  return { simulando, excluindo, simular, excluir };
+  return { simulando, excluindo, erro, simular, excluir };
 }

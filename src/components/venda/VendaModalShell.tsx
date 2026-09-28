@@ -603,6 +603,8 @@ export function VendaModalShell({
               concluida={ocStatusComercial === 'fechada'}
               encerrada={ocEntregaEncerrada}
               isCompra={false}
+              /* OC-VENDA-ENTREGAS-01a — entrega por saida, com "Adotar saida ja lancada". So' a venda liga (D4a). */
+              adocao={{ fazendaNome, contraparteNome: compradorNome }}
               categoriasDisponiveis={categoriasDisponiveis}
               documentosApi={documentosApi}
               /* ⚠ A DATA DA OPERACAO, e nao a de hoje: a saida pertence a' operacao. */

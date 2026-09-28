@@ -194,21 +194,34 @@ export function useCompraLotes({ operacaoId, clienteId, versao, onVersaoChange, 
     }
   }, [operacaoId, clienteId, versao, lotes, onVersaoChange, carregar, onReabrir]);
 
-  const totais = useMemo(() => {
-    let animais = 0, pesoTotal = 0, valorNegociado = 0;
-    for (const l of lotes) {
-      const q = parseNumericValue(l.quantidade) || 0;
-      const pm = parseNumericValue(l.pesoMedioKg) || 0;
-      const v = parseNumericValue(l.valorInformado) || 0;
-      const pt = q * pm;
-      animais += q;
-      pesoTotal += pt;
-      valorNegociado += l.criterioValor === 'kg' ? pt * v : l.criterioValor === 'cabeca' ? q * v : v;
-    }
-    return { lotes: lotes.length, animais, pesoTotal, valorNegociado };
-  }, [lotes]);
+  const totais = useMemo(() => totaisDosLotes(lotes), [lotes]);
 
   return { lotes, loading, saving, adicionarLote, editarLote, removerLote, salvar, recarregar: carregar, totais };
+}
+
+/* OC-VENDA-ENTREGAS-01a — O TOTAL DA TELA E' O NUMERO QUE O BANCO GRAVA. `_oc_valor_do_lote` arredonda CADA lote a centavos
+   (`ROUND(..., 2)`) e `oc_salvar_lotes` soma os arredondados em `valor_acordado`. Esta soma juntava os valores CRUS e so' o
+   total era arredondado na hora de formatar: a 232c05aa gravou 2.366.601,26 e a Negociacao mostrava 2.366.601,25 (os sete
+   lotes crus somam 2.366.601,252). Agora cada lote vira centavos inteiros antes de somar — a mesma regra do banco.
+   ⚠ `toPrecision(15)` antes do `Math.round`: `x * 100` em ponto flutuante pode cair um fio abaixo da meia unidade
+   (1,005 * 100 = 100,49999999999999) e arredondar para baixo onde o `ROUND` do Postgres arredonda para cima. */
+export function centavosDoLote(criterio: string | null | undefined, quantidade: number, pesoMedioKg: number, valorInformado: number): number {
+  const bruto = criterio === 'kg' ? quantidade * pesoMedioKg * valorInformado
+    : criterio === 'cabeca' ? quantidade * valorInformado : valorInformado;
+  return Math.round(Number((bruto * 100).toPrecision(15)));
+}
+
+export function totaisDosLotes(lotes: { quantidade: string; pesoMedioKg: string; valorInformado: string; criterioValor: string | null }[]) {
+  let animais = 0, pesoTotal = 0, centavos = 0;
+  for (const l of lotes) {
+    const q = parseNumericValue(l.quantidade) || 0;
+    const pm = parseNumericValue(l.pesoMedioKg) || 0;
+    const v = parseNumericValue(l.valorInformado) || 0;
+    animais += q;
+    pesoTotal += q * pm;
+    centavos += centavosDoLote(l.criterioValor, q, pm, v);
+  }
+  return { lotes: lotes.length, animais, pesoTotal, valorNegociado: centavos / 100 };
 }
 
 /* PR-OC-UX-LOTE-B-02 — MEDIAS DA NEGOCIACAO, um lugar so.

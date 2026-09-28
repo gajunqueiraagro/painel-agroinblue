@@ -10,6 +10,7 @@ import { formatMed2 } from '@/lib/calculos/formatters';
 import type { RecebimentoApi, EstadoRecebimento, LoteRecebimento } from '@/hooks/useOperacaoRecebimento';
 import type { DocumentosApi } from '@/hooks/useOperacaoDocumentos';
 import { DocumentoFormOC, FORM_VAZIO } from './DocumentoFormOC';
+import { EntregasVendaTabela, EnviarTodosDialog } from '@/components/venda/EntregasVendaTabela';
 
 // Aba Recebimento (PR-OC-RECEB-01). Lotes negociados aparecem automaticamente; registro/estorno
 //   por lote; "Receber todos conforme negociado"; divergência por lote; encerrar recebimento.
@@ -36,6 +37,10 @@ interface Props {
      VERBO, nunca o campo: quantidade, data e categoria descrevem o mesmo fato nos dois.
      ⚠ SO TEXTO DE TELA. Nenhum identificador, nenhum nome de prop, nenhuma chave de api. */
   rotulos?: RotulosEntrega;
+  /* OC-VENDA-ENTREGAS-01a — liga a entrega por SAIDA (mock oc_venda_entregas_mock_v2): uma linha por saida de cada
+     lote, "Adotar saida ja lancada" e o "Enviar todos" com uma data por linha. So' o `VendaModalShell` passa: o
+     abate tambem usa `isCompra={false}` e fica como estava (D4a). Os nomes vao so' para o texto do seletor. */
+  adocao?: { fazendaNome: string | null; contraparteNome: string | null };
 }
 
 export interface RotulosEntrega {
@@ -186,7 +191,7 @@ function ReceberLoteDialog({ lote, rotulo, pesoSugerido, hoje, isCompra, saving,
   );
 }
 
-export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada, isCompra, categoriasDisponiveis, documentosApi, dataOperacao, somenteLeitura, onVoltarNegociacao, rotulos }: Props) {
+export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada, isCompra, categoriasDisponiveis, documentosApi, dataOperacao, somenteLeitura, onVoltarNegociacao, rotulos, adocao }: Props) {
   /* ⚠ AS TRES TABELAS POR LINHA (`qtd`, `peso`, `dataReb`) SAIRAM em
      PR-OC-RECEB-REGISTRO-02. Elas so existiam para alimentar os inputs inline da
      grade de onze colunas; com os campos dentro do modal, os valores viajam por
@@ -199,6 +204,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
   const [motivoEncerrar, setMotivoEncerrar] = useState('');
   const [reabrirOpen, setReabrirOpen] = useState(false);
   const [motivoReabrir, setMotivoReabrir] = useState('');
+  const [enviarTodosOpen, setEnviarTodosOpen] = useState(false);
   const hoje = new Date().toISOString().slice(0, 10);
   /* O que o campo de data traz aberto. Editavel: o operador corrige quando a saida (ou a
      chegada) nao aconteceu no dia da operacao. */
@@ -340,7 +346,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
               aparecem ao rolar. So no eixo vertical. */}
           <div className="sticky top-0 z-10 -mt-1.5 space-y-1.5 border-b bg-card pt-1.5 pb-1.5">
             <div className="flex items-baseline justify-between gap-3">
-              <span className="text-[12px] font-medium text-foreground min-w-0 truncate">{rotulos?.tituloSecao ?? 'Recebimento por lote na fazenda'}</span>
+              <span className="text-[12px] font-medium text-foreground min-w-0 break-words">{rotulos?.tituloSecao ?? 'Recebimento por lote na fazenda'}</span>
               <span className="text-[11px] font-normal text-muted-foreground shrink-0">encerrado</span>
             </div>
             {/* ── DOIS NUMEROS ────────────────────────────────────────────────
@@ -411,12 +417,12 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
                 return (
                   <div key={l.loteId} className="px-3.5 py-1.5 leading-[1.35]">
                     <div className="flex items-baseline justify-between gap-3">
-                      <span className="min-w-0 truncate text-[11px] font-medium text-foreground">{catLabel(l.categoria)}</span>
+                      <span className="min-w-0 break-words text-[11px] font-medium text-foreground">{catLabel(l.categoria)}</span>
                       <span className={`shrink-0 rounded-full px-1.5 py-px text-[10px] font-normal ${TONE[l.estado]}`}>
                         {LABEL[l.estado]}
                       </span>
                     </div>
-                    <div className={`truncate text-[10px] font-normal ${temFalta ? 'text-amber-700 dark:text-amber-500' : 'text-muted-foreground'}`}>
+                    <div className={`break-words text-[10px] font-normal ${temFalta ? 'text-amber-700 dark:text-amber-500' : 'text-muted-foreground'}`}>
                       {contexto}
                     </div>
                   </div>
@@ -431,12 +437,13 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
               `-mt-1.5 pt-1.5` porque o cartao desta aba e' `p-1.5`, nao `p-2`. */}
           <div className="sticky top-0 z-10 -mt-1.5 space-y-1.5 border-b bg-card pt-1.5 pb-1.5">
             <div className="flex items-baseline justify-between gap-3">
-              <span className="text-[12px] font-medium text-foreground min-w-0 truncate">{rotulos?.tituloSecao ?? 'Recebimento por lote na fazenda'}</span>
+              <span className="text-[12px] font-medium text-foreground min-w-0 break-words">{rotulos?.tituloSecao ?? 'Recebimento por lote na fazenda'}</span>
               {/* ATALHO DO CASO COMUM: resolve a entrega conforme negociada sem abrir
                   modal nenhum. Some quando nao ha saldo — acao que nao faz nada e' pior
                   que acao ausente. */}
               {!readOnly && algumLoteComSaldo && (
-                <button type="button" disabled={api.saving} onClick={() => void api.receberTodos()}
+                <button type="button" disabled={api.saving}
+                  onClick={() => { if (adocao) setEnviarTodosOpen(true); else void api.receberTodos(); }}
                   title="Registrar em todos os lotes a quantidade negociada"
                   aria-label={rotulos?.movimentarTodos ?? 'Receber todos conforme negociado'}
                   className="shrink-0 text-[11px] font-normal text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline">
@@ -487,7 +494,17 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
               ⚠ ESTADO E DIFERENCA DIZIAM O MESMO em duas colunas. Sobrou um: a pilula
               aparece quando nao ha mais o que receber; havendo saldo, o lugar e' da
               ACAO, que e' o que o operador precisa ali. */}
-          {api.lotes.length === 0 ? (
+          {adocao ? (
+            <EntregasVendaTabela
+              api={api}
+              catLabel={catLabel}
+              readOnly={!!readOnly}
+              fazendaNome={adocao.fazendaNome}
+              contraparteNome={adocao.contraparteNome}
+              onRegistrarNova={setReceberLoteId}
+              onEstornar={(id) => void api.estornar(id, rotulos?.motivoEstornoPadrao ?? 'estorno pela aba Recebimento')}
+            />
+          ) : api.lotes.length === 0 ? (
             <div className="rounded-md border border-dashed bg-muted/10 px-3 py-3 text-center text-[11px] text-muted-foreground">
               {api.loading ? 'Carregando…' : 'Nenhum lote negociado.'}
             </div>
@@ -514,8 +531,8 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
                 return (
                   <div key={l.loteId} className="flex items-center gap-3 px-3.5 py-1.5 leading-[1.35]">
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-[11px] font-medium text-foreground">{catLabel(l.categoria)}</div>
-                      <div className={`truncate text-[10px] font-normal ${atencao ? 'text-amber-700 dark:text-amber-500' : 'text-muted-foreground'}`}>
+                      <div className="break-words text-[11px] font-medium text-foreground">{catLabel(l.categoria)}</div>
+                      <div className={`break-words text-[10px] font-normal ${atencao ? 'text-amber-700 dark:text-amber-500' : 'text-muted-foreground'}`}>
                         {contexto}
                       </div>
                     </div>
@@ -566,8 +583,9 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
         />
       )}
 
-      {/* Movimentações registradas (com estorno antes do encerramento) */}
-      {movsAtivas.length > 0 && (
+      {/* Movimentações registradas (com estorno antes do encerramento). Com `adocao` e a entrega aberta, a tabela
+          por saida ja' mostra cada uma, com estornar/desvincular na linha. */}
+      {movsAtivas.length > 0 && !(adocao && !encerrada) && (
         <div className="space-y-0.5">
           <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Movimentações registradas</div>
           {/* Era uma frase por movimentacao, com os campos separados por bolinhas: nada
@@ -624,6 +642,17 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
             <Undo2 className="h-3 w-3" /> Reabrir recebimento
           </Button>
         </div>
+      )}
+
+      {enviarTodosOpen && (
+        <EnviarTodosDialog
+          lotes={api.lotes}
+          dataPadrao={dataPadrao}
+          catLabel={catLabel}
+          saving={api.saving}
+          onFechar={() => setEnviarTodosOpen(false)}
+          onConfirmar={(datas) => { setEnviarTodosOpen(false); void api.receberTodos(datas); }}
+        />
       )}
 
       {/* Encerramento com consequência EXPLÍCITA (substitui a confirmação fraca). Motivo obrigatório quando

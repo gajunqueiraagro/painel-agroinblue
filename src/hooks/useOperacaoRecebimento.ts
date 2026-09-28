@@ -19,6 +19,9 @@ export interface LoteRecebimento {
   diferenca: number;
   estado: EstadoRecebimento;
   pesoMedioNegociadoKg: number | null;   // referência (só inicializa o input Peso méd.; vínculo por loteId)
+  /* OC-VENDA-ENTREGAS-01a — o contrato do lote, para a coluna "Contratado" da entrega da venda. */
+  criterioValor: string | null;
+  valorInformado: number | null;
 }
 
 export interface MovimentacaoOC {
@@ -29,6 +32,23 @@ export interface MovimentacaoOC {
   quantidade: number;
   pesoMedio: number | null;
   cancelado: boolean;
+  /* OC-VENDA-ENTREGAS-01a — 'adotada' e' saida que ja existia no zootecnico e foi ligada ao lote; desfaz-se
+     com Desvincular, nunca com Estornar. O valor e' o do lancamento, nunca reescrito. */
+  origem: 'registrada' | 'adotada';
+  lancamentoId: string;
+  valorTotal: number | null;
+}
+
+/** Saida do zootecnico que o lote pode adotar (`oc_saidas_adotaveis`). */
+export interface SaidaAdotavel {
+  lancamentoId: string;
+  data: string;
+  categoria: string | null;
+  quantidade: number;
+  pesoMedio: number | null;
+  valorTotal: number | null;
+  origemRegistro: string | null;
+  criadoEm: string | null;
 }
 
 export interface RegistroRecebimento {
@@ -45,7 +65,13 @@ export interface RecebimentoApi {
   loading: boolean;
   saving: boolean;
   concluirNegociacao: (opts?: { versaoOverride?: number; silent?: boolean }) => Promise<boolean>;
-  receberTodos: () => Promise<void>;
+  /** `datas` (por loteId): a data de CADA saida — OC-VENDA-ENTREGAS-01a, D3. Sem ela o banco usa a de hoje. */
+  receberTodos: (datas?: Record<string, string>) => Promise<void>;
+  /* OC-VENDA-ENTREGAS-01a — adocao. Devolvem a MENSAGEM de erro (ou null), sem toast: a tela a mostra ao lado
+     do botao (UX-TOAST-01). */
+  listarAdotaveis: (loteId: string) => Promise<{ saidas: SaidaAdotavel[]; erro: string | null }>;
+  adotar: (loteId: string, lancamentoIds: string[]) => Promise<string | null>;
+  desvincular: (movimentacaoId: string) => Promise<string | null>;
   registrar: (loteId: string, dados: RegistroRecebimento) => Promise<void>;
   estornar: (movimentacaoId: string, motivo: string) => Promise<void>;
   encerrar: (motivo: string) => Promise<void>;
@@ -77,8 +103,13 @@ interface LoteRecRow {
   peso_medio_negociado_kg: number | null;
 }
 interface MovRow {
-  id: string; operacao_lote_id: string;
-  lancamentos: { data: string; categoria: string | null; quantidade: number; peso_medio_kg: number | null; cancelado: boolean } | null;
+  id: string; operacao_lote_id: string; movimentacao_id: string; origem: string | null;
+  lancamentos: { data: string; categoria: string | null; quantidade: number; peso_medio_kg: number | null; valor_total: number | null; cancelado: boolean } | null;
+}
+interface LoteContratoRow { id: string; criterio_valor: string | null; valor_informado: number | null }
+interface AdotavelRow {
+  lancamento_id: string; data: string; categoria: string | null; quantidade: number; peso_medio_kg: number | null;
+  valor_total: number | null; origem_registro: string | null; created_at: string | null;
 }
 
 export function useOperacaoRecebimento({ operacaoId, clienteId, versao, onVersaoChange, onStatusChange, onEntregaChange, enabled }: Params): RecebimentoApi {
@@ -91,20 +122,25 @@ export function useOperacaoRecebimento({ operacaoId, clienteId, versao, onVersao
     if (!enabled || !operacaoId) { setLotes([]); setMovimentacoes([]); return; }
     setLoading(true);
     try {
-      const [rec, mov] = await Promise.all([
+      const [rec, mov, ctr] = await Promise.all([
         (supabase as any).from('vw_oc_lotes_recebimento').select('*').eq('operacao_id', operacaoId).order('ordem'),
         (supabase as any).from('zoo_operacao_movimentacoes')
-          .select('id, operacao_lote_id, lancamentos(data, categoria, quantidade, peso_medio_kg, cancelado)')
+          .select('id, operacao_lote_id, movimentacao_id, origem, lancamentos(data, categoria, quantidade, peso_medio_kg, valor_total, cancelado)')
           .eq('operacao_id', operacaoId),
+        (supabase as any).from('zoo_operacao_lotes').select('id, criterio_valor, valor_informado').eq('operacao_id', operacaoId),
       ]);
       /* Leitura por PostgREST, não RPC — mas o mapa também serve: ele preserva a
          mensagem quando não reconhece o código, e traduz 42501 e 40001 quando são eles. */
       if (rec.error) throw normalizarErroRpc(rec.error);
       if (mov.error) throw normalizarErroRpc(mov.error);
+      if (ctr.error) throw normalizarErroRpc(ctr.error);
+      const contratos = new Map(((ctr.data ?? []) as LoteContratoRow[]).map(c => [c.id, c]));
       setLotes(((rec.data ?? []) as LoteRecRow[]).map(r => ({
         loteId: r.lote_id, ordem: r.ordem, categoria: r.categoria_negociada,
         qtdNegociada: r.qtd_negociada, qtdRecebida: r.qtd_recebida, diferenca: r.diferenca, estado: r.estado_recebimento,
         pesoMedioNegociadoKg: r.peso_medio_negociado_kg ?? null,
+        criterioValor: contratos.get(r.lote_id)?.criterio_valor ?? null,
+        valorInformado: contratos.get(r.lote_id)?.valor_informado ?? null,
       })));
       setMovimentacoes(((mov.data ?? []) as MovRow[]).map(m => ({
         id: m.id, loteId: m.operacao_lote_id,
@@ -113,6 +149,9 @@ export function useOperacaoRecebimento({ operacaoId, clienteId, versao, onVersao
         quantidade: m.lancamentos?.quantidade ?? 0,
         pesoMedio: m.lancamentos?.peso_medio_kg ?? null,
         cancelado: m.lancamentos?.cancelado ?? false,
+        origem: m.origem === 'adotada' ? 'adotada' : 'registrada',
+        lancamentoId: m.movimentacao_id,
+        valorTotal: m.lancamentos?.valor_total ?? null,
       })));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Falha ao carregar recebimento.');
@@ -155,13 +194,16 @@ const concluirNegociacao = useCallback(async (opts?: { versaoOverride?: number; 
     } finally { setSaving(false); }
   }, [operacaoId, clienteId, versao, onVersaoChange, onStatusChange, carregar]);
 
-  const receberTodos = useCallback(async () => {
+  const receberTodos = useCallback(async (datas?: Record<string, string>) => {
     if (!guardOp()) return;
     // Recebe SEMPRE o saldo pendente por lote (diferenca > 0): inclui parciais, nunca repete o
     // que já foi recebido; ignora lotes completos (diferenca=0) ou excedentes (diferenca<0).
+    /* OC-VENDA-ENTREGAS-01a (D3): com `datas`, cada item leva a data da SUA saida — a RPC ja' aceitava
+       `data` por item, e sem ela grava a de hoje. Sem `datas` (compra), o payload e' o de sempre. */
     const itens = lotes
       .filter(l => l.diferenca > 0)
-      .map(l => ({ lote_id: l.loteId, categoria: l.categoria, quantidade: l.diferenca }));
+      .map(l => ({ lote_id: l.loteId, categoria: l.categoria, quantidade: l.diferenca,
+                   ...(datas?.[l.loteId] ? { data: datas[l.loteId] } : {}) }));
     if (itens.length === 0) { toast.info('Nenhum saldo pendente para receber conforme negociado.'); return; }
     setSaving(true);
     try {
@@ -208,6 +250,64 @@ const concluirNegociacao = useCallback(async (opts?: { versaoOverride?: number; 
       toast.error(e instanceof Error ? e.message : 'Falha ao estornar.');
     } finally { setSaving(false); }
   }, [operacaoId, clienteId, carregar]);
+
+  /* ── OC-VENDA-ENTREGAS-01a — ADOTAR SAIDA JA LANCADA ─────────────────────────────────────────
+     Adotar so' cria o vinculo lote -> movimentacao; o banco decide quem pode (`_oc_motivo_nao_adotavel`,
+     a mesma regra da lista e da gravacao). Varias saidas no mesmo gesto: uma RPC por saida, cada uma com a
+     versao que a anterior DEVOLVEU — a do render ficaria velha na segunda (40001).
+     ⚠ SEM TOAST: devolvem a mensagem, e a tela a poe ao lado do botao (UX-TOAST-01). */
+  const listarAdotaveis = useCallback(async (loteId: string): Promise<{ saidas: SaidaAdotavel[]; erro: string | null }> => {
+    if (!operacaoId) return { saidas: [], erro: 'Operação não iniciada.' };
+    const { data, error } = await (supabase as any).rpc('oc_saidas_adotaveis', { p_operacao_id: operacaoId, p_lote_id: loteId });
+    if (error) return { saidas: [], erro: normalizarErroRpc(error).message };
+    return {
+      saidas: ((data ?? []) as AdotavelRow[]).map(r => ({
+        lancamentoId: r.lancamento_id, data: r.data, categoria: r.categoria, quantidade: r.quantidade,
+        pesoMedio: r.peso_medio_kg ?? null, valorTotal: r.valor_total ?? null,
+        origemRegistro: r.origem_registro ?? null, criadoEm: r.created_at ?? null,
+      })),
+      erro: null,
+    };
+  }, [operacaoId]);
+
+  const adotar = useCallback(async (loteId: string, lancamentoIds: string[]): Promise<string | null> => {
+    if (!operacaoId || !clienteId) return 'Operação não iniciada.';
+    if (versao == null) return 'Versão da operação indisponível.';
+    if (lancamentoIds.length === 0) return 'Selecione ao menos uma saída.';
+    setSaving(true);
+    let v = versao;
+    try {
+      for (const lancamentoId of lancamentoIds) {
+        const { data, error } = await (supabase as any).rpc('oc_adotar_movimentacao', {
+          p_operacao_id: operacaoId, p_cliente_id: clienteId, p_lote_id: loteId,
+          p_lancamento_id: lancamentoId, p_versao_esperada: v,
+        });
+        if (error) return normalizarErroRpc(error).message;
+        if (data?.versao != null) { v = data.versao; onVersaoChange(data.versao); }
+      }
+      return null;
+    } finally {
+      await carregar();
+      setSaving(false);
+    }
+  }, [operacaoId, clienteId, versao, onVersaoChange, carregar]);
+
+  const desvincular = useCallback(async (movimentacaoId: string): Promise<string | null> => {
+    if (!operacaoId || !clienteId) return 'Operação não iniciada.';
+    if (versao == null) return 'Versão da operação indisponível.';
+    setSaving(true);
+    try {
+      const { data, error } = await (supabase as any).rpc('oc_desvincular_movimentacao', {
+        p_movimentacao_id: movimentacaoId, p_cliente_id: clienteId, p_versao_esperada: versao, p_motivo: null,
+      });
+      if (error) return normalizarErroRpc(error).message;
+      if (data?.versao != null) onVersaoChange(data.versao);
+      return null;
+    } finally {
+      await carregar();
+      setSaving(false);
+    }
+  }, [operacaoId, clienteId, versao, onVersaoChange, carregar]);
 
   const encerrar = useCallback(async (motivo: string) => {
     if (!guardOp()) return;
@@ -328,6 +428,8 @@ const concluirNegociacao = useCallback(async (opts?: { versaoOverride?: number; 
   return useMemo(() => ({
     lotes, movimentacoes, loading, saving,
     concluirNegociacao, receberTodos, registrar, estornar, encerrar, reabrir, estornarTudo,
+    listarAdotaveis, adotar, desvincular,
     recarregar: carregar,
-  }), [lotes, movimentacoes, loading, saving, concluirNegociacao, receberTodos, registrar, estornar, encerrar, reabrir, estornarTudo, carregar]);
+  }), [lotes, movimentacoes, loading, saving, concluirNegociacao, receberTodos, registrar, estornar, encerrar, reabrir, estornarTudo,
+       listarAdotaveis, adotar, desvincular, carregar]);
 }

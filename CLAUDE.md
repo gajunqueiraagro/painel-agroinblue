@@ -882,6 +882,19 @@ no mesmo arquivo.
   ela NAO aparece (a RPC nao abre o nao alocado por grupo, e o caso prova que a busca sabe achar a etapa vizinha); zero, meio
   centavo, nulo ou payload antigo nao desenham a linha; e na lavoura admin ela vem depois das culturas e o modal a mostra.
   ⚠ PROVADO: com a linha da pecuaria desligada, 1 caso cai pela razao certa.
+  De 2141 para 2161 no OC-VENDA-ENTREGAS-01a, em quatro arquivos novos. `src/components/venda/entregasVenda.test.tsx` (+10): as
+  regras puras da entrega por saida (uma linha por saida ATIVA, a pendente, a estornada fora; o preco do contrato; o "Enviar
+  todos" so' com saldo e a data vazia cobrada por linha) e a tabela (selo "adotada · id", valor da SAIDA em verde, nada
+  truncado, cabecalhos centralizados; registrada com "estornar" e adotada com "desvincular"; a recusa do banco ao lado; o
+  seletor que so' oferece o que `oc_saidas_adotaveis` devolveu, cobra a selecao vazia e adota a marcada; e o "Enviar todos"
+  com uma data por lote, vazia em vermelho). `src/hooks/useOperacaoRecebimento.adocao.test.ts` (+5): origem, valor e contrato
+  lidos; varias adocoes encadeando a versao DEVOLVIDA (o banco falso recusa versao velha); selecao vazia sem banco; desvincular
+  e a lista; o `receberTodos` com e sem datas. `src/hooks/compraLotesTotais.test.ts` (+2): o total da Negociacao da 232c05aa e'
+  2.366.601,26 (o do banco) e NAO 2.366.601,25; meio centavo como o ROUND do Postgres. `src/components/compra/excluirLoteDialogo.test.tsx`
+  (+3): o dialogo da lixeira continua aberto quando o pai re-renderiza, a frase da saida adotada sem botao nem dica de
+  conciliacao, e a dica quando o bloqueio e' conciliado.
+  ⚠ PROVADO: com a versao do render no lugar da devolvida 1 caso cai; sem a trava da selecao vazia, 1; com o `NegociacaoOC`
+    aninhado de volta (o arquivo de antes), o caso do re-render cai.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -2842,7 +2855,53 @@ preview que o cabecalho nao sai da tela ao rolar.
     registrado: nao e possivel adicionar ou remover lotes. Estorne o recebimento primeiro." MANDA ESTORNAR E O ESTORNO NAO
     DESTRAVA. Hoje a 232c05aa tem 5 vinculos cancelados e continua travada para incluir os 2 lotes de garrotes (ficam para a FASE 2).
     Regra certa: ADICIONAR lote nunca exige estorno; REMOVER so' trava o lote que tem saida ATIVA.
-  O mock vem do Chat antes da FASE 2.
+    ⚠ CORRIGIDO no OC-VENDA-ENTREGAS-01a (bloco abaixo).
+- ⚠ OC-VENDA-ENTREGAS-01a — UM LOTE ADOTA A SAIDA QUE JA ESTA NO ZOOTECNICO (28/09/2026, mock
+  `docs/mocks/oc_venda_entregas_mock_v2.html`, md5 0ce4e642; decisoes do Gabriel). Tres migrations:
+  `supabase/migrations/20261027166000_oc_venda_entregas_01a.sql` (⚠ registrada como `20260928131303`; ledger = arquivo 2338d944),
+  `supabase/migrations/20261027166100_oc_venda_entregas_01a_dados.sql` (`20260928131426`, 749f1bc1) e
+  `supabase/migrations/20261027166200_oc_venda_entregas_01a_fix.sql` (`20260928133059`, 7d5be910).
+  O QUE E': `zoo_operacao_movimentacoes.origem` ('registrada' | 'adotada'). Adotar so' cria o vinculo lote -> movimentacao: nao cria,
+  nao altera e nao apaga animal, e o VALOR DA SAIDA ADOTADA NUNCA E' REESCRITO (D4d: d6ce7648 fica 574.041,83 contra 574.046,85 do
+  lote; a diferenca e' do 01c). Regra unica `_oc_motivo_nao_adotavel` (mesma fazenda, tipo da OC — venda/abate adotam SAIDA, compra
+  adota ENTRADA —, mesma categoria, realizada e ativa, comprador vazio ou igual a' contraparte, sem OC, e sem financeiro PROGRAMADO do
+  modal antigo, D4b). RPCs: `oc_saidas_adotaveis` (INVOKER, ordenada pela distancia a' data da OC — sem comprador no historico a lista
+  traz a categoria inteira), `oc_adotar_movimentacao` e `oc_desvincular_movimentacao` (SECDEF, versao + 1, evento com usuario e data;
+  desvincular sem motivo). Genericas por tipo; a tela liga SO' NA VENDA (`adocao`, passada so' pelo `VendaModalShell` — o abate tambem
+  usa `isCompra={false}`). Abate e compra: OC-ADOTAR-TODOS-01.
+  GUARDAS POR ORIGEM: `oc_estornar_movimentacao` recusa a adotada ("use Desvincular"); `_oc_estorno_mov` a pula (o estorno total nao a
+  cancela); `oc_revalorar_lote`, `_oc_sync_abate_lancamento` e a propagacao de categoria do `oc_salvar_lotes` nao a reescrevem;
+  `oc_cancelar` a lista como "saida adotada (desvincule na aba Entrega)".
+  TRAVA DE LOTES (D1): `oc_salvar_lotes` conta so' saida ATIVA; incluir lote nunca trava; remover e mudar quantidade/peso travam so' o
+  lote com saida ativa, e a mensagem diz o lote e a saida (data, cab). Lote removido sem saida ativa leva os vinculos estornados dele, e
+  o evento `salvar_lotes` os registra em `vinculos_estornados_removidos` (cada estorno ja' tem o seu `estornar_movimentacao`).
+  ⚠ DEFEITO ANTIGO CORRIGIDO JUNTO: no caminho B o `v_grav` da propagacao de categoria era o da ULTIMA volta do laco de checagem — a
+    categoria corrigida ia para o lancamento de outro lote.
+  LIXEIRA (fix, decisao 3): `oc_excluir_lote` RECUSA lote com saida ativa, como bloqueio (a simulacao devolve a frase): adotada ->
+  "Lote <cat> (ordem N) tem saida adotada: <data> · <cab> cab. Desvincule na aba Entrega."; registrada -> "... tem saida ativa: ...
+  Estorne a saida primeiro.". Lote sem saida exclui como antes. ⚠ MUDA O DESENHO DO [OC-EXCLUIR-LOTE] (06/09), que desfazia a saida
+  registrada: agora ela se desfaz antes, pela aba Entrega. O dialogo mostra a frase do banco (a dica da conciliacao so' quando o
+  bloqueio e' dela) e a falha inline, sem toast (`useExcluirLoteOC.erro`).
+  ⚠ E O DIALOGO NUNCA ABRIA, e a causa nao era a RPC: `NegociacaoOC` era declarada DENTRO de `AbaNegociacaoLotes`, um tipo de
+    componente novo a cada render do pai. A simulacao mudava `simulando` no `LancamentosTab`, o pai re-renderizava, a lista remontava e
+    o `excluindoLote` voltava a null — o dialogo entrava e saia em 14 ms (medido com MutationObserver). Saiu para o nivel do modulo
+    (move verbatim; os cinco valores do closure viraram props). O modal de lote corria o mesmo risco.
+  ⚠ E `_oc_sync_abate_lancamento` ESTAVA COM EXECUTE PARA PUBLIC (SECDEF que reescreve lancamento): nenhum codigo do front a chama e os
+    dois chamadores sao SECDEF — REVOKE de PUBLIC, anon e authenticated no fix.
+  TELA (venda): aba Entrega por SAIDA — uma linha por saida ativa de cada lote (Lote, Contratado, Data da saida, Cab, Peso, Valor da
+  entrega em verde, Origem com selo adotada/registrada/pendente), "Adotar saida ja lancada" com seletor inline e marcacao multipla,
+  "Registrar nova saida" (o modal de sempre), e o "Enviar todos" com uma DATA POR LINHA, editavel, sem gravar no lote (D3; antes o
+  banco gravava `current_date`). Recusas ao lado do botao. Sem `truncate` nas linhas da aba.
+  O CENTAVO: o banco arredonda CADA lote e soma (`_oc_valor_do_lote`); a Negociacao somava os lotes crus e arredondava o total — 232c05aa
+  2.366.601,26 no banco x 2.366.601,25 na tela. `totaisDosLotes` (`useCompraLotes`) passou a somar centavos por lote.
+  DADOS DA 232c05aa (aplicados pelas RPCs, como o usuario do Gabriel): 2 lotes de garrotes (6 cab a 12,80/kg; 11 cab a 12,00/kg) e as 7
+  saidas historicas adotadas -> entrega 779/779, acordado 2.366.601,26, versao 17; lancamentos da fazenda, cache e DRE da Sta. Rita 2025
+  identicos (md5).
+  ⚠ A ABA ENTREGA DA 232c05aa SEGUE "indisponivel" ate' a negociacao ser concluida (gate anterior) — o Tipo de venda esta' vazio. O
+    Gabriel preenche e conclui pela tela, e homologa ali o seletor e o "Enviar todos" (desvincula a 81e41593 e adota de novo).
+  ⚠ COMPETENCIA NAO ENTROU (D2): vai para o 01b, com o vinculo dos 4 titulos; regra ja' decidida — a receita segue cada entrega,
+    proporcional ao valor de cada saida, cada parte no mes da saida; parcelas definem so' o caixa. `oc_vincular_lancamento` e' a funcao a
+    reaproveitar.
 - ⚠ RATEIO-VIGENCIA-01 — O RATEIO ADMINISTRATIVO OLHA QUAIS ATIVIDADES EXISTEM EM CADA MES (28/09/2026, decisoes do Gabriel e do
   Chat). Retroativo, todo o historico, todos os clientes; nada gravado — os DREs recalculam. Migration
   `supabase/migrations/20261027161000_rateio_vigencia_01.sql` (⚠ registrada como `20260928102310`; ledger = arquivo sem a quebra de

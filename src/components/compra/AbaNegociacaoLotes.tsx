@@ -186,9 +186,18 @@ export function AbaNegociacaoLotes({
         fisicoBloqueado={!!fisicoBloqueado}
         onVoltarCompra={onVoltarCompra}
         rotulos={rotulos}
+        linhaMagra={linhaMagra}
+        loteUnico={loteUnico}
+        valorProjetado={valorProjetado}
+        exclusaoOC={exclusaoOC}
+        onReabrirParaEditar={onReabrirParaEditar}
       />
     );
   }
+
+  // ── MODO LEGADO: linha read-only (inalterado) ──
+  return <NegociacaoLegado categoria={categoria} categoriasDisponiveis={categoriasDisponiveis} quantidadeNum={quantidadeNum} pesoKgNum={pesoKgNum} darkSelectClass={darkSelectClass} />;
+}
 
 /* ═══ MODO OC — LISTA COMPACTA + MODAL POR LOTE (PR-OC-UX-LOTE-C2-01) ═══════════
    Antes: grade de 8 colunas editaveis inline, todos os lotes editaveis ao mesmo
@@ -208,6 +217,7 @@ export function AbaNegociacaoLotes({
    seria mentir para o operador. */
 function NegociacaoOC({
   lotesApi, categoriasDisponiveis, darkSelectClass, operacaoPronta, somenteLeitura, fisicoBloqueado, onVoltarCompra, rotulos,
+  linhaMagra, loteUnico, valorProjetado, exclusaoOC, onReabrirParaEditar,
 }: {
   lotesApi: NonNullable<Props['lotesApi']>;
   categoriasDisponiveis: Props['categoriasDisponiveis'];
@@ -217,8 +227,19 @@ function NegociacaoOC({
   fisicoBloqueado: boolean;
   onVoltarCompra?: () => void;
   rotulos?: AbaNegociacaoLotesRotulos;
+  linhaMagra: boolean;
+  loteUnico: Props['loteUnico'];
+  valorProjetado: Props['valorProjetado'];
+  exclusaoOC: Props['exclusaoOC'];
+  onReabrirParaEditar: Props['onReabrirParaEditar'];
 }) {
-  /* ⚠ `linhaMagra`, `loteUnico` e `valorProjetado` chegam pelo CLOSURE — esta funcao e'
+  /* ⚠ OC-VENDA-ENTREGAS-01a — ESTA FUNCAO SAIU DE DENTRO DE `AbaNegociacaoLotes` e os cinco valores que ela lia pelo
+     closure (`linhaMagra`, `loteUnico`, `valorProjetado`, `exclusaoOC`, `onReabrirParaEditar`) chegam agora so' por prop.
+     ANINHADA, ela era um TIPO DE COMPONENTE NOVO a cada render do pai: qualquer re-render remontava a lista e zerava o
+     estado local. Medido na 232c05aa: a lixeira abria o dialogo de excluir, a simulacao mudava `simulando` no
+     `LancamentosTab`, o pai re-renderizava e o dialogo sumia 14 ms depois — o lote nunca podia ser excluido pela tela.
+     O modal de lote (`editandoId`) corria o mesmo risco.
+     (Texto de antes, que descrevia o closure:) `linhaMagra`, `loteUnico` e `valorProjetado` chegam pelo CLOSURE — esta funcao e'
      ANINHADA em `AbaNegociacaoLotes` (medido: 142..371). Declara-los tambem como prop e
      passa-los no call site, sem destructuring, criaria duas fontes com o corpo lendo so'
      uma — a prop seria ignorada em silencio no dia em que divergissem. */
@@ -495,10 +516,6 @@ function NegociacaoOC({
       )}
     </div>
   );
-}
-
-  // ── MODO LEGADO: linha read-only (inalterado) ──
-  return <NegociacaoLegado categoria={categoria} categoriasDisponiveis={categoriasDisponiveis} quantidadeNum={quantidadeNum} pesoKgNum={pesoKgNum} darkSelectClass={darkSelectClass} />;
 }
 
 /* Par rotulo-valor do resumo do lote — regra (c) do topo, mesmo tratamento do

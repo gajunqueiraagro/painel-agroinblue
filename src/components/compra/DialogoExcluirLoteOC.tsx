@@ -44,10 +44,14 @@ export function DialogoExcluirLoteOC({
   }, [api, loteId]);
 
   const bloqueado = !!simulacao && simulacao.bloqueios.length > 0;
+  /* OC-VENDA-ENTREGAS-01a-fix — o bloqueio nao e' mais so' "titulo conciliado": lote com saida ativa tambem nao se exclui, e
+     a frase do banco ja' diz o caminho (desvincular a adotada, estornar a registrada). A dica da conciliacao aparece so'
+     quando o bloqueio e' dela. */
+  const temConciliado = !!simulacao && simulacao.bloqueios.some(b => b.tipo === 'conciliado');
   /* Fonte única do `disabled`, do `title` e da dica ao lado — nunca três textos que possam
      discordar entre si. */
   const motivoTravado = !simulacao ? 'Consultando o que será desfeito…'
-    : bloqueado ? 'Há título conciliado; estorne a conciliação primeiro.'
+    : bloqueado ? (temConciliado ? 'Há título conciliado; estorne a conciliação primeiro.' : 'Há saída ativa neste lote.')
     : !motivo.trim() ? 'Informe o motivo.'
     : versao == null ? 'Versão da operação indisponível; reabra a operação.'
     : null;
@@ -66,7 +70,9 @@ export function DialogoExcluirLoteOC({
           {rotulo} — o que este lote arrasta é desfeito junto. Confira antes de confirmar.
         </DialogDescription>
 
-        {!simulacao ? (
+        {!simulacao && api.erro ? (
+          <p className="py-3 text-[11px] text-destructive" role="alert">{api.erro}</p>
+        ) : !simulacao ? (
           <p className="py-3 text-[11px] text-muted-foreground">Consultando o que será desfeito…</p>
         ) : bloqueado ? (
           <div className="space-y-1 rounded-md border border-destructive/50 bg-destructive/5 px-3 py-2">
@@ -79,9 +85,11 @@ export function DialogoExcluirLoteOC({
             {/* ⚠ SEM LINK, DE PROPÓSITO: a seção Conciliação não tem endereço por URL (o
                 V2Index não lê `?section=`), e um link que não leva a lugar nenhum é pior
                 que a instrução escrita. O texto do banco já diz qual estorno fazer. */}
-            <p className="text-[10px] leading-tight text-muted-foreground">
-              Estorne a conciliação do título em Financeiro › Conciliação e tente de novo.
-            </p>
+            {temConciliado && (
+              <p className="text-[10px] leading-tight text-muted-foreground">
+                Estorne a conciliação do título em Financeiro › Conciliação e tente de novo.
+              </p>
+            )}
           </div>
         ) : (
           <div className="space-y-2">
@@ -101,7 +109,10 @@ export function DialogoExcluirLoteOC({
         )}
 
         <div className="flex items-center justify-end gap-2">
-          {motivoTravado && !bloqueado && (
+          {simulacao && api.erro && (
+            <span className="mr-auto text-[10px] leading-tight text-destructive" role="alert">{api.erro}</span>
+          )}
+          {motivoTravado && !bloqueado && !(simulacao && api.erro) && (
             <span className="mr-auto text-[10px] leading-tight text-muted-foreground">{motivoTravado}</span>
           )}
           <Button type="button" variant="ghost" onClick={onFechar}>Voltar</Button>
