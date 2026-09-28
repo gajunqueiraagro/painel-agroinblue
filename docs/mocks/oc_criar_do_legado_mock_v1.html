@@ -1,0 +1,94 @@
+<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Criar OC do legado — mock v1</title><style>
+:root{--p:#1D3A5D;--p2:#2E4B6E;--fg:#0F1729;--mf:#6B7280;--bd:#E0E2E6;--gr:#15803d;--grb:#f0fdf4;--rd:#b91c1c;--am:#b45309;--amb:#fffbeb;--amd:#fde68a;--s:#E8E6DF;--rec:#EAF1F9;--recb:#1d4ed8}
+*{box-sizing:border-box}body{margin:0;background:#8a929c;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--fg);padding:16px}
+.lbl{color:#fff;font-size:12px;font-weight:600;margin:0 auto 6px;width:1100px}
+.m{width:1100px;height:520px;margin:0 auto 18px;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.3);display:flex;flex-direction:column}
+.hd{background:var(--p);color:#fff;height:32px;flex:none;display:flex;align-items:center;gap:12px;padding:0 12px;font-size:12px}
+.hd .pill{border:1px solid rgba(255,255,255,.5);border-radius:10px;padding:0 7px;font-size:10px}
+.tabs{display:flex;gap:4px;padding:4px 10px;border-bottom:1px solid var(--bd);flex:none}
+.tabs span{font-size:10.5px;padding:2px 9px;border-radius:5px;color:var(--mf)}.tabs span.on{background:#e8eef6;color:var(--p);font-weight:600}
+.wrap{flex:1;display:grid;grid-template-columns:1fr 180px;min-height:0}
+.main{display:flex;flex-direction:column;min-height:0;padding:6px 10px;gap:5px}
+.kp{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;flex:none}
+.k{border:1px solid var(--bd);border-radius:4px;padding:2px 7px;display:flex;justify-content:space-between;align-items:center;height:24px}
+.k .a{font-size:9.5px;color:var(--mf)}.k .b{font-size:11.5px;font-weight:700}
+.k.dif{border-color:var(--amd);background:var(--amb)}
+.tb{display:flex;align-items:center;gap:6px;flex:none}
+.tb .t{font-size:10.5px;font-weight:600}.tb .sp{margin-left:auto;display:flex;gap:5px}
+.btn{font-size:10px;border:1px solid var(--bd);border-radius:4px;padding:1px 8px;background:#fff;font-weight:500;white-space:nowrap}.btn.nv{background:var(--p);color:#fff;border-color:var(--p)}
+.scroll{flex:1;overflow:auto;border:1px solid var(--bd);border-radius:4px;min-height:0}
+table{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;font-variant-numeric:tabular-nums}
+thead th{white-space:nowrap;position:sticky;background:var(--p2);color:#fff;font-size:9.5px;font-weight:600;text-align:center;padding:0 5px;height:17px}
+thead tr.g th{top:0;background:var(--p)}thead tr.cth th{top:17px}
+th.dv,td.dv{border-left:2px solid #9aa7b6}
+td{font-size:10px;height:18px;padding:0 5px;border-bottom:1px solid #eceae4;white-space:nowrap}
+tr.ent td{background:#fff}tr.rec td{background:var(--rec)}
+tfoot td{position:sticky;bottom:0;background:var(--s);font-weight:700;height:19px;border-top:2px solid #9aa7b6}
+.r{text-align:right}.c{text-align:center}.pos{color:var(--gr)}.neg{color:var(--rd)}.amb{color:var(--am)}.mf{color:var(--mf)}
+.bg{font-size:8.5px;border-radius:3px;padding:0 5px;font-weight:600}.be{background:var(--grb);color:var(--gr)}.br{background:#dbe7f6;color:var(--recb)}
+.dbar{flex:none;display:flex;align-items:center;gap:8px;border:1px solid var(--amd);background:var(--amb);border-radius:4px;padding:2px 8px;font-size:10.5px;height:24px}
+.aside{border-left:1px solid var(--bd);background:#fafafa;font-size:10px;overflow:auto}
+.aside h4{margin:0;padding:3px 8px;background:var(--s);font-size:9.5px;letter-spacing:.03em}
+.aside .rw{display:flex;justify-content:space-between;padding:1px 8px}.aside .rw span:first-child{color:var(--mf)}
+.foot{flex:none;display:flex;justify-content:flex-end;gap:6px;padding:4px 10px;background:var(--p)}.foot span{font-size:10px;color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:4px;padding:1px 9px}
+.note{width:1100px;margin:0 auto;background:#fff;border-radius:6px;padding:10px 12px;font-size:11.5px;line-height:1.55}
+
+.sec{border:1px solid var(--bd);border-radius:4px;overflow:hidden;margin-bottom:6px}
+.sec .h{font-size:10.5px;font-weight:600;padding:3px 8px;background:var(--s);display:flex}.sec .h span{margin-left:auto;font-weight:400;color:var(--mf)}
+.cb{display:inline-block;width:10px;height:10px;border:1px solid var(--p);border-radius:2px;background:var(--p);vertical-align:-1px}.cb.no{background:#fff}
+tr.off td{color:#9ca3af}
+.ok{background:var(--grb);color:var(--gr);font-size:8.5px;border-radius:3px;padding:0 5px;font-weight:600}
+</style></head><body>
+<div class="lbl">Financeiro V2 · menu da linha do lançamento legado · "Criar OC a partir deste lançamento"</div>
+<div class="m" style="height:auto">
+ <div class="scroll" style="flex:none;margin:8px 10px"><table>
+  <colgroup><col style="width:80px"><col style="width:72px"><col><col style="width:170px"><col style="width:110px"><col style="width:70px"><col style="width:96px"><col style="width:200px"></colgroup>
+  <thead><tr class="g"><th>Competência</th><th>Pagamento</th><th>Descrição</th><th>Conta</th><th>Favorecido</th><th>OC</th><th>Valor</th><th></th></tr></thead>
+  <tbody>
+   <tr class="ent"><td class="c">17/04/25</td><td class="c">17/04/25</td><td>Venda 317 machos</td><td>1120 Venda desmama machos</td><td>Helder Hofig</td><td class="c mf">sem OC</td><td class="r pos">992.140,99</td><td class="c"><span class="btn nv">Criar OC a partir deste lançamento</span></td></tr>
+  </tbody></table></div>
+</div>
+
+<div class="lbl">Diálogo · o sistema sugere as saídas de gado, você marca, confere a prévia e cria a OC</div>
+<div style="width:1000px;margin:0 auto 18px;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.3)">
+ <div class="hd"><b>Criar OC a partir do legado</b><span class="pill">Faz. Sta. Rita</span><span>Venda</span><span style="margin-left:auto">✕</span></div>
+ <div style="padding:6px 10px">
+  <div class="sec"><div class="h">1 · Recebimentos desta venda<span>o lançamento escolhido; dá para somar outros do mesmo comprador</span></div>
+   <table><colgroup><col style="width:24px"><col style="width:66px"><col><col style="width:110px"><col style="width:96px"></colgroup>
+   <thead><tr class="g"><th></th><th>Pagamento</th><th>Descrição</th><th>Favorecido</th><th>Valor</th></tr></thead>
+   <tbody><tr class="rec"><td class="c"><span class="cb"></span></td><td class="c">17/04/25</td><td>Venda 317 machos</td><td>Helder Hofig</td><td class="r pos">992.140,99</td></tr></tbody></table>
+   <div style="padding:3px 8px"><span class="btn">+ Somar outro recebimento</span></div>
+  </div>
+  <div class="sec"><div class="h">2 · Saídas de gado sugeridas<span>mesma fazenda, venda, sem OC, até 60 dias antes do pagamento · 317 cab pedidos na descrição</span></div>
+   <table><colgroup><col style="width:24px"><col style="width:66px"><col style="width:90px"><col style="width:44px"><col style="width:64px"><col style="width:96px"><col><col style="width:80px"></colgroup>
+   <thead><tr class="g"><th></th><th>Data</th><th>Categoria</th><th>Cab</th><th>Peso</th><th>Valor</th><th>Lançamento</th><th>Sugestão</th></tr></thead>
+   <tbody>
+    <tr class="ent"><td class="c"><span class="cb"></span></td><td class="c">19/03/25</td><td>Desmama M</td><td class="r">178</td><td class="r">248,21</td><td class="r pos">565.521,66</td><td class="mf">ef0a8a40 · importado</td><td class="c"><span class="ok">soma 317</span></td></tr>
+    <tr class="ent"><td class="c"><span class="cb"></span></td><td class="c">20/03/25</td><td>Desmama M</td><td class="r">139</td><td class="r">239,78</td><td class="r pos">426.616,58</td><td class="mf">4cc823d6 · importado</td><td class="c"><span class="ok">soma 317</span></td></tr>
+    <tr class="off"><td class="c"><span class="cb no"></span></td><td class="c">23/04/25</td><td>Desmama M</td><td class="r">193</td><td class="r">232,37</td><td class="r">574.041,83</td><td>d6ce7648 · importado</td><td class="c"></td></tr>
+   </tbody>
+   <tfoot><tr><td></td><td>Marcadas</td><td></td><td class="r">317</td><td></td><td class="r pos">992.138,24</td><td colspan="2"></td></tr></tfoot></table>
+  </div>
+  <div class="sec"><div class="h">3 · Prévia da OC que será criada<span>modelo conta corrente · nada muda no rebanho nem no caixa</span></div>
+   <table><colgroup><col style="width:66px"><col style="width:36px"><col style="width:44px"><col style="width:84px"><col><col style="width:150px"><col style="width:96px"><col style="width:96px"><col style="width:96px"></colgroup>
+   <thead><tr class="g"><th>Data</th><th>Lote</th><th>Cab</th><th>Evento</th><th>Descrição</th><th>Conta</th><th class="dv">Entrega (DRE)</th><th>Recebido (caixa)</th><th class="dv">Saldo</th></tr></thead>
+   <tbody>
+    <tr class="ent"><td class="c">19/03/25</td><td class="c">1</td><td class="r">178</td><td class="c"><span class="bg be">Entrega</span></td><td>Venda desmama M</td><td>1120 Venda desmama machos</td><td class="r neg dv">−565.521,66</td><td></td><td class="r neg dv"><b>−565.521,66</b></td></tr>
+    <tr class="ent"><td class="c">20/03/25</td><td class="c">2</td><td class="r">139</td><td class="c"><span class="bg be">Entrega</span></td><td>Venda desmama M</td><td>1120 Venda desmama machos</td><td class="r neg dv">−426.616,58</td><td></td><td class="r neg dv"><b>−992.138,24</b></td></tr>
+    <tr class="rec"><td class="c">17/04/25</td><td></td><td></td><td class="c"><span class="bg br">Recebimento</span></td><td>Venda 317 machos</td><td>Adiantamento de clientes</td><td class="dv"></td><td class="r pos">992.140,99</td><td class="r pos dv"><b>2,75</b></td></tr>
+   </tbody>
+   <tfoot><tr><td>Total</td><td></td><td class="r">317</td><td colspan="3"></td><td class="r neg dv">−992.138,24</td><td class="r pos">992.140,99</td><td class="r pos dv">2,75</td></tr></tfoot></table>
+  </div>
+  <div class="dbar" style="margin-bottom:4px"><b>Comprador</b><span>Helder Hofig</span><b style="margin-left:14px">Receita no DRE</b><span>mar/25 (hoje está em abr/25)</span><b style="margin-left:14px">Saldo</b><span class="pos">2,75 recebido a mais · explicar depois na OC</span></div>
+ </div>
+ <div class="foot"><span>Cancelar</span><span style="background:#15803d;border-color:#15803d">Criar OC</span></div>
+</div>
+
+<div class="note"><b>Mock v1 · criar OC a partir do legado (OC-CRIAR-DO-LEGADO-01).</b> Exemplo real da Santa Rita: o recebimento de 17/04 pagou as saídas de 19 e 20/03.<br>
+• <b>Onde começa</b>: no Financeiro V2, no lançamento legado sem OC ("Criar OC a partir deste lançamento"). O mesmo diálogo pode abrir pelo lado do zootécnico, a partir da saída.<br>
+• <b>1 · Recebimentos</b>: o lançamento escolhido; dá para somar outros do mesmo comprador quando uma venda foi paga em várias vezes.<br>
+• <b>2 · Saídas sugeridas</b>: mesma fazenda, mesmo tipo, sem OC, perto da data; o sistema já marca as que somam as cabeças citadas na descrição. Você confere e ajusta.<br>
+• <b>3 · Prévia</b>: a OC em conta corrente, igual à aba Financeiro. Criar a OC só liga o que já existe: adota as saídas, cria as entregas e passa o recebimento para Adiantamento de clientes. Rebanho e caixa não mudam; a receita vai para o mês da entrega.<br>
+• A diferença (aqui 2,75) fica para explicar depois na própria OC.<br>
+• Começa por venda. Abate e compra vêm depois, com a mesma tela.</div>
+</body></html>

@@ -929,6 +929,13 @@ no mesmo arquivo.
   total sem caixa so' dentro da chave (sai `tipoDaLinha`, que morreu com a coluna); e o do cancelar em `abaContaCorrente.test.tsx`
   passou a ler "Recebimento de vendas" no lugar de "Adiantamento de Clientes". ⚠ PROVADO: com o filtro 'com' desligado no plano, 1
   caso cai.
+  De 2205 para 2221 no OC-CRIAR-DO-LEGADO-01, em dois arquivos novos. `src/lib/oc/criarDoLegado.test.ts` (+9): quando a acao aparece (e
+  cada recusa a tira, boitel inclusive), as cabecas lidas da descricao (nao a parcela nem o ano), o pre-marcado unico (200 + 115 = 315),
+  ambiguo e nenhum sem marca, a irma "2/2" primeiro, e o envelope com o rateio fechando em centavos no total. `src/components/financeiro-v2/
+  criarOCDoLegado.test.tsx` (+7), com a RPC mockada: comprador e saidas preenchidos e os argumentos da simulacao, a previa ("Recebimento de
+  vendas", entrega negativa vermelha, recebimento verde, saldo 0,00, R$/kg), as pendencias juntas com o Criar travado, desmarcar e trocar o
+  criterio refazendo a simulacao, "Somar" a irma, criar com os MESMOS argumentos da previa e `p_simular = false`, e a recusa ao lado.
+  ⚠ PROVADO: sem o pre-marcado 2 casos caem; sem o rotulo, 1; so' a primeira pendencia, 1.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -3051,7 +3058,35 @@ preview que o cabecalho nao sai da tela ao rolar.
   `_oc_sigla_categoria` (espelho de `siglaCategoria`, com teste) e `oc_sincronizar_entregas` ddfff259 -> de36ab1e (migration
   `supabase/migrations/20261027170000_fin_v2_sem_caixa_01.sql`, ⚠ registrada como `20260928172954`; ledger = arquivo 2855c8d7). Dado da
   232c05aa: `20261027170100_fin_v2_sem_caixa_01_dados.sql`, 7 titulos e 7 partes INCLUSIVE a f3ef425a (autorizado), provado em
-  rollback — 0 de 18.755 lancamentos mudam valor, datas, hash, conta, plano ou status; versao igual. Aguarda o OK para aplicar.
+  rollback — 0 de 18.755 lancamentos mudam valor, datas, hash, conta, plano ou status; versao igual. APLICADO com o OK do Gabriel
+  (⚠ registrado como `20260928174323`; ledger = arquivo a571ee25).
+- ⚠ OC-CRIAR-DO-LEGADO-01 — UMA VENDA LEGADA VIRA OC PRONTA, DA LINHA DO FINANCEIRO (28/09/2026, mock
+  `docs/mocks/oc_criar_do_legado_mock_v1.html`, md5 70d4c89a; decisoes D1-D7 do Gabriel). So' venda; abate e compra depois, com a mesma tela.
+  PRINCIPIO: preenche sozinho o derivavel, pergunta so' o que nao tem de onde tirar, bloqueia so' o erro primario. A OC nasce no modelo
+  conta corrente, FECHADA e com a entrega encerrada; tudo continua editavel nela depois (explicar diferenca, 01c).
+  BANCO: migration `supabase/migrations/20261027171000_oc_criar_do_legado_01.sql` (⚠ registrada como `20260928175010`; ledger = arquivo,
+  md5 05cce6f2). NENHUMA FUNCAO EXISTENTE MUDA — a cadeia so' liga o que ja existe:
+    `_oc_legado_motivo_recebimento` (NULL = pode entrar: entrada, com caixa, fora do modal antigo, conta 1110-1140, viva, sem parte viva
+      de OC; boitel 1150 fora, D3); `oc_criar_do_legado_sugestoes` (INVOKER: recebimentos, parcelas irmas do mesmo cliente/fazenda/
+      favorecido e saidas candidatas de 60 dias antes a 120 depois do primeiro pagamento, D4); `oc_criar_do_legado` (SECDEF, EXECUTE so'
+      authenticated e service_role), UMA transacao na ordem que as guardas impoem: oc_salvar_rascunho -> oc_salvar_lotes (um lote por
+      saida, criterio 'total', peso da saida, D1) -> oc_adotar_movimentacao -> modelo conta_corrente + evento definir_modelo_financeiro
+      (D2) -> oc_sincronizar_entregas ("Venda NNN SIGLA") -> oc_vincular_lancamento (recebimento, hash preservado) -> oc_confirmar ->
+      oc_encerrar_entrega (D5) -> evento criar_do_legado. Rateio em CENTAVOS pelo valor de cada saida, resto no ultimo lote.
+  ⚠ ERROS PRIMARIOS TODOS DE UMA VEZ, e nenhum grava. A SIMULACAO (`p_simular`) percorre a cadeia inteira e a desfaz (SQLSTATE 'OCSIM'):
+    a previa da tela E' a RPC — nenhuma conta no front. Recusa de uma funcao chamada vira pendencia.
+  TELA: "Criar OC a partir deste lancamento" no menu "…" da linha do Financeiro V2 (`podeCriarOCDoLegado`, espelho da regra 1), dialogo
+  `CriarOCDoLegadoDialog` em cinco blocos (A31): recebimentos + "Somar outro recebimento" (irmas "n/m" primeiro, D6); dados da OC
+  (comprador pelo favorecido, trocavel; fazenda do recebimento; data = primeira saida marcada); valor (recebimentos padrao / saidas /
+  outro); saidas com a combinacao UNICA que fecha as cabecas da descricao pre-marcada (ambigua ou nenhuma: nada marcado); previa em
+  conta corrente com "Recebimento de vendas". Pendencias em vermelho ao lado do botao, sem toast. Criada: abre a OC e avisa a lista.
+  ⚠ PROVA EM ROLLBACK como o Gabriel (Santa Rita, "Venda 315 Desmama M", 692f1957 + 4df4ea15, saidas 8bd25a97 de 200 cab + 9542dccc de
+    115): OC fechada, conta corrente, entrega encerrada, acordado 1.182.600,75 (707.751,47 + 474.849,28, R$ 15,00/kg), saldo 0 quitado no
+    padrao e -14,25 falta receber pelo criterio das saidas; entregas "Venda 200 DM"/"Venda 115 DM" em 26-27/03; recebimentos em
+    "Adiantamento de Clientes" com competencia e valor iguais; md5 do caixa, do rebanho e do cache IDENTICOS; DRE SR 2026: marco vendas
+    194.862,28 -> 1.377.463,03, abril 2.435.721,13 -> 1.253.120,38, ano igual (8.620.222,90); as cinco pendencias juntas; simulacoes nao
+    deixaram OC. NA TELA a mesma previa, ao centavo — nada criado (0 OCs novas).
+  ⚠ NENHUMA OC FOI CRIADA DE VERDADE: a 692f1957 fica para o Gabriel criar pela tela.
 - ⚠ RATEIO-VIGENCIA-01 — O RATEIO ADMINISTRATIVO OLHA QUAIS ATIVIDADES EXISTEM EM CADA MES (28/09/2026, decisoes do Gabriel e do
   Chat). Retroativo, todo o historico, todos os clientes; nada gravado — os DREs recalculam. Migration
   `supabase/migrations/20261027161000_rateio_vigencia_01.sql` (⚠ registrada como `20260928102310`; ledger = arquivo sem a quebra de

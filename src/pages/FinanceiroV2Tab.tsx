@@ -39,12 +39,14 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Plus, Pencil, Copy, MoreHorizontal, ChevronLeft, ChevronRight, Zap, List, ChevronsUpDown, FilterX, Download, ArrowUp, ArrowDown, ArrowUpDown, Trash2, X, SlidersHorizontal, Maximize2, Minimize2, ExternalLink, Beef, CheckCircle2 } from 'lucide-react';
+import { Plus, Pencil, Copy, MoreHorizontal, ChevronLeft, ChevronRight, Zap, List, ChevronsUpDown, FilterX, Download, ArrowUp, ArrowDown, ArrowUpDown, Trash2, X, SlidersHorizontal, Maximize2, Minimize2, ExternalLink, Beef, CheckCircle2, FilePlus2 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useFazenda } from '@/contexts/FazendaContext';
-import { useFinanceiroV2, dataDaDimensao, type LancamentoV2, type FiltrosV2, type DimensaoDataFinanceiro } from '@/hooks/useFinanceiroV2';
+import { useFinanceiroV2, dataDaDimensao, notificarLancamentosMudaram, type LancamentoV2, type FiltrosV2, type DimensaoDataFinanceiro } from '@/hooks/useFinanceiroV2';
+import { CriarOCDoLegadoDialog } from '@/components/financeiro-v2/CriarOCDoLegadoDialog';
+import { podeCriarOCDoLegado } from '@/lib/oc/criarDoLegado';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
 import { ModoRapidoGrid } from '@/components/financeiro-v2/ModoRapidoGrid';
 import { FinanceiroV2ExportMenu } from '@/components/financeiro-v2/FinanceiroV2ExportMenu';
@@ -558,6 +560,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
 
   const [mode, setMode] = useState<'list' | 'rapido'>('list');
   const [dialogOpen, setDialogOpen] = useState(false);
+  /* OC-CRIAR-DO-LEGADO-01 — o recebimento legado de onde nasce a OC (null = dialogo fechado). */
+  const [criarOCDe, setCriarOCDe] = useState<string | null>(null);
   const [editingLanc, setEditingLanc] = useState<LancamentoV2 | null>(null);
   // PR-OC-FIN-EDIT-FIX-02 — libera favorecido do título OC só nesta abertura (fluxo "Editar" da OC).
   const [favOCEdit, setFavOCEdit] = useState(false);
@@ -2803,6 +2807,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                                   onClick={() => handleDuplicate(l)}>
                                   <Copy className="mr-1.5 h-3 w-3" /> Duplicar
                                 </DropdownMenuItem>
+                                {/* OC-CRIAR-DO-LEGADO-01 — so' onde o banco aceitaria o recebimento (1110-1140, sem OC, vivo, fora do modal antigo). */}
+                                {podeCriarOCDoLegado(l, !!lancamentosComOC.get(l.id)) && (
+                                  <DropdownMenuItem className="text-[11px]" onClick={() => setCriarOCDe(l.id)}>
+                                    <FilePlus2 className="mr-1.5 h-3 w-3" /> Criar OC a partir deste lançamento
+                                  </DropdownMenuItem>
+                                )}
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </div>
@@ -2886,6 +2896,20 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         permiteEditarFavorecidoOC={favOCEdit}
         onAbrirOperacaoOC={abrirOCFinanceiro}
       />
+
+      {criarOCDe && clienteAtual?.id && (
+        <CriarOCDoLegadoDialog
+          clienteId={clienteAtual.id}
+          lancamentoId={criarOCDe}
+          fornecedores={hook.fornecedores}
+          onFechar={() => setCriarOCDe(null)}
+          onCriada={(operacaoId) => {
+            setCriarOCDe(null);
+            notificarLancamentosMudaram(clienteAtual.id);
+            abrirOCFinanceiro(operacaoId, 'venda');
+          }}
+        />
+      )}
 
 
       {/* Bulk delete confirmation */}
