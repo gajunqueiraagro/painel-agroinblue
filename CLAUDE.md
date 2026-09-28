@@ -2777,6 +2777,48 @@ preview que o cabecalho nao sai da tela ao rolar.
     numero errado — foi o que aconteceu no briefing do CACHE-RRCC-2021-01.
   Conserto: renomear as chaves para o vocabulario aprovado, SEM MUDAR NUMERO, com todos os leitores (hooks, modais, testes e as
   provas registradas aqui) acompanhando no mesmo PR.
+- ⚠ OC-VENDA-ENTREGAS-01 — UM CONTRATO DE VENDA, N ENTREGAS (frente aberta em 28/09/2026; FASE 0 feita, PASSO A aplicado, FASE 2
+  espera o mock do Chat).
+  O CASO (Santa Rita, Helder Hofig, desmama 2025): contrato do ano a R$ 12,80/kg (13,00 em jun), 5 embarques de desmama
+  (19/03 178, 20/03 139, 23/04 193, 21/05 183, 25/06 69 = 762 cab) + 2 de garrotes que foram junto (21/05 6 cab 18.031,09;
+  25/06 11 cab 25.056,24), todos no historico importado (13/04/2026). Financeiro: 4 recebimentos do Helder (17/04 992.140,99;
+  22/05 574.042,04; 21/06 567.956,34; 25/07 231.104,00 = 2.365.243,37), competencia = data do pagamento, sem vinculo bancario
+  no sistema. A diferenca "183x189" e "69x80" SAO OS GARROTES; o resto por recebimento: +2,75 / -4,81 / 0,00 / -1.356,58.
+  ⚠ O QUE DEU ERRADO, 28/09: o Gabriel criou a OC 73a28eb6 (rascunho: R$/kg vazio -> valor acordado nulo -> `oc_confirmar`
+    recusa "Cadastro comercial incompleto (rascunho tecnico)") e depois a 232c05aa, com preco, que pela aba Entrega registrou 5
+    saidas NOVAS para embarques que ja existiam — 762 cab em DOBRO. Efeito: desfrute 2025 em 2.661 cab (certo 1.899); em julho o
+    fechamento recalibrou o saldo (sistema 3.256 x fechamento 4.018) e declarou os 762 como 15.143 @ de producao; e o gatilho de
+    invalidacao APAGOU o cache de 2025 da Faz. Sta. Rita (mesmo defeito da ZOOT-CACHE-BURACO-01). VBP e Lucro operacional nao
+    mexeram (receita do financeiro, pontas do fechamento).
+  PASSO A — APLICADO (migration de DADO `supabase/migrations/20261027163000_oc_venda_entregas_01_limpeza.sql`, ⚠ registrada como
+  `20260928112907`, ledger = arquivo 47c0097c), pelas RPCs oficiais, como o usuario do Gabriel: `oc_estornar_movimentacao` nas 5
+  saidas novas (4812f1e9, af48ead8, 3780a107, eea57264, 86da927f), `oc_cancelar` da 73a28eb6 ("duplicada da 232c05aa (teste)") e
+  `refresh_zoot_cache(Faz. Sta. Rita, 2025)`. Os 7 historicos intactos. A entrega da 232c05aa ja tinha sido reaberta pelo Gabriel
+  (11:21, "garrotes") — a primeira rodada PAROU na guarda por isso, e so' seguiu com o OK.
+  PROVAS (dado real): 7 historicos ativos / 779 cab (762 + 17 garrotes), 0 saidas ativas da OC; julho sistema = fechamento 4.018 e
+  producao 15.143,28 -> 9.100,77 @ (-6.042,51 = o peso dos 762); desfrute 1.899 cab / 25.279,69 @ / 336,43 R$/@; producao do ano
+  22.868,57 @; VBP 7.699.400,16 e Lucro operacional 1.752.337,39 iguais. 232c05aa: programada v6, entrega aberta 0/762, sem
+  compromisso. 73a28eb6: cancelada, com o evento `cancelar`.
+  DECISOES DO GABRIEL (governam a FASE 2):
+    a) competencia do titulo = a data de CADA ENTREGA (hoje e' sempre a `data_operacao` da OC, em `oc_materializar_programacao` e
+       no VINCULAR — muda o mes da receita no DRE);
+    b) compromisso pelo VALOR TOTAL da operacao, rateado entre os lotes, com parcelas livres (antecipado, parcial, por entrega);
+    c) VINCULAR recebimentos ja conciliados a esse compromisso;
+    d) diferenca final (entregue x recebido) NAO bloqueia o fechamento e, autorizada, AJUSTA o valor da venda;
+    e) ADICIONAR LOTE NUNCA EXIGE ESTORNO.
+  PECAS QUE FALTAM: (1) ADOTAR SAIDA EXISTENTE — ligar um lancamento zootecnico ja gravado a um lote, sem criar gado (so'
+  `zoo_operacao_movimentacoes`; guardas de fazenda, categoria, contraparte e saldo do lote) — resolve este caso e o
+  ZOO-DOBRO-OC-LEGADO; (2) COMPROMISSO DE N LOTES (hoje 1 compromisso tem no maximo 1 `lote_id`, 1 titulo = 1 parte e 1 liquidacao
+  ativa por titulo — N:N nao existe); (3) R$/kg DE CONTRATO na OC, herdado pelos lotes e sobrescrevivel; (4) TRAVAS CERTAS e
+  mensagem que diga O QUE prende — o Concluir da venda nao trava nem diz nada em rascunho (so' a compra trava), R$/kg vazio nao e'
+  avisado no campo, e o "Enviar todos" data a saida com HOJE (`current_date`) e sem peso.
+  ⚠ DEFEITO DA TRAVA DE LOTES (achado no PASSO A): `oc_salvar_lotes` decide "recebimento registrado" por
+    `EXISTS (SELECT 1 FROM zoo_operacao_movimentacoes WHERE operacao_id = ...)` — conta o VINCULO mesmo com o lancamento
+    CANCELADO. O estorno (`oc_estornar_movimentacao`) e' append-only e mantem o vinculo, entao a mensagem "Operacao com recebimento
+    registrado: nao e possivel adicionar ou remover lotes. Estorne o recebimento primeiro." MANDA ESTORNAR E O ESTORNO NAO
+    DESTRAVA. Hoje a 232c05aa tem 5 vinculos cancelados e continua travada para incluir os 2 lotes de garrotes (ficam para a FASE 2).
+    Regra certa: ADICIONAR lote nunca exige estorno; REMOVER so' trava o lote que tem saida ATIVA.
+  O mock vem do Chat antes da FASE 2.
 - ⚠ RATEIO-VIGENCIA-01 — O RATEIO ADMINISTRATIVO OLHA QUAIS ATIVIDADES EXISTEM EM CADA MES (28/09/2026, decisoes do Gabriel e do
   Chat). Retroativo, todo o historico, todos os clientes; nada gravado — os DREs recalculam. Migration
   `supabase/migrations/20261027161000_rateio_vigencia_01.sql` (⚠ registrada como `20260928102310`; ledger = arquivo sem a quebra de
