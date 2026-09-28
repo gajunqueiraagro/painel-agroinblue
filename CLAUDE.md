@@ -876,6 +876,11 @@ no mesmo arquivo.
   valores do periodo, o aviso do GMD no ano parcial e as cores do agio e da variacao do custo.
   ⚠ PROVADO: com o custeio sem o rateio 2 casos caem; com a diferenca escondida, 3; com a marca "8m" ignorada, 1; com o agio
     pelo sinal comum, 1.
+  De 2137 para 2141 no RATEIO-VIGENCIA-01: `src/components/agri/rateioDetalheModal.test.tsx` foi de 24 para 28 casos — a etapa
+  "Nao alocado" da aba Rateio: na pecuaria sem grupo ela fecha a aba depois das fazendas, nivel 0, com motivo e valor; num grupo
+  ela NAO aparece (a RPC nao abre o nao alocado por grupo, e o caso prova que a busca sabe achar a etapa vizinha); zero, meio
+  centavo, nulo ou payload antigo nao desenham a linha; e na lavoura admin ela vem depois das culturas e o modal a mostra.
+  ⚠ PROVADO: com a linha da pecuaria desligada, 1 caso cai pela razao certa.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -2739,6 +2744,44 @@ preview que o cabecalho nao sai da tela ao rolar.
   em 2021 (0 de 12 meses, com 12 meses de fechamento). `at_produzida` vem nulo e o GMD, o custo por @ produzida e a margem do ano
   saem "—"; na ponte a producao sai "—" e os 3.189 @ dela caem na Diferenca. Mesmo risco ja' registrado em CACHE-X-FECHAMENTO-01
   (o Bom Retiro 2023). Conserto: rematerializar o cache do RRCC 2021 — e conferir antes quais numeros homologados do ano mudam.
+- ⚠ RATEIO-VIGENCIA-01 — O RATEIO ADMINISTRATIVO OLHA QUAIS ATIVIDADES EXISTEM EM CADA MES (28/09/2026, decisoes do Gabriel e do
+  Chat). Retroativo, todo o historico, todos os clientes; nada gravado — os DREs recalculam. Migration
+  `supabase/migrations/20261027161000_rateio_vigencia_01.sql` (⚠ registrada como `20260928102310`; ledger = arquivo sem a quebra de
+  linha final, md5 81361912).
+  O DEFEITO: `agri_rateio_admin` guarda uma chave por ANO CIVIL, e os quatro leitores a aplicavam a todo mes do ano, existisse ou nao
+  a atividade. NJ 2023 (80/15/5): a lavoura so' comeca em jul/23 e a silvicultura nao tem DRE — R$ 115.592,95 do administrativo do
+  ano nao caiam em DRE nenhum (48.508,91 da silvicultura + 67.084,04 da lavoura de jan-jun).
+  A FUNCAO UNICA `fn_rateio_admin_mes(cliente, de, ate, cenario, safra)` (nova, md5 0f115ffb, SECURITY INVOKER, EXECUTE para
+  authenticated, service_role e supabase_read_only_user): uma linha por lancamento administrativo com o PESO de cada atividade no mes.
+  Os quatro leitores a usam — `fn_dre_pecuaria` (e9b5b5dc -> 41f7f098), `fn_dre_lavoura` (2108094b -> eece80eb),
+  `fn_dre_agricola_por_safra` (7aad0a26 -> 604e6948) e `fn_painel_rateio_detalhe` (634705c3 -> 7472a393), patch guardado por md5,
+  ACLs iguais — e a LISTA DE EXCLUSAO DE MACROS mora so' nela (a do Painel Safra nao tinha 'Tributos': fechou a divergencia).
+  REGRA: existencia no mes — pecuaria = rebanho > 0 (cache realizado ou fechamento); agricultura = safra com area plantada cobrindo o
+  mes; silvicultura = lancamento de silvicultura desde o primeiro. Uma so' existe -> 100% dela; mais de uma com chave -> a chave do
+  ano renormalizada sobre as que existem; mais de uma sem chave, ou nenhuma -> tudo "nao alocado" com o motivo. A parte da
+  SILVICULTURA vai para "nao alocado" ate' existir DRE dela. INVARIANTE (soma dos pesos = 1) conferido na propria funcao, que aborta.
+  Com safra, a agricultura do mes e' multiplicada pela fatia de area da safra entre as plantadas no mes: um mes nunca cai em duas
+  safras (o NJ tem -Lav, -AMD e -MAND por periodo; so' a -Lav tem cultura).
+  ⚠ MES FUTURO (decisao do Gabriel): depois do ULTIMO mes com dado de rebanho do cliente, a pecuaria HERDA a existencia daquele mes.
+    Sem isso, os previstos de 2027 (sem cache) iam 100% para a silvicultura (NJ, SR) ou para "mes sem atividade" (Vera). Provado:
+    ate' 2026-12, 9.895 linhas identicas com e sem a regra; mudam so' as 60 de 2027.
+  CHAVE NOVA: `rateio_adm.nao_alocado` (fn_dre_pecuaria) e `nao_alocado` (painel, ramo admin) = {valor, silvicultura, outros,
+  motivos}. TELA: a aba Rateio do modal de valor ganhou a etapa "Nao alocado (motivo)" quando > 0 (`etapaNaoAlocado`), na pecuaria
+  SO' SEM GRUPO — a RPC nao abre o nao alocado por grupo — e depois das fazendas/culturas (logo abaixo da parte, as fazendas
+  recuadas pareciam filhas dele; visto na tela).
+  EFEITO MEDIDO (realizado): mudam SO' NJ 2023 (Lucro operacional 3.672.308,97 -> 3.604.289,07; rateio 776.142,59 -> 844.162,49),
+  NJ 2026 jan-ago (2.791.954,04 -> 2.753.788,51) e Raul 2021 (-3,90). Agnaldo/RRCC/Vera/Teste 28 de 28 e a meta 49 de 49 identicas
+  (jsonb por valor, tirada a chave nova). Lavoura: as tres -Lav identicas; -AMD/-MAND/26/27 com parte 0; Painel Safra = DRE (23/24
+  227.329,53 -> 222.044,34). Invariante em 385 cliente-meses, zero quebra. Tela: NJ 2023, Lavoura 23/24 e SR 2021 (nao alocado 8.082,73).
+  ⚠ O ROTULO DA PARTE VIROU "Parte da pecuaria no periodo" / "Parte da agricultura no periodo" (era "(percentual declarado do
+    ano)", que deixou de ser verdade): o % e' o EFETIVO do periodo. O tooltip diz a regra ("Chave declarada do ano aplicada so aos
+    meses em que a atividade existe; a parte de atividade sem DRE fica em Nao alocado."), pelo campo `dica` da etapa.
+- RATEIO-PERIODOS-TELA-01 — pendencia, nao tratada (RATEIO-VIGENCIA-01, decisao 6): a tela Cadastros segue editando a chave POR ANO.
+  Uma tabela de periodos (vigencia de/ate por atividade) e o editor dela sao frente propria — mock antes. A regra do mes ja' mora em
+  `fn_rateio_admin_mes`; a tabela nova so' trocaria a FONTE da chave.
+- SILVICULTURA-DRE-01 — pendencia, nao tratada (RATEIO-VIGENCIA-01, decisao 2): a parte da silvicultura do administrativo vai para
+  "nao alocado" (NJ 2023 47.573,04; SR ~5% todo ano) ate' existir um DRE da silvicultura. Quando ele existir, o peso
+  `peso_silvicultura` de `fn_rateio_admin_mes` ja' e' o dele — so' falta o leitor.
 - ⚠ TRANSF-FAZENDA-ORIGEM-01 — "GLOBAL NAO E' FAZENDA" NA TRANSFERENCIA, NO CONSUMO E NA EVOLUIR CATEGORIA (regra permanente,
   Gabriel, 27/09/2026). Todo campo de fazenda de modal e' seletor com todas as fazendas ativas do cliente, com QUALQUER filtro:
   filtro numa fazenda -> nasce com ela e troca; Global -> nasce VAZIO, obrigatorio, vermelho com "Selecione a fazenda do

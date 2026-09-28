@@ -26,7 +26,7 @@ import { ThOrdenavel } from '@/components/ui/th-ordenavel';
 import { porCabeca, rateioDoGrupo, valorDe, centrosDoBloco, LINHAS_PEC } from '@/components/agri/drePecRegua';
 import { BLOCO_DA_LINHA } from '@/hooks/useDrePecuaria';
 import type {
-  ChaveLinhaPec, DrePecLinhas, DrePecuaria, LancamentoPec, RateioAdmPec, RecortePec,
+  ChaveLinhaPec, DrePecLinhas, DrePecuaria, LancamentoPec, NaoAlocadoRateio, RateioAdmPec, RecortePec,
 } from '@/hooks/useDrePecuaria';
 
 
@@ -116,6 +116,8 @@ export interface RateioDetalhe {
    * Lançamentos em vez de se esconder.
    */
   fatias_atividade?: FatiaAtividade[] | null;
+  /** RATEIO-VIGENCIA-01 — o administrativo que não caiu em DRE nenhum (só no ramo admin). */
+  nao_alocado?: NaoAlocadoRateio | null;
 }
 
 
@@ -244,6 +246,8 @@ export interface EtapaValorDre {
   nivel: 0 | 1;
   /** A etapa que É a célula clicada (a fazenda da coluna, a cultura aberta, a parte da atividade). */
   destaque?: boolean;
+  /** O tooltip da etapa, quando o rótulo não diz tudo; sem ele, o próprio rótulo. */
+  dica?: string;
 }
 
 export interface ValorDre {
@@ -302,6 +306,27 @@ export function ratearNoAlvo(pesos: readonly number[], alvo: number): number[] {
 
 const pctDe = (parte: number, base: number) => (base !== 0 ? (parte / base) * 100 : null);
 
+/** RATEIO-VIGENCIA-01: o % da parte é o EFETIVO do período (o peso de cada mês), não a chave crua do ano. */
+const DICA_PARTE = 'Chave declarada do ano aplicada só aos meses em que a atividade existe; '
+  + 'a parte de atividade sem DRE fica em Não alocado.';
+
+/**
+ * A ETAPA "NÃO ALOCADO" DA ABA RATEIO — RATEIO-VIGENCIA-01. O administrativo do período que não caiu em
+ * DRE nenhum: a parte da silvicultura (que não tem DRE) e o mês sem chave ou sem atividade.
+ * ⚠ SÓ APARECE COM VALOR (> meio centavo): zero aqui é ausência de fato, e a linha só ocuparia espaço.
+ * ⚠ O MOTIVO VAI NO RÓTULO, curto e da RPC ("silvicultura sem DRE", "mes sem chave"); sem ele o número
+ *   pareceria perda, quando é custo que existe e espera o seu DRE.
+ */
+export function etapaNaoAlocado(n: NaoAlocadoRateio | null | undefined, bruto: number): EtapaValorDre | null {
+  if (!n || !(n.valor > 0.005)) return null;
+  const motivos = n.motivos.filter(m => m.valor > 0.005).map(m => m.motivo).filter(Boolean);
+  return {
+    chave: 'nao_alocado',
+    etapa: motivos.length > 0 ? `Não alocado (${motivos.join(', ')})` : 'Não alocado',
+    base: formatNum(bruto, 2), pct: pctDe(n.valor, bruto), valor: n.valor, nivel: 0,
+  };
+}
+
 /* ══════════════════════════ LAVOURA ══════════════════════════ */
 
 /**
@@ -335,7 +360,7 @@ export function valorDaLavoura(d: RateioDetalhe, tipo: TipoRateio, o: {
     if (admin) {
       const bruto = (d.fatias_atividade ?? []).reduce((a, x) => a + x.valor, 0);
       etapas.push({ chave: 'bruto', etapa: 'Custo administrativo no período (bruto)', base: '—', pct: null, valor: bruto, nivel: 0 });
-      etapas.push({ chave: 'parte', etapa: 'Parte da agricultura (percentual declarado do ano)',
+      etapas.push({ chave: 'parte', etapa: 'Parte da agricultura no período', dica: DICA_PARTE,
         base: formatNum(bruto, 2), pct: d.pct_agricultura, valor: d.pool, nivel: 0 });
     } else {
       etapas.push({ chave: 'pool', etapa: 'Custo compartilhado a ratear', base: '—', pct: null, valor: d.pool, nivel: 0 });
@@ -344,6 +369,11 @@ export function valorDaLavoura(d: RateioDetalhe, tipo: TipoRateio, o: {
       chave: `c-${x.cultura}`, etapa: labelDaCultura(x.cultura), base: `${formatNum(x.area_ha, 2)} ha`,
       pct: x.peso, valor: x.valor, nivel: 1, destaque: x.atual,
     }));
+    /* Depois das culturas, que repartem a parte da agricultura — o mesmo lugar da pecuária. */
+    if (admin) {
+      const na = etapaNaoAlocado(d.nao_alocado, (d.fatias_atividade ?? []).reduce((a, x) => a + x.valor, 0));
+      if (na) etapas.push(na);
+    }
   }
   const area = o.area ?? f?.area_ha ?? null;
   const porHa = (v: number | null) => (v == null || area == null || !(area > 0) ? '—' : formatNum(v / area, 2));
@@ -457,8 +487,11 @@ export function valorDaPecuaria(o: {
     const parte = gs.reduce((a, g) => a + g.parte, 0);
     const nome = grupo == null ? 'Custo administrativo' : `${grupo} administrativo`;
     etapas.push({ chave: 'bruto', etapa: `${nome} no período (bruto)`, base: '—', pct: null, valor: bruto, nivel: 0 });
-    etapas.push({ chave: 'parte', etapa: 'Parte da pecuária (percentual declarado do ano)',
+    etapas.push({ chave: 'parte', etapa: 'Parte da pecuária no período', dica: DICA_PARTE,
       base: formatNum(bruto, 2), pct: pctDe(parte, bruto), valor: parte, nivel: 0, destaque: r.fazendaId === null });
+    /* ⚠ SÓ SEM GRUPO: a RPC devolve o não alocado do período inteiro, não por grupo — num grupo ele diria
+       um número que não é daquele grupo. */
+    const na = grupo == null ? etapaNaoAlocado(o.rateio.naoAlocado, bruto) : null;
     const faz = o.dre?.fazendas ?? [];
     const somaCab = faz.reduce((a, f) => a + f.linhas.patrimonio.cab_media, 0);
     faz.forEach(f => etapas.push({
@@ -468,6 +501,9 @@ export function valorDaPecuaria(o: {
       valor: grupo == null ? f.linhas.rateio_adm : rateioDoGrupo(f.linhas, grupo),
       nivel: 1, destaque: f.fazenda_id === r.fazendaId,
     }));
+    /* ⚠ DEPOIS DAS FAZENDAS: elas repartem a parte da pecuária; logo abaixo do não alocado, recuadas,
+       pareceriam filhas dele (visto na tela, NJ 2023). */
+    if (na) etapas.push(na);
   }
   const bloco = ROTULO_BLOCO_PEC[r.bloco] ?? r.bloco;
   return {
@@ -757,7 +793,7 @@ export function ModalValorDre({
           {valor.etapas.map((e, i) => (
             <tr key={e.chave} className={cn('border-t border-slate-100',
               e.nivel === 1 && i % 2 === 1 && 'bg-muted/30', e.destaque && 'font-semibold')}>
-              <td className={cn(TD, 'truncate')} style={{ paddingLeft: e.nivel === 1 ? 22 : 8 }} title={e.etapa}>{e.etapa}</td>
+              <td className={cn(TD, 'truncate')} style={{ paddingLeft: e.nivel === 1 ? 22 : 8 }} title={e.dica ?? e.etapa}>{e.etapa}</td>
               <td className={cn(TD, 'whitespace-nowrap text-right tabular-nums')}>{e.base}</td>
               <td className={cn(TD, 'whitespace-nowrap text-right tabular-nums')}>
                 {e.pct == null ? '—' : `${formatNum(e.pct, 1)}%`}

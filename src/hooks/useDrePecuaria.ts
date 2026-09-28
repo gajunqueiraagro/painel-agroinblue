@@ -518,10 +518,35 @@ export interface LancamentoRateioAdmPec {
   origem: 'lancamento' | 'planejamento';
 }
 
+/**
+ * O ADMINISTRATIVO QUE NAO CAIU EM DRE NENHUM — RATEIO-VIGENCIA-01 (`nao_alocado` da RPC).
+ * ⚠ HOJE E' A PARTE DA SILVICULTURA (sem DRE) e, em mes sem chave ou sem atividade, o mes inteiro. Vem
+ *   do PERIODO INTEIRO, sem grupo: a RPC nao o abre por grupo.
+ */
+export interface NaoAlocadoRateio {
+  valor: number;
+  motivos: { motivo: string; valor: number }[];
+}
+
+/** Le o `nao_alocado` da RPC; ausente (payload antigo) = `null`. */
+export function lerNaoAlocado(v: unknown): NaoAlocadoRateio | null {
+  if (v == null || typeof v !== 'object') return null;
+  const o = objeto(v);
+  return {
+    valor: num(o.valor),
+    motivos: (Array.isArray(o.motivos) ? o.motivos : []).map((x: unknown) => {
+      const m = objeto(x);
+      return { motivo: String(m.motivo ?? ''), valor: num(m.valor) };
+    }),
+  };
+}
+
 export interface RateioAdmPec {
   lancamentos: LancamentoRateioAdmPec[];
   /** Bruto e parte da pecuaria por grupo, no periodo. */
   grupos: { grupo: string; bruto: number; parte: number }[];
+  /** Opcional: fixture e payload antigo nao o trazem, e ausente e' "sem linha", nunca zero. */
+  naoAlocado?: NaoAlocadoRateio | null;
 }
 
 /**
@@ -563,6 +588,7 @@ export function useRateioAdmPec(
           const g = objeto(x);
           return { grupo: String(g.grupo ?? '(sem)'), bruto: num(g.bruto), parte: num(g.parte) };
         }),
+        naoAlocado: lerNaoAlocado(o.nao_alocado),
       };
     },
   });
