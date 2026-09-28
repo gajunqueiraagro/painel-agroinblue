@@ -72,9 +72,12 @@ interface Opts {
   enabled: boolean;
   versao: number | null;
   onVersaoChange: (v: number) => void;
+  /** OC-VENDA-ENTREGAS-01d (A2): o ajuste de preco e o desfazer dele REVALORAM um lote no banco. Quem mostra os lotes (o resumo
+      lateral soma `lotesApi.totais`) precisa reler, senao o "Valor acordado" segue com o lote de antes do ajuste. */
+  aoMudarLotes?: () => void | Promise<unknown>;
 }
 
-export function useOcContaCorrente({ operacaoId, enabled, versao, onVersaoChange }: Opts): OcContaCorrenteApi {
+export function useOcContaCorrente({ operacaoId, enabled, versao, onVersaoChange, aoMudarLotes }: Opts): OcContaCorrenteApi {
   const [contaCorrente, setContaCorrente] = useState<ContaCorrente | null>(null);
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -169,16 +172,17 @@ export function useOcContaCorrente({ operacaoId, enabled, versao, onVersaoChange
           p_lote_id: it.loteId, p_plano_conta_id: it.planoContaId, p_motivo: it.motivo.trim(), p_vencimento: it.vencimento,
           p_simular: false,
         });
-        if (error) { await recarregar(); return normalizarErroRpc(error).message; }
+        /* os itens anteriores ja' gravaram (inclusive um ajuste): reler os lotes tambem na recusa */
+        if (error) { await Promise.all([recarregar(), aoMudarLotes?.()]); return normalizarErroRpc(error).message; }
         const v = Number(data?.operacao_versao);
         if (Number.isFinite(v)) { versaoCorrente = v; onVersaoChange(v); }
       }
-      await recarregar();
+      await Promise.all([recarregar(), aoMudarLotes?.()]);
       return null;
     } finally {
       setOcupado(false);
     }
-  }, [operacaoId, versaoAtual, onVersaoChange, recarregar]);
+  }, [operacaoId, versaoAtual, onVersaoChange, recarregar, aoMudarLotes]);
 
   const desfazerExplicacao = useCallback(async (parteId: string, motivo: string): Promise<string | null> => {
     if (!operacaoId || versaoAtual == null) return 'Operação não carregada.';
@@ -191,12 +195,12 @@ export function useOcContaCorrente({ operacaoId, enabled, versao, onVersaoChange
       if (error) return normalizarErroRpc(error).message;
       const v = Number(data?.operacao_versao);
       if (Number.isFinite(v)) onVersaoChange(v);
-      await recarregar();
+      await Promise.all([recarregar(), aoMudarLotes?.()]);
       return null;
     } finally {
       setOcupado(false);
     }
-  }, [operacaoId, versaoAtual, onVersaoChange, recarregar]);
+  }, [operacaoId, versaoAtual, onVersaoChange, recarregar, aoMudarLotes]);
 
   const programarRecebimento = useCallback(async (valor: number, vencimento: string): Promise<string | null> => {
     if (!operacaoId || versaoAtual == null) return 'Operação não carregada.';

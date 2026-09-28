@@ -914,6 +914,11 @@ no mesmo arquivo.
   dialogo "Explicar diferenca" (dois descontos zerando, motivo vermelho, recusa ao lado, desfazer com motivo), o programar
   recebimento, o cancelar listando o rol (e travado pelo bloqueio) e o resumo lateral lido da FONTE.
   ⚠ PROVADO: com o sinal de `corDoSaldo` invertido 5 casos caem; sem a trava do motivo na explicacao, 1.
+  De 2191 para 2197 no OC-VENDA-ENTREGAS-01d, em dois arquivos novos. `src/lib/oc/rotuloCategoriaEspelho.test.ts` (+2): o
+  `_oc_rotulo_categoria` da migration contra `CATEGORIAS`, par a par (9), o codigo fora da lista voltando como veio e a descricao
+  da entrega passando pelo rotulo nas duas escritas. `src/hooks/useOcContaCorrente.lotes.test.ts` (+4): explicar e desfazer releem
+  os lotes, a recusa no meio da cadeia tambem rele (o item anterior ja' gravou) e o shell passa a releitura (lido da fonte).
+  ⚠ PROVADO: sem a releitura no hook, 3 dos 4 caem.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -3003,6 +3008,20 @@ preview que o cabecalho nao sai da tela ao rolar.
     "1120 Venda de Desmama Machos" pedia 171px. Larguras medidas celula a celula (Range sobre o conteudo): menor folga 0px,
     nenhuma negativa, toda linha com 18px, sem reticencia e sem quebra.
   ⚠ LISTADAS, nao tocadas: 6cf548a1 e 229ac98d tem `valor_acordado` com fracao de centavo.
+- ⚠ OC-VENDA-ENTREGAS-01d — CORRECOES DA HOMOLOGACAO DO 01c (28/09/2026).
+  (A1) A descricao da entrega usa o NOME da categoria ("Entrega 193 cab Desmama M"), nao o codigo: `_oc_rotulo_categoria` (espelho
+  de `CATEGORIAS`, com teste) e `oc_sincronizar_entregas` 20f2e321 -> ddfff259 (migration `20261027169000_oc_venda_entregas_01d.sql`,
+  ⚠ registrada como `20260928170051`; ledger = arquivo 646d7738). O ramo de atualizacao nao reescreve descricao: as 7 da 232c05aa
+  sao a migration de dado `20261027169100_oc_venda_entregas_01d_dados.sql` (7 partes e 6 titulos; o titulo f3ef425a, editado a
+  mao para "Entrega 193 DM", NAO e' tocado). Provado em rollback: 0 de 18.755 lancamentos da Santa Rita mudam valor, datas, hash,
+  conta, plano ou status; versao igual; 6 linhas de auditoria; e uma entrega recriada pelo sincronizar nasce com o nome.
+  (A2) "Valor acordado" do resumo lateral ficava 2.366.601,26 depois do ajuste de preco do lote 7. O BANCO ESTAVA CERTO
+  (`valor_acordado` 2.365.243,37 = soma dos `_oc_valor_do_lote`): o resumo soma `lotesApi.totais`, estado da tela, e o hook da conta
+  corrente nao mandava reler os lotes depois de revalorar. Agora `useOcContaCorrente` recebe `aoMudarLotes` (o shell passa
+  `lotesApi.recarregar`) e o chama depois de explicar e de desfazer, inclusive na recusa no meio da cadeia. Nenhum dado a corrigir.
+  (A3) Conferido, nada solto: nenhum recebimento do Helder de 2025 fora da OC, nenhum financeiro do modal antigo apontando para as 7
+  saidas; os 5 zootecnicos cancelados ligados a OC sao os estornos do PASSO A; as vendas de jul/2025 (ed69c178, b5adc760, 8f0696c7,
+  88a90a7d, 87b78082) sao outras vendas. Os 4 recebimentos e as 7 saidas SAO a OC — nada de legado a apagar.
 - ⚠ RATEIO-VIGENCIA-01 — O RATEIO ADMINISTRATIVO OLHA QUAIS ATIVIDADES EXISTEM EM CADA MES (28/09/2026, decisoes do Gabriel e do
   Chat). Retroativo, todo o historico, todos os clientes; nada gravado — os DREs recalculam. Migration
   `supabase/migrations/20261027161000_rateio_vigencia_01.sql` (⚠ registrada como `20260928102310`; ledger = arquivo sem a quebra de

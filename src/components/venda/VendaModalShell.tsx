@@ -373,6 +373,8 @@ export function VendaModalShell({
     enabled: !!ocOperacaoId,
     versao: ocVersao ?? null,
     onVersaoChange: onOcVersaoChange ?? (() => {}),
+    /* OC-VENDA-ENTREGAS-01d (A2): ajuste de preco revalora o lote; sem reler, o "Valor acordado" seguia no lote de antes. */
+    aoMudarLotes: lotesApi?.recarregar,
   });
   const cc = ccApi.contaCorrente?.modelo === 'conta_corrente' ? ccApi.contaCorrente : null;
   const [cancelarCcAberto, setCancelarCcAberto] = useState(false);
