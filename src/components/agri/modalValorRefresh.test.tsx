@@ -94,7 +94,12 @@ const recorteAdm = (dre: DrePecuaria): RecortePec => ({
 const montarModal = (valor: ReturnType<typeof valorDaPecuaria>) => (
   <ModalValorDre aberto onFechar={() => {}} valor={valor} comRateioInicial onAbrirLancamento={() => {}} />
 );
-const descricoes = () => [...document.querySelectorAll('tbody tr td:nth-child(3) span.truncate')].map(s => s.textContent);
+/* DRE-MODAL-SUBCENTRO-01: a Descricao deixou de ter `truncate` (texto quebra, sem reticencia) e o modal ganhou um SEGUNDO
+   tbody — o quadro "Por subcentro". A lista e' a tabela fora do quadro; a descricao e' o primeiro span da 3a coluna. */
+const descricoes = () => [...document.querySelectorAll('tbody tr')]
+  .filter(tr => !tr.closest('[data-testid="quadro-subcentro"]'))
+  .map(tr => tr.querySelector('td:nth-child(3) span')?.textContent ?? null)
+  .filter((t): t is string => t != null);
 /* A faixa dos tres cards (Direto, Rateio, Total) — "Direto da fazenda" tambem e' o rotulo do segmentado. */
 const cartoes = () => document.querySelector('.grid.grid-cols-3')?.textContent ?? '';
 

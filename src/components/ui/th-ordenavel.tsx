@@ -16,12 +16,13 @@
  * tabela — a Central usa `hover:bg-primary-foreground/10` sobre o azul, e é o que a colheita
  * passa também.
  */
+import type { ReactNode } from 'react';
 import { ArrowUp, ArrowDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { DirecaoOrdem } from '@/hooks/useOrdenacaoTabela';
 
 export function ThOrdenavel<C extends string>({
-  coluna, rotulo, ordem, onOrdenar, className, alinhaDireita,
+  coluna, rotulo, ordem, onOrdenar, className, alinhaDireita, extra,
 }: {
   coluna: C;
   rotulo: string;
@@ -30,6 +31,11 @@ export function ThOrdenavel<C extends string>({
   /** O estilo da tabela: sticky, fundo, tamanho. Este componente não decide nada disso. */
   className?: string;
   alinhaDireita?: boolean;
+  /**
+   * Algo ao lado do rótulo — ex.: o selo do filtro ativo (DRE-MODAL-SUBCENTRO-01). O clique DENTRO dele não
+   * ordena: quem o passa trata o próprio clique. Sem a prop, nada muda.
+   */
+  extra?: ReactNode;
 }) {
   const ativa = ordem.coluna === coluna;
   return (
@@ -54,6 +60,9 @@ export function ThOrdenavel<C extends string>({
           ? <ArrowUp className={cn('h-2.5 w-2.5 shrink-0', !ativa && 'invisible')} />
           : <ArrowDown className="h-2.5 w-2.5 shrink-0" />}
       </span>
+      {extra != null && (
+        <span onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>{extra}</span>
+      )}
     </th>
   );
 }

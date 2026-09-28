@@ -858,6 +858,15 @@ no mesmo arquivo.
   Global, com a do filtro fora dele; a guarda antes de validar e de gravar, lida da fonte) e, na FONTE, o novo lancamento, a
   Mesa e o dialogo (vazio em "todas"/Global, prefill do Excel vencendo, edicao com a gravada, guarda antes do simples e do
   parcelado, toast do parcelado fora). ⚠ PROVADO: com o `fazOperacionais[0]` de volta no novo lancamento, 1 caso cai.
+  De 2103 para 2116 no DRE-MODAL-SUBCENTRO-01, em dois arquivos novos. `src/components/agri/quadroSubcentro.test.tsx` (+12): a
+  LEI do quadro (soma = cartoes ao centavo, com rateio e so' direto, Pecuaria e Lavoura), a ordem pelo Total, a regra do sinal, e o
+  modal montado (linha de Total com os numeros dos cartoes, "—" onde o subcentro nao tem linha do tipo, filtro com selo e rodape, x
+  e segundo clique voltando a todos, coluna de rateio sumindo em "Direto", rotulo "Rateio adm."/"Rateio", Subcentro da lista
+  ordenando com a ausencia no fim, e o refresh apos salvar desfazendo o filtro que ficou vazio). `src/hooks/useRateioAdmPec.subcentro.test.tsx`
+  (+1): o hook repassa o subcentro da RPC. ⚠ ESTE NASCEU DE UM DEFEITO VISTO NA TELA com a suite verde (ver o bloco).
+  Dois casos existentes mudaram de contrato, nunca afrouxados: as colunas ordenaveis passaram de 7 para 8 (entrou Subcentro) e o
+  helper `descricoes()` do `modalValorRefresh.test.tsx` deixou de achar a descricao por `span.truncate` (a reticencia saiu) e passou a
+  ignorar o tbody do quadro. ⚠ PROVADO: com o subcentro nulo fora da soma, 3 casos caem; sem o campo no mapa do hook, 1.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -2648,6 +2657,35 @@ preview que o cabecalho nao sai da tela ao rolar.
   ResOp (`ResOpCentros`), `ExtratoDistribuicaoEconomica`, Conciliacao (`ConciliacaoBancariaTab`) e a linha "Macro · Grupo · Centro"
   do editor (hidratada do lancamento). Leem a chave: `fn_dre_pecuaria`, `fn_dre_pecuaria_lancamentos`, `fn_dre_lavoura` e o
   `ExtratoGerencialTab`. As copias so' podem sumir depois que o ultimo leitor migrar.
+  ⚠ UM PASSO DADO no DRE-MODAL-SUBCENTRO-01 (28/09/2026): `fn_painel_rateio_detalhe` passou a DEVOLVER o subcentro pela chave. Os
+    FILTROS dela (`l.centro_custo`, `l.macro_custo`, `l.escopo_negocio`) continuam nas copias — medido na FASE 0, e e' o que falta.
+- ⚠ DRE-MODAL-SUBCENTRO-01 — QUADRO "POR SUBCENTRO" NO MODAL DE VALOR DO DRE (28/09/2026, mock
+  `docs/mocks/dre_modal_subcentro_mock_v2.html`, md5 8abe1d0e; decisoes do Gabriel). Entre os cartoes e a lista, uma linha por
+  subcentro com Direto, Rateio (o selo do modal: "Rateio adm." / "Rateio"), Total, R$/cab/mes ou R$/ha (a MESMA conta dos cartoes:
+  `porUnidade` foi reescrito sobre `porUnidadeNum`), % do Total do modo ativo e barrinha, mais a linha "Total do grupo"; ordenado pelo
+  Total. Segue o segmentado: em "Direto" a coluna de rateio some e o subcentro so' de rateio sai. Clique filtra a lista (selo "x" no
+  cabecalho da Descricao, rodape "N lancamentos em ... · de M no grupo"); x ou segundo clique voltam a todos. Coluna Subcentro na lista.
+  Cabecalhos centralizados. Saida em vermelho pela regra do sinal (`corDoSinal`: saida > 0 vermelho, estorno inverte) nos cartoes, no
+  quadro, na lista e no rodape — `ValorDre.saida` (Lavoura sempre; Pecuaria fora de venda/outras receitas).
+  A LEI: o quadro agrupa AS MESMAS linhas da lista (`quadroPorSubcentro`, soma em centavos inteiros), entao quadro = lista = cartoes.
+  Medido na FASE 0 e na tela: NJ jul/25-jun/26 Mao de Obra 1.106.988,24 + 467.256,90 = 1.574.245,14 e Administracao 169.391,70 +
+  427.993,39; Lavoura NJ 25/26 Operacoes Mecanizadas do Amendoim 426.301,60 + 429.815,41 = 856.117,01 — ao centavo.
+  BANCO: `fn_painel_rateio_detalhe` devolve `subcentro` em cada linha, pela chave (migration
+  `supabase/migrations/20261027159000_dre_modal_subcentro_01.sql`, ⚠ registrada como `20260928004210`; patch guardado por md5
+  6f69f1cc -> 634705c3, ledger = arquivo 873ad7f9). Aditiva: PROVADA em rollback em 246 chamadas (admin da pecuaria de 7 clientes x
+  2020-2026 x realizado/meta, e toda safra agricola x cultura x centro nos ramos natureza, investimento, pool e admin), 16.323 linhas,
+  0 divergencias tirada a chave nova; ACL, SECURITY DEFINER e search_path iguais.
+  ⚠ NA PECUARIA NENHUM SUBCENTRO APARECE NOS DOIS LADOS: o direto e' "... Pecuaria" e o rateio e' "... Administrativo" — linhas
+    diferentes do plano. Decisao do Gabriel: uma linha por subcentro, sem juntar por nome-base. Na Lavoura o MESMO subcentro tem
+    direto e rateio e fica numa linha so'.
+  ⚠ "—" E' AUSENCIA, NAO 0,00: o subcentro sem linha de um tipo mostra "—" naquela coluna (desvio do mock, que so' tinha linhas com
+    os dois lados, pela sentinela da casa).
+  ⚠ O DEFEITO QUE A SUITE NAO VIU: `useRateioAdmPec` remonta cada linha campo a campo, e sem o `subcentro` no mapa a tela mostrava todo
+    o rateio como "(sem subcentro)" — a soma fechava (nao depende do nome) e o recorte sumia. So' a tela mostrou; o teste do hook nasceu
+    dele.
+  ⚠ O QUADRO MORA NO MESMO SCROLLPORT DA LISTA (um so' por tela): rola junto, e o cabecalho da lista gruda quando chega ao topo.
+  ⚠ TEXTO SEM RETICENCIA na lista inteira: Descricao, Subcentro, Favorecido e Fazenda quebram linha (a regra de 27/09 alcancou este
+    modal); `ThOrdenavel` ganhou `extra` (o selo), opcional.
 - ⚠ TRANSF-FAZENDA-ORIGEM-01 — "GLOBAL NAO E' FAZENDA" NA TRANSFERENCIA, NO CONSUMO E NA EVOLUIR CATEGORIA (regra permanente,
   Gabriel, 27/09/2026). Todo campo de fazenda de modal e' seletor com todas as fazendas ativas do cliente, com QUALQUER filtro:
   filtro numa fazenda -> nasce com ela e troca; Global -> nasce VAZIO, obrigatorio, vermelho com "Selecione a fazenda do

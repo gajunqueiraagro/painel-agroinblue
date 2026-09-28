@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="utf-8"><title>DRE modal por subcentro — mock v2</title>
+<style>
+:root{--p:#1D3A5D;--bg:#F6F7F9;--fg:#0F1729;--mf:#6B7280;--bd:#E0E2E6;--am:#b45309;--amb:#fffbeb;--amd:#fde68a;--gr:#15803d;--rd:#b91c1c}
+*{box-sizing:border-box}body{margin:0;background:#8a929c;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--fg);padding:20px}
+.lbl{color:#fff;font-size:12px;font-weight:600;margin:0 auto 6px;width:1100px}
+.m{width:1100px;margin:0 auto 18px;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.3)}
+.hd{background:var(--p);color:#fff;padding:7px 12px}
+.hd .t{font-size:13px;font-weight:600}.hd .s{font-size:10px;opacity:.8;margin-top:1px}
+.bar{display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--bd)}
+.seg{display:inline-flex;border:1px solid var(--bd);border-radius:5px;overflow:hidden;height:20px}
+.seg span{padding:0 8px;font-size:10px;display:flex;align-items:center;color:var(--mf)}.seg span.on{background:var(--p);color:#fff}
+.kp{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:6px 12px}
+.k{border:1px solid var(--bd);border-radius:5px;padding:4px 8px;height:44px}.k .a{font-size:9.5px;color:var(--mf)}.k .b{font-size:13px;font-weight:600;color:var(--rd)}.k .c{font-size:9.5px;color:var(--mf)}
+.k.tot{background:#eef3f9}
+.sc{margin:0 12px 6px;border:1px solid var(--bd);border-radius:5px;overflow:hidden}
+.sc .h{font-size:10px;font-weight:600;padding:3px 8px;background:#E8E6DF;display:flex}
+.sc .h span{margin-left:auto;font-weight:400;color:var(--mf)}
+table{width:100%;border-collapse:collapse;table-layout:fixed;font-variant-numeric:tabular-nums}
+.sc th,.ls th{font-size:9.5px;color:var(--mf);font-weight:500;text-align:center !important;padding:0 6px;height:18px;border-bottom:1px solid var(--bd);white-space:nowrap}
+.sc td{font-size:10px;height:17px;padding:0 6px;border-bottom:1px solid #f0f1f3;white-space:nowrap}
+.sc tr:nth-child(even) td{background:#F5F4F0}
+.sc tr.on td{background:#dfe8f3;font-weight:600}
+.sc tr.tt td{background:#D6D4CC;font-weight:600}
+.r{text-align:right}.neg{color:var(--rd)}
+.bar2{height:5px;background:#e5e7eb;border-radius:3px;overflow:hidden}.bar2 i{display:block;height:100%;background:#94a3b8}
+.ls{margin:0 12px;border:1px solid var(--bd);border-radius:5px;overflow:hidden}
+.ls td{font-size:10px;height:20px;padding:0 6px;border-bottom:1px solid #f0f1f3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ls tr:nth-child(even) td{background:#fafafa}
+.tag{font-size:8.5px;color:var(--am);background:var(--amb);border:1px solid var(--amd);border-radius:3px;padding:0 3px;margin-left:3px}
+.chip{font-size:9.5px;background:#dfe8f3;color:var(--p);border-radius:9px;padding:1px 7px;margin-left:6px}
+.re{color:var(--gr);font-weight:600;font-size:9.5px}
+.ft{display:flex;justify-content:space-between;padding:6px 12px;font-size:10.5px;border-top:1px solid var(--bd);background:var(--bg);margin-top:6px}
+.note{width:1100px;margin:0 auto;background:#fff;border-radius:6px;padding:10px 12px;font-size:11px;line-height:1.5}
+</style></head><body>
+
+<div class="lbl">Modal de valor do DRE · Mão de obra · com o quadro “Por subcentro” e a coluna Subcentro · filtrado em “Salários”</div>
+<div class="m">
+ <div class="hd"><div class="t">Mão de obra · R$ 720.000,00 · R$ 10,00/cab/mês</div><div class="s">Custo fixo pecuária · Todas as fazendas · jul/25 → jun/26 · 6.000 cab médias × 12 meses</div></div>
+ <div class="bar"><span class="seg"><span class="on">Lançamentos</span><span>Rateio</span></span><span class="seg"><span>Direto da fazenda</span><span class="on">Com rateio adm.</span></span></div>
+ <div class="kp">
+  <div class="k"><div class="a">Direto da fazenda</div><div class="b">R$ 540.000,00</div><div class="c">R$ 7,50/cab/mês · 75%</div></div>
+  <div class="k"><div class="a">Rateio administrativo</div><div class="b">R$ 180.000,00</div><div class="c">R$ 2,50/cab/mês · 25%</div></div>
+  <div class="k tot"><div class="a">Total do grupo</div><div class="b">R$ 720.000,00</div><div class="c">R$ 10,00/cab/mês</div></div>
+ </div>
+ <div class="sc">
+  <div class="h">Por subcentro <span>clique numa linha para filtrar a lista · clique de novo para ver todos</span></div>
+  <table>
+   <colgroup><col><col style="width:110px"><col style="width:110px"><col style="width:120px"><col style="width:96px"><col style="width:56px"><col style="width:120px"></colgroup>
+   <thead><tr><th>Subcentro</th><th class="r">Direto</th><th class="r">Rateio adm.</th><th class="r">Total</th><th class="r">R$/cab/mês</th><th class="r">%</th><th></th></tr></thead>
+   <tbody>
+    <tr class="on"><td>Salários e Ordenados</td><td class="r neg">360.000,00</td><td class="r neg">120.000,00</td><td class="r neg">480.000,00</td><td class="r">6,67</td><td class="r">66,7%</td><td><div class="bar2"><i style="width:66.7%"></i></div></td></tr>
+    <tr><td>Encargos Sociais (FGTS / INSS)</td><td class="r neg">108.000,00</td><td class="r neg">36.000,00</td><td class="r neg">144.000,00</td><td class="r">2,00</td><td class="r">20,0%</td><td><div class="bar2"><i style="width:20%"></i></div></td></tr>
+    <tr><td>Benefícios (alimentação, saúde)</td><td class="r neg">54.000,00</td><td class="r neg">18.000,00</td><td class="r neg">72.000,00</td><td class="r">1,00</td><td class="r">10,0%</td><td><div class="bar2"><i style="width:10%"></i></div></td></tr>
+    <tr><td>Rescisões e Férias</td><td class="r neg">18.000,00</td><td class="r neg">6.000,00</td><td class="r neg">24.000,00</td><td class="r">0,33</td><td class="r">3,3%</td><td><div class="bar2"><i style="width:3.3%"></i></div></td></tr>
+    <tr class="tt"><td>Total do grupo</td><td class="r neg">540.000,00</td><td class="r neg">180.000,00</td><td class="r neg">720.000,00</td><td class="r">10,00</td><td class="r">100%</td><td></td></tr>
+   </tbody>
+  </table>
+ </div>
+ <div class="ls">
+  <table>
+   <colgroup><col style="width:70px"><col style="width:70px"><col><col style="width:150px"><col style="width:130px"><col style="width:96px"><col style="width:84px"><col style="width:66px"><col style="width:22px"></colgroup>
+   <thead><tr><th>Comp. ↓</th><th>Pgto</th><th>Descrição <span class="chip">Salários e Ordenados ✕</span></th><th>Subcentro</th><th>Favorecido</th><th>Fazenda</th><th class="r">Valor</th><th>Status</th><th></th></tr></thead>
+   <tbody>
+    <tr><td>05/06/26</td><td>05/06/26</td><td>Folha de pagamento junho — campo</td><td>Salários e Ordenados</td><td>Folha NJ</td><td>Retiro</td><td class="r neg">48.200,00</td><td class="re">Realizado</td><td>✎</td></tr>
+    <tr><td>05/06/26</td><td>05/06/26</td><td>Folha escritório junho <span class="tag">rateio adm. 40%</span></td><td>Salários e Ordenados</td><td>Folha Escritório</td><td>Administrativo</td><td class="r neg">5.200,00</td><td class="re">Realizado</td><td>✎</td></tr>
+    <tr><td>05/05/26</td><td>05/05/26</td><td>Folha de pagamento maio — campo</td><td>Salários e Ordenados</td><td>Folha NJ</td><td>Retiro</td><td class="r neg">47.900,00</td><td class="re">Realizado</td><td>✎</td></tr>
+    <tr><td>05/05/26</td><td>05/05/26</td><td>Folha escritório maio <span class="tag">rateio adm. 40%</span></td><td>Salários e Ordenados</td><td>Folha Escritório</td><td>Administrativo</td><td class="r neg">5.200,00</td><td class="re">Realizado</td><td>✎</td></tr>
+   </tbody>
+  </table>
+ </div>
+ <div class="ft"><span>48 lançamentos em “Salários e Ordenados” · de 312 no grupo</span><b class="neg">R$ 480.000,00</b></div>
+</div>
+<div class="note"><b>Mock v2 · DRE-MODAL-SUBCENTRO-01.</b> Números ilustrativos (não vieram do banco).<br>
+• Novo quadro <b>“Por subcentro”</b> entre os cards e a lista: cada subcentro do grupo com Direto, Rateio adm., Total, R$/cab/mês, % do grupo e uma barrinha. Fecha no total do grupo (mesma conta dos cards).<br>
+• Clique numa linha do quadro <b>filtra a lista</b> (aparece o selo “Salários e Ordenados ✕” no cabeçalho da Descrição; clique no ✕ ou na mesma linha volta a todos). Rodapé mostra o total do filtro.<br>
+• Nova coluna <b>Subcentro</b> na lista (só o nome, sem código), ordenável como as outras.<br>
+• Cabeçalhos das colunas centralizados (as células seguem: texto à esquerda, valores à direita).<br>
+• Valores de saída em vermelho (regra do sinal). Lavoura usa o mesmo quadro com R$/ha.</div>
+</body></html>

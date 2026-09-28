@@ -14,7 +14,7 @@
  *   adaptador a reparte até a coluna (fazenda ou cultura) por `ratearNoAlvo`, em centavos, com o
  *   resíduo na maior linha. Por isso a soma da lista é o número da grade, e não o bruto.
  */
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Segmentado } from '@/components/ui/segmentado';
 import { Loader2, Pencil, X } from 'lucide-react';
@@ -75,6 +75,8 @@ export interface LancamentoRateio {
   pct?: number | null;
   parte?: number | null;
   origem?: string | null;
+  /** O subcentro da linha, lido da CHAVE (`plano_conta_id`) — DRE-MODAL-SUBCENTRO-01. Opcional: payload antigo. */
+  subcentro?: string | null;
   /** `true` = sem cultura marcada, é o que entra no pool compartilhado. */
   compartilhado: boolean;
 }
@@ -223,6 +225,8 @@ export interface LinhaValorDre {
   descricao: string | null;
   favorecido: string | null;
   fazenda: string | null;
+  /** O subcentro, pela chave — agrupa o quadro "Por subcentro" e filtra a lista (DRE-MODAL-SUBCENTRO-01). */
+  subcentro: string | null;
   valor: number;
   status: string | null;
   /** % do lançamento original que caiu NESTA célula. `null` = linha direta. */
@@ -249,6 +253,12 @@ export interface ValorDre {
   contexto: string;
   /** R$/cab/mês (pecuária) ou R$/ha (lavoura) — a MESMA conta da grade. */
   porUnidade: (v: number | null) => string;
+  /**
+   * O NÚMERO da mesma conta, sem "R$" nem sufixo, e o rótulo da coluna — para o quadro "Por subcentro"
+   * (DRE-MODAL-SUBCENTRO-01). `porUnidade` é montado A PARTIR dele: uma conta só, dois formatos.
+   */
+  porUnidadeNum: (v: number | null) => string;
+  rotuloUnidade: string;
   /** `null` = a linha não tem parte direta ("—"). */
   direto: number | null;
   /** `null` = a linha não tem rateio ("—"). */
@@ -258,6 +268,11 @@ export interface ValorDre {
   rotuloDireto: string;
   /** "rateio adm." ou "rateio" — o selo da linha de rateio. */
   seloRateio: string;
+  /**
+   * A célula é de SAÍDA (custo, investimento, deduções…) — DRE-MODAL-SUBCENTRO-01. Governa a regra do sinal nos
+   * cartões, no quadro e na lista: saída em vermelho; o negativo (estorno) inverte.
+   */
+  saida: boolean;
   linhas: LinhaValorDre[];
   etapas: EtapaValorDre[];
   rodapeRateio: string;
@@ -312,7 +327,8 @@ export function valorDaLavoura(d: RateioDetalhe, tipo: TipoRateio, o: {
     chave: `${rateioPct == null ? 'd' : 'r'}-${l.id || i}`,
     idEditavel: l.id && (l.origem == null || l.origem === 'lancamento') ? l.id : null,
     competencia: l.data, pagamento: l.pagamento ?? null, descricao: l.descricao,
-    favorecido: l.favorecido, fazenda: l.fazenda ?? null, valor, status: l.status ?? null, rateioPct,
+    favorecido: l.favorecido, fazenda: l.fazenda ?? null, subcentro: l.subcentro ?? null, valor,
+    status: l.status ?? null, rateioPct,
   });
   const etapas: EtapaValorDre[] = [];
   if (temRateio) {
@@ -330,15 +346,20 @@ export function valorDaLavoura(d: RateioDetalhe, tipo: TipoRateio, o: {
     }));
   }
   const area = o.area ?? f?.area_ha ?? null;
+  const porHa = (v: number | null) => (v == null || area == null || !(area > 0) ? '—' : formatNum(v / area, 2));
   return {
     titulo: o.rotulo,
     contexto: [labelDaCultura(o.cultura), o.safra ? `Safra ${o.safra}` : null,
       subtituloDoRateio(d, tipo, o.pool)].filter(Boolean).join(' · '),
-    porUnidade: v => (v == null || area == null || !(area > 0) ? '—' : `R$ ${formatNum(v / area, 2)}/ha`),
+    porUnidade: v => { const t = porHa(v); return t === '—' ? '—' : `R$ ${t}/ha`; },
+    porUnidadeNum: porHa,
+    rotuloUnidade: 'R$/ha',
     direto, rateio,
     rotuloRateio: admin ? 'Rateio administrativo' : 'Rateio compartilhado',
     rotuloDireto: 'Direto da cultura',
     seloRateio: admin ? 'rateio adm.' : 'rateio',
+    /* Todo ramo da Lavoura aqui é custo: natureza, pool, investimento e o rateio administrativo. */
+    saida: true,
     linhas: [
       ...diretos.map((l, i) => linha(l, i, l.valor, null)),
       ...doPool.map((l, i) => linha(l, i, repartidos[i] ?? 0, pctDe(repartidos[i] ?? 0, l.valor))),
@@ -350,6 +371,9 @@ export function valorDaLavoura(d: RateioDetalhe, tipo: TipoRateio, o: {
 }
 
 /* ══════════════════════════ PECUÁRIA ══════════════════════════ */
+
+/* Os blocos de ENTRADA da cascata da pecuária; o resto é saída (a regra do sinal do modal). */
+const BLOCOS_DE_ENTRADA_PEC = new Set(['venda', 'outras_receitas']);
 
 const ROTULO_BLOCO_PEC: Record<string, string> = {
   fixo: 'Custo fixo', variavel: 'Custo variável', investimento: 'Investimento', rateio_adm: 'Rateio administrativo',
@@ -416,13 +440,13 @@ export function valorDaPecuaria(o: {
       chave: `d-${l.origem}-${l.id ?? i}`,
       idEditavel: l.origem === 'lancamento' ? l.id : null,
       competencia: l.data, pagamento: l.pagamento ?? null, descricao: l.descricao, favorecido: l.favorecido,
-      fazenda: l.fazenda, valor: l.valor, status: l.status, rateioPct: null,
+      fazenda: l.fazenda, subcentro: l.subcentro, valor: l.valor, status: l.status, rateioPct: null,
     })),
     ...(cel.rateio == null ? [] : doGrupo.map((l, i): LinhaValorDre => ({
       chave: `r-${l.id ?? i}-${i}`,
       idEditavel: l.origem === 'lancamento' ? l.id : null,
       competencia: l.data, pagamento: l.pagamento, descricao: l.descricao, favorecido: l.favorecido,
-      fazenda: l.fazenda, valor: repartidos[i] ?? 0, status: l.status,
+      fazenda: l.fazenda, subcentro: l.subcentro ?? null, valor: repartidos[i] ?? 0, status: l.status,
       rateioPct: pctDe(repartidos[i] ?? 0, l.valor),
     }))),
   ];
@@ -457,20 +481,79 @@ export function valorDaPecuaria(o: {
       const t = porCabeca(v, cel.cabMedia, cel.meses);
       return v == null || t === '—' ? '—' : `R$ ${t}/cab/mês`;
     },
+    porUnidadeNum: v => porCabeca(v, cel.cabMedia, cel.meses),
+    rotuloUnidade: 'R$/cab/mês',
     direto: r.soRateio ? null : cel.direto,
     rateio: cel.rateio,
     rotuloRateio: grupo ? `Rateio administrativo (${grupo} adm.)` : 'Rateio administrativo',
     rotuloDireto: 'Direto da fazenda',
     seloRateio: 'rateio adm.',
+    saida: !BLOCOS_DE_ENTRADA_PEC.has(r.bloco),
     linhas,
     etapas,
     rodapeRateio: 'Mesma conta do DRE: a soma dos grupos fecha no rateio administrativo total',
   };
 }
 
+/* ══════════════════════════ O QUADRO "POR SUBCENTRO" ══════════════════════════ */
+
+/** Uma linha do quadro: o subcentro, o direto, o rateio e o total, em reais; `n` = lançamentos. */
+export interface LinhaQuadroSubcentro {
+  subcentro: string | null;
+  direto: number;
+  rateio: number;
+  total: number;
+  n: number;
+  /** Quantas linhas de cada tipo: sem linha de um tipo, a célula é "—" (ausência), nunca 0,00. */
+  nDireto: number;
+  nRateio: number;
+}
+
+/** O rótulo do subcentro nulo (linha antiga, ou planejamento sem plano): ausência dita, nunca vazio. */
+export const ROTULO_SEM_SUBCENTRO = '(sem subcentro)';
+
+/**
+ * O QUADRO "POR SUBCENTRO" — DRE-MODAL-SUBCENTRO-01.
+ *
+ * ⚠ AGRUPA AS MESMAS LINHAS QUE A LISTA MOSTRA, e nada mais: não há conta paralela. As linhas de rateio já vêm
+ *   repartidas até o rateio da célula (`ratearNoAlvo`), então a soma do quadro é a da lista, que é a dos cartões.
+ *   Medido na FASE 0 (NJ jul/25-jun/26, Mão de Obra e Administração; Lavoura NJ 25/26, Operações Mecanizadas do
+ *   Amendoim): fecha ao centavo nos dois modos.
+ * ⚠ SOMA EM CENTAVOS INTEIROS: somar reais em ponto flutuante deixaria o total do quadro a um décimo de centavo do
+ *   cartão, e a igualdade "quadro = cartões" deixaria de ser exata.
+ * ⚠ O MODO VEM PRONTO NA LISTA: em "Direto" as linhas de rateio já saíram, e o subcentro só de rateio some junto.
+ * Ordem: Total, do maior para o menor; empate pelo nome, para a ordem não mudar entre renders.
+ */
+export function quadroPorSubcentro(linhas: readonly LinhaValorDre[]): {
+  linhas: LinhaQuadroSubcentro[]; direto: number; rateio: number; total: number;
+} {
+  const m = new Map<string | null, { d: number; r: number; nd: number; nr: number }>();
+  for (const l of linhas) {
+    const acc = m.get(l.subcentro) ?? { d: 0, r: 0, nd: 0, nr: 0 };
+    const c = Math.round(l.valor * 100);
+    if (l.rateioPct == null) { acc.d += c; acc.nd += 1; } else { acc.r += c; acc.nr += 1; }
+    m.set(l.subcentro, acc);
+  }
+  const out = [...m.entries()].map(([subcentro, a]) => ({
+    subcentro, direto: a.d / 100, rateio: a.r / 100, total: (a.d + a.r) / 100, n: a.nd + a.nr,
+    nDireto: a.nd, nRateio: a.nr,
+  }));
+  out.sort((a, b) => b.total - a.total
+    || (a.subcentro ?? ROTULO_SEM_SUBCENTRO).localeCompare(b.subcentro ?? ROTULO_SEM_SUBCENTRO, 'pt-BR'));
+  const d = [...m.values()].reduce((x, a) => x + a.d, 0);
+  const r = [...m.values()].reduce((x, a) => x + a.r, 0);
+  return { linhas: out, direto: d / 100, rateio: r / 100, total: (d + r) / 100 };
+}
+
+/** A regra do sinal do modal: saída em vermelho; o negativo (estorno) inverte a regra. */
+export function corDoSinal(v: number | null, saida: boolean): string | undefined {
+  if (v == null || v === 0) return undefined;
+  return (saida ? v > 0 : v < 0) ? 'text-destructive' : undefined;
+}
+
 /* ══════════════════════════ O MODAL ══════════════════════════ */
 
-type ColunaLinha = 'comp' | 'pgto' | 'descricao' | 'favorecido' | 'fazenda' | 'valor' | 'status';
+type ColunaLinha = 'comp' | 'pgto' | 'descricao' | 'subcentro' | 'favorecido' | 'fazenda' | 'valor' | 'status';
 
 /* ⚠ TODAS AS COLUNAS ORDENAM (o lápis não é coluna de dado). As larguras são as do mock, e a
    Descrição fica com o resto — `table-fixed`, sem rolagem horizontal. */
@@ -478,6 +561,8 @@ export const COLUNAS_VALOR_DRE: Array<ColunaOrdenavel<LinhaValorDre, ColunaLinha
   { coluna: 'comp', h: 'Comp.', w: 74, tipo: 'data', valor: l => l.competencia },
   { coluna: 'pgto', h: 'Pgto', w: 74, tipo: 'data', valor: l => l.pagamento },
   { coluna: 'descricao', h: 'Descrição', tipo: 'texto', valor: l => l.descricao },
+  /* DRE-MODAL-SUBCENTRO-01 — só o nome (sem código), ordenável; a largura sai da Descrição. */
+  { coluna: 'subcentro', h: 'Subcentro', w: 150, tipo: 'texto', valor: l => l.subcentro },
   { coluna: 'favorecido', h: 'Favorecido', w: 130, tipo: 'texto', valor: l => l.favorecido },
   { coluna: 'fazenda', h: 'Fazenda', w: 96, tipo: 'texto', valor: l => l.fazenda },
   { coluna: 'valor', h: 'Valor', w: 92, tipo: 'numero', valor: l => l.valor, direita: true },
@@ -488,6 +573,10 @@ const W_LAPIS = 28;
 const TH = 'sticky top-0 z-10 bg-card px-2 py-1 text-[9.5px] font-semibold text-muted-foreground'
   + ' shadow-[inset_0_-1px_0_0_hsl(var(--border))] hover:bg-muted';
 const TD = 'px-2 py-[3px] text-[10.5px] leading-[1.25]';
+/* DRE-MODAL-SUBCENTRO-01 — os cabeçalhos do quadro e da lista CENTRALIZADOS; as células seguem texto à esquerda e
+   valor à direita. E TEXTO SEM RETICÊNCIA: não cabe, quebra (regra do Gabriel, 27/09/2026). */
+const TH_C = `${TH} !text-center`;
+const QUEBRA = 'whitespace-normal break-words';
 const SELO = 'ml-1 inline-block shrink-0 whitespace-nowrap rounded-[4px] border border-amber-200 bg-amber-50 px-1'
   + ' text-[9.5px] leading-[13px] text-amber-700';
 
@@ -503,14 +592,106 @@ function Status({ s }: { s: string | null }) {
   );
 }
 
-function Cartao({ rotulo, valor, sub, total }: { rotulo: string; valor: string; sub: string; total?: boolean }) {
+function Cartao({ rotulo, valor, sub, total, cor }: { rotulo: string; valor: string; sub: string; total?: boolean; cor?: string }) {
   return (
     <div className={cn('min-w-0 rounded-md border px-2.5 py-1.5', total && 'border-[#c9d6e6] bg-[#eef3f9]')}>
       <div className="truncate text-[10px] text-muted-foreground" title={rotulo}>{rotulo}</div>
-      <div className={cn('whitespace-nowrap text-[15px] font-semibold tabular-nums', valor.startsWith('-') && 'text-destructive')}>
+      <div className={cn('whitespace-nowrap text-[15px] font-semibold tabular-nums', cor)}>
         {valor}
       </div>
       <div className="whitespace-nowrap text-[10px] tabular-nums text-muted-foreground">{sub}</div>
+    </div>
+  );
+}
+
+/**
+ * O QUADRO "POR SUBCENTRO" — DRE-MODAL-SUBCENTRO-01 (mock docs/mocks/dre_modal_subcentro_mock_v2.html). Bloco do
+ * próprio modal, não componente compartilhado. Em "Direto" a coluna Rateio some e o Total é o direto (as linhas de
+ * rateio já saíram da lista). O % é sobre o Total do modo ativo — o mesmo número do cartão.
+ */
+function QuadroSubcentro({ quadro, valor, comRateio, baseTotal, filtro, onAlternar, rotuloSub }: {
+  quadro: ReturnType<typeof quadroPorSubcentro>;
+  valor: ValorDre;
+  comRateio: boolean;
+  baseTotal: number;
+  filtro: { sub: string | null } | null;
+  onAlternar: (s: string | null) => void;
+  rotuloSub: (s: string | null) => string;
+}) {
+  const mostraRateio = comRateio && valor.rateio != null;
+  const pctDoTotal = (v: number) => (baseTotal !== 0 ? (v / baseTotal) * 100 : null);
+  /* `presente = false` = o subcentro não tem linha daquele tipo: "—", que é ausência, e não 0,00 (sentinela da casa). */
+  const cel = (v: number, presente = true) => (
+    <td className={cn(TD, 'whitespace-nowrap text-right tabular-nums', presente && corDoSinal(v, valor.saida),
+      !presente && 'text-muted-foreground')}>{presente ? formatNum(v, 2) : '—'}</td>
+  );
+  return (
+    <div className="mb-2 mt-1 overflow-hidden rounded-md border" data-testid="quadro-subcentro">
+      <div className="flex items-baseline gap-2 bg-[#E8E6DF] px-2 py-[3px] text-[10px] font-semibold">
+        Por subcentro
+        <span className="ml-auto font-normal text-muted-foreground">
+          clique numa linha para filtrar a lista · clique de novo para ver todos
+        </span>
+      </div>
+      <table className="w-full table-fixed border-collapse">
+        <colgroup>
+          <col />
+          <col style={{ width: 110 }} />
+          {mostraRateio && <col style={{ width: 110 }} />}
+          <col style={{ width: 120 }} />
+          <col style={{ width: 96 }} />
+          <col style={{ width: 56 }} />
+          <col style={{ width: 120 }} />
+        </colgroup>
+        <thead><tr>
+          <th className={cn(TH_C, 'static hover:bg-card')}>Subcentro</th>
+          <th className={cn(TH_C, 'static hover:bg-card')}>Direto</th>
+          {/* O rótulo é o selo do próprio modal: "Rateio adm." (pecuária, admin) ou "Rateio" (pool da lavoura). */}
+          {mostraRateio && <th className={cn(TH_C, 'static hover:bg-card')}>{valor.seloRateio.charAt(0).toUpperCase() + valor.seloRateio.slice(1)}</th>}
+          <th className={cn(TH_C, 'static hover:bg-card')}>Total</th>
+          <th className={cn(TH_C, 'static hover:bg-card')}>{valor.rotuloUnidade}</th>
+          <th className={cn(TH_C, 'static hover:bg-card')}>%</th>
+          <th className={cn(TH_C, 'static hover:bg-card')} />
+        </tr></thead>
+        <tbody>
+          {quadro.linhas.map((q, i) => {
+            const total = mostraRateio ? q.total : q.direto;
+            const p = pctDoTotal(total);
+            const ativo = !!filtro && filtro.sub === q.subcentro;
+            return (
+              <tr key={q.subcentro ?? '__sem__'} onClick={() => onAlternar(q.subcentro)} data-testid="linha-quadro"
+                title={ativo ? 'clique para ver todos' : 'clique para filtrar a lista'}
+                className={cn('cursor-pointer border-t border-slate-100 hover:bg-primary/[0.06]',
+                  ativo ? 'bg-[#dfe8f3] font-semibold' : i % 2 === 1 && 'bg-[#F5F4F0]')}>
+                <td className={cn(TD, QUEBRA)}>{rotuloSub(q.subcentro)}</td>
+                {cel(q.direto, q.nDireto > 0)}
+                {mostraRateio && cel(q.rateio, q.nRateio > 0)}
+                {cel(total)}
+                <td className={cn(TD, 'whitespace-nowrap text-right tabular-nums')}>{valor.porUnidadeNum(total)}</td>
+                <td className={cn(TD, 'whitespace-nowrap text-right tabular-nums')}>{p == null ? '—' : `${formatNum(p, 1)}%`}</td>
+                <td className={TD}>
+                  <div className="h-[5px] overflow-hidden rounded bg-slate-200">
+                    <i className="block h-full bg-slate-400" style={{ width: `${Math.max(0, Math.min(100, p ?? 0))}%` }} />
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+          <tr className="border-t bg-[#D6D4CC] font-semibold" data-testid="total-quadro">
+            <td className={TD}>Total do grupo</td>
+            {cel(quadro.direto)}
+            {mostraRateio && cel(quadro.rateio)}
+            {cel(mostraRateio ? quadro.total : quadro.direto)}
+            <td className={cn(TD, 'whitespace-nowrap text-right tabular-nums')}>
+              {valor.porUnidadeNum(mostraRateio ? quadro.total : quadro.direto)}
+            </td>
+            <td className={cn(TD, 'whitespace-nowrap text-right tabular-nums')}>
+              {baseTotal !== 0 ? `${formatNum(((mostraRateio ? quadro.total : quadro.direto) / baseTotal) * 100, 1)}%` : '—'}
+            </td>
+            <td className={TD} />
+          </tr>
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -538,10 +719,24 @@ export function ModalValorDre({
   const comRateio = semDireto ? true : semRateio ? false : comRateioEscolha;
   const linhas = useMemo(
     () => (valor?.linhas ?? []).filter(l => comRateio || l.rateioPct == null), [valor, comRateio]);
-  const ord = useOrdenacaoTabela(linhas, COLUNAS_VALOR_DRE, { coluna: 'comp', direcao: 'desc' });
-  const soma = useMemo(() => linhas.reduce((a, l) => a + l.valor, 0), [linhas]);
-  const nRateio = linhas.filter(l => l.rateioPct != null).length;
+  /* O quadro "Por subcentro" agrupa AS MESMAS linhas da lista (DRE-MODAL-SUBCENTRO-01). Relido junto com elas
+     depois de salvar um lançamento pelo modal (DRE-MODAL-REFRESH-01). */
+  const quadro = useMemo(() => quadroPorSubcentro(linhas), [linhas]);
+  /* O filtro por subcentro: `null` = todos. O subcentro nulo é um valor de filtro de verdade, por isso o objeto. */
+  const [filtro, setFiltro] = useState<{ sub: string | null } | null>(null);
+  /* Se o subcentro filtrado sumir (salvar um lançamento o tirou do grupo, ou o modo "Direto" o escondeu), volta a
+     todos — um filtro vazio pareceria "nenhum lançamento". */
+  useEffect(() => {
+    if (filtro && !quadro.linhas.some(q => q.subcentro === filtro.sub)) setFiltro(null);
+  }, [filtro, quadro]);
+  const linhasDaLista = useMemo(
+    () => (filtro ? linhas.filter(l => l.subcentro === filtro.sub) : linhas), [linhas, filtro]);
+  const ord = useOrdenacaoTabela(linhasDaLista, COLUNAS_VALOR_DRE, { coluna: 'comp', direcao: 'desc' });
+  const soma = useMemo(() => linhasDaLista.reduce((a, l) => a + l.valor, 0), [linhasDaLista]);
+  const nRateio = linhasDaLista.filter(l => l.rateioPct != null).length;
   if (!valor) return null;
+  const rotuloSub = (s: string | null) => s ?? ROTULO_SEM_SUBCENTRO;
+  const alternarFiltro = (s: string | null) => setFiltro(f => (f && f.sub === s ? null : { sub: s }));
   const total = (valor.direto ?? 0) + (valor.rateio ?? 0);
   const mostrado = comRateio ? total : (valor.direto ?? 0);
   const pct = (v: number | null) => (v == null || total === 0 ? '' : ` · ${formatNum((v / total) * 100, 0)}%`);
@@ -585,7 +780,14 @@ export function ModalValorDre({
         <thead><tr>
           {COLUNAS_VALOR_DRE.map(c => (
             <ThOrdenavel key={c.coluna} coluna={c.coluna} rotulo={c.h} ordem={ord.ordem} onOrdenar={ord.alternar}
-              className={TH} alinhaDireita={c.direita} />
+              className={TH_C} alinhaDireita={c.direita}
+              extra={c.coluna === 'descricao' && filtro ? (
+                <button type="button" onClick={() => setFiltro(null)} title="voltar a todos os subcentros"
+                  data-testid="selo-filtro-subcentro"
+                  className="ml-1.5 inline-flex max-w-full items-center gap-1 rounded-[9px] bg-[#dfe8f3] px-1.5 text-[9.5px] font-medium normal-case leading-[14px] text-primary">
+                  <span className={QUEBRA}>{rotuloSub(filtro.sub)}</span><X className="h-2.5 w-2.5 shrink-0" />
+                </button>
+              ) : undefined} />
           ))}
           <th className={cn(TH, 'hover:bg-card')} />
         </tr></thead>
@@ -610,16 +812,17 @@ export function ModalValorDre({
                 <td className={cn(TD, 'whitespace-nowrap tabular-nums')}>{dataBR(l.competencia)}</td>
                 <td className={cn(TD, 'whitespace-nowrap tabular-nums')}>{dataBR(l.pagamento)}</td>
                 <td className={TD}>
-                  <div className="flex min-w-0 items-center">
-                    <span className="min-w-0 truncate" title={l.descricao ?? undefined}>{l.descricao || '—'}</span>
+                  <div className="flex min-w-0 flex-wrap items-center">
+                    <span className={cn('min-w-0', QUEBRA)}>{l.descricao || '—'}</span>
                     {l.rateioPct != null && (
                       <span className={SELO}>{valor.seloRateio} {formatNum(l.rateioPct, 1)}%</span>
                     )}
                   </div>
                 </td>
-                <td className={cn(TD, 'truncate text-muted-foreground')} title={l.favorecido ?? undefined}>{l.favorecido || '—'}</td>
-                <td className={cn(TD, 'truncate')} title={l.fazenda ?? undefined}>{l.fazenda || '—'}</td>
-                <td className={cn(TD, 'whitespace-nowrap text-right tabular-nums', corValor(l.valor))}>{formatNum(l.valor, 2)}</td>
+                <td className={cn(TD, QUEBRA)}>{rotuloSub(l.subcentro)}</td>
+                <td className={cn(TD, QUEBRA, 'text-muted-foreground')}>{l.favorecido || '—'}</td>
+                <td className={cn(TD, QUEBRA)}>{l.fazenda || '—'}</td>
+                <td className={cn(TD, 'whitespace-nowrap text-right tabular-nums', corDoSinal(l.valor, valor.saida))}>{formatNum(l.valor, 2)}</td>
                 <td className={TD}><Status s={l.status} /></td>
                 <td className={cn(TD, 'text-center')}>
                   <Pencil className={cn('inline h-3 w-3 text-muted-foreground', !abrir && 'invisible')} />
@@ -672,14 +875,22 @@ export function ModalValorDre({
         </div>
 
         <div className="grid shrink-0 grid-cols-3 gap-2 px-3.5 py-2">
-          <Cartao rotulo={valor.rotuloDireto} valor={moedaOuTraco(valor.direto)}
+          <Cartao rotulo={valor.rotuloDireto} valor={moedaOuTraco(valor.direto)} cor={corDoSinal(valor.direto, valor.saida)}
             sub={valor.direto == null ? '—' : `${valor.porUnidade(valor.direto)}${pct(valor.direto)}`} />
-          <Cartao rotulo={valor.rotuloRateio} valor={moedaOuTraco(valor.rateio)}
+          <Cartao rotulo={valor.rotuloRateio} valor={moedaOuTraco(valor.rateio)} cor={corDoSinal(valor.rateio, valor.saida)}
             sub={valor.rateio == null ? '—' : `${valor.porUnidade(valor.rateio)}${pct(valor.rateio)}`} />
-          <Cartao total rotulo="Total do grupo" valor={formatMoeda(total)} sub={valor.porUnidade(total)} />
+          <Cartao total rotulo="Total do grupo" valor={formatMoeda(total)} sub={valor.porUnidade(total)} cor={corDoSinal(total, valor.saida)} />
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3.5">{corpo}</div>
+        {/* ⚠ O QUADRO MORA DENTRO DO MESMO SCROLLPORT DA LISTA (um só por tela): rola junto, e o cabeçalho da lista
+            gruda no topo quando chega lá. */}
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3.5">
+          {aba === 'lancamentos' && !carregando && quadro.linhas.length > 0 && (
+            <QuadroSubcentro quadro={quadro} valor={valor} comRateio={comRateio} baseTotal={mostrado}
+              filtro={filtro} onAlternar={alternarFiltro} rotuloSub={rotuloSub} />
+          )}
+          {corpo}
+        </div>
 
         <div className="flex shrink-0 items-center justify-between gap-2 border-t bg-muted/40 px-3.5 py-1.5 text-[11px]">
           {aba === 'rateio' ? (
@@ -689,11 +900,13 @@ export function ModalValorDre({
             </>
           ) : (
             <>
-              <span>
+              <span data-testid="rodape-lista">
                 {ord.ordenadas.length} lançamento{ord.ordenadas.length === 1 ? '' : 's'}
-                {nRateio > 0 && ` · ${nRateio} de ${valor.seloRateio}`}
+                {filtro
+                  ? ` em “${rotuloSub(filtro.sub)}” · de ${linhas.length} no grupo`
+                  : nRateio > 0 ? ` · ${nRateio} de ${valor.seloRateio}` : ''}
               </span>
-              <b className={cn('whitespace-nowrap text-[12px] tabular-nums', corValor(soma))}>{formatMoeda(soma)}</b>
+              <b className={cn('whitespace-nowrap text-[12px] tabular-nums', corDoSinal(soma, valor.saida))}>{formatMoeda(soma)}</b>
             </>
           )}
         </div>

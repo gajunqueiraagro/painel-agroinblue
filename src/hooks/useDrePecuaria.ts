@@ -511,6 +511,8 @@ export interface LancamentoRateioAdmPec {
   status: string | null;
   valor: number;
   grupo: string;
+  /** O subcentro, pela chave — DRE-MODAL-SUBCENTRO-01 (a RPC passou a devolve-lo). Opcional: payload antigo. */
+  subcentro?: string | null;
   pct: number;
   parte: number;
   origem: 'lancamento' | 'planejamento';
@@ -551,7 +553,9 @@ export function useRateioAdmPec(
           return {
             id: txt(l.id), data: txt(l.data), pagamento: txt(l.pagamento), descricao: txt(l.descricao),
             favorecido: txt(l.favorecido), fazenda: txt(l.fazenda), status: txt(l.status),
-            valor: num(l.valor), grupo: String(l.grupo ?? '(sem)'), pct: num(l.pct), parte: num(l.parte),
+            valor: num(l.valor), grupo: String(l.grupo ?? '(sem)'),
+            /* DRE-MODAL-SUBCENTRO-01 — a RPC passou a devolver o subcentro (pela chave). */
+            subcentro: txt(l.subcentro), pct: num(l.pct), parte: num(l.parte),
             origem: l.origem === 'planejamento' ? 'planejamento' : 'lancamento',
           };
         }),
