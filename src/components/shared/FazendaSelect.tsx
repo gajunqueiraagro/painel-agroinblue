@@ -10,6 +10,7 @@ import { AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Fazenda } from '@/contexts/FazendaContext';
 import { fazendaAdministrativa, avisoFazendaAdministrativa } from '@/lib/financeiro/escopoDoSubcentro';
+import { MSG_FAZENDA_OBRIGATORIA } from '@/lib/zoo/fazendaDoFormulario';
 
 export interface FazendaSelectProps {
   value: string;
@@ -29,11 +30,18 @@ export interface FazendaSelectProps {
   tabIndex?: number;
   disabled?: boolean;             // disabled adicional (além de forçado)
   hideAviso?: boolean;            // Mesa: suprime o texto "Dividendos são salvos..." (densidade)
+  /**
+   * FIN-FAZENDA-PADRAO-01 — campo OBRIGATORIO: vazio (e nao forcado ao Administrativo) fica com borda vermelha e
+   * "Selecione a fazenda do lançamento." embaixo, o desenho do TRANSF-FAZENDA-ORIGEM-01. Sem a prop, nada muda.
+   */
+  obrigatorio?: boolean;
+  /** `id` do bloco, para quem grava levar o foco ao campo quando ele falta. */
+  id?: string;
 }
 
 export function FazendaSelect({
   value, onChange, fazendas, forcaAdministrativo,
-  label, className, triggerClassName, size = 'default', tabIndex, disabled, hideAviso,
+  label, className, triggerClassName, size = 'default', tabIndex, disabled, hideAviso, obrigatorio, id,
 }: FazendaSelectProps) {
   const fazOperacionais = fazendas.filter(f => f.id !== '__global__');
 
@@ -45,15 +53,20 @@ export function FazendaSelect({
     }
   }, [forcaAdministrativo, fazendaAdm, value, onChange]);
 
+  /* ⚠ FORCADO AO ADMINISTRATIVO NAO FALTA: o efeito acima o preenche no mesmo ciclo, e acusar "falta" nesse
+     instante seria um vermelho que pisca e some. */
+  const falta = !!obrigatorio && !value && !(forcaAdministrativo && fazendaAdm);
+
   return (
-    <div className={className}>
+    <div className={className} id={id}>
       {label && <Label className="text-[10px]">{label}</Label>}
       <Select value={value} onValueChange={onChange} disabled={forcaAdministrativo || disabled}>
-        <SelectTrigger tabIndex={tabIndex} className={cn('h-8', size === 'compact' && 'h-5 px-1.5 text-[11px] [&_svg]:h-3 [&_svg]:w-3', triggerClassName)}><SelectValue placeholder="Selecione" /></SelectTrigger>
+        <SelectTrigger tabIndex={tabIndex} className={cn('h-8', size === 'compact' && 'h-5 px-1.5 text-[11px] [&_svg]:h-3 [&_svg]:w-3', triggerClassName, falta && 'border-destructive')}><SelectValue placeholder="Selecione" /></SelectTrigger>
         <SelectContent>
           {fazOperacionais.map(f => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}
         </SelectContent>
       </Select>
+      {falta && <p className="mt-0.5 text-[10px] text-destructive">{MSG_FAZENDA_OBRIGATORIA}</p>}
       {!hideAviso && forcaAdministrativo && fazendaAdm && (
         <p className="text-[10px] text-amber-600 flex items-center gap-1 mt-1">
           <AlertTriangle className="h-3 w-3" />

@@ -1161,6 +1161,13 @@ export function LancamentoV2Dialog({
        `FazendaSelect` não tenha disparado) — FIN-FAZENDA-ADM-01 ampliou de Dividendos para
        todo escopo administrativo, pelo mesmo par tela+payload da safra. */
     const fazendaIdEfetivo = (fazendaTravadaAdm && fazendaAdm) ? fazendaAdm.id : fazendaId;
+    /* FIN-FAZENDA-PADRAO-01 — fazenda vazia nao grava, no simples E no parcelado, e antes do banco. O campo ja' esta'
+       em vermelho com a frase; aqui so' se leva o foco a ele, sem toast (UX-TOAST-01). O `canSave` ja' exigia a
+       fazenda (`computeValidacaoModal`), entao esta linha e' a trava do proprio gravar, nao a unica. */
+    if (!fazendaIdEfetivo) {
+      document.getElementById('campo-fazenda-financeiro')?.querySelector('button')?.focus();
+      return;
+    }
     // Extra validation for transfers
     if (isTransferencia) {
       if (!contaOrigemId || contaOrigemId === '__none__' || !contaDestinoId || contaDestinoId === '__none__') {
@@ -1312,7 +1319,8 @@ export function LancamentoV2Dialog({
        no banco — que é o item 4 da homologação. */
     if (!currentIsEdit && formaPagamentoParc === 'parcelada' && numParcelas >= 2) {
       if (!clienteAtual?.id) { toast.error('Sessão inválida'); setSaving(false); return; }
-      if (!fazendaIdEfetivo) { toast.error('Escolha a fazenda'); setSaving(false); return; }
+      /* A fazenda vazia ja' foi recusada no inicio do `handleSubmit`, com o foco no campo — o toast "Escolha a
+         fazenda" que morava aqui saiu (FIN-FAZENDA-PADRAO-01). */
       /* ⚠ A 1ª PARCELA É O VENCIMENTO, NÃO O PAGAMENTO — e essa inversão era metade do defeito.
          A grade de prévia tinha cabeçalho "Vencimento" sobre um campo que gravava
          `data_pagamento`, e o vencimento real ia igual nas N. A RPC escalona o VENCIMENTO e
@@ -1812,6 +1820,10 @@ export function LancamentoV2Dialog({
                 fazendas={fazendas}
                 forcaAdministrativo={fazendaTravadaAdm}
                 label="Fazenda *"
+                /* FIN-FAZENDA-PADRAO-01 — com o filtro Global o campo nasce VAZIO (nunca a primeira da lista), e o
+                   vazio aparece aqui, em vermelho, antes de qualquer clique. */
+                obrigatorio
+                id="campo-fazenda-financeiro"
                 className="col-span-4"
                 triggerClassName={fieldBg}
                 tabIndex={7}

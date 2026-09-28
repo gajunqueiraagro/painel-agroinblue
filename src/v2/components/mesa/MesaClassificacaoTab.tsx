@@ -1127,10 +1127,12 @@ export function MesaClassificacaoTab() {
         contas={hookFin.contasBancarias}
         classificacoes={hookFin.classificacoes}
         fornecedores={hookFin.fornecedores}
+        /* FIN-FAZENDA-PADRAO-01 — o codigo do Excel resolvido vem no `prefill` e vence; sem ele, a fazenda do filtro, e
+           em Global VAZIA e obrigatoria. Antes caia na primeira fazenda da lista (ordem do banco). */
         defaultFazendaId={
           fazendaAtual && fazendaAtual.id !== '__global__'
             ? fazendaAtual.id
-            : fazendas.find((f) => f.id !== '__global__')?.id
+            : ''
         }
         onCriarFornecedor={hookFin.criarFornecedor}
         prefill={

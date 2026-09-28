@@ -2365,7 +2365,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
 
       {mode === 'rapido' && (fazendaId === '__all__' || fazendaId) && (
         <ModoRapidoGrid
-          fazendaId={fazendaId !== '__all__' ? fazendaId : fazOperacionais[0]?.id || ''}
+          /* FIN-FAZENDA-PADRAO-01 — em "todas" o lote nasce SEM fazenda, e o seletor do cabecalho a pede; nunca a
+             primeira da lista. */
+          fazendaId={fazendaId !== '__all__' ? fazendaId : ''}
+          fazendas={fazendas}
           contas={hook.contasBancarias}
           classificacoes={hook.classificacoes}
           onSaveBatch={hook.criarLancamentosEmLote}
@@ -2831,7 +2834,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         classificacoes={hook.classificacoes}
         fornecedores={hook.fornecedores}
         safras={hook.safras}
-        defaultFazendaId={fazendaId !== '__all__' ? fazendaId : fazOperacionais[0]?.id || ''}
+        /* FIN-FAZENDA-PADRAO-01 — "todas" nao e' fazenda: o novo lancamento nasce com a fazenda VAZIA e obrigatoria,
+           nunca com a primeira da lista (antes: `fazOperacionais[0]`, gravada sem ninguem a ter escolhido). */
+        defaultFazendaId={fazendaId !== '__all__' ? fazendaId : ''}
         onCriarFornecedor={hook.criarFornecedor}
         permiteEditarFavorecidoOC={favOCEdit}
         onAbrirOperacaoOC={abrirOCFinanceiro}

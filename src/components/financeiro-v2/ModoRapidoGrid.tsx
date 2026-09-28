@@ -17,6 +17,8 @@ import {
   STATUS_FINANCEIRO_OPCOES_MODAL,
   deriveStatusFinanceiro as deriveStatus,
 } from '@/lib/financeiro/statusFinanceiro';
+import { FazendaSelect } from '@/components/shared/FazendaSelect';
+import type { Fazenda } from '@/contexts/FazendaContext';
 
 interface RowData {
   id: string;
@@ -34,7 +36,13 @@ interface RowData {
 }
 
 interface Props {
+  /**
+   * A fazenda com que o LOTE nasce: a do filtro da tela, ou VAZIA em Global — FIN-FAZENDA-PADRAO-01. Antes era a
+   * fazenda de TODAS as linhas, sem campo nenhum, e em Global a tela mandava a primeira da lista.
+   */
   fazendaId: string;
+  /** As fazendas do seletor do lote (o `FazendaSelect` compartilhado filtra a sentinela). */
+  fazendas: Fazenda[];
   contas: ContaBancariaV2[];
   classificacoes: ClassificacaoItem[];
   onSaveBatch: (forms: LancamentoV2Form[]) => Promise<boolean>;
@@ -71,7 +79,11 @@ function createEmptyRow(inherit?: Partial<RowData>): RowData {
   };
 }
 
-export function ModoRapidoGrid({ fazendaId, contas, classificacoes, onSaveBatch, onDone }: Props) {
+export function ModoRapidoGrid({ fazendaId, fazendas, contas, classificacoes, onSaveBatch, onDone }: Props) {
+  /* A fazenda do lote, escolhida no cabecalho — FIN-FAZENDA-PADRAO-01. Nasce da prop (filtro ou vazio) e troca; se o
+     filtro da tela mudar, acompanha. */
+  const [fazendaLote, setFazendaLote] = useState(fazendaId);
+  useEffect(() => { setFazendaLote(fazendaId); }, [fazendaId]);
   const [rows, setRows] = useState<RowData[]>(() => [createEmptyRow()]);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Map<string, string[]>>(new Map());
@@ -181,6 +193,11 @@ export function ModoRapidoGrid({ fazendaId, contas, classificacoes, onSaveBatch,
 
   // Save batch
   const handleSave = useCallback(async () => {
+    /* Sem a fazenda do lote nenhuma linha grava. O campo ja' esta' em vermelho com a frase; o foco vai a ele. */
+    if (!fazendaLote) {
+      document.getElementById('campo-fazenda-lote')?.querySelector('button')?.focus();
+      return;
+    }
     if (!validate()) {
       toast.error('Corrija os erros antes de salvar');
       return;
@@ -189,7 +206,7 @@ export function ModoRapidoGrid({ fazendaId, contas, classificacoes, onSaveBatch,
     const forms: LancamentoV2Form[] = rows
       .filter(r => r.data_competencia && r.valor && parseFloat(r.valor) > 0)
       .map(r => ({
-        fazenda_id: fazendaId,
+        fazenda_id: fazendaLote,
         conta_bancaria_id: r.conta_bancaria_id || null,
         data_competencia: r.data_competencia,
         data_pagamento: r.data_pagamento || null,
@@ -216,18 +233,30 @@ export function ModoRapidoGrid({ fazendaId, contas, classificacoes, onSaveBatch,
       setErrors(new Map());
       onDone();
     }
-  }, [rows, fazendaId, validate, onSaveBatch, onDone]);
+  }, [rows, fazendaLote, validate, onSaveBatch, onDone]);
 
   const filledCount = rows.filter(r => r.data_competencia && r.valor).length;
 
-  const contasFazenda = contas.filter(c => c.fazenda_id === fazendaId);
+  const contasFazenda = contas.filter(c => c.fazenda_id === fazendaLote);
 
   return (
     <div className="space-y-3">
       {/* Header bar */}
-      <div className="flex items-center justify-between">
-        <div className="text-xs text-muted-foreground">
-          {filledCount} linha(s) preenchida(s) · {rows.length} total
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <FazendaSelect
+            id="campo-fazenda-lote"
+            value={fazendaLote}
+            onChange={setFazendaLote}
+            fazendas={fazendas}
+            forcaAdministrativo={false}
+            label="Fazenda do lote *"
+            obrigatorio
+            className="w-[220px]"
+          />
+          <div className="pt-5 text-xs text-muted-foreground">
+            {filledCount} linha(s) preenchida(s) · {rows.length} total
+          </div>
         </div>
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={addRow} className="h-7 text-xs gap-1">

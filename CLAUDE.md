@@ -852,6 +852,12 @@ no mesmo arquivo.
   categoria montada de verdade (campo vazio, vermelho e com TODAS as fazendas; preenchido e trocavel; travado na edicao; sem
   fazenda nao grava, com ela o payload leva a escolhida; sem `exigeFazenda` o Fechamento segue igual).
   ⚠ PROVADO: com o Destino sem filtrar a Origem 1 caso cai; sem a fazenda no `motivoBloqueio`, 1.
+  De 2092 para 2103 no FIN-FAZENDA-PADRAO-01: entrou `src/components/financeiro-v2/fazendaFinanceiro.test.tsx` (+11) — o
+  `FazendaSelect` com `obrigatorio` montado de verdade (vazio vermelho com a frase; preenchido troca e lista todas menos a
+  sentinela; sem a prop nada muda; Administrativo forcado preenche e nao acusa falta), o Modo rapido montado (lote vazio em
+  Global, com a do filtro fora dele; a guarda antes de validar e de gravar, lida da fonte) e, na FONTE, o novo lancamento, a
+  Mesa e o dialogo (vazio em "todas"/Global, prefill do Excel vencendo, edicao com a gravada, guarda antes do simples e do
+  parcelado, toast do parcelado fora). ⚠ PROVADO: com o `fazOperacionais[0]` de volta no novo lancamento, 1 caso cai.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -2669,11 +2675,46 @@ preview que o cabecalho nao sai da tela ao rolar.
     vermelha, as 3 fazendas pecuarias na lista, Origem Faz. Pureza -> cabecalho e resumo "Faz. Pureza", Destino sem a Pureza; Origem
     trocada para Sta. Luzia (o Destino) -> Destino limpo. Consumo e Evoluir categoria: vazios e vermelhos, cabecalho "—", e com a
     fazenda escolhida o cabecalho a mostra.
-- FIN-FAZENDA-PADRAO-01 — pendencia, proxima frente (registrada no TRANSF-FAZENDA-ORIGEM-01, 27/09/2026): o `LancamentoV2Dialog`
-  aberto pela `FinanceiroV2Tab` (`FinanceiroV2Tab.tsx:2834`, `fazOperacionais[0]`) e a Mesa de classificacao
-  (`MesaClassificacaoTab.tsx:1130`, a primeira fazenda que nao e' a sentinela) PRE-PREENCHEM A PRIMEIRA FAZENDA OPERACIONAL em
-  Global. Pela regra "Global nao e' fazenda" deveriam vir vazios e obrigatorios: hoje o operador grava na primeira fazenda da lista
-  sem ter escolhido. Causa diferente (padrao fixo, nao o nome do filtro), por isso fora daquela frente.
+- ⚠ FIN-FAZENDA-PADRAO-01 — O FINANCEIRO NAO ESCOLHE A FAZENDA POR NINGUEM (28/09/2026; a pendencia de mesmo nome, aberta no
+  TRANSF-FAZENDA-ORIGEM-01, esta' BAIXADA). Com o filtro em "todas"/Global, o novo lancamento (`FinanceiroV2Tab`), a Mesa de
+  classificacao (Excel sem codigo resolvido) e o Modo rapido nascem com a fazenda VAZIA e obrigatoria — nunca a primeira da lista.
+  Filtro numa fazenda: nasce com ela e troca. Edicao: a gravada, com a troca que o dialogo ja' tinha. Sem banco nem RPC.
+  O DEFEITO: `defaultFazendaId = fazOperacionais[0]` (nao-administrativas, alfabetica, INCLUINDO inativas) no novo lancamento e no
+  Modo rapido, e `fazendas.find(f => f.id !== '__global__')` (ordem do banco) na Mesa — gravado sem ninguem escolher. O Modo rapido
+  nem tinha campo: o lote inteiro ia para aquela fazenda.
+  O CONSERTO E' O COMPONENTE COMUM: o `FazendaSelect` ganhou `obrigatorio` (borda vermelha e "Selecione a fazenda do lançamento."
+  quando vazio e NAO forcado ao Administrativo) e `id` (foco). Sem a prop nada muda para os outros usuarios dele. O dialogo o usa
+  obrigatorio; o Modo rapido ganhou o seletor "Fazenda do lote *" no cabecalho (vazio em Global, a do filtro fora dele) e sem ele
+  nenhuma linha grava. O salvar do dialogo recusa fazenda vazia no simples e no parcelado ANTES do banco, levando o foco ao campo; o
+  toast "Escolha a fazenda" do parcelado saiu.
+  ⚠ CORRECAO DA FASE 0: o salvar simples JA' NAO chegava ao banco vazio — `computeValidacaoModal` exige `fazendaId` e o `canSave`
+    desliga o botao (`lancamentoDialogTabs.ts:102`). O que faltava era o campo DIZER. A guarda nova e' a trava do proprio gravar.
+  ⚠ PREENCHIMENTOS AUTOMATICOS QUE FICAM, por decisao do Gabriel: cliente de uma fazenda so' (o contexto nem abre Global); fazenda
+    da CONTA BANCARIA (criar a partir do extrato); codigo do Excel na Mesa e fazenda do arquivo no Custeio, quando resolvem;
+    fazenda da OC e do contrato (obrigacao); Administrativo pelo escopo (FIN-FAZENDA-ADM-01).
+  ⚠ A MESA DE CLASSIFICACAO E O MODO RAPIDO NAO SAO ALCANCAVEIS HOJE, e a FASE 0 nao viu: `MesaClassificacaoTab` so' e' montada
+    por `V2MesaClassificacao`/`V2MesaOperacional`, que sairam do `V2Index` (PR-CLEANUP-MESA-CLASSIFICACAO-01 / -REFERENCIAS-
+    OPERACIONAIS-01), e `setMode('rapido')` nao e' chamado em lugar nenhum da `FinanceiroV2Tab`. O conserto entrou nos dois (pedido
+    do briefing, e sem ele quem religar herda o palpite), mas a prova de tela so' existe para o novo lancamento.
+  ⚠ MEDIDO ANTES (so' leitura, 28/09): sem sinal de lancamento gravado na fazenda errada. A fatia dos manuais na "primeira fazenda"
+    acompanha a dos importados em todo cliente (NJ 43,6 % x 40,3 %; Vera 26,5 x 25,4; Agnaldo 9,2 x 23,3), zero manual sem
+    fazenda, e dos 76 manuais com fazenda trocada depois so' 9 sairam da "primeira" — 8 deles para Administrativo, que e' a regra.
+  ⚠ PROVA NA TELA (preview, NJ, Global, nada salvo — 0 lancamentos do NJ na janela): novo lancamento com Fazenda vazia, vermelha e
+    com a frase, resumo "—", a lista igual a de antes; escolhida Faz. Sto. Expedito, o resumo a mostra.
+- TELAS-ORFAS-01 — pendencia, DECISAO DO GABRIEL: religar ou remover (registrada no FIN-FAZENDA-PADRAO-01, 28/09/2026). A Mesa de
+  classificacao (`MesaClassificacaoTab`, montada so' por `V2MesaClassificacao` / `V2MesaOperacional`) nao tem rota nem menu desde
+  PR-CLEANUP-MESA-CLASSIFICACAO-01 / -REFERENCIAS-OPERACIONAIS-01, e o Modo rapido (`ModoRapidoGrid`) nao tem botao —
+  `setMode('rapido')` nao tem chamador na `FinanceiroV2Tab`. O conserto da fazenda (FIN-FAZENDA-PADRAO-01) ja' esta' nos dois: quem
+  religar nao herda o palpite da primeira fazenda.
+- FIN-RECORRENCIA-FAZENDA-01 — pendencia, nao tratada (FIN-FAZENDA-PADRAO-01): o `RecorrenciaDialog` nasce com a fazenda VAZIA
+  mesmo com o filtro numa fazenda — nao semeia do filtro (`useState(ed?.fazendaId ?? '')`). Outra causa: nao ha palpite, falta a
+  semente. Em Global ja' esta' certo (vazio).
+- FIN-FAZENDA-INATIVA-LISTA-01 — pendencia, nao tratada (FIN-FAZENDA-PADRAO-01): `fazOperacionais` (`FinanceiroV2Tab.tsx:582`) e o
+  `FazendaSelect` compartilhado listam TODAS as fazendas do cliente menos a sentinela, INCLUSIVE as inativas
+  (`status_operacional`). O zootecnico ja' filtra ativas (`fazendasOC`); o Financeiro, nao.
+- FIN-IMPORTAR-ANTIGO-01 — so' listado (FIN-FAZENDA-PADRAO-01): `importarLancamentos` (`useFinanceiro.ts`, a importacao antiga)
+  nao tem chamador. Se alguem a religar, a linha sem fazenda cai em `primaryFazendaId` — a fazenda da primeira linha, ou a primeira
+  do cadastro.
 - EVOLUIR-PESO-FAZENDA-01 — pendencia, nao tratada (registrada no TRANSF-FAZENDA-ORIGEM-01, 27/09/2026): o peso sugerido da
   Evoluir categoria (`origemInfo` em `useReclassificacaoState`) sai do rebanho do CLIENTE INTEIRO (`useRebanhoOficial` sem
   fazenda, ponderado pelo saldo), e nao da fazenda escolhida no campo novo. Visto na tela: 388 kg para garrotes do NJ com a Pureza
