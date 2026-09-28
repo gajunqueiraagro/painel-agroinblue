@@ -905,6 +905,15 @@ no mesmo arquivo.
   (+6): colunas do DRE x caixa, status do dado, saldo final so' com entregas concluidas, "Atualizar entregas" com a recusa ao
   lado, motivo obrigatorio do vincular e somente leitura. Um caso existente de `listaPaginadaV2.test.ts` mudou de contrato
   (compara os quatro totais, nao dois) e a projecao da view foi de 44 para 46 colunas — nunca afrouxados.
+  De 2181 para 2191 no OC-VENDA-ENTREGAS-01c, nos dois arquivos da conta corrente, que mudaram de CONTRATO (o sinal virou o
+  do caixa da fazenda). `src/lib/oc/contaCorrente.test.ts` (6 -> 9): sairam os casos de `colunasDoSaldo`,
+  `cartoesDaContaCorrente` e `saldoFinalAExplicar` (morreram com as funcoes — a coluna dupla "Ele deve | Adiantado" virou o
+  Saldo unico) e entraram o sinal do saldo, a combinacao ate zerar (ajuste 1.000 + permuta 357,89 da 232c05aa, em centavos),
+  o explicado pelo banco e o padrao de data/conta. `src/components/venda/abaContaCorrente.test.tsx` (6 -> 13): o extrato
+  (entrega negativa vermelha, recebimento positivo verde, saldo corrido), o sinal no card e no Total nos tres estados, o
+  dialogo "Explicar diferenca" (dois descontos zerando, motivo vermelho, recusa ao lado, desfazer com motivo), o programar
+  recebimento, o cancelar listando o rol (e travado pelo bloqueio) e o resumo lateral lido da FONTE.
+  ⚠ PROVADO: com o sinal de `corDoSaldo` invertido 5 casos caem; sem a trava do motivo na explicacao, 1.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -1741,6 +1750,11 @@ preview que o cabecalho nao sai da tela ao rolar.
   fecha e NAO grava; cada campo pendente fica vermelho com a mensagem embaixo, o primeiro recebe o foco, e o
   obrigatorio vem marcado (`*`) antes. Cada bloco se cobra dos PROPRIOS campos; o bloco nunca aberto se
   cobra no botao que grava, com bloco e campo escritos ao lado. Detalhe: A29 do docs/PADROES-UI.md.
+- ⚠ PADRAO DE TABELA (regra permanente, Gabriel, 28/09/2026, no OC-VENDA-ENTREGAS-01c): 10px nas linhas, 9,5px no
+  cabecalho, linha de 18px, datas dd/mm/aa; cabecalho navy em todos os niveis; cabecalho, totais e cards CONGELADOS (so' as
+  linhas rolam); uma informacao por coluna e uma linha por registro; divisor vertical entre grupos de colunas; tipos de linha
+  diferentes com fundos diferentes; cor pelo sinal; cabecalho centralizado, numero a direita; nada truncado com "...".
+  Detalhe: A31 do docs/PADROES-UI.md; exemplo vivo `AbaContaCorrenteOC`.
 - ⚠ UX-TOAST-01 (regra permanente, Gabriel, 26/09/2026): validacao e erro de preenchimento NUNCA em toast no
   canto — vao junto do campo ou do botao; toast que sobrar tem X e nao cobre area de digitacao. A recusa nao
   desfaz o digitado. Detalhe: A30 do docs/PADROES-UI.md.
@@ -2951,6 +2965,44 @@ preview que o cabecalho nao sai da tela ao rolar.
   entregas e' botao explicito (saida adotada/estornada depois nao atualiza sozinha — a aba avisa); `oc_cancelar` nao cancela as
   entregas; o resumo lateral da venda continua lendo compromissos (vazio na conta corrente); `vw_oc_obrigacoes` lista as partes
   novas (so' o modo legado a le).
+  ⚠ BAIXADAS NO 01c: "Programar recebimento", "Explicar diferenca", o `oc_cancelar` com entregas e o resumo lateral.
+- ⚠ OC-VENDA-ENTREGAS-01c — EXPLICAR A DIFERENCA, CANCELAR COM ENTREGAS, RESUMO E PROGRAMAR RECEBIMENTO (28/09/2026, mock
+  `docs/mocks/oc_conta_corrente_mock_v7.html`, md5 dd5e9cbd, que SUBSTITUI o v4 na aba; decisoes do Gabriel). Migration
+  `supabase/migrations/20261027168000_oc_venda_entregas_01c.sql` (⚠ registrada como `20260928153826`; ledger = arquivo byte a
+  byte, md5 e4b9ad34). Estrutura so' — NENHUM DADO GRAVADO; a 232c05aa segue sem explicacao.
+  O EXTRATO E' LIDO PELO CAIXA DA FAZENDA: recebimento POSITIVO, entrega NEGATIVA, explicacao positiva quando reduz o que falta
+  receber; saldo = recebido - entregue + explicacoes, corrido linha a linha — NEGATIVO falta receber (vermelho), POSITIVO
+  adiantado (verde), ZERO quitado. `situacao` passou a 'falta_receber' | 'adiantado' | 'quitado' (sai o 'ele_deve' do 01b, e o
+  sinal inverteu). So' na conta corrente: no DRE a entrega segue receita positiva.
+  EXPLICACOES (partes com origem 'explicacao', uma linha ambar no extrato, motivo obrigatorio, competencia = ultima entrega):
+    ajuste de preco -> muda o valor do LOTE pelo criterio 'total' (R$ exato; o R$/kg so' derivado, com 2 casas), e a entrega;
+    desconto comercial -> 5020, sem caixa; permuta/outra despesa -> conta de SAIDA pecuaria escolhida, sem caixa;
+    outra receita -> conta de ENTRADA pecuaria escolhida, sem caixa; devolver ao comprador -> 5006 (NOVA, sem DRE), pagamento
+    programado que so' entra no saldo quando pago.
+  `oc_explicar_saldo` (com `p_simular`) e `oc_desfazer_explicacao`; `explicado` e' INTENCAO (conta a devolucao programada),
+  `saldo_a_explicar` e' o saldo antes das explicacoes efetivas, `falta_explicar` o que sobra. A liquidacao automatica PULA a
+  explicacao sem caixa.
+  CANCELAR (decisao 2): `oc_cancelar` ganhou o ramo conta corrente — cancela entregas e explicacoes, devolve cada recebimento a'
+  conta ORIGINAL (a do evento `vincular_recebimento`; valor, hash, conta bancaria e conciliacao intactos), desvincula as saidas
+  adotadas (o gado fica no zootecnico). `oc_cancelar_rol` lista tudo antes; o dialogo (`CancelarContaCorrenteDialog`) mostra o
+  rol, pede motivo e poe a recusa ao lado do botao. A venda NAO TINHA botao de cancelar: ele nasce SO' na conta corrente.
+  PROGRAMAR RECEBIMENTO: `oc_programar_recebimento` (compromisso sem lote em 3015, programado e materializado); fica fora do saldo.
+  RESUMO LATERAL: Entregue / Recebido / Saldo com o sinal do extrato, da MESMA instancia de `useOcContaCorrente` — ela subiu
+  para o `VendaModalShell` e desce por `ccApiExterno`.
+  VIEW: `vw_oc_operacao_liquidacao` ganhou o ramo conta corrente (`_oc_conta_corrente_base`, `base_origem = 'conta_corrente'`);
+  as outras 110 OCs identicas por md5 antes e depois.
+  ⚠ DEFEITO DORMENTE CORRIGIDO: `oc_revalorar_lote` gravava `valor_acordado` por uma soma diferente da de `oc_salvar_lotes`;
+    agora os dois somam `_oc_valor_do_lote(...)->>'total'`. Zero OCs afetadas hoje.
+  PROVAS EM ROLLBACK, como o usuario do Gabriel, na 232c05aa: ajuste de 1.000 no lote 5 + permuta de 357,89 zeram (quitado,
+  explicado 1.357,89); DRE jun vendas -1.000 e custo variavel +357,89, resultado operacional do ano igual; caixa md5 igual;
+  desfazer as duas volta tudo. Cancelar: 4 recebimentos de volta a 1120 com o hash, 0 entregas e 0 liquidacoes vivas, 7 saidas
+  vivas no zootecnico, DRE EXATAMENTE o de antes do 01b. Programar: 1.357,89 programado fora do saldo.
+  ⚠ DESVIOS DO MOCK, POR MEDICAO NA TELA: o modal da venda tem 1024px (decisao do MODAIS-PADRAO-01b) e o mock foi desenhado
+    em 1100; a tabela tem 766px. Com os textos reais da 232c05aa a linha pedia 842px. Saiu (a) o "R$" dos valores da TABELA
+    (como no proprio mock; os cards mantem) e (b) o NUMERO do plano na coluna Conta, que vai no `title` — com ele,
+    "1120 Venda de Desmama Machos" pedia 171px. Larguras medidas celula a celula (Range sobre o conteudo): menor folga 0px,
+    nenhuma negativa, toda linha com 18px, sem reticencia e sem quebra.
+  ⚠ LISTADAS, nao tocadas: 6cf548a1 e 229ac98d tem `valor_acordado` com fracao de centavo.
 - ⚠ RATEIO-VIGENCIA-01 — O RATEIO ADMINISTRATIVO OLHA QUAIS ATIVIDADES EXISTEM EM CADA MES (28/09/2026, decisoes do Gabriel e do
   Chat). Retroativo, todo o historico, todos os clientes; nada gravado — os DREs recalculam. Migration
   `supabase/migrations/20261027161000_rateio_vigencia_01.sql` (⚠ registrada como `20260928102310`; ledger = arquivo sem a quebra de

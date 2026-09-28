@@ -3579,6 +3579,24 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       setAcaoOcLoading(null);
     }
   };
+  /* OC-VENDA-ENTREGAS-01c — o cancelar da venda em CONTA CORRENTE: a mesma RPC do rodape da compra, mas a recusa volta como
+     TEXTO para o dialogo mostrar ao lado do botao (UX-TOAST-01), e o sucesso nao precisa de toast — o dialogo fecha e o selo da
+     operacao vira "cancelada". O banco desfaz entregas, explicacoes, recebimentos e saidas adotadas numa transacao. */
+  const cancelarVendaContaCorrenteOC = async (motivo: string): Promise<string | null> => {
+    const clienteId = clienteAtual?.id;
+    if (!ocOperacaoId || !clienteId || ocVersao == null) return 'Operação ainda não carregada.';
+    if (acaoOcLoading) return 'Aguarde a ação em andamento.';
+    setAcaoOcLoading('cancelar');
+    try {
+      await ocRpc.cancelar(ocOperacaoId, clienteId, ocVersao, motivo);
+      await recarregarOperacaoOC();
+      return null;
+    } catch (e) {
+      return e instanceof Error ? e.message : 'Falha ao cancelar a operação.';
+    } finally {
+      setAcaoOcLoading(null);
+    }
+  };
   /* ⚠ DEVOLVE SE DEU CERTO — [OC-EDITAR-LOTE-FECHADA] (128b). O rodapé, que era o único
      chamador, ignora o retorno e segue idêntico; o modal do lote precisa saber, porque é
      ele quem some com a faixa de "reabrir" quando a operação volta a ser editável. */
@@ -6226,6 +6244,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           /* OC-EDITAR-CADASTRAL-01 — mesmo roteamento do abate e da compra. */
           onSalvarOperacao={() => (caminhoDoSalvarOC(ocStatusComercial) === 'editar_dados' ? salvarDadosOperacaoOC() : salvarOperacaoVendaOC())}
           onSalvarNegociacao={() => salvarNegociacaoVendaOC()}
+          onCancelarContaCorrente={cancelarVendaContaCorrenteOC}
           semAlteracoes={ocStatusComercial === 'fechada' ? !ocDadosSujos : ocVendaSemAlteracoes}
           erroSalvar={erroSalvarOC}
           /* As tres apis, no mesmo idioma da compra. A venda as MONTA; nao as edita. */

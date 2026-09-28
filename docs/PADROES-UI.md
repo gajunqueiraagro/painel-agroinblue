@@ -990,3 +990,23 @@ corrigir e salvar de novo. Exemplo vivo: `erroRealizado` ao lado do "Salvar nego
 `VendaModalShell`.
 
 **Onde nasceu:** OC-BOITEL-REALIZADO-UX-01 (26/09/2026), decisão do Gabriel.
+
+## A31 — Tabela: uma régua só para toda tabela de dados
+
+**Regra (permanente, Gabriel, 28/09/2026):**
+- fonte de **10px** nas linhas e **9,5px** no cabeçalho; linha de **18px**; datas em **dd/mm/aa**;
+- cabeçalho **navy** em todos os níveis (o segundo nível em navy mais claro, `#2E4B6E`);
+- cabeçalho, totais e cards **congelados** — só as linhas rolam (um scrollport só, fundo opaco, ver o bloco de cabeçalho fixo);
+- **uma informação por coluna, uma linha por registro** (a conta leva o número do plano: "1120 Venda de Desmama Machos");
+- **divisor vertical** (2px, `#9aa7b6`) entre grupos de colunas;
+- tipos de linha diferentes têm **fundos diferentes** (na conta corrente: entrega branco, recebimento azul-claro `#EAF1F9`,
+  explicação âmbar-claro `#fffbeb`);
+- **cor pelo sinal** (negativo vermelho `#b91c1c`, positivo verde `#15803d`, zero sem cor);
+- cabeçalho **centralizado**, número **à direita**, **nada truncado com reticência** (texto que não cabe quebra linha).
+
+**Por quê:** cada tabela nova inventava tamanhos, cores e cabeçalho — a mesma pergunta respondida de cinco jeitos. A régua
+existe para o operador ler qualquer tabela do sistema sem reaprender.
+
+**Exemplo vivo:** `src/components/venda/AbaContaCorrenteOC.tsx` (mock `docs/mocks/oc_conta_corrente_mock_v7.html`).
+
+**Onde nasceu:** OC-VENDA-ENTREGAS-01c (28/09/2026).

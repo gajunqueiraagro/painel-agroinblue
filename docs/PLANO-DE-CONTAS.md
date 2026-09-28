@@ -8,6 +8,8 @@
 > ⚠ Idem para **3015 Adiantamento de Clientes** e **5005 Adiantamento a Fornecedores** (OC-VENDA-ENTREGAS-01b,
 > 28/09/2026, migration `20261027167000`), no vão de Movimentações Financeiras, sem renumerar — conferido: 231 linhas,
 > 223 globais.
+> ⚠ Idem para **5006 Devolução de Adiantamento de Clientes** (OC-VENDA-ENTREGAS-01c, 28/09/2026, migration
+> `20261027168000`), saída, sem bloco nem DRE, no mesmo vão — conferido: 232 linhas, 224 globais.
 
 Fonte: `public.financeiro_plano_contas` no Supabase **proto** (`binbcdfbisgscrifztia`).
 Hierarquia: **tipo de operação › macro custo › grupo de custo › centro de custo › subcentro**.
@@ -428,6 +430,7 @@ de decisão, não `false`.
 | 5005 | Movimentações Financeiras | Adiantamento a Fornecedores | pecuaria | não | — | — | global |
 | 10005 | Movimentações Financeiras | Adiantamento a Parceiro - Lavoura | agricultura | não | — | — | global |
 | 5010 | Movimentações Financeiras | Adiantamento de Boitel | pecuaria | não | — | — | global |
+| 5006 | Movimentações Financeiras | Devolução de Adiantamento de Clientes | pecuaria | não | — | — | global |
 
 ### Tributos
 

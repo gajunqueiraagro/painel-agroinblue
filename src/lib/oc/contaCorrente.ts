@@ -1,48 +1,79 @@
 /**
- * CONTA CORRENTE DA VENDA — OC-VENDA-ENTREGAS-01b (ADR-2026-21).
+ * CONTA CORRENTE DA VENDA — OC-VENDA-ENTREGAS-01b/01c (ADR-2026-21, mock `docs/mocks/oc_conta_corrente_mock_v7.html`).
  *
- * A entrega e' a receita (competencia = data da saida, sem caixa); o recebimento e' o caixa (adiantamento de cliente,
- * fora do DRE). O saldo do comprador e' CALCULADO — `oc_conta_corrente` o devolve linha a linha e no fim —, nunca
- * gravado. Aqui mora so' a leitura desse envelope: nenhuma soma de regra. A tela nao recalcula o saldo; separa o sinal
- * nas duas colunas ("Ele deve" / "Adiantado por ele") e diz o status que o dado tem.
+ * ⚠ O EXTRATO E' LIDO PELO CAIXA DA FAZENDA (01c): recebimento SOMA (entrou dinheiro), entrega ABATE (gado que saiu e ainda
+ *   falta receber), explicacao SOMA quando reduz o que falta receber. saldo = recebido - entregue + explicacoes; NEGATIVO = falta
+ *   receber, POSITIVO = o comprador adiantou, ZERO = quitado. So' aqui: no DRE a entrega segue receita positiva.
+ * ⚠ O SALDO E' DO BANCO (`oc_conta_corrente`), linha a linha e no fim. Esta lib so' le o envelope e o sinal; nao soma regra.
  */
 
-export type TipoLinhaContaCorrente = 'entrega' | 'recebimento';
+export type TipoLinhaContaCorrente = 'entrega' | 'recebimento' | 'explicacao';
+export type TipoExplicacao = 'ajuste_preco' | 'desconto_comercial' | 'permuta_despesa' | 'outra_receita' | 'devolucao_comprador';
 /** D6: sem conta bancaria nunca aparece como conciliado. */
-export type StatusLinhaContaCorrente = 'sem_caixa' | 'sem_conta_bancaria' | 'conciliado' | 'programado' | 'realizado';
-export type SituacaoContaCorrente = 'ele_deve' | 'nos_devemos' | 'quitado';
+export type StatusLinhaContaCorrente =
+  | 'sem_caixa' | 'sem_conta_bancaria' | 'conciliado' | 'programado' | 'realizado' | 'ajuste';
+export type SituacaoContaCorrente = 'falta_receber' | 'adiantado' | 'quitado';
 
 export interface LinhaContaCorrente {
   tipo: TipoLinhaContaCorrente;
+  subtipo: TipoExplicacao | null;
   data: string;
-  lancamentoId: string;
+  parteId: string;
+  lancamentoId: string | null;
   loteOrdem: number | null;
   categoria: string | null;
   cab: number | null;
   descricao: string | null;
+  contaOrdem: number | null;
   conta: string | null;
-  valor: number;
+  banco: string | null;
+  /** Coluna "Entrega (DRE)" com o sinal do caixa: entrega negativa, explicacao que reduz o devido positiva. */
+  movEntrega: number | null;
+  /** Coluna "Recebido (caixa)": recebimento positivo, devolucao negativa. */
+  movRecebido: number | null;
   status: StatusLinhaContaCorrente;
   /** Programado nao entra no saldo (ainda nao e' dinheiro). */
   noSaldo: boolean;
-  /** Saldo acumulado do comprador depois desta linha: positivo = ele deve; negativo = adiantou. */
+  /** Saldo corrido depois desta linha. */
   saldo: number;
+  motivo: string | null;
+}
+
+export interface ExplicacaoContaCorrente {
+  parteId: string;
+  tipo: TipoExplicacao;
+  loteOrdem: number | null;
+  contaOrdem: number | null;
+  conta: string | null;
+  motivo: string | null;
+  /** O que a linha explica, com o sinal do saldo (reduz o que falta receber = positivo). */
+  valor: number;
+  status: StatusLinhaContaCorrente;
 }
 
 export interface ContaCorrente {
   modelo: 'titulo' | 'conta_corrente';
   versao: number;
+  statusComercial: string | null;
   valorAcordado: number | null;
   entregue: number;
   cabEntregue: number;
   recebido: number;
   programado: number;
+  devolvido: number;
   saldo: number;
+  explicado: number;
+  /** A diferenca antes de qualquer explicacao. */
+  saldoAExplicar: number;
+  /** O que ainda nao tem explicacao (zero = tudo explicado). */
+  faltaExplicar: number;
   situacao: SituacaoContaCorrente;
   aEntregar: number;
+  ultimaEntrega: string | null;
   recebimentosSemContaBancaria: number;
   saidasSemEntrega: number;
   linhas: LinhaContaCorrente[];
+  explicacoes: ExplicacaoContaCorrente[];
 }
 
 const num = (v: unknown): number => {
@@ -51,94 +82,170 @@ const num = (v: unknown): number => {
 };
 const numOuNulo = (v: unknown): number | null => (v === null || v === undefined || v === '' ? null : num(v));
 const texto = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null);
+/** Estreita um valor desconhecido para objeto, sem cast. */
+const obj = (v: unknown): Record<string, unknown> =>
+  (v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v)) : {});
 
+const TIPOS_EXPLICACAO: readonly TipoExplicacao[] = [
+  'ajuste_preco', 'desconto_comercial', 'permuta_despesa', 'outra_receita', 'devolucao_comprador',
+];
+function tipoExplicacaoDe(v: unknown): TipoExplicacao | null {
+  return TIPOS_EXPLICACAO.find(t => t === v) ?? null;
+}
 function statusDe(v: unknown): StatusLinhaContaCorrente {
-  return v === 'sem_caixa' || v === 'sem_conta_bancaria' || v === 'conciliado' || v === 'programado' ? v : 'realizado';
+  return v === 'sem_caixa' || v === 'sem_conta_bancaria' || v === 'conciliado' || v === 'programado' || v === 'ajuste'
+    ? v : 'realizado';
 }
 function situacaoDe(v: unknown): SituacaoContaCorrente {
-  return v === 'ele_deve' || v === 'nos_devemos' ? v : 'quitado';
+  return v === 'falta_receber' || v === 'adiantado' ? v : 'quitado';
+}
+function tipoLinhaDe(v: unknown): TipoLinhaContaCorrente {
+  return v === 'entrega' || v === 'explicacao' ? v : 'recebimento';
 }
 
 /** Le o jsonb de `oc_conta_corrente`. Campo fora do contrato cai no neutro, nunca inventa numero. */
 export function lerContaCorrente(raw: unknown): ContaCorrente | null {
   if (!raw || typeof raw !== 'object') return null;
-  const r = raw as Record<string, unknown>;
+  const r = obj(raw);
   const linhas = Array.isArray(r.linhas) ? r.linhas : [];
+  const explicacoes = Array.isArray(r.explicacoes) ? r.explicacoes : [];
   return {
     modelo: r.modelo === 'conta_corrente' ? 'conta_corrente' : 'titulo',
     versao: num(r.versao),
+    statusComercial: texto(r.status_comercial),
     valorAcordado: numOuNulo(r.valor_acordado),
     entregue: num(r.entregue),
     cabEntregue: num(r.cab_entregue),
     recebido: num(r.recebido),
     programado: num(r.programado),
+    devolvido: num(r.devolvido),
     saldo: num(r.saldo),
+    explicado: num(r.explicado),
+    saldoAExplicar: num(r.saldo_a_explicar),
+    faltaExplicar: num(r.falta_explicar),
     situacao: situacaoDe(r.situacao),
     aEntregar: num(r.a_entregar),
+    ultimaEntrega: texto(r.ultima_entrega),
     recebimentosSemContaBancaria: num(r.recebimentos_sem_conta_bancaria),
     saidasSemEntrega: num(r.saidas_sem_entrega),
     linhas: linhas.map((x) => {
-      const l = (x ?? {}) as Record<string, unknown>;
+      const l = obj(x);
       return {
-        tipo: l.tipo === 'entrega' ? 'entrega' : 'recebimento',
+        tipo: tipoLinhaDe(l.tipo),
+        subtipo: tipoExplicacaoDe(l.subtipo),
         data: String(l.data ?? ''),
-        lancamentoId: String(l.lancamento_id ?? ''),
+        parteId: String(l.parte_id ?? ''),
+        lancamentoId: texto(l.lancamento_id),
         loteOrdem: numOuNulo(l.lote_ordem),
         categoria: texto(l.categoria),
         cab: numOuNulo(l.cab),
         descricao: texto(l.descricao),
+        contaOrdem: numOuNulo(l.conta_ordem),
         conta: texto(l.conta),
-        valor: num(l.valor),
+        banco: texto(l.banco),
+        movEntrega: numOuNulo(l.mov_entrega),
+        movRecebido: numOuNulo(l.mov_recebido),
         status: statusDe(l.status),
         noSaldo: l.no_saldo !== false,
         saldo: num(l.saldo),
+        motivo: texto(l.motivo),
       };
+    }),
+    explicacoes: explicacoes.flatMap((x) => {
+      const e = obj(x);
+      const tipo = tipoExplicacaoDe(e.tipo);
+      if (!tipo) return [];
+      return [{
+        parteId: String(e.parte_id ?? ''),
+        tipo,
+        loteOrdem: numOuNulo(e.lote_ordem),
+        contaOrdem: numOuNulo(e.conta_ordem),
+        conta: texto(e.conta),
+        motivo: texto(e.motivo),
+        valor: num(e.valor),
+        status: statusDe(e.status),
+      }];
     }),
   };
 }
 
-/**
- * O saldo do comprador em DUAS colunas, uma so' preenchida: positivo e' o que ele deve (o gado saiu antes do dinheiro);
- * negativo e' o que ele adiantou (o dinheiro veio antes do gado). Zero nas duas e' "quitado", e aparece como 0,00 na de
- * "Ele deve" — zero e' valor, nao ausencia.
- */
-export function colunasDoSaldo(saldo: number): { eleDeve: number | null; adiantado: number | null } {
-  const centavos = Math.round(saldo * 100);
-  if (centavos < 0) return { eleDeve: null, adiantado: -centavos / 100 };
-  return { eleDeve: centavos / 100, adiantado: null };
+/** Cor pelo sinal do caixa da fazenda: negativo = falta receber (vermelho), positivo = adiantado/entrou (verde). */
+export function corDoSaldo(valor: number | null): 'neg' | 'pos' | 'zero' {
+  if (valor === null) return 'zero';
+  const c = Math.round(valor * 100);
+  return c < 0 ? 'neg' : c > 0 ? 'pos' : 'zero';
 }
 
-/** Os quatro cartoes do topo. "Ele deve" e "Adiantado por ele" sao o mesmo saldo lido pelos dois lados. */
-export function cartoesDaContaCorrente(cc: ContaCorrente): { entregue: number; recebido: number; eleDeve: number; adiantado: number } {
-  const c = colunasDoSaldo(cc.saldo);
-  return { entregue: cc.entregue, recebido: cc.recebido, eleDeve: c.eleDeve ?? 0, adiantado: c.adiantado ?? 0 };
+/** O rotulo do card do saldo, que segue o sinal. */
+export function rotuloDoSaldo(saldo: number): string {
+  const c = corDoSaldo(saldo);
+  return c === 'neg' ? 'Saldo · falta receber' : c === 'pos' ? 'Saldo · adiantado pelo comprador' : 'Saldo · quitado';
 }
 
 /**
- * "Saldo final a explicar" so' existe com as entregas CONCLUIDAS (nada mais a entregar) e saldo diferente de zero. Antes
- * disso o saldo e' so' o andamento do contrato. A OC fecha mesmo sem explicar (a explicacao e' o 01c).
+ * A barra da diferenca: so' existe com as entregas concluidas (nada mais a entregar) e algo ainda sem explicacao. Antes disso o
+ * saldo e' so' o andamento do contrato. A OC fecha mesmo sem explicar.
  */
-export function saldoFinalAExplicar(cc: ContaCorrente): { frase: string; valor: number } | null {
-  if (cc.linhas.every((l) => l.tipo !== 'entrega')) return null;
+export function barraDaDiferenca(cc: ContaCorrente): { frase: string; valor: number } | null {
+  if (!cc.linhas.some(l => l.tipo === 'entrega')) return null;
   if (Math.round(cc.aEntregar * 100) > 0) return null;
-  const centavos = Math.round(cc.saldo * 100);
-  if (centavos === 0) return null;
-  return centavos > 0
-    ? { frase: 'Entregas concluídas e o comprador pagou menos que o entregue · a OC fecha mesmo assim', valor: -centavos / 100 }
-    : { frase: 'Entregas concluídas e o comprador pagou mais que o entregue · a OC fecha mesmo assim', valor: -centavos / 100 };
+  const c = Math.round(cc.faltaExplicar * 100);
+  if (c === 0) return null;
+  const v = Math.abs(c) / 100;
+  const fmt = v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return c < 0
+    ? { frase: `Recebeu R$ ${fmt} a menos do que entregou.`, valor: cc.faltaExplicar }
+    : { frase: `Recebeu R$ ${fmt} a mais do que entregou.`, valor: cc.faltaExplicar };
 }
 
 export const ROTULO_STATUS: Record<StatusLinhaContaCorrente, string> = {
   sem_caixa: 'sem caixa',
-  sem_conta_bancaria: 'sem conta bancária',
+  sem_conta_bancaria: 'sem conta',
   conciliado: 'conciliado',
   programado: 'programado',
   realizado: 'realizado',
+  ajuste: 'ajuste',
 };
 
-/** "Recebimento 2 de 4" — a posicao do recebimento entre os da OC, na ordem da conta corrente. */
-export function rotuloRecebimento(linhas: readonly LinhaContaCorrente[], lancamentoId: string): string {
+export const ROTULO_EXPLICACAO: Record<TipoExplicacao, string> = {
+  ajuste_preco: 'Ajuste de preço',
+  desconto_comercial: 'Desconto comercial',
+  permuta_despesa: 'Permuta / outra despesa',
+  outra_receita: 'Outra receita',
+  devolucao_comprador: 'Devolver ao comprador',
+};
+
+/** "Recebimento 2 de 4" — a posicao do recebimento entre os da OC, na ordem do extrato. */
+export function rotuloRecebimento(linhas: readonly LinhaContaCorrente[], parteId: string): string {
   const recs = linhas.filter((l) => l.tipo === 'recebimento');
-  const i = recs.findIndex((l) => l.lancamentoId === lancamentoId);
+  const i = recs.findIndex((l) => l.parteId === parteId);
   return i < 0 ? 'Recebimento' : `Recebimento ${i + 1} de ${recs.length}`;
+}
+
+/** Data do extrato: dd/mm/aa (padrao de tabela, 28/09/2026). */
+export function dataCurta(iso: string | null): string {
+  if (!iso) return '—';
+  const [a, m, d] = iso.slice(0, 10).split('-');
+  return a && m && d ? `${d}/${m}/${a.slice(2)}` : '—';
+}
+
+/** "1120 Venda de Desmama Machos" — conta com o numero do plano, uma informacao so'. */
+export function contaComNumero(ordem: number | null, conta: string | null): string {
+  if (!conta) return '—';
+  return ordem ? `${ordem} ${conta}` : conta;
+}
+
+/**
+ * O que cada explicacao faz no saldo, com o sinal do caixa da fazenda: a que REDUZ o que falta receber (ajuste para baixo,
+ * desconto, permuta) e' positiva; a que aumenta (ajuste para cima, outra receita, devolucao) e' negativa. O mesmo sinal que o
+ * banco devolve em `explicacoes[].valor` — a tela usa isto so' para o RASCUNHO do dialogo, antes de salvar.
+ */
+export function efeitoNoSaldo(tipo: TipoExplicacao, valor: number): number {
+  if (tipo === 'ajuste_preco' || tipo === 'desconto_comercial' || tipo === 'permuta_despesa') return valor;
+  return -valor;
+}
+
+/** Soma em centavos do que o rascunho explica — o total do dialogo, antes de salvar. */
+export function totalDoRascunho(itens: readonly { tipo: TipoExplicacao; valor: number }[]): number {
+  return itens.reduce((acc, i) => acc + Math.round(efeitoNoSaldo(i.tipo, i.valor) * 100), 0) / 100;
 }

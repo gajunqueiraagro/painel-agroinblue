@@ -2,7 +2,7 @@ import { AbaLiquidacaoOC } from './AbaLiquidacaoOC';
 import type { PropostaCompromisso } from '@/components/compra/DialogoGerarCompromissos';
 import { AbaCompromissosOC, type LinhaPrevisao, type RotulosCompromissos } from './AbaCompromissosOC';
 import { useOcCompromissos, type OcCompromissosApi } from '@/hooks/useOcCompromissos';
-import { useOcContaCorrente } from '@/hooks/useOcContaCorrente';
+import { useOcContaCorrente, type OcContaCorrenteApi } from '@/hooks/useOcContaCorrente';
 import { AbaContaCorrenteOC } from '@/components/venda/AbaContaCorrenteOC';
 import { AlertTriangle } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
@@ -54,6 +54,9 @@ interface Props {
      E' a licao que os catalogos do `AbaCompromissosOC` ja tinham ensinado: subir, e nao
      duplicar. A compra nao passa nada e segue montando a sua — comportamento identico. */
   ocApiExterno?: OcCompromissosApi;
+  /** OC-VENDA-ENTREGAS-01c — a conta corrente tambem vem de fora quando o shell da venda a tem (resumo lateral e cancelar
+      leem a MESMA instancia). A compra nao passa e o hook daqui segue desligado para ela. */
+  ccApiExterno?: OcContaCorrenteApi;
 }
 
 export function AbaFinanceiroOC(props: Props) {
@@ -78,12 +81,13 @@ export function AbaFinanceiroOC(props: Props) {
   /* OC-VENDA-ENTREGAS-01b — o MODELO decide antes do modo: venda em conta corrente nao tem compromisso nem titulo por
      parcela, tem entregas e recebimentos (ADR-2026-21). O modelo vem do banco (`oc_conta_corrente.modelo`), nunca inferido
      das partes. Hook sempre chamado; so' liga na venda. */
-  const ccApi = useOcContaCorrente({
+  const ccApiProprio = useOcContaCorrente({
     operacaoId: operacaoId ?? null,
-    enabled: !!operacaoId && api.tipoOperacao === 'venda',
+    enabled: !props.ccApiExterno && !!operacaoId && api.tipoOperacao === 'venda',
     versao: props.ocVersao ?? versaoLocal,
     onVersaoChange: props.onOcVersaoChange ?? setVersaoLocal,
   });
+  const ccApi = props.ccApiExterno ?? ccApiProprio;
 
   const legado = (
     <AbaLiquidacaoOC

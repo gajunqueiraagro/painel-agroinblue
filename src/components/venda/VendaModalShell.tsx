@@ -44,6 +44,9 @@ import { AbaAuditoriaOC } from '@/components/compra/AbaAuditoriaOC';
 import { AbaRecebimentoLotes } from '@/components/compra/AbaRecebimentoLotes';
 import { AbaFinanceiroOC } from '@/components/compra/AbaFinanceiroOC';
 import { useOcCompromissos } from '@/hooks/useOcCompromissos';
+import { useOcContaCorrente } from '@/hooks/useOcContaCorrente';
+import { CancelarContaCorrenteDialog } from '@/components/venda/CancelarContaCorrenteDialog';
+import { corDoSaldo } from '@/lib/oc/contaCorrente';
 import type { ReactNode } from 'react';
 import type { LinhaPrevisao, RotulosCompromissos } from '@/components/compra/AbaCompromissosOC';
 import type { RecebimentoApi } from '@/hooks/useOperacaoRecebimento';
@@ -177,6 +180,8 @@ export interface VendaModalShellProps {
      duas acoes, porque e' sempre "salvar o que esta' na tela" — e e' o mesmo desenho do
      CompraModalShell, cujo rodape de Negociacao chama `lotesApi.salvar()`. */
   onSalvarNegociacao: () => void | Promise<unknown>;
+  /** OC-VENDA-ENTREGAS-01c — cancelar a venda em CONTA CORRENTE; devolve o texto da recusa (ou null) para o dialogo. */
+  onCancelarContaCorrente?: (motivo: string) => Promise<string | null>;
   /* As tres apis da OC, as MESMAS que a compra usa. A venda as monta; nao as edita. */
   documentosApi?: DocumentosApi;
   eventosApi?: EventosApi;
@@ -216,7 +221,7 @@ export function VendaModalShell({
   boitelRealSalvo = null, pendenciaRealizado = null, erroRealizado = null,
   documentosApi, eventosApi, liquidacaoApi, recebimentoApi, ocEntregaEncerrada = false,
   categoria, categoriasDisponiveis,
-  quantidadeNum, pesoKgNum, submitting, onSalvarOperacao, onSalvarNegociacao, semAlteracoes = false,
+  quantidadeNum, pesoKgNum, submitting, onSalvarOperacao, onSalvarNegociacao, onCancelarContaCorrente, semAlteracoes = false,
   onConcluirNegociacao, onReabrirNegociacao, onFechar, erroSalvar = null, abaInicial = null,
 }: VendaModalShellProps) {
   /* A lista de fazendas no formato do combobox — FAZ-ATIVIDADE-01c. Deriva de `fazendasOC`, que já
@@ -361,6 +366,16 @@ export function VendaModalShell({
     versao: ocVersao ?? null,
     onVersaoChange: onOcVersaoChange ?? (() => {}),
   });
+  /* OC-VENDA-ENTREGAS-01c — a CONTA CORRENTE tambem sobe para ca, pela mesma razao: o resumo lateral e o cancelar leem os
+     numeros que a aba Financeiro mostra. Uma instancia, descendo por prop (`ccApiExterno`). */
+  const ccApi = useOcContaCorrente({
+    operacaoId: ocOperacaoId ?? null,
+    enabled: !!ocOperacaoId,
+    versao: ocVersao ?? null,
+    onVersaoChange: onOcVersaoChange ?? (() => {}),
+  });
+  const cc = ccApi.contaCorrente?.modelo === 'conta_corrente' ? ccApi.contaCorrente : null;
+  const [cancelarCcAberto, setCancelarCcAberto] = useState(false);
   const fin = ocCompromissosApi.resumoOperacao;
   const temFin = !!fin && fin.temCompromissos;
   const finAReceber = temFin ? fin.entradaObrigacao - fin.entradaLiquidado : null;
@@ -680,6 +695,7 @@ export function VendaModalShell({
               clienteId={liquidacaoApi.clienteId ?? null}
               /* A instancia que o resumo lateral ja monta — uma leitura, dois consumidores. */
               ocApiExterno={ocCompromissosApi}
+              ccApiExterno={ccApi}
               /* OC-VENDA-ENTREGAS-01b — a conta corrente escreve (entregas, recebimento) e encadeia a versao da OC. */
               ocVersao={ocVersao}
               onOcVersaoChange={onOcVersaoChange}
@@ -1036,11 +1052,23 @@ export function VendaModalShell({
 
               {/* ⚠ SEM COMPROMISSOS OS TRES SAO TRACO, e nao zero: operacao sem financeiro
                   lancado nao "recebeu zero", ela ainda nao tem financeiro. */}
+              {/* OC-VENDA-ENTREGAS-01c — em CONTA CORRENTE nao ha compromisso: os tres numeros sao os da aba, com o MESMO sinal do
+                  extrato (saldo negativo = falta receber, vermelho; positivo = adiantado, verde). */}
+              {cc ? (
+                <div data-testid="resumo-conta-corrente">
+                  <LinhaResumo rotulo="Entregue" valor={formatMoeda(cc.entregue)} />
+                  <LinhaResumo rotulo="Recebido" valor={formatMoeda(cc.recebido)} cor={cc.recebido > 0 ? 'text-[#15803d]' : undefined} />
+                  <LinhaResumo rotulo={corDoSaldo(cc.saldo) === 'neg' ? 'Saldo · falta receber' : corDoSaldo(cc.saldo) === 'pos' ? 'Saldo · adiantado' : 'Saldo · quitado'}
+                    forte valor={formatMoeda(cc.saldo)}
+                    cor={corDoSaldo(cc.saldo) === 'neg' ? 'text-[#b91c1c]' : corDoSaldo(cc.saldo) === 'pos' ? 'text-[#15803d]' : undefined} />
+                </div>
+              ) : (
               <div>
                 <LinhaResumo rotulo="A receber" valor={finAReceber == null ? null : formatMoeda(finAReceber)} />
                 <LinhaResumo rotulo="Recebido" valor={finRecebido == null ? null : formatMoeda(finRecebido)} />
                 <LinhaResumo rotulo="Saldo" valor={finSaldo == null ? null : formatMoeda(finSaldo)} />
               </div>
+              )}
           </AsideResumo>
         </div>
       </div>
@@ -1048,6 +1076,13 @@ export function VendaModalShell({
       {/* RODAPE — 32px com botoes 22px/10px, a medida do Abate (era `px-6 py-2`, 48px). Mesmos
           botoes, mesma ordem, mesmos textos. */}
       <div className="h-8 shrink-0 bg-primary px-2 flex items-center justify-end gap-2">
+        {/* OC-VENDA-ENTREGAS-01c, decisao 2 — a venda em conta corrente ganha o Cancelar; o dialogo lista o que sera desfeito. */}
+        {cc && onCancelarContaCorrente && ocStatusComercial !== 'cancelada' && (
+          <Button type="button" variant="ghost" onClick={() => setCancelarCcAberto(true)} disabled={submitting}
+            className="mr-auto h-[22px] px-[9px] text-[10px] text-white/90 hover:bg-white/10 hover:text-white">
+            Cancelar operação
+          </Button>
+        )}
         <Button type="button" variant="ghost" onClick={onFechar}
           className="h-[22px] px-[9px] text-[10px] text-white/90 hover:bg-white/10 hover:text-white" title="Fechar sem salvar" aria-label="Fechar">
           Fechar
@@ -1151,6 +1186,9 @@ export function VendaModalShell({
           so' vai para `detalhes` do evento), e o dialogo da compra o pede como "opcional".
           Reabrir desfaz um congelamento e e' o que a Auditoria vai mostrar daqui a um ano;
           "reaberta sem motivo" e' um registro que nao explica nada. */}
+      {cancelarCcAberto && onCancelarContaCorrente && (
+        <CancelarContaCorrenteDialog api={ccApi} onCancelar={onCancelarContaCorrente} onFechar={() => setCancelarCcAberto(false)} />
+      )}
       <Dialog open={reabrirAberto} onOpenChange={setReabrirAberto}>
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle className="text-[13px]">Reabrir negociação</DialogTitle></DialogHeader>
