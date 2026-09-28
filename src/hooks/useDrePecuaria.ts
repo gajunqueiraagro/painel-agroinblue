@@ -691,6 +691,21 @@ export interface MovimentosPec {
   produzidas: ParcelaMov; nascimentos: ParcelaMov; compradas: ParcelaMov; transf_entrada: ParcelaMov;
   vendas_abates: ParcelaMov; mortes: ParcelaMov; transf_saida: ParcelaMov;
   ajustes: ParcelaMov;
+  /**
+   * O DESFRUTE ABERTO POR TIPO — DRE-CASCATA-MODAL-01 (migration 20261027160000).
+   *
+   * ⚠ AS MESMAS LINHAS DE `vendas_abates`, separadas por `lancamentos.tipo`: abate, venda (venda e
+   * venda_pe) e consumo, em cabeças e @ VIVA. A soma das cabeças é a do `vendas_abates`; a das arrobas
+   * pode diferir em centavos de @ (cada parcela é arredondada por conta própria).
+   * ⚠ OPCIONAL: uma RPC anterior à migration não a manda, e aí ela é `null` — a aba mostra traço, não zero.
+   */
+  desfrute_por_tipo?: DesfrutePorTipo | null;
+}
+
+export interface DesfrutePorTipo {
+  abate: { cabecas: number; arrobas: number };
+  venda: { cabecas: number; arrobas: number };
+  consumo: { cabecas: number; arrobas: number };
 }
 
 export interface PatrimonioPec {
@@ -733,8 +748,60 @@ const lerMovimentos = (x: unknown): MovimentosPec => {
     compradas: parcela(m.compradas), transf_entrada: parcela(m.transf_entrada),
     vendas_abates: parcela(m.vendas_abates), mortes: parcela(m.mortes),
     transf_saida: parcela(m.transf_saida), ajustes: parcela(m.ajustes),
+    desfrute_por_tipo: lerDesfrutePorTipo(m.desfrute_por_tipo),
   };
 };
+
+/* ⚠ SEM A CHAVE, `null` — e não três zeros: uma RPC anterior à migration não a manda, e zero
+   afirmaria "não houve abate". */
+const lerDesfrutePorTipo = (x: unknown): DesfrutePorTipo | null => {
+  if (x == null || typeof x !== 'object') return null;
+  const o = objeto(x);
+  const t = (y: unknown) => { const p = objeto(y); return { cabecas: num(p.cabecas), arrobas: num(p.arrobas) }; };
+  return { abate: t(o.abate), venda: t(o.venda), consumo: t(o.consumo) };
+};
+
+/**
+ * A LEITURA DE UM PERÍODO DA PONTE — o corpo que morava no `queryFn` de `useDrePecuariaPatrimonio`,
+ * MOVIDO sem mudança para que a versão em lista (DRE-CASCATA-MODAL-01) use a MESMA leitura e a MESMA
+ * chave de cache: o ano que o modal da variação já trouxe sai do cache na leitura dos anos.
+ */
+async function buscarPatrimonio(
+  clienteId: string | null | undefined, fazendaId: string | null, de: string | null, ate: string | null,
+): Promise<PatrimonioPec> {
+  const { data: r, error: err } = await (supabase as any).rpc('fn_dre_pecuaria_patrimonio', {
+    p_cliente: clienteId, p_fazenda: fazendaId, p_de: de, p_ate: ate,
+  });
+  if (err) throw err;
+  const o = objeto(r);
+  const t = objeto(o.total);
+  return {
+    p0: String(o.p0 ?? ''),
+    p1: String(o.p1 ?? ''),
+    p0_fonte: o.p0_fonte === 'fechamento' || o.p0_fonte === 'cadastro' || o.p0_fonte === 'zero'
+      ? o.p0_fonte : null,
+    p1_fonte: o.p1_fonte === 'fechamento' || o.p1_fonte === 'cadastro' || o.p1_fonte === 'zero'
+      ? o.p1_fonte : null,
+    categorias: (Array.isArray(o.categorias) ? o.categorias : []).map((x: unknown) => {
+      const c = objeto(x);
+      return {
+        categoria: String(c.categoria ?? '—'),
+        q0: num(c.q0), pm0: numOuNulo(c.pm0), pk0: numOuNulo(c.pk0), v0: num(c.v0),
+        q1: num(c.q1), pm1: numOuNulo(c.pm1), pk1: numOuNulo(c.pk1),
+        v1_p0: num(c.v1_p0), v1_p1: num(c.v1_p1),
+        vpb: num(c.vpb), efeito: num(c.efeito),
+      };
+    }),
+    total: {
+      q0: num(t.q0), v0: num(t.v0), q1: num(t.q1),
+      v1_p0: num(t.v1_p0), v1_p1: num(t.v1_p1), vpb: num(t.vpb), efeito: num(t.efeito),
+    },
+    movimentos: lerMovimentos(o.movimentos),
+  };
+}
+
+const chavePatrimonio = (clienteId: string | null | undefined, fazendaId: string | null, de: string | null, ate: string | null) =>
+  ['dre-pec-patrimonio', clienteId ?? '', fazendaId ?? '', de ?? '', ate ?? ''];
 
 export function useDrePecuariaPatrimonio(
   clienteId: string | null | undefined,
@@ -744,41 +811,31 @@ export function useDrePecuariaPatrimonio(
   ativo: boolean,
 ) {
   const { data, isLoading, error } = useQuery({
-    queryKey: ['dre-pec-patrimonio', clienteId ?? '', fazendaId ?? '', de ?? '', ate ?? ''],
+    queryKey: chavePatrimonio(clienteId, fazendaId, de, ate),
     /* ⚠ SÓ COM O MODAL ABERTO: é uma leitura por fazenda × período, e buscá-la ao montar a grade
        daria uma ida ao banco por coluna sem ninguém para ler. */
     enabled: !!clienteId && !!de && !!ate && ativo,
-    queryFn: async (): Promise<PatrimonioPec> => {
-      const { data: r, error: err } = await (supabase as any).rpc('fn_dre_pecuaria_patrimonio', {
-        p_cliente: clienteId, p_fazenda: fazendaId, p_de: de, p_ate: ate,
-      });
-      if (err) throw err;
-      const o = objeto(r);
-      const t = objeto(o.total);
-      return {
-        p0: String(o.p0 ?? ''),
-        p1: String(o.p1 ?? ''),
-        p0_fonte: o.p0_fonte === 'fechamento' || o.p0_fonte === 'cadastro' || o.p0_fonte === 'zero'
-          ? o.p0_fonte : null,
-        p1_fonte: o.p1_fonte === 'fechamento' || o.p1_fonte === 'cadastro' || o.p1_fonte === 'zero'
-          ? o.p1_fonte : null,
-        categorias: (Array.isArray(o.categorias) ? o.categorias : []).map((x: unknown) => {
-          const c = objeto(x);
-          return {
-            categoria: String(c.categoria ?? '—'),
-            q0: num(c.q0), pm0: numOuNulo(c.pm0), pk0: numOuNulo(c.pk0), v0: num(c.v0),
-            q1: num(c.q1), pm1: numOuNulo(c.pm1), pk1: numOuNulo(c.pk1),
-            v1_p0: num(c.v1_p0), v1_p1: num(c.v1_p1),
-            vpb: num(c.vpb), efeito: num(c.efeito),
-          };
-        }),
-        total: {
-          q0: num(t.q0), v0: num(t.v0), q1: num(t.q1),
-          v1_p0: num(t.v1_p0), v1_p1: num(t.v1_p1), vpb: num(t.vpb), efeito: num(t.efeito),
-        },
-        movimentos: lerMovimentos(o.movimentos),
-      };
-    },
+    queryFn: () => buscarPatrimonio(clienteId, fazendaId, de, ate),
   });
   return { patrimonio: data ?? null, carregando: isLoading, erro: error as Error | null };
+}
+
+/**
+ * A PONTE DE N PERÍODOS EM PARALELO — DRE-CASCATA-MODAL-01, a "Leitura dos anos".
+ *
+ * ⚠ `useQueries`, como `useDrePecuariaLista`: o número de anos muda e um hook não pode ser chamado um
+ * número variável de vezes. Mesma chave e mesma leitura do hook de um período só.
+ * ⚠ SÓ COM A ABA ABERTA (`ativo`): fora dela, zero requisições.
+ */
+export function useDrePecuariaPatrimonioLista(
+  clienteId: string | null | undefined, periodos: readonly { de: string; ate: string }[], ativo: boolean,
+) {
+  const resultados = useQueries({
+    queries: periodos.map(p => ({
+      queryKey: chavePatrimonio(clienteId, null, p.de, p.ate),
+      enabled: !!clienteId && ativo,
+      queryFn: () => buscarPatrimonio(clienteId, null, p.de, p.ate),
+    })),
+  });
+  return resultados.map(r => ({ patrimonio: r.data ?? null, carregando: r.isLoading }));
 }

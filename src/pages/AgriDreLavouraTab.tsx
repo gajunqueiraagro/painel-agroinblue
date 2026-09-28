@@ -56,7 +56,7 @@ import {
   SeletorPeriodoPecuaria, safraCorrentePecuaria, useSafraDeAbertura,
 } from '@/components/agri/SeletorPeriodoPecuaria';
 import { PecPatrimonioModal } from '@/components/agri/PecPatrimonioModal';
-import { PecCascataView } from '@/components/agri/PecCascataView';
+import { PecGraficoModal } from '@/components/agri/PecGraficoModal';
 import {
   PecHistoricoLinhaModal, type RecorteHistoricoPec,
 } from '@/components/agri/PecHistoricoLinhaModal';
@@ -1288,12 +1288,13 @@ export function AgriDreLavouraTab({ onCorrigirPrecos }: {
           <div className="rounded-lg border border-border/60 bg-card px-3 py-8 text-center text-[11px] text-muted-foreground">
             <Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin align-[-2px]" /> Carregando…
           </div>
-        ) : vistaPec === 'grafico' ? (
-          /* ⚠ A MESMA ÁREA, O MESMO `cartaoRef` E A MESMA ALTURA MEDIDA: trocar de vista não pode
-             mover os cards nem os controles acima — é o que o segmentado promete ao ficar parado. */
-          <PecCascataView colunas={colunasPec} clienteId={clienteId}
-            alturaCartao={alturaCartao} cartaoRef={cartao} />
         ) : (
+          <>
+          {/* ⚠ O GRÁFICO É UM MODAL POR CIMA DA GRADE — DRE-CASCATA-MODAL-01. A grade continua montada atrás
+              (os cards e os controles não se movem), e fechar o modal volta o segmentado para "Tabela". O
+              estado segue em `f_vista`: o link que abria a cascata abre o modal. */}
+          <PecGraficoModal aberto={vistaPec === 'grafico'} onFechar={() => setVistaPec('tabela')}
+            colunas={colunasPec} clienteId={clienteId} clienteNome={clienteAtual?.nome ?? null} />
           <PecDrePanel colunas={colunasPec} alturaCartao={alturaCartao} cartaoRef={cartao}
             unidades={unidadesPec}
             modo={modoPec} abertos={abertosPec} onAbertos={f => setAbertosPec(f)}
@@ -1305,6 +1306,7 @@ export function AgriDreLavouraTab({ onCorrigirPrecos }: {
             onAbrirDidatico={(fazendaId, nome, qual, de, ate, insumos) =>
               setDidatico({ fazendaId, nome, qual, de, ate, insumos })}
             onAbrirHistorico={setHistoricoPec} />
+          </>
         )
       )}
 

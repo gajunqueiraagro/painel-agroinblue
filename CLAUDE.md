@@ -867,6 +867,15 @@ no mesmo arquivo.
   Dois casos existentes mudaram de contrato, nunca afrouxados: as colunas ordenaveis passaram de 7 para 8 (entrou Subcentro) e o
   helper `descricoes()` do `modalValorRefresh.test.tsx` deixou de achar a descricao por `span.truncate` (a reticencia saiu) e passou a
   ignorar o tbody do quadro. ⚠ PROVADO: com o subcentro nulo fora da soma, 3 casos caem; sem o campo no mapa do hook, 1.
+  De 2116 para 2137 no DRE-CASCATA-MODAL-01: entrou `src/components/agri/pecLeituraAnos.test.tsx` (+21). O caso que justifica
+  o arquivo e' o da EXTRACAO: o corpo antigo da `PecCascataView` (HEAD a607b1d2) copiado no teste da' os MESMOS @ desfrutada,
+  R$/@ do desfrute, R$/@ da reposicao e agio que `indicadoresDoAno` em NJ 2025, SR 2021 e RRCC 2021 (numeros do banco). Os
+  outros travam o custeio COM rateio (e que sem ele o custo por @ seria outro), o RRCC 2021 sem cache em traco com o preco
+  presente, a compra sem reposicao em traco, a ponte fechando em @ e em cab com a diferenca aparecendo so' quando nao e' zero,
+  a producao so' em @ (e em traco sem `at_produzida`), o GMD pela funcao oficial sobre os meses do periodo, o "8m" so' nos
+  valores do periodo, o aviso do GMD no ano parcial e as cores do agio e da variacao do custo.
+  ⚠ PROVADO: com o custeio sem o rateio 2 casos caem; com a diferenca escondida, 3; com a marca "8m" ignorada, 1; com o agio
+    pelo sinal comum, 1.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -2686,6 +2695,50 @@ preview que o cabecalho nao sai da tela ao rolar.
   ⚠ O QUADRO MORA NO MESMO SCROLLPORT DA LISTA (um so' por tela): rola junto, e o cabecalho da lista gruda quando chega ao topo.
   ⚠ TEXTO SEM RETICENCIA na lista inteira: Descricao, Subcentro, Favorecido e Fazenda quebram linha (a regra de 27/09 alcancou este
     modal); `ThOrdenavel` ganhou `extra` (o selo), opcional.
+- ⚠ DRE-CASCATA-MODAL-01 — O BOTAO "Grafico" DO DRE DA PECUARIA ABRE UM MODAL COM DUAS ABAS (28/09/2026, mock
+  `docs/mocks/dre_cascata_modal_leitura_mock_v5.html`, md5 b724e0f5; decisoes do Gabriel e do Chat). O modal tem a largura do
+  conteudo (988 = 960 + 2 x 14) e fica POR CIMA da grade — a grade segue montada atras e o estado continua em `f_vista=grafico`.
+  (1) "Cascata do ano" = a `PecCascataView` de antes, agora em PIXELS REAIS (viewBox = tamanho desenhado, `LARGURA_CASCATA` 960;
+     antes ela esticava 1180 unidades com `preserveAspectRatio="none"`), fontes maiores (tabela 11, eixo 10, valores 10,5), nomes
+     quebrados pela largura da faixa em ate' tres linhas (`quebrarRotulo`), legenda sem os quadradinhos. A tabela de movimentos
+     virou VISAO DE CAIXA: desfrute +verde, reposicao −vermelha; agio positivo vermelho, desagio verde. O rotulo que desceria sobre
+     os nomes sobe para cima da barra (o "−484 k" do investimento cobria "Investimento no periodo", NJ jan–ago/23).
+  (2) "Leitura dos anos" = uma coluna por ano do seletor (as colunas de valor do REALIZADO do cliente inteiro, na ordem da grade):
+     preco de venda x custo por @ com a margem em curva na mesma escala; rebanho inicial x desfrute com o % dentro da barra; o
+     movimento do rebanho (Global em ponte + abas Nascimentos, Compras, Desfrute, Mortes; @ | cab), alinhado as colunas da tabela
+     (a mesma regua de 222px); e a tabela de indicadores com cabecalho fixo. Clique num ano (cabecalho ou rotulo do grafico) abre a
+     cascata dele.
+  AS RAZOES MORAM EM `indicadoresDoAno` (`src/components/agri/pecLeituraAnos.ts`), EXTRAIDAS da cascata sem mudar conta, e a
+  cascata passou a le-las: preco medio de venda = vendas / @ desfrutadas em @ VIVA (decisao 2: a definicao que a cascata ja' usava);
+  custeio = custo variavel + custo fixo + rateio adm., o `compor` do "(−) Custeio de producao" do Resumido, lido da def (decisao 1);
+  custo por @ produzida = custeio / `at_produzida` (so' com producao positiva); margem por @ = preco − custo (nasce aqui).
+  A PONTE e' `movimentos` da `fn_dre_pecuaria_patrimonio`, e a "Diferenca" (`ajustes`) aparece cinza, com o numero, sempre que nao e'
+  zero (decisao 5). GMD = `computePeriodGmd` sobre o `zoot_mensal_cache` (decisao 4, `useGmdPeriodos`, paginacao paralela com
+  `count`). Taxa de natalidade NAO existe (decisao 3). Ano parcial: valores do periodo com "8m", comparaveis sem marca, e o aviso
+  "periodo parcial: nao compara com ano cheio" no proprio GMD — "parcial" e' pelos meses da COLUNA: com "Ano 2026" o seletor corta
+  em jan–ago e os anos anteriores sao os MESMOS oito meses, entao todos levam a marca.
+  BANCO: `fn_dre_pecuaria_patrimonio` devolve `movimentos.desfrute_por_tipo` (abate / venda + venda_pe / consumo, cab e @ viva) —
+  migration `supabase/migrations/20261027160000_dre_cascata_modal_01.sql` (⚠ registrada como `20260928091641`; patch guardado por md5
+  641d0037 -> ab60f388; ledger = arquivo 160f1f36). PROVADA em rollback: 49 chamadas no Global (7 clientes x 2020-2026) e 22 por
+  fazenda, 71 de 71 saidas identicas tirada a chave nova; cabecas por tipo = `vendas_abates` em 71 de 71, arrobas ate' 0,01 @.
+  A aba Desfrute le o R$ dos grupos de centros do DRE — Abates (1010, 1020) e Venda Peso Vivo (1110-1155), com R$/@ pela @ do tipo —
+  e Venda de tropa, Consumo interno e hedge SO' em R$, da lista `fn_dre_pecuaria_lancamentos` do centro "Venda Geral" (a soma fecha
+  com o centro: Vera 2025, 19.000,00). Consumo 1050 e hedge 1055 nao tem nenhum lancamento no banco: as linhas saem 0,00.
+  ⚠ DUAS DEFINICOES DE R$/@ DO DESFRUTE SEGUEM NO REPO, e nao foram unificadas: a cascata e a leitura dividem pela @ do DRE
+    (`at_desfrutada` convertida para @ viva); a aba Movimentos do modal da variacao (`PecPonteTabela`) divide pela @ da ponte
+    (`movimentos.vendas_abates`, que prefere o peso medio tambem no abate). E o custeio da `PecPonteTabela` e' o do PC-100, SEM o
+    rateio. Mudar a ponte mexeria no modal homologado da variacao — fora do escopo.
+  ⚠ E O EFEITO DE MERCADO DO NJ jan–ago/24 E' 0,00 DE VERDADE: `v_fim_p1 = v_fim_p0` (17.918.598,98 nos dois) — os precos de ago/24
+    sao os de dez/23. A tela esta' fiel a RPC.
+- DESFRUTE-DEFINICAO-UNICA-01 — pendencia, DECISAO DO GABRIEL (registrada no DRE-CASCATA-MODAL-01, 28/09/2026): o R$/@ do
+  desfrute tem DUAS definicoes no repo. A cascata e a "Leitura dos anos" dividem as vendas pela @ do DRE (`at_desfrutada`
+  convertida para @ viva, em `indicadoresDoAno`); a aba Movimentos do modal da variacao (`PecPonteTabela`) divide pela @ da ponte
+  (`movimentos.vendas_abates`, que prefere o peso medio tambem no abate), e o custeio dela e' o do PC-100, SEM o rateio adm.
+  Unificar em `indicadoresDoAno` muda numero de modal homologado — so' com decisao do Gabriel, medindo antes quanto cada ano muda.
+- CACHE-RRCC-2021-01 — pendencia, trabalho de DADO (decisao do Chat, 28/09/2026): o `zoot_mensal_cache` do RRCC nao tem NENHUMA linha
+  em 2021 (0 de 12 meses, com 12 meses de fechamento). `at_produzida` vem nulo e o GMD, o custo por @ produzida e a margem do ano
+  saem "—"; na ponte a producao sai "—" e os 3.189 @ dela caem na Diferenca. Mesmo risco ja' registrado em CACHE-X-FECHAMENTO-01
+  (o Bom Retiro 2023). Conserto: rematerializar o cache do RRCC 2021 — e conferir antes quais numeros homologados do ano mudam.
 - ⚠ TRANSF-FAZENDA-ORIGEM-01 — "GLOBAL NAO E' FAZENDA" NA TRANSFERENCIA, NO CONSUMO E NA EVOLUIR CATEGORIA (regra permanente,
   Gabriel, 27/09/2026). Todo campo de fazenda de modal e' seletor com todas as fazendas ativas do cliente, com QUALQUER filtro:
   filtro numa fazenda -> nasce com ela e troca; Global -> nasce VAZIO, obrigatorio, vermelho com "Selecione a fazenda do

@@ -22,7 +22,7 @@ import { formatNum } from '@/lib/calculos/formatters';
 import { LINHAS_PEC_RESUMIDO, type ColunaPec } from '@/components/agri/drePecRegua';
 import { valorDaLinha } from '@/pages/PecDrePanel';
 import { useDrePecuariaPatrimonio } from '@/hooks/useDrePecuaria';
-import { kgToArrobas } from '@/types/cattle';
+import { indicadoresDoAno } from '@/components/agri/pecLeituraAnos';
 
 const NAVY = '#0C447C';
 const CAB_TABELA = '#2C3E5C';
@@ -37,6 +37,9 @@ const INFORMATIVA = '#8A8880';
 const VERDE = 'text-emerald-700';
 const VERMELHO = 'text-destructive';
 const corSinal = (v: number | null) => (v == null || v === 0 ? undefined : v > 0 ? VERDE : VERMELHO);
+/* ⚠ ÁGIO É CUSTO A MAIS: positivo sai VERMELHO e deságio VERDE — DRE-CASCATA-MODAL-01, a mesma regra da
+   leitura dos anos. Pelo sinal comum, pagar mais caro na reposição aparecia como boa notícia. */
+const corAgio = (v: number | null) => (v == null || v === 0 ? undefined : v > 0 ? VERMELHO : VERDE);
 
 const traco = '—';
 const n0 = (v: number | null | undefined) => (v == null ? traco : formatNum(v, 0));
@@ -59,7 +62,8 @@ const abrev = (v: number): string => {
   if (a >= 1_000) return `${formatNum(v / 1_000, 0)} k`;
   return formatNum(v, 0);
 };
-const abrevSinal = (v: number) => `${v > 0 ? '+' : ''}${abrev(v)}`;
+/* `+ 0` normaliza o −0 que a subtração de uma linha zerada produz — a barra dos juros zerados mostrava "-0". */
+const abrevSinal = (v: number) => `${v > 0 ? '+' : ''}${abrev(v + 0)}`;
 
 /** Uma barra da cascata, já posicionada. */
 export interface Barra {
@@ -74,18 +78,23 @@ export interface Barra {
 }
 
 /**
- * ⚠ AS LARGURAS DA FAIXA SÃO AS DO fix4, recalibradas contra o texto renderizado — não as do mock.
- * A tabela "Rebanho" aqui é a MESMA do modal da variação, coluna por coluna, e uma régua só para
- * as duas é o que impede que elas divirjam no próximo número de oito dígitos.
+ * ⚠ AS LARGURAS DA FAIXA FORAM RECALIBRADAS NO DRE-CASCATA-MODAL-01 para a fonte de 11px (eram as do
+ * fix4, em 10px, iguais às do modal da variação). A fonte cresceu por pedido do Gabriel e "ágio sobre
+ * R$/@ do desfrute" deixou de caber em 148px; com a regra da casa, texto que não cabe não se corta.
  */
-const COLS_REBANHO = [70, 72, 78, 78, 62] as const;
-const COLS_MOV = [148, 66, 74, 78, 92] as const;
+const COLS_REBANHO: readonly number[] = [80, 80, 86, 86, 68];
+const COLS_MOV: readonly number[] = [178, 70, 84, 80, 104];
 
-export function PecCascataView({ colunas, clienteId, alturaCartao, cartaoRef }: {
+/**
+ * ⚠ ELA MORA NO MODAL DO GRÁFICO DESDE O DRE-CASCATA-MODAL-01, na aba "Cascata do ano": deixou de ocupar
+ * o cartão da grade. O ano escolhido pode vir de fora (`escolhido`/`onEscolher`) — é assim que o clique
+ * num ano da "Leitura dos anos" abre a cascata daquele ano; sem as duas props ela guarda a escolha sozinha.
+ */
+export function PecCascataView({ colunas, clienteId, escolhido: escolhidoFora, onEscolher }: {
   colunas: readonly ColunaPec[];
   clienteId: string | null | undefined;
-  alturaCartao: number | null;
-  cartaoRef: React.RefObject<HTMLDivElement>;
+  escolhido?: string | null;
+  onEscolher?: (chave: string) => void;
 }) {
   /* ⚠ SÓ COLUNAS DE VALOR VIRAM CHIP: a de Δ é derivada das outras duas e não tem cascata própria —
      uma ponte de diferenças não acumula para lugar nenhum. */
@@ -93,7 +102,9 @@ export function PecCascataView({ colunas, clienteId, alturaCartao, cartaoRef }: 
   /* ⚠ ABRE NO MAIS RECENTE, que é a coluna `atual` quando ela existe: é o período que a tela toda
      está mostrando, e abrir noutro faria o gráfico contradizer os cards acima dele. */
   const padrao = anos.find(c => c.atual)?.chave ?? anos[anos.length - 1]?.chave ?? '';
-  const [escolhido, setEscolhido] = useState<string>('');
+  const [escolhidoLocal, setEscolhidoLocal] = useState<string>('');
+  const escolhido = escolhidoFora ?? escolhidoLocal;
+  const setEscolhido = (c: string) => { setEscolhidoLocal(c); onEscolher?.(c); };
   const col = anos.find(c => c.chave === escolhido) ?? anos.find(c => c.chave === padrao) ?? anos[0];
 
   const { patrimonio, carregando } = useDrePecuariaPatrimonio(
@@ -114,45 +125,35 @@ export function PecCascataView({ colunas, clienteId, alturaCartao, cartaoRef }: 
   const pk1 = at1 && at1 !== 0 && v1 != null ? v1 / at1 : null;
   const dif = (a: number | null, b: number | null) => (a == null || b == null ? null : b - a);
 
-  const prod = col?.linhas?.producao ?? null;
-  /* ⚠ O DESFRUTE DO DRE VEM EM @ DE CARCAÇA (÷15, com rendimento 50% presumido nas vendas em pé) e
-     o estoque em @ VIVA (÷30). Com 50% exatos os dois números coincidem; o que difere é o ABATE,
-     onde o peso de carcaça é medido. Converter é dividir pelo rendimento e reconverter — o mesmo
-     caminho do fix3. */
-  const atDesf = prod?.at_desfrutada == null ? null : kgToArrobas(prod.at_desfrutada * 15 / 0.5);
-  const atComp = prod?.at_comprada ?? null;
-  const cabDesf = prod?.cab_desfrutada ?? null;
-  const cabComp = prod?.cab_comprada ?? null;
-  const rsDesf = col?.linhas?.vendas ?? null;
-  const rsComp = col?.linhas?.reposicao ?? null;
-  const pkDesf = atDesf && atDesf !== 0 && rsDesf != null ? rsDesf / atDesf : null;
-  /* ⚠ REPOSIÇÃO ZERO COM COMPRA REAL DÁ TRAÇO, NÃO ZERO — REPOSICAO-SEM-CUSTO-01. Medido: o SR
-     comprou 6 cabeças em 2021 e o DRE não tem lançamento de reposição nenhum. Um R$/@ de zero
-     faria o ágio sair em −100 % em toda a tela, afirmando um prejuízo que não foi medido. */
-  const pkComp = atComp && atComp !== 0 && rsComp != null && rsComp !== 0 ? rsComp / atComp : null;
-  const agio = pkComp == null || pkDesf == null || pkDesf === 0 ? null : pkComp / pkDesf - 1;
+  /* ⚠ AS RAZÕES MORAM EM `indicadoresDoAno` desde o DRE-CASCATA-MODAL-01 — extraídas daqui sem mudar
+     conta, e lidas também pela "Leitura dos anos". Uma definição de R$/@ para as duas abas. */
+  const { atDesf, atComp, cabDesf, cabComp, receitaDesf: rsDesf, rsComp, pkDesf, pkComp, agio } =
+    indicadoresDoAno(col?.linhas ?? null);
 
   const cel = (txt: string, cor?: string, esq?: boolean, forte?: boolean) => (
-    <td className={cn('truncate px-1.5 py-0 text-[10px] leading-none tabular-nums',
+    <td className={cn('whitespace-nowrap px-1.5 py-0 text-[11px] leading-none tabular-nums',
       esq ? 'text-left' : 'text-right', forte && 'font-medium', cor)}>{txt}</td>
   );
   const cab = (rots: readonly string[]) => (
-    <tr style={{ height: 16 }}>
+    <tr style={{ height: 18 }}>
       {rots.map((r, i) => (
-        <th key={i} className={cn('truncate px-1.5 py-0 text-[9px] font-semibold leading-none text-white',
+        <th key={i} className={cn('whitespace-nowrap px-1.5 py-0 text-[10px] font-semibold leading-none text-white',
           i === 0 ? 'text-left' : 'text-right')} style={{ backgroundColor: CAB_TABELA }}>{r}</th>
       ))}
     </tr>
   );
   const capa = (txt: string, span: number) => (
-    <tr style={{ height: 16 }}>
-      <td colSpan={span} className="truncate px-1.5 py-0 text-[10px] font-medium leading-none"
+    <tr style={{ height: 18 }}>
+      <td colSpan={span} className="whitespace-nowrap px-1.5 py-0 text-[11px] font-medium leading-none"
         style={{ backgroundColor: AZUL_CLARO, color: NAVY }}>{txt}</td>
     </tr>
   );
 
   /* ─────────── O DESENHO ─────────── */
-  const W = 1180, MARG_ESQ = 62, MARG_DIR = 10, H = 300, PAD_TOPO = 16, PAD_BASE = 34;
+  /* ⚠ EM PIXELS REAIS — a regra do `preserveAspectRatio="none"` (CLAUDE.md, UI): a cascata passou a morar
+     num modal de largura fixa, e o `viewBox` é exatamente o tamanho desenhado. Uma unidade vale um pixel,
+     e a fonte de 10,5 é de 10,5. Antes o SVG esticava 1180 unidades até a largura do cartão. */
+  const W = LARGURA_CASCATA, MARG_ESQ = 62, MARG_DIR = 10, H = 310, PAD_TOPO = 20, PAD_BASE = 46;
   const FAIXA = W - MARG_ESQ - MARG_DIR;
   const passoX = grafico ? FAIXA / grafico.barras.length : 0;
   const escalaY = (v: number) => {
@@ -172,15 +173,14 @@ export function PecCascataView({ colunas, clienteId, alturaCartao, cartaoRef }: 
   }, [grafico]);
 
   return (
-    <div ref={cartaoRef} className="flex flex-col gap-2 overflow-hidden rounded-lg border border-border/60 bg-card p-2"
-      style={alturaCartao ? { height: alturaCartao } : undefined}>
+    <div className="flex flex-col gap-2">
       {/* ⚠ OS CHIPS SÃO AS COLUNAS DA GRADE, com o rótulo do cabeçalho delas: trocar de vista não
           pode trocar o vocabulário do período. */}
       <div className="flex shrink-0 flex-wrap items-center gap-1">
         {anos.map(c => (
           <button key={c.chave} type="button" onClick={() => setEscolhido(c.chave)}
             title={c.subLongo ?? c.sub}
-            className={cn('shrink-0 rounded px-2 text-[10px] font-medium transition-colors',
+            className={cn('shrink-0 rounded px-2 text-[11px] font-medium transition-colors',
               c.chave === col?.chave ? 'bg-primary text-primary-foreground'
                 : 'text-muted-foreground hover:bg-muted')}
             style={{ height: 22 }}>
@@ -197,8 +197,8 @@ export function PecCascataView({ colunas, clienteId, alturaCartao, cartaoRef }: 
             {cab(['', patrimonio?.p0 ? rotuloDeMes(patrimonio.p0) : '—',
               patrimonio?.p1 ? rotuloDeMes(patrimonio.p1) : '—', 'Dif.', 'Dif. %'])}
             {carregando ? (
-              <tr style={{ height: 16 }}><td colSpan={5}
-                className="px-1.5 text-[10px] leading-none text-muted-foreground">
+              <tr style={{ height: 18 }}><td colSpan={5}
+                className="px-1.5 text-[11px] leading-none text-muted-foreground">
                 <Loader2 className="mr-1 inline h-3 w-3 animate-spin align-[-2px]" />Carregando…</td></tr>
             ) : ([
               { r: 'Cabeças', a: n0(q0), b: n0(q1), d: dif(q0, q1), f: sinal0, base: q0 },
@@ -208,7 +208,7 @@ export function PecCascataView({ colunas, clienteId, alturaCartao, cartaoRef }: 
             ].map((l, i, ls) => {
               const total = i === ls.length - 1;
               return (
-                <tr key={l.r} style={{ height: 16, backgroundColor: total ? AZUL_CLARO : undefined }}>
+                <tr key={l.r} style={{ height: 18, backgroundColor: total ? AZUL_CLARO : undefined }}>
                   {cel(l.r, undefined, true, total)}
                   {cel(l.a, undefined, false, total)}
                   {cel(l.b, undefined, false, total)}
@@ -220,54 +220,56 @@ export function PecCascataView({ colunas, clienteId, alturaCartao, cartaoRef }: 
           </tbody>
         </table>
 
+        {/* ⚠ VISÃO DE CAIXA — DRE-CASCATA-MODAL-01: o desfrute ENTRA dinheiro (+, verde) e a reposição SAI
+            (−, vermelha). Antes a tabela lia pelo rebanho (desfrute saindo em vermelho, compra entrando em
+            verde), ao lado de uma cascata que é de dinheiro — as duas se contradiziam na mesma tela. */}
         <table className="border-collapse" style={{ tableLayout: 'fixed', width: COLS_MOV.reduce((a, w) => a + w, 0) }}>
           <colgroup>{COLS_MOV.map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>
           <tbody>
             {capa('Movimentos do período', 5)}
             {cab(['', 'Cabeças', 'Arrobas', 'R$/@', 'Valor (R$)'])}
-            <tr style={{ height: 16 }}>
+            <tr style={{ height: 18 }}>
               {cel('Desfrute (venda + abate)', undefined, true)}
-              {cel(cabDesf == null ? traco : sinal0(-cabDesf), VERMELHO)}
-              {cel(atDesf == null ? traco : sinal0(-atDesf), VERMELHO)}
+              {cel(cabDesf == null ? traco : sinal0(cabDesf), VERDE)}
+              {cel(atDesf == null ? traco : sinal0(atDesf), VERDE)}
               {cel(n2(pkDesf))}
-              {cel(rsDesf == null ? traco : sinal0(-rsDesf), VERMELHO)}
+              {cel(rsDesf == null ? traco : sinal0(rsDesf), VERDE)}
             </tr>
-            <tr style={{ height: 16 }}>
+            <tr style={{ height: 18 }}>
               {cel('% do rebanho inicial', undefined, true)}
-              {cel(cabDesf == null || !q0 ? traco : pct(-cabDesf, q0), VERMELHO)}
-              {cel(atDesf == null || !at0 ? traco : pct(-atDesf, at0), VERMELHO)}
+              {cel(cabDesf == null || !q0 ? traco : pct(cabDesf, q0), VERDE)}
+              {cel(atDesf == null || !at0 ? traco : pct(atDesf, at0), VERDE)}
               {cel('')}{cel('')}
             </tr>
-            <tr style={{ height: 16 }}>
+            <tr style={{ height: 18 }}>
               {cel('Reposição (compra)', undefined, true)}
-              {cel(cabComp == null ? traco : sinal0(cabComp), VERDE)}
-              {cel(atComp == null ? traco : sinal0(atComp), VERDE)}
+              {cel(cabComp == null ? traco : sinal0(-cabComp), VERMELHO)}
+              {cel(atComp == null ? traco : sinal0(-atComp), VERMELHO)}
               {cel(n2(pkComp))}
-              {cel(rsComp == null || rsComp === 0 ? traco : sinal0(rsComp), VERDE)}
+              {cel(rsComp == null || rsComp === 0 ? traco : sinal0(-rsComp), VERMELHO)}
             </tr>
-            <tr style={{ height: 16 }}>
+            <tr style={{ height: 18 }}>
               {cel('ágio sobre R$/@ do desfrute', undefined, true)}
               {cel('')}{cel('')}
-              {cel(agio == null ? traco : pct(agio, 1), corSinal(agio))}
+              {cel(agio == null ? traco : pct(agio, 1), corAgio(agio))}
               {cel('')}
             </tr>
           </tbody>
         </table>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-hidden rounded border bg-card">
+      <div className="overflow-hidden rounded border bg-card" style={{ width: W, height: H }}>
         {!grafico ? (
           <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground">
             Sem dado para desenhar a cascata neste período.
           </div>
         ) : (
-          <svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"
-            role="img" aria-label="Cascata do resultado">
+          <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Cascata do resultado">
             {linhasGrade.map(v => (
               <g key={v}>
                 <line x1={MARG_ESQ} x2={W - MARG_DIR} y1={escalaY(v)} y2={escalaY(v)}
                   stroke="#E3E1D9" strokeWidth={1} />
-                <text x={MARG_ESQ - 5} y={escalaY(v) + 3} fontSize={9} textAnchor="end" fill="#8A8880">
+                <text x={MARG_ESQ - 5} y={escalaY(v) + 3.5} fontSize={10} textAnchor="end" fill="#8A8880">
                   {abrev(v)}
                 </text>
               </g>
@@ -277,7 +279,7 @@ export function PecCascataView({ colunas, clienteId, alturaCartao, cartaoRef }: 
               <>
                 <line x1={MARG_ESQ} x2={W - MARG_DIR} y1={escalaY(0)} y2={escalaY(0)}
                   stroke="#2C2C2A" strokeWidth={1} />
-                <text x={MARG_ESQ - 5} y={escalaY(0) + 3} fontSize={9} textAnchor="end" fill="#2C2C2A">0</text>
+                <text x={MARG_ESQ - 5} y={escalaY(0) + 3.5} fontSize={10} textAnchor="end" fill="#2C2C2A">0</text>
               </>
             )}
             {grafico.barras.map((b, i) => {
@@ -287,8 +289,10 @@ export function PecCascataView({ colunas, clienteId, alturaCartao, cartaoRef }: 
               /* ⚠ O RÓTULO VAI EMBAIXO DA BARRA QUANDO ELA DESCE E O VALOR É NEGATIVO, e nunca em
                  cima dos NOMES: com tudo acima, um passo negativo de barra curta punha o número
                  sobre o número da barra vizinha. */
-              const abaixo = !b.subtotal && b.valor < 0;
-              const yTxt = abaixo ? y + alt + 9 : y - 3;
+              /* ⚠ E SE EMBAIXO ELE CAIR NA FAIXA DOS NOMES, SOBE para cima da barra — medido no NJ jan–ago/23:
+                 o "−484 k" do investimento, abaixo de uma barra rente ao chão, cobria "Investimento no período". */
+              const abaixo = !b.subtotal && b.valor < 0 && y + alt + 11 <= H - PAD_BASE + 2;
+              const yTxt = abaixo ? y + alt + 11 : y - 4;
               return (
                 <g key={b.chave}>
                   {i > 0 && (
@@ -299,18 +303,13 @@ export function PecCascataView({ colunas, clienteId, alturaCartao, cartaoRef }: 
                   <rect x={x} y={y} width={larg} height={alt} fill={b.cor} rx={1}>
                     <title>{`${b.rotulo}: ${formatNum(b.valor, 2)}`}</title>
                   </rect>
-                  <text x={x + larg / 2} y={yTxt} fontSize={9} textAnchor="middle"
-                    fontWeight={b.forte ? 600 : 400} fill="#3A3833">
+                  <text x={x + larg / 2} y={yTxt} fontSize={10.5} textAnchor="middle"
+                    fontWeight={b.forte ? 600 : 500} fill="#3A3833">
                     {b.subtotal ? abrev(b.valor) : abrevSinal(b.valor)}
                   </text>
-                  {b.rotulo.replace(/^[=(−)\s]+/, '').split(' ').reduce<string[]>((ls, w) => {
-                    const u = ls[ls.length - 1];
-                    if (u && (u + ' ' + w).length <= 13) ls[ls.length - 1] = u + ' ' + w;
-                    else ls.push(w);
-                    return ls;
-                  }, []).slice(0, 2).map((linha, j) => (
-                    <text key={j} x={x + larg / 2} y={H - PAD_BASE + 13 + j * 9} fontSize={8.5}
-                      textAnchor="middle" fontWeight={b.forte ? 600 : 400} fill="#6B6862">{linha}</text>
+                  {quebrarRotulo(b.rotulo, passoX).map((linha, j) => (
+                    <text key={j} x={cx + passoX / 2} y={H - PAD_BASE + 14 + j * 11} fontSize={10}
+                      textAnchor="middle" fontWeight={b.forte ? 600 : 400} fill="#4B4944">{linha}</text>
                   ))}
                 </g>
               );
@@ -319,20 +318,43 @@ export function PecCascataView({ colunas, clienteId, alturaCartao, cartaoRef }: 
         )}
       </div>
 
-      <div className="flex shrink-0 items-baseline justify-between gap-3 text-[10px] text-muted-foreground">
-        <span className="flex items-center gap-3">
-          {([['Subtotal', SUBTOTAL], ['Soma', SOMA], ['Subtrai', SUBTRAI], ['Investimento', INFORMATIVA]] as const).map(([r, c]) => (
-            <span key={r} className="flex items-center gap-1">
-              <span className="inline-block h-2 w-2 rounded-[1px]" style={{ backgroundColor: c }} />{r}
-            </span>
-          ))}
+      {/* ⚠ LEGENDA SEM OS QUADRADINHOS — DRE-CASCATA-MODAL-01: a palavra já vem na cor da barra. */}
+      <div className="flex shrink-0 items-baseline justify-between gap-3 text-[11px]" style={{ width: W }}>
+        <span className="flex items-center gap-3 font-medium">
+          {LEGENDA.map(l => <span key={l.rotulo} style={{ color: l.cor }}>{l.rotulo}</span>)}
         </span>
-        <span className={cn('truncate font-medium tabular-nums', corSinal(grafico?.lucro ?? null))}>
+        <span className={cn('whitespace-nowrap font-medium tabular-nums', corSinal(grafico?.lucro ?? null))}>
           Resultado econômico R$ {grafico ? formatNum(grafico.lucro, 2) : traco}
         </span>
       </div>
     </div>
   );
+}
+
+/** A largura do desenho da cascata — o miolo do modal do gráfico (988 − 2 × 14 de respiro). */
+export const LARGURA_CASCATA = 960;
+
+const LEGENDA: ReadonlyArray<{ rotulo: string; cor: string }> = [
+  { rotulo: 'Subtotal', cor: SUBTOTAL }, { rotulo: 'Soma', cor: SOMA },
+  { rotulo: 'Subtrai', cor: SUBTRAI }, { rotulo: 'Investimento', cor: INFORMATIVA },
+];
+
+/**
+ * O NOME DA BARRA EM ATÉ TRÊS LINHAS QUE CABEM NA FAIXA DELA — DRE-CASCATA-MODAL-01.
+ *
+ * ⚠ O LIMITE SAI DA LARGURA DA FAIXA, não de treze letras fixas: com a fonte de 10px, "Margem de
+ * contribuição" em duas linhas de treze passava da faixa de 58px e encostava no nome vizinho. ~5,6px
+ * por caractere é a média medida do Inter a 10px (dígitos e minúsculas). A palavra maior que a faixa
+ * fica inteira numa linha própria — cortar com reticência é proibido.
+ */
+export function quebrarRotulo(rotulo: string, faixa: number): string[] {
+  const max = Math.max(6, Math.floor((faixa - 4) / 5.6));
+  return rotulo.replace(/^[=(−)\s]+/, '').split(' ').reduce<string[]>((ls, w) => {
+    const u = ls[ls.length - 1];
+    if (u && (u + ' ' + w).length <= max) ls[ls.length - 1] = u + ' ' + w;
+    else ls.push(w);
+    return ls;
+  }, []).slice(0, 3);
 }
 
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
