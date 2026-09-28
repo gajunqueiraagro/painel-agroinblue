@@ -10,7 +10,7 @@ import {
 } from '@/lib/financeiro/statusFinanceiro';
 import { isTransferenciaTipo } from '@/lib/financeiro/v2Transferencia';
 import { contaEmFoco, formatarValorLinha } from '@/lib/financeiro/sinalPorConta';
-import { totaisDaListaV2, tipoDaLinha, vaiParaDaLinha } from '@/lib/financeiro/totaisDaListaV2';
+import { totaisDaListaV2, tipoDaLinha } from '@/lib/financeiro/totaisDaListaV2';
 import { useLancamentosConciliados, desfazerVinculo, desfazerGrupo } from '@/hooks/useConciliacaoDoMes';
 import { useLancamentosComOC, rotuloOrigemOC } from '@/hooks/useLancamentosComOC';
 import { iconeOrigemLancamento, LEGENDA_ICONES } from '@/v2/lib/origemLancamento';
@@ -2472,8 +2472,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     `title`, e o que a coluna precisa responder é QUAL conta, não o nome todo. */}
                 {modoIntensivo && <col style={{ width: 92 }} />}
                 {modoIntensivo && <col style={{ width: 92 }} />}
-                {/* Vai para (OC-VENDA-ENTREGAS-01b): DRE / Caixa / Caixa e DRE — a entrega vai para o DRE, o recebimento para o caixa. */}
-                <col style={{ width: 64 }} />
                 <col style={{ width: 90 }} />
                 {/* Doc: 55 na normal, 90→60 no Ampliado — FIN-LISTA-VISUAL-06.
                     ⚠ A FONTE NÃO MUDA, e o briefing pedia 10px: a célula JÁ renderiza a 9px,
@@ -2522,7 +2520,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                   {modoIntensivo && (
                     <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">C. Destino</th>
                   )}
-                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">Vai para</th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('valor')}>Valor<SortIndicator field="valor" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('doc')}>Doc.<SortIndicator field="doc" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('status')}>Status<SortIndicator field="status" /></th>
@@ -2720,7 +2717,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                             ganha o MESMO fundo das colunas de data — `bg-background`, medido no
                             `LancamentosTabela.tsx` da referência, que é o cinza
                             `--background: 220 17% 97%` sobre o branco do card. */}
-                        <td className="px-1 py-1 align-middle text-center text-[10px] leading-tight break-words text-muted-foreground" data-vai-para>{vaiParaDaLinha(l)}</td>
                         <td className={`celula-valor text-right font-semibold whitespace-nowrap px-1 py-1 align-middle text-[12px] leading-tight bg-background ${valorDaLinha(l).classe}`}>
                           {valorDaLinha(l).texto}
                         </td>

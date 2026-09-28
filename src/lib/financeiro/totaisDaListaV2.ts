@@ -36,9 +36,9 @@ export function totaisDaListaV2(linhas: readonly LinhaTotalizavel[], foco: strin
 }
 
 /**
- * "Tipo" e "Vai para" da linha (mock v4): a entrega da conta corrente vai para o DRE e nao para o caixa; o recebimento vai
- * para o caixa e nao para o DRE. Demais lancamentos: sem caixa vai so' para o DRE; com caixa, para o caixa (e para o DRE
- * quando a conta compoe o DRE).
+ * "Tipo" da linha (mock v4): entrega da conta corrente, recebimento, pagamento, sem caixa ou lancamento comum.
+ * ⚠ A coluna "Vai para" (DRE / Caixa / Caixa e DRE) SAIU no FIN-V2-VAI-PARA-FORA-01 (pedido do Gabriel: poluia a tabela), e o
+ *   `vaiParaDaLinha` saiu com ela. Os totais do topo continuam separando caixa de sem caixa.
  */
 export type TipoDaLinha = 'Entrega' | 'Recebimento' | 'Pagamento' | 'Sem caixa' | 'Lançamento';
 
@@ -50,7 +50,3 @@ export function tipoDaLinha(l: { origem_tipo?: string | null; subcentro?: string
   return 'Lançamento';
 }
 
-export function vaiParaDaLinha(l: { sem_movimentacao_caixa?: boolean | null; compoe_dre?: boolean | null }): string {
-  if (l.sem_movimentacao_caixa === true) return l.compoe_dre === false ? '—' : 'DRE';
-  return l.compoe_dre === true ? 'Caixa e DRE' : 'Caixa';
-}

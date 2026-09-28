@@ -59,8 +59,11 @@ export const COLUNAS_VIEW_DOC = [
   'cancelado', 'conciliado_em', 'editado_manual', 'created_at', 'updated_at',
   'mes_competencia', 'mes_vencimento', 'mes_pagamento', 'mes_financeira',
   'documento_formatado',
-  /* OC-VENDA-ENTREGAS-01b: a view ganhou `sem_movimentacao_caixa` (os totais separam caixa de sem caixa) e a lista passa a
-     ler `compoe_dre`, que a view ja tinha — as duas alimentam as colunas Tipo e "Vai para". */
+  /* OC-VENDA-ENTREGAS-01b: a view ganhou `sem_movimentacao_caixa` (os totais e a coluna Tipo separam caixa de sem caixa) e a
+     lista passa a ler `compoe_dre`, que a view ja tinha.
+     ⚠ `compoe_dre` FICA mesmo sem a coluna "Vai para" (FIN-V2-VAI-PARA-FORA-01): a linha da lista e' o `lancamento` que o
+       `LancamentoV2Dialog` recebe, e o selo "Compoe DRE" dele le' `lancamento.compoe_dre` — sem a coluna aqui ele voltaria a "—"
+       para todo lancamento aberto pela lista. */
   'compoe_dre', 'sem_movimentacao_caixa',
 ] as const;
 

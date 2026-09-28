@@ -7,7 +7,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { totaisDaListaV2, tipoDaLinha, vaiParaDaLinha } from './totaisDaListaV2';
+import { totaisDaListaV2, tipoDaLinha } from './totaisDaListaV2';
 import { totaisNoCliente } from './listaPaginadaV2';
 
 const ENTREGA = { valor: 565521.66, tipo_operacao: '1-Entradas', sinal: '1', sem_movimentacao_caixa: true, origem_tipo: 'oc:entrega',
@@ -41,14 +41,21 @@ describe('totais do Financeiro V2: caixa x sem caixa', () => {
     expect(t).toEqual({ entradas: 992140.99, saidas: 50000, entradasSemCaixa: 565521.66, saidasSemCaixa: 1000 });
   });
 
-  it('Tipo e "Vai para": entrega vai para o DRE, recebimento vai para o caixa e fica fora do DRE', () => {
+  it('Tipo da linha; a coluna "Vai para" saiu da lista e o Tipo e os cinco totais ficaram (lido da fonte)', () => {
     expect(tipoDaLinha(ENTREGA)).toBe('Entrega');
-    expect(vaiParaDaLinha(ENTREGA)).toBe('DRE');
     expect(tipoDaLinha(RECEBIMENTO)).toBe('Recebimento');
-    expect(vaiParaDaLinha(RECEBIMENTO)).toBe('Caixa');
     expect(tipoDaLinha(BARTER_INSUMO)).toBe('Sem caixa');
     expect(tipoDaLinha({ subcentro: 'Adiantamento a Fornecedores' })).toBe('Pagamento');
-    expect(vaiParaDaLinha({ sem_movimentacao_caixa: false, compoe_dre: true })).toBe('Caixa e DRE');
+    /* FIN-V2-VAI-PARA-FORA-01: a tela normal e a ampliada sao a MESMA tabela (o Ampliado so' acrescenta C. Origem/C. Destino). */
+    const tela = readFileSync(resolve(__dirname, '../../pages/FinanceiroV2Tab.tsx'), 'utf8');
+    expect(tela).not.toContain('>Vai para<');
+    expect(tela).not.toContain('data-vai-para');
+    expect(tela).not.toContain('vaiParaDaLinha');
+    /* a busca sabe achar: o cabecalho vizinho e os cinco totais continuam la' */
+    expect(tela).toContain('>Tipo</th>');
+    for (const rotulo of ['Entradas de caixa:', 'Receita sem caixa:', 'Saídas de caixa:', 'Despesa sem caixa:', 'Transf.:']) {
+      expect(tela).toContain(rotulo);
+    }
   });
 
   it('D3: Contas a Pagar e Receber tira o sem caixa SEMPRE (lido da fonte: a consulta nao se monta em teste)', () => {
