@@ -506,10 +506,32 @@ docs/historico/frentes-ate-2026-09-29.md.)
   "criar item" e' acao NEUTRA. A UNICA RECUSA e' a DIRECAO do plano de um COMPROMISSO (que sai da lista e, forcado,
   e' recusado) — nunca da OC, que continua candidata com "criar item". OC cancelada/rascunho nem entra na lista.
   E' o par da regra "PECUARIA: LANCAMENTOS IGUAIS SAO NORMAIS", logo acima.
-- ⚠ CONTA CORRENTE DA OC: rege o ADR-2026-21 com os adendos (venda e compra no modelo; abate e a migracao das OCs
-  existentes sao a fila). Entrega = receita sem caixa no mes da saida; recebimento/pagamento fica no subcentro da
-  operacao e sai do DRE pela parte (`compoe_dre = false` por `_oc_cc_fora_do_dre`); saldo calculado, nunca gravado;
-  despesa paga a terceiro nunca se cancela. Leitor do DRE que le' pela conta respeita `compoe_dre`.
+- ⚠ CONTA CORRENTE DA OC (ADR-2026-21 + adendos; venda e compra no modelo, abate e a migracao
+  das OCs existentes na fila):
+  - A OC e' UMA venda/compra. Entrega/entrada do gado = titulo sem caixa, receita/custo no DRE
+    na data do fato (CPC 47), descricao "Venda NNN SIGLA"/"Compra NNN SIGLA", valor do lote.
+  - Recebimento/pagamento FICA no subcentro da operacao (ex.: Venda de Desmama Machos) e sai do
+    DRE pela parte viva (`compoe_dre = false` por `_oc_cc_fora_do_dre`). NUNCA mover para conta
+    de adiantamento: 3015, 5005 e 5006 estao DESATIVADAS e nao se usam (OC-CC-CLASSIFICACAO-01).
+    Filtrar o Financeiro por subcentro de venda/compra tem de mostrar o dinheiro das OCs.
+  - Saldo = calculado, nunca gravado. Extrato pelo caixa da fazenda: venda recebimento +,
+    entrega -; compra espelhado (Falta pagar / Adiantado ao fornecedor / Quitado).
+  - Diferenca final = saldo; explica-se na OC (ajuste de preco no lote com criterio total,
+    desconto 5020, permuta/outra despesa, outra receita so pecuaria, devolucao no subcentro da
+    operacao fora do DRE). A OC fecha sem explicar; pendencia visivel. Nunca "fazer bater".
+  - Programado/devolucao nasce na categoria de MAIOR VALOR da OC.
+  - Adocao: a OC adota a saida/entrada ja lancada (nunca cria gado de novo); saida adotada
+    nunca e' reescrita nem cancelada pela OC; incluir lote nunca trava; lote com saida ativa
+    nao se remove nem se exclui (mensagem diz qual e o caminho). Programados do modal antigo
+    nunca sao adotados nem vinculados. Boitel fora do conta corrente.
+  - Legado: financeiro conciliado manda no VALOR; zootecnico na QUANTIDADE e na DATA.
+  - Cancelar: so o que e' da conta corrente; despesa paga a terceiro fica; recebimento ja pago
+    sai da OC e volta a ser venda/compra comum (compoe DRE).
+  - Conta bancaria se le' pela direcao: entrada -> conta_destino_id; saida -> conta_bancaria_id.
+- ⚠ FINANCEIRO V2 MOSTRA SO DINHEIRO por padrao; sem caixa (entregas, barter, consumo) em secao
+  separada atras de chave. Nenhuma coluna nova que gere rolagem horizontal a 1440px; o menu
+  "..." fica fixo e sempre visivel. OC se abre pelo icone do produto ou "Abrir OC" no menu
+  (FIN-V2-SEM-CAIXA-01, FIN-V2-HOMOLOG-FIX-01).
 - ⚠ BOITEL: ao financeiro e ao DRE vai SO' O LIQUIDO DO ACERTO; R$/@ de venda = liquido / @ vivas que sairam. O VALOR DA
   OPERACAO E' O SLOT (`zoo_operacao_lotes.valor_informado`, helper `valorDaVendaBoitel`) e a tela nunca o calcula; o
   acerto e' conferencia. Com o realizado aplicado, o realizado vence a projecao em tudo (`custosDaVendaBoitel`, mesmo
