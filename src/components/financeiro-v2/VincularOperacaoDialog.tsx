@@ -33,6 +33,13 @@ interface Props {
   onClose: () => void;
   /** Depois de gravar: o chamador fecha o que precisa (o detalhe do lancamento). */
   onVinculado?: () => void;
+  /**
+   * A OC que ja' vem escolhida — OC-VENDA-FINANCEIRO-COMPLETO-01a ("+ Buscar despesa no Financeiro", aberto de DENTRO da OC).
+   * ⚠ SO' VALE SE O BANCO A DEVOLVER COMO CANDIDATA: a lista e a ordem seguem de `oc_candidatas_vinculo`. Fora da lista, a
+   *   escolha volta a ser a de sempre (`candidataInicial`) — a tela nunca escolhe o que o banco nao ofereceu.
+   * ⚠ AUSENTE = o comportamento de antes, sem mudanca nenhuma (Financeiro V2).
+   */
+  operacaoIdPreEscolhida?: string | null;
 }
 
 const brl = (n: number | null | undefined) =>
@@ -44,7 +51,7 @@ const ROTULO_ORIGEM: Record<string, string> = {
   conciliacao: 'Conciliação', mesa_excel: 'Mesa (Excel)', mesa_split: 'Mesa (divisão)',
 };
 
-export function VincularOperacaoDialog({ open, lancamentoId, clienteId, onClose, onVinculado }: Props) {
+export function VincularOperacaoDialog({ open, lancamentoId, clienteId, onClose, onVinculado, operacaoIdPreEscolhida = null }: Props) {
   const [resp, setResp] = useState<RespostaCandidatas | null>(null);
   const [carregando, setCarregando] = useState(false);
   const [erroCarga, setErroCarga] = useState<string | null>(null);
@@ -76,7 +83,9 @@ export function VincularOperacaoDialog({ open, lancamentoId, clienteId, onClose,
         const comps = r.regra?.componentes ?? [];
         const item = r.componente_sugerido?.codigo ?? (comps.length === 1 ? comps[0] : null);
         setComponente(item);
-        const inicial = candidataInicial(r.candidatas ?? [], item, r.lancamento?.valor ?? 0);
+        const inicial = operacaoIdPreEscolhida && (r.candidatas ?? []).some(c => c.operacao_id === operacaoIdPreEscolhida)
+          ? operacaoIdPreEscolhida
+          : candidataInicial(r.candidatas ?? [], item, r.lancamento?.valor ?? 0);
         setOcSel(inicial);
         /* VINCULAR-FIX-01: valor exato vence — o compromisso exato vai escolhido, mesmo de outro componente. */
         const ocInicial = (r.candidatas ?? []).find(c => c.operacao_id === inicial);
@@ -85,7 +94,7 @@ export function VincularOperacaoDialog({ open, lancamentoId, clienteId, onClose,
       .catch(e => { if (!cancelado) setErroCarga(mensagemDeErro(e)); })
       .finally(() => { if (!cancelado) setCarregando(false); });
     return () => { cancelado = true; };
-  }, [open, lancamentoId]);
+  }, [open, lancamentoId, operacaoIdPreEscolhida]);
 
   const candidatas = resp?.candidatas ?? [];
   const lanc = resp?.lancamento;

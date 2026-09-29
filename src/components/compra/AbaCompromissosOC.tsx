@@ -34,6 +34,11 @@ import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { NovoFornecedorDialog } from '@/components/financeiro-v2/NovoFornecedorDialog';
+import { VincularOperacaoDialog } from '@/components/financeiro-v2/VincularOperacaoDialog';
+import { TabelaDespesasOC } from '@/components/compra/TabelaDespesasOC';
+import { BuscarDespesaOCDialog } from '@/components/compra/BuscarDespesaOCDialog';
+import { rotuloCurtoDaConta } from '@/lib/financeiro/rotuloConta';
+import { linhasDeDespesa, recusaNaContaCorrente, totaisDeDespesa, type LinhaDespesa, type TituloDaDespesa } from '@/lib/oc/despesasDaOperacao';
 /* ⚠ `CampoMoeda`, `brl`, `round2` e `parseMoeda` SAIRAM daqui para
    @/components/ui/campo-moeda em PR-OC-DOC-AJUSTES-03, sem uma linha alterada. Eram
    locais e nao exportados, entao outra tela nao tinha como reusar o campo — e a aba
@@ -113,6 +118,16 @@ interface Props {
    * não o rodapé.
    */
   abrirGerarAoMontar?: boolean;
+  /**
+   * MODO SO' DESPESAS — OC-VENDA-FINANCEIRO-COMPLETO-01a. A OC em CONTA CORRENTE (venda e compra, ADR-2026-21) nao tem principal
+   * no financeiro: a receita/custo e' a entrega + recebimento/pagamento, no extrato de cima. Aqui sobram as despesas pagas a
+   * terceiros (compromissos de OBRIGACAO), na tabela do mock v4, com as MESMAS acoes de sempre.
+   * ⚠ NENHUM CAMINHO DE PRINCIPAL: sem "Gerar compromissos", sem "Gerar previsão", sem "Lançar realizado", sem abrir o gerar ao
+   *   montar; o "+ Nova despesa" e' o "Novo compromisso" travado em obrigacao, e o `criar` recusa principal por baixo
+   *   (`recusaNaContaCorrente`).
+   * ⚠ AUSENTE = a aba de compromissos de sempre, sem mudanca nenhuma (OC no modelo por titulo).
+   */
+  soDespesas?: boolean;
 }
 
 /* Tema escuro para o painel do `SearchableSelect` (Lote, Subcentro, Favorecido).
@@ -445,7 +460,7 @@ const ROTULOS_PADRAO: RotulosCompromissos = {
   mostrarBaseDaOperacao: true, mostrarSentidoDoDinheiro: false,
 };
 
-export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, ehBoitel, fornecedores, valorAcordado, lotes, contraparteId, dataOperacao, dataChegada, darkSelectClass, recarregarDados, linhasPrevisao, bloqueioPrevisao = null, seloProjecao, propostasExtras, propostasDoMotor, abrirGerarAoMontar, rotulos = ROTULOS_PADRAO, motivoReabertura = null }: Props) {
+export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, ehBoitel, fornecedores, valorAcordado, lotes, contraparteId, dataOperacao, dataChegada, darkSelectClass, recarregarDados, linhasPrevisao, bloqueioPrevisao = null, seloProjecao, propostasExtras, propostasDoMotor, abrirGerarAoMontar, rotulos = ROTULOS_PADRAO, motivoReabertura = null, soDespesas = false }: Props) {
   const { resumoOperacao, compromissos, parcelas, versao, saving } = ocApi;
   const [searchParams, setSearchParams] = useSearchParams();
   /* ⚠ OS DOIS CATALOGOS SUBIRAM PARA CA — PR-OC-VENDA-FIN-PREVISAO-01D (adendo 2). Eles
@@ -498,21 +513,38 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
      ela a dependencia — um Reclassificar recarrega a aba e a coluna acompanha.
      ⚠ SEM TITULO VIVO, O COMPROMISSO; titulo ainda nao lido, "—" (dado ausente, nunca o
      compromisso fingindo ser o titulo). */
+  /* ⚠ OC-VENDA-FINANCEIRO-COMPLETO-01a — a MESMA consulta ganhou o que a tabela de despesas mostra (favorecido, banco, status,
+     competencia, pagamento, conciliacao). No modo so' despesas vem junto a conciliacao de verdade, de
+     `conciliacao_bancaria_itens` (`conciliado_em` esta' nulo no proto inteiro — ver `despesasDaOperacao.ts`); fora dele nada
+     muda de consulta. */
   const [titulosDasParcelas, setTitulosDasParcelas] =
-    useState<ReadonlyMap<string, { descricao: string | null; planoContaId: string | null; cancelado: boolean }> | null>(null);
+    useState<ReadonlyMap<string, TituloDaDespesa> | null>(null);
   useEffect(() => {
     const ids = Array.from(new Set(parcelas.map(p => p.tituloId).filter((v): v is string => !!v)));
     if (ids.length === 0) { setTitulosDasParcelas(new Map()); return; }
     let cancelado = false;
-    void supabase.from('financeiro_lancamentos_v2').select('id, descricao, plano_conta_id, cancelado').in('id', ids)
-      .then(({ data, error }) => {
+    void (async () => {
+      const { data, error } = await supabase.from('financeiro_lancamentos_v2')
+        .select('id, descricao, plano_conta_id, cancelado, favorecido_id, conta_bancaria_id, status_transacao, data_pagamento, data_competencia, conciliado_em')
+        .in('id', ids);
+      if (cancelado) return;
+      if (error) { setTitulosDasParcelas(null); return; }
+      let conciliados = new Set<string>();
+      if (soDespesas) {
+        const { data: cbi, error: e2 } = await supabase.from('conciliacao_bancaria_itens')
+          .select('lancamento_id').in('lancamento_id', ids).is('desfeito_em', null);
         if (cancelado) return;
-        if (error) { setTitulosDasParcelas(null); return; }
-        setTitulosDasParcelas(new Map((data ?? []).map(t => [t.id, {
-          descricao: t.descricao, planoContaId: t.plano_conta_id, cancelado: !!t.cancelado }])));
-      });
+        if (e2) { setTitulosDasParcelas(null); return; }
+        conciliados = new Set((cbi ?? []).map(c => c.lancamento_id));
+      }
+      setTitulosDasParcelas(new Map((data ?? []).map(t => [t.id, {
+        descricao: t.descricao, planoContaId: t.plano_conta_id, cancelado: !!t.cancelado,
+        favorecidoId: t.favorecido_id, contaBancariaId: t.conta_bancaria_id, statusTransacao: t.status_transacao,
+        dataPagamento: t.data_pagamento, dataCompetencia: t.data_competencia,
+        conciliado: t.conciliado_em != null || conciliados.has(t.id) }])));
+    })();
     return () => { cancelado = true; };
-  }, [parcelas]);
+  }, [parcelas, soDespesas]);
 
   /* PR-OC-UX-LOTE-B-01 — o detalhe virou MODAL. `selectedId` continua existindo e
      seguindo a regra de estabilidade apos refetch (ver acima): e' o que mantem o
@@ -931,11 +963,11 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
 
   const jaAbriuGerar = useRef(false);
   useEffect(() => {
-    if (!abrirGerarAoMontar || jaAbriuGerar.current) return;
+    if (!abrirGerarAoMontar || jaAbriuGerar.current || soDespesas) return;
     if (!semCompromisso || propostas.length === 0) return;
     jaAbriuGerar.current = true;
     setGerarAberto(true);
-  }, [abrirGerarAoMontar, semCompromisso, propostas.length]);
+  }, [abrirGerarAoMontar, semCompromisso, propostas.length, soDespesas]);
 
   const confere = !semCompromisso && !!resumoOperacao
     && resumoOperacao.obrigacaoTotal > TOL_CENTAVO
@@ -1099,7 +1131,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
    * Concluir (`c21572c8`).
    */
   async function gerarPropostas(linhas: PropostaCompromisso[], vencimento: string, forma: string, contaBancariaId: string | null) {
-    if (versao == null || linhas.length === 0) return;
+    if (versao == null || linhas.length === 0 || soDespesas) return;
     let v = versao;
     let feitas = 0;
     try {
@@ -1137,6 +1169,9 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
 
   async function criar(payloads: CriarCompromissoPayload[]) {
     if (versao == null || payloads.length === 0) return;
+    /* ⚠ A REDE DE BAIXO DO "+ Nova despesa": na OC em conta corrente, principal nao nasce por aqui nem que o dialogo deixe. */
+    const recusaCC = recusaNaContaCorrente(payloads.map(p => p.natureza), soDespesas);
+    if (recusaCC) { setAvisoBaseCoberta(recusaCC); return; }
     let v = versao;
     let ultimo: string | null = null;
     setAvisoBaseCoberta('');
@@ -1192,7 +1227,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
      propria transacao. O que ja entrou permanece e aparece na lista; o toast final diz
      quantas linhas passaram, para o operador ver onde parou e mandar de novo. */
   async function gerarPrevisao() {
-    if (versao == null || !linhasPrevisao?.length || gerando || bloqueioPrevisao) return;
+    if (versao == null || !linhasPrevisao?.length || gerando || bloqueioPrevisao || soDespesas) return;
     /* ⚠ PLANEJA ANTES DE GRAVAR — A4b. Se o plano cancela item zerado, pergunta primeiro; senao
        segue como sempre, sem pergunta nenhuma. */
     const acoes = planejarPrevisao(linhasPrevisao, compromissos);
@@ -1281,7 +1316,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
      quem ainda vai lancar. O evento do ajuste ja esta na auditoria dizendo o que houve. */
   async function lancarRealizado(lista: ProgramarParcelaInput[], ajustarValorPara?: number | null) {
     const alvo = realizarAlvo;
-    if (versao == null || !alvo?.compromissoId) return;
+    if (versao == null || !alvo?.compromissoId || soDespesas) return;
     try {
       let v = versao;
       if (ajustarValorPara != null && Math.abs(ajustarValorPara - alvo.valorCompromisso) > TOL_CENTAVO) {
@@ -1355,6 +1390,135 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
     } catch { /* toast pelo hook */ }
   }
 
+  /* ═══ MODO SO' DESPESAS (OC em conta corrente) — OC-VENDA-FINANCEIRO-COMPLETO-01a ══════════════════════════════════════
+     ⚠ DECLARADO ACIMA DO `return`, e isso nao e' estilo: `linhasDeDespesa` e o `menuDespesa` rodam no RENDER (o `.map` da
+     tabela), e uma `const` abaixo do uso cairia em TDZ — a tela branca do ABATE-FIN-TELA-BRANCA. */
+  const [buscarDespesaAberto, setBuscarDespesaAberto] = useState(false);
+  const [vincularDespesaId, setVincularDespesaId] = useState<string | null>(null);
+  const linhasDespesa = useMemo(
+    () => (soDespesas ? linhasDeDespesa(compromissos, parcelas, titulosDasParcelas) : []),
+    [soDespesas, compromissos, parcelas, titulosDasParcelas],
+  );
+  const totalDespesas = useMemo(() => totaisDeDespesa(compromissos).lancadas, [compromissos]);
+  const nomeFavorecido = (id: string | null) => (id ? (fornecedores.find(f => f.id === id)?.nome ?? null) : null);
+  const contaDoPlanoDespesa = (planoContaId: string | null) => {
+    const sub = planoContaId ? plano.rows.find(r => r.id === planoContaId)?.subcentro ?? null : null;
+    return sub ? { curto: rotuloCurtoDaConta(sub) ?? sub, inteiro: sub } : null;
+  };
+  const nomeBancoDespesa = (id: string | null) => (id ? nomeConta(id) : null);
+  /* Os subcentros de despesa da operacao, para o "+ Buscar despesa": o do lado (frete/comissao na compra; impostos e despesas
+     na venda e no abate) mais os das despesas que a OC ja' tem. */
+  const subcentrosDeDespesa = useMemo(() => {
+    const set = new Set<string>([tipoOperacao === 'compra' ? SUBCENTRO_OBRIGACAO_COMPRA : SUBCENTRO_DESPESA_VENDA]);
+    compromissos.filter(c => c.natureza === 'obrigacao').forEach(c => {
+      const sub = plano.rows.find(r => r.id === c.planoContaId)?.subcentro;
+      if (sub) set.add(sub);
+    });
+    return Array.from(set);
+  }, [tipoOperacao, compromissos, plano.rows]);
+  /* Clicar na linha abre o LANCAMENTO (o modal do Financeiro, pelo mesmo `editarTitulo` do "Editar" da parcela); sem titulo
+     vivo nao ha' lancamento a abrir, e abre o compromisso — onde mora o Programar. */
+  const abrirDespesa = (l: LinhaDespesa) => {
+    if (l.tituloId) { editarTitulo(l.tituloId); return; }
+    setSelectedId(l.compromisso.compromissoId);
+    setDetalheAberto(true);
+  };
+  /* ⚠ SO' AS ACOES QUE VALEM PARA O ESTADO DA LINHA, e cada uma e' a funcao de sempre: Programar e Lançar sao os do detalhe;
+     Programar saldo, Reclassificar, Desvincular e Desfazer, os do menu da lista; Estornar e Cancelar programação, o mesmo
+     `abrirEstorno`. Nenhum writer novo. */
+  const menuDespesa = (l: LinhaDespesa) => {
+    const c = l.compromisso;
+    const p = l.parcela;
+    const g = gateDesfazerCompromisso(c);
+    const temEfeito = parcelas.some(x => x.compromissoId === c.compromissoId && parcelaComEfeito(x));
+    const podeProgramar = l.tipo === 'compromisso' && c.status === 'aberto' && !c.temProgramacaoAtiva;
+    const podeSaldo = l.tipo === 'saldo' && c.temProgramacaoAtiva && c.saldoAProgramar > TOL_CENTAVO;
+    const podeLancar = !!p && p.status === 'prevista' && c.status === 'programado';
+    /* ⚠ CONCILIADO NAO SE ESTORNA NEM SE DESFAZ DAQUI (fix1): o banco recusaria, e o menu nao promete o que sera' negado. O
+       Desfazer percorre o compromisso INTEIRO, entao some se QUALQUER titulo dele estiver conciliado; o Estornar, se o desta linha. */
+    const conciliadoNaLinha = l.status === 'conciliado';
+    const conciliadoNoCompromisso = linhasDespesa.some(x => x.compromisso.compromissoId === c.compromissoId && x.status === 'conciliado');
+    const podeEstornar = !!p && parcelaComEfeito(p) && !!p.parcelaId && !conciliadoNaLinha;
+    const desvinculaveis = titulosDesvinculaveis(c, parcelas).filter(t => t.lancamentoId === l.tituloId);
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button type="button" className="h-[16px] w-[18px] text-[11px] font-bold leading-none tracking-[1px] text-primary"
+            aria-label={`Ações de ${l.descricao ?? 'despesa'}`} title="Ações desta despesa">⋯</button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="text-[11px]">
+          {l.tituloId && (
+            <DropdownMenuItem data-testid="acao-abrir-lancamento" onSelect={() => { if (l.tituloId) editarTitulo(l.tituloId); }}>
+              Abrir lançamento
+            </DropdownMenuItem>
+          )}
+          {podeProgramar && (
+            <DropdownMenuItem disabled={!podeEscrever} data-testid="acao-programar"
+              onSelect={() => { setSelectedId(c.compromissoId); setProgramarAberto(true); }}>
+              Programar
+            </DropdownMenuItem>
+          )}
+          {podeSaldo && (
+            <DropdownMenuItem disabled={!podeEscrever} data-testid="acao-programar-saldo" onSelect={() => setSaldoAlvo(c)}>
+              Programar saldo
+            </DropdownMenuItem>
+          )}
+          {podeLancar && p && (
+            <DropdownMenuItem disabled={!podeEscrever} data-testid="acao-lancar"
+              onSelect={() => { setContaParaMaterializar(''); setConfirmarParcela(p); }}>
+              Lançar
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem disabled={!podeEscrever || estRodando || !c.compromissoId} data-testid="acao-reclassificar-linha"
+            title="Troca a conta do plano deste item — valor, datas, pagamento e conciliação não mudam."
+            onSelect={() => setReclAlvo(c)}>
+            Reclassificar
+          </DropdownMenuItem>
+          {!!p && !!c.programacaoAtivaId && (
+            <DropdownMenuItem disabled={!podeEscrever || estRodando || temEfeito} data-testid="acao-cancelar-programacao"
+              title={temEfeito ? 'Estorne o lançamento da parcela antes de cancelar a programação.' : undefined}
+              onSelect={() => abrirEstorno({ nivel: 'programacao', programacaoId: c.programacaoAtivaId ?? undefined,
+                descricao: 'as parcelas previstas são canceladas, a programação é cancelada e o compromisso volta a ABERTO' })}>
+              Cancelar programação
+            </DropdownMenuItem>
+          )}
+          {podeEstornar && p && (
+            <DropdownMenuItem disabled={!podeEscrever || estRodando} data-testid="acao-estornar"
+              onSelect={() => abrirEstorno({ nivel: 'materializacao', programacaoId: p.programacaoId ?? undefined,
+                parcelaId: p.parcelaId ?? undefined,
+                descricao: `a parcela ${p.sequencia} de ${brl(p.valor)} volta a PREVISTA e o título é cancelado` })}>
+              Estornar
+            </DropdownMenuItem>
+          )}
+          {desvinculaveis.map(t => (
+            <DropdownMenuItem key={t.lancamentoId} disabled={!podeEscrever || estRodando} data-testid="acao-desvincular-linha"
+              title="O lançamento fica (valor, pagamento, conciliação); ele deixa de pertencer a esta operação."
+              onSelect={() => setDesvAlvo(t.lancamentoId)}>
+              Desvincular
+            </DropdownMenuItem>
+          ))}
+          {!conciliadoNoCompromisso && (
+            <DropdownMenuItem disabled={!g.pode || estRodando} data-testid="acao-desfazer" title={g.motivo || undefined}
+              onSelect={() => abrirEstorno({ nivel: 'desfazer', compromissoId: c.compromissoId ?? undefined,
+                descricao: `o compromisso ${c.natureza ?? ''}/${c.componente ?? ''} de ${brl(c.valorCompromisso)}`,
+                rol: rolDoDesfazer(c), estornoId: crypto.randomUUID() })}>
+              Desfazer
+            </DropdownMenuItem>
+          )}
+          {conciliadoNoCompromisso && (
+            <div className="px-2 py-1 text-[10px] text-zinc-300 max-w-[220px] leading-tight" data-testid="motivo-conciliado"
+              title="conciliado com o extrato; desfaça a conciliação primeiro">
+              Conciliado com o extrato; desfaça a conciliação primeiro.
+            </div>
+          )}
+          {!conciliadoNoCompromisso && g.motivo !== '' && (
+            <div className="px-2 py-1 text-[10px] text-zinc-300 max-w-[220px] leading-tight">{g.motivo}</div>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  };
+
   return (
     <div className="space-y-2 min-w-0 text-[12px]">
       {/* ═══ CABECALHO + NUMEROS, FIXOS (PR-OC-A18-COMPROMISSOS-01) ══════════════
@@ -1365,6 +1529,26 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
           enquanto a lista descia.
           ⚠ `-mt-1.5 pt-1.5` porque ESTE cartao e' `p-1.5`. Conferido no arquivo, nao
           copiado das irmas, que sao `p-2`. */}
+      {soDespesas && (
+        <div className="flex flex-col gap-[3px]" data-testid="despesas-da-operacao">
+          <div className="flex items-center gap-2">
+            <span className="text-[10.5px] font-semibold">Despesas da operação · pagas a terceiros, fora do saldo</span>
+            <span className="ml-auto flex gap-[5px]">
+              <Button type="button" variant="outline" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium"
+                disabled={!podeEscrever} onClick={() => setBuscarDespesaAberto(true)}>
+                + Buscar despesa no Financeiro
+              </Button>
+              <Button type="button" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium"
+                disabled={!podeEscrever} onClick={abrirNovo}>
+                + Nova despesa
+              </Button>
+            </span>
+          </div>
+          <TabelaDespesasOC linhas={linhasDespesa} total={totalDespesas} nomeFavorecido={nomeFavorecido}
+            contaDoPlano={contaDoPlanoDespesa} nomeBanco={nomeBancoDespesa} onAbrir={abrirDespesa} menu={menuDespesa} />
+        </div>
+      )}
+      {!soDespesas && (
       <div className="rounded-md border bg-card p-1.5 shadow-sm space-y-1.5">
         <div className="sticky top-0 z-10 -mt-1.5 space-y-1.5 border-b bg-card pt-1.5 pb-1.5">
           <div className="flex items-baseline justify-between gap-3">
@@ -1659,6 +1843,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
           </div>
         )}
       </div>
+      )}
 
       {/* ===== DETALHE DO COMPROMISSO — em MODAL (PR-OC-UX-LOTE-B-01) =====
           Antes este bloco abria ABAIXO da tabela. Com varios compromissos o detalhe
@@ -2027,7 +2212,21 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
           avisoBaseCoberta={avisoBaseCoberta}
           bloqueioPrevisao={bloqueioPrevisao}
           plano={plano} comps={comps}
+          soObrigacao={soDespesas}
         />
+      )}
+      {buscarDespesaAberto && clienteId && (
+        <BuscarDespesaOCDialog clienteId={clienteId} dataOperacao={dataOperacao} subcentros={subcentrosDeDespesa}
+          nomeFavorecido={nomeFavorecido}
+          onEscolher={id => { setBuscarDespesaAberto(false); setVincularDespesaId(id); }}
+          onFechar={() => setBuscarDespesaAberto(false)} />
+      )}
+      {/* O vincular de sempre (VINCULAR-LANC-OC-01), com esta OC ja' escolhida — a regra e a previa seguem no banco. */}
+      {vincularDespesaId && clienteId && (
+        <VincularOperacaoDialog open lancamentoId={vincularDespesaId} clienteId={clienteId}
+          operacaoIdPreEscolhida={resumoOperacao?.operacaoId ?? null}
+          onClose={() => setVincularDespesaId(null)}
+          onVinculado={() => { void ocApi.recarregar(); void recarregarDados?.(); }} />
       )}
       {programarAberto && selecionado && (
         <ProgramarDialog
@@ -2276,8 +2475,11 @@ function ResumoCard({ rotulo, valor }: { rotulo: string; valor: number }) {
 }
 
 // ===== Dialog: Novo compromisso =====
-function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOperacao, ehBoitel, fornecedores, darkSelectClass, valorAcordado, sugestaoSubcentro, descricaoDefault, contraparteId, lotesProntos, lotes, avisoBaseCoberta, onCriarFornecedor, plano, comps, bloqueioPrevisao = null }: {
+function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOperacao, ehBoitel, fornecedores, darkSelectClass, valorAcordado, sugestaoSubcentro, descricaoDefault, contraparteId, lotesProntos, lotes, avisoBaseCoberta, onCriarFornecedor, plano, comps, bloqueioPrevisao = null, soObrigacao = false }: {
   onClose: () => void; onSubmit: (p: CriarCompromissoPayload[]) => void; saving: boolean;
+  /** OC-VENDA-FINANCEIRO-COMPLETO-01a — "+ Nova despesa" da OC em conta corrente: nasce e fica em obrigacao; principal nao e'
+      oferecido (a receita/custo e' a entrega). Ausente = o dialogo de sempre, abrindo em principal. */
+  soObrigacao?: boolean;
   /** A recusa do A3, repassada — so' a principal a obedece. Ver `recusaDaPrincipalManual`. */
   bloqueioPrevisao?: string | null;
   clienteId: string | null; tipoOperacao: string | null; ehBoitel?: boolean; fornecedores: { id: string; nome: string }[]; darkSelectClass: string;
@@ -2290,7 +2492,7 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
   plano: ReturnType<typeof usePlanoContasOC>;
   comps: ReturnType<typeof useComponentesFinanceiros>;
 }) {
-  const [natureza, setNatureza] = useState<'principal' | 'obrigacao'>('principal');
+  const [natureza, setNatureza] = useState<'principal' | 'obrigacao'>(soObrigacao ? 'obrigacao' : 'principal');
   const [componente, setComponente] = useState('');
   const [valor, setValor] = useState<number | null>(null);
   const [subcentro, setSubcentro] = useState('');
@@ -2514,7 +2716,7 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
           padding proprio; sem isso o azul flutuaria com moldura branca em volta. */}
       <DialogContent className="max-w-md">
         <DialogHeader className="-mx-6 -mt-6 mb-1 space-y-0 bg-primary px-6 py-3">
-          <DialogTitle className="text-[12px] text-primary-foreground">Novo compromisso</DialogTitle>
+          <DialogTitle className="text-[12px] text-primary-foreground">{soObrigacao ? 'Nova despesa' : 'Novo compromisso'}</DialogTitle>
         </DialogHeader>
         {avisoBaseCoberta && (
           <div className="rounded-md border border-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2 py-1.5 text-[11px] leading-snug text-amber-800 dark:text-amber-200">
@@ -2525,10 +2727,11 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
           <div className="grid grid-cols-2 gap-2">
             <div>
               <Label className="text-[11px]">Natureza</Label>
-              <Select value={natureza} onValueChange={(v) => setNatureza(v === 'principal' ? 'principal' : 'obrigacao')}>
-                <SelectTrigger className="mt-0.5 h-6 text-[11px]"><SelectValue /></SelectTrigger>
+              <Select value={natureza} disabled={soObrigacao}
+                onValueChange={(v) => setNatureza(!soObrigacao && v === 'principal' ? 'principal' : 'obrigacao')}>
+                <SelectTrigger className="mt-0.5 h-6 text-[11px]" aria-label="Natureza"><SelectValue /></SelectTrigger>
                 <SelectContent className={darkSelectClass}>
-                  <SelectItem value="principal">principal</SelectItem>
+                  {!soObrigacao && <SelectItem value="principal">principal</SelectItem>}
                   <SelectItem value="obrigacao">obrigacao</SelectItem>
                 </SelectContent>
               </Select>

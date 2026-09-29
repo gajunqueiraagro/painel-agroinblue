@@ -1,0 +1,123 @@
+<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>OC venda Financeiro completo — mock v4</title><style>
+:root{--p:#1D3A5D;--p2:#2E4B6E;--fg:#0F1729;--mf:#6B7280;--bd:#E0E2E6;--gr:#15803d;--rd:#b91c1c;--z:#F5F4F0;--s:#E8E6DF;--amb:#fffbeb;--amd:#fde68a;--am:#b45309}
+*{box-sizing:border-box}body{margin:0;background:#8a929c;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--fg);padding:16px}
+.lbl{color:#fff;font-size:12px;font-weight:600;margin:0 auto 6px;width:1024px}
+.m{width:1024px;margin:0 auto 18px;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.3)}
+.hd{background:var(--p);color:#fff;height:32px;display:flex;align-items:center;gap:12px;padding:0 12px;font-size:12px}
+.hd .pill{border:1px solid rgba(255,255,255,.5);border-radius:10px;padding:0 7px;font-size:10px}
+.tabs{display:flex;gap:4px;padding:3px 10px;border-bottom:1px solid var(--bd)}
+.tabs span{font-size:10.5px;padding:1px 9px;border-radius:5px;color:var(--mf)}.tabs span.on{background:#e8eef6;color:var(--p);font-weight:600}
+.main{padding:6px 10px;display:flex;flex-direction:column;gap:5px;width:784px}
+.kp{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.k.dv2{border-left:3px solid #9aa7b6}
+.k{border:1px solid var(--bd);border-radius:4px;padding:2px 7px;height:34px;display:flex;flex-direction:column;justify-content:center}
+.k .a{font-size:9.5px;color:var(--mf);white-space:nowrap}.k .b{white-space:nowrap;font-size:12px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+.h3{font-size:10.5px;font-weight:600;display:flex;align-items:center;gap:8px;margin-top:3px}
+.h3 .sp{margin-left:auto;display:flex;gap:5px}
+.h3 .sum{font-weight:400;font-size:10px;color:var(--mf);font-variant-numeric:tabular-nums}
+.h3 .sum b{color:var(--fg)}
+.btn{font-size:10px;border:1px solid var(--bd);border-radius:4px;padding:0 8px;height:19px;line-height:17px;background:#fff;white-space:nowrap;display:inline-block}
+.btn.nv{background:var(--p);color:#fff;border-color:var(--p)}
+.scroll{border:1px solid var(--bd);border-radius:4px;overflow:visible}
+table{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;font-variant-numeric:tabular-nums}
+thead th{white-space:nowrap;background:var(--p);color:#fff;font-size:9.5px;font-weight:600;text-align:center;padding:0 5px;height:18px}
+thead tr.g th{background:var(--p2)}
+th.dv,td.dv{border-left:2px solid #9aa7b6}
+td{font-size:10px;height:18px;padding:0 4px;border-bottom:1px solid #eceae4;white-space:nowrap;overflow:hidden;line-height:1}
+tbody tr:nth-child(even) td{background:var(--z)}
+tbody tr.rec td{background:#EAF1F9}
+tbody tr.clk:hover td{background:#e8eef6;cursor:pointer}
+tfoot td{background:var(--s);font-weight:700;height:19px;border-top:2px solid #9aa7b6}
+.r{text-align:right}.c{text-align:center}.neg{color:var(--rd)}.pos{color:var(--gr)}.mf{color:var(--mf)}
+.ev{font-size:9px;border-radius:3px;padding:0 5px;font-weight:600}.ev.e{background:#f0fdf4;color:var(--gr)}.ev.r{background:#dbe7f6;color:#1d4ed8}
+.st{display:inline-block;font-size:9px;font-weight:600;line-height:13px;height:14px;border-radius:7px;padding:0 6px;white-space:nowrap}
+.prev{color:#c2410c;background:#fff7ed;border:1px solid #fed7aa}
+.prog{color:#1d4ed8;background:#eff6ff;border:1px solid #bfdbfe}
+.agen{color:#14532d;border:1px solid transparent}
+.real{color:#15803d;background:#f0fdf4;border:1px solid #bbf7d0}
+.conc{color:#fff;background:#166534;border:1px solid #166534}
+.dots{font-weight:700;color:var(--p);letter-spacing:1px}
+.menu{position:absolute;right:0;top:56px;background:#fff;border:1px solid var(--bd);border-radius:5px;box-shadow:0 6px 18px rgba(0,0,0,.18);font-size:10px;width:170px;z-index:5}
+.menu div{padding:3px 9px;white-space:nowrap}.menu div:hover{background:#e8eef6}
+.menu .sep{border-top:1px solid var(--bd);padding:0;margin:2px 0}
+.menu .dz{color:var(--rd)}
+.rel{position:relative}
+.foot{display:flex;justify-content:space-between;padding:0 12px;background:var(--p);height:30px;align-items:center;color:#fff;font-size:10.5px}
+.note{width:1024px;margin:0 auto 18px;background:#fff;border-radius:6px;padding:10px 12px;font-size:11.5px;line-height:1.55}
+.grid2{display:grid;grid-template-columns:160px 1fr;row-gap:0}
+.grid2 div{font-size:10.5px;height:22px;display:flex;align-items:center;border-bottom:1px solid #eceae4;padding:0 8px}
+.grid2 .a{color:var(--mf)}
+.sel{border:1px solid var(--bd);border-radius:4px;height:20px;display:inline-flex;align-items:center;padding:0 7px;width:320px;font-size:10.5px;justify-content:space-between}
+.sel.auto{background:#f0fdf4;border-color:#bbf7d0}
+.aviso{font-size:9.5px;color:var(--am);margin-left:8px}
+.sec{background:var(--s);font-size:10.5px;font-weight:600;padding:0 8px;height:22px;display:flex;align-items:center;justify-content:space-between}
+.sec span{font-weight:400;color:var(--mf);font-size:9.5px}
+.wrap{display:flex}.aside{width:240px;border-left:1px solid var(--bd);background:#fafafa;font-size:10px}
+.aside h4{margin:0;padding:3px 8px;background:var(--s);font-size:9.5px;letter-spacing:.03em}
+.aside .rw{display:flex;justify-content:space-between;padding:1px 8px;height:16px;align-items:center}.aside .rw span:first-child{color:var(--mf)}
+</style></head><body>
+
+<div class="lbl">A · OC de venda em conta corrente — aba Financeiro: o extrato continua; as despesas voltam a ser vivas (abrir, banco, status, programar, lançar, estornar, desfazer, reclassificar, nova despesa)</div>
+<div class="m">
+ <div class="hd"><b>Venda de animais</b><span class="pill">OC #7d1f8590</span><span>04/05/2026</span><span>Faz. 3 Muchachas</span><span style="margin-left:auto">✕</span></div>
+ <div class="tabs"><span>Venda</span><span>Negociação</span><span>Entrega</span><span>Documentos</span><span class="on">Financeiro</span><span>Auditoria</span></div>
+ <div class="wrap"><div class="main">
+  <div class="kp">
+   <div class="k"><span class="a">Entregue · DRE R$</span><span class="b pos">87.500,00</span></div>
+   <div class="k"><span class="a">Recebido</span><span class="b pos">87.500,00</span></div>
+   <div class="k"><span class="a">Saldo · quitado</span><span class="b">0,00</span></div>
+   <div class="k dv2"><span class="a">Despesas lançadas</span><span class="b neg">4.217,40</span></div>
+   <div class="k"><span class="a">Despesas pagas</span><span class="b neg">2.625,00</span></div>
+  </div>
+
+  <div class="h3">Conta corrente do comprador<span class="sp"><span class="btn">+ Buscar recebimento no Financeiro</span><span class="btn">+ Programar recebimento futuro</span></span></div>
+  <div class="scroll"><table>
+   <colgroup><col style="width:52px"><col style="width:30px"><col style="width:26px"><col style="width:86px"><col style="width:110px"><col style="width:152px"><col style="width:86px"><col style="width:76px"><col style="width:76px"><col style="width:76px"></colgroup>
+   <thead><tr><th>Data</th><th>Lote</th><th>Cab</th><th>Evento</th><th>Descrição</th><th>Conta</th><th>Banco</th><th class="dv">Entrega DRE</th><th>Recebido</th><th class="dv">Saldo</th></tr></thead>
+   <tbody>
+    <tr class="clk"><td class="c">04/05/26</td><td class="c">1</td><td class="c">25</td><td class="c"><span class="ev e">Entrega</span></td><td>Venda Desmama M</td><td>Venda de Desmama Machos</td><td class="mf c">—</td><td class="r neg dv">−87.500,00</td><td></td><td class="r neg dv">−87.500,00</td></tr>
+    <tr class="rec clk"><td class="c">06/05/26</td><td></td><td></td><td class="c"><span class="ev r">Recebimento</span></td><td>Recebimento 1 de 1</td><td>Venda de Desmama Machos</td><td>Itaú Personalite</td><td class="dv"></td><td class="r pos">87.500,00</td><td class="r dv">0,00</td></tr>
+   </tbody>
+   <tfoot><tr><td colspan="2">Total</td><td class="c">25</td><td colspan="4"></td><td class="r neg dv">−87.500,00</td><td class="r pos">87.500,00</td><td class="r dv">0,00</td></tr></tfoot>
+  </table></div>
+
+  <div class="h3">Despesas da operação · pagas a terceiros, fora do saldo
+   <span class="sp"><span class="btn">+ Buscar despesa no Financeiro</span><span class="btn nv">+ Nova despesa</span></span></div>
+  <div class="scroll rel"><table>
+   <colgroup><col style="width:56px"><col style="width:56px"><col style="width:124px"><col style="width:120px"><col style="width:142px"><col style="width:92px"><col style="width:88px"><col style="width:68px"><col style="width:20px"></colgroup>
+   <thead><tr><th>Venc.</th><th>Pgto.</th><th>Descrição</th><th>Favorecido</th><th>Conta</th><th class="dv">Banco</th><th>Status</th><th>Valor R$</th><th></th></tr></thead>
+   <tbody>
+    <tr class="clk"><td class="c">14/05/26</td><td class="c">14/05/26</td><td>Comissão · 025 DM</td><td>Elo MS Leilões Rurais</td><td>Imp. Desp. Abates/Vendas</td><td class="dv">Itaú Personalite</td><td class="c"><span class="st real">Realizado</span></td><td class="r neg">2.625,00</td><td class="c dots">⋯</td></tr>
+    <tr class="clk"><td class="c">10/05/26</td><td class="c mf">—</td><td>Fundersul · 025 DM</td><td>SEFAZ MS</td><td>Imp. Desp. Abates/Vendas</td><td class="dv">Itaú Personalite</td><td class="c"><span class="st prog">Programado</span></td><td class="r neg">1.312,40</td><td class="c dots">⋯</td></tr>
+    <tr class="clk"><td class="c">10/05/26</td><td class="c mf">—</td><td>Iagro · GTA 025 DM</td><td>IAGRO</td><td>Imp. Desp. Abates/Vendas</td><td class="dv mf c">—</td><td class="c"><span class="st prev">Previsto</span></td><td class="r neg">280,00</td><td class="c dots">⋯</td></tr>
+   </tbody>
+   <tfoot><tr><td colspan="5">3 despesas</td><td class="dv"></td><td></td><td class="r neg">4.217,40</td><td></td></tr></tfoot>
+  </table>
+  </div>
+  <div style="font-size:9.5px;color:var(--mf)">Clicar na linha abre o lançamento no Financeiro (banco, status, documentos). ⋯ = Abrir lançamento · Programar · Lançar (título com banco) · Reclassificar · Cancelar programação · Estornar · Desvincular · Desfazer — só as que valem para o estado da linha.</div></div>
+ <div class="aside"><h4>RESUMO DA OPERAÇÃO</h4><h4>IDENTIFICAÇÃO</h4>
+  <div class="rw"><span>Comprador</span><span>Ademar Issao Tanaka</span></div><div class="rw"><span>Data</span><span>04/05/2026</span></div><div class="rw"><span>Fazenda</span><span>Faz. 3 Muchachas</span></div><div class="rw"><span>Tipo</span><span>Desmama</span></div>
+  <h4>NEGOCIAÇÃO</h4><div class="rw"><span>Lotes</span><span>1 · 25 cab</span></div><div class="rw"><span>Valor acordado</span><span>R$ 87.500,00</span></div>
+  <h4>ENTREGA</h4><div class="rw"><span>Entregue</span><span>25 / 25 cab</span></div>
+  <h4>FINANCEIRO</h4><div class="rw"><span>Entregue</span><span>R$ 87.500,00</span></div><div class="rw"><span>Recebido</span><span class="pos">R$ 87.500,00</span></div><div class="rw"><span>Saldo · quitado</span><span><b>R$ 0,00</b></span></div><div class="rw"><span>Despesas</span><span class="neg">R$ 4.217,40</span></div>
+ </div></div>
+ <div class="foot"><span>Cancelar operação</span><span>Fechar</span></div>
+</div>
+
+<div class="lbl">B · Criar OC a partir do lançamento — Dados da OC: comprador vem da saída do gado, tipo de venda vem do subcentro</div>
+<div class="m" style="width:900px">
+ <div class="sec">2 · Dados da OC <span>preenchido pelo que o legado tem; confira</span></div>
+ <div class="grid2">
+  <div class="a">Comprador *</div><div><span class="sel auto">Vinicius Marini Ferreira<span>⌄</span></span><span class="aviso">financeiro: Henrique Marini F. e Outros · saída: Vinicius</span></div>
+  <div class="a">Tipo de venda *</div><div><span class="sel auto" style="width:180px">Desmama<span>⌄</span></span><span class="aviso" style="color:var(--mf)">pelo subcentro Venda de Desmama Machos</span></div>
+  <div class="a">Fazenda</div><div>Faz. 3 Muchachas</div>
+  <div class="a">Data da venda</div><div>04/05/26 · primeira saída marcada</div>
+ </div>
+ <div style="font-size:10px;color:var(--rd);padding:5px 8px">Comprador diferente da saída do gado (Vinicius Marini Ferreira): troque o comprador ou desmarque a saída.</div>
+</div>
+
+<div class="note"><b>Mock v4 · OC-VENDA-FINANCEIRO-COMPLETO-01.</b> Devolve as 12 funções que sumiram na OC em conta corrente (venda e compra), sem mexer no saldo.<br>
+• <b>A</b>: o extrato fica como está. As despesas voltam a ser a lista viva de sempre (a mesma da aba antiga, filtrada só às despesas): colunas Banco e Status, clique abre o lançamento, ⋯ com Programar, Lançar, Reclassificar, Cancelar programação, Estornar, Desvincular e Desfazer; "+ Nova despesa" (Fundersul, Iagro, frete, comissão) e "+ Buscar despesa". Nunca oferece receita principal aqui (a receita é a entrega + recebimento). Fundersul e Iagro são exemplo, só para mostrar os estados.<br>
+• <b>B</b>: comprador sugerido pela saída do gado, com a linha mostrando os dois nomes; tipo de venda pelo subcentro; mensagem de erro em português.<br>
+<b>v4:</b> medido no modal real de 1024px com o resumo lateral de 240px (área útil 766px): extrato sem ⋯ (igual a hoje), despesas sem a coluna Comp. (a competência aparece ao abrir o lançamento), cards com rótulo em cima e valor embaixo. <b>v3:</b> colunas medidas pelo maior texto, sem coluna elástica; blocos com 960px, data e valor perto. <b>v2:</b> topo volta aos cards de antes — Entregue, Recebido, Saldo, Despesas lançadas, Despesas pagas (mesma altura, lado a lado). <b>Para decidir:</b> o tipo de venda hoje não é gravado na OC (toda venda reabre com o campo vazio). Recomendo gravar numa coluna própria da OC — assim nunca mais reabre vazio, em nenhuma venda.</div>
+</body></html>

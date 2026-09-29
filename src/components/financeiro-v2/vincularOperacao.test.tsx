@@ -114,6 +114,22 @@ describe('ordem e pre-selecao', () => {
     expect(within(el(document, 'tr[data-oc="02be1a41"]')).getByText('= valor')).toBeTruthy();
   });
 
+  /* OC-VENDA-FINANCEIRO-COMPLETO-01a — o "+ Buscar despesa" abre o vincular de DENTRO da OC, com ela ja' escolhida. */
+  it('OC pre-escolhida (Buscar despesa da OC): vem marcada mesmo nao sendo a 1a; fora da lista do banco, vale a de sempre', async () => {
+    const outra = candidata({ operacao_id: '7d1f8590', numero_documento: '025', distancia_dias: 40, valor_exato: false,
+      compromissos: [compromisso({ id: 'k7', valor_total: 2625, valor_exato: false, componente: 'comissao' })] });
+    responder([candidata({}), outra], () => simOk());
+    const r = render(<VincularOperacaoDialog open lancamentoId={LANC} clienteId={CLIENTE} onClose={vi.fn()} operacaoIdPreEscolhida="7d1f8590" />);
+    await waitFor(() => expect(linha('7d1f8590')).not.toBeNull());
+    expect(within(el(document, 'tr[data-oc="7d1f8590"]')).getByRole('radio').getAttribute('aria-checked')).toBe('true');
+    expect(within(el(document, 'tr[data-oc="02be1a41"]')).getByRole('radio').getAttribute('aria-checked')).toBe('false');
+    r.unmount();
+    /* a tela nunca escolhe o que o banco nao ofereceu: id fora das candidatas -> a pre-selecao de sempre (valor exato) */
+    render(<VincularOperacaoDialog open lancamentoId={LANC} clienteId={CLIENTE} onClose={vi.fn()} operacaoIdPreEscolhida="nao-candidata" />);
+    await waitFor(() => expect(linha('02be1a41')).not.toBeNull());
+    expect(within(el(document, 'tr[data-oc="02be1a41"]')).getByRole('radio').getAttribute('aria-checked')).toBe('true');
+  });
+
   it('sem valor exato na 1a, nenhuma vem selecionada', () => {
     const c = candidata({ valor_exato: false, compromissos: [compromisso({ valor_exato: false })] });
     expect(candidataInicial([c], 'taxa_aquisicao', 2165.49)).toBeNull();

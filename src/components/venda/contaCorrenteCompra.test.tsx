@@ -94,8 +94,9 @@ const linhasDoTipo = (tipo: string) =>
 describe('compra em conta corrente — extrato espelho da venda (mock v1)', () => {
   it('cards, cabecalhos e linhas pelo lado da compra: entrada positiva verde, pagamento negativo vermelho, saldo zero quitado', () => {
     render(<AbaContaCorrenteOC api={api(compra())} somenteLeitura={false} lado="compra" />);
-    expect(txt(screen.getByTestId('card-entrega'))).toBe('Entrada do gado · custo no DRER$ 307.460,00');
-    expect(txt(screen.getByTestId('card-dinheiro'))).toBe('Pago · caixa-R$ 307.460,00');
+    /* OC-VENDA-FINANCEIRO-COMPLETO-01a (mock v4): rotulo curto em cima, valor sem "R$" embaixo, com o sinal tipografico */
+    expect(txt(screen.getByTestId('card-entrega'))).toBe('Entrada · DRE R$307.460,00');
+    expect(txt(screen.getByTestId('card-dinheiro'))).toBe('Pago−307.460,00');
     expect(txt(screen.getByTestId('card-saldo'))).toContain('Saldo · quitado');
     const tabela = screen.getByTestId('conta-corrente-tabela');
     expect(tabela.textContent).toContain('Fornecedor');
@@ -111,7 +112,8 @@ describe('compra em conta corrente — extrato espelho da venda (mock v1)', () =
     const [p] = linhasDoTipo('recebimento');
     expect(p[3].textContent).toBe('Pagamento');
     expect(p[4].textContent).toBe('Pagamento 1 de 1');
-    expect(p[5].textContent).toBe('Investimento Compra Bovinos Machos'); // OC-CC-CLASSIFICACAO-01: o pagamento fica na conta da compra
+    expect(p[5].getAttribute('title')).toBe('15020 Investimento Compra Bovinos Machos'); // OC-CC-CLASSIFICACAO-01: o pagamento fica na conta da compra
+    expect(p[5].textContent).toBe('Invest. Compra Bov. Machos'); // OC-VENDA-FINANCEIRO-COMPLETO-01a: o nome curto na celula, o inteiro no title
     expect(p[6].textContent).toBe('Sicredi');
     expect(txt(p[8])).toBe('−307.460,00');
     expect(p[8].className).toContain('text-[#b91c1c]');
@@ -126,16 +128,27 @@ describe('compra em conta corrente — extrato espelho da venda (mock v1)', () =
     expect(screen.getByTestId('barra-quitado').textContent).toContain('Quitado.');
   });
 
-  it('despesas da operacao num quadro separado, fora do saldo, com o valor negativo em vermelho', () => {
-    render(<AbaContaCorrenteOC api={api(compra())} somenteLeitura={false} lado="compra" />);
-    const q = screen.getByTestId('despesas-operacao');
-    expect(q.textContent).toContain('Despesas da operação · pagas a terceiros, fora do saldo');
-    const linhas = q.querySelectorAll('tbody tr');
-    expect(linhas).toHaveLength(4);
-    expect(Array.from(linhas).map(l => txt(l.querySelectorAll('td')[5]))).toEqual(['−1.800,00', '−1.000,00', '−500,00', '−5.236,00']);
-    expect(linhas[3].querySelectorAll('td')[1].textContent).toBe('16/04/26');
-    expect(linhas[0].querySelectorAll('td')[5].className).toContain('text-[#b91c1c]');
-    /* a busca sabe achar: a venda NAO tem o quadro */
+  /* OC-VENDA-FINANCEIRO-COMPLETO-01a — o quadro so' de leitura saiu: as despesas vivas chegam pelo slot (a lista de compromissos
+     no modo so' despesas, testada em despesasContaCorrente.test.tsx), e os dois cards da direita dizem os totais delas. */
+  it('despesas da operacao: o slot embaixo do extrato e os dois cards com os totais, fora do saldo', () => {
+    render(<AbaContaCorrenteOC api={api(compra())} somenteLeitura={false} lado="compra"
+      despesas={<div data-testid="slot-despesas">lista viva</div>} totaisDespesas={{ lancadas: 8536, pagas: 8536 }} />);
+    expect(screen.getByTestId('slot-despesas').textContent).toBe('lista viva');
+    expect(txt(screen.getByTestId('card-despesas-lancadas'))).toBe('Despesas lançadas8.536,00');
+    expect(txt(screen.getByTestId('card-despesas-pagas'))).toBe('Despesas pagas8.536,00');
+    expect(screen.getByTestId('card-despesas-lancadas').className).toContain('border-l-2');
+    /* o extrato nao desenha mais `cc.despesas` (as 4 da fixture): so' o slot fala delas */
+    expect(screen.queryByTestId('despesas-operacao')).toBeNull();
+    expect(screen.getByTestId('conta-corrente-tabela').textContent).not.toContain('Compra 121 DM-Frete');
+    /* o saldo e' o do banco: as despesas nao entram nele */
+    expect(txt(screen.getByTestId('total-saldo'))).toBe('0,00');
+  });
+
+  it('despesas ainda nao lidas: "—" nos dois cards, nunca zero; zero lido e zero', () => {
+    const { rerender } = render(<AbaContaCorrenteOC api={api(compra())} somenteLeitura={false} lado="compra" />);
+    expect(txt(screen.getByTestId('card-despesas-lancadas'))).toBe('Despesas lançadas—');
+    rerender(<AbaContaCorrenteOC api={api(compra())} somenteLeitura={false} lado="compra" totaisDespesas={{ lancadas: 0, pagas: 0 }} />);
+    expect(txt(screen.getByTestId('card-despesas-pagas'))).toBe('Despesas pagas0,00');
   });
 
   it('situacao da compra pelo sinal: positivo falta pagar, negativo adiantado ao fornecedor; a venda segue com as frases dela', () => {

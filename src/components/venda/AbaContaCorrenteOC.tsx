@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -8,11 +8,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { CATEGORIAS } from '@/types/cattle';
 import { parseNumericValue } from '@/lib/calculos/abate';
-import { rotuloDaConta } from '@/lib/financeiro/rotuloConta';
+import { rotuloCurtoDaConta, rotuloDaConta } from '@/lib/financeiro/rotuloConta';
 import {
   barraDaDiferenca, contaComNumero, corDoSaldo, dataCurta, efeitoNoSaldo, rotuloDoSaldo, rotuloExplicacao, rotuloRecebimento,
   totalDoRascunho, ROTULO_STATUS, TIPOS_EXPLICACAO_DO_LADO,
-  type DespesaOperacao, type LadoContaCorrente, type LinhaContaCorrente, type TipoExplicacao,
+  type LadoContaCorrente, type LinhaContaCorrente, type TipoExplicacao,
 } from '@/lib/oc/contaCorrente';
 import type {
   ContaParaExplicacao, ExplicacaoRascunho, LoteParaAjuste, OcContaCorrenteApi, RecebimentoVinculavel,
@@ -32,6 +32,9 @@ const TH = 'sticky h-[17px] whitespace-nowrap bg-[#2E4B6E] px-[4px] text-center 
 const THG = 'sticky top-0 z-20 h-[17px] whitespace-nowrap bg-primary px-[4px] text-center text-[9.5px] font-semibold text-white';
 const TD = 'h-[18px] whitespace-nowrap border-b border-[#eceae4] px-[4px] text-[10px]';
 const NUM = `${TD} text-right tabular-nums`;
+/* A celula que QUEBRA quando o texto nao cabe (regra da reticencia): sem o `whitespace-nowrap` do TD — somado depois, o
+   `whitespace-normal` perdia para ele no CSS gerado e a celula nao quebrava. Uma linha fica nos 18px; duas, em 27. */
+const TDQ = 'h-[18px] border-b border-[#eceae4] px-[4px] py-[1px] text-[10px] leading-[12px] break-words';
 const DV = 'border-l-2 border-l-[#9aa7b6]';
 const TF = 'sticky bottom-0 z-10 h-[19px] whitespace-nowrap border-t-2 border-t-[#9aa7b6] bg-[#E8E6DF] px-[4px] text-[10px] tabular-nums';
 const COR = { neg: 'text-[#b91c1c]', pos: 'text-[#15803d]', zero: '' };
@@ -39,6 +42,18 @@ const FUNDO: Record<LinhaContaCorrente['tipo'], string> = {
   entrega: 'bg-white', recebimento: 'bg-[#EAF1F9]', explicacao: 'bg-[#fffbeb]',
 };
 const BOTAO = 'h-[22px] px-[9px] text-[10px] font-medium';
+
+/**
+ * A REGUA DO EXTRATO — OC-VENDA-FINANCEIRO-COMPLETO-01a-fix1, sem coluna elastica. Soma 764: a LARGURA INTERNA MEDIDA da area que
+ * rola no modal real (1024 com o resumo de 240 da' 766, menos 1px de borda de cada lado). ⚠ A primeira versao somava 784 — o
+ * comentario dizia "soma 766" e ninguem somou — e a tabela rolava 20px na horizontal, cortando o Saldo (visto na prova de tela da
+ * Vera 7d1f8590: scrollWidth 784 x clientWidth 764). O teste agora soma os `col` renderizados.
+ * Data 53 · Lote 26 · Cab 26 · Evento 80 · Descricao 100 · Conta 152 · Banco 84 · Entrega/Recebido/Saldo 81.
+ * Medido com os textos reais (Inter): a Descricao quebra em 2 linhas quando nao cabe ("Venda Fêmeas Adultas", 108,2 para 92); a
+ * Conta usa o nome curto (`rotuloCurtoDaConta`, nome inteiro no `title`); o Banco cabe "Itaú Personalite" (73,1 para 76) e so'
+ * quebra em "sem conta bancária"; o maior valor real, 4.730.486,74 com sinal e em negrito, pede 72,8 para 73.
+ */
+export const REGUA_EXTRATO: readonly number[] = [53, 26, 26, 80, 100, 152, 84, 81, 81, 81];
 
 const rotuloCategoria = (slug: string | null) => (slug ? (CATEGORIAS.find(c => c.value === slug)?.label ?? slug) : '—');
 /* Valor de tabela como no mock v7: sem "R$" (a coluna ja diz que e' dinheiro) e com o sinal de menos tipografico. */
@@ -57,7 +72,7 @@ const TEXTOS: Record<LadoContaCorrente, {
   pendente1: string; pendenteN: (n: number) => string; atualizar: string;
 }> = {
   venda: {
-    cardEntrega: 'Entregue · vai para o DRE', cardDinheiro: 'Recebido · caixa', titulo: 'Conta corrente do comprador',
+    cardEntrega: 'Entregue · DRE R$', cardDinheiro: 'Recebido', titulo: 'Conta corrente do comprador',
     buscar: '+ Buscar recebimento no Financeiro', programar: '+ Programar recebimento futuro', grupoSaldo: 'Comprador',
     colEntrega: 'Entrega (DRE)', colDinheiro: 'Recebido (caixa)', vazio: 'Nenhuma entrega nem recebimento ainda.',
     seloEntrega: 'Entrega', seloDinheiro: 'Recebimento', verbo: 'Venda',
@@ -65,7 +80,7 @@ const TEXTOS: Record<LadoContaCorrente, {
     atualizar: 'Atualizar entregas',
   },
   compra: {
-    cardEntrega: 'Entrada do gado · custo no DRE', cardDinheiro: 'Pago · caixa', titulo: 'Conta corrente do fornecedor',
+    cardEntrega: 'Entrada · DRE R$', cardDinheiro: 'Pago', titulo: 'Conta corrente do fornecedor',
     buscar: '+ Buscar pagamento no Financeiro', programar: '+ Programar pagamento futuro', grupoSaldo: 'Fornecedor',
     colEntrega: 'Entrada (DRE)', colDinheiro: 'Pago (caixa)', vazio: 'Nenhuma entrada nem pagamento ainda.',
     seloEntrega: 'Entrada', seloDinheiro: 'Pagamento', verbo: 'Compra',
@@ -80,9 +95,14 @@ interface Props {
   somenteLeitura: boolean;
   /** De que lado a conta corrente fala. Padrao: venda (a tela de antes, sem nenhuma mudanca). */
   lado?: LadoContaCorrente;
+  /* OC-VENDA-FINANCEIRO-COMPLETO-01a — as despesas da operacao voltam a ser a LISTA VIVA de sempre (`AbaCompromissosOC` no modo
+     so' despesas), montada por quem tem o `ocApi` (o roteador da aba). Esta tela so' reserva o lugar, embaixo do extrato. */
+  despesas?: ReactNode;
+  /** Os dois cards da direita, somados dos compromissos de obrigacao vivos. `null` = ainda nao lidos ("—", nunca zero). */
+  totaisDespesas?: { lancadas: number; pagas: number } | null;
 }
 
-export function AbaContaCorrenteOC({ api, somenteLeitura, lado = 'venda' }: Props) {
+export function AbaContaCorrenteOC({ api, somenteLeitura, lado = 'venda', despesas, totaisDespesas = null }: Props) {
   const cc = api.contaCorrente;
   const t = TEXTOS[lado];
   /* sinal da coluna da entrega no total: a venda mostra o gado que saiu negativo; a compra, o que entrou positivo */
@@ -108,10 +128,16 @@ export function AbaContaCorrenteOC({ api, somenteLeitura, lado = 'venda' }: Prop
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-[5px]" data-testid="conta-corrente-oc">
-      <div className="grid flex-none grid-cols-3 gap-[5px]">
-        <Card rotulo={t.cardEntrega} valor={cc.entregue} cor={COR.pos} testid={lado === 'compra' ? 'card-entrega' : undefined} />
-        <Card rotulo={t.cardDinheiro} valor={-sinalEntrega * cc.recebido} cor={lado === 'compra' ? COR.neg : COR.pos} testid={lado === 'compra' ? 'card-dinheiro' : undefined} />
-        <Card rotulo={rotuloDoSaldo(cc.saldo, lado)} valor={cc.saldo} cor={COR[corSaldo]} destaque={corSaldo !== 'zero'} testid="card-saldo" />
+      {/* OC-VENDA-FINANCEIRO-COMPLETO-01a (mock v4) — cinco cards de mesma altura, rotulo em cima e valor embaixo. ⚠ O SALDO TEM
+          170px, os outros dividem o resto: medido (Inter 9,5px), "Saldo · adiantado pelo comprador" pede 151,7px e
+          "Saldo · adiantado ao fornecedor" 144, e com cinco iguais o card teria 132 uteis. Os outros rotulos pedem ate' 90,5 e o
+          maior valor real (4.730.486,74 a 12px) 87,3, para 127 uteis. */}
+      <div className="grid flex-none gap-[6px]" style={{ gridTemplateColumns: '1fr 1fr 170px 1fr 1fr' }} data-testid="cards-conta-corrente">
+        <CardEmPe rotulo={t.cardEntrega} valor={cc.entregue} cor={COR.pos} testid="card-entrega" />
+        <CardEmPe rotulo={t.cardDinheiro} valor={-sinalEntrega * cc.recebido} cor={lado === 'compra' ? COR.neg : COR.pos} testid="card-dinheiro" />
+        <CardEmPe rotulo={rotuloDoSaldo(cc.saldo, lado)} valor={cc.saldo} cor={COR[corSaldo]} destaque={corSaldo !== 'zero'} testid="card-saldo" />
+        <CardEmPe rotulo="Despesas lançadas" valor={totaisDespesas?.lancadas ?? null} cor={COR.neg} divisor testid="card-despesas-lancadas" />
+        <CardEmPe rotulo="Despesas pagas" valor={totaisDespesas?.pagas ?? null} cor={COR.neg} testid="card-despesas-pagas" />
       </div>
 
       {cc.saidasSemEntrega > 0 && (
@@ -140,12 +166,10 @@ export function AbaContaCorrenteOC({ api, somenteLeitura, lado = 'venda' }: Prop
       <div className="min-h-0 flex-1 overflow-auto rounded border" data-testid="conta-corrente-rolagem">
         <table className="w-full table-fixed border-separate border-spacing-0 tabular-nums" data-testid="conta-corrente-tabela">
           <colgroup>
-            {/* Larguras MEDIDAS no modal (1024px por decisao do MODAIS-PADRAO-01b; a tabela tem 766): pior texto de cada coluna +
-                8 de padding, com o total em negrito. A Descricao leva o resto. ⚠ Por isso a Conta vai SEM o numero do plano:
-                com ele, "1120 Venda de Desmama Machos" pedia 171px e a linha nao cabia sem quebrar ou cortar numero. */}
-            <col style={{ width: 56 }} /><col style={{ width: 28 }} /><col style={{ width: 30 }} /><col style={{ width: 80 }} />
-            <col /><col style={{ width: 148 }} /><col style={{ width: 58 }} />
-            <col style={{ width: 84 }} /><col style={{ width: 86 }} /><col style={{ width: 88 }} />
+            {/* Larguras MEDIDAS no modal (1024px por decisao do MODAIS-PADRAO-01b): pior texto de cada coluna + 8 de padding, com
+                o total em negrito. ⚠ Por isso a Conta vai SEM o numero do plano: com ele, "1120 Venda de Desmama Machos" pedia 171px
+                e a linha nao cabia sem quebrar ou cortar numero. A regua mora em `REGUA_EXTRATO` (acima), soma 764. */}
+            {REGUA_EXTRATO.map((w, i) => <col key={i} style={{ width: w }} />)}
           </colgroup>
           <thead>
             <tr>
@@ -213,9 +237,9 @@ export function AbaContaCorrenteOC({ api, somenteLeitura, lado = 'venda' }: Prop
         </div>
       )}
 
-      {/* OC-CRIAR-DO-LEGADO-01b: as despesas aparecem tambem na venda (a comissao do modal antigo ligada a' OC criada do legado).
-          Sem despesa, o quadro nao aparece — a venda de sempre fica igual. */}
-      <QuadroDespesas despesas={cc.despesas} />
+      {/* OC-VENDA-FINANCEIRO-COMPLETO-01a — as despesas da operacao (compra e venda), vivas: a lista de compromissos de obrigacao,
+          montada fora. Era um quadro so' de leitura (o `QuadroDespesas`), sem banco, sem status e sem acao. */}
+      {despesas}
 
       {erroAcao && <div className="flex-none text-[10px] text-destructive" role="alert">{erroAcao}</div>}
 
@@ -229,43 +253,27 @@ export function AbaContaCorrenteOC({ api, somenteLeitura, lado = 'venda' }: Prop
   );
 }
 
+/* O card do topo da aba (mock v4): rotulo 9,5 em cima, valor 12 negrito embaixo a' direita, 34px. Sem "R$" no valor, como
+   nas celulas da tabela. `null` = dado ainda nao lido: "—", nunca zero. */
+function CardEmPe({ rotulo, valor, cor, destaque, divisor, testid }: {
+  rotulo: string; valor: number | null; cor: string; destaque?: boolean; divisor?: boolean; testid?: string;
+}) {
+  return (
+    <div className={`flex h-[34px] flex-col justify-center rounded border px-[7px] ${destaque ? 'border-[#fde68a] bg-[#fffbeb]' : ''} ${divisor ? DV : ''}`}
+      data-testid={testid}>
+      <span className="whitespace-nowrap text-[9.5px] leading-none text-muted-foreground">{rotulo}</span>
+      <span className={`mt-[3px] whitespace-nowrap text-right text-[12px] font-bold leading-none tabular-nums ${valor === null ? 'text-muted-foreground' : cor}`}>
+        {valor === null ? '—' : num2(valor)}
+      </span>
+    </div>
+  );
+}
+
 function Card({ rotulo, valor, cor, destaque, testid }: { rotulo: string; valor: number; cor: string; destaque?: boolean; testid?: string }) {
   return (
     <div className={`flex h-6 items-center justify-between rounded border px-[7px] ${destaque ? 'border-[#fde68a] bg-[#fffbeb]' : ''}`} data-testid={testid}>
       <span className="text-[9.5px] text-muted-foreground">{rotulo}</span>
       <span className={`text-[11.5px] font-bold tabular-nums ${cor}`}>{formatMoeda(valor)}</span>
-    </div>
-  );
-}
-
-/* ─── Despesas da operacao (compra e venda): pagas a terceiros, fora do saldo — o quadro de baixo do mock ─── */
-function QuadroDespesas({ despesas }: { despesas: readonly DespesaOperacao[] }) {
-  if (despesas.length === 0) return null;
-  return (
-    <div className="flex-none" data-testid="despesas-operacao">
-      <div className="mb-[3px] text-[10.5px] font-semibold">Despesas da operação · pagas a terceiros, fora do saldo</div>
-      <div className="rounded border">
-        <table className="w-full table-fixed border-separate border-spacing-0 tabular-nums">
-          {/* a Conta fica com o que sobra: com 170px ela nao cabia "Investimento Frete/Comissão Compra Bovinos" e invadia o Valor
-              (visto na 1337bb2d) — a celula nao quebra, e' uma linha por registro (A31) */}
-          <colgroup><col style={{ width: 58 }} /><col style={{ width: 58 }} /><col style={{ width: 170 }} /><col style={{ width: 180 }} /><col /><col style={{ width: 84 }} /></colgroup>
-          <thead>
-            <tr>{['Comp.', 'Pgto.', 'Descrição', 'Favorecido', 'Conta', 'Valor'].map(h => <th key={h} className={`${THG} static`}>{h}</th>)}</tr>
-          </thead>
-          <tbody>
-            {despesas.map((d, i) => (
-              <tr key={d.parteId} className={i % 2 === 0 ? 'bg-white' : 'bg-[#F5F4F0]'} data-despesa={d.componente ?? ''}>
-                <td className={`${TD} text-center`}>{dataCurta(d.competencia)}</td>
-                <td className={`${TD} text-center`}>{dataCurta(d.pagamento)}</td>
-                <td className={`${TD} whitespace-normal break-words`}>{d.descricao ?? '—'}</td>
-                <td className={`${TD} whitespace-normal break-words`}>{d.favorecido ?? '—'}</td>
-                <td className={`${TD} whitespace-normal break-words`} title={contaComNumero(d.contaOrdem, d.conta)}>{rotuloDaConta(d.conta) ?? '—'}</td>
-                <td className={`${NUM} ${COR[corDoSaldo(d.valor)]}`}>{num2(d.valor)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
     </div>
   );
 }
@@ -291,9 +299,9 @@ function LinhaExtrato({ l, linhas, lado }: { l: LinhaContaCorrente; linhas: read
       <td className={`${TD} text-center`}>{l.loteOrdem ?? ''}</td>
       <td className={`${NUM}`}>{l.cab ?? ''}</td>
       <td className={`${TD} text-center`}><Selo tipo={l.tipo} lado={lado} /></td>
-      <td className={`${TD} whitespace-normal break-words`}>{descricao}</td>
-      <td className={`${TD} whitespace-normal break-words`} title={contaComNumero(l.contaOrdem, l.conta)}>{rotuloDaConta(l.conta) ?? '—'}</td>
-      <td className={`${TD} text-center ${bancoAmbar ? 'text-[#b45309]' : ''}`}>{banco}</td>
+      <td className={TDQ}>{descricao}</td>
+      <td className={TDQ} title={contaComNumero(l.contaOrdem, l.conta)}>{rotuloCurtoDaConta(l.conta) ?? '—'}</td>
+      <td className={`${TDQ} text-center ${bancoAmbar ? 'text-[#b45309]' : ''}`}>{banco}</td>
       <td className={`${NUM} ${DV} ${COR[corDoSaldo(l.movEntrega)]}`}>{moeda(l.movEntrega)}</td>
       <td className={`${NUM} ${l.noSaldo ? COR[corDoSaldo(l.movRecebido)] : 'text-muted-foreground'}`}>{moeda(l.movRecebido)}</td>
       <td className={`${NUM} ${DV} font-bold ${COR[cSaldo]}`}>{num2(l.saldo)}</td>

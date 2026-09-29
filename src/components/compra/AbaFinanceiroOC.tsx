@@ -4,6 +4,7 @@ import { AbaCompromissosOC, type LinhaPrevisao, type RotulosCompromissos } from 
 import { useOcCompromissos, type OcCompromissosApi } from '@/hooks/useOcCompromissos';
 import { useOcContaCorrente, type OcContaCorrenteApi } from '@/hooks/useOcContaCorrente';
 import { AbaContaCorrenteOC } from '@/components/venda/AbaContaCorrenteOC';
+import { totaisDeDespesa } from '@/lib/oc/despesasDaOperacao';
 import { AlertTriangle } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import type { LiquidacaoApi } from '@/hooks/useOperacaoLiquidacao';
@@ -102,8 +103,23 @@ export function AbaFinanceiroOC(props: Props) {
 
   if (!operacaoId || !clienteId) return legado;
   if (ccApi.contaCorrente?.modelo === 'conta_corrente') {
-    return <AbaContaCorrenteOC api={ccApi} somenteLeitura={props.financeiroNovoReadOnly}
-      lado={api.tipoOperacao === 'compra' ? 'compra' : 'venda'} />;
+    /* OC-VENDA-FINANCEIRO-COMPLETO-01a — as despesas da operacao voltam vivas embaixo do extrato: a lista de compromissos no modo
+       so' despesas. ⚠ NENHUMA PROP DE PRINCIPAL vai para ela — sem `linhasPrevisao`, `propostasExtras`, `propostasDoMotor` nem
+       `abrirGerarAoMontar` —, e o modo ainda os recusa por dentro. Os cards somam os mesmos compromissos (`totaisDeDespesa`);
+       enquanto eles nao chegaram, "—". */
+    const despesasLidas = !(ocApi.loading && !ocApi.resumoOperacao);
+    return (
+      <AbaContaCorrenteOC api={ccApi} somenteLeitura={props.financeiroNovoReadOnly}
+        lado={api.tipoOperacao === 'compra' ? 'compra' : 'venda'}
+        totaisDespesas={despesasLidas ? totaisDeDespesa(ocApi.compromissos) : null}
+        despesas={
+          <AbaCompromissosOC ocApi={ocApi} soDespesas bloqueado={props.financeiroNovoReadOnly} clienteId={clienteId}
+            tipoOperacao={api.tipoOperacao} fornecedores={api.fornecedores} valorAcordado={api.valorAcordado} lotes={api.lotes}
+            contraparteId={api.contraparteId} dataOperacao={props.dataOperacao ?? null} dataChegada={props.dataChegada ?? null}
+            darkSelectClass={props.darkSelectClass} recarregarDados={api.recarregar} rotulos={props.rotulos}
+            motivoReabertura={props.motivoReabertura ?? null} />
+        } />
+    );
   }
   if ((api.tipoOperacao === 'venda' || api.tipoOperacao === 'compra') && !ccApi.contaCorrente && !ccApi.erro) {
     return <div className="py-10 text-center text-[11px] text-muted-foreground">Carregando…</div>;

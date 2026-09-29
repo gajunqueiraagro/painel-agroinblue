@@ -265,22 +265,20 @@ describe('resumo lateral da venda em conta corrente (lido da FONTE)', () => {
   });
 });
 
-/* OC-CRIAR-DO-LEGADO-01b — a comissao do modal antigo ligada a' OC de venda aparece no quadro de despesas, fora do saldo, com o
-   MESMO componente da compra. Sem despesa, o quadro nao aparece (o snapshot da 232c05aa em contaCorrenteCompra.test.tsx trava isso). */
+/* OC-CRIAR-DO-LEGADO-01b — a comissao do modal antigo ligada a' OC de venda aparece nas despesas, fora do saldo, com o MESMO
+   componente da compra. OC-VENDA-FINANCEIRO-COMPLETO-01a: as despesas passaram a ser a lista viva (slot `despesas`, montada pelo
+   roteador com a lista de compromissos no modo so' despesas — despesasContaCorrente.test.tsx); o extrato nao as desenha mais. */
 describe('venda: despesas da operacao', () => {
-  it('a comissao aparece no quadro, com o valor em vermelho, e o saldo nao muda', () => {
+  it('a comissao fica fora do saldo e fora do extrato; os cards mostram o total que vem de fora', () => {
     const comComissao = cc({ despesas: [{ parte_id: 'pc1', lancamento_id: '9bcf8f46', componente: 'comissao', competencia: '2026-05-04',
       pagamento: '2026-05-14', vencimento: '2026-05-14', descricao: 'Venda 025 DM - Comissão', favorecido: 'Elo MS Leilões Rurais Eireli',
       conta_ordem: 5030, conta: 'Impostos e Despesas de Abates e Vendas', valor: -2625, status: 'realizado' }] });
-    render(<AbaContaCorrenteOC api={api(comComissao)} somenteLeitura={false} />);
-    const q = screen.getByTestId('despesas-operacao');
-    expect(q.textContent).toContain('Despesas da operação · pagas a terceiros, fora do saldo');
-    const linha = q.querySelector('tr[data-despesa="comissao"]');
-    expect(linha?.textContent).toContain('Venda 025 DM - Comissão');
-    expect(linha?.textContent).toContain('Elo MS Leilões Rurais Eireli');
-    const valor = linha?.querySelectorAll('td')[5];
-    expect(valor?.textContent).toBe('−2.625,00');
-    expect(valor?.className).toContain('text-[#b91c1c]');
+    render(<AbaContaCorrenteOC api={api(comComissao)} somenteLeitura={false} totaisDespesas={{ lancadas: 2625, pagas: 2625 }}
+      despesas={<div data-testid="slot-despesas" />} />);
+    expect(screen.getByTestId('slot-despesas')).toBeInTheDocument();
+    expect(screen.getByTestId('conta-corrente-tabela').textContent).not.toContain('Venda 025 DM - Comissão');
+    expect((screen.getByTestId('card-despesas-pagas').textContent ?? '')).toBe('Despesas pagas2.625,00');
+    expect(screen.getByTestId('card-despesas-pagas').lastElementChild?.className).toContain('text-[#b91c1c]');
     /* o saldo e' o do banco, que nao conta a despesa: o mesmo -1.357,89 da fixture sem comissao */
     expect(comComissao.saldo).toBe(cc().saldo);
   });
