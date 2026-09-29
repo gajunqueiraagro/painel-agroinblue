@@ -1015,6 +1015,13 @@ migration e' REGISTRO HISTORICO, nao se reaplica).
   passa a devolver MENOS linhas, e sem erro — a lista so' encolhe. Nenhum gate pega isso.
   Antes de culpar a RPC por um numero que baixou, conferir se a tela le direto e sem tenant.
 
+## ESTADO ATUAL (handoff de 29/09/2026 — atualizar a cada troca de sessao)
+- HEAD proto: 6ed7e148 (FIN-V2-HOMOLOG-FIX-01), publicado em origin/proto.
+- Fechadas por ultimo: OC-CONTA-CORRENTE-TODOS-01a (75cdd7ba), OC-CC-CLASSIFICACAO-01 (28a72522), FIN-V2-HOMOLOG-FIX-01 (6ed7e148).
+- Banco proto: aplicado ate' `20261027174000_fin_v2_homolog_fix_01.sql` (ledger 20260929105928), incluindo os dados da 173100; as migrations parked (2026080312*, 2026081312*/13*) nao sao desta fila.
+- Proxima frente: FIN-NFE-PARCELAS-01.
+- Fila: PR 2 conta corrente do ABATE; migracao das OCs existentes para conta corrente; criar-do-legado para abate/compra; 105 abates do modal antigo.
+
 ## DIVIDAS DE DADO E DE MOTOR (abertas, nao tratadas)
 - SALDO-INICIAL-MES-01 — `saldos_iniciais` tem coluna `mes`, e NINGUEM a le'.
   `fn_zoot_categoria_mensal` (md5 a3e6eb6b) busca o saldo em
