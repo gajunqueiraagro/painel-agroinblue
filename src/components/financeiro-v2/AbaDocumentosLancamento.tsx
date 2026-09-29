@@ -259,7 +259,19 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, fornecedores, onA
  *  ⚠ EXPORTADO para os documentos PENDENTES do "Novo lançamento" (FIN-NFE-PARCELAS-01): a mesma tela,
  *  com uma `api` que guarda em memória. `pendente` só troca o texto do botão e cala o toast de
  *  "registrado" — o documento ainda não foi a lugar nenhum. */
-export function FormDocumento({ api, documento, fornecedores, onFechar, pendente, semBoleto }: {
+/**
+ * O que o lançamento já diz, para o documento NOVO nascer preenchido — FIN-NFE-PARCELAS-01 PR 2b-fix1.
+ * Nº Documento do lançamento -> Número; competência -> Emissão; valor -> Valor; favorecido -> Emitente.
+ * Tudo editável; editar aqui NÃO muda o lançamento (são colunas de tabelas diferentes).
+ */
+export interface SugestaoDocumento {
+  numero: string | null;
+  dataEmissao: string | null;
+  valor: number | null;
+  emitenteId: string | null;
+}
+
+export function FormDocumento({ api, documento, fornecedores, onFechar, pendente, semBoleto, sugestao }: {
   api: LancamentoDocumentosApi;
   documento: LancDocumento | null;
   fornecedores: { id: string; nome: string }[];
@@ -267,13 +279,18 @@ export function FormDocumento({ api, documento, fornecedores, onFechar, pendente
   pendente?: boolean;
   /** Documento da COMPRA no parcelado: o boleto é por parcela, na grade de parcelas (PR 2b). */
   semBoleto?: boolean;
+  /** Só no documento NOVO: semeia número, emissão, valor e emitente (PR 2b-fix1). Ignorada na edição. */
+  sugestao?: SugestaoDocumento;
 }) {
+  /* ⚠ SUGESTÃO NÃO ENTRA EM REGISTRO JÁ GRAVADO (RECLASS-PESO-01): com `documento`, vale o que ele tem. */
+  const sug = documento ? null : (sugestao ?? null);
+  const emitenteSugerido = sug?.emitenteId && fornecedores.some(f => f.id === sug.emitenteId) ? sug.emitenteId : null;
   const [especie, setEspecie] = useState<EspecieLancDoc>(documento?.especie ?? 'nf');
-  const [numero, setNumero] = useState(documento?.numero ?? '');
+  const [numero, setNumero] = useState(documento?.numero ?? sug?.numero ?? '');
   const [serie, setSerie] = useState(documento?.serie ?? '');
-  const [dataEmissao, setDataEmissao] = useState(documento?.dataEmissao ?? '');
-  const [valor, setValor] = useState<number | null>(documento?.valorDocumento ?? null);
-  const [emitenteId, setEmitenteId] = useState(documento?.emitenteId ?? '');
+  const [dataEmissao, setDataEmissao] = useState(documento?.dataEmissao ?? sug?.dataEmissao ?? '');
+  const [valor, setValor] = useState<number | null>(documento?.valorDocumento ?? sug?.valor ?? null);
+  const [emitenteId, setEmitenteId] = useState(documento?.emitenteId ?? emitenteSugerido ?? '');
   const [emitenteNome, setEmitenteNome] = useState(documento?.emitenteNome ?? '');
   const [emitenteDoc, setEmitenteDoc] = useState(documento?.emitenteDocumento ?? '');
   const [chave, setChave] = useState(documento?.chaveAcesso ?? '');
@@ -287,6 +304,12 @@ export function FormDocumento({ api, documento, fornecedores, onFechar, pendente
   const [cancelandoNota, setCancelandoNota] = useState(false);
   const [motivoNota, setMotivoNota] = useState('');
   const especiesDoForm = semBoleto ? ESPECIES_LANC_DOC.filter(e => e.value !== 'boleto') : ESPECIES_LANC_DOC;
+  /* VALOR SUGERIDO É VALOR ACEITO: o que veio do lançamento fica âmbar enquanto ninguém mexer. */
+  const sugNumero = !!sug?.numero && numero === sug.numero;
+  const sugData = !!sug?.dataEmissao && dataEmissao === sug.dataEmissao;
+  const sugValor = sug?.valor != null && valor === sug.valor;
+  const sugEmitente = !!emitenteSugerido && emitenteId === emitenteSugerido;
+  const AMBAR = ' bg-amber-50 border-amber-300';
 
   const OUTRO = '__outro__';
   const emitenteEhOutro = emitenteId === OUTRO;
@@ -387,6 +410,11 @@ export function FormDocumento({ api, documento, fornecedores, onFechar, pendente
           </p>
         )}
 
+        {(sugNumero || sugData || sugValor || sugEmitente) && (
+          <p className="mx-4 mt-3 rounded border border-amber-300 bg-amber-50 px-2 py-1 text-[10px] text-amber-900" data-testid="sugestao-do-lancamento">
+            Preenchido com o que o lançamento diz ({[sugNumero && 'número', sugData && 'emissão', sugValor && 'valor', sugEmitente && 'emitente'].filter(Boolean).join(', ')}) — confira. Mudar aqui não muda o lançamento.
+          </p>
+        )}
         <div className="grid grid-cols-2 gap-2 px-4 py-3">
           <div>
             <Label className="text-[10px]">Espécie <span className="text-destructive">*</span></Label>
@@ -415,8 +443,8 @@ export function FormDocumento({ api, documento, fornecedores, onFechar, pendente
           </div>
           <div>
             <Label className="text-[10px]">Número</Label>
-            <Input value={numero} onChange={e => setNumero(e.target.value)}
-              className="h-8 text-[12px] mt-0.5" placeholder="Opcional" />
+            <Input value={numero} onChange={e => setNumero(e.target.value)} data-testid="doc-numero"
+              className={`h-8 text-[12px] mt-0.5${sugNumero ? AMBAR : ''}`} placeholder="Opcional" />
           </div>
           <div>
             <Label className="text-[10px]">Série</Label>
@@ -425,7 +453,7 @@ export function FormDocumento({ api, documento, fornecedores, onFechar, pendente
           </div>
           <div>
             <Label className="text-[10px]">Data de emissão</Label>
-            <DatePicker value={dataEmissao} onChange={setDataEmissao} className="h-8 text-[12px] mt-0.5" />
+            <DatePicker value={dataEmissao} onChange={setDataEmissao} className={`h-8 text-[12px] mt-0.5${sugData ? AMBAR : ''}`} />
           </div>
           {/* ⚠ NA OC, O VALOR DO DOCUMENTO NÃO É UM CAMPO — DOC-UMA-FONTE-01. Lá ele é a
               soma dos COMPONENTES (acréscimo, desconto comercial, retenção), que mexem na
@@ -443,13 +471,13 @@ export function FormDocumento({ api, documento, fornecedores, onFechar, pendente
           ) : (
             <div>
               <Label className="text-[10px]">Valor do documento</Label>
-              <CampoMoeda valor={valor} onChange={setValor} className="h-8 text-[12px] mt-0.5 text-right" />
+              <CampoMoeda valor={valor} onChange={setValor} className={`h-8 text-[12px] mt-0.5 text-right${sugValor ? AMBAR : ''}`} />
             </div>
           )}
           <div>
             <Label className="text-[10px]">Emitente</Label>
             <Select value={emitenteId || undefined} onValueChange={setEmitenteId}>
-              <SelectTrigger className="h-8 text-[12px] mt-0.5"><SelectValue placeholder="Selecione" /></SelectTrigger>
+              <SelectTrigger className={`h-8 text-[12px] mt-0.5${sugEmitente ? AMBAR : ''}`} data-testid="doc-emitente"><SelectValue placeholder="Selecione" /></SelectTrigger>
               <SelectContent>
                 {fornecedores.map(f => (
                   <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>

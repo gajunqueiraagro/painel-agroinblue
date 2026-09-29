@@ -220,3 +220,26 @@ export async function irmasDaParcela(lancamentoId: string, clienteId: string): P
     };
   });
 }
+
+/**
+ * Nome de arquivo numa linha só — FIN-NFE-PARCELAS-01 PR 2b-fix1. O nome da NF-e (a chave de 44
+ * dígitos + "-nfe.pdf") quebrava em três linhas na coluna Arquivo. A tela mostra o FIM sempre (a extensão
+ * e os últimos dígitos) e o COMEÇO no espaço que sobrar, cortado com "…" pelo CSS só quando não cabe
+ * ("3526092345…446110-nfe.pdf"); o nome inteiro vai no `title`. O corte acompanha a largura da coluna —
+ * medido: a 748px úteis do diálogo, com o emitente inteiro, sobram ~94px para o arquivo.
+ * ⚠ EXCEÇÃO CONSCIENTE À A31 ("nada cortado com reticência"), SÓ NA COLUNA ARQUIVO: nome de arquivo não
+ *   cabe e não se lê inteiro; quem precisa dele passa o mouse.
+ */
+export function partesDoNome(nome: string, fim = 10): { inicio: string; fim: string } {
+  if (nome.length <= fim) return { inicio: '', fim: nome };
+  return { inicio: nome.slice(0, nome.length - fim), fim: nome.slice(nome.length - fim) };
+}
+
+/**
+ * O número da coluna "Nota fiscal" da grade de parcelas — PR 2b-fix1. O da NF da compra pendente; sem ele,
+ * o Nº Documento do lançamento; sem nenhum, null ("—"). O formato 000.000.000 é de quem mostra.
+ */
+export function numeroDaNotaDaCompra(pendentes: readonly DocumentoPendente[], numeroDoLancamento: string): string | null {
+  const nf = pendentes.find(p => p.parcela == null && p.payload.especie === 'nf');
+  return nf?.payload.numero?.trim() || numeroDoLancamento.trim() || null;
+}

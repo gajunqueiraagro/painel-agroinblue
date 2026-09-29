@@ -13,14 +13,15 @@ import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Plus, Pencil, X } from 'lucide-react';
 import { formatNFNumber } from '@/lib/financeiro/documentoHelper';
-import { FormDocumento } from '@/components/financeiro-v2/AbaDocumentosLancamento';
+import { FormDocumento, type SugestaoDocumento } from '@/components/financeiro-v2/AbaDocumentosLancamento';
 import {
   rotuloEspecieDoc, type LancDocumento, type LancDocPayload, type LancamentoDocumentosApi,
 } from '@/hooks/useLancamentoDocumentos';
-import { motivoArquivoRecusado, novoPendente, type DocumentoPendente } from '@/lib/financeiro/documentosPendentes';
+import { motivoArquivoRecusado, novoPendente, partesDoNome, type DocumentoPendente } from '@/lib/financeiro/documentosPendentes';
 
 const TH = 'sticky top-0 z-10 h-[17px] whitespace-nowrap bg-primary px-[4px] text-center text-[9.5px] font-semibold text-white';
-const TD = 'h-[18px] border-b border-[#eceae4] px-[4px] text-[10px] align-middle';
+/* `py-0 leading-none`: como a grade de parcelas — sem isto a linha mede 19 (medido no PR 2b-fix1). */
+const TD = 'h-[18px] border-b border-[#eceae4] px-[4px] py-0 text-[10px] leading-none align-middle';
 
 const dataCurta = (iso: string | null | undefined) => {
   if (!iso) return '—';
@@ -33,6 +34,17 @@ function numeroExibido(d: LancDocumento): string {
   if (!d.numero) return '—';
   const n = d.especie === 'nf' ? (formatNFNumber(d.numero) || d.numero) : d.numero;
   return d.serie ? `${n} · série ${d.serie}` : n;
+}
+
+/** Começo que encolhe (com "…" só quando não cabe) + fim sempre visível. */
+function NomeDoArquivo({ nome }: { nome: string }) {
+  const { inicio, fim } = partesDoNome(nome);
+  return (
+    <span className="flex min-w-0">
+      <span className="min-w-0 overflow-hidden text-ellipsis" data-testid="arquivo-inicio">{inicio}</span>
+      <span className="shrink-0" data-testid="arquivo-fim">{fim}</span>
+    </span>
+  );
 }
 
 /** O pendente no formato que o `FormDocumento` lê — só para editar; nada disto vai ao banco. */
@@ -86,7 +98,7 @@ export function apiDePendentes(
   };
 }
 
-export function DocumentosPendentes({ pendentes, onMudar, fornecedores, ligadoA, travado }: {
+export function DocumentosPendentes({ pendentes, onMudar, fornecedores, ligadoA, travado, sugestao }: {
   pendentes: DocumentoPendente[];
   onMudar: (f: (l: DocumentoPendente[]) => DocumentoPendente[]) => void;
   fornecedores: { id: string; nome: string }[];
@@ -98,6 +110,8 @@ export function DocumentosPendentes({ pendentes, onMudar, fornecedores, ligadoA,
   ligadoA?: number;
   /** Depois do salvar a lista é o que falta gravar: não se edita mais, só se tenta de novo. */
   travado?: boolean;
+  /** PR 2b-fix1 — o que o lançamento já diz (Nº Documento, competência, valor, favorecido), para o documento NOVO nascer preenchido. */
+  sugestao?: SugestaoDocumento;
 }) {
   const [formAberto, setFormAberto] = useState(false);
   const [editando, setEditando] = useState<LancDocumento | null>(null);
@@ -122,11 +136,13 @@ export function DocumentosPendentes({ pendentes, onMudar, fornecedores, ligadoA,
           <table className="w-full table-fixed border-separate border-spacing-0 tabular-nums">
             {/* A31 — larguras fixas: nada muda de largura quando o dado muda (PR 2b). */}
             <colgroup>
-              {/* medidas no diálogo (748px úteis): com "Ligado a" sobram ~160px para o Arquivo */}
-              <col style={{ width: 56 }} /><col style={{ width: 104 }} /><col style={{ width: 54 }} />
-              <col style={{ width: 110 }} /><col style={{ width: 72 }} /><col />
-              {ligadoA ? <col style={{ width: 84 }} /> : null}
-              <col style={{ width: 66 }} /><col style={{ width: 40 }} />
+              {/* PR 2b-fix1 — medidas no diálogo (748px úteis), texto renderizado + 8 de padding: "Comprovante" 76,
+                  000.000.000 76, dd/mm/aa 58, emitente "Ana Verena Milani Hernandes" 156, 1.234.567,89 78,
+                  "10 de 10 parcelas" 98, "não gravado" 72, ações 40. O Arquivo fica com a sobra e corta no meio. */}
+              <col style={{ width: 76 }} /><col style={{ width: 76 }} /><col style={{ width: 58 }} />
+              <col style={{ width: 156 }} /><col style={{ width: 78 }} /><col />
+              {ligadoA ? <col style={{ width: 98 }} /> : null}
+              <col style={{ width: 72 }} /><col style={{ width: 40 }} />
             </colgroup>
             <thead>
               <tr>
@@ -145,7 +161,10 @@ export function DocumentosPendentes({ pendentes, onMudar, fornecedores, ligadoA,
                     <td className={`${TD} text-center`}>{dataCurta(d.dataEmissao)}</td>
                     <td className={TD}>{d.emitenteNome ?? '—'}</td>
                     <td className={`${TD} text-right`}>{d.valorDocumento == null ? '—' : d.valorDocumento.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                    <td className={`${TD} break-all`}>{p.arquivo?.name ?? <span className="text-amber-700">sem arquivo</span>}</td>
+                    {/* PR 2b-fix1 — uma linha só: nome cortado no meio, inteiro no `title` (exceção da A31, só aqui). */}
+                    <td className={`${TD} overflow-hidden whitespace-nowrap`} title={p.arquivo?.name} data-testid="arquivo-pendente">
+                      {p.arquivo ? <NomeDoArquivo nome={p.arquivo.name} /> : <span className="text-amber-700">sem arquivo</span>}
+                    </td>
                     {ligadoA ? <td className={`${TD} text-center whitespace-nowrap`} data-testid="ligado-a">{ligadoA} de {ligadoA} parcelas</td> : null}
                     <td className={`${TD} text-center`}>
                       {p.gravado
@@ -178,6 +197,7 @@ export function DocumentosPendentes({ pendentes, onMudar, fornecedores, ligadoA,
 
       {formAberto && (
         <FormDocumento api={api} documento={editando} fornecedores={fornecedores} pendente semBoleto={!!ligadoA}
+          sugestao={sugestao}
           onFechar={() => { setFormAberto(false); setEditando(null); }} />
       )}
     </div>
