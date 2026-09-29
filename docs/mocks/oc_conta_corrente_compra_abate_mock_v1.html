@@ -1,0 +1,69 @@
+<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Conta corrente compra e abate — mock v1</title><style>
+:root{--p:#1D3A5D;--p2:#2E4B6E;--fg:#0F1729;--mf:#6B7280;--bd:#E0E2E6;--gr:#15803d;--grb:#f0fdf4;--rd:#b91c1c;--am:#b45309;--amb:#fffbeb;--amd:#fde68a;--s:#E8E6DF;--rec:#EAF1F9;--recb:#1d4ed8}
+*{box-sizing:border-box}body{margin:0;background:#8a929c;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--fg);padding:16px}
+.lbl{color:#fff;font-size:12px;font-weight:600;margin:0 auto 6px;width:1100px}
+.m{width:1100px;height:520px;margin:0 auto 18px;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.3);display:flex;flex-direction:column}
+.hd{background:var(--p);color:#fff;height:32px;flex:none;display:flex;align-items:center;gap:12px;padding:0 12px;font-size:12px}
+.hd .pill{border:1px solid rgba(255,255,255,.5);border-radius:10px;padding:0 7px;font-size:10px}
+.tabs{display:flex;gap:4px;padding:4px 10px;border-bottom:1px solid var(--bd);flex:none}
+.tabs span{font-size:10.5px;padding:2px 9px;border-radius:5px;color:var(--mf)}.tabs span.on{background:#e8eef6;color:var(--p);font-weight:600}
+.wrap{flex:1;display:grid;grid-template-columns:1fr 180px;min-height:0}
+.main{display:flex;flex-direction:column;min-height:0;padding:6px 10px;gap:5px}
+.kp{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;flex:none}
+.k{border:1px solid var(--bd);border-radius:4px;padding:2px 7px;display:flex;justify-content:space-between;align-items:center;height:24px}
+.k .a{font-size:9.5px;color:var(--mf)}.k .b{font-size:11.5px;font-weight:700}
+.k.dif{border-color:var(--amd);background:var(--amb)}
+.tb{display:flex;align-items:center;gap:6px;flex:none}
+.tb .t{font-size:10.5px;font-weight:600}.tb .sp{margin-left:auto;display:flex;gap:5px}
+.btn{font-size:10px;border:1px solid var(--bd);border-radius:4px;padding:1px 8px;background:#fff;font-weight:500;white-space:nowrap}.btn.nv{background:var(--p);color:#fff;border-color:var(--p)}
+.scroll{flex:1;overflow:auto;border:1px solid var(--bd);border-radius:4px;min-height:0}
+table{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;font-variant-numeric:tabular-nums}
+thead th{white-space:nowrap;position:sticky;background:var(--p2);color:#fff;font-size:9.5px;font-weight:600;text-align:center;padding:0 5px;height:17px}
+thead tr.g th{top:0;background:var(--p)}thead tr.cth th{top:17px}
+th.dv,td.dv{border-left:2px solid #9aa7b6}
+td{font-size:10px;height:18px;padding:0 5px;border-bottom:1px solid #eceae4;white-space:nowrap}
+tr.ent td{background:#fff}tr.rec td{background:var(--rec)}
+tfoot td{position:sticky;bottom:0;background:var(--s);font-weight:700;height:19px;border-top:2px solid #9aa7b6}
+.r{text-align:right}.c{text-align:center}.pos{color:var(--gr)}.neg{color:var(--rd)}.amb{color:var(--am)}.mf{color:var(--mf)}
+.bg{font-size:8.5px;border-radius:3px;padding:0 5px;font-weight:600}.be{background:var(--grb);color:var(--gr)}.br{background:#dbe7f6;color:var(--recb)}
+.dbar{flex:none;display:flex;align-items:center;gap:8px;border:1px solid var(--amd);background:var(--amb);border-radius:4px;padding:2px 8px;font-size:10.5px;height:24px}
+.aside{border-left:1px solid var(--bd);background:#fafafa;font-size:10px;overflow:auto}
+.aside h4{margin:0;padding:3px 8px;background:var(--s);font-size:9.5px;letter-spacing:.03em}
+.aside .rw{display:flex;justify-content:space-between;padding:1px 8px}.aside .rw span:first-child{color:var(--mf)}
+.foot{flex:none;display:flex;justify-content:flex-end;gap:6px;padding:4px 10px;background:var(--p)}.foot span{font-size:10px;color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:4px;padding:1px 9px}
+.note{width:1100px;margin:0 auto;background:#fff;border-radius:6px;padding:10px 12px;font-size:11.5px;line-height:1.55}
+
+tr.rec2 td{background:#F5F4F0}tr.ded td{background:#FFF7ED}tr.prog td{background:#fff;color:#9ca3af;font-style:italic}
+.bg.bd{background:#ffedd5;color:#c2410c}.bg.bp{background:#f3f4f6;color:#6b7280}
+.sec2{margin-top:2px}.sec2 .t{font-size:10.5px;font-weight:600;margin:2px 0 3px}</style></head><body><div class="lbl">COMPRA · OC Agnaldo 1337bb2d · 121 desmama machos · entrada soma o que devemos, pagamento abate</div><div class="m" style="height:auto">
+ <div class="hd"><b>Compra de animais · OC #1337bb2d · 25/03/26 · Agnaldo</b><span style="margin-left:auto">✕</span></div>
+ <div class="tabs"><span>Compra</span><span>Negociação</span><span>Entrega</span><span>Documentos</span><span class="on">Financeiro</span><span>Auditoria</span></div>
+ <div class="wrap"><div class="main">
+  <div class="kp"><div class="k "><span class="a">Entrada do gado · custo no DRE</span><span class="b pos">307.460,00</span></div><div class="k "><span class="a">Pago · caixa</span><span class="b neg">−307.460,00</span></div><div class="k "><span class="a">Saldo · quitado</span><span class="b ">0,00</span></div></div>
+  <div class="scroll" style="flex:none"><table><colgroup><col style="width:58px"><col style="width:32px"><col style="width:36px"><col style="width:84px"><col><col style="width:170px"><col style="width:58px"><col style="width:100px"><col style="width:100px"><col style="width:100px"></colgroup><thead><tr class="g"><th colspan="7">Evento</th><th colspan="2" class="dv">Movimento</th><th class="dv">Fornecedor</th></tr><tr class="cth"><th>Data</th><th>Lote</th><th>Cab</th><th>Evento</th><th>Descrição</th><th>Conta</th><th>Banco</th><th class="dv">Entrada (DRE)</th><th>Pago (caixa)</th><th class="dv">Saldo</th></tr></thead><tbody><tr class="ent"><td class="c">25/03/26</td><td class="c">1</td><td class="r">121</td><td class="c"><span class="bg be">Entrada</span></td><td>Compra 121 DM</td><td>Compra bovinos machos</td><td></td><td class="r pos dv">307.460,00</td><td></td><td class="r pos dv"><b>307.460,00</b></td></tr>
+<tr class="rec"><td class="c">25/04/26</td><td></td><td></td><td class="c"><span class="bg br">Pagamento</span></td><td>Pagamento 1 de 1</td><td>Pagamento de compras</td><td class="c">Sicredi</td><td class="dv"></td><td class="r neg">−307.460,00</td><td class="r dv"><b>0,00</b></td></tr></tbody><tfoot><tr><td>Total</td><td></td><td class="r">121</td><td colspan="4"></td><td class="r pos dv">307.460,00</td><td class="r neg">−307.460,00</td><td class="r dv">0,00</td></tr></tfoot></table></div>
+  <div class="dbar" style="background:#f0fdf4;border-color:#bbf7d0"><b>Quitado.</b><span class="mf">Com saldo positivo aparece "Falta pagar"; negativo, "Adiantado ao fornecedor".</span><span class="btn" style="margin-left:auto">Explicar diferença</span></div>
+  <div class="sec2"><div class="t">Despesas da operação · pagas a terceiros, fora do saldo</div>
+  <div class="scroll" style="flex:none"><table><colgroup><col style="width:58px"><col style="width:58px"><col><col style="width:150px"><col style="width:170px"><col style="width:100px"></colgroup>
+  <thead><tr class="g"><th>Comp.</th><th>Pgto.</th><th>Descrição</th><th>Favorecido</th><th>Conta</th><th>Valor</th></tr></thead><tbody><tr class="ent"><td class="c">25/03/26</td><td class="c">25/03/26</td><td>Frete</td><td>Transportadora</td><td>Despesas de compra</td><td class="r neg">−1.800,00</td></tr><tr class="rec2"><td class="c">25/03/26</td><td class="c">25/03/26</td><td>Comissão</td><td>Corretor 1</td><td>Despesas de compra</td><td class="r neg">−1.000,00</td></tr><tr class="ent"><td class="c">25/03/26</td><td class="c">25/03/26</td><td>Comissão</td><td>Corretor 2</td><td>Despesas de compra</td><td class="r neg">−500,00</td></tr><tr class="rec2"><td class="c">25/03/26</td><td class="c">25/04/26</td><td>ICMS</td><td>Sefaz</td><td>Despesas de compra</td><td class="r neg">−5.236,00</td></tr></tbody></table></div></div>
+ </div><div class="aside"><h4>RESUMO DA OPERAÇÃO</h4><h4 style="background:#eef0ee">IDENTIFICAÇÃO</h4><div class="rw"><span>Fornecedor</span><span>Vendedor X</span></div><div class="rw"><span>Data</span><span>25/03/26</span></div><h4 style="background:#eef0ee">ENTRADA</h4><div class="rw"><span>Recebido</span><span>121 / 121 cab</span></div><h4 style="background:#eef0ee">FINANCEIRO</h4><div class="rw"><span>Entrada</span><span class="pos">307.460,00</span></div><div class="rw"><span>Pago</span><span class="neg">−307.460,00</span></div><div class="rw"><span>Saldo</span><span>0,00</span></div></div></div>
+ <div class="foot"><span>Fechar</span></div></div><div class="lbl">ABATE · OC NJ 8a6295f0 · 18 vacas · bruto no DRE, Funrural como dedução, saldo fecha no líquido</div><div class="m" style="height:auto">
+ <div class="hd"><b>Abate · OC #8a6295f0 · 14/08/26 · NJ</b><span style="margin-left:auto">✕</span></div>
+ <div class="tabs"><span>Abate</span><span>Negociação</span><span>Entrega</span><span>Documentos</span><span class="on">Financeiro</span><span>Auditoria</span></div>
+ <div class="wrap"><div class="main">
+  <div class="kp"><div class="k "><span class="a">Entregue · bruto no DRE</span><span class="b pos">107.384,74</span></div><div class="k "><span class="a">Recebido · caixa</span><span class="b ">0,00</span></div><div class="k "><span class="a">Saldo · falta receber</span><span class="b neg">−107.174,97</span></div></div>
+  <div class="scroll" style="flex:none"><table><colgroup><col style="width:58px"><col style="width:32px"><col style="width:36px"><col style="width:84px"><col><col style="width:170px"><col style="width:58px"><col style="width:100px"><col style="width:100px"><col style="width:100px"></colgroup><thead><tr class="g"><th colspan="7">Evento</th><th colspan="2" class="dv">Movimento</th><th class="dv">Frigorífico</th></tr><tr class="cth"><th>Data</th><th>Lote</th><th>Cab</th><th>Evento</th><th>Descrição</th><th>Conta</th><th>Banco</th><th class="dv">Entrega (DRE)</th><th>Recebido (caixa)</th><th class="dv">Saldo</th></tr></thead><tbody><tr class="ent"><td class="c">14/08/26</td><td class="c">1</td><td class="r">18</td><td class="c"><span class="bg be">Entrega</span></td><td>Abate 018 V</td><td>Abates de fêmeas</td><td></td><td class="r neg dv">−107.384,74</td><td></td><td class="r neg dv"><b>−107.384,74</b></td></tr>
+<tr class="ded"><td class="c">14/08/26</td><td class="c">1</td><td></td><td class="c"><span class="bg bd">Dedução</span></td><td>Funrural retido pelo frigorífico</td><td>Impostos abates e vendas</td><td></td><td class="r pos dv">209,77</td><td></td><td class="r neg dv"><b>−107.174,97</b></td></tr>
+<tr class="prog"><td class="c">28/08/26</td><td></td><td></td><td class="c"><span class="bg bp">Programado</span></td><td>Recebimento 1 de 1</td><td>Recebimento de vendas</td><td></td><td class="dv"></td><td class="r">107.174,97</td><td class="r dv"></td></tr></tbody><tfoot><tr><td>Total</td><td></td><td class="r">18</td><td colspan="4"></td><td class="r neg dv">−107.174,97</td><td class="r">0,00</td><td class="r neg dv">−107.174,97</td></tr></tfoot></table></div>
+  <div class="dbar"><b>Falta receber R$ 107.174,97 da Minerva</b><span class="mf">(líquido = bruto 107.384,74 − Funrural 209,77). Programado para 28/08/26.</span><span class="btn" style="margin-left:auto">Explicar diferença</span></div>
+  <div class="sec2"><div class="t">Despesas da operação · pagas a terceiros, fora do saldo</div>
+  <div class="scroll" style="flex:none"><table><colgroup><col style="width:58px"><col style="width:58px"><col><col style="width:150px"><col style="width:170px"><col style="width:100px"></colgroup>
+  <thead><tr class="g"><th>Comp.</th><th>Pgto.</th><th>Descrição</th><th>Favorecido</th><th>Conta</th><th>Valor</th></tr></thead><tbody><tr class="ent"><td class="c">14/08/26</td><td class="c">14/08/26</td><td>Fundersul</td><td>Sefaz MS</td><td>Impostos abates e vendas</td><td class="r neg">−688,94</td></tr><tr class="rec2"><td class="c">14/08/26</td><td class="c">14/08/26</td><td>Taxa Iagro</td><td>Iagro</td><td>Impostos abates e vendas</td><td class="r neg">−113,48</td></tr></tbody></table></div></div>
+ </div><div class="aside"><h4>RESUMO DA OPERAÇÃO</h4><h4 style="background:#eef0ee">IDENTIFICAÇÃO</h4><div class="rw"><span>Frigorífico</span><span>Minerva</span></div><div class="rw"><span>Data</span><span>14/08/26</span></div><h4 style="background:#eef0ee">ABATE</h4><div class="rw"><span>Bruto</span><span>107.384,74</span></div><div class="rw"><span>Funrural</span><span class="neg">−209,77</span></div><div class="rw"><span>Líquido</span><span>107.174,97</span></div><h4 style="background:#eef0ee">FINANCEIRO</h4><div class="rw"><span>Recebido</span><span>0,00</span></div><div class="rw"><span>Saldo</span><span class="neg">−107.174,97</span></div></div></div>
+ <div class="foot"><span>Fechar</span></div></div>
+<div class="note"><b>Mock v1 · OC-CONTA-CORRENTE-TODOS-01 (compra e abate).</b> Casos reais medidos na FASE 0; nome do fornecedor da compra ilustrativo. Mesmo padrão A31 e mesmo extrato da venda.<br>
+• <b>Compra</b>: a entrada do gado soma o que a fazenda deve (custo no DRE na data da entrada, sem caixa); o pagamento abate (saiu do caixa, conta "Pagamento de compras"). Saldo positivo = <b>falta pagar</b>; negativo = <b>adiantado ao fornecedor</b>; zero = quitado. Coluna do grupo "Fornecedor".<br>
+• <b>Abate</b>: a entrega leva a <b>receita bruta</b> ao DRE e o <b>Funrural retido</b> entra como dedução (linha laranja), então o saldo fecha no <b>líquido</b> que o frigorífico paga. Recebimento programado aparece em cinza, fora do saldo, até o dinheiro entrar.<br>
+• <b>Despesas da operação</b> (frete, comissão, ICMS, Fundersul, Iagro): pagas a terceiros, ficam num quadro separado embaixo, fora do saldo, como já são hoje.<br>
+• Explicar diferença na compra: ajuste de preço no lote (desconto do fornecedor), devolução do fornecedor (entrada de caixa em "Pagamento de compras"), permuta/outra despesa.<br>
+• Venda continua exatamente como está.</div></body></html>

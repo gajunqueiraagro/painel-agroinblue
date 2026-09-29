@@ -936,6 +936,19 @@ no mesmo arquivo.
   vendas", entrega negativa vermelha, recebimento verde, saldo 0,00, R$/kg), as pendencias juntas com o Criar travado, desmarcar e trocar o
   criterio refazendo a simulacao, "Somar" a irma, criar com os MESMOS argumentos da previa e `p_simular = false`, e a recusa ao lado.
   ⚠ PROVADO: sem o pre-marcado 2 casos caem; sem o rotulo, 1; so' a primeira pendencia, 1.
+  De 2221 para 2233 no OC-CONTA-CORRENTE-TODOS-01a, em dois arquivos novos. `src/hooks/subcentroCompraEspelho.test.ts` (+3): o
+  `_oc_subcentro_compra` da migration contra `subcentroCompraPorCategoria`, categoria a categoria (9), nenhum palpite fora do enum e as
+  regras por tipo da compra (verbo, direcao, conta do dinheiro, conta da entrada). `src/components/venda/contaCorrenteCompra.test.tsx`
+  (+9), com os numeros da 1337bb2d: o extrato da compra (entrada positiva verde, pagamento negativo vermelho, "Pagamento 1 de 1",
+  "Pagamento de compras", totais e cards pelo lado), o quadro de despesas fora do saldo, a situacao (falta pagar / adiantado ao
+  fornecedor / quitado), o explicar com os tres tipos da compra e o efeito espelho, o cancelar com as palavras da compra e a entrega que
+  adota ENTRADA; e tres SNAPSHOTS DA VENDA (aba, entrega e cancelar da 232c05aa) gerados contra o codigo de ANTES do PR (HEAD 741cd800) e
+  conferidos byte a byte com o de depois — o id automatico do Radix e' normalizado. Os testes de venda existentes NAO mudaram.
+  ⚠ PROVADO: com os tipos da venda no dialogo da compra 1 caso cai; com o sinal da venda nos totais da compra, 1.
+  De 2233 para 2236 no mesmo PR, com as decisoes do Gabriel: `contaCorrenteCompra.test.tsx` (9 -> 12) — a 3016 na migration e o rotulo
+  "Devolução do fornecedor", o cancelar so' com compromisso 'recebimento' em todo tipo e a trava do `oc_cancelar`, e o `lerRol` das
+  despesas (rol antigo sem a chave vira lista vazia). O caso do cancelar da compra passou a cobrar a secao "Ficam (pagas a terceiros)"
+  (pago / em aberto) no lugar da frase do rodape; os fixtures de rol dos dois arquivos ganharam `despesas`. Os snapshots da venda nao mudaram.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -3087,6 +3100,58 @@ preview que o cabecalho nao sai da tela ao rolar.
     194.862,28 -> 1.377.463,03, abril 2.435.721,13 -> 1.253.120,38, ano igual (8.620.222,90); as cinco pendencias juntas; simulacoes nao
     deixaram OC. NA TELA a mesma previa, ao centavo — nada criado (0 OCs novas).
   ⚠ NENHUMA OC FOI CRIADA DE VERDADE: a 692f1957 fica para o Gabriel criar pela tela.
+  (Criada pelo Gabriel depois do commit: e1ea7f4b, 26/03/26, 315 cab, R$ 1.182.601.)
+- ⚠ OC-CONTA-CORRENTE-TODOS-01a — A COMPRA NO MODELO CONTA CORRENTE (PR 1 de 5, 29/09/2026; mock
+  `docs/mocks/oc_conta_corrente_compra_abate_mock_v1.html`, md5 334a4e0d, parte COMPRA; decisoes do Gabriel). ADR-2026-21 estendida a compra.
+  REGRA: ENTRADA do gado = titulo de custo SEM CAIXA em 15010/15020 (pelo sexo), 2-Saidas, competencia = pagamento = data da entrada,
+  valor do lote, "Compra NNN SIGLA"; PAGAMENTO = o titulo de caixa passa a 5005 "Adiantamento a Fornecedores" (na tela "Pagamento de
+  compras"), valor/datas/conta bancaria/hash preservados; extrato ESPELHO do da venda (entrada positiva, pagamento negativo, saldo positivo
+  'falta_pagar', negativo 'adiantado'); frete, comissao e ICMS ficam titulos comuns, fora do saldo, em `despesas`.
+  BANCO: migration `supabase/migrations/20261027172000_oc_conta_corrente_todos_01a.sql` (⚠ registrada como `20260929091118`; ledger =
+  arquivo, md5 151d1428). Pecas novas: `_oc_subcentro_compra` (espelho de `subcentroCompraPorCategoria`, com teste) e as regras por tipo
+  `_oc_cc_direcao`, `_oc_cc_conta_dinheiro`, `_oc_cc_conta_entrega`, `_oc_cc_verbo`. Patches guardados por md5 (origem -> destino):
+  oc_sincronizar_entregas de36ab1e -> c0fe12bb; _oc_vincular_recebimento ffb87b7f -> bd6ae293; oc_vincular_lancamento 9ce51f1f -> 773e6379;
+  _oc_vinculo_mapa 4d830519 -> fd9e1305 (linha 5005 da compra, espelho do 3015); oc_recebimentos_vinculaveis 4d39d01d -> d12a6c0f;
+  oc_conta_corrente 680b0d64 -> 6828bbf9; oc_explicar_saldo e325f49c -> f4a12b7e; oc_programar_recebimento 42eba32a -> 84ba61e6;
+  _oc_cancelar_conta_corrente d6b58623 -> 9dca4b6f. SEM MUDANCA (ja' serviam): _oc_conta_corrente_base, oc_desfazer_explicacao, oc_cancelar (este mudou depois, na 172200 — abaixo).
+  ⚠ `oc_vincular_lancamento` E `_oc_vinculo_mapa` NAO ESTAVAM NA LISTA DO BRIEFING e entraram porque o vincular do pagamento passa por eles
+    (o primeiro so' roteava a venda ao ramo conta corrente). Nenhuma funcao paralela.
+  ⚠ `oc_conta_corrente` CALCULA NO SINAL DA VENDA E VIRA NA SAIDA (x -1) SO' NA COMPRA; a chave `despesas` so' existe fora da venda. E' o
+    que deixa a venda byte a byte igual — PROVADO em rollback: `oc_conta_corrente`, vinculaveis e rol da 232c05aa e de uma OC criada do
+    legado (Venda 315) na mesma transacao, DRE SR 2025/2026 e Agnaldo 2026, caixa SR e Agnaldo e rebanho do Agnaldo: 12 de 12 md5 iguais.
+  ⚠ COMPONENTES REAPROVEITADOS, sem catalogo novo: o pagamento e' `principal/recebimento` e a devolucao do fornecedor e'
+    `obrigacao/devolucao_comprador`; a tela rotula pelo lado. O evento segue `vincular_recebimento` (o cancelar o le para devolver a conta).
+  ⚠ DEVOLUCAO DO FORNECEDOR EM CONTA PROPRIA (decisao do Gabriel sobre o relatorio): 3016 "Devolução de Adiantamento a Fornecedores",
+    ENTRADA, sem bloco nem DRE, espelho da 5006, no vao ao lado da 3015; na tela "Devolução do fornecedor" (`rotuloDaConta`). A primeira
+    versao gravava na 5005 forcando 1-Entradas numa conta de saida — a excecao saiu, e o tipo volta a ser SEMPRE o da conta.
+  ⚠ CANCELAR: UMA REGRA PARA TODOS OS TIPOS (decisao do Gabriel). So' se cancela o que e' da conta corrente — entregas/entradas,
+    recebimentos/pagamentos, explicacoes e compromissos 'recebimento'. DESPESA PAGA A TERCEIRO (frete, comissao, ICMS, Fundersul, Iagro)
+    NUNCA se cancela: compromisso, titulo e liquidacao ficam, e o dialogo as lista em "Ficam (pagas a terceiros)" (rol ganha `despesas`).
+    Vale para a venda (as duas vendas em conta corrente tem zero compromissos: nada muda nelas).
+    ⚠ `oc_cancelar` (A EXTERNA) TAMBEM MUDOU, fora da letra da decisao: depois do ramo conta corrente ela recusava QUALQUER titulo ou
+      liquidacao viva, e com as despesas ficando a compra nunca cancelaria. No modelo conta corrente as duas travas deixam de contar as
+      despesas; modelo titulo identico. Migration `supabase/migrations/20261027172200_oc_conta_corrente_todos_01a_devolucao_cancelar.sql`
+      (⚠ registrada como `20260929094538`; ledger = arquivo, md5 c3057fa2): oc_explicar_saldo f4a12b7e -> baae7c24,
+      _oc_cancelar_conta_corrente 9dca4b6f -> 330f7e27, oc_cancelar fec8f7bc -> 530383d4.
+    ⚠ PROVADO EM ROLLBACK: rol das duas vendas identico ao de antes mais `despesas: []`; devolucao de 100 na 1337bb2d nasce na 3016,
+      1-Entradas, sinal 1, programada; cancelar a 1337bb2d passa (entrada cancelada, pagamento de volta a 15020 com o valor, 4
+      despesas com compromisso/parte/titulo/liquidacao IDENTICOS, caixa e rebanho iguais); a 232c05aa cancela como antes.
+    ⚠ A 1337bb2d DE VERDADE NAO CANCELA, e isso e' certo: a entrada do gado e' REGISTRADA pela OC (nao adotada) e esta' em mes fechado
+      no P1 — estornar e' recusado pelo `guard_lancamento_mes_fechado_p1`. Na prova a entrada foi marcada como adotada (o caso das
+      compras legadas do PR 3).
+    ⚠ DOIS DEFEITOS DE TELA VISTOS NAS PRINTS, e corrigidos: (1) o bloco "Entradas/Saidas adotadas desvinculadas" listava TODA saida
+      do rol, inclusive a REGISTRADA (que e' o bloqueio); agora so' as adotadas. (2) o quadro de despesas tinha a Conta em 170px e o
+      `whitespace-nowrap` do TD vence o `whitespace-normal` (ordem do CSS do Tailwind) — "Investimento Frete/Comissão Compra Bovinos"
+      invadia o Valor; a Conta passou a ficar com o espaco livre. Pendente, nao tratado: o rol lista o favorecido do COMPROMISSO, e as
+      comissoes da 1337bb2d tem favorecido so' no titulo (Paulo Sergio Baruta) — no dialogo elas saem sem nome.
+  TELA: `AbaContaCorrenteOC`, `CancelarContaCorrenteDialog` e `EntregasVendaTabela` ganharam `lado` (padrao venda, sem mudanca);
+  `AbaFinanceiroOC` liga a conta corrente na compra; `CompraModalShell` monta UMA instancia de `useOcContaCorrente` (aba, resumo lateral
+  "Entrada / Pago / Saldo" e "Cancelar operação" com o rol) e liga a adocao na aba Recebimento ("Adotar entrada já lançada").
+  DADO DA 1337bb2d (migration `20261027172100_oc_conta_corrente_todos_01a_dados.sql`, APLICADA com o OK do Gabriel, ⚠ registrada como
+  `20260929093603`; ledger = arquivo, md5 fa2c26f2; real = rollback: caixa 79f7352f, DRE Agnaldo 2026 7cc492ad, rebanho 92d0e4d9):
+  desvincular o principal, modelo conta corrente, entrada "Compra 121 DM" 307.460 em 15020 (25/03), pagamento f110eb68 em 5005 com hash
+  preservado; extrato entrada 307.460,00 / pago -307.460,00 / saldo 0 quitado; 4 despesas (-8.536,00); DRE Agnaldo 2026, caixa e rebanho
+  com md5 identico. As outras compras seguem no modelo titulo (migracao e' o PR 3).
 - ⚠ RATEIO-VIGENCIA-01 — O RATEIO ADMINISTRATIVO OLHA QUAIS ATIVIDADES EXISTEM EM CADA MES (28/09/2026, decisoes do Gabriel e do
   Chat). Retroativo, todo o historico, todos os clientes; nada gravado — os DREs recalculam. Migration
   `supabase/migrations/20261027161000_rateio_vigencia_01.sql` (⚠ registrada como `20260928102310`; ledger = arquivo sem a quebra de

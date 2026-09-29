@@ -5871,6 +5871,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     onConfirmarOC: confirmarOperacaoOC,
     onCancelarOC: cancelarOperacaoOC,
     onReabrirOC: reabrirOperacaoOC,
+    /* OC-CONTA-CORRENTE-TODOS-01a — a compra em conta corrente: a mesma versao da venda e o mesmo cancelar (o
+       `cancelarVendaContaCorrenteOC` so' chama `oc_cancelar`, que roteia pelo modelo — o nome e' de quando so' a venda o tinha). */
+    ocVersao,
+    onOcVersaoChange: setOcVersao,
+    onCancelarContaCorrente: cancelarVendaContaCorrenteOC,
     // PR-OC-NAV-01 — fechar em modo OC retorna à Central e limpa a URL; fora do modo OC, apenas fecha.
     onClose: fecharModalOCComAutosave,
     // Troca de aba dentro do modal: a casca chama antes de trocar.

@@ -213,6 +213,7 @@ const ROL: RolCancelamento = {
   recebimentos: [{ data: '2025-04-17', valor: 992138.24, contaAtual: 'Adiantamento de Clientes', contaOriginal: 'Venda de Desmama Machos', acao: 'volta_para_conta_original' }],
   saidas: [{ data: '2025-03-19', cab: 178, categoria: 'desmama_m', origem: 'adotada' }],
   compromissos: [],
+  despesas: [],
   bloqueios: [],
 };
 

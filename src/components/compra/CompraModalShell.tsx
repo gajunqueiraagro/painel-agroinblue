@@ -27,6 +27,8 @@ import type { LiquidacaoApi } from '@/hooks/useOperacaoLiquidacao';
 import { CompraResumoPanel } from './CompraResumoPanel';
 import { ResumoLateralOC } from './ResumoLateralOC';
 import { CompraDetalhesDialog, EMPTY_COMPRA_DETALHES, type CompraDetalhes } from './CompraDetalhesDialog';
+import { useOcContaCorrente } from '@/hooks/useOcContaCorrente';
+import { CancelarContaCorrenteDialog } from '@/components/venda/CancelarContaCorrenteDialog';
 
 // Controlador de input mascarado (retorno de useIntegerInput/useDecimalInput no monólito).
 interface MaskedInput {
@@ -114,6 +116,11 @@ export interface CompraModalShellProps {
   onConfirmarOC?: () => void | Promise<boolean>;   // devolve true quando a operacao fechou de verdade
   onCancelarOC?: (motivo: string) => void;
   onReabrirOC?: (motivo: string) => void;
+  /* OC-CONTA-CORRENTE-TODOS-01a — a compra em conta corrente: a versao compartilhada (a mesma da venda) e o cancelar que lista o
+     rol antes de confirmar. Sem elas, a compra no modelo titulo segue como estava. */
+  ocVersao?: number | null;
+  onOcVersaoChange?: (v: number) => void;
+  onCancelarContaCorrente?: (motivo: string) => Promise<string | null>;
   onClose: () => void;
 }
 
@@ -293,6 +300,17 @@ export function CompraModalShell(api: CompraModalShellProps) {
   const cenarioOptions: (StatusOperacional | 'meta')[] = ['realizado', 'meta'];
   const cenarioAtual = CENARIO_UI[api.statusOp] ?? CENARIO_UI.realizado;
   const fornecedorNome = api.fornecedores.find(f => f.id === api.compraFornecedorId)?.nome || '';
+  /* OC-CONTA-CORRENTE-TODOS-01a — a CONTA CORRENTE sobe para o shell, como na venda: a aba Financeiro, o resumo lateral e o cancelar
+     leem os numeros da mesma instancia. O modelo vem do banco (`oc_conta_corrente.modelo`); na compra titulo nada muda. */
+  const ccApi = useOcContaCorrente({
+    operacaoId: api.modoOC ? (api.ocOperacaoId ?? null) : null,
+    enabled: !!api.modoOC && !!api.ocOperacaoId,
+    versao: api.ocVersao ?? null,
+    onVersaoChange: api.onOcVersaoChange ?? (() => {}),
+    aoMudarLotes: api.lotesApi?.recarregar,
+  });
+  const cc = ccApi.contaCorrente?.modelo === 'conta_corrente' ? ccApi.contaCorrente : null;
+  const [cancelarCcAberto, setCancelarCcAberto] = useState(false);
   const fornecedorDocumento = api.fornecedores.find(f => f.id === api.compraFornecedorId)?.cpfCnpj || '';
   /**
    * O mês da data escolhida está fechado (P1 oficial) para a fazenda de destino?
@@ -455,6 +473,8 @@ export function CompraModalShell(api: CompraModalShellProps) {
               dataOperacao={api.ocDataOperacao ?? null}
               somenteLeitura={permissoes.recebimentoReadOnly}
               onVoltarNegociacao={() => irParaAba('negociacao')}
+              /* OC-CONTA-CORRENTE-TODOS-01a — a compra adota a ENTRADA que ja' esta' no zootecnico, como a venda adota a saida. */
+              adocao={{ fazendaNome: api.fazendaAtualNome || null, contraparteNome: fornecedorNome || null, lado: 'compra' }}
             />
           ) : abaAtiva === 'documentos' && api.documentosApi ? (
             <AbaDocumentosOC api={api.documentosApi} operacaoPronta={!!api.ocOperacaoId}
@@ -495,6 +515,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
               clienteId={api.liquidacaoApi.clienteId}
               dataOperacao={api.ocDataOperacao ?? null}
               dataChegada={dataChegada}
+              ccApiExterno={ccApi}
             />
           ) : (
           <>
@@ -743,6 +764,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
             financeiroResumo={api.liquidacaoApi?.resumo ?? null}
             obrigacoesCount={api.liquidacaoApi?.obrigacoes.length ?? null}
             obrigacoes={api.liquidacaoApi?.obrigacoes ?? null}
+            contaCorrente={cc}
           />
         ) : (
           /* O legado nao usa o `AsideResumo`: ganha o respiro que o `p-4` do corpo lhe dava. */
@@ -776,6 +798,13 @@ export function CompraModalShell(api: CompraModalShellProps) {
           Mesmos botoes, mesma ordem, mesmo alinhamento (`justify-between`). */}
       <div className="h-8 shrink-0 bg-primary px-2 flex items-center justify-between gap-2">
         <div className="min-w-0">
+          {/* OC-CONTA-CORRENTE-TODOS-01a — em conta corrente o cancelar lista o rol antes (o mesmo dialogo da venda). */}
+          {cc && api.onCancelarContaCorrente && api.ocStatusComercial !== 'cancelada' && (
+            <Button type="button" variant="ghost" onClick={() => setCancelarCcAberto(true)} disabled={api.submitting || !!api.acaoOcLoading}
+              className="h-[22px] px-[9px] text-[10px] text-white/90 hover:bg-white/10 hover:text-white">
+              Cancelar operação
+            </Button>
+          )}
           {api.editingId && (
             <Button variant="outline" onClick={api.handleCancelEdit} disabled={api.submitting}
               className="h-[22px] px-[9px] text-[10px] border-destructive text-destructive hover:bg-destructive/10 gap-1 bg-transparent">
@@ -1107,6 +1136,11 @@ export function CompraModalShell(api: CompraModalShellProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {cancelarCcAberto && api.onCancelarContaCorrente && (
+        <CancelarContaCorrenteDialog api={ccApi} lado="compra" onCancelar={api.onCancelarContaCorrente}
+          onFechar={() => setCancelarCcAberto(false)} />
+      )}
 
       {/* Diálogo financeiro intocável (Completar Compra) — wiring byte a byte via setters */}
       <CompraDetalhesDialog

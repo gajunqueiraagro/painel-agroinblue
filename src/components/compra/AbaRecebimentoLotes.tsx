@@ -11,6 +11,7 @@ import type { RecebimentoApi, EstadoRecebimento, LoteRecebimento } from '@/hooks
 import type { DocumentosApi } from '@/hooks/useOperacaoDocumentos';
 import { DocumentoFormOC, FORM_VAZIO } from './DocumentoFormOC';
 import { EntregasVendaTabela, EnviarTodosDialog } from '@/components/venda/EntregasVendaTabela';
+import type { LadoContaCorrente } from '@/lib/oc/contaCorrente';
 
 // Aba Recebimento (PR-OC-RECEB-01). Lotes negociados aparecem automaticamente; registro/estorno
 //   por lote; "Receber todos conforme negociado"; divergência por lote; encerrar recebimento.
@@ -40,7 +41,7 @@ interface Props {
   /* OC-VENDA-ENTREGAS-01a — liga a entrega por SAIDA (mock oc_venda_entregas_mock_v2): uma linha por saida de cada
      lote, "Adotar saida ja lancada" e o "Enviar todos" com uma data por linha. So' o `VendaModalShell` passa: o
      abate tambem usa `isCompra={false}` e fica como estava (D4a). Os nomes vao so' para o texto do seletor. */
-  adocao?: { fazendaNome: string | null; contraparteNome: string | null };
+  adocao?: { fazendaNome: string | null; contraparteNome: string | null; lado?: LadoContaCorrente };
 }
 
 export interface RotulosEntrega {
@@ -501,6 +502,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
               readOnly={!!readOnly}
               fazendaNome={adocao.fazendaNome}
               contraparteNome={adocao.contraparteNome}
+              lado={adocao.lado}
               onRegistrarNova={setReceberLoteId}
               onEstornar={(id) => void api.estornar(id, rotulos?.motivoEstornoPadrao ?? 'estorno pela aba Recebimento')}
             />
@@ -650,6 +652,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
           dataPadrao={dataPadrao}
           catLabel={catLabel}
           saving={api.saving}
+          lado={adocao?.lado}
           onFechar={() => setEnviarTodosOpen(false)}
           onConfirmar={(datas) => { setEnviarTodosOpen(false); void api.receberTodos(datas); }}
         />

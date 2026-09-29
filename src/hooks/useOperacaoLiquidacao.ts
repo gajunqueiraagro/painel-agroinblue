@@ -124,6 +124,13 @@ export function valorLoteOC(l: LoteOC): number | null {
 
 const sexoDaCategoria = (c: string): 'macho' | 'femea' => (CATEGORIAS_FEMEAS_COMPRA.has(c) ? 'femea' : 'macho');
 const subcentroDoSexo = (s: 'macho' | 'femea') => (s === 'femea' ? SUBCENTRO_PRINCIPAL_COMPRA_FEMEAS : SUBCENTRO_PRINCIPAL_COMPRA_MACHOS);
+/* OC-CONTA-CORRENTE-TODOS-01a — o subcentro da ENTRADA do gado na compra, pela categoria. A MESMA regra de `classificarLotesCompra`
+   (femea -> Fêmeas, demais categorias validas -> Machos), exposta para o espelho do banco (`_oc_subcentro_compra`, com teste).
+   Categoria fora do enum devolve null — nunca um palpite. */
+export function subcentroCompraPorCategoria(categoria: string): string | null {
+  if (!CATEGORIAS_VALIDAS.has(categoria)) return null;
+  return subcentroDoSexo(sexoDaCategoria(categoria));
+}
 
 // PR-FIN-OC-COMPOSICAO-02 — um item POR LOTE (identidade comercial = lote/categoria). O sexo/subcentro
 //   é só classificação GERENCIAL derivada; NUNCA chave de consolidação. valorBruto = valor oficial do lote.

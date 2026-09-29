@@ -10,8 +10,9 @@ import { CATEGORIAS } from '@/types/cattle';
 import { parseNumericValue } from '@/lib/calculos/abate';
 import { rotuloDaConta } from '@/lib/financeiro/rotuloConta';
 import {
-  barraDaDiferenca, contaComNumero, corDoSaldo, dataCurta, efeitoNoSaldo, rotuloDoSaldo, rotuloRecebimento, totalDoRascunho,
-  ROTULO_EXPLICACAO, ROTULO_STATUS, type LinhaContaCorrente, type TipoExplicacao,
+  barraDaDiferenca, contaComNumero, corDoSaldo, dataCurta, efeitoNoSaldo, rotuloDoSaldo, rotuloExplicacao, rotuloRecebimento,
+  totalDoRascunho, ROTULO_STATUS, TIPOS_EXPLICACAO_DO_LADO,
+  type DespesaOperacao, type LadoContaCorrente, type LinhaContaCorrente, type TipoExplicacao,
 } from '@/lib/oc/contaCorrente';
 import type {
   ContaParaExplicacao, ExplicacaoRascunho, LoteParaAjuste, OcContaCorrenteApi, RecebimentoVinculavel,
@@ -47,13 +48,45 @@ const num2 = (v: number) => {
 };
 const moeda = (v: number | null) => (v === null ? '' : num2(v));
 
+/* OC-CONTA-CORRENTE-TODOS-01a — os textos de cada lado (mock oc_conta_corrente_compra_abate_mock_v1). A venda fala do comprador e
+   da entrega; a compra, do fornecedor e da entrada do gado. O extrato da compra e' o ESPELHO do da venda: entrada positiva, pagamento
+   negativo, saldo positivo = falta pagar. O sinal vem do banco (`oc_conta_corrente` ja' o vira); aqui so' os rotulos e os totais. */
+const TEXTOS: Record<LadoContaCorrente, {
+  cardEntrega: string; cardDinheiro: string; titulo: string; buscar: string; programar: string; grupoSaldo: string;
+  colEntrega: string; colDinheiro: string; vazio: string; seloEntrega: string; seloDinheiro: string; verbo: string;
+  pendente1: string; pendenteN: (n: number) => string; atualizar: string;
+}> = {
+  venda: {
+    cardEntrega: 'Entregue · vai para o DRE', cardDinheiro: 'Recebido · caixa', titulo: 'Conta corrente do comprador',
+    buscar: '+ Buscar recebimento no Financeiro', programar: '+ Programar recebimento futuro', grupoSaldo: 'Comprador',
+    colEntrega: 'Entrega (DRE)', colDinheiro: 'Recebido (caixa)', vazio: 'Nenhuma entrega nem recebimento ainda.',
+    seloEntrega: 'Entrega', seloDinheiro: 'Recebimento', verbo: 'Venda',
+    pendente1: '1 saída ainda não virou entrega no financeiro.', pendenteN: n => `${n} saídas ainda não viraram entrega no financeiro.`,
+    atualizar: 'Atualizar entregas',
+  },
+  compra: {
+    cardEntrega: 'Entrada do gado · custo no DRE', cardDinheiro: 'Pago · caixa', titulo: 'Conta corrente do fornecedor',
+    buscar: '+ Buscar pagamento no Financeiro', programar: '+ Programar pagamento futuro', grupoSaldo: 'Fornecedor',
+    colEntrega: 'Entrada (DRE)', colDinheiro: 'Pago (caixa)', vazio: 'Nenhuma entrada nem pagamento ainda.',
+    seloEntrega: 'Entrada', seloDinheiro: 'Pagamento', verbo: 'Compra',
+    pendente1: '1 entrada de gado ainda não virou lançamento no financeiro.',
+    pendenteN: n => `${n} entradas de gado ainda não viraram lançamento no financeiro.`,
+    atualizar: 'Atualizar entradas',
+  },
+};
+
 interface Props {
   api: OcContaCorrenteApi;
   somenteLeitura: boolean;
+  /** De que lado a conta corrente fala. Padrao: venda (a tela de antes, sem nenhuma mudanca). */
+  lado?: LadoContaCorrente;
 }
 
-export function AbaContaCorrenteOC({ api, somenteLeitura }: Props) {
+export function AbaContaCorrenteOC({ api, somenteLeitura, lado = 'venda' }: Props) {
   const cc = api.contaCorrente;
+  const t = TEXTOS[lado];
+  /* sinal da coluna da entrega no total: a venda mostra o gado que saiu negativo; a compra, o que entrou positivo */
+  const sinalEntrega = lado === 'compra' ? 1 : -1;
   const [erroAcao, setErroAcao] = useState<string | null>(null);
   const [dialogo, setDialogo] = useState<'buscar' | 'programar' | 'explicar' | null>(null);
 
@@ -65,7 +98,7 @@ export function AbaContaCorrenteOC({ api, somenteLeitura }: Props) {
     );
   }
 
-  const barra = barraDaDiferenca(cc);
+  const barra = barraDaDiferenca(cc, lado);
   const corSaldo = corDoSaldo(cc.saldo);
   const atualizarEntregas = async () => {
     setErroAcao(null);
@@ -76,30 +109,30 @@ export function AbaContaCorrenteOC({ api, somenteLeitura }: Props) {
   return (
     <div className="flex h-full min-h-0 flex-col gap-[5px]" data-testid="conta-corrente-oc">
       <div className="grid flex-none grid-cols-3 gap-[5px]">
-        <Card rotulo="Entregue · vai para o DRE" valor={cc.entregue} cor={COR.pos} />
-        <Card rotulo="Recebido · caixa" valor={cc.recebido} cor={COR.pos} />
-        <Card rotulo={rotuloDoSaldo(cc.saldo)} valor={cc.saldo} cor={COR[corSaldo]} destaque={corSaldo !== 'zero'} testid="card-saldo" />
+        <Card rotulo={t.cardEntrega} valor={cc.entregue} cor={COR.pos} testid={lado === 'compra' ? 'card-entrega' : undefined} />
+        <Card rotulo={t.cardDinheiro} valor={-sinalEntrega * cc.recebido} cor={lado === 'compra' ? COR.neg : COR.pos} testid={lado === 'compra' ? 'card-dinheiro' : undefined} />
+        <Card rotulo={rotuloDoSaldo(cc.saldo, lado)} valor={cc.saldo} cor={COR[corSaldo]} destaque={corSaldo !== 'zero'} testid="card-saldo" />
       </div>
 
       {cc.saidasSemEntrega > 0 && (
         <div className="flex flex-none items-center gap-2 rounded border border-amber-300 bg-amber-50 px-2 text-[10.5px] text-amber-800">
-          <span>{cc.saidasSemEntrega === 1 ? '1 saída ainda não virou entrega no financeiro.' : `${cc.saidasSemEntrega} saídas ainda não viraram entrega no financeiro.`}</span>
+          <span>{cc.saidasSemEntrega === 1 ? t.pendente1 : t.pendenteN(cc.saidasSemEntrega)}</span>
           <Button type="button" size="sm" className={`${BOTAO} ml-auto`} disabled={somenteLeitura || api.ocupado} onClick={atualizarEntregas}>
-            Atualizar entregas
+            {t.atualizar}
           </Button>
         </div>
       )}
 
       <div className="flex flex-none items-center gap-1.5">
-        <span className="text-[10.5px] font-semibold">Conta corrente do comprador</span>
+        <span className="text-[10.5px] font-semibold">{t.titulo}</span>
         <span className="ml-auto flex gap-[5px]">
           <Button type="button" variant="outline" size="sm" className={BOTAO} disabled={somenteLeitura || api.ocupado}
             onClick={() => { setErroAcao(null); setDialogo('buscar'); }}>
-            + Buscar recebimento no Financeiro
+            {t.buscar}
           </Button>
           <Button type="button" variant="outline" size="sm" className={BOTAO} disabled={somenteLeitura || api.ocupado}
             onClick={() => { setErroAcao(null); setDialogo('programar'); }}>
-            + Programar recebimento futuro
+            {t.programar}
           </Button>
         </span>
       </div>
@@ -118,21 +151,21 @@ export function AbaContaCorrenteOC({ api, somenteLeitura }: Props) {
             <tr>
               <th className={THG} colSpan={7}>Evento</th>
               <th className={`${THG} ${DV}`} colSpan={2}>Movimento</th>
-              <th className={`${THG} ${DV}`}>Comprador</th>
+              <th className={`${THG} ${DV}`}>{t.grupoSaldo}</th>
             </tr>
             <tr>
               {['Data', 'Lote', 'Cab', 'Evento', 'Descrição', 'Conta', 'Banco'].map(h => (
                 <th key={h} className={`${TH} top-[17px] z-20`}>{h}</th>
               ))}
-              <th className={`${TH} top-[17px] z-20 ${DV}`}>Entrega (DRE)</th>
-              <th className={`${TH} top-[17px] z-20`}>Recebido (caixa)</th>
+              <th className={`${TH} top-[17px] z-20 ${DV}`}>{t.colEntrega}</th>
+              <th className={`${TH} top-[17px] z-20`}>{t.colDinheiro}</th>
               <th className={`${TH} top-[17px] z-20 ${DV}`}>Saldo</th>
             </tr>
           </thead>
           <tbody>
-            {cc.linhas.map(l => <LinhaExtrato key={l.parteId} l={l} linhas={cc.linhas} />)}
+            {cc.linhas.map(l => <LinhaExtrato key={l.parteId} l={l} linhas={cc.linhas} lado={lado} />)}
             {cc.linhas.length === 0 && (
-              <tr><td colSpan={10} className={`${TD} py-4 text-center text-muted-foreground`}>Nenhuma entrega nem recebimento ainda.</td></tr>
+              <tr><td colSpan={10} className={`${TD} py-4 text-center text-muted-foreground`}>{t.vazio}</td></tr>
             )}
           </tbody>
           <tfoot>
@@ -141,8 +174,8 @@ export function AbaContaCorrenteOC({ api, somenteLeitura }: Props) {
               <td className={TF} />
               <td className={`${TF} text-right`}>{cc.cabEntregue}</td>
               <td className={TF} colSpan={4} />
-              <td className={`${TF} text-right ${COR.neg} ${DV}`}>{num2(-cc.entregue)}</td>
-              <td className={`${TF} text-right ${COR.pos}`}>{num2(cc.recebido)}</td>
+              <td className={`${TF} text-right ${lado === 'compra' ? COR.pos : COR.neg} ${DV}`}>{num2(sinalEntrega * cc.entregue)}</td>
+              <td className={`${TF} text-right ${lado === 'compra' ? COR.neg : COR.pos}`}>{num2(-sinalEntrega * cc.recebido)}</td>
               <td className={`${TF} text-right ${COR[corSaldo]} ${DV}`} data-testid="total-saldo">{num2(cc.saldo)}</td>
             </tr>
           </tfoot>
@@ -159,6 +192,17 @@ export function AbaContaCorrenteOC({ api, somenteLeitura }: Props) {
           </Button>
         </div>
       )}
+      {/* A compra mostra o "Quitado." do mock mesmo sem explicacao (o botao de explicar fica a' mao); a venda segue como era. */}
+      {!barra && lado === 'compra' && cc.explicacoes.length === 0 && cc.linhas.some(l => l.tipo === 'entrega') && (
+        <div className="flex h-6 flex-none items-center gap-2 rounded border border-[#bbf7d0] bg-[#f0fdf4] px-2 text-[10.5px]" data-testid="barra-quitado">
+          <b>Quitado.</b>
+          <span className="text-muted-foreground">Com saldo positivo aparece "Falta pagar"; negativo, "Adiantado ao fornecedor".</span>
+          <Button type="button" variant="outline" size="sm" className={`${BOTAO} ml-auto`} disabled={somenteLeitura || api.ocupado}
+            onClick={() => { setErroAcao(null); setDialogo('explicar'); }}>
+            Explicar diferença
+          </Button>
+        </div>
+      )}
       {!barra && cc.explicacoes.length > 0 && (
         <div className="flex h-6 flex-none items-center gap-2 rounded border border-[#bbf7d0] bg-[#f0fdf4] px-2 text-[10.5px]">
           <b>Diferença explicada.</b>
@@ -169,11 +213,16 @@ export function AbaContaCorrenteOC({ api, somenteLeitura }: Props) {
         </div>
       )}
 
+      {lado !== 'venda' && <QuadroDespesas despesas={cc.despesas} />}
+
       {erroAcao && <div className="flex-none text-[10px] text-destructive" role="alert">{erroAcao}</div>}
 
-      {dialogo === 'buscar' && <DialogoBuscarRecebimento api={api} onFechar={() => setDialogo(null)} />}
-      {dialogo === 'programar' && <DialogoProgramarRecebimento api={api} sugerido={cc.saldo < 0 ? -cc.saldo : null} onFechar={() => setDialogo(null)} />}
-      {dialogo === 'explicar' && <DialogoExplicarDiferenca api={api} somenteLeitura={somenteLeitura} onFechar={() => setDialogo(null)} />}
+      {dialogo === 'buscar' && <DialogoBuscarRecebimento api={api} lado={lado} onFechar={() => setDialogo(null)} />}
+      {dialogo === 'programar' && (
+        <DialogoProgramarRecebimento api={api} lado={lado} onFechar={() => setDialogo(null)}
+          sugerido={lado === 'compra' ? (cc.saldo > 0 ? cc.saldo : null) : (cc.saldo < 0 ? -cc.saldo : null)} />
+      )}
+      {dialogo === 'explicar' && <DialogoExplicarDiferenca api={api} somenteLeitura={somenteLeitura} lado={lado} onFechar={() => setDialogo(null)} />}
     </div>
   );
 }
@@ -187,16 +236,48 @@ function Card({ rotulo, valor, cor, destaque, testid }: { rotulo: string; valor:
   );
 }
 
-function Selo({ tipo }: { tipo: LinhaContaCorrente['tipo'] }) {
+/* ─── Despesas da operacao (compra): pagas a terceiros, fora do saldo — o quadro de baixo do mock ─── */
+function QuadroDespesas({ despesas }: { despesas: readonly DespesaOperacao[] }) {
+  if (despesas.length === 0) return null;
+  return (
+    <div className="flex-none" data-testid="despesas-operacao">
+      <div className="mb-[3px] text-[10.5px] font-semibold">Despesas da operação · pagas a terceiros, fora do saldo</div>
+      <div className="rounded border">
+        <table className="w-full table-fixed border-separate border-spacing-0 tabular-nums">
+          {/* a Conta fica com o que sobra: com 170px ela nao cabia "Investimento Frete/Comissão Compra Bovinos" e invadia o Valor
+              (visto na 1337bb2d) — a celula nao quebra, e' uma linha por registro (A31) */}
+          <colgroup><col style={{ width: 58 }} /><col style={{ width: 58 }} /><col style={{ width: 170 }} /><col style={{ width: 180 }} /><col /><col style={{ width: 84 }} /></colgroup>
+          <thead>
+            <tr>{['Comp.', 'Pgto.', 'Descrição', 'Favorecido', 'Conta', 'Valor'].map(h => <th key={h} className={`${THG} static`}>{h}</th>)}</tr>
+          </thead>
+          <tbody>
+            {despesas.map((d, i) => (
+              <tr key={d.parteId} className={i % 2 === 0 ? 'bg-white' : 'bg-[#F5F4F0]'} data-despesa={d.componente ?? ''}>
+                <td className={`${TD} text-center`}>{dataCurta(d.competencia)}</td>
+                <td className={`${TD} text-center`}>{dataCurta(d.pagamento)}</td>
+                <td className={`${TD} whitespace-normal break-words`}>{d.descricao ?? '—'}</td>
+                <td className={`${TD} whitespace-normal break-words`}>{d.favorecido ?? '—'}</td>
+                <td className={`${TD} whitespace-normal break-words`} title={contaComNumero(d.contaOrdem, d.conta)}>{rotuloDaConta(d.conta) ?? '—'}</td>
+                <td className={`${NUM} ${COR[corDoSaldo(d.valor)]}`}>{num2(d.valor)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function Selo({ tipo, lado }: { tipo: LinhaContaCorrente['tipo']; lado: LadoContaCorrente }) {
   const estilo = tipo === 'entrega' ? 'bg-[#f0fdf4] text-[#15803d]' : tipo === 'recebimento' ? 'bg-[#dbe7f6] text-[#1d4ed8]' : 'bg-[#fde68a] text-[#b45309]';
-  const texto = tipo === 'entrega' ? 'Entrega' : tipo === 'recebimento' ? 'Recebimento' : 'Explicação';
+  const texto = tipo === 'entrega' ? TEXTOS[lado].seloEntrega : tipo === 'recebimento' ? TEXTOS[lado].seloDinheiro : 'Explicação';
   return <span className={`rounded-[3px] px-[5px] text-[9.5px] font-semibold ${estilo}`}>{texto}</span>;
 }
 
-function LinhaExtrato({ l, linhas }: { l: LinhaContaCorrente; linhas: readonly LinhaContaCorrente[] }) {
-  const descricao = l.tipo === 'entrega' ? `Venda ${rotuloCategoria(l.categoria)}`
-    : l.tipo === 'recebimento' ? rotuloRecebimento(linhas, l.parteId)
-    : (l.subtipo ? ROTULO_EXPLICACAO[l.subtipo] : 'Explicação');
+function LinhaExtrato({ l, linhas, lado }: { l: LinhaContaCorrente; linhas: readonly LinhaContaCorrente[]; lado: LadoContaCorrente }) {
+  const descricao = l.tipo === 'entrega' ? `${TEXTOS[lado].verbo} ${rotuloCategoria(l.categoria)}`
+    : l.tipo === 'recebimento' ? rotuloRecebimento(linhas, l.parteId, lado)
+    : (l.subtipo ? rotuloExplicacao(l.subtipo, lado) : 'Explicação');
   const banco = l.tipo === 'recebimento' || l.subtipo === 'devolucao_comprador'
     ? (l.banco ?? (l.status === 'programado' ? ROTULO_STATUS.programado : ROTULO_STATUS.sem_conta_bancaria))
     : '';
@@ -207,7 +288,7 @@ function LinhaExtrato({ l, linhas }: { l: LinhaContaCorrente; linhas: readonly L
       <td className={`${TD} text-center`}>{dataCurta(l.data)}</td>
       <td className={`${TD} text-center`}>{l.loteOrdem ?? ''}</td>
       <td className={`${NUM}`}>{l.cab ?? ''}</td>
-      <td className={`${TD} text-center`}><Selo tipo={l.tipo} /></td>
+      <td className={`${TD} text-center`}><Selo tipo={l.tipo} lado={lado} /></td>
       <td className={`${TD} whitespace-normal break-words`}>{descricao}</td>
       <td className={`${TD} whitespace-normal break-words`} title={contaComNumero(l.contaOrdem, l.conta)}>{rotuloDaConta(l.conta) ?? '—'}</td>
       <td className={`${TD} text-center ${bancoAmbar ? 'text-[#b45309]' : ''}`}>{banco}</td>
@@ -219,7 +300,8 @@ function LinhaExtrato({ l, linhas }: { l: LinhaContaCorrente; linhas: readonly L
 }
 
 /* ─── Buscar recebimento no Financeiro (vincular recebimento ja lancado) ─── */
-function DialogoBuscarRecebimento({ api, onFechar }: { api: OcContaCorrenteApi; onFechar: () => void }) {
+function DialogoBuscarRecebimento({ api, lado, onFechar }: { api: OcContaCorrenteApi; lado: LadoContaCorrente; onFechar: () => void }) {
+  const compra = lado === 'compra';
   const [itens, setItens] = useState<RecebimentoVinculavel[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [escolhido, setEscolhido] = useState<string | null>(null);
@@ -246,9 +328,11 @@ function DialogoBuscarRecebimento({ api, onFechar }: { api: OcContaCorrenteApi; 
   return (
     <Dialog open onOpenChange={o => { if (!o) onFechar(); }}>
       <DialogContent className="max-w-3xl">
-        <DialogHeader><DialogTitle className="text-[12px]">Buscar recebimento no Financeiro</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle className="text-[12px]">{compra ? 'Buscar pagamento no Financeiro' : 'Buscar recebimento no Financeiro'}</DialogTitle></DialogHeader>
         <div className="text-[10px] text-muted-foreground">
-          O lançamento passa para Adiantamento de Clientes (sai do DRE). Valor, datas, conta bancária e conciliação não mudam.
+          {compra
+            ? 'O lançamento passa para Pagamento de compras (sai do DRE). Valor, datas, conta bancária e conciliação não mudam.'
+            : 'O lançamento passa para Adiantamento de Clientes (sai do DRE). Valor, datas, conta bancária e conciliação não mudam.'}
         </div>
         <div className="max-h-[50vh] overflow-auto rounded border">
           <table className="w-full table-fixed border-separate border-spacing-0 tabular-nums">
@@ -261,7 +345,7 @@ function DialogoBuscarRecebimento({ api, onFechar }: { api: OcContaCorrenteApi; 
             </thead>
             <tbody>
               {itens === null && <tr><td colSpan={6} className={`${TD} text-center text-muted-foreground`}>Carregando…</td></tr>}
-              {itens?.length === 0 && <tr><td colSpan={6} className={`${TD} text-center text-muted-foreground`}>Nenhuma entrada do cliente disponível para vincular.</td></tr>}
+              {itens?.length === 0 && <tr><td colSpan={6} className={`${TD} text-center text-muted-foreground`}>{compra ? 'Nenhuma saída do cliente disponível para vincular.' : 'Nenhuma entrada do cliente disponível para vincular.'}</td></tr>}
               {itens?.map(r => (
                 <tr key={r.lancamentoId} className={`cursor-pointer ${escolhido === r.lancamentoId ? 'bg-primary/10' : 'bg-white'}`}
                   onClick={() => setEscolhido(r.lancamentoId)} data-lancamento={r.lancamentoId}>
@@ -273,13 +357,13 @@ function DialogoBuscarRecebimento({ api, onFechar }: { api: OcContaCorrenteApi; 
                   <td className={`${TD} whitespace-normal break-words`}>{r.descricao ?? '—'}{!r.mesmoFavorecido ? ' · outro favorecido' : ''}</td>
                   <td className={`${TD} whitespace-normal break-words`}>{rotuloDaConta(r.subcentro) ?? '—'}</td>
                   <td className={`${TD} text-center ${r.semContaBancaria ? 'text-[#b45309]' : ''}`}>{r.conciliado ? 'conciliado' : (r.semContaBancaria ? 'sem conta' : (r.status ?? '—'))}</td>
-                  <td className={`${NUM} ${COR.pos}`}>{formatMoeda(r.valor)}</td>
+                  <td className={`${NUM} ${compra ? COR.neg : COR.pos}`}>{formatMoeda(compra ? -r.valor : r.valor)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        {faltaEscolha && <div className="text-[10px] text-destructive">Escolha o recebimento.</div>}
+        {faltaEscolha && <div className="text-[10px] text-destructive">{compra ? 'Escolha o pagamento.' : 'Escolha o recebimento.'}</div>}
         <CampoMotivo id="motivo-buscar-recebimento" valor={motivo} onChange={setMotivo} falta={faltaMotivo} />
         <DialogFooter className="items-center">
           {erro && <span className="mr-auto text-[10px] text-destructive" role="alert">{erro}</span>}
@@ -303,7 +387,8 @@ function CampoMotivo({ id, valor, onChange, falta }: { id: string; valor: string
 }
 
 /* ─── Programar recebimento futuro: compromisso sem lote em Adiantamento de Clientes ─── */
-function DialogoProgramarRecebimento({ api, sugerido, onFechar }: { api: OcContaCorrenteApi; sugerido: number | null; onFechar: () => void }) {
+function DialogoProgramarRecebimento({ api, lado, sugerido, onFechar }: { api: OcContaCorrenteApi; lado: LadoContaCorrente; sugerido: number | null; onFechar: () => void }) {
+  const compra = lado === 'compra';
   const [valor, setValor] = useState(sugerido ? sugerido.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '');
   const [vencimento, setVencimento] = useState('');
   const [tentou, setTentou] = useState(false);
@@ -321,8 +406,12 @@ function DialogoProgramarRecebimento({ api, sugerido, onFechar }: { api: OcConta
   return (
     <Dialog open onOpenChange={o => { if (!o) onFechar(); }}>
       <DialogContent className="max-w-sm">
-        <DialogHeader><DialogTitle className="text-[12px]">Programar recebimento futuro</DialogTitle></DialogHeader>
-        <div className="text-[10px] text-muted-foreground">Nasce um recebimento programado em Adiantamento de Clientes. Ele entra no saldo quando for pago.</div>
+        <DialogHeader><DialogTitle className="text-[12px]">{compra ? 'Programar pagamento futuro' : 'Programar recebimento futuro'}</DialogTitle></DialogHeader>
+        <div className="text-[10px] text-muted-foreground">
+          {compra
+            ? 'Nasce um pagamento programado em Pagamento de compras. Ele entra no saldo quando for pago.'
+            : 'Nasce um recebimento programado em Adiantamento de Clientes. Ele entra no saldo quando for pago.'}
+        </div>
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label className="text-[10px] font-medium" htmlFor="valor-programar">Valor *</label>
@@ -348,9 +437,10 @@ function DialogoProgramarRecebimento({ api, sugerido, onFechar }: { api: OcConta
 /* ─── Explicar diferenca (mock v7): uma linha por explicacao; salvas, viram linhas ambar no extrato ─── */
 interface Rascunho { chave: number; tipo: TipoExplicacao; valor: string; loteId: string; contaId: string; motivo: string; vencimento: string }
 
-const TIPOS: readonly TipoExplicacao[] = ['ajuste_preco', 'desconto_comercial', 'permuta_despesa', 'outra_receita', 'devolucao_comprador'];
-
-export function DialogoExplicarDiferenca({ api, somenteLeitura, onFechar }: { api: OcContaCorrenteApi; somenteLeitura: boolean; onFechar: () => void }) {
+export function DialogoExplicarDiferenca({ api, somenteLeitura, lado = 'venda', onFechar }: {
+  api: OcContaCorrenteApi; somenteLeitura: boolean; lado?: LadoContaCorrente; onFechar: () => void;
+}) {
+  const TIPOS = TIPOS_EXPLICACAO_DO_LADO[lado];
   const cc = api.contaCorrente;
   const [rascunhos, setRascunhos] = useState<Rascunho[]>([]);
   const [tentou, setTentou] = useState(false);
@@ -376,7 +466,7 @@ export function DialogoExplicarDiferenca({ api, somenteLeitura, onFechar }: { ap
     tipo: r.tipo, valor: parseNumericValue(r.valor), loteId: r.loteId || null, planoContaId: r.contaId || null,
     motivo: r.motivo, vencimento: r.vencimento || null,
   }));
-  const explicadoRascunho = totalDoRascunho(itens);
+  const explicadoRascunho = totalDoRascunho(itens, lado);
   const explicadoTotal = Math.round((cc.explicado + explicadoRascunho) * 100) / 100;
   const falta = Math.round((cc.saldoAExplicar + explicadoTotal) * 100) / 100;
 
@@ -391,7 +481,7 @@ export function DialogoExplicarDiferenca({ api, somenteLeitura, onFechar }: { ap
   const faltando = rascunhos.flatMap(r => pendencias(r));
   const adicionar = (tipo: TipoExplicacao) => {
     /* o valor nasce com o que falta explicar, no sinal do tipo — valor sugerido e' valor aceito, e fica marcado em ambar */
-    const sugerido = efeitoNoSaldo(tipo, 1) > 0 ? Math.max(0, -falta) : Math.max(0, falta);
+    const sugerido = efeitoNoSaldo(tipo, 1, lado) > 0 ? Math.max(0, -falta) : Math.max(0, falta);
     setRascunhos(prev => [...prev, { chave: Date.now() + prev.length, tipo, valor: sugerido > 0 ? sugerido.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '',
       loteId: '', contaId: '', motivo: '', vencimento: '' }]);
   };
@@ -433,7 +523,7 @@ export function DialogoExplicarDiferenca({ api, somenteLeitura, onFechar }: { ap
             <tbody>
               {cc.explicacoes.map(e => (
                 <tr key={e.parteId} className="bg-[#fffbeb]" data-explicacao={e.tipo}>
-                  <td className={TD}>{ROTULO_EXPLICACAO[e.tipo]}</td>
+                  <td className={TD}>{rotuloExplicacao(e.tipo, lado)}</td>
                   <td className={`${TD} text-center`}>{e.loteOrdem ?? ''}</td>
                   <td className={`${TD} whitespace-normal break-words`}>{contaComNumero(e.contaOrdem, rotuloDaConta(e.conta))}</td>
                   <td className={`${TD} whitespace-normal break-words`}>{e.motivo ?? ''}</td>
@@ -451,7 +541,7 @@ export function DialogoExplicarDiferenca({ api, somenteLeitura, onFechar }: { ap
                 const verm = (campo: string) => (p.includes(campo) ? 'border-destructive' : '');
                 return (
                   <tr key={r.chave} className="bg-white" data-rascunho={r.tipo}>
-                    <td className={TD}>{ROTULO_EXPLICACAO[r.tipo]}</td>
+                    <td className={TD}>{rotuloExplicacao(r.tipo, lado)}</td>
                     <td className={`${TD} text-center`}>
                       {r.tipo === 'ajuste_preco' ? (
                         <Select value={r.loteId} onValueChange={v => alterar(r.chave, { loteId: v })}>
@@ -473,7 +563,7 @@ export function DialogoExplicarDiferenca({ api, somenteLeitura, onFechar }: { ap
                       ) : r.tipo === 'devolucao_comprador' ? (
                         <DatePicker value={r.vencimento} onChange={v => alterar(r.chave, { vencimento: v })} size="compact" className={verm('vencimento')} />
                       ) : (
-                        <span>{r.tipo === 'desconto_comercial' ? '5020 Deduções Outras Operações Pecuária' : 'venda do lote'}</span>
+                        <span>{r.tipo === 'desconto_comercial' ? '5020 Deduções Outras Operações Pecuária' : lado === 'compra' ? 'compra do lote' : 'venda do lote'}</span>
                       )}
                     </td>
                     <td className={TD}>
@@ -519,13 +609,17 @@ export function DialogoExplicarDiferenca({ api, somenteLeitura, onFechar }: { ap
         {!somenteLeitura && (
           <div className="flex flex-wrap gap-[5px]">
             {TIPOS.map(t => (
-              <Button key={t} type="button" variant="outline" size="sm" className={BOTAO} onClick={() => adicionar(t)}>+ {ROTULO_EXPLICACAO[t]}</Button>
+              <Button key={t} type="button" variant="outline" size="sm" className={BOTAO} onClick={() => adicionar(t)}>+ {rotuloExplicacao(t, lado)}</Button>
             ))}
           </div>
         )}
         <div className="text-[10px] text-muted-foreground">
-          Ajuste de preço muda o valor da entrega do lote (R$/kg derivado). Os outros tipos lançam sem caixa na conta escolhida, com
-          competência na data da última entrega ({dataCurta(cc.ultimaEntrega)}). Devolver ao comprador programa um pagamento de caixa.
+          {lado === 'compra'
+            ? <>Ajuste de preço muda o valor da entrada do lote (desconto do fornecedor; R$/kg derivado). Permuta lança sem caixa na conta
+              escolhida, com competência na data da última entrada ({dataCurta(cc.ultimaEntrega)}). Devolução do fornecedor programa uma
+              entrada de caixa em Pagamento de compras.</>
+            : <>Ajuste de preço muda o valor da entrega do lote (R$/kg derivado). Os outros tipos lançam sem caixa na conta escolhida, com
+          competência na data da última entrega ({dataCurta(cc.ultimaEntrega)}). Devolver ao comprador programa um pagamento de caixa.</>}
         </div>
         <DialogFooter className="items-center">
           {erro && <span className="mr-auto text-[10px] text-destructive" role="alert">{erro}</span>}

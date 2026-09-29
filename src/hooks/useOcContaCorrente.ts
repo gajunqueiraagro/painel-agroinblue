@@ -41,6 +41,8 @@ export interface RolCancelamento {
   recebimentos: Array<{ data: string; valor: number; contaAtual: string | null; contaOriginal: string | null; acao: string }>;
   saidas: Array<{ data: string; cab: number; categoria: string | null; origem: string }>;
   compromissos: Array<{ componente: string; valor: number }>;
+  /** OC-CONTA-CORRENTE-TODOS-01a (decisao 3): despesas pagas a terceiros — frete, comissao, ICMS, Fundersul, Iagro. FICAM. */
+  despesas: Array<{ componente: string; nome: string | null; favorecido: string | null; valor: number; pago: number }>;
   bloqueios: string[];
 }
 
@@ -273,6 +275,8 @@ export function lerRol(raw: unknown): RolCancelamento | null {
       contaAtual: txt(e.conta_atual), contaOriginal: txt(e.conta_original), acao: String(e.acao ?? '') })),
     saidas: lista(r.saidas).map(e => ({ data: String(e.data ?? ''), cab: Number(e.cab) || 0, categoria: txt(e.categoria), origem: String(e.origem ?? '') })),
     compromissos: lista(r.compromissos).map(e => ({ componente: String(e.componente ?? ''), valor: Number(e.valor) || 0 })),
+    despesas: lista(r.despesas).map(e => ({ componente: String(e.componente ?? ''), nome: txt(e.nome), favorecido: txt(e.favorecido),
+      valor: Number(e.valor) || 0, pago: Number(e.pago) || 0 })),
     bloqueios: lista(r.bloqueios).map(e => String(e.descricao ?? '')),
   };
 }

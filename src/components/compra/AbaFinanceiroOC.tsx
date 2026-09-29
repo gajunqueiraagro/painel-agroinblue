@@ -83,7 +83,8 @@ export function AbaFinanceiroOC(props: Props) {
      das partes. Hook sempre chamado; so' liga na venda. */
   const ccApiProprio = useOcContaCorrente({
     operacaoId: operacaoId ?? null,
-    enabled: !props.ccApiExterno && !!operacaoId && api.tipoOperacao === 'venda',
+    /* OC-CONTA-CORRENTE-TODOS-01a — a compra tambem pode estar em conta corrente (o abate e' o PR 2). */
+    enabled: !props.ccApiExterno && !!operacaoId && (api.tipoOperacao === 'venda' || api.tipoOperacao === 'compra'),
     versao: props.ocVersao ?? versaoLocal,
     onVersaoChange: props.onOcVersaoChange ?? setVersaoLocal,
   });
@@ -101,9 +102,10 @@ export function AbaFinanceiroOC(props: Props) {
 
   if (!operacaoId || !clienteId) return legado;
   if (ccApi.contaCorrente?.modelo === 'conta_corrente') {
-    return <AbaContaCorrenteOC api={ccApi} somenteLeitura={props.financeiroNovoReadOnly} />;
+    return <AbaContaCorrenteOC api={ccApi} somenteLeitura={props.financeiroNovoReadOnly}
+      lado={api.tipoOperacao === 'compra' ? 'compra' : 'venda'} />;
   }
-  if (api.tipoOperacao === 'venda' && !ccApi.contaCorrente && !ccApi.erro) {
+  if ((api.tipoOperacao === 'venda' || api.tipoOperacao === 'compra') && !ccApi.contaCorrente && !ccApi.erro) {
     return <div className="py-10 text-center text-[11px] text-muted-foreground">Carregando…</div>;
   }
   if (ocApi.loading && !ocApi.resumoOperacao) {

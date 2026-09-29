@@ -54,3 +54,20 @@ entre o que saiu da fazenda e o que o comprador pagou.
   patchear as seis. Para o cliente, a conta é o dinheiro da venda (ou da compra), com ou sem adiantamento.
 - **Descrição da entrega: "Venda <cab:3> <sigla>"** ("Venda 183 DM", "Venda 006 G"), o mesmo formato dos títulos das OCs, com a
   sigla oficial (`SIGLA_POR_SLUG`, espelhada no banco em `_oc_sigla_categoria`).
+
+## Adendo — OC-CONTA-CORRENTE-TODOS-01a (29/09/2026, decisões do Gabriel)
+
+- **A compra entra no modelo conta corrente, espelho da venda.** A ENTRADA do gado é título de custo SEM CAIXA em
+  "Investimento Compra Bovinos Fêmeas/Machos" (pelo sexo, `_oc_subcentro_compra`, espelho de `subcentroCompraPorCategoria`),
+  competência = pagamento = data da entrada, valor do lote, descrição "Compra <cab:3> <sigla>". O PAGAMENTO é o título de caixa
+  que passa a "Adiantamento a Fornecedores" (5005; na tela "Pagamento de compras"), com valor, datas, conta bancária e hash
+  preservados. O extrato é o da venda com o sinal virado: entrada positiva, pagamento negativo; saldo positivo "falta pagar",
+  negativo "adiantado", zero "quitado". Frete, comissão e ICMS seguem títulos comuns, fora do saldo, listados como despesas da
+  operação. OC de homologação: 1337bb2d (Agnaldo), migrada em `20261027172100`.
+- **A devolução do fornecedor tem conta de entrada própria:** 3016 "Devolução de Adiantamento a Fornecedores" (Entrada
+  Financeira / Outras Entradas / Movimentações Financeiras, sem bloco nem DRE), espelho da 5006 da venda; na tela "Devolução do
+  fornecedor" (`rotuloDaConta`). Substitui a primeira versão, que gravava a devolução na 5005 forçando entrada numa conta de saída.
+- **Cancelar: uma regra para todos os tipos.** Cancela-se só o que é da conta corrente — entregas/entradas,
+  recebimentos/pagamentos (que voltam à conta original), explicações e os compromissos da conta corrente (o "Programar
+  recebimento/pagamento"). **Despesas pagas a terceiros (frete, comissão, ICMS, Fundersul, Iagro...) nunca são canceladas:**
+  compromisso, título e liquidação ficam, e o diálogo as lista em "Ficam (pagas a terceiros)". Vale para a venda também.

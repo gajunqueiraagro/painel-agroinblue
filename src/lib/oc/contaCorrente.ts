@@ -12,7 +12,26 @@ export type TipoExplicacao = 'ajuste_preco' | 'desconto_comercial' | 'permuta_de
 /** D6: sem conta bancaria nunca aparece como conciliado. */
 export type StatusLinhaContaCorrente =
   | 'sem_caixa' | 'sem_conta_bancaria' | 'conciliado' | 'programado' | 'realizado' | 'ajuste';
-export type SituacaoContaCorrente = 'falta_receber' | 'adiantado' | 'quitado';
+/** 'falta_pagar' so' na compra (OC-CONTA-CORRENTE-TODOS-01a): o extrato da compra e' o espelho do da venda. */
+export type SituacaoContaCorrente = 'falta_receber' | 'falta_pagar' | 'adiantado' | 'quitado';
+/** De que lado da operacao a conta corrente fala: a venda recebe do comprador, a compra paga ao fornecedor. */
+export type LadoContaCorrente = 'venda' | 'compra';
+
+/** Despesa da operacao (frete, comissao, ICMS): titulo comum pago a terceiro, FORA do saldo. O banco so' a devolve fora da venda. */
+export interface DespesaOperacao {
+  parteId: string;
+  lancamentoId: string | null;
+  componente: string | null;
+  competencia: string | null;
+  pagamento: string | null;
+  descricao: string | null;
+  favorecido: string | null;
+  contaOrdem: number | null;
+  conta: string | null;
+  /** Com o sinal do caixa da fazenda: saida negativa. */
+  valor: number;
+  status: string | null;
+}
 
 export interface LinhaContaCorrente {
   tipo: TipoLinhaContaCorrente;
@@ -74,6 +93,8 @@ export interface ContaCorrente {
   saidasSemEntrega: number;
   linhas: LinhaContaCorrente[];
   explicacoes: ExplicacaoContaCorrente[];
+  /** Despesas da operacao, fora do saldo (compra; a venda nao tem a chave e fica vazia). */
+  despesas: DespesaOperacao[];
 }
 
 const num = (v: unknown): number => {
@@ -97,7 +118,7 @@ function statusDe(v: unknown): StatusLinhaContaCorrente {
     ? v : 'realizado';
 }
 function situacaoDe(v: unknown): SituacaoContaCorrente {
-  return v === 'falta_receber' || v === 'adiantado' ? v : 'quitado';
+  return v === 'falta_receber' || v === 'falta_pagar' || v === 'adiantado' ? v : 'quitado';
 }
 function tipoLinhaDe(v: unknown): TipoLinhaContaCorrente {
   return v === 'entrega' || v === 'explicacao' ? v : 'recebimento';
@@ -109,6 +130,7 @@ export function lerContaCorrente(raw: unknown): ContaCorrente | null {
   const r = obj(raw);
   const linhas = Array.isArray(r.linhas) ? r.linhas : [];
   const explicacoes = Array.isArray(r.explicacoes) ? r.explicacoes : [];
+  const despesas = Array.isArray(r.despesas) ? r.despesas : [];
   return {
     modelo: r.modelo === 'conta_corrente' ? 'conta_corrente' : 'titulo',
     versao: num(r.versao),
@@ -166,6 +188,22 @@ export function lerContaCorrente(raw: unknown): ContaCorrente | null {
         status: statusDe(e.status),
       }];
     }),
+    despesas: despesas.map((x) => {
+      const d = obj(x);
+      return {
+        parteId: String(d.parte_id ?? ''),
+        lancamentoId: texto(d.lancamento_id),
+        componente: texto(d.componente),
+        competencia: texto(d.competencia),
+        pagamento: texto(d.pagamento),
+        descricao: texto(d.descricao),
+        favorecido: texto(d.favorecido),
+        contaOrdem: numOuNulo(d.conta_ordem),
+        conta: texto(d.conta),
+        valor: num(d.valor),
+        status: texto(d.status),
+      };
+    }),
   };
 }
 
@@ -176,9 +214,12 @@ export function corDoSaldo(valor: number | null): 'neg' | 'pos' | 'zero' {
   return c < 0 ? 'neg' : c > 0 ? 'pos' : 'zero';
 }
 
-/** O rotulo do card do saldo, que segue o sinal. */
-export function rotuloDoSaldo(saldo: number): string {
+/** O rotulo do card do saldo, que segue o sinal. Na compra o sinal e' o espelho: positivo falta pagar, negativo adiantado. */
+export function rotuloDoSaldo(saldo: number, lado: LadoContaCorrente = 'venda'): string {
   const c = corDoSaldo(saldo);
+  if (lado === 'compra') {
+    return c === 'pos' ? 'Saldo · falta pagar' : c === 'neg' ? 'Saldo · adiantado ao fornecedor' : 'Saldo · quitado';
+  }
   return c === 'neg' ? 'Saldo · falta receber' : c === 'pos' ? 'Saldo · adiantado pelo comprador' : 'Saldo · quitado';
 }
 
@@ -186,13 +227,18 @@ export function rotuloDoSaldo(saldo: number): string {
  * A barra da diferenca: so' existe com as entregas concluidas (nada mais a entregar) e algo ainda sem explicacao. Antes disso o
  * saldo e' so' o andamento do contrato. A OC fecha mesmo sem explicar.
  */
-export function barraDaDiferenca(cc: ContaCorrente): { frase: string; valor: number } | null {
+export function barraDaDiferenca(cc: ContaCorrente, lado: LadoContaCorrente = 'venda'): { frase: string; valor: number } | null {
   if (!cc.linhas.some(l => l.tipo === 'entrega')) return null;
   if (Math.round(cc.aEntregar * 100) > 0) return null;
   const c = Math.round(cc.faltaExplicar * 100);
   if (c === 0) return null;
   const v = Math.abs(c) / 100;
   const fmt = v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (lado === 'compra') {
+    return c > 0
+      ? { frase: `Pagou R$ ${fmt} a menos do que o gado que entrou.`, valor: cc.faltaExplicar }
+      : { frase: `Pagou R$ ${fmt} a mais do que o gado que entrou.`, valor: cc.faltaExplicar };
+  }
   return c < 0
     ? { frase: `Recebeu R$ ${fmt} a menos do que entregou.`, valor: cc.faltaExplicar }
     : { frase: `Recebeu R$ ${fmt} a mais do que entregou.`, valor: cc.faltaExplicar };
@@ -215,11 +261,24 @@ export const ROTULO_EXPLICACAO: Record<TipoExplicacao, string> = {
   devolucao_comprador: 'Devolver ao comprador',
 };
 
-/** "Recebimento 2 de 4" — a posicao do recebimento entre os da OC, na ordem do extrato. */
-export function rotuloRecebimento(linhas: readonly LinhaContaCorrente[], parteId: string): string {
+/** "Recebimento 2 de 4" (na compra, "Pagamento 1 de 1") — a posicao entre os da OC, na ordem do extrato. */
+export function rotuloRecebimento(linhas: readonly LinhaContaCorrente[], parteId: string, lado: LadoContaCorrente = 'venda'): string {
+  const nome = lado === 'compra' ? 'Pagamento' : 'Recebimento';
   const recs = linhas.filter((l) => l.tipo === 'recebimento');
   const i = recs.findIndex((l) => l.parteId === parteId);
-  return i < 0 ? 'Recebimento' : `Recebimento ${i + 1} de ${recs.length}`;
+  return i < 0 ? nome : `${nome} ${i + 1} de ${recs.length}`;
+}
+
+/** Os tipos de explicacao de cada lado (decisao do Gabriel): a compra tem ajuste de preco, devolucao do fornecedor e permuta. */
+export const TIPOS_EXPLICACAO_DO_LADO: Record<LadoContaCorrente, readonly TipoExplicacao[]> = {
+  venda: ['ajuste_preco', 'desconto_comercial', 'permuta_despesa', 'outra_receita', 'devolucao_comprador'],
+  compra: ['ajuste_preco', 'permuta_despesa', 'devolucao_comprador'],
+};
+
+/** O nome da explicacao na tela. A devolucao da contraparte e' um componente so' no banco; o rotulo segue o lado. */
+export function rotuloExplicacao(tipo: TipoExplicacao, lado: LadoContaCorrente = 'venda'): string {
+  if (lado === 'compra' && tipo === 'devolucao_comprador') return 'Devolução do fornecedor';
+  return ROTULO_EXPLICACAO[tipo];
 }
 
 /** Data do extrato: dd/mm/aa (padrao de tabela, 28/09/2026). */
@@ -240,12 +299,13 @@ export function contaComNumero(ordem: number | null, conta: string | null): stri
  * desconto, permuta) e' positiva; a que aumenta (ajuste para cima, outra receita, devolucao) e' negativa. O mesmo sinal que o
  * banco devolve em `explicacoes[].valor` — a tela usa isto so' para o RASCUNHO do dialogo, antes de salvar.
  */
-export function efeitoNoSaldo(tipo: TipoExplicacao, valor: number): number {
-  if (tipo === 'ajuste_preco' || tipo === 'desconto_comercial' || tipo === 'permuta_despesa') return valor;
-  return -valor;
+export function efeitoNoSaldo(tipo: TipoExplicacao, valor: number, lado: LadoContaCorrente = 'venda'): number {
+  const naVenda = tipo === 'ajuste_preco' || tipo === 'desconto_comercial' || tipo === 'permuta_despesa' ? valor : -valor;
+  /* A compra e' o espelho (o banco vira o sinal na saida): o que reduz o que a fazenda deve e' NEGATIVO. */
+  return lado === 'compra' ? -naVenda : naVenda;
 }
 
 /** Soma em centavos do que o rascunho explica — o total do dialogo, antes de salvar. */
-export function totalDoRascunho(itens: readonly { tipo: TipoExplicacao; valor: number }[]): number {
-  return itens.reduce((acc, i) => acc + Math.round(efeitoNoSaldo(i.tipo, i.valor) * 100), 0) / 100;
+export function totalDoRascunho(itens: readonly { tipo: TipoExplicacao; valor: number }[], lado: LadoContaCorrente = 'venda'): number {
+  return itens.reduce((acc, i) => acc + Math.round(efeitoNoSaldo(i.tipo, i.valor, lado) * 100), 0) / 100;
 }

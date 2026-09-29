@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { formatNum } from '@/lib/calculos/formatters';
 import { linhasDaEntrega, precoDoContrato, itensEnviarTodos, datasFaltando } from '@/lib/oc/entregasPorLote';
 import type { RecebimentoApi, LoteRecebimento, SaidaAdotavel } from '@/hooks/useOperacaoRecebimento';
+import type { LadoContaCorrente } from '@/lib/oc/contaCorrente';
 
 /* OC-VENDA-ENTREGAS-01a — a aba Entrega da VENDA, uma linha por saida de cada lote (mock
    docs/mocks/oc_venda_entregas_mock_v2.html). Cada lote ADOTA a saida que ja esta lancada no zootecnico
@@ -22,6 +23,15 @@ const TH = 'px-1.5 py-1 text-center text-[10px] font-medium text-muted-foregroun
 const TD = 'px-1.5 py-1 align-top text-[11px]';
 const VERDE = 'text-emerald-700 dark:text-emerald-400';
 
+/* OC-CONTA-CORRENTE-TODOS-01a — a compra adota ENTRADA ja' lancada (o mesmo `oc_adotar_movimentacao`, que ja' casava o tipo). So' as
+   palavras mudam: a venda segue com as frases de antes. */
+const TEXTOS: Record<LadoContaCorrente, {
+  mov: string; movs: string; Mov: string; valor: string; contraparte: (nome: string) => string;
+}> = {
+  venda: { mov: 'saída', movs: 'saídas', Mov: 'Saída', valor: 'Valor da entrega', contraparte: nome => ` para ${nome} ou sem comprador gravado` },
+  compra: { mov: 'entrada', movs: 'entradas', Mov: 'Entrada', valor: 'Valor da entrada', contraparte: nome => ` de ${nome} ou sem fornecedor gravado` },
+};
+
 function origemDoLancamento(s: SaidaAdotavel): string {
   const quando = s.criadoEm ? fmtBr(s.criadoEm.slice(0, 10)).slice(0, 5) : null;
   const como = s.origemRegistro === 'importacao_historica' ? 'importado' : 'lançado';
@@ -36,9 +46,11 @@ interface Props {
   contraparteNome: string | null;
   onRegistrarNova: (loteId: string) => void;
   onEstornar: (movimentacaoId: string) => void;
+  lado?: LadoContaCorrente;
 }
 
-export function EntregasVendaTabela({ api, catLabel, readOnly, fazendaNome, contraparteNome, onRegistrarNova, onEstornar }: Props) {
+export function EntregasVendaTabela({ api, catLabel, readOnly, fazendaNome, contraparteNome, onRegistrarNova, onEstornar, lado = 'venda' }: Props) {
+  const t = TEXTOS[lado];
   const [loteAdotando, setLoteAdotando] = useState<LoteRecebimento | null>(null);
   const [saidas, setSaidas] = useState<SaidaAdotavel[]>([]);
   const [carregando, setCarregando] = useState(false);
@@ -59,7 +71,7 @@ export function EntregasVendaTabela({ api, catLabel, readOnly, fazendaNome, cont
   });
   const confirmarAdocao = async () => {
     if (!loteAdotando) return;
-    if (marcadas.size === 0) { setErroSeletor('Selecione ao menos uma saída.'); return; }
+    if (marcadas.size === 0) { setErroSeletor(`Selecione ao menos uma ${t.mov}.`); return; }
     // na ordem da lista, para a trilha sair na mesma ordem que o operador viu
     const ids = saidas.filter(s => marcadas.has(s.lancamentoId)).map(s => s.lancamentoId);
     const erro = await api.adotar(loteAdotando.loteId, ids);
@@ -77,9 +89,9 @@ export function EntregasVendaTabela({ api, catLabel, readOnly, fazendaNome, cont
       <table className="w-full border-collapse" data-testid="entregas-venda">
         <thead>
           <tr className="border-b">
-            <th className={TH}>Lote</th><th className={TH}>Contratado</th><th className={TH}>Data da saída</th>
-            <th className={TH}>Cab</th><th className={TH}>Peso</th><th className={TH}>Valor da entrega</th>
-            <th className={TH}>Origem da saída</th>
+            <th className={TH}>Lote</th><th className={TH}>Contratado</th><th className={TH}>Data da {t.mov}</th>
+            <th className={TH}>Cab</th><th className={TH}>Peso</th><th className={TH}>{t.valor}</th>
+            <th className={TH}>Origem da {t.mov}</th>
           </tr>
         </thead>
         <tbody>
@@ -137,11 +149,11 @@ export function EntregasVendaTabela({ api, catLabel, readOnly, fazendaNome, cont
                           <>
                             <button type="button" disabled={api.saving} onClick={() => void abrirSeletor(l)}
                               className="text-[10px] text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground">
-                              Adotar saída já lançada
+                              Adotar {t.mov} já lançada
                             </button>
                             <button type="button" disabled={api.saving} onClick={() => onRegistrarNova(l.loteId)}
                               className="text-[10px] text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground">
-                              Registrar nova saída
+                              Registrar nova {t.mov}
                             </button>
                           </>
                         )}
@@ -159,11 +171,11 @@ export function EntregasVendaTabela({ api, catLabel, readOnly, fazendaNome, cont
       {loteAdotando && (
         <div className="rounded-md border bg-muted/10 p-1.5 space-y-1" data-testid="seletor-adocao">
           <div className="text-[11px] font-medium text-foreground break-words">
-            Adotar saída já lançada · {catLabel(loteAdotando.categoria)}
+            Adotar {t.mov} já lançada · {catLabel(loteAdotando.categoria)}
             {loteAdotando.qtdNegociada != null ? `, ${Math.max(loteAdotando.qtdNegociada - loteAdotando.qtdRecebida, 0)} cab` : ''}
             <span className="font-normal text-muted-foreground">
-              {' '}· mostrando saídas da {fazendaNome ?? 'fazenda da operação'} de {catLabel(loteAdotando.categoria)}
-              {contraparteNome ? ` para ${contraparteNome} ou sem comprador gravado` : ''} ainda sem OC, as mais perto da data da operação primeiro
+              {' '}· mostrando {t.movs} da {fazendaNome ?? 'fazenda da operação'} de {catLabel(loteAdotando.categoria)}
+              {contraparteNome ? t.contraparte(contraparteNome) : ''} ainda sem OC, as mais perto da data da operação primeiro
             </span>
           </div>
           <table className="w-full border-collapse">
@@ -177,13 +189,13 @@ export function EntregasVendaTabela({ api, catLabel, readOnly, fazendaNome, cont
             <tbody>
               {carregando && (<tr><td colSpan={7} className={`${TD} text-center text-muted-foreground`}>Carregando…</td></tr>)}
               {!carregando && saidas.length === 0 && !erroSeletor && (
-                <tr><td colSpan={7} className={`${TD} text-center text-muted-foreground`}>Nenhuma saída desta categoria disponível para adotar.</td></tr>
+                <tr><td colSpan={7} className={`${TD} text-center text-muted-foreground`}>Nenhuma {t.mov} desta categoria disponível para adotar.</td></tr>
               )}
               {saidas.map(s => (
                 <tr key={s.lancamentoId} className="border-b border-border/60" data-adotavel={s.lancamentoId}>
                   <td className={`${TD} text-center`}>
                     <Checkbox checked={marcadas.has(s.lancamentoId)} onCheckedChange={() => alternar(s.lancamentoId)}
-                      aria-label={`Selecionar saída de ${fmtBr(s.data)}`} className="h-3.5 w-3.5" />
+                      aria-label={`Selecionar ${t.mov} de ${fmtBr(s.data)}`} className="h-3.5 w-3.5" />
                   </td>
                   <td className={`${TD} text-center tabular-nums`}>{fmtBr(s.data)}</td>
                   <td className={`${TD} text-center`}>{catLabel(s.categoria)}</td>
@@ -200,7 +212,7 @@ export function EntregasVendaTabela({ api, catLabel, readOnly, fazendaNome, cont
             <Button type="button" variant="ghost" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium" onClick={fecharSeletor}>Cancelar</Button>
             <Button type="button" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium" disabled={api.saving}
               onClick={() => void confirmarAdocao()}>
-              {api.saving ? 'Adotando…' : `Adotar ${marcadas.size} saída${marcadas.size === 1 ? '' : 's'}`}
+              {api.saving ? 'Adotando…' : `Adotar ${marcadas.size} ${marcadas.size === 1 ? t.mov : t.movs}`}
             </Button>
           </div>
         </div>
@@ -211,10 +223,11 @@ export function EntregasVendaTabela({ api, catLabel, readOnly, fazendaNome, cont
 
 /* "Enviar todos" da venda (D3): uma data POR LINHA, editavel, sem gravar no lote. Vazia fica vermelha com a
    frase embaixo e nada grava (UX-OBRIGATORIOS-01). */
-export function EnviarTodosDialog({ lotes, dataPadrao, catLabel, saving, onConfirmar, onFechar }: {
+export function EnviarTodosDialog({ lotes, dataPadrao, catLabel, saving, onConfirmar, onFechar, lado = 'venda' }: {
   lotes: LoteRecebimento[]; dataPadrao: string; catLabel: (slug: string | null | undefined) => string;
-  saving: boolean; onConfirmar: (datas: Record<string, string>) => void; onFechar: () => void;
+  saving: boolean; onConfirmar: (datas: Record<string, string>) => void; onFechar: () => void; lado?: LadoContaCorrente;
 }) {
+  const t = TEXTOS[lado];
   const [itens, setItens] = useState(() => itensEnviarTodos(lotes, dataPadrao));
   const [cobrar, setCobrar] = useState(false);
   const faltando = datasFaltando(itens);
@@ -229,7 +242,7 @@ export function EnviarTodosDialog({ lotes, dataPadrao, catLabel, saving, onConfi
         <DialogHeader><DialogTitle className="text-[12px]">Enviar todos conforme negociado</DialogTitle></DialogHeader>
         <table className="w-full border-collapse">
           <thead>
-            <tr className="border-b"><th className={TH}>Lote</th><th className={TH}>Cab</th><th className={TH}>Data da saída *</th></tr>
+            <tr className="border-b"><th className={TH}>Lote</th><th className={TH}>Cab</th><th className={TH}>Data da {t.mov} *</th></tr>
           </thead>
           <tbody>
             {itens.map(i => {
@@ -243,7 +256,7 @@ export function EnviarTodosDialog({ lotes, dataPadrao, catLabel, saving, onConfi
                     <DatePicker value={i.data} size="compact"
                       onChange={v => setItens(prev => prev.map(x => (x.loteId === i.loteId ? { ...x, data: v } : x)))}
                       className={vermelho ? 'border-destructive' : undefined} />
-                    {vermelho && <div className="mt-0.5 text-[10px] text-destructive">Informe a data da saída.</div>}
+                    {vermelho && <div className="mt-0.5 text-[10px] text-destructive">Informe a data da {t.mov}.</div>}
                   </td>
                 </tr>
               );

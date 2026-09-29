@@ -5,6 +5,7 @@ import { pesoMedioPorCabeca, valorPorKgNegociado, type CompraLotesApi } from '@/
 import type { LoteRecebimento, EstadoRecebimento } from '@/hooks/useOperacaoRecebimento';
 import type { DocumentoLista } from '@/hooks/useOperacaoDocumentos';
 import type { ResumoLiquidacao, ObrigacaoLinha } from '@/hooks/useOperacaoLiquidacao';
+import { corDoSaldo, rotuloDoSaldo, type ContaCorrente } from '@/lib/oc/contaCorrente';
 
 // Resumo lateral OC (PR-RESUMO-LATERAL-01a). Painel PERMANENTE das 6 etapas, independente
 //   da aba ativa. Espelho sintético das fontes OFICIAIS já montadas (uma única vez) em
@@ -80,11 +81,13 @@ interface Props {
   financeiroResumo: ResumoLiquidacao | null;            // fonte oficial derivada nas views (legado; não mais exibido)
   obrigacoesCount: number | null;
   obrigacoes: ObrigacaoLinha[] | null;                  // PR-OC-FIN-VISAO-02 — split Principal × Obrigações por natureza
+  /** OC-CONTA-CORRENTE-TODOS-01a — compra em conta corrente: os tres numeros da aba, com o mesmo sinal do extrato. */
+  contaCorrente?: ContaCorrente | null;
 }
 
 export function ResumoLateralOC({
   tipoLabel, dataLabel, statusComercial, fornecedorNome, fazendaNome, ocId,
-  negociacaoTotais, recebimentoLotes, entregaEncerrada, documentos, obrigacoes,
+  negociacaoTotais, recebimentoLotes, entregaEncerrada, documentos, obrigacoes, contaCorrente = null,
 }: Props) {
   const rec = consolidarRecebimento(recebimentoLotes);
   const doc = consolidarDocumentos(documentos);
@@ -153,12 +156,22 @@ export function ResumoLateralOC({
         </div>
 
         <SecaoResumo titulo="Financeiro" />
+        {contaCorrente ? (
+          /* entrada positiva (verde), pago negativo (vermelho), saldo pela cor do extrato: positivo (falta pagar) verde como na tabela */
+          <div data-testid="resumo-conta-corrente">
+            <LinhaResumo rotulo="Entrada" valor={formatMoeda(contaCorrente.entregue)} cor={contaCorrente.entregue > 0 ? 'text-[#15803d]' : undefined} />
+            <LinhaResumo rotulo="Pago" valor={formatMoeda(-contaCorrente.recebido)} cor={contaCorrente.recebido > 0 ? 'text-[#b91c1c]' : undefined} />
+            <LinhaResumo rotulo={rotuloDoSaldo(contaCorrente.saldo, 'compra')} forte valor={formatMoeda(contaCorrente.saldo)}
+              cor={corDoSaldo(contaCorrente.saldo) === 'neg' ? 'text-[#b91c1c]' : corDoSaldo(contaCorrente.saldo) === 'pos' ? 'text-[#15803d]' : undefined} />
+          </div>
+        ) : (
         <div>
           <LinhaResumo rotulo="Lançado" valor={temFinanceiro ? moneyOr(finLancado) : null} />
           <LinhaResumo rotulo="Liquidado" valor={temFinanceiro ? moneyOr(finLiquidado) : null} />
           <LinhaResumo rotulo="Saldo" valor={temFinanceiro ? moneyOr(finSaldo) : null}
             cor={finSaldo > 0.005 ? 'text-amber-700 dark:text-amber-500' : undefined} />
         </div>
+        )}
 
         <SecaoResumo titulo="Documentos" />
         <div>

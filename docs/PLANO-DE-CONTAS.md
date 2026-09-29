@@ -10,6 +10,8 @@
 > 223 globais.
 > ⚠ Idem para **5006 Devolução de Adiantamento de Clientes** (OC-VENDA-ENTREGAS-01c, 28/09/2026, migration
 > `20261027168000`), saída, sem bloco nem DRE, no mesmo vão — conferido: 232 linhas, 224 globais.
+> ⚠ Idem para **3016 Devolução de Adiantamento a Fornecedores** (OC-CONTA-CORRENTE-TODOS-01a, 29/09/2026, migration
+> `20261027172200`), entrada, sem bloco nem DRE, espelho da 5006, no vão ao lado da 3015 — conferido: 233 linhas, 225 globais.
 
 Fonte: `public.financeiro_plano_contas` no Supabase **proto** (`binbcdfbisgscrifztia`).
 Hierarquia: **tipo de operação › macro custo › grupo de custo › centro de custo › subcentro**.
@@ -59,6 +61,7 @@ de decisão, não `false`.
 | 4005 | Ajustes | Estorno Recebido | administrativo | não | — | — | global |
 | 3015 | Movimentações Financeiras | Adiantamento de Clientes | pecuaria | não | — | — | global |
 | 3025 | Movimentações Financeiras | Devolução de Adiantamento - Parceiro Lavoura | agricultura | não | — | — | global |
+| 3016 | Movimentações Financeiras | Devolução de Adiantamento a Fornecedores | pecuaria | não | — | — | global |
 | 3020 | Movimentações Financeiras | Devolução de Adiantamento de Boitel | pecuaria | não | — | — | global |
 
 ### Receita Operacional

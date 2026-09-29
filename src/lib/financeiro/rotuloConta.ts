@@ -8,6 +8,8 @@
 const ROTULO_POR_CONTA: Readonly<Record<string, string>> = {
   'Adiantamento de Clientes': 'Recebimento de vendas',
   'Adiantamento a Fornecedores': 'Pagamento de compras',
+  /* OC-CONTA-CORRENTE-TODOS-01a (decisao 2): a conta 3016, espelho da 5006 — o dinheiro que o fornecedor devolve */
+  'Devolução de Adiantamento a Fornecedores': 'Devolução do fornecedor',
 };
 
 /** O nome que a tela mostra para a conta; conta fora do mapa aparece como esta' no plano. */
