@@ -10,6 +10,8 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 const chamadas: { nome: string; args: Record<string, unknown> }[] = [];
 let respostaCriar: (args: Record<string, unknown>) => unknown = () => ({ ok: false, pendencias: [] });
+/* OC-CRIAR-DO-LEGADO-01b: a saida do PROPRIO lancamento (modal antigo), lida da tabela na primeira carga. Nula = legado sem elo. */
+let saidaDoLancamento: string | null = null;
 
 const SUGESTOES = {
   recebimentos: [{ id: '692f1957', data: '2026-04-16', valor: 591300.38, descricao: 'Venda 315 Desmama M - 1/2', favorecido_id: 'forn-1',
@@ -54,6 +56,9 @@ vi.mock('@/integrations/supabase/client', () => ({
       }
       return Promise.resolve({ data: respostaCriar(args), error: null });
     },
+    from: () => ({
+      select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { movimentacao_rebanho_id: saidaDoLancamento }, error: null }) }) }),
+    }),
   },
 }));
 
@@ -81,6 +86,7 @@ function montar(onCriada = vi.fn()) {
 
 beforeEach(() => {
   chamadas.length = 0;
+  saidaDoLancamento = null;
   respostaCriar = (args) => (args.p_simular ? PREVIA_OK : { ...PREVIA_OK, simulado: false, operacao_id: 'op-nova' });
 });
 
@@ -175,5 +181,43 @@ describe('Criar OC a partir do legado', () => {
     fireEvent.click(botao);
     await waitFor(() => expect(screen.getByText('Saida 8bd25a97 ja esta em outra OC')).toBeInTheDocument());
     expect(onCriada).not.toHaveBeenCalled();
+  });
+});
+
+describe('OC-CRIAR-DO-LEGADO-01b — modal antigo ja recebido', () => {
+  const marcada = (id: string) => screen.getByTestId('saidas').querySelector(`tr[data-saida="${id}"] button[role="checkbox"]`)?.getAttribute('data-state');
+
+  it('a saida do proprio lancamento vem marcada e VENCE a combinacao pelas cabecas; a simulacao sai com ela', async () => {
+    saidaDoLancamento = 'x90';
+    montar();
+    await waitFor(() => expect(marcada('x90')).toBe('checked'));
+    expect(marcada('8bd25a97')).toBe('unchecked');
+    expect(marcada('9542dccc')).toBe('unchecked');
+    await waitFor(() => expect(ultimaSimulacao()?.p_saidas).toEqual([{ lancamento_id: 'x90' }]));
+  });
+
+  it('a comissao que a simulacao liga aparece na previa como despesa da operacao, fora do saldo', async () => {
+    const DESPESA = { parte_id: 'pc1', lancamento_id: '9bcf8f46', componente: 'comissao', competencia: '2026-05-04', pagamento: '2026-05-14',
+      descricao: 'Venda 025 DM - Comissão', favorecido: 'Elo MS Leilões Rurais Eireli', conta_ordem: 5030,
+      conta: 'Impostos e Despesas de Abates e Vendas', valor: -2625, status: 'realizado' };
+    respostaCriar = (args) => (args.p_simular
+      ? { ...PREVIA_OK, conta_corrente: { ...PREVIA_OK.conta_corrente, despesas: [DESPESA] } }
+      : { ...PREVIA_OK, simulado: false, operacao_id: 'op-nova' });
+    montar();
+    const tabela = await screen.findByTestId('despesas-previa');
+    const linha = tabela.querySelector('tr[data-despesa="comissao"]');
+    expect(linha?.textContent).toContain('Comissão — despesa da operação, fora do saldo');
+    expect(linha?.textContent).toContain('Elo MS Leilões Rurais Eireli');
+    const valor = linha?.querySelectorAll('td')[3];
+    expect(valor?.textContent).toBe('−2.625,00');
+    expect(valor?.className).toContain('text-[#b91c1c]');
+    /* fora do saldo: o saldo da previa continua zero */
+    expect(screen.getByTestId('saldo-previa').textContent).toBe('0,00');
+  });
+
+  it('sem despesa, a previa nao ganha a tabela (a busca sabe achar: a previa esta la)', async () => {
+    montar();
+    await waitFor(() => expect(screen.getByTestId('previa')).toBeInTheDocument());
+    expect(screen.queryByTestId('despesas-previa')).toBeNull();
   });
 });

@@ -12,7 +12,7 @@ import { CATEGORIAS } from '@/types/cattle';
 import { rotuloDaConta } from '@/lib/financeiro/rotuloConta';
 import { corDoSaldo, dataCurta } from '@/lib/oc/contaCorrente';
 import {
-  cabecasDaDescricao, combinacaoUnica, lerResultado, lerSugestoes, ordenarIrmas, precoPorKg,
+  cabecasDaDescricao, lerResultado, lerSugestoes, ordenarIrmas, precoPorKg, saidasPreMarcadas,
   type RecebimentoResumo, type ResultadoCriar, type SaidaCandidata,
 } from '@/lib/oc/criarDoLegado';
 
@@ -30,6 +30,8 @@ const TH = 'h-[17px] whitespace-nowrap bg-[#2E4B6E] px-[5px] text-center text-[9
 const TD = 'h-[18px] border-b border-[#eceae4] px-[5px] text-[10px]';
 const NUM = `${TD} text-right tabular-nums`;
 const COR = { neg: 'text-[#b91c1c]', pos: 'text-[#15803d]', zero: '' };
+const DESPESA: Record<string, string> = { comissao: 'Comissão', frete: 'Frete', taxas_impostos: 'Taxas e impostos', taxa_aquisicao: 'Taxa de aquisição' };
+const rotuloDaDespesa = (componente: string | null) => (componente ? DESPESA[componente] ?? componente : 'Despesa');
 const rotuloCategoria = (slug: string | null) => (slug ? (CATEGORIAS.find(c => c.value === slug)?.label ?? slug) : '—');
 const num2 = (v: number) => {
   const t = Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -93,11 +95,15 @@ export function CriarOCDoLegadoDialog({ clienteId, lancamentoId, fornecedores, o
       setIrmas(ordenarIrmas(s.irmas, s.recebimentos[0]?.descricao ?? null));
       setSaidas(s.saidas);
       if (!iniciado) {
-        /* So' na primeira carga: preenche o comprador pelo favorecido e pre-marca a combinacao unica. Depois, a mao do operador. */
+        /* So' na primeira carga: preenche o comprador pelo favorecido e pre-marca. Depois, a mao do operador.
+           OC-CRIAR-DO-LEGADO-01b: a saida do PROPRIO lancamento (modal antigo) vence a combinacao pelas cabecas. */
         const base = s.recebimentos[0];
         if (base?.favorecidoId) setComprador(base.favorecidoId);
-        const unica = combinacaoUnica(s.saidas, cabecasDaDescricao(base?.descricao));
-        setMarcadas(new Set(unica ?? []));
+        const { data: lanc } = await supabase.from('financeiro_lancamentos_v2')
+          .select('movimentacao_rebanho_id').eq('id', lancamentoId).maybeSingle();
+        if (!vivo) return;
+        const pre = saidasPreMarcadas(s.saidas, lanc?.movimentacao_rebanho_id ?? null, cabecasDaDescricao(base?.descricao));
+        setMarcadas(new Set(pre ?? []));
         setIniciado(true);
       }
       setErroCarga(null);
@@ -350,6 +356,24 @@ export function CriarOCDoLegadoDialog({ clienteId, lancamentoId, fornecedores, o
                   <span><span className="text-muted-foreground">Receita no DRE</span> {mesesReceita.map(fmtMes).join(', ') || '—'}{base ? ` (hoje está em ${fmtMes(base.data.slice(0, 7))})` : ''}</span>
                   <span><span className="text-muted-foreground">Saldo</span> <b className={COR[corDoSaldo(cc.saldo)]}>{num2(cc.saldo)}</b>{corDoSaldo(cc.saldo) !== 'zero' ? ' · explicar depois na OC' : ' · quitado'}</span>
                 </div>
+              )}
+              {/* OC-CRIAR-DO-LEGADO-01b — a comissao do modal antigo presa a' saida entra na OC como despesa da operacao, fora do
+                  saldo. Vem da propria simulacao (`conta_corrente.despesas`): nenhuma regra copiada aqui. */}
+              {cc && cc.despesas.length > 0 && (
+                <table className="mt-1 w-full table-fixed border-separate border-spacing-0 tabular-nums" data-testid="despesas-previa">
+                  <colgroup><col style={{ width: 300 }} /><col /><col style={{ width: 200 }} /><col style={{ width: 90 }} /></colgroup>
+                  <thead><tr>{['Despesa ligada à OC', 'Descrição', 'Favorecido', 'Valor'].map(h => <th key={h} className={TH}>{h}</th>)}</tr></thead>
+                  <tbody>
+                    {cc.despesas.map(d => (
+                      <tr key={d.parteId} className="bg-white" data-despesa={d.componente ?? ''}>
+                        <td className={TD}>{rotuloDaDespesa(d.componente)} — despesa da operação, fora do saldo</td>
+                        <td className={`${TD} break-words`}>{d.descricao ?? '—'}</td>
+                        <td className={`${TD} break-words`}>{d.favorecido ?? '—'}</td>
+                        <td className={`${NUM} ${COR[corDoSaldo(d.valor)]}`}>{num2(d.valor)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               )}
             </Secao>
           </div>

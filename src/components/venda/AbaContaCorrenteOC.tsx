@@ -213,7 +213,9 @@ export function AbaContaCorrenteOC({ api, somenteLeitura, lado = 'venda' }: Prop
         </div>
       )}
 
-      {lado !== 'venda' && <QuadroDespesas despesas={cc.despesas} />}
+      {/* OC-CRIAR-DO-LEGADO-01b: as despesas aparecem tambem na venda (a comissao do modal antigo ligada a' OC criada do legado).
+          Sem despesa, o quadro nao aparece — a venda de sempre fica igual. */}
+      <QuadroDespesas despesas={cc.despesas} />
 
       {erroAcao && <div className="flex-none text-[10px] text-destructive" role="alert">{erroAcao}</div>}
 
@@ -236,7 +238,7 @@ function Card({ rotulo, valor, cor, destaque, testid }: { rotulo: string; valor:
   );
 }
 
-/* ─── Despesas da operacao (compra): pagas a terceiros, fora do saldo — o quadro de baixo do mock ─── */
+/* ─── Despesas da operacao (compra e venda): pagas a terceiros, fora do saldo — o quadro de baixo do mock ─── */
 function QuadroDespesas({ despesas }: { despesas: readonly DespesaOperacao[] }) {
   if (despesas.length === 0) return null;
   return (

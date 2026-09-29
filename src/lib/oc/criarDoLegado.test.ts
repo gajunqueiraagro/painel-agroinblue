@@ -6,7 +6,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  CONTAS_VENDA_GADO, podeCriarOCDoLegado, cabecasDaDescricao, combinacaoUnica, ordenarIrmas, lerResultado, precoPorKg,
+  CONTAS_VENDA_GADO, podeCriarOCDoLegado, cabecasDaDescricao, combinacaoUnica, ordenarIrmas, lerResultado, precoPorKg, saidasPreMarcadas,
   type SaidaCandidata, type RecebimentoResumo,
 } from './criarDoLegado';
 import { SUBCENTRO_VENDA_BOITEL } from '@/lib/financeiro/subcentroVenda';
@@ -16,17 +16,52 @@ const RECEB = { tipo_operacao: '1-Entradas', subcentro: 'Venda de Desmama Machos
 const saida = (id: string, data: string, quantidade: number): SaidaCandidata =>
   ({ id, data, categoria: 'desmama_m', quantidade, peso_medio_kg: 250, valor: 1000, origem_registro: null, fornecedor_id: null });
 
+describe('OC-CRIAR-DO-LEGADO-01b — o modal antigo ja recebido entra', () => {
+  const MODAL = { ...RECEB, origem_lancamento: 'movimentacao_rebanho' };
+
+  it('realizado, conciliado ou com data de conciliacao: aparece (o espelho de _oc_legado_motivo_recebimento)', () => {
+    expect(podeCriarOCDoLegado({ ...MODAL, status_transacao: 'realizado' }, false)).toBe(true);
+    expect(podeCriarOCDoLegado({ ...MODAL, status_transacao: 'conciliado' }, false)).toBe(true);
+    expect(podeCriarOCDoLegado({ ...MODAL, status_transacao: 'agendado', conciliado_em: '2026-05-05' }, false)).toBe(true);
+  });
+
+  it('programado, agendado ou sem status: nao aparece ("Receba primeiro"); e as outras recusas continuam valendo', () => {
+    expect(podeCriarOCDoLegado({ ...MODAL, status_transacao: 'programado' }, false)).toBe(false);
+    expect(podeCriarOCDoLegado({ ...MODAL, status_transacao: 'agendado' }, false)).toBe(false);
+    expect(podeCriarOCDoLegado(MODAL, false)).toBe(false);
+    /* a busca sabe achar: o mesmo realizado some com OC, sem caixa ou fora de 1110-1140 */
+    expect(podeCriarOCDoLegado({ ...MODAL, status_transacao: 'realizado' }, true)).toBe(false);
+    expect(podeCriarOCDoLegado({ ...MODAL, status_transacao: 'realizado', sem_movimentacao_caixa: true }, false)).toBe(false);
+    expect(podeCriarOCDoLegado({ ...MODAL, status_transacao: 'realizado', subcentro: SUBCENTRO_VENDA_BOITEL }, false)).toBe(false);
+  });
+
+  it('a saida do proprio lancamento vem marcada, e ela vence a combinacao pelas cabecas', () => {
+    const saidas = [saida('a', '2026-05-04', 25), saida('b', '2026-05-04', 15), saida('c', '2026-05-05', 10)];
+    /* 25 cabecas fecham com "a" sozinha E com "b" + "c": pelas cabecas a combinacao e' ambigua e nada seria marcado */
+    expect(combinacaoUnica(saidas, 25)).toBeNull();
+    expect(saidasPreMarcadas(saidas, 'b', 25)).toEqual(['b']);
+    expect(saidasPreMarcadas(saidas, 'a', 25)).toEqual(['a']);
+  });
+
+  it('saida do lancamento fora das sugestoes (ou nula): volta a combinacao unica de antes', () => {
+    const saidas = [saida('a', '2026-05-04', 25), saida('b', '2026-05-04', 15)];
+    expect(saidasPreMarcadas(saidas, 'zzz', 25)).toEqual(['a']);
+    expect(saidasPreMarcadas(saidas, null, 25)).toEqual(['a']);
+    expect(saidasPreMarcadas(saidas, null, null)).toBeNull();
+  });
+});
+
 describe('quando a acao aparece', () => {
   it('recebimento vivo de venda de gado (1110-1140), sem OC e com caixa: aparece', () => {
     expect(podeCriarOCDoLegado(RECEB, false)).toBe(true);
     expect(CONTAS_VENDA_GADO.has('Venda de Desmama Machos')).toBe(true);
   });
-  it('cada recusa do banco tira a acao: com OC, saida, cancelado, sem caixa, modal antigo, boitel e conta de fora', () => {
+  it('cada recusa do banco tira a acao: com OC, saida, cancelado, sem caixa, modal antigo PROGRAMADO, boitel e conta de fora', () => {
     expect(podeCriarOCDoLegado(RECEB, true)).toBe(false);
     expect(podeCriarOCDoLegado({ ...RECEB, tipo_operacao: '2-Saídas' }, false)).toBe(false);
     expect(podeCriarOCDoLegado({ ...RECEB, cancelado: true }, false)).toBe(false);
     expect(podeCriarOCDoLegado({ ...RECEB, sem_movimentacao_caixa: true }, false)).toBe(false);
-    expect(podeCriarOCDoLegado({ ...RECEB, origem_lancamento: 'movimentacao_rebanho' }, false)).toBe(false);
+    expect(podeCriarOCDoLegado({ ...RECEB, origem_lancamento: 'movimentacao_rebanho', status_transacao: 'programado' }, false)).toBe(false);
     expect(podeCriarOCDoLegado({ ...RECEB, subcentro: SUBCENTRO_VENDA_BOITEL }, false)).toBe(false);
     expect(CONTAS_VENDA_GADO.has(SUBCENTRO_VENDA_BOITEL)).toBe(false);
     expect(podeCriarOCDoLegado({ ...RECEB, subcentro: 'Fertilizantes' }, false)).toBe(false);

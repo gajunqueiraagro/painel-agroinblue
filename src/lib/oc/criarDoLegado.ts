@@ -18,16 +18,39 @@ export interface LancamentoCandidato {
   cancelado?: boolean | null;
   origem_lancamento?: string | null;
   sem_movimentacao_caixa?: boolean | null;
+  status_transacao?: string | null;
+  conciliado_em?: string | null;
 }
 
-/** A acao "Criar OC a partir deste lancamento" so' aparece onde o banco aceitaria o recebimento. Espelho da regra do banco. */
+/** Recebido de verdade: realizado, conciliado ou com data de conciliacao — o mesmo teste de `_oc_legado_motivo_recebimento`. */
+function jaRecebido(l: LancamentoCandidato): boolean {
+  return l.status_transacao === 'realizado' || l.status_transacao === 'conciliado' || !!l.conciliado_em;
+}
+
+/**
+ * A acao "Criar OC a partir deste lancamento" so' aparece onde o banco aceitaria o recebimento. Espelho da regra do banco.
+ * OC-CRIAR-DO-LEGADO-01b: o lancamento do MODAL ANTIGO (origem 'movimentacao_rebanho') entra quando ja' RECEBIDO — a criacao
+ * adota a saida dele, nunca cria gado. Programado/agendado fica de fora: "Receba primeiro".
+ */
 export function podeCriarOCDoLegado(l: LancamentoCandidato, temOC: boolean): boolean {
   return !temOC
     && l.tipo_operacao === '1-Entradas'
     && l.cancelado !== true
     && l.sem_movimentacao_caixa !== true
-    && l.origem_lancamento !== 'movimentacao_rebanho'
+    && (l.origem_lancamento !== 'movimentacao_rebanho' || jaRecebido(l))
     && !!l.subcentro && CONTAS_VENDA_GADO.has(l.subcentro);
+}
+
+/**
+ * O que ja' vem marcado ao abrir a criacao. OC-CRIAR-DO-LEGADO-01b (decisao 3): a saida do PROPRIO lancamento
+ * (`movimentacao_rebanho_id`, o modal antigo) vence — ela e' conhecida, nao se adivinha. Sem ela (ou fora das sugestoes),
+ * a combinacao unica que fecha as cabecas da descricao, como antes (D4).
+ */
+export function saidasPreMarcadas(
+  saidas: readonly SaidaCandidata[], saidaDoLancamento: string | null | undefined, cabecas: number | null,
+): string[] | null {
+  if (saidaDoLancamento && saidas.some(s => s.id === saidaDoLancamento)) return [saidaDoLancamento];
+  return combinacaoUnica(saidas, cabecas);
 }
 
 /** Cabecas citadas na descricao: o primeiro numero seguido de palavra ("Venda 315 Desmama M - 1/2" -> 315). Ano nao conta. */

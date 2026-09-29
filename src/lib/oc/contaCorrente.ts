@@ -17,7 +17,7 @@ export type SituacaoContaCorrente = 'falta_receber' | 'falta_pagar' | 'adiantado
 /** De que lado da operacao a conta corrente fala: a venda recebe do comprador, a compra paga ao fornecedor. */
 export type LadoContaCorrente = 'venda' | 'compra';
 
-/** Despesa da operacao (frete, comissao, ICMS): titulo comum pago a terceiro, FORA do saldo. O banco so' a devolve fora da venda. */
+/** Despesa da operacao (frete, comissao, ICMS): titulo comum pago a terceiro, FORA do saldo. Venda e compra (OC-CRIAR-DO-LEGADO-01b). */
 export interface DespesaOperacao {
   parteId: string;
   lancamentoId: string | null;
@@ -93,7 +93,7 @@ export interface ContaCorrente {
   saidasSemEntrega: number;
   linhas: LinhaContaCorrente[];
   explicacoes: ExplicacaoContaCorrente[];
-  /** Despesas da operacao, fora do saldo (compra; a venda nao tem a chave e fica vazia). */
+  /** Despesas da operacao, fora do saldo (venda e compra; sem despesa, vazia). */
   despesas: DespesaOperacao[];
 }
 
