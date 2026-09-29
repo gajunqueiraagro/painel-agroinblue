@@ -860,8 +860,14 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
        ⚠ E O `hook.lancamentos.find(...)` QUE HAVIA AQUI LIA O ESTADO VELHO. Ele rodava logo
        depois do `await loadLancamentos`, e `useState` não atualiza de forma síncrona — o
        log sempre mostrou o lançamento ANTERIOR, desde que foi escrito. Saiu com a recarga. */
-    const salvo = id ? await hook.editarLancamento(id, form) : await hook.criarLancamento(form);
+    /* FIN-NFE-PARCELAS-01 — CRIAR DEVOLVE O ID: o modal grava os documentos pendentes no lançamento que
+       acabou de nascer. `criarLancamentoComId` com a origem 'manual' é o mesmo insert (`buildInsertRow`,
+       mesma origem, mesmo toast) do `criarLancamento`; o que ele não faz é avisar as outras instâncias,
+       e por isso a notificação vem logo abaixo, só no sucesso — a mesma ordem do `criarLancamento`. */
+    const criadoId = id ? null : await hook.criarLancamentoComId(form, { origem: 'manual' });
+    const salvo = id ? await hook.editarLancamento(id, form) : !!criadoId;
     if (!salvo) return false;
+    if (criadoId && clienteAtual?.id) notificarLancamentosMudaram(clienteAtual.id);
 
     /* ⚠ EDITAR NÃO RECARREGA NADA — e é o gesto de todo dia, o que motivou este PR. O
        `editarLancamento` já trocou a linha no estado com o que os TRIGGERS gravaram: o hook
@@ -878,7 +884,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = scrollTop;
       });
     }
-    return true;
+    return criadoId ?? true;
   };
   const handleDelete = async (id: string, motivo?: string) => {
     /* O motivo vem da confirmacao do modal (PR-CPR-2A.4). `excluirLancamento` ja o grava em
@@ -2888,6 +2894,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         open={dialogOpen}
         onClose={() => { setDialogOpen(false); setEditingLanc(null); onCloseDialog?.(); }}
         onSave={handleSave}
+        documentosAntesDeSalvar
         onDelete={handleDelete}
         lancamento={editingLanc}
         fazendas={fazendas}

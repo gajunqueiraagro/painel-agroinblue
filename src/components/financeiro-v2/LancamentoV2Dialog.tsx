@@ -70,6 +70,10 @@ import { RodapeCancelamento } from '@/components/financeiro-v2/RodapeCancelament
 import { podeOferecerVinculo, subcentrosVinculaveis, lancamentoTemParteOC } from '@/lib/oc/vincularLancamento';
 import { podeOferecerDesvinculo } from '@/lib/oc/desvincularLancamento';
 import { DesvincularOperacaoDialog } from '@/components/financeiro-v2/DesvincularOperacaoDialog';
+import { DocumentosPendentes } from '@/components/financeiro-v2/DocumentosPendentes';
+import {
+  gravarDocumentosPendentes, lancamentoDaParcela1, todosGravados, type DocumentoPendente,
+} from '@/lib/financeiro/documentosPendentes';
 
 interface Props {
   open: boolean;
@@ -85,7 +89,19 @@ interface Props {
    */
   carregando?: boolean;
   onClose: () => void;
-  onSave: (form: LancamentoV2Form, id?: string) => Promise<boolean>;
+  /**
+   * ⚠ PODE DEVOLVER O ID DO LANÇAMENTO CRIADO — FIN-NFE-PARCELAS-01. `true` continua valendo "salvou"
+   * para os chamadores de sempre; quem devolve o id (a `string`) é quem liga `documentosAntesDeSalvar`,
+   * porque sem o id os documentos pendentes não teriam onde nascer.
+   */
+  onSave: (form: LancamentoV2Form, id?: string) => Promise<boolean | string>;
+  /**
+   * Liga a aba Documentos no "Novo lançamento" — FIN-NFE-PARCELAS-01, PR 1. Os documentos ficam
+   * pendentes em memória e são gravados depois do salvar. ⚠ SÓ PARA QUEM DEVOLVE O ID NO `onSave`:
+   * com `true` puro, o à vista não saberia em que lançamento gravar. Opcional e `false`: os outros
+   * chamadores seguem com "Salve o lançamento para anexar documentos".
+   */
+  documentosAntesDeSalvar?: boolean;
   /**
    * ⚠ O SEGUNDO ARGUMENTO É ADITIVO — PR-CPR-2A.4. O diálogo passou a PEDIR um motivo na
    * confirmação, e quem sabe o que fazer com ele é o chamador: a CPR manda para o `p_motivo`
@@ -210,9 +226,9 @@ const STATUS_OPTIONS = STATUS_FINANCEIRO_OPCOES_MODAL;
  */
 export async function gravarParcelamento(
   payload: ReturnType<typeof montarPayloadParcelamento>, clienteId: string, invalidar: () => Promise<unknown>,
-): Promise<void> {
+): Promise<string | null> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
-  const { error } = await (supabase as any).rpc('fn_parcelamento_cadastrar', { p_payload: payload });
+  const { data, error } = await (supabase as any).rpc('fn_parcelamento_cadastrar', { p_payload: payload });
   if (error) throw error;
   /* ⚠ INVALIDAÇÃO AMPLA, e é deliberado: este modal é montado por DEZ telas diferentes,
      cada uma com o seu `onSave` e a sua forma de recarregar, e o parcelamento não passa
@@ -225,6 +241,9 @@ export async function gravarParcelamento(
      escrita feita POR FORA dele — cada instancia inscrita relê com os filtros que esta'
      mostrando. So' no sucesso: quem chegou aqui passou pelo `if (error) throw`. */
   notificarLancamentosMudaram(clienteId);
+  /* FIN-NFE-PARCELAS-01 — o uuid do financiamento (a RPC devolve `uuid`): e' por ele que os documentos
+     pendentes acham a parcela 1. */
+  return typeof data === 'string' ? data : null;
 }
 
 function formatNotaFiscal(raw: string): string {
@@ -338,6 +357,7 @@ export function LancamentoV2Dialog({
   fornecedores, safras, defaultFazendaId, onCriarFornecedor, prefill, lockedFields,
   ocultarParcelamento,
   referenciaOperacionalInfo, excelContext, permiteEditarFavorecidoOC, onAbrirOperacaoOC,
+  documentosAntesDeSalvar,
 }: Props) {
   const { clienteAtual } = useCliente();
   const qc = useQueryClient();
@@ -346,6 +366,12 @@ export function LancamentoV2Dialog({
      nasce desligado (`null`) e a aba diz o que fazer, em vez de oferecer um botão que
      recusaria no servidor. */
   const documentosApi = useLancamentoDocumentos(lancamento?.id ?? null, clienteAtual?.id ?? null);
+  /* FIN-NFE-PARCELAS-01 — os documentos do lançamento NOVO, em memória até o salvar. `posSalvar`
+     existe quando o lançamento já foi gravado e algum documento não: a partir dali o botão principal
+     some (salvar de novo criaria OUTRO lançamento) e sobra o "Tentar de novo". */
+  const [pendentes, setPendentes] = useState<DocumentoPendente[]>([]);
+  const [posSalvar, setPosSalvar] = useState<{ lancamentoId: string; erro: string } | null>(null);
+  const [gravandoDocs, setGravandoDocs] = useState(false);
   const navigate = useNavigate();
   const isEdit = !!lancamento;
   // PR-SAFE-0 — título originado da Operação Comercial: valor/favorecido/classificação/tipo
@@ -946,6 +972,8 @@ export function LancamentoV2Dialog({
     }
     setFornecedorSearch('');
     setAbaAtiva('geral');
+    setPendentes([]);
+    setPosSalvar(null);
   }, [open, lancamento, defaultFazendaId, prefill, lockedFields]);
 
   // FIN-MODAL-FECHO-01 item 2 — resolve o operacao_id do título OC pelo vínculo
@@ -1368,8 +1396,17 @@ export function LancamentoV2Dialog({
             fase: faseParaGravar(atividade, fase),
           },
         );
-        await gravarParcelamento(payload, clienteAtual.id, () => qc.invalidateQueries());
+        const financiamentoId = await gravarParcelamento(payload, clienteAtual.id, () => qc.invalidateQueries());
         toast.success(`Parcelamento criado: ${numParcelas} parcelas`);
+        /* FIN-NFE-PARCELAS-01 — os pendentes vão para a PARCELA 1 (a herança para todas e' o PR 2). */
+        if (pendentes.length > 0) {
+          const parcela1 = financiamentoId ? await lancamentoDaParcela1(financiamentoId) : null;
+          if (!parcela1) {
+            setPosSalvar({ lancamentoId: '', erro: 'Parcelamento gravado, mas a parcela 1 não foi encontrada — anexe os documentos nela pelo Editar.' });
+            return;
+          }
+          if (!(await gravarPendentesDepoisDoSalvar(parcela1))) return;
+        }
         onClose();
       } catch (e) {
         /* ⚠ A MENSAGEM CRUA DA RPC — e agora ela de fato chega. O teste anterior era
@@ -1431,8 +1468,52 @@ export function LancamentoV2Dialog({
 
     // CRITICAL: pass the stable ID for edits — ensures UPDATE, never INSERT
     const ok = await onSave(form, currentEditId || undefined);
+    if (!ok) { setSaving(false); return; }
+    /* FIN-NFE-PARCELAS-01 — lançamento novo com documentos pendentes: o `onSave` devolveu o id (quem
+       liga `documentosAntesDeSalvar` devolve), e a cadeia de sempre roda nele antes de fechar. */
+    if (!currentIsEdit && pendentes.length > 0) {
+      const idCriado = typeof ok === 'string' ? ok : null;
+      if (!idCriado) {
+        setSaving(false);
+        setPosSalvar({ lancamentoId: '', erro: 'Lançamento gravado, mas sem o id para anexar — anexe os documentos pelo Editar.' });
+        return;
+      }
+      const tudo = await gravarPendentesDepoisDoSalvar(idCriado);
+      setSaving(false);
+      if (tudo) onClose();
+      return;
+    }
     setSaving(false);
-    if (ok) onClose();
+    onClose();
+  };
+
+  /**
+   * Roda a cadeia dos documentos pendentes num lançamento que JÁ existe. Devolve `true` quando todos
+   * foram gravados. ⚠ FALHA NÃO DESFAZ O LANÇAMENTO: ele fica gravado, a lista mostra o que não foi, e
+   * o erro aparece ao lado do botão com "Tentar de novo" — sem toast (UX-TOAST-01).
+   */
+  const gravarPendentesDepoisDoSalvar = async (lancamentoId: string): Promise<boolean> => {
+    if (!clienteAtual?.id) return false;
+    setGravandoDocs(true);
+    try {
+      const lista = await gravarDocumentosPendentes(clienteAtual.id, lancamentoId, pendentes);
+      setPendentes(lista);
+      if (todosGravados(lista)) { setPosSalvar(null); return true; }
+      const falhas = lista.filter(p => !p.gravado);
+      setPosSalvar({
+        lancamentoId,
+        erro: `Lançamento gravado. ${falhas.length} ${falhas.length === 1 ? 'documento não foi gravado' : 'documentos não foram gravados'}: ${falhas[0].erro ?? 'falha'}`,
+      });
+      setAbaAtiva('documentos');
+      return false;
+    } finally {
+      setGravandoDocs(false);
+    }
+  };
+
+  const tentarDeNovo = async () => {
+    if (!posSalvar?.lancamentoId) return;
+    if (await gravarPendentesDepoisDoSalvar(posSalvar.lancamentoId)) onClose();
   };
 
   const handleFornecedorCriado = (f: FornecedorV2) => {
@@ -2163,6 +2244,11 @@ export function LancamentoV2Dialog({
             {lancamento?.id ? (
               <AbaDocumentosLancamento api={documentosApi}
                 fornecedores={fornecedores.map(f => ({ id: f.id, nome: f.nome }))} />
+            ) : documentosAntesDeSalvar ? (
+              <DocumentosPendentes pendentes={pendentes} onMudar={setPendentes}
+                fornecedores={fornecedores.map(f => ({ id: f.id, nome: f.nome }))}
+                parcelado={formaPagamentoParc === 'parcelada' && numParcelas >= 2}
+                travado={!!posSalvar} />
             ) : (
               <p className="rounded-md border bg-muted/20 px-3.5 py-3 text-[11px] text-muted-foreground">
                 Salve o lançamento para anexar documentos.
@@ -2336,9 +2422,26 @@ export function LancamentoV2Dialog({
                 }}
               />
             )}
-            <Button tabIndex={17} onClick={handleSubmit} disabled={saving || !canSave} className="h-[22px] px-[9px] text-[10px] font-semibold shadow-md shadow-primary/25 ring-1 ring-primary/20">
-              {getSubmitLabel()}
-            </Button>
+            {/* FIN-NFE-PARCELAS-01 — depois do salvar, com documento que nao gravou: a frase ao lado do botao
+                (UX-TOAST-01) e o "Tentar de novo" no lugar do salvar, que criaria OUTRO lancamento. */}
+            {posSalvar ? (
+              <>
+                <span className="max-w-[520px] text-[10px] leading-tight text-destructive" data-testid="erro-documentos">
+                  {posSalvar.erro}
+                </span>
+                {posSalvar.lancamentoId && (
+                  <Button onClick={tentarDeNovo} disabled={gravandoDocs} data-testid="tentar-de-novo"
+                    className="h-[22px] px-[9px] text-[10px] font-semibold">
+                    {gravandoDocs ? 'Gravando…' : 'Tentar de novo'}
+                  </Button>
+                )}
+                <Button variant="outline" onClick={onClose} className="h-[22px] px-[9px] text-[10px]">Fechar</Button>
+              </>
+            ) : (
+              <Button tabIndex={17} onClick={handleSubmit} disabled={saving || gravandoDocs || !canSave} className="h-[22px] px-[9px] text-[10px] font-semibold shadow-md shadow-primary/25 ring-1 ring-primary/20">
+                {gravandoDocs ? 'Gravando documentos…' : getSubmitLabel()}
+              </Button>
+            )}
           </div>
 
           {/* PR-FIN-MODAL-02H — Painel lateral de RESUMO (fluxo normal, sem Contexto Excel).

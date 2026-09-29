@@ -227,12 +227,16 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, fornecedores }: {
   );
 }
 
-/** O formulário — registrar ou editar. O arquivo entra depois que o documento existe. */
-function FormDocumento({ api, documento, fornecedores, onFechar }: {
+/** O formulário — registrar ou editar. O arquivo entra depois que o documento existe.
+ *  ⚠ EXPORTADO para os documentos PENDENTES do "Novo lançamento" (FIN-NFE-PARCELAS-01): a mesma tela,
+ *  com uma `api` que guarda em memória. `pendente` só troca o texto do botão e cala o toast de
+ *  "registrado" — o documento ainda não foi a lugar nenhum. */
+export function FormDocumento({ api, documento, fornecedores, onFechar, pendente }: {
   api: LancamentoDocumentosApi;
   documento: LancDocumento | null;
   fornecedores: { id: string; nome: string }[];
   onFechar: () => void;
+  pendente?: boolean;
 }) {
   const [especie, setEspecie] = useState<EspecieLancDoc>(documento?.especie ?? 'nf');
   const [numero, setNumero] = useState(documento?.numero ?? '');
@@ -295,7 +299,7 @@ function FormDocumento({ api, documento, fornecedores, onFechar }: {
         versao = 1;
       }
       if (arquivo && id && destino) await api.anexar(id, versao, arquivo, destino);
-      toast.success(documento ? 'Documento atualizado.' : 'Documento registrado.');
+      if (!pendente) toast.success(documento ? 'Documento atualizado.' : 'Documento registrado.');
       onFechar();
     } catch (e) {
       /* ⚠ A MENSAGEM DA RPC, INTEIRA: ela nomeia o que recusou (espécie inválida, versão
@@ -430,7 +434,7 @@ function FormDocumento({ api, documento, fornecedores, onFechar }: {
         <div className="flex items-center justify-end gap-2 border-t bg-card px-4 py-2.5">
           <Button type="button" variant="ghost" onClick={onFechar}>Cancelar</Button>
           <Button type="button" onClick={salvar} disabled={enviando || api.saving}>
-            {documento ? 'Salvar documento' : 'Registrar documento'}
+            {pendente ? (documento ? 'Salvar na lista' : 'Adicionar à lista') : (documento ? 'Salvar documento' : 'Registrar documento')}
           </Button>
         </div>
       </DialogContent>

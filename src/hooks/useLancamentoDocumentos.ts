@@ -145,6 +145,19 @@ export interface DestinoDocumento { origem: OrigemLancDoc; operacaoId: string | 
 export interface DocumentoCriado extends DestinoDocumento { id: string }
 
 const BUCKET = 'fin-documentos';
+export const BUCKET_LANCAMENTO_DOCUMENTOS = BUCKET;
+
+/**
+ * O caminho do arquivo de um documento do LANCAMENTO no bucket — UM LUGAR SO' (FIN-NFE-PARCELAS-01).
+ * ⚠ E' O MESMO TEMPLATE que o `anexar` sempre usou, so' que com nome: a cadeia dos documentos
+ * pendentes grava depois do salvar e tem de cair exatamente onde a aba procura. O `Date.now()`
+ * fica: o mesmo documento pode receber arquivo novo, e com `upsert: false` a chave repetida recusa.
+ */
+export function caminhoDocumentoLancamento(
+  clienteId: string, lancamentoId: string, documentoId: string, ext: string,
+): string {
+  return `${clienteId}/${lancamentoId}/${documentoId}-${Date.now()}.${ext}`;
+}
 const BUCKET_OC = 'oc-documentos';
 
 /**
@@ -164,8 +177,9 @@ export function especieParaOC(e: EspecieLancDoc | undefined): string {
 export const TAMANHO_MAXIMO = 10 * 1024 * 1024;
 export const TIPOS_ACEITOS = ['application/pdf', 'image/jpeg', 'image/png'];
 
-/** Só as chaves presentes sobem: `editar` altera o que recebe e preserva o resto. */
-function paraJson(p: LancDocPayload): Record<string, Json> {
+/** Só as chaves presentes sobem: `editar` altera o que recebe e preserva o resto.
+ *  Exportada para a cadeia dos documentos pendentes (FIN-NFE-PARCELAS-01), que registra com o MESMO payload. */
+export function paraJson(p: LancDocPayload): Record<string, Json> {
   const j: Record<string, Json> = {};
   const por = (chave: string, v: string | number | null | undefined) => {
     /* `undefined` NÃO sobe: é assim que `editar` altera só o que recebeu. `null` sobe, e
@@ -483,7 +497,7 @@ export function useLancamentoDocumentos(
          As chaves antigas (com o nome) não mudam: a leitura usa o `url` gravado. */
       const caminho = daOC
         ? `${clienteId}/${destino.operacaoId}/${documentoId}.${ext}`
-        : `${clienteId}/${lancamentoId}/${documentoId}-${Date.now()}.${ext}`;
+        : caminhoDocumentoLancamento(clienteId, lancamentoId!, documentoId, ext);
       const up = await supabase.storage.from(daOC ? BUCKET_OC : BUCKET)
         .upload(caminho, file, { upsert: false });
       if (up.error) throw up.error;
