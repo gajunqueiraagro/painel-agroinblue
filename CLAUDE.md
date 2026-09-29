@@ -960,6 +960,11 @@ no mesmo arquivo.
   REGERADOS — o diff deles e' so' conta 1120 no lugar de 3015, "Banco do Brasil" no lugar de "sem conta", status realizado e os
   textos novos do cancelar. ⚠ PROVADO: com o espelho ignorando a origem, 1 caso cai; com a seta do cancelar sempre ligada, 3.
   ⚠ A REGRA E' DE BANCO e foi provada la' (bloco OC-CC-CLASSIFICACAO-01); o vitest trava o texto, nao o comportamento.
+  De 2248 para 2254 no FIN-V2-HOMOLOG-FIX-01: entrou `src/components/financeiro-v2/finV2HomologFix01.test.ts` (+6), lido da FONTE (a
+  `FinanceiroV2Tab` e o `LancamentoV2Dialog` nao se montam em teste): a lista sem a coluna OC e com 15 colunas na linha vazia, o "..."
+  fixo a' direita com fundo opaco, o "Abrir OC" so' na linha com OC, o botao do rodape do Editar pela MESMA regra e so' depois de ler a
+  parte, e o patch do favorecido guardado por md5. Um caso de `totaisDaListaV2.test.ts` mudou de contrato, nunca afrouxado: cobrava a
+  coluna OC e passou a afirmar a AUSENCIA dela. ⚠ "Sem rolagem a 1440" nao cabe no jsdom (nao faz layout): foi medido no navegador.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -3153,8 +3158,9 @@ preview que o cabecalho nao sai da tela ao rolar.
     ⚠ DOIS DEFEITOS DE TELA VISTOS NAS PRINTS, e corrigidos: (1) o bloco "Entradas/Saidas adotadas desvinculadas" listava TODA saida
       do rol, inclusive a REGISTRADA (que e' o bloqueio); agora so' as adotadas. (2) o quadro de despesas tinha a Conta em 170px e o
       `whitespace-nowrap` do TD vence o `whitespace-normal` (ordem do CSS do Tailwind) — "Investimento Frete/Comissão Compra Bovinos"
-      invadia o Valor; a Conta passou a ficar com o espaco livre. Pendente, nao tratado: o rol lista o favorecido do COMPROMISSO, e as
-      comissoes da 1337bb2d tem favorecido so' no titulo (Paulo Sergio Baruta) — no dialogo elas saem sem nome.
+      invadia o Valor; a Conta passou a ficar com o espaco livre. O rol listava o favorecido do COMPROMISSO, e as
+      comissoes da 1337bb2d tem favorecido so' no titulo (Paulo Sergio Baruta) — no dialogo saiam sem nome. (FEITO no
+      FIN-V2-HOMOLOG-FIX-01: sem favorecido no compromisso, o do titulo vivo mais antigo.)
   TELA: `AbaContaCorrenteOC`, `CancelarContaCorrenteDialog` e `EntregasVendaTabela` ganharam `lado` (padrao venda, sem mudanca);
   `AbaFinanceiroOC` liga a conta corrente na compra; `CompraModalShell` monta UMA instancia de `useOcContaCorrente` (aba, resumo lateral
   "Entrada / Pago / Saldo" e "Cancelar operação" com o rol) e liga a adocao na aba Recebimento ("Adotar entrada já lançada").
@@ -3210,6 +3216,29 @@ preview que o cabecalho nao sai da tela ao rolar.
   vincular o pos em true nos 4 importados da 232c05aa), copias da conta nas 7 partes, um evento por OC; 3015, 5005 e 5006 DESATIVADAS.
   Provado em rollback exatamente como o arquivo: DRE SR 2025/2026 e Agnaldo 2026, caixa SR+Agnaldo, rebanho SR+Agnaldo e saldo das 3
   conta correntes com md5 identico.
+- ⚠ FIN-V2-HOMOLOG-FIX-01 — CORRECOES DA HOMOLOGACAO DO FINANCEIRO V2 (29/09/2026).
+  (1) "CRIAR OC A PARTIR DESTE LANCAMENTO" NAO APARECIA, E NAO ERA DEPLOY NEM REGRA. Medido: o proto publica cada commit na Vercel
+  (741cd800 com status success); `podeCriarOCDoLegado` sobre os recebimentos de venda dos clientes aprova 153 — e o que reprova e' de
+  desenho (abate 589 e boitel 110, fora do "so' venda 1110-1140"; 79 ja' com OC; 28 do modal antigo). A regra continua valendo depois
+  do OC-CC-CLASSIFICACAO-01: o recebimento em conta corrente tem parte viva, e parte viva ja' tira a acao. O DEFEITO ERA DE LAYOUT: com
+  a coluna OC a tabela pedia 991px num container de 908 (viewport 1134), rolava na horizontal, e Status e "..." ficavam FORA DA VISTA
+  — o menu existia e ninguem o via.
+  (2) O botao tambem no RODAPE do `LancamentoV2Dialog`, logo depois do "Vincular à operação": mesma `podeCriarOCDoLegado`, mesmo
+  `CriarOCDoLegadoDialog`, e SO' depois que a parte da OC foi lida (`parteOCLida`) — antes disso um titulo de OC pareceria legado.
+  Criada a OC: avisa a lista, fecha o editor e abre a OC.
+  (3) A COLUNA OC SAIU DA LISTA (normal e ampliada): quem abre a OC e' o icone ao lado do produto (aba Financeiro) e o novo item
+  "Abrir OC" do menu "...", so' na linha com OC. O "..." ficou FIXO A' DIREITA (`sticky right-0`, fundo opaco) — mesmo numa janela
+  estreita ele nao sai da vista. Medido a 1440 (iframe de 1440x900): tabela 1190 em 1210, ampliada 1398 em 1418, NENHUM elemento
+  rolando na horizontal. A SECAO SEM CAIXA MANTEVE a coluna OC: ela e' `table-fixed` com a Descricao elastica e cabe sem rolagem.
+  (4) O favorecido das despesas que ficam no cancelar da conta corrente: o do compromisso; sem ele, o do titulo vivo mais antigo.
+  Migration `supabase/migrations/20261027174000_fin_v2_homolog_fix_01.sql` (⚠ registrada como `20260929105928`; ledger = arquivo,
+  md5 4081a96b), patch guardado por md5: `_oc_cancelar_conta_corrente` a15e583a -> 5f585988. So' leitura para o rol, ACL igual
+  (authenticated sem EXECUTE). 1337bb2d: comissoes -> Paulo Sergio Baruta (x2), ICMS -> Sefaz MS, frete segue Manoel Marcelo.
+  ⚠ PROVA NA TELA (SR, nada criado): diálogo aberto pelo rodape do Editar de "Venda 011 novilhas" (12/08/25, 16.614,00) com a
+    previa simulada e saldo 0,00; menu da "Venda 317 machos" com "Abrir OC" e sem "Criar OC".
+  ⚠ OBSERVADO NA PREVIA, nao e' defeito: o recebimento fica na conta que o LEGADO lhe deu ("Venda de Desmama Machos") e a entrega
+    na da categoria do lote ("Venda de Femeas Adultas" para novilhas) — o recebimento nunca troca de conta desde o OC-CC-CLASSIFICACAO-01,
+    e como ele sai do DRE pela parte, a receita que conta e' a da entrega.
 - ⚠ RATEIO-VIGENCIA-01 — O RATEIO ADMINISTRATIVO OLHA QUAIS ATIVIDADES EXISTEM EM CADA MES (28/09/2026, decisoes do Gabriel e do
   Chat). Retroativo, todo o historico, todos os clientes; nada gravado — os DREs recalculam. Migration
   `supabase/migrations/20261027161000_rateio_vigencia_01.sql` (⚠ registrada como `20260928102310`; ledger = arquivo sem a quebra de

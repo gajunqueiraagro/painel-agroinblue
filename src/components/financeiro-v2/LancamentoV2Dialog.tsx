@@ -38,7 +38,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { computeValidacaoModal, type AbaFinanceira } from './lancamentoDialogTabs';
 import { AbaAuditoriaLancamento } from '@/components/financeiro-v2/AbaAuditoriaLancamento';
-import { AlertCircle, AlertTriangle, Copy, KeyRound, RefreshCw, DollarSign, FileText, Beef, Repeat, Loader2, Link2, Unlink } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Copy, KeyRound, RefreshCw, DollarSign, FileText, Beef, Repeat, Loader2, Link2, Unlink, FilePlus2 } from 'lucide-react';
 import { LancamentoZooModal } from '@/v2/components/edicao/LancamentoZooModal';
 import { toast } from 'sonner';
 import { mensagemDoErro } from '@/lib/supabase/mensagemDoErro';
@@ -64,6 +64,8 @@ import {
 } from '@/lib/agri/rateioLancamento';
 import { useCulturasDaSafra } from '@/hooks/useAreaPlantada';
 import { VincularOperacaoDialog } from '@/components/financeiro-v2/VincularOperacaoDialog';
+import { CriarOCDoLegadoDialog } from '@/components/financeiro-v2/CriarOCDoLegadoDialog';
+import { podeCriarOCDoLegado } from '@/lib/oc/criarDoLegado';
 import { RodapeCancelamento } from '@/components/financeiro-v2/RodapeCancelamento';
 import { podeOferecerVinculo, subcentrosVinculaveis, lancamentoTemParteOC } from '@/lib/oc/vincularLancamento';
 import { podeOferecerDesvinculo } from '@/lib/oc/desvincularLancamento';
@@ -984,9 +986,13 @@ export function LancamentoV2Dialog({
      PARTE, nao pela `origem_lancamento`: um lancamento manual vinculado a OC tem parte viva e
      origem 'manual'. Guarda a OC e o tipo para o "Abrir OC" no lugar do botao. */
   const [parteOCViva, setParteOCViva] = useState<{ operacaoId: string; tipo: string | null } | null>(null);
+  /* FIN-V2-HOMOLOG-FIX-01: so' depois de LIDA a parte o "Criar OC" pode aparecer — antes disso "sem parte" e' so' "ainda nao sei". */
+  const [parteOCLida, setParteOCLida] = useState(false);
+  const [criarOCAberto, setCriarOCAberto] = useState(false);
   useEffect(() => {
     let cancelled = false;
     setParteOCViva(null);
+    setParteOCLida(false);
     if (!open || !isEdit || !lancamento?.id) return;
     const id = lancamento.id;
     (async () => {
@@ -997,7 +1003,8 @@ export function LancamentoV2Dialog({
         .eq('cancelada', false)
         .limit(1)
         .maybeSingle();
-      if (cancelled || !parte?.operacao_id) return;
+      if (cancelled) return;
+      if (!parte?.operacao_id) { setParteOCLida(true); return; }
       const { data: op } = await supabase
         .from('zoo_operacoes_comerciais')
         .select('tipo_operacao')
@@ -1005,6 +1012,7 @@ export function LancamentoV2Dialog({
         .maybeSingle();
       if (cancelled) return;
       setParteOCViva({ operacaoId: parte.operacao_id, tipo: op?.tipo_operacao ?? null });
+      setParteOCLida(true);
     })();
     return () => { cancelled = true; };
   }, [open, isEdit, lancamento?.id]);
@@ -2290,6 +2298,19 @@ export function LancamentoV2Dialog({
                 <Link2 className="h-3 w-3" /> Vincular à operação
               </Button>
             )}
+            {/* FIN-V2-HOMOLOG-FIX-01 (item 2): "Criar OC a partir deste lançamento" tambem aqui, ao lado do Vincular — a MESMA
+                regra da lista (`podeCriarOCDoLegado`) e o MESMO dialogo. */}
+            {isEdit && lancamento && clienteAtual?.id && parteOCLida && podeCriarOCDoLegado(lancamento, !!parteOCViva) && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-[22px] px-[9px] text-[10px] gap-1"
+                onClick={() => setCriarOCAberto(true)}
+                data-testid="acao-criar-oc-legado"
+              >
+                <FilePlus2 className="h-3 w-3" /> Criar OC a partir deste lançamento
+              </Button>
+            )}
             {/* OC-DESVINCULAR-01 — o inverso, SO' com parte VIVA de OC (a mesma leitura do rodape
                 de cancelamento). O lancamento fica; sai a ligacao. */}
             {isEdit && lancamento && clienteAtual?.id && parteOCViva
@@ -2451,6 +2472,21 @@ export function LancamentoV2Dialog({
           clienteId={clienteAtual.id}
           onClose={() => setVincularAberto(false)}
           onVinculado={onClose}
+        />
+      )}
+      {/* FIN-V2-HOMOLOG-FIX-01 — por cima do detalhe; criada, avisa a lista, fecha os dois e abre a OC (como a lista faz). */}
+      {criarOCAberto && lancamento?.id && clienteAtual?.id && (
+        <CriarOCDoLegadoDialog
+          clienteId={clienteAtual.id}
+          lancamentoId={lancamento.id}
+          fornecedores={fornecedores}
+          onFechar={() => setCriarOCAberto(false)}
+          onCriada={(operacaoId) => {
+            setCriarOCAberto(false);
+            notificarLancamentosMudaram(clienteAtual.id);
+            onClose();
+            onAbrirOperacaoOC?.(operacaoId, 'venda');
+          }}
         />
       )}
       {/* OC-DESVINCULAR-01 — por cima do detalhe; desvinculado, fecha os dois (a lista ja' foi avisada). */}

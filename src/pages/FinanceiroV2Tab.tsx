@@ -11,7 +11,7 @@ import {
 import { isTransferenciaTipo } from '@/lib/financeiro/v2Transferencia';
 import { contaEmFoco, formatarValorLinha } from '@/lib/financeiro/sinalPorConta';
 import { totaisDaListaV2 } from '@/lib/financeiro/totaisDaListaV2';
-import { SecaoSemCaixa, CelulaOC, totalSemCaixa } from '@/components/financeiro-v2/SecaoSemCaixa';
+import { SecaoSemCaixa, totalSemCaixa } from '@/components/financeiro-v2/SecaoSemCaixa';
 import { useLancamentosConciliados, desfazerVinculo, desfazerGrupo } from '@/hooks/useConciliacaoDoMes';
 import { useLancamentosComOC, rotuloOrigemOC } from '@/hooks/useLancamentosComOC';
 import { iconeOrigemLancamento, LEGENDA_ICONES } from '@/v2/lib/origemLancamento';
@@ -2478,9 +2478,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 <col style={{ width: 120 }} />
                 <col style={{ width: 80 }} />
                 <col style={{ width: 80 }} />
-                {/* OC (FIN-V2-SEM-CAIXA-01): no lugar da coluna Tipo, que saiu — na lista padrao tudo e' dinheiro. O codigo curto
-                    da OC (8 caracteres, fonte mono) abre a operacao na aba Financeiro. */}
-                <col style={{ width: 58 }} />
+                {/* FIN-V2-HOMOLOG-FIX-01: a coluna OC (58px, do FIN-V2-SEM-CAIXA-01) SAIU — empurrava a tabela para a rolagem
+                    horizontal e escondia o "…" (onde mora "Criar OC a partir deste lançamento"). A OC continua a um clique: o
+                    icone ao lado do produto abre a operacao na aba Financeiro, e o "…" ganhou "Abrir OC". */}
                 {/* Fazenda 50→44→38: a célula mostra o CÓDIGO (PUR, RET, ADM), nunca o nome —
                     o nome inteiro está no `title`. Chegou a 30 no FIN-TABELA-GEOMETRIA-01 e
                     voltou junto com as datas, no mesmo revert de geometria. */}
@@ -2549,7 +2549,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('fornecedor')}>Fornecedor<SortIndicator field="fornecedor" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">Macro</th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('centro')}>Centro<SortIndicator field="centro" /></th>
-                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">OC</th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground" title="Fazenda">Faz.</th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('safra')}>Safra<SortIndicator field="safra" /></th>
                   {modoIntensivo && (
@@ -2561,13 +2560,14 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('valor')}>Valor<SortIndicator field="valor" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('doc')}>Doc.<SortIndicator field="doc" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('status')}>Status<SortIndicator field="status" /></th>
-                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground"></th>
+                  {/* FIN-V2-HOMOLOG-FIX-01: o "…" fica FIXO a' direita — nunca some na rolagem horizontal do Ampliado. */}
+                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground sticky right-0 z-30 bg-primary" aria-label="Ações"></th>
                 </tr>
               </thead>
               <tbody className="[&_tr:last-child]:border-0">
                 {linhasDaGrade.length === 0 ? (
                   <tr className="border-b">
-                    <td colSpan={16} className="text-center text-muted-foreground py-4 text-[10px]">
+                    <td colSpan={15} className="text-center text-muted-foreground py-4 text-[10px]">
                       Nenhum lançamento encontrado.
                     </td>
                   </tr>
@@ -2705,7 +2705,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                         </td>
                         <td className="truncate px-1 py-1 align-middle text-[11px] font-medium leading-tight text-muted-foreground" title={l.macro_custo || ''}>{l.macro_custo || '-'}</td>
                         <td className="truncate px-1 py-1 align-middle text-[11px] leading-tight text-muted-foreground" title={l.centro_custo || ''}>{l.centro_custo || '-'}</td>
-                        <CelulaOC oc={lancamentosComOC.get(l.id)} onAbrir={abrirOCFinanceiro} />
                         <td className="truncate px-1 py-1 align-middle text-[11px] font-medium leading-tight text-muted-foreground" title={fazendaNameMap.get(l.fazenda_id) || ''}>{fazendaCodigoMap.get(l.fazenda_id) || '-'}</td>
                         {/* ⚠ "—" É AUSÊNCIA, e aqui ela é informação: financiamento de
                             investimento e administrativo NÃO têm safra por regra. Um traço
@@ -2781,7 +2780,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                             "Ver contrato" — ela não se edita aqui, edita-se no contrato. E
                             "Duplicar" continua desabilitado nela, com o motivo escrito no item,
                             que é a regra da casa para botão cinza. */}
-                        <td className="!py-0 px-0 align-middle" onClick={(e) => e.stopPropagation()}>
+                        <td className="!py-0 px-0 align-middle sticky right-0 z-10 bg-background" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-center">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
@@ -2807,6 +2806,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                                   onClick={() => handleDuplicate(l)}>
                                   <Copy className="mr-1.5 h-3 w-3" /> Duplicar
                                 </DropdownMenuItem>
+                                {/* FIN-V2-HOMOLOG-FIX-01: "Abrir OC" quando a linha tiver OC (a coluna OC saiu) — mesma porta do icone. */}
+                                {lancamentosComOC.get(l.id) && (
+                                  <DropdownMenuItem className="text-[11px]" data-testid="menu-abrir-oc"
+                                    onClick={() => { const oc = lancamentosComOC.get(l.id); if (oc) abrirOCFinanceiro(oc.operacaoId, oc.tipo); }}>
+                                    <ExternalLink className="mr-1.5 h-3 w-3" /> Abrir OC
+                                  </DropdownMenuItem>
+                                )}
                                 {/* OC-CRIAR-DO-LEGADO-01 — so' onde o banco aceitaria o recebimento (1110-1140, sem OC, vivo, fora do modal antigo). */}
                                 {podeCriarOCDoLegado(l, !!lancamentosComOC.get(l.id)) && (
                                   <DropdownMenuItem className="text-[11px]" onClick={() => setCriarOCDe(l.id)}>

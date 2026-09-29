@@ -41,13 +41,15 @@ describe('totais do Financeiro V2: caixa x sem caixa', () => {
     expect(t).toEqual({ entradas: 992140.99, saidas: 50000, entradasSemCaixa: 565521.66, saidasSemCaixa: 1000 });
   });
 
-  it('FIN-V2-SEM-CAIXA-01: sai a coluna Tipo, entra a OC; no topo so dinheiro, e o sem caixa so com a chave (lido da fonte)', () => {
+  it('FIN-V2-SEM-CAIXA-01: sai a coluna Tipo; no topo so dinheiro, e o sem caixa so com a chave (lido da fonte)', () => {
     /* a tela normal e a ampliada sao a MESMA tabela (o Ampliado so' acrescenta C. Origem/C. Destino) */
     const tela = readFileSync(resolve(__dirname, '../../pages/FinanceiroV2Tab.tsx'), 'utf8');
     expect(tela).not.toContain('>Tipo</th>');
     expect(tela).not.toContain('tipoDaLinha');
-    expect(tela).toContain('>OC</th>');
-    expect(tela).toContain('<CelulaOC oc={lancamentosComOC.get(l.id)}');
+    /* FIN-V2-HOMOLOG-FIX-01 (item 3): a coluna OC da lista SAIU — o icone ao lado do produto e o "Abrir OC" do menu a
+       substituem (ver finV2HomologFix01.test.ts). */
+    expect(tela).not.toContain('>OC</th>');
+    expect(tela).not.toContain('<CelulaOC oc={lancamentosComOC.get(l.id)}');
     for (const rotulo of ['Entradas:', 'Saídas:', 'Transf.:', 'lanç.']) expect(tela).toContain(rotulo);
     /* os dois totais sem caixa sairam da faixa padrao; o total sem caixa so' existe dentro de `mostrarSemCaixa &&` */
     expect(tela).not.toContain('Receita sem caixa:');
