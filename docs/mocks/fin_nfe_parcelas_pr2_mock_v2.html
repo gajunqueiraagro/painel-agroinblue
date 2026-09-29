@@ -1,0 +1,137 @@
+<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Parcelas com NF e boleto — mock PR2 v2</title><style>
+:root{--p:#1D3A5D;--p2:#2E4B6E;--fg:#0F1729;--mf:#6B7280;--bd:#E0E2E6;--gr:#15803d;--grb:#f0fdf4;--rd:#b91c1c;--am:#b45309;--amb:#fffbeb;--amd:#fde68a;--s:#E8E6DF;--z:#F5F4F0}
+*{box-sizing:border-box}body{margin:0;background:#8a929c;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--fg);padding:16px}
+.lbl{color:#fff;font-size:12px;font-weight:600;margin:0 auto 6px;width:1100px}
+.m{width:1100px;margin:0 auto 18px;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.3);display:flex;flex-direction:column}
+.hd{background:var(--p);color:#fff;height:32px;flex:none;display:flex;align-items:center;gap:12px;padding:0 12px;font-size:12px}
+.hd .pill{border:1px solid rgba(255,255,255,.5);border-radius:10px;padding:0 7px;font-size:10px}
+.main{display:flex;flex-direction:column;padding:8px 10px;gap:5px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px 10px}
+.f label{display:block;font-size:9.5px;color:var(--mf);margin-bottom:1px}
+.f .i{border:1px solid var(--bd);border-radius:4px;height:24px;display:flex;align-items:center;padding:0 7px;font-size:11px;background:#fff;white-space:nowrap}
+.f .i .s{margin-left:auto;color:var(--mf);font-size:9.5px}
+.chk{display:inline-block;width:11px;height:11px;border-radius:2px;background:var(--p);margin-right:5px;vertical-align:-1px}
+.h3{font-size:10.5px;font-weight:600;margin:6px 0 2px;display:flex;align-items:center;gap:8px}
+.h3 .sp{margin-left:auto;display:flex;gap:5px}
+.btn{font-size:10px;border:1px solid var(--bd);border-radius:4px;padding:0 8px;height:18px;line-height:16px;background:#fff;font-weight:500;white-space:nowrap;display:inline-block}
+.btn.nv{background:var(--p);color:#fff;border-color:var(--p)}
+.btn.sm{height:15px;line-height:13px;font-size:9.5px;padding:0 6px}
+.lk{color:var(--p);font-size:9.5px;text-decoration:underline;white-space:nowrap}
+.x{color:var(--rd);font-size:10px;font-weight:700}
+.scroll{border:1px solid var(--bd);border-radius:4px;overflow:auto}
+table{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;font-variant-numeric:tabular-nums}
+thead th{white-space:nowrap;position:sticky;top:0;background:var(--p);color:#fff;font-size:9.5px;font-weight:600;text-align:center;padding:0 5px;height:18px}
+th.dv,td.dv{border-left:2px solid #9aa7b6}
+td{font-size:10px;height:18px;padding:0 5px;border-bottom:1px solid #eceae4;white-space:nowrap;overflow:hidden}
+tbody tr:nth-child(even) td{background:var(--z)}
+tfoot td{position:sticky;bottom:0;background:var(--s);font-weight:700;height:19px;border-top:2px solid #9aa7b6}
+.r{text-align:right}.c{text-align:center}.neg{color:var(--rd)}.mf{color:var(--mf)}.pos{color:var(--gr)}
+.chip{font-size:9px;border-radius:9px;padding:0 6px;font-weight:600;white-space:nowrap}
+.chip.nf{background:#e8eef6;color:var(--p)}.chip.bl{background:var(--grb);color:var(--gr)}.chip.am{background:var(--amb);color:var(--am);border:1px solid var(--amd)}
+.fl{color:var(--gr);font-weight:600}
+.lg{font-size:9.5px;color:var(--mf)}
+.foot{flex:none;display:flex;justify-content:flex-end;gap:6px;padding:4px 10px;background:var(--p);height:32px;align-items:center}.foot span{font-size:10px;color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:4px;padding:0 9px;height:22px;line-height:20px}
+.foot .ok{background:#15803d;border-color:#15803d}
+.dbar{display:flex;align-items:center;gap:8px;border:1px solid var(--amd);background:var(--amb);border-radius:4px;padding:0 8px;font-size:10px;height:22px}
+.drop{border:1.5px dashed var(--p);border-radius:6px;background:#f7f9fc;padding:0 10px;height:28px;font-size:10.5px;display:flex;align-items:center;gap:10px}
+.note{width:1100px;margin:0 auto 18px;background:#fff;border-radius:6px;padding:10px 12px;font-size:11.5px;line-height:1.55}
+.sm-m{width:760px}
+.row2{display:flex;gap:10px;align-items:flex-start}
+</style></head><body>
+
+<!-- ======================= TELA A ======================= -->
+<div class="lbl">A · Novo lançamento com "Parcelada" marcada — a NF entra uma vez e vale para as 8; cada parcela tem o seu boleto (antes de salvar)</div>
+<div class="m">
+ <div class="hd"><b>Novo lançamento</b><span class="pill">Vera</span><span style="margin-left:auto">✕</span></div>
+ <div class="main">
+  <div class="grid">
+   <div class="f"><label>Tipo</label><div class="i">Saída</div></div>
+   <div class="f"><label>Competência</label><div class="i">24/09/26</div></div>
+   <div class="f"><label>Fornecedor</label><div class="i">St Repro<span class="s">busca digitando</span></div></div>
+   <div class="f"><label>Valor total</label><div class="i">R$ 24.052,00</div></div>
+   <div class="f"><label>Subcentro</label><div class="i">Sêmen e IATF</div></div>
+   <div class="f"><label>Fazenda</label><div class="i">Faz. Baia Grande</div></div>
+   <div class="f"><label>Conta de pagamento</label><div class="i">Sicredi</div></div>
+   <div class="f"><label>Parcelamento</label><div class="i"><span class="chk"></span>Parcelada · 8x<span class="s">1º venc. 26/10/26</span></div></div>
+  </div>
+
+  <div class="h3">Documentos da compra <span class="lg">valem para todas as parcelas</span><span class="sp"><span class="btn">+ Nota fiscal</span><span class="btn">+ Outro documento</span></span></div>
+  <div class="scroll"><table>
+   <colgroup><col style="width:90px"><col style="width:96px"><col><col style="width:130px"><col style="width:120px"><col style="width:74px"></colgroup>
+   <thead><tr><th>Tipo</th><th>Número</th><th>Arquivo</th><th class="dv">Ligado a</th><th>Valor R$</th><th class="dv">Ação</th></tr></thead>
+   <tbody>
+    <tr><td class="c"><span class="chip nf">Nota fiscal</span></td><td class="c">000.018.112</td><td>NF_18112_ST_Repro.pdf</td><td class="c dv">8 de 8 parcelas</td><td class="r">24.052,00</td><td class="c dv"><span class="lk">ver</span> <span class="x">✕</span></td></tr>
+   </tbody>
+  </table></div>
+
+  <div class="h3">Parcelas <span class="lg">1 boleto por parcela · agora ou depois</span><span class="sp"><span class="btn nv">Anexar vários boletos</span></span></div>
+  <div class="scroll" style="max-height:186px"><table>
+   <colgroup><col style="width:60px"><col style="width:80px"><col style="width:100px"><col style="width:96px"><col><col style="width:74px"></colgroup>
+   <thead><tr><th>Parcela</th><th>Vencimento</th><th>Valor R$</th><th class="dv">Nota fiscal</th><th>Boleto</th><th class="dv">Ação</th></tr></thead>
+   <tbody>
+    <tr><td class="c">1/8</td><td class="c">26/10/26</td><td class="r neg">3.006,50</td><td class="c dv">000.018.112</td><td class="fl">boleto_001_ST_Repro.pdf</td><td class="c dv"><span class="lk">ver</span> <span class="x">✕</span></td></tr>
+    <tr><td class="c">2/8</td><td class="c">26/11/26</td><td class="r neg">3.006,50</td><td class="c dv">000.018.112</td><td class="fl">boleto_002_ST_Repro.pdf</td><td class="c dv"><span class="lk">ver</span> <span class="x">✕</span></td></tr>
+    <tr><td class="c">3/8</td><td class="c">26/12/26</td><td class="r neg">3.006,50</td><td class="c dv">000.018.112</td><td class="mf">sem boleto</td><td class="c dv"><span class="btn sm">+ Boleto</span></td></tr>
+    <tr><td class="c">4/8</td><td class="c">26/01/27</td><td class="r neg">3.006,50</td><td class="c dv">000.018.112</td><td class="mf">sem boleto</td><td class="c dv"><span class="btn sm">+ Boleto</span></td></tr>
+    <tr><td class="c">5/8</td><td class="c">26/02/27</td><td class="r neg">3.006,50</td><td class="c dv">000.018.112</td><td class="mf">sem boleto</td><td class="c dv"><span class="btn sm">+ Boleto</span></td></tr>
+    <tr><td class="c">6/8</td><td class="c">26/03/27</td><td class="r neg">3.006,50</td><td class="c dv">000.018.112</td><td class="mf">sem boleto</td><td class="c dv"><span class="btn sm">+ Boleto</span></td></tr>
+    <tr><td class="c">7/8</td><td class="c">26/04/27</td><td class="r neg">3.006,50</td><td class="c dv">000.018.112</td><td class="mf">sem boleto</td><td class="c dv"><span class="btn sm">+ Boleto</span></td></tr>
+    <tr><td class="c">8/8</td><td class="c">26/05/27</td><td class="r neg">3.006,50</td><td class="c dv">000.018.112</td><td class="mf">sem boleto</td><td class="c dv"><span class="btn sm">+ Boleto</span></td></tr>
+   </tbody>
+   <tfoot><tr><td colspan="2">Total · 8 parcelas</td><td class="r neg">24.052,00</td><td class="c dv">1 nota</td><td>2 de 8 com boleto</td><td class="dv"></td></tr></tfoot>
+  </table></div>
+  <div class="lg">Vencimentos ainda saem iguais todo mês a partir do 1º (regra de hoje). Vencimento e valor livres por parcela = PR 3.</div>
+ </div>
+ <div class="foot"><span>Cancelar</span><span class="ok">Salvar 8 parcelas</span></div>
+</div>
+
+<!-- ======================= TELA B ======================= -->
+<div class="lbl">B · "Anexar vários boletos" — solta os 8 PDFs de uma vez; cada arquivo vai para uma parcela; o que não casou fica em amarelo para escolher</div>
+<div class="m sm-m">
+ <div class="hd"><b>Anexar vários boletos</b><span class="pill">8 parcelas · St Repro</span><span style="margin-left:auto">✕</span></div>
+ <div class="main">
+  <div class="drop"><b>Solte os boletos aqui</b><span class="mf">PDF ou imagem · vários de uma vez</span><span class="btn" style="margin-left:auto">Escolher arquivos</span></div>
+  <div class="scroll"><table>
+   <colgroup><col><col style="width:110px"><col style="width:96px"><col style="width:80px"><col style="width:90px"><col style="width:40px"></colgroup>
+   <thead><tr><th>Arquivo</th><th class="dv">Vai para</th><th>Casou por</th><th>Vencimento</th><th>Valor R$</th><th class="dv"></th></tr></thead>
+   <tbody>
+    <tr><td>boleto_003_ST_Repro.pdf</td><td class="c dv">Parcela 3/8 ▾</td><td class="c">vencimento</td><td class="c">26/12/26</td><td class="r neg">3.006,50</td><td class="c dv"><span class="x">✕</span></td></tr>
+    <tr><td>boleto_004_ST_Repro.pdf</td><td class="c dv">Parcela 4/8 ▾</td><td class="c">vencimento</td><td class="c">26/01/27</td><td class="r neg">3.006,50</td><td class="c dv"><span class="x">✕</span></td></tr>
+    <tr><td>boleto_005_ST_Repro.pdf</td><td class="c dv">Parcela 5/8 ▾</td><td class="c">vencimento</td><td class="c">26/02/27</td><td class="r neg">3.006,50</td><td class="c dv"><span class="x">✕</span></td></tr>
+    <tr><td>boleto_006_ST_Repro.pdf</td><td class="c dv">Parcela 6/8 ▾</td><td class="c mf">nome do arquivo</td><td class="c">26/03/27</td><td class="r neg">3.006,50</td><td class="c dv"><span class="x">✕</span></td></tr>
+    <tr><td>boleto_007_ST_Repro.pdf</td><td class="c dv">Parcela 7/8 ▾</td><td class="c">vencimento</td><td class="c">26/04/27</td><td class="r neg">3.006,50</td><td class="c dv"><span class="x">✕</span></td></tr>
+    <tr><td>boleto_8.pdf</td><td class="c dv"><span class="chip am">escolher ▾</span></td><td class="c mf">não leu</td><td class="c mf">—</td><td class="r mf">—</td><td class="c dv"><span class="x">✕</span></td></tr>
+   </tbody>
+   <tfoot><tr><td>6 arquivos · 5 ligados · 1 a escolher</td><td class="dv"></td><td></td><td></td><td></td><td class="dv"></td></tr></tfoot>
+  </table></div>
+  <div class="dbar"><b>Falta escolher a parcela de 1 arquivo.</b><span class="mf">Parcela ainda sem boleto: 8/8.</span></div>
+  <div class="lg">1º o sistema lê o vencimento do boleto e casa com a parcela que vence no mesmo mês; se não conseguir ler, usa o número no nome do arquivo (001…008); se nenhum dos dois, fica amarelo para escolher. O operador sempre pode trocar no ▾. Parcela que já tem boleto não aparece como opção (substituir = ✕ na grade e anexar de novo).</div>
+ </div>
+ <div class="foot"><span>Cancelar</span><span class="ok" style="opacity:.5">Anexar 6 boletos</span></div>
+</div>
+
+<!-- ======================= TELA C ======================= -->
+<div class="lbl">C · Depois de salvo: abrir a parcela 3/8 no Financeiro — a NF aparece como "da compra" e o boleto é só desta parcela</div>
+<div class="m sm-m">
+ <div class="hd"><b>Editar lançamento</b><span class="pill">Sêmen e IATF · 3/8</span><span style="margin-left:auto">✕</span></div>
+ <div class="main">
+  <div class="h3">Documentos<span class="sp"><span class="btn">+ Boleto</span><span class="btn">+ Outro documento</span></span></div>
+  <div class="scroll"><table>
+   <colgroup><col style="width:90px"><col style="width:96px"><col><col style="width:120px"><col style="width:74px"></colgroup>
+   <thead><tr><th>Tipo</th><th>Número</th><th>Arquivo</th><th class="dv">Ligado a</th><th class="dv">Ação</th></tr></thead>
+   <tbody>
+    <tr><td class="c"><span class="chip nf">Nota fiscal</span></td><td class="c">000.018.112</td><td>NF_18112_ST_Repro.pdf</td><td class="c dv">8 parcelas ▸</td><td class="c dv"><span class="lk">ver</span> <span class="lk">✎</span></td></tr>
+    <tr><td class="c"><span class="chip bl">Boleto</span></td><td class="c mf">—</td><td>boleto_003_ST_Repro.pdf</td><td class="c dv">só esta</td><td class="c dv"><span class="lk">ver</span> <span class="x">✕</span></td></tr>
+   </tbody>
+  </table></div>
+  <div class="lg">NF errada: o ✎ troca o arquivo e os dados da nota (número, emissão, valor) — como a nota é uma só, a troca vale nas 8 parcelas, e o formulário avisa "esta nota está em 8 parcelas". A NF não tem ✕ dentro da parcela; tirar a nota = pelo parcelamento (sai das 8 juntas).</div>
+ </div>
+ <div class="foot"><span>Fechar</span><span class="ok">Salvar</span></div>
+</div>
+
+<div class="note"><b>Mock PR 2 v2 · FIN-NFE-PARCELAS-01 · NF da compra ligada às parcelas + boleto por parcela.</b> Dados do caso Vera (St Repro, NF 18112, R$ 24.052,00 em 8 × 3.006,50). Padrão A31: linha 18px, fonte 10 / cabeçalho 9,5 navy congelado, datas dd/mm/aa, uma informação por coluna, divisores entre grupos, zebra, NF 000.000.000, nada cortado.<br>
+• <b>Uma NF, várias parcelas</b> (opção 3): o documento é gravado <b>uma vez</b> e ligado às 8 parcelas — não são 8 cópias. A coluna "Ligado a" diz a quantas.<br>
+• <b>Boleto</b>: um por parcela, "+ Boleto" na linha ou "Anexar vários" (tela B). Boleto é opcional — salvar sem boleto não é pendência.<br>
+• <b>Fora deste PR</b>: vencimentos/valores livres (PR 3), ler o XML (PR 4).<br>
+<b>Decidido (29/09):</b> NF uma só para as 8; sem ✕ na parcela, troca pelo ✎ vale para as 8; boletos casam 1º pelo vencimento (mesmo mês), 2º pelo nome do arquivo, senão escolha na mão.</div>
+</body></html>

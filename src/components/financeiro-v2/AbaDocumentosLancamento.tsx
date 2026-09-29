@@ -29,6 +29,7 @@ import { CampoMoeda } from '@/components/ui/campo-moeda';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Paperclip, Pencil, Ban, Plus, X } from 'lucide-react';
 import { formatMoeda } from '@/lib/calculos/formatters';
+import { formatNFNumber } from '@/lib/financeiro/documentoHelper';
 import {
   ESPECIES_LANC_DOC, especieValida, rotuloEspecieDoc, type EspecieLancDoc, type LancDocumento, type LancDocPayload,
   type LancamentoDocumentosApi, type DestinoDocumento,
@@ -39,15 +40,19 @@ function identidade(d: LancDocumento): string {
   /* OC-DOC-ESPECIE-01: das duas origens — a NF da OC aparecia "Outro", e a complementar some sem a crua. */
   const base = rotuloEspecieDoc(d);
   if (!d.numero) return base;
-  return d.serie ? `${base} ${d.numero} · série ${d.serie}` : `${base} ${d.numero}`;
+  /* PR 2b — padrão da casa: NF no formato 000.000.000 */
+  const numero = d.especie === 'nf' ? (formatNFNumber(d.numero) || d.numero) : d.numero;
+  return d.serie ? `${base} ${numero} · série ${d.serie}` : `${base} ${numero}`;
 }
 
 const dataBr = (iso: string | null) => (iso ? iso.split('-').reverse().join('/') : null);
 
-export function AbaDocumentosLancamento({ api, somenteLeitura, fornecedores }: {
+export function AbaDocumentosLancamento({ api, somenteLeitura, fornecedores, onAnexarBoletosDasParcelas }: {
   api: LancamentoDocumentosApi;
   somenteLeitura?: boolean;
   fornecedores: { id: string; nome: string }[];
+  /** Presente só quando o lançamento é parcela de um parcelamento — abre "Anexar vários boletos" (PR 2b). */
+  onAnexarBoletosDasParcelas?: () => void;
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [formAberto, setFormAberto] = useState(false);
@@ -103,16 +108,20 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, fornecedores }: {
     <div className="space-y-2">
       {/* ── TOPO: o confronto, vindo do banco ─────────────────────────────────── */}
       <div className="flex flex-wrap items-end gap-x-8 gap-y-2 rounded-md border bg-muted/20 px-3.5 py-[11px]">
+        {/* ⚠ COM A NF DA COMPRA, A CONFERÊNCIA É PELA COMPRA — FIN-NFE-PARCELAS-01 PR 2b: a nota contra a
+            soma das parcelas ATIVAS (o banco já responde, chaves `grupo_*`). Sem ela, como sempre. */}
         <div>
-          <div className="text-[11px] text-muted-foreground leading-none">Documentado</div>
-          <div className="mt-1 text-[20px] font-medium leading-none tabular-nums">
-            {c ? formatMoeda(c.valorDocumentado) : '—'}
+          <div className="text-[11px] text-muted-foreground leading-none">{c?.grupo ? 'Nota da compra' : 'Documentado'}</div>
+          <div className="mt-1 text-[20px] font-medium leading-none tabular-nums" data-testid="topo-documentado">
+            {c ? formatMoeda(c.grupo ? c.grupo.valorDocumento : c.valorDocumentado) : '—'}
           </div>
         </div>
         <div>
-          <div className="text-[11px] text-muted-foreground leading-none">Valor do lançamento</div>
-          <div className="mt-1 text-[20px] font-medium leading-none tabular-nums">
-            {c ? formatMoeda(c.valorLancamento) : '—'}
+          <div className="text-[11px] text-muted-foreground leading-none">
+            {c?.grupo ? `Parcelas ativas (${c.grupo.qtd})` : 'Valor do lançamento'}
+          </div>
+          <div className="mt-1 text-[20px] font-medium leading-none tabular-nums" data-testid="topo-valor">
+            {c ? formatMoeda(c.grupo ? c.grupo.somaLancamentos : c.valorLancamento) : '—'}
           </div>
         </div>
         {c && c.docsComValor > 0 && (
@@ -131,10 +140,18 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, fornecedores }: {
           {/* O destino do PRÓXIMO documento, dito antes do clique — nunca depois. */}
           {api.operacaoId && ' · o próximo documento nasce na operação comercial'}
         </span>
-        <Button type="button" size="sm" className="h-7 gap-1 px-2.5 text-[11px]"
-          disabled={somenteLeitura} onClick={() => { setEditando(null); setFormAberto(true); }}>
-          <Plus className="h-3.5 w-3.5" /> Adicionar documento
-        </Button>
+        <span className="flex items-center gap-1.5">
+          {onAnexarBoletosDasParcelas && (
+            <Button type="button" size="sm" variant="outline" className="h-7 px-2.5 text-[11px]" data-testid="anexar-boletos-parcelas"
+              disabled={somenteLeitura} onClick={onAnexarBoletosDasParcelas}>
+              Anexar boletos das parcelas
+            </Button>
+          )}
+          <Button type="button" size="sm" className="h-7 gap-1 px-2.5 text-[11px]"
+            disabled={somenteLeitura} onClick={() => { setEditando(null); setFormAberto(true); }}>
+            <Plus className="h-3.5 w-3.5" /> Adicionar documento
+          </Button>
+        </span>
       </div>
 
       {/* ── LISTA A18 ─────────────────────────────────────────────────────────── */}
@@ -149,6 +166,13 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, fornecedores }: {
                       NF da operação pareceria um documento do lançamento — e o operador
                       anexaria a segunda cópia da mesma nota, que é justamente o que esta
                       frente existe para impedir. */}
+                  {/* PR 2b — a NF da compra, ligada às parcelas: o selo diz a quantas. Irmão do "da operação". */}
+                  {(d.ligadoAQtd ?? 1) > 1 && (
+                    <span className="shrink-0 rounded-full bg-sky-100 px-1.5 py-px text-[10px] text-sky-800" data-testid="selo-parcelas"
+                      title="Esta nota está em várias parcelas da mesma compra">
+                      {d.ligadoAQtd} parcelas
+                    </span>
+                  )}
                   {d.origem === 'operacao' && (
                     <button type="button"
                       title="Este documento é da operação comercial — abrir a OC na aba Documentos"
@@ -189,11 +213,15 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, fornecedores }: {
                     className="hover:text-foreground disabled:opacity-30">
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
-                  <button type="button" title="Cancelar documento" aria-label="Cancelar documento"
-                    disabled={somenteLeitura} onClick={() => { setCancelando(d); setMotivo(''); }}
-                    className="hover:text-destructive disabled:opacity-30">
-                    <Ban className="h-3.5 w-3.5" />
-                  </button>
+                  {/* ⚠ NF DA COMPRA NÃO SE CANCELA PELO CARTÃO (decisão do Gabriel, PR 2b): ela está em N
+                      parcelas, e o caminho é o lápis, que avisa e pede o motivo. */}
+                  {(d.ligadoAQtd ?? 1) <= 1 && (
+                    <button type="button" title="Cancelar documento" aria-label="Cancelar documento"
+                      disabled={somenteLeitura} onClick={() => { setCancelando(d); setMotivo(''); }}
+                      className="hover:text-destructive disabled:opacity-30">
+                      <Ban className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -231,12 +259,14 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, fornecedores }: {
  *  ⚠ EXPORTADO para os documentos PENDENTES do "Novo lançamento" (FIN-NFE-PARCELAS-01): a mesma tela,
  *  com uma `api` que guarda em memória. `pendente` só troca o texto do botão e cala o toast de
  *  "registrado" — o documento ainda não foi a lugar nenhum. */
-export function FormDocumento({ api, documento, fornecedores, onFechar, pendente }: {
+export function FormDocumento({ api, documento, fornecedores, onFechar, pendente, semBoleto }: {
   api: LancamentoDocumentosApi;
   documento: LancDocumento | null;
   fornecedores: { id: string; nome: string }[];
   onFechar: () => void;
   pendente?: boolean;
+  /** Documento da COMPRA no parcelado: o boleto é por parcela, na grade de parcelas (PR 2b). */
+  semBoleto?: boolean;
 }) {
   const [especie, setEspecie] = useState<EspecieLancDoc>(documento?.especie ?? 'nf');
   const [numero, setNumero] = useState(documento?.numero ?? '');
@@ -250,6 +280,13 @@ export function FormDocumento({ api, documento, fornecedores, onFechar, pendente
   const [observacao, setObservacao] = useState(documento?.observacao ?? '');
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [enviando, setEnviando] = useState(false);
+  /* UX-TOAST-01 — PR 2b: a recusa (arquivo em formato errado, RPC) fica AO LADO do botão, não num toast. */
+  const [erroForm, setErroForm] = useState<string | null>(null);
+  /* PR 2b — NF da compra (em N parcelas): cancelar pelo lápis, com motivo, sai das N de uma vez. */
+  const compartilhada = (documento?.ligadoAQtd ?? 1) > 1;
+  const [cancelandoNota, setCancelandoNota] = useState(false);
+  const [motivoNota, setMotivoNota] = useState('');
+  const especiesDoForm = semBoleto ? ESPECIES_LANC_DOC.filter(e => e.value !== 'boleto') : ESPECIES_LANC_DOC;
 
   const OUTRO = '__outro__';
   const emitenteEhOutro = emitenteId === OUTRO;
@@ -278,8 +315,24 @@ export function FormDocumento({ api, documento, fornecedores, onFechar, pendente
     emitenteDocumento: emitenteEhOutro ? (emitenteDoc.trim() || null) : null,
   });
 
+  const cancelarNota = async () => {
+    if (!documento) return;
+    if (!motivoNota.trim()) { setErroForm('Informe o motivo do cancelamento da nota.'); return; }
+    setEnviando(true);
+    setErroForm(null);
+    try {
+      await api.cancelar(documento.id, motivoNota.trim());
+      onFechar();
+    } catch (e) {
+      setErroForm(e instanceof Error ? e.message : 'Falha ao cancelar a nota.');
+    } finally {
+      setEnviando(false);
+    }
+  };
+
   const salvar = async () => {
     setEnviando(true);
+    setErroForm(null);
     try {
       let id = documento?.id ?? null;
       let versao = documento?.versao ?? 1;
@@ -293,7 +346,7 @@ export function FormDocumento({ api, documento, fornecedores, onFechar, pendente
         versao = documento.versao + 1;
       } else {
         const criado = await api.registrar(payload());
-        if (!criado) { toast.error('Não foi possível registrar o documento.'); return; }
+        if (!criado) { setErroForm('Não foi possível registrar o documento.'); return; }
         id = criado.id;
         destino = { origem: criado.origem, operacaoId: criado.operacaoId };
         versao = 1;
@@ -305,7 +358,7 @@ export function FormDocumento({ api, documento, fornecedores, onFechar, pendente
       /* ⚠ A MENSAGEM DA RPC, INTEIRA: ela nomeia o que recusou (espécie inválida, versão
          em conflito, lançamento cancelado). Trocá-la por "erro ao salvar" apagaria a única
          pista que o operador tem. */
-      toast.error(e instanceof Error ? e.message : 'Falha ao salvar o documento.');
+      setErroForm(e instanceof Error ? e.message : 'Falha ao salvar o documento.');
     } finally {
       setEnviando(false);
     }
@@ -313,8 +366,10 @@ export function FormDocumento({ api, documento, fornecedores, onFechar, pendente
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onFechar(); }}>
-      <DialogContent className="max-w-lg p-0 gap-0 overflow-hidden">
-        <div className="bg-primary px-4 py-2.5 text-primary-foreground flex items-center justify-between">
+      {/* PR 2b — cabeçalho e rodapé fixos, só o corpo rola: com o aviso da nota compartilhada e o motivo do
+          cancelamento, o formulário passava da altura da tela e o cabeçalho sumia (visto na prova na tela). */}
+      <DialogContent className="max-w-lg p-0 gap-0 overflow-hidden flex max-h-[calc(100vh-32px)] flex-col">
+        <div className="bg-primary px-4 py-2.5 text-primary-foreground flex shrink-0 items-center justify-between">
           <DialogTitle className="text-[14px] font-semibold">
             {documento ? 'Editar documento' : 'Novo documento'}
           </DialogTitle>
@@ -325,13 +380,20 @@ export function FormDocumento({ api, documento, fornecedores, onFechar, pendente
           Informe espécie, número, data, valor e emitente do documento deste lançamento.
         </DialogDescription>
 
+        <div className="min-h-0 flex-1 overflow-auto">
+        {compartilhada && (
+          <p className="mx-4 mt-3 rounded border border-sky-200 bg-sky-50 px-2 py-1 text-[10px] text-sky-900" data-testid="aviso-nota-compartilhada">
+            Esta nota está em {documento?.ligadoAQtd} parcelas; a alteração vale para todas.
+          </p>
+        )}
+
         <div className="grid grid-cols-2 gap-2 px-4 py-3">
           <div>
             <Label className="text-[10px]">Espécie <span className="text-destructive">*</span></Label>
             <Select value={especie} onValueChange={v => setEspecie(especieValida(v))} disabled={especieSoLeitura}>
               <SelectTrigger className="h-8 text-[12px] mt-0.5"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {ESPECIES_LANC_DOC.map(e => (
+                {especiesDoForm.map(e => (
                   <SelectItem key={e.value} value={e.value}>{e.label}</SelectItem>
                 ))}
               </SelectContent>
@@ -431,7 +493,33 @@ export function FormDocumento({ api, documento, fornecedores, onFechar, pendente
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t bg-card px-4 py-2.5">
+        {compartilhada && cancelandoNota && (
+          <div className="mx-4 mb-2 space-y-1 rounded border border-red-200 bg-red-50 px-2 py-1.5" data-testid="cancelar-nota">
+            <Label className="text-[10px]">Motivo do cancelamento da nota <span className="text-destructive">*</span></Label>
+            <Input value={motivoNota} onChange={e => setMotivoNota(e.target.value)} className="h-8 text-[12px]"
+              placeholder={`A nota sai das ${documento?.ligadoAQtd} parcelas`} />
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="ghost" className="h-7 text-[11px]" onClick={() => { setCancelandoNota(false); setMotivoNota(''); setErroForm(null); }}>Voltar</Button>
+              <Button type="button" variant="destructive" className="h-7 text-[11px]" disabled={enviando} onClick={cancelarNota}
+                data-testid="confirmar-cancelar-nota">
+                Cancelar nota
+              </Button>
+            </div>
+          </div>
+        )}
+
+        </div>
+
+        <div className="flex shrink-0 items-center justify-end gap-2 border-t bg-card px-4 py-2.5">
+          {erroForm && (
+            <span className="mr-auto text-[10px] leading-tight text-destructive" data-testid="erro-form-documento">{erroForm}</span>
+          )}
+          {compartilhada && !cancelandoNota && (
+            <Button type="button" variant="outline" className={`${erroForm ? '' : 'mr-auto'} text-destructive`}
+              onClick={() => { setCancelandoNota(true); setErroForm(null); }} data-testid="abrir-cancelar-nota">
+              Cancelar nota (sai das {documento?.ligadoAQtd} parcelas)
+            </Button>
+          )}
           <Button type="button" variant="ghost" onClick={onFechar}>Cancelar</Button>
           <Button type="button" onClick={salvar} disabled={enviando || api.saving}>
             {pendente ? (documento ? 'Salvar na lista' : 'Adicionar à lista') : (documento ? 'Salvar documento' : 'Registrar documento')}

@@ -12,7 +12,7 @@
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Plus, Pencil, X } from 'lucide-react';
-import { formatMoeda } from '@/lib/calculos/formatters';
+import { formatNFNumber } from '@/lib/financeiro/documentoHelper';
 import { FormDocumento } from '@/components/financeiro-v2/AbaDocumentosLancamento';
 import {
   rotuloEspecieDoc, type LancDocumento, type LancDocPayload, type LancamentoDocumentosApi,
@@ -28,6 +28,13 @@ const dataCurta = (iso: string | null | undefined) => {
   return `${d}/${m}/${a.slice(2)}`;
 };
 
+/** Número do documento: NF no formato 000.000.000 (padrão da casa); as outras espécies como vieram. */
+function numeroExibido(d: LancDocumento): string {
+  if (!d.numero) return '—';
+  const n = d.especie === 'nf' ? (formatNFNumber(d.numero) || d.numero) : d.numero;
+  return d.serie ? `${n} · série ${d.serie}` : n;
+}
+
 /** O pendente no formato que o `FormDocumento` lê — só para editar; nada disto vai ao banco. */
 function comoDocumento(p: DocumentoPendente): LancDocumento {
   const x = p.payload;
@@ -37,7 +44,7 @@ function comoDocumento(p: DocumentoPendente): LancDocumento {
     dataEmissao: x.dataEmissao ?? null, valorDocumento: x.valorDocumento ?? null, url: null,
     tipo: p.arquivo?.type ?? null, tamanhoBytes: p.arquivo?.size ?? null, observacao: x.observacao ?? null,
     emitenteId: x.emitenteId ?? null, emitenteNome: x.emitenteNome ?? null, emitenteDocumento: x.emitenteDocumento ?? null,
-    cancelado: false, canceladoMotivo: null, versao: 1,
+    cancelado: false, canceladoMotivo: null, versao: 1, ligadoAQtd: null,
   };
 }
 
@@ -79,12 +86,16 @@ export function apiDePendentes(
   };
 }
 
-export function DocumentosPendentes({ pendentes, onMudar, fornecedores, parcelado, travado }: {
+export function DocumentosPendentes({ pendentes, onMudar, fornecedores, ligadoA, travado }: {
   pendentes: DocumentoPendente[];
   onMudar: (f: (l: DocumentoPendente[]) => DocumentoPendente[]) => void;
   fornecedores: { id: string; nome: string }[];
-  /** No parcelado os documentos vão só para a parcela 1 (a herança é o PR 2) — e a tela diz. */
-  parcelado: boolean;
+  /**
+   * PARCELADO — FIN-NFE-PARCELAS-01 PR 2b: os documentos desta lista são os da COMPRA, registrados na
+   * parcela 1 e ligados às N. A coluna "Ligado a" diz a quantas, e o boleto não é oferecido aqui (ele
+   * é por parcela, na grade de parcelas). Ausente = à vista, como no PR 1.
+   */
+  ligadoA?: number;
   /** Depois do salvar a lista é o que falta gravar: não se edita mais, só se tenta de novo. */
   travado?: boolean;
 }) {
@@ -105,18 +116,21 @@ export function DocumentosPendentes({ pendentes, onMudar, fornecedores, parcelad
           <Plus className="h-3 w-3" /> Adicionar documento
         </Button>
       </div>
-      {parcelado && (
-        <p className="text-[10px] text-amber-700" data-testid="aviso-parcela-1">
-          No parcelado, os documentos vão para a parcela 1; levar a NF para todas as parcelas vem no próximo passo.
-        </p>
-      )}
 
       {pendentes.length > 0 && (
         <div className="overflow-auto rounded border border-[#E0E2E6]">
-          <table className="w-full border-separate border-spacing-0 tabular-nums">
+          <table className="w-full table-fixed border-separate border-spacing-0 tabular-nums">
+            {/* A31 — larguras fixas: nada muda de largura quando o dado muda (PR 2b). */}
+            <colgroup>
+              {/* medidas no diálogo (748px úteis): com "Ligado a" sobram ~160px para o Arquivo */}
+              <col style={{ width: 56 }} /><col style={{ width: 104 }} /><col style={{ width: 54 }} />
+              <col style={{ width: 110 }} /><col style={{ width: 72 }} /><col />
+              {ligadoA ? <col style={{ width: 84 }} /> : null}
+              <col style={{ width: 66 }} /><col style={{ width: 40 }} />
+            </colgroup>
             <thead>
               <tr>
-                {['Espécie', 'Número', 'Emissão', 'Emitente', 'Valor', 'Arquivo', 'Situação', ''].map((h, i) => (
+                {['Espécie', 'Número', 'Emissão', 'Emitente', 'Valor R$', 'Arquivo', ...(ligadoA ? ['Ligado a'] : []), 'Situação', ''].map((h, i) => (
                   <th key={i} className={TH}>{h}</th>
                 ))}
               </tr>
@@ -127,11 +141,12 @@ export function DocumentosPendentes({ pendentes, onMudar, fornecedores, parcelad
                 return (
                   <tr key={p.chave} className="bg-white">
                     <td className={TD}>{rotuloEspecieDoc(d)}</td>
-                    <td className={TD}>{d.numero ? (d.serie ? `${d.numero} · série ${d.serie}` : d.numero) : '—'}</td>
+                    <td className={TD}>{numeroExibido(d)}</td>
                     <td className={`${TD} text-center`}>{dataCurta(d.dataEmissao)}</td>
                     <td className={TD}>{d.emitenteNome ?? '—'}</td>
-                    <td className={`${TD} text-right`}>{d.valorDocumento == null ? '—' : formatMoeda(d.valorDocumento)}</td>
+                    <td className={`${TD} text-right`}>{d.valorDocumento == null ? '—' : d.valorDocumento.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                     <td className={`${TD} break-all`}>{p.arquivo?.name ?? <span className="text-amber-700">sem arquivo</span>}</td>
+                    {ligadoA ? <td className={`${TD} text-center whitespace-nowrap`} data-testid="ligado-a">{ligadoA} de {ligadoA} parcelas</td> : null}
                     <td className={`${TD} text-center`}>
                       {p.gravado
                         ? <span className="rounded bg-emerald-100 px-1 text-[9.5px] font-semibold text-emerald-700">gravado</span>
@@ -162,7 +177,7 @@ export function DocumentosPendentes({ pendentes, onMudar, fornecedores, parcelad
       )}
 
       {formAberto && (
-        <FormDocumento api={api} documento={editando} fornecedores={fornecedores} pendente
+        <FormDocumento api={api} documento={editando} fornecedores={fornecedores} pendente semBoleto={!!ligadoA}
           onFechar={() => { setFormAberto(false); setEditando(null); }} />
       )}
     </div>

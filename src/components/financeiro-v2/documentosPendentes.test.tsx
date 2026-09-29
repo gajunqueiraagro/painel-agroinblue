@@ -18,12 +18,12 @@ vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 import { DocumentosPendentes, apiDePendentes } from '@/components/financeiro-v2/DocumentosPendentes';
 import { novoPendente, type DocumentoPendente } from '@/lib/financeiro/documentosPendentes';
 
-function Palco({ inicial = [], parcelado = false, travado = false }: { inicial?: DocumentoPendente[]; parcelado?: boolean; travado?: boolean }) {
+function Palco({ inicial = [], ligadoA, travado = false }: { inicial?: DocumentoPendente[]; ligadoA?: number; travado?: boolean }) {
   const [lista, setLista] = useState<DocumentoPendente[]>(inicial);
   return (
     <>
       <DocumentosPendentes pendentes={lista} onMudar={setLista} fornecedores={[{ id: 'f1', nome: 'St Repro' }]}
-        parcelado={parcelado} travado={travado} />
+        ligadoA={ligadoA} travado={travado} />
       <output data-testid="n">{lista.length}</output>
     </>
   );
@@ -34,7 +34,8 @@ describe('pendentes antes de salvar', () => {
     const p = novoPendente({ especie: 'nf', numero: '18112', serie: '2', dataEmissao: '2026-09-24', valorDocumento: 24052, emitenteNome: 'St Repro' },
       new File(['%PDF'], 'nfe_18112.pdf', { type: 'application/pdf' }));
     render(<Palco inicial={[p]} />);
-    const linha = screen.getByText('18112 · série 2').closest('tr');
+    /* PR 2b — padrão da casa: NF no formato 000.000.000 (contrato novo; antes, "18112" cru). */
+    const linha = screen.getByText('000.018.112 · série 2').closest('tr');
     expect(linha?.textContent).toContain('NF');
     expect(linha?.textContent).toContain('24/09/26');
     expect(linha?.textContent).toContain('St Repro');
@@ -52,7 +53,8 @@ describe('pendentes antes de salvar', () => {
     fireEvent.change(screen.getAllByPlaceholderText('Opcional')[0], { target: { value: '777' } });
     fireEvent.click(screen.getByText('Adicionar à lista'));
     await waitFor(() => expect(screen.getByTestId('n').textContent).toBe('1'));
-    expect(screen.getByText('777')).toBeTruthy();
+    /* NF (a espécie padrão do formulário) no formato da casa — PR 2b */
+    expect(screen.getByText('000.000.777')).toBeTruthy();
     expect(screen.queryByText('Adicionar à lista')).toBeNull();
   });
 
@@ -66,12 +68,18 @@ describe('pendentes antes de salvar', () => {
     expect(screen.getByText('Adicionar documento').closest('button')?.disabled).toBe(true);
   });
 
-  it('no parcelado a aba avisa, em uma linha, que os documentos vão para a parcela 1 — e à vista não', () => {
-    const { unmount } = render(<Palco parcelado />);
-    expect(screen.getByTestId('aviso-parcela-1').textContent).toContain('parcela 1');
-    unmount();
-    render(<Palco />);
+  /* PR 2b — CONTRATO NOVO: a linha âmbar "vão só para a parcela 1" saiu (a NF agora é ligada às N) e no
+     lugar dela entra a coluna "Ligado a". O caso afirma as duas coisas, e o à vista sem nenhuma. */
+  it('no parcelado a lista diz "Ligado a N de N parcelas" e o aviso da parcela 1 sumiu; à vista, sem a coluna', () => {
+    const doc = novoPendente({ especie: 'nf', numero: '18112' }, null);
+    const { unmount } = render(<Palco inicial={[doc]} ligadoA={8} />);
+    expect(screen.getByTestId('ligado-a').textContent).toBe('8 de 8 parcelas');
+    expect(screen.getByText('Ligado a')).toBeTruthy();
     expect(screen.queryByTestId('aviso-parcela-1')).toBeNull();
+    unmount();
+    render(<Palco inicial={[doc]} />);
+    expect(screen.queryByTestId('ligado-a')).toBeNull();
+    expect(screen.queryByText('Ligado a')).toBeNull();
   });
 
   it('arquivo recusado no mesmo clique DESFAZ o registro — o segundo clique não duplica o pendente', async () => {
@@ -101,14 +109,15 @@ describe('ligação com o salvar (lida da fonte)', () => {
     const trecho = dialogo.slice(dialogo.indexOf('const ok = await onSave(form, currentEditId || undefined);'));
     expect(trecho).toContain("if (!currentIsEdit && pendentes.length > 0) {");
     expect(trecho).toContain("const idCriado = typeof ok === 'string' ? ok : null;");
-    expect(trecho).toContain('const tudo = await gravarPendentesDepoisDoSalvar(idCriado);');
+    expect(trecho).toContain("const tudo = await gravarPendentesDepoisDoSalvar({ tipo: 'avista', lancamentoId: idCriado });");
     expect(trecho).toContain('if (tudo) onClose();');
   });
 
-  it('parcelado: o uuid da RPC leva à parcela 1, e só então fecha', () => {
+  it('parcelado: o uuid da RPC leva às parcelas gravadas, e só então fecha (PR 2b: todas, não só a 1)', () => {
     expect(dialogo).toContain('const financiamentoId = await gravarParcelamento(payload, clienteAtual.id, () => qc.invalidateQueries());');
-    expect(dialogo).toContain('const parcela1 = financiamentoId ? await lancamentoDaParcela1(financiamentoId) : null;');
-    expect(dialogo).toContain('if (!(await gravarPendentesDepoisDoSalvar(parcela1))) return;');
+    expect(dialogo).toContain('const parcelasGravadas = financiamentoId ? await lancamentosDoParcelamento(financiamentoId) : [];');
+    expect(dialogo).toContain("if (!(await gravarPendentesDepoisDoSalvar({ tipo: 'parcelado', parcelas: parcelasGravadas }))) return;");
+    expect(dialogo).not.toContain('lancamentoDaParcela1');
     expect(dialogo).toContain("return typeof data === 'string' ? data : null;");
   });
 

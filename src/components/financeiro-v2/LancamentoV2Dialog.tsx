@@ -71,8 +71,11 @@ import { podeOferecerVinculo, subcentrosVinculaveis, lancamentoTemParteOC } from
 import { podeOferecerDesvinculo } from '@/lib/oc/desvincularLancamento';
 import { DesvincularOperacaoDialog } from '@/components/financeiro-v2/DesvincularOperacaoDialog';
 import { DocumentosPendentes } from '@/components/financeiro-v2/DocumentosPendentes';
+import { ParcelasDaCompra } from '@/components/financeiro-v2/ParcelasDaCompra';
+import { AnexarBoletosDialog, type BoletoAtribuido } from '@/components/financeiro-v2/AnexarBoletosDialog';
 import {
-  gravarDocumentosPendentes, lancamentoDaParcela1, todosGravados, type DocumentoPendente,
+  gravarDocumentosPendentes, gravarDocumentosDoParcelamento, lancamentosDoParcelamento, irmasDaParcela,
+  novoPendente, todosGravados, type DocumentoPendente, type ParcelaGravada, type ParcelaIrma,
 } from '@/lib/financeiro/documentosPendentes';
 
 interface Props {
@@ -370,8 +373,27 @@ export function LancamentoV2Dialog({
      existe quando o lançamento já foi gravado e algum documento não: a partir dali o botão principal
      some (salvar de novo criaria OUTRO lançamento) e sobra o "Tentar de novo". */
   const [pendentes, setPendentes] = useState<DocumentoPendente[]>([]);
-  const [posSalvar, setPosSalvar] = useState<{ lancamentoId: string; erro: string } | null>(null);
+  /* O alvo da nova tentativa: o lançamento à vista, ou as parcelas do parcelamento (PR 2b). `null` = não
+     há como tentar de novo daqui (a frase diz o caminho). */
+  const [posSalvar, setPosSalvar] = useState<{
+    alvo: { tipo: 'avista'; lancamentoId: string } | { tipo: 'parcelado'; parcelas: ParcelaGravada[] } | null;
+    erro: string;
+  } | null>(null);
   const [gravandoDocs, setGravandoDocs] = useState(false);
+  /* PR 2b — "Anexar vários boletos": aberto da grade do novo parcelado ('previa') ou da parcela aberta ('irmas'). */
+  const [anexarBoletos, setAnexarBoletos] = useState<'previa' | 'irmas' | null>(null);
+  const [irmas, setIrmas] = useState<ParcelaIrma[] | null>(null);
+  const [erroAntesDeSalvar, setErroAntesDeSalvar] = useState<string | null>(null);
+  /* As irmãs de uma parcela aberta (a consulta do M6 da FASE 0). Só no editar; `null` = não é parcela. */
+  useEffect(() => {
+    let cancelado = false;
+    setIrmas(null);
+    if (!open || !lancamento?.id || !clienteAtual?.id) return;
+    irmasDaParcela(lancamento.id, clienteAtual.id)
+      .then(r => { if (!cancelado) setIrmas(r); })
+      .catch(() => { if (!cancelado) setIrmas(null); });
+    return () => { cancelado = true; };
+  }, [open, lancamento?.id, clienteAtual?.id]);
   const navigate = useNavigate();
   const isEdit = !!lancamento;
   // PR-SAFE-0 — título originado da Operação Comercial: valor/favorecido/classificação/tipo
@@ -974,6 +996,8 @@ export function LancamentoV2Dialog({
     setAbaAtiva('geral');
     setPendentes([]);
     setPosSalvar(null);
+    setAnexarBoletos(null);
+    setErroAntesDeSalvar(null);
   }, [open, lancamento, defaultFazendaId, prefill, lockedFields]);
 
   // FIN-MODAL-FECHO-01 item 2 — resolve o operacao_id do título OC pelo vínculo
@@ -1355,6 +1379,13 @@ export function LancamentoV2Dialog({
        no banco — que é o item 4 da homologação. */
     if (!currentIsEdit && formaPagamentoParc === 'parcelada' && numParcelas >= 2) {
       if (!clienteAtual?.id) { toast.error('Sessão inválida'); setSaving(false); return; }
+      /* PR 2b — boleto de parcela que saiu do plano não tem onde nascer: pára ANTES de gravar, e diz. */
+      if (pendentes.some(p => p.parcela != null && p.parcela > numParcelas)) {
+        setErroAntesDeSalvar(`Há boleto de parcela acima de ${numParcelas} — tire-o na aba Documentos ou volte o número de parcelas.`);
+        setAbaAtiva('documentos');
+        setSaving(false);
+        return;
+      }
       /* A fazenda vazia ja' foi recusada no inicio do `handleSubmit`, com o foco no campo — o toast "Escolha a
          fazenda" que morava aqui saiu (FIN-FAZENDA-PADRAO-01). */
       /* ⚠ A 1ª PARCELA É O VENCIMENTO, NÃO O PAGAMENTO — e essa inversão era metade do defeito.
@@ -1398,14 +1429,15 @@ export function LancamentoV2Dialog({
         );
         const financiamentoId = await gravarParcelamento(payload, clienteAtual.id, () => qc.invalidateQueries());
         toast.success(`Parcelamento criado: ${numParcelas} parcelas`);
-        /* FIN-NFE-PARCELAS-01 — os pendentes vão para a PARCELA 1 (a herança para todas e' o PR 2). */
+        /* FIN-NFE-PARCELAS-01 PR 2b — a NF da compra vai para a parcela 1 e é LIGADA às N; cada boleto,
+           para a sua parcela (pelo número). */
         if (pendentes.length > 0) {
-          const parcela1 = financiamentoId ? await lancamentoDaParcela1(financiamentoId) : null;
-          if (!parcela1) {
-            setPosSalvar({ lancamentoId: '', erro: 'Parcelamento gravado, mas a parcela 1 não foi encontrada — anexe os documentos nela pelo Editar.' });
+          const parcelasGravadas = financiamentoId ? await lancamentosDoParcelamento(financiamentoId) : [];
+          if (parcelasGravadas.length === 0) {
+            setPosSalvar({ alvo: null, erro: 'Parcelamento gravado, mas as parcelas não foram encontradas — anexe os documentos pelo Editar de cada parcela.' });
             return;
           }
-          if (!(await gravarPendentesDepoisDoSalvar(parcela1))) return;
+          if (!(await gravarPendentesDepoisDoSalvar({ tipo: 'parcelado', parcelas: parcelasGravadas }))) return;
         }
         onClose();
       } catch (e) {
@@ -1475,10 +1507,10 @@ export function LancamentoV2Dialog({
       const idCriado = typeof ok === 'string' ? ok : null;
       if (!idCriado) {
         setSaving(false);
-        setPosSalvar({ lancamentoId: '', erro: 'Lançamento gravado, mas sem o id para anexar — anexe os documentos pelo Editar.' });
+        setPosSalvar({ alvo: null, erro: 'Lançamento gravado, mas sem o id para anexar — anexe os documentos pelo Editar.' });
         return;
       }
-      const tudo = await gravarPendentesDepoisDoSalvar(idCriado);
+      const tudo = await gravarPendentesDepoisDoSalvar({ tipo: 'avista', lancamentoId: idCriado });
       setSaving(false);
       if (tudo) onClose();
       return;
@@ -1492,17 +1524,21 @@ export function LancamentoV2Dialog({
    * foram gravados. ⚠ FALHA NÃO DESFAZ O LANÇAMENTO: ele fica gravado, a lista mostra o que não foi, e
    * o erro aparece ao lado do botão com "Tentar de novo" — sem toast (UX-TOAST-01).
    */
-  const gravarPendentesDepoisDoSalvar = async (lancamentoId: string): Promise<boolean> => {
+  const gravarPendentesDepoisDoSalvar = async (
+    alvo: { tipo: 'avista'; lancamentoId: string } | { tipo: 'parcelado'; parcelas: ParcelaGravada[] },
+  ): Promise<boolean> => {
     if (!clienteAtual?.id) return false;
     setGravandoDocs(true);
     try {
-      const lista = await gravarDocumentosPendentes(clienteAtual.id, lancamentoId, pendentes);
+      const lista = alvo.tipo === 'avista'
+        ? await gravarDocumentosPendentes(clienteAtual.id, alvo.lancamentoId, pendentes)
+        : await gravarDocumentosDoParcelamento(clienteAtual.id, alvo.parcelas, pendentes);
       setPendentes(lista);
       if (todosGravados(lista)) { setPosSalvar(null); return true; }
       const falhas = lista.filter(p => !p.gravado);
       setPosSalvar({
-        lancamentoId,
-        erro: `Lançamento gravado. ${falhas.length} ${falhas.length === 1 ? 'documento não foi gravado' : 'documentos não foram gravados'}: ${falhas[0].erro ?? 'falha'}`,
+        alvo,
+        erro: `${alvo.tipo === 'avista' ? 'Lançamento gravado' : 'Parcelamento gravado'}. ${falhas.length} ${falhas.length === 1 ? 'documento não foi gravado' : 'documentos não foram gravados'}: ${falhas[0].erro ?? 'falha'}`,
       });
       setAbaAtiva('documentos');
       return false;
@@ -1512,8 +1548,30 @@ export function LancamentoV2Dialog({
   };
 
   const tentarDeNovo = async () => {
-    if (!posSalvar?.lancamentoId) return;
-    if (await gravarPendentesDepoisDoSalvar(posSalvar.lancamentoId)) onClose();
+    if (!posSalvar?.alvo) return;
+    if (await gravarPendentesDepoisDoSalvar(posSalvar.alvo)) onClose();
+  };
+
+  /* PR 2b — "Anexar vários boletos" antes de salvar: vira pendente de cada parcela. */
+  const guardarBoletosDaPrevia = async (itens: BoletoAtribuido[]): Promise<string | null> => {
+    setPendentes(l => [...l, ...itens.map(i => novoPendente({ especie: 'boleto' }, i.arquivo, i.parcela))]);
+    return null;
+  };
+
+  /* PR 2b — "Anexar boletos das parcelas" numa parcela já gravada: grava direto em cada irmã. A cadeia é a
+     mesma (registrar -> subir -> anexar); a primeira falha volta para o diálogo, ao lado do botão. */
+  const gravarBoletosNasIrmas = async (itens: BoletoAtribuido[]): Promise<string | null> => {
+    if (!clienteAtual?.id || !irmas) return 'Sessão inválida.';
+    const falhas: string[] = [];
+    for (const i of itens) {
+      const irma = irmas.find(x => x.numero === i.parcela);
+      if (!irma) { falhas.push(`parcela ${i.parcela}: não encontrada`); continue; }
+      const [r] = await gravarDocumentosPendentes(clienteAtual.id, irma.lancamentoId, [novoPendente({ especie: 'boleto' }, i.arquivo, i.parcela)]);
+      if (!r.gravado) falhas.push(`parcela ${i.parcela}: ${r.erro ?? 'falha'}`);
+    }
+    await documentosApi.recarregar();
+    if (lancamento?.id) setIrmas(await irmasDaParcela(lancamento.id, clienteAtual.id).catch(() => null));
+    return falhas.length ? `Não gravados — ${falhas.join('; ')}` : null;
   };
 
   const handleFornecedorCriado = (f: FornecedorV2) => {
@@ -2243,11 +2301,32 @@ export function LancamentoV2Dialog({
                 é o confronto que responde, não o campo digitado. */}
             {lancamento?.id ? (
               <AbaDocumentosLancamento api={documentosApi}
-                fornecedores={fornecedores.map(f => ({ id: f.id, nome: f.nome }))} />
+                fornecedores={fornecedores.map(f => ({ id: f.id, nome: f.nome }))}
+                onAnexarBoletosDasParcelas={irmas ? () => setAnexarBoletos('irmas') : undefined} />
+            ) : documentosAntesDeSalvar && formaPagamentoParc === 'parcelada' && numParcelas >= 2 ? (
+              /* PR 2b — PARCELADO: os documentos da COMPRA (ligados às N) e a grade de parcelas com o boleto
+                 de cada uma. Os dois lados da mesma lista de pendentes, separados por `parcela`. */
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <p className="text-[11px] font-semibold">Documentos da compra <span className="font-normal text-muted-foreground">· valem para todas as parcelas</span></p>
+                  <DocumentosPendentes pendentes={pendentes.filter(p => p.parcela == null)}
+                    onMudar={f => setPendentes(l => [...f(l.filter(p => p.parcela == null)), ...l.filter(p => p.parcela != null)])}
+                    fornecedores={fornecedores.map(f => ({ id: f.id, nome: f.nome }))}
+                    ligadoA={numParcelas} travado={!!posSalvar} />
+                </div>
+                <ParcelasDaCompra parcelas={parcelaRows}
+                  notaFiscal={pendentes.find(p => p.parcela == null && p.payload.especie === 'nf')?.payload.numero ?? null}
+                  qtdNotas={pendentes.filter(p => p.parcela == null && p.payload.especie === 'nf').length}
+                  boletos={pendentes.filter(p => p.parcela != null && p.parcela <= numParcelas)}
+                  foraDoPlano={pendentes.filter(p => p.parcela != null && p.parcela > numParcelas)}
+                  onBoleto={(parcela, arquivo) => { setErroAntesDeSalvar(null); setPendentes(l => [...l, novoPendente({ especie: 'boleto' }, arquivo, parcela)]); }}
+                  onTirarBoleto={chave => { setErroAntesDeSalvar(null); setPendentes(l => l.filter(p => p.chave !== chave)); }}
+                  onAnexarVarios={() => setAnexarBoletos('previa')}
+                  travado={!!posSalvar} />
+              </div>
             ) : documentosAntesDeSalvar ? (
               <DocumentosPendentes pendentes={pendentes} onMudar={setPendentes}
                 fornecedores={fornecedores.map(f => ({ id: f.id, nome: f.nome }))}
-                parcelado={formaPagamentoParc === 'parcelada' && numParcelas >= 2}
                 travado={!!posSalvar} />
             ) : (
               <p className="rounded-md border bg-muted/20 px-3.5 py-3 text-[11px] text-muted-foreground">
@@ -2424,12 +2503,17 @@ export function LancamentoV2Dialog({
             )}
             {/* FIN-NFE-PARCELAS-01 — depois do salvar, com documento que nao gravou: a frase ao lado do botao
                 (UX-TOAST-01) e o "Tentar de novo" no lugar do salvar, que criaria OUTRO lancamento. */}
+            {!posSalvar && erroAntesDeSalvar && (
+              <span className="max-w-[520px] text-[10px] leading-tight text-destructive" data-testid="erro-antes-de-salvar">
+                {erroAntesDeSalvar}
+              </span>
+            )}
             {posSalvar ? (
               <>
                 <span className="max-w-[520px] text-[10px] leading-tight text-destructive" data-testid="erro-documentos">
                   {posSalvar.erro}
                 </span>
-                {posSalvar.lancamentoId && (
+                {posSalvar.alvo && (
                   <Button onClick={tentarDeNovo} disabled={gravandoDocs} data-testid="tentar-de-novo"
                     className="h-[22px] px-[9px] text-[10px] font-semibold">
                     {gravandoDocs ? 'Gravando…' : 'Tentar de novo'}
@@ -2498,6 +2582,26 @@ export function LancamentoV2Dialog({
           </fieldset>
         </DialogContent>
       </Dialog>
+
+      {/* PR 2b — "Anexar vários boletos" (tela B do mock). Antes de salvar, as parcelas são a prévia e os
+          boletos viram pendentes; depois, as irmãs gravadas e os boletos vão direto. */}
+      {anexarBoletos === 'previa' && (
+        <AnexarBoletosDialog
+          subtitulo={`${numParcelas} parcelas`}
+          parcelas={parcelaRows.map(r => ({
+            numero: r.numero, vencimento: r.dataVencimento, valor: r.valor,
+            temBoleto: pendentes.some(p => p.parcela === r.numero),
+          }))}
+          onConfirmar={guardarBoletosDaPrevia}
+          onFechar={() => setAnexarBoletos(null)} />
+      )}
+      {anexarBoletos === 'irmas' && irmas && (
+        <AnexarBoletosDialog
+          subtitulo={`${irmas.length} parcelas`}
+          parcelas={irmas.filter(i => !i.cancelada).map(i => ({ numero: i.numero, vencimento: i.vencimento, valor: i.valor, temBoleto: i.temBoleto }))}
+          onConfirmar={gravarBoletosNasIrmas}
+          onFechar={() => setAnexarBoletos(null)} />
+      )}
 
       {/* ── CONFIRMAÇÃO DO CANCELAMENTO — PR-CPR-2A.4 ──
           ⚠ `AlertDialog`, E NÃO O `confirm()` NATIVO que estava aqui. O nativo abre o modal do

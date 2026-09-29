@@ -74,6 +74,19 @@ export interface LancDocumento {
   cancelado: boolean;
   canceladoMotivo: string | null;
   versao: number;
+  /**
+   * Em quantos lançamentos este documento está — FIN-NFE-PARCELAS-01 PR 2b (`ligado_a_qtd` da view,
+   * PR 2a). 1 = só deste lançamento; >1 = a NF da compra ligada às parcelas; null = documento da OC.
+   */
+  ligadoAQtd: number | null;
+}
+
+/**
+ * `ligado_a_qtd` sem cast: a coluna entrou na view no PR 2a e o `types.ts` ainda não a conhece, então
+ * a leitura pergunta antes (`in` + `typeof`). Ausente vira null — a tela trata como documento de hoje.
+ */
+function ligadoAQtdDe(r: object): number | null {
+  return 'ligado_a_qtd' in r && typeof r.ligado_a_qtd === 'number' ? r.ligado_a_qtd : null;
 }
 
 /** O que o banco responde sobre "o que está documentado bate com o lançamento?". */
@@ -84,6 +97,12 @@ export interface Confronto {
   docsComValor: number;
   diferenca: number;
   confere: boolean;
+  /**
+   * A COMPRA — FIN-NFE-PARCELAS-01 PR 2b. Presente só quando o lançamento tem documento compartilhado
+   * (a NF ligada às parcelas): `diferenca` e `confere` já vêm do banco contra a soma das parcelas
+   * ATIVAS do grupo. Ausente = o confronto de sempre.
+   */
+  grupo?: { valorDocumento: number; somaLancamentos: number; qtd: number };
 }
 
 export interface LancDocPayload {
@@ -254,6 +273,7 @@ function daLinha(r: DocRow): LancDocumento {
     emitenteDocumento: s(r.emitente_documento),
     cancelado: r.cancelado === true, canceladoMotivo: s(r.cancelado_motivo),
     versao: Number(r.versao ?? 1),
+    ligadoAQtd: ligadoAQtdDe(r),
   };
 }
 
@@ -263,13 +283,23 @@ export function daConfronto(c: Json | null | undefined): Confronto | null {
      Perguntar antes de ler é o que mantém o zero-cast — e o que faz a tela mostrar "—" em
      vez de quebrar se a RPC um dia responder outra coisa. */
   if (!c || typeof c !== 'object' || Array.isArray(c)) return null;
-  return {
+  const base: Confronto = {
     valorLancamento: Number(c.valor_lancamento ?? 0),
     valorDocumentado: Number(c.valor_documentado ?? 0),
     docsAtivos: Number(c.docs_ativos ?? 0),
     docsComValor: Number(c.docs_com_valor ?? 0),
     diferenca: Number(c.diferenca ?? 0),
     confere: c.confere === true,
+  };
+  /* PR 2b: as chaves `grupo_*` só existem com documento compartilhado — e aí vêm as três juntas. */
+  if (c.grupo_soma_lancamentos == null) return base;
+  return {
+    ...base,
+    grupo: {
+      valorDocumento: Number(c.grupo_valor_documento ?? 0),
+      somaLancamentos: Number(c.grupo_soma_lancamentos ?? 0),
+      qtd: Number(c.grupo_qtd ?? 0),
+    },
   };
 }
 
@@ -294,6 +324,11 @@ export function confrontoDasDuasOrigens(
   doBanco: Confronto | null, docs: readonly LancDocumento[],
 ): Confronto | null {
   if (!doBanco) return null;
+  /* ⚠ COM A NF DA COMPRA, O BANCO JÁ RESPONDE — FIN-NFE-PARCELAS-01 PR 2b. Somar as linhas da view aqui
+     poria a nota inteira (24.052,00) contra UMA parcela (3.006,50); o banco confere contra a soma das
+     parcelas ativas. Documento de OC num lançamento de parcelamento não acontece hoje; se acontecer,
+     o que vale é o banco. */
+  if (doBanco.grupo) return doBanco;
   const ativos = docs.filter(d => !d.cancelado);
   const comValor = ativos.filter(d => d.valorDocumento != null);
   const total = comValor.reduce((acc, d) => acc + (d.valorDocumento ?? 0), 0);
