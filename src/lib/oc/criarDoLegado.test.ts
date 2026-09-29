@@ -7,6 +7,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   CONTAS_VENDA_GADO, podeCriarOCDoLegado, cabecasDaDescricao, combinacaoUnica, ordenarIrmas, lerResultado, precoPorKg, saidasPreMarcadas,
+  ordenarSaidas, fazendaDasMarcadas, confrontoComRecebido, lerSugestoes, pareceComComprador, SEMELHANCA_MINIMA,
   type SaidaCandidata, type RecebimentoResumo,
 } from './criarDoLegado';
 import { SUBCENTRO_VENDA_BOITEL } from '@/lib/financeiro/subcentroVenda';
@@ -128,5 +129,50 @@ describe('envelope de oc_criar_do_legado', () => {
     expect(r.pendencias).toEqual(['Informe o comprador', 'Marque ao menos uma saida de gado']);
     expect(r.contaCorrente).toBeNull();
     expect(lerResultado(null).ok).toBe(false);
+  });
+});
+
+/* OC-CRIAR-DO-LEGADO-01c — destino ordena (nao filtra), a fazenda da OC e' a do gado, e o valor marcado se confronta com o recebido. */
+describe('OC-CRIAR-DO-LEGADO-01c', () => {
+  const sd = (id: string, data: string, qtd: number, o: Partial<SaidaCandidata> = {}): SaidaCandidata => ({
+    id, data, categoria: 'vacas', quantidade: qtd, peso_medio_kg: 400, valor: 1000, origem_registro: null, fornecedor_id: null, ...o });
+
+  it('ordenar: parecidas com o comprador (>= 0,3) primeiro, mesmo mais novas; dentro do grupo, por data', () => {
+    const r = ordenarSaidas([sd('velha-outra', '2025-03-01', 1, { semelhanca: 0.02 }), sd('b', '2025-03-28', 51, { semelhanca: 1 }),
+      sd('a', '2025-03-20', 52, { semelhanca: 0.3 }), sd('sem-score', '2025-02-01', 3)]);
+    expect(r.map(s => s.id)).toEqual(['a', 'b', 'sem-score', 'velha-outra']);
+    expect(SEMELHANCA_MINIMA).toBe(0.3);
+    expect(pareceComComprador({ semelhanca: 0.29 })).toBe(false);
+  });
+
+  it('pre-marcado: a combinacao entre as PARECIDAS vence a combinacao entre todas (que fecharia com o gado de outro comprador)', () => {
+    /* 103 cab: parecidas 52 + 51; entre todas, 100 + 3 tambem fecharia — sem a preferencia, seriam 2 combinacoes e nada marcado */
+    const saidas = [sd('p52', '2025-03-28', 52, { semelhanca: 1 }), sd('p51', '2025-03-28', 51, { semelhanca: 1 }),
+      sd('o100', '2025-03-10', 100, { semelhanca: 0 }), sd('o3', '2025-03-11', 3, { semelhanca: 0 })];
+    expect(saidasPreMarcadas(saidas, null, 103)?.sort()).toEqual(['p51', 'p52']);
+    /* a busca sabe achar: sem parecidas, a combinacao entre todas (ambigua aqui) nao marca nada */
+    expect(saidasPreMarcadas(saidas.map(s => ({ ...s, semelhanca: 0 })), null, 103)).toBeNull();
+  });
+
+  it('fazenda das marcadas: nenhuma, uma, ou mistas com os nomes em ordem', () => {
+    expect(fazendaDasMarcadas([])).toEqual({ tipo: 'nenhuma' });
+    expect(fazendaDasMarcadas([sd('a', '2025-03-28', 52, { fazenda_id: 'se', fazenda_nome: 'Faz. Sto. Expedito' }),
+      sd('b', '2025-03-28', 51, { fazenda_id: 'se', fazenda_nome: 'Faz. Sto. Expedito' })]))
+      .toEqual({ tipo: 'uma', fazendaId: 'se', fazenda: 'Faz. Sto. Expedito' });
+    expect(fazendaDasMarcadas([sd('a', '2025-03-28', 52, { fazenda_id: 'se', fazenda_nome: 'Faz. Sto. Expedito' }),
+      sd('c', '2025-04-26', 1, { fazenda_id: 'pz', fazenda_nome: 'Faz. Pureza' })]))
+      .toEqual({ tipo: 'mistas', fazendas: ['Faz. Pureza', 'Faz. Sto. Expedito'] });
+  });
+
+  it('confronto com o recebido, em centavos: bate, ou a diferenca com sinal', () => {
+    expect(confrontoComRecebido(219096.6 + 214883.4, 433980)).toEqual({ bate: true, diferenca: 0 });
+    expect(confrontoComRecebido(438282, 433980)).toEqual({ bate: false, diferenca: 4302 });
+    expect(confrontoComRecebido(433000, 433980).diferenca).toBe(-980);
+  });
+
+  it('o envelope das sugestoes le fazenda, destino e semelhanca', () => {
+    const r = lerSugestoes({ saidas: [{ id: 's', data: '2025-03-28', quantidade: 52, fazenda_id: 'se', fazenda_nome: 'Faz. Sto. Expedito',
+      destino: 'Fernando Cesar Sanches', semelhanca: 1 }] });
+    expect(r.saidas[0]).toMatchObject({ fazenda_id: 'se', fazenda_nome: 'Faz. Sto. Expedito', destino: 'Fernando Cesar Sanches', semelhanca: 1 });
   });
 });

@@ -12,6 +12,8 @@ const chamadas: { nome: string; args: Record<string, unknown> }[] = [];
 let respostaCriar: (args: Record<string, unknown>) => unknown = () => ({ ok: false, pendencias: [] });
 /* OC-CRIAR-DO-LEGADO-01b: a saida do PROPRIO lancamento (modal antigo), lida da tabela na primeira carga. Nula = legado sem elo. */
 let saidaDoLancamento: string | null = null;
+/* OC-CRIAR-DO-LEGADO-01c: sugestoes de outro caso (o da NJ); nulo = as de Santa Rita, abaixo. */
+let sugestoesTroca: unknown = null;
 
 const SUGESTOES = {
   recebimentos: [{ id: '692f1957', data: '2026-04-16', valor: 591300.38, descricao: 'Venda 315 Desmama M - 1/2', favorecido_id: 'forn-1',
@@ -50,6 +52,7 @@ vi.mock('@/integrations/supabase/client', () => ({
     rpc: (nome: string, args: Record<string, unknown>) => {
       chamadas.push({ nome, args });
       if (nome === 'oc_criar_do_legado_sugestoes') {
+        if (sugestoesTroca) return Promise.resolve({ data: sugestoesTroca, error: null });
         const ids = Array.isArray(args.p_recebimentos) ? args.p_recebimentos : [];
         const extra = ids.includes('4df4ea15') ? [{ ...SUGESTOES.irmas[1], favorecido_id: 'forn-1', fazenda_id: 'faz-sr', fazenda: 'Faz. Sta. Rita' }] : [];
         return Promise.resolve({ data: { ...SUGESTOES, recebimentos: [...SUGESTOES.recebimentos, ...extra], irmas: ids.includes('4df4ea15') ? [SUGESTOES.irmas[0]] : SUGESTOES.irmas }, error: null });
@@ -87,6 +90,7 @@ function montar(onCriada = vi.fn()) {
 beforeEach(() => {
   chamadas.length = 0;
   saidaDoLancamento = null;
+  sugestoesTroca = null;
   respostaCriar = (args) => (args.p_simular ? PREVIA_OK : { ...PREVIA_OK, simulado: false, operacao_id: 'op-nova' });
 });
 
@@ -219,5 +223,72 @@ describe('OC-CRIAR-DO-LEGADO-01b — modal antigo ja recebido', () => {
     montar();
     await waitFor(() => expect(screen.getByTestId('previa')).toBeInTheDocument());
     expect(screen.queryByTestId('despesas-previa')).toBeNull();
+  });
+});
+
+/* OC-CRIAR-DO-LEGADO-01c — o caso da NJ (lancamento 3c70ad6e "Venda 103 vacas", 28/03/25, R$ 433.980,00, Fernando Cesar Sanches,
+   lancamento na Faz. Pureza; o gado saiu da Faz. Sto. Expedito). Numeros e semelhancas os da prova em rollback da migration
+   20261027178000. A 1 vaca da Pureza vem com data ANTERIOR de proposito: a ordem pela semelhanca tem de vencer a da data. */
+const SUGESTOES_NJ = {
+  recebimentos: [{ id: '3c70ad6e', data: '2025-03-28', valor: 433980, descricao: 'Venda 103 vacas', favorecido_id: 'forn-1',
+    favorecido: 'Fernando Cesar Sanches', fazenda_id: 'faz-pz', fazenda: 'Faz. Pureza', conta: 'Venda de Fêmeas Adultas', motivo: null }],
+  irmas: [],
+  saidas: [
+    { id: '85728552', data: '2025-03-01', categoria: 'vacas', quantidade: 1, peso_medio_kg: 400, valor: 4302, origem_registro: 'importacao_historica',
+      fornecedor_id: null, fazenda_id: 'faz-pz', fazenda_nome: 'Faz. Pureza', destino: 'Rodrigo Funcionario', semelhanca: 0.02 },
+    { id: '020bc4cd', data: '2025-03-28', categoria: 'vacas', quantidade: 52, peso_medio_kg: 420, valor: 219096.6, origem_registro: 'importacao_historica',
+      fornecedor_id: null, fazenda_id: 'faz-se', fazenda_nome: 'Faz. Sto. Expedito', destino: 'Fernando Cesar Sanches', semelhanca: 1 },
+    { id: '11ccf2bf', data: '2025-03-28', categoria: 'vacas', quantidade: 51, peso_medio_kg: 420, valor: 214883.4, origem_registro: 'importacao_historica',
+      fornecedor_id: null, fazenda_id: 'faz-se', fazenda_nome: 'Faz. Sto. Expedito', destino: 'Fernando Cesar Sanches', semelhanca: 1 },
+  ],
+  janela: { de: '2025-01-27', ate: '2025-07-26' },
+};
+
+describe('OC-CRIAR-DO-LEGADO-01c — o gado de outra fazenda', () => {
+  const montarNJ = () => render(<CriarOCDoLegadoDialog clienteId="cli-nj" lancamentoId="3c70ad6e" fornecedores={FORNECEDORES} onCriada={vi.fn()} onFechar={vi.fn()} />);
+  const txt = (el: Element | null) => (el?.textContent ?? '').replace(/\u00a0/g, ' ');
+
+  it('as duas saidas da Sto. Expedito aparecem, primeiro (destino parecido), com Fazenda e Destino, e ja vem marcadas (52 + 51 = 103)', async () => {
+    sugestoesTroca = SUGESTOES_NJ;
+    montarNJ();
+    await waitFor(() => expect(screen.getByTestId('cab-marcadas').textContent).toBe('103'));
+    const linhas = Array.from(document.querySelectorAll('[data-testid="saidas"] tbody tr[data-saida]'));
+    expect(linhas.map(l => l.getAttribute('data-saida'))).toEqual(['020bc4cd', '11ccf2bf', '85728552']);
+    const cel = Array.from(linhas[0].querySelectorAll('td')).map(td => td.textContent);
+    expect(cel[2]).toBe('Faz. Sto. Expedito');
+    expect(cel[3]).toBe('Fernando Cesar Sanches');
+    expect(Array.from(document.querySelectorAll('[data-testid="saidas"] thead th')).map(t => t.textContent))
+      .toEqual(['', 'Data', 'Fazenda', 'Destino', 'Categoria', 'Cab', 'Peso', 'Valor', 'Lançamento']);
+    expect(document.body.textContent).not.toContain('mesma fazenda');
+  });
+
+  it('a fazenda da OC e a do gado; aviso amarelo porque o lancamento esta na Pureza; a simulacao sai com a Sto. Expedito', async () => {
+    sugestoesTroca = SUGESTOES_NJ;
+    montarNJ();
+    await waitFor(() => expect(screen.getByTestId('cab-marcadas').textContent).toBe('103'));
+    expect(txt(screen.getByTestId('fazenda-da-oc'))).toContain('Faz. Sto. Expedito');
+    expect(txt(screen.getByTestId('aviso-fazenda'))).toBe('Lançamento na Faz. Pureza; gado saiu da Faz. Sto. Expedito. A OC fica na fazenda do gado.');
+    await waitFor(() => expect(ultimaSimulacao()?.p_dados).toEqual({ fazenda_id: 'faz-se', contraparte_id: 'forn-1' }));
+    /* o zootecnico marcado contra o recebimento: 433.980,00 x 433.980,00 */
+    expect(txt(screen.getByTestId('confronto-recebido'))).toBe('recebido 433.980,00 · bate');
+  });
+
+  it('marcar uma de cada fazenda: recusado na secao 2, com os nomes, e o aviso de fazenda some', async () => {
+    sugestoesTroca = SUGESTOES_NJ;
+    montarNJ();
+    await waitFor(() => expect(screen.getByTestId('cab-marcadas').textContent).toBe('103'));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Marcar saída de 01/03/25' }));
+    await waitFor(() => expect(screen.getByTestId('fazendas-mistas')).toBeInTheDocument());
+    expect(txt(screen.getByTestId('fazendas-mistas')))
+      .toBe('As saídas marcadas são de fazendas diferentes (Faz. Pureza e Faz. Sto. Expedito): uma OC por fazenda — desmarque as de uma delas.');
+    expect(screen.queryByTestId('aviso-fazenda')).toBeNull();
+    /* divergencia do valor e' informacao, nao bloqueio */
+    expect(txt(screen.getByTestId('confronto-recebido'))).toBe('recebido 433.980,00 · difere R$ 4.302,00');
+  });
+
+  it('mesma fazenda (Santa Rita): sem aviso — a busca sabe achar: o aviso existe no caso da NJ', async () => {
+    montar();
+    await waitFor(() => expect(screen.getByTestId('cab-marcadas').textContent).toBe('315'));
+    expect(screen.queryByTestId('aviso-fazenda')).toBeNull();
   });
 });

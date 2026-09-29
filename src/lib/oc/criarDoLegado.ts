@@ -50,7 +50,10 @@ export function saidasPreMarcadas(
   saidas: readonly SaidaCandidata[], saidaDoLancamento: string | null | undefined, cabecas: number | null,
 ): string[] | null {
   if (saidaDoLancamento && saidas.some(s => s.id === saidaDoLancamento)) return [saidaDoLancamento];
-  return combinacaoUnica(saidas, cabecas);
+  /* OC-CRIAR-DO-LEGADO-01c: sem o filtro de fazenda a lista traz saidas de OUTROS compradores; a combinacao procura primeiro
+     entre as que parecem com o comprador (destino ~ favorecido) e so' depois entre todas — para nao fechar as cabecas com o gado
+     de outra venda. */
+  return combinacaoUnica(saidas.filter(pareceComComprador), cabecas) ?? combinacaoUnica(saidas, cabecas);
 }
 
 /** Cabecas citadas na descricao: o primeiro numero seguido de palavra ("Venda 315 Desmama M - 1/2" -> 315). Ano nao conta. */
@@ -71,6 +74,51 @@ export interface SaidaCandidata {
   valor: number | null;
   origem_registro: string | null;
   fornecedor_id: string | null;
+  /** OC-CRIAR-DO-LEGADO-01c: a fazenda de onde o gado SAIU (pode diferir da do lancamento financeiro). */
+  fazenda_id?: string | null;
+  fazenda_nome?: string | null;
+  /** O destino digitado na saida (texto livre: comprador, fazenda ou apelido). */
+  destino?: string | null;
+  /** Semelhanca (trigram, 0-1) entre o destino e o favorecido do recebimento — calculada no banco. */
+  semelhanca?: number | null;
+}
+
+/**
+ * OC-CRIAR-DO-LEGADO-01c (decisao do Gabriel): o destino ORDENA, nao filtra. A partir de 0,3 a saida "parece com o comprador".
+ * ⚠ POR QUE NAO FILTRA: nas 62 saidas ja' escolhidas em 38 OCs do legado, filtrar por destino ~ favorecido esconderia de 22
+ *   (trigram >= 0,3) a 46 (nome igual) — o destino e' texto livre: fazenda ("Faz. Eldorado II"), apelido ("Valtinho") ou vazio.
+ */
+export const SEMELHANCA_MINIMA = 0.3;
+export const pareceComComprador = (s: Pick<SaidaCandidata, 'semelhanca'>) => (s.semelhanca ?? 0) >= SEMELHANCA_MINIMA;
+
+/** As parecidas com o comprador primeiro; dentro de cada grupo, por data (e id, para ser estavel). */
+export function ordenarSaidas(saidas: readonly SaidaCandidata[]): SaidaCandidata[] {
+  return [...saidas].sort((a, b) => Number(pareceComComprador(b)) - Number(pareceComComprador(a))
+    || a.data.localeCompare(b.data) || a.id.localeCompare(b.id));
+}
+
+export type FazendaDasMarcadas =
+  | { tipo: 'nenhuma' }
+  | { tipo: 'uma'; fazendaId: string | null; fazenda: string | null }
+  | { tipo: 'mistas'; fazendas: string[] };
+
+/**
+ * A fazenda da OC e' a do GADO: a das saidas marcadas (o banco decide igual, em `oc_criar_do_legado`). Mais de uma = mistura, que o
+ * banco recusa; a tela diz antes, com os nomes.
+ */
+export function fazendaDasMarcadas(marcadas: readonly SaidaCandidata[]): FazendaDasMarcadas {
+  if (marcadas.length === 0) return { tipo: 'nenhuma' };
+  const porId = new Map<string, string | null>();
+  for (const s of marcadas) porId.set(s.fazenda_id ?? '', s.fazenda_nome ?? null);
+  if (porId.size > 1) return { tipo: 'mistas', fazendas: [...porId.values()].map(n => n ?? 'sem fazenda').sort((a, b) => a.localeCompare(b)) };
+  const [[id, nome]] = [...porId.entries()];
+  return { tipo: 'uma', fazendaId: id || null, fazenda: nome };
+}
+
+/** O zootecnico marcado contra o recebido, em centavos: "bate" ou a diferenca (marcadas − recebido). Informacao, nao bloqueio. */
+export function confrontoComRecebido(somaMarcadas: number, somaRecebida: number): { bate: boolean; diferenca: number } {
+  const d = Math.round(somaMarcadas * 100) - Math.round(somaRecebida * 100);
+  return { bate: d === 0, diferenca: d / 100 };
 }
 
 /**
@@ -145,7 +193,8 @@ export function lerSugestoes(raw: unknown): Sugestoes {
     saidas: lista(r.saidas).map((v) => {
       const s = obj(v);
       return { id: String(s.id ?? ''), data: String(s.data ?? ''), categoria: txt(s.categoria), quantidade: num(s.quantidade) ?? 0,
-        peso_medio_kg: num(s.peso_medio_kg), valor: num(s.valor), origem_registro: txt(s.origem_registro), fornecedor_id: txt(s.fornecedor_id) };
+        peso_medio_kg: num(s.peso_medio_kg), valor: num(s.valor), origem_registro: txt(s.origem_registro), fornecedor_id: txt(s.fornecedor_id),
+        fazenda_id: txt(s.fazenda_id), fazenda_nome: txt(s.fazenda_nome), destino: txt(s.destino), semelhanca: num(s.semelhanca) };
     }),
   };
 }
