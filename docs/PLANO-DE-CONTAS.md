@@ -10,8 +10,12 @@
 > 223 globais.
 > ⚠ Idem para **5006 Devolução de Adiantamento de Clientes** (OC-VENDA-ENTREGAS-01c, 28/09/2026, migration
 > `20261027168000`), saída, sem bloco nem DRE, no mesmo vão — conferido: 232 linhas, 224 globais.
-> ⚠ Idem para **3016 Devolução de Adiantamento a Fornecedores** (OC-CONTA-CORRENTE-TODOS-01a, 29/09/2026, migration
-> `20261027172200`), entrada, sem bloco nem DRE, espelho da 5006, no vão ao lado da 3015 — conferido: 233 linhas, 225 globais.
+> ⚠ A **3016 Devolução de Adiantamento a Fornecedores** (OC-CONTA-CORRENTE-TODOS-01a, migration `20261027172200`) foi REMOVIDA
+> pelo OC-CC-CLASSIFICACAO-01 (29/09/2026, migration `20261027173000`) sem nunca ter tido lançamento — conferido: 232 linhas,
+> 224 globais.
+> ⚠ **3015, 5005 e 5006 saem de uso** pelo OC-CC-CLASSIFICACAO-01: o recebimento/pagamento da OC conta corrente fica no subcentro
+> da operação, fora do DRE pela parte da OC (ADR-2026-21, adendo). A migration de dado `20261027173100` devolve os 7 lançamentos
+> delas à conta da operação e as DESATIVA (não apaga, não renumera) — aplicada em 29/09/2026 (registrada `20260929105100`).
 
 Fonte: `public.financeiro_plano_contas` no Supabase **proto** (`binbcdfbisgscrifztia`).
 Hierarquia: **tipo de operação › macro custo › grupo de custo › centro de custo › subcentro**.
@@ -59,9 +63,8 @@ de decisão, não `false`.
 | ordem | centro | subcentro | escopo | DRE | LCDPR | bloco | origem |
 |---:|---|---|---|:-:|:-:|---|---|
 | 4005 | Ajustes | Estorno Recebido | administrativo | não | — | — | global |
-| 3015 | Movimentações Financeiras | Adiantamento de Clientes | pecuaria | não | — | — | global |
+| 3015 | Movimentações Financeiras | Adiantamento de Clientes (sai de uso: OC-CC-CLASSIFICACAO-01) | pecuaria | não | — | — | global |
 | 3025 | Movimentações Financeiras | Devolução de Adiantamento - Parceiro Lavoura | agricultura | não | — | — | global |
-| 3016 | Movimentações Financeiras | Devolução de Adiantamento a Fornecedores | pecuaria | não | — | — | global |
 | 3020 | Movimentações Financeiras | Devolução de Adiantamento de Boitel | pecuaria | não | — | — | global |
 
 ### Receita Operacional
@@ -430,10 +433,10 @@ de decisão, não `false`.
 | ordem | centro | subcentro | escopo | DRE | LCDPR | bloco | origem |
 |---:|---|---|---|:-:|:-:|---|---|
 | 16005 | Ajustes | Pagamento Estornado | administrativo | não | — | — | global |
-| 5005 | Movimentações Financeiras | Adiantamento a Fornecedores | pecuaria | não | — | — | global |
+| 5005 | Movimentações Financeiras | Adiantamento a Fornecedores (sai de uso: OC-CC-CLASSIFICACAO-01) | pecuaria | não | — | — | global |
 | 10005 | Movimentações Financeiras | Adiantamento a Parceiro - Lavoura | agricultura | não | — | — | global |
 | 5010 | Movimentações Financeiras | Adiantamento de Boitel | pecuaria | não | — | — | global |
-| 5006 | Movimentações Financeiras | Devolução de Adiantamento de Clientes | pecuaria | não | — | — | global |
+| 5006 | Movimentações Financeiras | Devolução de Adiantamento de Clientes (sai de uso: OC-CC-CLASSIFICACAO-01) | pecuaria | não | — | — | global |
 
 ### Tributos
 

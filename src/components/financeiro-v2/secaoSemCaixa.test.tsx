@@ -59,7 +59,7 @@ describe('filtro de caixa no plano da lista', () => {
 describe('secao sem caixa', () => {
   it('uma informacao por coluna, Cab das entregas, conta pelo nome, ordem pela competencia, sem checkbox', async () => {
     const abrir = vi.fn();
-    render(<SecaoSemCaixa linhas={[ENTREGA_G, BARTER, ENTREGA]} ocDe={id => (id.startsWith('e') ? { operacaoId: '232c05aa-e531-4f91', tipo: 'venda', ehBoitel: false } : undefined)} onAbrirOC={abrir} />);
+    render(<SecaoSemCaixa linhas={[ENTREGA_G, BARTER, ENTREGA]} ocDe={id => (id.startsWith('e') ? { operacaoId: '232c05aa-e531-4f91', tipo: 'venda', ehBoitel: false, foraDoDre: false } : undefined)} onAbrirOC={abrir} />);
     const secao = screen.getByTestId('secao-sem-caixa');
     expect(secao.textContent).toContain('Lançamentos sem caixa');
     expect(within(secao).queryByRole('checkbox')).toBeNull();
@@ -88,7 +88,7 @@ describe('secao sem caixa', () => {
 
   it('celula OC da lista: codigo curto clicavel, e traco sem OC', () => {
     const abrir = vi.fn();
-    const { container, rerender } = render(<table><tbody><tr><CelulaOC oc={{ operacaoId: '232c05aa-e531', tipo: 'venda', ehBoitel: false }} onAbrir={abrir} /></tr></tbody></table>);
+    const { container, rerender } = render(<table><tbody><tr><CelulaOC oc={{ operacaoId: '232c05aa-e531', tipo: 'venda', ehBoitel: false, foraDoDre: false }} onAbrir={abrir} /></tr></tbody></table>);
     fireEvent.click(screen.getByRole('button', { name: codigoOC('232c05aa-e531') }));
     expect(abrir).toHaveBeenCalledWith('232c05aa-e531', 'venda');
     rerender(<table><tbody><tr><CelulaOC oc={undefined} onAbrir={abrir} /></tr></tbody></table>);
@@ -97,9 +97,11 @@ describe('secao sem caixa', () => {
 });
 
 describe('rotulo de tela das contas (item 6)', () => {
-  it('"Adiantamento de Clientes" -> "Recebimento de vendas"; o espelho da compra; o resto passa como esta', () => {
-    expect(rotuloDaConta('Adiantamento de Clientes')).toBe('Recebimento de vendas');
-    expect(rotuloDaConta('Adiantamento a Fornecedores')).toBe('Pagamento de compras');
+  /* OC-CC-CLASSIFICACAO-01 (decisao 6): o mapa esvaziou — as contas de adiantamento sairam de uso e nao tem mais apelido */
+  it('toda conta aparece como esta no plano; "Recebimento de vendas" e "Pagamento de compras" sairam', () => {
+    expect(rotuloDaConta('Adiantamento de Clientes')).toBe('Adiantamento de Clientes');
+    expect(rotuloDaConta('Adiantamento a Fornecedores')).toBe('Adiantamento a Fornecedores');
+    expect(rotuloDaConta('Devolução de Adiantamento a Fornecedores')).toBe('Devolução de Adiantamento a Fornecedores');
     expect(rotuloDaConta('Venda de Desmama Machos')).toBe('Venda de Desmama Machos');
     expect(rotuloDaConta(null)).toBeNull();
   });

@@ -949,6 +949,17 @@ no mesmo arquivo.
   "Devolução do fornecedor", o cancelar so' com compromisso 'recebimento' em todo tipo e a trava do `oc_cancelar`, e o `lerRol` das
   despesas (rol antigo sem a chave vira lista vazia). O caso do cancelar da compra passou a cobrar a secao "Ficam (pagas a terceiros)"
   (pago / em aberto) no lugar da frase do rodape; os fixtures de rol dos dois arquivos ganharam `despesas`. Os snapshots da venda nao mudaram.
+  De 2236 para 2248 no OC-CC-CLASSIFICACAO-01: entrou `src/lib/oc/ccClassificacao.test.ts` (+10) — o TEXTO das duas migrations: a
+  regra no gatilho e o recalculo pela parte, o gate nos quatro leitores (e a leitura de `lancamentos` intocada), o vincular sem trocar
+  conta, o mapa de volta ao md5 de antes do 01b, programado e devolucao na conta da operacao, a conta bancaria pela direcao, e o dado
+  (7 ids, hash e `editado_manual` do retrato, 3015/5005/5006 desativadas e nunca apagadas, guardas de chegada) — cada presenca com a
+  ausencia do velho. `useLancamentosComOC.test.ts` (3 -> 5): a marca "fora do DRE · OC <codigo>" no tooltip e o espelho
+  `parteForaDoDre` x `_oc_cc_fora_do_dre` em 9 pares componente/origem. ⚠ CASOS EXISTENTES MUDARAM DE CONTRATO, nunca afrouxados:
+  os rotulos "Recebimento de vendas"/"Pagamento de compras"/"Devolução do fornecedor" (secaoSemCaixa, contaCorrenteCompra, criarOCDoLegado),
+  o texto do cancelar (abaContaCorrente, contaCorrenteCompra), os fixtures em 3015/5005 (agora 1120/15020) e os DOIS SNAPSHOTS DA VENDA,
+  REGERADOS — o diff deles e' so' conta 1120 no lugar de 3015, "Banco do Brasil" no lugar de "sem conta", status realizado e os
+  textos novos do cancelar. ⚠ PROVADO: com o espelho ignorando a origem, 1 caso cai; com a seta do cancelar sempre ligada, 3.
+  ⚠ A REGRA E' DE BANCO e foi provada la' (bloco OC-CC-CLASSIFICACAO-01); o vitest trava o texto, nao o comportamento.
   Ao reduzir ou acrescentar, atualizar este numero no mesmo PR e dizer quais testes
   sairam ou entraram.
 
@@ -3152,6 +3163,53 @@ preview que o cabecalho nao sai da tela ao rolar.
   desvincular o principal, modelo conta corrente, entrada "Compra 121 DM" 307.460 em 15020 (25/03), pagamento f110eb68 em 5005 com hash
   preservado; extrato entrada 307.460,00 / pago -307.460,00 / saldo 0 quitado; 4 despesas (-8.536,00); DRE Agnaldo 2026, caixa e rebanho
   com md5 identico. As outras compras seguem no modelo titulo (migracao e' o PR 3).
+- ⚠ OC-CC-CLASSIFICACAO-01 — O RECEBIMENTO/PAGAMENTO DA OC CONTA CORRENTE FICA NO SUBCENTRO DA OPERACAO, FORA DO DRE PELA PARTE
+  (29/09/2026, decisoes do Gabriel; ADR-2026-21, adendo — SUBSTITUI "recebimento vira Adiantamento de Clientes"). PRINCIPIO: a OC e'
+  UMA venda/compra; no Financeiro todo recebimento ou pagamento dela fica no subcentro da operacao e referenciado a OC; o detalhe
+  (lote, entrega, diferenca) fica na OC. O defeito: filtrar o Financeiro por "Venda de Desmama Machos" escondia o dinheiro das OCs.
+  ESTRUTURA: migration `supabase/migrations/20261027173000_oc_cc_classificacao_01.sql` (⚠ registrada como `20260929103705`; ledger =
+  arquivo, md5 beabab91). UMA REGRA, NUM LUGAR: `materializar_dre_lcdpr_from_plano` (1689de61 -> 85a3e101) poe `compoe_dre = false`
+  quando `_oc_cc_fora_do_dre(lancamento)` — parte VIVA de OC `conta_corrente`, componente 'recebimento' fora de explicacao/entrega, ou
+  'devolucao_comprador' de explicacao (decisao 4: "pela mesma regra"). Vence o valor enviado; sem a parte, a regra normal. Quem
+  recalcula e' `trg_oc_parte_recalcula_dre` em `zoo_operacao_partes` (insert/cancelada/lancamento/componente/origem), com
+  `app.oc_recalcular_dre`. Os QUATRO LEITORES que liam pela conta ganharam `and l.compoe_dre`: `fn_dre_pecuaria` (5 leituras;
+  41f7f098 -> 6ec910d8), `fn_dre_pecuaria_lancamentos` (aa6d090f -> 1bf56818), `fn_dre_lavoura` (eece80eb -> c177e6eb),
+  `fn_dre_agricola_por_safra` (604e6948 -> 02f7c4c4). Vincular nao troca a conta (`_oc_vincular_recebimento` bd6ae293 -> bddec0fd;
+  `oc_vincular_lancamento` 773e6379 -> 970a219a; `_oc_vinculo_mapa` fd9e1305 -> 928535c7, o md5 de ANTES do 01b). Programado e
+  devolucao na conta da categoria do lote de MAIOR valor (`_oc_cc_conta_principal`; `oc_programar_recebimento` 84ba61e6 -> b7ed17a5,
+  descricao "Venda NNN cab · Pagamento X de Y", X = posicao e Y = total NESSE MOMENTO; `oc_explicar_saldo` baae7c24 -> bd440c85, a
+  devolucao no sentido contrario ao dinheiro da operacao). Conta bancaria pela direcao em `oc_conta_corrente` (6828bbf9 -> 19993440 —
+  o "sem conta" do extrato) e `oc_recebimentos_vinculaveis` (d12a6c0f -> 69cddd2c); invariancia nas duas colunas em
+  `_oc_cancelar_conta_corrente` (330f7e27 -> a15e583a; a acao 'fica_em_adiantamento_manual' virou 'fica_manual'). 3016 REMOVIDA;
+  `_oc_cc_conta_dinheiro` saiu.
+  ⚠ A LEITURA DA CONTA ERA O DEFEITO, NAO O DADO: o gatilho `fn_normalizar_conta_por_direcao` ja' guarda a conta da entrada em
+    `conta_destino_id` e ZERA `conta_bancaria_id`; o extrato lia so' a segunda. `oc_sincronizar_entregas`, `oc_explicar_saldo` e
+    `oc_programar_recebimento` so' ESCREVEM a coluna (a normalizacao a poe no lugar); `oc_criar_do_legado_sugestoes` e
+    `_oc_legado_motivo_recebimento` NAO leem conta bancaria — a FASE 0 os listou por engano (contou leitura de lancamento).
+  ⚠ PROVAS EM ROLLBACK: gate nos quatro leitores, 294 saidas identicas antes x depois — pecuaria 7 clientes x 2020-2026 realizado (49)
+    e meta (49), 42 safras na lavoura e 42 na agricola, e a lista do modal 112 chamadas com 39.589 linhas (a primeira contagem de
+    linhas deu 0 por chave errada do JSON; conferida de novo antes de afirmar). Comportamento, como o Gabriel: os 7 na conta da
+    operacao com dre=false; banco em 7/7 recebimentos e status realizado/conciliado; programado em "Venda de Desmama Machos",
+    "Venda 779 cab · Pagamento 5 de 5", dre=false; devolucao da venda 2-Saidas na 1120 e da compra 1-Entradas na 15020, dre=false e
+    DRE SR 2025 igual; vincular deixou a conta e pos dre=false; cancelar a 232c05aa devolveu os 4 ao DRE (dre=true) e cancelou o
+    programado nascido na OC. ⚠ O DRE SR 2025 NAO MUDA COM O CANCELAR, e e' certo: depois do ajuste de preco do lote 7 (01d) as entregas
+    somam 2.365.243,37 = recebimentos — sai uma receita e volta outra de mesmo valor.
+  ⚠ A PRIMEIRA PROVA INTEIRA ESTOUROU O TEMPO DO CANAL e ficou rodando no servidor com os locks (a licao do DRE-MODAL-VALOR-01a):
+    `pg_stat_activity` mostrou a presa, `pg_cancel_backend` a derrubou, nada ficou gravado; a prova foi refeita em quatro fatias.
+  ⚠ `oc_desvincular_lancamento` NAO DESVINCULA RECEBIMENTO DE CONTA CORRENTE ("sem parcela de programacao") — anterior a este PR, fora
+    do escopo; a "parte que morre" ficou provada pelo cancelar.
+  ⚠ FRONT SEM O MODELO DA OC: o tipo gerado nao conhece `modelo_financeiro`, e zero-cast impede contornar. `parteForaDoDre` (espelho no
+    `useLancamentosComOC`, para o tooltip "fora do DRE · OC <codigo>") olha so' componente e origem — equivalente por construcao,
+    porque essas partes so' nascem em OC conta corrente.
+  TELA: `rotuloDaConta` com o mapa VAZIO (os tres apelidos sairam); textos do buscar/programar/explicar e do cancelar ("Recebimentos que
+  saem da OC (voltam a compor o DRE como venda)", seta so' quando a conta a repor e' outra, rodape explicando a volta ao DRE); comentario
+  da previa do criar-do-legado. docs/PLANO-DE-CONTAS.md sem a 3016.
+  DADO (`20261027173100_oc_cc_classificacao_01_dados.sql`, APLICADO com o OK do Gabriel, ⚠ registrado como `20260929105100`; ledger =
+  arquivo, md5 3196752d; real = rollback: DRE ef205b72, caixa b794e484, rebanho d9cef5a6, conta corrente d5c49852, versoes 28/42/11): os 7 (232c05aa 4 e e1ea7f4b 2 ->
+  1120; 1337bb2d 1 -> 15020) voltam a conta do evento `vincular_recebimento`, hash regravado, `editado_manual` do retrato de antes (o
+  vincular o pos em true nos 4 importados da 232c05aa), copias da conta nas 7 partes, um evento por OC; 3015, 5005 e 5006 DESATIVADAS.
+  Provado em rollback exatamente como o arquivo: DRE SR 2025/2026 e Agnaldo 2026, caixa SR+Agnaldo, rebanho SR+Agnaldo e saldo das 3
+  conta correntes com md5 identico.
 - ⚠ RATEIO-VIGENCIA-01 — O RATEIO ADMINISTRATIVO OLHA QUAIS ATIVIDADES EXISTEM EM CADA MES (28/09/2026, decisoes do Gabriel e do
   Chat). Retroativo, todo o historico, todos os clientes; nada gravado — os DREs recalculam. Migration
   `supabase/migrations/20261027161000_rateio_vigencia_01.sql` (⚠ registrada como `20260928102310`; ledger = arquivo sem a quebra de

@@ -24,14 +24,31 @@ export interface OCDoLancamento {
   tipo: string | null;
   /** Venda em boitel (tem linha em `zoo_operacao_boitel`). */
   ehBoitel: boolean;
+  /** OC-CC-CLASSIFICACAO-01: recebimento/pagamento (ou devolucao) de OC conta corrente — fica no subcentro da operacao e FORA
+   *  do DRE pela parte; a receita/custo entrou pela entrega. */
+  foraDoDre: boolean;
+}
+
+/**
+ * OC-CC-CLASSIFICACAO-01 — ESPELHO de `_oc_cc_fora_do_dre` (migration 20261027173000), que e' quem grava `compoe_dre = false`
+ * pelo gatilho. Aqui so' decide o texto do tooltip; o teste le' a migration e compara as duas regras.
+ * ⚠ SEM O MODELO DA OC, E E' EQUIVALENTE POR CONSTRUCAO: parte 'recebimento' e explicacao de devolucao so' nascem em OC conta
+ *   corrente (`_oc_vincular_recebimento`, `oc_programar_recebimento` e `oc_explicar_saldo` recusam outro modelo). E o tipo gerado
+ *   ainda nao conhece `modelo_financeiro` — le-lo aqui pediria um cast.
+ */
+export function parteForaDoDre(p: { componente: string | null; origem: string | null }): boolean {
+  if (p.componente === 'recebimento') return p.origem !== 'explicacao' && p.origem !== 'entrega';
+  return p.componente === 'devolucao_comprador' && p.origem === 'explicacao';
 }
 
 const ROTULO_TIPO: Record<string, string> = { compra: 'Compra', venda: 'Venda', abate: 'Abate' };
 
-/** O tooltip do icone, pelo tipo da OC: "Origem: Operação Comercial de Venda" — ou de Boitel. */
-export function rotuloOrigemOC(oc: Pick<OCDoLancamento, 'tipo' | 'ehBoitel'>): string {
+/** O tooltip do icone, pelo tipo da OC: "Origem: Operação Comercial de Venda" — ou de Boitel. O recebimento/pagamento da
+ *  conta corrente ganha "· fora do DRE · OC <codigo>" (decisao 6: sem coluna nova; o codigo e' o de `codigoOC`, 8 caracteres). */
+export function rotuloOrigemOC(oc: Pick<OCDoLancamento, 'tipo' | 'ehBoitel'> & Partial<Pick<OCDoLancamento, 'foraDoDre' | 'operacaoId'>>): string {
   const tipo = oc.ehBoitel ? 'Boitel' : (oc.tipo ? ROTULO_TIPO[oc.tipo] ?? oc.tipo : null);
-  return tipo ? `Origem: Operação Comercial de ${tipo}` : 'Origem: Operação Comercial';
+  const base = tipo ? `Origem: Operação Comercial de ${tipo}` : 'Origem: Operação Comercial';
+  return oc.foraDoDre && oc.operacaoId ? `${base} · fora do DRE · OC ${oc.operacaoId.slice(0, 8)}` : base;
 }
 
 export function useLancamentosComOC(clienteId: string | null) {
@@ -52,7 +69,7 @@ export function useLancamentosComOC(clienteId: string | null) {
       for (let from = 0; ; from += PAGE) {
         const { data, error } = await supabase
           .from('zoo_operacao_partes')
-          .select('financeiro_lancamento_id, operacao_id, zoo_operacoes_comerciais(tipo_operacao)')
+          .select('financeiro_lancamento_id, operacao_id, componente, origem, zoo_operacoes_comerciais(tipo_operacao)')
           .eq('cliente_id', clienteId)
           .eq('cancelada', false)
           .not('financeiro_lancamento_id', 'is', null)
@@ -67,6 +84,7 @@ export function useLancamentosComOC(clienteId: string | null) {
             operacaoId: r.operacao_id,
             tipo: op && typeof op.tipo_operacao === 'string' ? op.tipo_operacao : null,
             ehBoitel: false,
+            foraDoDre: parteForaDoDre({ componente: r.componente ?? null, origem: r.origem ?? null }),
           });
         }
         if (rows.length < PAGE) break;

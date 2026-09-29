@@ -30,7 +30,7 @@ function compra(extra: Record<string, unknown> = {}): ContaCorrente {
     linhas: [
       { tipo: 'entrega', data: '2026-03-25', parte_id: 'e1', lote_ordem: 1, cab: 121, categoria: 'desmama_m', conta_ordem: 15020,
         conta: 'Investimento Compra Bovinos Machos', descricao: 'Compra 121 DM', mov_entrega: 307460, status: 'sem_caixa', no_saldo: true, saldo: 307460 },
-      { tipo: 'recebimento', data: '2026-04-25', parte_id: 'p1', conta_ordem: 5005, conta: 'Adiantamento a Fornecedores',
+      { tipo: 'recebimento', data: '2026-04-25', parte_id: 'p1', conta_ordem: 15020, conta: 'Investimento Compra Bovinos Machos',
         descricao: 'Compra 121 DM', banco: 'Sicredi', mov_recebido: -307460, status: 'realizado', no_saldo: true, saldo: 0 },
     ],
     explicacoes: [],
@@ -62,8 +62,8 @@ function venda(): ContaCorrente {
         conta: 'Venda de Desmama Machos', mov_entrega: -566879.55, status: 'sem_caixa', no_saldo: true, saldo: -566879.55 },
       { tipo: 'entrega', data: '2025-03-20', parte_id: 'e2', lote_ordem: 2, cab: 139, categoria: 'desmama_m', conta_ordem: 1120,
         conta: 'Venda de Desmama Machos', mov_entrega: -426616.58, status: 'sem_caixa', no_saldo: true, saldo: -993496.13 },
-      { tipo: 'recebimento', data: '2025-04-17', parte_id: 'r1', conta_ordem: 3015, conta: 'Adiantamento de Clientes',
-        mov_recebido: 992138.24, status: 'sem_conta_bancaria', no_saldo: true, saldo: -1357.89 },
+      { tipo: 'recebimento', data: '2025-04-17', parte_id: 'r1', conta_ordem: 1120, conta: 'Venda de Desmama Machos',
+        banco: 'Banco do Brasil', mov_recebido: 992138.24, status: 'realizado', no_saldo: true, saldo: -1357.89 },
     ],
     explicacoes: [],
   });
@@ -111,7 +111,7 @@ describe('compra em conta corrente — extrato espelho da venda (mock v1)', () =
     const [p] = linhasDoTipo('recebimento');
     expect(p[3].textContent).toBe('Pagamento');
     expect(p[4].textContent).toBe('Pagamento 1 de 1');
-    expect(p[5].textContent).toBe('Pagamento de compras');
+    expect(p[5].textContent).toBe('Investimento Compra Bovinos Machos'); // OC-CC-CLASSIFICACAO-01: o pagamento fica na conta da compra
     expect(p[6].textContent).toBe('Sicredi');
     expect(txt(p[8])).toBe('−307.460,00');
     expect(p[8].className).toContain('text-[#b91c1c]');
@@ -177,7 +177,7 @@ describe('compra em conta corrente — extrato espelho da venda (mock v1)', () =
   it('cancelar a compra lista o rol com as palavras dela; sem motivo nao cancela', async () => {
     const rol: RolCancelamento = {
       entregas: [{ data: '2026-03-25', loteOrdem: 1, valor: 307460 }], explicacoes: [],
-      recebimentos: [{ data: '2026-04-25', valor: 307460, contaAtual: 'Adiantamento a Fornecedores', contaOriginal: 'Investimento Compra Bovinos Machos', acao: 'volta_para_conta_original' }],
+      recebimentos: [{ data: '2026-04-25', valor: 307460, contaAtual: 'Investimento Compra Bovinos Machos', contaOriginal: 'Investimento Compra Bovinos Machos', acao: 'volta_para_conta_original' }],
       saidas: [{ data: '2026-03-25', cab: 121, categoria: 'desmama_m', origem: 'registrada' }], compromissos: [],
       despesas: [
         { componente: 'frete', nome: 'Frete', favorecido: 'Manoel Marcelo Tavares Videira', valor: 1800, pago: 1800 },
@@ -190,8 +190,10 @@ describe('compra em conta corrente — extrato espelho da venda (mock v1)', () =
       lado="compra" onCancelar={onCancelar} onFechar={vi.fn()} />);
     const d = await screen.findByTestId('dialogo-cancelar-cc');
     await waitFor(() => expect(d.textContent).toContain('Entradas canceladas (saem do DRE)'));
-    expect(d.textContent).toContain('Pagamentos que voltam à conta original');
-    expect(d.textContent).toContain('Pagamento de compras');
+    expect(d.textContent).toContain('Pagamentos que saem da OC (voltam a compor o DRE como compra)');
+    expect(d.textContent).toContain('Investimento Compra Bovinos Machos');
+    expect(d.textContent).not.toContain('→');
+    expect(d.textContent).toContain('volta a ser uma compra comum no DRE');
     /* decisao 3: as despesas pagas a terceiros FICAM — a secao as lista, com o que ja' foi pago */
     const ficam = within(d).getByTestId('cc-cancelar-ficam');
     const txtFicam = (ficam.textContent ?? '').replace(/\u00a0/g, ' ');
@@ -229,6 +231,8 @@ describe('compra em conta corrente — extrato espelho da venda (mock v1)', () =
   });
 });
 
+/* OC-CC-CLASSIFICACAO-01: os snapshots foram REGERADOS pelo contrato novo — o recebimento na conta da venda (1120) com o banco,
+   e o cancelar dizendo que o recebimento sai da OC e volta ao DRE. A diferenca para os de antes e' so' essa (conferida no diff). */
 describe('a VENDA nao muda', () => {
   it('aba conta corrente da 232c05aa: o HTML e o de antes do PR', () => {
     const { container } = render(<AbaContaCorrenteOC api={api(venda())} somenteLeitura={false} />);
@@ -253,7 +257,7 @@ describe('a VENDA nao muda', () => {
     const rol: RolCancelamento = {
       entregas: [{ data: '2025-03-19', loteOrdem: 1, valor: 566879.55 }],
       explicacoes: [{ tipo: 'permuta_despesa', valor: 357.89, conta: 'Frete' }],
-      recebimentos: [{ data: '2025-04-17', valor: 992138.24, contaAtual: 'Adiantamento de Clientes', contaOriginal: 'Venda de Desmama Machos', acao: 'volta_para_conta_original' }],
+      recebimentos: [{ data: '2025-04-17', valor: 992138.24, contaAtual: 'Venda de Desmama Machos', contaOriginal: 'Venda de Desmama Machos', acao: 'volta_para_conta_original' }],
       saidas: [{ data: '2025-03-19', cab: 178, categoria: 'desmama_m', origem: 'adotada' }], compromissos: [], despesas: [], bloqueios: [],
     };
     render(<CancelarContaCorrenteDialog api={api(venda(), { lerRolCancelamento: vi.fn(async () => ({ rol, erro: null })) })}
@@ -277,15 +281,13 @@ describe('a VENDA nao muda', () => {
 describe('decisoes do Gabriel sobre a 01a (devolucao em conta propria, cancelar com uma regra so)', () => {
   const sql = readFileSync('supabase/migrations/20261027172200_oc_conta_corrente_todos_01a_devolucao_cancelar.sql', 'utf8');
 
-  it('a devolucao do fornecedor tem conta de ENTRADA propria (3016) e o tipo de operacao volta a ser o da conta', () => {
+  it('a 3016 nasceu aqui e saiu no OC-CC-CLASSIFICACAO-01, sem nunca ter lancamento; o rotulo saiu junto', () => {
     expect(sql).toContain("values (null, '1-Entradas', 'Entrada Financeira', 'Outras Entradas', 'Movimentações Financeiras', 'Devolução de Adiantamento a Fornecedores',");
     expect(sql).toContain("null, 'pecuaria', true, 3016, false, null, null);");
-    expect(sql).toContain("THEN 'Devolução de Adiantamento a Fornecedores' ELSE 'Devolução de Adiantamento de Clientes' END;");
-    expect(sql).toContain('$b$    v_tipo_op := v_pc.tipo_operacao;$b$');
-    expect(rotuloDaConta('Devolução de Adiantamento a Fornecedores')).toBe('Devolução do fornecedor');
-    /* as outras duas seguem como estavam: a busca sabe achar */
-    expect(rotuloDaConta('Adiantamento a Fornecedores')).toBe('Pagamento de compras');
-    expect(rotuloDaConta('Devolução de Adiantamento de Clientes')).toBe('Devolução de Adiantamento de Clientes');
+    const depois = readFileSync('supabase/migrations/20261027173000_oc_cc_classificacao_01.sql', 'utf8');
+    expect(depois).toContain("delete from public.financeiro_plano_contas where id = v_id;");
+    expect(depois).toContain("if v_ref <> 0 then raise exception 'OC-CC-CLASSIFICACAO-01: a 3016 tem % referencia(s); nao remove', v_ref; end if;");
+    expect(rotuloDaConta('Devolução de Adiantamento a Fornecedores')).toBe('Devolução de Adiantamento a Fornecedores');
   });
 
   it('o cancelar so toca compromisso da conta corrente em TODO tipo, e as despesas nao travam', () => {

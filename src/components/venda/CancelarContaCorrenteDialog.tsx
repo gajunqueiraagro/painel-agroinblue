@@ -25,14 +25,14 @@ const rotuloExplicacao = (t: string, lado: LadoContaCorrente) => {
 /* OC-CONTA-CORRENTE-TODOS-01a — a compra usa o mesmo rol, com as palavras do lado dela. A venda segue com as frases de antes. */
 const TEXTOS: Record<LadoContaCorrente, { entregas: string; recebimentos: string; saidas: string; rodape: string }> = {
   venda: {
-    entregas: 'Entregas canceladas (saem do DRE)', recebimentos: 'Recebimentos que voltam à conta original',
+    entregas: 'Entregas canceladas (saem do DRE)', recebimentos: 'Recebimentos que saem da OC (voltam a compor o DRE como venda)',
     saidas: 'Saídas adotadas desvinculadas (o gado continua no zootécnico)',
-    rodape: 'Nenhum título é apagado; valor, datas, conta bancária e conciliação dos recebimentos não mudam.',
+    rodape: 'Nenhum título é apagado; valor, datas, conta bancária e conciliação dos recebimentos não mudam. O dinheiro entrou de verdade: sem a OC, cada recebimento volta a ser uma venda comum no DRE, na conta em que está.',
   },
   compra: {
-    entregas: 'Entradas canceladas (saem do DRE)', recebimentos: 'Pagamentos que voltam à conta original',
+    entregas: 'Entradas canceladas (saem do DRE)', recebimentos: 'Pagamentos que saem da OC (voltam a compor o DRE como compra)',
     saidas: 'Entradas adotadas desvinculadas (o gado continua no zootécnico)',
-    rodape: 'Nenhum título é apagado; valor, datas, conta bancária e conciliação dos pagamentos não mudam.',
+    rodape: 'Nenhum título é apagado; valor, datas, conta bancária e conciliação dos pagamentos não mudam. O dinheiro saiu de verdade: sem a OC, cada pagamento volta a ser uma compra comum no DRE, na conta em que está.',
   },
 };
 
@@ -98,7 +98,9 @@ export function CancelarContaCorrenteDialog({ api, onCancelar, onFechar, lado = 
             </Bloco>
             <Bloco titulo={t.recebimentos} n={rol.recebimentos.length}>
               {rol.recebimentos.map((r, i) => (
-                <li key={i}>{dataCurta(r.data)} · {formatMoeda(r.valor)} · {rotuloDaConta(r.contaAtual) ?? '—'} → <b>{rotuloDaConta(r.contaOriginal) ?? '—'}</b></li>
+                /* OC-CC-CLASSIFICACAO-01: a conta ja' e' a da operacao; a seta so' aparece se o banco ainda for repor outra */
+                <li key={i}>{dataCurta(r.data)} · {formatMoeda(r.valor)} · {rotuloDaConta(r.contaAtual) ?? '—'}
+                  {r.contaOriginal && r.contaOriginal !== r.contaAtual ? <> → <b>{rotuloDaConta(r.contaOriginal)}</b></> : null}</li>
               ))}
             </Bloco>
             {/* so' as ADOTADAS se desvinculam; a registrada e' o bloqueio do banco (estornar antes) — listava-se tudo sob este titulo */}

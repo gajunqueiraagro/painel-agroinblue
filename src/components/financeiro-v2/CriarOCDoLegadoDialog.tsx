@@ -23,7 +23,8 @@ import {
      o erro primario — que vem do BANCO, todos de uma vez (`oc_criar_do_legado` com `p_simular`), escritos em vermelho ao lado do
      botao, sem toast.
    ⚠ A PREVIA E' A PROPRIA RPC SIMULADA: o extrato em conta corrente que ela devolve e' o que sera' gravado. Nenhuma conta aqui.
-   ⚠ PADRAO A31 nas tabelas; a conta "Adiantamento de Clientes" aparece como "Recebimento de vendas" (FIN-V2-SEM-CAIXA-01). */
+   ⚠ PADRAO A31 nas tabelas. OC-CC-CLASSIFICACAO-01: o recebimento fica na conta da venda (fora do DRE pela OC); a previa mostra
+     a conta como esta' no plano. */
 
 const TH = 'h-[17px] whitespace-nowrap bg-[#2E4B6E] px-[5px] text-center text-[9.5px] font-semibold text-white';
 const TD = 'h-[18px] border-b border-[#eceae4] px-[5px] text-[10px]';

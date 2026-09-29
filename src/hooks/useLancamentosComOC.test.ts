@@ -10,7 +10,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor, act } from '@testing-library/react';
 
-interface Parte { id: string; cliente_id: string; operacao_id: string; financeiro_lancamento_id: string | null; cancelada: boolean }
+interface Parte { id: string; cliente_id: string; operacao_id: string; financeiro_lancamento_id: string | null; cancelada: boolean; componente?: string; origem?: string }
 const OCS: Record<string, string> = { 'oc-venda': 'venda', 'oc-boitel': 'venda', 'oc-abate': 'abate', 'oc-compra': 'compra' };
 let partes: Parte[] = [];
 const BOITEL = ['oc-boitel'];
@@ -48,14 +48,17 @@ beforeEach(() => {
     { id: '2', cliente_id: 'vera', operacao_id: 'oc-boitel', financeiro_lancamento_id: 'titulo-boitel', cancelada: false },
     { id: '3', cliente_id: 'vera', operacao_id: 'oc-venda', financeiro_lancamento_id: 'desvinculado', cancelada: true },
     { id: '4', cliente_id: 'nj', operacao_id: 'oc-compra', financeiro_lancamento_id: 'de-outro-cliente', cancelada: false },
+    { id: '5', cliente_id: 'vera', operacao_id: 'oc-venda', financeiro_lancamento_id: 'recebimento-cc', cancelada: false, componente: 'recebimento', origem: 'manual' },
   ];
 });
 
 describe('icone de OC por parte viva', () => {
   it('o vinculado tem icone; o desvinculado e o de outro cliente nao', async () => {
     const { result } = renderHook(() => useLancamentosComOC('vera'));
-    await waitFor(() => expect(result.current.size).toBe(2));
-    expect(result.current.get('importado-vinculado')).toEqual({ operacaoId: 'oc-abate', tipo: 'abate', ehBoitel: false });
+    await waitFor(() => expect(result.current.size).toBe(3));
+    expect(result.current.get('importado-vinculado')).toEqual({ operacaoId: 'oc-abate', tipo: 'abate', ehBoitel: false, foraDoDre: false });
+    /* OC-CC-CLASSIFICACAO-01: o recebimento da conta corrente e' marcado fora do DRE; o titulo comum, nao */
+    expect(result.current.get('recebimento-cc')?.foraDoDre).toBe(true);
     expect(result.current.get('titulo-boitel')?.ehBoitel).toBe(true);
     expect(result.current.has('desvinculado')).toBe(false);
     expect(result.current.has('de-outro-cliente')).toBe(false);
@@ -80,3 +83,28 @@ describe('tooltip pelo tipo da OC', () => {
     expect(rotuloOrigemOC({ tipo: 'venda', ehBoitel: true })).toBe('Origem: Operação Comercial de Boitel');
   });
 });
+
+describe('OC-CC-CLASSIFICACAO-01 — a marca "fora do DRE" no tooltip e o espelho da regra do banco', () => {
+  it('o tooltip do recebimento/pagamento da conta corrente leva "fora do DRE · OC <codigo>"; o do titulo comum, nao', () => {
+    expect(rotuloOrigemOC({ tipo: 'venda', ehBoitel: false, foraDoDre: true, operacaoId: '232c05aa-e531-4f91' }))
+      .toBe('Origem: Operação Comercial de Venda · fora do DRE · OC 232c05aa');
+    expect(rotuloOrigemOC({ tipo: 'compra', ehBoitel: false, foraDoDre: false, operacaoId: '1337bb2d-9c86' }))
+      .toBe('Origem: Operação Comercial de Compra');
+  });
+
+  it('parteForaDoDre e _oc_cc_fora_do_dre dizem a mesma coisa para cada componente e origem', async () => {
+    const { parteForaDoDre } = await import('@/hooks/useLancamentosComOC');
+    const { readFileSync } = await import('node:fs');
+    const sql = readFileSync('supabase/migrations/20261027173000_oc_cc_classificacao_01.sql', 'utf8');
+    /* a regra do banco, lida do arquivo: e' ela que o front espelha */
+    expect(sql).toContain("and ((pt.componente = 'recebimento' and pt.origem not in ('explicacao', 'entrega'))");
+    expect(sql).toContain("or (pt.componente = 'devolucao_comprador' and pt.origem = 'explicacao')))");
+    const casos: Array<[string, string, boolean]> = [
+      ['recebimento', 'manual', true], ['recebimento', 'programacao', true], ['recebimento', 'entrega', false],
+      ['recebimento', 'explicacao', false], ['devolucao_comprador', 'explicacao', true], ['devolucao_comprador', 'manual', false],
+      ['principal', 'programacao', false], ['entrega', 'entrega', false], ['frete', 'programacao', false],
+    ];
+    for (const [componente, origem, esperado] of casos) expect(parteForaDoDre({ componente, origem })).toBe(esperado);
+  });
+});
+

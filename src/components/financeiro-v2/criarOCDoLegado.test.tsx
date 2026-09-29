@@ -1,7 +1,7 @@
 /**
  * OC-CRIAR-DO-LEGADO-01 — o dialogo "Criar OC a partir do legado". A regra mora no banco (`oc_criar_do_legado`, provada em
  * rollback); a RPC aqui e' MOCKADA e o arquivo trava o que a TELA faz: preenche o comprador pelo favorecido, pre-marca a
- * combinacao unica, manda a simulacao com o que esta' marcado, mostra a previa com o rotulo "Recebimento de vendas" e o sinal do
+ * combinacao unica, manda a simulacao com o que esta' marcado, mostra a previa com o recebimento na conta da venda (OC-CC-CLASSIFICACAO-01) e o sinal do
  * caixa, escreve TODAS as pendencias juntas ao lado do botao (sem toast), cria com `p_simular = false` e devolve o id.
  * Numeros do caso de prova (Santa Rita, 692f1957 + 4df4ea15, saidas 8bd25a97 e 9542dccc).
  */
@@ -37,8 +37,8 @@ const PREVIA_OK = {
     linhas: [
       { tipo: 'entrega', data: '2026-03-26', parte_id: 'p1', lote_ordem: 1, cab: 200, descricao: 'Venda 200 DM', conta: 'Venda de Desmama Machos', mov_entrega: -707751.47, saldo: -707751.47 },
       { tipo: 'entrega', data: '2026-03-27', parte_id: 'p2', lote_ordem: 2, cab: 115, descricao: 'Venda 115 DM', conta: 'Venda de Desmama Machos', mov_entrega: -474849.28, saldo: -1182600.75 },
-      { tipo: 'recebimento', data: '2026-04-16', parte_id: 'p3', descricao: 'Venda 315 Desmama M - 1/2', conta: 'Adiantamento de Clientes', mov_recebido: 591300.38, saldo: -591300.37 },
-      { tipo: 'recebimento', data: '2026-04-22', parte_id: 'p4', descricao: 'Venda 315 Desmama M - 2/2', conta: 'Adiantamento de Clientes', mov_recebido: 591300.37, saldo: 0 },
+      { tipo: 'recebimento', data: '2026-04-16', parte_id: 'p3', descricao: 'Venda 315 Desmama M - 1/2', conta: 'Venda de Desmama Machos', mov_recebido: 591300.38, saldo: -591300.37 },
+      { tipo: 'recebimento', data: '2026-04-22', parte_id: 'p4', descricao: 'Venda 315 Desmama M - 2/2', conta: 'Venda de Desmama Machos', mov_recebido: 591300.37, saldo: 0 },
     ],
   },
 };
@@ -101,11 +101,13 @@ describe('Criar OC a partir do legado', () => {
     expect(a?.p_recebimentos).toEqual(['692f1957']);
   });
 
-  it('a previa: lotes com R$/kg, "Recebimento de vendas" no lugar da conta de adiantamento, entrega negativa e saldo zero', async () => {
+  it('a previa: lotes com R$/kg, o recebimento na conta da venda (OC-CC-CLASSIFICACAO-01), entrega negativa e saldo zero', async () => {
     montar();
     await waitFor(() => expect(screen.getByTestId('previa')).toBeInTheDocument());
     const previa = screen.getByTestId('previa');
-    expect(previa.textContent).toContain('Recebimento de vendas');
+    const receb1 = previa.querySelector('tr[data-tipo="recebimento"]');
+    expect(receb1?.textContent).toContain('Venda de Desmama Machos');
+    expect(previa.textContent).not.toContain('Recebimento de vendas');
     expect(previa.textContent).not.toContain('Adiantamento de Clientes');
     expect(previa.textContent).toContain('Venda 200 DM');
     const entrega = previa.querySelector('tr[data-tipo="entrega"]');

@@ -38,6 +38,9 @@ export interface ExplicacaoRascunho {
 export interface RolCancelamento {
   entregas: Array<{ data: string; loteOrdem: number | null; valor: number }>;
   explicacoes: Array<{ tipo: string; valor: number; conta: string | null }>;
+  /** OC-CC-CLASSIFICACAO-01: `contaAtual` ja' e' a da operacao e `contaOriginal` e' a do `vincular_recebimento` (a mesma, desde que
+   *  o vincular nao troca mais a conta). `acao`: 'volta_para_conta_original' (vinculado: perde a parte e volta ao DRE),
+   *  'fica_manual' (nascido na OC e ja' pago) ou 'cancela_programado' (nascido na OC e nao pago). */
   recebimentos: Array<{ data: string; valor: number; contaAtual: string | null; contaOriginal: string | null; acao: string }>;
   saidas: Array<{ data: string; cab: number; categoria: string | null; origem: string }>;
   compromissos: Array<{ componente: string; valor: number }>;

@@ -71,3 +71,26 @@ entre o que saiu da fazenda e o que o comprador pagou.
   recebimentos/pagamentos (que voltam à conta original), explicações e os compromissos da conta corrente (o "Programar
   recebimento/pagamento"). **Despesas pagas a terceiros (frete, comissão, ICMS, Fundersul, Iagro...) nunca são canceladas:**
   compromisso, título e liquidação ficam, e o diálogo as lista em "Ficam (pagas a terceiros)". Vale para a venda também.
+
+## Adendo — OC-CC-CLASSIFICACAO-01 (29/09/2026, decisões do Gabriel)
+
+**Substitui** a regra "o recebimento vira Adiantamento de Clientes" (Decisão e adendos anteriores) e o "pagamento vai para
+Adiantamento a Fornecedores / devolução na 3016" do adendo OC-CONTA-CORRENTE-TODOS-01a.
+
+- **Princípio: a OC é uma venda/compra só.** No Financeiro, todo recebimento ou pagamento dela — adiantamento ou não — fica no
+  subcentro da operação (venda/compra de gado) e referenciado à OC; o detalhe por lote, entrega e diferença fica na OC. Uma verdade
+  só: filtrar o Financeiro por "Venda de Desmama Machos" mostra o dinheiro de todas as vendas, com ou sem OC.
+- **Recebimento/pagamento fica no subcentro da operação, fora do DRE pela parte da OC.** A receita/custo continua reconhecida
+  na ENTREGA (sem caixa, única fonte do DRE). O recebimento/pagamento (e a devolução) sai do DRE por `compoe_dre = false`, gravado
+  por UMA regra no gatilho que já grava a bandeira (`materializar_dre_lcdpr_from_plano`, predicado `_oc_cc_fora_do_dre`): parte
+  viva de OC conta corrente, componente recebimento (fora de explicação e entrega) ou devolução. Sem a parte viva, volta a regra
+  normal — cancelar a OC devolve o dinheiro ao DRE como venda/compra comum, porque ele entrou/saiu de verdade.
+- **Os leitores do DRE que liam pela conta respeitam a bandeira:** `fn_dre_pecuaria`, `fn_dre_pecuaria_lancamentos`,
+  `fn_dre_lavoura`, `fn_dre_agricola_por_safra`.
+- **Programado e devolução nascem na conta da operação** — a da categoria do lote de maior valor (editável depois); a devolução no
+  sentido contrário ao dinheiro da operação.
+- **Contas:** 3016 removida (zero lançamentos); 3015, 5005 e 5006 desativadas depois que os 7 lançamentos delas voltam à conta da
+  operação (não apagadas, não renumeradas). Os nomes de exibição "Recebimento de vendas", "Pagamento de compras" e "Devolução do
+  fornecedor" saíram.
+- **Conta bancária pela direção:** entrada em `conta_destino_id`, saída em `conta_bancaria_id` — o extrato da OC lia só a segunda e
+  mostrava "sem conta" em todo recebimento.

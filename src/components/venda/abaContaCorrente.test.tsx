@@ -24,7 +24,7 @@ function cc(extra: Record<string, unknown> = {}): ContaCorrente {
         conta: 'Venda de Desmama Machos', mov_entrega: -566879.55, status: 'sem_caixa', no_saldo: true, saldo: -566879.55 },
       { tipo: 'entrega', data: '2025-03-20', parte_id: 'e2', lote_ordem: 2, cab: 139, categoria: 'desmama_m', conta_ordem: 1120,
         conta: 'Venda de Desmama Machos', mov_entrega: -426616.58, status: 'sem_caixa', no_saldo: true, saldo: -993496.13 },
-      { tipo: 'recebimento', data: '2025-04-17', parte_id: 'r1', conta_ordem: 3015, conta: 'Adiantamento de Clientes',
+      { tipo: 'recebimento', data: '2025-04-17', parte_id: 'r1', conta_ordem: 1120, conta: 'Venda de Desmama Machos',
         mov_recebido: 992138.24, status: 'sem_conta_bancaria', no_saldo: true, saldo: -1357.89 },
     ],
     explicacoes: [],
@@ -210,7 +210,7 @@ describe('aba conta corrente da OC — extrato pelo caixa da fazenda', () => {
 const ROL: RolCancelamento = {
   entregas: [{ data: '2025-03-19', loteOrdem: 1, valor: 566879.55 }],
   explicacoes: [{ tipo: 'permuta_despesa', valor: 357.89, conta: 'Frete' }],
-  recebimentos: [{ data: '2025-04-17', valor: 992138.24, contaAtual: 'Adiantamento de Clientes', contaOriginal: 'Venda de Desmama Machos', acao: 'volta_para_conta_original' }],
+  recebimentos: [{ data: '2025-04-17', valor: 992138.24, contaAtual: 'Venda de Desmama Machos', contaOriginal: 'Venda de Desmama Machos', acao: 'volta_para_conta_original' }],
   saidas: [{ data: '2025-03-19', cab: 178, categoria: 'desmama_m', origem: 'adotada' }],
   compromissos: [],
   despesas: [],
@@ -224,8 +224,11 @@ describe('cancelar a venda em conta corrente', () => {
     const onFechar = vi.fn();
     const { rerender } = render(<CancelarContaCorrenteDialog api={a} onCancelar={onCancelar} onFechar={onFechar} />);
     const dlg = await screen.findByTestId('dialogo-cancelar-cc');
-    await waitFor(() => expect(dlg.textContent).toContain('Recebimentos que voltam à conta original (1)'));
-    expect(dlg.textContent).toContain('Recebimento de vendas → Venda de Desmama Machos'); // FIN-V2-SEM-CAIXA-01: rotulo de tela da conta
+    await waitFor(() => expect(dlg.textContent).toContain('Recebimentos que saem da OC (voltam a compor o DRE como venda) (1)'));
+    /* OC-CC-CLASSIFICACAO-01: o recebimento ja' esta' na conta da venda — sem seta, e o rodape diz que ele volta ao DRE */
+    expect((dlg.textContent ?? '').replace(/\u00a0/g, ' ')).toContain('R$ 992.138,24 · Venda de Desmama Machos');
+    expect(dlg.textContent).not.toContain('→');
+    expect(dlg.textContent).toContain('volta a ser uma venda comum no DRE');
     expect(dlg.textContent).toContain('Entregas canceladas (saem do DRE) (1)');
     expect(dlg.textContent).toContain('Permuta / outra despesa · Frete');
     expect(dlg.textContent).toContain('178 cab · Desmama M');

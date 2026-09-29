@@ -331,8 +331,8 @@ function DialogoBuscarRecebimento({ api, lado, onFechar }: { api: OcContaCorrent
         <DialogHeader><DialogTitle className="text-[12px]">{compra ? 'Buscar pagamento no Financeiro' : 'Buscar recebimento no Financeiro'}</DialogTitle></DialogHeader>
         <div className="text-[10px] text-muted-foreground">
           {compra
-            ? 'O lançamento passa para Pagamento de compras (sai do DRE). Valor, datas, conta bancária e conciliação não mudam.'
-            : 'O lançamento passa para Adiantamento de Clientes (sai do DRE). Valor, datas, conta bancária e conciliação não mudam.'}
+            ? 'O lançamento fica na conta da compra e sai do DRE pela OC (o custo entrou pela entrada do gado). Valor, datas, conta bancária e conciliação não mudam.'
+            : 'O lançamento fica na conta da venda e sai do DRE pela OC (a receita entrou pela entrega). Valor, datas, conta bancária e conciliação não mudam.'}
         </div>
         <div className="max-h-[50vh] overflow-auto rounded border">
           <table className="w-full table-fixed border-separate border-spacing-0 tabular-nums">
@@ -386,7 +386,7 @@ function CampoMotivo({ id, valor, onChange, falta }: { id: string; valor: string
   );
 }
 
-/* ─── Programar recebimento futuro: compromisso sem lote em Adiantamento de Clientes ─── */
+/* ─── Programar recebimento futuro: compromisso sem lote na conta da OC (a categoria do lote de maior valor), fora do DRE ─── */
 function DialogoProgramarRecebimento({ api, lado, sugerido, onFechar }: { api: OcContaCorrenteApi; lado: LadoContaCorrente; sugerido: number | null; onFechar: () => void }) {
   const compra = lado === 'compra';
   const [valor, setValor] = useState(sugerido ? sugerido.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '');
@@ -409,8 +409,8 @@ function DialogoProgramarRecebimento({ api, lado, sugerido, onFechar }: { api: O
         <DialogHeader><DialogTitle className="text-[12px]">{compra ? 'Programar pagamento futuro' : 'Programar recebimento futuro'}</DialogTitle></DialogHeader>
         <div className="text-[10px] text-muted-foreground">
           {compra
-            ? 'Nasce um pagamento programado em Pagamento de compras. Ele entra no saldo quando for pago.'
-            : 'Nasce um recebimento programado em Adiantamento de Clientes. Ele entra no saldo quando for pago.'}
+            ? 'Nasce um pagamento programado na conta da compra (a do lote de maior valor), fora do DRE. Ele entra no saldo quando for pago.'
+            : 'Nasce um recebimento programado na conta da venda (a do lote de maior valor), fora do DRE. Ele entra no saldo quando for pago.'}
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div>
@@ -617,7 +617,7 @@ export function DialogoExplicarDiferenca({ api, somenteLeitura, lado = 'venda', 
           {lado === 'compra'
             ? <>Ajuste de preço muda o valor da entrada do lote (desconto do fornecedor; R$/kg derivado). Permuta lança sem caixa na conta
               escolhida, com competência na data da última entrada ({dataCurta(cc.ultimaEntrega)}). Devolução do fornecedor programa uma
-              entrada de caixa em Pagamento de compras.</>
+              entrada de caixa na conta da compra, fora do DRE.</>
             : <>Ajuste de preço muda o valor da entrega do lote (R$/kg derivado). Os outros tipos lançam sem caixa na conta escolhida, com
           competência na data da última entrega ({dataCurta(cc.ultimaEntrega)}). Devolver ao comprador programa um pagamento de caixa.</>}
         </div>
