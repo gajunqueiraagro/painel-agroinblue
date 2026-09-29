@@ -38,7 +38,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { computeValidacaoModal, type AbaFinanceira } from './lancamentoDialogTabs';
 import { AbaAuditoriaLancamento } from '@/components/financeiro-v2/AbaAuditoriaLancamento';
-import { AlertCircle, AlertTriangle, Copy, KeyRound, RefreshCw, DollarSign, FileText, Beef, Repeat, Loader2, Link2, Unlink, FilePlus2 } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Copy, KeyRound, RefreshCw, DollarSign, Beef, Repeat, Loader2, Link2, Unlink, FilePlus2 } from 'lucide-react';
 import { LancamentoZooModal } from '@/v2/components/edicao/LancamentoZooModal';
 import { toast } from 'sonner';
 import { mensagemDoErro } from '@/lib/supabase/mensagemDoErro';
@@ -1164,9 +1164,6 @@ export function LancamentoV2Dialog({
     ? (tipoDocumento === 'Nota Fiscal' ? formatNFNumber(notaFiscal) : notaFiscal)
     : '';
 
-  /* PR 2b-fix1 — onde o bloco "Documentos" (Tipo/Nº) vai para o topo: no novo lançamento com documentos
-     antes de salvar, e na parcela aberta. Nos outros usos do diálogo, a ordem de sempre. */
-  const blocoDocumentosNoTopo = lancamento?.id ? irmas != null : !!documentosAntesDeSalvar;
   /* O documento novo nasce com o que o lançamento já diz — Nº Documento, competência, valor e favorecido.
      Só semeia o formulário: mudar o número no documento NÃO muda o Nº Documento do lançamento. */
   const sugestaoDoDocumento = {
@@ -2311,39 +2308,37 @@ export function LancamentoV2Dialog({
                 anexado agora alargaria o escopo para telas congeladas. Registrado como
                 [FIN-DOC-CAMPOS-LEGADOS]. ⚠ QUANDO OS DOIS DIVERGIREM, VALE O DOCUMENTO —
                 é o confronto que responde, não o campo digitado. */}
-            {/* PR 2b-fix1 — no novo lançamento e na parcela aberta, Tipo e Nº Documento vêm PRIMEIRO e ficam
+            {/* PR 2b-fix1/fix2 — em TODO uso da aba (decisão do Gabriel, 29/09), Tipo e Nº Documento vêm PRIMEIRO e ficam
                 presos no topo da área que rola (o `overflow-y-auto` do corpo, abaixo das abas; `-top-2` cobre os 8px do
                 `py-2` do corpo, senão as linhas passavam visíveis nessa faixa acima do bloco. O sticky não
                 cobre o cabeçalho das abas nem o rodapé). Mesmos campos; só a régua (rótulo 10, campo 11, h-8
-                como os outros campos do modal) e a posição. Nos outros usos o bloco fica onde sempre esteve. */}
-            {blocoDocumentosNoTopo && (
-              <section className={cn(sectionClass, "sticky -top-2 z-20")} data-testid="bloco-documentos-topo">
-                <p className="text-[11px] font-semibold text-foreground">Documentos <span className="font-normal text-muted-foreground">· do lançamento</span></p>
-                <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
-                  <div>
-                    <Label className="text-[10px]">Tipo Documento</Label>
-                    <Select value={tipoDocumento || '__none_td__'} onValueChange={v => { setTipoDocumento(v === '__none_td__' ? '' : v as TipoDocumento); if (v !== 'Nota Fiscal') { /* keep raw */ } }}>
-                      <SelectTrigger tabIndex={12} className={cn("h-8 text-[11px]", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none_td__">Nenhum</SelectItem>
-                        {TIPOS_DOCUMENTO.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="text-[10px]">Nº Documento</Label>
-                    <Input
-                      tabIndex={13}
-                      value={notaFiscalDisplay}
-                      onChange={handleNotaFiscalChange}
-                      inputMode={tipoDocumento === 'Nota Fiscal' ? 'numeric' : 'text'}
-                      className={cn("h-8 font-mono text-[11px]", fieldBg)}
-                      placeholder={tipoDocumento === 'Nota Fiscal' ? '000.000.000' : 'Número'}
-                    />
-                  </div>
+                como os outros campos do modal) e a posição. */}
+            <section className={cn(sectionClass, "sticky -top-2 z-20")} data-testid="bloco-documentos-topo">
+              <p className="text-[11px] font-semibold text-foreground">Documentos <span className="font-normal text-muted-foreground">· do lançamento</span></p>
+              <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
+                <div>
+                  <Label className="text-[10px]">Tipo Documento</Label>
+                  <Select value={tipoDocumento || '__none_td__'} onValueChange={v => { setTipoDocumento(v === '__none_td__' ? '' : v as TipoDocumento); if (v !== 'Nota Fiscal') { /* keep raw */ } }}>
+                    <SelectTrigger tabIndex={12} className={cn("h-8 text-[11px]", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none_td__">Nenhum</SelectItem>
+                      {TIPOS_DOCUMENTO.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
-              </section>
-            )}
+                <div>
+                  <Label className="text-[10px]">Nº Documento</Label>
+                  <Input
+                    tabIndex={13}
+                    value={notaFiscalDisplay}
+                    onChange={handleNotaFiscalChange}
+                    inputMode={tipoDocumento === 'Nota Fiscal' ? 'numeric' : 'text'}
+                    className={cn("h-8 font-mono text-[11px]", fieldBg)}
+                    placeholder={tipoDocumento === 'Nota Fiscal' ? '000.000.000' : 'Número'}
+                  />
+                </div>
+              </div>
+            </section>
             {lancamento?.id ? (
               <AbaDocumentosLancamento api={documentosApi}
                 fornecedores={fornecedores.map(f => ({ id: f.id, nome: f.nome }))}
@@ -2379,44 +2374,11 @@ export function LancamentoV2Dialog({
               </p>
             )}
 
-            {blocoDocumentosNoTopo ? (
-              <section className={sectionClass}>
-                <Label className="text-[10px]">Observação</Label>
-                <Textarea tabIndex={15} value={observacao} onChange={e => setObservacao(e.target.value)} rows={2} placeholder="Observações adicionais" className={cn("text-[11px] min-h-[48px]", fieldBg)} />
-              </section>
-            ) : (
-            /* ── BLOCO 4 — Documentos ── */
+            {/* PR 2b-fix2 — a Observação fica embaixo e rola; o bloco "Documentos" (Tipo/Nº) está no topo em todos os usos. */}
             <section className={sectionClass}>
-              <p className={sectionTitleClass}><FileText className="h-3.5 w-3.5" /> Documentos</p>
-              <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
-                <div>
-                  <Label className="text-[10px]">Tipo Documento</Label>
-                  <Select value={tipoDocumento || '__none_td__'} onValueChange={v => { setTipoDocumento(v === '__none_td__' ? '' : v as TipoDocumento); if (v !== 'Nota Fiscal') { /* keep raw */ } }}>
-                    <SelectTrigger tabIndex={12} className={cn("h-8 text-xs", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none_td__">Nenhum</SelectItem>
-                      {TIPOS_DOCUMENTO.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-[10px]">Nº Documento</Label>
-                  <Input
-                    tabIndex={13}
-                    value={notaFiscalDisplay}
-                    onChange={handleNotaFiscalChange}
-                    inputMode={tipoDocumento === 'Nota Fiscal' ? 'numeric' : 'text'}
-                    className={cn("h-8 font-mono text-xs", fieldBg)}
-                    placeholder={tipoDocumento === 'Nota Fiscal' ? '000.000.000' : 'Número'}
-                  />
-                </div>
-              </div>
-              <div>
-                <Label className="text-[10px]">Observação</Label>
-                <Textarea tabIndex={15} value={observacao} onChange={e => setObservacao(e.target.value)} rows={2} placeholder="Observações adicionais" className={cn("text-xs min-h-[48px]", fieldBg)} />
-              </div>
+              <Label className="text-[10px]">Observação</Label>
+              <Textarea tabIndex={15} value={observacao} onChange={e => setObservacao(e.target.value)} rows={2} placeholder="Observações adicionais" className={cn("text-[11px] min-h-[48px]", fieldBg)} />
             </section>
-            )}
             </TabsContent>
             {/* ═══ fim ABA DOCUMENTOS ═══ */}
 

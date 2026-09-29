@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
 import { formatNFNumber } from '@/lib/financeiro/documentoHelper';
 import { motivoArquivoRecusado, type DocumentoPendente } from '@/lib/financeiro/documentosPendentes';
+import { NomeDoArquivo } from '@/components/financeiro-v2/NomeDoArquivo';
 
 export interface ParcelaPrevistaLinha { numero: number; dataVencimento: string; valor: number }
 
@@ -102,9 +103,10 @@ export function ParcelasDaCompra({ parcelas, notaFiscal, qtdNotas, boletos, onBo
                   <td className={`${TD} text-center`}>{dataCurta(p.dataVencimento)}</td>
                   <td className={`${TD} text-right`}>{valorBR(p.valor)}</td>
                   <td className={`${TD} ${DV} text-center`}>{nf ?? '—'}</td>
-                  <td className={`${TD} break-all`}>
+                  {/* PR 2b-fix2 — uma linha só: a célula de nome de arquivo do fix1 (fim fixo, começo encolhe), inteiro no `title`. */}
+                  <td className={`${TD} overflow-hidden whitespace-nowrap`} title={b?.arquivo?.name} data-testid="boleto-da-parcela">
                     {rec ? <span className="text-destructive">{rec}</span>
-                      : b?.arquivo ? b.arquivo.name
+                      : b?.arquivo ? <NomeDoArquivo nome={b.arquivo.name} />
                         : <span className="text-muted-foreground">sem boleto</span>}
                   </td>
                   <td className={`${TD} text-center whitespace-nowrap`}>

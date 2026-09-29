@@ -22,6 +22,7 @@ import {
   casarBoletos, diasDeDiferenca, LIMITE_DIAS_AVISO, type CasouPor,
 } from '@/lib/financeiro/casarBoletos';
 import { motivoArquivoRecusado } from '@/lib/financeiro/documentosPendentes';
+import { NomeDoArquivo } from '@/components/financeiro-v2/NomeDoArquivo';
 
 export interface ParcelaDoBoleto {
   numero: number;
@@ -43,7 +44,8 @@ interface ItemArquivo {
 }
 
 const TH = 'sticky top-0 z-10 h-[17px] whitespace-nowrap bg-primary px-[4px] text-center text-[9.5px] font-semibold text-white';
-const TD = 'h-[18px] border-b border-[#eceae4] px-[4px] text-[10px] align-middle';
+/* `py-0 leading-none`: como a grade de parcelas — sem isto a linha mede 19 (medido no PR 2b-fix2). */
+const TD = 'h-[18px] border-b border-[#eceae4] px-[4px] py-0 text-[10px] leading-none align-middle';
 const dataCurta = (iso: string | null | undefined) => {
   if (!iso) return '—';
   const [a, m, d] = iso.split('-');
@@ -183,7 +185,10 @@ export function AnexarBoletosDialog({ parcelas, subtitulo, onConfirmar, onFechar
                     return (
                       <tr key={i.chave} data-testid="linha-boleto"
                         className={i.recusa ? 'bg-red-50' : amarelo ? 'bg-amber-50' : k % 2 ? 'bg-[#FAFAF8]' : 'bg-white'}>
-                        <td className={`${TD} break-all`}>{i.arquivo.name}</td>
+                        {/* PR 2b-fix2 — uma linha só, com a célula de nome de arquivo do fix1; o nome inteiro no `title`. */}
+                        <td className={`${TD} overflow-hidden whitespace-nowrap`} title={i.arquivo.name} data-testid="arquivo-do-boleto">
+                          <NomeDoArquivo nome={i.arquivo.name} />
+                        </td>
                         <td className={TD}>
                           {i.recusa ? <span className="text-destructive">{i.recusa}</span> : (
                             <Select value={parc != null ? String(parc) : undefined}

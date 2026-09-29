@@ -17,7 +17,8 @@ import { FormDocumento, type SugestaoDocumento } from '@/components/financeiro-v
 import {
   rotuloEspecieDoc, type LancDocumento, type LancDocPayload, type LancamentoDocumentosApi,
 } from '@/hooks/useLancamentoDocumentos';
-import { motivoArquivoRecusado, novoPendente, partesDoNome, type DocumentoPendente } from '@/lib/financeiro/documentosPendentes';
+import { motivoArquivoRecusado, novoPendente, type DocumentoPendente } from '@/lib/financeiro/documentosPendentes';
+import { NomeDoArquivo } from '@/components/financeiro-v2/NomeDoArquivo';
 
 const TH = 'sticky top-0 z-10 h-[17px] whitespace-nowrap bg-primary px-[4px] text-center text-[9.5px] font-semibold text-white';
 /* `py-0 leading-none`: como a grade de parcelas — sem isto a linha mede 19 (medido no PR 2b-fix1). */
@@ -34,17 +35,6 @@ function numeroExibido(d: LancDocumento): string {
   if (!d.numero) return '—';
   const n = d.especie === 'nf' ? (formatNFNumber(d.numero) || d.numero) : d.numero;
   return d.serie ? `${n} · série ${d.serie}` : n;
-}
-
-/** Começo que encolhe (com "…" só quando não cabe) + fim sempre visível. */
-function NomeDoArquivo({ nome }: { nome: string }) {
-  const { inicio, fim } = partesDoNome(nome);
-  return (
-    <span className="flex min-w-0">
-      <span className="min-w-0 overflow-hidden text-ellipsis" data-testid="arquivo-inicio">{inicio}</span>
-      <span className="shrink-0" data-testid="arquivo-fim">{fim}</span>
-    </span>
-  );
 }
 
 /** O pendente no formato que o `FormDocumento` lê — só para editar; nada disto vai ao banco. */
