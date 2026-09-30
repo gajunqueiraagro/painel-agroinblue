@@ -11,8 +11,13 @@
  * como falha encheria a tela de vermelho durante o trabalho inteiro.
  *
  * ⚠ NUNCA RATEIO PROPORCIONAL (regra do Gabriel). A tela não distribui a diferença entre os
- * lançamentos: quem sabe quanto cada um vale é o operador. Ele ajusta um valor, tira um, ou
- * cria o que falta — três gestos explícitos, nenhum palpite.
+ * lançamentos: quem sabe quanto cada um vale é o operador. Ele ajusta um valor, remove um do
+ * casamento, ou cria o que falta — gestos explícitos, nenhum palpite.
+ * ⚠ E O BANCO PREVALECE (PR-CONC-CASAR-VALOR-BANCO-01): "Usar valor do banco" (um levado) e
+ * "absorver a diferença" (vários, numa linha escolhida) põem o valor no CAMPO com um clique. É o
+ * mesmo gesto de digitar, só que sem digitar — e a `fn_espelho_casar` grava esse valor no próprio
+ * lançamento ao Conciliar (`UPDATE ... SET valor`, com a data do extrato e status realizado): o
+ * previsto vira o real. Nada concilia sozinho; o operador ainda clica Conciliar.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -34,6 +39,31 @@ export interface LevadoInicial {
 }
 
 interface Levado extends LevadoInicial { valorTexto: string; }
+
+/**
+ * O SENTIDO DA DIFERENÇA, dito como o operador lê — PR-CONC-CASAR-VALOR-BANCO-01.
+ * ⚠ A FRASE ANTIGA ERA INVERTIDA. A RPC devolve `diferenca = soma − no_extrato`, os dois ASSINADOS. Numa
+ * saída (extrato −506,51, lançamento −506,84) a diferença é −0,33 e a frase dizia "somam menos" — mas o
+ * lançamento é MAIOR que o que o banco pagou. O sentido se mede contra o sinal do extrato: diferença do
+ * MESMO sinal que ele = os lançamentos passam do banco ("a mais").
+ */
+export function sentidoDaDiferenca(diferenca: number, noExtrato: number): 'a_mais' | 'a_menos' | 'confere' {
+  if (Math.abs(diferenca) <= 0.01) return 'confere';
+  return diferenca * Math.sign(noExtrato || 1) > 0 ? 'a_mais' : 'a_menos';
+}
+
+/**
+ * O VALOR DA LINHA QUE ABSORVE A DIFERENÇA INTEIRA — PR-CONC-CASAR-VALOR-BANCO-01. `valorAtual` é o do campo
+ * (em módulo, como o campo trabalha) e `sinalDaLinha` o do lançamento (+1 entrada, −1 saída): a contribuição
+ * da linha na soma é `sinal × valor`, e tirar dela a diferença deixa a soma igual ao extrato. Devolve `null`
+ * quando a linha ficaria zerada ou negativa — aí a ação fica desabilitada com o motivo.
+ */
+export function valorAbsorvendo(valorAtual: number, sinalDaLinha: number, diferenca: number): number | null {
+  const novo = Math.round((valorAtual - diferenca * Math.sign(sinalDaLinha || 1)) * 100) / 100;
+  return novo > 0 ? novo : null;
+}
+
+const paraCampo = (v: number) => Math.abs(v).toFixed(2).replace('.', ',');
 
 /** O que a última simulação disse. `null` enquanto viaja. */
 interface Simulacao { ok: boolean; noExtrato: number; soma: number; diferenca: number; erro: string | null; }
@@ -58,7 +88,7 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
 
   useEffect(() => {
     if (!open) return;
-    setLevados(iniciais.map((l) => ({ ...l, valorTexto: Math.abs(l.valor_assinado).toFixed(2).replace('.', ',') })));
+    setLevados(iniciais.map((l) => ({ ...l, valorTexto: paraCampo(l.valor_assinado) })));
     setErroRodape(null);
     setSim(null);
   }, [open, iniciais]);
@@ -129,15 +159,27 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
   const semItens = levados.length === 0;
   const podeConciliar = !!sim?.ok && !gravando && !semItens;
   const podeCriar = !!sim && !sim.ok && Math.abs(sim.diferenca) > 0.01;
+  const sentido = sim && !semItens ? sentidoDaDiferenca(sim.diferenca, sim.noExtrato) : null;
+  const unico = levados.length === 1;
+  const valorDoBanco = paraCampo(extrato.valor);
+  const poeValor = (id: string, texto: string) =>
+    setLevados((v) => v.map((x) => x.lancamento_id === id ? { ...x, valorTexto: texto } : x));
+  /* Com a simulação viajando (sim nulo ou erro), "absorver" não tem diferença para absorver. */
+  const difAtual = sim && !sim.ok ? sim.diferenca : null;
 
   return (
     <>
       <Dialog open={open && !criando} onOpenChange={(v) => { if (!v) onClose(); }}>
-        <DialogContent className="w-[560px] max-w-[95vw] p-0 gap-0 overflow-hidden [&>button.absolute]:hidden text-[11px]">
+        {/* ⚠ `grid-cols-[minmax(0,1fr)]` — PR-CONC-CASAR-VALOR-BANCO-01. O `DialogContent` da casa é `grid`, e a coluna
+            implícita cresce até o conteúdo mínimo: com o botão "Usar valor do banco" a linha pedia 634px num modal de
+            560, e o `overflow-hidden` cortava a conta, o resumo e o Conciliar (medido na tela). Com a coluna travada, a
+            descrição do lançamento é que trunca (com `title`). */}
+        <DialogContent className="w-[560px] max-w-[95vw] grid-cols-[minmax(0,1fr)] p-0 gap-0 overflow-hidden [&>button.absolute]:hidden text-[11px]">
           <div className="flex h-9 shrink-0 items-center justify-between gap-2 bg-primary px-3 text-primary-foreground">
             <span className="text-[12px] font-medium">Casar com o banco</span>
             <div className="flex items-center gap-3">
-              <span className="text-[11px] opacity-90 truncate max-w-[50%]">{[nomeConta, dataCurta].filter(Boolean).join(' · ')}</span>
+              {/* Sem `truncate`: cortava "Banco do Br…" num cabeçalho com espaço de sobra (regra da casa: texto não corta com reticência). */}
+              <span className="text-[11px] opacity-90 whitespace-nowrap">{[nomeConta, dataCurta].filter(Boolean).join(' · ')}</span>
               <button type="button" onClick={onClose} aria-label="Fechar" className="rounded p-0.5 opacity-80 hover:opacity-100 hover:bg-primary-foreground/10">
                 <X className="h-3.5 w-3.5" />
               </button>
@@ -156,12 +198,12 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
 
             <div>
               <div className="text-[10px] text-muted-foreground mb-1">
-                lançamentos levados ({levados.length}) — edite o valor se o banco pagou diferente
+                lançamentos levados ({levados.length}) — edite o valor se o banco pagou diferente; ao conciliar, o lançamento fica com esse valor
               </div>
               {semItens && <div className="text-[10px] text-muted-foreground italic py-1">nenhum lançamento levado</div>}
               {levados.map((l) => (
-                <div key={l.lancamento_id} className="flex items-center gap-2 py-[3px] border-b last:border-b-0">
-                  <span className="min-w-0 flex-1 truncate">
+                <div key={l.lancamento_id} className="flex min-w-0 items-center gap-2 py-[3px] border-b last:border-b-0">
+                  <span className="min-w-0 flex-1 truncate" title={[l.descricao, l.fornecedor].filter(Boolean).join(' · ')}>
                     <span className="text-[11px]">{l.descricao ?? '—'}</span>
                     <span className="text-[10px] text-muted-foreground">{' · '}{l.fornecedor || '—'}</span>
                   </span>
@@ -172,9 +214,36 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
                     className={cn('w-24 rounded border px-1 py-0.5 text-right text-[11px] font-medium tabular-nums', corVal(l.valor_assinado))}
                     aria-label={`Valor de ${l.descricao ?? 'lançamento'}`}
                   />
-                  <button type="button" className="text-[10px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                  {/* ⚠ UM LEVADO: "Usar valor do banco" — o campo recebe o valor do extrato (em módulo, como o campo
+                      trabalha) e a diferença vai a zero na próxima simulação. VÁRIOS: "absorver a diferença" põe a
+                      diferença inteira NESTA linha; as outras não mudam. */}
+                  {unico ? (
+                    <button type="button" data-testid="usar-valor-banco"
+                      disabled={l.valorTexto === valorDoBanco}
+                      title={l.valorTexto === valorDoBanco ? 'O campo já tem o valor do banco.' : 'Preenche o campo com o valor do extrato; o lançamento fica com ele ao conciliar.'}
+                      onClick={() => poeValor(l.lancamento_id, valorDoBanco)}
+                      className={cn('h-[23px] shrink-0 whitespace-nowrap rounded border px-1.5 text-[10px]',
+                        l.valorTexto === valorDoBanco ? 'opacity-40 cursor-not-allowed' : 'hover:bg-muted')}>
+                      Usar valor do banco ({valorDoBanco})
+                    </button>
+                  ) : (() => {
+                    const novo = difAtual == null ? null : valorAbsorvendo(valorDe(l.valorTexto), l.valor_assinado, difAtual);
+                    const motivo = difAtual == null ? 'Confere com o banco: não há diferença para absorver.'
+                      : novo == null ? 'Esta linha ficaria zerada ou negativa: escolha outra, ou remova um lançamento.' : null;
+                    return (
+                      <button type="button" data-testid="absorver-diferenca" disabled={novo == null}
+                        title={motivo ?? `Esta linha passa a ${paraCampo(novo ?? 0)}; as outras não mudam e a soma fica igual ao banco.`}
+                        onClick={() => { if (novo != null) poeValor(l.lancamento_id, paraCampo(novo)); }}
+                        className={cn('shrink-0 whitespace-nowrap text-[10px] underline underline-offset-2',
+                          novo == null ? 'text-muted-foreground/50 cursor-not-allowed' : 'text-muted-foreground hover:text-foreground')}>
+                        absorver a diferença
+                      </button>
+                    );
+                  })()}
+                  <button type="button" className="shrink-0 whitespace-nowrap text-[10px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                    title="Tira este lançamento do casamento. Nada é apagado: ele continua no sistema, sem vínculo com este movimento."
                     onClick={() => setLevados((v) => v.filter((x) => x.lancamento_id !== l.lancamento_id))}>
-                    tirar
+                    remover deste casamento
                   </button>
                 </div>
               ))}
@@ -194,11 +263,19 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
                   {sim == null ? '—' : fmtBRL(sim.diferenca)}
                 </span>
               </div>
-              {sim && !sim.ok && (
-                <div className="text-[9px] text-muted-foreground">
-                  os lançamentos somam {sim.diferenca > 0 ? 'mais' : 'menos'} do que o banco pagou.
-                  Ajuste um valor, tire um, ou crie a diferença.
+              {/* ⚠ O SENTIDO E O VALOR, e a 10px (a frase estava a 9, abaixo do piso da casa). */}
+              {sim && sentido === 'a_mais' && (
+                <div className="text-[10px] text-muted-foreground" data-testid="frase-diferenca">
+                  Os lançamentos somam R$ {fmtBRL(Math.abs(sim.diferenca))} a mais que o banco. Use o valor do banco, ajuste uma linha ou crie um lançamento pela diferença (ex.: desconto).
                 </div>
+              )}
+              {sim && sentido === 'a_menos' && (
+                <div className="text-[10px] text-muted-foreground" data-testid="frase-diferenca">
+                  Os lançamentos somam R$ {fmtBRL(Math.abs(sim.diferenca))} a menos que o banco. Use o valor do banco, ajuste uma linha ou crie um lançamento pela diferença (ex.: juros, tarifa).
+                </div>
+              )}
+              {sim?.ok && (
+                <div className="text-[10px] text-emerald-600" data-testid="frase-diferenca">Confere com o banco ✓</div>
               )}
             </div>
 
@@ -389,11 +466,21 @@ export function CasarN1Modal({
                 {sim == null ? '—' : fmtBRL(sim.diferenca)}
               </span>
             </div>
-            {sim && !sim.ok && (
-              <div className="text-[9px] text-muted-foreground">
-                os extratos somam {sim.diferenca > 0 ? 'mais' : 'menos'} do que o lançamento.
-                O valor do banco não se edita: abra o lançamento e ajuste o valor lá, ou tire um extrato da seleção.
-              </div>
+            {/* ⚠ A MESMA REGRA DO 1:N (`sentidoDaDiferenca`) — PR-CONC-CASAR-VALOR-BANCO-01. Aqui a
+                `fn_espelho_casar_n1` trabalha EM MÓDULO (`diferenca = Σ|extratos| − |lançamento|`, conferido no
+                `prosrc` em 30/09), e a referência é o lançamento, positivo: a frase antiga não estava invertida no
+                N:1 — o que muda é dizer o VALOR, a 10px (estava a 9, abaixo do piso), e o "Confere" quando bate. */}
+            {sim && !sim.ok && (() => {
+              const sentidoN1 = sentidoDaDiferenca(sim.diferenca, sim.noLancamento);
+              return sentidoN1 === 'confere' ? null : (
+                <div className="text-[10px] text-muted-foreground" data-testid="frase-diferenca-n1">
+                  Os extratos somam R$ {fmtBRL(Math.abs(sim.diferenca))} {sentidoN1 === 'a_mais' ? 'a mais' : 'a menos'} que o lançamento.
+                  {' '}O valor do banco não se edita: abra o lançamento e ajuste o valor lá, ou tire um extrato da seleção.
+                </div>
+              );
+            })()}
+            {sim?.ok && (
+              <div className="text-[10px] text-emerald-600" data-testid="frase-diferenca-n1">Confere com o banco ✓</div>
             )}
           </div>
 
