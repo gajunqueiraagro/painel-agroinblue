@@ -24,11 +24,19 @@
  *
  * ⚠ A21 — CABEÇALHO, TOPO, ABAS E RESUMO FIXOS; SÓ A LISTA ROLA. A cadeia é
  * `h-[92vh]` → `flex-col` → `flex-1 min-h-0` → `overflow-y-auto` num scrollport só.
+ *
+ * ⚠ RÉGUA DA CASA — PR-CONC-CRIAR-LOTE-LAYOUT-01 (mock v1 aprovado pelo Gabriel, 30/09 18:04). O print do NJ · BB ·
+ * set/26 (218 movimentos, 154 a criar) mostrava fontes de 12 a 18px, o "marcar todos" escondido no canto, o bloco
+ * Saldo repetido na lateral e cor sem regra. Agora: tabela a 9,5px / linha de 18px, uma informação por coluna (Data ·
+ * Histórico · Doc · Valor · selo), o "marcar todos" é a caixa do cabeçalho (vazia / parcial / cheia), os quatro cards
+ * viraram UMA faixa de saldo e a lateral diz só o que entra ao criar e o que fica para depois.
+ * ⚠ SÓ FORMA: a RPC, as sub-abas de "Esperando" (907be6bb) e os contadores não mudaram — os blocos delas foram
+ *   copiados do disco como estavam. Os números da faixa são os mesmos que os cards já mostravam, só reorganizados.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Loader2 } from 'lucide-react';
+import { Loader2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { saldoConfere } from '@/lib/financeiro/conciliacaoCalc';
@@ -50,20 +58,29 @@ const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'o
 const corValor = (v: number) => (v < 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400');
 const comSinal = (v: number) => `${v < 0 ? '−' : '+'}${formatMoeda(Math.abs(v))}`;
 
-/**
- * Par rótulo-valor do resumo lateral — idioma do A17.
- *
- * ⚠ QUEM ENCOLHE É O RÓTULO, E ISSO ESTAVA INVERTIDO — PR-CONCILIAR-MES-VER-OS-PARES-01. O
- * rótulo era `shrink-0` e o valor `truncate`: numa coluna de 300px, "Lançamentos sem par no
- * banco (38)" empurrava o número até ele virar "−R$ 140.45…". Cortava justamente o que o
- * operador foi ler — o rótulo ele já sabe, o número é a informação.
- * ⚠ E O `title` VEM JUNTO no rótulo: truncar sem tooltip troca um corte por outro.
- */
-function LinhaResumo({ rotulo, valor, cor }: { rotulo: string; valor: string; cor?: string }) {
+/* ⚠ O NÚMERO DA RÉGUA NOVA VAI SEM "R$" — PR-CONC-CRIAR-LOTE-LAYOUT-01, como o mock: numa tabela de 9,5px o símbolo
+   repetido em cada linha come a largura que o valor precisa. O SINAL continua explícito (+/−) e a cor é a de
+   `corValor`, a mesma fonte do resto do diálogo. As sub-abas de "Esperando" seguem com `comSinal` (fora do escopo). */
+const num2 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const sinalNum = (v: number) => `${v < 0 ? '−' : '+'}${num2(Math.abs(v))}`;
+
+/* ⚠ COLUNAS DA TABELA "A CRIAR" — MEDIDAS NA TELA (viewport 1.135, Inter 9,5px, `Range` sem o zoom: este Dialog não
+     renderiza a 95%): pior texto + 8 de folga + 8 de padding.
+     Data 45 ("28/09", 28,1) · Doc 109 (o documento do BB, "202609011506510", 92,4; o do Sicredi mede 67,8) · Valor 92
+     ("−12.500.000,55", 75,4 — o maior movimento do proto, −2.667.572,77, mede 69,3) · selo 39 ("cru", 22,6).
+     O Histórico é a coluna que sobra: 549px a 1.135, e a mais longa do Sicredi Pessoal set/26 mede 496.
+   ⚠ O QUE NÃO CABE, MEDIDO: o documento do Bradesco com 91 caracteres ("N20077:10/09/26:…", 478,9px) e o histórico de
+     pedágio de 126 (646,2px) — sem quebra e numa linha de 18px, eles são CORTADOS na borda da coluna (sem "…"), com o
+     texto inteiro no `title`. Decisão registrada para o Gabriel. */
+export const COLUNAS_CRUS = { caixa: 22, data: 45, doc: 109, valor: 92, selo: 39 };
+
+/** Uma linha do resumo lateral: rótulo à esquerda, número à direita, uma linha só. */
+function LinhaLateral({ rotulo, valor, cor, forte, testid }: { rotulo: string; valor: string; cor?: string; forte?: boolean; testid?: string }) {
   return (
-    <div className="flex items-baseline justify-between gap-1.5 leading-tight">
-      <span className="min-w-0 truncate text-muted-foreground" title={rotulo}>{rotulo}</span>
-      <span className={`shrink-0 whitespace-nowrap text-right font-medium tabular-nums ${cor ?? ''}`}>{valor}</span>
+    <div className={`flex h-4 items-center justify-between gap-2 whitespace-nowrap ${forte ? 'mt-0.5 h-[18px] border-t pt-px font-semibold' : ''}`}
+      data-testid={testid}>
+      <span className={forte ? '' : 'text-muted-foreground'}>{rotulo}</span>
+      <span className={`tabular-nums ${cor ?? ''}`}>{valor}</span>
     </div>
   );
 }
@@ -254,17 +271,39 @@ export function ConciliarMesDialog({
     return n;
   });
   const todosMarcados = nCrus > 0 && marcados.size === nCrus;
+  /* ⚠ TRÊS ESTADOS NA CAIXA DO CABEÇALHO: vazia, parcial (`indeterminate`) e cheia. O parcial só existe como
+     propriedade do DOM — não há atributo HTML para ele —, por isso o ref. */
+  const algunsMarcados = marcados.size > 0 && !todosMarcados;
+  const caixaTodos = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (caixaTodos.current) caixaTodos.current.indeterminate = algunsMarcados; }, [algunsMarcados, previa, aba]);
 
-  /* A diferença do saldo do sistema contra o extrato — o número que explica por que o mês
-     não fecha hoje. `null` quando falta um dos dois: "não sei" não vira zero. */
-  const difSistema = useMemo(() => {
-    const dig = previa?.saldo.finalDigitado;
-    if (saldoSistemaHoje == null || dig == null) return null;
-    return saldoSistemaHoje - dig;
-  }, [saldoSistemaHoje, previa]);
+  /* O que entra ao criar — reage à seleção. */
+  const escolhidos = useMemo(
+    () => (previa?.crus ?? []).filter(c => marcados.has(c.extratoId)), [previa, marcados]);
+  const saidasMarc = escolhidos.filter(c => c.valorBanco < 0);
+  const entradasMarc = escolhidos.filter(c => c.valorBanco >= 0);
+  const somaDe = (l: { valorBanco: number }[]) => l.reduce((a, c) => a + c.valorBanco, 0);
+  const totalMarcados = somaDe(escolhidos);
 
+  /* A diferença de "Sistema depois de criar" contra o extrato digitado — `null` quando falta um dos dois:
+     "não sei" não vira zero. */
+  const difDepois = previa?.saldo.finalCalculado != null && previa.saldo.finalDigitado != null
+    ? previa.saldo.finalCalculado - previa.saldo.finalDigitado : null;
+
+  /* ⚠ TRAVA DE DUPLO CLIQUE POR REF: `api.gravando` só vale no próximo render, e dois cliques no mesmo tique
+     passariam os dois — criando o lote duas vezes. */
+  const gravandoRef = useRef(false);
   const confirmar = async () => {
-    if (!clienteId || !contaId || marcados.size === 0) return;
+    if (!clienteId || !contaId || marcados.size === 0 || gravandoRef.current) return;
+    gravandoRef.current = true;
+    try {
+      await confirmarUmaVez();
+    } finally {
+      gravandoRef.current = false;
+    }
+  };
+  const confirmarUmaVez = async () => {
+    if (!clienteId || !contaId) return;
     const r = await api.gravar(clienteId, contaId, anoMes, [...marcados]);
     if (!r) { toast.error(api.erro ?? 'Falha ao criar os lançamentos.'); return; }
     toast.success(
@@ -295,530 +334,479 @@ export function ConciliarMesDialog({
    * ⚠ O NÚMERO É O DOS MARCADOS, não o dos crus possíveis — o botão diz o que o clique FAZ.
    * Com a caixa por linha, `(6)` enquanto 3 estão marcados prometeria o dobro.
    */
-  const rotuloBotao = `Criar lançamentos do que sobrou (${marcados.size})`;
+  const rotuloBotao = `Criar ${marcados.size} lançamento${marcados.size === 1 ? '' : 's'}`;
+  const motivoBotao = marcados.size === 0 ? 'Marque as linhas que devem virar lançamento.' : null;
+  const { de: diaIni, ate: diaFim } = faixaInclusiva(ano, mes);
+  const nDias = porDia(previa?.crus ?? [], c => c.dataBanco);
+  const abas: { valor: Aba; rotulo: string }[] = [
+    { valor: 'crus', rotulo: `A criar ${nCrus}` },
+    { valor: 'esperando', rotulo: `Esperando ${nAguardando + (previa?.ambiguos ?? 0)}` },
+    { valor: 'ja', rotulo: `Já conciliados ${previa?.jaConciliados ?? 0}` },
+  ];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[92vh] max-h-[92vh] w-[96vw] max-w-[1400px] flex-col gap-0 overflow-hidden p-0">
-        <DialogHeader className="shrink-0 space-y-0.5 bg-primary px-4 py-2.5">
-          <DialogTitle className="text-[14px] font-semibold text-primary-foreground">
+      <DialogContent className="flex h-[92vh] max-h-[92vh] w-[96vw] max-w-[1400px] flex-col gap-0 overflow-hidden p-0 [&>button.absolute]:hidden">
+        <DialogHeader className="flex h-8 shrink-0 flex-row items-center gap-2 space-y-0 bg-primary px-3 py-0 text-left">
+          <DialogTitle className="text-[12px] font-medium text-primary-foreground">
             {/* ⚠ O TÍTULO DIZ O ATO, NÃO O PASSO — PR-ACOES-DO-MES-VERBO-01. Ele abria com
                 "Conciliar", e este diálogo não concilia nada desde PR-CONCILIACAO-CRUS-01: ele
-                cria lançamento a partir do movimento do banco que ficou sem par. O botão do
-                rodapé já dizia "Criar lançamentos do que sobrou"; o título o contradizia no
-                topo da mesma tela. */}
+                cria lançamento a partir do movimento do banco que ficou sem par. */}
             Criar lançamentos do extrato · {MESES[mes - 1]}/{ano} · {contaNome || 'conta'}
           </DialogTitle>
-          <p className="text-[11px] text-primary-foreground/85">
+          <span className="text-[10px] text-primary-foreground/80">
             {arquivosOfx} arquivo{arquivosOfx === 1 ? '' : 's'} OFX · {previa?.movimentosExtrato ?? '—'} movimentos
-          </p>
+          </span>
+          {/* O X da casca do Dialog cai fora da faixa de 32px: este é o do cabeçalho, como no `SugestoesCasarModal`. */}
+          <button type="button" onClick={() => onOpenChange(false)} aria-label="Fechar"
+            className="ml-auto rounded p-0.5 text-primary-foreground opacity-80 hover:bg-primary-foreground/10 hover:opacity-100">
+            <X className="h-3.5 w-3.5" />
+          </button>
         </DialogHeader>
 
         {api.simulando && !previa ? (
-          <div className="flex flex-1 items-center justify-center gap-2 text-[12px] text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" /> Conferindo o mês no banco…
+          <div className="flex flex-1 items-center justify-center gap-2 text-[10px] text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Conferindo o mês no banco…
           </div>
         ) : !previa ? (
-          <div className="flex flex-1 items-center justify-center px-6 text-center text-[12px] text-destructive">
+          <div className="flex flex-1 items-center justify-center px-6 text-center text-[10px] text-destructive">
             {api.erro ?? 'Não foi possível ler o mês.'}
           </div>
         ) : (
-          <div className="grid min-h-0 flex-1 gap-2.5 p-2.5 md:[grid-template-columns:1fr_300px]">
-            <div className="flex min-h-0 min-w-0 flex-col rounded-lg border bg-card">
-              {/* ═══ TOPO: os quatro números ═══════════════════════════════════ */}
-              <div className="grid shrink-0 grid-cols-2 gap-2 border-b bg-muted/40 px-3 py-2 sm:grid-cols-4">
-                <div>
-                  <div className="text-[11px] text-muted-foreground">Saldo final no extrato</div>
-                  <div className="text-[18px] font-medium leading-tight tabular-nums">
-                    {previa.saldo.finalDigitado == null ? '—' : formatMoeda(previa.saldo.finalDigitado)}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-[11px] text-muted-foreground">Saldo do sistema hoje</div>
-                  <div className="text-[18px] font-medium leading-tight tabular-nums">
-                    {saldoSistemaHoje == null ? '—' : formatMoeda(saldoSistemaHoje)}
-                  </div>
-                  {/* ⚠ TOLERÂNCIA ZERO — PR-CONCILIACAO-TOLERANCIA-ZERO-02. */}
-                  {difSistema != null && !saldoConfere(difSistema) && (
-                    <div className="text-[11px] text-red-600 dark:text-red-400 tabular-nums">
-                      {comSinal(difSistema)} contra o extrato
-                    </div>
-                  )}
-                </div>
-                <div>
-                  <div className="text-[11px] text-muted-foreground">Saldo após conciliar</div>
-                  <div className="text-[18px] font-medium leading-tight tabular-nums">
-                    {previa.saldo.finalCalculado == null ? '—' : formatMoeda(previa.saldo.finalCalculado)}
-                  </div>
-                  {/* ⚠ TRÊS ESTADOS, NÃO DOIS — a sentinela da casa: `null` é "não sei",
-                      e não pode virar "não confere". */}
-                  {previa.saldo.confere === true && (
-                    <div className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400">confere</div>
-                  )}
-                  {previa.saldo.confere === false && previa.saldo.finalDigitado != null && previa.saldo.finalCalculado != null && (
-                    <div className="text-[11px] text-red-600 dark:text-red-400 tabular-nums">
-                      {comSinal(previa.saldo.finalCalculado - previa.saldo.finalDigitado)}
-                    </div>
-                  )}
-                  {previa.saldo.confere == null && (
-                    <div className="text-[11px] text-amber-700 dark:text-amber-300">sem saldo do mês</div>
-                  )}
-                </div>
-                <div>
-                  <div className="text-[11px] text-muted-foreground">Movimentos do banco</div>
-                  <div className="text-[18px] font-medium leading-tight tabular-nums">{previa.movimentosExtrato}</div>
-                  <div className="text-[11px] text-muted-foreground">{previa.jaConciliados} já conciliados</div>
-                </div>
+          <div className="flex min-h-0 flex-1 flex-col">
+            {/* ═══ FAIXA DE SALDO — uma linha, no lugar dos quatro cards ═══════════════
+                ⚠ OS MESMOS NÚMEROS DE ANTES, só reorganizados: nada aqui recalcula saldo. "Sistema depois de criar" é o
+                `finalCalculado` da RPC (o antigo "Saldo após conciliar"), e "Sistema hoje" é o card do sistema,
+                recebido por prop (130). */}
+            <div className="flex shrink-0 flex-wrap items-end gap-x-7 gap-y-1 border-b px-3 py-1.5" data-testid="faixa-saldo">
+              <div className="flex flex-col">
+                <span className="text-[9.5px] text-muted-foreground">Saldo inicial</span>
+                <span className="text-[12px] font-semibold tabular-nums">{previa.saldo.inicial == null ? '—' : num2(previa.saldo.inicial)}</span>
+                <span className="text-[9.5px] text-muted-foreground">{dataBr(diaIni)}</span>
               </div>
-
-              {/* ═══ ABAS ══════════════════════════════════════════════════════ */}
-              <div className="flex shrink-0 flex-wrap gap-1 border-b px-3 py-1.5">
-                {/* ⚠ TRÊS ABAS, E A DO MEIO É NOVA — PR-CONCILIACAO-CRUS-01. Antes eram quatro,
-                    misturando o que este botão FAZIA (criar cru, substituir) com o que ele
-                    apenas relatava. Agora o botão faz uma coisa só, e as abas separam: o que
-                    VAI SER CRIADO aqui, o que FICA para os outros passos, e o que já está
-                    pronto. */}
-                {([
-                  ['crus', `A criar ${nCrus}`],
-                  /* ⚠ O BADGE CONTA MOVIMENTOS DO BANCO, E SÓ ELES — PR-CONCILIAR-MES-VER-OS-PARES-01.
-                     Ele somava os 38 LANÇAMENTOS do sistema aos 21 movimentos e exibia 59 — um número
-                     maior que os 35 movimentos que o próprio cabeçalho anuncia, e que não era a
-                     contagem de nada. Agora as três abas somam o mês: 5 + 21 + 9 = 35.
-                     ⚠ OS LANÇAMENTOS CONTINUAM DENTRO DA ABA, na faixa que é deles e com o número
-                     deles. O que sai da SOMA é a mistura de naturezas, não a informação. */
-                  ['esperando', `Esperando ${nAguardando + (previa.ambiguos ?? 0)}`],
-                  ['ja', `Já conciliados ${previa.jaConciliados}`],
-                ] as const).map(([id, rot]) => (
-                  <button type="button" key={id} onClick={() => setAba(id)}
-                    className={`rounded-full border px-2 py-px text-[10px] ${
-                      aba === id ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground'}`}>
-                    {rot}
-                  </button>
-                ))}
-
-                {/* ⚠ "MARCAR TODOS" SÓ NA ABA EM QUE HÁ O QUE MARCAR — a mesma decisão da coluna
-                    de caixas da prévia de importação: controle que não faz nada na aba errada é
-                    ruído permanente. */}
-                {aba === 'crus' && nCrus > 0 && (
-                  <label className="ml-auto flex cursor-pointer items-center gap-1 text-[10px] text-muted-foreground"
-                    title="Marcar os movimentos sem candidato nenhum no sistema — são os que podem virar lançamento novo.">
-                    <input type="checkbox" className="h-3 w-3 cursor-pointer"
-                      checked={todosMarcados}
-                      onChange={(e) => setMarcados(e.target.checked ? new Set(previa.crus.map(c => c.extratoId)) : new Set())} />
-                    marcar todos
-                  </label>
-                )}
+              <div className="flex flex-col">
+                <span className="text-[9.5px] text-muted-foreground">Movimentos do banco</span>
+                <span className={`text-[12px] font-semibold tabular-nums ${previa.saldo.movimentosExtrato == null ? '' : corValor(previa.saldo.movimentosExtrato)}`}>
+                  {previa.saldo.movimentosExtrato == null ? '—' : sinalNum(previa.saldo.movimentosExtrato)}
+                </span>
+                <span className="text-[9.5px] text-muted-foreground">{previa.movimentosExtrato} · {previa.jaConciliados} já conciliados</span>
               </div>
-
-              {/* ═══ SUB-ABAS DE "ESPERANDO" (nível 2) ════════════════════════
-                  ⚠ FORA DO SCROLLPORT, e é o que a torna fixa: `sticky` aqui ancoraria na lista
-                  e subiria com ela. Fixar cabeçalho é pôr a rolagem no nível certo.
-                  ⚠ E A MARCAÇÃO É O `Segmentado` DA CASA, não a pílula clara do mock: a regra
-                  permanente do CLAUDE.md diz que seleção se marca com NAVY preenchido, e que aba
-                  nova em qualquer tela usa este componente. A hierarquia entre os dois níveis vem
-                  da FORMA — nível 1 são pílulas soltas `rounded-full`, nível 2 é a barra emendada
-                  de 22px —, não de enfraquecer a marcação do nível de baixo.
-                  ⚠ DUAS BARRAS, E É ASSIM QUE O DIVISOR NASCE: `Segmentado` é uma barra emendada,
-                  então separar as naturezas em duas instâncias dá a divisão de graça, com a borda
-                  de cada uma. A do sistema vai de âmbar. Passar a mesma `subAtiva` às duas é o que
-                  faz só uma acender — a outra não encontra o valor entre as suas opções. */}
-              {aba === 'esperando' && (
-                <div className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b bg-muted/30 px-3 py-1.5">
-                  {/* ⚠ O PLACEHOLDER SEGURA O LUGAR DAS DUAS QUE DEPENDEM DOS PARES — item (a).
-                      Sem ele a barra abriria com "Data diferente (20)" e, 800 ms depois, se
-                      redesenharia como "Par exato (19)" + "Data diferente (1)". */}
-                  {!paresProntos && (
-                    <span className="text-[10px] italic text-muted-foreground">carregando pares…</span>
-                  )}
-                  {subAtiva && subBanco.length > 0 && (
-                    <>
-                      <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70">
-                        movimentos do banco:
-                      </span>
-                      <Segmentado altura={22} valor={subAtiva} onEscolher={setSubAba}
-                        opcoes={subBanco.map(x => ({
-                          valor: x.id,
-                          /* ⚠ `✓` NO LUGAR DO ZERO: a aba que zerou com o operador dentro dela
-                             continua na barra, e um "(0)" diria que ela está vazia em vez de
-                             dizer que o grupo acabou. */
-                          rotulo: <>{x.rotulo}<span className="ml-1 font-semibold tabular-nums">{x.n > 0 ? x.n : '✓'}</span></>,
-                        }))} />
-                    </>
-                  )}
-                  {subAtiva && subSistema.length > 0 && (
-                    <>
-                      {/* ⚠ "SISTEMA:" E ÂMBAR PORQUE A NATUREZA É OUTRA — aqui são LANÇAMENTOS, não
-                          movimentos do banco, e foi somá-los que fez o badge exibir 59 num mês de
-                          35 (PR-CONCILIAR-MES-VER-OS-PARES-01). A contagem desta barra continua
-                          FORA do badge de "Esperando", como lá. */}
-                      <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-700/80 dark:text-amber-400/80">
-                        sistema:
-                      </span>
-                      <Segmentado altura={22} className="border-amber-600/50" valor={subAtiva} onEscolher={setSubAba}
-                        opcoes={subSistema.map(x => ({
-                          valor: x.id,
-                          rotulo: <>{x.rotulo}<span className="ml-1 font-semibold tabular-nums">{x.n > 0 ? x.n : '✓'}</span></>,
-                        }))} />
-                    </>
-                  )}
-                  {paresProntos && !subAtiva && (
-                    <span className="text-[10px] text-muted-foreground">
-                      Nada esperando: todo movimento do mês já tem vínculo ou vai ser criado aqui.
-                    </span>
-                  )}
-                </div>
-              )}
-
-              {/* ═══ A LISTA — o único scrollport ══════════════════════════════ */}
-              <div className="min-h-0 flex-1 overflow-y-auto">
-                {aba === 'ja' ? (
-                  <p className="px-3 py-6 text-center text-[11px] text-muted-foreground">
-                    {previa.jaConciliados} movimento{previa.jaConciliados === 1 ? '' : 's'} já
-                    {previa.jaConciliados === 1 ? ' tinha' : ' tinham'} vínculo e não {previa.jaConciliados === 1 ? 'é tocado' : 'são tocados'}.
-                  </p>
-                ) : aba === 'crus' ? (
-                  nCrus === 0 ? (
-                    <p className="px-3 py-6 text-center text-[11px] text-muted-foreground">
-                      Nenhum movimento do mês está sem candidato no sistema — não há lançamento a criar aqui.
-                    </p>
-                  ) : porDia(previa.crus, c => c.dataBanco).map(([dia, itens]) => (
-                    <div key={dia}>
-                      <div className="sticky top-0 z-[2] border-b bg-muted px-3 py-1 text-[10px] font-medium">{dataBr(dia)}</div>
-                      {itens.map(c => (
-                        /* ⚠ A LINHA INTEIRA É O ALVO DO CLIQUE (é um `<label>`), não só os 12px da
-                           caixa — a mesma correção que o teste da grade do DRE pegou no `<td>`. */
-                        <label key={c.extratoId}
-                          className="flex cursor-pointer items-center gap-2 border-b border-border/60 px-3 py-[7px] hover:bg-muted/40">
-                          <input type="checkbox" className="h-3 w-3 shrink-0 cursor-pointer"
-                            checked={marcados.has(c.extratoId)}
-                            onChange={() => alternar(c.extratoId)} />
-                          <div className="min-w-0 flex-1">
-                            <div className="truncate text-[12px] font-medium" title={c.historicoBanco ?? undefined}>
-                              {c.historicoBanco ?? '—'}
-                            </div>
-                            <div className="truncate text-[10px] text-muted-foreground">
-                              {contaNome}{c.documentoBanco ? ` · doc ${c.documentoBanco}` : ''}
-                              {' · '}
-                              <span className="text-amber-700 dark:text-amber-300">
-                                nada parecido no sistema · nasce sem subcentro e sem fornecedor
-                              </span>
-                            </div>
-                          </div>
-                          <div className={`shrink-0 text-[12px] font-medium tabular-nums ${corValor(c.valorBanco)}`}>
-                            {comSinal(c.valorBanco)}
-                          </div>
-                          <span className="shrink-0 rounded-full bg-blue-100 px-1.5 py-px text-[10px] text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">cru</span>
-                        </label>
-                      ))}
-                    </div>
-                  ))
-                ) : (
-                  /* ═══ ESPERANDO — QUATRO GRUPOS, E AGORA UM DE CADA VEZ ═══════════
-                       PR-CONCILIAR-MES-SUBABAS-01. Eles empilhavam, cada um com a sua faixa, e os
-                       vazios custavam ~46px só para dizer "Nenhum." — num scrollport em que a
-                       linha de dois andares já come 44px. Medido no proto: em 3 das 4 contas com
-                       movimento em aberto, dois ou três dos quatro grupos estão vazios.
-                       ⚠ A BARRA DAS SUB-ABAS FICA FORA DESTE SCROLLPORT, acima — regra do
-                       cabeçalho fixo (A21). Dentro dele ela rolaria para fora justamente quando a
-                       lista ficasse longa, que é quando saber em qual grupo se está importa. */
-                  subAtiva === null ? (
-                    /* ⚠ SEM SUB-ABA NENHUMA SÃO DOIS ESTADOS, e confundi-los seria o erro de
-                       sentinela da casa: "ainda não sei" não pode se vestir de "não há". Enquanto
-                       os pares não voltam, duas das quatro nem foram montadas. */
-                    <p className="px-3 py-6 text-center text-[11px] text-muted-foreground">
-                      {paresProntos
-                        ? 'Nada esperando: todo movimento do mês já tem vínculo ou vai ser criado aqui.'
-                        : 'Conferindo os pares no banco…'}
-                    </p>
-                  ) : nAtiva === 0 ? (
-                    /* ⚠ "RESOLVIDO", E NÃO CAIR PARA A VIZINHA: a sub-aba que zera com o operador
-                       dentro dela continua aberta. Trocar o conteúdo sozinho seria a mesma
-                       cintilação que a barra deixou de ter. */
-                    <p className="px-3 py-6 text-center text-[11px] text-muted-foreground">
-                      Resolvido ✓ — nada mais neste grupo.
-                    </p>
-                  ) : subAtiva === 'par' ? (
-                    <div>
-                      {/* ⚠ OS DOIS LADOS, E O SELO "1 candidato" SAIU — PR-CONCILIAR-MES-ESPERANDO-
-                          COM-PAR-01. Dizer QUANTOS sem dizer QUEM é pedir aprovação sobre um número.
-                          É o mesmo desenho da caixa do "Vincular os exatos", de propósito: quem vê
-                          aqui e confirma lá está olhando a mesma lista. */}
-                      {comPar.map(({ mov, par }) => (
-                        <div key={mov.extratoId} className="flex items-center gap-2 border-b border-border/60 px-3 py-[7px] text-[10px]">
-                          {/* ⚠ 96px NÃO É CHUTE — PR-CONCILIAR-MES-ESPERANDO-COM-PAR-01. Em 86px o valor de
-                            7 dígitos CORTAVA: "−R$ 1.500.000,55" mede 87,61px a 10px, e o maior
-                            movimento do proto é R$ 2.667.572,77 (o maior lançamento, R$ 3.996.196,13).
-                            96px cobre até 8 dígitos (R$ 12.500.000,55 mede 92,36px), que é o próximo
-                            degrau desta base. */}
-                          <span className="w-[38px] shrink-0 overflow-hidden tabular-nums text-muted-foreground">{dataBr(mov.dataBanco)}</span>
-                          <span className="min-w-0 flex-1 truncate" title={mov.historicoBanco ?? undefined}>
-                            {mov.historicoBanco ?? '—'}
-                          </span>
-                          <span className={`w-[96px] shrink-0 text-right font-medium tabular-nums ${corValor(mov.valorBanco)}`}>
-                            {comSinal(mov.valorBanco)}
-                          </span>
-                          <span className="shrink-0 text-muted-foreground/40" aria-hidden>│</span>
-                          <span className="min-w-0 flex-1 truncate"
-                            title={[par.descricaoSistema, par.favorecido].filter(Boolean).join(' · ')}>
-                            {par.descricaoSistema ?? '—'}
-                            {par.favorecido && <span className="text-muted-foreground"> · {par.favorecido}</span>}
-                          </span>
-                          <span className={`w-[96px] shrink-0 text-right font-medium tabular-nums ${corValor(par.valorSistema)}`}>
-                            {comSinal(par.valorSistema)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : subAtiva === 'datadif' ? (
-                    <div>
-                      {/* ⚠ A SUB-ABA EXISTE PORQUE AS DUAS RÉGUAS SÃO COMPATÍVEIS, NÃO IDÊNTICAS: a
-                          prévia conta candidato até 5 dias, o botão casa só com data igual. Medido
-                          na Vera · set/26: 20 contra 19.
-                          ⚠ O QUE ELA NÃO DIZ é QUAL é o candidato — a prévia não emite o lançamento
-                          e o botão não o pareia. Nomeá-lo exige a RPC emitir o candidato marcado
-                          como aproximado: é migration, e é a fase 2 desta frente. */}
-                      {/* ⚠ UMA NOTA, NÃO UMA POR LINHA. O aviso de que casar é o passo seguinte
-                          valia repetido enquanto o lado direito era ele próprio; agora aquele
-                          espaço é do candidato, e repetir a frase em cada linha custaria a
-                          largura que o nome do lançamento passou a usar. */}
-                      <p className="border-b bg-muted/20 px-3 py-1 text-[10px] italic text-muted-foreground">
-                        O candidato é só para conferência — casar com data diferente continua sendo na Estação.
-                      </p>
-                      {semPar.map(mov => (
-                        <div key={mov.extratoId} className="flex items-center gap-2 border-b border-border/60 px-3 py-[7px] text-[10px]">
-                          <span className="w-[38px] shrink-0 overflow-hidden tabular-nums text-muted-foreground">{dataBr(mov.dataBanco)}</span>
-                          <span className="min-w-0 flex-1 truncate" title={mov.historicoBanco ?? undefined}>
-                            {mov.historicoBanco ?? '—'}
-                          </span>
-                          <span className={`w-[96px] shrink-0 text-right font-medium tabular-nums ${corValor(mov.valorBanco)}`}>
-                            {comSinal(mov.valorBanco)}
-                          </span>
-                          <span className="shrink-0 text-muted-foreground/40" aria-hidden>│</span>
-                          {mov.candLancamentoId == null ? (
-                            /* ⚠ SENTINELA, NÃO DEFEITO: a RPC só preenche o candidato no ramo de
-                               candidato único, e o `aguardando_exatos` carrega mais gente. Sem
-                               ele, a linha volta a dizer o que sempre soube. */
-                            <>
-                              <span className="min-w-0 flex-1 truncate italic text-muted-foreground">
-                                tem candidato, mas em data diferente — resolva na Estação
-                              </span>
-                              <span className="w-[96px] shrink-0" />
-                            </>
-                          ) : (
-                            <>
-                              {/* ⚠ A DESCRIÇÃO TRUNCA, A DATA E OS DIAS NÃO — e a ordem importa. O que
-                                  define este grupo é a DIFERENÇA DE DATA; deixá-la no fim de um
-                                  `truncate` a faria sumir justamente nas descrições longas, que são a
-                                  maioria ("ICMS Venda Mandioca · NF 9310349"). */}
-                              <span className="flex min-w-0 flex-1 items-baseline gap-1">
-                                <span className="min-w-0 truncate" title={mov.candDescricao ?? undefined}>
-                                  {mov.candDescricao ?? '—'}
-                                </span>
-                                <span className="shrink-0 text-muted-foreground">
-                                  · {dataBr(mov.candData)}
-                                  {mov.candData && mov.dataBanco
-                                    && ` · ${diasEntreISO(mov.candData, mov.dataBanco)} dia${diasEntreISO(mov.candData, mov.dataBanco) === 1 ? '' : 's'}`}
-                                </span>
-                              </span>
-                              {/* ⚠ O SINAL VEM DO MOVIMENTO, E NÃO É PALPITE — a RPC seleciona o
-                                  candidato com `l.sinal = (CASE WHEN v_ext.valor < 0 THEN '-1' ELSE
-                                  '1' END)`, no MESMO filtro que o escolheu: ter o sinal do movimento
-                                  é critério de seleção, não coincidência. `cand_valor` é
-                                  `financeiro_lancamentos_v2.valor`, que é absoluto.
-                                  ⚠ E SEM ISSO AS DUAS SUB-ABAS VIZINHAS SE CONTRADIZEM: em "Par
-                                  exato" a RPC já aplica o sinal (`valor_sistema`), então a mesma
-                                  coluna mostraria −R$ 2.016,00 em vermelho lá e +R$ 2.016,00 em verde
-                                  aqui, para pagamentos iguais. */}
-                              <span className={`w-[96px] shrink-0 text-right font-medium tabular-nums ${corValor(mov.valorBanco)}`}>
-                                {comSinal(Math.sign(mov.valorBanco) * Math.abs(mov.candValor ?? 0))}
-                              </span>
-                            </>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ) : subAtiva === 'agrupar' ? (
-                    <div>
-                      {/* ⚠ A LISTA ENTROU AQUI, e ela substitui um parágrafo que só repetia o número
-                          da própria aba. O comentário anterior guardava a razão de NÃO listar —
-                          "prometer a lista aqui seria abrir uma decisão nesta tela de novo" —, e a
-                          ressalva continua de pé: é ela que define a FORMA desta lista. Ela é de
-                          LEITURA — sem caixa, sem clique, sem ação. Quem ESCOLHE entre os
-                          candidatos é o passo 2b, e era o mesmo critério da faixa de data
-                          diferente, que já listava os dela sem deixar agir. */}
-                      {previa.ambiguosLista.map(m => (
-                        <div key={m.extratoId} className="flex items-center gap-2 border-b border-border/60 px-3 py-[7px] text-[10px]">
-                          <span className="w-[38px] shrink-0 overflow-hidden tabular-nums text-muted-foreground">{dataBr(m.dataBanco)}</span>
-                          <span className="min-w-0 flex-1 truncate" title={m.historicoBanco ?? undefined}>
-                            {m.historicoBanco ?? '—'}
-                          </span>
-                          <span className={`w-[96px] shrink-0 text-right font-medium tabular-nums ${corValor(m.valorBanco)}`}>
-                            {comSinal(m.valorBanco)}
-                          </span>
-                          <span className="shrink-0 text-muted-foreground/40" aria-hidden>│</span>
-                          <span className="min-w-0 flex-1 truncate italic text-muted-foreground">
-                            {m.candidatos} lançamentos do sistema disputam este movimento — o agrupamento resolve
-                          </span>
-                          <span className="w-[96px] shrink-0" />
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div>
-                      {/* ⚠ ESTES SÃO LANÇAMENTOS, NÃO MOVIMENTOS — a natureza que a barra separa com
-                          divisor, rótulo próprio e âmbar, e a mesma distinção que tirou o "59 > 35"
-                          do badge em PR-CONCILIAR-MES-VER-OS-PARES-01. */}
-                      {porDia(previa.semPar, s => s.data).map(([dia, itens]) => (
-                        <div key={dia}>
-                          <div className="border-b bg-muted/30 px-3 py-1 text-[10px]">{dataBr(dia)}</div>
-                          {itens.map(s => (
-                            <div key={s.lancamentoId} className="flex items-center gap-2 border-b border-border/60 px-3 py-[7px]">
-                              <div className="min-w-0 flex-1">
-                                <div className="truncate text-[12px] font-medium" title={s.descricao ?? undefined}>
-                                  {s.descricao ?? '—'}
-                                </div>
-                                <div className="truncate text-[10px] text-muted-foreground">
-                                  {contaNome}{s.subcentro ? ` · ${s.subcentro}` : ''}{s.statusTransacao ? ` · ${s.statusTransacao}` : ''}
-                                </div>
-                              </div>
-                              <div className={`shrink-0 text-[12px] font-medium tabular-nums ${corValor(s.valor)}`}>
-                                {comSinal(s.valor)}
-                              </div>
-                              <span className="shrink-0 rounded-full bg-muted px-1.5 py-px text-[10px] text-muted-foreground">sem par</span>
-                            </div>
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  )
-                )}
+              <div className="flex flex-col">
+                <span className="text-[9.5px] text-muted-foreground">Saldo final do extrato</span>
+                <span className="text-[12px] font-semibold tabular-nums">{previa.saldo.finalDigitado == null ? '—' : num2(previa.saldo.finalDigitado)}</span>
+                {previa.saldo.finalDigitado == null
+                  ? <span className="text-[9.5px] text-amber-700 dark:text-amber-300">sem saldo do mês</span>
+                  : <span className="text-[9.5px] text-muted-foreground">digitado · {dataBr(diaFim)}</span>}
+              </div>
+              <div className="flex flex-col" data-testid="faixa-depois">
+                <span className="text-[9.5px] text-muted-foreground">Sistema depois de criar</span>
+                <span className="text-[12px] font-semibold tabular-nums">{previa.saldo.finalCalculado == null ? '—' : num2(previa.saldo.finalCalculado)}</span>
+                {/* ⚠ TRÊS ESTADOS, NÃO DOIS — a sentinela da casa: `null` é "não sei", e não pode virar "não confere".
+                    ⚠ TOLERÂNCIA ZERO — PR-CONCILIACAO-TOLERANCIA-ZERO-02. */}
+                {difDepois == null
+                  ? <span className="text-[9.5px] text-muted-foreground">—</span>
+                  : saldoConfere(difDepois)
+                    ? <span className="text-[9.5px] font-medium text-emerald-600 dark:text-emerald-400">confere com o extrato</span>
+                    : <span className="text-[9.5px] tabular-nums text-amber-700 dark:text-amber-300">{sinalNum(difDepois)} contra o extrato</span>}
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[9.5px] text-muted-foreground">Sistema hoje</span>
+                <span className="text-[12px] font-semibold tabular-nums text-muted-foreground">{saldoSistemaHoje == null ? '—' : num2(saldoSistemaHoje)}</span>
+                <span className="text-[9.5px] text-muted-foreground">faltam os {nCrus} do banco</span>
               </div>
             </div>
 
-            {/* ═══ RESUMO LATERAL ═══════════════════════════════════════════════ */}
-            <div className="flex min-h-0 min-w-0 flex-col gap-2 overflow-y-auto">
-              <div className="rounded-lg border bg-card text-[11px]">
-                <div className="border-b bg-accent/40 px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-primary">
-                  O que vai acontecer
+            <div className="grid min-h-0 flex-1 md:[grid-template-columns:minmax(0,1fr)_230px]">
+              <div className="flex min-h-0 min-w-0 flex-col md:border-r">
+                {/* ═══ ABAS — o `Segmentado` da casa; à direita, o que está marcado ═══════════ */}
+                <div className="flex shrink-0 items-center gap-2 border-b px-3 py-1">
+                  {/* ⚠ TRÊS ABAS: o que VAI SER CRIADO aqui, o que FICA para os outros passos e o que já está pronto.
+                      ⚠ O BADGE DE "ESPERANDO" CONTA MOVIMENTOS DO BANCO, E SÓ ELES — PR-CONCILIAR-MES-VER-OS-PARES-01. */}
+                  <Segmentado altura={22} valor={aba} onEscolher={setAba}
+                    opcoes={abas} />
+                  {aba === 'crus' && nCrus > 0 && (
+                    <span className="ml-auto whitespace-nowrap text-[9.5px] text-muted-foreground" data-testid="marcados-resumo">
+                      {marcados.size} marcado{marcados.size === 1 ? '' : 's'}
+                      {marcados.size > 0 && <> · <span className={`tabular-nums ${corValor(totalMarcados)}`}>{sinalNum(totalMarcados)}</span></>}
+                    </span>
+                  )}
                 </div>
-                <div className="space-y-1 px-3 py-2">
-                  <LinhaResumo rotulo={`Entram como lançamento novo (${marcados.size})`}
-                    valor={comSinal(previa.crus.filter(c => marcados.has(c.extratoId)).reduce((a, c) => a + c.valorBanco, 0))}
-                    cor={corValor(previa.crusTotal)} />
-                </div>
-              </div>
 
-              {/* ⚠ O SEGUNDO BLOCO É O QUE IMPEDE O OPERADOR DE ACHAR QUE PERDEU MOVIMENTO —
-                  PR-CONCILIACAO-CRUS-01. Este botão passou a fazer UMA coisa, então num mês de
-                  35 ele cria 6 e não toca nos outros 29. Sem dizer para onde esses 29 foram, o
-                  silêncio vira desconfiança — e a tela já ensinou esse erro antes. */}
-              <div className="rounded-lg border bg-card text-[11px]">
-                <div className="border-b bg-muted/40 px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-                  O que fica para os outros passos
-                </div>
-                {/* ⚠ DUAS NATUREZAS, DOIS SUB-BLOCOS — PR-CONCILIAR-MES-VER-OS-PARES-01. As quatro
-                    linhas vinham empilhadas como se fossem a mesma coisa, e não são: três contam
-                    MOVIMENTOS DO BANCO e uma conta LANÇAMENTOS DO SISTEMA. Somá-las com o olho —
-                    que é o que uma lista sem título convida a fazer — dá um número que não existe,
-                    e foi assim que o badge chegou a 59 num mês de 35.
-                    ⚠ O TÍTULO DE CADA GRUPO É A CORREÇÃO, e não um enfeite: ele diz de que lado da
-                    conciliação aquele número veio, que é a única coisa que impede a soma errada. */}
-                <div className="space-y-1.5 px-3 py-2">
-                  <div>
-                    <div className="mb-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground/70">
-                      Movimentos do banco
-                    </div>
-                    <div className="space-y-1">
-                      <LinhaResumo rotulo="Com par exato, esperando vincular" valor={`${nAguardando}`} />
-                      <LinhaResumo rotulo="Com 2+ candidatos, esperando agrupar" valor={`${previa.ambiguos ?? 0}`} />
-                      <LinhaResumo rotulo="Já conciliados" valor={`${previa.jaConciliados}`} />
-                    </div>
+                {/* ═══ SUB-ABAS DE "ESPERANDO" (nível 2) ════════════════════════
+                    ⚠ FORA DO SCROLLPORT, e é o que a torna fixa: `sticky` aqui ancoraria na lista
+                    e subiria com ela. Fixar cabeçalho é pôr a rolagem no nível certo.
+                    ⚠ E A MARCAÇÃO É O `Segmentado` DA CASA, não a pílula clara do mock: a regra
+                    permanente do CLAUDE.md diz que seleção se marca com NAVY preenchido, e que aba
+                    nova em qualquer tela usa este componente. A hierarquia entre os dois níveis vem
+                    da FORMA — nível 1 são pílulas soltas `rounded-full`, nível 2 é a barra emendada
+                    de 22px —, não de enfraquecer a marcação do nível de baixo.
+                    ⚠ DUAS BARRAS, E É ASSIM QUE O DIVISOR NASCE: `Segmentado` é uma barra emendada,
+                    então separar as naturezas em duas instâncias dá a divisão de graça, com a borda
+                    de cada uma. A do sistema vai de âmbar. Passar a mesma `subAtiva` às duas é o que
+                    faz só uma acender — a outra não encontra o valor entre as suas opções. */}
+                {aba === 'esperando' && (
+                  <div className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b bg-muted/30 px-3 py-1.5">
+                    {/* ⚠ O PLACEHOLDER SEGURA O LUGAR DAS DUAS QUE DEPENDEM DOS PARES — item (a).
+                        Sem ele a barra abriria com "Data diferente (20)" e, 800 ms depois, se
+                        redesenharia como "Par exato (19)" + "Data diferente (1)". */}
+                    {!paresProntos && (
+                      <span className="text-[10px] italic text-muted-foreground">carregando pares…</span>
+                    )}
+                    {subAtiva && subBanco.length > 0 && (
+                      <>
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70">
+                          movimentos do banco:
+                        </span>
+                        <Segmentado altura={22} valor={subAtiva} onEscolher={setSubAba}
+                          opcoes={subBanco.map(x => ({
+                            valor: x.id,
+                            /* ⚠ `✓` NO LUGAR DO ZERO: a aba que zerou com o operador dentro dela
+                               continua na barra, e um "(0)" diria que ela está vazia em vez de
+                               dizer que o grupo acabou. */
+                            rotulo: <>{x.rotulo}<span className="ml-1 font-semibold tabular-nums">{x.n > 0 ? x.n : '✓'}</span></>,
+                          }))} />
+                      </>
+                    )}
+                    {subAtiva && subSistema.length > 0 && (
+                      <>
+                        {/* ⚠ "SISTEMA:" E ÂMBAR PORQUE A NATUREZA É OUTRA — aqui são LANÇAMENTOS, não
+                            movimentos do banco, e foi somá-los que fez o badge exibir 59 num mês de
+                            35 (PR-CONCILIAR-MES-VER-OS-PARES-01). A contagem desta barra continua
+                            FORA do badge de "Esperando", como lá. */}
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-700/80 dark:text-amber-400/80">
+                          sistema:
+                        </span>
+                        <Segmentado altura={22} className="border-amber-600/50" valor={subAtiva} onEscolher={setSubAba}
+                          opcoes={subSistema.map(x => ({
+                            valor: x.id,
+                            rotulo: <>{x.rotulo}<span className="ml-1 font-semibold tabular-nums">{x.n > 0 ? x.n : '✓'}</span></>,
+                          }))} />
+                      </>
+                    )}
+                    {paresProntos && !subAtiva && (
+                      <span className="text-[10px] text-muted-foreground">
+                        Nada esperando: todo movimento do mês já tem vínculo ou vai ser criado aqui.
+                      </span>
+                    )}
                   </div>
-                  <div>
-                    <div className="mb-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground/70">
-                      Lançamentos do sistema
-                    </div>
-                    <div className="space-y-1">
-                      {/* ⚠ O ÚNICO COM DINHEIRO, e agora ele cabe inteiro: a contagem vai no rótulo e
-                          o valor fica sozinho na direita, que é onde ele não disputa espaço. */}
-                      <LinhaResumo rotulo={`Sem par no banco (${nSemPar})`}
-                        valor={comSinal(previa.semParTotal)} cor={corValor(previa.semParTotal)} />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-lg border bg-card text-[11px]">
-                <div className="border-b bg-accent/40 px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-primary">Saldo</div>
-                <div className="space-y-1 px-3 py-2">
-                  <LinhaResumo rotulo="Inicial" valor={previa.saldo.inicial == null ? '—' : formatMoeda(previa.saldo.inicial)} />
-                  <LinhaResumo rotulo="Movimentos do banco"
-                    valor={previa.saldo.movimentosExtrato == null ? '—' : comSinal(previa.saldo.movimentosExtrato)} />
-                  <LinhaResumo rotulo="Final calculado" valor={previa.saldo.finalCalculado == null ? '—' : formatMoeda(previa.saldo.finalCalculado)} />
-                  <LinhaResumo rotulo="Final digitado" valor={previa.saldo.finalDigitado == null ? '—' : formatMoeda(previa.saldo.finalDigitado)}
-                    cor={previa.saldo.confere === true ? 'text-emerald-600 dark:text-emerald-400' : undefined} />
-                </div>
-              </div>
-
-              <div className="rounded-lg border bg-muted/30 px-3 py-2 text-[10px] leading-relaxed text-muted-foreground">
-                {api.gravando ? (
-                  <span className="tabular-nums">
-                    Gravando em lotes de 30 — <b className="text-foreground">{api.gravados}</b> de {marcados.size}.
-                    Cada lote é gravado por inteiro; se um falhar, os anteriores ficam.
-                  </span>
-                ) : nadaAFazer ? (
-                  'Nada a criar: todo movimento do mês já tem vínculo ou tem candidato no sistema.'
-                ) : (
-                  <>
-                    Serão criados <b className="text-foreground">{marcados.size}</b> lançamentos crus,
-                    iguais ao extrato: data, valor e histórico do banco, sem subcentro e sem
-                    fornecedor. Nenhum lançamento existente é alterado e nada é apagado.
-                    {/* ⚠ E NÃO SE CASA NADA AQUI — PR-CONCILIACAO-CRUS-01. Dizer isso na tela é o
-                        que separa este passo do "Vincular os exatos"; sem a frase, "conciliar o
-                        mês" continua parecendo o botão que fazia tudo. */}
-                    {' '}Vincular o que já existe é o passo seguinte.
-                    {/* ⚠ O DESFAZER POR ARQUIVO JÁ ALCANÇA OS CRUS — PR-CONC-DESFAZER-ARQUIVO-01.
-                        O "Ver importações" abre o `DesfazerArquivoModal` (RPC
-                        `fn_extrato_desfazer_arquivo`), que cancela os crus deste passo. A frase
-                        do "pode ser desfeito" continua fora deste diálogo por decisão de escopo:
-                        este PR não mexe no texto da tela daqui. */}
-                  </>
                 )}
+
+                {/* ═══ A LISTA — o único scrollport ══════════════════════════════ */}
+                <div className="min-h-0 flex-1 overflow-auto">
+                  {aba === 'ja' ? (
+                    <p className="px-3 py-6 text-center text-[11px] text-muted-foreground">
+                      {previa.jaConciliados} movimento{previa.jaConciliados === 1 ? '' : 's'} já
+                      {previa.jaConciliados === 1 ? ' tinha' : ' tinham'} vínculo e não {previa.jaConciliados === 1 ? 'é tocado' : 'são tocados'}.
+                    </p>
+                  ) : aba === 'crus' ? (
+                    nCrus === 0 ? (
+                      <p className="px-3 py-6 text-center text-[10px] text-muted-foreground">
+                        Nenhum movimento do mês está sem candidato no sistema — não há lançamento a criar aqui.
+                      </p>
+                    ) : (
+                      /* ⚠ RÉGUA DA CASA: 9,5px, linha de 18px, sem quebra, `table-fixed` com colgroup medido; o
+                         cabeçalho navy é `sticky` NESTE scrollport, que é o único da lista. */
+                      <table className="w-full table-fixed border-collapse text-[9.5px]" data-testid="tabela-crus">
+                        <colgroup>
+                          <col style={{ width: COLUNAS_CRUS.caixa }} />
+                          <col style={{ width: COLUNAS_CRUS.data }} />
+                          <col />
+                          <col style={{ width: COLUNAS_CRUS.doc }} />
+                          <col style={{ width: COLUNAS_CRUS.valor }} />
+                          <col style={{ width: COLUNAS_CRUS.selo }} />
+                        </colgroup>
+                        <thead className="sticky top-0 z-[2] bg-primary text-primary-foreground">
+                          <tr className="h-[18px]">
+                            <th className="px-[4px] text-center font-medium">
+                              {/* ⚠ "MARCAR TODOS" É ESTA CAIXA — vazia, parcial ou cheia —, e vale para a aba aberta. */}
+                              <input ref={caixaTodos} type="checkbox" className="h-3 w-3 cursor-pointer align-middle"
+                                aria-label="Marcar todos" checked={todosMarcados}
+                                onChange={() => setMarcados(todosMarcados ? new Set() : new Set(previa.crus.map(c => c.extratoId)))} />
+                            </th>
+                            <th className="px-[4px] text-left font-medium">Data</th>
+                            <th className="px-[4px] text-left font-medium">Histórico do banco</th>
+                            <th className="px-[4px] text-left font-medium">Doc</th>
+                            <th className="px-[4px] text-right font-medium">Valor</th>
+                            <th />
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {nDias.flatMap(([dia, itens]) => [
+                            <tr key={`dia-${dia}`} className="h-[18px] bg-muted font-semibold" data-testid="linha-dia">
+                              <td />
+                              <td colSpan={3} className="whitespace-nowrap px-[4px]">
+                                {dataBr(dia)} · {itens.length} movimento{itens.length === 1 ? '' : 's'}
+                              </td>
+                              <td className={`whitespace-nowrap px-[4px] text-right tabular-nums ${corValor(somaDe(itens))}`}>{sinalNum(somaDe(itens))}</td>
+                              <td />
+                            </tr>,
+                            ...itens.map((c, i) => (
+                              /* ⚠ A LINHA INTEIRA É O ALVO DO CLIQUE, não só os 12px da caixa. */
+                              <tr key={c.extratoId} data-testid="linha-cru" onClick={() => alternar(c.extratoId)}
+                                className={`h-[18px] cursor-pointer border-t border-border/60 hover:bg-muted/40 ${i % 2 === 1 ? 'bg-muted/25' : ''}`}>
+                                <td className="px-[4px] text-center">
+                                  <input type="checkbox" className="h-3 w-3 cursor-pointer align-middle"
+                                    aria-label={`Criar ${c.historicoBanco ?? 'movimento'}`}
+                                    checked={marcados.has(c.extratoId)}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onChange={() => alternar(c.extratoId)} />
+                                </td>
+                                <td className="whitespace-nowrap px-[4px] tabular-nums">{dataBr(c.dataBanco)}</td>
+                                <td className="overflow-hidden whitespace-nowrap px-[4px]" title={c.historicoBanco ?? undefined}>{c.historicoBanco ?? '—'}</td>
+                                <td className="overflow-hidden whitespace-nowrap px-[4px] text-muted-foreground" title={c.documentoBanco ?? undefined}>{c.documentoBanco ?? '—'}</td>
+                                <td className={`whitespace-nowrap px-[4px] text-right tabular-nums ${corValor(c.valorBanco)}`}>{sinalNum(c.valorBanco)}</td>
+                                <td className="px-[4px] text-center">
+                                  <span className="inline-block rounded-[3px] bg-blue-100 px-[4px] text-[9.5px] leading-[12px] text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">cru</span>
+                                </td>
+                              </tr>
+                            )),
+                          ])}
+                        </tbody>
+                      </table>
+                    )
+                  ) : (
+                    /* ═══ ESPERANDO — QUATRO GRUPOS, E AGORA UM DE CADA VEZ ═══════════
+                         PR-CONCILIAR-MES-SUBABAS-01. Eles empilhavam, cada um com a sua faixa, e os
+                         vazios custavam ~46px só para dizer "Nenhum." — num scrollport em que a
+                         linha de dois andares já come 44px. Medido no proto: em 3 das 4 contas com
+                         movimento em aberto, dois ou três dos quatro grupos estão vazios.
+                         ⚠ A BARRA DAS SUB-ABAS FICA FORA DESTE SCROLLPORT, acima — regra do
+                         cabeçalho fixo (A21). Dentro dele ela rolaria para fora justamente quando a
+                         lista ficasse longa, que é quando saber em qual grupo se está importa. */
+                    subAtiva === null ? (
+                      /* ⚠ SEM SUB-ABA NENHUMA SÃO DOIS ESTADOS, e confundi-los seria o erro de
+                         sentinela da casa: "ainda não sei" não pode se vestir de "não há". Enquanto
+                         os pares não voltam, duas das quatro nem foram montadas. */
+                      <p className="px-3 py-6 text-center text-[11px] text-muted-foreground">
+                        {paresProntos
+                          ? 'Nada esperando: todo movimento do mês já tem vínculo ou vai ser criado aqui.'
+                          : 'Conferindo os pares no banco…'}
+                      </p>
+                    ) : nAtiva === 0 ? (
+                      /* ⚠ "RESOLVIDO", E NÃO CAIR PARA A VIZINHA: a sub-aba que zera com o operador
+                         dentro dela continua aberta. Trocar o conteúdo sozinho seria a mesma
+                         cintilação que a barra deixou de ter. */
+                      <p className="px-3 py-6 text-center text-[11px] text-muted-foreground">
+                        Resolvido ✓ — nada mais neste grupo.
+                      </p>
+                    ) : subAtiva === 'par' ? (
+                      <div>
+                        {/* ⚠ OS DOIS LADOS, E O SELO "1 candidato" SAIU — PR-CONCILIAR-MES-ESPERANDO-
+                            COM-PAR-01. Dizer QUANTOS sem dizer QUEM é pedir aprovação sobre um número.
+                            É o mesmo desenho da caixa do "Vincular os exatos", de propósito: quem vê
+                            aqui e confirma lá está olhando a mesma lista. */}
+                        {comPar.map(({ mov, par }) => (
+                          <div key={mov.extratoId} className="flex items-center gap-2 border-b border-border/60 px-3 py-[7px] text-[10px]">
+                            {/* ⚠ 96px NÃO É CHUTE — PR-CONCILIAR-MES-ESPERANDO-COM-PAR-01. Em 86px o valor de
+                              7 dígitos CORTAVA: "−R$ 1.500.000,55" mede 87,61px a 10px, e o maior
+                              movimento do proto é R$ 2.667.572,77 (o maior lançamento, R$ 3.996.196,13).
+                              96px cobre até 8 dígitos (R$ 12.500.000,55 mede 92,36px), que é o próximo
+                              degrau desta base. */}
+                            <span className="w-[38px] shrink-0 overflow-hidden tabular-nums text-muted-foreground">{dataBr(mov.dataBanco)}</span>
+                            <span className="min-w-0 flex-1 truncate" title={mov.historicoBanco ?? undefined}>
+                              {mov.historicoBanco ?? '—'}
+                            </span>
+                            <span className={`w-[96px] shrink-0 text-right font-medium tabular-nums ${corValor(mov.valorBanco)}`}>
+                              {comSinal(mov.valorBanco)}
+                            </span>
+                            <span className="shrink-0 text-muted-foreground/40" aria-hidden>│</span>
+                            <span className="min-w-0 flex-1 truncate"
+                              title={[par.descricaoSistema, par.favorecido].filter(Boolean).join(' · ')}>
+                              {par.descricaoSistema ?? '—'}
+                              {par.favorecido && <span className="text-muted-foreground"> · {par.favorecido}</span>}
+                            </span>
+                            <span className={`w-[96px] shrink-0 text-right font-medium tabular-nums ${corValor(par.valorSistema)}`}>
+                              {comSinal(par.valorSistema)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : subAtiva === 'datadif' ? (
+                      <div>
+                        {/* ⚠ A SUB-ABA EXISTE PORQUE AS DUAS RÉGUAS SÃO COMPATÍVEIS, NÃO IDÊNTICAS: a
+                            prévia conta candidato até 5 dias, o botão casa só com data igual. Medido
+                            na Vera · set/26: 20 contra 19.
+                            ⚠ O QUE ELA NÃO DIZ é QUAL é o candidato — a prévia não emite o lançamento
+                            e o botão não o pareia. Nomeá-lo exige a RPC emitir o candidato marcado
+                            como aproximado: é migration, e é a fase 2 desta frente. */}
+                        {/* ⚠ UMA NOTA, NÃO UMA POR LINHA. O aviso de que casar é o passo seguinte
+                            valia repetido enquanto o lado direito era ele próprio; agora aquele
+                            espaço é do candidato, e repetir a frase em cada linha custaria a
+                            largura que o nome do lançamento passou a usar. */}
+                        <p className="border-b bg-muted/20 px-3 py-1 text-[10px] italic text-muted-foreground">
+                          O candidato é só para conferência — casar com data diferente continua sendo na Estação.
+                        </p>
+                        {semPar.map(mov => (
+                          <div key={mov.extratoId} className="flex items-center gap-2 border-b border-border/60 px-3 py-[7px] text-[10px]">
+                            <span className="w-[38px] shrink-0 overflow-hidden tabular-nums text-muted-foreground">{dataBr(mov.dataBanco)}</span>
+                            <span className="min-w-0 flex-1 truncate" title={mov.historicoBanco ?? undefined}>
+                              {mov.historicoBanco ?? '—'}
+                            </span>
+                            <span className={`w-[96px] shrink-0 text-right font-medium tabular-nums ${corValor(mov.valorBanco)}`}>
+                              {comSinal(mov.valorBanco)}
+                            </span>
+                            <span className="shrink-0 text-muted-foreground/40" aria-hidden>│</span>
+                            {mov.candLancamentoId == null ? (
+                              /* ⚠ SENTINELA, NÃO DEFEITO: a RPC só preenche o candidato no ramo de
+                                 candidato único, e o `aguardando_exatos` carrega mais gente. Sem
+                                 ele, a linha volta a dizer o que sempre soube. */
+                              <>
+                                <span className="min-w-0 flex-1 truncate italic text-muted-foreground">
+                                  tem candidato, mas em data diferente — resolva na Estação
+                                </span>
+                                <span className="w-[96px] shrink-0" />
+                              </>
+                            ) : (
+                              <>
+                                {/* ⚠ A DESCRIÇÃO TRUNCA, A DATA E OS DIAS NÃO — e a ordem importa. O que
+                                    define este grupo é a DIFERENÇA DE DATA; deixá-la no fim de um
+                                    `truncate` a faria sumir justamente nas descrições longas, que são a
+                                    maioria ("ICMS Venda Mandioca · NF 9310349"). */}
+                                <span className="flex min-w-0 flex-1 items-baseline gap-1">
+                                  <span className="min-w-0 truncate" title={mov.candDescricao ?? undefined}>
+                                    {mov.candDescricao ?? '—'}
+                                  </span>
+                                  <span className="shrink-0 text-muted-foreground">
+                                    · {dataBr(mov.candData)}
+                                    {mov.candData && mov.dataBanco
+                                      && ` · ${diasEntreISO(mov.candData, mov.dataBanco)} dia${diasEntreISO(mov.candData, mov.dataBanco) === 1 ? '' : 's'}`}
+                                  </span>
+                                </span>
+                                {/* ⚠ O SINAL VEM DO MOVIMENTO, E NÃO É PALPITE — a RPC seleciona o
+                                    candidato com `l.sinal = (CASE WHEN v_ext.valor < 0 THEN '-1' ELSE
+                                    '1' END)`, no MESMO filtro que o escolheu: ter o sinal do movimento
+                                    é critério de seleção, não coincidência. `cand_valor` é
+                                    `financeiro_lancamentos_v2.valor`, que é absoluto.
+                                    ⚠ E SEM ISSO AS DUAS SUB-ABAS VIZINHAS SE CONTRADIZEM: em "Par
+                                    exato" a RPC já aplica o sinal (`valor_sistema`), então a mesma
+                                    coluna mostraria −R$ 2.016,00 em vermelho lá e +R$ 2.016,00 em verde
+                                    aqui, para pagamentos iguais. */}
+                                <span className={`w-[96px] shrink-0 text-right font-medium tabular-nums ${corValor(mov.valorBanco)}`}>
+                                  {comSinal(Math.sign(mov.valorBanco) * Math.abs(mov.candValor ?? 0))}
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : subAtiva === 'agrupar' ? (
+                      <div>
+                        {/* ⚠ A LISTA ENTROU AQUI, e ela substitui um parágrafo que só repetia o número
+                            da própria aba. O comentário anterior guardava a razão de NÃO listar —
+                            "prometer a lista aqui seria abrir uma decisão nesta tela de novo" —, e a
+                            ressalva continua de pé: é ela que define a FORMA desta lista. Ela é de
+                            LEITURA — sem caixa, sem clique, sem ação. Quem ESCOLHE entre os
+                            candidatos é o passo 2b, e era o mesmo critério da faixa de data
+                            diferente, que já listava os dela sem deixar agir. */}
+                        {previa.ambiguosLista.map(m => (
+                          <div key={m.extratoId} className="flex items-center gap-2 border-b border-border/60 px-3 py-[7px] text-[10px]">
+                            <span className="w-[38px] shrink-0 overflow-hidden tabular-nums text-muted-foreground">{dataBr(m.dataBanco)}</span>
+                            <span className="min-w-0 flex-1 truncate" title={m.historicoBanco ?? undefined}>
+                              {m.historicoBanco ?? '—'}
+                            </span>
+                            <span className={`w-[96px] shrink-0 text-right font-medium tabular-nums ${corValor(m.valorBanco)}`}>
+                              {comSinal(m.valorBanco)}
+                            </span>
+                            <span className="shrink-0 text-muted-foreground/40" aria-hidden>│</span>
+                            <span className="min-w-0 flex-1 truncate italic text-muted-foreground">
+                              {m.candidatos} lançamentos do sistema disputam este movimento — o agrupamento resolve
+                            </span>
+                            <span className="w-[96px] shrink-0" />
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div>
+                        {/* ⚠ ESTES SÃO LANÇAMENTOS, NÃO MOVIMENTOS — a natureza que a barra separa com
+                            divisor, rótulo próprio e âmbar, e a mesma distinção que tirou o "59 > 35"
+                            do badge em PR-CONCILIAR-MES-VER-OS-PARES-01. */}
+                        {porDia(previa.semPar, s => s.data).map(([dia, itens]) => (
+                          <div key={dia}>
+                            <div className="border-b bg-muted/30 px-3 py-1 text-[10px]">{dataBr(dia)}</div>
+                            {itens.map(s => (
+                              <div key={s.lancamentoId} className="flex items-center gap-2 border-b border-border/60 px-3 py-[7px]">
+                                <div className="min-w-0 flex-1">
+                                  <div className="truncate text-[12px] font-medium" title={s.descricao ?? undefined}>
+                                    {s.descricao ?? '—'}
+                                  </div>
+                                  <div className="truncate text-[10px] text-muted-foreground">
+                                    {contaNome}{s.subcentro ? ` · ${s.subcentro}` : ''}{s.statusTransacao ? ` · ${s.statusTransacao}` : ''}
+                                  </div>
+                                </div>
+                                <div className={`shrink-0 text-[12px] font-medium tabular-nums ${corValor(s.valor)}`}>
+                                  {comSinal(s.valor)}
+                                </div>
+                                <span className="shrink-0 rounded-full bg-muted px-1.5 py-px text-[10px] text-muted-foreground">sem par</span>
+                              </div>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  )}
+                </div>
               </div>
+
+              {/* ═══ RESUMO LATERAL — só o que entra ao criar e o que fica para depois ═══════════
+                  ⚠ O BLOCO "SALDO" SAIU DAQUI: ele repetia a faixa do topo. */}
+              <aside className="flex min-h-0 min-w-0 flex-col gap-2.5 overflow-y-auto px-2.5 py-2 text-[9.5px]" data-testid="resumo-lateral">
+                <div>
+                  <div className="mb-0.5 text-[9.5px] font-semibold uppercase tracking-wide text-muted-foreground">Ao criar</div>
+                  {/* Zero é valor real, mas sem sinal nem cor: "+0,00" em vermelho diria uma saída que não existe. */}
+                  <LinhaLateral rotulo={`Saídas (${saidasMarc.length})`} testid="lat-saidas"
+                    valor={saidasMarc.length ? sinalNum(somaDe(saidasMarc)) : '0,00'} cor={saidasMarc.length ? corValor(-1) : 'text-muted-foreground'} />
+                  <LinhaLateral rotulo={`Entradas (${entradasMarc.length})`} testid="lat-entradas"
+                    valor={entradasMarc.length ? sinalNum(somaDe(entradasMarc)) : '0,00'} cor={entradasMarc.length ? corValor(1) : 'text-muted-foreground'} />
+                  <LinhaLateral forte rotulo={`${marcados.size} lançamento${marcados.size === 1 ? '' : 's'} cru${marcados.size === 1 ? '' : 's'}`} testid="lat-total"
+                    valor={marcados.size ? sinalNum(totalMarcados) : '0,00'} cor={marcados.size ? corValor(totalMarcados) : 'text-muted-foreground'} />
+                </div>
+                {/* ⚠ O SEGUNDO BLOCO É O QUE IMPEDE O OPERADOR DE ACHAR QUE PERDEU MOVIMENTO — PR-CONCILIACAO-CRUS-01. */}
+                <div>
+                  <div className="mb-0.5 text-[9.5px] font-semibold uppercase tracking-wide text-muted-foreground">Fica para depois</div>
+                  <LinhaLateral rotulo="Par exato, a vincular" valor={`${nAguardando}`} cor="text-muted-foreground" />
+                  <LinhaLateral rotulo="2+ candidatos, a agrupar" valor={`${previa.ambiguos ?? 0}`} cor="text-muted-foreground" />
+                  {/* ⚠ LANÇAMENTOS DO SISTEMA, NÃO MOVIMENTOS — a contagem não soma com as de cima. */}
+                  <LinhaLateral rotulo="No sistema sem par no banco"
+                    valor={nSemPar === 0 ? '0' : `${nSemPar} · ${sinalNum(previa.semParTotal)}`}
+                    cor={nSemPar === 0 ? 'text-muted-foreground' : corValor(previa.semParTotal)} />
+                </div>
+                <div className="rounded bg-amber-50 px-1.5 py-1 leading-[1.35] text-amber-800 dark:bg-amber-950/40 dark:text-amber-300" data-testid="aviso-cru">
+                  {api.gravando
+                    ? <span className="tabular-nums">Gravando em lotes de 30 — <b>{api.gravados}</b> de {marcados.size}. Cada lote é gravado por inteiro; se um falhar, os anteriores ficam.</span>
+                    : nadaAFazer
+                      ? 'Nada a criar: todo movimento do mês já tem vínculo ou tem candidato no sistema.'
+                      : 'Nasce cru: data, valor e histórico do banco, sem subcentro e sem fornecedor. Classifique no Enriquecer · Excel. Nada existente é alterado.'}
+                </div>
+              </aside>
             </div>
           </div>
         )}
 
-        <div className="flex h-12 shrink-0 items-center justify-end gap-2 border-t px-3">
-          {/* ⚠ O ERRO DO BANCO FICA NA TELA, em vermelho, e não só num toast que some — 132.
-              Foi um toast genérico que escondeu o `57014` de 07/09 e fez a gravação de 107
-              movimentos parecer um defeito sem causa. */}
+        <div className="flex h-9 shrink-0 items-center justify-end gap-2 border-t px-3">
+          {/* ⚠ O ERRO DO BANCO FICA NA TELA, em vermelho, e não só num toast que some — 132. */}
           {api.erro && (
-            <span className="mr-auto min-w-0 flex-1 truncate text-[10px] text-red-600 dark:text-red-400"
-              title={api.erro}>
+            <span className="mr-auto min-w-0 flex-1 break-words text-[10px] text-red-600 dark:text-red-400">
               {api.erro}
             </span>
           )}
-          <Button type="button" variant="ghost" size="sm" className="h-7 text-[11px]"
+          <Button type="button" variant="ghost" size="sm" className="h-[22px] px-2 text-[10px]"
             onClick={() => onOpenChange(false)}>
             Fechar sem alterar
           </Button>
           {previa && !nadaAFazer && (
             <>
-              {/* ⚠ O MOTIVO FICA ESCRITO AO LADO — regra da OC: botão desabilitado diz por quê,
-                  e a mesma frase governa o `disabled` e o `title`. Sem ela, o operador vê um
-                  botão morto e não descobre que faltava marcar a linha. */}
-              {marcados.size === 0 && !api.gravando && (
-                <span className="text-[10px] text-muted-foreground">Marque as linhas que devem virar lançamento.</span>
+              {/* ⚠ O MOTIVO FICA ESCRITO AO LADO — botão desabilitado diz por quê, e a mesma frase governa o
+                  `disabled` e o `title`. */}
+              {motivoBotao && !api.gravando && (
+                <span className="text-[10px] text-muted-foreground" data-testid="motivo-criar">{motivoBotao}</span>
               )}
               <Button type="button" size="sm"
-                className="h-7 bg-[#f3c84a] text-[11px] font-medium text-foreground hover:bg-[#e8bd3e]"
-                disabled={api.gravando || marcados.size === 0}
-                title={marcados.size === 0 ? 'Marque as linhas que devem virar lançamento.' : undefined}
+                className="h-[22px] bg-[#f3c84a] px-2 text-[10px] font-semibold text-foreground hover:bg-[#e8bd3e]"
+                disabled={api.gravando || !!motivoBotao}
+                title={motivoBotao ?? undefined}
                 onClick={() => { void confirmar(); }}>
                 {api.gravando
-                  /* ⚠ O NÚMERO SOBE PORQUE SÃO VÁRIAS CHAMADAS — 132. Um "Conciliando…" mudo
-                     por 10 s num lote de 107 é indistinguível de uma tela travada. */
+                  /* ⚠ O NÚMERO SOBE PORQUE SÃO VÁRIAS CHAMADAS — 132. */
                   ? `Gravando… ${api.gravados} de ${marcados.size}`
                   : rotuloBotao}
               </Button>

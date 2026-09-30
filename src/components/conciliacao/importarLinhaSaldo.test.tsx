@@ -61,7 +61,7 @@ beforeEach(() => {
   if (!Blob.prototype.text) Blob.prototype.text = function (this: Blob) { return lerComo(this, 'texto', ''); };
 });
 
-async function abrirPrevia(conteudo = OFX_ITAU) {
+async function abrirPrevia(conteudo: string | Uint8Array = OFX_ITAU) {
   const { container } = render(<ImportarBancoInline contas={[{ id: 'itau', label: 'cc-008 | itau bba pecuária' }]} contaId="itau" onContaChange={() => {}} />);
   const input = container.querySelector('input[type="file"]') as HTMLInputElement;
   fireEvent.change(input, { target: { files: [new File([conteudo], 'itau-ago-set.ofx', { type: 'application/x-ofx' })] } });
@@ -110,5 +110,18 @@ describe('toda linha importável tem caixa', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: 'Importar todas' }));
     await waitFor(() => expect(botaoImportar().textContent).toContain('Importar 0'));
     expect(botaoImportar()).toBeDisabled();
+  });
+});
+
+describe('o OFX do BB em cp1252 — PR-CONC-CRIAR-LOTE-LAYOUT-01', () => {
+  it('bytes Latin-1 com CHARSET:1252: a prévia mostra "Compra com Cartão", não "Cart\uFFFDo"', async () => {
+    const ofx = `OFXHEADER:100\nDATA:OFXSGML\nVERSION:102\nENCODING:USASCII\nCHARSET:1252\n\n<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS>
+<BANKTRANLIST><DTSTART>20260901<DTEND>20260930
+<STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20260901<TRNAMT>-31.80<FITID>202609011318000<MEMO>Compra com Cartão - 01/09 FRADELLI</STMTTRN>
+</BANKTRANLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>`;
+    const bytes = Uint8Array.from(ofx, (ch) => ch.charCodeAt(0)); // Latin-1: o "ã" é o byte 0xE3
+    await abrirPrevia(bytes);
+    expect(screen.getByText(/Compra com Cartão - 01\/09 FRADELLI/)).toBeInTheDocument();
+    expect(screen.queryByText(/Cart\uFFFDo/)).toBeNull();
   });
 });

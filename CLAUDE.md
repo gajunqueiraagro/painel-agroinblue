@@ -160,7 +160,7 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 30/09/2026 (PR-CONC-TRANSFERENCIAS-01-fix1): 2571 passando, 22 skipped, e
+  Baseline em 30/09/2026 (PR-CONC-CRIAR-LOTE-LAYOUT-01): 2596 passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -268,7 +268,13 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   foi nessa entrega que a planilha do NJ set/26 foi inteira sem conta. · PR-CONC-TRANSFERENCIAS-01 aposentou o detector
   orfao (`ExtratoListaTab`, `useExtratoParesOfx`, `useTransferenciaDecidir`) e deixou ORFAOS, sem importador, o
   `ConciliacaoPendenciasPanel` (e a lib `conciliacaoDiagnostico`, que so' ele usa) e o `RematchOnDemandPanel` — apagar
-  ou religar e' decisao; `transferencia_ofx_pares` segue como historico (13 decisoes), so' lida pela Mesa.
+  ou religar e' decisao; `transferencia_ofx_pares` segue como historico (13 decisoes), so' lida pela Mesa. ·
+  EXTRATO-UFFFD-01 (PR-CONC-CRIAR-LOTE-LAYOUT-01): 326 linhas de `extrato_bancario_v2` gravadas com U+FFFD antes do
+  conserto do charset (309 vivas: NJ BB 183, Santa Rita BB 120, Santa Rita Bradesco 6; todas com documento e seq, entao
+  a chave natural reconhece a reimportacao). O byte original se PERDEU; a correcao proposta e' por dicionario das 26
+  palavras medidas (F\uFFFDcil, Cart\uFFFDo, El\uFFFDtrica...) recalculando `hash_movimento` junto — so' com GO. E o doc
+  do Bradesco de 91 caracteres e o historico de 126 nao cabem na regua sem quebra do "Criar lancamentos": cortados na
+  borda, texto inteiro no `title` (decisao do Gabriel).
 - Telas e UI:
   TELAS-ORFAS-01 (decisao) · FIN-RECORRENCIA-FAZENDA-01 · FIN-FAZENDA-INATIVA-LISTA-01 · FIN-IMPORTAR-ANTIGO-01 ·
   FAZENDA-INATIVA-EDICAO-01 · LEGADOS-ABATE-VENDA-FAZENDA-01 · FORNECEDOR-UUID-CRU-01 · PROPRIEDADE-DESTINO-ORIGEM-01 ·
@@ -508,6 +514,11 @@ docs/historico/frentes-ate-2026-09-29.md.)
   `useValorRebanhoInicio`, com `origem === 'vazio'` virando null, nunca zero (bloco "03c", 24/09/2026).
 - ⚠ PAGINACAO DE LISTA GRANDE: primeira pagina com `count: 'exact'`, as demais em `Promise.all`; sem `count`, volta ao
   serial de proposito — `count ?? rows.length` truncaria calado (PERF-VALOR-REBANHO-01).
+- ⚠ ARQUIVO DE EXTRATO SE LE PELO CHARSET DECLARADO, NUNCA COM `File.text()` (que e' sempre UTF-8):
+  `decodificarExtrato` (`src/lib/financeiro/parser/`) — CHARSET/ENCODING do OFX 1.x ou `encoding` do `<?xml ?>`; declarado
+  UTF-8 com bytes invalidos ou nada declarado cai em windows-1252. O OFX do BB e do Bradesco vem em cp1252 e gravava
+  "Cart\uFFFDo" (PR-CONC-CRIAR-LOTE-LAYOUT-01). O hash do movimento usa a descricao: consertar texto ja' gravado exige
+  recalcular o hash junto.
 
 ## REGRAS VIGENTES — OPERACAO COMERCIAL E FINANCEIRO
 - ⚠ FINANCEIRO V2 — TODO RAMO DE `editarLancamento` REMENDA A LINHA COM O QUE O BANCO DEVOLVEU

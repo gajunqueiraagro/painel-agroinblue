@@ -36,6 +36,7 @@ import { separarLinhasDeSaldo, conferirSaldoDoExtrato, type ConferenciaSaldoExtr
 import { parseCSVComRelatorio } from '@/lib/financeiro/parser/parseCSV';
 import { extractPdfText } from '@/lib/financeiro/parser/extractPdfText';
 import { hashMovimento, normalizarTexto } from '@/lib/financeiro/extratoHash';
+import { decodificarExtrato } from '@/lib/financeiro/parser/decodificarExtrato';
 import { dataAncoraLancamento, orFiltroDataAncora, OR_CENARIO_NAO_META } from '@/lib/financeiro/dataAncora';
 import {
   classificarDuplicidadeOFX,
@@ -524,7 +525,9 @@ export function useImportacaoExtrato() {
         );
       }
 
-      const conteudo = await params.arquivo.text();
+      /* ⚠ PELO CHARSET DECLARADO, NUNCA `.text()` — PR-CONC-CRIAR-LOTE-LAYOUT-01. `.text()` é sempre UTF-8, e o OFX
+         do BB e do Bradesco vem em cp1252: "Cartão" gravava como "Cart\uFFFDo" (326 linhas no proto em 30/09). */
+      const conteudo = decodificarExtrato(await params.arquivo.arrayBuffer());
       const formato = detectarFormato(params.arquivo.name, conteudo);
       if (!formato) throw new ErroUsuarioSeguro('Formato não reconhecido (espera-se .ofx, .csv ou .pdf)');
       // Defensivo: o branch PDF acima sempre throwa antes de chegar aqui.
