@@ -25,6 +25,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { SearchableSelect, limparBuscasLembradas } from '@/components/ui/searchable-select';
 import { apenasAtivos, guardarFiltros, lerFiltros, esquecerFiltros } from '@/lib/financeiro/filtrosPersistidos';
+import { CHAVE_RETORNO_OC, extrasDoRetornoOC, type ExtrasRetornoOC } from '@/lib/financeiro/retornoOC';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { MOTIVO_BLOQUEIO_TITULO_OC } from '@/lib/financeiro/cancelamentoLancamento';
@@ -432,13 +433,21 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
        instantâneo vence — ele descreve a tela de onde o operador saiu há dois cliques.
        ⚠ E É UM EFEITO SÓ, de propósito: dois efeitos de restauração competindo pela mesma
        montagem dependeriam da ordem de declaração para decidir quem escreve por último. */
-    const raw = sessionStorage.getItem('financeirov2_return_filters') ?? (() => {
+    const instantaneo = sessionStorage.getItem(CHAVE_RETORNO_OC);
+    const raw = instantaneo ?? (() => {
       const ativos = lerFiltros();
       return ativos ? JSON.stringify(ativos) : null;
     })();
     if (!raw) return;
     try {
       const f = JSON.parse(raw);
+      /* OC-HOMOLOG-FIX-02 — "Data por" e o sem caixa voltam SO' do instantaneo da OC; a memoria geral nao os
+         guarda (decisao do PR-FIN-GRADE-DATAS-03 mantida). Cultura ja' voltava pela linha de baixo. */
+      if (instantaneo) {
+        const extras = extrasDoRetornoOC(f);
+        if (extras.dataPor !== undefined) setDataPor(extras.dataPor);
+        if (extras.mostrarSemCaixa !== undefined) setMostrarSemCaixa(extras.mostrarSemCaixa);
+      }
       if (f.fazendaId !== undefined) setFazendaId(f.fazendaId);
       /* Compatibilidade com o que foi guardado antes da multisseleção: um `ano` solto vira
          lista de um. Sem isto, quem tem sessão aberta volta com a lista vazia = "Todos". */
@@ -462,7 +471,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     } catch (e) {
       console.error('[FinanceiroV2Tab] erro ao restaurar filtros:', e);
     } finally {
-      sessionStorage.removeItem('financeirov2_return_filters');
+      sessionStorage.removeItem(CHAVE_RETORNO_OC);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -939,10 +948,14 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   //   (salvos no mesmo mecanismo já consumido pela restauração de retorno). Sem novo mecanismo.
   const abrirOCFinanceiro = (operacaoId: string, tipo?: string | null) => {
     try {
-      sessionStorage.setItem('financeirov2_return_filters', JSON.stringify({
+      /* OC-HOMOLOG-FIX-02 — mais os tres que o painel tambem ajusta; sem eles a volta trazia "Financeira", a chave do
+         sem caixa desligada e a cultura em "Todas" (src/lib/financeiro/retornoOC.ts). */
+      const extras: ExtrasRetornoOC = { dataPor, mostrarSemCaixa, culturaFiltro };
+      sessionStorage.setItem(CHAVE_RETORNO_OC, JSON.stringify({
         fazendaId, anosSelecionados, mesesSelecionados, statusSelecionados, tipoOperacao,
         contaOrigem, contaDestino, macroFiltro, grupoFiltro, centroFiltro,
         subcentroFiltro, produtoFiltro, documentoFiltro, fornecedorFiltro, atividadeFiltro, safraFiltro,
+        ...extras,
       }));
     } catch (e) {
       console.error('[FinanceiroV2Tab] erro ao salvar filtros de retorno:', e);

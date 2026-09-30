@@ -13,11 +13,16 @@ import { cn } from '@/lib/utils';
 import type { FornecedorV2 } from '@/hooks/useFinanceiroV2';
 import { COMBOBOX_CONTENT } from '@/components/ui/command';
 
-export interface FavorecidoSelectProps {
+/** O minimo que o seletor le' de um fornecedor. OC-HOMOLOG-FIX-02: o `NovoCompromissoDialog` da OC so' conhece
+ *  `{ id, nome }`, e o seletor passa a servi-lo sem cast; quem tem o `FornecedorV2` inteiro segue recebendo-o no
+ *  `onSelected`. */
+export type FavorecidoOpcao = Pick<FornecedorV2, 'id' | 'nome'> & Partial<Pick<FornecedorV2, 'cpf_cnpj' | 'ativo'>>;
+
+export interface FavorecidoSelectProps<F extends FavorecidoOpcao = FornecedorV2> {
   value: string;                          // favorecidoId ('' = nenhum)
   onChange: (id: string) => void;         // seta o id (sem side effect)
-  onSelected?: (f: FornecedorV2) => void; // side effect: forma/dados de pagamento
-  fornecedores: FornecedorV2[];
+  onSelected?: (f: F) => void;            // side effect: forma/dados de pagamento
+  fornecedores: F[];
   search: string;                         // busca CONTROLADA (o caller é dono)
   onSearchChange: (s: string) => void;
   /**
@@ -39,11 +44,19 @@ export interface FavorecidoSelectProps {
   tabIndex?: number;
   disabled?: boolean;
   showCpfCnpj?: boolean;                  // exibe "Nome (CPF/CNPJ)" — default false (demais telas inalteradas)
+  /**
+   * OC-HOMOLOG-FIX-02 — campo OPCIONAL: a lista ganha "— nenhum —" no topo, que devolve `''` e nao dispara
+   * `onSelected`. OPT-IN: sem a prop nada muda, e onde o favorecido e' obrigatorio ele segue sem como esvaziar.
+   * Era o que o dialogo de despesa da OC tinha com o `SearchableSelect` (`allLabel="— nenhum —"`).
+   */
+  limpavel?: boolean;
+  /** Texto do gatilho vazio. Default 'Selecione fornecedor...'. */
+  placeholder?: string;
 }
 
 /** Rótulo de exibição do favorecido. Com showCpfCnpj + documento presente → "Nome (CPF/CNPJ)";
  *  sem documento (ou desabilitado) → apenas o nome. Não altera valor/seleção/identidade. */
-function favorecidoLabel(f: Pick<FornecedorV2, 'nome' | 'cpf_cnpj'>, showCpfCnpj: boolean): string {
+function favorecidoLabel(f: FavorecidoOpcao, showCpfCnpj: boolean): string {
   const doc = (f.cpf_cnpj ?? '').trim();
   return showCpfCnpj && doc ? `${f.nome} (${doc})` : f.nome;
 }
@@ -52,11 +65,12 @@ function normalizeSearch(s: string): string {
   return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 }
 
-export function FavorecidoSelect({
+export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
   value, onChange, onSelected, fornecedores,
   search, onSearchChange, onCriarNovo, novoButtonClassName,
   label, triggerClassName, size = 'default', tabIndex, disabled, showCpfCnpj = false,
-}: FavorecidoSelectProps) {
+  limpavel = false, placeholder = 'Selecione fornecedor...',
+}: FavorecidoSelectProps<F>) {
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -100,6 +114,12 @@ export function FavorecidoSelect({
     if (f) onSelected?.(f);
   };
 
+  const handleLimpar = () => {
+    onChange('');
+    setOpen(false);
+    onSearchChange('');
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -134,7 +154,7 @@ export function FavorecidoSelect({
         <Popover open={open} onOpenChange={v => { setOpen(v); if (!v) onSearchChange(''); }}>
           <PopoverTrigger asChild>
             <Button tabIndex={tabIndex} variant="outline" role="combobox" aria-expanded={open} disabled={disabled} className={cn("flex-1 min-w-0 h-8 justify-between font-normal text-[12px]", size === 'compact' && 'h-5 px-1.5 text-[11px] [&_svg]:h-3 [&_svg]:w-3', triggerClassName)}>
-              <span className="truncate">{selectedNome || 'Selecione fornecedor...'}</span>
+              <span className="truncate">{selectedNome || placeholder}</span>
               <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
             </Button>
           </PopoverTrigger>
@@ -153,6 +173,16 @@ export function FavorecidoSelect({
               />
             </div>
             <div className="max-h-56 overflow-y-auto p-1">
+              {limpavel && (
+                <button
+                  type="button"
+                  className="relative flex min-h-[26px] w-full cursor-pointer select-none items-center rounded-sm px-2 py-1 text-[12px] text-zinc-400 outline-none hover:bg-zinc-800/45"
+                  onClick={handleLimpar}
+                >
+                  <Check className={cn("mr-2 h-3.5 w-3.5 shrink-0", value ? "opacity-0" : "opacity-100")} />
+                  <span>— nenhum —</span>
+                </button>
+              )}
               {filtered.length === 0 && <p className="py-3 text-center text-[11px] text-zinc-400">Nenhum fornecedor encontrado</p>}
               {filtered.map((f, idx) => (
                 <button

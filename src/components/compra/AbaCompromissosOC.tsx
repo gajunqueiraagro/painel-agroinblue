@@ -26,6 +26,7 @@ import { executarDesfazerCompromisso, lerEstadoDoDesfazer, rolDoEstado, ErroDesf
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { SearchableSelect } from '@/components/ui/searchable-select';
+import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
 import { DatePicker } from '@/components/ui/date-picker';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -2497,6 +2498,7 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
   const [valor, setValor] = useState<number | null>(null);
   const [subcentro, setSubcentro] = useState('');
   const [favorecidoId, setFavorecidoId] = useState('');
+  const [favorecidoBusca, setFavorecidoBusca] = useState('');
   const [novoFornecedorOpen, setNovoFornecedorOpen] = useState(false);
   const [descricao, setDescricao] = useState('');
   const ultimoDefaultRef = useRef('');   // último default de descrição aplicado automaticamente (ajuste vinculante 3)
@@ -2802,24 +2804,18 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
               <Label className="text-[11px]">Favorecido</Label>
               {/* PR-OC-COMPROMISSO-UX-01 — o "+" abre o MESMO cadastro rapido da aba
                   Compra. Sem ele o usuario precisava abandonar o compromisso, ir ao
-                  cadastro e voltar. `min-w-0` no seletor para ele ceder largura ao
-                  botao em vez de estourar a coluna. */}
-              <div className="flex items-center gap-1">
-                <div className="flex-1 min-w-0">
-                  <SearchableSelect
-                    value={favorecidoId || '__none__'} onValueChange={(v) => setFavorecidoId(v === '__none__' ? '' : v)}
-                    options={fornecedores.map(f => ({ value: f.id, label: f.nome }))} placeholder="Opcional"
-                    allLabel="— nenhum —" allValue="__none__" dense className="[&>button]:h-6 [&>button]:text-[11px]"
-                  />
-                </div>
-                {onCriarFornecedor && (
-                  <Button type="button" variant="outline" size="icon" className="h-6 w-6 shrink-0 mt-0.5"
-                    aria-label="Novo favorecido" title="Cadastrar favorecido"
-                    onClick={() => setNovoFornecedorOpen(true)}>
-                    <Plus className="h-3.5 w-3.5" />
-                  </Button>
-                )}
-              </div>
+                  cadastro e voltar.
+                  ⚠ O MESMO SELETOR DO LANCAMENTO — OC-HOMOLOG-FIX-02. Era o `SearchableSelect`, cujo painel e'
+                  um `absolute` DENTRO do DialogContent e mais largo que a coluna: o `autoFocus` da busca rolava o
+                  dialogo na horizontal, o cabecalho navy ficava pela metade, os campos cortados a' esquerda e a
+                  lista escura saia por fora do modal. O `FavorecidoSelect` abre em portal (Popover), fora da caixa. */}
+              <FavorecidoSelect
+                value={favorecidoId} onChange={setFavorecidoId} fornecedores={fornecedores}
+                search={favorecidoBusca} onSearchChange={setFavorecidoBusca} limpavel placeholder="Opcional"
+                onCriarNovo={onCriarFornecedor ? () => setNovoFornecedorOpen(true) : undefined}
+                novoButtonClassName="h-6 w-6"
+                triggerClassName="mt-0.5 h-6 px-2 text-[11px] [&_svg]:h-3 [&_svg]:w-3"
+              />
             </div>
           </div>
           <div>
