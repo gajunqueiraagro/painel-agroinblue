@@ -158,6 +158,20 @@ interface Props {
      */
     safra_id?: string;
     data_vencimento?: string;
+    /**
+     * O RESTO DO LANÇAMENTO, PARA O DUPLICAR — PR-FIN-DUPLICAR-ABRE-MODAL-01. Quem não passa estas chaves
+     * (extrato, Mesa, custeio) abre exatamente como antes: cada uma cai no valor de hoje (`?? ...`).
+     * ⚠ `cultura`, `fase` e `escopo_negocio` PASSADOS (inclusive vazios) VENCEM o que ficou da sessão: o ramo do
+     * prefill herdava a cultura/fase/atividade do último lançamento aberto, e a cópia de um lançamento de pecuária
+     * saía com a cultura de outro. Sem a chave, a herança continua (defeito anterior, frente própria).
+     */
+    cultura?: string;
+    fase?: string;
+    escopo_negocio?: string;
+    tipo_documento?: string;
+    observacao?: string;
+    forma_pagamento?: string;
+    dados_pagamento?: string;
   };
   /**
    * Esconde o bloco de Frequência/Modalidade/Parcelas.
@@ -950,15 +964,20 @@ export function LancamentoV2Dialog({
         grupo_custo: prefill.grupo_custo ?? '',
         centro_custo: prefill.centro_custo ?? '',
         plano_conta_id: prefill.plano_conta_id ?? null,
-        escopo_negocio: '',
+        escopo_negocio: prefill.escopo_negocio ?? '',
         safra_id: prefill.safra_id ?? '',
+        /* PR-FIN-DUPLICAR-ABRE-MODAL-01 — com a chave, o valor do original; sem ela, o de sempre (o da sessão). */
+        cultura: prefill.cultura ?? c.cultura,
+        fase: prefill.fase ?? c.fase,
+        atividade: prefill.escopo_negocio !== undefined ? atividadeValida(prefill.escopo_negocio) : c.atividade,
       }));
-      setTipoDocumento('');
-      setObservacao('');
+      /* O tipo do documento é uma lista fechada: valor fora dela (ou ausente) abre vazio, sem cast. */
+      setTipoDocumento(TIPOS_DOCUMENTO.find((td) => td === prefill.tipo_documento) ?? '');
+      setObservacao(prefill.observacao ?? '');
       setFormaPagamentoParc('avista');
       setNumParcelas(2); setNumParcelasTexto('2');
-      setFormaPgto('');
-      setDadosPagamento('');
+      setFormaPgto(prefill.forma_pagamento ?? '');
+      setDadosPagamento(prefill.dados_pagamento ?? '');
     } else {
       const today = new Date().toISOString().slice(0, 10);
       setFazendaId(defaultFazendaId || '');

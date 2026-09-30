@@ -43,7 +43,8 @@ no mesmo arquivo.
   sai com codigo 0 e passa sempre. Era um gate vazio. O comando oficial
   varre os 671 arquivos .ts/.tsx em src/ e sai com codigo 2 enquanto
   houver erro.
-- TSC baseline: 142 erros, medidos em ARVORE LIMPA — worktree em detached HEAD sobre o commit,
+- TSC baseline: 141 erros (142 -> 141 no PR-FIN-DUPLICAR-ABRE-MODAL-01, por APAGAR CODIGO MORTO: saiu o TS2322
+  `number` -> `string` do `sinal` no `duplicarLancamento` de useFinanceiroV2.ts), medidos em ARVORE LIMPA — worktree em detached HEAD sobre o commit,
   NUNCA no checkout principal (o trabalho parked acrescenta erros: as duas linhas do
   PR-CONCIL-DERIVADO-02A somam 3 TS2352). A historia de cada subida e queda — 73 -> 155 pela
   regeneracao do types.ts em 02/09 (a unica subida legitima), e as reducoes por CONSERTO, por
@@ -159,7 +160,7 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 30/09/2026 (PR-CONC-CONFERENCIA-MODAL-01-fix2): 2431 passando, 22 skipped, e
+  Baseline em 30/09/2026 (PR-FIN-DUPLICAR-ABRE-MODAL-01): 2444 passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -175,7 +176,7 @@ no mesmo arquivo.
   sairam ou entraram.
 
 ## RELATORIO DE EXECUCAO (formato obrigatorio, todo ciclo)
-1. TSC: N erros (baseline 142) — numero explicito, obtido com
+1. TSC: N erros (baseline 141) — numero explicito, obtido com
    `npx tsc -p tsconfig.app.json --noEmit`
 2. Build: OK/FALHOU + tempo
 3. git diff --stat completo

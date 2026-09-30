@@ -50,6 +50,7 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { useFinanceiroV2, dataDaDimensao, notificarLancamentosMudaram, type LancamentoV2, type FiltrosV2, type DimensaoDataFinanceiro } from '@/hooks/useFinanceiroV2';
 import { CriarOCDoLegadoDialog } from '@/components/financeiro-v2/CriarOCDoLegadoDialog';
 import { podeCriarOCDoLegado } from '@/lib/oc/criarDoLegado';
+import { prefillDeDuplicar, type PrefillDuplicar } from '@/lib/financeiro/prefillDeDuplicar';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
 import { ModoRapidoGrid } from '@/components/financeiro-v2/ModoRapidoGrid';
 import { FinanceiroV2ExportMenu } from '@/components/financeiro-v2/FinanceiroV2ExportMenu';
@@ -574,6 +575,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   /* OC-CRIAR-DO-LEGADO-01 — o recebimento legado de onde nasce a OC (null = dialogo fechado). */
   const [criarOCDe, setCriarOCDe] = useState<string | null>(null);
   const [editingLanc, setEditingLanc] = useState<LancamentoV2 | null>(null);
+  /* O prefill do "Duplicar" (PR-FIN-DUPLICAR-ABRE-MODAL-01): só existe entre o clique e o fechar do dialog. */
+  const [prefillDuplicar, setPrefillDuplicar] = useState<PrefillDuplicar | null>(null);
   // PR-OC-FIN-EDIT-FIX-02 — libera favorecido do título OC só nesta abertura (fluxo "Editar" da OC).
   const [favOCEdit, setFavOCEdit] = useState(false);
 
@@ -910,15 +913,20 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     }
     return ok;
   };
+  /**
+   * DUPLICAR ABRE O MODAL PREENCHIDO; SÓ O SALVAR GRAVA — PR-FIN-DUPLICAR-ABRE-MODAL-01 (Gabriel, 30/09).
+   * ⚠ Gravava na hora (`duplicarLancamento`, que saiu): a cópia nascia sem vencimento e "sumia" da lista filtrada por
+   * data financeira. Agora o dialog abre em modo NOVO com `prefillDeDuplicar`, e cancelar não deixa cópia nenhuma.
+   * ⚠ O ORIGINAL É RELIDO DO BANCO (`select('*')` na tabela), não tirado da linha da lista: o caminho paginado lê a view
+   * `vw_financeiro_lancamentos_v2_doc`, que não tem `cultura`, `fase` nem `plano_conta_id` (medido em 30/09). Se a
+   * leitura falhar, vale a linha da lista.
+   * Salvar passa pelo `handleSave` de sempre (`criarLancamento`), que recarrega a lista.
+   */
   const handleDuplicate = async (lanc: LancamentoV2) => {
-    const ok = await hook.duplicarLancamento(lanc);
-    if (ok) {
-      const scrollTop = scrollContainerRef.current?.scrollTop ?? 0;
-      await hook.loadLancamentos(filtros, hook.page);
-      requestAnimationFrame(() => {
-        if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = scrollTop;
-      });
-    }
+    const original = (await hook.buscarLancamentoPorId(lanc.id)) ?? lanc;
+    setEditingLanc(null);
+    setPrefillDuplicar(prefillDeDuplicar(original));
+    setDialogOpen(true);
   };
 
   // ── Bulk selection helpers (defined after sortedLancamentos via lazy refs) ──
@@ -930,7 +938,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     });
   };
 
-  const openNew = () => { setEditingLanc(null); setDialogOpen(true); };
+  const openNew = () => { setEditingLanc(null); setPrefillDuplicar(null); setDialogOpen(true); };
   const openEdit = (l: LancamentoV2, permiteFavOC = false) => {
     console.log('[FinV2] reopen edit object', {
       id: l.id,
@@ -942,6 +950,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
       destino_lido_de: 'conta_destino_id',
     });
     setFavOCEdit(permiteFavOC);   // PR-OC-FIN-EDIT-FIX-02 — só o fluxo "Editar" da OC passa true
+    setPrefillDuplicar(null);
     setEditingLanc(l);
     setDialogOpen(true);
   };
@@ -1625,7 +1634,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     <FinanceiroV2ControlesLista
       pendente={pendenteAplicar}
       onLimpar={handleLimparLista}
-      onNovo={() => { setEditingLanc(null); setDialogOpen(true); }}
+      onNovo={openNew}
       exportar={(
         <FinanceiroV2ExportMenu
           carregarConjunto={carregarConjuntoExportacao}
@@ -1657,7 +1666,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   ) : (
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-1">
-        <Button size="sm" onClick={() => { setEditingLanc(null); setDialogOpen(true); }} className="h-6 text-[10px] gap-0.5 px-1.5 bg-[#E7C873] text-foreground hover:bg-[#D9B95F]" title="Novo Lançamento">
+        <Button size="sm" onClick={openNew} className="h-6 text-[10px] gap-0.5 px-1.5 bg-[#E7C873] text-foreground hover:bg-[#D9B95F]" title="Novo Lançamento">
           <Plus className="h-3 w-3" /> Novo
         </Button>
         <FinanceiroV2ExportMenu
@@ -2924,7 +2933,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
 
       <LancamentoV2Dialog
         open={dialogOpen}
-        onClose={() => { setDialogOpen(false); setEditingLanc(null); onCloseDialog?.(); }}
+        onClose={() => { setDialogOpen(false); setEditingLanc(null); setPrefillDuplicar(null); onCloseDialog?.(); }}
         onSave={handleSave}
         documentosAntesDeSalvar
         onDelete={handleDelete}
@@ -2940,6 +2949,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         onCriarFornecedor={hook.criarFornecedor}
         permiteEditarFavorecidoOC={favOCEdit}
         onAbrirOperacaoOC={abrirOCFinanceiro}
+        prefill={prefillDuplicar ?? undefined}
       />
 
       {criarOCDe && clienteAtual?.id && (

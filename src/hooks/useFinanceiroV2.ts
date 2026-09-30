@@ -134,6 +134,9 @@ export interface LancamentoV2 {
    * vez de afirmar "não compõe" sobre o que ninguém leu.
    */
   compoe_dre?: boolean | null;
+  /* Opcional como o `safra_id`: o `select('*')` da tabela traz a coluna, e quem a lia fazia `as any`. Declarada no
+     PR-FIN-DUPLICAR-ABRE-MODAL-01 para o `prefillDeDuplicar` ler sem cast. */
+  tipo_documento?: string | null;
 }
 
 export interface Safra {
@@ -1360,44 +1363,9 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
   }, [clienteId, user]);
 
 
-  const duplicarLancamento = useCallback(async (lanc: LancamentoV2) => {
-    if (!clienteId || !user) return false;
-
-    const { error } = await supabase.from('financeiro_lancamentos_v2').insert({
-      cliente_id: clienteId,
-      fazenda_id: lanc.fazenda_id,
-      conta_bancaria_id: lanc.conta_bancaria_id,
-      conta_destino_id: lanc.conta_destino_id,
-      data_competencia: lanc.data_competencia,
-      data_pagamento: lanc.data_pagamento,
-      valor: lanc.valor,
-      sinal: lanc.sinal,
-      tipo_operacao: lanc.tipo_operacao,
-      status_transacao: STATUS_FINANCEIRO_INICIAL,   // PR-FIN-STATUS-UX-03A-1 — cópia nasce 'previsto' (era 'meta')
-      descricao: lanc.descricao ? `(Cópia) ${lanc.descricao}` : '(Cópia)',
-      macro_custo: lanc.macro_custo,
-      centro_custo: lanc.centro_custo,
-      subcentro: lanc.subcentro,
-      escopo_negocio: lanc.escopo_negocio,
-      observacao: lanc.observacao,
-      numero_documento: lanc.numero_documento,
-      tipo_documento: (lanc as any).tipo_documento,
-      favorecido_id: lanc.favorecido_id,
-      forma_pagamento: lanc.forma_pagamento,
-      dados_pagamento: lanc.dados_pagamento,
-      ano_mes: lanc.ano_mes,
-      origem_lancamento: 'manual',
-      created_by: user.id,
-      sem_movimentacao_caixa: false,
-    });
-
-    if (error) {
-      reportarErro(error, 'duplicarLancamento', toast.error);
-      return false;
-    }
-    toast.success('Lançamento duplicado');
-    return true;
-  }, [clienteId, user]);
+  /* ⚠ `duplicarLancamento` SAIU — PR-FIN-DUPLICAR-ABRE-MODAL-01. Era um `insert` direto que gravava a cópia na hora,
+     sem vencimento, sem a chave do plano e com o pagamento do original. Duplicar agora abre o `LancamentoV2Dialog` em modo
+     novo com `prefillDeDuplicar(lanc)` (`src/lib/financeiro/prefillDeDuplicar.ts`), e só `criarLancamento` grava. */
 
   /**
    * ⚠ `hashes` É POSICIONAL: `hashes[i]` pertence a `forms[i]`. Um objeto por linha seria
@@ -1673,7 +1641,6 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     excluirLancamento,
     excluirLancamentosEmLote,
     marcarRealizadoEmLote,
-    duplicarLancamento,
     loadAnosDisponiveis,
     setPage,
     /**
