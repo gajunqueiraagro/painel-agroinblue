@@ -160,7 +160,7 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 30/09/2026 (PR-CONC-CRIAR-LOTE-LAYOUT-01): 2596 passando, 22 skipped, e
+  Baseline em 30/09/2026 (PR-CONC-MESA-DIVERGENCIA-EXCEL-01): 2609 passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -274,7 +274,12 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   a chave natural reconhece a reimportacao). O byte original se PERDEU; a correcao proposta e' por dicionario das 26
   palavras medidas (F\uFFFDcil, Cart\uFFFDo, El\uFFFDtrica...) recalculando `hash_movimento` junto — so' com GO. E o doc
   do Bradesco de 91 caracteres e o historico de 126 nao cabem na regua sem quebra do "Criar lancamentos": cortados na
-  borda, texto inteiro no `title` (decisao do Gabriel).
+  borda, texto inteiro no `title` (decisao do Gabriel). · MESA-DIVERGENCIA (PR-CONC-MESA-DIVERGENCIA-EXCEL-01): (a) o
+  `fn_classificacao_populate_staging` resolve a fazenda so' por `codigo_importacao = texto` e DESCARTA o `v_fazenda_id`
+  achado — PR de banco (a Mesa ja' resolve pelo de-para no front); (b) COMPETENCIA do Excel nao vira proposta: decisao
+  do Gabriel se a competencia do Lucro Rural propoe (164 das 235 linhas com lancamento do NJ set/26 divergem); (c) o
+  contador "divergem da planilha" da' 226/235 no NJ set/26 (Produto 127, Data venc. 93, Documento 79) — decidir quais
+  campos contam; (d) o Salvar que grava a fazenda sugerida nao tem teste automatico (espelho do da safra).
 - Telas e UI:
   TELAS-ORFAS-01 (decisao) · FIN-RECORRENCIA-FAZENDA-01 · FIN-FAZENDA-INATIVA-LISTA-01 · FIN-IMPORTAR-ANTIGO-01 ·
   FAZENDA-INATIVA-EDICAO-01 · LEGADOS-ABATE-VENDA-FAZENDA-01 · FORNECEDOR-UUID-CRU-01 · PROPRIEDADE-DESTINO-ORIGEM-01 ·
@@ -519,6 +524,12 @@ docs/historico/frentes-ate-2026-09-29.md.)
   UTF-8 com bytes invalidos ou nada declarado cai em windows-1252. O OFX do BB e do Bradesco vem em cp1252 e gravava
   "Cart\uFFFDo" (PR-CONC-CRIAR-LOTE-LAYOUT-01). O hash do movimento usa a descricao: consertar texto ja' gravado exige
   recalcular o hash junto.
+- ⚠ A MESA NUNCA CALA QUANDO A PLANILHA DISCORDA DO RESULTADO (PR-CONC-MESA-DIVERGENCIA-EXCEL-01, Gabriel 30/09):
+  `divergenciasComPlanilha` marca "planilha: X" (azul, abaixo do Resultado) em cada campo em que o arquivo diz outra coisa,
+  comparando na regua de cada um (fazenda por id pelo resolvedor do de-para, datas por ISO, tipo pelo rotulo, fornecedor
+  so' quando o Resultado ficou sem, texto normalizado); so' em linha com lancamento. Ambar continua = vai mudar. A
+  fazenda da planilha se resolve pelo MESMO `preResolverFazenda` do passo 1 (apelidos de `fazendas.aliases`) e vira
+  sugestao ambar quando difere do sistema; conta de pecuaria/agricultura na fazenda Administrativo avisa (nao trava).
 
 ## REGRAS VIGENTES — OPERACAO COMERCIAL E FINANCEIRO
 - ⚠ FINANCEIRO V2 — TODO RAMO DE `editarLancamento` REMENDA A LINHA COM O QUE O BANCO DEVOLVEU

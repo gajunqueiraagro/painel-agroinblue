@@ -174,6 +174,13 @@ export interface EnriqEdicao {
   safraSugeridaId: string | null;
   /** A linha parece uma transferência e o tipo efetivo ainda não é. Proposta, nunca gravação. */
   tipoTransferenciaSugerido: boolean;
+  /**
+   * A fazenda que a PLANILHA diz, resolvida pelo mesmo resolvedor do de-para — PR-CONC-MESA-DIVERGENCIA-EXCEL-01.
+   *
+   * ⚠ SÓ QUANDO NÃO HÁ PROPOSTA e ela DIFERE do sistema: é proposta (âmbar) e o Salvar a grava. O sistema de um cru
+   *   nascido do extrato é a fazenda Administrativo por padrão — um lugar, não uma decisão.
+   */
+  fazendaSugeridaId: string | null;
 }
 
 export interface EnriqRowVM {
@@ -198,6 +205,15 @@ export interface EnriqRowVM {
   parteDeAgrupamento: boolean;
   /** O lançamento está classificado, mas sem produto ou sem fornecedor — 133i item 7. */
   lancamentoIncompleto: boolean;
+  /**
+   * Onde a PLANILHA diz uma coisa e o RESULTADO ficou outra — PR-CONC-MESA-DIVERGENCIA-EXCEL-01.
+   *
+   * ⚠ NUNCA SILÊNCIO: por não resolver, por regra que mantém o sistema ou por escolha anterior, a linha mostra
+   *   "planilha: X". Não é a faixa âmbar (essa é "vai mudar"); é "o arquivo discorda do que vai ficar".
+   * ⚠ COMPARA NA RÉGUA CERTA DE CADA CAMPO: fazenda por id (pelo resolvedor do de-para), datas por ISO, tipo pelo
+   *   rótulo, texto normalizado. Comparar o texto cru daria o falso positivo que o `divergenciasBanco` já pagou.
+   */
+  divergenciasPlanilha: ReadonlyArray<{ campo: string; planilha: string }>;
   /**
    * O RESULTADO não tem conta do plano — 133e item E. É a única trava de subcentro que
    * resta, e ela é sobre o que vai ser gravado, não sobre o que a planilha trouxe.

@@ -31,7 +31,7 @@ import type { EnriqGrupo, EnriqResumoGrupos } from '@/v2/lib/mesa/enriquecimento
  * item C. Entram aqui porque a barra é uma só; mas, como `incompletos`, atravessam os seis
  * grupos em vez de ser um deles.
  */
-export type VistaPasso2 = EnriqGrupo | 'todas' | 'sem_par_sistema' | 'incompletos' | 'a_revisar' | 'revisadas';
+export type VistaPasso2 = EnriqGrupo | 'todas' | 'sem_par_sistema' | 'incompletos' | 'a_revisar' | 'revisadas' | 'divergem_planilha';
 
 export interface EnriquecimentoTopoNumerosProps {
   resumo: EnriqResumoGrupos;
@@ -58,6 +58,8 @@ export interface EnriquecimentoTopoNumerosProps {
    * rodapé outro sobre a mesma lista.
    */
   revisao?: { aRevisar: number; revisadas: number };
+  /** PR-CONC-MESA-DIVERGENCIA-EXCEL-01 — linhas em que a planilha discorda do Resultado. Filtra, como "A revisar". */
+  divergemPlanilha?: number;
 }
 
 /** Rótulo, cor e a segunda linha de cada um dos seis. A ordem é a do trabalho. */
@@ -92,7 +94,7 @@ const CARD_ATIVO = 'border-primary bg-muted/40';
 const CARD_INERTE = 'border-transparent hover:bg-muted/30';
 
 export function EnriquecimentoTopoNumeros({
-  resumo, total, filtro, onFiltro, transferencias, semParSistema, incompletos, revisao,
+  resumo, total, filtro, onFiltro, transferencias, semParSistema, incompletos, revisao, divergemPlanilha,
 }: EnriquecimentoTopoNumerosProps) {
   /* Clicar no card que já filtra volta a "Todas" — o filtro é alternador. */
   const alternar = (g: VistaPasso2) => onFiltro(filtro === g ? 'todas' : g);
@@ -107,6 +109,16 @@ export function EnriquecimentoTopoNumeros({
             recorte do CASAMENTO, e um card do mesmo tamanho dos outros oito os faria
             parecer um. "A revisar" e "Revisadas" somam exatamente o total. */}
         <span className="flex items-baseline gap-2.5">
+          {/* ⚠ "N divergem da planilha" — nunca silêncio (PR-CONC-MESA-DIVERGENCIA-EXCEL-01). Azul como a coluna Excel. */}
+          {divergemPlanilha != null && divergemPlanilha > 0 && (
+            <button type="button" onClick={() => onFiltro(filtro === 'divergem_planilha' ? 'todas' : 'divergem_planilha')}
+              data-testid="contador-divergem-planilha"
+              title="Filtrar: linhas em que a planilha diz uma coisa e o Resultado ficou outra"
+              className={`text-[10px] transition-colors ${
+                filtro === 'divergem_planilha' ? 'font-medium text-blue-800' : 'text-blue-700 hover:text-blue-900'}`}>
+              <span className="tabular-nums">{divergemPlanilha}</span> divergem da planilha
+            </button>
+          )}
           {revisao && (
             <>
               <button type="button" onClick={() => onFiltro('a_revisar')}

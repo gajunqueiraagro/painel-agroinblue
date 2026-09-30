@@ -35,7 +35,7 @@ import {
   ResultadoTipoEditor, ResultadoContaDestinoEditor,
 } from './ResultadoCamposGravaveis';
 import { ehTipoTransferencia, subcentroDeTransferencia } from '@/v2/lib/mesa/transferenciaPlano';
-import { ehLinhaAdministrativa } from '@/lib/financeiro/escopoDoSubcentro';
+import { ehLinhaAdministrativa, escopoDoSubcentro, fazendaAdministrativa } from '@/lib/financeiro/escopoDoSubcentro';
 import type { ContaSelecionavel } from '@/components/shared/ContaBancariaSelect';
 import type { Safra } from '@/hooks/useFinanceiroV2';
 
@@ -202,6 +202,22 @@ export function MesaCamposTabela({
      diferentes na tela (a safra pelo escopo, a fazenda só por `macro === 'Dividendos'`), e
      por isso a linha do print aparecia com a safra travada e a fazenda editável. */
   const contaEhAdministrativa = ehLinhaAdministrativa(classificacoes, subcentroEfetivoResultado, row.edicao.macro);
+  /* A fazenda sugerida pela planilha só vale fora da conta administrativa: lá o Select é forçado e a sugestão
+     nunca seria o que vai ser gravado. */
+  const fazendaSugeridaId = contaEhAdministrativa ? null : row.edicao.fazendaSugeridaId;
+  /**
+   * PLANO × FAZENDA — PR-CONC-MESA-DIVERGENCIA-EXCEL-01 item d.
+   *
+   * ⚠ CONTA DE PECUÁRIA OU AGRICULTURA NA FAZENDA ADMINISTRATIVO RATEIA ERRADO NO DRE: o custo da atividade fica numa
+   *   fazenda que não tem a atividade. AVISA, não trava — pode ser a decisão certa, e quem sabe é o operador.
+   */
+  const escopoResultado = escopoDoSubcentro(classificacoes, subcentroEfetivoResultado);
+  const fazendaResultadoId = row.edicao.fazendaId ?? fazendaSugeridaId ?? row.edicao.fazendaIdAtual;
+  const admId = fazendaAdministrativa(fazendas)?.id ?? null;
+  const avisoPlanoFazenda = (escopoResultado === 'pecuaria' || escopoResultado === 'agricultura')
+    && !!admId && fazendaResultadoId === admId
+    ? `conta do plano de ${escopoResultado === 'pecuaria' ? 'pecuária' : 'agricultura'} na fazenda Administrativo — o rateio do DRE sai errado`
+    : null;
   /* ⚠ FILTRA ANTES DE MAPEAR, e isso não é estilo: a zebra e a faixa do bloco 2 se decidem
      pela POSIÇÃO da linha. Pulando a linha do destino dentro do `map`, o índice continuava
      contando por ela — e nas 17.732 saídas duas linhas sombreadas ficavam coladas, no
@@ -249,6 +265,11 @@ export function MesaCamposTabela({
         /* 4c — a linha é parte de um agrupamento: o valor não diverge, ele é uma parte. */
         const valorDeParte = campo === 'Valor' && row.parteDeAgrupamento;
         const abreBloco2 = bloco === 2 && linhas[indice - 1]?.bloco === 1;
+        /* PR-CONC-MESA-DIVERGENCIA-EXCEL-01 — a planilha discorda do Resultado. Em linha conciliada, o "difere do banco"
+           já diz o mesmo sobre os campos do extrato; os dois juntos seriam duas frases para uma divergência. */
+        const dp = row.divergenciasPlanilha.find((d) => d.campo === campo);
+        const divergePlanilha = !!dp && !divergeDoBanco;
+        const avisoCoerencia = campo === 'Fazenda' ? avisoPlanoFazenda : null;
         /* 133g item 6 — vazio no RESULTADO é o que importa: é ele que vai ser gravado. */
         const exigido = !!obrigatorio || (!!obrigatorioSeTransferencia && ehTransf);
         const faltando = exigido && (c.resultado === '—' || c.resultado.trim() === '');
@@ -301,6 +322,7 @@ export function MesaCamposTabela({
                     fazendaId={row.edicao.fazendaId} onEditar={onEditar} onCriarFornecedor={onCriarFornecedor} />
                 ) : editavel && campo === 'Fazenda' && fazendas ? (
                   <ResultadoFazendaEditor value={row.edicao.fazendaId} fazendaIdAtual={row.edicao.fazendaIdAtual}
+                    sugeridaId={fazendaSugeridaId}
                     fazendas={fazendas} forcaAdministrativo={contaEhAdministrativa} onEditar={onEditar} />
                 ) : editavel && campo === 'Produto / Descrição' ? (
                   <ResultadoProdutoEditor value={row.edicao.produto} descricaoAtual={row.edicao.descricaoAtual}
@@ -423,6 +445,21 @@ export function MesaCamposTabela({
                 que dizer, e ocupa a COLUNA do Resultado: assim o texto se alinha ao valor a
                 que se refere, em vez de flutuar sob a tabela inteira. `wrap` permitido — é
                 aqui que a frase cabe. */}
+            {/* ⚠ "planilha: X" — NUNCA SILÊNCIO (item b). Azul como a coluna Excel: é a voz da planilha, não o que vai
+                ser gravado. O âmbar continua sendo só "vai mudar". */}
+            {(divergePlanilha || avisoCoerencia) && !valorDeParte && (
+              <div className="grid gap-2 px-3 pb-0.5" style={{ gridTemplateColumns: COLS }}>
+                <span /><span /><span />
+                <span className="flex flex-col text-[10px] leading-tight">
+                  {divergePlanilha && (
+                    <span className="text-blue-700 dark:text-blue-400" data-testid="marca-planilha">planilha: {dp?.planilha}</span>
+                  )}
+                  {avisoCoerencia && (
+                    <span className="text-amber-700 dark:text-amber-400" data-testid="aviso-plano-fazenda">{avisoCoerencia}</span>
+                  )}
+                </span>
+              </div>
+            )}
             {(divergeDoBanco || valorDeParte) && (
               <div className="grid gap-2 px-3 pb-0.5" style={{ gridTemplateColumns: COLS }}>
                 <span /><span /><span />

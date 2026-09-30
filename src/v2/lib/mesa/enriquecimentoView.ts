@@ -24,6 +24,8 @@ import { safraSugerida, type SafraCandidata } from '@/lib/agri/safraSugerida';
 import { escopoDoSubcentro, ESCOPO_ADMINISTRATIVO } from '@/lib/financeiro/escopoDoSubcentro';
 import type { ClassificacaoItem } from '@/hooks/useFinanceiroV2';
 import { ehTipoTransferencia, subcentroDeTransferencia } from '@/v2/lib/mesa/transferenciaPlano';
+import { preResolverFazenda } from '@/v2/lib/importLanc/importLancamentosView';
+import type { Fazenda } from '@/contexts/FazendaContext';
 
 /**
  * OS CATÁLOGOS QUE AS DUAS SUGESTÕES PRECISAM — PR-MESA-SUGESTOES-01.
@@ -35,6 +37,9 @@ import { ehTipoTransferencia, subcentroDeTransferencia } from '@/v2/lib/mesa/tra
 export interface CatalogosDaSugestao {
   classificacoes?: readonly ClassificacaoItem[];
   safras?: readonly SafraCandidata[];
+  /** As fazendas do cliente e os apelidos ensinados no de-para — PR-CONC-MESA-DIVERGENCIA-EXCEL-01. */
+  fazendas?: readonly Fazenda[];
+  aliasesFazenda?: Readonly<Record<string, string[]>>;
 }
 
 /**
@@ -206,6 +211,58 @@ function nomeDaConta(id: string | null, contas: readonly ContaResolvivel[]): str
 function juntarTrilha(...partes: Array<string | null>): string | null {
   const vivas = partes.filter((p): p is string => !!p && p.trim() !== '');
   return vivas.length ? vivas.join(' · ') : null;
+}
+
+/**
+ * ONDE A PLANILHA DISCORDA DO RESULTADO — PR-CONC-MESA-DIVERGENCIA-EXCEL-01, regra geral da Mesa.
+ *
+ * ⚠ O RESULTADO É O QUE VAI FICAR: proposta, senão sugestão, senão o sistema — a mesma ordem dos editores.
+ * ⚠ CADA CAMPO NA SUA RÉGUA, e só os que a planilha de fato informa:
+ *   - Fazenda: por ID, pelo resolvedor do de-para; texto que não resolve diz "(não reconhecida)";
+ *   - Competência, Data venc., Data pgto.: por data ISO;
+ *   - Tipo: pelo rótulo (Entrada/Saída/Transferência), nunca "2-Saídas" × "Saída";
+ *   - Fornecedor: só quando o Resultado ficou SEM fornecedor — com um, o nome do cadastro e o texto da planilha são
+ *     vocabulários diferentes (o apelido existe para isso) e comparar acenderia em toda linha;
+ *   - Produto / Descrição e Documento: texto normalizado.
+ * ⚠ FORA DAQUI: Valor e Banco (o extrato manda — `divergenciasBanco`) e Conta do plano (o "planilha dizia" do órfão).
+ */
+export function divergenciasComPlanilha(
+  row: ClassificacaoStagingPreviewRow,
+  ctx: {
+    fazendaPlanilha: { id: string | null; texto: string; nome: string | null } | null;
+    fazendaResultadoId: string | null;
+    descricao: string | null;
+  },
+): Array<{ campo: string; planilha: string }> {
+  const out: Array<{ campo: string; planilha: string }> = [];
+  const f = ctx.fazendaPlanilha;
+  if (f) {
+    if (!f.id) out.push({ campo: 'Fazenda', planilha: `${f.texto} (não reconhecida)` });
+    else if (f.id !== ctx.fazendaResultadoId) out.push({ campo: 'Fazenda', planilha: f.nome ?? f.texto });
+  }
+  const data = (campo: string, planilha: string | null, resultado: string | null) => {
+    if (vazio(planilha)) return;
+    if (String(planilha).slice(0, 10) !== String(resultado ?? '').slice(0, 10)) {
+      out.push({ campo, planilha: fmtData(planilha) });
+    }
+  };
+  data('Competência', row.excel_data, row.proposto_data_competencia ?? row.lanc_data_competencia);
+  data('Data vencimento', row.excel_data_vencimento, row.proposto_data_vencimento ?? row.lanc_data_vencimento);
+  data('Data pagamento', row.excel_data_pagamento, row.proposto_data_pagamento ?? row.lanc_data_pagamento);
+  const tipoPlanilha = rotuloTipoOperacao(row.excel_tipo_operacao);
+  const tipoResultado = rotuloTipoOperacao(row.proposto_tipo_operacao ?? row.lanc_tipo_operacao)
+    ?? rotuloTipo(entradaOuSaidaDe(row));
+  if (tipoPlanilha && tipoPlanilha !== tipoResultado) out.push({ campo: 'Tipo', planilha: tipoPlanilha });
+  if (!vazio(row.excel_fornecedor) && !row.proposto_favorecido_id && !row.lanc_favorecido_id_atual) {
+    out.push({ campo: 'Fornecedor', planilha: String(row.excel_fornecedor) });
+  }
+  const texto = (campo: string, planilha: string | null, resultado: string | null) => {
+    if (vazio(planilha)) return;
+    if (vazio(resultado) || norm(planilha) !== norm(resultado)) out.push({ campo, planilha: String(planilha) });
+  };
+  texto('Produto / Descrição', row.excel_produto, row.proposto_produto ?? ctx.descricao);
+  texto('Documento', row.excel_documento, row.proposto_numero_documento ?? row.lanc_numero_documento);
+  return out;
 }
 
 export function toRowVM(
@@ -522,6 +579,22 @@ export function toRowVM(
       || textoSugereTransferencia(row.lanc_descricao, row.excel_produto)
     );
 
+  /**
+   * A FAZENDA DA PLANILHA — PR-CONC-MESA-DIVERGENCIA-EXCEL-01.
+   *
+   * ⚠ O MESMO RESOLVEDOR DO DE-PARA (`preResolverFazenda`: apelido ensinado, depois código de importação, código e
+   *   nome, tudo normalizado). O populate do banco procura só `codigo_importacao = texto` ("PUR") e ainda descarta o que
+   *   acha, então "Faz Pureza" — que o passo 1 resolve pelo apelido — chegava à Mesa sem proposta nenhuma, e o
+   *   Resultado mostrava a fazenda do cru (Administrativo) sem marca (Gabriel, 30/09 18:18).
+   * ⚠ SUGERE SÓ SEM PROPOSTA e quando DIFERE do sistema: com proposta, quem decide é ela (a divergência vira marca).
+   */
+  const fazendaDaPlanilha = !vazio(row.excel_fazenda_codigo) && catalogos.fazendas
+    ? preResolverFazenda(String(row.excel_fazenda_codigo), [...catalogos.fazendas], catalogos.aliasesFazenda ?? {})
+    : null;
+  const fazendaPlanilhaId = fazendaDaPlanilha?.valor ?? null;
+  const fazendaSugeridaId = !row.proposto_fazenda_id && fazendaPlanilhaId && fazendaPlanilhaId !== row.lanc_fazenda_id
+    ? fazendaPlanilhaId : null;
+
   const edicao: EnriqEdicao = {
     subcentro: subcentroEfetivo,   // BUG — nunca a proposta órfã; proposta válida ou o Sistema soberano
     favorecidoId: row.proposto_favorecido_id,
@@ -589,7 +662,17 @@ export function toRowVM(
     contaTextoNaoReconhecido: contaDoExcel.textoNaoReconhecido,
     safraSugeridaId,
     tipoTransferenciaSugerido,
+    fazendaSugeridaId,
   };
+
+  /* ⚠ SÓ COM LANÇAMENTO: sem par não há Resultado a comparar — todo campo da planilha "divergiria" de um vazio, e a
+     marca acenderia nas 274 linhas sem par da sessão do NJ set/26 (medido). Essas vivem no "Sem par no banco". */
+  const divergenciasPlanilha = !row.lanc_id ? [] : divergenciasComPlanilha(row, {
+    fazendaPlanilha: fazendaDaPlanilha
+      ? { id: fazendaPlanilhaId, texto: String(row.excel_fazenda_codigo), nome: fazendaDaPlanilha.rotulo ?? null } : null,
+    fazendaResultadoId: row.proposto_fazenda_id ?? fazendaSugeridaId ?? row.lanc_fazenda_id,
+    descricao,
+  });
 
   // PR-U2d-1 — estado operacional da linha (ordem: primeira condição que casar vence).
   const temMatch = row.lanc_id != null;
@@ -663,6 +746,7 @@ export function toRowVM(
       && (vazio(row.lanc_descricao) || !row.lanc_favorecido_id_atual),
     /* 133h-b item 4 — as divergências REAIS, já sem os três falsos positivos. */
     divergenciasBanco: divergenciasComExtrato(row, contas),
+    divergenciasPlanilha,
     parteDeAgrupamento: parteDeAgrupamento(row),
     contaBancaria: banco,
     /* ⚠ A IDENTIDADE PASSOU A SER A DO LANÇAMENTO — 133h-b item 2, e a razão é o que
@@ -908,6 +992,8 @@ export function filtrarPorGrupo(rows: EnriqRowVM[], grupo: string): EnriqRowVM[]
      (classificado, mas sem produto ou sem fornecedor) e atravessa todos eles. Mandá-lo
      para `grupoDaLinha` devolveria lista vazia, calada. */
   if (grupo === 'incompletos') return rows.filter((l) => l.lancamentoIncompleto);
+  /* PR-CONC-MESA-DIVERGENCIA-EXCEL-01 — atravessa os grupos, como os de cima. */
+  if (grupo === 'divergem_planilha') return rows.filter((l) => l.divergenciasPlanilha.length > 0);
   return rows.filter((l) => grupoDaLinha(l.status, l.aplicado) === grupo);
 }
 

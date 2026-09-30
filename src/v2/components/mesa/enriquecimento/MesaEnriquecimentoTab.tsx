@@ -32,6 +32,7 @@ import { EnriquecimentoSemParSistema } from './EnriquecimentoSemParSistema';
 import { useTransferenciasEspelhadas } from '@/v2/hooks/useTransferenciasEspelhadas';
 import { useSistemaNaoExplicado } from '@/v2/hooks/useSistemaNaoExplicado';
 import { useLancamentosConciliados } from '@/v2/hooks/useLancamentosConciliados';
+import { useAliasesFazenda } from '@/v2/hooks/useAliasesFazenda';
 import type { ContaResolvivel } from '@/v2/lib/mesa/resolverConta';
 import { EnriquecerProgressoDialog } from '@/components/conciliacao/EnriquecerProgressoDialog';
 import { useGravarLoteEnriquecimento, type LinhaParaGravar } from '@/v2/hooks/useGravarLoteEnriquecimento';
@@ -227,6 +228,8 @@ export function MesaEnriquecimentoTab({
     excluirLancamento } = useFinanceiroV2();
   const qcMesa = useQueryClient();
   const { fazendas } = useFazenda();
+  /* Os apelidos do de-para — a Mesa resolve a fazenda da planilha pelo mesmo resolvedor do passo 1. */
+  const aliasesFazenda = useAliasesFazenda(clienteAtual?.id);
   useEffect(() => {
     if (!clienteAtual?.id) return;
     loadClassificacoes();
@@ -370,8 +373,10 @@ export function MesaEnriquecimentoTab({
     /* ⚠ OS CATÁLOGOS ENTRAM AQUI — PR-MESA-SUGESTOES-01. São eles que deixam a view calcular a
        safra pela competência e reconhecer uma transferência; sem eles a linha sai como saía
        antes, que é o comportamento de todo teste que monta a view sem catálogo. */
-    () => stagingConta.map((r) => toRowVM(r, contasResolviveis, { classificacoes, safras })),
-    [stagingConta, contasResolviveis, classificacoes, safras]);
+    () => stagingConta.map((r) => toRowVM(r, contasResolviveis, { classificacoes, safras, fazendas, aliasesFazenda })),
+    [stagingConta, contasResolviveis, classificacoes, safras, fazendas, aliasesFazenda]);
+  /* PR-CONC-MESA-DIVERGENCIA-EXCEL-01 — "N divergem da planilha", do mesmo universo das outras contagens. */
+  const divergemPlanilha = useMemo(() => rowsVM.filter((r) => r.divergenciasPlanilha.length > 0).length, [rowsVM]);
   /* 133h item 3 — o único gate é o card do topo; `filtrarPorModo` saiu daqui com o
      "Todas | Pendentes". A função segue exportada e testada, para as telas legadas. */
   /* ⚠ AS DUAS CONTAGENS SAEM DE `rowsVM`, o recorte da CONTA — o mesmo universo do contador
@@ -973,6 +978,15 @@ export function MesaEnriquecimentoTab({
        * ⚠ E SÓ QUANDO O RESULTADO CONTINUA VAZIO: se o operador escolheu uma safra à mão entre
        * abrir e salvar, é a dele que vale — a sugestão não sobrescreve escolha.
        */
+      /* A FAZENDA DA PLANILHA VIRA PROPOSTA NO SALVAR — PR-CONC-MESA-DIVERGENCIA-EXCEL-01, pelo mesmo idioma da safra:
+         a tela mostra (âmbar), o Salvar grava; escolha do operador vence; conta administrativa não recebe. */
+      if (selecionado.edicao.fazendaSugeridaId
+          && !selecionado.edicao.fazendaId
+          && !contaAdministrativa(selecionado)) {
+        await editarProposto({
+          staging_id: id, patch: { fazenda_id: selecionado.edicao.fazendaSugeridaId },
+        });
+      }
       if (selecionado.edicao.safraSugeridaId
           && !selecionado.edicao.safraId
           && !contaAdministrativa(selecionado)) {
@@ -1549,6 +1563,7 @@ export function MesaEnriquecimentoTab({
            e a lista falarem de universos diferentes — o defeito que os outros sete cards
            evitam por construção. Fica o da sessão; o do mês é decisão de produto. */
         incompletos={incompletos}
+        divergemPlanilha={divergemPlanilha}
       />
 
       {/* ═══ TOOLBAR — UMA LINHA DE 32px (133d item 2) ════════════════════════════
