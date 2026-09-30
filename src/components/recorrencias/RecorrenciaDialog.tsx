@@ -13,7 +13,9 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { useFinanceiroV2 } from '@/hooks/useFinanceiroV2';
 import { FazendaSelect } from '@/components/shared/FazendaSelect';
 import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
-import { PlanoSubcentroSelect } from '@/components/shared/PlanoSubcentroSelect';
+import { ClassificacaoLancamento, atividadeValida, type ClassificacaoValor } from '@/components/shared/ClassificacaoLancamento';
+import { escopoDoSubcentro } from '@/lib/financeiro/escopoDoSubcentro';
+import { DiaVencimentoGrade } from './DiaVencimentoGrade';
 import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import {
   resumoVivo, primeiroVencimentoDe, mesDoFatoDe, propagarRecorrencia,
@@ -28,8 +30,6 @@ const OPCOES_MES_DO_FATO: readonly { valor: MesDoFato; rotulo: string; exemplo: 
   { valor: 'anterior', rotulo: 'Do mês anterior', exemplo: 'água, luz, telefone — consumo medido' },
 ];
 
-/** Dias oferecidos: 1 a 31. O aparo de mês curto é do calendário, não da lista. */
-const DIAS_VENCIMENTO = Array.from({ length: 31 }, (_, i) => i + 1);
 
 /**
  * RecorrenciaDialog — o cadastro da REGRA, não do lançamento.
@@ -76,10 +76,38 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
   const [fazendaId, setFazendaId] = useState(ed?.fazendaId ?? '');
   const [favorecidoId, setFavorecidoId] = useState(ed?.favorecidoId ?? '');
   const [contaId, setContaId] = useState(ed?.contaBancariaId ?? '');
-  const [subcentro, setSubcentro] = useState(ed?.subcentro ?? '');
-  const [subcentroSearch, setSubcentroSearch] = useState('');
+  /**
+   * A CLASSIFICAÇÃO É A DO LANÇAMENTO — PR-FIN-RECORRENCIA-MODAL-01. O mesmo `ClassificacaoLancamento`:
+   * atividade primeiro, subcentro filtrado por ela, safra sugerida pela data. Era um `PlanoSubcentroSelect` sozinho,
+   * com a lista inteira misturada, e uma safra sem sugestão — a segunda forma de classificar.
+   * ⚠ A REGRA GRAVA SÓ `subcentro` E `safra_id` (a `financeiro_recorrencias` não tem cultura, fase, escopo nem chave
+   * do plano), e por isso Cultura e Fase ficam ocultas (`ocultarCulturaFase`). A atividade não se grava: na edição
+   * ela sai do subcentro (`escopoDoSubcentro`), assim que as classificações carregam.
+   * ⚠ O `onChange` RECEBE O UPDATER E O ENTREGA AO `useState` — nunca `fn(value)` aqui (lição do PAR-01a-ii-fix1).
+   */
+  const [classificacao, setClassificacao] = useState<ClassificacaoValor>({
+    atividade: null, safra_id: ed?.safraId ?? '', cultura: '', fase: '', subcentro: ed?.subcentro ?? '',
+    macro_custo: '', grupo_custo: '', centro_custo: '', escopo_negocio: '', plano_conta_id: null,
+  });
+  const subcentro = classificacao.subcentro;
+  const safraId = classificacao.safra_id;
+  /* Na edição, a atividade e o resumo Macro › Grupo › Centro vêm do plano, quando ele chega. Só preenche o que
+     está vazio: depois que o operador mexe, a escolha é dele. */
+  useEffect(() => {
+    if (!classificacao.subcentro || classificacao.atividade || classificacoes.length === 0) return;
+    const alvo = classificacao.subcentro.trim().toLowerCase();
+    const cls = classificacoes.find((c) => (c.subcentro || '').trim().toLowerCase() === alvo);
+    setClassificacao((c) => (c.atividade ? c : {
+      ...c,
+      atividade: atividadeValida(escopoDoSubcentro(classificacoes, c.subcentro)),
+      macro_custo: cls?.macro_custo ?? c.macro_custo,
+      grupo_custo: cls?.grupo_custo ?? c.grupo_custo,
+      centro_custo: cls?.centro_custo ?? c.centro_custo,
+      escopo_negocio: cls?.escopo_negocio ?? c.escopo_negocio,
+      plano_conta_id: cls?.id ?? c.plano_conta_id,
+    }));
+  }, [classificacoes, classificacao.subcentro, classificacao.atividade]);
   const [fornecedorSearch, setFornecedorSearch] = useState('');
-  const [safraId, setSafraId] = useState(ed?.safraId ?? '');
   const [formaPgto, setFormaPgto] = useState(ed?.formaPagamento ?? '');
   const [observacao, setObservacao] = useState(ed?.observacao ?? '');
   /* ⚠ O SINAL VIVE NO VALOR, e o tipo DERIVA dele — a mesma doutrina da tabela,
@@ -113,11 +141,8 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
    * inclusive os que a propagação escrever. O front avisa para o operador não gravar uma
    * regra que promete uma safra que os lançamentos nunca terão.
    */
-  const ehAdministrativo = (() => {
-    const alvo = (subcentro || '').trim().toLowerCase();
-    const cls = classificacoes.find(c => (c.subcentro || '').trim().toLowerCase() === alvo);
-    return (cls?.escopo_negocio || '').trim() === 'administrativo';
-  })();
+  const ehAdministrativo = escopoDoSubcentro(classificacoes, subcentro, classificacao.escopo_negocio) === 'administrativo'
+    || classificacao.atividade === 'administrativo';
 
   const valorNum = Number(valorTexto.replace(/\./g, '').replace(',', '.')) || 0;
   /* Uma conta só, usada pela frase E pela gravação: se divergissem, a tela
@@ -272,15 +297,18 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
               ⚠ A FAZENDA É NOSSA E NÃO EXISTE NO ORIGINAL: ela entra aqui, na
               linha dos cadastros, porque é da mesma natureza dos dois vizinhos —
               a quem o lançamento pertence. A linha passou de dois para três
-              campos; a estrutura das outras não mudou. */}
-          <div className="grid grid-cols-12 gap-2">
-            <div className="col-span-4">
+              campos; a estrutura das outras não mudou.
+              ⚠ LARGURAS MEDIDAS NA TELA (PR-FIN-RECORRENCIA-MODAL-01, janela de 1.130): Conta 207 ("Banco do Brasil
+              (8974-3)" pede ~147 + a seta) e Fazenda 150 (as fazendas têm nome curto); o Favorecido fica com o resto —
+              era 171 e cortava "Porto Seguro Com…". Nome maior trunca com `title`. */}
+          <div className="grid grid-cols-[207px_minmax(0,1fr)_150px] gap-2">
+            <div className="min-w-0">
               <Label className="text-[10px]">Conta *</Label>
               <ContaBancariaSelect value={contaId} onValueChange={setContaId}
                 contas={contasBancarias} showBankDetails="agencia" placeholder="Selecionar conta" />
             </div>
 
-            <div className="col-span-4">
+            <div className="min-w-0">
               <FavorecidoSelect
                 value={favorecidoId} onChange={setFavorecidoId}
                 fornecedores={fornecedores} search={fornecedorSearch} onSearchChange={setFornecedorSearch}
@@ -289,34 +317,32 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
               />
             </div>
 
-            <div className="col-span-4">
+            <div className="min-w-0">
               <FazendaSelect value={fazendaId} onChange={setFazendaId} fazendas={fazendas}
                 forcaAdministrativo={false} label="Fazenda *" hideAviso />
             </div>
           </div>
 
-          {/* LINHA 3 — Classificação em largura cheia, com a cadeia como apoio.
-              O gatilho mostra a folha; sem a legenda, "Energia" não diz de qual
-              ramo veio. */}
-          <div>
-            <PlanoSubcentroSelect
-              value={subcentro} onChange={setSubcentro}
-              classificacoes={classificacoes}
-              tipoOperacao={ehSaida ? '2-Saídas' : '1-Entradas'}
-              search={subcentroSearch} onSearchChange={setSubcentroSearch}
-              label="Classificação *"
-            />
-            <p className="mt-0.5 truncate text-[10px] text-muted-foreground" title={subcentro || undefined}>
-              {subcentro || 'Macro › Grupo › Centro'}
-            </p>
-          </div>
+          {/* LINHA 3 — A CLASSIFICAÇÃO DO LANÇAMENTO (atividade · subcentro · safra), o mesmo componente.
+              ⚠ MONTADO FORA DE GRADE: ele devolve as duas grades dele (ver o aviso no próprio componente).
+              ⚠ A SAFRA SE SUGERE PELO PRIMEIRO VENCIMENTO (Início + Dia venc. + de que mês é a conta); sem ele, pelo
+              Início. A escolha à mão cala a sugestão; empate sem sigla não escolhe. */}
+          <ClassificacaoLancamento
+            value={classificacao}
+            onChange={setClassificacao}
+            classificacoes={classificacoes}
+            safras={safras}
+            dataCompetencia={primeiroVenc || dataInicio}
+            tipoOperacao={ehSaida ? '2-Saídas' : '1-Entradas'}
+            ocultarCulturaFase
+          />
 
-          {/* LINHA 4 — Periodicidade | Dia venc. | Início | Fim | Safra.
-              ⚠ A SAFRA OCUPA AS DUAS COLUNAS QUE ERAM DO "Valor fixo/variável"
-              do original: aqui não há `tipo_valor` no banco, e o campo não teria
-              onde gravar. A largura da linha e a das demais não mudaram. */}
-          <div className="grid grid-cols-12 gap-2">
-            <div className="col-span-2">
+          {/* LINHA 4 — Periodicidade | Dia venc. | Início | Fim.
+              ⚠ A SAFRA SAIU DAQUI (PR-FIN-RECORRENCIA-MODAL-01): mora na grade da classificação, com a sugestão.
+              ⚠ LARGURAS MEDIDAS NA TELA: "30/09/2026" pede ~71px a 12px, + o ícone e o padding = 118 cada (eram 154);
+              o dia é um número de dois dígitos numa grade, 64 (era 100). */}
+          <div className="grid grid-cols-[90px_64px_118px_118px] gap-2">
+            <div>
               <Label className="text-[10px]">Periodicidade</Label>
               {/* Só mensal existe — e o campo aparece porque o dia em que uma
                   segunda periodicidade chegar, ela chega neste lugar. */}
@@ -326,58 +352,25 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
               </Select>
             </div>
 
-            <div className="col-span-2">
+            <div>
               <Label className="text-[10px]">Dia venc. *</Label>
-              <Select value={String(Number(diaVencimento) || 1)}
-                onValueChange={v => setDiaVencimento(v)}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {DIAS_VENCIMENTO.map(d => (
-                    <SelectItem key={d} value={String(d)}>{d}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <DiaVencimentoGrade value={Number(diaVencimento) || 1} onChange={(d) => setDiaVencimento(String(d))} />
             </div>
 
-            {/* Início e Fim em 3 colunas: dd/mm/aaaa mais o ícone de calendário
-                não cabem em 2, e a data sairia cortada em "31/12/202". */}
-            <div className="col-span-3">
+            <div>
               <Label className="text-[10px]">Início *</Label>
               <div title="A COMPETÊNCIA do primeiro lançamento — o mês do fato.">
                 <DatePicker value={dataInicio} onChange={setDataInicio} className="text-[10px]" />
               </div>
             </div>
 
-            <div className="col-span-3">
+            <div>
               <Label className="text-[10px]">Fim *</Label>
               <div title="Limita a COMPETÊNCIA, não o vencimento: com deslocamento, o último pagamento cai depois desta data — e está certo.">
                 <DatePicker value={dataFim} onChange={setDataFim} className="text-[10px]" />
               </div>
             </div>
 
-            <div className="col-span-2">
-              <Label className="text-[10px]">Safra</Label>
-              <Select value={safraId || '__none__'} disabled={ehAdministrativo}
-                onValueChange={v => setSafraId(v === '__none__' ? '' : v)}>
-                <SelectTrigger className={cn('h-8 text-xs',
-                  ehAdministrativo && safraId && 'line-through opacity-60')}>
-                  <SelectValue placeholder="—" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">Sem safra</SelectItem>
-                  {(safras ?? []).map(s => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              {/* Mesmo idioma do modal de lançamento: campo desabilitado diz por quê, e
-                  quando há valor a perder o aviso é sobre a perda, não sobre a regra. */}
-              {ehAdministrativo && (
-                <div className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
-                  {safraId
-                    ? 'safra será removida ao salvar — administrativo não tem safra'
-                    : 'administrativo não tem safra'}
-                </div>
-              )}
-            </div>
           </div>
 
           {/* ── DE QUE MÊS É O QUE SE PAGA ──────────────────────────────────

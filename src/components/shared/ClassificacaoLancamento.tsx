@@ -74,6 +74,7 @@ export const atividadeValida = (v: string | null | undefined): Atividade | null 
 export function ClassificacaoLancamento({
   value, onChange, classificacoes, safras, dataCompetencia,
   culturasDaSafra = [], subcentroDesabilitado = false, tipoOperacao, travado = false, erroSubcentro = null,
+  ocultarCulturaFase = false,
 }: {
   value: ClassificacaoValor;
   /**
@@ -109,6 +110,13 @@ export function ClassificacaoLancamento({
   travado?: boolean;
   /** A recusa do save sobre o subcentro (direcao x conta do plano) — mora embaixo do campo. */
   erroSubcentro?: string | null;
+  /**
+   * Esconde Cultura e Fase — PR-FIN-RECORRENCIA-MODAL-01. A RECORRÊNCIA usa este componente e a
+   * `financeiro_recorrencias` só guarda `subcentro` e `safra_id` (medido em 30/09): mostrar Cultura/Fase
+   * ali seria pedir um dado que se descarta calado. Default `false` = o lançamento e a obrigação
+   * continuam idênticos. Quando a regra ganhar as colunas (frente própria), a prop sai.
+   */
+  ocultarCulturaFase?: boolean;
 }) {
   /* ⚠ O ADAPTADOR QUE FEZ ESTE PR SER UM *MOVE*: com `setClassificacao` aqui e os campos
      desestruturados com os nomes antigos, os handlers e o JSX abaixo entraram VERBATIM, sem uma
@@ -464,7 +472,7 @@ export function ClassificacaoLancamento({
                    de ratear. Sem ela, o operador leria o campo em branco como pendência e
                    preencheria por via das dúvidas — transformando custo compartilhado em
                    custo direto da primeira cultura da lista. */}
-              {atividade === 'agricultura' && (
+              {!ocultarCulturaFase && atividade === 'agricultura' && (
                 <div className="col-span-4">
                   <Label className="text-[10px]">Cultura</Label>
                   <Select value={cultura || SEM_CULTURA}
@@ -489,7 +497,7 @@ export function ClassificacaoLancamento({
                 </div>
               )}
 
-              {atividade === 'pecuaria' && (
+              {!ocultarCulturaFase && atividade === 'pecuaria' && (
                 <div className="col-span-4">
                   <Label className="text-[10px]">Fase</Label>
                   <Select value={fase || SEM_CULTURA}
