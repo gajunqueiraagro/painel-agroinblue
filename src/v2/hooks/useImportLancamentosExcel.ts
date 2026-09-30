@@ -1189,6 +1189,8 @@ export function useImportLancamentosExcel(somenteAtualizar = false) {
   return {
     // catálogos p/ os seletores da tela
     classificacoes, fornecedores, fazendas, contasBancarias, safras, criarFornecedor,
+    /** As contas com os apelidos — o catálogo da memória de conta (PR-CONC-EXCEL-CONTA-STAGING-01). */
+    contasResolviveis,
     // estado
     arquivo, parse, dePara, previa, pendentes, lendo, erro,
     exigeFazendaCabecalho, fazendaCabecalhoId, setFazendaCabecalhoId,

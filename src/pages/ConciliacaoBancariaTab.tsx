@@ -1372,8 +1372,6 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                 usar e os dois blocos responderem à mesma pergunta com números diferentes
                 (379 × 183 para a mesma planilha de 492 linhas). */}
             <EnriquecerPorPlanilha
-              clienteId={clienteAtual?.id ?? null}
-              contaId={selectedConta !== '__all__' ? selectedConta : null}
               contaNome={contaAtual}
               ano={Number(ano)} mes={Number(selectedMes)}
               /* ⚠ O MESMO DESTINO DO "↗ Lançamentos" do topo — 131. Reusar a prop que já

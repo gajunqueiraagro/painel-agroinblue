@@ -20,8 +20,8 @@ import { EnriquecerTresPassos } from '@/v2/components/mesa/enriquecimento/Enriqu
  * ao banco cujo resultado ninguém lê. O download do modelo continua na rota do menu.
  */
 interface Props {
-  clienteId: string | null;
-  contaId: string | null;
+  /* ⚠ SEM `clienteId` NEM `contaId` — PR-CONC-EXCEL-CONTA-STAGING-01: eram props mortas (nunca desciam).
+     O `EnriquecerTresPassos` lê o cliente do contexto, e a conta de trabalho é a do staging, por linha. */
   contaNome: string;
   ano: number;
   mes: number;

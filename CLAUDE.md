@@ -160,7 +160,7 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 30/09/2026 (FIN-RECORRENCIA-GERAR-PREENCHE-VAGA-01): 2520 passando, 22 skipped, e
+  Baseline em 30/09/2026 (PR-CONC-EXCEL-CONTA-STAGING-01): 2531 passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -259,7 +259,13 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   6cf548a1 e 229ac98d (OC-VENDA-ENTREGAS-01c) · `prepararCancelamentoEmLote`/`lotesDeCancelamento` sem chamador
   (FIN-V2-CANCEL-MOTIVO-01) · o AVANCO do `fn_recorrencia_gerar` recria competencia cuja unica linha esta' cancelada
   (cancelar parcela acima da marca e Gerar de novo a recria) e nao olha mes fechado — PR proprio (decisao do Gabriel,
-  30/09, em FIN-RECORRENCIA-GERAR-PREENCHE-VAGA-01, que so' deu essas travas as VAGAS).
+  30/09, em FIN-RECORRENCIA-GERAR-PREENCHE-VAGA-01, que so' deu essas travas as VAGAS) · Enriquecer · Excel
+  (PR-CONC-EXCEL-CONTA-STAGING-01), tres dividas de PR proprio: (a) DOIS RESOLVEDORES DE CONTA QUE DISCORDAM — o do
+  front (`resolverContaPorTexto`: apelido, nome, agencia+numero) e o do banco (`fn_classificacao_resolver_conta`, so'
+  "cc-NNN |"); unificar; (b) o PASSO 3a de `fn_classificacao_casar_sessao` (soma de 2) nao exclui
+  transferencia/estorno/meta como o passo 1 — PR de banco; (c) DOIS LEITORES DO MESMO ARQUIVO (`useImportLancamentosExcel`
+  faz o de-para, `useImportarClassificacao` popula o staging) — o de-para de conta tem de ser entregue de um ao outro, e
+  foi nessa entrega que a planilha do NJ set/26 foi inteira sem conta.
 - Telas e UI:
   TELAS-ORFAS-01 (decisao) · FIN-RECORRENCIA-FAZENDA-01 · FIN-FAZENDA-INATIVA-LISTA-01 · FIN-IMPORTAR-ANTIGO-01 ·
   FAZENDA-INATIVA-EDICAO-01 · LEGADOS-ABATE-VENDA-FAZENDA-01 · FORNECEDOR-UUID-CRU-01 · PROPRIEDADE-DESTINO-ORIGEM-01 ·

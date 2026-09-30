@@ -69,7 +69,7 @@ export function EnriquecerTresPassos({ ano, mes, clienteNome, contaNome, onVerNo
   // ── Leitura do arquivo + de-para com memória (o bloco de cima, sem o Confirmar dele) ──
   const {
     dePara, pendentes, parse, arquivo, lendo, erro,
-    classificacoes, fornecedores, fazendas, contasBancarias, safras,
+    classificacoes, fornecedores, fazendas, contasBancarias, safras, contasResolviveis,
     lerArquivo, resolverManualmente, alternarDescarte, limpar,
   } = useImportLancamentosExcel(true);
 
@@ -167,14 +167,13 @@ export function EnriquecerTresPassos({ ano, mes, clienteNome, contaNome, onVerNo
       }
       if (!imp.lote) { toast.error('Escolha a planilha primeiro.'); return; }
       /* O de-para de conta que o operador resolveu no passo 1 desce para o importador de
-         staging: é a mesma pergunta, respondida uma vez. */
-      if (dePara) {
-        for (const [texto, item] of Object.entries(dePara.conta)) {
-          if (item.valor) imp.resolverConta(texto, { contaId: item.valor });
-          else if (item.descartado) imp.resolverConta(texto, { ignorar: true });
-        }
-      }
-      const res = await imp.popular();
+         staging: é a mesma pergunta, respondida uma vez.
+         ⚠ POR PARÂMETRO, NÃO POR ESTADO — PR-CONC-EXCEL-CONTA-STAGING-01. Aqui havia um laço de
+         `imp.resolverConta(...)` seguido de `imp.popular()`: o `resolverConta` só agenda o estado, e o
+         `popular` lia o mapa desta renderização, ainda vazio — a planilha inteira ia sem conta e o motor
+         pulava tudo (NJ, set/26: 483 de 509). A memória das contas (a mesma do diálogo da Mesa) entra
+         junto, e o mapa se monta dentro do `popular`. */
+      const res = await imp.popular({ deParaConta: dePara?.conta, contasMemoria: contasResolviveis });
       if (!res) return;
       const r = await casarSessao({ sessao_id: res.sessaoId, ano_mes: anoMesRegua });
       toast.success(
@@ -212,6 +211,13 @@ export function EnriquecerTresPassos({ ano, mes, clienteNome, contaNome, onVerNo
       ? `${contasSemResposta} conta(s) bancária(s) da planilha sem resposta — abra o card Conta bancária.`
     : null;
 
+  /* ⚠ SESSÃO GRAVADA SEM CONTA — PR-CONC-EXCEL-CONTA-STAGING-01. As sessões populadas antes do conserto têm as
+     linhas com conta nula, e recasar não as conserta: o motor pula linha sem conta (`sem_conta_para_match`). A tela
+     reabre a sessão do mês sozinha, então o aviso fica na própria aba, e o caminho é reimportar a planilha. */
+  const linhasSemConta = useMemo(
+    () => (staging ?? []).filter((r) => String(r.match_status) === 'sem_conta_para_match').length,
+    [staging]);
+
   const carimbo = sessaoDaRegua ? dataHoraCurta(sessaoDaRegua.criada_em) : '';
   const subtitulo = [
     arquivo?.name ?? (sessaoDaRegua ? `importação de ${mesAbrev(sessaoDaRegua.excel_ano_mes)}` : null),
@@ -248,6 +254,21 @@ export function EnriquecerTresPassos({ ano, mes, clienteNome, contaNome, onVerNo
         <PassoBotao n={3} titulo="Gravar" ativo={passo === 3} concluido={false}
           detalhe="—" onClick={() => irParaPasso(3)} />
       </div>
+
+      {sessaoId && linhasSemConta > 0 && (
+        <div className="flex shrink-0 items-center gap-2 rounded border border-amber-300 bg-amber-50 px-2 py-1 text-[10px] text-amber-900"
+          data-testid="aviso-sem-conta">
+          <span>
+            <b className="tabular-nums">{linhasSemConta}</b> linha{linhasSemConta === 1 ? '' : 's'} desta planilha
+            {linhasSemConta === 1 ? ' ficou' : ' ficaram'} sem conta — reimporte a planilha.
+          </span>
+          {passo !== 1 && (
+            <button type="button" className="underline underline-offset-2" onClick={() => irParaPasso(1)}>
+              ir para a planilha e de-para
+            </button>
+          )}
+        </div>
+      )}
 
       {/* ═══ PASSO 1 ════════════════════════════════════════════════════════════ */}
       {passo === 1 && (

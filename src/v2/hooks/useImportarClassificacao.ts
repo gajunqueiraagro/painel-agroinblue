@@ -45,6 +45,50 @@ export interface ImportarPopularResult {
   counts: Record<string, number>;
 }
 
+/** A resposta do operador para um texto de conta no de-para do passo 1 (`DeParaItem` do importador). */
+export interface RespostaContaDePara { valor: string | null; descartado?: boolean }
+
+/**
+ * A MEMÓRIA, PURA — o que `resolverContaPorTexto` resolve com certeza, sem sobrescrever quem já respondeu.
+ * `preResolverPelaMemoria` grava isto no estado; `popular` usa direto, na mesma chamada.
+ */
+export function resolucoesPelaMemoria(
+  distintas: readonly ContaDistinta[],
+  respondidas: Record<string, ContaMapItem>,
+  contas: readonly ContaResolvivel[],
+): Record<string, ContaMapItem> {
+  const novos: Record<string, ContaMapItem> = {};
+  if (contas.length === 0) return novos;
+  for (const c of distintas) {
+    const jaTem = respondidas[c.texto];
+    if (jaTem?.contaId || jaTem?.ignorar) continue;
+    const hit = resolverContaPorTexto(c.texto, contas);
+    if (!hit) continue;
+    novos[c.texto] = { textoExcel: c.texto, contaId: hit.id, ignorar: false };
+  }
+  return novos;
+}
+
+/**
+ * O MAPA DE CONTAS DE UM GESTO — PR-CONC-EXCEL-CONTA-STAGING-01. Memória, depois o que já está no estado, e por
+ * cima as respostas do de-para do passo 1 (a do operador vence). Pendente (sem valor e não descartado) não entra: a
+ * linha vai sem conta e o motor a marca `sem_conta_para_match`, como antes.
+ */
+export function mapaContasDoGesto(
+  distintas: readonly ContaDistinta[],
+  noEstado: Record<string, ContaMapItem>,
+  deParaConta?: Record<string, RespostaContaDePara>,
+  contasMemoria?: readonly ContaResolvivel[],
+): Record<string, ContaMapItem> {
+  const doDePara: Record<string, ContaMapItem> = {};
+  for (const [texto, item] of Object.entries(deParaConta ?? {})) {
+    if (item.valor) doDePara[texto] = { textoExcel: texto, contaId: item.valor, ignorar: false };
+    else if (item.descartado) doDePara[texto] = { textoExcel: texto, contaId: null, ignorar: true };
+  }
+  const respondidas = { ...noEstado, ...doDePara };
+  return { ...resolucoesPelaMemoria(distintas, respondidas, contasMemoria ?? []), ...respondidas };
+}
+
 export function useImportarClassificacao(clienteId: string | null | undefined) {
   const qc = useQueryClient();
   // sessaoId=null → a query de staging fica desabilitada; só usamos populate.
@@ -121,17 +165,9 @@ export function useImportarClassificacao(clienteId: string | null | undefined) {
    * @returns quantas contas ficaram resolvidas pela memória nesta chamada.
    */
   function preResolverPelaMemoria(contas: readonly ContaResolvivel[]): number {
-    if (contas.length === 0) return 0;
-    const novos: Record<string, ContaMapItem> = {};
+    const novos = resolucoesPelaMemoria(contasDistintas, contaMap, contas);
     const novasOrigens: Record<string, OrigemContaResolvida> = {};
-    for (const c of contasDistintas) {
-      const jaTem = contaMap[c.texto];
-      if (jaTem?.contaId || jaTem?.ignorar) continue;
-      const hit = resolverContaPorTexto(c.texto, contas);
-      if (!hit) continue;
-      novos[c.texto] = { textoExcel: c.texto, contaId: hit.id, ignorar: false };
-      novasOrigens[c.texto] = 'memoria';
-    }
+    for (const texto of Object.keys(novos)) novasOrigens[texto] = 'memoria';
     const qtd = Object.keys(novos).length;
     if (qtd === 0) return 0;
     setContaMap((prev) => ({ ...prev, ...novos }));
@@ -172,16 +208,28 @@ export function useImportarClassificacao(clienteId: string | null | undefined) {
     }));
   }
 
-  async function popular(): Promise<ImportarPopularResult | null> {
+  /**
+   * Popula o staging.
+   *
+   * ⚠ O MAPA DE CONTAS VEM POR PARÂMETRO — PR-CONC-EXCEL-CONTA-STAGING-01. O Enriquecer chamava `resolverConta`
+   * (que só AGENDA o estado) e logo depois `popular()`, que lia o `contaMap` da renderização em curso — vazio. A
+   * planilha ia inteira para o staging sem conta (NJ, set/26: 483 de 509 linhas) e o motor pulava todas. Agora quem
+   * chama entrega as respostas do de-para e o catálogo da memória, e o mapa se monta AQUI, na mesma chamada.
+   */
+  async function popular(opcoes?: {
+    deParaConta?: Record<string, RespostaContaDePara>;
+    contasMemoria?: readonly ContaResolvivel[];
+  }): Promise<ImportarPopularResult | null> {
     if (!lote || !clienteId) return null;
     const novaSessao = crypto.randomUUID();
+    const mapa = mapaContasDoGesto(contasDistintas, contaMap, opcoes?.deParaConta, opcoes?.contasMemoria);
     // Enriquecer cada row com o UUID resolvido no DE/PARA (idêntico à Mesa antiga);
     // COALESCE no back resolve o restante via fn_classificacao_resolver_conta.
     const rows = lote.rows.map((r) => {
       const o = r.conta_origem?.trim();
       const d = r.conta_destino?.trim();
-      const io = o ? contaMap[o] : undefined;
-      const id = d ? contaMap[d] : undefined;
+      const io = o ? mapa[o] : undefined;
+      const id = d ? mapa[d] : undefined;
       return {
         ...r,
         conta_origem_id: io && !io.ignorar ? io.contaId : null,
