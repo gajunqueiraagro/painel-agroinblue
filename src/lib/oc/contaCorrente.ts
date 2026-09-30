@@ -309,3 +309,95 @@ export function efeitoNoSaldo(tipo: TipoExplicacao, valor: number, lado: LadoCon
 export function totalDoRascunho(itens: readonly { tipo: TipoExplicacao; valor: number }[], lado: LadoContaCorrente = 'venda'): number {
   return itens.reduce((acc, i) => acc + Math.round(efeitoNoSaldo(i.tipo, i.valor, lado) * 100), 0) / 100;
 }
+
+/* ─── OC-CC-VOLTA-01b — ajuste de preco nos dois sentidos, em todos os lotes, com previa ─────────────────────────────────── */
+
+/** O ajuste de preco SOBE ou BAIXA o valor dos lotes. */
+export type SentidoAjuste = 'sobe' | 'baixa';
+
+/**
+ * O sentido e o valor que ZERAM o que falta explicar — valor sugerido e' valor aceito (RECLASS-PESO-01).
+ * ⚠ O SINAL SAI DE `efeitoNoSaldo`, nao de uma segunda regra: baixar o preco reduz o que falta receber na venda (efeito positivo) e
+ * o que a fazenda deve na compra (efeito negativo, o espelho). Escolhe-se o sentido cujo efeito cancela o `falta`.
+ * Venda que recebeu a mais (falta positivo: o comprador adiantou) -> SOBE; recebeu a menos -> BAIXA. Compra: o espelho.
+ */
+export function sugestaoAjuste(falta: number, lado: LadoContaCorrente = 'venda'): { sentido: SentidoAjuste; valor: number } {
+  const centavos = Math.round(falta * 100);
+  if (centavos === 0) return { sentido: 'baixa', valor: 0 };
+  const baixarDaPositivo = efeitoNoSaldo('ajuste_preco', 1, lado) > 0;
+  const precisaPositivo = centavos < 0;
+  return { sentido: precisaPositivo === baixarDaPositivo ? 'baixa' : 'sobe', valor: Math.abs(centavos) / 100 };
+}
+
+/** O valor como a RPC o recebe: positivo baixa o preco do lote, negativo sobe (`oc_explicar_saldo`, ramo do ajuste). */
+export const valorAjusteParaRpc = (sentido: SentidoAjuste, valor: number): number => (sentido === 'sobe' ? -valor : valor);
+
+/** "Sobe o preço dos lotes em R$ 1.535.000,00" — o rotulo diz o sentido (regra 3). */
+export function rotuloSentidoAjuste(sentido: SentidoAjuste, valor: number, todos: boolean): string {
+  const quem = todos ? 'dos lotes' : 'do lote';
+  const reais = valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  return `${sentido === 'sobe' ? 'Sobe' : 'Baixa'} o preço ${quem} em ${reais}`;
+}
+
+/** Uma linha da previa: o lote, e embaixo dele cada entrega quando ele tem mais de uma (cada uma na data da sua saida). */
+export interface LinhaPreviaAjuste {
+  chave: string;
+  nivel: 'lote' | 'entrega' | 'total';
+  loteOrdem: number | null;
+  categoria: string | null;
+  /** Datas das entregas (dd/mm/aa), na ordem. */
+  datas: string[];
+  kg: number;
+  hoje: number;
+  novo: number;
+  /** R$/kg novo; nulo sem kg. */
+  porKgNovo: number | null;
+}
+
+const lista = (v: unknown): Record<string, unknown>[] => (Array.isArray(v) ? v.map(obj) : []);
+const porKg = (valor: number, kg: number): number | null => (kg > 0 ? Math.round((valor / kg) * 100) / 100 : null);
+
+/**
+ * A previa do ajuste, como a PROPRIA RPC a devolve em simulacao (`p_simular`, desfeita por OCSIM): nenhuma regra de rateio no
+ * front. Lote a lote (kg negociado, valor hoje, valor novo, R$/kg novo), com as entregas embaixo quando o lote tem mais de uma, e o
+ * total. Previa vazia ou fora do contrato: lista vazia.
+ */
+export function linhasDaPreviaAjuste(previa: unknown): LinhaPreviaAjuste[] {
+  const p = obj(previa);
+  const antes = lista(p.lotes_antes);
+  const depois = lista(p.lotes_depois);
+  if (depois.length === 0) return [];
+  const entAntes = lista(p.entregas_antes);
+  const entDepois = lista(p.entregas_depois);
+  const linhas: LinhaPreviaAjuste[] = [];
+  for (const d of depois) {
+    const id = texto(d.lote_id);
+    const a = antes.find(x => texto(x.lote_id) === id);
+    const kg = num(d.kg);
+    const doLote = entDepois.filter(e => texto(e.lote_id) === id);
+    const novo = num(d.total);
+    linhas.push({
+      chave: `lote:${id}`, nivel: 'lote', loteOrdem: numOuNulo(d.ordem), categoria: texto(d.categoria),
+      datas: doLote.map(e => dataCurta(texto(e.data))), kg, hoje: num(a?.total), novo, porKgNovo: porKg(novo, kg),
+    });
+    if (doLote.length > 1) {
+      for (const e of doLote) {
+        const pid = texto(e.parte_id);
+        const eAntes = entAntes.find(x => texto(x.parte_id) === pid);
+        const ekg = num(e.kg);
+        const enovo = num(e.valor);
+        linhas.push({
+          chave: `entrega:${pid}`, nivel: 'entrega', loteOrdem: numOuNulo(d.ordem), categoria: null,
+          datas: [dataCurta(texto(e.data))], kg: ekg, hoje: num(eAntes?.valor), novo: enovo, porKgNovo: porKg(enovo, ekg),
+        });
+      }
+    }
+  }
+  const lotes = linhas.filter(l => l.nivel === 'lote');
+  const kgT = lotes.reduce((s, l) => s + l.kg, 0);
+  const hojeT = lotes.reduce((s, l) => s + Math.round(l.hoje * 100), 0) / 100;
+  const novoT = lotes.reduce((s, l) => s + Math.round(l.novo * 100), 0) / 100;
+  linhas.push({ chave: 'total', nivel: 'total', loteOrdem: null, categoria: null, datas: [], kg: kgT, hoje: hojeT, novo: novoT,
+    porKgNovo: porKg(novoT, kgT) });
+  return linhas;
+}

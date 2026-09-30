@@ -77,6 +77,7 @@ function api(c: ContaCorrente, over: Partial<OcContaCorrenteApi> = {}): OcContaC
     sincronizarEntregas: vi.fn(async () => null), listarVinculaveis: vi.fn(async () => ({ erro: null, itens: [] })),
     vincularRecebimento: vi.fn(async () => null), explicarSaldo: vi.fn(async () => null),
     desfazerExplicacao: vi.fn(async () => null), programarRecebimento: vi.fn(async () => null),
+    simularExplicacao: vi.fn(async () => ({ previa: null, erro: null })),
     lerRolCancelamento: vi.fn(async () => ({ rol: null, erro: null })),
     listarLotes: vi.fn(async () => [{ id: 'l1', ordem: 1, categoria: 'desmama_m', cab: 121, total: 307460 }]),
     listarContas: vi.fn(async () => []),
@@ -180,7 +181,9 @@ describe('compra em conta corrente — extrato espelho da venda (mock v1)', () =
     fireEvent.change(within(d).getByLabelText('Valor'), { target: { value: '1.000,00' } });
     fireEvent.click(within(d).getByRole('button', { name: 'Salvar explicação' }));
     expect(explicarSaldo).not.toHaveBeenCalled();
-    expect(d.textContent).toContain('Complete cada linha: lote, motivo.');
+    /* OC-CC-VOLTA-01b: com um lote so', o ajuste ja' nasce nele (com mais de um, em "Todos"); falta so' o motivo */
+    expect(d.textContent).toContain('Complete cada linha: motivo.');
+    expect(within(d).getByLabelText('Lote do ajuste').textContent).toContain('1 · Desmama M');
     expect(efeitoNoSaldo('ajuste_preco', 1000, 'compra')).toBe(-1000);
     expect(efeitoNoSaldo('devolucao_comprador', 500, 'compra')).toBe(500);
     expect(efeitoNoSaldo('ajuste_preco', 1000)).toBe(1000);

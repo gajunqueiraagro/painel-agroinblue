@@ -7,8 +7,8 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
-import { AbaContaCorrenteOC } from './AbaContaCorrenteOC';
+import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
+import { AbaContaCorrenteOC, itemDoRascunho, type Rascunho } from './AbaContaCorrenteOC';
 import { CancelarContaCorrenteDialog } from './CancelarContaCorrenteDialog';
 import { lerContaCorrente, type ContaCorrente } from '@/lib/oc/contaCorrente';
 import type { OcContaCorrenteApi, RolCancelamento } from '@/hooks/useOcContaCorrente';
@@ -44,6 +44,7 @@ function api(c: ContaCorrente, over: Partial<OcContaCorrenteApi> = {}): OcContaC
     vincularRecebimento: vi.fn(async () => null),
     explicarSaldo: vi.fn(async () => null),
     desfazerExplicacao: vi.fn(async () => null),
+    simularExplicacao: vi.fn(async () => ({ previa: null, erro: null })),
     programarRecebimento: vi.fn(async () => null),
     lerRolCancelamento: vi.fn(async () => ({ rol: null, erro: null })),
     listarLotes: vi.fn(async () => []),
@@ -287,5 +288,154 @@ describe('venda: despesas da operacao', () => {
     render(<AbaContaCorrenteOC api={api(cc())} somenteLeitura={false} />);
     expect(screen.getByTestId('conta-corrente-tabela')).toBeInTheDocument();
     expect(screen.queryByTestId('despesas-operacao')).toBeNull();
+  });
+});
+
+/* ─── OC-CC-VOLTA-01b — ajuste de preco em todos os lotes, dois sentidos, previa e volta ─────────────────────────────────────── */
+/* A NJ af334f9c: 3 lotes de novilhas somando 1.015.000,00, recebido 2.550.000,00 (o comprador adiantou 1.535.000,00). */
+function ccAf(extra: Record<string, unknown> = {}): ContaCorrente {
+  const r = lerContaCorrente({
+    modelo: 'conta_corrente', versao: 14, valor_acordado: 1015000, entregue: 1015000, cab_entregue: 507,
+    recebido: 2550000, programado: 0, devolvido: 0, saldo: 1535000, explicado: 0, saldo_a_explicar: 1535000,
+    falta_explicar: 1535000, situacao: 'adiantado', a_entregar: 0, ultima_entrega: '2021-06-02',
+    recebimentos_sem_conta_bancaria: 0, saidas_sem_entrega: 0,
+    linhas: [
+      { tipo: 'recebimento', data: '2021-03-08', parte_id: 'r1', mov_recebido: 500000, status: 'realizado', no_saldo: true, saldo: 500000 },
+      { tipo: 'entrega', data: '2021-04-06', parte_id: 'e1', lote_ordem: 1, cab: 307, categoria: 'novilhas', mov_entrega: -610990.2,
+        status: 'sem_caixa', no_saldo: true, saldo: -110990.2 },
+      { tipo: 'entrega', data: '2021-04-21', parte_id: 'e2', lote_ordem: 2, cab: 131, categoria: 'novilhas', mov_entrega: -260715.69,
+        status: 'sem_caixa', no_saldo: true, saldo: -371705.89 },
+      { tipo: 'entrega', data: '2021-06-02', parte_id: 'e3', lote_ordem: 3, cab: 69, categoria: 'novilhas', mov_entrega: -143294.11,
+        status: 'sem_caixa', no_saldo: true, saldo: -515000 },
+      { tipo: 'recebimento', data: '2021-06-15', parte_id: 'r2', mov_recebido: 2050000, status: 'realizado', no_saldo: true, saldo: 1535000 },
+    ],
+    explicacoes: [],
+    ...extra,
+  });
+  if (!r) throw new Error('fixture');
+  return r;
+}
+const LOTES_AF = [
+  { id: 'l1', ordem: 1, categoria: 'novilhas', cab: 307, total: 610990.2 },
+  { id: 'l2', ordem: 2, categoria: 'novilhas', cab: 131, total: 260715.69 },
+  { id: 'l3', ordem: 3, categoria: 'novilhas', cab: 69, total: 143294.11 },
+];
+const loteP = (id: string, ordem: number, kg: number, total: number) => ({ lote_id: id, ordem, categoria: 'novilhas', kg, total });
+const PREVIA_AF = {
+  criterio: 'todos_por_kg', total_antes: 1015000, total_novo: 2550000,
+  lotes_antes: [loteP('l1', 1, 132010, 610990.2), loteP('l2', 2, 56330, 260715.69), loteP('l3', 3, 29670, 143294.11)],
+  lotes_depois: [loteP('l1', 1, 132010, 1544082.84), loteP('l2', 2, 56330, 658875.74), loteP('l3', 3, 29670, 347041.42)],
+  entregas_antes: [], entregas_depois: [
+    { parte_id: 'e1', lote_id: 'l1', data: '2021-04-06', kg: 132010, valor: 1544082.84 },
+    { parte_id: 'e2', lote_id: 'l2', data: '2021-04-21', kg: 56330, valor: 658875.74 },
+    { parte_id: 'e3', lote_id: 'l3', data: '2021-06-02', kg: 29670, valor: 347041.42 },
+  ],
+};
+
+async function abrirExplicar(a: OcContaCorrenteApi, botao = 'Explicar diferença') {
+  render(<AbaContaCorrenteOC api={a} somenteLeitura={false} />);
+  fireEvent.click(screen.getByRole('button', { name: botao }));
+  const dlg = await screen.findByTestId('dialogo-explicar');
+  await waitFor(() => expect(a.listarLotes).toHaveBeenCalled());
+  await act(async () => {});
+  return dlg;
+}
+
+describe('explicar diferenca — ajuste de preco em todos os lotes (OC-CC-VOLTA-01b)', () => {
+  it('af334f9c: nasce em "Todos os lotes (rateio por kg)", SOBE e com o que falta; a previa e a RPC em simulacao; salva o que previu', async () => {
+    const simularExplicacao = vi.fn<OcContaCorrenteApi['simularExplicacao']>(async () => ({ previa: PREVIA_AF, erro: null }));
+    const a = api(ccAf(), { listarLotes: vi.fn(async () => LOTES_AF), simularExplicacao });
+    const dlg = await abrirExplicar(a);
+    fireEvent.click(within(dlg).getByRole('button', { name: '+ Ajuste de preço' }));
+    expect(within(dlg).getByLabelText('Lote do ajuste').textContent).toBe('Todos os lotes (rateio por kg)');
+    expect(within(dlg).getByLabelText('Sentido do ajuste').textContent).toBe('Sobe o preço');
+    expect(within(dlg).getByLabelText('Valor')).toHaveProperty('value', '1.535.000,00');
+    expect(within(dlg).getByTestId('card-falta-explicar').textContent).toContain('0,00');
+    expect(within(dlg).getByTestId('card-falta-explicar').textContent).not.toContain('-');
+    /* a previa: a propria RPC, com o sinal de SUBIR (negativo) e o lote NULO (todos) */
+    await waitFor(() => expect(simularExplicacao).toHaveBeenCalled());
+    expect(vi.mocked(simularExplicacao).mock.calls[0][0]).toMatchObject({ tipo: 'ajuste_preco', valor: -1535000, loteId: null });
+    const previa = await within(dlg).findByTestId('previa-ajuste');
+    expect(txt(within(previa).getByTestId('previa-rotulo'))).toBe('Sobe o preço dos lotes em R$ 1.535.000,00');
+    const linhas = within(previa).getAllByRole('row').filter(r => r.getAttribute('data-previa'));
+    expect(linhas.map(r => r.getAttribute('data-previa'))).toEqual(['lote', 'lote', 'lote', 'total']);
+    expect(Array.from(linhas[0].querySelectorAll('td')).map(td => txt(td))).toEqual(
+      ['1 · Novilhas', '06/04/21', '132.010', '610.990,20', '1.544.082,84', '11,70']);
+    expect(Array.from(linhas[3].querySelectorAll('td')).map(td => txt(td))).toEqual(
+      ['Total', '', '218.010', '1.015.000,00', '2.550.000,00', '11,70']);
+    /* salvar manda o mesmo item que a previa simulou */
+    fireEvent.change(within(dlg).getByLabelText('Motivo *'), { target: { value: 'juros entram no preço' } });
+    fireEvent.click(within(dlg).getByRole('button', { name: 'Salvar explicação' }));
+    await waitFor(() => expect(a.explicarSaldo).toHaveBeenCalledTimes(1));
+    const [itens] = vi.mocked(a.explicarSaldo).mock.calls[0];
+    expect(itens).toEqual([{ tipo: 'ajuste_preco', valor: -1535000, loteId: null, planoContaId: null, motivo: 'juros entram no preço', vencimento: null }]);
+  });
+
+  it('o outro sentido: recebeu a menos -> BAIXA, positivo na RPC; com um lote so, ele ja vem escolhido', async () => {
+    const simularExplicacao = vi.fn<OcContaCorrenteApi['simularExplicacao']>(async () => ({ previa: null, erro: null }));
+    const a = api(cc(), { listarLotes: vi.fn(async () => [LOTES_AF[0]]), simularExplicacao });
+    const dlg = await abrirExplicar(a);
+    fireEvent.click(within(dlg).getByRole('button', { name: '+ Ajuste de preço' }));
+    expect(within(dlg).getByLabelText('Sentido do ajuste').textContent).toBe('Baixa o preço');
+    expect(within(dlg).getByLabelText('Lote do ajuste').textContent).toBe('1 · Novilhas');
+    await waitFor(() => expect(simularExplicacao).toHaveBeenCalled());
+    expect(vi.mocked(simularExplicacao).mock.calls[0][0]).toMatchObject({ tipo: 'ajuste_preco', valor: 1357.89, loteId: 'l1' });
+    expect(txt(await within(dlg).findByTestId('previa-rotulo'))).toBe('Baixa o preço do lote em R$ 1.357,89');
+  });
+
+  it('a recusa da simulacao aparece na previa, e nao grava nada', async () => {
+    const simularExplicacao = vi.fn<OcContaCorrenteApi['simularExplicacao']>(async () => ({ previa: null, erro: 'Lote 2 sem entrega no financeiro' }));
+    const a = api(ccAf(), { listarLotes: vi.fn(async () => LOTES_AF), simularExplicacao });
+    const dlg = await abrirExplicar(a);
+    fireEvent.click(within(dlg).getByRole('button', { name: '+ Ajuste de preço' }));
+    const previa = await within(dlg).findByTestId('previa-ajuste');
+    await waitFor(() => expect(within(previa).getByRole('alert').textContent).toBe('Lote 2 sem entrega no financeiro'));
+    expect(a.explicarSaldo).not.toHaveBeenCalled();
+  });
+
+  it('VOLTA: o ajuste de todos aparece como "todos"; remover chama o desfazer, e a recusa do banco (lote mudado) fica ao lado', async () => {
+    const recusa = 'Não dá para desfazer este ajuste de preço: lote 2 (valor 658.875,74 → 700.000,00) mudou depois dele.';
+    const a = api(ccAf({ saldo: 0, explicado: -1535000, falta_explicar: 0, situacao: 'quitado',
+      explicacoes: [{ parte_id: 'aj1', tipo: 'ajuste_preco', lote_ordem: null, conta_ordem: 1070, conta: 'Venda de Novilhas',
+        motivo: 'juros entram no preço', valor: -1535000, status: 'ajuste' }] }),
+      { desfazerExplicacao: vi.fn(async () => recusa) });
+    const dlg = await abrirExplicar(a, 'Ver explicação');
+    const linha = within(dlg).getAllByRole('row').find(r => r.getAttribute('data-explicacao') === 'ajuste_preco');
+    expect(linha?.querySelectorAll('td')[1].textContent).toBe('todos');
+    fireEvent.click(within(dlg).getByRole('button', { name: 'remover' }));
+    fireEvent.change(within(dlg).getByLabelText('Motivo *'), { target: { value: 'preço combinado mudou' } });
+    fireEvent.click(within(dlg).getByRole('button', { name: 'Remover explicação' }));
+    await waitFor(() => expect(a.desfazerExplicacao).toHaveBeenCalledWith('aj1', 'preço combinado mudou'));
+    await waitFor(() => expect(within(dlg).getByRole('alert').textContent).toBe(recusa));
+  });
+
+  it('outra receita e permuta: na DATA DO FATO, que nasce com a do ultimo recebimento; o rodape diz a regra nova', async () => {
+    const a = api(ccAf(), { listarLotes: vi.fn(async () => LOTES_AF) });
+    const dlg = await abrirExplicar(a);
+    fireEvent.click(within(dlg).getByRole('button', { name: '+ Outra receita' }));
+    const linha = within(dlg).getAllByRole('row').find(r => r.getAttribute('data-rascunho') === 'outra_receita');
+    expect((linha?.querySelector('input[value="15/06/2021"]'))).toBeTruthy();
+    fireEvent.click(within(dlg).getByRole('button', { name: '+ Desconto comercial' }));
+    const desc = within(dlg).getAllByRole('row').find(r => r.getAttribute('data-rascunho') === 'desconto_comercial');
+    expect(desc?.textContent).toContain('por entrega');
+    expect(dlg.textContent).not.toContain('última entrega');
+    expect(dlg.textContent).toContain('na data da saída dela');
+  });
+});
+
+describe('a linha do rascunho como a RPC a recebe (salvar e previa mandam a mesma)', () => {
+  const base: Rascunho = { chave: 1, tipo: 'ajuste_preco', valor: '1.535.000,00', loteId: '__todos__', contaId: '', motivo: 'm',
+    vencimento: '', sentido: 'sobe', data: '' };
+  it('ajuste: "todos" vai como lote NULO; sobe negativo, baixa positivo; um lote vai com o id', () => {
+    expect(itemDoRascunho(base)).toMatchObject({ valor: -1535000, loteId: null, vencimento: null });
+    expect(itemDoRascunho({ ...base, sentido: 'baixa', loteId: 'l2' })).toMatchObject({ valor: 1535000, loteId: 'l2' });
+  });
+  it('outra receita e permuta levam a DATA DO FATO; devolucao, o vencimento; desconto, nenhuma (e por entrega)', () => {
+    expect(itemDoRascunho({ ...base, tipo: 'outra_receita', valor: '100,00', data: '2021-06-15', contaId: 'c1' }))
+      .toMatchObject({ valor: 100, loteId: null, planoContaId: 'c1', vencimento: '2021-06-15' });
+    expect(itemDoRascunho({ ...base, tipo: 'permuta_despesa', valor: '50,00', data: '2021-06-10' })).toMatchObject({ vencimento: '2021-06-10' });
+    expect(itemDoRascunho({ ...base, tipo: 'devolucao_comprador', valor: '50,00', vencimento: '2021-07-01', data: '2021-06-10' }))
+      .toMatchObject({ vencimento: '2021-07-01' });
+    expect(itemDoRascunho({ ...base, tipo: 'desconto_comercial', valor: '1.000,00', data: '2021-06-10' })).toMatchObject({ valor: 1000, vencimento: null });
   });
 });

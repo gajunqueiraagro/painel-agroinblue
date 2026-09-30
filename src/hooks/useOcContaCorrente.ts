@@ -26,11 +26,14 @@ export interface RecebimentoVinculavel {
 /** Uma linha do dialogo "Explicar diferenca", como a RPC a recebe. */
 export interface ExplicacaoRascunho {
   tipo: TipoExplicacao;
-  /** Magnitude; o sinal do saldo sai do tipo (`efeitoNoSaldo`). No ajuste de preco, positivo reduz a entrega. */
+  /** Magnitude; o sinal do saldo sai do tipo (`efeitoNoSaldo`). No ajuste de preco, positivo BAIXA o preco e negativo SOBE
+   *  (`valorAjusteParaRpc`). */
   valor: number;
+  /** No ajuste de preco, NULO = todos os lotes, rateio por kg (OC-CC-VOLTA-01b). */
   loteId: string | null;
   planoContaId: string | null;
   motivo: string;
+  /** Devolucao: o vencimento. Permuta / outra receita: a data do fato (OC-CC-VOLTA-01b; sem ela, o banco usa a ultima entrega). */
   vencimento: string | null;
 }
 
@@ -61,6 +64,8 @@ export interface OcContaCorrenteApi {
   /** Grava as linhas do rascunho em ordem, encadeando a versao; para no primeiro erro e devolve a mensagem. */
   explicarSaldo: (itens: readonly ExplicacaoRascunho[]) => Promise<string | null>;
   desfazerExplicacao: (parteId: string, motivo: string) => Promise<string | null>;
+  /** A previa de UMA explicacao: a propria `oc_explicar_saldo` com `p_simular` (nada grava). `previa` e' o jsonb cru da RPC. */
+  simularExplicacao: (item: ExplicacaoRascunho) => Promise<{ previa: unknown; erro: string | null }>;
   programarRecebimento: (valor: number, vencimento: string) => Promise<string | null>;
   lerRolCancelamento: () => Promise<{ rol: RolCancelamento | null; erro: string | null }>;
   /** Lotes da OC com entrega, para o ajuste de preco. */
@@ -189,6 +194,19 @@ export function useOcContaCorrente({ operacaoId, enabled, versao, onVersaoChange
     }
   }, [operacaoId, versaoAtual, onVersaoChange, recarregar, aoMudarLotes]);
 
+  /* OC-CC-VOLTA-01b — A PREVIA E' A PROPRIA RPC com `p_simular` (desfeita por SQLSTATE 'OCSIM'): o rateio por kg, os centavos no
+     lote de maior peso e as entregas por data saem do banco, nunca de uma copia da regra aqui. Sem `ocupado`: e' leitura. */
+  const simularExplicacao = useCallback(async (it: ExplicacaoRascunho): Promise<{ previa: unknown; erro: string | null }> => {
+    if (!operacaoId || versaoAtual == null) return { previa: null, erro: 'Operação não carregada.' };
+    const { data, error } = await (supabase as any).rpc('oc_explicar_saldo', {
+      p_operacao_id: operacaoId, p_versao_esperada: versaoAtual, p_tipo: it.tipo, p_valor: it.valor,
+      p_lote_id: it.loteId, p_plano_conta_id: it.planoContaId, p_motivo: it.motivo.trim() || 'prévia', p_vencimento: it.vencimento,
+      p_simular: true,
+    });
+    if (error) return { previa: null, erro: normalizarErroRpc(error).message };
+    return { previa: data?.previa ?? null, erro: null };
+  }, [operacaoId, versaoAtual]);
+
   const desfazerExplicacao = useCallback(async (parteId: string, motivo: string): Promise<string | null> => {
     if (!operacaoId || versaoAtual == null) return 'Operação não carregada.';
     if (!motivo.trim()) return 'Informe o motivo.';
@@ -258,7 +276,7 @@ export function useOcContaCorrente({ operacaoId, enabled, versao, onVersaoChange
 
   return {
     contaCorrente, loading, erro, ocupado, recarregar, sincronizarEntregas, listarVinculaveis, vincularRecebimento,
-    explicarSaldo, desfazerExplicacao, programarRecebimento, lerRolCancelamento, listarLotes, listarContas,
+    explicarSaldo, desfazerExplicacao, simularExplicacao, programarRecebimento, lerRolCancelamento, listarLotes, listarContas,
   };
 }
 

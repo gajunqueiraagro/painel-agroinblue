@@ -10,9 +10,9 @@ import { CATEGORIAS } from '@/types/cattle';
 import { parseNumericValue } from '@/lib/calculos/abate';
 import { rotuloCurtoDaConta, rotuloDaConta } from '@/lib/financeiro/rotuloConta';
 import {
-  barraDaDiferenca, contaComNumero, corDoSaldo, dataCurta, efeitoNoSaldo, rotuloDoSaldo, rotuloExplicacao, rotuloRecebimento,
-  totalDoRascunho, ROTULO_STATUS, TIPOS_EXPLICACAO_DO_LADO,
-  type LadoContaCorrente, type LinhaContaCorrente, type TipoExplicacao,
+  barraDaDiferenca, contaComNumero, corDoSaldo, dataCurta, efeitoNoSaldo, linhasDaPreviaAjuste, rotuloDoSaldo, rotuloExplicacao,
+  rotuloRecebimento, rotuloSentidoAjuste, sugestaoAjuste, totalDoRascunho, valorAjusteParaRpc, ROTULO_STATUS, TIPOS_EXPLICACAO_DO_LADO,
+  type ContaCorrente, type LadoContaCorrente, type LinhaContaCorrente, type LinhaPreviaAjuste, type SentidoAjuste, type TipoExplicacao,
 } from '@/lib/oc/contaCorrente';
 import type {
   ContaParaExplicacao, ExplicacaoRascunho, LoteParaAjuste, OcContaCorrenteApi, RecebimentoVinculavel,
@@ -445,7 +445,36 @@ function DialogoProgramarRecebimento({ api, lado, sugerido, onFechar }: { api: O
 }
 
 /* ─── Explicar diferenca (mock v7): uma linha por explicacao; salvas, viram linhas ambar no extrato ─── */
-interface Rascunho { chave: number; tipo: TipoExplicacao; valor: string; loteId: string; contaId: string; motivo: string; vencimento: string }
+export interface Rascunho {
+  chave: number; tipo: TipoExplicacao; valor: string; loteId: string; contaId: string; motivo: string; vencimento: string;
+  /** Ajuste de preco: sobe ou baixa (OC-CC-VOLTA-01b). */
+  sentido: SentidoAjuste;
+  /** Permuta / outra receita: a data do fato (padrao: a do ultimo recebimento). */
+  data: string;
+}
+
+/** OC-CC-VOLTA-01b — "todos os lotes" no seletor do ajuste; vai a' RPC como lote NULO (rateio por kg). */
+const TODOS_LOTES = '__todos__';
+
+/* A linha do rascunho como a RPC a recebe. Uma funcao so' para o salvar e a previa: as duas mandam a mesma coisa. */
+export function itemDoRascunho(r: Rascunho): ExplicacaoRascunho {
+  const v = parseNumericValue(r.valor);
+  const comData = r.tipo === 'permuta_despesa' || r.tipo === 'outra_receita';
+  return {
+    tipo: r.tipo, valor: r.tipo === 'ajuste_preco' ? valorAjusteParaRpc(r.sentido, v) : v,
+    loteId: r.tipo === 'ajuste_preco' && r.loteId && r.loteId !== TODOS_LOTES ? r.loteId : null,
+    planoContaId: r.contaId || null, motivo: r.motivo,
+    vencimento: r.tipo === 'devolucao_comprador' ? (r.vencimento || null) : comData ? (r.data || null) : null,
+  };
+}
+
+/* A data do recebimento que gerou a diferenca: o ultimo que entrou no saldo; sem nenhum, a ultima entrega (regra 4). */
+function dataPadraoDoFato(cc: ContaCorrente): string {
+  const datas = cc.linhas.filter(l => l.tipo === 'recebimento' && l.noSaldo).map(l => l.data).sort();
+  return datas[datas.length - 1] ?? cc.ultimaEntrega ?? '';
+}
+
+interface EstadoPrevia { carregando: boolean; linhas: LinhaPreviaAjuste[]; erro: string | null }
 
 export function DialogoExplicarDiferenca({ api, somenteLeitura, lado = 'venda', onFechar }: {
   api: OcContaCorrenteApi; somenteLeitura: boolean; lado?: LadoContaCorrente; onFechar: () => void;
@@ -461,7 +490,8 @@ export function DialogoExplicarDiferenca({ api, somenteLeitura, lado = 'venda', 
   const [removendo, setRemovendo] = useState<string | null>(null);
   const [motivoRemover, setMotivoRemover] = useState('');
   const [tentouRemover, setTentouRemover] = useState(false);
-  const { listarLotes, listarContas } = api;
+  const [previa, setPrevia] = useState<EstadoPrevia | null>(null);
+  const { listarLotes, listarContas, simularExplicacao } = api;
 
   useEffect(() => {
     let vivo = true;
@@ -471,11 +501,23 @@ export function DialogoExplicarDiferenca({ api, somenteLeitura, lado = 'venda', 
     return () => { vivo = false; };
   }, [listarLotes, listarContas]);
 
+  /* OC-CC-VOLTA-01b (regra 5) — a PREVIA antes de salvar, do primeiro ajuste do rascunho: a propria RPC em simulacao. So' com lote e
+     valor; refeita quando a linha do ajuste muda (o objeto da linha so' troca quando ela e' editada). */
+  const ajusteRasc = rascunhos.find(r => r.tipo === 'ajuste_preco');
+  useEffect(() => {
+    if (!ajusteRasc || !ajusteRasc.loteId || !(parseNumericValue(ajusteRasc.valor) > 0)) { setPrevia(null); return; }
+    let vivo = true;
+    setPrevia({ carregando: true, linhas: [], erro: null });
+    const t = setTimeout(() => {
+      void simularExplicacao(itemDoRascunho(ajusteRasc)).then(res => {
+        if (vivo) setPrevia({ carregando: false, linhas: linhasDaPreviaAjuste(res.previa), erro: res.erro });
+      });
+    }, 350);
+    return () => { vivo = false; clearTimeout(t); };
+  }, [ajusteRasc, simularExplicacao]);
+
   if (!cc) return null;
-  const itens: ExplicacaoRascunho[] = rascunhos.map(r => ({
-    tipo: r.tipo, valor: parseNumericValue(r.valor), loteId: r.loteId || null, planoContaId: r.contaId || null,
-    motivo: r.motivo, vencimento: r.vencimento || null,
-  }));
+  const itens: ExplicacaoRascunho[] = rascunhos.map(itemDoRascunho);
   const explicadoRascunho = totalDoRascunho(itens, lado);
   const explicadoTotal = Math.round((cc.explicado + explicadoRascunho) * 100) / 100;
   const falta = Math.round((cc.saldoAExplicar + explicadoTotal) * 100) / 100;
@@ -485,15 +527,20 @@ export function DialogoExplicarDiferenca({ api, somenteLeitura, lado = 'venda', 
     ...(r.tipo === 'ajuste_preco' && !r.loteId ? ['lote'] : []),
     ...((r.tipo === 'permuta_despesa' || r.tipo === 'outra_receita') && !r.contaId ? ['conta'] : []),
     ...(r.tipo === 'devolucao_comprador' && !r.vencimento ? ['vencimento'] : []),
+    ...((r.tipo === 'permuta_despesa' || r.tipo === 'outra_receita') && !r.data ? ['data'] : []),
     ...(!r.motivo.trim() ? ['motivo'] : []),
     ...(!(parseNumericValue(r.valor) > 0) ? ['valor'] : []),
   ];
   const faltando = rascunhos.flatMap(r => pendencias(r));
   const adicionar = (tipo: TipoExplicacao) => {
-    /* o valor nasce com o que falta explicar, no sinal do tipo — valor sugerido e' valor aceito, e fica marcado em ambar */
-    const sugerido = efeitoNoSaldo(tipo, 1, lado) > 0 ? Math.max(0, -falta) : Math.max(0, falta);
+    /* o valor nasce com o que falta explicar, no sinal do tipo — valor sugerido e' valor aceito, e fica marcado em ambar.
+       ⚠ O AJUSTE TEM DOIS SENTIDOS (OC-CC-VOLTA-01b): nasce no sentido que zera o que falta — o comprador pagou a mais, SOBE —, com
+       "todos os lotes" quando a OC tem mais de um. */
+    const aj = sugestaoAjuste(falta, lado);
+    const sugerido = tipo === 'ajuste_preco' ? aj.valor : efeitoNoSaldo(tipo, 1, lado) > 0 ? Math.max(0, -falta) : Math.max(0, falta);
     setRascunhos(prev => [...prev, { chave: Date.now() + prev.length, tipo, valor: sugerido > 0 ? sugerido.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '',
-      loteId: '', contaId: '', motivo: '', vencimento: '' }]);
+      loteId: tipo === 'ajuste_preco' ? (lotes.length > 1 ? TODOS_LOTES : (lotes[0]?.id ?? '')) : '', contaId: '', motivo: '',
+      vencimento: '', sentido: aj.sentido, data: tipo === 'permuta_despesa' || tipo === 'outra_receita' ? dataPadraoDoFato(cc) : '' }]);
   };
   const alterar = (chave: number, campo: Partial<Rascunho>) =>
     setRascunhos(prev => prev.map(r => (r.chave === chave ? { ...r, ...campo } : r)));
@@ -517,7 +564,7 @@ export function DialogoExplicarDiferenca({ api, somenteLeitura, lado = 'venda', 
 
   return (
     <Dialog open onOpenChange={o => { if (!o) onFechar(); }}>
-      <DialogContent className="max-w-[820px]" data-testid="dialogo-explicar">
+      <DialogContent className="max-w-[920px]" data-testid="dialogo-explicar">
         <DialogHeader><DialogTitle className="text-[12px]">Explicar diferença</DialogTitle></DialogHeader>
         <div className="grid grid-cols-3 gap-[5px]">
           <Card rotulo="Saldo a explicar" valor={cc.saldoAExplicar} cor={COR[corDoSaldo(cc.saldoAExplicar)]} testid="card-saldo-a-explicar" />
@@ -526,15 +573,19 @@ export function DialogoExplicarDiferenca({ api, somenteLeitura, lado = 'venda', 
         </div>
         <div className="max-h-[45vh] overflow-auto rounded border">
           <table className="w-full table-fixed border-separate border-spacing-0 tabular-nums">
-            <colgroup><col style={{ width: 140 }} /><col style={{ width: 70 }} /><col style={{ width: 190 }} /><col /><col style={{ width: 100 }} /><col style={{ width: 64 }} /></colgroup>
+            <colgroup>
+              <col style={{ width: 112 }} /><col style={{ width: 190 }} /><col style={{ width: 92 }} /><col style={{ width: 160 }} /><col />
+              <col style={{ width: 116 }} /><col style={{ width: 40 }} />
+            </colgroup>
             <thead>
-              <tr>{['Tipo', 'Lote', 'Conta', 'Motivo', 'Valor', ''].map((h, i) => <th key={i} className={THG}>{h}</th>)}</tr>
+              <tr>{['Tipo', 'Lote', 'Data', 'Conta', 'Motivo', 'Valor', ''].map((h, i) => <th key={i} className={THG}>{h}</th>)}</tr>
             </thead>
             <tbody>
               {cc.explicacoes.map(e => (
                 <tr key={e.parteId} className="bg-[#fffbeb]" data-explicacao={e.tipo}>
                   <td className={TD}>{rotuloExplicacao(e.tipo, lado)}</td>
-                  <td className={`${TD} text-center`}>{e.loteOrdem ?? ''}</td>
+                  <td className={`${TD} text-center`}>{e.tipo === 'ajuste_preco' && e.loteOrdem == null ? 'todos' : (e.loteOrdem ?? '')}</td>
+                  <td className={TD} />
                   <td className={`${TD} whitespace-normal break-words`}>{contaComNumero(e.contaOrdem, rotuloDaConta(e.conta))}</td>
                   <td className={`${TD} whitespace-normal break-words`}>{e.motivo ?? ''}</td>
                   <td className={`${NUM} ${COR[corDoSaldo(e.valor)]}`}>{formatMoeda(e.valor)}</td>
@@ -557,10 +608,20 @@ export function DialogoExplicarDiferenca({ api, somenteLeitura, lado = 'venda', 
                         <Select value={r.loteId} onValueChange={v => alterar(r.chave, { loteId: v })}>
                           <SelectTrigger className={`h-[18px] px-1 text-[10px] ${verm('lote')}`} aria-label="Lote do ajuste"><SelectValue placeholder="lote" /></SelectTrigger>
                           <SelectContent>
+                            {lotes.length > 1 && <SelectItem value={TODOS_LOTES} className="text-[10px]">Todos os lotes (rateio por kg)</SelectItem>}
                             {lotes.map(l => <SelectItem key={l.id} value={l.id} className="text-[10px]">{`${l.ordem} · ${rotuloCategoria(l.categoria)}`}</SelectItem>)}
                           </SelectContent>
                         </Select>
                       ) : ''}
+                    </td>
+                    <td className={`${TD} text-center`}>
+                      {r.tipo === 'devolucao_comprador' ? (
+                        <DatePicker value={r.vencimento} onChange={v => alterar(r.chave, { vencimento: v })} size="compact" className={verm('vencimento')} />
+                      ) : r.tipo === 'permuta_despesa' || r.tipo === 'outra_receita' ? (
+                        <DatePicker value={r.data} onChange={v => alterar(r.chave, { data: v })} size="compact" className={verm('data')} />
+                      ) : (
+                        <span className="text-muted-foreground">por entrega</span>
+                      )}
                     </td>
                     <td className={TD}>
                       {r.tipo === 'permuta_despesa' || r.tipo === 'outra_receita' ? (
@@ -570,10 +631,18 @@ export function DialogoExplicarDiferenca({ api, somenteLeitura, lado = 'venda', 
                             {contasDoTipo(r.tipo).map(c => <SelectItem key={c.id} value={c.id} className="text-[10px]">{contaComNumero(c.ordem, c.subcentro)}</SelectItem>)}
                           </SelectContent>
                         </Select>
+                      ) : r.tipo === 'ajuste_preco' ? (
+                        <Select value={r.sentido} onValueChange={v => alterar(r.chave, { sentido: v === 'sobe' ? 'sobe' : 'baixa' })}>
+                          <SelectTrigger className="h-[18px] px-1 text-[10px]" aria-label="Sentido do ajuste"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="sobe" className="text-[10px]">Sobe o preço</SelectItem>
+                            <SelectItem value="baixa" className="text-[10px]">Baixa o preço</SelectItem>
+                          </SelectContent>
+                        </Select>
                       ) : r.tipo === 'devolucao_comprador' ? (
-                        <DatePicker value={r.vencimento} onChange={v => alterar(r.chave, { vencimento: v })} size="compact" className={verm('vencimento')} />
+                        <span>{lado === 'compra' ? 'conta da compra' : 'conta da venda'}</span>
                       ) : (
-                        <span>{r.tipo === 'desconto_comercial' ? '5020 Deduções Outras Operações Pecuária' : lado === 'compra' ? 'compra do lote' : 'venda do lote'}</span>
+                        <span>5020 Deduções Outras Operações Pecuária</span>
                       )}
                     </td>
                     <td className={TD}>
@@ -592,12 +661,12 @@ export function DialogoExplicarDiferenca({ api, somenteLeitura, lado = 'venda', 
                 );
               })}
               {cc.explicacoes.length === 0 && rascunhos.length === 0 && (
-                <tr><td colSpan={6} className={`${TD} text-center text-muted-foreground`}>Nenhuma explicação ainda. Escolha um tipo abaixo.</td></tr>
+                <tr><td colSpan={7} className={`${TD} text-center text-muted-foreground`}>Nenhuma explicação ainda. Escolha um tipo abaixo.</td></tr>
               )}
             </tbody>
             <tfoot>
               <tr className="font-bold">
-                <td colSpan={4} className="sticky bottom-0 h-[19px] border-t-2 border-[#9aa7b6] bg-[#E8E6DF] px-[5px] text-[10px]">Total explicado</td>
+                <td colSpan={5} className="sticky bottom-0 h-[19px] border-t-2 border-[#9aa7b6] bg-[#E8E6DF] px-[5px] text-[10px]">Total explicado</td>
                 <td className={`sticky bottom-0 h-[19px] border-t-2 border-[#9aa7b6] bg-[#E8E6DF] px-[5px] text-right text-[10px] ${COR[corDoSaldo(explicadoTotal)]}`}>{formatMoeda(explicadoTotal)}</td>
                 <td className="sticky bottom-0 border-t-2 border-[#9aa7b6] bg-[#E8E6DF]" />
               </tr>
@@ -606,6 +675,9 @@ export function DialogoExplicarDiferenca({ api, somenteLeitura, lado = 'venda', 
         </div>
         {tentou && faltando.length > 0 && (
           <div className="text-[10px] text-destructive">Complete cada linha: {faltando.join(', ')}.</div>
+        )}
+        {ajusteRasc && previa && (
+          <PreviaAjuste previa={previa} rotulo={rotuloSentidoAjuste(ajusteRasc.sentido, parseNumericValue(ajusteRasc.valor), ajusteRasc.loteId === TODOS_LOTES)} />
         )}
         {removendo && (
           <div className="rounded border border-destructive/40 p-2">
@@ -624,12 +696,12 @@ export function DialogoExplicarDiferenca({ api, somenteLeitura, lado = 'venda', 
           </div>
         )}
         <div className="text-[10px] text-muted-foreground">
+          {/* OC-CC-VOLTA-01b (regra 4): o DRE e' cada entrega na data da SUA saida — nunca a ultima para o total. */}
           {lado === 'compra'
-            ? <>Ajuste de preço muda o valor da entrada do lote (desconto do fornecedor; R$/kg derivado). Permuta lança sem caixa na conta
-              escolhida, com competência na data da última entrada ({dataCurta(cc.ultimaEntrega)}). Devolução do fornecedor programa uma
-              entrada de caixa na conta da compra, fora do DRE.</>
-            : <>Ajuste de preço muda o valor da entrega do lote (R$/kg derivado). Os outros tipos lançam sem caixa na conta escolhida, com
-          competência na data da última entrega ({dataCurta(cc.ultimaEntrega)}). Devolver ao comprador programa um pagamento de caixa.</>}
+            ? <>Ajuste de preço muda o valor dos lotes (em “Todos”, rateio pelo kg negociado) e o de cada entrada, na data dela. Permuta fica
+              na data informada. Devolução do fornecedor programa uma entrada de caixa na conta da compra, fora do DRE.</>
+            : <>Ajuste de preço e desconto são preço: mudam cada entrega, por kg, na data da saída dela. Outra receita e permuta ficam na data
+              informada. Devolver ao comprador programa um pagamento de caixa.</>}
         </div>
         <DialogFooter className="items-center">
           {erro && <span className="mr-auto text-[10px] text-destructive" role="alert">{erro}</span>}
@@ -640,5 +712,43 @@ export function DialogoExplicarDiferenca({ api, somenteLeitura, lado = 'venda', 
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/* OC-CC-VOLTA-01b (regra 5) — a previa do ajuste: lote | entregas (data) | kg | valor hoje | valor novo | R$/kg novo. Os numeros sao os
+   da RPC em simulacao; aqui so' se mostram. Lote com mais de uma entrega abre as entregas embaixo, cada uma na data da sua saida. */
+function PreviaAjuste({ previa, rotulo }: { previa: EstadoPrevia; rotulo: string }) {
+  const kg = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 0 });
+  return (
+    <div className="rounded border" data-testid="previa-ajuste">
+      <div className="flex h-[20px] items-center gap-2 border-b bg-[#fffbeb] px-[5px] text-[10px]">
+        <b data-testid="previa-rotulo">{rotulo}</b>
+        <span className="text-muted-foreground">prévia — nada é gravado até salvar</span>
+      </div>
+      {previa.carregando && <div className="px-[5px] py-1 text-[10px] text-muted-foreground">Calculando a prévia…</div>}
+      {previa.erro && <div className="px-[5px] py-1 text-[10px] text-destructive" role="alert">{previa.erro}</div>}
+      {!previa.carregando && !previa.erro && previa.linhas.length > 0 && (
+        <table className="w-full table-fixed border-separate border-spacing-0 tabular-nums">
+          <colgroup><col style={{ width: 120 }} /><col /><col style={{ width: 80 }} /><col style={{ width: 104 }} /><col style={{ width: 104 }} /><col style={{ width: 80 }} /></colgroup>
+          <thead>
+            <tr>{['Lote', 'Entregas (data)', 'kg', 'Valor hoje', 'Valor novo', 'R$/kg novo'].map(h => <th key={h} className={THG}>{h}</th>)}</tr>
+          </thead>
+          <tbody>
+            {previa.linhas.map(l => (
+              <tr key={l.chave} data-previa={l.nivel} className={l.nivel === 'total' ? 'bg-[#E8E6DF] font-bold' : l.nivel === 'entrega' ? 'bg-[#f8fafc]' : 'bg-white'}>
+                <td className={`${TD} ${l.nivel === 'entrega' ? 'pl-[14px] text-muted-foreground' : ''}`}>
+                  {l.nivel === 'total' ? 'Total' : l.nivel === 'entrega' ? 'entrega' : `${l.loteOrdem ?? ''} · ${rotuloCategoria(l.categoria)}`}
+                </td>
+                <td className={TDQ}>{l.datas.join(' · ')}</td>
+                <td className={NUM}>{kg(l.kg)}</td>
+                <td className={NUM}>{num2(l.hoje)}</td>
+                <td className={`${NUM} font-semibold`}>{num2(l.novo)}</td>
+                <td className={NUM}>{l.porKgNovo === null ? '—' : num2(l.porKgNovo)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
   );
 }
