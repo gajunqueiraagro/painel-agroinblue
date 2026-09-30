@@ -1,0 +1,83 @@
+diff --git a/src/components/financeiro-v2/EspelhoConciliacaoTab.tsx b/src/components/financeiro-v2/EspelhoConciliacaoTab.tsx
+index 6ac5c8f9..2cb2fa85 100644
+--- a/src/components/financeiro-v2/EspelhoConciliacaoTab.tsx
++++ b/src/components/financeiro-v2/EspelhoConciliacaoTab.tsx
+@@ -766,6 +766,12 @@ export const MOTIVO_CASAR_LABEL: Readonly<Record<string, string>> = {
+   minimo_dois_extratos: 'Marque ao menos dois movimentos do banco.',
+   contas_diferentes: 'Os movimentos são de contas diferentes.',
+   extrato_repetido: 'O mesmo movimento foi marcado duas vezes.',
++  /* Do sentido N:N (`fn_espelho_casar_nn`). */
++  minimo_dois_lancamentos: 'Marque ao menos dois lançamentos.',
++  lancamento_repetido: 'O mesmo lançamento foi marcado duas vezes.',
++  mes_fechado: 'Um dos lançamentos está num mês já fechado.',
++  sobre_aplicacao: 'Um dos valores é maior que o próprio lançamento.',
++  distribuicao_incompleta: 'A repartição não fechou — nada foi gravado.',
+ };
+ 
+ interface EstadoSelecao { extratos: Set<string>; lancamentos: Set<string>; }
+@@ -933,18 +939,24 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
+   /* ⚠ A DIFERENÇA DA BARRA É SÓ PARA EXIBIR. Quem decide se pode conciliar é a RPC: ela
+      revalida a soma no servidor, com os valores que estão lá e não os que a tela viu. */
+   const difSel = somaExtratos - somaLancs;
+-  /* ⚠ DOIS SENTIDOS, UMA BARRA. 1 extrato : N lançamentos vai pela `fn_espelho_casar`;
+-     N extratos : 1 lançamento pela `fn_espelho_casar_n1`. O que decide é a contagem dos dois
+-     lados — não há botão para escolher, porque a marcação já disse o que se quer. */
+-  const sentido: 'um_n' | 'n_um' | null =
++  /* ⚠ TRÊS SENTIDOS, UMA BARRA. 1 extrato : N lançamentos vai pela `fn_espelho_casar`;
++     N extratos : 1 lançamento pela `fn_espelho_casar_n1`; N : N pela `fn_espelho_casar_nn`. O que
++     decide é a contagem dos dois lados — não há botão para escolher, porque a marcação já disse o
++     que se quer.
++     ⚠ O TERCEIRO NASCEU DE UMA RECUSA SEM MOTIVO. Em 21/09/2026 três pagamentos ao arranquio
++     (-22.276,80) contra sete compromissos (-22.276,80) mostravam "diferença 0,00" e o botão
++     recusava: com 3 × 7 o `sentido` caía em `null` e a frase pedia para marcar 1 de um dos lados —
++     o que era impossível, porque nenhum pagamento casa com compromissos inteiros. Os 16.276,80
++     eram saldo acumulado, não "dois arranquios". Só o conjunto fecha. */
++  const sentido: 'um_n' | 'n_um' | 'n_n' | null =
+     sel.extratos.size === 1 && sel.lancamentos.size >= 1 ? 'um_n'
+     : sel.extratos.size >= 2 && sel.lancamentos.size === 1 ? 'n_um'
++    : sel.extratos.size >= 2 && sel.lancamentos.size >= 2 ? 'n_n'
+     : null;
+   const podeConciliar = !!sentido && Math.abs(difSel) <= 0.01;
+   const motivoBloqueio = sentido ? (Math.abs(difSel) > 0.01 ? 'os valores não batem' : '')
+     : sel.extratos.size === 0 ? 'marque ao menos um extrato'
+-    : sel.lancamentos.size === 0 ? 'marque ao menos um lançamento'
+-    : 'marque 1 extrato para N lançamentos, ou N extratos para 1 lançamento';
++    : 'marque ao menos um lançamento';
+ 
+   /**
+    * Conciliar pela barra — os dois sentidos.
+@@ -969,18 +981,32 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
+     if (!sentido) return;
+     setGravando(true); setErro(null);
+     try {
++      /* ⚠ O MÉTODO NÃO SE EXTRAI PARA UMA VARIÁVEL — ver o aviso acima. Vale para os TRÊS. */
++      const itensMarcados = () => [...sel.lancamentos].map((id) => ({
++        lancamento_id: id, valor: Math.abs(sisIndex.get(id)?.valor_assinado ?? 0),
++      }));
+       const chamada = sentido === 'um_n'
+         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+         ? (supabase as any).rpc('fn_espelho_casar', {
+             p_extrato_id: [...sel.extratos][0],
+-            p_itens: [...sel.lancamentos].map((id) => ({ lancamento_id: id, valor: Math.abs(sisIndex.get(id)?.valor_assinado ?? 0) })),
++            p_itens: itensMarcados(),
+             p_simular: false, p_motivo: 'casado_no_espelho',
+           })
++        : sentido === 'n_um'
+         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+-        : (supabase as any).rpc('fn_espelho_casar_n1', {
++        ? (supabase as any).rpc('fn_espelho_casar_n1', {
+             p_lancamento_id: [...sel.lancamentos][0],
+             p_extratos: [...sel.extratos],
+             p_simular: false, p_motivo: 'casado_no_espelho_n1',
++          })
++        /* ⚠ N:N MANDA OS VALORES, como o 1:N e ao contrário do N:1 — e a razão é o que a RPC faz
++           com eles: ela reparte os lançamentos entre os pagamentos, e para repartir precisa saber
++           quanto cada um pede. O N:1 não manda porque só há um lançamento e ele leva tudo. */
++        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
++        : (supabase as any).rpc('fn_espelho_casar_nn', {
++            p_extratos: [...sel.extratos],
++            p_itens: itensMarcados(),
++            p_simular: false, p_motivo: 'casado_no_espelho_nn',
+           });
+       /* O argumento de tipo é explícito porque o `.rpc` do idioma devolve `any`, e sem ele o
+          `T` do `comPrazo` cairia em `unknown` — o envelope da resposta é o mesmo dos outros
