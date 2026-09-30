@@ -39,10 +39,21 @@ interface Props {
   contaNome: string;
   /** Placar de baldes + rodapé — só a aba Conciliação os mostra. */
   comPlacar?: boolean;
+  /**
+   * O que recarregar depois de desfazer um arquivo — a aba que monta decide (o mesmo nome e o
+   * mesmo papel do `aoMudar` de `AcoesDoMes`). Chamado ao FECHAR o "Ver importações", e só se
+   * houve desfazer nele.
+   */
+  aoMudar?: () => void;
 }
 
-export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comPlacar }: Props) {
+export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comPlacar, aoMudar }: Props) {
   const [verImportacoes, setVerImportacoes] = useState(false);
+  /* ⚠ HOUVE DESFAZER NESTA ABERTURA DO "VER IMPORTAÇÕES" — PR-CONC-DESFAZER-ARQUIVO-01. O
+     desfazer muda os movimentos, o saldo do sistema e o saldo declarado do OFX, e dois desses
+     hooks não têm `recarregar`. O pai remonta o painel (`key`) — mas só ao FECHAR o dialog:
+     remontar no sucesso fecharia a lista que o operador ainda está usando. */
+  const [houveDesfazer, setHouveDesfazer] = useState(false);
   const [verExtrato, setVerExtrato] = useState(false);
   const [balde, setBalde] = useState<'todos' | SituacaoMovimento | 'match_direto' | 'provavel' | 'ambiguo' | 'sem_match'>('todos');
 
@@ -347,16 +358,21 @@ export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comP
       />
 
       <ImportacoesDialog
-        aberto={verImportacoes} aoFechar={() => setVerImportacoes(false)}
+        aberto={verImportacoes}
+        aoFechar={() => {
+          setVerImportacoes(false);
+          if (houveDesfazer) { setHouveDesfazer(false); aoMudar?.(); }
+        }}
         contaNome={contaNome} importacoes={importacoes.importacoes}
         anoMes={`${ano}-${String(mes).padStart(2, '0')}`}
-        carregando={importacoes.loading} aoDesfazer={importacoes.desfazer}
-        desfazendo={importacoes.desfazendo}
+        carregando={importacoes.loading}
+        aoDesfeito={() => { setHouveDesfazer(true); void importacoes.recarregar(); }}
       />
-      {/* ⚠ O PALCO RECEBE O MESMO ANO/MÊS/CONTA DESTE CARD — ele é a mesma
-          pergunta em outra escala, não uma tela com filtro próprio. E ao fechar,
-          o card recarrega: um vínculo feito lá dentro muda o "Conciliados N de M"
-          daqui. */}
+      {/* ⚠ O PALCO NÃO MORA MAIS NESTE CARD — ele vive em `AcoesDoMes` (aba "Enriquecer ·
+          Sistema") desde o PR-CONCILIACAO-PASSOS-01, e o que ele grava chega aqui pelo
+          `aoMudar` de lá: a aba remonta este painel pela `key`. O desfazer de arquivo usa o
+          MESMO caminho (o `aoMudar` deste painel), disparado ao fechar o "Ver importações"
+          depois de um desfazer — PR-CONC-DESFAZER-ARQUIVO-01. */}
     </div>
   );
 }

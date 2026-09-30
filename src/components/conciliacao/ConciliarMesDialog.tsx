@@ -777,9 +777,11 @@ export function ConciliarMesDialog({
                         que separa este passo do "Vincular os exatos"; sem a frase, "conciliar o
                         mês" continua parecendo o botão que fazia tudo. */}
                     {' '}Vincular o que já existe é o passo seguinte.
-                    {/* ⚠ A FRASE DO "PODE SER DESFEITO" NÃO ENTRA AINDA — 130 item 5. O
-                        desfazer por arquivo NÃO alcança os crus hoje; prometer isso seria a
-                        tela afirmando um caminho que não existe. */}
+                    {/* ⚠ O DESFAZER POR ARQUIVO JÁ ALCANÇA OS CRUS — PR-CONC-DESFAZER-ARQUIVO-01.
+                        O "Ver importações" abre o `DesfazerArquivoModal` (RPC
+                        `fn_extrato_desfazer_arquivo`), que cancela os crus deste passo. A frase
+                        do "pode ser desfeito" continua fora deste diálogo por decisão de escopo:
+                        este PR não mexe no texto da tela daqui. */}
                   </>
                 )}
               </div>

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { inscreverEmLancamentos } from '@/hooks/useFinanceiroV2';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
 import { faixaDoMes } from '@/hooks/useConciliacaoDoMes';
 import { TIPOS_ACEITOS, TAMANHO_MAXIMO } from '@/hooks/useLancamentoDocumentos';
 import { extensaoDoArquivo } from '@/lib/oc/caminhoDocumento';
@@ -216,14 +215,15 @@ export function importacoesDoMes(lista: readonly ImportacaoDaConta[], anoMes: st
  * arquivos, todos de 25/08/2026. Os outros 3.638 nasceram sem o vínculo de
  * importação (bug P0 registrado), e nenhum Desfazer os alcança.
  *
- * ⚠ DESFAZER NÃO APAGA EM SILÊNCIO. Movimento com vínculo ativo não sai: o
- * caminho é avisar e listar. Apagar um movimento conciliado levaria junto a
- * evidência de uma conciliação que continua existindo do outro lado.
+ * ⚠ ESTE HOOK SÓ LÊ — PR-CONC-DESFAZER-ARQUIVO-01. Ele tinha um `desfazer` próprio, um
+ * UPDATE direto em `extrato_bancario_v2` e `financeiro_importacoes_v2` que recusava arquivo
+ * com vínculo e, sem vínculo, cancelava os movimentos sem cancelar cru nenhum. Era o segundo
+ * caminho de escrita para a mesma pergunta. O desfazer de arquivo agora é um só: o
+ * `DesfazerArquivoModal`, sobre a RPC `fn_extrato_desfazer_arquivo`.
  */
 export function useImportacoesDaConta(clienteId: string | null, contaId: string | null) {
   const [importacoes, setImportacoes] = useState<ImportacaoDaConta[]>([]);
   const [loading, setLoading] = useState(false);
-  const [desfazendo, setDesfazendo] = useState(false);
 
   const carregar = useCallback(async () => {
     if (!clienteId || !contaId) { setImportacoes([]); return; }
@@ -312,47 +312,7 @@ export function useImportacoesDaConta(clienteId: string | null, contaId: string 
 
   useEffect(() => { carregar(); }, [carregar]);
 
-  const desfazer = useCallback(async (importacaoId: string) => {
-    const alvo = importacoes.find(i => i.id === importacaoId);
-    if (!alvo) return;
-    /* ⚠ A RECUSA VEM ANTES DA ESCRITA, e nomeia o que impede — a regra da casa:
-       antecipar a recusa, não deixar o operador descobrir depois. */
-    if (alvo.comVinculo > 0) {
-      toast.error(
-        `${alvo.nomeArquivo}: ${alvo.comVinculo} movimento${alvo.comVinculo === 1 ? '' : 's'} ` +
-        'já conciliado. Desfaça os vínculos antes de desfazer a importação.',
-      );
-      return;
-    }
-    setDesfazendo(true);
-    try {
-      const agora = new Date().toISOString();
-      const { error } = await supabase
-        .from('extrato_bancario_v2')
-        .update({ cancelado_em: agora, cancelado_motivo: 'importacao_desfeita' })
-        .eq('importacao_id', importacaoId)
-        .is('cancelado_em', null);
-      if (error) { toast.error(error.message); return; }
-      /* ⚠ E A IMPORTAÇÃO TAMBÉM É MARCADA — 132. Antes só as LINHAS eram canceladas, e o
-         registro do arquivo ficava com `status` de importação viva: quem lesse a tabela de
-         importações (não esta tela) via um arquivo que já não existe no extrato. As quatro
-         colunas foram conferidas em `information_schema` antes de escrever.
-         ⚠ FALHAR AQUI NÃO DESFAZ O QUE JÁ FOI: as linhas já estão canceladas, que é o que
-         importa para o extrato. O aviso é para o operador saber que o registro do arquivo
-         ficou para trás. */
-      const marca = await supabase
-        .from('financeiro_importacoes_v2')
-        .update({ status: 'cancelada', cancelado_em: agora, cancelado_motivo: 'importacao_desfeita' })
-        .eq('id', importacaoId);
-      if (marca.error) toast.warning(`Movimentos desfeitos, mas o registro do arquivo não foi marcado: ${marca.error.message}`);
-      toast.success(`Importação desfeita — ${alvo.importados} movimento${alvo.importados === 1 ? '' : 's'}.`);
-      await carregar();
-    } finally {
-      setDesfazendo(false);
-    }
-  }, [importacoes, carregar]);
-
-  return { importacoes, loading, desfazendo, desfazer, recarregar: carregar };
+  return { importacoes, loading, recarregar: carregar };
 }
 
 /**

@@ -1,8 +1,9 @@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { FileText, Loader2, Undo2 } from 'lucide-react';
+import { FileText, Undo2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { importacoesDoMes, type ImportacaoDaConta } from '@/hooks/useExtratoDaConta';
+import { DesfazerArquivoModal } from '@/components/conciliacao/DesfazerArquivoModal';
 
 /**
  * ImportacoesDialog — portado do `AllinBlues/financas`
@@ -25,12 +26,15 @@ interface Props {
   /** O mês da régua, `YYYY-MM`: a lista mostra só as importações com movimento nele. */
   anoMes: string;
   carregando: boolean;
-  desfazendo: boolean;
-  aoDesfazer: (id: string) => void;
+  /**
+   * Um arquivo foi desfeito — PR-CONC-DESFAZER-ARQUIVO-01. Quem monta recarrega a lista; o
+   * desfazer em si é do `DesfazerArquivoModal` (a RPC), não de quem monta.
+   */
+  aoDesfeito: () => void;
 }
 
 export function ImportacoesDialog({
-  aberto, aoFechar, contaNome, importacoes: todas, anoMes, carregando, desfazendo, aoDesfazer,
+  aberto, aoFechar, contaNome, importacoes: todas, anoMes, carregando, aoDesfeito,
 }: Props) {
   /* ⚠ SÓ O MÊS DA RÉGUA, PELO MOVIMENTO — PR-IMPORTACOES-MES-01. A lista trazia todas as
      importações da conta, e em agosto aparecia a cancelada de setembro. O mês de um arquivo é o
@@ -40,6 +44,8 @@ export function ImportacoesDialog({
      e o legado `cancelada_em`) ou o arquivo com todas as linhas desfeitas. */
   const [verCanceladas, setVerCanceladas] = useState(false);
   useEffect(() => { setVerCanceladas(false); }, [anoMes]);
+  /* O arquivo que o operador pediu para desfazer: abre o `DesfazerArquivoModal`. */
+  const [alvo, setAlvo] = useState<{ id: string; nome_arquivo: string | null } | null>(null);
   const { ativas, canceladas } = importacoesDoMes(todas, anoMes);
   const canceladasIds = new Set(canceladas.map(i => i.id));
   const eCancelada = (i: ImportacaoDaConta) => canceladasIds.has(i.id);
@@ -107,21 +113,20 @@ export function ImportacoesDialog({
                     )}
                   </div>
                   </div>
-                  {/* ⚠ O BOTÃO DIZ POR QUE, quando não dá — a regra do B-09. Com
-                      vínculo ativo ele não some: some a possibilidade, e a frase
-                      explica qual é. */}
+                  {/* ⚠ COM VÍNCULO TAMBÉM SE DESFAZ — PR-CONC-DESFAZER-ARQUIVO-01. O botão
+                      ficava cinza em arquivo conciliado porque o desfazer era um UPDATE direto
+                      que não sabia cancelar cru nem desfazer vínculo. Agora ele abre o
+                      `DesfazerArquivoModal` (RPC `fn_extrato_desfazer_arquivo`), que mostra
+                      antes o que vai acontecer e recusa mês fechado com a razão escrita. */}
                   {/* Arquivo já desfeito não tem o que desfazer: o botão SOME, em vez de
                       ficar cinza pedindo um clique que não faria nada. */}
                   {!eCancelada(imp) && (
                   <Button
                     type="button" variant="ghost" size="sm"
                     className="h-6 shrink-0 gap-1 px-1.5 text-[10px] text-muted-foreground"
-                    disabled={desfazendo || imp.comVinculo > 0}
-                    title={imp.comVinculo > 0
-                      ? `${imp.comVinculo} movimento(s) já conciliado(s) — desfaça os vínculos primeiro.`
-                      : 'Desfaz os movimentos deste arquivo que não tenham vínculo ativo.'}
-                    onClick={() => aoDesfazer(imp.id)}>
-                    {desfazendo ? <Loader2 className="h-3 w-3 animate-spin" /> : <Undo2 className="h-3 w-3" />}
+                    title="Desfaz o arquivo: cancela os crus, desfaz os vínculos e cancela os movimentos. Mostra antes o que vai acontecer."
+                    onClick={() => setAlvo({ id: imp.id, nome_arquivo: imp.nomeArquivo })}>
+                    <Undo2 className="h-3 w-3" />
                     Desfazer
                   </Button>
                   )}
@@ -138,17 +143,25 @@ export function ImportacoesDialog({
           )}
         </div>
 
-        {/* ⚠ O ALCANCE DO DESFAZER MUDOU DE ASSUNTO — 130 item 5. Antes o limite era só a
-            data de corte do rastreio; agora existe um segundo limite, maior: o Conciliar o
-            mês cria lançamentos e vínculos que este botão NÃO desfaz — ele recusa arquivo
-            com vínculo, e é só. Dizer "pode ser desfeito" sem o caminho existir seria a
-            tela prometendo o que ninguém entrega. */}
-        <p className="shrink-0 border-t px-4 py-2 text-[9px] leading-snug text-muted-foreground">
+        {/* ⚠ O ALCANCE DO DESFAZER, COM OS DOIS LIMITES — PR-CONC-DESFAZER-ARQUIVO-01. O
+            primeiro é o de sempre: sem rastro de arquivo antes de 25/08/2026. O segundo mudou:
+            o Desfazer agora cancela os crus, restaura os substituídos e desfaz os vínculos
+            manuais (a RPC), mas o lançamento que o operador casou à mão NÃO volta ao que era
+            antes — valor e status editados ficam. Restaurar isso é o PR seguinte; até lá a
+            frase diz o limite em vez de prometer a volta. */}
+        <p className="shrink-0 border-t px-4 py-2 text-[9.5px] leading-snug text-muted-foreground">
           Importações anteriores a 25/08/2026 não são rastreadas — os movimentos delas entraram
           sem vínculo de arquivo, e o Desfazer não os alcança.
-          {' '}Desfazer só alcança arquivos sem vínculo. Os lançamentos crus e os vínculos criados
-          pela conciliação em lote serão desfeitos por um caminho próprio — em construção.
+          {' '}O Desfazer cancela os lançamentos crus do arquivo, restaura os substituídos, desfaz
+          os vínculos e cancela os movimentos, e mostra antes o que vai acontecer. O lançamento
+          que você casou à mão fica como está: perde o vínculo, mas valor e status editados não voltam.
         </p>
+
+        <DesfazerArquivoModal
+          alvo={alvo}
+          onClose={() => setAlvo(null)}
+          onDesfeito={aoDesfeito}
+        />
       </DialogContent>
     </Dialog>
   );

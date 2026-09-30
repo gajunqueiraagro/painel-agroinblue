@@ -1240,6 +1240,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
               contaId={selectedConta !== '__all__' ? selectedConta : null}
               ano={Number(ano)} mes={Number(selectedMes)}
               contaNome={contaAtual}
+              aoMudar={() => { setRefreshExtrato(n => n + 1); }}
             />
 
           </div>
