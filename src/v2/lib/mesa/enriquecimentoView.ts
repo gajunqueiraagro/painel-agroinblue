@@ -25,6 +25,8 @@ import { escopoDoSubcentro, ESCOPO_ADMINISTRATIVO } from '@/lib/financeiro/escop
 import type { ClassificacaoItem } from '@/hooks/useFinanceiroV2';
 import { ehTipoTransferencia, subcentroDeTransferencia } from '@/v2/lib/mesa/transferenciaPlano';
 import { preResolverFazenda } from '@/v2/lib/importLanc/importLancamentosView';
+import { formaPagamentoPeloHistorico } from '@/v2/lib/mesa/formaPeloHistorico';
+import { atividadeDoSubcentro, rotuloAtividade } from '@/v2/lib/mesa/atividadeDaLinha';
 import type { Fazenda } from '@/contexts/FazendaContext';
 
 /**
@@ -340,6 +342,30 @@ export function toRowVM(
     && identidadeDaLinha.trim() !== textoPlanilha.trim();
   const contextoDaLinha = diferemAsDuas ? `planilha: ${textoPlanilha}` : null;
 
+  /* ── PR-CONC-MESA-PAINEL-V1 ─────────────────────────────────────────────────────────────────────────────────────
+     ⚠ O CRU É O MESMO DO BANCO (`_fn_classificacao_precedencia_cru`): origem 'extrato'/'ofx', sem conta do plano, fora
+       transferência. É ESPELHO, e quem mexer num confere o outro — o selo do rodapé diz ao operador qual regra vale. */
+  const ehCru: boolean | null = !row.lanc_id ? null
+    : (row.lanc_origem_lancamento === 'extrato' || row.lanc_origem_lancamento === 'ofx')
+      && vazio(row.lanc_subcentro_atual) && !row.lanc_plano_conta_id_atual
+      && !String(row.lanc_tipo_operacao ?? '').startsWith('3-');
+  /* ⚠ A FORMA PELO HISTÓRICO SÓ NO CRU, e só onde não há forma em lugar nenhum: no classificado o sistema prevalece,
+     e sobre uma proposta a sugestão escreveria por cima de uma escolha. */
+  const formaPagamentoSugerida = ehCru && vazio(row.proposto_forma_pagamento) && vazio(row.lanc_forma_pagamento)
+    ? formaPagamentoPeloHistorico(row.lanc_descricao)
+    : null;
+  const atividadeProposta = atividadeDoSubcentro(catalogos.classificacoes, subcentroEfetivo);
+  /* ⚠ A PLANILHA NÃO TEM COLUNA DE ATIVIDADE: é o escopo da conta que ela disse, com a fazenda dela entre parênteses —
+     referência, não proposta (a proposta é a da conta resolvida). */
+  const atividadePlanilhaRot = rotuloAtividade(
+    atividadeDoSubcentro(catalogos.classificacoes, row.planilha_subcentro ?? row.excel_subcentro));
+  const fazendaPlanilhaTxt = vazio(row.excel_fazenda_codigo) ? null : String(row.excel_fazenda_codigo).trim();
+  const atividadePlanilha = atividadePlanilhaRot
+    ? (fazendaPlanilhaTxt ? `${atividadePlanilhaRot} (${fazendaPlanilhaTxt})` : atividadePlanilhaRot)
+    : null;
+  const formaResultado = !vazio(row.proposto_forma_pagamento) ? row.proposto_forma_pagamento
+    : formaPagamentoSugerida ?? row.lanc_forma_pagamento ?? null;
+
   const comparativo: EnriqComparativoLinha[] = [
     {
       campo: 'Valor',
@@ -435,6 +461,16 @@ export function toRowVM(
        vinculado não há situação, e o "—" diz exatamente isso. */
     { campo: 'Situação', sistema: fmtTexto(row.lanc_status), excel: '—',
       resultado: fmtTexto(row.lanc_status), tom: 'neutro' },
+    /* ── PR-CONC-MESA-PAINEL-V1 ── */
+    { campo: 'Atividade',
+      sistema: fmtTexto(rotuloAtividade(atividadeDoSubcentro(catalogos.classificacoes, row.lanc_subcentro_atual))),
+      excel: fmtTexto(atividadePlanilha),
+      resultado: fmtTexto(rotuloAtividade(atividadeProposta)), tom: 'neutro' },
+    { campo: 'Tipo de documento', sistema: fmtTexto(row.lanc_tipo_documento), excel: '—',
+      ...resultadoEditavel(row.lanc_tipo_documento ?? null, null, row.proposto_tipo_documento ?? null) },
+    { campo: 'Forma de pagamento', sistema: fmtTexto(row.lanc_forma_pagamento), excel: '—',
+      resultado: fmtTexto(formaResultado),
+      tom: !vazio(formaResultado) && formaResultado !== row.lanc_forma_pagamento ? 'muda' : 'neutro' },
   ];
 
   // D3 — descritores LEGADO (PR-U2b), NÃO renderizados: o detalhe usa editores hardcoded
@@ -678,6 +714,12 @@ export function toRowVM(
     contaTextoNaoReconhecido: contaDoExcel.textoNaoReconhecido,
     safraSugeridaId,
     tipoTransferenciaSugerido,
+    tipoDocumento: row.proposto_tipo_documento ?? null,
+    tipoDocumentoAtual: row.lanc_tipo_documento ?? null,
+    formaPagamento: row.proposto_forma_pagamento ?? null,
+    formaPagamentoAtual: row.lanc_forma_pagamento ?? null,
+    formaPagamentoSugerida,
+    atividadeProposta,
   };
 
   /* ⚠ SÓ COM LANÇAMENTO: sem par não há Resultado a comparar — todo campo da planilha "divergiria" de um vazio, e a
@@ -734,6 +776,7 @@ export function toRowVM(
     subcentroOrfao,
     avisoPlanilha,
     mudaAlgo: row.will_change_anything,
+    ehCru,
     data: fmtData(dataDeCaixa.iso),
     dataIso: dataDeCaixa.iso,
     dataEhCompetencia: dataDeCaixa.ehCompetencia,
@@ -1236,6 +1279,9 @@ export function diferencasDoResultado(edicao: EnriqEdicao): string[] {
      no 133h item 10. */
   cmp('tipo de operação', edicao.tipoOperacaoProposto, edicao.tipoOperacaoAtual);
   cmp('conta destino', edicao.contaDestinoId, edicao.contaDestinoIdAtual);
+  /* PR-CONC-MESA-PAINEL-V1 — os dois que a Mesa passou a gravar. */
+  cmp('tipo de documento', edicao.tipoDocumento, edicao.tipoDocumentoAtual);
+  cmp('forma de pagamento', edicao.formaPagamento, edicao.formaPagamentoAtual);
   return difs;
 }
 

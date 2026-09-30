@@ -20,7 +20,7 @@ import { ContaBancariaSelect, type ContaSelecionavel } from '@/components/shared
 import type { EnriquecimentoListaProps } from './EnriquecimentoLista';
 import type { EnriquecimentoDetalheProps } from './EnriquecimentoDetalhe';
 import type { EnriquecimentoActionsProps } from './EnriquecimentoActions';
-import { MesaCamposTabela } from './MesaCamposTabela';
+import { MesaCamposTabela, SeloRegraDaLinha } from './MesaCamposTabela';
 import { STATUS_META } from './fmt';
 import { grupoDaLinha, diferencasDoResultado } from '@/v2/lib/mesa/enriquecimentoView';
 import type { EnriqRowVM } from './types';
@@ -40,7 +40,6 @@ type Agrupamento = 'dia';
 type FiltroEstado = 'todas' | 'atualizam' | 'decide' | 'agrupam' | 'sem_par' | 'revisar' | 'entradas' | 'saidas';
 
 /** O subcentro que a linha exibe como contexto — o proposto, que é o que se revisa. */
-const subcentroDa = (r: EnriqRowVM) => r.edicao.subcentro ?? '— sem subcentro';
 
 /* ⚠ COR E SINAL SAEM DO MESMO LUGAR — 129d item 4. Duas funções para a mesma pergunta
    divergiriam no dia em que alguém trocasse uma delas. `null` (sem lançamento) não pinta
@@ -463,17 +462,8 @@ export function EnriquecimentoMesaModal({
                   </div>
                 </div>
 
-                {/* ⚠ "Sugerido por", EM PORTUGUÊS DE CLIENTE — 129d item 3. "alias · motor v1"
-                    era jargão nosso: o operador não sabe o que é tier nem motor; ele sabe se
-                    ensinou um apelido. A frase vem pronta do adapter.
-                    ⚠ UMA LINHA, TRUNCADA — 133b-a: em `break-words` ela virava duas ou três
-                    num subcentro longo, e a altura do painel deixava de ser previsível. */}
-                <div className="shrink-0 truncate border-b px-3 py-0.5 text-[10px] leading-tight text-muted-foreground"
-                  title={`${selecionada.proveniencia.comoFoiSugerido} · ${subcentroDa(selecionada)}`}>
-                  Sugerido por: <b className="font-medium text-foreground">{selecionada.proveniencia.comoFoiSugerido}</b>
-                  {' · '}{subcentroDa(selecionada)}
-                </div>
-
+                {/* ⚠ O "Sugerido por" SAIU DAQUI — PR-CONC-MESA-PAINEL-V1 item 5: virou o "?" ao lado da Conta do plano,
+                    com a mesma frase no tooltip. Uma linha a menos no painel, e a frase junto do campo de que fala. */}
                 <MesaCamposTabela
                   row={selecionada}
                   classificacoes={detalhe.classificacoes}
@@ -485,6 +475,8 @@ export function EnriquecimentoMesaModal({
                   onEditar={detalhe.onEditar}
                   onCriarFornecedor={detalhe.onCriarFornecedor}
                   conciliado={selecionada.lancId ? conciliadosIds?.has(selecionada.lancId) : false}
+                  atividade={detalhe.atividade}
+                  onAtividade={detalhe.onAtividade}
                 />
                 {faixas}
               </>
@@ -500,23 +492,23 @@ export function EnriquecimentoMesaModal({
                 dizer. Ela responde às duas perguntas que a Mesa não respondia: qual dos
                 dois botões toca o Financeiro, e em que a planilha discorda do extrato.
                 Fora do rodapé de 32px de propósito: ele não pode crescer nem cortar botão. */}
-            <div className="shrink-0 border-t px-2 py-0.5 text-[10px] leading-tight">
-              {actions.erroBanco ? (
-                /* 133h adendo item 15 — o erro do banco fica escrito, não só no toast. */
-                <span className="font-medium text-red-700 dark:text-red-400" title={actions.erroBanco}>
-                  Não gravou — o banco recusou: {actions.erroBanco}
-                </span>
-              ) : actions.divergenciasDoExtrato && actions.divergenciasDoExtrato.length > 0 ? (
-                <span className="text-amber-700 dark:text-amber-400">
-                  Planilha diverge do extrato em: {actions.divergenciasDoExtrato.join(' · ')} — o
-                  extrato manda, e estes campos não serão gravados.
-                </span>
-              ) : (
-                <span className="text-muted-foreground">
-                  <b>Salvar</b> e <b>Salvar e próximo</b> gravam a mesma coisa; o segundo ainda avança.
-                </span>
-              )}
-            </div>
+            {/* ⚠ A LINHA ACIMA DO RODAPÉ SÓ EXISTE QUANDO TEM O QUE DIZER — PR-CONC-MESA-PAINEL-V1 item 5: a frase
+                "Salvar e Salvar e próximo gravam a mesma coisa" saiu; ficam o erro do banco e a divergência com o extrato. */}
+            {(actions.erroBanco || (actions.divergenciasDoExtrato && actions.divergenciasDoExtrato.length > 0)) && (
+              <div className="shrink-0 border-t px-2 py-0.5 text-[10px] leading-tight">
+                {actions.erroBanco ? (
+                  /* 133h adendo item 15 — o erro do banco fica escrito, não só no toast. */
+                  <span className="font-medium text-red-700 dark:text-red-400" title={actions.erroBanco}>
+                    Não gravou — o banco recusou: {actions.erroBanco}
+                  </span>
+                ) : (
+                  <span className="text-amber-700 dark:text-amber-400">
+                    Planilha diverge do extrato em: {actions.divergenciasDoExtrato?.join(' · ')} — o
+                    extrato manda, e estes campos não serão gravados.
+                  </span>
+                )}
+              </div>
+            )}
 
             {/* 32px — 133d item 4; os botões continuam h-7/11px. */}
             <div className="flex h-8 shrink-0 items-center gap-1.5 border-t px-2">
@@ -556,6 +548,9 @@ export function EnriquecimentoMesaModal({
                 title="Acelerador: aplica todos os Exatos pendentes DA SESSÃO, sem sobrescrever classificações existentes. Marque 'Revisado' para habilitar.">
                 Exatos ({actions.nAplicaveis})
               </Button>
+              {/* ⚠ O SELO DIZ A REGRA DA LINHA — PR-CONC-MESA-PAINEL-V1 item 6: no CRU a planilha prevalece (a precedência
+                  do banco a levou ao Resultado); no classificado, o sistema. Sem lançamento não há regra, e não há selo. */}
+              {selecionada && <SeloRegraDaLinha ehCru={selecionada.ehCru} />}
               <Button size="sm" variant="outline" className="h-7 shrink-0 whitespace-nowrap px-2 text-[11px]"
                 onClick={actions.onSalvar}
                 disabled={actions.salvarDisabled || actions.isBusy}

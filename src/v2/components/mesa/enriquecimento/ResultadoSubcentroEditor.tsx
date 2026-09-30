@@ -26,12 +26,18 @@ export interface ResultadoSubcentroEditorProps {
   subcentroTransferencia?: string | null;
   /** A conta que o texto de destino da planilha resolve (apelido do cadastro de contas). */
   contaDestinoSugeridaId?: string | null;
+  /**
+   * A ATIVIDADE escolhida na linha de cima — PR-CONC-MESA-PAINEL-V1 item 3. Filtra o plano pelo MESMO filtro do Novo
+   * Lançamento (`escopoNegocio` + `escopoObrigatorio` do `PlanoSubcentroSelect`), nunca por uma cópia. Sem ela, a lista
+   * é a de sempre.
+   */
+  escopoNegocio?: string | null;
   onEditar: (patch: Record<string, unknown>) => Promise<void>;
 }
 
 export function ResultadoSubcentroEditor({
   value, tipoOperacao, classificacoes, disabled,
-  subcentroTransferencia, contaDestinoSugeridaId, onEditar,
+  subcentroTransferencia, contaDestinoSugeridaId, escopoNegocio, onEditar,
 }: ResultadoSubcentroEditorProps) {
   const [search, setSearch] = useState('');
   return (
@@ -48,6 +54,8 @@ export function ResultadoSubcentroEditor({
       }}
       classificacoes={classificacoes}
       tipoOperacao={tipoOperacao ?? ''}
+      escopoNegocio={escopoNegocio ?? undefined}
+      escopoObrigatorio={!!escopoNegocio}
       search={search}
       onSearchChange={setSearch}
       disabled={disabled}

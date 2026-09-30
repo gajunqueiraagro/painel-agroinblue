@@ -140,11 +140,6 @@ export function EnriquecimentoActions({
         </span>
       )}
 
-      {/* 133h item 11 — a mesma frase do rodapé do passo 2: a Mesa também precisa dizê-la. */}
-      <span className="text-[10px] text-muted-foreground">
-        <b>Salvar</b> e <b>Salvar e Próximo</b> gravam a mesma coisa; o segundo ainda avança.
-      </span>
-
       {/* ── Separador + acelerador secundário (lote) ── */}
       <div className="h-5 w-px bg-border" />
       <Button

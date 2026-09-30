@@ -1,28 +1,21 @@
 /**
- * A tabela de campos da Mesa de Revisão — MESA-ENR-UX-01 (129).
+ * A tabela de campos da Mesa de Revisão — MESA-ENR-UX-01 (129); painel v1 no PR-CONC-MESA-PAINEL-V1.
  *
- * Quatro colunas: campo · Excel (azul, leitura) · Sistema atual · Resultado. Seções em
- * faixa. A ordem é a do mock, e ela não é estética: as três datas primeiro porque é o que
- * o operador confere primeiro no extrato; depois quem é (produto, fornecedor, fazenda);
- * depois onde entra (safra, subcentro, conta); e por último o papel.
+ * Quatro colunas: Campo · Planilha (azul, referência) · Sistema hoje · Vai gravar (texto neutro). Quatro grupos
+ * separados por faixa: DO EXTRATO (Tipo, Data pgto., Valor, Conta bancária — só leitura, no topo), DATAS,
+ * CLASSIFICAÇÃO (Atividade, Fazenda, Conta do plano, Safra) e IDENTIFICAÇÃO (produto, fornecedor, tipo e nº do
+ * documento, forma de pagamento, observação).
  *
- * ⚠ OS ONZE CAMPOS GRAVAM — desde o 129c (migration 20260906195410). Até ali eram cinco:
- * `fn_classificacao_apply_row` escrevia só `subcentro, macro_custo, grupo_custo,
- * centro_custo, plano_conta_id, favorecido_id, fazenda_id, descricao (de 'produto'),
- * numero_documento`, e as datas, a safra, a conta e a observação apareciam em LEITURA com
- * o motivo escrito — porque um campo editável cujo valor some no Salvar é o silêncio mais
- * caro que esta tela pode produzir. Agora a RPC grava as seis, e a coluna `gravaHoje`
- * passou a `true` em todas.
- * ⚠ A COLUNA `gravaHoje` FICA. Ela não é resíduo: é o lugar onde a próxima diferença
- * entre "a tela oferece" e "o banco aceita" volta a ser dita, em vez de virar um campo
- * que engole o que o operador digitou.
+ * ⚠ TODO CAMPO EDITÁVEL GRAVA: o `fn_classificacao_apply_row` escreve cada um deles (tipo de documento e forma de
+ *   pagamento desde a migration 20261027184600). Um campo editável cujo valor some no Salvar é o silêncio mais caro
+ *   que esta tela pode produzir — quem acrescentar campo aqui confere o gravador antes.
+ * ⚠ O ÚNICO VERDE É O VALOR DE UMA ENTRADA (item 1). Âmbar = "vai mudar"; azul = a planilha; vermelho = pendente.
  *
  * ⚠ ESTE COMPONENTE NÃO SUBSTITUI `EnriquecimentoDetalhe`. Aquele é a aba, que segue
  * intacta; este é a superfície ampla. Unificar os dois agora obrigaria a aba a herdar a
  * ordem nova sem homologação.
  */
 import type { EnriqRowVM, EnriqComparativoLinha } from './types';
-import { badgeDeStatusTransacao } from '@/lib/statusOperacional';
 import type { ClassificacaoItem, FornecedorV2 } from '@/hooks/useFinanceiroV2';
 import type { Fazenda } from '@/contexts/FazendaContext';
 import { ResultadoSubcentroEditor } from './ResultadoSubcentroEditor';
@@ -31,122 +24,105 @@ import { ResultadoFazendaEditor } from './ResultadoFazendaEditor';
 import { ResultadoProdutoEditor } from './ResultadoProdutoEditor';
 import { ResultadoDocumentoEditor } from './ResultadoDocumentoEditor';
 import {
-  ResultadoDataEditor, ResultadoSafraEditor, ResultadoContaEditor, ResultadoObservacaoEditor,
-  ResultadoTipoEditor, ResultadoContaDestinoEditor,
+  ResultadoDataEditor, ResultadoSafraEditor, ResultadoObservacaoEditor, ResultadoContaDestinoEditor,
 } from './ResultadoCamposGravaveis';
+import { ResultadoListaEditor, ResultadoAtividadeEditor } from './ResultadoListaEditor';
+import { TIPOS_DOCUMENTO } from '@/lib/financeiro/documentoHelper';
+import { FORMAS_PAGAMENTO_V2 } from '@/lib/financeiro/formasPagamentoV2';
+import { ATIVIDADES } from '@/lib/financeiro/ultimaAtividade';
+import { atividadeDoSubcentro, planoIncoerente, rotuloAtividade } from '@/v2/lib/mesa/atividadeDaLinha';
 import { ehTipoTransferencia, subcentroDeTransferencia } from '@/v2/lib/mesa/transferenciaPlano';
 import { ehLinhaAdministrativa, escopoDoSubcentro, fazendaAdministrativa } from '@/lib/financeiro/escopoDoSubcentro';
 import type { ContaSelecionavel } from '@/components/shared/ContaBancariaSelect';
 import type { Safra } from '@/hooks/useFinanceiroV2';
 
-/** Por que um campo ainda não é editável aqui. Texto curto, mostrado ao lado do valor. */
-const MOTIVO_SEM_APPLY = 'o Salvar ainda não grava este campo';
-
 /** Por que a conta do plano está travada numa transferência — PR-MESA-TRANSF-01 item 3. */
 const MOTIVO_TRANSFERENCIA =
   'transferência entre contas usa esta conta do plano e nenhuma outra (fora da DRE); '
-  + 'troque o Tipo para liberar';
+  + 'o tipo muda pelo passo "Transferências entre contas"';
+
+/** A conta do plano é de outra atividade — PR-CONC-MESA-PAINEL-V1 item 3. */
+const MOTIVO_PLANO_INCOERENTE = 'a conta do plano é de outra atividade — escolha uma conta da atividade acima';
 
 /**
- * Os campos que o EXTRATO manda — 133h item 12.
+ * O que o EXTRATO diz — PR-CONC-MESA-PAINEL-V1 item 2: Tipo, Data pgto., Valor e Conta bancária, no TOPO, numa caixa
+ * tracejada "do extrato", SÓ LEITURA.
  *
- * ⚠ NÃO É PREFERÊNCIA DE TELA, É O QUE A RPC FAZ. Desde a migration 20260908110224,
- * `fn_classificacao_apply_row` IGNORA `data_pagamento` e `conta_bancaria_id` do proposto
- * quando o lançamento tem vínculo ativo com o extrato. Oferecer o campo editável seria a
- * tela prometendo uma gravação que o banco descarta em silêncio — o defeito mais caro que
- * esta Mesa pode ter, porque o operador vê o valor mudar e nada acontece.
- * ⚠ `Valor` E `Tipo` JÁ ERAM LEITURA (`gravaHoje: false`); entram na lista porque o motivo
- * passa a ser outro e o operador precisa ler o motivo certo.
+ * ⚠ É O MOVIMENTO DO BANCO, e a Mesa classifica, não reescreve o banco. A `fn_classificacao_apply_row` já ignorava a
+ *   data de pagamento e a conta do proposto em linha conciliada (133h item 12); o que mudou é que a Mesa deixou de
+ *   oferecê-las em qualquer linha. O TIPO entra aqui pela mesma razão: a transferência tem passo próprio
+ *   ("Transferências entre contas", PR-CONC-TRANSFERENCIAS-01), que fecha as duas pontas.
  */
-/* ⚠ `Tipo` SAIU DA LISTA — PR-MESA-TRANSF-01. Ele nunca foi campo do extrato: o OFX diz
-   quanto, quando e em que conta, e o tipo de operação é classificação do sistema. Enquanto
-   esteve aqui, a linha de uma fatura de cartão dizia "o extrato manda neste campo" sobre
-   um campo que a `fn_classificacao_apply_row` sequer escrevia — e o operador não tinha
-   como transformar a saída crua do OFX na transferência que ela é. */
-const CAMPOS_DO_BANCO = new Set(['Data pagamento', 'Valor', 'Banco']);
-const MOTIVO_DO_BANCO = 'o extrato manda neste campo — conciliado';
+type Grupo = 'extrato' | 'datas' | 'classificacao' | 'identificacao';
 
 /**
- * A ordem do mock, com a seção de cada linha e se o Salvar grava.
+ * A ordem do mock (artifact VKVkcrkN9T2J9wARLk4738), com o grupo de cada linha.
  *
- * `campo` casa com `EnriqComparativoLinha.campo` produzido pelo adapter. Quando o
- * comparativo não traz a linha (Data venc., Safra, Conta bancária ainda não existem na
- * view), ela aparece assim mesmo, com "—" nas três colunas: esconder faria a tela mentir
- * por omissão sobre um campo que o operador procura.
+ * `campo` casa com `EnriqComparativoLinha.campo` produzido pelo adapter. Quando o comparativo não traz a linha, ela
+ * aparece assim mesmo, com "—": esconder faria a tela mentir por omissão sobre um campo que o operador procura.
+ * ⚠ SITUAÇÃO SAIU (item 2): é estado do lançamento, não campo que a Mesa decide, e ocupava uma linha do painel.
  */
-/** Os dois blocos do 133e item D. A faixa de 6px é o único separador; não há títulos. */
-type Bloco = 1 | 2;
-
 const ORDEM: Array<{
-  campo: string; rotulo: string; bloco: Bloco; gravaHoje: boolean;
+  campo: string; rotulo: string; grupo: Grupo;
   /**
    * A linha só existe quando o Resultado é transferência — PR-MESA-TRANSF-01.
-   *
-   * ⚠ NÃO É ESCONDER DADO, É NÃO INVENTAR CAMPO: uma saída não tem conta de destino, e uma
-   * linha "Conta destino: —" em 17.732 saídas ensinaria o operador a ignorar um campo que,
-   * nas 43 transferências, é o que impede o guard do banco de recusar a gravação.
+   * ⚠ NÃO É ESCONDER DADO, É NÃO INVENTAR CAMPO: uma saída não tem conta de destino.
    */
   soTransferencia?: boolean;
   /** Obrigatório SÓ na transferência — o guard do banco recusa sem ele. */
   obrigatorioSeTransferencia?: boolean;
-  /** 133g item 5 — separador de 2px DEPOIS desta linha. São os quatro cortes do olho. */
-  corta?: boolean;
-  /**
-   * 133g item 6 — sem ele o lançamento não fecha, e o Salvar diz qual falta.
-   *
-   * ⚠ A LISTA É DE PRODUTO, não do banco: `Valor` e `Data pgto.` já vêm do extrato e nunca
-   * estão vazios; entram na lista porque, se um dia estiverem, o operador precisa ver o
-   * vermelho antes de gravar — e não descobrir no fechamento.
-   */
+  /** 133g item 6 — sem ele o lançamento não fecha, e o Salvar diz qual falta. */
   obrigatorio?: boolean;
 }> = [
-  /* ⚠ A ORDEM É A DO OPERADOR — 133e item D, e ela não é estética: o bloco 1 é o MOVIMENTO
-     (o que aconteceu no banco: quando, quanto, em que conta, se está vivo, em que fazenda),
-     e é por ele que se reconhece a linha no extrato. O bloco 2 é a CLASSIFICAÇÃO — o que se
-     está aqui para decidir.
-     ⚠ "MACRO · GRUPO · CENTRO" SAIU: os três derivam da conta do plano e mudam junto com
-     ela; repeti-los era gastar uma das linhas para mostrar o que a linha de cima decide.
-     ⚠ "TIPO DE DOCUMENTO" FICA DE FORA até existir na view: `vw_classificacao_staging_preview`
-     não o traz e o parser da Mesa não o lê, então a linha só saberia mostrar "—" nas três
-     colunas. Um campo mudo ocupando 22px é pior que a ausência dele.
-     ⚠ QUATORZE LINHAS × 22px = 308px, mais 6 da faixa de bloco e 6 dos três separadores.
-     A décima quinta (Conta destino) só aparece na transferência. */
-  /* ⚠ O TIPO GRAVA DESDE A MIGRATION 20260909180123 — PR-MESA-TRANSF-01. Era `false` com o
-     motivo certo ("o Salvar ainda não grava este campo"), e virou `true` no dia em que a
-     RPC passou a escrever `tipo_operacao`. Deixá-lo em leitura seria a tela mentindo na
-     direção oposta. */
-  { campo: 'Tipo', rotulo: 'Tipo', bloco: 1, gravaHoje: true, obrigatorio: true },
-  { campo: 'Competência', rotulo: 'Competência', bloco: 1, gravaHoje: true },
-  { campo: 'Data vencimento', rotulo: 'Data venc.', bloco: 1, gravaHoje: true },
-  { campo: 'Data pagamento', rotulo: 'Data pgto.', bloco: 1, gravaHoje: true, obrigatorio: true },
-  { campo: 'Valor', rotulo: 'Valor', bloco: 1, gravaHoje: false, obrigatorio: true, corta: true },
-  { campo: 'Banco', rotulo: 'Conta bancária', bloco: 1, gravaHoje: true, obrigatorio: true },
-  { campo: 'Conta destino', rotulo: 'Conta destino', bloco: 1, gravaHoje: true,
+  { campo: 'Tipo', rotulo: 'Tipo', grupo: 'extrato', obrigatorio: true },
+  { campo: 'Data pagamento', rotulo: 'Data pgto.', grupo: 'extrato', obrigatorio: true },
+  { campo: 'Valor', rotulo: 'Valor', grupo: 'extrato', obrigatorio: true },
+  { campo: 'Banco', rotulo: 'Conta bancária', grupo: 'extrato', obrigatorio: true },
+  { campo: 'Conta destino', rotulo: 'Conta destino', grupo: 'extrato',
     soTransferencia: true, obrigatorioSeTransferencia: true },
-  { campo: 'Situação', rotulo: 'Situação', bloco: 1, gravaHoje: false },
-  { campo: 'Fazenda', rotulo: 'Fazenda', bloco: 1, gravaHoje: true, obrigatorio: true, corta: true },
-  { campo: 'Produto / Descrição', rotulo: 'Produto / descr.', bloco: 2, gravaHoje: true, obrigatorio: true },
-  { campo: 'Fornecedor', rotulo: 'Fornecedor', bloco: 2, gravaHoje: true },
-  { campo: 'Subcentro', rotulo: 'Conta do plano', bloco: 2, gravaHoje: true, obrigatorio: true },
-  { campo: 'Safra', rotulo: 'Safra', bloco: 2, gravaHoje: true, corta: true },
-  { campo: 'Documento', rotulo: 'Documento', bloco: 2, gravaHoje: true },
-  { campo: 'OBS', rotulo: 'Observação', bloco: 2, gravaHoje: true },
+  { campo: 'Competência', rotulo: 'Competência', grupo: 'datas' },
+  { campo: 'Data vencimento', rotulo: 'Data venc.', grupo: 'datas' },
+  { campo: 'Atividade', rotulo: 'Atividade', grupo: 'classificacao', obrigatorio: true },
+  { campo: 'Fazenda', rotulo: 'Fazenda', grupo: 'classificacao', obrigatorio: true },
+  { campo: 'Subcentro', rotulo: 'Conta do plano', grupo: 'classificacao', obrigatorio: true },
+  { campo: 'Safra', rotulo: 'Safra', grupo: 'classificacao' },
+  { campo: 'Produto / Descrição', rotulo: 'Produto / descr.', grupo: 'identificacao', obrigatorio: true },
+  { campo: 'Fornecedor', rotulo: 'Fornecedor', grupo: 'identificacao' },
+  { campo: 'Tipo de documento', rotulo: 'Tipo de documento', grupo: 'identificacao' },
+  { campo: 'Documento', rotulo: 'Nº documento', grupo: 'identificacao' },
+  { campo: 'Forma de pagamento', rotulo: 'Forma de pagamento', grupo: 'identificacao' },
+  { campo: 'OBS', rotulo: 'Observação', grupo: 'identificacao' },
 ];
+
+/** O grupo do extrato é só leitura — exportado para o teste afirmar a lista, não uma cópia dela. */
+export const CAMPOS_DO_EXTRATO = ORDEM.filter((o) => o.grupo === 'extrato' && !o.soTransferencia).map((o) => o.rotulo);
 
 /** Os campos que o Salvar exige — exportado porque o container monta o motivo com eles. */
 export const CAMPOS_OBRIGATORIOS_MESA = ORDEM.filter((o) => o.obrigatorio).map((o) => o.rotulo);
 
 /**
  * Os que só são obrigatórios na transferência — PR-MESA-TRANSF-01.
- *
- * ⚠ LISTA SEPARADA, E NÃO UM `obrigatorio: true`: a conta de destino não existe numa saída,
- * e entrar na lista única faria o Salvar de 17.732 saídas pedir um campo que a tela nem
- * desenha. Sai da MESMA `ORDEM` que desenha o asterisco — duas listas divergiriam.
+ * ⚠ LISTA SEPARADA: a conta de destino não existe numa saída. Sai da MESMA `ORDEM` que desenha o asterisco.
  */
 export const CAMPOS_OBRIGATORIOS_SE_TRANSFERENCIA =
   ORDEM.filter((o) => o.obrigatorioSeTransferencia).map((o) => o.rotulo);
 
 const VAZIA: EnriqComparativoLinha = { campo: '', sistema: '—', excel: '—', resultado: '—', tom: 'neutro' };
+
+/**
+ * O selo da regra da linha — PR-CONC-MESA-PAINEL-V1 item 6, no rodapé da Mesa, antes do Salvar.
+ * ⚠ NO CRU A PLANILHA PREVALECE (a precedência do banco a levou ao Resultado); no classificado, o sistema. Sem
+ *   lançamento (`null`) não há regra, e não há selo. Rótulo auxiliar a 8,5px (a exceção de selo).
+ */
+export function SeloRegraDaLinha({ ehCru }: { ehCru: boolean | null }) {
+  if (ehCru === null) return null;
+  return (
+    <span data-testid="selo-regra"
+      className="shrink-0 whitespace-nowrap rounded bg-primary/10 px-1.5 py-px text-[8.5px] text-primary">
+      {ehCru ? 'cru · planilha prevalece' : 'classificado · sistema prevalece'}
+    </span>
+  );
+}
 
 export interface MesaCamposTabelaProps {
   row: EnriqRowVM;
@@ -154,59 +130,40 @@ export interface MesaCamposTabelaProps {
   fornecedores?: FornecedorV2[];
   fazendas?: Fazenda[];
   clienteId?: string;
-  /** 129c — as listas dos seis campos que passaram a gravar. */
+  /** 129c — as listas dos campos que gravam. */
   safras?: Safra[];
   contas?: ContaSelecionavel[];
   onEditar?: (patch: Record<string, unknown>) => Promise<void>;
   onCriarFornecedor?: (nome: string, fazendaId: string | null, cpfCnpj?: string) => Promise<FornecedorV2 | null>;
   /**
-   * 133h item 12 — o lançamento desta linha tem vínculo ATIVO com o extrato.
-   *
-   * ⚠ VEM DE FORA porque a view não o expõe: `vw_classificacao_staging_preview` não traz
-   * nenhuma coluna de conciliação (conferido nas 80 colunas dela), e `lanc_status` não
-   * serve — medido no Proto: 2.459 'realizado' COM vínculo e 27.212 'realizado' SEM.
-   * `undefined` = ainda não se sabe, e aí nada trava: travar por suposição seria pior.
+   * 133h item 12 — o lançamento desta linha tem vínculo ATIVO com o extrato. Só muda o MOTIVO escrito no grupo do
+   * extrato; a leitura vale para toda linha desde o PR-CONC-MESA-PAINEL-V1.
    */
   conciliado?: boolean;
+  /**
+   * A ATIVIDADE escolhida nesta linha — PR-CONC-MESA-PAINEL-V1 item 3. `null`/ausente = a proposta (escopo da conta
+   * resolvida). O estado mora na aba, por linha: não é campo do banco, é o filtro da conta do plano.
+   */
+  atividade?: string | null;
+  onAtividade?: (atividade: string) => void;
 }
 
 export function MesaCamposTabela({
   row, classificacoes, fornecedores, fazendas, clienteId, safras, contas, onEditar, onCriarFornecedor,
-  conciliado,
+  conciliado, atividade, onAtividade,
 }: MesaCamposTabelaProps) {
   const porCampo = new Map(row.comparativo.map(c => [c.campo, c]));
-  /* ⚠ RÓTULO EM 104px — 133b-a. Era 120px, e a coluna sobrava largura que faz falta às três
-     colunas de conteúdo; nenhum dos quinze rótulos passa de 104px em 11px. */
-  /* ⚠ AS TRÊS COLUNAS DE CONTEÚDO EM `minmax(0,1fr)` — 133e item D. O Resultado tinha
-     1.3fr e comia a largura de "Sistema atual"; em 1440 a Conta do plano e o Fornecedor
-     truncavam de um lado enquanto sobrava espaço do outro. `minmax(0,…)` é o que permite a
-     célula ENCOLHER: sem o `0`, o `truncate` não tem em relação a quê truncar. */
-  const COLS = '104px minmax(0,1fr) minmax(0,1fr) minmax(0,1fr)';
-  /* ⚠ O RESULTADO MANDA, NÃO O LANÇAMENTO — PR-MESA-TRANSF-01. `edicao.tipoOperacao` já é
-     "proposta, senão o que o lançamento é": é ele que decide se a linha do destino existe e
-     se a conta do plano está travada, porque é ele que vai ser gravado. */
+  /* ⚠ AS TRÊS COLUNAS DE CONTEÚDO EM `minmax(0,…)` — 133e item D: sem o `0`, o `truncate` não tem em relação a quê
+     truncar. "Vai gravar" um pouco mais larga: é onde moram os controles. */
+  const COLS = '116px minmax(0,1fr) minmax(0,1fr) minmax(0,1.15fr)';
+  /* ⚠ O RESULTADO MANDA, NÃO O LANÇAMENTO — PR-MESA-TRANSF-01. */
   const ehTransf = ehTipoTransferencia(row.edicao.tipoOperacao);
-  /* A linha 18010 do plano, pelo `ordem_exibicao`; `null` sem catálogo — e aí nada é
-     forçado, que é o certo: forçar por suposição gravaria um subcentro adivinhado. */
   const subcentroTransferencia = subcentroDeTransferencia(classificacoes);
-
-  /**
-   * ⚠ A CONTA DO PLANO DECIDE A SAFRA — MESA-SAFRA-ADM-01, pela MESMA função do modal de
-   * lançamento (`ehSubcentroAdministrativo`), não por uma cópia: no dia em que um subcentro
-   * mudar de escopo no plano — e quatro mudaram em 11/09/2026 — as duas telas mudam juntas.
-   * ⚠ O SUBCENTRO EFETIVO É O PROPOSTO OU O ATUAL, nessa ordem: é o que a linha vai gravar, e
-   * a pergunta é sobre o que ela vai virar, não sobre o que ela era.
-   */
+  /* ⚠ O SUBCENTRO EFETIVO É O PROPOSTO OU O ATUAL, nessa ordem: é o que a linha vai gravar. */
   const subcentroEfetivoResultado = row.edicao.subcentro ?? row.edicao.subcentroAtual ?? null;
-  /* ⚠ A MESMA RESPOSTA GOVERNA SAFRA E FAZENDA — FIN-FAZENDA-ADM-01. Eram duas perguntas
-     diferentes na tela (a safra pelo escopo, a fazenda só por `macro === 'Dividendos'`), e
-     por isso a linha do print aparecia com a safra travada e a fazenda editável. */
   const contaEhAdministrativa = ehLinhaAdministrativa(classificacoes, subcentroEfetivoResultado, row.edicao.macro);
   /**
-   * PLANO × FAZENDA — PR-CONC-MESA-DIVERGENCIA-EXCEL-01 item d.
-   *
-   * ⚠ CONTA DE PECUÁRIA OU AGRICULTURA NA FAZENDA ADMINISTRATIVO RATEIA ERRADO NO DRE: o custo da atividade fica numa
-   *   fazenda que não tem a atividade. AVISA, não trava — pode ser a decisão certa, e quem sabe é o operador.
+   * PLANO × FAZENDA — PR-CONC-MESA-DIVERGENCIA-EXCEL-01 item d. AVISA, não trava.
    */
   const escopoResultado = escopoDoSubcentro(classificacoes, subcentroEfetivoResultado);
   const fazendaResultadoId = row.edicao.fazendaId ?? row.edicao.fazendaIdAtual;
@@ -215,105 +172,108 @@ export function MesaCamposTabela({
     && !!admId && fazendaResultadoId === admId
     ? `conta do plano de ${escopoResultado === 'pecuaria' ? 'pecuária' : 'agricultura'} na fazenda Administrativo — o rateio do DRE sai errado`
     : null;
-  /* ⚠ FILTRA ANTES DE MAPEAR, e isso não é estilo: a zebra e a faixa do bloco 2 se decidem
-     pela POSIÇÃO da linha. Pulando a linha do destino dentro do `map`, o índice continuava
-     contando por ela — e nas 17.732 saídas duas linhas sombreadas ficavam coladas, no
-     lugar exato onde o campo não existe. */
+  /* ── ATIVIDADE — item 3 ─────────────────────────────────────────────────────────────────────────────────────────
+     ⚠ A ESCOLHIDA, SENÃO A PROPOSTA. E a conta do plano de outra atividade vira PENDENTE: o Salvar não grava plano
+       incoerente (a aba cobra pelo mesmo `planoIncoerente`). */
+  const atividadeEfetiva = atividade ?? row.edicao.atividadeProposta;
+  const atividadeSistema = atividadeDoSubcentro(classificacoes, row.edicao.subcentroAtual);
+  const incoerente = planoIncoerente(classificacoes, subcentroEfetivoResultado, atividadeEfetiva);
+  /* ⚠ VALOR SEGUE O SINAL EM TODAS AS COLUNAS (item 1) — e é o ÚNICO verde da tabela: entrada. */
+  const corDoSinal = row.entradaOuSaida === 'saida' ? 'text-red-600 dark:text-red-400'
+    : row.entradaOuSaida === 'entrada' ? 'text-emerald-700 dark:text-emerald-400' : '';
+  /* ⚠ FILTRA ANTES DE MAPEAR: a faixa de grupo se decide pela POSIÇÃO da linha. */
   const linhas = ORDEM.filter((o) => !o.soTransferencia || ehTransf);
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto">
-      {/* ⚠ O CABEÇALHO DAS COLUNAS É STICKY DENTRO DESTE SCROLLPORT — A21. Ele mora no
-          mesmo elemento que rola; posto fora, subiria junto com a moldura.
-          ⚠ SEM UPPERCASE — 133b-a: caixa alta em 10px sobre três palavras curtas custa
-          largura e não ganha hierarquia; o peso 500 e a cor já separam o cabeçalho. */}
-      <div className="sticky top-0 z-10 grid gap-2 border-b bg-card px-3 py-1 text-[10px] font-medium"
+      {/* ⚠ O CABEÇALHO DAS COLUNAS É STICKY DENTRO DESTE SCROLLPORT — A21.
+          ⚠ "VAI GRAVAR" EM TEXTO NEUTRO (item 1): o verde do título e dos valores lia-se como "está certo", e o que a
+          coluna diz é só o que o Salvar escreve. A planilha segue azul — é a voz dela, nunca gravada direto. */}
+      <div className="sticky top-0 z-10 grid gap-2 border-b bg-card px-3 py-1 text-[9.5px] font-medium"
         style={{ gridTemplateColumns: COLS }}>
-        <span />
-        <span className="text-blue-600">Excel</span>
-        <span className="text-muted-foreground">Sistema atual</span>
-        <span className="text-emerald-600">Resultado</span>
+        <span className="text-muted-foreground">Campo</span>
+        <span className="text-blue-600 dark:text-blue-400">Planilha</span>
+        <span className="text-muted-foreground">Sistema hoje</span>
+        <span className="text-foreground" data-testid="cabecalho-vai-gravar">Vai gravar</span>
       </div>
 
-      {linhas.map(({ campo, rotulo, bloco, gravaHoje, corta, obrigatorio, obrigatorioSeTransferencia }, indice) => {
-        /* Zebra pela POSIÇÃO na tabela: o olho segue a linha, e alternar por bloco criaria
-           faixas de tamanhos diferentes. */
+      {linhas.map(({ campo, rotulo, grupo, obrigatorio, obrigatorioSeTransferencia }, indice) => {
         const zebra = indice % 2 === 1;
         const c = porCampo.get(campo) ?? VAZIA;
-        const igual = c.tom === 'ok';
         const vaiMudar = c.tom === 'muda' || c.tom === 'difere';
-        /* 133h item 12 — campo do banco não se edita em linha conciliada. */
-        const travadoPeloBanco = !!conciliado && CAMPOS_DO_BANCO.has(campo);
-        /* ⚠ EM TRANSFERÊNCIA A CONTA DO PLANO É UMA SÓ — PR-MESA-TRANSF-01 item 3. A 18010
-           mantém o movimento FORA da DRE; qualquer outra conta o traria de volta como
-           receita ou despesa, e o operador não teria como saber que foi isso que aconteceu.
-           O campo trava e o motivo fica escrito; sair de "Transferência" destrava. */
+        const doExtrato = grupo === 'extrato' && campo !== 'Conta destino';
+        /* ⚠ EM TRANSFERÊNCIA A CONTA DO PLANO É UMA SÓ — PR-MESA-TRANSF-01 item 3 (a 18010, fora da DRE). */
         const travadoPorTransferencia = ehTransf && campo === 'Subcentro' && !!subcentroTransferencia;
-        const editavel = gravaHoje && !row.aplicado && !!onEditar
-          && !travadoPeloBanco && !travadoPorTransferencia;
-        /* ⚠ DIVERGÊNCIA É INFORMAÇÃO, NUNCA GRAVAÇÃO: a RPC já ignora o proposto nestes
-           campos, então o que a planilha diz vira aviso — e o operador vê ANTES de salvar
-           que o arquivo dele discorda do extrato.
-           ⚠ A LISTA VEM DO ADAPTER — 133h-b item 4. Comparar `c.excel !== c.sistema` aqui
-           era o falso positivo: os dois lados falam vocabulários diferentes ("2-Saídas" ×
-           "Saída") e o valor de uma parte de agrupamento é MENOR por definição. */
+        const editavel = !row.aplicado && !!onEditar && !doExtrato && !travadoPorTransferencia;
+        /* ⚠ DIVERGÊNCIA COM O EXTRATO É INFORMAÇÃO, NUNCA GRAVAÇÃO — a lista vem do adapter (133h-b item 4). */
         const dv = row.divergenciasBanco.find((d) => d.campo === campo);
-        const divergeDoBanco = travadoPeloBanco && !!dv;
-        /* 4c — a linha é parte de um agrupamento: o valor não diverge, ele é uma parte. */
+        const divergeDoBanco = doExtrato && !!dv;
         const valorDeParte = campo === 'Valor' && row.parteDeAgrupamento;
-        const abreBloco2 = bloco === 2 && linhas[indice - 1]?.bloco === 1;
-        /* PR-CONC-MESA-DIVERGENCIA-EXCEL-01 — a planilha discorda do Resultado. Em linha conciliada, o "difere do banco"
-           já diz o mesmo sobre os campos do extrato; os dois juntos seriam duas frases para uma divergência. */
+        const abreGrupo = indice > 0 && linhas[indice - 1]?.grupo !== grupo;
+        /* PR-CONC-MESA-DIVERGENCIA-EXCEL-01 — a planilha discorda do Resultado. */
         const dp = row.divergenciasPlanilha.find((d) => d.campo === campo);
         const divergePlanilha = !!dp && !divergeDoBanco;
         const avisoCoerencia = campo === 'Fazenda' ? avisoPlanoFazenda : null;
-        /* 133g item 6 — vazio no RESULTADO é o que importa: é ele que vai ser gravado. */
+        const planoPendente = campo === 'Subcentro' && incoerente;
         const exigido = !!obrigatorio || (!!obrigatorioSeTransferencia && ehTransf);
-        const faltando = exigido && (c.resultado === '—' || c.resultado.trim() === '');
+        /* 133g item 6 — vazio no RESULTADO é o que importa. A Atividade só se cobra com o catálogo na mão. */
+        const faltando = campo === 'Atividade'
+          ? !!classificacoes && !atividadeEfetiva
+          : exigido && (c.resultado === '—' || c.resultado.trim() === '');
+        const corValor = campo === 'Valor' ? corDoSinal : '';
+        /* No extrato, o que vale é o que o banco tem; o Tipo proposto (18010 escolhida) é o que vai gravar. */
+        const valorExtrato = campo === 'Tipo' && row.edicao.tipoOperacaoProposto ? c.resultado : c.sistema;
 
         return (
           <div key={rotulo}>
-            {/* ⚠ 6px DE FAIXA, SEM TÍTULO — 133e item D. Os títulos de seção custavam uma
-                linha inteira cada para nomear o que a ordem já agrupa; a faixa separa sem
-                gastar altura, e 6px é o que o olho precisa para ver que mudou de assunto. */}
-            {abreBloco2 && <div className="h-1.5 bg-muted" />}
-            {/* ⚠ AS TRÊS COLUNAS NA MESMA MEDIDA — 129d item 2. Excel e Sistema estavam em
-                11px sobre linha alta enquanto o Resultado ficava dentro de um controle de
-                24px: as duas primeiras SALTAVAM, e a tela parecia desalinhada. O que
-                distingue é a COR (azul = referência, cinza = o que está gravado), não o
-                tamanho.
-                ⚠ 22px EXATOS — 133d item 4. Eram 24 (`py-[3px]` sobre 11px/1.3); com o painel
-                direito somando 470px, a altura da linha é o que decide se 15 campos cabem em
-                900 sem rolar. `h-[22px]` + `items-center` no lugar do padding: a medida passa
-                a ser declarada, não derivada.
-                ⚠ NUNCA QUEBRA: `truncate` em cada célula e o texto inteiro no `title`. */}
-            {/* ⚠ TODA LINHA COM A MESMA ALTURA — 133e item D. Conta bancária e Fornecedor
-                saltavam porque o CONTROLE tinha altura própria e empurrava a linha; agora a
-                linha declara 22px e `items-center` centra o que estiver dentro, controle ou
-                texto. O controle mora dentro da linha, nunca a define (ver `medidasMesa`). */}
-            <div className={`grid h-[22px] items-center gap-2 border-b border-border/50 px-3 text-[10px] leading-[1.3] ${
+            {/* ⚠ 6px DE FAIXA, SEM TÍTULO — os grupos (extrato · datas · classificação · identificação) se separam
+                sem gastar altura. */}
+            {abreGrupo && <div className="h-1.5 bg-muted" />}
+            {/* ⚠ 22px EXATOS, NUNCA QUEBRA — `truncate` em cada célula e o texto inteiro no `title`. */}
+            <div className={`grid h-[22px] items-center gap-2 border-b border-border/50 px-3 text-[10.5px] leading-[1.3] ${
               zebra ? 'bg-muted/30' : ''}`}
               style={{ gridTemplateColumns: COLS }}>
-              <span className="truncate text-[10px] text-muted-foreground" title={rotulo}>
+              <span className="truncate text-muted-foreground" title={rotulo}>
                 {rotulo}
-                {/* ⚠ ASTERISCO VERMELHO — 133g item 6. O operador não deve descobrir que um
-                    campo era obrigatório quando o Salvar recusa: ele vê antes de mexer. */}
                 {exigido && <span className="text-red-600 dark:text-red-400"> *</span>}
               </span>
-              {/* ⚠ O EXCEL É REFERÊNCIA, NUNCA GRAVADO DIRETO — por isso azul e sem controle. */}
-              <span className="truncate text-blue-700/90" title={c.excel}>{c.excel}</span>
-              {/* ⚠ O TIPO É COLORIDO — 133e item D: "Saída" em vermelho, "Entrada" em verde.
-                  É o campo que responde "saiu ou entrou?", e a cor responde antes da leitura. */}
-              <span className={`truncate ${
-                campo === 'Tipo' && c.sistema === 'Saída' ? 'text-red-600 dark:text-red-400'
-                : campo === 'Tipo' && c.sistema === 'Entrada' ? 'text-emerald-700 dark:text-emerald-400'
-                : 'text-slate-700 dark:text-slate-300'}`} title={c.sistema}>{c.sistema}</span>
+              <span className={`truncate ${corValor || 'text-blue-700/90 dark:text-blue-400'}`} title={c.excel}>{c.excel}</span>
+              <span className={`truncate ${corValor || 'text-slate-700 dark:text-slate-300'}`} title={c.sistema}>{c.sistema}</span>
               <div className="min-w-0">
-                {editavel && campo === 'Subcentro' && classificacoes ? (
-                  <ResultadoSubcentroEditor value={row.edicao.subcentro} tipoOperacao={row.edicao.tipoOperacao}
-                    classificacoes={classificacoes} onEditar={onEditar}
-                    subcentroTransferencia={subcentroTransferencia}
-                    contaDestinoSugeridaId={row.edicao.contaDestinoSugeridaId} />
+                {doExtrato ? (
+                  /* ⚠ CAIXA TRACEJADA "do extrato" — item 2: só leitura, e com cara de leitura. */
+                  <span data-testid={`extrato-${rotulo}`}
+                    title={faltando ? 'Obrigatório — o Salvar não grava sem ele.'
+                      : divergeDoBanco ? `${valorExtrato} — o extrato manda${conciliado ? ' (conciliado)' : ''}. A planilha diz "${dv?.planilha}", e isso NÃO será gravado.`
+                      : `${valorExtrato} — do extrato, só leitura`}
+                    className={`flex h-5 items-center gap-1.5 rounded border border-dashed px-1.5 ${
+                      faltando ? 'border-destructive/60 bg-destructive/5 text-destructive'
+                        : valorDeParte ? 'border-violet-300 bg-violet-50/60 text-violet-800 dark:border-violet-800 dark:bg-violet-950/20 dark:text-violet-200'
+                        : 'border-border bg-muted/60'}`}>
+                    <span className={`min-w-0 flex-1 truncate ${campo === 'Valor' ? 'tabular-nums' : ''} ${corValor}`}>
+                      {faltando ? 'obrigatório' : valorExtrato}
+                    </span>
+                    {divergeDoBanco && <span className="shrink-0 text-[9px] text-amber-700" aria-hidden title="Difere do extrato">⚠</span>}
+                    <span className="shrink-0 whitespace-nowrap text-[8.5px] text-muted-foreground">do extrato</span>
+                  </span>
+                ) : editavel && campo === 'Atividade' && classificacoes && onAtividade ? (
+                  <ResultadoAtividadeEditor value={atividadeEfetiva} valorAtual={atividadeSistema}
+                    opcoes={ATIVIDADES} onEscolher={onAtividade} />
+                ) : editavel && campo === 'Subcentro' && classificacoes ? (
+                  <div className={`flex min-w-0 items-center gap-1 ${planoPendente ? 'rounded ring-1 ring-destructive/70' : ''}`}
+                    data-testid={planoPendente ? 'plano-pendente' : undefined}>
+                    <div className="min-w-0 flex-1">
+                      <ResultadoSubcentroEditor value={row.edicao.subcentro} tipoOperacao={row.edicao.tipoOperacao}
+                        classificacoes={classificacoes} onEditar={onEditar}
+                        subcentroTransferencia={subcentroTransferencia}
+                        contaDestinoSugeridaId={row.edicao.contaDestinoSugeridaId}
+                        escopoNegocio={atividadeEfetiva} />
+                    </div>
+                    {/* ⚠ "Sugerido por" VIROU O "?" (item 5): a mesma frase, no tooltip, ao lado do campo a que se refere. */}
+                    <span data-testid="por-que-sugerido" role="img" aria-label={`Sugerido por: ${row.proveniencia.comoFoiSugerido}`}
+                      title={`Sugerido por: ${row.proveniencia.comoFoiSugerido}`}
+                      className="inline-flex h-3 w-3 shrink-0 cursor-help items-center justify-center rounded-full border border-muted-foreground text-[8px] font-bold text-muted-foreground">?</span>
+                  </div>
                 ) : editavel && campo === 'Fornecedor' && fornecedores && onCriarFornecedor ? (
                   <ResultadoFavorecidoEditor value={row.edicao.favorecidoId} valorAtual={row.edicao.favorecidoIdAtual}
                     fornecedores={fornecedores}
@@ -327,36 +287,23 @@ export function MesaCamposTabela({
                 ) : editavel && campo === 'Documento' ? (
                   <ResultadoDocumentoEditor value={row.edicao.numeroDocumento}
                     numeroDocumentoAtual={row.edicao.numeroDocumentoAtual} onEditar={onEditar} />
+                ) : editavel && campo === 'Tipo de documento' ? (
+                  <ResultadoListaEditor value={row.edicao.tipoDocumento} valorAtual={row.edicao.tipoDocumentoAtual}
+                    opcoes={TIPOS_DOCUMENTO} campo="tipo_documento" onEditar={onEditar} />
+                ) : editavel && campo === 'Forma de pagamento' ? (
+                  <ResultadoListaEditor value={row.edicao.formaPagamento} valorAtual={row.edicao.formaPagamentoAtual}
+                    sugerido={row.edicao.formaPagamentoSugerida} rotuloSugestao="pelo histórico do banco"
+                    opcoes={FORMAS_PAGAMENTO_V2} campo="forma_pagamento" onEditar={onEditar} />
                 ) : editavel && campo === 'Competência' ? (
                   <ResultadoDataEditor value={row.edicao.dataCompetencia}
                     valorAtual={row.edicao.dataCompetenciaAtual} campo="data_competencia" onEditar={onEditar} />
                 ) : editavel && campo === 'Data vencimento' ? (
                   <ResultadoDataEditor value={row.edicao.dataVencimento}
                     valorAtual={row.edicao.dataVencimentoAtual} campo="data_vencimento" onEditar={onEditar} />
-                ) : editavel && campo === 'Data pagamento' ? (
-                  <ResultadoDataEditor value={row.edicao.dataPagamento}
-                    valorAtual={row.edicao.dataPagamentoAtual} campo="data_pagamento" onEditar={onEditar} />
                 ) : editavel && campo === 'Safra' && safras ? (
                   <ResultadoSafraEditor value={row.edicao.safraId} valorAtual={row.edicao.safraIdAtual}
                     safras={safras} sugeridaId={row.edicao.safraSugeridaId}
                     onEditar={onEditar} administrativo={contaEhAdministrativa} />
-                ) : editavel && campo === 'Banco' && contas ? (
-                  <ResultadoContaEditor value={row.edicao.contaBancariaId}
-                    valorAtual={row.edicao.contaBancariaIdAtual} contas={contas}
-                    /* ⚠ O TIPO EFETIVO DECIDE A COLUNA DE GRAVAÇÃO (§2a) — é o mesmo `tipoOperacao`
-                       que o `PlanoSubcentroSelect` já usa para filtrar o plano. */
-                    tipoEfetivo={row.edicao.tipoOperacao}
-                    sugeridaId={row.edicao.contaSugeridaId}
-                    textoNaoReconhecido={row.edicao.contaTextoNaoReconhecido}
-                    onEditar={onEditar} />
-                ) : editavel && campo === 'Tipo' ? (
-                  <ResultadoTipoEditor value={row.edicao.tipoOperacaoProposto}
-                    valorAtual={row.edicao.tipoOperacaoAtual ?? row.edicao.tipoOperacaoExcel}
-                    subcentroTransferencia={subcentroTransferencia}
-                    subcentroAtualProposto={row.edicao.subcentro}
-                    contaDestinoSugeridaId={row.edicao.contaDestinoSugeridaId}
-                    transferenciaSugerida={row.edicao.tipoTransferenciaSugerido}
-                    onEditar={onEditar} />
                 ) : editavel && campo === 'Conta destino' && contas ? (
                   <ResultadoContaDestinoEditor value={row.edicao.contaDestinoId}
                     valorAtual={row.edicao.contaDestinoIdAtual} contas={contas}
@@ -366,88 +313,37 @@ export function MesaCamposTabela({
                   <ResultadoObservacaoEditor value={row.edicao.observacao}
                     valorAtual={row.edicao.observacaoAtual} onEditar={onEditar} />
                 ) : (
-                  /* ⚠ LEITURA NÃO PODE PARECER CAMPO — medido na tela: com borda de input e
-                     altura de controle, as datas e a safra pareciam editáveis e vazias, e o
-                     operador tentaria clicar. Sem borda, fundo chapado e o motivo no
-                     `title`: é a mesma regra do botão desabilitado que diz por quê.
-                     ⚠ E SEM ÍCONE DE CALENDÁRIO: ele prometeria um DatePicker que não
-                     existe. O que confere ou muda continua com a cor de sempre. */
-                  /* ⚠ CAMPO TRAVADO TEM CARA DE TRAVADO — 133b-a: `bg-muted`,
-                     `border-border/60` e texto muted, 22px como os editáveis. Antes a
-                     leitura ganhava borda verde ou âmbar e parecia um controle vazio, e o
-                     operador tentava clicar.
-                     ⚠ O ÂMBAR DO "VAI MUDAR" FICA NO TEXTO, não na moldura: é o valor que
-                     muda, não a célula. */
-                  /* ⚠ SITUAÇÃO É PÍLULA, NUNCA TEXTO SOLTO — 133g item 7. As cores são as da
-                     casa (`badgeDeStatusTransacao`, em `statusOperacional`), a mesma fonte da
-                     lista do Financeiro: realizado verde, programado azul, previsto cinza,
-                     cancelado vermelho. Cada tela inventando a sua seria o defeito do A23 de
-                     volta, num campo em que a cor É a informação. */
-                  campo === 'Situação' ? (
-                    <span className="flex h-[22px] items-center">
-                      <span className={`truncate rounded px-1.5 py-px text-[10px] font-medium ${badgeDeStatusTransacao(c.sistema === '—' ? null : c.sistema).cls}`}>
-                        {badgeDeStatusTransacao(c.sistema === '—' ? null : c.sistema).label}
-                      </span>
-                    </span>
-                  ) : (
+                  /* ⚠ LEITURA NÃO PODE PARECER CAMPO — sem ícone, fundo chapado e o motivo no `title`.
+                     ⚠ TEXTO NEUTRO (item 1): o "confere" deixou de ser verde; o âmbar continua sendo "vai mudar". */
                   <span
                     title={faltando ? 'Obrigatório — o Salvar não grava sem ele.'
-                      : travadoPeloBanco
-                        ? (divergeDoBanco
-                            ? `${c.sistema} — ${MOTIVO_DO_BANCO}. A planilha diz "${c.excel}", e isso NÃO será gravado.`
-                            : `${c.sistema} — ${MOTIVO_DO_BANCO}`)
                       : travadoPorTransferencia ? `${subcentroTransferencia} — ${MOTIVO_TRANSFERENCIA}`
-                      : gravaHoje ? c.resultado : `${c.resultado} — ${MOTIVO_SEM_APPLY}`}
-                    className={`flex h-[22px] items-center gap-1.5 truncate rounded border px-1.5 ${
+                      : c.resultado}
+                    className={`flex h-5 items-center gap-1.5 truncate rounded border px-1.5 ${
                       faltando ? 'border-destructive/60 bg-destructive/5 text-destructive'
-                        : valorDeParte ? 'border-violet-300 bg-violet-50/60 text-violet-800 dark:border-violet-800 dark:bg-violet-950/20 dark:text-violet-200'
-                        : divergeDoBanco ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200'
-                        : igual ? 'border-border/60 bg-muted text-emerald-700 dark:text-emerald-400'
                         : vaiMudar ? 'border-border/60 bg-amber-50 text-amber-800 dark:bg-amber-950/30 dark:text-amber-200'
-                        : 'border-border/60 bg-muted text-muted-foreground'}`}>
-                    {igual && !travadoPeloBanco && <span aria-hidden>✓</span>}
-                    {/* ⚠ EM LINHA CONCILIADA O RESULTADO É O DO BANCO, não o do proposto: a
-                        RPC ignora o proposto nestes campos, e mostrar o proposto aqui seria
-                        a tela anunciando um valor que nunca vai ser gravado. */}
+                        : 'border-border/60 bg-muted text-foreground'}`}>
                     <span className="truncate">
                       {faltando ? 'obrigatório'
-                        : travadoPeloBanco ? c.sistema
                         : travadoPorTransferencia ? subcentroTransferencia
+                        : campo === 'Atividade' ? (rotuloAtividade(atividadeEfetiva) ?? '—')
                         : c.resultado}
                     </span>
-                    {/* ⚠ O AVISO SAIU DE DENTRO DA CÉLULA — 133h-b item 4d. Ele não cabia
-                        em 22px ao lado do valor e saía cortado justamente na parte que
-                        importa (o que a planilha diz). Aqui fica só o ícone; o texto vai
-                        para a linha de contexto abaixo, onde pode quebrar. */}
-                    {divergeDoBanco && (
-                      <span className="ml-auto shrink-0 text-[9px]" aria-hidden title="Difere do extrato">⚠</span>
-                    )}
-                    {!gravaHoje && !faltando && !divergeDoBanco && !valorDeParte && (
-                      <span className="ml-auto shrink-0 text-[9px] italic opacity-70">leitura</span>
-                    )}
-                    {travadoPeloBanco && gravaHoje && !divergeDoBanco && (
-                      <span className="ml-auto shrink-0 text-[9px] italic opacity-70">do extrato</span>
-                    )}
-                    {/* ⚠ O CAMPO TRAVADO DIZ POR QUÊ, ao lado — a mesma regra do botão
-                        desabilitado. "Fixo" sem motivo faria o operador procurar o defeito. */}
                     {travadoPorTransferencia && !faltando && (
-                      <span className="ml-auto shrink-0 text-[9px] italic opacity-70">transferência</span>
+                      <span className="ml-auto shrink-0 text-[8.5px] italic opacity-70">transferência</span>
                     )}
                   </span>
-                  )
                 )}
               </div>
             </div>
-            {/* ⚠ A LINHA DE CONTEXTO DO CAMPO — 133h-b item 4c/4d. Ela só existe quando há o
-                que dizer, e ocupa a COLUNA do Resultado: assim o texto se alinha ao valor a
-                que se refere, em vez de flutuar sob a tabela inteira. `wrap` permitido — é
-                aqui que a frase cabe. */}
-            {/* ⚠ "planilha: X" — NUNCA SILÊNCIO (item b). Azul como a coluna Excel: é a voz da planilha, não o que vai
-                ser gravado. O âmbar continua sendo só "vai mudar". */}
-            {(divergePlanilha || avisoCoerencia) && !valorDeParte && (
+            {/* ⚠ A LINHA DE CONTEXTO DO CAMPO — só quando há o que dizer, na coluna do Resultado. */}
+            {(divergePlanilha || avisoCoerencia || planoPendente) && !valorDeParte && (
               <div className="grid gap-2 px-3 pb-0.5" style={{ gridTemplateColumns: COLS }}>
                 <span /><span /><span />
                 <span className="flex flex-col text-[10px] leading-tight">
+                  {planoPendente && (
+                    <span className="text-destructive" data-testid="plano-incoerente">{MOTIVO_PLANO_INCOERENTE}</span>
+                  )}
                   {divergePlanilha && (
                     <span className="text-blue-700 dark:text-blue-400" data-testid="marca-planilha">planilha: {dp?.planilha}</span>
                   )}
@@ -471,26 +367,17 @@ export function MesaCamposTabela({
                 )}
               </div>
             )}
-            {/* ⚠ 2px, NÃO 0,5 — 133g item 5. A linha de 0,5px separa CAMPOS; estes três
-                separam ASSUNTOS: dinheiro · onde · o que · papel. São os cortes por onde o
-                olho bate, e a 0,5px eles não existiam. */}
-            {corta && <div className="h-0.5 bg-border" />}
           </div>
         );
       })}
 
-      {/* ⚠ AVISO, NÃO TRAVA — 133e item E. O texto da planilha fora do plano oficial travava
-          o Salvar; agora ele é uma linha de 10px âmbar, e o Salvar olha o RESULTADO. */}
+      {/* ⚠ AVISO, NÃO TRAVA — 133e item E. */}
       {row.avisoPlanilha && (
         <p className="truncate px-3 py-0.5 text-[10px] leading-tight text-amber-700 dark:text-amber-400"
           title={`A planilha trouxe "${row.avisoPlanilha}", que não existe no plano oficial. O Resultado usa a conta do plano do sistema.`}>
           planilha dizia: {row.avisoPlanilha}
         </p>
       )}
-      <p className="px-3 py-1 text-[10px] leading-tight text-muted-foreground">
-        ✓ confere · faixa âmbar = vai mudar · Excel em azul é referência, nunca gravado
-        direto. Deixar um campo vazio remove a proposta dele.
-      </p>
     </div>
   );
 }

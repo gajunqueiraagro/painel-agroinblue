@@ -174,6 +174,19 @@ export interface EnriqEdicao {
   safraSugeridaId: string | null;
   /** A linha parece uma transferência e o tipo efetivo ainda não é. Proposta, nunca gravação. */
   tipoTransferenciaSugerido: boolean;
+
+  /* ── PR-CONC-MESA-PAINEL-V1: tipo de documento, forma de pagamento e atividade ──────── */
+  tipoDocumento: string | null;
+  tipoDocumentoAtual: string | null;
+  formaPagamento: string | null;
+  formaPagamentoAtual: string | null;
+  /**
+   * A forma que o HISTÓRICO DO BANCO diz (`formaPagamentoPeloHistorico`) — só no CRU, e só sem forma em lugar nenhum.
+   * Proposta em âmbar, como a safra sugerida: vira proposta no Salvar, nunca ao abrir a linha.
+   */
+  formaPagamentoSugerida: string | null;
+  /** O escopo da conta do plano resolvida (a proposta da Atividade); `null` sem catálogo ou sem escopo no plano. */
+  atividadeProposta: string | null;
 }
 
 export interface EnriqRowVM {
@@ -220,6 +233,12 @@ export interface EnriqRowVM {
    */
   avisoPlanilha: string | null;
   mudaAlgo: boolean;
+  /**
+   * O lançamento é CRU (veio do extrato e ninguém classificou) — espelho do predicado de
+   * `_fn_classificacao_precedencia_cru`: origem 'extrato'/'ofx', sem conta do plano, fora transferência.
+   * `null` sem lançamento. No cru a planilha prevalece; no classificado, o sistema.
+   */
+  ehCru: boolean | null;
   // LISTA (esquerda) — só o necessário para localizar o lançamento (lado SISTEMA).
   /** A data de CAIXA, já formatada — pagamento do lançamento, ou da planilha, ou competência. */
   data: string;

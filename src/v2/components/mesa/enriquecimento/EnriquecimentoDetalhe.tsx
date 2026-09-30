@@ -30,6 +30,9 @@ export interface EnriquecimentoDetalheProps {
   // PR-UX-ENR-MODAL-01 — modo ampliado (modal). SÓ apresentação: colunas mais largas e
   // tipografia maior. Default false = aba intacta (densidade otimizada de propósito).
   amplo?: boolean;
+  /** PR-CONC-MESA-PAINEL-V1 — a Atividade escolhida na linha (filtro da conta do plano) e o gesto de escolher. */
+  atividade?: string | null;
+  onAtividade?: (atividade: string) => void;
 }
 
 // Larguras FIXAS — "Resultado" é a mais larga (coração da tela).

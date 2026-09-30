@@ -160,7 +160,7 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 30/09/2026 (PR-CONC-MESA-CRU-EXCEL-PREVALECE-01): 2612 passando, 22 skipped, e
+  Baseline em 30/09/2026 (PR-CONC-MESA-PAINEL-V1): 2647 passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -281,7 +281,16 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   SUBCENTRO COM CONTEXTO DE ATIVIDADE (proximo PR): na 32c52f5c, apelidos que dao plano de agricultura em fazenda de
   pecuaria e vice-versa — agricultura/Faz. Sto. Expedito 9, pecuaria/Retiro Agricultura 8, agricultura/Faz. Pureza 30
   (a Pureza tem 279 ha agricolas; conferir), ex.: UNIPETRO -8.700 "Combustivel" + Faz Pureza -> Combustivel Maquinas
-  Agricultura; (d) a precedencia e' provada por teste SQL em ROLLBACK, sem mutacao do lado do banco.
+  Agricultura; (d) a precedencia e' provada por teste SQL em ROLLBACK, sem mutacao do lado do banco. · MESA-PAINEL
+  (PR-CONC-MESA-PAINEL-V1): (a) PADRONIZAR `forma_pagamento` LEGADO (auditoria) — "PIX/Transferência Bancária", "Cartão
+  de Credito/Crédito", "Credito", "Débito em Conta", "Cartão de Débito" fora de `FORMAS_PAGAMENTO_V2`; a Mesa os mostra
+  como estao (opcao "valor atual"), NAO normalizou (decisao do Gabriel); (b) `fn_classificacao_reverter_row` NAO
+  restaura `tipo_documento`, `forma_pagamento`, `observacao` nem as datas (o `estado_anterior` guarda os dois primeiros
+  desde a 20261027184600; as datas e a obs desde o 129c) — divida antiga, PR de banco; (c) o apply_row ainda grava
+  `data_pagamento`/`conta_bancaria_id` do proposto em lancamento NAO conciliado, e a Mesa agora os mostra so' leitura
+  ("do extrato") — proposta antiga nesses dois campos grava sem aparecer; medir e decidir; (d) a Mesa nao muda mais o
+  Tipo nem a conta bancaria (o Tipo vai pelo passo "Transferencias entre contas"); `ResultadoTipoEditor` e
+  `ResultadoContaEditor` (`ResultadoCamposGravaveis.tsx`) ficaram SEM CHAMADOR — apagar ou religar e' decisao.
 - Telas e UI:
   TELAS-ORFAS-01 (decisao) · FIN-RECORRENCIA-FAZENDA-01 · FIN-FAZENDA-INATIVA-LISTA-01 · FIN-IMPORTAR-ANTIGO-01 ·
   FAZENDA-INATIVA-EDICAO-01 · LEGADOS-ABATE-VENDA-FAZENDA-01 · FORNECEDOR-UUID-CRU-01 · PROPRIEDADE-DESTINO-ORIGEM-01 ·
@@ -339,7 +348,9 @@ preview que o cabecalho nao sai da tela ao rolar.
   9/400/16/recuo 8, filha 9/400/14/recuo 16, sub-coluna (R$/ha, /sc, /t) 9,5; (2) excecao: selo de status/motivo da
   Conferencia e do modal de sugestoes a 8px (`CelStatus` em `EspelhoConciliacaoTab.tsx`, decisao do Gabriel 30/09: "e so
   uma referencia", PR-CONC-CONFERENCIA-MODAL-01-fix2; o selo de motivo e o status de `SugestoesCasarModal.tsx`,
-  PR-CONC-SUGESTOES-CASAR-01) — so os selos, as tabelas seguem a 9,5. Excecoes declaradas, nao precedente:
+  PR-CONC-SUGESTOES-CASAR-01) — so os selos, as tabelas seguem a 9,5; (3) na Mesa (PR-CONC-MESA-PAINEL-V1), o rotulo
+  auxiliar a 8,5px — "do extrato", "pelo historico do banco", "transferencia" e o selo "cru/classificado" do rodape —,
+  com o corpo da tabela a 10,5. Excecoes declaradas, nao precedente:
   abaixo de 9,5px fora delas reprova o PR.
   ⚠ LARGURA DE COLUNA = pior texto RENDERIZADO + 8 de folga + 14 de padding, contando o slot do marcador
     ▲/▼ (`L_MARCADOR`, 10px). Mede-se com um `Range` sobre o conteudo de cada `td` contra o `clientWidth`
@@ -537,6 +548,17 @@ docs/historico/frentes-ate-2026-09-29.md.)
   resolvido)" quando a planilha nao resolve (o Resultado fica com o sistema — NAO RESOLVIDO NUNCA ESVAZIA, e o editor de
   fornecedor mostra o do sistema sem proposta); contador "N divergem da planilha" so' com Fazenda, Conta do plano,
   Fornecedor e Competencia RESOLVIDOS. Conta de pecuaria/agricultura na fazenda Administrativo avisa (nao trava).
+- ⚠ PAINEL DA MESA (PR-CONC-MESA-PAINEL-V1, Gabriel 30/09): colunas Campo | Planilha | Sistema hoje | Vai gravar, esta
+  em texto NEUTRO — o unico verde e' o valor de uma entrada (Valor segue o sinal nas tres colunas); ambar = vai mudar.
+  Grupos: DO EXTRATO no topo (Tipo, Data pgto., Valor, Conta bancaria — caixa tracejada, SO' LEITURA em toda linha),
+  datas, classificacao, identificacao. ATIVIDADE e' obrigatoria e NAO e' gravada: e' o filtro da conta do plano (o
+  `escopoNegocio`+`escopoObrigatorio` do `PlanoSubcentroSelect`), proposta pelo escopo da conta resolvida; conta de outra
+  atividade vira PENDENTE e o Salvar nao grava (`planoIncoerente`, `src/v2/lib/mesa/atividadeDaLinha.ts`, a mesma na
+  tabela e na aba). Tipo de documento e forma de pagamento GRAVAM (migration 20261027184600: COALESCE(proposta,
+  lancamento), ausente = sistema); a forma e' sugerida SO' NO CRU pelo historico do banco (`formaPagamentoPeloHistorico`,
+  mapa fechado Pix/Boleto/Compra com Cartao/TED-Transferencia; o resto fica vazio) e vira proposta no Salvar, como a
+  safra sugerida. O cru do front (`ehCru` do `toRowVM`) e' ESPELHO do predicado de `_fn_classificacao_precedencia_cru` —
+  quem mexer num confere o outro. O selo do rodape (`SeloRegraDaLinha`) diz a regra da linha.
 
 ## REGRAS VIGENTES — OPERACAO COMERCIAL E FINANCEIRO
 - ⚠ FINANCEIRO V2 — TODO RAMO DE `editarLancamento` REMENDA A LINHA COM O QUE O BANCO DEVOLVEU

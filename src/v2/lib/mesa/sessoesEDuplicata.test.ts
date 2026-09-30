@@ -164,6 +164,9 @@ describe('diferencasDoResultado', () => {
     safraSugeridaId: null, tipoTransferenciaSugerido: false,
     /* PR-MESA-CONTA-ENTRADA-01 — a conta vinda do Excel; este fixture não a exercita. */
     contaSugeridaId: null, contaTextoNaoReconhecido: null,
+    /* PR-CONC-MESA-PAINEL-V1 — tipo de documento, forma de pagamento e atividade. */
+    tipoDocumento: null, tipoDocumentoAtual: null, formaPagamento: null, formaPagamentoAtual: null,
+    formaPagamentoSugerida: null, atividadeProposta: null,
   };
 
   it('safra 25/26 -> 26/27 É diferença (o caso que a view não via)', () => {

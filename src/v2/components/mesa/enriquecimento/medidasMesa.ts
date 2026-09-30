@@ -9,8 +9,8 @@
  * diferença de um pixel entre colunas vizinhas lê-se como desalinhamento, não como
  * hierarquia. O que distingue as colunas é a COR (azul = referência, cinza = gravado), e a
  * hierarquia mora fora da tabela — no topo de 14px e no cabeçalho do modal.
- * ⚠ O DROPDOWN CONTINUA EM 11px: ele não é a tabela; abre sobre ela e se lê com o olho
- * parado. O piso de 10px vale para o que está SEMPRE na tela.
+ * ⚠ 10,5px DESDE O PR-CONC-MESA-PAINEL-V1 item 7 — corpo da tabela, controles e dropdown na mesma régua; rótulo
+ * auxiliar ("do extrato", "pelo histórico do banco") a 8,5px, a exceção de selo/rótulo auxiliar.
  *
  * ⚠ 20px, NÃO 22 — 133d item 4. A linha da tabela caiu para 22px; um controle da mesma
  * altura da linha empurra a borda e a tabela cresce 2px por campo — 30px em quinze campos,
@@ -25,14 +25,14 @@
  * valor. Trocá-lo no componente compartilhado mexeria em toda a aplicação — aqui a regra
  * fica presa à célula da Mesa, que é onde a densidade foi pedida.
  */
-export const CELULA_EDITAVEL = 'h-5 px-1.5 py-0 text-[10px] [&_svg]:h-3 [&_svg]:w-3';
+export const CELULA_EDITAVEL = 'h-5 px-1.5 py-0 text-[10.5px] [&_svg]:h-3 [&_svg]:w-3';
 
 /**
  * O mesmo, para os componentes que só aceitam classe no wrapper e precisam alcançar o
  * botão interno (`ContaBancariaSelect`).
  */
 export const CELULA_EDITAVEL_WRAPPER =
-  '[&>button]:h-5 [&>button]:px-1.5 [&>button]:py-0 [&>button]:text-[10px] [&_svg]:h-3 [&_svg]:w-3';
+  '[&>button]:h-5 [&>button]:px-1.5 [&>button]:py-0 [&>button]:text-[10.5px] [&_svg]:h-3 [&_svg]:w-3';
 
 /**
  * As três datas da tabela da Mesa — 133e adendo item 2: 10px nas TRÊS colunas, inclusive
@@ -43,7 +43,7 @@ export const CELULA_EDITAVEL_WRAPPER =
  * confere. O ícone de calendário do `DatePicker` compacto já é 12px e fica absoluto à
  * direita, então não come largura do valor.
  */
-export const CELULA_EDITAVEL_DATA = 'h-5 pl-1.5 pr-6 py-0 text-[10px] tabular-nums';
+export const CELULA_EDITAVEL_DATA = 'h-5 pl-1.5 pr-6 py-0 text-[10.5px] tabular-nums';
 
 /**
  * O gatilho compacto dos seletores da Mesa — 133g item 4: 10px, como o resto da tabela.
@@ -52,7 +52,10 @@ export const CELULA_EDITAVEL_DATA = 'h-5 pl-1.5 pr-6 py-0 text-[10px] tabular-nu
  * Mesa); aqui a `className` vence pelo `twMerge`, e é ela que traz a tabela ao tamanho
  * único. Um dia em que o `size` mudar, esta constante continua mandando.
  */
-export const GATILHO_TABELA = 'text-[10px]';
+export const GATILHO_TABELA = 'text-[10.5px]';
 
-/** Item do dropdown — 11px, denso, para o menu não ficar maior que a tabela. */
-export const ITEM_DROPDOWN = 'text-[11px] py-0.5';
+/**
+ * Item do dropdown — NA RÉGUA DO CAMPO (10,5px), PR-CONC-MESA-PAINEL-V1 item 7: o menu que abre de um campo de 10,5 em
+ * 11px parecia outro componente.
+ */
+export const ITEM_DROPDOWN = 'text-[10.5px] py-0.5';

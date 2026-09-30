@@ -49,6 +49,7 @@ import { ChevronDown, Trash2 } from 'lucide-react';
 import { ContaBancariaSelect, type ContaSelecionavel } from '@/components/shared/ContaBancariaSelect';
 import { baixarCsv, csvLinhaPt } from '@/lib/csv';
 import { fmtBRL, fmtData } from './fmt';
+import { planoIncoerente } from '@/v2/lib/mesa/atividadeDaLinha';
 import { Button } from '@/components/ui/button';
 
 export interface MesaEnriquecimentoTabProps {
@@ -142,6 +143,12 @@ export function MesaEnriquecimentoTab({
   const limparEditada = (id: string) =>
     setEditadasIds((p) => { if (!p.has(id)) return p; const n = new Set(p); n.delete(id); return n; });
   const [revisei, setRevisei] = useState(false);
+  /**
+   * A ATIVIDADE escolhida por linha — PR-CONC-MESA-PAINEL-V1 item 3.
+   * ⚠ ESTADO DE TELA, NÃO DE BANCO: a atividade é o filtro da conta do plano (o escopo gravado é cópia do plano). Sem
+   *   escolha, vale a proposta (`edicao.atividadeProposta`, o escopo da conta resolvida).
+   */
+  const [atividadePorLinha, setAtividadePorLinha] = useState<Record<string, string>>({});
   const [importOpen, setImportOpen] = useState(false);
   // PR-UX-ENR-MODAL-01 — superfície ampla da mesma mesa. Estado de UI puro:
   // não persiste, não sincroniza com URL, não altera nada do fluxo.
@@ -674,6 +681,16 @@ export function MesaEnriquecimentoTab({
     const faltando = paresCampoRotulo
       .filter(([campo, rot]) => CAMPOS_OBRIGATORIOS_MESA.includes(rot) && vazioNoResultado(campo))
       .map(([, rot]) => rot);
+    /* ⚠ PR-CONC-MESA-PAINEL-V1 item 3 — ATIVIDADE VAZIA E PLANO INCOERENTE PARAM AQUI, pela MESMA função que pinta a
+       conta de pendente na tabela (`planoIncoerente`). Só com o catálogo na mão: sem ele não se sabe o escopo. */
+    if (classificacoes) {
+      const atividade = atividadePorLinha[selecionado.id] ?? selecionado.edicao.atividadeProposta;
+      if (!atividade) faltando.push('Atividade');
+      const sub = selecionado.edicao.subcentro ?? selecionado.edicao.subcentroAtual;
+      if (planoIncoerente(classificacoes, sub, atividade) && !faltando.includes('Conta do plano')) {
+        faltando.push('Conta do plano (de outra atividade)');
+      }
+    }
     /* ⚠ PR-MESA-TRANSF-01 — TRANSFERÊNCIA SEM DESTINO PARA AQUI, ANTES DA RPC. O guard
        `trg_guard_transferencia_destino` recusa depois, e o operador leria um erro de
        constraint no lugar do nome do campo que falta. A pergunta é sobre o RESULTADO
@@ -684,7 +701,7 @@ export function MesaEnriquecimentoTab({
       faltando.push(...CAMPOS_OBRIGATORIOS_SE_TRANSFERENCIA);
     }
     return faltando;
-  }, [selecionado]);
+  }, [selecionado, classificacoes, atividadePorLinha]);
 
   const podeSalvar = !!selecionado && !selecionado.aplicado && selecionado.temMatch
     /* 133i item 11 — parte de agrupamento só entra no lançamento pelo Agrupar. */
@@ -986,6 +1003,16 @@ export function MesaEnriquecimentoTab({
           staging_id: id, patch: { safra_id: selecionado.edicao.safraSugeridaId },
         });
       }
+      /**
+       * A FORMA DE PAGAMENTO PELO HISTÓRICO VIRA PROPOSTA NO SALVAR — PR-CONC-MESA-PAINEL-V1 item 4, o MESMO padrão da
+       * safra logo acima: a tela mostra em âmbar, o Salvar grava; nunca ao abrir a linha. Só no cru (o adapter só a
+       * calcula lá) e só com o Resultado ainda vazio.
+       */
+      if (selecionado.edicao.formaPagamentoSugerida && !selecionado.edicao.formaPagamento) {
+        await editarProposto({
+          staging_id: id, patch: { forma_pagamento: selecionado.edicao.formaPagamentoSugerida },
+        });
+      }
       const res: any = await applyRow({ staging_id: id, overwrite: true });
       if (res?.aplicado) {
         limparEditada(id);
@@ -1201,6 +1228,12 @@ export function MesaEnriquecimentoTab({
     hideBanco: filtroConta !== 'todas',
     onEditar,
     onCriarFornecedor: criarFornecedor,
+    atividade: selecionado ? (atividadePorLinha[selecionado.id] ?? null) : null,
+    onAtividade: (a: string) => {
+      if (!selecionado) return;
+      const id = selecionado.id;
+      setAtividadePorLinha((p) => ({ ...p, [id]: a }));
+    },
   };
   const actionsProps: EnriquecimentoActionsProps = {
     posicao,

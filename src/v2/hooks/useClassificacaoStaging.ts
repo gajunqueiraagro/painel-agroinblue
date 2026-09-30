@@ -198,6 +198,11 @@ export interface ClassificacaoStagingPreviewRow {
   planilha_favorecido_nome?: string | null;
   planilha_subcentro?: string | null;
   lanc_origem_lancamento?: string | null;
+  /** PR-CONC-MESA-PAINEL-V1 — tipo de documento e forma de pagamento, propostos e do lançamento (a Mesa passou a gravá-los). */
+  proposto_tipo_documento?: string | null;
+  proposto_forma_pagamento?: string | null;
+  lanc_tipo_documento?: string | null;
+  lanc_forma_pagamento?: string | null;
 }
 
 /** O que `fn_classificacao_casar_sessao` devolve — 133a. */
