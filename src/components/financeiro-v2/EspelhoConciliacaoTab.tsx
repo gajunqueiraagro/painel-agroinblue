@@ -26,7 +26,7 @@ import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialo
 import { useFinanceiroV2, type LancamentoV2 } from '@/hooks/useFinanceiroV2';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { CasarComBancoModal, CasarN1Modal, type ExtratoAlvo, type LevadoInicial } from '@/components/financeiro-v2/CasarComBancoModal';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { DecisaoDerivadosDialog } from '@/components/financeiro-v2/DecisaoDerivadosDialog';
 import { useEspelhoInternas, type EspelhoInternas } from '@/hooks/useEspelhoInternas';
 import { saldoConfere } from '@/lib/financeiro/conciliacaoCalc';
@@ -36,7 +36,7 @@ import {
 } from '@/components/conciliacao/TabelaExtratoDoMes';
 import { toast } from 'sonner';
 import { X } from 'lucide-react';
-import { badgeDeStatusTransacao } from '@/lib/statusOperacional';
+import { STATUS_PALETA, STATUS_PILULA_BASE, STATUS_FILTRO_LABEL } from '@/lib/financeiro/statusFinanceiro';
 
 const MESES_CURTOS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
@@ -551,24 +551,77 @@ function Alca({ id }: { id: string }) {
   const { attributes, listeners, setNodeRef } = useDraggable({ id });
   return (
     <span ref={setNodeRef} {...listeners} {...attributes}
-      className="ml-1.5 inline-block cursor-grab select-none align-middle text-[12px] leading-none text-muted-foreground active:cursor-grabbing"
+      className="ml-1.5 inline-block cursor-grab select-none align-middle text-[10px] leading-none text-muted-foreground active:cursor-grabbing"
       title="Arraste sobre um movimento do banco para casar" aria-label="Arrastar lançamento">
       ⠿
     </span>
   );
 }
 
-/** A borda que separa os dois lados. Mesma célula em toda linha — é o que a faz contínua. */
-const MEIO = 'border-l border-r border-border text-center px-0';
+/** A borda que separa os dois lados. Mesma célula em toda linha — é o que a faz contínua.
+ *  ⚠ À DIREITA, 2px NO NAVY (PR-CONC-CONFERENCIA-MODAL-01, mock v2): é o divisor entre o banco e
+ *  o sistema, e ele atravessa a tabela inteira porque a célula existe em toda linha. */
+const MEIO = 'border-l border-border border-r-2 border-r-primary text-center px-0';
 const CEL = 'px-[5px] overflow-hidden text-ellipsis whitespace-nowrap';
 /* ⚠ A DATA NUNCA ENCOLHE. Com `text-ellipsis` numa coluna de 36px, "16/07" virava "16/…" —
-   e data cortada não é data. 44px cabe o formato inteiro, e a célula não corta. */
-const CEL_DATA = 'px-[5px] whitespace-nowrap text-[10px] text-muted-foreground';
-const H21 = 'h-[21px]';
+   e data cortada não é data. 38px cabe o formato inteiro a 10px ("30/09" mede 29,5), e a
+   célula não corta. */
+const CEL_DATA = 'px-[4px] whitespace-nowrap text-[10px] text-muted-foreground';
+/* ⚠ UMA ALTURA SÓ, 18px, EM TODA LINHA — PR-CONC-CONFERENCIA-MODAL-01. Eram três na mesma
+   tabela (16 no dia, 21 no movimento, 22 no fechamento e no aviso de vencidos) e 15 nas filhas,
+   com fontes de 10, 11 e 12px. Uma régua só; a hierarquia fica no peso e no fundo. */
+const H18 = 'h-[18px]';
 
 const corVal = (v: number) => (v < 0 ? 'text-rose-600' : 'text-emerald-600');
 /** O aplicado é magnitude; quem dá o sinal é o extrato que a filha explica. */
 const assinado = (valorExtrato: number, aplicado: number) => Math.sign(valorExtrato || 1) * aplicado;
+
+/**
+ * O STATUS DO LADO DO SISTEMA, NUMA COLUNA PRÓPRIA — PR-CONC-CONFERENCIA-MODAL-01 (regra do
+ * Gabriel de 28/09: uma informação por coluna, nunca selo misturado com texto). Ele morava no
+ * fim do texto do candidato, com as cores de `badgeDeStatusTransacao`; agora vem da PALETA ÚNICA
+ * (`STATUS_PALETA`, `statusFinanceiro.ts`): previsto, programado e agendado em texto colorido,
+ * realizado com caixa e conciliado com selo — as mesmas da lista do Financeiro e da OC.
+ * ⚠ SEM `text-ellipsis`: a coluna foi medida para o maior rótulo ("Conciliado" com selo, 65px a
+ * 10px), e status cortado não é status.
+ */
+function paletaDoStatus(k: string) {
+  switch (k) {
+    case 'previsto': return STATUS_PALETA.previsto;
+    case 'programado': return STATUS_PALETA.programado;
+    case 'agendado': return STATUS_PALETA.agendado;
+    case 'realizado': return STATUS_PALETA.realizado;
+    case 'conciliado': return STATUS_PALETA.conciliado;
+    default: return null;
+  }
+}
+function CelStatus({ status }: { status: string | null }) {
+  const k = (status ?? '').trim().toLowerCase();
+  const p = paletaDoStatus(k);
+  const rotulo = k === 'conciliado' ? 'Conciliado' : (STATUS_FILTRO_LABEL[k] ?? (status || ''));
+  return (
+    <td className="px-[3px] text-center whitespace-nowrap" data-status={k || undefined}>
+      {!p ? <span className="text-muted-foreground">{rotulo}</span>
+        : p.comCaixa ? <span className={cn(STATUS_PILULA_BASE, p.pilula, 'text-[10px]')}>{rotulo}</span>
+        : <span className={cn('font-semibold', p.texto)}>{rotulo}</span>}
+    </td>
+  );
+}
+
+/**
+ * A DATA DO LADO DO SISTEMA, na coluna própria — PR-CONC-CONFERENCIA-MODAL-01. No candidato é o
+ * VENCIMENTO (vencido em vermelho, e é aqui que o "vencido" é dito — o selo que ficava no texto
+ * saiu); no realizado é a data do lançamento, porque `fn_extratos_espelhados` não devolve o
+ * vencimento dele (`EspSis` não o tem).
+ */
+function CelDataSistema({ data, vencido = false, rotulo }: { data: string | null | undefined; vencido?: boolean; rotulo: string }) {
+  return (
+    <td className={cn(CEL_DATA, vencido && 'font-semibold text-destructive')}
+      title={data ? `${rotulo}${vencido ? ' · vencido' : ''}` : undefined}>
+      {data ? fmtData(data) : ''}
+    </td>
+  );
+}
 
 /** Na filha, descrição e fornecedor saem no mesmo tom — ela não repete competência nem origem. */
 function textoFilha(s: EspSis | undefined) {
@@ -589,7 +642,7 @@ function LinhaExtratoSemPar({ e, marcado, onMarcar, onCriar, onIgnorar }: {
      `<tr>`: o droppable envolve a linha, o draggable mora só na alça. */
   const { isOver, setNodeRef } = useDroppable({ id: `ext:${e.extrato_id}` });
   return (
-    <tr ref={setNodeRef} className={cn(H21, 'border-b border-border/50',
+    <tr ref={setNodeRef} className={cn(H18, 'border-b border-border/50',
       marcado && 'bg-amber-500/10',
       isOver && 'bg-emerald-500/10 outline-dashed outline-2 outline-emerald-500')}>
       <td className="text-center">
@@ -598,11 +651,13 @@ function LinhaExtratoSemPar({ e, marcado, onMarcar, onCriar, onIgnorar }: {
       </td>
       <td className={CEL_DATA}>{fmtData(e.data)}</td>
       <td className={cn(CEL, 'text-[10px] font-medium')} title={e.historico ?? ''}>{e.historico ?? '—'}</td>
-      <td className={cn(CEL, 'text-right text-[11px] font-medium tabular-nums', corVal(e.valor))}>{fmtBRL(e.valor)}</td>
-      <td className={cn(MEIO, 'text-[12px] text-muted-foreground')} title="sem correspondência">○</td>
+      <td className={cn(CEL, 'text-right font-medium tabular-nums', corVal(e.valor))}>{fmtBRL(e.valor)}</td>
+      <td className={cn(MEIO, 'text-muted-foreground')} title="sem correspondência">○</td>
       <td />
       <td />
-      <td className={cn(CEL, 'text-[10px] italic text-muted-foreground')}>— nenhum lançamento vinculado</td>
+      <td />
+      <td className={cn(CEL, 'italic text-muted-foreground')}>— nenhum lançamento vinculado</td>
+      <td />
       {/* ⚠ "criar" ABRE O MODAL COM A LISTA VAZIA, e não um formulário à parte: o caminho é o
           mesmo do "criar pela diferença", só que a diferença é o valor inteiro. Um segundo
           caminho para criar o mesmo lançamento seria a segunda forma. */}
@@ -625,20 +680,24 @@ function LinhaLancSemPar({ s, mesDoRecorte, marcado, onMarcar, onAbrir }: {
 }) {
   const { isOver, setNodeRef } = useDroppable({ id: `lan:${s.lancamento_id}` });
   return (
-    <tr ref={setNodeRef} className={cn(H21, 'border-b border-border/50',
+    <tr ref={setNodeRef} className={cn(H18, 'border-b border-border/50',
       marcado && 'bg-amber-500/10',
       isOver && 'bg-emerald-500/10 outline-dashed outline-2 outline-emerald-500')}>
+      {/* ⚠ A DATA DESTE LANÇAMENTO MORAVA NA COLUNA DE DATA DO BANCO — PR-CONC-CONFERENCIA-MODAL-01:
+          ela é do sistema, e desceu para a coluna de data do sistema. */}
       <td />
-      <td className={CEL_DATA}>{fmtData(s.data)}</td>
-      <td className={cn(CEL, 'text-[10px] italic text-muted-foreground')}>— sem extrato correspondente</td>
       <td />
-      <td className={cn(MEIO, 'text-[12px] font-semibold text-destructive')} title="sem par no banco">!</td>
+      <td className={cn(CEL, 'italic text-muted-foreground')}>— sem extrato correspondente</td>
+      <td />
+      <td className={cn(MEIO, 'font-semibold text-destructive')} title="sem par no banco">!</td>
       <td className="text-center">
         <input type="checkbox" className="h-3 w-3 align-middle" checked={marcado}
           onChange={onMarcar} aria-label="Marcar lançamento" />
       </td>
-      <td className={cn(CEL, 'text-left text-[11px] font-medium tabular-nums', corVal(s.valor_assinado))}>{fmtBRL(s.valor_assinado)}</td>
-      <td className={CEL}>{textoLancamento(s, mesDoRecorte, true)}</td>
+      <td className={cn(CEL, 'text-left font-medium tabular-nums', corVal(s.valor_assinado))}>{fmtBRL(s.valor_assinado)}</td>
+      <CelDataSistema data={s.data} rotulo="data do lançamento" />
+      <td className={CEL} title={tituloLancamento(s)}>{textoLancamento(s, mesDoRecorte, true)}</td>
+      <CelStatus status="realizado" />
       <td className={cn(CEL, 'text-right whitespace-nowrap')}>
         {onAbrir && <Acao onClick={() => onAbrir(s.lancamento_id)}>abrir</Acao>}
         <Alca id={`dragLan:${s.lancamento_id}`} />
@@ -667,16 +726,17 @@ function LinhaCandidato({ c, marcado, onMarcar, onAbrir }: {
 }) {
   const casavel = !c.ja_conciliado;
   const { isOver, setNodeRef } = useDroppable({ id: `lan:${c.lancamento_id}`, disabled: !casavel });
-  const badge = badgeDeStatusTransacao(c.status_transacao);
   const doc = c.numero_documento ? [c.tipo_documento, c.numero_documento].filter(Boolean).join(' ') : null;
   const fornecedorDiferente = c.fornecedor && c.fornecedor !== c.descricao ? c.fornecedor : null;
+  /* O `title` continua dizendo TUDO numa frase — é o que o hover mostra quando o texto trunca. */
   const titulo = [
     `${fmtData(c.data_vencimento)} venc.`, c.descricao || c.fornecedor, fornecedorDiferente && c.descricao ? fornecedorDiferente : null,
-    c.subcentro, badge.label, c.vencido ? 'vencido' : null, c.sem_conta ? 'sem conta' : null,
+    c.subcentro, STATUS_FILTRO_LABEL[(c.status_transacao ?? '').toLowerCase()] ?? c.status_transacao,
+    c.vencido ? 'vencido' : null, c.sem_conta ? 'sem conta' : null,
     c.ja_conciliado ? 'já vinculado' : null, doc,
   ].filter(Boolean).join(' · ');
   return (
-    <tr ref={setNodeRef} className={cn(H21, 'border-b border-border/50',
+    <tr ref={setNodeRef} className={cn(H18, 'border-b border-border/50',
       c.ja_conciliado && 'opacity-60',
       marcado && 'bg-amber-500/10',
       isOver && 'bg-emerald-500/10 outline-dashed outline-2 outline-emerald-500')}>
@@ -688,7 +748,8 @@ function LinhaCandidato({ c, marcado, onMarcar, onAbrir }: {
             onChange={onMarcar} aria-label="Marcar candidato" />
         )}
       </td>
-      <td className={cn(CEL, 'text-left text-[11px] font-medium tabular-nums', corVal(c.valor_assinado))}>{fmtBRL(c.valor_assinado)}</td>
+      <td className={cn(CEL, 'text-left font-medium tabular-nums', corVal(c.valor_assinado))}>{fmtBRL(c.valor_assinado)}</td>
+      <CelDataSistema data={c.data_vencimento} vencido={c.vencido} rotulo="vencimento" />
       {/* ⚠ O STATUS ERA A PRIMEIRA COISA A SUMIR — PR-ESPELHO-CANDIDATOS-POR-DATA-05, e é ele que
           o operador vem ler. A célula inteira era uma linha de texto corrido dentro de um
           `overflow-hidden text-ellipsis`: descrição e subcentro são longos, empurravam o badge
@@ -700,30 +761,40 @@ function LinhaCandidato({ c, marcado, onMarcar, onAbrir }: {
           do truncamento o resolve.
           ⚠ AS CORES DO BADGE NÃO SE TOCAM: vêm de `badgeDeStatusTransacao`, o mapa da casa.
           ⚠ E A DATA PERDE PESO, não presença: ela é o RÓTULO do vencimento, e estava competindo
-          com o dado por ser a primeira e estar em tabular. */}
+          com o dado por ser a primeira e estar em tabular.
+          ⚠ E AGORA VENCIMENTO E STATUS SAÍRAM DA CÉLULA — PR-CONC-CONFERENCIA-MODAL-01 (regra do
+          Gabriel de 28/09: uma informação por coluna). O vencimento tem coluna própria (e o
+          "vencido" é dito nela, em vermelho, em vez de um selo âmbar no texto); o status tem a
+          dele, com a paleta única. No texto sobram descrição · fornecedor · subcentro · documento,
+          que truncam com tudo no `title`, e os dois avisos que não são status nem data ("sem conta",
+          "já vinculado"), que ficam `shrink-0` no fim para nunca serem cortados. */}
       <td className={cn(CEL, 'max-w-0')} title={titulo}>
         <span className="flex items-center gap-1">
-          <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground/70">{fmtData(c.data_vencimento)}</span>
           <span className="min-w-0 flex-1 truncate">
-            <span className="text-[11px] font-medium">{c.descricao || c.fornecedor || '—'}</span>
-            <span className="text-[10px] text-muted-foreground">
+            <span className="font-medium">{c.descricao || c.fornecedor || '—'}</span>
+            <span className="text-muted-foreground">
               {fornecedorDiferente && c.descricao && <>{' · '}{fornecedorDiferente}</>}
               {c.subcentro && <>{' · '}{c.subcentro}</>}
               {doc && <>{' · '}{doc}</>}
             </span>
           </span>
-          <span className={cn('shrink-0 rounded px-1 text-[10px]', badge.cls)}>{badge.label}</span>
-          {c.vencido && <span className="shrink-0 rounded bg-amber-100 px-1 text-[10px] font-medium text-amber-800">vencido</span>}
-          {c.sem_conta && <span className="shrink-0 rounded bg-destructive/10 px-1 text-[10px] font-medium text-destructive">sem conta</span>}
-          {c.ja_conciliado && <span className="shrink-0 text-[10px] italic text-muted-foreground">já vinculado</span>}
+          {c.sem_conta && <span className="shrink-0 rounded bg-destructive/10 px-1 font-medium text-destructive">sem conta</span>}
+          {c.ja_conciliado && <span className="shrink-0 italic text-muted-foreground">já vinculado</span>}
         </span>
       </td>
+      <CelStatus status={c.status_transacao} />
       <td className={cn(CEL, 'text-right whitespace-nowrap')}>
         {onAbrir && <Acao onClick={() => onAbrir(c.lancamento_id)}>abrir</Acao>}
         {casavel && <Alca id={`dragLan:${c.lancamento_id}`} />}
       </td>
     </tr>
   );
+}
+
+/** O texto inteiro do lançamento para o `title` — é o que o hover mostra quando a célula trunca. */
+function tituloLancamento(s: EspSis | undefined) {
+  if (!s) return undefined;
+  return [s.descricao, s.fornecedor, s.subcentro].filter(Boolean).join(' · ') || undefined;
 }
 
 /** Descrição + fornecedor (+ competência quando difere, + origem quando sem par), UMA linha. */
@@ -734,7 +805,9 @@ function textoLancamento(s: EspSis | undefined, mesDoRecorte: string, semPar = f
     : null;
   return (
     <>
-      <span className="text-[11px] font-medium">{s.descricao ?? '—'}</span>
+      {/* ⚠ 10px COMO TUDO — PR-CONC-CONFERENCIA-MODAL-01: a descrição era 11px e o resto 10; agora a
+          tabela tem UMA fonte, e a hierarquia fica só no peso (descrição `font-medium`). */}
+      <span className="font-medium">{s.descricao ?? '—'}</span>
       {/* ⚠ SEM `text-muted-foreground` — PR-ESPELHO-CONFERENCIA-FONTE-07. O fornecedor e a
           competência são o que o operador LÊ para ter certeza de que este lançamento é o par
           daquele movimento do banco; em cinza claro a 10px eles viravam contexto de fundo, e
@@ -742,7 +815,7 @@ function textoLancamento(s: EspSis | undefined, mesDoRecorte: string, semPar = f
           ⚠ SÓ A COR MUDA: 10px continua, porque a hierarquia com a descrição (11px/medium) vem
           do tamanho e do peso, não do apagado. Tirar os dois faria o fornecedor competir com a
           descrição; tirar só a cor o traz para a leitura sem mexer em uma linha do layout. */}
-      <span className="text-[10px]">
+      <span>
         {' · '}{s.fornecedor || '—'}
         {comp && ` · competência ${comp}`}
         {semPar && s.origem_lancamento && ` · ${rotuloOrigem(s.origem_lancamento)}`}
@@ -1069,25 +1142,38 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
     <div className="flex min-h-0 flex-1 flex-col">
       {/* ⚠ A MARGEM É DO CONTAINER, NÃO DA TABELA. As bordas e a divisória continuam de fora a
           fora DA TABELA; é ela que se afasta da borda do modal, e não as linhas que encurtam. */}
-      <div className="min-h-0 flex-1 overflow-y-auto border-t px-3.5">
+      {/* ⚠ `overflow-auto`, NOS DOIS EIXOS — PR-CONC-CONFERENCIA-MODAL-01: abaixo da largura mínima
+          da tabela ela rola DENTRO do modal, nunca a página. */}
+      <div className="min-h-0 flex-1 overflow-auto border-t px-3.5">
         {/* ⚠ A RÉGUA É O PADRÃO DA TABELA, não de cada célula. Sem isto, as células que não
             declaram tamanho — as dos checkboxes, a das ações, a do lançamento — herdam os
-            16px/24px do documento e esticam a linha de 21px para 26,5px, mesmo com `h-[21px]`
+            16px/24px do documento e esticam a linha de 21px para 26,5px, mesmo com `h-[21px]` (hoje 18px)
             no `<tr>`: altura em tabela é mínimo, não teto. Medido em 09/09/2026. */}
-        <table className="w-full border-collapse text-[11px] leading-[1.3]" style={{ tableLayout: 'fixed' }}>
+        {/* ⚠ A RÉGUA DO MODAL — PR-CONC-CONFERENCIA-MODAL-01 (mock v2 aprovado pelo Gabriel), MEDIDA
+            NA TELA. 10px e 18px em TODA célula; onze colunas, uma informação por coluna:
+            OFX [check 18][data 38][histórico][valor 80][status 18] | divisor 2px | Sistema
+            [check 18][valor 80][data 38][descrição · fornecedor · subcentro][status 72][ações 142].
+            ⚠ AS DUAS DE TEXTO NÃO TÊM LARGURA: dividem o que sobra, e é isso que as faz crescer em
+            1440 sem alargar valor, data nem status. O piso é o `minWidth` de 1046, a largura útil do
+            modal na janela do Gabriel (innerWidth 1.135): 504 fixos + 271 para cada texto.
+            ⚠ STATUS 72, NÃO OS 58 DO MOCK: medido a 10px, "Conciliado" com selo pede 65 (51,4 de
+            texto + 14 da pílula) e "Programado" em texto 59,3; 58 cortaria os dois.
+            ⚠ AÇÕES 142: "diferença -134.613,84" pede 112,2 a 10px semibold — era ela que saía "-134…"
+            nos 104 de antes, a 11px (123,4). */}
+        <table className="w-full border-collapse text-[10px] leading-[14px]" style={{ tableLayout: 'fixed', minWidth: 1046 }}>
           <colgroup>
-            <col style={{ width: 18 }} /><col style={{ width: 44 }} /><col />
-            <col style={{ width: 92 }} /><col style={{ width: 26 }} />
-            <col style={{ width: 18 }} /><col style={{ width: 92 }} /><col />
-            <col style={{ width: 104 }} />
+            <col style={{ width: 18 }} /><col style={{ width: 38 }} /><col />
+            <col style={{ width: 80 }} /><col style={{ width: 18 }} />
+            <col style={{ width: 18 }} /><col style={{ width: 80 }} /><col style={{ width: 38 }} /><col />
+            <col style={{ width: 72 }} /><col style={{ width: 142 }} />
           </colgroup>
           <thead className="sticky top-0 z-10">
-            <tr className="bg-primary h-[22px] text-primary-foreground">
+            <tr className={cn(H18, 'bg-primary text-primary-foreground')}>
               <th />
               <th colSpan={3} className="px-[5px] text-left text-[10px] font-medium">Banco (OFX)</th>
               {/* A divisória atravessa o cabeçalho também — em branco, porque o fundo é azul. */}
-              <th className="border-l border-r border-primary-foreground/40 px-0" />
-              <th colSpan={3} className="px-[5px] text-left text-[10px] font-medium">Sistema</th>
+              <th className="border-l border-primary-foreground/40 border-r-2 border-r-primary-foreground/60 px-0" />
+              <th colSpan={5} className="px-[5px] text-left text-[10px] font-medium">Sistema</th>
               <th />
             </tr>
           </thead>
@@ -1101,10 +1187,10 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
                 para baixo da dobra em toda abertura. Fechado, ele AVISA sem ocupar — que é o que
                 uma lista de pendência antiga deve fazer numa tela de conferir o mês. */}
             {vencidos.length > 0 && (
-              <tr className="h-[22px] bg-amber-50 border-b border-amber-200 dark:bg-amber-950/20 dark:border-amber-900">
+              <tr className={cn(H18, 'bg-amber-50 border-b border-amber-200 dark:bg-amber-950/20 dark:border-amber-900')}>
                 <td colSpan={4} />
                 <td className={MEIO} />
-                <td colSpan={4} className="px-[5px]">
+                <td colSpan={6} className="px-[5px] whitespace-nowrap">
                   <label className="flex cursor-pointer items-center gap-1.5 text-[10px] font-medium text-amber-900 dark:text-amber-200">
                     <input type="checkbox" className="h-3 w-3 cursor-pointer"
                       checked={mostrarVencidos}
@@ -1123,10 +1209,10 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
 
             {dias.map((d) => (
               <React.Fragment key={d.data ?? 'sem-data'}>
-                <tr className="bg-muted/40 h-4">
-                  <td colSpan={4} className="px-[5px] text-[10px] font-medium text-muted-foreground">{fmtData(d.data)}</td>
+                <tr className={cn(H18, 'bg-muted/40')}>
+                  <td colSpan={4} className="px-[5px] whitespace-nowrap font-medium text-muted-foreground">{fmtData(d.data)}</td>
                   <td className={MEIO} />
-                  <td colSpan={4} />
+                  <td colSpan={6} />
                 </tr>
 
                 {d.pareados.map((p) => {
@@ -1137,25 +1223,27 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
                   const somaAssinada = Math.sign(p.extrato.valor || 1) * p.soma;
                   return (
                     <React.Fragment key={p.extrato.extrato_id}>
-                      <tr className={cn(H21, 'border-b border-border/50', agrupado && 'bg-muted/20')}>
+                      <tr className={cn(H18, 'border-b border-border/50', agrupado && 'bg-muted/20')}>
                         <td />
                         <td className={CEL_DATA}>{fmtData(p.extrato.data)}</td>
                         <td className={cn(CEL, 'text-[10px] font-medium')} title={p.extrato.historico ?? ''}>{p.extrato.historico ?? '—'}</td>
-                        <td className={cn(CEL, 'text-right text-[11px] font-medium tabular-nums', corVal(p.extrato.valor))}>{fmtBRL(p.extrato.valor)}</td>
-                        <td className={cn(MEIO, 'text-[12px] font-semibold', SINAL_CASADO.cor)} title={SINAL_CASADO.titulo}>{SINAL_CASADO.simbolo}</td>
+                        <td className={cn(CEL, 'text-right font-medium tabular-nums', corVal(p.extrato.valor))}>{fmtBRL(p.extrato.valor)}</td>
+                        <td className={cn(MEIO, 'font-semibold', SINAL_CASADO.cor)} title={SINAL_CASADO.titulo}>{SINAL_CASADO.simbolo}</td>
                         <td />
-                        <td className={cn(CEL, 'text-left text-[11px] font-medium tabular-nums', temDif ? 'text-amber-600' : corVal(somaAssinada))}
+                        <td className={cn(CEL, 'text-left font-medium tabular-nums', temDif ? 'text-amber-600' : corVal(somaAssinada))}
                             title={temDif ? `banco ${fmtBRL(Math.abs(p.diferenca))} ${p.diferenca > 0 ? 'a mais' : 'a menos'} que a soma` : undefined}>
                           {fmtBRL(somaAssinada)}
                         </td>
-                        <td className={CEL}>
+                        <CelDataSistema data={unica?.sis?.data} rotulo="data do lançamento" />
+                        <td className={CEL} title={unica ? tituloLancamento(unica.sis) : undefined}>
                           {agrupado
-                            ? <><span className="text-[11px] font-medium">{p.filhas.length} lançamentos</span>
-                                <span className="text-[10px] text-muted-foreground">{' · '}{p.grupoId ? 'agrupados' : `${p.filhas.length} vínculos`}</span></>
+                            ? <><span className="font-medium">{p.filhas.length} lançamentos</span>
+                                <span className="text-muted-foreground">{' · '}{p.grupoId ? 'agrupados' : `${p.filhas.length} vínculos`}</span></>
                             : textoLancamento(unica?.sis, mesDoRecorte)}
-                          {unica && unica.deN > 1 && <span className="text-[10px] text-muted-foreground">{' · '}1 de {unica.deN}</span>}
+                          {unica && unica.deN > 1 && <span className="text-muted-foreground">{' · '}1 de {unica.deN}</span>}
                           <MarcadorOrigem tipo={p.tipoVencedor} />
                         </td>
+                        <CelStatus status="conciliado" />
                         <td className={cn(CEL, 'text-right')}>
                           {unica && onAbrir && <Acao onClick={() => onAbrir(unica.lancamento_id)}>abrir</Acao>}
                           {(unica || p.grupoId) && (
@@ -1173,14 +1261,16 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
                           400 em tudo — inclusive no valor —, descrição em muted e borda mais
                           fraca que a das linhas. Ela explica a mãe; não compete com ela. */}
                       {agrupado && p.filhas.map((f) => (
-                        <tr key={f.lancamento_id} className="h-[15px] bg-muted/40 border-b border-border/30">
+                        <tr key={f.lancamento_id} className={cn(H18, 'bg-muted/40 border-b border-border/30')}>
                           <td /><td /><td /><td />
-                          <td className={cn(MEIO, 'text-[11px] font-normal text-muted-foreground')}>↳</td>
+                          <td className={cn(MEIO, 'font-normal text-muted-foreground')}>↳</td>
                           <td />
-                          <td className={cn(CEL, 'text-left text-[10px] font-normal tabular-nums', corVal(assinado(p.extrato.valor, f.valor_aplicado)))}>
+                          <td className={cn(CEL, 'text-left font-normal tabular-nums', corVal(assinado(p.extrato.valor, f.valor_aplicado)))}>
                             {fmtBRL(assinado(p.extrato.valor, f.valor_aplicado))}
                           </td>
-                          <td className={cn(CEL, 'text-[10px] font-normal text-muted-foreground')}>{textoFilha(f.sis)}</td>
+                          <CelDataSistema data={f.sis?.data} rotulo="data do lançamento" />
+                          <td className={cn(CEL, 'font-normal text-muted-foreground')} title={tituloLancamento(f.sis)}>{textoFilha(f.sis)}</td>
+                          <td />
                           <td className={cn(CEL, 'text-right')}>{onAbrir && <Acao onClick={() => onAbrir(f.lancamento_id)}>abrir</Acao>}</td>
                         </tr>
                       ))}
@@ -1194,20 +1284,22 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
                   const somaAssinada = Math.sign(g.sis.valor_assinado || 1) * g.soma;
                   return (
                     <React.Fragment key={g.sis.lancamento_id}>
-                      <tr className={cn(H21, 'border-b border-border/50 bg-muted/20')}>
+                      <tr className={cn(H18, 'border-b border-border/50 bg-muted/20')}>
                         <td /><td /><td />
-                        <td className={cn(CEL, 'text-right text-[11px] font-medium tabular-nums', temDif ? 'text-amber-600' : corVal(somaAssinada))}
+                        <td className={cn(CEL, 'text-right font-medium tabular-nums', temDif ? 'text-amber-600' : corVal(somaAssinada))}
                             title={temDif ? `os extratos somam ${fmtBRL(Math.abs(g.diferenca))} ${g.diferenca > 0 ? 'a mais' : 'a menos'} que o lançamento` : undefined}>
                           {fmtBRL(somaAssinada)}
                         </td>
-                        <td className={cn(MEIO, 'text-[12px] font-semibold', SINAL_CASADO.cor)} title={SINAL_CASADO.titulo}>{SINAL_CASADO.simbolo}</td>
+                        <td className={cn(MEIO, 'font-semibold', SINAL_CASADO.cor)} title={SINAL_CASADO.titulo}>{SINAL_CASADO.simbolo}</td>
                         <td />
-                        <td className={cn(CEL, 'text-left text-[11px] font-medium tabular-nums', corVal(g.sis.valor_assinado))}>{fmtBRL(g.sis.valor_assinado)}</td>
-                        <td className={CEL}>
+                        <td className={cn(CEL, 'text-left font-medium tabular-nums', corVal(g.sis.valor_assinado))}>{fmtBRL(g.sis.valor_assinado)}</td>
+                        <CelDataSistema data={g.sis.data} rotulo="data do lançamento" />
+                        <td className={CEL} title={tituloLancamento(g.sis)}>
                           {textoLancamento(g.sis, mesDoRecorte)}
-                          <span className="text-[10px] text-muted-foreground">{' · '}{g.extratos.length} extratos</span>
+                          <span className="text-muted-foreground">{' · '}{g.extratos.length} extratos</span>
                           <MarcadorOrigem tipo="agrupamento_manual" />
                         </td>
+                        <CelStatus status="conciliado" />
                         <td className={cn(CEL, 'text-right whitespace-nowrap')}>
                           {onAbrir && <Acao onClick={() => onAbrir(g.sis.lancamento_id)}>abrir</Acao>}
                           {g.grupoId && (
@@ -1221,13 +1313,13 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
                       {/* ⚠ FILHAS DO LADO DO BANCO e `↰` no meio: a seta aponta para o OFX porque
                           é ele que está sendo decomposto. Mesma régua das filhas do 1:N. */}
                       {g.extratos.map((x) => (
-                        <tr key={x.extrato.extrato_id} className="h-[15px] bg-muted/40 border-b border-border/30">
+                        <tr key={x.extrato.extrato_id} className={cn(H18, 'bg-muted/40 border-b border-border/30')}>
                           <td />
                           <td className={CEL_DATA}>{fmtData(x.extrato.data)}</td>
-                          <td className={cn(CEL, 'text-[10px] font-normal text-muted-foreground')} title={x.extrato.historico ?? ''}>{x.extrato.historico ?? '—'}</td>
-                          <td className={cn(CEL, 'text-right text-[10px] font-normal tabular-nums', corVal(x.extrato.valor))}>{fmtBRL(x.extrato.valor)}</td>
-                          <td className={cn(MEIO, 'text-[11px] font-normal text-muted-foreground')}>↰</td>
-                          <td /><td /><td /><td />
+                          <td className={cn(CEL, 'font-normal text-muted-foreground')} title={x.extrato.historico ?? ''}>{x.extrato.historico ?? '—'}</td>
+                          <td className={cn(CEL, 'text-right font-normal tabular-nums', corVal(x.extrato.valor))}>{fmtBRL(x.extrato.valor)}</td>
+                          <td className={cn(MEIO, 'font-normal text-muted-foreground')}>↰</td>
+                          <td /><td /><td /><td /><td /><td />
                         </tr>
                       ))}
                     </React.Fragment>
@@ -1247,18 +1339,21 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
                 {/* ⚠ NO FIM DO DIA, e depois do sem par: a ordem é a da atenção. O que falta
                     vem antes; o que está explicado e fora do extrato vem depois. */}
                 {d.internas.map((si) => (
-                  <tr key={si.lancamento_id} className={cn(H21, 'border-b border-border/50 bg-muted/20')}>
+                  <tr key={si.lancamento_id} className={cn(H18, 'border-b border-border/50 bg-muted/20')}>
+                    {/* A data é do lançamento do sistema: desceu da coluna do banco para a do sistema. */}
                     <td />
-                    <td className={CEL_DATA}>{fmtData(si.data)}</td>
-                    <td className={cn(CEL, 'text-[10px] italic text-muted-foreground')}>— o banco não exporta este movimento</td>
                     <td />
-                    <td className={cn(MEIO, 'text-[12px] text-muted-foreground')} title="transferência com conta interna">⇄</td>
+                    <td className={cn(CEL, 'italic text-muted-foreground')}>— o banco não exporta este movimento</td>
                     <td />
-                    <td className={cn(CEL, 'text-left text-[11px] font-medium tabular-nums text-muted-foreground')}>{fmtBRL(si.valor_assinado)}</td>
-                    <td className={CEL}>
-                      <span className="text-[11px] font-medium text-muted-foreground">{si.descricao ?? '—'}</span>
-                      <span className="text-[10px] text-muted-foreground">{' · '}transferência interna · fora do extrato</span>
+                    <td className={cn(MEIO, 'text-muted-foreground')} title="transferência com conta interna">⇄</td>
+                    <td />
+                    <td className={cn(CEL, 'text-left font-medium tabular-nums text-muted-foreground')}>{fmtBRL(si.valor_assinado)}</td>
+                    <CelDataSistema data={si.data} rotulo="data do lançamento" />
+                    <td className={CEL} title={tituloLancamento(si)}>
+                      <span className="font-medium text-muted-foreground">{si.descricao ?? '—'}</span>
+                      <span className="text-muted-foreground">{' · '}transferência interna · fora do extrato</span>
                     </td>
+                    <CelStatus status="realizado" />
                     <td className={cn(CEL, 'text-right whitespace-nowrap')}>
                       {onAbrir && <Acao onClick={() => onAbrir(si.lancamento_id)}>abrir</Acao>}
                     </td>
@@ -1300,17 +1395,19 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
                     Olhar `banco === 0 && sistema === 0` esconderia justamente esse caso. */}
                 {(d.pareados.length > 0 || d.paredosN1.length > 0 || d.extratosSemPar.length > 0
                   || d.lancsSemPar.length > 0 || d.internas.length > 0) && (
-                <tr className="h-[22px] bg-primary/10 border-t border-b border-border">
-                  <td colSpan={3} className={cn(CEL, 'text-[11px] font-semibold text-primary')}>fechamento {fmtData(d.data)}</td>
-                  <td className={cn(CEL, 'text-right text-[11px] font-semibold tabular-nums text-primary')}>{fmtBRL(d.banco)}</td>
+                <tr className={cn(H18, 'bg-primary/10 border-t border-b border-border')}>
+                  <td colSpan={3} className={cn(CEL, 'font-semibold text-primary')}>fechamento {fmtData(d.data)}</td>
+                  <td className={cn(CEL, 'text-right font-semibold tabular-nums text-primary')}>{fmtBRL(d.banco)}</td>
                   <td className={MEIO} />
                   <td />
                   {/* ⚠ NO FECHAMENTO O AZUL VENCE O VERMELHO/VERDE: a linha inteira é subtotal, e o
                       sinal já está no número. Colorir por sinal aqui faria o subtotal competir
                       visualmente com os movimentos que ele resume. */}
-                  <td className={cn(CEL, 'text-left text-[11px] font-semibold tabular-nums text-primary')}>{fmtBRL(d.sistema)}</td>
-                  <td />
-                  <td className={cn(CEL, 'text-right text-[11px] font-semibold')}>
+                  <td className={cn(CEL, 'text-left font-semibold tabular-nums text-primary')}>{fmtBRL(d.sistema)}</td>
+                  <td colSpan={3} />
+                  {/* ⚠ SEM `text-ellipsis` AQUI: "diferença -134.613,84" tem de sair inteira, e a coluna
+                      de 142px foi medida para ela (112,2px a 10px semibold). */}
+                  <td className="px-[5px] whitespace-nowrap text-right font-semibold">
                     {/* ⚠ TOLERÂNCIA ZERO — PR-CONCILIACAO-TOLERANCIA-ZERO-02. */}
                     {saldoConfere(d.banco - d.sistema)
                       ? <span className="text-emerald-600">confere</span>
@@ -1355,7 +1452,7 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
           <table className="w-full table-fixed">
             <tbody>
               {ignorados.map((ig) => (
-                <tr key={ig.extrato_id} className="h-[19px] border-b border-border/30">
+                <tr key={ig.extrato_id} className="h-[18px] border-b border-border/30">
                   <td className={cn(CEL_DATA, 'w-[44px]')}>{fmtData(ig.data)}</td>
                   <td className={cn(CEL, 'text-[10px]')} title={ig.historico ?? ''}>{ig.historico ?? '—'}</td>
                   <td className={cn(CEL, 'w-[96px] text-right text-[10px] tabular-nums', corVal(ig.valor))}>{fmtBRL(ig.valor)}</td>
@@ -1467,7 +1564,7 @@ interface Props {
   mes: string;
   /**
    * Candidatos do sistema (previsto/agendado/programado) na mesa — PR-CONCILIACAO-5-ABAS-01.
-   * A aba "Enriquecer · Sistema" os mostra para casar; o modal do Espelho é o FECHO e passa
+   * A aba "Casar lançamentos" os mostra para casar; o modal do Espelho é o FECHO e passa
    * `false`: só realizados.
    */
   mostrarCandidatos?: boolean;
@@ -1502,11 +1599,21 @@ export const ABAS_ESPELHO: readonly { key: AbaEspelho; label: string }[] = [
 
 export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes, mostrarCandidatos = true, soConferencia = false, aba: abaDeFora, onAbaChange }: Props) {
   const anoMes = `${ano}-${mes}`;
-  const [abaEscolhida, setAba] = useState<AbaEspelho>('conferencia');
+  /* ⚠ NASCE EM "Extrato (banco)", NÃO MAIS NA CONFERÊNCIA — PR-CONC-CONFERENCIA-MODAL-01: a
+     Conferência virou modal, e nascer nela abriria o Dialog sozinho, sem nada atrás. */
+  const [abaEscolhida, setAba] = useState<AbaEspelho>('ofx');
   /* Com `soConferencia` a sub-aba é fixa: a fileira some e nada a troca.
      ⚠ E `abaDeFora` VENCE QUANDO EXISTE: quem monta a fileira na própria barra governa a
      escolha; sem ela, o estado interno continua mandando, como sempre. */
   const aba = soConferencia ? 'conferencia' : (abaDeFora ?? abaEscolhida);
+  /* ⚠ A CONFERÊNCIA É UM MODAL POR CIMA DA SUB-ABA QUE ESTAVA ABERTA — PR-CONC-CONFERENCIA-MODAL-01.
+     O corpo continua mostrando a anterior, e fechar o modal volta para ela. `soConferencia` (a
+     montagem como aba da Conciliação, hoje sem consumidor) segue inline, como sempre foi. */
+  const conferenciaEmModal = !soConferencia;
+  const [abaAnterior, setAbaAnterior] = useState<Exclude<AbaEspelho, 'conferencia'>>('ofx');
+  useEffect(() => { if (aba !== 'conferencia') setAbaAnterior(aba); }, [aba]);
+  const abaCorpo = aba === 'conferencia' && conferenciaEmModal ? abaAnterior : aba;
+  const fecharConferencia = () => { if (onAbaChange) onAbaChange(abaAnterior); else setAba(abaAnterior); };
   /**
    * "ABRIR" PASSA A EDITAR — PR-ESPELHO-ABRIR-EDITA-09, e a fiação é COPIADA do
    * `AgriDreLavouraTab`, que já fazia isto.
@@ -1594,6 +1701,14 @@ export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes, mostrarCan
   const { entradasBanco, entradasSistema, saidasBanco, saidasSistema, difEntradas, difSaidas } =
     totaisDoEspelho(data, internas.lancamentosInternos);
 
+  /* O mesmo elemento vai inline (`soConferencia`) ou dentro do Dialog — um só, nunca dois. */
+  const conferencia = (
+    <AbaConferencia data={data} anoMes={anoMes} nomeConta={data.escopo.nome_conta ?? undefined}
+      clienteId={clienteId} contaId={contaId} internos={internas.lancamentosInternos}
+      onAbrir={onAbrirLancamento} onMudou={() => { void refetch(); }}
+      mostrarCandidatos={mostrarCandidatos} />
+  );
+
   const vinculados = new Set((data.vinculos ?? []).map((v) => v.lancamento_id));
   const extratosComVinculo = new Set((data.vinculos ?? []).map((v) => v.extrato_id));
   const semCorrespondencia = data.ofx_completo.filter((o) => !extratosComVinculo.has(o.extrato_id));
@@ -1639,31 +1754,64 @@ export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes, mostrarCan
             11px para 10px não cai NADA (os rótulos e os `line-height` é que passam a mandar),
             e o número encostaria nos rótulos de 9,5px. Menor sem ganhar altura é só menos
             legível. */}
-        <div className="grid grid-cols-[52px_92px_92px_92px_1fr] gap-x-2.5 items-baseline">
-          <span />
-          <span className="text-right text-[9.5px] leading-[11px] text-muted-foreground">banco</span>
-          <span className="text-right text-[9.5px] leading-[11px] text-muted-foreground">sistema</span>
-          <span className="text-right text-[9.5px] leading-[11px] text-muted-foreground">diferença</span>
-          <span className="text-[9.5px] leading-[11px] text-muted-foreground">sem par</span>
-
-          <span className="text-[9.5px] text-muted-foreground">saídas</span>
-          <span className="text-right text-[11px] font-medium tabular-nums leading-[13px] text-destructive">{fmtBRL(saidasBanco)}</span>
-          <span className="text-right text-[11px] font-medium tabular-nums leading-[13px] text-destructive">{fmtBRL(saidasSistema)}</span>
-          <span className={cn('text-right text-[11px] font-medium tabular-nums leading-[13px]',
-            saldoConfere(difSaidas) ? 'text-muted-foreground' : 'text-amber-600')}>{fmtBRL(difSaidas)}</span>
-          <span className="row-span-2 self-center text-[9.5px] text-muted-foreground leading-tight">
-            {semCorrespondencia.length} extrato{semCorrespondencia.length === 1 ? '' : 's'}
-            {' · '}{noSistemaNaoNoBanco.length} lançamento{noSistemaNaoNoBanco.length === 1 ? '' : 's'}
-            {noSistemaNaoNoBanco.length > 0 && (
-              <><br /><span className="text-destructive">{fmtBRL(totalNaoNoBanco)}</span></>
-            )}
-          </span>
-
-          <span className="text-[9.5px] text-muted-foreground">entradas</span>
-          <span className="text-right text-[11px] font-medium tabular-nums leading-[13px] text-emerald-600">{fmtBRL(entradasBanco)}</span>
-          <span className="text-right text-[11px] font-medium tabular-nums leading-[13px] text-emerald-600">{fmtBRL(entradasSistema)}</span>
-          <span className={cn('text-right text-[11px] font-medium tabular-nums leading-[13px]',
-            saldoConfere(difEntradas) ? 'text-muted-foreground' : 'text-amber-600')}>{fmtBRL(difEntradas)}</span>
+        {/* ⚠ AGORA É TABELA DE VERDADE — PR-CONC-CONFERENCIA-MODAL-01 (mock v2 do Gabriel): cabeçalho
+            navy, linhas de 18px a 10px, borda entre linhas e divisor vertical entre colunas. SÓ LAYOUT:
+            os números são os mesmos de `totaisDoEspelho`, e o "sem par" os mesmos contadores de antes,
+            com o total dos lançamentos sem par (`totalNaoNoBanco`) na coluna Valor. O dos extratos sem
+            par nunca foi calculado — fica "—" em vez de uma conta nova. */}
+        <div className="flex flex-wrap items-start gap-3" data-testid="resumo-espelho">
+          <table className="border-collapse border border-border text-[10px]" style={{ tableLayout: 'fixed', width: 358 }}>
+            <colgroup>
+              <col style={{ width: 70 }} /><col style={{ width: 96 }} /><col style={{ width: 96 }} /><col style={{ width: 96 }} />
+            </colgroup>
+            <thead>
+              <tr className="h-[18px] bg-primary text-primary-foreground">
+                <th className="border-r border-primary-foreground/30 px-[5px]" />
+                <th className="border-r border-primary-foreground/30 px-[5px] text-center font-medium">Banco (OFX)</th>
+                <th className="border-r border-primary-foreground/30 px-[5px] text-center font-medium">Sistema</th>
+                <th className="px-[5px] text-center font-medium">Diferença</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="h-[18px] border-b border-border">
+                <td className="border-r border-border px-[5px] text-muted-foreground">Saídas</td>
+                <td className="border-r border-border px-[5px] text-right font-medium tabular-nums whitespace-nowrap text-destructive">{fmtBRL(saidasBanco)}</td>
+                <td className="border-r border-border px-[5px] text-right font-medium tabular-nums whitespace-nowrap text-destructive">{fmtBRL(saidasSistema)}</td>
+                <td className={cn('px-[5px] text-right font-medium tabular-nums whitespace-nowrap',
+                  saldoConfere(difSaidas) ? 'text-muted-foreground' : 'text-amber-600')}>{fmtBRL(difSaidas)}</td>
+              </tr>
+              <tr className="h-[18px]">
+                <td className="border-r border-border px-[5px] text-muted-foreground">Entradas</td>
+                <td className="border-r border-border px-[5px] text-right font-medium tabular-nums whitespace-nowrap text-emerald-600">{fmtBRL(entradasBanco)}</td>
+                <td className="border-r border-border px-[5px] text-right font-medium tabular-nums whitespace-nowrap text-emerald-600">{fmtBRL(entradasSistema)}</td>
+                <td className={cn('px-[5px] text-right font-medium tabular-nums whitespace-nowrap',
+                  saldoConfere(difEntradas) ? 'text-muted-foreground' : 'text-amber-600')}>{fmtBRL(difEntradas)}</td>
+              </tr>
+            </tbody>
+          </table>
+          <table className="border-collapse border border-border text-[10px]" style={{ tableLayout: 'fixed', width: 216 }}>
+            <colgroup><col style={{ width: 70 }} /><col style={{ width: 50 }} /><col style={{ width: 96 }} /></colgroup>
+            <thead>
+              <tr className="h-[18px] bg-primary text-primary-foreground">
+                <th className="border-r border-primary-foreground/30 px-[5px] text-left font-medium">Sem par</th>
+                <th className="border-r border-primary-foreground/30 px-[5px] text-center font-medium">Qtde</th>
+                <th className="px-[5px] text-center font-medium">Valor</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="h-[18px] border-b border-border">
+                <td className="border-r border-border px-[5px] text-muted-foreground">Extratos</td>
+                <td className="border-r border-border px-[5px] text-right tabular-nums">{semCorrespondencia.length}</td>
+                <td className="px-[5px] text-right text-muted-foreground">—</td>
+              </tr>
+              <tr className="h-[18px]">
+                <td className="border-r border-border px-[5px] text-muted-foreground">Lançamentos</td>
+                <td className="border-r border-border px-[5px] text-right tabular-nums">{noSistemaNaoNoBanco.length}</td>
+                <td className={cn('px-[5px] text-right font-medium tabular-nums whitespace-nowrap',
+                  totalNaoNoBanco !== 0 ? 'text-destructive' : 'text-muted-foreground')}>{fmtBRL(totalNaoNoBanco)}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
 
         {/* ⚠ A FILEIRA SÓ NASCE AQUI QUANDO NINGUÉM A MONTOU FORA — PR-SISTEMA-BARRA-COMPACTA-01.
@@ -1682,15 +1830,41 @@ export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes, mostrarCan
         )}
       </div>
 
-      {aba === 'conferencia' && (
-        <AbaConferencia data={data} anoMes={anoMes} nomeConta={data.escopo.nome_conta ?? undefined}
-          clienteId={clienteId} contaId={contaId} internos={internas.lancamentosInternos}
-          onAbrir={onAbrirLancamento} onMudou={() => { void refetch(); }}
-          mostrarCandidatos={mostrarCandidatos} />
+      {!conferenciaEmModal && aba === 'conferencia' && conferencia}
+      {abaCorpo === 'ofx' && <TabelaExtratoDoMes ofx={data.ofx_completo} inicial={inicial} internas={internas} />}
+      {abaCorpo === 'sistema' && <AbaSistemaReal sistema={data.sistema_completo} inicial={inicial} onAbrir={onAbrirLancamento} />}
+      {abaCorpo === 'evolucao' && <AbaEvolucaoReal data={data} internos={internas.lancamentosInternos} />}
+
+      {/* ⚠ A CONFERÊNCIA ABRE EM MODAL LARGO — PR-CONC-CONFERENCIA-MODAL-01 (mock v2 do Gabriel). O
+          corpo é o MESMO `AbaConferencia`, só que dentro do Dialog: mesmas linhas, marcação, arrasto,
+          barra de casar, ignorados e legenda. 96vw × 90vh; cabeçalho de 32px com a conta e o mês, e
+          logo abaixo o resumo numa linha de 10px (os mesmos números da tabela do corpo). O cabeçalho
+          da mesa é `sticky` dentro do scroller e a legenda fica fora dele — só as linhas rolam. */}
+      {conferenciaEmModal && (
+        <Dialog open={aba === 'conferencia'} onOpenChange={(v) => { if (!v) fecharConferencia(); }}>
+          <DialogContent className="w-[96vw] max-w-[96vw] h-[90vh] max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col [&>button.absolute]:hidden"
+            data-testid="modal-conferencia">
+            <div className="flex h-8 shrink-0 items-center justify-between gap-2 bg-primary px-3.5 text-primary-foreground">
+              <DialogTitle className="text-[12px] font-medium">
+                {['Conferência', data.escopo.nome_conta, `${MESES_CURTOS[Number(mes) - 1] ?? mes}/${ano}`].filter(Boolean).join(' · ')}
+              </DialogTitle>
+              <button type="button" onClick={fecharConferencia} aria-label="Fechar"
+                className="rounded p-0.5 opacity-80 hover:opacity-100 hover:bg-primary-foreground/10">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <div className="shrink-0 whitespace-nowrap border-b px-3.5 py-[2px] text-[10px] text-muted-foreground">
+              Banco saídas <span className="font-medium tabular-nums text-destructive">{fmtBRL(saidasBanco)}</span>
+              {' · '}entradas <span className="font-medium tabular-nums text-emerald-600">{fmtBRL(entradasBanco)}</span>
+              {'  |  '}Sistema saídas <span className="font-medium tabular-nums text-destructive">{fmtBRL(saidasSistema)}</span>
+              {' · '}entradas <span className="font-medium tabular-nums text-emerald-600">{fmtBRL(entradasSistema)}</span>
+              {'  |  '}Sem par {semCorrespondencia.length} extrato{semCorrespondencia.length === 1 ? '' : 's'}
+              {' · '}{noSistemaNaoNoBanco.length} lançamento{noSistemaNaoNoBanco.length === 1 ? '' : 's'}
+            </div>
+            {aba === 'conferencia' && conferencia}
+          </DialogContent>
+        </Dialog>
       )}
-      {aba === 'ofx' && <TabelaExtratoDoMes ofx={data.ofx_completo} inicial={inicial} internas={internas} />}
-      {aba === 'sistema' && <AbaSistemaReal sistema={data.sistema_completo} inicial={inicial} onAbrir={onAbrirLancamento} />}
-      {aba === 'evolucao' && <AbaEvolucaoReal data={data} internos={internas.lancamentosInternos} />}
 
       {/* ⚠ `carregando={!catalogosProntos}`: esqueleto e Salvar travado até os quatro catálogos
           estarem na mão. Abrir o formulário editável com seletor vazio é o caminho para gravar

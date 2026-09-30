@@ -161,7 +161,7 @@ export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comP
             de produto: eles CONCILIAM, e esta aba é a de IMPORTAR. O operador entrava para
             conferir se o extrato chegou completo e encontrava, no mesmo cabeçalho, dois botões
             que gravam vínculo e criam lançamento — a tela ensinava o passo errado. Agora moram
-            em `AcoesDoMes`, montado na aba "Enriquecer · Sistema", que é o passo 2.
+            em `AcoesDoMes`, montado na aba "Casar lançamentos", que é o passo 2.
             ⚠ AQUI FICA O QUE É DO PASSO 1: a conta, a contagem, "Ver importações", os quatro
             números e o portão do saldo. Nada que concilie. */}
       </div>
@@ -368,8 +368,8 @@ export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comP
         carregando={importacoes.loading}
         aoDesfeito={() => { setHouveDesfazer(true); void importacoes.recarregar(); }}
       />
-      {/* ⚠ O PALCO NÃO MORA MAIS NESTE CARD — ele vive em `AcoesDoMes` (aba "Enriquecer ·
-          Sistema") desde o PR-CONCILIACAO-PASSOS-01, e o que ele grava chega aqui pelo
+      {/* ⚠ O PALCO NÃO MORA MAIS NESTE CARD — ele vive em `AcoesDoMes` (aba "Casar
+          lançamentos") desde o PR-CONCILIACAO-PASSOS-01, e o que ele grava chega aqui pelo
           `aoMudar` de lá: a aba remonta este painel pela `key`. O desfazer de arquivo usa o
           MESMO caminho (o `aoMudar` deste painel), disparado ao fechar o "Ver importações"
           depois de um desfazer — PR-CONC-DESFAZER-ARQUIVO-01. */}

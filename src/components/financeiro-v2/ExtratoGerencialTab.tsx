@@ -381,7 +381,7 @@ export function ExtratoGerencialTab({ periodo }: { periodo: PeriodoControlado })
       <div className="flex flex-wrap items-end gap-1.5 shrink-0">
         <div className="min-w-[220px]">
           {/* ⚠ O RÓTULO "Conta" SAIU — PR-CONC-HEADER-AJUSTES-02. As outras abas desta tela
-              (Importar Banco, Enriquecer · Sistema) montam o seletor SEM rótulo, e o mesmo
+              (Importar Banco, Casar lançamentos) montam o seletor SEM rótulo, e o mesmo
               controle com duas aparências na mesma tela é a divergência que a lei do componente
               padrão existe para evitar.
               ⚠ E ELE JÁ FURAVA O PISO DE FONTE: `text-[9px]` contra os 9,5px do PADROES-UI, com

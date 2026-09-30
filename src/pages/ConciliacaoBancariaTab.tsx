@@ -437,16 +437,18 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   const [refreshExtrato, setRefreshExtrato] = useState(0);
   /* ⚠ A SUB-ABA DO ESPELHO MORA AQUI — PR-SISTEMA-BARRA-COMPACTA-01: a fileira foi para a barra
      de ações desta tela, então quem governa a escolha é quem desenha os botões. */
-  const [abaEspelho, setAbaEspelho] = useState<AbaEspelho>('conferencia');
+  /* ⚠ NASCE EM "Extrato (banco)" — PR-CONC-CONFERENCIA-MODAL-01: a Conferência virou modal, e
+     nascer nela abriria o Dialog sozinho ao entrar na aba. */
+  const [abaEspelho, setAbaEspelho] = useState<AbaEspelho>('ofx');
   const [showPendencias, setShowPendencias] = useState(false);
   /* ⚠ O ESPELHO CONTINUA MODAL, E TAMBÉM VIRA ABA — PR-ESPELHO-02 e PR-CONCILIACAO-5-ABAS-01.
      O modal "Espelho OFX × Sistema", aberto pelo botão em "Importar Banco", segue sendo o FECHO
-     do mês: só realizados, sem candidatos. A aba "Enriquecer · Sistema" monta o MESMO
+     do mês: só realizados, sem candidatos. A aba "Casar lançamentos" monta o MESMO
      componente do Espelho, só na sub-aba Conferência e com os candidatos (previsto, agendado,
      programado) casáveis — é onde o extrato atualiza o sistema antes do Excel. "Auditoria fica
      separada" continua valendo para a Auditoria Bancária.
-     ⚠ CINCO ABAS, NA ORDEM DO FLUXO (decisão do Gabriel, 17/09): Importar Banco → Enriquecer ·
-     Sistema → Enriquecer · Excel → Extrato Gerencial → Conciliação. Os filtros do CABEÇALHO (ano,
+     ⚠ CINCO ABAS, NA ORDEM DO FLUXO (decisão do Gabriel, 17/09; a segunda renomeada em 30/09): Importar
+     Banco → Casar lançamentos → Enriquecer · Excel → Extrato Gerencial → Conciliação. Os filtros do CABEÇALHO (ano,
      mês, conta) valem para todas e se mantêm ao trocar de aba: são estado desta tela, não de cada
      aba — trocar de aba nunca perde onde o operador estava. */
   const [vistaExtrato, setVistaExtrato] = useState<'importar' | 'enriquecer_sistema' | 'enriquecer' | 'gerencial' | 'conciliacao'>('conciliacao');
@@ -1058,7 +1060,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
         </div>
 
         {/* PR-MOS-1 — abas da Conciliação Bancária. A Auditoria Bancária continua separada;
-            o Espelho é modal (o fecho) e também a aba "Enriquecer · Sistema" — ver o comentário
+            o Espelho é modal (o fecho) e também a aba "Casar lançamentos" — ver o comentário
             do `vistaExtrato`.
             ⚠ A BARRA NÃO USA O `Segmentado` da casa: são botões à mão, como já eram. Migrar é
             frente própria.
@@ -1092,7 +1094,9 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
               onClick={() => setVistaExtrato('enriquecer_sistema')}
               className={`px-2.5 py-1 rounded-t text-[10px] font-bold transition-colors ${vistaExtrato === 'enriquecer_sistema' ? 'bg-card text-foreground shadow-[inset_0_1px_0_hsl(var(--border)/0.6),inset_1px_0_0_hsl(var(--border)/0.6),inset_-1px_0_0_hsl(var(--border)/0.6)]' : 'bg-transparent text-muted-foreground hover:bg-background/60'}`}
             >
-              Enriquecer · Sistema
+              {/* Renomeada pelo Gabriel em 30/09 (PR-CONC-CONFERENCIA-MODAL-01): a aba casa o extrato com o que já
+                  está lançado. A chave interna continua `enriquecer_sistema`. */}
+              Casar lançamentos
             </button>
             <button
               onClick={() => setVistaExtrato('enriquecer')}
@@ -1257,7 +1261,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             vencia — regua marcando Mai e extrato mostrando Jun (print de 15:39).
             Passando `periodo`, esta tela e' a dona: os selects nao sao renderizados
             e trocar o mes na regua chega na aba no mesmo render. */}
-        {/* ⚠ ENRIQUECER · SISTEMA — PR-CONCILIACAO-5-ABAS-01. O Espelho na sub-aba Conferência, com os
+        {/* ⚠ CASAR LANÇAMENTOS — PR-CONCILIACAO-5-ABAS-01 (renomeada em 30/09). O Espelho na sub-aba Conferência, com os
             candidatos casáveis: o extrato atualiza o programado/previsto que já está no sistema.
             ⚠ PAI EM COLUNA FLEX SEM ROLAGEM, no molde do Enriquecer: a mesa tem rolagem própria, e
             um pai com `overflow-y-auto` daria duas barras. Sem conta, o componente pede a escolha. */}
@@ -1326,8 +1330,9 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                 na barra acima, e a sub-aba aberta chega por prop.
                 ⚠ `mostrarCandidatos` FICA: a Conferência desta aba é a mesa de casar o extrato
                 com o previsto/programado, e é o que separa esta montagem da do modal.
-                ⚠ E A CONFERÊNCIA CONTINUA SENDO A INICIAL — o `useState` do componente nasce em
-                'conferencia', então abrir a aba não mudou de lugar para quem já a usava. */}
+                ⚠ A INICIAL PASSOU A SER "Extrato (banco)" — PR-CONC-CONFERENCIA-MODAL-01: a
+                Conferência abre num modal largo por cima da sub-aba que estava aberta, e fechar
+                volta para ela. */}
             <EspelhoConciliacaoTab clienteId={clienteId ?? null}
               contaId={selectedConta === '__all__' ? null : selectedConta}
               ano={String(ano)} mes={selectedMes} mostrarCandidatos
