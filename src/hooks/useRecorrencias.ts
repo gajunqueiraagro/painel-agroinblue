@@ -245,6 +245,24 @@ export async function gerarRecorrencia(
 /** Até onde a edição da regra alcança os lançamentos que ela gerou. */
 export type EscopoPropagacao = 'futuros' | 'todos' | 'nenhum';
 
+/** Um lançamento cuja competência a regra recalcula (datas ISO). */
+export interface CompetenciaRecalculada { lancamentoId: string; venc: string; compAntiga: string | null; compNova: string }
+
+/** O que muda na competência — FIN-RECORRENCIA-PROPAGA-COMPETENCIA-01. Tudo vem do banco. */
+export interface CompetenciaPropagacao {
+  /** Por grupo (futuros / passados), independente do escopo escolhido: quantas mudam, quantas o mês fechado pula. */
+  grupos: Record<'futuros' | 'passados', { alteradas: number; puladasMesFechado: number; lista: CompetenciaRecalculada[] }>;
+  /** Meses fechados (`financeiro_fechamentos`) que fizeram pular algum lançamento, 'YYYY-MM'. */
+  mesesFechados: string[];
+  marcaAntes: string | null;
+  /** O que cada escopo faria: quantas mudam, a marca resultante, o que o próximo gerar cria, competência repetida. */
+  projecao: Record<'futuros' | 'todos', {
+    alteradas: number; marcaDepois: string | null; aGerar: string[]; duplicidades: { competencia: string; n: number }[];
+  }>;
+  /** Só na execução: quantas foram gravadas. */
+  aplicadas: number | null;
+}
+
 export interface ResultadoPropagacao {
   /** Quantos se enquadram em cada grupo — a contagem é do banco, nunca da tela. */
   futuros: number;
@@ -252,6 +270,39 @@ export interface ResultadoPropagacao {
   aplicadosFuturos: number;
   aplicadosPassados: number;
   simulado: boolean;
+  /** Ausente quando a RPC é anterior à FIN-RECORRENCIA-PROPAGA-COMPETENCIA-01. */
+  competencia: CompetenciaPropagacao | null;
+}
+
+/* ⚠ O JSON DA RPC SE LÊ CAMPO A CAMPO, sem `as`: o que não tiver a forma esperada vira vazio/zero, nunca um
+   objeto de outro formato fingindo ser este. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- jsonb da RPC
+function lerCompetencia(c: any): CompetenciaPropagacao | null {
+  if (!c || typeof c !== 'object') return null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- jsonb da RPC
+  const lista = (l: any): CompetenciaRecalculada[] => (Array.isArray(l) ? l : []).map((x) => ({
+    lancamentoId: String(x?.lancamento_id ?? ''), venc: String(x?.venc ?? ''),
+    compAntiga: x?.comp_antiga == null ? null : String(x.comp_antiga), compNova: String(x?.comp_nova ?? ''),
+  }));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- jsonb da RPC
+  const grupo = (g: any) => ({
+    alteradas: Number(g?.alteradas ?? 0), puladasMesFechado: Number(g?.puladas_mes_fechado ?? 0), lista: lista(g?.lista),
+  });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- jsonb da RPC
+  const proj = (p: any) => ({
+    alteradas: Number(p?.alteradas ?? 0),
+    marcaDepois: p?.marca_depois == null ? null : String(p.marca_depois),
+    aGerar: (Array.isArray(p?.a_gerar) ? p.a_gerar : []).map(String),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- jsonb da RPC
+    duplicidades: (Array.isArray(p?.duplicidades) ? p.duplicidades : []).map((d: any) => ({ competencia: String(d?.competencia ?? ''), n: Number(d?.n ?? 0) })),
+  });
+  return {
+    grupos: { futuros: grupo(c.futuros), passados: grupo(c.passados) },
+    mesesFechados: (Array.isArray(c.meses_fechados) ? c.meses_fechados : []).map(String),
+    marcaAntes: c.marca_antes == null ? null : String(c.marca_antes),
+    projecao: { futuros: proj(c.projecao?.futuros), todos: proj(c.projecao?.todos) },
+    aplicadas: c.aplicadas == null ? null : Number(c.aplicadas),
+  };
 }
 
 /**
@@ -288,6 +339,7 @@ export async function propagarRecorrencia(
       aplicadosFuturos: Number(r.aplicados_futuros ?? 0),
       aplicadosPassados: Number(r.aplicados_passados ?? 0),
       simulado: r.simulado === true,
+      competencia: lerCompetencia(r.competencia),
     },
     erro: null,
   };

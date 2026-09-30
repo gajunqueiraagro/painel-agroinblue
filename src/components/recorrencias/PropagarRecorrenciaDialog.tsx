@@ -39,10 +39,62 @@ const OPCOES: readonly { valor: EscopoPropagacao; rotulo: string; explica: strin
   { valor: 'futuros', rotulo: 'Só os futuros',
     explica: 'ainda não pagos nem conciliados — classificação, identificação e valor' },
   { valor: 'todos', rotulo: 'Futuros e passados',
-    explica: 'os realizados também mudam de classificação; datas e valor deles ficam' },
+    explica: 'os realizados também mudam de classificação e competência; vencimento, pagamento e valor pago ficam' },
   { valor: 'nenhum', rotulo: 'Não propagar',
     explica: 'só a regra muda; os lançamentos já gerados ficam como estão' },
 ];
+
+const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+/** '2026-08' ou '2026-08-01' → 'ago/26'. */
+const mesCurto = (s: string | null) => (s && s.length >= 7 ? `${MESES[Number(s.slice(5, 7)) - 1] ?? s.slice(5, 7)}/${s.slice(2, 4)}` : '—');
+/** '2026-10-05' → '05/10'. */
+const diaMes = (s: string | null) => (s && s.length >= 10 ? `${s.slice(8, 10)}/${s.slice(5, 7)}` : '—');
+
+/**
+ * A COMPETÊNCIA NA PRÉVIA — FIN-RECORRENCIA-PROPAGA-COMPETENCIA-01 (Gabriel, 30/09).
+ *
+ * ⚠ O QUE SE MOSTRA É O QUE O BANCO FARIA NO ESCOPO ESCOLHIDO: a RPC simula os dois (`projecao.futuros` e
+ * `projecao.todos`) numa ida só, e trocar a opção só troca qual se lê — nada é recalculado na tela.
+ * ⚠ E A MARCA DA GERAÇÃO É PARTE DA RESPOSTA: recuar a competência de dezembro para novembro deixa dezembro vago, e
+ * a propagação move a marca para o próximo "Gerar" criar o que faltou. A propagação em si não cria lançamento.
+ */
+export function BlocoCompetencia({ previa, escopo }: { previa: ResultadoPropagacao; escopo: 'futuros' | 'todos' }) {
+  const c = previa.competencia;
+  if (!c) return null;
+  const p = c.projecao[escopo];
+  const exemplos = escopo === 'todos' ? [...c.grupos.futuros.lista, ...c.grupos.passados.lista] : c.grupos.futuros.lista;
+  const ex = exemplos[0];
+  const puladas = c.grupos.futuros.puladasMesFechado + (escopo === 'todos' ? c.grupos.passados.puladasMesFechado : 0);
+  const marcaMuda = p.marcaDepois !== c.marcaAntes;
+  return (
+    <div className="rounded border px-2 py-1.5 text-[11px] leading-snug" data-testid="propagar-competencia">
+      {p.alteradas > 0 ? (
+        <div data-testid="competencias-recalculadas">
+          <b className="tabular-nums">{p.alteradas}</b> competência{p.alteradas === 1 ? '' : 's'} recalculada{p.alteradas === 1 ? '' : 's'}
+          {ex && <span className="text-muted-foreground"> (ex.: venc {diaMes(ex.venc)}: {diaMes(ex.compAntiga)} → {diaMes(ex.compNova)})</span>}
+        </div>
+      ) : (
+        <div className="text-muted-foreground">Nenhuma competência muda: todas já seguem a regra.</div>
+      )}
+      {puladas > 0 && (
+        <div className="text-amber-700" data-testid="competencias-puladas">
+          <b className="tabular-nums">{puladas}</b> pulada{puladas === 1 ? '' : 's'} por mês fechado ({c.mesesFechados.map(mesCurto).join(', ')})
+        </div>
+      )}
+      {marcaMuda && (
+        <div className="text-[10px] text-muted-foreground" data-testid="competencias-marca">
+          Marca da geração: {mesCurto(c.marcaAntes)} → {mesCurto(p.marcaDepois)}
+          {p.aGerar.length > 0 && <> · a próxima geração cria {p.aGerar.map(mesCurto).join(', ')}</>}
+        </div>
+      )}
+      {p.duplicidades.length > 0 && (
+        <div className="text-amber-700" data-testid="competencias-duplicadas">
+          Competência repetida depois do recálculo: {p.duplicidades.map((d) => `${mesCurto(d.competencia)} (${d.n})`).join(', ')} — confira antes
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function PropagarRecorrenciaDialog({ recorrenciaId, descricao, previa, recusa, aoFechar }: Props) {
   const [escopo, setEscopo] = useState<EscopoPropagacao>('futuros');
@@ -60,7 +112,9 @@ export function PropagarRecorrenciaDialog({ recorrenciaId, descricao, previa, re
       const r = await propagarRecorrencia(recorrenciaId, escopo, false);
       if (!r.ok || !r.dados) { toast.error(r.erro ?? 'O banco recusou a propagação.'); return; }
       const n = r.dados.aplicadosFuturos + r.dados.aplicadosPassados;
-      toast.success(n === 1 ? '1 lançamento atualizado.' : `${n} lançamentos atualizados.`);
+      const nc = r.dados.competencia?.aplicadas ?? 0;
+      toast.success((n === 1 ? '1 lançamento atualizado' : `${n} lançamentos atualizados`)
+        + (nc > 0 ? ` · ${nc} competência${nc === 1 ? '' : 's'} recalculada${nc === 1 ? '' : 's'}.` : '.'));
       aoFechar();
     } finally {
       setOcupado(false);
@@ -98,9 +152,12 @@ export function PropagarRecorrenciaDialog({ recorrenciaId, descricao, previa, re
                 <b className="tabular-nums">{previa.passados}</b> passado{previa.passados === 1 ? '' : 's'}
                 <div className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
                   Propagam: descrição, favorecido, fazenda, conta, classificação e safra.
-                  O valor só alcança os futuros; datas, tipo e sinal nunca mudam.
+                  O valor só alcança os futuros. Vencimento, pagamento e valor pago não mudam; a competência segue
+                  a regra. Tipo e sinal nunca mudam.
                 </div>
               </div>
+
+              {escopo !== 'nenhum' && <BlocoCompetencia previa={previa} escopo={escopo} />}
 
               {/* ⚠ SEM `as`: a lista é a fonte dos valores, então procurar nela estreita o tipo
                   e ainda valida — um valor que não esteja em OPCOES simplesmente não passa. */}
