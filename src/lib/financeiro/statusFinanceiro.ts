@@ -16,15 +16,20 @@
 
 // ── Domínio oficial (estágio financeiro persistido) ──
 
-/** Fluxo oficial: previsto → agendado → programado → realizado. */
+/** Fluxo oficial: previsto → programado → agendado → realizado (PR-FIN-V2-STATUS-PGTO-01). */
 export type StatusFinanceiro = 'previsto' | 'agendado' | 'programado' | 'realizado';
 
 /** Status inicial de um NOVO lançamento (era 'meta' até PR-FIN-STATUS-UX-03A-1). */
 export const STATUS_FINANCEIRO_INICIAL: StatusFinanceiro = 'previsto';
 
-/** Ordem oficial do fluxo. */
+/**
+ * Ordem oficial do fluxo — e a de TODO lugar que lista status: coluna, filtro, select do
+ * modal e `ModoRapidoGrid`.
+ * ⚠ PROGRAMADO ANTES DE AGENDADO — PR-FIN-V2-STATUS-PGTO-01 (aprovada pelo Gabriel em
+ * 29/09, FIN-V2-COLUNAS-STATUS-01). Era previsto → agendado → programado.
+ */
 export const STATUS_FINANCEIRO_ORDEM: StatusFinanceiro[] = [
-  'previsto', 'agendado', 'programado', 'realizado',
+  'previsto', 'programado', 'agendado', 'realizado',
 ];
 
 /** Labels de apresentação. */
@@ -35,20 +40,45 @@ export const STATUS_FINANCEIRO_LABEL: Record<StatusFinanceiro, string> = {
   realizado: 'Realizado',
 };
 
-/** Cores de texto na grade (padrão cromático atual preservado). */
 /**
- * ⚠ `programado` SAIU DO AZUL — FIN-LISTA-LAYOUT-02, e é correção de um bug, não de gosto.
- * Ele e `conciliado_real` tinham a MESMA string (`text-blue-600 dark:text-blue-400`), byte a
- * byte, enquanto o comentário de `STATUS_FILTRO_COR` prometia, três linhas abaixo, que "o
- * azul fica reservado ao conciliado DE VERDADE — duas coisas diferentes não podem ter a
- * mesma cor". O `...STATUS_FINANCEIRO_COR` espalhado ali já trazia o azul do programado, e a
- * reserva nunca valeu. Agora o azul é do conciliado e o programado é âmbar.
+ * A PALETA DO STATUS — DONA ÚNICA DA COR, PR-FIN-V2-STATUS-PGTO-01. Mock v4 aprovado pelo
+ * Gabriel em 29/09 (FIN-V2-COLUNAS-STATUS-01): Previsto laranja; Programado azul; Agendado
+ * verde escuro SÓ TEXTO; Realizado verde claro com fundo e borda; Conciliado verde escuro com
+ * selo oval de fundo verde escuro.
+ * ⚠ ELA MORAVA EM `TabelaDespesasOC.tsx` (o `PILULA` da conta corrente da OC), e a lista do
+ * Financeiro tinha outra (ciano/âmbar/roxo/azul). Duas cores para o mesmo status em duas telas.
+ * Agora a OC importa daqui.
+ * ⚠ `texto` É A COR QUANDO NÃO HÁ PÍLULA (quem mostra o status solto numa linha de texto), e
+ * `pilula` a da caixa. No Conciliado elas DIFEREM: o texto da pílula é branco sobre o verde, e
+ * branco solto sumiria no fundo. Classes literais, nunca montadas em runtime (o Tailwind só
+ * gera o que lê escrito).
+ * ⚠ `programado` e `conciliado` continuam com cores distintas — a colisão que o
+ * FIN-LISTA-LAYOUT-02 consertou (os dois tinham o mesmo azul) não volta.
  */
+export type StatusPaleta = StatusFinanceiro | 'conciliado';
+export const STATUS_PALETA: Record<StatusPaleta, { texto: string; pilula: string }> = {
+  previsto: { texto: 'text-[#c2410c]', pilula: 'text-[#c2410c] bg-[#fff7ed] border-[#fed7aa]' },
+  programado: { texto: 'text-[#1d4ed8]', pilula: 'text-[#1d4ed8] bg-[#eff6ff] border-[#bfdbfe]' },
+  agendado: { texto: 'text-[#14532d]', pilula: 'text-[#14532d] border-transparent' },
+  realizado: { texto: 'text-[#15803d]', pilula: 'text-[#15803d] bg-[#f0fdf4] border-[#bbf7d0]' },
+  conciliado: { texto: 'text-[#166534]', pilula: 'text-white bg-[#166534] border-[#166534]' },
+};
+
+/**
+ * A FORMA DA PÍLULA, uma só para todas as telas. 9,5px é o piso do sistema fora da Grade do DRE.
+ * ⚠ NA LISTA DO FINANCEIRO ELA RENDERIZA A 9px: `.table-financeiro td *` (index.css) força 9px
+ * com `!important` em tudo dentro da célula, e a lista inteira já está a 9px. Não é esta classe
+ * que decide lá.
+ */
+export const STATUS_PILULA_BASE =
+  'inline-block h-[15px] whitespace-nowrap rounded-[7px] border px-[6px] text-[9.5px] font-semibold leading-[13px]';
+
+/** Cores de texto na grade — derivadas da paleta, sem uma segunda fonte. */
 export const STATUS_FINANCEIRO_COR: Record<StatusFinanceiro, string> = {
-  previsto: 'text-cyan-600 dark:text-cyan-400',
-  agendado: 'text-purple-600 dark:text-purple-400',
-  programado: 'text-amber-600 dark:text-amber-400',
-  realizado: 'text-green-700 dark:text-green-400 font-bold',
+  previsto: STATUS_PALETA.previsto.texto,
+  programado: STATUS_PALETA.programado.texto,
+  agendado: STATUS_PALETA.agendado.texto,
+  realizado: STATUS_PALETA.realizado.texto,
 };
 
 /** Opções do Select do MODAL (seleção única). Sem Meta, sem Conciliado. */
@@ -122,7 +152,7 @@ export const STATUS_FILTRO_LABEL: Record<string, string> = {
   conciliado_real: 'Conciliado',
 };
 
-/** Cores da grade/filtro — Meta (legado) muted; Conciliado em azul. */
+/** Cores da grade/filtro — Meta (legado) muted; Conciliado no verde escuro da paleta. */
 export const STATUS_FILTRO_COR: Record<string, string> = {
   ...STATUS_FINANCEIRO_COR,
   meta: 'text-muted-foreground',
@@ -135,14 +165,48 @@ export const STATUS_FILTRO_COR: Record<string, string> = {
      saiu, porque era estilo. Vale a distinção: nem toda reversão leva junto o que veio na
      mesma carona. */
   conciliado: 'text-muted-foreground',
-  conciliado_real: 'text-blue-600 dark:text-blue-400',
+  conciliado_real: STATUS_PALETA.conciliado.texto,
 };
+
+/**
+ * A PÍLULA DA COLUNA ST, por chave de filtro (o `stKey` da lista). Só os cinco estágios têm caixa;
+ * os legados (`meta`, `conciliado` sem vínculo) não entram — ficam texto muted, porque a caixa
+ * afirmaria um estágio que o registro não tem.
+ */
+export const STATUS_FILTRO_PILULA: Record<string, string> = {
+  previsto: STATUS_PALETA.previsto.pilula,
+  programado: STATUS_PALETA.programado.pilula,
+  agendado: STATUS_PALETA.agendado.pilula,
+  realizado: STATUS_PALETA.realizado.pilula,
+  conciliado_real: STATUS_PALETA.conciliado.pilula,
+};
+
+/** Só realizado (e o conciliado, que é realizado com vínculo) tem data de pagamento. */
+export function statusTemPagamento(status: string | null | undefined): boolean {
+  return status === 'realizado' || status === 'conciliado';
+}
+
+/**
+ * O pagamento DEPOIS DE TROCAR O STATUS — PR-FIN-V2-STATUS-PGTO-01. Sair do realizado zera; voltar
+ * a ele não inventa data (a validação cobra). Pagamento travado pelo extrato fica: é o do banco.
+ */
+export function pagamentoAoTrocarStatus(novoStatus: string, pagamentoAtual: string, travado: boolean): string {
+  return statusTemPagamento(novoStatus) || travado ? pagamentoAtual : '';
+}
+
+/** O pagamento que VAI AO BANCO: nulo fora de realizado/conciliado, salvo o travado pelo extrato. */
+export function pagamentoParaGravar(status: string, pagamento: string, travado: boolean): string | null {
+  return statusTemPagamento(status) || travado ? (pagamento || null) : null;
+}
 
 
 // ── Writers ──
 
 /**
  * Deriva o status pela data de pagamento (writer de novos lançamentos).
+ * ⚠ O `LancamentoV2Dialog` NÃO USA MAIS — PR-FIN-V2-STATUS-PGTO-01: lá o status é escolhido e
+ * só o realizado tem pagamento. Sobra o `ModoRapidoGrid`, que ainda deriva agendado/programado
+ * da data de pagamento (frente própria).
  *   sem data → previsto (era 'meta' até PR-FIN-STATUS-UX-03A-1);
  *   data futura → agendado; data passada/hoje → programado.
  */

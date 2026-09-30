@@ -159,7 +159,7 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 30/09/2026 (PR-CONC-DESFAZER-ARQUIVO-01): 2402 passando, 22 skipped, e
+  Baseline em 30/09/2026 (PR-FIN-V2-STATUS-PGTO-01): 2416 passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -532,6 +532,13 @@ docs/historico/frentes-ate-2026-09-29.md.)
   separada atras de chave. Nenhuma coluna nova que gere rolagem horizontal a 1440px; o menu
   "..." fica fixo e sempre visivel. OC se abre pelo icone do produto ou "Abrir OC" no menu
   (FIN-V2-SEM-CAIXA-01, FIN-V2-HOMOLOG-FIX-01).
+- ⚠ STATUS NO FINANCEIRO (PR-FIN-V2-STATUS-PGTO-01, Gabriel 29-30/09): SO' REALIZADO (e conciliado) TEM DATA DE
+  PAGAMENTO; previsto/programado/agendado sao ESCOLHIDOS e a data de quando sai do banco mora no vencimento (o dialog zera o
+  pagamento ao sair do realizado e grava NULO fora dele, salvo pagamento travado pelo extrato). Ordem em todo lugar:
+  Previsto > Programado > Agendado > Realizado > Conciliado. Cor e pilula tem UM dono, `STATUS_PALETA` em
+  `src/lib/financeiro/statusFinanceiro.ts` (a coluna ST voltou a ter pilula, revogando so' para o status o FIN-LISTA-VISUAL-01).
+  Duplicata registrada: `BADGE_STATUS_TRANSACAO` (statusOperacional.ts, Mesa/Espelho); o `ModoRapidoGrid` ainda deriva
+  status da data de pagamento (frente propria).
 - ⚠ BOITEL: ao financeiro e ao DRE vai SO' O LIQUIDO DO ACERTO; R$/@ de venda = liquido / @ vivas que sairam. O VALOR DA
   OPERACAO E' O SLOT (`zoo_operacao_lotes.valor_informado`, helper `valorDaVendaBoitel`) e a tela nunca o calcula; o
   acerto e' conferencia. Com o realizado aplicado, o realizado vence a projecao em tudo (`custosDaVendaBoitel`, mesmo

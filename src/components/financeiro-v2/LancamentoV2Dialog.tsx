@@ -7,8 +7,10 @@ import { supabase } from '@/integrations/supabase/client';
 import {
   STATUS_FINANCEIRO_OPCOES_MODAL,
   STATUS_FINANCEIRO_INICIAL,
-  deriveStatusFinanceiro as deriveStatus,
   normalizeStatusModal,
+  statusTemPagamento,
+  pagamentoAoTrocarStatus,
+  pagamentoParaGravar,
 } from '@/lib/financeiro/statusFinanceiro';
 import { TIPOS_DOCUMENTO, formatNFNumber, extractNFDigits, type TipoDocumento } from '@/lib/financeiro/documentoHelper';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -216,8 +218,8 @@ const ABAS_TAB: { value: AbaVisual; label: string }[] = [
   { value: 'auditoria', label: 'Auditoria' },
 ];
 
-// PR-FIN-STATUS-UX-03A-1 — opções do modal e deriveStatus vêm do domínio único
-//   (statusFinanceiro.ts): previsto/agendado/programado/realizado; sem Meta, sem Conciliado.
+// PR-FIN-STATUS-UX-03A-1 — opções do modal vêm do domínio único (statusFinanceiro.ts):
+//   previsto/programado/agendado/realizado (ordem do PR-FIN-V2-STATUS-PGTO-01); sem Meta, sem Conciliado.
 const STATUS_OPTIONS = STATUS_FINANCEIRO_OPCOES_MODAL;
 
 /**
@@ -963,7 +965,8 @@ export function LancamentoV2Dialog({
       setDataCompetencia(today);
       setDataVencimento('');   // PR-FIN-MODAL-VENCIMENTO-02B — novo lançamento abre com vencimento vazio
       setDataPagamento('');   // PR-FIN-V2-STATUS-01 — novo lançamento NÃO recebe pagamento=hoje automático (só realizado exige)
-      setStatusTransacao(deriveStatus(today));
+      /* O status inicial é STATUS_FINANCEIRO_INICIAL ('previsto'), mais abaixo. O `deriveStatus(today)` que
+         morava aqui dava 'programado' e era sobrescrito na mesma passada — saiu com a derivação (PR-FIN-V2-STATUS-PGTO-01). */
       setDescricao('');
       setFavorecidoId('');
 
@@ -1132,11 +1135,25 @@ export function LancamentoV2Dialog({
     }
   }, [fornecedores, favorecidoId, buildDadosPagamento]);
 
+  /* ⚠ A DATA DE PAGAMENTO NÃO ESCOLHE MAIS O STATUS — PR-FIN-V2-STATUS-PGTO-01. Ela derivava
+     agendado (data futura) e programado (data passada), e com isso previsto/programado/agendado
+     nasciam com pagamento. A regra agora é do Gabriel: SÓ REALIZADO TEM PAGAMENTO; o status é
+     escolhido, e a data de quando sai do banco mora no vencimento. */
   const handleDataPagamentoChange = (val: string) => {
     setDataPagamento(val);
-    if (statusTransacao !== 'realizado') {
-      setStatusTransacao(deriveStatus(val));
-    }
+  };
+
+  /* O pagamento travado pelo fluxo de extrato (`lockedFields`) é o do banco: nada aqui o apaga. */
+  const pagamentoTravado = lockedFields?.includes('data_pagamento') ?? false;
+  const pagamentoPermitido = statusTemPagamento(statusTransacao);
+
+  /* ⚠ SAIR DO REALIZADO ZERA O PAGAMENTO — PR-FIN-V2-STATUS-PGTO-01. Os 7 do NJ voltaram de
+     realizado para previsto pelo modal e ficaram com o pagamento de 04/09 gravado. Voltar para
+     realizado reabre o campo VAZIO, e a validação existente cobra a data. */
+  const handleStatusChange = (v: string) => {
+    statusTouchedRef.current = true;
+    setStatusTransacao(v);
+    setDataPagamento(atual => pagamentoAoTrocarStatus(v, atual, pagamentoTravado));
   };
 
   const handleValorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1478,7 +1495,10 @@ export function LancamentoV2Dialog({
       conta_destino_id: contaDestinoFinal,
       data_competencia: dataCompetencia,
       data_vencimento: dataVencimento || null,   // PR-FIN-MODAL-VENCIMENTO-02B
-      data_pagamento: dataPagamento || null,
+      /* ⚠ DEFESA NO PAYLOAD — PR-FIN-V2-STATUS-PGTO-01: fora de realizado/conciliado o pagamento vai
+         NULO mesmo que o estado tenha valor (hidratação de registro antigo, prefill). A exceção é o
+         pagamento travado pelo extrato, que é o do banco. */
+      data_pagamento: pagamentoParaGravar(statusPersistido, dataPagamento, pagamentoTravado),
       valor: Math.abs(valorNum),
       tipo_operacao: tipoOperacao,
       status_transacao: statusPersistido,
@@ -1887,13 +1907,15 @@ export function LancamentoV2Dialog({
                 <Label className="text-[10px]">Data Vencimento</Label>
                 <DatePicker value={dataVencimento} onChange={setDataVencimento} disabled={isOCTitulo} className={dateFieldCls} />
               </div>
-              <div className="col-span-2">
+              <div className="col-span-2"
+                title={!pagamentoPermitido && !pagamentoTravado ? 'Só realizado tem data de pagamento' : undefined}>
                 <Label className="text-[10px]">Data Pagamento *</Label>
-                <DatePicker value={dataPagamento} onChange={handleDataPagamentoChange} disabled={lockedFields?.includes('data_pagamento')} tabIndex={3} className={dateFieldCls} />
+                <DatePicker value={dataPagamento} onChange={handleDataPagamentoChange}
+                  disabled={pagamentoTravado || !pagamentoPermitido} tabIndex={3} className={dateFieldCls} />
               </div>
               <div className="col-span-3">
                 <Label className="text-[10px]">Status *</Label>
-                <Select value={statusTransacao} onValueChange={(v) => { statusTouchedRef.current = true; setStatusTransacao(v); }}>
+                <Select value={statusTransacao} onValueChange={handleStatusChange}>
                   <SelectTrigger tabIndex={4} className={cn("h-8", fieldBg)}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {STATUS_OPTIONS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}

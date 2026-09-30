@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { ROTULO_STATUS_DESPESA, type LinhaDespesa, type StatusDespesa } from '@/lib/oc/despesasDaOperacao';
+import { STATUS_PALETA, STATUS_PILULA_BASE } from '@/lib/financeiro/statusFinanceiro';
 
 /* OC-VENDA-FINANCEIRO-COMPLETO-01a — a tabela das DESPESAS DA OPERACAO na OC em conta corrente (mock v4, parte de baixo da aba
    Financeiro). So' apresentacao: as linhas vem de `linhasDeDespesa`, os nomes de quem chama e o menu "⋯" tambem — as acoes sao
@@ -26,15 +27,14 @@ const DV = 'border-l-2 border-l-[#9aa7b6]';
 const TF = 'h-[19px] whitespace-nowrap border-t-2 border-t-[#9aa7b6] bg-[#E8E6DF] px-[4px] text-[10px] font-bold tabular-nums';
 const NEG = 'text-[#b91c1c]';
 
-/* As cinco cores do mock v4 (Previsto laranja, Programado azul, Agendado verde escuro sem fundo, Realizado verde claro com borda,
-   Conciliado verde escuro com fundo) e o ambar do "Sem título". ⚠ 9,5px, nao os 9 do mock: e' o piso do sistema fora da Grade
-   do DRE. */
+/* As cinco cores do mock v4 VÊM DA PALETA DO STATUS (`statusFinanceiro.ts`) — PR-FIN-V2-STATUS-PGTO-01: moravam aqui, e a lista
+   do Financeiro tinha outras. Só o ambar do "Sem título" é daqui: é estado da despesa da OC, não status de lançamento. */
 const PILULA: Record<StatusDespesa, string> = {
-  previsto: 'text-[#c2410c] bg-[#fff7ed] border-[#fed7aa]',
-  programado: 'text-[#1d4ed8] bg-[#eff6ff] border-[#bfdbfe]',
-  agendado: 'text-[#14532d] border-transparent',
-  realizado: 'text-[#15803d] bg-[#f0fdf4] border-[#bbf7d0]',
-  conciliado: 'text-white bg-[#166534] border-[#166534]',
+  previsto: STATUS_PALETA.previsto.pilula,
+  programado: STATUS_PALETA.programado.pilula,
+  agendado: STATUS_PALETA.agendado.pilula,
+  realizado: STATUS_PALETA.realizado.pilula,
+  conciliado: STATUS_PALETA.conciliado.pilula,
   sem_titulo: 'text-[#b45309] bg-[#fffbeb] border-[#fde68a]',
 };
 
@@ -44,7 +44,7 @@ const num2 = (v: number) => Math.abs(v).toLocaleString('pt-BR', { minimumFractio
 export function PilulaStatusDespesa({ status }: { status: StatusDespesa | null }) {
   if (!status) return <span className="text-muted-foreground">—</span>;
   return (
-    <span className={`inline-block h-[15px] whitespace-nowrap rounded-[7px] border px-[6px] text-[9.5px] font-semibold leading-[13px] ${PILULA[status]}`}
+    <span className={`${STATUS_PILULA_BASE} ${PILULA[status]}`}
       data-status={status}>
       {ROTULO_STATUS_DESPESA[status]}
     </span>

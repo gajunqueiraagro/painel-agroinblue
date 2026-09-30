@@ -5,6 +5,8 @@ import {
   STATUS_FINANCEIRO_OPCOES_FILTRO,
   STATUS_FILTRO_LABEL,
   STATUS_FILTRO_COR,
+  STATUS_FILTRO_PILULA,
+  STATUS_PILULA_BASE,
   isStatusFiltroFinanceiro,
   type StatusFiltroFinanceiro,
 } from '@/lib/financeiro/statusFinanceiro';
@@ -2535,10 +2537,19 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     porque `.celula-doc` no index.css tem `font-size: 9px !important` e vence
                     o `text-[10px]` do JSX. Subir para 10 seria AUMENTAR a fonte dentro de uma
                     coluna que está encolhendo 30px — o contrário do pedido. */}
-                <col style={{ width: modoIntensivo ? 60 : 55 }} />
-                {/* 58→64: a pílula ganhou borda e padding lateral; sem os 6px "Realizado"
-                    truncaria dentro dela — que é pior que não ter pílula. */}
-                <col style={{ width: 64 }} />
+                {/* ⚠ 55/60 → 70 — PR-FIN-V2-STATUS-PGTO-01: o documento cabe INTEIRO no formato
+                    "000.000.000". Medido com a fonte real (mono 8px, a `.celula-doc`): 53px de
+                    texto + 8 de padding + 8 de folga = 69. */}
+                <col style={{ width: 70 }} />
+                {/* ⚠ 64 → 84 — PR-FIN-V2-STATUS-PGTO-01. A pílula voltou (aprovada pelo Gabriel em
+                    29/09) e o maior rótulo com caixa é "Programado": 53,3px a 9px semibold (a lista
+                    força 9px) + 12 de padding e 2 de borda da pílula + 8 do `td` + 8 de folga = 84.
+                    Com 64, o status saía cortado colado nos pontinhos ("Ag").
+                    ⚠ A CONTA NOVA CABE SEM ROLAR: normal 968px contra ~1.011–1.026 úteis a 1280
+                    (1280 − 208 do menu − 24 do `px-3` − 2 de borda − 20 do `respiro-lista` − 0 a 15 da
+                    barra); Ampliado 1.142 contra ~1.219–1.234. Fazenda e Safra NÃO cederam: "ADM" já
+                    pede os 38 e "25/26-MAND" pede 74 (a 9px, forçados pelo CSS da lista). */}
+                <col style={{ width: 84 }} />
                 {/* Ações 36→28: um botão "…" em vez de dois ícones. */}
                 <col style={{ width: 28 }} />
               </colgroup>
@@ -2618,6 +2629,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     const stKey = vinculo && stCru === 'realizado' ? 'conciliado_real' : stCru;
                     const stLabel = STATUS_FILTRO_LABEL[stKey] || l.status_transacao || '-';
                     const stColor = STATUS_FILTRO_COR[stKey] || 'text-muted-foreground';
+                    const stPilula = STATUS_FILTRO_PILULA[stKey];
                     /* Vencido é fato de duas colunas: venceu no passado E não foi pago. */
                     const vencido = !!l.data_vencimento && !l.data_pagamento && l.data_vencimento < hojeISO;
                     /* A EVIDÊNCIA, sem UUID: o operador confere pelo que
@@ -2782,15 +2794,18 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                             faixa não cede — sem truncar, "Realizado" transbordaria a célula em
                             vez de a alargar. É o mesmo raciocínio do `min-w-0` da barra, do
                             outro lado da mesma regra. */}
-                        {/* ⚠ A PÍLULA COM BORDA FOI REVERTIDA — FIN-LISTA-VISUAL-01. Ela durou
-                            um PR: a caixa em toda linha competia com o valor numa lista densa,
-                            e o que se quer da coluna é reconhecer o estado de relance, não lê-lo
-                            emoldurado. Volta a ser TEXTO colorido, que é o que era antes.
-                            ⚠ O QUE NÃO VOLTA É A COLISÃO DE COR: `programado` continua âmbar e
-                            o azul segue reservado ao conciliado com vínculo. Aquela correção era
-                            de bug, não de estilo — e sobrevive à reversão do estilo. */}
-                        <td className={`truncate px-1 py-1 text-center align-middle text-[10px] leading-tight ${stColor}`}
-                          title={stTitle}>{stLabel}</td>
+                        {/* ⚠ A PÍLULA VOLTOU — PR-FIN-V2-STATUS-PGTO-01, por decisão do Gabriel (29/09),
+                            e revoga SÓ PARA O STATUS o FIN-LISTA-VISUAL-01 ("a caixa em toda linha
+                            compete com o valor"). Forma e cor vêm de `statusFinanceiro.ts`, a mesma
+                            pílula da conta corrente da OC.
+                            ⚠ SEM `truncate`: a coluna foi medida para o maior rótulo com caixa. Os
+                            legados ("Meta (legado)", "Conciliado (legado)") não têm caixa e quebram
+                            em duas linhas em vez de cortar. */}
+                        <td className="px-1 py-1 text-center align-middle leading-tight" title={stTitle}>
+                          {stPilula
+                            ? <span className={cn(STATUS_PILULA_BASE, stPilula)} data-status={stKey}>{stLabel}</span>
+                            : <span className={stColor}>{stLabel}</span>}
+                        </td>
                         {/* ⚠ UM BOTÃO "…" NO LUGAR DE DOIS ÍCONES — FIN-LISTA-LAYOUT-01. Dois
                             botões de 20px numa coluna de 36 disputavam espaço com a tabela
                             inteira, e o que eles faziam só se descobria no `title`. O menu diz
