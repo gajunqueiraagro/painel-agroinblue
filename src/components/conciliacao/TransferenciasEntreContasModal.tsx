@@ -5,15 +5,21 @@
  *   lançamentos em lote → Enriquecer · Excel. Sem ele, a saída num banco e a entrada no outro viram dois crus soltos:
  *   dinheiro mudando de bolso contado como despesa e como receita.
  * ⚠ O SISTEMA SUGERE, O OPERADOR CONFIRMA: a lista vem de `fn_transferencias_sugeridas` (o banco resolve o que fecha 1:1
- *   e o nó que só o mesmo dia resolve); o ambíguo pede a escolha da entrada. "Confirmar selecionadas" roda a PRÉVIA
- *   (`p_simular`) e só o segundo clique grava — cada par numa transação: 1 transferência (18010) e as duas pontas
- *   conciliadas, ou as duas pontas casadas na transferência que já estava lançada ("casa na existente").
+ *   e o nó que só o mesmo dia resolve); o ambíguo pede a escolha da entrada. Cada par grava numa transação: 1
+ *   transferência (18010) e as duas pontas conciliadas, ou as duas pontas casadas na transferência que já estava lançada
+ *   ("casa na existente").
+ * ⚠ UM CLIQUE GRAVA — PR-CONC-TRANSFERENCIAS-01-fix1 (homologação do Gabriel, 30/09 17:56: "o primeiro clique não faz
+ *   nada visível"). A PRÉVIA (`p_simular`) roda SOZINHA ao abrir e a cada mudança de seleção/contraparte, e aparece no
+ *   rodapé; "Confirmar transferências (N)" grava de primeira. Desligado, diz por quê ao lado; gravando, trava o duplo
+ *   clique por REF (o estado só vale no próximo render — dois cliques no mesmo tique passariam os dois). O padrão é o do
+ *   `PropagarRecorrenciaDialog`: prévia lida antes, um botão que grava.
  * ⚠ CASCA DO `SugestoesCasarModal` e a régua da casa: 9,5px, linha de 18px, cabeçalho navy fixo, uma informação por
  *   coluna, Data primeiro, SEM QUEBRA — as colunas foram medidas no maior texto real do NJ set/26 (a descrição do
  *   Sicredi, 61 caracteres). O que não couber na largura da tela rola na horizontal DENTRO da mesa, com o cabeçalho.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { X } from 'lucide-react';
+import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
@@ -58,7 +64,10 @@ export function TransferenciasEntreContasModal({ open, onClose, rotuloMes, linha
   const [escolha, setEscolha] = useState<Record<string, string>>({});
   const [marcados, setMarcados] = useState<Set<string>>(new Set());
   const [previa, setPrevia] = useState<ItemPrevia[] | null>(null);
-  const [ocupado, setOcupado] = useState(false);
+  const [previaCarregando, setPreviaCarregando] = useState(false);
+  const [previaErro, setPreviaErro] = useState<string | null>(null);
+  const [gravando, setGravando] = useState(false);
+  const gravandoRef = useRef(false);
   const [aviso, setAviso] = useState<string | null>(null);
 
   /* A lista mudou (abriu, gravou, releu): o resolvido nasce marcado; o ambíguo espera a escolha da entrada. */
@@ -83,54 +92,76 @@ export function TransferenciasEntreContasModal({ open, onClose, rotuloMes, linha
   );
 
   const alternar = (id: string) => {
-    setPrevia(null); setAviso(null);
+    setAviso(null);
     setMarcados((m) => { const n = new Set(m); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   };
   const escolher = (saidaId: string, entradaId: string) => {
-    setPrevia(null); setAviso(null);
+    setAviso(null);
     setEscolha((e) => ({ ...e, [saidaId]: entradaId }));
     setMarcados((m) => new Set(m).add(saidaId));
   };
 
-  /* 1º clique: a prévia pela própria RPC, com p_simular — nada grava. */
-  const verPrevia = async () => {
-    setOcupado(true); setAviso(null);
-    try {
-      const itens: ItemPrevia[] = [];
-      for (const l of selecionados) {
-        const e = entradaDe(l);
-        if (!e) continue;
-        itens.push({ saidaId: l.saida.id, entradaId: e.id, valor: e.valor, res: await fechar(l.saida.id, e.id, true) });
+  /* A PRÉVIA RODA SOZINHA: ao abrir e a cada mudança de seleção ou de contraparte, pela própria RPC com p_simular —
+     nada grava. A resposta de uma seleção antiga que chega depois é descartada (`vivo`). */
+  const pares = selecionados.flatMap((l) => { const e = entradaDe(l); return e ? [{ saidaId: l.saida.id, entradaId: e.id, valor: e.valor }] : []; });
+  const chavePares = pares.map((p) => `${p.saidaId}>${p.entradaId}`).join(',');
+  useEffect(() => {
+    if (!open) return undefined;
+    let vivo = true;
+    setPrevia(null); setPreviaErro(null);
+    if (pares.length === 0) { setPrevia([]); setPreviaCarregando(false); return undefined; }
+    setPreviaCarregando(true);
+    (async () => {
+      try {
+        const itens: ItemPrevia[] = [];
+        for (const p of pares) itens.push({ ...p, res: await fechar(p.saidaId, p.entradaId, true) });
+        if (vivo) setPrevia(itens);
+      } catch (e) {
+        if (vivo) setPreviaErro(e instanceof Error ? e.message : String(e));
+      } finally {
+        if (vivo) setPreviaCarregando(false);
       }
-      setPrevia(itens);
-    } finally {
-      setOcupado(false);
-    }
-  };
-
-  /* 2º clique: grava cada par que a prévia aceitou — cada um numa transação da RPC. */
-  const gravar = async () => {
-    if (!previa) return;
-    setOcupado(true);
-    let ok = 0;
-    const recusas: string[] = [];
-    try {
-      for (const it of previa.filter((p) => p.res.ok)) {
-        const r = await fechar(it.saidaId, it.entradaId, false);
-        if (r.ok) ok += 1; else recusas.push(`${fmtBRL(it.valor)}: ${textoMotivo(r.motivo)}`);
-      }
-    } finally {
-      setOcupado(false);
-    }
-    setPrevia(null);
-    setAviso(`${ok} transferência${ok === 1 ? '' : 's'} gravada${ok === 1 ? '' : 's'}`
-      + (recusas.length ? ` · ${recusas.length} recusada${recusas.length === 1 ? '' : 's'} (${recusas.join('; ')})` : ''));
-    if (ok > 0) await aoGravar();
-  };
+    })();
+    return () => { vivo = false; };
+  }, [open, chavePares]); // eslint-disable-line react-hooks/exhaustive-deps -- os pares são a chave
 
   const aceitos = previa?.filter((p) => p.res.ok) ?? [];
   const recusados = previa?.filter((p) => !p.res.ok) ?? [];
   const casam = aceitos.filter((p) => p.res.acao === 'casar_existente').length;
+
+  /* O motivo de o botão estar desligado — fonte única do `disabled`, do `title` e do texto ao lado. */
+  const motivoDesligado = gravando ? 'gravando…'
+    : previaCarregando ? 'conferindo a prévia…'
+    : previaErro ? `a prévia falhou: ${previaErro}`
+    : selecionados.length === 0 ? 'nenhuma transferência selecionada'
+    : aceitos.length === 0 ? 'o banco recusou todas as selecionadas'
+    : null;
+
+  /* UM CLIQUE GRAVA cada par que a prévia aceitou — cada um numa transação da RPC. */
+  const gravar = async () => {
+    if (gravandoRef.current || motivoDesligado) return;
+    gravandoRef.current = true;
+    setGravando(true); setAviso(null);
+    let ok = 0;
+    const recusas: string[] = [];
+    try {
+      for (const it of aceitos) {
+        const r = await fechar(it.saidaId, it.entradaId, false);
+        if (r.ok) ok += 1; else recusas.push(`${fmtBRL(it.valor)}: ${textoMotivo(r.motivo)}`);
+      }
+      /* A recusa fica no modal, ao lado do botão (UX-TOAST-01); o toast só diz o que foi feito, e tem X. */
+      if (recusas.length) setAviso(`${recusas.length} recusada${recusas.length === 1 ? '' : 's'} (${recusas.join('; ')})`);
+      if (ok > 0) {
+        toast.success(`${ok} transferência${ok === 1 ? '' : 's'} conciliada${ok === 1 ? '' : 's'}`, { closeButton: true });
+        /* ⚠ A TRAVA SÓ SAI DEPOIS DA RELEITURA: até a lista voltar, a prévia ainda é a de antes e mostraria de novo os
+           pares que acabaram de gravar. */
+        await aoGravar();
+      }
+    } finally {
+      gravandoRef.current = false;
+      setGravando(false);
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
@@ -222,7 +253,7 @@ export function TransferenciasEntreContasModal({ open, onClose, rotuloMes, linha
 
         <div className="flex min-h-[30px] items-center justify-between gap-2 px-3 py-1">
           <span className="text-[9.5px] text-muted-foreground" data-testid="previa-transferencias">
-            {aviso ?? (previa
+            {aviso ?? (previa && previa.length > 0
               ? `${aceitos.length} transferência${aceitos.length === 1 ? '' : 's'}: ${aceitos.length - casam} nova${aceitos.length - casam === 1 ? '' : 's'}`
                 + `${casam ? ` · ${casam} casa${casam === 1 ? '' : 'm'} na existente` : ''}`
                 + ` · ${fmtBRL(aceitos.reduce((t, p) => t + p.valor, 0))}`
@@ -230,18 +261,14 @@ export function TransferenciasEntreContasModal({ open, onClose, rotuloMes, linha
               : `${selecionados.length} de ${linhas.length} selecionada${linhas.length === 1 ? '' : 's'}`)}
           </span>
           <div className="flex items-center gap-2">
-            <button type="button" onClick={onClose} className="h-[22px] rounded border px-2 text-[10px] hover:bg-muted">Fechar</button>
-            {previa ? (
-              <button type="button" onClick={gravar} disabled={ocupado || aceitos.length === 0}
-                className="h-[22px] rounded bg-primary px-2 text-[10px] text-primary-foreground disabled:opacity-50">
-                Confirmar transferência ({aceitos.length})
-              </button>
-            ) : (
-              <button type="button" onClick={verPrevia} disabled={ocupado || selecionados.length === 0}
-                className="h-[22px] rounded bg-primary px-2 text-[10px] text-primary-foreground disabled:opacity-50">
-                Confirmar selecionadas ({selecionados.length})
-              </button>
+            {motivoDesligado && (
+              <span className="text-[10px] text-muted-foreground" data-testid="motivo-desligado">{motivoDesligado}</span>
             )}
+            <button type="button" onClick={onClose} className="h-[22px] rounded border px-2 text-[10px] hover:bg-muted">Fechar</button>
+            <button type="button" onClick={gravar} disabled={!!motivoDesligado} title={motivoDesligado ?? undefined}
+              className="h-[22px] rounded bg-primary px-2 text-[10px] text-primary-foreground disabled:opacity-50">
+              {gravando ? 'Gravando…' : `Confirmar transferências (${aceitos.length})`}
+            </button>
           </div>
         </div>
       </DialogContent>
