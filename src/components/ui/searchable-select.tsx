@@ -2,7 +2,9 @@ import * as React from 'react';
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { ChevronsUpDown, X } from 'lucide-react';
-import { COMBOBOX_PALETA } from '@/components/ui/command';
+import * as PopoverPrimitive from '@radix-ui/react-popover';
+import { Popover, PopoverContent } from '@/components/ui/popover';
+import { COMBOBOX_CONTENT } from '@/components/ui/command';
 
 export interface OpcaoSearchable {
   value: string;
@@ -136,7 +138,6 @@ export function SearchableSelect({
     }
   }, [chave, filtroAtivo]);
   const [highlightIdx, setHighlightIdx] = useState(0);
-  const [openUp, setOpenUp] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -178,15 +179,13 @@ export function SearchableSelect({
     }
   }, [highlightIdx]);
 
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-        esquecerAoFechar();
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+  /* ⚠ FECHAR AO CLICAR FORA agora é do Radix (`onOpenChange(false)` pelo `DismissableLayer`), e não mais um
+     `mousedown` no `document`: com o painel em portal, "dentro" deixou de ser `containerRef.contains`, e o Radix
+     sabe o que é camada de quem — inclusive dentro de um Dialog. */
+  const fecharPeloRadix = useCallback((aberto: boolean) => {
+    if (aberto) return;
+    setOpen(false);
+    esquecerAoFechar();
   }, [esquecerAoFechar]);
 
   const handleSelect = useCallback((val: string) => {
@@ -195,13 +194,10 @@ export function SearchableSelect({
     esquecerAoFechar();
   }, [onValueChange, esquecerAoFechar]);
 
+  /* Abrir para cima quando não cabe embaixo é do Radix agora (`avoidCollisions` vira o lado). O foco na busca vai
+     no `onOpenAutoFocus` do painel — o `setTimeout` continua como reforço para o gatilho por teclado. */
   const handleTriggerClick = () => {
     if (disabled) return;
-    if (containerRef.current) {
-      const rect = containerRef.current.getBoundingClientRect();
-      const spaceBelow = window.innerHeight - rect.bottom;
-      setOpenUp(spaceBelow < 160);
-    }
     setOpen(true);
     setHighlightIdx(filteredVisiveis.length > 0 ? 1 : 0);
     setTimeout(() => inputRef.current?.focus(), 0);
@@ -257,6 +253,8 @@ export function SearchableSelect({
   itemRefs.current = [];
 
   return (
+    <Popover open={open} onOpenChange={fecharPeloRadix}>
+    <PopoverPrimitive.Anchor asChild>
     <div ref={containerRef} className={cn('relative min-w-0', className)}>
       <button
         type="button"
@@ -318,6 +316,8 @@ export function SearchableSelect({
           <ChevronsUpDown className="h-2.5 w-2.5 opacity-50 shrink-0" />
         </span>
       </button>
+    </div>
+    </PopoverPrimitive.Anchor>
 
       {/* ⚠ PAINEL NO PADRAO DO SISTEMA (PR-UI-SELECT-05). Era `bg-popover` — branco — ao
           lado do "Data por", que abre o dark-glass do primitivo. A paleta vem de
@@ -326,8 +326,24 @@ export function SearchableSelect({
           item mais longo e `max-w-[28rem]` para antes do absurdo — a mesma regra que o
           SelectContent e o COMBOBOX_CONTENT ganharam no SELECT-04. Era `w-full`, e por isso
           nome longo era cortado num campo estreito. */}
+      {/* ⚠ EM PORTAL, SOBRE RADIX POPOVER — PR-FIN-FILTRO-DROPDOWN-LARGURA-01. A lista era um `div absolute` DENTRO do
+          componente: na última coluna da barra de filtros (Fornecedor) ela passava da borda e o container que rola
+          ganhava rolagem horizontal — a página "andava" (medido: painel de 301px terminando a 22px da borda numa
+          janela de 1.130). Agora é o `PopoverContent` da casa, igual ao `FavorecidoSelect`: portal, alinhado ao
+          campo, virando de lado quando não cabe (`avoidCollisions`, `collisionPadding` 8) e nunca empurrando layout.
+          ⚠ DENTRO DE DIALOG FUNCIONA porque é camada Radix: um portal feito à mão ficaria sob o `pointer-events: none`
+          que o Dialog modal põe no resto da página.
+          ⚠ LARGURA: mínimo = o campo (`--radix-popover-trigger-width`, que aqui é a âncora), máximo 320px (era 28rem =
+          448, e crescia com o nome mais longo). Nome maior trunca, com o texto inteiro no `title`. Paleta: o vidro
+          escuro de `COMBOBOX_CONTENT` (PR-UI-SELECT-05), a mesma do `FavorecidoSelect`. */}
       {open && (
-        <div className={cn("absolute z-50 min-w-full w-auto max-w-[28rem] rounded-md border shadow-md", COMBOBOX_PALETA, openUp ? "bottom-full mb-0.5" : "top-full mt-0.5", contentClassName)}>
+        <PopoverContent
+          align="start" sideOffset={2} collisionPadding={8} avoidCollisions
+          onOpenAutoFocus={(e) => { e.preventDefault(); inputRef.current?.focus(); }}
+          /* Clicar no próprio campo não fecha: é o gesto de "abrir", e o gatilho já reabre. */
+          onInteractOutside={(e) => { if (containerRef.current?.contains(e.target as Node)) e.preventDefault(); }}
+          data-testid="searchable-select-painel"
+          className={cn(COMBOBOX_CONTENT, 'max-w-[320px] rounded-md border shadow-md', contentClassName)}>
           <div className={cn('px-1 pt-1 pb-1', dense && 'sticky top-0 z-10 bg-zinc-950/80')}>
             <input
               ref={inputRef}
@@ -410,8 +426,8 @@ export function SearchableSelect({
               </button>
             )}
           </div>
-        </div>
+        </PopoverContent>
       )}
-    </div>
+    </Popover>
   );
 }
