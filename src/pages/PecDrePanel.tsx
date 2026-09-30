@@ -132,17 +132,6 @@ export const lerNAnosPec = (bruto: string): number => {
 };
 export const escreverNAnosPec = (n: number): string => String(n);
 
-/**
- * AS LINHAS QUE NÃO TÊM META — patrimônio não tem cenário.
- *
- * ⚠ A RPC NÃO FILTRA O PATRIMÔNIO POR CENÁRIO (rebanho é fato): a leitura em 'meta' devolve a MESMA
- * variação de rebanho do realizado. Mostrá-la na coluna Meta faria parecer que existe meta de
- * patrimônio. A coluna diz "—" e o delta também.
- */
-const SEM_META: ReadonlySet<ChaveLinhaPec> = new Set<ChaveLinhaPec>([
-  'vpb_operacional', 'efeito_mercado', 'resultado_com_mercado',
-]);
-
 const CHAVES_FINANCEIRAS: readonly ChaveLinhaPec[] = [
   'vendas', 'outras_receitas', 'deducoes', 'reposicao', 'custo_variavel', 'custo_fixo', 'juros', 'investimento',
 ];
@@ -243,7 +232,7 @@ export function colunasDaVisao(e: EntradaVisoes): ColunaPec[] {
       linhas: e.carregandoMeta ? null : (e.meta?.total ?? real.total),
       total: false, tipo: 'valor', unidade: 'ha', de, ate, cenario: 'meta',
       meses: e.meta?.periodo.meses ?? meses, atual: false,
-      semPatrimonio: true, semDado: semMeta, comparacao: true,
+      semDado: semMeta, comparacao: true,
     };
     /* ⚠ A REFERÊNCIA FICA À ESQUERDA DO ATUAL — a mesma lei do A28: o tempo corre da esquerda para
        a direita e a comparação vem DEPOIS do que compara. Com a meta à direita, o olho lia a
@@ -262,8 +251,8 @@ export function colunasDaVisao(e: EntradaVisoes): ColunaPec[] {
         ...totalReal, chave: '__delta__', nome: '', sub: '',
         total: false, tipo: 'delta', unidade: 'pct',
         ref: semMeta ? null : (e.meta?.total ?? null), deltaSlots: deltas, comparacao: true,
-        /* ⚠ AQUI O TRAÇO DO PATRIMÔNIO É CERTO: a meta não tem variação de rebanho. */
-        refSemPatrimonio: true,
+        /* ⚠ O PATRIMÔNIO ENTRA NO Δ — DRE-META-PATRIMONIO-01-fix1: a meta tem variação de rebanho
+           (P0 real, P1 da meta validada). Sem P1 validado a RPC devolve nulo e o Δ sai "—". */
       });
     }
     return cols;
@@ -297,8 +286,6 @@ export function colunasDaVisao(e: EntradaVisoes): ColunaPec[] {
     ...totalReal, chave: '__delta__', nome: '', sub: '',
     total: false, tipo: 'delta', unidade: 'pct',
     ref: anterior.semDado ? null : anterior.linhas, deltaSlots: deltas, comparacao: true,
-    /* ⚠ E AQUI NÃO: os dois lados são realizado, o patrimônio existe nos dois e o Δ é uma
-       subtração comum. Ver `refSemPatrimonio` em `drePecRegua.ts`. */
   }];
 }
 
@@ -306,14 +293,11 @@ export function colunasDaVisao(e: EntradaVisoes): ColunaPec[] {
 function valorNaColuna(col: ColunaPec, chave: ChaveLinhaPec): number | null {
   if (!col.linhas || col.semDado) return null;
   if (col.tipo === 'delta') {
-    /* ⚠ `SEM_META` SÓ VALE CONTRA A META — fix7 item C. Contra o ano anterior os dois lados são
-       realizado, e a variação de rebanho é subtraível como qualquer outra linha. */
-    if ((col.refSemPatrimonio && SEM_META.has(chave)) || !col.ref) return null;
+    if (!col.ref) return null;
     const r = valorDe(col.linhas, chave);
     const m = valorDe(col.ref, chave);
     return r == null || m == null ? null : r - m;
   }
-  if (col.semPatrimonio && SEM_META.has(chave)) return null;
   return valorDe(col.linhas, chave);
 }
 

@@ -532,7 +532,7 @@ describe('as duas visões', () => {
   /* ⚠ A REFERÊNCIA FICA À ESQUERDA DO ATUAL desde o fix4 — era "Realizado | Meta | Δ" e virou
      "Meta | Atual | Δ", a mesma lei do A28: a comparação vem DEPOIS do que compara. Os índices
      andaram com ela, e este caso foi atualizado para o contrato novo, nunca afrouxado. */
-  it('referência Meta: Meta | Atual | Δ — meta nunca soma, patrimônio sem meta, drill com o cenário', () => {
+  it('referência Meta: Meta | Atual | Δ — meta nunca soma, patrimônio da meta, drill com o cenário', () => {
     const abrir = vi.fn();
     render(<PecDrePanel colunas={comMeta({ meta: META, deltas: ['rs', 'pct'] })} alturaCartao={null}
       cartaoRef={{ current: null }} onAbrirLista={abrir} />);
@@ -554,12 +554,14 @@ describe('as duas visões', () => {
     expect(vendas?.cells[3]?.textContent).toBe('17.869.000,08');
     /* O Δ é a diferença: 17.869.000,08 − 451.560,00. */
     expect(vendas?.cells[5]?.textContent).toBe('17.417.440,08');
-    /* ⚠ A VPB DA META É A MESMA DO REALIZADO NO JSON — e a coluna diz "—" no R$, no R$/ha e no
-       delta: traço não vira número ao mudar de unidade. */
+    /* ⚠ CONTRATO NOVO — DRE-META-PATRIMONIO-01-fix1: a meta TEM variação de rebanho desde o
+       DRE-META-PATRIMONIO-01 (P0 real, P1 da meta validada), e a coluna Meta a lê como a Atual. Era
+       "—" nas três células; agora é o número, o R$/ha pela área DELA (−193.238 / 4.000 = −48,31) e o
+       Δ (real − meta = −193.238 − (−193.238) = 0). */
     const vpb = linhaDe('Variação por produção');
-    expect(vpb?.cells[1]?.textContent).toBe('—');
-    expect(vpb?.cells[2]?.textContent).toBe('—');
-    expect(vpb?.cells[5]?.textContent).toBe('—');
+    expect(vpb?.cells[1]?.textContent).toBe('-193.238,00');
+    expect(vpb?.cells[2]?.textContent).toBe('-48,31');
+    expect(vpb?.cells[5]?.textContent).toBe('0,00');
 
     if (vendas) fireEvent.click(vendas.cells[1]);
     expect(abrir).toHaveBeenCalledWith(expect.objectContaining({ cenario: 'meta', bloco: 'venda', fazendaId: null }));
@@ -1117,13 +1119,46 @@ describe('a comparação, por referência', () => {
     expect(efeito?.cells[5]?.textContent).not.toBe('—');
   });
 
-  it('contra a meta, o Δ do Efeito de mercado continua em traço', () => {
+  /* ⚠ CONTRATO NOVO — DRE-META-PATRIMONIO-01-fix1: era "contra a meta, o Δ do Efeito de mercado
+     continua em traço". A meta passou a ter efeito de mercado (P1 da meta − rebanho da meta a preço
+     P0), e a coluna e o Δ o leem como qualquer linha. */
+  it('contra a meta, o Efeito de mercado da meta aparece e o Δ é a diferença', () => {
     comAnoAnterior(1000000, 'meta');
     const efeito = linhaDe('Efeito de mercado');
-    /* ⚠ A COLUNA META TAMBÉM É TRAÇO, e é o que torna o Δ coerente: sem meta de rebanho não há do
-       que subtrair. Os 999.999 do fixture existem só para provar que o traço NÃO vem de zero. */
-    expect(efeito?.cells[1]?.textContent).toBe('—');
-    expect(efeito?.cells[5]?.textContent).toBe('—');
+    expect(efeito?.cells[1]?.textContent).toBe('999.999,00');
+    /* 2.618.562 − 999.999 = 1.618.563 */
+    expect(efeito?.cells[5]?.textContent).toBe('1.618.563,00');
+  });
+
+  /* ⚠ O CASO DA HOMOLOGAÇÃO — Raul Juliato, 25/26 meta: a RPC devolve produção 46.765,75 e mercado
+     123.677,03, e a tela mostrava "—" nas duas. Com Δ R$ e Δ %, as duas células de Δ são número. */
+  it('meta com produção e mercado (Raul 25/26): a coluna Meta mostra os dois e o Δ % calcula', () => {
+    render(<PecDrePanel colunas={colunasDaVisao({
+      visao: 'comparacao', de: '2025-07', ate: '2026-06', real: DRE, carregandoMeta: false, anos: [],
+      meta: { ...DRE, total: linhas({ vendas: 10000000, vpb_operacional: 46765.75, efeito_mercado: 123677.03 }) },
+      deltas: ['rs', 'pct'], referencia: 'meta',
+    })} alturaCartao={null} cartaoRef={{ current: null }} />);
+    const vpb = linhaDe('Variação por produção');
+    const efeito = linhaDe('Efeito de mercado');
+    expect(vpb?.cells[1]?.textContent).toBe('46.765,75');
+    expect(efeito?.cells[1]?.textContent).toBe('123.677,03');
+    /* Δ R$ = real − meta: −193.238 − 46.765,75 e 2.618.562 − 123.677,03 */
+    expect(vpb?.cells[5]?.textContent).toBe('-240.003,75');
+    expect(efeito?.cells[5]?.textContent).toBe('2.494.884,97');
+    expect(vpb?.cells[6]?.textContent).toContain('%');
+    expect(efeito?.cells[6]?.textContent).toContain('%');
+  });
+
+  /* ⚠ SEM P1 VALIDADO A RPC DEVOLVE NULO (sem_p1), e o "—" sai do dado, não de uma trava. */
+  it('meta sem P1 validado: a variação da meta é "—" e o Δ também', () => {
+    render(<PecDrePanel colunas={colunasDaVisao({
+      visao: 'comparacao', de: '2025-07', ate: '2026-06', real: DRE, carregandoMeta: false, anos: [],
+      meta: { ...DRE, total: linhas({ vendas: 10000000, vpb_operacional: null, efeito_mercado: null }) },
+      deltas: ['rs'], referencia: 'meta',
+    })} alturaCartao={null} cartaoRef={{ current: null }} />);
+    expect(linhaDe('Variação por produção')?.cells[1]?.textContent).toBe('—');
+    expect(linhaDe('Variação por produção')?.cells[5]?.textContent).toBe('—');
+    expect(linhaDe('Vendas')?.cells[1]?.textContent).toBe('10.000.000,00');
   });
 
   /**
