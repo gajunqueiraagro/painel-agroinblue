@@ -42,6 +42,9 @@ import {
   type RegistroExtratoExistente,
 } from '@/lib/financeiro/duplicidadeImportacao';
 import { ErroUsuarioSeguro, normalizarErro } from '@/lib/erroOperacional';
+import {
+  diasEntre, calcularScore, tryGroupingMatch, calcularScoreAgrupado, type LancamentoCandidato,
+} from '@/lib/conciliacao/sugestoesCasamento';
 
 /**
  * `CsvLayoutError` (parseCSV) é um erro de validação de layout, mas suas
@@ -411,35 +414,11 @@ function addDays(iso: string, n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-function diasEntre(a: string, b: string): number {
-  const d1 = new Date(a + 'T00:00:00').getTime();
-  const d2 = new Date(b + 'T00:00:00').getTime();
-  return Math.round((d1 - d2) / 86400000);
-}
-
 /* ⚠ A CÓPIA LOCAL DE `normalizarTexto` SAIU DAQUI — PR-IMPORT-REIMPORTACAO-01. Ela era byte a
    byte igual à de `extratoHash.ts`, que agora é exportada: duas cópias da normalização da
    identidade do movimento, e a comparação de texto deste arquivo tinha de concordar com o hash
    por coincidência. Agora concorda por construção. */
 
-interface LancamentoCandidato {
-  id: string;
-  data_pagamento: string | null;
-  data_vencimento: string | null;
-  data_competencia: string | null;
-  valor: number;
-  sinal: number;
-  descricao: string | null;
-  favorecido_id: string | null;
-  macro_custo: string | null;
-  grupo_custo: string | null;
-  centro_custo: string | null;
-  subcentro: string | null;
-  status_transacao: string | null;
-  numero_documento: string | null;
-  fazenda_id: string | null;
-  conta_bancaria_id: string | null;
-}
 
 /** Comparação textual estrita para ambiguidade (sem incluir parcial difuso). */
 function similarFornecedorEstrito(a: string | null, b: string | null): boolean {
@@ -496,171 +475,9 @@ function detectarAmbiguidade(
   };
 }
 
-/**
- * Score 0-100 de match entre movimento do extrato e lançamento financeiro.
- * Pré-condição: |valor| do extrato == |valor| do lançamento (tol 0.01).
- *   - 70 pontos: valor exato
- *   - +20:        diferença de data ≤ 3 dias
- *   - +10:        descrição/fornecedor similar
- */
-function calcularScore(
-  movDataISO: string,
-  movDescricao: string,
-  lanc: LancamentoCandidato,
-  fornNome: string | null,
-): number {
-  let score = 70;
-  const ancScore = dataAncoraLancamento(lanc);
-  if (ancScore) {
-    const diff = Math.abs(diasEntre(movDataISO, ancScore));
-    if (diff <= 3) score += 20;
-  }
-  const movN = normalizarTexto(movDescricao);
-  const lancN = normalizarTexto(lanc.descricao);
-  const fornN = normalizarTexto(fornNome);
-  if (movN && (
-    (lancN && (movN.includes(lancN) || lancN.includes(movN))) ||
-    (fornN && movN.includes(fornN))
-  )) {
-    score += 10;
-  }
-  return score;
-}
-
-/**
- * Heurística gulosa para encontrar combinação de até `maxItens` lançamentos
- * cuja soma de |valor| seja ≈ `target` (tol 0.05).
- *
- * Estratégia:
- *   - Pool ordenado por proximidade da data do movimento (heurística forte).
- *   - DFS limitado por profundidade e tempo (timeoutMs).
- *   - Poda: candidatos cujo |valor| > restante+0.05 são pulados.
- *   - Quando encontra solução, mantém a com MENOS itens (ties: mais próxima da data).
- *
- * Retorna `null` se não houver combinação viável dentro do orçamento.
- */
-interface GrupoEncontrado {
-  itens: LancamentoCandidato[];
-  somaAbs: number;
-}
-function tryGroupingMatch(
-  target: number,
-  pool: LancamentoCandidato[],
-  movDataISO: string,
-  maxItens: number,
-  timeoutMs: number,
-): GrupoEncontrado | null {
-  if (pool.length === 0 || target <= 0) return null;
-
-  // Ordena por proximidade da data — primeiros são candidatos mais prováveis.
-  const ordenado = [...pool].sort((a, b) => {
-    const ancA = dataAncoraLancamento(a);
-    const ancB = dataAncoraLancamento(b);
-    const da = ancA ? Math.abs(diasEntre(movDataISO, ancA)) : 999;
-    const db = ancB ? Math.abs(diasEntre(movDataISO, ancB)) : 999;
-    return da - db;
-  });
-
-  const start = Date.now();
-  let melhor: GrupoEncontrado | null = null;
-  const atual: LancamentoCandidato[] = [];
-
-  function dfs(startIdx: number, restante: number, depth: number) {
-    if (Date.now() - start > timeoutMs) return;
-    if (Math.abs(restante) < 0.05) {
-      if (melhor === null || atual.length < melhor.itens.length) {
-        const somaAbs = target - restante; // = soma acumulada dos itens
-        melhor = { itens: [...atual], somaAbs: Math.abs(somaAbs) };
-      }
-      return;
-    }
-    if (depth >= maxItens) return;
-    if (restante < -0.05) return; // ultrapassou demais
-    // Poda: se já temos solução com K itens, parar quando atual.length+1 >= K
-    if (melhor !== null && atual.length + 1 >= melhor.itens.length) return;
-
-    for (let i = startIdx; i < ordenado.length; i++) {
-      if (Date.now() - start > timeoutMs) return;
-      const v = Math.abs(Number(ordenado[i].valor) || 0);
-      if (v > restante + 0.05) continue;
-      atual.push(ordenado[i]);
-      dfs(i + 1, restante - v, depth + 1);
-      atual.pop();
-    }
-  }
-
-  dfs(0, target, 0);
-  return melhor;
-}
-
-/**
- * Score para match agrupado. Teto = 89 (nunca supera match 1:1 max=100).
- *
- * Bônus:
- *   +20 — Δ data média do grupo até a data do movimento ≤ 3 dias
- *   +10 — >50% dos itens têm fornecedor/descrição similar ao movimento
- *   +10 — todos os itens compartilham mesma `macro_custo` (coerência)
- *   +10 — span (max-min) entre datas do grupo ≤ 3 dias (compactness)
- *
- * Penalidades:
- *   -10 — grupo com > 5 itens (preferir grupos pequenos)
- *   -10 — múltiplas macros (mistura de naturezas)
- *    -5 — span > 7 dias entre as datas do grupo
- *
- * Base = 50. Após bônus/penalidades, teto duro em 89.
- */
-function calcularScoreAgrupado(
-  movDataISO: string,
-  movDescricao: string,
-  itens: LancamentoCandidato[],
-  fornByLancId: Map<string, string>,
-): number {
-  if (itens.length === 0) return 0;
-  let score = 50;
-
-  // ── Δ data média ──
-  const datas = itens.map((l) => dataAncoraLancamento(l)).filter((d): d is string => !!d);
-  let span = 0;
-  if (datas.length > 0) {
-    const ts = datas.map((d) => new Date(d + 'T00:00:00').getTime());
-    const mediaTs = ts.reduce((s, x) => s + x, 0) / ts.length;
-    const movTs = new Date(movDataISO + 'T00:00:00').getTime();
-    const diasMedios = Math.abs((mediaTs - movTs) / 86400000);
-    if (diasMedios <= 3) score += 20;
-    span = (Math.max(...ts) - Math.min(...ts)) / 86400000;
-  }
-
-  // ── descrição/fornecedor similar ──
-  const movN = normalizarTexto(movDescricao);
-  if (movN) {
-    let similares = 0;
-    for (const l of itens) {
-      const lancN = normalizarTexto(l.descricao);
-      const fornN = normalizarTexto(l.favorecido_id ? fornByLancId.get(l.id) ?? null : null);
-      if ((lancN && (movN.includes(lancN) || lancN.includes(movN))) ||
-          (fornN && movN.includes(fornN))) {
-        similares++;
-      }
-    }
-    if (similares / itens.length > 0.5) score += 10;
-  }
-
-  // ── coerência de macro_custo ──
-  const macros = new Set(itens.map((l) => l.macro_custo).filter((m): m is string => !!m));
-  if (macros.size === 1) score += 10;
-  if (macros.size > 1) score -= 10;
-
-  // ── compactness das datas ──
-  if (datas.length > 0) {
-    if (span <= 3) score += 10;
-    else if (span > 7) score -= 5;
-  }
-
-  // ── tamanho do grupo ──
-  if (itens.length > 5) score -= 10;
-
-  return Math.max(0, Math.min(89, score));
-}
+/* ⚠ O MOTOR DO CASAMENTO (`diasEntre`, `calcularScore`, `tryGroupingMatch`, `calcularScoreAgrupado`) SAIU DAQUI
+   VERBATIM para `src/lib/conciliacao/sugestoesCasamento.ts` — PR-CONC-SUGESTOES-CASAR-01. A Conferência usa o mesmo
+   motor no "Ver sugestões"; a prévia chama com os mesmos parâmetros e não mudou de comportamento. */
 
 export function useImportacaoExtrato() {
   const { clienteAtual } = useCliente();

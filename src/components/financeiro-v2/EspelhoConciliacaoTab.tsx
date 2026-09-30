@@ -37,8 +37,11 @@ import {
 import { toast } from 'sonner';
 import { X, MoreHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { STATUS_PALETA, STATUS_FILTRO_LABEL } from '@/lib/financeiro/statusFinanceiro';
+import { sugerirCasamentos, type Sugestao } from '@/lib/conciliacao/sugestoesCasamento';
+import { SugestoesCasarModal } from '@/components/financeiro-v2/SugestoesCasarModal';
 
 const MESES_CURTOS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
@@ -633,6 +636,11 @@ const CEL_DATA = 'px-[4px] whitespace-nowrap text-[9.5px] text-muted-foreground'
    tabela (16 no dia, 21 no movimento, 22 no fechamento e no aviso de vencidos) e 15 nas filhas,
    com fontes de 10, 11 e 12px. Uma régua só; a hierarquia fica no peso e no fundo. */
 const H18 = 'h-[18px]';
+/* ⚠ A LINHA CASADA TEM FUNDO VERDE MUITO LEVE — PR-CONC-SUGESTOES-CASAR-01 (Gabriel, 30/09): o token de sucesso a 6%
+   na mãe e 8% na filha (tipos de linha diferentes, fundos diferentes), nos dois lados, sem mudar fonte nem altura. O
+   que não está casado segue com os fundos de antes. */
+const CONCILIADA = 'bg-success/[0.06]';
+const CONCILIADA_FILHA = 'bg-success/[0.08]';
 
 const corVal = (v: number) => (v < 0 ? 'text-rose-600' : 'text-emerald-600');
 /** O aplicado é magnitude; quem dá o sinal é o extrato que a filha explica. */
@@ -702,8 +710,9 @@ function textoFilha(s: EspSis | undefined) {
  * podem ser chamados dentro de um `.map()` — a regra dos hooks proíbe, e o React quebraria ao
  * mudar a contagem de linhas entre renders. Extrair não foi estética: era a única forma.
  */
-function LinhaExtratoSemPar({ e, marcado, onMarcar, onCriar, onIgnorar }: {
+function LinhaExtratoSemPar({ e, marcado, onMarcar, onCriar, onIgnorar, nSugestoes, onSugestoes }: {
   e: EspOfx; marcado: boolean; onMarcar: () => void; onCriar: () => void; onIgnorar: () => void;
+  nSugestoes: number; onSugestoes: () => void;
 }) {
   /* ⚠ A MESMA LINHA É ALVO E ORIGEM. Alvo quando um lançamento vem por cima (1:N); origem
      quando ELA é arrastada sobre um lançamento (N:1). São dois nós do @dnd-kit no mesmo
@@ -734,7 +743,9 @@ function LinhaExtratoSemPar({ e, marcado, onMarcar, onCriar, onIgnorar }: {
           precisava sair do espelho, achar a mesma linha noutra tela e voltar. O fluxo inteiro
           — listar derivados, decidir um a um, exigir motivo — já é o `DecisaoDerivadosDialog`:
           esta tela o INSTANCIA, não o reescreve. */}
+      {/* ⚠ "VER SUGESTÕES (N)" — PR-CONC-SUGESTOES-CASAR-01. Com N = 0 aparece desabilitado e diz por quê. */}
       <CelAcoes alcaId={`dragExt:${e.extrato_id}`} itens={[
+        { rotulo: `Ver sugestões (${nSugestoes})`, onClick: nSugestoes > 0 ? onSugestoes : undefined, motivo: 'nenhuma sugestão para este movimento' },
         { rotulo: 'Criar', onClick: onCriar },
         { rotulo: 'Ignorar', onClick: onIgnorar },
       ]} />
@@ -939,11 +950,13 @@ function comPrazo<T>(promessa: PromiseLike<T>, ms: number): Promise<T> {
   ]);
 }
 
-function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos, onAbrir, onMudou, mostrarCandidatos = true }: {
+function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos, onAbrir, onMudou, mostrarCandidatos = true, soNaoConciliados = false }: {
   data: EspelhadosReais; anoMes: string; nomeConta?: string; clienteId: string; contaId: string | null;
   internos: ReadonlySet<string>; onAbrir?: (id: string) => void; onMudou: () => void;
   /** Sem candidatos, a mesa é só o fecho dos realizados (o modal do Espelho). */
   mostrarCandidatos?: boolean;
+  /** Esconde as linhas casadas (✓, dos dois lados); o dia sem linha visível some; o fechamento não é recalculado. */
+  soNaoConciliados?: boolean;
 }) {
   const dias = useMemo(() => montarMesa(data, internos), [data, internos]);
   const [sel, setSel] = useState<EstadoSelecao>({ extratos: new Set(), lancamentos: new Set() });
@@ -965,6 +978,18 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
   const candidatos = useMemo(
     () => (mostrarCandidatos ? (data.sistema_candidatos ?? []) : []),
     [data, mostrarCandidatos]);
+  /* ⚠ AS SUGESTÕES DE CADA MOVIMENTO SEM PAR — PR-CONC-SUGESTOES-CASAR-01. Calculadas UMA vez por mesa e guardadas
+     por linha: o "(N)" do menu é o tamanho desta lista e o modal mostra ESTA lista. Com orçamentos diferentes (2ms no
+     menu, 30 no modal) o menu dizia (2) e o modal mostrava 1 — medido no Camargo. Com a soma entre fornecedores
+     limitada a 3, a busca termina muito antes dos 30ms, e o resultado não depende mais do relógio.
+     Sem candidatos (o modal do Espelho), toda lista é vazia. */
+  const sugestoesPorLinha = useMemo(() => {
+    const m = new Map<string, Sugestao[]>();
+    for (const d of dias) for (const e of d.extratosSemPar) {
+      m.set(e.extrato_id, sugerirCasamentos(e, candidatos, { orcamentoMs: 30 }));
+    }
+    return m;
+  }, [dias, candidatos]);
 
   /**
    * OS VENCIDOS — PR-ESPELHO-VENCIDOS-NO-TOPO-08. O que já passou da data e continua em aberto.
@@ -1032,6 +1057,7 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
   };
 
   const [casar, setCasar] = useState<{ extrato: ExtratoAlvo; iniciais: LevadoInicial[] } | null>(null);
+  const [sugerir, setSugerir] = useState<ExtratoAlvo | null>(null);
   const [arrastando, setArrastando] = useState<EspSis | null>(null);
   const [arrastandoExt, setArrastandoExt] = useState<EspOfx | null>(null);
   const [casarN1, setCasarN1] = useState<{ sis: EspSis; extratos: EspOfx[] } | null>(null);
@@ -1138,10 +1164,18 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
 
   const mesDoRecorte = anoMes;
 
-  const comoLevado = (s: EspSis): LevadoInicial => ({
-    lancamento_id: s.lancamento_id, descricao: s.descricao,
-    fornecedor: s.fornecedor ?? null, valor_assinado: s.valor_assinado,
-  });
+  /* ⚠ VENC E STATUS DO LEVADO — PR-CONC-SUGESTOES-CASAR-01. O candidato traz os dois; o realizado sem par não traz o
+     vencimento (`EspSis.data` é a data do LANÇAMENTO), então vai "—", e o status é o que a mesa já mostra dele. */
+  const candidatoPorId = new Map(candidatos.map((c) => [c.lancamento_id, c]));
+  const comoLevado = (s: EspSis): LevadoInicial => {
+    const c = candidatoPorId.get(s.lancamento_id);
+    return {
+      lancamento_id: s.lancamento_id, descricao: s.descricao,
+      fornecedor: s.fornecedor ?? null, valor_assinado: s.valor_assinado,
+      data_vencimento: c ? c.data_vencimento : null,
+      status_transacao: c ? c.status_transacao : (s.status === 'conciliado' ? 'conciliado' : 'realizado'),
+    };
+  };
 
   /* ⚠ O ARRASTADO ENTRA JUNTO COM OS MARCADOS, e sem duplicar: arrastar um que já estava
      marcado leva a seleção inteira uma vez só, não ele duas. */
@@ -1280,6 +1314,11 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
             ))}
 
             {dias.map((d) => (
+              /* ⚠ "SÓ NÃO CONCILIADOS": o dia sem nenhuma linha visível some inteiro (cabeçalho e fechamento). O dia que
+                 fica mostra o fechamento com os totais do DIA INTEIRO, casados incluídos — o filtro esconde linhas, não
+                 muda a conta. */
+              soNaoConciliados && d.extratosSemPar.length === 0 && d.lancsSemPar.length === 0 && d.internas.length === 0
+                && !(mostrarCandidatos && d.candidatos.length > 0) ? null :
               <React.Fragment key={d.data ?? 'sem-data'}>
                 <tr className={cn(H18, 'bg-muted/40')}>
                   <td colSpan={4} className="px-[5px] whitespace-nowrap font-medium text-muted-foreground">{fmtData(d.data)}</td>
@@ -1287,7 +1326,7 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
                   <td colSpan={6} />
                 </tr>
 
-                {d.pareados.map((p) => {
+                {!soNaoConciliados && d.pareados.map((p) => {
                   const icone = iconeDoLancamento(p.tipoVencedor);
                   const agrupado = p.filhas.length > 1;
                   const unica = p.filhas.length === 1 ? p.filhas[0] : null;
@@ -1295,7 +1334,7 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
                   const somaAssinada = Math.sign(p.extrato.valor || 1) * p.soma;
                   return (
                     <React.Fragment key={p.extrato.extrato_id}>
-                      <tr className={cn(H18, 'border-b border-border/50', agrupado && 'bg-muted/20')}>
+                      <tr className={cn(H18, 'border-b border-border/50', CONCILIADA)} data-conciliada="">
                         <td />
                         <td className={CEL_DATA}>{fmtData(p.extrato.data)}</td>
                         <td className={cn(CEL, 'font-medium')} title={p.extrato.historico ?? ''}>{p.extrato.historico ?? '—'}</td>
@@ -1335,7 +1374,7 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
                           400 em tudo — inclusive no valor —, descrição em muted e borda mais
                           fraca que a das linhas. Ela explica a mãe; não compete com ela. */}
                       {agrupado && p.filhas.map((f) => (
-                        <tr key={f.lancamento_id} className={cn(H18, 'bg-muted/40 border-b border-border/30')}>
+                        <tr key={f.lancamento_id} className={cn(H18, CONCILIADA_FILHA, 'border-b border-border/30')} data-conciliada="">
                           <td /><td /><td /><td />
                           <td className={cn(MEIO, 'font-normal text-muted-foreground')}>↳</td>
                           <td />
@@ -1356,12 +1395,12 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
                 })}
 
                 {/* ⚠ N:1 — a mãe do lado do SISTEMA. Ver `ParedoN1`. */}
-                {d.paredosN1.map((g) => {
+                {!soNaoConciliados && d.paredosN1.map((g) => {
                   const temDif = Math.abs(g.diferenca) > 0.01;
                   const somaAssinada = Math.sign(g.sis.valor_assinado || 1) * g.soma;
                   return (
                     <React.Fragment key={g.sis.lancamento_id}>
-                      <tr className={cn(H18, 'border-b border-border/50 bg-muted/20')}>
+                      <tr className={cn(H18, 'border-b border-border/50', CONCILIADA)} data-conciliada="">
                         <td /><td /><td />
                         <td className={cn(CEL, 'text-right font-medium tabular-nums', temDif ? 'text-amber-600' : corVal(somaAssinada))}
                             title={temDif ? `os extratos somam ${fmtBRL(Math.abs(g.diferenca))} ${g.diferenca > 0 ? 'a mais' : 'a menos'} que o lançamento` : undefined}>
@@ -1390,7 +1429,7 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
                       {/* ⚠ FILHAS DO LADO DO BANCO e `↰` no meio: a seta aponta para o OFX porque
                           é ele que está sendo decomposto. Mesma régua das filhas do 1:N. */}
                       {g.extratos.map((x) => (
-                        <tr key={x.extrato.extrato_id} className={cn(H18, 'bg-muted/40 border-b border-border/30')}>
+                        <tr key={x.extrato.extrato_id} className={cn(H18, CONCILIADA_FILHA, 'border-b border-border/30')} data-conciliada="">
                           <td />
                           <td className={CEL_DATA}>{fmtData(x.extrato.data)}</td>
                           <td className={cn(CEL, 'font-normal text-muted-foreground')} title={x.extrato.historico ?? ''}>{x.extrato.historico ?? '—'}</td>
@@ -1414,7 +1453,9 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
                       extrato: { extrato_id: e.extrato_id, data: e.data, historico: e.historico, valor: e.valor },
                       iniciais: [],
                     })}
-                    onIgnorar={() => setIgnorarId(e.extrato_id)} />
+                    onIgnorar={() => setIgnorarId(e.extrato_id)}
+                    nSugestoes={sugestoesPorLinha.get(e.extrato_id)?.length ?? 0}
+                    onSugestoes={() => setSugerir({ extrato_id: e.extrato_id, data: e.data, historico: e.historico, valor: e.valor })} />
                 ))}
 
                 {/* ⚠ NO FIM DO DIA, e depois do sem par: a ordem é a da atenção. O que falta
@@ -1614,6 +1655,29 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
         )}
       </DragOverlay>
 
+      {/* ⚠ "casar" NUMA SUGESTÃO ABRE O MESMO `CasarComBancoModal` do "Criar" e do arrasto, já com os levados. Um
+          lançamento de valor diferente abre com o valor do banco no campo ("era R$ X"); a soma abre como está. */}
+      <SugestoesCasarModal
+        open={!!sugerir}
+        onClose={() => setSugerir(null)}
+        extrato={sugerir}
+        nomeConta={nomeConta}
+        sugestoes={(sugerir && sugestoesPorLinha.get(sugerir.extrato_id)) || []}
+        onCasar={(s) => {
+          if (!sugerir) return;
+          const umDiferente = s.lancamentos.length === 1 && s.valorDiferente;
+          setCasar({
+            extrato: sugerir,
+            iniciais: s.lancamentos.map((c) => ({
+              lancamento_id: c.lancamento_id, descricao: c.descricao, fornecedor: c.fornecedor,
+              valor_assinado: c.valor_assinado, usarValorDoBanco: umDiferente,
+              data_vencimento: c.data_vencimento, status_transacao: c.status_transacao,
+            })),
+          });
+          setSugerir(null);
+        }}
+      />
+
       <CasarComBancoModal
         open={!!casar}
         onClose={() => setCasar(null)}
@@ -1694,6 +1758,10 @@ export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes, mostrarCan
   const conferenciaEmModal = !soConferencia;
   const [abaAnterior, setAbaAnterior] = useState<Exclude<AbaEspelho, 'conferencia'>>('ofx');
   useEffect(() => { if (aba !== 'conferencia') setAbaAnterior(aba); }, [aba]);
+  /* ⚠ "SÓ NÃO CONCILIADOS" VIVE SÓ ENQUANTO O MODAL ESTÁ ABERTO — PR-CONC-SUGESTOES-CASAR-01 (Gabriel, 30/09): fechar a
+     Conferência volta a mostrar tudo na próxima abertura. */
+  const [soNaoConciliados, setSoNaoConciliados] = useState(false);
+  useEffect(() => { if (aba !== 'conferencia') setSoNaoConciliados(false); }, [aba]);
   const abaCorpo = aba === 'conferencia' && conferenciaEmModal ? abaAnterior : aba;
   const fecharConferencia = () => { if (onAbaChange) onAbaChange(abaAnterior); else setAba(abaAnterior); };
   /**
@@ -1788,7 +1856,7 @@ export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes, mostrarCan
     <AbaConferencia data={data} anoMes={anoMes} nomeConta={data.escopo.nome_conta ?? undefined}
       clienteId={clienteId} contaId={contaId} internos={internas.lancamentosInternos}
       onAbrir={onAbrirLancamento} onMudou={() => { void refetch(); }}
-      mostrarCandidatos={mostrarCandidatos} />
+      mostrarCandidatos={mostrarCandidatos} soNaoConciliados={soNaoConciliados} />
   );
 
   const vinculados = new Set((data.vinculos ?? []).map((v) => v.lancamento_id));
@@ -1927,9 +1995,20 @@ export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes, mostrarCan
           <DialogContent className="w-[96vw] max-w-[96vw] h-[90vh] max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col [&>button.absolute]:hidden"
             data-testid="modal-conferencia">
             <div className="flex h-8 shrink-0 items-center justify-between gap-2 bg-primary px-3.5 text-primary-foreground">
-              <DialogTitle className="text-[12px] font-medium">
-                {['Conferência', data.escopo.nome_conta, `${MESES_CURTOS[Number(mes) - 1] ?? mes}/${ano}`].filter(Boolean).join(' · ')}
-              </DialogTitle>
+              <div className="flex items-center gap-4">
+                <DialogTitle className="text-[12px] font-medium">
+                  {['Conferência', data.escopo.nome_conta, `${MESES_CURTOS[Number(mes) - 1] ?? mes}/${ano}`].filter(Boolean).join(' · ')}
+                </DialogTitle>
+                {/* ⚠ CHECKBOX CLARO, E NÃO O `Segmentado` — PR-CONC-SUGESTOES-CASAR-01. O segmentado marca a escolha em
+                    navy, e aqui o fundo JÁ é navy: o selecionado sumiria. É o `Checkbox` da casa com as cores invertidas
+                    para o cabeçalho escuro. */}
+                <label className="flex cursor-pointer items-center gap-1.5 text-[10px] font-medium">
+                  <Checkbox checked={soNaoConciliados} onCheckedChange={(v) => setSoNaoConciliados(v === true)}
+                    aria-label="Só não conciliados" data-testid="so-nao-conciliados"
+                    className="h-3.5 w-3.5 border-primary-foreground data-[state=checked]:bg-primary-foreground data-[state=checked]:text-primary [&_svg]:h-3 [&_svg]:w-3" />
+                  Só não conciliados
+                </label>
+              </div>
               <button type="button" onClick={fecharConferencia} aria-label="Fechar"
                 className="rounded p-0.5 opacity-80 hover:opacity-100 hover:bg-primary-foreground/10">
                 <X className="h-3.5 w-3.5" />

@@ -26,6 +26,7 @@ import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CriarLancamentoDaLinha } from '@/components/conciliacao/CriarLancamentoDaLinha';
 import { MOTIVO_CASAR_LABEL } from '@/components/financeiro-v2/EspelhoConciliacaoTab';
+import { STATUS_PALETA, STATUS_FILTRO_LABEL } from '@/lib/financeiro/statusFinanceiro';
 
 const fmtBRL = (v: number | null | undefined) =>
   v == null ? '—' : Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -36,7 +37,19 @@ export interface ExtratoAlvo {
 }
 export interface LevadoInicial {
   lancamento_id: string; descricao: string | null; fornecedor?: string | null; valor_assinado: number;
+  /** PR-CONC-SUGESTOES-CASAR-01: a sugestão "nome · valor diferente" abre com o VALOR DO BANCO no campo, e a linha
+   *  diz "era R$ X". É o mesmo gesto do "Usar valor do banco", feito pela sugestão; o Conciliar não muda. */
+  usarValorDoBanco?: boolean;
+  /** PR-CONC-SUGESTOES-CASAR-01: a linha de identificação mostra vencimento e status; ausentes, "—". */
+  data_vencimento?: string | null;
+  status_transacao?: string | null;
 }
+
+const PALETA_DO_STATUS: Record<string, { texto: string } | undefined> = {
+  previsto: STATUS_PALETA.previsto, programado: STATUS_PALETA.programado, agendado: STATUS_PALETA.agendado,
+  realizado: STATUS_PALETA.realizado, conciliado: STATUS_PALETA.conciliado,
+};
+const vencCurto = (d: string | null | undefined) => (d ? `${d.slice(8, 10)}/${d.slice(5, 7)}` : '—');
 
 interface Levado extends LevadoInicial { valorTexto: string; }
 
@@ -88,10 +101,12 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
 
   useEffect(() => {
     if (!open) return;
-    setLevados(iniciais.map((l) => ({ ...l, valorTexto: paraCampo(l.valor_assinado) })));
+    setLevados(iniciais.map((l) => ({
+      ...l, valorTexto: paraCampo(l.usarValorDoBanco && extrato ? extrato.valor : l.valor_assinado),
+    })));
     setErroRodape(null);
     setSim(null);
-  }, [open, iniciais]);
+  }, [open, iniciais, extrato]);
 
   const valorDe = (t: string) => Number(t.replace(/\./g, '').replace(',', '.')) || 0;
   const itens = useMemo(
@@ -172,9 +187,11 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
       <Dialog open={open && !criando} onOpenChange={(v) => { if (!v) onClose(); }}>
         {/* ⚠ `grid-cols-[minmax(0,1fr)]` — PR-CONC-CASAR-VALOR-BANCO-01. O `DialogContent` da casa é `grid`, e a coluna
             implícita cresce até o conteúdo mínimo: com o botão "Usar valor do banco" a linha pedia 634px num modal de
-            560, e o `overflow-hidden` cortava a conta, o resumo e o Conciliar (medido na tela). Com a coluna travada, a
-            descrição do lançamento é que trunca (com `title`). */}
-        <DialogContent className="w-[560px] max-w-[95vw] grid-cols-[minmax(0,1fr)] p-0 gap-0 overflow-hidden [&>button.absolute]:hidden text-[11px]">
+            560, e o `overflow-hidden` cortava a conta, o resumo e o Conciliar (medido na tela).
+            ⚠ E A DESCRIÇÃO NÃO TRUNCA MAIS — PR-CONC-SUGESTOES-CASAR-01 (Gabriel, print 13:42: "Servico Rastreabilidade
+            ..." cortado com espaço sobrando). Cada levado ocupa DUAS linhas: a identificação inteira, uma informação por
+            coluna (venc · descrição · fornecedor · status), e embaixo o campo e as ações. O que não couber quebra. */}
+        <DialogContent className="w-[640px] max-w-[95vw] grid-cols-[minmax(0,1fr)] p-0 gap-0 overflow-hidden [&>button.absolute]:hidden text-[11px]">
           <div className="flex h-9 shrink-0 items-center justify-between gap-2 bg-primary px-3 text-primary-foreground">
             <span className="text-[12px] font-medium">Casar com o banco</span>
             <div className="flex items-center gap-3">
@@ -191,22 +208,32 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
               <span className="text-[10px] text-muted-foreground">no banco</span>
               <span className={cn('text-[11px] font-semibold tabular-nums', corVal(extrato.valor))}>{fmtBRL(extrato.valor)}</span>
               <span className="text-[10px] text-muted-foreground">histórico</span>
-              <span className="text-[11px] truncate" title={extrato.historico ?? ''}>{extrato.historico ?? '—'}</span>
+              <span className="text-[11px] break-words">{extrato.historico ?? '—'}</span>
               <span className="text-[10px] text-muted-foreground">conta</span>
               <span className="text-[10px] text-muted-foreground">{[nomeConta, dataCurta].filter(Boolean).join(' · ')}</span>
             </div>
 
             <div>
-              <div className="text-[10px] text-muted-foreground mb-1">
-                lançamentos levados ({levados.length}) — edite o valor se o banco pagou diferente; ao conciliar, o lançamento fica com esse valor
+              <div className="text-[10px] text-muted-foreground mb-1 whitespace-nowrap">
+                lançamentos levados ({levados.length}) — ao conciliar, cada um fica com o valor do campo
               </div>
               {semItens && <div className="text-[10px] text-muted-foreground italic py-1">nenhum lançamento levado</div>}
               {levados.map((l) => (
-                <div key={l.lancamento_id} className="flex min-w-0 items-center gap-2 py-[3px] border-b last:border-b-0">
-                  <span className="min-w-0 flex-1 truncate" title={[l.descricao, l.fornecedor].filter(Boolean).join(' · ')}>
-                    <span className="text-[11px]">{l.descricao ?? '—'}</span>
-                    <span className="text-[10px] text-muted-foreground">{' · '}{l.fornecedor || '—'}</span>
-                  </span>
+                <div key={l.lancamento_id} className="py-[4px] border-b last:border-b-0" data-testid="levado">
+                  {(() => {
+                    const st = (l.status_transacao ?? '').trim().toLowerCase();
+                    return (
+                      <div className="grid grid-cols-[34px_minmax(0,1fr)_minmax(0,1fr)_62px] gap-x-2 items-baseline" data-testid="levado-identificacao">
+                        <span className="text-[10px] text-muted-foreground tabular-nums" title="vencimento">{vencCurto(l.data_vencimento)}</span>
+                        <span className="text-[11px] break-words">{l.descricao ?? '—'}</span>
+                        <span className="text-[10px] text-muted-foreground break-words">{l.fornecedor || '—'}</span>
+                        <span className={cn('text-right text-[10px] font-medium', PALETA_DO_STATUS[st]?.texto ?? 'text-muted-foreground')}>
+                          {st ? (STATUS_FILTRO_LABEL[st] ?? l.status_transacao) : '—'}
+                        </span>
+                      </div>
+                    );
+                  })()}
+                <div className="mt-[3px] flex min-w-0 items-center gap-2">
                   <input
                     value={l.valorTexto}
                     onChange={(e) => setLevados((v) => v.map((x) => x.lancamento_id === l.lancamento_id ? { ...x, valorTexto: e.target.value } : x))}
@@ -214,10 +241,20 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
                     className={cn('w-24 rounded border px-1 py-0.5 text-right text-[11px] font-medium tabular-nums', corVal(l.valor_assinado))}
                     aria-label={`Valor de ${l.descricao ?? 'lançamento'}`}
                   />
+                  {/* ⚠ "era R$ X" TOMA O LUGAR DO BOTÃO, não se soma a ele — PR-CONC-SUGESTOES-CASAR-01. Com os dois na linha
+                      de 560px a descrição virava "Folha ..." (medido na tela, NJ · BB · set/26). Com o campo já no valor do
+                      banco, o botão estaria desabilitado e não diria nada que o "era" não diga; se o operador mexer no
+                      campo, o botão volta. */}
+                  {l.usarValorDoBanco && l.valorTexto !== paraCampo(l.valor_assinado) && (
+                    <span className="shrink-0 whitespace-nowrap text-[10px] text-muted-foreground tabular-nums" data-testid="era-valor"
+                      title="O valor que o lançamento tinha. Ao conciliar, ele fica com o do campo.">
+                      era R$ {fmtBRL(Math.abs(l.valor_assinado))}
+                    </span>
+                  )}
                   {/* ⚠ UM LEVADO: "Usar valor do banco" — o campo recebe o valor do extrato (em módulo, como o campo
                       trabalha) e a diferença vai a zero na próxima simulação. VÁRIOS: "absorver a diferença" põe a
                       diferença inteira NESTA linha; as outras não mudam. */}
-                  {unico ? (
+                  {unico && l.usarValorDoBanco && l.valorTexto === valorDoBanco ? null : unico ? (
                     <button type="button" data-testid="usar-valor-banco"
                       disabled={l.valorTexto === valorDoBanco}
                       title={l.valorTexto === valorDoBanco ? 'O campo já tem o valor do banco.' : 'Preenche o campo com o valor do extrato; o lançamento fica com ele ao conciliar.'}
@@ -245,6 +282,7 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
                     onClick={() => setLevados((v) => v.filter((x) => x.lancamento_id !== l.lancamento_id))}>
                     remover deste casamento
                   </button>
+                </div>
                 </div>
               ))}
             </div>

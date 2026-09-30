@@ -228,12 +228,31 @@ describe('fix1 — a coluna de ações é a alça + "⋯"', () => {
     expect(within(tabelaDaMesa(modal)).queryByText('desconciliar')).toBeNull();
   });
 
-  it('extrato sem par: o menu tem Criar e Ignorar', async () => {
+  /* PR-CONC-SUGESTOES-CASAR-01: o menu ganhou "Ver sugestões (N)". Aqui o banco pagou -134.613,84 e o único candidato é
+     a folha de -3.407,89 do Jonatas — nem valor, nem soma, nem nome: N = 0, desabilitado e dizendo por quê. */
+  it('extrato sem par: o menu tem Ver sugestões (0) desabilitado com o motivo, Criar e Ignorar', async () => {
     const modal = await abrirConferencia();
     const semPar = within(modal).getByText('— nenhum lançamento vinculado').closest('tr')!;
     expect(itens(await abrirMenu(semPar))).toEqual([
+      { texto: 'Ver sugestões (0)nenhuma sugestão para este movimento', desabilitado: true },
       { texto: 'Criar', desabilitado: false }, { texto: 'Ignorar', desabilitado: false },
     ]);
+  });
+
+  it('com um candidato de mesmo valor: "Ver sugestões (1)" habilitado abre o modal POR CIMA da Conferência', async () => {
+    fixture.espelho = { ...ESPELHO, sistema_candidatos: [...ESPELHO.sistema_candidatos!, {
+      ...ESPELHO.sistema_candidatos![0], lancamento_id: 'c2', valor: 134613.84, valor_assinado: -134613.84,
+      descricao: 'Compra de gado', fornecedor: 'Fazenda Boa Vista',
+    }] };
+    const modal = await abrirConferencia();
+    const semPar = within(modal).getByText('— nenhum lançamento vinculado').closest('tr')!;
+    const menu = await abrirMenu(semPar);
+    expect(itens(menu)[0]).toEqual({ texto: 'Ver sugestões (1)', desabilitado: false });
+    fireEvent.click(within(menu).getByText('Ver sugestões (1)'));
+    const sug = await screen.findByTestId('sugestoes-casar');
+    expect(within(sug).getByText('Compra de gado')).toBeInTheDocument();
+    /* a Conferência continua aberta embaixo */
+    expect(screen.getByTestId('modal-conferencia')).toBeInTheDocument();
   });
 
   it('linha casada: o menu tem Abrir e Desconciliar', async () => {
@@ -279,5 +298,82 @@ describe('fix2 — o selo de status da Conferência é uma referência pequena, 
     expect(prog.className).toContain('text-right');
     expect(prog.firstElementChild!.className).toContain('text-[8px]');
     expect(prog.firstElementChild!.className).not.toMatch(/\bbg-/); // programado segue só texto
+  });
+});
+
+describe('PR-CONC-SUGESTOES-CASAR-01 — "Só não conciliados", fundo verde nas casadas e N estável', () => {
+  const casada = (modal: HTMLElement) => within(modal).queryByText('Pix - Agendamento - 04/09 05:35 ANTONIO PERES NETO');
+
+  it('em "Todos", a linha casada tem o fundo verde leve; a não casada, não', async () => {
+    const modal = await abrirConferencia();
+    const tr = casada(modal)!.closest('tr')!;
+    expect(tr.hasAttribute('data-conciliada')).toBe(true);
+    expect(tr.className).toContain('bg-success/[0.06]');
+    const semPar = within(modal).getByText('— nenhum lançamento vinculado').closest('tr')!;
+    expect(semPar.className).not.toContain('bg-success');
+    /* a busca sabe achar: há exatamente uma linha casada nesta mesa */
+    expect(modal.querySelectorAll('tr[data-conciliada]')).toHaveLength(1);
+  });
+
+  it('ligado: esconde a casada e o dia que só tinha ela; o dia que fica mantém o fechamento inteiro', async () => {
+    const modal = await abrirConferencia();
+    expect(within(modal).getByText('fechamento 04/09')).toBeInTheDocument();
+    const fech05 = () => within(modal).getByText('fechamento 05/09').closest('tr')!.textContent;
+    const antes = fech05();
+    fireEvent.click(screen.getByTestId('so-nao-conciliados'));
+    await waitFor(() => expect(casada(modal)).toBeNull());
+    expect(within(modal).queryByText('fechamento 04/09')).toBeNull(); // 04/09 só tinha a casada: some inteiro
+    expect(modal.querySelectorAll('tr[data-conciliada]')).toHaveLength(0);
+    expect(within(modal).getByText('— nenhum lançamento vinculado')).toBeInTheDocument();
+    expect(fech05()).toBe(antes); // o fechamento não é recalculado
+    fireEvent.click(screen.getByTestId('so-nao-conciliados'));
+    await waitFor(() => expect(casada(modal)).not.toBeNull());
+  });
+
+  it('ligado, num dia que tem casada E sem par: o dia fica, só a casada some (dos dois lados)', async () => {
+    fixture.espelho = { ...ESPELHO,
+      ofx_completo: ESPELHO.ofx_completo.map((e) => (e.extrato_id === 'e2' ? { ...e, data: '2026-09-05' } : e)),
+      sistema_completo: ESPELHO.sistema_completo.map((s) => ({ ...s, data: '2026-09-05' })) };
+    const modal = await abrirConferencia();
+    expect(casada(modal)).not.toBeNull();
+    expect(within(modal).queryByText(/Antonio Peres Neto/)).not.toBeNull(); // o lado do sistema da casada
+    fireEvent.click(screen.getByTestId('so-nao-conciliados'));
+    await waitFor(() => expect(casada(modal)).toBeNull());
+    expect(within(modal).queryByText(/Antonio Peres Neto/)).toBeNull();
+    expect(within(modal).getByText('fechamento 05/09')).toBeInTheDocument();
+    expect(within(modal).getByText('— nenhum lançamento vinculado')).toBeInTheDocument();
+  });
+
+  it('o estado vive só enquanto o modal está aberto: fechar e reabrir volta a mostrar tudo', async () => {
+    const modal = await abrirConferencia();
+    fireEvent.click(screen.getByTestId('so-nao-conciliados'));
+    await waitFor(() => expect(casada(modal)).toBeNull());
+    fireEvent.click(within(modal).getByRole('button', { name: 'Fechar' }));
+    await waitFor(() => expect(screen.queryByTestId('modal-conferencia')).toBeNull());
+    fireEvent.click(botaoSubAba('Conferência'));
+    const modal2 = await screen.findByTestId('modal-conferencia');
+    expect(casada(modal2)).not.toBeNull();
+    expect(screen.getByTestId('so-nao-conciliados').getAttribute('data-state')).toBe('unchecked');
+  });
+
+  it('N do menu = linhas do modal, e abrir duas vezes dá o mesmo N (a mesma lista, calculada uma vez)', async () => {
+    fixture.espelho = { ...ESPELHO, sistema_candidatos: [...ESPELHO.sistema_candidatos!, {
+      ...ESPELHO.sistema_candidatos![0], lancamento_id: 'c2', valor: 134613.84, valor_assinado: -134613.84,
+      descricao: 'Compra de gado', fornecedor: 'Fazenda Boa Vista',
+    }] };
+    const modal = await abrirConferencia();
+    const semPar = () => within(modal).getByText('— nenhum lançamento vinculado').closest('tr')!;
+    for (let vez = 0; vez < 2; vez++) {
+      fireEvent.keyDown(within(semPar()).getByRole('button', { name: 'Ações da linha' }), { key: 'Enter' });
+      const menu = await screen.findByRole('menu');
+      const item = within(menu).getAllByRole('menuitem')[0];
+      const n = Number(/\((\d+)\)/.exec(item.textContent ?? '')![1]);
+      fireEvent.click(item);
+      const sug = await screen.findByTestId('sugestoes-casar');
+      expect(within(sug).getAllByTestId('sugestao')).toHaveLength(n);
+      expect(n).toBe(1);
+      fireEvent.click(within(sug).getByText('Fechar')); // o do rodapé (o X também se chama Fechar)
+      await waitFor(() => expect(screen.queryByTestId('sugestoes-casar')).toBeNull());
+    }
   });
 });

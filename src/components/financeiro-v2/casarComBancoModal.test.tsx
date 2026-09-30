@@ -135,17 +135,41 @@ describe('"tirar" virou "remover deste casamento"', () => {
 });
 
 describe('o modal não corta nada (a estrutura que a medida da tela exigiu)', () => {
-  it('coluna do grid travada, descrição que trunca com title, botão da altura do campo, cabeçalho sem reticência', async () => {
-    montar([VIVO]);
+  /* PR-CONC-SUGESTOES-CASAR-01 (Gabriel, print 13:42): a descrição truncava com espaço sobrando. Cada levado agora
+     ocupa DUAS linhas — a identificação inteira (venc · descrição · fornecedor · status) e o campo com as ações. */
+  it('coluna do grid travada; levado em duas linhas, identificação inteira sem reticência; botão da altura do campo', async () => {
+    const LONGO: LevadoInicial = { lancamento_id: 'l-rastro', descricao: 'Serviço Rastreabilidade Bovina - SISBOV mensalidade setembro',
+      fornecedor: 'Agroinblue - G.F.de Rezende Junqueira; Gasto Recorrente', valor_assinado: -506.84,
+      data_vencimento: '2026-09-08', status_transacao: 'programado' };
+    montar([LONGO]);
     await frase();
     const dialogo = screen.getByRole('dialog');
     expect(dialogo.className).toContain('grid-cols-[minmax(0,1fr)]');
-    const linha = campo('Vivo Casa').parentElement!;
+    const levado = screen.getByTestId('levado');
+    const ident = within(levado).getByTestId('levado-identificacao');
+    expect([...ident.children].map((c) => c.textContent)).toEqual([
+      '08/09', LONGO.descricao, LONGO.fornecedor, 'Programado',
+    ]);
+    /* nada corta: nem truncate nem ellipsis em lugar nenhum do levado; texto livre quebra */
+    for (const el of [levado, ...levado.querySelectorAll('*')]) expect(el.getAttribute('class') ?? '').not.toMatch(/\btruncate\b|text-ellipsis/);
+    expect(ident.children[1].className).toContain('break-words');
+    expect(ident.children[2].className).toContain('break-words');
+    /* a segunda linha é a do campo e das ações */
+    const linha = campo(LONGO.descricao!).parentElement!;
     expect(linha.className).toContain('min-w-0');
-    expect(linha.firstElementChild!.getAttribute('title')).toBe('Vivo Casa · Telefonica Brasil S.A.');
+    expect(linha.parentElement).toBe(levado);
     expect(screen.getByTestId('usar-valor-banco').className).toContain('h-[23px]');
     const cab = within(dialogo).getAllByText('Banco do Brasil · 01/09').find((e) => e.className.includes('opacity-90'))!;
     expect(cab.className).not.toContain('truncate');
+  });
+});
+
+describe('o levado sem vencimento nem status mostra "—" (dado ausente), nunca vazio', () => {
+  it('VIVO sem os campos novos', async () => {
+    montar([VIVO]);
+    await frase();
+    const ident = screen.getByTestId('levado-identificacao');
+    expect([...ident.children].map((c) => c.textContent)).toEqual(['—', 'Vivo Casa', 'Telefonica Brasil S.A.', '—']);
   });
 });
 

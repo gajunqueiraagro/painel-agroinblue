@@ -160,7 +160,7 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 30/09/2026 (PR-FIN-RECORRENCIA-MODAL-01): 2469 passando, 22 skipped, e
+  Baseline em 30/09/2026 (PR-CONC-SUGESTOES-CASAR-01): 2504 passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -312,9 +312,10 @@ preview que o cabecalho nao sai da tela ao rolar.
   negocia por PR.
 - ⚠ PISO DE 9,5px, COM DUAS EXCECOES E SO' ELAS: (1) a Grade do DRE, cuja regua inteira mora em `REGUA_LINHA`
   (`src/components/agri/dreGrade.tsx`) — subtotal 11/500/20/recuo 0, grupo 9/500/16/recuo 8, simples
-  9/400/16/recuo 8, filha 9/400/14/recuo 16, sub-coluna (R$/ha, /sc, /t) 9,5; (2) excecao: selo de status da
-  Conferencia a 8px (`CelStatus` em `EspelhoConciliacaoTab.tsx`, decisao do Gabriel 30/09: "e so uma referencia";
-  PR-CONC-CONFERENCIA-MODAL-01-fix2) — so o selo, a tabela segue a 9,5. Excecoes declaradas, nao precedente:
+  9/400/16/recuo 8, filha 9/400/14/recuo 16, sub-coluna (R$/ha, /sc, /t) 9,5; (2) excecao: selo de status/motivo da
+  Conferencia e do modal de sugestoes a 8px (`CelStatus` em `EspelhoConciliacaoTab.tsx`, decisao do Gabriel 30/09: "e so
+  uma referencia", PR-CONC-CONFERENCIA-MODAL-01-fix2; o selo de motivo e o status de `SugestoesCasarModal.tsx`,
+  PR-CONC-SUGESTOES-CASAR-01) — so os selos, as tabelas seguem a 9,5. Excecoes declaradas, nao precedente:
   abaixo de 9,5px fora delas reprova o PR.
   ⚠ LARGURA DE COLUNA = pior texto RENDERIZADO + 8 de folga + 14 de padding, contando o slot do marcador
     ▲/▼ (`L_MARCADOR`, 10px). Mede-se com um `Range` sobre o conteudo de cada `td` contra o `clientWidth`
