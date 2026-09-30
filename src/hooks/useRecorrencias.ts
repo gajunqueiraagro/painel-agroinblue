@@ -227,19 +227,40 @@ export function useRecorrencias() {
  * prometer N e entregar M. Aqui a pergunta é literalmente a mesma; a diferença é
  * se o banco confirma a transação.
  */
+/** Uma competência VAGA que o Gerar preenche abaixo da marca — FIN-RECORRENCIA-GERAR-PREENCHE-VAGA-01. */
+export interface VagaRecorrencia { competencia: string; vencimento: string }
+
+/* ⚠ LIDA CAMPO A CAMPO, sem `as`: o que não tiver a forma esperada vira lista vazia, nunca uma vaga inventada. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- jsonb da RPC
+const lerVagas = (v: any): VagaRecorrencia[] => (Array.isArray(v) ? v : [])
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- jsonb da RPC
+  .map((x: any) => ({ competencia: String(x?.competencia ?? ''), vencimento: String(x?.vencimento ?? '') }))
+  .filter((x) => x.competencia !== '');
+
+/** "preenche 12/26 (venc 05/01/27)" — a MESMA frase no Gerar e na prévia da propagação. */
+export const textoVagas = (vagas: readonly VagaRecorrencia[]): string =>
+  'preenche ' + vagas.map((v) => {
+    const c = v.competencia.length >= 7 ? `${v.competencia.slice(5, 7)}/${v.competencia.slice(2, 4)}` : v.competencia;
+    const d = v.vencimento.length >= 10 ? `${v.vencimento.slice(8, 10)}/${v.vencimento.slice(5, 7)}/${v.vencimento.slice(2, 4)}` : '—';
+    return `${c} (venc ${d})`;
+  }).join(', ');
+
 export async function gerarRecorrencia(
   recorrenciaId: string, ate: string | null, simular: boolean,
-): Promise<{ ok: boolean; gerados: number; de: string | null; ate: string | null; erro: string | null }> {
+): Promise<{ ok: boolean; gerados: number; de: string | null; ate: string | null; vagas: VagaRecorrencia[]; erro: string | null }> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
   const { data, error } = await (supabase as any).rpc('fn_recorrencia_gerar', {
     p_recorrencia_id: recorrenciaId,
     p_ate: ate,
     p_simular: simular,
   });
-  if (error) return { ok: false, gerados: 0, de: null, ate: null, erro: error.message };
+  if (error) return { ok: false, gerados: 0, de: null, ate: null, vagas: [], erro: error.message };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- jsonb da RPC
   const r: any = data ?? {};
-  return { ok: r.ok !== false, gerados: Number(r.gerados ?? 0), de: r.de ?? null, ate: r.ate ?? null, erro: null };
+  return {
+    ok: r.ok !== false, gerados: Number(r.gerados ?? 0), de: r.de ?? null, ate: r.ate ?? null,
+    vagas: lerVagas(r.vagas), erro: null,
+  };
 }
 
 /** Até onde a edição da regra alcança os lançamentos que ela gerou. */
@@ -260,6 +281,8 @@ export interface CompetenciaPropagacao {
     alteradas: number; marcaDepois: string | null; aGerar: string[]; duplicidades: { competencia: string; n: number }[];
     /** fix2: a colisão real, em frase pronta do banco — o mesmo texto com que a execução recusa. `null` = sem colisão. */
     aviso: string | null;
+    /** As vagas que o próximo Gerar preenche abaixo da marca resultante (mesma função do banco que grava). */
+    vagas: VagaRecorrencia[];
   }>;
   /** Só na execução: quantas foram gravadas. */
   aplicadas: number | null;
@@ -298,6 +321,7 @@ function lerCompetencia(c: any): CompetenciaPropagacao | null {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- jsonb da RPC
     duplicidades: (Array.isArray(p?.duplicidades) ? p.duplicidades : []).map((d: any) => ({ competencia: String(d?.competencia ?? ''), n: Number(d?.n ?? 0) })),
     aviso: typeof p?.aviso === 'string' && p.aviso ? p.aviso : null,
+    vagas: lerVagas(p?.vagas),
   });
   return {
     grupos: { futuros: grupo(c.futuros), passados: grupo(c.passados) },

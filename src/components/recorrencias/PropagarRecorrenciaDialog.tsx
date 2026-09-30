@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { AlertTriangle, Loader2, Check } from 'lucide-react';
 import { toast } from 'sonner';
-import { propagarRecorrencia, type EscopoPropagacao, type ResultadoPropagacao } from '@/hooks/useRecorrencias';
+import { propagarRecorrencia, textoVagas, type EscopoPropagacao, type ResultadoPropagacao } from '@/hooks/useRecorrencias';
 
 /**
  * PropagarRecorrenciaDialog — até onde a edição da regra alcança o que ela gerou.
@@ -85,6 +85,12 @@ export function BlocoCompetencia({ previa, escopo }: { previa: ResultadoPropagac
         <div className="text-[10px] text-muted-foreground" data-testid="competencias-marca">
           Marca da geração: {mesCurto(c.marcaAntes)} → {mesCurto(p.marcaDepois)}
           {p.aGerar.length > 0 && <> · a próxima geração cria {p.aGerar.map(mesCurto).join(', ')}</>}
+        </div>
+      )}
+      {/* A vaga que o recálculo abre abaixo da marca, e o próximo Gerar preenche (FIN-RECORRENCIA-GERAR-PREENCHE-VAGA-01). */}
+      {p.vagas.length > 0 && (
+        <div className="text-[10px] text-muted-foreground" data-testid="competencias-vagas">
+          A próxima geração {textoVagas(p.vagas)}
         </div>
       )}
       {/* ⚠ COLISÃO REAL (fix2): a frase é a do BANCO, a mesma com que a execução recusa — a tela não a recompõe. Sem

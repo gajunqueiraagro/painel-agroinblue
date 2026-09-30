@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { AlertTriangle, Loader2, Play } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatMoeda } from '@/lib/calculos/formatters';
-import { gerarRecorrencia, type Recorrencia } from '@/hooks/useRecorrencias';
+import { gerarRecorrencia, textoVagas, type Recorrencia, type VagaRecorrencia } from '@/hooks/useRecorrencias';
 
 /**
  * GerarLancamentosDialog — a prévia e a execução, pela MESMA pergunta.
@@ -37,7 +37,7 @@ export function GerarLancamentosDialog({ recorrencia, aoFechar, aoGerar }: Props
   /* O horizonte nasce no fim da regra: o caso comum é gerar tudo o que falta.
      Encurtar é decisão de quem não quer inflar o ano ainda. */
   const [ate, setAte] = useState(recorrencia.dataFim.slice(0, 10));
-  const [previa, setPrevia] = useState<{ gerados: number; de: string | null; ate: string | null } | null>(null);
+  const [previa, setPrevia] = useState<{ gerados: number; de: string | null; ate: string | null; vagas: VagaRecorrencia[] } | null>(null);
   const [ocupado, setOcupado] = useState(false);
 
   const chamar = async (simular: boolean) => {
@@ -45,7 +45,7 @@ export function GerarLancamentosDialog({ recorrencia, aoFechar, aoGerar }: Props
     try {
       const r = await gerarRecorrencia(recorrencia.id, ate || null, simular);
       if (!r.ok || r.erro) { toast.error(r.erro ?? 'O banco recusou a geração.'); return; }
-      if (simular) { setPrevia({ gerados: r.gerados, de: r.de, ate: r.ate }); return; }
+      if (simular) { setPrevia({ gerados: r.gerados, de: r.de, ate: r.ate, vagas: r.vagas }); return; }
       /* ⚠ ZERO É RESPOSTA, NÃO FALHA: significa que o horizonte pedido já está
          inteiro gerado. Dizer "nenhum lançamento criado" sem explicar faria
          parecer defeito. */
@@ -103,10 +103,16 @@ export function GerarLancamentosDialog({ recorrencia, aoFechar, aoGerar }: Props
               ) : (
                 <span>
                   <b className="tabular-nums">{previa.gerados}</b> lançamento{previa.gerados === 1 ? '' : 's'}
-                  {previa.de && previa.ate && (
+                  {/* A janela só se mostra quando há avanço: com a marca no fim, "de" passa de "até". */}
+                  {previa.de && previa.ate && previa.de <= previa.ate && (
                     <span className="text-muted-foreground">
                       {' '}· de {mesBr(previa.de)} a {mesBr(previa.ate)}
                     </span>
+                  )}
+                  {/* ⚠ AS VAGAS ABAIXO DA MARCA — FIN-RECORRENCIA-GERAR-PREENCHE-VAGA-01. Competência da regra sem
+                      lançamento (nunca antes do mês corrente; cancelado conta como ocupado): o Gerar a preenche. */}
+                  {previa.vagas.length > 0 && (
+                    <span className="block text-[10px] text-muted-foreground" data-testid="gerar-vagas">{textoVagas(previa.vagas)}</span>
                   )}
                 </span>
               )}
