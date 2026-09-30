@@ -24,7 +24,9 @@ export function chaveParOfx(saidaId: string, entradaId: string): string {
 /**
  * useTransferenciasDecididas — lê decisões humanas já gravadas em
  * transferencia_ofx_pares (status confirmado/rejeitado) por cliente+mês.
- * Só leitura. As sugestões on-read vêm de useExtratoParesOfx (separado).
+ * Só leitura. O detector que gravava aqui (useExtratoParesOfx + useTransferenciaDecidir) foi aposentado em
+ * PR-CONC-TRANSFERENCIAS-01: a tabela ficou como HISTÓRICO, sem escrita nova. Transferência de OFX hoje é
+ * `fn_transferencias_sugeridas` + `fn_transferencia_de_extratos` (1 lançamento + 2 vínculos).
  *
  * - confirmadosOfx: Set<ofx_id> (saída E entrada) de pares status='confirmado'.
  *   Usado pelo gate H2 (PR-Det-5) para excluir OFX já resolvido.

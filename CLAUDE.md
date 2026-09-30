@@ -160,7 +160,7 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 30/09/2026 (PR-CONC-OFX-LINHA-SALDO-01): 2554 passando, 22 skipped, e
+  Baseline em 30/09/2026 (PR-CONC-TRANSFERENCIAS-01): 2567 passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -265,7 +265,10 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   "cc-NNN |"); unificar; (b) o PASSO 3a de `fn_classificacao_casar_sessao` (soma de 2) nao exclui
   transferencia/estorno/meta como o passo 1 — PR de banco; (c) DOIS LEITORES DO MESMO ARQUIVO (`useImportLancamentosExcel`
   faz o de-para, `useImportarClassificacao` popula o staging) — o de-para de conta tem de ser entregue de um ao outro, e
-  foi nessa entrega que a planilha do NJ set/26 foi inteira sem conta.
+  foi nessa entrega que a planilha do NJ set/26 foi inteira sem conta. · PR-CONC-TRANSFERENCIAS-01 aposentou o detector
+  orfao (`ExtratoListaTab`, `useExtratoParesOfx`, `useTransferenciaDecidir`) e deixou ORFAOS, sem importador, o
+  `ConciliacaoPendenciasPanel` (e a lib `conciliacaoDiagnostico`, que so' ele usa) e o `RematchOnDemandPanel` — apagar
+  ou religar e' decisao; `transferencia_ofx_pares` segue como historico (13 decisoes), so' lida pela Mesa.
 - Telas e UI:
   TELAS-ORFAS-01 (decisao) · FIN-RECORRENCIA-FAZENDA-01 · FIN-FAZENDA-INATIVA-LISTA-01 · FIN-IMPORTAR-ANTIGO-01 ·
   FAZENDA-INATIVA-EDICAO-01 · LEGADOS-ABATE-VENDA-FAZENDA-01 · FORNECEDOR-UUID-CRU-01 · PROPRIEDADE-DESTINO-ORIGEM-01 ·
@@ -574,6 +577,20 @@ docs/historico/frentes-ate-2026-09-29.md.)
   antes do mes corrente (competencia), nem em mes fechado. As travas moram so' em `_fn_recorrencia_vagas`, e o
   vencimento so' em `_fn_recorrencia_vencimento` — o gerar grava e a propagacao preve pela MESMA funcao. As duas
   internas nao sao SECURITY DEFINER e nao se executam pela API.
+- ⚠ TRANSFERENCIA DE OFX = 1 LANCAMENTO + 2 VINCULOS (PR-CONC-TRANSFERENCIAS-01, Gabriel 30/09): a saida num banco e a
+  entrada no outro viram UM `3-Transferências` (18010, origem = conta da saida, destino = conta da entrada) com um vinculo
+  vivo POR PONTA. O passo e' o botao "Transferencias entre contas (N)" do Casar lancamentos, ANTES do "Criar lancamentos
+  em lote": `fn_transferencias_sugeridas` sugere (contas diferentes, valor oposto exato, |dias| <= 1; o no' ambiguo que o
+  mesmo dia fecha 1:1 se resolve, o resto o operador escolhe) e `fn_transferencia_de_extratos` fecha as duas pontas numa
+  transacao — casa na transferencia ja' lancada quando existe (`_fn_transferencia_existente`), senao cria. A segunda ponta
+  grava pela MESMA rotina do vincular com `p_dupla_ponta := true`; sem ele (o default, e todo chamador antigo), lancamento
+  com vinculo vivo continua recusado. Nao existe excecao geral no casar nem no vincular.
+  ⚠ CONSULTA A `conciliacao_bancaria_itens` E' SEMPRE COM `desfeito_em IS NULL`. Desfazer (e cancelar o lancamento, pelo
+    gatilho `trg_cbi_desfazer_on_cancelamento`) NAO apaga a linha: marca `desfeito_em`. Contar sem o filtro fabrica
+    "vinculo pendurado" — erro meu na FASE 0 do PR-CONC-OFX-SALDO-LIMPEZA-01 (os 5 do NJ ja' estavam desfeitos; os 966
+    vinculos de lancamento cancelado do proto, todos desfeitos).
+  ⚠ A trava `guard_transferencia_conta_destino` so' via o singular '3-Transferência'; agora ve os dois (INSERT sem destino
+    recusa; UPDATE so' recusa quem remove um destino que existia).
 - ⚠ BOITEL: ao financeiro e ao DRE vai SO' O LIQUIDO DO ACERTO; R$/@ de venda = liquido / @ vivas que sairam. O VALOR DA
   OPERACAO E' O SLOT (`zoo_operacao_lotes.valor_informado`, helper `valorDaVendaBoitel`) e a tela nunca o calcula; o
   acerto e' conferencia. Com o realizado aplicado, o realizado vence a projecao em tudo (`custosDaVendaBoitel`, mesmo

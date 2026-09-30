@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { LayoutList, ListPlus } from 'lucide-react';
+import { ArrowLeftRight, LayoutList, ListPlus } from 'lucide-react';
 import { useConciliacaoDoMes } from '@/hooks/useConciliacaoDoMes';
 import {
   useSaldoGerencialDoMes, useSaldoSistemaNaPosicao,
@@ -8,6 +8,8 @@ import {
 } from '@/hooks/useExtratoDaConta';
 import { PalcoDoMes } from '@/components/conciliacao/PalcoDoMes';
 import { ConciliarMesDialog } from '@/components/conciliacao/ConciliarMesDialog';
+import { TransferenciasEntreContasModal } from '@/components/conciliacao/TransferenciasEntreContasModal';
+import { useTransferenciasSugeridas } from '@/hooks/useTransferenciasSugeridas';
 
 /**
  * AcoesDoMes — as duas portas do passo 2: "Criar lançamentos em lote" e "Conciliar unitário".
@@ -54,6 +56,13 @@ export function AcoesDoMes({ clienteId, contaId, contaNome, ano, mes, aoMudar }:
     clienteId, contaId, saldo.anoMes, saldo.saldoInicial, saldo.posicaoEm);
   const importacoes = useImportacoesDaConta(clienteId, contaId);
 
+  /* PR-CONC-TRANSFERENCIAS-01: as transferências são do CLIENTE (cruzam contas), não da conta da régua — por isso o
+     botão existe mesmo quando a conta escolhida não tem movimento no mês. */
+  const [verTransferencias, setVerTransferencias] = useState(false);
+  const anoMes = `${ano}-${String(mes).padStart(2, '0')}`;
+  const transf = useTransferenciasSugeridas(clienteId, anoMes);
+  const nTransf = transf.dados.total;
+
   /* ⚠ MESMA RÉGUA DO BOTÃO ANTIGO: `situacao === 'nao_conciliado'` é o vínculo real (soma dos
      `valor_aplicado` ativos), não heurística. Movimento parcial fica de fora, como antes. */
   const semVinculo = movimentos.filter(m => m.situacao === 'nao_conciliado').length;
@@ -63,10 +72,39 @@ export function AcoesDoMes({ clienteId, contaId, contaNome, ano, mes, aoMudar }:
     await aoMudar?.();
   };
 
-  if (movimentos.length === 0) return null;
+  const botaoTransferencias = (
+    <>
+      {/* ⚠ ANTES DO "Criar lançamentos em lote", e é de propósito: é o passo do fluxo do mês (Gabriel). Criar os crus
+          primeiro faz de cada ponta um lançamento solto — despesa num banco, receita no outro. */}
+      <Button type="button" variant="outline" size="sm"
+        className="h-6 gap-1 px-2 text-[10px]"
+        disabled={!clienteId}
+        title="Saída num banco e entrada no outro, do mesmo valor, em até 1 dia. Confirme antes de criar os lançamentos em lote."
+        onClick={() => setVerTransferencias(true)}>
+        <ArrowLeftRight className="h-3 w-3" />
+        Transferências entre contas{nTransf > 0 ? ` (${nTransf})` : ''}
+      </Button>
+      <TransferenciasEntreContasModal
+        open={verTransferencias}
+        onClose={() => setVerTransferencias(false)}
+        rotuloMes={`${String(mes).padStart(2, '0')}/${ano}`}
+        linhas={transf.dados.linhas}
+        carregando={transf.carregando}
+        erro={transf.erro}
+        fechar={transf.fechar}
+        aoGravar={async () => { await transf.depoisDeGravar(); await recarregarTudo(); }}
+      />
+    </>
+  );
+
+  if (movimentos.length === 0) {
+    return nTransf > 0 ? <div className="flex flex-wrap items-center gap-2">{botaoTransferencias}</div> : null;
+  }
 
   return (
     <div className="flex flex-wrap items-center gap-2">
+      {botaoTransferencias}
+
       {/* ⚠ O LAÇO MORREU — [CONCIL-MES-01] (130). "Lançar todos os sem vínculo" criava um cru
           para CADA movimento, sem prévia e sem olhar o sistema. Agora o botão abre a prévia, e
           quem grava é uma RPC atômica.
