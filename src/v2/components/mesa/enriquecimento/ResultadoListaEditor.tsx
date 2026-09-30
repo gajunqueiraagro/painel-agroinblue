@@ -24,7 +24,11 @@ export interface ResultadoListaEditorProps {
   valorAtual: string | null;
   /** A sugestão (âmbar), usada só quando não há proposta nem valor atual. */
   sugerido?: string | null;
-  /** O rótulo auxiliar da sugestão, ao lado do valor ("pelo histórico do banco"). */
+  /**
+   * O rótulo da sugestão ("pelo histórico do banco") — vai só no `title`.
+   * ⚠ O RÓTULO VISÍVEL MORA NO SLOT DA TABELA (PR-CONC-MESA-LAYOUT-FIXO-01): ao lado do select ele estreitava o campo e
+   *   empurrava a coluna (print 19:50).
+   */
   rotuloSugestao?: string;
   opcoes: readonly string[];
   /** A chave do patch (`tipo_documento`, `forma_pagamento`). */
@@ -45,7 +49,7 @@ export function ResultadoListaEditor({
     : valorAtual ? (atualForaDaLista ? ATUAL : valorAtual)
     : (sugerido ?? SEM);
   return (
-    <div className="flex min-w-0 items-center gap-1">
+    <div className="min-w-0">
       {/* sem nada em lugar nenhum, o gatilho mostra o placeholder ("escolher"), não o item "— sem" */}
       <Select value={selecionado === SEM ? '' : selecionado}
         onValueChange={(v) => {
@@ -56,7 +60,7 @@ export function ResultadoListaEditor({
           }
           if (v !== value) void onEditar({ [campo]: v });
         }}>
-        <SelectTrigger className={cn(CELULA_EDITAVEL, 'min-w-0 flex-1', ehSugestao && 'border-amber-500 bg-amber-50 dark:bg-amber-950/30',
+        <SelectTrigger className={cn(CELULA_EDITAVEL, 'w-full min-w-0', ehSugestao && 'border-amber-500 bg-amber-50 dark:bg-amber-950/30',
           !efetivo && 'text-muted-foreground')}
           title={ehSugestao && rotuloSugestao ? `${efetivo} — ${rotuloSugestao}; grava ao salvar` : efetivo || undefined}>
           {/* o gatilho mostra o valor atual como ele está gravado, sem o " · valor atual" do item */}
@@ -72,11 +76,6 @@ export function ResultadoListaEditor({
           ))}
         </SelectContent>
       </Select>
-      {ehSugestao && rotuloSugestao && (
-        <span className="shrink-0 whitespace-nowrap text-[8.5px] text-muted-foreground" data-testid="rotulo-sugestao">
-          {rotuloSugestao}
-        </span>
-      )}
     </div>
   );
 }

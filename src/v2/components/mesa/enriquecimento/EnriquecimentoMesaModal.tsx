@@ -492,23 +492,26 @@ export function EnriquecimentoMesaModal({
                 dizer. Ela responde às duas perguntas que a Mesa não respondia: qual dos
                 dois botões toca o Financeiro, e em que a planilha discorda do extrato.
                 Fora do rodapé de 32px de propósito: ele não pode crescer nem cortar botão. */}
-            {/* ⚠ A LINHA ACIMA DO RODAPÉ SÓ EXISTE QUANDO TEM O QUE DIZER — PR-CONC-MESA-PAINEL-V1 item 5: a frase
-                "Salvar e Salvar e próximo gravam a mesma coisa" saiu; ficam o erro do banco e a divergência com o extrato. */}
-            {(actions.erroBanco || (actions.divergenciasDoExtrato && actions.divergenciasDoExtrato.length > 0)) && (
-              <div className="shrink-0 border-t px-2 py-0.5 text-[10px] leading-tight">
-                {actions.erroBanco ? (
-                  /* 133h adendo item 15 — o erro do banco fica escrito, não só no toast. */
-                  <span className="font-medium text-red-700 dark:text-red-400" title={actions.erroBanco}>
-                    Não gravou — o banco recusou: {actions.erroBanco}
-                  </span>
-                ) : (
-                  <span className="text-amber-700 dark:text-amber-400">
-                    Planilha diverge do extrato em: {actions.divergenciasDoExtrato?.join(' · ')} — o
-                    extrato manda, e estes campos não serão gravados.
-                  </span>
-                )}
-              </div>
-            )}
+            {/* ⚠ A LINHA ACIMA DO RODAPÉ EXISTE SEMPRE, COM 18px — PR-CONC-MESA-LAYOUT-FIXO-01 item 4. Ela aparecia só com
+                erro do banco ou divergência do extrato e roubava altura da tabela no meio do gesto; vazia, guarda o lugar.
+                Uma linha, truncada, o texto inteiro no `title`. */}
+            <div data-testid="slot-rodape" className="flex h-[18px] shrink-0 items-center overflow-hidden whitespace-nowrap border-t px-2 text-[10px]"
+              title={actions.erroBanco ? `Não gravou — o banco recusou: ${actions.erroBanco}`
+                : actions.divergenciasDoExtrato && actions.divergenciasDoExtrato.length > 0
+                  ? `Planilha diverge do extrato em: ${actions.divergenciasDoExtrato.join(' · ')} — o extrato manda, e estes campos não serão gravados.`
+                  : undefined}>
+              {actions.erroBanco ? (
+                /* 133h adendo item 15 — o erro do banco fica escrito, não só no toast. */
+                <span className="truncate font-medium text-red-700 dark:text-red-400">
+                  Não gravou — o banco recusou: {actions.erroBanco}
+                </span>
+              ) : actions.divergenciasDoExtrato && actions.divergenciasDoExtrato.length > 0 ? (
+                <span className="truncate text-amber-700 dark:text-amber-400">
+                  Planilha diverge do extrato em: {actions.divergenciasDoExtrato.join(' · ')} — o
+                  extrato manda, e estes campos não serão gravados.
+                </span>
+              ) : null}
+            </div>
 
             {/* 32px — 133d item 4; os botões continuam h-7/11px. */}
             <div className="flex h-8 shrink-0 items-center gap-1.5 border-t px-2">

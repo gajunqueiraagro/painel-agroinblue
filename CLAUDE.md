@@ -160,7 +160,7 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 30/09/2026 (PR-CONC-MESA-PAINEL-V1): 2647 passando, 22 skipped, e
+  Baseline em 30/09/2026 (PR-CONC-MESA-LAYOUT-FIXO-01): 2662 passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -392,6 +392,18 @@ preview que o cabecalho nao sai da tela ao rolar.
   `sticky` ancora no scrollport MAIS PROXIMO; se esse scrollport nao tem
   altura, ele sobe junto com a pagina. Antes de escrever `sticky`, achar
   quem rola.
+- ⚠ LAYOUT FIXO — TUDO NO SISTEMA E' FIXO (regra soberana do Gabriel, 30/09/2026, PR-CONC-MESA-LAYOUT-FIXO-01):
+  selecionar, digitar ou trocar de linha NUNCA muda altura de linha, largura de coluna, posicao do rodape nem liga/desliga
+  rolagem. Como se faz: `table-layout: fixed` + `colgroup` medido no pior texto (nunca largura pelo conteudo); linhas de
+  altura FIXA sempre presentes (nenhuma aparece/some por condicao — campo que nao se aplica fica em leitura "—" com o
+  motivo); dica/rotulo auxiliar num SLOT DE LARGURA FIXA dentro da celula, sempre presente mesmo vazio (nunca ao lado
+  estreitando o controle, nunca em linha extra); aviso num slot de altura fixa reservado (vazio quando nao ha) ou no
+  `title`. Exemplo vivo: a Mesa de revisao (`MesaCamposTabela`: colgroup 140px | auto | auto | 44%, linha 22, slot da
+  dica 104, slot de aviso 18 no topo e 18 acima do rodape, selo de 148).
+  ⚠ NASCE DE DOIS PRINTS: o "pelo historico do banco" ao lado do select da forma estreitava o campo e empurrava a coluna
+    (19:50), e o "planilha dizia" nascia abaixo da tabela empurrando o rodape (18:59).
+  ⚠ O jsdom NAO MEDE: o teste prova o CONTRATO (colgroup, alturas declaradas, slots sempre presentes, mesma assinatura em
+    todos os estados); a medida renderizada (offsetWidth/offsetTop em varios estados) vai no relatorio.
 - ⚠ UM SCROLLPORT SO' POR TELA. Um `max-h` interno dentro de uma area que
   ja rola cria duas barras, e rolar a de dentro nao move o cabecalho
   fixo — o operador ve' a lista andar sem entender por que o topo fica.

@@ -153,7 +153,8 @@ describe('na tela', () => {
   const montar = (r: ReturnType<typeof vm>) => render(
     <MesaCamposTabela row={r} classificacoes={CLASSIF} fazendas={FAZENDAS} fornecedores={[forn('bbsa', 'Banco do Brasil S.A. (001)')]}
       onEditar={async () => {}} onCriarFornecedor={async () => null} />);
-  const linhaDe = (rotulo: string) => screen.getByTitle(rotulo).closest('div')!.parentElement!;
+  /* PR-CONC-MESA-LAYOUT-FIXO-01: a grade virou <table>; a linha do campo é o <tr> do rótulo. */
+  const linhaDe = (rotulo: string) => screen.getByTitle(rotulo).closest('tr')!;
 
   it('fornecedor sem proposta mostra o do sistema — nunca "Selecione..." com valor no sistema (print 18:35)', () => {
     montar(vm(SEGURO));

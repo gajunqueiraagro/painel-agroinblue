@@ -18,7 +18,7 @@ import type { ClassificacaoStagingPreviewRow } from '@/v2/hooks/useClassificacao
 vi.mock('@/integrations/supabase/client', () => ({ supabase: { from: () => ({}), rpc: () => Promise.resolve({ data: null, error: null }) } }));
 
 import {
-  MesaCamposTabela, SeloRegraDaLinha, CAMPOS_DO_EXTRATO, CAMPOS_OBRIGATORIOS_MESA,
+  MesaCamposTabela, SeloRegraDaLinha, CAMPOS_DO_EXTRATO, CAMPOS_OBRIGATORIOS_MESA, LARGURA_SELO,
 } from '@/v2/components/mesa/enriquecimento/MesaCamposTabela';
 
 const cls = (subcentro: string, escopo_negocio: string, tipo_operacao = '2-Saídas'): ClassificacaoItem => ({
@@ -97,18 +97,18 @@ describe('item 2 — o grupo do extrato é só leitura e vem no topo', () => {
   it('Tipo, Data pgto., Valor e Conta bancária são as quatro primeiras linhas', () => {
     expect(CAMPOS_DO_EXTRATO).toEqual(['Tipo', 'Data pgto.', 'Valor', 'Conta bancária']);
     const { container } = montar(vm(CRU));
-    const rotulos = Array.from(container.querySelectorAll('span[title]'))
+    const rotulos = Array.from(container.querySelectorAll('td[title]'))
       .map((el) => el.getAttribute('title'))
       .filter((t): t is string => !!t && [...CAMPOS_DO_EXTRATO, 'Competência', 'Atividade'].includes(t));
     expect(rotulos.slice(0, 4)).toEqual(CAMPOS_DO_EXTRATO);
   });
 
-  it('cada um é caixa tracejada "do extrato", sem controle nenhum', () => {
+  it('cada um é caixa tracejada, com "do extrato" no slot da dica, sem controle nenhum', () => {
     montar(vm(CRU));
     for (const rot of CAMPOS_DO_EXTRATO) {
       const caixa = screen.getByTestId(`extrato-${rot}`);
-      expect(caixa).toHaveTextContent('do extrato');
       expect(caixa.className).toMatch(/border-dashed/);
+      expect(within(linha(rot)).getByTestId('slot-dica')).toHaveTextContent('do extrato');
       expect(within(linha(rot)).queryByRole('combobox')).not.toBeInTheDocument();
       expect(within(linha(rot)).queryByRole('button')).not.toBeInTheDocument();
     }
@@ -251,6 +251,8 @@ describe('item 6 — o selo da regra da linha', () => {
     rerender(<SeloRegraDaLinha ehCru={false} />);
     expect(screen.getByTestId('selo-regra')).toHaveTextContent('classificado · sistema prevalece');
     rerender(<SeloRegraDaLinha ehCru={null} />);
-    expect(container).toBeEmptyDOMElement();
+    /* sem lançamento não há selo — mas o lugar fica, da mesma largura (LAYOUT-FIXO-01) */
+    expect(screen.queryByTestId('selo-regra')).not.toBeInTheDocument();
+    expect(container.querySelector('[data-testid="selo-regra-vazio"]')).toHaveStyle({ width: LARGURA_SELO });
   });
 });
