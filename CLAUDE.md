@@ -269,12 +269,12 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   orfao (`ExtratoListaTab`, `useExtratoParesOfx`, `useTransferenciaDecidir`) e deixou ORFAOS, sem importador, o
   `ConciliacaoPendenciasPanel` (e a lib `conciliacaoDiagnostico`, que so' ele usa) e o `RematchOnDemandPanel` — apagar
   ou religar e' decisao; `transferencia_ofx_pares` segue como historico (13 decisoes), so' lida pela Mesa. ·
-  EXTRATO-UFFFD-01 (PR-CONC-CRIAR-LOTE-LAYOUT-01): 326 linhas de `extrato_bancario_v2` gravadas com U+FFFD antes do
-  conserto do charset (309 vivas: NJ BB 183, Santa Rita BB 120, Santa Rita Bradesco 6; todas com documento e seq, entao
-  a chave natural reconhece a reimportacao). O byte original se PERDEU; a correcao proposta e' por dicionario das 26
-  palavras medidas (F\uFFFDcil, Cart\uFFFDo, El\uFFFDtrica...) recalculando `hash_movimento` junto — so' com GO. E o doc
-  do Bradesco de 91 caracteres e o historico de 126 nao cabem na regua sem quebra do "Criar lancamentos": cortados na
-  borda, texto inteiro no `title` (decisao do Gabriel). · MESA-CRU (PR-CONC-MESA-CRU-EXCEL-PREVALECE-01): (a) a sessao
+  EXTRATO-UFFFD-01 (corrigido em 30/09, migration 20261027184700): as 309 linhas VIVAS com U+FFFD foram consertadas
+  pelo dicionario das 26 palavras, com `hash_movimento` recalculado (zero sobra, zero colisao, vinculos intactos) e os 5
+  lancamentos CRUS ligados a elas junto. RESTAM, so' reportados: 17 linhas NAO vivas; 49 lancamentos CLASSIFICADOS vivos
+  com U+FFFD na descricao (28 ligados as linhas corrigidas) e 25 cancelados; o `snapshot_historico_banco` dos vinculos
+  (fotografia, nao se reescreve); 2 linhas vivas SEM U+FFFD cujo hash nao bate com a regra (2206313a, 64f3e26f — valor
+  editado depois da importacao). · MESA-CRU (PR-CONC-MESA-CRU-EXCEL-PREVALECE-01): (a) a sessao
   32c52f5c (e toda sessao anterior ao PR) so' ganha a precedencia e as colunas `planilha_*` quando for RECASADA — nao
   recasei (prova sem gravar); (b) "NAO E' NADA" do de-para de fornecedor NAO persiste: o descartado mora so' no estado do
   navegador e nao ha coluna/tabela para ele — pergunta aberta ao Gabriel (precisa de estrutura nova); (c) APELIDO DE
@@ -426,6 +426,9 @@ preview que o cabecalho nao sai da tela ao rolar.
   ⚠ SEM A PROP NADA MUDA — provado: o HTML do `LinhaResumo` sem `quebra` e' identico ao do HEAD nas 96 combinacoes de
     props (valor, cor, forte, empilhado, seloAbaixo, selo). Abate, Venda, Compra e envelope nao a usam.
   ⚠ E OS OUTROS `truncate` DO SISTEMA NAO FORAM VARRIDOS: a regra vale a partir daqui; a varredura e' frente propria.
+  ⚠ EXCECAO DECIDIDA (Gabriel, 30/09, PR-CONC-CRIAR-LOTE-LAYOUT-01): no "Criar lancamentos em lote", o DOCUMENTO e o
+    HISTORICO do banco que nao cabem na regua (Bradesco 91 caracteres, pedagio 126) sao cortados NA BORDA, sem "…", com o
+    texto inteiro no `title`. Excecao declarada, nao precedente.
 - ⚠ CASCA DE MODAL (MODAIS-PADRAO-01a..f): cabecalho 36px/13px, corpo `100vh-32` sem o teto do tema,
   resumo lateral de 240px com as pecas de `src/components/ui/linha-resumo.tsx` (`AsideResumo`,
   `FaixaTituloResumo`, `SecaoResumo`, `LinhaResumo` — `quebra` para texto livre), rodape de 32px com botoes
@@ -536,7 +539,8 @@ docs/historico/frentes-ate-2026-09-29.md.)
   `decodificarExtrato` (`src/lib/financeiro/parser/`) — CHARSET/ENCODING do OFX 1.x ou `encoding` do `<?xml ?>`; declarado
   UTF-8 com bytes invalidos ou nada declarado cai em windows-1252. O OFX do BB e do Bradesco vem em cp1252 e gravava
   "Cart\uFFFDo" (PR-CONC-CRIAR-LOTE-LAYOUT-01). O hash do movimento usa a descricao: consertar texto ja' gravado exige
-  recalcular o hash junto.
+  recalcular o hash junto. Texto ja' gravado com U+FFFD se corrige por DICIONARIO de palavra inteira, nunca por palpite
+  de byte, com a replica SQL do hash provada contra o gravado ANTES de trocar (EXTRATO-UFFFD-01, 20261027184700).
 - ⚠ MESA: NO CRU A PLANILHA PREVALECE, NO CLASSIFICADO O SISTEMA (PR-CONC-MESA-CRU-EXCEL-PREVALECE-01, Gabriel 30/09).
   CRU = lancamento de origem 'extrato'/'ofx' SEM conta do plano, fora transferencia. Quem decide e' o BANCO, numa funcao
   so' (`_fn_classificacao_precedencia_cru`, no fim do casar e do populate): a leitura da planilha fica em
