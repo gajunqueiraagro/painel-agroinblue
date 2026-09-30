@@ -160,7 +160,7 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 30/09/2026 (FIN-RECORRENCIA-PROPAGA-COMPETENCIA-01): 2511 passando, 22 skipped, e
+  Baseline em 30/09/2026 (FIN-RECORRENCIA-PROPAGA-COMPETENCIA-01-fix2): 2514 passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -475,6 +475,12 @@ docs/historico/frentes-ate-2026-09-29.md.)
   NAO, e nao consegue ligar (`LOAD 'safeupdate'` -> "access to library is not allowed"). Teste de RPC nova tem de rodar
   pelo `rpc` do app (com `p_simular` quando houver) — o teste em ROLLBACK pelo canal SQL passa com o defeito dentro
   (FIN-RECORRENCIA-PROPAGA-COMPETENCIA-01-fix1: "UPDATE requires a WHERE clause" na tela, verde no ROLLBACK).
+- ⚠ DESLOCAR CHAVE DE INDICE UNICO EM LOTE (competencia, ordem, numero) EXIGE ORDEM SEGURA LINHA A LINHA OU PASSO
+  INTERMEDIARIO: o indice unico confere a CADA LINHA, nao no fim do comando (so' constraint DEFERRABLE espera o fim).
+  `UPDATE ... SET competencia = competencia - 1 mes` passa ou falha pela ORDEM FISICA das linhas, e a previa nao ve
+  (o estado FINAL nao repete). Recuos em ordem crescente, avancos em decrescente; colisao REAL (estado final repetido)
+  se detecta ANTES e vira frase legivel — nunca o erro cru do indice na tela (FIN-RECORRENCIA-PROPAGA-COMPETENCIA-01-fix2,
+  `uniq_lanc_recorrencia_competencia`).
 - ⚠ TRILHA DE EVENTOS MOSTRA O QUE, NAO POR QUE. Conserto se brifa depois de reproduzir na tela e ler o chamador
   (OC-COMPRA-REVALOR-01); correlacao fabricada pela ordem dos cliques nao e' causa, e "em silencio" se mede
   (OC-URL-RAJADA-01).

@@ -87,7 +87,11 @@ export function BlocoCompetencia({ previa, escopo }: { previa: ResultadoPropagac
           {p.aGerar.length > 0 && <> · a próxima geração cria {p.aGerar.map(mesCurto).join(', ')}</>}
         </div>
       )}
-      {p.duplicidades.length > 0 && (
+      {/* ⚠ COLISÃO REAL (fix2): a frase é a do BANCO, a mesma com que a execução recusa — a tela não a recompõe. Sem
+          aviso mas com repetição (RPC anterior ao fix2), cai na lista de competências repetidas de antes. */}
+      {p.aviso ? (
+        <div className="text-amber-700" data-testid="competencias-aviso">{p.aviso}</div>
+      ) : p.duplicidades.length > 0 && (
         <div className="text-amber-700" data-testid="competencias-duplicadas">
           Competência repetida depois do recálculo: {p.duplicidades.map((d) => `${mesCurto(d.competencia)} (${d.n})`).join(', ')} — confira antes
         </div>
@@ -101,6 +105,7 @@ export function PropagarRecorrenciaDialog({ recorrenciaId, descricao, previa, re
   const [ocupado, setOcupado] = useState(false);
 
   const nada = !previa || (previa.futuros === 0 && previa.passados === 0);
+  const avisoEscolhido = escopo === 'nenhum' ? null : (previa?.competencia?.projecao[escopo].aviso ?? null);
 
   /* ⚠ "Não propagar" NÃO CHAMA A RPC. Ela aceita `'nenhum'` e devolveria as contagens sem
      escrever — mas seria uma ida ao banco para não fazer nada, e o resultado é o mesmo de
@@ -183,7 +188,14 @@ export function PropagarRecorrenciaDialog({ recorrenciaId, descricao, previa, re
           ) : (
             <>
               <Button variant="ghost" size="sm" disabled={ocupado} onClick={aoFechar}>Fechar</Button>
-              <Button type="button" size="sm" className="gap-1.5" disabled={ocupado}
+              {/* ⚠ COM COLISÃO NO ESCOPO ESCOLHIDO, "Propagar" desliga e diz por quê: o banco recusaria com a mesma frase,
+                  e mandar o clique só para receber a recusa num aviso de canto é o caminho mais longo para a mesma
+                  informação. "Futuros e passados" costuma ser a saída, e a frase já diz isso. */}
+              {avisoEscolhido && (
+                <span className="mr-auto text-[10px] text-amber-700" data-testid="propagar-bloqueado">resolva o aviso acima para propagar</span>
+              )}
+              <Button type="button" size="sm" className="gap-1.5" disabled={ocupado || !!avisoEscolhido}
+                title={avisoEscolhido ?? undefined}
                 onClick={() => { void confirmar(); }}>
                 {ocupado ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
                 {escopo === 'nenhum' ? 'Manter como estão' : 'Propagar'}

@@ -258,6 +258,8 @@ export interface CompetenciaPropagacao {
   /** O que cada escopo faria: quantas mudam, a marca resultante, o que o próximo gerar cria, competência repetida. */
   projecao: Record<'futuros' | 'todos', {
     alteradas: number; marcaDepois: string | null; aGerar: string[]; duplicidades: { competencia: string; n: number }[];
+    /** fix2: a colisão real, em frase pronta do banco — o mesmo texto com que a execução recusa. `null` = sem colisão. */
+    aviso: string | null;
   }>;
   /** Só na execução: quantas foram gravadas. */
   aplicadas: number | null;
@@ -295,6 +297,7 @@ function lerCompetencia(c: any): CompetenciaPropagacao | null {
     aGerar: (Array.isArray(p?.a_gerar) ? p.a_gerar : []).map(String),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- jsonb da RPC
     duplicidades: (Array.isArray(p?.duplicidades) ? p.duplicidades : []).map((d: any) => ({ competencia: String(d?.competencia ?? ''), n: Number(d?.n ?? 0) })),
+    aviso: typeof p?.aviso === 'string' && p.aviso ? p.aviso : null,
   });
   return {
     grupos: { futuros: grupo(c.futuros), passados: grupo(c.passados) },

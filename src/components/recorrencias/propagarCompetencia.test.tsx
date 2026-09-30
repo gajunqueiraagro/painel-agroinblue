@@ -139,3 +139,59 @@ describe('ao propagar', () => {
     expect(TOAST.success).toHaveBeenCalledWith('4 lançamentos atualizados · 3 competências recalculadas.');
   });
 });
+
+describe('fix2 — colisão real vira aviso legível e desliga o Propagar', () => {
+  /* A resposta da RPC para a "Folha - FGTS" do NJ (30/09, pelo rpc do app): o passado de venc 20/09 segura set/26, e em
+     "Só os futuros" o futuro de venc 20/10 cairia nele. Em "Futuros e passados" o passado anda junto, e não colide. */
+  const FGTS = {
+    futuros: 9, passados: 1, simulado: true, aplicados_futuros: 0, aplicados_passados: 0,
+    competencia: {
+      desloc: 1, marca_antes: '2027-06-01', meses_fechados: [],
+      futuros: { alteradas: 3, puladas_mes_fechado: 0, lista: [
+        { venc: '2026-10-20', comp_nova: '2026-09-01', comp_antiga: '2026-10-01', lancamento_id: 'f1' },
+      ] },
+      passados: { alteradas: 1, puladas_mes_fechado: 0, lista: [
+        { venc: '2026-09-20', comp_nova: '2026-08-01', comp_antiga: '2026-09-01', lancamento_id: 'p1' },
+      ] },
+      projecao: {
+        futuros: { alteradas: 3, marca_depois: '2027-06-01', a_gerar: [], duplicidades: [{ competencia: '2026-09', n: 2 }],
+          aviso: 'competência 09/26 já ocupada pelo lançamento venc 20/09 — escolha Futuros e passados ou ajuste manual' },
+        todos: { alteradas: 4, marca_depois: '2027-06-01', a_gerar: [], duplicidades: [], aviso: null },
+      },
+    },
+  };
+
+  it('"Só os futuros": mostra a frase do banco e desliga o Propagar dizendo por quê', async () => {
+    await abrir(FGTS);
+    expect(screen.getByTestId('competencias-aviso').textContent)
+      .toBe('competência 09/26 já ocupada pelo lançamento venc 20/09 — escolha Futuros e passados ou ajuste manual');
+    expect(screen.queryByTestId('competencias-duplicadas')).toBeNull();
+    const propagar = screen.getByRole('button', { name: 'Propagar' });
+    expect(propagar).toBeDisabled();
+    expect(propagar.getAttribute('title')).toContain('já ocupada');
+    expect(screen.getByTestId('propagar-bloqueado').textContent).toBe('resolva o aviso acima para propagar');
+  });
+
+  it('"Futuros e passados": sem aviso, 4 recalculadas, Propagar ligado e chama a RPC com escopo todos', async () => {
+    await abrir(FGTS);
+    fireEvent.click(screen.getByLabelText(/Futuros e passados/));
+    expect(screen.queryByTestId('competencias-aviso')).toBeNull();
+    expect(screen.getByTestId('competencias-recalculadas').textContent).toContain('4 competências recalculadas');
+    const propagar = screen.getByRole('button', { name: 'Propagar' });
+    expect(propagar).not.toBeDisabled();
+    RPC.resposta = { ...FGTS, simulado: false, competencia: { ...FGTS.competencia, aplicadas: 4 } };
+    fireEvent.click(propagar);
+    await waitFor(() => expect(TOAST.success).toHaveBeenCalled());
+    expect(RPC.chamadas.at(-1)).toEqual({ p_recorrencia_id: 'rec-felipe', p_escopo: 'todos', p_simular: false });
+  });
+
+  it('a leitura guarda o aviso por escopo; sem a chave, null', async () => {
+    RPC.resposta = FGTS;
+    const r = await propagarRecorrencia('x', 'futuros', true);
+    expect(r.dados?.competencia?.projecao.futuros.aviso).toContain('09/26');
+    expect(r.dados?.competencia?.projecao.todos.aviso).toBeNull();
+    RPC.resposta = FELIPE_SIM;
+    const semAviso = await propagarRecorrencia('x', 'futuros', true);
+    expect(semAviso.dados?.competencia?.projecao.futuros.aviso).toBeNull();
+  });
+});
