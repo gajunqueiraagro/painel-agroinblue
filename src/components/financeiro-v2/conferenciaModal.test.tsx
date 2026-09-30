@@ -1,6 +1,7 @@
 /**
- * PR-CONC-CONFERENCIA-MODAL-01 — a Conferência abre num modal largo, com uma régua só (10px, 18px, uma linha), uma
- * informação por coluna, e o resumo do corpo vira tabela.
+ * PR-CONC-CONFERENCIA-MODAL-01 — a Conferência abre num modal largo, com uma régua só (9,5px desde o fix1, 18px, uma
+ * linha), uma informação por coluna, e o resumo do corpo vira tabela.
+ * fix1 — a coluna de ações vira ALÇA + "⋯" (o `DropdownMenu` da casa), com as mesmas ações de antes no menu.
  *
  * ⚠ OS NÚMEROS SÃO OS DO PRINT DO GABRIEL (NJ · Banco do Brasil · set/26): o fechamento "diferença -134.613,84" saía
  *   "-134…", e o candidato "Folha de Pagamento · Jonatas…" perdia o nome do funcionário. O banco falso devolve um dia com
@@ -58,9 +59,16 @@ const ESPELHO: EspelhadosReais = {
   ofx_completo: [{
     extrato_id: 'e1', data: '2026-09-05', historico: 'TED Transf.Eletr.Dispon - 237 2372 5216892300015', documento: null,
     valor: -134613.84, status: 'sem_vinculo', flag_dup: false, flag_investimento: false,
+  }, {
+    /* Uma linha CASADA num dia à parte (04/09), para o menu "Abrir · Desconciliar" e sem mexer no fechamento de 05/09. */
+    extrato_id: 'e2', data: '2026-09-04', historico: 'Pix - Agendamento - 04/09 05:35 ANTONIO PERES NETO', documento: null,
+    valor: -6648.5, status: 'conciliado', flag_dup: false, flag_investimento: false,
   }],
-  sistema_completo: [],
-  vinculos: [],
+  sistema_completo: [{
+    lancamento_id: 's1', data: '2026-09-04', descricao: 'Folha de Pagamento', centro: 'Mão de Obra', subcentro: 'Salários',
+    valor_assinado: -6648.5, sinal: '-1', status: 'conciliado', fornecedor: 'Antonio Peres Neto',
+  }],
+  vinculos: [{ extrato_id: 'e2', lancamento_id: 's1', valor_aplicado: 6648.5, tipo_aprovacao: 'manual', grupo_id: null }],
   sistema_candidatos: [{
     lancamento_id: 'c1', data_vencimento: '2026-09-05', competencia: '2026-09-01', valor: 3407.89, valor_assinado: -3407.89,
     sinal: '-1', descricao: 'Folha de Pagamento', centro: 'Mão de Obra', subcentro: 'Salários e Encargos',
@@ -136,15 +144,16 @@ describe('a sub-aba inicial e o modal', () => {
 });
 
 describe('a mesa dentro do modal — uma régua só', () => {
-  it('o fechamento mostra "diferença -134.613,84" INTEIRA, numa célula que não corta', async () => {
+  it('o fechamento mostra "diferença -134.613,84" INTEIRA, em status + ações (colSpan 2), numa célula que não corta', async () => {
     const modal = await abrirConferencia();
     const dif = within(modal).getByText('diferença -134.613,84');
     const td = dif.closest('td')!;
+    expect(td.colSpan).toBe(2);
     expect(td.className).toContain('whitespace-nowrap');
     expect(td.className).not.toContain('text-ellipsis');
   });
 
-  it('toda linha tem 18px, 11 colunas e nenhuma fonte fora de 10px', async () => {
+  it('toda linha tem 18px, 11 colunas e a tabela inteira a 9,5px, sem célula de 10px ou mais', async () => {
     const modal = await abrirConferencia();
     const linhas = [...tabelaDaMesa(modal).querySelectorAll('tr')];
     expect(linhas.length).toBeGreaterThanOrEqual(5); // cabeçalho, dia, extrato, candidato, fechamento
@@ -152,8 +161,12 @@ describe('a mesa dentro do modal — uma régua só', () => {
       expect(tr.className).toContain('h-[18px]');
       expect([...tr.children].reduce((a, c) => a + ((c as HTMLTableCellElement).colSpan || 1), 0)).toBe(11);
     }
-    expect(tabelaDaMesa(modal).innerHTML).not.toMatch(/text-\[1[1-9]px\]/);
-    expect(tabelaDaMesa(modal).className).toContain('text-[10px]');
+    /* Toda célula, span e rótulo com texto; o gatilho do "⋯" é o `Button` da casa (que carrega `text-[12px]`) e só tem
+       ícone — por isso ele fica fora da varredura e se prova à parte que não tem texto. */
+    const comTexto = [...tabelaDaMesa(modal).querySelectorAll('th, td, span, label')];
+    expect(comTexto.filter((el) => /text-\[1[0-9]px\]/.test(String(el.className)))).toEqual([]);
+    expect(tabelaDaMesa(modal).className).toContain('text-[9.5px]');
+    for (const b of within(tabelaDaMesa(modal)).getAllByRole('button', { name: 'Ações da linha' })) expect(b.textContent).toBe('');
   });
 
   it('o candidato: vencimento e status em colunas próprias; o texto guarda descrição · fornecedor · subcentro', async () => {
@@ -183,8 +196,69 @@ describe('o resumo do corpo vira tabela', () => {
     expect([...tot.querySelectorAll('thead th')].map((th) => th.textContent)).toEqual(['', 'Banco (OFX)', 'Sistema', 'Diferença']);
     expect(tot.querySelector('thead tr')!.className).toContain('bg-primary');
     expect([...tot.querySelectorAll('tbody td')].filter((td) => td.className.includes('border-r')).length).toBe(6);
-    expect(within(tot).getAllByText('-134.613,84').length).toBe(2); // saídas do banco e a diferença
+    expect(within(tot).getByText('-141.262,34')).toBeInTheDocument(); // saídas do banco (sem par + casado)
+    expect(within(tot).getByText('-134.613,84')).toBeInTheDocument(); // a diferença
     expect([...semPar.querySelectorAll('thead th')].map((th) => th.textContent)).toEqual(['Sem par', 'Qtde', 'Valor']);
     expect(within(semPar).getByText('Extratos').closest('tr')!.textContent).toBe('Extratos1—');
+  });
+});
+
+describe('fix1 — a coluna de ações é a alça + "⋯"', () => {
+  const abrirMenu = async (linha: HTMLElement) => {
+    const gatilho = within(linha).getByRole('button', { name: 'Ações da linha' });
+    fireEvent.keyDown(gatilho, { key: 'Enter' });
+    return screen.findByRole('menu');
+  };
+  const itens = (menu: HTMLElement) => within(menu).getAllByRole('menuitem').map((i) => ({
+    texto: i.textContent, desabilitado: i.hasAttribute('data-disabled'),
+  }));
+
+  it('toda linha de registro tem a célula de ações com o "⋯"; o extrato sem par tem também a alça', async () => {
+    const modal = await abrirConferencia();
+    const acoes = [...tabelaDaMesa(modal).querySelectorAll('[data-testid="acoes-da-linha"]')];
+    expect(acoes.length).toBe(3); // extrato sem par, casado, candidato
+    for (const td of acoes) expect(within(td as HTMLElement).getByRole('button', { name: 'Ações da linha' })).toBeInTheDocument();
+    const semPar = within(modal).getByText('— nenhum lançamento vinculado').closest('tr')!;
+    expect(within(semPar).getByLabelText('Arrastar lançamento')).toBeInTheDocument();
+    /* nenhum link por extenso sobrou na mesa */
+    expect(within(tabelaDaMesa(modal)).queryByText('criar')).toBeNull();
+    expect(within(tabelaDaMesa(modal)).queryByText('desconciliar')).toBeNull();
+  });
+
+  it('extrato sem par: o menu tem Criar e Ignorar', async () => {
+    const modal = await abrirConferencia();
+    const semPar = within(modal).getByText('— nenhum lançamento vinculado').closest('tr')!;
+    expect(itens(await abrirMenu(semPar))).toEqual([
+      { texto: 'Criar', desabilitado: false }, { texto: 'Ignorar', desabilitado: false },
+    ]);
+  });
+
+  it('linha casada: o menu tem Abrir e Desconciliar', async () => {
+    const modal = await abrirConferencia();
+    const casada = within(modal).getByText('Pix - Agendamento - 04/09 05:35 ANTONIO PERES NETO').closest('tr')!;
+    expect(itens(await abrirMenu(casada))).toEqual([
+      { texto: 'Abrir', desabilitado: false }, { texto: 'Desconciliar', desabilitado: false },
+    ]);
+  });
+
+  it('candidato: o menu tem Abrir', async () => {
+    const modal = await abrirConferencia();
+    const cand = modal.querySelector('td[data-status="programado"]')!.closest('tr')! as HTMLElement;
+    expect(itens(await abrirMenu(cand))).toEqual([{ texto: 'Abrir', desabilitado: false }]);
+  });
+});
+
+describe('fix1 — a sub-aba Sistema ganha a coluna Fornecedor', () => {
+  it('cabeçalho Data · Descrição · Fornecedor · Centro/Subcentro · Valor · Saldo · Status, e o fornecedor preenchido', async () => {
+    montar();
+    await screen.findByTestId('resumo-espelho');
+    fireEvent.click(botaoSubAba('Sistema'));
+    const cab = await screen.findByText('Fornecedor');
+    expect([...cab.parentElement!.children].map((s) => s.textContent))
+      .toEqual(['Data', 'Descrição', 'Fornecedor', 'Centro/Subcentro', 'Valor', 'Saldo', 'Status']);
+    const fornecedores = screen.getAllByTestId('sistema-fornecedor');
+    expect(fornecedores.map((s) => s.textContent)).toEqual(['Antonio Peres Neto']);
+    expect(fornecedores[0].getAttribute('title')).toBe('Antonio Peres Neto');
+    expect(fornecedores[0].className).toContain('truncate');
   });
 });
