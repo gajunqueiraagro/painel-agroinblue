@@ -60,9 +60,16 @@ interface Props {
   nomeBanco: (contaBancariaId: string | null) => string | null;
   onAbrir: (l: LinhaDespesa) => void;
   menu: (l: LinhaDespesa) => ReactNode;
+  /** OC-VENDA-FINANCEIRO-COMPLETO-01a-fix2 — com ele, cabecalho e total CONGELADOS contra o scrollport do modal: o cabecalho gruda
+   *  `topo` px abaixo do alto (a altura do bloco fixo dos cards e sub-abas), o total no pe'. A tabela nao rola por dentro. */
+  topo?: number;
 }
 
-export function TabelaDespesasOC({ linhas, total, nomeFavorecido, contaDoPlano, nomeBanco, onAbrir, menu }: Props) {
+export function TabelaDespesasOC({ linhas, total, nomeFavorecido, contaDoPlano, nomeBanco, onAbrir, menu, topo }: Props) {
+  const fixo = topo !== undefined;
+  const th = fixo ? `${TH} sticky z-20` : TH;
+  const thTop = fixo ? { top: topo } : undefined;
+  const tf = fixo ? `${TF} sticky bottom-0 z-10` : TF;
   return (
     <div className="rounded border" data-testid="despesas-operacao">
       <table className="w-full table-fixed border-separate border-spacing-0 tabular-nums" data-testid="despesas-tabela">
@@ -71,11 +78,11 @@ export function TabelaDespesasOC({ linhas, total, nomeFavorecido, contaDoPlano, 
         </colgroup>
         <thead>
           <tr>
-            {['Venc.', 'Pgto.', 'Descrição', 'Favorecido', 'Conta'].map(h => <th key={h} className={TH}>{h}</th>)}
-            <th className={`${TH} ${DV}`}>Banco</th>
-            <th className={TH}>Status</th>
-            <th className={TH}>Valor R$</th>
-            <th className={TH} aria-label="Ações" />
+            {['Venc.', 'Pgto.', 'Descrição', 'Favorecido', 'Conta'].map(h => <th key={h} className={th} style={thTop}>{h}</th>)}
+            <th className={`${th} ${DV}`} style={thTop}>Banco</th>
+            <th className={th} style={thTop}>Status</th>
+            <th className={th} style={thTop}>Valor R$</th>
+            <th className={th} style={thTop} aria-label="Ações" />
           </tr>
         </thead>
         <tbody>
@@ -105,11 +112,11 @@ export function TabelaDespesasOC({ linhas, total, nomeFavorecido, contaDoPlano, 
         </tbody>
         <tfoot>
           <tr>
-            <td className={TF} colSpan={5}>{linhas.length === 1 ? '1 despesa' : `${linhas.length} despesas`}</td>
-            <td className={`${TF} ${DV}`} />
-            <td className={TF} />
-            <td className={`${TF} text-right ${NEG}`} data-testid="despesas-total">{num2(total)}</td>
-            <td className={TF} />
+            <td className={tf} colSpan={5}>{linhas.length === 1 ? '1 despesa' : `${linhas.length} despesas`}</td>
+            <td className={`${tf} ${DV}`} />
+            <td className={tf} />
+            <td className={`${tf} text-right ${NEG}`} data-testid="despesas-total">{num2(total)}</td>
+            <td className={tf} />
           </tr>
         </tfoot>
       </table>

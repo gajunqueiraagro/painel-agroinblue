@@ -3,8 +3,9 @@ import type { PropostaCompromisso } from '@/components/compra/DialogoGerarCompro
 import { AbaCompromissosOC, type LinhaPrevisao, type RotulosCompromissos } from './AbaCompromissosOC';
 import { useOcCompromissos, type OcCompromissosApi } from '@/hooks/useOcCompromissos';
 import { useOcContaCorrente, type OcContaCorrenteApi } from '@/hooks/useOcContaCorrente';
-import { AbaContaCorrenteOC } from '@/components/venda/AbaContaCorrenteOC';
-import { totaisDeDespesa } from '@/lib/oc/despesasDaOperacao';
+import { AbaContaCorrenteOC, type SubAbaContaCorrente } from '@/components/venda/AbaContaCorrenteOC';
+import { linhasDeDespesa, totaisDeDespesa } from '@/lib/oc/despesasDaOperacao';
+import { useSearchParams } from 'react-router-dom';
 import { AlertTriangle } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import type { LiquidacaoApi } from '@/hooks/useOperacaoLiquidacao';
@@ -90,6 +91,15 @@ export function AbaFinanceiroOC(props: Props) {
     onVersaoChange: props.onOcVersaoChange ?? setVersaoLocal,
   });
   const ccApi = props.ccApiExterno ?? ccApiProprio;
+  /* OC-VENDA-FINANCEIRO-COMPLETO-01a-fix2 — a SUB-ABA mora na URL (`oc_sub`): abrir um lancamento pelas despesas desmonta o modal, e
+     a volta do drill a reescreve (`returnOcSub` -> `abrirOperacaoOC`). Sem o parametro, o extrato do comprador. */
+  const [searchParams, setSearchParams] = useSearchParams();
+  const subAba: SubAbaContaCorrente = searchParams.get('oc_sub') === 'despesas' ? 'despesas' : 'conta';
+  const escolherSubAba = (s: SubAbaContaCorrente) => {
+    const next = new URLSearchParams(window.location.search);
+    if (s === 'despesas') next.set('oc_sub', 'despesas'); else next.delete('oc_sub');
+    setSearchParams(next, { replace: true });
+  };
 
   const legado = (
     <AbaLiquidacaoOC
@@ -112,13 +122,16 @@ export function AbaFinanceiroOC(props: Props) {
       <AbaContaCorrenteOC api={ccApi} somenteLeitura={props.financeiroNovoReadOnly}
         lado={api.tipoOperacao === 'compra' ? 'compra' : 'venda'}
         totaisDespesas={despesasLidas ? totaisDeDespesa(ocApi.compromissos) : null}
-        despesas={
+        /* o contador conta as MESMAS linhas que a tabela mostra (`linhasDeDespesa`; os titulos so' mudam status, nao quantas) */
+        qtdDespesas={despesasLidas ? linhasDeDespesa(ocApi.compromissos, ocApi.parcelas, null).length : null}
+        subAba={subAba} onSubAba={escolherSubAba}
+        despesas={({ host, topo }) => (
           <AbaCompromissosOC ocApi={ocApi} soDespesas bloqueado={props.financeiroNovoReadOnly} clienteId={clienteId}
             tipoOperacao={api.tipoOperacao} fornecedores={api.fornecedores} valorAcordado={api.valorAcordado} lotes={api.lotes}
             contraparteId={api.contraparteId} dataOperacao={props.dataOperacao ?? null} dataChegada={props.dataChegada ?? null}
             darkSelectClass={props.darkSelectClass} recarregarDados={api.recarregar} rotulos={props.rotulos}
-            motivoReabertura={props.motivoReabertura ?? null} />
-        } />
+            motivoReabertura={props.motivoReabertura ?? null} hostBotoesDespesa={host} topoFixo={topo} />
+        )} />
     );
   }
   if ((api.tipoOperacao === 'venda' || api.tipoOperacao === 'compra') && !ccApi.contaCorrente && !ccApi.erro) {

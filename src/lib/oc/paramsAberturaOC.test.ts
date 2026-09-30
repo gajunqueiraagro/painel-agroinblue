@@ -16,7 +16,7 @@
  * duas vezes, em dois dias.
  */
 import { describe, it, expect } from 'vitest';
-import { paramsAberturaOC } from '@/lib/oc/paramsAberturaOC';
+import { paramsAberturaOC, semParamsOC } from '@/lib/oc/paramsAberturaOC';
 
 const q = (s: string, o: Parameters<typeof paramsAberturaOC>[1]) => paramsAberturaOC(s, o);
 
@@ -100,5 +100,26 @@ describe('paramsAberturaOC — oc_aba', () => {
 
   it('com aba, grava', () => {
     expect(q('', { ocId: 'abc', aba: 'negociacao', tipo: 'venda' }).get('oc_aba')).toBe('negociacao');
+  });
+});
+
+/* OC-VENDA-FINANCEIRO-COMPLETO-01a-fix2 — a sub-aba do Financeiro em conta corrente (`oc_sub`) segue a mesma regra do `oc_return`:
+   escreve-se sempre, nunca pega carona. A volta do drill PASSA a que estava aberta; qualquer outra abertura a apaga. */
+describe('paramsAberturaOC — oc_sub', () => {
+  it('a volta do lancamento passa a sub-aba: reabre nas despesas, com os filtros intactos', () => {
+    const p = q('?f_tipo=venda&oc_return=operacoes-comerciais', { ocId: 'af3', tipo: 'venda', aba: 'financeiro', sub: 'despesas' });
+    expect(p.get('oc_sub')).toBe('despesas');
+    expect(p.get('f_tipo')).toBe('venda');
+    expect(p.get('oc_aba')).toBe('financeiro');
+  });
+  it('sem sub, a velha e APAGADA — abrir outra OC nunca herda as despesas de antes', () => {
+    const p = q('?oc_sub=despesas&oc_id=velha', { ocId: 'nova', tipo: 'venda' });
+    expect(p.has('oc_sub')).toBe(false);
+    expect(p.get('oc_id')).toBe('nova');
+  });
+  it('fechar a OC tira a sub-aba junto com os outros oc_* e deixa os filtros', () => {
+    const p = semParamsOC('?f_de=2021-01&oc_venda=1&oc_id=x&oc_aba=financeiro&oc_sub=despesas');
+    expect(p.has('oc_sub')).toBe(false);
+    expect(p.get('f_de')).toBe('2021-01');
   });
 });

@@ -106,13 +106,13 @@ describe('compra em conta corrente — extrato espelho da venda (mock v1)', () =
     expect(tabela.textContent).not.toContain('Comprador');
     const [e] = linhasDoTipo('entrega');
     expect(e[3].textContent).toBe('Entrada');
-    expect(e[4].textContent).toBe('Compra Desmama M');
+    expect(e[4].textContent).toBe('Desmama M'); // fix2: a Descricao gerada e' a categoria ("Compra Desmama M" pedia 99,3px para 92)
     expect(e[7].textContent).toBe('307.460,00');
     expect(e[7].className).toContain('text-[#15803d]');
     expect(e[9].textContent).toBe('307.460,00');
     const [p] = linhasDoTipo('recebimento');
     expect(p[3].textContent).toBe('Pagamento');
-    expect(p[4].textContent).toBe('Pagamento 1 de 1');
+    expect(p[4].textContent).toBe('Pgto. 1/1');
     expect(p[5].getAttribute('title')).toBe('15020 Investimento Compra Bovinos Machos'); // OC-CC-CLASSIFICACAO-01: o pagamento fica na conta da compra
     expect(p[5].textContent).toBe('Invest. Compra Bov. Machos'); // OC-VENDA-FINANCEIRO-COMPLETO-01a: o nome curto na celula, o inteiro no title
     expect(p[6].textContent).toBe('Sicredi');
@@ -131,15 +131,18 @@ describe('compra em conta corrente — extrato espelho da venda (mock v1)', () =
 
   /* OC-VENDA-FINANCEIRO-COMPLETO-01a — o quadro so' de leitura saiu: as despesas vivas chegam pelo slot (a lista de compromissos
      no modo so' despesas, testada em despesasContaCorrente.test.tsx), e os dois cards da direita dizem os totais delas. */
-  it('despesas da operacao: o slot embaixo do extrato e os dois cards com os totais, fora do saldo', () => {
-    render(<AbaContaCorrenteOC api={api(compra())} somenteLeitura={false} lado="compra"
+  it('despesas da operacao: o slot na sub-aba dele e os dois cards com os totais, fora do saldo', () => {
+    const { rerender } = render(<AbaContaCorrenteOC api={api(compra())} somenteLeitura={false} lado="compra" subAba="despesas"
       despesas={<div data-testid="slot-despesas">lista viva</div>} totaisDespesas={{ lancadas: 8536, pagas: 8536 }} />);
     expect(screen.getByTestId('slot-despesas').textContent).toBe('lista viva');
+    expect(screen.queryByTestId('conta-corrente-tabela')).toBeNull();
     expect(txt(screen.getByTestId('card-despesas-lancadas'))).toBe('Despesas lançadas8.536,00');
     expect(txt(screen.getByTestId('card-despesas-pagas'))).toBe('Despesas pagas8.536,00');
     expect(screen.getByTestId('card-despesas-lancadas').className).toContain('border-l-2');
     /* o extrato nao desenha mais `cc.despesas` (as 4 da fixture): so' o slot fala delas */
     expect(screen.queryByTestId('despesas-operacao')).toBeNull();
+    rerender(<AbaContaCorrenteOC api={api(compra())} somenteLeitura={false} lado="compra" subAba="conta"
+      despesas={<div data-testid="slot-despesas">lista viva</div>} totaisDespesas={{ lancadas: 8536, pagas: 8536 }} />);
     expect(screen.getByTestId('conta-corrente-tabela').textContent).not.toContain('Compra 121 DM-Frete');
     /* o saldo e' o do banco: as despesas nao entram nele */
     expect(txt(screen.getByTestId('total-saldo'))).toBe('0,00');
@@ -162,8 +165,8 @@ describe('compra em conta corrente — extrato espelho da venda (mock v1)', () =
     render(<AbaContaCorrenteOC api={api(compra({ saldo: 1000, falta_explicar: 1000, situacao: 'falta_pagar' }))} somenteLeitura={false} lado="compra" />);
     expect(txt(screen.getByTestId('card-saldo'))).toContain('Saldo · falta pagar');
     expect(screen.getByTestId('barra-diferenca').textContent).toContain('Pagou R$ 1.000,00 a menos do que o gado que entrou.');
-    expect(rotuloRecebimento(compra().linhas, 'p1', 'compra')).toBe('Pagamento 1 de 1');
-    expect(rotuloRecebimento(compra().linhas, 'p1')).toBe('Recebimento 1 de 1');
+    expect(rotuloRecebimento(compra().linhas, 'p1', 'compra')).toBe('Pgto. 1/1');
+    expect(rotuloRecebimento(compra().linhas, 'p1')).toBe('Receb. 1/1');
   });
 
   it('explicar na compra: so ajuste de preco, permuta e devolucao do fornecedor; o efeito e o espelho; motivo obrigatorio', async () => {

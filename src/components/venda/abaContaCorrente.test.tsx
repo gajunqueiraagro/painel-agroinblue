@@ -6,6 +6,7 @@
  * cancelar listando tudo, e o resumo lateral lido da FONTE (o shell da venda nao se monta em teste).
  */
 import { describe, it, expect, vi } from 'vitest';
+import { createPortal } from 'react-dom';
 import { readFileSync } from 'node:fs';
 import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
 import { AbaContaCorrenteOC, itemDoRascunho, type Rascunho } from './AbaContaCorrenteOC';
@@ -78,8 +79,8 @@ describe('aba conta corrente da OC — extrato pelo caixa da fazenda', () => {
     expect(r1[8].className).toContain('text-[#15803d]');
     expect(txt(r1[9])).toBe('\u22121.357,89');
     expect(r1[9].className).toContain('text-[#b91c1c]');
-    expect(r1[6].textContent).toBe('sem conta');
-    expect(r1[4].textContent).toBe('Recebimento 1 de 1');
+    expect(r1[6].textContent).toBe('s/ conta'); // fix2: texto gerado curto e numa linha
+    expect(r1[4].textContent).toBe('Receb. 1/1');
     expect(screen.getByTestId('conta-corrente-tabela').textContent).not.toContain('conciliado');
   });
 
@@ -274,10 +275,13 @@ describe('venda: despesas da operacao', () => {
     const comComissao = cc({ despesas: [{ parte_id: 'pc1', lancamento_id: '9bcf8f46', componente: 'comissao', competencia: '2026-05-04',
       pagamento: '2026-05-14', vencimento: '2026-05-14', descricao: 'Venda 025 DM - Comissão', favorecido: 'Elo MS Leilões Rurais Eireli',
       conta_ordem: 5030, conta: 'Impostos e Despesas de Abates e Vendas', valor: -2625, status: 'realizado' }] });
-    render(<AbaContaCorrenteOC api={api(comComissao)} somenteLeitura={false} totaisDespesas={{ lancadas: 2625, pagas: 2625 }}
-      despesas={<div data-testid="slot-despesas" />} />);
-    expect(screen.getByTestId('slot-despesas')).toBeInTheDocument();
+    const { rerender } = render(<AbaContaCorrenteOC api={api(comComissao)} somenteLeitura={false} totaisDespesas={{ lancadas: 2625, pagas: 2625 }}
+      despesas={<div data-testid="slot-despesas" />} subAba="conta" />);
     expect(screen.getByTestId('conta-corrente-tabela').textContent).not.toContain('Venda 025 DM - Comissão');
+    expect(screen.queryByTestId('slot-despesas')).toBeNull();
+    rerender(<AbaContaCorrenteOC api={api(comComissao)} somenteLeitura={false} totaisDespesas={{ lancadas: 2625, pagas: 2625 }}
+      despesas={<div data-testid="slot-despesas" />} subAba="despesas" />);
+    expect(screen.getByTestId('slot-despesas')).toBeInTheDocument();
     expect((screen.getByTestId('card-despesas-pagas').textContent ?? '')).toBe('Despesas pagas2.625,00');
     expect(screen.getByTestId('card-despesas-pagas').lastElementChild?.className).toContain('text-[#b91c1c]');
     /* o saldo e' o do banco, que nao conta a despesa: o mesmo -1.357,89 da fixture sem comissao */
@@ -437,5 +441,78 @@ describe('a linha do rascunho como a RPC a recebe (salvar e previa mandam a mesm
     expect(itemDoRascunho({ ...base, tipo: 'devolucao_comprador', valor: '50,00', vencimento: '2021-07-01', data: '2021-06-10' }))
       .toMatchObject({ vencimento: '2021-07-01' });
     expect(itemDoRascunho({ ...base, tipo: 'desconto_comercial', valor: '1.000,00', data: '2021-06-10' })).toMatchObject({ valor: 1000, vencimento: null });
+  });
+});
+
+/* ─── OC-VENDA-FINANCEIRO-COMPLETO-01a-fix2 — sub-abas: uma tabela por vez, com a altura toda ────────────────────────────────── */
+describe('sub-abas do Financeiro em conta corrente', () => {
+  /* O slot de verdade (AbaCompromissosOC) poe os DOIS botoes das despesas no host da faixa por portal; aqui, o mesmo gesto. */
+  const slot = ({ host }: { host: HTMLElement | null; topo: number }) => (
+    <div data-testid="slot-despesas">
+      lista viva
+      {host && createPortal(<><button type="button">+ Buscar despesa no Financeiro</button><button type="button">+ Nova despesa</button></>, host)}
+    </div>
+  );
+
+  it('abre no extrato do comprador; o contador diz quantas despesas ha sem clicar; os botoes sao os do recebimento', () => {
+    render(<AbaContaCorrenteOC api={api(cc())} somenteLeitura={false} despesas={slot} qtdDespesas={8} />);
+    const faixa = screen.getByTestId('faixa-subabas');
+    expect(within(faixa).getByRole('button', { name: /Conta corrente do comprador/ }).className).toContain('bg-primary');
+    expect(within(faixa).getByTestId('contador-despesas').textContent).toBe('8');
+    expect(screen.getByTestId('conta-corrente-tabela')).toBeInTheDocument();
+    expect(screen.queryByTestId('slot-despesas')).toBeNull();
+    expect(within(faixa).getByRole('button', { name: '+ Buscar recebimento no Financeiro' })).toBeTruthy();
+    expect(within(faixa).queryByRole('button', { name: '+ Nova despesa' })).toBeNull();
+    /* a faixa amarela da diferenca fica na sub-aba do comprador, embaixo do extrato */
+    expect(screen.getByTestId('barra-diferenca')).toBeInTheDocument();
+  });
+
+  it('nas despesas: so a lista (o extrato sai), os botoes trocam para os da despesa, na MESMA faixa', () => {
+    const onSubAba = vi.fn();
+    render(<AbaContaCorrenteOC api={api(cc())} somenteLeitura={false} despesas={slot} qtdDespesas={8} onSubAba={onSubAba} />);
+    fireEvent.click(within(screen.getByTestId('faixa-subabas')).getByRole('button', { name: /Despesas da operação/ }));
+    expect(onSubAba).toHaveBeenCalledWith('despesas');
+    expect(screen.getByTestId('slot-despesas')).toBeInTheDocument();
+    expect(screen.queryByTestId('conta-corrente-tabela')).toBeNull();
+    expect(screen.queryByTestId('barra-diferenca')).toBeNull();
+    const faixa = screen.getByTestId('faixa-subabas');
+    expect(within(faixa).getByRole('button', { name: '+ Nova despesa' })).toBeTruthy();
+    expect(within(faixa).getByRole('button', { name: '+ Buscar despesa no Financeiro' })).toBeTruthy();
+    expect(within(faixa).queryByRole('button', { name: '+ Buscar recebimento no Financeiro' })).toBeNull();
+    /* os cards ficam em cima nas duas */
+    expect(screen.getByTestId('cards-conta-corrente')).toBeInTheDocument();
+  });
+
+  it('a SUB-ABA VEM DE FORA (a URL, para sobreviver ao lancamento): montada em "despesas", reabre nas despesas', () => {
+    render(<AbaContaCorrenteOC api={api(cc())} somenteLeitura={false} despesas={slot} qtdDespesas={8} subAba="despesas" onSubAba={vi.fn()} />);
+    expect(screen.getByTestId('slot-despesas')).toBeInTheDocument();
+    expect(within(screen.getByTestId('faixa-subabas')).getByRole('button', { name: /Despesas da operação/ }).className).toContain('bg-primary');
+  });
+
+  it('despesas ainda nao lidas: sem contador (nunca um zero inventado); na compra, o fornecedor', () => {
+    render(<AbaContaCorrenteOC api={api(cc())} somenteLeitura={false} despesas={slot} qtdDespesas={null} lado="compra" />);
+    const faixa = screen.getByTestId('faixa-subabas');
+    expect(within(faixa).queryByTestId('contador-despesas')).toBeNull();
+    expect(within(faixa).getByRole('button', { name: /Conta corrente do fornecedor/ })).toBeTruthy();
+  });
+
+  it('nenhuma tabela rola por dentro: o extrato nao tem overflow proprio; o cabecalho gruda abaixo do bloco fixo', () => {
+    render(<AbaContaCorrenteOC api={api(cc())} somenteLeitura={false} despesas={slot} qtdDespesas={8} />);
+    expect(screen.getByTestId('conta-corrente-rolagem').className).not.toMatch(/overflow/);
+    expect(screen.getByTestId('topo-fixo').className).toContain('sticky');
+    const th = screen.getByTestId('conta-corrente-tabela').querySelector('thead tr:nth-child(2) th');
+    expect(th?.getAttribute('style')).toMatch(/top: \d+px/);
+  });
+
+  it('rotulos GERADOS curtos e numa linha: "Receb. 1/1", "s/ conta", a categoria na entrega — sem a classe que quebra', () => {
+    render(<AbaContaCorrenteOC api={api(cc())} somenteLeitura={false} />);
+    const [e1] = celulas('entrega');
+    const [r1] = celulas('recebimento');
+    expect(e1[4].textContent).toBe('Desmama M');
+    expect(r1[4].textContent).toBe('Receb. 1/1');
+    for (const td of [e1[4], r1[4], r1[6]]) {
+      expect(td.className).toContain('whitespace-nowrap');
+      expect(td.className).not.toContain('break-words');
+    }
   });
 });

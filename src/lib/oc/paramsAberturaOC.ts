@@ -22,6 +22,9 @@ export type ParamsAberturaOC = {
   tipo?: string;
   /** De ONDE veio o clique. Ausente apaga o parâmetro — nunca herda o que estava lá. */
   retorno?: string;
+  /** OC-VENDA-FINANCEIRO-COMPLETO-01a-fix2 — a sub-aba do Financeiro em conta corrente ('despesas'). Ausente apaga: a OC abre
+   *  no extrato do comprador. Quem volta de um lancamento PASSA a que estava aberta (a volta do drill). */
+  sub?: string;
 };
 
 /**
@@ -35,7 +38,7 @@ export type ParamsAberturaOC = {
  * `oc_venda` e `oc_abate` são lidos do MESMO query string, e dois ligados ao mesmo tempo
  * montariam dois shells no mesmo render.
  */
-export function paramsAberturaOC(searchAtual: string, { ocId, aba, tipo = 'compra', retorno }: ParamsAberturaOC): URLSearchParams {
+export function paramsAberturaOC(searchAtual: string, { ocId, aba, tipo = 'compra', retorno, sub }: ParamsAberturaOC): URLSearchParams {
   const p = new URLSearchParams(searchAtual);
 
   if (tipo === 'venda') { p.set('oc_venda', '1'); p.delete('oc_compra'); p.delete('oc_abate'); }
@@ -47,6 +50,7 @@ export function paramsAberturaOC(searchAtual: string, { ocId, aba, tipo = 'compr
   /* ⚠ SEMPRE ESCREVE OU SEMPRE APAGA — nunca "deixa como estava". É a linha inteira do
      defeito: o `else p.delete` é o que impede a carona. */
   if (retorno) p.set('oc_return', retorno); else p.delete('oc_return');
+  if (sub) p.set('oc_sub', sub); else p.delete('oc_sub');
 
   return p;
 }
@@ -68,6 +72,7 @@ export function semParamsOC(searchAtual: string): URLSearchParams {
   p.delete('oc_id');
   p.delete('oc_aba');
   p.delete('oc_return');
+  p.delete('oc_sub');
   return p;
 }
 

@@ -1,0 +1,141 @@
+<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>OC venda Financeiro — sub-abas — mock v5</title><style>
+:root{--p:#1D3A5D;--p2:#2E4B6E;--fg:#0F1729;--mf:#6B7280;--bd:#E0E2E6;--gr:#15803d;--rd:#b91c1c;--z:#F5F4F0;--s:#E8E6DF;--amb:#fffbeb;--amd:#fde68a;--am:#b45309}
+*{box-sizing:border-box}body{margin:0;background:#8a929c;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--fg);padding:16px}
+.lbl{color:#fff;font-size:12px;font-weight:600;margin:0 auto 6px;width:1024px}
+.m{width:1024px;margin:0 auto 18px;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.3)}
+.hd{background:var(--p);color:#fff;height:32px;display:flex;align-items:center;gap:12px;padding:0 12px;font-size:12px}
+.hd .pill{border:1px solid rgba(255,255,255,.5);border-radius:10px;padding:0 7px;font-size:10px}
+.tabs{display:flex;gap:4px;padding:3px 10px;border-bottom:1px solid var(--bd)}
+.tabs span{font-size:10.5px;padding:1px 9px;border-radius:5px;color:var(--mf)}.tabs span.on{background:#e8eef6;color:var(--p);font-weight:600}
+.main{padding:6px 10px;display:flex;flex-direction:column;gap:5px;width:784px;min-height:470px}
+.kp{display:grid;grid-template-columns:170px repeat(4,1fr);gap:6px}
+.k.dv2{border-left:3px solid #9aa7b6}
+.k{border:1px solid var(--bd);border-radius:4px;padding:2px 7px;height:34px;display:flex;flex-direction:column;justify-content:center}
+.k .a{font-size:9.5px;color:var(--mf);white-space:nowrap}.k .b{white-space:nowrap;font-size:12px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+.sub{display:flex;align-items:center;gap:2px;border-bottom:1px solid var(--bd);margin-top:4px;height:24px}
+.sub span{font-size:10.5px;padding:3px 10px;color:var(--mf);border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.sub span.on{color:var(--p);font-weight:600;border-bottom-color:var(--p)}
+.sub .n{display:inline-block;font-size:9px;font-weight:600;background:#e8eef6;color:var(--p);border-radius:8px;padding:0 5px;margin-left:5px;line-height:13px}
+.sub .sp{margin-left:auto;display:flex;gap:5px;padding-bottom:2px}
+.btn{font-size:10px;border:1px solid var(--bd);border-radius:4px;padding:0 8px;height:19px;line-height:17px;background:#fff;white-space:nowrap;display:inline-block}
+.btn.nv{background:var(--p);color:#fff;border-color:var(--p)}
+.scroll{border:1px solid var(--bd);border-radius:4px;overflow:visible}
+table{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;font-variant-numeric:tabular-nums}
+thead th{white-space:nowrap;background:var(--p);color:#fff;font-size:9.5px;font-weight:600;text-align:center;padding:0 5px;height:18px}
+thead tr.g th{background:var(--p2)}
+th.dv,td.dv{border-left:2px solid #9aa7b6}
+td{font-size:10px;height:18px;padding:0 4px;border-bottom:1px solid #eceae4;white-space:nowrap;overflow:hidden;line-height:1}
+td.wr{white-space:normal;line-height:1.1;height:auto;padding:2px 4px}
+tbody tr:nth-child(even) td{background:var(--z)}
+tbody tr.rec td{background:#EAF1F9}
+tbody tr.clk:hover td{background:#e8eef6;cursor:pointer}
+tfoot td{background:var(--s);font-weight:700;height:19px;border-top:2px solid #9aa7b6}
+.r{text-align:right}.c{text-align:center}.neg{color:var(--rd)}.pos{color:var(--gr)}.mf{color:var(--mf)}
+.ev{font-size:9px;border-radius:3px;padding:0 5px;font-weight:600}.ev.e{background:#f0fdf4;color:var(--gr)}.ev.r{background:#dbe7f6;color:#1d4ed8}
+.st{display:inline-block;font-size:9.5px;font-weight:600;line-height:13px;height:14px;border-radius:7px;padding:0 6px;white-space:nowrap}
+.prev{color:#c2410c;background:#fff7ed;border:1px solid #fed7aa}
+.prog{color:#1d4ed8;background:#eff6ff;border:1px solid #bfdbfe}
+.real{color:#15803d;background:#f0fdf4;border:1px solid #bbf7d0}
+.conc{color:#fff;background:#166534;border:1px solid #166534}
+.dots{font-weight:700;color:var(--p);letter-spacing:1px}
+.foot{display:flex;justify-content:space-between;padding:0 12px;background:var(--p);height:30px;align-items:center;color:#fff;font-size:10.5px}
+.note{width:1024px;margin:0 auto 18px;background:#fff;border-radius:6px;padding:10px 12px;font-size:11.5px;line-height:1.55}
+.wrap{display:flex}.aside{width:240px;border-left:1px solid var(--bd);background:#fafafa;font-size:10px}
+.aside h4{margin:0;padding:3px 8px;background:var(--s);font-size:9.5px;letter-spacing:.03em}
+.aside .rw{display:flex;justify-content:space-between;padding:1px 8px;height:16px;align-items:center}.aside .rw span:first-child{color:var(--mf)}
+.hint{font-size:9.5px;color:var(--mf);margin-top:auto}
+</style></head><body>
+
+<div class="lbl">1 · Sub-aba "Conta corrente do comprador" (abre nela). O extrato tem a altura toda; nada rola por dentro.</div>
+<div class="m">
+ <div class="hd"><b>Venda de animais</b><span class="pill">OC #125448f9</span><span>05/03/2024</span><span>Faz. Pureza</span><span style="margin-left:auto">✕</span></div>
+ <div class="tabs"><span>Venda</span><span>Negociação</span><span>Entrega</span><span>Documentos</span><span class="on">Financeiro</span><span>Auditoria</span></div>
+ <div class="wrap"><div class="main">
+  <div class="kp">
+   <div class="k"><span class="a">Entregue · DRE R$</span><span class="b pos">572.352,00</span></div>
+   <div class="k"><span class="a">Recebido</span><span class="b pos">572.352,00</span></div>
+   <div class="k"><span class="a">Saldo · quitado</span><span class="b">0,00</span></div>
+   <div class="k dv2"><span class="a">Despesas lançadas</span><span class="b neg">12.531,19</span></div>
+   <div class="k"><span class="a">Despesas pagas</span><span class="b neg">12.531,19</span></div>
+  </div>
+
+  <div class="sub"><span class="on">Conta corrente do comprador</span><span>Despesas da operação<span class="n">8</span></span>
+   <span class="sp"><span class="btn">+ Buscar recebimento no Financeiro</span><span class="btn">+ Programar recebimento futuro</span></span></div>
+
+  <div class="scroll"><table>
+   <colgroup><col style="width:53px"><col style="width:26px"><col style="width:26px"><col style="width:80px"><col style="width:100px"><col style="width:152px"><col style="width:84px"><col style="width:81px"><col style="width:81px"><col style="width:81px"></colgroup>
+   <thead><tr class="g"><th colspan="7">Evento</th><th colspan="2" class="dv">Movimento</th><th class="dv">Comprador</th></tr>
+   <tr><th>Data</th><th>Lote</th><th>Cab</th><th>Evento</th><th>Descrição</th><th>Conta</th><th>Banco</th><th class="dv">Entrega (DRE)</th><th>Recebido (caixa)</th><th class="dv">Saldo</th></tr></thead>
+   <tbody>
+    <tr class="clk"><td class="c">05/03/24</td><td class="c">1</td><td class="c">50</td><td class="c"><span class="ev e">Entrega</span></td><td>Venda Vacas</td><td>Venda de Fêmeas Adultas</td><td class="mf c">—</td><td class="r neg dv">−143.088,00</td><td></td><td class="r neg dv">−143.088,00</td></tr>
+    <tr class="rec clk"><td class="c">05/03/24</td><td></td><td></td><td class="c"><span class="ev r">Recebimento</span></td><td class="wr">Recebimento 1 de 4</td><td>Venda de Fêmeas Adultas</td><td>Bradesco</td><td class="dv"></td><td class="r pos">143.088,00</td><td class="r dv">0,00</td></tr>
+    <tr class="clk"><td class="c">06/03/24</td><td class="c">2</td><td class="c">50</td><td class="c"><span class="ev e">Entrega</span></td><td>Venda Vacas</td><td>Venda de Fêmeas Adultas</td><td class="mf c">—</td><td class="r neg dv">−143.088,00</td><td></td><td class="r neg dv">−143.088,00</td></tr>
+    <tr class="rec clk"><td class="c">06/03/24</td><td></td><td></td><td class="c"><span class="ev r">Recebimento</span></td><td class="wr">Recebimento 2 de 4</td><td>Venda de Fêmeas Adultas</td><td>Bradesco</td><td class="dv"></td><td class="r pos">143.088,00</td><td class="r dv">0,00</td></tr>
+    <tr class="clk"><td class="c">07/03/24</td><td class="c">3</td><td class="c">50</td><td class="c"><span class="ev e">Entrega</span></td><td>Venda Vacas</td><td>Venda de Fêmeas Adultas</td><td class="mf c">—</td><td class="r neg dv">−143.088,00</td><td></td><td class="r neg dv">−143.088,00</td></tr>
+    <tr class="rec clk"><td class="c">07/03/24</td><td></td><td></td><td class="c"><span class="ev r">Recebimento</span></td><td class="wr">Recebimento 3 de 4</td><td>Venda de Fêmeas Adultas</td><td>Bradesco</td><td class="dv"></td><td class="r pos">143.088,00</td><td class="r dv">0,00</td></tr>
+    <tr class="clk"><td class="c">08/03/24</td><td class="c">4</td><td class="c">50</td><td class="c"><span class="ev e">Entrega</span></td><td>Venda Vacas</td><td>Venda de Fêmeas Adultas</td><td class="mf c">—</td><td class="r neg dv">−143.088,00</td><td></td><td class="r neg dv">−143.088,00</td></tr>
+    <tr class="rec clk"><td class="c">08/03/24</td><td></td><td></td><td class="c"><span class="ev r">Recebimento</span></td><td class="wr">Recebimento 4 de 4</td><td>Venda de Fêmeas Adultas</td><td>Bradesco</td><td class="dv"></td><td class="r pos">143.088,00</td><td class="r dv">0,00</td></tr>
+   </tbody>
+   <tfoot><tr><td colspan="2">Total</td><td class="c">200</td><td colspan="4"></td><td class="r neg dv">−572.352,00</td><td class="r pos">572.352,00</td><td class="r dv">0,00</td></tr></tfoot>
+  </table></div>
+  <div class="hint">Clicar na linha abre o lançamento. A sub-aba de despesas mostra o contador para o operador saber que há 8 lá sem precisar clicar.</div>
+ </div>
+ <div class="aside"><h4>RESUMO DA OPERAÇÃO</h4><h4>IDENTIFICAÇÃO</h4>
+  <div class="rw"><span>Comprador</span><span>Dona Amelia Agropastoril</span></div><div class="rw"><span>Data</span><span>05/03/2024</span></div><div class="rw"><span>Fazenda</span><span>Faz. Pureza</span></div><div class="rw"><span>Tipo</span><span>—</span></div>
+  <h4>NEGOCIAÇÃO</h4><div class="rw"><span>Lotes</span><span>4 · 200 cab</span></div><div class="rw"><span>Valor acordado</span><span>R$ 572.352,00</span></div>
+  <h4>ENTREGA</h4><div class="rw"><span>Entregue</span><span>200 / 200 cab</span></div><div class="rw"><span>Saldo a entregar</span><span>0 cab</span></div>
+  <h4>FINANCEIRO</h4><div class="rw"><span>Entregue</span><span>R$ 572.352,00</span></div><div class="rw"><span>Recebido</span><span class="pos">R$ 572.352,00</span></div><div class="rw"><span>Saldo · quitado</span><span><b>R$ 0,00</b></span></div>
+ </div></div>
+ <div class="foot"><span>Cancelar operação</span><span>Fechar</span></div>
+</div>
+
+<div class="lbl">2 · Sub-aba "Despesas da operação" — mesma OC, as 8 despesas com a altura toda; botões de despesa só aqui</div>
+<div class="m">
+ <div class="hd"><b>Venda de animais</b><span class="pill">OC #125448f9</span><span>05/03/2024</span><span>Faz. Pureza</span><span style="margin-left:auto">✕</span></div>
+ <div class="tabs"><span>Venda</span><span>Negociação</span><span>Entrega</span><span>Documentos</span><span class="on">Financeiro</span><span>Auditoria</span></div>
+ <div class="wrap"><div class="main">
+  <div class="kp">
+   <div class="k"><span class="a">Entregue · DRE R$</span><span class="b pos">572.352,00</span></div>
+   <div class="k"><span class="a">Recebido</span><span class="b pos">572.352,00</span></div>
+   <div class="k"><span class="a">Saldo · quitado</span><span class="b">0,00</span></div>
+   <div class="k dv2"><span class="a">Despesas lançadas</span><span class="b neg">12.531,19</span></div>
+   <div class="k"><span class="a">Despesas pagas</span><span class="b neg">12.531,19</span></div>
+  </div>
+
+  <div class="sub"><span>Conta corrente do comprador</span><span class="on">Despesas da operação<span class="n">8</span></span>
+   <span class="sp"><span class="btn">+ Buscar despesa no Financeiro</span><span class="btn nv">+ Nova despesa</span></span></div>
+
+  <div class="scroll"><table>
+   <colgroup><col style="width:53px"><col style="width:53px"><col style="width:124px"><col style="width:120px"><col style="width:142px"><col style="width:92px"><col style="width:86px"><col style="width:74px"><col style="width:20px"></colgroup>
+   <thead><tr><th>Venc.</th><th>Pgto.</th><th>Descrição</th><th>Favorecido</th><th>Conta</th><th class="dv">Banco</th><th>Status</th><th>Valor R$</th><th></th></tr></thead>
+   <tbody>
+    <tr class="clk"><td class="c">06/03/24</td><td class="c">06/03/24</td><td class="wr">GTA - Venda 50 Femeas p/ Dona Amelia</td><td>RS Agro Industria</td><td>Imp. e Desp. Abate e Venda</td><td class="dv">Banco do Brasil</td><td class="c"><span class="st real">Realizado</span></td><td class="r neg">29,34</td><td class="c dots">⋯</td></tr>
+    <tr class="clk"><td class="c">06/03/24</td><td class="c">06/03/24</td><td class="wr">Fundersul - Venda 50 Femeas p/ Dona Amelia</td><td>Sefaz MS</td><td>Imp. e Desp. Abate e Venda</td><td class="dv">Banco do Brasil</td><td class="c"><span class="st real">Realizado</span></td><td class="r neg">1.670,49</td><td class="c dots">⋯</td></tr>
+    <tr class="clk"><td class="c">07/03/24</td><td class="c">07/03/24</td><td class="wr">GTA - Venda 50 Femeas p/ Dona Amelia</td><td>RS Agro Industria</td><td>Imp. e Desp. Abate e Venda</td><td class="dv">Banco do Brasil</td><td class="c"><span class="st real">Realizado</span></td><td class="r neg">29,34</td><td class="c dots">⋯</td></tr>
+    <tr class="clk"><td class="c">07/03/24</td><td class="c">07/03/24</td><td class="wr">Fundersul - Venda 50 Femeas p/ Dona Amelia</td><td>Sefaz MS</td><td>Imp. e Desp. Abate e Venda</td><td class="dv">Banco do Brasil</td><td class="c"><span class="st real">Realizado</span></td><td class="r neg">1.678,84</td><td class="c dots">⋯</td></tr>
+    <tr class="clk"><td class="c">08/03/24</td><td class="c">08/03/24</td><td class="wr">Comissão - 200 Femeas</td><td class="wr">Valter da Silva Barros</td><td>Imp. e Desp. Abate e Venda</td><td class="dv">Banco do Brasil</td><td class="c"><span class="st real">Realizado</span></td><td class="r neg">5.723,52</td><td class="c dots">⋯</td></tr>
+    <tr class="clk"><td class="c">08/03/24</td><td class="c">08/03/24</td><td class="wr">Fundersul - Venda 50 Femeas p/ Dona Amelia</td><td>Sefaz MS</td><td>Imp. e Desp. Abate e Venda</td><td class="dv">Banco do Brasil</td><td class="c"><span class="st real">Realizado</span></td><td class="r neg">1.670,49</td><td class="c dots">⋯</td></tr>
+    <tr class="clk"><td class="c">08/03/24</td><td class="c">08/03/24</td><td class="wr">Fundersul - Venda 50 Femeas p/ Dona Amelia</td><td>Sefaz MS</td><td>Imp. e Desp. Abate e Venda</td><td class="dv">Banco do Brasil</td><td class="c"><span class="st real">Realizado</span></td><td class="r neg">1.670,49</td><td class="c dots">⋯</td></tr>
+    <tr class="clk"><td class="c">08/03/24</td><td class="c">08/03/24</td><td class="wr">GTA - Venda 50 Femeas p/ Dona Amelia</td><td>RS Agro Industria</td><td>Imp. e Desp. Abate e Venda</td><td class="dv">Banco do Brasil</td><td class="c"><span class="st real">Realizado</span></td><td class="r neg">58,68</td><td class="c dots">⋯</td></tr>
+   </tbody>
+   <tfoot><tr><td colspan="5">8 despesas</td><td class="dv"></td><td></td><td class="r neg">12.531,19</td><td></td></tr></tfoot>
+  </table></div>
+  <div class="hint">Só o modal rola quando não couber (nunca a tabela por dentro). Ao voltar para a OC depois de abrir um lançamento, a sub-aba que estava aberta continua aberta.</div>
+ </div>
+ <div class="aside"><h4>RESUMO DA OPERAÇÃO</h4><h4>IDENTIFICAÇÃO</h4>
+  <div class="rw"><span>Comprador</span><span>Dona Amelia Agropastoril</span></div><div class="rw"><span>Data</span><span>05/03/2024</span></div><div class="rw"><span>Fazenda</span><span>Faz. Pureza</span></div><div class="rw"><span>Tipo</span><span>—</span></div>
+  <h4>NEGOCIAÇÃO</h4><div class="rw"><span>Lotes</span><span>4 · 200 cab</span></div><div class="rw"><span>Valor acordado</span><span>R$ 572.352,00</span></div>
+  <h4>ENTREGA</h4><div class="rw"><span>Entregue</span><span>200 / 200 cab</span></div><div class="rw"><span>Saldo a entregar</span><span>0 cab</span></div>
+  <h4>FINANCEIRO</h4><div class="rw"><span>Entregue</span><span>R$ 572.352,00</span></div><div class="rw"><span>Recebido</span><span class="pos">R$ 572.352,00</span></div><div class="rw"><span>Saldo · quitado</span><span><b>R$ 0,00</b></span></div>
+ </div></div>
+ <div class="foot"><span>Cancelar operação</span><span>Fechar</span></div>
+</div>
+
+<div class="note"><b>Mock v5 · OC-VENDA-FINANCEIRO-COMPLETO-01a-fix2 (sub-abas).</b> Só muda a distribuição; réguas, cards, menus e regras do 01a ficam iguais.<br>
+• Os 5 cards ficam sempre em cima, nas duas sub-abas.<br>
+• Faixa de sub-abas abaixo dos cards: <b>Conta corrente do comprador</b> (abre nela) e <b>Despesas da operação</b> com contador. Mesmo componente de sub-abas que o sistema já usa (Conciliação, DRE); nada novo.<br>
+• Cada sub-aba mostra uma tabela só, com a altura toda. Nenhuma tabela rola por dentro; se não couber, rola o modal.<br>
+• Os botões trocam com a sub-aba: "+ Buscar recebimento" e "+ Programar recebimento futuro" na primeira; "+ Buscar despesa" e "+ Nova despesa" na segunda.<br>
+• Abrir um lançamento e voltar mantém a sub-aba onde estava.<br>
+Caso real: OC 125448f9 (Santa Rita → Dona Amelia, 4 lotes, 8 despesas), a que encolheu na sua tela.</div>
+</body></html>

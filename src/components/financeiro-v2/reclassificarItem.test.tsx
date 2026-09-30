@@ -214,7 +214,8 @@ describe('a volta do drill para a OC', () => {
 
   it('lido da FONTE: o retornarDoDrill passa a origem, e sair pelo link limpa o drillReturn antes de abrir a OC', () => {
     const fonte = readFileSync('src/v2/V2Index.tsx', 'utf-8');
-    expect(fonte).toContain('abrirOperacaoOC(ret.id, ret.tab, ret.tipo, origemDaVolta(window.location.search));');
+    /* OC-VENDA-FINANCEIRO-COMPLETO-01a-fix2: a sub-aba (`ret.sub`) passou a ir junto; a origem continua sendo a da URL */
+    expect(fonte).toContain('abrirOperacaoOC(ret.id, ret.tab, ret.tipo, origemDaVolta(window.location.search), ret.sub);');
     const link = fonte.slice(fonte.indexOf('onAbrirOperacaoOCFinanceiro='), fonte.indexOf('onLancamentoAlvoConsumido='));
     expect(link.indexOf('setDrillReturn(null)')).toBeGreaterThan(-1);
     expect(link.indexOf('setDrillReturn(null)')).toBeLessThan(link.indexOf('abrirOperacaoOC('));

@@ -54,7 +54,7 @@ describe('conta corrente da venda — leitura e sinal do caixa', () => {
     expect(cc.linhas[10].saldo).toBe(cc.saldo);
     expect(rotuloDoSaldo(cc.saldo)).toBe('Saldo · falta receber');
     expect(barraDaDiferenca(cc)).toEqual({ frase: 'Recebeu R$ 1.357,89 a menos do que entregou.', valor: -1357.89 });
-    expect(rotuloRecebimento(cc.linhas, 'r-2025-05-22')).toBe('Recebimento 2 de 4');
+    expect(rotuloRecebimento(cc.linhas, 'r-2025-05-22')).toBe('Receb. 2/4');
   });
 
   it('sinal do saldo: negativo vermelho (falta receber), positivo verde (adiantado), zero e meio centavo quitado', () => {
@@ -123,5 +123,30 @@ describe('conta corrente da venda — leitura e sinal do caixa', () => {
     expect(dataCurta(null)).toBe('—');
     expect(contaComNumero(1120, 'Venda de Desmama Machos')).toBe('1120 Venda de Desmama Machos');
     expect(contaComNumero(null, null)).toBe('—');
+  });
+});
+
+/* OC-VENDA-FINANCEIRO-COMPLETO-01a-fix2 — os rotulos GERADOS do extrato: curtos, de UM lugar, e cabem na Descricao (92px uteis,
+   medido em Inter 10px: o maior e' "Devol. fornecedor", 84,9). */
+import { descricaoDoEvento, rotuloCurtoExplicacao } from './contaCorrente';
+describe('rotulos curtos do extrato (fix2)', () => {
+  const linha = (extra: Record<string, unknown>) => lerContaCorrente({ modelo: 'conta_corrente', linhas: [extra] })?.linhas[0];
+  const cat = (s: string | null) => (s === 'desmama_m' ? 'Desmama M' : s ?? '—');
+  it('entrega: a categoria (o Evento ja diz Entrega/Entrada; "Compra Desmama M" pedia 99,3px)', () => {
+    const l = linha({ tipo: 'entrega', data: '2026-03-25', parte_id: 'e', categoria: 'desmama_m', saldo: 0 });
+    expect(l && descricaoDoEvento(l, [l], 'compra', cat)).toBe('Desmama M');
+  });
+  it('explicacao: o nome curto, dos dois lados; o dialogo segue com o longo', () => {
+    const tipos: TipoExplicacao[] = ['ajuste_preco', 'desconto_comercial', 'permuta_despesa', 'outra_receita', 'devolucao_comprador'];
+    expect(tipos.map(t => rotuloCurtoExplicacao(t))).toEqual(['Ajuste de preço', 'Desconto', 'Permuta/desp.', 'Outra receita', 'Devol. comprador']);
+    expect(rotuloCurtoExplicacao('devolucao_comprador', 'compra')).toBe('Devol. fornecedor');
+    const l = linha({ tipo: 'explicacao', subtipo: 'permuta_despesa', data: '2026-03-25', parte_id: 'x', saldo: 0 });
+    expect(l && descricaoDoEvento(l, [l], 'venda', cat)).toBe('Permuta/desp.');
+  });
+  it('recebimento: "Receb. n/N", pagamento "Pgto. n/N"', () => {
+    const rs = ['a', 'b', 'c', 'd'].map(id => linha({ tipo: 'recebimento', data: '2021-06-15', parte_id: id, saldo: 0 }))
+      .filter((x): x is NonNullable<typeof x> => !!x);
+    expect(descricaoDoEvento(rs[1], rs, 'venda', cat)).toBe('Receb. 2/4');
+    expect(descricaoDoEvento(rs[3], rs, 'compra', cat)).toBe('Pgto. 4/4');
   });
 });

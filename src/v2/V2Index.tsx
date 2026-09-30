@@ -509,7 +509,7 @@ export default function V2Index() {
        operacao como compra: a venda voltava com `oc_compra=1`, a hidratacao a recusava
        e o usuario caia em Lancamentos sem modal. Guardar o id sem o tipo era guardar
        meio endereco. */
-    | { destino: 'oc'; id: string; tab: 'financeiro'; tipo: 'compra' | 'venda' | 'abate' };
+    | { destino: 'oc'; id: string; tab: 'financeiro'; tipo: 'compra' | 'venda' | 'abate'; sub?: string };
 
   const retornarDoDrill = (ret: DrillReturn) => {
     if (ret.destino === 'zoo') {
@@ -524,7 +524,9 @@ export default function V2Index() {
        ⚠ E A ORIGEM VAI JUNTO — OC-RECLASSIFICAR-ITEM-01. Sem o quarto argumento a funcao gravava
        `oc_return = sectionRef.current`, que aqui e' 'financeiro-lanc': a OC reabria, mas fechar a OC
        largava o operador no Financeiro em vez da Central (ou de onde ele a abriu). */
-    abrirOperacaoOC(ret.id, ret.tab, ret.tipo, origemDaVolta(window.location.search));
+    /* OC-VENDA-FINANCEIRO-COMPLETO-01a-fix2 — e a SUB-ABA vai junto: abrir um lancamento pelas despesas e voltar reabre nas
+       despesas, nao no extrato. */
+    abrirOperacaoOC(ret.id, ret.tab, ret.tipo, origemDaVolta(window.location.search), ret.sub);
   };
 
   const [searchParams, setSearchParams] = useSearchParams();
@@ -539,7 +541,7 @@ export default function V2Index() {
 
   /* ⚠ `retorno` — A ORIGEM VEM DE QUEM CLICA, NAO DA URL (OC-ABRIR-PERDE-ID-01). Omitido,
      vale a secao corrente (`sectionRef.current`), que e' onde o clique aconteceu. */
-  const abrirOperacaoOC = useCallback((ocId: string, aba?: string, tipo: string = 'compra', retorno?: string) => {
+  const abrirOperacaoOC = useCallback((ocId: string, aba?: string, tipo: string = 'compra', retorno?: string, sub?: string) => {
     /* ── oc_return E' A ORIGEM, NAO O DESTINO (PR-OC-FIX-RETORNO-02) ─────────────
        O valor diz DE ONDE o usuario veio, para o fecho devolve-lo ao mesmo lugar. Derivar
        do DESTINO carimbava "voltar ao Financeiro" em qualquer abertura na aba financeira.
@@ -562,7 +564,7 @@ export default function V2Index() {
        ⚠ A MONTAGEM MORA EM `paramsAberturaOC` (src/lib/oc/paramsAberturaOC.ts): era regra
        de navegacao sem teste possivel dentro de um `useCallback`. */
     const p = paramsAberturaOC(window.location.search, {
-      ocId, aba, tipo, retorno: retorno ?? sectionRef.current ?? undefined,
+      ocId, aba, tipo, retorno: retorno ?? sectionRef.current ?? undefined, sub,
     });
     setSearchParams(p, { replace: true });
     setSection('lancamentos-zoot');
@@ -753,7 +755,7 @@ export default function V2Index() {
       if (rzId) {
         setDrillReturn({ destino: 'zoo', id: rzId, tab: rzTab, section: origemSection });
       } else if (rocId) {
-        setDrillReturn({ destino: 'oc', id: rocId, tab: 'financeiro', tipo: rocTipo });
+        setDrillReturn({ destino: 'oc', id: rocId, tab: 'financeiro', tipo: rocTipo, sub: searchParams.get('returnOcSub') ?? undefined });
       }
       const next = new URLSearchParams(searchParams);
       next.delete('flancId');
@@ -762,6 +764,7 @@ export default function V2Index() {
       next.delete('returnZooTab');
       next.delete('returnOcId');
       next.delete('returnOcTipo');
+      next.delete('returnOcSub');
       setSearchParams(next, { replace: true });
     }
   }, [searchParams, setSearchParams]);

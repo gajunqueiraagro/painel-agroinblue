@@ -246,7 +246,8 @@ export function barraDaDiferenca(cc: ContaCorrente, lado: LadoContaCorrente = 'v
 
 export const ROTULO_STATUS: Record<StatusLinhaContaCorrente, string> = {
   sem_caixa: 'sem caixa',
-  sem_conta_bancaria: 'sem conta',
+  /* OC-VENDA-FINANCEIRO-COMPLETO-01a-fix2 — texto gerado pelo sistema e' curto e nunca quebra linha ("compactar sempre"). */
+  sem_conta_bancaria: 's/ conta',
   conciliado: 'conciliado',
   programado: 'programado',
   realizado: 'realizado',
@@ -261,12 +262,14 @@ export const ROTULO_EXPLICACAO: Record<TipoExplicacao, string> = {
   devolucao_comprador: 'Devolver ao comprador',
 };
 
-/** "Recebimento 2 de 4" (na compra, "Pagamento 1 de 1") — a posicao entre os da OC, na ordem do extrato. */
+/** "Receb. 2/4" (na compra, "Pgto. 1/3") — a posicao entre os da OC, na ordem do extrato.
+ *  ⚠ CURTO DE PROPOSITO (OC-VENDA-FINANCEIRO-COMPLETO-01a-fix2): "Recebimento 2 de 4" pedia 94,8px na Descricao de 92 uteis e
+ *  quebrava em duas linhas (af334f9c). Texto gerado pelo sistema nao quebra; so' o digitado. */
 export function rotuloRecebimento(linhas: readonly LinhaContaCorrente[], parteId: string, lado: LadoContaCorrente = 'venda'): string {
-  const nome = lado === 'compra' ? 'Pagamento' : 'Recebimento';
+  const nome = lado === 'compra' ? 'Pgto.' : 'Receb.';
   const recs = linhas.filter((l) => l.tipo === 'recebimento');
   const i = recs.findIndex((l) => l.parteId === parteId);
-  return i < 0 ? nome : `${nome} ${i + 1} de ${recs.length}`;
+  return i < 0 ? nome : `${nome} ${i + 1}/${recs.length}`;
 }
 
 /** Os tipos de explicacao de cada lado (decisao do Gabriel): a compra tem ajuste de preco, devolucao do fornecedor e permuta. */
@@ -400,4 +403,31 @@ export function linhasDaPreviaAjuste(previa: unknown): LinhaPreviaAjuste[] {
   linhas.push({ chave: 'total', nivel: 'total', loteOrdem: null, categoria: null, datas: [], kg: kgT, hoje: hojeT, novo: novoT,
     porKgNovo: porKg(novoT, kgT) });
   return linhas;
+}
+
+/* ─── OC-VENDA-FINANCEIRO-COMPLETO-01a-fix2 — os rotulos GERADOS do extrato, curtos e numa linha so' ────────────────────── */
+
+/** A explicacao no extrato, na coluna Descricao (92px uteis): o nome curto. O dialogo "Explicar diferenca" segue com o longo. */
+const ROTULO_EXPLICACAO_CURTO: Record<TipoExplicacao, string> = {
+  ajuste_preco: 'Ajuste de preço',
+  desconto_comercial: 'Desconto',
+  permuta_despesa: 'Permuta/desp.',
+  outra_receita: 'Outra receita',
+  devolucao_comprador: 'Devol. comprador',
+};
+export function rotuloCurtoExplicacao(tipo: TipoExplicacao, lado: LadoContaCorrente = 'venda'): string {
+  if (lado === 'compra' && tipo === 'devolucao_comprador') return 'Devol. fornecedor';
+  return ROTULO_EXPLICACAO_CURTO[tipo];
+}
+
+/**
+ * A Descricao de cada linha do extrato — UM lugar, nao a celula. Entrega: a categoria ("Desmama M"; o Evento ja' diz Entrega e a
+ * Conta diz Venda/Compra — "Compra Desmama M" pedia 99,3px para 92). Recebimento: "Receb. 2/4". Explicacao: o nome curto.
+ * Medido em Inter 10px: o maior e' "Devol. fornecedor", 84,9px.
+ */
+export function descricaoDoEvento(l: LinhaContaCorrente, linhas: readonly LinhaContaCorrente[], lado: LadoContaCorrente,
+  rotuloCategoria: (slug: string | null) => string): string {
+  if (l.tipo === 'entrega') return rotuloCategoria(l.categoria);
+  if (l.tipo === 'recebimento') return rotuloRecebimento(linhas, l.parteId, lado);
+  return l.subtipo ? rotuloCurtoExplicacao(l.subtipo, lado) : 'Explicação';
 }

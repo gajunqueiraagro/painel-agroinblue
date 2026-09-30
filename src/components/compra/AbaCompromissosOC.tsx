@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { FORMAS_PAGAMENTO } from '@/lib/financeiro/formasPagamento';
 import { useOperacaoEstornoFinanceiro } from '@/hooks/useOperacaoEstornoFinanceiro';
 import type { OcCompromissosApi, CompromissoResumo, ParcelaMaterializacao, CriarCompromissoPayload, ProgramarParcelaInput } from '@/hooks/useOcCompromissos';
@@ -129,6 +130,11 @@ interface Props {
    * ⚠ AUSENTE = a aba de compromissos de sempre, sem mudanca nenhuma (OC no modelo por titulo).
    */
   soDespesas?: boolean;
+  /** OC-VENDA-FINANCEIRO-COMPLETO-01a-fix2 — onde os botoes das despesas moram: a faixa de sub-abas da conta corrente. Ausente, a
+   *  lista desenha o titulo e os botoes em cima, como antes; `null`, o host ainda nao montou (nada se desenha). */
+  hostBotoesDespesa?: HTMLElement | null;
+  /** Altura do bloco fixo acima da tabela das despesas: o cabecalho dela gruda logo abaixo (um scrollport so', o do modal). */
+  topoFixo?: number;
 }
 
 /* Tema escuro para o painel do `SearchableSelect` (Lote, Subcentro, Favorecido).
@@ -461,7 +467,7 @@ const ROTULOS_PADRAO: RotulosCompromissos = {
   mostrarBaseDaOperacao: true, mostrarSentidoDoDinheiro: false,
 };
 
-export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, ehBoitel, fornecedores, valorAcordado, lotes, contraparteId, dataOperacao, dataChegada, darkSelectClass, recarregarDados, linhasPrevisao, bloqueioPrevisao = null, seloProjecao, propostasExtras, propostasDoMotor, abrirGerarAoMontar, rotulos = ROTULOS_PADRAO, motivoReabertura = null, soDespesas = false }: Props) {
+export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, ehBoitel, fornecedores, valorAcordado, lotes, contraparteId, dataOperacao, dataChegada, darkSelectClass, recarregarDados, linhasPrevisao, bloqueioPrevisao = null, seloProjecao, propostasExtras, propostasDoMotor, abrirGerarAoMontar, rotulos = ROTULOS_PADRAO, motivoReabertura = null, soDespesas = false, hostBotoesDespesa, topoFixo }: Props) {
   const { resumoOperacao, compromissos, parcelas, versao, saving } = ocApi;
   const [searchParams, setSearchParams] = useSearchParams();
   /* ⚠ OS DOIS CATALOGOS SUBIRAM PARA CA — PR-OC-VENDA-FIN-PREVISAO-01D (adendo 2). Eles
@@ -831,9 +837,13 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
          mesmo defeito que a venda pagou em PR-OC-VENDA-FIN-PREVISAO-01D. */
       next.set('returnOcTipo',
         tipoOperacao === 'venda' ? 'venda' : tipoOperacao === 'abate' ? 'abate' : 'compra');
+      /* OC-VENDA-FINANCEIRO-COMPLETO-01a-fix2 — a sub-aba aberta (conta corrente) volta junto; sem ela, apaga. */
+      const sub = searchParams.get('oc_sub');
+      if (sub) next.set('returnOcSub', sub); else next.delete('returnOcSub');
     } else {
       next.delete('returnOcId');
       next.delete('returnOcTipo');
+      next.delete('returnOcSub');
     }
     /* ⚠ OS TRES PARAMETROS MORREM AQUI. `oc_abate` entrou junto: um parametro esquecido
        reabre a operacao sozinho quando a secao volta a ser Lancamentos por outro caminho —
@@ -842,6 +852,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
     next.delete('oc_venda');
     next.delete('oc_abate');
     next.delete('oc_id');
+    next.delete('oc_sub');
     setSearchParams(next, { replace: true });
   };
 
@@ -1419,6 +1430,19 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
   }, [tipoOperacao, compromissos, plano.rows]);
   /* Clicar na linha abre o LANCAMENTO (o modal do Financeiro, pelo mesmo `editarTitulo` do "Editar" da parcela); sem titulo
      vivo nao ha' lancamento a abrir, e abre o compromisso — onde mora o Programar. */
+  /* Os dois botoes das despesas — na faixa de sub-abas quando ha' host (fix2), em cima da lista quando nao ha'. Os mesmos gestos. */
+  const botoesDespesa = (
+    <>
+      <Button type="button" variant="outline" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium"
+        disabled={!podeEscrever} onClick={() => setBuscarDespesaAberto(true)}>
+        + Buscar despesa no Financeiro
+      </Button>
+      <Button type="button" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium"
+        disabled={!podeEscrever} onClick={abrirNovo}>
+        + Nova despesa
+      </Button>
+    </>
+  );
   const abrirDespesa = (l: LinhaDespesa) => {
     if (l.tituloId) { editarTitulo(l.tituloId); return; }
     setSelectedId(l.compromisso.compromissoId);
@@ -1532,21 +1556,14 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
           copiado das irmas, que sao `p-2`. */}
       {soDespesas && (
         <div className="flex flex-col gap-[3px]" data-testid="despesas-da-operacao">
-          <div className="flex items-center gap-2">
-            <span className="text-[10.5px] font-semibold">Despesas da operação · pagas a terceiros, fora do saldo</span>
-            <span className="ml-auto flex gap-[5px]">
-              <Button type="button" variant="outline" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium"
-                disabled={!podeEscrever} onClick={() => setBuscarDespesaAberto(true)}>
-                + Buscar despesa no Financeiro
-              </Button>
-              <Button type="button" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium"
-                disabled={!podeEscrever} onClick={abrirNovo}>
-                + Nova despesa
-              </Button>
-            </span>
-          </div>
+          {hostBotoesDespesa === undefined ? (
+            <div className="flex items-center gap-2">
+              <span className="text-[10.5px] font-semibold">Despesas da operação · pagas a terceiros, fora do saldo</span>
+              <span className="ml-auto flex gap-[5px]">{botoesDespesa}</span>
+            </div>
+          ) : hostBotoesDespesa ? createPortal(botoesDespesa, hostBotoesDespesa) : null}
           <TabelaDespesasOC linhas={linhasDespesa} total={totalDespesas} nomeFavorecido={nomeFavorecido}
-            contaDoPlano={contaDoPlanoDespesa} nomeBanco={nomeBancoDespesa} onAbrir={abrirDespesa} menu={menuDespesa} />
+            contaDoPlano={contaDoPlanoDespesa} nomeBanco={nomeBancoDespesa} onAbrir={abrirDespesa} menu={menuDespesa} topo={topoFixo} />
         </div>
       )}
       {!soDespesas && (

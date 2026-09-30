@@ -5,13 +5,14 @@ import { Input } from '@/components/ui/input';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Segmentado } from '@/components/ui/segmentado';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { CATEGORIAS } from '@/types/cattle';
 import { parseNumericValue } from '@/lib/calculos/abate';
 import { rotuloCurtoDaConta, rotuloDaConta } from '@/lib/financeiro/rotuloConta';
 import {
-  barraDaDiferenca, contaComNumero, corDoSaldo, dataCurta, efeitoNoSaldo, linhasDaPreviaAjuste, rotuloDoSaldo, rotuloExplicacao,
-  rotuloRecebimento, rotuloSentidoAjuste, sugestaoAjuste, totalDoRascunho, valorAjusteParaRpc, ROTULO_STATUS, TIPOS_EXPLICACAO_DO_LADO,
+  barraDaDiferenca, contaComNumero, corDoSaldo, dataCurta, descricaoDoEvento, efeitoNoSaldo, linhasDaPreviaAjuste, rotuloDoSaldo, rotuloExplicacao,
+  rotuloSentidoAjuste, sugestaoAjuste, totalDoRascunho, valorAjusteParaRpc, ROTULO_STATUS, TIPOS_EXPLICACAO_DO_LADO,
   type ContaCorrente, type LadoContaCorrente, type LinhaContaCorrente, type LinhaPreviaAjuste, type SentidoAjuste, type TipoExplicacao,
 } from '@/lib/oc/contaCorrente';
 import type {
@@ -90,25 +91,58 @@ const TEXTOS: Record<LadoContaCorrente, {
   },
 };
 
+/** A sub-aba do Financeiro em conta corrente (OC-VENDA-FINANCEIRO-COMPLETO-01a-fix2). */
+export type SubAbaContaCorrente = 'conta' | 'despesas';
+
+/** O que o slot das despesas recebe: onde por os botoes (a faixa de sub-abas) e a altura do bloco fixo (o cabecalho gruda abaixo). */
+export interface ContextoDespesas { host: HTMLElement | null; topo: number }
+
 interface Props {
   api: OcContaCorrenteApi;
   somenteLeitura: boolean;
   /** De que lado a conta corrente fala. Padrao: venda (a tela de antes, sem nenhuma mudanca). */
   lado?: LadoContaCorrente;
   /* OC-VENDA-FINANCEIRO-COMPLETO-01a — as despesas da operacao voltam a ser a LISTA VIVA de sempre (`AbaCompromissosOC` no modo
-     so' despesas), montada por quem tem o `ocApi` (o roteador da aba). Esta tela so' reserva o lugar, embaixo do extrato. */
-  despesas?: ReactNode;
+     so' despesas), montada por quem tem o `ocApi` (o roteador da aba). Esta tela so' reserva o lugar — desde o fix2, a sua
+     sub-aba; a funcao recebe o host dos botoes e o topo fixo. */
+  despesas?: ReactNode | ((ctx: ContextoDespesas) => ReactNode);
   /** Os dois cards da direita, somados dos compromissos de obrigacao vivos. `null` = ainda nao lidos ("—", nunca zero). */
   totaisDespesas?: { lancadas: number; pagas: number } | null;
+  /** Quantas linhas a tabela das despesas tem — o contador da sub-aba. `null` = ainda nao lidas (sem contador). */
+  qtdDespesas?: number | null;
+  /** A sub-aba aberta, quando quem monta a guarda (na URL, para sobreviver a' ida ao lancamento). Sem ela, estado local. */
+  subAba?: SubAbaContaCorrente;
+  onSubAba?: (s: SubAbaContaCorrente) => void;
 }
 
-export function AbaContaCorrenteOC({ api, somenteLeitura, lado = 'venda', despesas, totaisDespesas = null }: Props) {
+/* O bloco fixo tem 34 (cards) + 5 + 26 (sub-abas) + 5 de folga; medido depois de montar (o aviso de saidas o aumenta). */
+const TOPO_PADRAO = 70;
+
+export function AbaContaCorrenteOC({ api, somenteLeitura, lado = 'venda', despesas, totaisDespesas = null, qtdDespesas = null,
+  subAba, onSubAba }: Props) {
   const cc = api.contaCorrente;
   const t = TEXTOS[lado];
   /* sinal da coluna da entrega no total: a venda mostra o gado que saiu negativo; a compra, o que entrou positivo */
   const sinalEntrega = lado === 'compra' ? 1 : -1;
   const [erroAcao, setErroAcao] = useState<string | null>(null);
   const [dialogo, setDialogo] = useState<'buscar' | 'programar' | 'explicar' | null>(null);
+  const [subLocal, setSubLocal] = useState<SubAbaContaCorrente>('conta');
+  const sub = subAba ?? subLocal;
+  const escolherSub = (s: SubAbaContaCorrente) => { setSubLocal(s); onSubAba?.(s); };
+  /* ⚠ CALLBACK REF, nao `useRef`: o host dos botoes das despesas e o bloco fixo so' existem depois do primeiro render, e quem os
+     usa (o portal, a medida) precisa re-renderizar quando chegam (mesma licao da barra do PastosTab). */
+  const [topoEl, setTopoEl] = useState<HTMLDivElement | null>(null);
+  const [hostDespesas, setHostDespesas] = useState<HTMLSpanElement | null>(null);
+  const [topo, setTopo] = useState(TOPO_PADRAO);
+  useEffect(() => {
+    if (!topoEl) return;
+    const medir = () => setTopo(topoEl.offsetHeight);
+    medir();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(medir);
+    ro.observe(topoEl);
+    return () => ro.disconnect();
+  }, [topoEl]);
 
   if (!cc) {
     return (
@@ -125,121 +159,156 @@ export function AbaContaCorrenteOC({ api, somenteLeitura, lado = 'venda', despes
     const erro = await api.sincronizarEntregas();
     if (erro) setErroAcao(erro);
   };
+  const temDespesas = despesas !== undefined;
+  const conteudoDespesas = typeof despesas === 'function' ? despesas({ host: hostDespesas, topo }) : despesas;
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-[5px]" data-testid="conta-corrente-oc">
-      {/* OC-VENDA-FINANCEIRO-COMPLETO-01a (mock v4) — cinco cards de mesma altura, rotulo em cima e valor embaixo. ⚠ O SALDO TEM
-          170px, os outros dividem o resto: medido (Inter 9,5px), "Saldo · adiantado pelo comprador" pede 151,7px e
-          "Saldo · adiantado ao fornecedor" 144, e com cinco iguais o card teria 132 uteis. Os outros rotulos pedem ate' 90,5 e o
-          maior valor real (4.730.486,74 a 12px) 87,3, para 127 uteis. */}
-      <div className="grid flex-none gap-[6px]" style={{ gridTemplateColumns: '1fr 1fr 170px 1fr 1fr' }} data-testid="cards-conta-corrente">
-        <CardEmPe rotulo={t.cardEntrega} valor={cc.entregue} cor={COR.pos} testid="card-entrega" />
-        <CardEmPe rotulo={t.cardDinheiro} valor={-sinalEntrega * cc.recebido} cor={lado === 'compra' ? COR.neg : COR.pos} testid="card-dinheiro" />
-        <CardEmPe rotulo={rotuloDoSaldo(cc.saldo, lado)} valor={cc.saldo} cor={COR[corSaldo]} destaque={corSaldo !== 'zero'} testid="card-saldo" />
-        <CardEmPe rotulo="Despesas lançadas" valor={totaisDespesas?.lancadas ?? null} cor={COR.neg} divisor testid="card-despesas-lancadas" />
-        <CardEmPe rotulo="Despesas pagas" valor={totaisDespesas?.pagas ?? null} cor={COR.neg} testid="card-despesas-pagas" />
-      </div>
+    /* ⚠ OC-VENDA-FINANCEIRO-COMPLETO-01a-fix2 — UM SCROLLPORT SO', O DO MODAL. Com 8 despesas (SR 125448f9) o extrato encolhia a
+       2 linhas com rolagem propria: duas tabelas disputavam a mesma altura. Agora cada sub-aba mostra UMA tabela com a altura toda,
+       nenhuma rola por dentro; os cards e a faixa de sub-abas ficam FIXOS no alto, e o cabecalho de cada tabela gruda logo abaixo
+       deles (`topo`, medido), o total no pe'. */
+    <div className="flex flex-col gap-[5px]" data-testid="conta-corrente-oc">
+      <div ref={setTopoEl} className="sticky top-0 z-30 -mt-2 bg-background pt-2" data-testid="topo-fixo">
+        <div className="flex flex-col gap-[5px] bg-muted/30 pb-[5px]">
+          {/* OC-VENDA-FINANCEIRO-COMPLETO-01a (mock v4) — cinco cards de mesma altura, rotulo em cima e valor embaixo. ⚠ O SALDO TEM
+              170px, os outros dividem o resto: medido (Inter 9,5px), "Saldo · adiantado pelo comprador" pede 151,7px e
+              "Saldo · adiantado ao fornecedor" 144, e com cinco iguais o card teria 132 uteis. Os outros rotulos pedem ate' 90,5 e o
+              maior valor real (4.730.486,74 a 12px) 87,3, para 127 uteis. */}
+          <div className="grid flex-none gap-[6px]" style={{ gridTemplateColumns: '1fr 1fr 170px 1fr 1fr' }} data-testid="cards-conta-corrente">
+            <CardEmPe rotulo={t.cardEntrega} valor={cc.entregue} cor={COR.pos} testid="card-entrega" />
+            <CardEmPe rotulo={t.cardDinheiro} valor={-sinalEntrega * cc.recebido} cor={lado === 'compra' ? COR.neg : COR.pos} testid="card-dinheiro" />
+            <CardEmPe rotulo={rotuloDoSaldo(cc.saldo, lado)} valor={cc.saldo} cor={COR[corSaldo]} destaque={corSaldo !== 'zero'} testid="card-saldo" />
+            <CardEmPe rotulo="Despesas lançadas" valor={totaisDespesas?.lancadas ?? null} cor={COR.neg} divisor testid="card-despesas-lancadas" />
+            <CardEmPe rotulo="Despesas pagas" valor={totaisDespesas?.pagas ?? null} cor={COR.neg} testid="card-despesas-pagas" />
+          </div>
 
-      {cc.saidasSemEntrega > 0 && (
-        <div className="flex flex-none items-center gap-2 rounded border border-amber-300 bg-amber-50 px-2 text-[10.5px] text-amber-800">
-          <span>{cc.saidasSemEntrega === 1 ? t.pendente1 : t.pendenteN(cc.saidasSemEntrega)}</span>
-          <Button type="button" size="sm" className={`${BOTAO} ml-auto`} disabled={somenteLeitura || api.ocupado} onClick={atualizarEntregas}>
-            {t.atualizar}
-          </Button>
-        </div>
-      )}
+          {cc.saidasSemEntrega > 0 && (
+            <div className="flex flex-none items-center gap-2 rounded border border-amber-300 bg-amber-50 px-2 text-[10.5px] text-amber-800">
+              <span>{cc.saidasSemEntrega === 1 ? t.pendente1 : t.pendenteN(cc.saidasSemEntrega)}</span>
+              <Button type="button" size="sm" className={`${BOTAO} ml-auto`} disabled={somenteLeitura || api.ocupado} onClick={atualizarEntregas}>
+                {t.atualizar}
+              </Button>
+            </div>
+          )}
 
-      <div className="flex flex-none items-center gap-1.5">
-        <span className="text-[10.5px] font-semibold">{t.titulo}</span>
-        <span className="ml-auto flex gap-[5px]">
-          <Button type="button" variant="outline" size="sm" className={BOTAO} disabled={somenteLeitura || api.ocupado}
-            onClick={() => { setErroAcao(null); setDialogo('buscar'); }}>
-            {t.buscar}
-          </Button>
-          <Button type="button" variant="outline" size="sm" className={BOTAO} disabled={somenteLeitura || api.ocupado}
-            onClick={() => { setErroAcao(null); setDialogo('programar'); }}>
-            {t.programar}
-          </Button>
-        </span>
-      </div>
-
-      <div className="min-h-0 flex-1 overflow-auto rounded border" data-testid="conta-corrente-rolagem">
-        <table className="w-full table-fixed border-separate border-spacing-0 tabular-nums" data-testid="conta-corrente-tabela">
-          <colgroup>
-            {/* Larguras MEDIDAS no modal (1024px por decisao do MODAIS-PADRAO-01b): pior texto de cada coluna + 8 de padding, com
-                o total em negrito. ⚠ Por isso a Conta vai SEM o numero do plano: com ele, "1120 Venda de Desmama Machos" pedia 171px
-                e a linha nao cabia sem quebrar ou cortar numero. A regua mora em `REGUA_EXTRATO` (acima), soma 764. */}
-            {REGUA_EXTRATO.map((w, i) => <col key={i} style={{ width: w }} />)}
-          </colgroup>
-          <thead>
-            <tr>
-              <th className={THG} colSpan={7}>Evento</th>
-              <th className={`${THG} ${DV}`} colSpan={2}>Movimento</th>
-              <th className={`${THG} ${DV}`}>{t.grupoSaldo}</th>
-            </tr>
-            <tr>
-              {['Data', 'Lote', 'Cab', 'Evento', 'Descrição', 'Conta', 'Banco'].map(h => (
-                <th key={h} className={`${TH} top-[17px] z-20`}>{h}</th>
-              ))}
-              <th className={`${TH} top-[17px] z-20 ${DV}`}>{t.colEntrega}</th>
-              <th className={`${TH} top-[17px] z-20`}>{t.colDinheiro}</th>
-              <th className={`${TH} top-[17px] z-20 ${DV}`}>Saldo</th>
-            </tr>
-          </thead>
-          <tbody>
-            {cc.linhas.map(l => <LinhaExtrato key={l.parteId} l={l} linhas={cc.linhas} lado={lado} />)}
-            {cc.linhas.length === 0 && (
-              <tr><td colSpan={10} className={`${TD} py-4 text-center text-muted-foreground`}>{t.vazio}</td></tr>
+          {/* A FAIXA DE SUB-ABAS — o `Segmentado` da casa (a selecao se marca em navy, regra permanente; o sublinhado do mock v5 nao
+              entra, como a pilula do mock da Conciliacao nao entrou). Os botoes da direita trocam com a sub-aba. */}
+          <div className="flex h-[26px] flex-none items-center gap-1.5" data-testid="faixa-subabas">
+            {temDespesas ? (
+              <Segmentado<SubAbaContaCorrente> valor={sub} onEscolher={escolherSub} opcoes={[
+                { valor: 'conta', rotulo: t.titulo },
+                { valor: 'despesas', rotulo: (
+                  <span className="inline-flex items-center gap-[5px]">
+                    Despesas da operação
+                    {qtdDespesas !== null && (
+                      <span className="rounded-[7px] bg-[#e8eef6] px-[5px] text-[9.5px] font-semibold leading-[13px] text-primary"
+                        data-testid="contador-despesas">{qtdDespesas}</span>
+                    )}
+                  </span>
+                ) },
+              ]} />
+            ) : (
+              <span className="text-[10.5px] font-semibold">{t.titulo}</span>
             )}
-          </tbody>
-          <tfoot>
-            <tr className="font-bold">
-              <td className={TF}>Total</td>
-              <td className={TF} />
-              <td className={`${TF} text-right`}>{cc.cabEntregue}</td>
-              <td className={TF} colSpan={4} />
-              <td className={`${TF} text-right ${lado === 'compra' ? COR.pos : COR.neg} ${DV}`}>{num2(sinalEntrega * cc.entregue)}</td>
-              <td className={`${TF} text-right ${lado === 'compra' ? COR.neg : COR.pos}`}>{num2(-sinalEntrega * cc.recebido)}</td>
-              <td className={`${TF} text-right ${COR[corSaldo]} ${DV}`} data-testid="total-saldo">{num2(cc.saldo)}</td>
-            </tr>
-          </tfoot>
-        </table>
+            {sub === 'conta' || !temDespesas ? (
+              <span className="ml-auto flex gap-[5px]" data-testid="botoes-conta">
+                <Button type="button" variant="outline" size="sm" className={BOTAO} disabled={somenteLeitura || api.ocupado}
+                  onClick={() => { setErroAcao(null); setDialogo('buscar'); }}>
+                  {t.buscar}
+                </Button>
+                <Button type="button" variant="outline" size="sm" className={BOTAO} disabled={somenteLeitura || api.ocupado}
+                  onClick={() => { setErroAcao(null); setDialogo('programar'); }}>
+                  {t.programar}
+                </Button>
+              </span>
+            ) : (
+              <span ref={setHostDespesas} className="ml-auto flex gap-[5px]" data-testid="botoes-despesas" />
+            )}
+          </div>
+        </div>
       </div>
 
-      {barra && (
-        <div className="flex h-6 flex-none items-center gap-2 rounded border border-[#fde68a] bg-[#fffbeb] px-2 text-[10.5px]" data-testid="barra-diferenca">
-          <b>{barra.frase}</b>
-          <span className="text-muted-foreground">A OC fecha mesmo assim; o saldo fica pendente até ser explicado.</span>
-          <Button type="button" size="sm" className={`${BOTAO} ml-auto`} disabled={somenteLeitura || api.ocupado}
-            onClick={() => { setErroAcao(null); setDialogo('explicar'); }}>
-            Explicar diferença
-          </Button>
-        </div>
-      )}
-      {/* A compra mostra o "Quitado." do mock mesmo sem explicacao (o botao de explicar fica a' mao); a venda segue como era. */}
-      {!barra && lado === 'compra' && cc.explicacoes.length === 0 && cc.linhas.some(l => l.tipo === 'entrega') && (
-        <div className="flex h-6 flex-none items-center gap-2 rounded border border-[#bbf7d0] bg-[#f0fdf4] px-2 text-[10.5px]" data-testid="barra-quitado">
-          <b>Quitado.</b>
-          <span className="text-muted-foreground">Com saldo positivo aparece "Falta pagar"; negativo, "Adiantado ao fornecedor".</span>
-          <Button type="button" variant="outline" size="sm" className={`${BOTAO} ml-auto`} disabled={somenteLeitura || api.ocupado}
-            onClick={() => { setErroAcao(null); setDialogo('explicar'); }}>
-            Explicar diferença
-          </Button>
-        </div>
-      )}
-      {!barra && cc.explicacoes.length > 0 && (
-        <div className="flex h-6 flex-none items-center gap-2 rounded border border-[#bbf7d0] bg-[#f0fdf4] px-2 text-[10.5px]">
-          <b>Diferença explicada.</b>
-          <Button type="button" variant="outline" size="sm" className={`${BOTAO} ml-auto`} disabled={somenteLeitura || api.ocupado}
-            onClick={() => { setErroAcao(null); setDialogo('explicar'); }}>
-            Ver explicação
-          </Button>
-        </div>
+      {(sub === 'conta' || !temDespesas) && (
+        <>
+          <div className="rounded border" data-testid="conta-corrente-rolagem">
+            <table className="w-full table-fixed border-separate border-spacing-0 tabular-nums" data-testid="conta-corrente-tabela">
+              <colgroup>
+                {/* Larguras MEDIDAS no modal (1024px por decisao do MODAIS-PADRAO-01b): pior texto de cada coluna + 8 de padding, com
+                    o total em negrito. ⚠ Por isso a Conta vai SEM o numero do plano: com ele, "1120 Venda de Desmama Machos" pedia 171px
+                    e a linha nao cabia sem quebrar ou cortar numero. A regua mora em `REGUA_EXTRATO` (acima), soma 764. */}
+                {REGUA_EXTRATO.map((w, i) => <col key={i} style={{ width: w }} />)}
+              </colgroup>
+              <thead>
+                <tr>
+                  <th className={THG} style={{ top: topo }} colSpan={7}>Evento</th>
+                  <th className={`${THG} ${DV}`} style={{ top: topo }} colSpan={2}>Movimento</th>
+                  <th className={`${THG} ${DV}`} style={{ top: topo }}>{t.grupoSaldo}</th>
+                </tr>
+                <tr>
+                  {['Data', 'Lote', 'Cab', 'Evento', 'Descrição', 'Conta', 'Banco'].map(h => (
+                    <th key={h} className={`${TH} z-20`} style={{ top: topo + 17 }}>{h}</th>
+                  ))}
+                  <th className={`${TH} z-20 ${DV}`} style={{ top: topo + 17 }}>{t.colEntrega}</th>
+                  <th className={`${TH} z-20`} style={{ top: topo + 17 }}>{t.colDinheiro}</th>
+                  <th className={`${TH} z-20 ${DV}`} style={{ top: topo + 17 }}>Saldo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cc.linhas.map(l => <LinhaExtrato key={l.parteId} l={l} linhas={cc.linhas} lado={lado} />)}
+                {cc.linhas.length === 0 && (
+                  <tr><td colSpan={10} className={`${TD} py-4 text-center text-muted-foreground`}>{t.vazio}</td></tr>
+                )}
+              </tbody>
+              <tfoot>
+                <tr className="font-bold">
+                  <td className={TF}>Total</td>
+                  <td className={TF} />
+                  <td className={`${TF} text-right`}>{cc.cabEntregue}</td>
+                  <td className={TF} colSpan={4} />
+                  <td className={`${TF} text-right ${lado === 'compra' ? COR.pos : COR.neg} ${DV}`}>{num2(sinalEntrega * cc.entregue)}</td>
+                  <td className={`${TF} text-right ${lado === 'compra' ? COR.neg : COR.pos}`}>{num2(-sinalEntrega * cc.recebido)}</td>
+                  <td className={`${TF} text-right ${COR[corSaldo]} ${DV}`} data-testid="total-saldo">{num2(cc.saldo)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          {barra && (
+            <div className="flex h-6 flex-none items-center gap-2 rounded border border-[#fde68a] bg-[#fffbeb] px-2 text-[10.5px]" data-testid="barra-diferenca">
+              <b>{barra.frase}</b>
+              <span className="text-muted-foreground">A OC fecha mesmo assim; o saldo fica pendente até ser explicado.</span>
+              <Button type="button" size="sm" className={`${BOTAO} ml-auto`} disabled={somenteLeitura || api.ocupado}
+                onClick={() => { setErroAcao(null); setDialogo('explicar'); }}>
+                Explicar diferença
+              </Button>
+            </div>
+          )}
+          {/* A compra mostra o "Quitado." do mock mesmo sem explicacao (o botao de explicar fica a' mao); a venda segue como era. */}
+          {!barra && lado === 'compra' && cc.explicacoes.length === 0 && cc.linhas.some(l => l.tipo === 'entrega') && (
+            <div className="flex h-6 flex-none items-center gap-2 rounded border border-[#bbf7d0] bg-[#f0fdf4] px-2 text-[10.5px]" data-testid="barra-quitado">
+              <b>Quitado.</b>
+              <span className="text-muted-foreground">Com saldo positivo aparece "Falta pagar"; negativo, "Adiantado ao fornecedor".</span>
+              <Button type="button" variant="outline" size="sm" className={`${BOTAO} ml-auto`} disabled={somenteLeitura || api.ocupado}
+                onClick={() => { setErroAcao(null); setDialogo('explicar'); }}>
+                Explicar diferença
+              </Button>
+            </div>
+          )}
+          {!barra && cc.explicacoes.length > 0 && (
+            <div className="flex h-6 flex-none items-center gap-2 rounded border border-[#bbf7d0] bg-[#f0fdf4] px-2 text-[10.5px]">
+              <b>Diferença explicada.</b>
+              <Button type="button" variant="outline" size="sm" className={`${BOTAO} ml-auto`} disabled={somenteLeitura || api.ocupado}
+                onClick={() => { setErroAcao(null); setDialogo('explicar'); }}>
+                Ver explicação
+              </Button>
+            </div>
+          )}
+        </>
       )}
 
       {/* OC-VENDA-FINANCEIRO-COMPLETO-01a — as despesas da operacao (compra e venda), vivas: a lista de compromissos de obrigacao,
-          montada fora. Era um quadro so' de leitura (o `QuadroDespesas`), sem banco, sem status e sem acao. */}
-      {despesas}
+          montada fora. Desde o fix2, na sua sub-aba, com a altura toda. */}
+      {sub === 'despesas' && temDespesas && conteudoDespesas}
 
       {erroAcao && <div className="flex-none text-[10px] text-destructive" role="alert">{erroAcao}</div>}
 
@@ -285,9 +354,8 @@ function Selo({ tipo, lado }: { tipo: LinhaContaCorrente['tipo']; lado: LadoCont
 }
 
 function LinhaExtrato({ l, linhas, lado }: { l: LinhaContaCorrente; linhas: readonly LinhaContaCorrente[]; lado: LadoContaCorrente }) {
-  const descricao = l.tipo === 'entrega' ? `${TEXTOS[lado].verbo} ${rotuloCategoria(l.categoria)}`
-    : l.tipo === 'recebimento' ? rotuloRecebimento(linhas, l.parteId, lado)
-    : (l.subtipo ? rotuloExplicacao(l.subtipo, lado) : 'Explicação');
+  /* OC-VENDA-FINANCEIRO-COMPLETO-01a-fix2 — a Descricao sai da lib (`descricaoDoEvento`) e e' texto GERADO: curta e numa linha. */
+  const descricao = descricaoDoEvento(l, linhas, lado, rotuloCategoria);
   const banco = l.tipo === 'recebimento' || l.subtipo === 'devolucao_comprador'
     ? (l.banco ?? (l.status === 'programado' ? ROTULO_STATUS.programado : ROTULO_STATUS.sem_conta_bancaria))
     : '';
@@ -299,9 +367,10 @@ function LinhaExtrato({ l, linhas, lado }: { l: LinhaContaCorrente; linhas: read
       <td className={`${TD} text-center`}>{l.loteOrdem ?? ''}</td>
       <td className={`${NUM}`}>{l.cab ?? ''}</td>
       <td className={`${TD} text-center`}><Selo tipo={l.tipo} lado={lado} /></td>
-      <td className={TDQ}>{descricao}</td>
+      <td className={TD}>{descricao}</td>
       <td className={TDQ} title={contaComNumero(l.contaOrdem, l.conta)}>{rotuloCurtoDaConta(l.conta) ?? '—'}</td>
-      <td className={`${TDQ} text-center ${bancoAmbar ? 'text-[#b45309]' : ''}`}>{banco}</td>
+      {/* o nome do banco e' dado (pode quebrar); "s/ conta" e "programado" sao gerados (uma linha) */}
+      <td className={`${l.banco ? TDQ : TD} text-center ${bancoAmbar ? 'text-[#b45309]' : ''}`}>{banco}</td>
       <td className={`${NUM} ${DV} ${COR[corDoSaldo(l.movEntrega)]}`}>{moeda(l.movEntrega)}</td>
       <td className={`${NUM} ${l.noSaldo ? COR[corDoSaldo(l.movRecebido)] : 'text-muted-foreground'}`}>{moeda(l.movRecebido)}</td>
       <td className={`${NUM} ${DV} font-bold ${COR[cSaldo]}`}>{num2(l.saldo)}</td>
