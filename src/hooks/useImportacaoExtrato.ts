@@ -32,6 +32,7 @@ import { useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { parseOFX, lerSaldoDeclaradoOFX, lerPeriodoDeclaradoOFX, type MovimentoBruto } from '@/lib/financeiro/parser/parseOFX';
+import { separarLinhasDeSaldo, conferirSaldoDoExtrato, type ConferenciaSaldoExtrato } from '@/lib/financeiro/parser/linhaDeSaldo';
 import { parseCSVComRelatorio } from '@/lib/financeiro/parser/parseCSV';
 import { extractPdfText } from '@/lib/financeiro/parser/extractPdfText';
 import { hashMovimento, normalizarTexto } from '@/lib/financeiro/extratoHash';
@@ -254,6 +255,14 @@ export interface PreviewResult {
   /** `LEDGERBAL/DTASOF` — a data a que o saldo declarado se refere. ISO. */
   saldoDeclaradoData: string | null;
   /**
+   * PR-CONC-OFX-LINHA-SALDO-01 — as linhas de SALDO que o banco mandou como movimento ("SALDO ANTERIOR", "SALDO
+   * TOTAL DISPONÍVEL DIA" do Itaú). Saem de `movimentos` antes de tudo: não geram hash, não entram na contagem, não
+   * se gravam. Ficam aqui só para a prévia mostrá-las apagadas e conferir o último saldo contra o declarado.
+   */
+  linhasSaldo: MovimentoBruto[];
+  /** O último saldo do extrato × `saldoDeclarado`. Só informa; o saldo manual da conta é soberano. */
+  conferenciaSaldo: ConferenciaSaldoExtrato;
+  /**
    * `BANKTRANLIST/DTSTART` e `DTEND` — o período que o ARQUIVO declara.
    *
    * ⚠ `null` QUANDO O ARQUIVO NÃO DIZ, e aí quem mostra cai para as datas dos
@@ -299,8 +308,10 @@ function recomputarAgregados(
     novosParaSalvar:   movimentos.filter((m) =>
       !m.existeNoDB && !m.jaExistenteChave && m.dupImportar !== false
     ).length,
+    /* ⚠ SÓ A SUSPEITA — PR-CONC-OFX-LINHA-SALDO-01: com caixa em toda linha, o "novo" desmarcado pelo operador
+       também tem `dupImportar === false`, e não é "duplicado?". */
     suspeitasForaDaImportacao: movimentos.filter((m) =>
-      !m.existeNoDB && !m.jaExistenteChave && m.dupImportar === false
+      !m.existeNoDB && !m.jaExistenteChave && !!m.dupClassificacao && m.dupImportar === false
     ).length,
     existentesNoBanco: movimentos.filter((m) =>  m.existeNoDB).length,
     jaExistentesPorChave: movimentos.filter((m) => !m.existeNoDB && m.jaExistenteChave === true).length,
@@ -547,6 +558,13 @@ export function useImportacaoExtrato() {
         movimentosBrutos = rel.movimentos;
         linhasInformativas = rel.linhasInformativas.length;
       }
+      /* ⚠ LINHA DE SALDO NÃO É MOVIMENTO — PR-CONC-OFX-LINHA-SALDO-01. O Itaú manda "SALDO ANTERIOR" e "SALDO TOTAL
+         DISPONÍVEL DIA" como `<STMTTRN>`, com o saldo inteiro no valor: importadas, viravam entradas do tamanho do caixa
+         (NJ, jul/26: cinco de R$ 1,7 mi). Saem AQUI, antes do hash — um helper só, para OFX e CSV. A identidade dos
+         movimentos não muda: o hash não usa posição, e o FITID da linha de saldo é só dela. */
+      const separadas = separarLinhasDeSaldo(movimentosBrutos);
+      movimentosBrutos = separadas.movimentos;
+      const linhasSaldo = separadas.saldos;
       if (movimentosBrutos.length === 0) {
         // Caminho real do "OFX inválido": parseOFX não lança — um arquivo
         // corrompido, truncado ou que não é OFX simplesmente não produz
@@ -1008,6 +1026,8 @@ export function useImportacaoExtrato() {
         saldoDeclaradoData,
         periodoDeclaradoInicio,
         periodoDeclaradoFim,
+        linhasSaldo,
+        conferenciaSaldo: conferirSaldoDoExtrato(linhasSaldo, saldoDeclarado),
       };
       setPreview(result);
       return result;
@@ -1305,6 +1325,31 @@ export function useImportacaoExtrato() {
     });
   }
 
+  /**
+   * PR-CONC-OFX-LINHA-SALDO-01 — TODA LINHA IMPORTÁVEL TEM CAIXA. O "novo" nascia sem caixa, e o operador não tinha
+   * como impedir uma linha de entrar (foi como o saldo do Itaú entrou). A marca é o mesmo `dupImportar` que a suspeita
+   * já usava — `false` = fica de fora; qualquer outro valor = entra —, então a contagem do botão e o que se grava
+   * seguem a regra única de `recomputarAgregados`/`confirmarImportacao`, sem segunda régua.
+   */
+  const importavel = (m: MovimentoPreview) => !m.existeNoDB && !m.jaExistenteChave;
+  function toggleImportar(hash: string): void {
+    setPreview((prev) => {
+      if (!prev) return prev;
+      const movs = prev.movimentos.map((m) =>
+        m.hash === hash && importavel(m) ? { ...m, dupImportar: m.dupImportar === false } : m,
+      );
+      return { ...prev, movimentos: movs, ...recomputarAgregados(movs) };
+    });
+  }
+  /** "Marcar todas" do cabeçalho: toda linha importável entra (ou fica de fora). */
+  function marcarTodasImportaveis(importar: boolean): void {
+    setPreview((prev) => {
+      if (!prev) return prev;
+      const movs = prev.movimentos.map((m) => (importavel(m) ? { ...m, dupImportar: importar } : m));
+      return { ...prev, movimentos: movs, ...recomputarAgregados(movs) };
+    });
+  }
+
   return {
     preview,
     loading,
@@ -1315,5 +1360,7 @@ export function useImportacaoExtrato() {
     reset,
     toggleImportarSuspeita,
     marcarTodasSuspeitas,
+    toggleImportar,
+    marcarTodasImportaveis,
   };
 }

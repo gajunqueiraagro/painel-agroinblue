@@ -160,7 +160,7 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 30/09/2026 (PR-CONC-EXCEL-CONTA-STAGING-01): 2531 passando, 22 skipped, e
+  Baseline em 30/09/2026 (PR-CONC-OFX-LINHA-SALDO-01): 2554 passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de

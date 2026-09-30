@@ -56,7 +56,7 @@ interface Props {
 export function ImportarBancoInline({ contas, contaId, onContaChange, onImportado, acoes }: Props) {
   const input = useRef<HTMLInputElement>(null);
   const { preview, loading, gerarPreview, confirmarImportacao, reset,
-    toggleImportarSuspeita, marcarTodasSuspeitas } = useImportacaoExtrato();
+    toggleImportar, marcarTodasImportaveis } = useImportacaoExtrato();
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [gravando, setGravando] = useState(false);
   /**
@@ -330,9 +330,24 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
           if (da !== db) return da < db ? -1 : 1;
           return Math.abs(b.valor) - Math.abs(a.valor);
         });
-        const suspeitas = preview.movimentos.filter((m) => m.dupClassificacao && !m.existeNoDB);
-        const temSuspeitas = suspeitas.length > 0;
-        const todasSuspeitasMarcadas = temSuspeitas && suspeitas.every((m) => m.dupImportar === true);
+        /* ⚠ TODA LINHA IMPORTÁVEL TEM CAIXA — PR-CONC-OFX-LINHA-SALDO-01. Era só a suspeita: o "novo" entrava sem o
+           operador poder impedir, e foi assim que o saldo do Itaú entrou. Marcada = entra no "Importar N"; o "novo"
+           nasce marcado e o "duplicado?" desmarcado (o padrão continua sendo o do hook). */
+        const importaveis = preview.movimentos.filter((m) => !m.existeNoDB && !m.jaExistenteChave);
+        const todasImportaveisMarcadas = importaveis.length > 0 && importaveis.every((m) => m.dupImportar !== false);
+        /* ⚠ AS LINHAS DE SALDO VÊM NA LISTA, APAGADAS, na data delas — PR-CONC-OFX-LINHA-SALDO-01. O operador vê que o
+           banco as mandou e que não entram; esconder daria a impressão de arquivo menor que o do banco. */
+        type LinhaTabela = { tipo: 'mov'; m: (typeof preview.movimentos)[number] } | { tipo: 'saldo'; s: (typeof preview.linhasSaldo)[number] };
+        const linhasTabela: LinhaTabela[] = [
+          ...movimentosOrdenados.map((m): LinhaTabela => ({ tipo: 'mov', m })),
+          ...preview.linhasSaldo.map((s): LinhaTabela => ({ tipo: 'saldo', s })),
+        ].sort((a, b) => {
+          const da = (a.tipo === 'mov' ? a.m.data : a.s.data).slice(0, 10);
+          const db = (b.tipo === 'mov' ? b.m.data : b.s.data).slice(0, 10);
+          if (da !== db) return da < db ? -1 : 1;
+          return (a.tipo === 'saldo' ? 1 : 0) - (b.tipo === 'saldo' ? 1 : 0); // o saldo fecha o dia
+        });
+        const conf = preview.conferenciaSaldo;
         /* ⚠ UM ARQUIVO SÓ → A DATA DELE; VÁRIOS → A CONTAGEM. Uma data escolhida entre
            três representaria mal o conjunto, e "já no extrato (arquivo de 18/08)" seria
            falso para as outras duas. */
@@ -400,7 +415,14 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
                 {periodoDoArquivo(preview)}
               </span>
             </Campo>
-            <Campo rotulo="Movimentos">{preview.movimentos.length}</Campo>
+            <Campo rotulo="Movimentos">
+              {preview.movimentos.length}
+              {preview.linhasSaldo.length > 0 && (
+                <span className="text-muted-foreground" title="Linhas de SALDO que o banco mandou como movimento — não entram na importação.">
+                  {' '}+ {preview.linhasSaldo.length} de saldo
+                </span>
+              )}
+            </Campo>
             <Campo rotulo="Saldo declarado pelo banco">
               {preview.saldoDeclarado == null ? (
                 <span title="Este arquivo não traz a tag LEDGERBAL — o banco não declarou saldo nele. O traço é ausência, não zero: somar os movimentos daria um número nosso, não o do banco.">—</span>
@@ -421,6 +443,19 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
             </Campo>
           </div>
 
+          {/* ⚠ O SALDO DO EXTRATO CONFERE O DECLARADO — PR-CONC-OFX-LINHA-SALDO-01. A última linha de saldo que o banco
+              mandou (data + valor) contra o `LEDGERBAL`. Só informa: não grava nada, e o saldo manual da conta continua
+              soberano. Sem um dos dois lados, diz qual falta — nunca "confere" por ausência. */}
+          {conf.ultimo && (
+            <div className="border-b border-border px-3 py-1 text-[10px] text-muted-foreground" data-testid="conferencia-saldo">
+              Saldo do extrato em {brData(conf.ultimo.data)}: <span className="tabular-nums text-foreground">{formatMoeda(conf.ultimo.valor)}</span>
+              {' · '}
+              {conf.confere === null ? 'sem saldo declarado no arquivo para conferir'
+                : conf.confere ? <span className="text-success">confere com o saldo declarado</span>
+                : <span className="text-warning">diverge do saldo declarado em {formatMoeda(conf.diferenca ?? 0)}</span>}
+            </div>
+          )}
+
           {/* ⚠ ALTURA RESERVADA, MESMO VAZIA — Lei de Estabilidade Visual. A frase muda de tamanho
               com o arquivo (dois dígitos viram três, o caso curto vira o longo) e some quando não
               há nada acionável; sem o `min-h` a tabela subiria e desceria entre um arquivo e
@@ -440,30 +475,47 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
                   <Th className="text-left">Doc</Th>
                   <Th className="text-right">Valor</Th>
                   <Th className="text-center">Situação</Th>
-                  {/* ⚠ A COLUNA SÓ EXISTE QUANDO HÁ O QUE DECIDIR — PR-IMPORT-REIMPORTACAO-01.
-                      Uma coluna de caixas vazias em todo arquivo normal seria ruído permanente
-                      para um caso que é a exceção. */}
-                  {temSuspeitas && (
-                    <Th className="text-center">
-                      <label className="flex cursor-pointer items-center justify-center gap-1"
-                        title="Marcar todas as linhas suspeitas como movimento novo — elas passam a entrar na importação.">
-                        <input type="checkbox" className="h-3 w-3"
-                          checked={todasSuspeitasMarcadas}
-                          onChange={(e) => marcarTodasSuspeitas(e.target.checked)} />
-                        importar
-                      </label>
-                    </Th>
-                  )}
+                  {/* ⚠ A COLUNA EXISTE SEMPRE — PR-CONC-OFX-LINHA-SALDO-01 (antes só com suspeita). Toda linha
+                      importável se marca e se desmarca aqui, e o "Importar N" conta o que está marcado. */}
+                  <Th className="text-center">
+                    <label className="flex cursor-pointer items-center justify-center gap-1"
+                      title="Marcar ou desmarcar todas as linhas que podem entrar na importação.">
+                      <input type="checkbox" className="h-3 w-3" aria-label="Importar todas"
+                        checked={todasImportaveisMarcadas} disabled={importaveis.length === 0}
+                        onChange={(e) => marcarTodasImportaveis(e.target.checked)} />
+                      importar
+                    </label>
+                  </Th>
                 </tr>
               </thead>
               <tbody>
-                {movimentosOrdenados.map((m, i) => {
+                {linhasTabela.map((linha, i) => {
+                  if (linha.tipo === 'saldo') {
+                    const s = linha.s;
+                    return (
+                      <tr key={`saldo-${s.data}-${s.documento ?? i}-${i}`} className="border-b border-border/60 opacity-45" data-testid="linha-saldo">
+                        <td className="whitespace-nowrap px-2 py-0.5 font-mono">{brData(s.data)}</td>
+                        <td className="max-w-[280px] truncate px-2 py-0.5" title={s.descricao}>{s.descricao}</td>
+                        <td className="px-2 py-0.5 font-mono text-muted-foreground">{s.documento ?? '—'}</td>
+                        <td className="whitespace-nowrap px-2 py-0.5 text-right font-medium tabular-nums text-muted-foreground">{formatMoeda(s.valor)}</td>
+                        <td className="px-2 py-0.5 text-center">
+                          <span className="rounded bg-muted px-1 py-0 text-[9px] font-semibold uppercase text-muted-foreground"
+                            title="Linha de SALDO que o banco mandou como movimento. Não entra na importação; o último saldo confere o declarado.">
+                            saldo do banco · não importa
+                          </span>
+                        </td>
+                        <td />
+                      </tr>
+                    );
+                  }
+                  const m = linha.m;
                   const repetido = m.existeNoDB || !!m.jaExistenteChave;
                   /* ⚠ APAGADA ENQUANTO NÃO FOR MARCADA: a provável reimportação não entra, então
                      ela se parece com o que já existe — e volta ao normal quando o operador diz
                      que é movimento novo. */
                   const suspeita = m.dupClassificacao ?? null;
-                  const suspeitaFora = !!suspeita && m.dupImportar === false;
+                  /* Desmarcada (suspeita no padrão, ou "novo" que o operador tirou): apagada, como o que não entra. */
+                  const suspeitaFora = !repetido && m.dupImportar === false;
                   const chave = `${m.data}-${m.documento ?? i}-${i}`;
                   return (
                     <Fragment key={chave}>
@@ -510,16 +562,15 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
                             : 'novo'}
                         </span>
                       </td>
-                      {temSuspeitas && (
-                        <td className="px-2 py-0.5 text-center">
-                          {suspeita && (
-                            <input type="checkbox" className="h-3 w-3 cursor-pointer"
-                              checked={m.dupImportar === true}
-                              onChange={() => toggleImportarSuspeita(m.hash)}
-                              title="Importar esta linha assim mesmo — é movimento novo, não repetição." />
-                          )}
-                        </td>
-                      )}
+                      <td className="px-2 py-0.5 text-center">
+                        {!repetido && (
+                          <input type="checkbox" className="h-3 w-3 cursor-pointer" aria-label={`Importar ${m.descricao || 'movimento'}`}
+                            checked={m.dupImportar !== false}
+                            onChange={() => toggleImportar(m.hash)}
+                            title={suspeita ? 'Importar esta linha assim mesmo — é movimento novo, não repetição.'
+                              : 'Desmarque para esta linha não entrar na importação.'} />
+                        )}
+                      </td>
                     </tr>
                     {/* ⚠ O PAR NA PRÓPRIA LINHA, E NÃO SÓ NO HOVER — PR-IMPORT-DUPLICATA-LEITURA-01.
                         O selo acusava sem mostrar a prova: para saber POR QUE a linha foi marcada,
@@ -533,7 +584,7 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
                         do par não disputa espaço com coluna nenhuma: as seis ficam idênticas. */}
                     {suspeita && (
                       <tr className={cn('border-b border-border/60', suspeitaFora && 'opacity-45')}>
-                        <td colSpan={temSuspeitas ? 6 : 5}
+                        <td colSpan={6}
                           className="truncate px-2 pb-0.5 pt-0 pl-6 text-[9px] text-muted-foreground">
                           ↳ já no extrato: {m.dupExistenteDescricao ?? '—'}
                           {m.dupExistenteDocumento ? ` (doc ${m.dupExistenteDocumento})` : ''}
