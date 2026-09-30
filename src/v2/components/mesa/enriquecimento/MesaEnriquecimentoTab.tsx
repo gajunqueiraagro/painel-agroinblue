@@ -376,7 +376,8 @@ export function MesaEnriquecimentoTab({
     () => stagingConta.map((r) => toRowVM(r, contasResolviveis, { classificacoes, safras, fazendas, aliasesFazenda })),
     [stagingConta, contasResolviveis, classificacoes, safras, fazendas, aliasesFazenda]);
   /* PR-CONC-MESA-DIVERGENCIA-EXCEL-01 — "N divergem da planilha", do mesmo universo das outras contagens. */
-  const divergemPlanilha = useMemo(() => rowsVM.filter((r) => r.divergenciasPlanilha.length > 0).length, [rowsVM]);
+  /* Só os campos de CLASSIFICAÇÃO contam (PR-CONC-MESA-CRU-EXCEL-PREVALECE-01); Produto, Documento e datas ficam só na marca. */
+  const divergemPlanilha = useMemo(() => rowsVM.filter((r) => r.divergenciasPlanilha.some((d) => d.contador)).length, [rowsVM]);
   /* 133h item 3 — o único gate é o card do topo; `filtrarPorModo` saiu daqui com o
      "Todas | Pendentes". A função segue exportada e testada, para as telas legadas. */
   /* ⚠ AS DUAS CONTAGENS SAEM DE `rowsVM`, o recorte da CONTA — o mesmo universo do contador
@@ -978,15 +979,6 @@ export function MesaEnriquecimentoTab({
        * ⚠ E SÓ QUANDO O RESULTADO CONTINUA VAZIO: se o operador escolheu uma safra à mão entre
        * abrir e salvar, é a dele que vale — a sugestão não sobrescreve escolha.
        */
-      /* A FAZENDA DA PLANILHA VIRA PROPOSTA NO SALVAR — PR-CONC-MESA-DIVERGENCIA-EXCEL-01, pelo mesmo idioma da safra:
-         a tela mostra (âmbar), o Salvar grava; escolha do operador vence; conta administrativa não recebe. */
-      if (selecionado.edicao.fazendaSugeridaId
-          && !selecionado.edicao.fazendaId
-          && !contaAdministrativa(selecionado)) {
-        await editarProposto({
-          staging_id: id, patch: { fazenda_id: selecionado.edicao.fazendaSugeridaId },
-        });
-      }
       if (selecionado.edicao.safraSugeridaId
           && !selecionado.edicao.safraId
           && !contaAdministrativa(selecionado)) {

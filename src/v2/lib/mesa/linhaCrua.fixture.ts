@@ -30,6 +30,8 @@ export function linhaCrua(sobre: Partial<ClassificacaoStagingPreviewRow> = {}): 
     proposto_safra_codigo: null, proposto_data_competencia: null, proposto_data_vencimento: null,
     proposto_data_pagamento: null, proposto_conta_bancaria_id: null, proposto_observacao: null, lote_aplicavel: false,
     proposto_tipo_operacao: null, proposto_conta_destino_id: null,
+    planilha_fazenda_id: null, planilha_fazenda_nome: null, planilha_favorecido_id: null, planilha_favorecido_nome: null,
+    planilha_subcentro: null, lanc_origem_lancamento: null,
     ...sobre,
   };
 }

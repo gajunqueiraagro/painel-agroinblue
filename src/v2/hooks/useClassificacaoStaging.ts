@@ -187,6 +187,17 @@ export interface ClassificacaoStagingPreviewRow {
      existem — foi assim que `Data venc.` e `Safra` ficaram em "—" no 129c. */
   proposto_tipo_operacao: string | null;
   proposto_conta_destino_id: string | null;
+  /**
+   * A LEITURA DA PLANILHA, resolvida no banco — PR-CONC-MESA-CRU-EXCEL-PREVALECE-01 (`update_proposto._planilha`).
+   * Quem leva ao topo da proposta (Resultado) é a precedência do banco, só no cru; a tela a usa para a marca e o contador.
+   * `null` em sessão anterior ao PR (sem `_planilha`) — aí a marca usa o resolvedor do front como reserva.
+   */
+  planilha_fazenda_id?: string | null;
+  planilha_fazenda_nome?: string | null;
+  planilha_favorecido_id?: string | null;
+  planilha_favorecido_nome?: string | null;
+  planilha_subcentro?: string | null;
+  lanc_origem_lancamento?: string | null;
 }
 
 /** O que `fn_classificacao_casar_sessao` devolve — 133a. */

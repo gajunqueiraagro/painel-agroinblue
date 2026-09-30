@@ -214,51 +214,66 @@ function juntarTrilha(...partes: Array<string | null>): string | null {
 }
 
 /**
- * ONDE A PLANILHA DISCORDA DO RESULTADO — PR-CONC-MESA-DIVERGENCIA-EXCEL-01, regra geral da Mesa.
+ * ONDE A PLANILHA DISCORDA DO RESULTADO — PR-CONC-MESA-DIVERGENCIA-EXCEL-01, regra de PR-CONC-MESA-CRU-EXCEL-PREVALECE-01.
  *
- * ⚠ O RESULTADO É O QUE VAI FICAR: proposta, senão sugestão, senão o sistema — a mesma ordem dos editores.
- * ⚠ CADA CAMPO NA SUA RÉGUA, e só os que a planilha de fato informa:
- *   - Fazenda: por ID, pelo resolvedor do de-para; texto que não resolve diz "(não reconhecida)";
- *   - Competência, Data venc., Data pgto.: por data ISO;
- *   - Tipo: pelo rótulo (Entrada/Saída/Transferência), nunca "2-Saídas" × "Saída";
- *   - Fornecedor: só quando o Resultado ficou SEM fornecedor — com um, o nome do cadastro e o texto da planilha são
- *     vocabulários diferentes (o apelido existe para isso) e comparar acenderia em toda linha;
- *   - Produto / Descrição e Documento: texto normalizado.
- * ⚠ FORA DAQUI: Valor e Banco (o extrato manda — `divergenciasBanco`) e Conta do plano (o "planilha dizia" do órfão).
+ * ⚠ O RESULTADO É O QUE VAI FICAR: proposta, senão o sistema. QUEM DECIDE A PROPOSTA É O BANCO
+ *   (`_fn_classificacao_precedencia_cru`): no CRU a planilha vai para a proposta e não sobra marca; no JÁ CLASSIFICADO o
+ *   sistema fica e a planilha vira a marca. A tela só renderiza.
+ * ⚠ A PLANILHA RESOLVIDA VEM DO BANCO (`planilha_*`, de `update_proposto._planilha`), com a mesma normalização e os mesmos
+ *   apelidos do de-para. Sessão anterior ao PR (sem `_planilha`) usa o resolvedor do front como RESERVA — só para a marca.
+ * ⚠ NÃO RESOLVIDO NUNCA ESVAZIA: o Resultado fica com o sistema e a marca diz "<texto> (não resolvido)".
+ * ⚠ CADA CAMPO NA SUA RÉGUA: fazenda e fornecedor por ID; conta do plano pelo texto normalizado; datas por ISO; tipo
+ *   pelo rótulo; produto e documento por texto normalizado.
+ * ⚠ O CONTADOR SÓ CONTA CLASSIFICAÇÃO RESOLVIDA (Fazenda, Conta do plano, Fornecedor, Competência — Safra não tem coluna
+ *   na planilha): `contador: true`. Produto, Documento, datas e o "não resolvido" ficam só na marca da linha.
+ * ⚠ FORA DAQUI: Valor e Banco (o extrato manda — `divergenciasBanco`) e o subcentro órfão (o "planilha dizia").
  */
 export function divergenciasComPlanilha(
   row: ClassificacaoStagingPreviewRow,
   ctx: {
     fazendaPlanilha: { id: string | null; texto: string; nome: string | null } | null;
     fazendaResultadoId: string | null;
+    subcentroResultado: string | null;
     descricao: string | null;
   },
-): Array<{ campo: string; planilha: string }> {
-  const out: Array<{ campo: string; planilha: string }> = [];
+): Array<{ campo: string; planilha: string; contador: boolean }> {
+  const out: Array<{ campo: string; planilha: string; contador: boolean }> = [];
   const f = ctx.fazendaPlanilha;
   if (f) {
-    if (!f.id) out.push({ campo: 'Fazenda', planilha: `${f.texto} (não reconhecida)` });
-    else if (f.id !== ctx.fazendaResultadoId) out.push({ campo: 'Fazenda', planilha: f.nome ?? f.texto });
+    if (!f.id) out.push({ campo: 'Fazenda', planilha: `${f.texto} (não resolvido)`, contador: false });
+    else if (f.id !== ctx.fazendaResultadoId) out.push({ campo: 'Fazenda', planilha: f.nome ?? f.texto, contador: true });
   }
-  const data = (campo: string, planilha: string | null, resultado: string | null) => {
+  if (!vazio(row.excel_fornecedor)) {
+    const resultado = row.proposto_favorecido_id ?? row.lanc_favorecido_id_atual;
+    /* A leitura do banco; em sessão anterior ao PR a planilha resolvida ainda está no topo da proposta. */
+    const planilhaId = row.planilha_favorecido_id ?? row.proposto_favorecido_id;
+    const planilhaNome = row.planilha_favorecido_nome ?? row.proposto_favorecido_nome;
+    if (!planilhaId) {
+      out.push({ campo: 'Fornecedor', planilha: `${row.excel_fornecedor} (não resolvido)`, contador: false });
+    } else if (planilhaId !== resultado) {
+      out.push({ campo: 'Fornecedor', planilha: planilhaNome ?? String(row.excel_fornecedor), contador: true });
+    }
+  }
+  if (!vazio(row.planilha_subcentro) && !vazio(ctx.subcentroResultado)
+      && norm(row.planilha_subcentro) !== norm(ctx.subcentroResultado)) {
+    out.push({ campo: 'Subcentro', planilha: String(row.planilha_subcentro), contador: true });
+  }
+  const data = (campo: string, planilha: string | null, resultado: string | null, contador: boolean) => {
     if (vazio(planilha)) return;
     if (String(planilha).slice(0, 10) !== String(resultado ?? '').slice(0, 10)) {
-      out.push({ campo, planilha: fmtData(planilha) });
+      out.push({ campo, planilha: fmtData(planilha), contador });
     }
   };
-  data('Competência', row.excel_data, row.proposto_data_competencia ?? row.lanc_data_competencia);
-  data('Data vencimento', row.excel_data_vencimento, row.proposto_data_vencimento ?? row.lanc_data_vencimento);
-  data('Data pagamento', row.excel_data_pagamento, row.proposto_data_pagamento ?? row.lanc_data_pagamento);
+  data('Competência', row.excel_data, row.proposto_data_competencia ?? row.lanc_data_competencia, true);
+  data('Data vencimento', row.excel_data_vencimento, row.proposto_data_vencimento ?? row.lanc_data_vencimento, false);
+  data('Data pagamento', row.excel_data_pagamento, row.proposto_data_pagamento ?? row.lanc_data_pagamento, false);
   const tipoPlanilha = rotuloTipoOperacao(row.excel_tipo_operacao);
   const tipoResultado = rotuloTipoOperacao(row.proposto_tipo_operacao ?? row.lanc_tipo_operacao)
     ?? rotuloTipo(entradaOuSaidaDe(row));
-  if (tipoPlanilha && tipoPlanilha !== tipoResultado) out.push({ campo: 'Tipo', planilha: tipoPlanilha });
-  if (!vazio(row.excel_fornecedor) && !row.proposto_favorecido_id && !row.lanc_favorecido_id_atual) {
-    out.push({ campo: 'Fornecedor', planilha: String(row.excel_fornecedor) });
-  }
+  if (tipoPlanilha && tipoPlanilha !== tipoResultado) out.push({ campo: 'Tipo', planilha: tipoPlanilha, contador: false });
   const texto = (campo: string, planilha: string | null, resultado: string | null) => {
     if (vazio(planilha)) return;
-    if (vazio(resultado) || norm(planilha) !== norm(resultado)) out.push({ campo, planilha: String(planilha) });
+    if (vazio(resultado) || norm(planilha) !== norm(resultado)) out.push({ campo, planilha: String(planilha), contador: false });
   };
   texto('Produto / Descrição', row.excel_produto, row.proposto_produto ?? ctx.descricao);
   texto('Documento', row.excel_documento, row.proposto_numero_documento ?? row.lanc_numero_documento);
@@ -580,20 +595,21 @@ export function toRowVM(
     );
 
   /**
-   * A FAZENDA DA PLANILHA — PR-CONC-MESA-DIVERGENCIA-EXCEL-01.
+   * A FAZENDA DA PLANILHA, PARA A MARCA — PR-CONC-MESA-CRU-EXCEL-PREVALECE-01.
    *
-   * ⚠ O MESMO RESOLVEDOR DO DE-PARA (`preResolverFazenda`: apelido ensinado, depois código de importação, código e
-   *   nome, tudo normalizado). O populate do banco procura só `codigo_importacao = texto` ("PUR") e ainda descarta o que
-   *   acha, então "Faz Pureza" — que o passo 1 resolve pelo apelido — chegava à Mesa sem proposta nenhuma, e o
-   *   Resultado mostrava a fazenda do cru (Administrativo) sem marca (Gabriel, 30/09 18:18).
-   * ⚠ SUGERE SÓ SEM PROPOSTA e quando DIFERE do sistema: com proposta, quem decide é ela (a divergência vira marca).
+   * ⚠ A DO BANCO (`planilha_fazenda_id`, resolvida no populate/casar com os apelidos do de-para) manda. O resolvedor do
+   *   front (`preResolverFazenda`, a mesma régua) é RESERVA para sessão anterior ao PR, que não tem `_planilha` — e serve
+   *   só à marca: proposta quem faz é o banco, e só no cru.
    */
-  const fazendaDaPlanilha = !vazio(row.excel_fazenda_codigo) && catalogos.fazendas
+  const fazendaReserva = !row.planilha_fazenda_id && !vazio(row.excel_fazenda_codigo) && catalogos.fazendas
     ? preResolverFazenda(String(row.excel_fazenda_codigo), [...catalogos.fazendas], catalogos.aliasesFazenda ?? {})
     : null;
-  const fazendaPlanilhaId = fazendaDaPlanilha?.valor ?? null;
-  const fazendaSugeridaId = !row.proposto_fazenda_id && fazendaPlanilhaId && fazendaPlanilhaId !== row.lanc_fazenda_id
-    ? fazendaPlanilhaId : null;
+  const fazendaPlanilha = vazio(row.excel_fazenda_codigo) ? null
+    : row.planilha_fazenda_id
+      ? { id: row.planilha_fazenda_id, texto: String(row.excel_fazenda_codigo), nome: row.planilha_fazenda_nome ?? null }
+      : fazendaReserva
+        ? { id: fazendaReserva.valor ?? null, texto: String(row.excel_fazenda_codigo), nome: fazendaReserva.rotulo ?? null }
+        : null;
 
   const edicao: EnriqEdicao = {
     subcentro: subcentroEfetivo,   // BUG — nunca a proposta órfã; proposta válida ou o Sistema soberano
@@ -662,15 +678,14 @@ export function toRowVM(
     contaTextoNaoReconhecido: contaDoExcel.textoNaoReconhecido,
     safraSugeridaId,
     tipoTransferenciaSugerido,
-    fazendaSugeridaId,
   };
 
   /* ⚠ SÓ COM LANÇAMENTO: sem par não há Resultado a comparar — todo campo da planilha "divergiria" de um vazio, e a
      marca acenderia nas 274 linhas sem par da sessão do NJ set/26 (medido). Essas vivem no "Sem par no banco". */
   const divergenciasPlanilha = !row.lanc_id ? [] : divergenciasComPlanilha(row, {
-    fazendaPlanilha: fazendaDaPlanilha
-      ? { id: fazendaPlanilhaId, texto: String(row.excel_fazenda_codigo), nome: fazendaDaPlanilha.rotulo ?? null } : null,
-    fazendaResultadoId: row.proposto_fazenda_id ?? fazendaSugeridaId ?? row.lanc_fazenda_id,
+    fazendaPlanilha,
+    fazendaResultadoId: row.proposto_fazenda_id ?? row.lanc_fazenda_id,
+    subcentroResultado: subcentroEfetivo,
     descricao,
   });
 
@@ -993,7 +1008,7 @@ export function filtrarPorGrupo(rows: EnriqRowVM[], grupo: string): EnriqRowVM[]
      para `grupoDaLinha` devolveria lista vazia, calada. */
   if (grupo === 'incompletos') return rows.filter((l) => l.lancamentoIncompleto);
   /* PR-CONC-MESA-DIVERGENCIA-EXCEL-01 — atravessa os grupos, como os de cima. */
-  if (grupo === 'divergem_planilha') return rows.filter((l) => l.divergenciasPlanilha.length > 0);
+  if (grupo === 'divergem_planilha') return rows.filter((l) => l.divergenciasPlanilha.some((d) => d.contador));
   return rows.filter((l) => grupoDaLinha(l.status, l.aplicado) === grupo);
 }
 

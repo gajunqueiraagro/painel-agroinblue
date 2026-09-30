@@ -12,6 +12,11 @@ import { CELULA_EDITAVEL } from './medidasMesa';
 
 export interface ResultadoFavorecidoEditorProps {
   value: string | null;
+  /**
+   * O fornecedor do lançamento — PR-CONC-MESA-CRU-EXCEL-PREVALECE-01. Sem proposta, o campo mostra ELE, nunca
+   * "Selecione..." com valor no sistema: o operador lia um campo vazio sobre um fornecedor bom (print 18:35).
+   */
+  valorAtual?: string | null;
   fornecedores: FornecedorV2[];
   fazendaId: string | null;   // fazenda proposta da linha (para cadastrar fornecedor)
   disabled?: boolean;
@@ -20,7 +25,7 @@ export interface ResultadoFavorecidoEditorProps {
 }
 
 export function ResultadoFavorecidoEditor({
-  value, fornecedores, fazendaId, disabled, onEditar, onCriarFornecedor,
+  value, valorAtual, fornecedores, fazendaId, disabled, onEditar, onCriarFornecedor,
 }: ResultadoFavorecidoEditorProps) {
   const [search, setSearch] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -29,7 +34,7 @@ export function ResultadoFavorecidoEditor({
   return (
     <>
       <FavorecidoSelect
-        value={value ?? ''}
+        value={value ?? valorAtual ?? ''}
         onChange={(id) => { void onEditar({ favorecido_id: id }); }}
         fornecedores={fornecedores}
         search={search}

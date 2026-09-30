@@ -202,9 +202,6 @@ export function MesaCamposTabela({
      diferentes na tela (a safra pelo escopo, a fazenda só por `macro === 'Dividendos'`), e
      por isso a linha do print aparecia com a safra travada e a fazenda editável. */
   const contaEhAdministrativa = ehLinhaAdministrativa(classificacoes, subcentroEfetivoResultado, row.edicao.macro);
-  /* A fazenda sugerida pela planilha só vale fora da conta administrativa: lá o Select é forçado e a sugestão
-     nunca seria o que vai ser gravado. */
-  const fazendaSugeridaId = contaEhAdministrativa ? null : row.edicao.fazendaSugeridaId;
   /**
    * PLANO × FAZENDA — PR-CONC-MESA-DIVERGENCIA-EXCEL-01 item d.
    *
@@ -212,7 +209,7 @@ export function MesaCamposTabela({
    *   fazenda que não tem a atividade. AVISA, não trava — pode ser a decisão certa, e quem sabe é o operador.
    */
   const escopoResultado = escopoDoSubcentro(classificacoes, subcentroEfetivoResultado);
-  const fazendaResultadoId = row.edicao.fazendaId ?? fazendaSugeridaId ?? row.edicao.fazendaIdAtual;
+  const fazendaResultadoId = row.edicao.fazendaId ?? row.edicao.fazendaIdAtual;
   const admId = fazendaAdministrativa(fazendas)?.id ?? null;
   const avisoPlanoFazenda = (escopoResultado === 'pecuaria' || escopoResultado === 'agricultura')
     && !!admId && fazendaResultadoId === admId
@@ -318,11 +315,11 @@ export function MesaCamposTabela({
                     subcentroTransferencia={subcentroTransferencia}
                     contaDestinoSugeridaId={row.edicao.contaDestinoSugeridaId} />
                 ) : editavel && campo === 'Fornecedor' && fornecedores && onCriarFornecedor ? (
-                  <ResultadoFavorecidoEditor value={row.edicao.favorecidoId} fornecedores={fornecedores}
+                  <ResultadoFavorecidoEditor value={row.edicao.favorecidoId} valorAtual={row.edicao.favorecidoIdAtual}
+                    fornecedores={fornecedores}
                     fazendaId={row.edicao.fazendaId} onEditar={onEditar} onCriarFornecedor={onCriarFornecedor} />
                 ) : editavel && campo === 'Fazenda' && fazendas ? (
                   <ResultadoFazendaEditor value={row.edicao.fazendaId} fazendaIdAtual={row.edicao.fazendaIdAtual}
-                    sugeridaId={fazendaSugeridaId}
                     fazendas={fazendas} forcaAdministrativo={contaEhAdministrativa} onEditar={onEditar} />
                 ) : editavel && campo === 'Produto / Descrição' ? (
                   <ResultadoProdutoEditor value={row.edicao.produto} descricaoAtual={row.edicao.descricaoAtual}

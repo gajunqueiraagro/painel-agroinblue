@@ -161,7 +161,7 @@ describe('diferencasDoResultado', () => {
     tipoOperacaoProposto: null, tipoOperacaoAtual: null, tipoOperacaoExcel: null,
     contaDestinoId: null, contaDestinoIdAtual: null, contaDestinoSugeridaId: null,
     /* PR-MESA-SUGESTOES-01 — as duas propostas de regra; este fixture não as exercita. */
-    safraSugeridaId: null, tipoTransferenciaSugerido: false, fazendaSugeridaId: null,
+    safraSugeridaId: null, tipoTransferenciaSugerido: false,
     /* PR-MESA-CONTA-ENTRADA-01 — a conta vinda do Excel; este fixture não a exercita. */
     contaSugeridaId: null, contaTextoNaoReconhecido: null,
   };

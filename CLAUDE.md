@@ -160,7 +160,7 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 30/09/2026 (PR-CONC-MESA-DIVERGENCIA-EXCEL-01): 2609 passando, 22 skipped, e
+  Baseline em 30/09/2026 (PR-CONC-MESA-CRU-EXCEL-PREVALECE-01): 2612 passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -274,12 +274,14 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   a chave natural reconhece a reimportacao). O byte original se PERDEU; a correcao proposta e' por dicionario das 26
   palavras medidas (F\uFFFDcil, Cart\uFFFDo, El\uFFFDtrica...) recalculando `hash_movimento` junto — so' com GO. E o doc
   do Bradesco de 91 caracteres e o historico de 126 nao cabem na regua sem quebra do "Criar lancamentos": cortados na
-  borda, texto inteiro no `title` (decisao do Gabriel). · MESA-DIVERGENCIA (PR-CONC-MESA-DIVERGENCIA-EXCEL-01): (a) o
-  `fn_classificacao_populate_staging` resolve a fazenda so' por `codigo_importacao = texto` e DESCARTA o `v_fazenda_id`
-  achado — PR de banco (a Mesa ja' resolve pelo de-para no front); (b) COMPETENCIA do Excel nao vira proposta: decisao
-  do Gabriel se a competencia do Lucro Rural propoe (164 das 235 linhas com lancamento do NJ set/26 divergem); (c) o
-  contador "divergem da planilha" da' 226/235 no NJ set/26 (Produto 127, Data venc. 93, Documento 79) — decidir quais
-  campos contam; (d) o Salvar que grava a fazenda sugerida nao tem teste automatico (espelho do da safra).
+  borda, texto inteiro no `title` (decisao do Gabriel). · MESA-CRU (PR-CONC-MESA-CRU-EXCEL-PREVALECE-01): (a) a sessao
+  32c52f5c (e toda sessao anterior ao PR) so' ganha a precedencia e as colunas `planilha_*` quando for RECASADA — nao
+  recasei (prova sem gravar); (b) "NAO E' NADA" do de-para de fornecedor NAO persiste: o descartado mora so' no estado do
+  navegador e nao ha coluna/tabela para ele — pergunta aberta ao Gabriel (precisa de estrutura nova); (c) APELIDO DE
+  SUBCENTRO COM CONTEXTO DE ATIVIDADE (proximo PR): na 32c52f5c, apelidos que dao plano de agricultura em fazenda de
+  pecuaria e vice-versa — agricultura/Faz. Sto. Expedito 9, pecuaria/Retiro Agricultura 8, agricultura/Faz. Pureza 30
+  (a Pureza tem 279 ha agricolas; conferir), ex.: UNIPETRO -8.700 "Combustivel" + Faz Pureza -> Combustivel Maquinas
+  Agricultura; (d) a precedencia e' provada por teste SQL em ROLLBACK, sem mutacao do lado do banco.
 - Telas e UI:
   TELAS-ORFAS-01 (decisao) · FIN-RECORRENCIA-FAZENDA-01 · FIN-FAZENDA-INATIVA-LISTA-01 · FIN-IMPORTAR-ANTIGO-01 ·
   FAZENDA-INATIVA-EDICAO-01 · LEGADOS-ABATE-VENDA-FAZENDA-01 · FORNECEDOR-UUID-CRU-01 · PROPRIEDADE-DESTINO-ORIGEM-01 ·
@@ -524,12 +526,17 @@ docs/historico/frentes-ate-2026-09-29.md.)
   UTF-8 com bytes invalidos ou nada declarado cai em windows-1252. O OFX do BB e do Bradesco vem em cp1252 e gravava
   "Cart\uFFFDo" (PR-CONC-CRIAR-LOTE-LAYOUT-01). O hash do movimento usa a descricao: consertar texto ja' gravado exige
   recalcular o hash junto.
-- ⚠ A MESA NUNCA CALA QUANDO A PLANILHA DISCORDA DO RESULTADO (PR-CONC-MESA-DIVERGENCIA-EXCEL-01, Gabriel 30/09):
-  `divergenciasComPlanilha` marca "planilha: X" (azul, abaixo do Resultado) em cada campo em que o arquivo diz outra coisa,
-  comparando na regua de cada um (fazenda por id pelo resolvedor do de-para, datas por ISO, tipo pelo rotulo, fornecedor
-  so' quando o Resultado ficou sem, texto normalizado); so' em linha com lancamento. Ambar continua = vai mudar. A
-  fazenda da planilha se resolve pelo MESMO `preResolverFazenda` do passo 1 (apelidos de `fazendas.aliases`) e vira
-  sugestao ambar quando difere do sistema; conta de pecuaria/agricultura na fazenda Administrativo avisa (nao trava).
+- ⚠ MESA: NO CRU A PLANILHA PREVALECE, NO CLASSIFICADO O SISTEMA (PR-CONC-MESA-CRU-EXCEL-PREVALECE-01, Gabriel 30/09).
+  CRU = lancamento de origem 'extrato'/'ofx' SEM conta do plano, fora transferencia. Quem decide e' o BANCO, numa funcao
+  so' (`_fn_classificacao_precedencia_cru`, no fim do casar e do populate): a leitura da planilha fica em
+  `update_proposto._planilha`; no cru ela sobe para a proposta (+ competencia, vencimento, documento, observacao, produto;
+  plano administrativo forca fazenda Administrativo); no classificado a classificacao SAI do topo (o apply_row grava
+  COALESCE(proposta, lancamento)). Linha editada a mao nao e' tocada. Excel vazio (e "-") nunca apaga. Fazenda e
+  fornecedor se resolvem por `_fn_classificacao_resolver_fazenda/_fornecedor` (apelidos do de-para + nome, normalizacao
+  unica `_fn_normalizar_texto`). A tela so' renderiza: marca "planilha: X" (azul) onde o Resultado difere, "(nao
+  resolvido)" quando a planilha nao resolve (o Resultado fica com o sistema — NAO RESOLVIDO NUNCA ESVAZIA, e o editor de
+  fornecedor mostra o do sistema sem proposta); contador "N divergem da planilha" so' com Fazenda, Conta do plano,
+  Fornecedor e Competencia RESOLVIDOS. Conta de pecuaria/agricultura na fazenda Administrativo avisa (nao trava).
 
 ## REGRAS VIGENTES — OPERACAO COMERCIAL E FINANCEIRO
 - ⚠ FINANCEIRO V2 — TODO RAMO DE `editarLancamento` REMENDA A LINHA COM O QUE O BANCO DEVOLVEU
