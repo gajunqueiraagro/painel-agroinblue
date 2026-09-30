@@ -38,7 +38,7 @@ import { toast } from 'sonner';
 import { X, MoreHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { STATUS_PALETA, STATUS_PILULA_BASE, STATUS_FILTRO_LABEL } from '@/lib/financeiro/statusFinanceiro';
+import { STATUS_PALETA, STATUS_FILTRO_LABEL } from '@/lib/financeiro/statusFinanceiro';
 
 const MESES_CURTOS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
@@ -657,15 +657,21 @@ function paletaDoStatus(k: string) {
     default: return null;
   }
 }
+/* ⚠ O SELO DA CONFERÊNCIA É MENOR QUE A PÍLULA DA CASA — PR-CONC-CONFERENCIA-MODAL-01-fix2 (Gabriel, 30/09:
+   "é só uma referência"). 8px, 4px de padding lateral, sem padding vertical, 12px de altura, raio pequeno,
+   encostado à direita (junto do "⋯"). É a ÚNICA exceção ao piso de 9,5px nesta tabela, registrada no
+   CLAUDE.md; a pílula de `STATUS_PILULA_BASE` continua valendo nas outras telas. Cores: as da paleta única. */
+const SELO_CONFERENCIA = 'inline-flex h-[12px] items-center rounded-[3px] border px-[4px] text-[8px] font-semibold leading-none align-middle';
+const SELO_CONFERENCIA_TEXTO = 'text-[8px] font-semibold leading-none align-middle';
 function CelStatus({ status }: { status: string | null }) {
   const k = (status ?? '').trim().toLowerCase();
   const p = paletaDoStatus(k);
   const rotulo = k === 'conciliado' ? 'Conciliado' : (STATUS_FILTRO_LABEL[k] ?? (status || ''));
   return (
-    <td className="px-[3px] text-center whitespace-nowrap" data-status={k || undefined}>
-      {!p ? <span className="text-muted-foreground">{rotulo}</span>
-        : p.comCaixa ? <span className={cn(STATUS_PILULA_BASE, p.pilula, 'align-middle')}>{rotulo}</span>
-        : <span className={cn('font-semibold', p.texto)}>{rotulo}</span>}
+    <td className="px-[3px] text-right whitespace-nowrap" data-status={k || undefined}>
+      {!p ? <span className={cn(SELO_CONFERENCIA_TEXTO, 'text-muted-foreground')}>{rotulo}</span>
+        : p.comCaixa ? <span className={cn(SELO_CONFERENCIA, p.pilula)}>{rotulo}</span>
+        : <span className={cn(SELO_CONFERENCIA_TEXTO, p.texto)}>{rotulo}</span>}
     </td>
   );
 }
@@ -1230,8 +1236,8 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
           <colgroup>
             <col style={{ width: 18 }} /><col style={{ width: 38 }} /><col />
             <col style={{ width: 80 }} /><col style={{ width: 18 }} />
-            <col style={{ width: 18 }} /><col style={{ width: 80 }} /><col style={{ width: 38 }} /><col style={{ width: 278 }} />
-            <col style={{ width: 78 }} /><col style={{ width: 46 }} />
+            <col style={{ width: 18 }} /><col style={{ width: 80 }} /><col style={{ width: 38 }} /><col style={{ width: 296 }} />
+            <col style={{ width: 60 }} /><col style={{ width: 46 }} />
           </colgroup>
           <thead className="sticky top-0 z-10">
             <tr className={cn(H18, 'bg-primary text-primary-foreground')}>
@@ -1479,11 +1485,11 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
                       sinal já está no número. Colorir por sinal aqui faria o subtotal competir
                       visualmente com os movimentos que ele resume. */}
                   <td className={cn(CEL, 'text-left font-semibold tabular-nums text-primary')}>{fmtBRL(d.sistema)}</td>
-                  <td colSpan={2} />
-                  {/* ⚠ A DIFERENÇA OCUPA STATUS + AÇÕES (78 + 46 = 124px) — PR-CONC-CONFERENCIA-MODAL-01-fix1: a
-                      coluna de ações encolheu para a alça e o "⋯". Sem `text-ellipsis`: "diferença -134.613,84"
-                      pede 106,6px a 9,5px semibold + 10 de padding; com 8 de folga, 124. */}
-                  <td colSpan={2} className="px-[5px] whitespace-nowrap text-right font-semibold">
+                  <td />
+                  {/* ⚠ A DIFERENÇA OCUPA DESCRIÇÃO + STATUS + AÇÕES (colSpan 3) — fix2: com o selo de 8px a coluna de
+                      status encolheu, e status + ações já não cabem "diferença -134.613,84" (106,6px a 9,5px semibold +
+                      10 de padding). Na linha de fechamento a descrição é vazia, então o texto vai inteiro, à direita. */}
+                  <td colSpan={3} className="px-[5px] whitespace-nowrap text-right font-semibold">
                     {/* ⚠ TOLERÂNCIA ZERO — PR-CONCILIACAO-TOLERANCIA-ZERO-02. */}
                     {saldoConfere(d.banco - d.sistema)
                       ? <span className="text-emerald-600">confere</span>

@@ -144,11 +144,11 @@ describe('a sub-aba inicial e o modal', () => {
 });
 
 describe('a mesa dentro do modal — uma régua só', () => {
-  it('o fechamento mostra "diferença -134.613,84" INTEIRA, em status + ações (colSpan 2), numa célula que não corta', async () => {
+  it('o fechamento mostra "diferença -134.613,84" INTEIRA, em descrição + status + ações (colSpan 3), numa célula que não corta', async () => {
     const modal = await abrirConferencia();
     const dif = within(modal).getByText('diferença -134.613,84');
     const td = dif.closest('td')!;
-    expect(td.colSpan).toBe(2);
+    expect(td.colSpan).toBe(3);
     expect(td.className).toContain('whitespace-nowrap');
     expect(td.className).not.toContain('text-ellipsis');
   });
@@ -165,6 +165,9 @@ describe('a mesa dentro do modal — uma régua só', () => {
        ícone — por isso ele fica fora da varredura e se prova à parte que não tem texto. */
     const comTexto = [...tabelaDaMesa(modal).querySelectorAll('th, td, span, label')];
     expect(comTexto.filter((el) => /text-\[1[0-9]px\]/.test(String(el.className)))).toEqual([]);
+    /* abaixo de 9,5 SÓ o selo de status (exceção do fix2): nenhuma outra célula ou span leva fonte menor */
+    const abaixoDoPiso = comTexto.filter((el) => /text-\[(?:[0-8]|9)(?:\.[0-4])?px\]/.test(String(el.className)));
+    expect(abaixoDoPiso.every((el) => el.closest('td[data-status]'))).toBe(true);
     expect(tabelaDaMesa(modal).className).toContain('text-[9.5px]');
     for (const b of within(tabelaDaMesa(modal)).getAllByRole('button', { name: 'Ações da linha' })) expect(b.textContent).toBe('');
   });
@@ -260,5 +263,21 @@ describe('fix1 — a sub-aba Sistema ganha a coluna Fornecedor', () => {
     expect(fornecedores.map((s) => s.textContent)).toEqual(['Antonio Peres Neto']);
     expect(fornecedores[0].getAttribute('title')).toBe('Antonio Peres Neto');
     expect(fornecedores[0].className).toContain('truncate');
+  });
+});
+
+describe('fix2 — o selo de status da Conferência é uma referência pequena, à direita', () => {
+  it('selo a 8px, 12px de altura, 4px de padding lateral, encostado à direita da coluna', async () => {
+    const modal = await abrirConferencia();
+    const conc = modal.querySelector('td[data-status="conciliado"]')!;
+    expect(conc.className).toContain('text-right');
+    const selo = conc.firstElementChild!;
+    for (const c of ['text-[8px]', 'h-[12px]', 'px-[4px]', 'border']) expect(selo.className).toContain(c);
+    expect(selo.className).not.toMatch(/\bpy-/);
+    expect(selo.className).toContain('bg-[#166534]'); // a paleta única, conciliado com fundo
+    const prog = modal.querySelector('td[data-status="programado"]')!;
+    expect(prog.className).toContain('text-right');
+    expect(prog.firstElementChild!.className).toContain('text-[8px]');
+    expect(prog.firstElementChild!.className).not.toMatch(/\bbg-/); // programado segue só texto
   });
 });
