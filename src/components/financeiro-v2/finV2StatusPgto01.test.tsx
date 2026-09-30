@@ -73,27 +73,61 @@ describe('a ordem do status — Previsto > Programado > Agendado > Realizado > C
 });
 
 describe('a cor do status tem um dono', () => {
-  it('a pílula da OC renderiza EXATAMENTE a classe de antes do PR', () => {
-    const { container } = render(<PilulaStatusDespesa status="previsto" />);
-    expect(container.querySelector('[data-status="previsto"]')?.className).toBe(
-      'inline-block h-[15px] whitespace-nowrap rounded-[7px] border px-[6px] text-[9.5px] font-semibold leading-[13px] text-[#c2410c] bg-[#fff7ed] border-[#fed7aa]');
+  /* ⚠ fix1 (Gabriel, 30/09): caixa SÓ em realizado e conciliado. A OC herda: previsto e programado viram texto (borda
+     transparente, como o agendado já era); realizado e conciliado ficam byte a byte como antes. */
+  it('previsto, programado e agendado SEM fundo nem borda visível; realizado e conciliado COM', () => {
+    for (const s of ['previsto', 'programado', 'agendado'] as const) {
+      expect(STATUS_PALETA[s].comCaixa).toBe(false);
+      expect(STATUS_PALETA[s].pilula).not.toMatch(/\bbg-/);
+      expect(STATUS_PALETA[s].pilula).toContain('border-transparent');
+      expect(STATUS_FILTRO_PILULA[s]).toBeUndefined();
+    }
+    for (const s of ['realizado', 'conciliado'] as const) {
+      expect(STATUS_PALETA[s].comCaixa).toBe(true);
+      expect(STATUS_PALETA[s].pilula).toMatch(/\bbg-\[#/);
+      expect(STATUS_PALETA[s].pilula).not.toContain('border-transparent');
+    }
+  });
+  it('a pílula da OC: realizado igual à de antes do PR, previsto sem caixa', () => {
+    const base = 'inline-block h-[15px] whitespace-nowrap rounded-[7px] border px-[6px] text-[9.5px] font-semibold leading-[13px]';
+    const r = render(<PilulaStatusDespesa status="realizado" />);
+    expect(r.container.querySelector('[data-status="realizado"]')?.className).toBe(`${base} text-[#15803d] bg-[#f0fdf4] border-[#bbf7d0]`);
+    const p = render(<PilulaStatusDespesa status="previsto" />);
+    expect(p.container.querySelector('[data-status="previsto"]')?.className).toBe(`${base} text-[#c2410c] border-transparent`);
   });
   it('a lista e o filtro leem a mesma paleta (nenhuma segunda cor)', () => {
     expect(STATUS_FILTRO_COR.previsto).toBe(STATUS_PALETA.previsto.texto);
     expect(STATUS_FILTRO_COR.conciliado_real).toBe(STATUS_PALETA.conciliado.texto);
     expect(STATUS_FILTRO_PILULA.realizado).toBe(STATUS_PALETA.realizado.pilula);
+    expect(STATUS_FILTRO_PILULA.conciliado_real).toBe(STATUS_PALETA.conciliado.pilula);
     expect(STATUS_FILTRO_PILULA.meta).toBeUndefined();
   });
 });
 
 describe('FinanceiroV2Tab — a coluna ST', () => {
-  it('ST com 84px, Doc com 70, e o status sem truncate, em pílula', () => {
-    expect(tela).toContain('<col style={{ width: 84 }} />');
+  it('ST com 77px, Doc com 70, e o status sem truncate, em pílula', () => {
+    expect(tela).toContain('<col style={{ width: 77 }} />');
     expect(tela).toContain('<col style={{ width: 70 }} />');
     expect(tela).toContain('<span className={cn(STATUS_PILULA_BASE, stPilula)} data-status={stKey}>{stLabel}</span>');
     expect(tela).not.toContain('text-[10px] leading-tight ${stColor}`}');
   });
-  it('o "..." continua fixo à direita (regra vigente do CLAUDE.md, não revogada)', () => {
-    expect(tela).toContain('align-middle sticky right-0 z-10 bg-background" onClick={(e) => e.stopPropagation()}');
+  it('o "..." NÃO é fixo (fix1, decisão do Gabriel de 30/09): nenhum sticky à direita na tela', () => {
+    expect(tela).not.toContain('sticky right-0');
+    /* a busca sabe achar: os sticky da ESQUERDA (checkbox, origem, datas) continuam */
+    expect(tela).toContain('sticky left-0 z-10 bg-background');
+  });
+
+  /* ⚠ A CONTA DE LARGURA, MEDIDA NA TELA (fix1): na janela do Gabriel o scroller tem 909px de `clientWidth` (innerWidth 1.135) e
+     o `respiro-lista` tira 20 — 889 úteis. Com 15 de barra clássica (Windows, ou macOS "mostrar sempre"), 874. A soma do colgroup
+     no modo NORMAL (sem as duas contas do Ampliado, e o lado `: N` do ternário) tem de caber nesse piso. */
+  it('a soma do colgroup no modo normal cabe nos 874px úteis medidos', () => {
+    const grupo = tela.slice(tela.indexOf('<colgroup>'), tela.indexOf('</colgroup>'));
+    const cols = grupo.split('\n').filter(l => l.includes('<col style') && !l.includes('modoIntensivo &&'));
+    const larguras = cols.map(l => {
+      const tern = l.match(/modoIntensivo \? \d+ : (\d+)/);
+      return Number(tern ? tern[1] : l.match(/width: (\d+)/)![1]);
+    });
+    expect(larguras.length).toBe(15);
+    expect(larguras.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(874);
   });
 });

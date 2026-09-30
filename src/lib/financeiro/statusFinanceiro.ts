@@ -42,9 +42,10 @@ export const STATUS_FINANCEIRO_LABEL: Record<StatusFinanceiro, string> = {
 
 /**
  * A PALETA DO STATUS — DONA ÚNICA DA COR, PR-FIN-V2-STATUS-PGTO-01. Mock v4 aprovado pelo
- * Gabriel em 29/09 (FIN-V2-COLUNAS-STATUS-01): Previsto laranja; Programado azul; Agendado
- * verde escuro SÓ TEXTO; Realizado verde claro com fundo e borda; Conciliado verde escuro com
- * selo oval de fundo verde escuro.
+ * Gabriel em 29/09 (FIN-V2-COLUNAS-STATUS-01) e corrigido na homologação de 30/09
+ * (PR-FIN-V2-STATUS-PGTO-01-fix1): Previsto laranja, Programado azul e Agendado verde escuro são
+ * SÓ TEXTO; a caixa (fundo e borda) fica para o Realizado (verde claro) e o selo oval para o
+ * Conciliado (verde escuro). `comCaixa` diz quais.
  * ⚠ ELA MORAVA EM `TabelaDespesasOC.tsx` (o `PILULA` da conta corrente da OC), e a lista do
  * Financeiro tinha outra (ciano/âmbar/roxo/azul). Duas cores para o mesmo status em duas telas.
  * Agora a OC importa daqui.
@@ -56,12 +57,12 @@ export const STATUS_FINANCEIRO_LABEL: Record<StatusFinanceiro, string> = {
  * FIN-LISTA-LAYOUT-02 consertou (os dois tinham o mesmo azul) não volta.
  */
 export type StatusPaleta = StatusFinanceiro | 'conciliado';
-export const STATUS_PALETA: Record<StatusPaleta, { texto: string; pilula: string }> = {
-  previsto: { texto: 'text-[#c2410c]', pilula: 'text-[#c2410c] bg-[#fff7ed] border-[#fed7aa]' },
-  programado: { texto: 'text-[#1d4ed8]', pilula: 'text-[#1d4ed8] bg-[#eff6ff] border-[#bfdbfe]' },
-  agendado: { texto: 'text-[#14532d]', pilula: 'text-[#14532d] border-transparent' },
-  realizado: { texto: 'text-[#15803d]', pilula: 'text-[#15803d] bg-[#f0fdf4] border-[#bbf7d0]' },
-  conciliado: { texto: 'text-[#166534]', pilula: 'text-white bg-[#166534] border-[#166534]' },
+export const STATUS_PALETA: Record<StatusPaleta, { texto: string; pilula: string; comCaixa: boolean }> = {
+  previsto: { texto: 'text-[#c2410c]', pilula: 'text-[#c2410c] border-transparent', comCaixa: false },
+  programado: { texto: 'text-[#1d4ed8]', pilula: 'text-[#1d4ed8] border-transparent', comCaixa: false },
+  agendado: { texto: 'text-[#14532d]', pilula: 'text-[#14532d] border-transparent', comCaixa: false },
+  realizado: { texto: 'text-[#15803d]', pilula: 'text-[#15803d] bg-[#f0fdf4] border-[#bbf7d0]', comCaixa: true },
+  conciliado: { texto: 'text-[#166534]', pilula: 'text-white bg-[#166534] border-[#166534]', comCaixa: true },
 };
 
 /**
@@ -169,14 +170,12 @@ export const STATUS_FILTRO_COR: Record<string, string> = {
 };
 
 /**
- * A PÍLULA DA COLUNA ST, por chave de filtro (o `stKey` da lista). Só os cinco estágios têm caixa;
- * os legados (`meta`, `conciliado` sem vínculo) não entram — ficam texto muted, porque a caixa
- * afirmaria um estágio que o registro não tem.
+ * A CAIXA DA COLUNA ST, por chave de filtro (o `stKey` da lista). SÓ REALIZADO E CONCILIADO têm
+ * caixa (PR-FIN-V2-STATUS-PGTO-01-fix1); previsto, programado e agendado são texto colorido, sem
+ * o padding da pílula — é isso que deixa a coluna caber em 77px. Os legados (`meta`,
+ * `conciliado` sem vínculo) também não entram: a caixa afirmaria um estágio que o registro não tem.
  */
 export const STATUS_FILTRO_PILULA: Record<string, string> = {
-  previsto: STATUS_PALETA.previsto.pilula,
-  programado: STATUS_PALETA.programado.pilula,
-  agendado: STATUS_PALETA.agendado.pilula,
   realizado: STATUS_PALETA.realizado.pilula,
   conciliado_real: STATUS_PALETA.conciliado.pilula,
 };

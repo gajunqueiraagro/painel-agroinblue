@@ -2494,11 +2494,18 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     (check, origem, Comp., Venc., Pgto.). Mexer nela NÃO desloca nenhum offset —
                     conferido antes de aplicar, porque foi exatamente o oposto disso que
                     quebrou a lista hoje. */}
-                <col style={{ width: modoIntensivo ? 140 : 150 }} />
-                {/* Fornecedor 140→120 — FIN-LISTA-VISUAL-06. Trunca com o nome inteiro no `title`. */}
-                <col style={{ width: 120 }} />
-                <col style={{ width: 80 }} />
-                <col style={{ width: 80 }} />
+                {/* ⚠ A GRADE FOI MEDIDA NA TELA — PR-FIN-V2-STATUS-PGTO-01-fix1. A conta do PR anterior
+                    (968px contra ~1.011 úteis) saiu do código e supunha janela de 1280; a do Gabriel
+                    tem 1.135px de CSS (`innerWidth`), e o scroller úteis 909 − 20 do `respiro-lista` =
+                    889. A tabela rolava 79px e o "…" fixo cobria o status.
+                    Produto 150→111 (Ampliado 140→125), Fornecedor 120→100, Macro e Centro 80→66: são
+                    as colunas que truncam com o texto inteiro no `title`. Valor, datas e status não
+                    cederam. Soma normal 874 (cabe em 889, e em 874 com barra clássica de 15). */}
+                <col style={{ width: modoIntensivo ? 125 : 111 }} />
+                {/* Fornecedor 140→120 — FIN-LISTA-VISUAL-06; 120→100 no fix1. Trunca com o nome inteiro no `title`. */}
+                <col style={{ width: 100 }} />
+                <col style={{ width: 66 }} />
+                <col style={{ width: 66 }} />
                 {/* FIN-V2-HOMOLOG-FIX-01: a coluna OC (58px, do FIN-V2-SEM-CAIXA-01) SAIU — empurrava a tabela para a rolagem
                     horizontal e escondia o "…" (onde mora "Criar OC a partir deste lançamento"). A OC continua a um clique: o
                     icone ao lado do produto abre a operacao na aba Financeiro, e o "…" ganhou "Abrir OC". */}
@@ -2541,15 +2548,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     "000.000.000". Medido com a fonte real (mono 8px, a `.celula-doc`): 53px de
                     texto + 8 de padding + 8 de folga = 69. */}
                 <col style={{ width: 70 }} />
-                {/* ⚠ 64 → 84 — PR-FIN-V2-STATUS-PGTO-01. A pílula voltou (aprovada pelo Gabriel em
-                    29/09) e o maior rótulo com caixa é "Programado": 53,3px a 9px semibold (a lista
-                    força 9px) + 12 de padding e 2 de borda da pílula + 8 do `td` + 8 de folga = 84.
-                    Com 64, o status saía cortado colado nos pontinhos ("Ag").
-                    ⚠ A CONTA NOVA CABE SEM ROLAR: normal 968px contra ~1.011–1.026 úteis a 1280
-                    (1280 − 208 do menu − 24 do `px-3` − 2 de borda − 20 do `respiro-lista` − 0 a 15 da
-                    barra); Ampliado 1.142 contra ~1.219–1.234. Fazenda e Safra NÃO cederam: "ADM" já
-                    pede os 38 e "25/26-MAND" pede 74 (a 9px, forçados pelo CSS da lista). */}
-                <col style={{ width: 84 }} />
+                {/* ⚠ 64 → 84 → 77. Com 64 o status saía cortado colado nos pontinhos ("Ag"); o
+                    PR-FIN-V2-STATUS-PGTO-01 foi a 84 pela pílula em "Programado", e o fix1 a 77: previsto, programado e agendado viraram
+                    TEXTO (sem o padding da pílula), e a caixa ficou só para realizado e conciliado.
+                    Medido na tela: o maior com caixa é "Conciliado", 46,2px + 14 da pílula + 8 do `td`
+                    = 68,2; o maior sem caixa, "Programado", 53,3 + 8 = 61,3. Com 8 de folga, 77. */}
+                <col style={{ width: 77 }} />
                 {/* Ações 36→28: um botão "…" em vez de dois ícones. */}
                 <col style={{ width: 28 }} />
               </colgroup>
@@ -2590,8 +2594,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('valor')}>Valor<SortIndicator field="valor" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('doc')}>Doc.<SortIndicator field="doc" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('status')}>Status<SortIndicator field="status" /></th>
-                  {/* FIN-V2-HOMOLOG-FIX-01: o "…" fica FIXO a' direita — nunca some na rolagem horizontal do Ampliado. */}
-                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground sticky right-0 z-30 bg-primary" aria-label="Ações"></th>
+                  {/* ⚠ O "…" NÃO É FIXO — decisão soberana do Gabriel, 30/09 (PR-FIN-V2-STATUS-PGTO-01-fix1),
+                      e revoga a do FIN-V2-HOMOLOG-FIX-01 ("fixo à direita, nunca some na rolagem"). Fixo, ele
+                      ficava POR CIMA do status sempre que a lista rolava. É a última coluna, no fim da linha;
+                      se a tabela rolar, ele rola junto. */}
+                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground" aria-label="Ações"></th>
                 </tr>
               </thead>
               <tbody className="[&_tr:last-child]:border-0">
@@ -2630,6 +2637,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     const stLabel = STATUS_FILTRO_LABEL[stKey] || l.status_transacao || '-';
                     const stColor = STATUS_FILTRO_COR[stKey] || 'text-muted-foreground';
                     const stPilula = STATUS_FILTRO_PILULA[stKey];
+                    /* Os estágios sem caixa levam o mesmo peso da pílula; o legado fica no muted normal. */
+                    const stEstagio = stKey === 'previsto' || stKey === 'programado' || stKey === 'agendado';
                     /* Vencido é fato de duas colunas: venceu no passado E não foi pago. */
                     const vencido = !!l.data_vencimento && !l.data_pagamento && l.data_vencimento < hojeISO;
                     /* A EVIDÊNCIA, sem UUID: o operador confere pelo que
@@ -2745,23 +2754,18 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                             1.194 disponíveis em 1440, e uma faixa de 60px o faria rolar de novo
                             (o FIN-LISTA-VISUAL-06 acabou de tirá-lo de lá). Safra e cultura são
                             o mesmo assunto em dois níveis — o ciclo e o que se plantou nele.
-                            ⚠ A SEGUNDA LINHA SÓ EXISTE QUANDO HÁ CULTURA. Reservá-la sempre
-                            somaria ~8px em TODA linha de uma lista de 21px — 38% de altura para
-                            um dado que hoje quase nenhuma linha tem. O preço é a linha com
-                            cultura ficar mais alta que as vizinhas; é o menor dos dois. */}
+                            ⚠ UMA LINHA SÓ — PR-FIN-V2-STATUS-PGTO-01-fix1, e revoga a segunda linha da
+                            cultura: ela dobrava a altura das linhas de lavoura ("26/27-Lav" / "Mandioca")
+                            numa lista que se lê pela densidade. Safra e cultura vão na MESMA linha e
+                            truncam; o texto inteiro fica no `title`. Safra pode truncar; valor, status e
+                            data não. */}
                         <td className="truncate px-1 py-1 align-middle text-[10px] font-medium leading-tight text-muted-foreground"
                           title={[
                             l.safra_id ? (safraCodigoMap.get(l.safra_id) || '') : 'Sem safra',
                             l.cultura ? labelDaCultura(l.cultura) : null,
                           ].filter(Boolean).join(' · ')}>
-                          <span className="block truncate">
-                            {l.safra_id ? (safraCodigoMap.get(l.safra_id) || '—') : '—'}
-                          </span>
-                          {l.cultura && (
-                            <span className="block truncate text-[8px] font-normal leading-none text-muted-foreground/80">
-                              {labelDaCultura(l.cultura)}
-                            </span>
-                          )}
+                          {l.safra_id ? (safraCodigoMap.get(l.safra_id) || '—') : '—'}
+                          {l.cultura && ` · ${labelDaCultura(l.cultura)}`}
                         </td>
                         {modoIntensivo && (
                           <td className="truncate px-1 py-1 align-middle text-[10px] leading-tight text-muted-foreground"
@@ -2794,17 +2798,17 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                             faixa não cede — sem truncar, "Realizado" transbordaria a célula em
                             vez de a alargar. É o mesmo raciocínio do `min-w-0` da barra, do
                             outro lado da mesma regra. */}
-                        {/* ⚠ A PÍLULA VOLTOU — PR-FIN-V2-STATUS-PGTO-01, por decisão do Gabriel (29/09),
-                            e revoga SÓ PARA O STATUS o FIN-LISTA-VISUAL-01 ("a caixa em toda linha
-                            compete com o valor"). Forma e cor vêm de `statusFinanceiro.ts`, a mesma
-                            pílula da conta corrente da OC.
-                            ⚠ SEM `truncate`: a coluna foi medida para o maior rótulo com caixa. Os
-                            legados ("Meta (legado)", "Conciliado (legado)") não têm caixa e quebram
-                            em duas linhas em vez de cortar. */}
+                        {/* ⚠ CAIXA SÓ EM REALIZADO E CONCILIADO — PR-FIN-V2-STATUS-PGTO-01-fix1 (Gabriel,
+                            30/09). Previsto, programado e agendado são TEXTO colorido; realizado ganha a
+                            caixa verde clara e o conciliado o selo oval. Revoga SÓ PARA ESSES DOIS o
+                            FIN-LISTA-VISUAL-01 ("a caixa em toda linha compete com o valor"). Forma e cor
+                            vêm de `statusFinanceiro.ts`, a mesma da conta corrente da OC.
+                            ⚠ SEM `truncate`: a coluna foi medida para o maior rótulo. Os legados ("Meta
+                            (legado)", "Conciliado (legado)") quebram em duas linhas em vez de cortar. */}
                         <td className="px-1 py-1 text-center align-middle leading-tight" title={stTitle}>
                           {stPilula
                             ? <span className={cn(STATUS_PILULA_BASE, stPilula)} data-status={stKey}>{stLabel}</span>
-                            : <span className={stColor}>{stLabel}</span>}
+                            : <span className={cn(stColor, stEstagio && 'font-semibold')} data-status={stKey}>{stLabel}</span>}
                         </td>
                         {/* ⚠ UM BOTÃO "…" NO LUGAR DE DOIS ÍCONES — FIN-LISTA-LAYOUT-01. Dois
                             botões de 20px numa coluna de 36 disputavam espaço com a tabela
@@ -2814,7 +2818,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                             "Ver contrato" — ela não se edita aqui, edita-se no contrato. E
                             "Duplicar" continua desabilitado nela, com o motivo escrito no item,
                             que é a regra da casa para botão cinza. */}
-                        <td className="!py-0 px-0 align-middle sticky right-0 z-10 bg-background" onClick={(e) => e.stopPropagation()}>
+                        <td className="!py-0 px-0 align-middle" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-center">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>

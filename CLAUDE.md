@@ -159,7 +159,7 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 30/09/2026 (PR-FIN-V2-STATUS-PGTO-01): 2416 passando, 22 skipped, e
+  Baseline em 30/09/2026 (PR-FIN-V2-STATUS-PGTO-01-fix1): 2418 passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -529,14 +529,21 @@ docs/historico/frentes-ate-2026-09-29.md.)
     sai da OC e volta a ser venda/compra comum (compoe DRE).
   - Conta bancaria se le' pela direcao: entrada -> conta_destino_id; saida -> conta_bancaria_id.
 - ⚠ FINANCEIRO V2 MOSTRA SO DINHEIRO por padrao; sem caixa (entregas, barter, consumo) em secao
-  separada atras de chave. Nenhuma coluna nova que gere rolagem horizontal a 1440px; o menu
-  "..." fica fixo e sempre visivel. OC se abre pelo icone do produto ou "Abrir OC" no menu
-  (FIN-V2-SEM-CAIXA-01, FIN-V2-HOMOLOG-FIX-01).
+  separada atras de chave. OC se abre pelo icone do produto ou "Abrir OC" no menu (FIN-V2-SEM-CAIXA-01,
+  FIN-V2-HOMOLOG-FIX-01).
+  ⚠ O "..." NUNCA E' FIXO/STICKY (decisao soberana do Gabriel, 30/09, PR-FIN-V2-STATUS-PGTO-01-fix1; revoga o "fixo e
+    sempre visivel" do FIN-V2-HOMOLOG-FIX-01): e' a ultima coluna normal, no fim da linha; se a tabela rolar, ele rola junto,
+    NUNCA por cima de outra coluna. A lista CABE sem rolar no modo normal na janela do Gabriel e a 1280 — a largura se MEDE NA
+    TELA (a dele tem innerWidth 1.135: 889px uteis; colgroup normal 874 para caber tambem com barra classica de 15), nunca pela
+    conta do codigo, que supos 1280 e errou por 79px. Valor, status e data nunca truncam; Produto, Fornecedor, Macro, Centro e
+    Safra truncam com o texto inteiro no `title`, e toda linha tem UMA linha de altura.
 - ⚠ STATUS NO FINANCEIRO (PR-FIN-V2-STATUS-PGTO-01, Gabriel 29-30/09): SO' REALIZADO (e conciliado) TEM DATA DE
   PAGAMENTO; previsto/programado/agendado sao ESCOLHIDOS e a data de quando sai do banco mora no vencimento (o dialog zera o
   pagamento ao sair do realizado e grava NULO fora dele, salvo pagamento travado pelo extrato). Ordem em todo lugar:
   Previsto > Programado > Agendado > Realizado > Conciliado. Cor e pilula tem UM dono, `STATUS_PALETA` em
-  `src/lib/financeiro/statusFinanceiro.ts` (a coluna ST voltou a ter pilula, revogando so' para o status o FIN-LISTA-VISUAL-01).
+  `src/lib/financeiro/statusFinanceiro.ts`: Previsto laranja, Programado azul e Agendado verde escuro SO' TEXTO; CAIXA so' no
+  Realizado (verde claro, fundo e borda) e SELO OVAL so' no Conciliado (verde escuro) — fix1, 30/09, revogando para esses dois
+  o FIN-LISTA-VISUAL-01. A conta corrente da OC herda a mesma paleta.
   Duplicata registrada: `BADGE_STATUS_TRANSACAO` (statusOperacional.ts, Mesa/Espelho); o `ModoRapidoGrid` ainda deriva
   status da data de pagamento (frente propria).
 - ⚠ BOITEL: ao financeiro e ao DRE vai SO' O LIQUIDO DO ACERTO; R$/@ de venda = liquido / @ vivas que sairam. O VALOR DA

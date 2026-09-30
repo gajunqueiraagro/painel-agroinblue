@@ -27,9 +27,12 @@ describe('item 3 — lista sem coluna OC, "..." sempre visivel, "Abrir OC" no me
     expect(tela).toContain("import { SecaoSemCaixa, totalSemCaixa } from '@/components/financeiro-v2/SecaoSemCaixa';");
   });
 
-  it('o cabecalho e a celula do "..." ficam fixos a direita, com fundo opaco', () => {
-    expect(tela).toContain('sticky right-0 z-30 bg-primary" aria-label="Ações"');
-    expect(tela).toContain('align-middle sticky right-0 z-10 bg-background" onClick={(e) => e.stopPropagation()}');
+  /* ⚠ CONTRATO MUDOU NO PR-FIN-V2-STATUS-PGTO-01-fix1 (decisao do Gabriel, 30/09): o "..." NAO e' mais fixo — fixo, ele cobria
+     o status sempre que a lista rolava. Ele continua visivel porque a lista passou a caber sem rolar (medido na tela). */
+  it('o cabecalho e a celula do "..." sao a ultima coluna normal, sem sticky', () => {
+    expect(tela).toContain('text-primary-foreground" aria-label="Ações"></th>');
+    expect(tela).toContain('<td className="!py-0 px-0 align-middle" onClick={(e) => e.stopPropagation()}>');
+    expect(tela).not.toContain('sticky right-0');
   });
 
   it('"Abrir OC" so na linha com OC, abrindo a OC na aba Financeiro; o icone ao lado do produto continua', () => {
