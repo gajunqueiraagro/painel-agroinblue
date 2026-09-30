@@ -50,6 +50,7 @@ import { ContaBancariaSelect, type ContaSelecionavel } from '@/components/shared
 import { baixarCsv, csvLinhaPt } from '@/lib/csv';
 import { fmtBRL, fmtData } from './fmt';
 import { planoIncoerente } from '@/v2/lib/mesa/atividadeDaLinha';
+import { aprenderApelidoDaMesa } from '@/v2/lib/mesa/aprenderApelido';
 import { Button } from '@/components/ui/button';
 
 export interface MesaEnriquecimentoTabProps {
@@ -1126,6 +1127,7 @@ export function MesaEnriquecimentoTab({
   async function onEditar(patchOriginal: Record<string, unknown>): Promise<void> {
     if (!selecionado) return;
     const patch = ajustarSeAdministrativo(patchOriginal, selecionado);
+    const idLinha = selecionado.id;   // captura antes do await (a seleção pode mudar)
     // R1 — dispara a edição e registra a Promise SINCRONAMENTE (antes do 1º await), para o
     // salvar() disparado logo em seguida (blur→click) poder aguardá-la antes do apply.
     const p = editarProposto({ staging_id: selecionado.id, patch });
@@ -1139,6 +1141,22 @@ export function MesaEnriquecimentoTab({
         const rej = res?.campos_rejeitados;
         if (rej && Object.keys(rej).length > 0) {
           toast.error(`Alguns campos não aplicados: ${JSON.stringify(rej)}`);
+        }
+        /* ⚠ A MESA APRENDE A CONTA QUE O OPERADOR ESCOLHEU — PR-CONC-EXCEL-PLANILHA-COMPLETA-01 (opção A do Gabriel): o
+           apelido COMPOSTO "conta ⟂ safra" quando a linha traz safra, o simples quando não, pelo MESMO caminho do
+           importador (`persistirApelidos`). Só no gesto de escolher a conta — não no alinhamento do Salvar, que não é
+           escolha. Na próxima importação a mesma conta com a mesma safra resolve sozinha. */
+        const subEscolhido = typeof patchOriginal.subcentro === 'string' ? patchOriginal.subcentro : null;
+        const crua = staging.find((r) => r.staging_id === idLinha);
+        if (subEscolhido && crua?.excel_subcentro && clienteAtual?.id) {
+          const r = await aprenderApelidoDaMesa({
+            clienteId: clienteAtual.id,
+            contaPlanilha: crua.excel_subcentro,
+            safraPlanilha: crua.excel_safra,
+            subcentro: subEscolhido,
+            planoContaId: classificacoes?.find((c) => c.subcentro === subEscolhido)?.id,
+          });
+          if (!r.ok) toast.error(`A conta foi escolhida, mas o apelido não foi memorizado: ${r.erro ?? 'motivo desconhecido'}`);
         }
       } else {
         toast.error(MOTIVO_MSG[res?.motivo] ?? `Não editado (${res?.motivo ?? 'erro'}).`);

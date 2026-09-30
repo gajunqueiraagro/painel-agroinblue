@@ -219,7 +219,11 @@ export interface EnriqRowVM {
    * ⚠ COMPARA NA RÉGUA CERTA DE CADA CAMPO: fazenda por id (pelo resolvedor do de-para), datas por ISO, tipo pelo
    *   rótulo, texto normalizado. Comparar o texto cru daria o falso positivo que o `divergenciasBanco` já pagou.
    */
-  divergenciasPlanilha: ReadonlyArray<{ campo: string; planilha: string; contador: boolean }>;
+  divergenciasPlanilha: ReadonlyArray<{
+    campo: string; planilha: string; contador: boolean;
+    /** O texto inteiro da marca, quando não é "planilha: X" — o conflito de atividade (PR-CONC-EXCEL-PLANILHA-COMPLETA-01). */
+    texto?: string;
+  }>;
   /**
    * O RESULTADO não tem conta do plano — 133e item E. É a única trava de subcentro que
    * resta, e ela é sobre o que vai ser gravado, não sobre o que a planilha trouxe.

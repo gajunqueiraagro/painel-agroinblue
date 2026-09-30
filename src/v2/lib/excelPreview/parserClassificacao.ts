@@ -31,6 +31,7 @@ import * as XLSX from 'xlsx';
 import {
   COL_COMPETENCIA, COL_PAGAMENTO, COL_VENCIMENTO, COL_VALOR, COL_TIPO, COL_CONTA_PLANO, COL_FAZENDA,
   COL_FORNECEDOR, COL_CONTA_BANCARIA, COL_DESCRICAO, COL_DOCUMENTO, COL_OBSERVACAO,
+  COL_SAFRA, COL_TIPO_DOCUMENTO, COL_FORMA_PAGAMENTO, COL_STATUS,
 } from '@/v2/lib/excelPreview/colunasLancamento';
 
 export interface ClassificacaoExcelRow {
@@ -51,6 +52,15 @@ export interface ClassificacaoExcelRow {
   fazenda_codigo: string | null;
   observacao: string | null;  // PR-MAP-0 — contexto p/ o motor (NJ etc.)
   documento: string | null;   // PR-MAP-0 — texto (preserva zeros à esquerda)
+  /* ── PR-CONC-EXCEL-PLANILHA-COMPLETA-01: as quatro colunas do modelo que este parser DESCARTAVA ──────────────────
+     ⚠ TEXTO CRU, como veio: quem resolve é o banco (`_fn_classificacao_resolver_safra`, `_tipo_documento`,
+       `_forma_pagamento`), com a normalização única — uma segunda resolução aqui divergiria dela no primeiro acento.
+     ⚠ A DESCRIÇÃO NÃO ENTRA AQUI: ela JÁ É o `produto` (`PRODUTO_COLS` lê 'Descrição'/'Histórico'/'Produto'). */
+  safra: string | null;
+  tipo_documento: string | null;
+  forma_pagamento: string | null;
+  /** Medido e guardado, NÃO aplicado: "Sim" não está no vocabulário (realizado/previsto) — sem regra, não vira status. */
+  status: string | null;
   // PR-DePara-Conta-Fase1: UUID resolvido pelo DE/PARA do operador na Mesa.
   // Preenchido só no enriquecimento pré-populate (não no parsing do Excel).
   conta_origem_id?: string | null;
@@ -139,6 +149,7 @@ const ALIASES_CONHECIDOS = new Set<string>([
   ...DATA_COLS, ...VALOR_COLS, ...TIPO_COLS, ...SUBCENTRO_COLS, ...FORNECEDOR_COLS,
   ...PRODUTO_COLS, ...CONTA_ORIGEM_COLS, ...CONTA_DESTINO_COLS, ...FAZENDA_COLS,
   ...ANOMES_COLS, ...OBS_COLS, ...DOC_COLS,
+  ...COL_SAFRA, ...COL_TIPO_DOCUMENTO, ...COL_FORMA_PAGAMENTO, ...COL_STATUS,
 ]);
 
 /** Quantas linhas do topo podem ser cabecalho. O modelo novo poe um marcador
@@ -335,6 +346,10 @@ function parseRow(
     fazenda_codigo: pickCol(raw, FAZENDA_COLS),
     observacao: pickCol(raw, OBS_COLS),
     documento: pickCol(raw, DOC_COLS),
+    safra: pickCol(raw, COL_SAFRA),
+    tipo_documento: pickCol(raw, COL_TIPO_DOCUMENTO),
+    forma_pagamento: pickCol(raw, COL_FORMA_PAGAMENTO),
+    status: pickCol(raw, COL_STATUS),
   };
 
   return { row, erro: null };

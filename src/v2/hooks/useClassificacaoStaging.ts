@@ -203,6 +203,18 @@ export interface ClassificacaoStagingPreviewRow {
   proposto_forma_pagamento?: string | null;
   lanc_tipo_documento?: string | null;
   lanc_forma_pagamento?: string | null;
+  /**
+   * PR-CONC-EXCEL-PLANILHA-COMPLETA-01 — as quatro colunas da planilha que o parser descartava (texto cru) e o que o
+   * banco resolveu delas em `_planilha` (safra ATIVA; tipo de documento e forma nas listas do Novo Lançamento).
+   * `null` em sessão anterior ao PR: ela precisa ser reimportada para ter estas colunas.
+   */
+  excel_safra?: string | null;
+  excel_tipo_documento?: string | null;
+  excel_forma_pagamento?: string | null;
+  excel_status?: string | null;
+  planilha_safra_id?: string | null;
+  planilha_tipo_documento?: string | null;
+  planilha_forma_pagamento?: string | null;
 }
 
 /** O que `fn_classificacao_casar_sessao` devolve — 133a. */

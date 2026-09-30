@@ -313,7 +313,8 @@ export function MesaCamposTabela({
                   title: 'Forma sugerida pelo histórico do banco — grava ao salvar' });
               }
               if (divergePlanilha) {
-                dicas.push({ id: 'marca-planilha', texto: `planilha: ${dp?.planilha}`, cls: 'text-blue-700 dark:text-blue-400' });
+                dicas.push({ id: 'marca-planilha', texto: dp?.texto ?? `planilha: ${dp?.planilha}`,
+                  cls: dp?.texto ? 'text-destructive' : 'text-blue-700 dark:text-blue-400' });
               }
               const tituloSlot = dicas.map((d) => d.title ?? d.texto).join(' · ');
 

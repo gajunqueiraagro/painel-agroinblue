@@ -33,6 +33,8 @@ export function linhaCrua(sobre: Partial<ClassificacaoStagingPreviewRow> = {}): 
     planilha_fazenda_id: null, planilha_fazenda_nome: null, planilha_favorecido_id: null, planilha_favorecido_nome: null,
     planilha_subcentro: null, lanc_origem_lancamento: null,
     proposto_tipo_documento: null, proposto_forma_pagamento: null, lanc_tipo_documento: null, lanc_forma_pagamento: null,
+    excel_safra: null, excel_tipo_documento: null, excel_forma_pagamento: null, excel_status: null,
+    planilha_safra_id: null, planilha_tipo_documento: null, planilha_forma_pagamento: null,
     ...sobre,
   };
 }

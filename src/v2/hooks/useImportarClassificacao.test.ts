@@ -39,6 +39,7 @@ function linha(n: number, conta: string): ClassificacaoExcelRow {
     linha: n, subcentro: 'Folha', fornecedor: null, produto: null, conta_origem: conta, conta_destino: null,
     ano_mes: '2026-09', data: '2026-09-01', data_pagamento: '2026-09-04', data_vencimento: null, valor: 100 + n,
     tipo_operacao: '2-Saídas', fazenda_codigo: null, observacao: null, documento: null,
+    safra: null, tipo_documento: null, forma_pagamento: null, status: null,
   };
 }
 const LOTE: ClassificacaoParseResult = {

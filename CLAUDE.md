@@ -160,7 +160,7 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 30/09/2026 (PR-CONC-MESA-LAYOUT-FIXO-01): 2662 passando, 22 skipped, e
+  Baseline em 30/09/2026 (PR-CONC-EXCEL-PLANILHA-COMPLETA-01): 2674 passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -291,6 +291,12 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   ("do extrato") — proposta antiga nesses dois campos grava sem aparecer; medir e decidir; (d) a Mesa nao muda mais o
   Tipo nem a conta bancaria (o Tipo vai pelo passo "Transferencias entre contas"); `ResultadoTipoEditor` e
   `ResultadoContaEditor` (`ResultadoCamposGravaveis.tsx`) ficaram SEM CHAMADOR — apagar ou religar e' decisao.
+  · PLANILHA-COMPLETA (PR-CONC-EXCEL-PLANILHA-COMPLETA-01): (a) STATUS DA PLANILHA: guardado em `excel_status`, NAO aplicado —
+  "Sim" nao esta' no vocabulario (realizado/pago/liquidado · previsto/a pagar/aberto); falta a regra (o que "Sim" significa);
+  (b) sessoes anteriores ao PR (32c52f5c inclusive) NAO tem safra/tipo doc/forma/status: so' reimportando; (c) o
+  aprendizado da Mesa (escolher a conta -> apelido composto) nao tem teste de componente da aba (o helper e o caminho do
+  banco tem); (d) no proxy, 117 linhas com texto de safra que nao resolve ("Despesas Pessoais" 85, "Nao se aplica" 31 e o
+  apelido ambiguo da 25/26-AMD inativa) — conferir na planilha reimportada, onde a coluna Safra e' a de verdade.
 - Telas e UI:
   TELAS-ORFAS-01 (decisao) · FIN-RECORRENCIA-FAZENDA-01 · FIN-FAZENDA-INATIVA-LISTA-01 · FIN-IMPORTAR-ANTIGO-01 ·
   FAZENDA-INATIVA-EDICAO-01 · LEGADOS-ABATE-VENDA-FAZENDA-01 · FORNECEDOR-UUID-CRU-01 · PROPRIEDADE-DESTINO-ORIGEM-01 ·
@@ -564,6 +570,19 @@ docs/historico/frentes-ate-2026-09-29.md.)
   resolvido)" quando a planilha nao resolve (o Resultado fica com o sistema — NAO RESOLVIDO NUNCA ESVAZIA, e o editor de
   fornecedor mostra o do sistema sem proposta); contador "N divergem da planilha" so' com Fazenda, Conta do plano,
   Fornecedor e Competencia RESOLVIDOS. Conta de pecuaria/agricultura na fazenda Administrativo avisa (nao trava).
+- ⚠ APELIDO DE SUBCENTRO COM CONTEXTO = CHAVE COMPOSTA "conta ⟂ texto da safra", MECANISMO UNICO (decisao do Gabriel,
+  30/09, PR-CONC-EXCEL-PLANILHA-COMPLETA-01). E' a chave do B-22d (`chaveSubcentro`, `SEP_CHAVE_COMPOSTA`), no mesmo
+  `alias_text`: o importador de lancamentos a grava, `fn_classificacao_resolver_contexto` a tenta ANTES do apelido simples
+  (tier 'alias_composto'), e a Mesa a ENSINA quando o operador escolhe a conta numa linha com safra (`aprenderApelidoDaMesa`,
+  que reusa `persistirApelidos`; sem safra, o simples). PROIBIDO criar segundo mecanismo (coluna de atividade, tabela nova,
+  regra por escopo): dois resolvedores de contexto divergiriam no primeiro caso. Medido no proxy da 32c52f5c: os 44 planos de
+  outra atividade que o apelido simples dava resolvem todos pelo composto.
+  ⚠ A SAFRA DA PLANILHA DEFINE A ATIVIDADE no cru (planilha prevalece); no classificado o sistema prevalece e a safra vira
+    marca. Conta do plano de OUTRA atividade que a safra NAO sobe ao topo (a precedencia a tira; a Mesa mostra "apelido e' de
+    X; safra diz Y" e a conta fica pendente); plano administrativo NAO leva safra (marca "(plano administrativo nao leva
+    safra)"). Safra, tipo de documento e forma se resolvem no banco (`_fn_classificacao_resolver_safra` so' ATIVAS,
+    `_tipo_documento`, `_forma_pagamento` com o mapa dos legados); texto que nao resolve e' "(nao resolvido)" e nunca esvazia.
+    A forma pelo historico do banco (PAINEL-V1) virou reserva: so' quando a planilha nao traz forma.
 - ⚠ PAINEL DA MESA (PR-CONC-MESA-PAINEL-V1, Gabriel 30/09): colunas Campo | Planilha | Sistema hoje | Vai gravar, esta
   em texto NEUTRO — o unico verde e' o valor de uma entrada (Valor segue o sinal nas tres colunas); ambar = vai mudar.
   Grupos: DO EXTRATO no topo (Tipo, Data pgto., Valor, Conta bancaria — caixa tracejada, SO' LEITURA em toda linha),

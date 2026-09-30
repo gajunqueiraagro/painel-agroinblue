@@ -151,6 +151,8 @@ export function comoFoiSugerido(origem: string | null | undefined, textoExcel: s
   const curto = amostra.length > 28 ? `${amostra.slice(0, 28)}…` : amostra;
   switch (origem) {
     case 'alias': return curto ? `apelido que você ensinou (${curto})` : 'apelido que você ensinou';
+    /* PR-CONC-EXCEL-PLANILHA-COMPLETA-01 — a chave composta "conta ⟂ safra" (B-22d) */
+    case 'alias_composto': return curto ? `apelido que você ensinou para esta safra (${curto})` : 'apelido que você ensinou para esta safra';
     case 'regra': return 'regra automática';
     case 'manual': return 'escolha sua, salva antes';
     case 'plano_exato':
@@ -237,9 +239,18 @@ export function divergenciasComPlanilha(
     fazendaResultadoId: string | null;
     subcentroResultado: string | null;
     descricao: string | null;
+    /* ── PR-CONC-EXCEL-PLANILHA-COMPLETA-01 ── */
+    /** A safra que vai ser gravada (proposta, senão a do lançamento). */
+    safraResultadoId?: string | null;
+    /** O código da safra que a planilha resolveu, para a marca falar a língua da tela. */
+    safraPlanilhaCodigo?: string | null;
+    /** A conta do plano do Resultado é administrativa: ela não leva safra. */
+    planoAdministrativo?: boolean;
+    /** "apelido é de Agricultura; safra diz Pecuária" — a conta da planilha é de OUTRA atividade que a safra. */
+    conflitoAtividade?: string | null;
   },
-): Array<{ campo: string; planilha: string; contador: boolean }> {
-  const out: Array<{ campo: string; planilha: string; contador: boolean }> = [];
+): Array<{ campo: string; planilha: string; contador: boolean; texto?: string }> {
+  const out: Array<{ campo: string; planilha: string; contador: boolean; texto?: string }> = [];
   const f = ctx.fazendaPlanilha;
   if (f) {
     if (!f.id) out.push({ campo: 'Fazenda', planilha: `${f.texto} (não resolvido)`, contador: false });
@@ -256,10 +267,34 @@ export function divergenciasComPlanilha(
       out.push({ campo: 'Fornecedor', planilha: planilhaNome ?? String(row.excel_fornecedor), contador: true });
     }
   }
-  if (!vazio(row.planilha_subcentro) && !vazio(ctx.subcentroResultado)
+  /* ⚠ O CONFLITO DE ATIVIDADE VEM ANTES da marca comum: ele diz POR QUE a conta ficou pendente (o banco não sobe plano
+     incoerente com a safra), e "planilha: X" sozinho faria o operador achar que era só divergência. */
+  if (ctx.conflitoAtividade) {
+    out.push({ campo: 'Subcentro', planilha: String(row.planilha_subcentro ?? ''), contador: false, texto: ctx.conflitoAtividade });
+  } else if (!vazio(row.planilha_subcentro) && !vazio(ctx.subcentroResultado)
       && norm(row.planilha_subcentro) !== norm(ctx.subcentroResultado)) {
     out.push({ campo: 'Subcentro', planilha: String(row.planilha_subcentro), contador: true });
   }
+  /* ── PR-CONC-EXCEL-PLANILHA-COMPLETA-01: safra, tipo de documento e forma — o que o banco resolveu, pela régua do id/valor
+     da lista; texto que não resolve é "(não resolvido)" e o Resultado fica com o sistema (NUNCA esvazia). */
+  if (!vazio(row.excel_safra)) {
+    if (ctx.planoAdministrativo) {
+      out.push({ campo: 'Safra', planilha: `${row.excel_safra} (plano administrativo não leva safra)`, contador: false });
+    } else if (!row.planilha_safra_id) {
+      out.push({ campo: 'Safra', planilha: `${row.excel_safra} (não resolvido)`, contador: false });
+    } else if (row.planilha_safra_id !== (ctx.safraResultadoId ?? null)) {
+      out.push({ campo: 'Safra', planilha: ctx.safraPlanilhaCodigo ?? String(row.excel_safra), contador: true });
+    }
+  }
+  const lista = (campo: string, texto: string | null | undefined, resolvido: string | null | undefined, resultado: string | null) => {
+    if (vazio(texto)) return;
+    if (!resolvido) out.push({ campo, planilha: `${texto} (não resolvido)`, contador: false });
+    else if (resolvido !== resultado) out.push({ campo, planilha: resolvido, contador: false });
+  };
+  lista('Tipo de documento', row.excel_tipo_documento, row.planilha_tipo_documento,
+    row.proposto_tipo_documento ?? row.lanc_tipo_documento ?? null);
+  lista('Forma de pagamento', row.excel_forma_pagamento, row.planilha_forma_pagamento,
+    row.proposto_forma_pagamento ?? row.lanc_forma_pagamento ?? null);
   const data = (campo: string, planilha: string | null, resultado: string | null, contador: boolean) => {
     if (vazio(planilha)) return;
     if (String(planilha).slice(0, 10) !== String(resultado ?? '').slice(0, 10)) {
@@ -354,11 +389,29 @@ export function toRowVM(
   const formaPagamentoSugerida = ehCru && vazio(row.proposto_forma_pagamento) && vazio(row.lanc_forma_pagamento)
     ? formaPagamentoPeloHistorico(row.lanc_descricao)
     : null;
-  const atividadeProposta = atividadeDoSubcentro(catalogos.classificacoes, subcentroEfetivo);
-  /* ⚠ A PLANILHA NÃO TEM COLUNA DE ATIVIDADE: é o escopo da conta que ela disse, com a fazenda dela entre parênteses —
-     referência, não proposta (a proposta é a da conta resolvida). */
-  const atividadePlanilhaRot = rotuloAtividade(
-    atividadeDoSubcentro(catalogos.classificacoes, row.planilha_subcentro ?? row.excel_subcentro));
+  /* ── PR-CONC-EXCEL-PLANILHA-COMPLETA-01: A SAFRA DEFINE A ATIVIDADE ─────────────────────────────────────────────
+     ⚠ QUANDO A PLANILHA TRAZ SAFRA RESOLVIDA, a atividade sai DELA (prioridade sobre a conta e a fazenda) — no CRU, onde a
+       planilha prevalece; no classificado o sistema prevalece e a safra fica como marca. Plano ADMINISTRATIVO não tem
+       safra: aí a atividade é a do plano, e a safra da planilha vira só a marca "(plano administrativo não leva safra)". */
+  const safraDaPlanilha = row.planilha_safra_id
+    ? (catalogos.safras ?? []).find((sf) => sf.id === row.planilha_safra_id) ?? null
+    : null;
+  const escopoSafraPlanilha = rotuloAtividade(safraDaPlanilha?.escopo_negocio) ? (safraDaPlanilha?.escopo_negocio ?? null) : null;
+  const escopoPlanoPlanilha = atividadeDoSubcentro(catalogos.classificacoes, row.planilha_subcentro ?? row.excel_subcentro);
+  const planoAdmResultado = !!catalogos.classificacoes && !!subcentroEfetivo
+    && escopoDoSubcentro(catalogos.classificacoes, subcentroEfetivo) === ESCOPO_ADMINISTRATIVO;
+  /* ⚠ CONFLITO: a conta que a planilha resolveu é de OUTRA atividade que a safra — o banco não a leva ao topo (nunca grava
+     plano incoerente), e a marca diz o porquê. "apelido" quando veio do apelido simples (o composto já é por safra). */
+  const conflitoAtividade = escopoSafraPlanilha && escopoPlanoPlanilha && escopoPlanoPlanilha !== ESCOPO_ADMINISTRATIVO
+    && escopoPlanoPlanilha !== escopoSafraPlanilha
+    ? `${row.proposto_tier === 'alias' ? 'apelido' : 'conta'} é de ${rotuloAtividade(escopoPlanoPlanilha)}; safra diz ${rotuloAtividade(escopoSafraPlanilha)}`
+    : null;
+  const atividadeProposta = ehCru && escopoSafraPlanilha && !planoAdmResultado
+    ? escopoSafraPlanilha
+    : atividadeDoSubcentro(catalogos.classificacoes, subcentroEfetivo);
+  /* ⚠ A PLANILHA NÃO TEM COLUNA DE ATIVIDADE: é a da safra dela (quando traz), senão o escopo da conta que ela disse, com a
+     fazenda dela entre parênteses — referência, não proposta. */
+  const atividadePlanilhaRot = rotuloAtividade(escopoSafraPlanilha ?? escopoPlanoPlanilha);
   const fazendaPlanilhaTxt = vazio(row.excel_fazenda_codigo) ? null : String(row.excel_fazenda_codigo).trim();
   const atividadePlanilha = atividadePlanilhaRot
     ? (fazendaPlanilhaTxt ? `${atividadePlanilhaRot} (${fazendaPlanilhaTxt})` : atividadePlanilhaRot)
@@ -402,7 +455,9 @@ export function toRowVM(
        duas conviveram, saídas da MESMA coluna do banco, e qualquer tela que desenhasse o
        comparativo inteiro mostrava vencimento duas vezes.
        ⚠ `Safra` FICA: ela nasceu no mesmo bloco mas não tem irmã. */
-    refLinha('Safra', row.lanc_safra_codigo, row.proposto_safra, fmtTexto(row.lanc_safra_codigo), fmtTexto(row.proposto_safra)),
+    /* PR-CONC-EXCEL-PLANILHA-COMPLETA-01: a coluna Safra da planilha (`excel_safra`); `proposto_safra` era o texto carry-only antigo */
+    refLinha('Safra', row.lanc_safra_codigo, row.excel_safra ?? row.proposto_safra,
+      fmtTexto(row.lanc_safra_codigo), fmtTexto(row.excel_safra ?? row.proposto_safra)),
     // P0-5 — Documento: Sistema = numero_documento do lançamento; Excel = excel_documento; Resultado = proposta.
     { campo: 'Documento', sistema: fmtTexto(row.lanc_numero_documento), excel: fmtTexto(row.excel_documento), ...resultadoEditavel(row.lanc_numero_documento, row.excel_documento, row.proposto_numero_documento) },
     // P0-3 — linha "Descrição" separada removida (unificada em "Produto / Descrição").
@@ -466,9 +521,9 @@ export function toRowVM(
       sistema: fmtTexto(rotuloAtividade(atividadeDoSubcentro(catalogos.classificacoes, row.lanc_subcentro_atual))),
       excel: fmtTexto(atividadePlanilha),
       resultado: fmtTexto(rotuloAtividade(atividadeProposta)), tom: 'neutro' },
-    { campo: 'Tipo de documento', sistema: fmtTexto(row.lanc_tipo_documento), excel: '—',
+    { campo: 'Tipo de documento', sistema: fmtTexto(row.lanc_tipo_documento), excel: fmtTexto(row.excel_tipo_documento),
       ...resultadoEditavel(row.lanc_tipo_documento ?? null, null, row.proposto_tipo_documento ?? null) },
-    { campo: 'Forma de pagamento', sistema: fmtTexto(row.lanc_forma_pagamento), excel: '—',
+    { campo: 'Forma de pagamento', sistema: fmtTexto(row.lanc_forma_pagamento), excel: fmtTexto(row.excel_forma_pagamento),
       resultado: fmtTexto(formaResultado),
       tom: !vazio(formaResultado) && formaResultado !== row.lanc_forma_pagamento ? 'muda' : 'neutro' },
   ];
@@ -729,6 +784,10 @@ export function toRowVM(
     fazendaResultadoId: row.proposto_fazenda_id ?? row.lanc_fazenda_id,
     subcentroResultado: subcentroEfetivo,
     descricao,
+    safraResultadoId: row.proposto_safra_id ?? row.lanc_safra_id ?? null,
+    safraPlanilhaCodigo: safraDaPlanilha?.codigo ?? null,
+    planoAdministrativo: planoAdmResultado,
+    conflitoAtividade,
   });
 
   // PR-U2d-1 — estado operacional da linha (ordem: primeira condição que casar vence).
