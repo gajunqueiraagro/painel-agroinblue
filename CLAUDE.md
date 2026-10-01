@@ -248,6 +248,10 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   DRE-HOME-FONTE-UNICA (a Home le' a receita do zootecnico; em OC-VENDA-ENTREGAS-01b) · modal de valor: reconsulta
   da lavoura nao provada, e o editor aberto por ele sem `onAbrirOperacaoOC` (em DRE-MODAL-REFRESH-01).
 - OC e Financeiro:
+  MANDIOCA-OBS-CARGA-01: a observacao da carga (`agri_colheita.observacoes`, o campo do modal) NAO chega ao lancamento
+  do frete — `_agri_carga_inserir_papel` nao grava `observacao`; o motorista no lancamento se poe hoje pelo Financeiro
+  (medido no MANDIOCA-FRETE-SILVIO-01) · CONC-CRIAR-TRANSFERENCIA-01: o "Criar a partir do extrato" trava o tipo em
+  Saida/Entrada e nao permite Transferencia ·
   CONC-MESA-NN-01 (frente propria, medida no CONC-MESA-SINAL-01): a `montarMesa` trata como N:1 TODO lancamento com 2+
   extratos e CONSOME esses extratos — num bloco N:N (Emerson, NJ Sicredi Lavoura ago/26: 3 Pix x 7 arranquios) os outros
   lancamentos ligados aos mesmos extratos SOMEM da mesa (o "Arranquio 20,24 t · NF 9294773" consome o Pix 28/08 -16.276,80
