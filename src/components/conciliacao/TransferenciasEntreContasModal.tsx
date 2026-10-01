@@ -16,6 +16,10 @@
  * ⚠ CASCA DO `SugestoesCasarModal` e a régua da casa: 9,5px, linha de 18px, cabeçalho navy fixo, uma informação por
  *   coluna, Data primeiro, SEM QUEBRA — as colunas foram medidas no maior texto real do NJ set/26 (a descrição do
  *   Sicredi, 61 caracteres). O que não couber na largura da tela rola na horizontal DENTRO da mesa, com o cabeçalho.
+ * ⚠ A MEIA TRANSFERÊNCIA ENTRA NA MESMA TABELA (CONC-TRANSF-SEGUNDA-PONTA-01): o extrato livre na sua coluna (saída ou
+ *   entrada) e a ponta já conciliada na outra, em muted, com "já conciliada". É 1:1 por construção (o banco só lista o
+ *   par único), então nasce marcada; a prévia e a gravação vão por `fecharMeia` (`fn_transferencia_segunda_ponta`), e o
+ *   "Confirmar transferências (N)" conta as duas espécies juntas.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { X } from 'lucide-react';
@@ -26,7 +30,7 @@ import { cn } from '@/lib/utils';
 import { fmtBRL, fmtData } from '@/components/conciliacao/TabelaExtratoDoMes';
 import {
   textoMotivo,
-  type LinhaTransferencia, type PontaTransferencia, type ResultadoTransferencia,
+  type LinhaMeiaPonta, type LinhaTransferencia, type PontaTransferencia, type ResultadoTransferencia,
 } from '@/hooks/useTransferenciasSugeridas';
 
 const CEL = 'px-[4px] whitespace-nowrap';
@@ -44,7 +48,13 @@ const SELO_EXISTENTE = 'border-dashed border-[#1d4ed8] text-[#1d4ed8]';
 export const COLUNAS_TRANSF = [22, 46, 141, 301, 74, 46, 141, 369, 98];
 const LARGURA_MESA = COLUNAS_TRANSF.reduce((a, b) => a + b, 0);
 
-interface ItemPrevia { saidaId: string; entradaId: string; valor: number; res: ResultadoTransferencia }
+/* `par`: a = saída, b = entrada (fn_transferencia_de_extratos). `meia`: a = extrato livre, b = transferência
+   (fn_transferencia_segunda_ponta). `chave` é a da linha na tabela. */
+interface ItemPrevia { chave: string; tipo: 'par' | 'meia'; a: string; b: string; valor: number; res: ResultadoTransferencia }
+type Pendente = Omit<ItemPrevia, 'res'>;
+
+const MUTED = 'text-muted-foreground';
+const chaveMeia = (m: LinhaMeiaPonta) => `meia:${m.extrato.id}`;
 
 interface Props {
   open: boolean;
@@ -54,13 +64,21 @@ interface Props {
   carregando?: boolean;
   erro?: string | null;
   fechar: (saidaId: string, entradaId: string, simular: boolean) => Promise<ResultadoTransferencia>;
+  /** Meias transferências (uma ponta conciliada, a outra livre) — na mesma tabela, pré-marcadas. */
+  meias?: readonly LinhaMeiaPonta[];
+  /** A segunda ponta de uma meia transferência (`simular` não grava). */
+  fecharMeia?: (extratoId: string, lancamentoId: string, simular: boolean) => Promise<ResultadoTransferencia>;
   /** Depois de gravar (só no sucesso): relê a lista e avisa quem mostra lançamento. */
   aoGravar: () => void | Promise<void>;
 }
 
 const resolvida = (l: LinhaTransferencia) => l.como !== 'ambiguo' && !!l.entrada;
 
-export function TransferenciasEntreContasModal({ open, onClose, rotuloMes, linhas, carregando, erro, fechar, aoGravar }: Props) {
+const SEM_MEIAS: readonly LinhaMeiaPonta[] = [];
+
+export function TransferenciasEntreContasModal({
+  open, onClose, rotuloMes, linhas, meias = SEM_MEIAS, carregando, erro, fechar, fecharMeia, aoGravar,
+}: Props) {
   const [escolha, setEscolha] = useState<Record<string, string>>({});
   const [marcados, setMarcados] = useState<Set<string>>(new Set());
   const [previa, setPrevia] = useState<ItemPrevia[] | null>(null);
@@ -71,9 +89,9 @@ export function TransferenciasEntreContasModal({ open, onClose, rotuloMes, linha
   const [aviso, setAviso] = useState<string | null>(null);
 
   /* A lista mudou (abriu, gravou, releu): o resolvido nasce marcado; o ambíguo espera a escolha da entrada. */
-  const chaveLista = linhas.map((l) => l.saida.id).join(',');
+  const chaveLista = [...linhas.map((l) => l.saida.id), ...meias.map(chaveMeia)].join(',');
   useEffect(() => {
-    setMarcados(new Set(linhas.filter(resolvida).map((l) => l.saida.id)));
+    setMarcados(new Set([...linhas.filter(resolvida).map((l) => l.saida.id), ...meias.map(chaveMeia)]));
     setEscolha({});
     setPrevia(null);
   }, [chaveLista]); // eslint-disable-line react-hooks/exhaustive-deps -- a lista é a chave
@@ -91,6 +109,10 @@ export function TransferenciasEntreContasModal({ open, onClose, rotuloMes, linha
     [linhas, marcados, escolha],
   );
 
+  const meiasMarcadas = meias.filter((m) => marcados.has(chaveMeia(m)));
+  const nSelecionadas = selecionados.length + meiasMarcadas.length;
+  const nLinhas = linhas.length + meias.length;
+
   const alternar = (id: string) => {
     setAviso(null);
     setMarcados((m) => { const n = new Set(m); if (n.has(id)) n.delete(id); else n.add(id); return n; });
@@ -103,8 +125,20 @@ export function TransferenciasEntreContasModal({ open, onClose, rotuloMes, linha
 
   /* A PRÉVIA RODA SOZINHA: ao abrir e a cada mudança de seleção ou de contraparte, pela própria RPC com p_simular —
      nada grava. A resposta de uma seleção antiga que chega depois é descartada (`vivo`). */
-  const pares = selecionados.flatMap((l) => { const e = entradaDe(l); return e ? [{ saidaId: l.saida.id, entradaId: e.id, valor: e.valor }] : []; });
-  const chavePares = pares.map((p) => `${p.saidaId}>${p.entradaId}`).join(',');
+  const pares: Pendente[] = [
+    ...selecionados.flatMap((l): Pendente[] => {
+      const e = entradaDe(l);
+      return e ? [{ chave: l.saida.id, tipo: 'par', a: l.saida.id, b: e.id, valor: e.valor }] : [];
+    }),
+    ...meiasMarcadas.map((m): Pendente => ({
+      chave: chaveMeia(m), tipo: 'meia', a: m.extrato.id, b: m.transferencia_id, valor: Math.abs(m.extrato.valor),
+    })),
+  ];
+  const chavePares = pares.map((p) => `${p.a}>${p.b}`).join(',');
+  /* Uma linha pela RPC da sua espécie. Sem `fecharMeia` (quem não passa meias), a meia é recusada — nunca gravada. */
+  const executar = (p: Pendente, simular: boolean): Promise<ResultadoTransferencia> =>
+    p.tipo === 'par' ? fechar(p.a, p.b, simular)
+      : fecharMeia ? fecharMeia(p.a, p.b, simular) : Promise.resolve({ ok: false, motivo: 'recusado' });
   useEffect(() => {
     if (!open) return undefined;
     let vivo = true;
@@ -114,7 +148,7 @@ export function TransferenciasEntreContasModal({ open, onClose, rotuloMes, linha
     (async () => {
       try {
         const itens: ItemPrevia[] = [];
-        for (const p of pares) itens.push({ ...p, res: await fechar(p.saidaId, p.entradaId, true) });
+        for (const p of pares) itens.push({ ...p, res: await executar(p, true) });
         if (vivo) setPrevia(itens);
       } catch (e) {
         if (vivo) setPreviaErro(e instanceof Error ? e.message : String(e));
@@ -133,7 +167,7 @@ export function TransferenciasEntreContasModal({ open, onClose, rotuloMes, linha
   const motivoDesligado = gravando ? 'gravando…'
     : previaCarregando ? 'conferindo a prévia…'
     : previaErro ? `a prévia falhou: ${previaErro}`
-    : selecionados.length === 0 ? 'nenhuma transferência selecionada'
+    : nSelecionadas === 0 ? 'nenhuma transferência selecionada'
     : aceitos.length === 0 ? 'o banco recusou todas as selecionadas'
     : null;
 
@@ -146,7 +180,7 @@ export function TransferenciasEntreContasModal({ open, onClose, rotuloMes, linha
     const recusas: string[] = [];
     try {
       for (const it of aceitos) {
-        const r = await fechar(it.saidaId, it.entradaId, false);
+        const r = await executar(it, false);
         if (r.ok) ok += 1; else recusas.push(`${fmtBRL(it.valor)}: ${textoMotivo(r.motivo)}`);
       }
       /* A recusa fica no modal, ao lado do botão (UX-TOAST-01); o toast só diz o que foi feito, e tem X. */
@@ -198,13 +232,13 @@ export function TransferenciasEntreContasModal({ open, onClose, rotuloMes, linha
               {!carregando && erro && (
                 <tr className="h-[18px]"><td colSpan={9} className="px-[4px] text-rose-600">{erro}</td></tr>
               )}
-              {!carregando && !erro && linhas.length === 0 && (
+              {!carregando && !erro && nLinhas === 0 && (
                 <tr className="h-[18px]"><td colSpan={9} className="px-[4px] italic text-muted-foreground">nenhuma transferência entre contas pendente neste mês</td></tr>
               )}
               {linhas.map((l, i) => {
                 const e = entradaDe(l);
                 const existente = existenteDe(l);
-                const recusa = previa?.find((p) => p.saidaId === l.saida.id && !p.res.ok);
+                const recusa = previa?.find((p) => p.chave === l.saida.id && !p.res.ok);
                 return (
                   <tr key={l.saida.id} data-testid="transferencia"
                     title={l.como === 'mesmo_dia' ? 'resolvida pelo mesmo dia' : undefined}
@@ -247,6 +281,38 @@ export function TransferenciasEntreContasModal({ open, onClose, rotuloMes, linha
                   </tr>
                 );
               })}
+              {meias.map((m, j) => {
+                const k = chaveMeia(m);
+                const livreSai = m.extrato.valor < 0;
+                const recusa = previa?.find((p) => p.chave === k && !p.res.ok);
+                /* a ponta já conciliada: data e conta dela, "já conciliada" no lugar da descrição, tudo em muted */
+                const ligada = { data: fmtData(m.ponta_ligada.data), conta: m.ponta_ligada.conta ?? '—', descricao: 'já conciliada' };
+                const livre = { data: fmtData(m.extrato.data), conta: m.extrato.conta ?? '—', descricao: m.extrato.descricao ?? '—' };
+                const saida = livreSai ? livre : ligada;
+                const entrada = livreSai ? ligada : livre;
+                return (
+                  <tr key={k} data-testid="transferencia" data-meia-ponta=""
+                    className={cn('h-[18px] border-b border-border/50', (linhas.length + j) % 2 === 1 && 'bg-muted/30')}>
+                    <td className="px-[4px] text-center">
+                      <input type="checkbox" className="h-3 w-3 cursor-pointer align-middle"
+                        aria-label={`Transferência ${fmtBRL(Math.abs(m.extrato.valor))} de ${fmtData(m.extrato.data)}`}
+                        checked={marcados.has(k)} onChange={() => alternar(k)} />
+                    </td>
+                    <td className={cn(CEL, 'tabular-nums', !livreSai && MUTED)}>{saida.data}</td>
+                    <td className={cn(CEL, !livreSai && MUTED)}>{saida.conta}</td>
+                    <td className={cn(CEL, !livreSai && MUTED)}>{saida.descricao}</td>
+                    <td className={cn(CEL, 'text-right tabular-nums font-medium')}>{fmtBRL(Math.abs(m.extrato.valor))}</td>
+                    <td className={cn(CEL, DIVISOR, 'tabular-nums', livreSai && MUTED)}>{entrada.data}</td>
+                    <td className={cn(CEL, livreSai && MUTED)}>{entrada.conta}</td>
+                    <td className={cn(CEL, livreSai && MUTED)}>{entrada.descricao}</td>
+                    <td className={cn(CEL, 'text-center')}>
+                      {recusa
+                        ? <span className="text-rose-600" data-testid="recusa-transferencia">{textoMotivo(recusa.res.motivo)}</span>
+                        : <span className={cn(SELO, SELO_EXISTENTE)} data-testid="selo-existente">casa na existente</span>}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -258,7 +324,7 @@ export function TransferenciasEntreContasModal({ open, onClose, rotuloMes, linha
                 + `${casam ? ` · ${casam} casa${casam === 1 ? '' : 'm'} na existente` : ''}`
                 + ` · ${fmtBRL(aceitos.reduce((t, p) => t + p.valor, 0))}`
                 + `${recusados.length ? ` · ${recusados.length} recusada${recusados.length === 1 ? '' : 's'}` : ''}`
-              : `${selecionados.length} de ${linhas.length} selecionada${linhas.length === 1 ? '' : 's'}`)}
+              : `${nSelecionadas} de ${nLinhas} selecionada${nLinhas === 1 ? '' : 's'}`)}
           </span>
           <div className="flex items-center gap-2">
             {motivoDesligado && (

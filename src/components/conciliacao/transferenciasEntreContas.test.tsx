@@ -9,7 +9,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
-import type { LinhaTransferencia, ResultadoTransferencia } from '@/hooks/useTransferenciasSugeridas';
+import type { LinhaMeiaPonta, LinhaTransferencia, ResultadoTransferencia } from '@/hooks/useTransferenciasSugeridas';
 import { TransferenciasEntreContasModal } from './TransferenciasEntreContasModal';
 
 const ponta = (id: string, data: string, valor: number, conta: string, descricao: string) =>
@@ -204,5 +204,77 @@ describe('um clique grava', () => {
       .toBe('1 recusada (50.000,00: um dos movimentos já está conciliado)'));
     expect(M.aoGravar).not.toHaveBeenCalled();
     expect(M.toast).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * CONC-TRANSF-SEGUNDA-PONTA-01 — a meia transferência (uma ponta conciliada, a outra livre) na MESMA tabela.
+ * O caso do NJ mai/26: Sicredi Pessoal 14/05 +2.597,00 livre, a transferência b0134032 já ligada ao Sicredi Lavoura.
+ */
+describe('meia transferência na mesma tabela', () => {
+  const MEIA_ENTRADA: LinhaMeiaPonta = {
+    extrato: ponta('d5b459d6', '2026-05-14', 2597, 'Sicredi Pessoal', 'RECEBIMENTO PIX SICREDI LAVOURA'),
+    transferencia_id: 'b0134032',
+    ponta_ligada: { extrato_id: 'ff2f9e47', data: '2026-05-14', valor: -2597, conta_id: 'c-lav', conta: 'Sicredi Lavoura' },
+  };
+  const MEIA_SAIDA: LinhaMeiaPonta = {
+    extrato: ponta('x7', '2026-05-20', -7000, 'Banco do Brasil', 'PIX ENVIADO'),
+    transferencia_id: 'lanc-7k',
+    ponta_ligada: { extrato_id: 'y7', data: '2026-05-20', valor: 7000, conta_id: 'c-pes', conta: 'Sicredi Pessoal' },
+  };
+  const fecharMeia = vi.fn();
+  beforeEach(() => {
+    fecharMeia.mockReset().mockImplementation(async (): Promise<ResultadoTransferencia> => ({ ok: true, acao: 'casar_existente' }));
+  });
+  const abrirComMeias = (linhas: LinhaTransferencia[], meias: LinhaMeiaPonta[]) => render(
+    <TransferenciasEntreContasModal open onClose={() => {}} rotuloMes="05/2026" linhas={linhas} meias={meias}
+      fechar={M.fechar} fecharMeia={fecharMeia} aoGravar={M.aoGravar} />,
+  );
+
+  it('nasce marcada; a ponta livre na sua coluna e a já conciliada na outra, em muted, com "já conciliada"', async () => {
+    abrirComMeias([], [MEIA_ENTRADA, MEIA_SAIDA]);
+    expect(caixa('2.597,00')).toBeChecked();
+    expect(caixa('7.000,00')).toBeChecked();
+    /* livre é ENTRADA: a saída mostra a ponta ligada (Lavoura) em muted */
+    const cels = within(linhaDe('2.597,00')).getAllByRole('cell');
+    expect(cels.slice(1, 8).map((c) => c.textContent)).toEqual([
+      '14/05', 'Sicredi Lavoura', 'já conciliada', '2.597,00', '14/05', 'Sicredi Pessoal', 'RECEBIMENTO PIX SICREDI LAVOURA',
+    ]);
+    for (const i of [1, 2, 3]) expect(cels[i].className).toContain('text-muted-foreground');
+    for (const i of [5, 6, 7]) expect(cels[i].className).not.toContain('text-muted-foreground');
+    /* livre é SAÍDA: o espelho */
+    const cs = within(linhaDe('7.000,00')).getAllByRole('cell');
+    expect(cs[7].textContent).toBe('já conciliada');
+    for (const i of [5, 6, 7]) expect(cs[i].className).toContain('text-muted-foreground');
+    expect(within(linhaDe('2.597,00')).getByTestId('selo-existente').textContent).toBe('casa na existente');
+    expect(await confirmar(2)).toBeEnabled();
+  });
+
+  it('"Confirmar (N)" conta as duas espécies; a prévia vai a cada RPC com simular = true', async () => {
+    abrirComMeias([LIMPO], [MEIA_ENTRADA]);
+    expect(await confirmar(2)).toBeEnabled();
+    expect(M.fechar.mock.calls).toEqual([['s50', 'e50', true]]);
+    expect(fecharMeia.mock.calls).toEqual([['d5b459d6', 'b0134032', true]]);
+    expect(screen.getByTestId('previa-transferencias').textContent)
+      .toBe('2 transferências: 1 nova · 1 casa na existente · 52.597,00');
+  });
+
+  it('um clique grava as duas espécies juntas, cada uma pela sua RPC, e a lista relê', async () => {
+    abrirComMeias([LIMPO], [MEIA_ENTRADA]);
+    fireEvent.click(await confirmar(2));
+    await waitFor(() => expect(M.aoGravar).toHaveBeenCalledTimes(1));
+    expect(gravacoes()).toEqual([['s50', 'e50', false]]);
+    expect(fecharMeia.mock.calls.filter((c) => c[2] === false)).toEqual([['d5b459d6', 'b0134032', false]]);
+  });
+
+  it('desmarcar a meia tira da contagem; a recusa dela aparece na linha com o motivo', async () => {
+    fecharMeia.mockImplementation(async (): Promise<ResultadoTransferencia> => ({ ok: false, motivo: 'ponta_ja_ligada' }));
+    abrirComMeias([LIMPO], [MEIA_ENTRADA]);
+    await confirmar(1);
+    expect(within(linhaDe('2.597,00')).getByTestId('recusa-transferencia').textContent)
+      .toBe('esta ponta da transferência já está conciliada');
+    fireEvent.click(caixa('2.597,00'));
+    expect(await confirmar(1)).toBeEnabled();
+    await waitFor(() => expect(screen.getByTestId('previa-transferencias').textContent).toBe('1 transferência: 1 nova · 50.000,00'));
   });
 });

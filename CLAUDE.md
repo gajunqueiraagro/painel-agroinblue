@@ -160,8 +160,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 01/10/2026 (MANDIOCA-RETENCAO-NF-01, +4 em `src/lib/agri/compromissosDaCarga.test.ts`; antes o
-  CONC-BLOCOS-TELA-01, +12, e o MANDIOCA-ICMS-REPASSE-01, +8): 2769 passando, 22 skipped, e
+  Baseline em 01/10/2026 (CONC-TRANSF-SEGUNDA-PONTA-01, +9: 4 em `transferenciasEntreContas.test.tsx`, 2 em
+  `acoesDoMesTransferencias.test.tsx`, 3 no novo `src/hooks/useTransferenciasSugeridas.test.tsx`; antes o
+  CONC-CASAR-ALTURA-01, +3, e o MANDIOCA-RETENCAO-NF-01, +4): 2778 passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -779,6 +780,11 @@ docs/historico/frentes-ate-2026-09-29.md.)
     vinculos de lancamento cancelado do proto, todos desfeitos).
   ⚠ A trava `guard_transferencia_conta_destino` so' via o singular '3-Transferência'; agora ve os dois (INSERT sem destino
     recusa; UPDATE so' recusa quem remove um destino que existia).
+  ⚠ MEIA TRANSFERENCIA (uma ponta conciliada, a outra solta) FECHA PELA SEGUNDA PONTA (CONC-TRANSF-SEGUNDA-PONTA-01, migration
+    20261027185700, ledger 20261001173005): `fn_transferencias_meia_ponta` lista o extrato livre x a transferencia com UM vinculo
+    vivo em OUTRA conta (mesmo valor, na direcao, |dias| <= 1, so' o 1:1; a linha e' do mes quando uma das pontas cai nele) e
+    `fn_transferencia_segunda_ponta` (`p_simular`) grava pelo vincular com `p_dupla_ponta`, sem mexer no lancamento. Entra
+    na MESMA tabela e no MESMO (N) do "Transferencias entre contas". Medido: 58 no NJ de mar a jul (o backfill de jun/26).
 - ⚠ BOITEL: ao financeiro e ao DRE vai SO' O LIQUIDO DO ACERTO; R$/@ de venda = liquido / @ vivas que sairam. O VALOR DA
   OPERACAO E' O SLOT (`zoo_operacao_lotes.valor_informado`, helper `valorDaVendaBoitel`) e a tela nunca o calcula; o
   acerto e' conferencia. Com o realizado aplicado, o realizado vence a projecao em tudo (`custosDaVendaBoitel`, mesmo

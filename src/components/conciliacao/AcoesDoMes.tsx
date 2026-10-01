@@ -61,7 +61,9 @@ export function AcoesDoMes({ clienteId, contaId, contaNome, ano, mes, aoMudar }:
   const [verTransferencias, setVerTransferencias] = useState(false);
   const anoMes = `${ano}-${String(mes).padStart(2, '0')}`;
   const transf = useTransferenciasSugeridas(clienteId, anoMes);
-  const nTransf = transf.dados.total;
+  /* CONC-TRANSF-SEGUNDA-PONTA-01: o (N) soma as duas espécies — pares de duas pontas livres e meias transferências. */
+  const meias = transf.dados.meias ?? [];
+  const nTransf = transf.dados.total + meias.length;
 
   /* ⚠ MESMA RÉGUA DO BOTÃO ANTIGO: `situacao === 'nao_conciliado'` é o vínculo real (soma dos
      `valor_aplicado` ativos), não heurística. Movimento parcial fica de fora, como antes. */
@@ -89,9 +91,11 @@ export function AcoesDoMes({ clienteId, contaId, contaNome, ano, mes, aoMudar }:
         onClose={() => setVerTransferencias(false)}
         rotuloMes={`${String(mes).padStart(2, '0')}/${ano}`}
         linhas={transf.dados.linhas}
+        meias={meias}
         carregando={transf.carregando}
         erro={transf.erro}
         fechar={transf.fechar}
+        fecharMeia={transf.fecharMeia}
         aoGravar={async () => { await transf.depoisDeGravar(); await recarregarTudo(); }}
       />
     </>

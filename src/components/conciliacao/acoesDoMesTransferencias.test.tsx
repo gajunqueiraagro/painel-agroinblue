@@ -7,7 +7,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
-const M = vi.hoisted(() => ({ movimentos: [] as Array<{ situacao: string }>, total: 0 }));
+const M = vi.hoisted(() => ({ movimentos: [] as Array<{ situacao: string }>, total: 0, meias: [] as unknown[] }));
 
 vi.mock('@/hooks/useConciliacaoDoMes', () => ({
   useConciliacaoDoMes: () => ({ movimentos: M.movimentos, recarregar: vi.fn() }),
@@ -23,13 +23,13 @@ vi.mock('@/components/conciliacao/ConciliarMesDialog', () => ({ ConciliarMesDial
 vi.mock('@/components/conciliacao/TransferenciasEntreContasModal', () => ({ TransferenciasEntreContasModal: () => null }));
 vi.mock('@/hooks/useTransferenciasSugeridas', () => ({
   useTransferenciasSugeridas: () => ({
-    dados: { total: M.total, linhas: [] }, carregando: false, erro: null, fechar: vi.fn(), depoisDeGravar: vi.fn(),
+    dados: { total: M.total, linhas: [], meias: M.meias }, carregando: false, erro: null, fechar: vi.fn(), fecharMeia: vi.fn(), depoisDeGravar: vi.fn(),
   }),
 }));
 
 import { AcoesDoMes } from './AcoesDoMes';
 
-beforeEach(() => { M.movimentos = [{ situacao: 'nao_conciliado' }]; M.total = 10; });
+beforeEach(() => { M.movimentos = [{ situacao: 'nao_conciliado' }]; M.total = 10; M.meias = []; });
 
 const montar = () => render(<AcoesDoMes clienteId="nj" contaId="itau" contaNome="Itau BBA" ano={2026} mes={9} />);
 
@@ -51,6 +51,18 @@ describe('Transferências entre contas no passo 2', () => {
     M.movimentos = [];
     montar();
     expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['Transferências entre contas (10)']);
+  });
+
+  /* CONC-TRANSF-SEGUNDA-PONTA-01: o (N) soma pares e meias transferências. */
+  it('o número soma as duas espécies: 10 pares + 3 meias = (13)', () => {
+    M.meias = [{}, {}, {}];
+    montar();
+    expect(screen.getAllByRole('button')[0].textContent).toBe('Transferências entre contas (13)');
+  });
+  it('só meias pendentes, conta sem movimento: o botão aparece com o número delas', () => {
+    M.movimentos = []; M.total = 0; M.meias = [{}, {}];
+    montar();
+    expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['Transferências entre contas (2)']);
   });
 
   it('conta sem movimento e nenhum par: nada aparece, como antes', () => {
