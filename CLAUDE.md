@@ -613,6 +613,13 @@ docs/historico/frentes-ate-2026-09-29.md.)
   (`_agri_carga_inserir_papel`) e a pergunta "uma vez por NF" e' UMA (`_agri_carga_papel_na_nf`); papel que falta numa NF ja'
   registrada se acrescenta por `agri_carga_mandioca_completar`, que herda conta, SAFRA e fazenda da VENDA da carga (nao do
   talhao). O estado anterior do backfill das 14 NFs mora em `mandioca_icms_repasse_01_backfill` (gesto contrario linha a linha).
+- ⚠ BLOCO DE CONCILIACAO = N EXTRATOS x M LANCAMENTOS NUMA GRAVACAO (CONC-BLOCOS-01, migration 20261027185300, ledger
+  20261001125516): `fn_conciliar_bloco` (regra 'exato' ou 'mais_antigo_primeiro', `p_simular`) e `fn_desfazer_bloco` (restaura
+  status e data pelo `estado_anterior` de `conciliacao_blocos`). Os vinculos sao `conciliacao_bancaria_itens` com `grupo_id` =
+  bloco e 'agrupamento_manual'. NUNCA muda o valor do lancamento; so' o QUITADO vira realizado (data = extrato que quitou), o
+  parcial fica como estava. O gatilho de promocao pula quando `app.conciliar_bloco = 'on'` — so' o motor liga; 1:1 e 1:N
+  continuam promovendo no 1o vinculo. Recusa com SQLSTATE 'CBLOC' e a frase. ⚠ `grupo_id` SEM FK: 53 grupos antigos (154
+  vinculos) nao tem bloco — a FK pede antes um bloco 'legado' para cada um (pendente).
 - ⚠ MESA: NO CRU A PLANILHA PREVALECE, NO CLASSIFICADO O SISTEMA (PR-CONC-MESA-CRU-EXCEL-PREVALECE-01, Gabriel 30/09).
   CRU = lancamento de origem 'extrato'/'ofx' SEM conta do plano, fora transferencia. Quem decide e' o BANCO, numa funcao
   so' (`_fn_classificacao_precedencia_cru`, no fim do casar e do populate): a leitura da planilha fica em
