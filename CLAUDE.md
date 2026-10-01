@@ -629,6 +629,15 @@ docs/historico/frentes-ate-2026-09-29.md.)
     (o antigo "Usar valor do banco", so' no 1:N). Linha de bloco tem "Desfazer bloco" no "⋯" (passo inline, motivo
     obrigatorio). O vinculado PARCIAL continua candidato, com o chip "Parcial — falta R$ X" (aplicado vivo lido de
     `conciliacao_bancaria_itens`; o saldo livre quem valida e' a RPC).
+- ⚠ CAIXA DO SISTEMA = UMA REGRA NO BANCO (CONC-CAIXA-PONTA-01, migration 20261027185500, ledger 20261001141213):
+  `fn_caixa_sistema_pontas(cliente, conta, de, ate)` devolve uma linha por PONTA (lancamento x conta, sinal da direcao) e
+  data. Parcial (programado/agendado com 0 < aplicado < valor): o aplicado na data de cada extrato; realizado cujo aplicado
+  soma o valor: o aplicado nas datas dos extratos; o resto: como hoje (valor cheio na data de pagamento = o lv2). A
+  `fn_extratos_espelhados` emite `sistema_caixa` (versao espelhados-05-caixa) ao lado do `sistema_completo`; as 4 telas de
+  saldo (resumo da Conciliacao, aba Sistema, Evolucao, painel do mes) trocam no PR B. Medido: 1.973 conta-meses, so' o
+  Sicredi Lavoura ago/26 muda (+10.224,04, passa a bater em todos os dias). PENDENTE de decisao de dado: o par do BB do NJ
+  mai/26 (estorno 426aeeb0 conciliado mas programado sem data; devolucao 3314dfa1 cancelada, extrato +699,79 sem par) e as
+  7 pontas sobre-aplicadas legadas (aplicado > valor do lancamento) — ficam no "como hoje".
 - ⚠ MESA: NO CRU A PLANILHA PREVALECE, NO CLASSIFICADO O SISTEMA (PR-CONC-MESA-CRU-EXCEL-PREVALECE-01, Gabriel 30/09).
   CRU = lancamento de origem 'extrato'/'ofx' SEM conta do plano, fora transferencia. Quem decide e' o BANCO, numa funcao
   so' (`_fn_classificacao_precedencia_cru`, no fim do casar e do populate): a leitura da planilha fica em
