@@ -519,3 +519,39 @@ describe('CONC-N1-DESCONCILIAR-01 — N:1 sem grupo desconcilia por extrato', ()
     expect(fixture.chamadas.some((c) => c.fn === 'fn_desfazer_vinculo_extrato')).toBe(false);
   });
 });
+
+/* CONC-MESA-SINAL-01 — o desenho da filha usa o sinal do LANÇAMENTO: a dedução aparece NEGATIVA dentro do depósito, e a
+   soma da mãe é o líquido (o mesmo valor do extrato). Caso real NJ Sicredi Lavoura 06/04/2026. */
+describe('CONC-MESA-SINAL-01 — a dedução aparece negativa no depósito', () => {
+  const DEP: EspelhadosReais = {
+    ...ESPELHO,
+    ofx_completo: [...ESPELHO.ofx_completo,
+      { extrato_id: 'dep', data: '2026-09-07', historico: 'DEPOSITO VENDA GRAO', documento: null, valor: 402395.07, status: 'conciliado', flag_dup: false, flag_investimento: false }],
+    sistema_completo: [...ESPELHO.sistema_completo,
+      { lancamento_id: 'venda', data: '2026-09-07', descricao: 'Venda Soja', centro: null, subcentro: null, valor_assinado: 428386.4, sinal: '1', status: 'conciliado', fornecedor: null },
+      { lancamento_id: 'senar', data: '2026-09-07', descricao: 'Senar retido', centro: null, subcentro: null, valor_assinado: -856.76, sinal: '-1', status: 'conciliado', fornecedor: null },
+      { lancamento_id: 'desc', data: '2026-09-07', descricao: 'Descontos classificacao', centro: null, subcentro: null, valor_assinado: -25134.57, sinal: '-1', status: 'conciliado', fornecedor: null }],
+    vinculos: [...ESPELHO.vinculos,
+      { extrato_id: 'dep', lancamento_id: 'venda', valor_aplicado: 428386.4, tipo_aprovacao: 'agrupamento_manual', grupo_id: 'g9' },
+      { extrato_id: 'dep', lancamento_id: 'senar', valor_aplicado: 856.76, tipo_aprovacao: 'agrupamento_manual', grupo_id: 'g9' },
+      { extrato_id: 'dep', lancamento_id: 'desc', valor_aplicado: 25134.57, tipo_aprovacao: 'agrupamento_manual', grupo_id: 'g9' }],
+  };
+
+  it('filhas: venda positiva, Senar e descontos negativos; a mãe soma o líquido; o dia confere', async () => {
+    fixture.espelho = DEP;
+    const modal = await abrirConferencia();
+    const mae = within(modal).getByText('DEPOSITO VENDA GRAO').closest('tr');
+    if (!(mae instanceof HTMLElement)) throw new Error('mãe não encontrada');
+    expect(mae.textContent).toContain('402.395,07');
+    expect(mae.textContent).not.toContain('454.377,73');   // a soma errada (bruto + deduções)
+    const filhas: string[] = [];
+    let tr = mae.nextElementSibling;
+    while (tr && tr.textContent?.includes('↳')) { filhas.push(tr.textContent ?? ''); tr = tr.nextElementSibling; }
+    expect(filhas).toHaveLength(3);
+    expect(filhas.some((t) => t.includes('-856,76'))).toBe(true);
+    expect(filhas.some((t) => t.includes('-25.134,57'))).toBe(true);
+    expect(filhas.some((t) => t.includes('428.386,40') && !t.includes('-428.386,40'))).toBe(true);
+    const fechamento = [...modal.querySelectorAll('tr')].find((r) => r.textContent?.startsWith('fechamento 07/09'));
+    expect(fechamento?.textContent).toContain('confere');
+  });
+});

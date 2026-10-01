@@ -378,6 +378,21 @@ export function totaisDoEspelho(data: EspelhadosReais, internos: ReadonlySet<str
   };
 }
 
+/**
+ * O SINAL DE UM VALOR APLICADO — CONC-MESA-SINAL-01. É o do LANÇAMENTO na conta (`valor_assinado` de `sistema_completo`);
+ * só sem ele (lançamento fora do recorte) cai no sinal do extrato, que era a regra de antes para todos.
+ * ⚠ NASCE DE 2× AS DEDUÇÕES: o depósito de venda de grão casado em bloco (bruto + Senar + descontos; e, desde o
+ *   MANDIOCA-RETENCAO-NF-01, a venda + o Funrural) põe no MESMO extrato lançamentos de sinal oposto. Com o sinal do extrato
+ *   para todos, a dedução entrava somando: NJ Sicredi Lavoura 06/04 mostrava -51.982,66 (= 2 × 25.991,33) num dia em que o
+ *   caixa do banco (`sistema_caixa`) fecha igual ao extrato. Os dados estavam certos; a mesa, não.
+ * ⚠ UMA FUNÇÃO SÓ para a soma do dia (`montarMesa`) e para o desenho da filha: a dedução aparece negativa dentro do bloco
+ *   do depósito pelo mesmo cálculo que a tira do total.
+ */
+export function sinalDoAplicado(sis: Pick<EspSis, 'valor_assinado'> | undefined, valorExtrato: number): number {
+  if (sis && sis.valor_assinado !== 0 && Number.isFinite(sis.valor_assinado)) return Math.sign(sis.valor_assinado);
+  return Math.sign(valorExtrato || 1);
+}
+
 export function montarMesa(data: EspelhadosReais, internos: ReadonlySet<string>) {
   const vinculos = data.vinculos ?? [];
   const sisPorId = new Map(data.sistema_completo.map((s) => [s.lancamento_id, s]));
@@ -438,9 +453,14 @@ export function montarMesa(data: EspelhadosReais, internos: ReadonlySet<string>)
     if (consumidos.has(extrato.extrato_id)) continue;
     const vs = porExtrato.get(extrato.extrato_id) ?? [];
     if (vs.length === 0) { d.extratosSemPar.push(extrato); continue; }
-    const soma = vs.reduce((a, v) => a + Number(v.valor_aplicado ?? 0), 0);
-    /* O aplicado é magnitude; o sinal de quem o explica é o do extrato. */
-    d.sistema += Math.sign(extrato.valor || 1) * soma;
+    /* O aplicado é magnitude; o sinal é o do LANÇAMENTO (`sinalDoAplicado`), não o do extrato — a dedução de um depósito
+       de venda casado em bloco entra negativa. `soma` segue na direção do extrato (a de sempre: diferença = |extrato| −
+       soma, zero no bloco certo); o dia recebe a soma assinada. */
+    const sinalExtrato = Math.sign(extrato.valor || 1);
+    const somaAssinada = vs.reduce((a, v) =>
+      a + sinalDoAplicado(sisPorId.get(v.lancamento_id), extrato.valor) * Number(v.valor_aplicado ?? 0), 0);
+    const soma = sinalExtrato * somaAssinada;
+    d.sistema += somaAssinada;
     d.pareados.push({
       extrato,
       filhas: vs.map((v) => ({
@@ -647,8 +667,6 @@ const CONCILIADA = 'bg-success/[0.06]';
 const CONCILIADA_FILHA = 'bg-success/[0.08]';
 
 const corVal = (v: number) => (v < 0 ? 'text-rose-600' : 'text-emerald-600');
-/** O aplicado é magnitude; quem dá o sinal é o extrato que a filha explica. */
-const assinado = (valorExtrato: number, aplicado: number) => Math.sign(valorExtrato || 1) * aplicado;
 
 /**
  * O STATUS DO LADO DO SISTEMA, NUMA COLUNA PRÓPRIA — PR-CONC-CONFERENCIA-MODAL-01 (regra do
@@ -1497,8 +1515,9 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
                           <td /><td /><td /><td />
                           <td className={cn(MEIO, 'font-normal text-muted-foreground')}>↳</td>
                           <td />
-                          <td className={cn(CEL, 'text-left font-normal tabular-nums', corVal(assinado(p.extrato.valor, f.valor_aplicado)))}>
-                            {fmtBRL(assinado(p.extrato.valor, f.valor_aplicado))}
+                          {/* CONC-MESA-SINAL-01: o sinal da filha é o do lançamento — a dedução aparece negativa no depósito. */}
+                          <td className={cn(CEL, 'text-left font-normal tabular-nums', corVal(sinalDoAplicado(f.sis, p.extrato.valor) * f.valor_aplicado))}>
+                            {fmtBRL(sinalDoAplicado(f.sis, p.extrato.valor) * f.valor_aplicado)}
                           </td>
                           <CelDataSistema data={f.sis?.data} rotulo="data do lançamento" />
                           <td className={cn(CEL, 'font-normal text-muted-foreground')} title={tituloLancamento(f.sis)}>

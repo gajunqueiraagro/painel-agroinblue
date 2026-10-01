@@ -161,7 +161,7 @@ no mesmo arquivo.
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
   Baseline em 01/10/2026 (CONC-TRANSF-SEGUNDA-PONTA-02, +3: 2 em `src/hooks/useTransferenciasSugeridas.test.tsx` e 1 em
-  `transferenciasEntreContas.test.tsx`; antes o CONC-TRANSF-SEGUNDA-PONTA-01, +9, e o CONC-CASAR-ALTURA-01, +3): 2784
+  `transferenciasEntreContas.test.tsx`; antes o CONC-TRANSF-SEGUNDA-PONTA-01, +9, e o CONC-CASAR-ALTURA-01, +3): 2790
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -248,6 +248,13 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   DRE-HOME-FONTE-UNICA (a Home le' a receita do zootecnico; em OC-VENDA-ENTREGAS-01b) · modal de valor: reconsulta
   da lavoura nao provada, e o editor aberto por ele sem `onAbrirOperacaoOC` (em DRE-MODAL-REFRESH-01).
 - OC e Financeiro:
+  CONC-MESA-NN-01 (frente propria, medida no CONC-MESA-SINAL-01): a `montarMesa` trata como N:1 TODO lancamento com 2+
+  extratos e CONSOME esses extratos — num bloco N:N (Emerson, NJ Sicredi Lavoura ago/26: 3 Pix x 7 arranquios) os outros
+  lancamentos ligados aos mesmos extratos SOMEM da mesa (o "Arranquio 20,24 t · NF 9294773" consome o Pix 28/08 -16.276,80
+  e os outros 6 arranquios, 16.443,20, saem; mais 352,40 no 40,34 t) e o mes inteiro difere (mesa -170.601,20 x
+  `sistema_caixa` -184.396,80); e o N:1 e' desenhado na data do LANCAMENTO, nao na de cada extrato (ICMS NF 9287581
+  2.470,26 = 454,26 em 26/08 + 2.016,00 em 27/08, todo em 27/08; os 3.000 do Pix 24/08 do 40,34 t em 28/08), enquanto o
+  caixa reparte por extrato. Conserto: o bloco N:N na mesa e o N:1 datado por extrato (a regra do caixa) ·
   OC-BOITEL-DELTA-ANTIGO-01 (decisao) · OC-SALDO-MODAL-01 · OC-CLASSIF-ALINHAR-01 (decisao, caso a caso) ·
   OC-RETORNO-GERAL-01 (link direto perde `oc_aba`; em OC-RECLASSIFICAR-ITEM-01) · OC-ADOTAR-TODOS-01 (adotar saida no
   abate e na compra; em OC-VENDA-ENTREGAS-01a) · CANCEL-MOTIVO-BANCO-01 · CONCIL-DESFAZER-STATUS-01 (decisao) ·

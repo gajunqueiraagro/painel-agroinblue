@@ -13,7 +13,7 @@
  * interna sai mesmo quando alguém a concilia à mão.
  */
 import { describe, it, expect } from 'vitest';
-import { montarMesa, totaisDoEspelho, type EspelhadosReais } from './EspelhoConciliacaoTab';
+import { montarMesa, totaisDoEspelho, sinalDoAplicado, type EspelhadosReais } from './EspelhoConciliacaoTab';
 
 const VAZIO = {
   escopo: { cliente_id: 'c', conta_id: 'x', ano_mes: '2026-08', nome_conta: 'Bradesco' },
@@ -115,5 +115,72 @@ describe('cabeçalho — item B', () => {
     const dias = montarMesa(dados, internos);
     expect(t.entradasSistema + t.saidasSistema).toBe(somaSistemaDaMesa(dias));
     expect(t.entradasBanco + t.saidasBanco).toBe(dias.reduce((a, d) => a + d.banco, 0));
+  });
+});
+
+/**
+ * CONC-MESA-SINAL-01 — o valor aplicado leva o sinal do LANÇAMENTO, não o do extrato.
+ * O caso real: NJ Sicredi Lavoura 06/04/2026, depósito +402.395,07 = Venda +428.386,40 − Senar 856,76 − Descontos
+ * 25.134,57, casado em bloco. Com o sinal do extrato para todos, a mesa somava as deduções e o dia mostrava −51.982,66
+ * (= 2 × 25.991,33) onde o caixa do banco fecha igual ao extrato.
+ */
+describe('CONC-MESA-SINAL-01 — sinal do aplicado', () => {
+  const v = (e: string, l: string, ap: number, grupo: string | null = 'b1') =>
+    ({ extrato_id: e, lancamento_id: l, valor_aplicado: ap, tipo_aprovacao: 'agrupamento_manual', grupo_id: grupo });
+  const deposito = espelho({
+    ofx_completo: [ofx('dep', 402395.07, '2026-04-06')],
+    sistema_completo: [sis('venda', 428386.40, '2026-04-06'), sis('senar', -856.76, '2026-04-06'), sis('desc', -25134.57, '2026-04-06')],
+    vinculos: [v('dep', 'venda', 428386.40), v('dep', 'senar', 856.76), v('dep', 'desc', 25134.57)],
+  });
+
+  it('depósito com filhas de sinal oposto: o dia soma o líquido e fecha com o banco (diferença 0)', () => {
+    const [d] = montarMesa(deposito, new Set());
+    expect(d.sistema).toBeCloseTo(402395.07, 2);
+    expect(d.banco - d.sistema).toBeCloseTo(0, 2);
+    const [p] = d.pareados;
+    expect(p.soma).toBeCloseTo(402395.07, 2);
+    expect(p.diferenca).toBeCloseTo(0, 2);
+  });
+
+  it('a dedução tem sinal negativo dentro do depósito; a venda, positivo', () => {
+    const [d] = montarMesa(deposito, new Set());
+    const sinais = d.pareados[0].filhas.map((f) => [f.lancamento_id, sinalDoAplicado(f.sis, 402395.07)]);
+    expect(Object.fromEntries(sinais)).toEqual({ venda: 1, senar: -1, desc: -1 });
+  });
+
+  it('saída com um estorno de sinal oposto: o mesmo cálculo, na direção do extrato', () => {
+    const dados = espelho({
+      ofx_completo: [ofx('s', -900)],
+      sistema_completo: [sis('pag', -1000), sis('estorno', 100)],
+      vinculos: [v('s', 'pag', 1000), v('s', 'estorno', 100)],
+    });
+    const [d] = montarMesa(dados, new Set());
+    expect(d.sistema).toBeCloseTo(-900, 2);
+    expect(d.pareados[0].soma).toBeCloseTo(900, 2);        // na direção do extrato, como sempre
+    expect(d.pareados[0].diferenca).toBeCloseTo(0, 2);
+  });
+
+  it('N:1 inalterado: o lançamento conta pelo valor dele, uma vez', () => {
+    const dados = espelho({
+      ofx_completo: [ofx('a', -60), ofx('b', -40)],
+      sistema_completo: [sis('t', -100)],
+      vinculos: [v('a', 't', 60, null), v('b', 't', 40, null)],
+    });
+    const [d] = montarMesa(dados, new Set());
+    expect(d.paredosN1).toHaveLength(1);
+    expect(d.sistema).toBe(-100);
+    expect(d.paredosN1[0].diferenca).toBe(0);
+  });
+
+  it('fallback: lançamento fora do sistema_completo leva o sinal do extrato (a regra de antes)', () => {
+    const dados = espelho({
+      ofx_completo: [ofx('e', -300)],
+      sistema_completo: [],
+      vinculos: [v('e', 'fora', 300, null)],
+    });
+    const [d] = montarMesa(dados, new Set());
+    expect(d.sistema).toBe(-300);
+    expect(sinalDoAplicado(undefined, -300)).toBe(-1);
+    expect(sinalDoAplicado({ valor_assinado: 0 }, 50)).toBe(1);
   });
 });
