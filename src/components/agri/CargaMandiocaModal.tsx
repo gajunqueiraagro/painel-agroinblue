@@ -227,7 +227,7 @@ function Par({ rotulo, valor, forte }: { rotulo: string; valor: string; forte?: 
 
 export function CargaMandiocaModal({
   aberto, form, clienteId, areas, areaId, safraRotulo, fazendaNome, salvando,
-  icmsTravado, transporteTravado, talhoesDaCarga, travados, onAreaChange, onChange, onFechar, onSalvar,
+  icmsTravado, transporteTravado, funruralTravado, talhoesDaCarga, travados, onAreaChange, onChange, onFechar, onSalvar,
 }: {
   aberto: boolean;
   form: CargaMandiocaForm | null;
@@ -247,6 +247,8 @@ export function CargaMandiocaModal({
   icmsTravado: boolean;
   /** A NF desta carga já tem ICMS do FRETE lançado por outra carga — a mesma trava, uma vez por nota. */
   transporteTravado: boolean;
+  /** A NF desta carga já tem a RETENÇÃO (Funrural/SENAR) lançada por outra carga — a mesma trava, uma vez por nota. */
+  funruralTravado: boolean;
   /**
    * Os talhões da carga INTEIRA, já unidos ("IND.05 · IND.06"), ou `null` numa carga nova.
    * ⚠ NÃO SE DERIVA DE `areaId`: ele cabe um só, e uma carga dividida tem dois. Quem junta é
@@ -744,10 +746,15 @@ export function CargaMandiocaModal({
                           icmsTravado && 'bg-muted text-muted-foreground')} />
                     </div>
                     <div>
-                      <Label className="text-[10px]">Funrural (R$)</Label>
-                      <CampoMoeda valor={num(form.funrural)}
+                      <Label className="flex items-center gap-1 text-[10px]">
+                        Funrural (R$)
+                        {funruralTravado && <Lock className="h-2.5 w-2.5 text-muted-foreground" />}
+                      </Label>
+                      <CampoMoeda valor={funruralTravado ? 0 : num(form.funrural)}
+                        disabled={funruralTravado}
                         onChange={n => campo('funrural', n == null ? '' : String(n))}
-                        className={cn('mt-0.5 h-8 text-right font-mono text-[12px]', FOCO)} />
+                        className={cn('mt-0.5 h-8 text-right font-mono text-[12px]', FOCO,
+                          funruralTravado && 'bg-muted text-muted-foreground')} />
                     </div>
                     <div>
                       <Label className="text-[10px]">INSS (R$)</Label>
@@ -776,7 +783,7 @@ export function CargaMandiocaModal({
                       cortaria justamente o número da nota, que é o que ela veio dizer. */}
                   <div className="mt-1">
                     <span className="text-[10px] leading-snug text-muted-foreground">
-                      {dicaImpostosDaNota(form.nf, icmsTravado, transporteTravado)}
+                      {dicaImpostosDaNota(form.nf, icmsTravado, transporteTravado, funruralTravado)}
                     </span>
                   </div>
                 </div>

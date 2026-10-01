@@ -160,8 +160,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 01/10/2026 (CONC-BLOCOS-TELA-01, +8 em `src/components/financeiro-v2/casarComBancoModal.test.tsx` e +4 em
-  `src/components/financeiro-v2/conferenciaModal.test.tsx`; antes o MANDIOCA-ICMS-REPASSE-01, +8): 2762 passando, 22 skipped, e
+  Baseline em 01/10/2026 (MANDIOCA-RETENCAO-NF-01, +4 em `src/lib/agri/compromissosDaCarga.test.ts`; antes o
+  CONC-BLOCOS-TELA-01, +12, e o MANDIOCA-ICMS-REPASSE-01, +8): 2766 passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -613,6 +613,15 @@ docs/historico/frentes-ate-2026-09-29.md.)
   (`_agri_carga_inserir_papel`) e a pergunta "uma vez por NF" e' UMA (`_agri_carga_papel_na_nf`); papel que falta numa NF ja'
   registrada se acrescenta por `agri_carga_mandioca_completar`, que herda conta, SAFRA e fazenda da VENDA da carga (nao do
   talhao). O estado anterior do backfill das 14 NFs mora em `mandioca_icms_repasse_01_backfill` (gesto contrario linha a linha).
+  ⚠ A RETENCAO DA NF-e DO COMPRADOR (Funrural 1,63% ago, SENAR 0,2% set) E' O PAPEL 'funrural', UMA VEZ POR NF
+    (MANDIOCA-RETENCAO-NF-01, migration 20261027185600, ledger 20261001144347): o comprador retem e deposita o LIQUIDO, entao o
+    "falta" da venda num deposito NAO e' recebivel — e' a retencao. Saida, programado, deducao (b451681a), favorecido = comprador,
+    conta da venda, competencia = carga da NF; o registrar e o modal (`funruralTravado`) travam por NF como o ICMS, e
+    `agri_carga_mandioca_completar(…, p_rotulo, p_nfe)` a acrescenta ("Funrural retido 1,63% · NF x · NF-e y"). Backfill das 16 NFs
+    (1.564,96; 43,30 da 9320690 na 26/27, invisivel no DRE — LAVOURA-2627-INVISIVEL-01) em `mandioca_retencao_nf_01_backfill`.
+  ⚠ NO 'exato' O BLOCO ACEITA LANCAMENTO DE SINAL OPOSTO (venda + e retencao - contra o deposito liquido; soma com sinal); o
+    oposto vincula INTEIRO ao extrato MAIS ANTIGO do bloco. O 'mais_antigo_primeiro' segue uma direcao so' (recusa
+    `direcao_incoerente`).
 - ⚠ BLOCO DE CONCILIACAO = N EXTRATOS x M LANCAMENTOS NUMA GRAVACAO (CONC-BLOCOS-01, migration 20261027185300, ledger
   20261001125516): `fn_conciliar_bloco` (regra 'exato' ou 'mais_antigo_primeiro', `p_simular`) e `fn_desfazer_bloco` (restaura
   status e data pelo `estado_anterior` de `conciliacao_blocos`). Os vinculos sao `conciliacao_bancaria_itens` com `grupo_id` =

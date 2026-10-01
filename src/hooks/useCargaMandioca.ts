@@ -366,10 +366,12 @@ export function useContextoCargaMandioca(safraAreaIds: readonly string[]) {
    * ⚠ POR `papel`, NUNCA PELA DESCRIÇÃO — o mesmo idioma do `useColheita`.
    * ⚠ O ICMS DO FRETE TAMBÉM É UMA VEZ POR NOTA (MANDIOCA-ICMS-REPASSE-01, decisão do Gabriel, 01/10: 14 Pix de 311,14
    *   para 14 NFs): a mesma pergunta, com `papel = 'icms_transporte'` — a RPC faz as duas pela mesma função.
+   * ⚠ E A RETENÇÃO DA NOTA (Funrural/SENAR, papel 'funrural') TAMBÉM (MANDIOCA-RETENCAO-NF-01): o registrar a lança uma
+   *   vez por NF pela mesma `_agri_carga_papel_na_nf`.
    */
   const icmsJaNaNota = useCallback(async (
     nf: string, colheitasDaCargaAberta: readonly string[] = [],
-    papel: 'icms' | 'icms_transporte' = 'icms',
+    papel: 'icms' | 'icms_transporte' | 'funrural' = 'icms',
   ): Promise<boolean> => {
     if (!chave || !nf.trim()) return false;
     const db = supabase as any;

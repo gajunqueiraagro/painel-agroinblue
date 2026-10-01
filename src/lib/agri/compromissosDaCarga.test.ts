@@ -358,3 +358,23 @@ describe('dicaImpostosDaNota — ICMS da venda e do frete, uma vez por nota', ()
     expect(dicaImpostosDaNota('', false, true)).toMatch(/NF —/);
   });
 });
+
+/* MANDIOCA-RETENCAO-NF-01: a retenção (Funrural/SENAR) é uma vez por nota, como os dois ICMS. */
+describe('dicaImpostosDaNota — a retenção da nota travada', () => {
+  it('sem o 4o argumento as frases de antes ficam iguais', () => {
+    expect(dicaImpostosDaNota('9294773', true, true)).toBe(dicaImpostosDaNota('9294773', true, true, false));
+    expect(dicaImpostosDaNota('9294773', false, false, false)).toBe('');
+  });
+  it('só a retenção travada', () => {
+    expect(dicaImpostosDaNota('9294773', false, false, true))
+      .toBe('Retenção (Funrural/SENAR) já lançada na NF 9294773 — uma vez por nota.');
+  });
+  it('retenção com o ICMS da venda', () => {
+    expect(dicaImpostosDaNota('9294773', true, false, true))
+      .toBe('ICMS da venda e retenção (Funrural/SENAR) já lançados na NF 9294773 — uma vez por nota.');
+  });
+  it('os três travados numa frase só', () => {
+    expect(dicaImpostosDaNota('9294773', true, true, true))
+      .toBe('ICMS da venda, ICMS do frete e retenção (Funrural/SENAR) já lançados na NF 9294773 — uma vez por nota.');
+  });
+});

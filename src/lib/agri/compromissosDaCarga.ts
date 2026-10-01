@@ -387,9 +387,18 @@ export function totalDoServico(precoT: number | null, toneladas: number | null):
  * ⚠ ICMS DA VENDA E ICMS DO FRETE SÃO, OS DOIS, UMA VEZ POR NOTA (MANDIOCA-ICMS-REPASSE-01, decisão do Gabriel, 01/10:
  * 14 Pix de 311,14 para 14 NFs). Antes a frase dizia "O do frete é por carga", e a RPC gravava um por carga.
  * Vazia quando nada está travado — o slot da frase fica (layout fixo).
+ * ⚠ A RETENÇÃO (Funrural/SENAR) TAMBÉM É UMA VEZ POR NOTA (MANDIOCA-RETENCAO-NF-01, decisão do Gabriel, 01/10: o comprador
+ *   retém sobre a NF-e e deposita o líquido). Com ela travada a frase lista o que a nota já levou; sem ela, as frases de
+ *   antes, iguais.
  */
-export function dicaImpostosDaNota(nf: string, icmsTravado: boolean, transporteTravado: boolean): string {
+export function dicaImpostosDaNota(nf: string, icmsTravado: boolean, transporteTravado: boolean, funruralTravado = false): string {
   const nota = nf || '—';
+  if (funruralTravado) {
+    const itens = [icmsTravado && 'ICMS da venda', transporteTravado && 'ICMS do frete', 'retenção (Funrural/SENAR)']
+      .filter((x): x is string => typeof x === 'string');
+    const lista = itens.length === 1 ? itens[0] : `${itens.slice(0, -1).join(', ')} e ${itens[itens.length - 1]}`;
+    return `${lista[0].toUpperCase()}${lista.slice(1)} já ${itens.length === 1 ? 'lançada' : 'lançados'} na NF ${nota} — uma vez por nota.`;
+  }
   if (icmsTravado && transporteTravado) return `ICMS da venda e do frete já lançados na NF ${nota} — uma vez por nota.`;
   if (icmsTravado) return `ICMS da venda já lançado na NF ${nota} — uma vez por nota, como o do frete.`;
   if (transporteTravado) return `ICMS do frete já lançado na NF ${nota} — uma vez por nota, como o da venda.`;
