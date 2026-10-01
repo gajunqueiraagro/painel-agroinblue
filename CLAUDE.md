@@ -161,7 +161,7 @@ no mesmo arquivo.
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
   Baseline em 01/10/2026 (MANDIOCA-RETENCAO-NF-01, +4 em `src/lib/agri/compromissosDaCarga.test.ts`; antes o
-  CONC-BLOCOS-TELA-01, +12, e o MANDIOCA-ICMS-REPASSE-01, +8): 2766 passando, 22 skipped, e
+  CONC-BLOCOS-TELA-01, +12, e o MANDIOCA-ICMS-REPASSE-01, +8): 2769 passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de

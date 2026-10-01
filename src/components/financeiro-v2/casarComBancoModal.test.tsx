@@ -376,3 +376,56 @@ describe('CONC-BLOCOS-TELA-01 — Casar com o banco · bloco', () => {
     expect(fraseDaRecusa('soma_diverge: os extratos somam 1 e os lancamentos 2')).toBe('os extratos somam 1 e os lancamentos 2');
   });
 });
+
+/**
+ * CONC-CASAR-ALTURA-01 — homologação do Gabriel (01/10 12:30): o bloco com 2 Pix × 12 lançamentos passava da tela e o
+ * rodapé sumia. Nas 3 variantes: teto de 90vh, só o miolo rola, cabeçalho e rodapé (border-t, 34px) fixos.
+ * ⚠ O jsdom NÃO FAZ LAYOUT: o teste prova o CONTRATO (as classes e o botão FORA do rolável); a medida vai no relatório.
+ */
+describe('CONC-CASAR-ALTURA-01 — teto de 90vh, miolo rola, rodapé fixo', () => {
+  const contrato = (botao: RegExp | string) => {
+    const dlg = screen.getByRole('dialog');
+    expect(dlg.className).toContain('max-h-[90vh]');
+    expect(dlg.className).toContain('flex-col');
+    /* sem o X do Radix (`button.absolute`, escondido pela classe do modal) */
+    const filhos = [...dlg.children].filter((el) => el.tagName !== 'BUTTON');
+    const rolavel = filhos.filter((el) => el.className.includes('overflow-y-auto'));
+    expect(rolavel).toHaveLength(1);
+    expect(rolavel[0].className).toContain('min-h-0');
+    expect(rolavel[0].className).toContain('flex-1');
+    const conciliar = typeof botao === 'string' ? screen.getByTestId(botao) : screen.getByRole('button', { name: botao });
+    expect(rolavel[0].contains(conciliar)).toBe(false);
+    const rodape = filhos.find((el) => el.contains(conciliar))!;
+    expect(rodape).toBe(filhos[filhos.length - 1]);
+    for (const c of ['shrink-0', 'border-t', 'h-[34px]']) expect(rodape.className).toContain(c);
+    /* o cabeçalho continua shrink-0 e a rolagem é UMA só (nenhum outro filho rola) */
+    expect(filhos[0].className).toContain('shrink-0');
+  };
+
+  it('1:N: Conciliar, Criar e Cancelar no rodapé fixo, fora do miolo', () => {
+    montar([VIVO]);
+    contrato(/^Conciliar$/);
+    const dlg = screen.getByRole('dialog');
+    const rodape = [...dlg.children].filter((el) => el.tagName !== 'BUTTON').pop()!;
+    if (!(rodape instanceof HTMLElement)) throw new Error('rodapé ausente');
+    expect(within(rodape).getByText('Criar lançamento pela diferença')).toBeInTheDocument();
+    expect(within(rodape).getByText('Cancelar')).toBeInTheDocument();
+  });
+  it('N:1: o mesmo contrato', () => {
+    VALORES.set('l-n1', -3000); VALORES.set('n1a', -2000); VALORES.set('n1b', -1000);
+    render(<CasarN1Modal open onClose={() => {}} sis={{ lancamento_id: 'l-n1', descricao: 'Folha', fornecedor: 'X', valor_assinado: -3000 }}
+      extratos={[{ extrato_id: 'n1a', data: '2026-09-04', historico: 'Pix a', valor: -2000 }, { extrato_id: 'n1b', data: '2026-09-04', historico: 'Pix b', valor: -1000 }]}
+      nomeConta="Banco do Brasil" onConciliado={() => {}} />);
+    contrato(/^Conciliar$/);
+  });
+  it('bloco: o mesmo contrato, com o "Desfazer fica no ⋯" à esquerda do rodapé', () => {
+    BLOCO.resposta = { data: { ok: true, simulado: true, regra: 'exato', matriz: [], resumo: { soma_extratos: 1, soma_lancamentos: 1, diferenca: 0, quitados: [], parcial: null } }, error: null };
+    render(<CasarBlocoModal open onClose={() => {}}
+      extratos={[{ extrato_id: 'b1', data: '2026-09-02', historico: 'Pix', valor: -1 }]}
+      lancamentos={[{ lancamento_id: 'bl1', data: '2026-09-02', descricao: 'Frete', fornecedor: 'Nelson', valor_assinado: -1 }]}
+      onConciliado={() => {}} />);
+    contrato('conciliar-bloco');
+    const dlg = screen.getByRole('dialog');
+    expect([...dlg.children].filter((el) => el.tagName !== 'BUTTON').pop()!.textContent).toContain('Desfazer fica no');
+  });
+});

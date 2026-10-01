@@ -192,7 +192,7 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
             ⚠ E A DESCRIÇÃO NÃO TRUNCA MAIS — PR-CONC-SUGESTOES-CASAR-01 (Gabriel, print 13:42: "Servico Rastreabilidade
             ..." cortado com espaço sobrando). Cada levado ocupa DUAS linhas: a identificação inteira, uma informação por
             coluna (venc · descrição · fornecedor · status), e embaixo o campo e as ações. O que não couber quebra. */}
-        <DialogContent className="w-[640px] max-w-[95vw] grid-cols-[minmax(0,1fr)] p-0 gap-0 overflow-hidden [&>button.absolute]:hidden text-[11px]">
+        <DialogContent className="w-[640px] max-w-[95vw] max-h-[90vh] flex flex-col grid-cols-[minmax(0,1fr)] p-0 gap-0 overflow-hidden [&>button.absolute]:hidden text-[11px]">
           <div className="flex h-9 shrink-0 items-center justify-between gap-2 bg-primary px-3 text-primary-foreground">
             <span className="text-[12px] font-medium">Casar com o banco</span>
             <div className="flex items-center gap-3">
@@ -204,7 +204,7 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
             </div>
           </div>
 
-          <div className="p-3 space-y-2.5">
+          <div className="min-h-0 flex-1 overflow-y-auto p-3 space-y-2.5">
             <div className="rounded-xl bg-muted px-3 py-2 grid grid-cols-[70px_1fr] gap-x-2 gap-y-0.5 items-baseline">
               <span className="text-[10px] text-muted-foreground">no banco</span>
               <span className={cn('text-[11px] font-semibold tabular-nums', corVal(extrato.valor))}>{fmtBRL(extrato.valor)}</span>
@@ -328,20 +328,20 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
                 Nenhum lançamento explica este movimento. Crie o que falta pelo botão abaixo.
               </div>
             )}
+          </div>
 
-            <div className="flex items-center justify-end gap-2 pt-1">
-              <button type="button" onClick={onClose} className="text-[11px] text-muted-foreground underline underline-offset-2">Cancelar</button>
-              <button type="button" disabled={!podeCriar} onClick={() => setCriando(true)}
-                className={cn('rounded border px-2 py-0.5 text-[11px]',
-                  podeCriar ? 'hover:bg-muted' : 'opacity-40 cursor-not-allowed')}>
-                Criar lançamento pela diferença
-              </button>
-              <button type="button" disabled={!podeConciliar} onClick={conciliar}
-                className={cn('rounded px-2.5 py-0.5 text-[11px] font-medium',
-                  podeConciliar ? 'bg-[#E7C873] text-foreground hover:bg-[#D9B95F]' : 'bg-muted text-muted-foreground cursor-not-allowed')}>
-                {gravando ? 'Conciliando…' : 'Conciliar'}
-              </button>
-            </div>
+          <div className="flex h-[34px] shrink-0 items-center justify-end gap-2 border-t px-3 whitespace-nowrap">
+            <button type="button" onClick={onClose} className="text-[11px] text-muted-foreground underline underline-offset-2">Cancelar</button>
+            <button type="button" disabled={!podeCriar} onClick={() => setCriando(true)}
+              className={cn('rounded border px-2 py-0.5 text-[11px]',
+                podeCriar ? 'hover:bg-muted' : 'opacity-40 cursor-not-allowed')}>
+              Criar lançamento pela diferença
+            </button>
+            <button type="button" disabled={!podeConciliar} onClick={conciliar}
+              className={cn('rounded px-2.5 py-0.5 text-[11px] font-medium',
+                podeConciliar ? 'bg-[#E7C873] text-foreground hover:bg-[#D9B95F]' : 'bg-muted text-muted-foreground cursor-not-allowed')}>
+              {gravando ? 'Conciliando…' : 'Conciliar'}
+            </button>
           </div>
         </DialogContent>
       </Dialog>
@@ -465,7 +465,7 @@ export function CasarN1Modal({
           ("PAGAMENTO PIX-PIX_DEB 15412257000128 GOVERNO DO ESTADO DE MATO GROSSO DO SUL") alargava a coluna além dos 560px,
           e o `overflow-hidden` cortava os valores, a soma e o Conciliar (homologação do Gabriel, 01/10 08:31). Com a coluna
           presa à largura do modal, o histórico trunca com o texto inteiro no `title`. */}
-      <DialogContent className="w-[560px] max-w-[95vw] grid-cols-[minmax(0,1fr)] p-0 gap-0 overflow-hidden [&>button.absolute]:hidden text-[11px]">
+      <DialogContent className="w-[560px] max-w-[95vw] max-h-[90vh] flex flex-col grid-cols-[minmax(0,1fr)] p-0 gap-0 overflow-hidden [&>button.absolute]:hidden text-[11px]">
         <div className="flex h-9 shrink-0 items-center justify-between gap-2 bg-primary px-3 text-primary-foreground">
           <span className="text-[12px] font-medium">Casar com o banco</span>
           <div className="flex items-center gap-3">
@@ -476,7 +476,7 @@ export function CasarN1Modal({
           </div>
         </div>
 
-        <div className="p-3 space-y-2.5">
+        <div className="min-h-0 flex-1 overflow-y-auto p-3 space-y-2.5">
           <div className="rounded-xl bg-muted px-3 py-2 grid grid-cols-[70px_1fr] gap-x-2 gap-y-0.5 items-baseline">
             <span className="text-[10px] text-muted-foreground">no lançamento</span>
             <span className={cn('text-[11px] font-semibold tabular-nums', corVal(sis.valor_assinado))}>{fmtBRL(sis.valor_assinado)}</span>
@@ -532,15 +532,15 @@ export function CasarN1Modal({
           </div>
 
           {erro && <div className="text-[10px] text-destructive">{erro}</div>}
+        </div>
 
-          <div className="flex items-center justify-end gap-2 pt-1">
-            <button type="button" onClick={onClose} className="text-[11px] text-muted-foreground underline underline-offset-2">Cancelar</button>
-            <button type="button" disabled={!sim?.ok || gravando} onClick={conciliar}
-              className={cn('rounded px-2.5 py-0.5 text-[11px] font-medium',
-                sim?.ok && !gravando ? 'bg-[#E7C873] text-foreground hover:bg-[#D9B95F]' : 'bg-muted text-muted-foreground cursor-not-allowed')}>
-              {gravando ? 'Conciliando…' : 'Conciliar'}
-            </button>
-          </div>
+        <div className="flex h-[34px] shrink-0 items-center justify-end gap-2 border-t px-3 whitespace-nowrap">
+          <button type="button" onClick={onClose} className="text-[11px] text-muted-foreground underline underline-offset-2">Cancelar</button>
+          <button type="button" disabled={!sim?.ok || gravando} onClick={conciliar}
+            className={cn('rounded px-2.5 py-0.5 text-[11px] font-medium',
+              sim?.ok && !gravando ? 'bg-[#E7C873] text-foreground hover:bg-[#D9B95F]' : 'bg-muted text-muted-foreground cursor-not-allowed')}>
+            {gravando ? 'Conciliando…' : 'Conciliar'}
+          </button>
         </div>
       </DialogContent>
     </Dialog>
@@ -679,7 +679,7 @@ export function CasarBlocoModal({
           coluna implícita cresceria até o histórico mais longo do banco, cortando valores e botões. Largura FIXA de
           700px (o mock), para qualquer texto. */}
       <DialogContent data-testid="casar-bloco"
-        className="w-[700px] max-w-[95vw] grid-cols-[minmax(0,1fr)] p-0 gap-0 overflow-hidden [&>button.absolute]:hidden text-[10px]">
+        className="w-[700px] max-w-[95vw] max-h-[90vh] flex flex-col grid-cols-[minmax(0,1fr)] p-0 gap-0 overflow-hidden [&>button.absolute]:hidden text-[10px]">
         <div className="flex h-[30px] shrink-0 items-center justify-between gap-2 bg-primary px-3 text-primary-foreground">
           <span className="text-[11px] font-semibold whitespace-nowrap">Casar com o banco · bloco</span>
           <div className="flex items-center gap-3">
@@ -692,7 +692,7 @@ export function CasarBlocoModal({
           </div>
         </div>
 
-        <div className="flex flex-col gap-2 px-3 py-2">
+        <div className="min-h-0 flex-1 overflow-y-auto flex flex-col gap-2 px-3 py-2">
           <div className="flex items-center gap-1.5 whitespace-nowrap">
             <span className="text-muted-foreground">Regra</span>
             <Segmentado<RegraBloco> valor={regra} onEscolher={setRegra} altura={20}
@@ -795,7 +795,7 @@ export function CasarBlocoModal({
           <div className="min-h-[14px] text-[10px] text-destructive" data-testid="recusa-bloco">{recusa ?? ''}</div>
         </div>
 
-        <div className="flex h-[34px] items-center justify-between gap-2 border-t px-3 whitespace-nowrap">
+        <div className="flex h-[34px] shrink-0 items-center justify-between gap-2 border-t px-3 whitespace-nowrap">
           <span className="text-muted-foreground">Desfazer fica no "⋯" do bloco depois de conciliado.</span>
           <span className="flex items-center gap-2">
             <button type="button" onClick={onClose} className="rounded border px-2.5 py-0.5 text-[11px] hover:bg-muted">Cancelar</button>
