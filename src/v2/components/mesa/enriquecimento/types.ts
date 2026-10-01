@@ -17,6 +17,8 @@ export type EnriqEstado = 'pronto' | 'revisar' | 'aplicado' | 'sem_vinculo' | 'n
 export interface EnriqSessaoVM {
   id: string;
   label: string;          // ex.: "Mai/2026 · Imp 02 · 01/07 09:15 · 191 linhas"
+  /** "Imp 03" — o número da importação no mês, para o aviso de sessão mais nova (PR-CONC-EXCEL-SESSAO-E-DEPARA-01). */
+  imp: string;
   exatos: number;
   ambiguos: number;
   aplicados: number;

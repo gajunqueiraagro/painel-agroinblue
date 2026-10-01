@@ -12,6 +12,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ErroUsuarioSeguro, normalizarErro } from '@/lib/erroOperacional';
 import { supabase } from '@/integrations/supabase/client';
 import type { ClassificacaoRow } from '@/v2/lib/excelPreview/loteToClassificacao';
+import { mesPredominante } from '@/v2/lib/mesa/mesDaSessao';
 
 // PR-M2: sincronizar com fn_classificacao_populate_staging quando types regenerarem.
 /**
@@ -736,8 +737,16 @@ export function useSessoesClassificacao(clienteId: string | null) {
         if (from > 200_000) break; // salvaguarda anti-loop
       }
       const map = new Map<string, SessaoClassificacaoResumo>();
+      /* PR-CONC-EXCEL-SESSAO-E-DEPARA-01: o mês da sessão é o PREDOMINANTE das linhas (`mesPredominante`), não o da
+         primeira que a paginação por uuid entregou. */
+      const mesesPorSessao = new Map<string, Map<string, number>>();
       for (const r of linhas) {
         const k = r.sessao_id;
+        if (r.excel_ano_mes) {
+          const m = mesesPorSessao.get(k) ?? new Map<string, number>();
+          m.set(r.excel_ano_mes, (m.get(r.excel_ano_mes) ?? 0) + 1);
+          mesesPorSessao.set(k, m);
+        }
         const cur = map.get(k) ?? {
           sessao_id: k, excel_ano_mes: r.excel_ano_mes,
           total: 0, exatos: 0, ambiguos: 0, sem_match: 0, aplicados: 0, criada_em: r.created_at,
@@ -749,6 +758,10 @@ export function useSessoesClassificacao(clienteId: string | null) {
         if (r.aplicado) cur.aplicados++;
         if (r.created_at > cur.criada_em) cur.criada_em = r.created_at;
         map.set(k, cur);
+      }
+      for (const [k, cur] of map) {
+        const meses = mesesPorSessao.get(k);
+        if (meses) cur.excel_ano_mes = mesPredominante(meses);
       }
       return [...map.values()];
     },

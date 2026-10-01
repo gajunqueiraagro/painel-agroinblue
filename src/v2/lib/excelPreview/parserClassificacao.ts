@@ -299,6 +299,17 @@ function parseRow(
   const tipo = pickCol(raw, TIPO_COLS);
   const subcentro = pickCol(raw, SUBCENTRO_COLS);
 
+  /* ⚠ LINHA EM BRANCO NÃO É REJEITADA — PR-CONC-EXCEL-SESSAO-E-DEPARA-01. Com TODAS as colunas obrigatórias do modelo
+     vazias (competência, valor, tipo, conta do plano, fazenda, fornecedor, conta bancária) ela é o rodapé da planilha —
+     formatação ou fórmula arrastada abaixo do último lançamento —, e some em silêncio. O diálogo dizia "509 válidas · 42
+     rejeitadas" (L512..L553, "Data de competência ausente") numa planilha sem erro nenhum. É a mesma regra que o
+     `parserLancamentos` já tinha (`temAlgo`). Linha com QUALQUER dado obrigatório e um erro real continua rejeitada. */
+  const vazio = (v: unknown) => v === null || v === undefined || String(v).trim() === '';
+  if (vazio(dataRef) && vazio(valor) && !tipo && !subcentro && !pickCol(raw, FAZENDA_COLS)
+      && !pickCol(raw, FORNECEDOR_COLS) && !pickCol(raw, CONTA_ORIGEM_COLS)) {
+    return { row: null, erro: null };
+  }
+
   // Validação mínima
   const dataIso = parseDataRef(dataRef);
   if (!dataIso) {

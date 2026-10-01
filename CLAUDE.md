@@ -160,7 +160,7 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 01/10/2026 (PR-CONC-MESA-FAIXAS-FIXAS-01): 2683 passando, 22 skipped, e
+  Baseline em 01/10/2026 (PR-CONC-EXCEL-SESSAO-E-DEPARA-01): 2695 passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -291,6 +291,12 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   ("do extrato") — proposta antiga nesses dois campos grava sem aparecer; medir e decidir; (d) a Mesa nao muda mais o
   Tipo nem a conta bancaria (o Tipo vai pelo passo "Transferencias entre contas"); `ResultadoTipoEditor` e
   `ResultadoContaEditor` (`ResultadoCamposGravaveis.tsx`) ficaram SEM CHAMADOR — apagar ou religar e' decisao.
+  · SESSAO-E-DEPARA (PR-CONC-EXCEL-SESSAO-E-DEPARA-01): (a) `preResolverFazenda` ficou so' como reserva da Mesa para sessao
+  sem `_planilha` (anterior a 30/09) — sai quando essas sessoes forem excluidas; (b) a conta segue com resolvedor proprio no
+  front (divida ja' registrada); (c) ANTES deste PR, responder o de-para de fornecedor fora dos 1.000 primeiros pode ter
+  APAGADO apelidos (`aliases` regravado so' com o texto novo) — nao ha trilha para medir quantos; a reimportacao mostrara'
+  como "a resolver" o que perdeu; (d) Starlink: o apelido esta' num fornecedor INATIVO, e o resolvedor so' olha ativos —
+  continua "a resolver" (decisao: reativar o fornecedor ou ensinar de novo).
   · PLANILHA-COMPLETA (PR-CONC-EXCEL-PLANILHA-COMPLETA-01): (a) STATUS DA PLANILHA: guardado em `excel_status`, NAO aplicado —
   "Sim" nao esta' no vocabulario (realizado/pago/liquidado · previsto/a pagar/aberto); falta a regra (o que "Sim" significa);
   (b) sessoes anteriores ao PR (32c52f5c inclusive) NAO tem safra/tipo doc/forma/status: so' reimportando; (c) o
@@ -586,6 +592,20 @@ docs/historico/frentes-ate-2026-09-29.md.)
     safra)"). Safra, tipo de documento e forma se resolvem no banco (`_fn_classificacao_resolver_safra` so' ATIVAS,
     `_tipo_documento`, `_forma_pagamento` com o mapa dos legados); texto que nao resolve e' "(nao resolvido)" e nunca esvazia.
     A forma pelo historico do banco (PAINEL-V1) virou reserva: so' quando a planilha nao traz forma.
+- ⚠ O DE-PARA DO PASSO 1 (e o importador de lancamentos, que usa o mesmo hook) CLASSIFICA PELO RESOLVEDOR DO BANCO
+  (PR-CONC-EXCEL-SESSAO-E-DEPARA-01): fornecedor, fazenda, safra e subcentro por `fn_classificacao_depara_resolver` (so'
+  leitura) — os mesmos `_fn_classificacao_resolver_*` do populate, que agora tem UMA implementacao (`_det`, com a origem
+  apelido/cadastro; a de sempre devolve o id dela, provado igual em 1.222 textos). A memoria do front saiu: ela lia os
+  apelidos de fornecedor num select cortado em 1.000 (NJ: 3.433) e marcava "a resolver" o que o banco resolve. FICAM no
+  front: a CONTA (`resolverContaPorTexto`, mais forte que o do banco — divida "dois resolvedores de conta") e
+  `preResolverFazenda` so' como reserva da Mesa para sessao sem `_planilha`.
+  ⚠ LISTA GRANDE DO POSTGREST SE LE INTEIRA (`lerTodasAsPaginas`): o select cortado em 1.000 alimentava `persistirApelidos`,
+    que grava `aliases = [...os que conhece, texto]` — num fornecedor fora das 1.000 primeiras, responder o de-para APAGAVA os
+    apelidos que ele ja' tinha.
+  ⚠ A IMPORTACAO E' DO MES PREDOMINANTE DAS LINHAS (`mesPredominante`), nao o da primeira linha por uuid: a planilha do NJ
+    set/26 traz oito meses de competencia, e a Imp 03 caia em julho e sumia do seletor de setembro. O Enriquecer abre na mais
+    recente do mes, o seletor marca "(mais recente)" e, com uma antiga aberta, o slot fixo abaixo da barra avisa "ha uma
+    importacao mais nova (Imp N) — abrir". Linha da planilha sem nenhum obrigatorio e' ignorada, nao "rejeitada".
 - ⚠ PAINEL DA MESA (PR-CONC-MESA-PAINEL-V1, Gabriel 30/09): colunas Campo | Planilha | Sistema hoje | Vai gravar, esta
   em texto NEUTRO — o unico verde e' o valor de uma entrada (Valor segue o sinal nas tres colunas); ambar = vai mudar.
   Grupos: DO EXTRATO no topo (Tipo, Data pgto., Valor, Conta bancaria — caixa tracejada, SO' LEITURA em toda linha),

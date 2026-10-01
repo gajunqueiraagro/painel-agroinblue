@@ -16,7 +16,7 @@ import { useClassificacaoStaging, useSessoesClassificacao } from '@/v2/hooks/use
 import {
   toRowVM, toSessoesVM, contarAplicaveisExatos, escolherMelhorSessaoId, diferencasDoResultado, estaRevisada,
   listarContas, filtrarPorConta, resumirGrupos, filtrarPorGrupo, grupoDaLinha,
-  sessoesDoMes, contaEfetivaNome, parteDeAgrupamento, explicadoPorSiMesmo,
+  sessoesDoMes, sessaoMaisNovaQueAberta, contaEfetivaNome, parteDeAgrupamento, explicadoPorSiMesmo,
   type EnriqGrupo,
 } from '@/v2/lib/mesa/enriquecimentoView';
 import { EnriquecimentoLista, type EnriquecimentoListaProps } from './EnriquecimentoLista';
@@ -299,6 +299,10 @@ export function MesaEnriquecimentoTab({
    * ⚠ QUANDO NÃO HÁ RÉGUA, o mês da sessão ativa é o fallback: é a mesma precedência do
    * casador, e não a de "mostre tudo".
    */
+  /* A importação mais nova do mês, quando NÃO é a aberta — PR-CONC-EXCEL-SESSAO-E-DEPARA-01. */
+  const sessaoMaisNova = useMemo(
+    () => sessaoMaisNovaQueAberta(sessoes, anoMesRegua, sessaoId),
+    [sessoes, anoMesRegua, sessaoId]);
   const sessoesDoMesVM = useMemo(
     () => sessoesDoMes(sessoesVM, anoMesRegua ?? mesAtivo),
     [sessoesVM, anoMesRegua, mesAtivo]);
@@ -1644,7 +1648,8 @@ export function MesaEnriquecimentoTab({
               <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="max-h-[60vh] w-[340px] overflow-y-auto">
+          {/* 400px: o rótulo inteiro + "(mais recente)" + a lixeira sem cortar (PR-CONC-EXCEL-SESSAO-E-DEPARA-01) */}
+          <DropdownMenuContent align="start" className="max-h-[60vh] w-[400px] overflow-y-auto">
             {sessoesDoMesVM.length === 0 ? (
               <div className="px-2 py-3 text-center text-[10px] text-muted-foreground">
                 Nenhuma importação para {mesDaRegua && anoDaRegua ? `${String(mesDaRegua).padStart(2, '0')}/${anoDaRegua}` : 'este mês'}.
@@ -1653,6 +1658,11 @@ export function MesaEnriquecimentoTab({
               <DropdownMenuItem key={sv.id} className="gap-1 text-[11px]"
                 onSelect={() => { setSessaoId(sv.id); setFiltroConta('todas'); setSelecionadoId(null); }}>
                 <span className="min-w-0 flex-1 truncate" title={sv.label}>{sv.label}</span>
+                {/* PR-CONC-EXCEL-SESSAO-E-DEPARA-01 — a lista já vem da mais nova para a mais antiga; a primeira se diz.
+                    ⚠ FORA do rótulo que trunca: dentro dele, o marcador era o primeiro a ser cortado ("mais re..."). */}
+                {sv.id === sessoesDoMesVM[0]?.id && (
+                  <span className="shrink-0 whitespace-nowrap text-[10px] text-muted-foreground">(mais recente)</span>
+                )}
                 {/* ⚠ `preventDefault` NO ÍCONE: sem ele o menu fecha e a confirmação inline
                     nasce sem que ninguém a veja — o gesto de pedir a exclusão não é o de
                     escolher a sessão. */}
@@ -1791,9 +1801,23 @@ export function MesaEnriquecimentoTab({
             gesto da Mesa, e clicar na linha leva direto a ela.
             ⚠ NÃO É PERDA DE CAMINHO: a Mesa ampliada tem a mesma tabela, os mesmos
             candidatos e o Salvar — e agora abre NA LINHA que o operador escolheu. */}
-        <p className="shrink-0 px-1 text-[10px] text-muted-foreground">
-          Clique na linha para revisar e salvar na Mesa.
-        </p>
+        {/* ⚠ SLOT FIXO DE UMA LINHA — PR-CONC-EXCEL-SESSAO-E-DEPARA-01: com uma importação mais nova no mês, ele avisa e
+            abre; senão, a dica de sempre. Sessão antiga aberta sem aviso foi o que deixou o Gabriel conferindo a Imp 02
+            (sem safra) com a Imp 03 já no banco. */}
+        {sessaoMaisNova ? (
+          <p data-testid="aviso-sessao-mais-nova"
+            className="flex h-[18px] shrink-0 items-center gap-1 overflow-hidden whitespace-nowrap px-1 text-[10px] text-amber-700 dark:text-amber-400">
+            <span className="truncate">Há uma importação mais nova deste mês ({sessaoMaisNova.imp}) —</span>
+            <button type="button" className="shrink-0 underline"
+              onClick={() => { setSessaoId(sessaoMaisNova.id); setFiltroConta('todas'); setSelecionadoId(null); }}>
+              abrir
+            </button>
+          </p>
+        ) : (
+          <p className="flex h-[18px] shrink-0 items-center px-1 text-[10px] text-muted-foreground">
+            Clique na linha para revisar e salvar na Mesa.
+          </p>
+        )}
         <div className="min-h-0 md:flex-1">
           <EnriquecimentoLista {...listaProps} />
         </div>

@@ -903,15 +903,17 @@ export function toSessoesVM(sessoes: SessaoClassificacaoResumo[] | undefined | n
     const n = (idxPorMes.get(mes) ?? 0) + 1;
     idxPorMes.set(mes, n);
     const carimbo = dataHoraCurta(s.criada_em);
+    const imp = `Imp ${String(n).padStart(2, '0')}`;
     const partes = [
       mesAbrev(s.excel_ano_mes),
-      `Imp ${String(n).padStart(2, '0')}`,
+      imp,
       carimbo,
       `${s.total} linhas`,
     ].filter(Boolean);
     vmById.set(s.sessao_id, {
       id: s.sessao_id,
       label: partes.join(' · '),
+      imp,
       exatos: s.exatos,
       ambiguos: s.ambiguos,
       aplicados: s.aplicados,
@@ -1162,6 +1164,21 @@ export function escolherMelhorSessaoId(sessoes: SessaoClassificacaoResumo[] | un
  * ⚠ `null` NA RÉGUA DEVOLVE TUDO, e é a saída honesta: sem mês não há como peneirar, e uma
  * lista vazia diria "não há importação" onde o certo é "não sei qual mês você quer".
  */
+/**
+ * A importação mais nova do mês, quando ela NÃO é a que está aberta — PR-CONC-EXCEL-SESSAO-E-DEPARA-01. `null` quando a
+ * aberta já é a mais nova (ou não há nenhuma). É o que acende "há uma importação mais nova (Imp N) — abrir".
+ */
+export function sessaoMaisNovaQueAberta(
+  sessoes: SessaoClassificacaoResumo[] | undefined | null,
+  anoMes: string | null | undefined,
+  sessaoAberta: string | null,
+): EnriqSessaoVM | null {
+  if (!sessaoAberta) return null;
+  const mes = anoMes ?? (sessoes ?? []).find((s) => s.sessao_id === sessaoAberta)?.excel_ano_mes ?? null;
+  const nova = sessoesDoMes(toSessoesVM(sessoes), mes)[0];
+  return nova && nova.id !== sessaoAberta ? nova : null;
+}
+
 export function sessoesDoMes(
   sessoes: readonly EnriqSessaoVM[],
   anoMesRegua: string | null | undefined,

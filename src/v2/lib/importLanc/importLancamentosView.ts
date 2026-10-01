@@ -159,34 +159,14 @@ function distintos(
 }
 
 // ─── Pré-resolução por campo ────────────────────────────────────────
+/* PR-CONC-EXCEL-SESSAO-E-DEPARA-01: fornecedor, safra e subcentro saíram daqui — o de-para os resolve no BANCO
+   (`ResolucoesDoBanco`). Ficam a conta (resolvedor do front, ver `ResolucoesDoBanco`) e a fazenda abaixo. */
 
 /**
- * Subcentro. Ordem idêntica à do servidor (fn_classificacao_populate_staging):
- *   1. alias do cliente · 2. alias global · 3. lookup direto no plano.
- */
-export function preResolverSubcentro(
-  texto: string,
-  cat: Pick<CatalogosImport, 'classificacoes' | 'aliasesSubcentro'>,
-): Pick<DeParaItem, 'valor' | 'origem' | 'rotulo'> {
-  const alvo = normalizar(texto);
-
-  const doCliente = cat.aliasesSubcentro.find(
-    (a) => a.cliente_id !== null && normalizar(a.alias_text) === alvo,
-  );
-  if (doCliente) return { valor: doCliente.subcentro, origem: 'alias', rotulo: doCliente.subcentro };
-
-  const global = cat.aliasesSubcentro.find(
-    (a) => a.cliente_id === null && normalizar(a.alias_text) === alvo,
-  );
-  if (global) return { valor: global.subcentro, origem: 'alias', rotulo: global.subcentro };
-
-  const direto = cat.classificacoes.find((c) => normalizar(c.subcentro) === alvo);
-  if (direto) return { valor: direto.subcentro, origem: 'cadastro', rotulo: direto.subcentro };
-
-  return { valor: null, origem: 'pendente', rotulo: null };
-}
-
-/**
+ * ⚠ SÓ A RESERVA DA MESA (PR-CONC-EXCEL-SESSAO-E-DEPARA-01): o de-para do passo 1 resolve a fazenda no banco. Isto
+ * sobra para a marca "planilha: X" de sessão ANTERIOR a 30/09 (sem `_planilha`), onde "não resolveu" e "sessão antiga"
+ * são iguais na view; sai junto com essas sessões (fila do CLAUDE.md).
+ *
  * Fazenda. Testa as DUAS chaves do cadastro (codigo_importacao e codigo), que podem
  * divergir entre si (V2Fazendas atualiza só codigo_importacao), o nome — e, desde 133b-b,
  * os APELIDOS memorizados.
@@ -211,28 +191,6 @@ export function preResolverFazenda(
   return achou
     ? { valor: achou.id, origem: 'cadastro', rotulo: achou.nome }
     : { valor: null, origem: 'pendente', rotulo: null };
-}
-
-/**
- * Fornecedor. Nome exato normalizado (mesma régua do servidor) + aliases do cadastro.
- * Os aliases vêm SEPARADOS porque loadFornecedores (useFinanceiroV2) não seleciona a
- * coluna `aliases`; o hook busca o mapa à parte e injeta aqui. Sem cast.
- */
-export function preResolverFornecedor(
-  texto: string,
-  fornecedores: FornecedorV2[],
-  aliasesPorFornecedor: Readonly<Record<string, string[]>>,
-): Pick<DeParaItem, 'valor' | 'origem' | 'rotulo'> {
-  const alvo = normalizar(texto);
-
-  const porAlias = fornecedores.find((f) =>
-    (aliasesPorFornecedor[f.id] ?? []).some((a) => normalizar(String(a)) === alvo));
-  if (porAlias) return { valor: porAlias.id, origem: 'alias', rotulo: porAlias.nome };
-
-  const porNome = fornecedores.find((f) => normalizar(f.nome) === alvo);
-  if (porNome) return { valor: porNome.id, origem: 'cadastro', rotulo: porNome.nome };
-
-  return { valor: null, origem: 'pendente', rotulo: null };
 }
 
 /** Conta bancária. Delega ao resolvedor soberano (camada 0 = alias jsonb do cadastro). */
@@ -321,63 +279,93 @@ function montarMapa(
   return out;
 }
 
-export function montarDePara(
-  rows: LancamentoExcelRow[],
-  cat: CatalogosImport,
-): DeParaCompleto {
+/**
+ * O que o RESOLVEDOR DO BANCO respondeu para os textos do de-para — `fn_classificacao_depara_resolver`
+ * (PR-CONC-EXCEL-SESSAO-E-DEPARA-01). Texto ausente = o banco não resolve ("a resolver").
+ *
+ * ⚠ UM RESOLVEDOR SÓ: fornecedor, fazenda, safra e subcentro saem do MESMO código que o populate e a Mesa usam (os
+ *   `_fn_classificacao_resolver_*` e o motor de contexto, com a normalização única e a chave composta "conta ⟂ safra").
+ *   O front resolvia com a própria memória, e a dele era cega: lia os apelidos de fornecedor com um select que o
+ *   PostgREST corta em 1.000 linhas, e o NJ tem 3.433 fornecedores — Fgts, Luciana A. Martins, Banco Itau... ficavam
+ *   "a resolver" com o apelido no banco.
+ * ⚠ CONTA BANCÁRIA FICA NO FRONT (`resolverContaPorTexto`): o resolvedor do banco só entende "cc-NNN |", e é o do front
+ *   que entrega `conta_origem_id` ao populate. Unificar é a dívida registrada ("dois resolvedores de conta").
+ */
+export type CampoResolvidoNoBanco = 'fornecedor' | 'fazenda' | 'safra' | 'subcentro';
+export type ResolucoesDoBanco = Partial<Record<CampoResolvidoNoBanco,
+  Readonly<Record<string, { valor: string; origem: 'alias' | 'cadastro'; rotulo: string | null }>>>>;
+
+/** As chaves do de-para de cada campo — as MESMAS que `montarDePara` usa (o subcentro desdobra a conta ambígua). */
+function chavesDoDePara(rows: LancamentoExcelRow[]) {
   /* ⚠ A CHAVE DE SUBCENTRO É COMPOSTA SÓ ONDE PRECISA. Conta que aparece com uma
      safra só (ou sem safra) segue com a chave simples de sempre — o desdobro é
      exceção, e o fluxo sem ambiguidade não ganha uma pergunta sequer. */
   const ambiguas = contasAmbiguas(rows);
   return {
-    subcentro: montarMapa(
-      distintos(rows, (r) => {
-        const conta = r.conta_plano_texto?.trim();
-        if (!conta) return null;
-        return ambiguas.has(conta) ? chaveSubcentro(conta, r.safra_texto?.trim() ?? null) : conta;
-      }),
-      (t) => preResolverSubcentro(t, cat)),
-    fazenda: montarMapa(distintos(rows, (r) => r.fazenda_texto), (t) =>
-      preResolverFazenda(t, cat.fazendas, cat.aliasesFazenda)),
-    fornecedor: montarMapa(distintos(rows, (r) => r.fornecedor_texto), (t) =>
-      preResolverFornecedor(t, cat.fornecedores, cat.aliasesFornecedor)),
-    conta: montarMapa(distintos(rows, (r) => r.conta_bancaria_texto), (t) =>
-      preResolverConta(t, cat.contas)),
-    safra: montarMapa(distintos(rows, (r) => r.safra_texto), (t) =>
-      preResolverSafra(t, cat.safras, cat.aliasesSafra)),
+    subcentro: distintos(rows, (r) => {
+      const conta = r.conta_plano_texto?.trim();
+      if (!conta) return null;
+      return ambiguas.has(conta) ? chaveSubcentro(conta, r.safra_texto?.trim() ?? null) : conta;
+    }),
+    fazenda: distintos(rows, (r) => r.fazenda_texto),
+    fornecedor: distintos(rows, (r) => r.fornecedor_texto),
+    conta: distintos(rows, (r) => r.conta_bancaria_texto),
+    safra: distintos(rows, (r) => r.safra_texto),
   };
 }
 
 /**
- * Safra por NOME ou CÓDIGO exato, normalizado — B-22d.
- *
- * ⚠ SEM MEMÓRIA DE APELIDO, e é decisão declarada: `financeiro_safras` não tem
- * coluna `aliases` como `financeiro_fornecedores`, e o vocabulário é pequeno e
- * controlado (seis safras no maior cliente do Proto, contra centenas de
- * fornecedores). Sem casar, a linha fica pendente e o operador escolhe da lista
- * — a escolha vale para o arquivo. Se um dia incomodar, a coluna `aliases` é
- * migration aditiva e o quinto campo passa a memorizar como os outros quatro,
- * sem tocar em mais nada: o motor já é o mesmo.
+ * Lê a resposta da RPC sem confiar no formato: só entra item com `valor` texto e `origem` 'alias'/'cadastro'. Qualquer
+ * outra coisa é "o banco não resolveu" — e o item fica "a resolver", que é o estado honesto.
  */
-export function preResolverSafra(
-  texto: string,
-  safras: SafraRef[],
-  aliasesPorSafra: Readonly<Record<string, string[]>> = {},
-): Pick<DeParaItem, 'valor' | 'origem' | 'rotulo'> {
-  const alvo = normalizar(texto);
-  /* ⚠ APELIDO PRIMEIRO — 133b-b. O comentário acima previa que "se um dia incomodar, a
-     coluna `aliases` é migration aditiva e o quinto campo passa a memorizar como os outros
-     quatro": a migration veio no 133b, a gravação também, e só a leitura ficou. */
-  const porAlias = safras.find((sf) =>
-    (aliasesPorSafra[sf.id] ?? []).some((a) => normalizar(String(a)) === alvo));
-  if (porAlias) return { valor: porAlias.id, origem: 'alias', rotulo: porAlias.nome };
-
-  const achou = safras.find((sf) =>
-    normalizar(sf.nome) === alvo || (sf.codigo ? normalizar(sf.codigo) === alvo : false));
-  return achou
-    ? { valor: achou.id, origem: 'cadastro', rotulo: achou.nome }
-    : { valor: null, origem: 'pendente', rotulo: null };
+export function lerResolucoesDoBanco(data: unknown): ResolucoesDoBanco {
+  const out: ResolucoesDoBanco = {};
+  if (!data || typeof data !== 'object') return out;
+  const campos: CampoResolvidoNoBanco[] = ['fornecedor', 'fazenda', 'safra', 'subcentro'];
+  for (const campo of campos) {
+    const mapa: unknown = Reflect.get(data, campo);
+    if (!mapa || typeof mapa !== 'object') continue;
+    const itens: Record<string, { valor: string; origem: 'alias' | 'cadastro'; rotulo: string | null }> = {};
+    for (const [texto, v] of Object.entries(mapa)) {
+      if (!v || typeof v !== 'object') continue;
+      const valor: unknown = Reflect.get(v, 'valor');
+      const origem: unknown = Reflect.get(v, 'origem');
+      const rotulo: unknown = Reflect.get(v, 'rotulo');
+      if (typeof valor !== 'string' || (origem !== 'alias' && origem !== 'cadastro')) continue;
+      itens[texto] = { valor, origem, rotulo: typeof rotulo === 'string' ? rotulo : null };
+    }
+    out[campo] = itens;
+  }
+  return out;
 }
+
+/** Os textos que vão à RPC de leitura — um por chave, nos quatro campos que o banco resolve. */
+export function textosParaOBanco(rows: LancamentoExcelRow[]): Record<CampoResolvidoNoBanco, string[]> {
+  const c = chavesDoDePara(rows);
+  const so = (l: Array<{ texto: string }>) => l.map((i) => i.texto);
+  return { fornecedor: so(c.fornecedor), fazenda: so(c.fazenda), safra: so(c.safra), subcentro: so(c.subcentro) };
+}
+
+export function montarDePara(
+  rows: LancamentoExcelRow[],
+  cat: CatalogosImport,
+  /** A resposta do banco; enquanto não chega, os quatro campos ficam "a resolver" e `mesclarDePara` preenche depois. */
+  banco: ResolucoesDoBanco = {},
+): DeParaCompleto {
+  const c = chavesDoDePara(rows);
+  const doBanco = (campo: CampoResolvidoNoBanco) => (t: string): Pick<DeParaItem, 'valor' | 'origem' | 'rotulo'> => {
+    const r = banco[campo]?.[t];
+    return r ? { valor: r.valor, origem: r.origem, rotulo: r.rotulo } : { valor: null, origem: 'pendente', rotulo: null };
+  };
+  return {
+    subcentro: montarMapa(c.subcentro, doBanco('subcentro')),
+    fazenda: montarMapa(c.fazenda, doBanco('fazenda')),
+    fornecedor: montarMapa(c.fornecedor, doBanco('fornecedor')),
+    conta: montarMapa(c.conta, (t) => preResolverConta(t, cat.contas)),
+    safra: montarMapa(c.safra, doBanco('safra')),
+  };
+}
+
 
 /**
  * A MESCLAGEM DO DE-PARA — [ENRIQUECER-DEPARA-ESTADO-01] (133b-b).

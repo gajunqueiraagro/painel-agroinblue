@@ -21,8 +21,10 @@ import type { ContaResolvivel } from '@/v2/lib/mesa/resolverConta';
 import type { LancamentoV2Form } from '@/hooks/useFinanceiroV2';
 import { montarPayloadConta, type TipoOperacaoFinanceira } from '@/lib/financeiro/contaPayload';
 import { persistirApelidos, mapaDeRepontamento, type ResultadoApelidos } from '@/v2/lib/importLanc/persistirApelidos';
+import { lerTodasAsPaginas } from '@/v2/lib/importLanc/lerTodasAsPaginas';
 import {
   montarDePara, mesclarDePara, montarPrevia, contarPendentes, chaveFechamento,
+  textosParaOBanco, lerResolucoesDoBanco, type ResolucoesDoBanco,
   normalizar as normalizarTexto,
   type CatalogosImport, type DeParaCompleto, type DeParaMap, type DeParaItem,
   type SubcentroAliasRef, type ChaveFechamento, type NivelDuplicidade, type AlvoAtualizacao,
@@ -120,6 +122,8 @@ export function useImportLancamentosExcel(somenteAtualizar = false) {
   const [lendo, setLendo] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [dePara, setDePara] = useState<DeParaCompleto | null>(null);
+  /** PR-CONC-EXCEL-SESSAO-E-DEPARA-01 — o que o resolvedor do banco respondeu para os textos do arquivo. */
+  const [resolvidosBanco, setResolvidosBanco] = useState<ResolucoesDoBanco>({});
   /** Fazenda do cabeçalho — usada quando a planilha não traz coluna de fazenda. */
   const [fazendaCabecalhoId, setFazendaCabecalhoId] = useState<string | null>(null);
 
@@ -269,8 +273,22 @@ export function useImportLancamentosExcel(somenteAtualizar = false) {
     /* ⚠ FAZENDA E SAFRA ENTRARAM NO MESMO `Promise.all` — 133b. Duas consultas a mais, em
        paralelo, no lugar onde os outros aliases já eram lidos: um segundo efeito para o
        mesmo assunto criaria duas ordens de chegada para o mesmo mapa. */
+    /* ⚠ PAGINADO — PR-CONC-EXCEL-SESSAO-E-DEPARA-01. Era UM select, e o PostgREST corta em 1.000 linhas: o NJ tem 3.433
+       fornecedores. Além do de-para cego, isto ALIMENTA `persistirApelidos`, que grava `aliases = [...os que conhece,
+       texto]` — num fornecedor fora das 1.000 primeiras ele não conhece nenhum, e a resposta do operador APAGAVA os
+       apelidos que o fornecedor já tinha. Primeira página com `count: 'exact'`, as demais em `Promise.all` (regra da
+       paginação de lista grande do CLAUDE.md). */
+    const aliasesDosFornecedores = async (): Promise<{ data: Array<{ id: string; aliases: unknown }> }> => ({
+      data: await lerTodasAsPaginas(async (de, ate, contar) => {
+        /* o builder do PostgREST é thenable, não Promise: o `await` aqui é o que o despacha */
+        const { data, count } = await supabase.from('financeiro_fornecedores')
+          .select('id, aliases', contar ? { count: 'exact' } : undefined)
+          .eq('cliente_id', clienteId).order('id').range(de, ate);
+        return { data, count };
+      }),
+    });
     void Promise.all([
-      supabase.from('financeiro_fornecedores').select('id, aliases').eq('cliente_id', clienteId),
+      aliasesDosFornecedores(),
       supabase.from('financeiro_contas_bancarias').select('*').eq('cliente_id', clienteId),
       supabase.from('fazendas').select('id, aliases').eq('cliente_id', clienteId),
       supabase.from('financeiro_safras').select('id, aliases').eq('cliente_id', clienteId),
@@ -367,6 +385,7 @@ export function useImportLancamentosExcel(somenteAtualizar = false) {
       const r = await parseExcelLancamentos(file);
       setArquivo(file);
       setParse(r);
+      setResolvidosBanco({});
       setDePara(montarDePara(r.rows, catalogosRef.current));
     } catch (e: unknown) {
       setErro(e instanceof Error ? e.message : String(e));
@@ -387,9 +406,27 @@ export function useImportLancamentosExcel(somenteAtualizar = false) {
    */
   useEffect(() => {
     if (!parse) return;
-    const base = montarDePara(parse.rows, catalogos);
+    const base = montarDePara(parse.rows, catalogos, resolvidosBanco);
     setDePara((atual) => mesclarDePara(atual, base));
-  }, [parse, catalogos]);
+  }, [parse, catalogos, resolvidosBanco]);
+
+  /**
+   * O DE-PARA PERGUNTA AO BANCO — PR-CONC-EXCEL-SESSAO-E-DEPARA-01: fornecedor, fazenda, safra e subcentro pelo MESMO
+   * resolvedor do populate e da Mesa (`fn_classificacao_depara_resolver`, só leitura). Uma chamada por arquivo lido.
+   * ⚠ FALHA NÃO VIRA "RESOLVIDO": sem resposta, os itens ficam "a resolver" — o operador responde, e nada é inventado.
+   */
+  useEffect(() => {
+    if (!parse || !clienteId) return;
+    let cancelado = false;
+    void (supabase as any).rpc('fn_classificacao_depara_resolver', {
+      p_cliente_id: clienteId, p_textos: textosParaOBanco(parse.rows),
+    }).then(({ data, error }: { data: unknown; error: unknown }) => {
+      if (cancelado) return;
+      if (error) { console.error('[useImportLancamentosExcel] fn_classificacao_depara_resolver', error); return; }
+      setResolvidosBanco(lerResolucoesDoBanco(data));
+    });
+    return () => { cancelado = true; };
+  }, [parse, clienteId]);
 
   /**
    * Marca (ou limpa) o aviso "não memorizado" NA PRÓPRIA LINHA do de-para — 133b-b regra 2.

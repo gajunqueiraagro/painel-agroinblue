@@ -15,7 +15,7 @@ import {
 import type { EnriqSessaoVM } from '@/v2/components/mesa/enriquecimento/types';
 
 const sessao = (id: string, anoMes: string | null, criadaEm: string): EnriqSessaoVM => ({
-  id, label: id, exatos: 0, ambiguos: 0, aplicados: 0, anoMes, criadaEm, total: 10,
+  id, label: id, imp: 'Imp 01', exatos: 0, ambiguos: 0, aplicados: 0, anoMes, criadaEm, total: 10,
 });
 
 describe('sessoesDoMes', () => {

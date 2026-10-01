@@ -17,6 +17,7 @@ import {
   type CatalogosImport, type DeParaCompleto,
 } from './importLancamentosView';
 import type { LancamentoExcelRow } from '@/v2/lib/excelPreview/parserLancamentos';
+import type { Fazenda } from '@/contexts/FazendaContext';
 
 /** Uma linha da planilha com só o que o de-para lê. */
 function linha(n: number, over: Partial<LancamentoExcelRow> = {}): LancamentoExcelRow {
@@ -99,17 +100,16 @@ describe('mesclarDePara — o de-para não perde o que o operador escolheu', () 
     expect(dp.conta['Banco 2'].descartado).toBe(true);
   });
 
-  it('catálogo que chega DEPOIS preenche o que ainda está vazio', () => {
+  /* PR-CONC-EXCEL-SESSAO-E-DEPARA-01: quem resolve a fazenda é o BANCO (`fn_classificacao_depara_resolver`), não o catálogo
+     do front — o contrato mudou, e o caso acompanha: a resposta que chega DEPOIS do parse preenche o que está vazio. */
+  it('a resposta do banco que chega DEPOIS preenche o que ainda está vazio', () => {
     const dp0 = montarDePara(rows, CAT_VAZIO);
     expect(dp0.fazenda['Faz 2'].valor).toBeNull();
 
-    /* A fazenda chega no catálogo depois do parse — a ordem das queries não é garantida. */
-    const comFazenda: CatalogosImport = {
-      ...CAT_VAZIO,
-      fazendas: [{ id: 'f1', nome: 'Faz 2' } as CatalogosImport['fazendas'][number]],
-    };
-    const dp1 = mesclarDePara(dp0, montarDePara(rows, comFazenda));
+    const dp1 = mesclarDePara(dp0, montarDePara(rows, CAT_VAZIO,
+      { fazenda: { 'Faz 2': { valor: 'f1', origem: 'cadastro', rotulo: 'Faz 2' } } }));
     expect(dp1.fazenda['Faz 2'].valor).toBe('f1');
+    expect(dp1.fazenda['Faz 2'].origem).toBe('cadastro');
   });
 
   it('escolha do operador GANHA do catálogo que chega depois', () => {
@@ -125,52 +125,33 @@ describe('mesclarDePara — o de-para não perde o que o operador escolheu', () 
   });
 });
 
-describe('memória de fazenda e safra — a leitura que faltava (133b-b item 5)', () => {
+/* PR-CONC-EXCEL-SESSAO-E-DEPARA-01: a memória de fazenda e safra (133b-b item 5) passou a ser lida pelo BANCO
+   (`fn_classificacao_depara_resolver` → `_fn_classificacao_resolver_fazenda_det/_safra_det`). A regra "o apelido vence o
+   cadastro" mora lá e foi provada contra o resolvedor de antes em 1.222 textos reais. Aqui fica o contrato do front: ele
+   usa a resposta do banco, com a origem dela, e o catálogo dele NÃO resolve mais (um resolvedor só). */
+describe('memória de fazenda e safra — lida pelo banco', () => {
+  const FAZ_PUREZA: Fazenda = { id: 'faz-1', nome: 'Faz. Pureza', codigo_importacao: null, owner_id: 'o', cliente_id: 'nj' };
   const rows = [linha(2, { fazenda_texto: 'Faz Pureza', safra_texto: 'Pecuária 2025/2026' })];
 
-  it('fazenda resolve pelo apelido memorizado, não só por nome/código', () => {
-    const cat: CatalogosImport = {
-      ...CAT_VAZIO,
-      fazendas: [{ id: 'faz-1', nome: 'Faz. Pureza' } as CatalogosImport['fazendas'][number]],
-      aliasesFazenda: { 'faz-1': ['Faz Pureza'] },
-    };
-    const dp = montarDePara(rows, cat);
-    expect(dp.fazenda['Faz Pureza'].valor).toBe('faz-1');
-    expect(dp.fazenda['Faz Pureza'].origem).toBe('alias');
+  it('fazenda e safra vêm da resposta do banco, com a origem dela', () => {
+    const dp = montarDePara(rows, CAT_VAZIO, {
+      fazenda: { 'Faz Pureza': { valor: 'faz-1', origem: 'alias', rotulo: 'Faz. Pureza' } },
+      safra: { 'Pecuária 2025/2026': { valor: 'saf-1', origem: 'alias', rotulo: 'Safra 25/26 Pecuária' } },
+    });
+    expect(dp.fazenda['Faz Pureza']).toMatchObject({ valor: 'faz-1', origem: 'alias' });
+    expect(dp.safra['Pecuária 2025/2026']).toMatchObject({ valor: 'saf-1', origem: 'alias' });
   });
 
-  it('safra resolve pelo apelido memorizado', () => {
+  it('o catálogo do front, mesmo com o apelido, não responde mais pelo banco', () => {
     const cat: CatalogosImport = {
       ...CAT_VAZIO,
+      fazendas: [FAZ_PUREZA],
+      aliasesFazenda: { 'faz-1': ['Faz Pureza'] },
       safras: [{ id: 'saf-1', nome: 'Safra 25/26 Pecuária', codigo: '25/26-Pec' }],
       aliasesSafra: { 'saf-1': ['Pecuária 2025/2026'] },
     };
     const dp = montarDePara(rows, cat);
-    expect(dp.safra['Pecuária 2025/2026'].valor).toBe('saf-1');
-    expect(dp.safra['Pecuária 2025/2026'].origem).toBe('alias');
-  });
-
-  it('sem o apelido, os dois ficam pendentes — que era o estado medido no banco', () => {
-    const cat: CatalogosImport = {
-      ...CAT_VAZIO,
-      fazendas: [{ id: 'faz-1', nome: 'Faz. Pureza' } as CatalogosImport['fazendas'][number]],
-      safras: [{ id: 'saf-1', nome: 'Safra 25/26 Pecuária', codigo: '25/26-Pec' }],
-    };
-    const dp = montarDePara(rows, cat);
     expect(dp.fazenda['Faz Pureza'].valor).toBeNull();
     expect(dp.safra['Pecuária 2025/2026'].valor).toBeNull();
-  });
-
-  it('o apelido vence o cadastro quando os dois casam com o mesmo texto', () => {
-    const cat: CatalogosImport = {
-      ...CAT_VAZIO,
-      fazendas: [
-        { id: 'por-nome', nome: 'Faz Pureza' } as CatalogosImport['fazendas'][number],
-        { id: 'por-apelido', nome: 'Outra' } as CatalogosImport['fazendas'][number],
-      ],
-      aliasesFazenda: { 'por-apelido': ['Faz Pureza'] },
-    };
-    const dp = montarDePara(rows, cat);
-    expect(dp.fazenda['Faz Pureza'].valor).toBe('por-apelido');
   });
 });
