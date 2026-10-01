@@ -54,9 +54,12 @@ export function EnriquecimentoCandidatosInline({
   }, [data, lancIdsUsados]);
 
   return (
-    <div className="shrink-0 rounded-md border border-amber-300 bg-amber-50/60 dark:border-amber-800 dark:bg-amber-950/20">
-      <div className="flex flex-wrap items-baseline gap-x-2 border-b border-amber-300/60 px-2 py-1 dark:border-amber-800/60">
-        <span className="text-[11px] font-medium text-amber-900 dark:text-amber-200">
+    /* ⚠ PREENCHE A ÁREA DE DECISÃO — PR-CONC-MESA-FAIXAS-FIXAS-01: cabeçalho e botão fixos, e a LISTA ocupa o que sobra e
+       rola sozinha. Era `max-h-[128px]` numa faixa de altura livre, que encolhia a tabela quando havia candidatos. */
+    <div data-testid="candidatos-inline"
+      className="flex min-h-0 flex-1 flex-col rounded-md border border-amber-300 bg-amber-50/60 dark:border-amber-800 dark:bg-amber-950/20">
+      <div className="flex shrink-0 flex-wrap items-baseline gap-x-2 border-b border-amber-300/60 px-2 py-1 dark:border-amber-800/60">
+        <span className="text-[10.5px] font-medium text-amber-900 dark:text-amber-200">
           Qual lançamento do sistema é este?
         </span>
         <span className="text-[10px] text-amber-800/80 dark:text-amber-300/80">
@@ -74,7 +77,7 @@ export function EnriquecimentoCandidatosInline({
       ) : (
         /* Duas colunas, como o mock: os candidatos são pares do mesmo valor e comparar
            lado a lado custa menos que rolar uma coluna só. */
-        <div className="grid max-h-[128px] grid-cols-1 gap-x-3 overflow-y-auto px-2 py-1 sm:grid-cols-2">
+        <div data-testid="candidatos-lista" className="grid min-h-0 flex-1 auto-rows-min grid-cols-1 gap-x-3 overflow-y-auto px-2 py-1 sm:grid-cols-2">
           {visiveis.map((c) => (
             <label key={c.lanc_id}
               className="flex cursor-pointer items-center gap-1.5 rounded px-1 py-0.5 hover:bg-amber-100/70 dark:hover:bg-amber-900/30">
@@ -85,7 +88,7 @@ export function EnriquecimentoCandidatosInline({
                 disabled={isResolvendo}
                 onChange={() => setEscolhido(c.lanc_id)} />
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[11px] font-medium" title={c.descricao ?? ''}>
+                <span className="block truncate text-[10.5px] font-medium" title={c.descricao ?? ''}>
                   {c.descricao || c.favorecido_nome || '—'}
                 </span>
                 <span className="block truncate text-[10px] text-muted-foreground">
@@ -94,13 +97,13 @@ export function EnriquecimentoCandidatosInline({
                   {c.distancia_dias != null && c.distancia_dias !== 0 && ` · ${c.distancia_dias}d`}
                 </span>
               </span>
-              <span className="shrink-0 text-[11px] font-medium tabular-nums">{fmtBRL(c.valor)}</span>
+              <span className="shrink-0 text-[10.5px] font-medium tabular-nums">{fmtBRL(c.valor)}</span>
             </label>
           ))}
         </div>
       )}
 
-      <div className="flex items-center gap-2 border-t border-amber-300/60 px-2 py-1 dark:border-amber-800/60">
+      <div className="flex shrink-0 items-center gap-2 border-t border-amber-300/60 px-2 py-1 dark:border-amber-800/60">
         {/* ⚠ O MOTIVO DO DESABILITADO FICA ESCRITO AO LADO, e é a fonte única do `disabled`
             e do `title`: um botão apagado sem explicação faz o operador tentar de novo. */}
         <span className="text-[10px] text-muted-foreground">

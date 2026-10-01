@@ -1432,7 +1432,15 @@ export function MesaEnriquecimentoTab({
    * candidato" e "agrupe estas N linhas" são perguntas sobre a linha que se está olhando
    * campo a campo. Na tela principal, sem a tabela ao lado, seriam perguntas no vazio.
    */
-  const faixasDaLinha = !selecionado ? null : (
+  /* ⚠ SEM DECISÃO, SEM FAIXA — PR-CONC-MESA-FAIXAS-FIXAS-01: `null` aqui é o que faz a área fixa da Mesa dizer "nenhuma
+     decisão pendente" em vez de ficar em branco. As quatro condições são as mesmas que abrem cada faixa abaixo. */
+  const temDecisaoNaLinha = !!selecionado && (
+    ((selecionado.status === 'ja_classificado' || selecionado.status === 'resolvido_manual'
+      || selecionado.status === 'resolvido_grupo') && !selecionado.aplicado)
+    || (selecionado.status === 'sugestao_grupo' && !selecionado.aplicado)
+    || (selecionado.status === 'sugestao_split' && !selecionado.aplicado)
+    || pedeDecisao);
+  const faixasDaLinha = !selecionado || !temDecisaoNaLinha ? null : (
     <>
       {/* sobrescrever + desfazer — 10px, na mesma linha */}
       {(selecionado.status === 'ja_classificado' || selecionado.status === 'resolvido_manual'
@@ -1471,7 +1479,7 @@ export function MesaEnriquecimentoTab({
         <div className="shrink-0 border-t border-violet-300 bg-violet-50/60 px-3 py-1 dark:border-violet-800 dark:bg-violet-950/20">
           {!confirmandoGrupo ? (
             <div className="flex items-center gap-2">
-              <span className="min-w-0 flex-1 text-[11px] text-violet-900 dark:text-violet-200">
+              <span className="min-w-0 flex-1 text-[10.5px] text-violet-900 dark:text-violet-200">
                 {(linhaCrua?.match_lancamento_ids?.length ?? 0)} lançamentos do dia somam o valor desta linha.
               </span>
               <Button type="button" size="sm" className="h-6 shrink-0 px-2 text-[10px]"
@@ -1484,7 +1492,7 @@ export function MesaEnriquecimentoTab({
             /* ⚠ CONFIRMAÇÃO INLINE, NÃO MODAL — 133c. A pergunta é sobre a linha que está na
                tela, e um segundo modal a cobriria justamente quando ela importa. */
             <div className="flex items-center gap-2">
-              <span className="min-w-0 flex-1 text-[11px] text-amber-800 dark:text-amber-300">
+              <span className="min-w-0 flex-1 text-[10.5px] text-amber-800 dark:text-amber-300">
                 Isso une {linhaCrua?.match_lancamento_ids?.length ?? 0} lançamentos nesta linha. Continuar?
               </span>
               <Button type="button" size="sm" className="h-6 shrink-0 px-2 text-[10px]"
@@ -1509,7 +1517,7 @@ export function MesaEnriquecimentoTab({
               2 do mesmo dia somam um único movimento" e nenhum valor: o operador aceitava
               no escuro um gesto que CANCELA um lançamento. Extrato, planilha e resultado,
               lado a lado, é o que permite conferir antes de aceitar. */}
-          <div className="text-[10px] leading-[1.35] text-violet-900 dark:text-violet-200">
+          <div className="text-[10.5px] leading-[1.35] text-violet-900 dark:text-violet-200">
             <div className="truncate">
               <b>Extrato:</b> {selecionado.comparativo.find((c) => c.campo === 'Produto / Descrição')?.sistema ?? '—'}
               {' · '}{selecionado.data}{' · '}{fmtBRL(grupoDoSplit?.lancValor ?? null)}

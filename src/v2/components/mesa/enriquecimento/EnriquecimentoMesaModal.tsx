@@ -21,6 +21,7 @@ import type { EnriquecimentoListaProps } from './EnriquecimentoLista';
 import type { EnriquecimentoDetalheProps } from './EnriquecimentoDetalhe';
 import type { EnriquecimentoActionsProps } from './EnriquecimentoActions';
 import { MesaCamposTabela, SeloRegraDaLinha } from './MesaCamposTabela';
+import { AreaDecisao } from './AreaDecisao';
 import { STATUS_META } from './fmt';
 import { grupoDaLinha, diferencasDoResultado } from '@/v2/lib/mesa/enriquecimentoView';
 import type { EnriqRowVM } from './types';
@@ -478,7 +479,9 @@ export function EnriquecimentoMesaModal({
                   atividade={detalhe.atividade}
                   onAtividade={detalhe.onAtividade}
                 />
-                {faixas}
+                {/* ⚠ ÁREA DE DECISÃO DE ALTURA FIXA, SEMPRE PRESENTE — PR-CONC-MESA-FAIXAS-FIXAS-01: as faixas moram nela e o
+                    que passa da altura rola DENTRO; a tabela acima não encolhe ao trocar de linha. */}
+                <AreaDecisao>{faixas}</AreaDecisao>
               </>
             )}
 
