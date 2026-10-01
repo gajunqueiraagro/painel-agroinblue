@@ -10,14 +10,27 @@
  *     pronta   — entra no "Gravar N" (`elegivelParaLote`);
  *     decide   — grupos "você decide" e "agrupam" ainda não decididos;
  *     semBanco — grupo "sem par" (sem lançamento no banco para casar);
+ *     aguarda  — `resolvido_grupo` não gravado: sem caminho de gravação até o PR 2b (PR-CONC-ENRIQ-AGRUP-2a);
  *     outras   — status desconhecido (fica cinza na barra; nunca some do Linhas).
  *   Os cards antigos contavam `resolvido_*` não gravado em "Já gravadas" E no lote ao mesmo tempo; aqui ele é pronta.
  */
 import type { ClassificacaoStagingPreviewRow } from '@/v2/hooks/useClassificacaoStaging';
 import { contaDaLinhaStaging, grupoDaLinha, parteDeAgrupamento } from '@/v2/lib/mesa/enriquecimentoView';
 
-/** Os status que o "Gravar N" leva — `ja_classificado` só com "sobrescrever" marcado. */
-export const STATUS_DO_LOTE: ReadonlySet<string> = new Set(['exato', 'divergente', 'ambiguo_resolvido', 'resolvido_manual', 'resolvido_grupo']);
+/**
+ * Os status que o "Gravar N" leva — `ja_classificado` só com "sobrescrever" marcado.
+ * ⚠ `resolvido_grupo` SAIU (PR-CONC-ENRIQ-AGRUP-2a): a linha guarda N lançamentos em `match_lancamento_ids` com
+ *   `match_lancamento_id` NULO, e o `apply_row` exige o singular — no lote ela daria "sem lançamento vinculado". Ela
+ *   volta quando o N:1 tiver gravação própria (PR 2b); até lá é o balde `aguarda`.
+ */
+export const STATUS_DO_LOTE: ReadonlySet<string> = new Set(['exato', 'divergente', 'ambiguo_resolvido', 'resolvido_manual']);
+
+/** A linha resolvida como grupo (N lançamentos = 1 linha) e ainda não gravada — não tem caminho de gravação até o 2b. */
+export function aguardaAgrupamento(r: { aplicado: boolean; match_status: string }): boolean {
+  return !r.aplicado && r.match_status === 'resolvido_grupo';
+}
+export const MOTIVO_AGUARDA_AGRUPAMENTO =
+  'Aguarda agrupamento: a gravação de vários lançamentos numa linha da planilha chega no próximo PR.';
 
 /**
  * A linha entra no "Gravar N"?
@@ -31,10 +44,12 @@ export function elegivelParaLote(r: ClassificacaoStagingPreviewRow, sobrescrever
   return STATUS_DO_LOTE.has(status) || (status === 'ja_classificado' && sobrescrever);
 }
 
-export type BaldePainel = 'gravada' | 'pronta' | 'decide' | 'semBanco' | 'outras';
+export type BaldePainel = 'gravada' | 'pronta' | 'decide' | 'semBanco' | 'aguarda' | 'outras';
 
 export function baldeDaLinha(r: ClassificacaoStagingPreviewRow, sobrescrever = false): BaldePainel {
   if (r.aplicado) return 'gravada';
+  /* ⚠ ANTES do `grupoDaLinha`: ele mapeia `resolvido_grupo` em "Já gravadas", e a linha NÃO está gravada. */
+  if (aguardaAgrupamento(r)) return 'aguarda';
   if (elegivelParaLote(r, sobrescrever)) return 'pronta';
   const g = grupoDaLinha(r.match_status, r.aplicado);
   if (g === 'decide' || g === 'agrupam') return 'decide';
@@ -51,6 +66,8 @@ export interface LinhaPainelConta {
   prontas: number;
   decide: number;
   semBanco: number;
+  /** `resolvido_grupo` não gravado — aguarda o agrupamento com gravação (PR 2b). Não é pronta, não é feita. */
+  aguarda: number;
   outras: number;
   /** Lançamentos realizados da conta no mês que nenhuma linha da planilha explica (`fn_classificacao_sistema_nao_explicado`). */
   foraPlanilha: number;
@@ -81,7 +98,7 @@ export function montarPainelContas(
     const { id, nome } = contaDaLinhaStaging(r);
     let c = porConta.get(id);
     if (!c) {
-      c = { contaId: id, nome, linhas: 0, gravadas: 0, prontas: 0, decide: 0, semBanco: 0, outras: 0, foraPlanilha: 0,
+      c = { contaId: id, nome, linhas: 0, gravadas: 0, prontas: 0, decide: 0, semBanco: 0, aguarda: 0, outras: 0, foraPlanilha: 0,
         valorGravadas: 0, valorProntas: 0, valorSemBanco: 0, revisar: 0, concluida: false, faltaOfx: null };
       porConta.set(id, c);
     }
@@ -91,12 +108,13 @@ export function montarPainelContas(
     else if (b === 'pronta') { c.prontas += 1; c.valorProntas += valorDe(r); }
     else if (b === 'decide') c.decide += 1;
     else if (b === 'semBanco') { c.semBanco += 1; c.valorSemBanco += valorDe(r); }
+    else if (b === 'aguarda') c.aguarda += 1;
     else c.outras += 1;
   }
   for (const c of porConta.values()) {
     c.foraPlanilha = opts.foraPlanilhaPorConta?.get(c.contaId) ?? 0;
     c.revisar = c.prontas + c.decide;
-    c.concluida = c.linhas > 0 && c.prontas === 0 && c.decide === 0 && c.semBanco === 0 && c.outras === 0;
+    c.concluida = c.linhas > 0 && c.prontas === 0 && c.decide === 0 && c.semBanco === 0 && c.aguarda === 0 && c.outras === 0;
     c.faltaOfx = opts.contasComOfx === undefined || c.contaId === '__sem__' ? null : !opts.contasComOfx.has(c.contaId);
   }
   return [...porConta.values()].sort((a, b) => b.linhas - a.linhas || a.nome.localeCompare(b.nome, 'pt-BR'));
@@ -106,11 +124,11 @@ export type TotalPainel = Omit<LinhaPainelConta, 'contaId' | 'nome' | 'concluida
 
 /** O Total é a SOMA das linhas da tabela — nunca um segundo cálculo sobre o staging. */
 export function totalPainel(linhas: readonly LinhaPainelConta[]): TotalPainel {
-  const t: TotalPainel = { contas: linhas.length, linhas: 0, gravadas: 0, prontas: 0, decide: 0, semBanco: 0, outras: 0,
+  const t: TotalPainel = { contas: linhas.length, linhas: 0, gravadas: 0, prontas: 0, decide: 0, semBanco: 0, aguarda: 0, outras: 0,
     foraPlanilha: 0, valorGravadas: 0, valorProntas: 0, valorSemBanco: 0, revisar: 0 };
   for (const l of linhas) {
     t.linhas += l.linhas; t.gravadas += l.gravadas; t.prontas += l.prontas; t.decide += l.decide; t.semBanco += l.semBanco;
-    t.outras += l.outras; t.foraPlanilha += l.foraPlanilha; t.valorGravadas += l.valorGravadas;
+    t.aguarda += l.aguarda; t.outras += l.outras; t.foraPlanilha += l.foraPlanilha; t.valorGravadas += l.valorGravadas;
     t.valorProntas += l.valorProntas; t.valorSemBanco += l.valorSemBanco; t.revisar += l.revisar;
   }
   return t;

@@ -49,7 +49,8 @@ export type SimboloPlanilha = '✓' | '≈' | '≠' | '○' | '!' | '↳';
 export function simboloDaLinha(r: ClassificacaoStagingPreviewRow, balde: BaldePainel, valorSistema: number | null): SimboloPlanilha {
   if (parteDeAgrupamento(r)) return '↳';
   if (balde === 'gravada') return '✓';
-  if (balde === 'decide') return '!';
+  /* `aguarda` (resolvido como grupo, sem gravação até o 2b) pede você também: não está pronta nem feita */
+  if (balde === 'decide' || balde === 'aguarda') return '!';
   if (balde === 'semBanco' || balde === 'outras') return '○';
   const excel = Math.abs(Number(r.excel_valor) || 0);
   if (String(r.match_status) === 'divergente') return '≠';

@@ -55,8 +55,12 @@ import { ContaBancariaSelect, type ContaSelecionavel } from '@/components/shared
 import { baixarCsv, csvLinhaPt } from '@/lib/csv';
 import { fmtBRL, fmtData } from './fmt';
 import { planoIncoerente } from '@/v2/lib/mesa/atividadeDaLinha';
-import { baldeDaLinha, elegivelParaLote, montarPainelContas, type FiltroPainel } from '@/v2/lib/mesa/painelContas';
+import {
+  aguardaAgrupamento, baldeDaLinha, elegivelParaLote, montarPainelContas, MOTIVO_AGUARDA_AGRUPAMENTO, type FiltroPainel,
+} from '@/v2/lib/mesa/painelContas';
 import { aprenderApelidoDaMesa } from '@/v2/lib/mesa/aprenderApelido';
+import { levarAoFornecedor, previaAoFornecedor } from '@/v2/lib/mesa/aoFornecedor';
+import { motivoDoDesmembrar } from '@/v2/lib/mesa/desmembrar';
 import { Button } from '@/components/ui/button';
 
 export interface MesaEnriquecimentoTabProps {
@@ -563,6 +567,15 @@ export function MesaEnriquecimentoTab({
       completo: partes.length === gruposIdsDoSplit.length,
     };
   }, [gruposIdsDoSplit, staging, linhaCrua]);
+  /**
+   * POR QUE o desmembrar não abre — PR-CONC-ENRIQ-AGRUP-2a, decisão do Gabriel (iv): a soma da planilha tem de fechar com
+   * o lançamento AO CENTAVO; sem isso o bloco fica sem proposta e não se desmembra à mão. A RPC recusa pela mesma conta
+   * (`soma_divergente`, centavos inteiros).
+   */
+  const motivoDesmembrar: string | null = motivoDoDesmembrar(grupoDoSplit ? {
+    completo: grupoDoSplit.completo, bate: grupoDoSplit.bate, diferencaCent: grupoDoSplit.diferencaCent,
+    carregadas: grupoDoSplit.partes.length, total: gruposIdsDoSplit.length,
+  } : null);
 
   /**
    * As linhas que PODEM compor este movimento — 133i item 1.
@@ -707,6 +720,9 @@ export function MesaEnriquecimentoTab({
   const motivoSalvar: string | null =
     !selecionado ? 'Escolha uma linha.'
     : selecionado.aplicado ? 'Esta linha já foi gravada — use Reverter para desfazer.'
+    /* PR-CONC-ENRIQ-AGRUP-2a — resolvida como grupo (N lançamentos), sem gravação até o 2b: diz POR QUE, em vez de
+       "sem lançamento vinculado" (ela tem N). */
+    : aguardaAgrupamento({ aplicado: selecionado.aplicado, match_status: selecionado.status }) ? MOTIVO_AGUARDA_AGRUPAMENTO
     : !selecionado.temMatch ? 'Sem lançamento vinculado: escolha um candidato antes de gravar.'
     /* ⚠ 133i item 11 — PARTE DE AGRUPAMENTO NÃO SE GRAVA SOZINHA. O `apply_row` aplica a
        linha por cima do lançamento CONSOLIDADO, e o consolidado vale a soma das partes:
@@ -1151,8 +1167,34 @@ export function MesaEnriquecimentoTab({
     }
   }
 
-  /* ⚠ O "Ao fornecedor" (aplicar ao grupo, 129) SAIU COM O RODAPÉ DA MESA COMPACTA — PR-CONC-ENRIQUECER-V2-01: o
-     rodapé é ◀ ▶ Reverter | falta | Pular | Aprovar e próximo, e o lote das prontas é o "Gravar N" do painel. */
+  /**
+   * "AO FORNECEDOR" — RELIGADO NO "⋯" DO CABEÇALHO DA MESA (PR-CONC-ENRIQ-AGRUP-2a; saiu do rodapé em a2103de2).
+   *
+   * ⚠ GRAVA SÓ A PROPOSTA (`editarProposto`), uma linha por vez — nunca o `applyRow`: quem grava o lançamento é o
+   *   "Aprovar" de cada linha (decisão do Gabriel). A prévia e os alvos saem de `previaAoFornecedor` (id do fornecedor,
+   *   só não aprovadas, classificada fica com o sistema).
+   * ⚠ TRAVA DE DUPLO CLIQUE NO `ref`, não só no estado: dois cliques no mesmo tick leem o mesmo `aplicandoFornecedor`
+   *   ainda falso.
+   */
+  const previaFornecedor = useMemo(
+    () => (linhaCrua ? previaAoFornecedor(linhaCrua, staging, { classificacoes, fazendas }) : null),
+    [linhaCrua, staging, classificacoes, fazendas]);
+  const [aplicandoFornecedor, setAplicandoFornecedor] = useState(false);
+  const aplicandoFornecedorRef = useRef(false);
+  async function aplicarAoFornecedor() {
+    if (aplicandoFornecedorRef.current || !previaFornecedor || previaFornecedor.alvos.length === 0) return;
+    aplicandoFornecedorRef.current = true;
+    setAplicandoFornecedor(true);
+    try {
+      const { ok, falhas } = await levarAoFornecedor(previaFornecedor.alvos, editarProposto, marcarEditada);
+      toast[falhas === 0 ? 'success' : 'warning'](falhas === 0
+        ? `Proposta levada a ${ok} linha${ok === 1 ? '' : 's'} do fornecedor — nada foi gravado no lançamento.`
+        : `${ok} propostas levadas · ${falhas} recusadas.`);
+    } finally {
+      aplicandoFornecedorRef.current = false;
+      setAplicandoFornecedor(false);
+    }
+  }
 
 
   // PR-UX-ENR-MODAL-01 — prop-bags únicos. A aba e o modal ampliado consomem
@@ -1482,16 +1524,23 @@ export function MesaEnriquecimentoTab({
                 ⚠ ELE NÃO EXIGE MAIS QUE A SUGESTÃO BATA: quem decide se bate é a soma das
                 MARCADAS, dentro do modal. Travá-lo aqui esconderia justamente o caso em que
                 o operador precisa entrar para consertar a sugestão. */}
+            {/* ⚠ PR-CONC-ENRIQ-AGRUP-2a — DECISÃO DO GABRIEL (iv): bloco cuja soma NÃO FECHA fica sem proposta e SEM
+                desmembrar à mão. Revoga o "ele não exige mais que a sugestão bata" (133i item 1): o botão só abre com a
+                soma ao centavo, e o motivo fica escrito ao lado (regra do botão desabilitado). */}
             <Button type="button" size="sm" className="h-6 shrink-0 px-2 text-[10px]"
-              disabled={isSubstituindo || !linhaCrua?.lanc_id || candidatasDoGrupo.length < 2}
+              data-testid="botao-desmembrar"
+              disabled={isSubstituindo || !linhaCrua?.lanc_id || candidatasDoGrupo.length < 2 || !!motivoDesmembrar}
               title={!linhaCrua?.lanc_id
                 ? 'Esta linha não tem lançamento para agrupar.'
                 : candidatasDoGrupo.length < 2
                   ? 'Não há duas linhas sem par no mesmo dia e conta.'
-                  : 'Escolher quais linhas compõem este movimento.'}
+                  : motivoDesmembrar ?? 'Escolher quais linhas compõem este movimento.'}
               onClick={() => setAgruparOpen(true)}>
               Agrupar {gruposIdsDoSplit.length} linhas neste lançamento
             </Button>
+            {motivoDesmembrar && (
+              <span data-testid="motivo-desmembrar" className="text-[10px] text-amber-700 dark:text-amber-400">{motivoDesmembrar}</span>
+            )}
             {candidatasDoGrupo.length > gruposIdsDoSplit.length && (
               <span className="text-[10px] text-violet-800 dark:text-violet-300">
                 {candidatasDoGrupo.length} linhas sem par — dá para incluir ou tirar
@@ -1599,6 +1648,13 @@ export function MesaEnriquecimentoTab({
           onClick={() => { setSessaoId(sessaoMaisNova.id); setFiltroConta('todas'); setSelecionadoId(null); }}>abrir</button>
       </>
     ) });
+  }
+  /* PR-CONC-ENRIQ-AGRUP-2a — N:1 resolvido sem caminho de gravação: fora do "Gravar N", e dito no slot. */
+  const nAguarda = linhasPainel.reduce((a, l) => a + l.aguarda, 0);
+  if (nAguarda > 0) {
+    const texto = `${nAguarda} linha${nAguarda === 1 ? '' : 's'} aguarda${nAguarda === 1 ? '' : 'm'} agrupamento — a gravação de vários lançamentos numa linha chega no próximo PR.`;
+    avisosPainel.push({ id: 'aviso-aguarda-agrupamento', texto, cls: 'text-violet-800 dark:text-violet-300',
+      conteudo: <span className="truncate">{texto}</span> });
   }
   if (linhasSemConta > 0) {
     const texto = `${linhasSemConta} linha${linhasSemConta === 1 ? '' : 's'} desta planilha ${linhasSemConta === 1 ? 'ficou' : 'ficaram'} sem conta — reimporte a planilha.`;
@@ -1769,6 +1825,7 @@ export function MesaEnriquecimentoTab({
         contaNome={mesaContaId ? (linhasPainel.find((l) => l.contaId === mesaContaId)?.nome ?? null) : null}
         baldePorId={baldePorId}
         filtroInicial={mesaFiltroInicial}
+        aoFornecedor={{ previa: previaFornecedor, aplicando: aplicandoFornecedor, onAplicar: () => { void aplicarAoFornecedor(); } }}
       />
 
       {/* 133i item 1 — o agrupamento vira escolha, com os números na frente. */}

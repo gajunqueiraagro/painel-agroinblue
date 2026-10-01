@@ -51,15 +51,18 @@ function Num({ n, cor }: { n: number; cor?: string }) {
 }
 
 /** A barra de andamento: verde gravadas · âmbar prontas · vermelho você decide · cinza sem banco (e o resto). */
-export function BarraAndamento({ l }: { l: Pick<LinhaPainelConta, 'linhas' | 'gravadas' | 'prontas' | 'decide' | 'semBanco' | 'outras'> }) {
+export function BarraAndamento({ l }: { l: Pick<LinhaPainelConta, 'linhas' | 'gravadas' | 'prontas' | 'decide' | 'semBanco' | 'aguarda' | 'outras'> }) {
   const pct = (n: number) => (l.linhas > 0 ? `${(100 * n) / l.linhas}%` : '0%');
-  const titulo = `${l.gravadas} gravadas · ${l.prontas} prontas · ${l.decide} você decide · ${l.semBanco + l.outras} sem banco`;
+  const titulo = `${l.gravadas} gravadas · ${l.prontas} prontas · ${l.decide} você decide · ${l.semBanco + l.outras} sem banco`
+    + (l.aguarda > 0 ? ` · ${l.aguarda} aguardam agrupamento` : '');
   return (
     <div data-testid="barra-andamento" title={titulo} className="flex h-[6px] w-full overflow-hidden rounded-full bg-muted">
       <span data-segmento="gravadas" className="h-full bg-emerald-500" style={{ width: pct(l.gravadas) }} />
       <span data-segmento="prontas" className="h-full bg-amber-400" style={{ width: pct(l.prontas) }} />
       <span data-segmento="decide" className="h-full bg-red-500" style={{ width: pct(l.decide) }} />
       <span data-segmento="semBanco" className="h-full bg-slate-400" style={{ width: pct(l.semBanco + l.outras) }} />
+      {/* PR-CONC-ENRIQ-AGRUP-2a — resolvido como grupo, sem gravação até o 2b: não é pronta nem feita */}
+      <span data-segmento="aguarda" className="h-full bg-violet-400" style={{ width: pct(l.aguarda) }} />
     </div>
   );
 }

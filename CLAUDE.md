@@ -160,8 +160,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 01/10/2026 (PR-CONC-ENRIQUECER-V2-01, +30 em `src/v2/lib/mesa/enriquecerV2.test.tsx`): 2725 passando,
-  22 skipped, e
+  Baseline em 01/10/2026 (PR-CONC-ENRIQ-AGRUP-2a, +14 em `src/v2/lib/mesa/agrupamentos2a.test.tsx`; o ENRIQUECER-V2-01
+  tinha posto +30 em `enriquecerV2.test.tsx`): 2739 passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -305,12 +305,23 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   banco tem); (d) no proxy, 117 linhas com texto de safra que nao resolve ("Despesas Pessoais" 85, "Nao se aplica" 31 e o
   apelido ambiguo da 25/26-AMD inativa) — conferir na planilha reimportada, onde a coluna Safra e' a de verdade.
   · ENRIQUECER-V2 (PR-CONC-ENRIQUECER-V2-01): (a) SAIRAM do rodape da Mesa o "Salvar" (o Aprovar e' o Salvar + avanco),
-  "Revisado"/"Exatos" (o lote e' o "Gravar N prontas" do painel) e o "Ao fornecedor" (aplicar ao grupo) — religar este
-  ultimo e' decisao; (b) o casador da sessao 8d6efeb7 (BB, 01/09) casou as DUAS linhas "Telefone 506,51" no MESMO
+  "Revisado"/"Exatos" (o lote e' o "Gravar N prontas" do painel) e o "Ao fornecedor" — RELIGADO no "⋯" do cabecalho da
+  Mesa no PR-CONC-ENRIQ-AGRUP-2a, so' proposta; (b) o casador da sessao 8d6efeb7 (BB, 01/09) casou as DUAS linhas "Telefone 506,51" no MESMO
   lancamento (8ebd63d4) e deixou o outro "Vivo Casa 506,51" (e7970f00) so' no sistema — o Extrato mostra como ↳ + "So' no
   sistema"; lancamentos iguais sao normais, o que se mede e' o PAR (ENRIQ-CASADOR-IGUAIS-01, frente de banco); (c) o selo
   da pronta classificada (exato/divergente) e' "Diverge" — o briefing nao nomeou selo para "pronta, classificada"; (d) a
   1.135x579 do Gabriel, o bloco Identificacao da Mesa fica abaixo da dobra (a grade rola por dentro; layout fixo intacto).
+  · AGRUPAMENTOS (PR-CONC-ENRIQ-AGRUP-2a; o 2b e' a tabela de blocos, decisao (ii) do Gabriel): (a) o N:1 (`resolvido_grupo`,
+  N lancamentos = 1 linha) NAO TEM GRAVACAO — fica no balde `aguarda`, fora do "Gravar N", ate' o 2b; e o 2b PRECISA das mesmas
+  guardas de origem do desmembrar: o caso real do Rabobank 26.127,18 (sessao 8d6efeb7, `sugestao_grupo`) sao DUAS parcelas de
+  financiamento (juros 3.407,89 + amortizacao 22.719,29) — aplicar a classificacao da linha nas duas quebraria o financiamento;
+  (b) o desmembrar continua SEM REVERSAO (estado_anterior NULO; os 12 lancamentos `mesa_split` ja' cancelados foram repassados
+  a mao a OC/financiamento) — vem com a tabela de blocos; (c) o casador nao acha os blocos que existem: o "N:N" de 18/09 no BB
+  (4 linhas Receita Federal x 2 crus) sao DOIS desmembramentos 1:N (22.187,46 = 15.531,22 + 6.656,24; 709,76 = 354,88 +
+  354,88, classificacoes diferentes) — provados pela RPC em ROLLBACK, nao gravados; (d) Sicredi Lavoura ago/26: o T Cortez
+  20.998,80 (28/08) e' RECEBIMENTO no extrato sem lancamento e sem linha de planilha no proto; os crus do Emerson (579f22d5
+  3.000, 6438bdcb 16.276,80) estao SEM vinculo vivo com o extrato — o desmembrar recusa (`sem_vinculo_ofx`); (e) o caminho
+  de recusa ainda vai a toast (`handleAgruparNesteLancamento`) — UX-TOAST-01.
 - Telas e UI:
   TELAS-ORFAS-01 (decisao) · FIN-RECORRENCIA-FAZENDA-01 · FIN-FAZENDA-INATIVA-LISTA-01 · FIN-IMPORTAR-ANTIGO-01 ·
   FAZENDA-INATIVA-EDICAO-01 · LEGADOS-ABATE-VENDA-FAZENDA-01 · FORNECEDOR-UUID-CRU-01 · PROPRIEDADE-DESTINO-ORIGEM-01 ·
@@ -585,6 +596,15 @@ docs/historico/frentes-ate-2026-09-29.md.)
   dia "confere" por construcao). O checklist da Mesa (`checklistDaLinha`/`pendenciasDaLinha` em `MesaCamposTabela.tsx`) e' a
   UNICA lista de obrigatorios — desenha o ●, escreve o "falta:" e apaga o Aprovar — e julga Fazenda/Conta do plano/Descricao
   pelo VALOR EFETIVO (o Resultado diz "mantem" ate' com os dois lados vazios).
+- ⚠ DESMEMBRAR (1 lancamento = N linhas, `fn_classificacao_split_substituir`, PR-CONC-ENRIQ-AGRUP-2a, migration
+  20261027185000, ledger 20261001101020): so' desmembra lancamento CRU/MANUAL (origem 'extrato'/'ofx'/'manual') SEM vinculo de
+  origem — recusa, com motivo escrito, recorrencia, contrato/barter, financiamento/parcela, boitel, parte VIVA de OC, Zoo e
+  transferencia; recusa MES FECHADO no consolidado e em cada lancamento novo; copia TODOS os campos do apply_row
+  (COALESCE(proposta, consolidado)); os vinculos novos levam UM `grupo_id` e 'agrupamento_manual'; soma ao CENTAVO. Bloco cuja
+  soma nao fecha NAO tem proposta e NAO se desmembra a mao (decisao (iv) do Gabriel; `motivoDoDesmembrar`, a mesma frase da
+  RPC). "AO FORNECEDOR" (no "⋯" da Mesa) grava SO' A PROPOSTA (`levarAoFornecedor` so' recebe `editarProposto`), alvo pelo ID
+  do fornecedor resolvido, so' linha nao aprovada, e a linha JA' CLASSIFICADA fica com o sistema (prevista na previa).
+  `resolvido_grupo` fica FORA do lote (balde `aguarda`) ate' o N:1 ter gravacao (2b).
 - ⚠ MESA: NO CRU A PLANILHA PREVALECE, NO CLASSIFICADO O SISTEMA (PR-CONC-MESA-CRU-EXCEL-PREVALECE-01, Gabriel 30/09).
   CRU = lancamento de origem 'extrato'/'ofx' SEM conta do plano, fora transferencia. Quem decide e' o BANCO, numa funcao
   so' (`_fn_classificacao_precedencia_cru`, no fim do casar e do populate): a leitura da planilha fica em

@@ -28,6 +28,11 @@ import type { EnriquecimentoActionsProps } from './EnriquecimentoActions';
 import { MesaCamposTabela, SeloRegraDaLinha } from './MesaCamposTabela';
 import { AreaDecisao } from './AreaDecisao';
 import type { BaldePainel } from '@/v2/lib/mesa/painelContas';
+import type { PreviaAoFornecedor } from '@/v2/lib/mesa/aoFornecedor';
+import { MoreHorizontal } from 'lucide-react';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import type { EnriqRowVM } from './types';
 
 /**
@@ -46,10 +51,12 @@ export function passaNoFiltroMesa(balde: BaldePainel | undefined, f: FiltroMesa)
 
 /** A cor da bolinha da lista — a mesma da barra de andamento do painel. */
 const COR_DO_BALDE: Record<BaldePainel, string> = {
-  gravada: 'bg-emerald-500', pronta: 'bg-amber-400', decide: 'bg-red-500', semBanco: 'bg-slate-400', outras: 'bg-slate-300',
+  gravada: 'bg-emerald-500', pronta: 'bg-amber-400', decide: 'bg-red-500', semBanco: 'bg-slate-400', aguarda: 'bg-violet-400',
+  outras: 'bg-slate-300',
 };
 const NOME_DO_BALDE: Record<BaldePainel, string> = {
-  gravada: 'Gravada', pronta: 'Pronta para gravar', decide: 'Você decide', semBanco: 'Sem par no banco', outras: '—',
+  gravada: 'Gravada', pronta: 'Pronta para gravar', decide: 'Você decide', semBanco: 'Sem par no banco',
+  aguarda: 'Aguarda agrupamento', outras: '—',
 };
 
 /* ⚠ COR E SINAL SAEM DO MESMO LUGAR — 129d item 4. `null` (sem lançamento) não pinta nem prefixa. */
@@ -108,11 +115,16 @@ export interface EnriquecimentoMesaModalProps {
   baldePorId: ReadonlyMap<string, BaldePainel>;
   /** O recorte em que a lista abre; a aba escolhe "todas" quando abre numa linha que não pede revisão. */
   filtroInicial?: FiltroMesa;
+  /**
+   * "Ao fornecedor" no "⋯" do cabeçalho — PR-CONC-ENRIQ-AGRUP-2a. A PRÉVIA vem pronta da aba (`previaAoFornecedor`):
+   * o menu a mostra ANTES do gesto, e o gesto grava só a proposta.
+   */
+  aoFornecedor?: { previa: PreviaAoFornecedor | null; aplicando: boolean; onAplicar: () => void };
 }
 
 export function EnriquecimentoMesaModal({
   open, onOpenChange, sessaoLabel, lista, detalhe, actions, faixas, onOrdemVisivel, conciliadosIds,
-  contaId = null, contaNome, baldePorId, filtroInicial = 'revisar',
+  contaId = null, contaNome, baldePorId, filtroInicial = 'revisar', aoFornecedor,
 }: EnriquecimentoMesaModalProps) {
   const [filtro, setFiltro] = useState<FiltroMesa>(filtroInicial);
   /* ⚠ O RECORTE RENASCE A CADA ABERTURA: quem abre por "Revisar" quer as pendências; quem abre numa linha feita
@@ -280,6 +292,28 @@ export function EnriquecimentoMesaModal({
                     {' · '}{selecionada.data}{' · '}{selecionada.edicao.descricaoAtual ?? '—'}
                   </span>
                   <SeloRegraDaLinha ehCru={selecionada.ehCru} />
+                  {aoFornecedor && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button type="button" size="sm" variant="ghost" className="h-[22px] w-[22px] shrink-0 p-0"
+                          aria-label="Mais ações da linha" data-testid="menu-linha-mesa">
+                          <MoreHorizontal className="h-3.5 w-3.5" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-[340px]">
+                        {/* ⚠ A PRÉVIA ANTES DO GESTO: quantas linhas e quais campos mudam — e quantas ficam com o sistema. */}
+                        <DropdownMenuLabel data-testid="previa-ao-fornecedor" className="whitespace-normal text-[10px] font-normal text-zinc-300">
+                          Ao fornecedor: {aoFornecedor.previa?.resumo ?? '—'}
+                        </DropdownMenuLabel>
+                        <DropdownMenuItem data-testid="aplicar-ao-fornecedor" className="text-[11px]"
+                          disabled={!aoFornecedor.previa || aoFornecedor.previa.alvos.length === 0 || aoFornecedor.aplicando}
+                          onSelect={() => aoFornecedor.onAplicar()}>
+                          {aoFornecedor.aplicando ? 'Levando…'
+                            : `Levar à proposta de ${aoFornecedor.previa?.alvos.length ?? 0} linha${aoFornecedor.previa?.alvos.length === 1 ? '' : 's'} (não grava o lançamento)`}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
                   <span data-testid="posicao" className="shrink-0 whitespace-nowrap text-[10px] tabular-nums text-muted-foreground">
                     {actions.posicao}
                   </span>

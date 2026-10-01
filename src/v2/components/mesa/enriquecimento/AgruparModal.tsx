@@ -21,6 +21,7 @@
  *
  * ⚠ CENTAVOS EM INTEIRO em toda a soma: é a diferença que decide se o botão abre.
  */
+import { textoSomaDifere } from '@/v2/lib/mesa/desmembrar';
 import { useEffect, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -102,7 +103,8 @@ export function AgruparModal({
   const motivoTravado = n < 2
     ? 'Marque pelo menos duas linhas.'
     : !confere
-      ? `A soma das marcadas ${difCent > 0 ? 'passa' : 'falta'} ${fmtBRL(Math.abs(difCent) / 100)}.`
+      /* PR-CONC-ENRIQ-AGRUP-2a — a mesma frase da faixa e da RPC */
+      ? textoSomaDifere(difCent)
       : null;
 
   return (
