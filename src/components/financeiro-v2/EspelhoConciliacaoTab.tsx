@@ -295,7 +295,8 @@ export interface Pareado {
  */
 export interface ParedoN1 {
   sis: EspSis;
-  extratos: { extrato: EspOfx; valorAplicado: number }[];
+  /* `grupoId` do VÍNCULO de cada extrato (CONC-N1-DESCONCILIAR-01): sem grupo, a filha se desconcilia sozinha. */
+  extratos: { extrato: EspOfx; valorAplicado: number; grupoId: string | null }[];
   grupoId: string | null;
   soma: number;
   diferenca: number;
@@ -415,8 +416,8 @@ export function montarMesa(data: EspelhadosReais, internos: ReadonlySet<string>)
     const sis = sisPorId.get(lancId);
     if (!sis) return;
     const extratos = vs
-      .map((v) => ({ extrato: ofxPorId.get(v.extrato_id), valorAplicado: Number(v.valor_aplicado ?? 0) }))
-      .filter((x): x is { extrato: EspOfx; valorAplicado: number } => !!x.extrato);
+      .map((v) => ({ extrato: ofxPorId.get(v.extrato_id), valorAplicado: Number(v.valor_aplicado ?? 0), grupoId: v.grupo_id }))
+      .filter((x): x is { extrato: EspOfx; valorAplicado: number; grupoId: string | null } => !!x.extrato);
     if (extratos.length < 2) return;
     extratos.forEach((x) => consumidos.add(x.extrato.extrato_id));
     const soma = extratos.reduce((a, x) => a + x.valorAplicado, 0);
@@ -1549,7 +1550,7 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
                               const r = await desfazerGrupo(g.grupoId!, 'desfeito_no_espelho');
                               if (r.ok) onMudou(); else setErro(r.erro ?? 'Não foi possível desconciliar.');
                             } : undefined,
-                            motivo: 'sem grupo registrado para desfazer' },
+                            motivo: 'sem grupo: desconcilie cada extrato nas linhas abaixo' },
                         ]} />
                       </tr>
                       {/* ⚠ FILHAS DO LADO DO BANCO e `↰` no meio: a seta aponta para o OFX porque
@@ -1564,7 +1565,14 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
                           <td /><td /><td /><td /><td />
                           <CelAcoes itens={[
                             { rotulo: 'Abrir', motivo: 'é um movimento do banco: abra o lançamento acima' },
-                            { rotulo: 'Desconciliar', motivo: 'desconcilie pela linha do lançamento, acima' },
+                            /* ⚠ CONC-N1-DESCONCILIAR-01: o vínculo SEM grupo se desfaz um a um, pela RPC unitária (que recusa
+                               membro de grupo — é segura aqui). Com grupo, continua pela linha mãe (grupo ou bloco). */
+                            x.grupoId
+                              ? { rotulo: 'Desconciliar', motivo: 'desconcilie pela linha do lançamento, acima' }
+                              : { rotulo: 'Desconciliar', onClick: async () => {
+                                  const r = await desfazerVinculo(x.extrato.extrato_id, 'desfeito_no_espelho');
+                                  if (r.ok) onMudou(); else setErro(r.erro ?? 'Não foi possível desconciliar.');
+                                } },
                           ]} />
                         </tr>
                       ))}

@@ -161,7 +161,7 @@ no mesmo arquivo.
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
   Baseline em 01/10/2026 (CONC-TRANSF-SEGUNDA-PONTA-02, +3: 2 em `src/hooks/useTransferenciasSugeridas.test.tsx` e 1 em
-  `transferenciasEntreContas.test.tsx`; antes o CONC-TRANSF-SEGUNDA-PONTA-01, +9, e o CONC-CASAR-ALTURA-01, +3): 2781
+  `transferenciasEntreContas.test.tsx`; antes o CONC-TRANSF-SEGUNDA-PONTA-01, +9, e o CONC-CASAR-ALTURA-01, +3): 2784
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia

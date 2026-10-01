@@ -453,3 +453,69 @@ describe('CONC-BLOCOS-TELA-01 — desfazer bloco e o parcial', () => {
     expect(within(cand).queryByTestId('chip-parcial')).toBeNull();
   });
 });
+
+/* CONC-N1-DESCONCILIAR-01 — o N:1 SEM grupo (o caso 1b46c5de: 3 vínculos criados um a um, sem `grupo_id`) não tinha
+   caminho para desfazer. Cada extrato filho ganha "Desconciliar" pela RPC unitária; com grupo, continua pela linha mãe. */
+describe('CONC-N1-DESCONCILIAR-01 — N:1 sem grupo desconcilia por extrato', () => {
+  const abrirMenu = async (linha: HTMLElement) => {
+    fireEvent.keyDown(within(linha).getByRole('button', { name: 'Ações da linha' }), { key: 'Enter' });
+    return screen.findByRole('menu');
+  };
+  const N1 = (grupo: string | null): EspelhadosReais => ({
+    ...ESPELHO,
+    ofx_completo: [
+      ...ESPELHO.ofx_completo,
+      { extrato_id: 'e3', data: '2026-09-06', historico: 'TED ENVIADA ITAU 1', documento: null, valor: -100000, status: 'conciliado', flag_dup: false, flag_investimento: false },
+      { extrato_id: 'e4', data: '2026-09-06', historico: 'TED ENVIADA ITAU 2', documento: null, valor: -100000, status: 'conciliado', flag_dup: false, flag_investimento: false },
+    ],
+    sistema_completo: [
+      ...ESPELHO.sistema_completo,
+      { lancamento_id: 's9', data: '2026-09-06', descricao: 'Transferência Itau -> Sicredi', centro: 'Transferências', subcentro: 'Entre contas',
+        valor_assinado: -100000, sinal: '-1', status: 'conciliado', fornecedor: null },
+    ],
+    vinculos: [
+      ...ESPELHO.vinculos,
+      { extrato_id: 'e3', lancamento_id: 's9', valor_aplicado: 100000, tipo_aprovacao: 'manual', grupo_id: grupo },
+      { extrato_id: 'e4', lancamento_id: 's9', valor_aplicado: 100000, tipo_aprovacao: 'manual', grupo_id: grupo },
+    ],
+  });
+  const linhaDe = (modal: HTMLElement, texto: string | RegExp): HTMLElement => {
+    const tr = within(modal).getByText(texto).closest('tr');
+    if (!(tr instanceof HTMLElement)) throw new Error(`linha de "${texto}" não encontrada`);
+    return tr;
+  };
+  const item = (menu: HTMLElement, rotulo: string) =>
+    within(menu).getAllByRole('menuitem').find((i) => i.textContent?.startsWith(rotulo))!;
+
+  it('filha SEM grupo: "Desconciliar" habilitado chama fn_desfazer_vinculo_extrato com o extrato DELA', async () => {
+    fixture.espelho = N1(null);
+    const modal = await abrirConferencia();
+    const menu = await abrirMenu(linhaDe(modal, 'TED ENVIADA ITAU 2'));
+    const d = item(menu, 'Desconciliar');
+    expect(d.hasAttribute('data-disabled')).toBe(false);
+    fireEvent.click(d);
+    await waitFor(() => expect(fixture.chamadas.find((c) => c.fn === 'fn_desfazer_vinculo_extrato')?.args)
+      .toEqual({ p_extrato_id: 'e4', p_motivo: 'desfeito_no_espelho' }));
+    expect(fixture.chamadas.filter((c) => c.fn === 'fn_desfazer_vinculo_extrato')).toHaveLength(1);
+  });
+
+  it('a mãe sem grupo diz onde desconciliar', async () => {
+    fixture.espelho = N1(null);
+    const modal = await abrirConferencia();
+    const mae = linhaDe(modal, /2 extratos/);
+    const g = item(await abrirMenu(mae), 'Desconciliar grupo');
+    expect(g.hasAttribute('data-disabled')).toBe(true);
+    expect(g.textContent).toContain('sem grupo: desconcilie cada extrato nas linhas abaixo');
+  });
+
+  it('filha COM grupo: "Desconciliar" continua desabilitado (desfaz pela mãe) e nada é chamado', async () => {
+    fixture.espelho = N1('g1');
+    const modal = await abrirConferencia();
+    const menu = await abrirMenu(linhaDe(modal, 'TED ENVIADA ITAU 1'));
+    const d = item(menu, 'Desconciliar');
+    expect(d.hasAttribute('data-disabled')).toBe(true);
+    expect(d.textContent).toContain('desconcilie pela linha do lançamento, acima');
+    fireEvent.click(d);
+    expect(fixture.chamadas.some((c) => c.fn === 'fn_desfazer_vinculo_extrato')).toBe(false);
+  });
+});
