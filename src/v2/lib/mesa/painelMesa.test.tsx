@@ -82,25 +82,29 @@ describe('item 1 — cabeçalho e nenhum verde fora do valor de uma entrada', ()
     const v = verdes(container);
     expect(v.length).toBeGreaterThanOrEqual(3);
     for (const el of v) expect(el.textContent).toMatch(/5\.000,00/);
-    /* o Tipo "Entrada" não é verde */
-    expect(within(linha('Tipo')).getAllByText('Entrada').every((el) => !/emerald|green/.test(el.className))).toBe(true);
+    /* PR-CONC-ENRIQUECER-V2-01 — o Tipo saiu como linha (a cor do valor diz o sentido); o checklist não é verde */
+    expect(verdes(screen.getByTestId('checklist'))).toHaveLength(0);
   });
 
   it('a SAÍDA pinta o valor de vermelho nas três colunas', () => {
     montar(vm(CLASSIFICADO));
-    const vermelhos = within(linha('Valor')).getAllByText(/841,48/).filter((el) => /red/.test(el.className));
+    /* PR-CONC-ENRIQUECER-V2-01 — o valor mora na linha Pagamento (data · valor · conta) */
+    const vermelhos = within(linha('Pagamento')).getAllByText(/841,48/).filter((el) => /red/.test(el.className));
     expect(vermelhos).toHaveLength(3);
   });
 });
 
 describe('item 2 — o grupo do extrato é só leitura e vem no topo', () => {
-  it('Tipo, Data pgto., Valor e Conta bancária são as quatro primeiras linhas', () => {
-    expect(CAMPOS_DO_EXTRATO).toEqual(['Tipo', 'Data pgto.', 'Valor', 'Conta bancária']);
+  /* PR-CONC-ENRIQUECER-V2-01 — Tipo, Data pgto., Valor e Conta bancária viraram UMA linha, "Pagamento", no topo. */
+  it('Pagamento (pgto. · valor · conta) é a primeira linha, sob a faixa "Pagamento · do extrato"', () => {
+    expect(CAMPOS_DO_EXTRATO).toEqual(['Pagamento']);
     const { container } = montar(vm(CRU));
     const rotulos = Array.from(container.querySelectorAll('td[title]'))
       .map((el) => el.getAttribute('title'))
       .filter((t): t is string => !!t && [...CAMPOS_DO_EXTRATO, 'Competência', 'Atividade'].includes(t));
-    expect(rotulos.slice(0, 4)).toEqual(CAMPOS_DO_EXTRATO);
+    expect(rotulos[0]).toBe('Pagamento');
+    expect(screen.getByTestId('faixa-extrato')).toHaveTextContent('Pagamento · do extrato');
+    expect(within(linha('Pagamento')).getAllByText(/30\.000,00/).length).toBeGreaterThanOrEqual(1);
   });
 
   it('cada um é caixa tracejada, com "do extrato" no slot da dica, sem controle nenhum', () => {
@@ -220,7 +224,8 @@ describe('item 4 — forma de pagamento pelo histórico do banco (só no cru)', 
     expect(r.edicao.tipoDocumento).toBe('Nota Fiscal');
     expect(r.edicao.tipoDocumentoAtual).toBe('Recibo');
     montar(r);
-    expect(within(linha('Tipo de documento')).getByRole('combobox')).toHaveTextContent('Nota Fiscal');
+    /* PR-CONC-ENRIQUECER-V2-01 — "Documento · tipo" numa linha: o nº é texto, o tipo é o combobox */
+    expect(within(linha('Documento · tipo')).getByRole('combobox')).toHaveTextContent('Nota Fiscal');
   });
 });
 

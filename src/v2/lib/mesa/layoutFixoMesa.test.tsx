@@ -19,6 +19,7 @@ vi.mock('@/integrations/supabase/client', () => ({ supabase: { from: () => ({}),
 
 import {
   MesaCamposTabela, LARGURA_COL_CAMPO, LARGURA_COL_VAI_GRAVAR, LARGURA_SLOT_DICA, ALTURA_LINHA, ALTURA_SLOT_AVISO,
+  ROTULOS_DA_GRADE, ALTURA_FAIXA_GRUPO, ALTURA_CHECKLIST,
 } from '@/v2/components/mesa/enriquecimento/MesaCamposTabela';
 
 const cls = (subcentro: string, escopo_negocio: string, tipo_operacao = '2-Saídas', ordem?: number): ClassificacaoItem => ({
@@ -70,6 +71,7 @@ function assinatura(raiz: HTMLElement) {
     linhas: Array.from(tabela.querySelectorAll<HTMLTableRowElement>('tbody tr')).map((tr) => `${tr.getAttribute('data-testid') ?? 'faixa'}:${tr.style.height}`),
     slots: within(raiz).getAllByTestId('slot-dica').map((s) => s.style.width),
     slotAviso: within(raiz).getByTestId('slot-aviso').style.height,
+    checklist: within(raiz).getByTestId('checklist').style.height,
     /* o que vem DEPOIS da tabela dentro do painel — era aí que nascia o "planilha dizia" */
     irmaos: Array.from(raiz.querySelectorAll('[data-testid="grade-mesa"]')).map((t) => t.parentElement?.children.length),
   };
@@ -86,10 +88,17 @@ describe('a grade tem as mesmas medidas em todos os estados', () => {
     expect(base.irmaos).toEqual([1]);
   });
 
-  it('são 17 linhas de campo, inclusive a Conta destino fora da transferência', () => {
-    expect(base.linhas.filter((l) => l.startsWith('linha-'))).toHaveLength(17);
+  /* PR-CONC-ENRIQUECER-V2-01 (Mesa compacta) — eram 17; Tipo/Data pgto./Valor/Conta bancária viraram "Pagamento" e
+     Nº/Tipo de documento viraram "Documento · tipo": 13 linhas de campo, e as quatro faixas de título dos blocos. */
+  it('são 13 linhas de campo, inclusive a Conta destino fora da transferência, e 4 faixas de bloco', () => {
+    expect(ROTULOS_DA_GRADE).toHaveLength(13);
+    expect(base.linhas.filter((l) => l.startsWith('linha-'))).toHaveLength(13);
     expect(base.linhas).toContain(`linha-Conta destino:${ALTURA_LINHA}`);
-    expect(base.slots).toHaveLength(17);
+    expect(base.slots).toHaveLength(13);
+    expect(base.linhas.filter((l) => l.startsWith('faixa-'))).toEqual([
+      `faixa-extrato:${ALTURA_FAIXA_GRUPO}`, `faixa-datas:${ALTURA_FAIXA_GRUPO}`,
+      `faixa-classificacao:${ALTURA_FAIXA_GRUPO}`, `faixa-identificacao:${ALTURA_FAIXA_GRUPO}`]);
+    expect(base.checklist).toBe(ALTURA_CHECKLIST);
   });
 
   it.each(ESTADOS)('%s: a assinatura é a mesma do cru', (_nome, r, atividade) => {

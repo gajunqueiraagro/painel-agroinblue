@@ -26,7 +26,12 @@ import { AcaoEhTransferencia } from './AcaoEhTransferencia';
 import type { EnriqRowVM, EnriqSessaoVM } from './types';
 import { EnriquecimentoMesaModal } from './EnriquecimentoMesaModal';
 import { EnriquecimentoImportarDialog } from './EnriquecimentoImportarDialog';
-import { EnriquecimentoTopoNumeros, type VistaPasso2 } from './EnriquecimentoTopoNumeros';
+import { type VistaPasso2 } from './EnriquecimentoTopoNumeros';
+import { PainelContasEnriquecer } from './PainelContasEnriquecer';
+import { ExtratoDaPlanilhaModal } from './ExtratoDaPlanilhaModal';
+import { passaNoFiltroMesa, type FiltroMesa } from './EnriquecimentoMesaModal';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useContasComExtratoNoMes } from '@/v2/hooks/useContasComExtratoNoMes';
 import { EnriquecimentoTransferencias } from './EnriquecimentoTransferencias';
 import { EnriquecimentoSemParSistema } from './EnriquecimentoSemParSistema';
 import { useTransferenciasEspelhadas } from '@/v2/hooks/useTransferenciasEspelhadas';
@@ -38,7 +43,7 @@ import { EnriquecerProgressoDialog } from '@/components/conciliacao/EnriquecerPr
 import { useGravarLoteEnriquecimento, type LinhaParaGravar } from '@/v2/hooks/useGravarLoteEnriquecimento';
 import { EnriquecimentoCandidatosInline } from './EnriquecimentoCandidatosInline';
 import { AgruparModal } from './AgruparModal';
-import { MesaCamposTabela, CAMPOS_OBRIGATORIOS_MESA, CAMPOS_OBRIGATORIOS_SE_TRANSFERENCIA } from './MesaCamposTabela';
+import { MesaCamposTabela, CAMPOS_OBRIGATORIOS_SE_TRANSFERENCIA, pendenciasDaLinha } from './MesaCamposTabela';
 import { ehTipoTransferencia } from '@/v2/lib/mesa/transferenciaPlano';
 import { ehLinhaAdministrativa, fazendaAdministrativa } from '@/lib/financeiro/escopoDoSubcentro';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -50,6 +55,7 @@ import { ContaBancariaSelect, type ContaSelecionavel } from '@/components/shared
 import { baixarCsv, csvLinhaPt } from '@/lib/csv';
 import { fmtBRL, fmtData } from './fmt';
 import { planoIncoerente } from '@/v2/lib/mesa/atividadeDaLinha';
+import { baldeDaLinha, elegivelParaLote, montarPainelContas, type FiltroPainel } from '@/v2/lib/mesa/painelContas';
 import { aprenderApelidoDaMesa } from '@/v2/lib/mesa/aprenderApelido';
 import { Button } from '@/components/ui/button';
 
@@ -67,10 +73,14 @@ export interface MesaEnriquecimentoTabProps {
   onSessaoId?: (id: string | null) => void;
   /** 133c — o destino do "Ver no Financeiro" no relatório final do lote. */
   onVerNoFinanceiro?: () => void;
+  /** PR-CONC-ENRIQUECER-V2-01 — o botão "1 · Planilha e de-para N" do painel volta ao passo 1 da casca. */
+  onPlanilha?: () => void;
+  /** As pendências do de-para da planilha lida nesta sessão do navegador; `null` quando nenhuma foi lida. */
+  pendentesDePara?: number | null;
 }
 
 export function MesaEnriquecimentoTab({
-  anoMesRegua, sessaoId: sessaoIdProp, onSessaoId, onVerNoFinanceiro,
+  anoMesRegua, sessaoId: sessaoIdProp, onSessaoId, onVerNoFinanceiro, onPlanilha, pendentesDePara,
 }: MesaEnriquecimentoTabProps = {}) {
   const { clienteAtual } = useCliente();
   const { data: sessoes } = useSessoesClassificacao(clienteAtual?.id ?? null);
@@ -154,6 +164,21 @@ export function MesaEnriquecimentoTab({
   // PR-UX-ENR-MODAL-01 — superfície ampla da mesma mesa. Estado de UI puro:
   // não persiste, não sincroniza com URL, não altera nada do fluxo.
   const [mesaAmpliadaOpen, setMesaAmpliadaOpen] = useState(false);
+  /* ── PR-CONC-ENRIQUECER-V2-01 — o painel por conta, o Extrato da planilha e a Mesa por conta (estado de UI). ── */
+  const [filtroPainel, setFiltroPainel] = useState<FiltroPainel>('todas');
+  const [extratoOpen, setExtratoOpen] = useState(false);
+  const [extratoContaId, setExtratoContaId] = useState<string | null>(null);
+  const [listaAberta, setListaAberta] = useState<'transferencias' | 'fora' | null>(null);
+  /** A conta em que a Mesa abre (`null` = todas) e o recorte inicial da lista dela. */
+  const [mesaContaId, setMesaContaId] = useState<string | null>(null);
+  const [mesaFiltroInicial, setMesaFiltroInicial] = useState<FiltroMesa>('revisar');
+  /** Abre a Mesa numa conta, já numa linha (quando há) e num recorte. */
+  const abrirMesa = (contaId: string | null, stagingId: string | null, filtro: FiltroMesa) => {
+    setMesaContaId(contaId);
+    setMesaFiltroInicial(filtro);
+    if (stagingId) setSelecionadoId(stagingId);
+    setMesaAmpliadaOpen(true);
+  };
 
   /* Auto-seleção da sessão mais útil na abertura (regra extraída para o módulo puro).
      ⚠ DENTRO DO MÊS DA RÉGUA — 133h item 2. Com o seletor peneirado pelo mês, abrir numa
@@ -444,27 +469,9 @@ export function MesaEnriquecimentoTab({
   }, [rowsFiltradas, rowsVM, selecionadoId]);
   const selecionado = rowsNaTela.find((r) => r.id === selecionadoId) ?? null;
 
-  /**
-   * "A revisar" é o default — PR-MESA-ORDEM-REVISADO-01 item C.
-   *
-   * ⚠ SÓ QUANDO HÁ OS DOIS. Com tudo revisado, "A revisar" abriria uma lista vazia; com
-   * nada revisado, ele seria idêntico a "Todas" com outro nome. Nos dois extremos o default
-   * é "Todas", que é o que descreve a lista de verdade.
-   * ⚠ UMA VEZ POR RECORTE, e é isso que a chave garante. Sem ela, cada refetch — e há um a
-   * cada gravação — reimporia o default por cima da escolha do operador: ele clicaria em
-   * "Todas", salvaria uma linha e a tela voltaria sozinha para "A revisar".
-   * ⚠ O EFEITO RODA NA MONTAGEM DE PROPÓSITO, ao contrário do que a regra do 133 pede em
-   * geral: aqui a montagem É o momento de escolher o recorte inicial.
-   */
-  const chaveRecorte = `${sessaoId ?? ''}|${filtroConta}`;
-  const recorteAplicado = useRef<string | null>(null);
-  useEffect(() => {
-    if (!sessaoId || rowsVM.length === 0) return;
-    if (recorteAplicado.current === chaveRecorte) return;
-    recorteAplicado.current = chaveRecorte;
-    const revisadas = rowsVM.filter(estaRevisada).length;
-    setFiltroGrupo(revisadas > 0 && revisadas < rowsVM.length ? 'a_revisar' : 'todas');
-  }, [chaveRecorte, sessaoId, rowsVM]);
+  /* ⚠ O "A revisar é o default" (PR-MESA-ORDEM-REVISADO-01 item C) SAIU COM A LISTA DA TELA PRINCIPAL —
+     PR-CONC-ENRIQUECER-V2-01: o recorte agora é da Mesa (Revisar / Feitas / Todas, por conta), e a lista que ela recebe
+     é a sessão inteira, na ordem da tela. */
 
   /**
    * A primeira linha que ainda pede trabalho, na ordem da tela — item A.
@@ -671,41 +678,13 @@ export function MesaEnriquecimentoTab({
    */
   const obrigatoriosVazios = useMemo(() => {
     if (!selecionado) return [];
-    const porRotulo = new Map(selecionado.comparativo.map((c) => [c.campo, c]));
-    /* O `campo` do adapter e o `rotulo` da tabela não são o mesmo nome; a tabela exporta os
-       RÓTULOS, que é o que o operador lê no motivo. */
-    const paresCampoRotulo: Array<[string, string]> = [
-      ['Data pagamento', 'Data pgto.'], ['Valor', 'Valor'], ['Banco', 'Conta bancária'],
-      ['Fazenda', 'Fazenda'], ['Produto / Descrição', 'Produto / descr.'],
-      ['Subcentro', 'Conta do plano'], ['Tipo', 'Tipo'],
-    ];
-    const vazioNoResultado = (campo: string) => {
-      const c = porRotulo.get(campo);
-      return !c || c.resultado === '—' || c.resultado.trim() === '';
-    };
-    const faltando = paresCampoRotulo
-      .filter(([campo, rot]) => CAMPOS_OBRIGATORIOS_MESA.includes(rot) && vazioNoResultado(campo))
-      .map(([, rot]) => rot);
-    /* ⚠ PR-CONC-MESA-PAINEL-V1 item 3 — ATIVIDADE VAZIA E PLANO INCOERENTE PARAM AQUI, pela MESMA função que pinta a
-       conta de pendente na tabela (`planoIncoerente`). Só com o catálogo na mão: sem ele não se sabe o escopo. */
-    if (classificacoes) {
-      const atividade = atividadePorLinha[selecionado.id] ?? selecionado.edicao.atividadeProposta;
-      if (!atividade) faltando.push('Atividade');
-      const sub = selecionado.edicao.subcentro ?? selecionado.edicao.subcentroAtual;
-      if (planoIncoerente(classificacoes, sub, atividade) && !faltando.includes('Conta do plano')) {
-        faltando.push('Conta do plano (de outra atividade)');
-      }
-    }
-    /* ⚠ PR-MESA-TRANSF-01 — TRANSFERÊNCIA SEM DESTINO PARA AQUI, ANTES DA RPC. O guard
-       `trg_guard_transferencia_destino` recusa depois, e o operador leria um erro de
-       constraint no lugar do nome do campo que falta. A pergunta é sobre o RESULTADO
-       (`edicao.contaDestinoId` é a proposta; `contaDestinoIdAtual` é o que o lançamento já
-       tem), porque é o Resultado que vai ser gravado. */
-    if (ehTipoTransferencia(selecionado.edicao.tipoOperacao)
-        && !(selecionado.edicao.contaDestinoId ?? selecionado.edicao.contaDestinoIdAtual)) {
-      faltando.push(...CAMPOS_OBRIGATORIOS_SE_TRANSFERENCIA);
-    }
-    return faltando;
+    /* ⚠ A LISTA MORA NA TABELA DESDE O PR-CONC-ENRIQUECER-V2-01 (`pendenciasDaLinha`): o checklist da Mesa desenha, o
+       rodapé escreve "falta: ..." e este botão se apaga pela MESMA função. Antes era uma segunda lista aqui, com pares
+       campo×rótulo próprios. As regras são as de antes: obrigatório vazio no Resultado; Atividade vazia e plano de
+       outra atividade só com o catálogo na mão; transferência sem conta de destino. */
+    return pendenciasDaLinha(selecionado, {
+      classificacoes, atividade: atividadePorLinha[selecionado.id] ?? null,
+    });
   }, [selecionado, classificacoes, atividadePorLinha]);
 
   const podeSalvar = !!selecionado && !selecionado.aplicado && selecionado.temMatch
@@ -1172,59 +1151,9 @@ export function MesaEnriquecimentoTab({
     }
   }
 
-  /**
-   * Aplicar ao grupo — MESA-ENR-UX-01 (129).
-   *
-   * ⚠ MESMAS DUAS RPCs DO SALVAR, uma linha por vez: `editarProposto` grava a proposta e
-   * `applyRow` a aplica. Não há writer novo, e por isso cada linha rende o seu próprio
-   * evento — o que a auditoria precisa para dizer o que mudou em qual lançamento.
-   * ⚠ TRÊS CAMPOS, NÃO QUATRO. O envelope pede Fornecedor, Fazenda, Safra e Subcentro;
-   * `fn_classificacao_apply_row` não grava `safra_id`, então a safra fica de fora e o
-   * botão diz isso no título. Mandá-la no patch faria a RPC devolvê-la em
-   * `campos_rejeitados` e o operador veria um toast de erro no meio de um lote que deu
-   * certo.
-   * ⚠ SEQUENCIAL, NÃO EM PARALELO: são escritas na mesma sessão de staging, e o `await`
-   * em fila mantém a ordem dos eventos legível na auditoria. Um grupo tem unidades, não
-   * centenas — o custo é o do gesto.
-   * ⚠ FALHA DE UMA NÃO CANCELA AS OUTRAS, e o toast final diz quantas foram: parar no meio
-   * deixaria o grupo pela metade sem o operador saber quais.
-   */
-  const [aplicandoGrupo, setAplicandoGrupo] = useState(false);
-  async function handleAplicarAoGrupo(ids: string[]) {
-    if (!selecionado || ids.length === 0) return;
-    /* ⚠ A SAFRA ENTROU NO 129c. Antes ela ficava de fora porque o apply não a gravava e
-       mandá-la voltaria em `campos_rejeitados` — um toast de erro no meio de um lote que
-       deu certo. Agora `fn_classificacao_apply_row` grava `safra_id`, e o envelope pede
-       os quatro. `safra` (o texto do Excel) continua carry-only: quem grava é o id. */
-    /* ⚠ O GRUPO HERDA A REGRA DO ADMINISTRATIVO, e aqui ela é EXPLÍCITA em vez de passar pelo
-       `ajustarSeAdministrativo`: lá o ajuste é incremental (só mexe no que a linha tem de
-       errado), e um patch de grupo precisa dizer o valor para TODAS as linhas, inclusive as
-       que já estavam certas. Mesma decisão, dois usos diferentes. */
-    const admDoGrupo = contaAdministrativa(selecionado) ? fazendaAdministrativa(fazendas) : null;
-    const patch = {
-      subcentro: selecionado.edicao.subcentro,
-      favorecido_id: selecionado.edicao.favorecidoId,
-      fazenda_id: admDoGrupo ? admDoGrupo.id : selecionado.edicao.fazendaId,
-      safra_id: contaAdministrativa(selecionado) ? null : selecionado.edicao.safraId,
-    };
-    setAplicandoGrupo(true);
-    let ok = 0; let falhas = 0;
-    try {
-      for (const id of ids) {
-        try {
-          await editarProposto({ staging_id: id, patch });
-          const res: any = await applyRow({ staging_id: id, overwrite: true });
-          if (res?.aplicado) { ok++; } else falhas++;
-        } catch { falhas++; }
-      }
-      toast[falhas === 0 ? 'success' : 'warning'](
-        falhas === 0
-          ? `${ok} ${ok === 1 ? 'linha aplicada' : 'linhas aplicadas'} ao grupo.`
-          : `${ok} aplicadas · ${falhas} não aplicadas.`);
-    } finally {
-      setAplicandoGrupo(false);
-    }
-  }
+  /* ⚠ O "Ao fornecedor" (aplicar ao grupo, 129) SAIU COM O RODAPÉ DA MESA COMPACTA — PR-CONC-ENRIQUECER-V2-01: o
+     rodapé é ◀ ▶ Reverter | falta | Pular | Aprovar e próximo, e o lote das prontas é o "Gravar N" do painel. */
+
 
   // PR-UX-ENR-MODAL-01 — prop-bags únicos. A aba e o modal ampliado consomem
   // EXATAMENTE as mesmas props; a lista de props existe em UM lugar só.
@@ -1338,18 +1267,13 @@ export function MesaEnriquecimentoTab({
    * para cada linha já resolvida — ruído sobre trabalho que já estava certo.
    */
   const linhasDoLote = useMemo((): LinhaParaGravar[] => {
-    const ELEGIVEIS = new Set(['exato', 'divergente', 'ambiguo_resolvido', 'resolvido_manual', 'resolvido_grupo']);
     const out: LinhaParaGravar[] = [];
     for (const r of staging) {
-      if (r.aplicado) continue;
-      /* ⚠ 133i item 11 — O LOTE TAMBÉM NÃO PODE. Ele é o caminho que grava centenas: com a
-         parte de um agrupamento na fila, o `apply_row` a escreve por cima do consolidado
-         sem ninguém ver. Foi assim que o DARF de 25.590,80 recebeu duas classificações. */
-      if (parteDeAgrupamento(r)) continue;
-      const status: string = r.match_status;
+      /* ⚠ A REGRA DO LOTE MORA EM `elegivelParaLote` (painelContas) desde o PR-CONC-ENRIQUECER-V2-01: o painel por conta
+         conta as "prontas" pela MESMA função, e o "Gravar N" e a coluna Prontas não podem divergir.
+         ⚠ 133i item 11 — parte de agrupamento continua fora: o `apply_row` a escreveria por cima do consolidado. */
       const sobrescrever = sobrescreverIds.has(r.staging_id);
-      const entra = ELEGIVEIS.has(status) || (status === 'ja_classificado' && sobrescrever);
-      if (!entra) continue;
+      if (!elegivelParaLote(r, sobrescrever)) continue;
       const vm = toRowVM(r);
       out.push({
         stagingId: r.staging_id,
@@ -1591,281 +1515,222 @@ export function MesaEnriquecimentoTab({
     </>
   );
 
+  /* ── O PAINEL POR CONTA — PR-CONC-ENRIQUECER-V2-01. Nada de conta nova: os baldes saem de `baldeDaLinha` (o
+     `grupoDaLinha` dos cards e o `elegivelParaLote` do "Gravar N"); "fora da planilha" é a lista de
+     `fn_classificacao_sistema_nao_explicado` (a do card de antes), contada por conta; "falta OFX" lê o extrato do mês. */
+  const contasComOfx = useContasComExtratoNoMes(clienteAtual?.id, anoMesRegua ?? mesAtivo);
+  const foraPlanilhaPorConta = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const l of semParSistema ?? []) {
+      if (l.conta_bancaria_id) m.set(l.conta_bancaria_id, (m.get(l.conta_bancaria_id) ?? 0) + 1);
+    }
+    return m;
+  }, [semParSistema]);
+  const linhasPainel = useMemo(
+    () => montarPainelContas(staging, { foraPlanilhaPorConta, contasComOfx, sobrescreverIds }),
+    [staging, foraPlanilhaPorConta, contasComOfx, sobrescreverIds]);
+  const baldePorId = useMemo(
+    () => new Map(staging.map((r) => [r.staging_id, baldeDaLinha(r, sobrescreverIds.has(r.staging_id))])),
+    [staging, sobrescreverIds]);
+  /* As linhas que a planilha trouxe sem conta — o aviso que morava na casca (EnriquecerTresPassos) e veio para o slot. */
+  const linhasSemConta = useMemo(
+    () => staging.filter((r) => String(r.match_status) === 'sem_conta_para_match').length, [staging]);
+  const MESES_CURTOS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  const mesRotulo = mesDaRegua && anoDaRegua ? `${MESES_CURTOS[mesDaRegua - 1]}/${anoDaRegua}` : '—';
+  const mesCurto = mesDaRegua && anoDaRegua ? `${MESES_CURTOS[mesDaRegua - 1]}/${String(anoDaRegua).slice(2)}` : '—';
+
+  /* ── O SELETOR DE SESSÃO — o mesmo menu (com "(mais recente)" e a lixeira), agora no cabeçalho navy do painel ── */
+  const ehMaisRecente = !!sessaoId && sessaoId === sessoesDoMesVM[0]?.id;
+  const seletorSessao = (
+    /* ⚠ `DropdownMenu` DA CASA, NUNCA `<select>` NATIVO (133h item 2): a linha escolhe, o ícone pede a exclusão. */
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button type="button" data-testid="seletor-sessao"
+          className="flex h-6 min-w-0 max-w-[460px] items-center gap-1 rounded border border-primary-foreground/30 bg-primary-foreground/10 px-2 text-left text-[10px] text-primary-foreground hover:bg-primary-foreground/20">
+          <span className="min-w-0 truncate" title={sessaoLabel ?? undefined}>{sessaoLabel ?? '— nenhuma importação —'}</span>
+          {ehMaisRecente && <span className="shrink-0 whitespace-nowrap text-primary-foreground/75">(mais recente)</span>}
+          <ChevronDown className="h-3 w-3 shrink-0 opacity-70" />
+        </button>
+      </DropdownMenuTrigger>
+      {/* 400px: o rótulo inteiro + "(mais recente)" + a lixeira sem cortar (PR-CONC-EXCEL-SESSAO-E-DEPARA-01) */}
+      <DropdownMenuContent align="end" className="max-h-[60vh] w-[400px] overflow-y-auto">
+        {sessoesDoMesVM.length === 0 ? (
+          <div className="px-2 py-3 text-center text-[10px] text-muted-foreground">
+            Nenhuma importação para {mesDaRegua && anoDaRegua ? `${String(mesDaRegua).padStart(2, '0')}/${anoDaRegua}` : 'este mês'}.
+          </div>
+        ) : sessoesDoMesVM.map((sv) => (
+          <DropdownMenuItem key={sv.id} className="gap-1 text-[11px]"
+            onSelect={() => { setSessaoId(sv.id); setFiltroConta('todas'); setSelecionadoId(null); }}>
+            <span className="min-w-0 flex-1 truncate" title={sv.label}>{sv.label}</span>
+            {sv.id === sessoesDoMesVM[0]?.id && (
+              <span className="shrink-0 whitespace-nowrap text-[10px] text-muted-foreground">(mais recente)</span>
+            )}
+            <button type="button"
+              title={`Excluir a importação de ${sv.total} linha(s)`}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); void pedirExclusao(sv); }}
+              className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
+              <Trash2 className="h-[14px] w-[14px]" />
+            </button>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
+  /* ── O SLOT DE AVISO DO PAINEL — fixo, 18px: a exclusão pedida, a sessão mais nova e as linhas sem conta ── */
+  const avisosPainel: Array<{ id: string; conteudo: React.ReactNode; texto: string; cls: string }> = [];
+  if (exclusaoPendente) {
+    const texto = `${exclusaoPendente.linhas} linhas · nenhuma gravada — excluir ${exclusaoPendente.label}?`;
+    avisosPainel.push({ id: 'confirmar-exclusao', texto, cls: 'text-amber-800 dark:text-amber-300', conteudo: (
+      <>
+        <span className="min-w-0 truncate">{texto}</span>
+        <button type="button" className="shrink-0 font-medium underline" disabled={isExcluindoSessao}
+          onClick={() => { void confirmarExclusao(); }}>{isExcluindoSessao ? 'Excluindo…' : 'Excluir'}</button>
+        <button type="button" className="shrink-0 underline" onClick={() => setExclusaoPendente(null)}>Não</button>
+      </>
+    ) });
+  }
+  if (sessaoMaisNova) {
+    const texto = `Há uma importação mais nova deste mês (${sessaoMaisNova.imp}) —`;
+    avisosPainel.push({ id: 'aviso-sessao-mais-nova', texto, cls: 'text-amber-700 dark:text-amber-400', conteudo: (
+      <>
+        <span className="truncate">{texto}</span>
+        <button type="button" className="shrink-0 underline"
+          onClick={() => { setSessaoId(sessaoMaisNova.id); setFiltroConta('todas'); setSelecionadoId(null); }}>abrir</button>
+      </>
+    ) });
+  }
+  if (linhasSemConta > 0) {
+    const texto = `${linhasSemConta} linha${linhasSemConta === 1 ? '' : 's'} desta planilha ${linhasSemConta === 1 ? 'ficou' : 'ficaram'} sem conta — reimporte a planilha.`;
+    avisosPainel.push({ id: 'aviso-sem-conta', texto, cls: 'text-amber-800 dark:text-amber-300', conteudo: (
+      <>
+        <span className="truncate">{texto}</span>
+        {onPlanilha && (
+          <button type="button" className="shrink-0 underline" onClick={onPlanilha}>ir para a planilha e de-para</button>
+        )}
+      </>
+    ) });
+  }
+
+  const nTransferencias = transf.carregando ? null
+    : paresDaConta.length + transf.estornos.total + transf.faturas.total;
+  const menuPainel = [
+    { rotulo: isCasando ? 'Recasando…' : '↻ Recasar', desabilitado: isCasando || !sessaoId,
+      title: 'Procura de novo o lançamento de cada linha, sem reimportar.', onClick: () => { void recasar(); } },
+    { rotulo: '⬆ Importar planilha', onClick: () => setImportOpen(true) },
+    { rotulo: `Transferências entre contas${nTransferencias === null ? '' : ` (${nTransferencias})`}`,
+      onClick: () => setListaAberta('transferencias') },
+    { rotulo: `No sistema, fora da planilha (${semParSistema?.length ?? 0})`, onClick: () => setListaAberta('fora') },
+    { rotulo: 'Mesa · todas as contas', desabilitado: rowsNaTela.length === 0,
+      onClick: () => abrirMesa(null, primeiraNaoRevisada?.id ?? null, 'todas') },
+    { rotulo: 'Baixar sem par (CSV)', desabilitado: resumo.sem_par.qtd === 0, onClick: baixarSemPar },
+  ];
+
   return (
     <div className="flex flex-col gap-1 md:min-h-0 md:flex-1">
-      {/* ═══ TOPO: seis números + os mesmos seis como chips ════════════════════════ */}
-      <EnriquecimentoTopoNumeros
-        resumo={resumo}
-        total={rowsVM.length}
-        filtro={filtroGrupo}
-        onFiltro={(g) => { setFiltroGrupo(g); setSelecionadoId(null); }}
-        revisao={revisao}
-        /* ⚠ O CHIP CONTA O QUE A LISTA MOSTRA — 133e item G. Com o total do mês no chip e o
-           recorte da conta na lista, os dois discordariam sempre que houvesse filtro. */
-        /* ⚠ O CARD SOMA AS TRÊS FAMÍLIAS — 133f item 2. Elas respondem à mesma pergunta
-           ("este dinheiro saiu mesmo?") e vivem no mesmo chip; um card que contasse só os
-           pares entre contas diria 7 enquanto a tela tem 14. `únicos` vira o que ainda
-           PEDE trabalho — o que está feito não é trabalho. */
-        transferencias={transf.carregando ? undefined : {
-          total: paresDaConta.length + transf.estornos.total + transf.faturas.total,
-          unicos: paresDaConta.filter((p) => !p.ambiguo).length
-            + transf.estornos.pendentes + transf.faturas.pendentes,
+      {/* ═══ O PAINEL POR CONTA — PR-CONC-ENRIQUECER-V2-01 ═══════════════════════════════════════════════════
+          ⚠ ELE SUBSTITUI o topo de seis chips, a barra de 32px, a lista de linhas e o rodapé do passo 2. O trabalho
+          agora se escolhe POR CONTA: "Extrato da planilha" confere, "Revisar N" abre a Mesa nas pendências dela.
+          ⚠ NENHUM GESTO SE PERDEU: recasar, importar, transferências, sistema fora da planilha, Mesa de todas as contas
+          e o CSV dos sem par moram no "⋯" (e o card "No sistema, fora da planilha" abre a lista). */}
+      <PainelContasEnriquecer
+        mesRotulo={mesRotulo}
+        clienteNome={clienteAtual?.nome ?? '—'}
+        seletorSessao={seletorSessao}
+        linhas={linhasPainel}
+        mesCurto={mesCurto}
+        filtro={filtroPainel}
+        onFiltro={setFiltroPainel}
+        pendentesDePara={pendentesDePara ?? null}
+        onPlanilha={onPlanilha}
+        onExtrato={(contaId) => { setExtratoContaId(contaId ?? linhasPainel[0]?.contaId ?? null); setExtratoOpen(true); }}
+        onRevisar={(contaId) => {
+          const primeira = rowsNaTela.find((r) => r.contaId === contaId && passaNoFiltroMesa(baldePorId.get(r.id), 'revisar'));
+          abrirMesa(contaId, primeira?.id ?? null, 'revisar');
         }}
-        semParSistema={semParSistema?.length}
-        /* ⚠ 133i item 7 — O NÚMERO É O DA LISTA, e não o do mês. O envelope fala em
-           "lançamentos do mês"; medido no NJ agosto, são 84 lançamentos assim, e a sessão
-           aponta para 104 deles em 670 linhas. Contar o mês e filtrar a sessão faria o card
-           e a lista falarem de universos diferentes — o defeito que os outros sete cards
-           evitam por construção. Fica o da sessão; o do mês é decisão de produto. */
-        incompletos={incompletos}
-        divergemPlanilha={divergemPlanilha}
+        gravarN={linhasDoLote.length}
+        gravando={lote.gravando}
+        gravarRotulo={lote.gravando ? `Gravando… ${lote.progresso.feitas} de ${lote.progresso.total}` : undefined}
+        onGravar={() => { void handleGravarLote(); }}
+        onForaPlanilha={() => setListaAberta('fora')}
+        menu={menuPainel}
+        avisos={avisosPainel}
+        carregando={isFetching}
       />
 
-      {/* ═══ TOOLBAR — UMA LINHA DE 32px (133d item 2) ════════════════════════════
-          ⚠ SEM RÓTULO ACIMA DO CAMPO: o VALOR é o rótulo. "Todas as contas" e "Ordem da
-          planilha" dizem o que o campo é sem gastar uma palavra ao lado — e as palavras ao
-          lado eram o que fazia a barra quebrar em duas linhas.
-          ⚠ NADA OCUPA A LINHA INTEIRA: `flex-nowrap` e larguras fixas. Com `flex-wrap`, o
-          primeiro campo que não coubesse levava a barra para 64px e o topo para fora da
-          dobra. */}
-      <div className="flex h-8 w-full shrink-0 flex-nowrap items-center gap-1.5 overflow-hidden rounded-lg border bg-card px-2">
-        {/* ⚠ `Select` DA CASA, NUNCA `<select>` NATIVO: o menu do sistema operacional abre
-            com outra fonte e outro idioma em cada máquina. */}
-        {/* ⚠ VIROU `DropdownMenu` PORQUE CADA ITEM GANHOU UM SEGUNDO GESTO — 133h item 2.
-            Um `SelectItem` do Radix engole o clique do que estiver dentro dele: o ícone de
-            excluir viraria "escolher esta sessão". O menu permite os dois — a linha escolhe,
-            o ícone pede a exclusão — e continua sendo controle da casa, nunca nativo.
-            ⚠ A SESSÃO É O QUE CEDE — 133e item C. Ela era 260px fixos e empurrava a barra
-            para além do container em 1280; agora é ELÁSTICA entre 160 e 320 e trunca,
-            enquanto os controles de largura fixa e os botões não encolhem. */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button type="button"
-              className="flex h-6 min-w-[160px] max-w-[320px] flex-1 items-center gap-1 rounded-md border border-input bg-background px-2 text-left text-[11px] hover:bg-muted/50">
-              <span className="min-w-0 flex-1 truncate" title={sessaoLabel ?? undefined}>
-                {sessaoLabel ?? '— nenhuma importação —'}
-              </span>
-              <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
-            </button>
-          </DropdownMenuTrigger>
-          {/* 400px: o rótulo inteiro + "(mais recente)" + a lixeira sem cortar (PR-CONC-EXCEL-SESSAO-E-DEPARA-01) */}
-          <DropdownMenuContent align="start" className="max-h-[60vh] w-[400px] overflow-y-auto">
-            {sessoesDoMesVM.length === 0 ? (
-              <div className="px-2 py-3 text-center text-[10px] text-muted-foreground">
-                Nenhuma importação para {mesDaRegua && anoDaRegua ? `${String(mesDaRegua).padStart(2, '0')}/${anoDaRegua}` : 'este mês'}.
-              </div>
-            ) : sessoesDoMesVM.map((sv) => (
-              <DropdownMenuItem key={sv.id} className="gap-1 text-[11px]"
-                onSelect={() => { setSessaoId(sv.id); setFiltroConta('todas'); setSelecionadoId(null); }}>
-                <span className="min-w-0 flex-1 truncate" title={sv.label}>{sv.label}</span>
-                {/* PR-CONC-EXCEL-SESSAO-E-DEPARA-01 — a lista já vem da mais nova para a mais antiga; a primeira se diz.
-                    ⚠ FORA do rótulo que trunca: dentro dele, o marcador era o primeiro a ser cortado ("mais re..."). */}
-                {sv.id === sessoesDoMesVM[0]?.id && (
-                  <span className="shrink-0 whitespace-nowrap text-[10px] text-muted-foreground">(mais recente)</span>
-                )}
-                {/* ⚠ `preventDefault` NO ÍCONE: sem ele o menu fecha e a confirmação inline
-                    nasce sem que ninguém a veja — o gesto de pedir a exclusão não é o de
-                    escolher a sessão. */}
-                <button type="button"
-                  title={`Excluir a importação de ${sv.total} linha(s)`}
-                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); void pedirExclusao(sv); }}
-                  className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
-                  <Trash2 className="h-[14px] w-[14px]" />
-                </button>
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <Button size="sm" variant="outline" className="h-6 shrink-0 px-2 text-[11px]"
-          onClick={() => setImportOpen(true)}>
-          ⬆ Importar planilha
-        </Button>
-        {/* ⚠ RECASAR SEM REIMPORTAR — 133a. Resolver um ambíguo ou mapear uma conta no
-            de-para muda o que casa; sem ele, ver o efeito custaria reimportar tudo. */}
-        <Button size="sm" variant="outline" className="h-6 shrink-0 px-2 text-[11px]"
-          disabled={isCasando || !sessaoId}
-          title={!sessaoId ? 'Escolha uma importação.' : 'Procura de novo o lançamento de cada linha, sem reimportar.'}
-          onClick={() => { void recasar(); }}>
-          {isCasando ? 'Recasando…' : '↻ Recasar'}
-        </Button>
+      {/* ═══ AS DUAS LISTAS QUE NÃO SÃO LINHA DA PLANILHA — em diálogo, chamadas pelo "⋯" e pelo card ═══════
+          ⚠ MESMOS COMPONENTES E MESMAS AÇÕES de antes (133c): transferência é o PAR de lançamentos, e "fora da planilha"
+          é o lançamento órfão. Só mudou a casa: eram o corpo da tela, trocado por chip. */}
+      <Dialog open={listaAberta !== null} onOpenChange={(o) => { if (!o) setListaAberta(null); }}>
+        <DialogContent className="flex h-[86vh] max-h-[86vh] w-[92vw] max-w-[1200px] flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="h-9 shrink-0 flex-row items-center space-y-0 bg-primary px-4">
+            <DialogTitle className="text-[12px] font-medium text-primary-foreground">
+              {listaAberta === 'transferencias' ? 'Transferências entre contas' : 'No sistema, fora da planilha'} · {mesRotulo}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex min-h-0 flex-1 flex-col p-2">
+            {listaAberta === 'transferencias' ? (
+              <EnriquecimentoTransferencias
+                pares={paresDaConta}
+                carregando={transf.carregando}
+                simular={transf.simular}
+                unir={transf.unir}
+                unindo={transf.unindo}
+                estornos={transf.estornos.pares}
+                faturas={transf.faturas.faturas}
+                simularEstorno={transf.simularEstorno}
+                aplicarEstorno={transf.aplicarEstorno}
+                simularFatura={transf.simularFatura}
+                aplicarFatura={transf.aplicarFatura}
+                onErro={(m) => toast.error(`Não foi possível concluir: ${m}`)}
+                onUnido={(n) => toast.success(n > 0
+                  ? `Transferência unida — ${n} vínculo${n === 1 ? '' : 's'} do extrato movido${n === 1 ? '' : 's'}.`
+                  : 'Aplicado.')}
+              />
+            ) : listaAberta === 'fora' ? (
+              <EnriquecimentoSemParSistema
+                linhas={semParSistema ?? []}
+                carregando={carregandoSemPar}
+                onCancelar={handleCancelarDuplicado}
+                onAbrirNoFinanceiro={onVerNoFinanceiro}
+                /* 133i-b item 1 — o cadastro para a ação "É transferência para/de ▾". */
+                contas={contasBancarias}
+                /* 133i-c item 3 — o cliente, para as parcelas pendentes de "É parcela de financiamento ▾". */
+                clienteId={clienteAtual?.id ?? null}
+                onMudou={() => {
+                  /* ⚠ AS DUAS ACOES DA LISTA CAEM AQUI, e as duas tiram a linha da lista: virar
+                     transferencia e pagar parcela. */
+                  qcMesa.invalidateQueries({ queryKey: ['sistema-nao-explicado'] });
+                  qcMesa.invalidateQueries({ queryKey: ['parcelas-financiamento-pendentes'] });
+                  qcMesa.invalidateQueries({ queryKey: ['financiamentos-lista', clienteAtual?.id] });
+                  qcMesa.invalidateQueries({ queryKey: ['financiamento-parcelas'] });
+                  if (clienteAtual?.id) notificarLancamentosMudaram(clienteAtual.id);
+                  toast.success('Aplicado.');
+                }}
+                onErro={(m) => toast.error(`Não foi possível: ${m}`)}
+              />
+            ) : null}
+          </div>
+        </DialogContent>
+      </Dialog>
 
-        {/* ⚠ O SELETOR DE CONTA É UM SÓ NO SISTEMA — 133g item 9. Esta lista era montada à
-            mão e saía na ordem do VOLUME (a conta com mais linhas primeiro), sem gaveta
-            nenhuma: quinze contas correntes, investimentos e cartões embaralhados. Agora
-            agrupa por tipo como todo seletor de conta, e a CONTAGEM continua no rótulo —
-            ela é o que diz onde está o trabalho.
-            ⚠ "Todas" e "Sem conta" ENTRAM POR `prependItems`: são sentinelas do filtro, não
-            contas do cadastro, e um grupo com elas dentro seria mentira sobre o cadastro. */}
-        <div className="w-[170px] shrink-0">
-          <ContaBancariaSelect
-            value={filtroConta}
-            onValueChange={(id) => { setFiltroConta(id); setSelecionadoId(null); }}
-            contas={contasDoFiltro}
-            prependItems={itensFixosDoFiltro}
-            className="h-6 text-[11px]"
-          />
-        </div>
-
-        <Button size="sm" variant="outline" className="h-6 shrink-0 px-2 text-[11px]"
-          disabled={mesaAmpliadaVazia}
-          title={mesaAmpliadaVazia ? 'Nenhuma linha neste recorte.' : 'Revisar campo a campo e salvar — em tela cheia.'}
-          /* ⚠ ABRE NA PRIMEIRA QUE FALTA, NÃO NA PRIMEIRA DO MÊS — item A. Sem seleção, a
-             Mesa abria vazia e o operador tinha de achar onde parou; com a ordem crescente,
-             "a primeira" seria 03/08, que já está conferida há dias. Só decide quando não
-             há escolha vigente: a seleção do operador manda sempre. */
-          onClick={() => {
-            if (!selecionadoId && primeiraNaoRevisada) setSelecionadoId(primeiraNaoRevisada.id);
-            setMesaAmpliadaOpen(true);
-          }}>
-          Mesa ampliada
-        </Button>
-      </div>
-
-      {/* ⚠ A CONFIRMAÇÃO É INLINE E EFÊMERA — 133h item 2: ela só ocupa altura enquanto
-          existe, e some no gesto seguinte. Um diálogo modal para apagar uma importação de
-          rascunho seria pesado demais para o que o banco já protege (linha gravada recusa),
-          e leve demais seria apagar no primeiro clique. */}
-      {exclusaoPendente && (
-        <div className="flex shrink-0 items-center gap-2 rounded-lg border border-amber-300 bg-amber-50/60 px-2 py-1 dark:border-amber-800 dark:bg-amber-950/20">
-          <span className="min-w-0 flex-1 truncate text-[10px] text-amber-900 dark:text-amber-200"
-            title={exclusaoPendente.label}>
-            <b className="tabular-nums">{exclusaoPendente.linhas}</b> linhas · nenhuma gravada — excluir{' '}
-            {exclusaoPendente.label}?
-          </span>
-          <Button type="button" size="sm" className="h-6 shrink-0 px-2 text-[10px]"
-            disabled={isExcluindoSessao}
-            onClick={() => { void confirmarExclusao(); }}>
-            {isExcluindoSessao ? 'Excluindo…' : 'Excluir'}
-          </Button>
-          <Button type="button" size="sm" variant="outline" className="h-6 shrink-0 px-2 text-[10px]"
-            onClick={() => setExclusaoPendente(null)}>
-            Não
-          </Button>
-        </div>
-      )}
-
-      {isFetching && <div className="shrink-0 px-1 text-[10px] text-muted-foreground">Carregando…</div>}
-
-      {/* ═══ CORPO ════════════════════════════════════════════════════════════════
-          ⚠ DOIS CHIPS TROCAM O CORPO INTEIRO — 133c. Transferência e "sem par no sistema"
-          não olham linhas da planilha: a unidade de um é o PAR de lançamentos, a do outro é
-          o lançamento órfão. Encaixá-los na lista de linhas faria o contador do chip e o
-          tamanho da lista falarem de coisas diferentes. */}
-      {filtroGrupo === 'transferencia' ? (
-        <EnriquecimentoTransferencias
-          pares={paresDaConta}
-          carregando={transf.carregando}
-          simular={transf.simular}
-          unir={transf.unir}
-          unindo={transf.unindo}
-          estornos={transf.estornos.pares}
-          faturas={transf.faturas.faturas}
-          simularEstorno={transf.simularEstorno}
-          aplicarEstorno={transf.aplicarEstorno}
-          simularFatura={transf.simularFatura}
-          aplicarFatura={transf.aplicarFatura}
-          onErro={(m) => toast.error(`Não foi possível concluir: ${m}`)}
-          onUnido={(n) => toast.success(n > 0
-            ? `Transferência unida — ${n} vínculo${n === 1 ? '' : 's'} do extrato movido${n === 1 ? '' : 's'}.`
-            : 'Aplicado.')}
-        />
-      ) : filtroGrupo === 'sem_par_sistema' ? (
-        <EnriquecimentoSemParSistema
-          linhas={semParSistema ?? []}
-          carregando={carregandoSemPar}
-          onCancelar={handleCancelarDuplicado}
-          onAbrirNoFinanceiro={onVerNoFinanceiro}
-          /* 133i-b item 1 — o cadastro para a ação "É transferência para/de ▾". */
-          contas={contasBancarias}
-          /* 133i-c item 3 — o cliente, para as parcelas pendentes de "É parcela de financiamento ▾". */
-          clienteId={clienteAtual?.id ?? null}
-          onMudou={() => {
-            /* ⚠ AS DUAS ACOES DA LISTA CAEM AQUI, e as duas tiram a linha da lista: virar
-               transferencia e pagar parcela. Por isso a invalidacao e' a mesma, mais a
-               lista de financiamentos — que muda quando uma parcela e' paga. */
-            qcMesa.invalidateQueries({ queryKey: ['sistema-nao-explicado'] });
-            qcMesa.invalidateQueries({ queryKey: ['parcelas-financiamento-pendentes'] });
-            qcMesa.invalidateQueries({ queryKey: ['financiamentos-lista', clienteAtual?.id] });
-            qcMesa.invalidateQueries({ queryKey: ['financiamento-parcelas'] });
-            if (clienteAtual?.id) notificarLancamentosMudaram(clienteAtual.id);
-            toast.success('Aplicado.');
-          }}
-          onErro={(m) => toast.error(`Não foi possível: ${m}`)}
-        />
-      ) : (
-      <>
-        {/* ⚠ A TABELA SAIU DA TELA PRINCIPAL — 133d item 3. O passo 2 tinha lista de 400px
-            + tabela de 15 campos + candidatos + rodapé, e nada disso cabia em 900px: a
-            página rolava, e rolar a página tira o topo de 6 números da vista bem na hora
-            de conferir. Aqui ele é uma LISTA de largura total; revisar campo a campo é o
-            gesto da Mesa, e clicar na linha leva direto a ela.
-            ⚠ NÃO É PERDA DE CAMINHO: a Mesa ampliada tem a mesma tabela, os mesmos
-            candidatos e o Salvar — e agora abre NA LINHA que o operador escolheu. */}
-        {/* ⚠ SLOT FIXO DE UMA LINHA — PR-CONC-EXCEL-SESSAO-E-DEPARA-01: com uma importação mais nova no mês, ele avisa e
-            abre; senão, a dica de sempre. Sessão antiga aberta sem aviso foi o que deixou o Gabriel conferindo a Imp 02
-            (sem safra) com a Imp 03 já no banco. */}
-        {sessaoMaisNova ? (
-          <p data-testid="aviso-sessao-mais-nova"
-            className="flex h-[18px] shrink-0 items-center gap-1 overflow-hidden whitespace-nowrap px-1 text-[10px] text-amber-700 dark:text-amber-400">
-            <span className="truncate">Há uma importação mais nova deste mês ({sessaoMaisNova.imp}) —</span>
-            <button type="button" className="shrink-0 underline"
-              onClick={() => { setSessaoId(sessaoMaisNova.id); setFiltroConta('todas'); setSelecionadoId(null); }}>
-              abrir
-            </button>
-          </p>
-        ) : (
-          <p className="flex h-[18px] shrink-0 items-center px-1 text-[10px] text-muted-foreground">
-            Clique na linha para revisar e salvar na Mesa.
-          </p>
-        )}
-        <div className="min-h-0 md:flex-1">
-          <EnriquecimentoLista {...listaProps} />
-        </div>
-      </>
-      )}
-
-      {/* ═══ RODAPÉ FIXO ══════════════════════════════════════════════════════════ */}
-      <div className="flex shrink-0 flex-wrap items-center gap-2 rounded-lg border bg-muted/30 px-2 py-1">
-        <span className="min-w-0 flex-1 text-[10px] leading-tight text-muted-foreground">
-          {/* ⚠ 133h item 11 — O RODAPÉ DIZ O QUE TOCA O FINANCEIRO. A tela tinha "Salvar" e
-              "Confirmar" lado a lado e não dizia em lugar nenhum que só um deles grava; o
-              operador confirmava a sessão inteira achando que estava gravando, e nada
-              chegava ao lançamento.
-              ⚠ "CONFIRMAR" SAIU DO TEXTO com o botão único (adendo PR-MESA-TRANSF-01): não
-              há mais dois nomes, há um gesto que grava quando há o que gravar. A frase
-              continua dizendo a mesma coisa — o que muda é que agora ela descreve o que
-              ACONTECE, não qual dos dois botões apertar. */}
-          <b>Salvar</b> grava no lançamento; sem mudança, só marca a linha como revisada.
-          {' · '}
-          <b className="tabular-nums">{revisadas}</b>/<b className="tabular-nums">{rowsVM.length}</b> revisado
-          {' · '}
-          Gravar aplica os{' '}
-          <b className="tabular-nums">{resumo.atualizam.qtd}</b> que atualizam, os que você decidiu e os
-          agrupamentos que você aceitou. Os sem par ficam no relatório.
-          {editadasIds.size > 0 && (
-            <> · <b className="tabular-nums text-amber-700 dark:text-amber-400">{editadasIds.size}</b>{' '}
-              editada{editadasIds.size === 1 ? '' : 's'} nesta sessão, marcada{editadasIds.size === 1 ? '' : 's'} em âmbar.</>
-          )}
-        </span>
-        <Button type="button" size="sm" variant="outline" className="h-6 px-2 text-[10px]"
-          disabled={resumo.sem_par.qtd === 0}
-          title={resumo.sem_par.qtd === 0 ? 'Nenhuma linha sem par neste recorte.' : 'CSV com linha, data, conta, descrição, valor e motivo'}
-          onClick={baixarSemPar}>
-          Baixar sem par (CSV)
-        </Button>
-        {/* ⚠ O NÚMERO DO BOTÃO É O DA FILA, não o do topo — 133c. O topo conta por grupo
-            dentro do recorte de conta; a fila é a sessão inteira, sem as já aplicadas e sem
-            as `ja_classificado` que ninguém liberou. Dois números diferentes com o mesmo
-            rótulo seria a tela discordando de si mesma. */}
-        <Button type="button" size="sm" className="h-6 px-2 text-[10px]"
-          disabled={linhasDoLote.length === 0 || lote.gravando}
-          title={linhasDoLote.length === 0
-            ? 'Nada a gravar: as linhas que atualizam já foram aplicadas, ou não há nenhuma.'
-            : `Aplica ${linhasDoLote.length} linha(s) uma a uma, com progresso. Nada é criado.`}
-          onClick={() => { void handleGravarLote(); }}>
-          {lote.gravando ? `Gravando… ${lote.progresso.feitas} de ${lote.progresso.total}` : `Gravar ${linhasDoLote.length}`}
-        </Button>
-      </div>
+      {/* ═══ O EXTRATO DA PLANILHA — fica montado embaixo da Mesa: fechar a Mesa volta ao mesmo ponto ═══ */}
+      <ExtratoDaPlanilhaModal
+        open={extratoOpen}
+        onOpenChange={setExtratoOpen}
+        clienteId={clienteAtual?.id ?? null}
+        anoMes={anoMesRegua ?? mesAtivo ?? ''}
+        mesRotulo={mesRotulo}
+        staging={staging}
+        contas={linhasPainel.map((l) => ({ id: l.contaId, nome: l.nome }))}
+        contaId={extratoContaId}
+        onContaId={setExtratoContaId}
+        sobrescreverIds={sobrescreverIds}
+        onAbrirLinha={(stagingId, contaId) => {
+          const balde = baldePorId.get(stagingId);
+          abrirMesa(contaId, stagingId, passaNoFiltroMesa(balde, 'revisar') ? 'revisar' : 'todas');
+        }}
+      />
 
       {/* ⚠ MONTADO SEMPRE, visível por estado — o idioma do 131. Desmontá-lo ao fechar
           perderia o `scrollIntoView` do feed e faria o modal reabrir no topo; e quem fecha
@@ -1895,14 +1760,15 @@ export function MesaEnriquecimentoTab({
         lista={listaProps}
         detalhe={detalheProps}
         actions={actionsProps}
-        onAplicarAoGrupo={handleAplicarAoGrupo}
-        aplicandoGrupo={aplicandoGrupo}
         faixas={faixasDaLinha}
         onOrdemVisivel={setOrdemDaMesa}
-        /* 133h item 6 — o cadastro, para o filtro de conta da Mesa agrupar por tipo. */
-        contas={contasBancarias}
         /* 133h item 12 — quem veio do extrato tem campos que a RPC ignora. */
         conciliadosIds={conciliados}
+        /* PR-CONC-ENRIQUECER-V2-01 — a Mesa abre na conta escolhida no painel (ou na da linha do Extrato). */
+        contaId={mesaContaId}
+        contaNome={mesaContaId ? (linhasPainel.find((l) => l.contaId === mesaContaId)?.nome ?? null) : null}
+        baldePorId={baldePorId}
+        filtroInicial={mesaFiltroInicial}
       />
 
       {/* 133i item 1 — o agrupamento vira escolha, com os números na frente. */}

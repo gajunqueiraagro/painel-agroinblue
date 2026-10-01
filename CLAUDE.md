@@ -160,7 +160,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 01/10/2026 (PR-CONC-EXCEL-SESSAO-E-DEPARA-01): 2695 passando, 22 skipped, e
+  Baseline em 01/10/2026 (PR-CONC-ENRIQUECER-V2-01, +30 em `src/v2/lib/mesa/enriquecerV2.test.tsx`): 2725 passando,
+  22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -303,6 +304,13 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   aprendizado da Mesa (escolher a conta -> apelido composto) nao tem teste de componente da aba (o helper e o caminho do
   banco tem); (d) no proxy, 117 linhas com texto de safra que nao resolve ("Despesas Pessoais" 85, "Nao se aplica" 31 e o
   apelido ambiguo da 25/26-AMD inativa) — conferir na planilha reimportada, onde a coluna Safra e' a de verdade.
+  · ENRIQUECER-V2 (PR-CONC-ENRIQUECER-V2-01): (a) SAIRAM do rodape da Mesa o "Salvar" (o Aprovar e' o Salvar + avanco),
+  "Revisado"/"Exatos" (o lote e' o "Gravar N prontas" do painel) e o "Ao fornecedor" (aplicar ao grupo) — religar este
+  ultimo e' decisao; (b) o casador da sessao 8d6efeb7 (BB, 01/09) casou as DUAS linhas "Telefone 506,51" no MESMO
+  lancamento (8ebd63d4) e deixou o outro "Vivo Casa 506,51" (e7970f00) so' no sistema — o Extrato mostra como ↳ + "So' no
+  sistema"; lancamentos iguais sao normais, o que se mede e' o PAR (ENRIQ-CASADOR-IGUAIS-01, frente de banco); (c) o selo
+  da pronta classificada (exato/divergente) e' "Diverge" — o briefing nao nomeou selo para "pronta, classificada"; (d) a
+  1.135x579 do Gabriel, o bloco Identificacao da Mesa fica abaixo da dobra (a grade rola por dentro; layout fixo intacto).
 - Telas e UI:
   TELAS-ORFAS-01 (decisao) · FIN-RECORRENCIA-FAZENDA-01 · FIN-FAZENDA-INATIVA-LISTA-01 · FIN-IMPORTAR-ANTIGO-01 ·
   FAZENDA-INATIVA-EDICAO-01 · LEGADOS-ABATE-VENDA-FAZENDA-01 · FORNECEDOR-UUID-CRU-01 · PROPRIEDADE-DESTINO-ORIGEM-01 ·
@@ -362,7 +370,9 @@ preview que o cabecalho nao sai da tela ao rolar.
   uma referencia", PR-CONC-CONFERENCIA-MODAL-01-fix2; o selo de motivo e o status de `SugestoesCasarModal.tsx`,
   PR-CONC-SUGESTOES-CASAR-01) — so os selos, as tabelas seguem a 9,5; (3) na Mesa (PR-CONC-MESA-PAINEL-V1), o rotulo
   auxiliar a 8,5px — "do extrato", "pelo historico do banco", "transferencia" e o selo "cru/classificado" do rodape —,
-  com o corpo da tabela a 10,5. Excecoes declaradas, nao precedente:
+  com o corpo da tabela a 10,5; (4) a LISTA da Mesa compacta (PR-CONC-ENRIQUECER-V2-01, decisao do Gabriel no briefing):
+  168px, itens de 16px a 8,5px (`LARGURA_LISTA_MESA`/`ALTURA_ITEM_LISTA` em `EnriquecimentoMesaModal.tsx`) — e' navegacao,
+  o painel ao lado repete a linha inteira. Excecoes declaradas, nao precedente:
   abaixo de 9,5px fora delas reprova o PR.
   ⚠ LARGURA DE COLUNA = pior texto RENDERIZADO + 8 de folga + 14 de padding, contando o slot do marcador
     ▲/▼ (`L_MARCADOR`, 10px). Mede-se com um `Range` sobre o conteudo de cada `td` contra o `clientWidth`
@@ -568,6 +578,13 @@ docs/historico/frentes-ate-2026-09-29.md.)
   "Cart\uFFFDo" (PR-CONC-CRIAR-LOTE-LAYOUT-01). O hash do movimento usa a descricao: consertar texto ja' gravado exige
   recalcular o hash junto. Texto ja' gravado com U+FFFD se corrige por DICIONARIO de palavra inteira, nunca por palpite
   de byte, com a replica SQL do hash provada contra o gravado ANTES de trocar (EXTRATO-UFFFD-01, 20261027184700).
+- ⚠ ENRIQUECER V2 = PAINEL POR CONTA (PR-CONC-ENRIQUECER-V2-01, 01/10): cada linha da planilha cai em UM balde
+  (`baldeDaLinha`, `src/v2/lib/mesa/painelContas.ts`: gravada > pronta > decide > sem banco), "pronta" e' a MESMA
+  `elegivelParaLote` do "Gravar N", o Total e' a soma das contas, e o "Revisar N" e' o filtro "Revisar" da Mesa. O Extrato da
+  planilha monta pela `montarMesa` da Conferencia (`extratoDaPlanilha.ts`; aplicado do par 1:1 = valor do LANCAMENTO, senao o
+  dia "confere" por construcao). O checklist da Mesa (`checklistDaLinha`/`pendenciasDaLinha` em `MesaCamposTabela.tsx`) e' a
+  UNICA lista de obrigatorios — desenha o ●, escreve o "falta:" e apaga o Aprovar — e julga Fazenda/Conta do plano/Descricao
+  pelo VALOR EFETIVO (o Resultado diz "mantem" ate' com os dois lados vazios).
 - ⚠ MESA: NO CRU A PLANILHA PREVALECE, NO CLASSIFICADO O SISTEMA (PR-CONC-MESA-CRU-EXCEL-PREVALECE-01, Gabriel 30/09).
   CRU = lancamento de origem 'extrato'/'ofx' SEM conta do plano, fora transferencia. Quem decide e' o BANCO, numa funcao
   so' (`_fn_classificacao_precedencia_cru`, no fim do casar e do populate): a leitura da planilha fica em

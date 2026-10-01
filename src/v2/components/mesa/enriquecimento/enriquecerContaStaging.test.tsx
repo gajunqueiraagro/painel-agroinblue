@@ -23,7 +23,12 @@ vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('@/contexts/ClienteContext', () => ({ useCliente: () => ({ clienteAtual: { id: 'nj' } }) }));
 vi.mock('@/hooks/useFinanceiroV2', () => ({ useFinanceiroV2: () => ({ criarFornecedor: vi.fn() }) }));
 vi.mock('@/components/financeiro-v2/NovoFornecedorDialog', () => ({ NovoFornecedorDialog: () => null }));
-vi.mock('./MesaEnriquecimentoTab', () => ({ MesaEnriquecimentoTab: () => null }));
+/* PR-CONC-ENRIQUECER-V2-01 — no passo 2 quem fala é o painel (mockado aqui): a casca só lhe entrega o caminho do passo 1. */
+vi.mock('./MesaEnriquecimentoTab', () => ({
+  MesaEnriquecimentoTab: (p: { onPlanilha?: () => void; pendentesDePara?: number | null }) => (
+    <button type="button" data-testid="painel-mock" data-pendentes={String(p.pendentesDePara)} onClick={p.onPlanilha}>1 · Planilha e de-para</button>
+  ),
+}));
 vi.mock('./EnriquecerPasso1DePara', () => ({
   EnriquecerPasso1DePara: (p: { onIrParaRevisao: () => void }) => <button type="button" onClick={p.onIrParaRevisao}>Ir para a Revisão</button>,
 }));
@@ -76,10 +81,14 @@ describe('sessão do mês gravada sem conta', () => {
     M.sessoes = [sessaoSet26];
     M.staging = [linha('sem_conta_para_match', 1), linha('sem_conta_para_match', 2), linha('ja_aplicado', 3)];
     render(<EnriquecerTresPassos ano={2026} mes={9} clienteNome="NJ Pecuária" />);
-    const aviso = await screen.findByTestId('aviso-sem-conta');
-    expect(aviso.textContent).toContain('2 linhas desta planilha ficaram sem conta — reimporte a planilha.');
-    fireEvent.click(screen.getByRole('button', { name: 'ir para a planilha e de-para' }));
+    /* passo 2: o aviso mora no slot do painel (PR-CONC-ENRIQUECER-V2-01) — a casca não o repete */
+    const painel = await screen.findByTestId('painel-mock');
+    expect(screen.queryByTestId('aviso-sem-conta')).toBeNull();
+    expect(painel.getAttribute('data-pendentes')).toBe('1');
+    fireEvent.click(painel);
     expect(screen.getByRole('button', { name: 'Ir para a Revisão' })).toBeInTheDocument(); // passo 1 aberto
+    const aviso = screen.getByTestId('aviso-sem-conta');
+    expect(aviso.textContent).toContain('2 linhas desta planilha ficaram sem conta — reimporte a planilha.');
   });
 
   it('sessão com conta em todas as linhas: sem aviso', async () => {

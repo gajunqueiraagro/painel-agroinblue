@@ -229,7 +229,11 @@ export function EnriquecerTresPassos({ ano, mes, clienteNome, contaNome, onVerNo
 
   return (
     <div className="flex flex-col gap-1.5 md:min-h-0 md:flex-1">
-      {/* ═══ CABEÇALHO ══════════════════════════════════════════════════════════ */}
+      {/* ═══ CABEÇALHO ══════════════════════════════════════════════════════════
+          ⚠ SÓ FORA DO PASSO 2 — PR-CONC-ENRIQUECER-V2-01: no passo 2 o painel por conta tem o cabeçalho navy (mês,
+          cliente, sessão) e o botão "1 · Planilha e de-para N" que volta aqui; o cabeçalho, a barra de passos e o
+          aviso de linhas sem conta (que foi para o slot fixo do painel) seriam a segunda cópia de cada um. */}
+      {passo !== 2 && (<>
       <div className="shrink-0">
         <div className="text-[13px] font-medium leading-tight">
           Enriquecer {MESES[mes - 1] ?? '—'}/{ano} — {clienteNome ?? '—'}
@@ -245,7 +249,8 @@ export function EnriquecerTresPassos({ ano, mes, clienteNome, contaNome, onVerNo
           concluido={!!dePara && (pendentes?.total ?? 0) === 0}
           detalhe={dePara ? `${valoresDePara} valores · ${pendentes?.total ?? 0} a resolver` : 'escolher a planilha'}
           onClick={() => irParaPasso(1)} />
-        <PassoBotao n={2} titulo="Revisão" ativo={passo === 2}
+        {/* a barra só existe fora do passo 2 — o 2 nunca está ativo aqui */}
+        <PassoBotao n={2} titulo="Revisão" ativo={false}
           concluido={false}
           detalhe={sessaoId
             ? `${resumo.atualizam.qtd} atualizam · ${resumo.decide.qtd} você decide · ${resumo.agrupam.qtd} agrupam · ${resumo.sem_par.qtd} sem par`
@@ -254,8 +259,9 @@ export function EnriquecerTresPassos({ ano, mes, clienteNome, contaNome, onVerNo
         <PassoBotao n={3} titulo="Gravar" ativo={passo === 3} concluido={false}
           detalhe="—" onClick={() => irParaPasso(3)} />
       </div>
+      </>)}
 
-      {sessaoId && linhasSemConta > 0 && (
+      {sessaoId && linhasSemConta > 0 && passo !== 2 && (
         <div className="flex shrink-0 items-center gap-2 rounded border border-amber-300 bg-amber-50 px-2 py-1 text-[10px] text-amber-900"
           data-testid="aviso-sem-conta">
           <span>
@@ -349,6 +355,8 @@ export function EnriquecerTresPassos({ ano, mes, clienteNome, contaNome, onVerNo
           sessaoId={sessaoId}
           onSessaoId={setSessaoId}
           onVerNoFinanceiro={onVerNoFinanceiro}
+          onPlanilha={() => irParaPasso(1)}
+          pendentesDePara={dePara && pendentes ? pendentes.total : null}
         />
       )}
 

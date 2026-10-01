@@ -49,7 +49,7 @@ const MESES_CURTOS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 's
    Eles foram com a tabela do extrato para `TabelaExtratoDoMes`, e o Espelho passa a
    importá-los de lá. A direção é única de propósito: a peça importando daqui fecharia um
    ciclo de import, que o `npx madge --circular` acusa. Nada mudou no que eles fazem. */
-interface EspSis {
+export interface EspSis {
   lancamento_id: string; data: string | null; descricao: string | null;
   centro: string | null; subcentro: string | null; valor_assinado: number;
   sinal: string | null; status: 'conciliado' | 'sem_vinculo';
@@ -91,7 +91,7 @@ interface EspCandidato {
   ja_conciliado: boolean;
   sem_conta: boolean;
 }
-interface EspVinculo {
+export interface EspVinculo {
   extrato_id: string; lancamento_id: string; valor_aplicado: number;
   tipo_aprovacao: string | null; grupo_id: string | null;
 }
@@ -276,8 +276,8 @@ function AbaEvolucaoReal({ data, internos }: { data: EspelhadosReais; internos: 
 }
 
 // ── Conferência — a mesa do dia ────────────────────────────────────────────
-interface FilhaConf { lancamento_id: string; valor_aplicado: number; sis?: EspSis; deN: number; }
-interface Pareado {
+export interface FilhaConf { lancamento_id: string; valor_aplicado: number; sis?: EspSis; deN: number; }
+export interface Pareado {
   extrato: EspOfx; filhas: FilhaConf[]; grupoId: string | null;
   tipoVencedor: string | null; soma: number; diferenca: number;
 }
@@ -290,7 +290,7 @@ interface Pareado {
  * vez de para o sistema. Desenhar os dois casos igual faria o operador ler "um extrato
  * pagou N lançamentos" onde houve "N depósitos pagaram um título".
  */
-interface ParedoN1 {
+export interface ParedoN1 {
   sis: EspSis;
   extratos: { extrato: EspOfx; valorAplicado: number }[];
   grupoId: string | null;
@@ -298,7 +298,7 @@ interface ParedoN1 {
   diferenca: number;
 }
 
-interface DiaConf {
+export interface DiaConf {
   data: string | null;
   pareados: Pareado[];
   paredosN1: ParedoN1[];
@@ -1735,6 +1735,28 @@ interface Props {
 }
 
 /** As quatro visões do mês, na ordem em que se lê o extrato. */
+/**
+ * A leitura do Espelho de UMA conta no mês — `fn_extratos_espelhados`.
+ *
+ * ⚠ SAIU DO CORPO DO `EspelhoConciliacaoTab` NO PR-CONC-ENRIQUECER-V2-01, SEM MUDANÇA: a mesma chave e o mesmo
+ *   `queryFn`. O Extrato da planilha (Enriquecer) lê o MESMO lado Sistema que a Conferência — dois `useQuery` com a
+ *   mesma chave e dois corpos seriam duas donas do mesmo cache.
+ */
+export function useEspelhadosReais(clienteId: string | null | undefined, contaId: string | null | undefined, anoMes: string) {
+  return useQuery({
+    queryKey: ['espelho-conciliacao', clienteId, contaId, anoMes],
+    enabled: !!clienteId && !!contaId,
+    queryFn: async (): Promise<EspelhadosReais | null> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+      const { data: d, error } = await (supabase as any).rpc('fn_extratos_espelhados', {
+        p_cliente: clienteId, p_conta: contaId, p_mes: anoMes,
+      });
+      if (error) throw error;
+      return (d as EspelhadosReais) ?? null;
+    },
+  });
+}
+
 export type AbaEspelho = 'conferencia' | 'ofx' | 'sistema' | 'evolucao';
 export const ABAS_ESPELHO: readonly { key: AbaEspelho; label: string }[] = [
   { key: 'conferencia', label: 'Conferência' },
@@ -1811,18 +1833,7 @@ export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes, mostrarCan
 
   const internas = useEspelhoInternas(clienteId, contaId, anoMes);
 
-  const { data, refetch } = useQuery({
-    queryKey: ['espelho-conciliacao', clienteId, contaId, anoMes],
-    enabled: !!clienteId && !!contaId,
-    queryFn: async (): Promise<EspelhadosReais | null> => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
-      const { data: d, error } = await (supabase as any).rpc('fn_extratos_espelhados', {
-        p_cliente: clienteId, p_conta: contaId, p_mes: anoMes,
-      });
-      if (error) throw error;
-      return (d as EspelhadosReais) ?? null;
-    },
-  });
+  const { data, refetch } = useEspelhadosReais(clienteId, contaId, anoMes);
 
   /* ⚠ A RPC É POR UMA CONTA. O cabeçalho da Conciliação permite "todas", e comparar um
      extrato de uma conta com o sistema de várias não é espelho nenhum — a tela pede a

@@ -123,7 +123,8 @@ describe('BRUNO resolve SOZINHO (apelido composto)', () => {
     /* a 2a célula da linha é a coluna Planilha */
     const planilha = (rotulo: string) => linha(rotulo).querySelectorAll('td')[1];
     expect(planilha('Safra')).toHaveTextContent('Pecuária 2025/2026');
-    expect(planilha('Tipo de documento')).toHaveTextContent('Recibo');
+    /* PR-CONC-ENRIQUECER-V2-01 — nº e tipo numa linha só ("Documento · tipo") */
+    expect(planilha('Documento · tipo')).toHaveTextContent('Recibo');
     expect(planilha('Forma de pagamento')).toHaveTextContent('PIX/Transferência Bancária');
     expect(planilha('Atividade')).toHaveTextContent('Pecuária (Faz Pureza)');
   });

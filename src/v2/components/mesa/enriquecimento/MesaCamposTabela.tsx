@@ -1,10 +1,12 @@
 /**
  * A tabela de campos da Mesa de Revisão — MESA-ENR-UX-01 (129); painel v1 no PR-CONC-MESA-PAINEL-V1.
  *
- * Quatro colunas: Campo · Planilha (azul, referência) · Sistema hoje · Vai gravar (texto neutro). Quatro grupos
- * separados por faixa: DO EXTRATO (Tipo, Data pgto., Valor, Conta bancária — só leitura, no topo), DATAS,
- * CLASSIFICAÇÃO (Atividade, Fazenda, Conta do plano, Safra) e IDENTIFICAÇÃO (produto, fornecedor, tipo e nº do
- * documento, forma de pagamento, observação).
+ * Quatro colunas: Campo · Planilha (azul, referência) · Sistema hoje · Vai gravar (texto neutro). Quatro BLOCOS, cada um
+ * com faixa de título e fundo alternado (PR-CONC-ENRIQUECER-V2-01, Mesa compacta): PAGAMENTO · DO EXTRATO (pgto., valor e
+ * conta numa linha só, leitura; a Conta destino da transferência logo abaixo), DATAS, CLASSIFICAÇÃO (Atividade, Fazenda,
+ * Conta do plano, Safra) e IDENTIFICAÇÃO (Fornecedor, Descrição, Documento · tipo, Forma de pagamento, Observação).
+ * Acima da grade, o CHECKLIST da linha numa linha só (✓ ok / ● pendente com o motivo) — a mesma lista que o rodapé
+ * cobra ("falta: ...") e que desabilita o "Aprovar e próximo" (`pendenciasDaLinha`).
  *
  * ⚠ TODO CAMPO EDITÁVEL GRAVA: o `fn_classificacao_apply_row` escreve cada um deles (tipo de documento e forma de
  *   pagamento desde a migration 20261027184600). Um campo editável cujo valor some no Salvar é o silêncio mais caro
@@ -76,10 +78,10 @@ const ORDEM: Array<{
   /** 133g item 6 — sem ele o lançamento não fecha, e o Salvar diz qual falta. */
   obrigatorio?: boolean;
 }> = [
-  { campo: 'Tipo', rotulo: 'Tipo', grupo: 'extrato', obrigatorio: true },
-  { campo: 'Data pagamento', rotulo: 'Data pgto.', grupo: 'extrato', obrigatorio: true },
-  { campo: 'Valor', rotulo: 'Valor', grupo: 'extrato', obrigatorio: true },
-  { campo: 'Banco', rotulo: 'Conta bancária', grupo: 'extrato', obrigatorio: true },
+  /* ⚠ PAGAMENTO É UMA LINHA SÓ (PR-CONC-ENRIQUECER-V2-01): Tipo, Data pgto., Valor e Conta bancária eram quatro linhas
+     de leitura do extrato; juntas dizem "o que o banco pagou" de uma vez, e a tabela ganha três linhas. Os quatro
+     campos do comparativo continuam lidos um a um (`CAMPOS_DO_PAGAMENTO`). */
+  { campo: 'Pagamento', rotulo: 'Pagamento', grupo: 'extrato', obrigatorio: true },
   { campo: 'Conta destino', rotulo: 'Conta destino', grupo: 'extrato',
     soTransferencia: true, obrigatorioSeTransferencia: true },
   { campo: 'Competência', rotulo: 'Competência', grupo: 'datas' },
@@ -88,16 +90,28 @@ const ORDEM: Array<{
   { campo: 'Fazenda', rotulo: 'Fazenda', grupo: 'classificacao', obrigatorio: true },
   { campo: 'Subcentro', rotulo: 'Conta do plano', grupo: 'classificacao', obrigatorio: true },
   { campo: 'Safra', rotulo: 'Safra', grupo: 'classificacao' },
-  { campo: 'Produto / Descrição', rotulo: 'Produto / descr.', grupo: 'identificacao', obrigatorio: true },
   { campo: 'Fornecedor', rotulo: 'Fornecedor', grupo: 'identificacao' },
-  { campo: 'Tipo de documento', rotulo: 'Tipo de documento', grupo: 'identificacao' },
-  { campo: 'Documento', rotulo: 'Nº documento', grupo: 'identificacao' },
+  { campo: 'Produto / Descrição', rotulo: 'Descrição', grupo: 'identificacao', obrigatorio: true },
+  /* ⚠ DOCUMENTO · TIPO NUMA LINHA (os dois campos continuam gravando em separado: `numero_documento` e
+     `tipo_documento`). */
+  { campo: 'Documento', rotulo: 'Documento · tipo', grupo: 'identificacao' },
   { campo: 'Forma de pagamento', rotulo: 'Forma de pagamento', grupo: 'identificacao' },
   { campo: 'OBS', rotulo: 'Observação', grupo: 'identificacao' },
 ];
 
+/** O título da faixa de cada bloco. */
+const TITULO_DO_GRUPO: Record<Grupo, string> = {
+  extrato: 'Pagamento · do extrato', datas: 'Datas', classificacao: 'Classificação', identificacao: 'Identificação',
+};
+const ORDEM_DOS_GRUPOS: Grupo[] = ['extrato', 'datas', 'classificacao', 'identificacao'];
+
+/** Os quatro campos do comparativo que a linha "Pagamento" junta, na ordem em que aparecem nela. */
+export const CAMPOS_DO_PAGAMENTO = ['Data pagamento', 'Valor', 'Banco', 'Tipo'] as const;
+
 /** O grupo do extrato é só leitura — exportado para o teste afirmar a lista, não uma cópia dela. */
 export const CAMPOS_DO_EXTRATO = ORDEM.filter((o) => o.grupo === 'extrato' && !o.soTransferencia).map((o) => o.rotulo);
+/** As linhas da grade, na ordem — exportado para o teste de layout contar as linhas pela mesma lista. */
+export const ROTULOS_DA_GRADE = ORDEM.map((o) => o.rotulo);
 
 /** Os campos que o Salvar exige — exportado porque o container monta o motivo com eles. */
 export const CAMPOS_OBRIGATORIOS_MESA = ORDEM.filter((o) => o.obrigatorio).map((o) => o.rotulo);
@@ -110,6 +124,64 @@ export const CAMPOS_OBRIGATORIOS_SE_TRANSFERENCIA =
   ORDEM.filter((o) => o.obrigatorioSeTransferencia).map((o) => o.rotulo);
 
 const VAZIA: EnriqComparativoLinha = { campo: '', sistema: '—', excel: '—', resultado: '—', tom: 'neutro' };
+
+const vazio = (t: string | undefined) => t === undefined || t === '—' || t.trim() === '';
+
+/** Um item do checklist da linha: `ok`, ou pendente com o motivo. */
+export interface ItemChecklist { rotulo: string; ok: boolean; motivo?: string }
+
+/**
+ * O CHECKLIST DA LINHA — PR-CONC-ENRIQUECER-V2-01 (Mesa compacta). Os obrigatórios, na ordem da grade, cada um ✓ ou ●
+ * com o motivo. ⚠ É A ÚNICA LISTA: o checklist desenha, o rodapé escreve ("falta: ..."), e o "Aprovar e próximo" se
+ * apaga pela MESMA (`pendenciasDaLinha`). Era a aba que montava os "obrigatórios vazios" com pares campo×rótulo
+ * próprios — duas listas que divergiriam no primeiro campo novo.
+ * ⚠ A ATIVIDADE (e o plano incoerente) SÓ SE COBRAM COM O CATÁLOGO NA MÃO: sem ele não se sabe o escopo da conta.
+ * ⚠ FAZENDA, CONTA DO PLANO E DESCRIÇÃO SE JULGAM PELO VALOR EFETIVO (proposta, senão o do lançamento), não pelo texto
+ *   do Resultado: pela regra "Resultado nunca vazio" ele diz "mantém" até com os dois lados vazios, e a cobrança antiga
+ *   ("Resultado = —") não disparava nunca para esses três — uma linha sem conta do plano nenhuma passava no Salvar.
+ *   O Pagamento se julga pelo que o EXTRATO tem (a coluna Sistema): é leitura, e "sem extrato" é o motivo.
+ */
+export function checklistDaLinha(
+  row: EnriqRowVM,
+  opts: { classificacoes?: ClassificacaoItem[]; atividade?: string | null },
+): ItemChecklist[] {
+  const porCampo = new Map(row.comparativo.map((c) => [c.campo, c]));
+  const doExtrato = (campo: string) => porCampo.get(campo)?.sistema;
+  const itens: ItemChecklist[] = [];
+  const faltaPgto = CAMPOS_DO_PAGAMENTO.filter((c) => vazio(doExtrato(c)));
+  itens.push({ rotulo: 'Pagamento', ok: faltaPgto.length === 0, motivo: faltaPgto.length ? 'sem extrato' : undefined });
+  const atividade = opts.atividade ?? row.edicao.atividadeProposta;
+  if (opts.classificacoes) {
+    itens.push({ rotulo: 'Atividade', ok: !!atividade, motivo: atividade ? undefined : 'vazio' });
+  }
+  const semFazenda = !(row.edicao.fazendaId ?? row.edicao.fazendaIdAtual);
+  itens.push({ rotulo: 'Fazenda', ok: !semFazenda, motivo: semFazenda ? 'vazio' : undefined });
+  const sub = row.edicao.subcentro ?? row.edicao.subcentroAtual;
+  /* na transferência a conta do plano é UMA só e travada (PR-MESA-TRANSF-01 item 3): nunca "vazia" */
+  const planoVazio = !ehTipoTransferencia(row.edicao.tipoOperacao) && vazio(sub ?? undefined);
+  const incoerente = !planoVazio && !!opts.classificacoes && planoIncoerente(opts.classificacoes, sub, atividade);
+  itens.push({ rotulo: 'Conta do plano', ok: !planoVazio && !incoerente,
+    motivo: planoVazio ? 'vazio' : incoerente ? 'de outra atividade' : undefined });
+  const descVazia = vazio((row.edicao.produto ?? row.edicao.descricaoAtual) ?? undefined);
+  itens.push({ rotulo: 'Descrição', ok: !descVazia, motivo: descVazia ? 'vazio' : undefined });
+  if (ehTipoTransferencia(row.edicao.tipoOperacao)) {
+    const temDestino = !!(row.edicao.contaDestinoId ?? row.edicao.contaDestinoIdAtual);
+    itens.push({ rotulo: 'Conta destino', ok: temDestino, motivo: temDestino ? undefined : 'transferência exige' });
+  }
+  return itens;
+}
+
+/**
+ * O que falta, por nome, para a linha poder ser aprovada — o texto do "falta: ..." e a trava do botão.
+ * ⚠ "Conta do plano (de outra atividade)" mantém a frase que o Salvar já escrevia (PR-CONC-MESA-PAINEL-V1 item 3).
+ */
+export function pendenciasDaLinha(
+  row: EnriqRowVM,
+  opts: { classificacoes?: ClassificacaoItem[]; atividade?: string | null },
+): string[] {
+  return checklistDaLinha(row, opts).filter((i) => !i.ok).map((i) =>
+    i.motivo === 'de outra atividade' ? `${i.rotulo} (de outra atividade)` : i.rotulo);
+}
 
 /**
  * AS MEDIDAS DA GRADE — PR-CONC-MESA-LAYOUT-FIXO-01 (regra soberana do Gabriel, 30/09: nada desloca ao selecionar,
@@ -126,7 +198,10 @@ export const LARGURA_COL_VAI_GRAVAR = '44%';
 export const LARGURA_SLOT_DICA = '104px';
 export const ALTURA_LINHA = '22px';
 export const ALTURA_CABECALHO = '20px';
-export const ALTURA_FAIXA_GRUPO = '6px';
+/** A faixa de título de cada bloco (9,5px, o piso) — PR-CONC-ENRIQUECER-V2-01. */
+export const ALTURA_FAIXA_GRUPO = '16px';
+/** A linha do checklist, acima da grade. */
+export const ALTURA_CHECKLIST = '18px';
 export const ALTURA_SLOT_AVISO = '18px';
 /** "classificado · sistema prevalece" a 8,5px mede 128px (canvas, Inter) -> 128 + 8 + 12 de padding = 148. */
 export const LARGURA_SELO = '148px';
@@ -224,8 +299,52 @@ export function MesaCamposTabela({
       title: `A planilha trouxe "${row.avisoPlanilha}", que não existe no plano oficial. O Resultado usa a conta do plano do sistema.` });
   }
 
+  /* ── O CHECKLIST — PR-CONC-ENRIQUECER-V2-01: uma linha, os obrigatórios ✓/●, pela MESMA lista do rodapé. */
+  const checklist = checklistDaLinha(row, { classificacoes, atividade });
+
+  /* ── AS DUAS LINHAS COMPOSTAS — Pagamento (data · valor · conta) e Documento · tipo. O comparativo continua
+     campo a campo; aqui só se junta para desenhar. */
+  const parte = (campo: string) => porCampo.get(campo) ?? VAZIA;
+  const juntar = (campos: readonly string[], lado: 'excel' | 'sistema' | 'resultado') =>
+    campos.map((k) => parte(k)[lado]).join(' · ');
+  const composta = (campo: string): EnriqComparativoLinha => {
+    if (campo === 'Pagamento') {
+      const k = ['Data pagamento', 'Valor', 'Banco'];
+      return { campo, excel: juntar(k, 'excel'), sistema: juntar(k, 'sistema'), resultado: juntar(k, 'resultado'), tom: 'neutro' };
+    }
+    if (campo === 'Documento') {
+      const k = ['Documento', 'Tipo de documento'];
+      const tons = k.map((x) => parte(x).tom);
+      /* "mantém · mantém" diz duas vezes a mesma coisa: com os dois iguais, uma vez só */
+      const res = k.map((x) => parte(x).resultado);
+      return { campo, excel: juntar(k, 'excel'), sistema: juntar(k, 'sistema'),
+        resultado: res[0] === res[1] ? res[0] : res.join(' · '),
+        tom: tons.includes('muda') ? 'muda' : tons.includes('difere') ? 'difere' : 'neutro' };
+    }
+    return parte(campo);
+  };
+  /** O texto de Pagamento com o VALOR na cor do sinal (o único verde da tabela continua sendo o valor de entrada). */
+  const pagamentoPintado = (lado: 'excel' | 'sistema') => (
+    <>
+      {parte('Data pagamento')[lado]}{' · '}
+      <span className={`tabular-nums ${corDoSinal}`}>{parte('Valor')[lado]}</span>{' · '}
+      {parte('Banco')[lado]}
+    </>
+  );
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      <div data-testid="checklist" style={{ height: ALTURA_CHECKLIST }}
+        title={checklist.map((i) => `${i.ok ? '✓' : '●'} ${i.rotulo}${i.motivo ? `: ${i.motivo}` : ''}`).join(' · ')}
+        className="flex shrink-0 items-center gap-2.5 overflow-hidden whitespace-nowrap border-b px-3 text-[10px]">
+        {checklist.map((i) => (
+          <span key={i.rotulo} data-testid={`checklist-${i.rotulo}`} data-ok={i.ok ? 'sim' : 'nao'}
+            /* ⚠ ✓ EM CINZA, NUNCA VERDE: o único verde da tabela é o valor de uma entrada (PAINEL-V1 item 1). */
+            className={i.ok ? 'text-muted-foreground' : 'font-medium text-red-600 dark:text-red-400'}>
+            {i.ok ? '✓' : '●'} {i.rotulo}{i.motivo ? `: ${i.motivo}` : ''}
+          </span>
+        ))}
+      </div>
       <div data-testid="slot-aviso" style={{ height: ALTURA_SLOT_AVISO }}
         className="flex shrink-0 items-center gap-2 overflow-hidden whitespace-nowrap border-b px-3 text-[10px]"
         title={avisos.map((a) => a.title ?? a.texto).join(' · ') || undefined}>
@@ -258,8 +377,9 @@ export function MesaCamposTabela({
           </thead>
           <tbody>
             {ORDEM.map(({ campo, rotulo, grupo, soTransferencia, obrigatorio, obrigatorioSeTransferencia }, indice) => {
-              const zebra = indice % 2 === 1;
-              const c = porCampo.get(campo) ?? VAZIA;
+              /* ⚠ FUNDO ALTERNADO POR BLOCO, não por linha (Mesa compacta): o bloco se lê como uma caixa. */
+              const zebra = ORDEM_DOS_GRUPOS.indexOf(grupo) % 2 === 1;
+              const c = composta(campo);
               const vaiMudar = c.tom === 'muda' || c.tom === 'difere';
               const doExtrato = grupo === 'extrato' && campo !== 'Conta destino';
               /* ⚠ A LINHA DO DESTINO EXISTE SEMPRE (item 1: nenhuma linha aparece ou some por condição); fora da
@@ -270,22 +390,24 @@ export function MesaCamposTabela({
               const editavel = !row.aplicado && !!onEditar && !doExtrato && !travadoPorTransferencia
                 && !foraDeTransferencia;
               /* ⚠ DIVERGÊNCIA COM O EXTRATO É INFORMAÇÃO, NUNCA GRAVAÇÃO — a lista vem do adapter (133h-b item 4). */
-              const dv = row.divergenciasBanco.find((d) => d.campo === campo);
+              const camposDaLinha: readonly string[] = campo === 'Pagamento' ? CAMPOS_DO_PAGAMENTO
+                : campo === 'Documento' ? ['Documento', 'Tipo de documento'] : [campo];
+              const dv = row.divergenciasBanco.find((d) => camposDaLinha.includes(d.campo));
               const divergeDoBanco = doExtrato && !!dv;
-              const valorDeParte = campo === 'Valor' && row.parteDeAgrupamento;
-              const abreGrupo = indice > 0 && ORDEM[indice - 1]?.grupo !== grupo;
+              const valorDeParte = campo === 'Pagamento' && row.parteDeAgrupamento;
+              const abreGrupo = indice === 0 || ORDEM[indice - 1]?.grupo !== grupo;
               /* PR-CONC-MESA-DIVERGENCIA-EXCEL-01 — a planilha discorda do Resultado. */
-              const dp = row.divergenciasPlanilha.find((d) => d.campo === campo);
+              const dp = row.divergenciasPlanilha.find((d) => camposDaLinha.includes(d.campo));
               const divergePlanilha = !!dp && !divergeDoBanco;
               const planoPendente = campo === 'Subcentro' && incoerente;
               const exigido = !!obrigatorio || (!!obrigatorioSeTransferencia && ehTransf);
               /* 133g item 6 — vazio no RESULTADO é o que importa. A Atividade só se cobra com o catálogo na mão. */
-              const faltando = campo === 'Atividade'
-                ? !!classificacoes && !atividadeEfetiva
-                : exigido && (c.resultado === '—' || c.resultado.trim() === '');
-              const corValor = campo === 'Valor' ? corDoSinal : '';
-              /* No extrato, o que vale é o que o banco tem; o Tipo proposto (18010 escolhida) é o que vai gravar. */
-              const valorExtrato = campo === 'Tipo' && row.edicao.tipoOperacaoProposto ? c.resultado : c.sistema;
+              /* ⚠ O VERMELHO DA CÉLULA É O ● DO CHECKLIST — a mesma lista (`checklistDaLinha`), pelo rótulo. */
+              const faltando = checklist.some((i) => i.rotulo === rotulo && !i.ok)
+                /* a conta do plano de outra atividade é pendente, mas pinta pelo anel (`planoPendente`), não por vazio */
+                && !(campo === 'Subcentro' && incoerente);
+              /* No extrato, o que vale é o que o banco tem. */
+              const valorExtrato = c.sistema;
 
               /* ── O SLOT DA DICA — item 2: largura FIXA em toda linha, dentro da célula "Vai gravar", à direita do
                  campo. Ele existe mesmo vazio: é isso que deixa o campo com a mesma largura em todas as linhas. */
@@ -320,10 +442,12 @@ export function MesaCamposTabela({
 
               return (
                 <Fragment key={rotulo}>
-                  {/* ⚠ 6px DE FAIXA, SEM TÍTULO — os grupos (extrato · datas · classificação · identificação). */}
+                  {/* ⚠ A FAIXA DE TÍTULO DO BLOCO — 16px, 9,5px (Mesa compacta; era uma faixa de 6px sem título). */}
                   {abreGrupo && (
-                    <tr aria-hidden style={{ height: ALTURA_FAIXA_GRUPO }} className="bg-muted">
-                      <td colSpan={4} className="p-0" />
+                    <tr data-testid={`faixa-${grupo}`} style={{ height: ALTURA_FAIXA_GRUPO }} className="bg-muted">
+                      <td colSpan={4} className="py-0 pl-3 text-[9.5px] font-medium uppercase tracking-wide text-muted-foreground">
+                        {TITULO_DO_GRUPO[grupo]}
+                      </td>
                     </tr>
                   )}
                   {/* ⚠ 22px EXATOS E SEMPRE PRESENTE — nunca quebra: cada célula trunca e leva o texto no `title`. */}
@@ -333,8 +457,12 @@ export function MesaCamposTabela({
                       {rotulo}
                       {exigido && <span className="text-red-600 dark:text-red-400"> *</span>}
                     </td>
-                    <td className={`truncate px-1.5 py-0 ${corValor || 'text-blue-700/90 dark:text-blue-400'}`} title={c.excel}>{c.excel}</td>
-                    <td className={`truncate px-1.5 py-0 ${corValor || 'text-slate-700 dark:text-slate-300'}`} title={c.sistema}>{c.sistema}</td>
+                    <td className="truncate px-1.5 py-0 text-blue-700/90 dark:text-blue-400" title={c.excel}>
+                      {campo === 'Pagamento' ? pagamentoPintado('excel') : c.excel}
+                    </td>
+                    <td className="truncate px-1.5 py-0 text-slate-700 dark:text-slate-300" title={c.sistema}>
+                      {campo === 'Pagamento' ? pagamentoPintado('sistema') : c.sistema}
+                    </td>
                     <td className="px-1.5 py-0">
                       {/* sem altura própria: o controle (20px) centra na linha de 22 — dar 22 a este bloco somava a
                           borda de 1px e a linha media 23 (medido no navegador) */}
@@ -349,8 +477,10 @@ export function MesaCamposTabela({
                                 faltando ? 'border-destructive/60 bg-destructive/5 text-destructive'
                                   : valorDeParte ? 'border-violet-300 bg-violet-50/60 text-violet-800 dark:border-violet-800 dark:bg-violet-950/20 dark:text-violet-200'
                                   : 'border-border bg-muted/60'}`}>
-                              <span className={`min-w-0 flex-1 truncate ${campo === 'Valor' ? 'tabular-nums' : ''} ${corValor}`}>
-                                {faltando ? 'obrigatório' : valorExtrato}
+                              <span className="min-w-0 flex-1 truncate">
+                                {/* Pagamento mostra as partes mesmo incompleto ("—" na que falta), com a borda vermelha:
+                                    "obrigatório" no lugar esconderia o valor que existe. */}
+                                {campo === 'Pagamento' ? pagamentoPintado('sistema') : faltando ? 'obrigatório' : valorExtrato}
                               </span>
                             </span>
                           ) : editavel && campo === 'Atividade' && classificacoes && onAtividade ? (
@@ -373,11 +503,18 @@ export function MesaCamposTabela({
                             <ResultadoProdutoEditor value={row.edicao.produto} descricaoAtual={row.edicao.descricaoAtual}
                               clienteId={clienteId} onEditar={onEditar} />
                           ) : editavel && campo === 'Documento' ? (
-                            <ResultadoDocumentoEditor value={row.edicao.numeroDocumento}
-                              numeroDocumentoAtual={row.edicao.numeroDocumentoAtual} onEditar={onEditar} />
-                          ) : editavel && campo === 'Tipo de documento' ? (
-                            <ResultadoListaEditor value={row.edicao.tipoDocumento} valorAtual={row.edicao.tipoDocumentoAtual}
-                              opcoes={TIPOS_DOCUMENTO} campo="tipo_documento" onEditar={onEditar} />
+                            /* ⚠ DOIS CAMPOS NUMA CÉLULA, e cada um grava o seu: nº (`numero_documento`) e tipo
+                               (`tipo_documento`). A largura é fixa (55/45), não do conteúdo. */
+                            <div className="flex min-w-0 items-center gap-1">
+                              <div className="min-w-0 basis-[55%]">
+                                <ResultadoDocumentoEditor value={row.edicao.numeroDocumento}
+                                  numeroDocumentoAtual={row.edicao.numeroDocumentoAtual} onEditar={onEditar} />
+                              </div>
+                              <div className="min-w-0 basis-[45%]">
+                                <ResultadoListaEditor value={row.edicao.tipoDocumento} valorAtual={row.edicao.tipoDocumentoAtual}
+                                  opcoes={TIPOS_DOCUMENTO} campo="tipo_documento" onEditar={onEditar} />
+                              </div>
+                            </div>
                           ) : editavel && campo === 'Forma de pagamento' ? (
                             <ResultadoListaEditor value={row.edicao.formaPagamento} valorAtual={row.edicao.formaPagamentoAtual}
                               sugerido={row.edicao.formaPagamentoSugerida} rotuloSugestao="pelo histórico do banco"

@@ -53,7 +53,7 @@ function montar(faixas: ReactNode | null) {
       actions={{ posicao: '1 / 1', onAnterior: () => {}, onProximo: () => {}, canAnterior: false, canProximo: false,
         revisado: false, onRevisado: () => {}, onSalvar: () => {}, onSalvarProximo: () => {}, onReverter: () => {},
         onAplicarTodos: () => {}, nAplicaveis: 0 }}
-      faixas={faixas} />,
+      faixas={faixas} baldePorId={new Map()} />,
   );
 }
 
@@ -78,7 +78,8 @@ describe('a área de decisão é fixa em todos os estados', () => {
 
   it('existe sempre, com 104px, entre a tabela e o rodapé, e rola por dentro', () => {
     const b = base();
-    expect(b).toEqual({ altura: ALTURA_AREA_DECISAO, rolaDentro: true, naoEncolhe: true, ordem: true, linhasDaTabela: 20 });
+    /* 13 linhas de campo + 4 faixas de bloco (Mesa compacta, PR-CONC-ENRIQUECER-V2-01; eram 17 + 3) */
+    expect(b).toEqual({ altura: ALTURA_AREA_DECISAO, rolaDentro: true, naoEncolhe: true, ordem: true, linhasDaTabela: 17 });
     expect(ALTURA_AREA_DECISAO).toBe('104px');
   });
 
