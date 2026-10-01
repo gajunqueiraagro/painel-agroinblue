@@ -93,7 +93,26 @@ export const MOTIVO_TRANSFERENCIA: Record<string, string> = {
   fora_da_janela: 'mais de 1 dia entre o movimento e a transferência',
   ponta_ja_ligada: 'esta ponta da transferência já está conciliada',
   sem_outra_ponta: 'a transferência não tem a outra ponta conciliada',
+  /* CONC-TRANSF-SEGUNDA-PONTA-02 */
+  tem_meia_ponta: 'o movimento completa uma transferência já lançada',
+  ambigua: 'mais de um movimento ou transferência compatível',
 };
+
+/**
+ * CONC-TRANSF-SEGUNDA-PONTA-02 — extrato que completa uma transferência já ligada (meia ponta) NUNCA entra em par novo.
+ * O banco já o tira da lista dos pares (`_fn_meia_ponta_compativel`); esta é a mesma regra do lado da tela, por defesa:
+ * uma linha cuja saída ou entrada é meia ponta sai, e o candidato que é meia ponta sai das opções do ambíguo (sem
+ * candidato que sobre, a linha sai). Foi o par gravado antes da meia que criou a 3ª transferência (de4e99d5).
+ */
+export function paresSemMeiaPonta(linhas: readonly LinhaTransferencia[], meias: readonly LinhaMeiaPonta[]): LinhaTransferencia[] {
+  const daMeia = new Set(meias.map((m) => m.extrato.id));
+  return linhas.flatMap((l): LinhaTransferencia[] => {
+    if (daMeia.has(l.saida.id) || (l.entrada && daMeia.has(l.entrada.id))) return [];
+    const candidatas = l.candidatas.filter((c) => !daMeia.has(c.id));
+    if (!l.entrada && l.candidatas.length > 0 && candidatas.length === 0) return [];
+    return [{ ...l, candidatas }];
+  });
+}
 
 export const textoMotivo = (m?: string | null) => (m ? MOTIVO_TRANSFERENCIA[m] ?? m : 'recusado');
 
@@ -118,7 +137,9 @@ export function useTransferenciasSugeridas(clienteId: string | null, anoMes: str
       if (meias.error) throw meias.error;
       const r: { total?: number; linhas?: LinhaTransferencia[] } = pares.data ?? {};
       const rm: { linhas?: LinhaMeiaPonta[] } = meias.data ?? {};
-      return { total: r.total ?? 0, linhas: r.linhas ?? [], meias: rm.linhas ?? [] };
+      const listaMeias = rm.linhas ?? [];
+      const linhas = paresSemMeiaPonta(r.linhas ?? [], listaMeias);
+      return { total: linhas.length, linhas, meias: listaMeias };
     },
   });
 

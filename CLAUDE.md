@@ -160,9 +160,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 01/10/2026 (CONC-TRANSF-SEGUNDA-PONTA-01, +9: 4 em `transferenciasEntreContas.test.tsx`, 2 em
-  `acoesDoMesTransferencias.test.tsx`, 3 no novo `src/hooks/useTransferenciasSugeridas.test.tsx`; antes o
-  CONC-CASAR-ALTURA-01, +3, e o MANDIOCA-RETENCAO-NF-01, +4): 2778 passando, 22 skipped, e
+  Baseline em 01/10/2026 (CONC-TRANSF-SEGUNDA-PONTA-02, +3: 2 em `src/hooks/useTransferenciasSugeridas.test.tsx` e 1 em
+  `transferenciasEntreContas.test.tsx`; antes o CONC-TRANSF-SEGUNDA-PONTA-01, +9, e o CONC-CASAR-ALTURA-01, +3): 2781
+  passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -785,6 +785,12 @@ docs/historico/frentes-ate-2026-09-29.md.)
     vivo em OUTRA conta (mesmo valor, na direcao, |dias| <= 1, so' o 1:1; a linha e' do mes quando uma das pontas cai nele) e
     `fn_transferencia_segunda_ponta` (`p_simular`) grava pelo vincular com `p_dupla_ponta`, sem mexer no lancamento. Entra
     na MESMA tabela e no MESMO (N) do "Transferencias entre contas". Medido: 58 no NJ de mar a jul (o backfill de jun/26).
+    ⚠ A MEIA PONTA TEM PRIORIDADE SOBRE O PAR NOVO (CONC-TRANSF-SEGUNDA-PONTA-02, migration 20261027185800, ledger
+      20261001180139): a compatibilidade mora numa funcao so', `_fn_meia_ponta_compativel(extrato)` (a transferencia que ele
+      completa, ou NULL), usada pela lista, pela segunda ponta (recusa 'ambigua' quando a regra nao aponta o par), pela
+      `fn_transferencias_sugeridas` (o livre com meia ponta sai dos pares) e pela `fn_transferencia_de_extratos` (recusa
+      'tem_meia_ponta' antes de criar). A tela repete a regra por defesa (`paresSemMeiaPonta`) e grava as meias ANTES dos
+      pares. Nasceu da de4e99d5: o par de abr/26 gravado antes das meias criou uma 3a transferencia de 400.000.
 - ⚠ BOITEL: ao financeiro e ao DRE vai SO' O LIQUIDO DO ACERTO; R$/@ de venda = liquido / @ vivas que sairam. O VALOR DA
   OPERACAO E' O SLOT (`zoo_operacao_lotes.valor_informado`, helper `valorDaVendaBoitel`) e a tela nunca o calcula; o
   acerto e' conferencia. Com o realizado aplicado, o realizado vence a projecao em tudo (`custosDaVendaBoitel`, mesmo

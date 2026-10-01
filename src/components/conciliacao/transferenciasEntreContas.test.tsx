@@ -267,6 +267,21 @@ describe('meia transferência na mesma tabela', () => {
     expect(fecharMeia.mock.calls.filter((c) => c[2] === false)).toEqual([['d5b459d6', 'b0134032', false]]);
   });
 
+  /* CONC-TRANSF-SEGUNDA-PONTA-02: a meia religa o que existe e o par cria — as meias gravam ANTES dos pares. */
+  it('na gravação em lote as meias vão antes dos pares', async () => {
+    const ordem: string[] = [];
+    M.fechar.mockImplementation(async (s: string, _e: string, simular: boolean): Promise<ResultadoTransferencia> => {
+      if (!simular) ordem.push(`par ${s}`); return { ok: true, acao: 'criar' };
+    });
+    fecharMeia.mockImplementation(async (x: string, _l: string, simular: boolean): Promise<ResultadoTransferencia> => {
+      if (!simular) ordem.push(`meia ${x}`); return { ok: true, acao: 'casar_existente' };
+    });
+    abrirComMeias([LIMPO], [MEIA_ENTRADA, MEIA_SAIDA]);
+    fireEvent.click(await confirmar(3));
+    await waitFor(() => expect(M.aoGravar).toHaveBeenCalledTimes(1));
+    expect(ordem).toEqual(['meia d5b459d6', 'meia x7', 'par s50']);
+  });
+
   it('desmarcar a meia tira da contagem; a recusa dela aparece na linha com o motivo', async () => {
     fecharMeia.mockImplementation(async (): Promise<ResultadoTransferencia> => ({ ok: false, motivo: 'ponta_ja_ligada' }));
     abrirComMeias([LIMPO], [MEIA_ENTRADA]);

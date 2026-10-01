@@ -125,14 +125,17 @@ export function TransferenciasEntreContasModal({
 
   /* A PRÉVIA RODA SOZINHA: ao abrir e a cada mudança de seleção ou de contraparte, pela própria RPC com p_simular —
      nada grava. A resposta de uma seleção antiga que chega depois é descartada (`vivo`). */
+  /* ⚠ AS MEIAS VÃO ANTES DOS PARES (CONC-TRANSF-SEGUNDA-PONTA-02): a meia religa o que existe, o par cria. Na homologação
+     o par gravado primeiro criou a 3ª transferência (de4e99d5) com os extratos das duas meias. O banco já recusa
+     ('tem_meia_ponta'); a ordem é a segurança a mais. */
   const pares: Pendente[] = [
+    ...meiasMarcadas.map((m): Pendente => ({
+      chave: chaveMeia(m), tipo: 'meia', a: m.extrato.id, b: m.transferencia_id, valor: Math.abs(m.extrato.valor),
+    })),
     ...selecionados.flatMap((l): Pendente[] => {
       const e = entradaDe(l);
       return e ? [{ chave: l.saida.id, tipo: 'par', a: l.saida.id, b: e.id, valor: e.valor }] : [];
     }),
-    ...meiasMarcadas.map((m): Pendente => ({
-      chave: chaveMeia(m), tipo: 'meia', a: m.extrato.id, b: m.transferencia_id, valor: Math.abs(m.extrato.valor),
-    })),
   ];
   const chavePares = pares.map((p) => `${p.a}>${p.b}`).join(',');
   /* Uma linha pela RPC da sua espécie. Sem `fecharMeia` (quem não passa meias), a meia é recusada — nunca gravada. */
