@@ -456,7 +456,12 @@ export function CasarN1Modal({
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="w-[560px] max-w-[95vw] p-0 gap-0 overflow-hidden [&>button.absolute]:hidden text-[11px]">
+      {/* ⚠ `grid-cols-[minmax(0,1fr)]` — a MESMA regra da variante 1:N (PR-CONC-CASAR-VALOR-BANCO-01), CONC-CASAR-N1-LARGURA-01.
+          O `DialogContent` da casa é `grid`, e a coluna implícita cresce até o conteúdo mínimo: o histórico longo do banco
+          ("PAGAMENTO PIX-PIX_DEB 15412257000128 GOVERNO DO ESTADO DE MATO GROSSO DO SUL") alargava a coluna além dos 560px,
+          e o `overflow-hidden` cortava os valores, a soma e o Conciliar (homologação do Gabriel, 01/10 08:31). Com a coluna
+          presa à largura do modal, o histórico trunca com o texto inteiro no `title`. */}
+      <DialogContent className="w-[560px] max-w-[95vw] grid-cols-[minmax(0,1fr)] p-0 gap-0 overflow-hidden [&>button.absolute]:hidden text-[11px]">
         <div className="flex h-9 shrink-0 items-center justify-between gap-2 bg-primary px-3 text-primary-foreground">
           <span className="text-[12px] font-medium">Casar com o banco</span>
           <div className="flex items-center gap-3">

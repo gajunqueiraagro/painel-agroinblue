@@ -198,3 +198,53 @@ describe('N:1 — a frase dos extratos contra o lançamento, com o valor e a 10p
     await waitFor(async () => expect((await fraseN1()).textContent).toBe('Confere com o banco ✓'));
   });
 });
+
+/**
+ * CONC-CASAR-N1-LARGURA-01 — o histórico longo do banco não alarga o N:1 (homologação do Gabriel, 01/10 08:31: a coluna
+ * crescia e o `overflow-hidden` cortava valores, soma e Conciliar). O caso real: ICMS da NF 9287581 (2.470,26) pago em
+ * 26/08 −454,26 + 27/08 −2.016,00, Sicredi Lavoura.
+ * ⚠ O jsdom NÃO FAZ LAYOUT (scrollWidth e clientWidth são 0 — `0 <= 0` passaria sempre e não provaria nada): o teste prova
+ *   o CONTRATO que impede o alargamento — a coluna do grid presa (`minmax(0,1fr)`), a largura fixa e o histórico que
+ *   trunca com `title` —, e a medida renderizada vai no relatório.
+ */
+describe('CONC-CASAR-N1-LARGURA-01 — histórico longo no N:1', () => {
+  const HIST = 'PAGAMENTO PIX-PIX_DEB   15412257000128 GOVERNO DO ESTADO DE MATO GROSSO DO SUL · SECRETARIA DE FAZENDA · DAEMS ICMS NF 9287581 OLINDA';
+  const ICMS = { lancamento_id: 'l-icms', descricao: 'ICMS Venda Mandioca · NF 9287581', fornecedor: 'Sefaz MS', valor_assinado: -2470.26 };
+  const EXTRATOS = [
+    { extrato_id: 'e-454', data: '2026-08-26', historico: `${HIST} (1/2)`, valor: -454.26 },
+    { extrato_id: 'e-2016', data: '2026-08-27', historico: `${HIST} (2/2)`, valor: -2016 },
+  ];
+  const montarN1 = () => {
+    VALORES.set('l-icms', -2470.26); VALORES.set('e-454', -454.26); VALORES.set('e-2016', -2016);
+    return render(<CasarN1Modal open onClose={() => {}} sis={ICMS} extratos={EXTRATOS} nomeConta="Sicredi Lavoura" onConciliado={() => {}} />);
+  };
+
+  it('os históricos têm 120+ caracteres (o caso que alargava)', () => {
+    for (const e of EXTRATOS) expect((e.historico ?? '').length).toBeGreaterThanOrEqual(120);
+  });
+
+  it('a coluna do grid é presa à largura do modal (a mesma regra do 1:N) e a largura é fixa', () => {
+    montarN1();
+    const modal = screen.getByRole('dialog');
+    expect(modal.className).toContain('grid-cols-[minmax(0,1fr)]');
+    expect(modal.className).toContain('w-[560px]');
+    /* e nunca cresce pelo conteúdo */
+    expect(modal.scrollWidth).toBeLessThanOrEqual(modal.clientWidth);
+  });
+
+  it('o histórico trunca com o texto inteiro no title; valores, soma, "Confere" e Conciliar estão lá', async () => {
+    montarN1();
+    for (const e of EXTRATOS) {
+      /* o título EXATO (o banco manda espaços triplos; o `getByTitle` os colapsaria) */
+      const h = Array.from(document.querySelectorAll('[title]')).find((el) => el.getAttribute('title') === e.historico);
+      expect(h).toBeDefined();
+      expect(h?.className ?? '').toMatch(/\btruncate\b/);
+      expect(h?.className ?? '').toMatch(/\bmin-w-0\b/);
+    }
+    expect(screen.getByText('-454,26')).toBeInTheDocument();
+    expect(screen.getByText('-2.016,00')).toBeInTheDocument();
+    expect(await screen.findByTestId('frase-diferenca-n1')).toHaveTextContent('Confere com o banco ✓');
+    const conciliar = screen.getByRole('button', { name: 'Conciliar' });
+    expect(conciliar).toBeEnabled();
+  });
+});

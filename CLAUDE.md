@@ -160,8 +160,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 01/10/2026 (PR-CONC-ENRIQ-AGRUP-2a, +14 em `src/v2/lib/mesa/agrupamentos2a.test.tsx`; o ENRIQUECER-V2-01
-  tinha posto +30 em `enriquecerV2.test.tsx`): 2739 passando, 22 skipped, e
+  Baseline em 01/10/2026 (CONC-CASAR-N1-LARGURA-01, +3 em `src/components/financeiro-v2/casarComBancoModal.test.tsx`;
+  antes o PR-CONC-ENRIQ-AGRUP-2a, +14 em `src/v2/lib/mesa/agrupamentos2a.test.tsx`): 2742 passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
