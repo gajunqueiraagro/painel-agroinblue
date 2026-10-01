@@ -798,6 +798,10 @@ docs/historico/frentes-ate-2026-09-29.md.)
       `fn_transferencias_sugeridas` (o livre com meia ponta sai dos pares) e pela `fn_transferencia_de_extratos` (recusa
       'tem_meia_ponta' antes de criar). A tela repete a regra por defesa (`paresSemMeiaPonta`) e grava as meias ANTES dos
       pares. Nasceu da de4e99d5: o par de abr/26 gravado antes das meias criou uma 3a transferencia de 400.000.
+    ⚠ GEMEOS (CONC-TRANSF-SEGUNDA-PONTA-03, migration 20261027185900, ledger 20261001185439): extratos livres INDISTINGUIVEIS
+      (mesma conta, data e valor) em numero IGUAL ao de transferencias abertas compativeis fecham por ordem estavel (extrato
+      por id; transferencia por data, created_at, id) — qualquer atribuicao e' equivalente; fora disso, o 1:1 de sempre
+      (Itau 06/03 2 x -100.000 -> 1b46c5de e bd99294f).
 - ⚠ BOITEL: ao financeiro e ao DRE vai SO' O LIQUIDO DO ACERTO; R$/@ de venda = liquido / @ vivas que sairam. O VALOR DA
   OPERACAO E' O SLOT (`zoo_operacao_lotes.valor_informado`, helper `valorDaVendaBoitel`) e a tela nunca o calcula; o
   acerto e' conferencia. Com o realizado aplicado, o realizado vence a projecao em tudo (`custosDaVendaBoitel`, mesmo
