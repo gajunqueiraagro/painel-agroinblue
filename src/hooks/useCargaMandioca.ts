@@ -364,9 +364,12 @@ export function useContextoCargaMandioca(safraAreaIds: readonly string[]) {
    * simplesmente ignora o ICMS repetido. Sem esta leitura o operador digitaria 2.016,00 na segunda
    * carga da nota, a RPC descartaria em silêncio, e a tela teria mentido sobre o que gravou.
    * ⚠ POR `papel`, NUNCA PELA DESCRIÇÃO — o mesmo idioma do `useColheita`.
+   * ⚠ O ICMS DO FRETE TAMBÉM É UMA VEZ POR NOTA (MANDIOCA-ICMS-REPASSE-01, decisão do Gabriel, 01/10: 14 Pix de 311,14
+   *   para 14 NFs): a mesma pergunta, com `papel = 'icms_transporte'` — a RPC faz as duas pela mesma função.
    */
   const icmsJaNaNota = useCallback(async (
     nf: string, colheitasDaCargaAberta: readonly string[] = [],
+    papel: 'icms' | 'icms_transporte' = 'icms',
   ): Promise<boolean> => {
     if (!chave || !nf.trim()) return false;
     const db = supabase as any;
@@ -396,7 +399,7 @@ export function useContextoCargaMandioca(safraAreaIds: readonly string[]) {
     const { data: elos } = await db.from('agri_colheita_lancamentos')
       .select('colheita_id')
       .in('colheita_id', ids)
-      .eq('papel', 'icms')
+      .eq('papel', papel)
       .eq('ativo', true)
       .limit(1);
     return ((elos ?? []) as unknown[]).length > 0;

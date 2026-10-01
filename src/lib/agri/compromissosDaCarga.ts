@@ -25,6 +25,9 @@
 export type PapelCarga =
   | 'venda' | 'frete' | 'trator' | 'mao_obra'
   | 'icms' | 'icms_transporte' | 'funrural' | 'inss'
+  /* MANDIOCA-ICMS-REPASSE-01: o ICMS da nota é REPASSE — o comprador o devolve. A RPC grava, junto do `icms`, a
+     entrada que o comprador deve ("ICMS a Repassar - Devolvido"). */
+  | 'icms_recebivel'
   /* ⚠ OS DOIS NOMES ANTIGOS CONTINUAM NO BANCO: 42 lançamentos do backfill de 16/09 usam
      'arranquio' e 'carregamento'. A RPC não os grava mais, mas a tela LÊ o que existe — omiti-los
      aqui faria a aba Financeiro esconder serviços de toda carga anterior à reclassificação. */
@@ -37,6 +40,7 @@ const ROTULO: Record<PapelCarga, string> = {
   mao_obra: 'Mão de obra',
   icms: 'ICMS da venda',
   icms_transporte: 'ICMS do frete',
+  icms_recebivel: 'ICMS a receber (repasse)',
   funrural: 'Funrural',
   inss: 'INSS',
   arranquio: 'Mão de obra',
@@ -53,6 +57,8 @@ const ROTULO: Record<PapelCarga, string> = {
  */
 const ORDEM: Record<PapelCarga, number> = {
   venda: 0,
+  /* o que entra vem antes do que sai: o recebível do ICMS é a segunda entrada da carga */
+  icms_recebivel: 5,
   mao_obra: 10, arranquio: 10,
   frete: 20,
   trator: 30, carregamento: 30,
@@ -252,6 +258,9 @@ export function resultadoDaCarga(linhas: readonly LinhaCompromisso[]): Resultado
   for (const l of linhas) {
     const abs = Math.abs(l.valor);
     if (l.papel === 'venda') venda += abs;
+    /* ⚠ MANDIOCA-ICMS-REPASSE-01: o recebível ABATE o ICMS que ele devolve — o ICMS da nota é repasse e saiu do DRE
+       (plano "ICMS a Repassar", fora do DRE). Carga sem recebível (anterior ao repasse) continua como era. */
+    else if (l.papel === 'icms_recebivel') impostos -= abs;
     else if (ehImposto(l.papel)) impostos += abs;
     else if (ehServico(l.papel)) servicos += abs;
   }
@@ -370,4 +379,19 @@ export function reconstruirCarga(
 export function totalDoServico(precoT: number | null, toneladas: number | null): number | null {
   if (precoT == null || toneladas == null || toneladas <= 0) return null;
   return Math.round(precoT * toneladas * 100) / 100;
+}
+
+/**
+ * A frase abaixo dos impostos da nota no modal da carga: QUAL imposto a NF já levou.
+ *
+ * ⚠ ICMS DA VENDA E ICMS DO FRETE SÃO, OS DOIS, UMA VEZ POR NOTA (MANDIOCA-ICMS-REPASSE-01, decisão do Gabriel, 01/10:
+ * 14 Pix de 311,14 para 14 NFs). Antes a frase dizia "O do frete é por carga", e a RPC gravava um por carga.
+ * Vazia quando nada está travado — o slot da frase fica (layout fixo).
+ */
+export function dicaImpostosDaNota(nf: string, icmsTravado: boolean, transporteTravado: boolean): string {
+  const nota = nf || '—';
+  if (icmsTravado && transporteTravado) return `ICMS da venda e do frete já lançados na NF ${nota} — uma vez por nota.`;
+  if (icmsTravado) return `ICMS da venda já lançado na NF ${nota} — uma vez por nota, como o do frete.`;
+  if (transporteTravado) return `ICMS do frete já lançado na NF ${nota} — uma vez por nota, como o da venda.`;
+  return '';
 }

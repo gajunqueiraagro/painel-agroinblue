@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  montarCompromissos, resultadoDaCarga, topoFinanceiro, statusDaLinha,
+  montarCompromissos, resultadoDaCarga, topoFinanceiro, statusDaLinha, dicaImpostosDaNota,
   type LancamentoDaCarga,
 } from '@/lib/agri/compromissosDaCarga';
 
@@ -298,5 +298,63 @@ describe('totalDoServico', () => {
   it('arredonda em duas casas', () => {
     expect(totalDoServico(140.005, 1)).toBeCloseTo(140.01, 2);
     expect(totalDoServico(33.333, 3)).toBeCloseTo(100, 2);
+  });
+});
+
+/* MANDIOCA-ICMS-REPASSE-01 — o ICMS da nota é REPASSE: a carga nova grava, junto do `icms`, o recebível do comprador
+   (`icms_recebivel`, entrada, mesmo valor). A NF 9294773: 2.016,00 de ICMS que a T Cortez devolve. */
+describe('MANDIOCA-ICMS-REPASSE-01 — recebível do ICMS', () => {
+  const COM_REPASSE: LancamentoDaCarga[] = [
+    l('venda', 10774.76, '1', { favorecido: 'T Cortez Fraga Lopes Ltda' }),
+    l('frete', 2024.00, '-1', { favorecido: 'Silvio Eduardo Azoia' }),
+    l('icms', 2016.00, '-1', { favorecido: 'Sefaz MS' }),
+    l('icms_recebivel', 2016.00, '1', { favorecido: 'T Cortez Fraga Lopes Ltda' }),
+    l('icms_transporte', 311.14, '-1', { favorecido: 'Sefaz MS' }),
+  ];
+
+  it('o recebível é a segunda entrada, com rótulo próprio', () => {
+    const linhas = montarCompromissos(COM_REPASSE, 20.24, 1.05);
+    expect(linhas.map(x => x.papel)).toEqual(['venda', 'icms_recebivel', 'frete', 'icms', 'icms_transporte']);
+    const rec = linhas.find(x => x.papel === 'icms_recebivel');
+    expect(rec?.rotulo).toBe('ICMS a receber (repasse)');
+    expect(rec?.entrada).toBe(true);
+    expect(rec?.valor).toBe(2016);
+  });
+
+  /* ⚠ O CASO QUE JUSTIFICA O BLOCO: o ICMS da nota saiu do DRE (plano "ICMS a Repassar", fora do DRE). Sem o abate, o
+     resultado da carga continuaria tirando 2.016,00 que o comprador devolve — a tela discordaria do DRE. */
+  it('o recebível abate o ICMS no resultado: sobra só o do frete', () => {
+    const r = resultadoDaCarga(montarCompromissos(COM_REPASSE, 20.24, 1.05));
+    expect(r.impostos).toBeCloseTo(311.14, 2);
+    expect(r.liquido).toBeCloseTo(10774.76 - 311.14 - 2024.00, 2);
+  });
+
+  /* E a carga ANTERIOR ao repasse, sem recebível, continua como era — o abate não inventa devolução. */
+  it('sem recebível, o ICMS continua no resultado', () => {
+    const semRecebivel = COM_REPASSE.filter(x => x.papel !== 'icms_recebivel');
+    expect(resultadoDaCarga(montarCompromissos(semRecebivel, 20.24, 1.05)).impostos).toBeCloseTo(2327.14, 2);
+  });
+
+  it('o recebível conta no "a receber" do topo', () => {
+    expect(topoFinanceiro(montarCompromissos(COM_REPASSE, 20.24, 1.05)).aReceber).toBeCloseTo(12790.76, 2);
+  });
+});
+
+describe('dicaImpostosDaNota — ICMS da venda e do frete, uma vez por nota', () => {
+  it('nada travado: o slot fica vazio', () => {
+    expect(dicaImpostosDaNota('9294773', false, false)).toBe('');
+  });
+  /* ⚠ A FRASE ANTIGA DIZIA "O do frete é por carga" — e era isso que a RPC fazia. Desde 01/10 é por nota. */
+  it('só o da venda travado não diz mais que o do frete é por carga', () => {
+    const d = dicaImpostosDaNota('9294773', true, false);
+    expect(d).toBe('ICMS da venda já lançado na NF 9294773 — uma vez por nota, como o do frete.');
+    expect(d).not.toMatch(/por carga/);
+  });
+  it('só o do frete travado diz "já lançado na NF"', () => {
+    expect(dicaImpostosDaNota('9294773', false, true)).toBe('ICMS do frete já lançado na NF 9294773 — uma vez por nota, como o da venda.');
+  });
+  it('os dois travados numa frase só; sem NF, traço', () => {
+    expect(dicaImpostosDaNota('9294773', true, true)).toBe('ICMS da venda e do frete já lançados na NF 9294773 — uma vez por nota.');
+    expect(dicaImpostosDaNota('', false, true)).toMatch(/NF —/);
   });
 });

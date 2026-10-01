@@ -282,6 +282,8 @@ export function CargasDaArea({
   const [formMandioca, setFormMandioca] = useState<CargaMandiocaForm | null>(null);
   const [travados, setTravados] = useState<LancamentoTravado[]>([]);
   const [icmsTravado, setIcmsTravado] = useState(false);
+  /* O ICMS do frete também é uma vez por nota (MANDIOCA-ICMS-REPASSE-01): a mesma trava, outro papel. */
+  const [transporteTravado, setTransporteTravado] = useState(false);
   /* ⚠ OS TALHÕES DA CARGA INTEIRA, guardados à parte do form: uma carga dividida tem dois
      ("IND.05 · IND.06") e o `areaId` do form só cabe um. `CargaAgrupada.talhao` já os junta em
      ordem alfabética — é o mesmo texto que a lista da tela mostra, e não um segundo. */
@@ -378,6 +380,7 @@ export function CargasDaArea({
     const base = cargaMandiocaVazia();
     setTravados([]);
     setIcmsTravado(false);
+    setTransporteTravado(false);
     setTalhoesDaCarga(null);
     setAreaId(talhaoDestino?.id ?? '');
     setFormMandioca(base);
@@ -437,6 +440,7 @@ export function CargasDaArea({
     });
     /* ⚠ AS COLHEITAS DESTA CARGA NÃO CONTAM: a pergunta é se OUTRA carga da nota levou o ICMS. */
     setIcmsTravado(await icmsJaNaNota(c.principal.nf_produtor ?? '', c.ids));
+    setTransporteTravado(await icmsJaNaNota(c.principal.nf_produtor ?? '', c.ids, 'icms_transporte'));
   };
 
   /**
@@ -453,13 +457,14 @@ export function CargasDaArea({
   const nfDaCarga = formMandioca?.nf.trim() ?? '';
   const idsDaCargaAberta = formMandioca?.ids.join(',') ?? '';
   useEffect(() => {
-    if (!nfDaCarga) { setIcmsTravado(false); return; }
+    if (!nfDaCarga) { setIcmsTravado(false); setTransporteTravado(false); return; }
     let vivo = true;
     /* ⚠ ESTE EFEITO É QUEM MANDA, e por isso o conserto tem de estar nos DOIS chamadores: ele roda
        depois do `abrirCarga` e sobrescreve o que aquele decidiu. Consertar só lá deixaria o bug
        de pé, com o campo travando meio segundo depois de abrir. */
     const daCarga = idsDaCargaAberta ? idsDaCargaAberta.split(',') : [];
     void icmsJaNaNota(nfDaCarga, daCarga).then(v => { if (vivo) setIcmsTravado(v); });
+    void icmsJaNaNota(nfDaCarga, daCarga, 'icms_transporte').then(v => { if (vivo) setTransporteTravado(v); });
     return () => { vivo = false; };
   }, [nfDaCarga, idsDaCargaAberta, icmsJaNaNota]);
 
@@ -508,7 +513,8 @@ export function CargasDaArea({
       observacao: f.observacoes.trim() || null,
       contaId: f.contaId,
       inss: parseMoeda(f.inss) || null,
-      icmsTransporte: parseMoeda(f.icmsTransporte) || null,
+      /* ⚠ TRAVADO VAI NULO, pelo mesmo motivo do ICMS da venda: a nota já levou o do frete e a RPC o descartaria. */
+      icmsTransporte: transporteTravado ? null : (parseMoeda(f.icmsTransporte) || null),
     };
 
     setSalvando(true);
@@ -780,6 +786,7 @@ export function CargasDaArea({
         fazendaNome={talhaoDestino?.fazendaNome ?? talhoes[0]?.fazendaNome ?? null}
         salvando={salvando}
         icmsTravado={icmsTravado}
+        transporteTravado={transporteTravado}
         talhoesDaCarga={talhoesDaCarga}
         travados={travados}
         onAreaChange={setAreaId}

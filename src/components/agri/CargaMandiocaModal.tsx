@@ -27,7 +27,7 @@ import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { BlocoTopoAba } from '@/components/ui/bloco-topo-aba';
 import { useCompromissosDaCarga, useAlterarCompromisso } from '@/hooks/useCargaMandioca';
 import {
-  montarCompromissos, resultadoDaCarga, topoFinanceiro, ehImposto,
+  montarCompromissos, resultadoDaCarga, topoFinanceiro, ehImposto, dicaImpostosDaNota,
   type StatusCompromisso,
 } from '@/lib/agri/compromissosDaCarga';
 import { useContasBancariasLeves } from '@/hooks/useContasBancariasLeves';
@@ -227,7 +227,7 @@ function Par({ rotulo, valor, forte }: { rotulo: string; valor: string; forte?: 
 
 export function CargaMandiocaModal({
   aberto, form, clienteId, areas, areaId, safraRotulo, fazendaNome, salvando,
-  icmsTravado, talhoesDaCarga, travados, onAreaChange, onChange, onFechar, onSalvar,
+  icmsTravado, transporteTravado, talhoesDaCarga, travados, onAreaChange, onChange, onFechar, onSalvar,
 }: {
   aberto: boolean;
   form: CargaMandiocaForm | null;
@@ -245,6 +245,8 @@ export function CargaMandiocaModal({
    * mesma nota e a tela teria prometido um lançamento que nunca existiria.
    */
   icmsTravado: boolean;
+  /** A NF desta carga já tem ICMS do FRETE lançado por outra carga — a mesma trava, uma vez por nota. */
+  transporteTravado: boolean;
   /**
    * Os talhões da carga INTEIRA, já unidos ("IND.05 · IND.06"), ou `null` numa carga nova.
    * ⚠ NÃO SE DERIVA DE `areaId`: ele cabe um só, e uma carga dividida tem dois. Quem junta é
@@ -757,10 +759,15 @@ export function CargaMandiocaModal({
                       {/* ⚠ "DO FRETE" NO RÓTULO, e não é zelo: sem isso ele lê como o ICMS de cima e
                           o operador digita o mesmo número duas vezes. Este vai para Transporte
                           Agrícola (13090), junto do frete que ele tributa. */}
-                      <Label className="text-[10px]">ICMS do frete (R$)</Label>
-                      <CampoMoeda valor={num(form.icmsTransporte)}
+                      <Label className="flex items-center gap-1 text-[10px]">
+                        ICMS do frete (R$)
+                        {transporteTravado && <Lock className="h-2.5 w-2.5 text-muted-foreground" />}
+                      </Label>
+                      <CampoMoeda valor={transporteTravado ? 0 : num(form.icmsTransporte)}
+                        disabled={transporteTravado}
                         onChange={n => campo('icmsTransporte', n == null ? '' : String(n))}
-                        className={cn('mt-0.5 h-8 text-right font-mono text-[12px]', FOCO)} />
+                        className={cn('mt-0.5 h-8 text-right font-mono text-[12px]', FOCO,
+                          transporteTravado && 'bg-muted text-muted-foreground')} />
                     </div>
                   </div>
                   {/* ⚠ O MOTIVO DE ESTAR DESLIGADO FICA ESCRITO ABAIXO, não só no `title` — a
@@ -769,9 +776,7 @@ export function CargaMandiocaModal({
                       cortaria justamente o número da nota, que é o que ela veio dizer. */}
                   <div className="mt-1">
                     <span className="text-[10px] leading-snug text-muted-foreground">
-                      {icmsTravado
-                        ? `ICMS da venda já lançado na NF ${form.nf || '—'} — uma vez por nota. O do frete é por carga.`
-                        : ''}
+                      {dicaImpostosDaNota(form.nf, icmsTravado, transporteTravado)}
                     </span>
                   </div>
                 </div>
