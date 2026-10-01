@@ -160,8 +160,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 01/10/2026 (MANDIOCA-ICMS-REPASSE-01, +8 em `src/lib/agri/compromissosDaCarga.test.ts`; antes o
-  CONC-CASAR-N1-LARGURA-01, +3 em `src/components/financeiro-v2/casarComBancoModal.test.tsx`): 2750 passando, 22 skipped, e
+  Baseline em 01/10/2026 (CONC-BLOCOS-TELA-01, +8 em `src/components/financeiro-v2/casarComBancoModal.test.tsx` e +4 em
+  `src/components/financeiro-v2/conferenciaModal.test.tsx`; antes o MANDIOCA-ICMS-REPASSE-01, +8): 2762 passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -620,6 +620,15 @@ docs/historico/frentes-ate-2026-09-29.md.)
   parcial fica como estava. O gatilho de promocao pula quando `app.conciliar_bloco = 'on'` — so' o motor liga; 1:1 e 1:N
   continuam promovendo no 1o vinculo. Recusa com SQLSTATE 'CBLOC' e a frase. ⚠ `grupo_id` SEM FK: 53 grupos antigos (154
   vinculos) nao tem bloco — a FK pede antes um bloco 'legado' para cada um (pendente).
+  ⚠ DESEMPATE DO "MAIS ANTIGO PRIMEIRO" (CONC-BLOCOS-TELA-01, decisao do Gabriel, migration 20261027185400): competencia ->
+    vencimento -> created_at do lancamento -> MAIOR valor -> id. Nenhum campo guarda a ordem da planilha (as 10 NFs do backfill
+    de 16/09 tem o mesmo created_at); o maior valor as resolve. Sem coluna nova.
+  ⚠ A TELA DO BLOCO (`CasarBlocoModal`, variante do `CasarComBancoModal`, mock docs/mocks/mock-casar-bloco-v1.html) abre na
+    Conferencia com 2+ extratos E 2+ lancamentos, com lancamento PARCIAL marcado, ou pelo "Mais antigo primeiro…" da barra;
+    matriz e resumo SO' da RPC (simular a cada troca de regra), recusa CBLOC inline, sem "Corrigir o valor do lancamento"
+    (o antigo "Usar valor do banco", so' no 1:N). Linha de bloco tem "Desfazer bloco" no "⋯" (passo inline, motivo
+    obrigatorio). O vinculado PARCIAL continua candidato, com o chip "Parcial — falta R$ X" (aplicado vivo lido de
+    `conciliacao_bancaria_itens`; o saldo livre quem valida e' a RPC).
 - ⚠ MESA: NO CRU A PLANILHA PREVALECE, NO CLASSIFICADO O SISTEMA (PR-CONC-MESA-CRU-EXCEL-PREVALECE-01, Gabriel 30/09).
   CRU = lancamento de origem 'extrato'/'ofx' SEM conta do plano, fora transferencia. Quem decide e' o BANCO, numa funcao
   so' (`_fn_classificacao_precedencia_cru`, no fim do casar e do populate): a leitura da planilha fica em

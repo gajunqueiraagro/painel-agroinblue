@@ -1,0 +1,127 @@
+<title>Casar em bloco</title>
+<style>
+/* Layout: o modal "Casar com o banco" da casa, variante bloco (vários Pix × vários lançamentos) · largura fixa 700px · dois estados lado a lado no papel */
+:root{
+  --bg:#EEF2F6; --surface:#FFFFFF; --fg:#1B2533; --muted:#6B7684; --line:#D9DFE6; --soft:#F6F7F9; --zebra:#FAFBFC;
+  --primary:#1D3A5D; --on-primary:#FFFFFF; --thead:#24364F; --neg:#C62828; --pos:#2E7D32; --amber:#B45309; --amber-bg:#FDF3E3;
+  --ok:#E5F2E7; --ok-fg:#2E6B34; --chip:#E6EEF8; --chip-fg:#1D3A5D; --btn:#E9B949; --btn-fg:#1B2533;
+  --font:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0F1720; --surface:#16202B; --fg:#E6EBF1; --muted:#95A1AE; --line:#2A3644; --soft:#1A2531; --zebra:#18222D;
+  --primary:#2B4E78; --thead:#22344B; --neg:#EF6B6B; --pos:#5CBF6A; --amber:#E3A04A; --amber-bg:#3A2A14;
+  --ok:#1E3324; --ok-fg:#8FD19A; --chip:#223040; --chip-fg:#BFD3EC; --btn:#D9A93C; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0F1720; --surface:#16202B; --fg:#E6EBF1; --muted:#95A1AE; --line:#2A3644; --soft:#1A2531; --zebra:#18222D;
+  --primary:#2B4E78; --thead:#22344B; --neg:#EF6B6B; --pos:#5CBF6A; --amber:#E3A04A; --amber-bg:#3A2A14;
+  --ok:#1E3324; --ok-fg:#8FD19A; --chip:#223040; --chip-fg:#BFD3EC; --btn:#D9A93C; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:10px;margin:0;padding-block:12px;padding-inline:16px}
+.wrap{max-width:700px;margin:0 auto;display:flex;flex-direction:column;gap:10px}
+.tag{font-size:9px;color:var(--muted);letter-spacing:.05em;text-transform:uppercase}
+.modal{width:700px;max-width:100%;background:var(--surface);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.scrollx{overflow-x:auto}
+.mh{display:flex;justify-content:space-between;align-items:center;height:30px;padding:0 12px;background:var(--primary);color:var(--on-primary);font-size:11px;font-weight:600;white-space:nowrap}
+.mh .r{font-size:10px;font-weight:400;opacity:.85}
+.body{padding:8px 12px;display:flex;flex-direction:column;gap:8px}
+.lbl{font-size:9.5px;color:var(--muted);display:flex;justify-content:space-between;white-space:nowrap}
+.regra{display:flex;gap:6px;align-items:center;white-space:nowrap}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.seg span{padding:2px 8px;font-size:9.5px}
+.seg .on{background:var(--primary);color:var(--on-primary)}
+table{border-collapse:separate;border-spacing:0;table-layout:fixed;width:676px;font-size:10px}
+th{background:var(--thead);color:#E9EEF5;font-weight:600;font-size:9px;text-align:left;height:18px;padding:0 6px;white-space:nowrap}
+td{height:18px;padding:0 6px;border-bottom:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
+tbody tr:nth-child(even) td{background:var(--zebra)}
+.r{text-align:right}
+.num{font-variant-numeric:tabular-nums}
+.neg{color:var(--neg)} .pos{color:var(--pos)} .mut{color:var(--muted)}
+.chip{display:inline-block;font-size:8.5px;line-height:13px;padding:0 5px;border-radius:3px;background:var(--chip);color:var(--chip-fg)}
+.chip.ok{background:var(--ok);color:var(--ok-fg)}
+.chip.am{background:var(--amber-bg);color:var(--amber)}
+.res{display:grid;grid-template-columns:1fr 110px;row-gap:1px;font-size:10px;border-top:1px solid var(--line);padding-top:6px}
+.res .k{color:var(--muted)}
+.res .v{text-align:right;font-variant-numeric:tabular-nums}
+.res .v.b{font-weight:600}
+.msg{font-size:10px;font-weight:600}
+.msg.ok{color:var(--pos)} .msg.am{color:var(--amber)}
+.foot{display:flex;justify-content:space-between;align-items:center;height:34px;padding:0 12px;border-top:1px solid var(--line);white-space:nowrap}
+.btn{border:1px solid var(--line);border-radius:4px;padding:3px 10px;background:var(--surface);color:var(--fg)}
+.btn.pri{background:var(--btn);border-color:var(--btn);color:var(--btn-fg);font-weight:600}
+.g{display:flex;gap:6px;align-items:center}
+.note{font-size:10px;color:var(--muted);line-height:1.5;margin:0}
+.note b{color:var(--fg)}
+</style>
+
+<div class="wrap">
+  <div class="tag">Casar com o banco · variante bloco · proposta v1 · estado A: soma exata (Emerson, agosto)</div>
+  <div class="scrollx"><div class="modal">
+    <div class="mh"><span>Casar com o banco · bloco</span><span class="r">Sicredi Lavoura · 3 Pix × 7 lançamentos</span></div>
+    <div class="body">
+      <div class="regra"><span class="mut">Regra</span><span class="seg"><span class="on">Soma exata</span><span>Mais antigo primeiro</span></span></div>
+      <div class="lbl"><span>Pix levados (3)</span></div>
+      <table>
+        <colgroup><col style="width:58px"><col><col style="width:90px"></colgroup>
+        <thead><tr><th>Data</th><th>Histórico do banco</th><th class="r">Valor</th></tr></thead>
+        <tbody>
+          <tr><td class="num">24/08/26</td><td title="PAGAMENTO PIX-PIX_DEB 01391928164 EMERSON DE OLIVEIRA DOS ANJOS">PAGAMENTO PIX-PIX_DEB 01391928164 EMERSON DE OLIVEIRA DOS ANJOS</td><td class="r num neg">−3.000,00</td></tr>
+          <tr><td class="num">28/08/26</td><td title="PAGAMENTO PIX-PIX_DEB 01391928164 EMERSON DE OLIVEIRA DOS ANJOS">PAGAMENTO PIX-PIX_DEB 01391928164 EMERSON DE OLIVEIRA DOS ANJOS</td><td class="r num neg">−16.276,80</td></tr>
+          <tr><td class="num">28/08/26</td><td title="PAGAMENTO PIX-CX747834 68443093000162 68443093 CLEYTON ROBER">PAGAMENTO PIX-CX747834 68443093000162 68443093 CLEYTON ROBER</td><td class="r num neg">−3.000,00</td></tr>
+        </tbody>
+      </table>
+      <div class="lbl"><span>Lançamentos levados (7) · valor do lançamento nunca muda</span></div>
+      <table>
+        <colgroup><col style="width:58px"><col><col style="width:172px"><col style="width:66px"><col style="width:66px"><col style="width:78px"></colgroup>
+        <thead><tr><th>Data</th><th>Descrição</th><th>Fornecedor</th><th class="r">Valor</th><th class="r">Aplicado</th><th>Situação</th></tr></thead>
+        <tbody id="tA"></tbody>
+      </table>
+      <div class="res">
+        <span class="k">Soma dos Pix</span><span class="v">22.276,80</span>
+        <span class="k">Soma dos lançamentos</span><span class="v">22.276,80</span>
+        <span class="k">Diferença</span><span class="v b pos">0,00</span>
+      </div>
+      <div class="msg ok">Confere com o banco ✓ · os 7 lançamentos ficam quitados</div>
+    </div>
+    <div class="foot"><span class="mut">Desfazer fica no "⋯" do bloco depois de conciliado.</span><span class="g"><span class="btn">Cancelar</span><span class="btn pri">Conciliar bloco</span></span></div>
+  </div></div>
+
+  <div class="tag">Estado B: mais antigo primeiro, com parcial (T Cortez, 28/08)</div>
+  <div class="scrollx"><div class="modal">
+    <div class="mh"><span>Casar com o banco · bloco</span><span class="r">Sicredi Lavoura · 1 Pix × 2 lançamentos</span></div>
+    <div class="body">
+      <div class="regra"><span class="mut">Regra</span><span class="seg"><span>Soma exata</span><span class="on">Mais antigo primeiro</span></span></div>
+      <div class="lbl"><span>Pix levados (1)</span></div>
+      <table>
+        <colgroup><col style="width:58px"><col><col style="width:90px"></colgroup>
+        <thead><tr><th>Data</th><th>Histórico do banco</th><th class="r">Valor</th></tr></thead>
+        <tbody>
+          <tr><td class="num">28/08/26</td><td title="RECEBIMENTO PIX-PIX_CRED 32945441000152 T CORTEZ FRAGA LOPES LTDA">RECEBIMENTO PIX-PIX_CRED 32945441000152 T CORTEZ FRAGA LOPES LTDA</td><td class="r num pos">20.998,80</td></tr>
+        </tbody>
+      </table>
+      <div class="lbl"><span>Lançamentos levados (2) · valor do lançamento nunca muda</span></div>
+      <table>
+        <colgroup><col style="width:58px"><col><col style="width:172px"><col style="width:66px"><col style="width:66px"><col style="width:78px"></colgroup>
+        <thead><tr><th>Data</th><th>Descrição</th><th>Fornecedor</th><th class="r">Valor</th><th class="r">Aplicado</th><th>Situação</th></tr></thead>
+        <tbody>
+          <tr><td class="num">24/08/26</td><td>Venda 20,24 t Mandioca · NF 9294773</td><td>T Cortez Fraga Lopes Ltda</td><td class="r num pos">10.774,76</td><td class="r num">10.774,76</td><td><span class="chip ok">Quitado</span></td></tr>
+          <tr><td class="num">24/08/26</td><td>Venda 19,82 t Mandioca · NF 9294773</td><td>T Cortez Fraga Lopes Ltda</td><td class="r num pos">10.571,99</td><td class="r num">10.224,04</td><td><span class="chip am">Falta 347,95</span></td></tr>
+        </tbody>
+      </table>
+      <div class="res">
+        <span class="k">Soma dos Pix</span><span class="v">20.998,80</span>
+        <span class="k">Soma dos lançamentos</span><span class="v">21.346,75</span>
+        <span class="k">Diferença</span><span class="v b neg">−347,95</span>
+      </div>
+      <div class="msg am">Parcial · falta R$ 347,95 na Venda 19,82 t · ela continua aberta para o próximo depósito</div>
+    </div>
+    <div class="foot"><span class="mut">Soma dos Pix maior que a dos lançamentos é recusada.</span><span class="g"><span class="btn">Cancelar</span><span class="btn pri">Conciliar bloco</span></span></div>
+  </div></div>
+
+  <p class="note"><b>Como funciona.</b> Na Conferência você marca os Pix e os lançamentos, e o "Casar com o banco" abre nesta variante quando há mais de um Pix ou quando escolhe "Mais antigo primeiro". <b>Não existe "Usar valor do banco" aqui</b>: o valor do lançamento nunca muda. Corrigir valor errado continua sendo um gesto separado, no próprio lançamento. A descrição do lançamento aparece inteira, com a NF; só o histórico do banco pode cortar (o texto completo aparece ao passar o mouse). Largura fixa de 700px para qualquer texto.</p>
+</div>
+
+<script>
+const A=[['21/08/26','Arranquio Mandioca 40,34 t · NF 9287581',5647.6],['24/08/26','Arranquio Mandioca 20,24 t · NF 9294773',2833.6],['24/08/26','Arranquio Mandioca 19,82 t · NF 9294773',2774.8],['26/08/26','Arranquio Mandioca 19,18 t · NF 9297983',2685.2],['26/08/26','Arranquio Mandioca 17,68 t · NF 9297983',2475.2],['28/08/26','Arranquio Mandioca 20,52 t · NF 9310349',2872.8],['28/08/26','Arranquio Mandioca 21,34 t · NF 9310349',2987.6]];
+const f=v=>v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+document.getElementById('tA').innerHTML=A.map(([d,ds,v])=>`<tr><td class="num">${d}</td><td>${ds}</td><td>Emerson de Oliveira dos Anjos</td><td class="r num neg">−${f(v)}</td><td class="r num">${f(v)}</td><td><span class="chip ok">Quitado</span></td></tr>`).join('');
+</script>

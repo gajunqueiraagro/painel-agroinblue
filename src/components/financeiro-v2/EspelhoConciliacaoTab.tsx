@@ -25,7 +25,10 @@ import { desfazerVinculo, desfazerGrupo } from '@/hooks/useConciliacaoDoMes';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
 import { useFinanceiroV2, type LancamentoV2 } from '@/hooks/useFinanceiroV2';
 import { useFazenda } from '@/contexts/FazendaContext';
-import { CasarComBancoModal, CasarN1Modal, type ExtratoAlvo, type LevadoInicial } from '@/components/financeiro-v2/CasarComBancoModal';
+import {
+  CasarComBancoModal, CasarN1Modal, CasarBlocoModal, fraseDaRecusa,
+  type ExtratoAlvo, type LevadoInicial, type RegraBloco,
+} from '@/components/financeiro-v2/CasarComBancoModal';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { DecisaoDerivadosDialog } from '@/components/financeiro-v2/DecisaoDerivadosDialog';
 import { useEspelhoInternas, type EspelhoInternas } from '@/hooks/useEspelhoInternas';
@@ -798,10 +801,13 @@ function LinhaLancSemPar({ s, mesDoRecorte, marcado, onMarcar, onAbrir }: {
  * 20261027122200 e 20261027122300), nos dois sentidos (1:N e N:1). A pílula "sem conta" continua:
  * diz que o lançamento vai ganhar a conta do extrato ao casar.
  */
-function LinhaCandidato({ c, marcado, onMarcar, onAbrir }: {
+function LinhaCandidato({ c, marcado, onMarcar, onAbrir, falta = null }: {
   c: EspCandidato; marcado: boolean; onMarcar: () => void; onAbrir?: (id: string) => void;
+  /** CONC-BLOCOS-TELA-01: o que falta para quitar um vinculado PARCIAL. Com falta, ele continua casável. */
+  falta?: number | null;
 }) {
-  const casavel = !c.ja_conciliado;
+  const parcial = c.ja_conciliado && falta != null;
+  const casavel = !c.ja_conciliado || parcial;
   const { isOver, setNodeRef } = useDroppable({ id: `lan:${c.lancamento_id}`, disabled: !casavel });
   const doc = c.numero_documento ? [c.tipo_documento, c.numero_documento].filter(Boolean).join(' ') : null;
   const fornecedorDiferente = c.fornecedor && c.fornecedor !== c.descricao ? c.fornecedor : null;
@@ -814,7 +820,7 @@ function LinhaCandidato({ c, marcado, onMarcar, onAbrir }: {
   ].filter(Boolean).join(' · ');
   return (
     <tr ref={setNodeRef} className={cn(H18, 'border-b border-border/50',
-      c.ja_conciliado && 'opacity-60',
+      c.ja_conciliado && !parcial && 'opacity-60',
       marcado && 'bg-amber-500/10',
       isOver && 'bg-emerald-500/10 outline-dashed outline-2 outline-emerald-500')}>
       <td /><td /><td /><td />
@@ -856,7 +862,8 @@ function LinhaCandidato({ c, marcado, onMarcar, onAbrir }: {
             </span>
           </span>
           {c.sem_conta && <span className="shrink-0 rounded bg-destructive/10 px-1 font-medium text-destructive">sem conta</span>}
-          {c.ja_conciliado && <span className="shrink-0 italic text-muted-foreground">já vinculado</span>}
+          {parcial && falta != null && <ChipParcial falta={falta} />}
+          {c.ja_conciliado && !parcial && <span className="shrink-0 italic text-muted-foreground">já vinculado</span>}
         </span>
       </td>
       <CelStatus status={c.status_transacao} />
@@ -864,6 +871,19 @@ function LinhaCandidato({ c, marcado, onMarcar, onAbrir }: {
         { rotulo: 'Abrir', onClick: onAbrir ? () => onAbrir(c.lancamento_id) : undefined, motivo: SEM_ABRIR },
       ]} />
     </tr>
+  );
+}
+
+/**
+ * "PARCIAL — FALTA R$ X" — CONC-BLOCOS-TELA-01: o lançamento que um bloco deixou parcial. Ele continua programado e
+ * continua candidato para o próximo extrato; o chip diz quanto falta.
+ */
+function ChipParcial({ falta }: { falta: number }) {
+  return (
+    <span className="ml-1 shrink-0 rounded-[3px] bg-amber-100 px-1 text-[9.5px] font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
+      data-testid="chip-parcial">
+      Parcial — falta R$ {fmtBRL(falta)}
+    </span>
   );
 }
 
@@ -1061,6 +1081,65 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
   const [arrastando, setArrastando] = useState<EspSis | null>(null);
   const [arrastandoExt, setArrastandoExt] = useState<EspOfx | null>(null);
   const [casarN1, setCasarN1] = useState<{ sis: EspSis; extratos: EspOfx[] } | null>(null);
+  /* CONC-BLOCOS-TELA-01 — a variante BLOCO (N extratos × M lançamentos, `fn_conciliar_bloco`). */
+  const [casarBloco, setCasarBloco] = useState<{ extratos: EspOfx[]; lancs: EspSis[]; regra: RegraBloco } | null>(null);
+  /* O passo de desfazer um bloco: o id do bloco aberto, o motivo digitado e a recusa (inline, nunca toast). */
+  const [desfazendoBloco, setDesfazendoBloco] = useState<string | null>(null);
+  const [motivoDesfazer, setMotivoDesfazer] = useState('');
+  const [erroDesfazer, setErroDesfazer] = useState<string | null>(null);
+  const [desfazendo, setDesfazendo] = useState(false);
+  /**
+   * OS BLOCOS VIVOS DA CONTA — quem é bloco ganha "Desfazer bloco" no "⋯" (e não "Desconciliar grupo", que desfaria os
+   * vínculos sem devolver status e data). Relido a cada `data` nova (depois de conciliar ou desfazer).
+   */
+  const [blocosVivos, setBlocosVivos] = useState<ReadonlySet<string>>(new Set());
+  useEffect(() => {
+    if (!contaId) { setBlocosVivos(new Set()); return; }
+    let vivo = true;
+    void (async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: tabela fora de types.ts
+      const { data: linhas } = await (supabase as any).from('conciliacao_blocos')
+        .select('id').eq('conta_bancaria_id', contaId).is('desfeito_em', null);
+      if (vivo) setBlocosVivos(new Set(((linhas ?? []) as Array<{ id: string }>).map((b) => b.id)));
+    })();
+    return () => { vivo = false; };
+  }, [contaId, data]);
+  /**
+   * ⚠ O PARCIAL CONTINUA CANDIDATO — CONC-BLOCOS-TELA-01. O candidato com QUALQUER vínculo vem `ja_conciliado` e ficava
+   * sem checkbox; o que o bloco deixou parcial ("falta R$ X") tem de poder casar com o próximo depósito. Uma consulta só,
+   * pelos ids dos vinculados (candidatos e filhas): soma o aplicado vivo de cada um. A falta é exibição; quem valida o
+   * saldo livre é a `fn_conciliar_bloco`.
+   */
+  const idsVinculados = useMemo(() => {
+    const s = new Set<string>();
+    for (const c of data.sistema_candidatos ?? []) if (c.ja_conciliado) s.add(c.lancamento_id);
+    for (const v of data.vinculos ?? []) s.add(v.lancamento_id);
+    return [...s].sort().join(',');
+  }, [data]);
+  const [aplicadoVivo, setAplicadoVivo] = useState<ReadonlyMap<string, number>>(new Map());
+  useEffect(() => {
+    if (!idsVinculados) { setAplicadoVivo(new Map()); return; }
+    let vivo = true;
+    void (async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: tabela fora de types.ts
+      const { data: linhas } = await (supabase as any).from('conciliacao_bancaria_itens')
+        .select('lancamento_id, valor_aplicado').in('lancamento_id', idsVinculados.split(',')).is('desfeito_em', null);
+      if (!vivo) return;
+      const m = new Map<string, number>();
+      for (const l of (linhas ?? []) as Array<{ lancamento_id: string; valor_aplicado: number }>) {
+        m.set(l.lancamento_id, (m.get(l.lancamento_id) ?? 0) + Number(l.valor_aplicado ?? 0));
+      }
+      setAplicadoVivo(m);
+    })();
+    return () => { vivo = false; };
+  }, [idsVinculados]);
+  /** Quanto falta para quitar (> 0,005), ou `null` quando está inteiro ou sem vínculo. */
+  const faltaDe = (lancamentoId: string, valor: number): number | null => {
+    const ap = aplicadoVivo.get(lancamentoId);
+    if (ap == null) return null;
+    const falta = Math.round((Math.abs(valor) - ap) * 100) / 100;
+    return falta > 0.005 ? falta : null;
+  };
   /* ⚠ 4px ANTES DE VIRAR ARRASTO: sem a distância, o clique no checkbox ao lado da alça já
      começaria um drag e o operador não conseguiria marcar nada. */
   const sensores = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
@@ -1100,12 +1179,20 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
   /* ⚠ DOIS SENTIDOS, UMA BARRA. 1 extrato : N lançamentos vai pela `fn_espelho_casar`;
      N extratos : 1 lançamento pela `fn_espelho_casar_n1`. O que decide é a contagem dos dois
      lados — não há botão para escolher, porque a marcação já disse o que se quer. */
-  const sentido: 'um_n' | 'n_um' | null =
-    sel.extratos.size === 1 && sel.lancamentos.size >= 1 ? 'um_n'
+  /* ⚠ O BLOCO — CONC-BLOCOS-TELA-01: 2+ extratos E 2+ lançamentos, ou um lançamento PARCIAL marcado (o 1:N e o N:1
+     recusam lançamento já vinculado; só o bloco completa o saldo livre). Com 1 extrato e N lançamentos, ou N e 1, os
+     caminhos de sempre continuam como estão. */
+  const algumParcial = [...sel.lancamentos].some((id) => faltaDe(id, sisIndex.get(id)?.valor_assinado ?? 0) != null);
+  const sentido: 'um_n' | 'n_um' | 'bloco' | null =
+    sel.extratos.size >= 1 && sel.lancamentos.size >= 1 && algumParcial ? 'bloco'
+    : sel.extratos.size >= 2 && sel.lancamentos.size >= 2 ? 'bloco'
+    : sel.extratos.size === 1 && sel.lancamentos.size >= 1 ? 'um_n'
     : sel.extratos.size >= 2 && sel.lancamentos.size === 1 ? 'n_um'
     : null;
-  const podeConciliar = !!sentido && Math.abs(difSel) <= 0.01;
-  const motivoBloqueio = sentido ? (Math.abs(difSel) > 0.01 ? 'os valores não batem' : '')
+  /* O bloco não concilia pela barra: a matriz e a regra se conferem no modal, que é quem chama a RPC. */
+  const podeConciliar = !!sentido && sentido !== 'bloco' && Math.abs(difSel) <= 0.01;
+  const motivoBloqueio = sentido === 'bloco' ? 'bloco: confira em "Casar com o banco…"'
+    : sentido ? (Math.abs(difSel) > 0.01 ? 'os valores não batem' : '')
     : sel.extratos.size === 0 ? 'marque ao menos um extrato'
     : sel.lancamentos.size === 0 ? 'marque ao menos um lançamento'
     : 'marque 1 extrato para N lançamentos, ou N extratos para 1 lançamento';
@@ -1130,7 +1217,7 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
    * não volta é pior que um erro — o operador não sabe se gravou.
    */
   const conciliar = async () => {
-    if (!sentido) return;
+    if (!sentido || sentido === 'bloco') return;
     setGravando(true); setErro(null);
     try {
       const chamada = sentido === 'um_n'
@@ -1212,8 +1299,35 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
     }
   };
 
+  /* A variante bloco, com a seleção inteira. A regra começa em "Soma exata", ou na que o operador pediu. */
+  const abrirBloco = (regra: RegraBloco) => {
+    const extratos = [...sel.extratos].map((id) => extratoIndex.get(id)).filter((x): x is EspOfx => !!x);
+    const lancs = [...sel.lancamentos].map((id) => sisIndex.get(id)).filter((x): x is EspSis => !!x);
+    if (extratos.length && lancs.length) setCasarBloco({ extratos, lancs, regra });
+  };
+
+  /* O GESTO CONTRÁRIO do bloco: um passo inline (sem `confirm()` nativo), motivo obrigatório. */
+  const abrirDesfazerBloco = (blocoId: string) => {
+    setDesfazendoBloco(blocoId); setMotivoDesfazer(''); setErroDesfazer(null);
+  };
+  const desfazerBlocoAgora = async () => {
+    if (!desfazendoBloco || desfazendo) return;
+    if (!motivoDesfazer.trim()) { setErroDesfazer('Diga por que o bloco está sendo desfeito.'); return; }
+    setDesfazendo(true); setErroDesfazer(null);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+      const { error } = await (supabase as any).rpc('fn_desfazer_bloco', { p_bloco: desfazendoBloco, p_motivo: motivoDesfazer.trim() });
+      if (error) { setErroDesfazer(fraseDaRecusa(error.message)); return; }
+      setDesfazendoBloco(null);
+      onMudou();
+    } finally {
+      setDesfazendo(false);
+    }
+  };
+
   /* O botão da barra abre o modal do SENTIDO que a marcação já declarou. */
   const abrirCasarDaBarra = () => {
+    if (sentido === 'bloco') { abrirBloco(algumParcial ? 'mais_antigo_primeiro' : 'exato'); return; }
     if (sentido === 'n_um') {
       const sis = sisIndex.get([...sel.lancamentos][0]);
       const extratos = [...sel.extratos].map((id) => extratoIndex.get(id)).filter((x): x is EspOfx => !!x);
@@ -1308,7 +1422,7 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
               </tr>
             )}
             {mostrarVencidos && vencidos.map((c) => (
-              <LinhaCandidato key={c.lancamento_id} c={c}
+              <LinhaCandidato key={c.lancamento_id} c={c} falta={faltaDe(c.lancamento_id, c.valor)}
                 marcado={marcado('lancamentos', c.lancamento_id)}
                 onMarcar={() => alterna('lancamentos', c.lancamento_id)} onAbrir={onAbrir} />
             ))}
@@ -1359,7 +1473,11 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
                           { rotulo: 'Abrir',
                             onClick: unica && onAbrir ? () => onAbrir(unica.lancamento_id) : undefined,
                             motivo: unica ? SEM_ABRIR : 'agrupado: abra cada lançamento nas linhas abaixo' },
-                          { rotulo: p.grupoId ? 'Desconciliar grupo' : 'Desconciliar',
+                          /* ⚠ BLOCO SE DESFAZ PELO GESTO CONTRÁRIO DELE (CONC-BLOCOS-TELA-01): `fn_desfazer_bloco` devolve
+                             status e data de cada lançamento; o "Desconciliar grupo" só desfaria os vínculos. */
+                          p.grupoId && blocosVivos.has(p.grupoId)
+                            ? { rotulo: 'Desfazer bloco', onClick: () => abrirDesfazerBloco(p.grupoId!) }
+                            : { rotulo: p.grupoId ? 'Desconciliar grupo' : 'Desconciliar',
                             onClick: (unica || p.grupoId) ? async () => {
                               const r = p.grupoId
                                 ? await desfazerGrupo(p.grupoId, 'desfeito_no_espelho')
@@ -1382,7 +1500,13 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
                             {fmtBRL(assinado(p.extrato.valor, f.valor_aplicado))}
                           </td>
                           <CelDataSistema data={f.sis?.data} rotulo="data do lançamento" />
-                          <td className={cn(CEL, 'font-normal text-muted-foreground')} title={tituloLancamento(f.sis)}>{textoFilha(f.sis)}</td>
+                          <td className={cn(CEL, 'font-normal text-muted-foreground')} title={tituloLancamento(f.sis)}>
+                            {textoFilha(f.sis)}
+                            {(() => {
+                              const falta = faltaDe(f.lancamento_id, f.sis?.valor_assinado ?? 0);
+                              return falta == null ? null : <ChipParcial falta={falta} />;
+                            })()}
+                          </td>
                           <td />
                           <CelAcoes itens={[
                             { rotulo: 'Abrir', onClick: onAbrir ? () => onAbrir(f.lancamento_id) : undefined, motivo: SEM_ABRIR },
@@ -1418,7 +1542,9 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
                         <CelStatus status="conciliado" />
                         <CelAcoes itens={[
                           { rotulo: 'Abrir', onClick: onAbrir ? () => onAbrir(g.sis.lancamento_id) : undefined, motivo: SEM_ABRIR },
-                          { rotulo: 'Desconciliar grupo',
+                          g.grupoId && blocosVivos.has(g.grupoId)
+                            ? { rotulo: 'Desfazer bloco', onClick: () => abrirDesfazerBloco(g.grupoId!) }
+                            : { rotulo: 'Desconciliar grupo',
                             onClick: g.grupoId ? async () => {
                               const r = await desfazerGrupo(g.grupoId!, 'desfeito_no_espelho');
                               if (r.ok) onMudou(); else setErro(r.erro ?? 'Não foi possível desconciliar.');
@@ -1501,7 +1627,7 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
                     `false` e não vê candidato nenhum. `montarMesa` agrupa sempre; quem decide
                     mostrar é o render. */}
                 {mostrarCandidatos && d.candidatos.map((c) => (
-                  <LinhaCandidato key={c.lancamento_id} c={c}
+                  <LinhaCandidato key={c.lancamento_id} c={c} falta={faltaDe(c.lancamento_id, c.valor)}
                     marcado={marcado('lancamentos', c.lancamento_id)}
                     onMarcar={() => alterna('lancamentos', c.lancamento_id)} onAbrir={onAbrir} />
                 ))}
@@ -1605,6 +1731,25 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
         onConcluido={() => { setIgnorarId(null); void refetchIgnorados(); onMudou(); }}
       />
 
+      {/* ⚠ DESFAZER BLOCO — CONC-BLOCOS-TELA-01: passo inline, no lugar da barra, com motivo obrigatório. A recusa da RPC
+          aparece aqui, em vermelho — nunca em toast. */}
+      {desfazendoBloco && (
+        <div className="shrink-0 border-t-2 border-t-destructive bg-card px-3.5 py-1.5" data-testid="passo-desfazer-bloco">
+          <div className="flex flex-wrap items-center gap-2 text-[11px]">
+            <span className="font-semibold">Desfazer bloco</span>
+            <span className="text-[10px] text-muted-foreground">os vínculos saem e cada lançamento volta ao status e à data de antes</span>
+            <input value={motivoDesfazer} onChange={(e) => setMotivoDesfazer(e.target.value)} placeholder="Motivo *"
+              aria-label="Motivo do desfazer" className="h-[22px] w-64 rounded border px-1.5 text-[11px]" />
+            <button type="button" onClick={() => { void desfazerBlocoAgora(); }} disabled={desfazendo}
+              className="h-[22px] rounded bg-destructive px-2 text-[11px] font-medium text-destructive-foreground disabled:opacity-50">
+              {desfazendo ? 'Desfazendo…' : 'Desfazer'}
+            </button>
+            <button type="button" onClick={() => setDesfazendoBloco(null)} className="text-[11px] underline underline-offset-2 text-muted-foreground">Cancelar</button>
+            <span className="text-[10px] text-destructive" data-testid="erro-desfazer-bloco">{erroDesfazer ?? ''}</span>
+          </div>
+        </div>
+      )}
+
       {/* ⚠ A BARRA SÓ EXISTE COM SELEÇÃO, e some ao limpar: uma barra permanente vazia
           ocuparia 30px de mesa para não dizer nada. Esc limpa. */}
       {(sel.extratos.size > 0 || sel.lancamentos.size > 0) && (
@@ -1616,6 +1761,7 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
               {' · '}{sel.lancamentos.size} lançamento{sel.lancamentos.size === 1 ? '' : 's'}{' '}
               <span className="tabular-nums">{fmtBRL(somaLancs)}</span>
               {sentido === 'n_um' && <span className="ml-2 opacity-80">N extratos → 1 lançamento</span>}
+              {sentido === 'bloco' && <span className="ml-2 opacity-80">bloco: N extratos × M lançamentos</span>}
             </span>
             <span className="text-[#E7C873] tabular-nums">diferença {fmtBRL(difSel)}</span>
             {erro && <span className="text-[#F5B5B5]">{erro}</span>}
@@ -1634,6 +1780,15 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
                     : 'bg-primary-foreground/20 text-primary-foreground/50 cursor-not-allowed')}>
                 Casar com o banco…
               </button>
+              {/* ⚠ "MAIS ANTIGO PRIMEIRO" COM QUALQUER SELEÇÃO — CONC-BLOCOS-TELA-01: o operador que escolhe a regra abre a
+                  variante bloco já nela (o depósito que paga duas vendas e deixa uma parcial). */}
+              {sentido !== 'bloco' && sel.extratos.size >= 1 && sel.lancamentos.size >= 1 && (
+                <button type="button" onClick={() => abrirBloco('mais_antigo_primeiro')}
+                  title="Abre o bloco com a regra Mais antigo primeiro: o último lançamento pode ficar parcial"
+                  className="rounded bg-primary-foreground/20 px-2 py-0.5 text-[11px] hover:bg-primary-foreground/30">
+                  Mais antigo primeiro…
+                </button>
+              )}
               <button type="button" onClick={limpar} className="text-[11px] underline underline-offset-2 opacity-80 hover:opacity-100">
                 limpar
               </button>
@@ -1685,6 +1840,18 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
         iniciais={casar?.iniciais ?? []}
         nomeConta={nomeConta}
         contaBancariaId={contaId}
+        onConciliado={() => { limpar(); onMudou(); }}
+      />
+
+      <CasarBlocoModal
+        open={!!casarBloco}
+        onClose={() => setCasarBloco(null)}
+        extratos={(casarBloco?.extratos ?? []).map((e) => ({ extrato_id: e.extrato_id, data: e.data, historico: e.historico, valor: e.valor }))}
+        lancamentos={(casarBloco?.lancs ?? []).map((s) => ({
+          lancamento_id: s.lancamento_id, data: s.data, descricao: s.descricao, fornecedor: s.fornecedor ?? null, valor_assinado: s.valor_assinado,
+        }))}
+        nomeConta={nomeConta}
+        regraInicial={casarBloco?.regra ?? 'exato'}
         onConciliado={() => { limpar(); onMudou(); }}
       />
 

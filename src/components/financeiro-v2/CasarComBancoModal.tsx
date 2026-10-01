@@ -24,6 +24,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Segmentado } from '@/components/ui/segmentado';
 import { CriarLancamentoDaLinha } from '@/components/conciliacao/CriarLancamentoDaLinha';
 import { MOTIVO_CASAR_LABEL } from '@/components/financeiro-v2/EspelhoConciliacaoTab';
 import { STATUS_PALETA, STATUS_FILTRO_LABEL } from '@/lib/financeiro/statusFinanceiro';
@@ -255,13 +256,16 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
                       trabalha) e a diferença vai a zero na próxima simulação. VÁRIOS: "absorver a diferença" põe a
                       diferença inteira NESTA linha; as outras não mudam. */}
                   {unico && l.usarValorDoBanco && l.valorTexto === valorDoBanco ? null : unico ? (
+                    /* ⚠ "CORRIGIR O VALOR DO LANÇAMENTO" — CONC-BLOCOS-TELA-01 (decisão do Gabriel): era "Usar valor do
+                       banco". É um gesto SEPARADO, com nome próprio, porque muda o valor do lançamento; o comportamento é o
+                       mesmo de antes. Na variante bloco ele não existe. */
                     <button type="button" data-testid="usar-valor-banco"
                       disabled={l.valorTexto === valorDoBanco}
-                      title={l.valorTexto === valorDoBanco ? 'O campo já tem o valor do banco.' : 'Preenche o campo com o valor do extrato; o lançamento fica com ele ao conciliar.'}
+                      title={l.valorTexto === valorDoBanco ? 'O campo já tem o valor do banco.' : `muda o valor do lançamento para o do banco (${valorDoBanco})`}
                       onClick={() => poeValor(l.lancamento_id, valorDoBanco)}
                       className={cn('h-[23px] shrink-0 whitespace-nowrap rounded border px-1.5 text-[10px]',
                         l.valorTexto === valorDoBanco ? 'opacity-40 cursor-not-allowed' : 'hover:bg-muted')}>
-                      Usar valor do banco ({valorDoBanco})
+                      Corrigir o valor do lançamento
                     </button>
                   ) : (() => {
                     const novo = difAtual == null ? null : valorAbsorvendo(valorDe(l.valorTexto), l.valor_assinado, difAtual);
@@ -304,12 +308,12 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
               {/* ⚠ O SENTIDO E O VALOR, e a 10px (a frase estava a 9, abaixo do piso da casa). */}
               {sim && sentido === 'a_mais' && (
                 <div className="text-[10px] text-muted-foreground" data-testid="frase-diferenca">
-                  Os lançamentos somam R$ {fmtBRL(Math.abs(sim.diferenca))} a mais que o banco. Use o valor do banco, ajuste uma linha ou crie um lançamento pela diferença (ex.: desconto).
+                  Os lançamentos somam R$ {fmtBRL(Math.abs(sim.diferenca))} a mais que o banco. Corrija o valor do lançamento, ajuste uma linha ou crie um lançamento pela diferença (ex.: desconto).
                 </div>
               )}
               {sim && sentido === 'a_menos' && (
                 <div className="text-[10px] text-muted-foreground" data-testid="frase-diferenca">
-                  Os lançamentos somam R$ {fmtBRL(Math.abs(sim.diferenca))} a menos que o banco. Use o valor do banco, ajuste uma linha ou crie um lançamento pela diferença (ex.: juros, tarifa).
+                  Os lançamentos somam R$ {fmtBRL(Math.abs(sim.diferenca))} a menos que o banco. Corrija o valor do lançamento, ajuste uma linha ou crie um lançamento pela diferença (ex.: juros, tarifa).
                 </div>
               )}
               {sim?.ok && (
@@ -537,6 +541,271 @@ export function CasarN1Modal({
               {gravando ? 'Conciliando…' : 'Conciliar'}
             </button>
           </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   VARIANTE BLOCO — CONC-BLOCOS-TELA-01 (mock aprovado: docs/mocks/mock-casar-bloco-v1.html).
+   ───────────────────────────────────────────────────────────────────────────────────────────────────────────── */
+
+export type RegraBloco = 'exato' | 'mais_antigo_primeiro';
+
+export interface ExtratoDoBloco { extrato_id: string; data: string | null; historico: string | null; valor: number }
+export interface LancamentoDoBloco {
+  lancamento_id: string; data: string | null; descricao: string | null; fornecedor?: string | null; valor_assinado: number;
+}
+
+/** O que a `fn_conciliar_bloco` devolve — a matriz e o resumo. A tela só os MOSTRA. */
+export interface RespostaBloco {
+  matriz: Array<{ extrato_id: string; lancamento_id: string; valor_aplicado: number }>;
+  resumo: {
+    soma_extratos: number; soma_lancamentos: number; diferenca: number;
+    quitados: Array<{ lancamento_id: string }>;
+    parcial: { lancamento_id: string; descricao: string; aplicado: number; falta: number } | null;
+  };
+}
+
+/**
+ * A frase da recusa, sem o código: a RPC escreve "codigo: frase legível" (SQLSTATE CBLOC), e o operador lê a frase.
+ * ⚠ SÓ O PREFIXO `snake_case:` SAI — a frase em si (com os números da RPC) vai inteira.
+ */
+export function fraseDaRecusa(msg: string | null | undefined): string {
+  return (msg ?? '').replace(/^[a-z_]+:\s*/, '') || 'Não foi possível simular o bloco.';
+}
+
+/**
+ * O que cada lançamento recebeu, lido da MATRIZ da RPC (soma das células dele) — é a matriz exibida, não um cálculo
+ * da tela: quem decide quanto vai para quem é a alocação do banco.
+ */
+export function aplicadoPorLancamento(r: RespostaBloco): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const c of r.matriz) m.set(c.lancamento_id, Math.round(((m.get(c.lancamento_id) ?? 0) + Number(c.valor_aplicado)) * 100) / 100);
+  return m;
+}
+
+const dataCurta = (d: string | null | undefined) => (d ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(2, 4)}` : '—');
+
+/**
+ * CASAR COM O BANCO · BLOCO — N extratos × M lançamentos, numa gravação só (`fn_conciliar_bloco`).
+ *
+ * ⚠ A MATRIZ E O RESUMO VÊM SÓ DA RPC: ao abrir e a cada troca de regra, `p_simular = true`; o Conciliar bloco é a
+ *   MESMA chamada com `p_simular = false`. Nenhuma soma, nenhuma alocação aqui — a tela que somasse teria a segunda régua.
+ * ⚠ NÃO EXISTE "Corrigir o valor do lançamento" NESTA VARIANTE: o valor do lançamento nunca muda num bloco. Valor
+ *   errado se corrige no próprio lançamento, ou no 1:N.
+ * ⚠ A RECUSA (SQLSTATE CBLOC) FICA NO MODAL, acima do rodapé, em vermelho — nunca em toast (UX-TOAST-01) — e o botão
+ *   desabilita dizendo por quê.
+ */
+export function CasarBlocoModal({
+  open, onClose, extratos, lancamentos, nomeConta, regraInicial = 'exato', onConciliado,
+}: {
+  open: boolean; onClose: () => void;
+  extratos: readonly ExtratoDoBloco[]; lancamentos: readonly LancamentoDoBloco[];
+  nomeConta?: string; regraInicial?: RegraBloco; onConciliado: () => void;
+}) {
+  const [regra, setRegra] = useState<RegraBloco>(regraInicial);
+  const [resp, setResp] = useState<RespostaBloco | null>(null);
+  const [recusa, setRecusa] = useState<string | null>(null);
+  const [carregando, setCarregando] = useState(false);
+  const [gravando, setGravando] = useState(false);
+  /* ⚠ TRAVA DE DUPLO CLIQUE SÍNCRONA: o `gravando` do estado só chega no próximo render, e dois cliques no mesmo quadro
+     passariam os dois. A ref fecha a porta no mesmo instante. */
+  const gravandoRef = useRef(false);
+  const idsExt = useMemo(() => extratos.map((e) => e.extrato_id), [extratos]);
+  const idsLan = useMemo(() => lancamentos.map((l) => l.lancamento_id), [lancamentos]);
+
+  useEffect(() => { if (open) setRegra(regraInicial); }, [open, regraInicial]);
+
+  useEffect(() => {
+    if (!open || idsExt.length === 0 || idsLan.length === 0) return;
+    let cancelado = false;
+    setCarregando(true);
+    (async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+      const { data, error } = await (supabase as any).rpc('fn_conciliar_bloco', {
+        p_extratos: idsExt, p_lancamentos: idsLan, p_regra: regra, p_simular: true,
+      });
+      if (cancelado) return;
+      setCarregando(false);
+      if (error) { setResp(null); setRecusa(fraseDaRecusa(error.message)); return; }
+      setRecusa(null);
+      setResp(data ?? null);
+    })();
+    return () => { cancelado = true; };
+  }, [open, idsExt, idsLan, regra]);
+
+  const conciliar = async () => {
+    if (gravandoRef.current || !resp) return;
+    gravandoRef.current = true;
+    setGravando(true);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+      const { error } = await (supabase as any).rpc('fn_conciliar_bloco', {
+        p_extratos: idsExt, p_lancamentos: idsLan, p_regra: regra, p_simular: false,
+      });
+      if (error) { setRecusa(fraseDaRecusa(error.message)); return; }
+      onClose();
+      onConciliado();
+    } finally {
+      gravandoRef.current = false;
+      setGravando(false);
+    }
+  };
+
+  /* A ordem das linhas é a da ALOCAÇÃO da RPC (a matriz); quem não está nela (recusa) fica na ordem da seleção. */
+  const ordemDaMatriz = (ids: readonly string[], chave: 'extrato_id' | 'lancamento_id') => {
+    if (!resp) return [...ids];
+    const vistos: string[] = [];
+    for (const c of resp.matriz) if (!vistos.includes(c[chave])) vistos.push(c[chave]);
+    return [...vistos, ...ids.filter((i) => !vistos.includes(i))];
+  };
+  const extPorId = new Map(extratos.map((e) => [e.extrato_id, e]));
+  const lanPorId = new Map(lancamentos.map((l) => [l.lancamento_id, l]));
+  const aplicado = resp ? aplicadoPorLancamento(resp) : null;
+  const quitados = new Set((resp?.resumo.quitados ?? []).map((q) => q.lancamento_id));
+  const parcial = resp?.resumo.parcial ?? null;
+  const dif = resp ? Number(resp.resumo.diferenca) : null;
+  const confere = dif != null && Math.abs(dif) <= 0.005 && !parcial;
+  const motivoDesabilitado = gravando ? 'Conciliando…'
+    : carregando ? 'Simulando o bloco…'
+    : recusa ? recusa
+    : !resp ? 'Simulando o bloco…' : null;
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      {/* ⚠ `grid-cols-[minmax(0,1fr)]` — a MESMA regra do fix N1 (CONC-CASAR-N1-LARGURA-01): o `DialogContent` é grid e a
+          coluna implícita cresceria até o histórico mais longo do banco, cortando valores e botões. Largura FIXA de
+          700px (o mock), para qualquer texto. */}
+      <DialogContent data-testid="casar-bloco"
+        className="w-[700px] max-w-[95vw] grid-cols-[minmax(0,1fr)] p-0 gap-0 overflow-hidden [&>button.absolute]:hidden text-[10px]">
+        <div className="flex h-[30px] shrink-0 items-center justify-between gap-2 bg-primary px-3 text-primary-foreground">
+          <span className="text-[11px] font-semibold whitespace-nowrap">Casar com o banco · bloco</span>
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] opacity-90 whitespace-nowrap">
+              {[nomeConta, `${extratos.length} Pix × ${lancamentos.length} lançamento${lancamentos.length === 1 ? '' : 's'}`].filter(Boolean).join(' · ')}
+            </span>
+            <button type="button" onClick={onClose} aria-label="Fechar" className="rounded p-0.5 opacity-80 hover:opacity-100 hover:bg-primary-foreground/10">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2 px-3 py-2">
+          <div className="flex items-center gap-1.5 whitespace-nowrap">
+            <span className="text-muted-foreground">Regra</span>
+            <Segmentado<RegraBloco> valor={regra} onEscolher={setRegra} altura={20}
+              opcoes={[{ valor: 'exato', rotulo: 'Soma exata' }, { valor: 'mais_antigo_primeiro', rotulo: 'Mais antigo primeiro' }]} />
+          </div>
+
+          <div className="text-[9.5px] text-muted-foreground whitespace-nowrap">Pix levados ({extratos.length})</div>
+          <table className="w-full table-fixed border-separate border-spacing-0 text-[10px]" data-testid="tabela-pix">
+            <colgroup><col style={{ width: 58 }} /><col /><col style={{ width: 90 }} /></colgroup>
+            <thead>
+              <tr className="h-[18px] bg-primary text-primary-foreground text-[9.5px]">
+                <th className="px-1.5 text-left font-semibold">Data</th>
+                <th className="px-1.5 text-left font-semibold">Histórico do banco</th>
+                <th className="px-1.5 text-right font-semibold">Valor</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ordemDaMatriz(idsExt, 'extrato_id').map((id) => {
+                const e = extPorId.get(id);
+                if (!e) return null;
+                return (
+                  <tr key={id} className="h-[18px]" data-testid="pix-levado">
+                    <td className="border-b px-1.5 tabular-nums whitespace-nowrap">{dataCurta(e.data)}</td>
+                    {/* SÓ O HISTÓRICO DO BANCO TRUNCA — com o texto inteiro no `title`. */}
+                    <td className="border-b px-1.5 truncate" title={e.historico ?? ''}>{e.historico ?? '—'}</td>
+                    <td className={cn('border-b px-1.5 text-right tabular-nums whitespace-nowrap', corVal(e.valor))}>{fmtBRL(e.valor)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+
+          <div className="text-[9.5px] text-muted-foreground whitespace-nowrap">
+            Lançamentos levados ({lancamentos.length}) · valor do lançamento nunca muda
+          </div>
+          <table className="w-full table-fixed border-separate border-spacing-0 text-[10px]" data-testid="tabela-lancamentos">
+            <colgroup>
+              {/* As larguras do mock (58 · resto · 172 · 66 · 66 · 78): a Descrição fica com 236px e a NF cabe numa linha de
+                  18px (com 72/72/90 ela tinha 212 e quebrava em 37px — medido na tela). */}
+              <col style={{ width: 58 }} /><col /><col style={{ width: 172 }} />
+              <col style={{ width: 66 }} /><col style={{ width: 66 }} /><col style={{ width: 78 }} />
+            </colgroup>
+            <thead>
+              <tr className="h-[18px] bg-primary text-primary-foreground text-[9.5px]">
+                <th className="px-1.5 text-left font-semibold">Data</th>
+                <th className="px-1.5 text-left font-semibold">Descrição</th>
+                <th className="px-1.5 text-left font-semibold">Fornecedor</th>
+                <th className="px-1.5 text-right font-semibold">Valor</th>
+                <th className="px-1.5 text-right font-semibold">Aplicado</th>
+                <th className="px-1.5 text-left font-semibold">Situação</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ordemDaMatriz(idsLan, 'lancamento_id').map((id) => {
+                const l = lanPorId.get(id);
+                if (!l) return null;
+                const ap = aplicado?.get(id);
+                const ehParcial = parcial?.lancamento_id === id;
+                return (
+                  <tr key={id} className="h-[18px]" data-testid="lancamento-levado">
+                    <td className="border-b px-1.5 tabular-nums whitespace-nowrap">{dataCurta(l.data)}</td>
+                    {/* ⚠ DESCRIÇÃO E FORNECEDOR INTEIROS, sem reticência (regra da casa): se não cabem, quebram. */}
+                    <td className="border-b px-1.5 break-words" data-testid="descricao-levada">{l.descricao ?? '—'}</td>
+                    <td className="border-b px-1.5 break-words">{l.fornecedor || '—'}</td>
+                    <td className={cn('border-b px-1.5 text-right tabular-nums whitespace-nowrap', corVal(l.valor_assinado))}>{fmtBRL(l.valor_assinado)}</td>
+                    <td className="border-b px-1.5 text-right tabular-nums whitespace-nowrap" data-testid="aplicado">{ap == null ? '—' : fmtBRL(ap)}</td>
+                    <td className="border-b px-1.5 whitespace-nowrap" data-testid="situacao">
+                      {quitados.has(id)
+                        ? <span className="inline-block rounded-[3px] bg-emerald-100 px-1 text-[9.5px] leading-[13px] text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">Quitado</span>
+                        : ehParcial && parcial
+                          ? <span className="inline-block rounded-[3px] bg-amber-100 px-1 text-[9.5px] leading-[13px] text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">Falta {fmtBRL(parcial.falta)}</span>
+                          : <span className="text-muted-foreground">—</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+
+          <div className="grid grid-cols-[1fr_110px] gap-y-px border-t pt-1.5">
+            <span className="text-muted-foreground">Soma dos Pix</span>
+            <span className="text-right tabular-nums">{resp ? fmtBRL(resp.resumo.soma_extratos) : '—'}</span>
+            <span className="text-muted-foreground">Soma dos lançamentos</span>
+            <span className="text-right tabular-nums">{resp ? fmtBRL(resp.resumo.soma_lancamentos) : '—'}</span>
+            <span className="text-muted-foreground">Diferença</span>
+            <span className={cn('text-right font-semibold tabular-nums', dif == null ? '' : Math.abs(dif) <= 0.005 ? 'text-emerald-600' : 'text-rose-600')}
+              data-testid="diferenca-bloco">{dif == null ? '—' : fmtBRL(dif)}</span>
+          </div>
+          {resp && (confere
+            ? <div className="font-semibold text-emerald-600" data-testid="frase-bloco">
+                Confere com o banco ✓ · {quitados.size === 1 ? 'o lançamento fica quitado' : `os ${quitados.size} lançamentos ficam quitados`}
+              </div>
+            : parcial
+              ? <div className="font-semibold text-amber-600" data-testid="frase-bloco">
+                  Parcial · falta R$ {fmtBRL(parcial.falta)} na {parcial.descricao} · segue em aberto para o próximo depósito
+                </div>
+              : null)}
+
+          {/* ⚠ A RECUSA MORA AQUI, num slot acima do rodapé — nunca em toast (UX-TOAST-01). */}
+          <div className="min-h-[14px] text-[10px] text-destructive" data-testid="recusa-bloco">{recusa ?? ''}</div>
+        </div>
+
+        <div className="flex h-[34px] items-center justify-between gap-2 border-t px-3 whitespace-nowrap">
+          <span className="text-muted-foreground">Desfazer fica no "⋯" do bloco depois de conciliado.</span>
+          <span className="flex items-center gap-2">
+            <button type="button" onClick={onClose} className="rounded border px-2.5 py-0.5 text-[11px] hover:bg-muted">Cancelar</button>
+            <button type="button" disabled={!!motivoDesabilitado} onClick={() => { void conciliar(); }}
+              title={motivoDesabilitado ?? undefined} data-testid="conciliar-bloco"
+              className={cn('rounded px-2.5 py-0.5 text-[11px] font-semibold',
+                motivoDesabilitado ? 'bg-muted text-muted-foreground cursor-not-allowed' : 'bg-[#E7C873] text-foreground hover:bg-[#D9B95F]')}>
+              {gravando ? 'Conciliando…' : 'Conciliar bloco'}
+            </button>
+          </span>
         </div>
       </DialogContent>
     </Dialog>

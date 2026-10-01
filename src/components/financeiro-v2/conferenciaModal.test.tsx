@@ -15,19 +15,28 @@ import { render, screen, fireEvent, within, waitFor } from '@testing-library/rea
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { EspelhadosReais } from './EspelhoConciliacaoTab';
 
-const fixture = vi.hoisted(() => ({ espelho: null as unknown }));
+const fixture = vi.hoisted(() => ({
+  espelho: null as unknown,
+  /* CONC-BLOCOS-TELA-01: as linhas que o `from(tabela)` devolve (blocos vivos, aplicado vivo) e as RPCs chamadas. */
+  tabelas: {} as Record<string, unknown[]>,
+  chamadas: [] as Array<{ fn: string; args: unknown }>,
+}));
 
 vi.mock('@/integrations/supabase/client', () => {
-  const vazio = () => {
+  const vazio = (tabela: string) => {
     const b: Record<string, unknown> = {};
     for (const m of ['select', 'eq', 'gte', 'lte', 'is', 'not', 'order', 'in']) b[m] = () => b;
-    b.then = (ok: (x: { data: unknown[]; error: null }) => unknown) => Promise.resolve({ data: [], error: null }).then(ok);
+    b.then = (ok: (x: { data: unknown[]; error: null }) => unknown) =>
+      Promise.resolve({ data: fixture.tabelas[tabela] ?? [], error: null }).then(ok);
     return b;
   };
   return {
     supabase: {
-      rpc: (fn: string) => Promise.resolve(fn === 'fn_extratos_espelhados' ? { data: fixture.espelho, error: null } : { data: null, error: null }),
-      from: () => vazio(),
+      rpc: (fn: string, args: unknown) => {
+        fixture.chamadas.push({ fn, args });
+        return Promise.resolve(fn === 'fn_extratos_espelhados' ? { data: fixture.espelho, error: null } : { data: null, error: null });
+      },
+      from: (tabela: string) => vazio(tabela),
     },
   };
 });
@@ -48,7 +57,10 @@ const INTERNAS = vi.hoisted(() => ({
 vi.mock('@/hooks/useEspelhoInternas', () => ({ useEspelhoInternas: () => INTERNAS }));
 vi.mock('@/components/financeiro-v2/LancamentoV2Dialog', () => ({ LancamentoV2Dialog: () => null }));
 vi.mock('@/components/financeiro-v2/DecisaoDerivadosDialog', () => ({ DecisaoDerivadosDialog: () => null }));
-vi.mock('@/components/financeiro-v2/CasarComBancoModal', () => ({ CasarComBancoModal: () => null, CasarN1Modal: () => null }));
+vi.mock('@/components/financeiro-v2/CasarComBancoModal', () => ({
+  CasarComBancoModal: () => null, CasarN1Modal: () => null, CasarBlocoModal: () => null,
+  fraseDaRecusa: (m: string) => m.replace(/^[a-z_]+:\s*/, ''),
+}));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 import { EspelhoConciliacaoTab } from './EspelhoConciliacaoTab';
@@ -81,6 +93,8 @@ const ESPELHO: EspelhadosReais = {
 
 beforeEach(() => {
   fixture.espelho = ESPELHO;
+  fixture.tabelas = {};
+  fixture.chamadas = [];
   Element.prototype.scrollIntoView = () => {};
 });
 
@@ -375,5 +389,67 @@ describe('PR-CONC-SUGESTOES-CASAR-01 — "Só não conciliados", fundo verde nas
       fireEvent.click(within(sug).getByText('Fechar')); // o do rodapé (o X também se chama Fechar)
       await waitFor(() => expect(screen.queryByTestId('sugestoes-casar')).toBeNull());
     }
+  });
+});
+
+/* CONC-BLOCOS-TELA-01 — o bloco na Conferência: "Desfazer bloco" no "⋯" da linha agrupada de um bloco, com motivo
+   obrigatório num passo inline (sem `confirm()`), e o lançamento PARCIAL que continua candidato com "Parcial — falta". */
+describe('CONC-BLOCOS-TELA-01 — desfazer bloco e o parcial', () => {
+  const abrirMenu = async (linha: HTMLElement) => {
+    fireEvent.keyDown(within(linha).getByRole('button', { name: 'Ações da linha' }), { key: 'Enter' });
+    return screen.findByRole('menu');
+  };
+  const COM_BLOCO: EspelhadosReais = {
+    ...ESPELHO,
+    vinculos: [{ extrato_id: 'e2', lancamento_id: 's1', valor_aplicado: 6648.5, tipo_aprovacao: 'agrupamento_manual', grupo_id: 'b1' }],
+  };
+
+  it('linha de bloco: o menu troca "Desconciliar grupo" por "Desfazer bloco"; o passo exige motivo', async () => {
+    fixture.espelho = COM_BLOCO;
+    fixture.tabelas = { conciliacao_blocos: [{ id: 'b1' }] };
+    const modal = await abrirConferencia();
+    const casada = within(modal).getByText('Pix - Agendamento - 04/09 05:35 ANTONIO PERES NETO').closest('tr')!;
+    const menu = await abrirMenu(casada);
+    await waitFor(() => expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toContain('Desfazer bloco'));
+    expect(within(menu).queryByText('Desconciliar grupo')).toBeNull();
+    fireEvent.click(within(menu).getByText('Desfazer bloco'));
+    const passo = await screen.findByTestId('passo-desfazer-bloco');
+    /* sem motivo: não chama a RPC e diz por quê, ali mesmo */
+    fireEvent.click(within(passo).getByRole('button', { name: 'Desfazer' }));
+    expect(within(passo).getByTestId('erro-desfazer-bloco').textContent).toBe('Diga por que o bloco está sendo desfeito.');
+    expect(fixture.chamadas.some((c) => c.fn === 'fn_desfazer_bloco')).toBe(false);
+    /* com motivo: chama o gesto contrário do banco */
+    fireEvent.change(within(passo).getByLabelText('Motivo do desfazer'), { target: { value: 'Pix errado' } });
+    fireEvent.click(within(passo).getByRole('button', { name: 'Desfazer' }));
+    await waitFor(() => expect(fixture.chamadas.find((c) => c.fn === 'fn_desfazer_bloco')?.args)
+      .toEqual({ p_bloco: 'b1', p_motivo: 'Pix errado' }));
+  });
+
+  it('grupo que NÃO é bloco continua com "Desconciliar grupo"', async () => {
+    fixture.espelho = COM_BLOCO;
+    const modal = await abrirConferencia();
+    const casada = within(modal).getByText('Pix - Agendamento - 04/09 05:35 ANTONIO PERES NETO').closest('tr')!;
+    const menu = await abrirMenu(casada);
+    expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toContain('Desconciliar grupo');
+  });
+
+  it('candidato vinculado PARCIAL: chip "Parcial — falta R$ X" e checkbox (continua casável)', async () => {
+    fixture.espelho = { ...ESPELHO, sistema_candidatos: [{ ...ESPELHO.sistema_candidatos![0], ja_conciliado: true }] };
+    fixture.tabelas = { conciliacao_bancaria_itens: [{ lancamento_id: 'c1', valor_aplicado: 3060 }] };
+    const modal = await abrirConferencia();
+    const cand = () => modal.querySelector('td[data-status="programado"]')!.closest('tr')! as HTMLElement;
+    await waitFor(() => expect(within(cand()).getByTestId('chip-parcial').textContent).toBe('Parcial — falta R$ 347,89'));
+    expect(within(cand()).getByLabelText('Marcar candidato')).toBeInTheDocument();
+    expect(within(cand()).queryByText('já vinculado')).toBeNull();
+  });
+
+  it('candidato vinculado INTEIRO continua "já vinculado", sem checkbox', async () => {
+    fixture.espelho = { ...ESPELHO, sistema_candidatos: [{ ...ESPELHO.sistema_candidatos![0], ja_conciliado: true }] };
+    fixture.tabelas = { conciliacao_bancaria_itens: [{ lancamento_id: 'c1', valor_aplicado: 3407.89 }] };
+    const modal = await abrirConferencia();
+    const cand = modal.querySelector('td[data-status="programado"]')!.closest('tr')! as HTMLElement;
+    await waitFor(() => expect(within(cand).getByText('já vinculado')).toBeInTheDocument());
+    expect(within(cand).queryByLabelText('Marcar candidato')).toBeNull();
+    expect(within(cand).queryByTestId('chip-parcial')).toBeNull();
   });
 });

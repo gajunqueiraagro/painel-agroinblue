@@ -15,9 +15,13 @@ import type { LevadoInicial } from './CasarComBancoModal';
 const DIRECAO = vi.hoisted(() => new Map<string, number>());
 /* Para o N:1: o valor de cada extrato e do lançamento, pelo id — a `fn_espelho_casar_n1` soma em MÓDULO. */
 const VALORES = vi.hoisted(() => new Map<string, number>());
+/* CONC-BLOCOS-TELA-01: o que a `fn_conciliar_bloco` falsa devolve, e com que argumentos foi chamada. */
+const BLOCO = vi.hoisted(() => ({ resposta: { data: null, error: null } as { data: unknown; error: unknown }, chamadas: [] as unknown[] }));
+const TOAST = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
+vi.mock('sonner', () => ({ toast: TOAST }));
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
-    rpc: (fn: string, args: { p_itens: { lancamento_id: string; valor: number }[]; p_lancamento_id: string; p_extratos: string[] }) => {
+    rpc: (fn: string, args: { p_itens: { lancamento_id: string; valor: number }[]; p_lancamento_id: string; p_extratos: string[]; p_simular?: boolean; p_regra?: string }) => {
       if (fn === 'fn_espelho_casar_n1') {
         /* O corpo da RPC (lido no `prosrc` em 30/09): tudo em módulo, diferença = Σ|extratos| − |lançamento|. */
         const noLanc = Math.abs(VALORES.get(args.p_lancamento_id) ?? 0);
@@ -29,6 +33,10 @@ vi.mock('@/integrations/supabase/client', () => ({
             : { ok: false, motivo: 'soma_nao_bate', no_lancamento: noLanc, soma_extratos: soma, diferenca },
           error: null,
         });
+      }
+      if (fn === 'fn_conciliar_bloco') {
+        BLOCO.chamadas.push(args);
+        return Promise.resolve(BLOCO.resposta);
       }
       if (fn !== 'fn_espelho_casar') return Promise.resolve({ data: null, error: null });
       const alvo = -506.51;
@@ -46,7 +54,7 @@ vi.mock('@/integrations/supabase/client', () => ({
 vi.mock('@/components/conciliacao/CriarLancamentoDaLinha', () => ({ CriarLancamentoDaLinha: () => null }));
 vi.mock('@/components/financeiro-v2/EspelhoConciliacaoTab', () => ({ MOTIVO_CASAR_LABEL: {} }));
 
-import { CasarComBancoModal, CasarN1Modal, sentidoDaDiferenca, valorAbsorvendo } from './CasarComBancoModal';
+import { CasarComBancoModal, CasarN1Modal, CasarBlocoModal, sentidoDaDiferenca, valorAbsorvendo, fraseDaRecusa } from './CasarComBancoModal';
 
 const EXTRATO = { extrato_id: 'e-vivo', data: '2026-09-01', historico: 'Vivo Celular - VIVO MOVEL - MS', valor: -506.51 };
 const VIVO: LevadoInicial = { lancamento_id: 'l-vivo', descricao: 'Vivo Casa', fornecedor: 'Telefonica Brasil S.A.', valor_assinado: -506.84 };
@@ -77,12 +85,15 @@ describe('o sentido da diferença (a regra pura)', () => {
   });
 });
 
-describe('um lançamento levado — "Usar valor do banco"', () => {
+/* CONC-BLOCOS-TELA-01: o botão se chama "Corrigir o valor do lançamento" (gesto separado, decisão do Gabriel) e a dica diz
+   o que ele faz; o comportamento é o mesmo. */
+describe('um lançamento levado — "Corrigir o valor do lançamento"', () => {
   it('a frase diz "a mais" com o valor; o botão põe 506,51 no campo e a diferença vai a zero', async () => {
     montar([VIVO]);
     expect((await frase()).textContent).toContain('Os lançamentos somam R$ 0,33 a mais que o banco.');
     const botao = screen.getByTestId('usar-valor-banco');
-    expect(botao.textContent).toBe('Usar valor do banco (506,51)');
+    expect(botao.textContent).toBe('Corrigir o valor do lançamento');
+    expect(botao.getAttribute('title')).toBe('muda o valor do lançamento para o do banco (506,51)');
     fireEvent.click(botao);
     expect(campo('Vivo Casa').value).toBe('506,51');
     await waitFor(() => expect(screen.getByTestId('frase-diferenca').textContent).toBe('Confere com o banco ✓'));
@@ -246,5 +257,122 @@ describe('CONC-CASAR-N1-LARGURA-01 — histórico longo no N:1', () => {
     expect(await screen.findByTestId('frase-diferenca-n1')).toHaveTextContent('Confere com o banco ✓');
     const conciliar = screen.getByRole('button', { name: 'Conciliar' });
     expect(conciliar).toBeEnabled();
+  });
+});
+
+/* ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   CONC-BLOCOS-TELA-01 — a variante BLOCO (mock aprovado: docs/mocks/mock-casar-bloco-v1.html). Os números são os do
+   Emerson, agosto: 3 Pix × 7 arranquios = 22.276,80, diferença 0. A RPC falsa devolve a matriz e o resumo como a real
+   devolveu no proto (fn_conciliar_bloco, simular); a tela só mostra.
+   ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────── */
+describe('CONC-BLOCOS-TELA-01 — Casar com o banco · bloco', () => {
+  const HIST = 'PAGAMENTO PIX-PIX_DEB   01391928164 EMERSON DE OLIVEIRA DOS ANJOS · CONTA CORRENTE SICREDI LAVOURA · AGENCIA 0914 · DOC 77777';
+  const EXT = [
+    { extrato_id: 'e1', data: '2026-08-24', historico: HIST, valor: -3000 },
+    { extrato_id: 'e2', data: '2026-08-28', historico: HIST + ' (2)', valor: -16276.8 },
+    { extrato_id: 'e3', data: '2026-08-28', historico: 'PAGAMENTO PIX-CX747834  68443093000162 68443093 CLEYTON ROBERTO DA SILVA · SICREDI', valor: -3000 },
+  ];
+  const DESCS = ['Arranquio Mandioca 40,34 t · NF 9287581', 'Arranquio Mandioca 20,24 t · NF 9294773', 'Arranquio Mandioca 19,82 t · NF 9294773',
+    'Arranquio Mandioca 19,18 t · NF 9297983', 'Arranquio Mandioca 17,68 t · NF 9297983', 'Arranquio Mandioca 20,52 t · NF 9310349',
+    'Arranquio Mandioca 21,34 t · NF 9310349'];
+  const VALS = [5647.6, 2833.6, 2774.8, 2685.2, 2475.2, 2872.8, 2987.6];
+  const LAN = DESCS.map((d, i) => ({ lancamento_id: `l${i + 1}`, data: '2026-08-24', descricao: d, fornecedor: 'Emerson de Oliveira dos Anjos', valor_assinado: -VALS[i] }));
+  /* A matriz que a RPC devolveu (9 células: o 1º arranquio leva 3.000 do Pix de 24/08 e 2.647,60 do de 28/08). */
+  const MATRIZ = [
+    { extrato_id: 'e1', lancamento_id: 'l1', valor_aplicado: 3000 },
+    { extrato_id: 'e2', lancamento_id: 'l1', valor_aplicado: 2647.6 },
+    { extrato_id: 'e2', lancamento_id: 'l2', valor_aplicado: 2833.6 }, { extrato_id: 'e2', lancamento_id: 'l3', valor_aplicado: 2774.8 },
+    { extrato_id: 'e2', lancamento_id: 'l4', valor_aplicado: 2685.2 }, { extrato_id: 'e2', lancamento_id: 'l5', valor_aplicado: 2475.2 },
+    { extrato_id: 'e2', lancamento_id: 'l6', valor_aplicado: 2872.8 },
+    { extrato_id: 'e2', lancamento_id: 'l7', valor_aplicado: 2788.4 }, { extrato_id: 'e3', lancamento_id: 'l7', valor_aplicado: 199.2 },
+  ];
+  const OK = { data: {
+    ok: true, simulado: true, regra: 'exato', matriz: MATRIZ,
+    resumo: { soma_extratos: 22276.8, soma_lancamentos: 22276.8, diferenca: 0, quitados: LAN.map((l) => ({ lancamento_id: l.lancamento_id })), parcial: null },
+  }, error: null };
+  const montarBloco = () => render(<CasarBlocoModal open onClose={() => {}} extratos={EXT} lancamentos={LAN} nomeConta="Sicredi Lavoura" onConciliado={() => {}} />);
+
+  it('o histórico do banco tem 120+ caracteres no fixture', () => {
+    expect(HIST.length).toBeGreaterThanOrEqual(120);
+  });
+
+  it('não estoura: 700px fixos, a coluna presa ao modal, o botão no DOM, a descrição com a NF inteira', async () => {
+    BLOCO.resposta = OK; BLOCO.chamadas = [];
+    montarBloco();
+    const dlg = screen.getByTestId('casar-bloco');
+    expect(dlg.className).toContain('grid-cols-[minmax(0,1fr)]');
+    expect(dlg.className).toContain('w-[700px]');
+    expect(dlg.scrollWidth).toBeLessThanOrEqual(dlg.clientWidth);
+    expect(screen.getByTestId('conciliar-bloco')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('frase-bloco').textContent).toBe('Confere com o banco ✓ · os 7 lançamentos ficam quitados'));
+    /* a descrição sai INTEIRA e não trunca; o histórico trunca com o texto no title */
+    const descricoes = screen.getAllByTestId('descricao-levada');
+    expect(descricoes[0].textContent).toBe('Arranquio Mandioca 40,34 t · NF 9287581');
+    for (const d of descricoes) expect(d.className).not.toContain('truncate');
+    const hist = [...document.querySelectorAll('[title]')].find((el) => el.getAttribute('title') === HIST)!;
+    expect(hist.className).toContain('truncate');
+    expect(screen.getByTestId('diferenca-bloco').textContent).toBe('0,00');
+    expect(screen.getByTestId('conciliar-bloco')).not.toBeDisabled();
+  });
+
+  it('a matriz exibida é a da RPC: o aplicado de cada lançamento é a soma das células DELE, e a situação vem do resumo', async () => {
+    BLOCO.resposta = OK; BLOCO.chamadas = [];
+    montarBloco();
+    await screen.findByTestId('frase-bloco');
+    const linhas = screen.getAllByTestId('lancamento-levado');
+    expect(linhas.map((l) => within(l).getByTestId('aplicado').textContent)).toEqual(
+      ['5.647,60', '2.833,60', '2.774,80', '2.685,20', '2.475,20', '2.872,80', '2.987,60']);
+    expect(linhas.every((l) => within(l).getByTestId('situacao').textContent === 'Quitado')).toBe(true);
+    /* a chamada foi a simulação, com os ids e a regra */
+    expect(BLOCO.chamadas[0]).toEqual({ p_extratos: ['e1', 'e2', 'e3'], p_lancamentos: LAN.map((l) => l.lancamento_id), p_regra: 'exato', p_simular: true });
+  });
+
+  it('parcial: chip "Falta R$ X" e a frase do parcial (mais antigo primeiro)', async () => {
+    BLOCO.resposta = { data: {
+      ok: true, simulado: true, regra: 'mais_antigo_primeiro',
+      matriz: [{ extrato_id: 'e1', lancamento_id: 'l1', valor_aplicado: 3000 }],
+      resumo: { soma_extratos: 3000, soma_lancamentos: 5647.6, diferenca: -2647.6, quitados: [],
+        parcial: { lancamento_id: 'l1', descricao: DESCS[0], aplicado: 3000, falta: 2647.6 } },
+    }, error: null };
+    render(<CasarBlocoModal open onClose={() => {}} extratos={EXT.slice(0, 1)} lancamentos={LAN.slice(0, 1)} regraInicial="mais_antigo_primeiro" onConciliado={() => {}} />);
+    await waitFor(() => expect(screen.getByTestId('situacao').textContent).toBe('Falta 2.647,60'));
+    expect(screen.getByTestId('frase-bloco').textContent).toBe(`Parcial · falta R$ 2.647,60 na ${DESCS[0]} · segue em aberto para o próximo depósito`);
+  });
+
+  it('recusa CBLOC: a frase da RPC fica NO MODAL, em vermelho, sem toast; o botão desabilita dizendo por quê', async () => {
+    BLOCO.resposta = { data: null, error: { code: 'CBLOC', message: 'extrato_ja_vinculado: o extrato de 28/08 (-2017.00) ja tem vinculo — desfaca antes.' } };
+    TOAST.error.mockClear();
+    montarBloco();
+    const recusa = await screen.findByText('o extrato de 28/08 (-2017.00) ja tem vinculo — desfaca antes.');
+    expect(recusa.getAttribute('data-testid')).toBe('recusa-bloco');
+    expect(recusa.className).toContain('text-destructive');
+    const botao = screen.getByTestId('conciliar-bloco');
+    expect(botao).toBeDisabled();
+    expect(botao.getAttribute('title')).toBe('o extrato de 28/08 (-2017.00) ja tem vinculo — desfaca antes.');
+    expect(TOAST.error).not.toHaveBeenCalled();
+  });
+
+  it('NÃO existe "Corrigir o valor do lançamento" (nem "Usar valor do banco") na variante bloco', async () => {
+    BLOCO.resposta = OK;
+    montarBloco();
+    await screen.findByTestId('frase-bloco');
+    expect(screen.queryByText(/Corrigir o valor do lançamento|Usar valor do banco/)).toBeNull();
+    expect(screen.queryByTestId('usar-valor-banco')).toBeNull();
+  });
+
+  it('Conciliar bloco é a MESMA RPC com p_simular=false, e o duplo clique grava uma vez só', async () => {
+    BLOCO.resposta = OK; BLOCO.chamadas = [];
+    const feito = vi.fn();
+    render(<CasarBlocoModal open onClose={() => {}} extratos={EXT} lancamentos={LAN} onConciliado={feito} />);
+    await screen.findByTestId('frase-bloco');
+    const botao = screen.getByTestId('conciliar-bloco');
+    fireEvent.click(botao); fireEvent.click(botao);
+    await waitFor(() => expect(feito).toHaveBeenCalledTimes(1));
+    const gravacoes = BLOCO.chamadas.filter((c) => (c as { p_simular: boolean }).p_simular === false);
+    expect(gravacoes).toHaveLength(1);
+  });
+
+  it('a frase da recusa sai sem o código', () => {
+    expect(fraseDaRecusa('soma_diverge: os extratos somam 1 e os lancamentos 2')).toBe('os extratos somam 1 e os lancamentos 2');
   });
 });
