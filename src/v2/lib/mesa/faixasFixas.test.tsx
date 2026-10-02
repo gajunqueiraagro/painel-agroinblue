@@ -1,14 +1,14 @@
 /**
  * PR-CONC-MESA-FAIXAS-FIXAS-01 — as faixas de decisão moram numa área de ALTURA FIXA, sempre presente; a tabela não
- * encolhe ao trocar de linha.
+ * encolhe ao trocar de linha. PR-CONC-ENRIQUECER-V2-02 — a área virou uma BARRA de 20px, e as faixas abrem num Dialog.
  *
- * ⚠ O jsdom NÃO FAZ LAYOUT: aqui se prova o contrato (a área existe em todo estado, com a mesma altura declarada, ENTRE a
- *   tabela e o rodapé, e o conteúdo variável rola DENTRO dela). A medida renderizada — tabela visível 265, área 104, topo
- *   do rodapé 512 nos estados reais — vai no relatório.
+ * ⚠ O jsdom NÃO FAZ LAYOUT: aqui se prova o contrato (a barra existe em todo estado, com a mesma altura declarada, ENTRE a
+ *   tabela e o rodapé; sem decisão fica vazia; com decisão, "Abrir decisão" mostra o MESMO nó). A medida renderizada vai
+ *   no relatório.
  */
 import type { ReactNode } from 'react';
 import { describe, it, expect, vi, beforeAll } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, fireEvent } from '@testing-library/react';
 import { toRowVM } from '@/v2/lib/mesa/enriquecimentoView';
 import { linhaCrua } from '@/v2/lib/mesa/linhaCrua.fixture';
 import type { CandidatoProximo } from '@/v2/hooks/useClassificacaoCandidatosProximos';
@@ -65,7 +65,6 @@ function assinatura() {
   const antes = (a: Element, b: Element) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
   return {
     altura: area.style.height,
-    rolaDentro: area.className.includes('overflow-y-auto'),
     naoEncolhe: area.className.includes('shrink-0'),
     ordem: antes(grade, area) && antes(area, rodape),
     linhasDaTabela: grade.querySelectorAll('tbody tr').length,
@@ -76,11 +75,11 @@ describe('a área de decisão é fixa em todos os estados', () => {
   /* a linha sem decisão é a referência — calculada dentro de cada caso, para que uma falha aqui derrube o CASO, e não a coleta */
   const base = () => { candidatos = []; const { unmount } = montar(null); const a = assinatura(); unmount(); return a; };
 
-  it('existe sempre, com 104px, entre a tabela e o rodapé, e rola por dentro', () => {
+  it('existe sempre, com 20px, entre a tabela e o rodapé', () => {
     const b = base();
-    /* 13 linhas de campo + 4 faixas de bloco (Mesa compacta, PR-CONC-ENRIQUECER-V2-01; eram 17 + 3) */
-    expect(b).toEqual({ altura: ALTURA_AREA_DECISAO, rolaDentro: true, naoEncolhe: true, ordem: true, linhasDaTabela: 17 });
-    expect(ALTURA_AREA_DECISAO).toBe('104px');
+    /* 15 linhas de campo + 4 faixas de bloco (V2-02: Pagamento virou Data pgto. / Valor / Conta bancária; eram 13 + 4) */
+    expect(b).toEqual({ altura: ALTURA_AREA_DECISAO, naoEncolhe: true, ordem: true, linhasDaTabela: 19 });
+    expect(ALTURA_AREA_DECISAO).toBe('20px');
   });
 
   it.each(ESTADOS)('%s: a mesma assinatura da linha sem decisão', (_n, faixas, nCand) => {
@@ -90,17 +89,46 @@ describe('a área de decisão é fixa em todos os estados', () => {
     expect(assinatura()).toEqual(b);
   });
 
-  it('sem decisão, a área diz que não há o que decidir (não fica em branco)', () => {
+  it('sem decisão, a barra existe e fica VAZIA: sem texto e sem botão', () => {
     candidatos = [];
     montar(null);
-    expect(screen.getByTestId('area-decisao-vazia')).toHaveTextContent('Nenhuma decisão pendente nesta linha.');
+    const area = screen.getByTestId('area-decisao');
+    expect(area).toHaveTextContent(/^$/);
+    expect(within(area).queryByTestId('abrir-decisao')).not.toBeInTheDocument();
+    expect(area.dataset.temDecisao).toBe('nao');
+  });
+
+  it('com decisão, a barra avisa e "Abrir decisão" mostra o MESMO nó num Dialog', () => {
+    candidatos = [];
+    montar(ESTADOS[2][1]);
+    const area = screen.getByTestId('area-decisao');
+    expect(within(area).getByTestId('aviso-decisao')).toHaveTextContent('● Esta linha pede uma decisão');
+    expect(screen.queryByText('2 lançamentos do dia somam o valor desta linha.')).not.toBeInTheDocument();
+    fireEvent.click(within(area).getByTestId('abrir-decisao'));
+    const dialog = screen.getByTestId('dialog-decisao');
+    expect(within(dialog).getByText('2 lançamentos do dia somam o valor desta linha.')).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Juntar' })).toBeInTheDocument();
+    /* o título diz de quem é a decisão: fornecedor · valor com sinal */
+    expect(within(dialog).getByRole('heading').textContent).toBe(`Decisão · ${ROW.fornecedor} · −${ROW.valor}`);
   });
 });
 
-describe('os candidatos preenchem a área e a LISTA é que rola', () => {
+describe('o Dialog da decisão é da linha', () => {
+  it('trocar de linha fecha o Dialog', () => {
+    const { rerender } = render(<AreaDecisao chave="a" titulo="X · 1"><span>faixa A</span></AreaDecisao>);
+    fireEvent.click(screen.getByTestId('abrir-decisao'));
+    expect(screen.getByTestId('dialog-decisao')).toBeInTheDocument();
+    rerender(<AreaDecisao chave="b" titulo="Y · 2"><span>faixa B</span></AreaDecisao>);
+    expect(screen.queryByTestId('dialog-decisao')).not.toBeInTheDocument();
+    expect(screen.getByTestId('abrir-decisao')).toBeInTheDocument();
+  });
+});
+
+describe('os candidatos, no Dialog da decisão: a LISTA é que rola', () => {
   it.each([1, 8])('%i candidato(s): todos na lista, que ocupa a sobra e rola; sem teto próprio de altura', (n) => {
     candidatos = Array.from({ length: n }, (_v, i) => cand(i));
     render(<AreaDecisao>{candidatosInline}</AreaDecisao>);
+    fireEvent.click(screen.getByTestId('abrir-decisao'));
     const raiz = screen.getByTestId('candidatos-inline');
     expect(raiz.className).toMatch(/flex-1/);
     expect(raiz.className).toMatch(/min-h-0/);

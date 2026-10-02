@@ -160,8 +160,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 02/10/2026 (CONC-CRIAR-TRANSFERENCIA-01, +12 em `src/components/conciliacao/criarLancamentoDaLinha.test.tsx`;
-  antes o CONC-TRANSF-SEGUNDA-PONTA-02, +3, e o CONC-TRANSF-SEGUNDA-PONTA-01, +9): 2802
+  Baseline em 02/10/2026 (PR-CONC-ENRIQUECER-V2-02, +10: 8 em `src/v2/lib/mesa/enriquecerV2.test.tsx` e 2 em
+  `src/v2/lib/mesa/faixasFixas.test.tsx`; antes o CONC-CRIAR-TRANSFERENCIA-01, +12): 2812
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -448,10 +448,12 @@ preview que o cabecalho nao sai da tela ao rolar.
   motivo); dica/rotulo auxiliar num SLOT DE LARGURA FIXA dentro da celula, sempre presente mesmo vazio (nunca ao lado
   estreitando o controle, nunca em linha extra); aviso num slot de altura fixa reservado (vazio quando nao ha) ou no
   `title`. Exemplo vivo: a Mesa de revisao (`MesaCamposTabela`: colgroup 140px | auto | auto | 44%, linha 22, slot da
-  dica 104, slot de aviso 18 no topo e 18 acima do rodape, selo de 148, AREA DE DECISAO de 104 entre a tabela e o rodape —
-  `AreaDecisao`, PR-CONC-MESA-FAIXAS-FIXAS-01: as faixas de sobrescrever/desfazer, juntar grupo, agrupar e os candidatos moram
-  nela; vazia diz "Nenhuma decisao pendente nesta linha"; a lista de candidatos rola DENTRO dela. Medido nos estados reais:
-  tabela visivel 265, area 104, topo do rodape 512, iguais com e sem decisao).
+  dica 104, slot de aviso 18 no topo e 18 acima do rodape, selo de 148, BARRA DE DECISAO de 20 entre a tabela e o rodape —
+  `AreaDecisao`, PR-CONC-ENRIQUECER-V2-02 (era a area de 104 do PR-CONC-MESA-FAIXAS-FIXAS-01): sem decisao fica VAZIA; com
+  decisao, "● Esta linha pede uma decisao" + "Abrir decisao", que abre as MESMAS faixas (o no' `faixas` da aba, `null` quando
+  a linha nao pede) num Dialog por cima da Mesa; trocar de linha fecha o Dialog. Medido a 1135x579 no NJ set/26: tabela
+  visivel 335, barra 20, topo do rodape 472, iguais com e sem decisao; o grupo do extrato e' Data pgto. | Valor | Conta
+  bancaria, uma linha cada).
   ⚠ NASCE DE DOIS PRINTS: o "pelo historico do banco" ao lado do select da forma estreitava o campo e empurrava a coluna
     (19:50), e o "planilha dizia" nascia abaixo da tabela empurrando o rodape (18:59).
   ⚠ O jsdom NAO MEDE: o teste prova o CONTRATO (colgroup, alturas declaradas, slots sempre presentes, mesma assinatura em

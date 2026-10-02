@@ -2,8 +2,8 @@
  * A tabela de campos da Mesa de Revisão — MESA-ENR-UX-01 (129); painel v1 no PR-CONC-MESA-PAINEL-V1.
  *
  * Quatro colunas: Campo · Planilha (azul, referência) · Sistema hoje · Vai gravar (texto neutro). Quatro BLOCOS, cada um
- * com faixa de título e fundo alternado (PR-CONC-ENRIQUECER-V2-01, Mesa compacta): PAGAMENTO · DO EXTRATO (pgto., valor e
- * conta numa linha só, leitura; a Conta destino da transferência logo abaixo), DATAS, CLASSIFICAÇÃO (Atividade, Fazenda,
+ * com faixa de título e fundo alternado (PR-CONC-ENRIQUECER-V2-01, Mesa compacta): PAGAMENTO · DO EXTRATO (Data pgto., Valor e
+ * Conta bancária, uma linha cada, leitura — PR-CONC-ENRIQUECER-V2-02; a Conta destino da transferência logo abaixo), DATAS, CLASSIFICAÇÃO (Atividade, Fazenda,
  * Conta do plano, Safra) e IDENTIFICAÇÃO (Fornecedor, Descrição, Documento · tipo, Forma de pagamento, Observação).
  * Acima da grade, o CHECKLIST da linha numa linha só (✓ ok / ● pendente com o motivo) — a mesma lista que o rodapé
  * cobra ("falta: ...") e que desabilita o "Aprovar e próximo" (`pendenciasDaLinha`).
@@ -78,10 +78,12 @@ const ORDEM: Array<{
   /** 133g item 6 — sem ele o lançamento não fecha, e o Salvar diz qual falta. */
   obrigatorio?: boolean;
 }> = [
-  /* ⚠ PAGAMENTO É UMA LINHA SÓ (PR-CONC-ENRIQUECER-V2-01): Tipo, Data pgto., Valor e Conta bancária eram quatro linhas
-     de leitura do extrato; juntas dizem "o que o banco pagou" de uma vez, e a tabela ganha três linhas. Os quatro
-     campos do comparativo continuam lidos um a um (`CAMPOS_DO_PAGAMENTO`). */
-  { campo: 'Pagamento', rotulo: 'Pagamento', grupo: 'extrato', obrigatorio: true },
+  /* ⚠ UMA INFORMAÇÃO POR LINHA (PR-CONC-ENRIQUECER-V2-02, o PADRÃO DE TABELA): a linha única "Pagamento" do V2-01 juntava
+     data, valor e banco numa célula ("10/09 · 63.716,00 · Sicredi Lavoura") — três informações que o operador confere
+     uma a uma. O CHECKLIST não mudou: continua UM item "Pagamento", julgado por `CAMPOS_DO_PAGAMENTO`. */
+  { campo: 'Data pagamento', rotulo: 'Data pgto.', grupo: 'extrato', obrigatorio: true },
+  { campo: 'Valor', rotulo: 'Valor', grupo: 'extrato', obrigatorio: true },
+  { campo: 'Banco', rotulo: 'Conta bancária', grupo: 'extrato', obrigatorio: true },
   { campo: 'Conta destino', rotulo: 'Conta destino', grupo: 'extrato',
     soTransferencia: true, obrigatorioSeTransferencia: true },
   { campo: 'Competência', rotulo: 'Competência', grupo: 'datas' },
@@ -105,7 +107,7 @@ const TITULO_DO_GRUPO: Record<Grupo, string> = {
 };
 const ORDEM_DOS_GRUPOS: Grupo[] = ['extrato', 'datas', 'classificacao', 'identificacao'];
 
-/** Os quatro campos do comparativo que a linha "Pagamento" junta, na ordem em que aparecem nela. */
+/** Os quatro campos do comparativo que o item "Pagamento" do checklist julga (o Tipo não tem linha: é o sinal do Valor). */
 export const CAMPOS_DO_PAGAMENTO = ['Data pagamento', 'Valor', 'Banco', 'Tipo'] as const;
 
 /** O grupo do extrato é só leitura — exportado para o teste afirmar a lista, não uma cópia dela. */
@@ -302,16 +304,11 @@ export function MesaCamposTabela({
   /* ── O CHECKLIST — PR-CONC-ENRIQUECER-V2-01: uma linha, os obrigatórios ✓/●, pela MESMA lista do rodapé. */
   const checklist = checklistDaLinha(row, { classificacoes, atividade });
 
-  /* ── AS DUAS LINHAS COMPOSTAS — Pagamento (data · valor · conta) e Documento · tipo. O comparativo continua
-     campo a campo; aqui só se junta para desenhar. */
+  /* ── A LINHA COMPOSTA — Documento · tipo. O comparativo continua campo a campo; aqui só se junta para desenhar. */
   const parte = (campo: string) => porCampo.get(campo) ?? VAZIA;
   const juntar = (campos: readonly string[], lado: 'excel' | 'sistema' | 'resultado') =>
     campos.map((k) => parte(k)[lado]).join(' · ');
   const composta = (campo: string): EnriqComparativoLinha => {
-    if (campo === 'Pagamento') {
-      const k = ['Data pagamento', 'Valor', 'Banco'];
-      return { campo, excel: juntar(k, 'excel'), sistema: juntar(k, 'sistema'), resultado: juntar(k, 'resultado'), tom: 'neutro' };
-    }
     if (campo === 'Documento') {
       const k = ['Documento', 'Tipo de documento'];
       const tons = k.map((x) => parte(x).tom);
@@ -323,14 +320,6 @@ export function MesaCamposTabela({
     }
     return parte(campo);
   };
-  /** O texto de Pagamento com o VALOR na cor do sinal (o único verde da tabela continua sendo o valor de entrada). */
-  const pagamentoPintado = (lado: 'excel' | 'sistema') => (
-    <>
-      {parte('Data pagamento')[lado]}{' · '}
-      <span className={`tabular-nums ${corDoSinal}`}>{parte('Valor')[lado]}</span>{' · '}
-      {parte('Banco')[lado]}
-    </>
-  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -369,10 +358,12 @@ export function MesaCamposTabela({
               ⚠ "VAI GRAVAR" EM TEXTO NEUTRO (PR-CONC-MESA-PAINEL-V1 item 1). */}
           <thead>
             <tr style={{ height: ALTURA_CABECALHO }} className="text-left text-[9.5px] font-medium">
-              <th className="sticky top-0 z-10 border-b bg-card pl-3 pr-1.5 font-medium text-muted-foreground">Campo</th>
-              <th className="sticky top-0 z-10 border-b bg-card px-1.5 font-medium text-blue-600 dark:text-blue-400">Planilha</th>
-              <th className="sticky top-0 z-10 border-b bg-card px-1.5 font-medium text-muted-foreground">Sistema hoje</th>
-              <th className="sticky top-0 z-10 border-b bg-card px-1.5 font-medium text-foreground" data-testid="cabecalho-vai-gravar">Vai gravar</th>
+              {/* ⚠ PLANILHA = REFERÊNCIA, SISTEMA = VERDADE (PR-CONC-ENRIQUECER-V2-02): o cabeçalho diz quem manda — navy nas
+                  colunas do sistema, azul-claro na da planilha. Opaco e acima das linhas (sticky). */}
+              <th className="sticky top-0 z-10 border-b bg-primary pl-3 pr-1.5 font-medium text-primary-foreground">Campo</th>
+              <th className="sticky top-0 z-10 border-b bg-blue-100 px-1.5 font-medium text-blue-900" data-testid="cabecalho-planilha">Planilha · referência</th>
+              <th className="sticky top-0 z-10 border-b bg-primary px-1.5 font-medium text-primary-foreground">Sistema hoje</th>
+              <th className="sticky top-0 z-10 border-b bg-primary px-1.5 font-medium text-primary-foreground" data-testid="cabecalho-vai-gravar">Vai gravar</th>
             </tr>
           </thead>
           <tbody>
@@ -390,11 +381,12 @@ export function MesaCamposTabela({
               const editavel = !row.aplicado && !!onEditar && !doExtrato && !travadoPorTransferencia
                 && !foraDeTransferencia;
               /* ⚠ DIVERGÊNCIA COM O EXTRATO É INFORMAÇÃO, NUNCA GRAVAÇÃO — a lista vem do adapter (133h-b item 4). */
-              const camposDaLinha: readonly string[] = campo === 'Pagamento' ? CAMPOS_DO_PAGAMENTO
-                : campo === 'Documento' ? ['Documento', 'Tipo de documento'] : [campo];
+              const camposDaLinha: readonly string[] = campo === 'Documento' ? ['Documento', 'Tipo de documento'] : [campo];
               const dv = row.divergenciasBanco.find((d) => camposDaLinha.includes(d.campo));
               const divergeDoBanco = doExtrato && !!dv;
-              const valorDeParte = campo === 'Pagamento' && row.parteDeAgrupamento;
+              const valorDeParte = campo === 'Valor' && row.parteDeAgrupamento;
+              /* ⚠ O VALOR LEVA A COR DO SINAL nas três colunas; data e conta, texto neutro. */
+              const corDaLinha = campo === 'Valor' ? corDoSinal : '';
               const abreGrupo = indice === 0 || ORDEM[indice - 1]?.grupo !== grupo;
               /* PR-CONC-MESA-DIVERGENCIA-EXCEL-01 — a planilha discorda do Resultado. */
               const dp = row.divergenciasPlanilha.find((d) => camposDaLinha.includes(d.campo));
@@ -403,9 +395,12 @@ export function MesaCamposTabela({
               const exigido = !!obrigatorio || (!!obrigatorioSeTransferencia && ehTransf);
               /* 133g item 6 — vazio no RESULTADO é o que importa. A Atividade só se cobra com o catálogo na mão. */
               /* ⚠ O VERMELHO DA CÉLULA É O ● DO CHECKLIST — a mesma lista (`checklistDaLinha`), pelo rótulo. */
-              const faltando = checklist.some((i) => i.rotulo === rotulo && !i.ok)
-                /* a conta do plano de outra atividade é pendente, mas pinta pelo anel (`planoPendente`), não por vazio */
-                && !(campo === 'Subcentro' && incoerente);
+              /* ⚠ NO EXTRATO O VERMELHO É POR CAMPO (PR-CONC-ENRIQUECER-V2-02): a linha fica vermelha quando o Sistema DAQUELE
+                 campo está vazio; o checklist segue cobrando um item "Pagamento". */
+              const faltando = doExtrato ? vazio(c.sistema)
+                : checklist.some((i) => i.rotulo === rotulo && !i.ok)
+                  /* a conta do plano de outra atividade é pendente, mas pinta pelo anel (`planoPendente`), não por vazio */
+                  && !(campo === 'Subcentro' && incoerente);
               /* No extrato, o que vale é o que o banco tem. */
               const valorExtrato = c.sistema;
 
@@ -444,8 +439,9 @@ export function MesaCamposTabela({
                 <Fragment key={rotulo}>
                   {/* ⚠ A FAIXA DE TÍTULO DO BLOCO — 16px, 9,5px (Mesa compacta; era uma faixa de 6px sem título). */}
                   {abreGrupo && (
-                    <tr data-testid={`faixa-${grupo}`} style={{ height: ALTURA_FAIXA_GRUPO }} className="bg-muted">
-                      <td colSpan={4} className="py-0 pl-3 text-[9.5px] font-medium uppercase tracking-wide text-muted-foreground">
+                    /* ⚠ O PAR DE TOKENS DO "fechamento" DA CONFERÊNCIA (PR-CONC-ENRIQUECER-V2-02): o bloco se destaca do corpo. */
+                    <tr data-testid={`faixa-${grupo}`} style={{ height: ALTURA_FAIXA_GRUPO }} className="border-y border-border bg-primary/10">
+                      <td colSpan={4} className="py-0 pl-3 text-[9.5px] font-semibold uppercase tracking-wide text-primary">
                         {TITULO_DO_GRUPO[grupo]}
                       </td>
                     </tr>
@@ -458,10 +454,10 @@ export function MesaCamposTabela({
                       {exigido && <span className="text-red-600 dark:text-red-400"> *</span>}
                     </td>
                     <td className="truncate px-1.5 py-0 text-blue-700/90 dark:text-blue-400" title={c.excel}>
-                      {campo === 'Pagamento' ? pagamentoPintado('excel') : c.excel}
+                      {corDaLinha ? <span className={`tabular-nums ${corDaLinha}`}>{c.excel}</span> : c.excel}
                     </td>
                     <td className="truncate px-1.5 py-0 text-slate-700 dark:text-slate-300" title={c.sistema}>
-                      {campo === 'Pagamento' ? pagamentoPintado('sistema') : c.sistema}
+                      {corDaLinha ? <span className={`tabular-nums ${corDaLinha}`}>{c.sistema}</span> : c.sistema}
                     </td>
                     <td className="px-1.5 py-0">
                       {/* sem altura própria: o controle (20px) centra na linha de 22 — dar 22 a este bloco somava a
@@ -477,10 +473,8 @@ export function MesaCamposTabela({
                                 faltando ? 'border-destructive/60 bg-destructive/5 text-destructive'
                                   : valorDeParte ? 'border-violet-300 bg-violet-50/60 text-violet-800 dark:border-violet-800 dark:bg-violet-950/20 dark:text-violet-200'
                                   : 'border-border bg-muted/60'}`}>
-                              <span className="min-w-0 flex-1 truncate">
-                                {/* Pagamento mostra as partes mesmo incompleto ("—" na que falta), com a borda vermelha:
-                                    "obrigatório" no lugar esconderia o valor que existe. */}
-                                {campo === 'Pagamento' ? pagamentoPintado('sistema') : faltando ? 'obrigatório' : valorExtrato}
+                              <span className={`min-w-0 flex-1 truncate ${!faltando && corDaLinha ? `tabular-nums ${corDaLinha}` : ''}`}>
+                                {faltando ? 'obrigatório' : valorExtrato}
                               </span>
                             </span>
                           ) : editavel && campo === 'Atividade' && classificacoes && onAtividade ? (

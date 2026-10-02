@@ -333,8 +333,12 @@ export function EnriquecimentoMesaModal({
                   atividade={detalhe.atividade}
                   onAtividade={detalhe.onAtividade}
                 />
-                {/* ⚠ ÁREA DE DECISÃO DE ALTURA FIXA, SEMPRE PRESENTE — PR-CONC-MESA-FAIXAS-FIXAS-01. */}
-                <AreaDecisao>{faixas}</AreaDecisao>
+                {/* ⚠ ÁREA DE DECISÃO DE ALTURA FIXA, SEMPRE PRESENTE — PR-CONC-MESA-FAIXAS-FIXAS-01; uma barra de 20px que abre
+                    as faixas num Dialog desde o PR-CONC-ENRIQUECER-V2-02. Trocar de linha fecha o Dialog (`chave`). */}
+                <AreaDecisao chave={selecionada.id}
+                  titulo={`${selecionada.fornecedor} · ${sinalPrefixo(selecionada.entradaOuSaida)}${selecionada.valor}`}>
+                  {faixas}
+                </AreaDecisao>
               </>
             )}
 

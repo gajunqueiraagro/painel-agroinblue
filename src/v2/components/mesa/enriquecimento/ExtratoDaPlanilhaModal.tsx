@@ -8,6 +8,9 @@
  *
  * ⚠ A MONTAGEM É A DA CONFERÊNCIA (`montarExtratoDaPlanilha` → `montarMesa`), e as medidas também: linha de 18px, 10px
  *   no corpo, 9,5px no cabeçalho navy, cabeçalho e totais congelados, só o corpo rola, nada quebra.
+ * ⚠ PLANILHA = REFERÊNCIA, SISTEMA = VERDADE (PR-CONC-ENRIQUECER-V2-02): o cabeçalho diz isso (azul-claro × navy); o dia
+ *   FECHA no fim, como na Conferência ("fechamento DD/MM", o mesmo par de tokens), e o fechamento do MÊS fica congelado
+ *   abaixo do corpo.
  * ⚠ CLICAR NA LINHA (ou no "⋯") ABRE A MESA NAQUELA LINHA, por cima deste modal: ele continua montado, e fechar a Mesa
  *   volta ao MESMO ponto da rolagem.
  */
@@ -172,9 +175,9 @@ export function ExtratoDaPlanilhaModal({
             </colgroup>
             <thead>
               <tr style={{ height: ALTURA_LINHA_EXTRATO }} className="text-[9.5px]">
-                <th colSpan={3} className="sticky top-0 z-[3] bg-primary px-[5px] text-center font-medium text-primary-foreground">Planilha</th>
+                <th colSpan={3} data-testid="cabecalho-planilha" className="sticky top-0 z-[3] bg-blue-100 px-[5px] text-center font-medium text-blue-900">Planilha · referência</th>
                 <th className="sticky top-0 z-[3] border-x border-primary-foreground/30 bg-primary text-center font-medium text-primary-foreground" />
-                <th colSpan={7} className="sticky top-0 z-[3] bg-primary px-[5px] text-center font-medium text-primary-foreground">Sistema</th>
+                <th colSpan={7} data-testid="cabecalho-sistema" className="sticky top-0 z-[3] bg-primary px-[5px] text-center font-medium text-primary-foreground">Sistema · o que vale</th>
               </tr>
             </thead>
             <tbody>
@@ -191,8 +194,37 @@ export function ExtratoDaPlanilhaModal({
             </tbody>
           </table>
         </div>
+
+        {/* ═══ O FECHAMENTO DO MÊS — congelado, fora do scrollport, sempre presente (PR-CONC-ENRIQUECER-V2-02) ═══
+            ⚠ NENHUM CÁLCULO NOVO: são os totais do topo (`totaisDoEspelho`), somados — as saídas já vêm negativas. */}
+        <FechamentoDoMes mesRotulo={mesRotulo} totais={extrato?.totais ?? null} />
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** A faixa de 22px do fechamento do mês: "planilha P · sistema S · confere | difere R$ P−S"; sem extrato, "—". */
+export function FechamentoDoMes({ mesRotulo, totais }: {
+  mesRotulo: string;
+  totais: { entradasBanco: number; saidasBanco: number; entradasSistema: number; saidasSistema: number } | null;
+}) {
+  const p = totais ? totais.entradasBanco + totais.saidasBanco : null;
+  const sis = totais ? totais.entradasSistema + totais.saidasSistema : null;
+  const dif = p !== null && sis !== null ? p - sis : null;
+  return (
+    <div data-testid="fechamento-mes"
+      className="flex h-[22px] shrink-0 items-center overflow-hidden whitespace-pre bg-primary px-3.5 text-[10px] tabular-nums text-primary-foreground">
+      <span className="font-semibold">Fechamento {mesRotulo}</span>
+      {p === null || sis === null || dif === null ? (
+        <span>{' · —'}</span>
+      ) : (
+        <>
+          <span>{` · planilha ${brl(p)}`}</span>
+          <span>{` · sistema ${brl(sis)}`}</span>
+          <span className="font-semibold">{` · ${Math.abs(dif) < 0.005 ? 'confere' : `difere R$ ${brl(dif)}`}`}</span>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -200,15 +232,6 @@ function DiaRows({ d, onAbrir }: { d: ReturnType<typeof soNaoEnriquecidos>[numbe
   const dif = d.planilha - d.sistema;
   return (
     <>
-      <tr data-testid="dia" style={{ height: ALTURA_LINHA_EXTRATO }} className="bg-muted text-[9.5px] font-medium">
-        <td colSpan={2} className={CEL}>{dataCurta(d.data)}</td>
-        <td className={`${CEL} text-right ${corVal(d.planilha)}`}>{brl(d.planilha)}</td>
-        <td />
-        <td className={`${CEL} text-right ${corVal(d.sistema)}`}>{brl(d.sistema)}</td>
-        <td colSpan={6} className={`${CEL} text-right`} data-testid="fecho-dia">
-          {d.confere ? <span className="text-emerald-700">confere</span> : <span className="text-red-600">difere R$ {brl(dif)}</span>}
-        </td>
-      </tr>
       {d.linhas.map((l) => (
         <tr key={l.chave} data-testid="linha-extrato-planilha" data-staging={l.stagingId ?? undefined}
           style={{ height: ALTURA_LINHA_EXTRATO }}
@@ -240,6 +263,17 @@ function DiaRows({ d, onAbrir }: { d: ReturnType<typeof soNaoEnriquecidos>[numbe
           </td>
         </tr>
       ))}
+      {/* ⚠ O DIA FECHA NO FIM, COMO NA CONFERÊNCIA (PR-CONC-ENRIQUECER-V2-02): "fechamento DD/MM", o par de tokens de lá.
+          No fechamento o azul vence o verde/vermelho — a linha é subtotal, o sinal já está no número. */}
+      <tr data-testid="dia" style={{ height: ALTURA_LINHA_EXTRATO }} className="border-b border-t border-border bg-primary/10 text-[9.5px]">
+        <td colSpan={2} className={`${CEL} font-semibold text-primary`}>fechamento {dataCurta(d.data)}</td>
+        <td className={`${CEL} text-right font-semibold text-primary`}>{brl(d.planilha)}</td>
+        <td />
+        <td className={`${CEL} text-right font-semibold text-primary`}>{brl(d.sistema)}</td>
+        <td colSpan={6} className={`${CEL} text-right font-semibold`} data-testid="fecho-dia">
+          {d.confere ? <span className="text-emerald-700">confere</span> : <span className="text-red-600">difere R$ {brl(dif)}</span>}
+        </td>
+      </tr>
     </>
   );
 }

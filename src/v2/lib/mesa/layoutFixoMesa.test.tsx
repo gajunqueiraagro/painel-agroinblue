@@ -88,13 +88,14 @@ describe('a grade tem as mesmas medidas em todos os estados', () => {
     expect(base.irmaos).toEqual([1]);
   });
 
-  /* PR-CONC-ENRIQUECER-V2-01 (Mesa compacta) — eram 17; Tipo/Data pgto./Valor/Conta bancária viraram "Pagamento" e
-     Nº/Tipo de documento viraram "Documento · tipo": 13 linhas de campo, e as quatro faixas de título dos blocos. */
-  it('são 13 linhas de campo, inclusive a Conta destino fora da transferência, e 4 faixas de bloco', () => {
-    expect(ROTULOS_DA_GRADE).toHaveLength(13);
-    expect(base.linhas.filter((l) => l.startsWith('linha-'))).toHaveLength(13);
+  /* PR-CONC-ENRIQUECER-V2-01 (Mesa compacta) — eram 17; Nº/Tipo de documento viraram "Documento · tipo".
+     PR-CONC-ENRIQUECER-V2-02 — a linha "Pagamento" voltou a ser TRÊS (Data pgto., Valor, Conta bancária; o Tipo segue fora,
+     é o sinal do Valor): 15 linhas de campo, e as quatro faixas de título dos blocos. */
+  it('são 15 linhas de campo, inclusive a Conta destino fora da transferência, e 4 faixas de bloco', () => {
+    expect(ROTULOS_DA_GRADE).toHaveLength(15);
+    expect(base.linhas.filter((l) => l.startsWith('linha-'))).toHaveLength(15);
     expect(base.linhas).toContain(`linha-Conta destino:${ALTURA_LINHA}`);
-    expect(base.slots).toHaveLength(13);
+    expect(base.slots).toHaveLength(15);
     expect(base.linhas.filter((l) => l.startsWith('faixa-'))).toEqual([
       `faixa-extrato:${ALTURA_FAIXA_GRUPO}`, `faixa-datas:${ALTURA_FAIXA_GRUPO}`,
       `faixa-classificacao:${ALTURA_FAIXA_GRUPO}`, `faixa-identificacao:${ALTURA_FAIXA_GRUPO}`]);

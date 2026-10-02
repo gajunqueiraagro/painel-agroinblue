@@ -1,28 +1,62 @@
 /**
- * A ÁREA DE DECISÃO da Mesa — PR-CONC-MESA-FAIXAS-FIXAS-01 (regra soberana do Gabriel: layout fixo).
+ * A ÁREA DE DECISÃO da Mesa — PR-CONC-MESA-FAIXAS-FIXAS-01 (regra soberana do Gabriel: layout fixo); BARRA desde o
+ * PR-CONC-ENRIQUECER-V2-02.
  *
- * ⚠ ALTURA FIXA, SEMPRE PRESENTE, entre a tabela e o rodapé. As faixas de decisão (sobrescrever/desfazer, juntar grupo,
- *   agrupar o split, candidatos) nasciam ABAIXO da tabela só quando a linha pedia: o rodapé não andava, mas a TABELA
- *   encolhia — e a rolagem dela ligava e desligava ao trocar de linha. Agora a área existe em toda linha, com o mesmo
- *   tamanho; vazia, diz que não há decisão.
- * ⚠ O CONTEÚDO VARIÁVEL ROLA DENTRO DELA, nunca empurra: a lista de candidatos ocupa o que sobra entre o cabeçalho e o
- *   botão dela (`preencher`) e é ELA que rola; as faixas de altura conhecida cabem inteiras.
- * ⚠ 104px, MEDIDO: a faixa do split (três linhas de números + o botão) é a mais alta das faixas fixas (~78px); os
- *   candidatos precisam do cabeçalho (24) + uma fileira de dois candidatos (~41) + o botão (33) = 98. 104 cabe as duas
- *   sem rolar a área; 8 candidatos (4 fileiras) rolam dentro da lista.
+ * ⚠ ALTURA FIXA, SEMPRE PRESENTE, entre a tabela e o rodapé — agora uma BARRA de 20px. A área de 104px (V2-01) guardava
+ *   lugar para a faixa mais alta em TODA linha, e a maioria das linhas não pede decisão: eram 104px de "Nenhuma decisão
+ *   pendente" tirados da tabela de campos. A tabela ganhou os 84.
+ * ⚠ SEM DECISÃO, A BARRA FICA VAZIA (sem texto); COM DECISÃO, um aviso âmbar e o botão "Abrir decisão", que abre as MESMAS
+ *   faixas (`children`, o nó que a aba monta — sobrescrever/desfazer, juntar grupo, agrupar, candidatos) num Dialog por
+ *   cima da Mesa. Nenhum handler novo: o nó não é reescrito, só muda de lugar.
+ * ⚠ "HÁ DECISÃO" = `children` não nulo. A aba passa `null` quando a linha não pede decisão (`faixasDaLinha`, medido em
+ *   MesaEnriquecimentoTab) — é isso que permite a barra saber, sem olhar dentro do nó.
+ * ⚠ TROCAR DE LINHA FECHA O DIALOG (`chave`): a decisão aberta é da linha em que se clicou.
  */
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 
-export const ALTURA_AREA_DECISAO = '104px';
+export const ALTURA_AREA_DECISAO = '20px';
 
-export function AreaDecisao({ children }: { children?: ReactNode }) {
+export function AreaDecisao({ children, chave, titulo }: {
+  children?: ReactNode;
+  /** A linha a que a decisão pertence — trocar de linha fecha o Dialog. */
+  chave?: string | null;
+  /** "{fornecedor} · {valor}", no cabeçalho do Dialog. */
+  titulo?: string;
+}) {
+  const [aberta, setAberta] = useState(false);
+  const temDecisao = children !== null && children !== undefined && children !== false;
+  useEffect(() => { setAberta(false); }, [chave]);
+  useEffect(() => { if (!temDecisao) setAberta(false); }, [temDecisao]);
+
   return (
-    <div data-testid="area-decisao" style={{ height: ALTURA_AREA_DECISAO }}
-      className="flex shrink-0 flex-col overflow-y-auto border-t text-[10.5px]">
-      {children ?? (
-        <p data-testid="area-decisao-vazia" className="flex flex-1 items-center px-3 text-[10px] text-muted-foreground">
-          Nenhuma decisão pendente nesta linha.
-        </p>
+    <div data-testid="area-decisao" data-tem-decisao={temDecisao ? 'sim' : 'nao'} style={{ height: ALTURA_AREA_DECISAO }}
+      className="flex shrink-0 items-center gap-2 overflow-hidden whitespace-nowrap border-t px-3">
+      {temDecisao && (
+        <>
+          <span data-testid="aviso-decisao" className="min-w-0 truncate text-[10px] text-amber-700 dark:text-amber-400">
+            ● Esta linha pede uma decisão
+          </span>
+          <Button type="button" size="sm" variant="outline" data-testid="abrir-decisao"
+            className="h-4 shrink-0 px-1.5 text-[9.5px] leading-none" onClick={() => setAberta(true)}>
+            Abrir decisão
+          </Button>
+          <Dialog open={aberta} onOpenChange={setAberta}>
+            <DialogContent data-testid="dialog-decisao"
+              className="flex max-h-[80vh] w-[720px] max-w-[96vw] flex-col gap-0 overflow-hidden p-0">
+              <DialogHeader className="h-9 shrink-0 flex-row items-center space-y-0 bg-primary px-4">
+                <DialogTitle className="truncate pr-6 text-[12px] font-medium text-primary-foreground">
+                  Decisão · {titulo ?? '—'}
+                </DialogTitle>
+              </DialogHeader>
+              {/* o corpo rola; as faixas são as mesmas que moravam na área fixa */}
+              <div data-testid="corpo-decisao" className="flex min-h-0 flex-1 flex-col overflow-y-auto text-[10.5px]">
+                {children}
+              </div>
+            </DialogContent>
+          </Dialog>
+        </>
       )}
     </div>
   );

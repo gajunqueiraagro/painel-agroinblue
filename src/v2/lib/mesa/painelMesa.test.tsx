@@ -65,7 +65,11 @@ describe('item 1 — cabeçalho e nenhum verde fora do valor de uma entrada', ()
     const cab = screen.getByTestId('cabecalho-vai-gravar');
     expect(cab).toHaveTextContent('Vai gravar');
     expect(cab.className).not.toMatch(/emerald|green/);
-    for (const t of ['Campo', 'Planilha', 'Sistema hoje']) expect(screen.getByText(t)).toBeInTheDocument();
+    for (const t of ['Campo', 'Planilha · referência', 'Sistema hoje']) expect(screen.getByText(t)).toBeInTheDocument();
+    /* PR-CONC-ENRIQUECER-V2-02 — o cabeçalho diz quem manda: navy no sistema, azul-claro na planilha (referência) */
+    expect(screen.getByTestId('cabecalho-planilha').className).toMatch(/bg-blue-100/);
+    expect(screen.getByTestId('cabecalho-planilha').className).toMatch(/text-blue-900/);
+    for (const t of ['Campo', 'Sistema hoje', 'Vai gravar']) expect(screen.getByText(t).className).toMatch(/bg-primary text-primary-foreground|bg-primary .*text-primary-foreground/);
     expect(screen.queryByText('Resultado')).not.toBeInTheDocument();
   });
 
@@ -88,23 +92,32 @@ describe('item 1 — cabeçalho e nenhum verde fora do valor de uma entrada', ()
 
   it('a SAÍDA pinta o valor de vermelho nas três colunas', () => {
     montar(vm(CLASSIFICADO));
-    /* PR-CONC-ENRIQUECER-V2-01 — o valor mora na linha Pagamento (data · valor · conta) */
-    const vermelhos = within(linha('Pagamento')).getAllByText(/841,48/).filter((el) => /red/.test(el.className));
+    /* PR-CONC-ENRIQUECER-V2-02 — o valor tem linha própria de novo; data e conta, neutras */
+    const vermelhos = within(linha('Valor')).getAllByText(/841,48/).filter((el) => /red/.test(el.className));
     expect(vermelhos).toHaveLength(3);
+    for (const rot of ['Data pgto.', 'Conta bancária']) {
+      /* o asterisco do obrigatório é vermelho por regra própria; o que se olha são os VALORES */
+      const coloridos = Array.from(linha(rot).querySelectorAll('[class*="red"], [class*="emerald"]'))
+        .filter((el) => el.textContent?.trim() !== '*');
+      expect(coloridos).toHaveLength(0);
+    }
   });
 });
 
 describe('item 2 — o grupo do extrato é só leitura e vem no topo', () => {
-  /* PR-CONC-ENRIQUECER-V2-01 — Tipo, Data pgto., Valor e Conta bancária viraram UMA linha, "Pagamento", no topo. */
-  it('Pagamento (pgto. · valor · conta) é a primeira linha, sob a faixa "Pagamento · do extrato"', () => {
-    expect(CAMPOS_DO_EXTRATO).toEqual(['Pagamento']);
+  /* PR-CONC-ENRIQUECER-V2-02 — uma informação por linha: Data pgto., Valor e Conta bancária, no topo; "Pagamento" é só
+     o título do bloco e o item do checklist, não linha da grade. */
+  it('Data pgto., Valor e Conta bancária são as primeiras linhas, sob a faixa "Pagamento · do extrato"', () => {
+    expect(CAMPOS_DO_EXTRATO).toEqual(['Data pgto.', 'Valor', 'Conta bancária']);
     const { container } = montar(vm(CRU));
     const rotulos = Array.from(container.querySelectorAll('td[title]'))
       .map((el) => el.getAttribute('title'))
       .filter((t): t is string => !!t && [...CAMPOS_DO_EXTRATO, 'Competência', 'Atividade'].includes(t));
-    expect(rotulos[0]).toBe('Pagamento');
+    expect(rotulos.slice(0, 3)).toEqual(['Data pgto.', 'Valor', 'Conta bancária']);
+    expect(screen.queryByTitle('Pagamento')).not.toBeInTheDocument();
     expect(screen.getByTestId('faixa-extrato')).toHaveTextContent('Pagamento · do extrato');
-    expect(within(linha('Pagamento')).getAllByText(/30\.000,00/).length).toBeGreaterThanOrEqual(1);
+    expect(within(linha('Valor')).getAllByText(/30\.000,00/).length).toBeGreaterThanOrEqual(1);
+    expect(within(linha('Data pgto.')).getAllByText(/10\/09/).length).toBeGreaterThanOrEqual(1);
   });
 
   it('cada um é caixa tracejada, com "do extrato" no slot da dica, sem controle nenhum', () => {

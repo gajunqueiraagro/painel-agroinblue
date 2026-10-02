@@ -33,11 +33,11 @@ vi.mock('@/hooks/useEspelhoInternas', () => ({
 import {
   PainelContasEnriquecer, COLUNAS_PAINEL, ALTURA_LINHA_PAINEL,
 } from '@/v2/components/mesa/enriquecimento/PainelContasEnriquecer';
-import { ExtratoDaPlanilhaModal } from '@/v2/components/mesa/enriquecimento/ExtratoDaPlanilhaModal';
+import { ExtratoDaPlanilhaModal, FechamentoDoMes } from '@/v2/components/mesa/enriquecimento/ExtratoDaPlanilhaModal';
 import {
   EnriquecimentoMesaModal, LARGURA_LISTA_MESA, ALTURA_ITEM_LISTA,
 } from '@/v2/components/mesa/enriquecimento/EnriquecimentoMesaModal';
-import { checklistDaLinha, pendenciasDaLinha } from '@/v2/components/mesa/enriquecimento/MesaCamposTabela';
+import { checklistDaLinha, pendenciasDaLinha, MesaCamposTabela } from '@/v2/components/mesa/enriquecimento/MesaCamposTabela';
 
 beforeAll(() => {
   Element.prototype.scrollIntoView = () => {};
@@ -290,6 +290,62 @@ describe('Extrato da planilha — a tela', () => {
   });
 });
 
+/* ═══ PR-CONC-ENRIQUECER-V2-02 — o Extrato da planilha: referência × verdade, o dia fecha no fim, o mês congelado ═══ */
+describe('Extrato da planilha — leitura limpa (V2-02)', () => {
+  const abrirExtrato = () => render(<ExtratoDaPlanilhaModal open onOpenChange={vi.fn()} clienteId="nj" anoMes="2026-09"
+    mesRotulo="set/2026" staging={stagingBB0109()} contas={[{ id: CONTA_BB, nome: 'Banco do Brasil' }]} contaId={CONTA_BB}
+    onContaId={vi.fn()} onAbrirLinha={vi.fn()} />);
+
+  it('o cabeçalho diz quem manda: "Planilha · referência" azul-claro, "Sistema · o que vale" navy', () => {
+    ESPELHO.atual = espelhoBB0109();
+    abrirExtrato();
+    expect(screen.getByTestId('cabecalho-planilha')).toHaveTextContent('Planilha · referência');
+    expect(screen.getByTestId('cabecalho-planilha').className).toMatch(/bg-blue-100 .*text-blue-900/);
+    expect(screen.getByTestId('cabecalho-sistema')).toHaveTextContent('Sistema · o que vale');
+    expect(screen.getByTestId('cabecalho-sistema').className).toMatch(/bg-primary .*text-primary-foreground/);
+  });
+
+  it('o dia FECHA no fim: "fechamento DD/MM" vem DEPOIS de todas as linhas do dia, no azul da Conferência', () => {
+    ESPELHO.atual = espelhoBB0109();
+    abrirExtrato();
+    const corpo = screen.getByTestId('tabela-extrato-planilha').querySelector('tbody');
+    if (!corpo) throw new Error('sem corpo');
+    const trs = Array.from(corpo.querySelectorAll('tr'));
+    const dias = trs.filter((tr) => tr.dataset.testid === 'dia');
+    /* a busca prova que sabe achar: há dia e há linha */
+    expect(dias.length).toBeGreaterThan(0);
+    expect(trs.filter((tr) => tr.dataset.testid === 'linha-extrato-planilha').length).toBeGreaterThan(0);
+    /* a última linha do corpo é um fechamento, e todo fechamento é precedido por uma linha do dia */
+    expect(trs[trs.length - 1].dataset.testid).toBe('dia');
+    for (const d of dias) expect(trs[trs.indexOf(d) - 1]?.dataset.testid).toBe('linha-extrato-planilha');
+    expect(dias[0]).toHaveTextContent(/^fechamento 01\/09/);
+    expect(dias[0].className).toMatch(/bg-primary\/10/);
+    expect(within(dias[0]).getByTestId('fecho-dia')).toHaveTextContent('confere');
+  });
+
+  it('o fechamento do MÊS fica fora do scrollport, com planilha, sistema e confere/difere', () => {
+    ESPELHO.atual = espelhoBB0109();
+    abrirExtrato();
+    const mes = screen.getByTestId('fechamento-mes');
+    expect(mes).toHaveTextContent(/^Fechamento set\/2026 · planilha -?[\d.]+,\d{2} · sistema -?[\d.]+,\d{2} · (confere|difere R\$ -?[\d.]+,\d{2})$/);
+    expect(mes.style.height || mes.className).toMatch(/h-\[22px\]/);
+    /* fora do scrollport: não é descendente da área que rola */
+    expect(screen.getByTestId('tabela-extrato-planilha').parentElement?.contains(mes)).toBe(false);
+  });
+
+  it('a faixa do mês existe sem extrato, com "—"', () => {
+    ESPELHO.atual = null;
+    abrirExtrato();
+    expect(screen.getByTestId('fechamento-mes')).toHaveTextContent('Fechamento set/2026 · —');
+  });
+
+  it('a soma é a dos totais do topo: P = entradas + saídas da planilha, S = do sistema', () => {
+    render(<FechamentoDoMes mesRotulo="set/2026"
+      totais={{ entradasBanco: 1000, saidasBanco: -400, entradasSistema: 1000, saidasSistema: -350.5 }} />);
+    expect(screen.getByTestId('fechamento-mes')).toHaveTextContent('Fechamento set/2026 · planilha 600,00 · sistema 649,50 · difere R$ -49,50');
+  });
+});
+
 /* ═══ MESA COMPACTA ═══════════════════════════════════════════════════════════════════════════════════════════════ */
 const cls = (subcentro: string, escopo_negocio: string): ClassificacaoItem => ({
   id: subcentro, subcentro, escopo_negocio, macro_custo: 'Custeio Produção', grupo_custo: 'Custo Fixo',
@@ -333,6 +389,46 @@ describe('Mesa compacta — o checklist', () => {
       lanc_tipo_operacao: '3-Transferências', lanc_data_pagamento: '2026-09-01', lanc_conta_bancaria_id: 'bb',
       lanc_conta_bancaria_nome: 'BB', lanc_fazenda_id: 'f1', lanc_fazenda_nome: 'Faz', lanc_descricao: 'TED' } }), [], { classificacoes: CLASSIF });
     expect(pendenciasDaLinha(t, { classificacoes: CLASSIF })).toContain('Conta destino');
+  });
+});
+
+/* PR-CONC-ENRIQUECER-V2-02 — o Pagamento virou três linhas na grade, mas o checklist continua com UM item "Pagamento". */
+const SEM_EXTRATO = toRowVM(linhaCrua({
+  staging_id: 's-sx', lanc_id: 'l-sx', match_status: 'divergente', lanc_valor: 480, excel_valor: 480, lanc_sinal: '-1',
+  lanc_tipo_operacao: '2-Saídas', lanc_data_pagamento: null, lanc_conta_bancaria_id: 'bb', lanc_conta_bancaria_nome: 'BB',
+  conta_filtro_id: 'bb', lanc_fazenda_id: 'f1', lanc_fazenda_nome: 'Faz. Pureza', lanc_descricao: 'Folha Pagamento',
+  proposto_subcentro: 'Salários e Encargos Pecuária', proposto_subcentro_existe_no_plano: true,
+}), [], { classificacoes: CLASSIF });
+
+describe('Mesa — Pagamento em três linhas, checklist com um item (V2-02)', () => {
+  it('sem data de pagamento no extrato: o checklist diz "Pagamento", nunca o rótulo da linha', () => {
+    const c = checklistDaLinha(SEM_EXTRATO, { classificacoes: CLASSIF });
+    expect(c.find((i) => i.rotulo === 'Pagamento')).toEqual({ rotulo: 'Pagamento', ok: false, motivo: 'sem extrato' });
+    const p = pendenciasDaLinha(SEM_EXTRATO, { classificacoes: CLASSIF });
+    expect(p).toEqual(['Pagamento']);
+    for (const r of ['Data pgto.', 'Valor', 'Conta bancária']) expect(p).not.toContain(r);
+  });
+
+  it('na grade, o vermelho é POR CAMPO: só a Data pgto. (sem extrato) pinta; Valor e Conta bancária não', () => {
+    render(<MesaCamposTabela row={SEM_EXTRATO} classificacoes={CLASSIF} onEditar={vi.fn(() => Promise.resolve())} />);
+    expect(screen.getByTestId('extrato-Data pgto.')).toHaveTextContent('obrigatório');
+    expect(screen.getByTestId('extrato-Data pgto.').className).toMatch(/border-destructive/);
+    for (const r of ['Valor', 'Conta bancária']) {
+      expect(screen.getByTestId(`extrato-${r}`).className).not.toMatch(/destructive/);
+    }
+    expect(screen.getByTestId('extrato-Valor')).toHaveTextContent('480,00');
+    expect(screen.getByTestId('checklist-Pagamento')).toHaveTextContent('● Pagamento: sem extrato');
+    expect(screen.queryByTitle('Pagamento')).not.toBeInTheDocument();
+  });
+
+  it('o "falta:" do rodapé continua dizendo "Pagamento"', () => {
+    const motivo = `Falta preencher: ${pendenciasDaLinha(SEM_EXTRATO, { classificacoes: CLASSIF }).join(', ')}.`;
+    render(<EnriquecimentoMesaModal open onOpenChange={vi.fn()} sessaoLabel="Imp 03"
+      lista={{ rows: [SEM_EXTRATO], selecionadoId: SEM_EXTRATO.id, onSelecionar: vi.fn() }}
+      detalhe={{ row: SEM_EXTRATO, classificacoes: CLASSIF }}
+      actions={ACOES({ salvarMotivo: motivo, salvarDisabled: true })} contaId="bb" contaNome="BB"
+      baldePorId={new Map([[SEM_EXTRATO.id, 'decide']])} />);
+    expect(screen.getByTestId('falta')).toHaveTextContent(/^falta: Pagamento$/);
   });
 });
 
