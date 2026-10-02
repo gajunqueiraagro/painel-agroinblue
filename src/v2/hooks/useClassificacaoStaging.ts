@@ -639,6 +639,58 @@ export function useClassificacaoStaging(
     onSuccess: invalidarSessaoAtual,
   });
 
+  /**
+   * Bloco conferido N×M — PR-CONC-ENRIQ-BLOCO-NM-A (migration 20261027190200). AINDA SEM CHAMADOR (a tela é o NM-B).
+   *
+   * ⚠ NÃO GRAVA NO LANÇAMENTO: diz que as N linhas da planilha estão explicadas por aqueles M lançamentos (soma com sinal ao
+   *   centavo). As linhas viram 'conferido_bloco' com os M ids em `match_lancamento_ids`; o bloco e o estado anterior moram em
+   *   `classificacao_blocos`.
+   * ⚠ A RPC NÃO LANÇA EM RECUSA DE REGRA (soma_divergente, lancamento_cru, conta_incompativel, mes_fechado, ...): devolve
+   *   `{ ok:false, motivo, mensagem }` e o chamador escreve a frase junto do botão. `simular` é o ensaio (nada persiste) e não
+   *   invalida nada.
+   */
+  const conferirBlocoMutation = useMutation({
+    mutationFn: async (p: { sessao_id: string; staging_ids: string[]; lancamento_ids: string[]; simular?: boolean }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado do repo
+      const { data, error } = await (supabase as any).rpc('fn_classificacao_conferir_bloco', {
+        p_sessao_id: p.sessao_id, p_staging_ids: p.staging_ids, p_lancamento_ids: p.lancamento_ids,
+        p_simular: p.simular ?? false,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_d, variables) => { if (!variables.simular) invalidarSessaoAtual(); },
+  });
+
+  /** Desfaz um bloco: as linhas voltam ao estado anterior guardado no bloco. Motivo obrigatório (a RPC recusa sem ele). */
+  const desfazerBlocoMutation = useMutation({
+    mutationFn: async (p: { bloco_id: string; motivo: string }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado do repo
+      const { data, error } = await (supabase as any).rpc('fn_classificacao_desfazer_bloco', {
+        p_bloco_id: p.bloco_id, p_motivo: p.motivo,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: invalidarSessaoAtual,
+  });
+
+  /**
+   * Casar 1×1 manual uma linha sem par. Lançamento CLASSIFICADO → bloco 1×1 (`caminho: 'bloco_1x1'`); lançamento CRU do
+   * extrato → 'resolvido_manual' e a planilha sobe para a proposta (`caminho: 'cru'`). Recusa de regra em `{ ok:false }`.
+   */
+  const casarManualMutation = useMutation({
+    mutationFn: async (p: { staging_id: string; lancamento_id: string; simular?: boolean }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado do repo
+      const { data, error } = await (supabase as any).rpc('fn_classificacao_casar_manual', {
+        p_staging_id: p.staging_id, p_lancamento_id: p.lancamento_id, p_simular: p.simular ?? false,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_d, variables) => { if (!variables.simular) invalidarSessaoAtual(); },
+  });
+
   return {
     staging: stagingQuery.data ?? [],
     isLoading: stagingQuery.isLoading,
@@ -679,6 +731,13 @@ export function useClassificacaoStaging(
     // 133h item 9 — "Confirmar" persistido.
     marcarRevisada: marcarRevisadaMutation.mutateAsync,
     isMarcandoRevisada: marcarRevisadaMutation.isPending,
+    // PR-CONC-ENRIQ-BLOCO-NM-A — bloco conferido N×M e casar 1×1 manual (sem chamador até o NM-B).
+    conferirBloco: conferirBlocoMutation.mutateAsync,
+    isConferindoBloco: conferirBlocoMutation.isPending,
+    desfazerBloco: desfazerBlocoMutation.mutateAsync,
+    isDesfazendoBloco: desfazerBlocoMutation.isPending,
+    casarManual: casarManualMutation.mutateAsync,
+    isCasandoManual: casarManualMutation.isPending,
   };
 }
 

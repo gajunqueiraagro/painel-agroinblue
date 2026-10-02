@@ -343,6 +343,14 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   — o fix1 deixou o "Casar" APAGADO com "casar 1×1 em linha sem par ainda nao tem gravacao"; casar 1:1 uma sem par e' frente
   de banco, junto com o bloco NxM; (b) o N:M segue sem gravacao (o 2b de banco);
   (c) o lado Sistema do Enriquecer so' tem o REALIZADO do mes: previsto/programado/agendado nao se marcam aqui.
+  · BLOCO-NM (PR-CONC-ENRIQ-BLOCO-NM-A, so' banco; a tela e' o NM-B): (a) as tres RPCs e as tres mutations
+  (`conferirBloco`/`desfazerBloco`/`casarManual` em `useClassificacaoStaging`) estao SEM CHAMADOR; (b) `desfazer_proximos`
+  devolve SEMPRE a linha a `candidatos_proximos`, sem olhar a origem — a linha que veio de `sem_match` pelo casar manual
+  voltaria a "candidatos" sem ter candidato; a origem esta' gravada em `casamento_meta.status_anterior` (NAO no
+  `estado_anterior`, que o apply_row le' como o do LANCAMENTO) — PR de banco, nao alterado; (c) o T Cortez set/26 (23 x 49)
+  nao fecha (+10.764,11, o Pix de 25/09 sem lancamento, extrato 0001ae41): o bloco recusa `soma_divergente`, como deve;
+  (d) a recusa do Recasar provada no NM-A e' a do STATUS (o corpo antigo devolvia as 6 linhas do bloco a `sem_match`); o furo
+  do `v_usados` (lancamento de grupo casado 1:1 por outra linha) nao reapareceu no caso real — o conserto vale para os dois.
 - Telas e UI:
   TELAS-ORFAS-01 (decisao) · FIN-RECORRENCIA-FAZENDA-01 · FIN-FAZENDA-INATIVA-LISTA-01 · FIN-IMPORTAR-ANTIGO-01 ·
   FAZENDA-INATIVA-EDICAO-01 · LEGADOS-ABATE-VENDA-FAZENDA-01 · FORNECEDOR-UUID-CRU-01 · PROPRIEDADE-DESTINO-ORIGEM-01 ·
@@ -652,6 +660,18 @@ docs/historico/frentes-ate-2026-09-29.md.)
   RPC). "AO FORNECEDOR" (no "⋯" da Mesa) grava SO' A PROPOSTA (`levarAoFornecedor` so' recebe `editarProposto`), alvo pelo ID
   do fornecedor resolvido, so' linha nao aprovada, e a linha JA' CLASSIFICADA fica com o sistema (prevista na previa).
   `resolvido_grupo` fica FORA do lote (balde `aguarda`) ate' o N:1 ter gravacao (2b).
+- ⚠ BLOCO CONFERIDO N×M NO ENRIQUECER (PR-CONC-ENRIQ-BLOCO-NM-A, migration 20261027190200, ledger 20261002115607): N linhas da
+  planilha x M lancamentos CLASSIFICADOS e REALIZADOS da mesma conta, soma COM SINAL ao centavo (tolerancia 0,005; sinais
+  opostos permitidos) -> as linhas viram 'conferido_bloco' com os M ids em `match_lancamento_ids`. NAO ESCREVE no lancamento
+  nem em `conciliacao_bancaria_itens`. `fn_classificacao_conferir_bloco` (`p_simular`, SQLSTATE 'CBSIM'), recusas com motivo e
+  frase (lancamento cru -> "desmembre ou case 1×1", ja' escolhido, outra conta, mes fechado, soma divergente);
+  `fn_classificacao_desfazer_bloco` (motivo obrigatorio) restaura pelo `estado_anterior` de `classificacao_blocos` e recusa
+  linha que saiu do bloco por outro caminho; itens em `classificacao_bloco_itens` (trilha, sem FK). Escrita SO' pelas funcoes
+  (authenticated so' le', RLS `tenant_ok`). `fn_classificacao_casar_manual`: classificado -> bloco 1x1; cru do extrato ->
+  'resolvido_manual' + `_fn_classificacao_precedencia_cru`; valor/sinal/conta diferentes recusam.
+  ⚠ 'conferido_bloco' E' STATUS PRESERVADO: entrou nas CINCO listas do `fn_classificacao_casar_sessao` e na do
+    `fn_classificacao_excluir_sessao`, e o `v_usados` do Recasar passou a somar `unnest(match_lancamento_ids)` — antes so' o
+    singular, e um lancamento de grupo/bloco ficava livre para o Recasar casar 1:1. Status preservado novo entra nas SEIS.
 - ⚠ ICMS DA NOTA DA MANDIOCA E' REPASSE, NAO DEDUCAO (MANDIOCA-ICMS-REPASSE-01, migration 20261027185200, ledger
   20261001123042): o comprador devolve o ICMS da NF. O `icms` vai para "ICMS a Repassar - Pago" (10006) e nasce junto o
   `icms_recebivel` (entrada, "ICMS a Repassar - Devolvido", 3026, favorecido = comprador), os dois FORA do DRE pela regra 1b
