@@ -248,6 +248,12 @@ export interface ClassificacaoStagingPreviewRow {
   planilha_cultura?: string | null;
   proposto_cultura?: string | null;
   proposto_fase?: string | null;
+  /**
+   * PR-CONC-ENRIQ-SPLIT-REVERTER (migration 20261027191100) — o registro VIVO do desmembramento desta linha (`null` = a
+   * linha nao e' de split, ou e' de um split antigo sem registro) e se ela ja' teve um desmembramento desfeito.
+   */
+  split_id?: string | null;
+  split_desfeito?: boolean | null;
 }
 
 /** O que `fn_classificacao_casar_sessao` devolve — 133a. */
@@ -516,6 +522,22 @@ export function useClassificacaoStaging(
     onSuccess: invalidarSessaoAtual,
   });
 
+  /**
+   * DESFAZER O DESMEMBRAMENTO — PR-CONC-ENRIQ-SPLIT-REVERTER. `fn_classificacao_desfazer_split` recebe QUALQUER linha do
+   * split e desfaz o split inteiro; com `simular` faz tudo e desfaz (o ensaio que a barra mostra antes de confirmar).
+   * ⚠ A REGRA E AS RECUSAS SÃO DO BANCO: a tela só escreve o que ele devolve (`mensagem`).
+   */
+  const desfazerSplitMutation = useMutation({
+    mutationFn: async (params: { staging_id: string; motivo: string | null; simular: boolean }): Promise<any> => {
+      const { data, error } = await (supabase as any).rpc('fn_classificacao_desfazer_split', {
+        p_staging_id: params.staging_id, p_motivo: params.motivo, p_simular: params.simular,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_d, params) => { if (!params.simular) invalidarSessaoAtual(); },
+  });
+
   // PR-U2b — edição da proposta de enriquecimento (subcentro/favorecido/fazenda/
   // produto/safra/categoria) via RPC existente. Retorna o jsonb ({ ok, motivo,
   // update_proposto, campos_aplicados, campos_rejeitados }); o chamador checa `ok`.
@@ -757,6 +779,8 @@ export function useClassificacaoStaging(
     isApplyingRow: applyRowMutation.isPending,
     reverterRow: reverterRowMutation.mutateAsync,
     isRevertingRow: reverterRowMutation.isPending,
+    desfazerSplit: desfazerSplitMutation.mutateAsync,
+    isDesfazendoSplit: desfazerSplitMutation.isPending,
     editarProposto: editarPropostoMutation.mutateAsync,
     isEditando: editarPropostoMutation.isPending,
     resetarProposto: resetarPropostoMutation.mutateAsync,

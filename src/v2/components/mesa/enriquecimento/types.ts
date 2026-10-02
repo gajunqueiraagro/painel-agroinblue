@@ -292,6 +292,11 @@ export interface EnriqRowVM {
   parMudou: boolean;
   /** O lançamento casado é FILHO DE DESMEMBRAMENTO (`mesa_split`): a observação dele guarda o elo com o consolidado. */
   filhoDeDesmembramento: boolean;
+  /**
+   * O registro VIVO do desmembramento desta linha — PR-CONC-ENRIQ-SPLIT-REVERTER (`split_id` da view). Com ele o Reverter
+   * desfaz o split inteiro (`fn_classificacao_desfazer_split`); sem ele, o filho de split antigo não tem caminho de volta.
+   */
+  splitId: string | null;
   // LISTA (esquerda) — só o necessário para localizar o lançamento (lado SISTEMA).
   /** A data de CAIXA, já formatada — pagamento do lançamento, ou da planilha, ou competência. */
   data: string;

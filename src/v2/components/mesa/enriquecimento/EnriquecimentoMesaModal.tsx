@@ -21,6 +21,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Segmentado } from '@/components/ui/segmentado';
 import type { EnriquecimentoListaProps } from './EnriquecimentoLista';
 import type { EnriquecimentoDetalheProps } from './EnriquecimentoDetalhe';
@@ -107,6 +108,60 @@ export interface AcoesDaMesa extends EnriquecimentoActionsProps {
   erroEdicao?: string | null;
   /** O Recasar trocou o par desta linha depois da última edição/gravação (PR-CONC-ENRIQ-PROPOSTA-PAR-MUDOU D8) — âmbar. */
   parMudou?: boolean;
+  /**
+   * DESFAZER O DESMEMBRAMENTO — PR-CONC-ENRIQ-SPLIT-REVERTER (D8). Enquanto existe, o fluxo ocupa o slot da MENSAGEM do
+   * rodapé (nada novo aparece, nenhuma altura muda): `confirmar` (a simulação do banco em âmbar + Confirmar/cancelar),
+   * `motivo` (campo curto obrigatório + Confirmar/cancelar) e `erro` (a recusa do banco em vermelho). Sem toast.
+   */
+  desfazerSplit?: { etapa: 'confirmar' | 'motivo' | 'erro'; texto: string; titulo?: string; editados?: number } | null;
+  onDesfazerConfirmar?: () => void;
+  onDesfazerMotivo?: (motivo: string) => void;
+  onDesfazerCancelar?: () => void;
+}
+
+/**
+ * A barra do desfazer do desmembramento, no slot da mensagem do rodapé — PR-CONC-ENRIQ-SPLIT-REVERTER (decisão 2 do Gabriel:
+ * o texto curto cabe; as frases completas vão no `title`). Medido a 1135: o slot tem 472px; "desfaz: 5 linhas voltam ·
+ * R$ 2.667.572,77 vira um só" pede 245 e os dois botões ~120.
+ */
+function BarraDesfazerSplit({ estado, onConfirmar, onMotivo, onCancelar }: {
+  estado: NonNullable<AcoesDaMesa['desfazerSplit']>;
+  onConfirmar?: () => void; onMotivo?: (m: string) => void; onCancelar?: () => void;
+}) {
+  const [motivo, setMotivo] = useState('');
+  const botao = 'h-[22px] shrink-0 whitespace-nowrap px-2 text-[10px]';
+  return (
+    <span data-testid="desfazer-split" data-etapa={estado.etapa} title={estado.titulo ?? estado.texto}
+      className={`flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap text-[10px] ${
+        estado.etapa === 'erro' ? 'font-medium text-red-700 dark:text-red-400' : 'text-amber-700 dark:text-amber-400'}`}>
+      {estado.etapa === 'motivo' ? (
+        <>
+          <span className="shrink-0">motivo:</span>
+          <Input data-testid="desfazer-motivo" autoFocus value={motivo} onChange={(e) => setMotivo(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && motivo.trim()) { e.preventDefault(); onMotivo?.(motivo.trim()); } }}
+            className="h-[22px] w-[200px] shrink-0 px-1.5 py-0 text-[10px] text-foreground" />
+          <Button size="sm" className={botao} data-testid="desfazer-confirmar" disabled={!motivo.trim()}
+            onClick={() => onMotivo?.(motivo.trim())}>Confirmar</Button>
+        </>
+      ) : (
+        <>
+          {/* o texto curto, cortado NA BORDA se faltar espaço (nunca "…"); o inteiro mora no `title` */}
+          <span className="min-w-0 overflow-hidden">{estado.texto}</span>
+          {estado.etapa === 'confirmar' && !!estado.editados && (
+            <span data-testid="desfazer-editados" className="shrink-0 font-medium text-amber-700 dark:text-amber-400">
+              · {estado.editados} editados
+            </span>
+          )}
+          {estado.etapa === 'confirmar' && (
+            <Button size="sm" className={botao} data-testid="desfazer-confirmar" onClick={onConfirmar}>Confirmar</Button>
+          )}
+        </>
+      )}
+      <Button size="sm" variant="ghost" className={botao} data-testid="desfazer-cancelar" onClick={onCancelar}>
+        {estado.etapa === 'erro' ? 'fechar' : 'cancelar'}
+      </Button>
+    </span>
+  );
 }
 export interface DetalheDaMesa extends EnriquecimentoDetalheProps {
   /**
@@ -464,7 +519,11 @@ export function EnriquecimentoMesaModal({
               </AreaDecisao>
               {/* ⚠ A MENSAGEM, UMA LINHA, nesta prioridade: o banco recusou > falta (o `salvarMotivo`, que sai da MESMA lista
                   do checklist — 133b-a correção 1) > a planilha diverge do extrato. Vazia, o lugar fica (flex-1). */}
-              {mensagem.tipo === 'falta' ? (
+              {actions.desfazerSplit ? (
+                /* PR-CONC-ENRIQ-SPLIT-REVERTER: o fluxo do desfazer ocupa o MESMO slot (flex-1) — nada muda de altura */
+                <BarraDesfazerSplit key={`${selecionada?.id ?? ''}:${actions.desfazerSplit.etapa}`} estado={actions.desfazerSplit}
+                  onConfirmar={actions.onDesfazerConfirmar} onMotivo={actions.onDesfazerMotivo} onCancelar={actions.onDesfazerCancelar} />
+              ) : mensagem.tipo === 'falta' ? (
                 <span data-testid="falta" data-mensagem="falta" className="min-w-0 flex-1 truncate text-[10px] text-red-600 dark:text-red-400"
                   title={mensagem.texto}>{mensagem.texto}</span>
               ) : (

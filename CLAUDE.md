@@ -160,8 +160,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 02/10/2026 (PR-CONC-ENRIQ-MESA-CULTURA-FASE-B, +20 em `src/v2/lib/mesa/culturaFaseMesa.test.tsx`; antes o
-  PR-CONC-ENRIQ-PROPOSTA-PAR-MUDOU, +9): 2960
+  Baseline em 02/10/2026 (PR-CONC-ENRIQ-SPLIT-REVERTER, +9 em `src/v2/lib/mesa/desfazerSplit.test.tsx`; antes o
+  PR-CONC-ENRIQ-MESA-CULTURA-FASE-B, +20): 2969
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -329,6 +329,16 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   mesma data, como toda conta]; (d) Santa Rita 8a82eb7c linhas 58/98 e NJ a63fa4c6 linha 246: APLICADAS em lancamento de outro mes /
   conta (gravaram classificacao) — decisao caso a caso; (e) a reaberta nao guarda de onde veio (o "limpa" do Recasar zera o
   `casamento_meta`).
+  · SPLIT-REVERTER (PR-CONC-ENRIQ-SPLIT-REVERTER, 02/10): (a) 5 DESMEMBRAMENTOS ANTIGOS SEM REGISTRO (filhos ja' cancelados):
+  7cfad218 (4 de 5), 720ea2d4, add72c81, d0352371, ec7b5153 — a Mesa diz "desmembramento antigo · sem registro para desfazer";
+  (b) nos 15 retroativos o par anterior das linhas e' INFERIDO do status (`par_inferido`), nao gravado na hora; (c) o
+  "filho editado" (aviso D5) e' `updated_at > created_at + 1s` — qualquer UPDATE posterior conta, inclusive automatico; (d) o
+  rotulo da importacao na recusa e' a DATA da sessao ("importacao de 02/10 15:27"), nao o "Imp NN" (que so' o front numera);
+  (e) 42 linhas de OUTRAS importacoes gravadas em filhos de split ficam sem `split_id` (dfd0f02c 16, 9b6785b2 11, e9a3a955 11,
+  8a82eb7c 2, b8e5641d 2) — revertem pelo 1:1 de sempre (`tem_estado_anterior`), e IMPEDEM o desfazer do split dono enquanto
+  aplicadas (caso vivo: dfd8ab98, filhos 65dbd985/2de72941 gravados na Imp 04); a linha NAO aplicada de outra importacao num
+  filho vira par morto quando o split e' desfeito, e o Recasar dela a resolve; (f) o Reverter 1:1 (`handleReverter`) segue com
+  toast — so' o fluxo do desmembramento saiu dele (UX-TOAST-01).
   · CARTAO-MESMA-DATA (PR-CONC-ENRIQ-CARTAO-MESMA-DATA, 02/10): (a) CARTAO HISTORICAMENTE DATADO PELA COMPRA (Santa Rita Itau
   Black 2021–2024, parte do Nubank) nao casa por data exata quando a planilha traz a data da fatura; se virar caso real, pede
   regra propria com decisao do Gabriel; (b) o teste do CASADOR-MES (`conc_enriq_casador_mes_test.sql`) ja' nao monta contra a
@@ -813,6 +823,27 @@ docs/historico/frentes-ate-2026-09-29.md.)
   `_fn_conta_do_lancamento` 7bd27d014d20b2566fc35db2613a57e3; `_fn_classificacao_par_herdado_valido` cd12b3e28ca72a93f013d503211b37ed
   (-> 0224916d34eb19f8ad3cb9fcff6b69a7 no PR-CONC-ENRIQ-CARTAO-MESMA-DATA).
   Nenhum dado foi alterado: o conserto das sessoes e' pelo Recasar (e pelo Reverter, nas aplicadas), na tela.
+- ⚠ DESMEMBRAMENTO TEM REGISTRO E CAMINHO DE VOLTA, NO MOLDE DO BLOCO (PR-CONC-ENRIQ-SPLIT-REVERTER, 02/10, migration
+  20261027191100, ⚠ registrada como 20261002205050; ledger = arquivo, md5 0e2a728d…): `classificacao_splits` /
+  `classificacao_split_itens` (RLS `tenant_ok` so' leitura, escrita so' pelas funcoes) guardam consolidado, extrato, grupo, o
+  VINCULO ORIGINAL do consolidado (id, `tipo_aprovacao`, valor) e, por linha, o filho, o vinculo dele e o status/par de ANTES.
+  `fn_classificacao_split_substituir` grava o registro na mesma transacao (retorno ganha `split_id`; md5 f964b0dd -> 33f4da7b).
+  `fn_classificacao_desfazer_split(p_staging_id, p_motivo, p_simular)` (QUALQUER linha desfaz o split inteiro): cancela os filhos
+  pelo dono (`fn_cancelar_lancamento_auditoria`), DESCANCELA o consolidado (⚠ DESCANCELAR NAO TEM DONO GERAL — a funcao do gesto
+  faz o UPDATE), religa pelo dono (`fn_vincular_extrato_lancamento`) e CARIMBA o `tipo_aprovacao` original no id devolvido (o
+  padrao do `fn_extrato_conciliar_mes`: `ofx_cru` decide o `fn_extrato_desfazer_arquivo` e a marca "cru"), devolve as linhas ao
+  status/par de antes (nao aplicadas, proposta intacta) e marca o registro desfeito (nao apaga). Recusas com frase: sem registro,
+  ja' desfeito, motivo vazio, consolidado vivo, extrato cancelado/ignorado, linha fora do split, filho re-desmembrado / cancelado /
+  em outro extrato / em OUTRO grupo (o do proprio split nao conta) / em bloco conferido / GRAVADO NUMA LINHA APLICADA DE OUTRA
+  IMPORTACAO ("reverta la' antes"), mes fechado. Os gatilhos de lancamento na ida e na volta foram conferidos: nenhum assimetrico
+  (o duplicado de importacao so' age com `lote_importacao_id`, nulo nos consolidados). A view expoe no fim `split_id` (registro
+  vivo) e `split_desfeito` (md5 b041b03e -> 82f6fe33; custo {928,894,899} -> {942,935,928} ms em 551 linhas, as 116 colunas
+  antigas identicas por md5). Backfill de METADADO dos 15 splits antigos inteiros (40 itens) pelo "consol=" da observacao (12 dos
+  15 sem `grupo_id`); md5 de lancamentos, vinculos e staging igual antes x depois. NA MESA (D8): split com registro -> Reverter
+  habilitado; o clique SIMULA e a barra ocupa o slot da mensagem do rodape ("desfaz: N linhas voltam · R$ X vira um so'" +
+  "· K editados" ambar + Confirmar/cancelar; frases completas no `title`), depois "motivo:" + campo obrigatorio; recusa em
+  vermelho; sem toast. Medido a 1135: slot 454px, pior caso (5 linhas, R$ 2.667.572,77, 5 editados) pede 449; o passo do motivo
+  378; rodape 32 com topo 513,8 em todos os passos. md5: desfazer_split a4ff7cf6…
 - ⚠ O CARTAO E' UMA CONTA COMO AS OUTRAS NO PAR HERDADO (PR-CONC-ENRIQ-CARTAO-MESMA-DATA, decisao do Gabriel 02/10, migration
   20261027191000, ⚠ registrada como 20261002193356; ledger = arquivo, md5 07d044ba…): a excecao D2 do CASADOR-MES ("cartao
   dispensa a data, a do lancamento e' a da compra") foi REVOGADA — a premissa era falsa e foi decidida sem medir. Medido em

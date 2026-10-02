@@ -16,7 +16,7 @@ import { useClassificacaoStaging, useSessoesClassificacao } from '@/v2/hooks/use
 import {
   toRowVM, toSessoesVM, contarAplicaveisExatos, escolherMelhorSessaoId, estaRevisada,
   motivoReverterBloqueado, bloqueiaPorAgrupamento, rodaSugestoesDoSalvar,
-  eixoDaAtividade, culturaSugeridaNoSalvar, patchesAoTrocarAtividade,
+  eixoDaAtividade, culturaSugeridaNoSalvar, patchesAoTrocarAtividade, resumoDesfazerSplit,
   listarContas, filtrarPorConta, resumirGrupos, filtrarPorGrupo, grupoDaLinha,
   sessoesDoMes, sessaoMaisNovaQueAberta, contaEfetivaNome, parteDeAgrupamento, explicadoPorSiMesmo,
   type EnriqGrupo,
@@ -173,6 +173,13 @@ export function MesaEnriquecimentoTab({
    * coisa ("Todas (rateia)" inclusive): a sugestão some e o Salvar não a grava. Estado de tela, como a atividade.
    */
   const [culturaRecusadaIds, setCulturaRecusadaIds] = useState<ReadonlySet<string>>(new Set());
+  /**
+   * O DESFAZER DO DESMEMBRAMENTO EM ANDAMENTO — PR-CONC-ENRIQ-SPLIT-REVERTER (D8). Por linha (`id`): a simulação do banco
+   * (`confirmar`), o motivo (`motivo`) ou a recusa (`erro`). Mora no slot da mensagem do rodapé; trocar de linha o fecha.
+   */
+  const [desfazerSplit, setDesfazerSplit] = useState<{
+    id: string; etapa: 'confirmar' | 'motivo' | 'erro'; texto: string; titulo?: string; editados?: number;
+  } | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   // PR-UX-ENR-MODAL-01 — superfície ampla da mesma mesa. Estado de UI puro:
   // não persiste, não sincroniza com URL, não altera nada do fluxo.
@@ -208,7 +215,7 @@ export function MesaEnriquecimentoTab({
 
   const {
     staging, isFetching,
-    applyRow, isApplyingRow, reverterRow, isRevertingRow,
+    applyRow, isApplyingRow, reverterRow, isRevertingRow, desfazerSplit: desfazerSplitRpc, isDesfazendoSplit,
     apply, isApplying,
     editarProposto,
     resolverProximos, isResolvendoProximos, desfazerProximos,
@@ -493,6 +500,8 @@ export function MesaEnriquecimentoTab({
   const safraSel = selecionado
     ? (selecionado.edicao.safraId ?? selecionado.edicao.safraIdAtual ?? selecionado.edicao.safraSugeridaId) : null;
   const culturasDaSafraSel = useCulturasDaSafra(eixoSel === 'cultura' ? safraSel : null);
+  /* SPLIT-REVERTER: o fluxo do desfazer é da linha em que começou — trocar de linha o fecha */
+  useEffect(() => { setDesfazerSplit((d) => (d && d.id !== selecionadoId ? null : d)); }, [selecionadoId]);
 
   /* ⚠ O "A revisar é o default" (PR-MESA-ORDEM-REVISADO-01 item C) SAIU COM A LISTA DA TELA PRINCIPAL —
      PR-CONC-ENRIQUECER-V2-01: o recorte agora é da Mesa (Revisar / Feitas / Todas, por conta), e a lista que ela recebe
@@ -706,7 +715,7 @@ export function MesaEnriquecimentoTab({
   const pendingEditRef = useRef<Promise<unknown> | null>(null);
 
   // Escrita por linha (PR-U1). Salvar = apply_row(overwrite=true); Reverter = reverter_row.
-  const isBusy = isApplyingRow || isRevertingRow || isApplying;
+  const isBusy = isApplyingRow || isRevertingRow || isApplying || isDesfazendoSplit;
   // Linha órfã (subcentro fora do plano) não pode ser aplicada — a trigger do
   // lançamento rejeita. Só será salvável após editar o subcentro (PR-U2).
   /**
@@ -1152,12 +1161,43 @@ export function MesaEnriquecimentoTab({
   }
   async function handleReverter() {
     if (!selecionado) return;
+    /* SPLIT-REVERTER: linha de split com registro — o Reverter desfaz o desmembramento inteiro, pelo fluxo da barra */
+    if (selecionado.aplicado && selecionado.splitId) { void iniciarDesfazerSplit(selecionado.id); return; }
     try {
       const res: any = await reverterRow(selecionado.id);
       if (res?.ok) { limparEditada(selecionado.id); toast.success('Revertido.'); }
       else toast.error(MOTIVO_MSG[res?.motivo] ?? `Não revertido (${res?.motivo ?? 'erro'}).`);
     } catch (e: unknown) {
       toast.error(`Erro ao reverter: ${errMsg(e)}`);
+    }
+  }
+
+  /**
+   * DESFAZER O DESMEMBRAMENTO — PR-CONC-ENRIQ-SPLIT-REVERTER (D8). Três passos na barra do rodapé, sem toast e sem Dialog:
+   * a SIMULAÇÃO do banco (`p_simular`) com Confirmar/cancelar; o MOTIVO (obrigatório); a execução. A recusa — da simulação
+   * ou da execução — fica escrita em vermelho no mesmo slot. Depois de desfazer, a Mesa fica na mesma linha (D9).
+   */
+  async function iniciarDesfazerSplit(id: string) {
+    try {
+      const res: any = await desfazerSplitRpc({ staging_id: id, motivo: null, simular: true });
+      if (res?.ok) setDesfazerSplit({ id, etapa: 'confirmar', ...resumoDesfazerSplit(res) });
+      else setDesfazerSplit({ id, etapa: 'erro', texto: String(res?.mensagem ?? `o banco recusou (${res?.motivo ?? 'sem motivo'})`) });
+    } catch (e: unknown) {
+      setDesfazerSplit({ id, etapa: 'erro', texto: `o banco recusou: ${errMsg(e)}` });
+    }
+  }
+  async function executarDesfazerSplit(id: string, motivo: string) {
+    try {
+      const res: any = await desfazerSplitRpc({ staging_id: id, motivo, simular: false });
+      if (res?.ok) {
+        setDesfazerSplit(null);
+        limparEditada(id);
+        if (clienteAtual?.id) notificarLancamentosMudaram(clienteAtual.id);
+      } else {
+        setDesfazerSplit({ id, etapa: 'erro', texto: String(res?.mensagem ?? `o banco recusou (${res?.motivo ?? 'sem motivo'})`) });
+      }
+    } catch (e: unknown) {
+      setDesfazerSplit({ id, etapa: 'erro', texto: `o banco recusou: ${errMsg(e)}` });
     }
   }
 
@@ -1402,6 +1442,13 @@ export function MesaEnriquecimentoTab({
     erroEdicao: erroEdicao && selecionado && erroEdicao.id === selecionado.id ? erroEdicao.msg : null,
     /* PR-CONC-ENRIQ-PROPOSTA-PAR-MUDOU D8 — o Recasar trocou o par depois da última edição/gravação: "confira", sem bloquear. */
     parMudou: selecionado?.parMudou ?? false,
+    /* PR-CONC-ENRIQ-SPLIT-REVERTER D8 — o fluxo do desfazer do desmembramento, no slot da mensagem */
+    desfazerSplit: desfazerSplit && selecionado && desfazerSplit.id === selecionado.id
+      ? { etapa: desfazerSplit.etapa, texto: desfazerSplit.texto, titulo: desfazerSplit.titulo, editados: desfazerSplit.editados }
+      : null,
+    onDesfazerConfirmar: () => setDesfazerSplit((d) => (d ? { ...d, etapa: 'motivo' } : d)),
+    onDesfazerMotivo: (motivo: string) => { if (desfazerSplit) void executarDesfazerSplit(desfazerSplit.id, motivo); },
+    onDesfazerCancelar: () => setDesfazerSplit(null),
   };
   // Contagem da mesa ampliada: reusa rowsFiltradas (sessão + filtros vigentes). Nada recalculado.
   const mesaAmpliadaVazia = rowsNaTela.length === 0;

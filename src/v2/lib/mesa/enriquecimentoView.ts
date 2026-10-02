@@ -823,6 +823,7 @@ export function toRowVM(
     gravada: estadoDaLinhaGravada(row, edicao),
     parMudou: parMudouNoRecasar(row),
     filhoDeDesmembramento: row.lanc_origem_lancamento === 'mesa_split',
+    splitId: row.split_id ?? null,
     id: row.staging_id,
     linha: row.excel_linha_origem,
     status: row.match_status as EnriqStatus,
@@ -1370,7 +1371,8 @@ export function diferencasDoResultado(edicao: EnriqEdicao): string[] {
 // ── PR-CONC-ENRIQ-LINHA-GRAVADA-EDITAVEL: a linha gravada ─────────────────────────────────────────────────────────
 
 /** O motivo do Reverter apagado num filho de desmembramento sem estado anterior (D4) — escrito no rodapé, nunca em toast. */
-export const MOTIVO_SEM_DESFAZER = 'desmembramento · desfazer ainda não existe';
+/* PR-CONC-ENRIQ-SPLIT-REVERTER: o desfazer existe para o split com registro; este é o texto do split ANTIGO sem registro. */
+export const MOTIVO_SEM_DESFAZER = 'desmembramento antigo · sem registro para desfazer';
 /** O mesmo, para uma linha gravada que não guardou o estado anterior e NÃO é filho de split (não existe hoje no proto). */
 export const MOTIVO_SEM_ESTADO_ANTERIOR = 'sem estado anterior guardado · nada a desfazer';
 /** A dica da célula esvaziada numa linha gravada (D8): o gravador é COALESCE, ausente = mantém. */
@@ -1451,7 +1453,11 @@ export function parMudouNoRecasar(
 }
 
 /** Por que o Reverter está apagado numa linha gravada — D4. `null` = o Reverter vale (ou a linha não é gravada). */
-export function motivoReverterBloqueado(vm: Pick<EnriqRowVM, 'aplicado' | 'gravada' | 'filhoDeDesmembramento'>): string | null {
+export function motivoReverterBloqueado(
+  vm: Pick<EnriqRowVM, 'aplicado' | 'gravada' | 'filhoDeDesmembramento'> & Partial<Pick<EnriqRowVM, 'splitId'>>,
+): string | null {
+  /* PR-CONC-ENRIQ-SPLIT-REVERTER: linha de split COM registro vivo — o Reverter desfaz o desmembramento inteiro */
+  if (vm.aplicado && vm.splitId) return null;
   if (!vm.aplicado || vm.gravada?.temEstadoAnterior !== false) return null;
   return vm.filhoDeDesmembramento ? MOTIVO_SEM_DESFAZER : MOTIVO_SEM_ESTADO_ANTERIOR;
 }
@@ -1728,4 +1734,30 @@ export function patchesAoTrocarAtividade(
   if (nova !== 'agricultura' && edicao.cultura) out.push({ cultura: null });
   if (nova !== 'pecuaria' && edicao.fase) out.push({ fase: null });
   return out;
+}
+
+// ── PR-CONC-ENRIQ-SPLIT-REVERTER: o desfazer do desmembramento na barra da Mesa ──────────────────────────────────────
+
+/** O que a barra mostra a partir da resposta de `fn_classificacao_desfazer_split` (simulada). */
+export interface ResumoDesfazerSplit {
+  /** O texto curto, que cabe no slot do rodapé: "desfaz: N linhas voltam · R$ X vira um só" (do banco). */
+  texto: string;
+  /** A frase completa (D8) e o aviso (D5), no `title`. */
+  titulo: string;
+  /** Filhos editados depois de nascer — a marca âmbar "· K editados". */
+  editados: number;
+}
+
+export function resumoDesfazerSplit(res: {
+  mensagem?: unknown; linhas?: unknown; valor_consolidado?: unknown; editados?: unknown; avisos?: unknown;
+}): ResumoDesfazerSplit {
+  const linhas = Number(res.linhas) || 0;
+  const valor = Number(res.valor_consolidado) || 0;
+  const avisos = Array.isArray(res.avisos) ? res.avisos.map((a) => String(a)) : [];
+  const frase = `desfaz o desmembramento: ${linhas} linhas voltam e o lançamento de ${fmtBRL(valor)} volta a ser um só`;
+  return {
+    texto: typeof res.mensagem === 'string' && res.mensagem ? res.mensagem : frase,
+    titulo: [frase, ...avisos].join(' · '),
+    editados: Number(res.editados) || 0,
+  };
 }
