@@ -3,7 +3,9 @@ import * as SelectPrimitive from "@radix-ui/react-select";
 import { Check, ChevronDown, ChevronUp } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { MENU_ITEM, MENU_PALETA, MENU_ROTULO } from "@/components/ui/menuPadrao";
+import {
+  MENU_ESCOLHIDO_MARCADO, MENU_ITEM, MENU_PALETA, MENU_REALCE_FOCO, MENU_ROTULO,
+} from "@/components/ui/menuPadrao";
 
 const Select = SelectPrimitive.Root;
 
@@ -146,10 +148,12 @@ const SelectItem = React.forwardRef<
       /* ⚠ A MEDIDA É A DO PADRÃO — `MENU_ITEM` (UI-DROPDOWN-PADRAO-01): 22px de altura mínima e 10px de texto, a mesma
          de todo menu do sistema (era já 22/10 aqui desde o PR-UI-SELECT-03; agora vem do dono, não de uma cópia).
          O `pl-8` guarda o lugar do check à esquerda. Nenhuma tela sobrescreve o tamanho.
-         ⚠ O REALCE É `zinc-700`: o painel passou a `bg-zinc-800` opaco, e o `zinc-800/60` de antes sumia nele. */
+         ⚠ O REALCE VEM DO DONO (`MENU_REALCE_FOCO` / `MENU_ESCOLHIDO_MARCADO`, fix1): zinc-700 sobre o painel zinc-600; o texto não tem cor própria, herda o branco da paleta. */
       "relative flex w-full cursor-default select-none items-center overflow-hidden text-ellipsis whitespace-nowrap rounded-sm",
       MENU_ITEM,
-      "pl-8 pr-2 outline-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 text-zinc-100 focus:bg-zinc-700 focus:text-zinc-100 data-[state=checked]:bg-zinc-700/50 data-[state=checked]:text-zinc-100",
+      "pl-8 pr-2 outline-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      MENU_REALCE_FOCO,
+      MENU_ESCOLHIDO_MARCADO,
       className,
     )}
     {...props}

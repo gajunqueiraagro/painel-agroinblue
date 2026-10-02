@@ -18,6 +18,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
+import { MENU_VAZIO } from '@/components/ui/menuPadrao';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -366,7 +367,7 @@ export function FornecedorSelect({
                   onValueChange={setSearch}
                 />
                 <CommandList>
-                  <CommandEmpty className="py-3 text-center text-[10px] text-zinc-400">
+                  <CommandEmpty className={cn("py-3 text-center", MENU_VAZIO)}>
                     Nenhum fornecedor encontrado.
                   </CommandEmpty>
                   {sugestaoLegado && (
@@ -458,7 +459,7 @@ export function FornecedorSelect({
                 onValueChange={setSearch}
               />
               <CommandList>
-                <CommandEmpty className="py-3 text-center text-[10px] text-zinc-400">
+                <CommandEmpty className={cn("py-3 text-center", MENU_VAZIO)}>
                   Nenhum fornecedor encontrado.
                 </CommandEmpty>
                 <CommandGroup>

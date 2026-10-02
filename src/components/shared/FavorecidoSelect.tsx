@@ -12,7 +12,9 @@ import { Search, Check, ChevronsUpDown, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { FornecedorV2 } from '@/hooks/useFinanceiroV2';
 import { COMBOBOX_CONTENT } from '@/components/ui/command';
-import { MENU_ITEM } from '@/components/ui/menuPadrao';
+import {
+  MENU_BUSCA, MENU_ESCOLHIDO, MENU_ITEM, MENU_REALCE, MENU_REALCE_HOVER, MENU_SECUNDARIO, MENU_VAZIO,
+} from '@/components/ui/menuPadrao';
 
 /** O minimo que o seletor le' de um fornecedor. OC-HOMOLOG-FIX-02: o `NovoCompromissoDialog` da OC so' conhece
  *  `{ id, nome }`, e o seletor passa a servi-lo sem cast; quem tem o `FornecedorV2` inteiro segue recebendo-o no
@@ -161,12 +163,12 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
             </Button>
           </PopoverTrigger>
           <PopoverContent className={COMBOBOX_CONTENT} align="start">
-            {/* Input de busca do padrão de menu (UI-DROPDOWN-PADRAO-01): 28px, 10px, ícone 14px. */}
-            <div className="flex items-center border-b border-zinc-700/40 px-2">
+            {/* Input de busca do padrão de menu (`MENU_BUSCA`, fix1): zinc-700, texto branco, 9,5px, ícone 14px. */}
+            <div className="flex items-center border-b border-zinc-500/40 px-2">
               <Search className="mr-2 h-3.5 w-3.5 shrink-0 opacity-50" />
               <input
                 ref={inputRef}
-                className="flex h-7 w-full bg-transparent text-[10px] text-zinc-100 outline-none placeholder:text-zinc-400"
+                className={cn("my-1 flex h-6 w-full rounded px-1.5 outline-none", MENU_BUSCA)}
                 placeholder="Buscar fornecedor..."
                 value={search}
                 onChange={e => onSearchChange(e.target.value)}
@@ -178,14 +180,14 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
               {limpavel && (
                 <button
                   type="button"
-                  className={cn("relative flex w-full cursor-pointer select-none items-center rounded-sm text-zinc-400 outline-none hover:bg-zinc-700/60", MENU_ITEM)}
+                  className={cn("relative flex w-full cursor-pointer select-none items-center rounded-sm outline-none", MENU_SECUNDARIO, MENU_REALCE_HOVER, MENU_ITEM)}
                   onClick={handleLimpar}
                 >
                   <Check className={cn("mr-2 h-3.5 w-3.5 shrink-0", value ? "opacity-0" : "opacity-100")} />
                   <span>— nenhum —</span>
                 </button>
               )}
-              {filtered.length === 0 && <p className="py-3 text-center text-[10px] text-zinc-400">Nenhum fornecedor encontrado</p>}
+              {filtered.length === 0 && <p className={cn("py-3 text-center", MENU_VAZIO)}>Nenhum fornecedor encontrado</p>}
               {filtered.map((f, idx) => (
                 <button
                   key={f.id}
@@ -196,9 +198,9 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
                        ⚠ A MEDIDA DO PADRÃO DE MENU — `MENU_ITEM` (UI-DROPDOWN-PADRAO-01): era 12px/26, o maior do sistema. */
                     "relative flex w-full cursor-pointer select-none items-center rounded-sm outline-none",
                     MENU_ITEM,
-                    "text-zinc-100",
-                    idx === highlight ? "bg-zinc-700 text-zinc-100" : "hover:bg-zinc-700/60",
-                    value === f.id && idx !== highlight && "bg-zinc-700/50",
+                    /* o realce vem do dono (`menuPadrao.ts`, fix1): zinc-700 / zinc-700/60 sobre o painel zinc-600; o texto herda o branco */
+                    idx === highlight ? MENU_REALCE : MENU_REALCE_HOVER,
+                    value === f.id && idx !== highlight && MENU_ESCOLHIDO,
                   )}
                   onClick={() => handleSelect(f.id)}
                   onMouseEnter={() => setHighlight(idx)}

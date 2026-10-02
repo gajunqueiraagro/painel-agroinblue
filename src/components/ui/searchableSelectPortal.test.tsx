@@ -53,8 +53,9 @@ describe('o painel em portal, com largura limitada', () => {
     expect(c).toContain('min-w-[var(--radix-popover-trigger-width)]');
     expect(c).toContain('max-w-[320px]');
     expect(c).not.toContain('max-w-[28rem]');
-    /* UI-DROPDOWN-PADRAO-01 — era o vidro translúcido (zinc-950/55 + blur); agora a `MENU_PALETA`, opaca */
-    expect(c).toContain('bg-zinc-800');
+    /* UI-DROPDOWN-PADRAO-01 — era o vidro translúcido (zinc-950/55 + blur); agora a `MENU_PALETA`, opaca, zinc-600 (fix1) */
+    expect(c).toContain('bg-zinc-600');
+    expect(c).not.toContain('bg-zinc-800');
     expect(c).not.toMatch(/backdrop-blur/);
   });
 

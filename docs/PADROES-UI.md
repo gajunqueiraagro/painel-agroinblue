@@ -769,20 +769,25 @@ padrão é mudar aquele arquivo. `COMBOBOX_PALETA` (`ui/command.tsx`) reexporta 
 | elemento | medida |
 |---|---|
 | trigger (botão fechado) | `h-8`, `text-[12px]`, `font-normal`; o texto em `min-w-0 flex-1 truncate text-left` (começa na borda esquerda quando não cabe) |
-| caixa aberta | `MENU_PALETA` = `border-zinc-700/40 bg-zinc-800 text-zinc-100` — **OPACA**, sem alpha e sem `backdrop-blur` |
-| input de busca | `h-7`, `text-[10px]`, `placeholder:text-zinc-400`, ícone `h-3.5 w-3.5` |
-| item | `MENU_ITEM` = `min-h-[22px] px-2 py-1 text-[10px] leading-[14px]`, uma linha (`truncate`), check `h-3.5 w-3.5` (`pl-8` onde há check à esquerda) |
-| item destacado | `bg-zinc-700` |
-| item selecionado | `bg-zinc-700/50` |
-| grupo / rótulo | `MENU_ROTULO` = `text-[10px] font-medium text-zinc-400`, **sem** uppercase |
-| vazio | `text-[10px] text-zinc-400`, `py-3` |
+| caixa aberta | `MENU_PALETA` = `border-zinc-500/40 bg-zinc-600 text-white` — **OPACA**, sem alpha e sem `backdrop-blur`, rgb(82,82,91); o texto do item HERDA o branco (nenhum componente o pinta) (fix1, 02/10: o `bg-zinc-800` do 01 ficou quase preto; o antigo translúcido se via cinza médio, ~rgb(120,120,121)) |
+| input de busca | `h-7`, `MENU_BUSCA` = `bg-zinc-700 text-[9.5px] text-white placeholder:text-zinc-300`, ícone `h-3.5 w-3.5` |
+| item | `MENU_ITEM` = `min-h-[20px] px-2 py-[3px] text-[9.5px] leading-[14px]` (9,5px é o piso da casa), uma linha (`truncate`), check `h-3.5 w-3.5` (`pl-8` onde há check à esquerda) |
+| item destacado | `MENU_REALCE` = `bg-zinc-700` (e as variantes `MENU_REALCE_FOCO/HOVER/ABERTO/SELECIONADO`, escritas por extenso para o Tailwind gerar) |
+| item selecionado | `MENU_ESCOLHIDO` = `bg-zinc-700/60` (`MENU_ESCOLHIDO_MARCADO` no `Select`) |
+| grupo / rótulo | `MENU_ROTULO` = `text-[9.5px] font-medium text-zinc-200`, **sem** uppercase |
+| vazio | `MENU_VAZIO` = `text-[9.5px] text-zinc-200`, `py-3`; secundário `MENU_SECUNDARIO` = `text-zinc-200` |
 | altura máxima da lista | `max-h-56`, e a rolagem só na lista |
 
 - **Opaco, de propósito.** O fundo translúcido (`zinc-950` a 55% + desfoque) mostrava a cor do que
   estava atrás: cinza sobre a página branca, quase preto sobre o navy. Medido no proto (02/10): o
   `backgroundColor` computado era o mesmo nos dois e a cor vista, não. Opaco, é `rgb(39,39,42)` em
   qualquer fundo.
-- **O realce subiu para `zinc-700`**: sobre o `zinc-800` opaco, o `zinc-800/60` de antes não se via.
+- **O realce subiu para `zinc-700`**: sobre o `zinc-800` opaco, o `zinc-800/60` de antes não se via. No fix1 o painel virou
+  `zinc-600` e o realce `zinc-700`, num dono só (`MENU_REALCE`/`MENU_ESCOLHIDO`).
+- **Contraste, regra: todo texto do menu >= 4,5:1.** O primeiro ensaio do fix1 (painel `zinc-500`) só passava com o branco
+  (4,83; o `zinc-100` 4,40; o `zinc-200` 3,81) e o Gabriel escureceu um tom. Sobre `zinc-600`: item branco 7,73 (10,44 no
+  realce `zinc-700`), secundário `zinc-200` 6,09, `sky-100` 6,74, `amber-100` 6,94, placeholder `zinc-300` sobre a busca
+  `zinc-700` 7,07.
 
 - **Piso 9,5px.** Nada em `text-sm`/`text-base` dentro de lista suspensa — 14px numa lista
   de itens de 26px é o tamanho de um parágrafo dentro de um menu.

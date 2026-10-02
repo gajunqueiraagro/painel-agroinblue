@@ -12,7 +12,9 @@ import { Search, Check, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ClassificacaoItem } from '@/hooks/useFinanceiroV2';
 import { COMBOBOX_CONTENT } from '@/components/ui/command';
-import { MENU_ITEM } from '@/components/ui/menuPadrao';
+import {
+  MENU_BUSCA, MENU_ESCOLHIDO, MENU_ITEM, MENU_REALCE, MENU_REALCE_HOVER, MENU_SECUNDARIO, MENU_VAZIO,
+} from '@/components/ui/menuPadrao';
 
 export interface PlanoSubcentroSelectProps {
   value: string;                                                    // subcentro
@@ -224,12 +226,12 @@ export function PlanoSubcentroSelect({
           </Button>
         </PopoverTrigger>
         <PopoverContent className={cn(COMBOBOX_CONTENT, contentClassName)} align="start">
-          {/* Input de busca do padrão de menu (UI-DROPDOWN-PADRAO-01): 28px, 10px, ícone 14px. */}
-          <div className="flex items-center border-b border-zinc-700/40 px-2">
+          {/* Input de busca do padrão de menu (`MENU_BUSCA`, fix1): zinc-700, texto branco, 9,5px, ícone 14px. */}
+          <div className="flex items-center border-b border-zinc-500/40 px-2">
             <Search className="mr-2 h-3.5 w-3.5 shrink-0 opacity-50" />
             <input
               ref={searchInputRef}
-              className="flex h-7 w-full bg-transparent text-[10px] text-zinc-100 outline-none placeholder:text-zinc-400"
+              className={cn("my-1 flex h-6 w-full rounded px-1.5 outline-none", MENU_BUSCA)}
               placeholder="Buscar subcentro..."
               value={search}
               onChange={e => { onSearchChange(e.target.value); setHighlight(0); }}
@@ -242,14 +244,14 @@ export function PlanoSubcentroSelect({
                 lado, a mensagem diz quantos e oferece a porta — dizer "nenhum"
                 com dois escondidos é a tela mentindo sobre o próprio cadastro. */}
             {filtered.length === 0 && ocultosPorTipo === 0 && (
-              <p className="py-3 text-center text-[10px] text-zinc-400">Nenhum subcentro encontrado</p>
+              <p className={cn("py-3 text-center", MENU_VAZIO)}>Nenhum subcentro encontrado</p>
             )}
             {ocultosPorTipo > 0 && (
-              <p className="px-2 py-1.5 text-center text-[10px] leading-snug text-zinc-400">
+              <p className={cn("px-2 py-1.5 text-center leading-snug", MENU_VAZIO)}>
                 {filtered.length === 0 ? 'Nada aqui — ' : ''}
                 {ocultosPorTipo} do outro lado {ocultosPorTipo === 1 ? 'oculto' : 'ocultos'}
                 {' '}(a lista mostra só o tipo desta linha).{' '}
-                <button type="button" className="underline hover:text-zinc-100"
+                <button type="button" className="underline"
                   onClick={() => setMostrarTodos(true)}>
                   mostrar todos
                 </button>
@@ -259,7 +261,7 @@ export function PlanoSubcentroSelect({
               /* ⚠ O AVISO DA DIVERGÊNCIA VEM ANTES DA ESCOLHA. Escolher um
                   subcentro de outro tipo é legítimo — o cadastro pode estar do
                   lado errado —, mas precisa ser decisão, não descuido. */
-              <p className="px-2 py-1 text-center text-[10px] leading-snug text-amber-500">
+              <p className="px-2 py-1 text-center text-[9.5px] leading-snug text-amber-100">
                 Mostrando todos os tipos. Escolher um de tipo diferente do da linha classifica
                 fora da árvore esperada.
               </p>
@@ -272,13 +274,13 @@ export function PlanoSubcentroSelect({
                   /* ⚠ UMA LINHA, SEMPRE — A23: subcentro longo quebrava em duas e a lista
                      desalinhava. O texto inteiro fica no `title`. */
                   /* ⚠ A MEDIDA DO PADRÃO DE MENU — `MENU_ITEM` (UI-DROPDOWN-PADRAO-01). Este componente NÃO é um
-                     `Select`: é Popover + lista própria, então não herda nada e importa a medida do dono. O realce é
-                     zinc-700 (o painel é zinc-800 opaco). */
+                     `Select`: é Popover + lista própria, então não herda nada e importa a medida do dono. O realce
+                     também vem do dono (zinc-700 sobre o painel zinc-600, fix1; o texto herda o branco). */
                   "relative flex w-full cursor-pointer select-none items-center rounded-sm outline-none",
                   MENU_ITEM,
-                  "text-zinc-100",
-                  idx === highlight ? "bg-zinc-700 text-zinc-100" : "hover:bg-zinc-700/60",
-                  value === sc.subcentro && idx !== highlight && "bg-zinc-700/50",
+                  /* o realce vem do dono (`menuPadrao.ts`, fix1): zinc-700 / zinc-700/60 sobre o painel zinc-600; o texto herda o branco */
+                  idx === highlight ? MENU_REALCE : MENU_REALCE_HOVER,
+                  value === sc.subcentro && idx !== highlight && MENU_ESCOLHIDO,
                   itemClassName,
                 )}
                 onClick={() => handleSelect(sc.subcentro || '')}

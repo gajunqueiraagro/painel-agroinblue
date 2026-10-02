@@ -214,7 +214,8 @@ describe('dialogo Comercializacao — A x B (01b)', () => {
     abrirRealizado('Comercialização e Adiantamento');
     fireEvent.click(screen.getByRole('combobox'));
     const opcao = screen.getByRole('button', { name: /JBS - Anastacio/ });
-    expect(opcao.className).toContain('text-zinc-100');
+    /* UI-DROPDOWN-PADRAO-01-fix1: o item não pinta cor própria — herda o branco da paleta do menu */
+    expect(opcao.className).not.toMatch(/\btext-zinc-/);
     expect(opcao.className).not.toContain('bg-card');
   });
 });

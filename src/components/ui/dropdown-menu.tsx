@@ -3,7 +3,9 @@ import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
 import { Check, ChevronRight, Circle } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { MENU_ITEM, MENU_PALETA, MENU_ROTULO } from "@/components/ui/menuPadrao";
+import {
+  MENU_ITEM, MENU_PALETA, MENU_REALCE_ABERTO, MENU_REALCE_FOCO, MENU_ROTULO, MENU_SECUNDARIO,
+} from "@/components/ui/menuPadrao";
 
 const DropdownMenu = DropdownMenuPrimitive.Root;
 
@@ -28,7 +30,7 @@ const DropdownMenuSubTrigger = React.forwardRef<
     className={cn(
       "flex cursor-default select-none items-center rounded-sm gap-1.5 overflow-hidden text-ellipsis whitespace-nowrap",
       MENU_ITEM,
-      "outline-none data-[state=open]:bg-zinc-700 focus:bg-zinc-700",
+      "outline-none", MENU_REALCE_ABERTO, MENU_REALCE_FOCO,
       inset && "pl-8",
       className,
     )}
@@ -65,7 +67,7 @@ const DropdownMenuContent = React.forwardRef<
       ref={ref}
       sideOffset={sideOffset}
       className={cn(
-        /* ⚠ A PALETA E A MEDIDA DO ITEM SÃO AS DO PADRÃO (`menuPadrao.ts`, UI-DROPDOWN-PADRAO-01): opaca e 22px / 10px. */
+        /* ⚠ A PALETA E A MEDIDA DO ITEM SÃO AS DO PADRÃO (`menuPadrao.ts`, UI-DROPDOWN-PADRAO-01): opaca e 20px / 9,5px (fix1). */
         "z-50 min-w-[8rem] overflow-hidden rounded-md border p-1 shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
         MENU_PALETA,
         className,
@@ -87,7 +89,8 @@ const DropdownMenuItem = React.forwardRef<
     className={cn(
       "relative flex cursor-default select-none items-center rounded-sm gap-1.5 overflow-hidden text-ellipsis whitespace-nowrap",
       MENU_ITEM,
-      "outline-none transition-colors data-[disabled]:pointer-events-none data-[disabled]:opacity-50 focus:bg-zinc-700 focus:text-zinc-100",
+      "outline-none transition-colors data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      MENU_REALCE_FOCO,
       inset && "pl-8",
       className,
     )}
@@ -105,7 +108,8 @@ const DropdownMenuCheckboxItem = React.forwardRef<
     className={cn(
       "relative flex cursor-default select-none items-center rounded-sm overflow-hidden text-ellipsis whitespace-nowrap",
       MENU_ITEM,
-      "pl-8 pr-2 outline-none transition-colors data-[disabled]:pointer-events-none data-[disabled]:opacity-50 focus:bg-zinc-700 focus:text-zinc-100",
+      "pl-8 pr-2 outline-none transition-colors data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      MENU_REALCE_FOCO,
       className,
     )}
     checked={checked}
@@ -130,7 +134,8 @@ const DropdownMenuRadioItem = React.forwardRef<
     className={cn(
       "relative flex cursor-default select-none items-center rounded-sm overflow-hidden text-ellipsis whitespace-nowrap",
       MENU_ITEM,
-      "pl-8 pr-2 outline-none transition-colors data-[disabled]:pointer-events-none data-[disabled]:opacity-50 focus:bg-zinc-700 focus:text-zinc-100",
+      "pl-8 pr-2 outline-none transition-colors data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      MENU_REALCE_FOCO,
       className,
     )}
     {...props}
@@ -168,7 +173,7 @@ const DropdownMenuSeparator = React.forwardRef<
 DropdownMenuSeparator.displayName = DropdownMenuPrimitive.Separator.displayName;
 
 const DropdownMenuShortcut = ({ className, ...props }: React.HTMLAttributes<HTMLSpanElement>) => {
-  return <span className={cn("ml-auto text-[10px] tracking-widest text-zinc-400", className)} {...props} />;
+  return <span className={cn("ml-auto text-[9.5px] tracking-widest", MENU_SECUNDARIO, className)} {...props} />;
 };
 DropdownMenuShortcut.displayName = "DropdownMenuShortcut";
 

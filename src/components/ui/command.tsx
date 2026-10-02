@@ -5,7 +5,9 @@ import { Search } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { MENU_ITEM, MENU_PALETA } from "@/components/ui/menuPadrao";
+import {
+  MENU_BUSCA, MENU_ITEM, MENU_PALETA, MENU_REALCE_SELECIONADO, MENU_SECUNDARIO, MENU_VAZIO,
+} from "@/components/ui/menuPadrao";
 
 const Command = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive>,
@@ -54,9 +56,10 @@ const CommandInput = React.forwardRef<
     <CommandPrimitive.Input
       ref={ref}
       className={cn(
-        /* Input de busca do padrão: 32px, 12px, placeholder zinc-400. Era 44px e 14px — a
-           altura de um campo de formulário dentro de uma lista de itens de 26px. */
-        "flex h-7 w-full rounded-md bg-zinc-900/60 px-2 py-1 text-[10px] text-zinc-100 outline-none placeholder:text-zinc-400 disabled:cursor-not-allowed disabled:opacity-50",
+        /* Input de busca do padrão: 28px, `MENU_BUSCA` (zinc-700, texto branco, placeholder zinc-300, 9,5px — fix1). Era
+           44px e 14px — a altura de um campo de formulário dentro de uma lista de itens de 26px. */
+        "flex h-7 w-full rounded-md px-2 py-1 outline-none disabled:cursor-not-allowed disabled:opacity-50",
+        MENU_BUSCA,
         className,
       )}
       {...props}
@@ -84,7 +87,7 @@ CommandList.displayName = CommandPrimitive.List.displayName;
 const CommandEmpty = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive.Empty>,
   React.ComponentPropsWithoutRef<typeof CommandPrimitive.Empty>
->((props, ref) => <CommandPrimitive.Empty ref={ref} className="py-3 text-center text-[10px] text-zinc-400" {...props} />);
+>((props, ref) => <CommandPrimitive.Empty ref={ref} className={cn("py-3 text-center", MENU_VAZIO)} {...props} />);
 
 CommandEmpty.displayName = CommandPrimitive.Empty.displayName;
 
@@ -95,9 +98,9 @@ const CommandGroup = React.forwardRef<
   <CommandPrimitive.Group
     ref={ref}
     className={cn(
-      /* Rótulo de grupo: 10px/500 zinc-400, SEM uppercase — caixa alta em 10px sobre
-         nomes de grupo custa largura e não acrescenta hierarquia. */
-      "overflow-hidden p-1 text-zinc-100 [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-zinc-400",
+      /* Rótulo de grupo: 9,5px/500 zinc-200 (fix1: o zinc-400 sumia sobre o painel cinza), SEM uppercase — caixa
+         alta sobre nomes de grupo custa largura e não acrescenta hierarquia. */
+      "overflow-hidden p-1 [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:text-[9.5px] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-zinc-200",
       className,
     )}
     {...props}
@@ -146,10 +149,11 @@ const CommandItem = React.forwardRef<
     ref={ref}
     className={cn(
       /* ⚠ UMA LINHA, SEMPRE — A23. O item quebrava em duas quando o nome era longo, e a lista inteira desalinhava;
-         quem precisa do texto completo o tem no `title` que o consumidor passa. A medida é `MENU_ITEM` (22px / 10px). */
+         quem precisa do texto completo o tem no `title` que o consumidor passa. A medida é `MENU_ITEM` (20px / 9,5px). */
       "relative flex cursor-default select-none items-center gap-1.5 overflow-hidden text-ellipsis whitespace-nowrap rounded-sm",
       MENU_ITEM,
-      "text-zinc-100 outline-none data-[disabled=true]:pointer-events-none data-[selected='true']:bg-zinc-700 data-[selected=true]:text-zinc-100 data-[disabled=true]:opacity-50",
+      "outline-none data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50",
+      MENU_REALCE_SELECIONADO,
       className,
     )}
     {...props}
@@ -159,7 +163,7 @@ const CommandItem = React.forwardRef<
 CommandItem.displayName = CommandPrimitive.Item.displayName;
 
 const CommandShortcut = ({ className, ...props }: React.HTMLAttributes<HTMLSpanElement>) => {
-  return <span className={cn("ml-auto text-[10px] tracking-widest text-zinc-400", className)} {...props} />;
+  return <span className={cn("ml-auto text-[9.5px] tracking-widest", MENU_SECUNDARIO, className)} {...props} />;
 };
 CommandShortcut.displayName = "CommandShortcut";
 

@@ -2,15 +2,15 @@
  * UI-DROPDOWN-PADRAO-01 — um padrão só para todo menu aberto: o painel OPACO (`MENU_PALETA`) e o item de 22px / 10px
  * (`MENU_ITEM`), num dono só (`menuPadrao.ts`), aplicados pelos quatro componentes de menu e pelos campos com busca.
  *
- * ⚠ O jsdom NÃO PINTA: aqui se prova o CONTRATO das classes (o item de cada componente leva text-[10px] e min-h-[22px]; o
- *   painel leva bg-zinc-800 sem alpha e sem backdrop-blur). A cor e a altura renderizadas vão no relatório, medidas com
+ * ⚠ O jsdom NÃO PINTA: aqui se prova o CONTRATO das classes (o item de cada componente leva text-[9.5px] e min-h-[20px]; o
+ *   painel leva bg-zinc-600 sem alpha e sem backdrop-blur, texto branco — UI-DROPDOWN-PADRAO-01-fix1). A cor e a altura renderizadas vão no relatório, medidas com
  *   `getComputedStyle` sobre fundo branco e sobre o navy.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { MENU_PALETA, MENU_ITEM, MENU_ROTULO } from '@/components/ui/menuPadrao';
+import { MENU_PALETA, MENU_ITEM, MENU_ROTULO, MENU_REALCE, MENU_ESCOLHIDO, MENU_BUSCA } from '@/components/ui/menuPadrao';
 import { COMBOBOX_PALETA } from '@/components/ui/command';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from '@/components/ui/select';
 import {
@@ -33,33 +33,40 @@ const classes = (el: Element | null) => (el?.getAttribute('class') ?? '').split(
 /** O item tem a medida do padrão e NÃO tem a de antes. */
 function temMedidaDoPadrao(el: Element | null) {
   const c = classes(el);
-  expect(c).toContain('text-[10px]');
-  expect(c).toContain('min-h-[22px]');
+  expect(c).toContain('text-[9.5px]');
+  expect(c).toContain('min-h-[20px]');
   expect(c).not.toContain('text-[12px]');
+  expect(c).not.toContain('text-[10px]');
   expect(c).not.toContain('min-h-[26px]');
+  expect(c).not.toContain('min-h-[22px]');
 }
 /** O painel é a paleta opaca. */
 function temPaletaOpaca(el: Element | null) {
   const cls = el?.getAttribute('class') ?? '';
-  expect(classes(el)).toContain('bg-zinc-800');
+  expect(classes(el)).toContain('bg-zinc-600');
+  expect(cls).not.toMatch(/bg-zinc-800\b/);
   expect(cls).not.toMatch(/backdrop-blur/);
   expect(cls).not.toMatch(/bg-zinc-950\//);
 }
 
 describe('as constantes — um dono só', () => {
-  it('a paleta é opaca, o item é 22px / 10px, o rótulo é 10px', () => {
-    expect(MENU_PALETA).toBe('border-zinc-700/40 bg-zinc-800 text-zinc-100');
+  it('a paleta é opaca (zinc-600, texto branco — fix1), o item é 20px / 9,5px, o rótulo é 9,5px', () => {
+    expect(MENU_PALETA).toBe('border-zinc-500/40 bg-zinc-600 text-white');
     /* o FUNDO não tem alpha (a borda tem, de propósito) e não há desfoque */
     expect(MENU_PALETA).not.toMatch(/\bbg-\S+\/\d|backdrop/);
-    expect(MENU_ITEM).toBe('min-h-[22px] px-2 py-1 text-[10px] leading-[14px]');
-    expect(MENU_ROTULO).toBe('text-[10px] font-medium text-zinc-400');
+    expect(MENU_ITEM).toBe('min-h-[20px] px-2 py-[3px] text-[9.5px] leading-[14px]');
+    expect(MENU_ROTULO).toBe('text-[9.5px] font-medium text-zinc-200');
+    /* o realce num dono só: destacado zinc-700, escolhido zinc-700/60 */
+    expect(MENU_REALCE).toBe('bg-zinc-700');
+    expect(MENU_ESCOLHIDO).toBe('bg-zinc-700/60');
+    expect(MENU_BUSCA).toBe('bg-zinc-700 text-[9.5px] text-white placeholder:text-zinc-300');
     /* o nome antigo continua, valendo o dono novo — os importadores não quebram */
     expect(COMBOBOX_PALETA).toBe(MENU_PALETA);
   });
 });
 
 describe('os quatro componentes aplicam o padrão', () => {
-  it('Select: o painel opaco, o item 22/10 (com o recuo do check) e o rótulo', () => {
+  it('Select: o painel opaco, o item 20/9,5 (com o recuo do check) e o rótulo', () => {
     render(
       <Select open value="a">
         <SelectTrigger><SelectValue /></SelectTrigger>
@@ -75,10 +82,10 @@ describe('os quatro componentes aplicam o padrão', () => {
     const item = screen.getByRole('option', { name: 'Alfa' });
     temMedidaDoPadrao(item);
     expect(classes(item)).toContain('pl-8');
-    expect(classes(screen.getByText('Grupo'))).toContain('text-zinc-400');
+    expect(classes(screen.getByText('Grupo'))).toContain('text-zinc-200');
   });
 
-  it('DropdownMenu: o painel opaco, o item e o item de checkbox 22/10, o rótulo', () => {
+  it('DropdownMenu: o painel opaco, o item e o item de checkbox 20/9,5, o rótulo', () => {
     render(
       <DropdownMenu open>
         <DropdownMenuTrigger>abrir</DropdownMenuTrigger>
@@ -92,10 +99,10 @@ describe('os quatro componentes aplicam o padrão', () => {
     temPaletaOpaca(screen.getByTestId('painel-dropdown'));
     temMedidaDoPadrao(screen.getByRole('menuitem', { name: 'Abrir OC' }));
     temMedidaDoPadrao(screen.getByRole('menuitemcheckbox', { name: 'Marcado' }));
-    expect(classes(screen.getByText('Ações'))).toContain('text-zinc-400');
+    expect(classes(screen.getByText('Ações'))).toContain('text-zinc-200');
   });
 
-  it('Command: a caixa opaca e o item 22/10', () => {
+  it('Command: a caixa opaca e o item 20/9,5', () => {
     render(
       <Command data-testid="painel-command">
         <CommandList><CommandGroup><CommandItem>Fornecedor X</CommandItem></CommandGroup></CommandList>
@@ -105,7 +112,7 @@ describe('os quatro componentes aplicam o padrão', () => {
     temMedidaDoPadrao(screen.getByRole('option', { name: 'Fornecedor X' }));
   });
 
-  it('SearchableSelect: o painel opaco (pela constante do command.tsx) e o item 22/10', async () => {
+  it('SearchableSelect: o painel opaco (pela constante do command.tsx) e o item 20/9,5', async () => {
     render(<SearchableSelect value="__all__" onValueChange={() => {}} placeholder="Buscar..."
       options={[{ value: 'a', label: 'Amanda Montes Camargo' }]} />);
     fireEvent.click(screen.getByRole('button', { name: /Todos|Buscar|Selecione/ }));
@@ -118,7 +125,7 @@ describe('os quatro componentes aplicam o padrão', () => {
 describe('campos com busca — o item no padrão e o texto do gatilho à esquerda', () => {
   const FORN = [{ id: 'f1', nome: 'Luis Paulo Carvalho da Silva — fornecedor de nome bem longo', ativo: true }];
 
-  it('FavorecidoSelect: o gatilho tem o span min-w-0 flex-1 truncate text-left; o item é 22/10', () => {
+  it('FavorecidoSelect: o gatilho tem o span min-w-0 flex-1 truncate text-left; o item é 20/9,5', () => {
     render(<FavorecidoSelect value="f1" onChange={() => {}} fornecedores={FORN} search="" onSearchChange={() => {}} />);
     const gatilho = screen.getByRole('combobox');
     const span = gatilho.querySelector('span');
@@ -134,5 +141,37 @@ describe('campos com busca — o item no padrão e o texto do gatilho à esquerd
     expect(forn).toMatch(/<span className="min-w-0 flex-1 truncate text-left">\s*\{fornecedorSelecionado\?\.nome \?\? placeholder\}/);
     /* e o item do subcentro vem da medida do padrão, não de uma régua escrita no componente */
     expect(plano).toContain('MENU_ITEM,');
+  });
+});
+
+/* ═══ UI-DROPDOWN-PADRAO-01-fix1 — o realce e o secundário num dono só ═════════════════════════════════════════════ */
+describe('nenhum componente de menu escreve o realce ou o fundo escuro em literal (fix1)', () => {
+  const ARQUIVOS = [
+    'select.tsx', 'dropdown-menu.tsx', 'command.tsx', 'searchable-select.tsx',
+    '../shared/FavorecidoSelect.tsx', '../shared/FornecedorSelect.tsx', '../shared/PlanoSubcentroSelect.tsx',
+  ];
+  /* só o código: os comentários contam a história (zinc-700/800 de antes) e não pintam nada */
+  const semComentario = (t: string) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
+  it('os 7 arquivos: sem bg-zinc-700/800/900, sem text-zinc-100/400, sem sky-300/amber-500 — e todos importam do dono', () => {
+    for (const a of ARQUIVOS) {
+      const fonte = readFileSync(resolve(__dirname, a), 'utf8');
+      const codigo = semComentario(fonte);
+      expect(codigo, a).not.toMatch(/\bbg-zinc-(700|800|900)\b/);
+      expect(codigo, a).not.toMatch(/\btext-zinc-400\b/);
+      /* o texto do item herda o BRANCO da paleta: nenhum componente o pinta por cima */
+      expect(codigo, a).not.toMatch(/\btext-zinc-100\b/);
+      expect(codigo, a).not.toMatch(/\b(sky-300|amber-500)\b/);
+      expect(fonte, a).toMatch(/from ['"]@\/components\/ui\/menuPadrao['"]/);
+    }
+  });
+
+  it('a busca de menu sai de MENU_BUSCA; o vazio e o secundário, de MENU_VAZIO / MENU_SECUNDARIO', () => {
+    const cmd = readFileSync(resolve(__dirname, 'command.tsx'), 'utf8');
+    expect(cmd).toContain('MENU_BUSCA,');
+    expect(cmd).toContain('MENU_VAZIO');
+    expect(cmd).toContain('MENU_REALCE_SELECIONADO,');
+    const ss = readFileSync(resolve(__dirname, 'searchable-select.tsx'), 'utf8');
+    expect(ss).toContain("dense && 'sticky top-0 z-10 bg-zinc-600'");
   });
 });

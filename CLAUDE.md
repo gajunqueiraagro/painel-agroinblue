@@ -160,8 +160,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 02/10/2026 (PR-CONC-MESA-TRANSFERENCIA-VOLTA, +6 em `src/v2/lib/mesa/transferenciaNaMesa.test.tsx`, arquivo
-  novo; antes o PR-CONC-ENRIQ-MARCAR-FAVORECIDO, +9): 2878
+  Baseline em 02/10/2026 (UI-DROPDOWN-PADRAO-01-fix1, +2 em `src/components/ui/menuPadrao.test.tsx`; antes o
+  PR-CONC-MESA-TRANSFERENCIA-VOLTA, +6): 2880
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -308,6 +308,8 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   ("do extrato") — proposta antiga nesses dois campos grava sem aparecer; medir e decidir; (d) a Mesa nao muda mais o
   Tipo nem a conta bancaria (o Tipo vai pelo passo "Transferencias entre contas"); `ResultadoTipoEditor` e
   `ResultadoContaEditor` (`ResultadoCamposGravaveis.tsx`) ficaram SEM CHAMADOR — apagar ou religar e' decisao.
+  · MENU-CONTRASTE (UI-DROPDOWN-PADRAO-01-fix1): no seletor de importacao do Enriquecer, o "(mais recente)" e' pintado pela
+  tela com `text-muted-foreground` e da' 1,60:1 sobre o painel zinc-600 — PR proprio (a regra e' todo texto de menu >= 4,5:1).
   · TRANSFERENCIA-VOLTA (PR-CONC-MESA-TRANSFERENCIA-VOLTA): (a) `EnriquecimentoActions.tsx` NAO TEM QUEM O RENDERIZE desde
   fe26d14c (06/09, Mesa compacta) — o `slotTransferencia` nasceu dois dias depois (9fb376ab) ja' sem tela; o componente
   fica so' como dono do TIPO `EnriquecimentoActionsProps` (apagar o corpo ou religar e' decisao); (b) `AcaoEhTransferencia`
@@ -538,8 +540,10 @@ preview que o cabecalho nao sai da tela ao rolar.
   componente, NUNCA classe solta por tela; o span NAO leva `flex-1` (o gatilho com `justify-center`, o ano do Fechamento,
   continua centralizado). Os combobox que nao sao `SelectTrigger` (fornecedor, conta do plano) nao foram tocados.
 - ⚠ TODO MENU ABERTO TEM UM PADRAO SO', NUM DONO SO' (UI-DROPDOWN-PADRAO-01, A23): `src/components/ui/menuPadrao.ts` —
-  `MENU_PALETA` (`bg-zinc-800`, OPACO: sem alpha nem blur, a mesma cor sobre o branco e sobre o navy), `MENU_ITEM` (22px /
-  10px) e `MENU_ROTULO`. Select, DropdownMenu, Command, SearchableSelect e os combobox de `shared/` importam dali; realce em
+  `MENU_PALETA` (`bg-zinc-600` desde o fix1, rgb(82,82,91), texto BRANCO: OPACO, sem alpha nem blur, a mesma cor sobre o
+  branco e sobre o navy), `MENU_ITEM` (20px / 9,5px, o piso), `MENU_ROTULO`, e o REALCE (`MENU_REALCE*` zinc-700,
+  `MENU_ESCOLHIDO*` zinc-700/60), o secundario (`MENU_SECUNDARIO`/`MENU_VAZIO` zinc-200) e a busca (`MENU_BUSCA` zinc-700).
+  ⚠ TODO TEXTO DE MENU >= 4,5:1 (decisao do Gabriel, 02/10): o item NAO escreve cor, herda o branco da paleta (7,73). Select, DropdownMenu, Command, SearchableSelect e os combobox de `shared/` importam dali; realce em
   `zinc-700`. TELA NAO SOBRESCREVE tamanho nem altura do item de menu (saiu de 41 `SelectItem`, 11 `DropdownMenuItem`, do
   `itemCls` do Financeiro e do `ITEM_DROPDOWN` da Mesa). O texto do gatilho com busca fica `min-w-0 flex-1 truncate
   text-left`. Restam `text-xs` em 7 `DropdownMenuItem` (FinV2ContasTab, FinV2SafrasTab) e `py-*` em 7 `SelectItem`: fila.

@@ -5,7 +5,9 @@ import { ChevronsUpDown, X } from 'lucide-react';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { Popover, PopoverContent } from '@/components/ui/popover';
 import { COMBOBOX_CONTENT } from '@/components/ui/command';
-import { MENU_ITEM } from '@/components/ui/menuPadrao';
+import {
+  MENU_BUSCA, MENU_ITEM, MENU_REALCE, MENU_REALCE_HOVER, MENU_SECUNDARIO, MENU_VAZIO,
+} from '@/components/ui/menuPadrao';
 
 export interface OpcaoSearchable {
   value: string;
@@ -347,7 +349,7 @@ export function SearchableSelect({
           /* a paleta é `MENU_PALETA` (o dono, `menuPadrao.ts`), que chega pelo `COMBOBOX_CONTENT` do command.tsx —
              UI-DROPDOWN-PADRAO-01: opaca, a mesma do Select e do DropdownMenu */
           className={cn(COMBOBOX_CONTENT, 'max-w-[320px] rounded-md border shadow-md', contentClassName)}>
-          <div className={cn('px-1 pt-1 pb-1', dense && 'sticky top-0 z-10 bg-zinc-800')}>
+          <div className={cn('px-1 pt-1 pb-1', dense && 'sticky top-0 z-10 bg-zinc-600')}>
             <input
               ref={inputRef}
               value={search}
@@ -359,9 +361,10 @@ export function SearchableSelect({
                  SELECT-03. Agora e' um so': 28px de altura, 10px de texto, fundo
                  `zinc-900/60`. Os 12px que o comentario antigo defendia eram do tempo em
                  que o item tambem era 12px; hoje o sistema inteiro e' 10. */
+              /* fix1: o campo de busca é `MENU_BUSCA` (zinc-700, texto branco, placeholder zinc-300, 9,5px) */
               className={cn(
-                'w-full rounded bg-zinc-900/60 border border-zinc-700/40 px-2 h-7 text-[10px]',
-                'text-zinc-100 placeholder:text-zinc-400 outline-none focus:ring-1 focus:ring-zinc-600',
+                'w-full rounded border border-zinc-500/40 px-2 h-7 outline-none focus:ring-1 focus:ring-zinc-300',
+                MENU_BUSCA,
               )}
               onKeyDown={handleKeyDown}
               autoCorrect="off"
@@ -385,11 +388,11 @@ export function SearchableSelect({
                    continua sendo o GATILHO e a altura da lista, nao o item.
                    ⚠ REALCE ESCURO: `bg-accent` e' claro e sumia sobre o painel novo. */
                 className={cn(
-                  'w-full text-left rounded-sm cursor-pointer text-zinc-100',
+                  'w-full text-left rounded-sm cursor-pointer',
                   MENU_ITEM,
-                  /* realce zinc-700: o painel é zinc-800 opaco desde o UI-DROPDOWN-PADRAO-01 */
-                  idx === highlightIdx && 'bg-zinc-700',
-                  idx !== highlightIdx && 'hover:bg-zinc-700/60',
+                  /* o realce vem do dono (`MENU_REALCE`, fix1): zinc-700 sobre o painel zinc-600 */
+                  idx === highlightIdx && MENU_REALCE,
+                  idx !== highlightIdx && MENU_REALCE_HOVER,
                   value === o.value && 'font-semibold',
                 )}
               >
@@ -403,18 +406,19 @@ export function SearchableSelect({
                   {o.hint ? <span className="shrink-0 opacity-60">· {o.hint}</span> : null}
                 </span>
                 {o.sub ? (
-                  <span className={cn('block truncate text-[10px]',
-                    o.subAlerta ? 'text-amber-500' : 'text-zinc-400')} title={o.sub}>
+                  /* fix1: no painel cinza o amber-500 e o zinc-400 sumiam — amber-100 (6,94:1) e zinc-200 (6,09:1) sobre zinc-600 */
+                  <span className={cn('block truncate text-[9.5px]',
+                    o.subAlerta ? 'text-amber-100' : MENU_SECUNDARIO)} title={o.sub}>
                     {o.sub}
                   </span>
                 ) : null}
               </button>
             ))}
             {filtered.length === 0 && (
-              <div className="px-2 py-3 text-center text-[10px] text-zinc-400">Nenhum resultado</div>
+              <div className={cn('px-2 py-3 text-center', MENU_VAZIO)}>Nenhum resultado</div>
             )}
             {excedente > 0 && (
-              <div className="text-[10px] text-zinc-400 px-2 py-1 border-t border-zinc-700/40">
+              <div className={cn('px-2 py-1 border-t border-zinc-500/40', MENU_VAZIO)}>
                 +{excedente} resultado{excedente === 1 ? '' : 's'} — refine a busca
               </div>
             )}
@@ -425,7 +429,7 @@ export function SearchableSelect({
             {acaoFinal && (
               <button type="button" onMouseDown={e => e.preventDefault()}
                 onClick={() => { setOpen(false); acaoFinal.onSelect(); }}
-                className={cn('w-full text-left rounded-sm text-sky-300 hover:bg-zinc-700/60 border-t border-zinc-700/40', MENU_ITEM)}>
+                className={cn('w-full text-left rounded-sm text-sky-100 border-t border-zinc-500/40', MENU_REALCE_HOVER, MENU_ITEM)}>
                 {acaoFinal.label}
               </button>
             )}
