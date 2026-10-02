@@ -1035,6 +1035,9 @@ export function MesaEnriquecimentoTab({
          Na gravada o sistema prevalece e só vale o que o operador editou: o banco já alinhou a proposta ao lançamento na
          primeira edição, e uma sugestão aqui gravaria o que ninguém pediu. */
       const sugestoes = rodaSugestoesDoSalvar(selecionado);
+      /* ⚠ AS TRÊS LEVAM `_sugestao: true` — PR-CONC-ENRIQ-PROPOSTA-PAR-MUDOU D2. O banco lê e não grava: as chaves delas NÃO
+         entram em `chaves_do_operador`, e quando o Recasar troca o par elas são recalculadas para o par novo, em vez de
+         ficarem presas como se o operador as tivesse escolhido. Edição do operador nunca leva a marca. */
       /**
        * 133h item 13 — O RESULTADO É A FONTE DO PROPOSTO, SEMPRE.
        *
@@ -1049,7 +1052,7 @@ export function MesaEnriquecimentoTab({
        * planilha não some — continua no aviso "planilha dizia", que é o lugar dele.
        */
       if (sugestoes && precisaAlinhar(selecionado)) {
-        await editarProposto({ staging_id: id, patch: { subcentro: selecionado.edicao.subcentro } });
+        await editarProposto({ staging_id: id, patch: { subcentro: selecionado.edicao.subcentro, _sugestao: true } });
       }
       /**
        * A SAFRA SUGERIDA VIRA PROPOSTA NO SALVAR — PR-MESA-SUGESTOES-01 §1.
@@ -1065,7 +1068,7 @@ export function MesaEnriquecimentoTab({
           && !selecionado.edicao.safraId
           && !contaAdministrativa(selecionado)) {
         await editarProposto({
-          staging_id: id, patch: { safra_id: selecionado.edicao.safraSugeridaId },
+          staging_id: id, patch: { safra_id: selecionado.edicao.safraSugeridaId, _sugestao: true },
         });
       }
       /**
@@ -1075,7 +1078,7 @@ export function MesaEnriquecimentoTab({
        */
       if (sugestoes && selecionado.edicao.formaPagamentoSugerida && !selecionado.edicao.formaPagamento) {
         await editarProposto({
-          staging_id: id, patch: { forma_pagamento: selecionado.edicao.formaPagamentoSugerida },
+          staging_id: id, patch: { forma_pagamento: selecionado.edicao.formaPagamentoSugerida, _sugestao: true },
         });
       }
       const res: any = await applyRow({ staging_id: id, overwrite: true });
@@ -1361,6 +1364,8 @@ export function MesaEnriquecimentoTab({
     gravada: gravadaSel ? { alterada: gravadaSel.alterada } : null,
     motivoReverter,
     erroEdicao: erroEdicao && selecionado && erroEdicao.id === selecionado.id ? erroEdicao.msg : null,
+    /* PR-CONC-ENRIQ-PROPOSTA-PAR-MUDOU D8 — o Recasar trocou o par depois da última edição/gravação: "confira", sem bloquear. */
+    parMudou: selecionado?.parMudou ?? false,
   };
   // Contagem da mesa ampliada: reusa rowsFiltradas (sessão + filtros vigentes). Nada recalculado.
   const mesaAmpliadaVazia = rowsNaTela.length === 0;

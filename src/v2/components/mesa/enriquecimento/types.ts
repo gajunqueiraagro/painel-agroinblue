@@ -275,6 +275,11 @@ export interface EnriqRowVM {
    * linha gravada — a Mesa não apaga, e a célula diz "a Mesa não apaga · mantém".
    */
   gravada: EnriqGravada | null;
+  /**
+   * O Recasar trocou o par desta linha depois da última edição/gravação — PR-CONC-ENRIQ-PROPOSTA-PAR-MUDOU D8
+   * (`parMudouNoRecasar`). A proposta já foi refeita para o par novo pelo banco; o rodapé pede "confira". Não bloqueia nada.
+   */
+  parMudou: boolean;
   /** O lançamento casado é FILHO DE DESMEMBRAMENTO (`mesa_split`): a observação dele guarda o elo com o consolidado. */
   filhoDeDesmembramento: boolean;
   // LISTA (esquerda) — só o necessário para localizar o lançamento (lado SISTEMA).

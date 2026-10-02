@@ -160,8 +160,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 02/10/2026 (PR-CONC-ENRIQ-SAFRA-COMPETENCIA, +13 em `src/v2/lib/mesa/safraCompetencia.test.tsx`; antes o
-  PR-CONC-ENRIQ-LINHA-GRAVADA-EDITAVEL, +18): 2931
+  Baseline em 02/10/2026 (PR-CONC-ENRIQ-PROPOSTA-PAR-MUDOU, +9 em `src/v2/lib/mesa/propostaParMudou.test.tsx`; antes o
+  PR-CONC-ENRIQ-SAFRA-COMPETENCIA, +13): 2940
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -360,6 +360,17 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   lavoura o aviso e' so' texto]; (h) as safras INATIVAS AMD/MAND medem 107/113px em "competencia: X" e cortariam no slot —
   nao aparecem porque `_fn_safra_da_competencia` so' devolve safra ATIVA; codigo ativo novo com mais de 9 caracteres pede
   remedir o slot.
+  · PROPOSTA-PAR-MUDOU (PR-CONC-ENRIQ-PROPOSTA-PAR-MUDOU, 02/10): (a) LIMITE D5 ACEITO: linha editada ANTES do PR (manual, sem
+  `chaves_do_operador`) conta TODA chave presente no topo como do operador — inclusive o alinhamento de uma linha que foi gravada
+  e revertida (a 79 da 8d6efeb7 tem 17 chaves no topo, com `data_pagamento`/`conta_bancaria_id`) e campo esvaziado de proposito
+  volta preenchido; o aviso "par mudou" cobre; (b) SESSAO SEM `_planilha` (anterior a 30/09): na linha manual reavaliada a
+  precedencia CRIA o `_planilha` a partir do topo, que e' o do operador (244 linhas manuais nao aplicadas sem `_planilha` em
+  02/10; bdbdafc8 101) — a "planilha: X" dessas linhas mostraria a edicao, nao a planilha; decidir se a linha manual sem
+  `_planilha` deve ficar sem ele; (c) o casar continua NAO IDEMPOTENTE no STATUS (ja registrado em SAFRA-COMPETENCIA (c)):
+  medido de novo na bdbdafc8, 31 linhas mudam de status num segundo Recasar, no corpo antigo e no novo, sem mudar par nem
+  proposta; (d) `fn_classificacao_reresolver_sessao` tambem escreve `update_proposto`, mas so' em linha nunca editada
+  (`proposto_editado_em IS NULL`) e so' pelo `postgres` — fora deste PR; (e) a marca `par_mudou_em` fica no `casamento_meta` ate'
+  o proximo Recasar que troque o par de novo: o aviso some pela EDICAO ou GRAVACAO (`parMudouNoRecasar`), nao por limpeza.
   · BOITEL-PAINEL (PR-OC-BOITEL-PAINEL-01 e a FASE 0 PR-OC-BOITEL-ACERTO-CLAREZA, 02/10): (a) TRAVA DE P1 PELA DATA DO
   ENVIO: o "reaplique o Realizado" mexe no valor, nao no rebanho do mes do envio, mas o Salvar da Negociacao trava pelo mes da
   data da OC (`mesFechadoMotivo`, `VendaModalShell`); `oc_revalorar_lote` passa no banco com o mes fechado (simulado em
@@ -820,6 +831,25 @@ docs/historico/frentes-ate-2026-09-29.md.)
   `title`) — medido: o pior codigo ATIVO ("competencia: 20/21-Pec") pede 102px. NUNCA e' pendencia do checklist. (D7) a safra sugerida da linha sem safra le' `safra_da_competencia_id` — sem segunda regra na Mesa.
   md5: precedencia_cru f9db83d4…, `_fn_safra_da_competencia` 81e2f6bb…, view b041b03e…. Custo da view na 8d6efeb7
   (authenticated): {920,912,906} ms (antes {883,791,798}).
+- ⚠ QUANDO O RECASAR TROCA O PAR, A PROPOSTA E' REFEITA PARA O PAR NOVO E SO' FICA O QUE O OPERADOR MEXEU
+  (PR-CONC-ENRIQ-PROPOSTA-PAR-MUDOU, Gabriel 02/10, migration 20261027190900, ⚠ registrada como 20261002190947; ledger = arquivo,
+  md5 80bdf66b…). (D1) `editar_proposto` anota em `_meta.chaves_do_operador` as chaves de TODO patch do operador, removidas
+  inclusive (subcentro leva macro/grupo/centro/plano_conta_id); o alinhamento da linha gravada NAO entra. (D2) `"_sugestao":
+  true` no patch e' lido e NAO gravado, e as chaves dele nao entram na lista — a tela o manda SO' nas tres propostas automaticas
+  do `salvar()` (alinhar subcentro, safra sugerida, forma pelo historico); edicao do operador nunca. (D3) o casar tira a foto do
+  par antes do "limpa" e, na linha NAO aplicada fora de grupo/bloco (o `ambiguo` com candidatos NAO e' grupo) cujo par mudou
+  (nenhum<->par inclusive), grava `casamento_meta.par_anterior` e `par_mudou_em = now()`; par igual devolve a marca que ja'
+  havia. (D4) a precedencia reavalia — MESMO na manual — a linha com `par_mudou_em = now()`: chave da lista fica (com o valor,
+  ou ausente); o resto e' a regra para o par novo (cru: planilha + excel + safra da competencia; classificado: sai do topo).
+  Isto REVOGA, so' para a linha cujo par mudou, o "linha MANUAL nao entra" da precedencia. (D5) manual SEM lista: presente =
+  operador, ausente = regra. (D6) depois, `update_proposto_original` = a regra para o par novo (com o `_meta` nao manual) e a
+  linha so' continua manual se restar chave do operador. (D7) linha aplicada, conferido_bloco e grupo: fora. (D8) a Mesa avisa
+  "par mudou no Recasar · confira" (ambar, no slot da mensagem do rodape, sem bloquear) enquanto `par_mudou_em` > ultima edicao e
+  ultima gravacao (`parMudouNoRecasar`, `src/v2/lib/mesa/enriquecimentoView.ts`); prioridade: erro ao gravar > erro ao editar >
+  par mudou > falta > gravada > diverge (`mensagemDoRodape`). Prova: Recasar antigo x novo na bdbdafc8 (551 linhas) e na
+  b8e5641d (172): 0 par e 0 status diferentes; muda 1 proposta (a 517 da bdbdafc8, manual sem lista que ganhou par: so' o
+  `_meta` ganha a lista e o `_planilha` nasce); o segundo Recasar nao muda proposta nenhuma. md5: editar_proposto 4155bca8…,
+  casar_sessao 01de1fd5…, precedencia_cru c30287e0…; ACL inalterada.
 - ⚠ LINHA GRAVADA E' EDITAVEL NA MESA, E A BASE DELA E' O LANCAMENTO (PR-CONC-ENRIQ-LINHA-GRAVADA-EDITAVEL, migration
   20261027190600, ledger 20261002175601): no classificado o sistema prevalece, entao a proposta de uma linha gravada so' carrega o
   que o operador mudar DEPOIS de gravar. (D1) `_fn_classificacao_alinhar_ao_lancamento(proposta, lancamento)` e' o dono UNICO de

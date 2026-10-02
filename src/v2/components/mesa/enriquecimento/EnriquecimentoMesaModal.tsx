@@ -68,18 +68,20 @@ const sinalPrefixo = (s: 'entrada' | 'saida' | null) => (s === 'saida' ? '−' :
 
 /**
  * A mensagem única do rodapé da Mesa — PR-CONC-MESA-ORDEM-03. Prioridade: 1) o banco recusou a gravação (vermelho) ·
- * 2) o banco recusou a edição de um campo (vermelho) · 3) "falta: …" (vermelho) · 4) a linha GRAVADA: "alterada · falta
- * gravar" (âmbar) ou "já gravada" (neutro), com o motivo do Reverter apagado colado · 5) a planilha diverge do extrato
- * (âmbar). Exportada para o teste afirmar a ordem.
+ * 2) o banco recusou a edição de um campo (vermelho) · 3) o Recasar trocou o par: "par mudou no Recasar · confira" (âmbar,
+ * PR-CONC-ENRIQ-PROPOSTA-PAR-MUDOU D8 — não bloqueia, só pede conferência) · 4) "falta: …" (vermelho) · 5) a linha GRAVADA:
+ * "alterada · falta gravar" (âmbar) ou "já gravada" (neutro), com o motivo do Reverter apagado colado · 6) a planilha diverge
+ * do extrato (âmbar). Exportada para o teste afirmar a ordem.
  * ⚠ OS ERROS DE EDITAR E DE SALVAR MORAM AQUI, NÃO EM TOAST (PR-CONC-ENRIQ-LINHA-GRAVADA-EDITAVEL D9, UX-TOAST-01).
  */
 export function mensagemDoRodape(a: {
-  erroBanco?: string | null; erroEdicao?: string | null; falta?: string | null;
+  erroBanco?: string | null; erroEdicao?: string | null; parMudou?: boolean; falta?: string | null;
   gravada?: { alterada: boolean } | null; motivoReverter?: string | null;
   divergenciasDoExtrato?: readonly string[] | null;
-}): { tipo: 'erro' | 'falta' | 'alterada' | 'gravada' | 'diverge' | null; texto: string } {
+}): { tipo: 'erro' | 'par_mudou' | 'falta' | 'alterada' | 'gravada' | 'diverge' | null; texto: string } {
   if (a.erroBanco) return { tipo: 'erro', texto: `Não gravou — o banco recusou: ${a.erroBanco}` };
   if (a.erroEdicao) return { tipo: 'erro', texto: `Não alterou — ${a.erroEdicao}` };
+  if (a.parMudou) return { tipo: 'par_mudou', texto: 'par mudou no Recasar · confira' };
   if (a.falta) return { tipo: 'falta', texto: `falta: ${a.falta.replace(/^Falta preencher: /, '').replace(/\.$/, '')}` };
   if (a.gravada) {
     const base = a.gravada.alterada ? 'alterada · falta gravar' : 'já gravada';
@@ -103,6 +105,8 @@ export interface AcoesDaMesa extends EnriquecimentoActionsProps {
   motivoReverter?: string | null;
   /** O banco recusou a edição de um campo desta linha (D9) — escrito no rodapé, em vermelho. */
   erroEdicao?: string | null;
+  /** O Recasar trocou o par desta linha depois da última edição/gravação (PR-CONC-ENRIQ-PROPOSTA-PAR-MUDOU D8) — âmbar. */
+  parMudou?: boolean;
 }
 export interface DetalheDaMesa extends EnriquecimentoDetalheProps {
   /**
@@ -274,7 +278,7 @@ export function EnriquecimentoMesaModal({
   const falta = actions.salvarMotivo && !(gravada && !gravada.alterada) ? actions.salvarMotivo : null;
   /* A MENSAGEM DO RODAPÉ — uma só, pela prioridade (`mensagemDoRodape`). */
   const mensagem = mensagemDoRodape({
-    erroBanco: actions.erroBanco, erroEdicao: actions.erroEdicao, falta, gravada,
+    erroBanco: actions.erroBanco, erroEdicao: actions.erroEdicao, parMudou: actions.parMudou, falta, gravada,
     motivoReverter: actions.motivoReverter, divergenciasDoExtrato: actions.divergenciasDoExtrato,
   });
 
@@ -460,7 +464,8 @@ export function EnriquecimentoMesaModal({
                 <span data-testid="mensagem-rodape" data-mensagem={mensagem.tipo ?? 'nenhuma'} title={mensagem.texto || undefined}
                   className={`min-w-0 flex-1 truncate text-[10px] ${
                     mensagem.tipo === 'erro' ? 'font-medium text-red-700 dark:text-red-400'
-                      : mensagem.tipo === 'diverge' || mensagem.tipo === 'alterada' ? 'text-amber-700 dark:text-amber-400'
+                      : mensagem.tipo === 'diverge' || mensagem.tipo === 'alterada' || mensagem.tipo === 'par_mudou'
+                        ? 'text-amber-700 dark:text-amber-400'
                       : mensagem.tipo === 'gravada' ? 'text-muted-foreground' : ''}`}>
                   {mensagem.texto}
                 </span>

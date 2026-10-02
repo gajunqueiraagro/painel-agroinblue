@@ -813,6 +813,7 @@ export function toRowVM(
   return {
     /* PR-CONC-ENRIQ-LINHA-GRAVADA-EDITAVEL — o estado da linha gravada (alterada, Reverter, campos esvaziados). */
     gravada: estadoDaLinhaGravada(row, edicao),
+    parMudou: parMudouNoRecasar(row),
     filhoDeDesmembramento: row.lanc_origem_lancamento === 'mesa_split',
     id: row.staging_id,
     linha: row.excel_linha_origem,
@@ -1413,6 +1414,25 @@ export function estadoDaLinhaGravada(row: ClassificacaoStagingPreviewRow, edicao
     temEstadoAnterior: typeof row.tem_estado_anterior === 'boolean' ? row.tem_estado_anterior : null,
     camposEsvaziados,
   };
+}
+
+/**
+ * O RECASAR TROCOU O PAR DESTA LINHA DEPOIS DA ÚLTIMA MÃO DO OPERADOR — PR-CONC-ENRIQ-PROPOSTA-PAR-MUDOU D8.
+ * O casar grava `casamento_meta.par_mudou_em` (e `par_anterior`) quando o par muda; a precedência já refez a proposta para o
+ * par novo, mantendo só as chaves do operador. O aviso vale enquanto `par_mudou_em` for MAIS NOVO que a última edição
+ * (`proposto_editado_em`) e que a última gravação (`aplicado_em`): editar ou gravar a linha é o "conferi". Linha aplicada
+ * nunca é marcada pelo banco (D7); aqui ela também não avisa.
+ */
+export function parMudouNoRecasar(
+  row: Pick<ClassificacaoStagingPreviewRow, 'aplicado' | 'casamento_meta' | 'proposto_editado_em' | 'aplicado_em'>,
+): boolean {
+  if (row.aplicado) return false;
+  const marca = row.casamento_meta?.par_mudou_em;
+  const mudou = instante(typeof marca === 'string' ? marca : null);
+  if (mudou === null) return false;
+  const editado = instante(row.proposto_editado_em);
+  const gravado = instante(row.aplicado_em);
+  return (editado === null || mudou > editado) && (gravado === null || mudou > gravado);
 }
 
 /** Por que o Reverter está apagado numa linha gravada — D4. `null` = o Reverter vale (ou a linha não é gravada). */
