@@ -160,8 +160,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 02/10/2026 (PR-CONC-ENRIQ-BLOCO-ESTADOS, +7 em `src/v2/lib/mesa/enriquecerV2.test.tsx`; antes o
-  UI-DROPDOWN-PADRAO-01-fix1, +2): 2887
+  Baseline em 02/10/2026 (PR-OC-BOITEL-PAINEL-01, +13 em `src/components/venda/painelBoitel.test.ts`; antes o
+  PR-CONC-ENRIQ-BLOCO-ESTADOS, +7): 2900
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -329,6 +329,17 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   sao as 7 que ficam (D2); (d) Santa Rita 8a82eb7c linhas 58/98 e NJ a63fa4c6 linha 246: APLICADAS em lancamento de outro mes /
   conta (gravaram classificacao) — decisao caso a caso; (e) a reaberta nao guarda de onde veio (o "limpa" do Recasar zera o
   `casamento_meta`).
+  · BOITEL-PAINEL (PR-OC-BOITEL-PAINEL-01 e a FASE 0 PR-OC-BOITEL-ACERTO-CLAREZA, 02/10): (a) TRAVA DE P1 PELA DATA DO
+  ENVIO: o "reaplique o Realizado" mexe no valor, nao no rebanho do mes do envio, mas o Salvar da Negociacao trava pelo mes da
+  data da OC (`mesFechadoMotivo`, `VendaModalShell`); `oc_revalorar_lote` passa no banco com o mes fechado (simulado em
+  ROLLBACK na b58bf556); (b) O FINANCEIRO NAO ACOMPANHA O REALIZADO: principal programado/materializado fica 'pendente' no
+  `oc_revalorar_lote`, e o slot e' rebaixado por `salvar_lotes` do projetado (b58bf556: 593.145,00 → 565.217 em 31/08); (c)
+  ADIANTAMENTO DEVOLVIDO SEM DONO: nenhum caminho o atualiza ao realizado (7f7de76f: 42.416,00 projetado x 46.458,50 pago); (d)
+  CONFERENCIA DO FINANCEIRO NA MODALIDADE B: comparar o liquido de entradas e saidas da view com o "(=) Liquido" — escondida no
+  painel; (e) OCs a conferir: 2ca81c1b e 8dcafa8e (Vera; adiantamento no boitel sem devolvido na OC: −133.455,00 e −51.951,00
+  contra o papel), da0b8577 (RRCC; −7.854,00 contra o motor, e o slot 410.836,79 tambem diverge), 3260d1c8 (NJ; sem papel e
+  `valor_total_diarias` nulo); b58bf556 (principal desfeito pelo Gabriel em 02/10 15:53, "valor sem sanidade") e 7f7de76f
+  (−1.102,17) sao o conserto de dado da FASE 0.
   · TRANSFERENCIA-VOLTA (PR-CONC-MESA-TRANSFERENCIA-VOLTA): (a) `EnriquecimentoActions.tsx` NAO TEM QUEM O RENDERIZE desde
   fe26d14c (06/09, Mesa compacta) — o `slotTransferencia` nasceu dois dias depois (9fb376ab) ja' sem tela; o componente
   fica so' como dono do TIPO `EnriquecimentoActionsProps` (apagar o corpo ou religar e' decisao); (b) `AcaoEhTransferencia`
@@ -961,6 +972,20 @@ docs/historico/frentes-ate-2026-09-29.md.)
   predicado `realizadoAplicadoNoLote`). `ocBoitelReal` e' o rascunho, `ocBoitelRealSalvo` o que o banco tem — quem le'
   numero le' o salvo. Duas modalidades: A (o boitel abate) e B (abate em nome do produtor; acerto em 1155)
   (OC-BOITEL-VALOR-01, OC-BOITEL-REALIZADO-UX-01, BOITEL-ABATE-PRODUTOR-01).
+- ⚠ O PAINEL LATERAL DA VENDA EM BOITEL E' UMA CONTA SO', DE CIMA PARA BAIXO (PR-OC-BOITEL-PAINEL-01, Gabriel 02/10): acerto
+  itemizado → Saldo do acerto → + Adiantamento devolvido → A RECEBER DO BOITEL (o Pix, `saldoReceberBase`) → − Adiantamento
+  (ja' era seu) → − Gastos diretos (`custosDoProdutor`) → − Parte do parceiro (`pParte`) → LIQUIDO NO BOLSO
+  (`bolsoDaVendaBoitel`) → "Financeiro X faltam/sobram Y" (`entrada_obrigacao` da view, a diferenca em vermelho, so' no
+  realizado da A; a frase inteira no `title`). As linhas saem de UMA funcao pura, `linhasPainelBoitel` (`src/components/venda/painelBoitel.ts`); cada
+  linha e' um termo do motor — PROIBIDO linha de residuo; `residuoDaConta` e' so' a prova (0 centavo nas 35 linhas de boitel do
+  proto, 02/10). B: as tres linhas de `linhasResumoProdutor` + a cauda, sem "Financeiro". Projecao: ambar, sem diferenca.
+  Sairam do painel de boitel o trio A receber / Recebido / Saldo (o Saldo de nivel liquidado dizia −107.150,94 numa venda que
+  deixa 581.232,52) e a nota de 3 linhas (virou `title`); a venda comum segue com o trio.
+- ⚠ COR PELO SINAL, UM DONO SO' (PR-OC-BOITEL-PAINEL-01, D7): negativo SEMPRE vermelho, positivo SEMPRE verde —
+  `COR_SINAL` (`src/lib/oc/contaCorrente.ts`, ao lado de `corDoSaldo`; `text-[#b91c1c]` / `text-[#15803d]`). O resumo da conta
+  corrente e o painel de boitel leem dali. Sinal negativo com o "−" tipografico colado ao numero, nunca "-R$". Valor sem sinal
+  (o "Financeiro") fica neutro; a projecao fica no ambar dela. Os outros literais desses hex no sistema (16 arquivos) nao
+  foram migrados — fila.
 - ⚠ UM GESTO DE DESFAZER = UM MOTIVO + UM `estorno_id` EM TODOS OS EVENTOS; a cadeia vai da folha a raiz relendo o banco
   antes de cada nivel (`src/lib/oc/desfazerCompromisso.ts`) (OC-MOTIVO-UNICO-01).
 - ⚠ VINCULO COM OC = PARTE VIVA (`zoo_operacao_partes.cancelada = false`), nunca `origem_lancamento`; quem le' parte por

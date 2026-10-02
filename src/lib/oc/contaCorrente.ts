@@ -207,6 +207,15 @@ export function lerContaCorrente(raw: unknown): ContaCorrente | null {
   };
 }
 
+/**
+ * A COR PELO SINAL — um dono so' (PR-OC-BOITEL-PAINEL-01): negativo SEMPRE vermelho, positivo SEMPRE verde. O resumo da
+ * conta corrente e o painel de boitel leem daqui; eram literais soltos no `VendaModalShell`.
+ */
+export const COR_SINAL: { readonly neg: string; readonly pos: string } = {
+  neg: 'text-[#b91c1c]',
+  pos: 'text-[#15803d]',
+};
+
 /** Cor pelo sinal do caixa da fazenda: negativo = falta receber (vermelho), positivo = adiantado/entrou (verde). */
 export function corDoSaldo(valor: number | null): 'neg' | 'pos' | 'zero' {
   if (valor === null) return 'zero';

@@ -46,7 +46,8 @@ import { AbaFinanceiroOC } from '@/components/compra/AbaFinanceiroOC';
 import { useOcCompromissos } from '@/hooks/useOcCompromissos';
 import { useOcContaCorrente } from '@/hooks/useOcContaCorrente';
 import { CancelarContaCorrenteDialog } from '@/components/venda/CancelarContaCorrenteDialog';
-import { corDoSaldo } from '@/lib/oc/contaCorrente';
+import { corDoSaldo, COR_SINAL } from '@/lib/oc/contaCorrente';
+import { linhasPainelBoitel, linhaIdentificacaoBoitel, entregaEmUmaLinha, classeDaCorPainel } from '@/components/venda/painelBoitel';
 import type { ReactNode } from 'react';
 import type { LinhaPrevisao, RotulosCompromissos } from '@/components/compra/AbaCompromissosOC';
 import type { RecebimentoApi } from '@/hooks/useOperacaoRecebimento';
@@ -55,7 +56,7 @@ import type { EventosApi } from '@/hooks/useOperacaoEventos';
 import type { LiquidacaoApi } from '@/hooks/useOperacaoLiquidacao';
 import { BoitelTopoNegociacao, bolsoDaVendaBoitel, unitariosDoLiquido, derivadosBoitel, PilulaCenario, valorDaVendaBoitel, avisoAcertoDivergente, valorDoLoteBoitel } from '@/components/venda/BoitelNegociacaoDerivado';
 import { BoitelBlocosModais, BoitelAnaliseFaixa, faltamDosCinco, type BoitelEdicao } from '@/components/venda/BoitelBlocosModais';
-import { linhasPrevisaoBoitel, avisoBoitelProdutor, linhasResumoProdutor, propostasBoitelProdutor } from '@/components/venda/previsaoBoitel';
+import { linhasPrevisaoBoitel, avisoBoitelProdutor, propostasBoitelProdutor } from '@/components/venda/previsaoBoitel';
 import { pesoMedioPorCabeca } from '@/hooks/useCompraLotes';
 import { LinhaResumo, AsideResumo, FaixaTituloResumo, SecaoResumo } from '@/components/ui/linha-resumo';
 import { consolidarRecebimento } from '@/components/compra/ResumoLateralOC';
@@ -411,36 +412,24 @@ export function VendaModalShell({
     : (vendaBoitel?.valor ?? null);
   const corMundo = topoNoRealizado ? 'text-foreground' : 'text-[#854F0B] dark:text-amber-500';
 
-  /* ⚠ AS SETE LINHAS DO ACERTO SAEM DO MOTOR — B-11 item 2. `dAcerto*` sao as parcelas que
-     `derivadosBoitel` ja calcula com as flags aplicadas, e `valorTotalAntecipadoCalc` e o
-     reembolso. NENHUMA conta mora no resumo: ele lista e formata.
-     ⚠ "SO' ITENS COM FLAG [boitel]" E POR CONSTRUCAO, nao por filtro escrito: a parcela
-     `dAcerto*` de um custo que o contrato pos do lado do PRODUTOR ja vale zero. Frete e
-     notas do envio ficam de fora porque os defaults os poem la' — e se um contrato os
-     puser no boitel, eles APARECEM, porque a lista segue a flag e nao uma lista fixa.
-     ⚠ O SALDO E `fba - descontoDoAcerto`, o mesmo "Acerto liquido" da analise; e o total,
-     mais o reembolso, e' o `saldoReceberBase` do motor — o numero que o papel do boitel
-     traz. Nao ha uma segunda subtracao aqui. */
-  type LinhaAcerto = { rotulo: string; valor: number; sinal: '+' | '−' };
-  const acertoTodas: LinhaAcerto[] = derAcerto == null ? [] : [
-    { rotulo: '(+) Faturamento do abate', valor: derAcerto.fba, sinal: '+' },
-    { rotulo: '(−) Despesas do abate', valor: derAcerto.dAcertoAbate, sinal: '−' },
-    { rotulo: '(−) Diárias · nutrição', valor: derAcerto.dAcertoDiarias, sinal: '−' },
-    { rotulo: '(−) Sanidade', valor: derAcerto.dAcertoSanidade, sinal: '−' },
-    { rotulo: '(−) Outros', valor: derAcerto.dAcertoOutros, sinal: '−' },
-    { rotulo: '(−) Frete do envio', valor: derAcerto.dAcertoFrete, sinal: '−' },
-    { rotulo: '(−) Notas do envio', valor: derAcerto.dAcertoNotas, sinal: '−' },
-  ];
-  /* Zero nao entra: custo que o contrato pos do lado do produtor vale zero aqui, e uma
-     linha zerada afirmaria que o boitel cobrou nada — quando ele nao cobrou. */
-  /* ─── MODALIDADE B NO RESUMO — BOITEL-ABATE-PRODUTOR-01 ──────────────────────────────────
-     Na B nao ha "a receber do boitel": o frigorifico paga o produtor e o boitel cobra por boleto. O bloco vira
-     "(+) Recebido do frigorifico · (−) Pago ao boitel · (=) Liquido" — os MESMOS numeros do motor (`fba`,
-     `descontoDoAcerto`), da mesma linha que o topo le'. Na A nada muda. */
-  const ehProdutorResumo = ehBoitel
-    && (topoNoRealizado ? (boitelRealSalvo ?? boitelData) : boitelData)?.quemAbate === 'produtor';
-  const resumoProdutor = ehProdutorResumo && derAcerto ? linhasResumoProdutor(derAcerto) : null;
-  const linhasAcerto = resumoProdutor ? resumoProdutor.linhas : acertoTodas.filter(l => l.sinal === '+' || l.valor > 0);
+  /* ─── O PAINEL DE BOITEL — PR-OC-BOITEL-PAINEL-01 ────────────────────────────────────────
+     ⚠ AS LINHAS SAEM DE `linhasPainelBoitel`, termo a termo do motor: as parcelas `dAcerto*` (com as flags ja'
+     aplicadas — custo do lado do produtor vale zero aqui e nao entra), o `saldoReceberBase` (o Pix), o
+     `custosDoProdutor` e o `pParte` ate' o `bolsoDaVendaBoitel`. Nenhuma conta mora no resumo: ele desenha.
+     ⚠ O BOLSO E' DOS MESMOS DADOS DOS TERMOS — o realizado salvo com o realizado completo, a projecao sem ele —, senao
+     a escada fecharia contra um numero de outro mundo.
+     ⚠ MODALIDADE B (BOITEL-ABATE-PRODUTOR-01): as tres linhas de sempre (`linhasResumoProdutor`, os mesmos numeros) e a
+     cauda Gastos diretos · Liquido no bolso; sem "Financeiro" (divida registrada). */
+  const dadosDoPainel = topoNoRealizado ? (boitelRealSalvo ?? boitelData) : boitelData;
+  const painelBoitel = ehBoitel && derAcerto ? linhasPainelBoitel({
+    termos: derAcerto,
+    bolso: topoNoRealizado ? bolsoRealizado : bolsoProjetado,
+    modalidade: dadosDoPainel?.quemAbate === 'produtor' ? 'produtor' : 'boitel',
+    realizado: topoNoRealizado,
+    noFinanceiro: temFin ? fin.entradaObrigacao : null,
+  }) : null;
+  const linhaIdentificacao = linhaIdentificacaoBoitel(
+    data ? data.split('-').reverse().join('/') : null, fazendaNome ?? null, 'Boitel');
 
   const faltamBoitel = ehBoitel ? faltamDosCinco(boitelData) : [];
   const naNegociacao = abaAtiva === 'negociacao';
@@ -953,12 +942,22 @@ export function VendaModalShell({
         <div className="lg:min-h-0">
           <AsideResumo faixa={<FaixaTituloResumo />}>
               <SecaoResumo titulo="Identificação" />
+              {painelBoitel ? (
+                /* PR-OC-BOITEL-PAINEL-01 (D6b): no boitel a Identificacao vai a 2 linhas, para a conta do acerto caber sem
+                   rolar a 1135×525. A segunda e' "Data · Fazenda · Tipo", cortada na borda com o texto inteiro no `title`. */
+                <div>
+                  <LinhaResumo rotulo="Comprador" valor={compradorNome} />
+                  <div className="px-2.5 py-px leading-tight truncate font-medium" title={linhaIdentificacao}
+                    data-testid="identificacao-boitel">{linhaIdentificacao}</div>
+                </div>
+              ) : (
               <div>
                 <LinhaResumo rotulo="Comprador" valor={compradorNome} />
                 <LinhaResumo rotulo="Data" valor={data ? data.split('-').reverse().join('/') : null} />
                 <LinhaResumo rotulo="Fazenda" valor={fazendaNome} />
                 <LinhaResumo rotulo="Tipo" valor={vendaTipoVenda === 'gado_adulto' ? 'Gado adulto' : vendaTipoVenda === 'desmama' ? 'Desmama' : vendaTipoVenda === 'boitel' ? 'Boitel' : null} />
               </div>
+              )}
 
               <SecaoResumo titulo="Negociação" />
               {/* ⚠ ESTES CAMPOS NUNCA ESTIVERAM LIGADOS — B-08 item 4. Nao eram fonte
@@ -983,8 +982,10 @@ export function VendaModalShell({
                   /* A pilula so' existe onde ha dois mundos — ver a nota em `derAcerto`. */
                   selo={ehBoitel && !topoNoRealizado ? <PilulaCenario cenario="projetado" /> : undefined} />
                 {avisoDivergencia && (
-                  <div className="px-2.5 pb-0.5 text-[10px] leading-snug text-amber-700 dark:text-amber-500">
-                    {avisoDivergencia}
+                  /* PR-OC-BOITEL-PAINEL-01 (D5): UMA linha de 15px; a frase inteira (com o valor do acerto) vai no `title`. */
+                  <div className="px-2.5 py-px leading-tight truncate text-[10px] text-amber-700 dark:text-amber-500"
+                    title={avisoDivergencia} data-testid="aviso-lote-acerto">
+                    Lote ≠ acerto · reaplique o Realizado
                   </div>
                 )}
               </div>
@@ -999,59 +1000,38 @@ export function VendaModalShell({
               <div>
                 <LinhaResumo rotulo="Entregue" valor={entrega.recebido == null ? null
                   : `${entrega.recebido} / ${entrega.negociado ?? '—'} cab`} />
+                {/* PR-OC-BOITEL-PAINEL-01 (D6): no boitel, nada a entregar = uma linha so'. */}
+                {!(painelBoitel && entregaEmUmaLinha(entrega.diferenca)) && (
                 <LinhaResumo rotulo="Saldo a entregar" valor={entrega.diferenca == null ? null
                   : `${Math.max(0, -entrega.diferenca)} cab`} />
+                )}
               </div>
 
+              {/* ─── O PAINEL DE BOITEL — PR-OC-BOITEL-PAINEL-01 ──────────────────────────────────────
+                  ⚠ UMA CONTA, DE CIMA PARA BAIXO: acerto → A RECEBER DO BOITEL (o Pix) → LIQUIDO NO BOLSO → Financeiro.
+                  As linhas saem de `linhasPainelBoitel` (termos do motor + `entrada_obrigacao` da view); a tela so' desenha.
+                  Saiu o titulo "Financeiro" acima do acerto, o trio A receber / Recebido / Saldo (o Saldo de nivel liquidado
+                  dizia −107.150,94 numa venda que deixa 581.232,52) e a nota de 3 linhas — virou o `title` de "Gastos diretos".
+                  ⚠ "Financeiro" leva a diferenca NA MESMA LINHA: o numero neutro vai no `selo`, que o `LinhaResumo` desenha
+                  antes do valor, e o "faltam X" vermelho e' o valor. Sem mexer no componente compartilhado. */}
+              {painelBoitel ? (<>
+                <SecaoResumo titulo={painelBoitel.titulo}
+                  extra={!topoNoRealizado ? <PilulaCenario cenario="projetado" /> : undefined} />
+                <div data-testid="painel-boitel">
+                  {painelBoitel.linhas.filter(l => l.visivel).map(l => (
+                    <div key={l.chave} className={l.separador ? 'border-t pt-0.5 mt-0.5' : undefined} title={l.title}
+                      data-testid={`painel-boitel-${l.chave}`}>
+                      <LinhaResumo rotulo={l.rotulo} forte={l.destaque}
+                        valor={l.diferenca ? l.diferenca.texto : l.texto}
+                        selo={l.diferenca ? <span className="tabular-nums font-medium">{l.texto}</span> : undefined}
+                        cor={l.diferenca ? COR_SINAL.neg : classeDaCorPainel(l.cor, corMundo)} />
+                    </div>
+                  ))}
+                </div>
+              </>) : (<>
               {/* ⚠ A RECEBER, e nao "Lancado". Numa venda o dinheiro ENTRA — o vocabulario
                   do financeiro inverte junto com o sentido da operacao. */}
               <SecaoResumo titulo="Financeiro" />
-              {/* ─── O ACERTO COM O BOITEL — B-11 item 2 ─────────────────────────────
-                  ⚠ E O EXTRATO QUE O BOITEL MANDA, linha a linha, e ate' aqui ele so'
-                  existia dentro do modal do realizado. Quem abre a operacao para conferir
-                  o acerto tinha de entrar no modal, editar, ler e sair sem salvar.
-                  ⚠ SEGUE O MELHOR CONHECIMENTO como o resto da tela: realizado solido,
-                  projecao ambar com pilula no titulo do bloco.
-                  ⚠ O SUBTITULO (10px desde o MODAIS-PADRAO-01a) E PARTE DA INFORMACAO, nao decoracao: sem ele, o
-                  operador procura o frete nesta lista e conclui que sumiu. Ele nao sumiu —
-                  ele nao e' deste acerto. */}
-              {ehBoitel && derAcerto && linhasAcerto.length > 0 && (<>
-                <SecaoResumo titulo={resumoProdutor ? 'Abate em nome do produtor' : 'Acerto com o boitel'}
-                  extra={!topoNoRealizado ? <PilulaCenario cenario="projetado" /> : undefined} />
-                <div>
-                  {linhasAcerto.map(l => (
-                    <LinhaResumo key={l.rotulo} rotulo={l.rotulo} cor={corMundo}
-                      valor={`${l.sinal === '−' ? '− ' : ''}${formatMoeda(l.valor)}`} />
-                  ))}
-                  {resumoProdutor ? (
-                    <div className="border-t pt-0.5 mt-0.5">
-                      <LinhaResumo rotulo="(=) Líquido" forte cor={corMundo} valor={formatMoeda(resumoProdutor.liquido)} />
-                    </div>
-                  ) : (<>
-                  <div className="border-t pt-0.5 mt-0.5">
-                    <LinhaResumo rotulo="(=) Saldo do acerto" cor={corMundo}
-                      valor={formatMoeda(derAcerto.fba - derAcerto.descontoDoAcerto)} />
-                  </div>
-                  {derAcerto.valorTotalAntecipadoCalc > 0 && (
-                    /* ⚠ EMPILHADAS POR MEDICAO — MODAIS-PADRAO-01a. Em 240px (218 uteis, Inter 10/11px) esta
-                       nao cabe nem com R$ 95.243,50 (-10,4px) e a "A RECEBER" nao cabe em milhoes (-5,8px com
-                       R$ 9.999.999,99; +8,1 com R$ 473.884,10 — sorte, nao folga). As outras do acerto cabem no
-                       pior caso de milhoes: Faturamento +10,2, Recebido do frigorifico +5,5, Liquido +69. */
-                    <LinhaResumo empilhado rotulo="(+) Adiantamento a reembolsar" cor={corMundo}
-                      valor={`+ ${formatMoeda(derAcerto.valorTotalAntecipadoCalc)}`} />
-                  )}
-                  <div className="border-t pt-0.5 mt-0.5">
-                    <LinhaResumo empilhado rotulo="(=) A RECEBER DO BOITEL" forte cor={corMundo}
-                      valor={formatMoeda(derAcerto.saldoReceberBase)} />
-                  </div>
-                  </>)}
-                  {/* 10px e com o padding da linha — MODAIS-PADRAO-01a (era 9px, colada na borda). */}
-                  <div className="px-2.5 pt-0.5 text-[10px] text-muted-foreground leading-snug">
-                    gastos diretos do produtor (frete e notas do envio) não entram neste acerto — vivem no financeiro
-                  </div>
-                </div>
-              </>)}
-
               {/* ⚠ SEM COMPROMISSOS OS TRES SAO TRACO, e nao zero: operacao sem financeiro
                   lancado nao "recebeu zero", ela ainda nao tem financeiro. */}
               {/* OC-VENDA-ENTREGAS-01c — em CONTA CORRENTE nao ha compromisso: os tres numeros sao os da aba, com o MESMO sinal do
@@ -1059,10 +1039,10 @@ export function VendaModalShell({
               {cc ? (
                 <div data-testid="resumo-conta-corrente">
                   <LinhaResumo rotulo="Entregue" valor={formatMoeda(cc.entregue)} />
-                  <LinhaResumo rotulo="Recebido" valor={formatMoeda(cc.recebido)} cor={cc.recebido > 0 ? 'text-[#15803d]' : undefined} />
+                  <LinhaResumo rotulo="Recebido" valor={formatMoeda(cc.recebido)} cor={cc.recebido > 0 ? COR_SINAL.pos : undefined} />
                   <LinhaResumo rotulo={corDoSaldo(cc.saldo) === 'neg' ? 'Saldo · falta receber' : corDoSaldo(cc.saldo) === 'pos' ? 'Saldo · adiantado' : 'Saldo · quitado'}
                     forte valor={formatMoeda(cc.saldo)}
-                    cor={corDoSaldo(cc.saldo) === 'neg' ? 'text-[#b91c1c]' : corDoSaldo(cc.saldo) === 'pos' ? 'text-[#15803d]' : undefined} />
+                    cor={corDoSaldo(cc.saldo) === 'neg' ? COR_SINAL.neg : corDoSaldo(cc.saldo) === 'pos' ? COR_SINAL.pos : undefined} />
                 </div>
               ) : (
               <div>
@@ -1071,6 +1051,7 @@ export function VendaModalShell({
                 <LinhaResumo rotulo="Saldo" valor={finSaldo == null ? null : formatMoeda(finSaldo)} />
               </div>
               )}
+              </>)}
           </AsideResumo>
         </div>
       </div>
