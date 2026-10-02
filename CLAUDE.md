@@ -160,8 +160,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 02/10/2026 (PR-CONC-ENRIQ-PROPOSTA-PAR-MUDOU, +9 em `src/v2/lib/mesa/propostaParMudou.test.tsx`; antes o
-  PR-CONC-ENRIQ-SAFRA-COMPETENCIA, +13): 2940
+  Baseline em 02/10/2026 (PR-CONC-ENRIQ-MESA-CULTURA-FASE-B, +20 em `src/v2/lib/mesa/culturaFaseMesa.test.tsx`; antes o
+  PR-CONC-ENRIQ-PROPOSTA-PAR-MUDOU, +9): 2960
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -342,7 +342,10 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   outro campo), guardado pela contagem antes x depois; (b) a Mesa nao consegue LIMPAR uma cultura ja' gravada (vazio = tirar a
   proposta, e o apply nunca apaga por ausencia) — se o operador quiser "rateia" num lancamento que ja' tem cultura, e' o modal
   do Financeiro; (c) eucalipto em silvicultura: o gatilho o zera (a regra e' cultura so' em agricultura), coerente com o front;
-  (d) a tela (PR B) ainda nao le as colunas novas da view.
+  (d) [resolvido no PR-CONC-ENRIQ-MESA-CULTURA-FASE-B: a Mesa le e edita cultura/fase]; (e) CULTURA-FASE-B: o comentario
+  de `ClassificacaoLancamento.tsx` ("`useCulturasDaSafra` nao tem cache", motivo de receber a lista por prop) ficou velho —
+  o cache existe desde o FASE-B; a prop continua valendo (fora do escopo); (f) a sugestao de cultura recusada ("Todas
+  (rateia)") e' ESTADO DE TELA (`culturaRecusadaIds`, como a atividade): some no F5, e a sugestao volta a aparecer.
   · LINHA-GRAVADA (PR-CONC-ENRIQ-LINHA-GRAVADA-EDITAVEL, 02/10): (a) `safra` (texto) e `categoria` sao chaves INERTES de
   `c_editaveis` do `editar_proposto` (o apply_row nao as le'; 0 linhas de staging as tem; o lancamento nao tem coluna para elas,
   e o alinhamento nao as toca) — candidatas a sair da lista num PR de limpeza; (b) o Reverter devolve so' parte dos campos
@@ -822,6 +825,25 @@ docs/historico/frentes-ate-2026-09-29.md.)
   cartao mudam 76 de 1.225. O Recasar passa a reabrir 6 linhas na dfd0f02c (274/275/278/286/294/305, cada uma com o
   lancamento de 16/09 livre), 6 na 8d6efeb7 e 6 na 32c52f5c (266/279/290/308/356/432), 7 em cada sessao do Agnaldo (25206941,
   c304cce9, fc4d6089; candidato unico em 10/08, usado pela 9b6785b2 nao aplicada) e 0 na Santa Rita. md5 0224916d…
+- ⚠ CULTURA E FASE NA MESA = O SEGUNDO CONTROLE DA LINHA SAFRA (PR-CONC-ENRIQ-MESA-CULTURA-FASE-B, so' tela, 02/10): nenhuma
+  linha nova — a linha "Safra" vira "Safra · Cultura" (lavoura), "Safra · Fase" (pecuaria) ou fica "Safra" (o resto) pela
+  ATIVIDADE da linha (`eixoDaAtividade`/`rotuloLinhaSafra`; `data-testid` segue `linha-Safra`), e a coluna "Vai gravar" se
+  divide 55/45 como Documento · tipo: medido a 1135, 148px para a safra (pior codigo ativo 67) e 121 para o eixo (pior texto
+  "Todas (rateia)" 69); linha 22, rodape 32 com topo 513,8 nas tres atividades. O segundo controle
+  (`ResultadoCulturaFaseEditor`, `ResultadoCamposGravaveis.tsx`) EXISTE SEMPRE: fora de lavoura/pecuaria e' leitura "—" com
+  "nao se aplica a esta atividade". Listas e frases SO' DO DONO (`rateioLancamento.ts`: `CULTURAS_LANCAMENTO`, `FASES`,
+  `SEM_CULTURA`, `avisoCultura`/`avisoFase` no `title`; o teste mocka o dono com uma cultura e uma fase a mais). Valor =
+  proposta, senao o lancamento, senao a SUGESTAO da planilha em ambar (`culturaSugeridaDaPlanilha`: lavoura, sem cultura em
+  lugar nenhum, planilha com cultura) — primeiro item do menu "X · da planilha", que grava no clique SEM `_sugestao`; na linha
+  NAO gravada o Salvar tambem a grava COM `_sugestao: true` (a quarta proposta automatica, `culturaSugeridaNoSalvar`); na
+  gravada so' o clique. Escolher outra coisa ("Todas (rateia)" inclusive) recusa a sugestao (estado de tela). Trocar a
+  atividade limpa o eixo que nao se aplica (`patchesAoTrocarAtividade`). Nunca e' pendencia. "Todas (rateia)" num lancamento
+  com cultura: "a Mesa nao apaga · mantem" no `title` e `data-nao-apaga` (na gravada, por `camposEsvaziados`). cultura e
+  fase entram em `diferencasDoResultado` ("alterada · falta gravar") e a linha Safra do comparativo leva o eixo nas colunas
+  planilha/sistema. O lado da safra no ADMINISTRATIVO mostra so' "—" (ou a safra riscada), a frase no `title` (cortava a 148).
+  ⚠ `useCulturasDaSafra` (`src/hooks/useAreaPlantada.ts`) TEM CACHE POR SAFRA, NO DONO: uma consulta por safra por sessao para
+    todo consumidor (Financeiro, obrigacao, Mesa); o `salvar` do cadastro de area (unico escritor de `agri_safra_area`, nenhuma
+    funcao do banco escreve nela) chama `invalidarCulturasDaSafra`, e quem a mostra reconsulta. A Mesa so' pede na lavoura.
 - ⚠ CULTURA E FASE: O BANCO E' O DONO DA COERENCIA (PR-CONC-ENRIQ-MESA-CULTURA-FASE-A, migration 20261027190500, ledger
   20261002171822): o gatilho `trg_zz_cultura_fase_coerente` (BEFORE INSERT OR UPDATE em `financeiro_lancamentos_v2`, depois de
   `trg_resolve_classificacao_plano` pela ordem alfabetica) zera a CULTURA fora de agricultura e a FASE fora de pecuaria, para

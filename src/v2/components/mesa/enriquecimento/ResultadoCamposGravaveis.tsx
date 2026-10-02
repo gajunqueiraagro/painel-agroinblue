@@ -31,6 +31,10 @@ import { TIPOS_OPERACAO_RESULTADO, ehTipoTransferencia } from '@/v2/lib/mesa/tra
 import { AVISO_ADMIN_SEM_SAFRA, AVISO_ADMIN_SAFRA_SAI } from '@/lib/financeiro/escopoDoSubcentro';
 import { cn } from '@/lib/utils';
 import { patchDaConta } from '@/v2/lib/mesa/contaDaLinha';
+import {
+  CULTURAS_LANCAMENTO, FASES, SEM_CULTURA, avisoCultura, avisoFase,
+} from '@/lib/agri/rateioLancamento';
+import { DICA_NAO_APAGA, type EixoRateio } from '@/v2/lib/mesa/enriquecimentoView';
 
 type Editar = (patch: Record<string, unknown>) => Promise<void>;
 
@@ -90,11 +94,13 @@ export function ResultadoSafraEditor({ value, valorAtual, safras, sugeridaId, on
   if (administrativo) {
     /* ⚠ NÃO É UM SELECT DESABILITADO, é a leitura do fato: o campo não se aplica. Um `Select`
        cinza ainda convida ao clique — e foi clicando que o operador descobriu que não mudava. */
+    /* ⚠ A FRASE VAI NO `title` (PR-CONC-ENRIQ-MESA-CULTURA-FASE-B, decisão do Gabriel): com o segundo controle da linha
+       (cultura/fase) o lado da safra tem 148px a 1135, e "— · administrativo não tem safra" pedia 153 (192 com a safra
+       riscada) — cortava. Fica o fato visível ("—" ou a safra riscada); a regra não muda. */
     return (
-      <span className="block truncate text-[10px] leading-tight text-muted-foreground"
+      <span data-testid="safra-administrativo" className="block truncate text-[10px] leading-tight text-muted-foreground"
         title={efetivo ? AVISO_ADMIN_SAFRA_SAI : AVISO_ADMIN_SEM_SAFRA}>
         {efetivo ? <s>{safras.find(s2 => s2.id === efetivo)?.codigo || '—'}</s> : '—'}
-        <span className="ml-1">· {AVISO_ADMIN_SEM_SAFRA}</span>
       </span>
     );
   }
@@ -323,5 +329,114 @@ export function ResultadoObservacaoEditor({ value, valorAtual, onEditar, compact
       placeholder="Observação"
       autoComplete="off"
     />
+  );
+}
+
+/**
+ * O SEGUNDO CONTROLE DA LINHA SAFRA: CULTURA (lavoura) OU FASE (pecuária) — PR-CONC-ENRIQ-MESA-CULTURA-FASE-B.
+ *
+ * ⚠ AS LISTAS E AS FRASES SÃO DO DONO, `src/lib/agri/rateioLancamento.ts` (`CULTURAS_LANCAMENTO`, `FASES`, `SEM_CULTURA`,
+ *   `avisoCultura`/`avisoFase`) — o mesmo do modal do Financeiro. Aqui não se redefine lista, rótulo nem regra.
+ * ⚠ EXISTE SEMPRE (D1): fora da lavoura e da pecuária é leitura "—", com a mesma largura reservada. Nada aparece ou some.
+ * ⚠ VAZIO É ESCOLHA, NÃO FALTA: "Todas (rateia)" / "rateia" é o custo compartilhado — nunca pendência (D7). A frase do
+ *   rateio vai no `title` do controle (D10); o slot de 104px da linha não muda de prioridade.
+ * ⚠ VALOR (D4): a proposta; senão o do lançamento; senão a sugestão da planilha, em âmbar (D5).
+ * ⚠ A SUGESTÃO É O PRIMEIRO ITEM DO MENU, em âmbar ("Mandioca · da planilha"): escolhê-la grava pelo `editar_proposto`
+ *   SEM `_sugestao` (é gesto do operador). Na linha não gravada o Salvar também a grava, COM `_sugestao`; na gravada, só o
+ *   clique. Escolher outra coisa — "Todas (rateia)" inclusive — vale a escolha e a sugestão some (`onRecusar`).
+ * ⚠ A MESA NÃO APAGA (D8): "Todas (rateia)" num lançamento que tem cultura tira a proposta, e o COALESCE do apply mantém
+ *   a do lançamento — o controle diz "a Mesa não apaga · mantém" no `title` e na marca `data-nao-apaga`.
+ */
+export function ResultadoCulturaFaseEditor({
+  eixo, value, valorAtual, sugerida, culturasDaSafra = [], gravada = false, naoApaga = false, onEditar, onRecusar,
+}: {
+  eixo: EixoRateio;
+  value: string | null;
+  valorAtual: string | null;
+  /** A cultura da planilha oferecida (D5) — já filtrada por `culturaSugeridaDaPlanilha`. */
+  sugerida?: string | null;
+  /** As culturas com área plantada na safra (ordenam, nunca filtram) — `useCulturasDaSafra`. */
+  culturasDaSafra?: readonly string[];
+  /** Linha gravada: a sugestão só grava no clique (o title diz). */
+  gravada?: boolean;
+  /** O operador esvaziou numa linha gravada (`camposEsvaziados`): a Mesa não apaga. */
+  naoApaga?: boolean;
+  /** Ausente = leitura (linha sem `onEditar`). */
+  onEditar?: Editar;
+  /** O operador escolheu outra coisa que não a sugestão: ela some e o Salvar não a grava. */
+  onRecusar?: () => void;
+}) {
+  const [escolheuRateio, setEscolheuRateio] = useState(false);
+  if (eixo === null) {
+    return (
+      <span data-testid="cultura-fase-leitura" title="não se aplica a esta atividade"
+        className="flex h-5 items-center truncate rounded border border-border/60 bg-muted px-1.5 text-[10.5px] text-muted-foreground">
+        —
+      </span>
+    );
+  }
+  const campo = eixo;
+  const SUG = '__sugestao__';
+  const lista: ReadonlyArray<{ valor: string; label: string }> = eixo === 'cultura'
+    ? [...CULTURAS_LANCAMENTO].sort((a, b) =>
+        Number(culturasDaSafra.includes(b.valor)) - Number(culturasDaSafra.includes(a.valor)))
+    : FASES;
+  const rotulo = (v: string | null) => (v ? (lista.find((x) => x.valor === v)?.label ?? v) : null);
+  const ehSugestao = !value && !valorAtual && !!sugerida;
+  const efetivo = value ?? valorAtual ?? (ehSugestao ? sugerida ?? null : null);
+  const textoRateio = eixo === 'cultura' ? 'Todas (rateia)' : 'rateia';
+  const mantem = !value && !!valorAtual && (escolheuRateio || naoApaga);
+  const aviso = eixo === 'cultura' ? avisoCultura(efetivo, culturasDaSafra) : avisoFase(efetivo);
+  const title = ehSugestao
+    ? `${eixo === 'cultura' ? 'Cultura' : 'Fase'} da planilha — ${gravada ? 'escolha no menu para gravar' : 'grava ao salvar'}. ${aviso.texto}`
+    : mantem ? `${DICA_NAO_APAGA} — o lançamento continua com ${rotulo(valorAtual)}. ${aviso.texto}`
+    : aviso.texto;
+  if (!onEditar) {
+    return (
+      <span data-testid="cultura-fase-leitura" title={title}
+        className="flex h-5 items-center truncate rounded border border-border/60 bg-muted px-1.5 text-[10.5px]">
+        {rotulo(efetivo) ?? textoRateio}
+      </span>
+    );
+  }
+  return (
+    /* ⚠ COM SUGESTÃO, O SELECT FICA SEM VALOR (''): se o valor fosse o próprio item da sugestão, o Radix não dispara
+       `onValueChange` ao escolhê-lo de novo — o clique que grava (D5, na linha gravada o ÚNICO jeito de gravar) não faria
+       nada. O gatilho mostra o rótulo pelo `SelectValue` de qualquer jeito. */
+    <Select value={ehSugestao ? '' : (efetivo ?? SEM_CULTURA)}
+      onValueChange={(v) => {
+        if (v === SUG) { if (sugerida) void onEditar({ [campo]: sugerida }); return; }
+        if (sugerida) onRecusar?.();
+        if (v === SEM_CULTURA) {
+          setEscolheuRateio(true);
+          /* sem proposta não há o que tirar; com o lançamento preenchido, o COALESCE mantém (D8) */
+          if (value) void onEditar({ [campo]: null });
+          return;
+        }
+        setEscolheuRateio(false);
+        if (v === (value ?? valorAtual)) return;
+        void onEditar({ [campo]: v });
+      }}>
+      <SelectTrigger data-testid={`editor-${campo}`} data-nao-apaga={mantem ? 'sim' : undefined}
+        className={cn(CELULA_EDITAVEL, ehSugestao && 'border-amber-500 bg-amber-50')} title={title}>
+        {/* o texto do gatilho é o rótulo curto (nunca "Mandioca · da planilha", que pediria 109px em 89) */}
+        {/* sem valor (a sugestão), o Radix mostra o `placeholder`: o mesmo rótulo */}
+        <SelectValue placeholder={rotulo(efetivo) ?? textoRateio}>{rotulo(efetivo) ?? textoRateio}</SelectValue>
+      </SelectTrigger>
+      <SelectContent>
+        {ehSugestao && sugerida && (
+          <SelectItem value={SUG} className={cn(ITEM_DROPDOWN, 'text-amber-300')} data-testid="item-sugestao-planilha">
+            {rotulo(sugerida)} · da planilha
+          </SelectItem>
+        )}
+        <SelectItem value={SEM_CULTURA} className={ITEM_DROPDOWN}>{textoRateio}</SelectItem>
+        {lista.map((o) => (
+          <SelectItem key={o.valor} value={o.valor} className={ITEM_DROPDOWN}>
+            {o.label}
+            {eixo === 'cultura' && culturasDaSafra.includes(o.valor) && <span className="ml-1">· plantada</span>}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }

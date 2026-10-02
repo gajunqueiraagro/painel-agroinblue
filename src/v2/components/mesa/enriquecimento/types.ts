@@ -184,6 +184,16 @@ export interface EnriqEdicao {
   safraDaCompetenciaId: string | null;
   safraForaDoPeriodo: boolean | null;
   safraPlanilhaId: string | null;
+  /**
+   * CULTURA E FASE — PR-CONC-ENRIQ-MESA-CULTURA-FASE-B (o banco desde o FASE-A). Proposta (`cultura`/`fase`), o que o
+   * lançamento tem (`*Atual`) e a cultura que a planilha traz (derivada do texto da Safra; fase nunca vem da planilha).
+   * Qual dos dois eixos se aplica é a ATIVIDADE da linha (`eixoDaAtividade`); o gatilho do banco zera o outro.
+   */
+  cultura: string | null;
+  culturaAtual: string | null;
+  culturaPlanilha: string | null;
+  fase: string | null;
+  faseAtual: string | null;
   /** A linha parece uma transferência e o tipo efetivo ainda não é. Proposta, nunca gravação. */
   tipoTransferenciaSugerido: boolean;
 

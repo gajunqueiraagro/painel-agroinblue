@@ -124,7 +124,7 @@ export function useAreaPlantada(safraId: string | null, pastoId: string | null) 
 
     for (const a of paraApagar) {
       const { error } = await db.from('agri_safra_area').delete().eq('id', a.id);
-      if (error) return { ok: false, erro: `Não foi possível remover ${a.cultura}: ${error.message}` };
+      if (error) { invalidarCulturasDaSafra(safraId); return { ok: false, erro: `Não foi possível remover ${a.cultura}: ${error.message}` }; }
     }
     for (const l of linhas) {
       /**
@@ -161,9 +161,13 @@ export function useAreaPlantada(safraId: string | null, pastoId: string | null) 
             ? `Já existe ${l.cultura} da variedade "${l.variedade.trim()}" neste pasto nesta safra.`
             : `Já existe uma área de ${l.cultura} neste pasto nesta safra — informe a variedade para distinguir as duas.`
           : error.message;
+        /* o que já foi gravado antes da recusa mudou a safra: o cache esquece */
+        invalidarCulturasDaSafra(safraId);
         return { ok: false, erro: msg };
       }
     }
+    /* as culturas plantadas desta safra mudaram: o cache de `useCulturasDaSafra` esquece a safra (CULTURA-FASE-B) */
+    invalidarCulturasDaSafra(safraId);
     await carregar();
     return { ok: true };
   }, [safraId, pastoId, areas, carregar]);
@@ -227,24 +231,61 @@ export function useAreasPorPastoNaJanela(safraIds: readonly string[]) {
  * lista completa em vez de ficar sem opção — o custo pode chegar antes do cadastro do talhão.
  */
 export function useCulturasDaSafra(safraId: string | null | undefined) {
-  const [culturas, setCulturas] = useState<string[]>([]);
+  const [culturas, setCulturas] = useState<string[]>(() => (safraId ? CULTURAS_DA_SAFRA.get(safraId) : undefined) ?? []);
+  /* sobe quando o cadastro de área desta safra muda (`invalidarCulturasDaSafra`): a próxima leitura vai ao banco */
+  const [versao, setVersao] = useState(0);
+
+  useEffect(() => {
+    if (!safraId) return;
+    const aoInvalidar = (id: string) => { if (id === safraId) setVersao((v) => v + 1); };
+    OUVINTES_CULTURAS.add(aoInvalidar);
+    return () => { OUVINTES_CULTURAS.delete(aoInvalidar); };
+  }, [safraId]);
 
   useEffect(() => {
     if (!safraId) { setCulturas([]); return; }
+    const guardada = CULTURAS_DA_SAFRA.get(safraId);
+    if (guardada) { setCulturas(guardada); return; }
     let vivo = true;
     const db = supabase as any;
     db.from('agri_safra_area')
       .select('cultura')
       .eq('safra_id', safraId)
       .eq('ativo', true)
-      .then(({ data }: { data: Array<{ cultura: string }> | null }) => {
+      .then(({ data, error }: { data: Array<{ cultura: string }> | null; error: unknown }) => {
+        const lista = [...new Set((data ?? []).map(r => r.cultura))].sort();
+        /* só o que o banco respondeu SEM erro vai ao cache: uma falha não pode virar "safra sem área" até o F5 */
+        if (!error && data) CULTURAS_DA_SAFRA.set(safraId, lista);
         if (!vivo) return;
-        setCulturas([...new Set((data ?? []).map(r => r.cultura))].sort());
+        setCulturas(lista);
       });
     return () => { vivo = false; };
-  }, [safraId]);
+  }, [safraId, versao]);
 
   return culturas;
+}
+
+/**
+ * O CACHE DAS CULTURAS POR SAFRA — PR-CONC-ENRIQ-MESA-CULTURA-FASE-B (decisão do Gabriel: o cache mora no DONO).
+ *
+ * ⚠ UMA CONSULTA POR SAFRA POR SESSÃO, para todo consumidor (modal do Financeiro, obrigação, Mesa). Sem ele, a Mesa
+ *   consultava `agri_safra_area` a cada troca de linha com safra diferente — e de novo ao voltar a uma safra já vista.
+ * ⚠ O ÚNICO ESCRITOR de `agri_safra_area` no front é o `salvar` de `useAreaPlantada` (medido em 02/10: nenhuma função do
+ *   banco escreve nela), e ele INVALIDA a safra que gravou: quem está com ela aberta reconsulta.
+ * ⚠ A ASSINATURA NÃO MUDA: o hook recebe o `safraId` e devolve a lista, como antes.
+ */
+const CULTURAS_DA_SAFRA = new Map<string, string[]>();
+const OUVINTES_CULTURAS = new Set<(safraId: string) => void>();
+
+/** Esquece as culturas guardadas de uma safra — chamado por quem grava `agri_safra_area`. */
+export function invalidarCulturasDaSafra(safraId: string) {
+  CULTURAS_DA_SAFRA.delete(safraId);
+  OUVINTES_CULTURAS.forEach((f) => f(safraId));
+}
+
+/** Só para teste: o cache começa vazio em cada caso. */
+export function limparCacheCulturasDaSafra() {
+  CULTURAS_DA_SAFRA.clear();
 }
 
 /**

@@ -29,6 +29,7 @@ import { ResultadoProdutoEditor } from './ResultadoProdutoEditor';
 import { ResultadoDocumentoEditor } from './ResultadoDocumentoEditor';
 import {
   ResultadoDataEditor, ResultadoSafraEditor, ResultadoObservacaoEditor, ResultadoContaDestinoEditor,
+  ResultadoCulturaFaseEditor,
 } from './ResultadoCamposGravaveis';
 import { ResultadoListaEditor, ResultadoAtividadeEditor } from './ResultadoListaEditor';
 import { TIPOS_DOCUMENTO } from '@/lib/financeiro/documentoHelper';
@@ -37,7 +38,9 @@ import { ATIVIDADES } from '@/lib/financeiro/ultimaAtividade';
 import { atividadeDoSubcentro, planoIncoerente, rotuloAtividade } from '@/v2/lib/mesa/atividadeDaLinha';
 import { ehTipoTransferencia, subcentroDeTransferencia } from '@/v2/lib/mesa/transferenciaPlano';
 import { ehLinhaAdministrativa, escopoDoSubcentro, fazendaAdministrativa } from '@/lib/financeiro/escopoDoSubcentro';
-import { DICA_NAO_APAGA } from '@/v2/lib/mesa/enriquecimentoView';
+import {
+  DICA_NAO_APAGA, eixoDaAtividade, rotuloLinhaSafra, culturaSugeridaDaPlanilha,
+} from '@/v2/lib/mesa/enriquecimentoView';
 import type { ContaSelecionavel } from '@/components/shared/ContaBancariaSelect';
 import type { Safra } from '@/hooks/useFinanceiroV2';
 
@@ -269,11 +272,18 @@ export interface MesaCamposTabelaProps {
    */
   atividade?: string | null;
   onAtividade?: (atividade: string) => void;
+  /**
+   * PR-CONC-ENRIQ-MESA-CULTURA-FASE-B — as culturas plantadas na safra da linha (`useCulturasDaSafra`, só na lavoura; ordenam,
+   * nunca filtram), e a sugestão de cultura da planilha recusada pelo operador nesta linha (estado de tela, na aba).
+   */
+  culturasDaSafra?: readonly string[];
+  culturaRecusada?: boolean;
+  onRecusarCultura?: () => void;
 }
 
 export function MesaCamposTabela({
   row, classificacoes, fornecedores, fazendas, clienteId, safras, contas, onEditar, onCriarFornecedor,
-  conciliado, atividade, onAtividade,
+  conciliado, atividade, onAtividade, culturasDaSafra, culturaRecusada = false, onRecusarCultura,
 }: MesaCamposTabelaProps) {
   const porCampo = new Map(row.comparativo.map(c => [c.campo, c]));
   /* ⚠ O RESULTADO MANDA, NÃO O LANÇAMENTO — PR-MESA-TRANSF-01. */
@@ -298,6 +308,11 @@ export function MesaCamposTabela({
   const atividadeEfetiva = atividade ?? row.edicao.atividadeProposta;
   const atividadeSistema = atividadeDoSubcentro(classificacoes, row.edicao.subcentroAtual);
   const incoerente = planoIncoerente(classificacoes, subcentroEfetivoResultado, atividadeEfetiva);
+  /* ── CULTURA E FASE — PR-CONC-ENRIQ-MESA-CULTURA-FASE-B (D1): o eixo de rateio é o da ATIVIDADE da linha (a mesma que
+     filtra a conta do plano). Lavoura: cultura; pecuária: fase; o resto: "—" (o controle existe sempre). NUNCA é pendência
+     (D7): o checklist não o vê. */
+  const eixoRateio = eixoDaAtividade(atividadeEfetiva);
+  const culturaSugerida = culturaSugeridaDaPlanilha(row.edicao, eixoRateio, culturaRecusada);
   /* ⚠ VALOR SEGUE O SINAL EM TODAS AS COLUNAS (item 1) — e é o ÚNICO verde da tabela: entrada. */
   const corDoSinal = row.entradaOuSaida === 'saida' ? 'text-red-600 dark:text-red-400'
     : row.entradaOuSaida === 'entrada' ? 'text-emerald-700 dark:text-emerald-400' : '';
@@ -511,40 +526,12 @@ export function MesaCamposTabela({
                  e a marca "planilha: X") passavam dos 104px e cortavam. Fica a primeira, pela ordem em que entram — aviso >
                  "pela competência" > sugestão > marca da planilha —, e as outras vão inteiras no `title` do slot. */
               const dicasNoSlot = campo === 'Safra' ? dicas.slice(0, 1) : dicas;
-
-              return (
-                <Fragment key={rotulo}>
-                  {/* ⚠ A FAIXA DE TÍTULO DO BLOCO — 16px, 9,5px (Mesa compacta; era uma faixa de 6px sem título). */}
-                  {abreGrupo && (
-                    /* ⚠ O PAR DE TOKENS DO "fechamento" DA CONFERÊNCIA (PR-CONC-ENRIQUECER-V2-02): o bloco se destaca do corpo. */
-                    <tr data-testid={`faixa-${grupo}`} style={{ height: ALTURA_FAIXA_GRUPO }} className="border-y border-border bg-primary/10">
-                      <td colSpan={4} className="py-0 pl-3 text-[9.5px] font-semibold uppercase tracking-wide text-primary">
-                        {TITULO_DO_GRUPO[grupo]}
-                      </td>
-                    </tr>
-                  )}
-                  {/* ⚠ 22px (ou 18 no bloco compacto) EXATOS E SEMPRE PRESENTE — nunca quebra: cada célula trunca e leva o
-                      texto no `title`. O compacto desce o texto ao piso de 9,5px nas quatro colunas. */}
-                  <tr style={{ height: compacto ? ALTURA_LINHA_COMPACTA : ALTURA_LINHA }} data-testid={`linha-${rotulo}`}
-                    data-compacto={compacto ? 'sim' : undefined}
-                    className={`border-b border-border/50 ${compacto ? 'text-[9.5px]' : ''} ${zebra ? 'bg-muted/30' : ''}`}>
-                    <td className="truncate py-0 pl-3 pr-1.5 text-muted-foreground" title={rotulo}>
-                      {rotulo}
-                      {exigido && <span className="text-red-600 dark:text-red-400"> *</span>}
-                    </td>
-                    <td className="truncate px-1.5 py-0 text-blue-700/90 dark:text-blue-400" title={c.excel}>
-                      {corDaLinha ? <span className={`tabular-nums ${corDaLinha}`}>{c.excel}</span> : c.excel}
-                    </td>
-                    <td className="truncate px-1.5 py-0 text-slate-700 dark:text-slate-300" title={c.sistema}>
-                      {corDaLinha ? <span className={`tabular-nums ${corDaLinha}`}>{c.sistema}</span> : c.sistema}
-                    </td>
-                    <td className="px-1.5 py-0">
-                      {/* sem altura própria: o controle (20px) centra na linha de 22 — dar 22 a este bloco somava a
-                          borda de 1px e a linha media 23 (medido no navegador) */}
-                      <div className="flex items-center gap-1">
-                        <div className={`min-w-0 flex-1 ${planoPendente ? 'rounded ring-1 ring-destructive/70' : ''}`}
-                          data-testid={planoPendente ? 'plano-pendente' : undefined}>
-                          {doExtrato ? (
+              /* ⚠ A LINHA SAFRA MUDA SÓ O RÓTULO PELA ATIVIDADE (CULTURA-FASE-B D1); o `data-testid` e o checklist seguem o
+                 rótulo da ORDEM ("Safra"). */
+              const rotuloVisivel = campo === 'Safra' ? rotuloLinhaSafra(eixoRateio) : rotulo;
+              /* o controle da coluna "Vai gravar" (na linha Safra, o lado da safra) */
+              const controle = (
+doExtrato ? (
                             /* ⚠ CAIXA TRACEJADA — só leitura, e com cara de leitura. */
                             <span data-testid={`extrato-${rotulo}`}
                               title={faltando ? 'Obrigatório — o Salvar não grava sem ele.' : valorExtrato}
@@ -631,7 +618,58 @@ export function MesaCamposTabela({
                                   : c.resultado}
                               </span>
                             </span>
-                          )}
+                          )
+              );
+
+              return (
+                <Fragment key={rotulo}>
+                  {/* ⚠ A FAIXA DE TÍTULO DO BLOCO — 16px, 9,5px (Mesa compacta; era uma faixa de 6px sem título). */}
+                  {abreGrupo && (
+                    /* ⚠ O PAR DE TOKENS DO "fechamento" DA CONFERÊNCIA (PR-CONC-ENRIQUECER-V2-02): o bloco se destaca do corpo. */
+                    <tr data-testid={`faixa-${grupo}`} style={{ height: ALTURA_FAIXA_GRUPO }} className="border-y border-border bg-primary/10">
+                      <td colSpan={4} className="py-0 pl-3 text-[9.5px] font-semibold uppercase tracking-wide text-primary">
+                        {TITULO_DO_GRUPO[grupo]}
+                      </td>
+                    </tr>
+                  )}
+                  {/* ⚠ 22px (ou 18 no bloco compacto) EXATOS E SEMPRE PRESENTE — nunca quebra: cada célula trunca e leva o
+                      texto no `title`. O compacto desce o texto ao piso de 9,5px nas quatro colunas. */}
+                  <tr style={{ height: compacto ? ALTURA_LINHA_COMPACTA : ALTURA_LINHA }} data-testid={`linha-${rotulo}`}
+                    data-compacto={compacto ? 'sim' : undefined}
+                    className={`border-b border-border/50 ${compacto ? 'text-[9.5px]' : ''} ${zebra ? 'bg-muted/30' : ''}`}>
+                    <td className="truncate py-0 pl-3 pr-1.5 text-muted-foreground" title={rotuloVisivel}>
+                      {rotuloVisivel}
+                      {exigido && <span className="text-red-600 dark:text-red-400"> *</span>}
+                    </td>
+                    <td className="truncate px-1.5 py-0 text-blue-700/90 dark:text-blue-400" title={c.excel}>
+                      {corDaLinha ? <span className={`tabular-nums ${corDaLinha}`}>{c.excel}</span> : c.excel}
+                    </td>
+                    <td className="truncate px-1.5 py-0 text-slate-700 dark:text-slate-300" title={c.sistema}>
+                      {corDaLinha ? <span className={`tabular-nums ${corDaLinha}`}>{c.sistema}</span> : c.sistema}
+                    </td>
+                    <td className="px-1.5 py-0">
+                      {/* sem altura própria: o controle (20px) centra na linha de 22 — dar 22 a este bloco somava a
+                          borda de 1px e a linha media 23 (medido no navegador) */}
+                      <div className="flex items-center gap-1">
+                        <div className={`min-w-0 flex-1 ${planoPendente ? 'rounded ring-1 ring-destructive/70' : ''}`}
+                          data-testid={planoPendente ? 'plano-pendente' : undefined}>
+                          {campo === 'Safra' ? (
+                            /* ⚠ DOIS CONTROLES NUMA CÉLULA, como Documento · tipo (55/45, largura fixa): a safra e o eixo de
+                               rateio (CULTURA-FASE-B D1). Medido a 1135: 148px para a safra (pior código 67) e 121 para a
+                               cultura/fase (pior texto, "Todas (rateia)", 69). */
+                            <div className="flex min-w-0 items-center gap-1">
+                              <div className="min-w-0 basis-[55%]">{controle}</div>
+                              <div className="min-w-0 basis-[45%]" data-testid="segundo-controle-safra" data-eixo={eixoRateio ?? 'nenhum'}>
+                                <ResultadoCulturaFaseEditor eixo={eixoRateio}
+                                  value={eixoRateio === 'fase' ? row.edicao.fase : row.edicao.cultura}
+                                  valorAtual={eixoRateio === 'fase' ? row.edicao.faseAtual : row.edicao.culturaAtual}
+                                  sugerida={culturaSugerida} culturasDaSafra={culturasDaSafra}
+                                  gravada={row.aplicado}
+                                  naoApaga={!!row.gravada?.camposEsvaziados.includes(eixoRateio === 'fase' ? 'Fase' : 'Cultura')}
+                                  onEditar={editavel ? onEditar : undefined} onRecusar={onRecusarCultura} />
+                              </div>
+                            </div>
+                          ) : controle}
                         </div>
                         {/* ⚠ O SLOT: largura fixa, sempre presente, texto de 8,5px truncado com o todo no `title`.
                             O "?" do Plano de contas mora aqui (PAINEL-V1 item 5). */}

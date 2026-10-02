@@ -16,6 +16,7 @@ import { useClassificacaoStaging, useSessoesClassificacao } from '@/v2/hooks/use
 import {
   toRowVM, toSessoesVM, contarAplicaveisExatos, escolherMelhorSessaoId, estaRevisada,
   motivoReverterBloqueado, bloqueiaPorAgrupamento, rodaSugestoesDoSalvar,
+  eixoDaAtividade, culturaSugeridaNoSalvar, patchesAoTrocarAtividade,
   listarContas, filtrarPorConta, resumirGrupos, filtrarPorGrupo, grupoDaLinha,
   sessoesDoMes, sessaoMaisNovaQueAberta, contaEfetivaNome, parteDeAgrupamento, explicadoPorSiMesmo,
   type EnriqGrupo,
@@ -57,6 +58,7 @@ import { ContaBancariaSelect, type ContaSelecionavel } from '@/components/shared
 import { baixarCsv, csvLinhaPt } from '@/lib/csv';
 import { fmtBRL, fmtData } from './fmt';
 import { planoIncoerente } from '@/v2/lib/mesa/atividadeDaLinha';
+import { useCulturasDaSafra } from '@/hooks/useAreaPlantada';
 import {
   aguardaAgrupamento, baldeDaLinha, elegivelParaLote, montarPainelContas, MOTIVO_AGUARDA_AGRUPAMENTO, type FiltroPainel,
 } from '@/v2/lib/mesa/painelContas';
@@ -166,6 +168,11 @@ export function MesaEnriquecimentoTab({
    *   escolha, vale a proposta (`edicao.atividadeProposta`, o escopo da conta resolvida).
    */
   const [atividadePorLinha, setAtividadePorLinha] = useState<Record<string, string>>({});
+  /**
+   * A SUGESTÃO DE CULTURA DA PLANILHA RECUSADA, por linha — PR-CONC-ENRIQ-MESA-CULTURA-FASE-B (D5). O operador escolheu outra
+   * coisa ("Todas (rateia)" inclusive): a sugestão some e o Salvar não a grava. Estado de tela, como a atividade.
+   */
+  const [culturaRecusadaIds, setCulturaRecusadaIds] = useState<ReadonlySet<string>>(new Set());
   const [importOpen, setImportOpen] = useState(false);
   // PR-UX-ENR-MODAL-01 — superfície ampla da mesma mesa. Estado de UI puro:
   // não persiste, não sincroniza com URL, não altera nada do fluxo.
@@ -478,6 +485,14 @@ export function MesaEnriquecimentoTab({
     return [...antes, presa, ...rowsFiltradas.slice(antes.length)];
   }, [rowsFiltradas, rowsVM, selecionadoId]);
   const selecionado = rowsNaTela.find((r) => r.id === selecionadoId) ?? null;
+  /* ── CULTURA-FASE-B: o eixo de rateio da linha selecionada (a atividade escolhida, senão a proposta) e as culturas
+     plantadas na safra dela — SÓ NA LAVOURA (pecuária e o resto não consultam). O cache é do dono (`useCulturasDaSafra`):
+     uma consulta por safra por sessão. */
+  const atividadeSel = selecionado ? (atividadePorLinha[selecionado.id] ?? selecionado.edicao.atividadeProposta) : null;
+  const eixoSel = eixoDaAtividade(atividadeSel);
+  const safraSel = selecionado
+    ? (selecionado.edicao.safraId ?? selecionado.edicao.safraIdAtual ?? selecionado.edicao.safraSugeridaId) : null;
+  const culturasDaSafraSel = useCulturasDaSafra(eixoSel === 'cultura' ? safraSel : null);
 
   /* ⚠ O "A revisar é o default" (PR-MESA-ORDEM-REVISADO-01 item C) SAIU COM A LISTA DA TELA PRINCIPAL —
      PR-CONC-ENRIQUECER-V2-01: o recorte agora é da Mesa (Revisar / Feitas / Todas, por conta), e a lista que ela recebe
@@ -1035,7 +1050,7 @@ export function MesaEnriquecimentoTab({
          Na gravada o sistema prevalece e só vale o que o operador editou: o banco já alinhou a proposta ao lançamento na
          primeira edição, e uma sugestão aqui gravaria o que ninguém pediu. */
       const sugestoes = rodaSugestoesDoSalvar(selecionado);
-      /* ⚠ AS TRÊS LEVAM `_sugestao: true` — PR-CONC-ENRIQ-PROPOSTA-PAR-MUDOU D2. O banco lê e não grava: as chaves delas NÃO
+      /* ⚠ AS QUATRO (a cultura da planilha entrou no CULTURA-FASE-B) LEVAM `_sugestao: true` — PR-CONC-ENRIQ-PROPOSTA-PAR-MUDOU D2. O banco lê e não grava: as chaves delas NÃO
          entram em `chaves_do_operador`, e quando o Recasar troca o par elas são recalculadas para o par novo, em vez de
          ficarem presas como se o operador as tivesse escolhido. Edição do operador nunca leva a marca. */
       /**
@@ -1080,6 +1095,16 @@ export function MesaEnriquecimentoTab({
         await editarProposto({
           staging_id: id, patch: { forma_pagamento: selecionado.edicao.formaPagamentoSugerida, _sugestao: true },
         });
+      }
+      /**
+       * A CULTURA DA PLANILHA VIRA PROPOSTA NO SALVAR — PR-CONC-ENRIQ-MESA-CULTURA-FASE-B (D5), o mesmo padrão da safra
+       * sugerida e da forma pelo histórico: o seletor mostra em âmbar, o Salvar grava. Só na lavoura, só sem cultura em lugar
+       * nenhum, só em linha NÃO gravada (`culturaSugeridaNoSalvar` lê `rodaSugestoesDoSalvar`), e nunca recusada.
+       */
+      const culturaSug = culturaSugeridaNoSalvar(selecionado,
+        eixoDaAtividade(atividadePorLinha[id] ?? selecionado.edicao.atividadeProposta), culturaRecusadaIds.has(id));
+      if (sugestoes && culturaSug) {
+        await editarProposto({ staging_id: id, patch: { cultura: culturaSug, _sugestao: true } });
       }
       const res: any = await applyRow({ staging_id: id, overwrite: true });
       if (res?.aplicado) {
@@ -1307,6 +1332,17 @@ export function MesaEnriquecimentoTab({
       if (!selecionado) return;
       const id = selecionado.id;
       setAtividadePorLinha((p) => ({ ...p, [id]: a }));
+      /* ⚠ O EIXO QUE NÃO SE APLICA SAI NA HORA (CULTURA-FASE-B D6, como o modal do Financeiro): a proposta de cultura ao
+         virar pecuária, a de fase ao virar lavoura. O gatilho do banco já zeraria na gravação; limpar aqui é para a tela
+         não mostrar o que não vai gravar. Pelo `onEditar` de sempre. */
+      for (const patch of patchesAoTrocarAtividade(selecionado.edicao, a)) void onEditar(patch);
+    },
+    culturasDaSafra: culturasDaSafraSel,
+    culturaRecusada: selecionado ? culturaRecusadaIds.has(selecionado.id) : false,
+    onRecusarCultura: () => {
+      if (!selecionado) return;
+      const id = selecionado.id;
+      setCulturaRecusadaIds((p) => { if (p.has(id)) return p; const n = new Set(p); n.add(id); return n; });
     },
     versaoRestauro,
   };

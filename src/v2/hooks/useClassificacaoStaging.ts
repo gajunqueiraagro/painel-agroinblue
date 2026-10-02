@@ -238,6 +238,16 @@ export interface ClassificacaoStagingPreviewRow {
    */
   safra_da_competencia_id?: string | null;
   safra_fora_do_periodo?: boolean | null;
+  /**
+   * PR-CONC-ENRIQ-MESA-CULTURA-FASE-A (migration 20261027190500) — cultura e fase: do lançamento, a cultura que a planilha
+   * traz (derivada do texto da Safra, `_planilha.cultura`) e as propostas. A view as expõe no fim; a tela (FASE-B) só lê.
+   * Ausentes (view anterior) = sem eixo de rateio a mostrar.
+   */
+  lanc_cultura?: string | null;
+  lanc_fase?: string | null;
+  planilha_cultura?: string | null;
+  proposto_cultura?: string | null;
+  proposto_fase?: string | null;
 }
 
 /** O que `fn_classificacao_casar_sessao` devolve — 133a. */

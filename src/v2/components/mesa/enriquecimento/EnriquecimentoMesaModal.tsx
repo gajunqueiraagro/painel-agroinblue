@@ -114,6 +114,10 @@ export interface DetalheDaMesa extends EnriquecimentoDetalheProps {
    * texto guardam o rascunho em estado local, e um valor recusado não pode ficar parecendo aceito.
    */
   versaoRestauro?: number;
+  /** PR-CONC-ENRIQ-MESA-CULTURA-FASE-B — culturas plantadas na safra da linha e a sugestão de cultura recusada (D5). */
+  culturasDaSafra?: readonly string[];
+  culturaRecusada?: boolean;
+  onRecusarCultura?: () => void;
 }
 
 /**
@@ -434,6 +438,9 @@ export function EnriquecimentoMesaModal({
                   conciliado={selecionada.lancId ? conciliadosIds?.has(selecionada.lancId) : false}
                   atividade={detalhe.atividade}
                   onAtividade={detalhe.onAtividade}
+                  culturasDaSafra={detalhe.culturasDaSafra}
+                  culturaRecusada={detalhe.culturaRecusada}
+                  onRecusarCultura={detalhe.onRecusarCultura}
                 />
               </>
             )}

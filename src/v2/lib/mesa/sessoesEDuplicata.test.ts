@@ -169,6 +169,7 @@ describe('diferencasDoResultado', () => {
     formaPagamentoSugerida: null, atividadeProposta: null,
     /* PR-CONC-ENRIQ-SAFRA-COMPETENCIA — a safra da competência (da view); este fixture não a exercita. */
     safraDaCompetenciaId: null, safraForaDoPeriodo: null, safraPlanilhaId: null,
+    cultura: null, culturaAtual: null, culturaPlanilha: null, fase: null, faseAtual: null,
   };
 
   it('safra 25/26 -> 26/27 É diferença (o caso que a view não via)', () => {

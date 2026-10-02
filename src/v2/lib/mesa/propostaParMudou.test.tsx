@@ -125,7 +125,8 @@ describe('o aviso na Mesa (D8): âmbar, no slot da mensagem, sem bloquear', () =
   });
 });
 
-describe('a marca `_sugestao` (D2): só nas três propostas automáticas do Salvar', () => {
+/* ⚠ ERAM TRÊS; A CULTURA DA PLANILHA ENTROU COMO A QUARTA no PR-CONC-ENRIQ-MESA-CULTURA-FASE-B (D5) — contrato novo. */
+describe('a marca `_sugestao` (D2): só nas quatro propostas automáticas do Salvar', () => {
   const src = readFileSync(resolve(process.cwd(), 'src/v2/components/mesa/enriquecimento/MesaEnriquecimentoTab.tsx'), 'utf8');
   const corpo = (inicio: string, fim: string) => {
     const i = src.indexOf(inicio);
@@ -135,20 +136,21 @@ describe('a marca `_sugestao` (D2): só nas três propostas automáticas do Salv
   };
   const comMarca = /patch: \{[^}]*_sugestao: true[^}]*\}/g;
 
-  it('as três chamadas do salvar() levam a marca: alinhar subcentro, safra sugerida, forma pelo histórico', () => {
+  it('as quatro chamadas do salvar() levam a marca: alinhar subcentro, safra sugerida, forma pelo histórico, cultura', () => {
     const salvar = corpo('async function salvar(', 'async function handleSalvarProximo');
     const chamadas = salvar.match(comMarca) ?? [];
-    expect(chamadas).toHaveLength(3);
+    expect(chamadas).toHaveLength(4);
+    expect(chamadas.some((c) => /cultura: culturaSug/.test(c))).toBe(true);
     expect(chamadas.some((c) => /subcentro: selecionado\.edicao\.subcentro/.test(c))).toBe(true);
     expect(chamadas.some((c) => /safra_id: selecionado\.edicao\.safraSugeridaId/.test(c))).toBe(true);
     expect(chamadas.some((c) => /forma_pagamento: selecionado\.edicao\.formaPagamentoSugerida/.test(c))).toBe(true);
     /* nenhum editarProposto do salvar ficou sem a marca */
-    expect((salvar.match(/editarProposto\(/g) ?? []).length).toBe(3);
+    expect((salvar.match(/editarProposto\(/g) ?? []).length).toBe(4);
   });
 
   it('a edição do operador (onEditar) e o resto da aba não levam a marca', () => {
     expect(corpo('async function onEditar(', '\n  }\n')).not.toMatch(/_sugestao/);
-    /* no arquivo inteiro, só as três */
-    expect((src.match(comMarca) ?? []).length).toBe(3);
+    /* no arquivo inteiro, só as quatro */
+    expect((src.match(comMarca) ?? []).length).toBe(4);
   });
 });

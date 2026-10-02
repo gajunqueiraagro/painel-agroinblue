@@ -27,6 +27,7 @@ import { ehTipoTransferencia, subcentroDeTransferencia } from '@/v2/lib/mesa/tra
 import { preResolverFazenda } from '@/v2/lib/importLanc/importLancamentosView';
 import { formaPagamentoPeloHistorico } from '@/v2/lib/mesa/formaPeloHistorico';
 import { atividadeDoSubcentro, rotuloAtividade } from '@/v2/lib/mesa/atividadeDaLinha';
+import { CULTURAS_LANCAMENTO, FASES } from '@/lib/agri/rateioLancamento';
 import type { Fazenda } from '@/contexts/FazendaContext';
 
 /**
@@ -456,8 +457,10 @@ export function toRowVM(
        comparativo inteiro mostrava vencimento duas vezes.
        ⚠ `Safra` FICA: ela nasceu no mesmo bloco mas não tem irmã. */
     /* PR-CONC-EXCEL-PLANILHA-COMPLETA-01: a coluna Safra da planilha (`excel_safra`); `proposto_safra` era o texto carry-only antigo */
-    refLinha('Safra', row.lanc_safra_codigo, row.excel_safra ?? row.proposto_safra,
-      fmtTexto(row.lanc_safra_codigo), fmtTexto(row.excel_safra ?? row.proposto_safra)),
+    /* PR-CONC-ENRIQ-MESA-CULTURA-FASE-B (D2/D11): a linha Safra leva junto o eixo de rateio — na planilha a cultura que ela
+       traz (fase nunca vem da planilha), no sistema a cultura/fase do lançamento; e "difere" quando só elas mudam. */
+    linhaSafraComRateio(refLinha('Safra', row.lanc_safra_codigo, row.excel_safra ?? row.proposto_safra,
+      fmtTexto(row.lanc_safra_codigo), fmtTexto(row.excel_safra ?? row.proposto_safra)), row),
     // P0-5 — Documento: Sistema = numero_documento do lançamento; Excel = excel_documento; Resultado = proposta.
     { campo: 'Documento', sistema: fmtTexto(row.lanc_numero_documento), excel: fmtTexto(row.excel_documento), ...resultadoEditavel(row.lanc_numero_documento, row.excel_documento, row.proposto_numero_documento) },
     // P0-3 — linha "Descrição" separada removida (unificada em "Produto / Descrição").
@@ -754,6 +757,11 @@ export function toRowVM(
     safraDaCompetenciaId: row.safra_da_competencia_id ?? null,
     safraForaDoPeriodo: typeof row.safra_fora_do_periodo === 'boolean' ? row.safra_fora_do_periodo : null,
     safraPlanilhaId: row.planilha_safra_id ?? null,
+    cultura: vazio(row.proposto_cultura) ? null : String(row.proposto_cultura),
+    culturaAtual: vazio(row.lanc_cultura) ? null : String(row.lanc_cultura),
+    culturaPlanilha: vazio(row.planilha_cultura) ? null : String(row.planilha_cultura),
+    fase: vazio(row.proposto_fase) ? null : String(row.proposto_fase),
+    faseAtual: vazio(row.lanc_fase) ? null : String(row.lanc_fase),
     tipoTransferenciaSugerido,
     tipoDocumento: row.proposto_tipo_documento ?? null,
     tipoDocumentoAtual: row.lanc_tipo_documento ?? null,
@@ -1352,6 +1360,10 @@ export function diferencasDoResultado(edicao: EnriqEdicao): string[] {
   /* PR-CONC-MESA-PAINEL-V1 — os dois que a Mesa passou a gravar. */
   cmp('tipo de documento', edicao.tipoDocumento, edicao.tipoDocumentoAtual);
   cmp('forma de pagamento', edicao.formaPagamento, edicao.formaPagamentoAtual);
+  /* PR-CONC-ENRIQ-MESA-CULTURA-FASE-B (D9/D11): o apply_row grava as duas desde o FASE-A — mudança só de cultura ou de fase
+     é mudança, e numa linha gravada acende "alterada · falta gravar". */
+  cmp('cultura', edicao.cultura, edicao.culturaAtual);
+  cmp('fase', edicao.fase, edicao.faseAtual);
   return difs;
 }
 
@@ -1389,6 +1401,9 @@ const CAMPOS_ESVAZIAVEIS: ReadonlyArray<readonly [string, (r: ClassificacaoStagi
   ['Forma de pagamento', (r) => r.proposto_forma_pagamento, (r) => r.lanc_forma_pagamento],
   ['OBS', (r) => r.proposto_observacao, (r) => r.lanc_observacao],
   ['Conta destino', (r) => r.proposto_conta_destino_id, (r) => r.lanc_conta_destino_id],
+  /* CULTURA-FASE-B (D8): não são linhas da grade — o segundo controle da linha Safra as lê para dizer "a Mesa não apaga" */
+  ['Cultura', (r) => r.proposto_cultura, (r) => r.lanc_cultura],
+  ['Fase', (r) => r.proposto_fase, (r) => r.lanc_fase],
 ];
 
 /**
@@ -1637,4 +1652,80 @@ export function investimentoDoMesmoBanco(
   if (!banco) return null;
   const cand = contas.filter((c) => c.tipo_conta === 'inv' && (c.banco ?? '').trim().toLowerCase() === banco);
   return cand.length === 1 ? cand[0].id : null;
+}
+
+// ── PR-CONC-ENRIQ-MESA-CULTURA-FASE-B: cultura e fase na linha Safra ──────────────────────────────────────────────────
+
+/** O eixo de rateio que a atividade da linha pede — D1. Agricultura: cultura; pecuária: fase; o resto: nenhum. */
+export type EixoRateio = 'cultura' | 'fase' | null;
+export function eixoDaAtividade(atividade: string | null | undefined): EixoRateio {
+  return atividade === 'agricultura' ? 'cultura' : atividade === 'pecuaria' ? 'fase' : null;
+}
+
+/** O rótulo da linha Safra pelo eixo — D1 ("Safra · Cultura", "Safra · Fase", "Safra"). A altura da linha não muda. */
+export function rotuloLinhaSafra(eixo: EixoRateio): string {
+  return eixo === 'cultura' ? 'Safra · Cultura' : eixo === 'fase' ? 'Safra · Fase' : 'Safra';
+}
+
+/** O rótulo de uma cultura/fase pelo valor — as listas são as de `rateioLancamento.ts` (nunca uma cópia). */
+export function rotuloCultura(v: string | null | undefined): string | null {
+  return v ? (CULTURAS_LANCAMENTO.find((c) => c.valor === v)?.label ?? v) : null;
+}
+export function rotuloFase(v: string | null | undefined): string | null {
+  return v ? (FASES.find((f) => f.valor === v)?.label ?? v) : null;
+}
+
+/**
+ * A linha Safra do comparativo com o eixo de rateio — D2/D11. A planilha mostra a cultura que traz ("25/26-Lav · Mandioca");
+ * o sistema, a cultura ou a fase do lançamento. Só a cultura/fase mudando acende "difere".
+ */
+function linhaSafraComRateio(base: EnriqComparativoLinha, row: ClassificacaoStagingPreviewRow): EnriqComparativoLinha {
+  const junta = (a: string, b: string | null) => (b ? (a === '—' ? b : `${a} · ${b}`) : a);
+  const rateioSistema = rotuloCultura(row.lanc_cultura) ?? rotuloFase(row.lanc_fase);
+  const mudaCultura = !vazio(row.proposto_cultura) && row.proposto_cultura !== row.lanc_cultura;
+  const mudaFase = !vazio(row.proposto_fase) && row.proposto_fase !== row.lanc_fase;
+  const muda = (mudaCultura || mudaFase) && base.tom !== 'difere';
+  return {
+    ...base,
+    excel: junta(base.excel, rotuloCultura(row.planilha_cultura)),
+    sistema: junta(base.sistema, rateioSistema),
+    ...(muda ? { resultado: 'difere', tom: 'difere' as EnriqTom } : {}),
+  };
+}
+
+/**
+ * A cultura que a PLANILHA sugere — D5. Só no eixo cultura, só onde nada a define (sem proposta e sem cultura no
+ * lançamento) e só com a planilha trazendo uma. Preencher campo vazio não contraria "o sistema prevalece". Recusada pelo
+ * operador ("Todas (rateia)" ou outra escolha), não volta.
+ */
+export function culturaSugeridaDaPlanilha(
+  edicao: Pick<EnriqEdicao, 'cultura' | 'culturaAtual' | 'culturaPlanilha'>, eixo: EixoRateio, recusada = false,
+): string | null {
+  if (eixo !== 'cultura' || recusada) return null;
+  if (edicao.cultura || edicao.culturaAtual) return null;
+  return edicao.culturaPlanilha ?? null;
+}
+
+/**
+ * A cultura que o SALVAR grava como sugestão (`_sugestao: true`) — D5 com o D11 do LINHA-GRAVADA: só em linha NÃO gravada.
+ * Na gravada a sugestão aparece no seletor e só grava no clique do operador (sem `_sugestao`).
+ */
+export function culturaSugeridaNoSalvar(
+  vm: Pick<EnriqRowVM, 'aplicado' | 'edicao'>, eixo: EixoRateio, recusada = false,
+): string | null {
+  return rodaSugestoesDoSalvar(vm) ? culturaSugeridaDaPlanilha(vm.edicao, eixo, recusada) : null;
+}
+
+/**
+ * O QUE SAI QUANDO A ATIVIDADE DA LINHA MUDA — D6, como o modal do Financeiro: a proposta de cultura ao deixar a lavoura,
+ * a de fase ao deixar a pecuária. O gatilho do banco já zeraria na gravação; limpar é para a tela não mostrar o que não vai
+ * gravar. Devolve os patches do `editar_proposto` (vazio = nada a limpar).
+ */
+export function patchesAoTrocarAtividade(
+  edicao: Pick<EnriqEdicao, 'cultura' | 'fase'>, nova: string | null | undefined,
+): Array<Record<string, null>> {
+  const out: Array<Record<string, null>> = [];
+  if (nova !== 'agricultura' && edicao.cultura) out.push({ cultura: null });
+  if (nova !== 'pecuaria' && edicao.fase) out.push({ fase: null });
+  return out;
 }
