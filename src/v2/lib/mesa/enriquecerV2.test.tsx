@@ -6,7 +6,7 @@
  * ⚠ ASSERÇÃO DE "NENHUM" LEVA O TAMANHO DO CONJUNTO (CLAUDE.md): o Extrato reporta quantas linhas comparou dos dois lados.
  */
 import { describe, it, expect, vi, beforeAll } from 'vitest';
-import { render, screen, within, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, within, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import type { ClassificacaoStagingPreviewRow } from '@/v2/hooks/useClassificacaoStaging';
 import { linhaCrua } from '@/v2/lib/mesa/linhaCrua.fixture';
 import { CONTA_BB, espelhoBB0109, stagingBB0109 } from '@/v2/lib/mesa/enriquecerV2.fixture';
@@ -222,7 +222,8 @@ describe('Extrato da planilha — sessão 8d6efeb7, BB, 01/09', () => {
   it('↳: as duas "Telefone 506,51" sob o MESMO lançamento (8ebd63d4), e o outro "Vivo Casa" só no sistema', () => {
     const mae = linhas.findIndex((l) => l.chave === 'n1-8ebd63d4');
     expect(mae).toBeGreaterThanOrEqual(0);
-    expect(linhas[mae].selo).toBe('Desmembrar');
+    /* PR-CONC-ENRIQ-BLOCO-ESTADOS: as duas somam −1.013,02 contra −506,51 — é par repetido, não desmembrar */
+    expect(linhas[mae].selo).toBe('Par repetido');
     const filhas = linhas.slice(mae + 1, mae + 3);
     expect(filhas.map((f) => f.simbolo)).toEqual(['↳', '↳']);
     expect(filhas.map((f) => f.stagingId).sort()).toEqual(['547a04fa', '9fd050ed']);
@@ -394,7 +395,7 @@ describe('Extrato da planilha — agrupar pela seleção (2b-tela)', () => {
       expect(l.selPlanilha).toBeNull();
       expect(l.selSistema).toBeNull();
     }
-    expect(ls.find((l) => l.selo === 'Desmembrar')).toMatchObject({ selPlanilha: null, selSistema: null });
+    expect(ls.find((l) => l.selo === 'Par repetido')).toMatchObject({ selPlanilha: null, selSistema: null });
   });
 
   it('as caixas: a linha sem par e o "Só no sistema" têm; a pareada não; 13 colunas no colgroup', () => {
@@ -839,6 +840,114 @@ describe('Extrato da planilha — marcar todos do fornecedor', () => {
     /* a linha sem fornecedor: marcada, não oferece nada */
     fireEvent.click(caixaP('sem-forn'));
     expect(screen.queryByTestId('marcar-fornecedor-planilha')).not.toBeInTheDocument();
+  });
+});
+
+/* ═══ PR-CONC-ENRIQ-BLOCO-ESTADOS — a linha livre é a do banco; soltar o par; par repetido ═════════════════════════ */
+describe('Extrato da planilha — linha livre, par e par repetido (BLOCO-ESTADOS)', () => {
+  const linhaX = (staging_id: string, excel_valor: number, sobre: Partial<ClassificacaoStagingPreviewRow>) => linhaCrua({
+    staging_id, excel_valor, excel_tipo_operacao: '2-Saídas', excel_data_pagamento: '2026-09-01', conta_filtro_id: CONTA_BB,
+    excel_subcentro: 'Teste', excel_fornecedor: 'FORN', ...sobre,
+  });
+  /* rabobank: grupo sugerido (livre pelo banco); morto: par cancelado (livre, lanc_cancelado); vivo: divergente com par fora do
+     mês (NÃO livre); semView: a view antiga (sem a coluna) — a regra de antes */
+  const casos = () => [
+    ...stagingBB0109(),
+    linhaX('rabobank', 26127.18, { ...st('sugestao_grupo'), linha_livre: true, match_lancamento_ids: ['j', 'a'] }),
+    linhaX('morto', 47.5, { match_status: 'divergente', lanc_id: 'lanc-cancelado', linha_livre: true, lanc_cancelado: true }),
+    linhaX('vivo', 1690.71, { match_status: 'divergente', lanc_id: 'lanc-outro-mes', lanc_descricao: 'Seguro Maquinas',
+      lanc_valor: 1690.71, lanc_sinal: '-1', linha_livre: false, lanc_cancelado: false }),
+    linhaX('semView', 10, { match_status: 'divergente', lanc_id: 'lanc-outro-mes-2' }),
+  ];
+  const montar = () => montarExtratoDaPlanilha(casos(), espelhoBB0109(), CONTA_BB, new Set()).dias.flatMap((d) => d.linhas);
+
+  it('a caixa é a linha_livre do banco: grupo sugerido e par morto têm; par vivo não, e expõe parSoltavel', () => {
+    const ls = montar();
+    expect(ls.find((l) => l.stagingId === 'rabobank')).toMatchObject({ selPlanilha: 'rabobank', parSoltavel: null, par: null });
+    expect(ls.find((l) => l.stagingId === 'morto')).toMatchObject({ selPlanilha: 'morto', motivoLivre: 'o par desta linha foi cancelado' });
+    expect(ls.find((l) => l.stagingId === 'vivo')).toMatchObject({
+      selPlanilha: null, parSoltavel: 'vivo', motivoLivre: null,
+      par: { descricao: 'Seguro Maquinas', valor: -1690.71, gravado: false, repetido: false },
+    });
+  });
+
+  it('sem a coluna (view antiga): a regra de antes, e nunca uma caixa nova nem soltar', () => {
+    const l = montar().find((x) => x.stagingId === 'semView');
+    /* a regra de antes: sem lado Sistema, não filha, não enriquecida -> caixa; sem `linha_livre` não há parSoltavel */
+    expect(l).toMatchObject({ selPlanilha: 'semView', parSoltavel: null, par: null });
+  });
+
+  it('par repetido: a mãe do Vivo Casa (2 × −506,51 contra −506,51) é "Par repetido"; com a soma fechando é "Desmembrar"', () => {
+    const ls = montarExtratoDaPlanilha(stagingBB0109(), espelhoBB0109(), CONTA_BB, new Set()).dias.flatMap((d) => d.linhas);
+    expect(ls.find((l) => l.chave === 'n1-8ebd63d4')?.selo).toBe('Par repetido');
+    /* a mesma mãe com as filhas somando o valor dele: −300,00 − 206,51 = −506,51 */
+    const fecha = stagingBB0109().map((r) => (r.staging_id === '547a04fa' ? linhaCrua({ ...r, excel_valor: 300 })
+      : r.staging_id === '9fd050ed' ? linhaCrua({ ...r, excel_valor: 206.51 }) : r));
+    const ls2 = montarExtratoDaPlanilha(fecha, espelhoBB0109(), CONTA_BB, new Set()).dias.flatMap((d) => d.linhas);
+    expect(ls2.find((l) => l.chave === 'n1-8ebd63d4')?.selo).toBe('Desmembrar');
+  });
+
+  it('par repetido JÁ GRAVADO (Vivo Casa aplicado): tem par para a barra, mas não é soltável', () => {
+    const gravado = stagingBB0109().map((r) => (r.staging_id === '547a04fa' || r.staging_id === '9fd050ed'
+      ? linhaCrua({ ...r, aplicado: true, linha_livre: false, lanc_cancelado: false, lanc_descricao: 'Vivo Casa' }) : r));
+    const ls = montarExtratoDaPlanilha(gravado, espelhoBB0109(), CONTA_BB, new Set()).dias.flatMap((d) => d.linhas);
+    expect(ls.find((l) => l.stagingId === '547a04fa')).toMatchObject({
+      parSoltavel: null, par: { descricao: 'Vivo Casa', gravado: true, repetido: true },
+    });
+  });
+
+  /* ── a tela ─────────────────────────────────────────────────────────────────────────────────────────────────── */
+  const abrir = (staging: ClassificacaoStagingPreviewRow[], onAgrupar?: (g: unknown) => Promise<{ ok: boolean; mensagem?: string }>) => {
+    ESPELHO.atual = espelhoBB0109();
+    return render(<ExtratoDaPlanilhaModal open onOpenChange={vi.fn()} clienteId="nj" anoMes="2026-09" mesRotulo="set/2026"
+      staging={staging} contas={[{ id: CONTA_BB, nome: 'Banco do Brasil' }]} contaId={CONTA_BB}
+      onContaId={vi.fn()} onAbrirLinha={vi.fn()} onAgrupar={onAgrupar} />);
+  };
+  const tr = (id: string) => {
+    const el = screen.getAllByTestId('linha-extrato-planilha').find((x) => x.dataset.staging === id);
+    if (!el) throw new Error(`sem a linha ${id}`);
+    return el;
+  };
+
+  it('modo par: o símbolo da linha com par abre a barra; "Soltar o par" chama onAgrupar { forma: soltar }; 26px; Esc sai', async () => {
+    const onAgrupar = vi.fn(async () => ({ ok: true }));
+    abrir(casos(), onAgrupar);
+    const altura = screen.getByTestId('rodape-extrato').style.height;
+    expect(within(tr('vivo')).getByTestId('p-sel').querySelector('input')).toBeNull();
+    fireEvent.click(within(tr('vivo')).getByTestId('simbolo'));
+    expect(screen.getByTestId('resumo-par')).toHaveTextContent('par desta linha: Seguro Maquinas -1.690,71');
+    expect(screen.getByTestId('rodape-extrato').style.height).toBe(altura);
+    expect(tr('vivo').dataset.realce).toBe('sim');
+    fireEvent.click(screen.getByTestId('soltar-par'));
+    await waitFor(() => expect(onAgrupar).toHaveBeenCalledWith({ forma: 'soltar', stagingIds: ['vivo'], lancamentoIds: [] }));
+    await waitFor(() => expect(screen.getByTestId('fechamento-mes')).toBeInTheDocument());
+    /* de novo, e Esc sai */
+    fireEvent.click(within(tr('vivo')).getByTestId('simbolo'));
+    fireEvent.keyDown(screen.getByTestId('barra-par'), { key: 'Escape' });
+    expect(screen.queryByTestId('barra-par')).not.toBeInTheDocument();
+  });
+
+  it('recusa do soltar fica escrita; par repetido gravado: a barra manda reverter na Mesa e NÃO tem botão', async () => {
+    const recusa = 'A linha 176 já foi gravada no lançamento: reverta antes na Mesa.';
+    abrir(casos(), vi.fn(async () => ({ ok: false, mensagem: recusa })));
+    fireEvent.click(within(tr('vivo')).getByTestId('simbolo'));
+    fireEvent.click(screen.getByTestId('soltar-par'));
+    await waitFor(() => expect(screen.getByTestId('recado-par')).toHaveTextContent(recusa));
+    cleanup();
+    const gravado = stagingBB0109().map((r) => (r.staging_id === '547a04fa' || r.staging_id === '9fd050ed'
+      ? linhaCrua({ ...r, aplicado: true, linha_livre: false, lanc_cancelado: false, lanc_descricao: 'Vivo Casa' }) : r));
+    abrir(gravado, vi.fn(async () => ({ ok: true })));
+    fireEvent.click(within(tr('547a04fa')).getByTestId('simbolo'));
+    expect(screen.getByTestId('recado-par')).toHaveTextContent('par repetido já gravado: reverta as linhas na Mesa antes de soltar');
+    expect(screen.queryByTestId('soltar-par')).not.toBeInTheDocument();
+  });
+
+  it('o par morto marcado se explica no recado: "o par desta linha foi cancelado"', () => {
+    abrir(casos(), vi.fn(async () => ({ ok: true })));
+    fireEvent.click(within(tr('morto')).getByRole('checkbox'));
+    fireEvent.click(within(screen.getAllByTestId('linha-extrato-planilha')
+      .find((el) => !!within(el).queryByText('Só no sistema')) ?? tr('morto')).getByRole('checkbox'));
+    expect(screen.getByTestId('recado-selecao')).toHaveTextContent('o par desta linha foi cancelado');
   });
 });
 

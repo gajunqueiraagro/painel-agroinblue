@@ -209,6 +209,8 @@ export function MesaEnriquecimentoTab({
     splitSubstituir, isSubstituindo,
     /* PR-CONC-ENRIQ-BLOCO-NM-B — o bloco conferido e o casar 1×1 do Extrato da planilha */
     conferirBloco, desfazerBloco, casarManual,
+    /* PR-CONC-ENRIQ-BLOCO-ESTADOS — soltar o par de uma linha (modo par do Extrato da planilha) */
+    soltarPar,
     casarSessao, isCasando,
     excluirSessao, isExcluindoSessao,
     /* ⚠ `marcarRevisada` SAIU DAQUI — PR-MESA-SALVAR-UNICO-01 item 1. Ela tinha UM chamador
@@ -932,6 +934,7 @@ export function MesaEnriquecimentoTab({
    *   bloco      -> `conferirBloco`  (N linhas × M lançamentos classificados; nada se grava no lançamento)
    *   casar      -> `casarManual`    (1×1; cru: a planilha sobe para a proposta; classificado: bloco 1×1 no banco)
    *   desmembrar -> `splitSubstituir` · juntar -> `resolverGrupo` (como no 2b)
+   *   soltar     -> `soltarPar`      (PR-CONC-ENRIQ-BLOCO-ESTADOS: a linha volta a não ter par; o lançamento não muda)
    * ⚠ O ESPELHO DO MODAL SE RELÊ AQUI: os mutations invalidam o staging, não a `espelho-conciliacao` — e o desmembrar
    *   cancela o consolidado e cria N lançamentos, que é o que o lado Sistema mostra. O bloco e o casar mudam o que a
    *   planilha explica: o "fora da planilha" do painel (`sistema-nao-explicado`) se relê junto.
@@ -939,7 +942,9 @@ export function MesaEnriquecimentoTab({
   async function agruparDoExtrato(g: GestoAgrupar): Promise<ResultadoAgrupar> {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- o jsonb das RPCs, como nos handlers acima
-      const res: any = g.forma === 'bloco'
+      const res: any = g.forma === 'soltar'
+        ? await soltarPar({ staging_id: g.stagingIds[0] ?? '' })
+        : g.forma === 'bloco'
         ? await conferirBloco({ sessao_id: sessaoId ?? '', staging_ids: g.stagingIds, lancamento_ids: g.lancamentoIds })
         : g.forma === 'casar'
           ? await casarManual({ staging_id: g.stagingIds[0] ?? '', lancamento_id: g.lancamentoIds[0] ?? '' })
@@ -951,7 +956,9 @@ export function MesaEnriquecimentoTab({
       }
       if (g.forma === 'desmembrar' && clienteAtual?.id) notificarLancamentosMudaram(clienteAtual.id);
       if (clienteAtual?.id) void qcMesa.invalidateQueries({ queryKey: ['espelho-conciliacao', clienteAtual.id] });
-      if (g.forma === 'bloco' || g.forma === 'casar') void qcMesa.invalidateQueries({ queryKey: ['sistema-nao-explicado'] });
+      if (g.forma === 'bloco' || g.forma === 'casar' || g.forma === 'soltar') {
+        void qcMesa.invalidateQueries({ queryKey: ['sistema-nao-explicado'] });
+      }
       return { ok: true };
     } catch (e: unknown) {
       return { ok: false, mensagem: `Erro ao gravar: ${errMsg(e)}` };

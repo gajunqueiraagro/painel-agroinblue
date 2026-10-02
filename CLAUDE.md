@@ -160,8 +160,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 02/10/2026 (UI-DROPDOWN-PADRAO-01-fix1, +2 em `src/components/ui/menuPadrao.test.tsx`; antes o
-  PR-CONC-MESA-TRANSFERENCIA-VOLTA, +6): 2880
+  Baseline em 02/10/2026 (PR-CONC-ENRIQ-BLOCO-ESTADOS, +7 em `src/v2/lib/mesa/enriquecerV2.test.tsx`; antes o
+  UI-DROPDOWN-PADRAO-01-fix1, +2): 2887
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -310,6 +310,15 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   `ResultadoContaEditor` (`ResultadoCamposGravaveis.tsx`) ficaram SEM CHAMADOR — apagar ou religar e' decisao.
   · MENU-CONTRASTE (UI-DROPDOWN-PADRAO-01-fix1): no seletor de importacao do Enriquecer, o "(mais recente)" e' pintado pela
   tela com `text-muted-foreground` e da' 1,60:1 sobre o painel zinc-600 — PR proprio (a regra e' todo texto de menu >= 4,5:1).
+  · BLOCO-ESTADOS (PR-CONC-ENRIQ-BLOCO-ESTADOS): (a) VIVO CASA 322/323 (9fd050ed, 547a04fa) APLICADAS no MESMO 8ebd63d4 (soma
+  -1.013,02 x -506,51) — conserto de dado a decidir com o Gabriel; o soltar recusa linha aplicada, e reverter uma devolveria o
+  estado que a outra sobrescreveu; (b) CASADOR CARTAO x BB: 6 duplas nao aplicadas (265/266, 278/279, 289/290, 307/308,
+  355/356, 431/432) — a mesma compra na planilha no BB e no Cartao BB - Ourocard Visa (16/09), as DUAS casadas no lancamento do
+  cartao pago em 17/08; e' frente do casador (ENRIQ-CASADOR-IGUAIS-01); (c) PAR MORTO EM 'ja_aplicado' NAO SE SOLTA SOZINHO: o
+  Recasar preserva 'ja_aplicado', entao uma linha cujo lancamento foi cancelado fica presa nele ate' alguem a soltar (provado no
+  P5 com a 278); (d) a linha cujo lancamento e' de OUTRA conta aparece no Extrato da conta do LANCAMENTO (`conta_filtro_id` da
+  view prefere a do lancamento) — a 265 do BB aparece no Cartao BB; (e) o selo "Par repetido" so' aparece quando o lancamento do
+  par esta' no Sistema do mes (as 6 duplas do cartao, pagas em agosto, nao o mostram).
   · TRANSFERENCIA-VOLTA (PR-CONC-MESA-TRANSFERENCIA-VOLTA): (a) `EnriquecimentoActions.tsx` NAO TEM QUEM O RENDERIZE desde
   fe26d14c (06/09, Mesa compacta) — o `slotTransferencia` nasceu dois dias depois (9fb376ab) ja' sem tela; o componente
   fica so' como dono do TIPO `EnriquecimentoActionsProps` (apagar o corpo ou religar e' decisao); (b) `AcaoEhTransferencia`
@@ -701,6 +710,17 @@ docs/historico/frentes-ate-2026-09-29.md.)
   nenhum vinculo de bloco vai a' `montarMesa` (CONC-MESA-NN-01). O ✓ ou o selo abrem o MODO BLOCO no rodape de 26px (resumo,
   motivo obrigatorio, "Desfazer bloco", "voltar", Esc sai, linhas do bloco realcadas). 'conferido_bloco' = "Ja' gravadas" em
   `GRUPO_DE_STATUS`, balde 'gravada', fora do lote; na Mesa e' LEITURA (sem `onEditar`, Salvar diz por que).
+- ⚠ LINHA LIVRE TEM UMA DEFINICAO, NO BANCO (PR-CONC-ENRIQ-BLOCO-ESTADOS, migration 20261027190300, ledger 20261002142918):
+  `_fn_classificacao_linha_livre(staging)` = nao aplicada E (sem_match / candidatos_proximos / sugestao_grupo / sugestao_split /
+  ambiguo OU par morto: `match_lancamento_id` aponta para lancamento inexistente ou cancelado). O bloco e o casar manual a usam,
+  e a view `vw_classificacao_staging_preview` a expoe NO FIM (`linha_livre`, mais `lanc_cancelado` so' para escrever o motivo
+  do par morto). A TELA SO' LE': caixa = `linha_livre`; sem a coluna (view antiga) = a regra de antes, nunca livre. Recusa diz o
+  que fazer ("A linha N ja' tem par (X). Solte o par antes de conferir."). `fn_classificacao_soltar_par` (`p_simular`) devolve a
+  linha nao aplicada a 'sem_match' com `casamento_meta.solto_de`; recusa aplicada, em bloco, sem par; NAO toca o lancamento e
+  NAO LIMPA A PROPOSTA (decisao do Gabriel, 02/10: inclusive o que o operador editou; o proximo par ou o Recasar a refaz). No
+  Extrato, o simbolo de uma linha com par abre o MODO PAR (26px, Esc sai): "Soltar o par" so' com `parSoltavel`; par repetido
+  gravado so' manda reverter na Mesa. A mae de 2+ linhas no mesmo lancamento so' e' "Desmembrar" quando a soma fecha; senao
+  "Par repetido". A funcao tem EXECUTE para `authenticated` porque a view (security_invoker) a chama como quem consulta.
 - ⚠ BLOCO CONFERIDO N×M NO ENRIQUECER (PR-CONC-ENRIQ-BLOCO-NM-A, migration 20261027190200, ledger 20261002115607): N linhas da
   planilha x M lancamentos CLASSIFICADOS e REALIZADOS da mesma conta, soma COM SINAL ao centavo (tolerancia 0,005; sinais
   opostos permitidos) -> as linhas viram 'conferido_bloco' com os M ids em `match_lancamento_ids`. NAO ESCREVE no lancamento

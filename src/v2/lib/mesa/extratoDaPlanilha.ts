@@ -78,7 +78,9 @@ export const LEGENDA_SIMBOLOS: ReadonlyArray<[SimboloPlanilha, string]> = [
 
 /** O selo do lado Sistema. */
 export type SeloSistema =
-  | 'Enriquecido' | 'Cru · aplicar' | 'Diverge' | 'Valor ≠' | 'Só no sistema' | 'Desmembrar' | 'Transferência' | 'Em bloco';
+  | 'Enriquecido' | 'Cru · aplicar' | 'Diverge' | 'Valor ≠' | 'Só no sistema' | 'Desmembrar' | 'Transferência' | 'Em bloco'
+  /* PR-CONC-ENRIQ-BLOCO-ESTADOS: 2+ linhas no MESMO lançamento cuja soma difere dele — o par está errado */
+  | 'Par repetido';
 
 const ORIGENS_CRUAS = new Set(['extrato', 'ofx']);
 
@@ -138,6 +140,15 @@ export interface LinhaExtratoPlanilha {
   /** O bloco conferido a que a linha pertence (os dois lados) — abre o "Desfazer bloco". `null` fora de bloco. */
   blocoId: string | null;
   /**
+   * O PAR DA LINHA — PR-CONC-ENRIQ-BLOCO-ESTADOS. `parSoltavel` = a linha tem par vivo (`lanc_id`), não é livre, não está
+   * aplicada e não está em bloco: o "Soltar o par" vale para ela. `par` é o que a barra escreve no modo par — presente com
+   * `parSoltavel` ou quando o par repetido já foi gravado (então a barra diz para reverter na Mesa, sem botão).
+   */
+  parSoltavel: string | null;
+  par: ParDaLinha | null;
+  /** Por que a linha livre é livre, quando não é óbvio: o par dela foi cancelado (par morto). */
+  motivoLivre: string | null;
+  /**
    * O FORNECEDOR DE CADA LADO, para o "marcar todos do fornecedor" (PR-CONC-ENRIQ-MARCAR-FAVORECIDO). Cada lado com a SUA
    * chave, e as duas NUNCA se comparam: planilha = `planilha_favorecido_id` (o fornecedor que o banco resolveu da planilha)
    * ou, sem ele, o texto normalizado de `excel_fornecedor`; sistema = o nome do cadastro normalizado (`EspSis.fornecedor`).
@@ -168,6 +179,28 @@ export function chaveFornecedorSistema(nome: string | null | undefined): string 
 }
 
 type LinhaSemFornecedor = Omit<LinhaExtratoPlanilha, 'chaveFornecedor' | 'nomeFornecedor'>;
+
+/** O par que a barra descreve no modo par. */
+export interface ParDaLinha {
+  descricao: string;
+  /** Com sinal (saída negativa), como os valores desenhados; `null` sem valor. */
+  valor: number | null;
+  /** A linha já foi gravada no lançamento: soltar exige reverter na Mesa antes. */
+  gravado: boolean;
+  /** 2+ linhas desta conta no mesmo lançamento. */
+  repetido: boolean;
+}
+
+export const MOTIVO_PAR_MORTO = 'o par desta linha foi cancelado';
+
+/**
+ * A LINHA LIVRE (pode entrar num bloco ou num casar) — PR-CONC-ENRIQ-BLOCO-ESTADOS. A REGRA MORA EM
+ * `_fn_classificacao_linha_livre` (banco); a tela só lê a coluna `linha_livre` da view. `null` = a view ainda não a traz
+ * (anterior à migration 20261027190300): quem chama trata como antes, NUNCA como livre.
+ */
+export function linhaLivreDaView(r: Pick<ClassificacaoStagingPreviewRow, 'linha_livre'>): boolean | null {
+  return r.linha_livre === true ? true : r.linha_livre === false ? false : null;
+}
 
 export interface DiaExtratoPlanilha {
   data: string | null;
@@ -249,6 +282,22 @@ export function montarExtratoDaPlanilha(
     const balde: BaldePainel = r ? baldeDaLinha(r, sobrescreverIds.has(e.extrato_id)) : 'outras';
     const enriquecida = balde === 'gravada';
     const blocoId = r ? blocoDaLinha(r) : null;
+    const livre = r ? linhaLivreDaView(r) : null;
+    /* a caixa: a linha livre do banco; sem a coluna (view antiga), a regra de antes — e nunca uma caixa nova */
+    const selPlanilha = blocoId ? null
+      : livre === true ? e.extrato_id
+      : livre === false ? null
+      : (!sis && !filha && !enriquecida ? e.extrato_id : null);
+    const parSoltavel = r && r.lanc_id && livre === false && !r.aplicado && !blocoId ? e.extrato_id : null;
+    const repetido = !!r?.lanc_id && (porLanc.get(r.lanc_id) ?? 0) > 1;
+    const par: ParDaLinha | null = r && r.lanc_id && (parSoltavel || (r.aplicado && repetido)) ? {
+      descricao: (r.lanc_descricao ?? '').trim() || '—',
+      valor: sis ? sis.valor_assinado
+        : r.lanc_valor === null || r.lanc_valor === undefined ? null
+        : (r.lanc_sinal === '1' ? 1 : -1) * Math.abs(Number(r.lanc_valor)),
+      gravado: r.aplicado,
+      repetido,
+    } : null;
     return {
       chave: `p-${e.extrato_id}${sis ? `-${sis.lancamento_id}` : ''}`,
       stagingId: e.extrato_id,
@@ -259,9 +308,12 @@ export function montarExtratoDaPlanilha(
       selo: sis && r ? seloDoPar(r, balde, sis) : null,
       enriquecida,
       filha,
-      selPlanilha: !sis && !filha && !enriquecida && !blocoId ? e.extrato_id : null,
+      selPlanilha,
       selSistema: null,
       blocoId,
+      parSoltavel,
+      par,
+      motivoLivre: livre === true && r?.lanc_id && r.lanc_cancelado === true ? MOTIVO_PAR_MORTO : null,
     };
   };
 
@@ -272,11 +324,16 @@ export function montarExtratoDaPlanilha(
       linhas.push(linhaPlanilha(p.extrato, p.filhas[0]?.sis, false));
     }
     for (const n1 of d.paredosN1) {
-      /* A mãe é o lançamento; as linhas da planilha que o compõem vêm abaixo, com ↳. */
+      /* A mãe é o lançamento; as linhas da planilha que o compõem vêm abaixo, com ↳.
+         ⚠ "Desmembrar" SÓ QUANDO A SOMA FECHA (PR-CONC-ENRIQ-BLOCO-ESTADOS): 2+ linhas no mesmo lançamento que somam outro
+           valor são um par repetido — o Vivo Casa: duas "Telefone" −506,51 no 8ebd63d4 de −506,51 (soma −1.013,02). */
+      const somaFilhas = n1.extratos.reduce((a, x) => a + x.extrato.valor, 0);
+      const fecha = Math.abs(Math.abs(somaFilhas) - Math.abs(n1.sis.valor_assinado)) < 0.005;
       linhas.push({
         chave: `n1-${n1.sis.lancamento_id}`, stagingId: n1.extratos[0]?.extrato.extrato_id ?? null, data: n1.sis.data,
-        planilha: null, simbolo: null, sistema: daSistema(n1.sis), selo: 'Desmembrar', enriquecida: false, filha: false,
-        selPlanilha: null, selSistema: null, blocoId: null,
+        planilha: null, simbolo: null, sistema: daSistema(n1.sis), selo: fecha ? 'Desmembrar' : 'Par repetido',
+        enriquecida: false, filha: false,
+        selPlanilha: null, selSistema: null, blocoId: null, parSoltavel: null, par: null, motivoLivre: null,
       });
       for (const x of n1.extratos) linhas.push(linhaPlanilha(x.extrato, undefined, true));
     }
@@ -287,14 +344,14 @@ export function montarExtratoDaPlanilha(
       linhas.push({
         chave: `s-${s.lancamento_id}`, stagingId: null, data: s.data, planilha: null, simbolo: null,
         sistema: daSistema(s), selo: blocoId ? 'Em bloco' : 'Só no sistema', enriquecida: false, filha: false,
-        selPlanilha: null, selSistema: blocoId ? null : s.lancamento_id, blocoId,
+        selPlanilha: null, selSistema: blocoId ? null : s.lancamento_id, blocoId, parSoltavel: null, par: null, motivoLivre: null,
       });
     }
     for (const s of d.internas) {
       linhas.push({
         chave: `i-${s.lancamento_id}`, stagingId: null, data: s.data, planilha: null, simbolo: null,
         sistema: daSistema(s), selo: 'Transferência', enriquecida: false, filha: false,
-        selPlanilha: null, selSistema: null, blocoId: null,
+        selPlanilha: null, selSistema: null, blocoId: null, parSoltavel: null, par: null, motivoLivre: null,
       });
     }
     return {

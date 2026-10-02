@@ -21,6 +21,8 @@
 import { motivoDoDesmembrar } from '@/v2/lib/mesa/desmembrar';
 
 export type FormaDaSelecao = 'casar' | 'desmembrar' | 'juntar' | 'bloco';
+/** O que a barra pode gravar: as formas da seleção e o "Soltar o par" do modo par (PR-CONC-ENRIQ-BLOCO-ESTADOS). */
+export type FormaDoGesto = FormaDaSelecao | 'soltar';
 
 export interface ItemMarcado { id: string; valor: number }
 /** O lançamento marcado — `cru` decide entre o bloco (classificado) e o casar/desmembrar/juntar (cru). */

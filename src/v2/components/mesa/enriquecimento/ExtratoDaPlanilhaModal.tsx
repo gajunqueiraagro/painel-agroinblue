@@ -29,10 +29,10 @@ import { useEspelhadosReais } from '@/components/financeiro-v2/EspelhoConciliaca
 import { useEspelhoInternas } from '@/hooks/useEspelhoInternas';
 import { contaDaLinhaStaging } from '@/v2/lib/mesa/enriquecimentoView';
 import {
-  LEGENDA_SIMBOLOS, montarExtratoDaPlanilha, soNaoEnriquecidos, type LinhaExtratoPlanilha, type SeloSistema,
+  LEGENDA_SIMBOLOS, montarExtratoDaPlanilha, soNaoEnriquecidos, type LinhaExtratoPlanilha, type ParDaLinha, type SeloSistema,
 } from '@/v2/lib/mesa/extratoDaPlanilha';
 import {
-  doMesmoFornecedor, gestoDaSelecao, type FormaDaSelecao, type LadoDoExtrato,
+  doMesmoFornecedor, gestoDaSelecao, type FormaDoGesto, type LadoDoExtrato,
 } from '@/v2/lib/mesa/agruparNoExtrato';
 import { STATUS_PALETA, STATUS_PILULA_BASE } from '@/lib/financeiro/statusFinanceiro';
 
@@ -63,7 +63,7 @@ export const ALTURA_RODAPE_EXTRATO = '26px';
  * O gesto que a aba grava — `conferirBloco` / `casarManual` (NM-B) e os mutations da Mesa (`splitSubstituir` /
  * `resolverGrupo`).
  */
-export interface GestoAgrupar { forma: FormaDaSelecao; stagingIds: string[]; lancamentoIds: string[] }
+export interface GestoAgrupar { forma: FormaDoGesto; stagingIds: string[]; lancamentoIds: string[] }
 export type ResultadoAgrupar = { ok: boolean; mensagem?: string };
 /** Desfazer um bloco conferido — `desfazerBloco`; o motivo é obrigatório (a tela cobra antes, a RPC cobra de novo). */
 export interface GestoDesfazerBloco { blocoId: string; motivo: string }
@@ -92,6 +92,8 @@ const COR_SELO: Record<SeloSistema, string> = {
   'Transferência': 'border-sky-300 bg-sky-50 text-sky-800',
   /* a cor do "Enriquecido": o lançamento está explicado pelas linhas do bloco */
   'Em bloco': 'border-emerald-300 bg-emerald-50 text-emerald-800',
+  /* o vermelho do "Diverge": duas linhas no mesmo lançamento que não fecham — o par está errado */
+  'Par repetido': 'border-red-300 bg-red-50 text-red-700',
 };
 
 export interface ExtratoDaPlanilhaModalProps {
@@ -160,12 +162,24 @@ export function ExtratoDaPlanilhaModal({
   const [recusaBloco, setRecusaBloco] = useState<string | null>(null);
   const motivoRef = useRef<HTMLInputElement>(null);
   const sairDoBloco = () => { setBlocoAtivo(null); setMotivoBloco(''); setFaltaMotivo(false); setRecusaBloco(null); };
+  /* ── O MODO PAR — o "Soltar o par" (PR-CONC-ENRIQ-BLOCO-ESTADOS): o mesmo molde do modo bloco, na mesma faixa ────── */
+  const [parAtivo, setParAtivo] = useState<{ stagingId: string; par: ParDaLinha; soltavel: boolean } | null>(null);
+  const [recusaPar, setRecusaPar] = useState<string | null>(null);
+  const sairDoPar = () => { setParAtivo(null); setRecusaPar(null); };
   const abrirBloco = (id: string) => {
     if (gravando) return;
     limpar();
+    sairDoPar();
     setBlocoAtivo(id); setMotivoBloco(''); setFaltaMotivo(false); setRecusaBloco(null);
   };
-  useEffect(() => { limpar(); sairDoBloco(); }, [conta, open]);
+  const abrirPar = (l: LinhaExtratoPlanilha) => {
+    if (gravando || !l.stagingId || !l.par) return;
+    limpar();
+    sairDoBloco();
+    setRecusaPar(null);
+    setParAtivo({ stagingId: l.stagingId, par: l.par, soltavel: l.parSoltavel === l.stagingId });
+  };
+  useEffect(() => { limpar(); sairDoBloco(); sairDoPar(); }, [conta, open]);
   const alternar = (lado: LadoDoExtrato, id: string) => {
     const atual = lado === 'planilha' ? marcP : marcS;
     const marcando = !atual.has(id);
@@ -175,6 +189,7 @@ export function ExtratoDaPlanilhaModal({
     setConfirmando(false);
     setRecusa(null);
     sairDoBloco();
+    sairDoPar();
   };
   /* os valores vêm das MESMAS linhas desenhadas (com sinal) — nenhuma soma de outra fonte */
   const valores = useMemo(() => {
@@ -195,6 +210,9 @@ export function ExtratoDaPlanilhaModal({
   const temSelecao = marcP.size > 0 || marcS.size > 0;
   /* ── "+ N de {fornecedor}" — por lado, a partir da ÚLTIMA caixa marcada; marca SÓ aquele lado ─────────────────── */
   const linhasTodas = useMemo(() => (extrato?.dias ?? []).flatMap((d) => d.linhas), [extrato]);
+  /* o par morto se explica: marcada uma linha livre porque o par dela foi cancelado, o recado diz isso (só texto) */
+  const motivoLivreMarcado = linhasTodas.find((l) => l.selPlanilha && marcP.has(l.selPlanilha) && l.motivoLivre)?.motivoLivre ?? '';
+  const recadoSelecao = [!gesto.habilitado ? gesto.motivo : null, motivoLivreMarcado || null].filter(Boolean).join(' · ');
   const acaoFornecedor = (lado: LadoDoExtrato) => {
     const id = ultimo[lado];
     const marcados = lado === 'planilha' ? marcP : marcS;
@@ -221,6 +239,21 @@ export function ExtratoDaPlanilhaModal({
     }
     return { n, m, soma: Math.round(soma * 100) / 100 };
   }, [blocoAtivo, extrato]);
+
+  const soltarPar = async () => {
+    if (!parAtivo || !parAtivo.soltavel || !onAgrupar || gravando) return;
+    setGravando(true);
+    setRecusaPar(null);
+    try {
+      const res = await onAgrupar({ forma: 'soltar', stagingIds: [parAtivo.stagingId], lancamentoIds: [] });
+      if (res.ok) sairDoPar();
+      else setRecusaPar(res.mensagem ?? 'O banco recusou soltar o par.');
+    } catch (e: unknown) {
+      setRecusaPar(e instanceof Error ? e.message : 'Erro ao soltar o par.');
+    } finally {
+      setGravando(false);
+    }
+  };
 
   const desfazerBloco = async () => {
     if (!blocoAtivo || !onDesfazerBloco || gravando) return;
@@ -265,6 +298,7 @@ export function ExtratoDaPlanilhaModal({
         /* com seleção, o Esc LIMPA a seleção em vez de fechar o modal; no modo bloco, sai do modo */
         onEscapeKeyDown={(e) => {
           if (blocoAtivo) { e.preventDefault(); if (!gravando) sairDoBloco(); return; }
+          if (parAtivo) { e.preventDefault(); if (!gravando) sairDoPar(); return; }
           if (temSelecao) { e.preventDefault(); if (!gravando) limpar(); }
         }}>
         <DialogHeader className="h-9 shrink-0 flex-row items-center gap-2.5 space-y-0 bg-primary px-4">
@@ -349,7 +383,8 @@ export function ExtratoDaPlanilhaModal({
               {dias.map((d) => (
                 <DiaRows key={d.data ?? 'sem-data'} d={d} onAbrir={abrir} marcP={marcP} marcS={marcS} travado={gravando}
                   onMarcarP={(id) => alternar('planilha', id)} onMarcarS={(id) => alternar('sistema', id)}
-                  blocoAtivo={blocoAtivo} onAbrirBloco={abrirBloco} />
+                  blocoAtivo={blocoAtivo} onAbrirBloco={abrirBloco}
+                  parAtivoId={parAtivo?.stagingId ?? null} onAbrirPar={abrirPar} />
               ))}
             </tbody>
           </table>
@@ -391,6 +426,33 @@ export function ExtratoDaPlanilhaModal({
                   className="h-[18px] rounded bg-primary-foreground/20 px-2 text-[10px] hover:bg-primary-foreground/30">voltar</button>
               </span>
             </div>
+          ) : parAtivo ? (
+            <div data-testid="barra-par"
+              className="flex h-full items-center gap-3 overflow-hidden whitespace-nowrap border-t-2 border-t-[#E7C873] bg-primary px-3.5 text-[10px] tabular-nums text-primary-foreground">
+              <span data-testid="resumo-par" className="min-w-0 truncate" title={parAtivo.par.descricao}>
+                par desta linha: {parAtivo.par.descricao}{parAtivo.par.valor === null ? '' : ` ${brl(parAtivo.par.valor)}`}
+              </span>
+              <span data-testid="recado-par" className={`min-w-0 truncate ${recusaPar ? 'text-[#F5B5B5]' : 'text-primary-foreground/70'}`}
+                title={recusaPar ?? undefined}>
+                {recusaPar ?? (parAtivo.soltavel ? ''
+                  : parAtivo.par.repetido ? 'par repetido já gravado: reverta as linhas na Mesa antes de soltar'
+                  : 'par já gravado: reverta a linha na Mesa antes de soltar')}
+              </span>
+              <span className="ml-auto flex shrink-0 items-center gap-2">
+                {parAtivo.soltavel && (
+                  <button type="button" data-testid="soltar-par" disabled={gravando || !onAgrupar}
+                    title={!onAgrupar ? 'Gravação indisponível nesta tela.' : 'A linha volta a não ter par e pode ser casada de novo. O lançamento não muda.'}
+                    onClick={() => { void soltarPar(); }}
+                    className={`h-[18px] rounded px-2 text-[10px] font-medium ${
+                      onAgrupar && !gravando ? 'bg-[#E7C873] text-foreground hover:bg-[#D9B95F]'
+                        : 'cursor-not-allowed bg-primary-foreground/20 text-primary-foreground/50'}`}>
+                    {gravando ? 'Soltando…' : 'Soltar o par'}
+                  </button>
+                )}
+                <button type="button" data-testid="voltar-par" disabled={gravando} onClick={sairDoPar}
+                  className="h-[18px] rounded bg-primary-foreground/20 px-2 text-[10px] hover:bg-primary-foreground/30">voltar</button>
+              </span>
+            </div>
           ) : temSelecao ? (
             <div data-testid="barra-selecao"
               className="flex h-full items-center gap-3 overflow-hidden whitespace-nowrap border-t-2 border-t-[#E7C873] bg-primary px-3.5 text-[10px] tabular-nums text-primary-foreground">
@@ -401,8 +463,8 @@ export function ExtratoDaPlanilhaModal({
               {gesto.forma && <span className="opacity-80">{marcP.size}×{marcS.size}</span>}
               <span data-testid="recado-selecao"
                 className={`min-w-0 truncate ${recusa ? 'text-[#F5B5B5]' : 'text-primary-foreground/70'}`}
-                title={recusa ?? gesto.motivo ?? undefined}>
-                {recusa ?? (!gesto.habilitado ? gesto.motivo : '') ?? ''}
+                title={recusa ?? (recadoSelecao || undefined)}>
+                {recusa ?? recadoSelecao}
               </span>
               <span className="ml-auto flex shrink-0 items-center gap-2">
                 {/* "+ N de {fornecedor} (lado)": marca as que faltam DAQUELE lado; o nome corta na borda, inteiro no title */}
@@ -475,12 +537,13 @@ export function FechamentoDoMes({ mesRotulo, totais }: {
   );
 }
 
-function DiaRows({ d, onAbrir, marcP, marcS, travado, onMarcarP, onMarcarS, blocoAtivo, onAbrirBloco }: {
+function DiaRows({ d, onAbrir, marcP, marcS, travado, onMarcarP, onMarcarS, blocoAtivo, onAbrirBloco, parAtivoId, onAbrirPar }: {
   d: ReturnType<typeof soNaoEnriquecidos>[number];
   onAbrir: (l: LinhaExtratoPlanilha) => void;
   marcP: ReadonlySet<string>; marcS: ReadonlySet<string>; travado: boolean;
   onMarcarP: (id: string) => void; onMarcarS: (id: string) => void;
   blocoAtivo: string | null; onAbrirBloco: (blocoId: string) => void;
+  parAtivoId: string | null; onAbrirPar: (l: LinhaExtratoPlanilha) => void;
 }) {
   const dif = d.planilha - d.sistema;
   return (
@@ -489,9 +552,11 @@ function DiaRows({ d, onAbrir, marcP, marcS, travado, onMarcarP, onMarcarS, bloc
         <tr key={l.chave} data-testid="linha-extrato-planilha" data-staging={l.stagingId ?? undefined}
           style={{ height: ALTURA_LINHA_EXTRATO }}
           onClick={() => onAbrir(l)}
-          data-bloco={l.blocoId ?? undefined} data-realce={l.blocoId && l.blocoId === blocoAtivo ? 'sim' : undefined}
+          data-bloco={l.blocoId ?? undefined}
+          data-realce={(l.blocoId && l.blocoId === blocoAtivo) || (l.planilha && l.stagingId && l.stagingId === parAtivoId) ? 'sim' : undefined}
           className={`border-b border-border/40 ${l.stagingId ? 'cursor-pointer hover:bg-primary/[0.04]' : ''} ${
-            l.blocoId && l.blocoId === blocoAtivo ? 'bg-amber-100' : l.enriquecida ? 'bg-success/[0.06]' : ''}`}>
+            (l.blocoId && l.blocoId === blocoAtivo) || (l.planilha && l.stagingId && l.stagingId === parAtivoId) ? 'bg-amber-100'
+              : l.enriquecida ? 'bg-success/[0.06]' : ''}`}>
           {/* ⚠ O CLIQUE NA CAIXA NÃO ABRE A MESA (stopPropagation); o clique na linha continua abrindo. */}
           <td className="text-center" data-testid="p-sel" onClick={(e) => { if (l.selPlanilha) e.stopPropagation(); }}>
             {l.selPlanilha && (
@@ -502,12 +567,16 @@ function DiaRows({ d, onAbrir, marcP, marcS, travado, onMarcarP, onMarcarS, bloc
           <td className={`${CEL} text-[9.5px] text-muted-foreground`}>{l.planilha ? dataCurta(l.data) : ''}</td>
           <td className={`${CEL} ${l.filha ? 'pl-[14px]' : ''}`} title={l.planilha?.texto}>{l.planilha?.texto ?? ''}</td>
           <td className={`${CEL} text-right ${l.planilha ? corVal(l.planilha.valor) : ''}`}>{l.planilha ? brl(l.planilha.valor) : ''}</td>
-          {/* o ✓ de uma linha em bloco abre o "Desfazer bloco" — e não a Mesa */}
+          {/* o ✓ de uma linha em bloco abre o "Desfazer bloco"; o símbolo de uma linha com par abre o modo par — e não a Mesa */}
           <td data-testid="simbolo"
             className={`border-x text-center font-bold ${l.simbolo ? COR_SIMBOLO[l.simbolo] : ''} ${
-              l.blocoId && l.planilha ? 'cursor-pointer hover:bg-emerald-100' : ''}`}
-            title={l.blocoId && l.planilha ? 'Conferido em bloco — clique para ver ou desfazer o bloco' : undefined}
-            onClick={(e) => { if (l.blocoId && l.planilha) { e.stopPropagation(); onAbrirBloco(l.blocoId); } }}>
+              (l.blocoId || l.par) && l.planilha ? 'cursor-pointer hover:bg-emerald-100' : ''}`}
+            title={l.blocoId && l.planilha ? 'Conferido em bloco — clique para ver ou desfazer o bloco'
+              : l.par && l.planilha ? 'Clique para ver o par desta linha (e soltá-lo)' : undefined}
+            onClick={(e) => {
+              if (l.blocoId && l.planilha) { e.stopPropagation(); onAbrirBloco(l.blocoId); return; }
+              if (l.par && l.planilha) { e.stopPropagation(); onAbrirPar(l); }
+            }}>
             {l.simbolo ?? ''}
           </td>
           <td className="text-center" data-testid="s-sel" onClick={(e) => { if (l.selSistema) e.stopPropagation(); }}>

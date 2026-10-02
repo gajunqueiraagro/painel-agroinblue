@@ -216,6 +216,14 @@ export interface ClassificacaoStagingPreviewRow {
   planilha_safra_id?: string | null;
   planilha_tipo_documento?: string | null;
   planilha_forma_pagamento?: string | null;
+  /**
+   * PR-CONC-ENRIQ-BLOCO-ESTADOS — a LINHA LIVRE (pode entrar num bloco ou num casar), decidida no banco por
+   * `_fn_classificacao_linha_livre` e exposta pela view. A tela só lê. Ausente (view anterior à migration 20261027190300)
+   * = a tela trata como antes, NUNCA como livre.
+   */
+  linha_livre?: boolean | null;
+  /** O lançamento do par está cancelado — só para a barra escrever o motivo do par morto; não decide nada. */
+  lanc_cancelado?: boolean | null;
 }
 
 /** O que `fn_classificacao_casar_sessao` devolve — 133a. */
@@ -691,6 +699,23 @@ export function useClassificacaoStaging(
     onSuccess: (_d, variables) => { if (!variables.simular) invalidarSessaoAtual(); },
   });
 
+  /**
+   * Soltar o par de uma linha — PR-CONC-ENRIQ-BLOCO-ESTADOS (`fn_classificacao_soltar_par`). A linha volta a 'sem_match' e
+   * pode ser casada de novo; NÃO escreve no lançamento e NÃO limpa a proposta. Recusa (aplicada, em bloco, sem par) em
+   * `{ ok:false, mensagem }`.
+   */
+  const soltarParMutation = useMutation({
+    mutationFn: async (p: { staging_id: string; simular?: boolean }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado do repo
+      const { data, error } = await (supabase as any).rpc('fn_classificacao_soltar_par', {
+        p_staging_id: p.staging_id, p_simular: p.simular ?? false,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_d, variables) => { if (!variables.simular) invalidarSessaoAtual(); },
+  });
+
   return {
     staging: stagingQuery.data ?? [],
     isLoading: stagingQuery.isLoading,
@@ -738,6 +763,9 @@ export function useClassificacaoStaging(
     isDesfazendoBloco: desfazerBlocoMutation.isPending,
     casarManual: casarManualMutation.mutateAsync,
     isCasandoManual: casarManualMutation.isPending,
+    // PR-CONC-ENRIQ-BLOCO-ESTADOS — soltar o par de uma linha
+    soltarPar: soltarParMutation.mutateAsync,
+    isSoltandoPar: soltarParMutation.isPending,
   };
 }
 
