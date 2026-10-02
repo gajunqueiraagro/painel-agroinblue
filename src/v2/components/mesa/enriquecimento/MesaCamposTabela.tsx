@@ -37,6 +37,7 @@ import { ATIVIDADES } from '@/lib/financeiro/ultimaAtividade';
 import { atividadeDoSubcentro, planoIncoerente, rotuloAtividade } from '@/v2/lib/mesa/atividadeDaLinha';
 import { ehTipoTransferencia, subcentroDeTransferencia } from '@/v2/lib/mesa/transferenciaPlano';
 import { ehLinhaAdministrativa, escopoDoSubcentro, fazendaAdministrativa } from '@/lib/financeiro/escopoDoSubcentro';
+import { DICA_NAO_APAGA } from '@/v2/lib/mesa/enriquecimentoView';
 import type { ContaSelecionavel } from '@/components/shared/ContaBancariaSelect';
 import type { Safra } from '@/hooks/useFinanceiroV2';
 
@@ -402,8 +403,14 @@ export function MesaCamposTabela({
               const foraDeTransferencia = !!soTransferencia && !ehTransf;
               /* ⚠ EM TRANSFERÊNCIA A CONTA DO PLANO É UMA SÓ — PR-MESA-TRANSF-01 item 3 (a 18010, fora da DRE). */
               const travadoPorTransferencia = ehTransf && campo === 'Subcentro' && !!subcentroTransferencia;
-              const editavel = !row.aplicado && !!onEditar && !doExtrato && !travadoPorTransferencia
-                && !foraDeTransferencia;
+              /* ⚠ A OBSERVAÇÃO DO FILHO DE DESMEMBRAMENTO É O ELO COM O CONSOLIDADO (PR-CONC-ENRIQ-LINHA-GRAVADA-EDITAVEL D6):
+                 o "[split: … consol=…]" é o único caminho de volta ao lançamento cancelado. Só leitura, gravada ou não. */
+              const eloDoDesmembramento = campo === 'OBS' && row.filhoDeDesmembramento;
+              /* ⚠ LINHA GRAVADA É EDITÁVEL (D5), com as MESMAS regras da não gravada: o banco alinha a proposta ao lançamento
+                 na primeira edição depois de gravar, e o "Gravar alteração" só muda o que o operador mudou. O que vem do
+                 extrato continua travado; a linha em bloco continua leitura (a aba não passa `onEditar`). */
+              const editavel = !!onEditar && !doExtrato && !travadoPorTransferencia
+                && !foraDeTransferencia && !eloDoDesmembramento;
               /* ⚠ DIVERGÊNCIA COM O EXTRATO É INFORMAÇÃO, NUNCA GRAVAÇÃO — a lista vem do adapter (133h-b item 4). */
               const camposDaLinha: readonly string[] = campo === 'Documento' ? ['Documento', 'Tipo de documento'] : [campo];
               const dv = row.divergenciasBanco.find((d) => camposDaLinha.includes(d.campo));
@@ -452,6 +459,15 @@ export function MesaCamposTabela({
               if (campo === 'Forma de pagamento' && editavel && formaEhSugestao) {
                 dicas.push({ id: 'rotulo-sugestao', texto: 'pelo histórico do banco', cls: 'text-muted-foreground',
                   title: 'Forma sugerida pelo histórico do banco — grava ao salvar' });
+              }
+              if (eloDoDesmembramento) {
+                dicas.push({ id: 'dica-elo-desmembramento', texto: 'elo do desmembramento', cls: 'text-muted-foreground',
+                  title: 'A observação deste lançamento guarda o elo com o lançamento desmembrado ([split: … consol=…]): a Mesa não a altera.' });
+              }
+              /* D8 — a Mesa não apaga campo gravado: esvaziado, o "Vai gravar" volta ao valor do sistema, e a célula diz. */
+              if (row.gravada?.camposEsvaziados.includes(campo)) {
+                dicas.push({ id: 'dica-nao-apaga', texto: DICA_NAO_APAGA, cls: 'text-amber-700 dark:text-amber-400',
+                  title: 'Campo esvaziado numa linha gravada: a Mesa não apaga o que está no lançamento — ele fica como está.' });
               }
               if (divergePlanilha) {
                 dicas.push({ id: 'marca-planilha', texto: dp?.texto ?? `planilha: ${dp?.planilha}`,

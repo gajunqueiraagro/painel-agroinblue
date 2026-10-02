@@ -160,8 +160,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 02/10/2026 (PR-OC-BOITEL-PAINEL-01, +13 em `src/components/venda/painelBoitel.test.ts`; antes o
-  PR-CONC-ENRIQ-BLOCO-ESTADOS, +7): 2900
+  Baseline em 02/10/2026 (PR-CONC-ENRIQ-LINHA-GRAVADA-EDITAVEL, +18 em `src/v2/lib/mesa/linhaGravadaEditavel.test.tsx`;
+  antes o PR-OC-BOITEL-PAINEL-01, +13): 2918
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -337,6 +337,14 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   proposta, e o apply nunca apaga por ausencia) — se o operador quiser "rateia" num lancamento que ja' tem cultura, e' o modal
   do Financeiro; (c) eucalipto em silvicultura: o gatilho o zera (a regra e' cultura so' em agricultura), coerente com o front;
   (d) a tela (PR B) ainda nao le as colunas novas da view.
+  · LINHA-GRAVADA (PR-CONC-ENRIQ-LINHA-GRAVADA-EDITAVEL, 02/10): (a) `safra` (texto) e `categoria` sao chaves INERTES de
+  `c_editaveis` do `editar_proposto` (o apply_row nao as le'; 0 linhas de staging as tem; o lancamento nao tem coluna para elas,
+  e o alinhamento nao as toca) — candidatas a sair da lista num PR de limpeza; (b) o Reverter devolve so' parte dos campos
+  (divida MESA-PAINEL (b)), e isso vale tambem depois de uma regravacao; (c) o "Gravar alteracao" NAO AVANCA de linha
+  (escolha de tela deste PR: corrigir gravada e' gesto pontual) — revisar com o Gabriel na homologacao; (d) `EnriquecimentoActions`
+  (sem renderizador) ainda tem o `soAvanca`, que saiu da Mesa; (e) os outros toasts de erro da Mesa (Reverter, agrupar, escolher,
+  desfazer, lote, recasar, excluir sessao) ficam para o PR de acabamentos; (f) dados do Gabriel a corrigir PELA TELA depois do
+  deploy: 371/372 (filhos 65dbd985/2de72941), o documento 116396 da linha 16, e as 11 linhas gravadas com safra fora do periodo.
   · BOITEL-PAINEL (PR-OC-BOITEL-PAINEL-01 e a FASE 0 PR-OC-BOITEL-ACERTO-CLAREZA, 02/10): (a) TRAVA DE P1 PELA DATA DO
   ENVIO: o "reaplique o Realizado" mexe no valor, nao no rebanho do mes do envio, mas o Salvar da Negociacao trava pelo mes da
   data da OC (`mesFechadoMotivo`, `VendaModalShell`); `oc_revalorar_lote` passa no banco com o mes fechado (simulado em
@@ -781,6 +789,26 @@ docs/historico/frentes-ate-2026-09-29.md.)
   no classificado fica de referencia). A view expoe no fim `lanc_cultura`, `lanc_fase`, `planilha_cultura`, `proposto_cultura`,
   `proposto_fase`. md5: editar_proposto 8a586737…, apply_row 85cc0df6…, reverter_row 763c5cf5…, precedencia_cru 65bcb707…,
   split f964b0dd…, populate b62d8e0e…, view efc468cb…
+- ⚠ LINHA GRAVADA E' EDITAVEL NA MESA, E A BASE DELA E' O LANCAMENTO (PR-CONC-ENRIQ-LINHA-GRAVADA-EDITAVEL, migration
+  20261027190600, ledger 20261002175601): no classificado o sistema prevalece, entao a proposta de uma linha gravada so' carrega o
+  que o operador mudar DEPOIS de gravar. (D1) `_fn_classificacao_alinhar_ao_lancamento(proposta, lancamento)` e' o dono UNICO de
+  "proposta = lancamento": iguala o topo nas 17 chaves editaveis que o lancamento tem (subcentro leva macro/grupo/centro/
+  plano_conta_id; produto <- descricao; NULO = chave ausente), sem tocar `_planilha`, `_meta`, `safra` e `categoria`; o
+  `editar_proposto` o chama ANTES da edicao so' em linha APLICADA ainda nao editada depois da ultima gravacao
+  (`proposto_editado_em` NULO ou <= `aplicado_em`) — linha nao aplicada: identico (30/30 md5). (D2) gravar = o mesmo `apply_row`
+  com overwrite, que move `aplicado_em`. Sem o alinhamento, o overwrite levava a proposta velha inteira: no filho de split
+  apagava o "[split: … consol=…]" da observacao (o unico elo com o consolidado; provado por mutacao) e em 1.281 das 2.665
+  aplicadas desfaria correcao feita depois. (D3) "alterada · falta gravar" = aplicada E `proposto_editado_em > aplicado_em` E
+  `diferencasDoResultado` nao vazio (`estadoDaLinhaGravada`, `src/v2/lib/mesa/enriquecimentoView.ts`; a data sozinha nao basta,
+  o comparativo sozinho tambem nao): botao "Gravar alteracao" (nao avanca); sem alteracao, apagado e "ja gravada"; bolinha ambar
+  na lista, a linha segue em "Feitas". (D4) a view expoe no fim `tem_estado_anterior` e `proposto_editado_em`; o Reverter habilita
+  por `tem_estado_anterior` e, apagado, escreve o motivo no rodape ("desmembramento · desfazer ainda nao existe",
+  `motivoReverterBloqueado`). (D6) no filho de desmembramento (`lanc_origem_lancamento = 'mesa_split'`) a Observacao e' SO'
+  LEITURA ("elo do desmembramento"). (D7) `bloqueiaPorAgrupamento`: a parte de agrupamento so' passa quando e' o filho GRAVADO.
+  (D8) campo esvaziado numa gravada: "a Mesa nao apaga · mantem". (D9) erro de editar/salvar no rodape (`erroEdicao`/`erroBanco`),
+  nunca em toast, e a grade REMONTA (`versaoRestauro`) para o campo recusado voltar ao valor do banco. (D11) as tres propostas
+  automaticas do Salvar (alinhar subcentro, safra sugerida, forma pelo historico) so' em linha NAO gravada (`rodaSugestoesDoSalvar`).
+  md5: editar_proposto 83a28c3c…, `_fn_classificacao_alinhar_ao_lancamento` ba92442c… (so' service_role), view 94bc36f3….
 - ⚠ BLOCO CONFERIDO N×M NO ENRIQUECER (PR-CONC-ENRIQ-BLOCO-NM-A, migration 20261027190200, ledger 20261002115607): N linhas da
   planilha x M lancamentos CLASSIFICADOS e REALIZADOS da mesma conta, soma COM SINAL ao centavo (tolerancia 0,005; sinais
   opostos permitidos) -> as linhas viram 'conferido_bloco' com os M ids em `match_lancamento_ids`. NAO ESCREVE no lancamento

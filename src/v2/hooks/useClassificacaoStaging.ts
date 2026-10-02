@@ -224,6 +224,13 @@ export interface ClassificacaoStagingPreviewRow {
   linha_livre?: boolean | null;
   /** O lançamento do par está cancelado — só para a barra escrever o motivo do par morto; não decide nada. */
   lanc_cancelado?: boolean | null;
+  /**
+   * PR-CONC-ENRIQ-LINHA-GRAVADA-EDITAVEL (migration 20261027190600) — a linha gravada guardou o estado anterior (o Reverter
+   * tem para onde voltar) e quando a proposta foi editada pela última vez. "Alterada, falta gravar" = editada DEPOIS da
+   * última gravação (`proposto_editado_em > aplicado_em`). Ausentes (view anterior) = a tela trata como antes.
+   */
+  tem_estado_anterior?: boolean | null;
+  proposto_editado_em?: string | null;
 }
 
 /** O que `fn_classificacao_casar_sessao` devolve — 133a. */

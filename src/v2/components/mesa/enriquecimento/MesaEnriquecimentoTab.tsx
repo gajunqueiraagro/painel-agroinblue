@@ -14,17 +14,17 @@ import { useFinanceiroV2, notificarLancamentosMudaram } from '@/hooks/useFinance
 import { useQueryClient } from '@tanstack/react-query';
 import { useClassificacaoStaging, useSessoesClassificacao } from '@/v2/hooks/useClassificacaoStaging';
 import {
-  toRowVM, toSessoesVM, contarAplicaveisExatos, escolherMelhorSessaoId, diferencasDoResultado, estaRevisada,
+  toRowVM, toSessoesVM, contarAplicaveisExatos, escolherMelhorSessaoId, estaRevisada,
+  motivoReverterBloqueado, bloqueiaPorAgrupamento, rodaSugestoesDoSalvar,
   listarContas, filtrarPorConta, resumirGrupos, filtrarPorGrupo, grupoDaLinha,
   sessoesDoMes, sessaoMaisNovaQueAberta, contaEfetivaNome, parteDeAgrupamento, explicadoPorSiMesmo,
   type EnriqGrupo,
 } from '@/v2/lib/mesa/enriquecimentoView';
 import { EnriquecimentoLista, type EnriquecimentoListaProps } from './EnriquecimentoLista';
-import { EnriquecimentoDetalhe, type EnriquecimentoDetalheProps } from './EnriquecimentoDetalhe';
-import { type EnriquecimentoActionsProps } from './EnriquecimentoActions';
+import { EnriquecimentoDetalhe } from './EnriquecimentoDetalhe';
 import { AcaoEhTransferencia } from './AcaoEhTransferencia';
 import type { EnriqRowVM, EnriqSessaoVM } from './types';
-import { EnriquecimentoMesaModal } from './EnriquecimentoMesaModal';
+import { EnriquecimentoMesaModal, type AcoesDaMesa, type DetalheDaMesa } from './EnriquecimentoMesaModal';
 import { EnriquecimentoImportarDialog } from './EnriquecimentoImportarDialog';
 import { type VistaPasso2 } from './EnriquecimentoTopoNumeros';
 import { PainelContasEnriquecer } from './PainelContasEnriquecer';
@@ -678,6 +678,13 @@ export function MesaEnriquecimentoTab({
    * à navegação acusa a linha errada, que é pior que não acusar.
    */
   const [erroBanco, setErroBanco] = useState<{ id: string; msg: string } | null>(null);
+  /**
+   * O ERRO DA EDIÇÃO DE UM CAMPO — PR-CONC-ENRIQ-LINHA-GRAVADA-EDITAVEL D9. Era toast no canto (UX-TOAST-01); agora mora
+   * no rodapé, por linha, como o `erroBanco`. `versaoRestauro` sobe a cada recusa e remonta a grade: o campo recusado
+   * volta ao valor que o banco tem, em vez de ficar com o rascunho parecendo aceito.
+   */
+  const [erroEdicao, setErroEdicao] = useState<{ id: string; msg: string } | null>(null);
+  const [versaoRestauro, setVersaoRestauro] = useState(0);
 
   // R1 — Promise da edição em voo (commit-on-blur de Produto/Documento). salvar() a aguarda
   // antes do apply, para o apply_row NUNCA ler update_proposto antes do editar_proposto commitar.
@@ -706,11 +713,15 @@ export function MesaEnriquecimentoTab({
     });
   }, [selecionado, classificacoes, atividadePorLinha]);
 
-  const podeSalvar = !!selecionado && !selecionado.aplicado && selecionado.temMatch
-    /* 133i item 11 — parte de agrupamento só entra no lançamento pelo Agrupar. */
-    && !selecionado.parteDeAgrupamento
+  /* PR-CONC-ENRIQ-LINHA-GRAVADA-EDITAVEL — a linha GRAVADA grava de novo só com alteração pendente (D3); o Reverter
+     depende do estado anterior que o banco guardou (D4). */
+  const gravadaSel = selecionado?.gravada ?? null;
+  const motivoReverter = selecionado ? motivoReverterBloqueado(selecionado) : null;
+  const podeSalvar = !!selecionado && (!selecionado.aplicado || !!gravadaSel?.alterada) && selecionado.temMatch
+    /* 133i item 11 — parte de agrupamento só entra no lançamento pelo Agrupar; o filho de split gravado passa (D7). */
+    && !bloqueiaPorAgrupamento(selecionado)
     && obrigatoriosVazios.length === 0;
-  const podeReverter = !!selecionado && selecionado.aplicado;
+  const podeReverter = !!selecionado && selecionado.aplicado && !motivoReverter;
   /**
    * 133b-a correção 1 — POR QUE o Salvar está apagado, escrito ao lado.
    *
@@ -725,7 +736,8 @@ export function MesaEnriquecimentoTab({
    */
   const motivoSalvar: string | null =
     !selecionado ? 'Escolha uma linha.'
-    : selecionado.aplicado ? 'Esta linha já foi gravada — use Reverter para desfazer.'
+    /* D3/D4 — a gravada sem alteração não tem o que gravar; o "use Reverter" saiu (o Reverter diz o próprio motivo). */
+    : selecionado.aplicado && !gravadaSel?.alterada ? 'Já gravada: altere um campo para gravar de novo.'
     /* PR-CONC-ENRIQ-BLOCO-NM-B — o bloco conferido não grava no lançamento: a linha é leitura; desfaz-se pelo Extrato. */
     : selecionado.status === 'conferido_bloco'
       ? 'Conferida em bloco: os lançamentos já estão classificados — desfaça pelo Extrato da planilha.'
@@ -739,7 +751,7 @@ export function MesaEnriquecimentoTab({
        e a segunda linha sobrescreve a primeira. Foi o que aconteceu no DARF de 25.590,80,
        com duas linhas gravadas sobre o mesmo lançamento. O gesto certo é Agrupar, que
        cria uma linha por parte. */
-    : selecionado.parteDeAgrupamento
+    : bloqueiaPorAgrupamento(selecionado)
       ? 'Faz parte de um agrupamento — use Agrupar.'
     /* ⚠ A TRANSFERÊNCIA GANHA FRASE PRÓPRIA — PR-MESA-SUGESTOES-01 §2. "Falta preencher: Conta
        destino" descreve o campo; "Transferência exige conta de destino" descreve a REGRA, e é a
@@ -752,28 +764,10 @@ export function MesaEnriquecimentoTab({
     : obrigatoriosVazios.length > 0
       ? `Falta preencher: ${obrigatoriosVazios.join(', ')}.`
     : null;
-  /**
-   * 133h item 10 — as diferenças REAIS entre o Resultado e o lançamento.
-   *
-   * ⚠ `mudaAlgo` (a `will_change_anything` da view) SAIU DAQUI, e o envelope diz por quê:
-   * ela só olha subcentro e fornecedor, e só quando o lançamento está vazio neles. Uma
-   * linha cuja única mudança era a safra (25/26 -> 26/27) era tratada como "nada a gravar",
-   * o operador confirmava — e a safra nova nunca era gravada.
-   * ⚠ ELA NÃO DECIDE MAIS SE O BOTÃO GRAVA — PR-MESA-SALVAR-UNICO-01 item 1. "Sem
-   * diferença" deixou de ser um caminho: o Salvar chama o `apply_row` sempre, e com
-   * proposta vazia ele é no-op que marca `aplicado`. `diferencas` segue viva porque `soAvanca`
-   * a usa, e porque é ela que diz se uma linha JÁ gravada voltou a divergir.
-   */
-  const diferencas = useMemo(
-    () => (selecionado ? diferencasDoResultado(selecionado.edicao) : []),
-    [selecionado]);
-  /* 133i item 2c — já gravada e sem diferença: o gesto que resta é seguir.
-     ⚠ ESTE RAMO FICA, e não é a exceção que o item 1 mandou remover. Aquela era sobre uma
-     linha AINDA NÃO gravada, onde o botão fugia do `apply_row`; esta é sobre uma linha que
-     JÁ está no banco — `podeSalvar` é falso ("use Reverter") e gravar de novo não é gesto
-     que exista. Sem ele, o botão principal ficaria apagado numa linha correta e o operador
-     não teria como seguir por ele. */
-  const soAvanca = !!selecionado && selecionado.aplicado && diferencas.length === 0;
+  /* ⚠ O "SÓ SEGUIR" DA LINHA GRAVADA SAIU — PR-CONC-ENRIQ-LINHA-GRAVADA-EDITAVEL D3 (era o 133i item 2c, `soAvanca`).
+     A linha gravada passou a ser editável: com alteração pendente o botão principal é "Gravar alteração"; sem ela, fica
+     apagado e o rodapé diz "já gravada". Seguir é o ▶ e o Pular. As diferenças REAIS (`diferencasDoResultado`, 133h item
+     10) agora decidem dentro do estado da linha gravada (`EnriqRowVM.gravada.alterada`), um dono só. */
 
   /* ⚠ 133h item 9 — "revisado" É `revisado_em` OU `aplicado`: gravar uma linha é a forma
      mais forte de tê-la revisado, e contá-la como pendente faria o contador nunca fechar. */
@@ -1037,6 +1031,10 @@ export function MesaEnriquecimentoTab({
       // antes de o apply_row ler update_proposto. Sem timeout/polling: só await da Promise.
       // (erro da edição já foi tratado no onEditar; aqui só garantimos a ordem.)
       try { await pendingEditRef.current; } catch { /* noop */ }
+      /* ⚠ AS TRÊS PROPOSTAS AUTOMÁTICAS ABAIXO SÓ RODAM EM LINHA NÃO GRAVADA — PR-CONC-ENRIQ-LINHA-GRAVADA-EDITAVEL D11.
+         Na gravada o sistema prevalece e só vale o que o operador editou: o banco já alinhou a proposta ao lançamento na
+         primeira edição, e uma sugestão aqui gravaria o que ninguém pediu. */
+      const sugestoes = rodaSugestoesDoSalvar(selecionado);
       /**
        * 133h item 13 — O RESULTADO É A FONTE DO PROPOSTO, SEMPRE.
        *
@@ -1050,7 +1048,7 @@ export function MesaEnriquecimentoTab({
        * ele é a defesa que impede subcentro inventado de entrar no plano. O texto da
        * planilha não some — continua no aviso "planilha dizia", que é o lugar dele.
        */
-      if (precisaAlinhar(selecionado)) {
+      if (sugestoes && precisaAlinhar(selecionado)) {
         await editarProposto({ staging_id: id, patch: { subcentro: selecionado.edicao.subcentro } });
       }
       /**
@@ -1063,7 +1061,7 @@ export function MesaEnriquecimentoTab({
        * ⚠ E SÓ QUANDO O RESULTADO CONTINUA VAZIO: se o operador escolheu uma safra à mão entre
        * abrir e salvar, é a dele que vale — a sugestão não sobrescreve escolha.
        */
-      if (selecionado.edicao.safraSugeridaId
+      if (sugestoes && selecionado.edicao.safraSugeridaId
           && !selecionado.edicao.safraId
           && !contaAdministrativa(selecionado)) {
         await editarProposto({
@@ -1075,7 +1073,7 @@ export function MesaEnriquecimentoTab({
        * safra logo acima: a tela mostra em âmbar, o Salvar grava; nunca ao abrir a linha. Só no cru (o adapter só a
        * calcula lá) e só com o Resultado ainda vazio.
        */
-      if (selecionado.edicao.formaPagamentoSugerida && !selecionado.edicao.formaPagamento) {
+      if (sugestoes && selecionado.edicao.formaPagamentoSugerida && !selecionado.edicao.formaPagamento) {
         await editarProposto({
           staging_id: id, patch: { forma_pagamento: selecionado.edicao.formaPagamentoSugerida },
         });
@@ -1093,14 +1091,13 @@ export function MesaEnriquecimentoTab({
          cru do banco vai para a tela. "Não salvo (undefined)" era o que aparecia quando a
          RPC devolvia um motivo novo. */
       const msg = MOTIVO_MSG[res?.motivo] ?? `o banco respondeu "${res?.motivo ?? 'sem motivo'}"`;
+      /* ⚠ SEM TOAST (D9, UX-TOAST-01): a recusa fica escrita no rodapé ("Não gravou — o banco recusou: …"). */
       setErroBanco({ id, msg });
-      toast.error(`Não salvo — ${msg}`);
       return false;
     } catch (e: unknown) {
       /* O erro do trigger/constraint chega por aqui, e é ele que o operador precisa ler. */
       const msg = errMsg(e);
       setErroBanco({ id, msg });
-      toast.error(`Não salvo — o banco recusou: ${msg}`);
       return false;
     }
   }
@@ -1119,8 +1116,11 @@ export function MesaEnriquecimentoTab({
    * conferiu — que é o que o operador quis dizer.
    */
   async function handleSalvarProximo() {
+    /* ⚠ "GRAVAR ALTERAÇÃO" NÃO AVANÇA (PR-CONC-ENRIQ-LINHA-GRAVADA-EDITAVEL): corrigir uma linha gravada é gesto pontual,
+       e o operador confere ali mesmo que ela voltou a "já gravada". A não gravada segue como sempre: grava e avança. */
+    const eraGravada = !!selecionado?.aplicado;
     const ok = await salvar({ silencioso: true });
-    if (ok) irProximo();
+    if (ok && !eraGravada) irProximo();
   }
   async function handleReverter() {
     if (!selecionado) return;
@@ -1190,6 +1190,11 @@ export function MesaEnriquecimentoTab({
 
   // PR-U2c-2A — edição da proposta via editarProposto (os editores dos passos
   // 2B..2E chamam isto). patch = { subcentro | favorecido_id | fazenda_id | produto | ... }.
+  /** A edição foi recusada (D9): a frase no rodapé desta linha, e a grade remonta para o campo voltar ao valor do banco. */
+  function recusarEdicao(id: string, msg: string) {
+    setErroEdicao({ id, msg });
+    setVersaoRestauro((v) => v + 1);
+  }
   async function onEditar(patchOriginal: Record<string, unknown>): Promise<void> {
     if (!selecionado) return;
     const patch = ajustarSeAdministrativo(patchOriginal, selecionado);
@@ -1205,8 +1210,12 @@ export function MesaEnriquecimentoTab({
       const res: any = await p;
       if (res?.ok) {
         const rej = res?.campos_rejeitados;
-        if (rej && Object.keys(rej).length > 0) {
-          toast.error(`Alguns campos não aplicados: ${JSON.stringify(rej)}`);
+        /* ⚠ RECUSA DE CAMPO NO RODAPÉ, NÃO EM TOAST (PR-CONC-ENRIQ-LINHA-GRAVADA-EDITAVEL D9): a frase fica escrita, e a
+           grade remonta para o campo recusado voltar ao valor que o banco tem. */
+        if (rej && typeof rej === 'object' && Object.keys(rej).length > 0) {
+          recusarEdicao(idLinha, `campo recusado: ${Object.entries(rej).map(([k, v]) => `${k} (${String(v)})`).join(', ')}`);
+        } else {
+          setErroEdicao((e) => (e && e.id === idLinha ? null : e));
         }
         /* ⚠ A MESA APRENDE A CONTA QUE O OPERADOR ESCOLHEU — PR-CONC-EXCEL-PLANILHA-COMPLETA-01 (opção A do Gabriel): o
            apelido COMPOSTO "conta ⟂ safra" quando a linha traz safra, o simples quando não, pelo MESMO caminho do
@@ -1222,13 +1231,14 @@ export function MesaEnriquecimentoTab({
             subcentro: subEscolhido,
             planoContaId: classificacoes?.find((c) => c.subcentro === subEscolhido)?.id,
           });
-          if (!r.ok) toast.error(`A conta foi escolhida, mas o apelido não foi memorizado: ${r.erro ?? 'motivo desconhecido'}`);
+          /* a conta FOI gravada na proposta; só o apelido falhou — escrito no rodapé, sem desfazer o campo */
+          if (!r.ok) setErroEdicao({ id: idLinha, msg: `a conta foi escolhida, mas o apelido não foi memorizado: ${r.erro ?? 'motivo desconhecido'}` });
         }
       } else {
-        toast.error(MOTIVO_MSG[res?.motivo] ?? `Não editado (${res?.motivo ?? 'erro'}).`);
+        recusarEdicao(idLinha, MOTIVO_MSG[res?.motivo] ?? `o banco respondeu "${res?.motivo ?? 'sem motivo'}"`);
       }
     } catch (e: unknown) {
-      toast.error(`Erro ao editar: ${errMsg(e)}`);
+      recusarEdicao(idLinha, errMsg(e));
     } finally {
       if (pendingEditRef.current === p) pendingEditRef.current = null;
     }
@@ -1277,7 +1287,7 @@ export function MesaEnriquecimentoTab({
     hideBanco: filtroConta !== 'todas',
     editadasIds,
   };
-  const detalheProps: EnriquecimentoDetalheProps = {
+  const detalheProps: DetalheDaMesa = {
     row: selecionado,
     classificacoes,
     fornecedores,
@@ -1295,8 +1305,9 @@ export function MesaEnriquecimentoTab({
       const id = selecionado.id;
       setAtividadePorLinha((p) => ({ ...p, [id]: a }));
     },
+    versaoRestauro,
   };
-  const actionsProps: EnriquecimentoActionsProps = {
+  const actionsProps: AcoesDaMesa = {
     posicao,
     onAnterior: irAnterior,
     onProximo: irProximo,
@@ -1311,7 +1322,6 @@ export function MesaEnriquecimentoTab({
     nAplicaveis,
     salvarDisabled: !podeSalvar,
     salvarMotivo: motivoSalvar,
-    soAvanca,
     /* ── 133i-c item 1 — "É transferência para/de ▾" TAMBÉM NA MESA ──────────────
        ⚠ MESMO COMPONENTE E MESMO HOOK da lista "Sem par no sistema"
        (`EnriquecimentoSemParSistema:158`), montado aqui com a linha selecionada. Duas
@@ -1347,6 +1357,10 @@ export function MesaEnriquecimentoTab({
     isBusy,
     divergenciasDoExtrato,
     erroBanco: erroBanco && selecionado && erroBanco.id === selecionado.id ? erroBanco.msg : null,
+    /* PR-CONC-ENRIQ-LINHA-GRAVADA-EDITAVEL — o estado da gravada (D3), o motivo do Reverter apagado (D4) e a recusa de edição (D9). */
+    gravada: gravadaSel ? { alterada: gravadaSel.alterada } : null,
+    motivoReverter,
+    erroEdicao: erroEdicao && selecionado && erroEdicao.id === selecionado.id ? erroEdicao.msg : null,
   };
   // Contagem da mesa ampliada: reusa rowsFiltradas (sessão + filtros vigentes). Nada recalculado.
   const mesaAmpliadaVazia = rowsNaTela.length === 0;

@@ -193,6 +193,18 @@ export interface EnriqEdicao {
   atividadeProposta: string | null;
 }
 
+/** O estado de uma linha GRAVADA — PR-CONC-ENRIQ-LINHA-GRAVADA-EDITAVEL (ver `EnriqRowVM.gravada`). */
+export interface EnriqGravada {
+  /** Editada depois da última gravação e com diferença real: falta gravar. */
+  alterada: boolean;
+  /** Editada depois da última gravação (`proposto_editado_em > aplicado_em`), com ou sem diferença. */
+  editadaDepois: boolean;
+  /** O banco guardou o estado anterior (o Reverter tem para onde voltar). `null` = a view não diz. */
+  temEstadoAnterior: boolean | null;
+  /** Os campos da grade (`campo` da ORDEM da `MesaCamposTabela`) esvaziados numa linha gravada. */
+  camposEsvaziados: readonly string[];
+}
+
 export interface EnriqRowVM {
   id: string;
   linha: number | null;      // excel_linha_origem (contexto)
@@ -247,6 +259,16 @@ export interface EnriqRowVM {
    * `null` sem lançamento. No cru a planilha prevalece; no classificado, o sistema.
    */
   ehCru: boolean | null;
+  /**
+   * A LINHA GRAVADA — PR-CONC-ENRIQ-LINHA-GRAVADA-EDITAVEL. `null` = linha não gravada. Tudo vem da view (sobrevive ao F5).
+   * `alterada` = editada DEPOIS da última gravação E o comparativo (`diferencasDoResultado`) acusa diferença — é o
+   * "alterada · falta gravar" do rodapé e a bolinha âmbar da lista. `temEstadoAnterior` decide o Reverter (`null` = view
+   * anterior à migration: o Reverter fica como era). `camposEsvaziados`: os campos da grade que o operador esvaziou numa
+   * linha gravada — a Mesa não apaga, e a célula diz "a Mesa não apaga · mantém".
+   */
+  gravada: EnriqGravada | null;
+  /** O lançamento casado é FILHO DE DESMEMBRAMENTO (`mesa_split`): a observação dele guarda o elo com o consolidado. */
+  filhoDeDesmembramento: boolean;
   // LISTA (esquerda) — só o necessário para localizar o lançamento (lado SISTEMA).
   /** A data de CAIXA, já formatada — pagamento do lançamento, ou da planilha, ou competência. */
   data: string;

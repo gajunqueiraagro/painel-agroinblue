@@ -11,7 +11,7 @@ import type {
 } from '@/v2/hooks/useClassificacaoStaging';
 import type {
   EnriqRowVM, EnriqSessaoVM, EnriqContagensVM, EnriqContaVM, EnriqStatus, EnriqTom, EnriqComparativoLinha,
-  EnriqCampoEditavel, EnriqProveniencia, EnriqEdicao, EnriqEstado,
+  EnriqCampoEditavel, EnriqProveniencia, EnriqEdicao, EnriqEstado, EnriqGravada,
 } from '@/v2/components/mesa/enriquecimento/types';
 import { fmtData, fmtBRL, fmtTexto, mesAbrev, dataHoraCurta, STATUS_META } from '@/v2/components/mesa/enriquecimento/fmt';
 import { resolverContaPorTexto, type ContaResolvivel } from '@/v2/lib/mesa/resolverConta';
@@ -825,6 +825,9 @@ export function toRowVM(
     : 'pronto';                                         // exato / ambiguo_resolvido
 
   return {
+    /* PR-CONC-ENRIQ-LINHA-GRAVADA-EDITAVEL — o estado da linha gravada (alterada, Reverter, campos esvaziados). */
+    gravada: estadoDaLinhaGravada(row, edicao),
+    filhoDeDesmembramento: row.lanc_origem_lancamento === 'mesa_split',
     id: row.staging_id,
     linha: row.excel_linha_origem,
     status: row.match_status as EnriqStatus,
@@ -1363,6 +1366,90 @@ export function diferencasDoResultado(edicao: EnriqEdicao): string[] {
   cmp('tipo de documento', edicao.tipoDocumento, edicao.tipoDocumentoAtual);
   cmp('forma de pagamento', edicao.formaPagamento, edicao.formaPagamentoAtual);
   return difs;
+}
+
+// ── PR-CONC-ENRIQ-LINHA-GRAVADA-EDITAVEL: a linha gravada ─────────────────────────────────────────────────────────
+
+/** O motivo do Reverter apagado num filho de desmembramento sem estado anterior (D4) — escrito no rodapé, nunca em toast. */
+export const MOTIVO_SEM_DESFAZER = 'desmembramento · desfazer ainda não existe';
+/** O mesmo, para uma linha gravada que não guardou o estado anterior e NÃO é filho de split (não existe hoje no proto). */
+export const MOTIVO_SEM_ESTADO_ANTERIOR = 'sem estado anterior guardado · nada a desfazer';
+/** A dica da célula esvaziada numa linha gravada (D8): o gravador é COALESCE, ausente = mantém. */
+export const DICA_NAO_APAGA = 'a Mesa não apaga · mantém';
+
+const instante = (iso: string | null | undefined): number | null => {
+  const t = iso ? Date.parse(iso) : NaN;
+  return Number.isNaN(t) ? null : t;
+};
+const semValor = (v: unknown) => v === null || v === undefined || String(v).trim() === '';
+
+/**
+ * Os campos da grade que se ESVAZIAM numa linha gravada, com o lado proposto e o do lançamento — D8. `campo` é o da
+ * ORDEM da `MesaCamposTabela`. O "Documento" da grade são dois campos (número e tipo): esvaziar qualquer um conta.
+ * ⚠ LÊ A PROPOSTA CRUA (`proposto_*`), não a `edicao`: o subcentro da edição já cai no do sistema quando a proposta
+ *   some, e aí o esvaziamento ficaria invisível.
+ */
+const CAMPOS_ESVAZIAVEIS: ReadonlyArray<readonly [string, (r: ClassificacaoStagingPreviewRow) => unknown, (r: ClassificacaoStagingPreviewRow) => unknown]> = [
+  ['Competência', (r) => r.proposto_data_competencia, (r) => r.lanc_data_competencia],
+  ['Data vencimento', (r) => r.proposto_data_vencimento, (r) => r.lanc_data_vencimento],
+  ['Fornecedor', (r) => r.proposto_favorecido_id, (r) => r.lanc_favorecido_id_atual],
+  ['Produto / Descrição', (r) => r.proposto_produto, (r) => r.lanc_descricao],
+  ['Fazenda', (r) => r.proposto_fazenda_id, (r) => r.lanc_fazenda_id],
+  ['Subcentro', (r) => r.proposto_subcentro, (r) => r.lanc_subcentro_atual],
+  ['Safra', (r) => r.proposto_safra_id, (r) => r.lanc_safra_id],
+  ['Documento', (r) => r.proposto_numero_documento, (r) => r.lanc_numero_documento],
+  ['Documento', (r) => r.proposto_tipo_documento, (r) => r.lanc_tipo_documento],
+  ['Forma de pagamento', (r) => r.proposto_forma_pagamento, (r) => r.lanc_forma_pagamento],
+  ['OBS', (r) => r.proposto_observacao, (r) => r.lanc_observacao],
+  ['Conta destino', (r) => r.proposto_conta_destino_id, (r) => r.lanc_conta_destino_id],
+];
+
+/**
+ * O ESTADO DA LINHA GRAVADA — D3/D4/D8. `null` para linha não gravada.
+ *
+ * ⚠ "ALTERADA" PRECISA DAS DUAS CONDIÇÕES: editada DEPOIS da última gravação (o banco alinha a proposta ao lançamento na
+ *   primeira edição depois de gravar, e o `apply_row` move o `aplicado_em` na regravação) E o comparativo acusando
+ *   diferença. Só o comparativo acusava "alterada" em 1.281 das 2.665 linhas aplicadas do proto — lançamento corrigido
+ *   depois da gravação, e o "Gravar" teria desfeito a correção. Só a data acusaria a edição que voltou ao mesmo valor.
+ * ⚠ SEM `aplicado_em` (nunca deveria ocorrer numa aplicada) a edição conta como "depois" — é o que o banco faz.
+ */
+export function estadoDaLinhaGravada(row: ClassificacaoStagingPreviewRow, edicao: EnriqEdicao): EnriqGravada | null {
+  if (!row.aplicado) return null;
+  const editado = instante(row.proposto_editado_em);
+  const gravado = instante(row.aplicado_em);
+  const editadaDepois = editado !== null && (gravado === null || editado > gravado);
+  const camposEsvaziados = editadaDepois
+    ? [...new Set(CAMPOS_ESVAZIAVEIS.filter(([, prop, atual]) => semValor(prop(row)) && !semValor(atual(row))).map(([c]) => c))]
+    : [];
+  return {
+    alterada: editadaDepois && diferencasDoResultado(edicao).length > 0,
+    editadaDepois,
+    temEstadoAnterior: typeof row.tem_estado_anterior === 'boolean' ? row.tem_estado_anterior : null,
+    camposEsvaziados,
+  };
+}
+
+/** Por que o Reverter está apagado numa linha gravada — D4. `null` = o Reverter vale (ou a linha não é gravada). */
+export function motivoReverterBloqueado(vm: Pick<EnriqRowVM, 'aplicado' | 'gravada' | 'filhoDeDesmembramento'>): string | null {
+  if (!vm.aplicado || vm.gravada?.temEstadoAnterior !== false) return null;
+  return vm.filhoDeDesmembramento ? MOTIVO_SEM_DESFAZER : MOTIVO_SEM_ESTADO_ANTERIOR;
+}
+
+/**
+ * A guarda do agrupamento no Salvar — D7. A parte de um agrupamento não se grava sozinha (ela escreveria por cima do
+ * consolidado), EXCETO a linha GRAVADA cujo lançamento é o próprio filho do split: ali o par já é 1:1 com o filho, e o
+ * `casamento_meta.grupo_ids` só sobreviveu ao desmembramento. Não aplicada, bloco, ambíguo e sugestão: como antes.
+ */
+export function bloqueiaPorAgrupamento(vm: Pick<EnriqRowVM, 'parteDeAgrupamento' | 'aplicado' | 'filhoDeDesmembramento'>): boolean {
+  return vm.parteDeAgrupamento && !(vm.aplicado && vm.filhoDeDesmembramento);
+}
+
+/**
+ * As três propostas automáticas do Salvar (alinhar o subcentro, safra sugerida, forma pelo histórico) — D11: SÓ em
+ * linha não gravada. Na gravada o sistema prevalece e só vale o que o operador editou.
+ */
+export function rodaSugestoesDoSalvar(vm: Pick<EnriqRowVM, 'aplicado'>): boolean {
+  return !vm.aplicado;
 }
 
 // ── 133h-b item 4: a divergência com o extrato, sem falso positivo ──────────────

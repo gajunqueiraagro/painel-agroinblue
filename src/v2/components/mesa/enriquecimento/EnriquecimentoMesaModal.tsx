@@ -67,19 +67,49 @@ const corDoSinal = (s: 'entrada' | 'saida' | null) =>
 const sinalPrefixo = (s: 'entrada' | 'saida' | null) => (s === 'saida' ? '−' : s === 'entrada' ? '+' : '');
 
 /**
- * A mensagem única do rodapé da Mesa — PR-CONC-MESA-ORDEM-03. Prioridade: 1) o banco recusou (vermelho) · 2) "falta: …"
- * (vermelho) · 3) a planilha diverge do extrato (âmbar). Exportada para o teste afirmar a ordem.
+ * A mensagem única do rodapé da Mesa — PR-CONC-MESA-ORDEM-03. Prioridade: 1) o banco recusou a gravação (vermelho) ·
+ * 2) o banco recusou a edição de um campo (vermelho) · 3) "falta: …" (vermelho) · 4) a linha GRAVADA: "alterada · falta
+ * gravar" (âmbar) ou "já gravada" (neutro), com o motivo do Reverter apagado colado · 5) a planilha diverge do extrato
+ * (âmbar). Exportada para o teste afirmar a ordem.
+ * ⚠ OS ERROS DE EDITAR E DE SALVAR MORAM AQUI, NÃO EM TOAST (PR-CONC-ENRIQ-LINHA-GRAVADA-EDITAVEL D9, UX-TOAST-01).
  */
 export function mensagemDoRodape(a: {
-  erroBanco?: string | null; falta?: string | null; divergenciasDoExtrato?: readonly string[] | null;
-}): { tipo: 'erro' | 'falta' | 'diverge' | null; texto: string } {
+  erroBanco?: string | null; erroEdicao?: string | null; falta?: string | null;
+  gravada?: { alterada: boolean } | null; motivoReverter?: string | null;
+  divergenciasDoExtrato?: readonly string[] | null;
+}): { tipo: 'erro' | 'falta' | 'alterada' | 'gravada' | 'diverge' | null; texto: string } {
   if (a.erroBanco) return { tipo: 'erro', texto: `Não gravou — o banco recusou: ${a.erroBanco}` };
+  if (a.erroEdicao) return { tipo: 'erro', texto: `Não alterou — ${a.erroEdicao}` };
   if (a.falta) return { tipo: 'falta', texto: `falta: ${a.falta.replace(/^Falta preencher: /, '').replace(/\.$/, '')}` };
+  if (a.gravada) {
+    const base = a.gravada.alterada ? 'alterada · falta gravar' : 'já gravada';
+    return { tipo: a.gravada.alterada ? 'alterada' : 'gravada', texto: a.motivoReverter ? `${base} · ${a.motivoReverter}` : base };
+  }
   if (a.divergenciasDoExtrato && a.divergenciasDoExtrato.length > 0) {
     return { tipo: 'diverge',
       texto: `Planilha diverge do extrato em: ${a.divergenciasDoExtrato.join(' · ')} — o extrato manda, e estes campos não serão gravados.` };
   }
   return { tipo: null, texto: '' };
+}
+
+/**
+ * O que a Mesa recebe a mais que a aba antiga — PR-CONC-ENRIQ-LINHA-GRAVADA-EDITAVEL. Os prop-bags continuam os da aba
+ * (`EnriquecimentoActionsProps` / `EnriquecimentoDetalheProps`); estes campos só existem para a Mesa.
+ */
+export interface AcoesDaMesa extends EnriquecimentoActionsProps {
+  /** A linha selecionada é GRAVADA: `alterada` = editada depois de gravar, com diferença (D3). `null` = não gravada. */
+  gravada?: { alterada: boolean } | null;
+  /** Por que o Reverter está apagado numa linha gravada (D4) — escrito no rodapé. */
+  motivoReverter?: string | null;
+  /** O banco recusou a edição de um campo desta linha (D9) — escrito no rodapé, em vermelho. */
+  erroEdicao?: string | null;
+}
+export interface DetalheDaMesa extends EnriquecimentoDetalheProps {
+  /**
+   * Sobe quando uma edição falha (D9): a grade remonta e cada campo volta ao valor que o banco tem — os editores de
+   * texto guardam o rascunho em estado local, e um valor recusado não pode ficar parecendo aceito.
+   */
+  versaoRestauro?: number;
 }
 
 /**
@@ -107,8 +137,8 @@ export interface EnriquecimentoMesaModalProps {
   /** Rótulo da sessão ativa (mesmo label do seletor da toolbar). '—' quando não há. */
   sessaoLabel: string | null;
   lista: EnriquecimentoListaProps;
-  detalhe: EnriquecimentoDetalheProps;
-  actions: EnriquecimentoActionsProps;
+  detalhe: DetalheDaMesa;
+  actions: AcoesDaMesa;
   /**
    * 133d item 3 — as faixas de decisão da linha (sobrescrever, desfazer, agrupar, candidatos).
    * ⚠ NÓ, E NÃO MAIS PROPS: elas dependem de oito handlers e cinco estados que já vivem no container.
@@ -198,9 +228,12 @@ export function EnriquecimentoMesaModal({
     if (open) selRef.current?.scrollIntoView({ block: 'nearest' });
   }, [open, lista.selecionadoId]);
 
-  /* O gesto principal: grava e avança; numa linha já gravada e sem diferença, só segue. */
-  const aprovarDesabilitado = actions.soAvanca ? !actions.canProximo : (actions.salvarDisabled || actions.isBusy);
-  const aprovar = () => { if (actions.soAvanca) actions.onProximo(); else actions.onSalvarProximo(); };
+  /* O gesto principal: grava e avança. ⚠ NA LINHA GRAVADA (PR-CONC-ENRIQ-LINHA-GRAVADA-EDITAVEL D3) ele é "Gravar
+     alteração" e só acende com alteração pendente; sem ela, apagado ("já gravada") — o "só seguir" saiu: seguir é o ▶ e
+     o Pular. Quem decide se grava é a aba (`salvarDisabled`). */
+  const aprovarDesabilitado = !!actions.salvarDisabled || !!actions.isBusy;
+  const aprovar = () => { actions.onSalvarProximo(); };
+  const gravada = actions.gravada ?? null;
 
   /**
    * ENTER = APROVAR E PRÓXIMO — PR-CONC-ENRIQUECER-V2-01 ("Enter = o mesmo do Salvar e próximo"); Ctrl/Cmd+Enter segue
@@ -237,9 +270,13 @@ export function EnriquecimentoMesaModal({
   }, [open, actions]);
 
   const pctFeitas = contagens.todas > 0 ? (100 * contagens.feitas) / contagens.todas : 0;
-  const falta = actions.salvarMotivo && !actions.soAvanca ? actions.salvarMotivo : null;
-  /* A MENSAGEM DO RODAPÉ — uma só, pela prioridade (PR-CONC-MESA-ORDEM-03): 1 o banco recusou · 2 falta · 3 diverge. */
-  const mensagem = mensagemDoRodape({ erroBanco: actions.erroBanco, falta, divergenciasDoExtrato: actions.divergenciasDoExtrato });
+  /* "falta:" é pendência de campo; na gravada SEM alteração o motivo do botão apagado é "já gravada", que tem lugar próprio. */
+  const falta = actions.salvarMotivo && !(gravada && !gravada.alterada) ? actions.salvarMotivo : null;
+  /* A MENSAGEM DO RODAPÉ — uma só, pela prioridade (`mensagemDoRodape`). */
+  const mensagem = mensagemDoRodape({
+    erroBanco: actions.erroBanco, erroEdicao: actions.erroEdicao, falta, gravada,
+    motivoReverter: actions.motivoReverter, divergenciasDoExtrato: actions.divergenciasDoExtrato,
+  });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -282,14 +319,19 @@ export function EnriquecimentoMesaModal({
                   {linhas.map((r) => {
                     const sel = r.id === lista.selecionadoId;
                     const balde = baldePorId.get(r.id) ?? 'outras';
+                    /* ⚠ GRAVADA COM ALTERAÇÃO PENDENTE (D6): continua em "Feitas" (o balde é o mesmo), mas a bolinha fica
+                       âmbar — o token da "pronta", a cor de "falta gravar" que a lista já tem. */
+                    const alterada = !!r.gravada?.alterada;
                     return (
                       <button type="button" key={r.id} ref={sel ? selRef : undefined} data-testid="item-mesa"
-                        data-balde={balde}
-                        onClick={() => lista.onSelecionar(r.id)} title={`${r.fornecedor} · ${r.data} · ${NOME_DO_BALDE[balde]}`}
+                        data-balde={balde} data-alterada={alterada ? 'sim' : undefined}
+                        onClick={() => lista.onSelecionar(r.id)}
+                        title={`${r.fornecedor} · ${r.data} · ${alterada ? 'Gravada · alterada, falta gravar' : NOME_DO_BALDE[balde]}`}
                         style={{ height: ALTURA_ITEM_LISTA }}
                         className={`flex w-full items-center gap-1 border-b border-border/50 px-1.5 text-left ${
                           sel ? 'border-l-[3px] border-l-primary bg-primary/[0.08] pl-[3px]' : ''}`}>
-                        <span className={`h-[6px] w-[6px] shrink-0 rounded-full ${COR_DO_BALDE[balde]}`} />
+                        <span data-testid="bolinha-mesa"
+                          className={`h-[6px] w-[6px] shrink-0 rounded-full ${alterada ? COR_DO_BALDE.pronta : COR_DO_BALDE[balde]}`} />
                         {/* cortado na borda, sem "…" (regra da reticência); o nome inteiro está no `title` do item */}
                         <span className="min-w-0 flex-1 overflow-hidden whitespace-nowrap">{r.fornecedor}</span>
                         <span className={`shrink-0 whitespace-nowrap font-medium tabular-nums ${corDoSinal(r.entradaOuSaida)}`}>
@@ -374,6 +416,8 @@ export function EnriquecimentoMesaModal({
                 </Dialog>
 
                 <MesaCamposTabela
+                  /* a remontagem que devolve cada campo ao valor do banco quando uma edição falha (D9) */
+                  key={`${selecionada.id}:${detalhe.versaoRestauro ?? 0}`}
                   row={selecionada}
                   classificacoes={detalhe.classificacoes}
                   fornecedores={detalhe.fornecedores}
@@ -400,6 +444,7 @@ export function EnriquecimentoMesaModal({
               <Button size="sm" variant="ghost" className="h-[22px] w-[26px] shrink-0 p-0 text-[11px]" aria-label="Próximo"
                 onClick={actions.onProximo} disabled={!actions.canProximo}>▶</Button>
               <Button size="sm" variant="outline" className="h-[22px] shrink-0 whitespace-nowrap px-2 text-[10px]"
+                data-testid="reverter" title={actions.motivoReverter ?? undefined}
                 onClick={actions.onReverter} disabled={actions.reverterDisabled || actions.isBusy}>↺ Reverter</Button>
               {/* ⚠ O SLOT DA DECISÃO: largura FIXA, sempre presente (vazio sem decisão). Trocar de linha fecha o Dialog. */}
               <AreaDecisao chave={selecionada?.id ?? null}
@@ -415,7 +460,8 @@ export function EnriquecimentoMesaModal({
                 <span data-testid="mensagem-rodape" data-mensagem={mensagem.tipo ?? 'nenhuma'} title={mensagem.texto || undefined}
                   className={`min-w-0 flex-1 truncate text-[10px] ${
                     mensagem.tipo === 'erro' ? 'font-medium text-red-700 dark:text-red-400'
-                      : mensagem.tipo === 'diverge' ? 'text-amber-700 dark:text-amber-400' : ''}`}>
+                      : mensagem.tipo === 'diverge' || mensagem.tipo === 'alterada' ? 'text-amber-700 dark:text-amber-400'
+                      : mensagem.tipo === 'gravada' ? 'text-muted-foreground' : ''}`}>
                   {mensagem.texto}
                 </span>
               )}
@@ -425,10 +471,10 @@ export function EnriquecimentoMesaModal({
               <Button size="sm" data-testid="aprovar"
                 className="h-[22px] shrink-0 whitespace-nowrap bg-cta px-2.5 text-[10px] font-semibold text-cta-foreground hover:bg-cta-hover"
                 onClick={aprovar} disabled={aprovarDesabilitado}
-                title={actions.soAvanca
-                  ? 'Esta linha já está gravada e nada mudou: só seguir. (Enter)'
+                title={gravada
+                  ? `${actions.salvarMotivo ?? 'Grava no lançamento só o que você alterou; a linha fica selecionada.'} (Enter)`
                   : `${actions.salvarMotivo ?? 'Grava esta linha no lançamento e vai para a próxima.'} (Enter)`}>
-                {actions.canProximo ? 'Aprovar e próximo' : 'Aprovar — fim da lista'}
+                {gravada ? 'Gravar alteração' : actions.canProximo ? 'Aprovar e próximo' : 'Aprovar — fim da lista'}
               </Button>
             </div>
           </div>
