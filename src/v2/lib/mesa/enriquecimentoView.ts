@@ -16,11 +16,11 @@ import type {
 import { fmtData, fmtBRL, fmtTexto, mesAbrev, dataHoraCurta, STATUS_META } from '@/v2/components/mesa/enriquecimento/fmt';
 import { resolverContaPorTexto, type ContaResolvivel } from '@/v2/lib/mesa/resolverConta';
 import { contaDaLinha } from '@/v2/lib/mesa/contaDaLinha';
-/* ⚠ AS DUAS REGRAS VÊM DE ONDE JÁ MORAM, chamadas — nunca copiadas. `safraSugerida` é a mesma
-   função do `LancamentoV2Dialog` (e do import de custeio), e `escopoDoSubcentro` é a mesma que
-   aquele modal usa para decidir administrativo. Uma segunda cópia aqui envelheceria calada: os
-   subcentros MUDAM de escopo no plano — quatro mudaram em 11/09/2026. */
-import { safraSugerida, type SafraCandidata } from '@/lib/agri/safraSugerida';
+/* ⚠ AS REGRAS VÊM DE ONDE JÁ MORAM, chamadas — nunca copiadas. `escopoDoSubcentro` é a mesma que o
+   `LancamentoV2Dialog` usa para decidir administrativo: os subcentros MUDAM de escopo no plano — quatro
+   mudaram em 11/09/2026. A safra da competência é do BANCO (`safra_da_competencia_id` da view,
+   PR-CONC-ENRIQ-SAFRA-COMPETENCIA); daqui só se usa o tipo do catálogo. */
+import type { SafraCandidata } from '@/lib/agri/safraSugerida';
 import { escopoDoSubcentro, ESCOPO_ADMINISTRATIVO } from '@/lib/financeiro/escopoDoSubcentro';
 import type { ClassificacaoItem } from '@/hooks/useFinanceiroV2';
 import { ehTipoTransferencia, subcentroDeTransferencia } from '@/v2/lib/mesa/transferenciaPlano';
@@ -633,34 +633,17 @@ export function toRowVM(
   /* ════════ AS DUAS SUGESTÕES — PR-MESA-SUGESTOES-01 ════════ */
 
   /**
-   * A SAFRA QUE A COMPETÊNCIA IMPLICA — §1.
+   * A SAFRA QUE A COMPETÊNCIA IMPLICA — §1; o DONO É O BANCO desde o PR-CONC-ENRIQ-SAFRA-COMPETENCIA.
    *
    * ⚠ SÓ QUANDO NÃO HÁ SAFRA EM LUGAR NENHUM. Com proposta da planilha ou safra no lançamento, o
    * comportamento é o de hoje: a sugestão preencheria por cima de um dado que alguém pôs.
-   * ⚠ O ESCOPO VEM DO SUBCENTRO EFETIVO, pela função do modal — nunca de uma lista local. E
-   * administrativo NÃO sugere (OC_013): safra em administrativo é regra do backfill, pelo que o
-   * plano aponta, e o trigger `resolve_classificacao_from_plano` a zera de qualquer jeito.
-   * ⚠ `desempatar: false`, COMO NO MODAL. Aqui o operador está olhando a linha; a política de
-   * chutar a cultura principal é do import em lote, onde ninguém confere. Duas safras na mesma
-   * temporada devolvem `null`, e o campo fica vazio para ele escolher.
+   * ⚠ A REGRA NÃO MORA MAIS AQUI: a view expõe `safra_da_competencia_id` (`_fn_safra_da_competencia`: a safra ATIVA da
+   *   atividade cujo período contém a competência; zero ou duas -> nulo), e é a mesma função que a precedência usa na
+   *   pecuária. Duas regras de "safra da competência" (front e banco) divergiriam na primeira safra cadastrada fora do
+   *   padrão de código. Administrativo continua sem sugestão: não existe safra de escopo administrativo.
    */
-  /* ⚠ SEM O `escopoNegocio` DO TERCEIRO ARGUMENTO, e é o dado que manda: a linha do staging NÃO
-     traz escopo — só o subcentro. `escopoDoSubcentro` resolve pelo plano, que é a porta soberana;
-     o terceiro argumento do modal é o escopo que o LANÇAMENTO já tem, e aqui ele não existe. */
-  const escopoDaLinha = catalogos.classificacoes
-    ? escopoDoSubcentro(catalogos.classificacoes, subcentroEfetivo, null)
-    : null;
   const semSafraEmLugarNenhum = !row.proposto_safra_id && !row.lanc_safra_id;
-  const safraSugeridaId = (
-    semSafraEmLugarNenhum
-    && catalogos.safras
-    && escopoDaLinha
-    && escopoDaLinha !== ESCOPO_ADMINISTRATIVO
-  )
-    ? safraSugerida(
-      row.proposto_data_competencia ?? row.lanc_data_competencia ?? row.excel_data,
-      escopoDaLinha, [...catalogos.safras], { desempatar: false })
-    : null;
+  const safraSugeridaId = semSafraEmLugarNenhum ? (row.safra_da_competencia_id ?? null) : null;
 
   /**
    * ESTA LINHA É UMA TRANSFERÊNCIA? — §2.
@@ -768,6 +751,9 @@ export function toRowVM(
     /** O texto que o Excel trouxe e ninguém reconheceu — §2c. */
     contaTextoNaoReconhecido: contaDoExcel.textoNaoReconhecido,
     safraSugeridaId,
+    safraDaCompetenciaId: row.safra_da_competencia_id ?? null,
+    safraForaDoPeriodo: typeof row.safra_fora_do_periodo === 'boolean' ? row.safra_fora_do_periodo : null,
+    safraPlanilhaId: row.planilha_safra_id ?? null,
     tipoTransferenciaSugerido,
     tipoDocumento: row.proposto_tipo_documento ?? null,
     tipoDocumentoAtual: row.lanc_tipo_documento ?? null,

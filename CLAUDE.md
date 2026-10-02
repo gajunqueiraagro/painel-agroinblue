@@ -160,8 +160,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 02/10/2026 (PR-CONC-ENRIQ-LINHA-GRAVADA-EDITAVEL, +18 em `src/v2/lib/mesa/linhaGravadaEditavel.test.tsx`;
-  antes o PR-OC-BOITEL-PAINEL-01, +13): 2918
+  Baseline em 02/10/2026 (PR-CONC-ENRIQ-SAFRA-COMPETENCIA, +13 em `src/v2/lib/mesa/safraCompetencia.test.tsx`; antes o
+  PR-CONC-ENRIQ-LINHA-GRAVADA-EDITAVEL, +18): 2931
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -345,6 +345,21 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   (sem renderizador) ainda tem o `soAvanca`, que saiu da Mesa; (e) os outros toasts de erro da Mesa (Reverter, agrupar, escolher,
   desfazer, lote, recasar, excluir sessao) ficam para o PR de acabamentos; (f) dados do Gabriel a corrigir PELA TELA depois do
   deploy: 371/372 (filhos 65dbd985/2de72941), o documento 116396 da linha 16, e as 11 linhas gravadas com safra fora do periodo.
+  · SAFRA-COMPETENCIA (PR-CONC-ENRIQ-SAFRA-COMPETENCIA, 02/10): (a) a sugestao de safra da Mesa passou a ler a view: em SESSOES
+  ANTIGAS (anteriores ao `_planilha`, 30/09) 236 linhas sem safra perdem a sugestao (a proposta tem o subcentro em TEXTO, sem
+  `plano_conta_id`, e o lancamento e' cru) e 129 ganham (o plano pelo id existe e o texto nao casa: Nutricao Cria/Engorda; ou o
+  texto casa num plano administrativo e o id e' de pecuaria) — zero na 8d6efeb7 e em sessao com `_planilha`, zero troca de
+  uma safra por outra; (b) FORA DA MESA a regra antiga continua no front: `safraSugerida` (codigo + temporada) no
+  `LancamentoV2Dialog` e no import de custeio — hoje da' o mesmo (41 safras ativas com codigo = periodo), mas e' a segunda
+  regra; (c) o `fn_classificacao_casar_sessao` NAO E' IDEMPOTENTE (achado no ensaio): dois Recasar seguidos na b8e5641d
+  (Agnaldo) passam 21 linhas de `exato` a `ja_classificado`, sem mudar par nem proposta — frente do casador; (d) o papel do
+  canal MCP de leitura (`supabase_read_only_user`) nao executa `_fn_safra_da_competencia` (nem `_fn_classificacao_linha_livre`):
+  consulta pela view que peca essas colunas vai pelo canal write em DO + RAISE; (e) [resolvido no fix1: textos curtos e uma
+  dica so' no slot da Safra]; (f) a 214 da 8d6efeb7 (Vivo, "Comunicacao e Energia Pecuaria", safra "Nao se aplica" na planilha) passa a ter
+  26/27-Pec no topo no proximo Recasar — e' o que a sugestao do front ja' gravava no Salvar; (g) [resolvido no fix1: na
+  lavoura o aviso e' so' texto]; (h) as safras INATIVAS AMD/MAND medem 107/113px em "competencia: X" e cortariam no slot —
+  nao aparecem porque `_fn_safra_da_competencia` so' devolve safra ATIVA; codigo ativo novo com mais de 9 caracteres pede
+  remedir o slot.
   · BOITEL-PAINEL (PR-OC-BOITEL-PAINEL-01 e a FASE 0 PR-OC-BOITEL-ACERTO-CLAREZA, 02/10): (a) TRAVA DE P1 PELA DATA DO
   ENVIO: o "reaplique o Realizado" mexe no valor, nao no rebanho do mes do envio, mas o Salvar da Negociacao trava pelo mes da
   data da OC (`mesFechadoMotivo`, `VendaModalShell`); `oc_revalorar_lote` passa no banco com o mes fechado (simulado em
@@ -789,6 +804,22 @@ docs/historico/frentes-ate-2026-09-29.md.)
   no classificado fica de referencia). A view expoe no fim `lanc_cultura`, `lanc_fase`, `planilha_cultura`, `proposto_cultura`,
   `proposto_fase`. md5: editar_proposto 8a586737…, apply_row 85cc0df6…, reverter_row 763c5cf5…, precedencia_cru 65bcb707…,
   split f964b0dd…, populate b62d8e0e…, view efc468cb…
+- ⚠ NA PECUARIA A COMPETENCIA DECIDE A SAFRA; NA LAVOURA A PLANILHA VALE E A TELA AVISA (PR-CONC-ENRIQ-SAFRA-COMPETENCIA,
+  Gabriel 02/10 14:39; migrations 20261027190700 ledger 20261002182140 e 20261027190800 ledger 20261002182544). Dono UNICO:
+  `_fn_safra_da_competencia(cliente, escopo, data)` = a safra ATIVA do escopo cujo periodo (data_inicio..data_fim) contem a
+  data; zero ou duas -> NULO (sem palpite). SECURITY DEFINER com a guarda `tenant_ok(cliente)` por chamada (sem usuario, sem
+  guarda) — a RLS de `financeiro_safras` por linha dobrava o custo da view. (D2) `_fn_classificacao_precedencia_cru`, ramo do
+  CRU: atividade do topo = escopo do plano que sobe (sem plano, o da safra da planilha); se PECUARIA, a safra do topo = a da
+  competencia que vai ser gravada (a do topo; senao a do lancamento); NULO -> a planilha. `_planilha` guarda a da planilha. Linha
+  MANUAL nao entra (a escolha do operador vence), classificado/gravada/lavoura nao mudam. (D5) a view expoe no fim
+  `safra_da_competencia_id` (atividade = plano que vai ser gravado, senao a safra) e `safra_fora_do_periodo` (a safra que vai ser
+  gravada nao contem a competencia que vai ser gravada); a Mesa so' le': dica ambar "competencia: X" que APLICA pelo
+  `editar_proposto` na pecuaria e e' SO' TEXTO na lavoura (a safra atravessa o ano de proposito; fix1, Gabriel), sem candidata
+  "fora do periodo", e "pela competencia" (neutra) quando o banco trocou — a frase inteira, com a safra da planilha, no `title`;
+  na linha Safra o slot de 104px mostra UMA dica so' (aviso > pela competencia > sugestao > marca da planilha; as outras no
+  `title`) — medido: o pior codigo ATIVO ("competencia: 20/21-Pec") pede 102px. NUNCA e' pendencia do checklist. (D7) a safra sugerida da linha sem safra le' `safra_da_competencia_id` — sem segunda regra na Mesa.
+  md5: precedencia_cru f9db83d4…, `_fn_safra_da_competencia` 81e2f6bb…, view b041b03e…. Custo da view na 8d6efeb7
+  (authenticated): {920,912,906} ms (antes {883,791,798}).
 - ⚠ LINHA GRAVADA E' EDITAVEL NA MESA, E A BASE DELA E' O LANCAMENTO (PR-CONC-ENRIQ-LINHA-GRAVADA-EDITAVEL, migration
   20261027190600, ledger 20261002175601): no classificado o sistema prevalece, entao a proposta de uma linha gravada so' carrega o
   que o operador mudar DEPOIS de gravar. (D1) `_fn_classificacao_alinhar_ao_lancamento(proposta, lancamento)` e' o dono UNICO de
@@ -808,7 +839,8 @@ docs/historico/frentes-ate-2026-09-29.md.)
   (D8) campo esvaziado numa gravada: "a Mesa nao apaga · mantem". (D9) erro de editar/salvar no rodape (`erroEdicao`/`erroBanco`),
   nunca em toast, e a grade REMONTA (`versaoRestauro`) para o campo recusado voltar ao valor do banco. (D11) as tres propostas
   automaticas do Salvar (alinhar subcentro, safra sugerida, forma pelo historico) so' em linha NAO gravada (`rodaSugestoesDoSalvar`).
-  md5: editar_proposto 83a28c3c…, `_fn_classificacao_alinhar_ao_lancamento` ba92442c… (so' service_role), view 94bc36f3….
+  md5: editar_proposto 83a28c3c…, `_fn_classificacao_alinhar_ao_lancamento` ba92442c… (so' service_role), view 94bc36f3… (depois
+  b041b03e…, PR-CONC-ENRIQ-SAFRA-COMPETENCIA).
 - ⚠ BLOCO CONFERIDO N×M NO ENRIQUECER (PR-CONC-ENRIQ-BLOCO-NM-A, migration 20261027190200, ledger 20261002115607): N linhas da
   planilha x M lancamentos CLASSIFICADOS e REALIZADOS da mesma conta, soma COM SINAL ao centavo (tolerancia 0,005; sinais
   opostos permitidos) -> as linhas viram 'conferido_bloco' com os M ids em `match_lancamento_ids`. NAO ESCREVE no lancamento

@@ -306,6 +306,17 @@ export function MesaCamposTabela({
     && !contaEhAdministrativa;
   const formaEhSugestao = !row.edicao.formaPagamento && !row.edicao.formaPagamentoAtual
     && !!row.edicao.formaPagamentoSugerida;
+  /* ── A SAFRA × A COMPETÊNCIA — PR-CONC-ENRIQ-SAFRA-COMPETENCIA. Tudo vem da view (a regra é do banco,
+     `_fn_safra_da_competencia`); aqui só se decide QUAL dica escrever. ⚠ NUNCA É PENDÊNCIA: o checklist não a vê. */
+  const codigoDaSafra = (id: string | null) =>
+    (id ? safras?.find((sf) => sf.id === id) : undefined)?.codigo ?? (id ? safras?.find((sf) => sf.id === id)?.nome : null) ?? null;
+  const safraDaCompetencia = row.edicao.safraDaCompetenciaId;
+  /* a safra que vai gravar não contém a competência que vai gravar (pecuária classificada, lavoura, escolha à mão) */
+  const safraForaDoPeriodo = row.edicao.safraForaDoPeriodo === true;
+  /* D2: no CRU de pecuária o banco trocou a safra da planilha pela da competência — diz, sem âmbar (não é pendência) */
+  const safraPelaCompetencia = row.ehCru === true && !safraForaDoPeriodo && !!row.edicao.safraId
+    && row.edicao.safraId === safraDaCompetencia && !!row.edicao.safraPlanilhaId
+    && row.edicao.safraPlanilhaId !== row.edicao.safraId;
 
   /* ── OS AVISOS — à DIREITA DA LINHA DO CHECKLIST (PR-CONC-MESA-ORDEM-03; era um slot próprio de 18px, quase sempre
      vazio). Nunca linha nova: "planilha dizia" nascia abaixo da tabela e empurrava o rodapé (print 18:59), o de plano ×
@@ -421,7 +432,7 @@ export function MesaCamposTabela({
               const abreGrupo = indice === 0 || ORDEM[indice - 1]?.grupo !== grupo;
               /* PR-CONC-MESA-DIVERGENCIA-EXCEL-01 — a planilha discorda do Resultado. */
               const dp = row.divergenciasPlanilha.find((d) => camposDaLinha.includes(d.campo));
-              const divergePlanilha = !!dp && !divergeDoBanco;
+              const divergePlanilha = !!dp && !divergeDoBanco && !(campo === 'Safra' && safraPelaCompetencia);
               const planoPendente = campo === 'Subcentro' && incoerente;
               const exigido = !!obrigatorio || (!!obrigatorioSeTransferencia && ehTransf);
               /* 133g item 6 — vazio no RESULTADO é o que importa. A Atividade só se cobra com o catálogo na mão. */
@@ -437,7 +448,7 @@ export function MesaCamposTabela({
 
               /* ── O SLOT DA DICA — item 2: largura FIXA em toda linha, dentro da célula "Vai gravar", à direita do
                  campo. Ele existe mesmo vazio: é isso que deixa o campo com a mesma largura em todas as linhas. */
-              const dicas: Array<{ id?: string; texto: string; cls: string; title?: string }> = [];
+              const dicas: Array<{ id?: string; texto: string; cls: string; title?: string; acao?: () => void }> = [];
               if (doExtrato) {
                 dicas.push(valorDeParte
                   ? { texto: 'parte · agrupamento', cls: 'text-violet-700 dark:text-violet-400', title: `parte de ${c.sistema} (agrupamento)` }
@@ -452,6 +463,28 @@ export function MesaCamposTabela({
               }
               if (travadoPorTransferencia) {
                 dicas.push({ texto: 'transferência', cls: 'italic text-muted-foreground', title: `${subcentroTransferencia} — ${MOTIVO_TRANSFERENCIA}` });
+              }
+              if (campo === 'Safra' && safraForaDoPeriodo) {
+                /* ⚠ TEXTO CURTO, A FRASE NO `title` (fix1): nenhuma dica corta no slot de 104px.
+                   ⚠ NA LAVOURA O AVISO É SÓ TEXTO (fix1, Gabriel): a safra atravessa o ano de propósito (colheita de
+                   mandioca 25/26 paga em set/26) — convidar ao clique ali induziria a trocar o certo. Na pecuária (e nas
+                   demais atividades) o clique aplica a safra da competência pelo `editar_proposto` de sempre. */
+                const alvo = safraDaCompetencia;
+                const lavoura = !!alvo && safras?.find((sf) => sf.id === alvo)?.escopo_negocio === 'agricultura';
+                const frase = `A competência que vai ser gravada é da safra ${codigoDaSafra(alvo) ?? '—'}, e a escolhida não a contém.`;
+                dicas.push(!alvo
+                  ? { id: 'dica-safra-fora', texto: 'fora do período', cls: 'text-amber-700 dark:text-amber-400',
+                      title: 'Fora do período da safra: a competência que vai ser gravada não está no período da safra escolhida, e nenhuma safra da atividade a contém.' }
+                  : editavel && onEditar && !lavoura
+                    ? { id: 'dica-safra-competencia', texto: `competência: ${codigoDaSafra(alvo) ?? '—'}`,
+                        cls: 'text-amber-700 underline decoration-dotted dark:text-amber-400',
+                        title: `${frase} Clique para aplicar.`, acao: () => { void onEditar({ safra_id: alvo }); } }
+                    : { id: 'dica-safra-competencia', texto: `competência: ${codigoDaSafra(alvo) ?? '—'}`,
+                        cls: 'text-amber-700 dark:text-amber-400',
+                        title: lavoura ? `${frase} Na lavoura a safra atravessa o ano: confira antes de trocar.` : frase });
+              } else if (campo === 'Safra' && safraPelaCompetencia) {
+                dicas.push({ id: 'dica-safra-pela-competencia', texto: 'pela competência', cls: 'text-muted-foreground',
+                  title: `pela competência · planilha: ${codigoDaSafra(row.edicao.safraPlanilhaId) ?? '—'} — na pecuária a competência decide a safra; a da planilha fica só de referência.` });
               }
               if (campo === 'Safra' && editavel && safraEhSugestao) {
                 dicas.push({ texto: 'pela competência', cls: 'text-muted-foreground', title: 'Safra sugerida pela competência — grava ao salvar' });
@@ -474,6 +507,10 @@ export function MesaCamposTabela({
                   cls: dp?.texto ? 'text-destructive' : 'text-blue-700 dark:text-blue-400' });
               }
               const tituloSlot = dicas.map((d) => d.title ?? d.texto).join(' · ');
+              /* ⚠ NA LINHA SAFRA, UMA DICA SÓ NO SLOT (PR-CONC-ENRIQ-SAFRA-COMPETENCIA fix1): duas juntas (o aviso da competência
+                 e a marca "planilha: X") passavam dos 104px e cortavam. Fica a primeira, pela ordem em que entram — aviso >
+                 "pela competência" > sugestão > marca da planilha —, e as outras vão inteiras no `title` do slot. */
+              const dicasNoSlot = campo === 'Safra' ? dicas.slice(0, 1) : dicas;
 
               return (
                 <Fragment key={rotulo}>
@@ -606,7 +643,11 @@ export function MesaCamposTabela({
                               title={`Sugerido por: ${row.proveniencia.comoFoiSugerido}`}
                               className="inline-flex h-3 w-3 shrink-0 cursor-help items-center justify-center rounded-full border border-muted-foreground text-[8px] font-bold text-muted-foreground">?</span>
                           )}
-                          {dicas.map((d) => (
+                          {dicasNoSlot.map((d) => d.acao ? (
+                            /* a dica que APLICA (safra da competência): botão sem caixa, mesma linha, mesma fonte — nada cresce */
+                            <button key={d.texto} type="button" data-testid={d.id} onClick={d.acao}
+                              className={`min-w-0 truncate p-0 text-left leading-none ${d.cls}`}>{d.texto}</button>
+                          ) : (
                             <span key={d.texto} data-testid={d.id} className={`min-w-0 truncate ${d.cls}`}>{d.texto}</span>
                           ))}
                         </span>

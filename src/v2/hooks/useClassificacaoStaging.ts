@@ -231,6 +231,13 @@ export interface ClassificacaoStagingPreviewRow {
    */
   tem_estado_anterior?: boolean | null;
   proposto_editado_em?: string | null;
+  /**
+   * PR-CONC-ENRIQ-SAFRA-COMPETENCIA (migrations 20261027190700/190800) — a safra cuja vigencia contem a competencia que vai
+   * ser gravada, na atividade da linha (`_fn_safra_da_competencia`, dono unico; zero ou duas candidatas -> nulo), e se a
+   * safra que vai ser gravada esta' FORA desse periodo. A tela so' le'. Ausentes (view anterior) = nada a dizer.
+   */
+  safra_da_competencia_id?: string | null;
+  safra_fora_do_periodo?: boolean | null;
 }
 
 /** O que `fn_classificacao_casar_sessao` devolve — 133a. */

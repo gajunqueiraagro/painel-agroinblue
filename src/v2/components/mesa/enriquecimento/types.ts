@@ -176,6 +176,14 @@ export interface EnriqEdicao {
    * temporada e o desempate está desligado — aí o operador escolhe.
    */
   safraSugeridaId: string | null;
+  /**
+   * A SAFRA DA COMPETÊNCIA — PR-CONC-ENRIQ-SAFRA-COMPETENCIA, lida da view (`safra_da_competencia_id`; a regra é do banco).
+   * `safraForaDoPeriodo`: a safra que vai ser gravada não contém a competência que vai ser gravada (`null` = sem safra ou
+   * sem competência). `safraPlanilhaId`: a safra que a planilha disse (`_planilha`), para a marca "planilha: X".
+   */
+  safraDaCompetenciaId: string | null;
+  safraForaDoPeriodo: boolean | null;
+  safraPlanilhaId: string | null;
   /** A linha parece uma transferência e o tipo efetivo ainda não é. Proposta, nunca gravação. */
   tipoTransferenciaSugerido: boolean;
 
