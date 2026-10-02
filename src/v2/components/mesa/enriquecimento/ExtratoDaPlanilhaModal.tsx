@@ -12,12 +12,16 @@
  *   FECHA no fim, como na Conferência ("fechamento DD/MM", o mesmo par de tokens), e o fechamento do MÊS fica congelado
  *   abaixo do corpo.
  * ⚠ AGRUPAR PELA SELEÇÃO (PR-CONC-ENRIQ-AGRUP-2b-TELA), o gesto da Conferência: a caixa marca a linha "sem par" da planilha
- *   e o lançamento "Só no sistema"; a barra no rodapé diz a forma (1×1 casar · N×1 desmembrar · 1×N juntar · N×M sem
- *   gravação) e grava pela RPC que a aba já usa (`onAgrupar`). A recusa da RPC fica ESCRITA na barra e a seleção fica.
+ *   e o lançamento "Só no sistema"; a barra no rodapé diz a forma (`gestoDaSelecao`: bloco · casar · desmembrar · juntar)
+ *   e grava pela RPC que a aba liga (`onAgrupar`). A recusa da RPC fica ESCRITA na barra e a seleção fica.
+ * ⚠ O BLOCO E O CASAR 1×1 GRAVAM (PR-CONC-ENRIQ-BLOCO-NM-B): lançamentos classificados -> "Conferir bloco N×M" (sem
+ *   confirmação em dois passos: não altera lançamento nenhum e tem desfazer); cru 1×1 -> "Casar". O bloco conferido se
+ *   desfaz pelo ✓ da linha da planilha ou pelo selo "Em bloco": a barra entra no MODO BLOCO (resumo + motivo obrigatório +
+ *   "Desfazer bloco" + "voltar"), as linhas do bloco ficam realçadas, Esc sai — tudo nos MESMOS 26px do rodapé.
  * ⚠ CLICAR NA LINHA (ou no "⋯") ABRE A MESA NAQUELA LINHA, por cima deste modal: ele continua montado, e fechar a Mesa
- *   volta ao MESMO ponto da rolagem.
+ *   volta ao MESMO ponto da rolagem. O ✓ de bloco e o selo "Em bloco" não abrem (stopPropagation).
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Segmentado } from '@/components/ui/segmentado';
 import type { ClassificacaoStagingPreviewRow } from '@/v2/hooks/useClassificacaoStaging';
@@ -53,9 +57,14 @@ export const ALTURA_LINHA_EXTRATO = '18px';
 /** A faixa do rodapé: o fechamento do mês OU a barra da seleção, no MESMO lugar e com a MESMA altura. */
 export const ALTURA_RODAPE_EXTRATO = '26px';
 
-/** O gesto que a aba grava — os mesmos mutations da Mesa (`resolverProximos` / `splitSubstituir` / `resolverGrupo`). */
-export interface GestoAgrupar { forma: Exclude<FormaDaSelecao, 'bloco'>; stagingIds: string[]; lancamentoIds: string[] }
+/**
+ * O gesto que a aba grava — `conferirBloco` / `casarManual` (NM-B) e os mutations da Mesa (`splitSubstituir` /
+ * `resolverGrupo`).
+ */
+export interface GestoAgrupar { forma: FormaDaSelecao; stagingIds: string[]; lancamentoIds: string[] }
 export type ResultadoAgrupar = { ok: boolean; mensagem?: string };
+/** Desfazer um bloco conferido — `desfazerBloco`; o motivo é obrigatório (a tela cobra antes, a RPC cobra de novo). */
+export interface GestoDesfazerBloco { blocoId: string; motivo: string }
 
 const brl = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const dataCurta = (s: string | null) => {
@@ -79,6 +88,8 @@ const COR_SELO: Record<SeloSistema, string> = {
   'Só no sistema': 'border-slate-300 bg-slate-50 text-slate-700',
   'Desmembrar': 'border-violet-300 bg-violet-50 text-violet-800',
   'Transferência': 'border-sky-300 bg-sky-50 text-sky-800',
+  /* a cor do "Enriquecido": o lançamento está explicado pelas linhas do bloco */
+  'Em bloco': 'border-emerald-300 bg-emerald-50 text-emerald-800',
 };
 
 export interface ExtratoDaPlanilhaModalProps {
@@ -98,13 +109,15 @@ export interface ExtratoDaPlanilhaModalProps {
   onAbrirLinha: (stagingId: string, contaId: string) => void;
   /** Grava o agrupamento da seleção pela RPC; devolve `ok` e, na recusa, a frase. Sem ela, a barra só mostra. */
   onAgrupar?: (g: GestoAgrupar) => Promise<ResultadoAgrupar>;
+  /** Desfaz o bloco conferido; devolve `ok` e, na recusa, a frase. Sem ela, o modo bloco só mostra. */
+  onDesfazerBloco?: (g: GestoDesfazerBloco) => Promise<ResultadoAgrupar>;
 }
 
 const STATUS_ROTULO = { conciliado: 'Conciliado', realizado: 'Realizado' } as const;
 
 export function ExtratoDaPlanilhaModal({
   open, onOpenChange, clienteId, anoMes, mesRotulo, staging, contas, contaId, onContaId, sobrescreverIds, onAbrirLinha,
-  onAgrupar,
+  onAgrupar, onDesfazerBloco,
 }: ExtratoDaPlanilhaModalProps) {
   const [soPendentes, setSoPendentes] = useState(false);
   const conta = contaId ?? contas[0]?.id ?? null;
@@ -133,29 +146,74 @@ export function ExtratoDaPlanilhaModal({
   const [gravando, setGravando] = useState(false);
   const [recusa, setRecusa] = useState<string | null>(null);
   const limpar = () => { setMarcP(new Set()); setMarcS(new Set()); setConfirmando(false); setRecusa(null); };
-  useEffect(() => { limpar(); }, [conta, open]);
+  /* ── O MODO BLOCO — o "Desfazer bloco" (NM-B); entrar nele limpa a seleção, marcar uma caixa sai dele ───────────── */
+  const [blocoAtivo, setBlocoAtivo] = useState<string | null>(null);
+  const [motivoBloco, setMotivoBloco] = useState('');
+  const [faltaMotivo, setFaltaMotivo] = useState(false);
+  const [recusaBloco, setRecusaBloco] = useState<string | null>(null);
+  const motivoRef = useRef<HTMLInputElement>(null);
+  const sairDoBloco = () => { setBlocoAtivo(null); setMotivoBloco(''); setFaltaMotivo(false); setRecusaBloco(null); };
+  const abrirBloco = (id: string) => {
+    if (gravando) return;
+    limpar();
+    setBlocoAtivo(id); setMotivoBloco(''); setFaltaMotivo(false); setRecusaBloco(null);
+  };
+  useEffect(() => { limpar(); sairDoBloco(); }, [conta, open]);
   const alternar = (setter: typeof setMarcP, id: string) => {
     setter((atual) => { const n = new Set(atual); if (n.has(id)) n.delete(id); else n.add(id); return n; });
     setConfirmando(false);
     setRecusa(null);
+    sairDoBloco();
   };
   /* os valores vêm das MESMAS linhas desenhadas (com sinal) — nenhuma soma de outra fonte */
   const valores = useMemo(() => {
-    const vp = new Map<string, number>(); const vs = new Map<string, number>();
+    const vp = new Map<string, number>(); const vs = new Map<string, { valor: number; cru: boolean }>();
     for (const d of extrato?.dias ?? []) for (const l of d.linhas) {
       if (l.selPlanilha && l.planilha) vp.set(l.selPlanilha, l.planilha.valor);
-      if (l.selSistema && l.sistema) vs.set(l.selSistema, l.sistema.valor);
+      if (l.selSistema && l.sistema) vs.set(l.selSistema, { valor: l.sistema.valor, cru: l.sistema.cru });
     }
     return { vp, vs };
   }, [extrato]);
   const gesto = useMemo(() => gestoDaSelecao({
     planilha: [...marcP].filter((id) => valores.vp.has(id)).map((id) => ({ id, valor: valores.vp.get(id) ?? 0 })),
-    sistema: [...marcS].filter((id) => valores.vs.has(id)).map((id) => ({ id, valor: valores.vs.get(id) ?? 0 })),
+    sistema: [...marcS].flatMap((id) => {
+      const v = valores.vs.get(id);
+      return v ? [{ id, valor: v.valor, cru: v.cru }] : [];
+    }),
   }), [marcP, marcS, valores]);
   const temSelecao = marcP.size > 0 || marcS.size > 0;
+  /* o resumo do bloco aberto: N e M e a soma saem das linhas JÁ carregadas, as de mesmo `blocoId` */
+  const resumoBloco = useMemo(() => {
+    if (!blocoAtivo) return null;
+    let n = 0; let m = 0; let soma = 0;
+    for (const d of extrato?.dias ?? []) for (const l of d.linhas) {
+      if (l.blocoId !== blocoAtivo) continue;
+      if (l.planilha) { n++; soma += l.planilha.valor; }
+      else if (l.sistema) m++;
+    }
+    return { n, m, soma: Math.round(soma * 100) / 100 };
+  }, [blocoAtivo, extrato]);
+
+  const desfazerBloco = async () => {
+    if (!blocoAtivo || !onDesfazerBloco || gravando) return;
+    const motivo = motivoBloco.trim();
+    /* UX-OBRIGATORIOS-01: sem motivo, o campo fica vermelho com a frase, recebe o foco, e nada grava */
+    if (!motivo) { setFaltaMotivo(true); motivoRef.current?.focus(); return; }
+    setGravando(true);
+    setRecusaBloco(null);
+    try {
+      const res = await onDesfazerBloco({ blocoId: blocoAtivo, motivo });
+      if (res.ok) sairDoBloco();
+      else setRecusaBloco(res.mensagem ?? 'O banco recusou o desfazer.');
+    } catch (e: unknown) {
+      setRecusaBloco(e instanceof Error ? e.message : 'Erro ao desfazer o bloco.');
+    } finally {
+      setGravando(false);
+    }
+  };
 
   const gravar = async () => {
-    if (!gesto.forma || gesto.forma === 'bloco' || !gesto.habilitado || !onAgrupar || gravando) return;
+    if (!gesto.forma || !gesto.habilitado || !onAgrupar || gravando) return;
     /* ⚠ O DESMEMBRAR PEDE CONFIRMAÇÃO NA BARRA: cria N lançamentos e cancela o consolidado. */
     if (gesto.forma === 'desmembrar' && !confirmando) { setConfirmando(true); return; }
     setGravando(true);
@@ -176,8 +234,11 @@ export function ExtratoDaPlanilhaModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex h-[92vh] max-h-[92vh] w-[96vw] max-w-[1400px] flex-col gap-0 overflow-hidden p-0"
-        /* com seleção, o Esc LIMPA a seleção em vez de fechar o modal */
-        onEscapeKeyDown={(e) => { if (temSelecao) { e.preventDefault(); if (!gravando) limpar(); } }}>
+        /* com seleção, o Esc LIMPA a seleção em vez de fechar o modal; no modo bloco, sai do modo */
+        onEscapeKeyDown={(e) => {
+          if (blocoAtivo) { e.preventDefault(); if (!gravando) sairDoBloco(); return; }
+          if (temSelecao) { e.preventDefault(); if (!gravando) limpar(); }
+        }}>
         <DialogHeader className="h-9 shrink-0 flex-row items-center gap-2.5 space-y-0 bg-primary px-4">
           <DialogTitle className="whitespace-nowrap text-[12px] font-medium text-primary-foreground">
             Extrato da planilha · {nomeConta} · {mesRotulo}
@@ -259,7 +320,8 @@ export function ExtratoDaPlanilhaModal({
               )}
               {dias.map((d) => (
                 <DiaRows key={d.data ?? 'sem-data'} d={d} onAbrir={abrir} marcP={marcP} marcS={marcS} travado={gravando}
-                  onMarcarP={(id) => alternar(setMarcP, id)} onMarcarS={(id) => alternar(setMarcS, id)} />
+                  onMarcarP={(id) => alternar(setMarcP, id)} onMarcarS={(id) => alternar(setMarcS, id)}
+                  blocoAtivo={blocoAtivo} onAbrirBloco={abrirBloco} />
               ))}
             </tbody>
           </table>
@@ -269,7 +331,39 @@ export function ExtratoDaPlanilhaModal({
             Sem seleção: o fechamento do mês (PR-CONC-ENRIQUECER-V2-02; NENHUM CÁLCULO NOVO, os totais do topo somados).
             Com seleção: a barra, no MESMO lugar — nada muda de altura (PR-CONC-ENRIQ-AGRUP-2b-TELA). */}
         <div data-testid="rodape-extrato" style={{ height: ALTURA_RODAPE_EXTRATO }} className="flex shrink-0 flex-col">
-          {temSelecao ? (
+          {blocoAtivo && resumoBloco ? (
+            <div data-testid="barra-bloco"
+              className="flex h-full items-center gap-3 overflow-hidden whitespace-nowrap border-t-2 border-t-[#E7C873] bg-primary px-3.5 text-[10px] tabular-nums text-primary-foreground">
+              <span data-testid="resumo-bloco">
+                bloco conferido · {resumoBloco.n} {resumoBloco.n === 1 ? 'linha' : 'linhas'} × {resumoBloco.m}{' '}
+                {resumoBloco.m === 1 ? 'lançamento' : 'lançamentos'} · soma {brl(resumoBloco.soma)}
+              </span>
+              <input ref={motivoRef} type="text" data-testid="motivo-bloco" value={motivoBloco} disabled={gravando}
+                aria-label="Motivo para desfazer o bloco" aria-invalid={faltaMotivo || undefined}
+                placeholder="motivo *"
+                onChange={(e) => { setMotivoBloco(e.target.value); if (e.target.value.trim()) setFaltaMotivo(false); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') void desfazerBloco(); }}
+                className={`h-[18px] w-[220px] shrink-0 rounded border bg-background px-1.5 text-[10px] text-foreground outline-none ${
+                  faltaMotivo ? 'border-red-500 ring-1 ring-red-500' : 'border-transparent'}`} />
+              <span data-testid="recado-bloco" className={`min-w-0 truncate ${faltaMotivo || recusaBloco ? 'text-[#F5B5B5]' : ''}`}
+                title={recusaBloco ?? undefined}>
+                {faltaMotivo ? 'informe o motivo' : recusaBloco ?? ''}
+              </span>
+              <span className="ml-auto flex shrink-0 items-center gap-2">
+                <button type="button" data-testid="desfazer-bloco" disabled={gravando || !onDesfazerBloco}
+                  title={!onDesfazerBloco ? 'Gravação indisponível nesta tela.' : undefined}
+                  onClick={() => { void desfazerBloco(); }}
+                  className={`h-[18px] rounded px-2 text-[10px] font-medium ${
+                    onDesfazerBloco && !gravando
+                      ? 'bg-[#E7C873] text-foreground hover:bg-[#D9B95F]'
+                      : 'cursor-not-allowed bg-primary-foreground/20 text-primary-foreground/50'}`}>
+                  {gravando ? 'Desfazendo…' : 'Desfazer bloco'}
+                </button>
+                <button type="button" data-testid="voltar-bloco" disabled={gravando} onClick={sairDoBloco}
+                  className="h-[18px] rounded bg-primary-foreground/20 px-2 text-[10px] hover:bg-primary-foreground/30">voltar</button>
+              </span>
+            </div>
+          ) : temSelecao ? (
             <div data-testid="barra-selecao"
               className="flex h-full items-center gap-3 overflow-hidden whitespace-nowrap border-t-2 border-t-[#E7C873] bg-primary px-3.5 text-[10px] tabular-nums text-primary-foreground">
               <span>
@@ -342,11 +436,12 @@ export function FechamentoDoMes({ mesRotulo, totais }: {
   );
 }
 
-function DiaRows({ d, onAbrir, marcP, marcS, travado, onMarcarP, onMarcarS }: {
+function DiaRows({ d, onAbrir, marcP, marcS, travado, onMarcarP, onMarcarS, blocoAtivo, onAbrirBloco }: {
   d: ReturnType<typeof soNaoEnriquecidos>[number];
   onAbrir: (l: LinhaExtratoPlanilha) => void;
   marcP: ReadonlySet<string>; marcS: ReadonlySet<string>; travado: boolean;
   onMarcarP: (id: string) => void; onMarcarS: (id: string) => void;
+  blocoAtivo: string | null; onAbrirBloco: (blocoId: string) => void;
 }) {
   const dif = d.planilha - d.sistema;
   return (
@@ -355,8 +450,9 @@ function DiaRows({ d, onAbrir, marcP, marcS, travado, onMarcarP, onMarcarS }: {
         <tr key={l.chave} data-testid="linha-extrato-planilha" data-staging={l.stagingId ?? undefined}
           style={{ height: ALTURA_LINHA_EXTRATO }}
           onClick={() => onAbrir(l)}
+          data-bloco={l.blocoId ?? undefined} data-realce={l.blocoId && l.blocoId === blocoAtivo ? 'sim' : undefined}
           className={`border-b border-border/40 ${l.stagingId ? 'cursor-pointer hover:bg-primary/[0.04]' : ''} ${
-            l.enriquecida ? 'bg-success/[0.06]' : ''}`}>
+            l.blocoId && l.blocoId === blocoAtivo ? 'bg-amber-100' : l.enriquecida ? 'bg-success/[0.06]' : ''}`}>
           {/* ⚠ O CLIQUE NA CAIXA NÃO ABRE A MESA (stopPropagation); o clique na linha continua abrindo. */}
           <td className="text-center" data-testid="p-sel" onClick={(e) => { if (l.selPlanilha) e.stopPropagation(); }}>
             {l.selPlanilha && (
@@ -367,7 +463,14 @@ function DiaRows({ d, onAbrir, marcP, marcS, travado, onMarcarP, onMarcarS }: {
           <td className={`${CEL} text-[9.5px] text-muted-foreground`}>{l.planilha ? dataCurta(l.data) : ''}</td>
           <td className={`${CEL} ${l.filha ? 'pl-[14px]' : ''}`} title={l.planilha?.texto}>{l.planilha?.texto ?? ''}</td>
           <td className={`${CEL} text-right ${l.planilha ? corVal(l.planilha.valor) : ''}`}>{l.planilha ? brl(l.planilha.valor) : ''}</td>
-          <td data-testid="simbolo" className={`border-x text-center font-bold ${l.simbolo ? COR_SIMBOLO[l.simbolo] : ''}`}>{l.simbolo ?? ''}</td>
+          {/* o ✓ de uma linha em bloco abre o "Desfazer bloco" — e não a Mesa */}
+          <td data-testid="simbolo"
+            className={`border-x text-center font-bold ${l.simbolo ? COR_SIMBOLO[l.simbolo] : ''} ${
+              l.blocoId && l.planilha ? 'cursor-pointer hover:bg-emerald-100' : ''}`}
+            title={l.blocoId && l.planilha ? 'Conferido em bloco — clique para ver ou desfazer o bloco' : undefined}
+            onClick={(e) => { if (l.blocoId && l.planilha) { e.stopPropagation(); onAbrirBloco(l.blocoId); } }}>
+            {l.simbolo ?? ''}
+          </td>
           <td className="text-center" data-testid="s-sel" onClick={(e) => { if (l.selSistema) e.stopPropagation(); }}>
             {l.selSistema && (
               <input type="checkbox" className="h-3 w-3 align-middle" checked={marcS.has(l.selSistema)} disabled={travado}
@@ -385,7 +488,14 @@ function DiaRows({ d, onAbrir, marcP, marcS, travado, onMarcarP, onMarcarS }: {
             )}
           </td>
           <td className="px-[3px] text-center">
-            {l.selo && (
+            {l.selo === 'Em bloco' && l.blocoId ? (
+              <button type="button" data-testid="selo"
+                title="Conferido em bloco — clique para ver ou desfazer o bloco"
+                onClick={(e) => { e.stopPropagation(); if (l.blocoId) onAbrirBloco(l.blocoId); }}
+                className={`inline-flex h-[13px] cursor-pointer items-center whitespace-nowrap rounded-[3px] border px-[4px] text-[9.5px] leading-none ${COR_SELO[l.selo]}`}>
+                {l.selo}
+              </button>
+            ) : l.selo && (
               <span data-testid="selo" className={`inline-flex h-[13px] items-center whitespace-nowrap rounded-[3px] border px-[4px] text-[9.5px] leading-none ${COR_SELO[l.selo]}`}>
                 {l.selo}
               </span>

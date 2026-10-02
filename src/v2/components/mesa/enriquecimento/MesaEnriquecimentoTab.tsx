@@ -28,7 +28,9 @@ import { EnriquecimentoMesaModal } from './EnriquecimentoMesaModal';
 import { EnriquecimentoImportarDialog } from './EnriquecimentoImportarDialog';
 import { type VistaPasso2 } from './EnriquecimentoTopoNumeros';
 import { PainelContasEnriquecer } from './PainelContasEnriquecer';
-import { ExtratoDaPlanilhaModal, type GestoAgrupar, type ResultadoAgrupar } from './ExtratoDaPlanilhaModal';
+import {
+  ExtratoDaPlanilhaModal, type GestoAgrupar, type GestoDesfazerBloco, type ResultadoAgrupar,
+} from './ExtratoDaPlanilhaModal';
 import { passaNoFiltroMesa, type FiltroMesa } from './EnriquecimentoMesaModal';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useContasComExtratoNoMes } from '@/v2/hooks/useContasComExtratoNoMes';
@@ -205,6 +207,8 @@ export function MesaEnriquecimentoTab({
     resolverProximos, isResolvendoProximos, desfazerProximos,
     resolverGrupo, isResolvendoGrupo, desfazerGrupo,
     splitSubstituir, isSubstituindo,
+    /* PR-CONC-ENRIQ-BLOCO-NM-B — o bloco conferido e o casar 1×1 do Extrato da planilha */
+    conferirBloco, desfazerBloco, casarManual,
     casarSessao, isCasando,
     excluirSessao, isExcluindoSessao,
     /* ⚠ `marcarRevisada` SAIU DAQUI — PR-MESA-SALVAR-UNICO-01 item 1. Ela tinha UM chamador
@@ -720,6 +724,9 @@ export function MesaEnriquecimentoTab({
   const motivoSalvar: string | null =
     !selecionado ? 'Escolha uma linha.'
     : selecionado.aplicado ? 'Esta linha já foi gravada — use Reverter para desfazer.'
+    /* PR-CONC-ENRIQ-BLOCO-NM-B — o bloco conferido não grava no lançamento: a linha é leitura; desfaz-se pelo Extrato. */
+    : selecionado.status === 'conferido_bloco'
+      ? 'Conferida em bloco: os lançamentos já estão classificados — desfaça pelo Extrato da planilha.'
     /* PR-CONC-ENRIQ-AGRUP-2a — resolvida como grupo (N lançamentos), sem gravação até o 2b: diz POR QUE, em vez de
        "sem lançamento vinculado" (ela tem N). */
     : aguardaAgrupamento({ aplicado: selecionado.aplicado, match_status: selecionado.status }) ? MOTIVO_AGUARDA_AGRUPAMENTO
@@ -913,28 +920,50 @@ export function MesaEnriquecimentoTab({
   }
 
   /**
-   * O AGRUPAR DO EXTRATO DA PLANILHA — PR-CONC-ENRIQ-AGRUP-2b-TELA. A seleção do modal (linhas "sem par" × lançamentos
-   * "Só no sistema") grava pelos MESMOS mutations dos três handlers acima, mas sem toast e sem avançar de linha: o modal
-   * escreve a recusa na barra (UX-TOAST-01) e mantém a seleção. A tradução do motivo é a MESMA (`MOTIVO_MSG`).
+   * O AGRUPAR DO EXTRATO DA PLANILHA — PR-CONC-ENRIQ-AGRUP-2b-TELA; o bloco e o casar 1×1 no PR-CONC-ENRIQ-BLOCO-NM-B. A
+   * seleção do modal (linhas "sem par" × lançamentos "Só no sistema") grava pelos mutations do hook, sem toast e sem
+   * avançar de linha: o modal escreve a recusa na barra (UX-TOAST-01) e mantém a seleção. A frase é a da RPC
+   * (`res.mensagem`); `MOTIVO_MSG` só cobre a RPC antiga que não a manda.
+   *   bloco      -> `conferirBloco`  (N linhas × M lançamentos classificados; nada se grava no lançamento)
+   *   casar      -> `casarManual`    (1×1; cru: a planilha sobe para a proposta; classificado: bloco 1×1 no banco)
+   *   desmembrar -> `splitSubstituir` · juntar -> `resolverGrupo` (como no 2b)
    * ⚠ O ESPELHO DO MODAL SE RELÊ AQUI: os mutations invalidam o staging, não a `espelho-conciliacao` — e o desmembrar
-   *   cancela o consolidado e cria N lançamentos, que é o que o lado Sistema mostra.
+   *   cancela o consolidado e cria N lançamentos, que é o que o lado Sistema mostra. O bloco e o casar mudam o que a
+   *   planilha explica: o "fora da planilha" do painel (`sistema-nao-explicado`) se relê junto.
    */
   async function agruparDoExtrato(g: GestoAgrupar): Promise<ResultadoAgrupar> {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- o jsonb das RPCs, como nos handlers acima
-      const res: any = g.forma === 'casar'
-        ? await resolverProximos({ staging_id: g.stagingIds[0] ?? '', lancamento_id: g.lancamentoIds[0] ?? '' })
-        : g.forma === 'desmembrar'
-          ? await splitSubstituir({ lancamento_id: g.lancamentoIds[0] ?? '', sessao_id: sessaoId ?? '', staging_ids: g.stagingIds })
-          : await resolverGrupo({ staging_id: g.stagingIds[0] ?? '', lancamento_ids: g.lancamentoIds });
+      const res: any = g.forma === 'bloco'
+        ? await conferirBloco({ sessao_id: sessaoId ?? '', staging_ids: g.stagingIds, lancamento_ids: g.lancamentoIds })
+        : g.forma === 'casar'
+          ? await casarManual({ staging_id: g.stagingIds[0] ?? '', lancamento_id: g.lancamentoIds[0] ?? '' })
+          : g.forma === 'desmembrar'
+            ? await splitSubstituir({ lancamento_id: g.lancamentoIds[0] ?? '', sessao_id: sessaoId ?? '', staging_ids: g.stagingIds })
+            : await resolverGrupo({ staging_id: g.stagingIds[0] ?? '', lancamento_ids: g.lancamentoIds });
       if (!res?.ok) {
         return { ok: false, mensagem: res?.mensagem ?? MOTIVO_MSG[res?.motivo] ?? `O banco recusou (${res?.motivo ?? 'erro'}).` };
       }
       if (g.forma === 'desmembrar' && clienteAtual?.id) notificarLancamentosMudaram(clienteAtual.id);
       if (clienteAtual?.id) void qcMesa.invalidateQueries({ queryKey: ['espelho-conciliacao', clienteAtual.id] });
+      if (g.forma === 'bloco' || g.forma === 'casar') void qcMesa.invalidateQueries({ queryKey: ['sistema-nao-explicado'] });
       return { ok: true };
     } catch (e: unknown) {
       return { ok: false, mensagem: `Erro ao gravar: ${errMsg(e)}` };
+    }
+  }
+
+  /** O "Desfazer bloco" do Extrato da planilha (NM-B): as linhas voltam ao estado anterior guardado no bloco. */
+  async function desfazerBlocoDoExtrato(g: GestoDesfazerBloco): Promise<ResultadoAgrupar> {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- o jsonb da RPC, como nos handlers acima
+      const res: any = await desfazerBloco({ bloco_id: g.blocoId, motivo: g.motivo });
+      if (!res?.ok) return { ok: false, mensagem: res?.mensagem ?? `O banco recusou (${res?.motivo ?? 'erro'}).` };
+      if (clienteAtual?.id) void qcMesa.invalidateQueries({ queryKey: ['espelho-conciliacao', clienteAtual.id] });
+      void qcMesa.invalidateQueries({ queryKey: ['sistema-nao-explicado'] });
+      return { ok: true };
+    } catch (e: unknown) {
+      return { ok: false, mensagem: `Erro ao desfazer: ${errMsg(e)}` };
     }
   }
 
@@ -1245,7 +1274,8 @@ export function MesaEnriquecimentoTab({
     contas: contasBancarias,
     clienteId: clienteAtual?.id,
     hideBanco: filtroConta !== 'todas',
-    onEditar,
+    /* a linha conferida em bloco é LEITURA na Mesa: sem `onEditar`, nenhum campo vira editor (NM-B) */
+    onEditar: selecionado?.status === 'conferido_bloco' ? undefined : onEditar,
     onCriarFornecedor: criarFornecedor,
     atividade: selecionado ? (atividadePorLinha[selecionado.id] ?? null) : null,
     onAtividade: (a: string) => {
@@ -1813,6 +1843,7 @@ export function MesaEnriquecimentoTab({
           abrirMesa(contaId, stagingId, passaNoFiltroMesa(balde, 'revisar') ? 'revisar' : 'todas');
         }}
         onAgrupar={agruparDoExtrato}
+        onDesfazerBloco={desfazerBlocoDoExtrato}
       />
 
       {/* ⚠ MONTADO SEMPRE, visível por estado — o idioma do 131. Desmontá-lo ao fechar

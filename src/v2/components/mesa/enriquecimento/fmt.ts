@@ -72,6 +72,8 @@ export const STATUS_META: Record<string, { label: string; cls: string; dot: stri
   ambiguo_resolvido:{ label: 'Já gravadas', cls: 'text-muted-foreground', dot: 'bg-muted-foreground' },
   resolvido_manual: { label: 'Já gravadas', cls: 'text-muted-foreground', dot: 'bg-muted-foreground' },
   resolvido_grupo:  { label: 'Já gravadas', cls: 'text-muted-foreground', dot: 'bg-muted-foreground' },
+  /* PR-CONC-ENRIQ-BLOCO-NM-B — feito como os de cima (cinza), com nome próprio: o operador desfaz pelo Extrato. */
+  conferido_bloco:  { label: 'Conferido em bloco', cls: 'text-muted-foreground', dot: 'bg-muted-foreground' },
   /* ⚠ NÃO É MAIS SAÍDA DO CASADOR NOVO, mas sessões antigas ainda o têm — e uma linha sem
      rótulo mostraria o identificador cru na tela. */
   candidatos_proximos:{ label: 'Você decide', cls: 'text-amber-700', dot: 'bg-amber-500' },

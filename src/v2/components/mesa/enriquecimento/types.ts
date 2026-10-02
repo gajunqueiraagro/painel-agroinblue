@@ -8,7 +8,9 @@
 /* ⚠ `sugestao_grupo` e `sugestao_split` ENTRARAM EM 133a, com o casador do banco:
    1 linha da planilha = N lançamentos, e N linhas = 1 movimento do banco. Os
    identificadores são os do `match_status`; o que muda na tela é o rótulo ("Agrupam"). */
-export type EnriqStatus = 'exato' | 'ambiguo' | 'sem_match' | 'ja_classificado' | 'divergente' | 'ambiguo_resolvido' | 'candidatos_proximos' | 'resolvido_manual' | 'resolvido_grupo' | 'sugestao_grupo' | 'sugestao_split' | 'sem_conta_para_match' | 'ja_aplicado';
+/* ⚠ `conferido_bloco` ENTROU NO PR-CONC-ENRIQ-BLOCO-NM-B (o banco no NM-A): N linhas × M lançamentos classificados que
+   fecham ao centavo — nada a gravar no lançamento, o gesto acabou ("Já gravadas"). */
+export type EnriqStatus = 'exato' | 'ambiguo' | 'sem_match' | 'ja_classificado' | 'divergente' | 'ambiguo_resolvido' | 'candidatos_proximos' | 'resolvido_manual' | 'resolvido_grupo' | 'sugestao_grupo' | 'sugestao_split' | 'sem_conta_para_match' | 'ja_aplicado' | 'conferido_bloco';
 
 // PR-U2d-1 — estado OPERACIONAL da linha (ciclo Editar → Aplicar → Resolvida).
 // Derivado do VM (aplicado/temMatch/órfão/match_status); é a leitura principal.

@@ -11,9 +11,9 @@ import type { ClassificacaoStagingPreviewRow } from '@/v2/hooks/useClassificacao
 import { linhaCrua } from '@/v2/lib/mesa/linhaCrua.fixture';
 import { CONTA_BB, espelhoBB0109, stagingBB0109 } from '@/v2/lib/mesa/enriquecerV2.fixture';
 import {
-  baldeDaLinha, elegivelParaLote, filtrarPainel, montarPainelContas, totalPainel,
+  aguardaAgrupamento, baldeDaLinha, elegivelParaLote, filtrarPainel, montarPainelContas, totalPainel,
 } from '@/v2/lib/mesa/painelContas';
-import { montarExtratoDaPlanilha, soNaoEnriquecidos } from '@/v2/lib/mesa/extratoDaPlanilha';
+import { lancamentoCru, montarExtratoDaPlanilha, soNaoEnriquecidos } from '@/v2/lib/mesa/extratoDaPlanilha';
 import { toRowVM } from '@/v2/lib/mesa/enriquecimentoView';
 import type { ClassificacaoItem } from '@/hooks/useFinanceiroV2';
 
@@ -366,6 +366,13 @@ describe('Extrato da planilha — agrupar pela seleção (2b-tela)', () => {
     if (!tr) throw new Error('linha não encontrada');
     return tr;
   };
+  /* PR-CONC-ENRIQ-BLOCO-NM-B — o "Vivo Casa" e7970f00 do fixture é MANUAL e classificado: com ele a seleção é BLOCO. Para
+     os caminhos do cru (casar 1×1, desmembrar) o mesmo lançamento entra como CRU (do extrato, sem subcentro). */
+  const espelhoComCru = () => {
+    const esp = espelhoBB0109();
+    return { ...esp, sistema_completo: esp.sistema_completo.map((x) => (x.lancamento_id === 'e7970f00'
+      ? { ...x, origem_lancamento: 'extrato', subcentro: null } : x)) };
+  };
 
   it('o que se marca: a linha sem par e o "Só no sistema"; a pareada, a filha e a Transferência não', () => {
     /* a interna: um lançamento sem par marcado como transferência entre contas do cliente */
@@ -417,8 +424,8 @@ describe('Extrato da planilha — agrupar pela seleção (2b-tela)', () => {
     expect(screen.getByTestId('legenda')).not.toHaveTextContent('origem');
   });
 
-  it('marcar não abre a Mesa; 1×1 mostra "Casar" e a faixa tem a MESMA altura com e sem seleção', () => {
-    ESPELHO.atual = espelhoBB0109();
+  it('marcar não abre a Mesa; 1×1 cru mostra "Casar" e a faixa tem a MESMA altura com e sem seleção', () => {
+    ESPELHO.atual = espelhoComCru();
     const onAbrir = vi.fn();
     render(<ExtratoDaPlanilhaModal open onOpenChange={vi.fn()} clienteId="nj" anoMes="2026-09" mesRotulo="set/2026"
       staging={comSemPar()} contas={[{ id: CONTA_BB, nome: 'Banco do Brasil' }]} contaId={CONTA_BB}
@@ -451,23 +458,40 @@ describe('Extrato da planilha — agrupar pela seleção (2b-tela)', () => {
     fireEvent.click(screen.getByTestId('confirmar-gesto'));
   };
 
-  it('o "Casar" 1×1 fica APAGADO, com a frase escrita ao lado e no title (fix1)', () => {
-    ESPELHO.atual = espelhoBB0109();
+  /* NM-B: o 1×1 grava — cru vai ao `casarManual` (forma 'casar'), classificado é bloco 1×1 (forma 'bloco') */
+  it('o "Casar" 1×1 com cru de valor igual fica HABILITADO e grava a forma \'casar\' sem confirmação', async () => {
+    ESPELHO.atual = espelhoComCru();
     const onAgrupar = vi.fn(async () => ({ ok: true }));
     abrirSel(onAgrupar);
     fireEvent.click(within(linhaDo((tr) => tr.dataset.staging === 'sp-1')).getByRole('checkbox'));
     fireEvent.click(within(linhaDo((tr) => !!within(tr).queryByText('Só no sistema'))).getByRole('checkbox'));
     const botao = screen.getByTestId('botao-gesto');
     expect(botao).toHaveTextContent('Casar');
+    expect(botao).not.toBeDisabled();
+    /* a frase do 2b-tela ("… sem gravação") saiu: o recado do 1×1 que casa fica vazio */
+    expect(screen.getByTestId('recado-selecao').textContent).toBe('');
+    fireEvent.click(botao);
+    await waitFor(() => expect(onAgrupar).toHaveBeenCalledWith({ forma: 'casar', stagingIds: ['sp-1'], lancamentoIds: ['e7970f00'] }));
+    expect(screen.queryByTestId('confirmar-gesto')).not.toBeInTheDocument();
+  });
+
+  it('o 1×1 com cru de valor DIFERENTE: "Casar" apagado, a diferença escrita ao lado e no title', () => {
+    ESPELHO.atual = espelhoComCru();
+    const onAgrupar = vi.fn(async () => ({ ok: true }));
+    abrirSel(onAgrupar);
+    fireEvent.click(within(linhaDo((tr) => tr.dataset.staging === 'sp-2')).getByRole('checkbox'));
+    fireEvent.click(within(linhaDo((tr) => !!within(tr).queryByText('Só no sistema'))).getByRole('checkbox'));
+    const botao = screen.getByTestId('botao-gesto');
+    expect(botao).toHaveTextContent('Casar');
     expect(botao).toBeDisabled();
-    expect(botao).toHaveAttribute('title', 'casar 1×1 em linha sem par ainda não tem gravação');
-    expect(screen.getByTestId('recado-selecao')).toHaveTextContent('casar 1×1 em linha sem par ainda não tem gravação');
+    expect(botao).toHaveAttribute('title', 'os valores diferem em R$ 206,51 — o casar 1×1 é ao centavo');
+    expect(screen.getByTestId('recado-selecao')).toHaveTextContent('os valores diferem em R$ 206,51');
     fireEvent.click(botao);
     expect(onAgrupar).not.toHaveBeenCalled();
   });
 
   it('a recusa da RPC fica ESCRITA na barra e a seleção NÃO se desfaz', async () => {
-    ESPELHO.atual = espelhoBB0109();
+    ESPELHO.atual = espelhoComCru();
     const recusa = 'Lançamento vinculado a uma Operação Comercial não se desmembra: o caminho é a própria OC.';
     const onAgrupar = vi.fn(async () => ({ ok: false, mensagem: recusa }));
     abrirSel(onAgrupar);
@@ -481,7 +505,7 @@ describe('Extrato da planilha — agrupar pela seleção (2b-tela)', () => {
   });
 
   it('o sucesso limpa a seleção e volta o fechamento do mês; "limpar" e Esc limpam', async () => {
-    ESPELHO.atual = espelhoBB0109();
+    ESPELHO.atual = espelhoComCru();
     const onAgrupar = vi.fn(async () => ({ ok: true }));
     abrirSel(onAgrupar);
     const marcar = marcarDesmembrar;
@@ -499,6 +523,203 @@ describe('Extrato da planilha — agrupar pela seleção (2b-tela)', () => {
 });
 
 /* ═══ MESA COMPACTA ═══════════════════════════════════════════════════════════════════════════════════════════════ */
+/* ═══ PR-CONC-ENRIQ-BLOCO-NM-B — o bloco conferido no Extrato da planilha ═════════════════════════════════════════ */
+describe('Extrato da planilha — o bloco conferido (NM-B)', () => {
+  /* duas linhas da planilha (−300,00 − 206,51) conferidas em bloco com o "Vivo Casa" e7970f00 (−506,51, classificado) */
+  const linhaPl = (staging_id: string, excel_valor: number, sobre: Partial<ClassificacaoStagingPreviewRow> = {}) => linhaCrua({
+    staging_id, match_status: 'sem_match', excel_valor, excel_tipo_operacao: '2-Saídas', excel_data_pagamento: '2026-09-01',
+    conta_filtro_id: CONTA_BB, excel_subcentro: 'Telefone', excel_fornecedor: 'TELEFONICA', ...sobre,
+  });
+  /* o status que o tipo `MatchStatus` não declara entra pelo JSON, como no fixture real */
+  const emBloco = (staging_id: string, excel_valor: number) => linhaPl(staging_id, excel_valor, {
+    ...st('conferido_bloco'), match_lancamento_ids: ['e7970f00'], casamento_meta: { bloco_id: 'b1' },
+  });
+  const comBloco = () => [...stagingBB0109(), emBloco('bl-1', 300), emBloco('bl-2', 206.51), linhaPl('sp-9', 50)];
+  /* a prova de que a busca sabe achar: o MESMO fixture sem o status — as linhas sem par e o lançamento "Só no sistema" */
+  const semBloco = () => [...stagingBB0109(), linhaPl('bl-1', 300), linhaPl('bl-2', 206.51), linhaPl('sp-9', 50)];
+
+  it('a linha em bloco é ✓, enriquecida, não se marca e leva o blocoId; o lançamento é "Em bloco", não "Só no sistema"', () => {
+    const ls = montarExtratoDaPlanilha(comBloco(), espelhoBB0109(), CONTA_BB, new Set()).dias.flatMap((d) => d.linhas);
+    for (const id of ['bl-1', 'bl-2']) {
+      expect(ls.find((l) => l.stagingId === id)).toMatchObject({
+        simbolo: '✓', enriquecida: true, selPlanilha: null, blocoId: 'b1', sistema: null,
+      });
+    }
+    const lanc = ls.filter((l) => l.sistema?.lancamentoId === 'e7970f00');
+    expect(lanc).toHaveLength(1);
+    expect(lanc[0]).toMatchObject({ selo: 'Em bloco', selSistema: null, blocoId: 'b1', planilha: null });
+    expect(ls.some((l) => l.selo === 'Só no sistema')).toBe(false);
+    /* a linha fora do bloco continua marcável */
+    expect(ls.find((l) => l.stagingId === 'sp-9')?.selPlanilha).toBe('sp-9');
+
+    /* sem o status, o mesmo conjunto mostra o lançamento "Só no sistema" e as duas linhas marcáveis */
+    const ls0 = montarExtratoDaPlanilha(semBloco(), espelhoBB0109(), CONTA_BB, new Set()).dias.flatMap((d) => d.linhas);
+    expect(ls0.find((l) => l.sistema?.lancamentoId === 'e7970f00')).toMatchObject({ selo: 'Só no sistema', selSistema: 'e7970f00', blocoId: null });
+    expect(ls0.find((l) => l.stagingId === 'bl-1')).toMatchObject({ selPlanilha: 'bl-1', blocoId: null, enriquecida: false });
+  });
+
+  it('nenhum vínculo de bloco vai à montarMesa: mesmo com `lanc_id`, a linha não é pareada (não vira ↳ nem par)', () => {
+    /* uma linha em bloco que (por defeito) trouxesse o singular: sem o filtro ela casaria 1:1 com o e7970f00 */
+    const comLanc = comBloco().map((r) => (r.staging_id === 'bl-1' ? { ...r, lanc_id: 'e7970f00' } : r));
+    const ls = montarExtratoDaPlanilha(comLanc, espelhoBB0109(), CONTA_BB, new Set()).dias.flatMap((d) => d.linhas);
+    expect(ls.find((l) => l.stagingId === 'bl-1')).toMatchObject({ sistema: null, filha: false, simbolo: '✓' });
+    expect(ls.find((l) => l.sistema?.lancamentoId === 'e7970f00')?.selo).toBe('Em bloco');
+    /* e a mutação: a mesma linha com lanc_id e SEM o status casa — o filtro é o que separa */
+    const semStatus = semBloco().map((r) => (r.staging_id === 'bl-1' ? { ...r, lanc_id: 'e7970f00' } : r));
+    const ls0 = montarExtratoDaPlanilha(semStatus, espelhoBB0109(), CONTA_BB, new Set()).dias.flatMap((d) => d.linhas);
+    expect(ls0.find((l) => l.stagingId === 'bl-1')?.sistema?.lancamentoId).toBe('e7970f00');
+  });
+
+  it('"Só não enriquecidos" esconde as linhas em bloco, como as demais enriquecidas', () => {
+    const dias = montarExtratoDaPlanilha(comBloco(), espelhoBB0109(), CONTA_BB, new Set()).dias;
+    const so = soNaoEnriquecidos(dias).flatMap((d) => d.linhas);
+    expect(so.some((l) => l.stagingId === 'bl-1' || l.stagingId === 'bl-2')).toBe(false);
+    expect(so.some((l) => l.stagingId === 'sp-9')).toBe(true);
+  });
+
+  it('o `cru` do lado Sistema: origem extrato/ofx e sem subcentro', () => {
+    expect(lancamentoCru({ origem_lancamento: 'extrato', subcentro: null })).toBe(true);
+    expect(lancamentoCru({ origem_lancamento: 'ofx', subcentro: '  ' })).toBe(true);
+    expect(lancamentoCru({ origem_lancamento: 'extrato', subcentro: 'Telefone' })).toBe(false);
+    expect(lancamentoCru({ origem_lancamento: 'manual', subcentro: null })).toBe(false);
+    expect(lancamentoCru({ origem_lancamento: null, subcentro: null })).toBe(false);
+    const ls = montarExtratoDaPlanilha(semBloco(), espelhoBB0109(), CONTA_BB, new Set()).dias.flatMap((d) => d.linhas);
+    /* o fixture: e7970f00 é manual e classificado; os do extrato têm subcentro — nenhum cru */
+    expect(ls.find((l) => l.sistema?.lancamentoId === 'e7970f00')?.sistema?.cru).toBe(false);
+  });
+
+  it('balde: conferido_bloco é "gravada", fora do lote e fora do "aguarda"', () => {
+    const r = emBloco('bl-1', 300);
+    expect(baldeDaLinha(r)).toBe('gravada');
+    expect(baldeDaLinha(r, true)).toBe('gravada');
+    expect(elegivelParaLote(r)).toBe(false);
+    expect(elegivelParaLote(r, true)).toBe(false);
+    expect(aguardaAgrupamento(r)).toBe(false);
+    /* a prova de que o predicado sabe achar: a mesma linha sem o status cai em "sem banco" */
+    expect(baldeDaLinha(linhaPl('bl-1', 300))).toBe('semBanco');
+  });
+
+  /* ── a tela ──────────────────────────────────────────────────────────────────────────────────────────────────── */
+  const abrirBloco = (props: {
+    staging?: ClassificacaoStagingPreviewRow[];
+    onAgrupar?: (g: unknown) => Promise<{ ok: boolean; mensagem?: string }>;
+    onDesfazerBloco?: (g: unknown) => Promise<{ ok: boolean; mensagem?: string }>;
+    onAbrirLinha?: (id: string, conta: string) => void;
+  } = {}) => render(
+    <ExtratoDaPlanilhaModal open onOpenChange={vi.fn()} clienteId="nj" anoMes="2026-09" mesRotulo="set/2026"
+      staging={props.staging ?? comBloco()} contas={[{ id: CONTA_BB, nome: 'Banco do Brasil' }]} contaId={CONTA_BB}
+      onContaId={vi.fn()} onAbrirLinha={props.onAbrirLinha ?? vi.fn()} onAgrupar={props.onAgrupar}
+      onDesfazerBloco={props.onDesfazerBloco} />);
+  const tr = (pred: (el: HTMLElement) => boolean) => {
+    const el = screen.getAllByTestId('linha-extrato-planilha').find(pred);
+    if (!el) throw new Error('linha não encontrada');
+    return el;
+  };
+
+  it('"Conferir bloco 2×1" chama onAgrupar com os ids certos, SEM confirmação em dois passos', async () => {
+    ESPELHO.atual = espelhoBB0109();
+    const onAgrupar = vi.fn(async () => ({ ok: true }));
+    abrirBloco({ staging: semBloco(), onAgrupar });
+    fireEvent.click(within(tr((el) => el.dataset.staging === 'bl-1')).getByRole('checkbox'));
+    fireEvent.click(within(tr((el) => el.dataset.staging === 'bl-2')).getByRole('checkbox'));
+    fireEvent.click(within(tr((el) => !!within(el).queryByText('Só no sistema'))).getByRole('checkbox'));
+    const botao = screen.getByTestId('botao-gesto');
+    expect(botao).toHaveTextContent('Conferir bloco 2×1');
+    expect(botao).not.toBeDisabled();
+    expect(screen.getByTestId('diferenca-selecao')).toHaveTextContent('diferença 0,00');
+    fireEvent.click(botao);
+    expect(screen.queryByTestId('confirmar-gesto')).not.toBeInTheDocument();
+    await waitFor(() => expect(onAgrupar).toHaveBeenCalledWith({
+      forma: 'bloco', stagingIds: ['bl-1', 'bl-2'], lancamentoIds: ['e7970f00'],
+    }));
+    await waitFor(() => expect(screen.getByTestId('fechamento-mes')).toBeInTheDocument());
+  });
+
+  it('a recusa do bloco fica ESCRITA na barra e a seleção fica', async () => {
+    ESPELHO.atual = espelhoBB0109();
+    const recusa = 'O mês 2026-09 está fechado na fazenda de um dos lançamentos: reabra antes de conferir o bloco.';
+    const onAgrupar = vi.fn(async () => ({ ok: false, mensagem: recusa }));
+    abrirBloco({ staging: semBloco(), onAgrupar });
+    fireEvent.click(within(tr((el) => el.dataset.staging === 'bl-1')).getByRole('checkbox'));
+    fireEvent.click(within(tr((el) => el.dataset.staging === 'bl-2')).getByRole('checkbox'));
+    fireEvent.click(within(tr((el) => !!within(el).queryByText('Só no sistema'))).getByRole('checkbox'));
+    fireEvent.click(screen.getByTestId('botao-gesto'));
+    await waitFor(() => expect(screen.getByTestId('recado-selecao')).toHaveTextContent(recusa));
+    for (const id of ['bl-1', 'bl-2']) expect(within(tr((el) => el.dataset.staging === id)).getByRole('checkbox')).toBeChecked();
+  });
+
+  it('bloco que não fecha: botão apagado com a diferença, e nada grava', () => {
+    ESPELHO.atual = espelhoBB0109();
+    const onAgrupar = vi.fn(async () => ({ ok: true }));
+    abrirBloco({ staging: semBloco(), onAgrupar });
+    fireEvent.click(within(tr((el) => el.dataset.staging === 'bl-1')).getByRole('checkbox'));
+    fireEvent.click(within(tr((el) => !!within(el).queryByText('Só no sistema'))).getByRole('checkbox'));
+    const botao = screen.getByTestId('botao-gesto');
+    expect(botao).toHaveTextContent('Conferir bloco 1×1');
+    expect(botao).toBeDisabled();
+    expect(botao).toHaveAttribute('title', 'as somas diferem em R$ 206,51 — o bloco só confere quando fecha');
+    fireEvent.click(botao);
+    expect(onAgrupar).not.toHaveBeenCalled();
+  });
+
+  it('o ✓ da linha em bloco abre o MODO BLOCO (não a Mesa): resumo, realce, motivo, 26px', () => {
+    ESPELHO.atual = espelhoBB0109();
+    const onAbrirLinha = vi.fn();
+    abrirBloco({ onAbrirLinha, onDesfazerBloco: vi.fn(async () => ({ ok: true })) });
+    const alturaSem = screen.getByTestId('rodape-extrato').style.height;
+    fireEvent.click(within(tr((el) => el.dataset.staging === 'bl-1')).getByTestId('simbolo'));
+    expect(onAbrirLinha).not.toHaveBeenCalled();
+    expect(screen.getByTestId('resumo-bloco')).toHaveTextContent('bloco conferido · 2 linhas × 1 lançamento · soma -506,51');
+    expect(screen.getByTestId('rodape-extrato').style.height).toBe(alturaSem);
+    expect(alturaSem).toBe('26px');
+    /* o realce: as 2 linhas e o lançamento do bloco, e nenhuma outra */
+    const realce = screen.getAllByTestId('linha-extrato-planilha').filter((el) => el.dataset.realce === 'sim');
+    expect(realce).toHaveLength(3);
+    for (const el of realce) expect(el.dataset.bloco).toBe('b1');
+    /* o clique fora do ✓ continua abrindo a Mesa */
+    fireEvent.click(tr((el) => el.dataset.staging === 'bl-2'));
+    expect(onAbrirLinha).toHaveBeenCalledWith('bl-2', CONTA_BB);
+  });
+
+  it('desfazer SEM motivo não chama nada e marca o campo; COM motivo chama onDesfazerBloco', async () => {
+    ESPELHO.atual = espelhoBB0109();
+    const onDesfazerBloco = vi.fn(async () => ({ ok: true }));
+    abrirBloco({ onDesfazerBloco });
+    /* pelo selo "Em bloco" do lado Sistema */
+    fireEvent.click(within(tr((el) => !!within(el).queryByText('Em bloco'))).getByText('Em bloco'));
+    fireEvent.click(screen.getByTestId('desfazer-bloco'));
+    expect(onDesfazerBloco).not.toHaveBeenCalled();
+    const campo = screen.getByTestId('motivo-bloco');
+    expect(campo).toHaveAttribute('aria-invalid', 'true');
+    expect(campo.className).toMatch(/border-red-500/);
+    expect(screen.getByTestId('recado-bloco')).toHaveTextContent('informe o motivo');
+    expect(document.activeElement).toBe(campo);
+    fireEvent.change(campo, { target: { value: 'conferi errado' } });
+    expect(campo).not.toHaveAttribute('aria-invalid');
+    fireEvent.click(screen.getByTestId('desfazer-bloco'));
+    await waitFor(() => expect(onDesfazerBloco).toHaveBeenCalledWith({ blocoId: 'b1', motivo: 'conferi errado' }));
+    await waitFor(() => expect(screen.getByTestId('fechamento-mes')).toBeInTheDocument());
+  });
+
+  it('a recusa do desfazer fica escrita; Esc e "voltar" saem do modo bloco', async () => {
+    ESPELHO.atual = espelhoBB0109();
+    const recusa = 'A linha 12 ("ja_aplicado") já saiu do bloco por outro caminho: desfazer recusado.';
+    const onDesfazerBloco = vi.fn(async () => ({ ok: false, mensagem: recusa }));
+    abrirBloco({ onDesfazerBloco });
+    fireEvent.click(within(tr((el) => el.dataset.staging === 'bl-1')).getByTestId('simbolo'));
+    fireEvent.change(screen.getByTestId('motivo-bloco'), { target: { value: 'x' } });
+    fireEvent.click(screen.getByTestId('desfazer-bloco'));
+    await waitFor(() => expect(screen.getByTestId('recado-bloco')).toHaveTextContent(recusa));
+    expect(screen.getByTestId('barra-bloco')).toBeInTheDocument();
+    fireEvent.keyDown(screen.getByTestId('barra-bloco'), { key: 'Escape' });
+    expect(screen.queryByTestId('barra-bloco')).not.toBeInTheDocument();
+    expect(screen.getByTestId('fechamento-mes')).toBeInTheDocument();
+    fireEvent.click(within(tr((el) => el.dataset.staging === 'bl-1')).getByTestId('simbolo'));
+    fireEvent.click(screen.getByTestId('voltar-bloco'));
+    expect(screen.queryByTestId('barra-bloco')).not.toBeInTheDocument();
+  });
+});
+
 const cls = (subcentro: string, escopo_negocio: string): ClassificacaoItem => ({
   id: subcentro, subcentro, escopo_negocio, macro_custo: 'Custeio Produção', grupo_custo: 'Custo Fixo',
   centro_custo: 'Centro', tipo_operacao: '2-Saídas',

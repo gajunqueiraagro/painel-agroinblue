@@ -13,6 +13,10 @@
  * ⚠ SÓ O REALIZADO DO MÊS fica do lado Sistema (é o que `sistema_completo` traz). Linha cujo lançamento está em outro
  *   mês, ou ainda não realizado, fica como "sem par" do lado da planilha, com o estado dela — a tela não inventa um par
  *   que o Espelho não tem.
+ * ⚠ O BLOCO CONFERIDO (PR-CONC-ENRIQ-BLOCO-NM-B) É DESENHADO SEM PAREAMENTO: as linhas da planilha em 'conferido_bloco'
+ *   ficam ✓ do lado delas, e os M lançamentos (os `match_lancamento_ids` delas) ficam "Em bloco" do lado Sistema, cada um
+ *   no seu dia. NENHUM vínculo de bloco vai à `montarMesa` — ela trataria o N×M como N:1 e consumiria os extratos
+ *   (CONC-MESA-NN-01). O que liga os dois lados é o `blocoId` (`casamento_meta.bloco_id`).
  */
 import type { ClassificacaoStagingPreviewRow } from '@/v2/hooks/useClassificacaoStaging';
 import type { EspOfx } from '@/components/conciliacao/TabelaExtratoDoMes';
@@ -32,6 +36,13 @@ export function sinalDaPlanilha(r: ClassificacaoStagingPreviewRow, contaId: stri
   return -1;
 }
 
+/** O bloco da linha da planilha — `casamento_meta.bloco_id` de uma linha em 'conferido_bloco'; `null` fora dele. */
+export function blocoDaLinha(r: ClassificacaoStagingPreviewRow): string | null {
+  if (String(r.match_status) !== 'conferido_bloco') return null;
+  const b = r.casamento_meta?.bloco_id;
+  return typeof b === 'string' && b ? b : null;
+}
+
 /** "Conta do plano · Fornecedor" — o texto da planilha, como veio. */
 export function textoDaPlanilha(r: ClassificacaoStagingPreviewRow): string {
   const plano = (r.excel_subcentro ?? '').trim();
@@ -47,6 +58,8 @@ export function textoDaPlanilha(r: ClassificacaoStagingPreviewRow): string {
 export type SimboloPlanilha = '✓' | '≈' | '≠' | '○' | '!' | '↳';
 
 export function simboloDaLinha(r: ClassificacaoStagingPreviewRow, balde: BaldePainel, valorSistema: number | null): SimboloPlanilha {
+  /* o bloco conferido é feito, antes de qualquer marca de agrupamento que a linha carregue do casador */
+  if (String(r.match_status) === 'conferido_bloco') return '✓';
   if (parteDeAgrupamento(r)) return '↳';
   if (balde === 'gravada') return '✓';
   /* `aguarda` (resolvido como grupo, sem gravação até o 2b) pede você também: não está pronta nem feita */
@@ -65,9 +78,19 @@ export const LEGENDA_SIMBOLOS: ReadonlyArray<[SimboloPlanilha, string]> = [
 
 /** O selo do lado Sistema. */
 export type SeloSistema =
-  | 'Enriquecido' | 'Cru · aplicar' | 'Diverge' | 'Valor ≠' | 'Só no sistema' | 'Desmembrar' | 'Transferência';
+  | 'Enriquecido' | 'Cru · aplicar' | 'Diverge' | 'Valor ≠' | 'Só no sistema' | 'Desmembrar' | 'Transferência' | 'Em bloco';
 
 const ORIGENS_CRUAS = new Set(['extrato', 'ofx']);
+
+/**
+ * O lançamento do lado Sistema é CRU? Origem 'extrato'/'ofx' e SEM `subcentro` (`EspSis.origem_lancamento` +
+ * `EspSis.subcentro`, os dois emitidos por `fn_extratos_espelhados`) — o predicado de `_fn_classificacao_precedencia_cru`,
+ * que o casar manual usa no banco. ⚠ O `plano_conta_id` não vem no Espelho: lançamento com plano vazio e subcentro
+ *   escrito (legado) a tela vê como classificado, e o bloco o recusa no banco (`lancamento_cru`) — a frase fica na barra.
+ */
+export function lancamentoCru(s: Pick<EspSis, 'origem_lancamento' | 'subcentro'>): boolean {
+  return !!s.origem_lancamento && ORIGENS_CRUAS.has(s.origem_lancamento) && !(s.subcentro ?? '').trim();
+}
 
 export function seloDoPar(r: ClassificacaoStagingPreviewRow, balde: BaldePainel, sis: EspSis | undefined): SeloSistema {
   if (normalizarTipo(r.lanc_tipo_operacao ?? r.excel_tipo_operacao) === 'transferencia') return 'Transferência';
@@ -95,7 +118,11 @@ export interface LinhaExtratoPlanilha {
   data: string | null;
   planilha: { texto: string; valor: number } | null;
   simbolo: SimboloPlanilha | null;
-  sistema: { valor: number; data: string | null; descricao: string; fornecedor: string; status: StatusSistemaExtrato; lancamentoId: string } | null;
+  sistema: {
+    valor: number; data: string | null; descricao: string; fornecedor: string; status: StatusSistemaExtrato; lancamentoId: string;
+    /** Sem classificação, vindo do extrato (`lancamentoCru`) — decide a forma do gesto. */
+    cru: boolean;
+  } | null;
   selo: SeloSistema | null;
   /** Fundo verde-claro: a linha da planilha já está enriquecida. */
   enriquecida: boolean;
@@ -108,6 +135,8 @@ export interface LinhaExtratoPlanilha {
    */
   selPlanilha: string | null;
   selSistema: string | null;
+  /** O bloco conferido a que a linha pertence (os dois lados) — abre o "Desfazer bloco". `null` fora de bloco. */
+  blocoId: string | null;
 }
 
 export interface DiaExtratoPlanilha {
@@ -135,6 +164,12 @@ export function montarExtratoDaPlanilha(
   sobrescreverIds: ReadonlySet<string> = new Set(),
 ): ExtratoDaPlanilha {
   const porStaging = new Map(stagingDaConta.map((r) => [r.staging_id, r]));
+  /* os lançamentos de cada bloco conferido da conta: id do lançamento -> bloco */
+  const blocoDoLanc = new Map<string, string>();
+  for (const r of stagingDaConta) {
+    const b = blocoDaLinha(r);
+    if (b) for (const id of r.match_lancamento_ids ?? []) blocoDoLanc.set(id, b);
+  }
   const sisIds = new Set(espelho.sistema_completo.map((s) => s.lancamento_id));
   const ofx: EspOfx[] = stagingDaConta.map((r) => ({
     extrato_id: r.staging_id,
@@ -154,7 +189,8 @@ export function montarExtratoDaPlanilha(
   const porLanc = new Map<string, number>();
   for (const r of stagingDaConta) if (r.lanc_id) porLanc.set(r.lanc_id, (porLanc.get(r.lanc_id) ?? 0) + 1);
   const vinculos: EspVinculo[] = stagingDaConta
-    .filter((r) => !!r.lanc_id && sisIds.has(r.lanc_id))
+    /* o bloco nunca vira vínculo (ver o cabeçalho): mesmo que a linha trouxesse `lanc_id`, ele fica fora da `montarMesa` */
+    .filter((r) => !!r.lanc_id && sisIds.has(r.lanc_id) && !blocoDaLinha(r))
     .map((r) => {
       const lanc = r.lanc_id ?? '';
       const parte = (porLanc.get(lanc) ?? 0) > 1;
@@ -171,6 +207,7 @@ export function montarExtratoDaPlanilha(
     const r = porStaging.get(e.extrato_id);
     const balde: BaldePainel = r ? baldeDaLinha(r, sobrescreverIds.has(e.extrato_id)) : 'outras';
     const enriquecida = balde === 'gravada';
+    const blocoId = r ? blocoDaLinha(r) : null;
     return {
       chave: `p-${e.extrato_id}${sis ? `-${sis.lancamento_id}` : ''}`,
       stagingId: e.extrato_id,
@@ -181,8 +218,9 @@ export function montarExtratoDaPlanilha(
       selo: sis && r ? seloDoPar(r, balde, sis) : null,
       enriquecida,
       filha,
-      selPlanilha: !sis && !filha && !enriquecida ? e.extrato_id : null,
+      selPlanilha: !sis && !filha && !enriquecida && !blocoId ? e.extrato_id : null,
       selSistema: null,
+      blocoId,
     };
   };
 
@@ -197,23 +235,25 @@ export function montarExtratoDaPlanilha(
       linhas.push({
         chave: `n1-${n1.sis.lancamento_id}`, stagingId: n1.extratos[0]?.extrato.extrato_id ?? null, data: n1.sis.data,
         planilha: null, simbolo: null, sistema: daSistema(n1.sis), selo: 'Desmembrar', enriquecida: false, filha: false,
-        selPlanilha: null, selSistema: null,
+        selPlanilha: null, selSistema: null, blocoId: null,
       });
       for (const x of n1.extratos) linhas.push(linhaPlanilha(x.extrato, undefined, true));
     }
     for (const e of d.extratosSemPar) linhas.push(linhaPlanilha(e, undefined, false));
     for (const s of d.lancsSemPar) {
+      /* o lançamento de um bloco conferido não é "Só no sistema": está explicado pelas linhas do bloco */
+      const blocoId = blocoDoLanc.get(s.lancamento_id) ?? null;
       linhas.push({
         chave: `s-${s.lancamento_id}`, stagingId: null, data: s.data, planilha: null, simbolo: null,
-        sistema: daSistema(s), selo: 'Só no sistema', enriquecida: false, filha: false,
-        selPlanilha: null, selSistema: s.lancamento_id,
+        sistema: daSistema(s), selo: blocoId ? 'Em bloco' : 'Só no sistema', enriquecida: false, filha: false,
+        selPlanilha: null, selSistema: blocoId ? null : s.lancamento_id, blocoId,
       });
     }
     for (const s of d.internas) {
       linhas.push({
         chave: `i-${s.lancamento_id}`, stagingId: null, data: s.data, planilha: null, simbolo: null,
         sistema: daSistema(s), selo: 'Transferência', enriquecida: false, filha: false,
-        selPlanilha: null, selSistema: null,
+        selPlanilha: null, selSistema: null, blocoId: null,
       });
     }
     return { data: d.data, linhas, planilha: d.banco, sistema: d.sistema, confere: Math.abs(d.banco - d.sistema) < 0.005 };
@@ -231,6 +271,7 @@ function daSistema(s: EspSis): NonNullable<LinhaExtratoPlanilha['sistema']> {
   return {
     valor: s.valor_assinado, data: s.data, descricao: s.descricao ?? '—', fornecedor: s.fornecedor ?? '—',
     status: s.status === 'conciliado' ? 'conciliado' : 'realizado', lancamentoId: s.lancamento_id,
+    cru: lancamentoCru(s),
   };
 }
 

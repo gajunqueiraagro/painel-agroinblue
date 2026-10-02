@@ -160,8 +160,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 02/10/2026 (UI-DROPDOWN-PADRAO-01, +7 em `src/components/ui/menuPadrao.test.tsx`; antes o
-  PR-CONC-MESA-ORDEM-03, +8): 2844
+  Baseline em 02/10/2026 (PR-CONC-ENRIQ-BLOCO-NM-B, +19: +7 em `src/v2/lib/mesa/agruparNoExtrato.test.ts` (8 -> 15, o
+  contrato novo) e +12 em `src/v2/lib/mesa/enriquecerV2.test.tsx` (11 do bloco; o "Casar apagado" virou dois: cru igual
+  habilitado e cru diferente apagado); antes o UI-DROPDOWN-PADRAO-01, +7): 2863
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -338,13 +339,18 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   20.998,80 (28/08) e' RECEBIMENTO no extrato sem lancamento e sem linha de planilha no proto; os crus do Emerson (579f22d5
   3.000, 6438bdcb 16.276,80) estao SEM vinculo vivo com o extrato — o desmembrar recusa (`sem_vinculo_ofx`); (e) o caminho
   de recusa ainda vai a toast (`handleAgruparNesteLancamento`) — UX-TOAST-01.
-  · AGRUPAR NO EXTRATO (PR-CONC-ENRIQ-AGRUP-2b-TELA): (a) o 1x1 "Casar" chama `fn_classificacao_resolver_proximos`, que SO'
-  aceita linha `candidatos_proximos` — a linha "sem par" (`sem_match`), que e' a marcavel, volta `nao_candidatos_proximos`
-  — o fix1 deixou o "Casar" APAGADO com "casar 1×1 em linha sem par ainda nao tem gravacao"; casar 1:1 uma sem par e' frente
-  de banco, junto com o bloco NxM; (b) o N:M segue sem gravacao (o 2b de banco);
-  (c) o lado Sistema do Enriquecer so' tem o REALIZADO do mes: previsto/programado/agendado nao se marcam aqui.
-  · BLOCO-NM (PR-CONC-ENRIQ-BLOCO-NM-A, so' banco; a tela e' o NM-B): (a) as tres RPCs e as tres mutations
-  (`conferirBloco`/`desfazerBloco`/`casarManual` em `useClassificacaoStaging`) estao SEM CHAMADOR; (b) `desfazer_proximos`
+  · AGRUPAR NO EXTRATO (PR-CONC-ENRIQ-AGRUP-2b-TELA): (a) e (b) — o 1x1 e o NxM sem gravacao — FECHADOS no
+  PR-CONC-ENRIQ-BLOCO-NM-B; (c) o lado Sistema do Enriquecer so' tem o REALIZADO do mes: previsto/programado/agendado nao se
+  marcam aqui — e por isso o 1x1 cru cujo lancamento caiu no mes seguinte (TOKIO MARINE 1.690,71: planilha ago/26,
+  pagamento 10/09) nunca aparece com os dois lados na mesma tela.
+  · BLOCO-NM (PR-CONC-ENRIQ-BLOCO-NM-A banco, NM-B tela): (a) LIGADAS no NM-B (Extrato da planilha); o desfazer do casar
+  1x1 manual NAO tem tela (fora do NM-B); (e) "MARCAR TODOS DO FAVORECIDO": o bloco real e' grande (Emerson 6+20, T Cortez
+  23+49 caixas) — na prova foram marcadas por script sobre as caixas da tela (1,5 s e 2,0 s); a mao sao 26 e 72 cliques;
+  (f) o `cru` da tela e' `origem extrato/ofx` + `subcentro` vazio (o Espelho nao traz `plano_conta_id`), e o bloco recusa por
+  `plano_conta_id` vazio: medidos 315 lancamentos realizados com plano vazio e subcentro escrito (Vera 314 — 266 importacao +
+  48 manual —, Agnaldo 1 do extrato), que a tela trata como classificados e o banco recusa (`lancamento_cru`, frase na barra);
+  (g) N×1 com lancamento MANUAL classificado agora e' BLOCO (o desmembrar so' se oferece com cru), embora a RPC do
+  desmembrar aceite 'manual' — regra do briefing do NM-B; (b) `desfazer_proximos`
   devolve SEMPRE a linha a `candidatos_proximos`, sem olhar a origem — a linha que veio de `sem_match` pelo casar manual
   voltaria a "candidatos" sem ter candidato; a origem esta' gravada em `casamento_meta.status_anterior` (NAO no
   `estado_anterior`, que o apply_row le' como o do LANCAMENTO) — PR de banco, nao alterado; (c) o T Cortez set/26 (23 x 49)
@@ -660,6 +666,16 @@ docs/historico/frentes-ate-2026-09-29.md.)
   RPC). "AO FORNECEDOR" (no "⋯" da Mesa) grava SO' A PROPOSTA (`levarAoFornecedor` so' recebe `editarProposto`), alvo pelo ID
   do fornecedor resolvido, so' linha nao aprovada, e a linha JA' CLASSIFICADA fica com o sistema (prevista na previa).
   `resolvido_grupo` fica FORA do lote (balde `aguarda`) ate' o N:1 ter gravacao (2b).
+- ⚠ O GESTO DO EXTRATO DA PLANILHA DEPENDE DE CRU x CLASSIFICADO (PR-CONC-ENRIQ-BLOCO-NM-B, so' tela; `gestoDaSelecao`,
+  `src/v2/lib/mesa/agruparNoExtrato.ts`), nesta ordem: so' um lado -> nada; TODOS classificados -> "Conferir bloco NxM"
+  (`conferirBloco`, qualquer forma, 1x1 inclusive, so' com soma ao centavo, SEM confirmacao em dois passos: nao altera
+  lancamento e tem desfazer); ha cru: 1x1 -> "Casar" (`casarManual`, valores iguais ao centavo), Nx1 -> desmembrar, 1xN todos
+  crus -> juntar, o resto -> "ha lancamento sem classificacao no bloco: desmembre ou case 1×1". O `cru` e' `lancamentoCru`
+  (`extratoDaPlanilha.ts`, origem extrato/ofx + `subcentro` vazio do Espelho). O BLOCO E' DESENHADO SEM PAREAMENTO: linha
+  'conferido_bloco' = ✓ enriquecida, nao marcavel; os `match_lancamento_ids` dela = selo "Em bloco" (nao "So' no sistema");
+  nenhum vinculo de bloco vai a' `montarMesa` (CONC-MESA-NN-01). O ✓ ou o selo abrem o MODO BLOCO no rodape de 26px (resumo,
+  motivo obrigatorio, "Desfazer bloco", "voltar", Esc sai, linhas do bloco realcadas). 'conferido_bloco' = "Ja' gravadas" em
+  `GRUPO_DE_STATUS`, balde 'gravada', fora do lote; na Mesa e' LEITURA (sem `onEditar`, Salvar diz por que).
 - ⚠ BLOCO CONFERIDO N×M NO ENRIQUECER (PR-CONC-ENRIQ-BLOCO-NM-A, migration 20261027190200, ledger 20261002115607): N linhas da
   planilha x M lancamentos CLASSIFICADOS e REALIZADOS da mesma conta, soma COM SINAL ao centavo (tolerancia 0,005; sinais
   opostos permitidos) -> as linhas viram 'conferido_bloco' com os M ids em `match_lancamento_ids`. NAO ESCREVE no lancamento

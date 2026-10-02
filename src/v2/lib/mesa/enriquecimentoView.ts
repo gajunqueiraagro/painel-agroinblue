@@ -984,6 +984,7 @@ export function contarContagens(staging: ClassificacaoStagingPreviewRow[]): Enri
     /* ⚠ 133a — os quatro do casador novo. Sem a chave, o `if (k in status)` abaixo ignora
        o status e o chip fica sempre zerado: foi o que aconteceria com "Agrupam". */
     sugestao_grupo: 0, sugestao_split: 0, sem_conta_para_match: 0, ja_aplicado: 0,
+    conferido_bloco: 0,   // PR-CONC-ENRIQ-BLOCO-NM-B
   };
   let aplicados = 0;
   for (const r of staging) {
@@ -1022,6 +1023,9 @@ export const GRUPO_DE_STATUS: Readonly<Record<string, EnriqGrupo>> = {
   ambiguo_resolvido: 'ja_gravadas',
   resolvido_manual: 'ja_gravadas',
   resolvido_grupo: 'ja_gravadas',
+  /* PR-CONC-ENRIQ-BLOCO-NM-B — o bloco conferido: o gesto acabou (nada a gravar no lançamento), balde 'gravada', fora do
+     lote (não está em `STATUS_DO_LOTE`) e fora do `aguarda` (que é só `resolvido_grupo`). */
+  conferido_bloco: 'ja_gravadas',
 };
 
 /**
