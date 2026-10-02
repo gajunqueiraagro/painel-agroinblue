@@ -160,8 +160,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 02/10/2026 (PR-CONC-ENRIQUECER-V2-02, +10: 8 em `src/v2/lib/mesa/enriquecerV2.test.tsx` e 2 em
-  `src/v2/lib/mesa/faixasFixas.test.tsx`; antes o CONC-CRIAR-TRANSFERENCIA-01, +12): 2812
+  Baseline em 02/10/2026 (UI-SELECT-ALINHAMENTO-01, +2 em `src/components/ui/select.test.tsx`; antes o
+  PR-CONC-ENRIQUECER-V2-02, +10, e o CONC-CRIAR-TRANSFERENCIA-01, +12): 2814
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -499,6 +499,11 @@ preview que o cabecalho nao sai da tela ao rolar.
   resumo lateral de 240px com as pecas de `src/components/ui/linha-resumo.tsx` (`AsideResumo`,
   `FaixaTituloResumo`, `SecaoResumo`, `LinhaResumo` — `quebra` para texto livre), rodape de 32px com botoes
   de 22px. Os lancamentos simples usam o `LancamentoModalEnvelope`.
+- ⚠ O TEXTO DO `SelectTrigger` FICA A' ESQUERDA E CORTA NA BORDA, EM TODO O SISTEMA (UI-SELECT-ALINHAMENTO-01): o span do
+  valor leva `min-w-0 text-left break-all` no proprio componente (`src/components/ui/select.tsx`). O gatilho e' um <button>
+  (centralizado por padrao) e o texto que nao cabia herdava o centro ("Folha de..." com um vazio a' esquerda). Conserto e' no
+  componente, NUNCA classe solta por tela; o span NAO leva `flex-1` (o gatilho com `justify-center`, o ano do Fechamento,
+  continua centralizado). Os combobox que nao sao `SelectTrigger` (fornecedor, conta do plano) nao foram tocados.
 - ⚠ O `DialogContent` RENDERIZA A 95% E FICA ASSIM (DIALOG-ZOOM-95-01): medir com `offsetWidth`, nunca com
   `getBoundingClientRect()` (erra 5 % para menos), e `fontSize: 9` aparece como 8,55px. Nao corrigido de
   proposito: mexe na animacao de todos os dialogos.
