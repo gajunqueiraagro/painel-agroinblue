@@ -83,6 +83,11 @@ export function avisoFase(fase: string | null | undefined): AvisoRateio {
  * um lançamento que aparece como custo direto de amendoim no DRE da lavoura sem nunca ter
  * sido da lavoura.
  * ⚠ SILVICULTURA E ADMINISTRATIVO NÃO TÊM NENHUM DOS DOIS: nem cultura, nem fase.
+ * ⚠ ESPELHO DECLARADO DO BANCO — PR-CONC-ENRIQ-MESA-CULTURA-FASE-A. O dono da regra é o gatilho
+ *   `trg_zz_cultura_fase_coerente` (`_fn_lancamento_cultura_fase_coerente`) em `financeiro_lancamentos_v2`, que zera a
+ *   cultura fora de agricultura e a fase fora de pecuária para TODO escritor (modal, Mesa, import, split). Estas duas
+ *   funções ficam para a tela não mostrar o que não vai gravar; quem mexer numa confere a outra. A lista
+ *   `CULTURAS_LANCAMENTO` tem o espelho em `_fn_culturas_lancamento()` (a validação e a derivação da Mesa).
  */
 export function culturaParaGravar(atividade: string | null | undefined, cultura: string): string | null {
   return atividade === 'agricultura' ? (cultura.trim() || null) : null;

@@ -329,6 +329,14 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   sao as 7 que ficam (D2); (d) Santa Rita 8a82eb7c linhas 58/98 e NJ a63fa4c6 linha 246: APLICADAS em lancamento de outro mes /
   conta (gravaram classificacao) — decisao caso a caso; (e) a reaberta nao guarda de onde veio (o "limpa" do Recasar zera o
   `casamento_meta`).
+  · CULTURA-FASE-A (PR-CONC-ENRIQ-MESA-CULTURA-FASE-A, 02/10): (a) SESSOES JA' IMPORTADAS: o Recasar completa
+  `_planilha.cultura` so' nas linhas com par, NAO aplicadas e NAO editadas a mao (na 8d6efeb7: 49 das 125 — 26 amendoim, 23
+  mandioca); as outras 76 (aplicadas, sem par ou editadas) so' reimportando. Backfill PROPOSTO, NAO executado: acrescentar SO' a
+  chave `_planilha.cultura` = `_fn_classificacao_cultura_da_planilha(excel_safra, _planilha.safra_id)` nas linhas sem ela (nenhum
+  outro campo), guardado pela contagem antes x depois; (b) a Mesa nao consegue LIMPAR uma cultura ja' gravada (vazio = tirar a
+  proposta, e o apply nunca apaga por ausencia) — se o operador quiser "rateia" num lancamento que ja' tem cultura, e' o modal
+  do Financeiro; (c) eucalipto em silvicultura: o gatilho o zera (a regra e' cultura so' em agricultura), coerente com o front;
+  (d) a tela (PR B) ainda nao le as colunas novas da view.
   · BOITEL-PAINEL (PR-OC-BOITEL-PAINEL-01 e a FASE 0 PR-OC-BOITEL-ACERTO-CLAREZA, 02/10): (a) TRAVA DE P1 PELA DATA DO
   ENVIO: o "reaplique o Realizado" mexe no valor, nao no rebanho do mes do envio, mas o Salvar da Negociacao trava pelo mes da
   data da OC (`mesFechadoMotivo`, `VendaModalShell`); `oc_revalorar_lote` passa no banco com o mes fechado (simulado em
@@ -760,6 +768,19 @@ docs/historico/frentes-ate-2026-09-29.md.)
   md5: casar a6a6832f -> c5d725afa76d91242d2c2410984cf38c; populate 5fdbd817 -> 694ddc8baadae71b1d59de92a65c35b3;
   `_fn_conta_do_lancamento` 7bd27d014d20b2566fc35db2613a57e3; `_fn_classificacao_par_herdado_valido` cd12b3e28ca72a93f013d503211b37ed.
   Nenhum dado foi alterado: o conserto das sessoes e' pelo Recasar (e pelo Reverter, nas aplicadas), na tela.
+- ⚠ CULTURA E FASE: O BANCO E' O DONO DA COERENCIA (PR-CONC-ENRIQ-MESA-CULTURA-FASE-A, migration 20261027190500, ledger
+  20261002171822): o gatilho `trg_zz_cultura_fase_coerente` (BEFORE INSERT OR UPDATE em `financeiro_lancamentos_v2`, depois de
+  `trg_resolve_classificacao_plano` pela ordem alfabetica) zera a CULTURA fora de agricultura e a FASE fora de pecuaria, para
+  todo escritor; `culturaParaGravar`/`faseParaGravar` (`src/lib/agri/rateioLancamento.ts`) sao ESPELHO declarado, e
+  `CULTURAS_LANCAMENTO` tem o espelho `_fn_culturas_lancamento()` (seis, sem eucalipto). Na Mesa: `editar_proposto` aceita
+  `cultura`/`fase` (vazio tira a proposta; fora da lista recusa); `apply_row` grava COALESCE(proposta, lancamento) — nunca
+  apaga por ausencia; `estado_anterior` guarda as duas e o `reverter_row` so' as devolve com a chave presente (aplicada antes
+  do PR fica como esta'); o split copia COALESCE(proposta, consolidado). A planilha nao tem coluna de cultura: ela sai do TEXTO
+  DA SAFRA por `_fn_classificacao_cultura_da_planilha` (palavra inteira, uma so', so' com a safra resolvida de agricultura;
+  fase nunca se deriva) e mora em `update_proposto._planilha.cultura`; `cultura` esta' em `k_class` da precedencia (no cru sobe,
+  no classificado fica de referencia). A view expoe no fim `lanc_cultura`, `lanc_fase`, `planilha_cultura`, `proposto_cultura`,
+  `proposto_fase`. md5: editar_proposto 8a586737…, apply_row 85cc0df6…, reverter_row 763c5cf5…, precedencia_cru 65bcb707…,
+  split f964b0dd…, populate b62d8e0e…, view efc468cb…
 - ⚠ BLOCO CONFERIDO N×M NO ENRIQUECER (PR-CONC-ENRIQ-BLOCO-NM-A, migration 20261027190200, ledger 20261002115607): N linhas da
   planilha x M lancamentos CLASSIFICADOS e REALIZADOS da mesma conta, soma COM SINAL ao centavo (tolerancia 0,005; sinais
   opostos permitidos) -> as linhas viram 'conferido_bloco' com os M ids em `match_lancamento_ids`. NAO ESCREVE no lancamento
