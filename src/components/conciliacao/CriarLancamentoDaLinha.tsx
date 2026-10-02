@@ -37,6 +37,45 @@ import type { MovimentoConciliacao } from '@/hooks/useConciliacaoDoMes';
  * pagamento que já aconteceu. Gerar títulos futuros a partir dele criaria
  * cobranças que ninguém pagou e que nenhum movimento cobre.
  */
+export const TIPO_TRANSFERENCIA = '3-Transferências';
+type CampoTravado = 'valor' | 'data_pagamento' | 'conta_bancaria_id' | 'conta_destino_id' | 'tipo_operacao';
+
+/**
+ * CONC-CRIAR-TRANSFERENCIA-01 — os tipos que o Criar oferece para um movimento do banco: o do sinal OU Transferências
+ * (homologação do Gabriel, 01/10: "PAGTO FATURA MASTER" e "INTEGR.CAPITAL" são transferências e o Criar só permitia Saída).
+ * Nunca o tipo contrário ao sinal — a RPC recusa do mesmo jeito (`tipo_incoerente`).
+ */
+export function tiposDoExtrato(valor: number): string[] {
+  return valor >= 0 ? ['1-Entradas', TIPO_TRANSFERENCIA] : ['2-Saídas', TIPO_TRANSFERENCIA];
+}
+
+/**
+ * O que o extrato trava: valor, data de pagamento e A CONTA DELE (a de origem na saída, a de destino na entrada). O tipo e a
+ * outra conta são do operador. ⚠ O CAMINHO `semVinculo` NÃO MUDA (fora do escopo deste PR): continua tudo travado, tipo
+ * incluso — ele grava pelo writer comum e não pela RPC que monta a transferência.
+ */
+export function travasDoExtrato(valor: number, semVinculo: boolean): CampoTravado[] {
+  if (semVinculo) return ['valor', 'data_pagamento', 'conta_bancaria_id', 'conta_destino_id', 'tipo_operacao'];
+  return ['valor', 'data_pagamento', valor >= 0 ? 'conta_destino_id' : 'conta_bancaria_id'];
+}
+
+/**
+ * Os dois parâmetros novos de `fn_criar_lancamento_de_extrato`. Fora da transferência vão NULOS (o comportamento de antes);
+ * em transferência, a OUTRA conta é a do lado que o extrato não dita: o destino na saída do banco, a origem na entrada.
+ */
+export function parametrosDoTipo(
+  form: Pick<LancamentoV2Form, 'tipo_operacao' | 'conta_bancaria_id' | 'conta_destino_id'>, valor: number,
+): { p_tipo_operacao: string | null; p_outra_conta: string | null } {
+  if (form.tipo_operacao !== TIPO_TRANSFERENCIA) return { p_tipo_operacao: null, p_outra_conta: null };
+  return { p_tipo_operacao: TIPO_TRANSFERENCIA, p_outra_conta: (valor >= 0 ? form.conta_bancaria_id : form.conta_destino_id) || null };
+}
+
+/** A recusa da RPC vem como "codigo: frase" — o operador lê a frase (ex.: ja_existe_transferencia). */
+export function fraseDaRecusaCriar(msg: string): string {
+  const m = /^([a-z_]+): ([\s\S]+)$/.exec(msg);
+  return m ? m[2] : msg;
+}
+
 interface Props {
   movimento: MovimentoConciliacao;
   /** Conta do extrato — dá a fazenda por padrão, sem perguntar. */
@@ -100,6 +139,9 @@ export function CriarLancamentoDaLinha({ movimento, contaBancariaId, valorSugeri
   });
 
   const ehEntrada = movimento.valor >= 0;
+  /* Memoizados: o dialog reidrata o formulário quando `lockedFields` muda de identidade. */
+  const travas = useMemo(() => travasDoExtrato(movimento.valor, !!semVinculo), [movimento.valor, semVinculo]);
+  const tiposPermitidos = useMemo(() => tiposDoExtrato(movimento.valor), [movimento.valor]);
   const dataMov = movimento.data_movimento.slice(0, 10);
 
   const prefill = useMemo(() => ({
@@ -159,12 +201,15 @@ export function CriarLancamentoDaLinha({ movimento, contaBancariaId, valorSugeri
          montado aqui, que seria inventar estrutura. */
       p_dados_pagamento: form.dados_pagamento ? JSON.stringify(form.dados_pagamento) : null,
       p_data_vencimento: form.data_vencimento || null,
+      /* CONC-CRIAR-TRANSFERENCIA-01: o tipo e a outra conta — a RPC monta a transferência (18010, origem/destino pelo
+         sinal) e o vínculo na MESMA transação. Fora da transferência vão nulos: o caminho de sempre. */
+      ...parametrosDoTipo(form, movimento.valor),
     });
     /* A mensagem do Postgres nomeia o invariante violado — mês fechado, vínculo
        ativo, fazenda de outro cliente. Trocá-la por texto genérico tiraria do
        operador a única pista útil. Devolver `false` mantém o modal aberto para
        corrigir, que é o contrato do `onSave`. */
-    if (error) { toast.error(error.message ?? 'O banco recusou a criação.'); return false; }
+    if (error) { toast.error(error.message ? fraseDaRecusaCriar(error.message) : 'O banco recusou a criação.'); return false; }
     toast.success('Lançamento criado e vinculado — o movimento fechou.');
     await aoCriado();
     aoFechar();
@@ -183,7 +228,8 @@ export function CriarLancamentoDaLinha({ movimento, contaBancariaId, valorSugeri
       safras={safras}
       onCriarFornecedor={criarFornecedor}
       prefill={prefill}
-      lockedFields={['valor', 'data_pagamento', 'conta_bancaria_id', 'conta_destino_id', 'tipo_operacao']}
+      lockedFields={travas}
+      tiposOperacaoPermitidos={semVinculo ? undefined : tiposPermitidos}
       ocultarParcelamento
       /* ⚠ O BOX DE ORIGEM, read-only — o padrão do título de OC. Ele diz de onde
          o lançamento nasceu, que é o que explica os campos travados ao lado. */

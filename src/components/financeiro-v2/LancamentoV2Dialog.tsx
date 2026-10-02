@@ -182,6 +182,12 @@ interface Props {
    * movimento cobre. Sem a prop, o bloco aparece como sempre.
    */
   ocultarParcelamento?: boolean;
+  /**
+   * CONC-CRIAR-TRANSFERENCIA-01 — os tipos que o select oferece. O Criar a partir do extrato restringe ao par do sinal
+   * (saída do banco: Saídas ou Transferências; entrada: Entradas ou Transferências) — nunca o tipo contrário. Sem a prop,
+   * os três, como sempre.
+   */
+  tiposOperacaoPermitidos?: readonly string[];
   lockedFields?: Array<
     | 'valor'
     | 'data_pagamento'
@@ -374,7 +380,7 @@ function getMonthLabel(dateStr: string): string {
 export function LancamentoV2Dialog({
   open, carregando, onClose, onSave, onDelete, lancamento, fazendas, contas, classificacoes,
   fornecedores, safras, defaultFazendaId, onCriarFornecedor, prefill, lockedFields,
-  ocultarParcelamento,
+  ocultarParcelamento, tiposOperacaoPermitidos,
   referenciaOperacionalInfo, excelContext, permiteEditarFavorecidoOC, onAbrirOperacaoOC,
   documentosAntesDeSalvar,
 }: Props) {
@@ -1910,7 +1916,8 @@ export function LancamentoV2Dialog({
                 <Select value={tipoOperacao} onValueChange={aplicarTipoOperacao} disabled={lockedFields?.includes('tipo_operacao') || isOCTitulo}>
                   <SelectTrigger ref={firstFieldRef} tabIndex={1} className={cn("h-8", fieldBg)}><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {TIPOS_OPERACAO.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                    {TIPOS_OPERACAO.filter(t => !tiposOperacaoPermitidos || tiposOperacaoPermitidos.includes(t.value))
+                      .map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>

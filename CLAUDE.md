@@ -160,8 +160,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 01/10/2026 (CONC-TRANSF-SEGUNDA-PONTA-02, +3: 2 em `src/hooks/useTransferenciasSugeridas.test.tsx` e 1 em
-  `transferenciasEntreContas.test.tsx`; antes o CONC-TRANSF-SEGUNDA-PONTA-01, +9, e o CONC-CASAR-ALTURA-01, +3): 2790
+  Baseline em 02/10/2026 (CONC-CRIAR-TRANSFERENCIA-01, +12 em `src/components/conciliacao/criarLancamentoDaLinha.test.tsx`;
+  antes o CONC-TRANSF-SEGUNDA-PONTA-02, +3, e o CONC-TRANSF-SEGUNDA-PONTA-01, +9): 2802
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -250,8 +250,12 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
 - OC e Financeiro:
   MANDIOCA-OBS-CARGA-01: a observacao da carga (`agri_colheita.observacoes`, o campo do modal) NAO chega ao lancamento
   do frete — `_agri_carga_inserir_papel` nao grava `observacao`; o motorista no lancamento se poe hoje pelo Financeiro
-  (medido no MANDIOCA-FRETE-SILVIO-01) · CONC-CRIAR-TRANSFERENCIA-01: o "Criar a partir do extrato" trava o tipo em
-  Saida/Entrada e nao permite Transferencia ·
+  (medido no MANDIOCA-FRETE-SILVIO-01) · `ConciliarExtratoDialog.tsx` (`src/components/financeiro-v2/`) SEM IMPORTADOR — o
+  criar-e-vincular em duas chamadas que o B-32b vetou mora la'; apagar ou religar e' decisao (medido no
+  CONC-CRIAR-TRANSFERENCIA-01) · o caminho `semVinculo` do Criar (grupo que soma o cheio) continua so' Saida/Entrada, pelo
+  writer comum — Transferencia ali e' frente propria (CONC-CRIAR-TRANSFERENCIA-01) ·
+  no Criar em Transferencia, a "outra conta obrigatoria" hoje avisa por TOAST (o do `LancamentoV2Dialog`, contraria
+  UX-TOAST-01) — trocar por erro no campo (CONC-CRIAR-TRANSFERENCIA-01) ·
   CONC-MESA-NN-01 (frente propria, medida no CONC-MESA-SINAL-01): a `montarMesa` trata como N:1 TODO lancamento com 2+
   extratos e CONSOME esses extratos — num bloco N:N (Emerson, NJ Sicredi Lavoura ago/26: 3 Pix x 7 arranquios) os outros
   lancamentos ligados aos mesmos extratos SOMEM da mesa (o "Arranquio 20,24 t · NF 9294773" consome o Pix 28/08 -16.276,80
@@ -777,6 +781,11 @@ docs/historico/frentes-ate-2026-09-29.md.)
   antes do mes corrente (competencia), nem em mes fechado. As travas moram so' em `_fn_recorrencia_vagas`, e o
   vencimento so' em `_fn_recorrencia_vencimento` — o gerar grava e a propagacao preve pela MESMA funcao. As duas
   internas nao sao SECURITY DEFINER e nao se executam pela API.
+- ⚠ O "CRIAR" DA LINHA DO EXTRATO OFERECE O TIPO DO SINAL OU TRANSFERENCIAS, NUNCA O CONTRARIO (CONC-CRIAR-TRANSFERENCIA-01,
+  migration 20261027190100, ledger 20261002090125): `fn_criar_lancamento_de_extrato(..., p_tipo_operacao, p_outra_conta)`
+  monta a transferencia (18010, sinal -1, origem/destino pelo sinal, fazenda Administrativo do cliente) e o vinculo na MESMA
+  transacao; a conta do extrato fica travada, a outra e' obrigatoria. Movimento que ja' e' meia ponta ou tem transferencia
+  lancada recusa (`ja_existe_transferencia`) — fecha-se pelo "Transferencias entre contas". Sem os parametros novos, igual a antes.
 - ⚠ TRANSFERENCIA DE OFX = 1 LANCAMENTO + 2 VINCULOS (PR-CONC-TRANSFERENCIAS-01, Gabriel 30/09): a saida num banco e a
   entrada no outro viram UM `3-Transferências` (18010, origem = conta da saida, destino = conta da entrada) com um vinculo
   vivo POR PONTA. O passo e' o botao "Transferencias entre contas (N)" do Casar lancamentos, ANTES do "Criar lancamentos
