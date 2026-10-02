@@ -38,11 +38,11 @@ export interface PreviaAoFornecedor {
   classificadas: number;
   /** Os campos que mudam em pelo menos uma linha, na ordem da grade. */
   campos: string[];
-  /** "N linhas · campos: Conta do plano, Fazenda" — a prévia, pronta. */
+  /** "N linhas · campos: Plano de contas, Fazenda" — a prévia, pronta. */
   resumo: string;
 }
 
-const ORDEM_CAMPOS = ['Conta do plano', 'Fazenda', 'Safra'];
+const ORDEM_CAMPOS = ['Plano de contas', 'Fazenda', 'Safra'];
 
 export function previaAoFornecedor(
   fonte: ClassificacaoStagingPreviewRow,
@@ -53,7 +53,7 @@ export function previaAoFornecedor(
   const forn = fornecedorResolvido(fonte);
   if (!forn) return vazio('O fornecedor da planilha não está resolvido nesta linha.');
   const subcentro = fonte.proposto_subcentro ?? fonte.lanc_subcentro_atual ?? null;
-  if (!subcentro) return vazio('Esta linha ainda não tem conta do plano para levar.');
+  if (!subcentro) return vazio('Esta linha ainda não tem plano de contas para levar.');
   const adm = ehLinhaAdministrativa(opts.classificacoes, subcentro, fonte.proposto_macro ?? fonte.lanc_macro_atual);
   const fazAdm = adm ? fazendaAdministrativa(opts.fazendas) : null;
   const fazenda = fazAdm?.id ?? fonte.proposto_fazenda_id ?? fonte.lanc_fazenda_id ?? null;
@@ -67,7 +67,7 @@ export function previaAoFornecedor(
     if (jaClassificada(r)) { classificadas += 1; continue; }
     const patch: PatchAoFornecedor = {};
     const campos: string[] = [];
-    if ((r.proposto_subcentro ?? r.lanc_subcentro_atual ?? null) !== subcentro) { patch.subcentro = subcentro; campos.push('Conta do plano'); }
+    if ((r.proposto_subcentro ?? r.lanc_subcentro_atual ?? null) !== subcentro) { patch.subcentro = subcentro; campos.push('Plano de contas'); }
     if (fazenda && (r.proposto_fazenda_id ?? r.lanc_fazenda_id ?? null) !== fazenda) { patch.fazenda_id = fazenda; campos.push('Fazenda'); }
     if ((r.proposto_safra_id ?? r.lanc_safra_id ?? null) !== safra) { patch.safra_id = safra; campos.push('Safra'); }
     if (campos.length > 0) alvos.push({ stagingId: r.staging_id, patch, campos });

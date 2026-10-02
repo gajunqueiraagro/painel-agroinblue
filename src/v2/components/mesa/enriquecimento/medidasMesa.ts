@@ -59,3 +59,15 @@ export const GATILHO_TABELA = 'text-[10.5px]';
  * 11px parecia outro componente.
  */
 export const ITEM_DROPDOWN = 'text-[10.5px] py-0.5';
+
+/**
+ * A VARIANTE COMPACTA — PR-CONC-MESA-ORDEM-03: os blocos "Datas e pagamento" e "Complemento" da Mesa têm linha de 18px e
+ * texto de 9,5px (o piso da casa); o controle cai para 16px pela mesma regra dos 20 numa linha de 22 (o controle mora
+ * DENTRO da linha, nunca a define). Os blocos normais (Identificação, Classificação) seguem nas constantes de cima.
+ * ⚠ O MENU ABERTO NÃO MUDA AQUI (`ITEM_DROPDOWN`): padronizar os dropdowns do sistema é PR próprio.
+ */
+export const CELULA_EDITAVEL_COMPACTA = 'h-4 px-1.5 py-0 text-[9.5px] [&_svg]:h-3 [&_svg]:w-3';
+export const CELULA_EDITAVEL_DATA_COMPACTA = 'h-4 pl-1.5 pr-6 py-0 text-[9.5px] tabular-nums';
+/** O gatilho compacto do `ContaBancariaSelect` (a classe vence a do `size="compact"` pelo `twMerge`). */
+export const GATILHO_CONTA_COMPACTO = 'h-4 text-[9.5px]';
+

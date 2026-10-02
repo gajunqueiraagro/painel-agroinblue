@@ -520,20 +520,21 @@ const SEM_PLANO = toRowVM(linhaCrua({
 describe('Mesa compacta — o checklist', () => {
   it('a linha completa: tudo ✓, nada pendente', () => {
     const c = checklistDaLinha(COMPLETA, { classificacoes: CLASSIF });
-    expect(c.map((i) => i.rotulo)).toEqual(['Pagamento', 'Atividade', 'Fazenda', 'Conta do plano', 'Descrição']);
+    /* PR-CONC-MESA-ORDEM-03 — na ordem da grade: Pagamento · Descrição · Atividade · Fazenda · Plano de contas */
+    expect(c.map((i) => i.rotulo)).toEqual(['Pagamento', 'Descrição', 'Atividade', 'Fazenda', 'Plano de contas']);
     expect(c.every((i) => i.ok)).toBe(true);
     expect(pendenciasDaLinha(COMPLETA, { classificacoes: CLASSIF })).toEqual([]);
   });
 
   it('sem conta do plano: ● Conta do plano: vazio — e é a pendência que o rodapé escreve', () => {
     const c = checklistDaLinha(SEM_PLANO, { classificacoes: CLASSIF });
-    expect(c.find((i) => i.rotulo === 'Conta do plano')).toEqual({ rotulo: 'Conta do plano', ok: false, motivo: 'vazio' });
-    expect(pendenciasDaLinha(SEM_PLANO, { classificacoes: CLASSIF })).toContain('Conta do plano');
+    expect(c.find((i) => i.rotulo === 'Plano de contas')).toEqual({ rotulo: 'Plano de contas', ok: false, motivo: 'vazio' });
+    expect(pendenciasDaLinha(SEM_PLANO, { classificacoes: CLASSIF })).toContain('Plano de contas');
   });
 
-  it('plano de outra atividade: "Conta do plano (de outra atividade)", a frase de antes', () => {
+  it('plano de outra atividade: "Plano de contas (de outra atividade)", a frase de antes', () => {
     expect(pendenciasDaLinha(COMPLETA, { classificacoes: CLASSIF, atividade: 'administrativo' }))
-      .toEqual(['Conta do plano (de outra atividade)']);
+      .toEqual(['Plano de contas (de outra atividade)']);
   });
 
   it('transferência sem destino: ● Conta destino', () => {
@@ -629,10 +630,10 @@ describe('Mesa compacta — a tela', () => {
   });
 
   it('com pendência: "Aprovar e próximo" apagado, e o "falta:" diz o quê', () => {
-    montarMesa(SEM_PLANO, ACOES({ salvarDisabled: true, salvarMotivo: 'Falta preencher: Conta do plano.' }));
+    montarMesa(SEM_PLANO, ACOES({ salvarDisabled: true, salvarMotivo: 'Falta preencher: Plano de contas.' }));
     expect(screen.getByTestId('aprovar')).toBeDisabled();
-    expect(screen.getByTestId('falta')).toHaveTextContent('falta: Conta do plano');
-    expect(screen.getByTestId('checklist-Conta do plano').getAttribute('data-ok')).toBe('nao');
+    expect(screen.getByTestId('falta')).toHaveTextContent('falta: Plano de contas');
+    expect(screen.getByTestId('checklist-Plano de contas').getAttribute('data-ok')).toBe('nao');
   });
 
   it('Enter = Aprovar e próximo; num campo, o Enter é do campo; apagado, o Enter não grava', () => {
@@ -647,7 +648,7 @@ describe('Mesa compacta — a tela', () => {
     fireEvent.keyDown(screen.getAllByTestId('item-mesa')[0], { key: 'Enter' });
     expect(a.onSalvarProximo).toHaveBeenCalledTimes(2);
     unmount(); campo.remove();
-    const b = ACOES({ salvarDisabled: true, salvarMotivo: 'Falta preencher: Conta do plano.' });
+    const b = ACOES({ salvarDisabled: true, salvarMotivo: 'Falta preencher: Plano de contas.' });
     montarMesa(SEM_PLANO, b);
     fireEvent.keyDown(document.body, { key: 'Enter' });
     expect(b.onSalvarProximo).not.toHaveBeenCalled();

@@ -85,8 +85,8 @@ describe('Ao fornecedor — a prévia', () => {
   });
   it('cada alvo leva só o que muda; a prévia diz quantas linhas e quais campos', () => {
     expect(p.alvos.find((a) => a.stagingId === 'a7')?.patch).toEqual({ fazenda_id: 'pureza', safra_id: 'safra-lav' });
-    expect(p.alvos.find((a) => a.stagingId === 'a1')?.campos).toEqual(['Conta do plano', 'Fazenda', 'Safra']);
-    expect(p.resumo).toBe('3 linhas · campos: Conta do plano, Fazenda, Safra · 1 já classificada (o sistema prevalece)');
+    expect(p.alvos.find((a) => a.stagingId === 'a1')?.campos).toEqual(['Plano de contas', 'Fazenda', 'Safra']);
+    expect(p.resumo).toBe('3 linhas · campos: Plano de contas, Fazenda, Safra · 1 já classificada (o sistema prevalece)');
   });
   it('plano administrativo: fazenda Administrativo e nenhuma safra', () => {
     const adm = linhaF('adm-fonte', { proposto_subcentro: 'Despesas de Escritório', proposto_fazenda_id: 'pureza',
@@ -96,7 +96,7 @@ describe('Ao fornecedor — a prévia', () => {
   });
   it('sem fornecedor resolvido, ou sem conta do plano, diz por quê e não tem alvo', () => {
     expect(previaAoFornecedor(linhaF('s', { planilha_favorecido_id: null }), sessao, {}).motivo).toMatch(/não está resolvido/);
-    expect(previaAoFornecedor(linhaF('s2'), sessao, {}).motivo).toMatch(/ainda não tem conta do plano/);
+    expect(previaAoFornecedor(linhaF('s2'), sessao, {}).motivo).toMatch(/ainda não tem plano de contas/);
   });
 });
 
@@ -105,7 +105,7 @@ describe('Ao fornecedor — o gesto grava só a proposta', () => {
     const editar = vi.fn(() => Promise.resolve({ ok: true }));
     const marcadas: string[] = [];
     const r = await levarAoFornecedor(
-      [{ stagingId: 'a1', patch: { subcentro: 'X' }, campos: ['Conta do plano'] },
+      [{ stagingId: 'a1', patch: { subcentro: 'X' }, campos: ['Plano de contas'] },
         { stagingId: 'a2', patch: { fazenda_id: 'f' }, campos: ['Fazenda'] }],
       editar, (id) => marcadas.push(id));
     expect(r).toEqual({ ok: 2, falhas: 0 });
@@ -143,7 +143,7 @@ describe('Ao fornecedor — o "⋯" do cabeçalho da Mesa', () => {
     const p = previaAoFornecedor(FONTE, [FONTE, linhaF('a1')], { classificacoes: CLASSIF, fazendas: FAZENDAS });
     montar({ previa: p, aplicando: false, onAplicar });
     abrir();
-    expect(screen.getByTestId('previa-ao-fornecedor')).toHaveTextContent('Ao fornecedor: 1 linha · campos: Conta do plano, Fazenda, Safra');
+    expect(screen.getByTestId('previa-ao-fornecedor')).toHaveTextContent('Ao fornecedor: 1 linha · campos: Plano de contas, Fazenda, Safra');
     const item = screen.getByTestId('aplicar-ao-fornecedor');
     expect(item).toHaveTextContent('não grava o lançamento');
     fireEvent.click(item);

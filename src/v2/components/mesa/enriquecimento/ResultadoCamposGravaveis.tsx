@@ -23,7 +23,10 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ContaBancariaSelect, type ContaSelecionavel } from '@/components/shared/ContaBancariaSelect';
-import { CELULA_EDITAVEL, CELULA_EDITAVEL_DATA, ITEM_DROPDOWN } from './medidasMesa';
+import {
+  CELULA_EDITAVEL, CELULA_EDITAVEL_DATA, ITEM_DROPDOWN, CELULA_EDITAVEL_COMPACTA, CELULA_EDITAVEL_DATA_COMPACTA,
+  GATILHO_CONTA_COMPACTO,
+} from './medidasMesa';
 import { TIPOS_OPERACAO_RESULTADO, ehTipoTransferencia } from '@/v2/lib/mesa/transferenciaPlano';
 import { AVISO_ADMIN_SEM_SAFRA, AVISO_ADMIN_SAFRA_SAI } from '@/lib/financeiro/escopoDoSubcentro';
 import { cn } from '@/lib/utils';
@@ -32,19 +35,21 @@ import { patchDaConta } from '@/v2/lib/mesa/contaDaLinha';
 type Editar = (patch: Record<string, unknown>) => Promise<void>;
 
 /** As três datas — mesma peça, muda só a chave do patch. */
-export function ResultadoDataEditor({ value, valorAtual, campo, onEditar }: {
+export function ResultadoDataEditor({ value, valorAtual, campo, onEditar, compacto = false }: {
   value: string | null;
   /** O valor efetivo do lançamento, para o campo não abrir vazio sobre uma data que existe. */
   valorAtual: string | null;
   campo: 'data_competencia' | 'data_vencimento' | 'data_pagamento';
   onEditar: Editar;
+  /** Bloco compacto da Mesa (PR-CONC-MESA-ORDEM-03): 16px / 9,5px. */
+  compacto?: boolean;
 }) {
   const efetivo = value ?? valorAtual ?? '';
   return (
     <DatePicker
       value={efetivo}
       size="compact"
-      className={CELULA_EDITAVEL_DATA}
+      className={compacto ? CELULA_EDITAVEL_DATA_COMPACTA : CELULA_EDITAVEL_DATA}
       onChange={(novo) => {
         /* Reabrir o calendário e escolher a mesma data não pode custar uma escrita. */
         if ((novo || '') === efetivo) return;
@@ -261,12 +266,13 @@ export function ResultadoTipoEditor({ value, valorAtual, subcentroTransferencia,
  * efetivo (o campo não abre vazio sobre um destino que existe), mas o que se GRAVA é a
  * proposta — é por isso que o container exige o campo antes de chamar a RPC.
  */
-export function ResultadoContaDestinoEditor({ value, valorAtual, contas, contaOrigemId, onEditar }: {
+export function ResultadoContaDestinoEditor({ value, valorAtual, contas, contaOrigemId, onEditar, compacto = false }: {
   value: string | null;
   valorAtual: string | null;
   contas: ContaSelecionavel[];
   contaOrigemId: string | null;
   onEditar: Editar;
+  compacto?: boolean;
 }) {
   const efetivo = value ?? valorAtual ?? '';
   const elegiveis = contaOrigemId ? contas.filter((c) => c.id !== contaOrigemId) : contas;
@@ -276,6 +282,7 @@ export function ResultadoContaDestinoEditor({ value, valorAtual, contas, contaOr
       contas={elegiveis}
       placeholder="escolha a conta"
       size="compact"
+      className={compacto ? GATILHO_CONTA_COMPACTO : undefined}
       onValueChange={(id) => {
         if (id === efetivo) return;
         void onEditar({ conta_destino_id: id || null });
@@ -285,10 +292,11 @@ export function ResultadoContaDestinoEditor({ value, valorAtual, contas, contaOr
 }
 
 /** Observação — texto livre, commit no blur/Enter (o idioma do Documento). */
-export function ResultadoObservacaoEditor({ value, valorAtual, onEditar }: {
+export function ResultadoObservacaoEditor({ value, valorAtual, onEditar, compacto = false }: {
   value: string | null;
   valorAtual: string | null;
   onEditar: Editar;
+  compacto?: boolean;
 }) {
   const inicial = value ?? valorAtual ?? '';
   const [texto, setTexto] = useState(inicial);
@@ -307,7 +315,7 @@ export function ResultadoObservacaoEditor({ value, valorAtual, onEditar }: {
 
   return (
     <Input
-      className={CELULA_EDITAVEL}
+      className={compacto ? CELULA_EDITAVEL_COMPACTA : CELULA_EDITAVEL}
       value={texto}
       onChange={(e) => { textoRef.current = e.target.value; setTexto(e.target.value); }}
       onBlur={commit}

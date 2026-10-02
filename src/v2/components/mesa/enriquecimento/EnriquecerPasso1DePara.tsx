@@ -22,7 +22,7 @@ import type { Fazenda } from '@/contexts/FazendaContext';
 
 /** Os cinco campos, na ordem em que o trabalho acontece. */
 export const CAMPOS_DEPARA: ReadonlyArray<{ campo: CampoDePara; rotulo: string }> = [
-  { campo: 'subcentro', rotulo: 'Conta do plano' },
+  { campo: 'subcentro', rotulo: 'Plano de contas' },
   { campo: 'fazenda', rotulo: 'Fazenda' },
   { campo: 'fornecedor', rotulo: 'Fornecedor' },
   { campo: 'conta', rotulo: 'Conta bancária' },

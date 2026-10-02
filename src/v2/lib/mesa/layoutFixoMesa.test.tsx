@@ -6,6 +6,8 @@
  * ⚠ O jsdom NÃO FAZ LAYOUT: aqui se prova o CONTRATO de que as medidas saem (colgroup, altura declarada de cada linha,
  *   largura do slot, slots sempre presentes, nenhuma linha condicional) — e que ele é o MESMO em todos os estados. A
  *   medida renderizada (offsetWidth/offsetTop no navegador) vai no relatório do PR.
+ * ⚠ PR-CONC-MESA-ORDEM-03: a ordem do Novo lançamento (Datas e pagamento · Identificação · Classificação · Complemento),
+ *   altura POR BLOCO (18 nos compactos, 22 nos normais) e os avisos à direita da linha do checklist (o slot de 18px saiu).
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
@@ -18,8 +20,8 @@ import type { ClassificacaoStagingPreviewRow } from '@/v2/hooks/useClassificacao
 vi.mock('@/integrations/supabase/client', () => ({ supabase: { from: () => ({}), rpc: () => Promise.resolve({ data: null, error: null }) } }));
 
 import {
-  MesaCamposTabela, LARGURA_COL_CAMPO, LARGURA_COL_VAI_GRAVAR, LARGURA_SLOT_DICA, ALTURA_LINHA, ALTURA_SLOT_AVISO,
-  ROTULOS_DA_GRADE, ALTURA_FAIXA_GRUPO, ALTURA_CHECKLIST,
+  MesaCamposTabela, LARGURA_COL_CAMPO, LARGURA_COL_VAI_GRAVAR, LARGURA_SLOT_DICA, ALTURA_LINHA, ALTURA_LINHA_COMPACTA,
+  ROTULOS_DA_GRADE, ROTULOS_COMPACTOS, TITULOS_DOS_BLOCOS, ALTURA_FAIXA_GRUPO, ALTURA_CHECKLIST, CAMPOS_DO_EXTRATO,
 } from '@/v2/components/mesa/enriquecimento/MesaCamposTabela';
 
 const cls = (subcentro: string, escopo_negocio: string, tipo_operacao = '2-Saídas', ordem?: number): ClassificacaoItem => ({
@@ -70,8 +72,9 @@ function assinatura(raiz: HTMLElement) {
     colunas: Array.from(tabela.querySelectorAll('col')).map((c) => c.style.width),
     linhas: Array.from(tabela.querySelectorAll<HTMLTableRowElement>('tbody tr')).map((tr) => `${tr.getAttribute('data-testid') ?? 'faixa'}:${tr.style.height}`),
     slots: within(raiz).getAllByTestId('slot-dica').map((s) => s.style.width),
-    slotAviso: within(raiz).getByTestId('slot-aviso').style.height,
     checklist: within(raiz).getByTestId('checklist').style.height,
+    /* o lugar dos avisos existe sempre, DENTRO da linha do checklist */
+    avisosNoChecklist: !!within(within(raiz).getByTestId('checklist')).queryByTestId('avisos-linha'),
     /* o que vem DEPOIS da tabela dentro do painel — era aí que nascia o "planilha dizia" */
     irmaos: Array.from(raiz.querySelectorAll('[data-testid="grade-mesa"]')).map((t) => t.parentElement?.children.length),
   };
@@ -80,26 +83,53 @@ function assinatura(raiz: HTMLElement) {
 describe('a grade tem as mesmas medidas em todos os estados', () => {
   const base = (() => { const { container, unmount } = montar(vm(CRU), null); const a = assinatura(container); unmount(); return a; })();
 
-  it('as medidas declaradas são as do colgroup, e toda linha tem 22px', () => {
+  it('as medidas declaradas são as do colgroup; a altura é a do BLOCO: 18 nos compactos, 22 nos normais', () => {
     expect(base.colunas).toEqual([LARGURA_COL_CAMPO, '', '', LARGURA_COL_VAI_GRAVAR]);
-    expect(base.linhas.filter((l) => l.startsWith('linha-')).every((l) => l.endsWith(`:${ALTURA_LINHA}`))).toBe(true);
+    const linhas = base.linhas.filter((l) => l.startsWith('linha-'));
+    for (const l of linhas) {
+      const rotulo = l.slice('linha-'.length, l.lastIndexOf(':'));
+      expect(l).toBe(`linha-${rotulo}:${ROTULOS_COMPACTOS.includes(rotulo) ? ALTURA_LINHA_COMPACTA : ALTURA_LINHA}`);
+    }
+    /* 9 compactas (6 de Datas e pagamento + 3 de Complemento) e 6 normais */
+    expect(linhas.filter((l) => l.endsWith(`:${ALTURA_LINHA_COMPACTA}`))).toHaveLength(9);
+    expect(linhas.filter((l) => l.endsWith(`:${ALTURA_LINHA}`))).toHaveLength(6);
     expect(base.slots.every((w) => w === LARGURA_SLOT_DICA)).toBe(true);
-    expect(base.slotAviso).toBe(ALTURA_SLOT_AVISO);
+    expect(base.avisosNoChecklist).toBe(true);
     expect(base.irmaos).toEqual([1]);
   });
 
-  /* PR-CONC-ENRIQUECER-V2-01 (Mesa compacta) — eram 17; Nº/Tipo de documento viraram "Documento · tipo".
-     PR-CONC-ENRIQUECER-V2-02 — a linha "Pagamento" voltou a ser TRÊS (Data pgto., Valor, Conta bancária; o Tipo segue fora,
-     é o sinal do Valor): 15 linhas de campo, e as quatro faixas de título dos blocos. */
+  it('a ORDEM é a do Novo lançamento do Financeiro, e o extrato é marcado, não inferido pelo bloco', () => {
+    expect(ROTULOS_DA_GRADE).toEqual([
+      'Competência', 'Data venc.', 'Data pgto.', 'Valor', 'Conta bancária', 'Conta destino',
+      'Fornecedor', 'Descrição',
+      'Atividade', 'Fazenda', 'Plano de contas', 'Safra',
+      'Documento · tipo', 'Forma de pagamento', 'Observação',
+    ]);
+    expect(TITULOS_DOS_BLOCOS).toEqual(['Datas e pagamento', 'Identificação', 'Classificação', 'Complemento']);
+    expect(CAMPOS_DO_EXTRATO).toEqual(['Data pgto.', 'Valor', 'Conta bancária']);
+    expect(ROTULOS_COMPACTOS).toEqual(['Competência', 'Data venc.', 'Data pgto.', 'Valor', 'Conta bancária', 'Conta destino',
+      'Documento · tipo', 'Forma de pagamento', 'Observação']);
+  });
+
+  /* 15 linhas de campo (nenhuma some, nenhuma nasce — PR-CONC-MESA-ORDEM-03 só reordena) e as quatro faixas dos blocos. */
   it('são 15 linhas de campo, inclusive a Conta destino fora da transferência, e 4 faixas de bloco', () => {
     expect(ROTULOS_DA_GRADE).toHaveLength(15);
     expect(base.linhas.filter((l) => l.startsWith('linha-'))).toHaveLength(15);
-    expect(base.linhas).toContain(`linha-Conta destino:${ALTURA_LINHA}`);
+    expect(base.linhas).toContain(`linha-Conta destino:${ALTURA_LINHA_COMPACTA}`);
     expect(base.slots).toHaveLength(15);
     expect(base.linhas.filter((l) => l.startsWith('faixa-'))).toEqual([
-      `faixa-extrato:${ALTURA_FAIXA_GRUPO}`, `faixa-datas:${ALTURA_FAIXA_GRUPO}`,
-      `faixa-classificacao:${ALTURA_FAIXA_GRUPO}`, `faixa-identificacao:${ALTURA_FAIXA_GRUPO}`]);
+      `faixa-pagamento:${ALTURA_FAIXA_GRUPO}`, `faixa-identificacao:${ALTURA_FAIXA_GRUPO}`,
+      `faixa-classificacao:${ALTURA_FAIXA_GRUPO}`, `faixa-complemento:${ALTURA_FAIXA_GRUPO}`]);
     expect(base.checklist).toBe(ALTURA_CHECKLIST);
+  });
+
+  it('o bloco compacto desce o texto ao piso (9,5px) e o normal fica na régua da tabela', () => {
+    montar(vm(CRU), null);
+    expect(screen.getByTestId('linha-Competência').className).toMatch(/text-\[9\.5px\]/);
+    expect(screen.getByTestId('linha-Observação').className).toMatch(/text-\[9\.5px\]/);
+    expect(screen.getByTestId('linha-Fornecedor').className).not.toMatch(/text-\[9\.5px\]/);
+    /* a caixa "do extrato" acompanha o controle: 16px no compacto */
+    expect(screen.getByTestId('extrato-Valor').className).toMatch(/\bh-4\b/);
   });
 
   it.each(ESTADOS)('%s: a assinatura é a mesma do cru', (_nome, r, atividade) => {
@@ -116,7 +146,7 @@ describe('dicas e avisos moram nos slots, nunca em linha nova', () => {
     const slotForn = within(screen.getByTestId('linha-Fornecedor')).getByTestId('slot-dica');
     expect(within(slotForn).getByTestId('marca-planilha')).toHaveTextContent('planilha: Bruno Suniga (não resolvido)');
     /* o "?" também */
-    const slotPlano = within(screen.getByTestId('linha-Conta do plano')).getByTestId('slot-dica');
+    const slotPlano = within(screen.getByTestId('linha-Plano de contas')).getByTestId('slot-dica');
     expect(within(slotPlano).getByTestId('por-que-sugerido')).toBeInTheDocument();
   });
 
@@ -126,25 +156,27 @@ describe('dicas e avisos moram nos slots, nunca em linha nova', () => {
     expect(combo.parentElement?.children).toHaveLength(1);
   });
 
-  it('classificado: "planilha dizia" e o aviso de rateio vão para o slot do topo', () => {
+  it('classificado: "planilha dizia" e o aviso de rateio vão à direita da linha do checklist', () => {
     montar(vm(CLASSIFICADO), null);
-    const topo = screen.getByTestId('slot-aviso');
+    const topo = screen.getByTestId('avisos-linha');
+    expect(screen.getByTestId('checklist').contains(topo)).toBe(true);
     expect(within(topo).getByTestId('aviso-planilha-dizia')).toHaveTextContent('planilha dizia: Conta que não existe');
     expect(within(topo).getByTestId('aviso-plano-fazenda')).toBeInTheDocument();
     expect(topo.title).toContain('não existe no plano oficial');
   });
 
-  it('plano incoerente: o motivo no slot do topo e o campo marcado, sem linha nova', () => {
+  it('plano incoerente: o motivo na linha do checklist e o campo marcado, sem linha nova', () => {
     montar(vm(CRU), 'administrativo');
-    expect(within(screen.getByTestId('slot-aviso')).getByTestId('plano-incoerente')).toHaveTextContent('outra atividade');
-    expect(within(screen.getByTestId('linha-Conta do plano')).getByTestId('plano-pendente')).toBeInTheDocument();
+    expect(within(screen.getByTestId('avisos-linha')).getByTestId('plano-incoerente')).toHaveTextContent('outra atividade');
+    expect(within(screen.getByTestId('linha-Plano de contas')).getByTestId('plano-pendente')).toBeInTheDocument();
   });
 
-  it('sem aviso, o slot do topo continua lá, vazio e da mesma altura', () => {
+  it('sem aviso, o lugar dos avisos continua lá (vazio) e a linha do checklist tem a mesma altura', () => {
     montar(vm(CRU, { excel_fazenda_codigo: null }), null);
-    const topo = screen.getByTestId('slot-aviso');
+    const topo = screen.getByTestId('avisos-linha');
     expect(topo).toBeEmptyDOMElement();
-    expect(topo.style.height).toBe(ALTURA_SLOT_AVISO);
+    expect(screen.getByTestId('checklist').style.height).toBe(ALTURA_CHECKLIST);
+    expect(screen.queryByTestId('slot-aviso')).not.toBeInTheDocument();
   });
 
   it('fora da transferência a Conta destino é leitura "—" com o motivo no slot', () => {

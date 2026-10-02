@@ -140,7 +140,7 @@ describe('apelido simples de OUTRA atividade, sem composto: a conta fica pendent
 
   it('na tela: Conta do plano obrigatória e a marca no slot da linha', () => {
     montar(vm(CONFLITO));
-    const l = linha('Conta do plano');
+    const l = linha('Plano de contas');
     expect(within(l).getByTestId('marca-planilha')).toHaveTextContent('apelido é de Lavoura; safra diz Pecuária');
   });
 

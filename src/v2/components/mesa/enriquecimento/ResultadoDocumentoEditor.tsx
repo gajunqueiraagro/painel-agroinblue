@@ -5,15 +5,17 @@
 // atual do lançamento.
 import { useState, useEffect, useRef } from 'react';
 import { Input } from '@/components/ui/input';
-import { CELULA_EDITAVEL } from './medidasMesa';
+import { CELULA_EDITAVEL, CELULA_EDITAVEL_COMPACTA } from './medidasMesa';
 
 export interface ResultadoDocumentoEditorProps {
   value: string | null;                 // proposto_numero_documento
   numeroDocumentoAtual: string | null;  // lanc_numero_documento
   onEditar: (patch: Record<string, unknown>) => Promise<void>;
+  /** Bloco compacto da Mesa (PR-CONC-MESA-ORDEM-03): 16px / 9,5px. */
+  compacto?: boolean;
 }
 
-export function ResultadoDocumentoEditor({ value, numeroDocumentoAtual, onEditar }: ResultadoDocumentoEditorProps) {
+export function ResultadoDocumentoEditor({ value, numeroDocumentoAtual, onEditar, compacto = false }: ResultadoDocumentoEditorProps) {
   const inicial = value ?? numeroDocumentoAtual ?? '';
   const [text, setText] = useState(inicial);
   const textRef = useRef(inicial);   // síncrono (evita corrida no Enter)
@@ -32,7 +34,7 @@ export function ResultadoDocumentoEditor({ value, numeroDocumentoAtual, onEditar
 
   return (
     <Input
-      className={CELULA_EDITAVEL}
+      className={compacto ? CELULA_EDITAVEL_COMPACTA : CELULA_EDITAVEL}
       value={text}
       onChange={(e) => setBoth(e.target.value)}
       onBlur={commitValue}

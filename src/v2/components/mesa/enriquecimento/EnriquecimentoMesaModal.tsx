@@ -67,6 +67,22 @@ const corDoSinal = (s: 'entrada' | 'saida' | null) =>
 const sinalPrefixo = (s: 'entrada' | 'saida' | null) => (s === 'saida' ? '−' : s === 'entrada' ? '+' : '');
 
 /**
+ * A mensagem única do rodapé da Mesa — PR-CONC-MESA-ORDEM-03. Prioridade: 1) o banco recusou (vermelho) · 2) "falta: …"
+ * (vermelho) · 3) a planilha diverge do extrato (âmbar). Exportada para o teste afirmar a ordem.
+ */
+export function mensagemDoRodape(a: {
+  erroBanco?: string | null; falta?: string | null; divergenciasDoExtrato?: readonly string[] | null;
+}): { tipo: 'erro' | 'falta' | 'diverge' | null; texto: string } {
+  if (a.erroBanco) return { tipo: 'erro', texto: `Não gravou — o banco recusou: ${a.erroBanco}` };
+  if (a.falta) return { tipo: 'falta', texto: `falta: ${a.falta.replace(/^Falta preencher: /, '').replace(/\.$/, '')}` };
+  if (a.divergenciasDoExtrato && a.divergenciasDoExtrato.length > 0) {
+    return { tipo: 'diverge',
+      texto: `Planilha diverge do extrato em: ${a.divergenciasDoExtrato.join(' · ')} — o extrato manda, e estes campos não serão gravados.` };
+  }
+  return { tipo: null, texto: '' };
+}
+
+/**
  * AS MEDIDAS DA LISTA COMPACTA — decisão do Gabriel no briefing do PR-CONC-ENRIQUECER-V2-01: 168px de largura, linhas
  * de 16px, texto de 8,5px (exceção declarada ao piso de 9,5px, registrada no CLAUDE.md — a lista é NAVEGAÇÃO: o
  * painel ao lado repete cada linha inteira).
@@ -210,6 +226,8 @@ export function EnriquecimentoMesaModal({
 
   const pctFeitas = contagens.todas > 0 ? (100 * contagens.feitas) / contagens.todas : 0;
   const falta = actions.salvarMotivo && !actions.soAvanca ? actions.salvarMotivo : null;
+  /* A MENSAGEM DO RODAPÉ — uma só, pela prioridade (PR-CONC-MESA-ORDEM-03): 1 o banco recusou · 2 falta · 3 diverge. */
+  const mensagem = mensagemDoRodape({ erroBanco: actions.erroBanco, falta, divergenciasDoExtrato: actions.divergenciasDoExtrato });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -333,34 +351,13 @@ export function EnriquecimentoMesaModal({
                   atividade={detalhe.atividade}
                   onAtividade={detalhe.onAtividade}
                 />
-                {/* ⚠ ÁREA DE DECISÃO DE ALTURA FIXA, SEMPRE PRESENTE — PR-CONC-MESA-FAIXAS-FIXAS-01; uma barra de 20px que abre
-                    as faixas num Dialog desde o PR-CONC-ENRIQUECER-V2-02. Trocar de linha fecha o Dialog (`chave`). */}
-                <AreaDecisao chave={selecionada.id}
-                  titulo={`${selecionada.fornecedor} · ${sinalPrefixo(selecionada.entradaOuSaida)}${selecionada.valor}`}>
-                  {faixas}
-                </AreaDecisao>
               </>
             )}
 
-            {/* ⚠ A LINHA ACIMA DO RODAPÉ EXISTE SEMPRE, COM 18px — PR-CONC-MESA-LAYOUT-FIXO-01 item 4. */}
-            <div data-testid="slot-rodape" className="flex h-[18px] shrink-0 items-center overflow-hidden whitespace-nowrap border-t px-2 text-[10px]"
-              title={actions.erroBanco ? `Não gravou — o banco recusou: ${actions.erroBanco}`
-                : actions.divergenciasDoExtrato && actions.divergenciasDoExtrato.length > 0
-                  ? `Planilha diverge do extrato em: ${actions.divergenciasDoExtrato.join(' · ')} — o extrato manda, e estes campos não serão gravados.`
-                  : undefined}>
-              {actions.erroBanco ? (
-                <span className="truncate font-medium text-red-700 dark:text-red-400">
-                  Não gravou — o banco recusou: {actions.erroBanco}
-                </span>
-              ) : actions.divergenciasDoExtrato && actions.divergenciasDoExtrato.length > 0 ? (
-                <span className="truncate text-amber-700 dark:text-amber-400">
-                  Planilha diverge do extrato em: {actions.divergenciasDoExtrato.join(' · ')} — o
-                  extrato manda, e estes campos não serão gravados.
-                </span>
-              ) : null}
-            </div>
-
-            {/* ═══ RODAPÉ — 32px: ◀ ▶ Reverter | falta: ... | Pular | Aprovar e próximo ═══ */}
+            {/* ═══ RODAPÉ — 32px: ◀ ▶ Reverter | decisão | mensagem | Pular | Aprovar e próximo ═══
+                ⚠ AS DUAS LINHAS VAZIAS SAÍRAM (PR-CONC-MESA-ORDEM-03): a barra de decisão (20px) virou o slot de largura fixa
+                aqui dentro, e o slot de 18px acima do rodapé virou a MENSAGEM, na mesma faixa do "falta:". A tabela ganhou
+                os 38px; o rodapé não muda de altura em estado nenhum. */}
             <div data-testid="rodape-mesa" className="flex h-8 shrink-0 items-center gap-1.5 border-t px-2">
               <Button size="sm" variant="ghost" className="h-[22px] w-[26px] shrink-0 p-0 text-[11px]" aria-label="Anterior"
                 onClick={actions.onAnterior} disabled={!actions.canAnterior}>◀</Button>
@@ -368,12 +365,24 @@ export function EnriquecimentoMesaModal({
                 onClick={actions.onProximo} disabled={!actions.canProximo}>▶</Button>
               <Button size="sm" variant="outline" className="h-[22px] shrink-0 whitespace-nowrap px-2 text-[10px]"
                 onClick={actions.onReverter} disabled={actions.reverterDisabled || actions.isBusy}>↺ Reverter</Button>
-              {/* ⚠ O MOTIVO DO BLOQUEIO FICA ESCRITO (133b-a correção 1) — "falta: ..." é o `salvarMotivo`, que sai
-                  da MESMA lista do checklist. Vazio, o lugar fica (flex-1). */}
-              <span data-testid="falta" className="min-w-0 flex-1 truncate text-[10px] text-red-600 dark:text-red-400"
-                title={falta ?? undefined}>
-                {falta ? `falta: ${falta.replace(/^Falta preencher: /, '').replace(/\.$/, '')}` : ''}
-              </span>
+              {/* ⚠ O SLOT DA DECISÃO: largura FIXA, sempre presente (vazio sem decisão). Trocar de linha fecha o Dialog. */}
+              <AreaDecisao chave={selecionada?.id ?? null}
+                titulo={selecionada ? `${selecionada.fornecedor} · ${sinalPrefixo(selecionada.entradaOuSaida)}${selecionada.valor}` : undefined}>
+                {selecionada ? faixas : null}
+              </AreaDecisao>
+              {/* ⚠ A MENSAGEM, UMA LINHA, nesta prioridade: o banco recusou > falta (o `salvarMotivo`, que sai da MESMA lista
+                  do checklist — 133b-a correção 1) > a planilha diverge do extrato. Vazia, o lugar fica (flex-1). */}
+              {mensagem.tipo === 'falta' ? (
+                <span data-testid="falta" data-mensagem="falta" className="min-w-0 flex-1 truncate text-[10px] text-red-600 dark:text-red-400"
+                  title={mensagem.texto}>{mensagem.texto}</span>
+              ) : (
+                <span data-testid="mensagem-rodape" data-mensagem={mensagem.tipo ?? 'nenhuma'} title={mensagem.texto || undefined}
+                  className={`min-w-0 flex-1 truncate text-[10px] ${
+                    mensagem.tipo === 'erro' ? 'font-medium text-red-700 dark:text-red-400'
+                      : mensagem.tipo === 'diverge' ? 'text-amber-700 dark:text-amber-400' : ''}`}>
+                  {mensagem.texto}
+                </span>
+              )}
               <Button size="sm" variant="outline" className="h-[22px] shrink-0 whitespace-nowrap px-2 text-[10px]"
                 data-testid="pular" onClick={actions.onProximo} disabled={!actions.canProximo}
                 title="Vai para a próxima sem gravar esta.">Pular</Button>

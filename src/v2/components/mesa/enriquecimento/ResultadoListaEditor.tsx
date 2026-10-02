@@ -11,7 +11,7 @@
  *   proposta, nunca a gravação do mesmo texto.
  */
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CELULA_EDITAVEL, ITEM_DROPDOWN } from './medidasMesa';
+import { CELULA_EDITAVEL, CELULA_EDITAVEL_COMPACTA, ITEM_DROPDOWN } from './medidasMesa';
 import { cn } from '@/lib/utils';
 
 const ATUAL = '__valor_atual__';
@@ -36,10 +36,12 @@ export interface ResultadoListaEditorProps {
   onEditar: (patch: Record<string, unknown>) => Promise<void>;
   /** O texto do gatilho vazio. */
   placeholder?: string;
+  /** Bloco compacto da Mesa (PR-CONC-MESA-ORDEM-03): 16px / 9,5px. */
+  compacto?: boolean;
 }
 
 export function ResultadoListaEditor({
-  value, valorAtual, sugerido, rotuloSugestao, opcoes, campo, onEditar, placeholder = 'escolher',
+  value, valorAtual, sugerido, rotuloSugestao, opcoes, campo, onEditar, placeholder = 'escolher', compacto = false,
 }: ResultadoListaEditorProps) {
   const efetivo = value ?? valorAtual ?? sugerido ?? '';
   const ehSugestao = !value && !valorAtual && !!sugerido;
@@ -60,7 +62,7 @@ export function ResultadoListaEditor({
           }
           if (v !== value) void onEditar({ [campo]: v });
         }}>
-        <SelectTrigger className={cn(CELULA_EDITAVEL, 'w-full min-w-0', ehSugestao && 'border-amber-500 bg-amber-50 dark:bg-amber-950/30',
+        <SelectTrigger className={cn(compacto ? CELULA_EDITAVEL_COMPACTA : CELULA_EDITAVEL, 'w-full min-w-0', ehSugestao && 'border-amber-500 bg-amber-50 dark:bg-amber-950/30',
           !efetivo && 'text-muted-foreground')}
           title={ehSugestao && rotuloSugestao ? `${efetivo} — ${rotuloSugestao}; grava ao salvar` : efetivo || undefined}>
           {/* o gatilho mostra o valor atual como ele está gravado, sem o " · valor atual" do item */}

@@ -160,8 +160,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 02/10/2026 (PR-CONC-ENRIQ-AGRUP-2b-TELA com o fix1, +15: 8 em `src/v2/lib/mesa/agruparNoExtrato.test.ts` e 7
-  em `src/v2/lib/mesa/enriquecerV2.test.tsx`; antes o UI-SELECT-ALINHAMENTO-01, +2): 2829
+  Baseline em 02/10/2026 (PR-CONC-MESA-ORDEM-03, +8: 6 em `src/v2/lib/mesa/faixasFixas.test.tsx` e 2 em
+  `src/v2/lib/mesa/layoutFixoMesa.test.tsx`; antes o PR-CONC-ENRIQ-AGRUP-2b-TELA com o fix1, +15): 2837
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -453,12 +453,17 @@ preview que o cabecalho nao sai da tela ao rolar.
   motivo); dica/rotulo auxiliar num SLOT DE LARGURA FIXA dentro da celula, sempre presente mesmo vazio (nunca ao lado
   estreitando o controle, nunca em linha extra); aviso num slot de altura fixa reservado (vazio quando nao ha) ou no
   `title`. Exemplo vivo: a Mesa de revisao (`MesaCamposTabela`: colgroup 140px | auto | auto | 44%, linha 22, slot da
-  dica 104, slot de aviso 18 no topo e 18 acima do rodape, selo de 148, BARRA DE DECISAO de 20 entre a tabela e o rodape —
-  `AreaDecisao`, PR-CONC-ENRIQUECER-V2-02 (era a area de 104 do PR-CONC-MESA-FAIXAS-FIXAS-01): sem decisao fica VAZIA; com
-  decisao, "● Esta linha pede uma decisao" + "Abrir decisao", que abre as MESMAS faixas (o no' `faixas` da aba, `null` quando
-  a linha nao pede) num Dialog por cima da Mesa; trocar de linha fecha o Dialog. Medido a 1135x579 no NJ set/26: tabela
-  visivel 335, barra 20, topo do rodape 472, iguais com e sem decisao; o grupo do extrato e' Data pgto. | Valor | Conta
-  bancaria, uma linha cada).
+  dica 104, selo de 148; ORDEM DO NOVO LANCAMENTO DO FINANCEIRO (PR-CONC-MESA-ORDEM-03): blocos Datas e pagamento
+  (COMPACTO: Competencia, Data venc., Data pgto., Valor, Conta bancaria, Conta destino) · Identificacao (Fornecedor,
+  Descricao) · Classificacao (Atividade, Fazenda, Plano de contas, Safra) · Complemento (COMPACTO: Documento · tipo, Forma de
+  pagamento, Observacao); linha de 22 nos blocos normais e de 18 nos compactos (texto 9,5, controle 16 —
+  `CELULA_EDITAVEL_COMPACTA`), a ALTURA E' DO BLOCO; o "do extrato" e' marca explicita na ORDEM (`doExtrato`), nao o bloco.
+  SEM LINHA VAZIA: os avisos moram a' direita da linha do checklist (18px); a decisao e' um SLOT DE 96px NO RODAPE de 32
+  (◀ ▶ Reverter | decisao | mensagem | Pular | Aprovar) — com decisao "● Abrir decisao" em ambar, que abre as MESMAS faixas
+  (o no' `faixas` da aba, `null` quando a linha nao pede) num Dialog; sem decisao o slot fica vazio com a mesma largura;
+  trocar de linha fecha o Dialog; a mensagem do rodape e' UMA, pela prioridade banco recusou > falta > diverge do extrato
+  (`mensagemDoRodape`). Medido a 1135x579 no NJ set/26 (Itau BBA e Sicredi Lavoura): tabela visivel 391 = a grade inteira
+  (scrollHeight 391, nao rola), topo do rodape 490, rodape 32, iguais sem decisao, com decisao, com "falta" e com aviso).
   ⚠ NASCE DE DOIS PRINTS: o "pelo historico do banco" ao lado do select da forma estreitava o campo e empurrava a coluna
     (19:50), e o "planilha dizia" nascia abaixo da tabela empurrando o rodape (18:59).
   ⚠ O jsdom NAO MEDE: o teste prova o CONTRATO (colgroup, alturas declaradas, slots sempre presentes, mesma assinatura em

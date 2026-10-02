@@ -164,7 +164,7 @@ describe('na tela', () => {
   it('classificado: "planilha: Faz. Pureza" na Fazenda e a conta do plano da planilha como marca', () => {
     montar(vm(SEGURO));
     expect(within(linhaDe('Fazenda')).getByTestId('marca-planilha').textContent).toBe('planilha: Faz. Pureza');
-    expect(within(linhaDe('Conta do plano')).getByTestId('marca-planilha').textContent)
+    expect(within(linhaDe('Plano de contas')).getByTestId('marca-planilha').textContent)
       .toBe('planilha: Salários e Encargos Pecuária');
   });
 
@@ -178,6 +178,6 @@ describe('na tela', () => {
   it('classificado de pecuária na fazenda Administrativo: o aviso de rateio (não trava)', () => {
     montar(vm(SEGURO, { lanc_subcentro_atual: 'Salários e Encargos Pecuária' }));
     expect(screen.getByTestId('aviso-plano-fazenda').textContent)
-      .toBe('conta do plano de pecuária na fazenda Administrativo — o rateio do DRE sai errado');
+      .toBe('plano de contas de pecuária na fazenda Administrativo — o rateio do DRE sai errado');
   });
 });

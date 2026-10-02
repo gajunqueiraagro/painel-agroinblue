@@ -107,15 +107,17 @@ describe('item 1 — cabeçalho e nenhum verde fora do valor de uma entrada', ()
 describe('item 2 — o grupo do extrato é só leitura e vem no topo', () => {
   /* PR-CONC-ENRIQUECER-V2-02 — uma informação por linha: Data pgto., Valor e Conta bancária, no topo; "Pagamento" é só
      o título do bloco e o item do checklist, não linha da grade. */
-  it('Data pgto., Valor e Conta bancária são as primeiras linhas, sob a faixa "Pagamento · do extrato"', () => {
+  /* PR-CONC-MESA-ORDEM-03 — o bloco do topo é "Datas e pagamento" (a ordem do Novo lançamento): as duas datas editáveis
+     primeiro, depois Data pgto., Valor e Conta bancária, que são as do extrato (marca explícita, não o bloco). */
+  it('Data pgto., Valor e Conta bancária vêm logo depois das datas, no bloco "Datas e pagamento"', () => {
     expect(CAMPOS_DO_EXTRATO).toEqual(['Data pgto.', 'Valor', 'Conta bancária']);
     const { container } = montar(vm(CRU));
     const rotulos = Array.from(container.querySelectorAll('td[title]'))
       .map((el) => el.getAttribute('title'))
-      .filter((t): t is string => !!t && [...CAMPOS_DO_EXTRATO, 'Competência', 'Atividade'].includes(t));
-    expect(rotulos.slice(0, 3)).toEqual(['Data pgto.', 'Valor', 'Conta bancária']);
+      .filter((t): t is string => !!t && [...CAMPOS_DO_EXTRATO, 'Competência', 'Data venc.', 'Atividade'].includes(t));
+    expect(rotulos.slice(0, 5)).toEqual(['Competência', 'Data venc.', 'Data pgto.', 'Valor', 'Conta bancária']);
     expect(screen.queryByTitle('Pagamento')).not.toBeInTheDocument();
-    expect(screen.getByTestId('faixa-extrato')).toHaveTextContent('Pagamento · do extrato');
+    expect(screen.getByTestId('faixa-pagamento')).toHaveTextContent('Datas e pagamento');
     expect(within(linha('Valor')).getAllByText(/30\.000,00/).length).toBeGreaterThanOrEqual(1);
     expect(within(linha('Data pgto.')).getAllByText(/10\/09/).length).toBeGreaterThanOrEqual(1);
   });
@@ -151,14 +153,14 @@ describe('item 3 — Atividade filtra a conta do plano; plano de outra atividade
 
   it('a lista da conta do plano encolhe para a atividade escolhida', () => {
     montar(vm(CRU), { atividade: 'administrativo' });
-    fireEvent.click(within(linha('Conta do plano')).getByRole('combobox'));
+    fireEvent.click(within(linha('Plano de contas')).getByRole('combobox'));
     expect(screen.getByText('Seguros')).toBeInTheDocument();
     expect(screen.queryByText('Adubos Lavoura')).not.toBeInTheDocument();
   });
 
   it('sem escolha, a lista é a da atividade proposta (pecuária)', () => {
     montar(vm(CRU));
-    fireEvent.click(within(linha('Conta do plano')).getByRole('combobox'));
+    fireEvent.click(within(linha('Plano de contas')).getByRole('combobox'));
     expect(screen.queryByText('Seguros')).not.toBeInTheDocument();
     expect(screen.queryByText('Adubos Lavoura')).not.toBeInTheDocument();
   });
@@ -245,7 +247,7 @@ describe('item 4 — forma de pagamento pelo histórico do banco (só no cru)', 
 describe('item 5 — o "?" no lugar do "Sugerido por", e sem legenda', () => {
   it('o "?" ao lado da Conta do plano leva a frase no tooltip', () => {
     montar(vm(CRU));
-    const q = within(linha('Conta do plano')).getByTestId('por-que-sugerido');
+    const q = within(linha('Plano de contas')).getByTestId('por-que-sugerido');
     expect(q).toHaveTextContent('?');
     expect(q).toHaveAttribute('title', 'Sugerido por: apelido que você ensinou (Vagão Kuhn)');
   });
