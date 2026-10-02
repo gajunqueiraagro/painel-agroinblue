@@ -5,6 +5,7 @@ import { ChevronsUpDown, X } from 'lucide-react';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { Popover, PopoverContent } from '@/components/ui/popover';
 import { COMBOBOX_CONTENT } from '@/components/ui/command';
+import { MENU_ITEM } from '@/components/ui/menuPadrao';
 
 export interface OpcaoSearchable {
   value: string;
@@ -343,8 +344,10 @@ export function SearchableSelect({
           /* Clicar no próprio campo não fecha: é o gesto de "abrir", e o gatilho já reabre. */
           onInteractOutside={(e) => { if (containerRef.current?.contains(e.target as Node)) e.preventDefault(); }}
           data-testid="searchable-select-painel"
+          /* a paleta é `MENU_PALETA` (o dono, `menuPadrao.ts`), que chega pelo `COMBOBOX_CONTENT` do command.tsx —
+             UI-DROPDOWN-PADRAO-01: opaca, a mesma do Select e do DropdownMenu */
           className={cn(COMBOBOX_CONTENT, 'max-w-[320px] rounded-md border shadow-md', contentClassName)}>
-          <div className={cn('px-1 pt-1 pb-1', dense && 'sticky top-0 z-10 bg-zinc-950/80')}>
+          <div className={cn('px-1 pt-1 pb-1', dense && 'sticky top-0 z-10 bg-zinc-800')}>
             <input
               ref={inputRef}
               value={search}
@@ -383,9 +386,10 @@ export function SearchableSelect({
                    ⚠ REALCE ESCURO: `bg-accent` e' claro e sumia sobre o painel novo. */
                 className={cn(
                   'w-full text-left rounded-sm cursor-pointer text-zinc-100',
-                  'min-h-[22px] px-2 py-1 text-[10px] leading-[14px]',
-                  idx === highlightIdx && 'bg-zinc-800/60',
-                  idx !== highlightIdx && 'hover:bg-zinc-800/45',
+                  MENU_ITEM,
+                  /* realce zinc-700: o painel é zinc-800 opaco desde o UI-DROPDOWN-PADRAO-01 */
+                  idx === highlightIdx && 'bg-zinc-700',
+                  idx !== highlightIdx && 'hover:bg-zinc-700/60',
                   value === o.value && 'font-semibold',
                 )}
               >
@@ -421,7 +425,7 @@ export function SearchableSelect({
             {acaoFinal && (
               <button type="button" onMouseDown={e => e.preventDefault()}
                 onClick={() => { setOpen(false); acaoFinal.onSelect(); }}
-                className="w-full text-left rounded-sm text-sky-300 hover:bg-zinc-800/45 border-t border-zinc-700/40 min-h-[22px] px-2 py-1 text-[10px] leading-[14px]">
+                className={cn('w-full text-left rounded-sm text-sky-300 hover:bg-zinc-700/60 border-t border-zinc-700/40', MENU_ITEM)}>
                 {acaoFinal.label}
               </button>
             )}

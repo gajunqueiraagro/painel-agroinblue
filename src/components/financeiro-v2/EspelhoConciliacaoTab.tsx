@@ -612,7 +612,7 @@ function CelAcoes({ itens, alcaId }: { itens: ItemAcao[]; alcaId?: string }) {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-[150px]">
             {itens.map((it) => (
-              <DropdownMenuItem key={it.rotulo} className="text-[11px]" disabled={!it.onClick}
+              <DropdownMenuItem key={it.rotulo}  disabled={!it.onClick}
                 onClick={it.onClick}>
                 <span className="flex flex-col">
                   <span>{it.rotulo}</span>

@@ -160,8 +160,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 02/10/2026 (PR-CONC-MESA-ORDEM-03, +8: 6 em `src/v2/lib/mesa/faixasFixas.test.tsx` e 2 em
-  `src/v2/lib/mesa/layoutFixoMesa.test.tsx`; antes o PR-CONC-ENRIQ-AGRUP-2b-TELA com o fix1, +15): 2837
+  Baseline em 02/10/2026 (UI-DROPDOWN-PADRAO-01, +7 em `src/components/ui/menuPadrao.test.tsx`; antes o
+  PR-CONC-MESA-ORDEM-03, +8): 2844
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -514,6 +514,12 @@ preview que o cabecalho nao sai da tela ao rolar.
   (centralizado por padrao) e o texto que nao cabia herdava o centro ("Folha de..." com um vazio a' esquerda). Conserto e' no
   componente, NUNCA classe solta por tela; o span NAO leva `flex-1` (o gatilho com `justify-center`, o ano do Fechamento,
   continua centralizado). Os combobox que nao sao `SelectTrigger` (fornecedor, conta do plano) nao foram tocados.
+- ⚠ TODO MENU ABERTO TEM UM PADRAO SO', NUM DONO SO' (UI-DROPDOWN-PADRAO-01, A23): `src/components/ui/menuPadrao.ts` —
+  `MENU_PALETA` (`bg-zinc-800`, OPACO: sem alpha nem blur, a mesma cor sobre o branco e sobre o navy), `MENU_ITEM` (22px /
+  10px) e `MENU_ROTULO`. Select, DropdownMenu, Command, SearchableSelect e os combobox de `shared/` importam dali; realce em
+  `zinc-700`. TELA NAO SOBRESCREVE tamanho nem altura do item de menu (saiu de 41 `SelectItem`, 11 `DropdownMenuItem`, do
+  `itemCls` do Financeiro e do `ITEM_DROPDOWN` da Mesa). O texto do gatilho com busca fica `min-w-0 flex-1 truncate
+  text-left`. Restam `text-xs` em 7 `DropdownMenuItem` (FinV2ContasTab, FinV2SafrasTab) e `py-*` em 7 `SelectItem`: fila.
 - ⚠ O `DialogContent` RENDERIZA A 95% E FICA ASSIM (DIALOG-ZOOM-95-01): medir com `offsetWidth`, nunca com
   `getBoundingClientRect()` (erra 5 % para menos), e `fontSize: 9` aparece como 8,55px. Nao corrigido de
   proposito: mexe na animacao de todos os dialogos.

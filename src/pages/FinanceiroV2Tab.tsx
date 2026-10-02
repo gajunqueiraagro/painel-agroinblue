@@ -1594,7 +1594,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const hojeISO = new Date().toISOString().slice(0, 10);
 
   const selCls = "h-6 text-[10px]";
-  const itemCls = "text-[10px] py-0.5";
   const lblCls = "text-[9px] font-semibold leading-none mb-0.5 block text-[hsl(213_52%_24%)]";
 
   const isMobile = useIsMobile();
@@ -1787,10 +1786,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                   <Select value={dataPor} onValueChange={handleDataPorChange}>
                     <SelectTrigger className={`${selCls} w-full bg-white border-[#C9D4E2]`}><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="financeira" className={itemCls}>Financeira</SelectItem>
-                      <SelectItem value="competencia" className={itemCls}>Competência</SelectItem>
-                      <SelectItem value="vencimento" className={itemCls}>Vencimento</SelectItem>
-                      <SelectItem value="pagamento" className={itemCls}>Pagamento</SelectItem>
+                      <SelectItem value="financeira">Financeira</SelectItem>
+                      <SelectItem value="competencia">Competência</SelectItem>
+                      <SelectItem value="vencimento">Vencimento</SelectItem>
+                      <SelectItem value="pagamento">Pagamento</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1799,10 +1798,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                   <Select value={tipoOperacao} onValueChange={v => { setTipoOperacao(v); setContaOrigem('__all__'); setContaDestino('__all__'); setMacroLocked(false); }}>
                     <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2]`}><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__all__" className={itemCls}>Todos</SelectItem>
-                      <SelectItem value="1-Entradas" className={itemCls}>Entradas</SelectItem>
-                      <SelectItem value="2-Saídas" className={itemCls}>Saídas</SelectItem>
-                      <SelectItem value="3-Transferências" className={itemCls}>Transf.</SelectItem>
+                      <SelectItem value="__all__">Todos</SelectItem>
+                      <SelectItem value="1-Entradas">Entradas</SelectItem>
+                      <SelectItem value="2-Saídas">Saídas</SelectItem>
+                      <SelectItem value="3-Transferências">Transf.</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1962,8 +1961,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       <Select value={fazendaId} onValueChange={setFazendaId}>
                         <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2]`}><SelectValue placeholder="Selecione" /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="__all__" className={itemCls}>Todas</SelectItem>
-                          {fazOperacionais.map(f => <SelectItem key={f.id} value={f.id} className={itemCls}>{f.nome}</SelectItem>)}
+                          <SelectItem value="__all__">Todas</SelectItem>
+                          {fazOperacionais.map(f => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
@@ -1972,11 +1971,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       <Select value={atividadeFiltro} onValueChange={setAtividadeFiltro}>
                         <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2]`}><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="__all__" className={itemCls}>Todas</SelectItem>
+                          <SelectItem value="__all__">Todas</SelectItem>
                           {/* ⚠ O VALOR É O `escopo_negocio`, o texto é o do card. A comparação
                               em `getAtividade` é sempre pelo valor — rótulo é para ler. */}
                           {ATIVIDADES.map((a) => (
-                            <SelectItem key={a.valor} value={a.valor} className={itemCls}>{a.rotulo}</SelectItem>
+                            <SelectItem key={a.valor} value={a.valor}>{a.rotulo}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -1986,12 +1985,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       <Select value={safraFiltro} onValueChange={setSafraFiltro}>
                         <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2]`}><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="__all__" className={itemCls}>Todas</SelectItem>
+                          <SelectItem value="__all__">Todas</SelectItem>
                           {/* ⚠ "Sem safra" NÃO é "Todas": é a pergunta oposta, e é a que acha o
                               torto — financiamento e administrativo não têm safra por regra. */}
-                          <SelectItem value={SEM_SAFRA} className={itemCls}>Sem safra</SelectItem>
+                          <SelectItem value={SEM_SAFRA}>Sem safra</SelectItem>
                           {safrasDoFiltro.map(sf => (
-                            <SelectItem key={sf.id} value={sf.id} className={itemCls}>
+                            <SelectItem key={sf.id} value={sf.id}>
                               {sf.codigo || sf.nome}
                               {sf.escopo_negocio && (
                                 <span className="text-muted-foreground">
@@ -2119,10 +2118,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                   <Select value={dataPor} onValueChange={handleDataPorChange}>
                     <SelectTrigger className={`${selCls} w-full bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F]`}><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="financeira" className={itemCls}>Financeira</SelectItem>
-                      <SelectItem value="competencia" className={itemCls}>Competência</SelectItem>
-                      <SelectItem value="vencimento" className={itemCls}>Vencimento</SelectItem>
-                      <SelectItem value="pagamento" className={itemCls}>Pagamento</SelectItem>
+                      <SelectItem value="financeira">Financeira</SelectItem>
+                      <SelectItem value="competencia">Competência</SelectItem>
+                      <SelectItem value="vencimento">Vencimento</SelectItem>
+                      <SelectItem value="pagamento">Pagamento</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -2131,10 +2130,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                   <Select value={tipoOperacao} onValueChange={v => { setTipoOperacao(v); setContaOrigem('__all__'); setContaDestino('__all__'); setMacroLocked(false); }}>
                     <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F]`}><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__all__" className={itemCls}>Todos</SelectItem>
-                      <SelectItem value="1-Entradas" className={itemCls}>Entradas</SelectItem>
-                      <SelectItem value="2-Saídas" className={itemCls}>Saídas</SelectItem>
-                      <SelectItem value="3-Transferências" className={itemCls}>Transferências</SelectItem>
+                      <SelectItem value="__all__">Todos</SelectItem>
+                      <SelectItem value="1-Entradas">Entradas</SelectItem>
+                      <SelectItem value="2-Saídas">Saídas</SelectItem>
+                      <SelectItem value="3-Transferências">Transferências</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -2169,8 +2168,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                   <Select value={fazendaId} onValueChange={setFazendaId}>
                     <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F]`}><SelectValue placeholder="Selecione" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__all__" className={itemCls}>Todas</SelectItem>
-                      {fazOperacionais.map(f => <SelectItem key={f.id} value={f.id} className={itemCls}>{f.nome}</SelectItem>)}
+                      <SelectItem value="__all__">Todas</SelectItem>
+                      {fazOperacionais.map(f => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -2179,10 +2178,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                   <Select value={atividadeFiltro} onValueChange={setAtividadeFiltro}>
                     <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F]`}><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__all__" className={itemCls}>Todas</SelectItem>
+                      <SelectItem value="__all__">Todas</SelectItem>
                       {/* Mesma fonte do painel mobile, dez linhas acima — e do card do modal. */}
                       {ATIVIDADES.map((a) => (
-                        <SelectItem key={a.valor} value={a.valor} className={itemCls}>{a.rotulo}</SelectItem>
+                        <SelectItem key={a.valor} value={a.valor}>{a.rotulo}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -2192,12 +2191,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                   <Select value={safraFiltro} onValueChange={setSafraFiltro}>
                     <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2]`}><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__all__" className={itemCls}>Todas</SelectItem>
+                      <SelectItem value="__all__">Todas</SelectItem>
                       {/* ⚠ "Sem safra" NÃO é "Todas": é a pergunta oposta, e é a que acha o
                           torto — financiamento e administrativo não têm safra por regra. */}
-                      <SelectItem value={SEM_SAFRA} className={itemCls}>Sem safra</SelectItem>
+                      <SelectItem value={SEM_SAFRA}>Sem safra</SelectItem>
                       {safrasDoFiltro.map(sf => (
-                        <SelectItem key={sf.id} value={sf.id} className={itemCls}>
+                        <SelectItem key={sf.id} value={sf.id}>
                           {sf.codigo || sf.nome}
                           {sf.escopo_negocio && (
                             <span className="text-muted-foreground">
@@ -2215,13 +2214,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     <Select value={culturaFiltro} onValueChange={setCulturaFiltro}>
                       <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2]`}><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__all__" className={itemCls}>Todas</SelectItem>
+                        <SelectItem value="__all__">Todas</SelectItem>
                         {/* ⚠ "Sem cultura" É A PERGUNTA DA AUDITORIA: são os compartilhados, os
                             que vão ratear — e, hoje, também todos os que ninguém classificou
                             ainda. Achá-los é o primeiro passo para classificar. */}
-                        <SelectItem value={SEM_CULTURA} className={itemCls}>Sem cultura (rateia)</SelectItem>
+                        <SelectItem value={SEM_CULTURA}>Sem cultura (rateia)</SelectItem>
                         {CULTURAS_LANCAMENTO.map(c => (
-                          <SelectItem key={c.valor} value={c.valor} className={itemCls}>{c.label}</SelectItem>
+                          <SelectItem key={c.valor} value={c.valor}>{c.label}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -2837,32 +2836,32 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="min-w-[150px]">
                                 {isParcelaFinanciamento ? (
-                                  <DropdownMenuItem className="text-[11px]"
+                                  <DropdownMenuItem
                                     onClick={() => abrirFinanciamentoDaParcela(l)}>
                                     <ExternalLink className="mr-1.5 h-3 w-3" /> Ver contrato
                                   </DropdownMenuItem>
                                 ) : (
-                                  <DropdownMenuItem className="text-[11px]" disabled={!canEditRow}
+                                  <DropdownMenuItem disabled={!canEditRow}
                                     title={isHistoricoReadOnly ? 'Histórico antigo: somente leitura' : undefined}
                                     onClick={() => openEdit(l)}>
                                     <Pencil className="mr-1.5 h-3 w-3" /> Editar
                                   </DropdownMenuItem>
                                 )}
-                                <DropdownMenuItem className="text-[11px]" disabled={isParcelaFinanciamento}
+                                <DropdownMenuItem disabled={isParcelaFinanciamento}
                                   title={isParcelaFinanciamento ? 'Parcela de financiamento — não duplicável' : undefined}
                                   onClick={() => handleDuplicate(l)}>
                                   <Copy className="mr-1.5 h-3 w-3" /> Duplicar
                                 </DropdownMenuItem>
                                 {/* FIN-V2-HOMOLOG-FIX-01: "Abrir OC" quando a linha tiver OC (a coluna OC saiu) — mesma porta do icone. */}
                                 {lancamentosComOC.get(l.id) && (
-                                  <DropdownMenuItem className="text-[11px]" data-testid="menu-abrir-oc"
+                                  <DropdownMenuItem data-testid="menu-abrir-oc"
                                     onClick={() => { const oc = lancamentosComOC.get(l.id); if (oc) abrirOCFinanceiro(oc.operacaoId, oc.tipo); }}>
                                     <ExternalLink className="mr-1.5 h-3 w-3" /> Abrir OC
                                   </DropdownMenuItem>
                                 )}
                                 {/* OC-CRIAR-DO-LEGADO-01 — so' onde o banco aceitaria o recebimento (1110-1140, sem OC, vivo, fora do modal antigo). */}
                                 {podeCriarOCDoLegado(l, !!lancamentosComOC.get(l.id)) && (
-                                  <DropdownMenuItem className="text-[11px]" onClick={() => setCriarOCDe(l.id)}>
+                                  <DropdownMenuItem onClick={() => setCriarOCDe(l.id)}>
                                     <FilePlus2 className="mr-1.5 h-3 w-3" /> Criar OC a partir deste lançamento
                                   </DropdownMenuItem>
                                 )}

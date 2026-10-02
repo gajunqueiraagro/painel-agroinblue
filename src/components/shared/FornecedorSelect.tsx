@@ -364,10 +364,9 @@ export function FornecedorSelect({
                   placeholder="Buscar fornecedor..."
                   value={search}
                   onValueChange={setSearch}
-                  className="h-8 text-[12px]"
                 />
                 <CommandList>
-                  <CommandEmpty className="py-3 text-center text-[11px] text-zinc-400">
+                  <CommandEmpty className="py-3 text-center text-[10px] text-zinc-400">
                     Nenhum fornecedor encontrado.
                   </CommandEmpty>
                   {sugestaoLegado && (
@@ -444,7 +443,8 @@ export function FornecedorSelect({
                 !fornecedorSelecionado && 'text-muted-foreground',
               )}
             >
-              <span className="truncate text-left">
+              {/* UI-DROPDOWN-PADRAO-01: o texto que não cabe começa na borda esquerda (o botão centraliza por padrão) */}
+              <span className="min-w-0 flex-1 truncate text-left">
                 {fornecedorSelecionado?.nome ?? placeholder}
               </span>
               <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
@@ -456,10 +456,9 @@ export function FornecedorSelect({
                 placeholder="Buscar fornecedor..."
                 value={search}
                 onValueChange={setSearch}
-                className="h-8 text-[12px]"
               />
               <CommandList>
-                <CommandEmpty className="py-3 text-center text-[11px] text-zinc-400">
+                <CommandEmpty className="py-3 text-center text-[10px] text-zinc-400">
                   Nenhum fornecedor encontrado.
                 </CommandEmpty>
                 <CommandGroup>

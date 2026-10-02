@@ -616,7 +616,7 @@ export function CargaMandiocaModal({
                       </SelectTrigger>
                       <SelectContent>
                         {areas.map(a => (
-                          <SelectItem key={a.id} value={a.id} className="text-[12px]">
+                          <SelectItem key={a.id} value={a.id}>
                             {a.pastoNome} · {formatNum(a.area_plantada_ha, 2)} ha
                           </SelectItem>
                         ))}

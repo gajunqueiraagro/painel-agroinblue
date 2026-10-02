@@ -266,7 +266,7 @@ export function QuebraModal({
                 </SelectTrigger>
                 <SelectContent>
                   {MOTIVOS.map(m => (
-                    <SelectItem key={m.valor} value={m.valor} className="text-[12px]">
+                    <SelectItem key={m.valor} value={m.valor}>
                       {m.rotulo}
                     </SelectItem>
                   ))}

@@ -922,10 +922,10 @@ function TabelaHistorico({
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="min-w-[128px]">
-                  <DropdownMenuItem className="text-[10px]" onClick={() => onRefDelta('meta')}>
+                  <DropdownMenuItem onClick={() => onRefDelta('meta')}>
                     {ROTULO_REF.meta}
                   </DropdownMenuItem>
-                  <DropdownMenuItem className="text-[10px]" onClick={() => onRefDelta('ano')}>
+                  <DropdownMenuItem onClick={() => onRefDelta('ano')}>
                     {ROTULO_REF.ano}
                   </DropdownMenuItem>
                 </DropdownMenuContent>

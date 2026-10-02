@@ -45,7 +45,7 @@ describe('o painel em portal, com largura limitada', () => {
     expect(document.body.contains(painel())).toBe(true);
   });
 
-  it('largura: mínimo = o campo, máximo 320px (era 448 e crescia com o nome); vidro escuro da casa', async () => {
+  it('largura: mínimo = o campo, máximo 320px (era 448 e crescia com o nome); a paleta OPACA do padrão de menu', async () => {
     montar();
     abrir();
     await screen.findByPlaceholderText('Buscar fornecedor...');
@@ -53,7 +53,9 @@ describe('o painel em portal, com largura limitada', () => {
     expect(c).toContain('min-w-[var(--radix-popover-trigger-width)]');
     expect(c).toContain('max-w-[320px]');
     expect(c).not.toContain('max-w-[28rem]');
-    expect(c).toContain('bg-zinc-950/55');
+    /* UI-DROPDOWN-PADRAO-01 — era o vidro translúcido (zinc-950/55 + blur); agora a `MENU_PALETA`, opaca */
+    expect(c).toContain('bg-zinc-800');
+    expect(c).not.toMatch(/backdrop-blur/);
   });
 
   it('item longo trunca, com o texto inteiro no title', async () => {

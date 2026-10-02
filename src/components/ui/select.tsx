@@ -3,6 +3,7 @@ import * as SelectPrimitive from "@radix-ui/react-select";
 import { Check, ChevronDown, ChevronUp } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { MENU_ITEM, MENU_PALETA, MENU_ROTULO } from "@/components/ui/menuPadrao";
 
 const Select = SelectPrimitive.Root;
 
@@ -83,7 +84,9 @@ const SelectContent = React.forwardRef<
            Agnaldo…"; livre, um nome muito longo esticaria a caixa pela tela. `min-w` garante
            que nunca fique menor que o campo, `w-auto` deixa crescer ate o item mais longo e
            `max-w` para antes do absurdo — so' ali o `text-ellipsis` do item entra. */
-        "relative z-50 max-h-[min(24rem,var(--radix-select-content-available-height,24rem))] min-w-[var(--radix-select-trigger-width)] w-auto max-w-[28rem] overflow-hidden rounded-md border border-zinc-700/40 bg-zinc-950/55 backdrop-blur-xl text-zinc-100 shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+        "relative z-50 max-h-[min(24rem,var(--radix-select-content-available-height,24rem))] min-w-[var(--radix-select-trigger-width)] w-auto max-w-[28rem] overflow-hidden rounded-md border shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+        /* ⚠ A PALETA É A DO PADRÃO (`MENU_PALETA`, UI-DROPDOWN-PADRAO-01): opaca, a mesma em qualquer fundo. */
+        MENU_PALETA,
         position === "popper" &&
           "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
         className,
@@ -123,7 +126,7 @@ const SelectLabel = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <SelectPrimitive.Label ref={ref} /* Rótulo de grupo do padrão A23: 10px/500, SEM uppercase — caixa alta em 10px custa
        largura e não acrescenta hierarquia. */
-    className={cn("py-1 pl-8 pr-2 text-[10px] font-medium text-zinc-400", className)} {...props} />
+    className={cn("py-1 pl-8 pr-2", MENU_ROTULO, className)} {...props} />
 ));
 SelectLabel.displayName = SelectPrimitive.Label.displayName;
 
@@ -138,16 +141,15 @@ const SelectItem = React.forwardRef<
       // hover/focus com fundo escuro, selecionado (checked) com fundo mais escuro + texto branco
       // e check visível. Substitui o antigo focus:bg-accent/text-accent-foreground (que, sobre o
       // painel dark-glass, deixava o item selecionado ilegível — regressão do dropdown de Fazenda).
-      /* ⚠ UMA LINHA, SEMPRE — A23: o item quebrava em duas com nome longo e a lista
-         desalinhava. `min-h` mantém os 26px com o texto truncado. */
-      /* ⚠ 10px/15px E' O PADRAO DO SISTEMA — PR-UI-SELECT-03, medido com `getComputedStyle`
-         no proto: o "Data por" da barra de filtros abria com 10px/15px e o Conta Origem com
-         12px/18px, lado a lado. Os dois vinham do MESMO primitivo; a diferenca era um
-         `text-[10px]` que a barra de filtros passava por fora. O que era override de uma
-         tela virou a regua — entao o 10px desce para ca' e os overrides que pediam 10px
-         viram redundancia. `min-h-[26px]` NAO muda: a altura da linha ja' era a mesma nos
-         dois, e e' ela que da' o ritmo da lista. */
-      "relative flex min-h-[22px] w-full cursor-default select-none items-center overflow-hidden text-ellipsis whitespace-nowrap rounded-sm py-1 pl-8 pr-2 text-[10px] leading-[14px] outline-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 text-zinc-100 focus:bg-zinc-800/60 focus:text-zinc-100 data-[state=checked]:bg-zinc-800/40 data-[state=checked]:text-zinc-100",
+      /* ⚠ UMA LINHA, SEMPRE — A23: o item quebrava em duas com nome longo e a lista desalinhava; trunca, com o
+         texto inteiro no `title` que o consumidor passa. */
+      /* ⚠ A MEDIDA É A DO PADRÃO — `MENU_ITEM` (UI-DROPDOWN-PADRAO-01): 22px de altura mínima e 10px de texto, a mesma
+         de todo menu do sistema (era já 22/10 aqui desde o PR-UI-SELECT-03; agora vem do dono, não de uma cópia).
+         O `pl-8` guarda o lugar do check à esquerda. Nenhuma tela sobrescreve o tamanho.
+         ⚠ O REALCE É `zinc-700`: o painel passou a `bg-zinc-800` opaco, e o `zinc-800/60` de antes sumia nele. */
+      "relative flex w-full cursor-default select-none items-center overflow-hidden text-ellipsis whitespace-nowrap rounded-sm",
+      MENU_ITEM,
+      "pl-8 pr-2 outline-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 text-zinc-100 focus:bg-zinc-700 focus:text-zinc-100 data-[state=checked]:bg-zinc-700/50 data-[state=checked]:text-zinc-100",
       className,
     )}
     {...props}

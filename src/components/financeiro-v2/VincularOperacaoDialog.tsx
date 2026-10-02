@@ -214,7 +214,7 @@ export function VincularOperacaoDialog({ open, lancamentoId, clienteId, onClose,
                       <SelectValue placeholder="Escolha o item" />
                     </SelectTrigger>
                     <SelectContent>
-                      {permitidos.map(c => <SelectItem key={c} value={c} className="text-[11px]">{rotuloComponente(c)}</SelectItem>)}
+                      {permitidos.map(c => <SelectItem key={c} value={c}>{rotuloComponente(c)}</SelectItem>)}
                     </SelectContent>
                   </Select>
                   {sug && componente === sug.codigo && (

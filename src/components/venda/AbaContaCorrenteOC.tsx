@@ -677,8 +677,8 @@ export function DialogoExplicarDiferenca({ api, somenteLeitura, lado = 'venda', 
                         <Select value={r.loteId} onValueChange={v => alterar(r.chave, { loteId: v })}>
                           <SelectTrigger className={`h-[18px] px-1 text-[10px] ${verm('lote')}`} aria-label="Lote do ajuste"><SelectValue placeholder="lote" /></SelectTrigger>
                           <SelectContent>
-                            {lotes.length > 1 && <SelectItem value={TODOS_LOTES} className="text-[10px]">Todos os lotes (rateio por kg)</SelectItem>}
-                            {lotes.map(l => <SelectItem key={l.id} value={l.id} className="text-[10px]">{`${l.ordem} · ${rotuloCategoria(l.categoria)}`}</SelectItem>)}
+                            {lotes.length > 1 && <SelectItem value={TODOS_LOTES}>Todos os lotes (rateio por kg)</SelectItem>}
+                            {lotes.map(l => <SelectItem key={l.id} value={l.id}>{`${l.ordem} · ${rotuloCategoria(l.categoria)}`}</SelectItem>)}
                           </SelectContent>
                         </Select>
                       ) : ''}
@@ -697,15 +697,15 @@ export function DialogoExplicarDiferenca({ api, somenteLeitura, lado = 'venda', 
                         <Select value={r.contaId} onValueChange={v => alterar(r.chave, { contaId: v })}>
                           <SelectTrigger className={`h-[18px] px-1 text-[10px] ${verm('conta')}`} aria-label="Conta da explicação"><SelectValue placeholder="conta" /></SelectTrigger>
                           <SelectContent>
-                            {contasDoTipo(r.tipo).map(c => <SelectItem key={c.id} value={c.id} className="text-[10px]">{contaComNumero(c.ordem, c.subcentro)}</SelectItem>)}
+                            {contasDoTipo(r.tipo).map(c => <SelectItem key={c.id} value={c.id}>{contaComNumero(c.ordem, c.subcentro)}</SelectItem>)}
                           </SelectContent>
                         </Select>
                       ) : r.tipo === 'ajuste_preco' ? (
                         <Select value={r.sentido} onValueChange={v => alterar(r.chave, { sentido: v === 'sobe' ? 'sobe' : 'baixa' })}>
                           <SelectTrigger className="h-[18px] px-1 text-[10px]" aria-label="Sentido do ajuste"><SelectValue /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="sobe" className="text-[10px]">Sobe o preço</SelectItem>
-                            <SelectItem value="baixa" className="text-[10px]">Baixa o preço</SelectItem>
+                            <SelectItem value="sobe">Sobe o preço</SelectItem>
+                            <SelectItem value="baixa">Baixa o preço</SelectItem>
                           </SelectContent>
                         </Select>
                       ) : r.tipo === 'devolucao_comprador' ? (

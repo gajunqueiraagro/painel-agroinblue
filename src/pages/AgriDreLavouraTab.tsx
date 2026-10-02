@@ -1091,7 +1091,7 @@ export function AgriDreLavouraTab({ onCorrigirPrecos }: {
                     </SelectTrigger>
                     <SelectContent>
                       {safras.map(s => (
-                        <SelectItem key={s.id} value={s.id} className="text-[12px]">
+                        <SelectItem key={s.id} value={s.id}>
                           {s.codigo || s.nome}
                         </SelectItem>
                       ))}
@@ -1183,7 +1183,7 @@ export function AgriDreLavouraTab({ onCorrigirPrecos }: {
                   </SelectTrigger>
                   <SelectContent>
                     {culturas.map(c => (
-                      <SelectItem key={c.cultura} value={c.cultura} className="text-[12px]">
+                      <SelectItem key={c.cultura} value={c.cultura}>
                         {labelDaCultura(c.cultura)}
                       </SelectItem>
                     ))}

@@ -759,20 +759,30 @@ para 46px de altura, empurrando o resto.
 ## A23 — Uma lista suspensa só, para o sistema inteiro
 
 Toda lista suspensa — `Select`, `DropdownMenu`, `Command`, os combobox de `shared/` e o
-`SearchableSelect` no modo denso — abre com a **mesma** medida e o **mesmo** fundo. Não há
-escolha por componente.
+`SearchableSelect` — abre com a **mesma** medida e o **mesmo** fundo. Não há escolha por
+componente, e **nenhuma tela sobrescreve** o tamanho ou a altura do item.
+
+**O dono é `src/components/ui/menuPadrao.ts`** (desde 02/10/2026): `MENU_PALETA`, `MENU_ITEM` e
+`MENU_ROTULO`. Os quatro componentes de menu e os combobox de `shared/` importam dali; mudar o
+padrão é mudar aquele arquivo. `COMBOBOX_PALETA` (`ui/command.tsx`) reexporta `MENU_PALETA`.
 
 | elemento | medida |
 |---|---|
-| trigger (botão fechado) | `h-8`, `text-[12px]`, `font-normal`, `truncate` |
-| caixa aberta | `bg-zinc-950/55 backdrop-blur-xl border-zinc-700/40 text-zinc-100` |
-| input de busca | `h-8`, `text-[12px]`, `placeholder:text-zinc-400`, ícone `h-3.5 w-3.5` |
-| item | `text-[12px]`, `py-1 px-2`, `min-h-[26px]`, uma linha (`truncate`), check `h-3.5 w-3.5` |
-| item destacado | `bg-zinc-800/60` |
-| item selecionado | `bg-zinc-800/40` |
-| grupo / rótulo | `text-[10px] font-medium text-zinc-400`, **sem** uppercase |
-| vazio | `text-[11px] text-zinc-400`, `py-3` |
+| trigger (botão fechado) | `h-8`, `text-[12px]`, `font-normal`; o texto em `min-w-0 flex-1 truncate text-left` (começa na borda esquerda quando não cabe) |
+| caixa aberta | `MENU_PALETA` = `border-zinc-700/40 bg-zinc-800 text-zinc-100` — **OPACA**, sem alpha e sem `backdrop-blur` |
+| input de busca | `h-7`, `text-[10px]`, `placeholder:text-zinc-400`, ícone `h-3.5 w-3.5` |
+| item | `MENU_ITEM` = `min-h-[22px] px-2 py-1 text-[10px] leading-[14px]`, uma linha (`truncate`), check `h-3.5 w-3.5` (`pl-8` onde há check à esquerda) |
+| item destacado | `bg-zinc-700` |
+| item selecionado | `bg-zinc-700/50` |
+| grupo / rótulo | `MENU_ROTULO` = `text-[10px] font-medium text-zinc-400`, **sem** uppercase |
+| vazio | `text-[10px] text-zinc-400`, `py-3` |
 | altura máxima da lista | `max-h-56`, e a rolagem só na lista |
+
+- **Opaco, de propósito.** O fundo translúcido (`zinc-950` a 55% + desfoque) mostrava a cor do que
+  estava atrás: cinza sobre a página branca, quase preto sobre o navy. Medido no proto (02/10): o
+  `backgroundColor` computado era o mesmo nos dois e a cor vista, não. Opaco, é `rgb(39,39,42)` em
+  qualquer fundo.
+- **O realce subiu para `zinc-700`**: sobre o `zinc-800` opaco, o `zinc-800/60` de antes não se via.
 
 - **Piso 9,5px.** Nada em `text-sm`/`text-base` dentro de lista suspensa — 14px numa lista
   de itens de 26px é o tamanho de um parágrafo dentro de um menu.
@@ -791,6 +801,13 @@ escolha por componente.
 14px com itens de duas linhas, o `Select` em 12px, o `Command` base em 14px com input de
 44px; uns em cinza-escuro, outros em claro. Três tamanhos e dois fundos para o mesmo gesto,
 às vezes na mesma tela.
+
+**Segunda volta (02/10/2026, UI-DROPDOWN-PADRAO-01 da fila do Gabriel):** o item ainda ia de 10px/22
+(`Select`) a 12px/26 (`DropdownMenu`, fornecedor do Novo lançamento), 41 `SelectItem` e 11
+`DropdownMenuItem` de tela sobrescreviam o tamanho (mais o `itemCls` dos filtros do Financeiro e o
+`ITEM_DROPDOWN` da Mesa), e o fundo era translúcido. A medida e a paleta ganharam um dono
+(`menuPadrao.ts`) e as sobrescritas saíram. Ficaram, fora do escopo daquela volta, `text-xs` em 7
+`DropdownMenuItem` (`FinV2ContasTab`, `FinV2SafrasTab`) e `py-*` em 7 `SelectItem`.
 
 ---
 

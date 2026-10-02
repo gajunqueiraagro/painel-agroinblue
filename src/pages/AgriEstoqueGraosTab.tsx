@@ -763,7 +763,7 @@ export function AgriEstoqueGraosTab() {
               </SelectTrigger>
               <SelectContent>
                 {safras.map(s => (
-                  <SelectItem key={s.id} value={s.id} className="text-[12px]">
+                  <SelectItem key={s.id} value={s.id}>
                     {s.codigo || s.nome}
                   </SelectItem>
                 ))}
@@ -778,9 +778,9 @@ export function AgriEstoqueGraosTab() {
                 <SelectValue placeholder={culturasDaSafra.length === 0 ? 'Safra sem área' : 'Escolha'} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={TODAS} className="text-[12px]">Todas</SelectItem>
+                <SelectItem value={TODAS}>Todas</SelectItem>
                 {culturasDaSafra.map(c => (
-                  <SelectItem key={c} value={c} className="text-[12px]">{labelDaCultura(c)}</SelectItem>
+                  <SelectItem key={c} value={c}>{labelDaCultura(c)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -798,9 +798,9 @@ export function AgriEstoqueGraosTab() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={TODOS_LOCAIS} className="text-[12px]">Todos os locais</SelectItem>
+                  <SelectItem value={TODOS_LOCAIS}>Todos os locais</SelectItem>
                   {locaisAtivos.map(l => (
-                    <SelectItem key={l.id} value={l.id} className="text-[12px]">{l.nome}</SelectItem>
+                    <SelectItem key={l.id} value={l.id}>{l.nome}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

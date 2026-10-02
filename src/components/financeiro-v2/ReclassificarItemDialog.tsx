@@ -190,7 +190,7 @@ export function ReclassificarItemDialog({ open, item, rotuloOperacao, clienteId,
                       <SelectValue placeholder="Escolha o componente" />
                     </SelectTrigger>
                     <SelectContent>
-                      {opcoes.map(c => <SelectItem key={c} value={c} className="text-[11px]">{rotuloComponente(c)}</SelectItem>)}
+                      {opcoes.map(c => <SelectItem key={c} value={c}>{rotuloComponente(c)}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 )}

@@ -198,7 +198,7 @@ export function AnexarBoletosDialog({ parcelas, subtitulo, onConfirmar, onFechar
                               </SelectTrigger>
                               <SelectContent>
                                 {opcoes.map(p => (
-                                  <SelectItem key={p.numero} value={String(p.numero)} className="text-[10px]">
+                                  <SelectItem key={p.numero} value={String(p.numero)}>
                                     Parcela {p.numero}/{total}{p.vencimento ? ` · ${dataCurta(p.vencimento)}` : ''}
                                   </SelectItem>
                                 ))}

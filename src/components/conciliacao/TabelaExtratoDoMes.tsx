@@ -520,9 +520,9 @@ function MarcarDuplicadoDialog({ alvo, aoFechar, aoConfirmar, gravando, erro }: 
                 <SelectTrigger className="h-7 text-[11px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {MOTIVOS_DE_CANCELAMENTO.map(m => (
-                    <SelectItem key={m} value={m} className="text-[11px]">{m}</SelectItem>
+                    <SelectItem key={m} value={m}>{m}</SelectItem>
                   ))}
-                  <SelectItem value="Outro" className="text-[11px]">Outro…</SelectItem>
+                  <SelectItem value="Outro">Outro…</SelectItem>
                 </SelectContent>
               </Select>
               {outro && (

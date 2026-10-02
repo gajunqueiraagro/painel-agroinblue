@@ -265,7 +265,7 @@ export function TransferenciasEntreContasModal({
                           </SelectTrigger>
                           <SelectContent>
                             {l.candidatas.map((c) => (
-                              <SelectItem key={c.id} value={c.id} className="text-[10px]">
+                              <SelectItem key={c.id} value={c.id}>
                                 {`${fmtData(c.data)} · ${c.conta ?? '—'} · ${c.descricao ?? ''}`}
                               </SelectItem>
                             ))}

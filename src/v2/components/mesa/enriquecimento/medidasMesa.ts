@@ -55,16 +55,17 @@ export const CELULA_EDITAVEL_DATA = 'h-5 pl-1.5 pr-6 py-0 text-[10.5px] tabular-
 export const GATILHO_TABELA = 'text-[10.5px]';
 
 /**
- * Item do dropdown — NA RÉGUA DO CAMPO (10,5px), PR-CONC-MESA-PAINEL-V1 item 7: o menu que abre de um campo de 10,5 em
- * 11px parecia outro componente.
+ * Item do dropdown — VAZIO desde o UI-DROPDOWN-PADRAO-01: a Mesa HERDA o padrão de menu do sistema (`MENU_ITEM`, 22px /
+ * 10px, em `src/components/ui/menuPadrao.ts`). Era 10,5px (PR-CONC-MESA-PAINEL-V1 item 7), a régua do campo — uma
+ * sobrescrita por tela, que é o que o padrão elimina. Fica exportado vazio para os usos não precisarem mudar.
  */
-export const ITEM_DROPDOWN = 'text-[10.5px] py-0.5';
+export const ITEM_DROPDOWN = '';
 
 /**
  * A VARIANTE COMPACTA — PR-CONC-MESA-ORDEM-03: os blocos "Datas e pagamento" e "Complemento" da Mesa têm linha de 18px e
  * texto de 9,5px (o piso da casa); o controle cai para 16px pela mesma regra dos 20 numa linha de 22 (o controle mora
  * DENTRO da linha, nunca a define). Os blocos normais (Identificação, Classificação) seguem nas constantes de cima.
- * ⚠ O MENU ABERTO NÃO MUDA AQUI (`ITEM_DROPDOWN`): padronizar os dropdowns do sistema é PR próprio.
+ * ⚠ O MENU ABERTO NÃO MUDA AQUI: ele segue o padrão do sistema (`MENU_ITEM`, UI-DROPDOWN-PADRAO-01).
  */
 export const CELULA_EDITAVEL_COMPACTA = 'h-4 px-1.5 py-0 text-[9.5px] [&_svg]:h-3 [&_svg]:w-3';
 export const CELULA_EDITAVEL_DATA_COMPACTA = 'h-4 pl-1.5 pr-6 py-0 text-[9.5px] tabular-nums';

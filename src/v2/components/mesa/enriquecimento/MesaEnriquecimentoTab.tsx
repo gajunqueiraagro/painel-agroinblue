@@ -1634,7 +1634,7 @@ export function MesaEnriquecimentoTab({
             Nenhuma importação para {mesDaRegua && anoDaRegua ? `${String(mesDaRegua).padStart(2, '0')}/${anoDaRegua}` : 'este mês'}.
           </div>
         ) : sessoesDoMesVM.map((sv) => (
-          <DropdownMenuItem key={sv.id} className="gap-1 text-[11px]"
+          <DropdownMenuItem key={sv.id} className="gap-1"
             onSelect={() => { setSessaoId(sv.id); setFiltroConta('todas'); setSelecionadoId(null); }}>
             <span className="min-w-0 flex-1 truncate" title={sv.label}>{sv.label}</span>
             {sv.id === sessoesDoMesVM[0]?.id && (

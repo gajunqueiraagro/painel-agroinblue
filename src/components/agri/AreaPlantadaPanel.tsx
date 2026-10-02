@@ -219,7 +219,7 @@ export function AreaPlantadaPanel({ clienteId, pastoId, pastoNome, areaProdutiva
                 * FIN-SAFRA-ORDEM-02 fixou depois de ela ter sido quebrada uma vez.
                 */}
               {safras.map(s => (
-                <SelectItem key={s.id} value={s.id} className="text-[12px]">
+                <SelectItem key={s.id} value={s.id}>
                   {s.codigo || s.nome}
                   {idsDaJanela.includes(s.id) && (
                     <span className="ml-1 text-[10px] text-muted-foreground">· do mês</span>
@@ -269,7 +269,7 @@ export function AreaPlantadaPanel({ clienteId, pastoId, pastoNome, areaProdutiva
                 <SelectTrigger className="mt-0.5 h-8 text-[12px]"><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
                   {CULTURAS_AREA.map(c => (
-                    <SelectItem key={c.valor} value={c.valor} className="text-[12px]">{c.label}</SelectItem>
+                    <SelectItem key={c.valor} value={c.valor}>{c.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

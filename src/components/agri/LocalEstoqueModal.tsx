@@ -344,7 +344,7 @@ export function LocalEstoqueModal({
                     </SelectTrigger>
                     <SelectContent>
                       {QUEBRA_TIPOS.map(q => (
-                        <SelectItem key={q.valor} value={q.valor} className="text-[12px]">{q.rotulo}</SelectItem>
+                        <SelectItem key={q.valor} value={q.valor}>{q.rotulo}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -366,7 +366,7 @@ export function LocalEstoqueModal({
                           </SelectTrigger>
                           <SelectContent>
                             {QUEBRA_BASES.map(b => (
-                              <SelectItem key={b.valor} value={b.valor} className="text-[12px]">{b.rotulo}</SelectItem>
+                              <SelectItem key={b.valor} value={b.valor}>{b.rotulo}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
@@ -396,7 +396,7 @@ export function LocalEstoqueModal({
                     </SelectTrigger>
                     <SelectContent>
                       {TAXA_UNIDADES.map(u => (
-                        <SelectItem key={u.valor} value={u.valor} className="text-[12px]">{u.rotulo}</SelectItem>
+                        <SelectItem key={u.valor} value={u.valor}>{u.rotulo}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

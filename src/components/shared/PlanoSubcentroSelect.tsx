@@ -12,6 +12,7 @@ import { Search, Check, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ClassificacaoItem } from '@/hooks/useFinanceiroV2';
 import { COMBOBOX_CONTENT } from '@/components/ui/command';
+import { MENU_ITEM } from '@/components/ui/menuPadrao';
 
 export interface PlanoSubcentroSelectProps {
   value: string;                                                    // subcentro
@@ -217,17 +218,18 @@ export function PlanoSubcentroSelect({
       <Popover open={open} onOpenChange={v => { setOpen(v); if (!v) { onSearchChange(''); setHighlight(0); } }}>
         <PopoverTrigger asChild>
           <Button tabIndex={tabIndex} variant="outline" role="combobox" aria-expanded={open} disabled={disabled} className={cn("w-full h-8 justify-between font-normal text-[12px]", size === 'compact' && 'h-5 px-1.5 text-[11px] [&_svg]:h-3 [&_svg]:w-3', triggerClassName)}>
-            <span className="truncate" title={value || undefined}>{value || 'Selecione o subcentro...'}</span>
+            {/* UI-DROPDOWN-PADRAO-01: o texto que não cabe começa na borda esquerda (o botão centraliza por padrão) */}
+            <span className="min-w-0 flex-1 truncate text-left" title={value || undefined}>{value || 'Selecione o subcentro...'}</span>
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
         <PopoverContent className={cn(COMBOBOX_CONTENT, contentClassName)} align="start">
-          {/* Input de busca do padrão A23: 32px, 12px, ícone 14px. */}
+          {/* Input de busca do padrão de menu (UI-DROPDOWN-PADRAO-01): 28px, 10px, ícone 14px. */}
           <div className="flex items-center border-b border-zinc-700/40 px-2">
             <Search className="mr-2 h-3.5 w-3.5 shrink-0 opacity-50" />
             <input
               ref={searchInputRef}
-              className="flex h-8 w-full bg-transparent text-[12px] text-zinc-100 outline-none placeholder:text-zinc-400"
+              className="flex h-7 w-full bg-transparent text-[10px] text-zinc-100 outline-none placeholder:text-zinc-400"
               placeholder="Buscar subcentro..."
               value={search}
               onChange={e => { onSearchChange(e.target.value); setHighlight(0); }}
@@ -240,10 +242,10 @@ export function PlanoSubcentroSelect({
                 lado, a mensagem diz quantos e oferece a porta — dizer "nenhum"
                 com dois escondidos é a tela mentindo sobre o próprio cadastro. */}
             {filtered.length === 0 && ocultosPorTipo === 0 && (
-              <p className="py-3 text-center text-[11px] text-zinc-400">Nenhum subcentro encontrado</p>
+              <p className="py-3 text-center text-[10px] text-zinc-400">Nenhum subcentro encontrado</p>
             )}
             {ocultosPorTipo > 0 && (
-              <p className="px-2 py-1.5 text-center text-[11px] leading-snug text-zinc-400">
+              <p className="px-2 py-1.5 text-center text-[10px] leading-snug text-zinc-400">
                 {filtered.length === 0 ? 'Nada aqui — ' : ''}
                 {ocultosPorTipo} do outro lado {ocultosPorTipo === 1 ? 'oculto' : 'ocultos'}
                 {' '}(a lista mostra só o tipo desta linha).{' '}
@@ -269,15 +271,14 @@ export function PlanoSubcentroSelect({
                 className={cn(
                   /* ⚠ UMA LINHA, SEMPRE — A23: subcentro longo quebrava em duas e a lista
                      desalinhava. O texto inteiro fica no `title`. */
-                  /* ⚠ 10px/15px — A MESMA REGUA DO `SelectItem` do primitivo (PR-UI-SELECT-03). Este
-     componente NAO e' um `Select`: e' Popover + lista propria, entao nao herda nada e
-     precisa da regua escrita. Sem isto, o Subcentro abriria 2px maior que todo o resto
-     do sistema — que e' exatamente a divergencia que o PR veio fechar, do outro lado.
-     `min-h-[26px]` fica: a altura da linha ja' era a mesma. */
-                  "relative flex min-h-[22px] w-full cursor-pointer select-none items-center rounded-sm px-2 py-1 text-[10px] leading-[14px] outline-none",
+                  /* ⚠ A MEDIDA DO PADRÃO DE MENU — `MENU_ITEM` (UI-DROPDOWN-PADRAO-01). Este componente NÃO é um
+                     `Select`: é Popover + lista própria, então não herda nada e importa a medida do dono. O realce é
+                     zinc-700 (o painel é zinc-800 opaco). */
+                  "relative flex w-full cursor-pointer select-none items-center rounded-sm outline-none",
+                  MENU_ITEM,
                   "text-zinc-100",
-                  idx === highlight ? "bg-zinc-800/60 text-zinc-100" : "hover:bg-zinc-800/45",
-                  value === sc.subcentro && idx !== highlight && "bg-zinc-800/40",
+                  idx === highlight ? "bg-zinc-700 text-zinc-100" : "hover:bg-zinc-700/60",
+                  value === sc.subcentro && idx !== highlight && "bg-zinc-700/50",
                   itemClassName,
                 )}
                 onClick={() => handleSelect(sc.subcentro || '')}

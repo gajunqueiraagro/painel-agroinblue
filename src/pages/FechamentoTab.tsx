@@ -1061,7 +1061,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                 </SelectTrigger>
                 <SelectContent>
                   {anosDisp.map(a => (
-                    <SelectItem key={a} value={a} className="text-[11px]">{a}</SelectItem>
+                    <SelectItem key={a} value={a}>{a}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

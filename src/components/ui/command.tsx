@@ -5,6 +5,7 @@ import { Search } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { MENU_ITEM, MENU_PALETA } from "@/components/ui/menuPadrao";
 
 const Command = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive>,
@@ -20,7 +21,9 @@ const Command = React.forwardRef<
          consumidores passam `p-0`, então o `Command` preenche a superfície inteira. Pintar
          o `popover.tsx` escureceria TODO popover do sistema — inclusive os que não são
          lista suspensa —, que é muito além do que este padrão governa. */
-      "flex h-full w-full flex-col overflow-hidden rounded-md border border-zinc-700/40 bg-zinc-950/55 text-zinc-100 backdrop-blur-xl",
+      /* ⚠ A PALETA É A DO PADRÃO (`MENU_PALETA`, UI-DROPDOWN-PADRAO-01): opaca, a mesma em qualquer fundo. */
+      "flex h-full w-full flex-col overflow-hidden rounded-md border",
+      MENU_PALETA,
       className,
     )}
     {...props}
@@ -81,7 +84,7 @@ CommandList.displayName = CommandPrimitive.List.displayName;
 const CommandEmpty = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive.Empty>,
   React.ComponentPropsWithoutRef<typeof CommandPrimitive.Empty>
->((props, ref) => <CommandPrimitive.Empty ref={ref} className="py-3 text-center text-[11px] text-zinc-400" {...props} />);
+>((props, ref) => <CommandPrimitive.Empty ref={ref} className="py-3 text-center text-[10px] text-zinc-400" {...props} />);
 
 CommandEmpty.displayName = CommandPrimitive.Empty.displayName;
 
@@ -130,8 +133,7 @@ CommandSeparator.displayName = CommandPrimitive.Separator.displayName;
  * a variavel `--radix-popover-trigger-width` para consumir. Ele precisa da COR sem a
  * largura. Duas constantes, uma fonte: se a paleta mudar, muda nos dois.
  */
-export const COMBOBOX_PALETA =
-  'bg-zinc-950/55 backdrop-blur-xl border-zinc-700/40 text-zinc-100';
+export const COMBOBOX_PALETA = MENU_PALETA;  /* UI-DROPDOWN-PADRAO-01: o dono é `menuPadrao.ts`; o nome fica pelos importadores. */
 
 export const COMBOBOX_CONTENT =
   'p-0 min-w-[var(--radix-popover-trigger-width)] w-auto max-w-[28rem] ' + COMBOBOX_PALETA;
@@ -143,10 +145,11 @@ const CommandItem = React.forwardRef<
   <CommandPrimitive.Item
     ref={ref}
     className={cn(
-      /* ⚠ UMA LINHA, SEMPRE — A23. O item quebrava em duas quando o nome era longo, e a
-         lista inteira desalinhava. `min-h` garante os 26px mesmo com o texto truncado; quem
-         precisa do texto completo o tem no `title` que o consumidor passa. */
-      "relative flex min-h-[22px] cursor-default select-none items-center gap-1.5 overflow-hidden text-ellipsis whitespace-nowrap rounded-sm px-2 py-1 text-[10px] leading-[14px] text-zinc-100 outline-none data-[disabled=true]:pointer-events-none data-[selected='true']:bg-zinc-800/60 data-[selected=true]:text-zinc-100 data-[disabled=true]:opacity-50",
+      /* ⚠ UMA LINHA, SEMPRE — A23. O item quebrava em duas quando o nome era longo, e a lista inteira desalinhava;
+         quem precisa do texto completo o tem no `title` que o consumidor passa. A medida é `MENU_ITEM` (22px / 10px). */
+      "relative flex cursor-default select-none items-center gap-1.5 overflow-hidden text-ellipsis whitespace-nowrap rounded-sm",
+      MENU_ITEM,
+      "text-zinc-100 outline-none data-[disabled=true]:pointer-events-none data-[selected='true']:bg-zinc-700 data-[selected=true]:text-zinc-100 data-[disabled=true]:opacity-50",
       className,
     )}
     {...props}

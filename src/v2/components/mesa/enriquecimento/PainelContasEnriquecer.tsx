@@ -175,7 +175,7 @@ export function PainelContasEnriquecer({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-[220px]">
             {menu.map((m) => (
-              <DropdownMenuItem key={m.rotulo} className="text-[11px]" disabled={m.desabilitado} title={m.title}
+              <DropdownMenuItem key={m.rotulo}  disabled={m.desabilitado} title={m.title}
                 onSelect={() => m.onClick()}>
                 {m.rotulo}
               </DropdownMenuItem>

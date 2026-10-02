@@ -158,14 +158,14 @@ export function BarterInsumoModal({
                 </SelectTrigger>
                 <SelectContent>
                   {UNIDADES_INSUMO.map(u => (
-                    <SelectItem key={u.valor} value={u.valor} className="text-[12px]">{u.label}</SelectItem>
+                    <SelectItem key={u.valor} value={u.valor}>{u.label}</SelectItem>
                   ))}
                   {/* ⚠ O VALOR LEGADO CONTINUA NA LISTA, e só ele. Um insumo gravado com "Ton"
                       antes do catálogo abriria com o campo VAZIO e diria "salvo" apagando a
                       unidade que tinha — perda silenciosa num gesto que era só conferir. Ele
                       aparece uma vez, marcado, e sai quando o operador escolher a canônica. */}
                   {unidade && !unidadeConhecida(unidade) && (
-                    <SelectItem value={unidade} className="text-[12px]">
+                    <SelectItem value={unidade}>
                       {unidade} (fora do catálogo)
                     </SelectItem>
                   )}
@@ -187,7 +187,7 @@ export function BarterInsumoModal({
               </SelectTrigger>
               <SelectContent>
                 {safras.map(s => (
-                  <SelectItem key={s.id} value={s.id} className="text-[12px]">{s.codigo || s.nome}</SelectItem>
+                  <SelectItem key={s.id} value={s.id}>{s.codigo || s.nome}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

@@ -82,7 +82,7 @@ export function LocalEstoqueSelect({
         </SelectTrigger>
         <SelectContent>
           {opcoes.map(l => (
-            <SelectItem key={l.id} value={l.id} className="text-[12px]">
+            <SelectItem key={l.id} value={l.id}>
               {l.nome} · {rotuloTipoLocal(l.tipo)}
             </SelectItem>
           ))}

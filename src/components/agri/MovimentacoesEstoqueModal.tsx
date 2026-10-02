@@ -292,7 +292,7 @@ export function MovimentacoesEstoqueModal({
                           </SelectTrigger>
                           <SelectContent>
                             {MOTIVOS.map(o => (
-                              <SelectItem key={o.valor} value={o.valor} className="text-[12px]">
+                              <SelectItem key={o.valor} value={o.valor}>
                                 {o.rotulo}
                               </SelectItem>
                             ))}

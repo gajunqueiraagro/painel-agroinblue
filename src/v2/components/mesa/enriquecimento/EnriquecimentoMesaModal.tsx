@@ -323,7 +323,7 @@ export function EnriquecimentoMesaModal({
                         <DropdownMenuLabel data-testid="previa-ao-fornecedor" className="whitespace-normal text-[10px] font-normal text-zinc-300">
                           Ao fornecedor: {aoFornecedor.previa?.resumo ?? '—'}
                         </DropdownMenuLabel>
-                        <DropdownMenuItem data-testid="aplicar-ao-fornecedor" className="text-[11px]"
+                        <DropdownMenuItem data-testid="aplicar-ao-fornecedor" 
                           disabled={!aoFornecedor.previa || aoFornecedor.previa.alvos.length === 0 || aoFornecedor.aplicando}
                           onSelect={() => aoFornecedor.onAplicar()}>
                           {aoFornecedor.aplicando ? 'Levando…'

@@ -1027,7 +1027,7 @@ export function AgriBarterTab() {
                 </SelectTrigger>
                 <SelectContent>
                   {CULTURAS_LANCAMENTO.map(c => (
-                    <SelectItem key={c.valor} value={c.valor} className="text-[12px]">{c.label}</SelectItem>
+                    <SelectItem key={c.valor} value={c.valor}>{c.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

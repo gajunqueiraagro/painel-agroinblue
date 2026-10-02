@@ -272,7 +272,7 @@ export function BarterVendaModal({
                 </SelectTrigger>
                 <SelectContent>
                   {safras.map(s => (
-                    <SelectItem key={s.id} value={s.id} className="text-[12px]">{s.codigo || s.nome}</SelectItem>
+                    <SelectItem key={s.id} value={s.id}>{s.codigo || s.nome}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -287,7 +287,7 @@ export function BarterVendaModal({
                 </SelectTrigger>
                 <SelectContent>
                   {culturasDaSafra.map(c => (
-                    <SelectItem key={c} value={c} className="text-[12px]">{labelDaCultura(c)}</SelectItem>
+                    <SelectItem key={c} value={c}>{labelDaCultura(c)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -309,8 +309,8 @@ export function BarterVendaModal({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="fixo" className="text-[12px]">Preço fixo</SelectItem>
-                  <SelectItem value="a_fixar" className="text-[12px]">A fixar</SelectItem>
+                  <SelectItem value="fixo">Preço fixo</SelectItem>
+                  <SelectItem value="a_fixar">A fixar</SelectItem>
                 </SelectContent>
               </Select>
             </div>

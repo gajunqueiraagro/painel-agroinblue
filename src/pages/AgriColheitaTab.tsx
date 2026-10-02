@@ -338,7 +338,7 @@ export function AgriColheitaTab() {
               <SelectTrigger className="mt-0.5 h-8 text-[12px]"><SelectValue placeholder="Selecione" /></SelectTrigger>
               <SelectContent>
                 {safras.map(s => (
-                  <SelectItem key={s.id} value={s.id} className="text-[12px]">{s.codigo || s.nome}</SelectItem>
+                  <SelectItem key={s.id} value={s.id}>{s.codigo || s.nome}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -354,7 +354,7 @@ export function AgriColheitaTab() {
               </SelectTrigger>
               <SelectContent>
                 {culturasDaSafra.map(c => (
-                  <SelectItem key={c} value={c} className="text-[12px]">{labelDaCultura(c)}</SelectItem>
+                  <SelectItem key={c} value={c}>{labelDaCultura(c)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -368,11 +368,11 @@ export function AgriColheitaTab() {
               <SelectContent>
                 {/* ⚠ "TODOS" NO TOPO, e é o padrão ao entrar: a pergunta que o produtor faz
                     primeiro é sobre a cultura inteira; o talhão é o detalhe de quem vai lançar. */}
-                <SelectItem value={TODOS} className="text-[12px]">
+                <SelectItem value={TODOS}>
                   Todos os talhões{talhoesDaCultura.length > 0 && ` (${talhoesDaCultura.length})`}
                 </SelectItem>
                 {talhoesDaCultura.map(t => (
-                  <SelectItem key={t.id} value={t.id} className="text-[12px]">
+                  <SelectItem key={t.id} value={t.id}>
                     {t.pastoNome} · {formatNum(t.area_plantada_ha, 2)} ha
                     {t.status === 'abertura' && ' (abertura)'}
                   </SelectItem>
