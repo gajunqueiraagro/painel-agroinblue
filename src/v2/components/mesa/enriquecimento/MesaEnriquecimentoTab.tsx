@@ -28,7 +28,7 @@ import { EnriquecimentoMesaModal } from './EnriquecimentoMesaModal';
 import { EnriquecimentoImportarDialog } from './EnriquecimentoImportarDialog';
 import { type VistaPasso2 } from './EnriquecimentoTopoNumeros';
 import { PainelContasEnriquecer } from './PainelContasEnriquecer';
-import { ExtratoDaPlanilhaModal } from './ExtratoDaPlanilhaModal';
+import { ExtratoDaPlanilhaModal, type GestoAgrupar, type ResultadoAgrupar } from './ExtratoDaPlanilhaModal';
 import { passaNoFiltroMesa, type FiltroMesa } from './EnriquecimentoMesaModal';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useContasComExtratoNoMes } from '@/v2/hooks/useContasComExtratoNoMes';
@@ -912,6 +912,32 @@ export function MesaEnriquecimentoTab({
     }
   }
 
+  /**
+   * O AGRUPAR DO EXTRATO DA PLANILHA — PR-CONC-ENRIQ-AGRUP-2b-TELA. A seleção do modal (linhas "sem par" × lançamentos
+   * "Só no sistema") grava pelos MESMOS mutations dos três handlers acima, mas sem toast e sem avançar de linha: o modal
+   * escreve a recusa na barra (UX-TOAST-01) e mantém a seleção. A tradução do motivo é a MESMA (`MOTIVO_MSG`).
+   * ⚠ O ESPELHO DO MODAL SE RELÊ AQUI: os mutations invalidam o staging, não a `espelho-conciliacao` — e o desmembrar
+   *   cancela o consolidado e cria N lançamentos, que é o que o lado Sistema mostra.
+   */
+  async function agruparDoExtrato(g: GestoAgrupar): Promise<ResultadoAgrupar> {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- o jsonb das RPCs, como nos handlers acima
+      const res: any = g.forma === 'casar'
+        ? await resolverProximos({ staging_id: g.stagingIds[0] ?? '', lancamento_id: g.lancamentoIds[0] ?? '' })
+        : g.forma === 'desmembrar'
+          ? await splitSubstituir({ lancamento_id: g.lancamentoIds[0] ?? '', sessao_id: sessaoId ?? '', staging_ids: g.stagingIds })
+          : await resolverGrupo({ staging_id: g.stagingIds[0] ?? '', lancamento_ids: g.lancamentoIds });
+      if (!res?.ok) {
+        return { ok: false, mensagem: res?.mensagem ?? MOTIVO_MSG[res?.motivo] ?? `O banco recusou (${res?.motivo ?? 'erro'}).` };
+      }
+      if (g.forma === 'desmembrar' && clienteAtual?.id) notificarLancamentosMudaram(clienteAtual.id);
+      if (clienteAtual?.id) void qcMesa.invalidateQueries({ queryKey: ['espelho-conciliacao', clienteAtual.id] });
+      return { ok: true };
+    } catch (e: unknown) {
+      return { ok: false, mensagem: `Erro ao gravar: ${errMsg(e)}` };
+    }
+  }
+
   async function handleDesfazerGrupo(stagingId: string) {
     try {
       const res: any = await desfazerGrupo(stagingId);
@@ -1786,6 +1812,7 @@ export function MesaEnriquecimentoTab({
           const balde = baldePorId.get(stagingId);
           abrirMesa(contaId, stagingId, passaNoFiltroMesa(balde, 'revisar') ? 'revisar' : 'todas');
         }}
+        onAgrupar={agruparDoExtrato}
       />
 
       {/* ⚠ MONTADO SEMPRE, visível por estado — o idioma do 131. Desmontá-lo ao fechar

@@ -2,8 +2,8 @@
  * O EXTRATO DA PLANILHA — PR-CONC-ENRIQUECER-V2-01, quadro 2 do mock.
  *
  * A Conferência OFX × Sistema com a PLANILHA no lugar do banco. Esquerda: Data · "Conta do plano · Fornecedor" · Valor;
- * no meio, a coluna de 26px do símbolo (✓ ≈ ≠ ○ ! ↳); direita: Valor · Data · descrição · fornecedor · origem (B/✓/M) ·
- * selo · "⋯". Linhas por dia, com o fecho do dia ("confere" / "difere R$ X"); totais no topo; legenda; "Só não
+ * no meio, a coluna de 26px do símbolo (✓ ≈ ≠ ○ ! ↳); direita: Valor · Data · descrição · fornecedor · status (Conciliado /
+ * Realizado) · selo · "⋯". Linhas por dia, com o fecho do dia ("confere" / "difere R$ X"); totais no topo; legenda; "Só não
  * enriquecidos"; fundo verde-claro na linha já enriquecida.
  *
  * ⚠ A MONTAGEM É A DA CONFERÊNCIA (`montarExtratoDaPlanilha` → `montarMesa`), e as medidas também: linha de 18px, 10px
@@ -11,10 +11,13 @@
  * ⚠ PLANILHA = REFERÊNCIA, SISTEMA = VERDADE (PR-CONC-ENRIQUECER-V2-02): o cabeçalho diz isso (azul-claro × navy); o dia
  *   FECHA no fim, como na Conferência ("fechamento DD/MM", o mesmo par de tokens), e o fechamento do MÊS fica congelado
  *   abaixo do corpo.
+ * ⚠ AGRUPAR PELA SELEÇÃO (PR-CONC-ENRIQ-AGRUP-2b-TELA), o gesto da Conferência: a caixa marca a linha "sem par" da planilha
+ *   e o lançamento "Só no sistema"; a barra no rodapé diz a forma (1×1 casar · N×1 desmembrar · 1×N juntar · N×M sem
+ *   gravação) e grava pela RPC que a aba já usa (`onAgrupar`). A recusa da RPC fica ESCRITA na barra e a seleção fica.
  * ⚠ CLICAR NA LINHA (ou no "⋯") ABRE A MESA NAQUELA LINHA, por cima deste modal: ele continua montado, e fechar a Mesa
  *   volta ao MESMO ponto da rolagem.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Segmentado } from '@/components/ui/segmentado';
 import type { ClassificacaoStagingPreviewRow } from '@/v2/hooks/useClassificacaoStaging';
@@ -24,22 +27,35 @@ import { contaDaLinhaStaging } from '@/v2/lib/mesa/enriquecimentoView';
 import {
   LEGENDA_SIMBOLOS, montarExtratoDaPlanilha, soNaoEnriquecidos, type LinhaExtratoPlanilha, type SeloSistema,
 } from '@/v2/lib/mesa/extratoDaPlanilha';
+import { gestoDaSelecao, type FormaDaSelecao } from '@/v2/lib/mesa/agruparNoExtrato';
+import { STATUS_PALETA, STATUS_PILULA_BASE } from '@/lib/financeiro/statusFinanceiro';
 
 /** O colgroup — a régua da Conferência (pior texto renderizado + 8 + padding), medida no navegador. */
 export const COLUNAS_EXTRATO_PLANILHA: ReadonlyArray<{ chave: string; largura: string | null }> = [
+  /* as caixas de seleção — PR-CONC-ENRIQ-AGRUP-2b-TELA: 18px, SEMPRE presentes (layout fixo), vazias onde não se marca */
+  { chave: 'p-sel', largura: '18px' },
   { chave: 'p-data', largura: '44px' },
   { chave: 'p-texto', largura: null },
   { chave: 'p-valor', largura: '84px' },
   { chave: 'simbolo', largura: '26px' },
+  { chave: 's-sel', largura: '18px' },
   { chave: 's-valor', largura: '84px' },
   { chave: 's-data', largura: '44px' },
   { chave: 's-descricao', largura: null },
   { chave: 's-fornecedor', largura: '124px' },
-  { chave: 's-origem', largura: '22px' },
+  /* "Conciliado" na pílula de 9,5px semibold (STATUS_PILULA_BASE) mede 49px + 12 de padding + 2 de borda = 63, + 8 de
+     folga + 6 da célula = 77 -> 78 (medido no navegador). */
+  { chave: 's-status', largura: '78px' },
   { chave: 's-selo', largura: '84px' },
   { chave: 'acoes', largura: '22px' },
 ];
 export const ALTURA_LINHA_EXTRATO = '18px';
+/** A faixa do rodapé: o fechamento do mês OU a barra da seleção, no MESMO lugar e com a MESMA altura. */
+export const ALTURA_RODAPE_EXTRATO = '26px';
+
+/** O gesto que a aba grava — os mesmos mutations da Mesa (`resolverProximos` / `splitSubstituir` / `resolverGrupo`). */
+export interface GestoAgrupar { forma: Exclude<FormaDaSelecao, 'bloco'>; stagingIds: string[]; lancamentoIds: string[] }
+export type ResultadoAgrupar = { ok: boolean; mensagem?: string };
 
 const brl = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const dataCurta = (s: string | null) => {
@@ -80,10 +96,15 @@ export interface ExtratoDaPlanilhaModalProps {
   sobrescreverIds?: ReadonlySet<string>;
   /** Abre a Mesa nesta linha da planilha (por cima deste modal). */
   onAbrirLinha: (stagingId: string, contaId: string) => void;
+  /** Grava o agrupamento da seleção pela RPC; devolve `ok` e, na recusa, a frase. Sem ela, a barra só mostra. */
+  onAgrupar?: (g: GestoAgrupar) => Promise<ResultadoAgrupar>;
 }
+
+const STATUS_ROTULO = { conciliado: 'Conciliado', realizado: 'Realizado' } as const;
 
 export function ExtratoDaPlanilhaModal({
   open, onOpenChange, clienteId, anoMes, mesRotulo, staging, contas, contaId, onContaId, sobrescreverIds, onAbrirLinha,
+  onAgrupar,
 }: ExtratoDaPlanilhaModalProps) {
   const [soPendentes, setSoPendentes] = useState(false);
   const conta = contaId ?? contas[0]?.id ?? null;
@@ -105,9 +126,58 @@ export function ExtratoDaPlanilhaModal({
 
   const abrir = (l: LinhaExtratoPlanilha) => { if (l.stagingId && conta) onAbrirLinha(l.stagingId, conta); };
 
+  /* ── A SELEÇÃO — local ao modal; trocar de conta ou fechar limpa ─────────────────────────────────────────────── */
+  const [marcP, setMarcP] = useState<ReadonlySet<string>>(new Set());
+  const [marcS, setMarcS] = useState<ReadonlySet<string>>(new Set());
+  const [confirmando, setConfirmando] = useState(false);
+  const [gravando, setGravando] = useState(false);
+  const [recusa, setRecusa] = useState<string | null>(null);
+  const limpar = () => { setMarcP(new Set()); setMarcS(new Set()); setConfirmando(false); setRecusa(null); };
+  useEffect(() => { limpar(); }, [conta, open]);
+  const alternar = (setter: typeof setMarcP, id: string) => {
+    setter((atual) => { const n = new Set(atual); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+    setConfirmando(false);
+    setRecusa(null);
+  };
+  /* os valores vêm das MESMAS linhas desenhadas (com sinal) — nenhuma soma de outra fonte */
+  const valores = useMemo(() => {
+    const vp = new Map<string, number>(); const vs = new Map<string, number>();
+    for (const d of extrato?.dias ?? []) for (const l of d.linhas) {
+      if (l.selPlanilha && l.planilha) vp.set(l.selPlanilha, l.planilha.valor);
+      if (l.selSistema && l.sistema) vs.set(l.selSistema, l.sistema.valor);
+    }
+    return { vp, vs };
+  }, [extrato]);
+  const gesto = useMemo(() => gestoDaSelecao({
+    planilha: [...marcP].filter((id) => valores.vp.has(id)).map((id) => ({ id, valor: valores.vp.get(id) ?? 0 })),
+    sistema: [...marcS].filter((id) => valores.vs.has(id)).map((id) => ({ id, valor: valores.vs.get(id) ?? 0 })),
+  }), [marcP, marcS, valores]);
+  const temSelecao = marcP.size > 0 || marcS.size > 0;
+
+  const gravar = async () => {
+    if (!gesto.forma || gesto.forma === 'bloco' || !gesto.habilitado || !onAgrupar || gravando) return;
+    /* ⚠ O DESMEMBRAR PEDE CONFIRMAÇÃO NA BARRA: cria N lançamentos e cancela o consolidado. */
+    if (gesto.forma === 'desmembrar' && !confirmando) { setConfirmando(true); return; }
+    setGravando(true);
+    setRecusa(null);
+    try {
+      const res = await onAgrupar({ forma: gesto.forma, stagingIds: [...marcP], lancamentoIds: [...marcS] });
+      if (res.ok) limpar();
+      /* ⚠ A RECUSA FICA ESCRITA E A SELEÇÃO FICA (UX-TOAST-01) — o operador corrige sem remarcar. */
+      else { setRecusa(res.mensagem ?? 'O banco recusou o agrupamento.'); setConfirmando(false); }
+    } catch (e: unknown) {
+      setRecusa(e instanceof Error ? e.message : 'Erro ao gravar o agrupamento.');
+      setConfirmando(false);
+    } finally {
+      setGravando(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[92vh] max-h-[92vh] w-[96vw] max-w-[1400px] flex-col gap-0 overflow-hidden p-0">
+      <DialogContent className="flex h-[92vh] max-h-[92vh] w-[96vw] max-w-[1400px] flex-col gap-0 overflow-hidden p-0"
+        /* com seleção, o Esc LIMPA a seleção em vez de fechar o modal */
+        onEscapeKeyDown={(e) => { if (temSelecao) { e.preventDefault(); if (!gravando) limpar(); } }}>
         <DialogHeader className="h-9 shrink-0 flex-row items-center gap-2.5 space-y-0 bg-primary px-4">
           <DialogTitle className="whitespace-nowrap text-[12px] font-medium text-primary-foreground">
             Extrato da planilha · {nomeConta} · {mesRotulo}
@@ -155,7 +225,6 @@ export function ExtratoDaPlanilhaModal({
               {LEGENDA_SIMBOLOS.map(([s, t]) => (
                 <span key={s}><b className={COR_SIMBOLO[s]}>{s}</b> {t}</span>
               ))}
-              <span>· origem: <b>B</b> banco · <b>✓</b> conciliado · <b>M</b> manual</span>
             </span>
             <label className="ml-auto flex shrink-0 items-center gap-1 whitespace-nowrap">
               <input type="checkbox" data-testid="so-nao-enriquecidos" checked={soPendentes}
@@ -175,35 +244,80 @@ export function ExtratoDaPlanilhaModal({
             </colgroup>
             <thead>
               <tr style={{ height: ALTURA_LINHA_EXTRATO }} className="text-[9.5px]">
-                <th colSpan={3} data-testid="cabecalho-planilha" className="sticky top-0 z-[3] bg-blue-100 px-[5px] text-center font-medium text-blue-900">Planilha · referência</th>
+                <th colSpan={4} data-testid="cabecalho-planilha" className="sticky top-0 z-[3] bg-blue-100 px-[5px] text-center font-medium text-blue-900">Planilha · referência</th>
                 <th className="sticky top-0 z-[3] border-x border-primary-foreground/30 bg-primary text-center font-medium text-primary-foreground" />
-                <th colSpan={7} data-testid="cabecalho-sistema" className="sticky top-0 z-[3] bg-primary px-[5px] text-center font-medium text-primary-foreground">Sistema · o que vale</th>
+                <th colSpan={8} data-testid="cabecalho-sistema" className="sticky top-0 z-[3] bg-primary px-[5px] text-center font-medium text-primary-foreground">Sistema · o que vale</th>
               </tr>
             </thead>
             <tbody>
               {dias.length === 0 && (
                 <tr style={{ height: ALTURA_LINHA_EXTRATO }}>
-                  <td colSpan={11} className="py-6 text-center text-muted-foreground">
+                  <td colSpan={COLUNAS_EXTRATO_PLANILHA.length} className="py-6 text-center text-muted-foreground">
                     {extrato ? 'Nada neste recorte.' : '—'}
                   </td>
                 </tr>
               )}
               {dias.map((d) => (
-                <DiaRows key={d.data ?? 'sem-data'} d={d} onAbrir={abrir} />
+                <DiaRows key={d.data ?? 'sem-data'} d={d} onAbrir={abrir} marcP={marcP} marcS={marcS} travado={gravando}
+                  onMarcarP={(id) => alternar(setMarcP, id)} onMarcarS={(id) => alternar(setMarcS, id)} />
               ))}
             </tbody>
           </table>
         </div>
 
-        {/* ═══ O FECHAMENTO DO MÊS — congelado, fora do scrollport, sempre presente (PR-CONC-ENRIQUECER-V2-02) ═══
-            ⚠ NENHUM CÁLCULO NOVO: são os totais do topo (`totaisDoEspelho`), somados — as saídas já vêm negativas. */}
-        <FechamentoDoMes mesRotulo={mesRotulo} totais={extrato?.totais ?? null} />
+        {/* ═══ O RODAPÉ — congelado, fora do scrollport, sempre presente, 26px ═══
+            Sem seleção: o fechamento do mês (PR-CONC-ENRIQUECER-V2-02; NENHUM CÁLCULO NOVO, os totais do topo somados).
+            Com seleção: a barra, no MESMO lugar — nada muda de altura (PR-CONC-ENRIQ-AGRUP-2b-TELA). */}
+        <div data-testid="rodape-extrato" style={{ height: ALTURA_RODAPE_EXTRATO }} className="flex shrink-0 flex-col">
+          {temSelecao ? (
+            <div data-testid="barra-selecao"
+              className="flex h-full items-center gap-3 overflow-hidden whitespace-nowrap border-t-2 border-t-[#E7C873] bg-primary px-3.5 text-[10px] tabular-nums text-primary-foreground">
+              <span>
+                marcados: {marcP.size} da planilha {brl(gesto.somaPlanilha)} · {marcS.size} do sistema {brl(gesto.somaSistema)}
+              </span>
+              <span data-testid="diferenca-selecao" className="text-[#E7C873]">diferença {brl(gesto.diferenca)}</span>
+              {gesto.forma && <span className="opacity-80">{marcP.size}×{marcS.size}</span>}
+              <span data-testid="recado-selecao"
+                className={`min-w-0 truncate ${recusa ? 'text-[#F5B5B5]' : 'text-primary-foreground/70'}`}
+                title={recusa ?? gesto.motivo ?? undefined}>
+                {recusa ?? (!gesto.habilitado ? gesto.motivo : '') ?? ''}
+              </span>
+              <span className="ml-auto flex shrink-0 items-center gap-2">
+                {gesto.forma && confirmando ? (
+                  <>
+                    <button type="button" data-testid="confirmar-gesto" disabled={gravando} onClick={() => { void gravar(); }}
+                      className="h-[18px] rounded bg-[#E7C873] px-2 text-[10px] font-medium text-foreground hover:bg-[#D9B95F]">
+                      {gravando ? 'Gravando…' : `Confirmar: cria ${marcP.size} lançamentos e cancela o consolidado`}
+                    </button>
+                    <button type="button" data-testid="voltar-gesto" disabled={gravando} onClick={() => setConfirmando(false)}
+                      className="h-[18px] rounded bg-primary-foreground/20 px-2 text-[10px] hover:bg-primary-foreground/30">voltar</button>
+                  </>
+                ) : gesto.forma ? (
+                  <button type="button" data-testid="botao-gesto"
+                    disabled={!gesto.habilitado || gravando || !onAgrupar}
+                    title={!gesto.habilitado ? gesto.motivo ?? undefined : !onAgrupar ? 'Gravação indisponível nesta tela.' : undefined}
+                    onClick={() => { void gravar(); }}
+                    className={`h-[18px] rounded px-2 text-[10px] font-medium ${
+                      gesto.habilitado && onAgrupar && !gravando
+                        ? 'bg-[#E7C873] text-foreground hover:bg-[#D9B95F]'
+                        : 'cursor-not-allowed bg-primary-foreground/20 text-primary-foreground/50'}`}>
+                    {gravando ? 'Gravando…' : gesto.rotulo}
+                  </button>
+                ) : null}
+                <button type="button" data-testid="limpar-selecao" disabled={gravando} onClick={limpar}
+                  className="h-[18px] rounded bg-primary-foreground/20 px-2 text-[10px] hover:bg-primary-foreground/30">limpar</button>
+              </span>
+            </div>
+          ) : (
+            <FechamentoDoMes mesRotulo={mesRotulo} totais={extrato?.totais ?? null} />
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );
 }
 
-/** A faixa de 22px do fechamento do mês: "planilha P · sistema S · confere | difere R$ P−S"; sem extrato, "—". */
+/** O fechamento do mês (a altura é a do rodapé): "planilha P · sistema S · confere | difere R$ P−S"; sem extrato, "—". */
 export function FechamentoDoMes({ mesRotulo, totais }: {
   mesRotulo: string;
   totais: { entradasBanco: number; saidasBanco: number; entradasSistema: number; saidasSistema: number } | null;
@@ -213,7 +327,7 @@ export function FechamentoDoMes({ mesRotulo, totais }: {
   const dif = p !== null && sis !== null ? p - sis : null;
   return (
     <div data-testid="fechamento-mes"
-      className="flex h-[22px] shrink-0 items-center overflow-hidden whitespace-pre bg-primary px-3.5 text-[10px] tabular-nums text-primary-foreground">
+      className="flex h-full shrink-0 items-center overflow-hidden whitespace-pre bg-primary px-3.5 text-[10px] tabular-nums text-primary-foreground">
       <span className="font-semibold">Fechamento {mesRotulo}</span>
       {p === null || sis === null || dif === null ? (
         <span>{' · —'}</span>
@@ -228,7 +342,12 @@ export function FechamentoDoMes({ mesRotulo, totais }: {
   );
 }
 
-function DiaRows({ d, onAbrir }: { d: ReturnType<typeof soNaoEnriquecidos>[number]; onAbrir: (l: LinhaExtratoPlanilha) => void }) {
+function DiaRows({ d, onAbrir, marcP, marcS, travado, onMarcarP, onMarcarS }: {
+  d: ReturnType<typeof soNaoEnriquecidos>[number];
+  onAbrir: (l: LinhaExtratoPlanilha) => void;
+  marcP: ReadonlySet<string>; marcS: ReadonlySet<string>; travado: boolean;
+  onMarcarP: (id: string) => void; onMarcarS: (id: string) => void;
+}) {
   const dif = d.planilha - d.sistema;
   return (
     <>
@@ -238,15 +357,33 @@ function DiaRows({ d, onAbrir }: { d: ReturnType<typeof soNaoEnriquecidos>[numbe
           onClick={() => onAbrir(l)}
           className={`border-b border-border/40 ${l.stagingId ? 'cursor-pointer hover:bg-primary/[0.04]' : ''} ${
             l.enriquecida ? 'bg-success/[0.06]' : ''}`}>
+          {/* ⚠ O CLIQUE NA CAIXA NÃO ABRE A MESA (stopPropagation); o clique na linha continua abrindo. */}
+          <td className="text-center" data-testid="p-sel" onClick={(e) => { if (l.selPlanilha) e.stopPropagation(); }}>
+            {l.selPlanilha && (
+              <input type="checkbox" className="h-3 w-3 align-middle" checked={marcP.has(l.selPlanilha)} disabled={travado}
+                onChange={() => { if (l.selPlanilha) onMarcarP(l.selPlanilha); }} aria-label="Marcar linha da planilha" />
+            )}
+          </td>
           <td className={`${CEL} text-[9.5px] text-muted-foreground`}>{l.planilha ? dataCurta(l.data) : ''}</td>
           <td className={`${CEL} ${l.filha ? 'pl-[14px]' : ''}`} title={l.planilha?.texto}>{l.planilha?.texto ?? ''}</td>
           <td className={`${CEL} text-right ${l.planilha ? corVal(l.planilha.valor) : ''}`}>{l.planilha ? brl(l.planilha.valor) : ''}</td>
           <td data-testid="simbolo" className={`border-x text-center font-bold ${l.simbolo ? COR_SIMBOLO[l.simbolo] : ''}`}>{l.simbolo ?? ''}</td>
+          <td className="text-center" data-testid="s-sel" onClick={(e) => { if (l.selSistema) e.stopPropagation(); }}>
+            {l.selSistema && (
+              <input type="checkbox" className="h-3 w-3 align-middle" checked={marcS.has(l.selSistema)} disabled={travado}
+                onChange={() => { if (l.selSistema) onMarcarS(l.selSistema); }} aria-label="Marcar lançamento do sistema" />
+            )}
+          </td>
           <td className={`${CEL} text-right ${l.sistema ? corVal(l.sistema.valor) : ''}`}>{l.sistema ? brl(l.sistema.valor) : ''}</td>
           <td className={`${CEL} text-[9.5px] text-muted-foreground`}>{l.sistema ? dataCurta(l.sistema.data) : ''}</td>
           <td className={CEL} title={l.sistema?.descricao}>{l.sistema?.descricao ?? ''}</td>
           <td className={`${CEL} text-muted-foreground`} title={l.sistema?.fornecedor}>{l.sistema?.fornecedor ?? ''}</td>
-          <td className="text-center text-[9.5px] font-semibold text-muted-foreground" data-testid="origem">{l.sistema?.origem ?? ''}</td>
+          {/* ⚠ O STATUS TEM UM DONO SÓ: `STATUS_PALETA` (a mesma pílula do Financeiro), nunca cor copiada aqui. */}
+          <td className="px-[3px] text-center" data-testid="status-sistema">
+            {l.sistema && (
+              <span className={`${STATUS_PILULA_BASE} ${STATUS_PALETA[l.sistema.status].pilula}`}>{STATUS_ROTULO[l.sistema.status]}</span>
+            )}
+          </td>
           <td className="px-[3px] text-center">
             {l.selo && (
               <span data-testid="selo" className={`inline-flex h-[13px] items-center whitespace-nowrap rounded-[3px] border px-[4px] text-[9.5px] leading-none ${COR_SELO[l.selo]}`}>
@@ -266,8 +403,9 @@ function DiaRows({ d, onAbrir }: { d: ReturnType<typeof soNaoEnriquecidos>[numbe
       {/* ⚠ O DIA FECHA NO FIM, COMO NA CONFERÊNCIA (PR-CONC-ENRIQUECER-V2-02): "fechamento DD/MM", o par de tokens de lá.
           No fechamento o azul vence o verde/vermelho — a linha é subtotal, o sinal já está no número. */}
       <tr data-testid="dia" style={{ height: ALTURA_LINHA_EXTRATO }} className="border-b border-t border-border bg-primary/10 text-[9.5px]">
-        <td colSpan={2} className={`${CEL} font-semibold text-primary`}>fechamento {dataCurta(d.data)}</td>
+        <td colSpan={3} className={`${CEL} font-semibold text-primary`}>fechamento {dataCurta(d.data)}</td>
         <td className={`${CEL} text-right font-semibold text-primary`}>{brl(d.planilha)}</td>
+        <td />
         <td />
         <td className={`${CEL} text-right font-semibold text-primary`}>{brl(d.sistema)}</td>
         <td colSpan={6} className={`${CEL} text-right font-semibold`} data-testid="fecho-dia">

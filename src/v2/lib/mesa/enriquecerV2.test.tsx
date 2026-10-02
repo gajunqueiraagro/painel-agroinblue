@@ -6,7 +6,7 @@
  * ⚠ ASSERÇÃO DE "NENHUM" LEVA O TAMANHO DO CONJUNTO (CLAUDE.md): o Extrato reporta quantas linhas comparou dos dois lados.
  */
 import { describe, it, expect, vi, beforeAll } from 'vitest';
-import { render, screen, within, fireEvent } from '@testing-library/react';
+import { render, screen, within, fireEvent, waitFor } from '@testing-library/react';
 import type { ClassificacaoStagingPreviewRow } from '@/v2/hooks/useClassificacaoStaging';
 import { linhaCrua } from '@/v2/lib/mesa/linhaCrua.fixture';
 import { CONTA_BB, espelhoBB0109, stagingBB0109 } from '@/v2/lib/mesa/enriquecerV2.fixture';
@@ -228,7 +228,8 @@ describe('Extrato da planilha — sessão 8d6efeb7, BB, 01/09', () => {
     expect(filhas.map((f) => f.stagingId).sort()).toEqual(['547a04fa', '9fd050ed']);
     const so = linhas.filter((l) => l.selo === 'Só no sistema');
     expect(so.map((l) => l.sistema?.lancamentoId)).toEqual(['e7970f00']);
-    expect(so[0].sistema?.origem).toBe('✓');
+    /* PR-CONC-ENRIQ-AGRUP-2b-TELA — a origem B/✓/M virou o STATUS do lançamento (era '✓' = conciliado) */
+    expect(so[0].sistema?.status).toBe('conciliado');
   });
 
   it('o dia fecha: planilha e sistema somam o mesmo (as duas pontas têm dois 506,51)', () => {
@@ -328,7 +329,9 @@ describe('Extrato da planilha — leitura limpa (V2-02)', () => {
     abrirExtrato();
     const mes = screen.getByTestId('fechamento-mes');
     expect(mes).toHaveTextContent(/^Fechamento set\/2026 · planilha -?[\d.]+,\d{2} · sistema -?[\d.]+,\d{2} · (confere|difere R\$ -?[\d.]+,\d{2})$/);
-    expect(mes.style.height || mes.className).toMatch(/h-\[22px\]/);
+    /* PR-CONC-ENRIQ-AGRUP-2b-TELA — o rodapé passou a 26px (o fechamento OU a barra da seleção, no mesmo lugar) */
+    expect(screen.getByTestId('rodape-extrato').style.height).toBe('26px');
+    expect(screen.getByTestId('rodape-extrato').contains(mes)).toBe(true);
     /* fora do scrollport: não é descendente da área que rola */
     expect(screen.getByTestId('tabela-extrato-planilha').parentElement?.contains(mes)).toBe(false);
   });
@@ -343,6 +346,155 @@ describe('Extrato da planilha — leitura limpa (V2-02)', () => {
     render(<FechamentoDoMes mesRotulo="set/2026"
       totais={{ entradasBanco: 1000, saidasBanco: -400, entradasSistema: 1000, saidasSistema: -350.5 }} />);
     expect(screen.getByTestId('fechamento-mes')).toHaveTextContent('Fechamento set/2026 · planilha 600,00 · sistema 649,50 · difere R$ -49,50');
+  });
+});
+
+/* ═══ PR-CONC-ENRIQ-AGRUP-2b-TELA — agrupar pela seleção e o status do lado Sistema ═══════════════════════════════════ */
+describe('Extrato da planilha — agrupar pela seleção (2b-tela)', () => {
+  /* a linha "sem par" de 506,51 no dia e o "Vivo Casa" só no sistema (e7970f00): o 1×1 do caso real do ↳ */
+  const semPar = (staging_id: string, excel_valor: number) => linhaCrua({ staging_id, match_status: 'sem_match', excel_valor,
+    excel_tipo_operacao: '2-Saídas', excel_data_pagamento: '2026-09-01', conta_filtro_id: CONTA_BB, excel_subcentro: 'Telefone',
+    excel_fornecedor: 'TELEFONICA' });
+  /* sp-1 (506,51) faz o 1×1 com o "Vivo Casa"; sp-2 + sp-3 (300,00 + 206,51) fazem o N×1 que FECHA com ele (fix1) */
+  const comSemPar = () => [...stagingBB0109(), semPar('sp-1', 506.51), semPar('sp-2', 300), semPar('sp-3', 206.51)];
+  const abrirSel = (onAgrupar?: (g: unknown) => Promise<{ ok: boolean; mensagem?: string }>) => render(
+    <ExtratoDaPlanilhaModal open onOpenChange={vi.fn()} clienteId="nj" anoMes="2026-09" mesRotulo="set/2026"
+      staging={comSemPar()} contas={[{ id: CONTA_BB, nome: 'Banco do Brasil' }]} contaId={CONTA_BB}
+      onContaId={vi.fn()} onAbrirLinha={vi.fn()} onAgrupar={onAgrupar} />);
+  const linhaDo = (pred: (tr: HTMLElement) => boolean) => {
+    const tr = screen.getAllByTestId('linha-extrato-planilha').find(pred);
+    if (!tr) throw new Error('linha não encontrada');
+    return tr;
+  };
+
+  it('o que se marca: a linha sem par e o "Só no sistema"; a pareada, a filha e a Transferência não', () => {
+    /* a interna: um lançamento sem par marcado como transferência entre contas do cliente */
+    const esp = espelhoBB0109();
+    const interna = { ...esp.sistema_completo[0], lancamento_id: 'tr-1', descricao: 'TED entre contas', valor_assinado: -1000 };
+    const ex = montarExtratoDaPlanilha(comSemPar(), { ...esp, sistema_completo: [...esp.sistema_completo, interna] },
+      CONTA_BB, new Set(['tr-1']));
+    const ls = ex.dias.flatMap((d) => d.linhas);
+    expect(ls.find((l) => l.stagingId === 'sp-1')?.selPlanilha).toBe('sp-1');
+    expect(ls.find((l) => l.selo === 'Só no sistema')?.selSistema).toBe('e7970f00');
+    /* a busca prova que sabe achar: há pareadas, filhas e a interna — e nenhuma é marcável */
+    const pareadas = ls.filter((l) => l.planilha && l.sistema);
+    const filhas = ls.filter((l) => l.filha);
+    const internas = ls.filter((l) => l.selo === 'Transferência');
+    expect(pareadas.length).toBeGreaterThan(0);
+    expect(filhas.length).toBe(2);
+    expect(internas.length).toBe(1);
+    for (const l of [...pareadas, ...filhas, ...internas]) {
+      expect(l.selPlanilha).toBeNull();
+      expect(l.selSistema).toBeNull();
+    }
+    expect(ls.find((l) => l.selo === 'Desmembrar')).toMatchObject({ selPlanilha: null, selSistema: null });
+  });
+
+  it('as caixas: a linha sem par e o "Só no sistema" têm; a pareada não; 13 colunas no colgroup', () => {
+    ESPELHO.atual = espelhoBB0109();
+    abrirSel();
+    expect(screen.getByTestId('tabela-extrato-planilha').querySelectorAll('colgroup col')).toHaveLength(13);
+    expect(within(linhaDo((tr) => tr.dataset.staging === 'sp-1')).getByTestId('p-sel').querySelector('input')).not.toBeNull();
+    const so = linhaDo((tr) => !!within(tr).queryByText('Só no sistema'));
+    expect(within(so).getByTestId('s-sel').querySelector('input')).not.toBeNull();
+    const pareada = linhaDo((tr) => tr.dataset.staging === '6d4f80f7');
+    expect(within(pareada).getByTestId('p-sel').querySelector('input')).toBeNull();
+    expect(within(pareada).getByTestId('s-sel').querySelector('input')).toBeNull();
+    /* toda linha tem as duas células, mesmo vazias (layout fixo) */
+    for (const tr of screen.getAllByTestId('linha-extrato-planilha')) expect(tr.querySelectorAll('td')).toHaveLength(13);
+    for (const tr of screen.getAllByTestId('dia')) {
+      const span = Array.from(tr.querySelectorAll('td')).reduce((a, td) => a + (Number(td.getAttribute('colspan')) || 1), 0);
+      expect(span).toBe(13);
+    }
+  });
+
+  it('o status do lado Sistema é a pílula do STATUS_PALETA, e a legenda não fala mais de origem', () => {
+    ESPELHO.atual = espelhoBB0109();
+    abrirSel();
+    const st = within(linhaDo((tr) => tr.dataset.staging === '6d4f80f7')).getByTestId('status-sistema');
+    expect(st).toHaveTextContent('Conciliado');
+    expect(st.querySelector('span')?.className).toMatch(/bg-\[#166534\]/);
+    expect(screen.getByTestId('legenda')).not.toHaveTextContent('origem');
+  });
+
+  it('marcar não abre a Mesa; 1×1 mostra "Casar" e a faixa tem a MESMA altura com e sem seleção', () => {
+    ESPELHO.atual = espelhoBB0109();
+    const onAbrir = vi.fn();
+    render(<ExtratoDaPlanilhaModal open onOpenChange={vi.fn()} clienteId="nj" anoMes="2026-09" mesRotulo="set/2026"
+      staging={comSemPar()} contas={[{ id: CONTA_BB, nome: 'Banco do Brasil' }]} contaId={CONTA_BB}
+      onContaId={vi.fn()} onAbrirLinha={onAbrir} onAgrupar={vi.fn()} />);
+    const alturaSem = screen.getByTestId('rodape-extrato').style.height;
+    expect(screen.getByTestId('fechamento-mes')).toBeInTheDocument();
+    fireEvent.click(within(linhaDo((tr) => tr.dataset.staging === 'sp-1')).getByRole('checkbox'));
+    expect(onAbrir).not.toHaveBeenCalled();
+    expect(screen.getByTestId('barra-selecao')).toHaveTextContent('marque também o outro lado');
+    fireEvent.click(within(linhaDo((tr) => !!within(tr).queryByText('Só no sistema'))).getByRole('checkbox'));
+    const barra = screen.getByTestId('barra-selecao');
+    expect(barra).toHaveTextContent('marcados: 1 da planilha -506,51 · 1 do sistema -506,51');
+    expect(screen.getByTestId('diferenca-selecao')).toHaveTextContent('diferença 0,00');
+    expect(screen.getByTestId('botao-gesto')).toHaveTextContent('Casar');
+    expect(screen.getByTestId('rodape-extrato').style.height).toBe(alturaSem);
+    expect(screen.queryByTestId('fechamento-mes')).not.toBeInTheDocument();
+  });
+
+  /* o N×1 que fecha: sp-2 + sp-3 (−300,00 − 206,51) contra o "Vivo Casa" −506,51 — "Desmembrar em 2", confirmado NA barra */
+  const marcarDesmembrar = () => {
+    fireEvent.click(within(linhaDo((tr) => tr.dataset.staging === 'sp-2')).getByRole('checkbox'));
+    fireEvent.click(within(linhaDo((tr) => tr.dataset.staging === 'sp-3')).getByRole('checkbox'));
+    fireEvent.click(within(linhaDo((tr) => !!within(tr).queryByText('Só no sistema'))).getByRole('checkbox'));
+  };
+  const confirmarDesmembrar = () => {
+    expect(screen.getByTestId('botao-gesto')).toHaveTextContent('Desmembrar em 2');
+    expect(screen.getByTestId('botao-gesto')).not.toBeDisabled();
+    fireEvent.click(screen.getByTestId('botao-gesto'));
+    expect(screen.getByTestId('confirmar-gesto')).toHaveTextContent('Confirmar: cria 2 lançamentos e cancela o consolidado');
+    fireEvent.click(screen.getByTestId('confirmar-gesto'));
+  };
+
+  it('o "Casar" 1×1 fica APAGADO, com a frase escrita ao lado e no title (fix1)', () => {
+    ESPELHO.atual = espelhoBB0109();
+    const onAgrupar = vi.fn(async () => ({ ok: true }));
+    abrirSel(onAgrupar);
+    fireEvent.click(within(linhaDo((tr) => tr.dataset.staging === 'sp-1')).getByRole('checkbox'));
+    fireEvent.click(within(linhaDo((tr) => !!within(tr).queryByText('Só no sistema'))).getByRole('checkbox'));
+    const botao = screen.getByTestId('botao-gesto');
+    expect(botao).toHaveTextContent('Casar');
+    expect(botao).toBeDisabled();
+    expect(botao).toHaveAttribute('title', 'casar 1×1 em linha sem par ainda não tem gravação');
+    expect(screen.getByTestId('recado-selecao')).toHaveTextContent('casar 1×1 em linha sem par ainda não tem gravação');
+    fireEvent.click(botao);
+    expect(onAgrupar).not.toHaveBeenCalled();
+  });
+
+  it('a recusa da RPC fica ESCRITA na barra e a seleção NÃO se desfaz', async () => {
+    ESPELHO.atual = espelhoBB0109();
+    const recusa = 'Lançamento vinculado a uma Operação Comercial não se desmembra: o caminho é a própria OC.';
+    const onAgrupar = vi.fn(async () => ({ ok: false, mensagem: recusa }));
+    abrirSel(onAgrupar);
+    marcarDesmembrar();
+    confirmarDesmembrar();
+    await waitFor(() => expect(screen.getByTestId('recado-selecao')).toHaveTextContent(recusa));
+    expect(onAgrupar).toHaveBeenCalledWith({ forma: 'desmembrar', stagingIds: ['sp-2', 'sp-3'], lancamentoIds: ['e7970f00'] });
+    expect(screen.getByTestId('recado-selecao').className).toMatch(/text-\[#F5B5B5\]/);
+    for (const id of ['sp-2', 'sp-3']) expect(within(linhaDo((tr) => tr.dataset.staging === id)).getByRole('checkbox')).toBeChecked();
+    expect(within(linhaDo((tr) => !!within(tr).queryByText('Só no sistema'))).getByRole('checkbox')).toBeChecked();
+  });
+
+  it('o sucesso limpa a seleção e volta o fechamento do mês; "limpar" e Esc limpam', async () => {
+    ESPELHO.atual = espelhoBB0109();
+    const onAgrupar = vi.fn(async () => ({ ok: true }));
+    abrirSel(onAgrupar);
+    const marcar = marcarDesmembrar;
+    marcar();
+    confirmarDesmembrar();
+    await waitFor(() => expect(screen.getByTestId('fechamento-mes')).toBeInTheDocument());
+    expect(onAgrupar).toHaveBeenCalledWith({ forma: 'desmembrar', stagingIds: ['sp-2', 'sp-3'], lancamentoIds: ['e7970f00'] });
+    marcar();
+    fireEvent.click(screen.getByTestId('limpar-selecao'));
+    expect(screen.getByTestId('fechamento-mes')).toBeInTheDocument();
+    marcar();
+    fireEvent.keyDown(screen.getByTestId('barra-selecao'), { key: 'Escape' });
+    expect(screen.getByTestId('fechamento-mes')).toBeInTheDocument();
   });
 });
 

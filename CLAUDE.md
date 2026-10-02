@@ -160,8 +160,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 02/10/2026 (UI-SELECT-ALINHAMENTO-01, +2 em `src/components/ui/select.test.tsx`; antes o
-  PR-CONC-ENRIQUECER-V2-02, +10, e o CONC-CRIAR-TRANSFERENCIA-01, +12): 2814
+  Baseline em 02/10/2026 (PR-CONC-ENRIQ-AGRUP-2b-TELA com o fix1, +15: 8 em `src/v2/lib/mesa/agruparNoExtrato.test.ts` e 7
+  em `src/v2/lib/mesa/enriquecerV2.test.tsx`; antes o UI-SELECT-ALINHAMENTO-01, +2): 2829
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -338,6 +338,11 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   20.998,80 (28/08) e' RECEBIMENTO no extrato sem lancamento e sem linha de planilha no proto; os crus do Emerson (579f22d5
   3.000, 6438bdcb 16.276,80) estao SEM vinculo vivo com o extrato — o desmembrar recusa (`sem_vinculo_ofx`); (e) o caminho
   de recusa ainda vai a toast (`handleAgruparNesteLancamento`) — UX-TOAST-01.
+  · AGRUPAR NO EXTRATO (PR-CONC-ENRIQ-AGRUP-2b-TELA): (a) o 1x1 "Casar" chama `fn_classificacao_resolver_proximos`, que SO'
+  aceita linha `candidatos_proximos` — a linha "sem par" (`sem_match`), que e' a marcavel, volta `nao_candidatos_proximos`
+  — o fix1 deixou o "Casar" APAGADO com "casar 1×1 em linha sem par ainda nao tem gravacao"; casar 1:1 uma sem par e' frente
+  de banco, junto com o bloco NxM; (b) o N:M segue sem gravacao (o 2b de banco);
+  (c) o lado Sistema do Enriquecer so' tem o REALIZADO do mes: previsto/programado/agendado nao se marcam aqui.
 - Telas e UI:
   TELAS-ORFAS-01 (decisao) · FIN-RECORRENCIA-FAZENDA-01 · FIN-FAZENDA-INATIVA-LISTA-01 · FIN-IMPORTAR-ANTIGO-01 ·
   FAZENDA-INATIVA-EDICAO-01 · LEGADOS-ABATE-VENDA-FAZENDA-01 · FORNECEDOR-UUID-CRU-01 · PROPRIEDADE-DESTINO-ORIGEM-01 ·
@@ -619,6 +624,14 @@ docs/historico/frentes-ate-2026-09-29.md.)
   dia "confere" por construcao). O checklist da Mesa (`checklistDaLinha`/`pendenciasDaLinha` em `MesaCamposTabela.tsx`) e' a
   UNICA lista de obrigatorios — desenha o ●, escreve o "falta:" e apaga o Aprovar — e julga Fazenda/Conta do plano/Descricao
   pelo VALOR EFETIVO (o Resultado diz "mantem" ate' com os dois lados vazios).
+- ⚠ AGRUPAR PELO EXTRATO DA PLANILHA = O GESTO DA CONFERENCIA (PR-CONC-ENRIQ-AGRUP-2b-TELA, so' tela): marca-se a linha "sem
+  par" da planilha (`selPlanilha`) e o lancamento "So' no sistema" (`selSistema`); `gestoDaSelecao`
+  (`src/v2/lib/mesa/agruparNoExtrato.ts`) da' a forma — 1x1 casar (`resolver_proximos`), Nx1 desmembrar (`split_substituir`,
+  so' com soma ao centavo pela `motivoDoDesmembrar` e confirmacao NA BARRA), 1xN juntar (`resolver_grupo`), NxM desabilitado.
+  A barra mora no rodape de 26px no lugar do fechamento do mes (nada muda de altura); a recusa da RPC fica ESCRITA nela e a
+  selecao fica; quem grava e' a aba (`agruparDoExtrato`, os mesmos mutations, sem toast), que tambem rele o espelho
+  (`espelho-conciliacao` nao era invalidado pelos mutations). O lado Sistema mostra o STATUS (Conciliado/Realizado) pela
+  `STATUS_PALETA`; a origem B/✓/M saiu.
 - ⚠ DESMEMBRAR (1 lancamento = N linhas, `fn_classificacao_split_substituir`, PR-CONC-ENRIQ-AGRUP-2a, migration
   20261027185000, ledger 20261001101020): so' desmembra lancamento CRU/MANUAL (origem 'extrato'/'ofx'/'manual') SEM vinculo de
   origem — recusa, com motivo escrito, recorrencia, contrato/barter, financiamento/parcela, boitel, parte VIVA de OC, Zoo e

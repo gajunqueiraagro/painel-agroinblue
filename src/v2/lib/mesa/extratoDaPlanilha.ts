@@ -81,12 +81,12 @@ export function seloDoPar(r: ClassificacaoStagingPreviewRow, balde: BaldePainel,
   return 'Diverge';
 }
 
-/** B = veio do banco (extrato/OFX) · ✓ = conciliado · M = lançado à mão. */
-export function origemDoSistema(s: EspSis): 'B' | '✓' | 'M' {
-  if (s.status === 'conciliado') return '✓';
-  if (s.origem_lancamento && ORIGENS_CRUAS.has(s.origem_lancamento)) return 'B';
-  return 'M';
-}
+/**
+ * O STATUS do lançamento do lado Sistema — PR-CONC-ENRIQ-AGRUP-2b-TELA ("não consigo ver o que está realizado"). O lado
+ * Sistema do Enriquecer é o REALIZADO do mês (`sistema_completo`): com vínculo vivo ao extrato é Conciliado, sem ele é
+ * Realizado. Previstos não chegam aqui (casam-se no "Casar lançamentos"). Substitui a origem B/✓/M, que não dizia isso.
+ */
+export type StatusSistemaExtrato = 'conciliado' | 'realizado';
 
 /** Uma linha desenhada. `stagingId` é o que abre a Mesa (só no lado da planilha). */
 export interface LinhaExtratoPlanilha {
@@ -95,12 +95,19 @@ export interface LinhaExtratoPlanilha {
   data: string | null;
   planilha: { texto: string; valor: number } | null;
   simbolo: SimboloPlanilha | null;
-  sistema: { valor: number; data: string | null; descricao: string; fornecedor: string; origem: 'B' | '✓' | 'M'; lancamentoId: string } | null;
+  sistema: { valor: number; data: string | null; descricao: string; fornecedor: string; status: StatusSistemaExtrato; lancamentoId: string } | null;
   selo: SeloSistema | null;
   /** Fundo verde-claro: a linha da planilha já está enriquecida. */
   enriquecida: boolean;
   /** Filha de um agrupamento (desenhada abaixo da mãe, recuada). */
   filha: boolean;
+  /**
+   * O QUE SE MARCA para agrupar — PR-CONC-ENRIQ-AGRUP-2b-TELA. Derivados, sem cálculo novo:
+   * `selPlanilha` = a linha da planilha "sem par" (sem lado Sistema, não filha, não enriquecida);
+   * `selSistema` = o lançamento "Só no sistema". Transferência interna e a mãe do "Desmembrar" não se marcam.
+   */
+  selPlanilha: string | null;
+  selSistema: string | null;
 }
 
 export interface DiaExtratoPlanilha {
@@ -163,6 +170,7 @@ export function montarExtratoDaPlanilha(
   const linhaPlanilha = (e: EspOfx, sis: EspSis | undefined, filha: boolean): LinhaExtratoPlanilha => {
     const r = porStaging.get(e.extrato_id);
     const balde: BaldePainel = r ? baldeDaLinha(r, sobrescreverIds.has(e.extrato_id)) : 'outras';
+    const enriquecida = balde === 'gravada';
     return {
       chave: `p-${e.extrato_id}${sis ? `-${sis.lancamento_id}` : ''}`,
       stagingId: e.extrato_id,
@@ -171,8 +179,10 @@ export function montarExtratoDaPlanilha(
       simbolo: r ? (filha ? '↳' : simboloDaLinha(r, balde, sis ? sis.valor_assinado : null)) : null,
       sistema: sis ? daSistema(sis) : null,
       selo: sis && r ? seloDoPar(r, balde, sis) : null,
-      enriquecida: balde === 'gravada',
+      enriquecida,
       filha,
+      selPlanilha: !sis && !filha && !enriquecida ? e.extrato_id : null,
+      selSistema: null,
     };
   };
 
@@ -187,6 +197,7 @@ export function montarExtratoDaPlanilha(
       linhas.push({
         chave: `n1-${n1.sis.lancamento_id}`, stagingId: n1.extratos[0]?.extrato.extrato_id ?? null, data: n1.sis.data,
         planilha: null, simbolo: null, sistema: daSistema(n1.sis), selo: 'Desmembrar', enriquecida: false, filha: false,
+        selPlanilha: null, selSistema: null,
       });
       for (const x of n1.extratos) linhas.push(linhaPlanilha(x.extrato, undefined, true));
     }
@@ -195,12 +206,14 @@ export function montarExtratoDaPlanilha(
       linhas.push({
         chave: `s-${s.lancamento_id}`, stagingId: null, data: s.data, planilha: null, simbolo: null,
         sistema: daSistema(s), selo: 'Só no sistema', enriquecida: false, filha: false,
+        selPlanilha: null, selSistema: s.lancamento_id,
       });
     }
     for (const s of d.internas) {
       linhas.push({
         chave: `i-${s.lancamento_id}`, stagingId: null, data: s.data, planilha: null, simbolo: null,
         sistema: daSistema(s), selo: 'Transferência', enriquecida: false, filha: false,
+        selPlanilha: null, selSistema: null,
       });
     }
     return { data: d.data, linhas, planilha: d.banco, sistema: d.sistema, confere: Math.abs(d.banco - d.sistema) < 0.005 };
@@ -217,7 +230,7 @@ export function montarExtratoDaPlanilha(
 function daSistema(s: EspSis): NonNullable<LinhaExtratoPlanilha['sistema']> {
   return {
     valor: s.valor_assinado, data: s.data, descricao: s.descricao ?? '—', fornecedor: s.fornecedor ?? '—',
-    origem: origemDoSistema(s), lancamentoId: s.lancamento_id,
+    status: s.status === 'conciliado' ? 'conciliado' : 'realizado', lancamentoId: s.lancamento_id,
   };
 }
 
