@@ -319,6 +319,16 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   P5 com a 278); (d) a linha cujo lancamento e' de OUTRA conta aparece no Extrato da conta do LANCAMENTO (`conta_filtro_id` da
   view prefere a do lancamento) — a 265 do BB aparece no Cartao BB; (e) o selo "Par repetido" so' aparece quando o lancamento do
   par esta' no Sistema do mes (as 6 duplas do cartao, pagas em agosto, nao o mostram).
+  · CASADOR-MES (PR-CONC-ENRIQ-CASADOR-MES): (a) A REGUA DE DIRECAO AINDA TEM 5 COPIAS FORA DO DONO (`_fn_conta_do_lancamento`):
+  `fn_extrato_conciliar_mes` 3, `fn_transferencia_aplicar` 1, `fn_transferencias_espelhadas` 1; e o populate tem REGUA PROPRIA no
+  casamento por atributos (entrada: destino = destino da linha, ou destino/bancaria = origem; e exige `ano_mes` = competencia e
+  `data_pagamento = data`, a COMPETENCIA — no ensaio, 348/349/350 casaram por atributos com lancamentos de outra data, que o
+  Recasar refaz); (b) O RECASAR ATUAL JA' MEXIA EM 3 LINHAS DA 8d6efeb7 sem relacao com este PR: a 62 (par com a transferencia
+  7a1b1f93, que o casar exclui) volta a 'sem_match', e 371/372 viram 'sugestao_split' (dfd8ab98) — o Recasar desfaz par feito
+  com transferencia; (c) no item E da FASE 0 as linhas de CARTAO contam como "outro mes" (compra x fatura): no Agnaldo c304cce9
+  sao as 7 que ficam (D2); (d) Santa Rita 8a82eb7c linhas 58/98 e NJ a63fa4c6 linha 246: APLICADAS em lancamento de outro mes /
+  conta (gravaram classificacao) — decisao caso a caso; (e) a reaberta nao guarda de onde veio (o "limpa" do Recasar zera o
+  `casamento_meta`).
   · TRANSFERENCIA-VOLTA (PR-CONC-MESA-TRANSFERENCIA-VOLTA): (a) `EnriquecimentoActions.tsx` NAO TEM QUEM O RENDERIZE desde
   fe26d14c (06/09, Mesa compacta) — o `slotTransferencia` nasceu dois dias depois (9fb376ab) ja' sem tela; o componente
   fica so' como dono do TIPO `EnriquecimentoActionsProps` (apagar o corpo ou religar e' decisao); (b) `AcaoEhTransferencia`
@@ -721,6 +731,24 @@ docs/historico/frentes-ate-2026-09-29.md.)
   Extrato, o simbolo de uma linha com par abre o MODO PAR (26px, Esc sai): "Soltar o par" so' com `parSoltavel`; par repetido
   gravado so' manda reverter na Mesa. A mae de 2+ linhas no mesmo lancamento so' e' "Desmembrar" quando a soma fecha; senao
   "Par repetido". A funcao tem EXECUTE para `authenticated` porque a view (security_invoker) a chama como quem consulta.
+- ⚠ A MEMORIA DE APLICACAO ANTERIOR SO' HERDA O PAR QUE VALE PARA A LINHA (PR-CONC-ENRIQ-CASADOR-MES, migration
+  20261027190400, ledger 20261002160209): o PASSO 0 do `fn_classificacao_populate_staging` herdava o lancamento de qualquer linha
+  aplicada do cliente pela chave valor + competencia + tipo + fornecedor — a parcela de setembro herdava a de agosto. Agora:
+  (D0) a REGUA DE DIRECAO TEM DONO, `_fn_conta_do_lancamento(tipo, conta_bancaria, conta_destino)` ('1-Entradas' -> destino,
+  senao bancaria; SQL IMMUTABLE sem SET, o planner a embute) — as 4 copias do `casar_sessao` (PASSO 1, 3a `a`/`b`, 3b) usam ela;
+  (D1/D2) o par herdado vale so' com `_fn_classificacao_par_herdado_valido(lanc, conta da linha, data, mes_de, mes_ate)`, o UNICO
+  dono de: (a) mesma conta da linha (`COALESCE(conta_origem_id, conta_destino_id)`) pela regua; (b) `data_pagamento` IGUAL a' data
+  de pagamento da planilha — mes inteiro NAO e' reserva; conta com `tipo_conta = 'cartao'` dispensa (b) (compra x fatura);
+  (D1b) sem data de pagamento na planilha: no POPULATE compara a `data` (a mesma do casamento por atributos), no CASAR o mes da
+  sessao; (D3) o (c) — lancamento ja' com outra linha da sessao — mora em cada consumidor com o MESMO desempate: quem falha (a)/(b)
+  sai da disputa; lancamento preso em grupo/bloco de linha preservada e' usado; entre as que passam fica a APLICADA, senao a de
+  MENOR LINHA. No populate o loop vai em ordem de linha (posicao original desempata) e linha que ja' estava na sessao e' dona; no
+  casar e' a CTE `preservadas`/`disputa` no inicio. (D4) O Recasar REABRE (vira 'sem_match' e recasa pela regra normal) a linha
+  'ja_aplicado' NAO aplicada que falha; aplicada NUNCA e' reaberta (322/323 seguem), e as outras preservadas disputam mas nao sao
+  julgadas; o retorno ganha 'reabertas'. As duas internas: so' `service_role` (as RPCs sao SECURITY DEFINER).
+  md5: casar a6a6832f -> c5d725afa76d91242d2c2410984cf38c; populate 5fdbd817 -> 694ddc8baadae71b1d59de92a65c35b3;
+  `_fn_conta_do_lancamento` 7bd27d014d20b2566fc35db2613a57e3; `_fn_classificacao_par_herdado_valido` cd12b3e28ca72a93f013d503211b37ed.
+  Nenhum dado foi alterado: o conserto das sessoes e' pelo Recasar (e pelo Reverter, nas aplicadas), na tela.
 - ⚠ BLOCO CONFERIDO N×M NO ENRIQUECER (PR-CONC-ENRIQ-BLOCO-NM-A, migration 20261027190200, ledger 20261002115607): N linhas da
   planilha x M lancamentos CLASSIFICADOS e REALIZADOS da mesma conta, soma COM SINAL ao centavo (tolerancia 0,005; sinais
   opostos permitidos) -> as linhas viram 'conferido_bloco' com os M ids em `match_lancamento_ids`. NAO ESCREVE no lancamento
