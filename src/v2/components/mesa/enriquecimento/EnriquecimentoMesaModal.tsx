@@ -174,6 +174,18 @@ export function EnriquecimentoMesaModal({
 
   const selecionada = lista.rows.find((r) => r.id === lista.selecionadoId) ?? null;
 
+  /**
+   * "É TRANSFERÊNCIA PARA/DE OUTRA CONTA…" NO "⋯" — PR-CONC-MESA-TRANSFERENCIA-VOLTA. O gesto existia na aba
+   * (`actions.slotTransferencia`, 133i-c, 9fb376ab) mas NUNCA foi desenhado: o componente que o desenhava
+   * (`EnriquecimentoActions`) saiu da Mesa dois dias antes (fe26d14c). O Dialog renderiza o MESMO nó — nenhuma cópia,
+   * nenhum handler novo. Fecha ao trocar de linha e quando o slot some (o sucesso transforma a linha em transferência e
+   * a condição da aba deixa de oferecer o gesto).
+   */
+  const [transfAberto, setTransfAberto] = useState(false);
+  const temTransferencia = actions.slotTransferencia !== null && actions.slotTransferencia !== undefined;
+  useEffect(() => { setTransfAberto(false); }, [lista.selecionadoId]);
+  useEffect(() => { if (!temTransferencia) setTransfAberto(false); }, [temTransferencia]);
+
   /* A ordem visível sobe a cada mudança de recorte; fechado, o pai volta à lista dele. */
   useEffect(() => {
     if (!open) return;
@@ -310,7 +322,7 @@ export function EnriquecimentoMesaModal({
                     {' · '}{selecionada.data}{' · '}{selecionada.edicao.descricaoAtual ?? '—'}
                   </span>
                   <SeloRegraDaLinha ehCru={selecionada.ehCru} />
-                  {aoFornecedor && (
+                  {(aoFornecedor || temTransferencia) && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button type="button" size="sm" variant="ghost" className="h-[22px] w-[22px] shrink-0 p-0"
@@ -319,16 +331,25 @@ export function EnriquecimentoMesaModal({
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-[340px]">
-                        {/* ⚠ A PRÉVIA ANTES DO GESTO: quantas linhas e quais campos mudam — e quantas ficam com o sistema. */}
-                        <DropdownMenuLabel data-testid="previa-ao-fornecedor" className="whitespace-normal text-[10px] font-normal text-zinc-300">
-                          Ao fornecedor: {aoFornecedor.previa?.resumo ?? '—'}
-                        </DropdownMenuLabel>
-                        <DropdownMenuItem data-testid="aplicar-ao-fornecedor" 
-                          disabled={!aoFornecedor.previa || aoFornecedor.previa.alvos.length === 0 || aoFornecedor.aplicando}
-                          onSelect={() => aoFornecedor.onAplicar()}>
-                          {aoFornecedor.aplicando ? 'Levando…'
-                            : `Levar à proposta de ${aoFornecedor.previa?.alvos.length ?? 0} linha${aoFornecedor.previa?.alvos.length === 1 ? '' : 's'} (não grava o lançamento)`}
-                        </DropdownMenuItem>
+                        {temTransferencia && (
+                          <DropdownMenuItem data-testid="abrir-transferencia" onSelect={() => setTransfAberto(true)}>
+                            {selecionada.entradaOuSaida === 'entrada' ? 'É transferência de outra conta…' : 'É transferência para outra conta…'}
+                          </DropdownMenuItem>
+                        )}
+                        {aoFornecedor && (
+                          <>
+                            {/* ⚠ A PRÉVIA ANTES DO GESTO: quantas linhas e quais campos mudam — e quantas ficam com o sistema. */}
+                            <DropdownMenuLabel data-testid="previa-ao-fornecedor" className="whitespace-normal text-[10px] font-normal text-zinc-300">
+                              Ao fornecedor: {aoFornecedor.previa?.resumo ?? '—'}
+                            </DropdownMenuLabel>
+                            <DropdownMenuItem data-testid="aplicar-ao-fornecedor"
+                              disabled={!aoFornecedor.previa || aoFornecedor.previa.alvos.length === 0 || aoFornecedor.aplicando}
+                              onSelect={() => aoFornecedor.onAplicar()}>
+                              {aoFornecedor.aplicando ? 'Levando…'
+                                : `Levar à proposta de ${aoFornecedor.previa?.alvos.length ?? 0} linha${aoFornecedor.previa?.alvos.length === 1 ? '' : 's'} (não grava o lançamento)`}
+                            </DropdownMenuItem>
+                          </>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   )}
@@ -336,6 +357,21 @@ export function EnriquecimentoMesaModal({
                     {actions.posicao}
                   </span>
                 </div>
+
+                {/* O Dialog da transferência: por cima da Mesa, fora do fluxo do layout (nada cresce, nada desloca). */}
+                <Dialog open={transfAberto && temTransferencia} onOpenChange={setTransfAberto}>
+                  <DialogContent data-testid="dialog-transferencia"
+                    className="flex w-[520px] max-w-[96vw] flex-col gap-0 overflow-hidden p-0">
+                    <DialogHeader className="h-9 shrink-0 flex-row items-center space-y-0 bg-primary px-4">
+                      <DialogTitle className="truncate pr-6 text-[12px] font-medium text-primary-foreground">
+                        Transferência · {selecionada.fornecedor} · {sinalPrefixo(selecionada.entradaOuSaida)}{selecionada.valor}
+                      </DialogTitle>
+                    </DialogHeader>
+                    <div data-testid="corpo-transferencia" className="flex min-h-[56px] flex-col justify-center gap-1 px-4 py-3">
+                      {actions.slotTransferencia}
+                    </div>
+                  </DialogContent>
+                </Dialog>
 
                 <MesaCamposTabela
                   row={selecionada}

@@ -799,6 +799,11 @@ export function MesaEnriquecimentoTab({
     return null;
   })();
 
+  /* PR-CONC-MESA-TRANSFERENCIA-VOLTA — a recusa do gesto fica ESCRITA no Dialog, junto do botão (UX-TOAST-01); trocar de
+     linha a apaga. */
+  const [erroTransferencia, setErroTransferencia] = useState<string | null>(null);
+  useEffect(() => { setErroTransferencia(null); }, [selecionadoId]);
+
   const podeMarcarTransferencia = !!selecionado
     && !!selecionado.lancId
     && sentidoDaLinha !== null
@@ -1310,18 +1315,25 @@ export function MesaEnriquecimentoTab({
        por si mesma. `explicadoPorSiMesmo` é o predicado que a própria frente já usa para
        "transferência ou estorno nunca é pendência" — reusado em vez de reescrito. */
     slotTransferencia: podeMarcarTransferencia && selecionado?.lancId ? (
-      <AcaoEhTransferencia
-        lancamentoId={selecionado.lancId}
-        sentido={sentidoDaLinha}
-        contaPropriaId={selecionado.edicao.contaBancariaIdAtual ?? null}
-        contas={contasParaTransferencia}
-        onAplicado={() => {
-          toast.success('Transferência aplicada.');
-          void qcMesa.invalidateQueries({ queryKey: ['classificacao-staging'] });
-          void qcMesa.invalidateQueries({ queryKey: ['sistema-nao-explicado'] });
-        }}
-        onErro={(m) => toast.error(m)}
-      />
+      <>
+        <AcaoEhTransferencia
+          lancamentoId={selecionado.lancId}
+          sentido={sentidoDaLinha}
+          contaPropriaId={selecionado.edicao.contaBancariaIdAtual ?? null}
+          contas={contasParaTransferencia}
+          onAplicado={() => {
+            setErroTransferencia(null);
+            toast.success('Transferência aplicada.');
+            void qcMesa.invalidateQueries({ queryKey: ['classificacao-staging'] });
+            void qcMesa.invalidateQueries({ queryKey: ['sistema-nao-explicado'] });
+          }}
+          onErro={(m) => setErroTransferencia(m)}
+        />
+        {/* a recusa junto do botão — o slot de 14px existe sempre (layout fixo do Dialog) */}
+        <p data-testid="erro-transferencia" className="min-h-[14px] text-[10px] leading-[14px] text-red-600">
+          {erroTransferencia ?? ''}
+        </p>
+      </>
     ) : null,
     reverterDisabled: !podeReverter,
     aplicarTodosDisabled: !sessaoId || nAplicaveis === 0,

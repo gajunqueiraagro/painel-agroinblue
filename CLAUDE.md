@@ -160,9 +160,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 02/10/2026 (PR-CONC-ENRIQ-MARCAR-FAVORECIDO, +9: +4 `doMesmoFornecedor`/chaves em
-  `src/v2/lib/mesa/agruparNoExtrato.test.ts` e +5 do modal em `src/v2/lib/mesa/enriquecerV2.test.tsx`; antes o
-  PR-CONC-ENRIQ-BLOCO-NM-B, +19): 2872
+  Baseline em 02/10/2026 (PR-CONC-MESA-TRANSFERENCIA-VOLTA, +6 em `src/v2/lib/mesa/transferenciaNaMesa.test.tsx`, arquivo
+  novo; antes o PR-CONC-ENRIQ-MARCAR-FAVORECIDO, +9): 2878
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -309,6 +308,13 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   ("do extrato") — proposta antiga nesses dois campos grava sem aparecer; medir e decidir; (d) a Mesa nao muda mais o
   Tipo nem a conta bancaria (o Tipo vai pelo passo "Transferencias entre contas"); `ResultadoTipoEditor` e
   `ResultadoContaEditor` (`ResultadoCamposGravaveis.tsx`) ficaram SEM CHAMADOR — apagar ou religar e' decisao.
+  · TRANSFERENCIA-VOLTA (PR-CONC-MESA-TRANSFERENCIA-VOLTA): (a) `EnriquecimentoActions.tsx` NAO TEM QUEM O RENDERIZE desde
+  fe26d14c (06/09, Mesa compacta) — o `slotTransferencia` nasceu dois dias depois (9fb376ab) ja' sem tela; o componente
+  fica so' como dono do TIPO `EnriquecimentoActionsProps` (apagar o corpo ou religar e' decisao); (b) `AcaoEhTransferencia`
+  nao tem prop para nascer ABERTO: no Dialog e' 1 clique a mais em "E' transferencia para ▾" (nao reescrito); (c) o resumo
+  da simulacao corta com "…" (`truncate`, regra da reticencia) — no Sicredi Pessoal "Sicredi Pessoal → Invest-Sicredi Pe…";
+  (d) o `ContaBancariaSelect` nasce com o gatilho em branco (valor '__none__' sem placeholder visivel); (e) o mesmo gesto da
+  lista "Sem par no sistema" segue com a recusa em toast (`EnriquecimentoSemParSistema`).
   · SESSAO-E-DEPARA (PR-CONC-EXCEL-SESSAO-E-DEPARA-01): (a) `preResolverFazenda` ficou so' como reserva da Mesa para sessao
   sem `_planilha` (anterior a 30/09) — sai quando essas sessoes forem excluidas; (b) a conta segue com resolvedor proprio no
   front (divida ja' registrada); (c) ANTES deste PR, responder o de-para de fornecedor fora dos 1.000 primeiros pode ter
@@ -669,6 +675,12 @@ docs/historico/frentes-ate-2026-09-29.md.)
   RPC). "AO FORNECEDOR" (no "⋯" da Mesa) grava SO' A PROPOSTA (`levarAoFornecedor` so' recebe `editarProposto`), alvo pelo ID
   do fornecedor resolvido, so' linha nao aprovada, e a linha JA' CLASSIFICADA fica com o sistema (prevista na previa).
   `resolvido_grupo` fica FORA do lote (balde `aguarda`) ate' o N:1 ter gravacao (2b).
+- ⚠ "E' TRANSFERENCIA PARA/DE OUTRA CONTA…" MORA NO "⋯" DO CABECALHO DA MESA (PR-CONC-MESA-TRANSFERENCIA-VOLTA, so' tela):
+  o item aparece SO' com `actions.slotTransferencia` (o "⋯" aparece com ele OU com "Ao fornecedor") e abre um Dialog de 520px
+  (cabecalho navy 36px "Transferencia · {fornecedor} · {valor}") que renderiza o MESMO no' que a aba monta — nunca uma copia.
+  Fecha ao trocar de linha e quando o slot some (o sucesso faz a linha deixar de oferecer o gesto). A recusa do gesto fica
+  escrita no Dialog (`erro-transferencia`, slot de 14px), nao em toast. Medido a 1135: tabela 379 / topo 99, rodape 32 / topo
+  513,8, iguais com o Dialog aberto.
 - ⚠ "+ N DE {FORNECEDOR}" MARCA UM LADO SO' (PR-CONC-ENRIQ-MARCAR-FAVORECIDO, so' tela): a partir da ULTIMA caixa marcada
   de cada lado, `doMesmoFornecedor` (`agruparNoExtrato.ts`) da' os MARCAVEIS daquele lado com a mesma `chaveFornecedor`
   (`extratoDaPlanilha.ts`: planilha = `planilha_favorecido_id`, senao o texto normalizado de `excel_fornecedor`; sistema = o
