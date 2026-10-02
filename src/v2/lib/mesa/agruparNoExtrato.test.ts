@@ -8,7 +8,8 @@
  *     10.764,11 (o Pix de 25/09 sem lançamento) e por isso não confere.
  */
 import { describe, it, expect } from 'vitest';
-import { gestoDaSelecao, MOTIVO_CRU_NO_BLOCO } from './agruparNoExtrato';
+import { doMesmoFornecedor, gestoDaSelecao, MOTIVO_CRU_NO_BLOCO, type LinhaComFornecedor } from './agruparNoExtrato';
+import { chaveFornecedorPlanilha, chaveFornecedorSistema, normalizarFornecedor } from './extratoDaPlanilha';
 import { textoSomaDifere } from './desmembrar';
 
 const p = (...vs: number[]) => vs.map((valor, i) => ({ id: `p${i}`, valor }));
@@ -132,5 +133,47 @@ describe('gestoDaSelecao — as formas, na ordem do NM-B', () => {
     ]) {
       expect(gestoDaSelecao(sel).motivo ?? '').not.toMatch(/sem gravação|tem gravação/);
     }
+  });
+});
+
+/* ═══ PR-CONC-ENRIQ-MARCAR-FAVORECIDO — "os do mesmo fornecedor", um lado só ═══════════════════════════════════════ */
+describe('doMesmoFornecedor', () => {
+  const lp = (id: string | null, chave: string): LinhaComFornecedor => ({
+    selPlanilha: id, selSistema: null, chaveFornecedor: { planilha: chave, sistema: '' },
+  });
+  const ls = (id: string | null, chave: string): LinhaComFornecedor => ({
+    selPlanilha: null, selSistema: id, chaveFornecedor: { planilha: '', sistema: chave },
+  });
+  const EM = 'id:c9ccdb59';
+  /* a planilha do Emerson: 3 marcáveis, 1 em bloco (sem caixa), 1 de outro fornecedor; o sistema com a MESMA chave em texto */
+  const linhas = [
+    lp('p1', EM), lp('p2', EM), lp(null, EM), lp('p3', EM), lp('p4', 'id:outro'),
+    ls('s1', 'nome:emerson de oliveira dos anjos'), ls(null, 'nome:emerson de oliveira dos anjos'), ls('s2', 'nome:emerson de oliveira dos anjos'),
+  ];
+
+  it('devolve só os MARCÁVEIS daquele lado com a mesma chave (a linha em bloco/pareada não tem caixa e não entra)', () => {
+    expect(doMesmoFornecedor(linhas, 'planilha', EM)).toEqual(['p1', 'p2', 'p3']);
+    expect(doMesmoFornecedor(linhas, 'sistema', 'nome:emerson de oliveira dos anjos')).toEqual(['s1', 's2']);
+  });
+
+  it('nunca cruza os lados: a chave da planilha não acha nada no sistema, e vice-versa', () => {
+    expect(doMesmoFornecedor(linhas, 'sistema', EM)).toEqual([]);
+    expect(doMesmoFornecedor(linhas, 'planilha', 'nome:emerson de oliveira dos anjos')).toEqual([]);
+  });
+
+  it('chave vazia devolve [] — nunca "todos os sem fornecedor"', () => {
+    const semForn = [lp('a', ''), lp('b', ''), ls('c', '')];
+    expect(doMesmoFornecedor(semForn, 'planilha', '')).toEqual([]);
+    expect(doMesmoFornecedor(semForn, 'sistema', '')).toEqual([]);
+  });
+
+  it('as chaves: planilha pelo id resolvido (senão o texto), sistema pelo nome do cadastro; "—" e vazio são ""', () => {
+    expect(chaveFornecedorPlanilha({ planilha_favorecido_id: 'c9ccdb59', excel_fornecedor: 'Emerson de Oliveira' })).toBe('id:c9ccdb59');
+    expect(chaveFornecedorPlanilha({ planilha_favorecido_id: null, excel_fornecedor: '  SÍLVIO  Eduardo ' })).toBe('txt:silvio eduardo');
+    expect(chaveFornecedorPlanilha({ planilha_favorecido_id: null, excel_fornecedor: '—' })).toBe('');
+    expect(chaveFornecedorSistema('Emerson de Oliveira dos Anjos')).toBe('nome:emerson de oliveira dos anjos');
+    expect(chaveFornecedorSistema('—')).toBe('');
+    expect(chaveFornecedorSistema(null)).toBe('');
+    expect(normalizarFornecedor('Fraga  LOPES')).toBe('fraga lopes');
   });
 });

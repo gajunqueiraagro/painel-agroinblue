@@ -88,3 +88,29 @@ export function gestoDaSelecao(sel: {
   }
   return { ...base, forma: null, rotulo: '', habilitado: false, motivo: MOTIVO_CRU_NO_BLOCO };
 }
+
+/**
+ * "OS DO MESMO FORNECEDOR" — PR-CONC-ENRIQ-MARCAR-FAVORECIDO. Os ids MARCÁVEIS de UM lado com a mesma chave de fornecedor
+ * (`chaveFornecedor` da linha). É só um atalho para marcar caixas que já existem: linha em bloco, pareada, filha,
+ * transferência e a mãe do desmembrar não têm caixa (`selPlanilha`/`selSistema` nulos) e por isso nunca entram.
+ * ⚠ UM LADO SÓ: a chave da planilha e a do sistema são de mundos diferentes (o fornecedor resolvido da planilha × o nome do
+ *   cadastro) e nunca se comparam — o operador escolhe os dois lados.
+ * ⚠ CHAVE VAZIA (sem fornecedor, "—") devolve [] — nunca "todos os sem fornecedor".
+ */
+export type LadoDoExtrato = 'planilha' | 'sistema';
+
+export interface LinhaComFornecedor {
+  selPlanilha: string | null;
+  selSistema: string | null;
+  chaveFornecedor: { planilha: string; sistema: string };
+}
+
+export function doMesmoFornecedor(linhas: readonly LinhaComFornecedor[], lado: LadoDoExtrato, chave: string): string[] {
+  if (!chave) return [];
+  const ids: string[] = [];
+  for (const l of linhas) {
+    const id = lado === 'planilha' ? l.selPlanilha : l.selSistema;
+    if (id && l.chaveFornecedor[lado] === chave && !ids.includes(id)) ids.push(id);
+  }
+  return ids;
+}

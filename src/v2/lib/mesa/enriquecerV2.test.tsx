@@ -720,6 +720,128 @@ describe('Extrato da planilha — o bloco conferido (NM-B)', () => {
   });
 });
 
+/* ═══ PR-CONC-ENRIQ-MARCAR-FAVORECIDO — marcar todos do mesmo fornecedor, um lado de cada vez ═══════════════════════ */
+describe('Extrato da planilha — marcar todos do fornecedor', () => {
+  const NOME_PL = 'Emerson de Oliveira dos Anjos';
+  const NOME_SIS = 'Emerson de Oliveira dos Anjos (cadastro)';
+  /* 6 linhas do Emerson na planilha (id resolvido 'f-em', −1.000,00 cada), 1 já em bloco, 1 sem fornecedor ("—") */
+  const plEm = (i: number) => linhaCrua({
+    staging_id: `em-${i}`, match_status: 'sem_match', excel_valor: 1000, excel_tipo_operacao: '2-Saídas',
+    excel_data_pagamento: '2026-09-01', conta_filtro_id: CONTA_BB, excel_subcentro: 'Despesas Comerciais',
+    excel_fornecedor: NOME_PL, planilha_favorecido_id: 'f-em',
+  });
+  const stagingFav = () => [
+    ...stagingBB0109(), ...[1, 2, 3, 4, 5, 6].map(plEm),
+    linhaCrua({ ...plEm(9), staging_id: 'em-bloco', ...st('conferido_bloco'), match_lancamento_ids: ['em-s-bloco'],
+      casamento_meta: { bloco_id: 'b9' } }),
+    linhaCrua({ staging_id: 'sem-forn', match_status: 'sem_match', excel_valor: 7, excel_tipo_operacao: '2-Saídas',
+      excel_data_pagamento: '2026-09-01', conta_filtro_id: CONTA_BB, excel_subcentro: 'Outros', excel_fornecedor: '—' }),
+  ];
+  /* 20 lançamentos do Emerson no sistema (−300,00 cada = −6.000,00), classificados, e 1 em bloco */
+  const espelhoFav = () => {
+    const esp = espelhoBB0109();
+    const base = esp.sistema_completo[0];
+    const sis = (id: string) => ({ ...base, lancamento_id: id, valor_assinado: -300, fornecedor: NOME_SIS,
+      descricao: 'Arranquio Mandioca', origem_lancamento: 'excel', subcentro: 'Despesas Comerciais' });
+    return { ...esp, sistema_completo: [...esp.sistema_completo,
+      ...Array.from({ length: 20 }, (_, i) => sis(`em-s-${i + 1}`)), sis('em-s-bloco')] };
+  };
+  const abrir = () => {
+    ESPELHO.atual = espelhoFav();
+    return render(<ExtratoDaPlanilhaModal open onOpenChange={vi.fn()} clienteId="nj" anoMes="2026-09" mesRotulo="set/2026"
+      staging={stagingFav()} contas={[{ id: CONTA_BB, nome: 'Banco do Brasil' }]} contaId={CONTA_BB}
+      onContaId={vi.fn()} onAbrirLinha={vi.fn()} onAgrupar={vi.fn(async () => ({ ok: true }))} />);
+  };
+  const linhasDaTela = () => screen.getAllByTestId('linha-extrato-planilha');
+  const caixaP = (id: string) => {
+    const tr = linhasDaTela().find((el) => el.dataset.staging === id);
+    if (!tr) throw new Error(`sem a linha ${id}`);
+    const caixa = within(tr).getByTestId('p-sel').querySelector('input');
+    if (!caixa) throw new Error(`a linha ${id} não tem caixa`);
+    return caixa;
+  };
+  /* as caixas do lado Sistema dos lançamentos do Emerson (fornecedor na 10ª célula) */
+  const caixasSisEm = () => linhasDaTela()
+    .filter((el) => el.querySelectorAll('td')[9]?.textContent === NOME_SIS)
+    .map((el) => within(el).getByTestId('s-sel').querySelector('input'))
+    .filter((x): x is HTMLInputElement => x !== null);
+  const marcadasP = () => linhasDaTela().filter((el) => within(el).getByTestId('p-sel').querySelector('input:checked')).length;
+  const marcadasS = () => linhasDaTela().filter((el) => within(el).getByTestId('s-sel').querySelector('input:checked')).length;
+
+  it('as chaves das linhas: a planilha pelo id resolvido, o sistema pelo nome do cadastro; a linha em bloco não é marcável', () => {
+    const ls = montarExtratoDaPlanilha(stagingFav(), espelhoFav(), CONTA_BB, new Set()).dias.flatMap((d) => d.linhas);
+    expect(ls.find((l) => l.stagingId === 'em-1')?.chaveFornecedor).toEqual({ planilha: 'id:f-em', sistema: '' });
+    expect(ls.find((l) => l.sistema?.lancamentoId === 'em-s-1')?.chaveFornecedor)
+      .toEqual({ planilha: '', sistema: 'nome:emerson de oliveira dos anjos (cadastro)' });
+    expect(ls.find((l) => l.stagingId === 'em-bloco')).toMatchObject({ selPlanilha: null, chaveFornecedor: { planilha: 'id:f-em' } });
+    expect(ls.find((l) => l.sistema?.lancamentoId === 'em-s-bloco')).toMatchObject({ selSistema: null, selo: 'Em bloco' });
+    expect(ls.find((l) => l.stagingId === 'sem-forn')?.chaveFornecedor.planilha).toBe('');
+  });
+
+  it('1 linha do Emerson na planilha oferece "+ 5 de …"; clicar marca as 6 e NENHUM lançamento; o rodapé não muda de altura', () => {
+    abrir();
+    const altura = screen.getByTestId('rodape-extrato').style.height;
+    fireEvent.click(caixaP('em-3'));
+    const acao = screen.getByTestId('marcar-fornecedor-planilha');
+    expect(acao).toHaveTextContent(`+ 5 de ${NOME_PL} (planilha)`);
+    expect(acao).toHaveAttribute('title', `Marcar as outras 5 de ${NOME_PL} (planilha)`);
+    expect(screen.queryByTestId('marcar-fornecedor-sistema')).not.toBeInTheDocument();
+    fireEvent.click(acao);
+    expect(marcadasP()).toBe(6);
+    for (const i of [1, 2, 3, 4, 5, 6]) expect(caixaP(`em-${i}`)).toBeChecked();
+    /* ⚠ A GUARDA DO "UM LADO SÓ": nenhum lançamento marcado — a mutação que marcasse o outro lado derruba aqui */
+    expect(marcadasS()).toBe(0);
+    expect(screen.getByTestId('barra-selecao')).toHaveTextContent('marcados: 6 da planilha -6.000,00 · 0 do sistema 0,00');
+    /* todas marcadas: a ação some */
+    expect(screen.queryByTestId('marcar-fornecedor-planilha')).not.toBeInTheDocument();
+    expect(screen.getByTestId('rodape-extrato').style.height).toBe(altura);
+  });
+
+  it('idem do lado Sistema: "+ 19 de …" marca os 20 e nenhuma linha da planilha', () => {
+    abrir();
+    const caixas = caixasSisEm();
+    expect(caixas).toHaveLength(20);
+    fireEvent.click(caixas[0]);
+    const acao = screen.getByTestId('marcar-fornecedor-sistema');
+    expect(acao).toHaveTextContent(`+ 19 de ${NOME_SIS} (sistema)`);
+    fireEvent.click(acao);
+    expect(caixasSisEm().every((c) => c.checked)).toBe(true);
+    expect(marcadasS()).toBe(20);
+    expect(marcadasP()).toBe(0);
+  });
+
+  it('4 cliques: 1 linha + ação da planilha + 1 lançamento + ação do sistema -> "Conferir bloco 6×20", diferença 0,00', () => {
+    abrir();
+    fireEvent.click(caixaP('em-1'));
+    fireEvent.click(screen.getByTestId('marcar-fornecedor-planilha'));
+    fireEvent.click(caixasSisEm()[4]);
+    fireEvent.click(screen.getByTestId('marcar-fornecedor-sistema'));
+    expect(screen.getByTestId('botao-gesto')).toHaveTextContent('Conferir bloco 6×20');
+    expect(screen.getByTestId('botao-gesto')).not.toBeDisabled();
+    expect(screen.getByTestId('diferenca-selecao')).toHaveTextContent('diferença 0,00');
+    expect(screen.queryByTestId('marcar-fornecedor-planilha')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('marcar-fornecedor-sistema')).not.toBeInTheDocument();
+  });
+
+  it('desmarcar continua item a item; "limpar" e Esc limpam tudo; fornecedor "—" não gera a ação', () => {
+    abrir();
+    fireEvent.click(caixaP('em-1'));
+    fireEvent.click(screen.getByTestId('marcar-fornecedor-planilha'));
+    fireEvent.click(caixaP('em-4'));
+    expect(marcadasP()).toBe(5);
+    expect(caixaP('em-4')).not.toBeChecked();
+    fireEvent.click(screen.getByTestId('limpar-selecao'));
+    expect(marcadasP()).toBe(0);
+    fireEvent.click(caixaP('em-2'));
+    fireEvent.click(screen.getByTestId('marcar-fornecedor-planilha'));
+    fireEvent.keyDown(screen.getByTestId('barra-selecao'), { key: 'Escape' });
+    expect(marcadasP()).toBe(0);
+    /* a linha sem fornecedor: marcada, não oferece nada */
+    fireEvent.click(caixaP('sem-forn'));
+    expect(screen.queryByTestId('marcar-fornecedor-planilha')).not.toBeInTheDocument();
+  });
+});
+
 const cls = (subcentro: string, escopo_negocio: string): ClassificacaoItem => ({
   id: subcentro, subcentro, escopo_negocio, macro_custo: 'Custeio Produção', grupo_custo: 'Custo Fixo',
   centro_custo: 'Centro', tipo_operacao: '2-Saídas',

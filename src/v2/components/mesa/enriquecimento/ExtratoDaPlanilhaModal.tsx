@@ -31,7 +31,9 @@ import { contaDaLinhaStaging } from '@/v2/lib/mesa/enriquecimentoView';
 import {
   LEGENDA_SIMBOLOS, montarExtratoDaPlanilha, soNaoEnriquecidos, type LinhaExtratoPlanilha, type SeloSistema,
 } from '@/v2/lib/mesa/extratoDaPlanilha';
-import { gestoDaSelecao, type FormaDaSelecao } from '@/v2/lib/mesa/agruparNoExtrato';
+import {
+  doMesmoFornecedor, gestoDaSelecao, type FormaDaSelecao, type LadoDoExtrato,
+} from '@/v2/lib/mesa/agruparNoExtrato';
 import { STATUS_PALETA, STATUS_PILULA_BASE } from '@/lib/financeiro/statusFinanceiro';
 
 /** O colgroup — a régua da Conferência (pior texto renderizado + 8 + padding), medida no navegador. */
@@ -145,7 +147,12 @@ export function ExtratoDaPlanilhaModal({
   const [confirmando, setConfirmando] = useState(false);
   const [gravando, setGravando] = useState(false);
   const [recusa, setRecusa] = useState<string | null>(null);
-  const limpar = () => { setMarcP(new Set()); setMarcS(new Set()); setConfirmando(false); setRecusa(null); };
+  /* a ÚLTIMA caixa marcada de cada lado — é dela que sai o "+ N de {fornecedor}" (PR-CONC-ENRIQ-MARCAR-FAVORECIDO) */
+  const [ultimo, setUltimo] = useState<{ planilha: string | null; sistema: string | null }>({ planilha: null, sistema: null });
+  const limpar = () => {
+    setMarcP(new Set()); setMarcS(new Set()); setConfirmando(false); setRecusa(null);
+    setUltimo({ planilha: null, sistema: null });
+  };
   /* ── O MODO BLOCO — o "Desfazer bloco" (NM-B); entrar nele limpa a seleção, marcar uma caixa sai dele ───────────── */
   const [blocoAtivo, setBlocoAtivo] = useState<string | null>(null);
   const [motivoBloco, setMotivoBloco] = useState('');
@@ -159,8 +166,12 @@ export function ExtratoDaPlanilhaModal({
     setBlocoAtivo(id); setMotivoBloco(''); setFaltaMotivo(false); setRecusaBloco(null);
   };
   useEffect(() => { limpar(); sairDoBloco(); }, [conta, open]);
-  const alternar = (setter: typeof setMarcP, id: string) => {
-    setter((atual) => { const n = new Set(atual); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const alternar = (lado: LadoDoExtrato, id: string) => {
+    const atual = lado === 'planilha' ? marcP : marcS;
+    const marcando = !atual.has(id);
+    (lado === 'planilha' ? setMarcP : setMarcS)((a) => { const n = new Set(a); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+    /* desmarcar continua item a item; só a caixa MARCADA vira a "última" */
+    if (marcando) setUltimo((u) => ({ ...u, [lado]: id }));
     setConfirmando(false);
     setRecusa(null);
     sairDoBloco();
@@ -182,6 +193,23 @@ export function ExtratoDaPlanilhaModal({
     }),
   }), [marcP, marcS, valores]);
   const temSelecao = marcP.size > 0 || marcS.size > 0;
+  /* ── "+ N de {fornecedor}" — por lado, a partir da ÚLTIMA caixa marcada; marca SÓ aquele lado ─────────────────── */
+  const linhasTodas = useMemo(() => (extrato?.dias ?? []).flatMap((d) => d.linhas), [extrato]);
+  const acaoFornecedor = (lado: LadoDoExtrato) => {
+    const id = ultimo[lado];
+    const marcados = lado === 'planilha' ? marcP : marcS;
+    if (!id || !marcados.has(id)) return null;
+    const l = linhasTodas.find((x) => (lado === 'planilha' ? x.selPlanilha : x.selSistema) === id);
+    if (!l) return null;
+    const faltam = doMesmoFornecedor(linhasTodas, lado, l.chaveFornecedor[lado]).filter((x) => !marcados.has(x));
+    return faltam.length > 0 ? { lado, faltam, nome: l.nomeFornecedor[lado] || '—' } : null;
+  };
+  const acoesFornecedor = [acaoFornecedor('planilha'), acaoFornecedor('sistema')].flatMap((a) => (a ? [a] : []));
+  const marcarDoFornecedor = (lado: LadoDoExtrato, ids: readonly string[]) => {
+    (lado === 'planilha' ? setMarcP : setMarcS)((a) => new Set([...a, ...ids]));
+    setConfirmando(false);
+    setRecusa(null);
+  };
   /* o resumo do bloco aberto: N e M e a soma saem das linhas JÁ carregadas, as de mesmo `blocoId` */
   const resumoBloco = useMemo(() => {
     if (!blocoAtivo) return null;
@@ -320,7 +348,7 @@ export function ExtratoDaPlanilhaModal({
               )}
               {dias.map((d) => (
                 <DiaRows key={d.data ?? 'sem-data'} d={d} onAbrir={abrir} marcP={marcP} marcS={marcS} travado={gravando}
-                  onMarcarP={(id) => alternar(setMarcP, id)} onMarcarS={(id) => alternar(setMarcS, id)}
+                  onMarcarP={(id) => alternar('planilha', id)} onMarcarS={(id) => alternar('sistema', id)}
                   blocoAtivo={blocoAtivo} onAbrirBloco={abrirBloco} />
               ))}
             </tbody>
@@ -377,6 +405,17 @@ export function ExtratoDaPlanilhaModal({
                 {recusa ?? (!gesto.habilitado ? gesto.motivo : '') ?? ''}
               </span>
               <span className="ml-auto flex shrink-0 items-center gap-2">
+                {/* "+ N de {fornecedor} (lado)": marca as que faltam DAQUELE lado; o nome corta na borda, inteiro no title */}
+                {!confirmando && acoesFornecedor.map((a) => (
+                  <button key={a.lado} type="button" data-testid={`marcar-fornecedor-${a.lado}`} disabled={gravando}
+                    title={`Marcar as outras ${a.faltam.length} de ${a.nome} (${a.lado})`}
+                    onClick={() => marcarDoFornecedor(a.lado, a.faltam)}
+                    className="flex h-[18px] items-center rounded border border-primary-foreground/40 px-1.5 text-[10px] hover:bg-primary-foreground/15">
+                    <span>+ {a.faltam.length} de&nbsp;</span>
+                    <span className="max-w-[110px] overflow-hidden whitespace-nowrap">{a.nome}</span>
+                    <span>&nbsp;({a.lado})</span>
+                  </button>
+                ))}
                 {gesto.forma && confirmando ? (
                   <>
                     <button type="button" data-testid="confirmar-gesto" disabled={gravando} onClick={() => { void gravar(); }}

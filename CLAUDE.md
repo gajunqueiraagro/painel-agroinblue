@@ -160,9 +160,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 02/10/2026 (PR-CONC-ENRIQ-BLOCO-NM-B, +19: +7 em `src/v2/lib/mesa/agruparNoExtrato.test.ts` (8 -> 15, o
-  contrato novo) e +12 em `src/v2/lib/mesa/enriquecerV2.test.tsx` (11 do bloco; o "Casar apagado" virou dois: cru igual
-  habilitado e cru diferente apagado); antes o UI-DROPDOWN-PADRAO-01, +7): 2863
+  Baseline em 02/10/2026 (PR-CONC-ENRIQ-MARCAR-FAVORECIDO, +9: +4 `doMesmoFornecedor`/chaves em
+  `src/v2/lib/mesa/agruparNoExtrato.test.ts` e +5 do modal em `src/v2/lib/mesa/enriquecerV2.test.tsx`; antes o
+  PR-CONC-ENRIQ-BLOCO-NM-B, +19): 2872
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -344,8 +344,11 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   marcam aqui — e por isso o 1x1 cru cujo lancamento caiu no mes seguinte (TOKIO MARINE 1.690,71: planilha ago/26,
   pagamento 10/09) nunca aparece com os dois lados na mesma tela.
   · BLOCO-NM (PR-CONC-ENRIQ-BLOCO-NM-A banco, NM-B tela): (a) LIGADAS no NM-B (Extrato da planilha); o desfazer do casar
-  1x1 manual NAO tem tela (fora do NM-B); (e) "MARCAR TODOS DO FAVORECIDO": o bloco real e' grande (Emerson 6+20, T Cortez
-  23+49 caixas) — na prova foram marcadas por script sobre as caixas da tela (1,5 s e 2,0 s); a mao sao 26 e 72 cliques;
+  1x1 manual NAO tem tela (fora do NM-B); (e) "MARCAR TODOS DO FAVORECIDO" FECHADO no PR-CONC-ENRIQ-MARCAR-FAVORECIDO
+  (4 cliques no Emerson e no T Cortez); fica: enquanto as DUAS acoes "+ N de" estao na barra (1 marcado de cada lado), o
+  recado/motivo encolhe a 16px a 1135 (fica no `title` do gesto) e volta inteiro depois das acoes; o sistema chaveia pelo NOME
+  do cadastro porque `EspSis` nao declara `favorecido_id` (o Espelho o emite) — homonimos se juntam (NJ set/26: "Banco
+  Sicredi", 2 ids, 3 lancamentos); o `truncate` do recado e' pre-existente e corta com "…" (regra da reticencia);
   (f) o `cru` da tela e' `origem extrato/ofx` + `subcentro` vazio (o Espelho nao traz `plano_conta_id`), e o bloco recusa por
   `plano_conta_id` vazio: medidos 315 lancamentos realizados com plano vazio e subcentro escrito (Vera 314 — 266 importacao +
   48 manual —, Agnaldo 1 do extrato), que a tela trata como classificados e o banco recusa (`lancamento_cru`, frase na barra);
@@ -666,6 +669,12 @@ docs/historico/frentes-ate-2026-09-29.md.)
   RPC). "AO FORNECEDOR" (no "⋯" da Mesa) grava SO' A PROPOSTA (`levarAoFornecedor` so' recebe `editarProposto`), alvo pelo ID
   do fornecedor resolvido, so' linha nao aprovada, e a linha JA' CLASSIFICADA fica com o sistema (prevista na previa).
   `resolvido_grupo` fica FORA do lote (balde `aguarda`) ate' o N:1 ter gravacao (2b).
+- ⚠ "+ N DE {FORNECEDOR}" MARCA UM LADO SO' (PR-CONC-ENRIQ-MARCAR-FAVORECIDO, so' tela): a partir da ULTIMA caixa marcada
+  de cada lado, `doMesmoFornecedor` (`agruparNoExtrato.ts`) da' os MARCAVEIS daquele lado com a mesma `chaveFornecedor`
+  (`extratoDaPlanilha.ts`: planilha = `planilha_favorecido_id`, senao o texto normalizado de `excel_fornecedor`; sistema = o
+  nome do cadastro normalizado). As duas chaves NUNCA se comparam — o operador escolhe os dois lados. Fornecedor vazio ("—")
+  nao gera acao; linha em bloco, pareada ou transferencia nao tem caixa e nao entra. Na barra de 26px, como botoes inline
+  (medido a 1135: as duas acoes + o gesto cabem, grupo da direita 596 de 1088, sem rolagem).
 - ⚠ O GESTO DO EXTRATO DA PLANILHA DEPENDE DE CRU x CLASSIFICADO (PR-CONC-ENRIQ-BLOCO-NM-B, so' tela; `gestoDaSelecao`,
   `src/v2/lib/mesa/agruparNoExtrato.ts`), nesta ordem: so' um lado -> nada; TODOS classificados -> "Conferir bloco NxM"
   (`conferirBloco`, qualquer forma, 1x1 inclusive, so' com soma ao centavo, SEM confirmacao em dois passos: nao altera

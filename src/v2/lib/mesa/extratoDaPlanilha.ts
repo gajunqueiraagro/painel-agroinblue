@@ -137,7 +137,37 @@ export interface LinhaExtratoPlanilha {
   selSistema: string | null;
   /** O bloco conferido a que a linha pertence (os dois lados) — abre o "Desfazer bloco". `null` fora de bloco. */
   blocoId: string | null;
+  /**
+   * O FORNECEDOR DE CADA LADO, para o "marcar todos do fornecedor" (PR-CONC-ENRIQ-MARCAR-FAVORECIDO). Cada lado com a SUA
+   * chave, e as duas NUNCA se comparam: planilha = `planilha_favorecido_id` (o fornecedor que o banco resolveu da planilha)
+   * ou, sem ele, o texto normalizado de `excel_fornecedor`; sistema = o nome do cadastro normalizado (`EspSis.fornecedor`).
+   * String vazia quando o lado não existe ou não tem fornecedor ("—").
+   */
+  chaveFornecedor: { planilha: string; sistema: string };
+  /** O nome como se mostra na ação ("+ N de {nome}") — o texto da planilha e o nome do cadastro. */
+  nomeFornecedor: { planilha: string; sistema: string };
 }
+
+/** O texto do fornecedor normalizado: sem acento, minúsculo, espaços colapsados; "—" e vazio viram "". */
+export function normalizarFornecedor(t: string | null | undefined): string {
+  const x = (t ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+  return x === '—' || x === '-' ? '' : x;
+}
+
+/** A chave do fornecedor da linha da PLANILHA: o id resolvido pelo banco, senão o texto normalizado. */
+export function chaveFornecedorPlanilha(r: Pick<ClassificacaoStagingPreviewRow, 'planilha_favorecido_id' | 'excel_fornecedor'>): string {
+  if (r.planilha_favorecido_id) return `id:${r.planilha_favorecido_id}`;
+  const t = normalizarFornecedor(r.excel_fornecedor);
+  return t ? `txt:${t}` : '';
+}
+
+/** A chave do fornecedor do lançamento do SISTEMA: o nome do cadastro normalizado. */
+export function chaveFornecedorSistema(nome: string | null | undefined): string {
+  const t = normalizarFornecedor(nome);
+  return t ? `nome:${t}` : '';
+}
+
+type LinhaSemFornecedor = Omit<LinhaExtratoPlanilha, 'chaveFornecedor' | 'nomeFornecedor'>;
 
 export interface DiaExtratoPlanilha {
   data: string | null;
@@ -203,7 +233,18 @@ export function montarExtratoDaPlanilha(
   const data: EspelhadosReais = { ...espelho, ofx_completo: ofx, vinculos, sistema_candidatos: [] };
   const mesa: DiaConf[] = montarMesa(data, internos);
 
-  const linhaPlanilha = (e: EspOfx, sis: EspSis | undefined, filha: boolean): LinhaExtratoPlanilha => {
+  /* o fornecedor de cada lado, a partir do que a linha já desenha (planilha pelo staging, sistema pelo Espelho) */
+  const completar = (l: LinhaSemFornecedor): LinhaExtratoPlanilha => {
+    const r = l.planilha && l.stagingId ? porStaging.get(l.stagingId) : undefined;
+    const nomeSis = l.sistema && normalizarFornecedor(l.sistema.fornecedor) ? l.sistema.fornecedor : '';
+    return {
+      ...l,
+      chaveFornecedor: { planilha: r ? chaveFornecedorPlanilha(r) : '', sistema: l.sistema ? chaveFornecedorSistema(l.sistema.fornecedor) : '' },
+      nomeFornecedor: { planilha: r ? (r.excel_fornecedor ?? '').trim() : '', sistema: nomeSis },
+    };
+  };
+
+  const linhaPlanilha = (e: EspOfx, sis: EspSis | undefined, filha: boolean): LinhaSemFornecedor => {
     const r = porStaging.get(e.extrato_id);
     const balde: BaldePainel = r ? baldeDaLinha(r, sobrescreverIds.has(e.extrato_id)) : 'outras';
     const enriquecida = balde === 'gravada';
@@ -225,7 +266,7 @@ export function montarExtratoDaPlanilha(
   };
 
   const dias: DiaExtratoPlanilha[] = mesa.map((d) => {
-    const linhas: LinhaExtratoPlanilha[] = [];
+    const linhas: LinhaSemFornecedor[] = [];
     for (const p of d.pareados) {
       /* 1 linha da planilha × 1 lançamento é o caso normal; 1 × N não acontece aqui (o vínculo é um só por linha). */
       linhas.push(linhaPlanilha(p.extrato, p.filhas[0]?.sis, false));
@@ -256,7 +297,10 @@ export function montarExtratoDaPlanilha(
         selPlanilha: null, selSistema: null, blocoId: null,
       });
     }
-    return { data: d.data, linhas, planilha: d.banco, sistema: d.sistema, confere: Math.abs(d.banco - d.sistema) < 0.005 };
+    return {
+      data: d.data, linhas: linhas.map(completar), planilha: d.banco, sistema: d.sistema,
+      confere: Math.abs(d.banco - d.sistema) < 0.005,
+    };
   });
 
   return {
