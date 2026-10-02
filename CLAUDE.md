@@ -325,10 +325,16 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   `data_pagamento = data`, a COMPETENCIA — no ensaio, 348/349/350 casaram por atributos com lancamentos de outra data, que o
   Recasar refaz); (b) O RECASAR ATUAL JA' MEXIA EM 3 LINHAS DA 8d6efeb7 sem relacao com este PR: a 62 (par com a transferencia
   7a1b1f93, que o casar exclui) volta a 'sem_match', e 371/372 viram 'sugestao_split' (dfd8ab98) — o Recasar desfaz par feito
-  com transferencia; (c) no item E da FASE 0 as linhas de CARTAO contam como "outro mes" (compra x fatura): no Agnaldo c304cce9
-  sao as 7 que ficam (D2); (d) Santa Rita 8a82eb7c linhas 58/98 e NJ a63fa4c6 linha 246: APLICADAS em lancamento de outro mes /
+  com transferencia; (c) [revogada no PR-CONC-ENRIQ-CARTAO-MESMA-DATA: o cartao e' datado na fatura e o par herdado exige a
+  mesma data, como toda conta]; (d) Santa Rita 8a82eb7c linhas 58/98 e NJ a63fa4c6 linha 246: APLICADAS em lancamento de outro mes /
   conta (gravaram classificacao) — decisao caso a caso; (e) a reaberta nao guarda de onde veio (o "limpa" do Recasar zera o
   `casamento_meta`).
+  · CARTAO-MESMA-DATA (PR-CONC-ENRIQ-CARTAO-MESMA-DATA, 02/10): (a) CARTAO HISTORICAMENTE DATADO PELA COMPRA (Santa Rita Itau
+  Black 2021–2024, parte do Nubank) nao casa por data exata quando a planilha traz a data da fatura; se virar caso real, pede
+  regra propria com decisao do Gabriel; (b) o teste do CASADOR-MES (`conc_enriq_casador_mes_test.sql`) ja' nao monta contra a
+  8d6efeb7 de hoje (a 62 esta' 'sem_match' sem par e a 16 foi para o cru faf8537b) — independente deste PR; P5/P6/P7 foram
+  ajustados a' regra nova e o P7 escreve na 8d6efeb7 (so' com a sessao parada); (c) os comentarios do populate e do
+  casar_sessao ainda dizem "cartao dispensa a data" (so' comentario; o corpo nao foi tocado, por escopo).
   · CULTURA-FASE-A (PR-CONC-ENRIQ-MESA-CULTURA-FASE-A, 02/10): (a) SESSOES JA' IMPORTADAS: o Recasar completa
   `_planilha.cultura` so' nas linhas com par, NAO aplicadas e NAO editadas a mao (na 8d6efeb7: 49 das 125 — 26 amendoim, 23
   mandioca); as outras 76 (aplicadas, sem par ou editadas) so' reimportando. Backfill PROPOSTO, NAO executado: acrescentar SO' a
@@ -791,7 +797,8 @@ docs/historico/frentes-ate-2026-09-29.md.)
   senao bancaria; SQL IMMUTABLE sem SET, o planner a embute) — as 4 copias do `casar_sessao` (PASSO 1, 3a `a`/`b`, 3b) usam ela;
   (D1/D2) o par herdado vale so' com `_fn_classificacao_par_herdado_valido(lanc, conta da linha, data, mes_de, mes_ate)`, o UNICO
   dono de: (a) mesma conta da linha (`COALESCE(conta_origem_id, conta_destino_id)`) pela regua; (b) `data_pagamento` IGUAL a' data
-  de pagamento da planilha — mes inteiro NAO e' reserva; conta com `tipo_conta = 'cartao'` dispensa (b) (compra x fatura);
+  de pagamento da planilha — mes inteiro NAO e' reserva — em QUALQUER conta, o cartao inclusive (a excecao do cartao foi
+  REVOGADA no PR-CONC-ENRIQ-CARTAO-MESMA-DATA, regra logo abaixo);
   (D1b) sem data de pagamento na planilha: no POPULATE compara a `data` (a mesma do casamento por atributos), no CASAR o mes da
   sessao; (D3) o (c) — lancamento ja' com outra linha da sessao — mora em cada consumidor com o MESMO desempate: quem falha (a)/(b)
   sai da disputa; lancamento preso em grupo/bloco de linha preservada e' usado; entre as que passam fica a APLICADA, senao a de
@@ -800,8 +807,21 @@ docs/historico/frentes-ate-2026-09-29.md.)
   'ja_aplicado' NAO aplicada que falha; aplicada NUNCA e' reaberta (322/323 seguem), e as outras preservadas disputam mas nao sao
   julgadas; o retorno ganha 'reabertas'. As duas internas: so' `service_role` (as RPCs sao SECURITY DEFINER).
   md5: casar a6a6832f -> c5d725afa76d91242d2c2410984cf38c; populate 5fdbd817 -> 694ddc8baadae71b1d59de92a65c35b3;
-  `_fn_conta_do_lancamento` 7bd27d014d20b2566fc35db2613a57e3; `_fn_classificacao_par_herdado_valido` cd12b3e28ca72a93f013d503211b37ed.
+  `_fn_conta_do_lancamento` 7bd27d014d20b2566fc35db2613a57e3; `_fn_classificacao_par_herdado_valido` cd12b3e28ca72a93f013d503211b37ed
+  (-> 0224916d34eb19f8ad3cb9fcff6b69a7 no PR-CONC-ENRIQ-CARTAO-MESMA-DATA).
   Nenhum dado foi alterado: o conserto das sessoes e' pelo Recasar (e pelo Reverter, nas aplicadas), na tela.
+- ⚠ O CARTAO E' UMA CONTA COMO AS OUTRAS NO PAR HERDADO (PR-CONC-ENRIQ-CARTAO-MESMA-DATA, decisao do Gabriel 02/10, migration
+  20261027191000, ⚠ registrada como 20261002193356; ledger = arquivo, md5 07d044ba…): a excecao D2 do CASADOR-MES ("cartao
+  dispensa a data, a do lancamento e' a da compra") foi REVOGADA — a premissa era falsa e foi decidida sem medir. Medido em
+  02/10, % dos lancamentos de cartao no dia mais frequente do mes (a data da FATURA): Agnaldo Elo 99,8 (2.031) e Mastercard
+  100 (76); NJ Ourocard 99,7 (286), Visa Infinite 100 (80), Cartao Sicredi Lavoura 100 (158); Santa Rita Cartao Sicredi 100
+  (11), Bradesco 93,2 (44), Itau Black 78,1 (2.443; 43,6 em 2021, 56,3 em 2022, ~90 em 2023–24, fatura desde 2025) e Nubank
+  70,0 (100). O validador `_fn_classificacao_par_herdado_valido` (dono unico; populate e casar_sessao nao mudaram, so' os
+  comentarios deles ainda citam a excecao) exige a MESMA data de pagamento em toda conta; sem data, a janela do mes. Nada
+  muda fora do cartao: 17.836 linhas de staging com par em conta que nao e' cartao, saida identica (md5) antigo x novo; no
+  cartao mudam 76 de 1.225. O Recasar passa a reabrir 6 linhas na dfd0f02c (274/275/278/286/294/305, cada uma com o
+  lancamento de 16/09 livre), 6 na 8d6efeb7 e 6 na 32c52f5c (266/279/290/308/356/432), 7 em cada sessao do Agnaldo (25206941,
+  c304cce9, fc4d6089; candidato unico em 10/08, usado pela 9b6785b2 nao aplicada) e 0 na Santa Rita. md5 0224916d…
 - ⚠ CULTURA E FASE: O BANCO E' O DONO DA COERENCIA (PR-CONC-ENRIQ-MESA-CULTURA-FASE-A, migration 20261027190500, ledger
   20261002171822): o gatilho `trg_zz_cultura_fase_coerente` (BEFORE INSERT OR UPDATE em `financeiro_lancamentos_v2`, depois de
   `trg_resolve_classificacao_plano` pela ordem alfabetica) zera a CULTURA fora de agricultura e a FASE fora de pecuaria, para

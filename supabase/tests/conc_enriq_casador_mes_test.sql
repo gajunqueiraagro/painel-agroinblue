@@ -8,10 +8,14 @@
 -- P2  mesma conta e mesma data (o par valido da linha 3) -> herda ('ja_aplicado'), como antes.
 -- P3  o mesmo, com a linha em OUTRA conta -> nao herda.
 -- P4  duas linhas validas no mesmo lancamento, p_rows FORA de ordem (900 antes de 800) -> herda a 800, a 900 nao.
--- P5  linha de CARTAO (266, Ourocard), lancamento do cartao em 17/08, planilha paga em 16/09 -> herda (D2).
--- P6  dupla BB (265) + Cartao (266) no lancamento do cartao -> a do BB nao herda (conta), a do Cartao herda.
+-- P5  linha de CARTAO (266, Ourocard), lancamento do cartao em 17/08, planilha paga em 16/09 -> NAO herda: a excecao D2 do
+--     cartao foi revogada no PR-CONC-ENRIQ-CARTAO-MESMA-DATA (o lancamento de cartao e' datado na fatura, como a planilha).
+-- P6  dupla BB (265) + Cartao (266) no lancamento do cartao -> nenhuma herda (a do BB pela conta, a do Cartao pela data).
 -- P7  Recasar da 8d6efeb7 com um bloco conferido (Rabobank, linha 10): reabre o 'ja_aplicado' nao aplicado invalido (337 vai
---     para o gemeo de setembro; 265 fica sem par), nao toca na aplicada (16) nem no bloco; 266 fica.
+--     para o gemeo de setembro; 265 fica sem par; 266, de cartao, tambem e' reaberta), nao toca na aplicada (16) nem no bloco;
+--     e TODA linha 'ja_aplicado' nao aplicada que o validador recusa antes do Recasar sai do par antigo (o numero fixo de
+--     reabertas, 11, valia para o estado da sessao em 02/10 com a excecao do cartao).
+--     ⚠ P7 ESCREVE NA 8d6efeb7 (em ROLLBACK): so' roda quando a sessao nao estiver em uso.
 -- P8  estorno (140/141, 08/09) e transferencia (62, 21/09), mesma conta e mesma data -> herdam.
 -- P9  _fn_conta_do_lancamento = o CASE vivo em TODOS os lancamentos do NJ (divergencias = 0; o tamanho do conjunto vai junto).
 -- P10 linha SEM data de pagamento: lancamento com data_pagamento = `data` -> herda; mesmo mes, outro dia -> nao herda.
@@ -25,6 +29,7 @@ DECLARE
   s3 record; s16 record; s265 record; s266 record; s140 record; s141 record; s62 record; s337 record;
   v_outra_conta uuid; v_l_set uuid; v_l_337 uuid; v_d date; v_d2 date; v_k int := 0;
   v_rabo_antes text; v_16_antes text;
+  v_inval_ids uuid[]; v_inval_par uuid[];   -- PR-CONC-ENRIQ-CARTAO-MESMA-DATA: as recusadas pelo validador antes do Recasar
 BEGIN
   PERFORM set_config('statement_timeout', '120s', true);
   PERFORM set_config('request.jwt.claims', '{"sub":"7bd0b6ad-2527-4be1-af58-f2cc0c0edd8e","role":"authenticated"}', true);
@@ -131,8 +136,8 @@ BEGIN
     'data_pagamento', s266.excel_data_pagamento)));
   SELECT match_status, match_lancamento_id INTO v_st, v_lid FROM financeiro_classificacao_staging WHERE sessao_id = v_ses AND excel_linha_origem = 266;
   v_out := v_out || format(E'\nP5 cartao (planilha %s, lancamento %s): %s / %s', s266.excel_data_pagamento,
-    (SELECT data_pagamento FROM financeiro_lancamentos_v2 WHERE id = s266.match_lancamento_id), v_st, left(v_lid::text, 8));
-  IF v_st <> 'ja_aplicado' OR v_lid IS DISTINCT FROM s266.match_lancamento_id THEN v_ok := false; v_out := v_out || ' FALHOU'; END IF;
+    (SELECT data_pagamento FROM financeiro_lancamentos_v2 WHERE id = s266.match_lancamento_id), v_st, COALESCE(left(v_lid::text, 8), '—'));
+  IF v_st = 'ja_aplicado' OR v_lid IS NOT DISTINCT FROM s266.match_lancamento_id THEN v_ok := false; v_out := v_out || ' FALHOU'; END IF;
 
   -- ── P6 dupla BB + Cartao no lancamento do cartao (a chave da 266 nas duas)
   INSERT INTO financeiro_classificacao_staging (sessao_id, cliente_id, excel_linha_origem, excel_valor, excel_data, excel_tipo_operacao,
@@ -150,8 +155,8 @@ BEGIN
   v_out := v_out || format(E'\nP6 265 (BB): %s / %s', v_st, COALESCE(left(v_lid::text, 8), '—'));
   IF v_st = 'ja_aplicado' OR v_lid IS NOT DISTINCT FROM s266.match_lancamento_id THEN v_ok := false; v_out := v_out || ' FALHOU'; END IF;
   SELECT match_status, match_lancamento_id INTO v_st, v_lid FROM financeiro_classificacao_staging WHERE sessao_id = v_ses AND excel_linha_origem = 266;
-  v_out := v_out || format(' | 266 (Cartao): %s / %s', v_st, left(v_lid::text, 8));
-  IF v_st <> 'ja_aplicado' OR v_lid IS DISTINCT FROM s266.match_lancamento_id THEN v_ok := false; v_out := v_out || ' FALHOU'; END IF;
+  v_out := v_out || format(' | 266 (Cartao): %s / %s', v_st, COALESCE(left(v_lid::text, 8), '—'));
+  IF v_st = 'ja_aplicado' OR v_lid IS NOT DISTINCT FROM s266.match_lancamento_id THEN v_ok := false; v_out := v_out || ' FALHOU'; END IF;
 
   -- ── P8 estorno e transferencia, mesma conta e mesma data
   INSERT INTO financeiro_classificacao_staging (sessao_id, cliente_id, excel_linha_origem, excel_valor, excel_data, excel_tipo_operacao,
@@ -216,6 +221,15 @@ BEGIN
      AND round(l.valor, 2) = round(abs(s337.excel_valor), 2)
      AND public._fn_conta_do_lancamento(l.tipo_operacao, l.conta_bancaria_id, l.conta_destino_id) = COALESCE(s337.conta_origem_id, s337.conta_destino_id);
   IF n <> 1 THEN RAISE EXCEPTION 'P7: o gemeo de setembro da 337 nao e'' unico (%)', n; END IF;
+  -- as linhas que o validador recusa ANTES do Recasar (a regra, nao um numero fixo)
+  SELECT array_agg(s.staging_id), array_agg(s.match_lancamento_id) INTO v_inval_ids, v_inval_par
+    FROM financeiro_classificacao_staging s
+   WHERE s.sessao_id = c_ses AND s.match_status = 'ja_aplicado' AND NOT s.aplicado AND s.match_lancamento_id IS NOT NULL
+     AND NOT public._fn_classificacao_par_herdado_valido(s.match_lancamento_id, COALESCE(s.conta_origem_id, s.conta_destino_id),
+                                                         s.excel_data_pagamento, date '2026-09-01', date '2026-09-30');
+  IF NOT (s266.staging_id = ANY (COALESCE(v_inval_ids, '{}'))) THEN
+    v_ok := false; v_out := v_out || E'\nP7 FALHOU: a 266 (cartao, outro mes) nao esta entre as recusadas pelo validador';
+  END IF;
   v_r := fn_classificacao_casar_sessao(c_ses, '2026-09');
   v_out := v_out || format(E'\nP7 Recasar: reabertas %s', v_r->>'reabertas');
   SELECT match_lancamento_id INTO v_lid FROM financeiro_classificacao_staging WHERE staging_id = s337.staging_id;
@@ -225,14 +239,20 @@ BEGIN
   v_out := v_out || format(' | 265 -> %s / %s', v_st, COALESCE(left(v_lid::text, 8), '—'));
   IF v_lid IS NOT NULL THEN v_ok := false; v_out := v_out || ' FALHOU'; END IF;
   SELECT match_status, match_lancamento_id INTO v_st, v_lid FROM financeiro_classificacao_staging WHERE staging_id = s266.staging_id;
-  v_out := v_out || format(' | 266 -> %s / %s', v_st, left(v_lid::text, 8));
-  IF v_st <> 'ja_aplicado' OR v_lid IS DISTINCT FROM s266.match_lancamento_id THEN v_ok := false; v_out := v_out || ' FALHOU'; END IF;
+  v_out := v_out || format(' | 266 -> %s / %s', v_st, COALESCE(left(v_lid::text, 8), '—'));
+  IF v_st = 'ja_aplicado' AND v_lid IS NOT DISTINCT FROM s266.match_lancamento_id THEN v_ok := false; v_out := v_out || ' FALHOU'; END IF;
+  -- toda recusada saiu do par antigo em 'ja_aplicado'
+  SELECT count(*) INTO n FROM unnest(v_inval_ids, v_inval_par) AS u(sid, par)
+    JOIN financeiro_classificacao_staging s ON s.staging_id = u.sid
+   WHERE s.match_status = 'ja_aplicado' AND s.match_lancamento_id = u.par;
+  v_out := v_out || format(' | recusadas pelo validador %s, presas depois %s', COALESCE(array_length(v_inval_ids, 1), 0), n);
+  IF COALESCE(array_length(v_inval_ids, 1), 0) = 0 OR n <> 0 THEN v_ok := false; v_out := v_out || ' FALHOU'; END IF;
   v_out := v_out || format(' | aplicada 16 identica: %s | bloco Rabobank identico: %s',
     v_16_antes = (SELECT md5((to_jsonb(s) - 'updated_at')::text) FROM financeiro_classificacao_staging s WHERE s.staging_id = s16.staging_id),
     v_rabo_antes = (SELECT md5((to_jsonb(s) - 'updated_at')::text) FROM financeiro_classificacao_staging s WHERE s.staging_id = c_rabo));
   IF v_16_antes <> (SELECT md5((to_jsonb(s) - 'updated_at')::text) FROM financeiro_classificacao_staging s WHERE s.staging_id = s16.staging_id)
      OR v_rabo_antes <> (SELECT md5((to_jsonb(s) - 'updated_at')::text) FROM financeiro_classificacao_staging s WHERE s.staging_id = c_rabo)
-     OR (v_r->>'reabertas')::int <> 11 THEN
+     OR (v_r->>'reabertas')::int < COALESCE(array_length(v_inval_ids, 1), 0) THEN
     v_ok := false; v_out := v_out || ' FALHOU';
   END IF;
 
