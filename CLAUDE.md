@@ -160,8 +160,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 02/10/2026 (PR-CONC-ENRIQ-ACABAMENTOS-01, +17 em `src/v2/lib/mesa/acabamentos01.test.tsx`; antes o
-  PR-CONC-ENRIQ-SPLIT-REVERTER, +9): 2986
+  Baseline em 03/10/2026 (PR-CONC-CONFERENCIA-FECHAMENTO-DIA, +43 em `src/lib/conciliacao/mesaDoDia.test.ts` e +9 em
+  `src/components/financeiro-v2/conferenciaFechamentoDia.test.tsx`; antes o PR-CONC-ENRIQ-ACABAMENTOS-01, +17): 3038
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -256,13 +256,21 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   writer comum — Transferencia ali e' frente propria (CONC-CRIAR-TRANSFERENCIA-01) ·
   no Criar em Transferencia, a "outra conta obrigatoria" hoje avisa por TOAST (o do `LancamentoV2Dialog`, contraria
   UX-TOAST-01) — trocar por erro no campo (CONC-CRIAR-TRANSFERENCIA-01) ·
-  CONC-MESA-NN-01 (frente propria, medida no CONC-MESA-SINAL-01): a `montarMesa` trata como N:1 TODO lancamento com 2+
-  extratos e CONSOME esses extratos — num bloco N:N (Emerson, NJ Sicredi Lavoura ago/26: 3 Pix x 7 arranquios) os outros
-  lancamentos ligados aos mesmos extratos SOMEM da mesa (o "Arranquio 20,24 t · NF 9294773" consome o Pix 28/08 -16.276,80
-  e os outros 6 arranquios, 16.443,20, saem; mais 352,40 no 40,34 t) e o mes inteiro difere (mesa -170.601,20 x
-  `sistema_caixa` -184.396,80); e o N:1 e' desenhado na data do LANCAMENTO, nao na de cada extrato (ICMS NF 9287581
-  2.470,26 = 454,26 em 26/08 + 2.016,00 em 27/08, todo em 27/08; os 3.000 do Pix 24/08 do 40,34 t em 28/08), enquanto o
-  caixa reparte por extrato. Conserto: o bloco N:N na mesa e o N:1 datado por extrato (a regra do caixa) ·
+  [CONC-MESA-NN-01 FECHADA no PR-CONC-CONFERENCIA-FECHAMENTO-DIA (03/10): a Conferencia ancora todo extrato no dia dele, sem
+  consumir nenhum; ver a regra "A DATA DO BANCO MANDA NA CONFERENCIA"] ·
+  CONFERENCIA-FECHAMENTO-DIA (03/10), dividas: (a) o EXTRATO DA PLANILHA do Enriquecer AINDA ANCORA O N:1 NO LANCAMENTO
+  (`montarMesa(..., { ancoraN1: 'lancamento' })` em `extratoDaPlanilha.ts`: o "Desmembrar" depende do N:1 consumir as linhas)
+  — levar a' ancora do extrato e' PR proprio; (b) o "PR B" do CONC-CAIXA-PONTA-01 (resumo da Conciliacao, aba Sistema, painel
+  do mes) continua aberto — so' a Conferencia e a Evolucao passaram a fechar como o caixa; (c) DIVIDAS DE DADO, sem corrigir:
+  SOBRE-APLICADOS (aplicado nos extratos da conta > valor) Vera Itau Personalite mai/26 77711d94 (2 x 360 num de 360; o gemeo
+  d88ea17e sem par), NJ Itau BBA mar/26 e3e36029 (2 x 150.000 num de 150.000), Santa Rita BB jun/26 eabe167e (375.000 num de
+  215.000; a outra metade "Venda 032 Novilhas" 160.000 sem par); SUB-APLICADOS (realizado com menos aplicado que o valor) Santa
+  Rita Bradesco jul/26 f33269e9 (0,02 x 0,01) e Vera Itau Personalite set/26 a627a6eb (2,09 em 19/09 x 0,13 em 21/09); MEIAS
+  TRANSFERENCIAS (lancamento vinculado so' ao extrato da OUTRA conta; a ponta desta conta solta) — 14: Santa Rita BB abr/26
+  f56d3d79, BB jun/26 6d96ab88/7c1b7a71/c84a4e8b/5f853a10/74c3eb77, Bradesco abr/26 4e43075a, Itau mai/26 e5cdeef4, Sicredi
+  abr/26 a00a7e7a/14bf4197, Sicredi jun/26 f6633d13, Sicredi jul/26 ac8a6e9c; NJ Cartao Sicredi Lavoura ago/26 fada1f53, Itau BBA
+  mar/26 221204df; (d) o gesto "PAGOU DIFERENTE DO PROGRAMADO" (registrar o pago e abrir o saldo) e' PR proprio — a
+  Conferencia so' MOSTRA a diferenca ·
   OC-BOITEL-DELTA-ANTIGO-01 (decisao) · OC-SALDO-MODAL-01 · OC-CLASSIF-ALINHAR-01 (decisao, caso a caso) ·
   OC-RETORNO-GERAL-01 (link direto perde `oc_aba`; em OC-RECLASSIFICAR-ITEM-01) · OC-ADOTAR-TODOS-01 (adotar saida no
   abate e na compra; em OC-VENDA-ENTREGAS-01a) · CANCEL-MOTIVO-BANCO-01 · CONCIL-DESFAZER-STATUS-01 (decisao) ·
@@ -1006,6 +1014,25 @@ docs/historico/frentes-ate-2026-09-29.md.)
     (o antigo "Usar valor do banco", so' no 1:N). Linha de bloco tem "Desfazer bloco" no "⋯" (passo inline, motivo
     obrigatorio). O vinculado PARCIAL continua candidato, com o chip "Parcial — falta R$ X" (aplicado vivo lido de
     `conciliacao_bancaria_itens`; o saldo livre quem valida e' a RPC).
+- ⚠ A DATA DO BANCO MANDA NA CONFERENCIA (PR-CONC-CONFERENCIA-FECHAMENTO-DIA, Gabriel 03/10; so' tela). Dono:
+  `montarMesa` em `src/lib/conciliacao/mesaDoDia.ts` (lib pura, movida verbatim do `EspelhoConciliacaoTab`, que reexporta).
+  R1 todo extrato fica no dia em que caiu, e NENHUM e' consumido: os vinculos dele sao as filhas, inclusive os do bloco N×N.
+  R2 o lancamento casado aparece sob o extrato com a SUA data; pago por varios extratos, "parte de X · resto em DD/MM". R3 o
+  fechamento soma o que esta' desenhado no dia (os APLICADOS, com o sinal do lancamento). R4 data do lancamento ≠ a do banco e'
+  aviso ambar "lancado em DD/MM", nunca diferenca. R5 diferenca so' de verdade: extrato sem par, lancamento sem par, extrato com
+  aplicado ≠ valor, SOBRE-aplicado (motivo "aplicado acima do lancamento") e SUB-aplicado (o resto do realizado vira linha
+  "!" no dia do LANCAMENTO, motivo "aplicado abaixo do lancamento"). O N:1 do PR-ESPELHO-05 (mae = lancamento, filhas =
+  extratos, "a mae troca de lado") SO' VALE para bloco de um dia so' e puro (nenhum extrato dele explica outro lancamento).
+  ⚠ O VINCULO CONTA PARA A CONTA DO EXTRATO: "tem vinculo" e' ter vinculo com extrato DESTA conta; o lancamento vinculado so'
+  ao extrato de outra (meia transferencia) e' "lancamento sem par" aqui. A transferencia com as duas pontas casadas segue
+  casada nas duas.
+  ⚠ O SISTEMA DO DIA = `sistema_caixa` (CONC-CAIXA-PONTA-01) − internas − sobre/sub-aplicados (o caixa trata esses "como
+  hoje"; os conjuntos sao `lancamentosSobreAplicados`/`lancamentosSubAplicados`, os mesmos da lib). Provado nos 70
+  conta-meses do proto que tem extrato: 0 divergencias; 29 dias mudaram (N×N/N:1 que cruza dias, meia transferencia,
+  sobre/sub-aplicacao), nenhum para "diferenca" sem motivo. A Evolucao (`montarEvolucao`) usa a mesma mesa.
+  ⚠ OS AVISOS VAO ANTES DA DESCRICAO e seguem a ESCADA DE ABREVIACAO `textosDosAvisos` (`LIMITE_AVISOS` 58 caracteres =
+  ~283px dos 286 uteis; medido: o pior caso real, 57, pede 278px), frase inteira no `title`. O Extrato da planilha usa a
+  ancora antiga (`ancoraN1: 'lancamento'`), saida identica a' de antes (o oraculo `mesaDoDiaAntes.fixture.ts`).
 - ⚠ CAIXA DO SISTEMA = UMA REGRA NO BANCO (CONC-CAIXA-PONTA-01, migration 20261027185500, ledger 20261001141213):
   `fn_caixa_sistema_pontas(cliente, conta, de, ate)` devolve uma linha por PONTA (lancamento x conta, sinal da direcao) e
   data. Parcial (programado/agendado com 0 < aplicado < valor): o aplicado na data de cada extrato; realizado cujo aplicado

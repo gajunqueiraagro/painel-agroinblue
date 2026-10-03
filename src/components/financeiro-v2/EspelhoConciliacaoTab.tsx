@@ -20,7 +20,7 @@ import { DndContext, DragOverlay, useDraggable, useDroppable, PointerSensor, use
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
-import { iconeOrigemLancamento, LEGENDA_ICONES, rotuloOrigem, vinculoVencedor } from '@/v2/lib/origemLancamento';
+import { iconeOrigemLancamento, LEGENDA_ICONES, rotuloOrigem } from '@/v2/lib/origemLancamento';
 import { desfazerVinculo, desfazerGrupo } from '@/hooks/useConciliacaoDoMes';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
 import { useFinanceiroV2, type LancamentoV2 } from '@/hooks/useFinanceiroV2';
@@ -45,6 +45,17 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { STATUS_PALETA, STATUS_FILTRO_LABEL } from '@/lib/financeiro/statusFinanceiro';
 import { sugerirCasamentos, type Sugestao } from '@/lib/conciliacao/sugestoesCasamento';
 import { SugestoesCasarModal } from '@/components/financeiro-v2/SugestoesCasarModal';
+/* ⚠ A MESA DO DIA MUDOU DE CASA — PR-CONC-CONFERENCIA-FECHAMENTO-DIA: tipos do Espelho, `montarMesa`, `totaisDoEspelho`,
+   `sinalDoAplicado` e `ordenar` foram para a lib pura (movidos byte a byte); a tela importa de lá e REEXPORTA, para quem
+   já importava daqui (o Extrato da planilha, os testes) não mudar. */
+import {
+  montarMesa, totaisDoEspelho, sinalDoAplicado, ordenar,
+  type EspSis, type EspCandidato, type EspelhadosReais, type FilhaConf,
+} from '@/lib/conciliacao/mesaDoDia';
+export {
+  montarMesa, totaisDoEspelho, sinalDoAplicado,
+  type EspSis, type EspVinculo, type EspelhadosReais, type FilhaConf, type Pareado, type ParedoN1, type DiaConf,
+} from '@/lib/conciliacao/mesaDoDia';
 
 const MESES_CURTOS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
@@ -52,67 +63,7 @@ const MESES_CURTOS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 's
    Eles foram com a tabela do extrato para `TabelaExtratoDoMes`, e o Espelho passa a
    importá-los de lá. A direção é única de propósito: a peça importando daqui fecharia um
    ciclo de import, que o `npx madge --circular` acusa. Nada mudou no que eles fazem. */
-export interface EspSis {
-  lancamento_id: string; data: string | null; descricao: string | null;
-  centro: string | null; subcentro: string | null; valor_assinado: number;
-  sinal: string | null; status: 'conciliado' | 'sem_vinculo';
-  /* Opcionais porque a tela já sabe o que fazer com a ausência — "—". Em 09/09/2026 a RPC não os
-     emitia; hoje `fn_extratos_espelhados` devolve `fornecedor` no `sistema_completo` (conferido no
-     `prosrc` em 30/09, PR-CONC-CONFERENCIA-MODAL-01-fix1), e a sub-aba Sistema tem coluna para ele. */
-  fornecedor?: string | null;
-  origem_lancamento?: string | null;
-  competencia?: string | null;
-}
-/**
- * UM CANDIDATO DO SISTEMA — PR-ESPELHO-CANDIDATOS-FRONT-01 (Etapa 1 do Espelho evoluído).
- *
- * Lançamento previsto/agendado/programado que pode casar com o extrato: os do mês e todos os
- * vencidos em aberto. Vem de `sistema_candidatos` (`fn_extratos_espelhados`, versão
- * `espelhados-04-candidatos`, migration 20261027122100). Nesta etapa a tela só MOSTRA; casar
- * é a Etapa 2.
- */
-interface EspCandidato {
-  lancamento_id: string;
-  data_vencimento: string | null;
-  competencia: string | null;
-  valor: number;
-  valor_assinado: number;
-  sinal: string | null;
-  descricao: string | null;
-  centro: string | null;
-  subcentro: string | null;
-  status_transacao: string | null;
-  cenario: string | null;
-  cultura: string | null;
-  numero_documento: string | null;
-  tipo_documento: string | null;
-  favorecido_id: string | null;
-  fornecedor: string | null;
-  safra_codigo: string | null;
-  safra_descricao: string | null;
-  vencido: boolean;
-  ja_conciliado: boolean;
-  sem_conta: boolean;
-}
-export interface EspVinculo {
-  extrato_id: string; lancamento_id: string; valor_aplicado: number;
-  tipo_aprovacao: string | null; grupo_id: string | null;
-}
-export interface EspelhadosReais {
-  escopo: { cliente_id: string; conta_id: string; ano_mes: string; nome_conta: string | null };
-  saldos: { inicial: number | null; final_oficial: number | null; periodo_ini: string | null; periodo_fim: string | null; extrato_ini: string | null; extrato_fim: string | null };
-  ofx_completo: EspOfx[];
-  sistema_completo: EspSis[];
-  /* ⚠ A CHAVE QUE MATOU A HEURÍSTICA (migration 20260909120258). Diz qual lançamento casa
-     com qual extrato, com quanto foi aplicado e sob que tipo — tudo o que a Conferência
-     precisava e antes tinha de adivinhar. */
-  vinculos?: EspVinculo[];
-  /* Opcional: uma RPC anterior à `espelhados-04-candidatos` não emite a chave, e a tela
-     trata a ausência como lista vazia. */
-  sistema_candidatos?: EspCandidato[];
-  versao: string;
-  gerado_em: string;
-}
+
 
 
 
@@ -200,7 +151,7 @@ function AbaSistemaReal({ sistema, inicial, onAbrir }: { sistema: EspSis[]; inic
  * uma vez só, inclusive os que desenha dentro de um bloco N:1. Ler os dois lados da mesma
  * função é o que impede a próxima regra de entrar em um só.
  */
-function montarEvolucao(data: EspelhadosReais, internos: ReadonlySet<string>) {
+export function montarEvolucao(data: EspelhadosReais, internos: ReadonlySet<string>) {
   const inicial = data.saldos.inicial ?? 0;
   const nDias = data.saldos.periodo_fim ? Number(data.saldos.periodo_fim.split('-')[2]) : 31;
   const dia = (s: string | null) => (s ? Number(s.split('-')[2]) : 0);
@@ -276,257 +227,6 @@ function AbaEvolucaoReal({ data, internos }: { data: EspelhadosReais; internos: 
       </div>
     </div>
   );
-}
-
-// ── Conferência — a mesa do dia ────────────────────────────────────────────
-export interface FilhaConf { lancamento_id: string; valor_aplicado: number; sis?: EspSis; deN: number; }
-export interface Pareado {
-  extrato: EspOfx; filhas: FilhaConf[]; grupoId: string | null;
-  tipoVencedor: string | null; soma: number; diferenca: number;
-}
-/**
- * O SENTIDO INVERSO — PR-ESPELHO-05. Um lançamento explicado por VÁRIOS extratos.
- *
- * ⚠ A MÃE TROCA DE LADO. No 1:N a âncora é o extrato e as filhas são lançamentos; aqui é o
- * contrário, e a tela tem de dizer isso sem palavra nenhuma: a mãe aparece do lado do
- * SISTEMA, as filhas do lado do BANCO, e a seta do meio vira `↰` — apontando para o OFX em
- * vez de para o sistema. Desenhar os dois casos igual faria o operador ler "um extrato
- * pagou N lançamentos" onde houve "N depósitos pagaram um título".
- */
-export interface ParedoN1 {
-  sis: EspSis;
-  /* `grupoId` do VÍNCULO de cada extrato (CONC-N1-DESCONCILIAR-01): sem grupo, a filha se desconcilia sozinha. */
-  extratos: { extrato: EspOfx; valorAplicado: number; grupoId: string | null }[];
-  grupoId: string | null;
-  soma: number;
-  diferenca: number;
-}
-
-export interface DiaConf {
-  data: string | null;
-  pareados: Pareado[];
-  paredosN1: ParedoN1[];
-  extratosSemPar: EspOfx[];
-  lancsSemPar: EspSis[];
-  /**
-   * ⚠ TRANSFERÊNCIA COM CONTA INTERNA NÃO É "SEM PAR" — PR-ESPELHO-07 item D. O banco
-   * consolida a interna nesta conta e NÃO exporta o movimento entre as duas: cobrar par de
-   * um movimento que o extrato nunca teve é alarme onde não havia como acertar, e alarme
-   * assim ensina a ignorar o alarme. Ela sai do contador, sai da soma do dia e aparece no
-   * fim com sinal próprio — visível, porque o dinheiro andou; fora da conta, porque o banco
-   * não a mostra.
-   */
-  internas: EspSis[];
-  /**
-   * Os candidatos (previsto/agendado/programado) que VENCEM neste dia — PR-ESPELHO-CANDIDATOS-
-   * POR-DATA-05.
-   *
-   * ⚠ ELES NÃO ENTRAM EM `banco` NEM EM `sistema`, e essa é a regra que o pool separado
-   * protegia: candidato é SUGESTÃO, não realizado. Somá-lo no dia faria o fechamento deixar de
-   * bater com o extrato — e "confere" é a afirmação mais cara desta tela.
-   * ⚠ AGRUPAMENTO POR DATA, NÃO PAREAMENTO: o candidato entra no dia do vencimento dele porque
-   * é ali que o operador procura, ao lado do movimento do banco do mesmo dia. Quem casa com
-   * quem continua sendo decisão dele, na marcação.
-   */
-  candidatos: EspCandidato[];
-  banco: number;
-  sistema: number;
-}
-
-/**
- * ⚠ ENTRADAS ANTES DAS SAÍDAS, MAIORES PRIMEIRO — dentro de cada grupo do dia. A ordem não é
- * estética: quem confere um dia procura o valor grande primeiro, porque é o que explica a
- * diferença. Ordenar por data dentro do dia não ordenaria nada (é o mesmo dia).
- */
-function ordenar<T>(itens: T[], valor: (t: T) => number): T[] {
-  const entradas = itens.filter((i) => valor(i) > 0).sort((a, b) => Math.abs(valor(b)) - Math.abs(valor(a)));
-  const saidas = itens.filter((i) => valor(i) <= 0).sort((a, b) => Math.abs(valor(b)) - Math.abs(valor(a)));
-  return [...entradas, ...saidas];
-}
-
-/**
- * A mesa: um dia por bloco, com os dois lados na mesma cronologia.
- *
- * ⚠ SEM PAR DOS DOIS LADOS FICA DENTRO DO DIA. A versão anterior empurrava os lançamentos sem
- * extrato para um bloco no fim da lista, e ali eles não conversavam com nada — o operador via
- * "falta alguém" sem ver ao lado de quê. Dentro do dia, o extrato órfão e o lançamento órfão
- * aparecem a três linhas um do outro, que é como se descobre que são o mesmo dinheiro.
- */
-/**
- * Os quatro números do topo.
- *
- * ⚠ FUNÇÃO, E EXPORTADA, PARA PODER SER PROVADA. Isto era um cálculo solto no corpo do
- * componente, e foi por isso que ninguém percebeu que ele somava um conjunto diferente do
- * fechamento por dia logo abaixo: não havia onde escrever o teste que os compara. O
- * `internos` é o MESMO que a mesa recebe — é o que faz "o mesmo conjunto" ser verdade por
- * construção, e não por coincidência mantida à mão em dois lugares.
- */
-export function totaisDoEspelho(data: EspelhadosReais, internos: ReadonlySet<string>) {
-  const doSistema = data.sistema_completo.filter((s) => !internos.has(s.lancamento_id));
-  const soma = (xs: number[], positivo: boolean) =>
-    xs.filter((v) => (positivo ? v > 0 : v < 0)).reduce((a, v) => a + v, 0);
-  const banco = data.ofx_completo.map((o) => o.valor);
-  const sistema = doSistema.map((s) => s.valor_assinado);
-  const entradasBanco = soma(banco, true);
-  const entradasSistema = soma(sistema, true);
-  const saidasBanco = soma(banco, false);
-  const saidasSistema = soma(sistema, false);
-  return {
-    entradasBanco, entradasSistema, saidasBanco, saidasSistema,
-    difEntradas: entradasBanco - entradasSistema,
-    difSaidas: saidasBanco - saidasSistema,
-  };
-}
-
-/**
- * O SINAL DE UM VALOR APLICADO — CONC-MESA-SINAL-01. É o do LANÇAMENTO na conta (`valor_assinado` de `sistema_completo`);
- * só sem ele (lançamento fora do recorte) cai no sinal do extrato, que era a regra de antes para todos.
- * ⚠ NASCE DE 2× AS DEDUÇÕES: o depósito de venda de grão casado em bloco (bruto + Senar + descontos; e, desde o
- *   MANDIOCA-RETENCAO-NF-01, a venda + o Funrural) põe no MESMO extrato lançamentos de sinal oposto. Com o sinal do extrato
- *   para todos, a dedução entrava somando: NJ Sicredi Lavoura 06/04 mostrava -51.982,66 (= 2 × 25.991,33) num dia em que o
- *   caixa do banco (`sistema_caixa`) fecha igual ao extrato. Os dados estavam certos; a mesa, não.
- * ⚠ UMA FUNÇÃO SÓ para a soma do dia (`montarMesa`) e para o desenho da filha: a dedução aparece negativa dentro do bloco
- *   do depósito pelo mesmo cálculo que a tira do total.
- */
-export function sinalDoAplicado(sis: Pick<EspSis, 'valor_assinado'> | undefined, valorExtrato: number): number {
-  if (sis && sis.valor_assinado !== 0 && Number.isFinite(sis.valor_assinado)) return Math.sign(sis.valor_assinado);
-  return Math.sign(valorExtrato || 1);
-}
-
-export function montarMesa(data: EspelhadosReais, internos: ReadonlySet<string>) {
-  const vinculos = data.vinculos ?? [];
-  const sisPorId = new Map(data.sistema_completo.map((s) => [s.lancamento_id, s]));
-  const extratosPorLanc = new Map<string, number>();
-  for (const v of vinculos) extratosPorLanc.set(v.lancamento_id, (extratosPorLanc.get(v.lancamento_id) ?? 0) + 1);
-
-  const porExtrato = new Map<string, EspVinculo[]>();
-  for (const v of vinculos) {
-    const l = porExtrato.get(v.extrato_id);
-    if (l) l.push(v); else porExtrato.set(v.extrato_id, [v]);
-  }
-  const comVinculo = new Set(vinculos.map((v) => v.lancamento_id));
-
-  const dias = new Map<string, DiaConf>();
-  const dia = (d: string | null): DiaConf => {
-    const k = d ?? 'sem-data';
-    let atual = dias.get(k);
-    if (!atual) { atual = { data: d, pareados: [], paredosN1: [], extratosSemPar: [], lancsSemPar: [], internas: [], candidatos: [], banco: 0, sistema: 0 }; dias.set(k, atual); }
-    return atual;
-  };
-
-  /* ⚠ O N:1 É DECIDIDO PELO VÍNCULO, NÃO PELO `grupo_id`. Um lançamento com dois vínculos
-     ativos em extratos diferentes É um N:1, tenha ou não grupo — e os 9 casos antigos da
-     base não têm. Ler o grupo primeiro deixaria esses nove desenhados como nove pares
-     independentes que repetem o mesmo lançamento. */
-  const porLanc = new Map<string, EspVinculo[]>();
-  for (const v of vinculos) {
-    const l = porLanc.get(v.lancamento_id);
-    if (l) l.push(v); else porLanc.set(v.lancamento_id, [v]);
-  }
-  const ofxPorId = new Map(data.ofx_completo.map((o) => [o.extrato_id, o]));
-  const consumidos = new Set<string>();
-
-  porLanc.forEach((vs, lancId) => {
-    if (vs.length < 2) return;
-    const sis = sisPorId.get(lancId);
-    if (!sis) return;
-    const extratos = vs
-      .map((v) => ({ extrato: ofxPorId.get(v.extrato_id), valorAplicado: Number(v.valor_aplicado ?? 0), grupoId: v.grupo_id }))
-      .filter((x): x is { extrato: EspOfx; valorAplicado: number; grupoId: string | null } => !!x.extrato);
-    if (extratos.length < 2) return;
-    extratos.forEach((x) => consumidos.add(x.extrato.extrato_id));
-    const soma = extratos.reduce((a, x) => a + x.valorAplicado, 0);
-    const d = dia(sis.data);
-    d.sistema += sis.valor_assinado;
-    d.paredosN1.push({
-      sis, extratos,
-      grupoId: vs.find((v) => v.grupo_id)?.grupo_id ?? null,
-      soma,
-      diferenca: soma - Math.abs(sis.valor_assinado),
-    });
-  });
-
-  for (const extrato of data.ofx_completo) {
-    const d = dia(extrato.data);
-    d.banco += extrato.valor;
-    /* Já contado no banco do dia, mas desenhado dentro do bloco N:1 — não vira linha aqui. */
-    if (consumidos.has(extrato.extrato_id)) continue;
-    const vs = porExtrato.get(extrato.extrato_id) ?? [];
-    if (vs.length === 0) { d.extratosSemPar.push(extrato); continue; }
-    /* O aplicado é magnitude; o sinal é o do LANÇAMENTO (`sinalDoAplicado`), não o do extrato — a dedução de um depósito
-       de venda casado em bloco entra negativa. `soma` segue na direção do extrato (a de sempre: diferença = |extrato| −
-       soma, zero no bloco certo); o dia recebe a soma assinada. */
-    const sinalExtrato = Math.sign(extrato.valor || 1);
-    const somaAssinada = vs.reduce((a, v) =>
-      a + sinalDoAplicado(sisPorId.get(v.lancamento_id), extrato.valor) * Number(v.valor_aplicado ?? 0), 0);
-    const soma = sinalExtrato * somaAssinada;
-    d.sistema += somaAssinada;
-    d.pareados.push({
-      extrato,
-      filhas: vs.map((v) => ({
-        lancamento_id: v.lancamento_id,
-        valor_aplicado: Number(v.valor_aplicado ?? 0),
-        sis: sisPorId.get(v.lancamento_id),
-        deN: extratosPorLanc.get(v.lancamento_id) ?? 1,
-      })),
-      grupoId: vs.find((v) => v.grupo_id)?.grupo_id ?? null,
-      tipoVencedor: vinculoVencedor(vs, (v) => v.tipo_aprovacao)?.tipo_aprovacao ?? null,
-      soma,
-      diferenca: Math.abs(extrato.valor) - Math.abs(soma),
-    });
-  }
-
-  for (const s of data.sistema_completo) {
-    if (comVinculo.has(s.lancamento_id)) continue;
-    const d = dia(s.data);
-    /* ⚠ FORA DA SOMA, E É O `continue` QUE FAZ O CABEÇALHO FECHAR. Medido em agosto/2026 no
-       Bradesco do Agnaldo: as 17 transferências da Invest Fácil valem 1.206.567,85 de
-       entrada e 1.022.515,14 de saída — exatamente a distância entre o sistema e o banco nos
-       dois lados. Somá-las é comparar o que o banco tem com o que ele nunca exportou. */
-    if (internos.has(s.lancamento_id)) { d.internas.push(s); continue; }
-    d.lancsSemPar.push(s);
-    d.sistema += s.valor_assinado;
-  }
-
-  /**
-   * ⚠ O RECORTE É VENCIDO × A VENCER — PR-ESPELHO-VENCIDOS-NO-TOPO-08, e ele SUBSTITUI o
-   * critério anterior ("tem dia no extrato ou não"), de PR-ESPELHO-CANDIDATOS-POR-DATA-05.
-   *
-   * O critério antigo misturava duas coisas numa faixa só: o agendado de 25/09 (futuro, 591 mil)
-   * caía ao lado do previsto vencido de 05/06, porque nenhum dos dois tinha movimento do banco
-   * na sua data — e a faixa ordenava por valor, então o futuro aparecia ACIMA do atrasado. Ter
-   * ou não OFX no mesmo dia é acidente do extrato; vencer ou não é fato do lançamento, e é o
-   * que o operador decide em cima.
-   *
-   * ⚠ A VENCER CRIA O DIA (`dia()`, não `dias.get`): o agendado de 25/09 vira um bloco próprio,
-   * na posição cronológica do corpo, mesmo sem nenhum movimento do banco naquela data. Era
-   * justamente o que o critério antigo impedia.
-   * ⚠ VENCIDO NÃO ENTRA EM DIA NENHUM: ele é do passado e não pertence ao fluxo deste mês —
-   * vai para a faixa do topo, onde o render o mostra sob demanda.
-   * ⚠ E NADA DISSO SOMA em `d.banco`/`d.sistema`: candidato segue fora do subtotal, como desde
-   * o primeiro PR. O "confere" dos dias com OFX não muda.
-   */
-  for (const c of data.sistema_candidatos ?? []) {
-    if (c.vencido) continue;
-    dia(c.data_vencimento).candidatos.push(c);
-  }
-
-  const lista = [...dias.values()].sort((a, b) => (a.data ?? '') < (b.data ?? '') ? -1 : (a.data ?? '') > (b.data ?? '') ? 1 : 0);
-  for (const d of lista) {
-    d.pareados = ordenar(d.pareados, (p) => p.extrato.valor);
-    d.paredosN1 = ordenar(d.paredosN1, (p) => p.sis.valor_assinado);
-    d.extratosSemPar = ordenar(d.extratosSemPar, (e) => e.valor);
-    d.lancsSemPar = ordenar(d.lancsSemPar, (s) => s.valor_assinado);
-    d.internas = ordenar(d.internas, (s) => s.valor_assinado);
-    /* ⚠ A MESMA `ordenar` DAS OUTRAS CINCO — PR-ESPELHO-CANDIDATOS-ORDEM-06. Os candidatos
-       vinham na ordem crua da RPC (por vencimento), e dentro de um DIA o vencimento é o mesmo
-       para todos: a ordem virava acaso. Na Vera, 04/09, isso punha −33,61 acima de −12.000,00.
-       ⚠ E É `ordenar`, NÃO UM COMPARADOR NOVO: entrada antes de saída, cada grupo do maior para
-       o menor. Um segundo critério aqui faria a lista do sistema mudar de regra no meio do
-       mesmo dia — o candidato numa ordem, o lançamento sem par logo acima noutra. */
-    d.candidatos = ordenar(d.candidatos, (c) => c.valor_assinado);
-  }
-  return lista;
 }
 
 /**
@@ -725,6 +425,77 @@ function CelDataSistema({ data, vencido = false, rotulo }: { data: string | null
 function textoFilha(s: EspSis | undefined) {
   if (!s) return '—';
   return <>{s.descricao ?? '—'}{' · '}{s.fornecedor || '—'}</>;
+}
+
+/** "resto em 04/09" · "resto em 04/09 e 09/09" · "resto em 04/09, 09/09 e 11/09" — D3. */
+export function textoResto(datas: readonly string[]): string {
+  const ds = datas.map((d) => fmtData(d));
+  if (ds.length === 0) return '';
+  if (ds.length === 1) return `resto em ${ds[0]}`;
+  return `resto em ${ds.slice(0, -1).join(', ')} e ${ds[ds.length - 1]}`;
+}
+
+type AvisosVinculo = { lancadoEm: string | null; parte?: FilhaConf['parte']; sobreAplicado: boolean };
+
+/** A frase inteira dos avisos, para o `title` (o hover diz tudo mesmo quando a célula corta a descrição). */
+function tituloAvisos(a: AvisosVinculo): string[] {
+  return [
+    a.sobreAplicado ? 'aplicado acima do lançamento: os extratos desta conta aplicam mais do que o lançamento vale' : null,
+    a.lancadoEm ? `lançado em ${fmtData(a.lancadoEm)}: a data do lançamento difere da do banco (aviso, não diferença)` : null,
+    a.parte ? `parte de ${fmtBRL(a.parte.valorCheio)}${a.parte.restoEm.length ? ` · ${textoResto(a.parte.restoEm)}` : ''}` : null,
+  ].filter((x): x is string => !!x);
+}
+
+/**
+ * A ESCADA DE ABREVIAÇÃO DOS AVISOS — PR-CONC-CONFERENCIA-FECHAMENTO-DIA (D8: abreviar por regra, nunca cortar). Os avisos
+ * moram na coluna da descrição (296px; 286 úteis) e, medido na tela a 9,5px, o pior caso real do mês ("lançado em 04/09 ·
+ * parte de 11.080,80 · resto em 04/09 · ", 57 caracteres) ocupa 278px: ~4,9px por caractere, 58 cabem. A regra escolhe o
+ * PRIMEIRO nível cujo texto inteiro cabe em `LIMITE_AVISOS` caracteres: (1) por extenso; (2) "lanç." / "parte X · resto
+ * DD/MM" / "aplic. acima"; (3) o resto vira "resto em N datas"; (4) a parte sem o resto. A frase inteira fica sempre no
+ * `title` (`tituloAvisos`).
+ */
+export const LIMITE_AVISOS = 58;
+export function textosDosAvisos(a: AvisosVinculo): { tipo: 'sobre-aplicado' | 'lancado-em' | 'parte'; texto: string }[] {
+  const datas = (ds: readonly string[]) => ds.length <= 1 ? ds.map((d) => fmtData(d)).join('')
+    : `${ds.slice(0, -1).map((d) => fmtData(d)).join(', ')} e ${fmtData(ds[ds.length - 1])}`;
+  const niveis = [
+    { sobre: 'aplicado acima do lançamento', lanc: (d: string) => `lançado em ${fmtData(d)}`,
+      parte: (p: NonNullable<FilhaConf['parte']>) => `parte de ${fmtBRL(p.valorCheio)}${p.restoEm.length ? ` · ${textoResto(p.restoEm)}` : ''}` },
+    { sobre: 'aplic. acima', lanc: (d: string) => `lanç. ${fmtData(d)}`,
+      parte: (p: NonNullable<FilhaConf['parte']>) => `parte ${fmtBRL(p.valorCheio)}${p.restoEm.length ? ` · resto ${datas(p.restoEm)}` : ''}` },
+    { sobre: 'aplic. acima', lanc: (d: string) => `lanç. ${fmtData(d)}`,
+      parte: (p: NonNullable<FilhaConf['parte']>) => `parte ${fmtBRL(p.valorCheio)}${p.restoEm.length > 1 ? ` · resto em ${p.restoEm.length} datas` : p.restoEm.length ? ` · resto ${datas(p.restoEm)}` : ''}` },
+    { sobre: 'aplic. acima', lanc: (d: string) => `lanç. ${fmtData(d)}`,
+      parte: (p: NonNullable<FilhaConf['parte']>) => `parte ${fmtBRL(p.valorCheio)}` },
+  ];
+  let itens: { tipo: 'sobre-aplicado' | 'lancado-em' | 'parte'; texto: string }[] = [];
+  for (const n of niveis) {
+    itens = [
+      ...(a.sobreAplicado ? [{ tipo: 'sobre-aplicado' as const, texto: n.sobre }] : []),
+      ...(a.lancadoEm ? [{ tipo: 'lancado-em' as const, texto: n.lanc(a.lancadoEm) }] : []),
+      ...(a.parte ? [{ tipo: 'parte' as const, texto: n.parte(a.parte) }] : []),
+    ];
+    if (itens.reduce((t, i) => t + i.texto.length + 3, 0) <= LIMITE_AVISOS) return itens;
+  }
+  return itens;
+}
+
+/**
+ * OS AVISOS DO VÍNCULO — PR-CONC-CONFERENCIA-FECHAMENTO-DIA (D3, D4, R5). Vêm ANTES da descrição, na mesma célula: ela
+ * corta no FIM (a descrição, que está inteira no `title`), e o aviso nunca pode ser o pedaço cortado — por isso a escada
+ * de `textosDosAvisos`. Âmbar é aviso (data do lançamento diferente, aplicado acima); a parte é contexto (cinza). Nenhum
+ * deles entra na diferença do dia.
+ */
+function AvisosDoVinculo(a: AvisosVinculo) {
+  return (
+    <>
+      {textosDosAvisos(a).map((i) => (
+        <span key={i.tipo} data-aviso={i.tipo} className={i.tipo === 'parte' ? 'text-muted-foreground' : 'text-amber-600'}>
+          {i.texto}{' · '}
+        </span>
+      ))}
+    </>
+  );
 }
 
 /**
@@ -1451,7 +1222,7 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
                  fica mostra o fechamento com os totais do DIA INTEIRO, casados incluídos — o filtro esconde linhas, não
                  muda a conta. */
               soNaoConciliados && d.extratosSemPar.length === 0 && d.lancsSemPar.length === 0 && d.internas.length === 0
-                && !(mostrarCandidatos && d.candidatos.length > 0) ? null :
+                && d.restos.length === 0 && !(mostrarCandidatos && d.candidatos.length > 0) ? null :
               <React.Fragment key={d.data ?? 'sem-data'}>
                 <tr className={cn(H18, 'bg-muted/40')}>
                   <td colSpan={4} className="px-[5px] whitespace-nowrap font-medium text-muted-foreground">{fmtData(d.data)}</td>
@@ -1479,7 +1250,13 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
                           {fmtBRL(somaAssinada)}
                         </td>
                         <CelDataSistema data={unica?.sis?.data} rotulo="data do lançamento" />
-                        <td className={CEL} title={unica ? tituloLancamento(unica.sis) : undefined}>
+                        <td className={CEL} title={[
+                          ...tituloAvisos({ lancadoEm: unica?.lancadoEm ?? null, parte: unica?.parte, sobreAplicado: p.sobreAplicado }),
+                          unica ? tituloLancamento(unica.sis) : null,
+                        ].filter(Boolean).join(' · ') || undefined}>
+                          {/* PR-CONC-CONFERENCIA-FECHAMENTO-DIA: os avisos ANTES da descrição (a célula corta no fim). No agrupado
+                              a mãe só diz o "aplicado acima"; data e parte de cada lançamento vão na filha dele. */}
+                          <AvisosDoVinculo lancadoEm={unica?.lancadoEm ?? null} parte={unica?.parte ?? null} sobreAplicado={p.sobreAplicado} />
                           {agrupado
                             ? <><span className="font-medium">{p.filhas.length} lançamentos</span>
                                 <span className="text-muted-foreground">{' · '}{p.grupoId ? 'agrupados' : `${p.filhas.length} vínculos`}</span></>
@@ -1520,7 +1297,10 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
                             {fmtBRL(sinalDoAplicado(f.sis, p.extrato.valor) * f.valor_aplicado)}
                           </td>
                           <CelDataSistema data={f.sis?.data} rotulo="data do lançamento" />
-                          <td className={cn(CEL, 'font-normal text-muted-foreground')} title={tituloLancamento(f.sis)}>
+                          <td className={cn(CEL, 'font-normal text-muted-foreground')}
+                            title={[...tituloAvisos({ lancadoEm: f.lancadoEm, parte: f.parte, sobreAplicado: false }), tituloLancamento(f.sis)]
+                              .filter(Boolean).join(' · ') || undefined}>
+                            <AvisosDoVinculo lancadoEm={f.lancadoEm} parte={f.parte} sobreAplicado={false} />
                             {textoFilha(f.sis)}
                             {(() => {
                               const falta = faltaDe(f.lancamento_id, f.sis?.valor_assinado ?? 0);
@@ -1554,7 +1334,9 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
                         <td />
                         <td className={cn(CEL, 'text-left font-medium tabular-nums', corVal(g.sis.valor_assinado))}>{fmtBRL(g.sis.valor_assinado)}</td>
                         <CelDataSistema data={g.sis.data} rotulo="data do lançamento" />
-                        <td className={CEL} title={tituloLancamento(g.sis)}>
+                        <td className={CEL} title={[...tituloAvisos({ lancadoEm: g.lancadoEm, sobreAplicado: g.sobreAplicado }), tituloLancamento(g.sis)]
+                          .filter(Boolean).join(' · ') || undefined}>
+                          <AvisosDoVinculo lancadoEm={g.lancadoEm} sobreAplicado={g.sobreAplicado} />
                           {textoLancamento(g.sis, mesDoRecorte)}
                           <span className="text-muted-foreground">{' · '}{g.extratos.length} extratos</span>
                           <MarcadorOrigem tipo="agrupamento_manual" />
@@ -1641,6 +1423,32 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
                     onMarcar={() => alterna('lancamentos', sl.lancamento_id)} onAbrir={onAbrir} />
                 ))}
 
+                {/* ⚠ O RESTO NÃO APLICADO — PR-CONC-CONFERENCIA-FECHAMENTO-DIA (R5). O lançamento diz um valor e o banco aplicou
+                    menos: o aplicado está no dia do extrato, e o que falta aparece aqui, no dia do lançamento, somando no
+                    fechamento — a diferença real. Sem caixa de marcar: não é um lançamento a casar, é o pedaço que falta de um
+                    lançamento já casado; o gesto "pagou diferente do programado" é PR próprio. */}
+                {d.restos.map((r) => (
+                  <tr key={`resto-${r.sis.lancamento_id}`} data-resto="" className={cn(H18, 'border-b border-border/50')}>
+                    <td /><td /><td /><td />
+                    <td className={cn(MEIO, 'font-semibold text-destructive')} title="parte do lançamento sem extrato">!</td>
+                    <td />
+                    <td className={cn(CEL, 'text-left font-medium tabular-nums', corVal(Math.sign(r.sis.valor_assinado || 1) * r.resto))}>
+                      {fmtBRL(Math.sign(r.sis.valor_assinado || 1) * r.resto)}
+                    </td>
+                    <CelDataSistema data={r.sis.data} rotulo="data do lançamento" />
+                    <td className={CEL}
+                      title={`aplicado abaixo do lançamento: o lançamento vale ${fmtBRL(r.sis.valor_assinado)} e os extratos desta conta aplicam ${fmtBRL(r.aplicado)}; falta ${fmtBRL(r.resto)} · ${tituloLancamento(r.sis) ?? ''}`}>
+                      <span className="text-amber-600" data-aviso="sub-aplicado">aplicado abaixo do lançamento{' · '}</span>
+                      <span className="text-muted-foreground">resto de {fmtBRL(r.sis.valor_assinado)}{' · '}</span>
+                      {textoLancamento(r.sis, mesDoRecorte)}
+                    </td>
+                    <CelStatus status="realizado" />
+                    <CelAcoes itens={[
+                      { rotulo: 'Abrir', onClick: onAbrir ? () => onAbrir(r.sis.lancamento_id) : undefined, motivo: SEM_ABRIR },
+                    ]} />
+                  </tr>
+                ))}
+
                 {/* ⚠ OS CANDIDATOS DO DIA, LOGO ABAIXO DO EXTRATO DELE — PR-ESPELHO-CANDIDATOS-
                     POR-DATA-05. Eles viviam num POOL no fim da mesa, depois de todos os dias: o
                     operador via um movimento do banco em 04/09 e precisava rolar até o fim para
@@ -1669,7 +1477,7 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
                     zero tendo movimento (entrada e saída que se anulam), e esse fecha de verdade.
                     Olhar `banco === 0 && sistema === 0` esconderia justamente esse caso. */}
                 {(d.pareados.length > 0 || d.paredosN1.length > 0 || d.extratosSemPar.length > 0
-                  || d.lancsSemPar.length > 0 || d.internas.length > 0) && (
+                  || d.lancsSemPar.length > 0 || d.internas.length > 0 || d.restos.length > 0) && (
                 <tr className={cn(H18, 'bg-primary/10 border-t border-b border-border')}>
                   <td colSpan={3} className={cn(CEL, 'font-semibold text-primary')}>fechamento {fmtData(d.data)}</td>
                   <td className={cn(CEL, 'text-right font-semibold tabular-nums text-primary')}>{fmtBRL(d.banco)}</td>

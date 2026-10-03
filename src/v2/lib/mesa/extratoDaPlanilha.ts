@@ -316,7 +316,11 @@ export function montarExtratoDaPlanilha(
       };
     });
   const data: EspelhadosReais = { ...espelho, ofx_completo: ofx, vinculos, sistema_candidatos: [] };
-  const mesa: DiaConf[] = montarMesa(data, internos);
+  /* ⚠ A ÂNCORA ANTIGA, DE PROPÓSITO — PR-CONC-CONFERENCIA-FECHAMENTO-DIA (D6). A Conferência passou a ancorar todo
+     movimento no dia do BANCO; aqui o N:1 (o "Desmembrar": N linhas da planilha num lançamento) ainda vai para o dia do
+     lançamento e consome as linhas, como antes, porque o Gabriel está fechando setembro nesta tela. É dívida registrada
+     no CLAUDE.md: o Extrato da planilha ainda ancora no lançamento. */
+  const mesa: DiaConf[] = montarMesa(data, internos, { ancoraN1: 'lancamento' });
 
   /* o fornecedor de cada lado, a partir do que a linha já desenha (planilha pelo staging, sistema pelo Espelho) */
   const completar = (l: LinhaSemFornecedor): LinhaExtratoPlanilha => {
