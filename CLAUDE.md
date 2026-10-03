@@ -263,6 +263,20 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   writer comum — Transferencia ali e' frente propria (CONC-CRIAR-TRANSFERENCIA-01) ·
   no Criar em Transferencia, a "outra conta obrigatoria" hoje avisa por TOAST (o do `LancamentoV2Dialog`, contraria
   UX-TOAST-01) — trocar por erro no campo (CONC-CRIAR-TRANSFERENCIA-01) ·
+  IMPORT-BANCO-AGNALDO (PR-CONC-IMPORT-BANCO-AGNALDO-01A, 03/10, migration 20261027191900, ⚠ registrada como 20261003172223;
+  ledger = arquivo, md5 9e949ed2…): o desfazer de 03/10 16:39:18 UTC da importacao 95c641a0 ("mes errado") foi revertido para os
+  93 extratos de AGOSTO (108 vinculos, 80 lancamentos descancelados e o 7f51a6cc de volta, pelo `audit_log.dados_anteriores`;
+  as 2 liquidacoes de OC voltaram pelo gatilho do dono); ago/26 do Bradesco = o fixture de antes (conciliado, 54.738,55, 18
+  dias, 116 linhas). Antes/depois e gesto contrario por linha em `conc_import_agnaldo_01a_backfill` (287 linhas). O CHECK de
+  `conciliacao_audit_log.acao` ganhou 'importacao_restaurada'. Dividas: (a) o PR 01B — a identidade do movimento com a
+  ocorrencia (dois movimentos identicos no mesmo arquivo; o PostgREST manda `ON CONFLICT("id") DO NOTHING`, entao o
+  `ignoreDuplicates` NUNCA cobriu hash nem chave natural — o comentario "sem alvo" de `useImportacaoExtrato.ts` esta' errado),
+  a gravacao atomica (cabecalho + movimentos numa RPC), a mensagem certa e o aviso do excluir; e `fn_extrato_desfazer_arquivo`
+  CANCELA lancamento cru CLASSIFICADO, inclusive com parte de OC viva, sem aviso; (b) TRES CABECALHOS 'processada' SEM NADA
+  LIGADO, nao tocados: NJ 557b67fa "NJ_Import_Final_v3.xlsx" (19/04, 27.295 linhas, 27.283 VALIDAS e ZERO lancamentos com esse
+  `lote_importacao_id` — o dado estranho: ou o lote foi regravado sem o id, ou os lancamentos sairam), 8e37fed9 (13/07, 0
+  validas) e 80de5ff8 (23/07, 0 validas); (c) o status anterior de um extrato NAO se registra em lugar nenhum — o desfazer o
+  sobrescreve com 'nao_conciliado' (a restauracao usou o invariante 'conciliado' <=> vinculo vivo, 4.836 de 4.837). ·
   [CONC-MESA-NN-01 FECHADA no PR-CONC-CONFERENCIA-FECHAMENTO-DIA (03/10): a Conferencia ancora todo extrato no dia dele, sem
   consumir nenhum; ver a regra "A DATA DO BANCO MANDA NA CONFERENCIA"] ·
   CONFERENCIA-FECHAMENTO-DIA (03/10), dividas: (a) o EXTRATO DA PLANILHA do Enriquecer AINDA ANCORA O N:1 NO LANCAMENTO
