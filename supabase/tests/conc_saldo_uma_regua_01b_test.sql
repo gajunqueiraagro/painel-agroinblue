@@ -14,6 +14,9 @@
 --   PP  posicao em 15/01 (D5): o mes diverge (−7, um realizado no dia 20), a posicao fecha.
 --   LL (com a interna LI) a lista do sistema (D6): parcial, sobre-aplicado, gemeo sem par, sub-aplicado com o resto, interna fora.
 --   + lancamentos sem conta (D3) e o status do ano = o resumo mes a mes (D7).
+-- ATUALIZADO NO PR-CONC-INTERNA-SEPARADA-01a (migration 20261027192300) ao contrato novo, sem afrouxar: a posicao ganha
+--   `saldo_sistema_proprio_na_data`; a transferencia com a interna ENTRA na lista como 'transferencia_interna' (so' no saldo
+--   proprio); e no status do ano a interna aparece em todo mes em que a mae aparece. Roda depois da 20261027192300.
 set local statement_timeout = '120s';
 set local lock_timeout = '3s';
 
@@ -157,6 +160,7 @@ begin
   select * into r from fn_conciliacao_resumo_mes(c_cli, '2031-01', array[pp]) f where f.nivel = 'conta';
   if r.saldo_sistema <> 147 or r.diferenca <> -7 or r.status <> 'nao_conciliado'
      or r.posicao <> jsonb_build_object('data', '2031-01-15', 'saldo_sistema_na_data', 140.00, 'diferenca_na_data', 0.00,
+                                        'saldo_sistema_proprio_na_data', 140.00,
                                         'realizados_apos', jsonb_build_object('qtde', 1, 'valor', 7.00)) then
     raise exception 'D5: sistema % dif % status % posicao %', r.saldo_sistema, r.diferenca, r.status, r.posicao;
   end if;
@@ -182,13 +186,25 @@ begin
   select string_agg(format('%s|%s|%s|%s|%s|%s', l->>'data', l->>'tipo', l->>'valor', coalesce(l->>'parcial', '-'), coalesce(l->>'falta', '-'),
                            coalesce(l->>'sobre_aplicado', '-')), ' ' order by l->>'data', l->>'tipo' desc, l->>'valor')
     into a from jsonb_array_elements(v_lin) l;
-  if a <> '2031-01-02|vinculo|-200.00|true|100.00|- 2031-01-05|vinculo|-100.00|-|-|true 2031-01-05|vinculo|-100.00|-|-|true 2031-01-05|sem_par|-100|-|-|- 2031-01-07|resto_sub_aplicado|-20.00|-|-|- 2031-01-08|vinculo|-30.00|-|-|-' then
+  if a <> '2031-01-02|vinculo|-200.00|true|100.00|- 2031-01-05|vinculo|-100.00|-|-|true 2031-01-05|vinculo|-100.00|-|-|true 2031-01-05|sem_par|-100|-|-|- 2031-01-07|resto_sub_aplicado|-20.00|-|-|- 2031-01-08|vinculo|-30.00|-|-|- 2031-01-09|transferencia_interna|-40|-|-|-' then
     raise exception 'D6: linhas %', a;
   end if;
-  if exists (select 1 from jsonb_array_elements(v_lin) l where (l->>'lancamento_id')::uuid = t1) then raise exception 'D6: a interna entrou'; end if;
+  -- PR-CONC-INTERNA-SEPARADA-01a: a transferencia com a interna ENTRA na lista, uma vez, como 'transferencia_interna' — e so' no
+  -- saldo PROPRIO: o consolidado (inicial + as demais linhas) continua sem ela.
+  if (select string_agg(format('%s|%s|%s|%s', l->>'tipo', l->>'valor', l->>'transferencia', l->>'status_exibicao'), ' ')
+        from jsonb_array_elements(v_lin) l where (l->>'lancamento_id')::uuid = t1) is distinct from 'transferencia_interna|-40|true|realizado' then
+    raise exception 'D6: a transferencia com a interna %', (select jsonb_agg(l) from jsonb_array_elements(v_lin) l where (l->>'lancamento_id')::uuid = t1);
+  end if;
   if r.saldo_inicial <> 1500 or r.saldo_sistema <> 950
-     or round(r.saldo_inicial + (select sum((l->>'valor')::numeric) from jsonb_array_elements(v_lin) l), 2) <> r.saldo_sistema then
+     or round(r.saldo_inicial + (select sum((l->>'valor')::numeric) from jsonb_array_elements(v_lin) l
+                                  where l->>'tipo' <> 'transferencia_interna'), 2) <> r.saldo_sistema then
     raise exception 'D6: inicial % + linhas <> sistema %', r.saldo_inicial, r.saldo_sistema;
+  end if;
+  if (r.proprio->>'saldo_inicial')::numeric <> 1000 or (r.proprio->>'saldo_sistema')::numeric <> 410
+     or round((r.proprio->>'saldo_inicial')::numeric + (select sum((l->>'valor')::numeric) from jsonb_array_elements(v_lin) l), 2)
+        <> (r.proprio->>'saldo_sistema')::numeric
+     or (v_lin->-1->>'saldo_apos_proprio')::numeric <> 410 or (v_lin->-1->>'saldo_apos')::numeric <> 950 then
+    raise exception 'D6 proprio: % · ultima linha %', r.proprio, v_lin->-1;
   end if;
   if jsonb_array_length(r.dias) <> 4 or (r.dias->-1->>'saldo_sistema')::numeric <> r.saldo_sistema
      or (r.dias->-1->>'sistema_acum')::numeric <> -550 or (r.dias->0->>'saldo_banco')::numeric <> 1300 then
@@ -204,8 +220,15 @@ begin
     from (select to_char(make_date(2031, g, 1), 'YYYY-MM') mes from generate_series(1, 12) g) m, lateral fn_conciliacao_resumo_mes(c_cli, m.mes) y
    where y.nivel = 'total' or (y.nivel = 'conta' and (y.tem_extrato or exists (
           select 1 from financeiro_lancamentos_v2 l where l.cliente_id = c_cli and l.cancelado = false
-             and to_char(l.data_pagamento, 'YYYY-MM') = m.mes and (l.conta_bancaria_id = y.conta_id or l.conta_destino_id = y.conta_id))));
-  if a is distinct from b or v_n < 12 + 7 then raise exception E'D7: status_ano (% linhas)\n%\n<>\n%', v_n, a, b; end if;
+             and to_char(l.data_pagamento, 'YYYY-MM') = m.mes and (l.conta_bancaria_id = y.conta_id or l.conta_destino_id = y.conta_id))
+          -- PR-CONC-INTERNA-SEPARADA-01a (D4): a interna aparece em todo mes em que a MAE aparece (extrato ou lancamento da mae)
+          or (y.par_conta_id is not null and (
+                exists (select 1 from extrato_bancario_v2 x where x.conta_bancaria_id = y.par_conta_id and x.cancelado_em is null
+                           and x.ignorado_em is null and to_char(x.data_movimento, 'YYYY-MM') = m.mes)
+                or exists (select 1 from financeiro_lancamentos_v2 l where l.cliente_id = c_cli and l.cancelado = false
+                              and to_char(l.data_pagamento, 'YYYY-MM') = m.mes
+                              and (l.conta_bancaria_id = y.par_conta_id or l.conta_destino_id = y.par_conta_id))))));
+  if a is distinct from b or v_n < 12 + 8 then raise exception E'D7: status_ano (% linhas)\n%\n<>\n%', v_n, a, b; end if;
   v_out := v_out || format('D7 ok (%s linhas = 12 resumos); ', v_n);
 
   -- ── ACL ──

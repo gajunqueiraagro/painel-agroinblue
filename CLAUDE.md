@@ -1287,6 +1287,60 @@ docs/historico/frentes-ate-2026-09-29.md.)
   ⚠ G6 (fora, registrado): os REALIZADOS APOS UMA DATA DIGITADA no lapis nao estao no dono — ele so' conta os apos a posicao
     DECLARADA (`posicao.realizados_apos`). Hoje o lapis nao mostra "N realizados apos", entao nao faz falta; se um dia mostrar, e'
     banco (o dono devolver a contagem por data), nunca contagem de `linhas_sistema` na tela.
+- ⚠ A CONTA INTERNA TEM SALDO PROPRIO; O QUE FICA JUNTO E' SO' O VEREDITO DO PAR (PR-CONC-INTERNA-SEPARADA-01a, Gabriel 03/10,
+  so' banco; migration 20261027192300, ⚠ registrada como 20261003204845; ledger = arquivo, md5 ac949d1f…). Conta interna =
+  `consolida_em_conta_id` nao nulo; hoje so' o Agnaldo (mae Bradesco 186a093b, cc; interna Bradesco-Invest. Facil c2ce6a0e, inv). O
+  arquivo do banco da mae so' traz os rendimentos; aplicacoes e resgates existem so' como transferencias do sistema; a interna nao
+  tem extrato — por isso o veredito e' do PAR, consolidado.
+  · CAMPOS NOVOS, NO FIM do retorno de `fn_conciliacao_resumo_mes`: `proprio` jsonb {saldo_inicial, entradas, saidas, saldo_sistema,
+    saldo_extrato, diferenca, entradas_terceiros, entradas_transferencias, saidas_terceiros, saidas_transferencias} em toda linha
+    'conta' (sem interna, e na propria interna, = os campos de cima; na mae = o inicial e o extrato DELA e o sistema = inicial
+    proprio + movimento dela + as transferencias com a interna); `par_conta_id` e `par_status` (so' na interna); `internas`
+    [{conta_id, conta_nome}] (so' na mae). Linhas 'tipo' e 'total': os quatro NULOS.
+  · REGRA DO PAR: a interna tem status = `par_status` = o status da MAE e motivos [{motivo:'conferida_com', conta_id, conta_nome}]
+    (com a mae na chamada ou sozinha em `p_conta_ids`). No TOTAL o par vale UMA vez: a interna nao entra em
+    `contas_nao_conciliadas` nem em `contas_pendentes`. No SUBTOTAL do tipo a interna CONTA, com o status do par e o
+    'conferida_com' (os motivos da mae ficam na linha dela; nenhum campo novo): Investimentos reflete o veredito do par, e o tipo
+    cuja unica conta e' a interna herda esse veredito, nunca 'pendente []'. `fn_conciliacao_status_ano`: a interna aparece em todo
+    mes em que a mae aparece, com o status do par, e nao conta no universo das pendentes.
+  · SALDOS DOS AGREGADOS: subtotal e total somam o `proprio` de TODAS as contas, cada uma no seu tipo (a mae em Conta corrente, a
+    interna em Investimentos); entradas/saidas (e as aberturas, o banco e os sem par) seguem CONSOLIDADAS, sem as internas.
+  · CORRECAO DE DEFEITO (Opcao A): o CONSOLIDADO da mae = Σ PROPRIOS — passou a somar o movimento da interna com TERCEIROS, que
+    ficava de fora. Mudancas de Total medidas (antes x depois por md5, todos os clientes 2024-01..2026-09 e o Agnaldo
+    2020-01..2026-12: 2.682 linhas de conta sem o par e 64 conta-meses detalhados identicos; status do ano 1.015 linhas identicas),
+    TODAS do Agnaldo e aceitas pelo Gabriel:
+      mes       diferenca do par (antes -> depois)   o que muda no Total
+      2021-10   −5,91  -> 0,00                        saidas / saldo_sistema
+      2021-12   +1,26  -> 0,00                        entradas / saldo_sistema
+      2023-01   −3,96  -> 0,00                        saidas / saldo_sistema
+      2026-01   +82,51 -> 0,00                        entradas / saldo_sistema
+      2026-02   −65,41 -> 0,00                        saidas / saldo_sistema
+      2026-03   −17,10 -> 0,00                        saidas / saldo_sistema
+      2026-04   +3,52  -> 0,00                        entradas / saldo_sistema
+    (status 'conciliado' antes e depois nos sete); 2026-08: entradas e saidas do Total ±1,74 (liquido zero; saldo, diferenca e
+    status iguais); 2021-06: `contas_nao_conciliadas` 2 -> 1 (a interna sai da lista; saldos, diferenca e status identicos);
+    out, nov e dez/2026: `contas_pendentes` 13 -> 12 (resumo e status do ano).
+  · O SUBTOTAL INVESTIMENTOS DO AGNALDO passa de 'conciliado' a 'nao_conciliado' em 11 meses (o par nao conciliado): 2022-01,
+    2022-02, 2022-05, 2024-01, 2024-04, 2024-05, 2024-08, 2024-09, 2025-01, 2026-05, 2026-09; em 2021-06 ja' era 'nao_conciliado'
+    e so' o motivo da interna troca ('sem_extrato' -> 'conferida_com').
+  · `linhas_sistema` (uma conta): toda linha ganha `saldo_apos_proprio`; na MAE entram as linhas tipo 'transferencia_interna'
+    (`transferencia` true, `status_exibicao` 'realizado'), que contam SO' no `saldo_apos_proprio` — `dias`, `sistema_total` e o
+    `saldo_apos` consolidado ficam identicos. `posicao` ganha `saldo_sistema_proprio_na_data`. O helper
+    `_fn_conciliacao_dias_conta` manteve os 7 argumentos (devolve a mais `interna_total`, `interna_entradas`, `interna_saidas`,
+    `posicao_interna`).
+  ⚠ PARA A TELA (01b): na conta-mae o ULTIMO `saldo_apos` consolidado NAO FECHA em `saldo_sistema` quando a interna movimenta com
+    terceiros (a diferenca e' exatamente esse movimento); a tela da mae le' `saldo_apos_proprio` e `proprio.*`, que fecham sempre
+    (80 de 80 meses do par). Isto revoga, so' para a conta-mae, o "fecha em `saldo_sistema`" do 01c.
+  Provas no vivo: Σ proprios = consolidado em 80 de 81 meses do par (1 sem saldo); interna = mae em 33 de 33 meses do status do
+  ano; 18 transferencias internas em ago/26; abr/24 mae propria −55.719,49 x extrato −55.734,67, interna −4,02; ago/26 54.738,55
+  conciliado; set/26 26.205,97 x 110.611,77, diferenca 84.405,80. Tempo por chamada (10 chamadas, autenticado, antes -> depois):
+  status do ano NJ 1.884 -> 1.901 ms, Santa Rita 1.488 -> 1.554 ms; resumo de todas as contas do NJ 228 -> 214 ms.
+  md5: `_fn_conciliacao_resumo` 3f91479a… -> 68c2e274…, `_fn_conciliacao_dias_conta` b00a0840… -> bb71a135…, status do ano
+  fd79e1bd… -> 0c30b647…, publica 25aa2ac4… (corpo igual; DROP + CREATE pelo retorno); ACL, SECURITY DEFINER, search_path,
+  plan_cache_mode e tenant_ok conferidos na migration. Testes: `supabase/tests/conc_interna_separada_01a_test.sql` (D1–D6; contra o
+  corpo sem a regra do subtotal ele cai em "D3 inv veredito"); `conc_saldo_uma_regua_01b_test.sql` atualizado ao contrato novo
+  (posicao com `saldo_sistema_proprio_na_data`, a linha 'transferencia_interna', o fecho do proprio, a interna no status do ano
+  pela mae); 01, 01c e hotfix seguem OK. A TELA ainda esconde a interna e mostra a mae consolidada (PR 02): troca no 01b.
 - ⚠ A GRAVACAO DO EXTRATO E' DO BANCO, E O DESFAZER DIZ O QUE FAZ E RECUSA O QUE NAO PODE (PR-CONC-IMPORT-BANCO-01B, 03/10,
   migration 20261027192000, ⚠ registrada como 20261003174631; ledger = arquivo, md5 4966be59…).
   · IDENTIDADE DO MOVIMENTO: `hashMovimento` + a OCORRENCIA entre movimentos de CONTEUDO IDENTICO no arquivo, na ordem dele
