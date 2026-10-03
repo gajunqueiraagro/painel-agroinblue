@@ -25,7 +25,9 @@ import { EnriquecimentoLista, type EnriquecimentoListaProps } from './Enriquecim
 import { EnriquecimentoDetalhe } from './EnriquecimentoDetalhe';
 import { AcaoEhTransferencia } from './AcaoEhTransferencia';
 import type { EnriqRowVM, EnriqSessaoVM } from './types';
-import { EnriquecimentoMesaModal, type AcoesDaMesa, type DetalheDaMesa } from './EnriquecimentoMesaModal';
+import {
+  EnriquecimentoMesaModal, textoImportacaoAntiga, type AcoesDaMesa, type DetalheDaMesa,
+} from './EnriquecimentoMesaModal';
 import { EnriquecimentoImportarDialog } from './EnriquecimentoImportarDialog';
 import { type VistaPasso2 } from './EnriquecimentoTopoNumeros';
 import { PainelContasEnriquecer } from './PainelContasEnriquecer';
@@ -1816,13 +1818,15 @@ export function MesaEnriquecimentoTab({
       </>
     ) });
   }
+  /* PR-CONC-ENRIQ-ACABAMENTOS-01 (D1): a importação antiga, por extenso e com o link — ANTES do "sem conta". O texto corta
+     na borda (sem "…"); o link não encolhe; a frase inteira está no `title` do slot. */
   if (sessaoMaisNova) {
-    const texto = `Há uma importação mais nova deste mês (${sessaoMaisNova.imp}) —`;
+    const texto = `${textoImportacaoAntiga(sessaoMaisNova)} ·`;
     avisosPainel.push({ id: 'aviso-sessao-mais-nova', texto, cls: 'text-amber-700 dark:text-amber-400', conteudo: (
       <>
-        <span className="truncate">{texto}</span>
-        <button type="button" className="shrink-0 underline"
-          onClick={() => { setSessaoId(sessaoMaisNova.id); setFiltroConta('todas'); setSelecionadoId(null); }}>abrir</button>
+        <span className="min-w-0 overflow-hidden whitespace-nowrap">{texto}</span>
+        <button type="button" data-testid="ir-para-mais-recente" className="shrink-0 underline"
+          onClick={() => { setSessaoId(sessaoMaisNova.id); setFiltroConta('todas'); setSelecionadoId(null); }}>ir para a mais recente</button>
       </>
     ) });
   }
@@ -1965,6 +1969,7 @@ export function MesaEnriquecimentoTab({
         }}
         onAgrupar={agruparDoExtrato}
         onDesfazerBloco={desfazerBlocoDoExtrato}
+        importacaoMaisRecente={sessaoMaisNova}
       />
 
       {/* ⚠ MONTADO SEMPRE, visível por estado — o idioma do 131. Desmontá-lo ao fechar
@@ -1992,6 +1997,7 @@ export function MesaEnriquecimentoTab({
         open={mesaAmpliadaOpen}
         onOpenChange={setMesaAmpliadaOpen}
         sessaoLabel={sessaoLabel}
+        importacaoMaisRecente={sessaoMaisNova}
         lista={listaProps}
         detalhe={detalheProps}
         actions={actionsProps}

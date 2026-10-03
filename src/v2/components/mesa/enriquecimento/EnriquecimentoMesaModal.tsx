@@ -35,6 +35,29 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type { EnriqRowVM } from './types';
+import { dataHoraCurta } from './fmt';
+
+/**
+ * A IMPORTAÇÃO ANTIGA — PR-CONC-ENRIQ-ACABAMENTOS-01 (D1). A aberta não é a mais recente do mês (`sessaoMaisNovaQueAberta`,
+ * a mesma peneira do seletor): o painel diz por extenso e oferece o link; o Extrato da planilha e a Mesa levam só o selo
+ * "importação antiga", com a frase no `title`. Aviso, nunca trava.
+ */
+export interface ImportacaoMaisRecente { imp: string; criadaEm: string }
+
+export function textoImportacaoAntiga(r: ImportacaoMaisRecente): string {
+  const carimbo = dataHoraCurta(r.criadaEm);
+  return `importação antiga · a mais recente é ${r.imp}${carimbo ? ` · ${carimbo}` : ''}`;
+}
+
+/** O selo do cabeçalho navy (Extrato da planilha e Mesa): âmbar, 9,5px, não encolhe; a frase inteira no `title`. */
+export function SeloImportacaoAntiga({ maisRecente }: { maisRecente: ImportacaoMaisRecente }) {
+  return (
+    <span data-testid="selo-importacao-antiga" title={`${textoImportacaoAntiga(maisRecente)} — troque no seletor de importação do painel`}
+      className="inline-flex h-[14px] shrink-0 items-center whitespace-nowrap rounded-[3px] border border-amber-300 bg-amber-100 px-[4px] text-[9.5px] leading-none text-amber-800">
+      importação antiga
+    </span>
+  );
+}
 
 /**
  * O FILTRO ÚNICO DA LISTA — PR-CONC-ENRIQUECER-V2-01 (Mesa compacta): Revisar N / Feitas N / Todas.
@@ -229,11 +252,13 @@ export interface EnriquecimentoMesaModalProps {
    * o menu a mostra ANTES do gesto, e o gesto grava só a proposta.
    */
   aoFornecedor?: { previa: PreviaAoFornecedor | null; aplicando: boolean; onAplicar: () => void };
+  /** A importação mais recente do mês, quando a aberta NÃO é ela (D1) — o selo ao lado do rótulo da sessão. */
+  importacaoMaisRecente?: ImportacaoMaisRecente | null;
 }
 
 export function EnriquecimentoMesaModal({
   open, onOpenChange, sessaoLabel, lista, detalhe, actions, faixas, onOrdemVisivel, conciliadosIds,
-  contaId = null, contaNome, baldePorId, filtroInicial = 'revisar', aoFornecedor,
+  contaId = null, contaNome, baldePorId, filtroInicial = 'revisar', aoFornecedor, importacaoMaisRecente = null,
 }: EnriquecimentoMesaModalProps) {
   const [filtro, setFiltro] = useState<FiltroMesa>(filtroInicial);
   /* ⚠ O RECORTE RENASCE A CADA ABERTURA: quem abre por "Revisar" quer as pendências; quem abre numa linha feita
@@ -351,6 +376,7 @@ export function EnriquecimentoMesaModal({
           <span className="min-w-0 truncate text-[10px] text-primary-foreground/85" title={sessaoLabel ?? undefined}>
             {sessaoLabel ?? '—'}
           </span>
+          {importacaoMaisRecente && <SeloImportacaoAntiga maisRecente={importacaoMaisRecente} />}
         </DialogHeader>
 
         <div className="grid min-h-0 flex-1 gap-2 p-2" style={{ gridTemplateColumns: `${LARGURA_LISTA_MESA} 1fr` }}>

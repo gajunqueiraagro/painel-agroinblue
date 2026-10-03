@@ -149,6 +149,13 @@ export interface LinhaExtratoPlanilha {
   /** Por que a linha livre é livre, quando não é óbvio: o par dela foi cancelado (par morto). */
   motivoLivre: string | null;
   /**
+   * O PAR FORA DA VISTA — PR-CONC-ENRIQ-ACABAMENTOS-01 (D3): a linha da planilha tem par (`lanc_id`), mas o lançamento não
+   * está no lado Sistema deste mês/conta. Em vez do lado Sistema em branco, o texto cinza diz onde ele está — só com o que a
+   * view traz do par (`lanc_data_pagamento`, `lanc_conta_*`, `lanc_cancelado`); nunca valor nem status. `null` quando não há
+   * o que dizer (par no lado Sistema, sem par, ou par no mês e na conta que o Espelho não traz).
+   */
+  parFora: ParForaDaVista | null;
+  /**
    * O FORNECEDOR DE CADA LADO, para o "marcar todos do fornecedor" (PR-CONC-ENRIQ-MARCAR-FAVORECIDO). Cada lado com a SUA
    * chave, e as duas NUNCA se comparam: planilha = `planilha_favorecido_id` (o fornecedor que o banco resolveu da planilha)
    * ou, sem ele, o texto normalizado de `excel_fornecedor`; sistema = o nome do cadastro normalizado (`EspSis.fornecedor`).
@@ -193,6 +200,49 @@ export interface ParDaLinha {
 
 export const MOTIVO_PAR_MORTO = 'o par desta linha foi cancelado';
 
+/** O texto cinza do lado Sistema de uma linha cujo par está fora da vista (D3), e a frase inteira no `title`. */
+export interface ParForaDaVista { texto: string; titulo: string }
+
+/** "2026-08-28" → "28/08/2026"; o que não é data fica como veio. */
+function dataLonga(d: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(d);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : d;
+}
+
+/**
+ * Onde está o par de uma linha da planilha que o lado Sistema não mostra — D3 do PR-CONC-ENRIQ-ACABAMENTOS-01.
+ * ⚠ SÓ O QUE A VIEW TRAZ DO PAR: cancelado (`lanc_cancelado`) → "par cancelado"; pagamento em outro mês → "par em
+ *   DD/MM/AAAA · fora do mês"; conta do par (pela direção: entrada → destino, saída → bancária) diferente da do extrato →
+ *   "· outra conta: <nome>". Par no mês e na conta que o Espelho não traz (não realizado, por exemplo) → `null`: a tela
+ *   não inventa o porquê.
+ */
+export function parForaDaVista(
+  r: ClassificacaoStagingPreviewRow, contaId: string, anoMes: string | null | undefined,
+): ParForaDaVista | null {
+  if (!r.lanc_id) return null;
+  if (r.lanc_cancelado === true) {
+    return { texto: 'par cancelado', titulo: 'O lançamento do par desta linha foi cancelado — por isso não aparece no sistema. Clique para abrir na Mesa.' };
+  }
+  const data = r.lanc_data_pagamento ?? null;
+  const foraDoMes = !!data && !!anoMes && data.slice(0, 7) !== anoMes.slice(0, 7);
+  const mesmaConta = r.lanc_conta_bancaria_id === contaId || r.lanc_conta_destino_id === contaId;
+  const nomeOutra = sinalDaPlanilha(r, contaId) === 1 ? r.lanc_conta_destino_nome : r.lanc_conta_bancaria_nome;
+  const partes: string[] = [];
+  const motivos: string[] = [];
+  if (foraDoMes) { partes.push('fora do mês'); motivos.push('o pagamento é de outro mês'); }
+  if (!mesmaConta) {
+    const nome = (nomeOutra ?? '').trim() || '—';
+    partes.push(`outra conta: ${nome}`);
+    motivos.push(`o lançamento está na conta ${nome}`);
+  }
+  if (partes.length === 0) return null;
+  const onde = data ? `par em ${dataLonga(data)}` : 'par';
+  return {
+    texto: [onde, ...partes].join(' · '),
+    titulo: `O par desta linha (${(r.lanc_descricao ?? '').trim() || '—'}${data ? `, pago em ${dataLonga(data)}` : ''}) não aparece no sistema deste mês/conta: ${motivos.join(' e ')}. Clique para abrir na Mesa.`,
+  };
+}
+
 /**
  * A LINHA LIVRE (pode entrar num bloco ou num casar) — PR-CONC-ENRIQ-BLOCO-ESTADOS. A REGRA MORA EM
  * `_fn_classificacao_linha_livre` (banco); a tela só lê a coluna `linha_livre` da view. `null` = a view ainda não a traz
@@ -225,6 +275,8 @@ export function montarExtratoDaPlanilha(
   contaId: string,
   internos: ReadonlySet<string>,
   sobrescreverIds: ReadonlySet<string> = new Set(),
+  /** O mês da vista ("2026-09"), para o "fora do mês" do D3; sem ele, só a conta e o cancelado se dizem. */
+  anoMes: string | null = null,
 ): ExtratoDaPlanilha {
   const porStaging = new Map(stagingDaConta.map((r) => [r.staging_id, r]));
   /* os lançamentos de cada bloco conferido da conta: id do lançamento -> bloco */
@@ -314,6 +366,7 @@ export function montarExtratoDaPlanilha(
       parSoltavel,
       par,
       motivoLivre: livre === true && r?.lanc_id && r.lanc_cancelado === true ? MOTIVO_PAR_MORTO : null,
+      parFora: r && !sis && !filha && !blocoId && r.lanc_id && !sisIds.has(r.lanc_id) ? parForaDaVista(r, contaId, anoMes) : null,
     };
   };
 
@@ -333,7 +386,7 @@ export function montarExtratoDaPlanilha(
         chave: `n1-${n1.sis.lancamento_id}`, stagingId: n1.extratos[0]?.extrato.extrato_id ?? null, data: n1.sis.data,
         planilha: null, simbolo: null, sistema: daSistema(n1.sis), selo: fecha ? 'Desmembrar' : 'Par repetido',
         enriquecida: false, filha: false,
-        selPlanilha: null, selSistema: null, blocoId: null, parSoltavel: null, par: null, motivoLivre: null,
+        selPlanilha: null, selSistema: null, blocoId: null, parSoltavel: null, par: null, motivoLivre: null, parFora: null,
       });
       for (const x of n1.extratos) linhas.push(linhaPlanilha(x.extrato, undefined, true));
     }
@@ -345,13 +398,14 @@ export function montarExtratoDaPlanilha(
         chave: `s-${s.lancamento_id}`, stagingId: null, data: s.data, planilha: null, simbolo: null,
         sistema: daSistema(s), selo: blocoId ? 'Em bloco' : 'Só no sistema', enriquecida: false, filha: false,
         selPlanilha: null, selSistema: blocoId ? null : s.lancamento_id, blocoId, parSoltavel: null, par: null, motivoLivre: null,
+        parFora: null,
       });
     }
     for (const s of d.internas) {
       linhas.push({
         chave: `i-${s.lancamento_id}`, stagingId: null, data: s.data, planilha: null, simbolo: null,
         sistema: daSistema(s), selo: 'Transferência', enriquecida: false, filha: false,
-        selPlanilha: null, selSistema: null, blocoId: null, parSoltavel: null, par: null, motivoLivre: null,
+        selPlanilha: null, selSistema: null, blocoId: null, parSoltavel: null, par: null, motivoLivre: null, parFora: null,
       });
     }
     return {
@@ -376,9 +430,14 @@ function daSistema(s: EspSis): NonNullable<LinhaExtratoPlanilha['sistema']> {
   };
 }
 
-/** "Só não enriquecidos": tira a linha da planilha já enriquecida (e o dia que fica vazio). */
+/**
+ * "Só não enriquecidos": tira a linha da planilha já enriquecida (e o dia que fica vazio).
+ * ⚠ E O BLOCO CONFERIDO VIVO (PR-CONC-ENRIQ-ACABAMENTOS-01, D2): os dois lados dele — a linha da planilha em
+ *   'conferido_bloco' (já gravada) e o lançamento "Em bloco" — saem juntos; o `blocoId` só existe com o bloco vivo.
+ *   SÓ AS LINHAS: o fecho de cada dia (`planilha`/`sistema`/`confere`) e os totais do mês continuam os do extrato inteiro.
+ */
 export function soNaoEnriquecidos(dias: readonly DiaExtratoPlanilha[]): DiaExtratoPlanilha[] {
   return dias
-    .map((d) => ({ ...d, linhas: d.linhas.filter((l) => !l.enriquecida) }))
+    .map((d) => ({ ...d, linhas: d.linhas.filter((l) => !l.enriquecida && !l.blocoId) }))
     .filter((d) => d.linhas.length > 0);
 }

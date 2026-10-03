@@ -101,7 +101,8 @@ describe('a grade tem as mesmas medidas em todos os estados', () => {
   it('a ORDEM é a do Novo lançamento do Financeiro, e o extrato é marcado, não inferido pelo bloco', () => {
     expect(ROTULOS_DA_GRADE).toEqual([
       'Competência', 'Data venc.', 'Data pgto.', 'Valor', 'Conta bancária', 'Conta destino',
-      'Fornecedor', 'Descrição',
+      /* PR-CONC-ENRIQ-ACABAMENTOS-01 (D4): Descrição antes do Fornecedor — contrato novo da ORDEM */
+      'Descrição', 'Fornecedor',
       'Atividade', 'Fazenda', 'Plano de contas', 'Safra',
       'Documento · tipo', 'Forma de pagamento', 'Observação',
     ]);

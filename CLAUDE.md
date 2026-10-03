@@ -160,8 +160,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 02/10/2026 (PR-CONC-ENRIQ-SPLIT-REVERTER, +9 em `src/v2/lib/mesa/desfazerSplit.test.tsx`; antes o
-  PR-CONC-ENRIQ-MESA-CULTURA-FASE-B, +20): 2969
+  Baseline em 02/10/2026 (PR-CONC-ENRIQ-ACABAMENTOS-01, +17 em `src/v2/lib/mesa/acabamentos01.test.tsx`; antes o
+  PR-CONC-ENRIQ-SPLIT-REVERTER, +9): 2986
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -570,8 +570,8 @@ preview que o cabecalho nao sai da tela ao rolar.
   estreitando o controle, nunca em linha extra); aviso num slot de altura fixa reservado (vazio quando nao ha) ou no
   `title`. Exemplo vivo: a Mesa de revisao (`MesaCamposTabela`: colgroup 140px | auto | auto | 44%, linha 22, slot da
   dica 104, selo de 148; ORDEM DO NOVO LANCAMENTO DO FINANCEIRO (PR-CONC-MESA-ORDEM-03): blocos Datas e pagamento
-  (COMPACTO: Competencia, Data venc., Data pgto., Valor, Conta bancaria, Conta destino) · Identificacao (Fornecedor,
-  Descricao) · Classificacao (Atividade, Fazenda, Plano de contas, Safra) · Complemento (COMPACTO: Documento · tipo, Forma de
+  (COMPACTO: Competencia, Data venc., Data pgto., Valor, Conta bancaria, Conta destino) · Identificacao (Descricao,
+  Fornecedor — nesta ordem desde o PR-CONC-ENRIQ-ACABAMENTOS-01) · Classificacao (Atividade, Fazenda, Plano de contas, Safra) · Complemento (COMPACTO: Documento · tipo, Forma de
   pagamento, Observacao); linha de 22 nos blocos normais e de 18 nos compactos (texto 9,5, controle 16 —
   `CELULA_EDITAVEL_COMPACTA`), a ALTURA E' DO BLOCO; o "do extrato" e' marca explicita na ORDEM (`doExtrato`), nao o bloco.
   SEM LINHA VAZIA: os avisos moram a' direita da linha do checklist (18px); a decisao e' um SLOT DE 96px NO RODAPE de 32
@@ -753,6 +753,15 @@ docs/historico/frentes-ate-2026-09-29.md.)
   dia "confere" por construcao). O checklist da Mesa (`checklistDaLinha`/`pendenciasDaLinha` em `MesaCamposTabela.tsx`) e' a
   UNICA lista de obrigatorios — desenha o ●, escreve o "falta:" e apaga o Aprovar — e julga Fazenda/Conta do plano/Descricao
   pelo VALOR EFETIVO (o Resultado diz "mantem" ate' com os dois lados vazios).
+- ⚠ ACABAMENTOS DO ENRIQUECER (PR-CONC-ENRIQ-ACABAMENTOS-01, so' tela): (D1) IMPORTACAO ANTIGA = a aberta nao e' a mais
+  recente do mes (`sessaoMaisNovaQueAberta`, a peneira do seletor); o painel diz "importacao antiga · a mais recente e' Imp NN ·
+  DD/MM HH:MM · ir para a mais recente" (`textoImportacaoAntiga`) ANTES do "sem conta", e o Extrato da planilha e a Mesa levam so'
+  o selo `SeloImportacaoAntiga` (`EnriquecimentoMesaModal.tsx`), a frase no `title`; aviso, nunca trava. (D2) "So' nao
+  enriquecidos" (`soNaoEnriquecidos`) tira tambem o bloco conferido VIVO (`blocoId`, as duas pontas); so' as linhas — fecho do
+  dia, totais e contador sao do extrato inteiro. (D3) linha com par fora do lado Sistema: `parForaDaVista`
+  (`extratoDaPlanilha.ts`) escreve em cinza "par cancelado" / "par em DD/MM/AAAA · fora do mes" / "· outra conta: X" (conta
+  pela direcao), so' com o que a view traz do par; par no mes e na conta que o Espelho nao traz (nao realizado) fica em branco.
+  (D4) Identificacao: Descricao antes do Fornecedor (so' a ORDEM).
 - ⚠ AGRUPAR PELO EXTRATO DA PLANILHA = O GESTO DA CONFERENCIA (PR-CONC-ENRIQ-AGRUP-2b-TELA, so' tela): marca-se a linha "sem
   par" da planilha (`selPlanilha`) e o lancamento "So' no sistema" (`selSistema`); `gestoDaSelecao`
   (`src/v2/lib/mesa/agruparNoExtrato.ts`) da' a forma — 1x1 casar (`resolver_proximos`), Nx1 desmembrar (`split_substituir`,

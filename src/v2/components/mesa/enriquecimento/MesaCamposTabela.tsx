@@ -98,9 +98,9 @@ const ORDEM: Array<{
   { campo: 'Banco', rotulo: 'Conta bancária', grupo: 'pagamento', doExtrato: true, obrigatorio: true },
   { campo: 'Conta destino', rotulo: 'Conta destino', grupo: 'pagamento',
     soTransferencia: true, obrigatorioSeTransferencia: true },
-  /* ── IDENTIFICAÇÃO — quem é e o que é */
-  { campo: 'Fornecedor', rotulo: 'Fornecedor', grupo: 'identificacao' },
+  /* ── IDENTIFICAÇÃO — o que é e quem é. ⚠ DESCRIÇÃO ANTES DO FORNECEDOR (PR-CONC-ENRIQ-ACABAMENTOS-01, D4): só a ordem. */
   { campo: 'Produto / Descrição', rotulo: 'Descrição', grupo: 'identificacao', obrigatorio: true },
+  { campo: 'Fornecedor', rotulo: 'Fornecedor', grupo: 'identificacao' },
   /* ── CLASSIFICAÇÃO — onde aloca */
   { campo: 'Atividade', rotulo: 'Atividade', grupo: 'classificacao', obrigatorio: true },
   { campo: 'Fazenda', rotulo: 'Fazenda', grupo: 'classificacao', obrigatorio: true },

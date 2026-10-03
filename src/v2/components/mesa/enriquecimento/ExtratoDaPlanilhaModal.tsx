@@ -35,6 +35,7 @@ import {
   doMesmoFornecedor, gestoDaSelecao, type FormaDoGesto, type LadoDoExtrato,
 } from '@/v2/lib/mesa/agruparNoExtrato';
 import { STATUS_PALETA, STATUS_PILULA_BASE } from '@/lib/financeiro/statusFinanceiro';
+import { SeloImportacaoAntiga, type ImportacaoMaisRecente } from './EnriquecimentoMesaModal';
 
 /** O colgroup — a régua da Conferência (pior texto renderizado + 8 + padding), medida no navegador. */
 export const COLUNAS_EXTRATO_PLANILHA: ReadonlyArray<{ chave: string; largura: string | null }> = [
@@ -115,13 +116,15 @@ export interface ExtratoDaPlanilhaModalProps {
   onAgrupar?: (g: GestoAgrupar) => Promise<ResultadoAgrupar>;
   /** Desfaz o bloco conferido; devolve `ok` e, na recusa, a frase. Sem ela, o modo bloco só mostra. */
   onDesfazerBloco?: (g: GestoDesfazerBloco) => Promise<ResultadoAgrupar>;
+  /** A importação mais recente do mês, quando a aberta NÃO é ela (PR-CONC-ENRIQ-ACABAMENTOS-01, D1) — o selo do cabeçalho. */
+  importacaoMaisRecente?: ImportacaoMaisRecente | null;
 }
 
 const STATUS_ROTULO = { conciliado: 'Conciliado', realizado: 'Realizado' } as const;
 
 export function ExtratoDaPlanilhaModal({
   open, onOpenChange, clienteId, anoMes, mesRotulo, staging, contas, contaId, onContaId, sobrescreverIds, onAbrirLinha,
-  onAgrupar, onDesfazerBloco,
+  onAgrupar, onDesfazerBloco, importacaoMaisRecente = null,
 }: ExtratoDaPlanilhaModalProps) {
   const [soPendentes, setSoPendentes] = useState(false);
   const conta = contaId ?? contas[0]?.id ?? null;
@@ -134,8 +137,8 @@ export function ExtratoDaPlanilhaModal({
     () => (conta ? staging.filter((r) => contaDaLinhaStaging(r).id === conta) : []),
     [staging, conta]);
   const extrato = useMemo(
-    () => (espelho && contaReal ? montarExtratoDaPlanilha(daConta, espelho, contaReal, internos, sobrescreverIds) : null),
-    [espelho, contaReal, daConta, internos, sobrescreverIds]);
+    () => (espelho && contaReal ? montarExtratoDaPlanilha(daConta, espelho, contaReal, internos, sobrescreverIds, anoMes) : null),
+    [espelho, contaReal, daConta, internos, sobrescreverIds, anoMes]);
   const dias = useMemo(
     () => (extrato ? (soPendentes ? soNaoEnriquecidos(extrato.dias) : extrato.dias) : []),
     [extrato, soPendentes]);
@@ -306,6 +309,7 @@ export function ExtratoDaPlanilhaModal({
             Extrato da planilha · {nomeConta} · {mesRotulo}
           </DialogTitle>
           <span className="whitespace-nowrap text-[10px] text-primary-foreground/85">Planilha × Sistema</span>
+          {importacaoMaisRecente && <SeloImportacaoAntiga maisRecente={importacaoMaisRecente} />}
         </DialogHeader>
 
         {/* ═══ TOPO FIXO: conta, totais, legenda, chave ══════════════════════ */}
@@ -585,10 +589,19 @@ function DiaRows({ d, onAbrir, marcP, marcS, travado, onMarcarP, onMarcarS, bloc
                 onChange={() => { if (l.selSistema) onMarcarS(l.selSistema); }} aria-label="Marcar lançamento do sistema" />
             )}
           </td>
-          <td className={`${CEL} text-right ${l.sistema ? corVal(l.sistema.valor) : ''}`}>{l.sistema ? brl(l.sistema.valor) : ''}</td>
-          <td className={`${CEL} text-[9.5px] text-muted-foreground`}>{l.sistema ? dataCurta(l.sistema.data) : ''}</td>
-          <td className={CEL} title={l.sistema?.descricao}>{l.sistema?.descricao ?? ''}</td>
-          <td className={`${CEL} text-muted-foreground`} title={l.sistema?.fornecedor}>{l.sistema?.fornecedor ?? ''}</td>
+          {/* D3 (PR-CONC-ENRIQ-ACABAMENTOS-01): o par fora da vista ocupa as quatro células do lado Sistema com o texto cinza —
+              sem valor nem status inventados; corta na borda (sem "…") e a frase inteira vai no `title`. */}
+          {!l.sistema && l.parFora ? (
+            <td colSpan={4} data-testid="par-fora" title={l.parFora.titulo}
+              className={`${CEL} text-[9.5px] text-muted-foreground`}>{l.parFora.texto}</td>
+          ) : (
+            <>
+              <td className={`${CEL} text-right ${l.sistema ? corVal(l.sistema.valor) : ''}`}>{l.sistema ? brl(l.sistema.valor) : ''}</td>
+              <td className={`${CEL} text-[9.5px] text-muted-foreground`}>{l.sistema ? dataCurta(l.sistema.data) : ''}</td>
+              <td className={CEL} title={l.sistema?.descricao}>{l.sistema?.descricao ?? ''}</td>
+              <td className={`${CEL} text-muted-foreground`} title={l.sistema?.fornecedor}>{l.sistema?.fornecedor ?? ''}</td>
+            </>
+          )}
           {/* ⚠ O STATUS TEM UM DONO SÓ: `STATUS_PALETA` (a mesma pílula do Financeiro), nunca cor copiada aqui. */}
           <td className="px-[3px] text-center" data-testid="status-sistema">
             {l.sistema && (
