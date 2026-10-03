@@ -329,6 +329,14 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   mesma data, como toda conta]; (d) Santa Rita 8a82eb7c linhas 58/98 e NJ a63fa4c6 linha 246: APLICADAS em lancamento de outro mes /
   conta (gravaram classificacao) — decisao caso a caso; (e) a reaberta nao guarda de onde veio (o "limpa" do Recasar zera o
   `casamento_meta`).
+  · IMPORT-CUSTO (PR-CONC-ENRIQ-IMPORT-CUSTO-01, 03/10): (a) A TELA ainda manda lotes de 100 (`TAMANHO_LOTE`,
+  `useClassificacaoStaging.ts`) e, depois de CADA lote, `gravarDatasDaFatia` faz dezenas de UPDATEs agrupados por data que
+  casam ZERO linhas (staging sem policy de UPDATE; o populate ja' grava as duas datas) — idas inuteis a cada lote, frente de
+  tela; (b) o resolvedor de FAZENDA (`_fn_classificacao_resolver_fazenda_det`) tem o mesmo desenho (normaliza o cadastro a cada
+  chamada) — barato hoje (poucas fazendas), mesmo conserto se crescer; (c) `aliases` que nao e' array: o corpo antigo dava ERRO
+  na chamada, o novo trata como vazio (0 linhas assim no proto); (d) a FASE 0 do IMPORTACAO-MES segue: atomicidade da
+  importacao (sessao como entidade, retomar pelo mesmo uuid, Excluir que nao conta o `ja_aplicado` herdado), de-para de conta
+  (hifen x espaco no apelido; agencia+numero levando cartao a conta corrente) e a atualizacao da importacao do mes.
   · SPLIT-REVERTER (PR-CONC-ENRIQ-SPLIT-REVERTER, 02/10): (a) 5 DESMEMBRAMENTOS ANTIGOS SEM REGISTRO (filhos ja' cancelados):
   7cfad218 (4 de 5), 720ea2d4, add72c81, d0352371, ec7b5153 — a Mesa diz "desmembramento antigo · sem registro para desfazer";
   (b) nos 15 retroativos o par anterior das linhas e' INFERIDO do status (`par_inferido`), nao gravado na hora; (c) o
@@ -1031,6 +1039,24 @@ docs/historico/frentes-ate-2026-09-29.md.)
     safra)"). Safra, tipo de documento e forma se resolvem no banco (`_fn_classificacao_resolver_safra` so' ATIVAS,
     `_tipo_documento`, `_forma_pagamento` com o mapa dos legados); texto que nao resolve e' "(nao resolvido)" e nunca esvazia.
     A forma pelo historico do banco (PAINEL-V1) virou reserva: so' quando a planilha nao traz forma.
+- ⚠ O RESOLVEDOR DE FORNECEDOR PROCURA PELO VALOR NORMALIZADO GUARDADO (PR-CONC-ENRIQ-IMPORT-CUSTO-01, 03/10, migration
+  20261027191200, ⚠ registrada como 20261003113953; ledger = arquivo, md5 d22dfa4f…): `financeiro_fornecedores.nome_norm` e
+  `aliases_norm` (text[], nunca NULL) guardam `_fn_normalizar_texto` do nome e de cada apelido, mantidos pelo gatilho
+  `trg_fornecedor_norm_resolvedor` (BEFORE INSERT OR UPDATE OF nome, aliases; SECURITY DEFINER porque o front grava como
+  `authenticated`, que NAO executa `_fn_normalizar_texto`); o array sai de UM dono, `_fn_fornecedor_aliases_norm`. Indices btree
+  (cliente_id, nome_norm) WHERE ativo e GIN (aliases_norm). O `_det` procura por IGUALDADE nesses campos — mesma ordem de
+  camadas, mesmo "exatamente 1" do apelido, mesmo desempate (created_at, id). ⚠ COLUNA GERADA NAO DA': `_fn_normalizar_texto`
+  e' STABLE (dicionario do `unaccent`); por isso a conferencia `_fn_fornecedor_norm_divergentes()` (tem de dar 0) e a reconstrucao
+  `_fn_fornecedor_norm_reconstruir()`, so' `service_role` — quem atualizar a extensao `unaccent` roda as duas. ⚠ `nome_normalizado`
+  (maiusculas, pontuacao vira espaco, `trg_normalizar_fornecedor`) E' OUTRA REGRA e nao serve ao resolvedor: trocar uma pela
+  outra muda o resultado (o hifen x espaco do cartao). A precedencia tem a de 2 argumentos (`_fn_classificacao_precedencia_cru(
+  uuid, uuid[])`, o recorte); a de 1 delega com NULL (Recasar, casar manual), e o populate passa so' as linhas do lote. Uma
+  resolucao por texto distinto: mapa no populate, CTE materializado na precedencia. Prova: 1.174 pares (cliente, texto) do
+  staging, antigo x novo, 0 diferencas (3 de apelido ambiguo, 84 que casam inativo); 470 linhas da e6849efd em copia, staging
+  final identico; Recasar e de-para identicos. Tempo: lote do populate 3,2–5,2 s -> 0,45–0,72 s; Recasar 2,4 -> 0,63 s;
+  de-para (215 fornecedores) 9,4 -> 0,86 s. Escrita de fornecedor: +0,27 ms por linha (gatilho + indices).
+  md5: _det bdaacbe9…, precedencia(uuid) ad89e90c…, precedencia(uuid, uuid[]) e532918e…, populate 93e3eb6c…,
+  aliases_norm 4f0c33ff…, gatilho 31c60ecd…, divergentes 0f15d340…, reconstruir 271acc73…
 - ⚠ O DE-PARA DO PASSO 1 (e o importador de lancamentos, que usa o mesmo hook) CLASSIFICA PELO RESOLVEDOR DO BANCO
   (PR-CONC-EXCEL-SESSAO-E-DEPARA-01): fornecedor, fazenda, safra e subcentro por `fn_classificacao_depara_resolver` (so'
   leitura) — os mesmos `_fn_classificacao_resolver_*` do populate, que agora tem UMA implementacao (`_det`, com a origem
