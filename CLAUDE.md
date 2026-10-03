@@ -160,9 +160,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 03/10/2026 (PR-FIN-SAFRA-MODAL-01, +6 em `src/components/financeiro-v2/safraGravadaModal.test.tsx`; antes o
-  PR-CONC-CONFERENCIA-FECHAMENTO-DIA, +43 em `src/lib/conciliacao/mesaDoDia.test.ts` e +9 em
-  `src/components/financeiro-v2/conferenciaFechamentoDia.test.tsx`): 3044
+  Baseline em 03/10/2026 (PR-CONC-ENRIQ-IMPORT-ATOMICA-01, +10 em `src/v2/lib/mesa/importacaoAtomica.test.tsx` e +1 em
+  `src/v2/hooks/useSessoesClassificacao.test.tsx`; antes o PR-FIN-SAFRA-MODAL-01, +6 em
+  `src/components/financeiro-v2/safraGravadaModal.test.tsx`): 3055
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -350,9 +350,20 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   casam ZERO linhas (staging sem policy de UPDATE; o populate ja' grava as duas datas) — idas inuteis a cada lote, frente de
   tela; (b) o resolvedor de FAZENDA (`_fn_classificacao_resolver_fazenda_det`) tem o mesmo desenho (normaliza o cadastro a cada
   chamada) — barato hoje (poucas fazendas), mesmo conserto se crescer; (c) `aliases` que nao e' array: o corpo antigo dava ERRO
-  na chamada, o novo trata como vazio (0 linhas assim no proto); (d) a FASE 0 do IMPORTACAO-MES segue: atomicidade da
+  na chamada, o novo trata como vazio (0 linhas assim no proto); (d) a FASE 0 do IMPORTACAO-MES segue [a ATOMICIDADE fechou no PR-CONC-ENRIQ-IMPORT-ATOMICA-01; o resto, abaixo]: atomicidade da
   importacao (sessao como entidade, retomar pelo mesmo uuid, Excluir que nao conta o `ja_aplicado` herdado), de-para de conta
   (hifen x espaco no apelido; agencia+numero levando cartao a conta corrente) e a atualizacao da importacao do mes.
+  · IMPORT-ATOMICA (PR-CONC-ENRIQ-IMPORT-ATOMICA-01, 03/10): (a) LIMPEZA DAS SESSOES DO NJ set/26, pela tela e com o
+  Gabriel: 53ff65d5, 05f22626 e eae81dda (incompletas, 400 de 470, nada gravado) ja' se excluem; a 6d08260f nao — 3 blocos
+  conferidos e a gravacao DUPLICADA do lancamento 62347435 foram feitos nela (desfazer os blocos e reverter a gravacao antes);
+  (b) A MESA ANTIGA (`src/v2/components/mesa/MesaClassificacaoTab.tsx`, #7 do PARE) FICOU FORA: ela tem regra propria de
+  abertura (mais exatos + ambiguos) e ordena o seletor por data, sem olhar o estado — PODE ELEGER E ABRIR UMA SESSAO
+  INCOMPLETA. O formato que ela le' de `useSessoesClassificacao` nao mudou (campos so' acrescentados); (c) LEITURA DA VIEW
+  NOVA COM `(supabase as any).from` (o idioma das linhas vizinhas do mesmo hook): a view nasceu depois do `types.ts`, e a
+  unica excecao do zero-cast e' o `.rpc` — regenerar os tipos tira o cast; (d) sessao escrita por aba ANTERIOR a este PR (sem
+  `abrir`) nao tem registro: a tela a trata como legado completo, a regra do backfill; (e) PRs seguintes: DEPARA-CONTA-01
+  (hifen x espaco no apelido; agencia+numero levando cartao a conta corrente) e IMPORTACAO-MES-01 (a atualizacao da
+  importacao do mes).
   · SPLIT-REVERTER (PR-CONC-ENRIQ-SPLIT-REVERTER, 02/10): (a) 5 DESMEMBRAMENTOS ANTIGOS SEM REGISTRO (filhos ja' cancelados):
   7cfad218 (4 de 5), 720ea2d4, add72c81, d0352371, ec7b5153 — a Mesa diz "desmembramento antigo · sem registro para desfazer";
   (b) nos 15 retroativos o par anterior das linhas e' INFERIDO do status (`par_inferido`), nao gravado na hora; (c) o
@@ -787,6 +798,24 @@ docs/historico/frentes-ate-2026-09-29.md.)
   dia "confere" por construcao). O checklist da Mesa (`checklistDaLinha`/`pendenciasDaLinha` em `MesaCamposTabela.tsx`) e' a
   UNICA lista de obrigatorios — desenha o ●, escreve o "falta:" e apaga o Aprovar — e julga Fazenda/Conta do plano/Descricao
   pelo VALOR EFETIVO (o Resultado diz "mantem" ate' com os dois lados vazios).
+- ⚠ A IMPORTACAO TEM DONO NO BANCO (PR-CONC-ENRIQ-IMPORT-ATOMICA-01, 03/10, migration 20261027191400, ⚠ registrada como
+  20261003141854; ledger = arquivo, md5 a465e396…): `classificacao_sessoes` (id = o uuid que a tela gera, cliente, criado_em/por,
+  arquivo, linhas_esperadas, status importando|completa|incompleta, concluida_em; RLS `tenant_ok` so' leitura, escrita so' pelas
+  funcoes). A tela ABRE antes do primeiro lote (`fn_classificacao_sessao_abrir`, idempotente; outro numero de linhas recusa: "escolha
+  o mesmo arquivo") e CONCLUI depois do ultimo (`fn_classificacao_sessao_concluir`: 'completa' so' com linhas do staging = esperadas;
+  senao "N de M"). Linhas recebidas sao CONTADAS, nunca guardadas. A LEITURA e' `vw_classificacao_sessoes` (security_invoker), que
+  aplica a regra dos 10 minutos ('importando' parada vira 'incompleta'). Lote que falha NAO gera sessao nova: a falha guarda o id e
+  as linhas, e o "Tentar de novo" (escrito ao lado do controle, "linha 401 de 470 · …") reenvia a partir do lote que falhou
+  (`ErroLotePopulate.inicio`); retomar uma incompleta reenvia so' as linhas que faltam. O populate (93e3eb6c) NAO mudou: reenviar um
+  lote ja' entrado deixa o staging identico, editada/bloco/gravada inclusive (prova S3 em `conc_enriq_import_atomica_01_test.sql`).
+  ⚠ O RANKING TEM UM DONO SO' (`enriquecimentoView.ts`): `sessaoCompleta`, `toSessoesVM` (Imp NN conta SO' completa — a incompleta e'
+    "incompleta · 400 de 470"; excluir uma nao renumera), `maisRecenteDoMes` (o "(mais recente)"), `sessaoMaisRecenteCompleta`
+    (abre por padrao: `escolherMelhorSessaoId` e a regua do `EnriquecerTresPassos`). A incompleta nunca e' a mais recente nem abre;
+    aberta pelo seletor, a Mesa nao trabalha nela (painel sem contas, Recasar e Mesa apagados) e o slot oferece retomar/excluir.
+  ⚠ EXCLUIR (`fn_classificacao_excluir_sessao`, md5 5df4b007…): o 'ja_aplicado' HERDADO (aplicado = false) nao impede; impedem a
+    GRAVACAO feita na sessao (aplicado = true) e o BLOCO conferido dela, com o motivo escrito no slot ("3 blocos e 1 gravação feitos
+    nesta importação — …"), nunca em toast; os casamentos manuais nao impedem, mas a confirmacao os conta ("N casamentos manuais
+    feitos nesta importação serão perdidos"). A sessao sai da tabela junto.
 - ⚠ ACABAMENTOS DO ENRIQUECER (PR-CONC-ENRIQ-ACABAMENTOS-01, so' tela): (D1) IMPORTACAO ANTIGA = a aberta nao e' a mais
   recente do mes (`sessaoMaisNovaQueAberta`, a peneira do seletor); o painel diz "importacao antiga · a mais recente e' Imp NN ·
   DD/MM HH:MM · ir para a mais recente" (`textoImportacaoAntiga`) ANTES do "sem conta", e o Extrato da planilha e a Mesa levam so'

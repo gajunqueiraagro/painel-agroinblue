@@ -888,8 +888,29 @@ export function toRowVM(
 }
 
 /**
+ * A importação está COMPLETA? — PR-CONC-ENRIQ-IMPORT-ATOMICA-01, o dono do ranking.
+ *
+ * ⚠ O ESTADO VEM DO BANCO (`vw_classificacao_sessoes`, que aplica a regra dos 10 minutos); aqui só se lê. Sem `status` =
+ *   sessão legada sem registro, completa por regra do backfill.
+ * ⚠ SÓ A COMPLETA É NUMERADA ("Imp NN"), É "A MAIS RECENTE" E ABRE POR PADRÃO. A incompleta (e a que ainda está
+ *   importando) aparece no seletor marcada "incompleta · N de M", e a Mesa não deixa trabalhar nela.
+ */
+export function sessaoCompleta(s: Pick<SessaoClassificacaoResumo, 'status'>): boolean {
+  return s.status === undefined || s.status === 'completa';
+}
+
+/** "incompleta · 400 de 470" / "importando · 120 de 470" — a marca da sessão que não terminou (D6). */
+export function marcaSessaoNaoCompleta(s: Pick<SessaoClassificacaoResumo, 'status' | 'linhas_recebidas' | 'linhas_esperadas' | 'total'>): string {
+  const recebidas = s.linhas_recebidas ?? s.total;
+  const de = s.linhas_esperadas != null ? ` de ${s.linhas_esperadas}` : '';
+  return `${s.status === 'importando' ? 'importando' : 'incompleta'} · ${recebidas}${de}`;
+}
+
+/**
  * Sessões → VMs com rótulo identificável: "Mai/2026 · Imp NN · dd/MM HH:mm · N linhas".
- * O índice NN é cronológico por mês (desempata importações quase idênticas).
+ * O índice NN é cronológico por mês (desempata importações quase idênticas) e conta SÓ as completas
+ * (PR-CONC-ENRIQ-IMPORT-ATOMICA-01, opção (a) do Gabriel): a incompleta não tem número — "Set/2026 · incompleta ·
+ * 400 de 470 · dd/MM HH:mm" —, e excluí-la não renumera ninguém.
  * Retorna ordenado por criada_em desc (mais recente primeiro) para o seletor.
  */
 export function toSessoesVM(sessoes: SessaoClassificacaoResumo[] | undefined | null): EnriqSessaoVM[] {
@@ -898,20 +919,21 @@ export function toSessoesVM(sessoes: SessaoClassificacaoResumo[] | undefined | n
   const idxPorMes = new Map<string, number>();
   const vmById = new Map<string, EnriqSessaoVM>();
   for (const s of asc) {
+    const completa = sessaoCompleta(s);
     const mes = s.excel_ano_mes ?? '—';
-    const n = (idxPorMes.get(mes) ?? 0) + 1;
-    idxPorMes.set(mes, n);
     const carimbo = dataHoraCurta(s.criada_em);
-    const imp = `Imp ${String(n).padStart(2, '0')}`;
-    const partes = [
-      mesAbrev(s.excel_ano_mes),
-      imp,
-      carimbo,
-      `${s.total} linhas`,
-    ].filter(Boolean);
+    let imp = '';
+    if (completa) {
+      const n = (idxPorMes.get(mes) ?? 0) + 1;
+      idxPorMes.set(mes, n);
+      imp = `Imp ${String(n).padStart(2, '0')}`;
+    }
+    const partes = completa
+      ? [mesAbrev(s.excel_ano_mes), imp, carimbo, `${s.total} linhas`]
+      : [mesAbrev(s.excel_ano_mes), marcaSessaoNaoCompleta(s), carimbo];
     vmById.set(s.sessao_id, {
       id: s.sessao_id,
-      label: partes.join(' · '),
+      label: partes.filter(Boolean).join(' · '),
       imp,
       exatos: s.exatos,
       ambiguos: s.ambiguos,
@@ -919,6 +941,8 @@ export function toSessoesVM(sessoes: SessaoClassificacaoResumo[] | undefined | n
       anoMes: s.excel_ano_mes,
       criadaEm: s.criada_em,
       total: s.total,
+      completa,
+      marcaIncompleta: completa ? null : marcaSessaoNaoCompleta(s),
     });
   }
   return [...asc].reverse().map((s) => vmById.get(s.sessao_id)!).filter(Boolean);
@@ -1142,7 +1166,20 @@ export function filtrarPorModo(rows: EnriqRowVM[], modo: 'pendentes' | 'todas', 
 }
 
 export function escolherMelhorSessaoId(sessoes: SessaoClassificacaoResumo[] | undefined | null): string | null {
-  if (!sessoes || sessoes.length === 0) return null;
+  return sessaoMaisRecenteCompleta(sessoes, null)?.sessao_id ?? null;
+}
+
+/**
+ * A importação MAIS RECENTE e COMPLETA — do mês (`anoMes`) ou de todas (`null`). PR-CONC-ENRIQ-IMPORT-ATOMICA-01: o dono
+ * único da pergunta "qual abre?", lido pela abertura da Mesa (`escolherMelhorSessaoId`) e pela régua do Enriquecer
+ * (`EnriquecerTresPassos`). A incompleta NUNCA é a mais recente.
+ */
+export function sessaoMaisRecenteCompleta(
+  sessoes: SessaoClassificacaoResumo[] | undefined | null,
+  anoMes: string | null,
+): SessaoClassificacaoResumo | null {
+  const base = (sessoes ?? []).filter((s) => sessaoCompleta(s) && (anoMes === null || s.excel_ano_mes === anoMes));
+  if (base.length === 0) return null;
   /* ⚠ RECÊNCIA, NUNCA VOLUME — B-40 item 5, e a troca foi medida.
      A regra anterior ordenava por `exatos + ambiguos`, isto é, por quantidade de
      trabalho pendente, e só desempatava por data. No NJ isso abria a sessão de
@@ -1152,8 +1189,8 @@ export function escolherMelhorSessaoId(sessoes: SessaoClassificacaoResumo[] | un
      atual só diminui com o tempo.
      ⚠ E O TRABALHO PENDENTE NÃO SUMIU: as antigas seguem no seletor, acessíveis.
      O que mudou é que nenhuma delas se impõe sozinha na abertura. */
-  const ordenadas = [...sessoes].sort((a, b) => b.criada_em.localeCompare(a.criada_em));
-  return ordenadas[0]?.sessao_id ?? null;
+  const ordenadas = [...base].sort((a, b) => b.criada_em.localeCompare(a.criada_em));
+  return ordenadas[0] ?? null;
 }
 
 /**
@@ -1178,8 +1215,13 @@ export function sessaoMaisNovaQueAberta(
 ): EnriqSessaoVM | null {
   if (!sessaoAberta) return null;
   const mes = anoMes ?? (sessoes ?? []).find((s) => s.sessao_id === sessaoAberta)?.excel_ano_mes ?? null;
-  const nova = sessoesDoMes(toSessoesVM(sessoes), mes)[0];
+  const nova = maisRecenteDoMes(sessoesDoMes(toSessoesVM(sessoes), mes));
   return nova && nova.id !== sessaoAberta ? nova : null;
+}
+
+/** A primeira COMPLETA da lista já ordenada (`sessoesDoMes`) — o "(mais recente)" do seletor. Incompleta nunca. */
+export function maisRecenteDoMes(doMes: readonly EnriqSessaoVM[]): EnriqSessaoVM | null {
+  return doMes.find((s) => s.completa !== false) ?? null;
 }
 
 export function sessoesDoMes(

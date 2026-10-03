@@ -37,6 +37,11 @@ export interface EnriqSessaoVM {
   criadaEm: string;
   /** Total de linhas da sessão — o número que a confirmação de exclusão mostra. */
   total: number;
+  /** PR-CONC-ENRIQ-IMPORT-ATOMICA-01: a importação chegou inteira? Só a completa é numerada, "mais recente" e trabalhável.
+   *  Opcional para quem monta VM à mão (testes antigos): ausente = completa. */
+  completa?: boolean;
+  /** "incompleta · 400 de 470" (ou "importando · …") quando não está completa; `null` na completa. */
+  marcaIncompleta?: string | null;
 }
 
 // PR-P0-2 — contadores cobrem TODOS os status e somam ao Total; `aplicados` é

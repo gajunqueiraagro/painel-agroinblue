@@ -15,10 +15,12 @@ const linhas: Linha[] = [
   ...Array.from({ length: 303 }, (): Linha => ({ sessao_id: '8d6efeb7', excel_ano_mes: '2026-09', match_status: 'exato', aplicado: false, created_at: '2026-10-01T08:09:11Z' })),
   ...Array.from({ length: 108 }, (): Linha => ({ sessao_id: '8d6efeb7', excel_ano_mes: '2026-08', match_status: 'sem_match', aplicado: false, created_at: '2026-10-01T08:09:00Z' })),
 ];
+/* PR-CONC-ENRIQ-IMPORT-ATOMICA-01 — o registro da importação (a view), com o criado_em e o estado do dono. */
+const REGISTROS = vi.hoisted(() => ({ lista: [] as Array<Record<string, unknown>> }));
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
-    from: () => ({ select: () => ({ eq: () => ({ order: () => ({ range: (de: number, ate: number) =>
-      Promise.resolve({ data: linhas.slice(de, ate + 1), error: null }) }) }) }) }),
+    from: (tabela: string) => ({ select: () => ({ eq: () => ({ order: () => ({ range: (de: number, ate: number) =>
+      Promise.resolve({ data: tabela === 'vw_classificacao_sessoes' ? REGISTROS.lista : linhas.slice(de, ate + 1), error: null }) }) }) }) }),
   },
 }));
 
@@ -36,5 +38,21 @@ describe('useSessoesClassificacao — o mês da importação', () => {
     expect(s?.excel_ano_mes).toBe('2026-09');
     expect(s?.total).toBe(412);
     expect(s?.criada_em).toBe('2026-10-01T08:09:11Z');
+  });
+});
+
+describe('useSessoesClassificacao — o estado vem do dono (PR-CONC-ENRIQ-IMPORT-ATOMICA-01)', () => {
+  it('status, esperadas × recebidas e criado_em da view; a aberta sem linha nenhuma também aparece; o formato antigo fica', async () => {
+    REGISTROS.lista = [
+      { sessao_id: '8d6efeb7', criado_em: '2026-10-01T08:08:41Z', status: 'incompleta', linhas_esperadas: 470, linhas_recebidas: 412 },
+      { sessao_id: 'vazia', criado_em: '2026-10-03T14:00:00Z', status: 'importando', linhas_esperadas: 470, linhas_recebidas: 0 },
+    ];
+    const { result } = renderHook(() => useSessoesClassificacao('nj'), { wrapper: envoltorio });
+    await waitFor(() => expect(result.current.data).toBeDefined());
+    const s = result.current.data?.find((x) => x.sessao_id === '8d6efeb7');
+    expect(s).toMatchObject({ status: 'incompleta', linhas_esperadas: 470, linhas_recebidas: 412,
+      criada_em: '2026-10-01T08:08:41Z', excel_ano_mes: '2026-09', total: 412, exatos: 303 });
+    expect(result.current.data?.find((x) => x.sessao_id === 'vazia')).toMatchObject({ status: 'importando', total: 0 });
+    REGISTROS.lista = [];
   });
 });

@@ -362,10 +362,9 @@ export function useClassificacaoStaging(
              ⚠ O SQLSTATE SEGUE PELO CAMINHO NORMAL: 57014 agora tem categoria própria
              ('tempo') e vira "tente com menos linhas", em vez de "procure o suporte". */
           const causa = normalizarErro(error, 'popularStagingClassificacao');
-          throw new ErroUsuarioSeguro(
-            `${causa.mensagem} Parou no lote que começa na linha ${i + 1} de ${total}; ` +
-            `${acumulado.inseridas} linha(s) já estão no staging e não se perdem.`,
-          );
+          /* PR-CONC-ENRIQ-IMPORT-ATOMICA-01 (D4): o erro LEVA onde parou (`inicio`, o índice da primeira linha do lote
+             que falhou) — é por ele que o "Tentar de novo" reenvia só o que falta, na MESMA sessão. */
+          throw new ErroLotePopulate(causa.mensagem, i, total, acumulado.inseridas);
         }
         const parcial = data as PopulateResult;
         acumulado.total_linhas += parcial?.total_linhas ?? fatia.length;
@@ -831,6 +830,100 @@ export interface ExcluirSessaoResult {
   gravadas?: number;
   apagadas?: number;
   simulado?: boolean;
+  /** PR-CONC-ENRIQ-IMPORT-ATOMICA-01 (D7): a recusa por extenso ("3 blocos e 1 gravação feitos nesta importação — …"). */
+  mensagem?: string;
+  /** Os casamentos manuais feitos nesta importação — não impedem, mas a confirmação diz que se perdem. */
+  resolvidos?: number;
+  blocos?: number;
+}
+
+/**
+ * Um lote do populate falhou — PR-CONC-ENRIQ-IMPORT-ATOMICA-01 (D4).
+ *
+ * ⚠ `inicio` É O ÍNDICE (0-based) DA PRIMEIRA LINHA DO LOTE QUE FALHOU, na lista enviada. Cada chamada do populate é uma
+ *   transação: o lote que falhou não deixou linha nenhuma, e os anteriores ficaram. Reenviar a partir de `inicio`, na
+ *   MESMA sessão, é o retomar — o populate trata repetição (ON CONFLICT … DO NOTHING), provado no teste SQL S3.
+ */
+export class ErroLotePopulate extends ErroUsuarioSeguro {
+  readonly inicio: number;
+  readonly total: number;
+  readonly inseridas: number;
+  readonly causa: string;
+  constructor(causa: string, inicio: number, total: number, inseridas: number) {
+    super(`${causa} Parou no lote que começa na linha ${inicio + 1} de ${total}; ` +
+      `${inseridas} linha(s) já estão no staging e não se perdem.`);
+    this.name = 'ErroLotePopulate';
+    this.inicio = inicio; this.total = total; this.inseridas = inseridas; this.causa = causa;
+  }
+}
+
+/** O estado de uma importação, LIDO do dono (`vw_classificacao_sessoes`) — PR-CONC-ENRIQ-IMPORT-ATOMICA-01. */
+export type StatusSessao = 'importando' | 'completa' | 'incompleta';
+const ehStatusSessao = (v: unknown): v is StatusSessao => v === 'importando' || v === 'completa' || v === 'incompleta';
+
+/** O que `fn_classificacao_sessao_abrir` / `_concluir` devolvem — lido campo a campo, sem cast. */
+export interface EstadoSessaoResult {
+  ok: boolean;
+  status: StatusSessao | null;
+  linhasEsperadas: number | null;
+  linhasRecebidas: number;
+  motivo: string | null;
+  mensagem: string | null;
+}
+function lerEstadoSessao(data: unknown): EstadoSessaoResult {
+  const o: Record<string, unknown> = data !== null && typeof data === 'object' && !Array.isArray(data) ? { ...data } : {};
+  const num = (v: unknown) => (typeof v === 'number' ? v : null);
+  const txt = (v: unknown) => (typeof v === 'string' ? v : null);
+  return {
+    ok: o.ok === true,
+    status: ehStatusSessao(o.status) ? o.status : null,
+    linhasEsperadas: num(o.linhas_esperadas),
+    linhasRecebidas: num(o.linhas_recebidas) ?? 0,
+    motivo: txt(o.motivo),
+    mensagem: txt(o.mensagem),
+  };
+}
+
+/**
+ * Abre a importação ANTES do primeiro lote, dizendo quantas linhas esperar (D2). Idempotente: reabrir o mesmo id não
+ * duplica nem zera; numa incompleta é o retomar; com outro número de linhas o banco recusa ("escolha o mesmo arquivo").
+ */
+export async function abrirSessaoImportacao(p: {
+  sessaoId: string; clienteId: string; linhasEsperadas: number; arquivo: string | null;
+}): Promise<EstadoSessaoResult> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado do repo
+  const { data, error } = await (supabase as any).rpc('fn_classificacao_sessao_abrir', {
+    p_sessao_id: p.sessaoId, p_cliente_id: p.clienteId, p_linhas_esperadas: p.linhasEsperadas, p_arquivo: p.arquivo,
+  });
+  if (error) throw error;
+  return lerEstadoSessao(data);
+}
+
+/** Conclui DEPOIS do último lote (D3): 'completa' só quando as linhas do staging = as esperadas; senão "N de M". */
+export async function concluirSessaoImportacao(sessaoId: string): Promise<EstadoSessaoResult> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado do repo
+  const { data, error } = await (supabase as any).rpc('fn_classificacao_sessao_concluir', { p_sessao_id: sessaoId });
+  if (error) throw error;
+  return lerEstadoSessao(data);
+}
+
+/** As linhas que JÁ estão no staging da sessão — o retomar só reenvia as que faltam. */
+export async function linhasJaNaSessao(sessaoId: string): Promise<Set<number>> {
+  const ja = new Set<number>();
+  const PAGE = 1000;
+  for (let de = 0; ; de += PAGE) {
+    const { data, error } = await supabase
+      .from('financeiro_classificacao_staging')
+      .select('excel_linha_origem')
+      .eq('sessao_id', sessaoId)
+      .order('excel_linha_origem', { ascending: true })
+      .range(de, de + PAGE - 1);
+    if (error) throw error;
+    const lote = data ?? [];
+    for (const r of lote) if (typeof r.excel_linha_origem === 'number') ja.add(r.excel_linha_origem);
+    if (lote.length < PAGE) break;
+  }
+  return ja;
 }
 
 // ── PR-P4: listagem read-only de sessões de classificação (para reabrir/trocar) ──
@@ -842,7 +935,13 @@ export interface SessaoClassificacaoResumo {
   ambiguos: number;
   sem_match: number;
   aplicados: number;
-  criada_em: string;   // max(created_at) da sessão
+  /** PR-CONC-ENRIQ-IMPORT-ATOMICA-01: o `criado_em` da IMPORTAÇÃO (`classificacao_sessoes`); o legado, sem registro, segue
+   *  com o max(created_at) das linhas — que é o que o backfill gravou. */
+  criada_em: string;
+  /** O estado da importação, lido do dono. Ausente = legado sem registro (tratado como completa, a regra do backfill). */
+  status?: StatusSessao;
+  linhas_esperadas?: number | null;
+  linhas_recebidas?: number;
 }
 
 // SOMENTE SELECT: agrega staging por sessão no cliente. Não escreve, não popula, não aplica.
@@ -897,6 +996,34 @@ export function useSessoesClassificacao(clienteId: string | null) {
       for (const [k, cur] of map) {
         const meses = mesesPorSessao.get(k);
         if (meses) cur.excel_ano_mes = mesPredominante(meses);
+      }
+      /* ⚠ A IMPORTAÇÃO TEM DONO — PR-CONC-ENRIQ-IMPORT-ATOMICA-01. O estado (completa/incompleta/importando), as linhas
+         esperadas × recebidas e o `criado_em` vêm de `vw_classificacao_sessoes`, que é quem aplica a regra dos 10 minutos
+         (D5). As contagens por status continuam saindo das linhas, como antes: o formato que a Mesa antiga consome não muda.
+         A importação aberta que ainda não recebeu linha nenhuma também entra (incompleta "0 de M"). Sessão das linhas
+         SEM registro (escrita por uma aba anterior a este PR) fica sem `status` = legado completo, a regra do backfill. */
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- a view nasceu depois do types.ts (o idioma das linhas acima)
+      const { data: dataSessoes, error: errSessoes } = await (supabase as any)
+        .from('vw_classificacao_sessoes')
+        .select('sessao_id, criado_em, status, linhas_esperadas, linhas_recebidas')
+        .eq('cliente_id', clienteId)
+        .order('criado_em', { ascending: true })
+        .range(0, 9999);
+      if (errSessoes) throw errSessoes;
+      const registros: unknown[] = Array.isArray(dataSessoes) ? dataSessoes : [];
+      for (const r of registros) {
+        if (r === null || typeof r !== 'object') continue;
+        const o: Record<string, unknown> = { ...r };
+        if (typeof o.sessao_id !== 'string' || !ehStatusSessao(o.status)) continue;
+        const cur = map.get(o.sessao_id) ?? {
+          sessao_id: o.sessao_id, excel_ano_mes: null,
+          total: 0, exatos: 0, ambiguos: 0, sem_match: 0, aplicados: 0, criada_em: '',
+        };
+        if (typeof o.criado_em === 'string') cur.criada_em = o.criado_em;
+        cur.status = o.status;
+        cur.linhas_esperadas = typeof o.linhas_esperadas === 'number' ? o.linhas_esperadas : null;
+        cur.linhas_recebidas = typeof o.linhas_recebidas === 'number' ? o.linhas_recebidas : cur.total;
+        map.set(o.sessao_id, cur);
       }
       return [...map.values()];
     },

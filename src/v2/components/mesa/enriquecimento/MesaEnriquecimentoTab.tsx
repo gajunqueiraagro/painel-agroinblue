@@ -18,7 +18,7 @@ import {
   motivoReverterBloqueado, bloqueiaPorAgrupamento, rodaSugestoesDoSalvar,
   eixoDaAtividade, culturaSugeridaNoSalvar, patchesAoTrocarAtividade, resumoDesfazerSplit,
   listarContas, filtrarPorConta, resumirGrupos, filtrarPorGrupo, grupoDaLinha,
-  sessoesDoMes, sessaoMaisNovaQueAberta, contaEfetivaNome, parteDeAgrupamento, explicadoPorSiMesmo,
+  sessoesDoMes, sessaoMaisNovaQueAberta, maisRecenteDoMes, contaEfetivaNome, parteDeAgrupamento, explicadoPorSiMesmo,
   type EnriqGrupo,
 } from '@/v2/lib/mesa/enriquecimentoView';
 import { EnriquecimentoLista, type EnriquecimentoListaProps } from './EnriquecimentoLista';
@@ -366,21 +366,24 @@ export function MesaEnriquecimentoTab({
    * banco, que também é quem recusa.
    */
   const [exclusaoPendente, setExclusaoPendente] = useState<
-    { id: string; label: string; linhas: number } | null>(null);
+    { id: string; label: string; linhas: number; resolvidos: number } | null>(null);
+  /* PR-CONC-ENRIQ-IMPORT-ATOMICA-01 (D7): a recusa da exclusão fica ESCRITA no slot do painel, com o motivo do banco
+     ("3 blocos e 1 gravação feitos nesta importação — …"), e não num toast que some (UX-TOAST-01). */
+  const [recusaExclusao, setRecusaExclusao] = useState<string | null>(null);
+  const textoRecusaExclusao = (r: { motivo?: string; mensagem?: string; gravadas?: number }) =>
+    r.mensagem ?? (r.motivo === 'sessao_com_linhas_gravadas'
+      ? `${r.gravadas ?? 0} linha(s) gravada(s) — esta importação não pode ser excluída.`
+      : `Não foi possível excluir: ${r.motivo ?? 'motivo não informado'}.`);
 
   async function pedirExclusao(sv: EnriqSessaoVM) {
     setExclusaoPendente(null);
+    setRecusaExclusao(null);
     try {
       const r = await excluirSessao({ sessao_id: sv.id, simular: true });
-      if (!r.ok) {
-        toast.error(r.motivo === 'sessao_com_linhas_gravadas'
-          ? `${r.gravadas ?? 0} linha(s) gravada(s) — esta importação não pode ser excluída.`
-          : `Não foi possível excluir: ${r.motivo ?? 'motivo não informado'}.`);
-        return;
-      }
-      setExclusaoPendente({ id: sv.id, label: sv.label, linhas: r.linhas ?? sv.total });
+      if (!r.ok) { setRecusaExclusao(textoRecusaExclusao(r)); return; }
+      setExclusaoPendente({ id: sv.id, label: sv.label, linhas: r.linhas ?? sv.total, resolvidos: r.resolvidos ?? 0 });
     } catch (e: unknown) {
-      toast.error(`Não foi possível excluir: ${errMsg(e)}`);
+      setRecusaExclusao(`Não foi possível excluir: ${errMsg(e)}`);
     }
   }
 
@@ -389,25 +392,22 @@ export function MesaEnriquecimentoTab({
     if (!alvo) return;
     try {
       const r = await excluirSessao({ sessao_id: alvo.id, simular: false });
-      if (!r.ok) {
-        toast.error(r.motivo === 'sessao_com_linhas_gravadas'
-          ? `${r.gravadas ?? 0} linha(s) gravada(s) — esta importação não pode ser excluída.`
-          : `Não foi possível excluir: ${r.motivo ?? 'motivo não informado'}.`);
-        return;
-      }
+      if (!r.ok) { setExclusaoPendente(null); setRecusaExclusao(textoRecusaExclusao(r)); return; }
       toast.success(`Importação excluída — ${r.apagadas ?? 0} linha(s).`);
       setExclusaoPendente(null);
       /* ⚠ A ATIVA VIRA A MAIS RECENTE DO MÊS, e não "nenhuma": quem apaga uma importação
          velha quer continuar trabalhando no mês, não voltar à tela vazia. A lista ainda
          não foi reconsultada, então a escolha exclui o id apagado à mão. */
       if (alvo.id === sessaoId) {
-        const proxima = sessoesDoMesVM.find((x) => x.id !== alvo.id) ?? null;
+        /* a próxima é a mais recente COMPLETA que sobrou (o dono do ranking), nunca uma incompleta */
+        const proxima = maisRecenteDoMes(sessoesDoMesVM.filter((x) => x.id !== alvo.id));
         setSessaoId(proxima?.id ?? null);
         setFiltroConta('todas');
         setSelecionadoId(null);
       }
     } catch (e: unknown) {
-      toast.error(`Não foi possível excluir: ${errMsg(e)}`);
+      setExclusaoPendente(null);
+      setRecusaExclusao(`Não foi possível excluir: ${errMsg(e)}`);
     }
   }
   // Conta é a partição de trabalho: contadores, lista e fluxo derivam do staging DA CONTA.
@@ -1512,7 +1512,7 @@ export function MesaEnriquecimentoTab({
   }, [staging, sobrescreverIds]);
 
   async function handleGravarLote() {
-    if (linhasDoLote.length === 0) return;
+    if (linhasDoLote.length === 0 || sessaoBloqueada) return;   // D6: incompleta não grava
     setVerProgresso(true);
     await lote.gravar(linhasDoLote);
   }
@@ -1754,9 +1754,15 @@ export function MesaEnriquecimentoTab({
     }
     return m;
   }, [semParSistema]);
+  /* ⚠ A MESA NÃO TRABALHA EM IMPORTAÇÃO INCOMPLETA — PR-CONC-ENRIQ-IMPORT-ATOMICA-01 (D6). O painel fica sem contas (nem
+     Extrato nem Mesa abrem), o Recasar e a "Mesa · todas as contas" se apagam, e o slot oferece Retomar (com o mesmo
+     arquivo) ou Excluir. Trabalhar em 400 de 470 linhas foi o que deixou bloco e gravação presos numa sessão pela metade. */
+  const sessaoAbertaVM = sessoesVM.find((x) => x.id === sessaoId) ?? null;
+  const sessaoBloqueada = !!sessaoAbertaVM && sessaoAbertaVM.completa === false;
+  const [retomarImportacao, setRetomarImportacao] = useState<{ sessaoId: string; marca: string } | null>(null);
   const linhasPainel = useMemo(
-    () => montarPainelContas(staging, { foraPlanilhaPorConta, contasComOfx, sobrescreverIds }),
-    [staging, foraPlanilhaPorConta, contasComOfx, sobrescreverIds]);
+    () => (sessaoBloqueada ? [] : montarPainelContas(staging, { foraPlanilhaPorConta, contasComOfx, sobrescreverIds })),
+    [sessaoBloqueada, staging, foraPlanilhaPorConta, contasComOfx, sobrescreverIds]);
   const baldePorId = useMemo(
     () => new Map(staging.map((r) => [r.staging_id, baldeDaLinha(r, sobrescreverIds.has(r.staging_id))])),
     [staging, sobrescreverIds]);
@@ -1768,7 +1774,8 @@ export function MesaEnriquecimentoTab({
   const mesCurto = mesDaRegua && anoDaRegua ? `${MESES_CURTOS[mesDaRegua - 1]}/${String(anoDaRegua).slice(2)}` : '—';
 
   /* ── O SELETOR DE SESSÃO — o mesmo menu (com "(mais recente)" e a lixeira), agora no cabeçalho navy do painel ── */
-  const ehMaisRecente = !!sessaoId && sessaoId === sessoesDoMesVM[0]?.id;
+  const maisRecenteId = maisRecenteDoMes(sessoesDoMesVM)?.id ?? null;
+  const ehMaisRecente = !!sessaoId && sessaoId === maisRecenteId;
   const seletorSessao = (
     /* ⚠ `DropdownMenu` DA CASA, NUNCA `<select>` NATIVO (133h item 2): a linha escolhe, o ícone pede a exclusão. */
     <DropdownMenu>
@@ -1790,7 +1797,7 @@ export function MesaEnriquecimentoTab({
           <DropdownMenuItem key={sv.id} className="gap-1"
             onSelect={() => { setSessaoId(sv.id); setFiltroConta('todas'); setSelecionadoId(null); }}>
             <span className="min-w-0 flex-1 truncate" title={sv.label}>{sv.label}</span>
-            {sv.id === sessoesDoMesVM[0]?.id && (
+            {sv.id === maisRecenteId && (
               <span className="shrink-0 whitespace-nowrap text-[10px] text-muted-foreground">(mais recente)</span>
             )}
             <button type="button"
@@ -1807,8 +1814,20 @@ export function MesaEnriquecimentoTab({
 
   /* ── O SLOT DE AVISO DO PAINEL — fixo, 18px: a exclusão pedida, a sessão mais nova e as linhas sem conta ── */
   const avisosPainel: Array<{ id: string; conteudo: React.ReactNode; texto: string; cls: string }> = [];
+  if (recusaExclusao) {
+    avisosPainel.push({ id: 'recusa-exclusao', texto: recusaExclusao, cls: 'text-destructive', conteudo: (
+      <>
+        <span className="min-w-0 overflow-hidden whitespace-nowrap">{recusaExclusao}</span>
+        <button type="button" className="shrink-0 underline" onClick={() => setRecusaExclusao(null)}>ok</button>
+      </>
+    ) });
+  }
   if (exclusaoPendente) {
-    const texto = `${exclusaoPendente.linhas} linhas · nenhuma gravada — excluir ${exclusaoPendente.label}?`;
+    /* D7: os casamentos manuais não impedem, mas não somem calados — a confirmação diz quantos se perdem (só com N > 0). */
+    const perdidos = exclusaoPendente.resolvidos > 0
+      ? ` · ${exclusaoPendente.resolvidos} casamento${exclusaoPendente.resolvidos === 1 ? ' manual feito' : 's manuais feitos'} nesta importação ${exclusaoPendente.resolvidos === 1 ? 'será perdido' : 'serão perdidos'}`
+      : '';
+    const texto = `${exclusaoPendente.linhas} linhas · nenhuma gravada${perdidos} — excluir ${exclusaoPendente.label}?`;
     avisosPainel.push({ id: 'confirmar-exclusao', texto, cls: 'text-amber-800 dark:text-amber-300', conteudo: (
       <>
         <span className="min-w-0 truncate">{texto}</span>
@@ -1818,9 +1837,25 @@ export function MesaEnriquecimentoTab({
       </>
     ) });
   }
+  /* Uma mensagem por vez no slot: com a confirmação ou a recusa da exclusão aberta, o aviso da incompleta sai da frente. */
+  if (sessaoBloqueada && sessaoAbertaVM && !exclusaoPendente && !recusaExclusao) {
+    const texto = `importação ${sessaoAbertaVM.marcaIncompleta ?? 'incompleta'} — a Mesa não trabalha nela ·`;
+    avisosPainel.push({ id: 'aviso-incompleta', texto, cls: 'text-destructive', conteudo: (
+      <>
+        <span className="min-w-0 overflow-hidden whitespace-nowrap">{texto}</span>
+        <button type="button" data-testid="retomar-importacao" className="shrink-0 underline"
+          onClick={() => { setRetomarImportacao({ sessaoId: sessaoAbertaVM.id, marca: sessaoAbertaVM.marcaIncompleta ?? 'incompleta' }); setImportOpen(true); }}>
+          retomar (mesmo arquivo)</button>
+        <button type="button" data-testid="excluir-incompleta" className="shrink-0 underline"
+          onClick={() => { void pedirExclusao(sessaoAbertaVM); }}>excluir</button>
+      </>
+    ) });
+  }
   /* PR-CONC-ENRIQ-ACABAMENTOS-01 (D1): a importação antiga, por extenso e com o link — ANTES do "sem conta". O texto corta
-     na borda (sem "…"); o link não encolhe; a frase inteira está no `title` do slot. */
-  if (sessaoMaisNova) {
+     na borda (sem "…"); o link não encolhe; a frase inteira está no `title` do slot.
+     ⚠ NA INCOMPLETA (D6) o slot é só dela: os avisos de trabalho (antiga, agrupamento, sem conta) falam de uma importação
+     em que não se trabalha, e espremiam o "retomar · excluir" para fora da largura. */
+  if (sessaoMaisNova && !sessaoBloqueada) {
     const texto = `${textoImportacaoAntiga(sessaoMaisNova)} ·`;
     avisosPainel.push({ id: 'aviso-sessao-mais-nova', texto, cls: 'text-amber-700 dark:text-amber-400', conteudo: (
       <>
@@ -1832,12 +1867,12 @@ export function MesaEnriquecimentoTab({
   }
   /* PR-CONC-ENRIQ-AGRUP-2a — N:1 resolvido sem caminho de gravação: fora do "Gravar N", e dito no slot. */
   const nAguarda = linhasPainel.reduce((a, l) => a + l.aguarda, 0);
-  if (nAguarda > 0) {
+  if (nAguarda > 0 && !sessaoBloqueada) {
     const texto = `${nAguarda} linha${nAguarda === 1 ? '' : 's'} aguarda${nAguarda === 1 ? '' : 'm'} agrupamento — a gravação de vários lançamentos numa linha chega no próximo PR.`;
     avisosPainel.push({ id: 'aviso-aguarda-agrupamento', texto, cls: 'text-violet-800 dark:text-violet-300',
       conteudo: <span className="truncate">{texto}</span> });
   }
-  if (linhasSemConta > 0) {
+  if (linhasSemConta > 0 && !sessaoBloqueada) {
     const texto = `${linhasSemConta} linha${linhasSemConta === 1 ? '' : 's'} desta planilha ${linhasSemConta === 1 ? 'ficou' : 'ficaram'} sem conta — reimporte a planilha.`;
     avisosPainel.push({ id: 'aviso-sem-conta', texto, cls: 'text-amber-800 dark:text-amber-300', conteudo: (
       <>
@@ -1852,13 +1887,13 @@ export function MesaEnriquecimentoTab({
   const nTransferencias = transf.carregando ? null
     : paresDaConta.length + transf.estornos.total + transf.faturas.total;
   const menuPainel = [
-    { rotulo: isCasando ? 'Recasando…' : '↻ Recasar', desabilitado: isCasando || !sessaoId,
+    { rotulo: isCasando ? 'Recasando…' : '↻ Recasar', desabilitado: isCasando || !sessaoId || sessaoBloqueada,
       title: 'Procura de novo o lançamento de cada linha, sem reimportar.', onClick: () => { void recasar(); } },
     { rotulo: '⬆ Importar planilha', onClick: () => setImportOpen(true) },
     { rotulo: `Transferências entre contas${nTransferencias === null ? '' : ` (${nTransferencias})`}`,
       onClick: () => setListaAberta('transferencias') },
     { rotulo: `No sistema, fora da planilha (${semParSistema?.length ?? 0})`, onClick: () => setListaAberta('fora') },
-    { rotulo: 'Mesa · todas as contas', desabilitado: rowsNaTela.length === 0,
+    { rotulo: 'Mesa · todas as contas', desabilitado: rowsNaTela.length === 0 || sessaoBloqueada,
       onClick: () => abrirMesa(null, primeiraNaoRevisada?.id ?? null, 'todas') },
     { rotulo: 'Baixar sem par (CSV)', desabilitado: resumo.sem_par.qtd === 0, onClick: baixarSemPar },
   ];
@@ -1885,7 +1920,8 @@ export function MesaEnriquecimentoTab({
           const primeira = rowsNaTela.find((r) => r.contaId === contaId && passaNoFiltroMesa(baldePorId.get(r.id), 'revisar'));
           abrirMesa(contaId, primeira?.id ?? null, 'revisar');
         }}
-        gravarN={linhasDoLote.length}
+        /* D6: em importação incompleta nada se grava — o lote também se apaga (o painel já está sem contas). */
+        gravarN={sessaoBloqueada ? 0 : linhasDoLote.length}
         gravando={lote.gravando}
         gravarRotulo={lote.gravando ? `Gravando… ${lote.progresso.feitas} de ${lote.progresso.total}` : undefined}
         onGravar={() => { void handleGravarLote(); }}
@@ -2041,9 +2077,10 @@ export function MesaEnriquecimentoTab({
 
       <EnriquecimentoImportarDialog
         open={importOpen}
-        onClose={() => setImportOpen(false)}
+        onClose={() => { setImportOpen(false); setRetomarImportacao(null); }}
         clienteId={clienteAtual?.id ?? null}
-        onImportado={(sid) => { setSessaoId(sid); setFiltroConta('todas'); setFiltroGrupo('todas'); setSelecionadoId(null); setImportOpen(false); }}
+        retomar={retomarImportacao}
+        onImportado={(sid) => { setSessaoId(sid); setFiltroConta('todas'); setFiltroGrupo('todas'); setSelecionadoId(null); setImportOpen(false); setRetomarImportacao(null); }}
         /* ⚠ O MÊS É O DA RÉGUA — 133a. A competência das linhas do cliente vai de 10/2025 a
            09/2026; o mês que se está conciliando é o que a tela mostra, e é contra ele que
            o casador procura lançamento. Sem a régua, cai no mês da sessão. */

@@ -33,7 +33,7 @@ import { NovoFornecedorDialog } from '@/components/financeiro-v2/NovoFornecedorD
 import { tipoPorContaPlano } from '@/v2/lib/importLanc/importLancamentosView';
 import { useImportarClassificacao } from '@/v2/hooks/useImportarClassificacao';
 import { useClassificacaoStaging, useSessoesClassificacao } from '@/v2/hooks/useClassificacaoStaging';
-import { resumirGrupos } from '@/v2/lib/mesa/enriquecimentoView';
+import { resumirGrupos, sessaoMaisRecenteCompleta } from '@/v2/lib/mesa/enriquecimentoView';
 import { classificarConta } from '@/v2/lib/mesa/resolverConta';
 import { EnriquecerPasso1DePara } from './EnriquecerPasso1DePara';
 import { MesaEnriquecimentoTab } from './MesaEnriquecimentoTab';
@@ -92,11 +92,9 @@ export function EnriquecerTresPassos({ ano, mes, clienteNome, contaNome, onVerNo
    * importada colocaria a tela de agosto mostrando o arquivo de maio, que foi exatamente
    * o defeito que o B-40 item 5 pagou no seletor da Mesa.
    */
-  const sessaoDaRegua = useMemo(() => {
-    const doMes = (sessoes ?? []).filter((s) => s.excel_ano_mes === anoMesRegua);
-    if (doMes.length === 0) return null;
-    return [...doMes].sort((a, b) => b.criada_em.localeCompare(a.criada_em))[0];
-  }, [sessoes, anoMesRegua]);
+  /* PR-CONC-ENRIQ-IMPORT-ATOMICA-01: sem regra própria — o dono (`sessaoMaisRecenteCompleta`) diz qual, e a incompleta
+     nunca é ela. */
+  const sessaoDaRegua = useMemo(() => sessaoMaisRecenteCompleta(sessoes, anoMesRegua), [sessoes, anoMesRegua]);
 
   useEffect(() => {
     if (escolheuPasso.current) return;
@@ -156,9 +154,13 @@ export function EnriquecerTresPassos({ ano, mes, clienteNome, contaNome, onVerNo
    * (a RPC de populate acumula sobre a mesma sessão — conferido: zero DELETE no corpo dela).
    */
   const [preparando, setPreparando] = useState(false);
+  /* PR-CONC-ENRIQ-IMPORT-ATOMICA-01 (D4): a recusa de abrir a importação e a falha de lote ficam ESCRITAS ao lado do
+     controle, com o "Tentar de novo" (UX-TOAST-01) — não num toast que some. */
+  const [erroImportar, setErroImportar] = useState<string | null>(null);
   async function irParaRevisao() {
     if (!clienteId) return;
     setPreparando(true);
+    setErroImportar(null);
     try {
       if (sessaoId && !imp.lote) {
         await casarSessao({ sessao_id: sessaoId, ano_mes: anoMesRegua });
@@ -173,7 +175,13 @@ export function EnriquecerTresPassos({ ano, mes, clienteNome, contaNome, onVerNo
          `popular` lia o mapa desta renderização, ainda vazio — a planilha inteira ia sem conta e o motor
          pulava tudo (NJ, set/26: 483 de 509). A memória das contas (a mesma do diálogo da Mesa) entra
          junto, e o mapa se monta dentro do `popular`. */
-      const res = await imp.popular({ deParaConta: dePara?.conta, contasMemoria: contasResolviveis });
+      let res: Awaited<ReturnType<typeof imp.popular>>;
+      try {
+        res = await imp.popular({ deParaConta: dePara?.conta, contasMemoria: contasResolviveis });
+      } catch (e: unknown) {
+        setErroImportar(e instanceof Error ? e.message : String(e));
+        return;
+      }
       if (!res) return;
       const r = await casarSessao({ sessao_id: res.sessaoId, ano_mes: anoMesRegua });
       toast.success(
@@ -297,6 +305,17 @@ export function EnriquecerTresPassos({ ano, mes, clienteNome, contaNome, onVerNo
             )}
             {(lendo || imp.parsing) && <span className="text-[10px] text-muted-foreground">Lendo a planilha…</span>}
             {erro && <span className="text-[10px] text-destructive">{erro}</span>}
+            {(imp.textoFalha ?? erroImportar) && (
+              <span data-testid="falha-importacao" className="text-[10px] text-destructive" title={imp.textoFalha ?? erroImportar ?? undefined}>
+                {imp.textoFalha ?? erroImportar}
+              </span>
+            )}
+            {imp.falha && (
+              <Button variant="outline" className="h-7 text-[10px]" disabled={preparando || imp.isPopulating}
+                data-testid="tentar-de-novo" onClick={() => { void irParaRevisao(); }}>
+                Tentar de novo
+              </Button>
+            )}
             {imp.isPopulating && imp.progresso && (
               <span className="text-[10px] text-muted-foreground tabular-nums">
                 Preparando {imp.progresso.feitas} de {imp.progresso.total}…

@@ -140,7 +140,9 @@ describe('D1 — o aviso nos três lugares', () => {
     const j = src.indexOf("id: 'aviso-sem-conta'");
     expect(i).toBeGreaterThan(0);
     expect(j).toBeGreaterThan(i);
-    const ini = src.lastIndexOf('if (sessaoMaisNova) {', i);
+    /* PR-CONC-ENRIQ-IMPORT-ATOMICA-01: na importação incompleta o slot é só dela — a condição ganhou `&& !sessaoBloqueada` */
+    const ini = src.lastIndexOf('if (sessaoMaisNova && !sessaoBloqueada) {', i);
+    expect(ini).toBeGreaterThan(0);
     const bloco = src.slice(ini, src.indexOf('\n  }\n', ini));
     expect(bloco).toMatch(/textoImportacaoAntiga\(sessaoMaisNova\)/);
     expect(bloco).toMatch(/onClick=\{\(\) => \{ setSessaoId\(sessaoMaisNova\.id\);/);

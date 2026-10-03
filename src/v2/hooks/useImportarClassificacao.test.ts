@@ -29,6 +29,12 @@ vi.mock('@/v2/hooks/useClassificacaoStaging', () => ({
     },
     isPopulating: false,
   }),
+  /* PR-CONC-ENRIQ-IMPORT-ATOMICA-01: a importação abre antes e conclui depois (o contrato novo; o fluxo inteiro, com
+     falha de lote, está em `importacaoAtomica.test.tsx`). */
+  abrirSessaoImportacao: async () => ({ ok: true, status: 'importando', linhasEsperadas: 4, linhasRecebidas: 0, motivo: null, mensagem: null }),
+  concluirSessaoImportacao: async () => ({ ok: true, status: 'completa', linhasEsperadas: 4, linhasRecebidas: 4, motivo: null, mensagem: null }),
+  linhasJaNaSessao: async () => new Set<number>(),
+  ErroLotePopulate: class extends Error {},
 }));
 vi.mock('@tanstack/react-query', () => ({ useQueryClient: () => ({ invalidateQueries: () => undefined }) }));
 

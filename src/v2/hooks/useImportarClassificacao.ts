@@ -14,7 +14,10 @@ import {
   type ClassificacaoParseResult,
   type ClassificacaoExcelRow,
 } from '@/v2/lib/excelPreview/parserClassificacao';
-import { useClassificacaoStaging } from '@/v2/hooks/useClassificacaoStaging';
+import {
+  useClassificacaoStaging, ErroLotePopulate, abrirSessaoImportacao, concluirSessaoImportacao, linhasJaNaSessao,
+} from '@/v2/hooks/useClassificacaoStaging';
+import { ErroUsuarioSeguro } from '@/lib/erroOperacional';
 import { resolverContaPorTexto, type ContaResolvivel } from '@/v2/lib/mesa/resolverConta';
 
 export type ContaMapItem = { textoExcel: string; contaId: string | null; ignorar?: boolean };
@@ -43,6 +46,25 @@ export interface ImportarPopularResult {
   sessaoId: string;
   inseridas: number;
   counts: Record<string, number>;
+}
+
+/**
+ * Uma importação que parou no meio — PR-CONC-ENRIQ-IMPORT-ATOMICA-01 (D4).
+ * `inicio` é o índice da primeira linha que NÃO entrou (a do lote que falhou); `rows` são as linhas como foram montadas
+ * no primeiro envio (com as contas do de-para), para o reenvio levar exatamente o mesmo conteúdo.
+ */
+export interface FalhaImportacao {
+  sessaoId: string;
+  rows: ClassificacaoRowEnviada[];
+  inicio: number;
+  total: number;
+  causa: string;
+}
+type ClassificacaoRowEnviada = ClassificacaoExcelRow & { conta_origem_id: string | null; conta_destino_id: string | null };
+
+/** "linha 401 de 470 · o que falhou" — a frase ao lado do "Tentar de novo" (D4). */
+export function textoDaFalha(f: Pick<FalhaImportacao, 'inicio' | 'total' | 'causa'>): string {
+  return `linha ${f.inicio + 1} de ${f.total} · ${f.causa}`;
 }
 
 /** A resposta do operador para um texto de conta no de-para do passo 1 (`DeParaItem` do importador). */
@@ -101,6 +123,8 @@ export function useImportarClassificacao(clienteId: string | null | undefined) {
   const [parsing, setParsing] = useState(false);
   const [contaMap, setContaMap] = useState<Record<string, ContaMapItem>>({});
   const [origemConta, setOrigemConta] = useState<Record<string, OrigemContaResolvida>>({});
+  /** A importação que parou no meio (D4): a sessão, as linhas EXATAS que se enviaram e de onde recomeçar. */
+  const [falha, setFalha] = useState<FalhaImportacao | null>(null);
 
   // Contas distintas do lote (ignora vazio e '-') — idêntico à Mesa antiga.
   const contasDistintas = useMemo<ContaDistinta[]>(() => {
@@ -145,6 +169,7 @@ export function useImportarClassificacao(clienteId: string | null | undefined) {
     setErrosParser([]);
     setContaMap({});
     setOrigemConta({});
+    setFalha(null);
   }
 
   /**
@@ -219,40 +244,91 @@ export function useImportarClassificacao(clienteId: string | null | undefined) {
   async function popular(opcoes?: {
     deParaConta?: Record<string, RespostaContaDePara>;
     contasMemoria?: readonly ContaResolvivel[];
+    /** RETOMAR uma importação incompleta (D6): a MESMA sessão, com o mesmo arquivo; só as linhas que faltam são enviadas. */
+    sessaoRetomar?: string;
   }): Promise<ImportarPopularResult | null> {
     if (!lote || !clienteId) return null;
-    const novaSessao = crypto.randomUUID();
-    const mapa = mapaContasDoGesto(contasDistintas, contaMap, opcoes?.deParaConta, opcoes?.contasMemoria);
-    // Enriquecer cada row com o UUID resolvido no DE/PARA (idêntico à Mesa antiga);
-    // COALESCE no back resolve o restante via fn_classificacao_resolver_conta.
-    const rows = lote.rows.map((r) => {
-      const o = r.conta_origem?.trim();
-      const d = r.conta_destino?.trim();
-      const io = o ? mapa[o] : undefined;
-      const id = d ? mapa[d] : undefined;
-      return {
-        ...r,
-        conta_origem_id: io && !io.ignorar ? io.contaId : null,
-        conta_destino_id: id && !id.ignorar ? id.contaId : null,
-      };
-    });
-    const res = await populate({
-      sessao_id: novaSessao, rows,
-      /* O botão fica em "Populando…" por vários segundos num arquivo de 500 linhas; sem
-         contagem, o operador não distingue "trabalhando" de "travado" — e foi assim que a
-         falha silenciosa passou por homologação como "o botão não faz nada". */
-      onProgresso: (feitas, total) => setProgresso({ feitas, total }),
-    });
+    /* ⚠ A SESSÃO NÃO MUDA NO "TENTAR DE NOVO" — PR-CONC-ENRIQ-IMPORT-ATOMICA-01 (D4). Antes cada clique gerava um uuid
+       novo e o NJ ficou com quatro importações paradas em 400 de 470. Com uma falha guardada, o gesto seguinte REENVIA a
+       partir do lote que falhou, na sessão que já existe; arquivo novo (`reset`) é que zera a falha. */
+    const anterior = falha;
+    const sessao = opcoes?.sessaoRetomar ?? anterior?.sessaoId ?? crypto.randomUUID();
+    const rows = anterior && anterior.sessaoId === sessao ? anterior.rows : (() => {
+      const mapa = mapaContasDoGesto(contasDistintas, contaMap, opcoes?.deParaConta, opcoes?.contasMemoria);
+      // Enriquecer cada row com o UUID resolvido no DE/PARA (idêntico à Mesa antiga);
+      // COALESCE no back resolve o restante via fn_classificacao_resolver_conta.
+      return lote.rows.map((r) => {
+        const o = r.conta_origem?.trim();
+        const d = r.conta_destino?.trim();
+        const io = o ? mapa[o] : undefined;
+        const id = d ? mapa[d] : undefined;
+        return {
+          ...r,
+          conta_origem_id: io && !io.ignorar ? io.contaId : null,
+          conta_destino_id: id && !id.ignorar ? id.contaId : null,
+        };
+      });
+    })();
+    const esperadas = new Set(rows.map((r) => r.linha)).size;
+
+    /* D2 — o banco sabe quantas linhas esperar ANTES do primeiro lote. Reabrir é idempotente; com outro número de linhas
+       ele recusa ("escolha o mesmo arquivo") e a recusa vai escrita onde o erro aparece, não em toast. */
+    const aberta = await abrirSessaoImportacao({ sessaoId: sessao, clienteId, linhasEsperadas: esperadas, arquivo: arquivo?.name ?? null });
+    if (!aberta.ok) {
+      setFalha(null);
+      throw new ErroUsuarioSeguro(aberta.mensagem ?? 'Não foi possível abrir a importação.');
+    }
+
+    /* O que enviar: na falha guardada, do lote que falhou em diante; no retomar de uma incompleta, só as linhas que ainda
+       não estão no staging (o populate repetiria sem mexer em nada, mas não há por que reenviar o que já entrou). */
+    let aEnviar = rows;
+    if (anterior && anterior.sessaoId === sessao) aEnviar = rows.slice(anterior.inicio);
+    else if (opcoes?.sessaoRetomar) {
+      const ja = await linhasJaNaSessao(sessao);
+      aEnviar = rows.filter((r) => !ja.has(r.linha));
+    }
+    const deslocamento = rows.length - aEnviar.length;
+
+    let res: Awaited<ReturnType<typeof populate>> = { sessao_id: sessao, total_linhas: 0, inseridas: 0, counts_por_status: {} };
+    if (aEnviar.length > 0) {
+      try {
+        res = await populate({
+          sessao_id: sessao, rows: aEnviar,
+          /* O botão fica em "Populando…" por vários segundos num arquivo de 500 linhas; sem
+             contagem, o operador não distingue "trabalhando" de "travado" — e foi assim que a
+             falha silenciosa passou por homologação como "o botão não faz nada". */
+          onProgresso: (feitas) => setProgresso({ feitas: deslocamento + feitas, total: rows.length }),
+        });
+      } catch (e: unknown) {
+        setProgresso(null);
+        qc.invalidateQueries({ queryKey: ['classificacao-sessoes', clienteId] });
+        if (e instanceof ErroLotePopulate) {
+          const inicio = deslocamento + e.inicio;
+          setFalha({ sessaoId: sessao, rows, inicio, total: rows.length, causa: e.causa });
+        }
+        throw e;
+      }
+    }
     setProgresso(null);
-    // A nova sessão precisa aparecer no seletor da Mesa (a staging já é invalidada
-    // pelo onSuccess de populate; aqui invalidamos a LISTA de sessões).
+
+    /* D3 — só o banco diz que chegou tudo. Incompleta guarda a falha (o "Tentar de novo" reenvia o que falta). */
+    const fim = await concluirSessaoImportacao(sessao);
     qc.invalidateQueries({ queryKey: ['classificacao-sessoes', clienteId] });
-    return { sessaoId: novaSessao, inseridas: res.inseridas, counts: res.counts_por_status ?? {} };
+    if (fim.status !== 'completa') {
+      const faltam = await linhasJaNaSessao(sessao);
+      const inicio = Math.max(0, rows.findIndex((r) => !faltam.has(r.linha)));
+      const causa = fim.mensagem ?? `${fim.linhasRecebidas} de ${fim.linhasEsperadas ?? esperadas} linhas chegaram.`;
+      setFalha({ sessaoId: sessao, rows, inicio, total: rows.length, causa });
+      throw new ErroUsuarioSeguro(causa);
+    }
+    setFalha(null);
+    return { sessaoId: sessao, inseridas: res.inseridas, counts: res.counts_por_status ?? {} };
   }
 
   return {
     arquivo, lote, errosParser, parsing,
     contasDistintas, todasResolvidasOuIgnoradas, contaMap, origemConta,
     selecionarArquivo, resolverConta, preResolverPelaMemoria, popular, isPopulating, progresso, reset,
+    falha, textoFalha: falha ? textoDaFalha(falha) : null,
   };
 }

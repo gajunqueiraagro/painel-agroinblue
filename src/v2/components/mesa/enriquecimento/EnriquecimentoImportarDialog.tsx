@@ -27,9 +27,14 @@ export interface EnriquecimentoImportarDialogProps {
   onImportado: (sessaoId: string) => void;
   /** O mês da régua da tela, 'YYYY-MM' — é ele que o casador usa, não o da planilha. */
   anoMes: string;
+  /**
+   * RETOMAR uma importação incompleta (PR-CONC-ENRIQ-IMPORT-ATOMICA-01, D6): o id e a marca ("incompleta · 400 de 470").
+   * O operador escolhe o MESMO arquivo; o banco recusa outro com número de linhas diferente, e só o que falta é enviado.
+   */
+  retomar?: { sessaoId: string; marca: string } | null;
 }
 
-export function EnriquecimentoImportarDialog({ open, onClose, clienteId, onImportado, anoMes }: EnriquecimentoImportarDialogProps) {
+export function EnriquecimentoImportarDialog({ open, onClose, clienteId, onImportado, anoMes, retomar = null }: EnriquecimentoImportarDialogProps) {
   const hookFin = useFinanceiroV2();
   const imp = useImportarClassificacao(clienteId);
   /* ⚠ O CASADOR RODA DEPOIS DE TODAS AS FATIAS, uma vez, sobre a sessão inteira: ele
@@ -114,9 +119,19 @@ export function EnriquecimentoImportarDialog({ open, onClose, clienteId, onImpor
     }
   }
 
+  /* A recusa de abrir e a falha de lote ficam escritas no rodapé, ao lado do botão (UX-TOAST-01); o botão vira
+     "Tentar de novo" e reenvia a partir do lote que falhou, na mesma sessão (D4). */
+  const [erroImportar, setErroImportar] = useState<string | null>(null);
   async function handlePopular() {
+    setErroImportar(null);
+    let res: Awaited<ReturnType<typeof imp.popular>>;
     try {
-      const res = await imp.popular();
+      res = await imp.popular(retomar ? { sessaoRetomar: retomar.sessaoId } : undefined);
+    } catch (e: unknown) {
+      setErroImportar(e instanceof Error ? e.message : String(e));
+      return;
+    }
+    try {
       if (!res) return;
       /* ⚠ O TOAST TÉCNICO SAIU — [ENRIQUECER-MOTOR-01] (133a). "Staging populada (492
          linhas). ambiguo: 26 · sem_match: 590" é o vocabulário do banco despejado na tela:
@@ -146,9 +161,11 @@ export function EnriquecimentoImportarDialog({ open, onClose, clienteId, onImpor
           botão. Aqui só a lista de cards rola; cabeçalho e rodapé ficam. */}
       <DialogContent className="flex h-[560px] max-h-[92vh] w-[720px] max-w-[96vw] flex-col gap-0 overflow-hidden bg-muted/40 p-0">
         <DialogHeader className="shrink-0 space-y-0.5 border-b bg-card px-3 py-2">
-          <DialogTitle className="text-[13px] font-medium">Importar Excel de classificação</DialogTitle>
+          <DialogTitle className="text-[13px] font-medium">
+            {retomar ? 'Retomar importação incompleta' : 'Importar Excel de classificação'}
+          </DialogTitle>
           <p className="text-[11px] text-muted-foreground">
-            {lote
+            {retomar && !lote ? `${retomar.marca} — escolha o MESMO arquivo; só as linhas que faltam são enviadas.` : lote
               ? <>{lote.linhasValidas} válidas · {lote.linhasComErro} rejeitadas{pendentes > 0 ? ` · ${pendentes} conta(s) a mapear` : ''}</>
               : 'Escolha a planilha do mês.'}
           </p>
@@ -256,7 +273,12 @@ export function EnriquecimentoImportarDialog({ open, onClose, clienteId, onImpor
         </div>
 
         <div className="flex shrink-0 items-center justify-end gap-2 border-t bg-card px-3 py-2">
-          {pendentes > 0 && (
+          {(imp.textoFalha ?? erroImportar) ? (
+            <span data-testid="falha-importacao" className="mr-auto max-h-[26px] min-w-0 overflow-hidden text-[10px] leading-[13px] text-destructive"
+              title={imp.textoFalha ?? erroImportar ?? undefined}>
+              {imp.textoFalha ?? erroImportar}
+            </span>
+          ) : pendentes > 0 && (
             /* O botão desabilitado diz por quê, ao lado, em 10px — e é a MESMA frase do
                `title`, para não haver duas explicações da mesma trava. */
             <span className="mr-auto text-[10px] text-muted-foreground">
@@ -268,7 +290,7 @@ export function EnriquecimentoImportarDialog({ open, onClose, clienteId, onImpor
             title={pendentes > 0 ? `${pendentes} conta(s) sem resposta — escolha a conta ou marque "ignorar".` : undefined}>
             {imp.isPopulating
               ? (imp.progresso ? `Populando… ${imp.progresso.feitas}/${imp.progresso.total}` : 'Populando…')
-              : `Popular ${linhasAPopular} linhas`}
+              : imp.falha ? 'Tentar de novo' : `Popular ${linhasAPopular} linhas`}
           </Button>
         </div>
       </DialogContent>
