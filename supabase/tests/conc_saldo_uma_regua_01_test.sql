@@ -139,7 +139,8 @@ begin
   if exists (select 1 from jsonb_array_elements(v_dias) x where x->>'data' = '2031-01-02') then raise exception 'parcial virou diferenca'; end if;
 
   -- ── p_conta_ids NULL = todas as contas do cliente ──
-  select count(*) into v_n from fn_conciliacao_resumo_mes(c_cli, '2031-01', null);
+  -- PR-CONC-SALDO-UMA-REGUA-01b: o resumo passou a trazer os subtotais e o total depois das contas — contam-se as de nivel 'conta'
+  select count(*) into v_n from fn_conciliacao_resumo_mes(c_cli, '2031-01', null) f where f.nivel = 'conta';
   if v_n <> (select count(*) from financeiro_contas_bancarias where cliente_id = c_cli) then raise exception 'todas: % linhas', v_n; end if;
   v_out := v_out || format('todas = %s contas; ', v_n);
 

@@ -160,9 +160,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 03/10/2026 (PR-CONC-SALDO-UMA-REGUA-01, +9 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
-  PR-CONC-ENRIQ-IMPORT-ATOMICA-01, +10 em `src/v2/lib/mesa/importacaoAtomica.test.tsx` e +1 em
-  `src/v2/hooks/useSessoesClassificacao.test.tsx`): 3064
+  Baseline em 03/10/2026 (PR-CONC-SALDO-UMA-REGUA-01b, +13 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
+  PR-CONC-SALDO-UMA-REGUA-01, +9 no mesmo arquivo): 3077
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -270,7 +269,8 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   (`montarMesa(..., { ancoraN1: 'lancamento' })` em `extratoDaPlanilha.ts`: o "Desmembrar" depende do N:1 consumir as linhas)
   — levar a' ancora do extrato e' PR proprio; (b) o "PR B" do CONC-CAIXA-PONTA-01 (resumo da Conciliacao, aba Sistema, painel
   do mes) continua aberto — so' a Conferencia e a Evolucao passaram a fechar como o caixa [o DONO ja' existe desde o
-  PR-CONC-SALDO-UMA-REGUA-01: `fn_conciliacao_resumo_mes`; a troca das telas e' o PR 02 e o refresh sem F5 o PR 03]; (c) DIVIDAS DE DADO, sem corrigir:
+  PR-CONC-SALDO-UMA-REGUA-01: `fn_conciliacao_resumo_mes`, completo no 01b; a troca das telas e' o PR 02 e o refresh sem F5 o PR 03;
+  LOGO DEPOIS DO PR 02, o hotfix de seguranca de `fn_extratos_espelhados` (SECURITY DEFINER sem guarda de tenant)]; (c) DIVIDAS DE DADO, sem corrigir:
   SOBRE-APLICADOS (aplicado nos extratos da conta > valor) Vera Itau Personalite mai/26 77711d94 (2 x 360 num de 360; o gemeo
   d88ea17e sem par), NJ Itau BBA mar/26 e3e36029 (2 x 150.000 num de 150.000), Santa Rita BB jun/26 eabe167e (375.000 num de
   215.000; a outra metade "Venda 032 Novilhas" 160.000 sem par); SUB-APLICADOS (realizado com menos aplicado que o valor) Santa
@@ -1120,7 +1120,59 @@ docs/historico/frentes-ate-2026-09-29.md.)
     mai/26 (360), NJ Itau BBA mar/26 (150.000); (i) so' (timing dentro do mes, o saldo fecha) — Santa Rita Sicredi abr/26 (05 x 06,
     ±530.194,90) e Santa Rita BB jul/26 (14 x 15, ±124.305,93). E passa a 'conciliado': NJ Sicredi Lavoura set/26 (o Emerson).
   ⚠ `fn_extratos_espelhados` e' SECURITY DEFINER SEM guarda de tenant (le' como dono); a pontas e o resumo tem `tenant_ok` —
-    conferir numa frente de seguranca.
+    NA FILA: hotfix de seguranca logo depois do PR 02 (decisao do Gabriel, 03/10).
+- ⚠ O RESUMO FICOU COMPLETO — A TELA SO' RENDERIZA (PR-CONC-SALDO-UMA-REGUA-01b, 03/10, migration 20261027191700, ⚠ registrada
+  como 20261003163918; ledger = arquivo, md5 202fe32c…). `fn_conciliacao_resumo_mes` devolve, nesta ordem, as linhas de CONTA
+  (`nivel` 'conta', na ordem de `ordem_exibicao`), um SUBTOTAL por tipo ('tipo', `tipo_conta` = a chave de `grupoDaConta`:
+  cc|inv|cartao|permuta|caixa|outro, rotulo em `conta_nome`) e o TOTAL ('total', `conta_nome` 'Total'). As 19 colunas de antes
+  das linhas de conta sao IDENTICAS (md5: 69/69 conta-meses com uma conta, 27 cliente-meses / 407 contas com todas), e as novas
+  vem NO FIM: `nivel, tipo_conta, entradas_terceiros, entradas_transferencias, saidas_terceiros, saidas_transferencias,
+  saldo_inicial_origem, posicao, dias, linhas_sistema, sem_conta`.
+  · ABERTURA: as MESMAS pecas de entradas/saidas, transferencia = tipo 3- nas DUAS grafias (`isTransferenciaTipo`); as partes
+    somam o total no cru (69/69) e arredondadas (69/69).
+  · AGREGADOS: valores = soma das linhas de conta FORA as internas (o saldo delas ja' esta' na conta-mae); saldo que falta numa
+    conta e' ignorado e o agregado so' e' NULO quando nenhuma o tem. STATUS (decisao do Gabriel, 03/10, migration 20261027191800,
+    ⚠ registrada como 20261003170013, ledger = arquivo, md5 d320712e…): sobre TODAS as contas, COM OU SEM EXTRATO — qualquer conta
+    'nao_conciliado' (a sem extrato pela regua de hoje inclusive) faz o agregado 'nao_conciliado' com `[{motivo:'contas_nao_conciliadas',
+    qtde, contas:[{conta_id, conta_nome, status, motivos}]}]`; 'pendente' NAO derruba, e o agregado diz quantas sao
+    (`{motivo:'contas_pendentes', qtde}`, informativo); nenhuma conciliada e nenhuma divergente = 'pendente'; senao 'conciliado'.
+    Medido em 28 cliente-meses: 0 total conciliado com conta divergente (com ou sem extrato), 0 nao_conciliado sem conta
+    divergente, pendentes contados certo; os 4 do 01b (Vera jan–mar/26 Conta Fazenda −0,03; NJ set/26 Visa Infinite −6.470,73)
+    passaram a 'nao_conciliado'. ⚠ 'parcial' NAO EXISTE MAIS (o selo de hoje o mostra em 2 cliente-meses: Santa Rita mai/25 e
+    Agnaldo jun/21; no dono os dois ficam 'nao_conciliado', pela conta sem extrato que diverge). `sem_conta {qtde, entradas,
+    saidas}` so' no total e so' com `p_conta_ids` NULO; com qtde > 0 vira o motivo `lancamentos_sem_conta`, que INFORMA e nao
+    muda o status.
+  · `saldo_inicial_origem` 'informado' (ha' a linha do mes) | 'herdado' (saldo final do mes anterior) | 'ausente' — a regra de
+    `perContaSaldos`, da conta sozinha; NULO nos agregados.
+  · `posicao` so' com `saldo_extrato_data` ANTES do fim do mes: `{data, saldo_sistema_na_data, diferenca_na_data, realizados_apos
+    {qtde, valor}}`; a diferenca e o status do MES continuam no fim do mes. Os 5 do proto (Vera 3 e Agnaldo 2, set/26, todos sem
+    extrato) batem com o aviso de hoje (11/1/0/0/0 realizados apos).
+  · Com UMA conta (`p_conta_ids` de um elemento, ou o cliente com uma so'): `dias` [{data, banco, sistema, diferenca, motivos,
+    banco_acum, sistema_acum, saldo_banco, saldo_sistema}] (os dias com movimento, os dias da mesa; acumulados do cru) e
+    `linhas_sistema` [{tipo 'vinculo'|'sem_par'|'resto_sub_aplicado', data (a do caixa: o extrato no vinculo), valor CRU com o
+    sinal, lancamento_id, extrato_id, extrato_valor, transferencia, parcial + falta (do dono das pontas), sobre_aplicado,
+    descricao, fornecedor, subcentro, tipo_operacao, status_transacao, data_pagamento, valor_lancamento, numero_documento}] —
+    a interna sem extrato fica FORA; saldo inicial + Σ valor = saldo_sistema no centavo (69/69, os cinco do caixa inclusive).
+    Pior conta-mes: 134 KB (NJ BB mai/26, 263 linhas), 163 ms.
+  · `fn_conciliacao_status_ano(p_cliente_id, p_ano)` → (ano_mes, nivel 'conta'|'total', conta_id, conta_nome, tipo_conta,
+    status, motivos): so' as contas com extrato ou lancamento no mes, pela MESMA interna (`_fn_conciliacao_resumo`, so'
+    service_role, que e' o corpo do resumo). Para o total ser o do resumo, a interna recebe tambem a conta com SALDO INFORMADO no
+    mes; as demais sao 'pendente' por construcao e entram so' na contagem `contas_pendentes`. Igual a 12 resumos nos 4 clientes
+    (status e motivos). A interna pula o helper da conta SEM extrato e SEM lancamento no mes (o dia dela e' o do helper sobre um
+    periodo vazio, uma vez por chamada; saida identica em 876 linhas de conta e 336 agregados). Tempo, 20 chamadas na mesma
+    sessao, autenticado: NJ 1,80–1,93 s (2 de 40 acima de 2 s: 2.138 e 2.016 ms), Santa Rita ≤ 1.752, Agnaldo ≤ 798, Vera ≤ 507 —
+    98 de 100 abaixo de 2 s. ⚠ O NJ ESTA' NO LIMITE: proxima conta ou proximo ano mais cheio pede medir de novo.
+  · D1: indice `idx_fin_lanc_v2_cliente_destino` (cliente_id, conta_destino_id), SEM predicado (o parcial `cancelado IS NOT TRUE`
+    nao serve a `cancelado = false`), e o filtro de conta da pontas em DUAS buscas — saida identica (69/69, com e sem detalhe);
+    conta vazia 26 -> 2,3 ms, resumo de todas as contas do NJ ~590 -> ~230 ms; escrita: insert sem diferenca medivel, update de
+    todas as linhas +8%, 1,2 MB.
+  ⚠ DIVIDA (D8): duplicatas e pendencias gerenciais (`detectarDuplicatasCrossOrigin`, `derivarPendenciasGerenciais`) ficam no
+    FRONT, fora do dono.
+  ⚠ DIVIDA: o D6 (saldo inicial + linhas = saldo_sistema) NAO foi provado em Agnaldo Bradesco (186a093b) jul/26 — o conta-mes
+    nao estava no conjunto dos 69. E `'3-Transferência'` NO SINGULAR (6 lancamentos vivos, todos com destino) e' INVISIVEL para a
+    ponta de DESTINO na pontas (o predicado so' le' o plural e o sinal −1 nao entra pelo destino) — regra anterior a este PR.
+  md5: pontas ce53914e…, `_fn_conciliacao_dias_conta` b194103a…, `_fn_conciliacao_resumo` d8463a56… (d364e139… no 01b), resumo
+  25aa2ac4…, status_ano b31bf6ac… (d27b8623… no 01b).
 - ⚠ CAIXA DO SISTEMA = UMA REGRA NO BANCO (CONC-CAIXA-PONTA-01, migration 20261027185500, ledger 20261001141213):
   `fn_caixa_sistema_pontas(cliente, conta, de, ate)` devolve uma linha por PONTA (lancamento x conta, sinal da direcao) e
   data. Parcial (programado/agendado com 0 < aplicado < valor): o aplicado na data de cada extrato; realizado cujo aplicado

@@ -2,7 +2,8 @@
 -- `supabase db query --linked -f supabase/tests/conc_caixa_pontas_plano_hotfix_test.sql`
 --
 -- P1 o proconfig de `fn_caixa_sistema_pontas` tem `plan_cache_mode=force_custom_plan` e o search_path de antes.
--- P2 o corpo nao mudou (md5 8a1cd4f9…), SECURITY DEFINER e ACL como estavam.
+-- P2 o corpo e' o vigente (md5 ce53914e… desde o PR-CONC-SALDO-UMA-REGUA-01b; era 8a1cd4f9… no hotfix e 56a28f30… no 01),
+--    SECURITY DEFINER e ACL como estavam.
 -- P3 20 chamadas na MESMA sessao (NJ Banco do Brasil, set/26, sessao do usuario): nenhuma acima de 500 ms — sem o SET,
 --    da 6a em diante passava de 9 s. Os tempos vao na mensagem.
 set local statement_timeout = '120s';
@@ -16,7 +17,7 @@ begin
   if not ('plan_cache_mode=force_custom_plan' = any (v_cfg)) or not ('search_path=pg_catalog, public' = any (v_cfg)) then
     raise exception 'P1 FALHOU: proconfig %', v_cfg;
   end if;
-  if v_md5 <> '8a1cd4f9ecc02fa8eebb61a1c7093bd2' or not v_sec
+  if v_md5 <> 'ce53914eef1f3628abd3ce3abcf18619' or not v_sec
      or v_acl <> '{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}' then
     raise exception 'P2 FALHOU: md5 % secdef % acl %', v_md5, v_sec, v_acl;
   end if;
