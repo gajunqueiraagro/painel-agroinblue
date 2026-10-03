@@ -889,10 +889,13 @@ export function LancamentoV2Dialog({
       /* ⚠ LANÇAMENTO GRAVADO COM SAFRA NÃO RECEBE SUGESTÃO. O que está no banco é decisão
          de alguém, ainda que de outro dia; sobrescrevê-la ao abrir seria reclassificar sem
          pedir licença.
-         ⚠ ESTE `set` SAIU DAQUI — PAR-01a-ii, e quem garante a mesma coisa agora é o SEGUNDO
-         guard do efeito, dentro do cluster: `safra_id && safra_id !== safraSugeridaId`. Ao
-         abrir, `safraSugeridaId` nasce `null` (o cluster remonta pela `key`) e o `safra_id`
-         chega preenchido pela hidratação — o efeito retorna sem tocar em nada. */
+         ⚠ ESTE `set` SAIU DAQUI — PAR-01a-ii, e quem garante a mesma coisa é a guarda DENTRO DO
+         UPDATER do efeito de sugestão, no cluster (PR-FIN-SAFRA-MODAL-01): ela lê o `safra_id`
+         VIVO, e com safra que não foi a sugestão daquele bloco devolve o estado intacto.
+         ⚠ A GUARDA DO CLOSURE NÃO BASTAVA (o que este comentário dizia antes): o bloco montado
+         pelo RESET roda o efeito com a foto do reset (safra vazia) e o updater dele chegava
+         depois desta hidratação, apagando a safra gravada — o bloco novo montava vazio e
+         sugeria pela data. Foi assim que a mandioca do NJ foi para 26/27-Lav. */
       setTipoOperacao(lancamento.tipo_operacao);
       setStatusTransacao(normalizeStatusModal(lancamento.status_transacao));   // PR-FIN-STATUS-UX-03A-1 — legado 'meta' exibe como 'previsto' (sem gravar)
       setValorDisplay(toBRL(Math.abs(lancamento.valor)));

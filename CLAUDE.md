@@ -160,8 +160,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 03/10/2026 (PR-CONC-CONFERENCIA-FECHAMENTO-DIA, +43 em `src/lib/conciliacao/mesaDoDia.test.ts` e +9 em
-  `src/components/financeiro-v2/conferenciaFechamentoDia.test.tsx`; antes o PR-CONC-ENRIQ-ACABAMENTOS-01, +17): 3038
+  Baseline em 03/10/2026 (PR-FIN-SAFRA-MODAL-01, +6 em `src/components/financeiro-v2/safraGravadaModal.test.tsx`; antes o
+  PR-CONC-CONFERENCIA-FECHAMENTO-DIA, +43 em `src/lib/conciliacao/mesaDoDia.test.ts` e +9 em
+  `src/components/financeiro-v2/conferenciaFechamentoDia.test.tsx`): 3044
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -243,7 +244,14 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   (dormente) · REPOSICAO-SEM-CUSTO-01 (SR) · RECLASS-INVERSA-01 · GMD-FORA-DE-FAIXA-01 · META-VALIDACAO-01 (peso da
   reclassificacao no cenario meta; em RECLASS-PESO-01) · EVOLUIR-PESO-FAZENDA-01 · ZOO-DOBRO-OC-LEGADO (decisao).
 - DRE:
-  DRE-DELTA-SOMA-01 · DRE-JUROS-ADM-01 · LAVOURA-2627-INVISIVEL-01 · DIVIDENDOS-PLANO-01 · DRE-LEITOR-CHAVE-01 ·
+  DRE-DELTA-SOMA-01 · DRE-JUROS-ADM-01 · LAVOURA-2627-INVISIVEL-01 (a NF 9320690 inteira estava na 26/27 pelo defeito do
+  modal; voltou a' 25/26 no PR-FIN-SAFRA-MODAL-01 — conferir se resta algo) · SAFRA POR CULTURA (PR-FIN-SAFRA-MODAL-01,
+  pendentes de decisao do Gabriel): (a) `_fn_safra_da_cultura` (mandioca pela area, amendoim pela data) e' o PR seguinte;
+  (b) 4b3c9636 (6.480) e c93b6582 (5.426,51), mandioca de jun/25 na 24/25-Lav, vindos de 24/25-Pec/sem safra — ficaram;
+  (c) `agri_safra_area` com mandioca ATIVA tambem na 24/25-Lav (34,8 + 15 ha, plantio 01/06/2025) duplicando a 25/26, e
+  amendoim da 24/25-Lav com plantio 10/11/2026; (d) amendoim com safra fora da data: 52 lancamentos, nada corrigido (D5);
+  (e) o `por_bloco` do `nao_apropriado` de `fn_dre_lavoura` nao listava a Mao de Obra Direta (6.045,20 no total da 26/27 e em
+  bloco nenhum) — medir · DIVIDENDOS-PLANO-01 · DRE-LEITOR-CHAVE-01 ·
   DESFRUTE-DEFINICAO-UNICA-01 (decisao) · RPC-NOMES-LUCRO-01 · RATEIO-PERIODOS-TELA-01 · SILVICULTURA-DRE-01 ·
   DRE-HOME-FONTE-UNICA (a Home le' a receita do zootecnico; em OC-VENDA-ENTREGAS-01b) · modal de valor: reconsulta
   da lavoura nao provada, e o editor aberto por ele sem `onAbrirOperacaoOC` (em DRE-MODAL-REFRESH-01).
@@ -745,6 +753,16 @@ docs/historico/frentes-ate-2026-09-29.md.)
   (OC-URL-RAJADA-01).
 - ⚠ MUDANCA DE FILTRO SE PROVA COM VARREDURA ANTES x DEPOIS NUM CONJUNTO REAL, contando o que SUMIU; casos escolhidos
   nao mostram regressao de filtro (VINCULAR-FIX-01c).
+- ⚠ SAFRA GRAVADA ABRE E SALVA COMO ESTA'; A SUGESTAO PELA DATA SO' PREENCHE CAMPO VAZIO (PR-FIN-SAFRA-MODAL-01, Gabriel
+  03/10; migration 20261027191300, ⚠ registrada como 20261003135207; ledger = arquivo, md5 86c00210…). O efeito de sugestao de
+  `ClassificacaoLancamento` (`safraSugerida`) GUARDA DENTRO DO UPDATER, lendo o `safra_id` VIVO: o bloco montado pelo RESET do
+  `LancamentoV2Dialog` rodava com a foto do reset e o updater dele chegava depois da hidratacao, apagando a safra gravada (o
+  bloco novo montava vazio e sugeria pela data). Guarda de closure em efeito cujo updater vale sobre o estado do PAI nao
+  protege nada — a lei do PAR-01a-ii-fix1 vale para a guarda tambem. Trocar a CULTURA nao mexe na safra; trocar a ATIVIDADE
+  continua limpando a safra de outro escopo (PR-FIN-SAFRA-ESCOPO-01). Prova: `safraGravadaModal.test.tsx` (T1–T4), mutacao
+  (guarda fora do updater) derruba 4 de 6. Dado: 27 lancamentos de mandioca do NJ voltaram a 25/26-Lav (22 pela carga, 5 pelo
+  audit_log), estado anterior em `fin_safra_modal_01_backfill` com o gesto contrario por linha; T5/T6 em
+  `supabase/tests/fin_safra_modal_01_test.sql`.
 - ⚠ VALOR SUGERIDO E' VALOR ACEITO: a sugestao responde pelo numero como se fosse digitada, com a barra de qualidade do
   dado, marcada em ambar com uma linha de 10px; e SUGESTAO NAO ENTRA EM REGISTRO JA' GRAVADO (na edicao,
   `autoSugerir: false` e o valor hidratado conta como digitado) (RECLASS-PESO-01).
@@ -987,8 +1005,9 @@ docs/historico/frentes-ate-2026-09-29.md.)
   (plano com `compoe_dre = false` vence a matriz; por isso o insert passa `compoe_dre` NULO). O ICMS de transporte (311,14) e'
   CUSTO do frete (13090) e, como o da venda, UMA VEZ POR NF. Todo papel da carga entra por UMA funcao interna
   (`_agri_carga_inserir_papel`) e a pergunta "uma vez por NF" e' UMA (`_agri_carga_papel_na_nf`); papel que falta numa NF ja'
-  registrada se acrescenta por `agri_carga_mandioca_completar`, que herda conta, SAFRA e fazenda da VENDA da carga (nao do
-  talhao). O estado anterior do backfill das 14 NFs mora em `mandioca_icms_repasse_01_backfill` (gesto contrario linha a linha).
+  registrada se acrescenta por `agri_carga_mandioca_completar`, que herda conta e fazenda da VENDA da carga; a SAFRA e' a
+  da CARGA (a da area, `agri_safra_area`), nunca a da venda (PR-FIN-SAFRA-MODAL-01: copiar a da venda propagou a 26/27-Lav
+  errada da NF 9320690 a 3 papeis novos). O estado anterior do backfill das 14 NFs mora em `mandioca_icms_repasse_01_backfill` (gesto contrario linha a linha).
   ⚠ A RETENCAO DA NF-e DO COMPRADOR (Funrural 1,63% ago, SENAR 0,2% set) E' O PAPEL 'funrural', UMA VEZ POR NF
     (MANDIOCA-RETENCAO-NF-01, migration 20261027185600, ledger 20261001144347): o comprador retem e deposita o LIQUIDO, entao o
     "falta" da venda num deposito NAO e' recebivel — e' a retencao. Saida, programado, deducao (b451681a), favorecido = comprador,

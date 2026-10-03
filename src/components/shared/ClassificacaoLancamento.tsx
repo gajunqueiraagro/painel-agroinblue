@@ -241,12 +241,16 @@ export function ClassificacaoLancamento({
     const nova = atividade && atividade !== 'administrativo'
       ? safraSugerida(dataCompetencia, atividade, safras ?? [], { desempatar: false })
       : null;
-    /* ⚠ OS DOIS GUARDS ACIMA NÃO MUDARAM — PAR-01a-i, e são eles que impedem a sugestão de
-       atropelar a hidratação: `safraEditadaAMao` cala depois da escolha manual, e
-       `safraId !== safraSugeridaId` cala quando o campo já tem valor que não veio daqui —
-       exatamente o caso do lançamento antigo que acabou de ser carregado. Só a FORMA do set
-       mudou. */
-    setClassificacao((c) => ({ ...c, safra_id: nova ?? '' }));
+    /* ⚠ A GUARDA QUE VALE MORA DENTRO DO UPDATER — PR-FIN-SAFRA-MODAL-01. Os dois `return` acima
+       leem o `value` do CLOSURE deste render, e o updater é aplicado pelo pai sobre o estado VIVO.
+       O bloco que o reset montou (safra vazia, a última atividade, a data de hoje) roda este efeito
+       com a foto do reset; quando o updater chega, o estado já é o da hidratação — e
+       `{...c, safra_id: ''}` apagava a safra GRAVADA (a NF 9297983 abria em 26/27-Lav "sugerida",
+       e salvar sem tocar gravava 26/27: 19 lançamentos de mandioca do NJ foram assim). Agora o
+       updater confere o campo VIVO: com safra que não foi esta sugestão que pôs, devolve `c` intacto.
+       Os dois `return` ficam: no bloco certo eles poupam o render. */
+    setClassificacao((c) => ((c.safra_id && c.safra_id !== safraSugeridaId) ? c : { ...c, safra_id: nova ?? '' }));
+    /* Só chega aqui com o campo vazio (ou com a sugestão anterior deste bloco) na foto deste render. */
     setSafraSugeridaId(nova);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [atividade, dataCompetencia, safras, safraEditadaAMao]);
