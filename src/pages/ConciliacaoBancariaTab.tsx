@@ -27,22 +27,17 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
+import { belongsToConta, saldoConfere } from '@/lib/financeiro/conciliacaoCalc';
+import { useResumoMes, useStatusAno, CHAVE_RESUMO_MES, CHAVE_STATUS_ANO } from '@/hooks/useResumoConciliacao';
 import {
-  belongsToConta,
-  calcConciliacaoMensal,
-  saldoConfere,
-  type ConciliacaoLancamentoBase,
-  type ConciliacaoStatus,
-} from '@/lib/financeiro/conciliacaoCalc';
-import { paginarTudo } from '@/lib/financeiro/paginarTudo';
+  ROTULO_STATUS, frasesDoStatus, fraseDoRetido, fraseSemConta, contasParaFecharSemMovimento,
+  type LinhaResumo, type StatusDono, type FraseDoStatus,
+} from '@/lib/conciliacao/resumoDoDono';
 import { detectarDuplicatasCrossOrigin, montarSituacaoFechamento, derivarPendenciasGerenciais, derivarDetalhePendencias } from '@/lib/financeiro/fechamentoPendencias';
 import { buildUnifiedSaldos, type ContaSaldoRef, type SaldoV2SourceRow, type SaldoLegacySourceRow } from '@/lib/financeiro/saldosBancarios';
 import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
 import { mesUnico } from '@/v2/lib/periodo';
 // PR-MOS-2 — LotesExcelTab (Referências Operacionais antigas) desacoplado da aba Enriquecer (legado).
-
-/* ── Extended status type (adds 'parcial' to existing) ── */
-type MesStatusExt = ConciliacaoStatus | 'parcial';
 
 /* ── Types ── */
 export interface ContaRef {
@@ -96,58 +91,45 @@ export interface LancamentoResumo {
 
 interface FornecedorRef { id: string; nome: string; }
 
-export interface MesCard {
+/**
+ * O mês aberto — PR-CONC-SALDO-UMA-REGUA-02. Os números saíram daqui: o resumo, o status e os saldos são do dono
+ * (`fn_conciliacao_resumo_mes`). Fica só o rótulo e a LISTA de lançamentos do mês (o modal "Todos (N)" e as pendências
+ * de classificação), que é lista, não conta.
+ */
+interface MesCard {
   mes: string;
   label: string;
   anoMes: string;
-  saldoInicial: number;
-  entradasTerceiros: number;
-  transferenciasRecebidas: number;
-  totalEntradas: number;
-  saidasTerceiros: number;
-  transferenciasEnviadas: number;
-  totalSaidas: number;
-  saldoCalculado: number;
-  saldoExtrato: number | null;
-  diferenca: number;
-  status: MesStatusExt;
-  saldoRow: SaldoRow | null;
   lancamentos: LancamentoResumo[];
-  semContaSaidas?: number;
-  semContaEntradas?: number;
 }
 
+/**
+ * Uma conta da tabela "Saldos por conta" — a LINHA DO DONO, com a conta do cadastro ao lado (nome de exibição, mês de
+ * início, saldo inicial oficial) para o que só o cadastro diz.
+ */
 interface PerContaSaldo {
   conta: ContaRef;
-  sis: number;
-  ext: number | null;
-  dif: number;
-  status: MesStatusExt;
-  saldoRow: SaldoRow | null;
-  // PR-E1-F1 — proveniência do saldo inicial (fim do saldo_final=0 fantasma).
-  siOrigem: 'informado' | 'herdado' | 'ausente';
-  temMovimento: boolean;
-  /* O saldo inicial que `calcConciliacaoMensal` já devolve — repassado, não
-     recalculado. Serve à regra de exibição das contas ocultas. */
-  saldoInicial: number;
+  linha: LinhaResumo;
+  /** As contas internas consolidadas nesta (o dono já somou o saldo delas aqui); só o nome, para o `title`. */
+  consolidadas: string[];
 }
 
 /* ── Constants ── */
 const MESES_LABELS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
 /** Inline colors — avoids CSS class conflicts with host */
-const STATUS_COR: Record<string, {bg:string;border:string;txt:string}> = {
-  realizado:      {bg:'#EAF3DE', border:'#66BB6A', txt:'#2E7D32'},
-  parcial:        {bg:'#FFF8E1', border:'#FFB300', txt:'#E65100'},
+/* ⚠ AS CHAVES SÃO O STATUS DO DONO — PR-CONC-SALDO-UMA-REGUA-02: 'conciliado' (era 'realizado', o nome do status de
+   lançamento que a tela emprestava), 'nao_conciliado', 'pendente'. 'parcial' SAIU: o dono não o tem. Cores iguais. */
+const STATUS_COR: Record<StatusDono, {bg:string;border:string;txt:string}> = {
+  conciliado:     {bg:'#EAF3DE', border:'#66BB6A', txt:'#2E7D32'},
   nao_conciliado: {bg:'#FCEBEB', border:'#E57373', txt:'#A32D2D'},
   pendente:       {bg:'#F5F5F5', border:'#BDBDBD', txt:'#757575'},
 };
 
-const STATUS_META: Record<string, {label:string; Icon: typeof CheckCircle2; sub:string}> = {
-  realizado:      {label:'Conciliado',     Icon:CheckCircle2,  sub:''},
-  parcial:        {label:'Parcial',         Icon:AlertTriangle, sub:'Saldo global ok, contas individuais divergem'},
-  nao_conciliado: {label:'Não Conciliado',  Icon:XCircle,       sub:'Divergência no saldo'},
-  pendente:       {label:'Pendente',        Icon:AlertTriangle, sub:'Informe o saldo do extrato'},
+const STATUS_ICONE: Record<StatusDono, typeof CheckCircle2> = {
+  conciliado: CheckCircle2,
+  nao_conciliado: XCircle,
+  pendente: AlertTriangle,
 };
 
 /* ⚠ A ORDEM MUDOU DE CASA EM 132 — `@/lib/financeiro/gruposDeConta`. O valor é o mesmo,
@@ -182,188 +164,13 @@ function classifyLanc(l: LancamentoResumo, contaId: string): 'entrada'|'saida'|'
   return 'saida';
 }
 
-const r2 = (n: number) => Math.round(n * 100) / 100;
 
 
-/* ── Pure function to build month cards for any contaId ── */
-/**
- * ⚠ EXPORTADA PARA TESTE, e o motivo importa: o agregado deste arquivo ficou dois
- * dias contando transferência interna como saída (`e6360649`), e nada podia
- * acusá-lo porque a função era privada. Testar a regra num arquivo à parte não
- * bastava — o defeito não estava na regra, estava em COMO ela era chamada.
- * Nenhum componente a importa; é ponto de teste, não de reuso.
- */
-export function buildMonthCards(
-  ano: string,
-  targetContaId: string,
-  saldos: SaldoRow[],
-  lancamentos: LancamentoResumo[],
-  contas: ContaRef[],
-): MesCard[] {
-  const cards: MesCard[] = [];
-  const prevFinal = new Map<string, number>();
-  const prevDec = `${Number(ano)-1}-12`;
-  saldos.filter(r => r.ano_mes === prevDec).forEach(s => {
-    prevFinal.set(s.conta_bancaria_id, r2((prevFinal.get(s.conta_bancaria_id)||0) + s.saldo_final));
-  });
-
-  for (let m = 1; m <= 12; m++) {
-    const mesStr = String(m).padStart(2,'0');
-    const anoMes = `${ano}-${mesStr}`;
-    const isAll = targetContaId === '__all__';
-    const saldoRows = saldos.filter(s => s.ano_mes === anoMes);
-    const mesLancs = lancamentos.filter(l => (l.data_pagamento || '').slice(0, 7) === anoMes && belongsToConta(l, targetContaId));
-
-    if (!isAll) {
-      const official = calcConciliacaoMensal({
-        contaId: targetContaId, anoMes, saldoRows,
-        lancamentos: lancamentos as ConciliacaoLancamentoBase[],
-        fallbackSaldoInicial: prevFinal.get(targetContaId) || 0,
-        monthBy: 'data_pagamento',
-      });
-      cards.push({
-        mes: mesStr, label: MESES_LABELS[m-1], anoMes,
-        saldoInicial: official.saldoInicial,
-        entradasTerceiros: official.entradasTerceiros,
-        transferenciasRecebidas: official.transferenciasRecebidas,
-        totalEntradas: official.totalEntradas,
-        saidasTerceiros: official.saidasTerceiros,
-        transferenciasEnviadas: official.transferenciasEnviadas,
-        totalSaidas: official.totalSaidas,
-        saldoCalculado: official.saldoCalculado,
-        saldoExtrato: official.saldoExtrato,
-        diferenca: official.diferenca,
-        status: official.status as MesStatusExt,
-        saldoRow: saldoRows.find(s => s.conta_bancaria_id === targetContaId) || null,
-        lancamentos: mesLancs,
-      });
-      if (saldoRows.length > 0) saldoRows.forEach(s => prevFinal.set(s.conta_bancaria_id, s.saldo_final));
-      else prevFinal.set(targetContaId, official.saldoCalculado);
-      continue;
-    }
-
-    /* All accounts */
-    const saldoInicial = saldoRows.length > 0
-      ? r2(saldoRows.reduce((s,r) => s + (r.saldo_inicial||0), 0))
-      : r2(Array.from(prevFinal.values()).reduce((s,v) => s+v, 0));
-
-    /* ⚠ `contas` VEM FILTRADA POR `ativa = true`. Hoje nenhuma conta inativa tem
-       lançamento em cliente nenhum (medido em 04/09/2026), então a soma fecha; no
-       dia em que tiver, a perna que aponta para a inativa deixa de ser creditada e
-       uma transferência interna volta a parecer saída. */
-    const perAcct = contas.map(c => calcConciliacaoMensal({
-      contaId: c.id, anoMes, saldoRows,
-      lancamentos: lancamentos as ConciliacaoLancamentoBase[],
-      fallbackSaldoInicial: prevFinal.get(c.id) || 0,
-      monthBy: 'data_pagamento',
-    }));
-
-    const entradasTerceiros = r2(perAcct.reduce((s,r) => s + r.entradasTerceiros, 0));
-    const saidasTerceiros   = r2(perAcct.reduce((s,r) => s + r.saidasTerceiros, 0));
-    const saldoExtrato = saldoRows.length > 0 ? r2(saldoRows.reduce((s,r) => s + (r.saldo_final||0), 0)) : null;
-
-    // Total oficial: calculado direto de mesLancs (inclui sem-conta)
-    const totalSaidasOficial = r2(
-      mesLancs
-        .filter(l => (l.tipo_operacao || '') === '2-Saídas')
-        .reduce((s, l) => s + Math.abs(Number(l.valor) || 0), 0)
-    );
-    const totalEntradasOficial = r2(
-      mesLancs
-        .filter(l => (l.tipo_operacao || '') === '1-Entradas')
-        .reduce((s, l) => s + Math.abs(Number(l.valor) || 0), 0)
-    );
-
-    // Pendências: lançamentos sem conta vinculada.
-    /* Sobem antes do movimento porque ELE OS SOMA: dinheiro sem conta é dinheiro
-       que entrou ou saiu do conjunto, e some do agregado se ficar de fora. */
-    const semConta = mesLancs.filter(l => !l.conta_bancaria_id && !l.conta_destino_id);
-    const semContaSaidas = r2(
-      semConta
-        .filter(l => (l.tipo_operacao || '') === '2-Saídas')
-        .reduce((s, l) => s + Math.abs(Number(l.valor) || 0), 0)
-    );
-    const semContaEntradas = r2(
-      semConta
-        .filter(l => (l.tipo_operacao || '') === '1-Entradas')
-        .reduce((s, l) => s + Math.abs(Number(l.valor) || 0), 0)
-    );
-
-    /* ⚠ O AGREGADO É A SOMA DOS CARTÕES POR CONTA, e não uma conta própria sobre
-       as linhas. Cada `perAcct` já leu sua perna; somá-los ZERA POR CONSTRUÇÃO a
-       transferência interna (as duas pernas dentro do universo) e MANTÉM a de uma
-       perna só, que é dinheiro que saiu de verdade. A fórmula certa é a que não
-       precisa saber qual é qual.
-
-       ⚠ AQUI HAVIA `movimentoNaConta(l, isAll ? '' : targetContaId)` — e com conta
-       VAZIA não existe perna: o destino nunca era creditado, então toda
-       transferência interna virava saída pura. Medido no NJ/2026: janeiro errava
-       por 1.310.270,36, abril por 2.825.906,98 — ao centavo, o total transferido
-       no mês. Entrou em e6360649 (CONCIL-PARIDADE-VISUAL-01 §5), que corrigiu o
-       cartão DE UMA CONTA e quebrou o agregado no mesmo gesto: a régua da perna
-       vale para quem tem perna. O ternário era código morto — o ramo por conta
-       sai com `continue` bem antes daqui.
-
-       ⚠ AGOSTO NÃO PROVA NADA: é o único mês de 2026 sem transferência nenhuma,
-       e nele os dois cálculos empatam. Conferir jan/abr/jul. */
-    const movimentoDoMes = r2(
-      perAcct.reduce((s, r) => s + r.totalEntradas - r.totalSaidas, 0)
-      + semContaEntradas - semContaSaidas
-    );
-    const saldoCalculado = r2(saldoInicial + movimentoDoMes);
-    const diferenca = saldoExtrato !== null ? r2(saldoExtrato - saldoCalculado) : 0;
-
-    /* Extended status: realizado / parcial / nao_conciliado / pendente */
-    /* ⚠ SÓ AS CONTAS QUE EXISTIAM NO MÊS ENTRAM NO VEREDITO — CONCIL-SELO-PENDENTE-01.
-       O selo percorria `contas`, a lista de HOJE, e uma conta aberta em 2026
-       retinha o mês de 2021 inteiro em "Pendente — informe o saldo do extrato",
-       pedindo a declaração de uma conta que não existia. Medido no NJ/set-2021:
-       17 contas, 16 declaradas, 2 com movimento — e a única sem declaração era
-       o "Cartão BB - Visa Infinite", com `mes_inicio` em 2026-01.
-       ⚠ A RÉGUA JÁ EXISTIA NESTE ARQUIVO, em `perContaSaldos` (`!mes_inicio ||
-       mes_inicio <= anoMes`): a tabela de saldos já mostrava só as contas do mês,
-       e só o selo não perguntava. Duas leituras da mesma pergunta, uma calada. */
-    const contasDoMes = contas.filter(c => !c.mes_inicio || c.mes_inicio <= anoMes);
-    const accsWithSaldo = contasDoMes.filter(c => saldoRows.some(s => s.conta_bancaria_id === c.id));
-    let status: MesStatusExt;
-    if (accsWithSaldo.length === 0) {
-      status = 'pendente';
-    } else {
-      const globalOk = saldoExtrato !== null && Math.round(diferenca * 100) === 0;
-      const perStatuses = contasDoMes.map(c => calcConciliacaoMensal({
-        contaId: c.id, anoMes, saldoRows,
-        lancamentos: lancamentos as ConciliacaoLancamentoBase[],
-        fallbackSaldoInicial: prevFinal.get(c.id) || 0,
-        monthBy: 'data_pagamento',
-      }).status);
-      const allOk  = perStatuses.every(s => s === 'realizado');
-      const anyBad = perStatuses.some(s => s === 'nao_conciliado');
-      if (allOk)                       status = 'realizado';
-      else if (globalOk && !anyBad)       status = 'realizado';  // diff=0, nenhuma conta diverge (algumas sem extrato = ok)
-      else if (globalOk && anyBad)        status = 'parcial';
-      else if (anyBad)                    status = 'nao_conciliado';
-      else                                status = 'pendente';
-    }
-
-    cards.push({
-      mes: mesStr, label: MESES_LABELS[m-1], anoMes,
-      saldoInicial, entradasTerceiros, transferenciasRecebidas: 0,
-      totalEntradas: totalEntradasOficial, saidasTerceiros, transferenciasEnviadas: 0,
-      totalSaidas: totalSaidasOficial, saldoCalculado, saldoExtrato, diferenca, status,
-      saldoRow: null, lancamentos: mesLancs,
-      semContaSaidas, semContaEntradas,
-    });
-
-    // Propaga prevFinal para o próximo mês: usa saldo_final salvo se houver,
-    // senão saldoCalculado (assim cada conta sem extrato continua acumulando o cálculo).
-    contas.forEach((c, idx) => {
-      const row = saldoRows.find(s => s.conta_bancaria_id === c.id);
-      if (row) prevFinal.set(c.id, r2(row.saldo_final || 0));
-      else prevFinal.set(c.id, perAcct[idx].saldoCalculado);
-    });
-  }
-  return cards;
-}
+/* ⚠ `buildMonthCards` SAIU — PR-CONC-SALDO-UMA-REGUA-02. Era a conta da tela (saldo inicial, entradas, saídas,
+   diferença e o status dos doze meses, inclusive o 'parcial') feita por `calcConciliacaoMensal` sobre o VALOR CHEIO dos
+   realizados. O dono é `fn_conciliacao_resumo_mes` (o mês aberto) e `fn_conciliacao_status_ano` (a régua); o teste
+   `conciliacaoAgregadoTransferencia.test.ts` saiu com ela — a interna fora da soma é regra do dono, provada no
+   `conc_saldo_uma_regua_01b_test.sql`. */
 
 /* ── Props ── */
 interface ConciliacaoProps {
@@ -440,6 +247,8 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   /* ⚠ NASCE EM "Extrato (banco)" — PR-CONC-CONFERENCIA-MODAL-01: a Conferência virou modal, e
      nascer nela abriria o Dialog sozinho ao entrar na aba. */
   const [abaEspelho, setAbaEspelho] = useState<AbaEspelho>('ofx');
+  /* O dia em que a Conferência abre — o link "N dias com diferença" do Status (PR-CONC-SALDO-UMA-REGUA-02). */
+  const [diaFoco, setDiaFoco] = useState<string | null>(null);
   const [showPendencias, setShowPendencias] = useState(false);
   /* ⚠ O ESPELHO CONTINUA MODAL, E TAMBÉM VIRA ABA — PR-ESPELHO-02 e PR-CONCILIACAO-5-ABAS-01.
      O modal "Espelho OFX × Sistema", aberto pelo botão em "Importar Banco", segue sendo o FECHO
@@ -476,20 +285,9 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
      extrato anexado. Carregam o ANO inteiro, agrupado por mês, porque trocar de mês na
      régua não recarrega o `loadData` — consultar só o mês selecionado deixaria os ícones
      do mês anterior na tela. Os filtros do OFX são os mesmos de `useSaldoDeclaradoOfx`. */
-  /**
-   * CONTAS COM MOVIMENTO DE EXTRATO NO MÊS — PR-CONC-CONTA-PARADA-01.
-   *
-   * ⚠ NÃO DÁ PARA REUSAR O `contasComOfx` ABAIXO, e isso foi medido: ele exige
-   * `saldo_declarado` não nulo, e 60 das 64 importações vivas do proto NÃO o têm (nem
-   * `saldo_declarado_data`). Ele responde "quem declarou saldo pelo OFX", que é outra
-   * pergunta — usá-lo aqui ocultaria conta com extrato importado, que é justamente onde há
-   * o que conferir.
-   * ⚠ A FONTE HONESTA É O MOVIMENTO: `extrato_bancario_v2` pelo mês de `data_movimento`.
-   * Importação sem movimento não dá o que conciliar; movimento sem saldo declarado dá.
-   * ⚠ EM LEVAS: são 4.555 linhas no proto e 2.708 só do NJ em 2026 — acima do teto de mil do
-   * PostgREST, que não avisa quando corta.
-   */
-  const [contasComExtrato, setContasComExtrato] = useState<Map<string, Set<string>>>(new Map());
+  /* ⚠ `contasComExtrato` SAIU — PR-CONC-SALDO-UMA-REGUA-02. Era a leitura em levas do extrato do ano inteiro só para a
+     regra das contas ocultas saber quem teve movimento de extrato no mês; o dono responde isso na linha da conta
+     (`tem_extrato`), e a leitura deixou de existir. */
   const [contasComOfx, setContasComOfx] = useState<Map<string, Set<string>>>(new Map());
   const [contasComPdf, setContasComPdf] = useState<Map<string, Set<string>>>(new Map());
   const carregarIndicadoresSaldo = useCallback(async () => {
@@ -525,23 +323,6 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     setContasComOfx(porMes((imps ?? []).map(i => ({ conta: i.conta_bancaria_id, mes: i.saldo_declarado_data }))));
     setContasComPdf(porMes((docs ?? []).map(d => ({ conta: d.conta_bancaria_id, mes: d.ano_mes }))));
 
-    /* O movimento de extrato do ano, em levas — ver a nota do `contasComExtrato`. */
-    const movs = await paginarTudo<{ conta_bancaria_id: string | null; data_movimento: string | null }>(
-      async (de, tamanho) => {
-        const { data, error } = await supabase
-          .from('extrato_bancario_v2')
-          .select('conta_bancaria_id, data_movimento')
-          .eq('cliente_id', clienteId)
-          .is('cancelado_em', null)
-          .gte('data_movimento', `${ano}-01-01`)
-          .lt('data_movimento', `${Number(ano) + 1}-01-01`)
-          .order('id', { ascending: true })
-          .range(de, de + tamanho - 1);
-        if (error) throw error;
-        const leva = data ?? [];
-        return { linhas: leva, brutas: leva.length };
-      });
-    setContasComExtrato(porMes(movs.map(m => ({ conta: m.conta_bancaria_id, mes: m.data_movimento }))));
   }, [clienteId, ano]);
 
   const loadData = useCallback(async () => {
@@ -621,77 +402,75 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
      de 107 movimentos entrarem, até um F5 (medido em 07/09). O registro é o mesmo que o
      `useFinanceiroV2` já usava internamente — inventar um segundo seria a segunda fonte
      para a mesma pergunta. */
+  /* O dono relido junto com a carga: onde esta tela já recarregava (lançamentos mudaram, saldo informado), o resumo e a
+     régua do ano também relêem — senão a tela mostraria o número de antes do gesto. A invalidação nos gestos das
+     OUTRAS telas é o PR 03. */
+  const releDono = useCallback(() => {
+    if (!clienteId) return;
+    void queryClient.invalidateQueries({ queryKey: [CHAVE_RESUMO_MES, clienteId] });
+    void queryClient.invalidateQueries({ queryKey: [CHAVE_STATUS_ANO, clienteId] });
+  }, [clienteId, queryClient]);
+
   useEffect(() => {
     if (!clienteId) return;
-    return inscreverEmLancamentos(clienteId, () => { void loadData(); });
-  }, [clienteId, loadData]);
+    return inscreverEmLancamentos(clienteId, () => { void loadData(); releDono(); });
+  }, [clienteId, loadData, releDono]);
 
-  /* ── Month cards: two versions ── */
-  // Month BAR always shows global status (all accounts)
-  const monthBarCards = useMemo(
-    () => buildMonthCards(ano, '__all__', saldos, lancamentos, contas),
-    [ano, saldos, lancamentos, contas]
-  );
-  /* ⚠ O MAPA DE TONS É A MESMA LEITURA DE ANTES, só com outro formato: `STATUS_COR` pela
-     cor e `STATUS_META` pelo rótulo do `title`, exatamente como o bloco inline fazia. O
-     `|| STATUS_COR.pendente` continua sendo o fallback de status desconhecido. */
+  /* ═══ O DONO — PR-CONC-SALDO-UMA-REGUA-02 ═══
+     ⚠ A TELA SÓ DESENHA. O resumo do mês (todas as contas, os subtotais e o total) é UMA chamada a
+     `fn_conciliacao_resumo_mes`, e a régua dos doze meses é `fn_conciliacao_status_ano`. Nada aqui soma linha, subtrai
+     saldo ou escolhe conta: o universo de contas (ativa e já existente no mês) também é do dono (01c).
+     ⚠ A RÉGUA NÃO SEGURA A TELA: os meses nascem neutros e se pintam quando o status do ano responde; o mês aberto já
+     nasce pintado pelo total do resumo. */
+  const anoMesSel = `${ano}-${selectedMes}`;
+  const resumoQ = useResumoMes(clienteId, anoMesSel, null);
+  const resumo = resumoQ.data ?? null;
+  const statusAnoQ = useStatusAno(clienteId, Number(ano));
+
+  const linhaTotal = useMemo(() => resumo?.find(l => l.nivel === 'total') ?? null, [resumo]);
+  const linhaSel: LinhaResumo | null = selectedConta === '__all__'
+    ? linhaTotal
+    : (resumo?.find(l => l.nivel === 'conta' && l.conta_id === selectedConta) ?? null);
+
+  /* ⚠ O MAPA DE TONS: `STATUS_COR` pela cor e `ROTULO_STATUS` pelo `title`. Mês sem status do ano ainda fica SEM tom
+     (o seletor o desenha neutro); o mês aberto leva o status do total do resumo enquanto o do ano não chega. */
   const tomDosMeses = useMemo(() => {
     const m: Record<number, { bg: string; border: string; txt: string; title?: string }> = {};
-    for (const c of monthBarCards) {
-      const cc = STATUS_COR[c.status] || STATUS_COR.pendente;
-      m[Number(c.mes)] = { ...cc, title: STATUS_META[c.status]?.label || c.status };
+    for (const r of statusAnoQ.data ?? []) {
+      if (r.nivel !== 'total' || r.ano_mes.slice(0, 4) !== ano) continue;
+      m[Number(r.ano_mes.slice(5, 7))] = { ...STATUS_COR[r.status], title: ROTULO_STATUS[r.status] };
+    }
+    if (!statusAnoQ.data && linhaTotal) {
+      m[Number(selectedMes)] = { ...STATUS_COR[linhaTotal.status], title: ROTULO_STATUS[linhaTotal.status] };
     }
     return m;
-  }, [monthBarCards]);
+  }, [statusAnoQ.data, linhaTotal, ano, selectedMes]);
 
-  // Detail cards: filtered by selectedConta
-  const mesCards = useMemo(
-    () => buildMonthCards(ano, selectedConta, saldos, lancamentos, contas),
-    [ano, selectedConta, saldos, lancamentos, contas]
-  );
-  const selectedCard = useMemo(() => mesCards.find(c => c.mes === selectedMes)||null, [mesCards, selectedMes]);
+  /* O mês aberto: rótulo e a lista de lançamentos realizados dele (o modal "Todos (N)"). Lista, não conta. */
+  const selectedCard = useMemo((): MesCard => ({
+    mes: selectedMes,
+    label: MESES_LABELS[Number(selectedMes) - 1] ?? selectedMes,
+    anoMes: anoMesSel,
+    lancamentos: lancamentos.filter(l =>
+      (l.data_pagamento || '').slice(0, 7) === anoMesSel && belongsToConta(l, selectedConta)),
+  }), [selectedMes, anoMesSel, lancamentos, selectedConta]);
 
-  /* ── Per-account saldo data for current month ── */
+  /* ── As contas do mês: as linhas de CONTA do dono, na ordem do cadastro ──
+     ⚠ A CONTA INTERNA (`consolida_em_conta_id`) NÃO TEM LINHA PRÓPRIA: o dono já pôs o saldo dela na conta-mãe e a
+     deixa fora dos agregados — desenhá-la ao lado contaria duas vezes aos olhos. Ela aparece no `title` da mãe. */
   const perContaSaldos = useMemo((): PerContaSaldo[] => {
-    const anoMes = `${ano}-${selectedMes}`;
-    const anoMesSel2 = `${ano}-${selectedMes}`;
-    const contasAtivas = contas.filter(c => !c.mes_inicio || c.mes_inicio <= anoMesSel2);
-    // PR-E1-F1 — mês anterior (mesma lógica de handleFecharSemMovimento) para herdar o SI.
-    const [anoNum, mesNum] = anoMes.split('-').map(Number);
-    const mesAnterior = mesNum === 1
-      ? `${anoNum - 1}-12`
-      : `${anoNum}-${String(mesNum - 1).padStart(2, '0')}`;
-    return sortContas(contasAtivas).map(c => {
-      const saldoRow = saldos.find(s => s.ano_mes===anoMes && s.conta_bancaria_id===c.id)||null;
-      // PR-E1-F1 — SI vem da linha do mês (informado) OU do SF do mês anterior (herdado);
-      // sem nenhum dos dois = ausente. O 0 residual é só p/ exibição; nunca é gravado (Mudança 2).
-      const rowAnterior = saldos.find(s => s.conta_bancaria_id===c.id && s.ano_mes===mesAnterior);
-      const siOrigem: 'informado' | 'herdado' | 'ausente' =
-        saldoRow ? 'informado'
-        : (rowAnterior?.saldo_final != null) ? 'herdado'
-        : 'ausente';
-      const official = calcConciliacaoMensal({
-        contaId:c.id, anoMes, saldoRows:saldos,
-        lancamentos: lancamentos as ConciliacaoLancamentoBase[],
-        fallbackSaldoInicial: saldoRow?.saldo_inicial ?? rowAnterior?.saldo_final ?? 0,
-        monthBy: 'data_pagamento',
-      });
-      return {
-        conta:c, sis:official.saldoCalculado,
-        ext:official.saldoExtrato, dif:official.diferenca,
-        status:official.status as MesStatusExt, saldoRow,
-        siOrigem,
-        temMovimento: official.totalEntradas !== 0 || official.totalSaidas !== 0,
-        saldoInicial: official.saldoInicial,
+    const linhas = (resumo ?? []).filter(l => l.nivel === 'conta' && l.conta_id && !l.consolida_em_conta_id);
+    const internas = (resumo ?? []).filter(l => l.nivel === 'conta' && l.consolida_em_conta_id);
+    const porId = new Map(contas.map(c => [c.id, c]));
+    return linhas.map(l => {
+      const id = l.conta_id ?? '';
+      const conta = porId.get(id) ?? {
+        id, nome_conta: l.conta_nome, nome_exibicao: null, tipo_conta: l.tipo_conta,
+        codigo_conta: null, mes_inicio: null, saldo_inicial_oficial: null,
       };
+      return { conta, linha: l, consolidadas: internas.filter(i => i.consolida_em_conta_id === id).map(i => i.conta_nome) };
     });
-  }, [ano, selectedMes, saldos, lancamentos, contas]);
-
-  const totalSaldos = useMemo(() => ({
-    sis: r2(perContaSaldos.reduce((s,c)=>s+c.sis,0)),
-    ext: perContaSaldos.every(c=>c.ext===null) ? null : r2(perContaSaldos.reduce((s,c)=>s+(c.ext||0),0)),
-    dif: r2(perContaSaldos.reduce((s,c)=>s+c.dif,0)),
-  }), [perContaSaldos]);
+  }, [resumo, contas]);
 
   // Fonte única conta+mês — situacao e diagPendencias derivam DESTE lancMes (proibido recriar o filtro).
   const lancMes = useMemo(() => {
@@ -705,11 +484,11 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   const situacao = useMemo(() => {
     const dup = detectarDuplicatasCrossOrigin(lancMes);
     const pendGerenciais = derivarPendenciasGerenciais(lancMes);
-    const difSaldo = selectedConta === '__all__'
-      ? ((totalSaldos.ext ?? 0) - totalSaldos.sis)
-      : (selectedCard?.diferenca ?? 0);
+    /* D9 — a diferença de saldo é a do DONO (a linha da conta, ou o total no Todas); duplicatas e pendências gerenciais
+       seguem no front (dívida D8 do 01b). */
+    const difSaldo = linhaSel?.diferenca ?? 0;
     return montarSituacaoFechamento({ diferencaSaldo: difSaldo, duplicatas: dup, pendenciasGerenciais: pendGerenciais });
-  }, [lancMes, selectedConta, selectedCard, totalSaldos]);
+  }, [lancMes, linhaSel]);
 
   // Detalhe de pendências (mesmo lancMes canônico) — alimenta card Status + modal.
   const diagPendencias = useMemo(() => {
@@ -785,17 +564,28 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     return y===currentYear && mn===currentMonth && isFinanceiro;
   };
 
+  /* "N dias com diferença" → a Conferência daquela conta, aberta no primeiro dia com diferença. */
+  const irParaConferencia = useCallback((contaId: string, dia: string) => {
+    if (!contaId) return;
+    setSelectedConta(contaId);
+    setDiaFoco(dia || null);
+    setAbaEspelho('conferencia');
+    setVistaExtrato('enriquecer_sistema');
+  }, []);
+
   /* ── Derived display values ── */
-  const cardStatus = selectedCard?.status ?? 'pendente';
-  const cor        = STATUS_COR[cardStatus] || STATUS_COR.pendente;
-  const meta       = STATUS_META[cardStatus] || STATUS_META.pendente;
-  const StatusIcon = meta.Icon;
+  /* O selo e o card Status são o STATUS DO DONO da linha aberta (a conta, ou o total no Todas) — o mesmo da Conferência.
+     Sem a linha ainda (o resumo carregando, ou a conta fora do universo do mês), 'pendente'. */
+  const cardStatus: StatusDono = linhaSel?.status ?? 'pendente';
+  const cor        = STATUS_COR[cardStatus];
+  const StatusIcon = STATUS_ICONE[cardStatus];
+  const frasesStatus = linhaSel ? frasesDoStatus(linhaSel) : [];
+  const retido = linhaSel ? fraseDoRetido(linhaSel.retido_em_depositos) : null;
+  const semConta = selectedConta === '__all__' && linhaTotal ? fraseSemConta(linhaTotal.sem_conta) : null;
 
   const contaAtual = selectedConta === '__all__'
     ? 'Todas as contas'
     : getContaLabel(contas.find(c=>c.id===selectedConta) || {id:'',nome_conta:selectedConta,nome_exibicao:null,tipo_conta:null,codigo_conta:null});
-
-  const anoMesSel = `${ano}-${selectedMes}`;
 
   /**
    * A POSIÇÃO DO CARD — CONCIL-PARIDADE-VISUAL-01 §3.
@@ -806,22 +596,14 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
    * discordarem sobre qual data a diferença usou, que é exatamente o defeito
    * que o §5 acabou de matar no saldo.
    */
-  const saldoDataDoCard = selectedConta !== '__all__'
-    ? (saldos.find(x => x.ano_mes === anoMesSel && x.conta_bancaria_id === selectedConta)?.saldo_data ?? null)
-    : null;
-  const posicaoEmDoCard = saldoDataDoCard
+  /* ⚠ PR-CONC-SALDO-UMA-REGUA-02 (D5): a data do saldo do extrato e a posição são do DONO — `saldo_extrato_data` e
+     `posicao` (que só existe com a posição ANTES do fim do mês, com os realizados depois dela). Nada se conta aqui. */
+  const dataExtratoDoCard = linhaSel?.saldo_extrato_data
     ?? fimDoMes(Number(anoMesSel.slice(0, 4)), Number(anoMesSel.slice(5, 7)));
-  const posicaoDeclaradaDoCard = saldoDataDoCard !== null;
-  const posicaoDoCard = posicaoEmDoCard.slice(0, 10).split('-').reverse().slice(0, 2).join('/');
-
-  /* Quantos realizados vêm DEPOIS da posição — o que o aviso cobra. Conta sobre
-     os mesmos lançamentos que a régua do saldo usa; um recorte diferente faria
-     o aviso falar de linhas que a conta não viu. */
-  const avisoAposPosicao = selectedConta === '__all__' ? 0 : lancamentos.filter(l =>
-    (l.data_pagamento || '').slice(0, 7) === anoMesSel
-    && belongsToConta(l, selectedConta)
-    && !l.cancelado && l.cenario === 'realizado' && !l.sem_movimentacao_caixa
-    && (l.data_pagamento || '').slice(0, 10) > posicaoEmDoCard).length;
+  const posicaoDoCard = dataExtratoDoCard.slice(0, 10).split('-').reverse().slice(0, 2).join('/');
+  const posicaoDono = linhaSel?.posicao ?? null;
+  const avisoAposPosicao = posicaoDono?.realizados_apos.qtde ?? 0;
+  const ddmmPosicao = posicaoDono ? posicaoDono.data.slice(0, 10).split('-').reverse().slice(0, 2).join('/') : '';
   /* ⚠ OCULTAR NÃO É INATIVAR — PR-CONCILIACAO-CARDS-01a. Conta que abriu o mês com
      saldo 0,00, sem lançamento e sem saldo de extrato não diz nada sobre o mês e só
      empurra as outras para baixo. Some da LISTA; o Total continua somando todas
@@ -876,28 +658,24 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
    * ⚠ "SEM MOVIMENTAÇÃO" NÃO É "INATIVA": a conta continua viva e `cb.ativa` não é tocada. O
    *   rodapé "mostrar" a traz de volta para quem precisar digitar uma posição nela.
    */
+  /* ⚠ AS QUATRO PERGUNTAS LEEM A LINHA DO DONO (PR-CONC-SALDO-UMA-REGUA-02): saldo inicial, saldo do extrato,
+     entradas/saídas do mês e `tem_extrato`. É regra de EXIBIÇÃO: o Total e o subtotal são do dono, com ou sem ela. */
   const ehOculta = (c: PerContaSaldo) =>
-    Math.round(c.saldoInicial * 100) === 0
-    && Math.round((c.ext ?? 0) * 100) === 0
-    && !c.temMovimento
-    && !(contasComExtrato.get(anoMesSel)?.has(c.conta.id) ?? false);
+    Math.round((c.linha.saldo_inicial ?? 0) * 100) === 0
+    && Math.round((c.linha.saldo_extrato ?? 0) * 100) === 0
+    && Math.round(c.linha.entradas * 100) === 0 && Math.round(c.linha.saidas * 100) === 0
+    && !c.linha.tem_extrato;
   const qtdOcultas = perContaSaldos.filter(ehOculta).length;
   const contasVisiveis = mostrarOcultas ? perContaSaldos : perContaSaldos.filter(c => !ehOculta(c));
   /* ⚠ OS GRUPOS SAEM DO AGRUPADOR ÚNICO — PR-CONCILIA-GRUPOS-01. Eram três `<tr>` literais
      (cc/inv/cartao), e a conta de qualquer outro tipo (a permuta da NJ) ficava INVISÍVEL na
      tabela mas entrava no Total — nenhum subtotal fecharia. `agruparContasPorTipo` dá faixa a
      todo tipo, com o rótulo e a ordem que o dropdown do Importar Banco já usa.
-     ⚠ O SUBTOTAL É A MESMA SOMA DO `totalSaldos`, sobre as contas do grupo: `ext` nulo só
-     quando nenhuma conta do grupo tem extrato. Oculta vale zero, então a soma dos grupos
-     fecha com o Total com ou sem o "mostrar". */
-  const somarSaldos = (lista: readonly PerContaSaldo[]) => ({
-    sis: r2(lista.reduce((s,c)=>s+c.sis,0)),
-    ext: lista.every(c=>c.ext===null) ? null : r2(lista.reduce((s,c)=>s+(c.ext||0),0)),
-    dif: r2(lista.reduce((s,c)=>s+c.dif,0)),
-  });
+     ⚠ O SUBTOTAL É A LINHA 'tipo' DO DONO (PR-CONC-SALDO-UMA-REGUA-02), com a MESMA chave de `grupoDaConta`; a tela
+     não soma. Sem linha do dono para o grupo, o subtotal fica em "—". */
   const gruposSaldos = agruparContasPorTipo(
-    contasVisiveis.map(c => ({ ...c, tipo_conta: c.conta.tipo_conta, label: getContaLabel(c.conta) })),
-  ).map(g => ({ ...g, subtotal: somarSaldos(g.contas) }));
+    contasVisiveis.map(c => ({ ...c, tipo_conta: c.linha.tipo_conta ?? c.conta.tipo_conta, label: getContaLabel(c.conta) })),
+  ).map(g => ({ ...g, subtotal: resumo?.find(l => l.nivel === 'tipo' && l.tipo_conta === g.chave) ?? null }));
 
   /* ⚠ O PAREAMENTO É LIDO PELO MESMO HOOK DA ABA IMPORTAR — uma fonte, dois
      consumidores. Sem conta escolhida o hook não consulta e devolve vazio, e o
@@ -912,46 +690,36 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   /* A diferença do resumo — `null` quando não há saldo de extrato. Ausência é
      traço, nunca "confere". "Todas" compara o total do extrato com o do sistema,
      o mesmo cálculo que o card já fazia. */
-  const difResumo: number | null = selectedConta === '__all__'
-    ? (totalSaldos.ext !== null ? r2(totalSaldos.ext - totalSaldos.sis) : null)
-    : (selectedCard && selectedCard.saldoExtrato !== null ? selectedCard.diferenca : null);
+  const difResumo: number | null = linhaSel?.diferenca ?? null;
   const difResumoConfere = difResumo !== null && saldoConfere(difResumo);
+
+  /* ⚠ D8 — O QUE SE GRAVA É O DO DONO (`contasParaFecharSemMovimento`): saldo final = `saldo_sistema`, saldo inicial = o
+     do dono; conta com movimento no mês (entrada, saída ou extrato) NÃO se fecha — ela é para conferir. Antes gravava o
+     `saldoCalculado` da tela, a valor cheio, e fechava também a conta com movimento (sem a marca 'sem_movimento'). */
+  const fechamentoSemMovimento = useMemo(
+    () => contasParaFecharSemMovimento((resumo ?? []).filter(l => l.nivel === 'conta')),
+    [resumo]);
 
   const handleFecharSemMovimento = useCallback(async () => {
     if (!clienteId) return;
     const anoMes = anoMesSel;
-
-    // Contas sem extrato no mês selecionado
-    const contasSemExtrato = perContaSaldos.filter(p => p.ext === null);
-    if (contasSemExtrato.length === 0) {
-      toast.info('Nenhuma conta sem extrato neste mês.');
+    const { fechar, comMovimento, semReferencia } = fechamentoSemMovimento;
+    if (fechar.length === 0) {
+      toast.info('Nenhuma conta sem extrato e sem movimento para fechar neste mês.');
       return;
     }
 
     setFechandoSemMovimento(true);
     let salvos = 0;
     let erros = 0;
-    let semReferencia = 0;   // PR-E1-F1 — contas sem SI anterior (não inventamos 0)
 
     try {
-      for (const p of contasSemExtrato) {
-        // PR-E1-F1 — sem referência de saldo anterior: NÃO inventar 0; pular e avisar.
-        if (p.siOrigem === 'ausente') { semReferencia++; continue; }
-        // Saldo inicial = saldo_final do registro do mês anterior, se existir
-        const [anoNum, mesNum] = anoMes.split('-').map(Number);
-        const mesAnterior = mesNum === 1
-          ? `${anoNum - 1}-12`
-          : `${anoNum}-${String(mesNum - 1).padStart(2, '0')}`;
-        const rowAnterior = saldos.find(
-          s => s.conta_bancaria_id === p.conta.id && s.ano_mes === mesAnterior
-        );
-        const saldoInicial = rowAnterior?.saldo_final ?? 0;
-
+      for (const f of fechar) {
         // Buscar fazenda_id da conta
         const { data: cd } = await supabase
           .from('financeiro_contas_bancarias')
           .select('fazenda_id')
-          .eq('id', p.conta.id)
+          .eq('id', f.conta_id)
           .single();
         if (!cd) { erros++; continue; }
 
@@ -960,14 +728,13 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
           .insert({
             cliente_id: clienteId,
             fazenda_id: cd.fazenda_id,
-            conta_bancaria_id: p.conta.id,
+            conta_bancaria_id: f.conta_id,
             ano_mes: anoMes,
-            saldo_inicial: saldoInicial,
-            saldo_final: p.sis,
+            saldo_inicial: f.saldo_inicial,
+            saldo_final: f.saldo_final,
             origem_saldo_inicial: 'propagacao_automatica',
             status_mes: 'aberto',
-            // PR-E1-F1 — marca 'sem_movimento' só quando não há movimento; senão NULL (atual).
-            ...(!p.temMovimento ? { origem_saldo: 'sem_movimento' } : {}),
+            origem_saldo: 'sem_movimento',
           });
 
         if (error) { erros++; } else { salvos++; }
@@ -979,6 +746,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     if (salvos > 0) {
       toast.success(`${salvos} conta${salvos > 1 ? 's fechadas' : ' fechada'} com sucesso.`);
       loadData();
+      releDono();
     }
     if (erros > 0) {
       toast.error(`${erros} conta${erros > 1 ? 's' : ''} com erro ao fechar.`);
@@ -986,7 +754,10 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     if (semReferencia > 0) {
       toast.info(`${semReferencia} conta(s) sem referência de saldo anterior — informe o saldo manualmente.`);
     }
-  }, [clienteId, anoMesSel, perContaSaldos, saldos, loadData]);
+    if (comMovimento > 0) {
+      toast.info(`${comMovimento} conta(s) com movimento no mês não foram fechadas — confira e informe o saldo.`);
+    }
+  }, [clienteId, anoMesSel, fechamentoSemMovimento, loadData, releDono]);
 
   /* ── Render ── */
   return (
@@ -1053,7 +824,8 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
               setAno(String(p.de.ano));
               setSelectedMes(String(p.de.mes).padStart(2, '0'));
             }}
-            carregando={loading}
+            /* A régua não espera nada (PR-CONC-SALDO-UMA-REGUA-02): os tons vêm do dono e o mês sem tom é neutro. */
+            carregando={false}
             className="flex-1"
             tomPorMes={tomDosMeses}
           />
@@ -1083,7 +855,9 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             demais abas, que perderam a faixa vazia. */}
         {selectedCard && (
           <div className="flex gap-1 items-center">
-            {!loading && (<>
+            {/* As abas não esperam a carga dos lançamentos (PR-CONC-SALDO-UMA-REGUA-02): a Conciliação desenha o dono e
+                as outras abas mantêm o próprio "Carregando..." no corpo. */}
+            {(<>
             <button
               onClick={() => setVistaExtrato('importar')}
               className={`px-2.5 py-1 rounded-t text-[10px] font-bold transition-colors ${vistaExtrato === 'importar' ? 'bg-card text-foreground shadow-[inset_0_1px_0_hsl(var(--border)/0.6),inset_1px_0_0_hsl(var(--border)/0.6),inset_-1px_0_0_hsl(var(--border)/0.6)]' : 'bg-transparent text-muted-foreground hover:bg-background/60'}`}
@@ -1192,7 +966,9 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
           aba com seletor — quatro lugares, nenhum compartilhado. */}
       <div className="px-3 pb-3 bg-card md:flex-1 md:min-h-0 md:flex md:flex-col md:min-w-0">
 
-        {loading && <div className="text-center text-xs text-muted-foreground py-8">Carregando...</div>}
+        {/* A Conciliação não espera os lançamentos do ano (PR-CONC-SALDO-UMA-REGUA-02): ela desenha o dono, e a lista do
+            mês só alimenta os contadores do rodapé do Resumo e as pendências — que dizem "…" enquanto chegam. */}
+        {loading && vistaExtrato !== 'conciliacao' && <div className="text-center text-xs text-muted-foreground py-8">Carregando...</div>}
 
         {/* ─── IMPORTAR BANCO — clone da aba "Importar Extrato" do Financas ────
             ⚠ O CONTEUDO LEGADO SAIU: era um texto explicando o que a propria
@@ -1336,7 +1112,8 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             <EspelhoConciliacaoTab clienteId={clienteId ?? null}
               contaId={selectedConta === '__all__' ? null : selectedConta}
               ano={String(ano)} mes={selectedMes} mostrarCandidatos
-              aba={abaEspelho} onAbaChange={setAbaEspelho} />
+              aba={abaEspelho} onAbaChange={setAbaEspelho}
+              diaFoco={diaFoco} onDiaFocado={() => setDiaFoco(null)} />
           </div>
         )}
 
@@ -1391,7 +1168,13 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
           </div>
         )}
 
-        {!loading && selectedCard && vistaExtrato === 'conciliacao' && (
+        {/* O resumo do dono ainda não respondeu, ou falhou: a frase fica no lugar do conteúdo, nunca em toast. */}
+        {vistaExtrato === 'conciliacao' && !resumo && (
+          <div className="py-8 text-center text-xs text-muted-foreground" data-testid="resumo-estado">
+            {resumoQ.error ? `Não foi possível ler o resumo do mês: ${resumoQ.error instanceof Error ? resumoQ.error.message : String(resumoQ.error)}` : 'Carregando o resumo do mês…'}
+          </div>
+        )}
+        {resumo && vistaExtrato === 'conciliacao' && (
           <div className="space-y-2 md:flex-1 md:min-h-0 md:overflow-y-auto">
             {/* ⚠ A FAIXA DO MÊS VEIO DO CABEÇALHO — PR-CONC-FAIXA-STATUS-03. Mesmo conteúdo, mesma
                 ordem, mesmo cálculo de status; o que mudou foi a casa. Aqui ela é a primeira coisa
@@ -1412,8 +1195,8 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
               <span style={{
                 background:cor.bg, color:cor.txt, border:`1px solid ${cor.border}`,
                 fontSize:'9.5px', fontWeight:500, padding:'1px 6px', borderRadius:'20px',
-              }}>
-                {cardStatus==='realizado'?'✅':cardStatus==='parcial'?'⚠':cardStatus==='nao_conciliado'?'❌':'⏳'} {meta.label}
+              }} data-testid="selo-mes" data-status={cardStatus}>
+                {cardStatus==='conciliado'?'✅':cardStatus==='nao_conciliado'?'❌':'⏳'} {ROTULO_STATUS[cardStatus]}
               </span>
               <span className="text-[10px] text-muted-foreground" aria-hidden>·</span>
               {/* ⚠ O `text-[#185FA5]` É HEX SOLTO e fica ANOTADO, não corrigido: o briefing o
@@ -1436,100 +1219,105 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                 <div className="px-3 py-1.5 border-b bg-primary text-primary-foreground flex items-center justify-between min-h-[32px]">
                   <span className="text-[9px] font-medium uppercase tracking-wider whitespace-nowrap shrink-0">Resumo das movimentações</span>
                 </div>
+                {/* ⚠ TUDO DA LINHA DO DONO — PR-CONC-SALDO-UMA-REGUA-02 (D1): a conta aberta, ou o total no Todas. A abertura
+                    terceiros × transferências vale nas duas visões (o dono a dá no total também). Nulo é "—", nunca zero.
+                    As saídas vêm com o sinal do dono (negativas, em vermelho). */}
                 <div className="px-3 pt-1.5 flex justify-between">
                   <span className="text-[10px] text-muted-foreground">Saldo inicial</span>
-                  <span className="text-[11px] font-medium text-muted-foreground tabular-nums">{formatMoeda(selectedCard.saldoInicial)}</span>
+                  <span className="text-[11px] font-medium text-muted-foreground tabular-nums" data-testid="resumo-saldo-inicial">
+                    {linhaSel?.saldo_inicial != null ? formatMoeda(linhaSel.saldo_inicial) : '—'}
+                  </span>
                 </div>
                 <div className="mx-3 my-1 h-px bg-border" />
                 <div className="px-3 flex justify-between bg-success/10">
                   <span className="text-[10px] text-muted-foreground">Entradas</span>
-                  <span className="text-[11px] font-semibold text-success tabular-nums">{formatMoeda(selectedCard.totalEntradas)}</span>
+                  <span className="text-[11px] font-semibold text-success tabular-nums" data-testid="resumo-entradas">{linhaSel ? formatMoeda(linhaSel.entradas) : '—'}</span>
                 </div>
-                {selectedConta !== '__all__' && (
-                  <div className="px-5 space-y-0.5 pb-0.5">
-                    <div className="flex justify-between text-[9px] text-muted-foreground">
-                      <span>↳ terceiros</span><span className="tabular-nums">{formatMoeda(selectedCard.entradasTerceiros)}</span>
-                    </div>
-                    <div className="flex justify-between text-[9px] text-muted-foreground">
-                      <span>↳ transferências</span><span className="tabular-nums">{formatMoeda(selectedCard.transferenciasRecebidas)}</span>
-                    </div>
+                <div className="px-5 space-y-0.5 pb-0.5">
+                  <div className="flex justify-between text-[9.5px] text-muted-foreground">
+                    <span>↳ terceiros</span><span className="tabular-nums">{linhaSel ? formatMoeda(linhaSel.entradas_terceiros) : '—'}</span>
                   </div>
-                )}
+                  <div className="flex justify-between text-[9.5px] text-muted-foreground">
+                    <span>↳ transferências</span><span className="tabular-nums">{linhaSel ? formatMoeda(linhaSel.entradas_transferencias) : '—'}</span>
+                  </div>
+                  {retido && (
+                    <div className="flex justify-between text-[9.5px] text-muted-foreground" title={retido.titulo} data-testid="resumo-retido">
+                      <span>↳ {retido.texto}</span>
+                    </div>
+                  )}
+                </div>
                 <div className="px-3 flex justify-between bg-destructive/10">
                   <span className="text-[10px] text-muted-foreground">Saídas</span>
-                  <span className="text-[11px] font-semibold text-destructive tabular-nums">{formatMoeda(selectedCard.totalSaidas)}</span>
+                  <span className="text-[11px] font-semibold text-destructive tabular-nums" data-testid="resumo-saidas">{linhaSel ? formatMoeda(linhaSel.saidas) : '—'}</span>
                 </div>
-                {selectedConta !== '__all__' && (
-                  <div className="px-5 space-y-0.5 pb-0.5">
-                    <div className="flex justify-between text-[9px] text-muted-foreground">
-                      <span>↳ terceiros</span><span className="tabular-nums">{formatMoeda(selectedCard.saidasTerceiros)}</span>
-                    </div>
-                    <div className="flex justify-between text-[9px] text-muted-foreground">
-                      <span>↳ transferências</span><span className="tabular-nums">{formatMoeda(selectedCard.transferenciasEnviadas)}</span>
-                    </div>
+                <div className="px-5 space-y-0.5 pb-0.5">
+                  <div className="flex justify-between text-[9.5px] text-muted-foreground">
+                    <span>↳ terceiros</span><span className="tabular-nums">{linhaSel ? formatMoeda(linhaSel.saidas_terceiros) : '—'}</span>
+                  </div>
+                  <div className="flex justify-between text-[9.5px] text-muted-foreground">
+                    <span>↳ transferências</span><span className="tabular-nums">{linhaSel ? formatMoeda(linhaSel.saidas_transferencias) : '—'}</span>
+                  </div>
+                </div>
+                {semConta && (
+                  <div className="px-3 pb-0.5 text-[9.5px] leading-snug text-warning" title={semConta.titulo} data-testid="resumo-sem-conta">
+                    {semConta.texto}
                   </div>
                 )}
                 <div className="mx-3 my-1 h-px bg-border" />
                 <div className="px-3 flex justify-between bg-accent">
                   <span className="text-[10px] text-muted-foreground">Saldo no sistema</span>
-                  <span className={`text-[11px] font-bold tabular-nums ${(selectedConta==='__all__'?totalSaldos.sis:selectedCard.saldoCalculado)>=0?'text-success':'text-destructive'}`}>
-                    {formatMoeda(selectedConta === '__all__' ? totalSaldos.sis : selectedCard.saldoCalculado)}
+                  <span className={`text-[11px] font-bold tabular-nums ${(linhaSel?.saldo_sistema ?? 0) >= 0 ? 'text-success' : 'text-destructive'}`} data-testid="resumo-saldo-sistema">
+                    {linhaSel?.saldo_sistema != null ? formatMoeda(linhaSel.saldo_sistema) : '—'}
                   </span>
                 </div>
                 <div className="mx-3 my-1 h-px bg-border" />
-                {/* ⚠ A POSIÇÃO ENTRA AQUI TAMBÉM — §3. Este resumo comparava
-                    contra o fim do mês enquanto a aba Importar já comparava
-                    posição contra posição; as duas telas diziam coisas
-                    diferentes sobre o mesmo mês. A data e o lápis são os mesmos,
-                    e o rótulo passa a nomear a data que a diferença usou. */}
+                {/* ⚠ A DATA DO SALDO DO EXTRATO É A DO DONO (`saldo_extrato_data`; sem ela, o fim do mês). */}
                 <div className="px-3 py-1 bg-muted/20 flex justify-between">
                   <span className="text-[10px] text-muted-foreground">
                     Saldo extrato {posicaoDoCard && <span className="opacity-60">({posicaoDoCard})</span>}
                   </span>
-                  {/* O lápis que morava aqui saiu — PR-CONCILIA-GRUPOS-HIERARQUIA-01: fazia a MESMA
-                      edição do lápis da conta em "Saldos por conta" (mesma conta, mesmo mês). */}
-                  <span className="text-[11px] font-medium tabular-nums whitespace-nowrap shrink-0">
-                    {selectedCard.saldoExtrato !== null ? formatMoeda(selectedCard.saldoExtrato) : '—'}
+                  <span className="text-[11px] font-medium tabular-nums whitespace-nowrap shrink-0" data-testid="resumo-saldo-extrato">
+                    {linhaSel?.saldo_extrato != null ? formatMoeda(linhaSel.saldo_extrato) : '—'}
                   </span>
                 </div>
-                {/* NEW: Diferença — sem extrato é "—" e sem fundo: ausência nunca aparenta "confere". */}
+                {/* Diferença — sem extrato é "—" e sem fundo: ausência nunca aparenta "confere". */}
                 <div className={`px-3 py-1 flex justify-between mb-1 ${difResumo === null ? '' : difResumoConfere ? 'bg-success/10' : 'bg-destructive/10'}`}>
                   <span className="text-[10px] text-muted-foreground">Diferença de saldo <span className="opacity-60">(o mês fecha?)</span></span>
-                  <span className={`text-[11px] font-bold tabular-nums whitespace-nowrap shrink-0 ${difResumo === null ? 'text-muted-foreground' : difResumoConfere ? 'text-success' : 'text-destructive'}`}>
+                  <span className={`text-[11px] font-bold tabular-nums whitespace-nowrap shrink-0 ${difResumo === null ? 'text-muted-foreground' : difResumoConfere ? 'text-success' : 'text-destructive'}`} data-testid="resumo-diferenca">
                     {difResumo === null ? '—' : difResumoConfere ? 'confere' : formatMoeda(difResumo)}
                   </span>
                 </div>
-                  {/* ⚠ O AVISO COBRA A ATUALIZAÇÃO — a posição no meio do mês é
-                      declaração TEMPORÁRIA, e sem esta linha o operador fecharia
-                      o mês achando que conferiu agosto inteiro. */}
+                  {/* ⚠ A POSIÇÃO É DO DONO (D5): `posicao` só existe com o saldo declarado ANTES do fim do mês, e traz quantos
+                      realizados vieram depois dela. A posição no meio do mês é declaração TEMPORÁRIA: sem esta linha o operador
+                      fecharia o mês achando que conferiu o mês inteiro. */}
                   {avisoAposPosicao > 0 && (
-                    <div className="mx-3 mb-1 rounded bg-destructive/5 px-2 py-1 text-[9px] leading-snug text-destructive">
-                      {avisoAposPosicao} realizado{avisoAposPosicao === 1 ? '' : 's'} após {posicaoDoCard} não
+                    <div className="mx-3 mb-1 rounded bg-destructive/5 px-2 py-1 text-[9.5px] leading-snug text-destructive" data-testid="resumo-realizados-apos">
+                      {avisoAposPosicao} realizado{avisoAposPosicao === 1 ? '' : 's'} após {ddmmPosicao} não
                       conferido{avisoAposPosicao === 1 ? '' : 's'} — informe o saldo de uma data mais recente
                       para o mês fechar.
                     </div>
                   )}
-                  {/* A frase de rodapé: qual data a diferença usou. */}
-                  {selectedCard.saldoExtrato !== null && (
-                    <div className="px-3 pb-1 text-[9px] leading-snug text-muted-foreground">
-                      {posicaoDeclaradaDoCard
-                        ? `A diferença compara a posição de ${posicaoDoCard}, que é a data declarada pelo banco — e não o fim do mês.`
-                        : `Sem posição declarada: a diferença compara o fim do mês (${posicaoDoCard}). Informe a data no lápis para conferir posição contra posição.`}
+                  {/* A frase de rodapé: qual data o saldo do extrato usou. */}
+                  {linhaSel?.saldo_extrato != null && (
+                    <div className="px-3 pb-1 text-[9.5px] leading-snug text-muted-foreground" data-testid="resumo-rodape">
+                      {posicaoDono
+                        ? `Posição declarada em ${ddmmPosicao}: na data, a diferença é ${posicaoDono.diferenca_na_data != null ? formatMoeda(posicaoDono.diferenca_na_data) : '—'}.`
+                        : `A diferença compara o saldo do extrato de ${posicaoDoCard}.`}
                     </div>
                   )}
               {/* Transação — footer do card como badges */}
               <div className="px-2 pt-2 pb-2 border-t mt-1 flex items-center gap-1 flex-wrap">
                 <button onClick={()=>{setFiltroModal('todos');setShowLancModal(true);}}
                   className="px-2 py-0.5 rounded text-[9px] font-bold bg-primary/10 text-primary hover:bg-primary/20 cursor-pointer">
-                  Todos ({selectedCard.lancamentos.length})
+                  Todos ({loading ? '…' : selectedCard.lancamentos.length})
                 </button>
                 <button onClick={()=>{setFiltroModal('entradas');setShowLancModal(true);}}
                   className="px-2 py-0.5 rounded text-[9px] font-bold bg-success/10 text-success hover:bg-success/20 cursor-pointer">
-                  Entradas ({entradas.length})
+                  Entradas ({loading ? '…' : entradas.length})
                 </button>
                 <button onClick={()=>{setFiltroModal('saidas');setShowLancModal(true);}}
                   className="px-2 py-0.5 rounded text-[9px] font-bold bg-destructive/10 text-destructive hover:bg-destructive/20 cursor-pointer">
-                  Saídas ({saidas.length})
+                  Saídas ({loading ? '…' : saidas.length})
                 </button>
                 {transfEntrada.length > 0 && (
                   <button onClick={()=>{setFiltroModal('transf_entrada');setShowLancModal(true);}}
@@ -1547,62 +1335,49 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             </div>
 
               {/* ── COL 2: Status ── */}
-              {/* A cor do card É o veredito: vermelho não conciliado, verde conciliado; parcial e
-                  pendente mantêm a borda do tom deles e o cabeçalho navy dos outros cards. */}
-              <div className={`rounded-lg overflow-hidden flex flex-col border ${cardStatus === 'nao_conciliado' ? 'border-destructive' : cardStatus === 'realizado' ? 'border-success' : ''}`}
-                   style={cardStatus === 'nao_conciliado' || cardStatus === 'realizado' ? undefined : {borderColor:cor.border}}>
-                <div className={`px-3 py-1.5 border-b text-[9px] font-medium uppercase tracking-wider ${cardStatus === 'nao_conciliado' ? 'bg-destructive text-destructive-foreground border-destructive' : cardStatus === 'realizado' ? 'bg-success text-success-foreground border-success' : 'bg-primary text-primary-foreground'}`}>
+              {/* ⚠ O STATUS É O DO DONO — PR-CONC-SALDO-UMA-REGUA-02 (D2), o mesmo da Conferência, e o card ESCREVE os
+                  motivos dele: "N dias com diferença" leva à Conferência no primeiro dia; "saldo diverge", "o extrato não
+                  fecha com o saldo informado", "saldo não informado", "sem extrato". No Todas, as contas não conciliadas
+                  (nome por nome) e as pendentes. 'parcial' não existe. O pareamento e o "sem classificação" seguem como
+                  INFORMAÇÃO — não decidem a cor. */}
+              <div className={`rounded-lg overflow-hidden flex flex-col border ${cardStatus === 'nao_conciliado' ? 'border-destructive' : cardStatus === 'conciliado' ? 'border-success' : ''}`}
+                   style={cardStatus === 'nao_conciliado' || cardStatus === 'conciliado' ? undefined : {borderColor:cor.border}}
+                   data-testid="card-status" data-status={cardStatus}>
+                <div className={`px-3 py-1.5 border-b text-[9px] font-medium uppercase tracking-wider ${cardStatus === 'nao_conciliado' ? 'bg-destructive text-destructive-foreground border-destructive' : cardStatus === 'conciliado' ? 'bg-success text-success-foreground border-success' : 'bg-primary text-primary-foreground'}`}>
                   Status
                 </div>
                 <div className="flex-1 flex flex-col items-center justify-center gap-1.5 p-3 text-center"
                      style={{background:cor.bg}}>
                   <StatusIcon className="h-7 w-7" style={{color:cor.txt}} />
-                  <div className="text-[11px] font-bold" style={{color:cor.txt}}>{meta.label}</div>
-                  {/* ⚠ O QUE FALHOU, e não só QUE falhou. Pareamento sai do mesmo hook da aba
-                      Importar; sem conta escolhida ou sem extrato importado, é "—". */}
-                  <div className="text-[10px] leading-tight tabular-nums" style={{color:cor.txt}}>
-                    <div>
-                      {pareamento.todos === 0
-                        ? 'pareamento —'
-                        : `pareamento ${pareamento.conciliado}/${pareamento.todos} ${pareamento.conciliado === pareamento.todos ? 'ok' : 'falha'}`}
-                    </div>
-                    <div>
-                      {difResumo === null ? 'saldo —' : difResumoConfere ? 'saldo confere' : 'saldo diverge'}
-                    </div>
+                  <div className="text-[11px] font-bold" style={{color:cor.txt}}>{ROTULO_STATUS[cardStatus]}</div>
+                  <div className="w-full space-y-0.5 text-[9.5px] leading-tight" style={{color:cor.txt}} data-testid="status-motivos">
+                    {frasesStatus.map(f => (
+                      <LinhaMotivo key={f.chave} frase={f}
+                        onDia={f.dia && selectedConta !== '__all__' ? () => irParaConferencia(selectedConta, f.dia ?? '') : undefined}
+                        onDiaConta={irParaConferencia} />
+                    ))}
                   </div>
-                  {meta.sub && (
-                    <div className="text-[9px] leading-tight" style={{color:cor.txt, maxWidth:'90px'}}>{meta.sub}</div>
-                  )}
-                  {((selectedCard?.semContaSaidas ?? 0) + (selectedCard?.semContaEntradas ?? 0)) > 0 && (
-                    <div className="text-[9px] leading-tight font-medium text-warning">
-                      ⚠ {formatMoeda((selectedCard?.semContaSaidas ?? 0) + (selectedCard?.semContaEntradas ?? 0))} em lançamentos sem conta bancária
-                    </div>
-                  )}
+                  {/* O pareamento — informação, do mesmo hook da aba Importar; sem conta ou sem extrato, "—". */}
+                  <div className="text-[9.5px] leading-tight tabular-nums text-muted-foreground">
+                    {pareamento.todos === 0
+                      ? 'pareamento —'
+                      : `pareamento ${pareamento.conciliado}/${pareamento.todos}`}
+                  </div>
                   {diagPendencias.semClassificacao.length > 0 && (
-                    <div className="text-[9px] leading-tight font-medium text-destructive">
+                    <div className="text-[9.5px] leading-tight font-medium text-destructive">
                       🔴 {diagPendencias.semClassificacao.length} sem classificação
                     </div>
                   )}
                   {diagPendencias.duplicadosCount > 0 && (
-                    <div className="text-[9px] leading-tight font-medium text-destructive">
+                    <div className="text-[9.5px] leading-tight font-medium text-destructive">
                       🔴 {diagPendencias.duplicadosCount} duplicados
                     </div>
                   )}
                   {(diagPendencias.semClassificacao.length > 0 || diagPendencias.duplicadosCount > 0) && (
                     <button type="button" onClick={() => setShowPendencias(true)}
-                      className="text-[9px] underline text-muted-foreground hover:text-foreground mt-0.5">
+                      className="text-[9.5px] underline text-muted-foreground hover:text-foreground mt-0.5">
                       Ver detalhes
                     </button>
-                  )}
-                  {cardStatus === 'parcial' && (
-                    <div className="mt-1 w-full border-t pt-1.5 space-y-0.5" style={{borderColor:`${cor.border}80`}}>
-                      <div className="flex justify-between text-[9px]" style={{color:cor.txt}}>
-                        <span>Global</span><span>✓ ok</span>
-                      </div>
-                      <div className="flex justify-between text-[9px]" style={{color:cor.txt}}>
-                        <span>Por conta</span><span>✗ diverge</span>
-                      </div>
-                    </div>
                   )}
                 </div>
               </div>
@@ -1618,7 +1393,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                         ← Todas
                       </button>
                     )}
-                    {perContaSaldos.some(p => p.ext === null) && canEditSaldoFinal(anoMesSel) && (
+                    {fechamentoSemMovimento.fechar.length > 0 && canEditSaldoFinal(anoMesSel) && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -1688,10 +1463,11 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                       onClick={() => setSelectedConta('__all__')}
                     >
                       <td className="py-2 px-2 font-medium text-[12px] text-blue-900 shadow-[inset_0_-1px_0_hsl(var(--border))]">Total — todas as contas</td>
-                      <td className={`py-2 px-1 text-right font-bold text-[10px] tabular-nums whitespace-nowrap text-blue-900 shadow-[inset_0_-1px_0_hsl(var(--border))] ${totalSaldos.sis<0?'text-destructive':''}`}>{formatMoeda(totalSaldos.sis)}</td>
-                      <td className="py-2 px-1 text-right font-bold text-[10px] tabular-nums whitespace-nowrap text-blue-900 shadow-[inset_0_-1px_0_hsl(var(--border))]">{totalSaldos.ext===null?'—':formatMoeda(totalSaldos.ext)}</td>
-                      <td className={`py-2 px-1 text-right font-bold text-[10px] tabular-nums whitespace-nowrap shadow-[inset_0_-1px_0_hsl(var(--border))] ${totalSaldos.ext===null?'text-muted-foreground':saldoConfere(totalSaldos.dif)?'text-success':'text-destructive'}`}>
-                        {totalSaldos.ext===null ? '—' : saldoConfere(totalSaldos.dif) ? 'confere' : formatMoeda(totalSaldos.dif)}
+                      {/* O Total é a linha 'total' do dono (as internas fora: o saldo delas já está na conta-mãe). */}
+                      <td className={`py-2 px-1 text-right font-bold text-[10px] tabular-nums whitespace-nowrap text-blue-900 shadow-[inset_0_-1px_0_hsl(var(--border))] ${(linhaTotal?.saldo_sistema ?? 0)<0?'text-destructive':''}`} data-testid="total-sistema">{linhaTotal?.saldo_sistema != null ? formatMoeda(linhaTotal.saldo_sistema) : '—'}</td>
+                      <td className="py-2 px-1 text-right font-bold text-[10px] tabular-nums whitespace-nowrap text-blue-900 shadow-[inset_0_-1px_0_hsl(var(--border))]" data-testid="total-extrato">{linhaTotal?.saldo_extrato != null ? formatMoeda(linhaTotal.saldo_extrato) : '—'}</td>
+                      <td className={`py-2 px-1 text-right font-bold text-[10px] tabular-nums whitespace-nowrap shadow-[inset_0_-1px_0_hsl(var(--border))] ${linhaTotal?.diferenca == null?'text-muted-foreground':saldoConfere(linhaTotal.diferenca)?'text-success':'text-destructive'}`} data-testid="total-diferenca">
+                        {linhaTotal?.diferenca == null ? '—' : saldoConfere(linhaTotal.diferenca) ? 'confere' : formatMoeda(linhaTotal.diferenca)}
                       </td>
                       <td className="py-2 shadow-[inset_0_-1px_0_hsl(var(--border))]" />
                     </tr>
@@ -1713,10 +1489,10 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                     <tbody key={g.chave}>
                       <tr>
                         <td style={{top:`${alturaCabSaldos + alturaThead}px`}} className="px-2 py-1 text-[12px] font-semibold text-muted-foreground sticky z-[8] bg-card bg-[linear-gradient(hsl(var(--muted-foreground)/0.15),hsl(var(--muted-foreground)/0.15))] shadow-[inset_0_1px_0_hsl(var(--border))]">{g.rotulo}</td>
-                        <td style={{top:`${alturaCabSaldos + alturaThead}px`}} className={`py-1 px-1 text-right text-[10px] font-semibold tabular-nums whitespace-nowrap sticky z-[8] bg-card bg-[linear-gradient(hsl(var(--muted-foreground)/0.15),hsl(var(--muted-foreground)/0.15))] shadow-[inset_0_1px_0_hsl(var(--border))] ${g.subtotal.sis<0?'text-destructive':''}`}>{formatMoeda(g.subtotal.sis)}</td>
-                        <td style={{top:`${alturaCabSaldos + alturaThead}px`}} className="py-1 px-1 text-right text-[10px] font-semibold tabular-nums whitespace-nowrap sticky z-[8] bg-card bg-[linear-gradient(hsl(var(--muted-foreground)/0.15),hsl(var(--muted-foreground)/0.15))] shadow-[inset_0_1px_0_hsl(var(--border))]">{g.subtotal.ext===null ? '—' : formatMoeda(g.subtotal.ext)}</td>
-                        <td style={{top:`${alturaCabSaldos + alturaThead}px`}} className={`py-1 px-1 text-right text-[10px] font-semibold tabular-nums whitespace-nowrap sticky z-[8] bg-card bg-[linear-gradient(hsl(var(--muted-foreground)/0.15),hsl(var(--muted-foreground)/0.15))] shadow-[inset_0_1px_0_hsl(var(--border))] ${g.subtotal.ext===null?'text-muted-foreground':saldoConfere(g.subtotal.dif)?'text-success':'text-destructive'}`}>
-                          {g.subtotal.ext===null ? '—' : saldoConfere(g.subtotal.dif) ? 'confere' : formatMoeda(g.subtotal.dif)}
+                        <td style={{top:`${alturaCabSaldos + alturaThead}px`}} className={`py-1 px-1 text-right text-[10px] font-semibold tabular-nums whitespace-nowrap sticky z-[8] bg-card bg-[linear-gradient(hsl(var(--muted-foreground)/0.15),hsl(var(--muted-foreground)/0.15))] shadow-[inset_0_1px_0_hsl(var(--border))] ${(g.subtotal?.saldo_sistema ?? 0)<0?'text-destructive':''}`}>{g.subtotal?.saldo_sistema != null ? formatMoeda(g.subtotal.saldo_sistema) : '—'}</td>
+                        <td style={{top:`${alturaCabSaldos + alturaThead}px`}} className="py-1 px-1 text-right text-[10px] font-semibold tabular-nums whitespace-nowrap sticky z-[8] bg-card bg-[linear-gradient(hsl(var(--muted-foreground)/0.15),hsl(var(--muted-foreground)/0.15))] shadow-[inset_0_1px_0_hsl(var(--border))]">{g.subtotal?.saldo_extrato == null ? '—' : formatMoeda(g.subtotal.saldo_extrato)}</td>
+                        <td style={{top:`${alturaCabSaldos + alturaThead}px`}} className={`py-1 px-1 text-right text-[10px] font-semibold tabular-nums whitespace-nowrap sticky z-[8] bg-card bg-[linear-gradient(hsl(var(--muted-foreground)/0.15),hsl(var(--muted-foreground)/0.15))] shadow-[inset_0_1px_0_hsl(var(--border))] ${g.subtotal?.diferenca == null?'text-muted-foreground':saldoConfere(g.subtotal.diferenca)?'text-success':'text-destructive'}`}>
+                          {g.subtotal?.diferenca == null ? '—' : saldoConfere(g.subtotal.diferenca) ? 'confere' : formatMoeda(g.subtotal.diferenca)}
                         </td>
                         <td style={{top:`${alturaCabSaldos + alturaThead}px`}} className="py-1 sticky z-[8] bg-card bg-[linear-gradient(hsl(var(--muted-foreground)/0.15),hsl(var(--muted-foreground)/0.15))] shadow-[inset_0_1px_0_hsl(var(--border))]" />
                       </tr>
@@ -1725,7 +1501,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                         isActive={selectedConta===s.conta.id}
                         isDimmed={selectedConta!=='__all__'&&selectedConta!==s.conta.id}
                         onClick={()=>setSelectedConta(s.conta.id)}
-                        onEdit={()=>handleEditSaldo(anoMesSel,s.conta.id,s.ext)}
+                        onEdit={()=>handleEditSaldo(anoMesSel,s.conta.id,s.linha.saldo_extrato)}
                         canEdit={canEditSaldoFinal(anoMesSel)}
                         showSaldoAlert={anoMesSel === s.conta.mes_inicio && s.conta.saldo_inicial_oficial === null}
                         temOfx={contasComOfx.get(anoMesSel)?.has(s.conta.id) ?? false}
@@ -1914,7 +1690,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
           /* Anexar ou cancelar um extrato no modal não passa pelo `aoSalvar` (grava na hora),
              então os ícones recarregam ao fechar. */
           aoFechar={()=>{ setEditingSaldo(null); void carregarIndicadoresSaldo(); }}
-          aoSalvar={()=>{ loadData(); }}
+          aoSalvar={()=>{ loadData(); releDono(); }}
         />
       )}
 
@@ -1995,13 +1771,24 @@ interface SaldoContaRowProps {
 }
 
 function SaldoContaRow({data, isActive, isDimmed, onClick, onEdit, canEdit, showSaldoAlert, temOfx, temPdf}: SaldoContaRowProps) {
-  const {conta, sis, ext, dif, status} = data;
-  const dotColor = status==='realizado' ? '#2E7D32' : status==='nao_conciliado' ? '#C62828' : '#90A4AE';
+  /* ⚠ A LINHA É A DO DONO — PR-CONC-SALDO-UMA-REGUA-02 (D4): sistema, extrato, diferença e o status (o ponto). O `title`
+     da linha diz os motivos do dono e as contas internas que ele consolidou aqui. */
+  const { conta, linha, consolidadas } = data;
+  const sis = linha.saldo_sistema;
+  const ext = linha.saldo_extrato;
+  const dif = linha.diferenca;
+  const dotColor = linha.status==='conciliado' ? '#2E7D32' : linha.status==='nao_conciliado' ? '#C62828' : '#90A4AE';
+  const titulo = [
+    `${ROTULO_STATUS[linha.status]}${linha.motivos.length > 0 ? ': ' + frasesDoStatus(linha).map(f => f.texto).join(' · ') : ''}`,
+    consolidadas.length > 0 ? `consolida ${consolidadas.join(', ')} (o saldo delas já está aqui)` : '',
+  ].filter(Boolean).join('\n');
   return (
     <tr
       className="border-b last:border-b-0 cursor-pointer hover:bg-muted/20 transition-all"
       style={{opacity:isDimmed?0.3:1, background:isActive?'#E3F2FD':undefined}}
       onClick={onClick}
+      title={titulo}
+      data-testid="linha-saldo-conta" data-conta={conta.id} data-status={linha.status}
     >
       <td className="py-0.5 px-2 overflow-hidden">
         <span style={{width:7,height:7,borderRadius:'50%',background:dotColor,display:'inline-block',marginRight:4,verticalAlign:'middle',flexShrink:0}} />
@@ -2010,19 +1797,19 @@ function SaldoContaRow({data, isActive, isDimmed, onClick, onEdit, canEdit, show
             ele para de puxar o olho sem perder nada de legibilidade — a identidade da linha já
             é dada pela posição e pelo ponto colorido do status. */}
         <span className="text-[10px]" style={{verticalAlign:'middle'}}>{getContaLabel(conta)}</span>
-        {/* ⚠ ATÉ QUANDO ESTA CONTA FOI CONFERIDA, ao lado do nome. Antes só se sabia abrindo o
-            lápis, uma conta por vez; a régua da conciliação é por CONTA e é aqui que ela se lê.
-            ⚠ 9,5px MUTED: o piso da casa, e ele nasceu nesta mesma tabela (CLAUDE.md, decisão de
-            17/09). A hierarquia vem da COR antes do tamanho — a data é contexto, não identidade.
-            ⚠ SEM POSIÇÃO DECLARADA NÃO MOSTRA NADA, nem traço: ausência de conferência não é um
-            dado a exibir, e um "—" aqui pareceria erro numa conta que só está parada. */}
-        {data.saldoRow?.saldo_data && (
+        {/* ⚠ ATÉ QUANDO ESTA CONTA FOI CONFERIDA, ao lado do nome — a data do saldo do extrato do DONO.
+            ⚠ 9,5px MUTED: o piso da casa. Sem saldo de extrato não mostra nada, nem traço: ausência de conferência não é
+            um dado a exibir, e um "—" aqui pareceria erro numa conta que só está parada. */}
+        {ext !== null && linha.saldo_extrato_data && (
           <span className="ml-1 text-[9.5px] text-muted-foreground" style={{verticalAlign:'middle'}}>
-            · {data.saldoRow.saldo_data.slice(8, 10)}/{data.saldoRow.saldo_data.slice(5, 7)}
+            · {linha.saldo_extrato_data.slice(8, 10)}/{linha.saldo_extrato_data.slice(5, 7)}
           </span>
         )}
+        {consolidadas.length > 0 && (
+          <span className="ml-1 text-[9.5px] text-muted-foreground" style={{verticalAlign:'middle'}}>⊕</span>
+        )}
         {showSaldoAlert && (
-          <span className="ml-1 text-[8px] font-semibold text-warning border border-amber-300 bg-warning/10 rounded px-0.5" title="Saldo inicial não definido">⚠</span>
+          <span className="ml-1 text-[9.5px] font-semibold text-warning border border-amber-300 bg-warning/10 rounded px-0.5" title="Saldo inicial não definido">⚠</span>
         )}
         {/* Sem OFX e sem anexo, nenhum ícone: ausência não ganha marcador. */}
         {temOfx && (
@@ -2036,11 +1823,11 @@ function SaldoContaRow({data, isActive, isDimmed, onClick, onEdit, canEdit, show
           </span>
         )}
       </td>
-      <td className={`py-0.5 px-1 text-right text-[9.5px] tabular-nums whitespace-nowrap ${sis<0?'text-destructive':''}`}>{formatMoeda(sis)}</td>
+      <td className={`py-0.5 px-1 text-right text-[9.5px] tabular-nums whitespace-nowrap ${(sis ?? 0)<0?'text-destructive':''}`}>{sis===null?'—':formatMoeda(sis)}</td>
       <td className="py-0.5 px-1 text-right text-[9.5px] tabular-nums whitespace-nowrap">{ext===null?'—':formatMoeda(ext)}</td>
       {/* Sem extrato é "—" (dado ausente); com extrato, "confere" só com diferença ZERO. */}
-      <td className={`py-0.5 px-1 text-right text-[9.5px] tabular-nums whitespace-nowrap ${ext===null?'font-medium text-muted-foreground':saldoConfere(dif)?'font-medium text-success':'font-semibold text-destructive'}`}>
-        {ext===null ? '—' : saldoConfere(dif) ? 'confere' : formatMoeda(dif)}
+      <td className={`py-0.5 px-1 text-right text-[9.5px] tabular-nums whitespace-nowrap ${dif===null?'font-medium text-muted-foreground':saldoConfere(dif)?'font-medium text-success':'font-semibold text-destructive'}`}>
+        {dif===null ? '—' : saldoConfere(dif) ? 'confere' : formatMoeda(dif)}
       </td>
       <td className="py-0.5 px-1 text-center">
         {canEdit && (
@@ -2051,5 +1838,36 @@ function SaldoContaRow({data, isActive, isDimmed, onClick, onEdit, canEdit, show
         )}
       </td>
     </tr>
+  );
+}
+
+/* ── Sub-component: LinhaMotivo ── */
+/**
+ * Uma frase do status do dono no card Status. Com `dia` (e a conta aberta), é o link para a Conferência nesse dia; no
+ * Todas, "N contas não conciliadas" vem seguida do NOME de cada uma, cada nome com o link do primeiro dia dela.
+ * A frase quebra em linhas (nunca "…"); a forma inteira fica no `title`.
+ */
+function LinhaMotivo({ frase, onDia, onDiaConta }: {
+  frase: FraseDoStatus;
+  onDia?: () => void;
+  onDiaConta: (contaId: string, dia: string) => void;
+}) {
+  return (
+    <div title={frase.titulo} data-motivo={frase.chave}>
+      {onDia
+        ? <button type="button" onClick={onDia} className="underline hover:opacity-80 cursor-pointer" data-testid="link-dia">{frase.texto}</button>
+        : <span>{frase.texto}</span>}
+      {frase.contas && frase.contas.length > 0 && (
+        <div className="mt-0.5 space-y-0.5">
+          {frase.contas.map(c => (
+            <div key={c.conta_id} title={c.texto} data-testid="conta-nao-conciliada">
+              {c.dia
+                ? <button type="button" onClick={() => onDiaConta(c.conta_id, c.dia ?? '')} className="underline hover:opacity-80 cursor-pointer">{c.conta_nome}</button>
+                : <span>{c.conta_nome}</span>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

@@ -162,10 +162,13 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 03/10/2026 (PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
+  Baseline em 03/10/2026 (PR-CONC-SALDO-UMA-REGUA-02, +22 −5: `src/lib/conciliacao/resumoDoDono.test.ts` 7,
+  `src/components/financeiro-v2/espelhoDono.test.tsx` 4, `src/pages/conciliacaoDono.test.tsx` 11; saiu
+  `src/pages/conciliacaoAgregadoTransferencia.test.ts` 5, com o `buildMonthCards` que testava; antes o
+  PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3119
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3136
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -296,7 +299,9 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   (`montarMesa(..., { ancoraN1: 'lancamento' })` em `extratoDaPlanilha.ts`: o "Desmembrar" depende do N:1 consumir as linhas)
   — levar a' ancora do extrato e' PR proprio; (b) o "PR B" do CONC-CAIXA-PONTA-01 (resumo da Conciliacao, aba Sistema, painel
   do mes) continua aberto — so' a Conferencia e a Evolucao passaram a fechar como o caixa [o DONO ja' existe desde o
-  PR-CONC-SALDO-UMA-REGUA-01: `fn_conciliacao_resumo_mes`, completo no 01b; a troca das telas e' o PR 02 e o refresh sem F5 o PR 03;
+  PR-CONC-SALDO-UMA-REGUA-01: `fn_conciliacao_resumo_mes`, completo no 01b/01c; a aba Conciliacao, o quadro do topo e a aba Sistema
+  do Casar trocaram no PR 02; FICAM o 02b (o painel do mes e os consumidores de `useSaldoSistemaNaPosicao`) e o refresh sem F5 nos
+  gestos (PR 03);
   LOGO DEPOIS DO PR 02, o hotfix de seguranca de `fn_extratos_espelhados` (SECURITY DEFINER sem guarda de tenant)]; (c) DIVIDAS DE DADO, sem corrigir:
   SOBRE-APLICADOS (aplicado nos extratos da conta > valor) Vera Itau Personalite mai/26 77711d94 (2 x 360 num de 360; o gemeo
   d88ea17e sem par), NJ Itau BBA mar/26 e3e36029 (2 x 150.000 num de 150.000), Santa Rita BB jun/26 eabe167e (375.000 num de
@@ -1134,7 +1139,7 @@ docs/historico/frentes-ate-2026-09-29.md.)
   linhas e colunas identicas (69/69, 5.268 linhas; `fn_extratos_espelhados` 69/69 por md5); com ele, o detalhe da mesa
   (extrato · vinculo com o mes e o sinal · lancamento do lv2 com interna, aplicado e vinculo fora). md5: pontas 56a28f30…,
   resumo fe3c16e4…, `_fn_conciliacao_dias_conta` 66faca98…. Tempo, 20 chamadas na mesma sessao, todas as
-  contas: NJ 18 contas ≤ 619 ms, Santa Rita 27 ≤ 540 ms. NENHUMA TELA LE AINDA (PR 02).
+  contas: NJ 18 contas ≤ 619 ms, Santa Rita 27 ≤ 540 ms. AS TELAS QUE LEEM: ver a regra "A CONCILIACAO DESENHA O DONO" (PR 02).
   ⚠ DIVIDA: portar a MONTAGEM da mesa para o banco (hoje o banco e' dono do STATUS e da contagem de dias; `montarMesa` desenha).
   ⚠ DUAS REGUAS EXTRAS, fora deste dono e pendentes de decisao (D8): `PainelExtratoMes`/`useSaldoSistemaNaPosicao`
     (`useExtratoDaConta.ts:417-464`: `cenario='realizado'` sem filtrar status nem `sem_movimentacao_caixa`) e `FinV2SaldosTab`
@@ -1198,6 +1203,8 @@ docs/historico/frentes-ate-2026-09-29.md.)
   ⚠ DIVIDA: o D6 (saldo inicial + linhas = saldo_sistema) NAO foi provado em Agnaldo Bradesco (186a093b) jul/26 — o conta-mes
     nao estava no conjunto dos 69. E `'3-Transferência'` NO SINGULAR (6 lancamentos vivos, todos com destino) e' INVISIVEL para a
     ponta de DESTINO na pontas (o predicado so' le' o plural e o sinal −1 nao entra pelo destino) — regra anterior a este PR.
+  md5: pontas ce53914e…, `_fn_conciliacao_dias_conta` b194103a…, `_fn_conciliacao_resumo` d8463a56… (d364e139… no 01b), resumo
+  25aa2ac4…, status_ano b31bf6ac… (d27b8623… no 01b).
 - ⚠ O CONJUNTO DE CONTAS, A DIFERENCA POR LADO E O SALDO CORRIDO SAO DO DONO (PR-CONC-SALDO-UMA-REGUA-01c, 03/10, migration
   20261027192200, ⚠ registrada como 20261003183158; ledger = arquivo, md5 1b25da41…). (D1) SEM `p_conta_ids` o universo e' o da
   TELA: conta ATIVA e ja' existente no mes (`mes_inicio IS NULL OR mes_inicio <= mes`, a regua de `perContaSaldos`) — linhas,
@@ -1215,8 +1222,42 @@ docs/historico/frentes-ate-2026-09-29.md.)
   Tempo (10 chamadas, autenticado, antes x depois): status do ano NJ ~1,9 s x ~1,9 s, Santa Rita ~1,6 s x ~1,6 s; resumo de todas
   as contas NJ ~212 ms x ~212 ms. Prova sintetica: `supabase/tests/conc_saldo_uma_regua_01c_test.sql`; vitest: o fixture
   `resumoMes.fixture.json` recapturado com os campos novos.
-  md5: pontas ce53914e…, `_fn_conciliacao_dias_conta` b194103a…, `_fn_conciliacao_resumo` d8463a56… (d364e139… no 01b), resumo
-  25aa2ac4…, status_ano b31bf6ac… (d27b8623… no 01b).
+- ⚠ A CONCILIACAO DESENHA O DONO (PR-CONC-SALDO-UMA-REGUA-02, 03/10, so' tela). A aba Conciliacao (`ConciliacaoBancariaTab`) e o
+  quadro do topo e a aba Sistema do Casar (`EspelhoConciliacaoTab`) leem `fn_conciliacao_resumo_mes` por `useResumoMes` e a regua dos
+  doze meses por `useStatusAno` (`src/hooks/useResumoConciliacao.ts`, chaves `CHAVE_RESUMO_MES`/`CHAVE_STATUS_ANO`); o retorno se le'
+  e se escreve em `src/lib/conciliacao/resumoDoDono.ts` (parser sem cast, `frasesDoStatus`, `fraseDoRetido`, `fraseSemConta`,
+  `contasParaFecharSemMovimento`). A TELA NAO SOMA, NAO SUBTRAI E NAO ESCOLHE CONTA: `buildMonthCards` (e o teste
+  `conciliacaoAgregadoTransferencia.test.ts`), `perContaSaldos` por `calcConciliacaoMensal`, `totalSaldos`, a soma dos subtotais, o
+  'parcial' e a leitura em levas do extrato do ano (`contasComExtrato`) SAIRAM. O que ficou e quem e':
+  · RESUMO (D1): a linha do dono da conta aberta, ou o total no Todas, com a abertura terceiros x transferencias nas duas visoes,
+    "↳ retido no deposito R$ X (N)" (title) e, no Todas, "lancamentos sem conta +E / −S (N)" (o dono manda os dois em MODULO).
+  · STATUS (D2): o do dono, o mesmo da Conferencia; o card escreve os motivos ("N dias com diferenca" e' LINK para a Conferencia da
+    conta no PRIMEIRO dia — `diaFoco` no `EspelhoConciliacaoTab`, que rola a mesa ate' `data-dia`; "saldo diverge", "o extrato nao
+    fecha com o saldo informado", "saldo nao informado", "sem extrato"; no Todas "N contas nao conciliadas" com o nome de cada uma,
+    cada nome com o link do dia dela, e "N pendentes"). "confere em todos os dias" so' com extrato e SEM o motivo de dias. Pareamento,
+    "sem classificacao" e duplicados seguem INFORMATIVOS. Valor negativo nas frases com "−" tipografico colado ao "R$" (U+2060).
+  · REGUA (D3): os meses nascem NEUTROS e se pintam com `fn_conciliacao_status_ano`; o mes aberto nasce pintado pelo total do resumo.
+    `STATUS_COR` tem as chaves do dono (conciliado | nao_conciliado | pendente).
+  · SALDOS POR CONTA (D4): linhas 'conta' (sistema, extrato, diferenca, o ponto = status, o `title` = motivos), subtotal = linha 'tipo'
+    do dono, Total = linha 'total'. A CONTA INTERNA (`consolida_em_conta_id`) NAO TEM LINHA: o saldo dela ja' esta' na mae, que leva
+    "⊕" e "consolida X" no `title`. As ocultas (saldo 0, extrato 0, sem movimento, sem extrato) leem a linha do dono.
+  · POSICAO (D5): `saldo_extrato_data` e `posicao` do dono (rodape e "N realizados apos").
+  · CASAR (D6/D7): Banco x Sistema x Diferenca por lado, a linha "Retido" (sempre presente) e "Sem par" com o valor dos extratos; a aba
+    Sistema desenha `linhas_sistema` com `saldo_apos`, centro e `status_exibicao` ("parcial · falta R$ X", coluna de 154px medida no
+    pior de sete digitos); "Saldo final (sistema)" = `saldo_sistema`. A linha do resumo do modal da Conferencia le' os mesmos.
+  · FECHAR CONTAS SEM MOVIMENTO (D8): grava o `saldo_sistema` e o `saldo_inicial` DO DONO, e NAO fecha conta com movimento no mes
+    (entrada, saida ou extrato) — antes gravava o `saldoCalculado` a valor cheio e fechava tambem a conta com movimento.
+  · A aba nao espera os lancamentos do ano: abre com o resumo (as contagens "Todos (N)" dizem "…" ate' a lista chegar), e a regua
+    e as abas nao viram esqueleto. Medido no NJ (navegacao, recarga sem cache): 4.003 / 2.944 ms -> 1.002 / 889 ms ate' o Total.
+  ⚠ FORA (02b): `useSaldoSistemaNaPosicao` e os consumidores (`PainelExtratoMes`, `SaldoRealDialog`, `AcoesDoMes`),
+    `ConciliarMesDialog`, o G6; e, fora da Conciliacao, fluxo de caixa realizado, card "Caixa no mes", Contas a Pagar/Receber, Extrato
+    Gerencial e `FinV2SaldosTab` — continuam na regua antiga. O modal "Todos (N)" e as pendencias de classificacao/duplicados seguem
+    sobre a lista dos realizados do mes (lista, nao saldo).
+  ⚠ INVALIDACAO: so' onde a aba ja' recarregava (lancamentos mudaram, saldo informado, fechar sem movimento) ela rele' o dono
+    (`releDono`); os gestos de casar/conciliar das outras telas nao invalidam o resumo — PR 03.
+  ⚠ DIVIDA DO DONO (achada na homologacao local): conta SEM extrato que diverge sai 'nao_conciliado' so' com o motivo `sem_extrato`
+    (NJ Cartao BB Visa Infinite set/26, −6.470,73) — o card fica vermelho dizendo "sem extrato"; o dono deveria escrever tambem
+    `saldo_diverge` com o valor (01d, banco).
 - ⚠ A GRAVACAO DO EXTRATO E' DO BANCO, E O DESFAZER DIZ O QUE FAZ E RECUSA O QUE NAO PODE (PR-CONC-IMPORT-BANCO-01B, 03/10,
   migration 20261027192000, ⚠ registrada como 20261003174631; ledger = arquivo, md5 4966be59…).
   · IDENTIDADE DO MOVIMENTO: `hashMovimento` + a OCORRENCIA entre movimentos de CONTEUDO IDENTICO no arquivo, na ordem dele

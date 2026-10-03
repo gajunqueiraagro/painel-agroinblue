@@ -17,6 +17,8 @@ import type { EspelhadosReais } from './EspelhoConciliacaoTab';
 
 const fixture = vi.hoisted(() => ({
   espelho: null as unknown,
+  /* PR-CONC-SALDO-UMA-REGUA-02: o quadro do topo e a aba Sistema leem o DONO (`fn_conciliacao_resumo_mes` da conta). */
+  resumo: null as unknown,
   /* CONC-BLOCOS-TELA-01: as linhas que o `from(tabela)` devolve (blocos vivos, aplicado vivo) e as RPCs chamadas. */
   tabelas: {} as Record<string, unknown[]>,
   chamadas: [] as Array<{ fn: string; args: unknown }>,
@@ -34,6 +36,7 @@ vi.mock('@/integrations/supabase/client', () => {
     supabase: {
       rpc: (fn: string, args: unknown) => {
         fixture.chamadas.push({ fn, args });
+        if (fn === 'fn_conciliacao_resumo_mes') return Promise.resolve({ data: fixture.resumo, error: null });
         return Promise.resolve(fn === 'fn_extratos_espelhados' ? { data: fixture.espelho, error: null } : { data: null, error: null });
       },
       from: (tabela: string) => vazio(tabela),
@@ -91,8 +94,26 @@ const ESPELHO: EspelhadosReais = {
   versao: 't', gerado_em: 'agora',
 };
 
+/* A linha do dono para o mesmo mês: os números do print (saídas do banco −141.262,34, diferença −134.613,84, o extrato
+   sem par) e a lista do sistema com o saldo corrido do dono. */
+const RESUMO = [{
+  nivel: 'conta', conta_id: 'bb', conta_nome: 'Banco do Brasil', tipo_conta: 'cc', consolida_em_conta_id: null, tem_extrato: true,
+  saldo_inicial: 177290.71, saldo_inicial_origem: 'informado', entradas: 0, saidas: -6648.5,
+  entradas_terceiros: 0, entradas_transferencias: 0, saidas_terceiros: -6648.5, saidas_transferencias: 0,
+  saldo_sistema: 170642.21, saldo_extrato: null, saldo_extrato_data: null, diferenca: null,
+  diferenca_entradas: 0, diferenca_saidas: -134613.84, banco: { entradas: 0, saidas: -141262.34, extrato_nao_fecha: null },
+  extratos_sem_par: { qtde: 1, valor: -134613.84 }, lancamentos_sem_par: { qtde: 0, valor: 0 },
+  retido_em_depositos: { qtde: 0, valor: 0 }, status: 'pendente', motivos: [{ motivo: 'saldo_nao_informado' }],
+  posicao: null, sem_conta: null,
+  linhas_sistema: [{
+    tipo: 'vinculo', data: '2026-09-04', valor: -6648.5, lancamento_id: 's1', extrato_id: 'e2', descricao: 'Folha de Pagamento',
+    fornecedor: 'Antonio Peres Neto', centro: 'Mão de Obra', subcentro: 'Salários', status_exibicao: 'conciliado', saldo_apos: 170642.21,
+  }],
+}];
+
 beforeEach(() => {
   fixture.espelho = ESPELHO;
+  fixture.resumo = RESUMO;
   fixture.tabelas = {};
   fixture.chamadas = [];
   Element.prototype.scrollIntoView = () => {};
@@ -212,11 +233,14 @@ describe('o resumo do corpo vira tabela', () => {
     const [tot, semPar] = [...resumo.querySelectorAll('table')];
     expect([...tot.querySelectorAll('thead th')].map((th) => th.textContent)).toEqual(['', 'Banco (OFX)', 'Sistema', 'Diferença']);
     expect(tot.querySelector('thead tr')!.className).toContain('bg-primary');
-    expect([...tot.querySelectorAll('tbody td')].filter((td) => td.className.includes('border-r')).length).toBe(6);
-    expect(within(tot).getByText('-141.262,34')).toBeInTheDocument(); // saídas do banco (sem par + casado)
-    expect(within(tot).getByText('-134.613,84')).toBeInTheDocument(); // a diferença
+    /* PR-CONC-SALDO-UMA-REGUA-02: 7 divisores — a linha "Retido" (sempre presente) tem o seu no rótulo. */
+    expect([...tot.querySelectorAll('tbody td')].filter((td) => td.className.includes('border-r')).length).toBe(7);
+    expect(within(tot).getByText('-141.262,34')).toBeInTheDocument(); // saídas do banco, do dono
+    expect(within(tot).getByText('-134.613,84')).toBeInTheDocument(); // a diferença por lado, do dono
+    expect(within(tot).getByTestId('topo-retido').textContent).toBe('—');
     expect([...semPar.querySelectorAll('thead th')].map((th) => th.textContent)).toEqual(['Sem par', 'Qtde', 'Valor']);
-    expect(within(semPar).getByText('Extratos').closest('tr')!.textContent).toBe('Extratos1—');
+    /* O valor dos extratos sem par, que a tela nunca soube calcular ("—"), agora vem do dono. */
+    expect(within(semPar).getByText('Extratos').closest('tr')!.textContent).toBe('Extratos1-134.613,84');
   });
 });
 
