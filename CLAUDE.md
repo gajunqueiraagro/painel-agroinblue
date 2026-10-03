@@ -160,9 +160,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 03/10/2026 (PR-CONC-ENRIQ-IMPORT-ATOMICA-01, +10 em `src/v2/lib/mesa/importacaoAtomica.test.tsx` e +1 em
-  `src/v2/hooks/useSessoesClassificacao.test.tsx`; antes o PR-FIN-SAFRA-MODAL-01, +6 em
-  `src/components/financeiro-v2/safraGravadaModal.test.tsx`): 3055
+  Baseline em 03/10/2026 (PR-CONC-SALDO-UMA-REGUA-01, +9 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
+  PR-CONC-ENRIQ-IMPORT-ATOMICA-01, +10 em `src/v2/lib/mesa/importacaoAtomica.test.tsx` e +1 em
+  `src/v2/hooks/useSessoesClassificacao.test.tsx`): 3064
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -269,7 +269,8 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   CONFERENCIA-FECHAMENTO-DIA (03/10), dividas: (a) o EXTRATO DA PLANILHA do Enriquecer AINDA ANCORA O N:1 NO LANCAMENTO
   (`montarMesa(..., { ancoraN1: 'lancamento' })` em `extratoDaPlanilha.ts`: o "Desmembrar" depende do N:1 consumir as linhas)
   — levar a' ancora do extrato e' PR proprio; (b) o "PR B" do CONC-CAIXA-PONTA-01 (resumo da Conciliacao, aba Sistema, painel
-  do mes) continua aberto — so' a Conferencia e a Evolucao passaram a fechar como o caixa; (c) DIVIDAS DE DADO, sem corrigir:
+  do mes) continua aberto — so' a Conferencia e a Evolucao passaram a fechar como o caixa [o DONO ja' existe desde o
+  PR-CONC-SALDO-UMA-REGUA-01: `fn_conciliacao_resumo_mes`; a troca das telas e' o PR 02 e o refresh sem F5 o PR 03]; (c) DIVIDAS DE DADO, sem corrigir:
   SOBRE-APLICADOS (aplicado nos extratos da conta > valor) Vera Itau Personalite mai/26 77711d94 (2 x 360 num de 360; o gemeo
   d88ea17e sem par), NJ Itau BBA mar/26 e3e36029 (2 x 150.000 num de 150.000), Santa Rita BB jun/26 eabe167e (375.000 num de
   215.000; a outra metade "Venda 032 Novilhas" 160.000 sem par); SUB-APLICADOS (realizado com menos aplicado que o valor) Santa
@@ -748,6 +749,11 @@ docs/historico/frentes-ate-2026-09-29.md.)
   ("⚠ registrada como ...") e confere ledger = arquivo por md5.
 - ⚠ REPLACE DE VIEW LEVA `WITH (security_invoker = true)` e se confere em `pg_class.reloptions`; funcao SECURITY
   DEFINER nova nasce com EXECUTE para PUBLIC — fechar a ACL e conferir `proacl` depois.
+- ⚠ FUNCAO PL/pgSQL CHAMADA A CADA CARREGAMENTO DE TELA COM PARAMETRO DE CONTA LEVA `SET plan_cache_mode =
+  force_custom_plan` (PR-CONC-CAIXA-PONTAS-PLANO-HOTFIX, 03/10). Depois de 5 execucoes na mesma sessao o PL/pgSQL troca para o
+  plano GENERICO, que nao ve' o parametro: `fn_caixa_sistema_pontas` estimava 2 linhas onde havia 19.645 (NJ Banco do Brasil) e
+  ia de 81 ms a 9.531 ms da 6a chamada em diante — e o PostgREST REUSA conexoes (teto 8 s do `authenticated`). Medir sempre 20
+  chamadas na MESMA sessao; `LANGUAGE sql` nao tem esse cache. O canal HTTP de consulta corta em ~100 s: medicao longa vai em lotes.
 - ⚠ RPC CHAMADA PELA TELA RODA SOB pg_safeupdate: todo UPDATE/DELETE, INCLUSIVE EM TABELA TEMPORARIA, precisa de
   WHERE. O role `authenticator` do PostgREST carrega `session_preload_libraries=safeupdate`; o canal SQL (MCP, editor)
   NAO, e nao consegue ligar (`LOAD 'safeupdate'` -> "access to library is not allowed"). Teste de RPC nova tem de rodar
@@ -1081,6 +1087,40 @@ docs/historico/frentes-ate-2026-09-29.md.)
   ⚠ OS AVISOS VAO ANTES DA DESCRICAO e seguem a ESCADA DE ABREVIACAO `textosDosAvisos` (`LIMITE_AVISOS` 58 caracteres =
   ~283px dos 286 uteis; medido: o pior caso real, 57, pede 278px), frase inteira no `title`. O Extrato da planilha usa a
   ancora antiga (`ancoraN1: 'lancamento'`), saida identica a' de antes (o oraculo `mesaDoDiaAntes.fixture.ts`).
+- ⚠ O RESUMO DA CONTA NO MES TEM DONO NO BANCO (PR-CONC-SALDO-UMA-REGUA-01, 03/10, migration 20261027191600, ⚠ registrada como
+  20261003155248; ledger = arquivo, md5 74ba0e0b…): `fn_conciliacao_resumo_mes(p_cliente_id, p_ano_mes 'YYYY-MM', p_conta_ids
+  uuid[] DEFAULT NULL = todas as contas do cliente)`, uma linha por conta: `conta_id, conta_nome, consolida_em_conta_id,
+  tem_extrato, saldo_inicial, entradas, saidas, saldo_sistema, saldo_extrato, saldo_extrato_data, diferenca, banco {entradas,
+  saidas, extrato_nao_fecha}, extratos_sem_par {qtde, valor}, lancamentos_sem_par {qtde, valor}, retido_em_depositos {qtde,
+  valor}, dias_com_diferenca [{data, banco, sistema, diferenca, motivos[]}], status ('conciliado'|'nao_conciliado'|'pendente'),
+  motivos [{motivo, ...}], legado {saldo_inicial, entradas, saidas, saldo_sistema, saldo_extrato, diferenca, status}`.
+  REGUA DO CAIXA: o dia e' o da Conferencia — espelho DECLARADO de `montarMesa` em `_fn_conciliacao_dias_conta` (so'
+  service_role), provado igual em 69 conta-meses / 910 dias (0 divergencias) e preso pelo vitest `src/lib/conciliacao/
+  resumoMes.test.ts` (fixture do mesmo snapshot). Saldos INFORMADOS, CONSOLIDADOS com as internas (`consolida_em_conta_id`,
+  faltou um = NULO). Lado da ponta: a ligada a extrato entra do LADO DO EXTRATO (retencao em deposito liquido = entrada
+  negativa, contada em `retido_em_depositos`); o liquido nao muda (entradas e saidas arredondadas cada uma podem somar 0,01 a
+  menos/mais que o liquido com valores de 3 casas — o cru fecha). STATUS = 'conciliado' so' com (i) zero dias com diferenca,
+  (ii) saldo do sistema = informado e (iii) informado − inicial − Σ extrato = 0; senao 'nao_conciliado' com cada motivo e valor
+  (`dias_com_diferenca`, `saldo_diverge`, `extrato_nao_fecha`); sem saldo informado 'pendente' (`saldo_nao_informado`); mes sem
+  extrato = o status de hoje (a regua antiga) com `sem_extrato`. ⚠ (ii) e (iii) SOZINHOS NAO EXISTEM: (ii) = (iii) + Σ diferencas
+  dos dias. O dono das pontas evoluiu ADITIVO: `fn_caixa_sistema_pontas(..., p_detalhe boolean DEFAULT false)` — sem o parametro,
+  linhas e colunas identicas (69/69, 5.268 linhas; `fn_extratos_espelhados` 69/69 por md5); com ele, o detalhe da mesa
+  (extrato · vinculo com o mes e o sinal · lancamento do lv2 com interna, aplicado e vinculo fora). md5: pontas 56a28f30…,
+  resumo fe3c16e4…, `_fn_conciliacao_dias_conta` 66faca98…. Tempo, 20 chamadas na mesma sessao, todas as
+  contas: NJ 18 contas ≤ 619 ms, Santa Rita 27 ≤ 540 ms. NENHUMA TELA LE AINDA (PR 02).
+  ⚠ DIVIDA: portar a MONTAGEM da mesa para o banco (hoje o banco e' dono do STATUS e da contagem de dias; `montarMesa` desenha).
+  ⚠ DUAS REGUAS EXTRAS, fora deste dono e pendentes de decisao (D8): `PainelExtratoMes`/`useSaldoSistemaNaPosicao`
+    (`useExtratoDaConta.ts:417-464`: `cenario='realizado'` sem filtrar status nem `sem_movimentacao_caixa`) e `FinV2SaldosTab`
+    (`calcConciliacaoMensal` por `ano_mes`, a competencia). Tambem fora: fluxo de caixa realizado, card "Caixa no mes", Contas a
+    Pagar/Receber e Extrato Gerencial.
+  ⚠ DIVIDA DE DADO — os conta-meses que o dono passa a chamar de 'nao_conciliado' (eram 'conciliado' na regua antiga), por motivo:
+    (iii) o extrato importado nao fecha com o informado — Santa Rita Bradesco jun/26 (245.476,60) e jul/26 (−245.477,63), Santa
+    Rita Itau jul/26 e Itau BBA jul/26 (−10.000,60 cada), Agnaldo Bradesco mai/26 (20.414,85), NJ Sicredi Pessoal mar/26 (0,02),
+    NJ Sicredi PJ Pecuaria jul/26 (−881,49); (i)+(ii) sobre-aplicacao — Santa Rita BB jun/26 (−160.000), Vera Itau Personalite
+    mai/26 (360), NJ Itau BBA mar/26 (150.000); (i) so' (timing dentro do mes, o saldo fecha) — Santa Rita Sicredi abr/26 (05 x 06,
+    ±530.194,90) e Santa Rita BB jul/26 (14 x 15, ±124.305,93). E passa a 'conciliado': NJ Sicredi Lavoura set/26 (o Emerson).
+  ⚠ `fn_extratos_espelhados` e' SECURITY DEFINER SEM guarda de tenant (le' como dono); a pontas e o resumo tem `tenant_ok` —
+    conferir numa frente de seguranca.
 - ⚠ CAIXA DO SISTEMA = UMA REGRA NO BANCO (CONC-CAIXA-PONTA-01, migration 20261027185500, ledger 20261001141213):
   `fn_caixa_sistema_pontas(cliente, conta, de, ate)` devolve uma linha por PONTA (lancamento x conta, sinal da direcao) e
   data. Parcial (programado/agendado com 0 < aplicado < valor): o aplicado na data de cada extrato; realizado cujo aplicado
