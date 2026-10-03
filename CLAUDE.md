@@ -162,10 +162,10 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 03/10/2026 (PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
+  Baseline em 03/10/2026 (PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
+  PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2;
-  antes o PR-CONC-SALDO-UMA-REGUA-01b, +13): 3102
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3119
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -1198,6 +1198,23 @@ docs/historico/frentes-ate-2026-09-29.md.)
   ⚠ DIVIDA: o D6 (saldo inicial + linhas = saldo_sistema) NAO foi provado em Agnaldo Bradesco (186a093b) jul/26 — o conta-mes
     nao estava no conjunto dos 69. E `'3-Transferência'` NO SINGULAR (6 lancamentos vivos, todos com destino) e' INVISIVEL para a
     ponta de DESTINO na pontas (o predicado so' le' o plural e o sinal −1 nao entra pelo destino) — regra anterior a este PR.
+- ⚠ O CONJUNTO DE CONTAS, A DIFERENCA POR LADO E O SALDO CORRIDO SAO DO DONO (PR-CONC-SALDO-UMA-REGUA-01c, 03/10, migration
+  20261027192200, ⚠ registrada como 20261003183158; ledger = arquivo, md5 1b25da41…). (D1) SEM `p_conta_ids` o universo e' o da
+  TELA: conta ATIVA e ja' existente no mes (`mes_inicio IS NULL OR mes_inicio <= mes`, a regua de `perContaSaldos`) — linhas,
+  subtotais, total e `contas_pendentes`; `fn_conciliacao_status_ano` conta o MESMO universo por mes; com `p_conta_ids`, as contas
+  pedidas, como antes (69/69 conta-meses identicos por md5, 207 linhas). Medido em 2026: sairam 6 linhas de conta (537661af "Nelson
+  Virtual" e 77d37bbf "Sicredi-PJ Aplicacao", jan–mar, `mes_inicio` 2026-04), 12 de 264 agregados mudaram, todos por elas; no
+  537661af jan–mar o universo vira UMA conta, e a regra do "uma conta = detalhe" passa a mandar `dias`/`linhas_sistema` nela.
+  (D2) toda linha ganha NO FIM `diferenca_entradas` e `diferenca_saidas` (banco − sistema, do cru; agregados = soma fora as
+  internas) — o quadro do topo do Casar. Diferenca por lado NAO e' status: Santa Rita BB abr/26 da' +470.000 / −470.000 com o
+  liquido zero (extratos sem par e lancamentos sem par que se compensam no dia). (D3) `linhas_sistema` ganha `saldo_apos` (saldo
+  inicial + as linhas ate' ela, na ordem da lista; fecha em `saldo_sistema` em 69/69), `centro` (`centro_custo` do lancamento) e
+  `status_exibicao` ('parcial' o programado que nao quitou, 'conciliado' o vinculo, 'realizado' o resto; 5.034/1/330 nos 69).
+  A tela NAO SOMA LINHA. md5: `_fn_conciliacao_dias_conta` b00a0840…, `_fn_conciliacao_resumo` 3f91479a…, publica 25aa2ac4…
+  (corpo igual; DROP + CREATE pelo retorno), status do ano fd79e1bd…; ACL, tenant_ok e plan_cache_mode conferidos na migration.
+  Tempo (10 chamadas, autenticado, antes x depois): status do ano NJ ~1,9 s x ~1,9 s, Santa Rita ~1,6 s x ~1,6 s; resumo de todas
+  as contas NJ ~212 ms x ~212 ms. Prova sintetica: `supabase/tests/conc_saldo_uma_regua_01c_test.sql`; vitest: o fixture
+  `resumoMes.fixture.json` recapturado com os campos novos.
   md5: pontas ce53914e…, `_fn_conciliacao_dias_conta` b194103a…, `_fn_conciliacao_resumo` d8463a56… (d364e139… no 01b), resumo
   25aa2ac4…, status_ano b31bf6ac… (d27b8623… no 01b).
 - ⚠ A GRAVACAO DO EXTRATO E' DO BANCO, E O DESFAZER DIZ O QUE FAZ E RECUSA O QUE NAO PODE (PR-CONC-IMPORT-BANCO-01B, 03/10,

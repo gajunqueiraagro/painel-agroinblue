@@ -17,6 +17,11 @@
  * saldo inicial, saldo do sistema, `dias` e `linhas_sistema`), recapturado no MESMO snapshot que `esp` e `dias_banco`
  * (03/10, REPEATABLE READ, migration 20261027191700 dentro). Prova: saldo inicial + Σ linhas = saldo do sistema, e os `dias`
  * do resumo são os dias da mesa.
+ *
+ * PR-CONC-SALDO-UMA-REGUA-01c — recapturado (03/10, REPEATABLE READ, migration 20261027192200 aplicada): cada linha da lista
+ * ganhou `saldo_apos` (o saldo corrido, que a aba Sistema desenha sem somar), `centro` e `status_exibicao`; o resumo ganhou
+ * `diferenca_entradas`/`diferenca_saidas` (banco − sistema por lado, o quadro do topo do Casar). `esp`, `dias_banco`, `dias` e
+ * as chaves antigas da lista saíram IGUAIS à captura do 01b (a do Agnaldo muda só a ORDEM dos vínculos).
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -28,11 +33,16 @@ interface DiaResumo extends DiaBanco { banco_acum: number; sistema_acum: number;
 interface LinhaSistema {
   tipo: 'vinculo' | 'sem_par' | 'resto_sub_aplicado'; data: string; valor: number; lancamento_id: string;
   extrato_id?: string; parcial?: boolean; falta?: number; sobre_aplicado?: boolean;
+  saldo_apos: number; centro?: string; status_exibicao: 'conciliado' | 'parcial' | 'realizado';
 }
 interface Caso {
   cliente: string; conta: string; mes: string; internos: string[]; esp: EspelhadosReais;
   dias_banco: { dias: DiaBanco[]; retido_em_depositos: { qtde: number; valor: number } };
-  resumo: { saldo_inicial: number; saldo_sistema: number; dias: DiaResumo[]; linhas_sistema: LinhaSistema[] | null };
+  resumo: {
+    saldo_inicial: number; saldo_sistema: number; dias: DiaResumo[]; linhas_sistema: LinhaSistema[] | null;
+    diferenca_entradas: number; diferenca_saidas: number; entradas: number; saidas: number;
+    banco: { entradas: number; saidas: number }; status: string; retido_em_depositos: { qtde: number; valor: number };
+  };
 }
 const FIX: Record<string, Caso> = JSON.parse(readFileSync(resolve(process.cwd(), 'src/lib/conciliacao/resumoMes.fixture.json'), 'utf8'));
 const r2 = (x: number) => Math.round(x * 100) / 100;
@@ -128,5 +138,53 @@ describe('PR-CONC-SALDO-UMA-REGUA-01b — a lista e os dias do resumo de UMA con
     const sobre = (FIX.vera_2026_05.resumo.linhas_sistema ?? []).filter((l) => l.sobre_aplicado);
     expect(sobre.length).toBeGreaterThan(0);
     expect(new Set(sobre.map((l) => l.lancamento_id.slice(0, 8)))).toEqual(new Set(['77711d94']));
+  });
+});
+
+describe('PR-CONC-SALDO-UMA-REGUA-01c — saldo corrido, status de exibição e diferença por lado, do dono', () => {
+  for (const [nome, caso] of Object.entries(FIX)) {
+    it(`${nome}: o saldo_apos de cada linha é o saldo inicial + as linhas até ela, e o último é o saldo do sistema`, () => {
+      const r = caso.resumo;
+      const linhas = r.linhas_sistema ?? [];
+      let acum = Number(r.saldo_inicial);
+      for (const l of linhas) {
+        acum += Number(l.valor);
+        expect(r2(Number(l.saldo_apos))).toBe(r2(acum));
+      }
+      expect(r2(Number(linhas[linhas.length - 1].saldo_apos))).toBe(r2(Number(r.saldo_sistema)));
+    });
+    it(`${nome}: status de exibição — parcial só no parcial, conciliado só no vínculo, e toda linha tem centro`, () => {
+      for (const l of caso.resumo.linhas_sistema ?? []) {
+        const esperado = l.parcial ? 'parcial' : l.tipo === 'vinculo' ? 'conciliado' : 'realizado';
+        expect(l.status_exibicao).toBe(esperado);
+        expect(l.centro ?? '').not.toBe('');
+      }
+    });
+    it(`${nome}: diferença por lado = banco − sistema`, () => {
+      const r = caso.resumo;
+      expect(r2(Number(r.diferenca_entradas))).toBe(r2(Number(r.banco.entradas) - Number(r.entradas)));
+      expect(r2(Number(r.diferenca_saidas))).toBe(r2(Number(r.banco.saidas) - Number(r.saidas)));
+    });
+  }
+
+  it('a busca sabe achar: trocar duas linhas de lugar quebra o saldo corrido', () => {
+    const linhas = [...(FIX.nj_sicredi_lavoura_2026_09.resumo.linhas_sistema ?? [])];
+    const i = linhas.findIndex((l, k) => k > 0 && Math.abs(Number(l.valor) - Number(linhas[k - 1].valor)) > 0.005);
+    [linhas[i - 1], linhas[i]] = [linhas[i], linhas[i - 1]];
+    const r = FIX.nj_sicredi_lavoura_2026_09.resumo;
+    let acum = Number(r.saldo_inicial);
+    const quebradas = linhas.filter((l) => { acum += Number(l.valor); return r2(Number(l.saldo_apos)) !== r2(acum); });
+    expect(quebradas.length).toBeGreaterThan(0);
+  });
+
+  it('o Emerson: conciliado, zero de diferença nos dois lados, a lista termina em 155.972,29 e o parcial diz a falta', () => {
+    const r = FIX.nj_sicredi_lavoura_2026_09.resumo;
+    expect(r.status).toBe('conciliado');
+    expect([Number(r.diferenca_entradas), Number(r.diferenca_saidas)]).toEqual([0, 0]);
+    expect(r.retido_em_depositos).toEqual({ qtde: 15, valor: 1217.01 });
+    const linhas = r.linhas_sistema ?? [];
+    expect(Number(linhas[linhas.length - 1].saldo_apos)).toBe(155972.29);
+    expect(linhas.filter((l) => l.status_exibicao === 'parcial').map((l) => [l.lancamento_id.slice(0, 8), Number(l.falta)]))
+      .toEqual([['d320635d', 300]]);
   });
 });
