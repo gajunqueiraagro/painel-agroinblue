@@ -42,20 +42,54 @@ export interface HashMovimentoInput {
   valor: number;          // signed (negativo = débito)
   descricao: string | null | undefined;
   documento?: string | null;
+  /**
+   * PR-CONC-IMPORT-BANCO-01B — a OCORRÊNCIA do mesmo conteúdo no arquivo (1 = a primeira). Dois movimentos IDÊNTICOS no
+   * mesmo arquivo (dois "RENTAB.INVEST FACILCRED*" de 0,13 no mesmo dia) são dois movimentos: sem a ocorrência os dois
+   * tinham o mesmo hash, o banco devolvia 23505 e o lote inteiro caía.
+   * ⚠ A 1ª OCORRÊNCIA NÃO MUDA (o hash de sempre — medido: nenhum extrato gravado recalcula diferente); da 2ª em diante,
+   *   o mesmo conteúdo + `|N`. Contada entre linhas de CONTEÚDO IDÊNTICO (o mesmo hash da 1ª), na ordem do arquivo —
+   *   reimportar o mesmo arquivo dá os mesmos hashes e não duplica. Não confundir com o `seq_ocorrencia` da chave
+   *   natural (conta+data+valor+documento), que continua como está.
+   */
+  ocorrencia?: number;
 }
 
 export async function hashMovimento(input: HashMovimentoInput): Promise<string> {
-  const partes = [
+  const conteudo = [
     input.contaBancariaId,
     input.dataISO,
     input.valor.toFixed(2),
     normalizarTexto(input.descricao),
     normalizarTexto(input.documento),
-  ].join('|');
+  ];
+  const partes = ((input.ocorrencia ?? 1) > 1 ? [...conteudo, String(input.ocorrencia)] : conteudo).join('|');
 
   const buffer = new TextEncoder().encode(partes);
   const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
   return Array.from(new Uint8Array(hashBuffer))
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
+}
+
+/**
+ * PR-CONC-IMPORT-BANCO-01B — os hashes de um ARQUIVO inteiro, na ordem dele: cada movimento com a sua ocorrência entre os de
+ * conteúdo idêntico (o mesmo hash da 1ª). É o único lugar que numera — a prévia e a gravação usam o que sai daqui.
+ */
+export async function hashesDoArquivo(
+  contaBancariaId: string,
+  movimentos: ReadonlyArray<{ data: string; valor: number; descricao: string | null | undefined; documento?: string | null }>,
+): Promise<string[]> {
+  const base = await Promise.all(movimentos.map((m) => hashMovimento({
+    contaBancariaId, dataISO: m.data, valor: m.valor, descricao: m.descricao, documento: m.documento ?? '',
+  })));
+  const vistos = new Map<string, number>();
+  return Promise.all(base.map((h, i) => {
+    const ocorrencia = (vistos.get(h) ?? 0) + 1;
+    vistos.set(h, ocorrencia);
+    if (ocorrencia === 1) return h;
+    const m = movimentos[i];
+    return hashMovimento({
+      contaBancariaId, dataISO: m.data, valor: m.valor, descricao: m.descricao, documento: m.documento ?? '', ocorrencia,
+    });
+  }));
 }

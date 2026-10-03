@@ -213,8 +213,8 @@ describe('reportarErro', () => {
  */
 describe('invariantes de contrato (FASE 0)', () => {
   it('inseridos = 0 e sucesso idempotente, nao falha', () => {
-    // useImportacaoExtrato usa upsert com onConflict + ignoreDuplicates:
-    // zero inseridos significa "tudo ja existia", nao erro.
+    // useImportacaoExtrato grava pela RPC fn_extrato_importar_arquivo (PR-CONC-IMPORT-BANCO-01B), que PULA
+    // o que ja existe pelos dois indices unicos: zero inseridos significa "tudo ja existia", nao erro.
     const inseridos = 0;
     const ehFalha = false;                          // contrato: nunca falha por zero
     expect(ehFalha).toBe(false);

@@ -59,6 +59,10 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
     toggleImportar, marcarTodasImportaveis } = useImportacaoExtrato();
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [gravando, setGravando] = useState(false);
+  /* PR-CONC-IMPORT-BANCO-01B — o RESULTADO da gravação, escrito ao lado do botão (UX-TOAST-01), não em toast: o erro no
+     rodapé da prévia, junto do "Importar N" (a prévia fica, para tentar de novo); o sucesso na linha do "Escolher
+     arquivo", que é o que sobra na tela depois de gravar. Some ao escolher outro arquivo. */
+  const [resultado, setResultado] = useState<{ tipo: 'ok' | 'erro'; texto: string } | null>(null);
   /**
    * O tipo do arquivo escolhido — B-36, o hub.
    *
@@ -72,6 +76,7 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
   const [tipo, setTipo] = useState<TipoArquivoImport | null>(null);
 
   const escolher = async (a: File) => {
+    setResultado(null);
     /* ⚠ SÓ O COMEÇO DO ARQUIVO É LIDO PARA DETECTAR: as âncoras do custeio e a
        tag do OFX vivem no topo, e ler um extrato inteiro em memória só para
        decidir o tipo seria caro à toa. O parser do fluxo escolhido lê o resto. */
@@ -110,12 +115,13 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
          Enquanto só havia OFX aqui, o literal era verdadeiro; com o CSV entrando
          pelo mesmo botão, ele viraria mentira gravada em `tipo_arquivo`. O hook
          já detecta e devolve — a resposta certa é ler dele, não redecidir. */
-      await confirmarImportacao({ contaBancariaId: contaId, nomeArquivo: arquivo.name, formato: preview.formato });
-      toast.success('Extrato importado.');
+      const r = await confirmarImportacao({ contaBancariaId: contaId, nomeArquivo: arquivo.name, formato: preview.formato });
+      setResultado({ tipo: 'ok', texto: r.mensagem });
       cancelar();
-      onImportado?.();
+      if (r.inseridos > 0) onImportado?.();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Falha ao gravar o extrato.');
+      /* A recusa e a falha chegam autorais do hook (ErroUsuarioSeguro); a prévia fica para tentar de novo. */
+      setResultado({ tipo: 'erro', texto: e instanceof Error ? e.message : 'Não foi possível gravar o extrato. Nada foi gravado.' });
     } finally {
       setGravando(false);
     }
@@ -200,6 +206,12 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
             </span>
           </span>
           {acoes}
+          {resultado?.tipo === 'ok' && (
+            <span data-testid="resultado-importacao" title={resultado.texto}
+              className="max-w-[340px] shrink-0 text-[10px] leading-tight text-muted-foreground">
+              {resultado.texto}
+            </span>
+          )}
         </div>
       )}
 
@@ -599,10 +611,15 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
           </div>
 
           <div className="flex items-center gap-2 border-t border-border bg-accent px-3 py-2">
-            <Button type="button" variant="outline" size="sm" className="h-8 gap-1 text-xs" onClick={cancelar}>
+            <Button type="button" variant="outline" size="sm" className="h-8 gap-1 text-xs" onClick={() => { setResultado(null); cancelar(); }}>
               <X className="h-3.5 w-3.5" /> Cancelar
             </Button>
-            <div className="flex-1" />
+            {/* O erro da gravação mora AQUI, ao lado do botão, em até duas linhas (sem reticência; a frase inteira no `title`).
+                Vazio, o slot é só o espaçador que já estava. */}
+            <span data-testid="erro-importacao" title={resultado?.tipo === 'erro' ? resultado.texto : undefined}
+              className="min-w-0 flex-1 text-right text-[10px] leading-tight text-destructive">
+              {resultado?.tipo === 'erro' ? resultado.texto : ''}
+            </span>
             {/* ⚠ O BOTÃO DIZ QUANTOS VAI GRAVAR, e desabilita com o motivo quando
                 não há nada novo — a regra do botão que explica. */}
             <Button type="button" size="sm" className="h-8 gap-1.5 px-5 text-xs font-semibold"

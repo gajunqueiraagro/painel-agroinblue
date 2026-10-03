@@ -35,7 +35,7 @@ import { parseOFX, lerSaldoDeclaradoOFX, lerPeriodoDeclaradoOFX, type MovimentoB
 import { separarLinhasDeSaldo, conferirSaldoDoExtrato, type ConferenciaSaldoExtrato } from '@/lib/financeiro/parser/linhaDeSaldo';
 import { parseCSVComRelatorio } from '@/lib/financeiro/parser/parseCSV';
 import { extractPdfText } from '@/lib/financeiro/parser/extractPdfText';
-import { hashMovimento, normalizarTexto } from '@/lib/financeiro/extratoHash';
+import { hashesDoArquivo, normalizarTexto } from '@/lib/financeiro/extratoHash';
 import { decodificarExtrato } from '@/lib/financeiro/parser/decodificarExtrato';
 import { dataAncoraLancamento, orFiltroDataAncora, OR_CENARIO_NAO_META } from '@/lib/financeiro/dataAncora';
 import {
@@ -44,6 +44,7 @@ import {
   type RegistroExtratoExistente,
 } from '@/lib/financeiro/duplicidadeImportacao';
 import { ErroUsuarioSeguro, normalizarErro } from '@/lib/erroOperacional';
+import { lerRetornoImportacao, textoDoResultadoDaImportacao, type ResultadoImportacao } from '@/lib/financeiro/importacaoExtratoResultado';
 import {
   diasEntre, calcularScore, tryGroupingMatch, calcularScoreAgrupado, type LancamentoCandidato,
 } from '@/lib/conciliacao/sugestoesCasamento';
@@ -579,19 +580,10 @@ export function useImportacaoExtrato() {
         );
       }
 
-      // Calcular hashes em paralelo.
-      const movimentosComHash = await Promise.all(
-        movimentosBrutos.map(async (m) => ({
-          ...m,
-          hash: await hashMovimento({
-            contaBancariaId: params.contaBancariaId,
-            dataISO: m.data,
-            valor: m.valor,
-            descricao: m.descricao,
-            documento: m.documento ?? '',
-          }),
-        })),
-      );
+      // Calcular hashes — PR-CONC-IMPORT-BANCO-01B: com a OCORRÊNCIA entre movimentos de conteúdo idêntico
+      // (`hashesDoArquivo`): dois "RENTAB 0,13" iguais no mesmo dia são dois movimentos, cada um com hash próprio.
+      const hashesArquivo = await hashesDoArquivo(params.contaBancariaId, movimentosBrutos);
+      const movimentosComHash = movimentosBrutos.map((m, i) => ({ ...m, hash: hashesArquivo[i] }));
 
       // Consulta dos hashes JÁ persistidos: traz id + status para que a UI
       // possa diferenciar "existe no banco" (fato físico) de "já processado"
@@ -1048,10 +1040,7 @@ export function useImportacaoExtrato() {
     }
   }
 
-  async function confirmarImportacao(params: ConfirmarParams): Promise<{
-    inseridos: number;
-    importacaoId: string | null;
-  }> {
+  async function confirmarImportacao(params: ConfirmarParams): Promise<ResultadoImportacao> {
     // Invariante de programação, não erro de operador: segue Error comum e
     // chega à tela como mensagem genérica — é bug nosso, não ação do usuário.
     if (!preview) throw new Error('Sem preview gerado — chame gerarPreview primeiro');
@@ -1091,107 +1080,37 @@ export function useImportacaoExtrato() {
     setLoading(true);
     setError(null);
     try {
-      // 0) Validação defensiva — a conta bancária deve pertencer ao cliente atual.
-      //    Evita inserir em extrato_bancario_v2 com conta_bancaria_id de outro cliente.
-      const { data: conta, error: errConta } = await supabase
-        .from('financeiro_contas_bancarias')
-        .select('cliente_id')
-        .eq('id', params.contaBancariaId)
-        .maybeSingle();
-      if (errConta) throw errConta;
-      if (!conta) throw new ErroUsuarioSeguro('Conta bancária não encontrada.');
-      if ((conta as { cliente_id: string }).cliente_id !== clienteAtual.id) {
-        throw new ErroUsuarioSeguro('A conta bancária selecionada não pertence ao cliente atual.');
-      }
+      /* ⚠ A GRAVAÇÃO É DO BANCO — PR-CONC-IMPORT-BANCO-01B. `fn_extrato_importar_arquivo` grava o cabeçalho e os
+         movimentos numa transação só: ou entram juntos, ou nada fica (antes o cabeçalho ia num pedido e os movimentos em
+         outro, e a falha deixava cabeçalho 'processada' vazio — 4 no Agnaldo em 03/10). Ela confere a conta do cliente e
+         PULA, com o motivo, o que já existe vivo pelos DOIS índices únicos (hash e chave natural) — nunca erro.
+         ⚠ O COMENTÁRIO QUE MORAVA AQUI ESTAVA ERRADO: dizia que, sem `onConflict`, o PostgREST emitia `ON CONFLICT DO
+         NOTHING` sem alvo. Medido em `pg_stat_statements` (03/10): ele emite `ON CONFLICT("id") DO NOTHING` — o alvo é a
+         CHAVE PRIMÁRIA —, então o `ignoreDuplicates` nunca cobriu hash nem chave natural, e dois movimentos idênticos no
+         mesmo arquivo estouravam 23505 em `idx_extrato_v2_hash_unico`, traduzido como "já importado".
+         ⚠ FAZENDA NULA, como sempre (PR-FIX-OFX-IMPORT-ID): extrato bancário não tem fazenda — quem grava é a RPC. */
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+      const { data, error: eRpc } = await (supabase as any).rpc('fn_extrato_importar_arquivo', {
+        p_cliente_id: clienteAtual.id,
+        p_conta_bancaria_id: params.contaBancariaId,
+        p_nome_arquivo: params.nomeArquivo,
+        p_tipo_arquivo: params.formato,
+        p_total_linhas: preview.totalLinhas,
+        p_total_com_erro: preview.existentesNoBanco,
+        /* PR-IMPORTAR-SALDO-OFX-01 — o saldo que o ARQUIVO declara (LEDGERBAL/DTASOF): conferência, nunca 0 no lugar de nulo. */
+        p_saldo_declarado: preview.saldoDeclarado,
+        p_saldo_declarado_data: preview.saldoDeclaradoData,
+        p_movimentos: novos.map((m) => ({
+          data: m.data, descricao: m.descricao, documento: m.documento, valor: m.valor, tipo: m.tipo,
+          hash: m.hash, seq: m.seqOcorrencia ?? 1,   // PR-OFX-DEDUP-01 (1B)
+        })),
+      });
+      if (eRpc) throw eRpc;
+      const r = lerRetornoImportacao(data);
+      /* Recusa escrita pelo BANCO (conta de outro cliente, conta inexistente): a frase é dele, autoral, chega inteira. */
+      if (!r.ok) throw new ErroUsuarioSeguro(r.frase ?? 'Não foi possível gravar o extrato. Nada foi gravado.');
 
-      // 1) Cabeçalho de importação — SEMPRE. É ele que dá lote rastreável ao extrato.
-      //    status 'processada' e não 'confirmada': as 53 linhas existentes usam só
-      //    'processada' e 'cancelada', não há CHECK em status, e como este insert passa
-      //    a rodar sempre, 'confirmada' criaria um terceiro vocabulário no banco a
-      //    partir de um caminho que nunca gravou nada. 'processada' é o que o fluxo
-      //    Excel grava.
-      //    O `as any` fica: types.ts declara fazenda_id como string obrigatório e está
-      //    desatualizado em relação ao banco. Regenerar types.ts é PR próprio.
-      let importacaoId: string | null = null;
-      {
-        const { data: imp, error: e1 } = await supabase
-          .from('financeiro_importacoes_v2')
-          .insert({
-            cliente_id: clienteAtual.id,
-            fazenda_id: null,
-            conta_bancaria_id: params.contaBancariaId,
-            nome_arquivo: params.nomeArquivo,
-            tipo_arquivo: params.formato,
-            total_linhas: preview.totalLinhas,
-            total_validas: novos.length,
-            total_com_erro: preview.existentesNoBanco,
-            status: 'processada',
-            /* PR-IMPORTAR-SALDO-OFX-01 — o saldo que o ARQUIVO declara (LEDGERBAL/DTASOF),
-               que a prévia já tinha e se perdia aqui. É conferência, não o saldo do mês:
-               o manual continua em saldos_v2 e prevalece. Sem a tag (CSV, TXT, OFX sem
-               LEDGERBAL) a prévia traz `null`, e grava-se `null` — nunca 0. */
-            saldo_declarado: preview.saldoDeclarado,
-            saldo_declarado_data: preview.saldoDeclaradoData,
-          } as any)
-          .select('id')
-          .single();
-        if (e1) throw e1;
-        importacaoId = (imp as { id: string }).id;
-      }
-
-      // 2) Insert dos movimentos em batches de 500. Capturamos o id retornado
-      //    para atualizar o preview em memória — assim o usuário não perde as
-      //    ações de conciliação por re-gerar preview.
-      const BATCH = 500;
-      let inseridos = 0;
-      const idsPorHash = new Map<string, string>();
-      for (let i = 0; i < novos.length; i += BATCH) {
-        const fatia = novos.slice(i, i + BATCH).map((m) => ({
-          cliente_id: clienteAtual.id,
-          conta_bancaria_id: params.contaBancariaId,
-          importacao_id: importacaoId, // null em modo global
-          data_movimento: m.data,
-          descricao: m.descricao,
-          documento: m.documento,
-          valor: m.valor,
-          tipo_movimento: m.tipo,
-          hash_movimento: m.hash,
-          seq_ocorrencia: m.seqOcorrencia ?? 1,   // PR-OFX-DEDUP-01 (1B)
-          status: 'nao_conciliado' as const,
-        }));
-        // BUG-CSV-DEDUP-01 (blindagem — ÚLTIMA linha de defesa, não o mecanismo principal):
-        // upsert idempotente. Se a pré-detecção paginada falhar por algum motivo, duplicatas
-        // são IGNORADAS em vez de estourar a unique. `.select()` só retorna as linhas
-        // REALMENTE inseridas → `inseridos` conta o que entrou de fato (as ignoradas já existiam).
-        /* ⚠ SEM `onConflict`, E ISSO NÃO É DESCUIDO — PR-IMPORT-CANCELADO-01. Os dois índices
-           únicos desta tabela viraram PARCIAIS (`WHERE cancelado_em IS NULL AND status <>
-           'ignorado'`), e `ON CONFLICT (colunas)` NÃO consegue inferir um índice parcial sem
-           repetir o predicado — coisa que o PostgREST não tem como mandar. Medido no proto:
-             ON CONFLICT (cliente_id, hash_movimento) → ERRO 42P10
-             ON CONFLICT sem alvo                     → aceito, e ignora a duplicata
-           Omitir `onConflict` faz o supabase-js não mandar `on_conflict` na URL, e o PostgREST
-           emite `ON CONFLICT DO NOTHING` sem alvo — a única forma que funciona com índice
-           parcial. Enquanto estava com alvo, IMPORTAR ESTAVA QUEBRADO: todo salvamento
-           estourava 42P10.
-           ⚠ E O PREÇO ESTÁ DITO: sem alvo, o DO NOTHING passa a cobrir TAMBÉM o outro índice
-           único parcial, `idx_extrato_v2_chave_natural` (conta+data+valor+doc+seq). Uma linha
-           que bata na chave natural sem bater no hash — descrição reexportada diferente pelo
-           banco, por exemplo — agora é PULADA em silêncio, onde antes estourava. `inseridos`
-           conta o que de fato entrou, então o número na tela continua verdadeiro; o que falta é
-           a tela DIZER que pulou. Fica registrado como frente própria.
-           ⚠ ISSO SÓ SE PROVA EM RUNTIME: PostgREST monta o `ON CONFLICT` em texto, e nem TSC
-           nem build enxergam a incompatibilidade. */
-        const { data: inserted, error: e2 } = await supabase
-          .from('extrato_bancario_v2' as any)
-          .upsert(fatia, { ignoreDuplicates: true })
-          .select('id, hash_movimento');
-        if (e2) throw e2;
-        for (const r of (inserted ?? []) as { id: string; hash_movimento: string }[]) {
-          idsPorHash.set(r.hash_movimento, r.id);
-        }
-        inseridos += (inserted ?? []).length;
-      }
-
+      const idsPorHash = new Map<string, string>(r.ids.map((x) => [x.hash, x.id]));
       // Atualiza o preview em memória: cada movimento novo passa a ter
       // existeNoDB=true, statusPersistido='nao_conciliado' e o id do
       // registro recém-criado. Permite ações imediatamente após salvar.
@@ -1200,6 +1119,7 @@ export function useImportacaoExtrato() {
         const movs: MovimentoPreview[] = prev.movimentos.map((m) => {
           if (m.existeNoDB) return m;
           const novoId = idsPorHash.get(m.hash) ?? null;
+          if (!novoId) return m;
           return {
             ...m,
             existeNoDB: true,
@@ -1214,40 +1134,22 @@ export function useImportacaoExtrato() {
         };
       });
 
-      return { inseridos, importacaoId };
-    } catch (e: any) {
-      // BUG-CSV-DEDUP-01 (UX): nunca expor erro SQL cru na tela.
-      // Distinção IMPORTANTE: só afirmamos "extrato já importado" quando o erro
-      // identifica EXPLICITAMENTE a unique de hash (idx_extrato_v2_hash_unico).
-      // Qualquer OUTRA constraint (mesmo 23505) pode ser um defeito diferente →
-      // mensagem tratada genérica, sem afirmar reimportação; detalhe técnico só em log.
-      const raw = e?.message ?? String(e);
-      const isHashDup = /idx_extrato_v2_hash_unico/i.test(raw);
-      const isOutraConstraint = !isHashDup
-        && (e?.code === '23505' || /duplicate key|violates .*constraint/i.test(raw));
-
-      // As duas frases abaixo são autorais e não interpolam nada do erro —
-      // por isso viram `ErroUsuarioSeguro` e chegam íntegras ao operador.
-      // O ramo final MUDOU: antes fazia `msg = raw`, ou seja, devolvia a
-      // mensagem crua do PostgREST tanto para o `error` renderizado na tela
-      // quanto para o toast. Agora o erro original sobe intacto e a camada de
-      // UI o generaliza; o diagnóstico sanitizado fica no console.
-      let seguro: unknown;
-      if (isHashDup) {
-        seguro = new ErroUsuarioSeguro(
-          'Extrato já importado anteriormente. Nenhuma movimentação nova foi encontrada.',
-        );
-      } else if (isOutraConstraint) {
-        seguro = new ErroUsuarioSeguro(
-          'Não foi possível salvar o extrato por conflito de dados. Nenhuma movimentação foi alterada.',
-        );
-      } else {
-        seguro = e;
-      }
-
-      const n = normalizarErro(seguro, 'confirmarImportacao');
-      if (isOutraConstraint) console.error('[BUG-CSV-DEDUP-01] ' + n.diagnostico);
-      setError(n.mensagem);
+      /* "Já existiam" = o que a prévia já sabia que existia + o que o banco pulou. O que o operador desmarcou não entra:
+         não é "já existia", é escolha dele. */
+      const jaExistiam = preview.movimentos.filter((m) => m.existeNoDB || m.jaExistenteChave).length + r.pulados;
+      return {
+        inseridos: r.inseridos,
+        importacaoId: r.importacaoId,
+        jaExistiam,
+        mensagem: textoDoResultadoDaImportacao(r.inseridos, jaExistiam),
+      };
+    } catch (e: unknown) {
+      /* Recusa autoral passa inteira; o resto (rede, permissão, erro inesperado) é generalizado pela categoria, e como a
+         gravação é UMA transação, a frase pode afirmar o que é verdade: nada foi gravado. */
+      const seguro = e instanceof ErroUsuarioSeguro
+        ? e
+        : new ErroUsuarioSeguro(`Não foi possível gravar o extrato (${normalizarErro(e, 'confirmarImportacao').mensagem.replace(/\.$/, '')}). Nada foi gravado — tente de novo.`);
+      setError(seguro.message);
       throw seguro;
     } finally {
       setLoading(false);

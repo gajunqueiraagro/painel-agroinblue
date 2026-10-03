@@ -8,21 +8,27 @@
  *
  * ⚠ O RELATÓRIO É DA RPC, NUNCA DA TELA. `fn_extrato_desfazer_arquivo` com `p_simular = true`
  * devolve as contagens; a tela só as escreve em português.
+ * ⚠ PR-CONC-IMPORT-BANCO-01B: o resumo diz o período REAL, os movimentos por mês, as conciliações, os lançamentos
+ *   CLASSIFICADOS que serão cancelados, os que voltam a programado e as liquidações de OC estornadas
+ *   (`partesDoResumoDoDesfazer`); e a RPC RECUSA quando um lançamento a cancelar está ligado a uma OC viva — a frase dela
+ *   aparece aqui em vermelho, com onde resolver, e o botão fica apagado.
  */
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { partesDoResumoDoDesfazer, type SimulacaoDesfazer } from '@/lib/conciliacao/desfazerArquivoTexto';
 
 const num = (v: number) => v.toLocaleString('pt-BR');
 
 /** O relatório que a RPC devolve em modo simulação. */
-interface Relatorio {
+interface Relatorio extends SimulacaoDesfazer {
   ok: boolean;
   motivo?: string;
+  frase?: string;
   meses?: string;
   arquivo?: string;
   extratos?: number;
@@ -66,6 +72,9 @@ export function DesfazerArquivoModal({ alvo, onClose, onDesfeito }: {
   });
 
   const motivoValido = motivo.trim().length >= 5;
+  /* A RECUSA DO D5 vem COM as contagens: o operador vê o que o gesto faria E por que não pode. */
+  const recusaOC = rel?.ok === false && rel.motivo === 'oc_viva';
+  const partesResumo = rel && (rel.ok || recusaOC) ? partesDoResumoDoDesfazer(rel) : [];
   const restauracaoParcial = (rel?.substituidos_restaurados ?? 0) - (rel?.substituidos_com_audit ?? 0);
 
   const executar = async () => {
@@ -81,7 +90,8 @@ export function DesfazerArquivoModal({ alvo, onClose, onDesfeito }: {
       if (error) { setErro(error.message); return; }
       const r = (data ?? {}) as Relatorio & { meses?: string };
       if (r.ok === false) {
-        setErro(r.motivo === 'mes_fechado'
+        setErro(r.motivo === 'oc_viva' && r.frase ? r.frase
+          : r.motivo === 'mes_fechado'
           ? `O mês ${r.meses ?? ''} está fechado; reabra antes de desfazer.`
           : r.motivo === 'importacao_ja_cancelada' ? 'Esta importação já foi desfeita.'
           : r.motivo === 'importacao_nao_encontrada' ? 'Importação não encontrada.'
@@ -122,7 +132,7 @@ export function DesfazerArquivoModal({ alvo, onClose, onDesfeito }: {
         <div className="p-3 space-y-2.5">
           {isLoading && <div className="py-4 text-center text-[10px] text-muted-foreground">Conferindo o que será desfeito…</div>}
 
-          {rel && rel.ok === false && (
+          {rel && rel.ok === false && !recusaOC && (
             <div className="text-[11px] text-destructive">
               {rel.motivo === 'mes_fechado'
                 ? `O mês ${rel.meses ?? ''} está fechado; reabra antes de desfazer.`
@@ -131,21 +141,30 @@ export function DesfazerArquivoModal({ alvo, onClose, onDesfeito }: {
             </div>
           )}
 
-          {rel?.ok && (
+          {rel && (rel.ok || recusaOC) && (
             <>
               <div className="rounded-xl bg-muted px-3 py-2 space-y-0.5">
                 <div className="text-[11px] font-medium truncate" title={rel.arquivo ?? ''}>{rel.arquivo ?? alvo?.nome_arquivo ?? '—'}</div>
-                <div className="text-[10px] text-muted-foreground">
-                  {rel.meses ?? '—'} · {num(rel.extratos ?? 0)} extratos
-                  {(rel.sem_par ?? 0) > 0 && ` · ${num(rel.sem_par ?? 0)} sem par`}
+                {/* O RESUMO DA SIMULAÇÃO: cada parte inteira numa linha só (`whitespace-nowrap`); a quebra cai ENTRE partes,
+                    nunca no meio de uma, e nada se corta. */}
+                <div data-testid="resumo-desfazer" className="text-[10px] leading-snug text-muted-foreground">
+                  {/* ⚠ O SEPARADOR FICA FORA do span `nowrap`: é o espaço dele que dá à linha o ponto de quebra. Dentro do span
+                      (como nasceu), não havia quebra possível e as partes vazavam do modal numa linha só — medido. */}
+                  {[...partesResumo, ...((rel.sem_par ?? 0) > 0 ? [`${num(rel.sem_par ?? 0)} sem par`] : [])].map((p, i) => (
+                    <Fragment key={p}>{i > 0 && ' · '}<span className="whitespace-nowrap">{p}</span></Fragment>
+                  ))}
                 </div>
               </div>
 
+              {(rel.crus_classificados ?? 0) > 0 && (
+                <div className="text-[10px] text-amber-700 dark:text-amber-400">a classificação feita nos lançamentos cancelados se perde</div>
+              )}
+
+              {recusaOC && (
+                <div data-testid="recusa-desfazer" className="text-[11px] text-destructive">{rel.frase ?? 'Há lançamento ligado a uma OC viva: desfaça o vínculo na OC antes.'}</div>
+              )}
+
               <div className="space-y-1">
-                {linha(
-                  `${num(rel.crus_cancelados ?? 0)} lançamentos crus serão cancelados${(rel.crus_enriquecidos ?? 0) > 0 ? ` (${num(rel.crus_enriquecidos ?? 0)} já enriquecidos)` : ''}`,
-                  (rel.crus_enriquecidos ?? 0) > 0 ? 'a classificação feita neles se perde' : null,
-                )}
                 {linha(
                   `${num(rel.substituidos_restaurados ?? 0)} substituídos serão restaurados${(rel.substituidos_com_audit ?? 0) > 0 ? ` (${num(rel.substituidos_com_audit ?? 0)} pelo log)` : ''}`,
                   /* ⚠ SEM LOG, A RESTAURAÇÃO É PARCIAL — a RPC cai no snapshot do vínculo, que
@@ -158,14 +177,14 @@ export function DesfazerArquivoModal({ alvo, onClose, onDesfeito }: {
                 {linha(`${num(rel.vinculos_manuais_desfeitos ?? 0)} vínculos manuais serão desfeitos — o lançamento fica como você deixou (valor/status editados não voltam)`)}
               </div>
 
-              <div>
+              {!recusaOC && <div>
                 <label className="text-[10px] text-muted-foreground" htmlFor="motivo-desfazer">
                   Motivo (obrigatório)
                 </label>
                 <input id="motivo-desfazer" value={motivo} onChange={(e) => { setMotivo(e.target.value); setConfirmando(false); }}
                   placeholder="ex.: arquivo importado na conta errada"
                   className="mt-0.5 h-7 w-full rounded border bg-background px-2 text-[11px] outline-none focus-visible:ring-1" />
-              </div>
+              </div>}
             </>
           )}
 
@@ -180,7 +199,7 @@ export function DesfazerArquivoModal({ alvo, onClose, onDesfeito }: {
             <button type="button"
               disabled={!rel?.ok || !motivoValido || gravando}
               onClick={() => { if (confirmando) { void executar(); } else setConfirmando(true); }}
-              title={!motivoValido ? 'Escreva o motivo (mínimo 5 caracteres)' : undefined}
+              title={recusaOC ? (rel?.frase ?? 'Recusado: lançamento ligado a uma OC viva.') : !motivoValido ? 'Escreva o motivo (mínimo 5 caracteres)' : undefined}
               className={cn('rounded px-2.5 py-0.5 text-[11px] font-medium',
                 rel?.ok && motivoValido && !gravando
                   ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90'

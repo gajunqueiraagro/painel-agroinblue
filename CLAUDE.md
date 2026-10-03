@@ -43,7 +43,9 @@ no mesmo arquivo.
   sai com codigo 0 e passa sempre. Era um gate vazio. O comando oficial
   varre os 671 arquivos .ts/.tsx em src/ e sai com codigo 2 enquanto
   houver erro.
-- TSC baseline: 141 erros (142 -> 141 no PR-FIN-DUPLICAR-ABRE-MODAL-01, por APAGAR CODIGO MORTO: saiu o TS2322
+- TSC baseline: 140 erros (141 -> 140 no PR-CONC-IMPORT-BANCO-01B, por PECA QUE DEIXOU DE EXISTIR: saiu o TS2352 do
+  `(inserted ?? []) as { id; hash_movimento }[]` em useImportacaoExtrato.ts — o upsert direto em `extrato_bancario_v2` virou
+  a RPC `fn_extrato_importar_arquivo`; antes, 142 -> 141 no PR-FIN-DUPLICAR-ABRE-MODAL-01, por APAGAR CODIGO MORTO: saiu o TS2322
   `number` -> `string` do `sinal` no `duplicarLancamento` de useFinanceiroV2.ts), medidos em ARVORE LIMPA — worktree em detached HEAD sobre o commit,
   NUNCA no checkout principal (o trabalho parked acrescenta erros: as duas linhas do
   PR-CONCIL-DERIVADO-02A somam 3 TS2352). A historia de cada subida e queda — 73 -> 155 pela
@@ -160,8 +162,10 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 03/10/2026 (PR-CONC-SALDO-UMA-REGUA-01b, +13 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
-  PR-CONC-SALDO-UMA-REGUA-01, +9 no mesmo arquivo): 3077
+  Baseline em 03/10/2026 (PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
+  `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2;
+  antes o PR-CONC-SALDO-UMA-REGUA-01b, +13): 3102
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -268,15 +272,24 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   93 extratos de AGOSTO (108 vinculos, 80 lancamentos descancelados e o 7f51a6cc de volta, pelo `audit_log.dados_anteriores`;
   as 2 liquidacoes de OC voltaram pelo gatilho do dono); ago/26 do Bradesco = o fixture de antes (conciliado, 54.738,55, 18
   dias, 116 linhas). Antes/depois e gesto contrario por linha em `conc_import_agnaldo_01a_backfill` (287 linhas). O CHECK de
-  `conciliacao_audit_log.acao` ganhou 'importacao_restaurada'. Dividas: (a) o PR 01B — a identidade do movimento com a
-  ocorrencia (dois movimentos identicos no mesmo arquivo; o PostgREST manda `ON CONFLICT("id") DO NOTHING`, entao o
-  `ignoreDuplicates` NUNCA cobriu hash nem chave natural — o comentario "sem alvo" de `useImportacaoExtrato.ts` esta' errado),
-  a gravacao atomica (cabecalho + movimentos numa RPC), a mensagem certa e o aviso do excluir; e `fn_extrato_desfazer_arquivo`
-  CANCELA lancamento cru CLASSIFICADO, inclusive com parte de OC viva, sem aviso; (b) TRES CABECALHOS 'processada' SEM NADA
+  `conciliacao_audit_log.acao` ganhou 'importacao_restaurada'. Dividas: (a) [FECHADA no PR-CONC-IMPORT-BANCO-01B: a ocorrencia
+  no hash, a gravacao atomica, a mensagem certa, o resumo e as travas do desfazer — ver a regra "A GRAVACAO DO EXTRATO E' DO
+  BANCO"]; (b) TRES CABECALHOS 'processada' SEM NADA
   LIGADO, nao tocados: NJ 557b67fa "NJ_Import_Final_v3.xlsx" (19/04, 27.295 linhas, 27.283 VALIDAS e ZERO lancamentos com esse
   `lote_importacao_id` — o dado estranho: ou o lote foi regravado sem o id, ou os lancamentos sairam), 8e37fed9 (13/07, 0
   validas) e 80de5ff8 (23/07, 0 validas); (c) o status anterior de um extrato NAO se registra em lugar nenhum — o desfazer o
-  sobrescreve com 'nao_conciliado' (a restauracao usou o invariante 'conciliado' <=> vinculo vivo, 4.836 de 4.837). ·
+  sobrescreve com 'nao_conciliado' (a restauracao usou o invariante 'conciliado' <=> vinculo vivo, 4.836 de 4.837) [desde o
+  PR-CONC-IMPORT-BANCO-01B o desfazer grava o status anterior em `conciliacao_audit_log.payload_antes`]. ·
+  IMPORT-BANCO-01B (03/10), dividas: (a) DESFAZER SO' UM PERIODO DA IMPORTACAO (o Gabriel queria tirar so' os 7 de 02/09 da
+  95c641a0): hoje o desfazer e' do arquivo inteiro — PR proprio; (b) [o 5o CABECALHO VAZIO do Agnaldo, e56f5c3b (03/10 17:30:51
+  UTC), saiu na 20261027192100 (⚠ registrada como 20261003180742; ledger = arquivo, md5 0369cb9f…), com a guarda e o registro dos
+  outros 4]; (c) "CLASSIFICADO" NO DESFAZER = `plano_conta_id` (decisao do Gabriel): o ca94d19c da 95c641a0 ("Devolucao aporte
+  financeiro", 20.000) e' Dividendos POR TEXTO, a excecao do plano, e por isso o resumo diz "80 lancamentos serao cancelados (79
+  classificados, 17 editados a' mao)" — se Dividendos deve contar como classificado e' decisao; (d) a leitura do arquivo no
+  "Importar Banco" (formato nao reconhecido, falha do parser) segue em TOAST (UX-TOAST-01) — so' a gravacao saiu dele; (e) a
+  pre-deteccao da previa (`candRows`, a consulta dos vivos no intervalo do arquivo) NAO pagina: com mais de 1.000 extratos vivos no
+  periodo do arquivo, o "ja' existe pela chave natural" da previa ficaria incompleto — o banco continua pulando certo (a RPC
+  confere os dois indices), mas a previa contaria errado. ·
   [CONC-MESA-NN-01 FECHADA no PR-CONC-CONFERENCIA-FECHAMENTO-DIA (03/10): a Conferencia ancora todo extrato no dia dele, sem
   consumir nenhum; ver a regra "A DATA DO BANCO MANDA NA CONFERENCIA"] ·
   CONFERENCIA-FECHAMENTO-DIA (03/10), dividas: (a) o EXTRATO DA PLANILHA do Enriquecer AINDA ANCORA O N:1 NO LANCAMENTO
@@ -1187,6 +1200,33 @@ docs/historico/frentes-ate-2026-09-29.md.)
     ponta de DESTINO na pontas (o predicado so' le' o plural e o sinal −1 nao entra pelo destino) — regra anterior a este PR.
   md5: pontas ce53914e…, `_fn_conciliacao_dias_conta` b194103a…, `_fn_conciliacao_resumo` d8463a56… (d364e139… no 01b), resumo
   25aa2ac4…, status_ano b31bf6ac… (d27b8623… no 01b).
+- ⚠ A GRAVACAO DO EXTRATO E' DO BANCO, E O DESFAZER DIZ O QUE FAZ E RECUSA O QUE NAO PODE (PR-CONC-IMPORT-BANCO-01B, 03/10,
+  migration 20261027192000, ⚠ registrada como 20261003174631; ledger = arquivo, md5 4966be59…).
+  · IDENTIDADE DO MOVIMENTO: `hashMovimento` + a OCORRENCIA entre movimentos de CONTEUDO IDENTICO no arquivo, na ordem dele
+    (`hashesDoArquivo`, `src/lib/financeiro/extratoHash.ts`, o unico que numera): a 1a ocorrencia e' o hash de sempre (provado com
+    hashes reais do proto; nenhum extrato gravado recalcula diferente), da 2a em diante o conteudo + `|N`. Dois "RENTAB 0,13"
+    iguais no mesmo dia sao dois movimentos — e cada um tem a SUA caixa na previa (a caixa, o contador e o selo sao acionados
+    pelo hash da linha; com o hash antigo as duas linhas mudavam juntas, o print do Gabriel de 03/10 14:31). O `seq_ocorrencia` da chave natural (conta+data+valor+documento) nao mudou.
+  · GRAVACAO: `fn_extrato_importar_arquivo` (cabecalho + movimentos numa transacao, SECURITY DEFINER, `tenant_ok`, conta do
+    cliente) e' o UNICO escritor de `extrato_bancario_v2` (medido: nenhum outro INSERT no front, no banco ou em edge function). O
+    que ja' existe vivo e' PULADO com o motivo ('hash', 'chave_natural', 'repetido_no_arquivo', 'conflito'), nunca erro; sem
+    nenhum movimento novo, nao cria cabecalho. 110 movimentos em 31 ms, 2.000 em 269 ms.
+    ⚠ O PostgREST manda `ON CONFLICT("id") DO NOTHING` (alvo = chave primaria, medido em `pg_stat_statements`): o
+      `ignoreDuplicates` do supabase-js NAO cobre indice unico que nao seja a PK. Quem precisa de dedupe por outro indice grava
+      por RPC.
+  · TELA: o resultado vai AO LADO DO BOTAO (`textoDoResultadoDaImportacao`): "Extrato ja' importado anteriormente…" so' quando
+    nada entrou, "N importados · M ja' existiam" no parcial; a falha diz o que falhou e "Nada foi gravado" (a gravacao e' uma
+    transacao). Erro no rodape da previa (a previa fica); sucesso na linha do "Escolher arquivo".
+  · DESFAZER: `fn_extrato_desfazer_arquivo` JA' SIMULAVA (o `DesfazerArquivoModal`, aberto pelo "Ver importacoes", sempre
+    mostrou o relatorio da RPC). O que mudou: a simulacao informa o periodo real, os movimentos por mes, as conciliacoes, os
+    lancamentos CLASSIFICADOS (`plano_conta_id`) e os editados a' mao, os que voltam a programado e as liquidacoes de OC que o
+    gatilho do dono vai estornar (`partesDoResumoDoDesfazer`, `src/lib/conciliacao/desfazerArquivoTexto.ts`; cada parte inteira,
+    a quebra entre partes — medido: 4 linhas em 472px no caso do Agnaldo); RECUSA, com a frase e sem escrever, quando um
+    lancamento a cancelar tem parte de OC viva ("O lancamento X … esta' ligado a' OC Y: desfaca o vinculo na OC antes") — de 47
+    importacoes vivas, so' a 95c641a0 seria recusada; o mes fechado segue recusado como antes; a execucao grava o status anterior
+    de cada extrato em `conciliacao_audit_log.payload_antes`. A funcao (SECURITY DEFINER) ganhou guarda de tenant e perdeu o
+    EXECUTE de PUBLIC. Os campos de antes do retorno sao identicos em 54 de 55 importacoes (a 55a e' a recusa).
+  md5: `fn_extrato_importar_arquivo` bcc09c8a…, `fn_extrato_desfazer_arquivo` d4b48183… -> 0e3c3b5a….
 - ⚠ CAIXA DO SISTEMA = UMA REGRA NO BANCO (CONC-CAIXA-PONTA-01, migration 20261027185500, ledger 20261001141213):
   `fn_caixa_sistema_pontas(cliente, conta, de, ate)` devolve uma linha por PONTA (lancamento x conta, sinal da direcao) e
   data. Parcial (programado/agendado com 0 < aplicado < valor): o aplicado na data de cada extrato; realizado cujo aplicado
