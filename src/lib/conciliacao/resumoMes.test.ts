@@ -22,6 +22,12 @@
  * ganhou `saldo_apos` (o saldo corrido, que a aba Sistema desenha sem somar), `centro` e `status_exibicao`; o resumo ganhou
  * `diferenca_entradas`/`diferenca_saidas` (banco − sistema por lado, o quadro do topo do Casar). `esp`, `dias_banco`, `dias` e
  * as chaves antigas da lista saíram IGUAIS à captura do 01b (a do Agnaldo muda só a ORDEM dos vínculos).
+ *
+ * PR-CONC-INTERNA-SEPARADA-01b — o `resumo` de cada caso ganhou, lidos do dono em 03/10 com a migration 20261027192300 aplicada
+ * (as chaves de antes conferidas IGUAIS à captura do 01c, linha a linha): `proprio`, `internas`, `par_conta_id`, `par_status` e,
+ * em cada linha, `saldo_apos_proprio`. O Agnaldo (a conta-mãe) ganhou as 18 linhas 'transferencia_interna' e mudou entradas e
+ * saídas em ±1,74 (o consolidado passou a somar o movimento da interna com terceiros). CONTRATO NOVO: o `saldo_apos`
+ * (consolidado) não conta a transferência interna; o `saldo_apos_proprio` conta todas e fecha no `proprio.saldo_sistema`.
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -31,10 +37,11 @@ import { montarMesa, type EspelhadosReais } from './mesaDoDia';
 interface DiaBanco { data: string; banco: number; sistema: number; diferenca: number; motivos: string[] }
 interface DiaResumo extends DiaBanco { banco_acum: number; sistema_acum: number; saldo_banco: number | null; saldo_sistema: number | null }
 interface LinhaSistema {
-  tipo: 'vinculo' | 'sem_par' | 'resto_sub_aplicado'; data: string; valor: number; lancamento_id: string;
+  tipo: 'vinculo' | 'sem_par' | 'resto_sub_aplicado' | 'transferencia_interna'; data: string; valor: number; lancamento_id: string;
   extrato_id?: string; parcial?: boolean; falta?: number; sobre_aplicado?: boolean;
-  saldo_apos: number; centro?: string; status_exibicao: 'conciliado' | 'parcial' | 'realizado';
+  saldo_apos: number; saldo_apos_proprio: number; centro?: string; status_exibicao: 'conciliado' | 'parcial' | 'realizado';
 }
+interface Proprio { saldo_inicial: number; saldo_sistema: number; saldo_extrato: number | null; diferenca: number | null; entradas: number; saidas: number }
 interface Caso {
   cliente: string; conta: string; mes: string; internos: string[]; esp: EspelhadosReais;
   dias_banco: { dias: DiaBanco[]; retido_em_depositos: { qtde: number; valor: number } };
@@ -42,6 +49,7 @@ interface Caso {
     saldo_inicial: number; saldo_sistema: number; dias: DiaResumo[]; linhas_sistema: LinhaSistema[] | null;
     diferenca_entradas: number; diferenca_saidas: number; entradas: number; saidas: number;
     banco: { entradas: number; saidas: number }; status: string; retido_em_depositos: { qtde: number; valor: number };
+    proprio: Proprio; internas: { conta_id: string; conta_nome: string }[] | null; par_conta_id: string | null;
   };
 }
 const FIX: Record<string, Caso> = JSON.parse(readFileSync(resolve(process.cwd(), 'src/lib/conciliacao/resumoMes.fixture.json'), 'utf8'));
@@ -60,9 +68,14 @@ function divergencias(caso: Caso, internos: ReadonlySet<string>) {
   return { comparados: dias.length, fora };
 }
 
-/** Saldo inicial + Σ linhas da lista do sistema, no centavo (a soma é crua; arredonda-se só o fim). */
+/** As linhas do CONSOLIDADO: a transferência com a interna fica fora (só conta no saldo próprio). */
+const semInternas = (linhas: LinhaSistema[]) => linhas.filter((l) => l.tipo !== 'transferencia_interna');
+/** Saldo inicial + Σ linhas da lista do sistema (sem as transferências internas), no centavo (a soma é crua; arredonda-se só o fim). */
 const fechaLista = (r: Caso['resumo'], linhas = r.linhas_sistema ?? []) =>
-  r2(Number(r.saldo_inicial) + linhas.reduce((s, l) => s + Number(l.valor), 0));
+  r2(Number(r.saldo_inicial) + semInternas(linhas).reduce((s, l) => s + Number(l.valor), 0));
+/** Saldo inicial PRÓPRIO + Σ de TODAS as linhas (as transferências internas inclusive). */
+const fechaListaPropria = (r: Caso['resumo'], linhas = r.linhas_sistema ?? []) =>
+  r2(Number(r.proprio.saldo_inicial) + linhas.reduce((s, l) => s + Number(l.valor), 0));
 
 describe('o dia do banco é o dia da Conferência', () => {
   for (const [nome, caso] of Object.entries(FIX)) {
@@ -111,6 +124,8 @@ describe('PR-CONC-SALDO-UMA-REGUA-01b — a lista e os dias do resumo de UMA con
       expect((r.linhas_sistema ?? []).length).toBeGreaterThan(0);
       expect(fechaLista(r)).toBe(r2(Number(r.saldo_sistema)));
       expect(r2(Number(r.dias[r.dias.length - 1].saldo_sistema))).toBe(r2(Number(r.saldo_sistema)));
+      // PR-CONC-INTERNA-SEPARADA-01b: o saldo PRÓPRIO fecha com TODAS as linhas, a partir do inicial próprio
+      expect(fechaListaPropria(r)).toBe(r2(Number(r.proprio.saldo_sistema)));
     });
     it(`${nome}: os dias do resumo são os dias da mesa`, () => {
       const viaResumo = { ...caso, dias_banco: { ...caso.dias_banco, dias: caso.resumo.dias } };
@@ -147,11 +162,32 @@ describe('PR-CONC-SALDO-UMA-REGUA-01c — saldo corrido, status de exibição e 
       const r = caso.resumo;
       const linhas = r.linhas_sistema ?? [];
       let acum = Number(r.saldo_inicial);
+      let acumProprio = Number(r.proprio.saldo_inicial);
       for (const l of linhas) {
-        acum += Number(l.valor);
+        // o consolidado não conta a transferência com a interna; o próprio conta todas (PR-CONC-INTERNA-SEPARADA-01b)
+        if (l.tipo !== 'transferencia_interna') acum += Number(l.valor);
+        acumProprio += Number(l.valor);
         expect(r2(Number(l.saldo_apos))).toBe(r2(acum));
+        expect(r2(Number(l.saldo_apos_proprio))).toBe(r2(acumProprio));
       }
       expect(r2(Number(linhas[linhas.length - 1].saldo_apos))).toBe(r2(Number(r.saldo_sistema)));
+      expect(r2(Number(linhas[linhas.length - 1].saldo_apos_proprio))).toBe(r2(Number(r.proprio.saldo_sistema)));
+    });
+    it(`${nome}: conta sem par tem o próprio igual ao topo; a mãe tem as transferências internas e o inicial dela`, () => {
+      const r = caso.resumo;
+      const internas = (r.linhas_sistema ?? []).filter((l) => l.tipo === 'transferencia_interna');
+      if (r.internas === null && r.par_conta_id === null) {
+        expect(internas).toEqual([]);
+        expect([r.proprio.saldo_inicial, r.proprio.saldo_sistema, r.proprio.entradas, r.proprio.saidas].map(Number))
+          .toEqual([r.saldo_inicial, r.saldo_sistema, r.entradas, r.saidas].map(Number));
+        for (const l of r.linhas_sistema ?? []) expect(Number(l.saldo_apos_proprio)).toBe(Number(l.saldo_apos));
+      } else {
+        expect(nome).toBe('agnaldo_bradesco_2026_08');
+        expect(internas.length).toBe(18);
+        expect(Number(r.proprio.saldo_inicial)).toBe(1);
+        expect(Number(r.saldo_inicial)).toBe(238791.26);
+        expect(Number(r.proprio.saldo_sistema)).toBe(54738.55);
+      }
     });
     it(`${nome}: status de exibição — parcial só no parcial, conciliado só no vínculo, e toda linha tem centro`, () => {
       for (const l of caso.resumo.linhas_sistema ?? []) {

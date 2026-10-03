@@ -15,7 +15,7 @@ import {
   anexarSaldoDocumento, cancelarSaldoDocumento, urlAssinadaSaldoDocumento,
 } from '@/hooks/useExtratoDaConta';
 import { TIPOS_ACEITOS } from '@/hooks/useLancamentoDocumentos';
-import { useResumoMes, useReleDonoAoMudarLancamentos, useContasConsolidadasEm } from '@/hooks/useResumoConciliacao';
+import { useResumoMes, useReleDonoAoMudarLancamentos } from '@/hooks/useResumoConciliacao';
 import { saldoSistemaNaData } from '@/lib/conciliacao/resumoDoDono';
 
 /**
@@ -86,16 +86,16 @@ export function SaldoRealDialog({
    * inteiramente composta pelos lançamentos de 18 a 20/09 descontados de uma posição de 17.
    * ⚠ O NÚMERO É LIDO DO DONO, NÃO SOMADO — PR-CONC-SALDO-UMA-REGUA-02b (D4). Era `useSaldoSistemaNaPosicao` (saldo
    * inicial + `cenario='realizado'` a valor cheio, sem filtrar `status_transacao` — a herança que este comentário
-   * registrava). Agora é o `saldo_apos` da última linha de `linhas_sistema` com data até a digitada (`saldoSistemaNaData`);
+   * registrava). Agora é o saldo corrido da última linha de `linhas_sistema` com data até a digitada (`saldoSistemaNaData`);
    * sem linha até a data, o saldo inicial do dono. A chave é a do Casar e a do painel (`[conta]`): cache.
-   * ⚠ CONTA-MÃE COM INTERNA (D4a): o dono é consolidado e o digitado é SÓ da conta — somar o saldo da interna aqui seria
-   * cálculo paralelo. O modal mostra o sistema do dono com "consolidado com X" e NÃO compara; a diferença está no Resumo.
+   * ⚠ O SISTEMA É O DA CONTA — PR-CONC-INTERNA-SEPARADA-01b (D5, reverte o D4a do 02b): o saldo corrido lido é o
+   * `saldo_apos_proprio` (conta as transferências mãe↔interna) a partir do saldo inicial PRÓPRIO. O digitado é só da conta e o
+   * sistema também: a diferença volta a ser calculada em TODA conta — mãe e interna inclusive. Na mãe o modal mostrava o
+   * consolidado com "consolidado com X" e escondia a diferença (o Gabriel digitou −55.734,67 e leu −55.738,69).
    */
   const resumoQ = useResumoMes(clienteId, anoMes, [contaId], { servirDoCache: true });
   const linhaDono = resumoQ.data?.find((l) => l.nivel === 'conta' && l.conta_id === contaId) ?? null;
   useReleDonoAoMudarLancamentos(clienteId);
-  const consolidadas = useContasConsolidadasEm(clienteId, contaId).data ?? [];
-  const consolidada = consolidadas.length > 0;
   /* `data` é o campo "Posição em" — a leitura segue o que o operador digita, ao vivo (só dentro do mês). */
   const sistemaNaData = {
     carregando: resumoQ.isLoading,
@@ -175,7 +175,7 @@ export function SaldoRealDialog({
    * ⚠ É A ÚNICA DIFERENÇA QUE ESTA TELA MOSTRA. O OFX deixou de gerar a sua (ver abaixo):
    * são duas conciliações independentes, e a visual é a principal.
    */
-  const dif = !consolidada && valor !== null && sistemaNaData.saldoSistema !== null
+  const dif = valor !== null && sistemaNaData.saldoSistema !== null
     ? Math.round((valor - sistemaNaData.saldoSistema) * 100) / 100
     : null;
 
@@ -271,12 +271,6 @@ export function SaldoRealDialog({
             <div className="flex justify-between">
               <span className="text-[10px] text-muted-foreground">
                 sistema em {dataBr(data)}
-                {consolidada && (
-                  <span className="ml-1 text-[9.5px]" data-testid="lapis-consolidado"
-                    title={`o saldo do sistema é o do dono, consolidado: inclui ${consolidadas.join(', ')}`}>
-                    · consolidado com {consolidadas.join(', ')}
-                  </span>
-                )}
               </span>
               <span className="text-[11px] tabular-nums" data-testid="lapis-sistema">
                 {sistemaNaData.carregando ? '…'
@@ -284,11 +278,6 @@ export function SaldoRealDialog({
                   : formatMoeda(sistemaNaData.saldoSistema)}
               </span>
             </div>
-            {consolidada ? (
-              <div className="text-[10px] text-muted-foreground" data-testid="lapis-diferenca-consolidada">
-                conta consolidada: a diferença está no Resumo
-              </div>
-            ) : (
             <div className="flex items-baseline justify-between gap-2">
               <span className="text-[10px] text-muted-foreground">
                 diferença
@@ -306,7 +295,6 @@ export function SaldoRealDialog({
                 {dif == null ? '—' : saldoConfere(dif) ? 'confere' : formatMoeda(dif)}
               </span>
             </div>
-            )}
           </div>
 
           {/* Anexos do extrato — prova visual. Gravam na hora, independente do Informar/

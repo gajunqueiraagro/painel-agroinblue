@@ -70,25 +70,3 @@ export function useReleDonoAoMudarLancamentos(clienteId: string | null | undefin
     });
   }, [clienteId, qc]);
 }
-
-/**
- * AS CONTAS INTERNAS CONSOLIDADAS NESTA — só os NOMES, para a marca "⊕" e o "consolida X" (PR-CONC-SALDO-UMA-REGUA-02b,
- * D2a/D4a). É cadastro, não saldo: o número consolidado é o do dono. A linha do dono de UMA conta não diz quem se consolida
- * nela; a interna é que aponta para a mãe (`consolida_em_conta_id`).
- */
-export function useContasConsolidadasEm(clienteId: string | null | undefined, contaId: string | null | undefined) {
-  return useQuery({
-    queryKey: ['contas-consolidadas-em', clienteId, contaId],
-    enabled: !!clienteId && !!contaId,
-    staleTime: 5 * 60 * 1000,
-    queryFn: async (): Promise<string[]> => {
-      const { data, error } = await supabase
-        .from('financeiro_contas_bancarias')
-        .select('nome_exibicao, nome_conta')
-        .eq('cliente_id', clienteId ?? '')
-        .eq('consolida_em_conta_id', contaId ?? '');
-      if (error) throw error;
-      return (data ?? []).map((c) => c.nome_exibicao || c.nome_conta);
-    },
-  });
-}

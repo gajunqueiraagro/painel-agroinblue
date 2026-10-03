@@ -162,14 +162,16 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 03/10/2026 (PR-CONC-SALDO-UMA-REGUA-02b, +10 −8: `src/components/conciliacao/painelDono.test.tsx` 10; sairam os 8
+  Baseline em 03/10/2026 (PR-CONC-INTERNA-SEPARADA-01b, +31: `src/lib/conciliacao/resumoDoDono.test.ts` 10,
+  `src/lib/conciliacao/resumoMes.test.ts` 5, `src/components/conciliacao/painelDono.test.tsx` 5, `src/pages/conciliacaoDono.test.tsx` 9,
+  `src/components/financeiro-v2/espelhoDono.test.tsx` 2; antes o PR-CONC-SALDO-UMA-REGUA-02b, +10 −8: `src/components/conciliacao/painelDono.test.tsx` 10; sairam os 8
   de `somarAtePosicao` em `src/hooks/useExtratoDaConta.test.ts`, com a funcao; antes o PR-CONC-SALDO-UMA-REGUA-02, +22 −5: `src/lib/conciliacao/resumoDoDono.test.ts` 7,
   `src/components/financeiro-v2/espelhoDono.test.tsx` 4, `src/pages/conciliacaoDono.test.tsx` 11; saiu
   `src/pages/conciliacaoAgregadoTransferencia.test.ts` 5, com o `buildMonthCards` que testava; antes o
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3138
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3169
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -1239,8 +1241,9 @@ docs/historico/frentes-ate-2026-09-29.md.)
   · REGUA (D3): os meses nascem NEUTROS e se pintam com `fn_conciliacao_status_ano`; o mes aberto nasce pintado pelo total do resumo.
     `STATUS_COR` tem as chaves do dono (conciliado | nao_conciliado | pendente).
   · SALDOS POR CONTA (D4): linhas 'conta' (sistema, extrato, diferenca, o ponto = status, o `title` = motivos), subtotal = linha 'tipo'
-    do dono, Total = linha 'total'. A CONTA INTERNA (`consolida_em_conta_id`) NAO TEM LINHA: o saldo dela ja' esta' na mae, que leva
-    "⊕" e "consolida X" no `title`. As ocultas (saldo 0, extrato 0, sem movimento, sem extrato) leem a linha do dono.
+    do dono, Total = linha 'total'. [REVOGADO no PR-CONC-INTERNA-SEPARADA-01b: a conta interna TEM LINHA, no tipo
+    dela, e toda linha de conta desenha o `proprio` do dono; o "⊕" e o "consolida X" sairam — ver a regra "CADA CONTA COM O
+    SALDO PROPRIO".] As ocultas (saldo 0, extrato 0, sem movimento, sem extrato) leem o `proprio` da linha do dono.
   · POSICAO (D5): `saldo_extrato_data` e `posicao` do dono (rodape e "N realizados apos").
   · CASAR (D6/D7): Banco x Sistema x Diferenca por lado, a linha "Retido" (sempre presente) e "Sem par" com o valor dos extratos; a aba
     Sistema desenha `linhas_sistema` com `saldo_apos`, centro e `status_exibicao` ("parcial · falta R$ X", coluna de 154px medida no
@@ -1268,15 +1271,15 @@ docs/historico/frentes-ate-2026-09-29.md.)
     Casar; `servirDoCache` (staleTime 60 s so' nesse observador) e' o que evita a segunda ida ao dono ao montar (medido: 0
     chamadas abrindo o Importar depois do Casar; sem ele, 1). Fresco pelo GATILHO: `useReleDonoAoMudarLancamentos` (o mesmo
     `inscreverEmLancamentos` que o hook antigo ouvia, D6) e salvar o saldo no lapis invalidam `CHAVE_RESUMO_MES`.
-  · CONTA-MAE COM INTERNA (D2a; hoje so' Agnaldo Bradesco + Invest Facil): no painel, "Saldo extrato", "Saldo no sistema" e
-    "Diferenca" sao os TRES do dono (consolidado), com "⊕" e o `title` "consolida X" — nunca o saldo proprio ao lado do sistema
-    consolidado. Os nomes das internas vem do cadastro (`useContasConsolidadasEm`: `consolida_em_conta_id`), nao do dono.
+  · CONTA-MAE COM INTERNA (D2a) — [REVOGADO no PR-CONC-INTERNA-SEPARADA-01b: no painel os TRES sao os da CONTA — o extrato e'
+    o saldo declarado dela, o sistema e a diferenca sao o `proprio` do dono —, sem "⊕"; `useContasConsolidadasEm` saiu, os nomes
+    do par vem do dono (`internas` e o motivo 'conferida_com').]
   · "CONCILIAR O MES" (`AcoesDoMes`, D3): o "Sistema hoje" e' o mesmo `sistemaNaPosicao`; o `ConciliarMesDialog` nao mudou.
   · LAPIS (`SaldoRealDialog`, D4): "sistema em DD/MM" com a data DIGITADA e' o `saldo_apos` da ultima linha de
     `linhas_sistema` ate' a data (`saldoSistemaNaData`); sem linha ate' la', o saldo inicial do dono — LIDO, nao somado; a
-    diferenca contra o digitado segue `saldoConfere`. Em CONTA-MAE (D4a): o sistema do dono com "consolidado com X" e SEM
-    diferenca ("conta consolidada: a diferenca esta' no Resumo") — o digitado e' so' da conta, e somar a interna no front seria
-    calculo paralelo.
+    diferenca contra o digitado segue `saldoConfere`. Em CONTA-MAE (D4a) — [REVOGADO no PR-CONC-INTERNA-SEPARADA-01b: o
+    lapis le' o `saldo_apos_proprio` a partir do saldo inicial proprio e calcula a diferenca em TODA conta, mae e interna
+    inclusive; "consolidado com X" e "a diferenca esta' no Resumo" sairam.]
   ⚠ MUDAM DE NUMERO NESTE PR, COM CAUSA (aceitas pelo Gabriel, 03/10; medido em 547 conta-meses de 2026, 543 sem parcial e sem
     interna, 4 divergem): NJ Itau BBA mar/26 243.550,79 -> 93.550,79 (sobre-aplicado e3e36029, 150.000); Vera Itau Personalite
     mai/26 264.503,93 -> 264.143,93 (sobre-aplicado 77711d94, 360); Santa Rita BB jun/26 0,00 -> 160.000,00 (sobre-aplicado
@@ -1340,7 +1343,55 @@ docs/historico/frentes-ate-2026-09-29.md.)
   plan_cache_mode e tenant_ok conferidos na migration. Testes: `supabase/tests/conc_interna_separada_01a_test.sql` (D1–D6; contra o
   corpo sem a regra do subtotal ele cai em "D3 inv veredito"); `conc_saldo_uma_regua_01b_test.sql` atualizado ao contrato novo
   (posicao com `saldo_sistema_proprio_na_data`, a linha 'transferencia_interna', o fecho do proprio, a interna no status do ano
-  pela mae); 01, 01c e hotfix seguem OK. A TELA ainda esconde a interna e mostra a mae consolidada (PR 02): troca no 01b.
+  pela mae); 01, 01c e hotfix seguem OK. A TELA trocou no 01b (regra seguinte).
+- ⚠ CADA CONTA COM O SALDO PROPRIO; A INTERNA VOLTA PARA O TIPO DELA (PR-CONC-INTERNA-SEPARADA-01b, Gabriel 03/10, so' tela).
+  NASCE DE UMA REJEICAO: o Gabriel digitou −55.734,67 no Bradesco abr/24 e a tela mostrou −55.738,69 (somou os −4,02 da interna),
+  e a conta de investimento tinha sumido da lista. A tela so' LE o `proprio.*`, `par_*`, `internas`, `saldo_apos_proprio` e
+  `posicao.saldo_sistema_proprio_na_data` do dono; nenhuma soma, nenhuma subtracao, nenhuma leitura de cadastro para o par.
+  · LEITOR (`src/lib/conciliacao/resumoDoDono.ts`): `saldosDaLinha(l)` = na linha de CONTA o `proprio`, nos agregados o topo;
+    conta SEM `proprio` (dono antigo) fica NEUTRA ("—"), nunca cai no campo consolidado por reserva. `contaEmPar`, `marcaDoPar`
+    (mae: nomes de `internas`; interna: o `conta_nome` do motivo 'conferida_com'), `diferencaNaPosicao`, e os de antes
+    (`sistemaNaPosicao`, `saldoSistemaNaData`) passaram a ler o proprio. Os campos de TOPO da mae seguem consolidados: sao o
+    veredito do par (status, motivos, dias, quadro banco x sistema da Conferencia), nao o saldo da conta.
+  · SALDOS POR CONTA (`ConciliacaoBancariaTab`): a interna tem linha, a MESMA `SaldoContaRow`, no grupo do `tipo_conta` dela, com o
+    lapis dela; Sistema / Extrato / Diferenca = `proprio.*`; o "⊕" saiu. O ponto e' o status do dono (na interna, o do par).
+    OCULTAS: a regra le' o `proprio`, e a interna NUNCA se oculta com movimento proprio no mes nem com o par nao conciliado
+    ('pendente' inclusive). Subtotais e Total = as linhas 'tipo' e 'total' do dono.
+    ⚠ A MARCA DO PAR NA LINHA E' "· par", NAO "· conferida com <nome>" — MEDIDO a 1.135px: a coluna Conta tem 200–210px uteis;
+      "· conferida com Bradesco-Invest. Facil" pede ~175px e quebrava a linha em duas (36px contra 22); "· em par" (36,5px) ainda
+      quebrava a do Invest. Facil em set/26 por 1,7px (209,7 de 208). Com "· par" (20,1px) a pior linha pede 193,3 de 200. A frase
+      inteira ("conferida com <nome> — o mes desta conta so' fecha junto com <nome>: o arquivo do banco traz o saldo das duas
+      somado") vai no `title` da marca; o card Status escreve "conferida com <nome>" por extenso.
+  · RESUMO com UMA conta: saldo inicial, entradas, saidas (com terceiros x transferencias), sistema, extrato e diferenca =
+    `proprio.*`; no Todas, a linha 'total'. O card Status segue o topo (o veredito do par) e acrescenta "conferida com <nome>".
+  · PAINEL (`PainelExtratoMes`): extrato = o saldo declarado da conta; sistema e diferenca = `sistemaNaPosicao` (proprio; com
+    posicao, `posicao.saldo_sistema_proprio_na_data`). LAPIS (`SaldoRealDialog`): `saldoSistemaNaData` (o `saldo_apos_proprio` da
+    ultima linha ate' a data; sem linha, o `proprio.saldo_inicial`) e a diferenca contra o digitado em toda conta. "CONCILIAR O
+    MES" (`AcoesDoMes`): `saldoSistemaHoje` = o mesmo `sistemaNaPosicao`. "FECHAR CONTAS SEM MOVIMENTO"
+    (`contasParaFecharSemMovimento`) grava e julga pelo `proprio` — na mae o topo e' o consolidado, e grava'-lo como saldo dela
+    somaria a interna.
+  · ABA SISTEMA (`AbaSistemaReal`): saldo inicial e final = `proprio`, a coluna de saldo = `saldo_apos_proprio`, e na mae as
+    linhas 'transferencia_interna' aparecem com "⇄ interna · fora do extrato" (123px dos 154 da coluna; a legenda inteira no
+    `title`). ⚠ NA MAE O `saldo_apos` CONSOLIDADO NAO FECHA em `saldo_sistema` quando a interna movimenta com terceiros; a tela
+    da mae le' `saldo_apos_proprio`. A CONFERENCIA dia a dia (`montarMesa`), o QUADRO DO TOPO do Casar (banco x sistema por lado)
+    e a aba "Extrato (banco)" NAO mudaram: seguem consolidados — na mae o "Saldo inicial (extrato)" continua o do par (ago/26:
+    238.791,26) e o quadro mostra a diferenca por lado do dono (ago/26: +1,74 / −1,74, o movimento da interna com terceiros).
+  ⚠ PENDENCIA DE TELA (proximo PR): na conta-MAE, o quadro do topo do Casar e a aba "Extrato (banco)" SEGUEM CONSOLIDADOS, ao
+    lado de uma aba Sistema que ja' e' propria. Medido no Bradesco do Agnaldo, ago/26: "Saldo inicial (extrato)" 238.791,26 x
+    "Saldo inicial (sistema)" 1,00; diferenca por lado +1,74 / −1,74 num mes conciliado.
+  ⚠ DIVIDA DE BANCO (01c): o dono NAO devolve a diferenca PROPRIA na posicao declarada (`posicao.diferenca_propria_na_data`).
+    Em conta de par (mae ou interna) com a posicao antes do fim do mes, a Diferenca do painel e a do rodape do Resumo mostram
+    "—" com o `title` "diferença na posição ainda não disponível para conta conferida em par — veja a diferença do fim do mês"
+    (`TITULO_DIFERENCA_NA_POSICAO_INDISPONIVEL`); conta sem par segue lendo `posicao.diferenca_na_data`. Quando o campo entrar,
+    a tela troca o "—" pela leitura dele. ZERO casos de 2020-01 a 2026-12 na medicao de 03/10.
+  Provas: conta SEM par tem `proprio` = topo em 2.163 linhas de conta (todos os clientes, 2024-01..2026-09), 0 divergencias, e
+  a posicao propria = a da conta nas 5 com posicao. No navegador a 1.135px: Agnaldo abr/24 Bradesco −55.719,49 x −55.734,67
+  (−15,18) em Conta corrente e Invest. Facil −4,02 x −4,02 em Investimentos; ago/26 54.738,55 x 54.738,55 e 0,00 x 0,00; set/26
+  26.205,97 x 110.611,77 (84.405,80); aba Sistema do Bradesco ago/26 com 134 linhas, 18 internas, de 1,00 a 54.738,55; NJ set/26
+  igual ao publicado (Sicredi Lavoura 155.972,29, Banco do Brasil 604.088,31). Tempo no vivo, 10 chamadas: status do ano NJ
+  1.891–1.998 ms, Santa Rita 1.569–1.932 ms; resumo de todas as contas do NJ 216–229 ms. Testes: T1–T9 nos cinco arquivos da
+  linha de baseline, com dez mutacoes que caem pelo numero consolidado; os fixtures de conta sem par passam por `comProprio`
+  (`src/lib/conciliacao/resumoDoDono.fixture.ts`), e o `resumoMes.fixture.json` ganhou os campos do 01a lidos do dono.
 - ⚠ A GRAVACAO DO EXTRATO E' DO BANCO, E O DESFAZER DIZ O QUE FAZ E RECUSA O QUE NAO PODE (PR-CONC-IMPORT-BANCO-01B, 03/10,
   migration 20261027192000, ⚠ registrada como 20261003174631; ledger = arquivo, md5 4966be59…).
   · IDENTIDADE DO MOVIMENTO: `hashMovimento` + a OCORRENCIA entre movimentos de CONTEUDO IDENTICO no arquivo, na ordem dele

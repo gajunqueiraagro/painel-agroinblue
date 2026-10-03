@@ -5,14 +5,20 @@
  * ⚠ O BANCO FALSO DEVOLVE AS LINHAS DO DONO e a tela é montada inteira (os filhos pesados são trocados por nada — o
  *   Espelho fica com um espião das props, para o link "N dias com diferença"). Lançamentos do ano: nenhum — prova de que
  *   nenhum número do Resumo, do Status ou dos Saldos vem deles.
- * T1 Emerson · T2 selo = dono · T3 motivos e o link do dia · T4 Todas · T5 Agnaldo consolidado · T6 régua neutra → pintada
+ * T1 Emerson · T2 selo = dono · T3 motivos e o link do dia · T4 Todas · T5 o par do Agnaldo · T6 régua neutra → pintada
  * · T7 posição · T8 fechar sem movimento grava o do dono · T9 nenhum arquivo tocado importa a conta antiga.
+ *
+ * PR-CONC-INTERNA-SEPARADA-01b — CONTRATO NOVO: a linha de conta desenha o `proprio` do dono. O T5 antigo ("a conta
+ * consolidada é UMA linha, a interna não tem linha") virou o seu contrário: a mãe em Conta corrente e a interna em
+ * Investimentos, cada uma com o saldo próprio e a marca "conferida com". Entraram o T3 (01b) das ocultas e o T7 (01b) da conta
+ * sem par. As linhas de conta escritas à mão passam por `comProprio` (o `proprio` = topo que o dono manda em conta sem par).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { comProprio } from '@/lib/conciliacao/resumoDoDono.fixture';
 
 const B = vi.hoisted(() => ({
   resumo: {} as Record<string, unknown[]>,
@@ -24,6 +30,8 @@ const B = vi.hoisted(() => ({
   rpcs: [] as Array<{ fn: string; args: Record<string, unknown> }>,
   espelhoProps: [] as Array<Record<string, unknown>>,
   tom: [] as Array<Record<number, unknown> | undefined>,
+  /** As props com que o lápis foi aberto (o `saldoAtual` é o extrato que a linha passa). */
+  lapis: [] as Array<Record<string, unknown>>,
 }));
 
 vi.mock('@/integrations/supabase/client', () => {
@@ -54,7 +62,9 @@ vi.mock('@/hooks/useFinanceiroV2', () => ({ inscreverEmLancamentos: () => () => 
 vi.mock('@/hooks/useConciliacaoDoMes', () => ({ useConciliacaoDoMes: () => ({ movimentos: [] }), contarBaldes: () => ({ todos: 0, conciliado: 0 }) }));
 vi.mock('@/components/conciliacao/PainelExtratoMes', () => ({ PainelExtratoMes: () => null }));
 vi.mock('@/components/conciliacao/AcoesDoMes', () => ({ AcoesDoMes: () => null }));
-vi.mock('@/components/conciliacao/SaldoRealDialog', () => ({ SaldoRealDialog: () => null }));
+vi.mock('@/components/conciliacao/SaldoRealDialog', () => ({
+  SaldoRealDialog: (p: Record<string, unknown>) => { if (B.lapis[B.lapis.length - 1]?.contaId !== p.contaId) B.lapis.push(p); return null; },
+}));
 vi.mock('@/components/conciliacao/ImportarBancoInline', () => ({ ImportarBancoInline: () => null }));
 vi.mock('@/components/conciliacao/EnriquecerPorPlanilha', () => ({ EnriquecerPorPlanilha: () => null }));
 vi.mock('@/components/financeiro-v2/ExtratoGerencialTab', () => ({ ExtratoGerencialTab: () => null }));
@@ -80,7 +90,9 @@ const ID_LAV = EMERSON.conta as string;
 
 const conta = (id: string, nome: string, tipo = 'cc') =>
   ({ id, nome_conta: nome, nome_exibicao: null, tipo_conta: tipo, codigo_conta: null, mes_inicio: null, saldo_inicial_oficial: null });
-const linhaConta = (x: Record<string, unknown>) => ({
+/* `comProprio`: a linha de conta SEM par vem do dono com `proprio` = topo (PR-CONC-INTERNA-SEPARADA-01a). Quem escreve o
+   `proprio` à mão (a conta-mãe) fica com o seu. */
+const linhaConta = (x: Record<string, unknown>) => comProprio({
   nivel: 'conta', consolida_em_conta_id: null, tem_extrato: false, entradas: 0, saidas: 0, motivos: [],
   retido_em_depositos: { qtde: 0, valor: 0 }, extratos_sem_par: { qtde: 0, valor: 0 }, lancamentos_sem_par: { qtde: 0, valor: 0 },
   banco: { entradas: 0, saidas: 0 }, posicao: null, sem_conta: null, ...x,
@@ -88,7 +100,7 @@ const linhaConta = (x: Record<string, unknown>) => ({
 
 /* NJ set/26, recortado: o Emerson conciliado (o fixture real), o Cartão BB não conciliado e uma conta parada. */
 const LINHA_EMERSON = linhaConta({
-  ...EMERSON.resumo, conta_id: ID_LAV, conta_nome: 'Sicredi Lavoura', tipo_conta: 'cc', tem_extrato: true,
+  ...EMERSON.resumo, proprio: undefined, conta_id: ID_LAV, conta_nome: 'Sicredi Lavoura', tipo_conta: 'cc', tem_extrato: true,
   saldo_extrato: 155972.29, saldo_extrato_data: '2026-09-30', diferenca: 0, motivos: [], saldo_inicial_origem: 'informado',
   entradas_terceiros: 352212.94, entradas_transferencias: 820000, saidas_terceiros: -1035210.22, saidas_transferencias: -8619.53,
 });
@@ -131,7 +143,7 @@ beforeEach(() => {
     { ano_mes: '2026-09', nivel: 'total', status: 'nao_conciliado', motivos: [] },
   ];
   B.segurarAno = null;
-  B.inserts = []; B.rpcs = []; B.espelhoProps = []; B.tom = [];
+  B.inserts = []; B.rpcs = []; B.espelhoProps = []; B.tom = []; B.lapis = [];
 });
 
 function montar() {
@@ -216,24 +228,162 @@ describe('T4 — "Todas as contas": total, subtotais, contas não conciliadas, p
   });
 });
 
-describe('T5 — Agnaldo Bradesco set/26: a conta consolidada é UMA linha, com o saldo inicial consolidado', () => {
-  it('a Invest Fácil (interna) não tem linha própria; a mãe diz no title que a consolida', async () => {
+/* ── PR-CONC-INTERNA-SEPARADA-01b: o par do Agnaldo, cada conta com o saldo PRÓPRIO ──
+   O topo da mãe é o CONSOLIDADO do par (o veredito); o `proprio` é o saldo dela. Abr/24, o caso do Gabriel: extrato próprio
+   −55.734,67 × sistema próprio −55.719,49 (−15,18); a interna −4,02 × −4,02; o consolidado seria −55.738,69 × −55.723,51. */
+const CONF_MAE = [{ motivo: 'conferida_com', conta_id: 'brad', conta_nome: 'Bradesco' }];
+const MAE_ABR24 = (x: Record<string, unknown> = {}) => linhaConta({
+  conta_id: 'brad', conta_nome: 'Bradesco', tipo_conta: 'cc', status: 'nao_conciliado', tem_extrato: true, saldo_inicial_origem: 'informado',
+  saldo_inicial: -40000, entradas: 100, saidas: -15823.51, saldo_sistema: -55723.51, saldo_extrato: -55738.69, saldo_extrato_data: '2024-04-30', diferenca: -15.18,
+  entradas_terceiros: 100, entradas_transferencias: 0, saidas_terceiros: -15823.51, saidas_transferencias: 0,
+  motivos: [{ motivo: 'saldo_diverge', valor: -15.18 }],
+  internas: [{ conta_id: 'if', conta_nome: 'Bradesco-Invest. Facil' }], par_conta_id: null, par_status: null,
+  proprio: { saldo_inicial: -39997.27, entradas: 53405.5, saidas: -69127.72, saldo_sistema: -55719.49, saldo_extrato: -55734.67, diferenca: -15.18,
+    entradas_terceiros: 100, entradas_transferencias: 53305.5, saidas_terceiros: -15822.22, saidas_transferencias: -53305.5 },
+  ...x,
+});
+const INTERNA_ABR24 = (x: Record<string, unknown> = {}) => linhaConta({
+  conta_id: 'if', conta_nome: 'Bradesco-Invest. Facil', tipo_conta: 'inv', consolida_em_conta_id: 'brad', status: 'nao_conciliado',
+  par_conta_id: 'brad', par_status: 'nao_conciliado', internas: null, saldo_inicial_origem: 'informado',
+  saldo_inicial: -2.73, entradas: 53305.5, saidas: -53306.79, saldo_sistema: -4.02, saldo_extrato: -4.02, saldo_extrato_data: '2024-04-30', diferenca: 0,
+  entradas_transferencias: 53305.5, saidas_terceiros: -1.29, saidas_transferencias: -53305.5,
+  motivos: CONF_MAE, ...x,
+});
+const PAR_ABR24 = (mae = MAE_ABR24(), interna = INTERNA_ABR24()) => [mae, interna,
+  SUB('cc', { conta_nome: 'Conta corrente', status: 'nao_conciliado', saldo_sistema: -55719.49, saldo_extrato: -55734.67, diferenca: -15.18 }),
+  SUB('inv', { conta_nome: 'Investimentos', status: 'nao_conciliado', saldo_sistema: -4.02, saldo_extrato: -4.02, diferenca: 0 }),
+  linhaConta({ nivel: 'total', conta_id: null, conta_nome: 'Total', status: 'nao_conciliado', saldo_inicial: -40000, saldo_sistema: -55723.51,
+    saldo_extrato: -55738.69, diferenca: -15.18, entradas: 100, saidas: -15823.51,
+    motivos: [{ motivo: 'contas_nao_conciliadas', qtde: 1, contas: [{ conta_id: 'brad', conta_nome: 'Bradesco', status: 'nao_conciliado', motivos: [{ motivo: 'saldo_diverge', valor: -15.18 }] }] }] }),
+];
+const celulas = (id: string) => [...linhaDaConta(id).querySelectorAll('td')].slice(1, 4).map((td) => n(td.textContent));
+const grupoDe = (id: string) => n(linhaDaConta(id).closest('tbody')?.querySelector('tr td')?.textContent);
+const TITULO_PAR = (nome: string) => `o mês desta conta só fecha junto com ${nome}: o arquivo do banco traz o saldo das duas somado`;
+
+describe('T5 — o par do Agnaldo: a mãe em Conta corrente e a interna em Investimentos, cada uma com o saldo próprio', () => {
+  beforeEach(() => {
     B.contas = [conta('brad', 'Bradesco'), conta('if', 'Bradesco-Invest. Facil', 'inv')];
-    B.resumo = { '2026-09': [
-      linhaConta({ conta_id: 'brad', conta_nome: 'Bradesco', tipo_conta: 'cc', status: 'pendente', saldo_inicial: 54738.55,
-        saldo_inicial_origem: 'informado', saldo_sistema: 26205.97, saldo_extrato: null, diferenca: null, entradas: 1132588.6, saidas: -1161121.18,
-        motivos: [{ motivo: 'saldo_nao_informado', falta: 'final' }] }),
-      linhaConta({ conta_id: 'if', conta_nome: 'Bradesco-Invest. Facil', tipo_conta: 'inv', consolida_em_conta_id: 'brad',
-        saldo_inicial: 54737.55, saldo_sistema: 54737.55, saldo_extrato: null, diferenca: null, status: 'pendente', motivos: [{ motivo: 'sem_extrato' }] }),
-      linhaConta({ nivel: 'total', conta_id: null, conta_nome: 'Total', status: 'pendente', saldo_inicial: 54738.55, saldo_sistema: 26205.97,
-        saldo_extrato: null, diferenca: null, motivos: [{ motivo: 'contas_pendentes', qtde: 1 }] }),
-    ] };
+    B.resumo = { '2026-09': PAR_ABR24() };
+  });
+
+  it('as duas têm linha, no tipo de cada uma, com sistema / extrato / diferença do `proprio`; sem "⊕"', async () => {
+    montar();
+    await screen.findAllByTestId('linha-saldo-conta');
+    expect(screen.getAllByTestId('linha-saldo-conta').map((r) => r.getAttribute('data-conta'))).toEqual(['brad', 'if']);
+    expect([grupoDe('brad'), grupoDe('if')]).toEqual(['Conta corrente', 'Investimentos']);
+    expect(celulas('brad')).toEqual(['-R$ 55.719,49', '-R$ 55.734,67', '-R$ 15,18']);
+    expect(celulas('if')).toEqual(['-R$ 4,02', '-R$ 4,02', 'confere']);
+    const tabela = n(linhaDaConta('brad').closest('table')?.textContent);
+    expect(tabela).not.toContain('⊕');
+    /* o consolidado do par aparece SÓ no Total (a linha do dono), nunca na linha da mãe */
+    expect(linhaDaConta('brad').textContent).not.toContain('55.738,69');
+    expect(linhaDaConta('brad').textContent).not.toContain('55.723,51');
+    expect(n(screen.getByTestId('total-sistema').textContent)).toBe('-R$ 55.723,51');
+  });
+
+  it('a marca do par nas duas linhas, com o title; o ponto é o status do dono (na interna, o do par)', async () => {
+    montar();
+    await screen.findAllByTestId('linha-saldo-conta');
+    const marca = (id: string) => within(linhaDaConta(id)).getByTestId('marca-par');
+    /* na linha, a forma curta (a frase inteira não cabe nos 224px da coluna a 1.135px); o nome e o porquê no title */
+    expect(n(marca('brad').textContent)).toBe('· par');
+    expect(marca('brad').getAttribute('title')).toBe(`conferida com Bradesco-Invest. Facil — ${TITULO_PAR('Bradesco-Invest. Facil')}`);
+    expect(n(marca('if').textContent)).toBe('· par');
+    expect(marca('if').getAttribute('title')).toBe(`conferida com Bradesco — ${TITULO_PAR('Bradesco')}`);
+    expect(marca('brad').className).toContain('whitespace-nowrap');
+    expect([linhaDaConta('brad').getAttribute('data-status'), linhaDaConta('if').getAttribute('data-status')]).toEqual(['nao_conciliado', 'nao_conciliado']);
+    expect(linhaDaConta('brad').getAttribute('title')).not.toContain('consolida');
+    expect(linhaDaConta('if').getAttribute('title')).toBe('Não Conciliado: conferida com Bradesco');
+  });
+
+  it('Resumo com a MÃE aberta: os números próprios (com a abertura terceiros × transferências) e o card diz "conferida com"', async () => {
     await abrirConta('brad');
-    expect(screen.getAllByTestId('linha-saldo-conta').map((r) => r.getAttribute('data-conta'))).toEqual(['brad']);
-    expect(linhaDaConta('brad').getAttribute('title')).toContain('consolida Bradesco-Invest. Facil');
-    await waitFor(() => expect(n(screen.getByTestId('resumo-saldo-inicial').textContent)).toBe('R$ 54.738,55'));
-    expect(n(screen.getByTestId('resumo-saldo-sistema').textContent)).toBe('R$ 26.205,97');
-    expect(screen.getByTestId('resumo-diferenca').textContent).toBe('—');
+    await waitFor(() => expect(n(screen.getByTestId('resumo-saldo-sistema').textContent)).toBe('-R$ 55.719,49'));
+    expect(n(screen.getByTestId('resumo-saldo-inicial').textContent)).toBe('-R$ 39.997,27');
+    expect(n(screen.getByTestId('resumo-entradas').textContent)).toBe('R$ 53.405,50');
+    expect(n(screen.getByTestId('resumo-saidas').textContent)).toBe('-R$ 69.127,72');
+    expect(n(screen.getByTestId('resumo-saldo-extrato').textContent)).toBe('-R$ 55.734,67');
+    expect(n(screen.getByTestId('resumo-diferenca').textContent)).toBe('-R$ 15,18');
+    const cartao = n(screen.getByTestId('resumo-saldo-sistema').closest('.rounded-lg, [class*="rounded"]')?.textContent);
+    expect(cartao).toContain('R$ 53.305,50');   // ↳ transferências: as pernas com a interna
+    const motivos = screen.getByTestId('status-motivos');
+    expect(n(motivos.textContent)).toContain('saldo diverge −⁠R$ 15,18');
+    expect(n(motivos.textContent)).toContain('conferida com Bradesco-Invest. Facil');
+    expect(screen.getByTestId('card-status').getAttribute('data-status')).toBe('nao_conciliado');
+  });
+
+  it('Resumo com a INTERNA aberta: os números dela e o status do par', async () => {
+    await abrirConta('if');
+    await waitFor(() => expect(n(screen.getByTestId('resumo-saldo-sistema').textContent)).toBe('-R$ 4,02'));
+    expect(n(screen.getByTestId('resumo-saldo-extrato').textContent)).toBe('-R$ 4,02');
+    expect(screen.getByTestId('resumo-diferenca').textContent).toBe('confere');
+    expect(screen.getByTestId('card-status').getAttribute('data-status')).toBe('nao_conciliado');
+    expect(n(screen.getByTestId('status-motivos').textContent)).toBe('conferida com Bradesco');
+  });
+
+  it('o lápis da linha abre com o extrato PRÓPRIO — o valor que o operador digitou (−55.734,67), nunca o consolidado', async () => {
+    montar();
+    await screen.findAllByTestId('linha-saldo-conta');
+    fireEvent.click(within(linhaDaConta('brad')).getByRole('button'));
+    await waitFor(() => expect(B.lapis.length).toBe(1));
+    expect(B.lapis[0]).toMatchObject({ contaId: 'brad', saldoAtual: -55734.67 });
+    fireEvent.click(within(linhaDaConta('if')).getByRole('button'));
+    await waitFor(() => expect(B.lapis.length).toBe(2));
+    expect(B.lapis[1]).toMatchObject({ contaId: 'if', saldoAtual: -4.02 });
+  });
+});
+
+describe('T3 (01b) — a interna com movimento não se oculta; zerada, parada e com o par conciliado, pode', () => {
+  const zerada = { saldo_inicial: 0, entradas: 0, saidas: 0, saldo_sistema: 0, saldo_extrato: 0, diferenca: 0,
+    entradas_transferencias: 0, saidas_terceiros: 0, saidas_transferencias: 0 };
+  const ids = () => screen.getAllByTestId('linha-saldo-conta').map((r) => r.getAttribute('data-conta'));
+  beforeEach(() => { B.contas = [conta('brad', 'Bradesco'), conta('if', 'Bradesco-Invest. Facil', 'inv')]; });
+
+  it('saldo 0 nas duas pontas mas com aplicações e resgates no mês (abr/24: 106.611,00): aparece', async () => {
+    B.resumo = { '2026-09': PAR_ABR24(MAE_ABR24({ status: 'conciliado', motivos: [] }),
+      INTERNA_ABR24({ ...zerada, entradas: 53305.5, saidas: -53305.5, entradas_transferencias: 53305.5, saidas_transferencias: -53305.5,
+        status: 'conciliado', par_status: 'conciliado' })) };
+    montar();
+    await screen.findAllByTestId('linha-saldo-conta');
+    expect(ids()).toEqual(['brad', 'if']);
+  });
+
+  it('zerada e sem movimento, mas o par NÃO conciliado: aparece', async () => {
+    B.resumo = { '2026-09': PAR_ABR24(MAE_ABR24(), INTERNA_ABR24({ ...zerada })) };
+    montar();
+    await screen.findAllByTestId('linha-saldo-conta');
+    expect(ids()).toEqual(['brad', 'if']);
+  });
+
+  it('zerada, sem movimento e com o par conciliado: oculta, e o rodapé a conta', async () => {
+    B.resumo = { '2026-09': PAR_ABR24(MAE_ABR24({ status: 'conciliado', motivos: [] }),
+      INTERNA_ABR24({ ...zerada, status: 'conciliado', par_status: 'conciliado' })) };
+    montar();
+    await screen.findAllByTestId('linha-saldo-conta');
+    expect(ids()).toEqual(['brad']);
+    expect(screen.getByText(/1 conta sem saldo e sem movimento oculta/)).toBeInTheDocument();
+  });
+});
+
+describe('T7 (01b) — conta SEM par: a tela é a mesma com e sem o `proprio` espelhado', () => {
+  it('os números do Emerson, do Cartão e da conta parada são os dos campos de topo', async () => {
+    montar();
+    await screen.findAllByTestId('linha-saldo-conta');
+    expect(celulas(ID_LAV)).toEqual(['R$ 155.972,29', 'R$ 155.972,29', 'confere']);
+    expect(celulas('cartao')).toEqual(['-R$ 6.470,73', 'R$ 0,00', 'R$ 6.470,73']);
+    expect(celulas('parada')).toEqual(['R$ 300.000,00', '—', '—']);
+    expect(screen.queryByTestId('marca-par')).toBeNull();
+    fireEvent.click(linhaDaConta(ID_LAV));
+    await waitFor(() => expect(n(screen.getByTestId('resumo-saldo-sistema').textContent)).toBe('R$ 155.972,29'));
+    expect(n(screen.getByTestId('resumo-saldo-inicial').textContent)).toBe('R$ 30.150,70');
+    expect(n(screen.getByTestId('resumo-entradas').textContent)).toBe(`R$ ${Number(EMERSON.resumo.entradas).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`.replace(/\s/g, ' '));
+  });
+
+  it('conta SEM `proprio` (dono antigo) fica neutra: "—", nunca o campo consolidado por reserva', async () => {
+    B.resumo['2026-09'] = [{ ...LINHA_CARTAO, proprio: null }, TOTAL_NJ];
+    montar();
+    await screen.findAllByTestId('linha-saldo-conta');
+    expect(celulas('cartao')).toEqual(['—', '—', '—']);
   });
 });
 

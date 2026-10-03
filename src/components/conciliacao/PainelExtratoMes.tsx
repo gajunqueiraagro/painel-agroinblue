@@ -9,8 +9,8 @@ import {
 } from '@/hooks/useConciliacaoDoMes';
 import { useSaldoGerencialDoMes, useImportacoesDaConta, importacoesDoMes, useSaldoDeclaradoOfx } from '@/hooks/useExtratoDaConta';
 import { useQueryClient } from '@tanstack/react-query';
-import { useResumoMes, useReleDonoAoMudarLancamentos, useContasConsolidadasEm, CHAVE_RESUMO_MES } from '@/hooks/useResumoConciliacao';
-import { sistemaNaPosicao } from '@/lib/conciliacao/resumoDoDono';
+import { useResumoMes, useReleDonoAoMudarLancamentos, CHAVE_RESUMO_MES } from '@/hooks/useResumoConciliacao';
+import { sistemaNaPosicao, TITULO_DIFERENCA_NA_POSICAO_INDISPONIVEL } from '@/lib/conciliacao/resumoDoDono';
 import { SaldoRealDialog } from '@/components/conciliacao/SaldoRealDialog';
 import { ImportacoesDialog } from '@/components/conciliacao/ImportacoesDialog';
 import { ExtratoDoMesModal } from '@/components/conciliacao/TabelaExtratoDoMes';
@@ -73,11 +73,9 @@ export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comP
   const carregandoDono = !!clienteId && !!contaId && (resumoQ.isLoading || (resumoQ.isFetching && !linhaDono));
   useReleDonoAoMudarLancamentos(clienteId);
   const qc = useQueryClient();
-  /* D2a: conta-mãe com interna consolidada — extrato, sistema e diferença são os TRÊS do dono (consolidado). */
-  const consolidadas = useContasConsolidadasEm(clienteId, contaId).data ?? [];
-  const consolidada = consolidadas.length > 0;
-  const tituloConsolida = consolidada ? `consolida ${consolidadas.join(', ')} (o saldo delas já está aqui)` : undefined;
-  const extratoMostrado = consolidada ? (linhaDono?.saldo_extrato ?? null) : saldo.saldo;
+  /* ⚠ OS TRÊS SÃO OS DA CONTA — PR-CONC-INTERNA-SEPARADA-01b (D4, reverte o D2a do 02b): o extrato é o saldo declarado DESTA
+     conta (`saldo.saldo`, a linha dela), e o sistema e a diferença são o `proprio` do dono (`sistemaNaPosicao`). A conta-mãe
+     não mostra mais o consolidado do par nem o "⊕": a interna tem a linha dela na Conciliação. */
   const [editandoSaldo, setEditandoSaldo] = useState(false);
   const importacoes = useImportacoesDaConta(clienteId, contaId);
   const sug = useSugestoesDoMes(clienteId, contaId, ano, mes);
@@ -196,16 +194,14 @@ export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comP
             13/08 declara a posição daquele dia, e compará-la com o fechamento
             acusaria uma diferença que é só o resto do mês. */}
         <Campo rotulo={`Saldo no sistema (até ${diaMesBr(saldo.posicaoEm)})`}>
-          <span data-testid="painel-saldo-sistema" title={tituloConsolida}>
+          <span data-testid="painel-saldo-sistema">
             {carregandoDono ? '…' : sistema.saldo == null ? '—' : formatMoeda(sistema.saldo)}
-            {consolidada && <span className="ml-1 text-[9.5px] text-muted-foreground">⊕</span>}
           </span>
         </Campo>
 
         <Campo rotulo={`Saldo extrato (${diaMesBr(saldo.posicaoEm)})`}>
-          <span className="flex items-baseline gap-1.5" data-testid="painel-saldo-extrato" title={tituloConsolida}>
-            {consolidada && carregandoDono ? '…' : extratoMostrado == null ? '—' : formatMoeda(extratoMostrado)}
-            {consolidada && <span className="text-[9.5px] text-muted-foreground">⊕</span>}
+          <span className="flex items-baseline gap-1.5" data-testid="painel-saldo-extrato">
+            {saldo.saldo == null ? '—' : formatMoeda(saldo.saldo)}
             {saldo.origem && (
               <span className="rounded-full bg-muted px-1.5 py-0 text-[9px] font-normal text-muted-foreground">
                 {saldo.origem}
@@ -228,10 +224,12 @@ export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comP
             de saldos, a centímetros daqui, passou a exigir zero no PR anterior, e enquanto este
             campo aceitasse um centavo as duas réguas voltariam a conviver na mesma tela — uma
             contradizendo a outra sobre o mesmo número. */}
-        {/* ⚠ A DIFERENÇA É A DO DONO (D1): `posicao.diferenca_na_data` com posição no meio do mês, senão `diferenca`.
-            Nunca subtração na tela. */}
+        {/* ⚠ A DIFERENÇA É A DO DONO (D1): `posicao.diferenca_na_data` com posição no meio do mês, senão a do `proprio`.
+            Nunca subtração na tela. Conta conferida em PAR com posição no meio do mês: o dono ainda não devolve a diferença
+            própria na data (dívida de banco 01c) — "—" com o motivo no `title`. */}
         <Campo rotulo="Diferença de saldo (o mês fecha?)">
-          <span data-testid="painel-diferenca">
+          <span data-testid="painel-diferenca"
+            title={sistema.diferencaIndisponivel ? TITULO_DIFERENCA_NA_POSICAO_INDISPONIVEL : undefined}>
             {carregandoDono ? '…' : sistema.diferenca == null ? '—' : (
               <span className={saldoConfere(sistema.diferenca) ? 'text-success' : 'text-destructive'}>
                 {saldoConfere(sistema.diferenca) ? 'confere' : formatMoeda(sistema.diferenca)}

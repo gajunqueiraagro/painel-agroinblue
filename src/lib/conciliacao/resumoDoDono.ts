@@ -23,14 +23,39 @@ export interface Motivo {
   dias?: string[];
   falta?: string;
   contas?: MotivoConta[];
+  /** 'conferida_com': a conta com que esta fecha o mês (a mãe, na linha da interna). */
+  conta_id?: string;
+  conta_nome?: string;
 }
 
 export interface PosicaoDono {
   data: string;
   saldo_sistema_na_data: number | null;
   diferenca_na_data: number | null;
+  /** O sistema PRÓPRIO da conta na data (PR-CONC-INTERNA-SEPARADA-01a); em conta sem par é o `saldo_sistema_na_data`. */
+  saldo_sistema_proprio_na_data: number | null;
   realizados_apos: QtdeValor;
 }
+
+/**
+ * O SALDO PRÓPRIO DA CONTA — PR-CONC-INTERNA-SEPARADA-01a/01b. Em conta sem par (e na interna) é igual aos campos de topo;
+ * na conta-mãe é só o dela, com as transferências mãe↔interna. Os campos de topo da mãe seguem CONSOLIDADOS: são o
+ * veredito do par, não o saldo da conta.
+ */
+export interface ProprioDono {
+  saldo_inicial: number | null;
+  entradas: number;
+  saidas: number;
+  saldo_sistema: number | null;
+  saldo_extrato: number | null;
+  diferenca: number | null;
+  entradas_terceiros: number;
+  entradas_transferencias: number;
+  saidas_terceiros: number;
+  saidas_transferencias: number;
+}
+
+export interface ContaDoPar { conta_id: string; conta_nome: string }
 
 export interface LinhaSistemaDono {
   tipo: string;
@@ -46,7 +71,12 @@ export interface LinhaSistemaDono {
   subcentro: string | null;
   status_exibicao: 'conciliado' | 'parcial' | 'realizado';
   saldo_apos: number;
+  /** O saldo corrido PRÓPRIO (conta as linhas 'transferencia_interna'); nulo se o dono não o mandou. */
+  saldo_apos_proprio: number | null;
 }
+
+/** A perna da transferência mãe↔interna na lista da mãe: fora do extrato e do consolidado, dentro do saldo próprio. */
+export const TIPO_TRANSFERENCIA_INTERNA = 'transferencia_interna';
 
 export interface LinhaResumo {
   nivel: NivelDono;
@@ -78,6 +108,13 @@ export interface LinhaResumo {
   posicao: PosicaoDono | null;
   sem_conta: { qtde: number; entradas: number; saidas: number } | null;
   linhas_sistema: LinhaSistemaDono[] | null;
+  /** Só nas linhas de conta; nulo nos agregados (e se o dono não o mandou). */
+  proprio: ProprioDono | null;
+  /** Na interna: a mãe e o status do par (o mesmo `status` da linha). */
+  par_conta_id: string | null;
+  par_status: StatusDono | null;
+  /** Na mãe: as internas conferidas com ela; vazio nas demais. */
+  internas: ContaDoPar[];
 }
 
 export interface StatusAnoDono {
@@ -116,6 +153,8 @@ function lerMotivos(v: unknown): Motivo[] {
     const val = numeroOuNulo(m.valor); if (val !== null) x.valor = val;
     if (Array.isArray(m.dias)) x.dias = m.dias.filter((d): d is string => typeof d === 'string');
     const f = texto(m.falta); if (f !== null) x.falta = f;
+    const ci = texto(m.conta_id); if (ci !== null) x.conta_id = ci;
+    const cn = texto(m.conta_nome); if (cn !== null) x.conta_nome = cn;
     if (Array.isArray(m.contas)) {
       x.contas = m.contas.filter(ehObjeto).map((c) => ({
         conta_id: texto(c.conta_id) ?? '', conta_nome: texto(c.conta_nome) ?? '',
@@ -144,7 +183,35 @@ function lerLinhaSistema(v: unknown): LinhaSistemaDono | null {
     subcentro: texto(v.subcentro),
     status_exibicao: se === 'parcial' || se === 'conciliado' ? se : 'realizado',
     saldo_apos: numero(v.saldo_apos),
+    saldo_apos_proprio: numeroOuNulo(v.saldo_apos_proprio),
   };
+}
+
+function lerProprio(v: unknown): ProprioDono | null {
+  if (!ehObjeto(v)) return null;
+  return {
+    saldo_inicial: numeroOuNulo(v.saldo_inicial),
+    entradas: numero(v.entradas),
+    saidas: numero(v.saidas),
+    saldo_sistema: numeroOuNulo(v.saldo_sistema),
+    saldo_extrato: numeroOuNulo(v.saldo_extrato),
+    diferenca: numeroOuNulo(v.diferenca),
+    entradas_terceiros: numero(v.entradas_terceiros),
+    entradas_transferencias: numero(v.entradas_transferencias),
+    saidas_terceiros: numero(v.saidas_terceiros),
+    saidas_transferencias: numero(v.saidas_transferencias),
+  };
+}
+
+function lerContasDoPar(v: unknown): ContaDoPar[] {
+  if (!Array.isArray(v)) return [];
+  const out: ContaDoPar[] = [];
+  for (const c of v) {
+    if (!ehObjeto(c)) continue;
+    const id = texto(c.conta_id);
+    if (id !== null) out.push({ conta_id: id, conta_nome: texto(c.conta_nome) ?? '' });
+  }
+  return out;
 }
 
 export function lerLinhaResumo(v: unknown): LinhaResumo | null {
@@ -184,6 +251,7 @@ export function lerLinhaResumo(v: unknown): LinhaResumo | null {
           data: pos.data,
           saldo_sistema_na_data: numeroOuNulo(pos.saldo_sistema_na_data),
           diferenca_na_data: numeroOuNulo(pos.diferenca_na_data),
+          saldo_sistema_proprio_na_data: numeroOuNulo(pos.saldo_sistema_proprio_na_data),
           realizados_apos: qtdeValor(pos.realizados_apos),
         }
       : null,
@@ -191,6 +259,10 @@ export function lerLinhaResumo(v: unknown): LinhaResumo | null {
     linhas_sistema: Array.isArray(v.linhas_sistema)
       ? v.linhas_sistema.map(lerLinhaSistema).filter((l): l is LinhaSistemaDono => l !== null)
       : null,
+    proprio: lerProprio(v.proprio),
+    par_conta_id: texto(v.par_conta_id),
+    par_status: v.par_status === 'conciliado' || v.par_status === 'nao_conciliado' || v.par_status === 'pendente' ? v.par_status : null,
+    internas: lerContasDoPar(v.internas),
   };
 }
 
@@ -232,6 +304,10 @@ const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', curren
  */
 const brlSinal = (v: number) => (v < 0 ? `\u2212\u2060${brl(Math.abs(v))}` : brl(v));
 const ddmm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+
+/** O `title` da marca do par: por que as duas contas só fecham juntas. */
+export const tituloDoPar = (nome: string) =>
+  `o mês desta conta só fecha junto com ${nome}: o arquivo do banco traz o saldo das duas somado`;
 
 /**
  * Uma frase do status, já escrita. `dia` é o primeiro dia com diferença (o link da Conferência); `contas`, os nomes das
@@ -289,6 +365,10 @@ function fraseDoMotivo(m: Motivo): FraseDoStatus {
         contas,
       };
     }
+    case 'conferida_com': {
+      const nome = m.conta_nome ?? '';
+      return { chave: m.motivo, texto: `conferida com ${nome}`, titulo: tituloDoPar(nome) };
+    }
     case 'contas_pendentes': {
       const n = m.qtde ?? 0;
       return { chave: m.motivo, texto: `${n} ${n === 1 ? 'pendente' : 'pendentes'}`, titulo: `${n} ${n === 1 ? 'conta' : 'contas'} sem saldo informado` };
@@ -307,12 +387,78 @@ function fraseDoMotivo(m: Motivo): FraseDoStatus {
  * ⚠ "confere em todos os dias" só existe quando a conta TEM extrato e o dono NÃO escreveu `dias_com_diferenca` —
  *   as duas frases nunca convivem.
  */
-export function frasesDoStatus(l: Pick<LinhaResumo, 'nivel' | 'tem_extrato' | 'motivos'>): FraseDoStatus[] {
+export function frasesDoStatus(l: Pick<LinhaResumo, 'nivel' | 'tem_extrato' | 'motivos'> & { internas?: readonly ContaDoPar[] }): FraseDoStatus[] {
   const frases = l.motivos.map(fraseDoMotivo);
   if (l.nivel === 'conta' && l.tem_extrato && !l.motivos.some((m) => m.motivo === 'dias_com_diferenca')) {
     frases.unshift({ chave: 'confere_dias', texto: 'confere em todos os dias' });
   }
+  /* A MÃE diz com quem é conferida (a interna já traz o motivo 'conferida_com' do dono) — PR-CONC-INTERNA-SEPARADA-01b. */
+  if (l.nivel === 'conta' && l.internas && l.internas.length > 0) {
+    const nome = l.internas.map((i) => i.conta_nome).join(', ');
+    frases.push({ chave: 'conferida_com', texto: `conferida com ${nome}`, titulo: tituloDoPar(nome) });
+  }
   return frases;
+}
+
+/* ── o saldo próprio e o par (PR-CONC-INTERNA-SEPARADA-01b) ───────────────────── */
+
+const PROPRIO_AUSENTE: ProprioDono = {
+  saldo_inicial: null, entradas: 0, saidas: 0, saldo_sistema: null, saldo_extrato: null, diferenca: null,
+  entradas_terceiros: 0, entradas_transferencias: 0, saidas_terceiros: 0, saidas_transferencias: 0,
+};
+
+/**
+ * OS NÚMEROS QUE A TELA DESENHA PARA UMA LINHA: na linha de CONTA, o `proprio` do dono (o saldo da conta, nunca o
+ * consolidado do par); nos agregados ('tipo', 'total'), os campos de topo — que o dono já soma pelos próprios.
+ * ⚠ LER, não calcular: conta sem `proprio` (dono antigo) fica neutra ("—"), nunca cai no campo consolidado.
+ */
+export function saldosDaLinha(l: LinhaResumo | null): ProprioDono {
+  if (!l) return PROPRIO_AUSENTE;
+  if (l.nivel === 'conta') return l.proprio ?? PROPRIO_AUSENTE;
+  return {
+    saldo_inicial: l.saldo_inicial, entradas: l.entradas, saidas: l.saidas, saldo_sistema: l.saldo_sistema,
+    saldo_extrato: l.saldo_extrato, diferenca: l.diferenca,
+    entradas_terceiros: l.entradas_terceiros, entradas_transferencias: l.entradas_transferencias,
+    saidas_terceiros: l.saidas_terceiros, saidas_transferencias: l.saidas_transferencias,
+  };
+}
+
+/** A conta é conferida em PAR: é a interna (aponta a mãe) ou a mãe (tem internas). */
+export function contaEmPar(l: Pick<LinhaResumo, 'par_conta_id' | 'internas'> | null): boolean {
+  return !!l && (l.par_conta_id !== null || l.internas.length > 0);
+}
+
+/**
+ * A MARCA DO PAR — "conferida com <nome>": na mãe, os nomes de `internas`; na interna, o `conta_nome` do motivo
+ * 'conferida_com'. Nulo em conta sem par. Os nomes são os do dono; nenhuma leitura de cadastro.
+ * ⚠ `curto` É O QUE CABE NA LINHA DE "SALDOS POR CONTA": medido a 1.135px, a coluna Conta tem 224px úteis e sobram 117 na
+ *   linha do Bradesco (106 na do Invest. Fácil); "· conferida com Bradesco-Invest. Facil" pede ~175 e quebrava a linha em
+ *   duas (36px contra 22). Até "· em par" (36,5px) quebrava a do Invest. Fácil em set/26 por 1,7px (nome + data + marca +
+ *   clipe = 209,7 de 208). A linha escreve `curto` ("par") e a frase inteira — `texto` + o porquê — vai no `title`.
+ */
+export function marcaDoPar(l: Pick<LinhaResumo, 'par_conta_id' | 'internas' | 'motivos'> | null): { texto: string; curto: string; titulo: string; tituloLinha: string } | null {
+  if (!l) return null;
+  const nome = l.internas.length > 0
+    ? l.internas.map((i) => i.conta_nome).join(', ')
+    : l.par_conta_id !== null
+      ? (l.motivos.find((m) => m.motivo === 'conferida_com')?.conta_nome ?? '')
+      : '';
+  if (!nome) return null;
+  return { texto: `conferida com ${nome}`, curto: 'par', titulo: tituloDoPar(nome), tituloLinha: `conferida com ${nome} — ${tituloDoPar(nome)}` };
+}
+
+/** O `title` do "—" da diferença na posição, em conta de par (dívida de banco 01c: `posicao.diferenca_propria_na_data`). */
+export const TITULO_DIFERENCA_NA_POSICAO_INDISPONIVEL =
+  'diferença na posição ainda não disponível para conta conferida em par — veja a diferença do fim do mês';
+
+/**
+ * A DIFERENÇA NA POSIÇÃO DECLARADA, lida do dono. Conta sem par: `posicao.diferenca_na_data`. Conta de PAR: o dono ainda
+ * não devolve a diferença própria na data — a tela mostra "—" com o motivo (`indisponivel`), nunca uma subtração.
+ */
+export function diferencaNaPosicao(l: LinhaResumo | null): { valor: number | null; indisponivel: boolean } {
+  if (!l || !l.posicao) return { valor: null, indisponivel: false };
+  if (l.nivel === 'conta' && contaEmPar(l)) return { valor: null, indisponivel: true };
+  return { valor: l.posicao.diferenca_na_data, indisponivel: false };
 }
 
 /** "retido no depósito R$ X (N)", com a frase inteira para o `title`; nulo sem retenção. */
@@ -356,44 +502,52 @@ export function contasParaFecharSemMovimento(linhas: readonly LinhaResumo[]): {
   let comMovimento = 0;
   let semReferencia = 0;
   for (const l of linhas) {
-    if (l.nivel !== 'conta' || !l.conta_id || l.saldo_extrato !== null) continue;
-    if (l.tem_extrato || Math.round(l.entradas * 100) !== 0 || Math.round(l.saidas * 100) !== 0) { comMovimento++; continue; }
-    if (l.saldo_inicial_origem === 'ausente' || l.saldo_inicial === null || l.saldo_sistema === null) { semReferencia++; continue; }
-    fechar.push({ conta_id: l.conta_id, saldo_inicial: l.saldo_inicial, saldo_final: l.saldo_sistema });
+    if (l.nivel !== 'conta' || !l.conta_id) continue;
+    /* ⚠ O QUE SE GRAVA É O SALDO DA CONTA, o `proprio` (PR-CONC-INTERNA-SEPARADA-01b): em conta sem par é igual ao topo; na
+       mãe o topo é o consolidado do par, e gravá-lo como saldo dela somaria a interna. */
+    const p = saldosDaLinha(l);
+    if (p.saldo_extrato !== null) continue;
+    if (l.tem_extrato || Math.round(p.entradas * 100) !== 0 || Math.round(p.saidas * 100) !== 0) { comMovimento++; continue; }
+    if (l.saldo_inicial_origem === 'ausente' || p.saldo_inicial === null || p.saldo_sistema === null) { semReferencia++; continue; }
+    fechar.push({ conta_id: l.conta_id, saldo_inicial: p.saldo_inicial, saldo_final: p.saldo_sistema });
   }
   return { fechar, comMovimento, semReferencia };
 }
 
 /**
- * O SISTEMA NA POSIÇÃO, LIDO DO DONO — PR-CONC-SALDO-UMA-REGUA-02b (D1). Com posição declarada ANTES do fim do mês, o
- * saldo, a diferença e os "realizados após" são os da `posicao`; sem ela, os do mês. Nada se soma nem se subtrai aqui:
- * cada campo é uma chave da linha do dono.
+ * O SISTEMA NA POSIÇÃO, LIDO DO DONO — PR-CONC-SALDO-UMA-REGUA-02b (D1), próprio desde o PR-CONC-INTERNA-SEPARADA-01b (D4/D7).
+ * Com posição declarada ANTES do fim do mês: o saldo é `posicao.saldo_sistema_proprio_na_data`, a diferença é a da posição
+ * (`diferencaNaPosicao`: em conta de par, indisponível) e os "realizados após" são os da `posicao`; sem ela, o `proprio` do
+ * mês. Nada se soma nem se subtrai aqui: cada campo é uma chave da linha do dono. Em conta sem par os números são os de antes.
  */
 export function sistemaNaPosicao(l: LinhaResumo | null): {
-  saldo: number | null; diferenca: number | null; aposQtde: number; data: string | null;
+  saldo: number | null; diferenca: number | null; diferencaIndisponivel: boolean; aposQtde: number; data: string | null;
 } {
-  if (!l) return { saldo: null, diferenca: null, aposQtde: 0, data: null };
+  if (!l) return { saldo: null, diferenca: null, diferencaIndisponivel: false, aposQtde: 0, data: null };
   if (l.posicao) {
+    const dif = diferencaNaPosicao(l);
     return {
-      saldo: l.posicao.saldo_sistema_na_data, diferenca: l.posicao.diferenca_na_data,
+      saldo: l.posicao.saldo_sistema_proprio_na_data, diferenca: dif.valor, diferencaIndisponivel: dif.indisponivel,
       aposQtde: l.posicao.realizados_apos.qtde, data: l.posicao.data,
     };
   }
-  return { saldo: l.saldo_sistema, diferenca: l.diferenca, aposQtde: 0, data: l.saldo_extrato_data };
+  const p = saldosDaLinha(l);
+  return { saldo: p.saldo_sistema, diferenca: p.diferenca, diferencaIndisponivel: false, aposQtde: 0, data: l.saldo_extrato_data };
 }
 
 /**
- * O SISTEMA NUMA DATA QUALQUER — o lápis (D4). É o `saldo_apos` da ÚLTIMA linha de `linhas_sistema` com data até a
- * pedida (a lista vem em ordem de data e o `saldo_apos` é corrido pelo dono); sem linha até a data, o saldo inicial do
- * dono. LER, não somar. Sem a lista (resumo sem detalhe), nulo — nunca uma soma de reserva.
+ * O SISTEMA NUMA DATA QUALQUER — o lápis (D4 do 02b; próprio desde o PR-CONC-INTERNA-SEPARADA-01b, D5). É o
+ * `saldo_apos_proprio` da ÚLTIMA linha de `linhas_sistema` com data até a pedida (a lista vem em ordem de data e o saldo é
+ * corrido pelo dono, com as transferências mãe↔interna); sem linha até a data, o saldo inicial PRÓPRIO. LER, não somar.
+ * Sem a lista (resumo sem detalhe), nulo — nunca uma soma de reserva.
  */
 export function saldoSistemaNaData(l: LinhaResumo | null, dataIso: string): number | null {
   if (!l || !l.linhas_sistema) return null;
   const d = dataIso.slice(0, 10);
-  let saldo: number | null = l.saldo_inicial;
+  let saldo: number | null = saldosDaLinha(l).saldo_inicial;
   for (const x of l.linhas_sistema) {
     if (!x.data || x.data.slice(0, 10) > d) continue;
-    saldo = x.saldo_apos;
+    saldo = x.saldo_apos_proprio;
   }
   return saldo;
 }

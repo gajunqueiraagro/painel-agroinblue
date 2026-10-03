@@ -53,7 +53,7 @@ import {
   type EspSis, type EspCandidato, type EspelhadosReais, type FilhaConf,
 } from '@/lib/conciliacao/mesaDoDia';
 import { useResumoMes } from '@/hooks/useResumoConciliacao';
-import { fraseDoRetido, type LinhaResumo, type LinhaSistemaDono } from '@/lib/conciliacao/resumoDoDono';
+import { fraseDoRetido, saldosDaLinha, TIPO_TRANSFERENCIA_INTERNA, type LinhaResumo, type LinhaSistemaDono } from '@/lib/conciliacao/resumoDoDono';
 export {
   montarMesa, totaisDoEspelho, sinalDoAplicado,
   type EspSis, type EspVinculo, type EspelhadosReais, type FilhaConf, type Pareado, type ParedoN1, type DiaConf,
@@ -74,6 +74,16 @@ const MESES_CURTOS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 's
  * ⚠ A FRASE INTEIRA vai no `title`; a coluna tem largura fixa medida no pior caso ("parcial · falta R$ 9.999.999,99").
  */
 function StatusLinhaSistema({ l }: { l: LinhaSistemaDono }) {
+  /* A perna da transferência mãe↔interna (PR-CONC-INTERNA-SEPARADA-01b, D6): o ⇄ da mesa; a legenda inteira no `title`
+     (a coluna tem 154px e "transferência interna · fora do extrato" pede mais). */
+  if (l.tipo === TIPO_TRANSFERENCIA_INTERNA) {
+    return (
+      <span className="text-muted-foreground text-[10px] whitespace-nowrap" data-testid="sistema-transferencia-interna"
+        title="transferência interna · fora do extrato: conta só no saldo próprio desta conta">
+        ⇄ interna · fora do extrato
+      </span>
+    );
+  }
   if (l.status_exibicao === 'parcial') {
     const texto = `parcial · falta ${l.falta != null ? formatarFalta(l.falta) : '—'}`;
     return <span className="text-amber-700 text-[10px] whitespace-nowrap" title={`programado que o extrato não quitou: ${texto}`}>{texto}</span>;
@@ -96,14 +106,18 @@ function corDaDiferenca(v: number | null | undefined) {
  *   Agora as linhas são `linhas_sistema` de `fn_conciliacao_resumo_mes` (a régua do caixa: o vínculo na data do extrato,
  *   o parcial pelo aplicado), o saldo de cada uma é o `saldo_apos` do dono e o "Saldo final (sistema)" é o `saldo_sistema`.
  *   Nada é somado aqui.
+ * ⚠ O SALDO É O DA CONTA — PR-CONC-INTERNA-SEPARADA-01b (D6): o saldo corrido é o `saldo_apos_proprio`, o inicial e o final são
+ *   os do `proprio`, e na conta-mãe aparecem as linhas 'transferencia_interna' (aplicações e resgates na interna), que só
+ *   existem no sistema. Em conta sem par os três são os de antes. A Conferência dia a dia segue consolidada, sem elas.
  */
 function AbaSistemaReal({ linha, onAbrir }: { linha: LinhaResumo | null; onAbrir?: (lancamentoId: string) => void }) {
   if (!linha) {
     return <div className="min-h-0 flex-1 border-t px-3.5 py-6 text-center text-[10px] text-muted-foreground">Carregando o resumo do mês…</div>;
   }
   const linhas = linha.linhas_sistema ?? [];
-  const inicial = linha.saldo_inicial;
-  const final = linha.saldo_sistema;
+  const proprio = saldosDaLinha(linha);
+  const inicial = proprio.saldo_inicial;
+  const final = proprio.saldo_sistema;
   return (
     /* Mesma régua do Extrato acima — a lista é o scrollport, e ele é o modal inteiro. */
     <div className="min-h-0 flex-1 overflow-y-auto border-t px-3.5 text-[10px]" data-testid="aba-sistema">
@@ -136,14 +150,14 @@ function AbaSistemaReal({ linha, onAbrir }: { linha: LinhaResumo | null; onAbrir
         return (
           <div key={`${i}-${r.extrato_id ?? ''}-${r.lancamento_id ?? ''}`}
                onClick={() => r.lancamento_id && onAbrir?.(r.lancamento_id)}
-               data-testid="sistema-linha"
+               data-testid="sistema-linha" data-tipo={r.tipo}
                className="grid grid-cols-[44px_minmax(0,0.85fr)_minmax(0,0.95fr)_minmax(0,1.4fr)_80px_80px_154px] gap-1 py-0.5 border-b last:border-b-0 items-center cursor-pointer hover:bg-muted/50">
             <span className="whitespace-nowrap text-muted-foreground">{fmtData(r.data)}</span>
             <span className="truncate" title={r.descricao ?? ''}>{r.descricao ?? '—'}</span>
             <span className="truncate" title={r.fornecedor ?? ''} data-testid="sistema-fornecedor">{r.fornecedor || '—'}</span>
             <span className="truncate text-muted-foreground" title={cs}>{cs}</span>
             <span className={`whitespace-nowrap text-right tabular-nums ${corValReal(r.valor)}`}>{fmtBRL(r.valor)}</span>
-            <span className={`whitespace-nowrap text-right tabular-nums ${corValReal(r.saldo_apos)}`} data-testid="sistema-saldo">{fmtBRL(r.saldo_apos)}</span>
+            <span className={`whitespace-nowrap text-right tabular-nums ${corValReal(r.saldo_apos_proprio ?? 0)}`} data-testid="sistema-saldo">{r.saldo_apos_proprio != null ? fmtBRL(r.saldo_apos_proprio) : '—'}</span>
             <StatusLinhaSistema l={r} />
           </div>
         );

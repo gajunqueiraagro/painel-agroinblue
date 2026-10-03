@@ -100,6 +100,55 @@ describe('T1 — o Emerson no Casar: o quadro do topo e a aba Sistema são do do
   });
 });
 
+describe('T6 (PR-CONC-INTERNA-SEPARADA-01b) — a aba Sistema da conta-MÃE: saldo corrido próprio e as transferências internas', () => {
+  const AG = FIX.agnaldo_bradesco_2026_08;
+  beforeEach(() => {
+    fixture.espelho = { ...AG.esp, escopo: { cliente_id: AG.cliente, conta_id: AG.conta, ano_mes: '2026-08', nome_conta: 'Bradesco' } };
+    fixture.resumo = [{ ...AG.resumo, nivel: 'conta', conta_id: AG.conta, conta_nome: 'Bradesco', tem_extrato: true,
+      extratos_sem_par: { qtde: 0, valor: 0 }, lancamentos_sem_par: { qtde: 0, valor: 0 } }];
+  });
+  const montarMae = () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return render(
+      <QueryClientProvider client={qc}>
+        <EspelhoConciliacaoTab clienteId={AG.cliente} contaId={AG.conta} ano="2026" mes="08" aba="sistema" onAbaChange={() => {}} />
+      </QueryClientProvider>,
+    );
+  };
+
+  it('começa no saldo inicial PRÓPRIO (1,00, não os 238.791,26 do par), mostra as 18 internas e fecha em proprio.saldo_sistema', async () => {
+    montarMae();
+    const fim = await screen.findByTestId('sistema-saldo-final');
+    expect(fim.textContent).toBe('54.738,55');
+    expect(txt('sistema-saldo-inicial')).toBe('1,00');
+    const linhas = screen.getAllByTestId('sistema-linha');
+    expect(linhas.length).toBe(AG.resumo.linhas_sistema.length);
+    expect(linhas.length).toBe(134);
+    const internas = screen.getAllByTestId('sistema-transferencia-interna');
+    expect(internas.length).toBe(18);
+    expect(internas[0].textContent).toBe('⇄ interna · fora do extrato');
+    expect(internas[0].getAttribute('title')).toContain('transferência interna · fora do extrato');
+    /* a coluna de saldo é o `saldo_apos_proprio` de CADA linha, na ordem do dono */
+    const fmt = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const saldos = screen.getAllByTestId('sistema-saldo').map((s) => s.textContent);
+    expect(saldos).toEqual(AG.resumo.linhas_sistema.map((l: { saldo_apos_proprio: number }) => fmt(l.saldo_apos_proprio)));
+    expect(saldos[saldos.length - 1]).toBe('54.738,55');
+    /* e NÃO o corrido consolidado: a primeira linha difere (238.757,65 no consolidado) */
+    expect(saldos[0]).not.toBe(fmt(AG.resumo.linhas_sistema[0].saldo_apos));
+  });
+
+  it('conta SEM par (o Emerson): a coluna de saldo é a de antes — o próprio é igual ao corrido', async () => {
+    fixture.espelho = { ...CASO.esp, escopo: { cliente_id: CASO.cliente, conta_id: CONTA, ano_mes: '2026-09', nome_conta: 'Sicredi Lavoura' } };
+    fixture.resumo = [{ ...CASO.resumo, nivel: 'conta', conta_id: CONTA, conta_nome: 'Sicredi Lavoura', tem_extrato: true }];
+    montar({ aba: 'sistema', onAbaChange: () => {} });
+    await screen.findByTestId('sistema-saldo-final');
+    const fmt = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    expect(screen.getAllByTestId('sistema-saldo').map((s) => s.textContent))
+      .toEqual(CASO.resumo.linhas_sistema.map((l: { saldo_apos: number }) => fmt(l.saldo_apos)));
+    expect(screen.queryByTestId('sistema-transferencia-interna')).toBeNull();
+  });
+});
+
 describe('o link "N dias com diferença" abre a Conferência no dia', () => {
   it('a mesa rola até o cabeçalho do dia pedido e avisa quem pediu', async () => {
     const rolados: string[] = [];

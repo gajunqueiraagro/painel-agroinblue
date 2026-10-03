@@ -51,7 +51,9 @@ export function AcoesDoMes({ clienteId, contaId, contaNome, ano, mes, aoMudar }:
 
   const { movimentos, recarregar } = useConciliacaoDoMes(clienteId, contaId, ano, mes);
   /* D3 (PR-CONC-SALDO-UMA-REGUA-02b): o "Sistema hoje" do "Conciliar o mês" é o do DONO — o mesmo número do card do painel
-     (`sistemaNaPosicao`, a mesma chave `[conta]`). Era `useSaldoSistemaNaPosicao`, a soma a valor cheio. */
+     (`sistemaNaPosicao`, a mesma chave `[conta]`). Era `useSaldoSistemaNaPosicao`, a soma a valor cheio.
+     PR-CONC-INTERNA-SEPARADA-01b (D7): é o saldo PRÓPRIO da conta — `posicao.saldo_sistema_proprio_na_data` com posição
+     declarada, senão `proprio.saldo_sistema`; conta sem par não muda de número. */
   const anoMesDono = `${ano}-${String(mes).padStart(2, '0')}`;
   const resumoQ = useResumoMes(clienteId, anoMesDono, contaId ? [contaId] : [], { servirDoCache: true });
   const sistema = sistemaNaPosicao(resumoQ.data?.find((l) => l.nivel === 'conta' && l.conta_id === contaId) ?? null);
