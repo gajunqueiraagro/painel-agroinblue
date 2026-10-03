@@ -1,7 +1,11 @@
 -- PR-CONC-GRUPO-FASE-1 — Testes das RPCs de grupo + constraints.
 -- Rodar em HOMOLOG/PROTO (NUNCA prod). Transacional: cria fixtures efêmeros e faz ROLLBACK ao final —
 -- nada é persistido. Usa FKs reais (cliente/conta/fazenda da Vera) + competência FUTURA (2099-01) para
--- não esbarrar em mês fechado. auth.uid() é NULL numa sessão SQL direta (criado_por/actor ficam NULL, ok).
+-- não esbarrar em mês fechado.
+-- PR-SEG-TENANT-VARREDURA-01A: as RPCs de grupo passaram a exigir tenant (`tenant_ok` do cliente da linha); sem usuário elas
+-- recusam com 42501. O teste simula o admin AgroinBlue 7bd0b6ad por `request.jwt.claims` (como os demais testes de
+-- conciliação), sem tocar `cliente_membros` — os membros da Vera (a91962cd, 0e422659) não existem em `auth.users`, e a FK
+-- `criado_por` recusaria o vínculo. Nenhuma asserção de resultado mudou.
 -- Pré-requisito: migrations 01–03 aplicadas.
 \set VERBOSITY verbose
 BEGIN;
@@ -18,6 +22,7 @@ DECLARE
   v_n     int;
   v_err   text;
 BEGIN
+  PERFORM set_config('request.jwt.claims', '{"sub":"7bd0b6ad-2527-4be1-af58-f2cc0c0edd8e","role":"authenticated"}', true);
   -- Fixture: 1 OFX crédito 218.859,05 + 2 lançamentos (entrada) que somam exatamente.
   INSERT INTO extrato_bancario_v2 (id, cliente_id, conta_bancaria_id, data_movimento, descricao, documento,
                                    valor, tipo_movimento, hash_movimento, status)

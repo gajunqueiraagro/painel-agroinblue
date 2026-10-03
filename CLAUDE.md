@@ -1392,6 +1392,62 @@ docs/historico/frentes-ate-2026-09-29.md.)
   1.891–1.998 ms, Santa Rita 1.569–1.932 ms; resumo de todas as contas do NJ 216–229 ms. Testes: T1–T9 nos cinco arquivos da
   linha de baseline, com dez mutacoes que caem pelo numero consolidado; os fixtures de conta sem par passam por `comProprio`
   (`src/lib/conciliacao/resumoDoDono.fixture.ts`), e o `resumoMes.fixture.json` ganhou os campos do 01a lidos do dono.
+- ⚠ FUNCAO SECURITY DEFINER EXPOSTA A `authenticated` QUE RECEBE ID DE LINHA RESOLVE O CLIENTE E CHAMA `tenant_ok` ANTES DE
+  ESCREVER (PR-SEG-TENANT-VARREDURA-01A, 03/10, so' banco; migration 20261027192400, ⚠ registrada como 20261003215217; ledger =
+  arquivo, md5 b856a932…). SECURITY DEFINER atravessa a RLS: sem a guarda no corpo, quem souber o uuid de uma linha de outro
+  cliente escreve nela. MEDIDO antes do conserto, em ensaio com rollback: o gestor da NJ (membro so' da NJ) desfez vinculo,
+  vinculou, casou, desfez e refez grupo, reverteu desconsideracao e CRIOU UM LANCAMENTO DE R$ 553.134,18 no Agnaldo; sem usuario
+  nenhum (`auth.uid()` nulo) as funcoes tambem gravavam. Nelas `auth.uid()` so' registrava o autor.
+  · A FORMA DA GUARDA (a mesma nas 8, no inicio do corpo, antes de qualquer leitura de negocio, lock ou escrita): um bloco
+    `DECLARE g_cli uuid[]` que junta o `cliente_id` de TODA linha recebida por parametro (subconsulta escalar: linha inexistente
+    ou id nulo vira NULL), e recusa com `RAISE EXCEPTION 'sem acesso a este registro' USING ERRCODE = '42501'` se (a) alguma nao
+    existe, (b) nao sao todas do MESMO cliente, (c) `NOT COALESCE(public.tenant_ok(cliente), false)`. A recusa e' UMA SO' e nao diz
+    se a linha existe; sem usuario, 42501 (nunca o "pula se `auth.uid()` e' nulo"). Array e JSON de ids: TODOS os elementos.
+    Vale tambem para o `p_simular`, que le'. Assinatura, retorno, SECURITY DEFINER, search_path e ACL nao mudaram.
+  · AS 8 (md5 antes -> depois): `fn_vincular_extrato_lancamento` c03d4cb4 -> 6dbfb0dc (extrato + lancamento) ·
+    `fn_vincular_grupo_conciliacao` 5cf79977 -> e7fa603e (extrato + todos os lancamentos) · `fn_desfazer_vinculo_extrato`
+    07af033c -> 79a1cf25 · `fn_desfazer_grupo_conciliacao` 06558026 -> 37d02aed (os vinculos do grupo e os extratos deles; grupo sem
+    vinculo nenhum = sem acesso) · `fn_espelho_casar` da53db48 -> cd21bf8d (extrato + o lancamento de todos os itens) ·
+    `fn_espelho_casar_n1` 6bb6c7d3 -> d86e57ce (lancamento + todos os extratos) · `fn_criar_lancamento_de_extrato` 2ea6be7a ->
+    79521304 (extrato + fazenda, fornecedor, safra e outra conta QUANDO INFORMADOS — cadastros POR CLIENTE, nenhum e' global; o
+    plano de contas nao e' parametro, sai do texto do subcentro ou do 18010 global) · `fn_reverter_desconsideracao_extrato`
+    099101c8 -> 7501026a.
+  · O QUE MUDA PARA QUEM CHAMA: com dado do proprio cliente (e para o admin), nada — retornos e linhas gravadas identicos
+    (9 passos x 4 cenarios, antes x depois). Id inexistente e pedido com clientes misturados, que antes devolviam "extrato nao
+    encontrado" / `cliente_divergente` / `lancamento_nao_encontrado`, agora dao 42501. As telas so' EXIBEM essas mensagens
+    (`MOTIVO_CASAR_LABEL` em `EspelhoConciliacaoTab.tsx`, usado tambem pelo `CasarComBancoModal`); a unica que decide algo e'
+    `soma_nao_bate`, que nao mudou.
+  · CHAMADORES: nenhum trigger nem cron chama as 8; quem chama sao RPCs de usuario (`fn_extrato_conciliar_mes`,
+    `fn_vincular_exatos_mes`, `fn_transferencia_de_extratos`, `fn_transferencia_segunda_ponta`, `fn_classificacao_split_substituir`,
+    `fn_classificacao_desfazer_split` e a propria `fn_espelho_casar`). ⚠ TESTE SQL QUE CHAMA UMA DAS 8 SIMULA UM USUARIO
+    (`request.jwt.claims`): sem ele, 42501. O `pr_conc_grupo_01_test.sql` passou a simular o admin 7bd0b6ad.
+  · CUSTO: +0,5 a 0,7 ms por chamada (mediana de 20 na mesma sessao, como `authenticated`: n1 em simulacao 0,05–0,09 -> 0,68–0,80
+    ms; desfazer vinculo 0,9–1,3 -> 1,4–1,8 ms; vincular 2,2–2,9 -> 2,8–3,5 ms). O teto do PR e' ABSOLUTO, +2 ms por chamada
+    (decisao do Gabriel; +20 % nao cabe em funcao de 1 ms). Lote, no pior conta-mes (NJ Banco do Brasil mai/26, 262 movimentos):
+    `fn_vincular_exatos_mes` com 239 pares 421 -> 536 ms; `fn_extrato_conciliar_mes` criando os 23 restantes 644 -> 641 ms; um
+    lote de 30 sem nenhum par (o `LOTE_CONCILIAR` da tela) 958 -> 957 ms.
+  ⚠ PENDENCIA (PR proprio): OTIMIZAR `tenant_ok`. Medido (1.000 chamadas): `tenant_ok` 0,135 ms para membro e 0,076 ms para admin,
+    contra 0,023 ms de uma consulta direta a `cliente_membros`; resolver o cliente das linhas custa 0,022 ms. Quase todo o custo
+    da guarda e' dele (duas funcoes SQL SECURITY DEFINER encadeadas), e ele e' chamado por linha em toda policy.
+  ⚠ PRE-EXISTENTE, sem relacao com a guarda: `fn_extrato_conciliar_mes` SEM `p_limite` criando 262 lancamentos numa chamada leva
+    ~8,8 s (antes e depois) — acima do teto de 8 s do `authenticated`. A tela chama em lotes de 30; quem chamar sem limite estoura.
+  ⚠ `cliente_membros` TEM LINHAS ORFAS: 2290944b (admin, 4 clientes), a91962cd (gestor) e 0e422659 (campo), os dois ultimos da Vera,
+    nao existem em `auth.users` — a Vera nao tem nenhum membro com usuario real. Achado ao simular usuario no teste; nao alterado.
+  ⚠ O QUE RESTA DA VARREDURA (FASE 0 de 03/10: 270 SECURITY DEFINER, 202 expostas a `authenticated`, 142 com guarda no corpo POR
+    TEXTO — nao auditadas uma a uma —, 58 sem guarda: 32 de escrita e 26 de leitura; eram 8 a mais antes deste PR): 01B leitura das
+    tres telas (`fn_extratos_espelhados`, `get_anos_financeiro_v2`, `fn_zoot_categoria_mensal`, `get_status_pilares_fechamento`) e
+    `refresh_zoot_cache` (3 assinaturas, escrita) · 01C revogar EXECUTE: `anon` em 3 DEFINER (`fn_recorrencia_cancelar`,
+    `oc_ajustar_valor_compromisso`, `oc_salvar_abate`) e em 15 INVOKER, e `authenticated` nas sem chamador no front · 01D escrita
+    agricola (barter, mandioca, graos, estoque, locais) e `fn_promover_staging`, ~18 corpos · 01E leitura restante (DRE pecuaria,
+    painel de safra, estoque de graos, auditorias), ~20 corpos · 01F PERFIL (decisao do Gabriel): `tenant_ok` e as policies nao
+    distinguem leitura de escrita — perfil `leitura` ou `campo` do proprio cliente grava. Tabelas: 155 com `cliente_id`, 0 com RLS
+    desligada, 0 com policy `true`.
+  Provas: travessia NJ -> Agnaldo e Agnaldo -> NJ, 42501 nas 8 (9 passos cada), estado do cliente alvo identico; 9 pedidos mistos ou
+  inexistentes, 42501 e nada escrito; sem usuario, 42501; repetidas no banco VIVO depois de aplicar. Teste:
+  `supabase/tests/seg_tenant_varredura_01a_test.sql` (D1–D3 com contas, extratos e lancamentos sinteticos em dois clientes reais;
+  no corpo sem a guarda ele cai em "D1 travessia"). Dos 26 testes SQL de conciliacao, 25 dao o MESMO resultado antes x depois
+  (13 passam; 12 ja' falhavam no dado de hoje, por deriva do dado, sem relacao com este PR) e o 26o (`pr_conc_grupo_01`, script
+  de psql) passa com o usuario simulado.
 - ⚠ A GRAVACAO DO EXTRATO E' DO BANCO, E O DESFAZER DIZ O QUE FAZ E RECUSA O QUE NAO PODE (PR-CONC-IMPORT-BANCO-01B, 03/10,
   migration 20261027192000, ⚠ registrada como 20261003174631; ledger = arquivo, md5 4966be59…).
   · IDENTIDADE DO MOVIMENTO: `hashMovimento` + a OCORRENCIA entre movimentos de CONTEUDO IDENTICO no arquivo, na ordem dele
