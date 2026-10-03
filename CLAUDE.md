@@ -1474,7 +1474,7 @@ docs/historico/frentes-ate-2026-09-29.md.)
   sem usuario 42501; para o membro e para o admin o retorno e' IDENTICO por md5 (NJ: anos + 34 conta-meses de espelhados; Agnaldo:
   anos + 5), no ensaio e de novo no banco vivo. Teste: `supabase/tests/seg_tenant_varredura_01b_test.sql` (no corpo sem a guarda
   ele cai em "T1 ux: anos de Y").
-  ⚠ 01B2, DESENHO APROVADO PELO GABRIEL (NAO implementado): `refresh_zoot_cache` (3 assinaturas), `fn_zoot_categoria_mensal` e
+  ⚠ 01B2 [FEITO no PR-SEG-TENANT-VARREDURA-01B2 — ver a regra "INTERNO x PUBLICO"; o texto abaixo e' o desenho de antes]: `refresh_zoot_cache` (3 assinaturas), `fn_zoot_categoria_mensal` e
     `get_status_pilares_fechamento` tem chamador SEM USUARIO e nao aceitam a guarda direta. Para cada uma: corpo interno `_fn_…`
     (o corpo de hoje, SEM EXECUTE para `authenticated`) + RPC publica de MESMO nome e assinatura, so' com a guarda e o repasse;
     cron, triggers e funcoes internas chamam a interna. 5 FUNCOES NOVAS (`_fn_refresh_zoot_cache` x3, `_fn_zoot_categoria_mensal`,
@@ -1495,6 +1495,57 @@ docs/historico/frentes-ate-2026-09-29.md.)
   ⚠ O QUE RESTA DA VARREDURA depois deste PR: 01B2 (acima, 5 corpos) · 01C revogar EXECUTE (`anon` em 3 DEFINER e 15 INVOKER;
     `authenticated` nas sem chamador no front) e a guarda que pula sem usuario · 01D escrita agricola e `fn_promover_staging` (~18)
     · 01E leitura restante (~20) · 01F perfil.
+- ⚠ INTERNO x PUBLICO: FUNCAO COM CHAMADOR SEM USUARIO NAO LEVA A GUARDA NO CORPO (PR-SEG-TENANT-VARREDURA-01B2, 03/10, so' banco;
+  migration 20261027192600, ⚠ registrada como 20261003223419; ledger = arquivo, md5 c6ae0e09…). Quando uma RPC exposta a
+  `authenticated` tambem e' chamada por cron, trigger ou funcao interna (sem `auth.uid()`), a guarda de tenant no corpo derrubaria
+  o cron e a gravacao sem usuario. O desenho: uma INTERNA `_fn_…` com o corpo de antes, SECURITY DEFINER, sem EXECUTE para PUBLIC,
+  anon e authenticated (so' service_role e o dono); e a PUBLICA, de MESMO nome, assinatura, retorno, volatilidade e ACL, vira so'
+  `DECLARE v_cli uuid := (SELECT f.cliente_id FROM public.fazendas f WHERE f.id = <fazenda>)` + `IF v_cli IS NULL OR NOT
+  COALESCE(public.tenant_ok(v_cli), false) THEN RAISE … '42501'` + o repasse. Cron, triggers e funcoes internas chamam a INTERNA.
+  · INTERNAS (6): `_fn_zoot_categoria_mensal(uuid, integer, text)` 5358f873 e `_fn_status_pilares_fechamento(uuid, text)` 84f5f2e3
+    (o MESMO md5 do corpo de origem: byte a byte) · `_fn_refresh_zoot_cache(uuid, integer)` 0fe8fda6, `(uuid, integer, text)`
+    0c8d3c89, `(uuid, integer, integer)` 83074104 (o corpo de antes chamando `_fn_zoot_categoria_mensal`) ·
+    `_fn_can_close_valor_rebanho(uuid, text)` a37017ef (chama `_fn_status_pilares_fechamento`).
+  · PUBLICAS (6), md5 antes -> depois: `refresh_zoot_cache(uuid, integer)` c6a682c7 -> d3427246 · `(uuid, integer, text)` 40de5b72 ->
+    cfe5d4f9 · `(uuid, integer, integer)` d127294c -> 0653e105 · `fn_zoot_categoria_mensal` 5358f873 -> 63b66fdc (era LANGUAGE sql;
+    a publica e' plpgsql com `RETURN QUERY SELECT * FROM` a interna, que segue sql) · `get_status_pilares_fechamento` 84f5f2e3 ->
+    c94a2c54 · `can_close_valor_rebanho` b5d3ec00 -> f78602f3. Fazenda inexistente ou NULA tambem da' 42501 (antes respondiam: a
+    dos pilares devolvia o objeto com `fazenda_id` nulo); nenhuma tela chama assim — todas barram `!fazendaId` e `'__global__'`, e o
+    modo Global percorre as fazendas REAIS do cliente (`useStatusPilaresLote`, `ResOpAuditoria`).
+  · CHAMADORES TROCADOS PARA A INTERNA (5): `fn_zoot_cache_reconstruir_sujos` 602664a8 -> 336f7f4f (o cron
+    `zoot_cache_sujo_reconstruir`) · `trg_fn_zoot_cache_reconstruir` be6899e0 -> 8e5ea09a (trigger deferido em `zoot_cache_sujo`) ·
+    `get_status_pilares_ano` 46ad7cc4 -> 746e8600 (JA' tinha guarda propria — `nao_autenticado` / `sem_permissao`, 42501 — e ela NAO
+    mudou; so' as duas chamadas) · `guard_valor_rebanho_requer_p1_fechado` 96ee64ae -> 8fbec5c8 (trigger em
+    `valor_rebanho_fechamento`, ja' era SECURITY DEFINER; achado so' neste PR) · `guard_lancamento_mes_fechado_p1` c01f38bc ->
+    1b71cb89 (trigger em `lancamentos`): VIROU SECURITY DEFINER com `search_path = public` (decisao do Gabriel) — conferido no
+    corpo: ela so' le' o status do mes da propria linha (NEW/OLD) pela interna e recusa; nao le' nem escreve mais nada.
+  · NAO MUDARAM: `fn_zoot_cache_rebuild` (guarda propria e usuario presente; segue chamando a `refresh_zoot_cache` PUBLICA, que o
+    deixa passar — provado com o gestor do Agnaldo) e `fn_zoot_cache_ensure` (INVOKER, chama a rebuild).
+    `trg_fn_guard_lancamento_mes_fechado_p1` cita a publica dos pilares mas NAO esta' em trigger nenhum: codigo morto, nao tocado
+    — se um dia for ligada, quebra sem usuario.
+  · MEDIDO ANTES (P0, ensaio): o gestor da NJ lia a categoria mensal (159 linhas), os pilares e o `can_close` de uma fazenda do
+    Agnaldo e executava as tres `refresh_zoot_cache` nela; o do Agnaldo, o mesmo na NJ; sem usuario, tudo respondia.
+  · PROVAS (ensaio e de novo no banco VIVO): travessia nos dois sentidos, 42501 nas seis publicas (e `sem_permissao` no status do
+    ano), cache do alvo identico; para o membro e para o admin o retorno e' IDENTICO por md5 em TODAS as fazendas de cada cliente
+    (NJ 5 fazendas x 7 chamadas, Agnaldo 3 x 7) e o cache depois de cada refresh e' igual ao de antes; internas: "permission
+    denied" para `authenticated` e `anon`; cadeia sem usuario viva (um buraco aberto no cache: o trigger deferido, disparado com
+    `SET CONSTRAINTS ALL IMMEDIATE`, e a varredura do cron o reconstroem e apagam a marca); trava de mes fechado em `lancamentos`
+    com as MESMAS mensagens, com e sem usuario (update estrutural, delete e insert recusados em ago/26; update nao estrutural e
+    insert em mes aberto passam).
+  · TEMPO: repasse de +0,31 a +0,38 ms nas `refresh` e na categoria mensal (publica x interna alternadas na mesma sessao, entrada
+    leve) e +0,12 a +0,16 ms em pilares e `can_close`; nas chamadas de 670 ms a diferenca some no ruido (−2,5 a +6 ms, os dois
+    sinais). ESCRITA EM `lancamentos`: ⚠ antes x depois em ensaios SEPARADOS nao mede (ruido de ±40 % entre rodadas); medido A/B
+    NA MESMA transacao, trocando a funcao do trigger a cada serie (8 series de 200 updates e 50 inserts de cada lado): updates
+    −2,2 % na mediana (+2,1 % na soma), inserts +0,1 % (−1,1 % na soma) — sem aumento mensuravel.
+  Teste: `supabase/tests/seg_tenant_varredura_01b2_test.sql` (T1–T9; tres mutacoes em ensaio caem pela razao certa: publica sem a
+  guarda -> T1; a varredura do cron chamando a publica -> T7 "reconstruidos 0"; interna aberta a `authenticated` -> T6). Os tres
+  testes SQL antigos que citam os pilares (`pr_oc_estornar_recebimento_01`, `pr_p1_data_fim_01`, `pr_p0b2_area`) ja' falhavam no
+  dado de hoje e falham IGUAL depois.
+  ⚠ O QUE RESTA DA VARREDURA: 01C revogar EXECUTE (`anon` em 3 DEFINER — `fn_recorrencia_cancelar`, `oc_ajustar_valor_compromisso`,
+    `oc_salvar_abate` — e em 15 INVOKER; `authenticated` nas sem chamador no front) e a guarda que PULA sem usuario
+    (`fn_caixa_sistema_pontas`, `fn_conciliacao_resumo_mes`, `fn_conciliacao_status_ano` e mais uma) · 01D escrita agricola (barter,
+    mandioca, graos, estoque, locais) e `fn_promover_staging`, ~18 corpos · 01E leitura restante (DRE pecuaria, painel de safra,
+    estoque de graos, auditorias), ~20 corpos · 01F PERFIL (`tenant_ok` e as policies nao distinguem leitura de escrita).
 - ⚠ A GRAVACAO DO EXTRATO E' DO BANCO, E O DESFAZER DIZ O QUE FAZ E RECUSA O QUE NAO PODE (PR-CONC-IMPORT-BANCO-01B, 03/10,
   migration 20261027192000, ⚠ registrada como 20261003174631; ledger = arquivo, md5 4966be59…).
   · IDENTIDADE DO MOVIMENTO: `hashMovimento` + a OCORRENCIA entre movimentos de CONTEUDO IDENTICO no arquivo, na ordem dele
