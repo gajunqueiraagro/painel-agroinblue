@@ -7,7 +7,10 @@ import {
   useConciliacaoDoMes, useSugestoesDoMes, contarBaldes, frameDoRodape,
   type SituacaoMovimento,
 } from '@/hooks/useConciliacaoDoMes';
-import { useSaldoGerencialDoMes, useSaldoSistemaNaPosicao, useImportacoesDaConta, importacoesDoMes, useSaldoDeclaradoOfx } from '@/hooks/useExtratoDaConta';
+import { useSaldoGerencialDoMes, useImportacoesDaConta, importacoesDoMes, useSaldoDeclaradoOfx } from '@/hooks/useExtratoDaConta';
+import { useQueryClient } from '@tanstack/react-query';
+import { useResumoMes, useReleDonoAoMudarLancamentos, useContasConsolidadasEm, CHAVE_RESUMO_MES } from '@/hooks/useResumoConciliacao';
+import { sistemaNaPosicao } from '@/lib/conciliacao/resumoDoDono';
 import { SaldoRealDialog } from '@/components/conciliacao/SaldoRealDialog';
 import { ImportacoesDialog } from '@/components/conciliacao/ImportacoesDialog';
 import { ExtratoDoMesModal } from '@/components/conciliacao/TabelaExtratoDoMes';
@@ -59,8 +62,22 @@ export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comP
 
   const { movimentos, recarregar } = useConciliacaoDoMes(clienteId, contaId, ano, mes);
   const saldo = useSaldoGerencialDoMes(clienteId, contaId, ano, mes);
-  const sistema = useSaldoSistemaNaPosicao(
-    clienteId, contaId, saldo.anoMes, saldo.saldoInicial, saldo.posicaoEm);
+  /* ⚠ O SALDO DO SISTEMA, A DIFERENÇA E OS "REALIZADOS APÓS" SÃO DO DONO — PR-CONC-SALDO-UMA-REGUA-02b (D1). Era
+     `useSaldoSistemaNaPosicao`: saldo inicial + os `cenario='realizado'` a VALOR CHEIO até a posição, somados aqui (no
+     Emerson, NJ Sicredi Lavoura set/26, 158.533,89 contra os 155.972,29 do Resumo). A chave é a MESMA do Casar
+     (`[conta]`), então a aba que já abriu a conta serve do cache. */
+  const resumoQ = useResumoMes(clienteId, saldo.anoMes, contaId ? [contaId] : [], { servirDoCache: true });
+  const linhaDono = resumoQ.data?.find((l) => l.nivel === 'conta' && l.conta_id === contaId) ?? null;
+  const sistema = sistemaNaPosicao(linhaDono);
+  /* D7: enquanto o dono não respondeu, "…" — nunca o número antigo nem 0,00. */
+  const carregandoDono = !!clienteId && !!contaId && (resumoQ.isLoading || (resumoQ.isFetching && !linhaDono));
+  useReleDonoAoMudarLancamentos(clienteId);
+  const qc = useQueryClient();
+  /* D2a: conta-mãe com interna consolidada — extrato, sistema e diferença são os TRÊS do dono (consolidado). */
+  const consolidadas = useContasConsolidadasEm(clienteId, contaId).data ?? [];
+  const consolidada = consolidadas.length > 0;
+  const tituloConsolida = consolidada ? `consolida ${consolidadas.join(', ')} (o saldo delas já está aqui)` : undefined;
+  const extratoMostrado = consolidada ? (linhaDono?.saldo_extrato ?? null) : saldo.saldo;
   const [editandoSaldo, setEditandoSaldo] = useState(false);
   const importacoes = useImportacoesDaConta(clienteId, contaId);
   const sug = useSugestoesDoMes(clienteId, contaId, ano, mes);
@@ -179,12 +196,16 @@ export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comP
             13/08 declara a posição daquele dia, e compará-la com o fechamento
             acusaria uma diferença que é só o resto do mês. */}
         <Campo rotulo={`Saldo no sistema (até ${diaMesBr(saldo.posicaoEm)})`}>
-          {sistema.saldoSistema == null ? '—' : formatMoeda(sistema.saldoSistema)}
+          <span data-testid="painel-saldo-sistema" title={tituloConsolida}>
+            {carregandoDono ? '…' : sistema.saldo == null ? '—' : formatMoeda(sistema.saldo)}
+            {consolidada && <span className="ml-1 text-[9.5px] text-muted-foreground">⊕</span>}
+          </span>
         </Campo>
 
         <Campo rotulo={`Saldo extrato (${diaMesBr(saldo.posicaoEm)})`}>
-          <span className="flex items-baseline gap-1.5">
-            {saldo.saldo == null ? '—' : formatMoeda(saldo.saldo)}
+          <span className="flex items-baseline gap-1.5" data-testid="painel-saldo-extrato" title={tituloConsolida}>
+            {consolidada && carregandoDono ? '…' : extratoMostrado == null ? '—' : formatMoeda(extratoMostrado)}
+            {consolidada && <span className="text-[9.5px] text-muted-foreground">⊕</span>}
             {saldo.origem && (
               <span className="rounded-full bg-muted px-1.5 py-0 text-[9px] font-normal text-muted-foreground">
                 {saldo.origem}
@@ -207,15 +228,16 @@ export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comP
             de saldos, a centímetros daqui, passou a exigir zero no PR anterior, e enquanto este
             campo aceitasse um centavo as duas réguas voltariam a conviver na mesma tela — uma
             contradizendo a outra sobre o mesmo número. */}
+        {/* ⚠ A DIFERENÇA É A DO DONO (D1): `posicao.diferenca_na_data` com posição no meio do mês, senão `diferenca`.
+            Nunca subtração na tela. */}
         <Campo rotulo="Diferença de saldo (o mês fecha?)">
-          {saldo.saldo == null || sistema.saldoSistema == null ? '—' : (
-            <span className={saldoConfere(saldo.saldo - sistema.saldoSistema)
-              ? 'text-success' : 'text-destructive'}>
-              {saldoConfere(saldo.saldo - sistema.saldoSistema)
-                ? 'confere'
-                : formatMoeda(saldo.saldo - sistema.saldoSistema)}
-            </span>
-          )}
+          <span data-testid="painel-diferenca">
+            {carregandoDono ? '…' : sistema.diferenca == null ? '—' : (
+              <span className={saldoConfere(sistema.diferenca) ? 'text-success' : 'text-destructive'}>
+                {saldoConfere(sistema.diferenca) ? 'confere' : formatMoeda(sistema.diferenca)}
+              </span>
+            )}
+          </span>
         </Campo>
 
         <Campo rotulo="Conciliados">{contagem.conciliado} de {contagem.todos}</Campo>
@@ -268,10 +290,11 @@ export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comP
           declaração TEMPORÁRIA: a cadeia mensal segue lendo `saldo_final` como
           fim de mês. Sem esta linha, o operador informaria a posição de 13/08 e
           fecharia o mês achando que conferiu agosto inteiro. */}
-      {saldo.saldo != null && sistema.aposPosicao > 0 && (
-        <div className="border-b border-border bg-destructive/5 px-3 py-1 text-[10px] leading-snug text-destructive">
-          {sistema.aposPosicao} realizado{sistema.aposPosicao === 1 ? '' : 's'} após{' '}
-          {diaMesBr(saldo.posicaoEm)} não conferido{sistema.aposPosicao === 1 ? '' : 's'} — informe o
+      {/* D1: a contagem é `posicao.realizados_apos.qtde` do dono. */}
+      {saldo.saldo != null && sistema.aposQtde > 0 && (
+        <div className="border-b border-border bg-destructive/5 px-3 py-1 text-[10px] leading-snug text-destructive" data-testid="painel-realizados-apos">
+          {sistema.aposQtde} realizado{sistema.aposQtde === 1 ? '' : 's'} após{' '}
+          {diaMesBr(sistema.data ?? saldo.posicaoEm)} não conferido{sistema.aposQtde === 1 ? '' : 's'} — informe o
           saldo de uma data mais recente para o mês fechar.
         </div>
       )}
@@ -292,7 +315,8 @@ export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comP
           ano={ano} mes={mes}
           saldoAtual={saldo.saldo} saldoDataAtual={saldo.saldoData}
           aoFechar={() => setEditandoSaldo(false)}
-          aoSalvar={() => { saldo.recarregarSaldo(); }}
+          /* O saldo informado muda o extrato e a diferença DO DONO: o resumo se rele junto (gesto desta tela). */
+          aoSalvar={() => { saldo.recarregarSaldo(); void qc.invalidateQueries({ queryKey: [CHAVE_RESUMO_MES, clienteId] }); }}
         />
       )}
 

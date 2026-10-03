@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { somarAtePosicao, movimentoNaConta, fimDoMes, type LinhaDaPosicao } from './useExtratoDaConta';
+import { movimentoNaConta, fimDoMes, type LinhaDaPosicao } from './useExtratoDaConta';
 
 /**
  * O que este teste protege — FIN-SALDO-POSICAO-01.
@@ -68,71 +68,10 @@ describe('movimentoNaConta — o sinal é COLUNA, valor é sempre positivo', () 
       l({ valor: 138510.62, sinal: -1, tipo_operacao: '2-Saídas' }),
       l({ valor: 39116.28, sinal: -1, tipo_operacao: '3-Transferências' }),
     ];
-    const { ate } = somarAtePosicao(linhas, CONTA, '2026-08-31');
+    /* PR-CONC-SALDO-UMA-REGUA-02b: `somarAtePosicao` saiu (era a régua antiga do card); o caso real segue provando a régua
+       da LINHA, que o saldo em caixa usa. */
+    const ate = linhas.reduce((s, x) => s + movimentoNaConta(x, CONTA), 0);
     expect(ate).toBeCloseTo(-177617.55, 2);
     expect(208561.46 + ate).toBeCloseTo(30943.91, 2);
-  });
-});
-
-describe('somarAtePosicao — o corte é a data declarada', () => {
-  it('soma o que está ATÉ a posição e conta o que vem depois', () => {
-    const r = somarAtePosicao([
-      l({ valor: 100, data_pagamento: '2026-08-05' }),
-      l({ valor: 50,  data_pagamento: '2026-08-13' }),
-      l({ valor: 900, data_pagamento: '2026-08-14' }),
-      l({ valor: 900, data_pagamento: '2026-08-31' }),
-    ], CONTA, '2026-08-13');
-    expect(r.ate).toBe(-150);
-    expect(r.depois).toBe(2);
-  });
-
-  /* ⚠ O DIA DA POSIÇÃO ENTRA. "Posição em 13/08" é o saldo ao FIM do dia 13 —
-     excluí-lo faria o saldo do sistema ficar sistematicamente atrás do banco. */
-  it('a linha do próprio dia da posição entra na soma', () => {
-    const r = somarAtePosicao([l({ valor: 50, data_pagamento: '2026-08-13' })], CONTA, '2026-08-13');
-    expect(r.ate).toBe(-50);
-    expect(r.depois).toBe(0);
-  });
-
-  /* ⚠ A PERNA DE DESTINO É ENTRADA NESTA CONTA. Sem isto, toda transferência
-     recebida viraria uma diferença inexplicável. */
-  it('transferência recebida entra positiva', () => {
-    const r = somarAtePosicao([
-      l({ valor: 300, sinal: -1, tipo_operacao: '3-Transferências',
-          conta_bancaria_id: OUTRA, conta_destino_id: CONTA }),
-    ], CONTA, '2026-08-31');
-    expect(r.ate).toBe(300);
-  });
-
-  it('a perna de origem mantém o sinal que o lançamento tem', () => {
-    const r = somarAtePosicao([
-      l({ valor: 300, sinal: -1, tipo_operacao: '3-Transferências',
-          conta_bancaria_id: CONTA, conta_destino_id: OUTRA }),
-    ], CONTA, '2026-08-31');
-    expect(r.ate).toBe(-300);
-  });
-
-  /* ⚠ SEM DATA NÃO ENTRA E NÃO COBRA. Contá-la como "depois" pediria ao operador
-     uma data mais recente que nunca resolveria o aviso. */
-  it('linha sem data de pagamento é ignorada nos dois lados', () => {
-    const r = somarAtePosicao([l({ data_pagamento: null }), l({ data_pagamento: '' })], CONTA, '2026-08-31');
-    expect(r).toEqual({ ate: 0, depois: 0 });
-  });
-
-  it('entradas e saídas se somam pelo sinal que já trazem', () => {
-    const r = somarAtePosicao([
-      l({ valor: 1000, sinal: 1, tipo_operacao: '1-Entradas', data_pagamento: '2026-08-02' }),
-      l({ valor: 250,  sinal: -1, data_pagamento: '2026-08-03' }),
-    ], CONTA, '2026-08-31');
-    expect(r.ate).toBe(750);
-  });
-
-  it('valor em texto é lido como número', () => {
-    const r = somarAtePosicao([l({ valor: '100.50' })], CONTA, '2026-08-31');
-    expect(r.ate).toBeCloseTo(-100.5, 2);
-  });
-
-  it('lista vazia não inventa saldo nem aviso', () => {
-    expect(somarAtePosicao([], CONTA, '2026-08-31')).toEqual({ ate: 0, depois: 0 });
   });
 });

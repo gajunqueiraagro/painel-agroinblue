@@ -162,13 +162,14 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 03/10/2026 (PR-CONC-SALDO-UMA-REGUA-02, +22 −5: `src/lib/conciliacao/resumoDoDono.test.ts` 7,
+  Baseline em 03/10/2026 (PR-CONC-SALDO-UMA-REGUA-02b, +10 −8: `src/components/conciliacao/painelDono.test.tsx` 10; sairam os 8
+  de `somarAtePosicao` em `src/hooks/useExtratoDaConta.test.ts`, com a funcao; antes o PR-CONC-SALDO-UMA-REGUA-02, +22 −5: `src/lib/conciliacao/resumoDoDono.test.ts` 7,
   `src/components/financeiro-v2/espelhoDono.test.tsx` 4, `src/pages/conciliacaoDono.test.tsx` 11; saiu
   `src/pages/conciliacaoAgregadoTransferencia.test.ts` 5, com o `buildMonthCards` que testava; antes o
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3136
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3138
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -300,8 +301,8 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   — levar a' ancora do extrato e' PR proprio; (b) o "PR B" do CONC-CAIXA-PONTA-01 (resumo da Conciliacao, aba Sistema, painel
   do mes) continua aberto — so' a Conferencia e a Evolucao passaram a fechar como o caixa [o DONO ja' existe desde o
   PR-CONC-SALDO-UMA-REGUA-01: `fn_conciliacao_resumo_mes`, completo no 01b/01c; a aba Conciliacao, o quadro do topo e a aba Sistema
-  do Casar trocaram no PR 02; FICAM o 02b (o painel do mes e os consumidores de `useSaldoSistemaNaPosicao`) e o refresh sem F5 nos
-  gestos (PR 03);
+  do Casar trocaram no PR 02, e o painel do mes, o lapis e o "Conciliar o mes" no 02b; FICA o refresh sem F5 nos gestos de outras
+  telas (PR 03);
   LOGO DEPOIS DO PR 02, o hotfix de seguranca de `fn_extratos_espelhados` (SECURITY DEFINER sem guarda de tenant)]; (c) DIVIDAS DE DADO, sem corrigir:
   SOBRE-APLICADOS (aplicado nos extratos da conta > valor) Vera Itau Personalite mai/26 77711d94 (2 x 360 num de 360; o gemeo
   d88ea17e sem par), NJ Itau BBA mar/26 e3e36029 (2 x 150.000 num de 150.000), Santa Rita BB jun/26 eabe167e (375.000 num de
@@ -1141,9 +1142,8 @@ docs/historico/frentes-ate-2026-09-29.md.)
   resumo fe3c16e4…, `_fn_conciliacao_dias_conta` 66faca98…. Tempo, 20 chamadas na mesma sessao, todas as
   contas: NJ 18 contas ≤ 619 ms, Santa Rita 27 ≤ 540 ms. AS TELAS QUE LEEM: ver a regra "A CONCILIACAO DESENHA O DONO" (PR 02).
   ⚠ DIVIDA: portar a MONTAGEM da mesa para o banco (hoje o banco e' dono do STATUS e da contagem de dias; `montarMesa` desenha).
-  ⚠ DUAS REGUAS EXTRAS, fora deste dono e pendentes de decisao (D8): `PainelExtratoMes`/`useSaldoSistemaNaPosicao`
-    (`useExtratoDaConta.ts:417-464`: `cenario='realizado'` sem filtrar status nem `sem_movimentacao_caixa`) e `FinV2SaldosTab`
-    (`calcConciliacaoMensal` por `ano_mes`, a competencia). Tambem fora: fluxo de caixa realizado, card "Caixa no mes", Contas a
+  ⚠ UMA REGUA EXTRA, fora deste dono e pendente de decisao (D8): `FinV2SaldosTab` (`calcConciliacaoMensal` por `ano_mes`, a
+    competencia). [`PainelExtratoMes`/`useSaldoSistemaNaPosicao` sairam no PR-CONC-SALDO-UMA-REGUA-02b.] Tambem fora: fluxo de caixa realizado, card "Caixa no mes", Contas a
     Pagar/Receber e Extrato Gerencial.
   ⚠ DIVIDA DE DADO — os conta-meses que o dono passa a chamar de 'nao_conciliado' (eram 'conciliado' na regua antiga), por motivo:
     (iii) o extrato importado nao fecha com o informado — Santa Rita Bradesco jun/26 (245.476,60) e jul/26 (−245.477,63), Santa
@@ -1249,15 +1249,44 @@ docs/historico/frentes-ate-2026-09-29.md.)
     (entrada, saida ou extrato) — antes gravava o `saldoCalculado` a valor cheio e fechava tambem a conta com movimento.
   · A aba nao espera os lancamentos do ano: abre com o resumo (as contagens "Todos (N)" dizem "…" ate' a lista chegar), e a regua
     e as abas nao viram esqueleto. Medido no NJ (navegacao, recarga sem cache): 4.003 / 2.944 ms -> 1.002 / 889 ms ate' o Total.
-  ⚠ FORA (02b): `useSaldoSistemaNaPosicao` e os consumidores (`PainelExtratoMes`, `SaldoRealDialog`, `AcoesDoMes`),
-    `ConciliarMesDialog`, o G6; e, fora da Conciliacao, fluxo de caixa realizado, card "Caixa no mes", Contas a Pagar/Receber, Extrato
-    Gerencial e `FinV2SaldosTab` — continuam na regua antiga. O modal "Todos (N)" e as pendencias de classificacao/duplicados seguem
+  ⚠ FORA (o que ainda resta depois do 02b): o G6 (ver a regra do 02b, logo abaixo); e, fora da Conciliacao, fluxo de caixa
+    realizado, card "Caixa no mes", Contas a Pagar/Receber, Extrato Gerencial e `FinV2SaldosTab` — continuam na regua antiga. O modal "Todos (N)" e as pendencias de classificacao/duplicados seguem
     sobre a lista dos realizados do mes (lista, nao saldo).
   ⚠ INVALIDACAO: so' onde a aba ja' recarregava (lancamentos mudaram, saldo informado, fechar sem movimento) ela rele' o dono
     (`releDono`); os gestos de casar/conciliar das outras telas nao invalidam o resumo — PR 03.
   ⚠ DIVIDA DO DONO (achada na homologacao local): conta SEM extrato que diverge sai 'nao_conciliado' so' com o motivo `sem_extrato`
     (NJ Cartao BB Visa Infinite set/26, −6.470,73) — o card fica vermelho dizendo "sem extrato"; o dono deveria escrever tambem
     `saldo_diverge` com o valor (01d, banco).
+- ⚠ O PAINEL DO MES, O LAPIS E O "CONCILIAR O MES" LEEM O DONO (PR-CONC-SALDO-UMA-REGUA-02b, 03/10, so' tela).
+  `useSaldoSistemaNaPosicao` e `somarAtePosicao` SAIRAM (com o teste deles): eram a regua antiga (saldo inicial do mes + os
+  `cenario='realizado'` a VALOR CHEIO ate' a posicao, sem filtrar `status_transacao`, somados no front). `movimentoNaConta` e
+  `LinhaDaPosicao` FICAM (saldo em caixa e Contas a Pagar/Receber, fora da Conciliacao).
+  · PAINEL (`PainelExtratoMes`, D1): saldo no sistema, diferenca e "N realizados apos" sao a linha do dono pela posicao
+    (`sistemaNaPosicao`, `src/lib/conciliacao/resumoDoDono.ts`: `posicao.saldo_sistema_na_data` / `diferenca_na_data` /
+    `realizados_apos.qtde` com posicao no meio do mes; senao `saldo_sistema` / `diferenca`). Nenhuma subtracao na tela. "…"
+    enquanto o dono nao responde (D7). Leitura `useResumoMes(cliente, mes, [conta], { servirDoCache: true })` — a MESMA chave do
+    Casar; `servirDoCache` (staleTime 60 s so' nesse observador) e' o que evita a segunda ida ao dono ao montar (medido: 0
+    chamadas abrindo o Importar depois do Casar; sem ele, 1). Fresco pelo GATILHO: `useReleDonoAoMudarLancamentos` (o mesmo
+    `inscreverEmLancamentos` que o hook antigo ouvia, D6) e salvar o saldo no lapis invalidam `CHAVE_RESUMO_MES`.
+  · CONTA-MAE COM INTERNA (D2a; hoje so' Agnaldo Bradesco + Invest Facil): no painel, "Saldo extrato", "Saldo no sistema" e
+    "Diferenca" sao os TRES do dono (consolidado), com "⊕" e o `title` "consolida X" — nunca o saldo proprio ao lado do sistema
+    consolidado. Os nomes das internas vem do cadastro (`useContasConsolidadasEm`: `consolida_em_conta_id`), nao do dono.
+  · "CONCILIAR O MES" (`AcoesDoMes`, D3): o "Sistema hoje" e' o mesmo `sistemaNaPosicao`; o `ConciliarMesDialog` nao mudou.
+  · LAPIS (`SaldoRealDialog`, D4): "sistema em DD/MM" com a data DIGITADA e' o `saldo_apos` da ultima linha de
+    `linhas_sistema` ate' a data (`saldoSistemaNaData`); sem linha ate' la', o saldo inicial do dono — LIDO, nao somado; a
+    diferenca contra o digitado segue `saldoConfere`. Em CONTA-MAE (D4a): o sistema do dono com "consolidado com X" e SEM
+    diferenca ("conta consolidada: a diferenca esta' no Resumo") — o digitado e' so' da conta, e somar a interna no front seria
+    calculo paralelo.
+  ⚠ MUDAM DE NUMERO NESTE PR, COM CAUSA (aceitas pelo Gabriel, 03/10; medido em 547 conta-meses de 2026, 543 sem parcial e sem
+    interna, 4 divergem): NJ Itau BBA mar/26 243.550,79 -> 93.550,79 (sobre-aplicado e3e36029, 150.000); Vera Itau Personalite
+    mai/26 264.503,93 -> 264.143,93 (sobre-aplicado 77711d94, 360); Santa Rita BB jun/26 0,00 -> 160.000,00 (sobre-aplicado
+    eabe167e "Venda 118 vacas - 1/2", 375.000 num de 215.000); NJ Caixa Carlos ago/26 −859,84 -> 0,00 (434823f9 "Revisao Hilux -
+    6/6", PROGRAMADO com `cenario='realizado'`, que a regua antiga somava). Alem delas, o parcial (o Emerson, NJ Sicredi Lavoura
+    set/26: 158.533,89 -> 155.972,29) e a conta-mae consolidada. `posicao` nula com `saldo_data` declarada: 0 de 547; "realizados
+    apos" antigo x dono: 0 divergencias.
+  ⚠ G6 (fora, registrado): os REALIZADOS APOS UMA DATA DIGITADA no lapis nao estao no dono — ele so' conta os apos a posicao
+    DECLARADA (`posicao.realizados_apos`). Hoje o lapis nao mostra "N realizados apos", entao nao faz falta; se um dia mostrar, e'
+    banco (o dono devolver a contagem por data), nunca contagem de `linhas_sistema` na tela.
 - ⚠ A GRAVACAO DO EXTRATO E' DO BANCO, E O DESFAZER DIZ O QUE FAZ E RECUSA O QUE NAO PODE (PR-CONC-IMPORT-BANCO-01B, 03/10,
   migration 20261027192000, ⚠ registrada como 20261003174631; ledger = arquivo, md5 4966be59…).
   · IDENTIDADE DO MOVIMENTO: `hashMovimento` + a OCORRENCIA entre movimentos de CONTEUDO IDENTICO no arquivo, na ordem dele

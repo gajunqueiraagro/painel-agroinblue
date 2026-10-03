@@ -11,11 +11,12 @@ import { formatMoeda } from '@/lib/calculos/formatters';
 import { saldoConfere } from '@/lib/financeiro/conciliacaoCalc';
 import {
   gravarSaldoReal, removerSaldoReal, fimDoMes,
-  useSaldoDeclaradoOfx, useSaldoDocumentos, useSaldoGerencialDoMes,
-  useSaldoSistemaNaPosicao, useExtratoFimDoMes,
+  useSaldoDeclaradoOfx, useSaldoDocumentos, useExtratoFimDoMes,
   anexarSaldoDocumento, cancelarSaldoDocumento, urlAssinadaSaldoDocumento,
 } from '@/hooks/useExtratoDaConta';
 import { TIPOS_ACEITOS } from '@/hooks/useLancamentoDocumentos';
+import { useResumoMes, useReleDonoAoMudarLancamentos, useContasConsolidadasEm } from '@/hooks/useResumoConciliacao';
+import { saldoSistemaNaData } from '@/lib/conciliacao/resumoDoDono';
 
 /**
  * SaldoRealDialog — o lápis: informar o saldo que o banco mostra, e QUANDO.
@@ -83,17 +84,23 @@ export function SaldoRealDialog({
    * 17/09 é 155.746,78 (diferença real 2,94, o rendimento provisionado); o sistema do MÊS
    * INTEIRO é 96.937,72, e era ele que a tela mostrava — diferença falsa de 58.812,00,
    * inteiramente composta pelos lançamentos de 18 a 20/09 descontados de uma posição de 17.
-   * ⚠ A SOMA NÃO É NOVA: `useSaldoSistemaNaPosicao` já faz exatamente "saldo inicial do mês
-   * mais os realizados até a posição", e é a mesma função que o card do Extrato usa.
-   * ⚠ E ELA HERDA UMA INCOERÊNCIA DE FILTRO: o hook pede `cenario='realizado'` sem exigir
-   * `status_transacao='realizado'` — a mesma que o card da CPR corrigiu em db5c900c. Na Vera
-   * não muda nada (ela não tem linha nesse estado); no NJ mudaria. Consertar ali afeta
-   * `AcoesDoMes` e `PainelExtratoMes`, então fica PR próprio. Aqui só se registra a herança.
+   * ⚠ O NÚMERO É LIDO DO DONO, NÃO SOMADO — PR-CONC-SALDO-UMA-REGUA-02b (D4). Era `useSaldoSistemaNaPosicao` (saldo
+   * inicial + `cenario='realizado'` a valor cheio, sem filtrar `status_transacao` — a herança que este comentário
+   * registrava). Agora é o `saldo_apos` da última linha de `linhas_sistema` com data até a digitada (`saldoSistemaNaData`);
+   * sem linha até a data, o saldo inicial do dono. A chave é a do Casar e a do painel (`[conta]`): cache.
+   * ⚠ CONTA-MÃE COM INTERNA (D4a): o dono é consolidado e o digitado é SÓ da conta — somar o saldo da interna aqui seria
+   * cálculo paralelo. O modal mostra o sistema do dono com "consolidado com X" e NÃO compara; a diferença está no Resumo.
    */
-  const gerencial = useSaldoGerencialDoMes(clienteId, contaId, ano, mes);
-  /* `data` é o campo "Posição em" — a soma segue o que o operador digita, ao vivo. */
-  const sistemaNaData = useSaldoSistemaNaPosicao(
-    clienteId, contaId, anoMes, gerencial.saldoInicial, data);
+  const resumoQ = useResumoMes(clienteId, anoMes, [contaId], { servirDoCache: true });
+  const linhaDono = resumoQ.data?.find((l) => l.nivel === 'conta' && l.conta_id === contaId) ?? null;
+  useReleDonoAoMudarLancamentos(clienteId);
+  const consolidadas = useContasConsolidadasEm(clienteId, contaId).data ?? [];
+  const consolidada = consolidadas.length > 0;
+  /* `data` é o campo "Posição em" — a leitura segue o que o operador digita, ao vivo (só dentro do mês). */
+  const sistemaNaData = {
+    carregando: resumoQ.isLoading,
+    saldoSistema: data && data.slice(0, 7) === anoMes ? saldoSistemaNaData(linhaDono, data) : null,
+  };
   const extratoFim = useExtratoFimDoMes(clienteId, contaId, ano, mes);
   const anexos = useSaldoDocumentos(clienteId, contaId, ano, mes);
   const inputArquivo = useRef<HTMLInputElement>(null);
@@ -168,7 +175,7 @@ export function SaldoRealDialog({
    * ⚠ É A ÚNICA DIFERENÇA QUE ESTA TELA MOSTRA. O OFX deixou de gerar a sua (ver abaixo):
    * são duas conciliações independentes, e a visual é a principal.
    */
-  const dif = valor !== null && sistemaNaData.saldoSistema !== null
+  const dif = !consolidada && valor !== null && sistemaNaData.saldoSistema !== null
     ? Math.round((valor - sistemaNaData.saldoSistema) * 100) / 100
     : null;
 
@@ -264,13 +271,24 @@ export function SaldoRealDialog({
             <div className="flex justify-between">
               <span className="text-[10px] text-muted-foreground">
                 sistema em {dataBr(data)}
+                {consolidada && (
+                  <span className="ml-1 text-[9.5px]" data-testid="lapis-consolidado"
+                    title={`o saldo do sistema é o do dono, consolidado: inclui ${consolidadas.join(', ')}`}>
+                    · consolidado com {consolidadas.join(', ')}
+                  </span>
+                )}
               </span>
-              <span className="text-[11px] tabular-nums">
+              <span className="text-[11px] tabular-nums" data-testid="lapis-sistema">
                 {sistemaNaData.carregando ? '…'
                   : sistemaNaData.saldoSistema === null ? '—'
                   : formatMoeda(sistemaNaData.saldoSistema)}
               </span>
             </div>
+            {consolidada ? (
+              <div className="text-[10px] text-muted-foreground" data-testid="lapis-diferenca-consolidada">
+                conta consolidada: a diferença está no Resumo
+              </div>
+            ) : (
             <div className="flex items-baseline justify-between gap-2">
               <span className="text-[10px] text-muted-foreground">
                 diferença
@@ -284,10 +302,11 @@ export function SaldoRealDialog({
                 dif == null ? 'text-muted-foreground'
                 : saldoConfere(dif) ? 'text-success'
                 : provavelRendimento ? 'font-semibold text-amber-600 dark:text-amber-400'
-                : 'font-semibold text-destructive'}`}>
+                : 'font-semibold text-destructive'}`} data-testid="lapis-diferenca">
                 {dif == null ? '—' : saldoConfere(dif) ? 'confere' : formatMoeda(dif)}
               </span>
             </div>
+            )}
           </div>
 
           {/* Anexos do extrato — prova visual. Gravam na hora, independente do Informar/
@@ -337,7 +356,7 @@ export function SaldoRealDialog({
           </div>
 
           <p className="text-[10px] leading-snug text-muted-foreground">
-            O saldo do sistema é somado até esta data — posição contra posição. Conta no vermelho:
+            O saldo do sistema é o desta data, como na aba Sistema — posição contra posição. Conta no vermelho:
             informe com o sinal, ex. −1.845,32.
           </p>
         </div>

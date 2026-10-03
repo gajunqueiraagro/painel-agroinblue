@@ -2,10 +2,9 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ArrowLeftRight, LayoutList, ListPlus } from 'lucide-react';
 import { useConciliacaoDoMes } from '@/hooks/useConciliacaoDoMes';
-import {
-  useSaldoGerencialDoMes, useSaldoSistemaNaPosicao,
-  useImportacoesDaConta, importacoesDoMes,
-} from '@/hooks/useExtratoDaConta';
+import { useImportacoesDaConta, importacoesDoMes } from '@/hooks/useExtratoDaConta';
+import { useResumoMes, useReleDonoAoMudarLancamentos } from '@/hooks/useResumoConciliacao';
+import { sistemaNaPosicao } from '@/lib/conciliacao/resumoDoDono';
 import { PalcoDoMes } from '@/components/conciliacao/PalcoDoMes';
 import { ConciliarMesDialog } from '@/components/conciliacao/ConciliarMesDialog';
 import { TransferenciasEntreContasModal } from '@/components/conciliacao/TransferenciasEntreContasModal';
@@ -51,9 +50,12 @@ export function AcoesDoMes({ clienteId, contaId, contaNome, ano, mes, aoMudar }:
   const [verConciliarMes, setVerConciliarMes] = useState(false);
 
   const { movimentos, recarregar } = useConciliacaoDoMes(clienteId, contaId, ano, mes);
-  const saldo = useSaldoGerencialDoMes(clienteId, contaId, ano, mes);
-  const sistema = useSaldoSistemaNaPosicao(
-    clienteId, contaId, saldo.anoMes, saldo.saldoInicial, saldo.posicaoEm);
+  /* D3 (PR-CONC-SALDO-UMA-REGUA-02b): o "Sistema hoje" do "Conciliar o mês" é o do DONO — o mesmo número do card do painel
+     (`sistemaNaPosicao`, a mesma chave `[conta]`). Era `useSaldoSistemaNaPosicao`, a soma a valor cheio. */
+  const anoMesDono = `${ano}-${String(mes).padStart(2, '0')}`;
+  const resumoQ = useResumoMes(clienteId, anoMesDono, contaId ? [contaId] : [], { servirDoCache: true });
+  const sistema = sistemaNaPosicao(resumoQ.data?.find((l) => l.nivel === 'conta' && l.conta_id === contaId) ?? null);
+  useReleDonoAoMudarLancamentos(clienteId);
   const importacoes = useImportacoesDaConta(clienteId, contaId);
 
   /* PR-CONC-TRANSFERENCIAS-01: as transferências são do CLIENTE (cruzam contas), não da conta da régua — por isso o
@@ -165,16 +167,16 @@ export function AcoesDoMes({ clienteId, contaId, contaNome, ano, mes, aoMudar }:
         />
       )}
 
-      {/* ⚠ O SALDO DO SISTEMA VAI POR PROP — 130. Quem o calcula é `useSaldoSistemaNaPosicao`
-          (posição contra posição); refazer a conta dentro do diálogo daria dois números para a
-          mesma pergunta na mesma tela. */}
+      {/* ⚠ O SALDO DO SISTEMA VAI POR PROP — 130. Quem o dá é o DONO (`fn_conciliacao_resumo_mes`, posição contra
+          posição, PR-CONC-SALDO-UMA-REGUA-02b); refazer a conta dentro do diálogo daria dois números para a mesma pergunta
+          na mesma tela. */}
       <ConciliarMesDialog
         open={verConciliarMes}
         onOpenChange={setVerConciliarMes}
         clienteId={clienteId} contaId={contaId} contaNome={contaNome}
         ano={ano} mes={mes}
         arquivosOfx={importacoesDoMes(importacoes.importacoes, `${ano}-${String(mes).padStart(2, '0')}`).ativas.length}
-        saldoSistemaHoje={sistema.saldoSistema ?? null}
+        saldoSistemaHoje={sistema.saldo}
         aoConcluir={recarregarTudo}
       />
     </div>

@@ -13,10 +13,13 @@ vi.mock('@/hooks/useConciliacaoDoMes', () => ({
   useConciliacaoDoMes: () => ({ movimentos: M.movimentos, recarregar: vi.fn() }),
 }));
 vi.mock('@/hooks/useExtratoDaConta', () => ({
-  useSaldoGerencialDoMes: () => ({ anoMes: '2026-09', saldoInicial: 0, posicaoEm: null }),
-  useSaldoSistemaNaPosicao: () => ({ saldoSistema: null }),
   useImportacoesDaConta: () => ({ importacoes: [] }),
   importacoesDoMes: () => ({ ativas: [] }),
+}));
+/* PR-CONC-SALDO-UMA-REGUA-02b: o "Sistema hoje" vem do dono (`useResumoMes`); aqui ele não importa. */
+vi.mock('@/hooks/useResumoConciliacao', () => ({
+  useResumoMes: () => ({ data: [], isLoading: false }),
+  useReleDonoAoMudarLancamentos: () => {},
 }));
 vi.mock('@/components/conciliacao/PalcoDoMes', () => ({ PalcoDoMes: () => null }));
 vi.mock('@/components/conciliacao/ConciliarMesDialog', () => ({ ConciliarMesDialog: () => null }));

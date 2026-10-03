@@ -363,3 +363,37 @@ export function contasParaFecharSemMovimento(linhas: readonly LinhaResumo[]): {
   }
   return { fechar, comMovimento, semReferencia };
 }
+
+/**
+ * O SISTEMA NA POSIÇÃO, LIDO DO DONO — PR-CONC-SALDO-UMA-REGUA-02b (D1). Com posição declarada ANTES do fim do mês, o
+ * saldo, a diferença e os "realizados após" são os da `posicao`; sem ela, os do mês. Nada se soma nem se subtrai aqui:
+ * cada campo é uma chave da linha do dono.
+ */
+export function sistemaNaPosicao(l: LinhaResumo | null): {
+  saldo: number | null; diferenca: number | null; aposQtde: number; data: string | null;
+} {
+  if (!l) return { saldo: null, diferenca: null, aposQtde: 0, data: null };
+  if (l.posicao) {
+    return {
+      saldo: l.posicao.saldo_sistema_na_data, diferenca: l.posicao.diferenca_na_data,
+      aposQtde: l.posicao.realizados_apos.qtde, data: l.posicao.data,
+    };
+  }
+  return { saldo: l.saldo_sistema, diferenca: l.diferenca, aposQtde: 0, data: l.saldo_extrato_data };
+}
+
+/**
+ * O SISTEMA NUMA DATA QUALQUER — o lápis (D4). É o `saldo_apos` da ÚLTIMA linha de `linhas_sistema` com data até a
+ * pedida (a lista vem em ordem de data e o `saldo_apos` é corrido pelo dono); sem linha até a data, o saldo inicial do
+ * dono. LER, não somar. Sem a lista (resumo sem detalhe), nulo — nunca uma soma de reserva.
+ */
+export function saldoSistemaNaData(l: LinhaResumo | null, dataIso: string): number | null {
+  if (!l || !l.linhas_sistema) return null;
+  const d = dataIso.slice(0, 10);
+  let saldo: number | null = l.saldo_inicial;
+  for (const x of l.linhas_sistema) {
+    if (!x.data || x.data.slice(0, 10) > d) continue;
+    saldo = x.saldo_apos;
+  }
+  return saldo;
+}

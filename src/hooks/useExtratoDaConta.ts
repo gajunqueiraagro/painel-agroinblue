@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react';
-import { inscreverEmLancamentos } from '@/hooks/useFinanceiroV2';
 import { supabase } from '@/integrations/supabase/client';
 import { faixaDoMes } from '@/hooks/useConciliacaoDoMes';
 import { TIPOS_ACEITOS, TAMANHO_MAXIMO } from '@/hooks/useLancamentoDocumentos';
@@ -315,30 +314,12 @@ export function useImportacoesDaConta(clienteId: string | null, contaId: string 
   return { importacoes, loading, recarregar: carregar };
 }
 
-/**
- * O SALDO DO SISTEMA NA POSIÇÃO — somado ATÉ a data declarada.
- * FIN-SALDO-POSICAO-01, peça 2.
- *
- * ⚠ POSIÇÃO CONTRA POSIÇÃO, e é isso que faltava: hoje a tela compara um saldo
- * digitado com o mês INTEIRO. Um extrato consultado em 13/08 declara a posição
- * daquele dia; confrontá-lo com o fechamento de 31/08 acusa uma diferença que é
- * só o resto do mês — e foi o que obrigou a arqueologia no Bradesco.
- *
- * ⚠ A CONTA É `saldo_inicial` DO MÊS MAIS O MOVIMENTO ATÉ A DATA. O inicial vem
- * da cadeia mensal (preenchido nas 4.700 linhas) e é o único ponto de partida
- * confiável — somar o histórico inteiro desde 2019 daria o mesmo número ao preço
- * de milhares de linhas, e divergiria no primeiro mês em que a cadeia tivesse um
- * ajuste que os lançamentos não explicam.
- *
- * ⚠ SÓ REALIZADO E SÓ CAIXA, a mesma régua do vínculo: previsto não moveu
- * dinheiro, cancelado não é lançamento, e `sem_movimentacao_caixa` não toca a
- * conta. Incluir qualquer um deles faria o sistema divergir do extrato por
- * construção.
- *
- * ⚠ A CONTA DESTINO CONTA COMO ENTRADA. Uma transferência tem duas pernas, e a
- * conta que recebe vê o dinheiro entrar — ignorá-la faria toda transferência
- * parecer uma diferença.
- */
+/* ⚠ `useSaldoSistemaNaPosicao` E `somarAtePosicao` SAÍRAM — PR-CONC-SALDO-UMA-REGUA-02b. Eram a régua antiga do saldo do
+   sistema na Conciliação (saldo inicial do mês + os lançamentos `cenario='realizado'` a VALOR CHEIO até a posição, sem filtrar
+   `status_transacao`), somada no front. O card do painel, o "Conciliar o mês" e o lápis leem o dono
+   (`fn_conciliacao_resumo_mes` por `useResumoMes`). `LinhaDaPosicao` e `movimentoNaConta` FICAM: o saldo em caixa
+   (`saldoEmCaixa.ts`) e Contas a Pagar/Receber os usam, fora da Conciliação. */
+
 /** Uma linha de lançamento, no mínimo que a soma da posição olha. */
 export interface LinhaDaPosicao {
   valor: number | string | null;
@@ -382,85 +363,6 @@ export function movimentoNaConta(l: LinhaDaPosicao, contaId: string): number {
   if (l.tipo_operacao === '1-Entradas') return v;
   if (l.tipo_operacao === '2-Saídas' || l.tipo_operacao === '3-Transferências') return -v;
   return 0;
-}
-
-/**
- * A CONTA DA POSIÇÃO, pura e testável — o que decide se o mês fecha.
- *
- * ⚠ FUNÇÃO PURA de propósito: é aqui que "o mês fecha" ou "há diferença", e uma
- * conta que só existe dentro de um efeito não pode ser exercitada sem navegador.
- * O hook busca; esta função decide.
- *
- * ⚠ COMPARAÇÃO DE STRING ISO, não de `Date`: 'YYYY-MM-DD' ordena
- * lexicograficamente, e construir `Date` aqui reintroduziria o fuso — o mesmo
- * motivo pelo qual `fimDoMes` usa `Date.UTC`.
- */
-export function somarAtePosicao(
-  linhas: readonly LinhaDaPosicao[], contaId: string, posicaoEm: string,
-): { ate: number; depois: number } {
-  let ate = 0, depois = 0;
-  for (const l of linhas) {
-    const d = (l.data_pagamento ?? '').slice(0, 10);
-    /* Sem data de pagamento a linha não tem posição no tempo: não entra na soma
-       nem é contada como "depois" — contá-la cobraria do operador uma
-       atualização que nenhuma data mais recente resolveria. */
-    if (!d) continue;
-    /* A perna de destino entra positiva nesta conta; a de origem vai com o sinal
-       que o lançamento já tem. Ignorar o destino faria toda transferência
-       recebida parecer uma diferença. */
-    const v = movimentoNaConta(l, contaId);
-    if (d <= posicaoEm) ate += v; else depois += 1;
-  }
-  return { ate, depois };
-}
-
-export function useSaldoSistemaNaPosicao(
-  clienteId: string | null, contaId: string | null,
-  anoMes: string, saldoInicial: number | null, posicaoEm: string,
-) {
-  const [saldoSistema, setSaldoSistema] = useState<number | null>(null);
-  /** Realizados DEPOIS da posição — o que o aviso conta. */
-  const [aposPosicao, setAposPosicao] = useState(0);
-  const [carregando, setCarregando] = useState(false);
-  /* ⚠ RELER QUANDO OS LANÇAMENTOS MUDAM — [CONCIL-MES-02] (132). O "Conciliar o mês" grava
-     por RPC, fora de qualquer hook desta tela; sem ouvir, este card seguia mostrando o
-     saldo de antes até um F5 (medido em 07/09). O gatilho é um contador: mudou, o efeito
-     abaixo roda de novo com as mesmas dependências. */
-  const [versao, setVersao] = useState(0);
-  useEffect(() => {
-    if (!clienteId) return;
-    return inscreverEmLancamentos(clienteId, () => setVersao(v => v + 1));
-  }, [clienteId]);
-
-  useEffect(() => {
-    let cancelado = false;
-    if (!clienteId || !contaId || saldoInicial == null) {
-      setSaldoSistema(null); setAposPosicao(0); return;
-    }
-    const primeiroDia = `${anoMes}-01`;
-    const ultimoDia = fimDoMes(Number(anoMes.slice(0, 4)), Number(anoMes.slice(5, 7)));
-    setCarregando(true);
-    (async () => {
-      const { data } = await supabase
-        .from('financeiro_lancamentos_v2')
-        .select('valor, sinal, tipo_operacao, data_pagamento, conta_bancaria_id, conta_destino_id')
-        .eq('cliente_id', clienteId)
-        .eq('cancelado', false)
-        .eq('cenario', 'realizado')
-        .or(`conta_bancaria_id.eq.${contaId},conta_destino_id.eq.${contaId}`)
-        .gte('data_pagamento', primeiroDia)
-        .lte('data_pagamento', ultimoDia);
-      if (cancelado) return;
-      const linhas: LinhaDaPosicao[] = data ?? [];
-      const { ate, depois } = somarAtePosicao(linhas, contaId, posicaoEm);
-      setSaldoSistema(Math.round((saldoInicial + ate) * 100) / 100);
-      setAposPosicao(depois);
-      setCarregando(false);
-    })();
-    return () => { cancelado = true; setCarregando(false); };
-  }, [clienteId, contaId, anoMes, saldoInicial, posicaoEm, versao]);
-
-  return { saldoSistema, aposPosicao, carregando };
 }
 
 /* ─── PR-SALDO-MODAL-OFX-ANEXO-02B ────────────────────────────────────────────────
