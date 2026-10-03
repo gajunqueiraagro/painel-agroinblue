@@ -1448,6 +1448,53 @@ docs/historico/frentes-ate-2026-09-29.md.)
   no corpo sem a guarda ele cai em "D1 travessia"). Dos 26 testes SQL de conciliacao, 25 dao o MESMO resultado antes x depois
   (13 passam; 12 ja' falhavam no dado de hoje, por deriva do dado, sem relacao com este PR) e o 26o (`pr_conc_grupo_01`, script
   de psql) passa com o usuario simulado.
+- ⚠ LEITURA SECURITY DEFINER TAMBEM RECUSA COM 42501, NUNCA DEVOLVE VAZIO (PR-SEG-TENANT-VARREDURA-01B, 03/10, so' banco;
+  migration 20261027192500, ⚠ registrada como 20261003221228; ledger = arquivo, md5 851fc6c7…). Duas funcoes, as unicas das 7 da
+  leva sem chamador sem usuario:
+  · `get_anos_financeiro_v2(cliente)` 76507034 -> be48858d: `tenant_ok(cliente)` antes de ler. MEDIDO antes: o gestor da NJ lia os 11
+    anos do Agnaldo, o do Agnaldo os 25 da NJ, e sem usuario lia tudo.
+  · `fn_extratos_espelhados(cliente, conta, mes)` afbded55 -> a3da2905: `tenant_ok(cliente)` E a conta tem de ser DESTE cliente
+    (`financeiro_contas_bancarias.cliente_id`), nem o admin cruza os dois. MEDIDO antes: usuario de outro cliente ja' era recusado,
+    mas POR TABELA (a `fn_caixa_sistema_pontas` que ela chama) e com codigo CBLOC; sem usuario lia tudo (262 movimentos e 263
+    lancamentos da NJ); e cliente X + conta de Y devolvia o NOME da conta de Y com as listas vazias. A FASE 0 a listou como "sem
+    guarda" por ler so' o corpo dela — ⚠ GUARDA SE MEDE CHAMANDO, nao lendo o corpo: funcao sem guarda propria pode recusar por
+    quem ela chama, e funcao com guarda pode pular (`auth.uid() IS NOT NULL AND NOT …`).
+  · A LINGUAGEM PASSOU DE sql A plpgsql (LANGUAGE sql nao tem RAISE); a consulta de cada uma e' a de antes, byte a byte (o gerador
+    confere que o corpo antigo esta' CONTIDO no novo). `get_anos` leva `#variable_conflict use_column` (o `ano` do ORDER BY e' a
+    coluna). `fn_extratos_espelhados` leva `SET plan_cache_mode = force_custom_plan` (a regra do PR-CONC-CAIXA-PONTAS-PLANO-HOTFIX).
+    Assinatura, retorno, STABLE, SECURITY DEFINER, search_path e ACL nao mudaram.
+  · TEMPO, ⚠ MEDIDO NO MODO EM QUE A TELA CHAMA (cada chamada um comando de topo, como o PostgREST): `fn_extratos_espelhados` no
+    pior conta-mes (NJ Banco do Brasil mai/26) 134–137 ms antes x 133–137 ms depois; `get_anos` NJ 21,9–22,3 x 21,8–22,5 ms. Chamada
+    num laco de plpgsql a funcao SQL antiga reaproveitava o plano e dava 110 ms — nesse modo o corpo novo "sobe" 35 ms, e e'
+    artefato da medicao (a variante `force_generic_plan` tambem da' 110 ms: fica como opcao se um dia for preciso).
+  · TELAS: nenhuma chama com cliente ou conta nulos (`enabled: !!clienteId && !!contaId`; `if (!clienteId)`). `useFinanceiroV2.ts`
+    IGNORA o erro de `get_anos_financeiro_v2` e cai na leitura direta de `financeiro_lancamentos_v2`, que segue sob RLS — nao vaza,
+    e a tela nao mudou. `EspelhoConciliacaoTab`/`TabelaExtratoDoMes` lancam o erro para o `useQuery`.
+  Provas: travessia nos dois sentidos, 42501 nas duas; 5 cruzamentos (conta de outro cliente, inexistente, nula; cliente nulo) 42501;
+  sem usuario 42501; para o membro e para o admin o retorno e' IDENTICO por md5 (NJ: anos + 34 conta-meses de espelhados; Agnaldo:
+  anos + 5), no ensaio e de novo no banco vivo. Teste: `supabase/tests/seg_tenant_varredura_01b_test.sql` (no corpo sem a guarda
+  ele cai em "T1 ux: anos de Y").
+  ⚠ 01B2, DESENHO APROVADO PELO GABRIEL (NAO implementado): `refresh_zoot_cache` (3 assinaturas), `fn_zoot_categoria_mensal` e
+    `get_status_pilares_fechamento` tem chamador SEM USUARIO e nao aceitam a guarda direta. Para cada uma: corpo interno `_fn_…`
+    (o corpo de hoje, SEM EXECUTE para `authenticated`) + RPC publica de MESMO nome e assinatura, so' com a guarda e o repasse;
+    cron, triggers e funcoes internas chamam a interna. 5 FUNCOES NOVAS (`_fn_refresh_zoot_cache` x3, `_fn_zoot_categoria_mensal`,
+    `_fn_get_status_pilares_fechamento` — nomes a confirmar no briefing). 6 CHAMADORES A ALTERAR: `fn_zoot_cache_reconstruir_sujos`
+    (o cron `zoot_cache_sujo_reconstruir`), `trg_fn_zoot_cache_reconstruir` (trigger deferido em `zoot_cache_sujo`),
+    `fn_zoot_cache_rebuild`, `guard_lancamento_mes_fechado_p1` (trigger em `lancamentos`), `can_close_valor_rebanho` e
+    `get_status_pilares_ano`; e as tres `refresh_zoot_cache` chamam a interna da categoria mensal. DECISAO DO GABRIEL:
+    `guard_lancamento_mes_fechado_p1` vira SECURITY DEFINER com search_path fixo e chama a interna (ela so' le' o status do mes da
+    propria linha). `trg_fn_guard_lancamento_mes_fechado_p1` cita a funcao mas nao esta' em trigger nenhum — conferir.
+    RISCO ABERTO ATE' LA' (P0 de 03/10, em ensaio): o gestor de um cliente le' o rebanho por categoria (83 linhas) e o status dos
+    pilares de uma fazenda de outro cliente, `can_close_valor_rebanho` responde, e as tres `refresh_zoot_cache` executam e regravam
+    o cache dele; sem usuario, idem.
+  ⚠ `fn_caixa_sistema_pontas` SEGUE COM A GUARDA "PULA SE `auth.uid()` E' NULO" (`IF auth.uid() IS NOT NULL AND NOT tenant_ok`,
+    recusa com codigo CBLOC) e tem EXECUTE para `authenticated`: chamada direta sem usuario le'. Quem a chama: `fn_extratos_espelhados`
+    (agora guardada) e `_fn_conciliacao_dias_conta` (interna, so' service_role, atras de `fn_conciliacao_resumo_mes` e
+    `fn_conciliacao_status_ano`, que tem a MESMA forma de guarda). Nenhum trigger nem cron a chama; o unico uso legitimo sem usuario e'
+    o canal SQL (testes e ensaios). Sao 4 funcoes com essa forma no banco — fica para o 01B2/01C.
+  ⚠ O QUE RESTA DA VARREDURA depois deste PR: 01B2 (acima, 5 corpos) · 01C revogar EXECUTE (`anon` em 3 DEFINER e 15 INVOKER;
+    `authenticated` nas sem chamador no front) e a guarda que pula sem usuario · 01D escrita agricola e `fn_promover_staging` (~18)
+    · 01E leitura restante (~20) · 01F perfil.
 - ⚠ A GRAVACAO DO EXTRATO E' DO BANCO, E O DESFAZER DIZ O QUE FAZ E RECUSA O QUE NAO PODE (PR-CONC-IMPORT-BANCO-01B, 03/10,
   migration 20261027192000, ⚠ registrada como 20261003174631; ledger = arquivo, md5 4966be59…).
   · IDENTIDADE DO MOVIMENTO: `hashMovimento` + a OCORRENCIA entre movimentos de CONTEUDO IDENTICO no arquivo, na ordem dele
