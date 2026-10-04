@@ -140,25 +140,25 @@ describe('(d) emitente e emissão em colunas próprias, na ordem do cabeçalho',
   });
 });
 
-describe('(e) nada corta com reticência: o nome fica inteiro numa linha e o emitente quebra', () => {
+describe('(e) uma linha por registro: o nome fica inteiro e o emitente CORTA com o texto inteiro no title', () => {
+  /* UI-LINHA-UNICA-01 (Gabriel, 04/10/2026): "eu odeio quando vai empilhando e alongando… pode esconder se for texto muito grande,
+     mas não vai empilhando". Em tabela nenhuma célula quebra; texto longo corta com "…" e o title diz o resto. Substitui a regra
+     antiga ("reticência proibida"), pela qual este emitente quebrava em duas linhas. */
   const LONGO = 'Cooperativa Agropecuaria dos Produtores do Mato Grosso do Sul';
+  const MOTIVO = 'anexado em duplicidade na parcela errada do parcelamento';
   const DA_OC = doc({ id: 'oc', origem: 'operacao', operacaoId: 'op1', numero: '84', serie: '1', ligadoAQtd: 3,
     emitenteNome: LONGO, valorDocumento: 315000, dataEmissao: '2026-09-10' });
 
-  it('nome longo com os dois selos: sem truncate, sem title de corte, célula que não quebra; a linha só tem altura MÍNIMA', () => {
-    monta([DA_OC, { ...CANCELADO, canceladoMotivo: 'anexado em duplicidade na parcela errada do parcelamento' }]);
+  it('nome longo com os dois selos: inteiro, sem corte e sem quebra; a linha tem ALTURA FIXA de 22px', () => {
+    monta([DA_OC, { ...CANCELADO, canceladoMotivo: MOTIVO }]);
     fireEvent.click(screen.getByText('mostrar'));
-    const tabela = screen.getByTestId('tabela-documentos');
-    /* a busca sabe achar: a tabela tem classes; nenhuma é de corte */
-    expect(tabela.querySelectorAll('[class]').length).toBeGreaterThan(10);
-    expect(tabela.querySelectorAll('.truncate, [class*="text-ellipsis"], [class*="line-clamp"]')).toHaveLength(0);
     for (const l of linhas()) {
       const nome = within(l).getByTestId('doc-nome');
+      expect(nome.className).not.toContain('truncate');
       expect(nome.getAttribute('title')).toBeNull();
       expect(nome.parentElement?.className).toContain('whitespace-nowrap');
-      expect(nome.parentElement?.className).not.toContain('min-w-0');
-      expect(l.className).toContain('min-h-[22px]');
-      expect(l.className).not.toMatch(/(^| )h-\[22px\]/);
+      expect(l.className).toMatch(/(^| )h-\[22px\]/);
+      expect(l.className).not.toContain('min-h-[22px]');
     }
     const [oc] = linhas();
     expect(within(oc).getByTestId('doc-nome').textContent).toBe('NF 000.000.084 · série 1');
@@ -166,16 +166,28 @@ describe('(e) nada corta com reticência: o nome fica inteiro numa linha e o emi
     expect(within(oc).getByText('da operação')).toBeInTheDocument();
   });
 
-  it('emitente (e o motivo do cancelado) inteiro, numa célula que pode quebrar de linha', () => {
-    monta([DA_OC, { ...CANCELADO, canceladoMotivo: 'anexado em duplicidade na parcela errada do parcelamento' }]);
+  it('emitente e motivo do cancelado: célula de corte (truncate), nunca de quebra, com o texto INTEIRO no title', () => {
+    monta([DA_OC, { ...CANCELADO, canceladoMotivo: MOTIVO }]);
     fireEvent.click(screen.getByText('mostrar'));
     const textos = linhas().map(l => within(l).getByTestId('doc-emitente-texto'));
-    expect(textos.map(t => t.textContent)).toEqual([LONGO, 'motivo: anexado em duplicidade na parcela errada do parcelamento']);
+    expect(textos.map(t => t.textContent)).toEqual([LONGO, `motivo: ${MOTIVO}`]);
     for (const t of textos) {
-      expect(t.className).toContain('[overflow-wrap:anywhere]');
+      expect(t.className).toContain('truncate');
       expect(t.className).toContain('min-w-0');
-      expect(t.className).not.toContain('whitespace-nowrap');
-      expect(t.getAttribute('title')).toBeNull();
+      expect(t.className).not.toContain('overflow-wrap');
+      expect(t.getAttribute('title')).toBe(t.textContent);
     }
+    /* data e valor nunca cortam */
+    for (const l of linhas()) {
+      expect(within(l).getByTestId('doc-emissao').className).not.toContain('truncate');
+      expect(within(l).getByTestId('doc-valor').className).not.toContain('truncate');
+    }
+  });
+
+  it('sem emitente: "—", sem title', () => {
+    monta([doc({ id: 'v', especie: 'boleto' })]);
+    const t = within(linhas()[0]).getByTestId('doc-emitente-texto');
+    expect(t.textContent).toBe('—');
+    expect(t.getAttribute('title')).toBeNull();
   });
 });

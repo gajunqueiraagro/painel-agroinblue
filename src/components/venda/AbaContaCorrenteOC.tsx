@@ -25,7 +25,7 @@ import type {
    O saldo e' do banco (`oc_conta_corrente`); esta tela nao soma nada.
    ⚠ PADRAO DE TABELA (regra permanente, 28/09/2026): 10px nas linhas, 9,5px no cabecalho, linha de 18px, datas dd/mm/aa; cabecalho
      navy nos dois niveis; cards, titulo, cabecalho, Total e barra congelados — so' as linhas rolam; uma informacao por coluna;
-     divisor vertical entre grupos; fundo por tipo de linha; cor pelo sinal; cabecalho centralizado, numero a direita; nada truncado.
+     divisor vertical entre grupos; fundo por tipo de linha; cor pelo sinal; cabecalho centralizado, numero a direita; uma linha por registro (texto livre corta com `title`, numero e data nunca).
    ⚠ D6: status e' o que o dado diz ("sem conta" em ambar), nunca um "conciliado" inventado.
    ⚠ RECUSA AO LADO DO BOTAO, nunca em toast (UX-TOAST-01); motivo obrigatorio em vermelho inline (UX-OBRIGATORIOS-01). */
 
@@ -33,9 +33,13 @@ const TH = 'sticky h-[17px] whitespace-nowrap bg-[#2E4B6E] px-[4px] text-center 
 const THG = 'sticky top-0 z-20 h-[17px] whitespace-nowrap bg-primary px-[4px] text-center text-[9.5px] font-semibold text-white';
 const TD = 'h-[18px] whitespace-nowrap border-b border-[#eceae4] px-[4px] text-[10px]';
 const NUM = `${TD} text-right tabular-nums`;
-/* A celula que QUEBRA quando o texto nao cabe (regra da reticencia): sem o `whitespace-nowrap` do TD — somado depois, o
-   `whitespace-normal` perdia para ele no CSS gerado e a celula nao quebrava. Uma linha fica nos 18px; duas, em 27. */
-const TDQ = 'h-[18px] border-b border-[#eceae4] px-[4px] py-[1px] text-[10px] leading-[12px] break-words';
+/* A celula de TEXTO LIVRE (conta, banco): UMA LINHA SO', cortada na borda com "…" e o texto inteiro no `title` — a regra do
+   UI-LINHA-UNICA-01 (Gabriel, 04/10/2026: uma linha por registro, sempre; texto longo corta, numero/valor/data nunca). Era a
+   celula que QUEBRAVA em duas linhas (27px), pela regra antiga da reticencia. */
+const TDQ = `${TD} overflow-hidden text-ellipsis`;
+/* ⚠ FORA DO UI-LINHA-UNICA-01: a lista de DATAS das entregas na PREVIA do ajuste de preco (o dialogo "Explicar") ainda quebra —
+   data nunca se corta, e a coluna dela nao foi medida para o pior caso. Divida registrada. */
+const TD_DATAS_DA_PREVIA = 'h-[18px] border-b border-[#eceae4] px-[4px] py-[1px] text-[10px] leading-[12px] break-words';
 const DV = 'border-l-2 border-l-[#9aa7b6]';
 const TF = 'sticky bottom-0 z-10 h-[19px] whitespace-nowrap border-t-2 border-t-[#9aa7b6] bg-[#E8E6DF] px-[4px] text-[10px] tabular-nums';
 const COR = { neg: 'text-[#b91c1c]', pos: 'text-[#15803d]', zero: '' };
@@ -368,9 +372,9 @@ function LinhaExtrato({ l, linhas, lado }: { l: LinhaContaCorrente; linhas: read
       <td className={`${NUM}`}>{l.cab ?? ''}</td>
       <td className={`${TD} text-center`}><Selo tipo={l.tipo} lado={lado} /></td>
       <td className={TD}>{descricao}</td>
-      <td className={TDQ} title={contaComNumero(l.contaOrdem, l.conta)}>{rotuloCurtoDaConta(l.conta) ?? '—'}</td>
-      {/* o nome do banco e' dado (pode quebrar); "s/ conta" e "programado" sao gerados (uma linha) */}
-      <td className={`${l.banco ? TDQ : TD} text-center ${bancoAmbar ? 'text-[#b45309]' : ''}`}>{banco}</td>
+      <td className={TDQ} title={contaComNumero(l.contaOrdem, l.conta)} data-celula="conta">{rotuloCurtoDaConta(l.conta) ?? '—'}</td>
+      {/* o nome do banco e' dado (corta, com o nome inteiro no `title`); "s/ conta" e "programado" sao gerados e curtos */}
+      <td className={`${l.banco ? TDQ : TD} text-center ${bancoAmbar ? 'text-[#b45309]' : ''}`} title={l.banco ?? undefined} data-celula="banco">{banco}</td>
       <td className={`${NUM} ${DV} ${COR[corDoSaldo(l.movEntrega)]}`}>{moeda(l.movEntrega)}</td>
       <td className={`${NUM} ${l.noSaldo ? COR[corDoSaldo(l.movRecebido)] : 'text-muted-foreground'}`}>{moeda(l.movRecebido)}</td>
       <td className={`${NUM} ${DV} font-bold ${COR[cSaldo]}`}>{num2(l.saldo)}</td>
@@ -808,7 +812,7 @@ function PreviaAjuste({ previa, rotulo }: { previa: EstadoPrevia; rotulo: string
                 <td className={`${TD} ${l.nivel === 'entrega' ? 'pl-[14px] text-muted-foreground' : ''}`}>
                   {l.nivel === 'total' ? 'Total' : l.nivel === 'entrega' ? 'entrega' : `${l.loteOrdem ?? ''} · ${rotuloCategoria(l.categoria)}`}
                 </td>
-                <td className={TDQ}>{l.datas.join(' · ')}</td>
+                <td className={TD_DATAS_DA_PREVIA}>{l.datas.join(' · ')}</td>
                 <td className={NUM}>{kg(l.kg)}</td>
                 <td className={NUM}>{num2(l.hoje)}</td>
                 <td className={`${NUM} font-semibold`}>{num2(l.novo)}</td>

@@ -277,9 +277,19 @@ describe('as despesas vivas (mock v4)', () => {
     expect(document.querySelector('[data-despesa="principal"]')).toBeNull();
     expect(txt(document.querySelector('[data-testid="despesas-tabela"] tfoot td'))).toBe('2 despesas');
     expect(txt(screen.getByTestId('despesas-total'))).toBe('4.225,00');
-    /* Descricao, Favorecido, Conta e Banco podem quebrar; datas, status e valor, nunca */
-    expect(c[2].className).not.toContain('whitespace-nowrap');
-    expect(c[7].className).toContain('whitespace-nowrap');
+    /* UI-LINHA-UNICA-01 — UMA LINHA POR REGISTRO: nenhuma celula quebra. Descricao, Favorecido, Conta e Banco CORTAM com "…"
+       e o texto inteiro no `title`; datas, status e valor nunca cortam. */
+    for (const td of c) {
+      expect(td.className).toContain('whitespace-nowrap');
+      expect(td.className).not.toContain('break-words');
+    }
+    const corta = (td: Element) => td.className.includes('text-ellipsis') && td.className.includes('overflow-hidden');
+    expect(c.map(corta)).toEqual([false, false, true, true, true, true, false, false, false]);
+    for (const i of [2, 3, 4, 5]) expect(c[i].getAttribute('title')).toBeTruthy();
+    expect(c[2].getAttribute('title')).toBe(txt(c[2]));                       // o title e' o texto INTEIRO da descricao
+    expect(c[3].getAttribute('title')).toBe(txt(c[3]));
+    /* datas a 9,5px, numeros alinhados */
+    for (const i of [0, 1]) { expect(c[i].className).toContain('text-[9.5px]'); expect(c[i].className).toContain('tabular-nums'); }
   });
 
   it('conciliado de verdade vem de conciliacao_bancaria_itens (conciliado_em esta nulo no proto inteiro)', async () => {

@@ -496,6 +496,28 @@ describe('sub-abas do Financeiro em conta corrente', () => {
     expect(within(faixa).getByRole('button', { name: /Conta corrente do fornecedor/ })).toBeTruthy();
   });
 
+  it('UI-LINHA-UNICA-01: uma linha por registro — Conta e Banco longos CORTAM com o texto inteiro no title; data, cab, valor e saldo nunca', () => {
+    const BANCO = 'Sicredi Cooperativa de Crédito Centro Sul do Mato Grosso do Sul';
+    const c = cc();
+    const linhas = c.linhas.map(l => l.tipo === 'recebimento' ? { ...l, banco: BANCO, conta: 'Impostos e Despesas de Abates e Vendas', contaOrdem: 5030 } : l);
+    render(<AbaContaCorrenteOC api={api({ ...c, linhas })} somenteLeitura={false} />);
+    const [r1] = celulas('recebimento');
+    const corta = (td: Element) => td.className.includes('text-ellipsis') && td.className.includes('overflow-hidden');
+    /* Data · Lote · Cab · Tipo · Descricao · Conta · Banco · Entrega · Recebido · Saldo */
+    expect(r1.map(corta)).toEqual([false, false, false, false, false, true, true, false, false, false]);
+    for (const td of r1) {
+      expect(td.className).toContain('whitespace-nowrap');
+      expect(td.className).not.toContain('break-words');
+    }
+    expect(r1[5].getAttribute('title')).toContain('Impostos e Despesas de Abates e Vendas');     // o nome INTEIRO da conta (com o numero)
+    expect(r1[6].getAttribute('title')).toBe(BANCO);
+    expect(txt(r1[6])).toBe(BANCO);
+    /* nas entregas nao ha banco: a celula e' a comum, sem title */
+    const [e1] = celulas('entrega');
+    expect(corta(e1[6])).toBe(false);
+    expect(e1[6].getAttribute('title')).toBeNull();
+  });
+
   it('nenhuma tabela rola por dentro: o extrato nao tem overflow proprio; o cabecalho gruda abaixo do bloco fixo', () => {
     render(<AbaContaCorrenteOC api={api(cc())} somenteLeitura={false} despesas={slot} qtdDespesas={8} />);
     expect(screen.getByTestId('conta-corrente-rolagem').className).not.toMatch(/overflow/);

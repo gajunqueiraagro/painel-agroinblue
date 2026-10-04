@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 04/10/2026 (OC-BOITEL-REVALORAR-SALVAR-01, +16 em `src/lib/oc/revalorarAoSalvar.test.tsx`; antes o
+  Baseline em 04/10/2026 (UI-LINHA-UNICA-01, +2: `src/components/venda/abaContaCorrente.test.tsx` 1,
+  `src/components/financeiro-v2/documentosLayout.test.tsx` 1; antes o OC-BOITEL-REVALORAR-SALVAR-01, +16 em `src/lib/oc/revalorarAoSalvar.test.tsx`; antes o
   FIN-DOCUMENTO-FORM-01, +27 em `src/components/financeiro-v2/documentoFormPorTipo.test.tsx`, e
   FIN-RESUMO-PAGAMENTO-01, +7 em `src/components/financeiro-v2/resumoPagamentoModal.test.tsx`; antes o FIN-PIX-CADASTRO-MODAL-01, +35: `src/lib/financeiro/dadosPagamentoDoCadastro.test.ts` 14,
   `src/components/financeiro-v2/dadosPagamentoModal.test.tsx` 21; antes o
@@ -178,7 +179,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3279
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3281
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -483,7 +484,7 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   fe26d14c (06/09, Mesa compacta) — o `slotTransferencia` nasceu dois dias depois (9fb376ab) ja' sem tela; o componente
   fica so' como dono do TIPO `EnriquecimentoActionsProps` (apagar o corpo ou religar e' decisao); (b) `AcaoEhTransferencia`
   nao tem prop para nascer ABERTO: no Dialog e' 1 clique a mais em "E' transferencia para ▾" (nao reescrito); (c) o resumo
-  da simulacao corta com "…" (`truncate`, regra da reticencia) — no Sicredi Pessoal "Sicredi Pessoal → Invest-Sicredi Pe…";
+  da simulacao corta com "…" (`truncate`; conferir se o `title` leva o texto inteiro, regra da linha unica) — no Sicredi Pessoal "Sicredi Pessoal → Invest-Sicredi Pe…";
   (d) o `ContaBancariaSelect` nasce com o gatilho em branco (valor '__none__' sem placeholder visivel); (e) o mesmo gesto da
   lista "Sem par no sistema" segue com a recusa em toast (`EnriquecimentoSemParSistema`).
   · SESSAO-E-DEPARA (PR-CONC-EXCEL-SESSAO-E-DEPARA-01): (a) `preResolverFazenda` ficou so' como reserva da Mesa para sessao
@@ -525,7 +526,7 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   (4 cliques no Emerson e no T Cortez); fica: enquanto as DUAS acoes "+ N de" estao na barra (1 marcado de cada lado), o
   recado/motivo encolhe a 16px a 1135 (fica no `title` do gesto) e volta inteiro depois das acoes; o sistema chaveia pelo NOME
   do cadastro porque `EspSis` nao declara `favorecido_id` (o Espelho o emite) — homonimos se juntam (NJ set/26: "Banco
-  Sicredi", 2 ids, 3 lancamentos); o `truncate` do recado e' pre-existente e corta com "…" (regra da reticencia);
+  Sicredi", 2 ids, 3 lancamentos); o `truncate` do recado e' pre-existente e corta com "…" (o texto inteiro esta' no `title` do gesto);
   (f) o `cru` da tela e' `origem extrato/ofx` + `subcentro` vazio (o Espelho nao traz `plano_conta_id`), e o bloco recusa por
   `plano_conta_id` vazio: medidos 315 lancamentos realizados com plano vazio e subcentro escrito (Vera 314 — 266 importacao +
   48 manual —, Agnaldo 1 do extrato), que a tela trata como classificados e o banco recusa (`lancamento_cru`, frase na barra);
@@ -543,7 +544,7 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   CENARIO-EDICAO-01 e a reclassificacao suspeita 2b134b8a (MODAIS-PADRAO-01f) · altura dos asides e o
   `CompraResumoPanel` legado, a Compra ausente em "Lancar meta" no primeiro carregamento e os titulos de 9px dos
   resumos das cargas (MODAIS-PADRAO-01a/01d) · subcentro do titulo de OC sem cadeado no modal do Financeiro
-  (OC-RECLASSIFICAR-ITEM-01) · os `truncate` e os toasts de erro restantes (regra da reticencia; UX-TOAST-01) ·
+  (OC-RECLASSIFICAR-ITEM-01) · as tabelas que ainda empilham texto e os toasts de erro restantes (regra "uma linha por registro"; UX-TOAST-01) ·
   PERF-VALOR-REBANHO-02 · PERF-RLS-FECHAMENTO-PASTO-ITENS-01 (policy por linha; frente de banco).
 
 ## TRABALHO PARKED (nao tocar)
@@ -627,7 +628,8 @@ preview que o cabecalho nao sai da tela ao rolar.
 - ⚠ PADRAO DE TABELA (regra permanente, Gabriel, 28/09/2026, no OC-VENDA-ENTREGAS-01c): 10px nas linhas, 9,5px no
   cabecalho, linha de 18px, datas dd/mm/aa; cabecalho navy em todos os niveis; cabecalho, totais e cards CONGELADOS (so' as
   linhas rolam); uma informacao por coluna e uma linha por registro; divisor vertical entre grupos de colunas; tipos de linha
-  diferentes com fundos diferentes; cor pelo sinal; cabecalho centralizado, numero a direita; nada truncado com "...".
+  diferentes com fundos diferentes; cor pelo sinal; cabecalho centralizado, numero a direita; texto que nao cabe corta na celula com o inteiro no `title`, numero,
+  valor e data nunca (regra "UMA LINHA POR REGISTRO", abaixo).
   Detalhe: A31 do docs/PADROES-UI.md; exemplo vivo `AbaContaCorrenteOC`.
 - ⚠ UX-TOAST-01 (regra permanente, Gabriel, 26/09/2026): validacao e erro de preenchimento NUNCA em toast no
   canto — vao junto do campo ou do botao; toast que sobrar tem X e nao cobre area de digitacao. A recusa nao
@@ -686,8 +688,23 @@ preview que o cabecalho nao sai da tela ao rolar.
   `viewBox` de 100 numa caixa de 220px renderiza a 17,6px). Referencia de como se faz: `PecCascataView`.
   Quem precisar de unidade normalizada faz como `V2AreasMeta`: nenhum texto dentro do SVG (valores em HTML
   por cima) e `vectorEffect="non-scaling-stroke"` em todo traco. Nenhum gate ve' isso — jsdom nao faz layout.
-- ⚠ TEXTO CORTADO COM RETICENCIA E' PROIBIDO — SE NAO CABE, QUEBRA EM DUAS LINHAS (regra permanente do Gabriel,
-  27/09/2026, no MODAIS-PADRAO-01e). `LinhaResumo` ganhou `quebra` (opt-in): o VALOR ocupa ate' duas linhas, alinhado
+- ⚠ UMA LINHA POR REGISTRO, SEMPRE (UI-LINHA-UNICA-01, Gabriel 04/10/2026 — SUBSTITUI a regra "texto cortado com reticencia e'
+  proibido" de 27/09). Em TABELA, nenhuma celula quebra linha nem aumenta a altura da linha. Texto que nao cabe e' cortado na
+  propria celula (nowrap + ellipsis) e o texto INTEIRO vai no `title`. Numero, valor e data NUNCA sao cortados: a coluna deles tem
+  a largura do pior caso. Pedido literal: "eu odeio quando vai empilhando e alongando… pode esconder se for texto muito grande,
+  mas nao vai empilhando".
+  · ONDE JA' VALE (medido a 1.133): `TabelaDespesasOC` (regua 52·52·150·144·110·84·76·74·22 = 764, linha de 19px; datas a 9,5px; Descricao,
+    Favorecido, Conta e Banco cortam), o extrato da conta corrente (`AbaContaCorrenteOC`: Conta e Banco cortam; `REGUA_EXTRATO`
+    intacta) e a coluna Emitente da aba Documentos do lancamento. A celula de texto livre e' a `TDQ` de cada arquivo (deixou de
+    quebrar e passou a cortar — nao ha' terceira variante).
+  · ⚠ O RESUMO LATERAL FICA FORA, POR DECISAO: `LinhaResumo` com `quebra` (texto livre em ate' duas linhas, 16 usos) nao e'
+    tabela e nao mudou — o paragrafo abaixo continua valendo PARA ELE.
+  · ⚠ DIVIDA — tabelas que ainda empilham texto: `AbaRecebimentoLotes.tsx`, `EntregasVendaTabela.tsx`,
+    `BuscarDespesaOCDialog.tsx` e a lista de DATAS na previa do ajuste de preco (`TD_DATAS_DA_PREVIA` em `AbaContaCorrenteOC`:
+    data nao se corta e a coluna nao foi medida). Os comentarios ⚠ de ~24 arquivos que citam a regra antiga ("reticencia
+    proibida") NAO foram varridos — so' os dos arquivos tocados.
+- ⚠ NO RESUMO LATERAL O TEXTO LIVRE QUEBRA EM DUAS LINHAS (regra do Gabriel de 27/09/2026, no MODAIS-PADRAO-01e — vale so' para
+  o `LinhaResumo`, nao para tabela). `LinhaResumo` ganhou `quebra` (opt-in): o VALOR ocupa ate' duas linhas, alinhado
   a' direita, sem "…", e o rotulo fica na primeira. Para TEXTO livre (produto, favorecido, conta, centro, subcentro);
   numero e data seguem numa linha so'.
   ⚠ NASCE DE MEDICAO: no resumo de 240px, "Impostos e Despesas de Abates e Vendas" pedia 200px e tinha 163, e o
@@ -695,10 +712,9 @@ preview que o cabecalho nao sai da tela ao rolar.
     300px de antes. Com `quebra`, os dois aparecem inteiros em duas linhas (27px).
   ⚠ SEM A PROP NADA MUDA — provado: o HTML do `LinhaResumo` sem `quebra` e' identico ao do HEAD nas 96 combinacoes de
     props (valor, cor, forte, empilhado, seloAbaixo, selo). Abate, Venda, Compra e envelope nao a usam.
-  ⚠ E OS OUTROS `truncate` DO SISTEMA NAO FORAM VARRIDOS: a regra vale a partir daqui; a varredura e' frente propria.
-  ⚠ EXCECAO DECIDIDA (Gabriel, 30/09, PR-CONC-CRIAR-LOTE-LAYOUT-01): no "Criar lancamentos em lote", o DOCUMENTO e o
-    HISTORICO do banco que nao cabem na regua (Bradesco 91 caracteres, pedagio 126) sao cortados NA BORDA, sem "…", com o
-    texto inteiro no `title`. Excecao declarada, nao precedente.
+  ⚠ NO "CRIAR LANCAMENTOS EM LOTE" (Gabriel, 30/09, PR-CONC-CRIAR-LOTE-LAYOUT-01) o DOCUMENTO e o HISTORICO do banco que nao
+    cabem na regua (Bradesco 91 caracteres, pedagio 126) sao cortados NA BORDA, sem "…", com o texto inteiro no `title` — era
+    excecao a' regra antiga; pela regra nova (uma linha por registro) e' o caso comum, so' sem a reticencia.
 - ⚠ CASCA DE MODAL (MODAIS-PADRAO-01a..f): cabecalho 36px/13px, corpo `100vh-32` sem o teto do tema,
   resumo lateral de 240px com as pecas de `src/components/ui/linha-resumo.tsx` (`AsideResumo`,
   `FaixaTituloResumo`, `SecaoResumo`, `LinhaResumo` — `quebra` para texto livre), rodape de 32px com botoes
@@ -1922,16 +1938,16 @@ docs/historico/frentes-ate-2026-09-29.md.)
   (VINCULAR-LANC-OC-01, OC-CRIAR-DO-LEGADO-01).
 - ⚠ DOCUMENTO: quem le' NF filtra por `especie` e tolera (sem numero, ignora; sem nenhuma, "—"); "2+ documentos" nao e'
   "2+ NFs". O anexo so' fala do arquivo e recebe o endereco do documento de quem chama (OC-DOC-ESPECIE-01).
-- ⚠ ABA DOCUMENTOS DO LANCAMENTO = TABELA COMPACTA, CANCELADO FORA DA VISTA, NADA CORTA (FIN-DOCUMENTOS-LAYOUT-01, Gabriel 04/10,
+- ⚠ ABA DOCUMENTOS DO LANCAMENTO = TABELA COMPACTA, CANCELADO FORA DA VISTA, UMA LINHA POR REGISTRO (FIN-DOCUMENTOS-LAYOUT-01, Gabriel 04/10,
   so' apresentacao, `AbaDocumentosLancamento.tsx`; unico consumidor `LancamentoV2Dialog`). Padrao de tabela A31: cabecalho navy
-  9,5px de 18px, linha de 10px com MINIMO de 22px, colunas Documento · Emitente · Emissao · Valor · Situacao · acoes. O confronto e'
+  9,5px de 18px, linha de 10px com 22px FIXOS, colunas Documento · Emitente · Emissao · Valor · Situacao · acoes. O confronto e'
   uma faixa de linha unica (rotulo 10px, valor 12px; 27px medidos). CANCELADO NAO APARECE por padrao: rodape de 20px "N documento(s)
   cancelado(s) oculto(s) · mostrar" / "… · ocultar", ESTADO LOCAL (`mostrarCancelados`, nao persiste); mostrado, vem depois dos
   ativos, riscado, com "motivo: …" na coluna Emitente e sem acoes. Ativo sem arquivo: "sem arquivo" ambar ANTES do emitente.
-  ⚠ SEM RETICENCIA, SEM EXCECAO (o briefing pediu truncate + title e foi corrigido): a coluna Documento e' `max-content` e nao
-    quebra — identidade e selos ("N parcelas", "da operacao") sempre inteiros; o Emitente fica com o resto (`minmax(0,1fr)`) e
-    QUEBRA de linha (palavras inteiras; token unico por `overflow-wrap:anywhere`), e so' entao a linha passa de 22px (27 com duas
-    linhas). A grade e' UMA, na tabela (`GRADE_DOCUMENTOS`), e cabecalho e linhas sao SUBGRADES (`LINHA_DOCUMENTOS`,
+  ⚠ A COLUNA DOCUMENTO NUNCA CORTA; O EMITENTE CORTA (UI-LINHA-UNICA-01, que reverteu a quebra em duas linhas): Documento e'
+    `max-content` e nao quebra — identidade e selos ("N parcelas", "da operacao") sempre inteiros; o Emitente (e o "motivo: …" do
+    cancelado) fica com o resto (`minmax(0,1fr)`) e CORTA com "…", com o texto inteiro no `title`; data e valor nunca cortam.
+    A grade e' UMA, na tabela (`GRADE_DOCUMENTOS`), e cabecalho e linhas sao SUBGRADES (`LINHA_DOCUMENTOS`,
     `grid-template-columns: subgrid`) — sem isso a coluna `max-content` desalinharia entre linhas. O respiro de 10px das bordas
     mora na primeira e na ultima celula (padding na subgrade encolhe as trilhas das pontas; a ultima trilha e' 72 = 62 + 10).
     Medido a 1.135 (dialogo no teto de 1.024, logo igual a 1.280): tabela 750; Agnaldo "Compra 110 bezerros - 1/2" Documento 206 /

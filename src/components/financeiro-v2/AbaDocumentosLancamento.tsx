@@ -54,9 +54,9 @@ const dataBr = (iso: string | null) => (iso ? iso.split('-').reverse().join('/')
  * (`LINHA_DOCUMENTOS`), então as colunas alinham por construção — inclusive a de Documento, cuja largura é a do maior
  * conteúdo entre todas as linhas.
  *
- * ⚠ NADA CORTA COM RETICÊNCIA (regra do CLAUDE.md, sem exceção aqui): Documento é `max-content` e não quebra — identidade
- *   e selos sempre inteiros; Emitente fica com o resto e QUEBRA de linha quando não cabe (palavras inteiras; token único
- *   muito longo quebra por `overflow-wrap`), e só então a linha passa dos 22px. As quatro últimas são fixas; o respiro de
+ * ⚠ UMA LINHA POR REGISTRO, SEMPRE (UI-LINHA-UNICA-01, Gabriel 04/10/2026): Documento é `max-content` e não quebra nem corta —
+ *   identidade e selos sempre inteiros; Emitente (e o "motivo: …" do cancelado) fica com o resto e CORTA na célula com "…",
+ *   com o texto inteiro no `title` — a linha tem 22px, nunca mais. As quatro últimas são fixas; o respiro de
  *   10px das bordas mora na primeira e na última célula (padding numa subgrade encolheria as trilhas das pontas), por
  *   isso a última trilha tem 72 = 62 + 10.
  */
@@ -185,7 +185,7 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, fornecedores, onA
       {/* ── A TABELA DOS DOCUMENTOS ───────────────────────────────────────────── */}
       {/* ⚠ TABELA COMPACTA DE LINHA ÚNICA — FIN-DOCUMENTOS-LAYOUT-01 (padrão de tabela da casa: cabeçalho navy 9,5px, linha
           10px). Era um cartão de duas linhas por documento (12px + 10px), com emitente e data dividindo a segunda; agora
-          cada informação tem a sua coluna e a linha tem 22px (cresce só quando o emitente quebra). Cabeçalho e linhas são
+          cada informação tem a sua coluna e a linha tem 22px, sempre (o emitente corta, não quebra). Cabeçalho e linhas são
           subgrades da grade da tabela (`GRADE_DOCUMENTOS`). */}
       {api.documentos.length > 0 && (
         <div className={`${GRADE_DOCUMENTOS} overflow-hidden rounded-md border`} data-testid="tabela-documentos">
@@ -204,7 +204,7 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, fornecedores, onA
             const semArquivo = !d.url && !d.cancelado;
             return (
             <div key={d.id} data-testid="linha-documento" data-cancelado={d.cancelado ? 'sim' : undefined}
-              className={`${LINHA_DOCUMENTOS} min-h-[22px] border-t text-[10px] leading-none ${d.cancelado ? 'bg-muted/40 text-muted-foreground/70' : ''}`}>
+              className={`${LINHA_DOCUMENTOS} h-[22px] border-t text-[10px] leading-none ${d.cancelado ? 'bg-muted/40 text-muted-foreground/70' : ''}`}>
               <div className="flex items-center gap-1.5 whitespace-nowrap pl-[10px]">
                 <span className={d.cancelado ? 'line-through' : 'font-semibold text-foreground'} data-testid="doc-nome">{nome}</span>
                 {/* ⚠ A PÍLULA DIZ DE QUEM É O PAPEL, e o clique leva até ele. Sem ela, a
@@ -230,9 +230,9 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, fornecedores, onA
               <div className="flex min-w-0 items-center gap-1.5 text-muted-foreground" data-testid="cel-emitente">
                 {/* ⚠ SEM ARQUIVO É AVISO, NÃO ERRO: registrar primeiro e anexar depois é
                     um caminho legítimo, e a linha diz o que falta em vez de esconder.
-                    Fica ANTES do emitente e não encolhe nem quebra; quem quebra de linha é o emitente. */}
+                    Fica ANTES do emitente e não encolhe; quem corta é o emitente. */}
                 {semArquivo && <span className="shrink-0 whitespace-nowrap text-amber-700">sem arquivo</span>}
-                <span className={`min-w-0 py-[2px] leading-[11px] [overflow-wrap:anywhere] ${d.cancelado ? 'text-muted-foreground/70' : ''}`} data-testid="doc-emitente-texto">{emitente || (semArquivo ? '' : '—')}</span>
+                <span className={`min-w-0 truncate ${d.cancelado ? 'text-muted-foreground/70' : ''}`} title={emitente || undefined} data-testid="doc-emitente-texto">{emitente || (semArquivo ? '' : '—')}</span>
               </div>
               <span className={`whitespace-nowrap ${d.cancelado ? '' : 'text-muted-foreground'}`} data-testid="doc-emissao">{dataBr(d.dataEmissao) ?? '—'}</span>
               <span className="whitespace-nowrap text-right tabular-nums" data-testid="doc-valor">
