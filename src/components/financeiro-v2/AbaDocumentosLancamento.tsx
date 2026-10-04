@@ -47,6 +47,21 @@ function identidade(d: LancDocumento): string {
 
 const dataBr = (iso: string | null) => (iso ? iso.split('-').reverse().join('/') : null);
 
+/**
+ * A GRADE DA LISTA — FIN-DOCUMENTOS-LAYOUT-01 (mock do Gabriel, 04/10/2026): Documento · Emitente · Emissão · Valor ·
+ * Situação · ações. A grade é UMA, na tabela (`GRADE_DOCUMENTOS`); o cabeçalho e cada linha são SUBGRADES dela
+ * (`LINHA_DOCUMENTOS`), então as colunas alinham por construção — inclusive a de Documento, cuja largura é a do maior
+ * conteúdo entre todas as linhas.
+ *
+ * ⚠ NADA CORTA COM RETICÊNCIA (regra do CLAUDE.md, sem exceção aqui): Documento é `max-content` e não quebra — identidade
+ *   e selos sempre inteiros; Emitente fica com o resto e QUEBRA de linha quando não cabe (palavras inteiras; token único
+ *   muito longo quebra por `overflow-wrap`), e só então a linha passa dos 22px. As quatro últimas são fixas; o respiro de
+ *   10px das bordas mora na primeira e na última célula (padding numa subgrade encolheria as trilhas das pontas), por
+ *   isso a última trilha tem 72 = 62 + 10.
+ */
+const GRADE_DOCUMENTOS = 'grid grid-cols-[max-content_minmax(0,1fr)_70px_92px_66px_72px] gap-x-[10px]';
+const LINHA_DOCUMENTOS = 'col-span-full grid [grid-template-columns:subgrid] items-center';
+
 export function AbaDocumentosLancamento({ api, somenteLeitura, fornecedores, onAnexarBoletosDasParcelas }: {
   api: LancamentoDocumentosApi;
   somenteLeitura?: boolean;
@@ -62,6 +77,12 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, fornecedores, onA
 
   const c = api.confronto;
   const ativos = api.documentos.filter(d => !d.cancelado);
+  /* ⚠ CANCELADO NÃO FICA NA LISTA — FIN-DOCUMENTOS-LAYOUT-01 (pedido do Gabriel, 29/09 e 04/10: "quando eu cancelo um, ele não
+     some, fica poluindo a tela"). Ele é história: sai da vista e fica atrás do "mostrar" do rodapé, o mesmo padrão das contas
+     ocultas de "Saldos por conta". Estado local: não persiste e volta a ocultar quando o modal fecha. */
+  const cancelados = api.documentos.filter(d => d.cancelado);
+  const [mostrarCancelados, setMostrarCancelados] = useState(false);
+  const linhas = mostrarCancelados ? [...ativos, ...cancelados] : ativos;
 
   /**
    * Abre a OC na aba Documentos — DOC-UMA-FONTE-01.
@@ -105,36 +126,39 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, fornecedores, onA
   };
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-1.5">
       {/* ── TOPO: o confronto, vindo do banco ─────────────────────────────────── */}
-      <div className="flex flex-wrap items-end gap-x-8 gap-y-2 rounded-md border bg-muted/20 px-3.5 py-[11px]">
+      {/* ⚠ UMA FAIXA DE LINHA ÚNICA — FIN-DOCUMENTOS-LAYOUT-01. Era rótulo de 11px sobre valor de 20px, com 11px de respiro:
+          o confronto ocupava mais altura que a lista que ele resume. Rótulo 10px e valor 12px lado a lado; em largura
+          estreita os grupos QUEBRAM de linha (`flex-wrap`), não cortam. */}
+      <div className="flex flex-wrap items-baseline gap-x-[18px] gap-y-1 rounded-md border bg-muted/20 px-3.5 py-[5px] leading-[14px]" data-testid="topo-confronto">
         {/* ⚠ COM A NF DA COMPRA, A CONFERÊNCIA É PELA COMPRA — FIN-NFE-PARCELAS-01 PR 2b: a nota contra a
             soma das parcelas ATIVAS (o banco já responde, chaves `grupo_*`). Sem ela, como sempre. */}
-        <div>
-          <div className="text-[11px] text-muted-foreground leading-none">{c?.grupo ? 'Nota da compra' : 'Documentado'}</div>
-          <div className="mt-1 text-[20px] font-medium leading-none tabular-nums" data-testid="topo-documentado">
+        <span className="inline-flex items-baseline gap-[5px] whitespace-nowrap">
+          <span className="text-[10px] text-muted-foreground">{c?.grupo ? 'Nota da compra' : 'Documentado'}</span>
+          <span className="text-[12px] font-semibold tabular-nums" data-testid="topo-documentado">
             {c ? formatMoeda(c.grupo ? c.grupo.valorDocumento : c.valorDocumentado) : '—'}
-          </div>
-        </div>
-        <div>
-          <div className="text-[11px] text-muted-foreground leading-none">
+          </span>
+        </span>
+        <span className="inline-flex items-baseline gap-[5px] whitespace-nowrap">
+          <span className="text-[10px] text-muted-foreground">
             {c?.grupo ? `Parcelas ativas (${c.grupo.qtd})` : 'Valor do lançamento'}
-          </div>
-          <div className="mt-1 text-[20px] font-medium leading-none tabular-nums" data-testid="topo-valor">
+          </span>
+          <span className="text-[12px] font-semibold tabular-nums" data-testid="topo-valor">
             {c ? formatMoeda(c.grupo ? c.grupo.somaLancamentos : c.valorLancamento) : '—'}
-          </div>
-        </div>
+          </span>
+        </span>
         {c && c.docsComValor > 0 && (
           c.confere
-            ? <div className="text-[11px] font-medium text-emerald-600">confere</div>
-            : <div className="text-[11px] font-medium text-amber-700">
+            ? <span className="whitespace-nowrap text-[11px] font-medium text-emerald-600">confere</span>
+            : <span className="whitespace-nowrap text-[11px] font-medium text-amber-700">
                 {formatMoeda(Math.abs(c.diferenca))} {c.diferenca > 0 ? 'a mais' : 'a menos'}
-              </div>
+              </span>
         )}
       </div>
 
       <div className="flex items-center justify-between">
-        <span className="text-[11px] text-muted-foreground">
+        <span className="text-[10px] text-muted-foreground">
           {ativos.length === 0 ? 'Nenhum documento anexado'
             : `${ativos.length} ${ativos.length === 1 ? 'documento' : 'documentos'}`}
           {/* O destino do PRÓXIMO documento, dito antes do clique — nunca depois. */}
@@ -142,76 +166,95 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, fornecedores, onA
         </span>
         <span className="flex items-center gap-1.5">
           {onAnexarBoletosDasParcelas && (
-            <Button type="button" size="sm" variant="outline" className="h-7 px-2.5 text-[11px]" data-testid="anexar-boletos-parcelas"
+            <Button type="button" size="sm" variant="outline" className="h-[22px] px-2 text-[10px]" data-testid="anexar-boletos-parcelas"
               disabled={somenteLeitura} onClick={onAnexarBoletosDasParcelas}>
               Anexar boletos das parcelas
             </Button>
           )}
-          <Button type="button" size="sm" className="h-7 gap-1 px-2.5 text-[11px]"
+          <Button type="button" size="sm" className="h-[22px] gap-1 px-2 text-[10px]"
             disabled={somenteLeitura} onClick={() => { setEditando(null); setFormAberto(true); }}>
-            <Plus className="h-3.5 w-3.5" /> Adicionar documento
+            <Plus className="h-3 w-3" /> Adicionar documento
           </Button>
         </span>
       </div>
 
-      {/* ── LISTA A18 ─────────────────────────────────────────────────────────── */}
+      {/* ── A TABELA DOS DOCUMENTOS ───────────────────────────────────────────── */}
+      {/* ⚠ TABELA COMPACTA DE LINHA ÚNICA — FIN-DOCUMENTOS-LAYOUT-01 (padrão de tabela da casa: cabeçalho navy 9,5px, linha
+          10px). Era um cartão de duas linhas por documento (12px + 10px), com emitente e data dividindo a segunda; agora
+          cada informação tem a sua coluna e a linha tem 22px (cresce só quando o emitente quebra). Cabeçalho e linhas são
+          subgrades da grade da tabela (`GRADE_DOCUMENTOS`). */}
       {api.documentos.length > 0 && (
-        <div className="divide-y rounded-md border">
-          {api.documentos.map(d => (
-            <div key={d.id} className="flex items-center gap-2 px-3.5 py-[7px] leading-[1.35]">
-              <div className="min-w-0 flex-1">
-                <div className="flex min-w-0 items-baseline gap-1.5">
-                  <span className="truncate text-[12px] font-medium text-foreground">{identidade(d)}</span>
-                  {/* ⚠ A PÍLULA DIZ DE QUEM É O PAPEL, e o clique leva até ele. Sem ela, a
-                      NF da operação pareceria um documento do lançamento — e o operador
-                      anexaria a segunda cópia da mesma nota, que é justamente o que esta
-                      frente existe para impedir. */}
-                  {/* PR 2b — a NF da compra, ligada às parcelas: o selo diz a quantas. Irmão do "da operação". */}
-                  {(d.ligadoAQtd ?? 1) > 1 && (
-                    <span className="shrink-0 rounded-full bg-sky-100 px-1.5 py-px text-[10px] text-sky-800" data-testid="selo-parcelas"
-                      title="Esta nota está em várias parcelas da mesma compra">
-                      {d.ligadoAQtd} parcelas
-                    </span>
-                  )}
-                  {d.origem === 'operacao' && (
-                    <button type="button"
-                      title="Este documento é da operação comercial — abrir a OC na aba Documentos"
-                      onClick={() => abrirOperacao(d)}
-                      className="shrink-0 rounded-full bg-blue-100 px-1.5 py-px text-[10px] text-blue-700 underline-offset-2 hover:underline dark:bg-blue-900/40 dark:text-blue-300">
-                      da operação
-                    </button>
-                  )}
-                </div>
-                <div className="truncate text-[10px] text-muted-foreground">
-                  {/* ⚠ SEM ARQUIVO É AVISO, NÃO ERRO: registrar primeiro e anexar depois é
-                      um caminho legítimo, e a linha diz o que falta em vez de esconder. */}
-                  {!d.url && !d.cancelado
-                    ? <span className="text-amber-700">sem arquivo</span>
-                    : [d.emitenteNome, dataBr(d.dataEmissao)].filter(Boolean).join(' · ') || '—'}
-                </div>
+        <div className={`${GRADE_DOCUMENTOS} overflow-hidden rounded-md border`} data-testid="tabela-documentos">
+          <div className={`${LINHA_DOCUMENTOS} h-[18px] bg-primary text-[9.5px] font-medium leading-none text-primary-foreground/85`} data-testid="cabecalho-documentos">
+            <span className="pl-[10px]">Documento</span>
+            <span>Emitente</span>
+            <span>Emissão</span>
+            <span className="text-right">Valor</span>
+            <span className="text-center">Situação</span>
+            <span />
+          </div>
+          {linhas.map(d => {
+            const nome = identidade(d);
+            /* Na linha cancelada a coluna Emitente diz POR QUE saiu (o motivo); sem motivo, o emitente. */
+            const emitente = d.cancelado && d.canceladoMotivo ? `motivo: ${d.canceladoMotivo}` : (d.emitenteNome || '');
+            const semArquivo = !d.url && !d.cancelado;
+            return (
+            <div key={d.id} data-testid="linha-documento" data-cancelado={d.cancelado ? 'sim' : undefined}
+              className={`${LINHA_DOCUMENTOS} min-h-[22px] border-t text-[10px] leading-none ${d.cancelado ? 'bg-muted/40 text-muted-foreground/70' : ''}`}>
+              <div className="flex items-center gap-1.5 whitespace-nowrap pl-[10px]">
+                <span className={d.cancelado ? 'line-through' : 'font-semibold text-foreground'} data-testid="doc-nome">{nome}</span>
+                {/* ⚠ A PÍLULA DIZ DE QUEM É O PAPEL, e o clique leva até ele. Sem ela, a
+                    NF da operação pareceria um documento do lançamento — e o operador
+                    anexaria a segunda cópia da mesma nota, que é justamente o que esta
+                    frente existe para impedir. */}
+                {/* PR 2b — a NF da compra, ligada às parcelas: o selo diz a quantas. Irmão do "da operação". */}
+                {(d.ligadoAQtd ?? 1) > 1 && (
+                  <span className="shrink-0 rounded-full bg-sky-100 px-1.5 py-px text-[9.5px] text-sky-800" data-testid="selo-parcelas"
+                    title="Esta nota está em várias parcelas da mesma compra">
+                    {d.ligadoAQtd} parcelas
+                  </span>
+                )}
+                {d.origem === 'operacao' && (
+                  <button type="button"
+                    title="Este documento é da operação comercial — abrir a OC na aba Documentos"
+                    onClick={() => abrirOperacao(d)}
+                    className="shrink-0 rounded-full bg-blue-100 px-1.5 py-px text-[9.5px] text-blue-700 underline-offset-2 hover:underline dark:bg-blue-900/40 dark:text-blue-300">
+                    da operação
+                  </button>
+                )}
               </div>
-              <div className="shrink-0 text-right text-[12px] font-medium tabular-nums">
+              <div className="flex min-w-0 items-center gap-1.5 text-muted-foreground" data-testid="cel-emitente">
+                {/* ⚠ SEM ARQUIVO É AVISO, NÃO ERRO: registrar primeiro e anexar depois é
+                    um caminho legítimo, e a linha diz o que falta em vez de esconder.
+                    Fica ANTES do emitente e não encolhe nem quebra; quem quebra de linha é o emitente. */}
+                {semArquivo && <span className="shrink-0 whitespace-nowrap text-amber-700">sem arquivo</span>}
+                <span className={`min-w-0 py-[2px] leading-[11px] [overflow-wrap:anywhere] ${d.cancelado ? 'text-muted-foreground/70' : ''}`} data-testid="doc-emitente-texto">{emitente || (semArquivo ? '' : '—')}</span>
+              </div>
+              <span className={`whitespace-nowrap ${d.cancelado ? '' : 'text-muted-foreground'}`} data-testid="doc-emissao">{dataBr(d.dataEmissao) ?? '—'}</span>
+              <span className="whitespace-nowrap text-right tabular-nums" data-testid="doc-valor">
                 {d.valorDocumento == null ? '—' : formatMoeda(d.valorDocumento)}
-              </div>
-              {d.cancelado ? (
-                <span className="shrink-0 rounded-full bg-muted px-1.5 py-px text-[10px] text-muted-foreground"
-                  title={d.canceladoMotivo ?? undefined}>Cancelado</span>
-              ) : (
-                <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-px text-[10px] text-emerald-700">Ativo</span>
-              )}
+              </span>
+              <span className="text-center">
+                {d.cancelado ? (
+                  <span className="rounded-full bg-muted px-1.5 py-px text-[9.5px] text-muted-foreground"
+                    title={d.canceladoMotivo ?? undefined}>Cancelado</span>
+                ) : (
+                  <span className="rounded-full bg-emerald-100 px-1.5 py-px text-[9.5px] text-emerald-700">Ativo</span>
+                )}
+              </span>
               {/* Documento cancelado não tem ações: é história, não trabalho pendente. */}
-              {!d.cancelado && (
-                <div className="flex shrink-0 items-center gap-2.5 text-muted-foreground">
+              {d.cancelado ? <span /> : (
+                <div className="flex items-center justify-end gap-2 pr-[10px] text-muted-foreground">
                   <button type="button" title={d.url ? 'Abrir arquivo' : 'Sem arquivo anexado'}
                     aria-label="Abrir arquivo" disabled={!d.url}
                     onClick={() => abrirArquivo(d)}
                     className="hover:text-foreground disabled:opacity-30">
-                    <Paperclip className="h-3.5 w-3.5" />
+                    <Paperclip className="h-3 w-3" />
                   </button>
                   <button type="button" title="Editar documento" aria-label="Editar documento"
                     disabled={somenteLeitura} onClick={() => { setEditando(d); setFormAberto(true); }}
                     className="hover:text-foreground disabled:opacity-30">
-                    <Pencil className="h-3.5 w-3.5" />
+                    <Pencil className="h-3 w-3" />
                   </button>
                   {/* ⚠ NF DA COMPRA NÃO SE CANCELA PELO CARTÃO (decisão do Gabriel, PR 2b): ela está em N
                       parcelas, e o caminho é o lápis, que avisa e pede o motivo. */}
@@ -219,13 +262,26 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, fornecedores, onA
                     <button type="button" title="Cancelar documento" aria-label="Cancelar documento"
                       disabled={somenteLeitura} onClick={() => { setCancelando(d); setMotivo(''); }}
                       className="hover:text-destructive disabled:opacity-30">
-                      <Ban className="h-3.5 w-3.5" />
+                      <Ban className="h-3 w-3" />
                     </button>
                   )}
                 </div>
               )}
             </div>
-          ))}
+            );
+          })}
+          {/* O rodapé dos cancelados — só exibição, estado local, não persiste. */}
+          {cancelados.length > 0 && (
+            <div className="col-span-full flex h-5 items-center border-t px-[10px] text-[10px] leading-none text-muted-foreground" data-testid="rodape-cancelados">
+              {cancelados.length} {cancelados.length === 1 ? 'documento cancelado' : 'documentos cancelados'}
+              {!mostrarCancelados && (cancelados.length === 1 ? ' oculto' : ' ocultos')}
+              {' · '}
+              <button type="button" className="ml-1 underline hover:text-foreground cursor-pointer"
+                onClick={() => setMostrarCancelados(v => !v)}>
+                {mostrarCancelados ? 'ocultar' : 'mostrar'}
+              </button>
+            </div>
+          )}
         </div>
       )}
 

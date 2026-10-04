@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 04/10/2026 (OC-BOITEL-ADIANTAMENTO-01a, +3 em `src/components/venda/previsaoBoitel.test.ts`; antes o
+  Baseline em 04/10/2026 (FIN-DOCUMENTOS-LAYOUT-01, +10 em `src/components/financeiro-v2/documentosLayout.test.tsx`; antes o
+  OC-BOITEL-ADIANTAMENTO-01a, +3 em `src/components/venda/previsaoBoitel.test.ts`; antes o
   PR-CONC-SALDOS-LAYOUT-01, +3 em `src/pages/conciliacaoDono.test.tsx`; antes o PR-CONC-STATUS-SALDO-01b, +9: `src/lib/conciliacao/resumoDoDono.test.ts` 2,
   `src/pages/conciliacaoDono.test.tsx` 6, `src/v2/components/SeletorPeriodo.test.tsx` 1; antes o PR-CONC-INTERNA-SEPARADA-01b, +31: `src/lib/conciliacao/resumoDoDono.test.ts` 10,
   `src/lib/conciliacao/resumoMes.test.ts` 5, `src/components/conciliacao/painelDono.test.tsx` 5, `src/pages/conciliacaoDono.test.tsx` 9,
@@ -173,7 +174,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3184
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3194
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -1889,6 +1890,25 @@ docs/historico/frentes-ate-2026-09-29.md.)
   (VINCULAR-LANC-OC-01, OC-CRIAR-DO-LEGADO-01).
 - ⚠ DOCUMENTO: quem le' NF filtra por `especie` e tolera (sem numero, ignora; sem nenhuma, "—"); "2+ documentos" nao e'
   "2+ NFs". O anexo so' fala do arquivo e recebe o endereco do documento de quem chama (OC-DOC-ESPECIE-01).
+- ⚠ ABA DOCUMENTOS DO LANCAMENTO = TABELA COMPACTA, CANCELADO FORA DA VISTA, NADA CORTA (FIN-DOCUMENTOS-LAYOUT-01, Gabriel 04/10,
+  so' apresentacao, `AbaDocumentosLancamento.tsx`; unico consumidor `LancamentoV2Dialog`). Padrao de tabela A31: cabecalho navy
+  9,5px de 18px, linha de 10px com MINIMO de 22px, colunas Documento · Emitente · Emissao · Valor · Situacao · acoes. O confronto e'
+  uma faixa de linha unica (rotulo 10px, valor 12px; 27px medidos). CANCELADO NAO APARECE por padrao: rodape de 20px "N documento(s)
+  cancelado(s) oculto(s) · mostrar" / "… · ocultar", ESTADO LOCAL (`mostrarCancelados`, nao persiste); mostrado, vem depois dos
+  ativos, riscado, com "motivo: …" na coluna Emitente e sem acoes. Ativo sem arquivo: "sem arquivo" ambar ANTES do emitente.
+  ⚠ SEM RETICENCIA, SEM EXCECAO (o briefing pediu truncate + title e foi corrigido): a coluna Documento e' `max-content` e nao
+    quebra — identidade e selos ("N parcelas", "da operacao") sempre inteiros; o Emitente fica com o resto (`minmax(0,1fr)`) e
+    QUEBRA de linha (palavras inteiras; token unico por `overflow-wrap:anywhere`), e so' entao a linha passa de 22px (27 com duas
+    linhas). A grade e' UMA, na tabela (`GRADE_DOCUMENTOS`), e cabecalho e linhas sao SUBGRADES (`LINHA_DOCUMENTOS`,
+    `grid-template-columns: subgrid`) — sem isso a coluna `max-content` desalinharia entre linhas. O respiro de 10px das bordas
+    mora na primeira e na ultima celula (padding na subgrade encolhe as trilhas das pontas; a ultima trilha e' 72 = 62 + 10).
+    Medido a 1.135 (dialogo no teto de 1.024, logo igual a 1.280): tabela 750; Agnaldo "Compra 110 bezerros - 1/2" Documento 206 /
+    Emitente 192, "NF 000.000.084 · série 1" + "da operação" inteiros; x de cada coluna identico no cabecalho e nas linhas; 0
+    estouros, 0 rolagem horizontal. O maior emitente do proto tem 42 caracteres (201px).
+  ⚠ PENDENCIAS: DOC-REATIVAR-01 (reativar documento cancelado — hoje nao ha' caminho) · a REGRA DO CONFRONTO quando a NF inteira
+    e o boleto da parcela estao no mesmo lancamento e SOMAM (Vera "Ferramentas - 2/2": documentado 2.557,95 x lancamento 852,65,
+    "R$ 1.705,30 a mais") · o caso "NF em N parcelas" (`ligado_a_qtd > 1`) nao existe no proto, o selo so' esta' provado por teste
+    · o `data-testid="doc-emitente"` e' do SELECT do `FormDocumento`; a celula da tabela e' `cel-emitente`.
 - ⚠ "GLOBAL NAO E' FAZENDA": campo de fazenda de modal e' seletor das fazendas ativas; filtro numa fazenda nasce com
   ela; Global nasce VAZIO, obrigatorio, vermelho com "Selecione a fazenda do lançamento."; edicao mostra a gravada. O
   Financeiro nunca escolhe a primeira fazenda por ninguem (`FazendaSelect` com `obrigatorio`)
