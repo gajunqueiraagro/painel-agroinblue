@@ -41,7 +41,7 @@ import { VendaModalShell } from '@/components/venda/VendaModalShell';
 import { AbateModalShell } from '@/components/abate/AbateModalShell';
 import { boitelVazio, payloadBoitel, boitelDeLinha, pendenciaDoRealizado, realizadoNaoSalvo, type BoitelEdicao } from '@/components/venda/BoitelBlocosModais';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { liquidoDaVendaBoitel, realizadoAplicadoNoLote } from '@/components/venda/BoitelNegociacaoDerivado';
+import { liquidoDaVendaBoitel, realizadoAplicadoNoLote, valorDaVendaBoitel, slotDaVendaBoitel } from '@/components/venda/BoitelNegociacaoDerivado';
 import { ReclassificacaoFormFields, useReclassificacaoState } from '@/components/ReclassificacaoForm';
 import { LancamentoModalEnvelope } from '@/components/lancamento/LancamentoModalEnvelope';
 import { LinhaResumo } from '@/components/ui/linha-resumo';
@@ -83,7 +83,7 @@ import { useIntegerInput, useDecimalInput, parseDecimalInput } from '@/hooks/use
 import { toast } from 'sonner';
 import { decidirHidratacao, vaiHidratar } from '@/lib/oc/hidratacaoOC';
 import { caminhoDoSalvarOC, soCadastrais } from '@/lib/oc/edicaoCadastralOC';
-import { gravarRealizadoBoitel as gravarRealizadoNoBanco, type ResultadoRealizado } from '@/lib/oc/gravarRealizadoBoitel';
+import { gravarRealizadoBoitel as gravarRealizadoNoBanco, decisaoDoRealizado, type ResultadoRealizado } from '@/lib/oc/gravarRealizadoBoitel';
 import { useMasterLock } from '@/hooks/useMasterLock';
 import { MasterLockBanner } from '@/components/MasterLockBanner';
 import { MorteLoteMetaDialog } from '@/components/MorteLoteMetaDialog';
@@ -2936,7 +2936,16 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      ele cobra os fatos — um realizado gravado antigo, incompleto (3260d1c8, 8b211cae), nao
      trava a negociacao de quem nem abriu o realizado. */
   const realizadoSujo = vendaTipoVenda === 'boitel' && realizadoNaoSalvo(ocBoitelReal, ocBoitelRealSalvo);
-  const pendenciaRealizado = realizadoSujo ? pendenciaDoRealizado(boitelRealDaVenda) : null;
+  /* ⚠ O LOTE DIVERGE DO ACERTO? — OC-BOITEL-REVALORAR-SALVAR-01. A MESMA conta do aviso "Lote ≠ acerto" do resumo
+     (`valorDaVendaBoitel`, sobre o realizado como o banco o tem e o slot dos lotes); nenhuma formula nova. Com realizado
+     completo e lote divergente o Salvar grava o realizado e revalora mesmo sem rascunho sujo — ver `decisaoDoRealizado`. */
+  const loteDivergeDoAcerto = vendaTipoVenda === 'boitel' && valorDaVendaBoitel({
+    slot: slotDaVendaBoitel(lotesApi.totais), realizado: boitelRealSalvoDaVenda, projetado: boitelDaVenda,
+  }).divergente;
+  const decisaoRealizado = decisaoDoRealizado({
+    sujo: realizadoSujo, loteDiverge: loteDivergeDoAcerto, pendencia: pendenciaDoRealizado(boitelRealDaVenda),
+  });
+  const pendenciaRealizado = decisaoRealizado === 'recusar' ? pendenciaDoRealizado(boitelRealDaVenda) : null;
 
   /* A assinatura do que esta' na tela AGORA. Recalculada a cada render de proposito — sao
      dois JSON pequenos, e memorizar traria o risco de dependencia esquecida, caro justamente
@@ -3385,7 +3394,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
          continua aceso para a nova tentativa. */
       let sucesso = 'Negociação salva.';
       let avisoPendente: string | null = null;
-      if (realizadoSujo) {
+      /* ⚠ SUJO **OU** LOTE DIVERGENTE DO ACERTO — OC-BOITEL-REVALORAR-SALVAR-01: era so' `realizadoSujo`, e uma OC com o
+         realizado ja' gravado e o lote defasado nunca chegava ao revalorar (b58bf556). O Concluir herda: ele salva por AQUI. */
+      if (decisaoRealizado === 'gravar') {
         const r = await gravarRealizadoBoitel(clienteId, versaoFinal);
         /* `'erro' in r` e nao `!r.ok`: com `strict: false` o TS nao estreita a uniao pelo booleano. */
         if ('erro' in r) { setErroRealizado(r.erro); return false; }
@@ -6250,7 +6261,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           onSalvarOperacao={() => (caminhoDoSalvarOC(ocStatusComercial) === 'editar_dados' ? salvarDadosOperacaoOC() : salvarOperacaoVendaOC())}
           onSalvarNegociacao={() => salvarNegociacaoVendaOC()}
           onCancelarContaCorrente={cancelarVendaContaCorrenteOC}
-          semAlteracoes={ocStatusComercial === 'fechada' ? !ocDadosSujos : ocVendaSemAlteracoes}
+          /* OC-BOITEL-REVALORAR-SALVAR-01 — lote divergente do acerto E' o que salvar: o botao acende sem nada editado. */
+          semAlteracoes={ocStatusComercial === 'fechada' ? !ocDadosSujos : (ocVendaSemAlteracoes && decisaoRealizado !== 'gravar')}
           erroSalvar={erroSalvarOC}
           /* As tres apis, no mesmo idioma da compra. A venda as MONTA; nao as edita. */
           documentosApi={documentosApi}

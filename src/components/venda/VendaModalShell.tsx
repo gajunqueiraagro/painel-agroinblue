@@ -54,7 +54,7 @@ import type { RecebimentoApi } from '@/hooks/useOperacaoRecebimento';
 import type { DocumentosApi } from '@/hooks/useOperacaoDocumentos';
 import type { EventosApi } from '@/hooks/useOperacaoEventos';
 import type { LiquidacaoApi } from '@/hooks/useOperacaoLiquidacao';
-import { BoitelTopoNegociacao, bolsoDaVendaBoitel, unitariosDoLiquido, derivadosBoitel, PilulaCenario, valorDaVendaBoitel, avisoAcertoDivergente, valorDoLoteBoitel } from '@/components/venda/BoitelNegociacaoDerivado';
+import { BoitelTopoNegociacao, bolsoDaVendaBoitel, unitariosDoLiquido, derivadosBoitel, PilulaCenario, valorDaVendaBoitel, avisoAcertoDivergente, valorDoLoteBoitel, slotDaVendaBoitel, COMO_RESOLVER_DIVERGENCIA_CURTO } from '@/components/venda/BoitelNegociacaoDerivado';
 import { BoitelBlocosModais, BoitelAnaliseFaixa, faltamDosCinco, type BoitelEdicao } from '@/components/venda/BoitelBlocosModais';
 import { linhasPrevisaoBoitel, avisoBoitelProdutor, propostasBoitelProdutor } from '@/components/venda/previsaoBoitel';
 import { pesoMedioPorCabeca } from '@/hooks/useCompraLotes';
@@ -278,8 +278,7 @@ export function VendaModalShell({
      calculados so' para conferencia. Ver `valorDaVendaBoitel`.
      ⚠ SOMA ZERO E' SLOT VAZIO, nao valor: `totais.valorNegociado` soma 0 para lote sem
      `valor_informado`, e uma venda boitel nao vale zero — vale "ainda nao gravado". */
-  const slotBoitel = lotesApi && lotesApi.totais.lotes > 0 && lotesApi.totais.valorNegociado > 0
-    ? lotesApi.totais.valorNegociado : null;
+  const slotBoitel = slotDaVendaBoitel(lotesApi?.totais);
   const vendaBoitel = ehBoitel
     ? valorDaVendaBoitel({ slot: slotBoitel, realizado: boitelRealSalvo, projetado: boitelData ?? null })
     : null;
@@ -985,7 +984,7 @@ export function VendaModalShell({
                   /* PR-OC-BOITEL-PAINEL-01 (D5): UMA linha de 15px; a frase inteira (com o valor do acerto) vai no `title`. */
                   <div className="px-2.5 py-px leading-tight truncate text-[10px] text-amber-700 dark:text-amber-500"
                     title={avisoDivergencia} data-testid="aviso-lote-acerto">
-                    Lote ≠ acerto · reaplique o Realizado
+                    Lote ≠ acerto · {COMO_RESOLVER_DIVERGENCIA_CURTO}
                   </div>
                 )}
               </div>

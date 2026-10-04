@@ -104,10 +104,10 @@ describe('dialogo na B — sentido e favorecido por linha, confronto pelo liquid
   it('com bloqueio (slot != recebido - pago) o botao trava e diz por que; grava na ordem acerto -> principal', async () => {
     const onGerar = vi.fn(async (_linhas: PropostaCompromisso[]) => {});
     const ps = comNomes(propostasBoitelProdutor(entrada('produtor', LIQUIDO)) ?? []);
-    const { unmount } = abrir(ps, LIQUIDO, { bloqueio: 'Recebido do frigorífico ... · reaplique o Realizado', onGerar });
+    const { unmount } = abrir(ps, LIQUIDO, { bloqueio: 'Recebido do frigorífico ... · salve a negociação para atualizar', onGerar });
     const botao = screen.getByRole('button', { name: 'Gerar 2 compromissos' });
     expect(botao.hasAttribute('disabled')).toBe(true);
-    expect(screen.getByText(/reaplique o Realizado/)).toBeTruthy();
+    expect(screen.getByText(/salve a negociação para atualizar/)).toBeTruthy();
     unmount();
 
     abrir(ps, LIQUIDO, { onGerar });

@@ -85,7 +85,7 @@ describe('o revalorar com compromisso pendente vira aviso', () => {
 });
 
 describe('o "+ Novo compromisso" manual recusa a principal na divergencia', () => {
-  const BLOQUEIO = 'Acerto do boitel R$ 882.608,62 · reaplique o Realizado';
+  const BLOQUEIO = 'Acerto do boitel R$ 882.608,62 · salve a negociação para atualizar';
   it('principal com o bloqueio do A3: recusa com a mesma frase', () => {
     expect(recusaDaPrincipalManual('principal', BLOQUEIO)).toBe(BLOQUEIO);
   });

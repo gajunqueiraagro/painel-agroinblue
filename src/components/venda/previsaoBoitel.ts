@@ -9,7 +9,7 @@
 import { format, addDays, parseISO } from 'date-fns';
 import { siglaCategoria } from '@/lib/financeiro/produtoOC';
 import { subcentroVendaPorCategoria, SUBCENTRO_DESPESA_VENDA, SUBCENTRO_ADIANTAMENTO_BOITEL, SUBCENTRO_DEVOLUCAO_ADIANTAMENTO_BOITEL } from '@/hooks/useOperacaoLiquidacao';
-import { custosDaVendaBoitel, principalDaPrevisaoBoitel, derivadosBoitel, type ValorDaVendaBoitel } from '@/components/venda/BoitelNegociacaoDerivado';
+import { custosDaVendaBoitel, principalDaPrevisaoBoitel, derivadosBoitel, COMO_RESOLVER_DIVERGENCIA, type ValorDaVendaBoitel } from '@/components/venda/BoitelNegociacaoDerivado';
 import { faltamDosCinco, type BoitelEdicao } from '@/components/venda/BoitelBlocosModais';
 import type { LinhaPrevisao } from '@/components/compra/AbaCompromissosOC';
 import type { PropostaCompromisso } from '@/components/compra/DialogoGerarCompromissos';
@@ -280,7 +280,7 @@ export function avisoBoitelProdutor(entrada: EntradaPrevisaoBoitel): string | nu
   if (dados.quemAbate !== 'produtor') return null;
   const b = valoresDoProdutor(dados, vendaBoitel);
   if (!b.divergencia) return null;
-  return `Recebido do frigorífico ${brl(b.recebido)} − pago ao boitel ${brl(b.pago)} = ${brl(b.divergencia.liquido)}, e o valor da operação é ${brl(b.divergencia.slot)} · reaplique o Realizado`;
+  return `Recebido do frigorífico ${brl(b.recebido)} − pago ao boitel ${brl(b.pago)} = ${brl(b.divergencia.liquido)}, e o valor da operação é ${brl(b.divergencia.slot)} · ${COMO_RESOLVER_DIVERGENCIA}`;
 }
 
 /** Uma linha do bloco "Acerto" do resumo lateral. */

@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 04/10/2026 (FIN-DOCUMENTO-FORM-01, +27 em `src/components/financeiro-v2/documentoFormPorTipo.test.tsx`, e
+  Baseline em 04/10/2026 (OC-BOITEL-REVALORAR-SALVAR-01, +16 em `src/lib/oc/revalorarAoSalvar.test.tsx`; antes o
+  FIN-DOCUMENTO-FORM-01, +27 em `src/components/financeiro-v2/documentoFormPorTipo.test.tsx`, e
   FIN-RESUMO-PAGAMENTO-01, +7 em `src/components/financeiro-v2/resumoPagamentoModal.test.tsx`; antes o FIN-PIX-CADASTRO-MODAL-01, +35: `src/lib/financeiro/dadosPagamentoDoCadastro.test.ts` 14,
   `src/components/financeiro-v2/dadosPagamentoModal.test.tsx` 21; antes o
   FIN-DOCUMENTOS-LAYOUT-01, +10 em `src/components/financeiro-v2/documentosLayout.test.tsx`; antes o
@@ -177,7 +178,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3263
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3279
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -1844,6 +1845,34 @@ docs/historico/frentes-ate-2026-09-29.md.)
   predicado `realizadoAplicadoNoLote`). `ocBoitelReal` e' o rascunho, `ocBoitelRealSalvo` o que o banco tem — quem le'
   numero le' o salvo. Duas modalidades: A (o boitel abate) e B (abate em nome do produtor; acerto em 1155)
   (OC-BOITEL-VALOR-01, OC-BOITEL-REALIZADO-UX-01, BOITEL-ABATE-PRODUTOR-01).
+- ⚠ BOITEL: SALVAR E CONCLUIR REAPLICAM O REALIZADO QUANDO O LOTE DIVERGE DO ACERTO (OC-BOITEL-REVALORAR-SALVAR-01, Gabriel 04/10,
+  so' tela). Com realizado COMPLETO o lote TEM que valer o saldo do acerto. O Salvar da negociacao so' gravava o realizado com o
+  RASCUNHO SUJO (payload diferente do gravado): numa OC com o realizado ja' gravado e o lote defasado, abrir o Realizado e Aplicar
+  sem mudar numero nao sujava nada, e o revalorar nunca rodava (b58bf556, Vera: tres salvamentos em 04/10, lote em 565.217,00 x
+  acerto 593.139,96). Dono da decisao: `decisaoDoRealizado` (`src/lib/oc/gravarRealizadoBoitel.ts`) — 'gravar' com rascunho sujo e
+  completo OU lote divergente com realizado completo; 'recusar' com sujo e incompleto (a frase do campo, como sempre); 'nada' no
+  resto, inclusive divergente com realizado ANTIGO incompleto (nao trava a negociacao de quem nem abriu o realizado). A divergencia
+  e' a do motor (`valorDaVendaBoitel(...).divergente`, sobre o realizado SALVO e o slot `slotDaVendaBoitel(lotesApi.totais)`, dono
+  unico usado pelo resumo e pelo Salvar); a escrita e' a de sempre (`oc_salvar_boitel('realizado')` -> `oc_revalorar_lote`,
+  idempotentes), na ordem lotes -> projetado -> realizado -> revalorar. O botao Salvar ACENDE com a divergencia, sem nada editado.
+  ⚠ O CONCLUIR NAO E' OUTRO CAMINHO: `VendaModalShell` chama `onSalvarNegociacao()` e so' conclui se ele nao devolver `false` —
+    ele herda a condicao. Com a OC FECHADA nada disso roda: o Salvar recusa antes de ir ao servidor ("reabra para editar") e o
+    dialogo do Realizado e' so' leitura; reabrir e' o primeiro passo.
+  ⚠ A FRASE TEM UM DONO (`BoitelNegociacaoDerivado.tsx`): `COMO_RESOLVER_DIVERGENCIA` ("salve a negociação para atualizar", no
+    `title`, no LoteDialog, na recusa da previsao e na modalidade B) e `COMO_RESOLVER_DIVERGENCIA_CURTO` ("salve para atualizar",
+    so' na linha de 15px do resumo de 240px: a frase inteira pedia 255px e cortava com "…"). "reaplique o Realizado" saiu — era um
+    gesto que a tela nao tinha.
+  ⚠ O `LancamentosTab` NAO SE MONTA EM TESTE: a ligacao (condicao do Salvar, botao aceso) e' provada LENDO A FONTE, e o
+    comportamento no `VendaModalShell` real com um anfitriao que usa as mesmas funcoes (`revalorarAoSalvar.test.tsx`).
+  ⚠ DIVIDA ABERTA — OC-BOITEL-RASCUNHO-REALIZADO-01: 04/10 15:35 UTC, b58bf556: Salvar apos reabrir nao gravou o realizado
+    (eventos reabrir 15:35:02 -> salvar_lotes + salvar_boitel('projetado') + fechar 15:35:13, nenhum 'realizado'). Hipotese 1 = a
+    edicao nao entrou no rascunho (com a OC fechada o dialogo e' so' leitura; sobram 11 s entre reabrir e salvar); hipotese 2 =
+    rascunho perdido entre o Aplicar e o Salvar, NAO descartada (nao reproduzida: editar exige reabrir, que e' escrita, e nao ha'
+    no proto venda de boitel com realizado em aberto). No shell real o rascunho sobrevive do Aplicar ao Salvar (teste (5)).
+  ⚠ PENDENCIAS: a TRAVA DE P1 x o acerto de boitel que chega 3-4 meses depois (o Salvar exige o mes da data da OC aberto; decisao
+    do Gabriel) · a DEVOLUCAO DO ADIANTAMENTO e o principal PROGRAMADO nao acompanham o realizado (7f7de76f: 261.853,50 e
+    42.416,00 contra 258.913,17 e 46.458,50; `oc_revalorar_lote` so' ajusta principal 'aberto' sem parcela, e a guarda "excede a
+    base" mora so' em `oc_criar_compromisso`) · compactar o modal de venda em boitel (mock antes).
 - ⚠ BOITEL (MODALIDADE A) COM ADIANTAMENTO: O SLOT E' O LIQUIDO DO ACERTO, E O ADIANTAMENTO SAO DUAS PONTAS FORA DO DRE
   (OC-BOITEL-ADIANTAMENTO-01a, Gabriel 04/10: "se tem devolucao do adiantamento, tem que estar na OC e no financeiro, igual, sem
   duplicar"). No financeiro a OC tem TRES lancamentos: a SAIDA do adiantamento, na data em que saiu ("Adiantamento de Boitel",

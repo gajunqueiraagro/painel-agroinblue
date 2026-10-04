@@ -16,6 +16,33 @@
  * ⚠ NENHUMA RECUSA VAI PARA TOAST (UX-TOAST-01): tudo volta como texto.
  */
 
+/**
+ * O SALVAR DA NEGOCIACAO GRAVA O REALIZADO? — OC-BOITEL-REVALORAR-SALVAR-01 (Gabriel, 04/10/2026).
+ *
+ * ⚠ A REGRA: com realizado completo, o lote TEM que valer o saldo do acerto. Ate' aqui o Salvar so' gravava o realizado com o
+ *   RASCUNHO SUJO (payload diferente do gravado). Numa OC cujo realizado ja' estava gravado e cujo lote ficou defasado (o aviso
+ *   "Lote ≠ acerto"), abrir o Realizado e clicar Aplicar sem mudar numero nao sujava nada — e o Salvar pulava o revalorar. Medido
+ *   na b58bf556 (Vera): tres salvamentos em 04/10, nenhum `revalorar_lote`, lote em 565.217,00 contra acerto de 593.139,96.
+ *   Agora a DIVERGENCIA tambem manda gravar: o aviso passa a ser cumprido pelo proprio Salvar (e pelo Concluir, que salva por
+ *   dentro). As duas escritas sao idempotentes para o mesmo payload.
+ *   · 'recusar' — rascunho sujo e incompleto: o Salvar nao grava nada e diz o bloco e o campo (como sempre).
+ *   · 'gravar'  — rascunho sujo e completo, OU lote divergente do acerto com o realizado completo.
+ *   · 'nada'    — nem sujo nem divergente; ou divergente com um realizado ANTIGO incompleto, que nao trava a negociacao de
+ *                 quem nem abriu o realizado (3260d1c8, 8b211cae) — ali nao ha' saldo do acerto confiavel para gravar.
+ */
+export type DecisaoDoRealizado = 'gravar' | 'recusar' | 'nada';
+export function decisaoDoRealizado(a: {
+  /** O rascunho do realizado difere do que o banco tem (`realizadoNaoSalvo`). */
+  sujo: boolean;
+  /** O valor do lote diverge do saldo do acerto (`valorDaVendaBoitel(...).divergente`). */
+  loteDiverge: boolean;
+  /** `pendenciaDoRealizado(rascunho)`: a frase do que falta, ou `null` com o realizado completo. */
+  pendencia: string | null;
+}): DecisaoDoRealizado {
+  if (a.sujo) return a.pendencia ? 'recusar' : 'gravar';
+  return a.loteDiverge && !a.pendencia ? 'gravar' : 'nada';
+}
+
 export type ResultadoRealizado =
   | { ok: true; versao: number; sucesso: string; avisoPendente: string | null }
   | { ok: false; erro: string };

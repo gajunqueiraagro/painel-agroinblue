@@ -549,9 +549,25 @@ export function valorDaVendaBoitel({ slot, realizado, projetado }: {
   return { valor: slot, acerto, projecao: liquidoDaVendaBoitel(projetado), realizadoAplicado, divergente };
 }
 
+/** O QUE FAZER com a divergencia lote x acerto — um lugar so'. Era "reaplique o Realizado", um gesto que a tela nao tinha; desde o
+ *  OC-BOITEL-REVALORAR-SALVAR-01 o Salvar da negociacao grava o realizado e revalora o lote quando ha' divergencia. */
+export const COMO_RESOLVER_DIVERGENCIA = 'salve a negociação para atualizar';
+/** A versao da LINHA de 15px do resumo lateral (240px): a frase inteira pede 255px e cortava com "…" (medido a 1.133); esta cabe.
+ *  A frase inteira, com o valor do acerto, vai no `title` (`avisoAcertoDivergente`). */
+export const COMO_RESOLVER_DIVERGENCIA_CURTO = 'salve para atualizar';
+
 /** A frase da divergencia — uma so', para o resumo, o LoteDialog e a recusa da previsao. */
 export const avisoAcertoDivergente = (acerto: number) =>
-  `Acerto do boitel ${acerto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} · reaplique o Realizado`;
+  `Acerto do boitel ${acerto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} · ${COMO_RESOLVER_DIVERGENCIA}`;
+
+/**
+ * O SLOT DA VENDA BOITEL, lido dos totais dos lotes — um dono para o resumo (`VendaModalShell`) e para o Salvar (`LancamentosTab`).
+ * ⚠ SOMA ZERO E' SLOT VAZIO, nao valor: `totais.valorNegociado` soma 0 para lote sem `valor_informado`, e uma venda boitel nao
+ *   vale zero — vale "ainda nao gravado".
+ */
+export function slotDaVendaBoitel(totais: { lotes: number; valorNegociado: number } | null | undefined): number | null {
+  return totais && totais.lotes > 0 && totais.valorNegociado > 0 ? totais.valorNegociado : null;
+}
 
 /**
  * A LINHA PRINCIPAL DA PREVISAO — o "a receber" do boitel — OC-BOITEL-VALOR-01 A3.

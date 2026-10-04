@@ -78,7 +78,7 @@ describe('a previsao principal nasce do slot, ligada ao lote', () => {
     const v = valorDaVendaBoitel({ slot: SLOT, realizado: REALIZADO, projetado: PROJETADO });
     expect(principalDaPrevisaoBoitel(v, [LOTE_ID])).toBeNull();
     /* `toLocaleString` poe espaco NAO QUEBRAVEL depois do "R$" — o `\s` da regex o aceita. */
-    expect(avisoAcertoDivergente(v.acerto ?? 0)).toMatch(/^Acerto do boitel R\$\s882\.608,62 · reaplique o Realizado$/);
+    expect(avisoAcertoDivergente(v.acerto ?? 0)).toMatch(/^Acerto do boitel R\$\s882\.608,62 · salve a negociação para atualizar$/);
   });
 
   it('sem realizado, a linha sai com a projecao GRAVADA (o slot), ligada ao lote', () => {
@@ -110,7 +110,7 @@ describe('as telas mostram o slot', () => {
        numero mais abaixo, e por isso a busca e' pelo campo, nao pelo texto. */
     const campo = screen.getByTitle(/Derivado do acerto com o boitel/);
     expect(campo.textContent).toMatch(/848\.713,32/);
-    expect(screen.getByText(/^Acerto do boitel R\$\s882\.608,62 · reaplique o Realizado$/)).toBeDefined();
+    expect(screen.getByText(/^Acerto do boitel R\$\s882\.608,62 · salve a negociação para atualizar$/)).toBeDefined();
     /* ⚠ O ACERTO NAO APARECE COMO VALOR: so' dentro do aviso. */
     expect(campo.textContent).not.toMatch(/882\.608,62/);
   });
@@ -118,7 +118,7 @@ describe('as telas mostram o slot', () => {
   it('LoteDialog: slot = acerto, sem aviso', () => {
     montarLoteDialog(ACERTO);
     expect(screen.getByTitle(/Derivado do acerto com o boitel/).textContent).toMatch(/882\.608,62/);
-    expect(screen.queryByText(/reaplique o Realizado/)).toBeNull();
+    expect(screen.queryByText(/salve a negociação para atualizar/)).toBeNull();
   });
 
   it('Documentos: "Negociado" e o valor_acordado que chega por prop (o slot somado)', () => {
