@@ -9,7 +9,7 @@
  * autoridade no caso do rebanho. Esconder o botao e' cortesia.
  */
 import { Button } from '@/components/ui/button';
-import { MOTIVO_BLOQUEIO_REBANHO, MOTIVO_BLOQUEIO_TITULO_OC } from '@/lib/financeiro/cancelamentoLancamento';
+import { MOTIVO_BLOQUEIO_REBANHO, MOTIVO_BLOQUEIO_TITULO_OC, MOTIVO_BLOQUEIO_TITULO_OC_SEM_ACESSO } from '@/lib/financeiro/cancelamentoLancamento';
 
 /* MODAIS-PADRAO-01e — na medida do rodape de 32px do `LancamentoV2Dialog` (unico chamador): botao 22px/10px e
    as frases em 10px (eram 11px, e a do titulo de OC quebrava em tres linhas). Mesmos textos. */
@@ -19,13 +19,14 @@ export function RodapeCancelamento({ tituloOC, bloqueioRebanho, onCancelar, onAb
   tituloOC: { operacaoId: string; tipo: string | null } | null;
   bloqueioRebanho: boolean;
   onCancelar: () => void;
-  /** ACESSOS-02b — ausente = a pessoa nao acessa a tela da OC: a frase do bloqueio fica, o atalho "Abrir OC →" sai. */
+  /** ACESSOS-02b — ausente = a pessoa nao acessa a tela da OC: a frase do bloqueio fica, o atalho "Abrir OC →" sai.
+   *  ACESSOS-02c — e a frase deixa de mandar ao "Desfazer compromisso" (que mora la'): diz quem altera a operacao. */
   onAbrirOC?: (operacaoId: string, tipo: string | null) => void;
 }) {
   if (tituloOC) {
     return (
       <span className="flex items-center gap-1.5 text-[10px] leading-tight text-muted-foreground" data-testid="cancelar-titulo-oc">
-        {MOTIVO_BLOQUEIO_TITULO_OC}
+        {onAbrirOC ? MOTIVO_BLOQUEIO_TITULO_OC : MOTIVO_BLOQUEIO_TITULO_OC_SEM_ACESSO}
         {onAbrirOC && (
         <Button variant="link" size="sm" className="h-auto shrink-0 p-0 text-[10px] font-medium"
           onClick={() => onAbrirOC(tituloOC.operacaoId, tituloOC.tipo)}>

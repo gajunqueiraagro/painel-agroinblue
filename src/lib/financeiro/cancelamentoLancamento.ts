@@ -70,6 +70,14 @@ export function motivoInformado(m: string | null | undefined): string | null {
  * (VINCULAR-LANC-OC-01, ou o 91e6a216 a mao) tem parte viva e origem 'manual'.
  */
 export const MOTIVO_BLOQUEIO_TITULO_OC = 'Título de operação comercial — desfaça pelo Desfazer compromisso';
+/** ACESSOS-02c — a mesma frase para quem NAO tem a tela da operacao: o "Desfazer compromisso" mora numa tela que ela nao alcanca. */
+export const MOTIVO_BLOQUEIO_TITULO_OC_SEM_ACESSO = 'Título de operação comercial — alterações na operação são feitas pelo administrador';
+/** ACESSOS-02c — o motivo dos dois gestos do modal que alteram a operacao, para quem nao pode altera'-la. */
+export const MOTIVO_SEM_ACESSO_DESVINCULAR = 'só quem tem acesso à operação pode desvincular';
+export const MOTIVO_SEM_ACESSO_VINCULAR = 'só quem tem acesso à operação pode vincular';
+/** ACESSOS-02c — onde se ajusta o que o titulo de OC trava, na faixa de origem do modal: com a tela, "na OC"; sem ela, quem ajusta. */
+export const ondeAjustarTituloOC = (temATelaDaOperacao: boolean) =>
+  temATelaDaOperacao ? 'ajuste na OC' : 'ajustados pelo administrador na operação';
 
 /** O lote separa o que cancela do que pula, sem perder a ordem pedida. */
 export function separarTitulosOC(ids: readonly string[], comParteViva: ReadonlySet<string>): {

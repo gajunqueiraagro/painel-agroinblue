@@ -105,7 +105,8 @@ describe('a lista de lancamentos (FinanceiroV2Tab, lida da FONTE): um caso por p
 describe('o modal do lancamento (LancamentoV2Dialog, lido da FONTE)', () => {
   const modal = fonte('src/components/financeiro-v2/LancamentoV2Dialog.tsx');
   it('"Abrir →" e "corrigir na operação": os dois penduram em `operacaoAbrivel`, que agora exige o acesso', () => {
-    expect(modal).toContain("const podeAbrirOC = usePodeAbrir('lancamentos-zoot');");
+    /* ACESSOS-02c: a tela da operacao tem um nome so' (`TELA_DA_OPERACAO`), o mesmo do ajudante dos gestos */
+    expect(modal).toContain('const podeAbrirOC = usePodeAbrir(TELA_DA_OPERACAO);');
     expect(modal).toContain('const operacaoAbrivel = !!operacaoId && !!operacaoTipo && podeAbrirOC;');
     expect(modal.match(/\{operacaoAbrivel && \(/g)).toHaveLength(2);
     /* o aviso que diz que o lancamento e' de uma operacao nao depende do atalho */

@@ -16,7 +16,8 @@ import {
 } from '@/lib/financeiro/statusFinanceiro';
 import { TIPOS_DOCUMENTO, formatNFNumber, extractNFDigits, type TipoDocumento } from '@/lib/financeiro/documentoHelper';
 import { useCliente } from '@/contexts/ClienteContext';
-import { usePodeAbrir } from '@/v2/hooks/usePodeAbrir';
+import { usePodeAbrir, usePodeAlterarOperacao, TELA_DA_OPERACAO } from '@/v2/hooks/usePodeAbrir';
+import { GestoDeOperacao } from '@/components/financeiro-v2/GestoDeOperacao';
 import { useLancamentoDocumentos } from '@/hooks/useLancamentoDocumentos';
 import { AbaDocumentosLancamento } from '@/components/financeiro-v2/AbaDocumentosLancamento';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -27,6 +28,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import {
   bloqueiaCancelamentoPeloFinanceiro,
+  MOTIVO_SEM_ACESSO_VINCULAR, MOTIVO_SEM_ACESSO_DESVINCULAR, ondeAjustarTituloOC,
 } from '@/lib/financeiro/cancelamentoLancamento';
 import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -525,7 +527,9 @@ export function LancamentoV2Dialog({
   const { clienteAtual } = useCliente();
   /* ACESSOS-02b — os atalhos deste modal para a OC ("Abrir →", "corrigir na operação", "Abrir OC →", criar OC do legado) so' se
      oferecem a quem acessa a tela da OC; os avisos que dizem que o lancamento e' de uma operacao continuam. */
-  const podeAbrirOC = usePodeAbrir('lancamentos-zoot');
+  const podeAbrirOC = usePodeAbrir(TELA_DA_OPERACAO);
+  /* ACESSOS-02c — gesto que ALTERA a operacao (vincular, desvincular) fica apagado com o motivo para quem nao a edita. */
+  const podeAlterarOperacao = usePodeAlterarOperacao();
   const qc = useQueryClient();
   /* ⚠ OS DOCUMENTOS SÓ EXISTEM DEPOIS QUE O LANÇAMENTO EXISTE: as RPCs recebem
      `p_lancamento_id`, e num lançamento novo não há id para anexar nada. Por isso o hook
@@ -2058,7 +2062,7 @@ export function LancamentoV2Dialog({
               <div className="rounded-md border border-sky-200 dark:border-sky-800 bg-sky-50/60 dark:bg-sky-950/30 px-2 py-1 mb-2 flex items-start gap-2">
                 <p className="text-[10px] text-sky-700 dark:text-sky-400 leading-tight flex-1">
                   <span className="font-semibold text-sky-800 dark:text-sky-300">Origem: Operação Comercial.</span>{' '}
-                  Valor, favorecido, classificação, tipo e competência são somente leitura (ajuste na OC); data prevista, conta, descrição, observação e documento continuam editáveis.
+                  Valor, favorecido, classificação, tipo e competência são somente leitura ({ondeAjustarTituloOC(podeAbrirOC)}); data prevista, conta, descrição, observação e documento continuam editáveis.
                 </p>
                 {/* link só aparece quando o vínculo resolve E o tipo tem fluxo soberano de abertura (compra). */}
                 {operacaoAbrivel && (
@@ -2692,15 +2696,10 @@ export function LancamentoV2Dialog({
                 ⚠ E O ESPELHO NÃO É O CONTROLE: a RPC continua sendo a autoridade, e se a
                 corrida acontecer o erro dela aparece no toast do chamador. */}
             {isEdit && vinculoDisponivel && lancamento && clienteAtual?.id && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-[22px] px-[9px] text-[10px] gap-1"
-                onClick={() => setVincularAberto(true)}
-                data-testid="acao-vincular-oc"
-              >
+              <GestoDeOperacao podeAlterar={podeAlterarOperacao} motivo={MOTIVO_SEM_ACESSO_VINCULAR}
+                onClick={() => setVincularAberto(true)} testId="acao-vincular-oc">
                 <Link2 className="h-3 w-3" /> Vincular à operação
-              </Button>
+              </GestoDeOperacao>
             )}
             {/* FIN-V2-HOMOLOG-FIX-01 (item 2): "Criar OC a partir deste lançamento" tambem aqui, ao lado do Vincular — a MESMA
                 regra da lista (`podeCriarOCDoLegado`) e o MESMO dialogo. */}
@@ -2719,15 +2718,10 @@ export function LancamentoV2Dialog({
                 de cancelamento). O lancamento fica; sai a ligacao. */}
             {isEdit && lancamento && clienteAtual?.id && parteOCViva
               && podeOferecerDesvinculo({ lancamentoId: lancamento.id, cancelado: lancamento.cancelado, temParteViva: true }) && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-[22px] px-[9px] text-[10px] gap-1"
-                onClick={() => setDesvincularAberto(true)}
-                data-testid="acao-desvincular-oc"
-              >
+              <GestoDeOperacao podeAlterar={podeAlterarOperacao} motivo={MOTIVO_SEM_ACESSO_DESVINCULAR}
+                onClick={() => setDesvincularAberto(true)} testId="acao-desvincular-oc">
                 <Unlink className="h-3 w-3" /> Desvincular da operação
-              </Button>
+              </GestoDeOperacao>
             )}
             {isEdit && onDelete && lancamento && (
               <RodapeCancelamento

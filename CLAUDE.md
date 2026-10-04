@@ -162,7 +162,7 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 04/10/2026 (ACESSOS-02b, +29: `src/acessoRotas.test.tsx` 15, `src/v2/lib/acessoSaidas.test.tsx` 14; antes o ACESSOS-02a, +26 em `src/v2/lib/acessoTelas.test.tsx`; antes o OC-CC-ACOES-LINHA-02, +20: `src/components/venda/abaContaCorrente.test.tsx` 11,
+  Baseline em 04/10/2026 (ACESSOS-02c, +17 em `src/v2/lib/acessoGestos.test.tsx`; antes o ACESSOS-02b, +29: `src/acessoRotas.test.tsx` 15, `src/v2/lib/acessoSaidas.test.tsx` 14; antes o ACESSOS-02a, +26 em `src/v2/lib/acessoTelas.test.tsx`; antes o OC-CC-ACOES-LINHA-02, +20: `src/components/venda/abaContaCorrente.test.tsx` 11,
   `src/lib/oc/abrirLancamentoDaOC.test.ts` 7, `src/components/compra/despesasContaCorrente.test.tsx` 2; antes o UI-LINHA-UNICA-01, +2: `src/components/venda/abaContaCorrente.test.tsx` 1,
   `src/components/financeiro-v2/documentosLayout.test.tsx` 1; antes o OC-BOITEL-REVALORAR-SALVAR-01, +16 em `src/lib/oc/revalorarAoSalvar.test.tsx`; antes o
   FIN-DOCUMENTO-FORM-01, +27 em `src/components/financeiro-v2/documentoFormPorTipo.test.tsx`, e
@@ -180,7 +180,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3356
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3373
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -290,6 +290,32 @@ CONSULTAM: a lateral (`V2Sidebar`, por `gruposVisiveis`), o drawer (`V2ContextDr
     consultar o ajudante. "Vincular à operação" e' dialogo, nao muda de tela.
   ⚠ DECIDIDO (Gabriel, 04/10): a PARCELA DE FINANCIAMENTO fica SEM item de abrir para quem nao tem a tela de Financiamentos — o
     "Ver contrato" era o unico, e nao entra item desabilitado no lugar; a linha segue visivel com o 🏦.
+- ⚠ ATALHO SOME; GESTO FICA DESABILITADO COM O MOTIVO (ACESSOS-02c, Gabriel 04/10, so' tela): quem nao tem acesso a' tela da operacao
+  nao executa, a partir das telas liberadas, gesto que ALTERA a operacao comercial. O gesto fica VISIVEL e APAGADO, com o motivo no
+  `title` e escrito ao lado (10px), e o clique nao dispara — a pessoa nao ve^ o efeito nem teria como desfazer. Um ajudante so',
+  `usePodeAlterarOperacao()` (`src/v2/hooks/usePodeAbrir.ts`: nivel 'editar' em `TELA_DA_OPERACAO`, a mesma tela dos atalhos do
+  02b), e uma peca que desenha, `GestoDeOperacao` (`src/components/financeiro-v2/GestoDeOperacao.tsx`); nenhum `if` de perfil no
+  ponto de uso. Para o admin e para quem edita a tela, nada muda. ⚠ E' O QUE A TELA OFERECE: a trava de gravacao e' o 01F.
+  · ONDE VALE (`LancamentoV2Dialog`, o unico lugar das tres telas com esses gestos): "Desvincular da operação" ("só quem tem acesso
+    à operação pode desvincular") e "Vincular à operação" ("só quem tem acesso à operação pode vincular").
+  · TEXTOS PARA QUEM NAO TEM A TELA (donos em `src/lib/financeiro/cancelamentoLancamento.ts`): a faixa de origem diz "(ajustados
+    pelo administrador na operação)" no lugar de "(ajuste na OC)" (`ondeAjustarTituloOC`), e o rodape "Título de operação comercial
+    — alterações na operação são feitas pelo administrador" (`MOTIVO_BLOQUEIO_TITULO_OC_SEM_ACESSO`; o `RodapeCancelamento` troca a
+    frase quando nao recebe `onAbrirOC`).
+  · NAO E' GESTO DE OPERACAO, E FICA: salvar o que o titulo de OC deixa editar (data prevista, conta, descricao, observacao,
+    fornecedor, safra), realizar/conciliar/desfazer conciliacao (a liquidacao da OC acompanha pelo gatilho — fluxo que as tres telas
+    PRECISAM), o desfazer de importacao do extrato (a RPC ja' recusa lancamento de OC viva) e a aba Documentos do lancamento.
+  ⚠ EXCECAO CONSCIENTE (Gabriel, 04/10): "Criar OC a partir deste lançamento" (menu da linha e rodape do modal) continua SUMINDO
+    para quem nao tem a tela, como no 02b — criar operacao sem poder abri-la nao se oferece, nem apagado.
+  ⚠ A ABA DOCUMENTOS DE UM TITULO DE OC FICA LIBERADA (anexar nota e comprovante e' trabalho do financeiro), e GRAVA NA OPERACAO
+    (`oc_documento_registrar/editar/cancelar`, `useLancamentoDocumentos.ts`); o cancelamento de documento de OC segue a frente
+    DOC-CANCELAR-OC-01.
+  ⚠ DIVIDA ACESSOS-TEXTO-DESFAZER-01: textos que ainda mandam ao "Desfazer compromisso" fora do modal, lugar que o perfil do piloto
+    nao alcanca — o cancelar em lote (`FinanceiroV2Tab.tsx` ~:2999 e o toast ~:1423) e o toast do hook (`useFinanceiroV2.ts` ~:1199,
+    `MOTIVO_BLOQUEIO_TITULO_OC`).
+  ⚠ O modal zootecnico aberto pelo lancamento segue a divida ACESSOS-SAIDA-MODAL-ZOO-01. O rodape de 32px com o motivo + o botao
+    apagado + a frase do titulo NAO foi medido com perfil sem a tela (so' se ve^ com usuario de teste). No teste, deixar o `onClick`
+    no botao apagado nao derruba nada (o `disabled` ja' impede o clique): mutacao sobrevivente aceita.
 - ⚠ O ENDERECO E' "/" (ACESSOS-02b; o dominio proprio aponta para o mesmo projeto): o sistema abre e navega na raiz. `/v2` e
   `/v2/...` continuam ABRINDO a mesma tela e sao trocados por "/" na barra, com query string e hash intactos (`ehEnderecoV2` e o
   efeito no `AppRouter`). ⚠ E' TROCA DE ENDERECO, NAO DESMONTE: as rotas "/" e "/v2" montam o MESMO `<V2Index />`; um `<Navigate>`

@@ -16,3 +16,19 @@ export function usePodeAbrir(tela: V2Section): boolean {
   const { clienteAtual, isAdmin } = useCliente();
   return nivelDaTela(clienteAtual?.perfil ?? null, isAdmin, tela) !== 'nao';
 }
+
+/** A tela pela qual se abre e se altera uma operacao comercial — a MESMA que os atalhos do ACESSOS-02b consultam. */
+export const TELA_DA_OPERACAO: V2Section = 'lancamentos-zoot';
+
+/**
+ * A PESSOA PODE ALTERAR UMA OPERACAO COMERCIAL? — ACESSOS-02c. O ajudante de quem desenha um GESTO que altera a operacao a partir
+ * de outra tela (vincular e desvincular o lancamento, no modal do Financeiro). Exige nivel 'editar' na tela da operacao.
+ *
+ * ⚠ ATALHO SOME, GESTO FICA APAGADO COM O MOTIVO: quem nao tem a tela da operacao nao ve^ o efeito do gesto nem tem como desfaze^-lo
+ *   — o botao continua la', desabilitado, e diz por que (`GestoDeOperacao`). Para o admin e para quem edita a tela, true: nada muda.
+ * ⚠ E' O QUE A TELA OFERECE, NAO A TRAVA: a gravacao por perfil e' do banco (01F).
+ */
+export function usePodeAlterarOperacao(): boolean {
+  const { clienteAtual, isAdmin } = useCliente();
+  return nivelDaTela(clienteAtual?.perfil ?? null, isAdmin, TELA_DA_OPERACAO) === 'editar';
+}
