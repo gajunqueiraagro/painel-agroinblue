@@ -11,6 +11,8 @@ import {
   statusTemPagamento,
   pagamentoAoTrocarStatus,
   pagamentoParaGravar,
+  STATUS_PALETA,
+  STATUS_PILULA_BASE,
 } from '@/lib/financeiro/statusFinanceiro';
 import { TIPOS_DOCUMENTO, formatNFNumber, extractNFDigits, type TipoDocumento } from '@/lib/financeiro/documentoHelper';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -1391,7 +1393,15 @@ export function LancamentoV2Dialog({
   const resumoTipoLabel = TIPOS_OPERACAO.find(t => t.value === tipoOperacao)?.label ?? tipoOperacao;
   // Cor semântica SÓ do valor do Tipo (categorias reais do form): saída=vermelho, entrada=azul, transferência=cinza.
   const resumoTipoCor = isTransferencia ? 'text-zinc-400' : isEntrada ? 'text-blue-500' : 'text-red-500';
-  const resumoStatusLabel = STATUS_OPTIONS.find(s => s.value === statusTransacao)?.label ?? statusTransacao;
+  const resumoStatusOpcao = STATUS_OPTIONS.find(s => s.value === statusTransacao);
+  const resumoStatusLabel = resumoStatusOpcao?.label ?? statusTransacao;
+  /* FIN-RESUMO-PAGAMENTO-01 — a cor do status é a da paleta dona (`STATUS_PALETA`), nunca escrita aqui: previsto, programado e
+     agendado só texto em semibold; realizado na pílula com caixa. Status fora da lista do modal (legado) fica sem cor. */
+  const resumoStatusCor = (() => {
+    if (!resumoStatusOpcao) return undefined;
+    const paleta = STATUS_PALETA[resumoStatusOpcao.value];
+    return paleta.comCaixa ? `${STATUS_PILULA_BASE} ${paleta.pilula}` : `${paleta.texto} font-semibold`;
+  })();
 
   // PR-U2c-1C: fornecedoresList/normalizeSearch/filteredFornecedores/effects/keyDown/
   // selectedFornecedorNome migraram para <FavorecidoSelect />.
@@ -2775,7 +2785,6 @@ export function LancamentoV2Dialog({
                   <LinhaResumo rotulo="Valor" valor={valorNum > 0 ? formatMoeda(valorNum) : null} />
                   {!isEntrada && <LinhaResumo rotulo="Conta origem" valor={resumoContaOrigem} quebra />}
                   {(isEntrada || isTransferencia) && <LinhaResumo rotulo="Conta destino" valor={resumoContaDestino} quebra />}
-                  <LinhaResumo rotulo="Status" valor={resumoStatusLabel} />
                 </div>
 
                 <SecaoResumo titulo="Classificação" />
@@ -2785,8 +2794,13 @@ export function LancamentoV2Dialog({
                   <LinhaResumo rotulo="Subcentro" valor={subcentro} quebra />
                 </div>
 
+                {/* FIN-RESUMO-PAGAMENTO-01 — o status mora AQUI (saiu de "Financeiro": uma informação, um lugar), com a cor da
+                    paleta, e o vencimento aparece: previsto/programado/agendado não têm data de pagamento, e o resumo não dizia
+                    quando o lançamento sai do banco. */}
                 <SecaoResumo titulo="Pagamento" />
-                <div>
+                <div data-testid="resumo-pagamento">
+                  <LinhaResumo rotulo="Status" valor={resumoStatusLabel} cor={resumoStatusCor} />
+                  <LinhaResumo rotulo="Vencimento" valor={resumoFmtData(dataVencimento)} />
                   <LinhaResumo rotulo="Pagamento" valor={resumoFmtData(dataPagamento)} />
                   <LinhaResumo rotulo="Forma" valor={formaPgto} quebra />
                   <LinhaResumo rotulo="Modalidade" valor={!isEdit ? (formaPagamentoParc === 'parcelada' ? 'Parcelada' : 'À vista') : null} />
