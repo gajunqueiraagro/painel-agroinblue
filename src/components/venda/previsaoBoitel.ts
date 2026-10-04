@@ -8,7 +8,7 @@
  */
 import { format, addDays, parseISO } from 'date-fns';
 import { siglaCategoria } from '@/lib/financeiro/produtoOC';
-import { subcentroVendaPorCategoria, SUBCENTRO_DESPESA_VENDA, SUBCENTRO_ADIANTAMENTO_BOITEL } from '@/hooks/useOperacaoLiquidacao';
+import { subcentroVendaPorCategoria, SUBCENTRO_DESPESA_VENDA, SUBCENTRO_ADIANTAMENTO_BOITEL, SUBCENTRO_DEVOLUCAO_ADIANTAMENTO_BOITEL } from '@/hooks/useOperacaoLiquidacao';
 import { custosDaVendaBoitel, principalDaPrevisaoBoitel, derivadosBoitel, type ValorDaVendaBoitel } from '@/components/venda/BoitelNegociacaoDerivado';
 import { faltamDosCinco, type BoitelEdicao } from '@/components/venda/BoitelBlocosModais';
 import type { LinhaPrevisao } from '@/components/compra/AbaCompromissosOC';
@@ -213,9 +213,13 @@ export function linhasPrevisaoBoitel({
     vencimentoPrevisto: dataAbate,
     loteId: principal.loteId,
   });
+  /* ⚠ A DEVOLUCAO NASCE NA CONTA DELA, FORA DO DRE — OC-BOITEL-ADIANTAMENTO-01a. Era `subEntrada` ("Venda em Boitel",
+     1150, receita): a devolucao inflava a receita da venda pelo valor do adiantamento, e as tres que existiam foram
+     reclassificadas a' mao depois de nascer. "Devolucao de Adiantamento de Boitel" (3020, Entrada Financeira) e' o par da
+     saida ("Adiantamento de Boitel", 5010) e e' o subcentro que `_oc_vinculo_mapa` espera para este componente. */
   if (antecipado > 0) linhas.push({
     natureza: 'obrigacao', componente: 'adiantamento_devolvido',
-    subcentro: subEntrada,
+    subcentro: SUBCENTRO_DEVOLUCAO_ADIANTAMENTO_BOITEL,
     valor: antecipado,
     rotulo: 'Recebimento ref. adiantamento',
     descricao: `${rot} - Adiantamento devolvido`,
@@ -233,7 +237,7 @@ export function linhasPrevisaoBoitel({
     });
     if (!(antecipado > 0)) {
       linhas.push(zerada('adiantamento', SUBCENTRO_ADIANTAMENTO_BOITEL, 'Adiantamento ao boitel', `${rot} - Adiantamento`));
-      linhas.push(zerada('adiantamento_devolvido', subEntrada, 'Recebimento ref. adiantamento', `${rot} - Adiantamento devolvido`));
+      linhas.push(zerada('adiantamento_devolvido', SUBCENTRO_DEVOLUCAO_ADIANTAMENTO_BOITEL, 'Recebimento ref. adiantamento', `${rot} - Adiantamento devolvido`));
     }
     if (!(foraDoBoitel > 0)) {
       linhas.push(zerada('frete', SUBCENTRO_DESPESA_VENDA, 'Despesas fora do boitel', `${rot} - Despesas fora do boitel`));

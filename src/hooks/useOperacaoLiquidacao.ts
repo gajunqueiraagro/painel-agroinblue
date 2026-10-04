@@ -86,6 +86,11 @@ export function subcentroAbatePorCategoria(categoria: string): string | null {
 export const SUBCENTRO_DESPESA_VENDA = 'Impostos e Despesas de Abates e Vendas';
 /* O adiantamento que o produtor paga ao boitel. `2-Saídas` / centro `Ajustes`. */
 export const SUBCENTRO_ADIANTAMENTO_BOITEL = 'Adiantamento de Boitel';
+/* O adiantamento que VOLTA no acerto do boitel. `1-Entradas`, Entrada Financeira, 3020, FORA do DRE — o par do de cima.
+   ⚠ O NOME E' O DO PLANO E O DE `_oc_vinculo_mapa` (banco), que so' aceita `adiantamento_devolvido` neste subcentro. O
+     adiantamento muda QUANDO o dinheiro passa, nao QUANTO a venda vale: nenhuma das duas pontas e' receita
+     (OC-BOITEL-ADIANTAMENTO-01a). */
+export const SUBCENTRO_DEVOLUCAO_ADIANTAMENTO_BOITEL = 'Devolução de Adiantamento de Boitel';
 const CATEGORIAS_FEMEAS_COMPRA = new Set<string>(['mamotes_f', 'desmama_f', 'novilhas', 'vacas']);
 const CATEGORIAS_VALIDAS = new Set<string>(CATEGORIAS.map(c => c.value));
 

@@ -14,6 +14,7 @@ import {
   type EntradaPrevisaoBoitel,
 } from '@/components/venda/previsaoBoitel';
 import { boitelVazio } from '@/components/venda/BoitelBlocosModais';
+import { SUBCENTRO_DEVOLUCAO_ADIANTAMENTO_BOITEL } from '@/hooks/useOperacaoLiquidacao';
 import { valorDaVendaBoitel, derivadosBoitel, type BoitelEdicao } from '@/components/venda/BoitelNegociacaoDerivado';
 
 const BOITEL = 'boitel-ricardo';
@@ -53,6 +54,42 @@ describe('modalidade A (boitel abate) — a previsao de sempre', () => {
 
   it('o frigorifico gravado NAO muda nada na A — so' + "'" + ' o quem-abate decide', () => {
     expect(linhasPrevisaoBoitel(entrada('boitel', LIQUIDO, JBS))).toEqual(linhasPrevisaoBoitel(entrada('boitel', LIQUIDO, '')));
+  });
+});
+
+/* ── OC-BOITEL-ADIANTAMENTO-01a: a devolucao do adiantamento nasce na conta dela, fora do DRE ── */
+describe('modalidade A com adiantamento — a devolucao em "Devolução de Adiantamento de Boitel"', () => {
+  const comAdiantamento = (): EntradaPrevisaoBoitel => {
+    const e = entrada('boitel', LIQUIDO);
+    const ad = { possuiAdiantamento: true, valorAdiantamentoDiarias: 131355, valorAdiantamentoSanitario: 2100, dataAdiantamento: '2023-07-12' };
+    return { ...e, boitelRealSalvo: e.boitelRealSalvo ? { ...e.boitelRealSalvo, ...ad } : null };
+  };
+
+  it('(a) linha viva: entrada de 133.455,00 em 3020, na data do acerto; a saida segue em "Adiantamento de Boitel"', () => {
+    const l = linhasPrevisaoBoitel(comAdiantamento()) ?? [];
+    const dev = l.filter(x => x.componente === 'adiantamento_devolvido');
+    expect(dev).toHaveLength(1);
+    expect(dev[0]).toMatchObject({ natureza: 'obrigacao', subcentro: SUBCENTRO_DEVOLUCAO_ADIANTAMENTO_BOITEL, valor: 133455,
+      favorecidoId: BOITEL, rotulo: 'Recebimento ref. adiantamento' });
+    expect(SUBCENTRO_DEVOLUCAO_ADIANTAMENTO_BOITEL).toBe('Devolução de Adiantamento de Boitel');   // o nome do plano e do `_oc_vinculo_mapa`
+    expect(l.find(x => x.componente === 'adiantamento')).toMatchObject({ subcentro: 'Adiantamento de Boitel', valor: 133455 });
+    /* a devolucao e o principal vencem no mesmo dia (o acerto) */
+    expect(dev[0].vencimentoPrevisto).toBe(l.find(x => x.natureza === 'principal')?.vencimentoPrevisto);
+  });
+
+  it('(b) o principal continua em "Venda em Boitel", com o liquido do acerto — o adiantamento nao muda quanto a venda vale', () => {
+    const l = linhasPrevisaoBoitel(comAdiantamento()) ?? [];
+    expect(l.find(x => x.natureza === 'principal')).toMatchObject({ subcentro: 'Venda em Boitel', valor: LIQUIDO, loteId: LOTE });
+    /* nenhuma outra linha usa a conta da devolucao */
+    expect(l.filter(x => x.subcentro === SUBCENTRO_DEVOLUCAO_ADIANTAMENTO_BOITEL).map(x => x.componente)).toEqual(['adiantamento_devolvido']);
+  });
+
+  it('(a) linha ZERADA (realizado sem adiantamento): a devolucao zerada tambem aponta a conta dela', () => {
+    const l = linhasPrevisaoBoitel(entrada('boitel', LIQUIDO)) ?? [];
+    const z = l.filter(x => x.zerada && x.componente === 'adiantamento_devolvido');
+    expect(z).toHaveLength(1);
+    expect(z[0]).toMatchObject({ subcentro: SUBCENTRO_DEVOLUCAO_ADIANTAMENTO_BOITEL, valor: 0 });
+    expect(l.find(x => x.zerada && x.componente === 'adiantamento')?.subcentro).toBe('Adiantamento de Boitel');
   });
 });
 

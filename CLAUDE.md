@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 04/10/2026 (PR-CONC-SALDOS-LAYOUT-01, +3 em `src/pages/conciliacaoDono.test.tsx`; antes o PR-CONC-STATUS-SALDO-01b, +9: `src/lib/conciliacao/resumoDoDono.test.ts` 2,
+  Baseline em 04/10/2026 (OC-BOITEL-ADIANTAMENTO-01a, +3 em `src/components/venda/previsaoBoitel.test.ts`; antes o
+  PR-CONC-SALDOS-LAYOUT-01, +3 em `src/pages/conciliacaoDono.test.tsx`; antes o PR-CONC-STATUS-SALDO-01b, +9: `src/lib/conciliacao/resumoDoDono.test.ts` 2,
   `src/pages/conciliacaoDono.test.tsx` 6, `src/v2/components/SeletorPeriodo.test.tsx` 1; antes o PR-CONC-INTERNA-SEPARADA-01b, +31: `src/lib/conciliacao/resumoDoDono.test.ts` 10,
   `src/lib/conciliacao/resumoMes.test.ts` 5, `src/components/conciliacao/painelDono.test.tsx` 5, `src/pages/conciliacaoDono.test.tsx` 9,
   `src/components/financeiro-v2/espelhoDono.test.tsx` 2; antes o PR-CONC-SALDO-UMA-REGUA-02b, +10 −8: `src/components/conciliacao/painelDono.test.tsx` 10; sairam os 8
@@ -172,7 +173,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3181
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3184
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -1839,6 +1840,26 @@ docs/historico/frentes-ate-2026-09-29.md.)
   predicado `realizadoAplicadoNoLote`). `ocBoitelReal` e' o rascunho, `ocBoitelRealSalvo` o que o banco tem — quem le'
   numero le' o salvo. Duas modalidades: A (o boitel abate) e B (abate em nome do produtor; acerto em 1155)
   (OC-BOITEL-VALOR-01, OC-BOITEL-REALIZADO-UX-01, BOITEL-ABATE-PRODUTOR-01).
+- ⚠ BOITEL (MODALIDADE A) COM ADIANTAMENTO: O SLOT E' O LIQUIDO DO ACERTO, E O ADIANTAMENTO SAO DUAS PONTAS FORA DO DRE
+  (OC-BOITEL-ADIANTAMENTO-01a, Gabriel 04/10: "se tem devolucao do adiantamento, tem que estar na OC e no financeiro, igual, sem
+  duplicar"). No financeiro a OC tem TRES lancamentos: a SAIDA do adiantamento, na data em que saiu ("Adiantamento de Boitel",
+  5010, `SUBCENTRO_ADIANTAMENTO_BOITEL`); o RECEBIMENTO REF. OPERACAO (principal, "Venda em Boitel", 1150); e o RECEBIMENTO REF.
+  ADIANTAMENTO DEVOLVIDO ("Devolução de Adiantamento de Boitel", 3020, `SUBCENTRO_DEVOLUCAO_ADIANTAMENTO_BOITEL`,
+  `src/hooks/useOperacaoLiquidacao.ts`) — os dois ultimos na data do acerto, somando o "a receber do boitel"
+  (`saldoReceberBase`). O adiantamento muda QUANDO o dinheiro passa, nao QUANTO a venda vale: nenhuma das duas pontas e'
+  receita (`compoe_dre = false` nas duas contas). Dono das linhas: `linhasPrevisaoBoitel` (`previsaoBoitel.ts`); dono do mapa
+  componente -> subcentro no banco: `_oc_vinculo_mapa` — o front se alinha a ele.
+  ⚠ NASCE DE DEFEITO MEDIDO: a linha `adiantamento_devolvido` nascia em `subEntrada` (1150, receita) e inflaria o DRE pelo valor
+    do adiantamento; as tres devolucoes que existiam (b58bf556, 7f7de76f, 581d075c) foram reclassificadas a' mao depois de
+    nascer — os LANCAMENTOS estao em 3020, mas os COMPROMISSOS da b58bf556 e da 7f7de76f ainda dizem "Venda em Boitel" /
+    "Venda de Machos Adultos" (nao corrigido).
+  ⚠ A SAIDA JA' PAGA NO LEGADO E' ADOTADA, NUNCA RECRIADA (`oc_vincular_lancamento`, que muda so' competencia e safra do
+    lancamento — aceito pelo Gabriel); o "Gerar compromissos" nao a propoe. A conferencia OC = financeiro e' o "Financeiro X
+    faltam/sobram Y" do painel: AVISA, nao trava.
+  ⚠ FILA: 01b ("Gerar compromissos" propoe principal + devolucao na A com adiantamento) · adocao pelo lado da OC · dado: Vera
+    2ca81c1b (falta devolucao 133.455,00 em 03/10/25) e 8dcafa8e (51.951,00 em 09/12/25), 7f7de76f (devolucao 42.416,00 ->
+    46.458,50), RRCC f2a065e8 (tres recebimentos nas datas do banco), NJ 3260d1c8 (principal a 2.505.586,19, slot fica);
+    b58bf556 parada; RRCC 412330f3 aguardando o Gabriel (391.212,02 sem explicacao).
 - ⚠ O PAINEL LATERAL DA VENDA EM BOITEL E' UMA CONTA SO', DE CIMA PARA BAIXO (PR-OC-BOITEL-PAINEL-01, Gabriel 02/10): acerto
   itemizado → Saldo do acerto → + Adiantamento devolvido → A RECEBER DO BOITEL (o Pix, `saldoReceberBase`) → − Adiantamento
   (ja' era seu) → − Gastos diretos (`custosDoProdutor`) → − Parte do parceiro (`pParte`) → LIQUIDO NO BOLSO
