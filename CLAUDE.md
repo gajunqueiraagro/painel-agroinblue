@@ -887,8 +887,12 @@ docs/historico/frentes-ate-2026-09-29.md.)
   (DRE-MODAL-VALOR-01a, OC-CC-CLASSIFICACAO-01).
 - ⚠ `apply_migration` REGISTRA COM O TIMESTAMP DO DIA, nao com o do nome do arquivo: todo registro diz os dois
   ("⚠ registrada como ...") e confere ledger = arquivo por md5.
-- ⚠ REPLACE DE VIEW LEVA `WITH (security_invoker = true)` e se confere em `pg_class.reloptions`; funcao SECURITY
-  DEFINER nova nasce com EXECUTE para PUBLIC — fechar a ACL e conferir `proacl` depois.
+- ⚠ REPLACE DE VIEW LEVA `WITH (security_invoker = true)` e se confere em `pg_class.reloptions`.
+- ⚠ CHECKLIST DE MIGRATION QUE CRIA FUNCAO (SEG-TENANT-VARREDURA-01C, 04/10): FUNCAO NOVA NASCE FECHADA — so' `postgres` e
+  `service_role`. TODA MIGRATION QUE CRIA FUNCAO CHAMADA PELA TELA LEVA `GRANT EXECUTE ON FUNCTION … TO authenticated` (e
+  `service_role` quando couber) NA PROPRIA MIGRATION; SEM ISSO A TELA RECEBE "permission denied for function". Nunca conceder a
+  `anon` nem a PUBLIC. `DROP + CREATE` (mudanca de retorno) PERDE a ACL: re-conceder. Conferir `proacl` depois e rodar
+  `supabase/tests/seg_tenant_varredura_01c_test.sql`. Interna (`_fn_…`) fica como nasce.
 - ⚠ FUNCAO PL/pgSQL CHAMADA A CADA CARREGAMENTO DE TELA COM PARAMETRO DE CONTA LEVA `SET plan_cache_mode =
   force_custom_plan` (PR-CONC-CAIXA-PONTAS-PLANO-HOTFIX, 03/10). Depois de 5 execucoes na mesma sessao o PL/pgSQL troca para o
   plano GENERICO, que nao ve' o parametro: `fn_caixa_sistema_pontas` estimava 2 linhas onde havia 19.645 (NJ Banco do Brasil) e
@@ -1772,6 +1776,49 @@ docs/historico/frentes-ate-2026-09-29.md.)
   ⚠ O QUE RESTA DA VARREDURA: 01C revogar EXECUTE (`anon` em 3 DEFINER — `fn_recorrencia_cancelar`, `oc_ajustar_valor_compromisso`,
     `oc_salvar_abate` — e em 15 INVOKER; `authenticated` nas sem chamador no front) e a guarda que PULA sem usuario
     (`fn_caixa_sistema_pontas`, `fn_conciliacao_resumo_mes`, `fn_conciliacao_status_ano` e mais uma) · 01D escrita agricola (barter,
+    mandioca, graos, estoque, locais) e `fn_promover_staging`, ~18 corpos · 01E leitura restante (DRE pecuaria, painel de safra,
+    estoque de graos, auditorias), ~20 corpos · 01F PERFIL (`tenant_ok` e as policies nao distinguem leitura de escrita).
+- ⚠ NENHUMA FUNCAO DO SISTEMA E' EXECUTAVEL SEM LOGIN, E FUNCAO NOVA NASCE FECHADA (SEG-TENANT-VARREDURA-01C, Gabriel 04/10, so'
+  banco, so' permissoes — NENHUM corpo mudou; migration 20261027192900, ⚠ registrada como 20261004212142; ledger = arquivo, md5
+  7bc00df2…). MEDIDO antes: o papel `anon` (quem nem logou) executava 118 das 441 funcoes do `public`, sempre por heranca de
+  PUBLIC: 3 SECURITY DEFINER (`fn_recorrencia_cancelar`, `oc_ajustar_valor_compromisso`, `oc_salvar_abate`), 23 INVOKER, 57 de
+  trigger e 35 de extensao. Nenhuma gravava ou lia dado sem usuario (as DEFINER recusam no corpo; as INVOKER batem em "permission
+  denied for table", `anon` nao tem privilegio em tabela nenhuma do `public`), mas a porta estava aberta e a lista crescia sozinha.
+  · REGRA 1 — FUNCAO DO SISTEMA NO `public` NAO E' EXECUTAVEL POR `anon` NEM POR PUBLIC. 118 -> 35: as 83 do sistema (3 + 23 + 57)
+    levaram `REVOKE EXECUTE … FROM PUBLIC, anon` e `GRANT … TO authenticated, service_role`, nomeadas uma a uma (guarda de
+    origem: 83 e o md5 da lista, ou 0). `authenticated` (359) e `service_role` (399) ficaram com o MESMO conjunto, por md5; o md5
+    do `prosrc` das 441 e' identico.
+  · EXCECAO NOMEADA, E SO' ELA: as 35 funcoes de EXTENSAO (`pg_trgm` 31, `unaccent` 4) seguem com PUBLIC — sao biblioteca pura e
+    pertencem ao `supabase_admin`, de quem o `postgres` nao e' membro (o REVOKE nelas nao da' erro e nao tem efeito; `ALTER DEFAULT
+    PRIVILEGES FOR ROLE supabase_admin` e' recusado, 42501). Extensao nova no `public` aparece no teste (T2).
+  · REGRA 2 — FUNCAO NOVA NASCE FECHADA: `ALTER DEFAULT PRIVILEGES FOR ROLE postgres REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC` (⚠ o
+    padrao de PUBLIC e' GLOBAL do papel — o padrao por schema so' ACRESCENTA —, entao vale para funcao que o `postgres` criar em
+    qualquer schema) e `… IN SCHEMA public REVOKE … FROM anon`. No `public` a funcao nova nasce so' com `postgres` e
+    `service_role`: ⚠ QUEM A EXPOE A' TELA DA' `GRANT EXECUTE … TO authenticated` NA PROPRIA MIGRATION, SENAO A TELA RECEBE
+    "permission denied for function" (o checklist de migration, na secao DADO, BANCO E METODO). Isto substitui o "funcao SECURITY
+    DEFINER nova nasce com EXECUTE para PUBLIC — fechar a ACL".
+  · GUARDA DA LISTA: `supabase/tests/seg_tenant_varredura_01c_test.sql` (roda como `postgres`, termina em RAISE "OK"): T0 o
+    detector acha uma funcao aberta de proposito; T1 zero funcoes do sistema executaveis por `anon`, e a falha NOMEIA as que
+    achar; T2 so' `pg_trgm` e `unaccent` abertas; T3 funcao nova nasce sem `anon` e sem `authenticated`, com `service_role`; T4
+    chamada de verdade como `anon` -> 42501 "permission denied for function", `unaccent` responde. Mutacao (GRANT a `anon` em
+    `fn_get_mesa_v2_mode`) cai em T1 com o nome. Rodar depois de toda migration que cria funcao.
+  · PROVAS NO VIVO (iguais ao ensaio): `anon` -> "permission denied for function" nas 3 DEFINER e em 16 INVOKER chamadas; com o JWT
+    do gestor da NJ as tres seguem chamaveis e a guarda responde como antes (recorrencia inexistente P0001; compromisso da Vera
+    42501 "Sem permissao nesta operacao"; abate NJ P0001 "Cenario invalido"; abate do Agnaldo 42501 "Acesso negado"); os cinco
+    testes SQL (`seg_tenant_varredura_01a`, `_01b`, `_01b2`, `conc_saldo_uma_regua_01b`, `conc_status_saldo_01a`) OK.
+  ⚠ P9 DE NAVEGADOR PENDENTE POR QUEDA DE SESSAO; CONFERIDO DEPOIS DO COMMIT (a sessao caiu por troca de usuario do Gabriel, 2 min
+    antes da migration; nao e' efeito dela).
+  ⚠ ACHADO, sem corrigir: `fn_recorrencia_cancelar` diz "recorrencia inexistente" (P0001) antes de "acesso negado" — distingue
+    id que existe de id que nao existe para quem nao e' do cliente (a regra do 01A e' UMA recusa so').
+  ⚠ DIVIDA SEG-AUTHENTICATED-SEM-CHAMADOR-01: 21 funcoes com EXECUTE para `authenticated` SEM CHAMADOR NO FRONT (medido por nome;
+    revogar e' decisao caso a caso — algumas sao chamadas por outras funcoes ou pelo arquiteto): `agri_carga_mandioca_completar`,
+    `auditar_integridade_classificacao`, `cancel_financeiro_importacao_v2`, `fn_ajustes_sugeridos_mes`, `fn_area_vigente_mes`,
+    `fn_auditoria_consistencia_zoot`, `fn_conciliacao_cartoes`, `fn_conciliacao_soberana`, `fn_reativar_vinculo_extrato`,
+    `fn_reconciliar_todos_financiamentos`, `fn_saldo_inicial_pasto`, `fn_transferir_vinculo_extrato`, `fn_ws_conciliacao`,
+    `fn_zoot_cache_buracos`, `oc_adotar_titulo_financeiro`, `oc_alterar_parcelas`, `oc_criar_rascunho`, `oc_derivar_status`,
+    `oc_editar_negociacao`, `oc_limpar_operacao_teste`, `oc_reabrir_para_reconciliacao`.
+  ⚠ O QUE RESTA DA VARREDURA: a guarda que PULA sem usuario (`fn_caixa_sistema_pontas`, `fn_conciliacao_resumo_mes`,
+    `fn_conciliacao_status_ano` e mais uma — hoje `anon` ja' nao as executa; sobra o canal SQL) · 01D escrita agricola (barter,
     mandioca, graos, estoque, locais) e `fn_promover_staging`, ~18 corpos · 01E leitura restante (DRE pecuaria, painel de safra,
     estoque de graos, auditorias), ~20 corpos · 01F PERFIL (`tenant_ok` e as policies nao distinguem leitura de escrita).
 - ⚠ A GRAVACAO DO EXTRATO E' DO BANCO, E O DESFAZER DIZ O QUE FAZ E RECUSA O QUE NAO PODE (PR-CONC-IMPORT-BANCO-01B, 03/10,
