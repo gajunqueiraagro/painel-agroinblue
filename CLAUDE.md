@@ -162,7 +162,7 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 04/10/2026 (ACESSOS-02a, +26 em `src/v2/lib/acessoTelas.test.tsx`; antes o OC-CC-ACOES-LINHA-02, +20: `src/components/venda/abaContaCorrente.test.tsx` 11,
+  Baseline em 04/10/2026 (ACESSOS-02b, +29: `src/acessoRotas.test.tsx` 15, `src/v2/lib/acessoSaidas.test.tsx` 14; antes o ACESSOS-02a, +26 em `src/v2/lib/acessoTelas.test.tsx`; antes o OC-CC-ACOES-LINHA-02, +20: `src/components/venda/abaContaCorrente.test.tsx` 11,
   `src/lib/oc/abrirLancamentoDaOC.test.ts` 7, `src/components/compra/despesasContaCorrente.test.tsx` 2; antes o UI-LINHA-UNICA-01, +2: `src/components/venda/abaContaCorrente.test.tsx` 1,
   `src/components/financeiro-v2/documentosLayout.test.tsx` 1; antes o OC-BOITEL-REVALORAR-SALVAR-01, +16 em `src/lib/oc/revalorarAoSalvar.test.tsx`; antes o
   FIN-DOCUMENTO-FORM-01, +27 em `src/components/financeiro-v2/documentoFormPorTipo.test.tsx`, e
@@ -180,7 +180,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3327
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3356
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -273,16 +273,45 @@ CONSULTAM: a lateral (`V2Sidebar`, por `gruposVisiveis`), o drawer (`V2ContextDr
 - TELA INICIAL: quem nao tem a 'home' e esta' nela (ao entrar, ao trocar de cliente) cai em `primeiraTelaPermitida` (no piloto,
   Lançamentos Financeiros). ⚠ SO' A 'home' E' TROCADA: outra tela sem acesso mostra o aviso, nao um redirecionamento calado. Sem
   nenhuma tela: "Nenhuma tela liberada para o seu perfil. Fale com o administrador."
+- ⚠ ROTAS FORA DO V2 SO' PARA O ADMIN (ACESSOS-02b): `/caderno-importacao`, `/v3` (e `/v3/*`), `/layout-lab` e `/resumo-operacional`
+  nao passam pelo `V2Index`, entao a guarda dele nao as alcancava. `SoAdmin` (`src/AppRouter.tsx`) as embrulha: quem nao e' admin
+  vai para "/" (e de la' para a primeira tela permitida), sem ver a tela. Nao pisca: o `AppRouter` so' desenha rotas depois de o
+  `ClienteContext` carregar. Rota nova fora do V2 nasce dentro do `SoAdmin`, ou com guarda propria.
+- ⚠ ATALHO PARA TELA SEM ACESSO NAO E' OFERECIDO (ACESSOS-02b): o controle que NAVEGA para uma tela com nivel 'nao' SOME para
+  aquela pessoa; a INFORMACAO da linha fica (o icone da OC, o 🏦 da parcela, o codigo da OC, a frase do bloqueio). Um ajudante so',
+  `usePodeAbrir(tela)` (`src/v2/hooks/usePodeAbrir.ts`, em cima de `nivelDaTela`) — nenhum `if` de perfil no ponto de uso. NAO e' a
+  regra do menu "⋯" da OC (item que nao vale fica desabilitado com o motivo): aqui e' ACESSO. Onde vale hoje:
+  `FinanceiroV2Tab` (icone do produto -> marca sem botao; "Abrir OC", "Ver contrato" e "Criar OC a partir deste lançamento" do menu
+  da linha; o codigo da OC na secao sem caixa, `CelulaOC`) e `LancamentoV2Dialog` ("Abrir →" e "corrigir na operação", por
+  `operacaoAbrivel`; "Abrir OC →" do `RodapeCancelamento`; criar OC do legado; a porta da OC no modal zootecnico). Conciliação e
+  Contas a Pagar/Receber nao tem outra saida. Tela nova liberada para cliente: varrer as saidas dela e usar o ajudante.
+  ⚠ DIVIDA ACESSOS-SAIDA-MODAL-ZOO-01: no modal zootecnico aberto pelo lancamento, "abrir no formulario principal" continua
+    oferecido (tirar a prop faria o modal editar no lugar) — o clique cai no aviso de sem acesso; some quando o modal zootecnico
+    consultar o ajudante. "Vincular à operação" e' dialogo, nao muda de tela.
+  ⚠ DECIDIDO (Gabriel, 04/10): a PARCELA DE FINANCIAMENTO fica SEM item de abrir para quem nao tem a tela de Financiamentos — o
+    "Ver contrato" era o unico, e nao entra item desabilitado no lugar; a linha segue visivel com o 🏦.
+- ⚠ O ENDERECO E' "/" (ACESSOS-02b; o dominio proprio aponta para o mesmo projeto): o sistema abre e navega na raiz. `/v2` e
+  `/v2/...` continuam ABRINDO a mesma tela e sao trocados por "/" na barra, com query string e hash intactos (`ehEnderecoV2` e o
+  efeito no `AppRouter`). ⚠ E' TROCA DE ENDERECO, NAO DESMONTE: as rotas "/" e "/v2" montam o MESMO `<V2Index />`; um `<Navigate>`
+  no lugar desmontaria o `V2Index` a cada `navigate('/v2?flancId=…')` interno e a secao de origem (estado, fora da URL) se perderia
+  — provado por mutacao. `/v2/qualquer-coisa` vira "/" (o V2 nunca leu o subcaminho).
+  ⚠ DIVIDA URL-SEM-V2-CENTRALIZAR-01 (funciona pela troca, mas ainda escreve o endereco antigo, e a barra pisca `/v2` por um
+    instante — ~20 pontos em 6 arquivos, montagem de URL espalhada):
+    `LancamentoV2Dialog.tsx` (~:2070, :2326, :2735, :2969, :2975, :2981), `LancamentoDetalhe.tsx` (~:262, :1148, :1154, :1161),
+    `FinanceiroCaixaTab.tsx` (~:625, :636), `CusteioTxtImportTab.tsx` (~:795), `CadernoImportTab.tsx` (~:156) e os rotulos
+    `tela_origem` de `indicadorCatalogo.ts` (~:336, :365, :393). Um dono de montagem de URL do sistema e' PR proprio.
+- ⚠ DIVIDA — A BARRA DO CELULAR NAO TEM NENHUMA DAS TRES TELAS DO PILOTO (decisao do Gabriel pendente): as cinco abas de
+  `V2MobileNav` sao Home, "Operação" (id `'financeiro'`, que nem e' secao — os dois TS2322 da baseline), Plan., PC-100 e Mais; para o
+  perfil do piloto a barra some, e no celular a pessoa entra em Lançamentos Financeiros e nao tem como ir a's outras duas.
 - ⚠ O PERFIL NAO ADMIN NAO SE PROVA NO NAVEGADOR COM O LOGIN DO ADMIN: provado por teste (`src/v2/lib/acessoTelas.test.tsx`; a rota
   e' lida da FONTE, o `V2Index` nao se monta em teste); o Gabriel homologa com usuario de teste. Nao criar usuario, nao trocar
   perfil, nao mexer em `cliente_membros`.
 - ⚠ O QUE FALTA: (a) o EFEITO de 'ver' nas telas (modo somente leitura por perfil) — hoje a funcao devolve o nivel e nenhuma tela o
   usa; no piloto as tres sao 'editar' para gestor e financeiro, e 'ver' para `leitura`, que hoje EDITARIA; (b) a trava no banco, 01F;
-  (c) a grade por pessoa, ACESSOS-03; (d) o endereco sem `/v2`.
+  (c) a grade por pessoa, ACESSOS-03; (d) [feito no ACESSOS-02b: o endereco e' "/"].
 - ⚠ ACHADOS (medidos, sem corrigir):
-  R1 — a raiz "/" ja' NAO e' o v1: `AppRouter.tsx` redireciona "/" para `/v2` e `pages/Index.tsx` deixou de ser rota (so' fica no
-     repo). `usePermissions.canViewTab` so' e' usado pelo v1, que nao e' mais alcancavel. MAS ha' QUATRO ROTAS FORA DO V2, abertas a
-     qualquer usuario logado, sem consulta de perfil: `/caderno-importacao`, `/v3` (e `/v3/*`), `/layout-lab`, `/resumo-operacional`.
+  R1 — a raiz "/" NAO e' o v1: `pages/Index.tsx` deixou de ser rota (so' fica no repo) e `usePermissions.canViewTab` so' e' usado por
+     ele. [As quatro rotas fora do V2 foram fechadas ao nao admin no ACESSOS-02b, e "/" passou a ser o proprio sistema.]
   R2 — saidas das tres telas para telas nao liberadas (caem no aviso): Lançamentos -> "Abrir OC" e o icone do produto
      (`FinanceiroV2Tab.tsx` ~:2741, ~:2858, ~:2883 -> `abrirOperacaoOC` -> 'lancamentos-zoot'); Lançamentos -> financiamento da
      parcela (~:529, ~:546, ~:563 -> 'financiamentos'); o link "Abrir →" / "corrigir na operação" do modal do lancamento (mesma

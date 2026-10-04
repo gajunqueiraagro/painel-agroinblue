@@ -1,4 +1,5 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { useEffect, type ReactNode } from 'react';
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -13,10 +14,39 @@ import V2NaoEncontrada from '@/v2/pages/V2NaoEncontrada';
 import V3Index from '@/v3/V3Index';
 import LayoutLab from '@/pages/LayoutLab';
 
+/**
+ * ROTA FORA DO V2 SO' PARA O ADMIN DO AGROinBLUE — ACESSOS-02b.
+ *
+ * ⚠ `/caderno-importacao`, `/v3`, `/layout-lab` e `/resumo-operacional` nao passam pelo `V2Index`, entao a guarda de tela dele
+ *   (`nivelDaTela`) nao as alcanca: qualquer usuario logado as abria digitando o endereco. Quem nao e' admin vai para o sistema
+ *   ("/"), onde o `V2Index` o leva a' primeira tela permitida. Para o admin, como sempre.
+ * ⚠ NAO PISCA: o `AppRouter` so' desenha as rotas depois de o `ClienteContext` carregar (o "Carregando fazendas..." acima), e o
+ *   `isAdmin` e' resolvido no mesmo carregamento — aqui ele ja' e' o de verdade.
+ */
+export function SoAdmin({ children }: { children: ReactNode }) {
+  const { isAdmin } = useCliente();
+  return isAdmin ? <>{children}</> : <Navigate to="/" replace />;
+}
+
+/** O endereco antigo: `/v2` e `/v2/qualquer-coisa`. */
+export const ehEnderecoV2 = (pathname: string): boolean => /^\/v2(\/|$)/.test(pathname);
+
 export default function AppRouter() {
   const { user, loading: authLoading } = useAuth();
   const { loading: loadingCliente } = useCliente();
   const { fazendaAtual, loading: fazendaLoading } = useFazenda();
+  /* ═══ O ENDERECO SEM /v2 — ACESSOS-02b ═════════════════════════════════════════════════════════════════════════════════
+     O sistema abre e navega em "/". `/v2` e `/v2/...` (favoritos, links ja' enviados, e os ~20 pontos do codigo que ainda escrevem
+     `/v2?...`) continuam ABRINDO a mesma tela e sao trocados por "/" na barra, com a query string e o hash intactos.
+     ⚠ TROCA DE ENDERECO, NAO DESMONTE: as duas rotas montam o MESMO `<V2Index />` na mesma posicao, e isto aqui so' reescreve a
+       barra (`replace`). Um `<Navigate>` no lugar da rota `/v2` desmontaria o `V2Index` a cada `navigate('/v2?flancId=…')` de
+       dentro do sistema, e a secao de origem (estado dele, que nao vive na URL) se perderia no caminho.
+     ⚠ O HOOK FICA ANTES DOS `return` ANTECIPADOS (regra dos hooks). */
+  const location = useLocation();
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (ehEnderecoV2(location.pathname)) navigate({ pathname: '/', search: location.search, hash: location.hash }, { replace: true });
+  }, [location.pathname, location.search, location.hash, navigate]);
 
   if (authLoading) {
     return (
@@ -46,20 +76,23 @@ export default function AppRouter() {
 
   return (
     <Routes>
-      <Route path="/caderno-importacao" element={<CadernoImportTab />} />
+      {/* ACESSOS-02b — as quatro rotas fora do V2 so' para o admin (`SoAdmin`, acima). */}
+      <Route path="/caderno-importacao" element={<SoAdmin><CadernoImportTab /></SoAdmin>} />
+      <Route path="/v3" element={<SoAdmin><V3Index /></SoAdmin>} />
+      <Route path="/v3/*" element={<SoAdmin><V3Index /></SoAdmin>} />
+      <Route path="/layout-lab" element={<SoAdmin><LayoutLab /></SoAdmin>} />
+      <Route path="/resumo-operacional" element={<SoAdmin><ResumoOperacionalPage /></SoAdmin>} />
+      {/* O endereco antigo monta a MESMA tela; o efeito acima troca a barra para "/" sem desmontar. */}
       <Route path="/v2" element={<V2Index />} />
       <Route path="/v2/*" element={<V2Index />} />
-      <Route path="/v3" element={<V3Index />} />
-      <Route path="/v3/*" element={<V3Index />} />
-      <Route path="/layout-lab" element={<LayoutLab />} />
-      <Route path="/resumo-operacional" element={<ResumoOperacionalPage />} />
       {/* ⚠ "/" LEVA AO /v2 — PR-BARRA-UNICA-01a. Ele levava a `pages/Index.tsx`, o shell v1
           completo: quem abria o sistema sem caminho caía na tela antiga. `replace` para o
           "voltar" do navegador não devolver a raiz e reentrar no redirecionamento.
           ⚠ `Index.tsx` CONTINUA NO REPO, de propósito: deixa de ser rota, não some. Apagar
           900 linhas e as ~24 telas que só ele monta é decisão de produto, não efeito
           colateral de uma troca de rota. */}
-      <Route path="/" element={<Navigate to="/v2" replace />} />
+      {/* ⚠ E DESDE O ACESSOS-02b "/" E' O SISTEMA, sem redirecionar: o `/v2` e' que virou o endereco antigo. */}
+      <Route path="/" element={<V2Index />} />
       {/* ⚠ E O "*" DEIXA DE SER O v1. Uma URL inventada abria o sistema inteiro na tela
           antiga — o oposto de dizer que o endereço não existe. */}
       <Route path="*" element={<V2NaoEncontrada />} />

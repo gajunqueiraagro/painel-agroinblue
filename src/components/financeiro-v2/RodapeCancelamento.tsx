@@ -19,16 +19,19 @@ export function RodapeCancelamento({ tituloOC, bloqueioRebanho, onCancelar, onAb
   tituloOC: { operacaoId: string; tipo: string | null } | null;
   bloqueioRebanho: boolean;
   onCancelar: () => void;
-  onAbrirOC: (operacaoId: string, tipo: string | null) => void;
+  /** ACESSOS-02b — ausente = a pessoa nao acessa a tela da OC: a frase do bloqueio fica, o atalho "Abrir OC →" sai. */
+  onAbrirOC?: (operacaoId: string, tipo: string | null) => void;
 }) {
   if (tituloOC) {
     return (
       <span className="flex items-center gap-1.5 text-[10px] leading-tight text-muted-foreground" data-testid="cancelar-titulo-oc">
         {MOTIVO_BLOQUEIO_TITULO_OC}
+        {onAbrirOC && (
         <Button variant="link" size="sm" className="h-auto shrink-0 p-0 text-[10px] font-medium"
           onClick={() => onAbrirOC(tituloOC.operacaoId, tituloOC.tipo)}>
           Abrir OC →
         </Button>
+        )}
       </span>
     );
   }

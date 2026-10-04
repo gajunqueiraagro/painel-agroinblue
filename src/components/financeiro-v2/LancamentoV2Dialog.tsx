@@ -16,6 +16,7 @@ import {
 } from '@/lib/financeiro/statusFinanceiro';
 import { TIPOS_DOCUMENTO, formatNFNumber, extractNFDigits, type TipoDocumento } from '@/lib/financeiro/documentoHelper';
 import { useCliente } from '@/contexts/ClienteContext';
+import { usePodeAbrir } from '@/v2/hooks/usePodeAbrir';
 import { useLancamentoDocumentos } from '@/hooks/useLancamentoDocumentos';
 import { AbaDocumentosLancamento } from '@/components/financeiro-v2/AbaDocumentosLancamento';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -522,6 +523,9 @@ export function LancamentoV2Dialog({
   documentosAntesDeSalvar,
 }: Props) {
   const { clienteAtual } = useCliente();
+  /* ACESSOS-02b — os atalhos deste modal para a OC ("Abrir →", "corrigir na operação", "Abrir OC →", criar OC do legado) so' se
+     oferecem a quem acessa a tela da OC; os avisos que dizem que o lancamento e' de uma operacao continuam. */
+  const podeAbrirOC = usePodeAbrir('lancamentos-zoot');
   const qc = useQueryClient();
   /* ⚠ OS DOCUMENTOS SÓ EXISTEM DEPOIS QUE O LANÇAMENTO EXISTE: as RPCs recebem
      `p_lancamento_id`, e num lançamento novo não há id para anexar nada. Por isso o hook
@@ -748,7 +752,7 @@ export function LancamentoV2Dialog({
      venda por ali devolvia `oc_compra=1`, que a hidratacao recusa. O conserto foi passar o TIPO
      que este modal ja resolve, em vez de esconder o link: numa venda de boitel — justamente a que
      motivou esta frente — o operador via "classificacao pertence a OC" e nao tinha como chegar la. */
-  const operacaoAbrivel = !!operacaoId && !!operacaoTipo;
+  const operacaoAbrivel = !!operacaoId && !!operacaoTipo && podeAbrirOC;
   const [tipoOperacao, setTipoOperacao] = useState('2-Saídas');
   const [statusTransacao, setStatusTransacao] = useState<string>(STATUS_FINANCEIRO_INICIAL);   // PR-FIN-STATUS-UX-03A-1 — inicial 'previsto' (era 'meta')
   // PR-FIN-STATUS-UX-03A-1 — anti-reclassificação silenciosa do legado 'meta':
@@ -2700,7 +2704,7 @@ export function LancamentoV2Dialog({
             )}
             {/* FIN-V2-HOMOLOG-FIX-01 (item 2): "Criar OC a partir deste lançamento" tambem aqui, ao lado do Vincular — a MESMA
                 regra da lista (`podeCriarOCDoLegado`) e o MESMO dialogo. */}
-            {isEdit && lancamento && clienteAtual?.id && parteOCLida && podeCriarOCDoLegado(lancamento, !!parteOCViva) && (
+            {isEdit && lancamento && clienteAtual?.id && parteOCLida && podeAbrirOC && podeCriarOCDoLegado(lancamento, !!parteOCViva) && (
               <Button
                 variant="outline"
                 size="sm"
@@ -2730,10 +2734,10 @@ export function LancamentoV2Dialog({
                 tituloOC={parteOCViva}
                 bloqueioRebanho={bloqueiaCancelamentoPeloFinanceiro(lancamento)}
                 onCancelar={() => { setMotivoCancelamento(''); setConfirmandoCancelamento(true); }}
-                onAbrirOC={(opId, tipo) => {
+                onAbrirOC={podeAbrirOC ? (opId, tipo) => {
                   if (onAbrirOperacaoOC) onAbrirOperacaoOC(opId, tipo);
                   else window.location.assign(`/v2?oc_id=${encodeURIComponent(opId)}`);
-                }}
+                } : undefined}
               />
             )}
             {/* FIN-NFE-PARCELAS-01 — depois do salvar, com documento que nao gravou: a frase ao lado do botao
@@ -2957,7 +2961,7 @@ export function LancamentoV2Dialog({
              modal precisam dela: o B-16 ligou um so', e quem chegasse pelos outros via o
              aviso sem saida. Botao ausente e' pior que aviso ausente — ele diz "va la'" e
              nao diz por onde. */
-          onAbrirOperacao={(ocId, tipo) => {
+          onAbrirOperacao={!podeAbrirOC ? undefined : (ocId, tipo) => {
             setZooModalId(null);
             /* ⚠ `oc_return` LEVA A ORIGEM — B-17 adendo. `window.location.assign` RECARREGA a
                pagina, e a `section` do /v2 e' estado interno que NAO vive na URL: sem este

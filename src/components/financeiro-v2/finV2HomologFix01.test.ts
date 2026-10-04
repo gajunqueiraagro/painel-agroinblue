@@ -37,7 +37,8 @@ describe('item 3 — lista sem coluna OC, "..." sempre visivel, "Abrir OC" no me
 
   it('"Abrir OC" so na linha com OC, abrindo a OC na aba Financeiro; o icone ao lado do produto continua', () => {
     const menu = tela.slice(tela.indexOf('data-testid="menu-abrir-oc"') - 200, tela.indexOf('data-testid="menu-abrir-oc"') + 300);
-    expect(menu).toContain('{lancamentosComOC.get(l.id) && (');
+    /* ACESSOS-02b: e so' para quem acessa a tela da OC (`podeAbrirOC`, de `usePodeAbrir`) — atalho para tela sem acesso nao se oferece */
+    expect(menu).toContain('{podeAbrirOC && lancamentosComOC.get(l.id) && (');
     expect(menu).toContain('abrirOCFinanceiro(oc.operacaoId, oc.tipo)');
     expect(menu).toContain('Abrir OC');
     expect(tela).toContain('onClick={e => { e.stopPropagation(); abrirOCFinanceiro(oc.operacaoId, oc.tipo); }}');
@@ -46,7 +47,8 @@ describe('item 3 — lista sem coluna OC, "..." sempre visivel, "Abrir OC" no me
 
 describe('item 2 — "Criar OC a partir deste lançamento" no rodape do Editar lançamento', () => {
   it('mesma regra da lista, so depois de ler a parte da OC, e o mesmo dialogo', () => {
-    expect(dialogo).toContain('parteOCLida && podeCriarOCDoLegado(lancamento, !!parteOCViva) && (');
+    /* ACESSOS-02b: mais o acesso a' tela da OC (criada, a OC abre) */
+    expect(dialogo).toContain('parteOCLida && podeAbrirOC && podeCriarOCDoLegado(lancamento, !!parteOCViva) && (');
     expect(dialogo).toContain('data-testid="acao-criar-oc-legado"');
     expect(dialogo).toContain("import { CriarOCDoLegadoDialog } from '@/components/financeiro-v2/CriarOCDoLegadoDialog';");
     /* ao lado do Vincular: o botao vem logo depois dele no rodape */

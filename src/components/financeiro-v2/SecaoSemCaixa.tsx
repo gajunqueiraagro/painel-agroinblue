@@ -37,12 +37,15 @@ export function totalSemCaixa(linhas: readonly LinhaSemCaixa[]): number {
 }
 
 /** Celula OC da lista padrao: o codigo curto, clicavel, que abre a OC na aba Financeiro. Sem OC, traco. */
-export function CelulaOC({ oc, onAbrir }: { oc: OCDoLancamento | undefined; onAbrir: (operacaoId: string, tipo?: string | null) => void }) {
+/* ACESSOS-02b — `onAbrir` ausente = quem ve^ a linha nao acessa a tela da OC: o CODIGO da OC fica (a informacao), sem o atalho. */
+export function CelulaOC({ oc, onAbrir }: { oc: OCDoLancamento | undefined; onAbrir?: (operacaoId: string, tipo?: string | null) => void }) {
   return (
     <td className="px-1 py-1 text-center align-middle font-mono text-[10px] leading-tight" onClick={e => e.stopPropagation()} data-coluna-oc>
-      {oc ? (
+      {oc && !onAbrir ? (
+        <span className="font-semibold" data-testid="codigo-oc">{codigoOC(oc.operacaoId)}</span>
+      ) : oc ? (
         <button type="button" className="font-semibold text-primary underline" title="Abrir a operação na aba Financeiro"
-          onClick={() => onAbrir(oc.operacaoId, oc.tipo)}>
+          onClick={() => onAbrir?.(oc.operacaoId, oc.tipo)}>
           {codigoOC(oc.operacaoId)}
         </button>
       ) : <span className="text-muted-foreground">—</span>}
@@ -59,7 +62,7 @@ interface Props {
   carregando?: boolean;
   erro?: string | null;
   ocDe: (lancamentoId: string) => OCDoLancamento | undefined;
-  onAbrirOC: (operacaoId: string, tipo?: string | null) => void;
+  onAbrirOC?: (operacaoId: string, tipo?: string | null) => void;
 }
 
 /** Cabecas por lancamento: so' a entrega da conta corrente tem (a saida adotada que ela fatura). Barter e consumo, traco. */

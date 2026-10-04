@@ -20,6 +20,7 @@ import { iconeOrigemLancamento, LEGENDA_ICONES } from '@/v2/lib/origemLancamento
 import { MinimodalOrigemLancamento } from '@/components/financeiro-v2/MinimodalOrigemLancamento';
 import { useCoberturaExtrato } from '@/hooks/useCoberturaExtrato';
 import { useCliente } from '@/contexts/ClienteContext';
+import { usePodeAbrir } from '@/v2/hooks/usePodeAbrir';
 import { contaSimpleValid } from '@/components/financeiro-v2/lancamentoDialogTabs';
 import { validarLancamento, tipoDaContaNoPlano } from '@/lib/financeiro/validacaoLancamento';
 import { formatDocumento } from '@/lib/financeiro/documentoHelper';
@@ -241,6 +242,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
      cliente. A lista carrega tudo em lote e pagina no cliente; um mapa completo
      é o que casa com ela, e trocar de página não repergunta nada. */
   const { clienteAtual } = useCliente();
+  /* ACESSOS-02b — os atalhos desta tela para OUTRAS telas so' se oferecem a quem as acessa (`usePodeAbrir`, em cima do dono do
+     acesso). A OC abre em 'lancamentos-zoot'; o contrato da parcela, em 'financiamentos'. A marca da linha (o icone da OC, o 🏦
+     da parcela) continua: so' o controle que navega some. */
+  const podeAbrirOC = usePodeAbrir('lancamentos-zoot');
+  const podeAbrirFinanciamento = usePodeAbrir('financiamentos');
   const { conciliados, recarregar: recarregarVinculos } = useLancamentosConciliados(clienteAtual?.id ?? null);
   /* VINCULAR-FIX-01 — o icone de OC da linha sai da PARTE VIVA, nao da origem: um lancamento vinculado
      (importado ou manual) tambem e' titulo da OC, e o desvinculado deixa de ser. Mesmo molde do mapa acima. */
@@ -2733,6 +2739,17 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                           {(() => {
                             const oc = lancamentosComOC.get(l.id);
                             if (!oc) return null;
+                            /* ACESSOS-02b — sem acesso a' tela da OC a MARCA fica (o lancamento e' de uma OC) e o atalho sai. */
+                            if (!podeAbrirOC) return (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span data-testid="marca-oc" className="inline-flex align-middle ml-1 shrink-0">
+                                    <Beef className="h-3 w-3 text-amber-600 dark:text-amber-400" />
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>{rotuloOrigemOC(oc)}</TooltipContent>
+                              </Tooltip>
+                            );
                             return (
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -2836,10 +2853,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="min-w-[150px]">
                                 {isParcelaFinanciamento ? (
-                                  <DropdownMenuItem
+                                  /* ACESSOS-02b — "Ver contrato" leva a Financiamentos: so' para quem acessa a tela. */
+                                  podeAbrirFinanciamento ? (
+                                  <DropdownMenuItem data-testid="menu-ver-contrato"
                                     onClick={() => abrirFinanciamentoDaParcela(l)}>
                                     <ExternalLink className="mr-1.5 h-3 w-3" /> Ver contrato
                                   </DropdownMenuItem>
+                                  ) : null
                                 ) : (
                                   <DropdownMenuItem disabled={!canEditRow}
                                     title={isHistoricoReadOnly ? 'Histórico antigo: somente leitura' : undefined}
@@ -2853,14 +2873,14 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                                   <Copy className="mr-1.5 h-3 w-3" /> Duplicar
                                 </DropdownMenuItem>
                                 {/* FIN-V2-HOMOLOG-FIX-01: "Abrir OC" quando a linha tiver OC (a coluna OC saiu) — mesma porta do icone. */}
-                                {lancamentosComOC.get(l.id) && (
+                                {podeAbrirOC && lancamentosComOC.get(l.id) && (
                                   <DropdownMenuItem data-testid="menu-abrir-oc"
                                     onClick={() => { const oc = lancamentosComOC.get(l.id); if (oc) abrirOCFinanceiro(oc.operacaoId, oc.tipo); }}>
                                     <ExternalLink className="mr-1.5 h-3 w-3" /> Abrir OC
                                   </DropdownMenuItem>
                                 )}
                                 {/* OC-CRIAR-DO-LEGADO-01 — so' onde o banco aceitaria o recebimento (1110-1140, sem OC, vivo, fora do modal antigo). */}
-                                {podeCriarOCDoLegado(l, !!lancamentosComOC.get(l.id)) && (
+                                {podeAbrirOC && podeCriarOCDoLegado(l, !!lancamentosComOC.get(l.id)) && (
                                   <DropdownMenuItem onClick={() => setCriarOCDe(l.id)}>
                                     <FilePlus2 className="mr-1.5 h-3 w-3" /> Criar OC a partir deste lançamento
                                   </DropdownMenuItem>
@@ -2880,7 +2900,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
           {mostrarSemCaixa && (
             <SecaoSemCaixa linhas={linhasSemCaixa} carregando={LISTA_V2 && semCaixaServidor.carregando}
               erro={LISTA_V2 ? semCaixaServidor.erro : null}
-              ocDe={id => lancamentosComOC.get(id)} onAbrirOC={abrirOCFinanceiro} />
+              ocDe={id => lancamentosComOC.get(id)} onAbrirOC={podeAbrirOC ? abrirOCFinanceiro : undefined} />
           )}
 
           {/* Bulk action bar */}

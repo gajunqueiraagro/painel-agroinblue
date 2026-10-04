@@ -19,7 +19,7 @@ export default function V2NaoEncontrada() {
         O endereço que você abriu não existe no sistema. Ele pode ter mudado de lugar, ou o
         link pode estar incompleto.
       </p>
-      <Link to="/v2"
+      <Link to="/"
         className="mt-1 rounded bg-primary px-3 py-1.5 text-[12px] font-medium text-primary-foreground hover:opacity-90">
         Ir para a Visão Geral
       </Link>
