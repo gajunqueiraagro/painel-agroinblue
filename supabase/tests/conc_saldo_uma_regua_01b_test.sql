@@ -17,6 +17,11 @@
 -- ATUALIZADO NO PR-CONC-INTERNA-SEPARADA-01a (migration 20261027192300) ao contrato novo, sem afrouxar: a posicao ganha
 --   `saldo_sistema_proprio_na_data`; a transferencia com a interna ENTRA na lista como 'transferencia_interna' (so' no saldo
 --   proprio); e no status do ano a interna aparece em todo mes em que a mae aparece. Roda depois da 20261027192300.
+-- ATUALIZADO NO CONC-TOTAL-SEM-SALDO-01a (migration 20261027192800): 'pendente' PARADA (sem saldo e sem movimento, a O3) continua
+--   nao derrubando; a pendente que PESA derruba o agregado para 'pendente', com extrato e diferenca NULOS e o motivo
+--   'contas_sem_saldo' — a WS (saldo herdado + movimento, o defeito da Vera out/26) e a WP (so' o saldo herdado, parada). O D7
+--   passou a provar tambem que a regua julga o MESMO conjunto de contas: de fev/2031 em diante as contas sinteticas ficam paradas
+--   com saldo herdado, e a regua sem a conta parada cai nele. Roda depois da 20261027192800.
 set local statement_timeout = '120s';
 set local lock_timeout = '3s';
 
@@ -42,7 +47,7 @@ create function pg_temp.saldo(p_conta uuid, p_mes text, p_final numeric, p_data 
 do $t$
 declare
   c_cli constant uuid := 'f2d67cd4-24d0-456f-a079-a3281dcce7fd';
-  ab uuid; x uuid; c1 uuid; c2 uuid; ic uuid; o2 uuid; o3 uuid; pp uuid; ll uuid; li uuid; sx uuid;
+  ab uuid; x uuid; c1 uuid; c2 uuid; ic uuid; o2 uuid; o3 uuid; pp uuid; ll uuid; li uuid; sx uuid; ws uuid; wp uuid;
   p1 uuid; l2 uuid; l3 uuid; l4 uuid; t1 uuid; e uuid;
   r record; t record; v_out text := ''; v_n int; v_raw jsonb; v_sem0 jsonb; v_lin jsonb; a text; b text;
 begin
@@ -122,12 +127,60 @@ begin
      or t.motivos->0->'contas'->0->'avisos' <> '[{"motivo": "sem_extrato"}]'::jsonb then
     raise exception 'D3 conta sem extrato divergente: % %', t.status, t.motivos;
   end if;
-  -- 'pendente' nao derruba: o total concilia e diz quantas pendentes; so' pendentes = 'pendente'
+  -- 'pendente' PARADA (a O3: sem saldo no sistema e sem movimento) nao derruba: o total concilia e diz quantas pendentes; so'
+  -- pendentes = 'pendente'. CONC-TOTAL-SEM-SALDO-01a: a parada nao ganha 'contas_sem_saldo' e nao anula extrato nem diferenca.
   select f.status || ' ' || f.motivos::text into a from fn_conciliacao_resumo_mes(c_cli, '2031-01', array[c1, o3]) f where f.nivel = 'total';
   select f.status || ' ' || f.motivos::text into b from fn_conciliacao_resumo_mes(c_cli, '2031-01', array[o3]) f where f.nivel = 'total';
   if a <> 'conciliado [{"qtde": 1, "motivo": "contas_pendentes"}]' or b <> 'pendente [{"qtde": 1, "motivo": "contas_pendentes"}]' then
     raise exception 'D3 pendente: C1+O3 % · so O3 %', a, b;
   end if;
+  select * into t from fn_conciliacao_resumo_mes(c_cli, '2031-01', array[c1, o3]) f where f.nivel = 'total';
+  if t.saldo_extrato is distinct from 100.00 or t.diferenca is distinct from 0.00 then
+    raise exception 'D3 parada: a pendente sem saldo e sem movimento anulou o agregado (ext % dif %)', t.saldo_extrato, t.diferenca;
+  end if;
+
+  -- ── CONC-TOTAL-SEM-SALDO-01a: a pendente que PESA derruba o agregado, e extrato e diferenca ficam NULOS ──
+  -- O DEFEITO (Vera out/26): a WS tem saldo herdado 5.884,14 e uma saida de 95.000 (sistema −89.115,86) e NAO tem saldo informado
+  -- no mes; ao lado dela a C1 conciliada (100 x 100). Antes: total 'conciliado', sistema −89.015,86, extrato 100, diferenca 0.
+  ws := pg_temp.conta('SINT WS', 'cc');
+  perform pg_temp.saldo(ws, '2030-12', 5884.14);
+  perform pg_temp.lan(ws, null, '2-Saídas', '-1', 95000, 'realizado', '2031-01-04');
+  for t in select * from fn_conciliacao_resumo_mes(c_cli, '2031-01', array[c1, ws]) f where f.nivel in ('tipo', 'total') loop
+    if t.status <> 'pendente' or t.saldo_sistema is distinct from -89015.86 or t.saldo_extrato is not null or t.diferenca is not null
+       or jsonb_array_length(t.motivos) <> 2 or t.motivos->0 <> '{"motivo": "contas_pendentes", "qtde": 1}'::jsonb
+       or t.motivos->1 <> jsonb_build_object('motivo', 'contas_sem_saldo', 'qtde', 1,
+                            'contas', jsonb_build_array(jsonb_build_object('conta_id', ws, 'conta_nome', 'SINT WS'))) then
+      raise exception 'SEM-SALDO defeito (%): status % sis % ext % dif % motivos %', t.nivel, t.status, t.saldo_sistema, t.saldo_extrato,
+        t.diferenca, t.motivos;
+    end if;
+  end loop;
+  -- a linha da CONTA nao muda: a WS segue 'pendente' com o sistema dela, e a C1 conciliada com a diferenca dela
+  select f.status || ' ' || f.saldo_sistema || ' ' || coalesce(f.saldo_extrato::text, 'nulo') into a
+    from fn_conciliacao_resumo_mes(c_cli, '2031-01', array[c1, ws]) f where f.nivel = 'conta' and f.conta_id = ws;
+  select f.status || ' ' || f.diferenca into b from fn_conciliacao_resumo_mes(c_cli, '2031-01', array[c1, ws]) f where f.nivel = 'conta' and f.conta_id = c1;
+  if a <> 'pendente -89115.86 nulo' or b <> 'conciliado 0.00' then raise exception 'SEM-SALDO contas: WS % · C1 %', a, b; end if;
+  -- SO' O SALDO HERDADO pesa tambem (a WP: 1.154,08 em dez, nada em janeiro): soma cheia do sistema nao fica ao lado de extrato parcial
+  wp := pg_temp.conta('SINT WP', 'cc');
+  perform pg_temp.saldo(wp, '2030-12', 1154.08);
+  select * into t from fn_conciliacao_resumo_mes(c_cli, '2031-01', array[c1, wp]) f where f.nivel = 'total';
+  if t.status <> 'pendente' or t.saldo_sistema is distinct from 1254.08 or t.saldo_extrato is not null or t.diferenca is not null
+     or (t.motivos->1->>'motivo') is distinct from 'contas_sem_saldo' or (t.motivos->1->'contas'->0->>'conta_id')::uuid <> wp then
+    raise exception 'SEM-SALDO herdado: status % sis % ext % dif % motivos %', t.status, t.saldo_sistema, t.saldo_extrato, t.diferenca, t.motivos;
+  end if;
+  -- com conta DIVERGENTE junto, o status segue 'nao_conciliado' (o pior veredito), mas extrato e diferenca ficam nulos e o motivo vai
+  select * into t from fn_conciliacao_resumo_mes(c_cli, '2031-01', array[c1, sx, ws]) f where f.nivel = 'total';
+  if t.status <> 'nao_conciliado' or t.saldo_extrato is not null or t.diferenca is not null
+     or t.motivos->0->>'motivo' <> 'contas_nao_conciliadas' or t.motivos->1->>'motivo' <> 'contas_pendentes'
+     or t.motivos->2->>'motivo' <> 'contas_sem_saldo' then
+    raise exception 'SEM-SALDO com divergente: status % ext % dif % motivos %', t.status, t.saldo_extrato, t.diferenca, t.motivos;
+  end if;
+  -- informado o saldo, a WS deixa de pesar: o agregado volta a somar e a julgar pelo saldo
+  perform pg_temp.saldo(ws, '2031-01', -89115.86);
+  select * into t from fn_conciliacao_resumo_mes(c_cli, '2031-01', array[c1, ws]) f where f.nivel = 'total';
+  if t.status <> 'conciliado' or t.saldo_extrato is distinct from -89015.86 or t.diferenca is distinct from 0.00 or t.motivos <> '[]'::jsonb then
+    raise exception 'SEM-SALDO informado: status % ext % dif % motivos %', t.status, t.saldo_extrato, t.diferenca, t.motivos;
+  end if;
+  v_out := v_out || 'SEM-SALDO ok (pesa com movimento ou so com saldo herdado -> pendente, extrato e diferenca nulos, contas_sem_saldo; parada nao pesa; com divergente segue nao_conciliado; informado o saldo, volta); ';
   v_out := v_out || 'D3 ok (so timing no extrato = conciliado com aviso, e o total tambem; conta SEM extrato que diverge no SALDO derruba, com saldo_diverge; pendente nao derruba e e contada; interna fora da soma; so C1 = conciliado); ';
 
   -- ── D3: lancamentos sem conta, na linha do total (so' com todas as contas) ──

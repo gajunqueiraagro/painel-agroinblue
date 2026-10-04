@@ -1464,6 +1464,49 @@ docs/historico/frentes-ate-2026-09-29.md.)
     diferenca na data — a tela passa a ler `posicao.diferenca_propria_na_data` em PR proprio; (b) `financeiro_saldos_bancarios_v2`
     tem 2 pares de linhas DUPLICADAS (Agnaldo 21c7682e fev/21 e 38b316c0 mar/21, zeros, inofensivas hoje; nao ha' unicidade em
     conta + mes); (c) VALOR-3-CASAS: os lancamentos de 3 casas seguem no dado (a diferenca so' deixou de mostra'-los).
+- ⚠ O AGREGADO DA CONCILIACAO NUNCA CONCILIA COM CONTA QUE PESA SEM SALDO INFORMADO; EXTRATO E DIFERENCA DO AGREGADO FICAM NULOS; CONTA
+  PARADA NAO PESA (CONC-TOTAL-SEM-SALDO-01a, Gabriel 04/10, so' banco; migration 20261027192800, ⚠ registrada como 20261004202343;
+  ledger = arquivo, md5 c9742434…). REVOGA EM PARTE a D3 de 03/10 ("pendente nao derruba o agregado"). Frase do Gabriel, na Vera
+  out/26 em "Todas as contas": "sistema tem 12 mil, extrato tem 101 mil. Como que a diferenca confere? Erro primario."
+  · O DEFEITO: no subtotal e no total, `saldo_sistema` somava TODAS as contas, `saldo_extrato` so' as com saldo informado e
+    `diferenca` so' as diferencas que existiam (`sum` ignora NULL); a conta 'pendente' so' entrava em 'contas_pendentes'. Duas
+    somas de conjuntos diferentes lado a lado, diferenca 0, veredito 'conciliado'. Nasceu no 01b (20261027191700/191800) e chegou
+    a' tela no PR 02; o STATUS-SALDO-01a nao o criou.
+  · CONTA QUE PESA SEM SALDO = linha de conta 'pendente' (falta o saldo informado) E saldo proprio no sistema <> 0 OU entradas <> 0
+    OU saidas <> 0 no mes. ⚠ A CHAVE E' O STATUS, NUNCA O AVISO 'sem_extrato' (5.068 conta-meses o tem; a coluna "Extrato" da
+    tela e' o saldo INFORMADO, nao o arquivo do banco). A interna e' julgada pelo saldo proprio, como qualquer conta.
+  · NO AGREGADO ('tipo' e 'total'): status 'nao_conciliado' se alguma diverge; senao 'pendente' se ha' conta que pesa sem saldo
+    OU nenhuma conciliada; senao 'conciliado'. Motivo novo depois de 'contas_pendentes': {motivo:'contas_sem_saldo', qtde,
+    contas:[{conta_id, conta_nome}]}. `saldo_extrato` e `diferenca` = NULL quando ha' conta que pesa sem saldo, em QUALQUER
+    status (a diferenca de cada conta segue na linha da conta). A pendente sem saldo e sem movimento NAO pesa. As linhas de
+    conta e as demais colunas do agregado nao mudam.
+  · ⚠ REGUA E RESUMO JULGAM O MESMO CONJUNTO DE CONTAS: `fn_conciliacao_status_ano` so' mandava ao dono as contas com movimento,
+    extrato ou linha de saldo no mes; a conta PARADA COM SALDO HERDADO (saldo final <> 0 no mes anterior, nada no mes) ficava de
+    fora — no resumo ela pesa. Agora a regua a manda tambem (`v_ant`). Quem mudar o criterio de um lado confere o outro.
+  · MEDIDO (7 clientes, 2020-01 a 2026-12): 5.137 linhas de conta identicas por md5; 15 agregados de 'conciliado' a 'pendente'
+    (8 totais: NJ 2025-06 e 2026-03; Santa Rita 2024-07, 2024-08, 2025-01, 2025-10, 2025-11, 2025-12; 7 subtotais da Santa Rita:
+    cc 2024-07 e 2024-08, inv 2025-05, 09, 10, 11, 12); 28 so' ganham o motivo e os nulos (Agnaldo 3, NJ 5, Raul 2, RRCC 2, Santa
+    Rita 13 — inclusive os totais 'nao_conciliado' de 2025-03, 05 e 09, que perdem a diferenca somada —, Vera 3); regua = resumo
+    em 588 cliente-meses (status e motivos, 0 divergencias). A Vera out/26 NAO esta' na lista: o saldo do Itau Personalite foi
+    informado as 14:37 de 04/10 e a conta passou a 'nao_conciliado' pela regra de sempre.
+  md5: `_fn_conciliacao_resumo` 26f4a6df… -> 04aa7a4d773b7d58dcdf94d7e9415daf; `fn_conciliacao_status_ano` 35db738d… ->
+  ab397ac3b920cc3ffec95ed91914ef6d; `fn_conciliacao_resumo_mes` 25aa2ac4… (nao tocada). ACL, SECURITY DEFINER, search_path e
+  plan_cache_mode conferidos na migration. Teste: `supabase/tests/conc_saldo_uma_regua_01b_test.sql` (bloco SEM-SALDO: o defeito,
+  a parada com saldo herdado, a parada que nao pesa, com divergente junto, e a volta quando o saldo e' informado; o D7 passou a
+  cobrir a regua com conta parada). Mutacoes: so' o patch do dono -> cai no D7; corpo antigo -> cai em "SEM-SALDO defeito".
+  ⚠ FILA DO 01b (tela): a frase do motivo `contas_sem_saldo` (hoje a tela o mostra cru) em `resumoDoDono.ts` (`fraseDoMotivo`,
+    ~:412); "falta saldo · N conta(s)" no lugar do "—" na coluna Diferenca do Total e do subtotal (`ConciliacaoBancariaTab.tsx`
+    ~:1519 e ~:1546) e no Resumo (~:1314-1317); o "(31/10)" do "Saldo extrato" some quando o total nao tem data de saldo
+    (~:622-623, hoje cai no fim do mes); fixtures e testes de `conciliacaoDono.test.tsx` (`TOTAL_NJ`, ~:120, tem o padrao do
+    defeito) e de `resumoDoDono.test.ts`.
+  ⚠ DIVIDA CONC-REGUA-DESEMPENHO-01: a regua passa de 2 s nos anos cheios, e ja' passava antes deste PR. Mediana de 5 chamadas
+    como a tela chama, antes -> depois (ms): NJ 2026 1.933 -> 1.973 · NJ 2025 2.258 -> 2.307 · NJ 2024 2.147 -> 2.186 · Santa Rita
+    2026 1.642 -> 1.649 · Santa Rita 2025 2.339 -> 2.314 · Santa Rita 2023 2.382 -> 2.370 · Agnaldo 2026 953 -> 1.001 · Agnaldo 2023
+    1.859 -> 1.840 (com picos isolados de 3 a 4,7 s dos dois lados) · Vera 2026 482 -> 514 · Vera 2025 600 -> 613. O patch custa
+    +1% a +5%; o teto aceito para ele foi +10% na mediana (decisao do Gabriel).
+  ⚠ DIVIDA "FECHAR CONTAS SEM MOVIMENTO" EM MES EM CURSO (decisao do Gabriel pendente): em 04/10 o botao fechou o Itau CDI da Vera
+    em outubro (dia 4) com o saldo do sistema, e dois minutos depois o saldo de setembro foi corrigido — o final gravado ficou
+    velho e a conta virou 'nao_conciliado' por um saldo que ninguem conferiu.
 - ⚠ A TELA ESCREVE O SALDO NO STATUS E O EXTRATO NA "2a PROVA" (PR-CONC-STATUS-SALDO-01b, so' tela). `resumoDoDono.ts` le'
   `avisos` (conta, tipo, total, status do ano e as contas citadas em `contas_nao_conciliadas`), sem cast. AVISO TRATADO COMO MOTIVO
   E' DEFEITO (mutacao derruba 11 testes).
