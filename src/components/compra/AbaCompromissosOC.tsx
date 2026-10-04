@@ -38,6 +38,8 @@ import { toast } from 'sonner';
 import { NovoFornecedorDialog } from '@/components/financeiro-v2/NovoFornecedorDialog';
 import { VincularOperacaoDialog } from '@/components/financeiro-v2/VincularOperacaoDialog';
 import { TabelaDespesasOC } from '@/components/compra/TabelaDespesasOC';
+import { paramsAbrirLancamentoDaOC } from '@/lib/oc/abrirLancamentoDaOC';
+import { ItemDeMenuOC, motivoSomenteLeitura } from '@/components/venda/AbaContaCorrenteOC';
 import { BuscarDespesaOCDialog } from '@/components/compra/BuscarDespesaOCDialog';
 import { rotuloCurtoDaConta } from '@/lib/financeiro/rotuloConta';
 import { linhasDeDespesa, recusaNaContaCorrente, totaisDeDespesa, type LinhaDespesa, type TituloDaDespesa } from '@/lib/oc/despesasDaOperacao';
@@ -804,56 +806,10 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
     setNovoAberto(true);
   };
 
-  // Editar o título vinculado à parcela materializada: reutiliza o modal oficial do Financeiro V2
-  // via o fluxo existente ?flancId={tituloId} (V2Index consome, troca de seção e abre o modal com a
-  // proteção OC — valor/classificação/favorecido/vencimento seguem travados). Sem modal/RPC/writer novo.
-  /* ⚠ ESTA IDA APAGA `oc_compra` e `oc_id` — e' a identidade da OC morrendo aqui, nao no
-     fechamento do modal. Sem deixar endereco, o Editar era o unico drill da base que saia
-     sem dizer de onde veio: salvar, X ou clicar fora largavam o usuario no Financeiro e
-     ele refazia o caminho inteiro para reabrir a operacao.
-     `returnOcId` e' o espelho de `returnZooId` (PR-B1-R2): mesmo gesto, mesmo useEffect
-     do outro lado, mesmo estado `drillReturn`. Nao inventa convencao nova — usa a que ja
-     existia e que so a OC nao usava.
-
-     ⚠ O ENDERECO PRECISA DO TIPO — PR-OC-VENDA-FIN-PREVISAO-01D. `returnOcId` dizia QUAL
-     operacao reabrir e nao dizia QUE TIPO ela e'; do outro lado, `abrirOperacaoOC` tem
-     `tipo` com default 'compra'. O retorno de uma VENDA voltava como `oc_compra=1`, a
-     hidratacao do LancamentosTab recusava ("Esta operação não é uma Compra e não pode ser
-     aberta aqui"), limpava os parametros e largava o usuario em Lancamentos sem modal.
-     Um id sem tipo e' meio endereco.
-     ⚠ E APAGA `oc_venda` TAMBEM. So' `oc_compra` era apagado, entao numa venda o
-     parametro sobrevivia a ida ao Financeiro. E' a mesma armadilha do parametro preso que
-     PR-OC-VENDA-REABRIR-01D ja pagou uma vez: `oc_venda=1` esquecido na URL reabre a
-     operacao sozinho quando a secao volta a ser Lancamentos por outro caminho. */
+  /* OC-CC-ACOES-LINHA-02 — o corpo (e o comentario que o explica) mora em `src/lib/oc/abrirLancamentoDaOC.ts`: o extrato da conta
+     corrente abre o lancamento pelo MESMO caminho, e este componente so' existe montado na sub-aba Despesas. */
   const editarTitulo = (tituloId: string) => {
-    const next = new URLSearchParams(searchParams);
-    next.set('flancId', tituloId);
-    next.set('ocfin', '1');   // PR-OC-FIN-EDIT-FIX-02 — contexto OC: libera edição de favorecido no título
-    const ocId = resumoOperacao?.operacaoId ?? null;
-    // Sem id nao ha para onde voltar: melhor nao prometer retorno do que prometer errado.
-    if (ocId) {
-      next.set('returnOcId', ocId);
-      /* ⚠ TRES TIPOS. O abate voltava marcado como compra e a hidratacao o recusava —
-         mesmo defeito que a venda pagou em PR-OC-VENDA-FIN-PREVISAO-01D. */
-      next.set('returnOcTipo',
-        tipoOperacao === 'venda' ? 'venda' : tipoOperacao === 'abate' ? 'abate' : 'compra');
-      /* OC-VENDA-FINANCEIRO-COMPLETO-01a-fix2 — a sub-aba aberta (conta corrente) volta junto; sem ela, apaga. */
-      const sub = searchParams.get('oc_sub');
-      if (sub) next.set('returnOcSub', sub); else next.delete('returnOcSub');
-    } else {
-      next.delete('returnOcId');
-      next.delete('returnOcTipo');
-      next.delete('returnOcSub');
-    }
-    /* ⚠ OS TRES PARAMETROS MORREM AQUI. `oc_abate` entrou junto: um parametro esquecido
-       reabre a operacao sozinho quando a secao volta a ser Lancamentos por outro caminho —
-       a armadilha que PR-OC-VENDA-REABRIR-01D ja pagou uma vez. */
-    next.delete('oc_compra');
-    next.delete('oc_venda');
-    next.delete('oc_abate');
-    next.delete('oc_id');
-    next.delete('oc_sub');
-    setSearchParams(next, { replace: true });
+    setSearchParams(paramsAbrirLancamentoDaOC(searchParams, { tituloId, ocId: resumoOperacao?.operacaoId ?? null, tipoOperacao }), { replace: true });
   };
 
   /* ITEM 2 — "quanto falta programar?" e' a pergunta do operador, e a resposta
@@ -1448,9 +1404,11 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
     setSelectedId(l.compromisso.compromissoId);
     setDetalheAberto(true);
   };
-  /* ⚠ SO' AS ACOES QUE VALEM PARA O ESTADO DA LINHA, e cada uma e' a funcao de sempre: Programar e Lançar sao os do detalhe;
-     Programar saldo, Reclassificar, Desvincular e Desfazer, os do menu da lista; Estornar e Cancelar programação, o mesmo
-     `abrirEstorno`. Nenhum writer novo. */
+  /* ⚠ TODOS OS ITENS, SEMPRE, NA MESMA ORDEM (OC-CC-ACOES-LINHA-02): o que nao vale para o estado da linha fica DESABILITADO com o
+     motivo escrito no item e no `title` — antes ele sumia, e o operador nao sabia se o gesto existia. NENHUMA CONDICAO DE
+     HABILITACAO MUDOU: o que estava escondido ficou apagado, o que estava habilitado segue igual. Cada gesto e' a funcao de
+     sempre: Programar e Lançar sao os do detalhe; Programar saldo, Reclassificar, Desvincular e Desfazer, os do menu da lista;
+     Estornar e Cancelar programação, o mesmo `abrirEstorno`. Nenhum writer novo. */
   const menuDespesa = (l: LinhaDespesa) => {
     const c = l.compromisso;
     const p = l.parcela;
@@ -1460,85 +1418,71 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
     const podeSaldo = l.tipo === 'saldo' && c.temProgramacaoAtiva && c.saldoAProgramar > TOL_CENTAVO;
     const podeLancar = !!p && p.status === 'prevista' && c.status === 'programado';
     /* ⚠ CONCILIADO NAO SE ESTORNA NEM SE DESFAZ DAQUI (fix1): o banco recusaria, e o menu nao promete o que sera' negado. O
-       Desfazer percorre o compromisso INTEIRO, entao some se QUALQUER titulo dele estiver conciliado; o Estornar, se o desta linha. */
+       Desfazer percorre o compromisso INTEIRO, entao apaga se QUALQUER titulo dele estiver conciliado; o Estornar, se o desta linha. */
     const conciliadoNaLinha = l.status === 'conciliado';
     const conciliadoNoCompromisso = linhasDespesa.some(x => x.compromisso.compromissoId === c.compromissoId && x.status === 'conciliado');
     const podeEstornar = !!p && parcelaComEfeito(p) && !!p.parcelaId && !conciliadoNaLinha;
     const desvinculaveis = titulosDesvinculaveis(c, parcelas).filter(t => t.lancamentoId === l.tituloId);
+    const temCancelarProgramacao = !!p && !!c.programacaoAtivaId;
+    /* O motivo de quem nao pode ESCREVER: a operacao em somente leitura (cancelada; na compra, tambem rascunho — a frase e' a do
+       extrato, pelo lado); versao por chegar e gravacao em curso passam sozinhas. */
+    const semEscrita = !podeEscrever
+      ? (bloqueado ? motivoSomenteLeitura(tipoOperacao === 'compra' ? 'compra' : 'venda') : 'aguarde · gravando') : null;
+    const rodando = estRodando ? 'aguarde · gravando' : null;
+    const CONCILIADO = 'conciliado · desfaça a conciliação primeiro';
     return (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button type="button" className="h-[16px] w-[18px] text-[11px] font-bold leading-none tracking-[1px] text-primary"
             aria-label={`Ações de ${l.descricao ?? 'despesa'}`} title="Ações desta despesa">⋯</button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="text-[11px]">
-          {l.tituloId && (
-            <DropdownMenuItem data-testid="acao-abrir-lancamento" onSelect={() => { if (l.tituloId) editarTitulo(l.tituloId); }}>
-              Abrir lançamento
-            </DropdownMenuItem>
-          )}
-          {podeProgramar && (
-            <DropdownMenuItem disabled={!podeEscrever} data-testid="acao-programar"
-              onSelect={() => { setSelectedId(c.compromissoId); setProgramarAberto(true); }}>
-              Programar
-            </DropdownMenuItem>
-          )}
-          {podeSaldo && (
-            <DropdownMenuItem disabled={!podeEscrever} data-testid="acao-programar-saldo" onSelect={() => setSaldoAlvo(c)}>
-              Programar saldo
-            </DropdownMenuItem>
-          )}
-          {podeLancar && p && (
-            <DropdownMenuItem disabled={!podeEscrever} data-testid="acao-lancar"
-              onSelect={() => { setContaParaMaterializar(''); setConfirmarParcela(p); }}>
-              Lançar
-            </DropdownMenuItem>
-          )}
-          <DropdownMenuItem disabled={!podeEscrever || estRodando || !c.compromissoId} data-testid="acao-reclassificar-linha"
+        <DropdownMenuContent align="end" className="text-[11px]" data-testid="menu-linha-despesa">
+          <ItemDeMenuOC testid="acao-abrir-lancamento" texto="Abrir lançamento"
+            motivo={l.tituloId ? null : 'esta linha não tem lançamento'}
+            onEscolher={() => { if (l.tituloId) editarTitulo(l.tituloId); }} />
+          <ItemDeMenuOC testid="acao-programar" texto="Programar"
+            motivo={!podeProgramar ? 'já programado' : semEscrita} desabilitado={!podeProgramar || !podeEscrever}
+            onEscolher={() => { setSelectedId(c.compromissoId); setProgramarAberto(true); }} />
+          <ItemDeMenuOC testid="acao-programar-saldo" texto="Programar saldo"
+            motivo={!podeSaldo ? 'sem saldo a programar' : semEscrita} desabilitado={!podeSaldo || !podeEscrever}
+            onEscolher={() => setSaldoAlvo(c)} />
+          <ItemDeMenuOC testid="acao-lancar" texto="Lançar"
+            motivo={!podeLancar ? (p && p.status !== 'prevista' ? 'já lançado' : 'programe antes de lançar') : semEscrita}
+            desabilitado={!podeLancar || !podeEscrever}
+            onEscolher={() => { if (p) { setContaParaMaterializar(''); setConfirmarParcela(p); } }} />
+          <ItemDeMenuOC testid="acao-reclassificar-linha" texto="Reclassificar"
             title="Troca a conta do plano deste item — valor, datas, pagamento e conciliação não mudam."
-            onSelect={() => setReclAlvo(c)}>
-            Reclassificar
-          </DropdownMenuItem>
-          {!!p && !!c.programacaoAtivaId && (
-            <DropdownMenuItem disabled={!podeEscrever || estRodando || temEfeito} data-testid="acao-cancelar-programacao"
-              title={temEfeito ? 'Estorne o lançamento da parcela antes de cancelar a programação.' : undefined}
-              onSelect={() => abrirEstorno({ nivel: 'programacao', programacaoId: c.programacaoAtivaId ?? undefined,
-                descricao: 'as parcelas previstas são canceladas, a programação é cancelada e o compromisso volta a ABERTO' })}>
-              Cancelar programação
-            </DropdownMenuItem>
-          )}
-          {podeEstornar && p && (
-            <DropdownMenuItem disabled={!podeEscrever || estRodando} data-testid="acao-estornar"
-              onSelect={() => abrirEstorno({ nivel: 'materializacao', programacaoId: p.programacaoId ?? undefined,
-                parcelaId: p.parcelaId ?? undefined,
-                descricao: `a parcela ${p.sequencia} de ${brl(p.valor)} volta a PREVISTA e o título é cancelado` })}>
-              Estornar
-            </DropdownMenuItem>
+            motivo={semEscrita ?? rodando ?? (!c.compromissoId ? 'esta linha não tem compromisso' : null)}
+            desabilitado={!podeEscrever || estRodando || !c.compromissoId}
+            onEscolher={() => setReclAlvo(c)} />
+          <ItemDeMenuOC testid="acao-cancelar-programacao" texto="Cancelar programação"
+            motivo={!temCancelarProgramacao ? 'sem programação ativa'
+              : temEfeito ? 'Estorne o lançamento da parcela antes de cancelar a programação.' : (semEscrita ?? rodando)}
+            desabilitado={!temCancelarProgramacao || !podeEscrever || estRodando || temEfeito}
+            onEscolher={() => abrirEstorno({ nivel: 'programacao', programacaoId: c.programacaoAtivaId ?? undefined,
+              descricao: 'as parcelas previstas são canceladas, a programação é cancelada e o compromisso volta a ABERTO' })} />
+          <ItemDeMenuOC testid="acao-estornar" texto="Estornar"
+            motivo={!podeEstornar ? (conciliadoNaLinha ? CONCILIADO : 'sem lançamento a estornar') : (semEscrita ?? rodando)}
+            desabilitado={!podeEstornar || !podeEscrever || estRodando}
+            onEscolher={() => { if (p) abrirEstorno({ nivel: 'materializacao', programacaoId: p.programacaoId ?? undefined,
+              parcelaId: p.parcelaId ?? undefined,
+              descricao: `a parcela ${p.sequencia} de ${brl(p.valor)} volta a PREVISTA e o título é cancelado` }); }} />
+          {desvinculaveis.length === 0 && (
+            <ItemDeMenuOC testid="acao-desvincular-linha" texto="Desvincular" motivo="sem lançamento vinculado nesta linha" />
           )}
           {desvinculaveis.map(t => (
-            <DropdownMenuItem key={t.lancamentoId} disabled={!podeEscrever || estRodando} data-testid="acao-desvincular-linha"
+            <ItemDeMenuOC key={t.lancamentoId} testid="acao-desvincular-linha" texto="Desvincular"
               title="O lançamento fica (valor, pagamento, conciliação); ele deixa de pertencer a esta operação."
-              onSelect={() => setDesvAlvo(t.lancamentoId)}>
-              Desvincular
-            </DropdownMenuItem>
+              motivo={semEscrita ?? rodando} desabilitado={!podeEscrever || estRodando}
+              onEscolher={() => setDesvAlvo(t.lancamentoId)} />
           ))}
-          {!conciliadoNoCompromisso && (
-            <DropdownMenuItem disabled={!g.pode || estRodando} data-testid="acao-desfazer" title={g.motivo || undefined}
-              onSelect={() => abrirEstorno({ nivel: 'desfazer', compromissoId: c.compromissoId ?? undefined,
-                descricao: `o compromisso ${c.natureza ?? ''}/${c.componente ?? ''} de ${brl(c.valorCompromisso)}`,
-                rol: rolDoDesfazer(c), estornoId: crypto.randomUUID() })}>
-              Desfazer
-            </DropdownMenuItem>
-          )}
-          {conciliadoNoCompromisso && (
-            <div className="px-2 py-1 text-[10px] text-zinc-300 max-w-[220px] leading-tight" data-testid="motivo-conciliado"
-              title="conciliado com o extrato; desfaça a conciliação primeiro">
-              Conciliado com o extrato; desfaça a conciliação primeiro.
-            </div>
-          )}
-          {!conciliadoNoCompromisso && g.motivo !== '' && (
-            <div className="px-2 py-1 text-[10px] text-zinc-300 max-w-[220px] leading-tight">{g.motivo}</div>
-          )}
+          <ItemDeMenuOC testid="acao-desfazer" texto="Desfazer"
+            motivo={conciliadoNoCompromisso ? CONCILIADO : !g.pode ? (semEscrita ?? 'compromisso cancelado') : rodando}
+            nota={g.pode ? g.motivo : ''} title={g.motivo || undefined}
+            desabilitado={conciliadoNoCompromisso || !g.pode || estRodando}
+            onEscolher={() => abrirEstorno({ nivel: 'desfazer', compromissoId: c.compromissoId ?? undefined,
+              descricao: `o compromisso ${c.natureza ?? ''}/${c.componente ?? ''} de ${brl(c.valorCompromisso)}`,
+              rol: rolDoDesfazer(c), estornoId: crypto.randomUUID() })} />
         </DropdownMenuContent>
       </DropdownMenu>
     );

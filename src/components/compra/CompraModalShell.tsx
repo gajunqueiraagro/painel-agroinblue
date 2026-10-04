@@ -511,6 +511,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
               financeiroLegadoReadOnly={permissoes.financeiroLegadoReadOnly}
               financeiroNovoReadOnly={permissoes.financeiroNovoReadOnly}
               onIrParaDocumentos={() => irParaAba('documentos')}
+              onIrParaEntrega={() => irParaAba('recebimento')}
               operacaoId={api.ocOperacaoId ?? null}
               clienteId={api.liquidacaoApi.clienteId}
               dataOperacao={api.ocDataOperacao ?? null}

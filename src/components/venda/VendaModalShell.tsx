@@ -698,6 +698,7 @@ export function VendaModalShell({
               rotulos={rotulosCompromissos}
               seloProjecao={ehBoitel ? <PilulaCenario cenario="projetado" /> : undefined}
               onIrParaDocumentos={() => setAbaAtiva('documentos')}
+              onIrParaEntrega={() => setAbaAtiva('entrega')}
             />
           ) : abaAtiva === 'financeiro' ? (
             /* ── FINANCEIRO — VAZIO HONESTO ──────────────────────────────────────

@@ -156,7 +156,16 @@ function abrirMenu(linha: HTMLElement) {
   fireEvent.keyDown(botao, { key: 'Enter' });
   return screen.getByRole('menu');
 }
-const itensDoMenu = (menu: HTMLElement) => within(menu).getAllByRole('menuitem').map(i => i.textContent);
+/* OC-CC-ACOES-LINHA-02 — o item tem o rotulo e, apagado, o motivo na segunda linha: le-se cada parte no seu lugar. */
+const rotuloDoItem = (i: Element) => i.querySelector('span')?.textContent ?? '';
+const itensDoMenu = (menu: HTMLElement) => within(menu).getAllByRole('menuitem').map(rotuloDoItem);
+/** rotulo -> motivo de estar apagado (`null` = vale) */
+const estadoDoMenu = (menu: HTMLElement) => Object.fromEntries(within(menu).getAllByRole('menuitem').map(i => [
+  rotuloDoItem(i),
+  i.getAttribute('data-disabled') === null ? null : (i.querySelector('[data-testid="motivo-do-item"]')?.textContent ?? ''),
+]));
+const TODOS_OS_ITENS = ['Abrir lançamento', 'Programar', 'Programar saldo', 'Lançar', 'Reclassificar', 'Cancelar programação', 'Estornar',
+  'Desvincular', 'Desfazer'];
 
 beforeEach(() => { dados.titulos = [TITULO_T1]; dados.cbi = []; dados.busca = []; dados.partes = []; local = ''; });
 
@@ -309,31 +318,71 @@ describe('as despesas vivas (mock v4)', () => {
     expect(q.get('oc_venda')).toBeNull();
   });
 
-  it('o ⋯ so oferece o que vale para o estado da linha', async () => {
+  it('OC-CC-ACOES-LINHA-02: o ⋯ tem TODOS os itens, sempre na mesma ordem; o que nao vale fica apagado com o motivo', async () => {
     montar(true);
     await waitFor(() => expect(within(linhaDe('comissao')).getByText('Realizado')).toBeTruthy());
+    /* despesa com titulo LANCADO: o que valia antes (Abrir, Reclassificar, Estornar, Desvincular, Desfazer) segue valendo */
     const m1 = abrirMenu(linhaDe('comissao'));
-    expect(itensDoMenu(m1)).toEqual(['Abrir lançamento', 'Reclassificar', 'Cancelar programação', 'Estornar', 'Desvincular', 'Desfazer']);
-    /* com titulo lancado, cancelar a programacao espera o estorno */
-    expect(within(m1).getByText('Cancelar programação').closest('[role="menuitem"]')?.getAttribute('data-disabled')).toBe('');
+    expect(itensDoMenu(m1)).toEqual(TODOS_OS_ITENS);
+    expect(estadoDoMenu(m1)).toEqual({
+      'Abrir lançamento': null, Programar: 'já programado', 'Programar saldo': 'sem saldo a programar', 'Lançar': 'já lançado',
+      Reclassificar: null, 'Cancelar programação': 'Estorne o lançamento da parcela antes de cancelar a programação.',
+      Estornar: null, Desvincular: null, Desfazer: null,
+    });
+    /* o motivo tambem vai no `title` do item */
+    expect(within(m1).getByTestId('acao-programar').getAttribute('title')).toBe('já programado');
     fireEvent.keyDown(m1, { key: 'Escape' });
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+    /* compromisso ABERTO, sem programacao nem titulo: so' Programar, Reclassificar e Desfazer valem — os mesmos tres de antes */
     const m2 = abrirMenu(linhaDe('taxas_impostos'));
-    expect(itensDoMenu(m2)).toEqual(['Programar', 'Reclassificar', 'Desfazer']);
+    expect(itensDoMenu(m2)).toEqual(TODOS_OS_ITENS);
+    expect(estadoDoMenu(m2)).toEqual({
+      'Abrir lançamento': 'esta linha não tem lançamento', Programar: null, 'Programar saldo': 'sem saldo a programar',
+      'Lançar': 'programe antes de lançar', Reclassificar: null, 'Cancelar programação': 'sem programação ativa',
+      Estornar: 'sem lançamento a estornar', Desvincular: 'sem lançamento vinculado nesta linha', Desfazer: null,
+    });
   });
 
-  it('despesa Conciliada: o ⋯ nao oferece Estornar nem Desfazer, e diz por que (fix1)', async () => {
+  it('OC-CC-ACOES-LINHA-02: item apagado nao dispara o gesto; o que vale dispara', async () => {
+    montar(true);
+    await waitFor(() => expect(within(linhaDe('comissao')).getByText('Realizado')).toBeTruthy());
+    const m = abrirMenu(linhaDe('taxas_impostos'));
+    fireEvent.click(within(m).getByTestId('acao-abrir-lancamento'));
+    expect(new URLSearchParams(local).get('flancId')).toBeNull();
+    fireEvent.keyDown(m, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+    fireEvent.click(within(abrirMenu(linhaDe('comissao'))).getByTestId('acao-abrir-lancamento'));
+    expect(new URLSearchParams(local).get('flancId')).toBe('t1');
+  });
+
+  it('OC-CC-ACOES-LINHA-02: somente leitura — os itens de gravar ficam apagados com "operação cancelada · somente leitura" (venda)', async () => {
+    render(
+      <MemoryRouter initialEntries={['/v2?oc_venda=1&oc_id=' + OC]}>
+        <AbaCompromissosOC ocApi={ocApi()} bloqueado clienteId="cli" tipoOperacao="venda" fornecedores={FORNECEDORES}
+          valorAcordado={87500} lotes={[]} contraparteId={null} dataOperacao="2026-05-04" dataChegada={null} darkSelectClass="" soDespesas />
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(within(linhaDe('comissao')).getByText('Realizado')).toBeTruthy());
+    const e = estadoDoMenu(abrirMenu(linhaDe('comissao')));
+    expect(e['Abrir lançamento']).toBeNull();
+    for (const item of ['Reclassificar', 'Estornar', 'Desvincular', 'Desfazer']) expect(e[item]).toBe('operação cancelada · somente leitura');
+  });
+
+  it('despesa Conciliada: Estornar e Desfazer ficam APAGADOS no ⋯, com o porque no item (fix1 + OC-CC-ACOES-LINHA-02)', async () => {
     dados.cbi = [{ lancamento_id: 't1', desfeito_em: null }];
     montar(true);
     await waitFor(() => expect(within(linhaDe('comissao')).getByText('Conciliado')).toBeTruthy());
     const m = abrirMenu(linhaDe('comissao'));
-    expect(itensDoMenu(m)).toEqual(['Abrir lançamento', 'Reclassificar', 'Cancelar programação', 'Desvincular']);
-    const motivo = within(m).getByTestId('motivo-conciliado');
-    expect(motivo.getAttribute('title')).toBe('conciliado com o extrato; desfaça a conciliação primeiro');
-    /* a busca sabe achar: a outra despesa, nao conciliada, segue com o Desfazer */
+    expect(itensDoMenu(m)).toEqual(TODOS_OS_ITENS);
+    const e = estadoDoMenu(m);
+    expect(e.Estornar).toBe('conciliado · desfaça a conciliação primeiro');
+    expect(e.Desfazer).toBe('conciliado · desfaça a conciliação primeiro');
+    expect(within(m).getByTestId('acao-desfazer').getAttribute('title')).toBe('conciliado · desfaça a conciliação primeiro');
+    expect(e['Abrir lançamento']).toBeNull();
+    /* a busca sabe achar: a outra despesa, nao conciliada, segue com o Desfazer VALENDO */
     fireEvent.keyDown(m, { key: 'Escape' });
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
-    expect(itensDoMenu(abrirMenu(linhaDe('taxas_impostos')))).toContain('Desfazer');
+    expect(estadoDoMenu(abrirMenu(linhaDe('taxas_impostos'))).Desfazer).toBeNull();
   });
 });
 
@@ -387,7 +436,9 @@ describe('a regua das duas tabelas soma 764 (largura interna medida)', () => {
       listarLotes: vi.fn(async () => []), listarContas: vi.fn(async () => []),
     };
     const { container } = render(<AbaContaCorrenteOC api={api} somenteLeitura />);
-    expect(container.querySelectorAll('[data-testid="conta-corrente-tabela"] colgroup col')).toHaveLength(10);
+    /* 11 desde o OC-CC-ACOES-LINHA-02: a coluna do "⋯" (22px), tirada da Conta — a soma segue 764 */
+    expect(container.querySelectorAll('[data-testid="conta-corrente-tabela"] colgroup col')).toHaveLength(11);
+    expect(REGUA_EXTRATO[10]).toBe(22);
     expect(somaDosCols(container.querySelector('[data-testid="conta-corrente-tabela"]'))).toBe(LARGURA_INTERNA_MEDIDA);
   });
 });

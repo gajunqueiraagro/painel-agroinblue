@@ -4,6 +4,7 @@ import { AbaCompromissosOC, type LinhaPrevisao, type RotulosCompromissos } from 
 import { useOcCompromissos, type OcCompromissosApi } from '@/hooks/useOcCompromissos';
 import { useOcContaCorrente, type OcContaCorrenteApi } from '@/hooks/useOcContaCorrente';
 import { AbaContaCorrenteOC, type SubAbaContaCorrente } from '@/components/venda/AbaContaCorrenteOC';
+import { paramsAbrirLancamentoDaOC } from '@/lib/oc/abrirLancamentoDaOC';
 import { linhasDeDespesa, totaisDeDespesa } from '@/lib/oc/despesasDaOperacao';
 import { useSearchParams } from 'react-router-dom';
 import { AlertTriangle } from 'lucide-react';
@@ -26,6 +27,8 @@ interface Props {
   financeiroLegadoReadOnly: boolean;   // gate do fluxo legado (AbaLiquidacaoOC)
   financeiroNovoReadOnly: boolean;     // gate do modelo novo (AbaCompromissosOC) — já calculado no shell
   onIrParaDocumentos?: () => void;
+  /** OC-CC-ACOES-LINHA-02 — a aba da entrega (venda) / do recebimento do gado (compra): o "Ir para a entrega" da linha do extrato. */
+  onIrParaEntrega?: () => void;
   // wiring mínimo do modelo novo (vindo do CompraModalShell)
   operacaoId?: string | null;
   clienteId?: string | null;
@@ -100,6 +103,12 @@ export function AbaFinanceiroOC(props: Props) {
     if (s === 'despesas') next.set('oc_sub', 'despesas'); else next.delete('oc_sub');
     setSearchParams(next, { replace: true });
   };
+  /* OC-CC-ACOES-LINHA-02 — o extrato abre o lancamento pelo MESMO dono das despesas (`paramsAbrirLancamentoDaOC`): na sub-aba
+     Conta corrente nao ha' `oc_sub`, e a volta do drill abre no extrato. */
+  const abrirLancamento = (lancamentoId: string) => {
+    setSearchParams(paramsAbrirLancamentoDaOC(searchParams, { tituloId: lancamentoId, ocId: operacaoId ?? null, tipoOperacao: api.tipoOperacao }),
+      { replace: true });
+  };
 
   const legado = (
     <AbaLiquidacaoOC
@@ -125,6 +134,7 @@ export function AbaFinanceiroOC(props: Props) {
         /* o contador conta as MESMAS linhas que a tabela mostra (`linhasDeDespesa`; os titulos so' mudam status, nao quantas) */
         qtdDespesas={despesasLidas ? linhasDeDespesa(ocApi.compromissos, ocApi.parcelas, null).length : null}
         subAba={subAba} onSubAba={escolherSubAba}
+        onAbrirLancamento={abrirLancamento} onIrParaEntrega={props.onIrParaEntrega}
         despesas={({ host, topo }) => (
           <AbaCompromissosOC ocApi={ocApi} soDespesas bloqueado={props.financeiroNovoReadOnly} clienteId={clienteId}
             tipoOperacao={api.tipoOperacao} fornecedores={api.fornecedores} valorAcordado={api.valorAcordado} lotes={api.lotes}

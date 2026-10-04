@@ -9,9 +9,9 @@ import { describe, it, expect, vi } from 'vitest';
 import { createPortal } from 'react-dom';
 import { readFileSync } from 'node:fs';
 import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
-import { AbaContaCorrenteOC, itemDoRascunho, type Rascunho } from './AbaContaCorrenteOC';
+import { AbaContaCorrenteOC, DialogoProgramarRecebimento, acoesDaLinha, itemDoRascunho, motivoSomenteLeitura, type Rascunho } from './AbaContaCorrenteOC';
 import { CancelarContaCorrenteDialog } from './CancelarContaCorrenteDialog';
-import { lerContaCorrente, type ContaCorrente } from '@/lib/oc/contaCorrente';
+import { lerContaCorrente, type ContaCorrente, type LinhaContaCorrente } from '@/lib/oc/contaCorrente';
 import type { OcContaCorrenteApi, RolCancelamento } from '@/hooks/useOcContaCorrente';
 
 function cc(extra: Record<string, unknown> = {}): ContaCorrente {
@@ -164,9 +164,10 @@ describe('aba conta corrente da OC — extrato pelo caixa da fazenda', () => {
   });
 
   it('PROGRAMAR RECEBIMENTO: nasce com o que falta receber; sem vencimento nao grava; com ele, grava valor e data', async () => {
+    /* OC-CC-ACOES-LINHA-02 — o botao do topo saiu (uso medido: zero); o dialogo fica e volta pelo "Parcelar" da linha. Aqui ele e'
+       montado direto, com o sugerido que a aba calculava (o que falta receber). */
     const a = api(cc());
-    render(<AbaContaCorrenteOC api={a} somenteLeitura={false} />);
-    fireEvent.click(screen.getByRole('button', { name: '+ Programar recebimento futuro' }));
+    render(<DialogoProgramarRecebimento api={a} lado="venda" sugerido={1357.89} onFechar={() => {}} />);
     const valor = await screen.findByLabelText('Valor *');
     expect(valor).toHaveProperty('value', '1.357,89');
     fireEvent.click(screen.getByRole('button', { name: 'Programar' }));
@@ -203,7 +204,7 @@ describe('aba conta corrente da OC — extrato pelo caixa da fazenda', () => {
 
   it('somente leitura (OC cancelada) desliga todas as escritas', () => {
     render(<AbaContaCorrenteOC api={api(cc({ saidas_sem_entrega: 1 }))} somenteLeitura />);
-    for (const nome of ['Atualizar entregas', '+ Buscar recebimento no Financeiro', '+ Programar recebimento futuro', 'Explicar diferença']) {
+    for (const nome of ['Atualizar entregas', '+ Buscar recebimento no Financeiro', 'Explicar diferença']) {
       expect(screen.getByRole('button', { name: nome })).toHaveProperty('disabled', true);
     }
   });
@@ -503,9 +504,12 @@ describe('sub-abas do Financeiro em conta corrente', () => {
     render(<AbaContaCorrenteOC api={api({ ...c, linhas })} somenteLeitura={false} />);
     const [r1] = celulas('recebimento');
     const corta = (td: Element) => td.className.includes('text-ellipsis') && td.className.includes('overflow-hidden');
-    /* Data · Lote · Cab · Tipo · Descricao · Conta · Banco · Entrega · Recebido · Saldo */
-    expect(r1.map(corta)).toEqual([false, false, false, false, false, true, true, false, false, false]);
-    for (const td of r1) {
+    /* Data · Lote · Cab · Tipo · Descricao · Conta · Banco · Entrega · Recebido · Saldo · ⋯ */
+    expect(r1.map(corta)).toEqual([false, false, false, false, false, true, true, false, false, false, false]);
+    /* as dez celulas de DADO; a 11a e' o "⋯" (so' um botao, sem texto e sem padding horizontal) */
+    expect(r1).toHaveLength(11);
+    expect(r1[10].className).not.toMatch(/\bpx-/);
+    for (const td of r1.slice(0, 10)) {
       expect(td.className).toContain('whitespace-nowrap');
       expect(td.className).not.toContain('break-words');
     }
@@ -536,5 +540,218 @@ describe('sub-abas do Financeiro em conta corrente', () => {
       expect(td.className).toContain('whitespace-nowrap');
       expect(td.className).not.toContain('break-words');
     }
+  });
+});
+
+/* ═══ OC-CC-ACOES-LINHA-02 — toda linha do extrato e' clicavel e tem "⋯"; item que nao vale fica apagado com o motivo ═══ */
+describe('OC-CC-ACOES-LINHA-02 — clique e menu "⋯" em toda linha do extrato', () => {
+  const linha = (o: Partial<LinhaContaCorrente>): LinhaContaCorrente => ({
+    tipo: 'recebimento', subtipo: null, data: '2025-04-17', parteId: 'r1', lancamentoId: 'L1', loteOrdem: null, categoria: null, cab: null,
+    descricao: null, contaOrdem: 1120, conta: 'Venda de Desmama Machos', banco: 'Bradesco', movEntrega: null, movRecebido: 100,
+    status: 'realizado', noSaldo: true, saldo: 0, motivo: null, ...o,
+  });
+  const par = (l: LinhaContaCorrente, lado: 'venda' | 'compra' = 'venda', fechada = false) =>
+    acoesDaLinha(l, lado, fechada).map(a => [a.texto, a.motivo]);
+
+  it('RECEBIMENTO: os quatro itens na ordem; motivo por status (realizado, conciliado, programado) e sem lancamento', () => {
+    expect(par(linha({ status: 'realizado' }))).toEqual([
+      ['Abrir lançamento', null],
+      ['Parcelar este recebimento', 'já recebido · só se parcela o que está programado'],
+      ['Desvincular da operação', 'disponível em breve'],
+      ['Cancelar recebimento programado', 'só para recebimento programado'],
+    ]);
+    expect(par(linha({ status: 'conciliado' }))).toEqual([
+      ['Abrir lançamento', null],
+      ['Parcelar este recebimento', 'já recebido · só se parcela o que está programado'],
+      ['Desvincular da operação', 'conciliado · desfaça a conciliação primeiro'],
+      ['Cancelar recebimento programado', 'só para recebimento programado'],
+    ]);
+    expect(par(linha({ status: 'programado', noSaldo: false }))).toEqual([
+      ['Abrir lançamento', null],
+      ['Parcelar este recebimento', 'disponível em breve'],
+      ['Desvincular da operação', 'disponível em breve'],
+      ['Cancelar recebimento programado', 'disponível em breve'],
+    ]);
+    expect(par(linha({ lancamentoId: null }))[0]).toEqual(['Abrir lançamento', 'esta linha não tem lançamento']);
+    /* so' o cancelar e' vermelho */
+    expect(acoesDaLinha(linha({}), 'venda', false).map(a => !!a.perigo)).toEqual([false, false, false, true]);
+  });
+
+  it('RECEBIMENTO na compra: os textos espelhados (pagamento)', () => {
+    expect(par(linha({ status: 'realizado' }), 'compra')).toEqual([
+      ['Abrir lançamento', null],
+      ['Parcelar este pagamento', 'já pago · só se parcela o que está programado'],
+      ['Desvincular da operação', 'disponível em breve'],
+      ['Cancelar pagamento programado', 'só para pagamento programado'],
+    ]);
+  });
+
+  it('ENTREGA: ir para a entrega vale; abrir so leitura e desvincular ficam apagados com o motivo', () => {
+    const e = linha({ tipo: 'entrega', status: 'sem_caixa', movEntrega: -100, movRecebido: null, banco: null });
+    expect(par(e)).toEqual([
+      ['Ir para a entrega', null],
+      ['Abrir lançamento (só leitura)', 'disponível em breve'],
+      ['Desvincular da operação', 'a entrega é da operação · corrija na aba Entrega'],
+    ]);
+    expect(par({ ...e, lancamentoId: null })[1]).toEqual(['Abrir lançamento (só leitura)', 'esta linha não tem lançamento']);
+    expect(par(e, 'compra')).toEqual([
+      ['Ir para a entrada', null],
+      ['Abrir lançamento (só leitura)', 'disponível em breve'],
+      ['Desvincular da operação', 'a entrada é da operação · corrija na aba Recebimento'],
+    ]);
+    /* operacao fechada nao muda a entrega: ir para a entrega continua valendo */
+    expect(par(e, 'venda', true)).toEqual(par(e));
+  });
+
+  it('EXPLICACAO: abrir explicacoes vale; abrir lancamento so com lancamento; desfazer apaga no conciliado', () => {
+    const x = linha({ tipo: 'explicacao', subtipo: 'permuta_despesa', status: 'sem_caixa', lancamentoId: null });
+    expect(par(x)).toEqual([
+      ['Abrir explicações', null],
+      ['Abrir lançamento', 'esta explicação não gera lançamento'],
+      ['Desfazer explicação', null],
+    ]);
+    expect(par({ ...x, lancamentoId: 'L9' })[1]).toEqual(['Abrir lançamento', null]);
+    expect(par({ ...x, status: 'conciliado' })[2]).toEqual(['Desfazer explicação', 'conciliado · desfaça a conciliação primeiro']);
+    expect(acoesDaLinha(x, 'venda', false)[2].perigo).toBe(true);
+  });
+
+  it('SOMENTE LEITURA: os itens de gravar dizem "operação cancelada · somente leitura" (compra: rascunho ou cancelada); abrir continua valendo', () => {
+    const LEITURA = 'operação cancelada · somente leitura';
+    expect(motivoSomenteLeitura('venda')).toBe(LEITURA);
+    expect(motivoSomenteLeitura('compra')).toBe('operação em rascunho ou cancelada · somente leitura');
+    expect(par(linha({ status: 'programado' }), 'compra', true).slice(1).map(x => x[1]))
+      .toEqual(Array(3).fill('operação em rascunho ou cancelada · somente leitura'));
+    expect(par(linha({ status: 'programado' }), 'venda', true)).toEqual([
+      ['Abrir lançamento', null],
+      ['Parcelar este recebimento', LEITURA],
+      ['Desvincular da operação', LEITURA],
+      ['Cancelar recebimento programado', LEITURA],
+    ]);
+    const x = linha({ tipo: 'explicacao', subtipo: 'permuta_despesa', status: 'sem_caixa', lancamentoId: 'L9' });
+    expect(par(x, 'venda', true)).toEqual([
+      ['Abrir explicações', null], ['Abrir lançamento', null], ['Desfazer explicação', LEITURA],
+    ]);
+  });
+
+  /* ── na tela ── */
+  const comLanc = () => {
+    const c = cc();
+    return { ...c, linhas: c.linhas.map(l => (l.tipo === 'recebimento' ? { ...l, lancamentoId: 'L-receb' } : { ...l, lancamentoId: 'L-' + l.parteId })) };
+  };
+  const linhaTr = (tipo: string, i = 0) => within(screen.getByTestId('conta-corrente-tabela')).getAllByRole('row')
+    .filter(r => r.getAttribute('data-tipo') === tipo)[i];
+  const abrirMenu = (tr: HTMLElement) => {
+    fireEvent.keyDown(within(tr).getByRole('button', { name: /^Ações de/ }), { key: 'Enter' });
+    return screen.getByRole('menu');
+  };
+  const itens = (menu: HTMLElement) => within(menu).getAllByRole('menuitem').map(i => ({
+    texto: i.querySelector('span')?.textContent ?? '', apagado: i.getAttribute('data-disabled') !== null,
+    motivo: i.querySelector('[data-testid="motivo-do-item"]')?.textContent ?? null, title: i.getAttribute('title'),
+  }));
+
+  it('TODA linha tem o "⋯"; clicar no RECEBIMENTO abre o lancamento dele (o primeiro item); clicar no "⋯" NAO abre', () => {
+    const abrir = vi.fn();
+    render(<AbaContaCorrenteOC api={api(comLanc())} somenteLeitura={false} onAbrirLancamento={abrir} onIrParaEntrega={vi.fn()} />);
+    const linhas = within(screen.getByTestId('conta-corrente-tabela')).getAllByRole('row').filter(r => r.getAttribute('data-tipo'));
+    expect(linhas).toHaveLength(3);
+    for (const tr of linhas) expect(within(tr).getAllByRole('button', { name: /^Ações de/ })).toHaveLength(1);
+    const botao = within(linhaTr('recebimento')).getByRole('button', { name: /^Ações de/ });
+    fireEvent.click(botao);
+    expect(abrir).not.toHaveBeenCalled();
+    fireEvent.click(linhaTr('recebimento').querySelector('td')!);
+    expect(abrir).toHaveBeenCalledTimes(1);
+    expect(abrir).toHaveBeenCalledWith('L-receb');
+    /* teclado: Enter com o foco NA LINHA abre; Enter no botao do menu nao */
+    fireEvent.keyDown(linhaTr('recebimento'), { key: 'Enter' });
+    expect(abrir).toHaveBeenCalledTimes(2);
+    expect(linhaTr('recebimento').getAttribute('tabindex')).toBe('0');
+    expect(linhaTr('recebimento').className).toContain('cursor-pointer');
+  });
+
+  it('clicar na ENTREGA vai para a aba Entrega; recebimento SEM lancamento nao e clicavel, e o menu diz por que', () => {
+    const abrir = vi.fn(); const ir = vi.fn();
+    render(<AbaContaCorrenteOC api={api(cc())} somenteLeitura={false} onAbrirLancamento={abrir} onIrParaEntrega={ir} />);
+    fireEvent.click(linhaTr('entrega').querySelector('td')!);
+    expect(ir).toHaveBeenCalledTimes(1);
+    const r = linhaTr('recebimento');                 // o fixture nao tem lancamento_id
+    expect(r.getAttribute('data-clicavel')).toBe('nao');
+    fireEvent.click(r.querySelector('td')!);
+    expect(abrir).not.toHaveBeenCalled();
+    const m = itens(abrirMenu(r));
+    expect(m.map(i => i.texto)).toEqual(['Abrir lançamento', 'Parcelar este recebimento', 'Desvincular da operação', 'Cancelar recebimento programado']);
+    /* nenhum item some: os quatro estao la', apagados, cada um com o motivo no item E no title */
+    expect(m.every(i => i.apagado)).toBe(true);
+    expect(m[0].motivo).toBe('esta linha não tem lançamento');
+    for (const i of m) expect(i.title).toBe(i.motivo);
+  });
+
+  it('item do menu que vale dispara; apagado nao; e o clique no item nao dispara o clique da linha por tabela', () => {
+    const abrir = vi.fn(); const ir = vi.fn();
+    render(<AbaContaCorrenteOC api={api(comLanc())} somenteLeitura={false} onAbrirLancamento={abrir} onIrParaEntrega={ir} />);
+    const m = abrirMenu(linhaTr('entrega'));
+    fireEvent.click(within(m).getByTestId('acao-abrir_leitura'));
+    fireEvent.click(within(m).getByTestId('acao-desvincular'));
+    expect(abrir).not.toHaveBeenCalled();
+    expect(ir).not.toHaveBeenCalled();
+    fireEvent.click(within(m).getByTestId('acao-ir_entrega'));
+    expect(ir).toHaveBeenCalledTimes(1);               // uma vez: o item; a linha por baixo nao repetiu
+  });
+
+  it('EXPLICACAO: clicar na linha abre o dialogo; "Desfazer explicação" abre o dialogo JA no passo de remocao, e nada sai sem o motivo', async () => {
+    const c = cc({ saldo: 0, falta_explicar: 0, explicado: 1357.89, situacao: 'quitado',
+      linhas: [
+        { tipo: 'entrega', data: '2025-03-19', parte_id: 'e1', lote_ordem: 1, cab: 178, categoria: 'desmama_m', conta_ordem: 1120,
+          conta: 'Venda de Desmama Machos', mov_entrega: -566879.55, status: 'sem_caixa', no_saldo: true, saldo: -566879.55 },
+        { tipo: 'explicacao', subtipo: 'permuta_despesa', data: '2025-04-17', parte_id: 'p9', conta_ordem: 8045, conta: 'Frete',
+          mov_entrega: 1357.89, status: 'sem_caixa', no_saldo: true, saldo: 0, motivo: 'frete do comprador' },
+      ],
+      explicacoes: [{ parte_id: 'p9', tipo: 'permuta_despesa', conta_ordem: 8045, conta: 'Frete', motivo: 'frete do comprador',
+        valor: 1357.89, status: 'sem_caixa' }] });
+    const a = api(c);
+    render(<AbaContaCorrenteOC api={a} somenteLeitura={false} onAbrirLancamento={vi.fn()} onIrParaEntrega={vi.fn()} />);
+    /* clique na linha = "Abrir explicações": o dialogo inteiro, sem passo de remocao */
+    fireEvent.click(linhaTr('explicacao').querySelector('td')!);
+    let dlg = await screen.findByTestId('dialogo-explicar');
+    expect(within(dlg).queryByRole('button', { name: 'Remover explicação' })).toBeNull();
+    fireEvent.click(within(dlg).getByRole('button', { name: 'Cancelar' }));
+    await waitFor(() => expect(screen.queryByTestId('dialogo-explicar')).toBeNull());
+    /* "Desfazer explicação": o mesmo dialogo, ja' no passo de remocao DAQUELA linha */
+    fireEvent.click(within(abrirMenu(linhaTr('explicacao'))).getByTestId('acao-desfazer_explicacao'));
+    dlg = await screen.findByTestId('dialogo-explicar');
+    expect(dlg.querySelector('[data-removendo="sim"]')?.getAttribute('data-explicacao')).toBe('permuta_despesa');
+    expect(a.desfazerExplicacao).not.toHaveBeenCalled();           // abrir nao remove
+    fireEvent.click(within(dlg).getByRole('button', { name: 'Remover explicação' }));
+    expect(a.desfazerExplicacao).not.toHaveBeenCalled();           // sem motivo nao remove
+    expect(within(dlg).getByText('Informe o motivo.')).toBeTruthy();
+    fireEvent.change(within(dlg).getByLabelText('Motivo *'), { target: { value: 'lancado errado' } });
+    fireEvent.click(within(dlg).getByRole('button', { name: 'Remover explicação' }));
+    await waitFor(() => expect(a.desfazerExplicacao).toHaveBeenCalledWith('p9', 'lancado errado'));
+  });
+
+  it('o botao "+ Programar … futuro" saiu do topo nos DOIS lados; o "+ Buscar" fica', () => {
+    const { unmount } = render(<AbaContaCorrenteOC api={api(cc())} somenteLeitura={false} />);
+    expect(screen.getByRole('button', { name: '+ Buscar recebimento no Financeiro' })).toBeTruthy();   // a busca sabe achar
+    expect(screen.queryByRole('button', { name: /Programar recebimento futuro/ })).toBeNull();
+    unmount();
+    render(<AbaContaCorrenteOC api={api(cc())} somenteLeitura={false} lado="compra" />);
+    expect(screen.getByRole('button', { name: '+ Buscar pagamento no Financeiro' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Programar pagamento futuro/ })).toBeNull();
+    expect(screen.queryByText(/Programar .* futuro/)).toBeNull();
+  });
+
+  it('a regua tem 11 colunas, o "⋯" com 22px, somando 764; cabecalho e Total cobrem a coluna nova', () => {
+    render(<AbaContaCorrenteOC api={api(cc())} somenteLeitura={false} />);
+    const tab = screen.getByTestId('conta-corrente-tabela');
+    const cols = Array.from(tab.querySelectorAll('colgroup col')).map(c => parseFloat(c.getAttribute('style')?.match(/width:\s*([\d.]+)px/)?.[1] ?? 'NaN'));
+    expect(cols).toHaveLength(11);
+    expect(cols[10]).toBe(22);
+    expect(cols.reduce((x, y) => x + y, 0)).toBe(764);
+    /* data, lote, cab, selo, os tres valores: nenhum cedeu largura */
+    expect([cols[0], cols[1], cols[2], cols[3], cols[7], cols[8], cols[9]]).toEqual([53, 26, 26, 80, 81, 81, 81]);
+    const [grupos, colunas] = Array.from(tab.querySelectorAll('thead tr'));
+    expect(Array.from(grupos.querySelectorAll('th')).reduce((n, th) => n + (th.colSpan || 1), 0)).toBe(11);
+    expect(colunas.querySelectorAll('th')).toHaveLength(11);
+    expect(Array.from(tab.querySelectorAll('tfoot td')).reduce((n, td) => n + ((td as HTMLTableCellElement).colSpan || 1), 0)).toBe(11);
+    for (const tr of Array.from(tab.querySelectorAll('tbody tr'))) expect(tr.querySelectorAll('td')).toHaveLength(11);
   });
 });

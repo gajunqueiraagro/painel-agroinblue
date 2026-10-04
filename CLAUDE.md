@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 04/10/2026 (UI-LINHA-UNICA-01, +2: `src/components/venda/abaContaCorrente.test.tsx` 1,
+  Baseline em 04/10/2026 (OC-CC-ACOES-LINHA-02, +20: `src/components/venda/abaContaCorrente.test.tsx` 11,
+  `src/lib/oc/abrirLancamentoDaOC.test.ts` 7, `src/components/compra/despesasContaCorrente.test.tsx` 2; antes o UI-LINHA-UNICA-01, +2: `src/components/venda/abaContaCorrente.test.tsx` 1,
   `src/components/financeiro-v2/documentosLayout.test.tsx` 1; antes o OC-BOITEL-REVALORAR-SALVAR-01, +16 em `src/lib/oc/revalorarAoSalvar.test.tsx`; antes o
   FIN-DOCUMENTO-FORM-01, +27 em `src/components/financeiro-v2/documentoFormPorTipo.test.tsx`, e
   FIN-RESUMO-PAGAMENTO-01, +7 em `src/components/financeiro-v2/resumoPagamentoModal.test.tsx`; antes o FIN-PIX-CADASTRO-MODAL-01, +35: `src/lib/financeiro/dadosPagamentoDoCadastro.test.ts` 14,
@@ -179,7 +180,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3281
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3301
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -695,7 +696,7 @@ preview que o cabecalho nao sai da tela ao rolar.
   mas nao vai empilhando".
   · ONDE JA' VALE (medido a 1.133): `TabelaDespesasOC` (regua 52·52·150·144·110·84·76·74·22 = 764, linha de 19px; datas a 9,5px; Descricao,
     Favorecido, Conta e Banco cortam), o extrato da conta corrente (`AbaContaCorrenteOC`: Conta e Banco cortam; `REGUA_EXTRATO`
-    intacta) e a coluna Emitente da aba Documentos do lancamento. A celula de texto livre e' a `TDQ` de cada arquivo (deixou de
+    ganhou a coluna do "⋯" no OC-CC-ACOES-LINHA-02 — 53·26·26·80·94·136·84·81·81·81·22 = 764, linha de 18px) e a coluna Emitente da aba Documentos do lancamento. A celula de texto livre e' a `TDQ` de cada arquivo (deixou de
     quebrar e passou a cortar — nao ha' terceira variante).
   · ⚠ O RESUMO LATERAL FICA FORA, POR DECISAO: `LinhaResumo` com `quebra` (texto livre em ate' duas linhas, 16 usos) nao e'
     tabela e nao mudou — o paragrafo abaixo continua valendo PARA ELE.
@@ -1798,6 +1799,39 @@ docs/historico/frentes-ate-2026-09-29.md.)
   - Cancelar: so o que e' da conta corrente; despesa paga a terceiro fica; recebimento ja pago
     sai da OC e volta a ser venda/compra comum (compoe DRE).
   - Conta bancaria se le' pela direcao: entrada -> conta_destino_id; saida -> conta_bancaria_id.
+- ⚠ TODA LINHA DO CONTA CORRENTE E DAS DESPESAS DA OC E' CLICAVEL E TEM "⋯"; ITEM QUE NAO VALE FICA DESABILITADO COM O MOTIVO,
+  NUNCA SOME (OC-CC-ACOES-LINHA-02, Gabriel 04/10, so' tela; nasce de "eu nao conseguia clicar no recebimento e abrir o modal
+  financeiro… so' tabela de visualizacao"). O clique na linha (e o Enter com o foco nela) e' o PRIMEIRO item do menu dela; o
+  motivo do item apagado vai NO item (segunda linha, ambar) e no `title` — o menu e' a excecao da linha unica. O item e' um so',
+  `ItemDeMenuOC` (`AbaContaCorrenteOC.tsx`), usado pelos dois menus.
+  · EXTRATO (`acoesDaLinha`, funcao pura no mesmo arquivo; textos por lado em `TEXTOS`): RECEBIMENTO/PAGAMENTO = Abrir lançamento ·
+    Parcelar este recebimento · Desvincular da operação · Cancelar recebimento programado; ENTREGA/ENTRADA = Ir para a entrega (a
+    aba Entrega da venda, Recebimento da compra — `onIrParaEntrega`, do shell) · Abrir lançamento (só leitura) · Desvincular da
+    operação; EXPLICACAO = Abrir explicações (o `DialogoExplicarDiferenca` inteiro) · Abrir lançamento · Desfazer explicação (o
+    MESMO dialogo, ja' no passo de remocao daquela linha, `removerAoAbrir`; o motivo e o "Remover explicação" continuam
+    obrigatorios). Em somente leitura os itens de GRAVAR dizem, pelo lado (`motivoSomenteLeitura`, um dono para os dois menus):
+    venda "operação cancelada · somente leitura"; compra "operação em rascunho ou cancelada · somente leitura".
+    ⚠ ESSE "SOMENTE LEITURA" E' `financeiroNovoReadOnly`, QUE NA VENDA SO' LIGA COM A OC CANCELADA (na compra, rascunho ou
+      cancelada): a OC FECHADA segue gravando no Financeiro, de proposito — por isso a frase NAO e' "operação fechada · reabra
+      para alterar" (a primeira versao; trocada por decisao do Gabriel em 04/10). Nao ha' no proto OC em conta corrente
+      cancelada: provado so' por teste.
+  · REGUA: a 11a coluna (22px) saiu das duas de TEXTO pela medicao — Descricao 100 -> 94 (texto gerado, nao corta: o pior,
+    "Devol. fornecedor", pede 84,6 + 8) e Conta 152 -> 136 (corta com `title`); data, numero e valor nao cederam.
+  · DESPESAS (`menuDespesa`, `AbaCompromissosOC`): os nove itens SEMPRE, na mesma ordem — Abrir lançamento · Programar · Programar
+    saldo · Lançar · Reclassificar · Cancelar programação · Estornar · Desvincular · Desfazer. NENHUMA condicao de habilitacao
+    mudou: o que sumia ficou apagado com a frase da propria condicao.
+  · ABRIR O LANCAMENTO TEM UM DONO: `paramsAbrirLancamentoDaOC` (`src/lib/oc/abrirLancamentoDaOC.ts`), o corpo do antigo
+    `editarTitulo` movido linha a linha; as despesas e o extrato (por `AbaFinanceiroOC`) chamam a mesma funcao, e a volta abre na
+    sub-aba de onde saiu (sem `oc_sub` = extrato). PROIBIDO segundo caminho de abrir.
+  · O BOTAO "+ Programar recebimento/pagamento futuro" SAIU DO TOPO (uso medido: zero). `DialogoProgramarRecebimento`, o hook
+    (`programarRecebimento`) e a RPC `oc_programar_recebimento` FICAM, sem ponto de entrada: voltam pelo "Parcelar".
+  ⚠ FILA DO PR 3 (banco), que ACENDE os itens hoje em "disponível em breve": desvincular recebimento de conta corrente
+    (`oc_desvincular_lancamento` recusa parte de conta corrente) · parcelar recebimento programado · cancelar recebimento
+    programado (nao existe gesto nem RPC).
+  ⚠ DIVIDAS: FIN-MODAL-SOMENTE-LEITURA-01 — modo so' leitura no `LancamentoV2Dialog` (prop + repasse no `FinanceiroV2Tab` +
+    parametro no `V2Index`), que acende o "Abrir lançamento (só leitura)" da entrega (hoje o modal trava 5 campos do titulo de OC
+    e deixa gravar fornecedor, safra e observacao) · EDITAR EXPLICACAO GRAVADA NO LUGAR (hoje so' remover e acrescentar) · a
+    linha de recebimento sem `lancamentoId` nao e' clicavel (o "⋯" diz por que).
 - ⚠ FINANCEIRO V2 MOSTRA SO DINHEIRO por padrao; sem caixa (entregas, barter, consumo) em secao
   separada atras de chave. OC se abre pelo icone do produto ou "Abrir OC" no menu (FIN-V2-SEM-CAIXA-01,
   FIN-V2-HOMOLOG-FIX-01).
