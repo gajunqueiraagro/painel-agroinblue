@@ -84,7 +84,18 @@ export interface NavItem {
      construção" e sem clique. Decisao do Gabriel — o menu anuncia o rumo. Nao e'
      `status`, que fala de wrapper de rota; e' outro eixo. */
   emConstrucao?: boolean;
+  /**
+   * A tela esta' LIBERADA PARA CLIENTES — ACESSOS-02a. Sem a marca, so' o admin do AGROinBLUE a ve^ e a abre, qualquer que seja
+   * o perfil do membro. O piloto comeca com o MINIMO e libera aos poucos (decisao do Gabriel, 04/10/2026): hoje, tres telas.
+   * ⚠ A MARCA NAO DECIDE SOZINHA: liberada, a tela ainda passa pela matriz perfil × grupo. Quem responde "esta pessoa acessa
+   *   esta tela?" e' UM dono, `nivelDaTela` (`src/v2/lib/acessoTelas.ts`); menu e rota so' consultam.
+   */
+  liberadaClientes?: boolean;
 }
+
+/** A Visao Geral ('home') nao e' item do `NAV_GRUPOS` (e' o botao do topo da lateral), entao a marca dela mora aqui, ao lado da
+ *  lista. NAO liberada no piloto (ACESSOS-02a): quem nao e' admin entra direto na primeira tela permitida. */
+export const HOME_LIBERADA_CLIENTES = false;
 
 export interface NavSecao {
   /* Vazio = secao SEM cabecalho. Usado por "Fechamento Área", que deixou de ser
@@ -181,8 +192,8 @@ export const NAV_GRUPOS: NavGrupo[] = [
       {
         titulo: 'Operação',
         itens: [
-          { id: 'financeiro-lanc',     label: 'Lançamentos Financeiros', status: 'ready' },
-          { id: 'conciliacao',         label: 'Conciliação Bancária',    status: 'ready' },
+          { id: 'financeiro-lanc',     label: 'Lançamentos Financeiros', status: 'ready', liberadaClientes: true },
+          { id: 'conciliacao',         label: 'Conciliação Bancária',    status: 'ready', liberadaClientes: true },
           /* ⚠ A TELA NOVA ENTRA AO LADO DAS VELHAS, e nao no lugar delas —
              FIN-CONCIL-PORTAR-01, rodada 1. Ela leva "(novo)" no rotulo porque
              conviver sem dizer qual e' qual faria o operador escolher no escuro.
@@ -225,7 +236,7 @@ export const NAV_GRUPOS: NavGrupo[] = [
              Operação é o que se faz numa conta e num mês; aqui a pergunta é "o que vence,
              quando, somando todas as contas", que é a mesma família do Painel por Período:
              leitura de compromisso, não lançamento. */
-          { id: 'contas-a-pagar-receber', label: 'Contas a Pagar/Receber', status: 'ready' },
+          { id: 'contas-a-pagar-receber', label: 'Contas a Pagar/Receber', status: 'ready', liberadaClientes: true },
           { id: 'painel-financiamentos', label: 'Painel Financiamentos', status: 'needs-wrapper' },
         ],
       },

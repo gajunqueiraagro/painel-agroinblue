@@ -16,6 +16,8 @@ import { AnaliseTrimestralTab } from '@/pages/AnaliseTrimestralTab';
 import { AnaliseOperacionalTab } from '@/pages/AnaliseOperacionalTab';
 import { PrecoMercadoTab } from '@/pages/PrecoMercadoTab';
 import V2NaoEncontrada from '@/v2/pages/V2NaoEncontrada';
+import V2SemAcesso from '@/v2/pages/V2SemAcesso';
+import { nivelDaTela, primeiraTelaPermitida } from '@/v2/lib/acessoTelas';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { V2Sidebar, type V2Section } from './components/V2Sidebar';
@@ -796,6 +798,22 @@ export default function V2Index() {
   const { fazendas, isGlobal, setFazendaAtual } = useFazenda();
   const { canEditMeta } = usePermissions();
 
+  /* ═══ ACESSO POR PERFIL — ACESSOS-02a ═══════════════════════════════════════════════════════════════════════════════════
+     O dono e' `nivelDaTela` (`src/v2/lib/acessoTelas.ts`): a marca `liberadaClientes` do menu + a matriz perfil × grupo. A rota
+     so' CONSULTA, num ponto so' — a chamada unica de `renderContent()`, la' embaixo. O `AppRouter` so' monta esta tela depois de
+     o cliente carregar, entao perfil e `isAdmin` ja' sao os de verdade aqui. Para o admin, nada muda. */
+  const perfilAcesso = clienteAtual?.perfil ?? null;
+  const semAcesso = nivelDaTela(perfilAcesso, isAdmin, section) === 'nao';
+  const primeiraPermitida = primeiraTelaPermitida(perfilAcesso, isAdmin);
+  /* A TELA INICIAL de quem nao tem a Visão Geral: ao entrar e ao trocar de cliente, quem esta' na 'home' cai na primeira tela
+     permitida na ordem do menu (no piloto, Lançamentos Financeiros). ⚠ SO' A 'home' E' TROCADA: quem chegou a OUTRA tela sem
+     acesso (endereco, parametro de URL, navegacao interna) ve^ o aviso, nunca um redirecionamento calado; e quem ja' esta' numa
+     tela permitida fica nela. Sem nenhuma tela permitida, fica na 'home': a rota mostra o aviso. */
+  useEffect(() => {
+    if (isAdmin || !primeiraPermitida || primeiraPermitida === 'home') return;
+    if (sectionRef.current === 'home') setSection(primeiraPermitida);
+  }, [clienteAtual?.id, perfilAcesso, isAdmin, primeiraPermitida]);
+
   useEffect(() => {
     if (!clienteAtual?.id) return;
     (async () => {
@@ -1504,6 +1522,8 @@ export default function V2Index() {
             duas linhas. */}
         <BarraSecao area={rotulo.area} secao={rotulo.secao}
           atalho={(() => {
+            /* ACESSOS-02a — sem acesso a' tela, nenhum atalho para as vizinhas. */
+            if (semAcesso) return undefined;
             const ativa = secaoDoAtalho(section);
             return ativa ? (
               <Segmentado altura={22} valor={ativa} onEscolher={irPeloAtalho}
@@ -1512,7 +1532,7 @@ export default function V2Index() {
           })()} />
 
         {/* SUB-NAV FINANCEIRO — desktop apenas */}
-        {['financeiro-dashboard', 'fluxo-caixa', 'rateio-adm', 'importacao-extratos'].includes(section) && (
+        {!semAcesso && ['financeiro-dashboard', 'fluxo-caixa', 'rateio-adm', 'importacao-extratos'].includes(section) && (
           <div className="hidden md:flex shrink-0 items-center gap-1 px-4 py-1.5 border-b border-border bg-background">
             <span className="text-[11px] font-bold text-foreground mr-2">Financeiro</span>
             {([
@@ -1561,7 +1581,13 @@ export default function V2Index() {
               ? "w-full min-w-0 pb-16 md:pb-0 md:flex-1 md:min-h-0 md:flex md:flex-col"
               : "w-full min-w-0 pb-16 md:pb-0"
           }>
-            {renderContent()}
+            {/* ⚠ A GUARDA DA ROTA, NUM PONTO SO' — ACESSOS-02a. Qualquer `section` com nivel 'nao' para a pessoa (endereco
+                digitado, parametro de URL, `sessionStorage`, navegacao interna de outra tela) desenha o aviso, NUNCA a tela. */}
+            {semAcesso ? (
+              <V2SemAcesso primeira={primeiraPermitida
+                ? { rotulo: rotuloDaSecao(primeiraPermitida).secao, ir: () => navegarPeloMenu(primeiraPermitida) }
+                : null} />
+            ) : renderContent()}
           </div>
         </section>
 

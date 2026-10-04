@@ -22,7 +22,8 @@ import { Button } from '@/components/ui/button';
 import { AlterarSenhaDialog } from '@/components/AlterarSenhaDialog';
 import logo from '@/assets/logo.png';
 import { useCliente } from '@/contexts/ClienteContext';
-import { NAV_GRUPOS, SECTION_TO_GROUP } from '@/v2/lib/navGrupos';
+import { SECTION_TO_GROUP } from '@/v2/lib/navGrupos';
+import { gruposVisiveis, nivelDaTela } from '@/v2/lib/acessoTelas';
 
 // Re-export V2Section para compatibilidade com V2Index e V2MobileNav
 export type { V2Section } from '@/v2/lib/navGrupos';
@@ -62,7 +63,12 @@ export function V2Sidebar({
   fazendaSelector,
   className,
 }: V2SidebarProps) {
-  const { isAdmin } = useCliente();
+  const { isAdmin, clienteAtual } = useCliente();
+  /* ACESSOS-02a — o que se OFERECE vem de UM dono (`nivelDaTela`): grupo sem item visivel some, e os dois botoes soltos
+     (Visão Geral, Configurações) somem para quem nao tem a tela. Para o admin nada muda. */
+  const perfil = clienteAtual?.perfil ?? null;
+  const veHome = nivelDaTela(perfil, isAdmin, 'home') !== 'nao';
+  const veConfiguracoes = nivelDaTela(perfil, isAdmin, 'configuracoes') !== 'nao';
   const activeGroup = SECTION_TO_GROUP[activeSection] ?? null;
 
   function handleGroup(groupId: string) {
@@ -105,6 +111,7 @@ export function V2Sidebar({
       <nav className="flex-1 overflow-y-auto py-2 px-2 space-y-0.5">
 
         {/* Visão Geral */}
+        {veHome && (
         <button
           onClick={() => { onNavigate('home'); onDrawerToggle?.(null); }}
           className={cn(
@@ -117,12 +124,13 @@ export function V2Sidebar({
           <LayoutDashboard className="h-4 w-4 shrink-0" />
           Visão Geral
         </button>
+        )}
 
         {/* Grupos com drawer — Rebanho, Financeiro, Planejamento */}
         {/* ⚠ O GRUPO "Validar" SO' APARECE PARA O ADMIN — PR-VALIDAR-01. `isAdmin` ja'
             existe no `ClienteContext` (RPC `is_admin_agroinblue`, com cache por usuario),
             entao nao ha hook novo: o front ja sabia, faltava perguntar. */}
-        {NAV_GRUPOS.filter((g) => !g.soAdmin || isAdmin).map((grupo) => {
+        {gruposVisiveis(perfil, isAdmin).map((grupo) => {
           const Icon = GRUPO_ICONS[grupo.id] ?? Target;
           const isDrawerOpen  = drawerAtivo === grupo.id;
           const isGroupActive = activeGroup  === grupo.id;
@@ -152,6 +160,7 @@ export function V2Sidebar({
         })}
 
         {/* Configurações */}
+        {veConfiguracoes && (
         <button
           onClick={() => { onNavigate('configuracoes'); onDrawerToggle?.(null); }}
           className={cn(
@@ -164,6 +173,7 @@ export function V2Sidebar({
           <Settings className="h-4 w-4 shrink-0" />
           Configurações
         </button>
+        )}
 
       </nav>
 

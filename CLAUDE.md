@@ -162,7 +162,7 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 04/10/2026 (OC-CC-ACOES-LINHA-02, +20: `src/components/venda/abaContaCorrente.test.tsx` 11,
+  Baseline em 04/10/2026 (ACESSOS-02a, +26 em `src/v2/lib/acessoTelas.test.tsx`; antes o OC-CC-ACOES-LINHA-02, +20: `src/components/venda/abaContaCorrente.test.tsx` 11,
   `src/lib/oc/abrirLancamentoDaOC.test.ts` 7, `src/components/compra/despesasContaCorrente.test.tsx` 2; antes o UI-LINHA-UNICA-01, +2: `src/components/venda/abaContaCorrente.test.tsx` 1,
   `src/components/financeiro-v2/documentosLayout.test.tsx` 1; antes o OC-BOITEL-REVALORAR-SALVAR-01, +16 em `src/lib/oc/revalorarAoSalvar.test.tsx`; antes o
   FIN-DOCUMENTO-FORM-01, +27 em `src/components/financeiro-v2/documentoFormPorTipo.test.tsx`, e
@@ -180,7 +180,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3301
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3327
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -242,6 +242,58 @@ migration e' REGISTRO HISTORICO, nao se reaplica).
 - ⚠ O QUE ISSO MUDA PARA QUEM ESCREVE TELA: consulta que lia a tabela sem `.eq('cliente_id', ...)`
   passa a devolver MENOS linhas, e sem erro — a lista so' encolhe. Nenhum gate pega isso.
   Antes de culpar a RPC por um numero que baixou, conferir se a tela le direto e sem tenant.
+
+## ACESSO A TELA POR PERFIL — UM DONO (ACESSOS-02a, Gabriel 04/10/2026, so' tela)
+O acesso a tela tem um dono, `nivelDaTela(perfil, isAdmin, tela) -> 'nao' | 'ver' | 'editar'` (`src/v2/lib/acessoTelas.ts`): a marca
+`liberadaClientes` no menu (`NavItem`, `src/v2/lib/navGrupos.ts`) + a matriz perfil × grupo (`MATRIZ_ACESSO`). MENU E ROTA SO'
+CONSULTAM: a lateral (`V2Sidebar`, por `gruposVisiveis`), o drawer (`V2ContextDrawer`, por `secoesVisiveis`), a barra do celular
+(`V2MobileNav`) e a rota (`V2Index`, UM ponto: a chamada unica de `renderContent()`). Nenhum componente decide por conta propria.
+- ⚠ VISIBILIDADE NAO E' PERMISSAO: isto decide o que se OFERECE e o que a rota ABRE. Ler e gravar e' do banco (RLS; a trava de
+  gravacao por perfil e' o 01F, que ainda nao existe — `tenant_ok` nao distingue leitura de escrita).
+- DUAS CAMADAS: (1) sem a marca `liberadaClientes`, quem nao e' admin do AGROinBLUE nao ve^ nem abre a tela, qualquer que seja o
+  perfil; tela fora do menu (rota interna, legado, drill) nao tem marca. (2) liberada, vale a matriz. Admin: 'editar' em tudo, como
+  sempre. Perfil desconhecido ou nulo: 'nao' em tudo.
+- PILOTO (comecar com o minimo e liberar aos poucos): TRES telas liberadas — `financeiro-lanc`, `conciliacao`,
+  `contas-a-pagar-receber`. A Visão Geral ('home') NAO (`HOME_LIBERADA_CLIENTES`, em navGrupos).
+- MATRIZ (aprovada em 16/09; "leitura" e' decisao do arquiteto: 'ver' onde o gestor tem acesso):
+      grupo         gestor_cliente  financeiro  campo   leitura
+      home          ver             ver         ver     ver
+      rebanho       editar          ver         editar  ver
+      financeiro    editar          editar      nao     ver
+      planejamento  editar          editar      nao     ver
+      executivo     ver             ver         nao     ver
+      auditoria     ver             ver         nao     ver
+      cadastros     editar          editar      nao     ver
+      validar       nao             nao         nao     nao
+- MENU: item 'nao' nao aparece; secao do drawer sem item some; grupo sem item visivel some da lateral; "Visão Geral" e
+  "Configurações" somem para quem tem 'nao' nelas. Para o admin nada muda.
+- ROTA: `section` com nivel 'nao' desenha `V2SemAcesso` ("Você não tem acesso a esta tela" + botao para a primeira tela permitida),
+  nunca a tela — por endereco, parametro de URL, `sessionStorage` ou navegacao interna. Sem acesso, a barra tambem nao oferece o
+  atalho de Producao nem a sub-navegacao do Financeiro.
+- TELA INICIAL: quem nao tem a 'home' e esta' nela (ao entrar, ao trocar de cliente) cai em `primeiraTelaPermitida` (no piloto,
+  Lançamentos Financeiros). ⚠ SO' A 'home' E' TROCADA: outra tela sem acesso mostra o aviso, nao um redirecionamento calado. Sem
+  nenhuma tela: "Nenhuma tela liberada para o seu perfil. Fale com o administrador."
+- ⚠ O PERFIL NAO ADMIN NAO SE PROVA NO NAVEGADOR COM O LOGIN DO ADMIN: provado por teste (`src/v2/lib/acessoTelas.test.tsx`; a rota
+  e' lida da FONTE, o `V2Index` nao se monta em teste); o Gabriel homologa com usuario de teste. Nao criar usuario, nao trocar
+  perfil, nao mexer em `cliente_membros`.
+- ⚠ O QUE FALTA: (a) o EFEITO de 'ver' nas telas (modo somente leitura por perfil) — hoje a funcao devolve o nivel e nenhuma tela o
+  usa; no piloto as tres sao 'editar' para gestor e financeiro, e 'ver' para `leitura`, que hoje EDITARIA; (b) a trava no banco, 01F;
+  (c) a grade por pessoa, ACESSOS-03; (d) o endereco sem `/v2`.
+- ⚠ ACHADOS (medidos, sem corrigir):
+  R1 — a raiz "/" ja' NAO e' o v1: `AppRouter.tsx` redireciona "/" para `/v2` e `pages/Index.tsx` deixou de ser rota (so' fica no
+     repo). `usePermissions.canViewTab` so' e' usado pelo v1, que nao e' mais alcancavel. MAS ha' QUATRO ROTAS FORA DO V2, abertas a
+     qualquer usuario logado, sem consulta de perfil: `/caderno-importacao`, `/v3` (e `/v3/*`), `/layout-lab`, `/resumo-operacional`.
+  R2 — saidas das tres telas para telas nao liberadas (caem no aviso): Lançamentos -> "Abrir OC" e o icone do produto
+     (`FinanceiroV2Tab.tsx` ~:2741, ~:2858, ~:2883 -> `abrirOperacaoOC` -> 'lancamentos-zoot'); Lançamentos -> financiamento da
+     parcela (~:529, ~:546, ~:563 -> 'financiamentos'); o link "Abrir →" / "corrigir na operação" do modal do lancamento (mesma
+     porta da OC). Ficam dentro do permitido: Conciliação <-> Lançamentos (`onNavigateToLancamentos` / `onBack`). Dialogos que nao
+     mudam de `section` seguem funcionando: modal do lancamento, cadastro de fornecedor pelo modal, saldo da conta ("Cadastrar" e o
+     lapis da Conciliação), modais do Casar/Importar/Enriquecer e o do Contas a Pagar/Receber.
+  R3 — fora do menu: a barra de secao so' tem o Sair; o atalho de Producao so' aparece nas telas de Producao (nao liberadas) e a
+     sub-navegacao do Financeiro so' em telas nao liberadas — as duas somem no aviso; nao ha' busca global nem atalho de teclado no
+     shell. `?oc_id` / `?oc_compra` na URL abrem 'operacoes-comerciais' / 'lancamentos-zoot' -> aviso. ⚠ A BARRA DO CELULAR NAO TEM
+     ABA PARA NENHUMA DAS TRES TELAS (as cinco abas sao home, "financeiro" — que nem e' secao —, meta-cenario, painel-anual e
+     configuracoes): no celular o perfil do piloto entra em Lançamentos Financeiros e NAO TEM COMO IR as outras duas. Pre-existente.
 
 ## ESTADO ATUAL (handoff de 29/09/2026 — atualizar a cada troca de sessao)
 - HEAD proto: 6ed7e148 (FIN-V2-HOMOLOG-FIX-01), publicado em origin/proto.

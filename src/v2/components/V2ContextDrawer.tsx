@@ -9,6 +9,8 @@
  */
 import { Star, Circle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useCliente } from '@/contexts/ClienteContext';
+import { secoesVisiveis } from '@/v2/lib/acessoTelas';
 import {
   NAV_GRUPOS,
   type V2Section,
@@ -109,6 +111,8 @@ export function V2ContextDrawer({
   onSelect,
   onClose,
 }: V2ContextDrawerProps) {
+  /* ACESSOS-02a — o hook vem ANTES do `return` antecipado (regra dos hooks). */
+  const { isAdmin, clienteAtual } = useCliente();
   if (!grupoAtivo) return null;
   const grupo = NAV_GRUPOS.find((g) => g.id === grupoAtivo);
   /* Produção tem cinco cabecalhos de escopo e a lista mais longa do menu: e' o grupo
@@ -153,7 +157,8 @@ export function V2ContextDrawer({
                   ⚠ SECAO SEM CABECALHO ganha um filete abaixo, que e' a linha que separa
                   ela do cabecalho seguinte — sem ele o item solto pareceria pertencer ao
                   grupo de baixo, que e' justamente o que o desenho quer evitar. */}
-              {grupo.drawer.map((secao, i) => (
+              {/* ACESSOS-02a — so' os itens que a pessoa acessa (`secoesVisiveis`, do dono); a secao sem item some. */}
+              {secoesVisiveis(clienteAtual?.perfil ?? null, isAdmin, grupo).map((secao, i) => (
                 <div key={`${secao.titulo}-${i}`} role="group"
                   aria-label={secao.titulo || undefined}
                   className={secao.titulo ? undefined : cn('border-b border-white/10', ehProducao ? 'pb-3.5' : 'pb-4')}>
