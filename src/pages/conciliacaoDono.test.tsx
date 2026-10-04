@@ -5,6 +5,7 @@
  * ⚠ O BANCO FALSO DEVOLVE AS LINHAS DO DONO e a tela é montada inteira (os filhos pesados são trocados por nada — o
  *   Espelho fica com um espião das props, para o link "N dias com diferença"). Lançamentos do ano: nenhum — prova de que
  *   nenhum número do Resumo, do Status ou dos Saldos vem deles.
+ * (PR-CONC-STATUS-SALDO-01b: motivos = o saldo; avisos = a 2ª prova do extrato; ver o bloco STATUS-SALDO.)
  * T1 Emerson · T2 selo = dono · T3 motivos e o link do dia · T4 Todas · T5 o par do Agnaldo · T6 régua neutra → pintada
  * · T7 posição · T8 fechar sem movimento grava o do dono · T9 nenhum arquivo tocado importa a conta antiga.
  *
@@ -93,7 +94,7 @@ const conta = (id: string, nome: string, tipo = 'cc') =>
 /* `comProprio`: a linha de conta SEM par vem do dono com `proprio` = topo (PR-CONC-INTERNA-SEPARADA-01a). Quem escreve o
    `proprio` à mão (a conta-mãe) fica com o seu. */
 const linhaConta = (x: Record<string, unknown>) => comProprio({
-  nivel: 'conta', consolida_em_conta_id: null, tem_extrato: false, entradas: 0, saidas: 0, motivos: [],
+  nivel: 'conta', consolida_em_conta_id: null, tem_extrato: false, entradas: 0, saidas: 0, motivos: [], avisos: [],
   retido_em_depositos: { qtde: 0, valor: 0 }, extratos_sem_par: { qtde: 0, valor: 0 }, lancamentos_sem_par: { qtde: 0, valor: 0 },
   banco: { entradas: 0, saidas: 0 }, posicao: null, sem_conta: null, ...x,
 });
@@ -107,21 +108,24 @@ const LINHA_EMERSON = linhaConta({
 const LINHA_CARTAO = linhaConta({
   conta_id: 'cartao', conta_nome: 'Cartão BB - Visa Infinite', tipo_conta: 'cartao', status: 'nao_conciliado',
   saldo_inicial: 0, saldo_sistema: -6470.73, saldo_extrato: 0, saldo_extrato_data: '2026-09-30', diferenca: 6470.73, tem_extrato: true,
-  motivos: [{ motivo: 'dias_com_diferenca', qtde: 2, dias: ['2026-09-08', '2026-09-15'] }, { motivo: 'saldo_diverge', valor: 6470.73 }],
+  /* PR-CONC-STATUS-SALDO-01b: o saldo decide (motivos); o extrato importado avisa (avisos). */
+  motivos: [{ motivo: 'saldo_diverge', valor: 6470.73 }],
+  avisos: [{ motivo: 'dias_com_diferenca', qtde: 2, dias: ['2026-09-08', '2026-09-15'] }],
 });
 const LINHA_PARADA = linhaConta({
   conta_id: 'parada', conta_nome: 'Invest Parado', tipo_conta: 'inv', status: 'pendente',
   saldo_inicial: 300000, saldo_inicial_origem: 'herdado', saldo_sistema: 300000, saldo_extrato: null, diferenca: null,
-  motivos: [{ motivo: 'sem_extrato' }],
+  motivos: [{ motivo: 'saldo_nao_informado', falta: 'final' }], avisos: [{ motivo: 'sem_extrato' }],
 });
 const TOTAL_NJ = linhaConta({
   nivel: 'total', conta_id: null, conta_nome: 'Total', status: 'nao_conciliado',
   saldo_inicial: 330150.7, saldo_sistema: 449501.56, saldo_extrato: 155972.29, diferenca: 0, entradas: 1172212.94, saidas: -1043829.75,
   motivos: [
-    { motivo: 'contas_nao_conciliadas', qtde: 1, contas: [{ conta_id: 'cartao', conta_nome: 'Cartão BB - Visa Infinite', status: 'nao_conciliado', motivos: LINHA_CARTAO.motivos }] },
+    { motivo: 'contas_nao_conciliadas', qtde: 1, contas: [{ conta_id: 'cartao', conta_nome: 'Cartão BB - Visa Infinite', status: 'nao_conciliado', motivos: LINHA_CARTAO.motivos, avisos: LINHA_CARTAO.avisos }] },
     { motivo: 'contas_pendentes', qtde: 1 },
     { motivo: 'lancamentos_sem_conta', qtde: 3 },
   ],
+  avisos: [{ motivo: 'contas_com_aviso', qtde: 2, qtde_alem_sem_extrato: 1, por_aviso: { sem_extrato: 1, dias_com_diferenca: 1 } }],
   sem_conta: { qtde: 3, entradas: 100, saidas: 869.29 },
 });
 const SUB = (tipo: string, x: Record<string, unknown>) => linhaConta({ nivel: 'tipo', conta_id: null, tipo_conta: tipo, ...x });
@@ -139,8 +143,8 @@ beforeEach(() => {
       TOTAL_NJ],
   };
   B.statusAno = [
-    { ano_mes: '2026-08', nivel: 'total', status: 'conciliado', motivos: [] },
-    { ano_mes: '2026-09', nivel: 'total', status: 'nao_conciliado', motivos: [] },
+    { ano_mes: '2026-08', nivel: 'total', status: 'conciliado', motivos: [], avisos: [] },
+    { ano_mes: '2026-09', nivel: 'total', status: 'nao_conciliado', motivos: [], avisos: [] },
   ];
   B.segurarAno = null;
   B.inserts = []; B.rpcs = []; B.espelhoProps = []; B.tom = []; B.lapis = [];
@@ -180,8 +184,9 @@ describe('T2 — o selo é o status do dono, e "confere em todos os dias" nunca 
     await waitFor(() => expect(screen.getByTestId('card-status').getAttribute('data-status')).toBe('nao_conciliado'));
     const motivos = screen.getByTestId('status-motivos');
     expect(within(motivos).queryByText('confere em todos os dias')).toBeNull();
-    expect(n(motivos.textContent)).toContain('2 dias com diferença');
-    expect(n(motivos.textContent)).toContain('saldo diverge R$ 6.470,73');
+    /* o status é o SALDO; o dia com diferença é 2ª prova, fora das frases do status */
+    expect(n(motivos.textContent)).toBe('saldo diverge R$ 6.470,73');
+    expect(n(screen.getByTestId('segunda-prova').textContent)).toBe('2ª prova · extrato2 dias com diferença');
     expect(screen.getByTestId('selo-mes').getAttribute('data-status')).toBe('nao_conciliado');
     expect(screen.getByTestId('selo-mes').textContent).toBe('❌ Não Conciliado');
   });
@@ -199,7 +204,10 @@ describe('T3 — os motivos e o link do dia', () => {
 
   it('sem extrato e sem saldo: "sem extrato"; nada de link', async () => {
     await abrirConta('parada');
-    await waitFor(() => expect(n(screen.getByTestId('status-motivos').textContent)).toBe('sem extrato'));
+    await waitFor(() => expect(n(screen.getByTestId('status-motivos').textContent)).toBe('saldo não informado'));
+    const prova = screen.getByTestId('segunda-prova');
+    expect(n(prova.textContent)).toBe('2ª prova · extratosem extrato');
+    expect(prova.querySelector('[data-aviso="sem_extrato"]')?.className).toContain('text-muted-foreground');   // informa: neutro
     expect(screen.queryByTestId('link-dia')).toBeNull();
   });
 });
@@ -213,6 +221,10 @@ describe('T4 — "Todas as contas": total, subtotais, contas não conciliadas, p
     expect(n(motivos.textContent)).toContain('1 conta não conciliada');
     expect(within(motivos).getByTestId('conta-nao-conciliada').textContent).toBe('Cartão BB - Visa Infinite');
     expect(n(motivos.textContent)).toContain('1 pendente');
+    /* T-g: as contas com aviso do extrato (além de "sem extrato"), do `contas_com_aviso` do dono */
+    const prova = screen.getByTestId('segunda-prova');
+    expect(n(prova.textContent)).toBe('2ª prova · extrato1 conta com aviso do extrato');
+    expect(prova.querySelector('[data-aviso="contas_com_aviso"] [data-motivo]')?.getAttribute('title')).toBe('sem extrato: 1 · dias com diferença: 1');
     expect(n(screen.getByTestId('resumo-sem-conta').textContent)).toBe('lançamentos sem conta +R$ 100,00 / −R$ 869,29 (3)');
     expect(n(screen.getByTestId('total-sistema').textContent)).toBe('R$ 449.501,56');
     expect(screen.getByText('R$ 300.000,00', { selector: 'td.sticky' })).toBeInTheDocument(); // o subtotal Investimentos do dono
@@ -243,18 +255,19 @@ const MAE_ABR24 = (x: Record<string, unknown> = {}) => linhaConta({
   ...x,
 });
 const INTERNA_ABR24 = (x: Record<string, unknown> = {}) => linhaConta({
-  conta_id: 'if', conta_nome: 'Bradesco-Invest. Facil', tipo_conta: 'inv', consolida_em_conta_id: 'brad', status: 'nao_conciliado',
+  /* PR-CONC-STATUS-SALDO-01b: a interna é julgada pelo SEU saldo (0,00 = conciliado); `par_status` segue o da mãe. */
+  conta_id: 'if', conta_nome: 'Bradesco-Invest. Facil', tipo_conta: 'inv', consolida_em_conta_id: 'brad', status: 'conciliado',
   par_conta_id: 'brad', par_status: 'nao_conciliado', internas: null, saldo_inicial_origem: 'informado',
   saldo_inicial: -2.73, entradas: 53305.5, saidas: -53306.79, saldo_sistema: -4.02, saldo_extrato: -4.02, saldo_extrato_data: '2024-04-30', diferenca: 0,
   entradas_transferencias: 53305.5, saidas_terceiros: -1.29, saidas_transferencias: -53305.5,
-  motivos: CONF_MAE, ...x,
+  motivos: [], avisos: [{ motivo: 'sem_extrato' }, ...CONF_MAE], ...x,
 });
 const PAR_ABR24 = (mae = MAE_ABR24(), interna = INTERNA_ABR24()) => [mae, interna,
   SUB('cc', { conta_nome: 'Conta corrente', status: 'nao_conciliado', saldo_sistema: -55719.49, saldo_extrato: -55734.67, diferenca: -15.18 }),
-  SUB('inv', { conta_nome: 'Investimentos', status: 'nao_conciliado', saldo_sistema: -4.02, saldo_extrato: -4.02, diferenca: 0 }),
+  SUB('inv', { conta_nome: 'Investimentos', status: 'conciliado', saldo_sistema: -4.02, saldo_extrato: -4.02, diferenca: 0 }),
   linhaConta({ nivel: 'total', conta_id: null, conta_nome: 'Total', status: 'nao_conciliado', saldo_inicial: -40000, saldo_sistema: -55723.51,
     saldo_extrato: -55738.69, diferenca: -15.18, entradas: 100, saidas: -15823.51,
-    motivos: [{ motivo: 'contas_nao_conciliadas', qtde: 1, contas: [{ conta_id: 'brad', conta_nome: 'Bradesco', status: 'nao_conciliado', motivos: [{ motivo: 'saldo_diverge', valor: -15.18 }] }] }] }),
+    motivos: [{ motivo: 'contas_nao_conciliadas', qtde: 1, contas: [{ conta_id: 'brad', conta_nome: 'Bradesco', status: 'nao_conciliado', motivos: [{ motivo: 'saldo_diverge', valor: -15.18 }], avisos: [] }] }] }),
 ];
 const celulas = (id: string) => [...linhaDaConta(id).querySelectorAll('td')].slice(1, 4).map((td) => n(td.textContent));
 const grupoDe = (id: string) => n(linhaDaConta(id).closest('tbody')?.querySelector('tr td')?.textContent);
@@ -281,7 +294,7 @@ describe('T5 — o par do Agnaldo: a mãe em Conta corrente e a interna em Inves
     expect(n(screen.getByTestId('total-sistema').textContent)).toBe('-R$ 55.723,51');
   });
 
-  it('a marca do par nas duas linhas, com o title; o ponto é o status do dono (na interna, o do par)', async () => {
+  it('a marca do par nas duas linhas, com o title; o ponto é o status PRÓPRIO de cada uma (a interna pelo saldo dela)', async () => {
     montar();
     await screen.findAllByTestId('linha-saldo-conta');
     const marca = (id: string) => within(linhaDaConta(id)).getByTestId('marca-par');
@@ -291,9 +304,10 @@ describe('T5 — o par do Agnaldo: a mãe em Conta corrente e a interna em Inves
     expect(n(marca('if').textContent)).toBe('· par');
     expect(marca('if').getAttribute('title')).toBe(`conferida com Bradesco — ${TITULO_PAR('Bradesco')}`);
     expect(marca('brad').className).toContain('whitespace-nowrap');
-    expect([linhaDaConta('brad').getAttribute('data-status'), linhaDaConta('if').getAttribute('data-status')]).toEqual(['nao_conciliado', 'nao_conciliado']);
+    expect([linhaDaConta('brad').getAttribute('data-status'), linhaDaConta('if').getAttribute('data-status')]).toEqual(['nao_conciliado', 'conciliado']);
     expect(linhaDaConta('brad').getAttribute('title')).not.toContain('consolida');
-    expect(linhaDaConta('if').getAttribute('title')).toBe('Não Conciliado: conferida com Bradesco');
+    expect(linhaDaConta('if').getAttribute('title')).toBe('Conciliado: conferida com Bradesco — 2ª prova · extrato: sem extrato');
+    expect(within(linhaDaConta('if')).queryByTestId('marca-aviso-conta')).toBeNull();   // "sem extrato" informa, não marca
   });
 
   it('Resumo com a MÃE aberta: os números próprios (com a abertura terceiros × transferências) e o card diz "conferida com"', async () => {
@@ -312,13 +326,14 @@ describe('T5 — o par do Agnaldo: a mãe em Conta corrente e a interna em Inves
     expect(screen.getByTestId('card-status').getAttribute('data-status')).toBe('nao_conciliado');
   });
 
-  it('Resumo com a INTERNA aberta: os números dela e o status do par', async () => {
+  it('Resumo com a INTERNA aberta: os números dela e o status PRÓPRIO (o par só aponta)', async () => {
     await abrirConta('if');
     await waitFor(() => expect(n(screen.getByTestId('resumo-saldo-sistema').textContent)).toBe('-R$ 4,02'));
     expect(n(screen.getByTestId('resumo-saldo-extrato').textContent)).toBe('-R$ 4,02');
     expect(screen.getByTestId('resumo-diferenca').textContent).toBe('confere');
-    expect(screen.getByTestId('card-status').getAttribute('data-status')).toBe('nao_conciliado');
+    expect(screen.getByTestId('card-status').getAttribute('data-status')).toBe('conciliado');
     expect(n(screen.getByTestId('status-motivos').textContent)).toBe('conferida com Bradesco');
+    expect(n(screen.getByTestId('segunda-prova').textContent)).toBe('2ª prova · extratosem extrato');
   });
 
   it('o lápis da linha abre com o extrato PRÓPRIO — o valor que o operador digitou (−55.734,67), nunca o consolidado', async () => {
@@ -355,6 +370,17 @@ describe('T3 (01b) — a interna com movimento não se oculta; zerada, parada e 
     expect(ids()).toEqual(['brad', 'if']);
   });
 
+  it('zerada e sem movimento, com a MÃE conciliada mas o status DELA pendente (PR-CONC-STATUS-SALDO-01b): aparece', async () => {
+    /* cada conta é julgada sozinha: `par_status` (o da mãe) conciliado não basta para esconder a interna que não fechou */
+    B.resumo = { '2026-09': PAR_ABR24(MAE_ABR24({ status: 'conciliado', motivos: [] }),
+      INTERNA_ABR24({ ...zerada, saldo_extrato: null, diferenca: null, status: 'pendente', par_status: 'conciliado',
+        motivos: [{ motivo: 'saldo_nao_informado', falta: 'final' }] })) };
+    montar();
+    await screen.findAllByTestId('linha-saldo-conta');
+    expect(ids()).toEqual(['brad', 'if']);
+    expect(linhaDaConta('if').getAttribute('data-status')).toBe('pendente');
+  });
+
   it('zerada, sem movimento e com o par conciliado: oculta, e o rodapé a conta', async () => {
     B.resumo = { '2026-09': PAR_ABR24(MAE_ABR24({ status: 'conciliado', motivos: [] }),
       INTERNA_ABR24({ ...zerada, status: 'conciliado', par_status: 'conciliado' })) };
@@ -384,6 +410,73 @@ describe('T7 (01b) — conta SEM par: a tela é a mesma com e sem o `proprio` es
     montar();
     await screen.findAllByTestId('linha-saldo-conta');
     expect(celulas('cartao')).toEqual(['—', '—', '—']);
+  });
+});
+
+/* ── PR-CONC-STATUS-SALDO-01b: o status é o saldo; o extrato importado é a 2ª prova ──
+   As linhas são as do ENSAIO da migration (`statusSaldo.fixture.json`), dado real do proto. */
+const SS = JSON.parse(readFileSync(resolve(process.cwd(), 'src/lib/conciliacao/statusSaldo.fixture.json'), 'utf8'));
+describe('STATUS-SALDO — conciliado pelo saldo com aviso do extrato: verde, 2ª prova âmbar, marcador', () => {
+  const PESSOAL = SS.nj_sicredi_pessoal_2026_03.conta;
+  beforeEach(() => {
+    B.contas = [conta(PESSOAL.conta_id, 'Sicredi Pessoal'), conta(ID_LAV, 'Sicredi Lavoura')];
+    B.resumo = { '2026-09': [PESSOAL, LINHA_EMERSON, SS.nj_sicredi_pessoal_2026_03.total] };
+    B.statusAno = SS.nj_status_ano_2026_total;
+  });
+
+  it('NJ Sicredi Pessoal mar/26 (linha real): card VERDE; a 2ª prova diz 1 dia, o extrato que não fecha (0,02) e o sem par, em âmbar, com o link do dia', async () => {
+    await abrirConta(PESSOAL.conta_id);
+    await waitFor(() => expect(screen.getByTestId('card-status').getAttribute('data-status')).toBe('conciliado'));
+    expect(screen.getByTestId('selo-mes').textContent).toBe('✅ Conciliado');
+    expect(n(screen.getByTestId('status-motivos').textContent)).toBe('');   // nem "confere em todos os dias": há dia com diferença
+    const prova = screen.getByTestId('segunda-prova');
+    expect(n(prova.textContent)).toBe('2ª prova · extrato1 dia com diferençao extrato não fecha com o saldo informado R$ 0,021 lançamento sem par');
+    for (const el of prova.querySelectorAll('[data-aviso]')) {
+      expect(el.className).toContain('text-amber-700');
+      expect(el.className).not.toMatch(/destructive|red/);
+    }
+    fireEvent.click(within(prova).getByTestId('link-dia'));
+    await screen.findByTestId('espelho');
+    const ult = B.espelhoProps[B.espelhoProps.length - 1];
+    expect([ult.contaId, ult.aba, ult.diaFoco]).toEqual([PESSOAL.conta_id, 'conferencia', '2026-03-31']);
+  });
+
+  it('Saldos por conta: o ponto segue o status e a conta conciliada COM aviso leva o marcador âmbar; a sem aviso, não', async () => {
+    montar();
+    await screen.findAllByTestId('linha-saldo-conta');
+    const linha = linhaDaConta(PESSOAL.conta_id);
+    expect(linha.getAttribute('data-status')).toBe('conciliado');
+    expect(within(linha).getByTestId('marca-aviso-conta')).toBeInTheDocument();
+    expect(n(linha.getAttribute('title'))).toBe('Conciliado — 2ª prova · extrato: 1 dia com diferença · o extrato não fecha com o saldo informado R$ 0,02 · 1 lançamento sem par');
+    expect(within(linhaDaConta(ID_LAV)).queryByTestId('marca-aviso-conta')).toBeNull();
+    expect(linhaDaConta(ID_LAV).getAttribute('title')).toBe('Conciliado: confere em todos os dias');
+  });
+
+  it('conta SEM aviso nenhum (o Emerson): idêntica a antes — sem bloco de 2ª prova', async () => {
+    await abrirConta(ID_LAV);
+    await waitFor(() => expect(within(screen.getByTestId('status-motivos')).getByText('confere em todos os dias')).toBeInTheDocument());
+    expect(screen.queryByTestId('segunda-prova')).toBeNull();
+  });
+
+  it('régua do ano (status real do NJ 2026): a cor é o status; mês conciliado com aviso além de "sem extrato" leva a marca (mar e jul), os outros não', async () => {
+    montar();
+    await waitFor(() => expect(screen.getByTestId('regua').getAttribute('data-meses')).toBe('1,2,3,4,5,6,7,8,9,10,11,12'));
+    const tom = B.tom[B.tom.length - 1] as Record<number, { title?: string; marca?: string; bg: string }>;
+    const comMarca = Object.keys(tom).filter((m) => tom[Number(m)].marca).map(Number);
+    expect(comMarca).toEqual([3, 7]);
+    expect(tom[3].title).toBe('Conciliado');
+    expect(tom[3].marca).toBe('2ª prova · extrato: 1 conta com aviso do extrato (sem extrato: 13 · dias com diferença: 1 · extrato não fecha: 1 · lançamentos sem par: 1)');   // ordem fixa, não a do JSON
+    expect(tom[3].bg).toBe(tom[4].bg);   // a marca NÃO muda a cor do mês
+  });
+
+  it('Vera Itaú CDI set/26 (linha real): conciliado na POSIÇÃO, com o aviso dos realizados depois dela', async () => {
+    const CDI = SS.vera_itau_cdi_2026_09.conta;
+    B.contas = [conta(CDI.conta_id, 'Itaú CDI', 'inv')];
+    B.resumo = { '2026-09': [CDI, SS.vera_itau_cdi_2026_09.total] };
+    await abrirConta(CDI.conta_id);
+    await waitFor(() => expect(screen.getByTestId('card-status').getAttribute('data-status')).toBe('conciliado'));
+    expect(n(screen.getByTestId('segunda-prova').textContent)).toBe('2ª prova · extratosem extrato1 realizado após 17/09');
+    expect(within(linhaDaConta(CDI.conta_id)).getByTestId('marca-aviso-conta')).toBeInTheDocument();
   });
 });
 

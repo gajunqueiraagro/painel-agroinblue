@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 03/10/2026 (PR-CONC-INTERNA-SEPARADA-01b, +31: `src/lib/conciliacao/resumoDoDono.test.ts` 10,
+  Baseline em 03/10/2026 (PR-CONC-STATUS-SALDO-01b, +9: `src/lib/conciliacao/resumoDoDono.test.ts` 2,
+  `src/pages/conciliacaoDono.test.tsx` 6, `src/v2/components/SeletorPeriodo.test.tsx` 1; antes o PR-CONC-INTERNA-SEPARADA-01b, +31: `src/lib/conciliacao/resumoDoDono.test.ts` 10,
   `src/lib/conciliacao/resumoMes.test.ts` 5, `src/components/conciliacao/painelDono.test.tsx` 5, `src/pages/conciliacaoDono.test.tsx` 9,
   `src/components/financeiro-v2/espelhoDono.test.tsx` 2; antes o PR-CONC-SALDO-UMA-REGUA-02b, +10 −8: `src/components/conciliacao/painelDono.test.tsx` 10; sairam os 8
   de `somarAtePosicao` em `src/hooks/useExtratoDaConta.test.ts`, com a funcao; antes o PR-CONC-SALDO-UMA-REGUA-02, +22 −5: `src/lib/conciliacao/resumoDoDono.test.ts` 7,
@@ -171,7 +172,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3169
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3178
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -1440,6 +1441,23 @@ docs/historico/frentes-ate-2026-09-29.md.)
     diferenca na data — a tela passa a ler `posicao.diferenca_propria_na_data` em PR proprio; (b) `financeiro_saldos_bancarios_v2`
     tem 2 pares de linhas DUPLICADAS (Agnaldo 21c7682e fev/21 e 38b316c0 mar/21, zeros, inofensivas hoje; nao ha' unicidade em
     conta + mes); (c) VALOR-3-CASAS: os lancamentos de 3 casas seguem no dado (a diferenca so' deixou de mostra'-los).
+- ⚠ A TELA ESCREVE O SALDO NO STATUS E O EXTRATO NA "2a PROVA" (PR-CONC-STATUS-SALDO-01b, so' tela). `resumoDoDono.ts` le'
+  `avisos` (conta, tipo, total, status do ano e as contas citadas em `contas_nao_conciliadas`), sem cast. AVISO TRATADO COMO MOTIVO
+  E' DEFEITO (mutacao derruba 11 testes).
+  · `frasesDoStatus` = os `motivos` + "confere em todos os dias" (conta COM extrato e SEM o AVISO `dias_com_diferenca`) +
+    "conferida com <nome>" (o par). `frasesDosAvisos` = a 2a prova, sem o ponteiro do par; `marca` = pede olho (ambar), e
+    `sem_extrato` e' neutro. `marcaDoPar` e o dia do link de cada conta leem `avisos`.
+  · CARD STATUS: veredito e frases do saldo; abaixo, so' quando ha' aviso, o bloco "2ª prova · extrato" (`segunda-prova`) em
+    ambar/neutro, NUNCA vermelho; "N dias com diferenca" segue o link da Conferencia no primeiro dia. Conta sem aviso = a tela de
+    antes. No Todas, "N contas com aviso do extrato" = `contas_com_aviso.qtde_alem_sem_extrato` (some com zero), o `title` com a
+    contagem por aviso em ORDEM FIXA (`ROTULO_AVISO`) — ⚠ a ordem das chaves de um objeto JSON muda com o transporte (o PostgREST
+    manda na ordem do jsonb, o canal SQL em alfabetica): frase montada de chaves de objeto ordena por lista propria.
+  · MARCADOR AMBAR (`marcaDeAviso`: linha CONCILIADA com aviso ALEM de `sem_extrato` — 5.068 das 5.137 conta-meses tem
+    `sem_extrato`, marcar por ele pintaria tudo): na regua, `TomDoMes.marca` do `SeletorPeriodo` (ponto de 5px, posicao absoluta;
+    chip 65x28 com e sem ele, medido a 1.135); em "Saldos por conta", ponto de 4px SOBRE o ponto de status (zero pixel a mais na
+    coluna Conta). A cor do mes e do ponto continua sendo o status.
+  · OCULTAS: a interna fica visivel quando o status DELA nao e' conciliado OU o `par_status` (o da mae) nao e'.
+  Fixture real: `src/lib/conciliacao/statusSaldo.fixture.json` (linhas do dono lidas do proto depois da 20261027192700).
 - ⚠ FUNCAO SECURITY DEFINER EXPOSTA A `authenticated` QUE RECEBE ID DE LINHA RESOLVE O CLIENTE E CHAMA `tenant_ok` ANTES DE
   ESCREVER (PR-SEG-TENANT-VARREDURA-01A, 03/10, so' banco; migration 20261027192400, ⚠ registrada como 20261003215217; ledger =
   arquivo, md5 b856a932…). SECURITY DEFINER atravessa a RLS: sem a guarda no corpo, quem souber o uuid de uma linha de outro

@@ -63,6 +63,23 @@ describe('A23 — nada muda de tamanho ao selecionar', () => {
     expect(outro.style.boxShadow).toBe('');
     expect(geometriaDe(ativo)).toEqual(geometriaDe(outro));
   });
+
+  it('`marca` no tom: ponto âmbar FORA do fluxo (não muda a geometria nem a cor do mês) e o texto somado ao title', () => {
+    const tom = { bg: 'rgb(1, 2, 3)', border: 'rgb(4, 5, 6)', txt: 'rgb(7, 8, 9)', title: 'Conciliado' };
+    montar(mesUnico(2026, 5), { tomPorMes: { 6: tom, 7: { ...tom, marca: '2ª prova · extrato: 1 conta com aviso do extrato' } } });
+    const sem = screen.getByText('Jun');
+    const com = screen.getByText('Jul');
+    expect(sem.querySelector('[data-testid="marca-aviso-mes"]')).toBeNull();
+    expect(sem.getAttribute('title')).toBe('Conciliado');
+    const ponto = com.querySelector<HTMLElement>('[data-testid="marca-aviso-mes"]');
+    expect(ponto).not.toBeNull();
+    expect(ponto?.style.position).toBe('absolute');            // fora do fluxo: não empurra o rótulo
+    expect(com.getAttribute('data-marca')).toBe('aviso');
+    expect(com.getAttribute('title')).toBe('Conciliado — 2ª prova · extrato: 1 conta com aviso do extrato');
+    expect(com.style.backgroundColor).toBe(sem.style.backgroundColor);   // a cor é o status, a marca não a muda
+    expect(geometriaDe(com)).toEqual(geometriaDe(sem));
+    expect(com.textContent).toBe('Jul');
+  });
 });
 
 describe('seleção', () => {

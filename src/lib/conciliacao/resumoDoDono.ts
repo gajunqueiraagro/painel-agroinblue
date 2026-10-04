@@ -6,6 +6,10 @@
  *   esperada vira o valor neutro — e se ESCREVE em português o que ele já decidiu. Nenhuma função daqui soma linha,
  *   subtrai saldo ou escolhe conta: quem precisar de um número que não está na linha do dono pede ao dono.
  * ⚠ O STATUS É O DO DONO, o mesmo da Conferência: 'conciliado' | 'nao_conciliado' | 'pendente'. 'parcial' não existe.
+ * ⚠ O STATUS É O SALDO; O EXTRATO IMPORTADO É A 2ª PROVA — PR-CONC-STATUS-SALDO-01b. `motivos` só traz o que DECIDE o
+ *   status (saldo diverge, saldo não informado; nos agregados, as contas). O que vem do extrato importado — sem extrato,
+ *   dias com diferença, extrato que não fecha, linhas sem par, realizados após a posição — vem em `avisos`, com a mesma
+ *   forma, e NUNCA muda o veredito: a tela o escreve à parte, em cor neutra/âmbar. Aviso tratado como motivo é defeito.
  */
 
 export type StatusDono = 'conciliado' | 'nao_conciliado' | 'pendente';
@@ -13,7 +17,7 @@ export type NivelDono = 'conta' | 'tipo' | 'total';
 
 export interface QtdeValor { qtde: number; valor: number }
 
-export interface MotivoConta { conta_id: string; conta_nome: string; status: StatusDono; motivos: Motivo[] }
+export interface MotivoConta { conta_id: string; conta_nome: string; status: StatusDono; motivos: Motivo[]; avisos: Motivo[] }
 
 /** Os motivos que o dono escreve; `motivo` desconhecido fica como veio (a tela o mostra cru, nunca o esconde). */
 export interface Motivo {
@@ -26,6 +30,13 @@ export interface Motivo {
   /** 'conferida_com': a conta com que esta fecha o mês (a mãe, na linha da interna). */
   conta_id?: string;
   conta_nome?: string;
+  /** 'realizados_apos_posicao': a data da posição declarada. */
+  data?: string;
+  /** 'saldo_diverge' julgado na posição declarada: a data dela. */
+  posicao?: string;
+  /** 'contas_com_aviso' (agregados): quantas contas têm cada aviso, e quantas têm algum além de 'sem_extrato'. */
+  por_aviso?: Record<string, number>;
+  qtde_alem_sem_extrato?: number;
 }
 
 export interface PosicaoDono {
@@ -105,6 +116,8 @@ export interface LinhaResumo {
   retido_em_depositos: QtdeValor;
   status: StatusDono;
   motivos: Motivo[];
+  /** A 2ª prova (o extrato importado) e, na interna, o ponteiro 'conferida_com'. Nunca decide o status. */
+  avisos: Motivo[];
   posicao: PosicaoDono | null;
   sem_conta: { qtde: number; entradas: number; saidas: number } | null;
   linhas_sistema: LinhaSistemaDono[] | null;
@@ -124,6 +137,7 @@ export interface StatusAnoDono {
   conta_nome: string | null;
   status: StatusDono;
   motivos: Motivo[];
+  avisos: Motivo[];
 }
 
 /* ── leitura sem cast ─────────────────────────────────────────────────────────── */
@@ -155,10 +169,18 @@ function lerMotivos(v: unknown): Motivo[] {
     const f = texto(m.falta); if (f !== null) x.falta = f;
     const ci = texto(m.conta_id); if (ci !== null) x.conta_id = ci;
     const cn = texto(m.conta_nome); if (cn !== null) x.conta_nome = cn;
+    const dt = texto(m.data); if (dt !== null) x.data = dt;
+    const ps = texto(m.posicao); if (ps !== null) x.posicao = ps;
+    const qa = numeroOuNulo(m.qtde_alem_sem_extrato); if (qa !== null) x.qtde_alem_sem_extrato = qa;
+    if (ehObjeto(m.por_aviso)) {
+      const pa: Record<string, number> = {};
+      for (const [k, n] of Object.entries(m.por_aviso)) { const q2 = numeroOuNulo(n); if (q2 !== null) pa[k] = q2; }
+      x.por_aviso = pa;
+    }
     if (Array.isArray(m.contas)) {
       x.contas = m.contas.filter(ehObjeto).map((c) => ({
         conta_id: texto(c.conta_id) ?? '', conta_nome: texto(c.conta_nome) ?? '',
-        status: status(c.status), motivos: lerMotivos(c.motivos),
+        status: status(c.status), motivos: lerMotivos(c.motivos), avisos: lerMotivos(c.avisos),
       }));
     }
     out.push(x);
@@ -246,6 +268,7 @@ export function lerLinhaResumo(v: unknown): LinhaResumo | null {
     retido_em_depositos: qtdeValor(v.retido_em_depositos),
     status: status(v.status),
     motivos: lerMotivos(v.motivos),
+    avisos: lerMotivos(v.avisos),
     posicao: pos && typeof pos.data === 'string'
       ? {
           data: pos.data,
@@ -283,6 +306,7 @@ export function lerStatusAno(dado: unknown): StatusAnoDono[] {
       conta_nome: texto(r.conta_nome),
       status: status(r.status),
       motivos: lerMotivos(r.motivos),
+      avisos: lerMotivos(r.avisos),
     });
   }
   return out;
@@ -320,9 +344,21 @@ export interface FraseDoStatus {
   titulo?: string;
   /** Leva à Conferência neste dia. */
   dia?: string;
+  /** Aviso que pede olho (âmbar): todo aviso do extrato menos o 'sem_extrato', que é o caso comum (neutro). */
+  marca?: boolean;
   /** No Todas: as contas que o total cita (o nome e o primeiro dia com diferença dela, se houver). */
   contas?: { conta_id: string; conta_nome: string; texto: string; dia?: string }[];
 }
+
+/** O nome de cada aviso na contagem por aviso dos agregados (`contas_com_aviso.por_aviso`). */
+const ROTULO_AVISO: Record<string, string> = {
+  sem_extrato: 'sem extrato',
+  dias_com_diferenca: 'dias com diferença',
+  extrato_nao_fecha: 'extrato não fecha',
+  extratos_sem_par: 'extratos sem par',
+  lancamentos_sem_par: 'lançamentos sem par',
+  realizados_apos_posicao: 'realizados após a posição',
+};
 
 function fraseDoMotivo(m: Motivo): FraseDoStatus {
   switch (m.motivo) {
@@ -337,7 +373,10 @@ function fraseDoMotivo(m: Motivo): FraseDoStatus {
       };
     }
     case 'saldo_diverge':
-      return { chave: m.motivo, texto: `saldo diverge ${brlSinal(m.valor ?? 0)}` };
+      return {
+        chave: m.motivo, texto: `saldo diverge ${brlSinal(m.valor ?? 0)}`,
+        titulo: m.posicao ? `diferença na posição declarada em ${ddmm(m.posicao)}` : undefined,
+      };
     case 'extrato_nao_fecha':
       return {
         chave: m.motivo,
@@ -350,7 +389,8 @@ function fraseDoMotivo(m: Motivo): FraseDoStatus {
       return { chave: m.motivo, texto: 'sem extrato' };
     case 'contas_nao_conciliadas': {
       const contas = (m.contas ?? []).map((c) => {
-        const dias = c.motivos.find((x) => x.motivo === 'dias_com_diferenca');
+        /* O dia do link vem dos AVISOS da conta (a 2ª prova) — PR-CONC-STATUS-SALDO-01b. */
+        const dias = c.avisos.find((x) => x.motivo === 'dias_com_diferenca');
         return {
           conta_id: c.conta_id, conta_nome: c.conta_nome,
           texto: c.motivos.map((x) => fraseDoMotivo(x).texto).join(' · '),
@@ -377,27 +417,95 @@ function fraseDoMotivo(m: Motivo): FraseDoStatus {
       const n = m.qtde ?? 0;
       return { chave: m.motivo, texto: `${n} ${n === 1 ? 'lançamento sem conta' : 'lançamentos sem conta'}` };
     }
+    case 'extratos_sem_par': {
+      const n = m.qtde ?? 0;
+      return { chave: m.motivo, texto: `${n} ${n === 1 ? 'extrato sem par' : 'extratos sem par'}`, titulo: `movimentos do banco sem lançamento: ${brlSinal(m.valor ?? 0)}` };
+    }
+    case 'lancamentos_sem_par': {
+      const n = m.qtde ?? 0;
+      return { chave: m.motivo, texto: `${n} ${n === 1 ? 'lançamento sem par' : 'lançamentos sem par'}`, titulo: `lançamentos do sistema sem movimento no banco: ${brlSinal(m.valor ?? 0)}` };
+    }
+    case 'realizados_apos_posicao': {
+      const n = m.qtde ?? 0;
+      return {
+        chave: m.motivo,
+        texto: `${n} ${n === 1 ? 'realizado' : 'realizados'} após ${m.data ? ddmm(m.data) : 'a posição'}`,
+        titulo: `o saldo foi informado em ${m.data ? ddmm(m.data) : 'data anterior ao fim do mês'} e o status julga essa data; depois dela há ${n} ${n === 1 ? 'lançamento realizado' : 'lançamentos realizados'}, ${brlSinal(m.valor ?? 0)}`,
+      };
+    }
+    case 'contas_com_aviso': {
+      const n = m.qtde_alem_sem_extrato ?? 0;
+      return {
+        chave: m.motivo,
+        texto: `${n} ${n === 1 ? 'conta com aviso do extrato' : 'contas com aviso do extrato'}`,
+        /* ⚠ ORDEM FIXA, a de `ROTULO_AVISO` (o desconhecido no fim): a ordem das chaves de um objeto JSON muda com o
+           transporte (o PostgREST manda na ordem do jsonb; outro canal, alfabética) e a frase não pode mudar com ela. */
+        titulo: [...Object.keys(ROTULO_AVISO), ...Object.keys(m.por_aviso ?? {}).filter((k) => !(k in ROTULO_AVISO))]
+          .filter((k) => m.por_aviso?.[k] !== undefined)
+          .map((k) => `${ROTULO_AVISO[k] ?? k.replace(/_/g, ' ')}: ${m.por_aviso?.[k]}`).join(' · '),
+      };
+    }
     default:
       return { chave: m.motivo, texto: m.motivo.replace(/_/g, ' ') };
   }
 }
 
+/** O ponteiro do par: não é motivo nem 2ª prova — diz com quem a conta fecha. */
+const AVISO_DO_PAR = 'conferida_com';
+/** Conta sem arquivo importado é o caso comum: informa, não pede olho. */
+const AVISO_NEUTRO = 'sem_extrato';
+
+/** O nome da outra conta do par: na mãe, as `internas`; na interna, o aviso 'conferida_com' do dono. Vazio sem par. */
+function nomeDoPar(l: Pick<LinhaResumo, 'par_conta_id' | 'internas' | 'avisos'>): string {
+  if (l.internas.length > 0) return l.internas.map((i) => i.conta_nome).join(', ');
+  if (l.par_conta_id !== null) return l.avisos.find((m) => m.motivo === AVISO_DO_PAR)?.conta_nome ?? '';
+  return '';
+}
+
 /**
- * As frases do status de UMA linha do dono (conta ou total), na ordem em que ele as escreveu.
- * ⚠ "confere em todos os dias" só existe quando a conta TEM extrato e o dono NÃO escreveu `dias_com_diferenca` —
- *   as duas frases nunca convivem.
+ * As frases do STATUS de UMA linha do dono (conta ou agregado), na ordem em que ele as escreveu: só o que DECIDE (os
+ * `motivos`), mais "confere em todos os dias" e, em conta de par, "conferida com <nome>".
+ * ⚠ "confere em todos os dias" só existe quando a conta TEM extrato e o dono NÃO avisou `dias_com_diferenca` — as duas
+ *   frases nunca convivem. Desde o PR-CONC-STATUS-SALDO-01b o dia com diferença é AVISO: quem olhar `motivos` aqui escreve
+ *   "confere em todos os dias" numa conta com dia divergente.
  */
-export function frasesDoStatus(l: Pick<LinhaResumo, 'nivel' | 'tem_extrato' | 'motivos'> & { internas?: readonly ContaDoPar[] }): FraseDoStatus[] {
+export function frasesDoStatus(l: Pick<LinhaResumo, 'nivel' | 'tem_extrato' | 'motivos' | 'avisos' | 'par_conta_id' | 'internas'>): FraseDoStatus[] {
   const frases = l.motivos.map(fraseDoMotivo);
-  if (l.nivel === 'conta' && l.tem_extrato && !l.motivos.some((m) => m.motivo === 'dias_com_diferenca')) {
+  if (l.nivel === 'conta' && l.tem_extrato && !l.avisos.some((m) => m.motivo === 'dias_com_diferenca')) {
     frases.unshift({ chave: 'confere_dias', texto: 'confere em todos os dias' });
   }
-  /* A MÃE diz com quem é conferida (a interna já traz o motivo 'conferida_com' do dono) — PR-CONC-INTERNA-SEPARADA-01b. */
-  if (l.nivel === 'conta' && l.internas && l.internas.length > 0) {
-    const nome = l.internas.map((i) => i.conta_nome).join(', ');
-    frases.push({ chave: 'conferida_com', texto: `conferida com ${nome}`, titulo: tituloDoPar(nome) });
+  if (l.nivel === 'conta') {
+    const nome = nomeDoPar(l);
+    if (nome) frases.push({ chave: AVISO_DO_PAR, texto: `conferida com ${nome}`, titulo: tituloDoPar(nome) });
   }
   return frases;
+}
+
+/**
+ * A 2ª PROVA — as frases dos AVISOS do extrato importado, na ordem do dono. Não decidem o status e a tela as escreve à
+ * parte ("2ª prova · extrato"), nunca em vermelho. `marca` = pede olho (âmbar); 'sem_extrato' informa (neutro). O
+ * ponteiro do par fica fora (está nas frases do status). Nos agregados, "N contas com aviso do extrato" conta as contas
+ * com aviso ALÉM de 'sem_extrato' (`qtde_alem_sem_extrato`, do dono) e some quando são zero.
+ */
+export function frasesDosAvisos(l: Pick<LinhaResumo, 'avisos'>): FraseDoStatus[] {
+  const out: FraseDoStatus[] = [];
+  for (const m of l.avisos) {
+    if (m.motivo === AVISO_DO_PAR) continue;
+    if (m.motivo === 'contas_com_aviso' && (m.qtde_alem_sem_extrato ?? 0) <= 0) continue;
+    out.push({ ...fraseDoMotivo(m), marca: m.motivo !== AVISO_NEUTRO });
+  }
+  return out;
+}
+
+/**
+ * O MARCADOR ÂMBAR (régua do ano e "Saldos por conta"): a linha está CONCILIADA e o extrato importado tem aviso que pede
+ * olho. Devolve o texto do `title` (os avisos por extenso) ou nulo. Só LÊ o dono: status e avisos são dele.
+ */
+export function marcaDeAviso(l: Pick<LinhaResumo, 'status' | 'avisos'>): string | null {
+  if (l.status !== 'conciliado') return null;
+  const f = frasesDosAvisos(l).filter((x) => x.marca);
+  if (f.length === 0) return null;
+  return `2ª prova · extrato: ${f.map((x) => (x.chave === 'contas_com_aviso' && x.titulo ? `${x.texto} (${x.titulo})` : x.texto)).join(' · ')}`;
 }
 
 /* ── o saldo próprio e o par (PR-CONC-INTERNA-SEPARADA-01b) ───────────────────── */
@@ -429,20 +537,16 @@ export function contaEmPar(l: Pick<LinhaResumo, 'par_conta_id' | 'internas'> | n
 }
 
 /**
- * A MARCA DO PAR — "conferida com <nome>": na mãe, os nomes de `internas`; na interna, o `conta_nome` do motivo
- * 'conferida_com'. Nulo em conta sem par. Os nomes são os do dono; nenhuma leitura de cadastro.
+ * A MARCA DO PAR — "conferida com <nome>": na mãe, os nomes de `internas`; na interna, o `conta_nome` do AVISO
+ * 'conferida_com' (era motivo até o PR-CONC-STATUS-SALDO-01b). Nulo em conta sem par. Os nomes são os do dono; nenhuma leitura de cadastro.
  * ⚠ `curto` É O QUE CABE NA LINHA DE "SALDOS POR CONTA": medido a 1.135px, a coluna Conta tem 224px úteis e sobram 117 na
  *   linha do Bradesco (106 na do Invest. Fácil); "· conferida com Bradesco-Invest. Facil" pede ~175 e quebrava a linha em
  *   duas (36px contra 22). Até "· em par" (36,5px) quebrava a do Invest. Fácil em set/26 por 1,7px (nome + data + marca +
  *   clipe = 209,7 de 208). A linha escreve `curto` ("par") e a frase inteira — `texto` + o porquê — vai no `title`.
  */
-export function marcaDoPar(l: Pick<LinhaResumo, 'par_conta_id' | 'internas' | 'motivos'> | null): { texto: string; curto: string; titulo: string; tituloLinha: string } | null {
+export function marcaDoPar(l: Pick<LinhaResumo, 'par_conta_id' | 'internas' | 'avisos'> | null): { texto: string; curto: string; titulo: string; tituloLinha: string } | null {
   if (!l) return null;
-  const nome = l.internas.length > 0
-    ? l.internas.map((i) => i.conta_nome).join(', ')
-    : l.par_conta_id !== null
-      ? (l.motivos.find((m) => m.motivo === 'conferida_com')?.conta_nome ?? '')
-      : '';
+  const nome = nomeDoPar(l);
   if (!nome) return null;
   return { texto: `conferida com ${nome}`, curto: 'par', titulo: tituloDoPar(nome), tituloLinha: `conferida com ${nome} — ${tituloDoPar(nome)}` };
 }

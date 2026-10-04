@@ -1,0 +1,853 @@
+{
+ "_origem": "PR-CONC-STATUS-SALDO-01: linhas de fn_conciliacao_resumo_mes / fn_conciliacao_status_ano lidas do banco proto em 03/10/2026, depois da migration 20261027192700 (ledger 20261004024939). Dado real; nenhuma linha escrita a mao.",
+ "nj_sicredi_pessoal_2026_03": {
+  "conta": {
+   "avisos": [
+    {
+     "dias": [
+      "2026-03-31"
+     ],
+     "motivo": "dias_com_diferenca",
+     "qtde": 1
+    },
+    {
+     "motivo": "extrato_nao_fecha",
+     "valor": 0.02
+    },
+    {
+     "motivo": "lancamentos_sem_par",
+     "qtde": 1,
+     "valor": 0.02
+    }
+   ],
+   "banco": {
+    "entradas": 131088.9,
+    "extrato_nao_fecha": 0.02,
+    "saidas": -130634.61
+   },
+   "consolida_em_conta_id": null,
+   "conta_id": "24e4e21c-019d-4f62-acca-fa757dc0486b",
+   "conta_nome": "Sicredi Pessoal",
+   "dias": null,
+   "dias_com_diferenca": [
+    {
+     "banco": -360,
+     "data": "2026-03-31",
+     "diferenca": -0.02,
+     "motivos": [
+      "lancamento_sem_par"
+     ],
+     "sistema": -359.98
+    }
+   ],
+   "diferenca": 0,
+   "diferenca_entradas": -0.02,
+   "diferenca_saidas": 0,
+   "entradas": 131088.92,
+   "entradas_terceiros": 1088.92,
+   "entradas_transferencias": 130000,
+   "extratos_sem_par": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "internas": null,
+   "lancamentos_sem_par": {
+    "qtde": 1,
+    "valor": 0.02
+   },
+   "legado": {
+    "diferenca": 0,
+    "entradas": 131088.92,
+    "saidas": -130634.61,
+    "saldo_extrato": 3342.58,
+    "saldo_inicial": 2888.27,
+    "saldo_sistema": 3342.58,
+    "status": "conciliado"
+   },
+   "linhas_sistema": null,
+   "motivos": [],
+   "nivel": "conta",
+   "par_conta_id": null,
+   "par_status": null,
+   "posicao": null,
+   "proprio": {
+    "diferenca": 0,
+    "entradas": 131088.92,
+    "entradas_terceiros": 1088.92,
+    "entradas_transferencias": 130000,
+    "saidas": -130634.61,
+    "saidas_terceiros": -130584.61,
+    "saidas_transferencias": -50,
+    "saldo_extrato": 3342.58,
+    "saldo_inicial": 2888.27,
+    "saldo_sistema": 3342.58
+   },
+   "retido_em_depositos": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "saidas": -130634.61,
+   "saidas_terceiros": -130584.61,
+   "saidas_transferencias": -50,
+   "saldo_extrato": 3342.58,
+   "saldo_extrato_data": "2026-03-31",
+   "saldo_inicial": 2888.27,
+   "saldo_inicial_origem": "informado",
+   "saldo_sistema": 3342.58,
+   "sem_conta": null,
+   "status": "conciliado",
+   "tem_extrato": true,
+   "tipo_conta": "cc"
+  },
+  "total": {
+   "avisos": [
+    {
+     "motivo": "contas_com_aviso",
+     "por_aviso": {
+      "dias_com_diferenca": 1,
+      "extrato_nao_fecha": 1,
+      "lancamentos_sem_par": 1,
+      "sem_extrato": 13
+     },
+     "qtde": 14,
+     "qtde_alem_sem_extrato": 1
+    }
+   ],
+   "banco": {
+    "entradas": 3955978.11,
+    "extrato_nao_fecha": 200.02,
+    "saidas": -4471810.67
+   },
+   "consolida_em_conta_id": null,
+   "conta_id": null,
+   "conta_nome": "Total",
+   "dias": null,
+   "dias_com_diferenca": null,
+   "diferenca": 0,
+   "diferenca_entradas": -62087.29,
+   "diferenca_saidas": 62756.56,
+   "entradas": 4018065.4,
+   "entradas_terceiros": 1865108.84,
+   "entradas_transferencias": 2152956.56,
+   "extratos_sem_par": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "internas": null,
+   "lancamentos_sem_par": {
+    "qtde": 102,
+    "valor": -669.27
+   },
+   "legado": null,
+   "linhas_sistema": null,
+   "motivos": [
+    {
+     "motivo": "contas_pendentes",
+     "qtde": 1
+    }
+   ],
+   "nivel": "total",
+   "par_conta_id": null,
+   "par_status": null,
+   "posicao": null,
+   "proprio": null,
+   "retido_em_depositos": {
+    "qtde": 2,
+    "valor": 31619.28
+   },
+   "saidas": -4534567.23,
+   "saidas_terceiros": -2381610.67,
+   "saidas_transferencias": -2152956.56,
+   "saldo_extrato": 572325.82,
+   "saldo_extrato_data": null,
+   "saldo_inicial": 1087958.36,
+   "saldo_inicial_origem": null,
+   "saldo_sistema": 572325.82,
+   "sem_conta": {
+    "entradas": 0,
+    "qtde": 0,
+    "saidas": 0
+   },
+   "status": "conciliado",
+   "tem_extrato": true,
+   "tipo_conta": null
+  }
+ },
+ "nj_sicredi_pj_pecuaria_2026_07": {
+  "conta": {
+   "avisos": [
+    {
+     "dias": [
+      "2026-07-20"
+     ],
+     "motivo": "dias_com_diferenca",
+     "qtde": 1
+    },
+    {
+     "motivo": "extrato_nao_fecha",
+     "valor": -881.49
+    },
+    {
+     "motivo": "lancamentos_sem_par",
+     "qtde": 1,
+     "valor": -881.49
+    }
+   ],
+   "banco": {
+    "entradas": 0,
+    "extrato_nao_fecha": -881.49,
+    "saidas": -5539.18
+   },
+   "consolida_em_conta_id": null,
+   "conta_id": "5a00259d-1c49-4f33-9b6c-eea83b5028b7",
+   "conta_nome": "Sicredi PJ Pecuária",
+   "dias": null,
+   "dias_com_diferenca": [
+    {
+     "banco": 0,
+     "data": "2026-07-20",
+     "diferenca": 881.49,
+     "motivos": [
+      "lancamento_sem_par"
+     ],
+     "sistema": -881.49
+    }
+   ],
+   "diferenca": 0,
+   "diferenca_entradas": 0,
+   "diferenca_saidas": 881.49,
+   "entradas": 0,
+   "entradas_terceiros": 0,
+   "entradas_transferencias": 0,
+   "extratos_sem_par": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "internas": null,
+   "lancamentos_sem_par": {
+    "qtde": 1,
+    "valor": -881.49
+   },
+   "legado": {
+    "diferenca": 0,
+    "entradas": 0,
+    "saidas": -6420.67,
+    "saldo_extrato": 2646.61,
+    "saldo_inicial": 9067.28,
+    "saldo_sistema": 2646.61,
+    "status": "conciliado"
+   },
+   "linhas_sistema": null,
+   "motivos": [],
+   "nivel": "conta",
+   "par_conta_id": null,
+   "par_status": null,
+   "posicao": null,
+   "proprio": {
+    "diferenca": 0,
+    "entradas": 0,
+    "entradas_terceiros": 0,
+    "entradas_transferencias": 0,
+    "saidas": -6420.67,
+    "saidas_terceiros": -6370.67,
+    "saidas_transferencias": -50,
+    "saldo_extrato": 2646.61,
+    "saldo_inicial": 9067.28,
+    "saldo_sistema": 2646.61
+   },
+   "retido_em_depositos": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "saidas": -6420.67,
+   "saidas_terceiros": -6370.67,
+   "saidas_transferencias": -50,
+   "saldo_extrato": 2646.61,
+   "saldo_extrato_data": "2026-07-31",
+   "saldo_inicial": 9067.28,
+   "saldo_inicial_origem": "informado",
+   "saldo_sistema": 2646.61,
+   "sem_conta": null,
+   "status": "conciliado",
+   "tem_extrato": true,
+   "tipo_conta": "cc"
+  },
+  "total": {
+   "avisos": [
+    {
+     "motivo": "contas_com_aviso",
+     "por_aviso": {
+      "dias_com_diferenca": 1,
+      "extrato_nao_fecha": 1,
+      "lancamentos_sem_par": 1,
+      "sem_extrato": 13
+     },
+     "qtde": 14,
+     "qtde_alem_sem_extrato": 1
+    }
+   ],
+   "banco": {
+    "entradas": 2850723.18,
+    "extrato_nao_fecha": -10731.49,
+    "saidas": -2927103.55
+   },
+   "consolida_em_conta_id": null,
+   "conta_id": null,
+   "conta_nome": "Total",
+   "dias": null,
+   "dias_com_diferenca": null,
+   "diferenca": 0,
+   "diferenca_entradas": -138510.01,
+   "diferenca_saidas": 149241.5,
+   "entradas": 2989233.19,
+   "entradas_terceiros": 1926167.56,
+   "entradas_transferencias": 1063065.63,
+   "extratos_sem_par": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "internas": null,
+   "lancamentos_sem_par": {
+    "qtde": 106,
+    "valor": -10731.49
+   },
+   "legado": null,
+   "linhas_sistema": null,
+   "motivos": [
+    {
+     "motivo": "contas_pendentes",
+     "qtde": 1
+    }
+   ],
+   "nivel": "total",
+   "par_conta_id": null,
+   "par_status": null,
+   "posicao": null,
+   "proprio": null,
+   "retido_em_depositos": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "saidas": -3076345.05,
+   "saidas_terceiros": -2013279.42,
+   "saidas_transferencias": -1063065.63,
+   "saldo_extrato": 2489791.34,
+   "saldo_extrato_data": null,
+   "saldo_inicial": 2576903.2,
+   "saldo_inicial_origem": null,
+   "saldo_sistema": 2489791.34,
+   "sem_conta": {
+    "entradas": 0,
+    "qtde": 0,
+    "saidas": 0
+   },
+   "status": "conciliado",
+   "tem_extrato": true,
+   "tipo_conta": null
+  }
+ },
+ "vera_itau_cdi_2026_09": {
+  "conta": {
+   "avisos": [
+    {
+     "motivo": "sem_extrato"
+    },
+    {
+     "data": "2026-09-17",
+     "motivo": "realizados_apos_posicao",
+     "qtde": 1,
+     "valor": 1080000
+    }
+   ],
+   "banco": {
+    "entradas": 0,
+    "extrato_nao_fecha": -205000.85,
+    "saidas": 0
+   },
+   "consolida_em_conta_id": null,
+   "conta_id": "990456bd-b19e-421c-969d-a41fad934671",
+   "conta_nome": "Itaú CDI",
+   "dias": null,
+   "dias_com_diferenca": [
+    {
+     "banco": 0,
+     "data": "2026-09-03",
+     "diferenca": 205000.85,
+     "motivos": [
+      "lancamento_sem_par"
+     ],
+     "sistema": -205000.85
+    },
+    {
+     "banco": 0,
+     "data": "2026-09-29",
+     "diferenca": -1080000,
+     "motivos": [
+      "lancamento_sem_par"
+     ],
+     "sistema": 1080000
+    }
+   ],
+   "diferenca": -1080000,
+   "diferenca_entradas": -1080000,
+   "diferenca_saidas": 205000.85,
+   "entradas": 1080000,
+   "entradas_terceiros": 0,
+   "entradas_transferencias": 1080000,
+   "extratos_sem_par": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "internas": null,
+   "lancamentos_sem_par": {
+    "qtde": 2,
+    "valor": 874999.15
+   },
+   "legado": {
+    "diferenca": -1080000,
+    "entradas": 1080000,
+    "saidas": -205000.85,
+    "saldo_extrato": 100207.94,
+    "saldo_inicial": 305208.79,
+    "saldo_sistema": 1180207.94,
+    "status": "nao_conciliado"
+   },
+   "linhas_sistema": null,
+   "motivos": [],
+   "nivel": "conta",
+   "par_conta_id": null,
+   "par_status": null,
+   "posicao": {
+    "data": "2026-09-17",
+    "diferenca_na_data": 0,
+    "diferenca_propria_na_data": 0,
+    "realizados_apos": {
+     "qtde": 1,
+     "valor": 1080000
+    },
+    "saldo_sistema_na_data": 100207.94,
+    "saldo_sistema_proprio_na_data": 100207.94
+   },
+   "proprio": {
+    "diferenca": -1080000,
+    "entradas": 1080000,
+    "entradas_terceiros": 0,
+    "entradas_transferencias": 1080000,
+    "saidas": -205000.85,
+    "saidas_terceiros": 0,
+    "saidas_transferencias": -205000.85,
+    "saldo_extrato": 100207.94,
+    "saldo_inicial": 305208.79,
+    "saldo_sistema": 1180207.94
+   },
+   "retido_em_depositos": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "saidas": -205000.85,
+   "saidas_terceiros": 0,
+   "saidas_transferencias": -205000.85,
+   "saldo_extrato": 100207.94,
+   "saldo_extrato_data": "2026-09-17",
+   "saldo_inicial": 305208.79,
+   "saldo_inicial_origem": "informado",
+   "saldo_sistema": 1180207.94,
+   "sem_conta": null,
+   "status": "conciliado",
+   "tem_extrato": false,
+   "tipo_conta": "inv"
+  },
+  "total": {
+   "avisos": [
+    {
+     "motivo": "contas_com_aviso",
+     "por_aviso": {
+      "dias_com_diferenca": 1,
+      "extratos_sem_par": 1,
+      "realizados_apos_posicao": 2,
+      "sem_extrato": 5
+     },
+     "qtde": 6,
+     "qtde_alem_sem_extrato": 3
+    }
+   ],
+   "banco": {
+    "entradas": 1304843.56,
+    "extrato_nao_fecha": -205000.85,
+    "saidas": -1329903.33
+   },
+   "consolida_em_conta_id": null,
+   "conta_id": null,
+   "conta_nome": "Total",
+   "dias": null,
+   "dias_com_diferenca": null,
+   "diferenca": -86246.83,
+   "diferenca_entradas": -123966.34,
+   "diferenca_saidas": 242720.36,
+   "entradas": 1428809.9,
+   "entradas_terceiros": 106089.54,
+   "entradas_transferencias": 1322720.36,
+   "extratos_sem_par": {
+    "qtde": 2,
+    "valor": 993755.13
+   },
+   "internas": null,
+   "lancamentos_sem_par": {
+    "qtde": 46,
+    "valor": 874999.15
+   },
+   "legado": null,
+   "linhas_sistema": null,
+   "motivos": [
+    {
+     "contas": [
+      {
+       "avisos": [
+        {
+         "dias": [
+          "2026-09-19",
+          "2026-09-28"
+         ],
+         "motivo": "dias_com_diferenca",
+         "qtde": 2
+        },
+        {
+         "motivo": "extratos_sem_par",
+         "qtde": 2,
+         "valor": 993755.13
+        }
+       ],
+       "conta_id": "1afe76df-b61e-49f4-b637-f5ce020c778b",
+       "conta_nome": "Itaú Personalite",
+       "motivos": [
+        {
+         "motivo": "saldo_diverge",
+         "valor": 993753.17
+        }
+       ],
+       "status": "nao_conciliado"
+      }
+     ],
+     "motivo": "contas_nao_conciliadas",
+     "qtde": 1
+    }
+   ],
+   "nivel": "total",
+   "par_conta_id": null,
+   "par_status": null,
+   "posicao": null,
+   "proprio": null,
+   "retido_em_depositos": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "saidas": -1572623.69,
+   "saidas_terceiros": -249903.33,
+   "saidas_transferencias": -1322720.36,
+   "saldo_extrato": 107246.16,
+   "saldo_extrato_data": null,
+   "saldo_inicial": 337306.78,
+   "saldo_inicial_origem": null,
+   "saldo_sistema": 193492.99,
+   "sem_conta": {
+    "entradas": 0,
+    "qtde": 0,
+    "saidas": 0
+   },
+   "status": "nao_conciliado",
+   "tem_extrato": true,
+   "tipo_conta": null
+  }
+ },
+ "nj_status_ano_2026_total": [
+  {
+   "ano_mes": "2026-01",
+   "avisos": [
+    {
+     "motivo": "contas_com_aviso",
+     "por_aviso": {
+      "sem_extrato": 18
+     },
+     "qtde": 18,
+     "qtde_alem_sem_extrato": 0
+    }
+   ],
+   "conta_id": null,
+   "conta_nome": "Total",
+   "motivos": [
+    {
+     "motivo": "contas_pendentes",
+     "qtde": 1
+    }
+   ],
+   "nivel": "total",
+   "status": "conciliado",
+   "tipo_conta": null
+  },
+  {
+   "ano_mes": "2026-02",
+   "avisos": [
+    {
+     "motivo": "contas_com_aviso",
+     "por_aviso": {
+      "sem_extrato": 18
+     },
+     "qtde": 18,
+     "qtde_alem_sem_extrato": 0
+    }
+   ],
+   "conta_id": null,
+   "conta_nome": "Total",
+   "motivos": [
+    {
+     "motivo": "contas_pendentes",
+     "qtde": 1
+    }
+   ],
+   "nivel": "total",
+   "status": "conciliado",
+   "tipo_conta": null
+  },
+  {
+   "ano_mes": "2026-03",
+   "avisos": [
+    {
+     "motivo": "contas_com_aviso",
+     "por_aviso": {
+      "dias_com_diferenca": 1,
+      "extrato_nao_fecha": 1,
+      "lancamentos_sem_par": 1,
+      "sem_extrato": 13
+     },
+     "qtde": 14,
+     "qtde_alem_sem_extrato": 1
+    }
+   ],
+   "conta_id": null,
+   "conta_nome": "Total",
+   "motivos": [
+    {
+     "motivo": "contas_pendentes",
+     "qtde": 1
+    }
+   ],
+   "nivel": "total",
+   "status": "conciliado",
+   "tipo_conta": null
+  },
+  {
+   "ano_mes": "2026-04",
+   "avisos": [
+    {
+     "motivo": "contas_com_aviso",
+     "por_aviso": {
+      "sem_extrato": 13
+     },
+     "qtde": 13,
+     "qtde_alem_sem_extrato": 0
+    }
+   ],
+   "conta_id": null,
+   "conta_nome": "Total",
+   "motivos": [
+    {
+     "motivo": "contas_pendentes",
+     "qtde": 1
+    }
+   ],
+   "nivel": "total",
+   "status": "conciliado",
+   "tipo_conta": null
+  },
+  {
+   "ano_mes": "2026-05",
+   "avisos": [
+    {
+     "motivo": "contas_com_aviso",
+     "por_aviso": {
+      "sem_extrato": 13
+     },
+     "qtde": 13,
+     "qtde_alem_sem_extrato": 0
+    }
+   ],
+   "conta_id": null,
+   "conta_nome": "Total",
+   "motivos": [
+    {
+     "motivo": "contas_pendentes",
+     "qtde": 1
+    }
+   ],
+   "nivel": "total",
+   "status": "conciliado",
+   "tipo_conta": null
+  },
+  {
+   "ano_mes": "2026-06",
+   "avisos": [
+    {
+     "motivo": "contas_com_aviso",
+     "por_aviso": {
+      "sem_extrato": 13
+     },
+     "qtde": 13,
+     "qtde_alem_sem_extrato": 0
+    }
+   ],
+   "conta_id": null,
+   "conta_nome": "Total",
+   "motivos": [
+    {
+     "motivo": "contas_pendentes",
+     "qtde": 1
+    }
+   ],
+   "nivel": "total",
+   "status": "conciliado",
+   "tipo_conta": null
+  },
+  {
+   "ano_mes": "2026-07",
+   "avisos": [
+    {
+     "motivo": "contas_com_aviso",
+     "por_aviso": {
+      "dias_com_diferenca": 1,
+      "extrato_nao_fecha": 1,
+      "lancamentos_sem_par": 1,
+      "sem_extrato": 13
+     },
+     "qtde": 14,
+     "qtde_alem_sem_extrato": 1
+    }
+   ],
+   "conta_id": null,
+   "conta_nome": "Total",
+   "motivos": [
+    {
+     "motivo": "contas_pendentes",
+     "qtde": 1
+    }
+   ],
+   "nivel": "total",
+   "status": "conciliado",
+   "tipo_conta": null
+  },
+  {
+   "ano_mes": "2026-08",
+   "avisos": [
+    {
+     "motivo": "contas_com_aviso",
+     "por_aviso": {
+      "sem_extrato": 13
+     },
+     "qtde": 13,
+     "qtde_alem_sem_extrato": 0
+    }
+   ],
+   "conta_id": null,
+   "conta_nome": "Total",
+   "motivos": [],
+   "nivel": "total",
+   "status": "conciliado",
+   "tipo_conta": null
+  },
+  {
+   "ano_mes": "2026-09",
+   "avisos": [
+    {
+     "motivo": "contas_com_aviso",
+     "por_aviso": {
+      "sem_extrato": 14
+     },
+     "qtde": 14,
+     "qtde_alem_sem_extrato": 0
+    }
+   ],
+   "conta_id": null,
+   "conta_nome": "Total",
+   "motivos": [
+    {
+     "motivo": "contas_pendentes",
+     "qtde": 7
+    }
+   ],
+   "nivel": "total",
+   "status": "conciliado",
+   "tipo_conta": null
+  },
+  {
+   "ano_mes": "2026-10",
+   "avisos": [
+    {
+     "motivo": "contas_com_aviso",
+     "por_aviso": {
+      "sem_extrato": 18
+     },
+     "qtde": 18,
+     "qtde_alem_sem_extrato": 0
+    }
+   ],
+   "conta_id": null,
+   "conta_nome": "Total",
+   "motivos": [
+    {
+     "motivo": "contas_pendentes",
+     "qtde": 18
+    }
+   ],
+   "nivel": "total",
+   "status": "pendente",
+   "tipo_conta": null
+  },
+  {
+   "ano_mes": "2026-11",
+   "avisos": [
+    {
+     "motivo": "contas_com_aviso",
+     "por_aviso": {
+      "sem_extrato": 18
+     },
+     "qtde": 18,
+     "qtde_alem_sem_extrato": 0
+    }
+   ],
+   "conta_id": null,
+   "conta_nome": "Total",
+   "motivos": [
+    {
+     "motivo": "contas_pendentes",
+     "qtde": 18
+    }
+   ],
+   "nivel": "total",
+   "status": "pendente",
+   "tipo_conta": null
+  },
+  {
+   "ano_mes": "2026-12",
+   "avisos": [
+    {
+     "motivo": "contas_com_aviso",
+     "por_aviso": {
+      "sem_extrato": 18
+     },
+     "qtde": 18,
+     "qtde_alem_sem_extrato": 0
+    }
+   ],
+   "conta_id": null,
+   "conta_nome": "Total",
+   "motivos": [
+    {
+     "motivo": "contas_pendentes",
+     "qtde": 18
+    }
+   ],
+   "nivel": "total",
+   "status": "pendente",
+   "tipo_conta": null
+  }
+ ]
+}

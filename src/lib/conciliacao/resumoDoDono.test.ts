@@ -10,7 +10,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
-  lerResumo, lerStatusAno, frasesDoStatus, fraseDoRetido, fraseSemConta, contasParaFecharSemMovimento,
+  lerResumo, lerStatusAno, frasesDoStatus, frasesDosAvisos, marcaDeAviso, fraseDoRetido, fraseSemConta, contasParaFecharSemMovimento,
   saldosDaLinha, marcaDoPar, contaEmPar, diferencaNaPosicao, sistemaNaPosicao, saldoSistemaNaData, tituloDoPar,
   TITULO_DIFERENCA_NA_POSICAO_INDISPONIVEL, TIPO_TRANSFERENCIA_INTERNA,
   type LinhaResumo,
@@ -45,48 +45,95 @@ describe('a leitura do dono, sem cast e sem inventar', () => {
   });
 });
 
-describe('T2/T3 — as frases do status saem dos motivos do dono', () => {
-  it('cada motivo com a sua frase; "N dias com diferença" leva ao PRIMEIRO dia', () => {
+describe('T2/T3 — as frases do status saem dos motivos do dono; o extrato importado é a 2ª prova (avisos)', () => {
+  it('cada motivo com a sua frase; os avisos à parte, e "N dias com diferença" leva ao PRIMEIRO dia', () => {
     const l = base({
       tem_extrato: true, status: 'nao_conciliado',
-      motivos: [
+      motivos: [{ motivo: 'saldo_diverge', valor: 150000 }, { motivo: 'saldo_nao_informado', falta: 'final' }],
+      avisos: [
         { motivo: 'dias_com_diferenca', qtde: 2, dias: ['2026-03-03', '2026-03-17'] },
-        { motivo: 'saldo_diverge', valor: 150000 },
         { motivo: 'extrato_nao_fecha', valor: 0.02 },
-        { motivo: 'saldo_nao_informado', falta: 'final' },
-        { motivo: 'sem_extrato' },
+        { motivo: 'extratos_sem_par', qtde: 1, valor: 10 },
+        { motivo: 'lancamentos_sem_par', qtde: 3, valor: -5 },
+        { motivo: 'realizados_apos_posicao', qtde: 1, valor: 1080000, data: '2026-09-17' },
       ],
     });
-    const f = frasesDoStatus(l);
     /* O real do `toLocaleString` separa "R$" do número com espaço inseparável — normalizado só para comparar. */
-    expect(f.map((x) => x.texto.replace(/\s/g, ' '))).toEqual([
+    expect(frasesDoStatus(l).map((x) => x.texto.replace(/\s/g, ' '))).toEqual(['saldo diverge R$ 150.000,00', 'saldo não informado']);
+    const a = frasesDosAvisos(l);
+    expect(a.map((x) => x.texto.replace(/\s/g, ' '))).toEqual([
       '2 dias com diferença',
-      'saldo diverge R$ 150.000,00',
       'o extrato não fecha com o saldo informado R$ 0,02',
-      'saldo não informado',
-      'sem extrato',
+      '1 extrato sem par',
+      '3 lançamentos sem par',
+      '1 realizado após 17/09',
     ]);
-    expect(f[0].dia).toBe('2026-03-03');
+    expect(a[0].dia).toBe('2026-03-03');
+    expect(a.every((x) => x.marca)).toBe(true);
     /* negativo: o "−" tipográfico colado ao "R$" por word-joiner — a frase quebra, o valor não */
-    const neg = frasesDoStatus(base({ tem_extrato: false, motivos: [{ motivo: 'extrato_nao_fecha', valor: -881.49 }] }))[0].texto;
+    const neg = frasesDosAvisos(base({ tem_extrato: true, avisos: [{ motivo: 'extrato_nao_fecha', valor: -881.49 }] }))[0].texto;
     expect(neg.endsWith('\u2212\u2060R$\u00a0881,49')).toBe(true);
+    /* 'sem_extrato' informa (neutro); o ponteiro do par não é 2ª prova */
+    const s = frasesDosAvisos(base({ avisos: [{ motivo: 'sem_extrato' }, { motivo: 'conferida_com', conta_id: 'm', conta_nome: 'Mãe' }] }));
+    expect(s.map((x) => [x.texto, x.marca])).toEqual([['sem extrato', false]]);
+    /* saldo julgado na posição: a data vai no title */
+    expect(frasesDoStatus(base({ motivos: [{ motivo: 'saldo_diverge', valor: 5, posicao: '2026-09-17' }] }))[0].titulo).toBe('diferença na posição declarada em 17/09');
   });
 
-  it('"confere em todos os dias" NUNCA convive com um motivo de dias (e só com extrato)', () => {
-    const com = frasesDoStatus(base({ tem_extrato: true, motivos: [{ motivo: 'dias_com_diferenca', qtde: 1, dias: ['2026-09-02'] }] }));
+  it('"confere em todos os dias" NUNCA convive com o AVISO de dias (e só com extrato)', () => {
+    const com = frasesDoStatus(base({ tem_extrato: true, status: 'conciliado', motivos: [], avisos: [{ motivo: 'dias_com_diferenca', qtde: 1, dias: ['2026-09-02'] }] }));
     expect(com.map((x) => x.chave)).not.toContain('confere_dias');
-    const sem = frasesDoStatus(base({ tem_extrato: true, motivos: [{ motivo: 'saldo_diverge', valor: 1 }] }));
+    expect(com).toEqual([]);   // conciliado pelo saldo: nenhuma frase de status; o dia está na 2ª prova
+    const sem = frasesDoStatus(base({ tem_extrato: true, motivos: [{ motivo: 'saldo_diverge', valor: 1 }], avisos: [{ motivo: 'extrato_nao_fecha', valor: 1 }] }));
     expect(sem[0].texto).toBe('confere em todos os dias');
-    expect(frasesDoStatus(base({ tem_extrato: false, motivos: [] }))).toEqual([]);
+    expect(frasesDoStatus(base({ tem_extrato: false, motivos: [], avisos: [{ motivo: 'sem_extrato' }] }))).toEqual([]);
     expect(frasesDoStatus(emerson()).map((x) => x.texto)).toEqual(['confere em todos os dias']);
+    expect(frasesDosAvisos(emerson())).toEqual([]);   // conta sem aviso: nenhum bloco de 2ª prova
   });
 
-  it('no total: "N contas não conciliadas" com o nome de cada uma e o primeiro dia dela; "N pendentes"', () => {
+  it('aviso NÃO é motivo: o status (e a frase dele) não muda com avisos; ausente vira []', () => {
+    const [l] = lerResumo([{ nivel: 'conta', conta_id: 'x', status: 'conciliado', tem_extrato: true, motivos: [],
+      avisos: [{ motivo: 'extrato_nao_fecha', valor: -881.49 }, { motivo: 'dias_com_diferenca', qtde: 1, dias: ['2026-07-20'] }] }]);
+    expect(l.status).toBe('conciliado');
+    expect(l.motivos).toEqual([]);
+    expect(l.avisos.map((m) => m.motivo)).toEqual(['extrato_nao_fecha', 'dias_com_diferenca']);
+    expect(frasesDoStatus(l).some((f) => f.chave === 'extrato_nao_fecha' || f.chave === 'dias_com_diferenca')).toBe(false);
+    expect(lerResumo([{ nivel: 'conta', conta_id: 'y' }])[0].avisos).toEqual([]);
+    expect(lerResumo([{ nivel: 'conta', conta_id: 'y', avisos: 'lixo' }])[0].avisos).toEqual([]);
+    expect(lerStatusAno([{ ano_mes: '2026-03', nivel: 'total', status: 'conciliado', avisos: [{ motivo: 'contas_com_aviso', qtde: 14, qtde_alem_sem_extrato: 1, por_aviso: { sem_extrato: 13, dias_com_diferenca: 1 } }] }])[0].avisos)
+      .toEqual([{ motivo: 'contas_com_aviso', qtde: 14, qtde_alem_sem_extrato: 1, por_aviso: { sem_extrato: 13, dias_com_diferenca: 1 } }]);
+  });
+
+  it('o marcador âmbar: só em linha CONCILIADA com aviso além de "sem extrato"; o title escreve os avisos', () => {
+    const c = (x: Record<string, unknown>) => base({ status: 'conciliado', motivos: [], ...x });
+    expect(marcaDeAviso(c({ avisos: [] }))).toBeNull();
+    expect(marcaDeAviso(c({ avisos: [{ motivo: 'sem_extrato' }] }))).toBeNull();
+    expect(marcaDeAviso(c({ avisos: [{ motivo: 'sem_extrato' }, { motivo: 'conferida_com', conta_id: 'm', conta_nome: 'Mãe' }] }))).toBeNull();
+    expect(marcaDeAviso(c({ avisos: [{ motivo: 'dias_com_diferenca', qtde: 1, dias: ['2026-03-31'] }] }))).toBe('2ª prova · extrato: 1 dia com diferença');
+    expect(marcaDeAviso(base({ status: 'nao_conciliado', avisos: [{ motivo: 'dias_com_diferenca', qtde: 1, dias: ['2026-03-31'] }] }))).toBeNull();
+    expect(marcaDeAviso(base({ status: 'pendente', avisos: [{ motivo: 'extrato_nao_fecha', valor: 1 }] }))).toBeNull();
+    /* agregado: conta as contas com aviso ALÉM de sem extrato; zero = sem marca e sem frase */
+    const [t0, t1] = lerStatusAno([
+      { ano_mes: '2026-02', nivel: 'total', status: 'conciliado', avisos: [{ motivo: 'contas_com_aviso', qtde: 18, qtde_alem_sem_extrato: 0, por_aviso: { sem_extrato: 18 } }] },
+      { ano_mes: '2026-03', nivel: 'total', status: 'conciliado', avisos: [{ motivo: 'contas_com_aviso', qtde: 14, qtde_alem_sem_extrato: 1, por_aviso: { sem_extrato: 13, dias_com_diferenca: 1, extrato_nao_fecha: 1 } }] },
+    ]);
+    expect(marcaDeAviso(t0)).toBeNull();
+    expect(frasesDosAvisos(t0)).toEqual([]);
+    expect(marcaDeAviso(t1)).toBe('2ª prova · extrato: 1 conta com aviso do extrato (sem extrato: 13 · dias com diferença: 1 · extrato não fecha: 1)');
+    expect(frasesDosAvisos(t1).map((f) => f.texto)).toEqual(['1 conta com aviso do extrato']);
+    /* a frase não depende da ordem das chaves do JSON (o PostgREST e o canal SQL mandam `por_aviso` em ordens diferentes) */
+    const [t2] = lerStatusAno([{ ano_mes: '2026-03', nivel: 'total', status: 'conciliado', avisos: [{ motivo: 'contas_com_aviso', qtde: 14, qtde_alem_sem_extrato: 1,
+      por_aviso: { extrato_nao_fecha: 1, novo_aviso: 2, dias_com_diferenca: 1, sem_extrato: 13 } }] }]);
+    expect(frasesDosAvisos(t2)[0].titulo).toBe('sem extrato: 13 · dias com diferença: 1 · extrato não fecha: 1 · novo aviso: 2');
+  });
+
+  it('no total: "N contas não conciliadas" com o nome de cada uma e o primeiro dia dela (dos AVISOS da conta); "N pendentes"', () => {
     const [t] = lerResumo([{
       nivel: 'total', conta_nome: 'Total', status: 'nao_conciliado', motivos: [
         { motivo: 'contas_nao_conciliadas', qtde: 2, contas: [
-          { conta_id: 'a', conta_nome: 'Itau BBA', status: 'nao_conciliado', motivos: [{ motivo: 'dias_com_diferenca', qtde: 1, dias: ['2026-03-03'] }, { motivo: 'saldo_diverge', valor: 150000 }] },
-          { conta_id: 'b', conta_nome: 'Cartão BB', status: 'nao_conciliado', motivos: [{ motivo: 'saldo_diverge', valor: -6470.73 }] },
+          { conta_id: 'a', conta_nome: 'Itau BBA', status: 'nao_conciliado', motivos: [{ motivo: 'saldo_diverge', valor: 150000 }],
+            avisos: [{ motivo: 'dias_com_diferenca', qtde: 1, dias: ['2026-03-03'] }] },
+          { conta_id: 'b', conta_nome: 'Cartão BB', status: 'nao_conciliado', motivos: [{ motivo: 'saldo_diverge', valor: -6470.73 }], avisos: [{ motivo: 'sem_extrato' }] },
         ] },
         { motivo: 'contas_pendentes', qtde: 3 },
       ],
@@ -94,7 +141,7 @@ describe('T2/T3 — as frases do status saem dos motivos do dono', () => {
     const f = frasesDoStatus(t);
     expect(f.map((x) => x.texto)).toEqual(['2 contas não conciliadas', '3 pendentes']);
     expect(f[0].contas?.map((c) => [c.conta_nome, c.dia ?? null])).toEqual([['Itau BBA', '2026-03-03'], ['Cartão BB', null]]);
-    expect(f[0].titulo).toContain('Itau BBA: 1 dia com diferença');
+    expect(f[0].titulo?.replace(/\s/g, ' ')).toContain('Itau BBA: saldo diverge R$ 150.000,00');
   });
 
   it('retido e sem conta: frase só quando há; o dono manda os dois lados do sem conta em módulo', () => {
@@ -138,9 +185,11 @@ const maeCrua = (x: Record<string, unknown> = {}) => ({
   ...x,
 });
 const internaCrua = (x: Record<string, unknown> = {}) => comProprio({
-  nivel: 'conta', conta_id: 'if', conta_nome: 'Bradesco-Invest. Facil', status: 'nao_conciliado', par_conta_id: 'brad', par_status: 'nao_conciliado',
+  /* PR-CONC-STATUS-SALDO-01b: a interna é julgada pelo SEU saldo (0,00 = conciliado); `par_status` é o da mãe (informativo)
+     e o ponteiro 'conferida_com' vem nos AVISOS. */
+  nivel: 'conta', conta_id: 'if', conta_nome: 'Bradesco-Invest. Facil', status: 'conciliado', par_conta_id: 'brad', par_status: 'nao_conciliado',
   saldo_inicial: -2.73, saldo_sistema: -4.02, saldo_extrato: -4.02, diferenca: 0,
-  motivos: [{ motivo: 'conferida_com', conta_id: 'brad', conta_nome: 'Bradesco' }], ...x,
+  motivos: [], avisos: [{ motivo: 'sem_extrato' }, { motivo: 'conferida_com', conta_id: 'brad', conta_nome: 'Bradesco' }], ...x,
 });
 
 describe('T1 (01b) — o leitor: proprio, par_*, internas, saldo_apos_proprio e a transferência interna', () => {
@@ -154,10 +203,11 @@ describe('T1 (01b) — o leitor: proprio, par_*, internas, saldo_apos_proprio e 
     expect(ti.map((x) => [x.valor, x.saldo_apos, x.saldo_apos_proprio, x.status_exibicao])).toEqual([[-1.29, -55722.22, -55720.78, 'realizado']]);
   });
 
-  it('a interna: par_conta_id, par_status e o motivo conferida_com com o nome da mãe', () => {
+  it('a interna: par_conta_id, par_status (o da mãe), o status PRÓPRIO e o aviso conferida_com com o nome da mãe', () => {
     const [l] = lerResumo([internaCrua()]);
-    expect([l.par_conta_id, l.par_status, l.status]).toEqual(['brad', 'nao_conciliado', 'nao_conciliado']);
-    expect(l.motivos).toEqual([{ motivo: 'conferida_com', conta_id: 'brad', conta_nome: 'Bradesco' }]);
+    expect([l.par_conta_id, l.par_status, l.status]).toEqual(['brad', 'nao_conciliado', 'conciliado']);
+    expect(l.motivos).toEqual([]);
+    expect(l.avisos).toEqual([{ motivo: 'sem_extrato' }, { motivo: 'conferida_com', conta_id: 'brad', conta_nome: 'Bradesco' }]);
     expect(l.internas).toEqual([]);
   });
 
@@ -190,7 +240,7 @@ describe('o que a tela lê do par', () => {
     expect(saldosDaLinha(total).saldo_sistema).toBe(-55723.51);
   });
 
-  it('marcaDoPar: a mãe cita as internas, a interna cita a mãe (do motivo), conta sem par não tem marca', () => {
+  it('marcaDoPar: a mãe cita as internas, a interna cita a mãe (do AVISO conferida_com), conta sem par não tem marca', () => {
     const [mae, interna, comum] = lerResumo([maeCrua(), internaCrua(), comProprio({ nivel: 'conta', conta_id: 'c', saldo_sistema: 1 })]);
     expect(marcaDoPar(mae)).toEqual({ texto: 'conferida com Bradesco-Invest. Facil', curto: 'par', titulo: tituloDoPar('Bradesco-Invest. Facil'),
       tituloLinha: 'conferida com Bradesco-Invest. Facil — o mês desta conta só fecha junto com Bradesco-Invest. Facil: o arquivo do banco traz o saldo das duas somado' });
@@ -201,7 +251,7 @@ describe('o que a tela lê do par', () => {
     expect(tituloDoPar('X')).toBe('o mês desta conta só fecha junto com X: o arquivo do banco traz o saldo das duas somado');
   });
 
-  it('frasesDoStatus: a mãe ganha "conferida com <interna>" depois dos motivos; a interna escreve o motivo do dono', () => {
+  it('frasesDoStatus: a mãe ganha "conferida com <interna>" depois dos motivos; a interna escreve o ponteiro do dono (aviso)', () => {
     const [mae, interna] = lerResumo([maeCrua(), internaCrua()]);
     expect(frasesDoStatus(mae).map((f) => f.texto)).toEqual(['confere em todos os dias', 'saldo diverge −\u2060R$\u00a015,18', 'conferida com Bradesco-Invest. Facil']);
     expect(frasesDoStatus(interna).map((f) => f.texto)).toEqual(['conferida com Bradesco']);

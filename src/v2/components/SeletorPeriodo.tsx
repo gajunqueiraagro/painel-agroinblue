@@ -40,7 +40,15 @@ import {
 export { MESES_CURTOS };
 
 /** A cor de um mês quando ela carrega informação (status, alerta). */
-export interface TomDoMes { bg: string; border: string; txt: string; title?: string }
+export interface TomDoMes {
+  bg: string; border: string; txt: string; title?: string;
+  /**
+   * MARCADOR no canto do mês: um ponto âmbar com este texto somado ao `title`. É um aviso que NÃO muda a cor do mês
+   * (PR-CONC-STATUS-SALDO-01b: mês conciliado pelo saldo, com aviso do extrato importado). Posição absoluta — não muda
+   * a largura nem a altura do botão.
+   */
+  marca?: string;
+}
 
 export interface SeletorPeriodoProps {
   /** `'ano'` esconde a fita de meses; `'ano-mes'` a mostra. */
@@ -128,6 +136,12 @@ const BOTAO_BASE: React.CSSProperties = {
   flex: '1 0 44px', height: ALTURA, textAlign: 'center', padding: '0 4px',
   fontSize: 11, fontWeight: 500, borderRadius: 8, borderWidth: 1, borderStyle: 'solid',
   cursor: 'pointer', lineHeight: 1, transition: 'background-color .12s, border-color .12s',
+};
+
+/** O ponto âmbar do canto (5px, fora do fluxo): avisa sem mudar a cor nem a medida do mês. */
+const MARCA_DO_MES: React.CSSProperties = {
+  position: 'absolute', top: 3, right: 3, width: 5, height: 5, borderRadius: '50%',
+  background: '#D97706', pointerEvents: 'none',
 };
 
 /** "Ano" usa a MESMA régua dos meses — só a largura é fixa, porque ele não é um dos doze. */
@@ -286,13 +300,17 @@ export function SeletorPeriodo({
                   key={m}
                   type="button"
                   onClick={(e) => clicarMes(m, e.shiftKey)}
-                  title={tom?.title}
+                  title={tom?.marca ? [tom.title, tom.marca].filter(Boolean).join(' — ') : tom?.title}
                   aria-pressed={papel !== 'fora'}
                   data-papel={papel}
+                  data-marca={tom?.marca ? 'aviso' : undefined}
                   className={papel === 'fora' && !tom ? 'hover:!bg-[#e3e6ea]' : undefined}
-                  style={{ ...BOTAO_BASE, ...estilo }}
+                  style={{ ...BOTAO_BASE, ...estilo, ...(tom?.marca ? { position: 'relative' } : {}) }}
                 >
                   {rotulo}
+                  {tom?.marca && (
+                    <span aria-hidden data-testid="marca-aviso-mes" style={MARCA_DO_MES} />
+                  )}
                 </button>
               );
             })}

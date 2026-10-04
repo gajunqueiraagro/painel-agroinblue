@@ -32,6 +32,7 @@ import { useResumoMes, useStatusAno, CHAVE_RESUMO_MES, CHAVE_STATUS_ANO } from '
 import {
   ROTULO_STATUS, frasesDoStatus, fraseDoRetido, fraseSemConta, contasParaFecharSemMovimento,
   saldosDaLinha, marcaDoPar, diferencaNaPosicao, TITULO_DIFERENCA_NA_POSICAO_INDISPONIVEL,
+  frasesDosAvisos, marcaDeAviso,
   type LinhaResumo, type StatusDono, type FraseDoStatus,
 } from '@/lib/conciliacao/resumoDoDono';
 import { detectarDuplicatasCrossOrigin, montarSituacaoFechamento, derivarPendenciasGerenciais, derivarDetalhePendencias } from '@/lib/financeiro/fechamentoPendencias';
@@ -437,13 +438,15 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   /* ⚠ O MAPA DE TONS: `STATUS_COR` pela cor e `ROTULO_STATUS` pelo `title`. Mês sem status do ano ainda fica SEM tom
      (o seletor o desenha neutro); o mês aberto leva o status do total do resumo enquanto o do ano não chega. */
   const tomDosMeses = useMemo(() => {
-    const m: Record<number, { bg: string; border: string; txt: string; title?: string }> = {};
+    /* ⚠ A COR É O STATUS (o saldo); o aviso do extrato é um PONTO ÂMBAR no canto do mês conciliado, com os avisos no
+       `title` — PR-CONC-STATUS-SALDO-01b. `marcaDeAviso` só lê o status e os avisos do dono. */
+    const m: Record<number, { bg: string; border: string; txt: string; title?: string; marca?: string }> = {};
     for (const r of statusAnoQ.data ?? []) {
       if (r.nivel !== 'total' || r.ano_mes.slice(0, 4) !== ano) continue;
-      m[Number(r.ano_mes.slice(5, 7))] = { ...STATUS_COR[r.status], title: ROTULO_STATUS[r.status] };
+      m[Number(r.ano_mes.slice(5, 7))] = { ...STATUS_COR[r.status], title: ROTULO_STATUS[r.status], marca: marcaDeAviso(r) ?? undefined };
     }
     if (!statusAnoQ.data && linhaTotal) {
-      m[Number(selectedMes)] = { ...STATUS_COR[linhaTotal.status], title: ROTULO_STATUS[linhaTotal.status] };
+      m[Number(selectedMes)] = { ...STATUS_COR[linhaTotal.status], title: ROTULO_STATUS[linhaTotal.status], marca: marcaDeAviso(linhaTotal) ?? undefined };
     }
     return m;
   }, [statusAnoQ.data, linhaTotal, ano, selectedMes]);
@@ -582,6 +585,8 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   const cor        = STATUS_COR[cardStatus];
   const StatusIcon = STATUS_ICONE[cardStatus];
   const frasesStatus = linhaSel ? frasesDoStatus(linhaSel) : [];
+  /* A 2ª PROVA (o extrato importado): avisos do dono, escritos à parte e nunca em vermelho — PR-CONC-STATUS-SALDO-01b. */
+  const frasesAvisos = linhaSel ? frasesDosAvisos(linhaSel) : [];
   const retido = linhaSel ? fraseDoRetido(linhaSel.retido_em_depositos) : null;
   const semConta = selectedConta === '__all__' && linhaTotal ? fraseSemConta(linhaTotal.sem_conta) : null;
 
@@ -665,14 +670,16 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   /* ⚠ AS QUATRO PERGUNTAS LEEM A LINHA DO DONO (PR-CONC-SALDO-UMA-REGUA-02): saldo inicial, saldo do extrato,
      entradas/saídas do mês e `tem_extrato`. É regra de EXIBIÇÃO: o Total e o subtotal são do dono, com ou sem ela.
      ⚠ SOBRE O `proprio` (PR-CONC-INTERNA-SEPARADA-01b, D2): a interna com aplicação ou resgate no mês tem entradas/saídas
-     próprias e aparece; e a interna de um par NÃO conciliado nunca se oculta — é ali que o operador vai conferir. */
+     próprias e aparece; e a interna de um par NÃO conciliado nunca se oculta — é ali que o operador vai conferir.
+     ⚠ "PAR NÃO CONCILIADO" SÃO DUAS PERGUNTAS desde o PR-CONC-STATUS-SALDO-01b: cada conta é julgada pelo SEU saldo, e
+     `par_status` é só o status da MÃE. A interna fica visível quando o status DELA não é conciliado OU o da mãe não é. */
   const ehOculta = (c: PerContaSaldo) => {
     const p = saldosDaLinha(c.linha);
     return Math.round((p.saldo_inicial ?? 0) * 100) === 0
       && Math.round((p.saldo_extrato ?? 0) * 100) === 0
       && Math.round(p.entradas * 100) === 0 && Math.round(p.saidas * 100) === 0
       && !c.linha.tem_extrato
-      && !(c.linha.par_conta_id !== null && c.linha.par_status !== 'conciliado');
+      && !(c.linha.par_conta_id !== null && (c.linha.status !== 'conciliado' || c.linha.par_status !== 'conciliado'));
   };
   const qtdOcultas = perContaSaldos.filter(ehOculta).length;
   const contasVisiveis = mostrarOcultas ? perContaSaldos : perContaSaldos.filter(c => !ehOculta(c));
@@ -1367,6 +1374,22 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                         onDiaConta={irParaConferencia} />
                     ))}
                   </div>
+                  {/* ⚠ A 2ª PROVA · EXTRATO — PR-CONC-STATUS-SALDO-01b: o que o extrato importado diz NÃO decide o status e
+                      por isso mora fora das frases dele, em cor neutra (sem extrato) ou âmbar (pede olho), NUNCA vermelho.
+                      Sem aviso, o bloco não existe: a conta sem aviso fica como sempre foi. O "N dias com diferença"
+                      segue sendo o link da Conferência no primeiro dia. */}
+                  {frasesAvisos.length > 0 && (
+                    <div className="w-full border-t border-black/10 pt-1 space-y-0.5 text-[9.5px] leading-tight" data-testid="segunda-prova">
+                      <div className="text-muted-foreground">2ª prova · extrato</div>
+                      {frasesAvisos.map(f => (
+                        <div key={f.chave} className={f.marca ? 'text-amber-700' : 'text-muted-foreground'} data-aviso={f.chave}>
+                          <LinhaMotivo frase={f}
+                            onDia={f.dia && selectedConta !== '__all__' ? () => irParaConferencia(selectedConta, f.dia ?? '') : undefined}
+                            onDiaConta={irParaConferencia} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   {/* O pareamento — informação, do mesmo hook da aba Importar; sem conta ou sem extrato, "—". */}
                   <div className="text-[9.5px] leading-tight tabular-nums text-muted-foreground">
                     {pareamento.todos === 0
@@ -1792,7 +1815,11 @@ function SaldoContaRow({data, isActive, isDimmed, onClick, onEdit, canEdit, show
   const par = marcaDoPar(linha);
   const dotColor = linha.status==='conciliado' ? '#2E7D32' : linha.status==='nao_conciliado' ? '#C62828' : '#90A4AE';
   const frases = frasesDoStatus(linha);
-  const titulo = `${ROTULO_STATUS[linha.status]}${frases.length > 0 ? ': ' + frases.map(f => f.texto).join(' · ') : ''}`;
+  /* O `title` diz o status (o saldo) e, à parte, a 2ª prova (os avisos do extrato) — PR-CONC-STATUS-SALDO-01b. */
+  const avisos = frasesDosAvisos(linha);
+  const marcaAviso = marcaDeAviso(linha);
+  const titulo = `${ROTULO_STATUS[linha.status]}${frases.length > 0 ? ': ' + frases.map(f => f.texto).join(' · ') : ''}`
+    + (avisos.length > 0 ? ` — 2ª prova · extrato: ${avisos.map(f => f.texto).join(' · ')}` : '');
   return (
     <tr
       className="border-b last:border-b-0 cursor-pointer hover:bg-muted/20 transition-all"
@@ -1802,7 +1829,13 @@ function SaldoContaRow({data, isActive, isDimmed, onClick, onEdit, canEdit, show
       data-testid="linha-saldo-conta" data-conta={conta.id} data-status={linha.status}
     >
       <td className="py-0.5 px-2 overflow-hidden">
-        <span style={{width:7,height:7,borderRadius:'50%',background:dotColor,display:'inline-block',marginRight:4,verticalAlign:'middle',flexShrink:0}} />
+        {/* ⚠ O PONTO É O STATUS (o saldo). Conta CONCILIADA com aviso do extrato leva um ponto âmbar de 4px SOBRE o canto
+            do ponto de status (posição absoluta): avisa sem gastar um pixel da coluna Conta, que não tem folga. */}
+        <span style={{width:7,height:7,borderRadius:'50%',background:dotColor,display:'inline-block',marginRight:4,verticalAlign:'middle',flexShrink:0,position:'relative'}}>
+          {marcaAviso && (
+            <span aria-hidden data-testid="marca-aviso-conta" style={{position:'absolute',top:-2,right:-2,width:4,height:4,borderRadius:'50%',background:'#D97706',boxShadow:'0 0 0 1px #fff'}} />
+          )}
+        </span>
         {/* ⚠ 10px, E NÃO 11 — PR-CONC-SALDOS-NOME-DATA-01. Medido antes de mexer: o nome estava
             em 11px e era o maior texto da linha só porque os valores são 10px. Igualado a eles,
             ele para de puxar o olho sem perder nada de legibilidade — a identidade da linha já
