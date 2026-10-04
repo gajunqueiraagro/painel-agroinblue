@@ -40,7 +40,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { computeValidacaoModal, type AbaFinanceira } from './lancamentoDialogTabs';
 import { AbaAuditoriaLancamento } from '@/components/financeiro-v2/AbaAuditoriaLancamento';
-import { AlertCircle, AlertTriangle, Copy, KeyRound, RefreshCw, DollarSign, Beef, Repeat, Loader2, Link2, Unlink, FilePlus2 } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Copy, RefreshCw, DollarSign, Beef, Repeat, Loader2, Link2, Unlink, FilePlus2 } from 'lucide-react';
 import { LancamentoZooModal } from '@/v2/components/edicao/LancamentoZooModal';
 import { toast } from 'sonner';
 import { mensagemDoErro } from '@/lib/supabase/mensagemDoErro';
@@ -52,6 +52,11 @@ import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
 import type { Fazenda } from '@/contexts/FazendaContext';
 import { NovoFornecedorDialog } from './NovoFornecedorDialog';
 import { formatMoeda } from '@/lib/calculos/formatters';
+import {
+  formaEfetiva, linhasDoCadastro, modoDosDados, normalizarFormaDoCadastro, textoDoCadastro,
+  type BlocoDoCadastro,
+} from '@/lib/financeiro/dadosPagamentoDoCadastro';
+import { FornecedorFormDialog } from '@/components/financeiro-v2/FornecedorFormDialog';
 import { cn } from '@/lib/utils';
 import type { ExcelContext } from '@/v2/lib/mesa/buildExcelContext';
 import { planoDeTransferencia, ehTipoTransferencia } from '@/v2/lib/mesa/transferenciaPlano';
@@ -241,6 +246,136 @@ const ABAS_TAB: { value: AbaVisual; label: string }[] = [
 // PR-FIN-STATUS-UX-03A-1 — opções do modal vêm do domínio único (statusFinanceiro.ts):
 //   previsto/programado/agendado/realizado (ordem do PR-FIN-V2-STATUS-PGTO-01); sem Meta, sem Conciliado.
 const STATUS_OPTIONS = STATUS_FINANCEIRO_OPCOES_MODAL;
+
+/**
+ * "DADOS PARA PAGAMENTO" — FIN-PIX-CADASTRO-MODAL-01. Só desenha: as linhas vêm de `linhasDoCadastro` e o modo de `modoDosDados`.
+ *
+ *   · CADASTRO com dado: o bloco — cabeçalho "PIX · do cadastro do fornecedor", uma linha por informação com o seu "Copiar",
+ *     rodapé com a observação do cadastro e os dois links.
+ *   · CADASTRO sem dado para a forma: o aviso âmbar com "+ Cadastrar Pix do fornecedor" — nunca o campo vazio em silêncio.
+ *   · CADASTRO sem fornecedor ou forma sem dado de cadastro (Boleto, Cartão…): só o link para informar à mão.
+ *   · ENTRADA ou TRANSFERÊNCIA: quem monta passa o bloco 'nada' — só o link, ou o campo próprio se já houver texto.
+ *   · PRÓPRIO: o texto do lançamento, com TODAS as linhas visíveis (era um campo de uma linha que escondia a chave).
+ * ⚠ COPIAR NUNCA TRAVA: `bloqueado` apaga só o que EDITA (os links e o campo).
+ * ⚠ NENHUMA RETICÊNCIA: valor longo quebra de linha (`overflow-wrap`), e a linha só tem altura MÍNIMA.
+ */
+export function DadosParaPagamento({
+  modo, bloco, forma, fornecedorNome, realizado, temCadastro = true, texto, bloqueado, campoClassName,
+  onTexto, onUsarProprio, onVoltarAoCadastro, onEditarCadastro,
+}: {
+  modo: 'cadastro' | 'proprio';
+  bloco: BlocoDoCadastro;
+  forma: string;
+  fornecedorNome: string | null;
+  /** O lançamento JÁ está pago: o texto gravado é histórico e o cadastro, quando aparece, é o "cadastro atual". */
+  realizado: boolean;
+  /** `false` em Entradas e Transferências: não há cadastro para onde voltar, e o link "voltar a usar o cadastro" não aparece. */
+  temCadastro?: boolean;
+  texto: string;
+  bloqueado?: boolean;
+  campoClassName?: string;
+  onTexto: (t: string) => void;
+  onUsarProprio: () => void;
+  onVoltarAoCadastro: () => void;
+  onEditarCadastro: () => void;
+}) {
+  const copiar = (valor: string, aviso: string) => { void navigator.clipboard.writeText(valor); toast.success(aviso); };
+  const LINK = 'underline underline-offset-2 hover:text-foreground disabled:opacity-40 disabled:no-underline';
+  const BOTAO_COPIAR = 'inline-flex h-[18px] shrink-0 items-center gap-1 rounded px-1.5 text-[9.5px] leading-none';
+  /* a altura acompanha o texto: uma linha de campo por linha de texto, e o que quebrar por largura cresce pelo scrollHeight */
+  const areaRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = areaRef.current;
+    if (!el || modo !== 'proprio') return;
+    el.style.height = 'auto';
+    if (el.scrollHeight > 0) el.style.height = `${el.scrollHeight + 2}px`;
+  }, [texto, modo]);
+
+  if (modo === 'proprio') {
+    return (
+      <div data-testid="pgto-proprio">
+        <div className="mb-0.5 flex items-center justify-between gap-2 text-[9.5px] text-muted-foreground">
+          <span className="font-semibold text-primary">{realizado ? 'Dados gravados neste lançamento' : 'Dados próprios deste lançamento'}</span>
+          <span className="flex items-center gap-2">
+            {texto && (
+              <button type="button" className={cn(BOTAO_COPIAR, 'border text-foreground hover:bg-muted')} onClick={() => copiar(texto, 'Dados copiados')}>
+                <Copy className="h-2.5 w-2.5" /> Copiar
+              </button>
+            )}
+            {!realizado && temCadastro && (
+              <button type="button" className={LINK} disabled={bloqueado} onClick={onVoltarAoCadastro}>voltar a usar o cadastro</button>
+            )}
+          </span>
+        </div>
+        <Textarea ref={areaRef} tabIndex={14} value={texto} onChange={e => onTexto(e.target.value)} disabled={bloqueado}
+          rows={Math.max(2, texto.split('\n').length)} placeholder="Chave PIX, dados bancários..."
+          className={cn('min-h-[40px] resize-none overflow-hidden text-xs', campoClassName)} />
+      </div>
+    );
+  }
+
+  const linkProprio = (rotulo: string) => (
+    <button type="button" className={LINK} disabled={bloqueado} onClick={onUsarProprio}>{rotulo}</button>
+  );
+
+  if (bloco.tipo === 'falta') {
+    const nome = fornecedorNome ?? 'O fornecedor';
+    return (
+      <div data-testid="pgto-falta">
+        <div className="flex items-center justify-between gap-2 rounded border border-amber-300 bg-amber-50 px-2 py-1 text-[10px] text-amber-900">
+          <span className="min-w-0 [overflow-wrap:anywhere]">
+            {bloco.falta === 'pix' ? `${nome} não tem Pix cadastrado.` : `${nome} não tem dados bancários cadastrados.`}
+          </span>
+          <button type="button" disabled={bloqueado} onClick={onEditarCadastro}
+            className="inline-flex h-[20px] shrink-0 items-center rounded bg-primary px-2 text-[9.5px] font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-40">
+            {bloco.falta === 'pix' ? '+ Cadastrar Pix do fornecedor' : '+ Cadastrar dados bancários do fornecedor'}
+          </button>
+        </div>
+        <div className="mt-0.5 text-right text-[9.5px] text-muted-foreground">{linkProprio('informar dados só neste lançamento')}</div>
+      </div>
+    );
+  }
+
+  if (bloco.tipo === 'nada') {
+    return (
+      <div className="flex min-h-[32px] items-center text-[9.5px] text-muted-foreground" data-testid="pgto-nada">
+        {linkProprio('informar dados só neste lançamento')}
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-hidden rounded border" data-testid="pgto-bloco" data-forma={forma}>
+      <div className="flex items-center justify-between gap-2 bg-muted px-2 py-[3px] text-[9.5px] leading-[12px]">
+        <span className="font-semibold text-primary" data-testid="pgto-cabecalho">
+          {bloco.titulo} · {realizado ? 'cadastro atual' : 'do cadastro do fornecedor'}
+        </span>
+        <span className="min-w-0 text-right text-muted-foreground [overflow-wrap:anywhere]">{fornecedorNome}</span>
+      </div>
+      {bloco.linhas.map(l => (
+        <div key={l.rotulo} data-testid="pgto-linha"
+          className="grid min-h-[22px] grid-cols-[78px_minmax(0,1fr)_auto] items-center gap-x-2 border-t px-2 text-[10px] leading-[12px]">
+          <span className="text-muted-foreground">{l.rotulo}</span>
+          <span className={cn('min-w-0 py-[2px] [overflow-wrap:anywhere]', l.principal && 'font-semibold')}>{l.valor}</span>
+          {l.copia ? (
+            <button type="button" onClick={() => copiar(l.copia ?? '', l.aviso ?? 'Copiado')}
+              className={cn(BOTAO_COPIAR, l.principal ? 'bg-primary font-medium text-primary-foreground hover:bg-primary/90' : 'border text-foreground hover:bg-muted')}>
+              <Copy className="h-2.5 w-2.5" /> {l.principal ? 'Copiar chave' : 'Copiar'}
+            </button>
+          ) : <span />}
+        </div>
+      ))}
+      <div className="flex items-start justify-between gap-3 border-t px-2 py-[3px] text-[9.5px] leading-[12px] text-muted-foreground">
+        <span className="min-w-0 [overflow-wrap:anywhere]">Observação do cadastro: {bloco.observacao ?? '—'}</span>
+        <span className="flex shrink-0 items-center gap-1 whitespace-nowrap">
+          <button type="button" className={LINK} disabled={bloqueado} onClick={onEditarCadastro}>editar cadastro</button>
+          <span>·</span>
+          {linkProprio('usar outros dados só neste lançamento')}
+        </span>
+      </div>
+    </div>
+  );
+}
 
 /**
  * GRAVA O PARCELAMENTO E AVISA QUEM MOSTRA LANCAMENTOS — FIN-V2-REFRESH-02.
@@ -630,6 +765,12 @@ export function LancamentoV2Dialog({
   // Payment method fields
   const [formaPgto, setFormaPgto] = useState('');
   const [dadosPagamento, setDadosPagamento] = useState('');
+  /* FIN-PIX-CADASTRO-MODAL-01 — `dadosPagamento` é o texto PRÓPRIO do lançamento (a exceção). O modo (`cadastro` | `proprio`)
+     é calculado do que veio gravado até o operador decidir; daí em diante vale a decisão dele (`modoPgto`). */
+  const [modoPgto, setModoPgto] = useState<'cadastro' | 'proprio' | null>(null);
+  const [cadastroPgtoAberto, setCadastroPgtoAberto] = useState(false);
+  /* O fornecedor RELIDO do banco depois de salvar o cadastro por aqui: vale por cima da prop só enquanto o modal está aberto. */
+  const [fornecedorRelido, setFornecedorRelido] = useState<Record<string, FornecedorV2>>({});
 
   // Product suggestions state
   // PR-U2c-1A: sugestões de Produto migraram para <ProdutoAutocomplete />.
@@ -1134,34 +1275,54 @@ export function LancamentoV2Dialog({
     [formaPagamentoParc, numParcelas, valorNum, dataVencimento, dataPagamento],
   );
 
-  /** Build payment text from supplier data */
-  const buildDadosPagamento = useCallback((f: FornecedorV2, metodo?: string): string => {
-    const tipo = metodo || f.tipo_recebimento || '';
-    const lines: string[] = [];
-    if (tipo === 'PIX' && f.pix_chave) {
-      lines.push(`PIX | Tipo: ${f.pix_tipo_chave || '-'}`);
-      lines.push(`Chave: ${f.pix_chave}`);
-      if (f.nome_favorecido) lines.push(`Favorecido: ${f.nome_favorecido}`);
-    } else if (tipo === 'Transferência' || tipo === 'Transferência Bancária') {
-      if (f.banco) lines.push(`Banco: ${f.banco}`);
-      if (f.agencia) lines.push(`Agência: ${f.agencia}`);
-      if (f.conta) lines.push(`Conta: ${f.conta}`);
-      if (f.tipo_conta) lines.push(`Tipo: ${f.tipo_conta}`);
-      if (f.cpf_cnpj_pagamento) lines.push(`CPF/CNPJ: ${f.cpf_cnpj_pagamento}`);
-      if (f.nome_favorecido) lines.push(`Favorecido: ${f.nome_favorecido}`);
-    }
-    if (f.observacao_pagamento) lines.push(f.observacao_pagamento);
-    return lines.join('\n');
+  /* ── DADOS PARA PAGAMENTO: o cadastro do fornecedor manda enquanto não está pago — FIN-PIX-CADASTRO-MODAL-01 ──────────
+     ⚠ O `buildDadosPagamento` que morava aqui virou `textoDoCadastro` (a lib), byte a byte. Ele só rodava quando a forma ou o
+       fornecedor MUDAVAM, e gravava a cópia: lançamento que já nascia com PIX (recorrência, parcelamento, OC) abria vazio, e a
+       cópia envelhecia. Agora o bloco é LIDO do cadastro a cada render e nada é copiado. */
+  const fornecedorDoPgto = favorecidoId
+    ? (fornecedorRelido[favorecidoId] ?? fornecedores.find(x => x.id === favorecidoId) ?? null) : null;
+  /* R6 — "realizado" é o do REGISTRO, não o do select: o que foi usado para pagar é o que está gravado. */
+  const pgtoJaRealizado = !!lancamento && (lancamento.status_transacao === 'realizado' || lancamento.status_transacao === 'conciliado');
+  const formaEfetivaPgto = formaEfetiva(formaPgto, fornecedorDoPgto);
+  const textoCadastroPgto = fornecedorDoPgto ? textoDoCadastro(fornecedorDoPgto, formaEfetivaPgto) : '';
+  /* ⚠ O BLOCO DO CADASTRO É SÓ PARA SAÍDAS (ajuste do Gabriel, 04/10): o Pix do fornecedor serve para PAGAR. Numa entrada ou
+     numa transferência ele não diz nada — a tela chegou a avisar "Boitel Sta. Clara não tem Pix cadastrado." num RECEBIMENTO.
+     Fora de Saídas: havendo texto, o campo próprio; não havendo, só o link. Nada é gravado nem apagado por causa do tipo. */
+  const pgtoEhSaida = tipoOperacao === '2-Saídas';
+  const modoPgtoEfetivo = pgtoEhSaida
+    ? (modoPgto ?? modoDosDados({ realizado: pgtoJaRealizado, textoGravado: dadosPagamento, textoDoCadastro: textoCadastroPgto }))
+    : (modoPgto === 'proprio' || dadosPagamento.trim() ? 'proprio' : 'cadastro');
+  const blocoPgto: BlocoDoCadastro = pgtoEhSaida
+    ? linhasDoCadastro(fornecedorDoPgto, formaEfetivaPgto, valorNum, formatMoeda(Math.abs(valorNum)))
+    : { tipo: 'nada' };
+  /** O que vai para `dados_pagamento`: seguindo o cadastro, NULO — o campo é o da exceção. */
+  const dadosPagamentoParaGravar = modoPgtoEfetivo === 'proprio' && dadosPagamento.trim() ? dadosPagamento : null;
+
+  /* ⚠ R4 — TROCAR A FORMA OU O FORNECEDOR NÃO ESCREVE NEM APAGA TEXTO. O modo em que a tela está é CONGELADO antes da troca:
+     sem isso, um texto gravado "igual ao cadastro" viraria "diferente" (e apareceria como próprio) só porque o cadastro
+     comparado mudou. */
+  const handleFormaPgtoChange = useCallback((metodo: string) => {
+    setModoPgto(modoPgtoEfetivo);
+    setFormaPgto(metodo === FORMA_PAGAMENTO_V2_NENHUMA ? '' : metodo);
+  }, [modoPgtoEfetivo]);
+
+  /** Relê AQUELE fornecedor depois de o cadastro salvar (as mesmas colunas de `loadFornecedores`) — releitura do dono logo após
+   *  a escrita, não segunda fonte. Vale nas treze telas que montam este modal, sem prop nova. */
+  const relerFornecedorDoPgto = useCallback(async (id: string) => {
+    const { data } = await supabase
+      .from('financeiro_fornecedores')
+      .select('id, nome, cpf_cnpj, fazenda_id, ativo, tipo_recebimento, pix_tipo_chave, pix_chave, banco, agencia, conta, tipo_conta, cpf_cnpj_pagamento, nome_favorecido, observacao_pagamento')
+      .eq('id', id)
+      .maybeSingle();
+    if (data) setFornecedorRelido(m => ({ ...m, [id]: { ...data, ativo: data.ativo !== false } }));
   }, []);
 
-  /** Re-fill payment data when payment method changes */
-  const handleFormaPgtoChange = useCallback((metodo: string) => {
-    setFormaPgto(metodo === FORMA_PAGAMENTO_V2_NENHUMA ? '' : metodo);
-    const f = fornecedores.find(x => x.id === favorecidoId);
-    if (f && metodo && metodo !== FORMA_PAGAMENTO_V2_NENHUMA) {
-      setDadosPagamento(buildDadosPagamento(f, metodo));
-    }
-  }, [fornecedores, favorecidoId, buildDadosPagamento]);
+  /* O que foi decidido e relido vale só para o modal ABERTO naquele lançamento. */
+  useEffect(() => {
+    setModoPgto(null);
+    setCadastroPgtoAberto(false);
+    setFornecedorRelido({});
+  }, [open, lancamento?.id]);
 
   /* ⚠ A DATA DE PAGAMENTO NÃO ESCOLHE MAIS O STATUS — PR-FIN-V2-STATUS-PGTO-01. Ela derivava
      agendado (data futura) e programado (data passada), e com isso previsto/programado/agendado
@@ -1538,7 +1699,7 @@ export function LancamentoV2Dialog({
       tipo_documento: tipoDocumento || null,
       favorecido_id: favorecidoForForm,
       forma_pagamento: formaPgto || null,
-      dados_pagamento: dadosPagamento || null,
+      dados_pagamento: dadosPagamentoParaGravar,
       safra_id: safraParaGravar(),
       cultura: culturaParaGravar(atividade, cultura),
       fase: faseParaGravar(atividade, fase),
@@ -1972,9 +2133,10 @@ export function LancamentoV2Dialog({
                   value={favorecidoId}
                   onChange={setFavorecidoId}
                   onSelected={f => {
+                    /* O fornecedor SUGERE a forma (já no nome que o lançamento usa); os dados não são mais copiados. */
                     if (f.tipo_recebimento) {
-                      setFormaPgto(f.tipo_recebimento);
-                      setDadosPagamento(buildDadosPagamento(f, f.tipo_recebimento));
+                      setModoPgto(modoPgtoEfetivo);
+                      setFormaPgto(normalizarFormaDoCadastro(f.tipo_recebimento));
                     }
                   }}
                   fornecedores={fornecedores}
@@ -2217,7 +2379,7 @@ export function LancamentoV2Dialog({
 
               {/* Forma / Dados de Pagamento — realocados do antigo bloco "Complementares"
                   (PR-FIN-MODAL-02B). Campos e handlers idênticos; só mudou a aba. */}
-              <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
+              <div className="grid grid-cols-[150px_minmax(0,1fr)] gap-x-2 gap-y-1.5">
                 <div>
                   <Label className="text-[10px]">Forma de Pagamento</Label>
                   <Select value={formaPgto || FORMA_PAGAMENTO_V2_NENHUMA} onValueChange={handleFormaPgtoChange}>
@@ -2235,28 +2397,23 @@ export function LancamentoV2Dialog({
                     </SelectContent>
                   </Select>
                 </div>
-                <div>
-                  <div className="flex items-center justify-between mb-0.5">
-                    <Label className="text-[10px]">Dados Pagamento</Label>
-                    <div className="flex gap-1">
-                      {formaPgto === 'PIX' && dadosPagamento && (() => {
-                        const chaveMatch = dadosPagamento.match(/Chave:\s*(.+)/i);
-                        return chaveMatch ? (
-                          <Button type="button" variant="ghost" size="sm" className="h-5 px-1.5 text-[9px] gap-0.5 text-primary hover:text-primary"
-                            onClick={() => { navigator.clipboard.writeText(chaveMatch[1].trim()); toast.success('Chave PIX copiada'); }}>
-                            <KeyRound className="h-2.5 w-2.5" /> PIX
-                          </Button>
-                        ) : null;
-                      })()}
-                      {dadosPagamento && (
-                        <Button type="button" variant="ghost" size="sm" className="h-5 px-1.5 text-[9px] gap-0.5 text-muted-foreground hover:text-foreground"
-                          onClick={() => { navigator.clipboard.writeText(dadosPagamento); toast.success('Dados copiados'); }}>
-                          <Copy className="h-2.5 w-2.5" /> Copiar
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                  <Textarea tabIndex={14} value={dadosPagamento} onChange={e => setDadosPagamento(e.target.value)} rows={1} placeholder="Chave PIX, dados bancários..." className={cn("text-xs resize-none min-h-[32px]", fieldBg)} />
+                <div className="min-w-0">
+                  <Label className="text-[10px]">Dados para pagamento</Label>
+                  <DadosParaPagamento
+                    modo={modoPgtoEfetivo}
+                    bloco={blocoPgto}
+                    forma={formaEfetivaPgto}
+                    fornecedorNome={fornecedorDoPgto?.nome ?? null}
+                    realizado={pgtoJaRealizado}
+                    temCadastro={pgtoEhSaida}
+                    texto={dadosPagamento}
+                    bloqueado={saving}
+                    campoClassName={fieldBg}
+                    onTexto={(t) => { setModoPgto('proprio'); setDadosPagamento(t); }}
+                    onUsarProprio={() => { if (modoPgtoEfetivo !== 'proprio') setDadosPagamento(''); setModoPgto('proprio'); }}
+                    onVoltarAoCadastro={() => { setDadosPagamento(''); setModoPgto('cadastro'); }}
+                    onEditarCadastro={() => setCadastroPgtoAberto(true)}
+                  />
                 </div>
               </div>
 
@@ -2806,6 +2963,19 @@ export function LancamentoV2Dialog({
             setZooModalId(null);
             navigate(`/v2?section=financeiro-lanc&fano=${ano}&fmes=${mes}`);
           }}
+        />
+      )}
+
+      {/* O cadastro do fornecedor, aberto pelo bloco "Dados para pagamento" (editar cadastro / + Cadastrar Pix). */}
+      {clienteAtual && fornecedorDoPgto && (
+        <FornecedorFormDialog
+          open={cadastroPgtoAberto}
+          onClose={() => setCadastroPgtoAberto(false)}
+          editing={fornecedorDoPgto}
+          allFornecedores={fornecedores}
+          fazendas={fazendas}
+          clienteId={clienteAtual.id}
+          onSaved={() => { void relerFornecedorDoPgto(fornecedorDoPgto.id); }}
         />
       )}
 

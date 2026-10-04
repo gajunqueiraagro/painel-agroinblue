@@ -162,7 +162,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 04/10/2026 (FIN-DOCUMENTOS-LAYOUT-01, +10 em `src/components/financeiro-v2/documentosLayout.test.tsx`; antes o
+  Baseline em 04/10/2026 (FIN-PIX-CADASTRO-MODAL-01, +35: `src/lib/financeiro/dadosPagamentoDoCadastro.test.ts` 14,
+  `src/components/financeiro-v2/dadosPagamentoModal.test.tsx` 21; antes o
+  FIN-DOCUMENTOS-LAYOUT-01, +10 em `src/components/financeiro-v2/documentosLayout.test.tsx`; antes o
   OC-BOITEL-ADIANTAMENTO-01a, +3 em `src/components/venda/previsaoBoitel.test.ts`; antes o
   PR-CONC-SALDOS-LAYOUT-01, +3 em `src/pages/conciliacaoDono.test.tsx`; antes o PR-CONC-STATUS-SALDO-01b, +9: `src/lib/conciliacao/resumoDoDono.test.ts` 2,
   `src/pages/conciliacaoDono.test.tsx` 6, `src/v2/components/SeletorPeriodo.test.tsx` 1; antes o PR-CONC-INTERNA-SEPARADA-01b, +31: `src/lib/conciliacao/resumoDoDono.test.ts` 10,
@@ -174,7 +176,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3194
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3229
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -1909,6 +1911,38 @@ docs/historico/frentes-ate-2026-09-29.md.)
     e o boleto da parcela estao no mesmo lancamento e SOMAM (Vera "Ferramentas - 2/2": documentado 2.557,95 x lancamento 852,65,
     "R$ 1.705,30 a mais") · o caso "NF em N parcelas" (`ligado_a_qtd > 1`) nao existe no proto, o selo so' esta' provado por teste
     · o `data-testid="doc-emitente"` e' do SELECT do `FormDocumento`; a celula da tabela e' `cel-emitente`.
+- ⚠ DADOS PARA PAGAMENTO: O CADASTRO DO FORNECEDOR MANDA ENQUANTO NAO PAGO (FIN-PIX-CADASTRO-MODAL-01, Gabriel 04/10, so' tela).
+  O modal do lancamento (`LancamentoV2Dialog`, aba Pagamento) LE o Pix / os dados bancarios do cadastro a cada abertura, sem
+  copia; `financeiro_lancamentos_v2.dados_pagamento` (jsonb com STRING) e' o campo da EXCECAO — so' guarda texto quando o operador
+  escolhe "usar outros dados so' neste lancamento". Seguindo o cadastro, o Salvar grava NULO (as copias antigas iguais ao cadastro
+  vao sendo limpas conforme os lancamentos sao editados; nenhum backfill).
+  · DONO DA MONTAGEM: `src/lib/financeiro/dadosPagamentoDoCadastro.ts` — `textoDoCadastro` (o formato gravado, BYTE A BYTE o do
+    antigo `buildDadosPagamento`: "PIX | Tipo: …\nChave: …\nFavorecido: …"; e' ele que decide igual x diferente),
+    `linhasDoCadastro` (o que o bloco desenha e o que cada botao copia), `formaEfetiva`, `modoDosDados`, `valorParaCopiar`
+    ("3192,00", sem R$ nem milhar). O componente e' `DadosParaPagamento`, no arquivo do modal.
+  · FORMA EFETIVA = a do lancamento; vazia, a preferida do cadastro (`tipo_recebimento`) SO' PARA MOSTRAR — o select fica em
+    "Nenhuma" e a forma NAO e' gravada. "Transferência Bancária" (cadastro) = "Transferência" (lancamento). Com forma PIX a chave
+    aparece sempre que existir, qualquer que seja o tipo do cadastro.
+  · MODO: nao realizado com texto vazio OU igual ao que o cadastro monta hoje = CADASTRO (bloco "PIX · do cadastro do fornecedor":
+    Tipo da chave, Chave com "Copiar chave", Favorecido, Valor; rodape com a observacao do cadastro, "editar cadastro" e "usar
+    outros dados so' neste lancamento"); texto diferente = PROPRIO ("Dados proprios deste lancamento", campo com TODAS as linhas
+    visiveis, "voltar a usar o cadastro"). REALIZADO com texto = o gravado ("Dados gravados neste lancamento"); sem texto, o
+    cadastro com o cabecalho "cadastro atual". O modo e' calculado ate' o operador agir e CONGELA na troca de forma ou de
+    fornecedor: TROCAR FORMA OU FORNECEDOR NUNCA ESCREVE NEM APAGA TEXTO (antes sobrescrevia o digitado e zerava em silencio).
+  · SEM DADO NO CADASTRO para a forma (PIX sem chave, Transferencia sem banco): aviso ambar "<Fornecedor> nao tem Pix cadastrado."
+    + "+ Cadastrar Pix do fornecedor", que abre o `FornecedorFormDialog`; ao salvar, o modal RELE aquele fornecedor por id e usa
+    a leitura por cima da prop enquanto esta' aberto (releitura do dono apos a escrita; vale nas 13 telas que montam o modal, sem
+    prop nova). Forma sem dado de cadastro (Boleto, Cartao…) ou sem fornecedor: so' o link "informar dados so' neste lancamento".
+  · ⚠ O BLOCO E O AVISO SAO SO' PARA SAIDAS (`2-Saídas`). Em Entrada e Transferencia: havendo texto, o campo proprio; nao havendo,
+    so' o link — o Pix do fornecedor serve para PAGAR (a tela chegou a dizer "Boitel Sta. Clara nao tem Pix cadastrado." num
+    recebimento).
+  ⚠ O `ContratoDialog` TEM OUTRA MONTAGEM e NAO usa a lib (sem Favorecido, banco em qualquer forma que nao seja PIX com chave,
+    grava "Transferência Bancária" como forma): lancamento gerado por contrato cai em "dados proprios", de proposito.
+  ⚠ PENDENCIAS: FIN-PIX-CADASTRO-MODAL-02 (gravar a copia AO REALIZAR — banco, porque realizar acontece por conciliacao, bloco e
+    OC; hoje o realizado sem texto mostra o "cadastro atual") · FIN-CONTRATO-DADOS-PGTO-01 (qual texto o contrato gera e a forma
+    sem normalizar) · "copiar Pix" em Contas a Pagar e Receber · Pix copia-e-cola como campo proprio · importar as chaves dos
+    outros clientes (so' a Vera tem cadastro de pagamento: 22 fornecedores com chave) · os geradores (recorrencia, parcelamento,
+    OC, importacoes) continuam sem copiar nada, e nao precisam · o campo nao tem trava de somente leitura (nem em titulo de OC).
 - ⚠ "GLOBAL NAO E' FAZENDA": campo de fazenda de modal e' seletor das fazendas ativas; filtro numa fazenda nasce com
   ela; Global nasce VAZIO, obrigatorio, vermelho com "Selecione a fazenda do lançamento."; edicao mostra a gravada. O
   Financeiro nunca escolhe a primeira fazenda por ninguem (`FazendaSelect` com `obrigatorio`)
