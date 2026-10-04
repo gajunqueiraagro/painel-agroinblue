@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 04/10/2026 (FIN-PIX-CADASTRO-MODAL-01, +35: `src/lib/financeiro/dadosPagamentoDoCadastro.test.ts` 14,
+  Baseline em 04/10/2026 (FIN-DOCUMENTO-FORM-01, +27 em `src/components/financeiro-v2/documentoFormPorTipo.test.tsx`, e
+  FIN-RESUMO-PAGAMENTO-01, +7 em `src/components/financeiro-v2/resumoPagamentoModal.test.tsx`; antes o FIN-PIX-CADASTRO-MODAL-01, +35: `src/lib/financeiro/dadosPagamentoDoCadastro.test.ts` 14,
   `src/components/financeiro-v2/dadosPagamentoModal.test.tsx` 21; antes o
   FIN-DOCUMENTOS-LAYOUT-01, +10 em `src/components/financeiro-v2/documentosLayout.test.tsx`; antes o
   OC-BOITEL-ADIANTAMENTO-01a, +3 em `src/components/venda/previsaoBoitel.test.ts`; antes o
@@ -176,7 +177,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3229
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3263
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -1911,6 +1912,34 @@ docs/historico/frentes-ate-2026-09-29.md.)
     e o boleto da parcela estao no mesmo lancamento e SOMAM (Vera "Ferramentas - 2/2": documentado 2.557,95 x lancamento 852,65,
     "R$ 1.705,30 a mais") · o caso "NF em N parcelas" (`ligado_a_qtd > 1`) nao existe no proto, o selo so' esta' provado por teste
     · o `data-testid="doc-emitente"` e' do SELECT do `FormDocumento`; a celula da tabela e' `cel-emitente`.
+- ⚠ OS CAMPOS DO DOCUMENTO SAO POR TIPO, E O DONO E' UM SO' (FIN-DOCUMENTO-FORM-01, Gabriel 04/10, so' tela): `CAMPOS_POR_ESPECIE`
+  (`AbaDocumentosLancamento.tsx`, lida pelo `FormDocumento` e pelo payload — nenhum `if (especie === …)` espalhado). O tipo e' o
+  PRIMEIRO campo, em controle segmentado de uma linha (Nota fiscal | Boleto | Recibo | Comprovante | Outro; sem Boleto com
+  `semBoleto`; medido a 1.133: 478px, cinco segmentos de 95px a 10px). Rotulos -> colunas (as de sempre; nada no banco):
+  NF = Numero, Serie, Data de emissao, Valor da nota, Emitente, Chave de acesso · Boleto = Data do documento, Valor do boleto, Nº do
+  documento, Beneficiario · Recibo = Data do recibo, Valor recebido, Nº do recibo, Quem recebeu (emitente) · Comprovante = Data do
+  pagamento, Valor pago, Autenticacao / ID da transacao (SEM emitente) · Outro = Data, Valor, Identificacao, Emitente. Fora da NF o
+  numero vem depois de data e valor, em largura inteira. Obrigatorio continua sendo so' o tipo.
+  · TROCAR O TIPO troca os campos e PRESERVA o digitado; o payload manda NULO o que o tipo nao tem (serie e chave fora da NF;
+    emitente no Comprovante), inclusive ao editar um documento existente.
+  · ⚠ DOCUMENTO DA OPERACAO (especie so' leitura, pode ser traducao do vocabulario da OC): o que a tela NAO mostra e' PRESERVADO
+    (serie, chave, emitente vao com o valor que o documento ja' tem), nunca zerado; segmentos desligados, valor "vem dos componentes".
+  · EMITENTE = `SearchableSelect` da casa (digita e procura), com `semTodos` (prop opcional nova: tira o item "Todos" da lista —
+    num campo de formulario o vazio e' "Selecione", nao uma escolha) e "Outro (informar nome e CNPJ/CPF)" como acao do rodape.
+    SO' FORNECEDOR ATIVO (`ativo !== false`, a regra do `FavorecidoSelect`), MAIS o ja' gravado no documento em edicao, mesmo
+    inativo. Quem monta o formulario passa `ativo` junto de id e nome (`FornecedorDoDocumento`).
+  · SUGESTAO DO LANCAMENTO (faixa ambar) vale no lancamento NOVO e no JA' SALVO — a aba recebe a MESMA `sugestaoDoDocumento` do
+    `LancamentoV2Dialog`, um dono so' —, so' para documento NOVO e so' nos campos que o tipo mostra. No Comprovante a data
+    sugerida e' a de PAGAMENTO do lancamento; sem pagamento fica VAZIA (competencia nao e' data de comprovante).
+  · ARQUIVO: area de largura inteira, tracejada, nos tokens de `success`; o `<input type="file">` e' o de sempre (mesmos `accept`),
+    escondido; mostra o nome + "remover", ou "arquivo anexado · substituir"; soltar um arquivo entra pelo mesmo input.
+  ⚠ PENDENCIAS: FIN-DOCUMENTO-FORM-02 (banco: linha digitavel e vencimento do boleto, "referente a" do recibo, autenticacao do
+    comprovante como campo proprio, obrigatoriedade por tipo) · DOC-REATIVAR-01 · no Comprovante o "numero" sugerido e' o Nº
+    Documento do lancamento (o da NF) e cai em "Autenticacao / ID da transacao" — decidir se a sugestao de numero deve valer nesse
+    tipo · arrastar e soltar sem prova na tela.
+- ⚠ O RESUMO DO LANCAMENTO DIZ O STATUS E O VENCIMENTO NO BLOCO PAGAMENTO (FIN-RESUMO-PAGAMENTO-01, 04/10): Status · Vencimento ·
+  Pagamento · Forma · Modalidade · Nº de Parcelas; o status saiu de "Financeiro" (uma informacao, um lugar) e a cor vem de
+  `STATUS_PALETA` / `STATUS_PILULA_BASE` pela prop `cor` do `LinhaResumo` — nenhuma cor escrita no modal.
 - ⚠ DADOS PARA PAGAMENTO: O CADASTRO DO FORNECEDOR MANDA ENQUANTO NAO PAGO (FIN-PIX-CADASTRO-MODAL-01, Gabriel 04/10, so' tela).
   O modal do lancamento (`LancamentoV2Dialog`, aba Pagamento) LE o Pix / os dados bancarios do cadastro a cada abertura, sem
   copia; `financeiro_lancamentos_v2.dados_pagamento` (jsonb com STRING) e' o campo da EXCECAO — so' guarda texto quando o operador

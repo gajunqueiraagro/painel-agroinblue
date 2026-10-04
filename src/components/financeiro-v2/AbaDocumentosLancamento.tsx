@@ -16,7 +16,7 @@
  * fazem o documentado divergir do lançado sem que nada esteja errado — por isso âmbar e
  * uma frase, não vermelho e um bloqueio.
  */
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -24,14 +24,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Segmentado } from '@/components/ui/segmentado';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { CampoMoeda } from '@/components/ui/campo-moeda';
 import { DatePicker } from '@/components/ui/date-picker';
-import { Paperclip, Pencil, Ban, Plus, X } from 'lucide-react';
+import { Paperclip, Pencil, Ban, Plus, Upload, X } from 'lucide-react';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { formatNFNumber } from '@/lib/financeiro/documentoHelper';
 import {
-  ESPECIES_LANC_DOC, especieValida, rotuloEspecieDoc, type EspecieLancDoc, type LancDocumento, type LancDocPayload,
+  ESPECIES_LANC_DOC, rotuloEspecieDoc, type EspecieLancDoc, type LancDocumento, type LancDocPayload,
   type LancamentoDocumentosApi, type DestinoDocumento,
 } from '@/hooks/useLancamentoDocumentos';
 
@@ -62,10 +63,13 @@ const dataBr = (iso: string | null) => (iso ? iso.split('-').reverse().join('/')
 const GRADE_DOCUMENTOS = 'grid grid-cols-[max-content_minmax(0,1fr)_70px_92px_66px_72px] gap-x-[10px]';
 const LINHA_DOCUMENTOS = 'col-span-full grid [grid-template-columns:subgrid] items-center';
 
-export function AbaDocumentosLancamento({ api, somenteLeitura, fornecedores, onAnexarBoletosDasParcelas }: {
+export function AbaDocumentosLancamento({ api, somenteLeitura, fornecedores, onAnexarBoletosDasParcelas, sugestao }: {
   api: LancamentoDocumentosApi;
   somenteLeitura?: boolean;
-  fornecedores: { id: string; nome: string }[];
+  fornecedores: FornecedorDoDocumento[];
+  /** O que o lançamento SALVO já diz, para o documento NOVO nascer preenchido — FIN-DOCUMENTO-FORM-01. É a MESMA sugestão do
+   *  lançamento novo, montada no mesmo ponto do `LancamentoV2Dialog`. Editar um documento existente nunca a recebe. */
+  sugestao?: SugestaoDocumento;
   /** Presente só quando o lançamento é parcela de um parcelamento — abre "Anexar vários boletos" (PR 2b). */
   onAnexarBoletosDasParcelas?: () => void;
 }) {
@@ -286,7 +290,7 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, fornecedores, onA
       )}
 
       {formAberto && (
-        <FormDocumento api={api} documento={editando} fornecedores={fornecedores}
+        <FormDocumento api={api} documento={editando} fornecedores={fornecedores} sugestao={sugestao}
           onFechar={() => { setFormAberto(false); setEditando(null); }} />
       )}
 
@@ -325,12 +329,45 @@ export interface SugestaoDocumento {
   dataEmissao: string | null;
   valor: number | null;
   emitenteId: string | null;
+  /** A data de PAGAMENTO do lançamento: é a data sugerida quando o documento é um COMPROVANTE (FIN-DOCUMENTO-FORM-01). */
+  dataPagamento?: string | null;
 }
+
+/**
+ * QUAIS CAMPOS CADA TIPO DE DOCUMENTO TEM, E COMO SE CHAMAM — FIN-DOCUMENTO-FORM-01 (Gabriel, 04/10/2026).
+ *
+ * ⚠ NASCE DE UMA QUEIXA: trocar de Nota fiscal para Boleto, Recibo ou Comprovante mantinha Número, Série, Data de emissão e
+ *   Valor do documento "como se fosse tudo nota fiscal". Recibo não tem série, comprovante não tem emitente, e a data de um
+ *   comprovante é a do PAGAMENTO.
+ * ⚠ UM DONO SÓ: o formulário desenha por esta tabela e o payload zera por ela — nenhum `if (especie === …)` espalhado. O que o
+ *   tipo NÃO tem vai NULO no payload (série e chave fora da NF; emitente no Comprovante), inclusive ao editar um documento
+ *   existente e mudar o tipo.
+ * ⚠ AS COLUNAS SÃO AS DE SEMPRE (numero, serie, chave_acesso, data_emissao, valor_documento, emitente): só o RÓTULO e a
+ *   PRESENÇA mudam. Linha digitável, vencimento do boleto, "referente a" do recibo e autenticação como campo próprio pedem
+ *   coluna nova — FIN-DOCUMENTO-FORM-02.
+ */
+/** O fornecedor como o formulário o lê. `ativo` ausente conta como ativo (a regra do `FavorecidoSelect`: `ativo !== false`). */
+export interface FornecedorDoDocumento { id: string; nome: string; ativo?: boolean | null }
+
+export const CAMPOS_POR_ESPECIE: Record<EspecieLancDoc, {
+  numero: string; data: string; valor: string;
+  /** O rótulo do emitente; `null` = o tipo não tem emitente. */
+  emitente: string | null;
+  serie: boolean; chave: boolean;
+  /** Como a data é chamada na faixa "Preenchido com o que o lançamento diz". */
+  dataNaSugestao: string;
+}> = {
+  nf: { numero: 'Número', data: 'Data de emissão', valor: 'Valor da nota', emitente: 'Emitente', serie: true, chave: true, dataNaSugestao: 'emissão' },
+  boleto: { numero: 'Nº do documento', data: 'Data do documento', valor: 'Valor do boleto', emitente: 'Beneficiário', serie: false, chave: false, dataNaSugestao: 'data' },
+  recibo: { numero: 'Nº do recibo', data: 'Data do recibo', valor: 'Valor recebido', emitente: 'Quem recebeu (emitente)', serie: false, chave: false, dataNaSugestao: 'data' },
+  comprovante: { numero: 'Autenticação / ID da transação', data: 'Data do pagamento', valor: 'Valor pago', emitente: null, serie: false, chave: false, dataNaSugestao: 'data do pagamento' },
+  outro: { numero: 'Identificação', data: 'Data', valor: 'Valor', emitente: 'Emitente', serie: false, chave: false, dataNaSugestao: 'data' },
+};
 
 export function FormDocumento({ api, documento, fornecedores, onFechar, pendente, semBoleto, sugestao }: {
   api: LancamentoDocumentosApi;
   documento: LancDocumento | null;
-  fornecedores: { id: string; nome: string }[];
+  fornecedores: FornecedorDoDocumento[];
   onFechar: () => void;
   pendente?: boolean;
   /** Documento da COMPRA no parcelado: o boleto é por parcela, na grade de parcelas (PR 2b). */
@@ -340,7 +377,11 @@ export function FormDocumento({ api, documento, fornecedores, onFechar, pendente
 }) {
   /* ⚠ SUGESTÃO NÃO ENTRA EM REGISTRO JÁ GRAVADO (RECLASS-PESO-01): com `documento`, vale o que ele tem. */
   const sug = documento ? null : (sugestao ?? null);
-  const emitenteSugerido = sug?.emitenteId && fornecedores.some(f => f.id === sug.emitenteId) ? sug.emitenteId : null;
+  /* ⚠ SÓ FORNECEDOR ATIVO NA LISTA DO EMITENTE (a regra do `FavorecidoSelect`), MAIS o que já está gravado no documento em
+     edição, mesmo inativo — senão o valor atual sumiria do campo. Digitar "pant" trazia quatro cadastros do mesmo fornecedor,
+     três deles inativos. */
+  const fornecedoresDaLista = fornecedores.filter(f => f.ativo !== false || f.id === documento?.emitenteId);
+  const emitenteSugerido = sug?.emitenteId && fornecedoresDaLista.some(f => f.id === sug.emitenteId) ? sug.emitenteId : null;
   const [especie, setEspecie] = useState<EspecieLancDoc>(documento?.especie ?? 'nf');
   const [numero, setNumero] = useState(documento?.numero ?? sug?.numero ?? '');
   const [serie, setSerie] = useState(documento?.serie ?? '');
@@ -361,11 +402,24 @@ export function FormDocumento({ api, documento, fornecedores, onFechar, pendente
   const [motivoNota, setMotivoNota] = useState('');
   const especiesDoForm = semBoleto ? ESPECIES_LANC_DOC.filter(e => e.value !== 'boleto') : ESPECIES_LANC_DOC;
   /* VALOR SUGERIDO É VALOR ACEITO: o que veio do lançamento fica âmbar enquanto ninguém mexer. */
+  const campos = CAMPOS_POR_ESPECIE[especie];
+  /* A data que o lançamento sugere depende do TIPO: no comprovante é a do PAGAMENTO — e, sem pagamento, NENHUMA (a competência
+     não é data de comprovante); nos outros, a de sempre. */
+  const dataSugeridaPara = (e: EspecieLancDoc) => (e === 'comprovante' ? (sug?.dataPagamento ?? '') : (sug?.dataEmissao ?? ''));
+  const dataSugerida = dataSugeridaPara(especie);
   const sugNumero = !!sug?.numero && numero === sug.numero;
-  const sugData = !!sug?.dataEmissao && dataEmissao === sug.dataEmissao;
+  const sugData = !!dataSugerida && dataEmissao === dataSugerida;
   const sugValor = sug?.valor != null && valor === sug.valor;
-  const sugEmitente = !!emitenteSugerido && emitenteId === emitenteSugerido;
+  /* a sugestão só vale para campo que o tipo MOSTRA */
+  const sugEmitente = !!campos.emitente && !!emitenteSugerido && emitenteId === emitenteSugerido;
   const AMBAR = ' bg-amber-50 border-amber-300';
+  /* ⚠ TROCAR O TIPO TROCA OS CAMPOS E PRESERVA O DIGITADO: número, data, valor, observação e emitente ficam no estado (o
+     emitente volta a aparecer se o operador voltar a um tipo que o tem). Só a DATA AINDA SUGERIDA acompanha o tipo. */
+  const trocarEspecie = (nova: EspecieLancDoc) => {
+    if (sug && dataEmissao === dataSugerida) setDataEmissao(dataSugeridaPara(nova));
+    setEspecie(nova);
+  };
+  const arquivoRef = useRef<HTMLInputElement>(null);
 
   const OUTRO = '__outro__';
   const emitenteEhOutro = emitenteId === OUTRO;
@@ -380,18 +434,25 @@ export function FormDocumento({ api, documento, fornecedores, onFechar, pendente
   const payload = (): LancDocPayload => ({
     especie: especieSoLeitura ? undefined : especie,
     numero: numero.trim() || null,
-    serie: serie.trim() || null,
-    /* A chave só existe em nota fiscal — guardá-la noutra espécie seria dado sem dono. */
-    chaveAcesso: especie === 'nf' ? (chave.trim() || null) : null,
+    /* ⚠ O QUE O TIPO NÃO TEM VAI NULO (`CAMPOS_POR_ESPECIE`): série e chave só existem em nota fiscal — guardá-las noutro
+       tipo seria dado sem dono. No documento da OPERAÇÃO a espécie daqui é só leitura e pode ser tradução do vocabulário da
+       OC: o que não aparece é PRESERVADO como está, nunca zerado por uma tela que não o mostra. */
+    serie: campos.serie ? (serie.trim() || null) : (especieSoLeitura ? (documento?.serie ?? null) : null),
+    chaveAcesso: campos.chave ? (chave.trim() || null) : (especieSoLeitura ? (documento?.chaveAcesso ?? null) : null),
     dataEmissao: dataEmissao || null,
     /* `undefined` não sobe (ver `paraJson`): na OC o valor não é campo, e mandar `null`
        apagaria o que os componentes dizem. */
     valorDocumento: destinoOC ? undefined : valor,
     observacao: observacao.trim() || null,
-    emitenteId: emitenteEhOutro ? null : (emitenteId || null),
-    emitenteNome: emitenteEhOutro ? (emitenteNome.trim() || null)
-      : (fornecedores.find(f => f.id === emitenteId)?.nome ?? null),
-    emitenteDocumento: emitenteEhOutro ? (emitenteDoc.trim() || null) : null,
+    ...(campos.emitente ? {
+      emitenteId: emitenteEhOutro ? null : (emitenteId || null),
+      emitenteNome: emitenteEhOutro ? (emitenteNome.trim() || null)
+        : (fornecedores.find(f => f.id === emitenteId)?.nome ?? null),
+      emitenteDocumento: emitenteEhOutro ? (emitenteDoc.trim() || null) : null,
+    } : especieSoLeitura ? {
+      emitenteId: documento?.emitenteId ?? null, emitenteNome: documento?.emitenteNome ?? null,
+      emitenteDocumento: documento?.emitenteDocumento ?? null,
+    } : { emitenteId: null, emitenteNome: null, emitenteDocumento: null }),
   });
 
   const cancelarNota = async () => {
@@ -456,7 +517,7 @@ export function FormDocumento({ api, documento, fornecedores, onFechar, pendente
             className="text-white/80 hover:text-white"><X className="h-4 w-4" /></button>
         </div>
         <DialogDescription className="sr-only">
-          Informe espécie, número, data, valor e emitente do documento deste lançamento.
+          Escolha o tipo e informe os dados do documento deste lançamento.
         </DialogDescription>
 
         <div className="min-h-0 flex-1 overflow-auto">
@@ -468,20 +529,15 @@ export function FormDocumento({ api, documento, fornecedores, onFechar, pendente
 
         {(sugNumero || sugData || sugValor || sugEmitente) && (
           <p className="mx-4 mt-3 rounded border border-amber-300 bg-amber-50 px-2 py-1 text-[10px] text-amber-900" data-testid="sugestao-do-lancamento">
-            Preenchido com o que o lançamento diz ({[sugNumero && 'número', sugData && 'emissão', sugValor && 'valor', sugEmitente && 'emitente'].filter(Boolean).join(', ')}) — confira. Mudar aqui não muda o lançamento.
+            Preenchido com o que o lançamento diz ({[sugNumero && 'número', sugData && campos.dataNaSugestao, sugValor && 'valor', sugEmitente && 'emitente'].filter(Boolean).join(', ')}) — confira. Mudar aqui não muda o lançamento.
           </p>
         )}
         <div className="grid grid-cols-2 gap-2 px-4 py-3">
-          <div>
-            <Label className="text-[10px]">Espécie <span className="text-destructive">*</span></Label>
-            <Select value={especie} onValueChange={v => setEspecie(especieValida(v))} disabled={especieSoLeitura}>
-              <SelectTrigger className="h-8 text-[12px] mt-0.5"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {especiesDoForm.map(e => (
-                  <SelectItem key={e.value} value={e.value}>{e.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          {/* ── O TIPO VEM PRIMEIRO, e é ele que decide os campos abaixo (`CAMPOS_POR_ESPECIE`) ── */}
+          <div className="col-span-2">
+            <Label className="text-[10px]">Tipo de documento <span className="text-destructive">*</span></Label>
+            <Segmentado valor={especie} onEscolher={trocarEspecie} altura={26} className="mt-0.5 flex w-full [&>button]:flex-1"
+              opcoes={especiesDoForm.map(e => ({ valor: e.value, rotulo: e.label, desabilitada: especieSoLeitura }))} />
             {/* ⚠ O VOCABULÁRIO DA OC É MENOR, e o operador precisa saber ANTES de salvar.
                 Lá só existem `nf_principal`, `nf_complementar`, `recibo` e `outro`: boleto e
                 comprovante viram "Outro", e a espécie escolhida se perde. Avisar aqui é
@@ -497,18 +553,21 @@ export function FormDocumento({ api, documento, fornecedores, onFechar, pendente
               </p>
             )}
           </div>
+          {/* ── linha 1: os dois campos principais — na NF, Número e Série; nos demais, data e valor ── */}
+          {campos.serie && (<>
+            <div>
+              <Label className="text-[10px]">{campos.numero}</Label>
+              <Input value={numero} onChange={e => setNumero(e.target.value)} data-testid="doc-numero"
+                className={`h-8 text-[12px] mt-0.5${sugNumero ? AMBAR : ''}`} placeholder="Opcional" />
+            </div>
+            <div>
+              <Label className="text-[10px]">Série</Label>
+              <Input value={serie} onChange={e => setSerie(e.target.value)} data-testid="doc-serie"
+                className="h-8 text-[12px] mt-0.5" placeholder="Opcional" />
+            </div>
+          </>)}
           <div>
-            <Label className="text-[10px]">Número</Label>
-            <Input value={numero} onChange={e => setNumero(e.target.value)} data-testid="doc-numero"
-              className={`h-8 text-[12px] mt-0.5${sugNumero ? AMBAR : ''}`} placeholder="Opcional" />
-          </div>
-          <div>
-            <Label className="text-[10px]">Série</Label>
-            <Input value={serie} onChange={e => setSerie(e.target.value)}
-              className="h-8 text-[12px] mt-0.5" placeholder="Opcional" />
-          </div>
-          <div>
-            <Label className="text-[10px]">Data de emissão</Label>
+            <Label className="text-[10px]">{campos.data}</Label>
             <DatePicker value={dataEmissao} onChange={setDataEmissao} className={`h-8 text-[12px] mt-0.5${sugData ? AMBAR : ''}`} />
           </div>
           {/* ⚠ NA OC, O VALOR DO DOCUMENTO NÃO É UM CAMPO — DOC-UMA-FONTE-01. Lá ele é a
@@ -518,46 +577,57 @@ export function FormDocumento({ api, documento, fornecedores, onFechar, pendente
               onde ele mora é a resposta honesta; escolher uma natureza de componente por
               conta própria seria decidir dinheiro. */}
           {destinoOC ? (
-            <div>
-              <Label className="text-[10px] text-muted-foreground">Valor do documento</Label>
+            <div data-testid="doc-valor-da-oc">
+              <Label className="text-[10px] text-muted-foreground">{campos.valor}</Label>
               <p className="mt-0.5 h-8 text-[10px] leading-tight text-muted-foreground">
                 Vem dos componentes, na aba Documentos da operação.
               </p>
             </div>
           ) : (
             <div>
-              <Label className="text-[10px]">Valor do documento</Label>
+              <Label className="text-[10px]">{campos.valor}</Label>
               <CampoMoeda valor={valor} onChange={setValor} className={`h-8 text-[12px] mt-0.5 text-right${sugValor ? AMBAR : ''}`} />
             </div>
           )}
-          <div>
-            <Label className="text-[10px]">Emitente</Label>
-            <Select value={emitenteId || undefined} onValueChange={setEmitenteId}>
-              <SelectTrigger className={`h-8 text-[12px] mt-0.5${sugEmitente ? AMBAR : ''}`} data-testid="doc-emitente"><SelectValue placeholder="Selecione" /></SelectTrigger>
-              <SelectContent>
-                {fornecedores.map(f => (
-                  <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>
-                ))}
-                <SelectItem value={OUTRO}>Outro (informar)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          {emitenteEhOutro && (<>
+          {/* fora da NF o número não é a identidade do papel: vem depois, em largura inteira */}
+          {!campos.serie && (
+            <div className="col-span-2">
+              <Label className="text-[10px]">{campos.numero}</Label>
+              <Input value={numero} onChange={e => setNumero(e.target.value)} data-testid="doc-numero"
+                className={`h-8 text-[12px] mt-0.5${sugNumero ? AMBAR : ''}`} placeholder="Opcional" />
+            </div>
+          )}
+          {/* ── EMITENTE COM BUSCA — o `SearchableSelect` da casa (UI-DROPDOWN-PADRAO-01): digita e procura. Era um Select
+              com a lista inteira dos fornecedores, sem busca. "Outro" é a ação do rodapé da lista. ── */}
+          {campos.emitente && (
+            <div className="col-span-2" data-testid="doc-emitente">
+              <Label className="text-[10px]">{campos.emitente}</Label>
+              <SearchableSelect dense semTodos
+                value={emitenteEhOutro ? '' : emitenteId} allValue=""
+                allLabel={emitenteEhOutro ? 'Outro (informar nome e CNPJ/CPF)' : 'Selecione'}
+                onValueChange={setEmitenteId}
+                options={fornecedoresDaLista.map(f => ({ value: f.id, label: f.nome }))}
+                placeholder="Digite para buscar…"
+                acaoFinal={{ label: 'Outro (informar nome e CNPJ/CPF)', onSelect: () => setEmitenteId(OUTRO) }}
+                className={`mt-0.5${sugEmitente ? ' [&>button]:border-amber-300 [&>button]:bg-amber-50' : ''}`} />
+            </div>
+          )}
+          {campos.emitente && emitenteEhOutro && (<>
             <div>
               <Label className="text-[10px]">Nome do emitente</Label>
-              <Input value={emitenteNome} onChange={e => setEmitenteNome(e.target.value)}
+              <Input value={emitenteNome} onChange={e => setEmitenteNome(e.target.value)} data-testid="doc-emitente-nome"
                 className="h-8 text-[12px] mt-0.5" />
             </div>
             <div>
               <Label className="text-[10px]">CNPJ / CPF do emitente</Label>
-              <Input value={emitenteDoc} onChange={e => setEmitenteDoc(e.target.value)}
+              <Input value={emitenteDoc} onChange={e => setEmitenteDoc(e.target.value)} data-testid="doc-emitente-documento"
                 className="h-8 text-[12px] mt-0.5" />
             </div>
           </>)}
-          {especie === 'nf' && (
+          {campos.chave && (
             <div className="col-span-2">
               <Label className="text-[10px]">Chave de acesso</Label>
-              <Input value={chave} onChange={e => setChave(e.target.value)}
+              <Input value={chave} onChange={e => setChave(e.target.value)} data-testid="doc-chave"
                 className="h-8 text-[12px] mt-0.5 font-mono" placeholder="44 dígitos" />
             </div>
           )}
@@ -566,11 +636,37 @@ export function FormDocumento({ api, documento, fornecedores, onFechar, pendente
             <Input value={observacao} onChange={e => setObservacao(e.target.value)}
               className="h-8 text-[12px] mt-0.5" placeholder="Opcional" />
           </div>
+          {/* ── ARQUIVO: a área verde, "melhor para identificar" (Gabriel). O `<input type="file">` é o de sempre (mesmos
+              `accept` e regras) — só deixou de ser a cara do campo. Soltar um arquivo aqui entra pelo MESMO input. ── */}
           <div className="col-span-2">
             <Label className="text-[10px]">Arquivo</Label>
-            <Input type="file" accept="application/pdf,image/jpeg,image/png"
-              onChange={e => setArquivo(e.target.files?.[0] ?? null)}
-              className="h-8 text-[11px] mt-0.5 file:text-[11px]" />
+            <input ref={arquivoRef} type="file" accept="application/pdf,image/jpeg,image/png" className="sr-only" tabIndex={-1}
+              data-testid="doc-arquivo" onChange={e => setArquivo(e.target.files?.[0] ?? null)} />
+            <div role="button" tabIndex={0} data-testid="area-arquivo"
+              onClick={() => arquivoRef.current?.click()}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); arquivoRef.current?.click(); } }}
+              onDragOver={e => e.preventDefault()}
+              onDrop={e => {
+                e.preventDefault();
+                const solto = e.dataTransfer.files;
+                if (!solto?.length || !arquivoRef.current) return;
+                arquivoRef.current.files = solto;
+                setArquivo(solto[0]);
+              }}
+              className="mt-0.5 flex min-h-[40px] cursor-pointer items-center gap-2 rounded-md border border-dashed border-success bg-success/10 px-3 py-1.5 text-[11px] text-success hover:bg-success/15 focus:outline-none focus:ring-2 focus:ring-success/40">
+              <Upload className="h-3.5 w-3.5 shrink-0" />
+              {arquivo ? (<>
+                <span className="min-w-0 flex-1 font-medium [overflow-wrap:anywhere]" data-testid="arquivo-escolhido">{arquivo.name}</span>
+                <button type="button" className="shrink-0 underline underline-offset-2"
+                  onClick={e => { e.stopPropagation(); setArquivo(null); if (arquivoRef.current) arquivoRef.current.value = ''; }}>
+                  remover
+                </button>
+              </>) : documento?.url ? (
+                <span className="flex-1">arquivo anexado · <span className="underline underline-offset-2">substituir</span></span>
+              ) : (
+                <span className="flex-1 font-medium">Anexar arquivo (PDF ou imagem)</span>
+              )}
+            </div>
             <p className="mt-1 text-[10px] text-muted-foreground">
               PDF, JPG ou PNG, até 10 MB. Pode ficar para depois — o documento aparece na lista dizendo “sem arquivo”.
             </p>

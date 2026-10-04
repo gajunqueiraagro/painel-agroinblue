@@ -64,6 +64,12 @@ interface SearchableSelectProps {
   allLabel?: string;
   allValue?: string;
   disabled?: boolean;
+  /**
+   * Tira o item "Todos" da LISTA — FIN-DOCUMENTO-FORM-01. O componente nasceu como FILTRO, onde "Todos" é uma escolha; num
+   * campo de FORMULÁRIO (o emitente do documento) ele não é: ali o vazio é "ainda não escolhi", e quem o diz é o gatilho
+   * (`allLabel`, com `allValue` = o valor vazio do campo). ⚠ OPCIONAL E `false`: as outras montagens não mudam em nada.
+   */
+  semTodos?: boolean;
   className?: string;
   /** Densidade opt-in (usada só pela Compra): busca sticky e lista mais alta.
    *  ⚠ NAO MEXE MAIS NO ITEM (PR-UI-SELECT-05): item, busca e painel sao os mesmos nos
@@ -104,6 +110,7 @@ export function SearchableSelect({
   allLabel = 'Todos',
   allValue = '__all__',
   disabled = false,
+  semTodos = false,
   className,
   dense = false,
   contentClassName,
@@ -168,12 +175,14 @@ export function SearchableSelect({
   const excedente = filtered.length - filteredVisiveis.length;
 
   const selectableItems = useMemo(() => {
-    return [{ value: allValue, label: allLabel }, ...filteredVisiveis];
-  }, [filteredVisiveis, allValue, allLabel]);
+    return semTodos ? filteredVisiveis : [{ value: allValue, label: allLabel }, ...filteredVisiveis];
+  }, [filteredVisiveis, allValue, allLabel, semTodos]);
+  /* o primeiro item REAL: com "Todos" na lista ele é o índice 1; sem, o 0 */
+  const primeiroReal = semTodos ? 0 : (filteredVisiveis.length > 0 ? 1 : 0);
 
   useEffect(() => {
-    setHighlightIdx(filteredVisiveis.length > 0 ? 1 : 0);
-  }, [filteredVisiveis]);
+    setHighlightIdx(primeiroReal);
+  }, [filteredVisiveis, primeiroReal]);
 
   useEffect(() => {
     const el = itemRefs.current[highlightIdx];
@@ -202,7 +211,7 @@ export function SearchableSelect({
   const handleTriggerClick = () => {
     if (disabled) return;
     setOpen(true);
-    setHighlightIdx(filteredVisiveis.length > 0 ? 1 : 0);
+    setHighlightIdx(primeiroReal);
     setTimeout(() => inputRef.current?.focus(), 0);
   };
 

@@ -1379,6 +1379,8 @@ export function LancamentoV2Dialog({
     dataEmissao: dataCompetencia || null,
     valor: valorNum ? Math.abs(valorNum) : null,
     emitenteId: favorecidoId || null,
+    /* FIN-DOCUMENTO-FORM-01 — o comprovante sugere a data do PAGAMENTO, não a competência */
+    dataPagamento: dataPagamento || null,
   };
 
   const contasDisponiveis = contas;
@@ -2559,7 +2561,8 @@ export function LancamentoV2Dialog({
             </section>
             {lancamento?.id ? (
               <AbaDocumentosLancamento api={documentosApi}
-                fornecedores={fornecedores.map(f => ({ id: f.id, nome: f.nome }))}
+                fornecedores={fornecedores.map(f => ({ id: f.id, nome: f.nome, ativo: f.ativo }))}
+                sugestao={sugestaoDoDocumento}
                 onAnexarBoletosDasParcelas={irmas ? () => setAnexarBoletos('irmas') : undefined} />
             ) : documentosAntesDeSalvar && formaPagamentoParc === 'parcelada' && numParcelas >= 2 ? (
               /* PR 2b — PARCELADO: os documentos da COMPRA (ligados às N) e a grade de parcelas com o boleto
@@ -2569,7 +2572,7 @@ export function LancamentoV2Dialog({
                   <p className="text-[11px] font-semibold">Documentos da compra <span className="font-normal text-muted-foreground">· valem para todas as parcelas</span></p>
                   <DocumentosPendentes pendentes={pendentes.filter(p => p.parcela == null)}
                     onMudar={f => setPendentes(l => [...f(l.filter(p => p.parcela == null)), ...l.filter(p => p.parcela != null)])}
-                    fornecedores={fornecedores.map(f => ({ id: f.id, nome: f.nome }))}
+                    fornecedores={fornecedores.map(f => ({ id: f.id, nome: f.nome, ativo: f.ativo }))}
                     ligadoA={numParcelas} travado={!!posSalvar} sugestao={sugestaoDoDocumento} />
                 </div>
                 <ParcelasDaCompra parcelas={parcelaRows}
@@ -2584,7 +2587,7 @@ export function LancamentoV2Dialog({
               </div>
             ) : documentosAntesDeSalvar ? (
               <DocumentosPendentes pendentes={pendentes} onMudar={setPendentes}
-                fornecedores={fornecedores.map(f => ({ id: f.id, nome: f.nome }))}
+                fornecedores={fornecedores.map(f => ({ id: f.id, nome: f.nome, ativo: f.ativo }))}
                 travado={!!posSalvar} sugestao={sugestaoDoDocumento} />
             ) : (
               <p className="rounded-md border bg-muted/20 px-3.5 py-3 text-[11px] text-muted-foreground">
