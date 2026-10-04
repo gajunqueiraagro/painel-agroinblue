@@ -85,21 +85,24 @@ begin
     if r.nivel = 'conta' and r.conta_id = c1 and (r.status, r.diferenca, r.saldo_inicial) is distinct from ('conciliado', 0.00, 1000) then
       raise exception 'D3 montagem C1: % % %', r.status, r.diferenca, r.saldo_inicial;
     end if;
-    if r.nivel = 'conta' and r.conta_id = c2 and (r.status, r.diferenca) is distinct from ('nao_conciliado', 0.00) then
-      raise exception 'D3 montagem C2: % %', r.status, r.diferenca;
+    -- PR-CONC-STATUS-SALDO-01a: a C2 so' tem timing (lancamento em 05, extrato em 06) e o saldo fecha: 'conciliado', com os
+    -- dias com diferenca nos AVISOS (antes 'nao_conciliado' pelo motivo dos dias)
+    if r.nivel = 'conta' and r.conta_id = c2 and (r.status, r.diferenca, r.motivos) is distinct from ('conciliado', 0.00, '[]'::jsonb)
+       or r.nivel = 'conta' and r.conta_id = c2 and not r.avisos @> '[{"motivo": "dias_com_diferenca", "qtde": 2}]'::jsonb then
+      raise exception 'D3 montagem C2: % % % %', r.status, r.diferenca, r.motivos, r.avisos;
     end if;
-    if r.nivel = 'tipo' and r.tipo_conta = 'cc' and r.status <> 'nao_conciliado' then raise exception 'D3 tipo cc: %', r.status; end if;
+    if r.nivel = 'tipo' and r.tipo_conta = 'cc' and r.status <> 'conciliado' then raise exception 'D3 tipo cc: %', r.status; end if;
     -- a interna IC (sem extrato, saldo 1.000 -> 1.000) concilia pela regua de hoje: o subtotal 'inv' e' 'conciliado'
     if r.nivel = 'tipo' and r.tipo_conta = 'inv' and (r.status, r.motivos) is distinct from ('conciliado', '[]'::jsonb) then
       raise exception 'D3 tipo inv: % %', r.status, r.motivos;
     end if;
     if r.nivel = 'total' then
       -- a diferenca do total e' ZERO e mesmo assim nao concilia: a C2 tem dias com diferenca
-      if r.diferenca <> 0 or r.status <> 'nao_conciliado' or jsonb_array_length(r.motivos) <> 1
-         or r.motivos->0->>'motivo' <> 'contas_nao_conciliadas'
-         or (r.motivos->0->>'qtde')::int <> 1 or (r.motivos->0->'contas'->0->>'conta_id')::uuid <> c2
-         or r.motivos->0->'contas'->0->'motivos'->0->>'motivo' <> 'dias_com_diferenca' then
-        raise exception 'D3 total: dif % status % motivos %', r.diferenca, r.status, r.motivos;
+      -- PR-CONC-STATUS-SALDO-01a: nenhuma conta diverge no SALDO -> total 'conciliado' sem motivo; a C2 aparece so' na contagem
+      -- de contas com aviso (1 alem de 'sem_extrato'); a interna IC so' tem 'sem_extrato' e por isso nao entra nos avisos do total
+      if r.diferenca <> 0 or r.status <> 'conciliado' or r.motivos <> '[]'::jsonb
+         or r.avisos <> '[{"motivo": "contas_com_aviso", "qtde": 1, "qtde_alem_sem_extrato": 1, "por_aviso": {"dias_com_diferenca": 1, "extratos_sem_par": 1, "lancamentos_sem_par": 1}}]'::jsonb then
+        raise exception 'D3 total: dif % status % motivos % avisos %', r.diferenca, r.status, r.motivos, r.avisos;
       end if;
       -- a soma ignora a interna (o saldo dela ja' esta' na C1): 1.000, nao 2.000
       if r.saldo_inicial <> 1000 or r.saldo_sistema <> 1180 or r.saldo_extrato <> 1180 or r.sem_conta is not null then
@@ -114,7 +117,9 @@ begin
   select * into t from fn_conciliacao_resumo_mes(c_cli, '2031-01', array[c1, sx]) f where f.nivel = 'total';
   if t.status <> 'nao_conciliado' or t.motivos->0->>'motivo' <> 'contas_nao_conciliadas' or (t.motivos->0->>'qtde')::int <> 1
      or (t.motivos->0->'contas'->0->>'conta_id')::uuid <> sx or t.motivos->0->'contas'->0->>'status' <> 'nao_conciliado'
-     or t.motivos->0->'contas'->0->'motivos' <> '[{"motivo": "sem_extrato"}]'::jsonb then
+     -- PR-CONC-STATUS-SALDO-01a: o motivo e' o saldo (15 informado x 10 do sistema); 'sem_extrato' virou aviso da conta
+     or t.motivos->0->'contas'->0->'motivos' <> '[{"motivo": "saldo_diverge", "valor": 5.00}]'::jsonb
+     or t.motivos->0->'contas'->0->'avisos' <> '[{"motivo": "sem_extrato"}]'::jsonb then
     raise exception 'D3 conta sem extrato divergente: % %', t.status, t.motivos;
   end if;
   -- 'pendente' nao derruba: o total concilia e diz quantas pendentes; so' pendentes = 'pendente'
@@ -123,7 +128,7 @@ begin
   if a <> 'conciliado [{"qtde": 1, "motivo": "contas_pendentes"}]' or b <> 'pendente [{"qtde": 1, "motivo": "contas_pendentes"}]' then
     raise exception 'D3 pendente: C1+O3 % · so O3 %', a, b;
   end if;
-  v_out := v_out || 'D3 ok (total dif 0 + uma conta divergente = nao_conciliado com a conta e o motivo; conta SEM extrato divergente tambem derruba; pendente nao derruba e e contada; interna fora da soma; so C1 = conciliado); ';
+  v_out := v_out || 'D3 ok (so timing no extrato = conciliado com aviso, e o total tambem; conta SEM extrato que diverge no SALDO derruba, com saldo_diverge; pendente nao derruba e e contada; interna fora da soma; so C1 = conciliado); ';
 
   -- ── D3: lancamentos sem conta, na linha do total (so' com todas as contas) ──
   select f.sem_conta into v_sem0 from fn_conciliacao_resumo_mes(c_cli, '2031-01') f where f.nivel = 'total';
@@ -136,8 +141,10 @@ begin
     raise exception 'D3 sem conta: antes % depois % motivos %', v_sem0, r.sem_conta, r.motivos;
   end if;
   -- o status do total e' das contas: sem conta nao o muda
-  if r.status <> (select case when count(*) filter (where f.tem_extrato) = 0 then 'pendente'
-                              when count(*) filter (where f.tem_extrato and f.status <> 'conciliado') = 0 then 'conciliado' else 'nao_conciliado' end
+  -- PR-CONC-STATUS-SALDO-01a: a regra do total escrita como ela e' (a de antes so' olhava conta COM extrato e passava porque a
+  -- divergente tinha extrato): qualquer conta 'nao_conciliado' derruba; nenhuma conciliada = 'pendente'; a interna CONTA
+  if r.status <> (select case when count(*) filter (where f.status = 'nao_conciliado') > 0 then 'nao_conciliado'
+                              when count(*) filter (where f.status = 'conciliado') = 0 then 'pendente' else 'conciliado' end
                     from fn_conciliacao_resumo_mes(c_cli, '2031-01') f where f.nivel = 'conta') then
     raise exception 'D3 sem conta mudou o status do total: %', r.status;
   end if;
@@ -158,16 +165,19 @@ begin
   perform pg_temp.lan(null, pp, '1-Entradas', '1', 7, 'realizado', '2031-01-20');
   perform pg_temp.saldo(pp, '2030-12', 100); perform pg_temp.saldo(pp, '2031-01', 140, '2031-01-15');
   select * into r from fn_conciliacao_resumo_mes(c_cli, '2031-01', array[pp]) f where f.nivel = 'conta';
-  if r.saldo_sistema <> 147 or r.diferenca <> -7 or r.status <> 'nao_conciliado'
+  -- PR-CONC-STATUS-SALDO-01a: com posicao declarada o status julga a diferenca NA POSICAO (0,00 em 15/01 = 'conciliado'),
+  -- a do mes (-7) segue em `diferenca`; a posicao ganha `diferenca_propria_na_data` e o realizado depois dela vira aviso
+  if r.saldo_sistema <> 147 or r.diferenca <> -7 or r.status <> 'conciliado' or r.motivos <> '[]'::jsonb
+     or not r.avisos @> '[{"motivo": "realizados_apos_posicao", "qtde": 1, "valor": 7.00, "data": "2031-01-15"}]'::jsonb
      or r.posicao <> jsonb_build_object('data', '2031-01-15', 'saldo_sistema_na_data', 140.00, 'diferenca_na_data', 0.00,
-                                        'saldo_sistema_proprio_na_data', 140.00,
+                                        'saldo_sistema_proprio_na_data', 140.00, 'diferenca_propria_na_data', 0.00,
                                         'realizados_apos', jsonb_build_object('qtde', 1, 'valor', 7.00)) then
-    raise exception 'D5: sistema % dif % status % posicao %', r.saldo_sistema, r.diferenca, r.status, r.posicao;
+    raise exception 'D5: sistema % dif % status % motivos % avisos % posicao %', r.saldo_sistema, r.diferenca, r.status, r.motivos, r.avisos, r.posicao;
   end if;
   if (select f.posicao from fn_conciliacao_resumo_mes(c_cli, '2031-01', array[c1]) f where f.nivel = 'conta') is not null then
     raise exception 'D5: posicao sem data declarada';
   end if;
-  v_out := v_out || 'D5 posicao ok (mes -7 nao_conciliado; em 15/01 fecha, 1 realizado depois, 7,00); ';
+  v_out := v_out || 'D5 posicao ok (mes -7; em 15/01 fecha = conciliado pela posicao, aviso de 1 realizado depois, 7,00); ';
 
   -- ── D6: a lista do sistema ──
   p1 := pg_temp.lan(ll, null, '2-Saídas', '-1', 300, 'programado', null);

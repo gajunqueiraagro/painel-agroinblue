@@ -106,18 +106,24 @@ begin
 
   -- ── D2: o par ──
   v_conf := jsonb_build_array(jsonb_build_object('motivo', 'conferida_com', 'conta_id', m, 'conta_nome', 'SINT IS M'));
-  if r.status <> 'nao_conciliado' or r.par_conta_id is not null or r.par_status is not null
+  -- PR-CONC-STATUS-SALDO-01a: cada conta do par e' julgada pelo SEU saldo proprio. A mae fecha (770 = 770) -> 'conciliado', e o
+  -- que o extrato dela dizia (nao fecha com o informado em 7,00: o movimento da interna com terceiros) virou AVISO; a interna fecha (707 = 707) -> 'conciliado', com o ponteiro
+  -- 'conferida_com' nos AVISOS (era o unico motivo). `par_status` segue sendo o status da mae.
+  if r.status <> 'conciliado' or r.motivos <> '[]'::jsonb or r.par_conta_id is not null or r.par_status is not null
+     or r.avisos <> '[{"motivo": "extrato_nao_fecha", "valor": 7.00}]'::jsonb
      or r.internas is distinct from jsonb_build_array(jsonb_build_object('conta_id', i, 'conta_nome', 'SINT IS I')) then
-    raise exception 'D2 mae: status % par % internas %', r.status, r.par_conta_id, r.internas;
+    raise exception 'D2 mae: status % motivos % avisos % par % internas %', r.status, r.motivos, r.avisos, r.par_conta_id, r.internas;
   end if;
   -- a interna SOZINHA na chamada (a mae nao esta' em p_conta_ids) ...
-  if (ri.status, ri.par_status, ri.par_conta_id) is distinct from ('nao_conciliado', 'nao_conciliado', m) or ri.motivos is distinct from v_conf
+  if (ri.status, ri.par_status, ri.par_conta_id) is distinct from ('conciliado', 'conciliado', m) or ri.motivos <> '[]'::jsonb
+     or ri.avisos is distinct from jsonb_build_array(jsonb_build_object('motivo', 'sem_extrato')) || v_conf
      or ri.internas is not null then
     raise exception 'D2 interna sozinha: % % % %', ri.status, ri.par_status, ri.par_conta_id, ri.motivos;
   end if;
   -- ... e com a mae na chamada: o mesmo
   select * into t from fn_conciliacao_resumo_mes(c_cli, '2031-01', array[m, i]) f where f.nivel = 'conta' and f.conta_id = i;
-  if (t.status, t.par_status, t.par_conta_id) is distinct from ('nao_conciliado', 'nao_conciliado', m) or t.motivos is distinct from v_conf then
+  if (t.status, t.par_status, t.par_conta_id) is distinct from ('conciliado', 'conciliado', m) or t.motivos <> '[]'::jsonb
+     or t.avisos is distinct from jsonb_build_array(jsonb_build_object('motivo', 'sem_extrato')) || v_conf then
     raise exception 'D2 interna com a mae: % % % %', t.status, t.par_status, t.par_conta_id, t.motivos;
   end if;
   select string_agg(f.conta_nome || '=' || f.status || '/' || coalesce(f.par_status, '-'), ' ' order by f.conta_nome) into a
@@ -125,7 +131,7 @@ begin
   if a <> 'SINT IS I2=conciliado/conciliado SINT IS I3=pendente/pendente SINT IS M2=conciliado/- SINT IS M3=pendente/-' then
     raise exception 'D2 pares B e C: %', a;
   end if;
-  v_out := v_out || 'D2 ok (interna = status do par, conferida_com, sozinha e com a mae; mae com internas; pares conciliado e pendente); ';
+  v_out := v_out || 'D2 ok (cada conta pelo saldo proprio; par_status = o da mae; conferida_com nos avisos, sozinha e com a mae; mae com internas; pares conciliado e pendente); ';
 
   -- ── D3: subtotais e total ──
   for t in select * from fn_conciliacao_resumo_mes(c_cli, '2031-01', array[m, i, k]) f where f.nivel <> 'conta' loop
@@ -141,16 +147,16 @@ begin
       raise exception 'D3 inv: ini % sis % ext % dif % ent % sai %', t.saldo_inicial, t.saldo_sistema, t.saldo_extrato, t.diferenca, t.entradas, t.saidas;
     end if;
     -- o subtotal de Investimentos conta a interna com o status do par; a K (conciliada) nao o salva
-    if t.nivel = 'tipo' and t.tipo_conta = 'inv' and (t.status <> 'nao_conciliado' or t.motivos is distinct from jsonb_build_array(
-         jsonb_build_object('motivo', 'contas_nao_conciliadas', 'qtde', 1, 'contas', jsonb_build_array(jsonb_build_object(
-           'conta_id', i, 'conta_nome', 'SINT IS I', 'status', 'nao_conciliado', 'motivos', v_conf))))) then
+    -- PR-CONC-STATUS-SALDO-01a: a interna e a K fecham pelo saldo proprio -> Investimentos 'conciliado', sem motivo
+    if t.nivel = 'tipo' and t.tipo_conta = 'inv' and (t.status <> 'conciliado' or t.motivos <> '[]'::jsonb) then
       raise exception 'D3 inv veredito: % %', t.status, t.motivos;
     end if;
     if t.nivel = 'total' and ((t.saldo_inicial, t.saldo_sistema, t.saldo_extrato, t.diferenca, t.entradas, t.saidas)
          is distinct from (1510, 1487, 1487, 0, 7.00, -30.00)
          -- o par vale UMA vez: so' a mae na lista
-         or t.status <> 'nao_conciliado' or jsonb_array_length(t.motivos) <> 1 or (t.motivos->0->>'qtde')::int <> 1
-         or jsonb_array_length(t.motivos->0->'contas') <> 1 or (t.motivos->0->'contas'->0->>'conta_id')::uuid <> m) then
+         -- PR-CONC-STATUS-SALDO-01a: nenhuma conta diverge no saldo -> total 'conciliado'; o extrato da mae conta em `avisos`
+         or t.status <> 'conciliado' or t.motivos <> '[]'::jsonb
+         or (t.avisos->0->>'motivo', (t.avisos->0->>'qtde_alem_sem_extrato')::int) is distinct from ('contas_com_aviso', 1)) then
       raise exception 'D3 total: ini % sis % ext % dif % ent % sai % · % %', t.saldo_inicial, t.saldo_sistema, t.saldo_extrato, t.diferenca,
         t.entradas, t.saidas, t.status, t.motivos;
     end if;
@@ -161,16 +167,15 @@ begin
   select string_agg(f.nivel || coalesce(':' || f.tipo_conta, '') || '=' || f.status || ' ' || f.motivos::text, ' · ' order by f.nivel, f.tipo_conta) into b
     from fn_conciliacao_resumo_mes(c_cli, '2031-01', array[m3, i3]) f where f.nivel <> 'conta';
   if a <> 'tipo:cc=conciliado [] · tipo:inv=conciliado [] · total=conciliado []'
-     or b <> 'tipo:cc=pendente [{"qtde": 1, "motivo": "contas_pendentes"}] · tipo:inv=pendente [{"qtde": 1, "motivo": "contas_pendentes"}] · total=pendente [{"qtde": 1, "motivo": "contas_pendentes"}]' then
+     or b <> 'tipo:cc=pendente [{"qtde": 1, "motivo": "contas_pendentes"}] · tipo:inv=pendente [{"qtde": 1, "motivo": "contas_pendentes"}] · total=pendente [{"qtde": 2, "motivo": "contas_pendentes"}]' then
     raise exception E'D3 tipo so com a interna:\n%\n%', a, b;
   end if;
   select f.status || ' ' || f.motivos::text into a from fn_conciliacao_resumo_mes(c_cli, '2031-01', array[m, i]) f
    where f.nivel = 'tipo' and f.tipo_conta = 'inv';
-  if a <> 'nao_conciliado ' || jsonb_build_array(jsonb_build_object('motivo', 'contas_nao_conciliadas', 'qtde', 1, 'contas',
-            jsonb_build_array(jsonb_build_object('conta_id', i, 'conta_nome', 'SINT IS I', 'status', 'nao_conciliado', 'motivos', v_conf))))::text then
+  if a <> 'conciliado []' then
     raise exception 'D3 tipo so com a interna (A): %', a;
   end if;
-  v_out := v_out || 'D3 ok (cc 770 · inv 717 · total 1.487; entradas/saidas consolidadas; inv conta a interna com o status do par; total conta o par uma vez; tipo so com a interna = o veredito do par nos 3 estados); ';
+  v_out := v_out || 'D3 ok (cc 770 · inv 717 · total 1.487; entradas/saidas consolidadas; inv e total pelo saldo proprio de cada conta, a interna inclusive; tipo so com a interna nos 3 estados); ';
 
   -- ── D5: a lista do sistema da mae e a posicao ──
   v_lin := r.linhas_sistema;
@@ -194,6 +199,8 @@ begin
   select * into t from fn_conciliacao_resumo_mes(c_cli, '2031-01', array[m2]) f where f.nivel = 'conta';
   if t.posicao is distinct from jsonb_build_object('data', '2031-01-20', 'saldo_sistema_na_data', 100.00, 'diferenca_na_data', 0.00,
                                                    'saldo_sistema_proprio_na_data', 60.00,
+                                                   -- PR-CONC-STATUS-SALDO-01a: a diferenca PROPRIA na data (60 informado x 60 proprio)
+                                                   'diferenca_propria_na_data', 0.00,
                                                    'realizados_apos', jsonb_build_object('qtde', 0, 'valor', 0)) then
     raise exception 'D5 posicao: %', t.posicao;
   end if;
@@ -208,9 +215,9 @@ begin
    where y.nivel = 'conta';
   -- seis linhas: jan M, I, M2, I2 · mar M e a I (sem movimento proprio: aparece porque a mae aparece)
   if a is distinct from b or v_n <> 6 then raise exception E'D4: status do ano (% linhas)\n%\n<>\n%', v_n, a, b; end if;
-  if (select s.status || ' ' || s.motivos::text from fn_conciliacao_status_ano(c_cli, 2031) s where s.ano_mes = '2031-03' and s.conta_id = i)
-     is distinct from (select s.status from fn_conciliacao_status_ano(c_cli, 2031) s where s.ano_mes = '2031-03' and s.conta_id = m) || ' ' || v_conf::text then
-    raise exception 'D4: interna em marco <> a mae';
+  -- PR-CONC-STATUS-SALDO-01a: a interna segue aparecendo em marco pela mae, com o status PROPRIO e o ponteiro nos avisos
+  if not exists (select 1 from fn_conciliacao_status_ano(c_cli, 2031) s where s.ano_mes = '2031-03' and s.conta_id = i and s.avisos @> v_conf) then
+    raise exception 'D4: interna em marco sem o ponteiro da mae';
   end if;
   select string_agg(format('%s|%s|%s', s.ano_mes, s.status, s.motivos), E'\n' order by s.ano_mes) into a
     from fn_conciliacao_status_ano(c_cli, 2031) s where s.nivel = 'total';
@@ -218,14 +225,14 @@ begin
     from (select to_char(make_date(2031, g, 1), 'YYYY-MM') mes from generate_series(1, 12) g) q, lateral fn_conciliacao_resumo_mes(c_cli, q.mes) y
    where y.nivel = 'total';
   if a is distinct from b then raise exception E'D4: total do ano\n%\n<>\n%', a, b; end if;
-  -- o par vale uma vez: num mes parado, as pendentes do total = as contas do universo SEM as internas
+  -- PR-CONC-STATUS-SALDO-01a: a interna conta como conta: num mes parado, as pendentes do total = TODAS as contas do universo
   if (select (x->>'qtde')::int from fn_conciliacao_status_ano(c_cli, 2031) s, jsonb_array_elements(s.motivos) x
        where s.nivel = 'total' and s.ano_mes = '2031-06' and x->>'motivo' = 'contas_pendentes')
      is distinct from (select count(*)::int from financeiro_contas_bancarias c where c.cliente_id = c_cli and c.ativa
-                        and (c.mes_inicio is null or c.mes_inicio <= '2031-06') and c.consolida_em_conta_id is null) then
+                        and (c.mes_inicio is null or c.mes_inicio <= '2031-06')) then
     raise exception 'D4: pendentes do total em junho';
   end if;
-  v_out := v_out || format('D4 ok (%s linhas de conta = os resumos; a interna em marco pela mae; total do ano = 12 resumos; pendentes sem as internas); ', v_n);
+  v_out := v_out || format('D4 ok (%s linhas de conta = os resumos; a interna em marco pela mae; total do ano = 12 resumos; pendentes com as internas); ', v_n);
 
   -- ── D6: assinatura, config e ACL ──
   if has_function_privilege('authenticated', 'public._fn_conciliacao_resumo(uuid, text, uuid[], boolean, boolean)', 'EXECUTE')

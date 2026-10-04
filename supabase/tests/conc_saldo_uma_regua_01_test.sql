@@ -84,8 +84,10 @@ begin
   if r.entradas <> 1053.70 or r.saidas <> -610.00 or round(r.entradas + r.saidas, 2) <> round(r.saldo_sistema - r.saldo_inicial, 2) then
     raise exception 'A: D3 entradas % saidas % (liquido %)', r.entradas, r.saidas, r.saldo_sistema - r.saldo_inicial;
   end if;
-  if r.status <> 'nao_conciliado' or (select string_agg(x->>'motivo', ',') from jsonb_array_elements(r.motivos) x) <> 'dias_com_diferenca,saldo_diverge' then
-    raise exception 'A: status % motivos %', r.status, r.motivos;
+  -- PR-CONC-STATUS-SALDO-01a: o status e' o SALDO proprio (motivo so' 'saldo_diverge'); os dias com diferenca viram AVISO
+  if r.status <> 'nao_conciliado' or (select string_agg(x->>'motivo', ',') from jsonb_array_elements(r.motivos) x) <> 'saldo_diverge'
+     or not r.avisos @> '[{"motivo": "dias_com_diferenca", "qtde": 5}]'::jsonb then
+    raise exception 'A: status % motivos % avisos %', r.status, r.motivos, r.avisos;
   end if;
   v_raw := public._fn_conciliacao_dias_conta(c_cli, a, '2031-01-01', '2031-01-31');
   if round((v_raw->>'entradas')::numeric + (v_raw->>'saidas')::numeric, 6) <> round((v_raw->>'sistema_total')::numeric, 6) then
@@ -123,17 +125,20 @@ begin
     (c_cli, m4, '2030-12', 100), (c_cli, m4, '2031-01', 145),
     (c_cli, m5, '2030-12', 100), (c_cli, m5, '2031-01', 150),
     (c_cli, s, '2030-12', 100), (c_cli, s, '2031-01', 100);
-  for r in select f.conta_nome, f.status, (select string_agg(x->>'motivo', ',' order by x->>'motivo') from jsonb_array_elements(f.motivos) x) m, f.motivos
+  -- PR-CONC-STATUS-SALDO-01a: `m` = os MOTIVOS (o que decide: o saldo) e `a` = os AVISOS (a 2a prova, do extrato importado).
+  -- M1 e M4 tem o saldo fechando: passam a 'conciliado', com os avisos; M2, M3 e M5 seguem 'nao_conciliado' so' por 'saldo_diverge'.
+  for r in select f.conta_nome, f.status, coalesce((select string_agg(x->>'motivo', ',' order by x->>'motivo') from jsonb_array_elements(f.motivos) x), '') m,
+                  coalesce((select string_agg(x->>'motivo', ',' order by x->>'motivo') from jsonb_array_elements(f.avisos) x), '') a, f.motivos, f.avisos
              from fn_conciliacao_resumo_mes(c_cli, '2031-01', array[m1, m2, m3, m4, m5, s]) f loop
-    if (r.conta_nome = 'SINT M1' and (r.status, r.m) is distinct from ('nao_conciliado', 'dias_com_diferenca'))
-       or (r.conta_nome = 'SINT M2' and (r.status, r.m) is distinct from ('nao_conciliado', 'extrato_nao_fecha,saldo_diverge'))
-       or (r.conta_nome = 'SINT M3' and (r.status, r.m) is distinct from ('nao_conciliado', 'dias_com_diferenca,saldo_diverge'))
-       or (r.conta_nome = 'SINT M4' and (r.status, r.m) is distinct from ('nao_conciliado', 'dias_com_diferenca,extrato_nao_fecha'))
-       or (r.conta_nome = 'SINT M5' and (r.status, r.m) is distinct from ('nao_conciliado', 'dias_com_diferenca,extrato_nao_fecha,saldo_diverge'))
-       or (r.conta_nome = 'SINT S' and (r.status, r.m) is distinct from ('conciliado', 'sem_extrato')) then
-      raise exception 'D5: % -> % [%]', r.conta_nome, r.status, r.motivos;
+    if (r.conta_nome = 'SINT M1' and (r.status, r.m, r.a) is distinct from ('conciliado', '', 'dias_com_diferenca,extratos_sem_par,lancamentos_sem_par'))
+       or (r.conta_nome = 'SINT M2' and (r.status, r.m, r.a) is distinct from ('nao_conciliado', 'saldo_diverge', 'extrato_nao_fecha'))
+       or (r.conta_nome = 'SINT M3' and (r.status, r.m, r.a) is distinct from ('nao_conciliado', 'saldo_diverge', 'dias_com_diferenca,extratos_sem_par,lancamentos_sem_par'))
+       or (r.conta_nome = 'SINT M4' and (r.status, r.m, r.a) is distinct from ('conciliado', '', 'dias_com_diferenca,extrato_nao_fecha,extratos_sem_par,lancamentos_sem_par'))
+       or (r.conta_nome = 'SINT M5' and (r.status, r.m, r.a) is distinct from ('nao_conciliado', 'saldo_diverge', 'dias_com_diferenca,extrato_nao_fecha,extratos_sem_par,lancamentos_sem_par'))
+       or (r.conta_nome = 'SINT S' and (r.status, r.m, r.a) is distinct from ('conciliado', '', 'sem_extrato')) then
+      raise exception 'D5: % -> % motivos % avisos %', r.conta_nome, r.status, r.motivos, r.avisos;
     end if;
-    v_out := v_out || format('%s %s [%s]; ', r.conta_nome, r.status, r.m);
+    v_out := v_out || format('%s %s [%s] avisos [%s]; ', r.conta_nome, r.status, r.m, r.a);
   end loop;
   -- o programado parcial sozinho: conta A sem o resto dos casos ja' foi; aqui a prova direta de que ele NAO e' diferenca
   if exists (select 1 from jsonb_array_elements(v_dias) x where x->>'data' = '2031-01-02') then raise exception 'parcial virou diferenca'; end if;

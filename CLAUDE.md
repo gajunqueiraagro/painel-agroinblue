@@ -1134,7 +1134,8 @@ docs/historico/frentes-ate-2026-09-29.md.)
   resumoMes.test.ts` (fixture do mesmo snapshot). Saldos INFORMADOS, CONSOLIDADOS com as internas (`consolida_em_conta_id`,
   faltou um = NULO). Lado da ponta: a ligada a extrato entra do LADO DO EXTRATO (retencao em deposito liquido = entrada
   negativa, contada em `retido_em_depositos`); o liquido nao muda (entradas e saidas arredondadas cada uma podem somar 0,01 a
-  menos/mais que o liquido com valores de 3 casas — o cru fecha). STATUS = 'conciliado' so' com (i) zero dias com diferenca,
+  menos/mais que o liquido com valores de 3 casas — o cru fecha). [REVOGADO no PR-CONC-STATUS-SALDO-01a: o status e' so' o SALDO; (i) e (iii) viraram AVISOS — ver a regra "VERDE =
+  SALDO BATE".] STATUS = 'conciliado' so' com (i) zero dias com diferenca,
   (ii) saldo do sistema = informado e (iii) informado − inicial − Σ extrato = 0; senao 'nao_conciliado' com cada motivo e valor
   (`dias_com_diferenca`, `saldo_diverge`, `extrato_nao_fecha`); sem saldo informado 'pendente' (`saldo_nao_informado`); mes sem
   extrato = o status de hoje (a regua antiga) com `sem_extrato`. ⚠ (ii) e (iii) SOZINHOS NAO EXISTEM: (ii) = (iii) + Σ diferencas
@@ -1257,9 +1258,8 @@ docs/historico/frentes-ate-2026-09-29.md.)
     sobre a lista dos realizados do mes (lista, nao saldo).
   ⚠ INVALIDACAO: so' onde a aba ja' recarregava (lancamentos mudaram, saldo informado, fechar sem movimento) ela rele' o dono
     (`releDono`); os gestos de casar/conciliar das outras telas nao invalidam o resumo — PR 03.
-  ⚠ DIVIDA DO DONO (achada na homologacao local): conta SEM extrato que diverge sai 'nao_conciliado' so' com o motivo `sem_extrato`
-    (NJ Cartao BB Visa Infinite set/26, −6.470,73) — o card fica vermelho dizendo "sem extrato"; o dono deveria escrever tambem
-    `saldo_diverge` com o valor (01d, banco).
+  [A "divida 01d" (conta sem extrato divergente so' com `sem_extrato`) FECHOU no PR-CONC-STATUS-SALDO-01a: o motivo e' sempre
+    `saldo_diverge` com o valor, e `sem_extrato` virou aviso. O NJ Cartao BB Visa Infinite set/26 esta' conciliado, 0,00.]
 - ⚠ O PAINEL DO MES, O LAPIS E O "CONCILIAR O MES" LEEM O DONO (PR-CONC-SALDO-UMA-REGUA-02b, 03/10, so' tela).
   `useSaldoSistemaNaPosicao` e `somarAtePosicao` SAIRAM (com o teste deles): eram a regua antiga (saldo inicial do mes + os
   `cenario='realizado'` a VALOR CHEIO ate' a posicao, sem filtrar `status_transacao`, somados no front). `movimentoNaConta` e
@@ -1300,7 +1300,8 @@ docs/historico/frentes-ate-2026-09-29.md.)
     'conta' (sem interna, e na propria interna, = os campos de cima; na mae = o inicial e o extrato DELA e o sistema = inicial
     proprio + movimento dela + as transferencias com a interna); `par_conta_id` e `par_status` (so' na interna); `internas`
     [{conta_id, conta_nome}] (so' na mae). Linhas 'tipo' e 'total': os quatro NULOS.
-  · REGRA DO PAR: a interna tem status = `par_status` = o status da MAE e motivos [{motivo:'conferida_com', conta_id, conta_nome}]
+  · REGRA DO PAR [REVOGADA no PR-CONC-STATUS-SALDO-01a: cada conta e' julgada pelo SEU saldo, `par_status` so' informa, o
+    'conferida_com' e' AVISO e a interna conta no total]: a interna tem status = `par_status` = o status da MAE e motivos [{motivo:'conferida_com', conta_id, conta_nome}]
     (com a mae na chamada ou sozinha em `p_conta_ids`). No TOTAL o par vale UMA vez: a interna nao entra em
     `contas_nao_conciliadas` nem em `contas_pendentes`. No SUBTOTAL do tipo a interna CONTA, com o status do par e o
     'conferida_com' (os motivos da mae ficam na linha dela; nenhum campo novo): Investimentos reflete o veredito do par, e o tipo
@@ -1379,7 +1380,8 @@ docs/historico/frentes-ate-2026-09-29.md.)
   ⚠ PENDENCIA DE TELA (proximo PR): na conta-MAE, o quadro do topo do Casar e a aba "Extrato (banco)" SEGUEM CONSOLIDADOS, ao
     lado de uma aba Sistema que ja' e' propria. Medido no Bradesco do Agnaldo, ago/26: "Saldo inicial (extrato)" 238.791,26 x
     "Saldo inicial (sistema)" 1,00; diferenca por lado +1,74 / −1,74 num mes conciliado.
-  ⚠ DIVIDA DE BANCO (01c): o dono NAO devolve a diferenca PROPRIA na posicao declarada (`posicao.diferenca_propria_na_data`).
+  ⚠ DIVIDA DE BANCO (01c) [o CAMPO foi entregue no PR-CONC-STATUS-SALDO-01a; a TELA ainda nao o le' — pendencia "posicao na
+    tela"]: o dono NAO devolve a diferenca PROPRIA na posicao declarada (`posicao.diferenca_propria_na_data`).
     Em conta de par (mae ou interna) com a posicao antes do fim do mes, a Diferenca do painel e a do rodape do Resumo mostram
     "—" com o `title` "diferença na posição ainda não disponível para conta conferida em par — veja a diferença do fim do mês"
     (`TITULO_DIFERENCA_NA_POSICAO_INDISPONIVEL`); conta sem par segue lendo `posicao.diferenca_na_data`. Quando o campo entrar,
@@ -1392,6 +1394,52 @@ docs/historico/frentes-ate-2026-09-29.md.)
   1.891–1.998 ms, Santa Rita 1.569–1.932 ms; resumo de todas as contas do NJ 216–229 ms. Testes: T1–T9 nos cinco arquivos da
   linha de baseline, com dez mutacoes que caem pelo numero consolidado; os fixtures de conta sem par passam por `comProprio`
   (`src/lib/conciliacao/resumoDoDono.fixture.ts`), e o `resumoMes.fixture.json` ganhou os campos do 01a lidos do dono.
+- ⚠ VERDE = SALDO BATE COM O SISTEMA; O EXTRATO IMPORTADO E' A 2a PROVA, SO' AVISO (PR-CONC-STATUS-SALDO-01a, Gabriel 03/10, so'
+  banco; migration 20261027192700, ⚠ registrada como 20261004024939; ledger = arquivo, md5 d7d4ce62…). "Conciliado" diz UMA coisa:
+  o saldo informado da conta bate com o saldo do sistema. Substitui o que os blocos de cima diziam sobre motivos que reprovam
+  (dias com diferenca, extrato que nao fecha, sem extrato) e sobre o `par_status` decidir o status da interna.
+  · LINHA DE CONTA, sobre o saldo PROPRIO: 'conciliado' = saldo informado e diferenca 0 (ZERO EXATO sobre valores arredondados a
+    2 casas — a tolerancia de sempre); 'nao_conciliado' = informado e diferente, motivo `saldo_diverge {valor}`; 'pendente' = falta
+    saldo, motivo `saldo_nao_informado {falta}`. `motivos` SO' LEVA O QUE DECIDE.
+  · `avisos` jsonb, a ULTIMA coluna de `fn_conciliacao_resumo_mes`, `fn_conciliacao_status_ano` e da interna, com a mesma forma
+    dos motivos ([] sem aviso): `sem_extrato` · `dias_com_diferenca {qtde, dias}` · `extrato_nao_fecha {valor}` ·
+    `extratos_sem_par {qtde, valor}` e `lancamentos_sem_par {qtde, valor}` (so' com extrato) · `realizados_apos_posicao {qtde,
+    valor, data}` · `conferida_com {conta_id, conta_nome}` (na interna, o ponteiro da mae). NENHUM AVISO MUDA O STATUS. Os avisos de
+    extrato da mae seguem no consolidado.
+  · PAR: cada conta julgada pelo SEU proprio; `par_status` segue = o status da MAE, so' informa; `par_conta_id` e `internas` ficam.
+  · POSICAO: com saldo declarado ANTES do fim do mes o status julga a diferenca PROPRIA NA POSICAO
+    (`posicao.diferenca_propria_na_data`, campo novo; `saldo_diverge` leva `posicao` = a data); sem posicao, a do fim do mes. A
+    `diferenca` e a `proprio.diferenca` continuam sendo as do FIM do mes.
+  · DIFERENCA = round(extrato, 2) − round(sistema, 2), os dois numeros que a tela mostra (`diferenca`, `proprio.diferenca` e as duas
+    da posicao). Lancamento com 3 casas dava 0,01 com os dois saldos iguais na tela. Mudaram 4 linhas, todas em 0,01: Vera Itau
+    Personalite nov/24 e Raul Bradesco Virtual jul/23 (0,01 -> 0,00), Vera Conta Fazenda set/24 e nov/24 (−0,07 -> −0,06).
+  · SALDO INICIAL: o saldo final do mes anterior; SEM ele, o `saldo_inicial` INFORMADO na linha do mes (o primeiro mes da conta),
+    no topo, no `proprio` e no saldo corrido proprio da mae (`_fn_conciliacao_dias_conta`). 66 linhas ganharam inicial, sistema e
+    diferenca (`proprio` = topo nas 66; 65 conciliadas, 1 nao conciliada: Santa Rita Itau BBA ago/23).
+  · AGREGADOS (subtotal do tipo e total): qualquer 'nao_conciliado' derruba; 'pendente' so' conta; nenhuma conciliada = 'pendente'.
+    TODA conta entra UMA vez com o SEU status, a INTERNA inclusive (antes ela ficava fora do total); as SOMAS nao mudam. `avisos`
+    = [{motivo:'contas_com_aviso', qtde, qtde_alem_sem_extrato, por_aviso:{<aviso>: n contas}}] ('conferida_com' nao conta; no
+    TOTAL a interna so' entra nessa contagem com aviso ALEM de 'sem_extrato'). As contas citadas em `contas_nao_conciliadas` levam
+    `avisos`. `lancamentos_sem_conta` segue motivo INFORMATIVO do total. No status do ano as omitidas somam em `contas_pendentes`
+    (todas) e em `contas_com_aviso` (as que nao sao internas).
+  · MEDIDO (7 clientes, 2020-01..2026-12, 6.803 linhas, 5.137 de conta, antes x depois na mesma transacao): nenhuma conta passa de
+    conciliado a nao conciliado nem a pendente; 17 passam de nao conciliado a conciliado (Santa Rita Sicredi abr/26, Bradesco jun e
+    jul/26, Itau, Itau BBA e BB jul/26; Agnaldo Invest. Facil jan/fev/mai/22, dez/24, jan/25, mai e set/26 e Bradesco mai/26; NJ
+    Sicredi Pessoal mar/26 e Sicredi PJ Pecuaria jul/26; Vera Itau CDI set/26, pela posicao); 5 totais passam a conciliado. A
+    interna no total muda 4 totais do Agnaldo, so' de contador: jun/21 `contas_nao_conciliadas` 1 -> 2 (mae +0,96, interna −0,96)
+    e out/nov/dez/26 `contas_pendentes` 12 -> 13. Status do ano = resumo em status, motivos e avisos (2.549 linhas). Tempo
+    (mediana de 6, mesma transacao): status do ano NJ 1.910 -> 1.935 ms, Santa Rita 1.552 -> 1.614 ms; resumo NJ 208 -> 206 ms.
+  md5: `_fn_conciliacao_resumo` 68c2e274… -> 26f4a6df…, `fn_conciliacao_status_ano` 0c30b647… -> 35db738d…,
+  `_fn_conciliacao_dias_conta` bb71a135… -> cbd60a5e…, `fn_conciliacao_resumo_mes` 25aa2ac4… (corpo igual; DROP + CREATE pelo
+  retorno, como o status do ano). ACL, SECURITY DEFINER, search_path, plan_cache_mode e tenant_ok conferidos na migration.
+  Testes: `supabase/tests/conc_status_saldo_01a_test.sql` (T1–T9; no corpo antigo cai em "no field avisos");
+  `conc_saldo_uma_regua_01`, `_01b` e `conc_interna_separada_01a` atualizados SO' em status/motivos/avisos (e a chave nova da
+  posicao); `_01c` e o hotfix passam sem mudanca. Os seis OK no banco vivo depois de aplicar.
+  ⚠ PENDENCIAS: (a) POSICAO NA TELA (produto, Gabriel decide na homologacao): Vera Itau CDI set/26 fica verde pela posicao e a
+    coluna Diferenca / "Diferenca de saldo" mostram −1.080.000,00 do fim do mes; e a conta de par com posicao ainda mostra "—" na
+    diferenca na data — a tela passa a ler `posicao.diferenca_propria_na_data` em PR proprio; (b) `financeiro_saldos_bancarios_v2`
+    tem 2 pares de linhas DUPLICADAS (Agnaldo 21c7682e fev/21 e 38b316c0 mar/21, zeros, inofensivas hoje; nao ha' unicidade em
+    conta + mes); (c) VALOR-3-CASAS: os lancamentos de 3 casas seguem no dado (a diferenca so' deixou de mostra'-los).
 - ⚠ FUNCAO SECURITY DEFINER EXPOSTA A `authenticated` QUE RECEBE ID DE LINHA RESOLVE O CLIENTE E CHAMA `tenant_ok` ANTES DE
   ESCREVER (PR-SEG-TENANT-VARREDURA-01A, 03/10, so' banco; migration 20261027192400, ⚠ registrada como 20261003215217; ledger =
   arquivo, md5 b856a932…). SECURITY DEFINER atravessa a RLS: sem a guarda no corpo, quem souber o uuid de uma linha de outro
