@@ -480,6 +480,63 @@ describe('STATUS-SALDO — conciliado pelo saldo com aviso do extrato: verde, 2�
   });
 });
 
+/* ── PR-CONC-SALDOS-LAYOUT-01: só apresentação de "Saldos por conta" ── */
+describe('LAYOUT — "Saldos por conta": sem a faixa amarela, negativo vermelho no Extrato, selecionada em navy', () => {
+  it('(a) a faixa "Informe o saldo final REAL…" não existe; o lápis da linha continua', async () => {
+    montar();
+    await screen.findAllByTestId('linha-saldo-conta');
+    expect(screen.queryByText(/Informe o saldo final/)).toBeNull();
+    expect(linhaDaConta(ID_LAV).querySelector('button')).not.toBeNull();   // o lápis
+    expect(screen.getByText('Saldos por conta')).toBeInTheDocument();
+  });
+
+  it('(b) Extrato NEGATIVO é vermelho na conta, no subtotal e no Total; positivo e zero, não', async () => {
+    B.contas = [conta('brad', 'Bradesco'), conta('if', 'Bradesco-Invest. Facil', 'inv'), conta(ID_LAV, 'Sicredi Lavoura'), conta('cartao', 'Cartão BB - Visa Infinite', 'cartao')];
+    B.resumo = { '2026-09': [...PAR_ABR24().slice(0, 2), LINHA_EMERSON, LINHA_CARTAO, ...PAR_ABR24().slice(2),
+      SUB('cartao', { conta_nome: 'Cartão', status: 'nao_conciliado', saldo_sistema: -6470.73, saldo_extrato: 0, diferenca: 6470.73 })] };
+    montar();
+    await screen.findAllByTestId('linha-saldo-conta');
+    const extratoDa = (id: string) => within(linhaDaConta(id)).getByTestId('conta-extrato');
+    /* a busca sabe achar: os três níveis têm Extrato negativo neste fixture */
+    expect(n(extratoDa('brad').textContent)).toBe('-R$ 55.734,67');
+    expect(extratoDa('brad').className).toContain('text-destructive');
+    expect(extratoDa('if').className).toContain('text-destructive');           // −4,02
+    const subs = screen.getAllByTestId('subtotal-extrato');
+    const sub = (txt: string) => subs.find((s) => n(s.textContent) === txt)!;
+    expect(sub('-R$ 55.734,67').className).toContain('text-destructive');      // Conta corrente
+    expect(sub('R$ 0,00').className).not.toContain('text-destructive');        // Cartão: zero não é negativo
+    expect(n(screen.getByTestId('total-extrato').textContent)).toBe('-R$ 55.738,69');
+    expect(screen.getByTestId('total-extrato').className).toContain('text-destructive');
+    /* positivo e zero ficam na cor do texto */
+    expect(n(extratoDa(ID_LAV).textContent)).toBe('R$ 155.972,29');
+    expect(extratoDa(ID_LAV).className).not.toContain('text-destructive');
+    expect(extratoDa('cartao').className).not.toContain('text-destructive');
+    /* o Sistema segue a mesma regra, como antes */
+    expect(screen.getByTestId('total-sistema').className).toContain('text-destructive');
+  });
+
+  it('(c) a conta selecionada tem o fundo navy a 10%, o filete e o nome em destaque; as demais ficam a 0,3', async () => {
+    await abrirConta(ID_LAV);
+    await waitFor(() => expect(linhaDaConta(ID_LAV).getAttribute('data-ativa')).toBe('sim'));
+    const ativa = linhaDaConta(ID_LAV);
+    expect(ativa.className).toContain('bg-primary/10');
+    expect(ativa.style.opacity).toBe('1');
+    expect(ativa.querySelector('td')?.className).toContain('shadow-[inset_3px_0_0_hsl(var(--primary))]');
+    expect(within(ativa).getByTestId('nome-conta').className).toContain('font-semibold text-primary');
+    for (const id of ['cartao', 'parada']) {
+      const outra = linhaDaConta(id);
+      expect(outra.style.opacity).toBe('0.3');
+      expect(outra.className).not.toContain('bg-primary/10');
+      expect(outra.querySelector('td')?.className).not.toContain('inset_3px');
+      expect(within(outra).getByTestId('nome-conta').className).not.toContain('font-semibold');
+    }
+    /* sem seleção, ninguém apagado nem marcado */
+    fireEvent.click(screen.getByText('← Todas'));
+    await waitFor(() => expect(linhaDaConta(ID_LAV).getAttribute('data-ativa')).toBeNull());
+    expect(screen.getAllByTestId('linha-saldo-conta').map((r) => r.style.opacity)).toEqual(['1', '1', '1']);
+  });
+});
+
 describe('T6 — a régua nasce neutra e se pinta quando o status do ano responde; a tela não espera', () => {
   it('antes do status do ano: só o mês aberto pintado (pelo resumo) e o Resumo já na tela; depois, os meses do ano', async () => {
     let soltar: () => void = () => {};

@@ -162,7 +162,7 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 03/10/2026 (PR-CONC-STATUS-SALDO-01b, +9: `src/lib/conciliacao/resumoDoDono.test.ts` 2,
+  Baseline em 04/10/2026 (PR-CONC-SALDOS-LAYOUT-01, +3 em `src/pages/conciliacaoDono.test.tsx`; antes o PR-CONC-STATUS-SALDO-01b, +9: `src/lib/conciliacao/resumoDoDono.test.ts` 2,
   `src/pages/conciliacaoDono.test.tsx` 6, `src/v2/components/SeletorPeriodo.test.tsx` 1; antes o PR-CONC-INTERNA-SEPARADA-01b, +31: `src/lib/conciliacao/resumoDoDono.test.ts` 10,
   `src/lib/conciliacao/resumoMes.test.ts` 5, `src/components/conciliacao/painelDono.test.tsx` 5, `src/pages/conciliacaoDono.test.tsx` 9,
   `src/components/financeiro-v2/espelhoDono.test.tsx` 2; antes o PR-CONC-SALDO-UMA-REGUA-02b, +10 −8: `src/components/conciliacao/painelDono.test.tsx` 10; sairam os 8
@@ -172,7 +172,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3178
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3181
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -1458,6 +1458,21 @@ docs/historico/frentes-ate-2026-09-29.md.)
     coluna Conta). A cor do mes e do ponto continua sendo o status.
   · OCULTAS: a interna fica visivel quando o status DELA nao e' conciliado OU o `par_status` (o da mae) nao e'.
   Fixture real: `src/lib/conciliacao/statusSaldo.fixture.json` (linhas do dono lidas do proto depois da 20261027192700).
+- ⚠ LAYOUT DE "SALDOS POR CONTA" (PR-CONC-SALDOS-LAYOUT-01, Gabriel 03-04/10, so' apresentacao, `ConciliacaoBancariaTab.tsx`):
+  SEM a faixa amarela de orientacao ("Informe o saldo final REAL…"). Cabecalho das colunas NAVY opaco em duas camadas
+  (`bg-primary` + 10% de `primary-foreground`), 9,5px, "Conta" a' esquerda e os valores a' direita. Total em `bg-card`, rotulo e
+  valores a 10,5px bold. Faixa de grupo com rotulo a 10px `text-primary` (o cinza em duas camadas ficou). Contas a 10px com
+  recuo de 18px; a SELECIONADA e' `bg-primary/10` (classe, nao estilo inline) + filete de 3px por sombra interna na primeira
+  celula + nome em `font-semibold text-primary`; as demais a 0,3. NEGATIVO E' VERMELHO em Sistema E em Extrato nos tres niveis,
+  uma funcao so' (`corDoValor`); a Diferenca nao mudou. A celula do lapis nao tem padding vertical nem entrelinha (o botao de
+  16px levava a linha a 21,5px). Medido a 1.135 / 1.280 / 1.366: cabecalho 18,25 · Total 21,75 · grupo 20 · conta 20,3–20,8;
+  0 valores estourando ou colando; sticky intacto (thead em 33,5, faixa de grupo em 73,5).
+  ⚠ EMENDA DE SUBPIXEL ENTRE CELULAS COM FUNDO: com `table-layout:auto` as celulas caem em posicao fracionaria e entre duas
+    vizinhas aparece um fio do que esta' atras. Fundo no `tr`/`thead` NAO resolve (o navegador pinta o fundo da linha celula a
+    celula). Conserto: 1px de sombra EXTERNA para cada lado na COR COMPOSTA do fundo (`color-mix` dos dois tokens da camada:
+    90% primary + 10% primary-foreground no cabecalho; 85% card + 15% muted-foreground na faixa de grupo, `SOMBRA_FAIXA_GRUPO`).
+    Sombra na cor de UMA camada so' risca a vizinha; sombra nao ocupa espaco (colunas e alturas identicas antes x depois).
+  ⚠ A TELA DESTA MAQUINA TEM 1.168px: 1.280 e 1.366 se medem num IFRAME da propria aplicacao com esse viewport (mesmo login).
 - ⚠ FUNCAO SECURITY DEFINER EXPOSTA A `authenticated` QUE RECEBE ID DE LINHA RESOLVE O CLIENTE E CHAMA `tenant_ok` ANTES DE
   ESCREVER (PR-SEG-TENANT-VARREDURA-01A, 03/10, so' banco; migration 20261027192400, ⚠ registrada como 20261003215217; ledger =
   arquivo, md5 b856a932…). SECURITY DEFINER atravessa a RLS: sem a guarda no corpo, quem souber o uuid de uma linha de outro
