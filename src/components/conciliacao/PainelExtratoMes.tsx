@@ -10,6 +10,7 @@ import {
 import { useSaldoGerencialDoMes, useImportacoesDaConta, importacoesDoMes, useSaldoDeclaradoOfx } from '@/hooks/useExtratoDaConta';
 import { useQueryClient } from '@tanstack/react-query';
 import { useResumoMes, useReleDonoAoMudarLancamentos, CHAVE_RESUMO_MES } from '@/hooks/useResumoConciliacao';
+import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
 import { sistemaNaPosicao, TITULO_DIFERENCA_NA_POSICAO_INDISPONIVEL } from '@/lib/conciliacao/resumoDoDono';
 import { SaldoRealDialog } from '@/components/conciliacao/SaldoRealDialog';
 import { ImportacoesDialog } from '@/components/conciliacao/ImportacoesDialog';
@@ -388,7 +389,11 @@ export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comP
         contaNome={contaNome} importacoes={importacoes.importacoes}
         anoMes={`${ano}-${String(mes).padStart(2, '0')}`}
         carregando={importacoes.loading}
-        aoDesfeito={() => { setHouveDesfazer(true); void importacoes.recarregar(); }}
+        aoDesfeito={() => {
+          setHouveDesfazer(true); void importacoes.recarregar();
+          /* CONC-SEM-F5-01 — gravou com a Conciliação montada: avisa o canal de lançamentos, e o dono relê sem F5. */
+          if (clienteId) notificarLancamentosMudaram(clienteId);
+        }}
       />
       {/* ⚠ O PALCO NÃO MORA MAIS NESTE CARD — ele vive em `AcoesDoMes` (aba "Casar
           lançamentos") desde o PR-CONCILIACAO-PASSOS-01, e o que ele grava chega aqui pelo

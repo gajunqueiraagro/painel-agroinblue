@@ -23,7 +23,7 @@ import { cn } from '@/lib/utils';
 import { iconeOrigemLancamento, LEGENDA_ICONES, rotuloOrigem } from '@/v2/lib/origemLancamento';
 import { desfazerVinculo, desfazerGrupo } from '@/hooks/useConciliacaoDoMes';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
-import { useFinanceiroV2, type LancamentoV2 } from '@/hooks/useFinanceiroV2';
+import { useFinanceiroV2, notificarLancamentosMudaram, type LancamentoV2 } from '@/hooks/useFinanceiroV2';
 import { useFazenda } from '@/contexts/FazendaContext';
 import {
   CasarComBancoModal, CasarN1Modal, CasarBlocoModal, fraseDaRecusa,
@@ -52,7 +52,7 @@ import {
   montarMesa, sinalDoAplicado, ordenar,
   type EspSis, type EspCandidato, type EspelhadosReais, type FilhaConf,
 } from '@/lib/conciliacao/mesaDoDia';
-import { useResumoMes } from '@/hooks/useResumoConciliacao';
+import { useResumoMes, useReleDonoAoMudarLancamentos } from '@/hooks/useResumoConciliacao';
 import { fraseDoRetido, saldosDaLinha, TIPO_TRANSFERENCIA_INTERNA, type LinhaResumo, type LinhaSistemaDono } from '@/lib/conciliacao/resumoDoDono';
 export {
   montarMesa, totaisDoEspelho, sinalDoAplicado,
@@ -1834,6 +1834,8 @@ export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes, mostrarCan
      `fn_conciliacao_resumo_mes` (com UMA conta ela traz os dias e a lista do sistema). Chamado antes dos retornos
      antecipados abaixo — hook nunca depois de `return`. Sem conta, a consulta não sai. */
   const resumoQ = useResumoMes(clienteId, anoMes, contaId ? [contaId] : []);
+  /* CONC-SEM-F5-01 — o quadro do topo e a aba Sistema ouvem o canal: gesto que grava relê o dono sem F5. */
+  useReleDonoAoMudarLancamentos(clienteId);
   const linhaDono = resumoQ.data?.find((l) => l.nivel === 'conta' && l.conta_id === contaId) ?? null;
   /* ⚠ NASCE EM "Extrato (banco)", NÃO MAIS NA CONFERÊNCIA — PR-CONC-CONFERENCIA-MODAL-01: a
      Conferência virou modal, e nascer nela abriria o Dialog sozinho, sem nada atrás. */
@@ -1935,10 +1937,17 @@ export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes, mostrarCan
   const retidoTopo = linhaDono ? fraseDoRetido(linhaDono.retido_em_depositos) : null;
 
   /* O mesmo elemento vai inline (`soConferencia`) ou dentro do Dialog — um só, nunca dois. */
+  /* CONC-SEM-F5-01 — TODO gesto da Conferência (casar 1:1 e N:1, bloco, desfazer bloco, desconciliar, ignorar, reverter) cai
+     aqui: além de reler o espelho, AVISA o canal de lançamentos. Era o caso do Gabriel (04/10): conciliava no Casar, voltava à
+     aba Conciliação e o mês seguia "Não conciliado" até o F5 — este ponto só fazia o `refetch`. */
+  const aoMudarConferencia = () => {
+    void refetch();
+    if (clienteId) notificarLancamentosMudaram(clienteId);
+  };
   const conferencia = (
     <AbaConferencia data={data} anoMes={anoMes} nomeConta={data.escopo.nome_conta ?? undefined}
       clienteId={clienteId} contaId={contaId} internos={internas.lancamentosInternos}
-      onAbrir={onAbrirLancamento} onMudou={() => { void refetch(); }}
+      onAbrir={onAbrirLancamento} onMudou={aoMudarConferencia}
       mostrarCandidatos={mostrarCandidatos} soNaoConciliados={soNaoConciliados}
       diaFoco={aba === 'conferencia' ? diaFoco : null} onDiaFocado={onDiaFocado} />
   );

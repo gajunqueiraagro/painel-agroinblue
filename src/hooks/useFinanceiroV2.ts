@@ -345,10 +345,12 @@ const lancamentosSubscribers = new Map<string, Set<() => void>>();
  * notificação seria a segunda fonte da mesma pergunta.
  * ⚠ CHAMAR DEPOIS DA ESCRITA, NUNCA ANTES — a regra que já valia aqui dentro.
  */
-export function notificarLancamentosMudaram(clienteId: string) {
+export function notificarLancamentosMudaram(clienteId: string, menosEste?: (() => void) | null) {
   const subs = lancamentosSubscribers.get(clienteId);
   if (!subs) return;
-  for (const cb of [...subs]) cb();
+  /* `menosEste` (CONC-SEM-F5-01): quem gravou e ja' remendou a propria tela nao precisa se reler — o editar do Financeiro
+     remenda a linha (PR-FIN-SAVE-LENTO-01) e recarregar a lista inteira a cada edicao desfaria isso. Os OUTROS ouvem. */
+  for (const cb of [...subs]) if (cb !== menosEste) cb();
 }
 
 /**
@@ -752,6 +754,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
   };
 
   useEffect(() => { loadLancamentosRef.current = loadLancamentos; }, [loadLancamentos]);
+  const meuOuvinteRef = useRef<(() => void) | null>(null);
 
   /* Inscrição por cliente: trocar de cliente sai do Set antigo pelo cleanup e entra no
      novo. Só o `clienteId` na dependência — o callback alcança o loader corrente pelo ref,
@@ -766,10 +769,19 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     let set = lancamentosSubscribers.get(clienteId);
     if (!set) { set = new Set(); lancamentosSubscribers.set(clienteId, set); }
     set.add(cb);
+    meuOuvinteRef.current = cb;
     return () => {
       set.delete(cb);
+      if (meuOuvinteRef.current === cb) meuOuvinteRef.current = null;
       if (set.size === 0) lancamentosSubscribers.delete(clienteId);
     };
+  }, [clienteId]);
+
+  /* CONC-SEM-F5-01 — editar, excluir, excluir em lote e realizar em lote AVISAM o canal depois de gravar: a Conciliacao (o dono
+     do resumo e a regua), o DRE da lavoura e as outras instancias deste hook releem sem F5. Esta instancia fica de fora
+     (`menosEste`): quem a usa ja' atualiza a propria lista como sempre fez. */
+  const avisarOsOutros = useCallback(() => {
+    if (clienteId) notificarLancamentosMudaram(clienteId, meuOuvinteRef.current);
   }, [clienteId]);
 
   /* ⚠ O SEGUNDO ARGUMENTO É OPCIONAL DE PROPÓSITO: os 20 chamadores existentes seguem
@@ -1066,7 +1078,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
         /* ⚠ A MESMA RELEITURA DO RAMO COMUM — FIN-V2-REFRESH-01. O que o ramo pode GRAVAR
            continua restrito acima; o que muda e' so' a tela passar a mostrar o que ficou. */
         await remendarComOBanco();
-        if (!opts?.silent) toast.success('Lançamento atualizado');
+        if (!opts?.silent) { toast.success('Lançamento atualizado'); avisarOsOutros(); }
         return true;
       }
     }
@@ -1169,9 +1181,10 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       console.warn(normalizarErro(syncErr, 'sincronizarVinculosDoLancamento').diagnostico);
     }
 
-    if (!opts?.silent) toast.success('Lançamento atualizado');
+    /* `silent` e' o laco do importador de Excel: quem roda em lote avisa uma vez no fim, nao a cada linha. */
+    if (!opts?.silent) { toast.success('Lançamento atualizado'); avisarOsOutros(); }
     return true;
-  }, [clienteId, user, classificacoes]);
+  }, [clienteId, user, classificacoes, avisarOsOutros]);
 
   /**
    * Cancelamento lógico de UM lançamento.
@@ -1235,8 +1248,9 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     }
 
     toast.success('Lançamento excluído com sucesso');
+    avisarOsOutros();
     return true;
-  }, [user]);
+  }, [user, avisarOsOutros]);
 
   /**
    * ⚠ FIN-V2-CANCEL-MOTIVO-01 — UM motivo para o lote, gravado com o autor em cada linha, como no
@@ -1307,8 +1321,9 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       await recomputarStatusExtrato(extratoId);
     }
 
+    if (totalExcluidos > 0) avisarOsOutros();
     return { excluidos: totalExcluidos, bloqueados: [], puladosOC };
-  }, [user]);
+  }, [user, avisarOsOutros]);
 
 
   /**
@@ -1353,14 +1368,16 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
         if (error) {
           // `atualizados` devolve o parcial já persistido — não zerar.
           reportarErro(error, 'marcarRealizadoEmLote', toast.error);
+          if (atualizados > 0) avisarOsOutros();
           return { atualizados };
         }
         atualizados += batch.length;
       }
     }
 
+    if (atualizados > 0) avisarOsOutros();
     return { atualizados };
-  }, [clienteId, user]);
+  }, [clienteId, user, avisarOsOutros]);
 
 
   /* ⚠ `duplicarLancamento` SAIU — PR-FIN-DUPLICAR-ABRE-MODAL-01. Era um `insert` direto que gravava a cópia na hora,

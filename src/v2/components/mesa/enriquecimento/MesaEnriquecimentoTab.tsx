@@ -10,7 +10,7 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
-import { useFinanceiroV2, notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
+import { useFinanceiroV2 } from '@/hooks/useFinanceiroV2';
 import { useQueryClient } from '@tanstack/react-query';
 import { useClassificacaoStaging, useSessoesClassificacao } from '@/v2/hooks/useClassificacaoStaging';
 import {
@@ -936,8 +936,7 @@ export function MesaEnriquecimentoTab({
       if (res?.ok) {
         const n = Array.isArray(res.lancamentos_criados) ? res.lancamentos_criados.length : stagingIds.length;
         toast.success(`${n} lançamentos criados no lugar do consolidado.`);
-        /* O extrato mudou de dono e o consolidado foi cancelado: o Financeiro precisa saber. */
-        if (clienteAtual?.id) notificarLancamentosMudaram(clienteAtual.id);
+        /* O extrato mudou de dono e o consolidado foi cancelado: quem avisa o Financeiro e' o hook (`useClassificacaoStaging`). */
       } else {
         toast.error(res?.mensagem ?? MOTIVO_MSG[res?.motivo] ?? `Não agrupado (${res?.motivo ?? 'erro'}).`);
       }
@@ -974,7 +973,6 @@ export function MesaEnriquecimentoTab({
       if (!res?.ok) {
         return { ok: false, mensagem: res?.mensagem ?? MOTIVO_MSG[res?.motivo] ?? `O banco recusou (${res?.motivo ?? 'erro'}).` };
       }
-      if (g.forma === 'desmembrar' && clienteAtual?.id) notificarLancamentosMudaram(clienteAtual.id);
       if (clienteAtual?.id) void qcMesa.invalidateQueries({ queryKey: ['espelho-conciliacao', clienteAtual.id] });
       if (g.forma === 'bloco' || g.forma === 'casar' || g.forma === 'soltar') {
         void qcMesa.invalidateQueries({ queryKey: ['sistema-nao-explicado'] });
@@ -1194,7 +1192,6 @@ export function MesaEnriquecimentoTab({
       if (res?.ok) {
         setDesfazerSplit(null);
         limparEditada(id);
-        if (clienteAtual?.id) notificarLancamentosMudaram(clienteAtual.id);
       } else {
         setDesfazerSplit({ id, etapa: 'erro', texto: String(res?.mensagem ?? `o banco recusou (${res?.motivo ?? 'sem motivo'})`) });
       }
@@ -1530,7 +1527,6 @@ export function MesaEnriquecimentoTab({
   async function handleCancelarDuplicado(lancId: string, motivo: string): Promise<boolean> {
     const ok = await excluirLancamento(lancId, motivo);
     if (ok) {
-      if (clienteAtual?.id) notificarLancamentosMudaram(clienteAtual.id);
       await qcMesa.invalidateQueries({
         queryKey: ['sistema-nao-explicado', sessaoId, contaIdSel, mesParaTransferencias],
       });
@@ -1977,7 +1973,6 @@ export function MesaEnriquecimentoTab({
                   qcMesa.invalidateQueries({ queryKey: ['parcelas-financiamento-pendentes'] });
                   qcMesa.invalidateQueries({ queryKey: ['financiamentos-lista', clienteAtual?.id] });
                   qcMesa.invalidateQueries({ queryKey: ['financiamento-parcelas'] });
-                  if (clienteAtual?.id) notificarLancamentosMudaram(clienteAtual.id);
                   toast.success('Aplicado.');
                 }}
                 onErro={(m) => toast.error(`Não foi possível: ${m}`)}

@@ -51,7 +51,21 @@ const FIN = vi.hoisted(() => {
     buscarLancamentoPorId: async () => null, criarFornecedor: noop, editarLancamento: noop, criarLancamento: noop, excluirLancamento: noop,
   };
 });
-vi.mock('@/hooks/useFinanceiroV2', () => ({ useFinanceiroV2: () => FIN }));
+/* CONC-SEM-F5-01: o Espelho ouve e avisa o canal de lançamentos — o mock leva as duas pontas dele, e elas FUNCIONAM (um
+   canal de verdade, por cliente), para o caso do Gabriel ser provado de ponta a ponta: gesto -> aviso -> o dono relê. */
+const CANAL = vi.hoisted(() => ({ ouvintes: new Map<string, Set<() => void>>(), avisos: [] as string[] }));
+vi.mock('@/hooks/useFinanceiroV2', () => ({
+  useFinanceiroV2: () => FIN,
+  inscreverEmLancamentos: (cliente: string, cb: () => void) => {
+    const set = CANAL.ouvintes.get(cliente) ?? new Set<() => void>();
+    CANAL.ouvintes.set(cliente, set); set.add(cb);
+    return () => { set.delete(cb); };
+  },
+  notificarLancamentosMudaram: (cliente: string) => {
+    CANAL.avisos.push(cliente);
+    for (const cb of [...(CANAL.ouvintes.get(cliente) ?? [])]) cb();
+  },
+}));
 vi.mock('@/contexts/FazendaContext', () => ({ useFazenda: () => ({ fazendas: [] }) }));
 const INTERNAS = vi.hoisted(() => ({
   contasInternas: new Set<string>(), lancamentosInternos: new Set<string>(),
@@ -67,6 +81,7 @@ vi.mock('@/components/financeiro-v2/CasarComBancoModal', () => ({
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 import { EspelhoConciliacaoTab } from './EspelhoConciliacaoTab';
+import { useStatusAno } from '@/hooks/useResumoConciliacao';
 
 const ESPELHO: EspelhadosReais = {
   escopo: { cliente_id: 'nj', conta_id: 'bb', ano_mes: '2026-09', nome_conta: 'Banco do Brasil' },
@@ -116,6 +131,7 @@ beforeEach(() => {
   fixture.resumo = RESUMO;
   fixture.tabelas = {};
   fixture.chamadas = [];
+  CANAL.avisos = [];
   Element.prototype.scrollIntoView = () => {};
 });
 
@@ -521,6 +537,37 @@ describe('CONC-N1-DESCONCILIAR-01 — N:1 sem grupo desconcilia por extrato', ()
     await waitFor(() => expect(fixture.chamadas.find((c) => c.fn === 'fn_desfazer_vinculo_extrato')?.args)
       .toEqual({ p_extrato_id: 'e4', p_motivo: 'desfeito_no_espelho' }));
     expect(fixture.chamadas.filter((c) => c.fn === 'fn_desfazer_vinculo_extrato')).toHaveLength(1);
+  });
+
+  /* CONC-SEM-F5-01 — O CASO DO GABRIEL (04/10): conciliava/desconciliava no Casar, voltava à aba Conciliação e o mês seguia com o
+     número de antes até o F5. Todo gesto da Conferência cai no `onMudou` do Espelho, que agora AVISA o canal — e o dono (o resumo
+     E a régua do ano) é relido. Aqui a régua está montada ao lado, como na tela (a aba Conciliação fica montada atrás do Casar). */
+  it('CONC-SEM-F5-01: o gesto da Conferência avisa o canal, e o resumo E a régua são relidos sem F5', async () => {
+    fixture.espelho = N1(null);
+    function ReguaDoAno() { useStatusAno('nj', 2026); return null; }
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={qc}>
+        <ReguaDoAno />
+        <EspelhoConciliacaoTab clienteId="nj" contaId="bb" ano="2026" mes="09" />
+      </QueryClientProvider>,
+    );
+    await screen.findByTestId('resumo-espelho');
+    fireEvent.click(botaoSubAba('Conferência'));
+    const modal = await screen.findByTestId('modal-conferencia');
+    const chamadas = (fn: string) => fixture.chamadas.filter((c) => c.fn === fn).length;
+    await waitFor(() => expect(chamadas('fn_conciliacao_status_ano')).toBe(1));
+    const [resumoAntes, reguaAntes] = [chamadas('fn_conciliacao_resumo_mes'), chamadas('fn_conciliacao_status_ano')];
+    expect(resumoAntes).toBe(1);
+    expect(CANAL.avisos).toEqual([]);
+
+    fireEvent.click(item(await abrirMenu(linhaDe(modal, 'TED ENVIADA ITAU 2')), 'Desconciliar'));
+
+    await waitFor(() => expect(CANAL.avisos).toEqual(['nj']));
+    await waitFor(() => expect(chamadas('fn_conciliacao_resumo_mes')).toBe(resumoAntes + 1));
+    await waitFor(() => expect(chamadas('fn_conciliacao_status_ano')).toBe(reguaAntes + 1));
+    /* o número de antes fica na tela enquanto o novo não chega: o quadro do topo não some */
+    expect(screen.getByTestId('resumo-espelho')).toBeInTheDocument();
   });
 
   it('a mãe sem grupo diz onde desconciliar', async () => {

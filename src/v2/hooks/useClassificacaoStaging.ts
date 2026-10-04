@@ -11,6 +11,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ErroUsuarioSeguro, normalizarErro } from '@/lib/erroOperacional';
 import { supabase } from '@/integrations/supabase/client';
+import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
 import type { ClassificacaoRow } from '@/v2/lib/excelPreview/loteToClassificacao';
 import { mesPredominante } from '@/v2/lib/mesa/mesDaSessao';
 
@@ -498,6 +499,15 @@ export function useClassificacaoStaging(
     if (clienteId) qc.invalidateQueries({ queryKey: ['classificacao-sessoes', clienteId] });
   };
 
+  /* CONC-SEM-F5-01 — O AVISO E' DO HOOK, nao de cada botao da aba: as quatro mutacoes que MEXEM EM LANCAMENTO (gravar a linha,
+     reverter, desmembrar, desfazer o desmembramento) avisam o canal quando o banco diz `ok` e nao e' ensaio. As demais so'
+     mexem no staging (par, bloco, proposta) e nao avisam. O lote (`useGravarLoteEnriquecimento`) chama a RPC por fora daqui e
+     avisa UMA vez no fim. */
+  const avisarSeGravou = (data: unknown, simular: boolean = false) => {
+    const ok = !!data && typeof data === 'object' && 'ok' in data && (data as { ok?: unknown }).ok === true;
+    if (ok && !simular && clienteId) notificarLancamentosMudaram(clienteId);
+  };
+
   const applyRowMutation = useMutation({
     mutationFn: async (params: { staging_id: string; overwrite: boolean }): Promise<any> => {
       const { data, error } = await (supabase as any).rpc('fn_classificacao_apply_row', {
@@ -507,7 +517,7 @@ export function useClassificacaoStaging(
       if (error) throw error;
       return data;
     },
-    onSuccess: invalidarSessaoAtual,
+    onSuccess: (data) => { invalidarSessaoAtual(); avisarSeGravou(data); },
   });
 
   const reverterRowMutation = useMutation({
@@ -518,7 +528,7 @@ export function useClassificacaoStaging(
       if (error) throw error;
       return data;
     },
-    onSuccess: invalidarSessaoAtual,
+    onSuccess: (data) => { invalidarSessaoAtual(); avisarSeGravou(data); },
   });
 
   /**
@@ -534,7 +544,7 @@ export function useClassificacaoStaging(
       if (error) throw error;
       return data;
     },
-    onSuccess: (_d, params) => { if (!params.simular) invalidarSessaoAtual(); },
+    onSuccess: (data, params) => { if (!params.simular) invalidarSessaoAtual(); avisarSeGravou(data, params.simular); },
   });
 
   // PR-U2b — edição da proposta de enriquecimento (subcentro/favorecido/fazenda/
@@ -634,8 +644,9 @@ export function useClassificacaoStaging(
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: queryKeyStaging(sessaoId) });
+      avisarSeGravou(data);
     },
   });
 

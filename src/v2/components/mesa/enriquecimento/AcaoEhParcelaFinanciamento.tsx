@@ -11,6 +11,8 @@
  * que a tela não conhece (parcela já paga, contrato cancelado, cru já vinculado), e
  * reescrever a mensagem esconderia justamente o que o operador precisa ler.
  */
+import { useCliente } from '@/contexts/ClienteContext';
+import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -48,6 +50,7 @@ export function AcaoEhParcelaFinanciamento({
   const [parcelaId, setParcelaId] = useState<string>('');
   const [sim, setSim] = useState<Simulacao | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  const { clienteAtual } = useCliente();
 
   if (candidatas.length === 0) return null;
 
@@ -77,6 +80,8 @@ export function AcaoEhParcelaFinanciamento({
     setOcupado(true);
     try {
       await chamar(parcelaId, false);
+      /* CONC-SEM-F5-01 — gravou com a Conciliação montada: avisa o canal de lançamentos, e o dono relê sem F5. */
+      if (clienteAtual?.id) notificarLancamentosMudaram(clienteAtual.id);
       setAberto(false); setSim(null); setParcelaId('');
       onAplicado();
     } catch (e: unknown) { onErro(msgErro(e)); }

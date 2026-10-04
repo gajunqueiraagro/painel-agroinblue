@@ -162,7 +162,7 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 04/10/2026 (ACESSOS-02c, +17 em `src/v2/lib/acessoGestos.test.tsx`; antes o ACESSOS-02b, +29: `src/acessoRotas.test.tsx` 15, `src/v2/lib/acessoSaidas.test.tsx` 14; antes o ACESSOS-02a, +26 em `src/v2/lib/acessoTelas.test.tsx`; antes o OC-CC-ACOES-LINHA-02, +20: `src/components/venda/abaContaCorrente.test.tsx` 11,
+  Baseline em 04/10/2026 (CONC-SEM-F5-01, +19: `src/hooks/concSemF5.test.tsx` 18, `src/components/financeiro-v2/conferenciaModal.test.tsx` 1; antes o ACESSOS-02c, +17 em `src/v2/lib/acessoGestos.test.tsx`; antes o ACESSOS-02b, +29: `src/acessoRotas.test.tsx` 15, `src/v2/lib/acessoSaidas.test.tsx` 14; antes o ACESSOS-02a, +26 em `src/v2/lib/acessoTelas.test.tsx`; antes o OC-CC-ACOES-LINHA-02, +20: `src/components/venda/abaContaCorrente.test.tsx` 11,
   `src/lib/oc/abrirLancamentoDaOC.test.ts` 7, `src/components/compra/despesasContaCorrente.test.tsx` 2; antes o UI-LINHA-UNICA-01, +2: `src/components/venda/abaContaCorrente.test.tsx` 1,
   `src/components/financeiro-v2/documentosLayout.test.tsx` 1; antes o OC-BOITEL-REVALORAR-SALVAR-01, +16 em `src/lib/oc/revalorarAoSalvar.test.tsx`; antes o
   FIN-DOCUMENTO-FORM-01, +27 em `src/components/financeiro-v2/documentoFormPorTipo.test.tsx`, e
@@ -180,7 +180,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3373
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3392
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -1391,8 +1391,7 @@ docs/historico/frentes-ate-2026-09-29.md.)
   ⚠ FORA (o que ainda resta depois do 02b): o G6 (ver a regra do 02b, logo abaixo); e, fora da Conciliacao, fluxo de caixa
     realizado, card "Caixa no mes", Contas a Pagar/Receber, Extrato Gerencial e `FinV2SaldosTab` — continuam na regua antiga. O modal "Todos (N)" e as pendencias de classificacao/duplicados seguem
     sobre a lista dos realizados do mes (lista, nao saldo).
-  ⚠ INVALIDACAO: so' onde a aba ja' recarregava (lancamentos mudaram, saldo informado, fechar sem movimento) ela rele' o dono
-    (`releDono`); os gestos de casar/conciliar das outras telas nao invalidam o resumo — PR 03.
+  [INVALIDACAO: o "PR 03" e' o CONC-SEM-F5-01 — ver a regra "F5 NUNCA E' NECESSARIO NA CONCILIACAO".]
   [A "divida 01d" (conta sem extrato divergente so' com `sem_extrato`) FECHOU no PR-CONC-STATUS-SALDO-01a: o motivo e' sempre
     `saldo_diverge` com o valor, e `sem_extrato` virou aviso. O NJ Cartao BB Visa Infinite set/26 esta' conciliado, 0,00.]
 - ⚠ O PAINEL DO MES, O LAPIS E O "CONCILIAR O MES" LEEM O DONO (PR-CONC-SALDO-UMA-REGUA-02b, 03/10, so' tela).
@@ -1618,6 +1617,59 @@ docs/historico/frentes-ate-2026-09-29.md.)
   ⚠ DIVIDA "FECHAR CONTAS SEM MOVIMENTO" EM MES EM CURSO (decisao do Gabriel pendente): em 04/10 o botao fechou o Itau CDI da Vera
     em outubro (dia 4) com o saldo do sistema, e dois minutos depois o saldo de setembro foi corrigido — o final gravado ficou
     velho e a conta virou 'nao_conciliado' por um saldo que ninguem conferiu.
+- ⚠ F5 NUNCA E' NECESSARIO NA CONCILIACAO (CONC-SEM-F5-01, Gabriel 04/10, so' tela): GESTO QUE GRAVA LANCAMENTO, VINCULO, SALDO OU
+  EXTRATO COM A CONCILIACAO MONTADA AVISA O CANAL DE LANCAMENTOS (`notificarLancamentosMudaram`, `src/hooks/useFinanceiroV2.ts`), E A
+  CONCILIACAO RELE O DONO AO VOLTAR A' VISTA. Nasce do caso do Gabriel (Vera set/26, Itau Personalite): conciliou no Casar, voltou a'
+  aba Conciliacao e o mes seguia "Nao conciliado, diferenca 305.371,67" ate' o F5.
+  · A CAUSA MEDIDA: as cinco abas internas (Importar, Casar, Enriquecer, Gerencial, Conciliacao) sao estado da MESMA tela — trocar
+    de aba NAO desmonta —, e todo gesto do Casar/Conferencia terminava num `onMudou` que so' relia o espelho. Trocar de SECAO
+    desmonta a tela, e o canal so' fala com quem esta' montado: aviso dado na OC nao alcanca a Conciliacao.
+  · O DONO SE INVALIDA POR UMA FUNCAO SO', `invalidarDono(qc, cliente)` (`src/hooks/useResumoConciliacao.ts`): as DUAS chaves pelo
+    prefixo (o resumo de todas as contas, cada chave por conta e a regua do ano). Invalidar VENCE o `staleTime` de 60 s do
+    `servirDoCache`, mantem o numero anterior na tela enquanto o novo nao chega, e leva `cancelRefetch: false` — releitura em curso
+    nao e' cancelada nem duplicada. `useReleDonoAoMudarLancamentos` (canal -> `invalidarDono`) passou a reler tambem a REGUA; o
+    Espelho (quadro do topo e aba Sistema) o usa.
+  · VOLTAR A' VISTA (`useReleDonoAoVoltarAVista(cliente, aVista)`, na `ConciliacaoBancariaTab` com a aba interna "Conciliacao"):
+    ao entrar na secao, ao trocar para a aba interna e quando a janela volta a ter foco/visibilidade — UMA chamada do resumo e UMA
+    da regua por retorno (eventos colados dentro de `JANELA_DO_RETORNO_MS` contam um). Fora de vista nao dispara. E' a rede de
+    seguranca para o que foi gravado em OUTRA secao; a chave por conta fica marcada e o painel com `servirDoCache` rele ao montar.
+  · ⚠ A RECARGA PELO CANAL E' SILENCIOSA (`loadData(true)`): nao liga o `loading` nem esvazia a lista. Tres abas internas se
+    desenham atras de `!loading`; com o Casar e o Importar avisando a cada gesto, a recarga normal as DESMONTARIA no meio do trabalho
+    (a Conferencia aberta, a previa da importacao).
+  · ⚠ `notificarLancamentosMudaram(cliente, menosEste)`: o `useFinanceiroV2` avisa os OUTROS e fica de fora — toda instancia dele
+    ouve o canal recarregando a lista inteira, e avisar a si mesmo no editar desfaria o PR-FIN-SAVE-LENTO-01. O editar em laco
+    (`silent`, o importador de Excel) nao avisa por linha.
+  · QUEM AVISA (no ponto de sucesso do dono do gesto, nunca em cada botao): o `onMudou` do Espelho (casar 1:1 e N:1, bloco, desfazer
+    bloco, desconciliar, ignorar, reverter — `EspelhoConciliacaoTab.tsx`); criar pela linha (`CriarLancamentoDaLinha`); importar
+    extrato (`useImportacaoExtrato`); desfazer importacao (`PainelExtratoMes`, que tem o cliente); cancelar e reverter movimento
+    (`useCancelarMovimento`); a Mesa do Enriquecer no HOOK (`useClassificacaoStaging`: gravar a linha, reverter, desmembrar, desfazer
+    o desmembramento — so' com `ok` do banco e fora do ensaio; os 5 avisos soltos da `MesaEnriquecimentoTab` SAIRAM); parcela de
+    financiamento e transferencia pela Mesa (`AcaoEhParcelaFinanciamento`, `useTransferenciaAplicar`); editar, excluir, excluir em
+    lote e realizar em lote (`useFinanceiroV2`). Ja' avisavam: criar e criar em lote, parcelamento, vincular/desvincular/
+    reclassificar, criar OC do legado, modal zoo, "Conciliar o mes", transferencias entre contas e o lote do Enriquecer.
+  · Testes: `src/hooks/concSemF5.test.tsx` (18) e o caso do Gabriel de ponta a ponta em `conferenciaModal.test.tsx` (gesto da
+    Conferencia -> aviso -> resumo E regua relidos). 16 mutacoes, uma por bloco, cada uma derrubando o seu caso.
+  ⚠ MOCK DE `@/hooks/useFinanceiroV2` EM TESTE QUE MONTA O ESPELHO OU O CRIAR PELA LINHA leva `inscreverEmLancamentos` e
+    `notificarLancamentosMudaram` (e o `ClienteContext`, no criar pela linha).
+  ⚠ DIVIDA CANAL-LANCAMENTOS-AVISO-GERAL-01 — os demais pontos que gravam e NAO avisam (medidos em 04/10; ~60 pontos, uns 20 sem
+    hook dono). Nao afetam a Conciliacao (ela rele ao voltar a' vista); importam para os outros ouvintes do canal (a lista de
+    Lancamentos, `useLancamentosComOC`, o DRE da lavoura) quando montados junto:
+    OC — `useOcCompromissos.ts` (criar, programar, parcelas, materializar, ajustar valor), `useOperacaoLiquidacao.ts` (gerar e
+    cancelar obrigacao, liquidar, estornar), `useOcContaCorrente.ts`, `useOperacaoRecebimento.ts`, `useCompraLotes.ts`,
+    `useOperacaoAbate.ts`, `useReprogramarCompromissoLote.ts`, `useExcluirLoteOC.ts`, `useOperacaoComercial.ts`;
+    recorrencia e contratos — `useRecorrencias.ts` (gerar, propagar, cancelar), `useContratos.ts`;
+    financiamentos — `useFinanciamentoCadastro.ts`, `ModalBaixaParcela.tsx`, `FinanciamentoDetalhe.tsx`, `parcelaMirror.ts`;
+    paineis legados que gravam direto — `AbateFinanceiroPanel.tsx`, `CompraFinanceiroPanel.tsx`, `VendaFinanceiroPanel.tsx`,
+    `gerarFinanceiroCompra.ts`, `gerarFinanceiroConsumo.ts`, `useBoitelOperacoes.ts`, `ContaBoitelTab.tsx`, `useFinanceiro.ts`,
+    `useLancamentos.ts`;
+    agricultura — `useCargaMandioca.ts`, `useBarterMaterializacao.ts`, `AgriEstoqueGraosTab.tsx`;
+    correcoes e auditoria — `AuditoriaDuplicidadeTab.tsx`, `CorrecaoTransferenciasBanner.tsx`, `CorrecaoTransferenciasDialog.tsx`,
+    `FornecedorFormDialog.tsx`, `FinV2FornecedoresTab.tsx`;
+    saldo informado fora da Conciliacao — `useExtratoDaConta.ts`, `FinV2SaldosTab.tsx`, `FinV2ContasTab.tsx`;
+    cancelar por RPC — `ContasPagarReceberTab.tsx` (cache proprio `cpr-lancs`/`cpr-caixa`, nao ouve o canal),
+    `LancamentoLeituraDialog.tsx`; e telas fora das abas da Conciliacao — `EstacaoConciliar.tsx`, `VincularMatchDireto.tsx`,
+    `DecisaoDerivadosDialog.tsx` fora do Espelho, `CasarComBancoModal.tsx` (dentro do Espelho ja' passa pelo `onMudou`),
+    `useConciliacaoDoMes.ts`, `useConciliarMes.ts` (o dialogo avisa).
 - ⚠ A TELA ESCREVE O SALDO NO STATUS E O EXTRATO NA "2a PROVA" (PR-CONC-STATUS-SALDO-01b, so' tela). `resumoDoDono.ts` le'
   `avisos` (conta, tipo, total, status do ano e as contas citadas em `contas_nao_conciliadas`), sem cast. AVISO TRATADO COMO MOTIVO
   E' DEFEITO (mutacao derruba 11 testes).

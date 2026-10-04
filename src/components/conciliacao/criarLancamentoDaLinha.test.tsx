@@ -46,7 +46,10 @@ vi.mock('@/hooks/useFinanceiroV2', () => ({
     loadContas: async () => {}, loadFornecedores: async () => {}, loadClassificacoes: async () => {}, loadSafras: async () => {},
     criarFornecedor: async () => null, criarLancamentoComId: M.criarComId,
   }),
+  /* CONC-SEM-F5-01: o criar pela linha avisa o canal de lançamentos depois que a RPC grava. */
+  notificarLancamentosMudaram: () => {},
 }));
+vi.mock('@/contexts/ClienteContext', () => ({ useCliente: () => ({ clienteAtual: { id: 'cli-1' } }) }));
 vi.mock('@/components/financeiro-v2/LancamentoV2Dialog', () => ({
   LancamentoV2Dialog: (p: PropsCapturadas) => {
     M.props = p;

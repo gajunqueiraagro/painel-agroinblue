@@ -18,6 +18,7 @@
  * mesma regra.
  */
 import { useCallback, useState } from 'react';
+import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -108,6 +109,8 @@ export function useCancelarMovimento(clienteId: string | null, contaId: string |
       qc.invalidateQueries({ queryKey: ['espelho-conciliacao', clienteId, contaId, anoMes] }),
       qc.invalidateQueries({ queryKey: ['extrato-bancario-v2'] }),
     ]);
+    /* CONC-SEM-F5-01 — gravou com a Conciliação montada: avisa o canal de lançamentos, e o dono relê sem F5. */
+    if (clienteId) notificarLancamentosMudaram(clienteId);
   }, [qc, clienteId, contaId, anoMes]);
 
   const cancelar = useCallback(async (extratoId: string, motivo: string): Promise<boolean> => {

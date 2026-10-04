@@ -15,6 +15,8 @@
  * prontas ('ja e transferencia', 'a outra conta tem de ser diferente da conta do
  * lancamento'), e reescrevê-las aqui só criaria uma segunda versão da mesma verdade.
  */
+import { useCliente } from '@/contexts/ClienteContext';
+import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -36,6 +38,7 @@ const msg = (e: unknown): string => {
 
 export function useTransferenciaAplicar() {
   const [ocupado, setOcupado] = useState(false);
+  const { clienteAtual } = useCliente();
 
   async function chamar(lancamentoId: string, contaOutraId: string, simular: boolean) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado do repo
@@ -57,7 +60,12 @@ export function useTransferenciaAplicar() {
 
   async function aplicar(lancamentoId: string, contaOutraId: string): Promise<SimulacaoTransferencia> {
     setOcupado(true);
-    try { return await chamar(lancamentoId, contaOutraId, false); }
+    try {
+      const r = await chamar(lancamentoId, contaOutraId, false);
+      /* CONC-SEM-F5-01 — gravou com a Conciliação montada: avisa o canal de lançamentos, e o dono relê sem F5. */
+      if (clienteAtual?.id) notificarLancamentosMudaram(clienteAtual.id);
+      return r;
+    }
     finally { setOcupado(false); }
   }
 

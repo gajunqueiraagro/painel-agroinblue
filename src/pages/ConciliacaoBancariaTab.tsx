@@ -28,7 +28,7 @@ import {
 import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
 import { belongsToConta, saldoConfere } from '@/lib/financeiro/conciliacaoCalc';
-import { useResumoMes, useStatusAno, CHAVE_RESUMO_MES, CHAVE_STATUS_ANO } from '@/hooks/useResumoConciliacao';
+import { useResumoMes, useStatusAno, invalidarDono, useReleDonoAoVoltarAVista } from '@/hooks/useResumoConciliacao';
 import {
   ROTULO_STATUS, frasesDoStatus, fraseDoRetido, fraseSemConta, contasParaFecharSemMovimento,
   saldosDaLinha, marcaDoPar, diferencaNaPosicao, TITULO_DIFERENCA_NA_POSICAO_INDISPONIVEL,
@@ -339,11 +339,17 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
 
   }, [clienteId, ano]);
 
-  const loadData = useCallback(async () => {
+  /* ⚠ `silencioso` — CONC-SEM-F5-01: a recarga disparada pelo CANAL não liga o `loading` nem esvazia a lista. Três das abas
+     internas se desenham atrás de `!loading`; com o Casar e o Importar avisando o canal a cada gesto, a recarga normal as
+     DESMONTARIA no meio do trabalho (a Conferência aberta, a prévia da importação). Os números de antes ficam na tela até os
+     novos chegarem. Trocar de cliente ou de ano segue pela carga normal. */
+  const loadData = useCallback(async (silencioso: boolean = false) => {
     if (!clienteId) return;
     void carregarIndicadoresSaldo();
-    setLoading(true);
-    setLancamentos([]);
+    if (!silencioso) {
+      setLoading(true);
+      setLancamentos([]);
+    }
     const prevDec    = `${Number(ano)-1}-12`;
     const anoMesMin  = `${ano}-01`;
     const anoMesMax  = `${ano}-12`;
@@ -417,17 +423,13 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
      `useFinanceiroV2` já usava internamente — inventar um segundo seria a segunda fonte
      para a mesma pergunta. */
   /* O dono relido junto com a carga: onde esta tela já recarregava (lançamentos mudaram, saldo informado), o resumo e a
-     régua do ano também relêem — senão a tela mostraria o número de antes do gesto. A invalidação nos gestos das
-     OUTRAS telas é o PR 03. */
-  const releDono = useCallback(() => {
-    if (!clienteId) return;
-    void queryClient.invalidateQueries({ queryKey: [CHAVE_RESUMO_MES, clienteId] });
-    void queryClient.invalidateQueries({ queryKey: [CHAVE_STATUS_ANO, clienteId] });
-  }, [clienteId, queryClient]);
+     régua do ano também relêem — senão a tela mostraria o número de antes do gesto. CONC-SEM-F5-01: os gestos das abas
+     internas (Casar, Importar, Enriquecer) avisam o canal, e o retorno à vista relê o que foi gravado em outra seção. */
+  const releDono = useCallback(() => invalidarDono(queryClient, clienteId), [clienteId, queryClient]);
 
   useEffect(() => {
     if (!clienteId) return;
-    return inscreverEmLancamentos(clienteId, () => { void loadData(); releDono(); });
+    return inscreverEmLancamentos(clienteId, () => { void loadData(true); releDono(); });
   }, [clienteId, loadData, releDono]);
 
   /* ═══ O DONO — PR-CONC-SALDO-UMA-REGUA-02 ═══
@@ -440,6 +442,10 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   const resumoQ = useResumoMes(clienteId, anoMesSel, null);
   const resumo = resumoQ.data ?? null;
   const statusAnoQ = useStatusAno(clienteId, Number(ano));
+  /* CONC-SEM-F5-01 — a rede de segurança: ao entrar na seção, ao voltar para esta aba interna e quando a janela volta a ter
+     foco, o dono é relido (uma chamada do resumo e uma da régua). Declarado DEPOIS das duas leituras: a releitura que elas
+     já fazem ao montar não é duplicada. */
+  useReleDonoAoVoltarAVista(clienteId, vistaExtrato === 'conciliacao');
 
   const linhaTotal = useMemo(() => resumo?.find(l => l.nivel === 'total') ?? null, [resumo]);
   const linhaSel: LinhaResumo | null = selectedConta === '__all__'

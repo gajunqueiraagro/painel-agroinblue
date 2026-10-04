@@ -3,7 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
-import { useFinanceiroV2, type LancamentoV2Form } from '@/hooks/useFinanceiroV2';
+import { useFinanceiroV2, notificarLancamentosMudaram, type LancamentoV2Form } from '@/hooks/useFinanceiroV2';
+import { useCliente } from '@/contexts/ClienteContext';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
 import type { MovimentoConciliacao } from '@/hooks/useConciliacaoDoMes';
 
@@ -111,6 +112,7 @@ interface Props {
 
 export function CriarLancamentoDaLinha({ movimento, contaBancariaId, valorSugerido, semVinculo, aoFechar, aoCriado }: Props) {
   const { fazendas } = useFazenda();
+  const { clienteAtual } = useCliente();
   const {
     contasBancarias, fornecedores, classificacoes, safras,
     loadContas, loadFornecedores, loadClassificacoes, loadSafras, criarFornecedor,
@@ -211,6 +213,8 @@ export function CriarLancamentoDaLinha({ movimento, contaBancariaId, valorSugeri
        corrigir, que é o contrato do `onSave`. */
     if (error) { toast.error(error.message ? fraseDaRecusaCriar(error.message) : 'O banco recusou a criação.'); return false; }
     toast.success('Lançamento criado e vinculado — o movimento fechou.');
+    /* CONC-SEM-F5-01 — gravou com a Conciliação montada: avisa o canal de lançamentos, e o dono relê sem F5. */
+    if (clienteAtual?.id) notificarLancamentosMudaram(clienteAtual.id);
     await aoCriado();
     aoFechar();
     return true;

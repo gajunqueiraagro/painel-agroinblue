@@ -31,6 +31,7 @@
 import { useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
+import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
 import { parseOFX, lerSaldoDeclaradoOFX, lerPeriodoDeclaradoOFX, type MovimentoBruto } from '@/lib/financeiro/parser/parseOFX';
 import { separarLinhasDeSaldo, conferirSaldoDoExtrato, type ConferenciaSaldoExtrato } from '@/lib/financeiro/parser/linhaDeSaldo';
 import { parseCSVComRelatorio } from '@/lib/financeiro/parser/parseCSV';
@@ -1111,6 +1112,8 @@ export function useImportacaoExtrato() {
       if (!r.ok) throw new ErroUsuarioSeguro(r.frase ?? 'Não foi possível gravar o extrato. Nada foi gravado.');
 
       const idsPorHash = new Map<string, string>(r.ids.map((x) => [x.hash, x.id]));
+      /* CONC-SEM-F5-01 — gravou com a Conciliação montada: avisa o canal de lançamentos, e o dono relê sem F5. */
+      notificarLancamentosMudaram(clienteAtual.id);
       // Atualiza o preview em memória: cada movimento novo passa a ter
       // existeNoDB=true, statusPersistido='nao_conciliado' e o id do
       // registro recém-criado. Permite ações imediatamente após salvar.

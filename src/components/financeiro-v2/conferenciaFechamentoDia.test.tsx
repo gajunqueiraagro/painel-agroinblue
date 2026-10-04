@@ -36,7 +36,10 @@ const FIN = vi.hoisted(() => {
     buscarLancamentoPorId: async () => null, criarFornecedor: noop, editarLancamento: noop, criarLancamento: noop, excluirLancamento: noop,
   };
 });
-vi.mock('@/hooks/useFinanceiroV2', () => ({ useFinanceiroV2: () => FIN }));
+/* CONC-SEM-F5-01: o Espelho ouve e avisa o canal de lançamentos — o mock leva as duas pontas dele. */
+vi.mock('@/hooks/useFinanceiroV2', () => ({
+  useFinanceiroV2: () => FIN, inscreverEmLancamentos: () => () => {}, notificarLancamentosMudaram: () => {},
+}));
 vi.mock('@/contexts/FazendaContext', () => ({ useFazenda: () => ({ fazendas: [] }) }));
 const INTERNAS = vi.hoisted(() => ({
   contasInternas: new Set<string>(), lancamentosInternos: new Set<string>(),
