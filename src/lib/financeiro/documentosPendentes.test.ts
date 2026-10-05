@@ -156,7 +156,7 @@ describe('falha e "Tentar de novo"', () => {
   });
 
   it('o arquivo que não serve é recusado antes, com a mesma frase do anexo da aba', () => {
-    expect(motivoArquivoRecusado(new File(['x'], 'a.txt', { type: 'text/plain' }))).toBe('Formato não aceito. Envie PDF, JPG ou PNG.');
+    expect(motivoArquivoRecusado(new File(['x'], 'a.txt', { type: 'text/plain' }))).toBe('Formato não aceito. Envie PDF, JPG, PNG ou XML.');
     expect(motivoArquivoRecusado(pdf())).toBeNull();
   });
 });

@@ -16,7 +16,7 @@
  * fazem o documentado divergir do lançado sem que nada esteja errado — por isso âmbar e
  * uma frase, não vermelho e um bloqueio.
  */
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -28,12 +28,14 @@ import { Segmentado } from '@/components/ui/segmentado';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { CampoMoeda } from '@/components/ui/campo-moeda';
 import { DatePicker } from '@/components/ui/date-picker';
-import { Paperclip, Pencil, Ban, Plus, Upload, X } from 'lucide-react';
+import { Paperclip, Pencil, Ban, Plus, X } from 'lucide-react';
+import { AreaDeArquivo } from '@/components/ui/area-de-arquivo';
+import { ajudaDaRegra } from '@/lib/arquivo/aceitarArquivo';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { formatNFNumber } from '@/lib/financeiro/documentoHelper';
 import {
   ESPECIES_LANC_DOC, rotuloEspecieDoc, type EspecieLancDoc, type LancDocumento, type LancDocPayload,
-  type LancamentoDocumentosApi, type DestinoDocumento,
+  type LancamentoDocumentosApi, type DestinoDocumento, REGRA_ARQUIVO_DO_DOCUMENTO,
 } from '@/hooks/useLancamentoDocumentos';
 
 /** A identidade da linha — A18: sem número próprio, o rótulo do tipo SOBE para cá. */
@@ -419,7 +421,6 @@ export function FormDocumento({ api, documento, fornecedores, onFechar, pendente
     if (sug && dataEmissao === dataSugerida) setDataEmissao(dataSugeridaPara(nova));
     setEspecie(nova);
   };
-  const arquivoRef = useRef<HTMLInputElement>(null);
 
   const OUTRO = '__outro__';
   const emitenteEhOutro = emitenteId === OUTRO;
@@ -640,35 +641,18 @@ export function FormDocumento({ api, documento, fornecedores, onFechar, pendente
               `accept` e regras) — só deixou de ser a cara do campo. Soltar um arquivo aqui entra pelo MESMO input. ── */}
           <div className="col-span-2">
             <Label className="text-[10px]">Arquivo</Label>
-            <input ref={arquivoRef} type="file" accept="application/pdf,image/jpeg,image/png,application/xml,text/xml,.xml" className="sr-only" tabIndex={-1}
-              data-testid="doc-arquivo" onChange={e => setArquivo(e.target.files?.[0] ?? null)} />
-            <div role="button" tabIndex={0} data-testid="area-arquivo"
-              onClick={() => arquivoRef.current?.click()}
-              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); arquivoRef.current?.click(); } }}
-              onDragOver={e => e.preventDefault()}
-              onDrop={e => {
-                e.preventDefault();
-                const solto = e.dataTransfer.files;
-                if (!solto?.length || !arquivoRef.current) return;
-                arquivoRef.current.files = solto;
-                setArquivo(solto[0]);
-              }}
-              className="mt-0.5 flex min-h-[40px] cursor-pointer items-center gap-2 rounded-md border border-dashed border-success bg-success/10 px-3 py-1.5 text-[11px] text-success hover:bg-success/15 focus:outline-none focus:ring-2 focus:ring-success/40">
-              <Upload className="h-3.5 w-3.5 shrink-0" />
-              {arquivo ? (<>
-                <span className="min-w-0 flex-1 font-medium [overflow-wrap:anywhere]" data-testid="arquivo-escolhido">{arquivo.name}</span>
-                <button type="button" className="shrink-0 underline underline-offset-2"
-                  onClick={e => { e.stopPropagation(); setArquivo(null); if (arquivoRef.current) arquivoRef.current.value = ''; }}>
-                  remover
-                </button>
-              </>) : documento?.url ? (
-                <span className="flex-1">arquivo anexado · <span className="underline underline-offset-2">substituir</span></span>
-              ) : (
-                <span className="flex-1 font-medium">Anexar arquivo (PDF ou imagem)</span>
-              )}
-            </div>
+            {/* UI-ARRASTAR-ARQUIVO-01a — a área é a do sistema (`AreaDeArquivo`): clicar ou arrastar, realce verde, e o tipo
+                errado é recusado AO ESCOLHER, na própria área (a conferência ao gravar continua, pelo mesmo dono). Altura fixa
+                de 40px: o nome longo corta com o inteiro no `title`. */}
+            <AreaDeArquivo regra={REGRA_ARQUIVO_DO_DOCUMENTO} testId="area-arquivo" inputTestId="doc-arquivo" className="mt-0.5 h-10"
+              onArquivos={([f]) => setArquivo(f ?? null)}
+              conteudo={arquivo
+                ? <span data-testid="arquivo-escolhido">{arquivo.name}</span>
+                : documento?.url ? <>arquivo anexado · <span className="underline underline-offset-2">substituir</span></> : undefined}
+              tituloDoConteudo={arquivo ? arquivo.name : documento?.url ? 'arquivo anexado · clique ou arraste outro para substituir' : undefined}
+              onRemover={arquivo ? () => setArquivo(null) : undefined} />
             <p className="mt-1 text-[10px] text-muted-foreground">
-              PDF, JPG ou PNG, até 10 MB. Pode ficar para depois — o documento aparece na lista dizendo “sem arquivo”.
+              {ajudaDaRegra(REGRA_ARQUIVO_DO_DOCUMENTO)}. Pode ficar para depois — o documento aparece na lista dizendo “sem arquivo”.
             </p>
           </div>
         </div>

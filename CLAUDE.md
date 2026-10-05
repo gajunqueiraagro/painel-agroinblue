@@ -162,7 +162,10 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 05/10/2026 (REC-VALOR-DO-MES-MODAL-01, +45: `src/lib/financeiro/valorDoMes.test.ts` 28,
+  Baseline em 05/10/2026 (UI-ARRASTAR-ARQUIVO-01a, +70: `src/lib/arquivo/aceitarArquivo.test.ts` 32,
+  `src/lib/arquivo/protegerSoltarFora.test.ts` 6, `src/components/ui/area-de-arquivo.test.tsx` 14,
+  `src/components/ui/areaDeArquivoTelas.test.tsx` 13, `src/components/ui/areaDeArquivoCaracterizacao.test.tsx` 5; antes o
+  REC-VALOR-DO-MES-MODAL-01, +45: `src/lib/financeiro/valorDoMes.test.ts` 28,
   `src/components/financeiro-v2/valorDoMesModal.test.tsx` 14, `src/hooks/useFinanceiroV2.valorDoMes.test.ts` 3; antes o
   REC-PROPAGAR-VALOR-DO-MES-01, +11 em `src/components/recorrencias/propagarValorDoMes.test.tsx`;
   antes o FIN-VALOR-CALC-01a, +101: `src/lib/calculos/contaNoCampo.test.ts` 75,
@@ -191,7 +194,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3778
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3848
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -942,6 +945,55 @@ preview que o cabecalho nao sai da tela ao rolar.
   `zinc-700`. TELA NAO SOBRESCREVE tamanho nem altura do item de menu (saiu de 41 `SelectItem`, 11 `DropdownMenuItem`, do
   `itemCls` do Financeiro e do `ITEM_DROPDOWN` da Mesa). O texto do gatilho com busca fica `min-w-0 flex-1 truncate
   text-left`. Restam `text-xs` em 7 `DropdownMenuItem` (FinV2ContasTab, FinV2SafrasTab) e `py-*` em 7 `SelectItem`: fila.
+- ⚠ TODO CAMPO QUE RECEBE ARQUIVO ACEITA CLICAR E ARRASTAR, POR UM COMPONENTE E UMA REGRA (UI-ARRASTAR-ARQUIVO-01a, Gabriel
+  05/10/2026, so' tela). Campo de arquivo novo usa `AreaDeArquivo` (`src/components/ui/area-de-arquivo.tsx`) e quem decide se o
+  arquivo serve e' `aceitarArquivo` (`src/lib/arquivo/aceitarArquivo.ts`). PROIBIDO `onDrop`/`dataTransfer` proprio em tela e
+  PROIBIDO tela decidir tipo, tamanho ou quantidade por conta propria.
+  · A REGRA (`RegraDeAceite`: `tipos`, `tamanhoMaxBytes`, `varios`, `frases`): `aceitarArquivo(arquivos, regra)` devolve `{ ok,
+    motivo, codigo, arquivos, porArquivo: [{ arquivo, original, motivo, codigo }] }`. O TIPO sai do MIME quando o navegador o
+    informa; SEM MIME (vazio ou `application/octet-stream`), da EXTENSAO — o `.xml` que chega sem tipo vale ONDE XML e' permitido.
+    MIME informado e fora da lista recusa, mesmo com a extensao boa. ⚠ O ARQUIVO ACEITO SAI COM O TIPO PREENCHIDO (o mesmo
+    conteudo com o MIME canonico quando veio da extensao): quem sobe o arquivo usa o que o dono DEVOLVE, e o caminho e o
+    `contentType` seguem calculados como sempre. Catalogo de hoje: pdf, jpg, png, xml (OFX, planilha, TXT e CSV entram no 01b).
+  · AS REGRAS QUE EXISTEM, cada uma num lugar: `REGRA_ARQUIVO_DO_DOCUMENTO` (PDF, JPG, PNG, XML, 10 MB) e
+    `REGRA_ARQUIVO_DO_BOLETO` (PDF, JPG, PNG — a tela mostra o que grava) em `useLancamentoDocumentos.ts`; `REGRA_ARQUIVO_DA_OC`
+    (PDF, JPG, PNG, XML, 10 MB) em `src/lib/oc/caminhoDocumento.ts`. Os donos antigos DELEGAM: `motivoArquivoRecusado`, o `anexar`
+    do documento do lancamento, `motivoArquivoInvalido`, `anexarArquivo` da OC e `anexarSaldoDocumento`.
+  · AS FRASES VEM DA REGRA, nunca escritas a' mao na tela: `fraseDeFormatoNaoAceito(tipos)` ("Formato não aceito. Envie PDF,
+    JPG, PNG ou XML." — cita XML onde XML entra, e so' ali), `resumoDaRegra` (o texto da area: "PDF, imagem ou XML · até 10 MB")
+    e `ajudaDaRegra` (a ajuda sob o campo). Sem frase propria valem as do dono ("Só PDF, imagem ou XML.", "Arquivo acima de
+    10 MB.", "Solte um arquivo só."); frase em branco nao vale — o motivo nunca sai vazio.
+  · O COMPONENTE: clicar na area (ou Enter/Espaco) abre o seletor; arrastar ARQUIVO por cima realca em verde (tokens `success`;
+    conta entradas e saidas para nao piscar sobre os filhos; texto ou linha arrastada nao acendem nada). DOIS MODOS: "um"
+    (padrao) recusa NA AREA, em vermelho, e nao chama o destino; "lote" entrega TODOS com o veredito de cada um e a tela mostra
+    por linha (boletos; no "Do XML" quem julga cada arquivo segue sendo o `lerNFe`, e o teto de 2 MB mora nele). UMA LINHA: o
+    texto corta com o inteiro no `title`, a parte `fixo` (tamanho) nunca corta, e a ALTURA E' A DO HOSPEDEIRO (`className`), a
+    mesma vazia, com arquivo, com recusa e com realce. Desabilitada fica APAGADA com o motivo escrito (`motivoDesabilitado`).
+    A area e' `relative`: o seletor escondido fica preso nela (solto, vazava da rolagem do modal).
+  · PROTECAO GLOBAL, UMA SO', NO SHELL (`protegerSoltarFora`, ligada em `App.tsx`): arquivo solto FORA de uma area nao navega nem
+    abre o arquivo. So' age com `dataTransfer.types` contendo "Files" e so' se ninguem tratou o evento antes; os arrastares que
+    nao sao de arquivo (`EspelhoConciliacaoTab`, `DividendosTab`, `PastosTab`) usam `@dnd-kit` com sensor de PONTEIRO e nem
+    passam por ela (preso por teste de fonte).
+  · TROCADAS NO 01a (quatro): aba Documentos do lancamento (40px; o tipo errado e' recusado AO ESCOLHER, na area — antes so' ao
+    gravar; a conferencia ao gravar continua, pelo mesmo dono), "Anexar vários boletos" (40px, lote), "Do XML" (48px, lote;
+    sem cliente fica apagada) e o documento da OC (40px; a recusa saiu do toast; "Já há um arquivo anexado · enviar outro
+    substitui" virou o texto da faixa, nao mais uma linha a mais; dois arquivos soltos = "Solte um arquivo só.").
+  Medido a 1.135 no cliente Teste, sem gravar: "Do XML" area 1046 x 48 e modal 1080 x 239, antes e depois; formulario do documento
+  area 478 x 40 e modal 512 x 491, iguais vazia / com realce / com recusa / com nome de 90 caracteres; boletos e OC 40px (marcacao
+  injetada na largura do hospedeiro). Sintetico com "Files" fora de area: `defaultPrevented` = true; com texto: false.
+  MEDIDO PARA O XML NA OC (A1): o bucket `oc-documentos` aceita `text/xml` e `application/xml` (10 MB), o caminho sai com `.xml`
+  e a URL assinada nao filtra tipo — mas NENHUM `.xml` foi gravado ate' hoje em nenhum dos dois buckets (0 de 174 e 0 de 408):
+  subir e abrir um XML de verdade nunca foi exercitado.
+  ⚠ FILA: 01b — os 7 campos so'-clique de tela liberada (`ParcelasDaCompra.tsx`, `SaldoRealDialog.tsx`, `ImportarBancoInline.tsx`,
+    `EnriquecerTresPassos.tsx`, `V2ImportLancamentosExcel.tsx`, `CusteioTxtImportTab.tsx`, `EnriquecimentoImportarDialog.tsx`) ·
+    01c — so' admin: `MapaRebanhoImportDialog` e `CadernoImportTab` (ja' arrastam; area alta com previa pede conteudo proprio),
+    `MesaClassificacaoTab`, `V2MesaOperacional`, `ExcelImportDialog`, `KmlUploadDialog`, `AbateDetalhesDialog` (4 campos) ·
+    legados sem rota ficam (`ImportMapaPastos`, `ImportacaoFinanceira`, `ImportZootHistoricoTab`).
+  ⚠ DIVIDAS: `ParcelasDaCompra` (boleto por linha) ainda julga pela regra do DOCUMENTO, que aceita XML — passa a' do boleto no
+    01b · o toast de recusa do `anexarArquivo` da OC continua (so' a recusa do formulario saiu do toast) · NAO PROVADO NO
+    NAVEGADOR: o arrasto real do Finder (so' evento sintetico), boletos e OC dentro dos modais reais, o clique abrindo o seletor
+    do sistema, e os tres `@dnd-kit` com a protecao ligada (so' por teste de fonte) · OC-DOCUMENTO-XML-REAL-01: subir e abrir um
+    `.xml` real na OC e na aba Documentos (homologacao do Gabriel).
 - ⚠ O `DialogContent` RENDERIZA A 95% E FICA ASSIM (DIALOG-ZOOM-95-01): medir com `offsetWidth`, nunca com
   `getBoundingClientRect()` (erra 5 % para menos), e `fontSize: 9` aparece como 8,55px. Nao corrigido de
   proposito: mexe na animacao de todos os dialogos.
@@ -2655,9 +2707,8 @@ docs/historico/frentes-ate-2026-09-29.md.)
     "fornecedor nao encontrado / fazenda nao identificada", no cliente Teste e com XML SINTETICO, sem gravar: nenhum XML real,
     nenhum Salvar, nenhum upload ao bucket e nenhum "ver" do XML foram exercitados na tela) · a origem do SUBCENTRO vai numa
     faixa no topo, nao ao lado do campo (o seletor de classificacao nao aceita rotulo) · o documento NF pendente guarda o
-    emitente proposto na ABERTURA: trocar o fornecedor no lancamento nao troca o emitente do documento · o `.xml` anexado A MAO
-    na aba Documentos com tipo vazio (alguns navegadores) e' recusado pelas travas de front — so' o caminho do XML lido garante o
-    tipo · as mensagens "Envie PDF, JPG ou PNG" nao citam XML · a tabela de documentos pendentes (`DocumentosPendentes`) quebra
+    emitente proposto na ABERTURA: trocar o fornecedor no lancamento nao troca o emitente do documento · [o `.xml` anexado a' mao com tipo vazio PASSOU A VALER no
+    UI-ARRASTAR-ARQUIVO-01a: o dono do aceite o reconhece pela extensao e devolve o arquivo com o tipo preenchido] · [as mensagens passaram a citar XML onde XML entra — UI-ARRASTAR-ARQUIVO-01a] · a tabela de documentos pendentes (`DocumentosPendentes`) quebra
     Numero e Emitente em duas linhas (pre-existente, UI-LINHA-UNICA) · `FinanceiroV2ControlesLista` (so' com a flag da lista
     paginada, desligada) ganhou o botao como prop opcional, sem teste proprio · "abrir" de nota ja' registrada abre em OUTRA
     aba do navegador · proximos: tela C ("Importar XML" no formulario do documento) e parcelas livres (PR c).

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { faixaDoMes } from '@/hooks/useConciliacaoDoMes';
-import { TIPOS_ACEITOS, TAMANHO_MAXIMO } from '@/hooks/useLancamentoDocumentos';
+import { REGRA_ARQUIVO_DO_DOCUMENTO, FRASE_FORMATO_NAO_ACEITO } from '@/hooks/useLancamentoDocumentos';
+import { aceitarArquivo } from '@/lib/arquivo/aceitarArquivo';
 import { extensaoDoArquivo } from '@/lib/oc/caminhoDocumento';
 
 /**
@@ -523,10 +524,13 @@ export function useSaldoDocumentos(
 export async function anexarSaldoDocumento(params: {
   clienteId: string; contaId: string; anoMes: string; file: File;
 }): Promise<{ ok: boolean; erro: string | null }> {
-  const { clienteId, contaId, anoMes, file } = params;
+  const { clienteId, contaId, anoMes } = params;
+  /* O aceite é do dono (UI-ARRASTAR-ARQUIVO-01a), com a regra do documento do Financeiro; o arquivo que sobe é o que ele devolve. */
+  const aceite = aceitarArquivo([params.file], REGRA_ARQUIVO_DO_DOCUMENTO);
+  if (aceite.ok === false) return { ok: false, erro: aceite.motivo };
+  const file = aceite.arquivos[0];
   const ext = extensaoDoArquivo(file);
-  if (!ext || !TIPOS_ACEITOS.includes(file.type)) return { ok: false, erro: 'Formato não aceito. Envie PDF, JPG ou PNG.' };
-  if (file.size > TAMANHO_MAXIMO) return { ok: false, erro: 'Arquivo acima de 10 MB.' };
+  if (!ext) return { ok: false, erro: FRASE_FORMATO_NAO_ACEITO };
 
   const userId = (await supabase.auth.getUser()).data.user?.id ?? null;
   const { data: linha, error: erroRegistro } = await supabase

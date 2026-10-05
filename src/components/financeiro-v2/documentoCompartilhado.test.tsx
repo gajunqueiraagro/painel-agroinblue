@@ -111,7 +111,9 @@ describe('conferência pela compra (chaves grupo_* do banco)', () => {
 });
 
 describe('UX-TOAST-01 — o formulário do documento não usa toast para recusa', () => {
-  it('arquivo em formato errado aparece AO LADO do botão, e nenhum toast.error', async () => {
+  /* UI-ARRASTAR-ARQUIVO-01a — CONTRATO NOVO (Gabriel, 05/10): o tipo errado é recusado AO ESCOLHER, na própria área, pelo dono
+     do aceite — não espera o "Adicionar à lista". A frase é a mesma; o toast continua proibido. */
+  it('arquivo em formato errado é recusado NA ÁREA ao escolher, e nenhum toast.error', async () => {
     toastErro.mockClear();
     let lista: import('@/lib/financeiro/documentosPendentes').DocumentoPendente[] = [];
     render(<DocumentosPendentes pendentes={lista} onMudar={f => { lista = f(lista); }} fornecedores={[]} />);
@@ -119,8 +121,9 @@ describe('UX-TOAST-01 — o formulário do documento não usa toast para recusa'
     const input = document.querySelector('input[type="file"]');
     if (!input) throw new Error('input de arquivo não achado');
     fireEvent.change(input, { target: { files: [new File(['x'], 'a.txt', { type: 'text/plain' })] } });
-    fireEvent.click(screen.getByText('Adicionar à lista'));
-    await waitFor(() => expect(screen.getByTestId('erro-form-documento').textContent).toBe('Formato não aceito. Envie PDF, JPG ou PNG.'));
+    await waitFor(() => expect(screen.getByTestId('area-de-arquivo-recusa').textContent).toBe('Formato não aceito. Envie PDF, JPG, PNG ou XML.'));
+    expect(screen.queryByTestId('arquivo-escolhido')).toBeNull();
+    expect(screen.queryByTestId('erro-form-documento')).toBeNull();
     expect(toastErro).not.toHaveBeenCalled();
   });
 

@@ -19,10 +19,11 @@
  */
 import { supabase } from '@/integrations/supabase/client';
 import {
-  paraJson, caminhoDocumentoLancamento, BUCKET_LANCAMENTO_DOCUMENTOS, TAMANHO_MAXIMO, TIPOS_ACEITOS,
+  paraJson, caminhoDocumentoLancamento, BUCKET_LANCAMENTO_DOCUMENTOS, REGRA_ARQUIVO_DO_DOCUMENTO,
   type LancDocPayload,
 } from '@/hooks/useLancamentoDocumentos';
 import { extensaoDoArquivo } from '@/lib/oc/caminhoDocumento';
+import { aceitarArquivo } from '@/lib/arquivo/aceitarArquivo';
 
 export interface DocumentoPendente {
   /** Identidade local, só para a lista da tela. */
@@ -58,9 +59,8 @@ export function novoPendente(payload: LancDocPayload, arquivo: File | null, parc
 
 /** A mesma recusa do `anexar` do hook, dita ANTES — o arquivo errado não espera o salvar para falhar. */
 export function motivoArquivoRecusado(file: File): string | null {
-  if (!extensaoDoArquivo(file) || !TIPOS_ACEITOS.includes(file.type)) return 'Formato não aceito. Envie PDF, JPG ou PNG.';
-  if (file.size > TAMANHO_MAXIMO) return 'Arquivo acima de 10 MB.';
-  return null;
+  /* DELEGA ao dono do aceite — UI-ARRASTAR-ARQUIVO-01a. A regra e as frases são as do documento do Financeiro. */
+  return aceitarArquivo([file], REGRA_ARQUIVO_DO_DOCUMENTO).motivo;
 }
 
 function mensagem(e: unknown): string {
@@ -92,16 +92,18 @@ async function gravarUm(
       documentoId = String(id);
     }
     if (!anexado && p.arquivo) {
-      const recusa = motivoArquivoRecusado(p.arquivo);
-      if (recusa) throw new Error(recusa);
-      const ext = extensaoDoArquivo(p.arquivo) ?? '';
+      /* O aceite é do dono, e o arquivo que sobe é o que ele devolve (com o tipo preenchido) — UI-ARRASTAR-ARQUIVO-01a. */
+      const aceite = aceitarArquivo([p.arquivo], REGRA_ARQUIVO_DO_DOCUMENTO);
+      if (aceite.ok === false) throw new Error(aceite.motivo);
+      const arquivo = aceite.arquivos[0];
+      const ext = extensaoDoArquivo(arquivo) ?? '';
       const caminho = caminhoDocumentoLancamento(clienteId, lancamentoId, documentoId, ext);
-      const up = await supabase.storage.from(BUCKET_LANCAMENTO_DOCUMENTOS).upload(caminho, p.arquivo, { upsert: false });
+      const up = await supabase.storage.from(BUCKET_LANCAMENTO_DOCUMENTOS).upload(caminho, arquivo, { upsert: false });
       if (up.error) throw up.error;
       /* Versão 1: o documento acabou de nascer, e o anexo nunca passou (senão estaria `anexado`). */
       const { error } = await supabase.rpc('fin_documento_editar', {
         p_documento_id: documentoId, p_cliente_id: clienteId, p_versao_esperada: 1,
-        p_payload: { url: caminho, tipo: p.arquivo.type, tamanho_bytes: p.arquivo.size },
+        p_payload: { url: caminho, tipo: arquivo.type, tamanho_bytes: arquivo.size },
       });
       if (error) {
         await supabase.storage.from(BUCKET_LANCAMENTO_DOCUMENTOS).remove([caminho]);

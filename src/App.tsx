@@ -7,10 +7,15 @@ import { ClienteProvider } from "@/contexts/ClienteContext";
 import { FazendaProvider } from "@/contexts/FazendaContext";
 import AppRouter from "./AppRouter";
 import NotFound from "./pages/NotFound.tsx";
+import { useEffect } from "react";
+import { protegerSoltarFora } from "@/lib/arquivo/protegerSoltarFora";
 
 const queryClient = new QueryClient();
 
-const App = () => (
+/* UI-ARRASTAR-ARQUIVO-01a — a proteção é do SHELL e é uma só: arquivo solto fora de uma área não navega nem abre o arquivo. */
+const App = () => {
+  useEffect(() => protegerSoltarFora(), []);
+  return (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       {/* ⚠ UM TOASTER SÓ — PR-TOAST-POSICAO-01. Havia dois montados: este `Sonner` e o
@@ -34,6 +39,7 @@ const App = () => (
       </AuthProvider>
     </TooltipProvider>
   </QueryClientProvider>
-);
+  );
+};
 
 export default App;

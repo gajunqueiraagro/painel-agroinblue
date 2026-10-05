@@ -226,20 +226,22 @@ describe('documento da OPERAÇÃO: espécie travada e valor que não é campo, c
 });
 
 describe('a área de arquivo', () => {
-  it('vazia convida a anexar; com arquivo mostra o nome e "remover"; o input é o mesmo, com o mesmo accept', () => {
+  it('vazia convida a clicar ou arrastar; com arquivo mostra o nome e "remover"; o seletor aceita os tipos da regra', () => {
     monta();
     const area = screen.getByTestId('area-arquivo');
-    expect(area.textContent).toBe('Anexar arquivo (PDF ou imagem)');
+    /* UI-ARRASTAR-ARQUIVO-01a — o convite é o do sistema, numa linha: clicar OU arrastar, com os tipos e o limite */
+    expect(area.textContent).toBe('Clique ou arraste o arquivo · PDF, imagem ou XML · até 10 MB');
     for (const c of ['border-dashed', 'border-success', 'bg-success/10']) expect(area.className).toContain(c);
     const input = screen.getByTestId('doc-arquivo') as HTMLInputElement;
     expect(input.type).toBe('file');
-    expect(input.accept).toBe('application/pdf,image/jpeg,image/png,application/xml,text/xml,.xml');
+    expect(input.accept).toBe('application/pdf,image/jpeg,image/png,application/xml,text/xml,.pdf,.jpg,.jpeg,.png,.xml');
     fireEvent.change(input, { target: { files: [new File(['%PDF'], 'NFe 31776 Comercial Pantanal.pdf', { type: 'application/pdf' })] } });
     expect(screen.getByTestId('arquivo-escolhido').textContent).toBe('NFe 31776 Comercial Pantanal.pdf');
     fireEvent.click(within(area).getByText('remover'));
     expect(screen.queryByTestId('arquivo-escolhido')).toBeNull();
-    expect(area.textContent).toBe('Anexar arquivo (PDF ou imagem)');
-    expect(screen.getByText(/PDF, JPG ou PNG, até 10 MB/)).toBeInTheDocument();
+    expect(area.textContent).toBe('Clique ou arraste o arquivo · PDF, imagem ou XML · até 10 MB');
+    /* a ajuda vem da REGRA: cita XML, que a aba aceita */
+    expect(screen.getByText(/PDF, JPG, PNG ou XML, até 10 MB\. Pode ficar para depois/)).toBeInTheDocument();
   });
   it('documento que já tem arquivo: "arquivo anexado · substituir"; sem arquivo, o convite', () => {
     monta({ documento: doc({}) });

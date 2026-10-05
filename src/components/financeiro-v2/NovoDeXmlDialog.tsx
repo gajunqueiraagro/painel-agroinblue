@@ -9,10 +9,11 @@
  * ⚠ O PADRAO DA TABELA E' O A31: cabecalho navy 9,5px, linha de 18px a 10px, uma linha por nota; numero, valor e data nunca
  *   cortam, texto longo corta com o inteiro no `title`.
  */
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
-import { FileUp } from 'lucide-react';
+import { AreaDeArquivo } from '@/components/ui/area-de-arquivo';
+import type { RegraDeAceite } from '@/lib/arquivo/aceitarArquivo';
 import { lerNFe } from '@/lib/financeiro/nfe/lerNFe';
 import type { AvisoNFe, NotaLida } from '@/lib/financeiro/nfe/tipos';
 import { proporLancamento, type FazendaComIE, type PropostaDeLancamento } from '@/lib/financeiro/nfe/proporLancamento';
@@ -66,6 +67,9 @@ const DIVISOR = 'border-l border-border/60';
 /** A celula do botao: sem reticencia (botao nao e' texto que se corta). */
 const TD_ACAO = 'h-[18px] px-[7px] text-center whitespace-nowrap';
 let seq = 0;
+/* UI-ARRASTAR-ARQUIVO-01a — em LOTE: a área entrega TODOS os arquivos e quem julga cada um continua sendo o LEITOR (`lerNFe`),
+   com a frase dele na linha — CT-e, evento, PDF, grande demais (o teto de 2 MB mora no leitor, não aqui). */
+const REGRA_DOS_XML: RegraDeAceite = { tipos: ['xml'], varios: true };
 
 export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedores, onAbrirLancamento, lancadas }: {
   open: boolean;
@@ -80,8 +84,6 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
 }) {
   const [linhas, setLinhas] = useState<LinhaDeNota[]>([]);
   const [lendo, setLendo] = useState(false);
-  const [sobre, setSobre] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const lerArquivos = useCallback(async (arquivos: File[]) => {
     if (!clienteId || arquivos.length === 0) return;
@@ -150,23 +152,11 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
         </div>
 
         <div className="space-y-2 px-4 py-3">
-          <div
-            data-testid="xml-area-de-soltar"
-            onDragOver={(e) => { e.preventDefault(); setSobre(true); }}
-            onDragLeave={() => setSobre(false)}
-            onDrop={(e) => { e.preventDefault(); setSobre(false); void lerArquivos(Array.from(e.dataTransfer.files)); }}
-            className={`flex h-12 items-center justify-center gap-3 rounded border border-dashed px-3 text-[11px] ${sobre ? 'border-success bg-success/10' : 'border-success/50 bg-success/5'}`}
-          >
-            <FileUp className="h-4 w-4 shrink-0 text-success" />
-            <span className="text-foreground">Solte os XML das notas aqui · NF-e (modelo 55) · um arquivo por nota · vários de uma vez</span>
-            <Button type="button" size="sm" variant="outline" className="h-[22px] px-[9px] text-[10px]" disabled={lendo || !clienteId}
-              onClick={() => inputRef.current?.click()}>
-              {lendo ? 'Lendo…' : 'Escolher arquivos'}
-            </Button>
-            <input ref={inputRef} type="file" multiple accept=".xml,text/xml,application/xml" className="sr-only" tabIndex={-1}
-              data-testid="xml-input"
-              onChange={(e) => { const fs = Array.from(e.target.files ?? []); e.target.value = ''; void lerArquivos(fs); }} />
-          </div>
+          <AreaDeArquivo modo="lote" regra={REGRA_DOS_XML} testId="xml-area-de-soltar" inputTestId="xml-input" className="h-12"
+            convite="Clique ou arraste os XML das notas" detalhe="NF-e (modelo 55) · um arquivo por nota · vários de uma vez"
+            rotuloDoBotao={lendo ? 'Lendo…' : 'Escolher arquivos'}
+            desabilitado={!clienteId} motivoDesabilitado="Selecione um cliente para ler as notas."
+            onArquivos={(arquivos) => { void lerArquivos(arquivos); }} />
 
           <div className="max-h-[52vh] overflow-y-auto rounded border">
             <table className="w-full table-fixed border-collapse" data-testid="xml-tabela">

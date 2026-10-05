@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { formatarNF } from '@/lib/calculos/formatters';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -9,14 +9,15 @@ import { DatePicker } from '@/components/ui/date-picker';
    AbaCompromissosOC, como funcao local e nao exportada — e era exatamente por isso que
    este formulario mostrava `106425` cru: nao havia como reusar. Saiu de la inteiro. */
 import { CampoMoeda } from '@/components/ui/campo-moeda';
-import { Plus, Trash2, ArrowLeft, FileText, Paperclip, ChevronRight, ChevronDown } from 'lucide-react';
+import { Plus, Trash2, ArrowLeft, FileText, ChevronRight, ChevronDown } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { NovoFornecedorDialog } from '@/components/financeiro-v2/NovoFornecedorDialog';
-import { motivoArquivoInvalido } from '@/lib/oc/caminhoDocumento';
+import { motivoArquivoInvalido, REGRA_ARQUIVO_DA_OC } from '@/lib/oc/caminhoDocumento';
+import { AreaDeArquivo } from '@/components/ui/area-de-arquivo';
+import { resumoDaRegra } from '@/lib/arquivo/aceitarArquivo';
 import { extractPdfText } from '@/lib/financeiro/parser/extractPdfText';
 import { extrairDanfe, type DanfeExtraido } from '@/lib/oc/extrairDanfe';
 import { candidatosPorNome, soDigitosDoc, raizCnpj, type CandidatoFornecedor } from '@/lib/oc/similaridadeFornecedor';
-import { toast } from 'sonner';
 import { parseNumericValue } from '@/lib/calculos/abate';
 import type {
   DocumentosApi, EspecieDoc, NaturezaComp, DocumentoPayload, ComponentePayload,
@@ -112,9 +113,6 @@ export function DocumentoFormOC({ api, somenteLeitura, fornecedores, contraparte
      porque o upload so acontece quando ja existe `documento_id` — ver o submit. */
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [novoFornecedorOpen, setNovoFornecedorOpen] = useState(false);
-  /* O seletor de arquivo nativo e' largo e feio; o gesto vira um botao que o aciona.
-     O input segue existindo — escondido — porque e' ele quem abre o dialogo do SO. */
-  const fileRef = useRef<HTMLInputElement>(null);
   /* Abre JA se o documento que chegou tem quebra de valores (edicao de nota com frete,
      Funrural etc.). Nota simples nasce fechada. */
   const [detalharAberto, setDetalharAberto] = useState(() => !formaSimples(initialForm.componentes));
@@ -127,7 +125,6 @@ export function DocumentoFormOC({ api, somenteLeitura, fornecedores, contraparte
      Quem digitou tem mais razao que o parser. */
   const [sugeridos, setSugeridos] = useState<Set<string>>(new Set());
   const [lendoNota, setLendoNota] = useState(false);
-  const [arrastando, setArrastando] = useState(false);
 
   /* ── AS TRES SITUACOES DO EMITENTE (PR-OC-DOC-ENRIQUECER-FORNECEDOR-01) ────
      1. CNPJ ja existe  -> seleciona direto, sem perguntar. Documento e' chave exata.
@@ -266,7 +263,9 @@ export function DocumentoFormOC({ api, somenteLeitura, fornecedores, contraparte
   const receberArquivo = (f: File | null) => {
     if (!f) { setArquivo(null); setAvisoLeitura(null); setSugeridos(new Set()); return; }
     const invalido = motivoArquivoInvalido(f);
-    if (invalido) { toast.error(invalido); setArquivo(null); return; }
+    /* UI-ARRASTAR-ARQUIVO-01a — a recusa aparece NA ÁREA (a `AreaDeArquivo` julga antes, pelo mesmo dono); aqui fica só a
+       guarda, sem aviso de canto. */
+    if (invalido) { setArquivo(null); return; }
     setArquivo(f);
     void lerNota(f);
   };
@@ -404,37 +403,16 @@ export function DocumentoFormOC({ api, somenteLeitura, fornecedores, contraparte
           soltar continua valendo na faixa toda; o seletor nativo, largo e feio, fica
           escondido atras de um botao. */}
       {!somenteLeitura && (
-        <div
-          onDragOver={e => { e.preventDefault(); setArrastando(true); }}
-          onDragLeave={() => setArrastando(false)}
-          onDrop={e => { e.preventDefault(); setArrastando(false); receberArquivo(e.dataTransfer.files?.[0] ?? null); }}
-          className={`rounded-md border border-dashed px-2 py-1.5 transition-colors ${
-            arrastando ? 'border-primary bg-primary/10' : 'border-muted-foreground/30 bg-muted/20'
-          }`}>
-          <div className="flex items-center gap-2 min-w-0">
-            <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-            <div className="min-w-0 flex-1 leading-tight">
-              <div className="text-[11px] font-medium text-foreground truncate">
-                {arquivo ? arquivo.name : 'Anexe a nota ou recibo — arraste aqui'}
-              </div>
-              <div className="text-[10px] text-muted-foreground truncate">
-                {lendoNota ? 'Lendo a nota…'
-                  : arquivo ? `${(arquivo.size / 1024 / 1024).toFixed(1)} MB · NF em PDF preenche os campos abaixo`
-                  : 'PDF, JPG ou PNG até 10 MB · NF em PDF preenche os campos abaixo'}
-              </div>
-            </div>
-            <Button type="button" variant="outline" size="sm" className="h-6 text-[10px] shrink-0"
-              onClick={() => fileRef.current?.click()}>{arquivo ? 'Trocar' : 'Escolher'}</Button>
-          </div>
-          {/* ⚠ `value=''` no clique: sem isso, reescolher O MESMO arquivo nao dispara
-              `change`, e quem tentasse reler a nota apos uma falha ficaria sem resposta. */}
-          <input ref={fileRef} type="file" accept="application/pdf,image/jpeg,image/png" className="hidden"
-            onClick={e => { (e.target as HTMLInputElement).value = ''; }}
-            onChange={e => receberArquivo(e.target.files?.[0] ?? null)} />
-          {form.url && !arquivo && (
-            <div className="text-[10px] text-muted-foreground mt-0.5">Já há um arquivo anexado. Enviar outro substitui.</div>
-          )}
-        </div>
+        /* UI-ARRASTAR-ARQUIVO-01a — a faixa é a `AreaDeArquivo` do sistema: clicar ou arrastar, realce verde, recusa NA área
+           (era toast). UMA linha de 40px, sempre: o "Já há um arquivo anexado" deixou de ser uma linha a mais e virou o texto
+           da faixa. Reescolher o MESMO arquivo dispara de novo (a área zera o seletor a cada escolha). */
+        <AreaDeArquivo regra={REGRA_ARQUIVO_DA_OC} className="h-10"
+          detalhe={`${resumoDaRegra(REGRA_ARQUIVO_DA_OC)} · NF em PDF preenche os campos abaixo`}
+          conteudo={arquivo ? arquivo.name : form.url ? 'Já há um arquivo anexado · enviar outro substitui' : undefined}
+          tituloDoConteudo={arquivo ? arquivo.name : form.url ? 'Já há um arquivo anexado. Enviar outro substitui.' : undefined}
+          fixo={lendoNota ? 'Lendo a nota…' : arquivo ? `${(arquivo.size / 1024 / 1024).toFixed(1)} MB` : undefined}
+          rotuloDoBotao={arquivo ? 'Trocar' : 'Escolher'}
+          onArquivos={([f]) => receberArquivo(f ?? null)} />
       )}
 
       {/* O que a leitura conseguiu — ou nao. Nunca silencio: campo errado e silencio

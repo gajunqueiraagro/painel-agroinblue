@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { BUCKET_OC_DOCUMENTOS, caminhoDocumentoOC, extensaoDoArquivo, motivoArquivoInvalido } from '@/lib/oc/caminhoDocumento';
+import { BUCKET_OC_DOCUMENTOS, caminhoDocumentoOC, extensaoDoArquivo, REGRA_ARQUIVO_DA_OC } from '@/lib/oc/caminhoDocumento';
+import { aceitarArquivo } from '@/lib/arquivo/aceitarArquivo';
 import { normalizarErroRpc } from '@/hooks/useOcCompromissos';
 
 // Documentos fiscais da Operação Comercial (PR-OC-DOC-UI-01). Consome EXCLUSIVAMENTE os contratos
@@ -210,8 +211,11 @@ export function useOperacaoDocumentos({ operacaoId, clienteId, enabled }: Params
      existe para permitir. */
   const anexarArquivo = useCallback(async (documentoId: string, versaoEsperada: number, file: File): Promise<boolean> => {
     if (!guard() || !clienteId || !operacaoId) return false;
-    const invalido = motivoArquivoInvalido(file);
-    if (invalido) { toast.error(invalido); return false; }
+    /* O aceite é do dono (UI-ARRASTAR-ARQUIVO-01a); o arquivo que sobe é o que ele devolve, com o tipo preenchido (o `.xml`
+       que o navegador entrega sem tipo sai como `application/xml`, e é dele que a extensão do caminho é tirada). */
+    const aceite = aceitarArquivo([file], REGRA_ARQUIVO_DA_OC);
+    if (aceite.ok === false) { toast.error(aceite.motivo); return false; }
+    file = aceite.arquivos[0];
     const ext = extensaoDoArquivo(file)!;
     const caminho = caminhoDocumentoOC(clienteId, operacaoId, documentoId, ext);
     setSaving(true);

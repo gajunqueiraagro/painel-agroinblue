@@ -17,6 +17,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Json, Database } from '@/integrations/supabase/types';
 import { extensaoDoArquivo } from '@/lib/oc/caminhoDocumento';
+import { aceitarArquivo, fraseDeFormatoNaoAceito, type RegraDeAceite, type TipoDeArquivo } from '@/lib/arquivo/aceitarArquivo';
 
 /* ⚠ O TIPO VEM DO BANCO, não de um `as`. A tabela entrou no `types.ts` em `eb478369`;
    antes disto o único caminho seria um cast, e ele deixaria de acusar no dia em que uma
@@ -196,6 +197,27 @@ export function especieParaOC(e: EspecieLancDoc | undefined): string {
 export const TAMANHO_MAXIMO = 10 * 1024 * 1024;
 /* FIN-NFE-XML-01d — o XML da NF-e entra (os buckets o aceitam desde o 01b1). */
 export const TIPOS_ACEITOS = ['application/pdf', 'image/jpeg', 'image/png', 'application/xml', 'text/xml'];
+/**
+ * A REGRA DE ACEITE do arquivo de um documento do Financeiro (lançamento, boleto da parcela, extrato do saldo) —
+ * UI-ARRASTAR-ARQUIVO-01a. Quem julga é `aceitarArquivo` (o dono); aqui moram os tipos, o limite e a frase que os testes e a
+ * tela prendem. ⚠ O `.xml` sem MIME (alguns navegadores não o informam) passou a ser aceito: o dono devolve o arquivo com o
+ * tipo preenchido, e é ESSE que sobe.
+ */
+const TIPOS_DO_DOCUMENTO: readonly TipoDeArquivo[] = ['pdf', 'jpg', 'png', 'xml'];
+const TIPOS_DO_BOLETO: readonly TipoDeArquivo[] = ['pdf', 'jpg', 'png'];
+/** "Formato não aceito. Envie PDF, JPG, PNG ou XML." — montada dos tipos da regra, nunca escrita à mão. */
+export const FRASE_FORMATO_NAO_ACEITO = fraseDeFormatoNaoAceito(TIPOS_DO_DOCUMENTO);
+export const REGRA_ARQUIVO_DO_DOCUMENTO: RegraDeAceite = {
+  tipos: TIPOS_DO_DOCUMENTO,
+  tamanhoMaxBytes: TAMANHO_MAXIMO,
+  frases: { tipo: FRASE_FORMATO_NAO_ACEITO },
+};
+/** O BOLETO é PDF, JPG ou PNG — sem XML (a tela mostra o que grava: Gabriel, 05/10). */
+export const REGRA_ARQUIVO_DO_BOLETO: RegraDeAceite = {
+  tipos: TIPOS_DO_BOLETO,
+  tamanhoMaxBytes: TAMANHO_MAXIMO,
+  frases: { tipo: fraseDeFormatoNaoAceito(TIPOS_DO_BOLETO) },
+};
 
 /** Só as chaves presentes sobem: `editar` altera o que recebe e preserva o resto.
  *  Exportada para a cadeia dos documentos pendentes (FIN-NFE-PARCELAS-01), que registra com o MESMO payload. */
@@ -512,9 +534,12 @@ export function useLancamentoDocumentos(
    */
   const anexar = useCallback(async (documentoId: string, versaoEsperada: number, file: File, destino: DestinoDocumento) => {
     if (!habilitado || !clienteId) return false;
+    /* O aceite é do dono (UI-ARRASTAR-ARQUIVO-01a); o arquivo que segue é o que ele devolve, com o tipo preenchido. */
+    const aceite = aceitarArquivo([file], REGRA_ARQUIVO_DO_DOCUMENTO);
+    if (aceite.ok === false) throw new Error(aceite.motivo);
+    file = aceite.arquivos[0];
     const ext = extensaoDoArquivo(file);
-    if (!ext || !TIPOS_ACEITOS.includes(file.type)) throw new Error('Formato não aceito. Envie PDF, JPG ou PNG.');
-    if (file.size > TAMANHO_MAXIMO) throw new Error('Arquivo acima de 10 MB.');
+    if (!ext) throw new Error(FRASE_FORMATO_NAO_ACEITO);
     /* ⚠ O DESTINO VEM DE QUEM CHAMA — OC-DOC-ESPECIE-01. Procurar o documento na lista em memoria
        era o defeito: no clique que registra e anexa, a lista ainda e' a do render anterior. */
     const daOC = destino.origem === 'operacao';

@@ -11,17 +11,19 @@
  * ⚠ A31: 10px nas linhas, 9,5px no cabeçalho navy, linha de 18px, larguras fixas, sem reticência.
  * Recusa por arquivo e pendência ao lado do botão, sem toast.
  */
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Paperclip, X } from 'lucide-react';
+import { X } from 'lucide-react';
+import { AreaDeArquivo } from '@/components/ui/area-de-arquivo';
+import type { RegraDeAceite, VereditoDoArquivo } from '@/lib/arquivo/aceitarArquivo';
+import { REGRA_ARQUIVO_DO_BOLETO } from '@/hooks/useLancamentoDocumentos';
 import { extractPdfText } from '@/lib/financeiro/parser/extractPdfText';
 import { lerLinhaDigitavel, type LeituraBoleto } from '@/lib/financeiro/linhaDigitavel';
 import {
   casarBoletos, diasDeDiferenca, LIMITE_DIAS_AVISO, type CasouPor,
 } from '@/lib/financeiro/casarBoletos';
-import { motivoArquivoRecusado } from '@/lib/financeiro/documentosPendentes';
 import { NomeDoArquivo } from '@/components/financeiro-v2/NomeDoArquivo';
 
 export interface ParcelaDoBoleto {
@@ -58,6 +60,8 @@ const ROTULO_CASOU: Record<CasouPor, string> = {
 };
 
 let seqArquivo = 0;
+/** A regra do BOLETO (PDF, JPG ou PNG — sem XML), em LOTE: cada arquivo é julgado sozinho e a recusa aparece na linha dele. */
+const REGRA_DOS_BOLETOS: RegraDeAceite = { ...REGRA_ARQUIVO_DO_BOLETO, varios: true };
 
 export function AnexarBoletosDialog({ parcelas, subtitulo, onConfirmar, onFechar }: {
   parcelas: readonly ParcelaDoBoleto[];
@@ -67,21 +71,20 @@ export function AnexarBoletosDialog({ parcelas, subtitulo, onConfirmar, onFechar
   onFechar: () => void;
 }) {
   const [itens, setItens] = useState<ItemArquivo[]>([]);
-  const [arrastando, setArrastando] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const total = parcelas.length;
   const livres = useMemo(() => parcelas.filter(p => !p.temBoleto), [parcelas]);
   const porNumero = useMemo(() => new Map(parcelas.map(p => [p.numero, p])), [parcelas]);
 
-  const receber = useCallback((lista: FileList | File[] | null) => {
-    if (!lista) return;
-    const novos: ItemArquivo[] = Array.from(lista).map(arquivo => {
+  /* UI-ARRASTAR-ARQUIVO-01a — os arquivos chegam da `AreaDeArquivo` JÁ JULGADOS pelo dono do aceite (um veredito por
+     arquivo); o que se faz com cada um é o de sempre. */
+  const receber = useCallback((vereditos: readonly VereditoDoArquivo[]) => {
+    const novos: ItemArquivo[] = vereditos.map(({ arquivo, motivo }) => {
       seqArquivo += 1;
       return {
-        chave: `arq-${Date.now()}-${seqArquivo}`, arquivo, recusa: motivoArquivoRecusado(arquivo),
+        chave: `arq-${Date.now()}-${seqArquivo}`, arquivo, recusa: motivo,
         lendo: false, leitura: null, parcelaManual: null,
       };
     });
@@ -144,24 +147,9 @@ export function AnexarBoletosDialog({ parcelas, subtitulo, onConfirmar, onFechar
         </DialogDescription>
 
         <div className="space-y-2 px-4 py-3">
-          <div
-            data-testid="soltar-boletos"
-            onDragOver={e => { e.preventDefault(); setArrastando(true); }}
-            onDragLeave={() => setArrastando(false)}
-            onDrop={e => { e.preventDefault(); setArrastando(false); receber(e.dataTransfer.files); }}
-            className={`flex items-center gap-2 rounded-md border border-dashed px-3 py-1.5 ${arrastando ? 'border-primary bg-primary/10' : 'border-muted-foreground/30 bg-muted/20'}`}>
-            <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-            <div className="flex-1 leading-tight">
-              <div className="text-[11px] font-medium">Solte os boletos aqui</div>
-              <div className="text-[10px] text-muted-foreground">PDF, JPG ou PNG, até 10 MB cada · vários de uma vez</div>
-            </div>
-            <Button type="button" variant="outline" className="h-[22px] px-[9px] text-[10px]" onClick={() => inputRef.current?.click()}>
-              Escolher arquivos
-            </Button>
-            <input ref={inputRef} type="file" multiple accept="application/pdf,image/jpeg,image/png" className="hidden"
-              data-testid="input-boletos"
-              onChange={e => { receber(e.target.files); e.target.value = ''; }} />
-          </div>
+          <AreaDeArquivo modo="lote" regra={REGRA_DOS_BOLETOS} testId="soltar-boletos" inputTestId="input-boletos" className="h-10"
+            convite="Clique ou arraste os boletos"
+            rotuloDoBotao="Escolher arquivos" onArquivos={(_arquivos, vereditos) => receber(vereditos)} />
 
           {itens.length > 0 && (
             <div className="max-h-[320px] overflow-auto rounded border border-[#E0E2E6]">
