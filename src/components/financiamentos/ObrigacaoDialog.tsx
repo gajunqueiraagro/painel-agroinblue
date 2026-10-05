@@ -15,12 +15,14 @@ import { CredorAutocomplete } from '@/components/financiamentos/CredorAutocomple
 import { DestinacoesForm, DestinacaoItem } from '@/components/financiamentos/DestinacoesForm';
 import { useFinanciamentoCadastro, FinanciamentoForm, NaturezaContrato } from '@/hooks/useFinanciamentoCadastro';
 /* PAR-01c — a MESMA classificação do modal do financeiro, reusada sem copiar a regra. */
-import { ClassificacaoLancamento } from '@/components/shared/ClassificacaoLancamento';
+import { ClassificacaoLancamento, atividadeValida } from '@/components/shared/ClassificacaoLancamento';
 import { FazendaSelect } from '@/components/shared/FazendaSelect';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCulturasDaSafra } from '@/hooks/useAreaPlantada';
 import { FORMAS_PAGAMENTO_V2, FORMA_PAGAMENTO_V2_NENHUMA } from '@/lib/financeiro/formasPagamentoV2';
 import { ehSubcentroAdministrativo } from '@/lib/financeiro/escopoDoSubcentro';
+import { CULTURAS_LANCAMENTO, FASES } from '@/lib/agri/rateioLancamento';
+import { MOTIVO_VALE_POR_PARCELA, textoDasParcelas, valorComumDasParcelas } from '@/lib/financiamentos/valorDasParcelas';
 import ModalBaixaParcela from '@/components/financiamentos/ModalBaixaParcela';
 import { TableFooter } from '@/components/ui/table';
 import { Pencil } from 'lucide-react';
@@ -241,7 +243,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
   const ehParcelamento = form.natureza === 'parcelamento';
 
   /* ── MODO EDITAR — o contrato existente e o cronograma que ele ja' tem ──────── */
-  const { data: contrato } = useQuery({
+  const { data: contrato, isFetching: buscandoContrato } = useQuery({
     queryKey: ['obrigacao-edicao', financiamentoId],
     enabled: ehEdicao && !!financiamentoId && open,
     queryFn: async () => {
@@ -269,6 +271,47 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
     },
   });
 
+  /**
+   * O QUE AS PARCELAS TÊM — PARC-OBRIGACAO-EDICAO-01a. Safra, cultura, fase e forma de pagamento não são colunas do contrato:
+   * moram no LANÇAMENTO de cada parcela. Na edição a tela as LÊ daqui e as mostra em leitura — o Salvar do contrato não as grava.
+   * ⚠ PELO `financiamento_id` DO LANÇAMENTO, uma consulta só (medido: os 38 lançamentos de parcela dos 9 parcelamentos do proto o
+   * têm); um `.in()` com os ids das parcelas estouraria a URL num contrato de 360. Só as linhas que SÃO de parcela contam — o
+   * recorte é feito abaixo, contra `lancamento_id` das parcelas gravadas (a captação também leva `financiamento_id`).
+   */
+  const { data: lancamentosDoContrato } = useQuery({
+    queryKey: ['obrigacao-edicao-lancamentos', financiamentoId],
+    enabled: ehEdicao && !!financiamentoId && open,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('financeiro_lancamentos_v2')
+        .select('id, safra_id, cultura, fase, forma_pagamento')
+        .eq('financiamento_id', financiamentoId!)
+        .eq('cancelado', false);
+      const linhas = data ?? [];
+      /* O NOME da safra vem do cadastro por id: a lista do hook só tem as ATIVAS, e a parcela pode estar numa inativa. */
+      const idsSafra = [...new Set(linhas.map(l => l.safra_id).filter((v): v is string => !!v))];
+      const nomes: Record<string, string> = {};
+      if (idsSafra.length > 0) {
+        const { data: cad } = await supabase.from('financeiro_safras').select('id, nome').in('id', idsSafra);
+        for (const sf of cad ?? []) nomes[sf.id] = sf.nome;
+      }
+      return { linhas, nomes };
+    },
+  });
+  const dasParcelas = useMemo(() => {
+    const ids = new Set(parcelasGravadas.map(p => p.lancamento_id).filter((v): v is string => !!v));
+    const linhas = (lancamentosDoContrato?.linhas ?? []).filter(l => ids.has(l.id));
+    const nomes = lancamentosDoContrato?.nomes ?? {};
+    return {
+      safra: textoDasParcelas(valorComumDasParcelas(linhas.map(l => l.safra_id)), 'Sem safra', v => nomes[v] ?? 'safra fora do cadastro'),
+      cultura: textoDasParcelas(valorComumDasParcelas(linhas.map(l => l.cultura)), 'Todas (rateia)',
+        v => CULTURAS_LANCAMENTO.find(c => c.valor === v)?.label ?? v),
+      fase: textoDasParcelas(valorComumDasParcelas(linhas.map(l => l.fase)), 'Todas (rateia)',
+        v => FASES.find(f => f.valor === v)?.label ?? v),
+      forma: textoDasParcelas(valorComumDasParcelas(linhas.map(l => l.forma_pagamento)), 'Nenhuma'),
+    };
+  }, [parcelasGravadas, lancamentosDoContrato]);
+
   const temParcelaPaga = parcelasGravadas.some(p => p.status === 'pago');
   /* Somas do rodape da grade — sobre TODAS as parcelas gravadas, nao so' as visiveis na
      rolagem. Mesmas linhas ja' carregadas; nenhuma consulta nova. */
@@ -281,8 +324,13 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
 
   /* ⚠ CARREGA UMA VEZ (`carregado`), e nao a cada render: o form e' de escrita, e
      re-semear a cada resposta de query apagaria o que o operador acabou de digitar. */
+  /* ⚠ E SÓ COM DADO FRESCO — PARC-OBRIGACAO-EDICAO-01a. O diálogo desmonta ao fechar e o react-query guarda a última leitura:
+     reaberto, ele entregava a cópia de ANTES do salvar, este efeito semeava com ela e travava (`carregado`) — a tela mostrava o
+     valor antigo com o banco no novo, e salvar de novo regravava o velho por cima (Vera, contrato 4f53db54, 05/10/2026).
+     `buscandoContrato` é o `isFetching` da query: enquanto a busca corre, o form ESPERA; semeia quando ela termina.
+     A edição em curso continua protegida pelo `carregado`: busca que chega DEPOIS de semear não reescreve nada. */
   useEffect(() => {
-    if (!ehEdicao || !contrato || carregado) return;
+    if (!ehEdicao || !contrato || carregado || buscandoContrato) return;
     /* O banco guarda a taxa MENSAL; a tela fala em ANUAL. A volta e' a inversa exata
        da ida do gravador — juros compostos, nao 12x. */
     const mensal = Number(contrato.taxa_juros_mensal) || 0;
@@ -327,7 +375,37 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
     const statusBruto = contrato.status ?? '';
     setStatusContrato(ehStatusContrato(statusBruto) ? statusBruto : 'ativo');
     setCarregado(true);
-  }, [ehEdicao, contrato, carregado, setForm]);
+  }, [ehEdicao, contrato, carregado, buscandoContrato, setForm]);
+
+  /**
+   * O CLUSTER NASCE COM A CONTA DO CONTRATO — PARC-OBRIGACAO-EDICAO-01a.
+   *
+   * ⚠ O DEFEITO: na edição o cluster de classificação abria VAZIO, e o efeito de espelho (abaixo) copiava esse vazio para
+   * `form.plano_conta_parcela_id` — abrir o diálogo ZERAVA a conta do contrato no form e acendia a pendência "Escolha a
+   * classificação da parcela". Agora ele é hidratado UMA vez, com a linha do plano que o contrato aponta: conta, macro, grupo,
+   * centro e a atividade (a do plano; na falta dela, o escopo do contrato).
+   * ⚠ SÓ NO PARCELAMENTO, e só depois de o form estar semeado e o plano carregado. Conta que não está no plano carregado
+   * (inativa) não hidrata — e o espelho, sem hidratação, NÃO toca o form: a conta gravada fica como está.
+   */
+  const [clusterHidratado, setClusterHidratado] = useState(false);
+  useEffect(() => {
+    if (!ehEdicao || !contrato || !carregado || clusterHidratado) return;
+    if (contrato.natureza !== 'parcelamento' || classificacoes.length === 0) return;
+    const idDoContrato = contrato.plano_conta_parcela_id ?? '';
+    const linha = idDoContrato ? classificacoes.find(c => c.id === idDoContrato) : undefined;
+    if (!linha) return;
+    setClassificacao(c => ({
+      ...c,
+      subcentro: linha.subcentro,
+      macro_custo: linha.macro_custo,
+      grupo_custo: linha.grupo_custo || '',
+      centro_custo: linha.centro_custo,
+      escopo_negocio: linha.escopo_negocio || '',
+      plano_conta_id: idDoContrato,
+      atividade: atividadeValida(linha.escopo_negocio) ?? atividadeValida(contrato.tipo_financiamento),
+    }));
+    setClusterHidratado(true);
+  }, [ehEdicao, contrato, carregado, clusterHidratado, classificacoes, setClassificacao]);
 
   /* O cronograma gravado alimenta a previa em modo editar — ela e' so' leitura. */
   useEffect(() => {
@@ -390,6 +468,11 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
   );
 
   useEffect(() => {
+    /* ⚠ EM EDIÇÃO, NADA ANTES DE O FORM SER SEMEADO — PARC-OBRIGACAO-EDICAO-01a. Antes disso o `form` é o de fábrica (um
+       financiamento vazio), e este efeito escrevia nele a conta de amortização do escopo. Quando o plano e o contrato chegavam
+       no MESMO ciclo, esse `set` (updater sobre o estado vivo) caía DEPOIS da semeadura e trocava a conta do contrato pela de
+       amortização — que o ramo do parcelamento, logo abaixo, zerava. Achado pelo teste da conta fora do plano carregado. */
+    if (ehEdicao && !carregado) return;
     if (ehParcelamento) {
       /* Virou parcelamento: o id de amortizacao herdado nao serve — a lista e' outra
          (saidas operacionais) e quem escolhe e' o operador. */
@@ -403,6 +486,9 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
          aqui, num lugar so', evitou reescrever esses tres consumidores — e evitou que a
          classificacao passasse a ter duas fontes. */
       const doCluster = classificacao.plano_conta_id ?? '';
+      /* ⚠ EM EDIÇÃO O CLUSTER SÓ MANDA DEPOIS DE HIDRATADO (ou de o operador escolher uma conta) — PARC-OBRIGACAO-EDICAO-01a.
+         Antes disso ele está vazio por não ter sido preenchido, não por decisão de ninguém; copiá-lo zerava a conta do contrato. */
+      if (ehEdicao && !clusterHidratado && !doCluster) return;
       if (form.plano_conta_parcela_id !== doCluster) set('plano_conta_parcela_id', doCluster);
       return;
     }
@@ -413,7 +499,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
     if (idAmortizacaoEscopo && form.plano_conta_parcela_id !== idAmortizacaoEscopo) {
       set('plano_conta_parcela_id', idAmortizacaoEscopo);
     }
-  }, [ehEdicao, ehParcelamento, idAmortizacaoEscopo, form.plano_conta_parcela_id, classificacao.plano_conta_id, set]);
+  }, [ehEdicao, carregado, ehParcelamento, idAmortizacaoEscopo, form.plano_conta_parcela_id, classificacao.plano_conta_id, clusterHidratado, set]);
 
   /* ── PENDENCIAS — a MESMA cadeia que ja desabilitava o botao, agora como lista ──
      ⚠ MESMAS REGRAS, MESMAS FRASES, MESMA ORDEM da pagina: o que muda e' que cada uma
@@ -771,6 +857,17 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                       que este item veio tirar. */}
                   <div className={`grid gap-2 ${ehParcelamento ? 'grid-cols-[1fr_1fr_2fr]' : 'grid-cols-[1fr_2fr]'}`}>
                     {ehParcelamento && (
+                      ehEdicao ? (
+                      /* ⚠ EM EDIÇÃO É LEITURA — PARC-OBRIGACAO-EDICAO-01a. A forma mora em cada PARCELA e o Salvar do contrato
+                         não a grava: o campo aceitava a escolha e a jogava fora. Agora mostra o que as parcelas têm (o valor,
+                         ou "varia entre as parcelas"); o motivo vai na linha de baixo, inteiro. */
+                      <div>
+                        <Label className={ROTULO}>Forma de pagamento</Label>
+                        <Input readOnly disabled tabIndex={-1} data-testid="forma-das-parcelas"
+                          className={`${CAMPO} ${CAMPO_TRAVADO}`} value={dasParcelas.forma} title={dasParcelas.forma} />
+                        <p className={APOIO}>Lida das parcelas</p>
+                      </div>
+                      ) : (
                       <div>
                         <Label className={ROTULO}>Forma de pagamento</Label>
                         <Select
@@ -785,6 +882,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                         </Select>
                         <p className={APOIO}>Vai em cada parcela</p>
                       </div>
+                      )
                     )}
                     <div>
                       <Label className={ROTULO}>Data do contrato *</Label>
@@ -797,6 +895,12 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                         placeholder="opcional" />
                     </div>
                   </div>
+                  {ehEdicao && ehParcelamento && (
+                    <p data-testid="motivo-forma" className="truncate text-[10px] leading-[14px] text-muted-foreground"
+                      title={MOTIVO_VALE_POR_PARCELA}>
+                      Forma de pagamento: {MOTIVO_VALE_POR_PARCELA}
+                    </p>
+                  )}
                 </TabsContent>
 
                 {/* ══ ABA PARCELAS ══════════════════════════════════════════════ */}
@@ -1165,7 +1269,42 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                           culturasDaSafra={culturasDaSafra}
                           /* Um parcelamento é sempre despesa — é o que filtra a lista de contas. */
                           tipoOperacao="2-Saídas"
+                          /* ⚠ NA EDIÇÃO A LINHA DA SAFRA É DAS PARCELAS — PARC-OBRIGACAO-EDICAO-01a: o cluster não a desenha
+                             (nem sugere safra); quem a mostra, em leitura, é o bloco logo abaixo. Na criação, nada muda. */
+                          ocultarLinhaDaSafra={ehEdicao}
                       />
+                      {ehEdicao && (
+                        /* ⚠ SAFRA E FASE/CULTURA EM LEITURA, COM O MOTIVO — o Salvar do contrato não as grava (não são
+                           colunas dele). Mesma grade de 12 do cluster, para os rótulos alinharem com os de cima; o eixo é o da
+                           atividade (lavoura = cultura, pecuária = fase), a regra do próprio cluster. */
+                        <div data-testid="das-parcelas">
+                          <div className="grid grid-cols-12 gap-2 items-start">
+                            <div className="col-span-4">
+                              <Label className="text-[10px]">Safra</Label>
+                              <Input readOnly disabled tabIndex={-1} data-testid="safra-das-parcelas"
+                                className={`${CAMPO} ${CAMPO_TRAVADO}`} value={dasParcelas.safra} title={dasParcelas.safra} />
+                            </div>
+                            {classificacao.atividade === 'agricultura' && (
+                              <div className="col-span-4">
+                                <Label className="text-[10px]">Cultura</Label>
+                                <Input readOnly disabled tabIndex={-1} data-testid="cultura-das-parcelas"
+                                  className={`${CAMPO} ${CAMPO_TRAVADO}`} value={dasParcelas.cultura} title={dasParcelas.cultura} />
+                              </div>
+                            )}
+                            {classificacao.atividade === 'pecuaria' && (
+                              <div className="col-span-4">
+                                <Label className="text-[10px]">Fase</Label>
+                                <Input readOnly disabled tabIndex={-1} data-testid="fase-das-parcelas"
+                                  className={`${CAMPO} ${CAMPO_TRAVADO}`} value={dasParcelas.fase} title={dasParcelas.fase} />
+                              </div>
+                            )}
+                          </div>
+                          <p data-testid="motivo-safra" className="mt-0.5 truncate text-[10px] leading-[14px] text-muted-foreground"
+                            title={MOTIVO_VALE_POR_PARCELA}>
+                            {MOTIVO_VALE_POR_PARCELA}
+                          </p>
+                        </div>
+                      )}
                       <p className={APOIO}>Cada parcela vira um lançamento nesta classificação</p>
                       <p className="text-[10px] text-muted-foreground">
                         Parcelamento não tem captação: o dinheiro não entra, a despesa é que sai em N vezes.

@@ -74,7 +74,7 @@ export const atividadeValida = (v: string | null | undefined): Atividade | null 
 export function ClassificacaoLancamento({
   value, onChange, classificacoes, safras, dataCompetencia,
   culturasDaSafra = [], subcentroDesabilitado = false, tipoOperacao, travado = false, erroSubcentro = null,
-  ocultarCulturaFase = false,
+  ocultarCulturaFase = false, ocultarLinhaDaSafra = false,
 }: {
   value: ClassificacaoValor;
   /**
@@ -117,6 +117,13 @@ export function ClassificacaoLancamento({
    * continuam idênticos. Quando a regra ganhar as colunas (frente própria), a prop sai.
    */
   ocultarCulturaFase?: boolean;
+  /**
+   * Tira a linha inteira de Safra · Cultura/Fase — PARC-OBRIGACAO-EDICAO-01a. Na EDIÇÃO de um parcelamento esses campos são das
+   * PARCELAS, não do contrato: o Salvar do contrato não os grava, e a tela os mostra em leitura (o diálogo desenha a linha
+   * dele). Com a prop, o cluster também NÃO SUGERE safra — sugestão num campo que ninguém vê seria estado escondido.
+   * Default `false` = lançamento, recorrência e a CRIAÇÃO da obrigação continuam idênticos.
+   */
+  ocultarLinhaDaSafra?: boolean;
 }) {
   /* ⚠ O ADAPTADOR QUE FEZ ESTE PR SER UM *MOVE*: com `setClassificacao` aqui e os campos
      desestruturados com os nomes antigos, os handlers e o JSX abaixo entraram VERBATIM, sem uma
@@ -236,6 +243,7 @@ export function ClassificacaoLancamento({
   const ehAdministrativo = escopoDoPlano === 'administrativo' || atividade === 'administrativo';
 
   useEffect(() => {
+    if (ocultarLinhaDaSafra) return;
     if (safraEditadaAMao) return;
     if (safraId && safraId !== safraSugeridaId) return;
     const nova = atividade && atividade !== 'administrativo'
@@ -253,7 +261,7 @@ export function ClassificacaoLancamento({
     /* Só chega aqui com o campo vazio (ou com a sugestão anterior deste bloco) na foto deste render. */
     setSafraSugeridaId(nova);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [atividade, dataCompetencia, safras, safraEditadaAMao]);
+  }, [atividade, dataCompetencia, safras, safraEditadaAMao, ocultarLinhaDaSafra]);
   return (
     <>
             {/* ── LINHA 4 — Classificação INCORPORADA: Safra + Subcentro ──
@@ -398,6 +406,7 @@ export function ClassificacaoLancamento({
                  mais longo do subcentro pede 291,5px e a pílula "Administrativo" 90,4, e as
                  doze colunas de 666px não comportam os três inteiros (4+6+4 = 14). Entre
                  truncar dois nomes e usar uma linha a mais, a linha a mais é mais barata. */}
+            {!ocultarLinhaDaSafra && (
             <div className="grid grid-cols-12 gap-2 items-start">
               <div className="col-span-4">
                 <Label className="text-[10px]">Safra</Label>
@@ -519,6 +528,7 @@ export function ClassificacaoLancamento({
                 </div>
               )}
             </div>
+            )}
     </>
   );
 }

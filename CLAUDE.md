@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 05/10/2026 (FIN-IMPORT-EXCEL-STATUS-01a, +28: `src/lib/financeiro/statusParaImportar.test.ts` 8,
+  Baseline em 05/10/2026 (PARC-OBRIGACAO-EDICAO-01a, +26: `src/components/financiamentos/obrigacaoEdicao.test.tsx` 19,
+  `src/lib/financiamentos/valorDasParcelas.test.ts` 7; antes o FIN-IMPORT-EXCEL-STATUS-01a, +28: `src/lib/financeiro/statusParaImportar.test.ts` 8,
   `src/v2/lib/importLanc/semDataDePagamento.test.ts` 12, `src/v2/pages/importExcelSemDataDePagamento.test.tsx` 8; antes o
   FIN-NFE-XML-01d, +52: `src/lib/financeiro/nfe/proporLancamento.test.ts` 27,
   `src/components/financeiro-v2/novoDeXml.test.tsx` 25; antes o FIN-NFE-XML-01a, +35: `src/lib/financeiro/nfe/lerNFe.test.ts` 30, `src/lib/financeiro/nfe/centavos.test.ts` 5;
@@ -186,7 +187,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3595
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3621
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -2215,6 +2216,37 @@ docs/historico/frentes-ate-2026-09-29.md.)
   o FIN-LISTA-VISUAL-01. A conta corrente da OC herda a mesma paleta.
   Duplicata registrada: `BADGE_STATUS_TRANSACAO` (statusOperacional.ts, Mesa/Espelho); o `ModoRapidoGrid` ainda deriva
   status da data de pagamento (frente propria).
+- ⚠ "EDITAR OBRIGACAO" MOSTRA O QUE SALVOU E NAO DESCARTA EM SILENCIO (PARC-OBRIGACAO-EDICAO-01a, Gabriel 05/10/2026, so' tela).
+  Nasce do caso da Vera (contrato 4f53db54): editou, salvou, reabriu e viu o valor antigo; salvar de novo regravava o velho.
+  · CACHE: o `ObrigacaoDialog` le' o contrato por `['obrigacao-edicao', id]`, as parcelas por `['obrigacao-edicao-parcelas', id]` e
+    os lancamentos delas por `['obrigacao-edicao-lancamentos', id]`; o `saveEdit` (`FinanciamentoDetalhe.tsx`) invalida as TRES. E
+    o form so' e' semeado com a busca TERMINADA (`isFetching` falso): reaberto, o dialogo nao semeia com a copia do cache. Depois
+    de semeado (`carregado`), busca nova nao reescreve nada — edicao em curso fica.
+  · CLASSIFICACAO: na edicao de parcelamento o cluster e' HIDRATADO uma vez com a linha do plano do contrato
+    (`plano_conta_parcela_id`: conta, macro, grupo, centro; atividade = escopo do plano, na falta `tipo_financiamento`). O efeito de
+    espelho (cluster -> `form.plano_conta_parcela_id`) NAO age antes de o form ser semeado nem copia cluster vazio nao hidratado:
+    abrir nao zera a conta nem acende "Escolha a classificação da parcela". Conta fora do plano carregado: preservada como esta'.
+  · SAFRA, CULTURA/FASE E FORMA DE PAGAMENTO SAO DAS PARCELAS (nao ha' coluna no contrato): na edicao sao LEITURA, lidas dos
+    lancamentos das parcelas (por `financiamento_id`, recortados pelo `lancamento_id` das parcelas) — iguais = o valor; divergentes
+    = "varia entre as parcelas"; todas sem o dado = a palavra da casa (Sem safra / Todas (rateia) / Nenhuma); nenhuma parcela
+    lancada = "—". Dono puro: `src/lib/financiamentos/valorDasParcelas.ts` (`valorComumDasParcelas`, `textoDasParcelas`,
+    `MOTIVO_VALE_POR_PARCELA` = "Vale por parcela. A alteração em todas as parcelas chega na próxima etapa."). O cluster
+    (`ClassificacaoLancamento`) ganhou `ocultarLinhaDaSafra` (padrao false: lancamento, recorrencia e a CRIACAO identicos): com
+    ela nao desenha nem SUGERE safra; o dialogo desenha a linha em leitura. Na CRIACAO nada mudou.
+  · TOAST: "Obrigação atualizada"; se descricao, conta do plano ou conta bancaria mudaram e ha' parcelas, com a descricao "As
+    parcelas já lançadas não foram alteradas."
+  · FINANCIAMENTO E EMPRESTIMO (mesmo dialogo) nao mudam: foto (md5 + tamanho do HTML) das tres abas, em criacao e edicao, presa
+    em `obrigacaoDialog.fotos.json`; regravar com `OBRIG_FOTO=gravar` so' quando a mudanca for de proposito.
+  Medido a 1.135 na Vera (so' leitura): dialogo 558px nas tres abas, sem rolagem do modal nem da coluna; motivo 698 de 698px.
+  ⚠ DIVIDAS: PARC-CONTRATO-SEM-AUDITORIA-01 (`financiamentos` nao tem `updated_by` nem auditoria) · PARC-PROPAGACAO-PARCELAS-01
+    (levar descricao, conta, safra, fase e forma do contrato as parcelas, com a pergunta "so' o contrato / nao pagas / todas";
+    RPC e mock) · a FAZENDA segue editavel na edicao de parcelamento e NAO e' gravada pelo `saveEdit` (mesmo descarte) · conta do
+    contrato fora do plano ativo: cluster vazio sem frase · a prova da CRIACAO de parcelamento e' por HTML/diff, sem teste de
+    payload · o `saveEdit` grava em varias idas ao banco, sem transacao (contrato, parcelas deslocadas, captacao) · rotulo
+    "Lavoura" x valor `agricultura`: a linha de Cultura depende da atividade do cluster, sem caso real no proto · o resumo lateral
+    do dialogo sobra 3px (371 de 368) a 1.135 · `FinanciamentoDetalhe.tsx:228` TS2322 `number` -> `string` no `sinal: 1` do insert
+    da captacao (baseline: o tipo gerado diz string) · nao provado no navegador: salvar -> reabrir, "varia entre as parcelas", a
+    linha de Cultura e o toast com a frase (so' por teste).
 - ⚠ O IMPORTADOR DE EXCEL NAO GRAVA LINHA SEM DATA DE PAGAMENTO (FIN-IMPORT-EXCEL-STATUS-01a, Gabriel 05/10/2026, so' tela;
   "sem data de pagamento nao pode entrar como realizado"). O status da linha importada tem UM dono, `statusParaImportar({
   dataPagamento, statusPlanilha })` (`src/lib/financeiro/statusFinanceiro.ts`): com data -> 'realizado'; sem data -> recusada

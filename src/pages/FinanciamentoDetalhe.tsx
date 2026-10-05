@@ -255,7 +255,18 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
     }
     // ─────────────────────────────────────────────────────────────────
 
-    toast.success('Obrigação atualizada');
+    /* ⚠ O QUE O SALVAR NÃO ALCANÇA, DITO — PARC-OBRIGACAO-EDICAO-01a. Descrição e conta são copiadas para o lançamento de cada
+       parcela quando ela nasce; este gravador atualiza só o CONTRATO. Enquanto a propagação não existe, quem mudou um dos dois
+       num contrato com parcelas lê que elas ficaram como estavam — em vez de descobrir depois. */
+    const mudouOQueAsParcelasCopiam =
+      (form.descricao ?? '') !== (fin?.descricao ?? '')
+      || (form.plano_conta_parcela_id || null) !== (fin?.plano_conta_parcela_id ?? null)
+      || (form.conta_bancaria_id || null) !== (fin?.conta_bancaria_id ?? null);
+    if (mudouOQueAsParcelasCopiam && parcelas.length > 0) {
+      toast.success('Obrigação atualizada', { description: 'As parcelas já lançadas não foram alteradas.' });
+    } else {
+      toast.success('Obrigação atualizada');
+    }
     // Invalidações RQ pós-sucesso — atualização "sem F5" das superfícies React Query.
     // (Superfícies imperativas — modal Lançamentos/useFinanceiroV2 e Conciliação/
     // useConciliacaoBancariaItens — atualizam só no remount; ver gate inicial.)
@@ -267,6 +278,11 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
     qc.invalidateQueries({ queryKey: ['painel-financiamentos'] });
     qc.invalidateQueries({ queryKey: ['auditoria-saldo-anterior'] });
     qc.invalidateQueries({ queryKey: ['auditoria-saldo-extrato-real'] });
+    /* ⚠ AS CHAVES DO PRÓPRIO DIÁLOGO — PARC-OBRIGACAO-EDICAO-01a. Eram as únicas que este gravador não invalidava: o
+       `ObrigacaoDialog` lê o contrato por elas, desmonta ao fechar, e reaberto recebia a cópia de antes do salvar. */
+    qc.invalidateQueries({ queryKey: ['obrigacao-edicao', id] });
+    qc.invalidateQueries({ queryKey: ['obrigacao-edicao-parcelas', id] });
+    qc.invalidateQueries({ queryKey: ['obrigacao-edicao-lancamentos', id] });
     /* ⚠ ERA ISTO QUE DEIXAVA O MODAL ABERTO (PR-PARC-05b item 3). A funcao e'
        `Promise<boolean>` e caia no fim sem `return`, devolvendo `undefined`: o
        `if (ok) onSalvo?.()` do dialogo nunca disparava, e o operador via o toast de
