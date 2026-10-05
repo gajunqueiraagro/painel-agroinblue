@@ -8,8 +8,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { render, screen, fireEvent, within } from '@testing-library/react';
-import { NAV_GRUPOS, HOME_LIBERADA_CLIENTES, type V2Section } from './navGrupos';
-import { MATRIZ_ACESSO, gruposVisiveis, nivelDaTela, primeiraTelaPermitida, secoesVisiveis } from './acessoTelas';
+import { NAV_GRUPOS, HOME_LIBERADA_CLIENTES, OPERACAO_COMERCIAL_LIBERADA_CLIENTES, TELA_OPERACAO_COMERCIAL, type V2Section } from './navGrupos';
+import { MATRIZ_ACESSO, NIVEL_POR_TELA, TELA_DE_ENTRADA_PREFERIDA, gruposVisiveis, nivelDaTela, primeiraTelaPermitida, secoesVisiveis } from './acessoTelas';
 import { V2Sidebar } from '@/v2/components/V2Sidebar';
 import { V2ContextDrawer } from '@/v2/components/V2ContextDrawer';
 import { V2MobileNav } from '@/v2/components/V2MobileNav';
@@ -30,9 +30,12 @@ const PERFIS = ['gestor_cliente', 'financeiro', 'campo', 'leitura'] as const;
 const todosOsItens = NAV_GRUPOS.flatMap((g) => g.drawer.flatMap((s) => s.itens.map((i) => ({ grupo: g.id, item: i }))));
 
 describe('a marca de liberacao (navGrupos)', () => {
-  it('exatamente tres telas liberadas, as do piloto; a Visão Geral NAO', () => {
-    expect(todosOsItens.filter((x) => x.item.liberadaClientes).map((x) => x.item.id)).toEqual(PILOTO);
-    expect(todosOsItens.filter((x) => x.item.liberadaClientes).every((x) => x.grupo === 'financeiro')).toBe(true);
+  it('as telas liberadas: as tres do piloto (Financeiro) e, desde o ACESSOS-OC-01, a lista de Operações Comerciais; a Visão Geral NAO', () => {
+    expect(todosOsItens.filter((x) => x.item.liberadaClientes).map((x) => x.item.id)).toEqual(['operacoes-comerciais', ...PILOTO]);
+    expect(todosOsItens.filter((x) => x.item.liberadaClientes && x.grupo !== 'financeiro').map((x) => x.item.id)).toEqual(['operacoes-comerciais']);
+    /* a tela propria da operacao nao e' item de menu: a marca dela mora ao lado da da home */
+    expect(OPERACAO_COMERCIAL_LIBERADA_CLIENTES).toBe(true);
+    expect(todosOsItens.some((x) => x.item.id === TELA_OPERACAO_COMERCIAL)).toBe(false);
     expect(HOME_LIBERADA_CLIENTES).toBe(false);
     /* a busca sabe achar: o menu tem dezenas de itens sem a marca */
     expect(todosOsItens.filter((x) => !x.item.liberadaClientes).length).toBeGreaterThan(40);
@@ -83,14 +86,46 @@ describe('nivelDaTela', () => {
   });
 });
 
+describe('a excecao por tela (NIVEL_POR_TELA) — ACESSOS-OC-01', () => {
+  const TELAS_DA_OC: V2Section[] = ['operacoes-comerciais', TELA_OPERACAO_COMERCIAL];
+  it('a lista e a tela da operacao: so o gestor edita; financeiro (ate o OC-03), campo e leitura, nao; admin, editar', () => {
+    for (const t of TELAS_DA_OC) {
+      expect(nivelDaTela('gestor_cliente', false, t)).toBe('editar');
+      expect(nivelDaTela('financeiro', false, t)).toBe('nao');
+      expect(nivelDaTela('campo', false, t)).toBe('nao');
+      expect(nivelDaTela('leitura', false, t)).toBe('nao');
+      expect(nivelDaTela('admin_agroinblue', true, t)).toBe('editar');
+      for (const p of [null, undefined, '', 'dono']) expect(nivelDaTela(p, false, t)).toBe('nao');
+    }
+  });
+  it('a excecao VENCE a matriz do grupo: no grupo `rebanho` o financeiro veria e o campo editaria', () => {
+    expect(MATRIZ_ACESSO.rebanho).toEqual({ gestor_cliente: 'editar', financeiro: 'ver', campo: 'editar', leitura: 'ver' });
+    expect(Object.keys(NIVEL_POR_TELA).sort()).toEqual([...TELAS_DA_OC].sort());
+  });
+  it('o resto do grupo `rebanho` continua fechado: a tela de lancamentos do rebanho e as vizinhas seguem "nao" para todo perfil', () => {
+    for (const p of PERFIS) for (const t of ['lancamentos-zoot', 'conferencia-lancamentos', 'fechamento', 'mapa-pastos', 'rebanho-home', 'chuvas'] as const) {
+      expect(nivelDaTela(p, false, t)).toBe('nao');
+    }
+  });
+  it('a excecao nao libera tela sem a marca (a marca continua sendo a primeira porta)', () => {
+    /* a busca sabe achar: a mesma funcao devolve "editar" para a tela liberada do mesmo mapa */
+    expect(nivelDaTela('gestor_cliente', false, 'operacoes-comerciais')).toBe('editar');
+    expect(nivelDaTela('gestor_cliente', false, 'lancamentos-zoot')).toBe('nao');
+  });
+});
+
 describe('o que o menu oferece (gruposVisiveis / secoesVisiveis)', () => {
   it('financeiro: um grupo so (Financeiro) com exatamente as tres telas', () => {
     const grupos = gruposVisiveis('financeiro', false);
     expect(grupos.map((g) => g.id)).toEqual(['financeiro']);
     expect(secoesVisiveis('financeiro', false, grupos[0]).flatMap((s) => s.itens.map((i) => i.id))).toEqual(PILOTO);
   });
-  it('gestor e leitura veem as mesmas tres; campo e perfil nulo, nenhuma', () => {
-    for (const p of ['gestor_cliente', 'leitura']) expect(gruposVisiveis(p, false).map((g) => g.id)).toEqual(['financeiro']);
+  it('leitura ve^ as mesmas tres; o GESTOR ganha Produção com um item so, Operações Comerciais (ACESSOS-OC-01); campo e perfil nulo, nenhuma', () => {
+    expect(gruposVisiveis('leitura', false).map((g) => g.id)).toEqual(['financeiro']);
+    const doGestor = gruposVisiveis('gestor_cliente', false);
+    expect(doGestor.map((g) => g.id)).toEqual(['rebanho', 'financeiro']);
+    expect(secoesVisiveis('gestor_cliente', false, doGestor[0]).flatMap((s) => s.itens.map((i) => i.id))).toEqual(['operacoes-comerciais']);
+    expect(secoesVisiveis('gestor_cliente', false, doGestor[1]).flatMap((s) => s.itens.map((i) => i.id))).toEqual(PILOTO);
     expect(gruposVisiveis('campo', false)).toEqual([]);
     expect(gruposVisiveis(null, false)).toEqual([]);
   });
@@ -99,13 +134,22 @@ describe('o que o menu oferece (gruposVisiveis / secoesVisiveis)', () => {
     expect(grupos).toEqual(NAV_GRUPOS);
     for (const g of NAV_GRUPOS) expect(secoesVisiveis('admin_agroinblue', true, g)).toEqual(g.drawer);
   });
-  it('a tela inicial: financeiro, gestor e leitura caem em Lançamentos Financeiros; campo nao tem nenhuma; admin, a Visão Geral', () => {
+  it('a tela inicial: financeiro, leitura e o GESTOR caem em Lançamentos Financeiros (a preferida), nao em Operações Comerciais; campo nao tem nenhuma; admin, a Visão Geral', () => {
+    expect(TELA_DE_ENTRADA_PREFERIDA).toBe('financeiro-lanc');
     expect(primeiraTelaPermitida('financeiro', false)).toBe('financeiro-lanc');
     expect(primeiraTelaPermitida('gestor_cliente', false)).toBe('financeiro-lanc');
     expect(primeiraTelaPermitida('leitura', false)).toBe('financeiro-lanc');
     expect(primeiraTelaPermitida('campo', false)).toBeNull();
     expect(primeiraTelaPermitida(null, false)).toBeNull();
     expect(primeiraTelaPermitida('admin_agroinblue', true)).toBe('home');
+  });
+  it('sem a tela preferida, vale a primeira permitida na ordem do menu', () => {
+    // prova de que a busca sabe achar: o gestor NAO tem 'lancamentos-zoot', e a primeira dele no menu e' a lista de OCs
+    expect(nivelDaTela('gestor_cliente', false, 'lancamentos-zoot')).toBe('nao');
+    expect(primeiraTelaPermitida('gestor_cliente', false, 'lancamentos-zoot')).toBe('operacoes-comerciais');
+    expect(primeiraTelaPermitida('financeiro', false, 'lancamentos-zoot')).toBe('financeiro-lanc');
+    expect(primeiraTelaPermitida('campo', false, 'lancamentos-zoot')).toBeNull();
+    expect(primeiraTelaPermitida('admin_agroinblue', true, 'lancamentos-zoot')).toBe('home');
   });
 });
 
@@ -123,6 +167,13 @@ describe('a lateral (V2Sidebar)', () => {
   it('financeiro: so o grupo Financeiro — sem Visão Geral, sem Configurações, sem os outros grupos', () => {
     lateral();
     expect(botoesDaLateral()).toEqual(['Financeiro']);
+  });
+  it('gestor: Produção (so com Operações Comerciais) e Financeiro — ACESSOS-OC-01', () => {
+    como('gestor_cliente');
+    lateral();
+    expect(botoesDaLateral()).toEqual(['Produção', 'Financeiro']);
+    expect(itensDoDrawer('rebanho').itens).toEqual(['Operações Comerciais']);
+    expect(itensDoDrawer('financeiro').itens).toEqual(['Lançamentos Financeiros', 'Conciliação Bancária', 'Contas a Pagar/Receber']);
   });
   it('campo: nenhum item', () => {
     como('campo');

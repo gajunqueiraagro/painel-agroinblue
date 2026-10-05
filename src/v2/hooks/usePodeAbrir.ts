@@ -1,6 +1,6 @@
 import { useCliente } from '@/contexts/ClienteContext';
 import { nivelDaTela } from '@/v2/lib/acessoTelas';
-import type { V2Section } from '@/v2/lib/navGrupos';
+import { TELA_OPERACAO_COMERCIAL, type V2Section } from '@/v2/lib/navGrupos';
 
 /**
  * A PESSOA PODE ABRIR ESTA TELA? — ACESSOS-02b. O ajudante de quem desenha um ATALHO para outra tela (o icone e o "Abrir OC" do
@@ -17,8 +17,9 @@ export function usePodeAbrir(tela: V2Section): boolean {
   return nivelDaTela(clienteAtual?.perfil ?? null, isAdmin, tela) !== 'nao';
 }
 
-/** A tela pela qual se abre e se altera uma operacao comercial — a MESMA que os atalhos do ACESSOS-02b consultam. */
-export const TELA_DA_OPERACAO: V2Section = 'lancamentos-zoot';
+/** A tela pela qual se abre e se altera uma operacao comercial — a MESMA que os atalhos do ACESSOS-02b consultam. Desde o
+ *  ACESSOS-OC-01 e' a tela PROPRIA da operacao (`operacao-comercial`), nao mais a de lancamentos do rebanho. */
+export const TELA_DA_OPERACAO: V2Section = TELA_OPERACAO_COMERCIAL;
 
 /**
  * A PESSOA PODE ALTERAR UMA OPERACAO COMERCIAL? — ACESSOS-02c. O ajudante de quem desenha um GESTO que altera a operacao a partir

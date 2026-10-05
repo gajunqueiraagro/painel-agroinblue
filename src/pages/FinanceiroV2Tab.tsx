@@ -20,7 +20,7 @@ import { iconeOrigemLancamento, LEGENDA_ICONES } from '@/v2/lib/origemLancamento
 import { MinimodalOrigemLancamento } from '@/components/financeiro-v2/MinimodalOrigemLancamento';
 import { useCoberturaExtrato } from '@/hooks/useCoberturaExtrato';
 import { useCliente } from '@/contexts/ClienteContext';
-import { usePodeAbrir } from '@/v2/hooks/usePodeAbrir';
+import { usePodeAbrir, TELA_DA_OPERACAO } from '@/v2/hooks/usePodeAbrir';
 import { contaSimpleValid } from '@/components/financeiro-v2/lancamentoDialogTabs';
 import { validarLancamento, tipoDaContaNoPlano } from '@/lib/financeiro/validacaoLancamento';
 import { formatDocumento } from '@/lib/financeiro/documentoHelper';
@@ -243,9 +243,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
      é o que casa com ela, e trocar de página não repergunta nada. */
   const { clienteAtual } = useCliente();
   /* ACESSOS-02b — os atalhos desta tela para OUTRAS telas so' se oferecem a quem as acessa (`usePodeAbrir`, em cima do dono do
-     acesso). A OC abre em 'lancamentos-zoot'; o contrato da parcela, em 'financiamentos'. A marca da linha (o icone da OC, o 🏦
+     acesso). A OC abre na tela propria dela (`TELA_DA_OPERACAO`); o contrato da parcela, em 'financiamentos'. A marca da linha (o icone da OC, o 🏦
      da parcela) continua: so' o controle que navega some. */
-  const podeAbrirOC = usePodeAbrir('lancamentos-zoot');
+  const podeAbrirOC = usePodeAbrir(TELA_DA_OPERACAO);
   const podeAbrirFinanciamento = usePodeAbrir('financiamentos');
   const { conciliados, recarregar: recarregarVinculos } = useLancamentosConciliados(clienteAtual?.id ?? null);
   /* VINCULAR-FIX-01 — o icone de OC da linha sai da PARTE VIVA, nao da origem: um lancamento vinculado

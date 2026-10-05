@@ -6,7 +6,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { render, screen, fireEvent, renderHook } from '@testing-library/react';
-import { usePodeAbrir } from '@/v2/hooks/usePodeAbrir';
+import { usePodeAbrir, TELA_DA_OPERACAO } from '@/v2/hooks/usePodeAbrir';
 import { CelulaOC } from '@/components/financeiro-v2/SecaoSemCaixa';
 import { RodapeCancelamento } from '@/components/financeiro-v2/RodapeCancelamento';
 
@@ -19,10 +19,20 @@ beforeEach(() => como('financeiro'));
 
 describe('usePodeAbrir — so consulta o dono', () => {
   const pode = (tela: Parameters<typeof usePodeAbrir>[0]) => renderHook(() => usePodeAbrir(tela)).result.current;
-  it('financeiro: abre as tres do piloto; NAO abre a OC (lancamentos-zoot) nem Financiamentos', () => {
+  it('financeiro: abre as tres do piloto; NAO abre a OC (nem a tela propria dela, ate o ACESSOS-OC-03) nem Financiamentos', () => {
     expect(pode('financeiro-lanc')).toBe(true);
     expect(pode('conciliacao')).toBe(true);
     expect(pode('contas-a-pagar-receber')).toBe(true);
+    expect(pode('lancamentos-zoot')).toBe(false);
+    expect(pode(TELA_DA_OPERACAO)).toBe(false);
+    expect(pode('operacoes-comerciais')).toBe(false);
+    expect(pode('financiamentos')).toBe(false);
+  });
+  it('gestor (ACESSOS-OC-01): abre a lista e a tela propria da OC — os atalhos do 02b voltam para ele; a tela do rebanho segue fechada', () => {
+    como('gestor_cliente');
+    expect(TELA_DA_OPERACAO).toBe('operacao-comercial');
+    expect(pode(TELA_DA_OPERACAO)).toBe(true);
+    expect(pode('operacoes-comerciais')).toBe(true);
     expect(pode('lancamentos-zoot')).toBe(false);
     expect(pode('financiamentos')).toBe(false);
   });
@@ -79,7 +89,7 @@ const fonte = (arq: string) => readFileSync(arq, 'utf8').replace(/\{\/\*[\s\S]*?
 describe('a lista de lancamentos (FinanceiroV2Tab, lida da FONTE): um caso por ponto', () => {
   const tela = fonte('src/pages/FinanceiroV2Tab.tsx');
   it('o ajudante e chamado uma vez por tela de destino, no topo — nenhum `if` de perfil nos pontos', () => {
-    expect(tela).toContain("const podeAbrirOC = usePodeAbrir('lancamentos-zoot');");
+    expect(tela).toContain('const podeAbrirOC = usePodeAbrir(TELA_DA_OPERACAO);');
     expect(tela).toContain("const podeAbrirFinanciamento = usePodeAbrir('financiamentos');");
     expect(tela).not.toMatch(/perfil === '|isAdmin/);
   });

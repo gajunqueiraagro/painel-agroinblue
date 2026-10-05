@@ -10,6 +10,7 @@ export type V2Section =
   // rebanho
   | 'rebanho-home' | 'pastos' | 'chuvas' | 'chuvas-lancamento' | 'lancamentos-zoot'
   | 'operacoes-comerciais'
+  | 'operacao-comercial'   // a tela propria da Operacao Comercial (ACESSOS-OC-01/02): so' os modais da OC, sem item de menu
   | 'mapa-pastos' | 'fechamento' | 'meta-gmd' | 'mapa-geo-pastos'
   | 'conferencia-lancamentos' | 'conferencia-mensal'
   | 'resumo-pastos' | 'evolucao-categoria' | 'auditoria-tecnica'
@@ -97,6 +98,14 @@ export interface NavItem {
  *  lista. NAO liberada no piloto (ACESSOS-02a): quem nao e' admin entra direto na primeira tela permitida. */
 export const HOME_LIBERADA_CLIENTES = false;
 
+/**
+ * A TELA PROPRIA DA OPERACAO COMERCIAL — ACESSOS-OC-01. E' onde a OC (compra, venda, abate) abre: os tres modais, sem os cards,
+ * a lista e os formularios de rebanho de `lancamentos-zoot`. Nao e' item de menu (chega-se a ela abrindo ou criando uma OC),
+ * entao a marca de liberada mora aqui, ao lado da da 'home'. Quem decide o nivel de cada perfil e' o dono (`nivelDaTela`).
+ */
+export const TELA_OPERACAO_COMERCIAL: V2Section = 'operacao-comercial';
+export const OPERACAO_COMERCIAL_LIBERADA_CLIENTES = true;
+
 export interface NavSecao {
   /* Vazio = secao SEM cabecalho. Usado por "Fechamento Área", que deixou de ser
      exclusivo da pecuaria e por isso nao mora sob nenhum dos escopos. */
@@ -152,7 +161,7 @@ export const NAV_GRUPOS: NavGrupo[] = [
         itens: [
           { id: 'rebanho-home',            label: 'Visão Geral',          status: 'ready' },
           { id: 'conferencia-lancamentos', label: 'Lançamentos',          status: 'ready' },
-          { id: 'operacoes-comerciais',    label: 'Operações Comerciais', status: 'ready', primary: true },
+          { id: 'operacoes-comerciais',    label: 'Operações Comerciais', status: 'ready', primary: true, liberadaClientes: true },
           { id: 'conferencia-mensal',      label: 'Evolução no Ano',      status: 'ready' },
           { id: 'mapa-pastos',             label: 'Mapa de Pastos',       status: 'ready' },
           { id: 'mapa-geo-pastos',         label: 'Geo Pastos',           status: 'ready' },
@@ -452,6 +461,7 @@ const ROTULOS_FORA_DO_MENU: Partial<Record<V2Section, { area: string; secao: str
      tela e são alcançáveis (por URL, por drill ou por aba interna), e uma barra em branco
      seria a única tela sem endereço. Nomeá-las aqui mantém a fonte única. */
   'home':                   { area: 'Início',        secao: 'Visão Geral' },
+  'operacao-comercial':     { area: 'Produção',      secao: 'Operação Comercial' },
   'pastos':                 { area: 'Produção',      secao: 'Pastos' },
   'chuvas-lancamento':      { area: 'Produção',      secao: 'Chuvas — lançar' },
   /* ⚠ `'evolucao'` FICA DE FORA: ela tem ramo de render em `V2Index` mas NÃO existe na

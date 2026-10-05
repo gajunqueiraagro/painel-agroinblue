@@ -14,20 +14,24 @@ import {
   ondeAjustarTituloOC,
 } from '@/lib/financeiro/cancelamentoLancamento';
 
-const quem = vi.hoisted(() => ({ isAdmin: false, perfil: 'gestor_cliente' as string | null }));
+const quem = vi.hoisted(() => ({ isAdmin: false, perfil: 'financeiro' as string | null }));
 vi.mock('@/contexts/ClienteContext', () => ({
   useCliente: () => ({ isAdmin: quem.isAdmin, clienteAtual: quem.perfil === null ? null : { id: 'c1', perfil: quem.perfil } }),
 }));
 const como = (perfil: string | null, isAdmin = false) => { quem.perfil = perfil; quem.isAdmin = isAdmin; };
-beforeEach(() => como('gestor_cliente'));
+beforeEach(() => como('financeiro'));
 
 describe('usePodeAlterarOperacao — so consulta o dono, pela MESMA tela dos atalhos do 02b', () => {
   const pode = () => renderHook(() => usePodeAlterarOperacao()).result.current;
-  it('a tela da operacao e a que o 02b consulta', () => {
-    expect(TELA_DA_OPERACAO).toBe('lancamentos-zoot');
+  it('a tela da operacao e a PROPRIA dela (ACESSOS-OC-01), a mesma que os atalhos do 02b consultam', () => {
+    expect(TELA_DA_OPERACAO).toBe('operacao-comercial');
   });
-  it('os quatro perfis de cliente (tela da operacao nao liberada) e o perfil nulo: nao alteram', () => {
-    for (const p of ['gestor_cliente', 'financeiro', 'campo', 'leitura', null]) { como(p); expect(pode()).toBe(false); }
+  it('financeiro (ate o ACESSOS-OC-03), campo, leitura e perfil nulo: nao alteram — os gestos seguem apagados com o motivo', () => {
+    for (const p of ['financeiro', 'campo', 'leitura', null]) { como(p); expect(pode()).toBe(false); }
+  });
+  it('gestor (ACESSOS-OC-01): altera — Desvincular e Vincular voltam a habilitar para ele', () => {
+    como('gestor_cliente');
+    expect(pode()).toBe(true);
   });
   it('admin: altera, como sempre', () => {
     como('admin_agroinblue', true);
