@@ -143,9 +143,12 @@ describe('o painel "O que vai acontecer"', () => {
 });
 
 describe('mensagemDeErro', () => {
-  it('unicidade vira frase; o resto passa como veio; conflito de versão segue com a frase dele', () => {
+  /* ATUALIZADO AO CONTRATO DO OC-VINCULAR-CANDIDATAS-01: o texto que o banco levanta passou a chegar em frase (mapa num lugar
+     so'); o que nao esta' no mapa continua passando como veio. */
+  it('unicidade vira frase; a recusa do banco vira frase; o que não está no mapa passa como veio; conflito de versão segue com a frase dele', () => {
     expect(mensagemDeErro({ message: 'duplicate key value violates unique constraint "x"' })).toBe(FRASE_COLISAO_DE_UNICIDADE);
-    expect(mensagemDeErro({ message: 'Operacao cancelada nao aceita vinculo de lancamento' })).toBe('Operacao cancelada nao aceita vinculo de lancamento');
+    expect(mensagemDeErro({ message: 'Operacao cancelada nao aceita vinculo de lancamento' })).toBe('A operação está cancelada.');
+    expect(mensagemDeErro({ message: 'um texto que o mapa nao conhece' })).toBe('um texto que o mapa nao conhece');
     expect(mensagemDeErro({ message: 'Conflito de versao (esperada 1, atual 2)' })).toContain('A operação mudou');
   });
 });

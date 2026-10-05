@@ -36,6 +36,9 @@ export interface CompromissoCandidato {
   diferenca: number;
   valor_exato: boolean;
   acao_prevista: AcaoCompromisso;
+  /** OC-VINCULAR-CANDIDATAS-01: compromisso − soma das parcelas vivas, EXATA (nulo sem parcela); e a marca "pagas com diferença". */
+  diferenca_parcelas?: number | null;
+  pagas_com_diferenca?: boolean;
   /** VINCULAR-FIX-01: o compromisso e' do MESMO subcentro do lancamento (entra qualquer que seja o componente). */
   mesmo_subcentro?: boolean;
 }
@@ -68,6 +71,20 @@ export interface OperacaoCandidata {
   competencia_nova: string;
   competencia_muda_de_mes: boolean;
   movimento_duplicado: { movimento_antigo: string; movimentos_da_oc: string[] } | null;
+  /**
+   * OC-VINCULAR-CANDIDATAS-01 — as MARCAS que o banco põe no que antes sumia da lista. ⚠ OPCIONAIS: a função antiga não as devolve
+   * (e ela nem listava essas OCs).
+   *   · `outra_fazenda`: a OC e o lançamento têm fazenda, e não é a mesma — pode ser escolhida, com o selo;
+   *   · `fora_da_janela`: entre a janela e o limite de dias — fica sob o "mostrar", e pode ser escolhida;
+   *   · `rascunho`: aparece APAGADA, com o motivo; não se escolhe.
+   */
+  outra_fazenda?: boolean;
+  fora_da_janela?: boolean;
+  rascunho?: boolean;
+  /** Todas as parcelas pagas, mas o compromisso ≠ a soma das parcelas (ao centavo): NÃO é "todos liquidados". O valor é do banco. */
+  pagas_com_diferenca?: boolean;
+  /** compromisso − soma das parcelas vivas, dos compromissos pagos (positivo = pago a menos; negativo = pago a mais). */
+  diferenca_parcelas?: number;
 }
 
 export interface CabecalhoLancamento {
@@ -96,19 +113,28 @@ export interface RespostaCandidatas {
   regra?: { natureza: string; componentes: string[]; tipos_oc: string[] };
   componente_sugerido?: SugestaoComponente | null;
   candidatas?: OperacaoCandidata[];
+  /** OC-VINCULAR-CANDIDATAS-01 — os números da regra vêm do banco; a tela não escreve "60" nem "180". */
+  janela_dias?: number;
+  limite_dias?: number;
+  /** OCs do mesmo tipo além do limite: só a contagem. */
+  fora_do_limite?: number;
+  /** OCs vivas de OUTRO tipo perto destas datas (recebimento em subcentro de venda x OC de abate): só a contagem. */
+  outro_tipo?: { qtd: number; tipos: string[] } | null;
 }
 
 export interface AvisoVinculo {
   codigo: 'movimento_duplicado' | 'competencia_mudou_de_mes' | 'favorecido_diferente'
     | 'classificacao_diverge_do_compromisso' | 'principal_diverge_da_base' | 'safra_diverge_da_competencia'
     | 'principal_excede_acordado'
-    | 'recebido_acima_do_saldo' | 'compromisso_reduzido' | 'mes_fechado';
+    | 'recebido_acima_do_saldo' | 'compromisso_reduzido' | 'mes_fechado' | 'fazenda_diferente';
   de?: string; para?: string; base?: number | null; soma_principal?: number;
   /** `recebido_acima_do_saldo` / `compromisso_reduzido` (OC-VINCULAR-RECEBIMENTO-PARCIAL-01): nada some em silêncio. */
   lado?: 'receber' | 'pagar'; recebido?: number; saldo?: number | null; diferenca?: number;
   compromisso_de?: number | null; compromisso_para?: number;
   /** `mes_fechado`: 'YYYY-MM'. Avisa e fica na trilha; não bloqueia. */
   mes?: string;
+  /** `fazenda_diferente` (OC-VINCULAR-CANDIDATAS-01): os nomes vêm do banco. */
+  operacao_fazenda?: string | null; lancamento_fazenda?: string | null;
   /** `principal_excede_acordado` (OC-VINCULAR-PARCELA-SEGUINTE-01). */
   acordado?: number; vinculado?: number; excedente?: number;
   compromisso?: string; lancamento?: string;
@@ -295,7 +321,28 @@ const brl = (n: number | null | undefined) =>
  *  4. mais de um livre do item -> neutro "escolher compromisso" (a lista oferece "criar item");
  *  5. um livre, sem titulo -> verde "sem título do item".
  */
+export const MOTIVO_RASCUNHO = 'em rascunho — conclua a negociação';
+
+/* OC-VINCULAR-CANDIDATAS-01 — TODAS AS PARCELAS PAGAS E O COMPROMISSO ≠ A SOMA DELAS (nunca "liquidado": R$ 0,01 já conta). O valor
+   vem do banco, inteiro; o sinal é dito em palavras. A resolução é na OC (OC-AJUSTE-DIFERENCA-01), não por um vínculo novo. */
+const ladoDaDiferenca = (d: number) => (d > 0 ? 'pago a menos' : 'pago a mais');
+export function seloDaDiferenca(c: Pick<OperacaoCandidata, 'pagas_com_diferenca' | 'diferenca_parcelas'>): string | null {
+  if (!c.pagas_com_diferenca) return null;
+  const d = c.diferenca_parcelas ?? 0;
+  /* curto de propósito: o selo longo (269px) espremia a coluna Operação de TODAS as linhas; a frase inteira vai no painel e no `title` */
+  return `parcelas pagas · ${d > 0 ? 'falta' : 'sobra'} ${brl(Math.abs(d))}`;
+}
+export function motivoDaDiferenca(c: Pick<OperacaoCandidata, 'pagas_com_diferenca' | 'diferenca_parcelas'>): string | null {
+  if (!c.pagas_com_diferenca) return null;
+  const d = c.diferenca_parcelas ?? 0;
+  return `Todas as parcelas deste compromisso estão pagas. Sobra uma diferença de ${brl(Math.abs(d))} entre o combinado e o pago (${ladoDaDiferenca(d)}); ela se resolve na OC.`;
+}
+
 export function situacaoDaCandidata(c: OperacaoCandidata, componente: string | null, _valorLancamento: number): SituacaoCandidata {
+  /* OC-VINCULAR-CANDIDATAS-01 — RASCUNHO aparece e NÃO se escolhe: o motivo vai no selo e no `title` (o banco recusaria). */
+  if (c.rascunho) return { rotulo: MOTIVO_RASCUNHO, tom: 'neutro', selecionavel: false, title: 'Operação em rascunho não recebe lançamento. Conclua a negociação na operação e volte aqui.' };
+  const selo = seloDaDiferenca(c);
+  if (selo) return { rotulo: selo, tom: 'ambar', selecionavel: false, title: motivoDaDiferenca(c) ?? undefined };
   const livres = c.compromissos.filter(k => k.componente === componente && k.acao_prevista !== 'recusar');
   const alvo = livres.length === 1 ? livres[0] : null;
   if (compromissoExato(c)) return { rotulo: '= valor', tom: 'verde', selecionavel: true };
@@ -324,7 +371,8 @@ export function linhaDaCandidata(c: Pick<OperacaoCandidata, 'data_referencia' | 
 /** Pre-selecao: SO' a primeira, e so' se for valor exato e selecionavel. Senao, nenhuma. */
 export function candidataInicial(cands: OperacaoCandidata[], componente: string | null, valorLancamento: number): string | null {
   const c = cands[0];
-  if (!c || !c.valor_exato) return null;
+  /* OC-VINCULAR-CANDIDATAS-01: o que antes nem aparecia (outra fazenda, fora da janela, rascunho) NUNCA vai escolhido sozinho. */
+  if (!c || !c.valor_exato || c.outra_fazenda || c.fora_da_janela || c.rascunho) return null;
   return situacaoDaCandidata(c, componente, valorLancamento).selecionavel ? c.operacao_id : null;
 }
 
@@ -369,6 +417,9 @@ export function textoDoAviso(a: AvisoVinculo): AvisoTela {
     case 'mes_fechado':
       return { codigo: a.codigo, tom: 'ambar', texto:
         `O mês ${a.mes ? `${a.mes.slice(5, 7)}/${a.mes.slice(0, 4)}` : ''} do rebanho está fechado. O vínculo não é bloqueado: fica registrado na auditoria da OC.` };
+    case 'fazenda_diferente':
+      return { codigo: a.codigo, tom: 'ambar', texto:
+        `A OC é da ${a.operacao_fazenda ?? 'outra fazenda'}. O lançamento continua em ${a.lancamento_fazenda ?? 'sua fazenda'}; o vínculo não muda a fazenda.` };
     case 'safra_diverge_da_competencia':
       return { codigo: a.codigo, tom: 'ambar', texto: 'A safra do lançamento não é a sugerida para a nova competência; ela não muda.' };
     default:
@@ -444,14 +495,106 @@ export function rotuloOC(c: Pick<OperacaoCandidata, 'numero_documento' | 'data_o
 
 export const FRASE_COLISAO_DE_UNICIDADE = 'O vínculo colide com um registro que já existe na operação. Nada foi gravado.';
 
+/* ─── TODA RECUSA CHEGA EM FRASE (OC-VINCULAR-CANDIDATAS-01) ──────────────────────────────────────────────────────────────
+   Um lugar só: o motivo de inelegibilidade da lista (`FRASE_DO_INELEGIVEL`) e o texto que o banco levanta nas três funções
+   (`FRASES_DO_BANCO`: vincular, recebimento de conta corrente, desvincular). Os três diálogos (Vincular, Desvincular,
+   Reclassificar) passam por `mensagemDeErro`. Texto que não casa com nada passa como veio — e o teste lista os que casam. */
+export const FRASE_DO_INELEGIVEL: Record<string, string> = {
+  lancamento_nao_encontrado: 'Este lançamento não foi encontrado. Recarregue a lista.',
+  cancelado: 'Este lançamento está cancelado; lançamento cancelado não se liga a operação.',
+  meta: 'Este lançamento é de meta; só lançamento realizado ou programado se liga a operação.',
+  ja_vinculado: 'Este lançamento já está ligado a uma operação. Desvincule antes de ligar a outra.',
+  financiamento_ou_transferencia: 'Parcela de financiamento e transferência entre contas não se ligam a operação comercial.',
+  subcentro_sem_regra: 'Este subcentro não se liga a operação comercial.',
+  direcao_diverge_do_subcentro: 'A direção do lançamento (entrada ou saída) não combina com o subcentro dele. Corrija a classificação antes de vincular.',
+  sem_valor: 'Lançamento sem valor não se liga a operação.',
+};
+export const fraseDoInelegivel = (motivo: string | null | undefined) =>
+  FRASE_DO_INELEGIVEL[motivo ?? ''] ?? 'Este lançamento não pode ser vinculado a uma operação.';
+
+export const FRASES_DO_BANCO: ReadonlyArray<readonly [RegExp, string]> = [
+  [/Conflito de versao/i, 'A operação mudou enquanto você olhava. Reabra o vínculo para ver o estado novo.'],
+  /* OC-VINCULAR-PARCELA-SEGUINTE-01 — violação de unicidade NUNCA chega crua (o erro do Postgres fala inglês e cita o índice). */
+  [/duplicate key value violates unique constraint/i, FRASE_COLISAO_DE_UNICIDADE],
+  [/exige motivo/i, 'Informe o motivo.'],
+  [/Operacao .* nao encontrada/i, 'A operação não foi encontrada. Recarregue a lista.'],
+  [/Sem permissao nesta operacao/i, 'Você não tem acesso a esta operação.'],
+  [/Operacao em rascunho/i, 'A operação está em rascunho. Conclua a negociação antes.'],
+  [/Operacao cancelada/i, 'A operação está cancelada.'],
+  [/Lancamento .* nao encontrado neste cliente/i, 'O lançamento não foi encontrado neste cliente.'],
+  [/Lancamento cancelado: use o Desfazer/i, 'O lançamento está cancelado: o caminho é o “Desfazer compromisso”, na operação.'],
+  [/Lancamento cancelado nao pode ser vinculado/i, FRASE_DO_INELEGIVEL.cancelado],
+  [/Lancamento de meta/i, FRASE_DO_INELEGIVEL.meta],
+  [/financiamento ou transferencia/i, FRASE_DO_INELEGIVEL.financiamento_ou_transferencia],
+  [/Lancamento sem valor positivo/i, FRASE_DO_INELEGIVEL.sem_valor],
+  [/Lancamento ja esta ligado a uma operacao/i, FRASE_DO_INELEGIVEL.ja_vinculado],
+  [/Subcentro ".*" nao se vincula/i, FRASE_DO_INELEGIVEL.subcentro_sem_regra],
+  [/nao cabe numa operacao de/i, 'O subcentro deste lançamento não é do tipo desta operação (venda, compra ou abate).'],
+  [/Direcao do lancamento .* nao confere/i, FRASE_DO_INELEGIVEL.direcao_diverge_do_subcentro],
+  [/Direcao do compromisso .* nao confere/i, 'Este compromisso é de outra direção (entrada ou saída) que a do lançamento.'],
+  [/Direcao da conta .* nao confere/i, 'A conta escolhida é de outra direção (entrada ou saída) que a do lançamento.'],
+  [/Compromisso .* nao encontrado nesta operacao/i, 'O compromisso escolhido não é mais desta operação. Reabra o vínculo.'],
+  [/Compromisso cancelado nao recebe vinculo/i, 'O compromisso escolhido está cancelado.'],
+  [/Compromisso .* nao cabe no subcentro/i, 'O compromisso escolhido não é do subcentro deste lançamento.'],
+  [/Componente informado .* diverge/i, 'O item escolhido não é o do compromisso. Reabra o vínculo.'],
+  [/Informe o componente/i, 'Escolha o item da operação.'],
+  [/Componente .* nao cabe no subcentro/i, 'O item escolhido não combina com o subcentro deste lançamento.'],
+  [/inexistente ou inativo no catalogo/i, 'O item escolhido não existe mais no catálogo de itens.'],
+  [/Parcela .* nao pertence a programacao ativa/i, 'A parcela escolhida não é mais deste compromisso. Reabra o vínculo.'],
+  [/mudaria o hash de importacao/i, 'O vínculo mudaria a identidade de importação deste lançamento, e por isso não foi feito. Nada foi gravado.'],
+  [/so em venda ou compra no modelo conta corrente/i, 'Esta operação não é de conta corrente.'],
+  [/Pagamento tem de ser uma saida/i, 'Numa compra, o pagamento tem de ser um lançamento de saída.'],
+  [/Recebimento tem de ser uma entrada/i, 'Numa venda, o recebimento tem de ser um lançamento de entrada.'],
+  [/sem movimentacao de caixa nao e recebimento/i, 'Lançamento sem movimentação de caixa não é recebimento nem pagamento.'],
+  [/nao muda o lancamento; valor, datas/i, 'O vínculo mudaria valor, data ou conta deste lançamento, e por isso não foi feito. Nada foi gravado.'],
+  [/Competencia pela saida mudaria/i, 'O vínculo mudaria valor, pagamento ou conta deste lançamento, e por isso não foi feito. Nada foi gravado.'],
+  [/fora do modelo vivo, nao se desvincula por aqui/i, 'Recebimento ou pagamento de operação em conta corrente ainda não se desvincula por aqui.'],
+  [/liquidacao MANUAL ativa/i, 'Este título tem liquidação manual na operação. Estorne a liquidação antes de desvincular.'],
+  [/Conta do plano .* inexistente ou inativa/i, 'A conta escolhida não existe ou está inativa.'],
+  [/Conta do plano de outro cliente/i, 'A conta escolhida é de outro cliente.'],
+];
+
 export function mensagemDeErro(e: unknown): string {
   if (e && typeof e === 'object' && 'message' in e) {
     const m = String(e.message);
-    if (/Conflito de versao/i.test(m)) return 'A operação mudou enquanto você olhava. Reabra o vínculo para ver o estado novo.';
-    /* OC-VINCULAR-PARCELA-SEGUINTE-01 — violação de unicidade NUNCA chega crua: a função do banco já a traduz; esta é a rede
-       para o que vier de outro ponto (o erro do Postgres fala inglês e cita o nome do índice). */
-    if (/duplicate key value violates unique constraint/i.test(m)) return FRASE_COLISAO_DE_UNICIDADE;
+    for (const [padrao, frase] of FRASES_DO_BANCO) if (padrao.test(m)) return frase;
     return m;
   }
   return String(e);
 }
+
+/* ─── a lista de candidatas, como a tela a desenha (OC-VINCULAR-CANDIDATAS-01) ──────────────────────────────────────────
+   O banco decide o que aparece, em que ordem e com que marca. Aqui só se REPARTE o retorno em dois blocos pela marca
+   `fora_da_janela` (a ordem de cada bloco é a que veio) e se escrevem as frases — com os números do retorno. */
+export function blocosDeCandidatas(cands: OperacaoCandidata[]): { naJanela: OperacaoCandidata[]; foraDaJanela: OperacaoCandidata[] } {
+  return { naJanela: cands.filter(c => !c.fora_da_janela), foraDaJanela: cands.filter(c => !!c.fora_da_janela) };
+}
+const plural = (n: number, um: string, varios: string) => (n === 1 ? um : varios);
+/** "3 na janela de 60 dias" — o número da janela é o do banco; sem ele (função antiga), não se escreve número nenhum. */
+export function fraseDaJanela(r: RespostaCandidatas, n: number): string {
+  return r.janela_dias == null ? `${n} ${plural(n, 'candidata', 'candidatas')}` : `${n} na janela de ${r.janela_dias} dias`;
+}
+export function rotuloMostrarFora(r: RespostaCandidatas, n: number, aberto: boolean): string {
+  const janela = r.janela_dias == null ? 'da janela' : `da janela de ${r.janela_dias} dias`;
+  return `${aberto ? 'Ocultar' : 'Mostrar'} ${n} fora ${janela}`;
+}
+export function fraseForaDoLimite(r: RespostaCandidatas): string | null {
+  const n = r.fora_do_limite ?? 0;
+  if (n <= 0 || r.limite_dias == null) return null;
+  return `${n} ${plural(n, 'operação', 'operações')} do mesmo tipo a mais de ${r.limite_dias} dias ${plural(n, 'fica', 'ficam')} fora da lista.`;
+}
+const NOME_DO_TIPO: Record<string, string> = { venda: 'venda', compra: 'compra', abate: 'abate' };
+export function fraseOutroTipo(r: RespostaCandidatas): string | null {
+  const o = r.outro_tipo;
+  if (!o || o.qtd <= 0) return null;
+  const outros = o.tipos.map(t => NOME_DO_TIPO[t] ?? t).join(', ');
+  const deste = (r.regra?.tipos_oc ?? []).map(t => NOME_DO_TIPO[t] ?? t).join(' ou ');
+  return `${o.qtd} ${plural(o.qtd, 'operação', 'operações')} de outro tipo (${outros}) perto destas datas — o subcentro deste lançamento é de ${deste}.`;
+}
+/** O aviso do painel para a OC fora da janela (a distância e a janela são do retorno). */
+export function avisoForaDaJanela(c: OperacaoCandidata, r: RespostaCandidatas): string | null {
+  if (!c.fora_da_janela) return null;
+  return `Esta operação está a ${c.distancia_dias} dias do lançamento${r.janela_dias == null ? '' : `, fora da janela de ${r.janela_dias} dias`}. Confira se é mesmo ela.`;
+}
+/** O selo da linha de outra fazenda. */
+export const seloOutraFazenda = (c: OperacaoCandidata) => (c.outra_fazenda ? `outra fazenda: ${c.fazenda_nome ?? '—'}` : null);

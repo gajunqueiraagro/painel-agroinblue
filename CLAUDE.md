@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 05/10/2026 (OC-VINCULAR-RECEBIMENTO-PARCIAL-01, +25 em `src/components/financeiro-v2/vincularRecebimentoParcial.test.tsx` — 3945 depois dele;
+  Baseline em 05/10/2026 (OC-VINCULAR-CANDIDATAS-01, +24 em `src/components/financeiro-v2/vincularCandidatas.test.tsx` — 3969 depois dele;
+  antes o OC-VINCULAR-RECEBIMENTO-PARCIAL-01, +25 em `src/components/financeiro-v2/vincularRecebimentoParcial.test.tsx` — 3945 depois dele;
   antes o OC-VINCULAR-PARCELA-SEGUINTE-01, +10 em `src/components/financeiro-v2/vincularParcelaSeguinte.test.tsx` — 3920 depois dele;
   antes o UI-ARRASTAR-ARQUIVO-01b, +62: `src/lib/arquivo/aceitarArquivo.test.ts` 27, `src/lib/arquivo/umSoArrastar.test.ts` 3,
   `src/components/ui/area-de-arquivo.test.tsx` 3, `src/components/conciliacao/arquivoTelas01b.test.tsx` 18,
@@ -199,7 +200,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3945
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3969
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -2306,6 +2307,56 @@ docs/historico/frentes-ate-2026-09-29.md.)
     leitura do corpo) · compromisso com varias parcelas TODAS pagas ainda conta como "livre" na escolha do compromisso · a OC
     7016f2b5 do Agnaldo (recebido 368.210 num combinado de 361.130) espera os gestos de ajuste · nao provado no navegador: compra
     e abate com saldo parcial, o aviso de recebido a mais e o de mes fechado (so' por teste).
+- ⚠ NADA SOME DA LISTA DE CANDIDATAS SEM MOTIVO (OC-VINCULAR-CANDIDATAS-01, Gabriel 05/10/2026; migration 20261027193400, ⚠ registrada
+  como 20261005220703; ledger = arquivo, md5 7cab9484…; patch guardado por md5: `oc_candidatas_vinculo` 70231c30… -> 05cbc9b2…,
+  `oc_vincular_lancamento` 4bc44efe… -> d72b7db7…, `_oc_vincular_recebimento` 3dc56197… -> 76003144…,
+  `_oc_vinculo_compromisso_liquidado` 565d6aef… -> e13097f2…).
+  O dono do que aparece, em que ordem e com que marca e' `oc_candidatas_vinculo`; a tela so' REPARTE o retorno pela marca
+  (`blocosDeCandidatas`) e escreve as frases com os NUMEROS DO RETORNO (`janela_dias`, `limite_dias`) — nenhum filtro no front,
+  nenhum 60 ou 180 escrito na tela (preso por teste de fonte).
+  · OUTRA FAZENDA aparece (`outra_fazenda`), com o selo "outra fazenda: <nome>", e PODE ser escolhida; o vincular grava o aviso
+    `fazenda_diferente` na trilha e NAO muda a fazenda do lancamento. FORA DA JANELA (janela < distancia <= limite) vem marcada
+    `fora_da_janela` e fica sob "Mostrar N fora da janela de J dias" (fechado por padrao; estado local); acima do limite, so' a
+    contagem (`fora_do_limite`). RASCUNHO vem marcada e fica APAGADA, nao selecionavel, com "em rascunho — conclua a negociação".
+    CANCELADA e de teste seguem fora. OUTRO TIPO segue fora, com uma linha de rodape (`outro_tipo {qtd, tipos}`, so' para
+    natureza principal — na despesa seria toda compra do periodo).
+  · A ORDEM (P8), no banco: dentro da janela antes de fora -> selecionavel antes de rascunho -> mesma fazenda antes de outra ->
+    valor exato -> pista da descricao -> distancia. Quem ja' aparecia segue na mesma ordem relativa e no topo (medido em 416
+    lancamentos avulsos reais: 0 mudancas de ordem, de topo e de payload).
+  · PRE-SELECAO (`candidataInicial`): nunca outra fazenda, fora da janela ou rascunho, mesmo com valor exato.
+  · COMPROMISSO LIQUIDADO TEM UM DONO, `_oc_vinculo_compromisso_liquidado` (lido pelo vincular e pelas candidatas): tem parcela
+    viva e TODAS pagas. Com varias parcelas todas pagas ele deixou de contar como livre (`acao_prevista` 'recusar').
+  · TODAS PAGAS NAO E' "LIQUIDADO" QUANDO O COMPROMISSO ≠ A SOMA DAS PARCELAS, AO CENTAVO (Gabriel: nunca arredondar, nunca mentir;
+    R$ 0,01 conta). A lista devolve, por compromisso e por OC, `diferenca_parcelas` (compromisso − soma das parcelas vivas; nulo
+    sem parcela; positivo = pago a menos) e a marca `pagas_com_diferenca`; `todos_liquidados` so' com diferenca ZERO. Na tela a
+    linha fica APAGADA, nao selecionavel, com o selo "parcelas pagas · falta R$ 0,50" / "· sobra R$ X" (`seloDaDiferenca`; curto de
+    proposito — o selo longo espremia a coluna Operacao de todas as linhas), e o clique nela escreve o motivo no painel
+    (`motivoDaDiferenca`: "Todas as parcelas deste compromisso estão pagas. Sobra uma diferença de R$ 0,50 entre o combinado e o
+    pago (pago a menos); ela se resolve na OC."). O clique em QUALQUER linha nao selecionavel escreve o motivo dela no painel.
+    ⚠ E' ENTRADA DO OC-AJUSTE-DIFERENCA-01 (sem gesto neste PR): caso real, compra 2fd157be do Agnaldo — combinado 27.062,50,
+      quatro parcelas pagas somando 27.062,00, view "parcial" com saldo 0,50.
+    ⚠ A COMPARACAO E' AO CENTAVO (`round(…, 2)`): ha' compromisso gravado com fracao de centavo (6cf548a1, −0,000009), que sem
+      isso ganharia a marca com "R$ 0,00".
+    ⚠ E' O QUE A TELA OFERECE: a RPC `oc_vincular_lancamento` continua aceitando "criar item" numa OC com tudo pago (regra
+      VINCULAR NAO JULGA REPETICAO) — com diferenca ZERO a linha segue selecionavel com "criar item"; so' a COM diferenca apaga.
+  · RECUSA EM FRASE, NUM LUGAR SO' (`src/lib/oc/vincularLancamento.ts`): `FRASE_DO_INELEGIVEL` (o motivo de `elegivel: false`) e
+    `FRASES_DO_BANCO` (o texto do RAISE -> frase, lido por `mensagemDeErro`, que os tres dialogos usam). Texto que o mapa nao
+    conhece passa como veio — RAISE novo nas RPCs de vinculo entra no mapa no mesmo PR.
+  · O BOTAO "Vincular à operação" NAO MUDOU (decisao do Gabriel, 05/10): subcentro fora do mapa segue SEM botao
+    (`podeOferecerVinculo`); a frase "Este subcentro não se liga a operação comercial." fica no mapa para quando a RPC recusar.
+  · O LANCAMENTO NO TOPO DO DIALOGO SAO DUAS LINHAS DE 10px (`vinc-lancamento`, 40px; eram 109): descricao · favorecido · valor /
+    pagamento · competencia · fazenda · subcentro · origem; so' texto livre corta (inteiro no `title`). O espaco foi para a lista.
+  · O MODAL NAO CRESCE: o corpo nao rola; a LISTA e' o unico scrollport (`vinc-lista`), com o cabecalho sticky nela; a coluna
+    Operacao e' a unica que corta (`w-full max-w-0 truncate`, inteiro no `title`).
+  Provas: 416 lancamentos avulsos reais, antigo x novo — 0 mudancas de conjunto, ordem, topo e payload entre as que ja' apareciam;
+  82 ganham OC de outra fazenda, 369 tem OC fora da janela, listas vazias 42 -> 7; tempo p50 4,5 -> 15,4 ms, p95 8,7 -> 28,5, pior
+  99,8 ms. Teste SQL `supabase/tests/oc_vincular_candidatas_01_test.sql` (K1–K8); 20 mutacoes de banco e 17 de tela + controles.
+  ⚠ DIVIDAS: RAISE NOVO NAS RPCs DE VINCULO EXIGE A FRASE NO MAPA NO MESMO PR (nada forca alem desta regra) · "mostrar fora da
+    janela" e' ESTADO LOCAL (fecha a cada abertura) · LAYOUT FIXO: a tabela de candidatas e' `table-layout:auto` — abrir o "mostrar"
+    ("a 144 dias") ou uma linha com o selo da diferenca estreita a coluna Operacao (352 -> 286px medidos), e o `thead` sticky deixa
+    ~2px de linha a' vista acima dele · a 491px de modal cabem ~4 linhas com rodape (por conta, nao medido) · o selo "outra
+    fazenda: <nome>" repete a fazenda que a linha ja' diz · 2 linhas de `audit_log` do ensaio no cliente Teste (lancamentos
+    417a4374 e afc277bf, apagados) · nao provado no navegador: rascunho com a funcao real (so' por teste e por resposta simulada).
 - ⚠ CONTA CORRENTE DA OC (ADR-2026-21 + adendos; venda e compra no modelo, abate e a migracao
   das OCs existentes na fila):
   - A OC e' UMA venda/compra. Entrega/entrada do gado = titulo sem caixa, receita/custo no DRE

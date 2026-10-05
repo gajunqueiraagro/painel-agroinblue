@@ -19,11 +19,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
-import { TOM_SELO, Selo, Secao, Par } from '@/components/financeiro-v2/modalVinculoOC';
+import { TOM_SELO, Selo, Secao } from '@/components/financeiro-v2/modalVinculoOC';
 import {
   buscarCandidatasVinculo, vincularLancamentoOC, situacaoDaCandidata, candidataInicial,
   compromissoDoItem, compromissoExato, linhaDaCandidata, rotuloComponente, resumoDoVinculo, textoDoAviso, rotuloOC, dataBr, mensagemDeErro, ehRecusa, ehVinculo,
   fraseDaParcela, fraseDoParcial,
+  blocosDeCandidatas, fraseDaJanela, rotuloMostrarFora, fraseForaDoLimite, fraseOutroTipo, avisoForaDaJanela, seloOutraFazenda, fraseDoInelegivel,
   type RespostaCandidatas, type RespostaVinculo, type OperacaoCandidata, type VinculoRecusado,
 } from '@/lib/oc/vincularLancamento';
 
@@ -69,13 +70,17 @@ export function VincularOperacaoDialog({ open, lancamentoId, clienteId, onClose,
   const [erroSim, setErroSim] = useState<string | null>(null);
   const [motivo, setMotivo] = useState('');
   const [gravando, setGravando] = useState(false);
+  /* OC-VINCULAR-CANDIDATAS-01: as de fora da janela ficam recolhidas ate' o operador pedir. */
+  const [mostrarFora, setMostrarFora] = useState(false);
+  /* a linha que NÃO se escolhe diz por quê no painel, ao ser clicada (o motivo é o `title` do selo, do dono) */
+  const [motivoDaLinha, setMotivoDaLinha] = useState<string | null>(null);
 
   /* Carga: candidatas + item sugerido + pre-selecao (so' valor exato). */
   useEffect(() => {
     if (!open) return;
     let cancelado = false;
     setResp(null); setErroCarga(null); setSim(null); setErroSim(null); setMotivo('');
-    setOcSel(null); setCompromissoSel(null); setParcelaSel(null); setCriarNovo(false); setEscolhaPedida(null);
+    setOcSel(null); setCompromissoSel(null); setParcelaSel(null); setCriarNovo(false); setEscolhaPedida(null); setMostrarFora(false); setMotivoDaLinha(null);
     setCarregando(true);
     buscarCandidatasVinculo(lancamentoId)
       .then(r => {
@@ -105,7 +110,7 @@ export function VincularOperacaoDialog({ open, lancamentoId, clienteId, onClose,
   /* Trocar de OC ou de item zera as escolhas que dependem deles. */
   const escolherOC = (id: string) => {
     const c = candidatas.find(x => x.operacao_id === id);
-    setOcSel(id); setCompromissoSel(c ? compromissoExato(c)?.id ?? null : null);
+    setMotivoDaLinha(null); setOcSel(id); setCompromissoSel(c ? compromissoExato(c)?.id ?? null : null);
     setParcelaSel(null); setCriarNovo(false); setEscolhaPedida(null);
   };
   const escolherItem = (c: string) => { setComponente(c); setCompromissoSel(null); setParcelaSel(null); setCriarNovo(false); setEscolhaPedida(null); };
@@ -177,8 +182,9 @@ export function VincularOperacaoDialog({ open, lancamentoId, clienteId, onClose,
         </div>
 
         <div className="grid min-h-0 flex-1 grid-cols-[1fr_270px]">
-          {/* corpo: unico que rola */}
-          <div className="min-h-0 overflow-y-auto px-4 py-3 space-y-4">
+          {/* OC-VINCULAR-CANDIDATAS-01 — corpo SEM rolagem propria: o lancamento, o item e o motivo ficam parados e SO' A LISTA de
+              candidatas rola, com o cabecalho dela fixo (a lista cresceu: outras fazendas, fora da janela, rascunhos). */}
+          <div className="flex min-h-0 flex-col gap-3 overflow-hidden px-4 py-3">
             {carregando && (
               <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" /> Procurando operações candidatas…
@@ -187,7 +193,7 @@ export function VincularOperacaoDialog({ open, lancamentoId, clienteId, onClose,
             {erroCarga && <p className="text-[11px] text-destructive">{erroCarga}</p>}
             {resp && !resp.elegivel && (
               <p className="text-[11px] text-destructive" data-testid="vinc-inelegivel">
-                Este lançamento não pode ser vinculado ({resp.motivo}).
+                {fraseDoInelegivel(resp.motivo)}
               </p>
             )}
 
@@ -198,15 +204,21 @@ export function VincularOperacaoDialog({ open, lancamentoId, clienteId, onClose,
                   {lanc.movimentacao_rebanho_id && <Selo tom="ambar">Modal antigo</Selo>}
                 </span>
               }>
-                <div className="grid grid-cols-4 gap-x-3 gap-y-1.5 rounded-md border bg-muted/20 px-2.5 py-2">
-                  <div className="col-span-2"><Par rotulo="Descrição" valor={lanc.descricao ?? '—'} /></div>
-                  <Par rotulo="Valor" valor={<span className="font-medium tabular-nums">{brl(lanc.valor)}</span>} />
-                  <Par rotulo="Subcentro" valor={lanc.subcentro ?? '—'} />
-                  <Par rotulo="Favorecido" valor={lanc.favorecido_nome ?? '—'} />
-                  <Par rotulo="Competência" valor={dataBr(lanc.data_competencia)} />
-                  <Par rotulo="Pagamento" valor={dataBr(lanc.data_pagamento)} />
-                  <Par rotulo="Fazenda" valor={lanc.fazenda_nome ?? '—'} />
-                  <Par rotulo="Origem" valor={ROTULO_ORIGEM[lanc.origem_lancamento ?? ''] ?? lanc.origem_lancamento ?? '—'} />
+                {/* OC-VINCULAR-CANDIDATAS-01 (acerto b): o lançamento em DUAS linhas de 10px — o espaço vai para a lista. Só texto
+                    longo corta (inteiro no `title`); valor e datas nunca. */}
+                <div className="rounded-md border bg-muted/20 px-2 py-1 text-[10px] leading-[15px]" data-testid="vinc-lancamento">
+                  <div className="flex items-baseline gap-3 whitespace-nowrap">
+                    <Dado rotulo="Descrição" valor={lanc.descricao ?? '—'} corta className="min-w-0 flex-[2]" forte />
+                    <Dado rotulo="Favorecido" valor={lanc.favorecido_nome ?? '—'} corta className="min-w-0 flex-1" />
+                    <Dado rotulo="Valor" valor={brl(lanc.valor)} className="shrink-0 tabular-nums" forte />
+                  </div>
+                  <div className="flex items-baseline gap-3 whitespace-nowrap">
+                    <Dado rotulo="Pagamento" valor={dataBr(lanc.data_pagamento)} className="shrink-0 tabular-nums" />
+                    <Dado rotulo="Competência" valor={dataBr(lanc.data_competencia)} className="shrink-0 tabular-nums" />
+                    <Dado rotulo="Fazenda" valor={lanc.fazenda_nome ?? '—'} corta className="min-w-0 flex-1" />
+                    <Dado rotulo="Subcentro" valor={lanc.subcentro ?? '—'} corta className="min-w-0 flex-[2]" />
+                    <Dado rotulo="Origem" valor={ROTULO_ORIGEM[lanc.origem_lancamento ?? ''] ?? lanc.origem_lancamento ?? '—'} className="shrink-0" />
+                  </div>
                 </div>
                 <div className="flex items-center gap-2 pt-0.5">
                   <span className="text-[11px] text-muted-foreground">Item da OC</span>
@@ -227,26 +239,51 @@ export function VincularOperacaoDialog({ open, lancamentoId, clienteId, onClose,
               </Secao>
             )}
 
-            {resp?.elegivel && (
-              <Secao titulo="Operações candidatas" extra={<span className="text-[10px] text-muted-foreground">{candidatas.length} na janela de 60 dias</span>}>
+            {resp?.elegivel && (() => {
+              const { naJanela, foraDaJanela } = blocosDeCandidatas(candidatas);
+              const visiveis = mostrarFora ? [...naJanela, ...foraDaJanela] : naJanela;
+              const rodape = [fraseForaDoLimite(resp), fraseOutroTipo(resp)].filter((x): x is string => !!x);
+              return (
+              <div className="flex min-h-0 flex-1 flex-col gap-1" data-testid="vinc-secao-candidatas">
+                <div className="flex shrink-0 items-baseline gap-2">
+                  <h3 className="text-[12px] font-medium">Operações candidatas</h3>
+                  <span className="text-[10px] text-muted-foreground" data-testid="vinc-contagem">{fraseDaJanela(resp, naJanela.length)}</span>
+                  {foraDaJanela.length > 0 && (
+                    <button type="button" data-testid="vinc-mostrar-fora" aria-expanded={mostrarFora}
+                      onClick={() => setMostrarFora(v => !v)}
+                      className="ml-auto text-[10px] font-medium text-primary underline-offset-2 hover:underline">
+                      {rotuloMostrarFora(resp, foraDaJanela.length, mostrarFora)}
+                    </button>
+                  )}
+                </div>
                 {candidatas.length === 0 ? (
-                  <p className="text-[11px] text-muted-foreground">Nenhuma operação do mesmo tipo, cliente e fazenda perto destas datas.</p>
+                  <p className="shrink-0 text-[11px] text-muted-foreground" data-testid="vinc-sem-candidatas">
+                    Nenhuma operação deste tipo perto destas datas.
+                  </p>
                 ) : (
+                  /* o UNICO scrollport do corpo; o cabecalho da tabela fica fixo nele */
+                  <div className="min-h-[52px] flex-1 overflow-y-auto rounded border" data-testid="vinc-lista">
                   <table className="w-full border-collapse text-[10.5px]" data-testid="vinc-candidatas">
-                    <thead>
+                    <thead className="sticky top-0 z-10 bg-card">
                       <tr className="border-b text-left text-[10px] text-muted-foreground">
-                        <th className="w-6 py-1" />
+                        <th className="w-6 py-1 pl-1" />
                         <th className="py-1 font-normal">Operação</th>
                         <th className="py-1 font-normal text-right">Dist.</th>
                         <th className="py-1 font-normal text-right">Acordado</th>
                         <th className="py-1 pl-2 font-normal">Compromisso do item</th>
-                        <th className="py-1 font-normal">Situação</th>
+                        <th className="py-1 pl-2 font-normal">Situação</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {candidatas.map(c => (
+                      {visiveis.length === 0 && (
+                        <tr><td colSpan={6} className="py-1.5 pl-1 text-[10.5px] text-muted-foreground" data-testid="vinc-so-fora">
+                          Nenhuma dentro da janela.
+                        </td></tr>
+                      )}
+                      {visiveis.map(c => (
                         <LinhaCandidata key={c.operacao_id} c={c} componente={componente} valorLanc={valorLanc}
                           selecionada={c.operacao_id === ocSel} onEscolher={() => escolherOC(c.operacao_id)}
+                          onExplicar={m => { setOcSel(null); setMotivoDaLinha(m); }}
                           escolha={c.operacao_id === ocSel ? escolhaPedida : null}
                           compromissoSel={compromissoSel} parcelaSel={parcelaSel}
                           onCompromisso={id => { setCompromissoSel(id); setParcelaSel(null); setCriarNovo(false); }}
@@ -255,10 +292,16 @@ export function VincularOperacaoDialog({ open, lancamentoId, clienteId, onClose,
                       ))}
                     </tbody>
                   </table>
+                  </div>
                 )}
-                {erroSim && <p className="text-[11px] text-destructive">{erroSim}</p>}
-              </Secao>
-            )}
+                {/* o que continua FORA da lista, dito em uma linha cada (os numeros sao do banco) */}
+                {rodape.map(f => (
+                  <p key={f} className="shrink-0 truncate text-[10px] leading-tight text-muted-foreground" title={f} data-testid="vinc-rodape-lista">{f}</p>
+                ))}
+                {erroSim && <p className="shrink-0 text-[11px] text-destructive">{erroSim}</p>}
+              </div>
+              );
+            })()}
 
             {resp?.elegivel && (
               <Secao titulo="Motivo">
@@ -275,7 +318,10 @@ export function VincularOperacaoDialog({ open, lancamentoId, clienteId, onClose,
               O que vai acontecer
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto px-2.5 py-2 space-y-2">
-              {!oc && <p className="text-muted-foreground">Escolha uma operação para ver o efeito antes de confirmar.</p>}
+              {!oc && motivoDaLinha && (
+                <p data-testid="vinc-motivo-da-linha" className={cn('rounded border px-1.5 py-1 leading-snug', TOM_SELO.ambar)}>{motivoDaLinha}</p>
+              )}
+              {!oc && !motivoDaLinha && <p className="text-muted-foreground">Escolha uma operação para ver o efeito antes de confirmar.</p>}
               {oc && simulando && <p className="flex items-center gap-1 text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" /> Calculando…</p>}
               {oc && !simulando && recusa && (
                 <p className={recusa.motivo === 'titulo_oc_liquidado' ? 'text-red-700 dark:text-red-300' : 'text-amber-800 dark:text-amber-300'}>
@@ -306,6 +352,9 @@ export function VincularOperacaoDialog({ open, lancamentoId, clienteId, onClose,
                       </div>
                     ))}
                   </dl>
+                  {oc && resp && avisoForaDaJanela(oc, resp) && (
+                    <p data-testid="vinc-aviso-janela" className={cn('rounded border px-1.5 py-1 leading-snug', TOM_SELO.ambar)}>{avisoForaDaJanela(oc, resp)}</p>
+                  )}
                   {sim.avisos.length > 0 && (
                     <ul className="space-y-1 border-t pt-2" data-testid="vinc-avisos">
                       {sim.avisos.map(textoDoAviso).map(a => (
@@ -341,8 +390,18 @@ export function VincularOperacaoDialog({ open, lancamentoId, clienteId, onClose,
   );
 }
 
-function LinhaCandidata({ c, componente, valorLanc, selecionada, onEscolher, escolha, compromissoSel, parcelaSel, onCompromisso, onParcela, onCriarNovo }: {
-  c: OperacaoCandidata; componente: string | null; valorLanc: number; selecionada: boolean; onEscolher: () => void;
+/** Um dado do lançamento na faixa compacta: rótulo apagado + valor, numa linha; `corta` = texto livre (inteiro no `title`). */
+function Dado({ rotulo, valor, corta, forte, className }: { rotulo: string; valor: string; corta?: boolean; forte?: boolean; className?: string }) {
+  return (
+    <span className={cn(corta && 'truncate', className)} title={corta ? `${rotulo}: ${valor}` : undefined}>
+      <span className="text-muted-foreground">{rotulo}</span>{' '}
+      <span className={cn(forte && 'font-medium')}>{valor}</span>
+    </span>
+  );
+}
+
+function LinhaCandidata({ c, componente, valorLanc, selecionada, onEscolher, onExplicar, escolha, compromissoSel, parcelaSel, onCompromisso, onParcela, onCriarNovo }: {
+  c: OperacaoCandidata; componente: string | null; valorLanc: number; selecionada: boolean; onEscolher: () => void; onExplicar: (motivo: string) => void;
   escolha: VinculoRecusado | null; compromissoSel: string | null; parcelaSel: string | null;
   onCompromisso: (id: string) => void; onParcela: (id: string) => void; onCriarNovo: () => void;
 }) {
@@ -352,23 +411,31 @@ function LinhaCandidata({ c, componente, valorLanc, selecionada, onEscolher, esc
     <>
       <tr
         data-oc={c.operacao_id} data-selecionavel={sit.selecionavel ? 'sim' : 'nao'}
-        onClick={() => { if (sit.selecionavel) onEscolher(); }}
+        onClick={() => { if (sit.selecionavel) onEscolher(); else if (sit.title) onExplicar(sit.title); }}
         title={sit.title}
         className={cn('border-b', sit.selecionavel ? 'cursor-pointer hover:bg-accent/50' : 'cursor-not-allowed opacity-60',
           selecionada && 'bg-primary/5')}
       >
-        <td className="py-1">
+        <td className="py-1 pl-1">
           <span role="radio" aria-checked={selecionada} aria-disabled={!sit.selecionavel}
             className={cn('inline-block h-3 w-3 rounded-full border', selecionada ? 'border-primary bg-primary' : 'border-muted-foreground/50')} />
         </td>
         {/* VINCULAR-FIX-01: data · tipo · fazenda · cab · contraparte numa linha so' (sem "OC de"). */}
-        <td className="py-1 font-medium max-w-[330px] truncate" data-testid="vinc-linha" title={linhaDaCandidata(c)}>{linhaDaCandidata(c)}</td>
-        <td className="py-1 text-right tabular-nums">{c.distancia_dias}d</td>
-        <td className="py-1 text-right tabular-nums">{brl(c.valor_acordado)}</td>
+        <td className="py-1 font-medium w-full max-w-0 truncate" data-testid="vinc-linha" title={linhaDaCandidata(c)}>
+          {seloOutraFazenda(c) && (
+            <span data-testid="vinc-outra-fazenda" title={seloOutraFazenda(c) ?? undefined}
+              className="mr-1 rounded border border-amber-300 bg-amber-50 px-1 text-[9.5px] font-medium text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
+              {seloOutraFazenda(c)}
+            </span>
+          )}
+          {linhaDaCandidata(c)}
+        </td>
+        <td className="py-1 pl-2 text-right tabular-nums whitespace-nowrap" data-testid="vinc-dist">{c.fora_da_janela ? `a ${c.distancia_dias} dias` : `${c.distancia_dias}d`}</td>
+        <td className="py-1 pl-2 text-right tabular-nums whitespace-nowrap">{brl(c.valor_acordado)}</td>
         <td className="py-1 pl-2 max-w-[180px] truncate">
           {comp ? `${comp.descricao ?? rotuloComponente(comp.componente)} · ${brl(comp.valor_total)}` : 'nenhum (será criado)'}
         </td>
-        <td className="py-1"><Selo tom={sit.tom} title={sit.title}>{sit.rotulo}</Selo></td>
+        <td className="py-1 pl-2 whitespace-nowrap"><Selo tom={sit.tom} title={sit.title}>{sit.rotulo}</Selo></td>
       </tr>
       {selecionada && escolha && (
         <tr className="border-b bg-amber-50/40 dark:bg-amber-950/20" data-testid="vinc-escolha">
