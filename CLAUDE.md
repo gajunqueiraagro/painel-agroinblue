@@ -162,7 +162,7 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 04/10/2026 (CONC-SEM-F5-01, +19: `src/hooks/concSemF5.test.tsx` 18, `src/components/financeiro-v2/conferenciaModal.test.tsx` 1; antes o ACESSOS-02c, +17 em `src/v2/lib/acessoGestos.test.tsx`; antes o ACESSOS-02b, +29: `src/acessoRotas.test.tsx` 15, `src/v2/lib/acessoSaidas.test.tsx` 14; antes o ACESSOS-02a, +26 em `src/v2/lib/acessoTelas.test.tsx`; antes o OC-CC-ACOES-LINHA-02, +20: `src/components/venda/abaContaCorrente.test.tsx` 11,
+  Baseline em 04/10/2026 (FIN-PGTO-FANTASMA-01, +13 em `src/components/financeiro-v2/finPgtoFantasma01.test.tsx`; antes o CONC-SEM-F5-01, +19: `src/hooks/concSemF5.test.tsx` 18, `src/components/financeiro-v2/conferenciaModal.test.tsx` 1; antes o ACESSOS-02c, +17 em `src/v2/lib/acessoGestos.test.tsx`; antes o ACESSOS-02b, +29: `src/acessoRotas.test.tsx` 15, `src/v2/lib/acessoSaidas.test.tsx` 14; antes o ACESSOS-02a, +26 em `src/v2/lib/acessoTelas.test.tsx`; antes o OC-CC-ACOES-LINHA-02, +20: `src/components/venda/abaContaCorrente.test.tsx` 11,
   `src/lib/oc/abrirLancamentoDaOC.test.ts` 7, `src/components/compra/despesasContaCorrente.test.tsx` 2; antes o UI-LINHA-UNICA-01, +2: `src/components/venda/abaContaCorrente.test.tsx` 1,
   `src/components/financeiro-v2/documentosLayout.test.tsx` 1; antes o OC-BOITEL-REVALORAR-SALVAR-01, +16 em `src/lib/oc/revalorarAoSalvar.test.tsx`; antes o
   FIN-DOCUMENTO-FORM-01, +27 em `src/components/financeiro-v2/documentoFormPorTipo.test.tsx`, e
@@ -180,7 +180,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3392
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3405
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -2099,6 +2099,39 @@ docs/historico/frentes-ate-2026-09-29.md.)
   o FIN-LISTA-VISUAL-01. A conta corrente da OC herda a mesma paleta.
   Duplicata registrada: `BADGE_STATUS_TRANSACAO` (statusOperacional.ts, Mesa/Espelho); o `ModoRapidoGrid` ainda deriva
   status da data de pagamento (frente propria).
+- ⚠ A TELA MOSTRA O QUE VAI GRAVAR (FIN-PGTO-FANTASMA-01, Gabriel 04/10, so' tela). A regra do pagamento nao mudou — so'
+  realizado/conciliado tem data de pagamento, e o dono e' `pagamentoParaGravar` (`src/lib/financeiro/statusFinanceiro.ts`). O
+  defeito era a tela: o `LancamentoV2Dialog` hidratava a data do banco de um previsto/programado/agendado, mostrava-a no campo
+  desabilitado e no resumo, e o salvar a gravava NULA sem aviso (medido no gate do CONC-SEM-F5-01: o 5a9f8ea4 do cliente Teste
+  perdeu o 10/09/2026 numa edicao so' de descricao). "Preservar o que o usuario nao tocou" foi RECUSADO: contradiz a regra de 30/09.
+  · O campo "Data Pagamento" e a linha "Pagamento" do resumo leem `pagamentoParaMostrar(status, pagamento, travado)` — o irmao de
+    leitura, que E' `pagamentoParaGravar` com vazio no lugar de nulo (nunca uma segunda condicao no modal). Fora do realizado, e
+    sem trava do extrato: campo vazio e desabilitado, resumo "—". Pagamento travado pelo extrato segue a' vista. O estado hidratado
+    nao mudou: levar o lancamento a realizado mostra e grava a data que ele trazia.
+  · O CASO LEGADO E' AVISADO ANTES: `pagamentoQueSeraRemovido(pagamentoDoBanco, status, pagamento, travado)` devolve a data que o
+    salvar vai remover, e so' entao a tela escreve, em ambar, sob a primeira linha de campos: "este lançamento tinha data de
+    pagamento DD/MM/AAAA sem estar realizado; ao salvar ela é removida" (`avisoPagamentoLegado`). So' na edicao; some se o status
+    for a realizado. E' a UNICA vez em que o salvar apaga algo que o usuario nao tocou.
+  · Contas a Pagar/Receber usa o mesmo modal: sem mudanca propria.
+  · LEGADO CONHECIDO (medido em 04/10: 6 lancamentos vivos nao realizados com data de pagamento, em 71.985), SEM UPDATE por decisao
+    do Gabriel: NJ 434823f9 "Revisão Hilux - 6/6" (programado, 10/08/26) e Vera 3684ea26 "Balança Pesagem - 2/2" (agendado,
+    05/10/26) tem vencimento = pagamento e se normalizam no proximo salvar; os do cliente Teste (31399130, 4a92f0af, 16e69fbe,
+    1285aa17; o 5a9f8ea4 ja' ficou sem data) ficam como estao.
+  ⚠ O MODAL AINDA NORMALIZA OUTROS CAMPOS NO SALVAR SEM O USUARIO TOCAR (medido, nao mudado): `dados_pagamento` nulo quando segue o
+    cadastro; safra nula e fazenda Administrativo em plano administrativo; conta de origem/destino pela direcao; o 18010 fixo na
+    transferencia; macro/grupo/centro re-resolvidos do plano; cultura/fase zeradas fora da atividade; `ano_mes` (pagamento, senao
+    competencia); `editado_manual` e `updated_by`.
+  ⚠ DIVIDAS MEDIDAS NA FASE 0 PILOTO-ACHADOS-01 (so' registro):
+    PGTO-LEITORES-NAO-AUDITADOS-01 — `fn_dre_pecuaria_lancamentos`, `fn_endividamento_mensal` e `fn_rateio_admin_mes` leem
+      `data_pagamento` sem filtro de realizado aparente (busca por texto; nao auditadas);
+    MASTERLOCK-GLOBAL-01 — `useMasterLock.ts:78-97` consulta `pastos`, `fechamento_pastos` e `valor_rebanho_mensal` com
+      `fazenda_id = "__global__"` (400, 22P02, erro engolido) e NUNCA trava em modo Global; desde 17/04. Decisao do Gabriel
+      pendente: conferir cada fazenda real ou nao travar;
+    OC-ENRIQUECER-URL-01 — `enriquecerMovimentosOC.ts:150` manda `.in('movimentacao_id', ids)` com 1.254 ids no NJ (URL de 49 KB,
+      "Bad Request", erro engolido): os movimentos de OC ficam sem valor, fornecedor e detalhe do abate na lista do rebanho;
+    HOME-FIM-DE-MES-01 — `useProdutivoPorFazenda.ts:129` usa o dia 31 em mes de 30 (400, 22008);
+    HOME-SALDOS-EMBED-01 — `useSaldosPorConta.ts:48` embute `financeiro_contas_bancarias` sem FK (400, PGRST200);
+    HOME-VIEW-TIMEOUT-01 — `vw_zoot_fazenda_mensal` estoura o tempo no NJ (500, 57014).
 - ⚠ O GERAR GARANTE A SERIE COMPLETA DA RECORRENCIA (FIN-RECORRENCIA-GERAR-PREENCHE-VAGA-01, Gabriel 30/09): alem de
   avancar a marca, `fn_recorrencia_gerar` preenche a competencia VAGA abaixo dela; CANCELADO CONTA COMO OCUPADO; nunca
   antes do mes corrente (competencia), nem em mes fechado. As travas moram so' em `_fn_recorrencia_vagas`, e o

@@ -198,6 +198,33 @@ export function pagamentoParaGravar(status: string, pagamento: string, travado: 
   return statusTemPagamento(status) || travado ? (pagamento || null) : null;
 }
 
+/**
+ * O pagamento que a TELA MOSTRA — FIN-PGTO-FANTASMA-01. A TELA MOSTRA O QUE VAI GRAVAR: é `pagamentoParaGravar` com o vazio
+ * no lugar do nulo, nunca uma segunda condição. Antes o campo (desabilitado) e o resumo mostravam a data do banco de um
+ * lançamento previsto/programado/agendado — uma data que o usuário não podia tocar e que o salvar apagava sem aviso.
+ */
+export function pagamentoParaMostrar(status: string, pagamento: string, travado: boolean): string {
+  return pagamentoParaGravar(status, pagamento, travado) ?? '';
+}
+
+/**
+ * A DATA QUE O SALVAR VAI REMOVER — FIN-PGTO-FANTASMA-01. O caso legado: o lançamento veio do banco com data de pagamento sem
+ * estar realizado, e com o status escolhido agora ela não é gravada. É a única vez em que o salvar apaga algo que o usuário não
+ * tocou, e por isso a tela avisa antes. Nulo = nada a avisar (sem data no banco, ou a data vai ser gravada como está).
+ */
+export function pagamentoQueSeraRemovido(
+  pagamentoGravado: string | null | undefined, statusAtual: string, pagamentoAtual: string, travado: boolean,
+): string | null {
+  if (!pagamentoGravado) return null;
+  return pagamentoParaGravar(statusAtual, pagamentoAtual, travado) === null ? pagamentoGravado : null;
+}
+
+/** A frase do aviso do caso legado, com a data em dd/mm/aaaa. */
+export function avisoPagamentoLegado(pagamentoGravado: string): string {
+  const data = pagamentoGravado.slice(0, 10).split('-').reverse().join('/');
+  return `este lançamento tinha data de pagamento ${data} sem estar realizado; ao salvar ela é removida`;
+}
+
 
 // ── Writers ──
 

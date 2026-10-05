@@ -11,6 +11,9 @@ import {
   statusTemPagamento,
   pagamentoAoTrocarStatus,
   pagamentoParaGravar,
+  pagamentoParaMostrar,
+  pagamentoQueSeraRemovido,
+  avisoPagamentoLegado,
   STATUS_PALETA,
   STATUS_PILULA_BASE,
 } from '@/lib/financeiro/statusFinanceiro';
@@ -1345,6 +1348,12 @@ export function LancamentoV2Dialog({
   /* O pagamento travado pelo fluxo de extrato (`lockedFields`) é o do banco: nada aqui o apaga. */
   const pagamentoTravado = lockedFields?.includes('data_pagamento') ?? false;
   const pagamentoPermitido = statusTemPagamento(statusTransacao);
+  /* FIN-PGTO-FANTASMA-01 — A TELA MOSTRA O QUE VAI GRAVAR: o campo e o resumo leem `pagamentoParaMostrar` (o dono da regra do
+     salvar), não a data hidratada. E o legado — data de pagamento no banco sem estar realizado — é avisado antes de sumir. */
+  const pagamentoMostrado = pagamentoParaMostrar(statusTransacao, dataPagamento, pagamentoTravado);
+  const pagamentoLegadoARemover = isEdit
+    ? pagamentoQueSeraRemovido(lancamento?.data_pagamento, statusTransacao, dataPagamento, pagamentoTravado)
+    : null;
 
   /* ⚠ SAIR DO REALIZADO ZERA O PAGAMENTO — PR-FIN-V2-STATUS-PGTO-01. Os 7 do NJ voltaram de
      realizado para previsto pelo modal e ficaram com o pagamento de 04/09 gravado. Voltar para
@@ -2120,7 +2129,7 @@ export function LancamentoV2Dialog({
               <div className="col-span-2"
                 title={!pagamentoPermitido && !pagamentoTravado ? 'Só realizado tem data de pagamento' : undefined}>
                 <Label className="text-[10px]">Data Pagamento *</Label>
-                <DatePicker value={dataPagamento} onChange={handleDataPagamentoChange}
+                <DatePicker value={pagamentoMostrado} onChange={handleDataPagamentoChange}
                   disabled={pagamentoTravado || !pagamentoPermitido} tabIndex={3} className={dateFieldCls} />
               </div>
               <div className="col-span-3">
@@ -2133,6 +2142,13 @@ export function LancamentoV2Dialog({
                 </Select>
               </div>
             </div>
+            {/* FIN-PGTO-FANTASMA-01 — só no caso legado (data de pagamento no banco sem estar realizado): o salvar remove a
+                data, e é a única vez em que ele apaga algo que o usuário não tocou — a tela diz antes. */}
+            {pagamentoLegadoARemover && (
+              <p className="-mt-1 text-[10px] leading-tight text-amber-700 dark:text-amber-400" data-testid="aviso-pagamento-legado">
+                {avisoPagamentoLegado(pagamentoLegadoARemover)}
+              </p>
+            )}
 
             {/* ── LINHA 2 — Produto e Favorecido ── */}
             <div className="grid grid-cols-12 gap-2">
@@ -2802,7 +2818,7 @@ export function LancamentoV2Dialog({
                 <div data-testid="resumo-pagamento">
                   <LinhaResumo rotulo="Status" valor={resumoStatusLabel} cor={resumoStatusCor} />
                   <LinhaResumo rotulo="Vencimento" valor={resumoFmtData(dataVencimento)} />
-                  <LinhaResumo rotulo="Pagamento" valor={resumoFmtData(dataPagamento)} />
+                  <LinhaResumo rotulo="Pagamento" valor={resumoFmtData(pagamentoMostrado)} />
                   <LinhaResumo rotulo="Forma" valor={formaPgto} quebra />
                   <LinhaResumo rotulo="Modalidade" valor={!isEdit ? (formaPagamentoParc === 'parcelada' ? 'Parcelada' : 'À vista') : null} />
                   <LinhaResumo rotulo="Nº de Parcelas" valor={!isEdit && formaPagamentoParc === 'parcelada' ? `${numParcelas}` : null} />
