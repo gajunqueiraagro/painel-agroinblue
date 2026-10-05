@@ -297,6 +297,13 @@ export interface ResultadoPropagacao {
   simulado: boolean;
   /** Ausente quando a RPC é anterior à FIN-RECORRENCIA-PROPAGA-COMPETENCIA-01. */
   competencia: CompetenciaPropagacao | null;
+  /**
+   * REC-PROPAGAR-VALOR-DO-MES-01 — quantas ocorrências com o VALOR DO MÊS ajustado (planilha ou à mão) cada escopo PULA: o
+   * Propagar não toca nenhum campo delas. Contagem do banco, pelo predicado do próprio update; zero quando a RPC é anterior.
+   */
+  valorDoMes: Record<'futuros' | 'todos', number>;
+  /** As que o escopo PEDIDO pulou (na execução) ou pularia (na simulação). */
+  puladasValorDoMes: number;
 }
 
 /* ⚠ O JSON DA RPC SE LÊ CAMPO A CAMPO, sem `as`: o que não tiver a forma esperada vira vazio/zero, nunca um
@@ -367,9 +374,22 @@ export async function propagarRecorrencia(
       aplicadosPassados: Number(r.aplicados_passados ?? 0),
       simulado: r.simulado === true,
       competencia: lerCompetencia(r.competencia),
+      valorDoMes: { futuros: Number(r.valor_do_mes?.futuros ?? 0), todos: Number(r.valor_do_mes?.todos ?? 0) },
+      puladasValorDoMes: Number(r.puladas_valor_do_mes ?? 0),
     },
     erro: null,
   };
+}
+
+/**
+ * A FRASE DAS PULADAS — REC-PROPAGAR-VALOR-DO-MES-01. Um dono: o diálogo a escreve e o `title` a repete inteira.
+ * `null` com zero — sem conta ajustada a tela é a de sempre.
+ */
+export function frasePuladasValorDoMes(n: number): string | null {
+  if (!(n > 0)) return null;
+  return n === 1
+    ? '1 conta com o valor do mês ajustado fica como está.'
+    : `${n} contas com o valor do mês ajustado ficam como estão.`;
 }
 
 /** Cancelar é `ativo = false` — e NÃO apaga o que já foi gerado. */

@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { AlertTriangle, Loader2, Check } from 'lucide-react';
 import { toast } from 'sonner';
-import { propagarRecorrencia, textoVagas, type EscopoPropagacao, type ResultadoPropagacao } from '@/hooks/useRecorrencias';
+import { propagarRecorrencia, textoVagas, frasePuladasValorDoMes, type EscopoPropagacao, type ResultadoPropagacao } from '@/hooks/useRecorrencias';
 
 /**
  * PropagarRecorrenciaDialog — até onde a edição da regra alcança o que ela gerou.
@@ -112,6 +112,10 @@ export function PropagarRecorrenciaDialog({ recorrenciaId, descricao, previa, re
 
   const nada = !previa || (previa.futuros === 0 && previa.passados === 0);
   const avisoEscolhido = escopo === 'nenhum' ? null : (previa?.competencia?.projecao[escopo].aviso ?? null);
+  /* REC-PROPAGAR-VALOR-DO-MES-01 — as contas com o valor do mês ajustado que o escopo ESCOLHIDO pula. O número é do banco
+     (`valor_do_mes[escopo]`); trocar a opção só troca qual se lê. "Não propagar" não pula nada: nada é propagado. */
+  const puladasValorDoMes = escopo === 'nenhum' ? 0 : (previa?.valorDoMes[escopo] ?? 0);
+  const frasePuladas = frasePuladasValorDoMes(puladasValorDoMes);
 
   /* ⚠ "Não propagar" NÃO CHAMA A RPC. Ela aceita `'nenhum'` e devolveria as contagens sem
      escrever — mas seria uma ida ao banco para não fazer nada, e o resultado é o mesmo de
@@ -124,8 +128,11 @@ export function PropagarRecorrenciaDialog({ recorrenciaId, descricao, previa, re
       if (!r.ok || !r.dados) { toast.error(r.erro ?? 'O banco recusou a propagação.'); return; }
       const n = r.dados.aplicadosFuturos + r.dados.aplicadosPassados;
       const nc = r.dados.competencia?.aplicadas ?? 0;
+      /* O que ficou de fora também é resultado: o operador lê quantas o Propagar pulou (número do banco, da execução). */
+      const fp = frasePuladasValorDoMes(r.dados.puladasValorDoMes);
       toast.success((n === 1 ? '1 lançamento atualizado' : `${n} lançamentos atualizados`)
-        + (nc > 0 ? ` · ${nc} competência${nc === 1 ? '' : 's'} recalculada${nc === 1 ? '' : 's'}.` : '.'));
+        + (nc > 0 ? ` · ${nc} competência${nc === 1 ? '' : 's'} recalculada${nc === 1 ? '' : 's'}.` : '.')
+        + (fp ? ` ${fp}` : ''));
       aoFechar();
     } finally {
       setOcupado(false);
@@ -158,9 +165,30 @@ export function PropagarRecorrenciaDialog({ recorrenciaId, descricao, previa, re
           ) : (
             <>
               <div className="rounded border bg-muted/40 px-2 py-1.5 text-[11px]">
+                {frasePuladas ? (
+                  /* ⚠ NA MESMA LINHA DA CONTAGEM, para o diálogo não mudar de altura — REC-PROPAGAR-VALOR-DO-MES-01. A caixa tem
+                     398px úteis e a frase pede 255 a 9,5px ao lado de ~123 da contagem: cabe; com números grandes quem cede é
+                     o TEXTO da frase (corta, inteiro no `title`). A contagem e o N da frase nunca cortam.
+                     ⚠ SEM CONTA AJUSTADA este ramo não existe: o HTML é o de antes, byte a byte. */
+                  <div className="flex items-baseline gap-2">
+                    <span className="shrink-0 whitespace-nowrap">
+                      <b className="tabular-nums">{previa.futuros}</b> futuro{previa.futuros === 1 ? '' : 's'}
+                      {' · '}
+                      <b className="tabular-nums">{previa.passados}</b> passado{previa.passados === 1 ? '' : 's'}
+                    </span>
+                    <span className="ml-auto flex min-w-0 items-baseline gap-1 text-[9.5px] text-muted-foreground"
+                      data-testid="propagar-valor-do-mes" title={frasePuladas}>
+                      <b className="shrink-0 tabular-nums text-foreground">{puladasValorDoMes}</b>
+                      <span className="min-w-0 truncate">{frasePuladas.replace(/^\d+\s/, '')}</span>
+                    </span>
+                  </div>
+                ) : (
+                  <>
                 <b className="tabular-nums">{previa.futuros}</b> futuro{previa.futuros === 1 ? '' : 's'}
                 {' · '}
                 <b className="tabular-nums">{previa.passados}</b> passado{previa.passados === 1 ? '' : 's'}
+                  </>
+                )}
                 <div className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
                   Propagam: descrição, favorecido, fazenda, conta, classificação e safra.
                   O valor só alcança os futuros. Vencimento, pagamento e valor pago não mudam; a competência segue

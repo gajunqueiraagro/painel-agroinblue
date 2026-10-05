@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 05/10/2026 (FIN-VALOR-CALC-01a, +101: `src/lib/calculos/contaNoCampo.test.ts` 75,
+  Baseline em 05/10/2026 (REC-PROPAGAR-VALOR-DO-MES-01, +11 em `src/components/recorrencias/propagarValorDoMes.test.tsx`;
+  antes o FIN-VALOR-CALC-01a, +101: `src/lib/calculos/contaNoCampo.test.ts` 75,
   `src/components/financeiro-v2/valorComConta.test.tsx` 26; antes o PARC-OBRIGACAO-EDICAO-01a, +26: `src/components/financiamentos/obrigacaoEdicao.test.tsx` 19,
   `src/lib/financiamentos/valorDasParcelas.test.ts` 7; antes o FIN-IMPORT-EXCEL-STATUS-01a, +28: `src/lib/financeiro/statusParaImportar.test.ts` 8,
   `src/v2/lib/importLanc/semDataDePagamento.test.ts` 12, `src/v2/pages/importExcelSemDataDePagamento.test.tsx` 8; antes o
@@ -188,7 +189,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3722
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3733
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -2306,6 +2307,8 @@ docs/historico/frentes-ate-2026-09-29.md.)
     1.730.894,43; vivas da planilha = 154 (673.438,79); md5 do NJ fora das 63 identico; `audit_log` +63. FORA, sem tocar (o
     Gabriel confirma se sao contas distintas): 1ed5ffd8 (Mapfre 1.966,57), 31e2b2e1 (Ademicon 4.341,41), 53a82f31 (Porto Seguro
     218,81) — a recorrencia de cada uma ja' tinha casado com a gemea exata das 09:41.
+  ⚠ [RESOLVIDA PARA AS MARCADAS no REC-PROPAGAR-VALOR-DO-MES-01 — ver a regra "O VALOR DO MES TEM MARCA NA LINHA": as 31 contas
+    do NJ estao marcadas 'planilha' e o Propagar as pula. O texto abaixo e' o registro do defeito.]
   ⚠ DIVIDA REC-PROPAGAR-SOBRESCREVE-VALOR-DO-MES-01: `fn_recorrencia_propagar` em "futuros"/"todos" regrava valor
     (`abs(valor_base)`), descricao, fornecedor, fazenda, conta, subcentro, safra, forma e observacao em TODA linha viva da
     recorrencia em previsto/programado/agendado sem pagamento, sem olhar `editado_manual` nem o valor atual — apaga o valor do mes
@@ -2353,6 +2356,35 @@ docs/historico/frentes-ate-2026-09-29.md.)
     HOME-FIM-DE-MES-01 — `useProdutivoPorFazenda.ts:129` usa o dia 31 em mes de 30 (400, 22008);
     HOME-SALDOS-EMBED-01 — `useSaldosPorConta.ts:48` embute `financeiro_contas_bancarias` sem FK (400, PGRST200);
     HOME-VIEW-TIMEOUT-01 — `vw_zoot_fazenda_mensal` estoura o tempo no NJ (500, 57014).
+- ⚠ O VALOR DO MES TEM MARCA NA LINHA, E O PROPAGAR PULA AS MARCADAS (REC-PROPAGAR-VALOR-DO-MES-01, Gabriel 05/10/2026; migration
+  20261027193100, ⚠ registrada como 20261005140345; ledger = arquivo, md5 56bfc04d…). O valor da RECORRENCIA e' ESTIMATIVA ("estou
+  lançando os próximos 12 meses, não sei se vai ser esse valor exato"); o valor e a data do MES vem da planilha ou de ajuste a'
+  mao e valem mais.
+  · A MARCA e' um FATO GRAVADO na linha do lancamento, nunca comparacao de valores na hora (o `valor_base` pode mudar depois):
+    `financeiro_lancamentos_v2.valor_do_mes_em` (timestamptz) + `valor_do_mes_origem` ('planilha' | 'manual'), nulas em todo o
+    resto; CHECK `fin_lanc_v2_valor_do_mes_chk` as mantem juntas. ⚠ CHECK COM `IN (...)` SOBRE COLUNA NULA DA' NULL, E NULL PASSA:
+    a primeira versao aceitava marca sem origem (achado no ensaio) — o `IS NOT NULL` vai escrito.
+  · `fn_recorrencia_propagar` (md5 fdde526a -> 6a932aa9, patch guardado por md5 com 7 ancoras) PULA a ocorrencia marcada em
+    "futuros" e em "todos": NENHUM campo dela muda — valor, descricao, fornecedor, fazenda, conta, classificacao, safra, forma,
+    observacao, nem a competencia (ela conta no estado final como linha que fica onde esta'). Marcada ja' PAGA em "todos": pulada
+    inteira (decisao do Gabriel). O retorno ganha NO FIM `puladas_valor_do_mes` (as do escopo pedido; 0 em 'nenhum') e
+    `valor_do_mes {futuros, todos}` (as que cada escopo pularia); os campos de antes nao mudaram de nome nem de sentido. ACL
+    preservada (authenticated sim, anon nao). Sem marcada, retorno e linhas IDENTICOS aos da funcao anterior (provado no ensaio).
+  · QUEM GRAVA A MARCA HOJE: so' o backfill desta migration — 31 contas do NJ 'planilha' (a limpeza de 05/10) e 10 da Vera
+    'manual' (toda ocorrencia de recorrencia em aberto com valor <> `abs(valor_base)` na hora de aplicar; a marca leva o
+    `updated_at` da linha). Fora das colunas novas nenhum valor mudou (md5 por cliente identico, 87.019 linhas).
+  · TELA: o `PropagarRecorrenciaDialog` mostra, na MESMA LINHA da contagem ("15 futuros · 1 passado"), "N contas com o valor do mês
+    ajustado ficam como estão." (`frasePuladasValorDoMes`, `src/hooks/useRecorrencias.ts`; 9,5px; N = `valor_do_mes[escopo]` do
+    banco; "Não propagar" nao mostra nada; inteira no `title`), e o aviso de sucesso repete o numero da EXECUCAO. Com zero, o HTML
+    e' o de antes (foto em `propagarValorDoMes.fotos.json`). Medido em DOM sintetico de 416px: caixa de 74px com e sem a frase.
+  Teste SQL: `supabase/tests/rec_propagar_valor_do_mes_01_test.sql` (T1–T4, cenario sintetico no cliente Teste, termina em RAISE OK).
+  ⚠ APLICAR MIGRATION COM `ADD COLUMN` NA TABELA DE LANCAMENTOS TRAVA A TABELA: os ensaios revertidos seguraram o lock ~3 s cada (o
+    teto do `authenticated` e' 8 s) — ensaio curto, com `lock_timeout`, e a aplicacao avisada.
+  ⚠ DIVIDAS: REC-VALOR-DO-MES-MODAL-01 (editar valor/vencimento de UMA ocorrencia no modal do Financeiro ainda NAO marca — lacuna
+    ate' o PR da tela; sem gatilho, por decisao) · REC-VALOR-DO-MES-DESFAZER-01 (nao ha' como tirar a marca) · o dialogo do Propagar
+    com a frase nunca foi aberto no navegador (so' aparece depois de salvar uma recorrencia) · a frase corta 4px no caso extremo
+    ("60 futuros · 60 passados" com 31 contas) · `fn_previsoes_casar` (o PR de previsoes) e' quem vai gravar 'planilha' daqui em
+    diante · os tipos do supabase nao foram regenerados (o front nao le' as colunas novas).
 - ⚠ O GERAR GARANTE A SERIE COMPLETA DA RECORRENCIA (FIN-RECORRENCIA-GERAR-PREENCHE-VAGA-01, Gabriel 30/09): alem de
   avancar a marca, `fn_recorrencia_gerar` preenche a competencia VAGA abaixo dela; CANCELADO CONTA COMO OCUPADO; nunca
   antes do mes corrente (competencia), nem em mes fechado. As travas moram so' em `_fn_recorrencia_vagas`, e o
