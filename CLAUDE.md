@@ -2426,10 +2426,29 @@ docs/historico/frentes-ate-2026-09-29.md.)
   · O LEITOR NAO SABE QUEM E' O CLIENTE: `tipoNota` e' do ponto de vista do emitente. Recusar "nota em que o cliente e' o
     emitente" (decisao do Gabriel: nota de venda entra pela Operacao Comercial) e o mapa `tPag` -> forma de pagamento sao da
     tela que chama (PRs b e d).
+  · "ESTA NOTA JA' ESTA' REGISTRADA?" TEM UM DONO NO BANCO (FIN-NFE-XML-01b1, 05/10/2026, so' banco; migration 20261027193000,
+    ⚠ registrada como 20261005111752; ledger = arquivo, md5 38380897…): `fn_documento_chave_ja_registrada(p_cliente, p_chave,
+    p_ignorar_documento default null)` -> (origem 'lancamento'|'oc', documento_id, lancamento_id, operacao_id, operacao_tipo,
+    numero, serie, descricao, data, valor). So' leitura; SECURITY DEFINER com `tenant_ok(p_cliente)` e 42501 (a regra de leitura
+    do 01B); EXECUTE so' para `authenticated` e `service_role`. Compara SO' DIGITOS nas DUAS tabelas de documento (34 dos 78
+    documentos com chave estao gravados com espaco, pontuacao ou prefixo); chave que nao da' 44 digitos devolve VAZIO, sem erro.
+    NAO CONTA: documento cancelado, documento de lancamento cancelado, documento de OC cancelada e o proprio
+    `p_ignorar_documento`. ⚠ Documento ligado a varias parcelas (`financeiro_documento_vinculos`) conta enquanto o dono OU
+    alguma parcela ligada estiver viva. Decisao do Gabriel: nota repetida AVISA e mostra onde esta'; NAO bloqueia — das 7 chaves
+    repetidas hoje, 4 sao a mesma nota no lancamento e na OC, 1 e' uma nota em duas OCs, 2 tem a ponta do lancamento cancelada.
+    Nenhuma tela faz essa consulta por conta propria. Medido: 0,5–0,9 ms por chamada no NJ.
+  · OS BUCKETS `fin-documentos` E `oc-documentos` ACEITAM XML (`text/xml`, `application/xml`), alem de PDF, JPEG e PNG; o limite
+    de 10 MB nao mudou. O XML da nota fica anexado ao documento NF (decisao do Gabriel).
   ⚠ QUEM CONSOME ESTREITA COM `r.ok === false` / `=== true`: com `strict: false` o `if (!r.ok)` NAO estreita a uniao (TS2339).
   ⚠ FIXTURES SINTETICAS (`__fixtures__/notas.ts`, montadas de um molde): nenhum dado real de cliente entra no repo.
   ⚠ O jsdom NAO E' O NAVEGADOR: o `parsererror` so' foi exercitado na forma do jsdom (o Chrome o poe DENTRO do documento, o
     Firefox como raiz — o leitor checa as duas, mas so' uma tem teste), e nenhum XML real de SEFAZ foi lido.
+  ⚠ DIVIDAS DO 01b1: NFE-CHAVE-NORMALIZADA-01 (gravar a chave ja' so' com digitos, e indice, em vez de normalizar na leitura —
+    hoje sao dezenas de linhas por cliente) · DOC-LANCAMENTO-CANCELADO-01 (cancelar o lancamento nao cancela o documento dele:
+    2 casos hoje, lancamentos 0826a4ee do NJ e a97bed09 do Agnaldo) · OC-NOTA-DUAS-OCS-01 (uma nota em duas OCs nao tem vinculo
+    proprio; e a nota do Agnaldo — Caio Felipe, 28/08 — soma 62.100 de acordado contra 63.050 de nota: diferenca de 950 nao
+    investigada) · o ensaio do 01b1 (regras, tenant, as 7 chaves) rodou em transacao revertida e NAO virou arquivo em
+    `supabase/tests/` · os tipos do supabase NAO foram regenerados (a tela chama por `(supabase as any).rpc`).
   ⚠ DIVIDAS: NFE-CHAVE-DV-01 (o digito verificador da chave nao e' conferido, so' os 44 digitos) · NFE-LEIAUTE-310-01 (`dEmi`
     do leiaute 3.10 nao e' lido: nota antiga cai em "Nota sem data de emissão.") · `cStat` 135 e' status de EVENTO, nao de
     protocolo de nota (esta' na lista por decisao do briefing; inofensivo) · duplicata sem `dVenc` sai com vencimento vazio, sem
