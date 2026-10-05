@@ -9,7 +9,10 @@
  * ⚠ OS ROTULOS SAO OS DO MOCK APROVADO (opcao A), nao os do menu: no menu o "Lancar movimentacao"
  * se chama "Pecuaria", sob "Lancar" — solto na barra, esse nome nao diria o que e'.
  */
-import type { V2Section } from '@/v2/lib/navGrupos';
+import { TELA_OPERACAO_COMERCIAL, type V2Section } from '@/v2/lib/navGrupos';
+
+/** As telas onde o modal da OC e' montado: "Lançar movimentação" e, desde o ACESSOS-OC-02, a tela propria da operacao. */
+const TELAS_QUE_HOSPEDAM_A_OC: readonly V2Section[] = ['lancamentos-zoot', TELA_OPERACAO_COMERCIAL];
 import { temParamsOC } from '@/lib/oc/paramsAberturaOC';
 
 export type SecaoAtalhoProducao = 'operacoes-comerciais' | 'lancamentos-zoot' | 'conferencia-lancamentos';
@@ -19,6 +22,12 @@ export const OPCOES_ATALHO_PRODUCAO: ReadonlyArray<{ valor: SecaoAtalhoProducao;
   { valor: 'lancamentos-zoot', rotulo: 'Lançar movimentação' },
   { valor: 'conferencia-lancamentos', rotulo: 'Lançamentos' },
 ];
+
+/** ACESSOS-OC-02 (M7) — as opcoes que a pessoa pode abrir (atalho para tela sem acesso nao e' oferecido). Quem decide o acesso
+ *  e' o dono (`nivelDaTela`); aqui so' se filtra, na ordem de sempre. */
+export function opcoesDoAtalho(podeAbrir: (s: SecaoAtalhoProducao) => boolean): Array<{ valor: SecaoAtalhoProducao; rotulo: string }> {
+  return OPCOES_ATALHO_PRODUCAO.filter((o) => podeAbrir(o.valor));
+}
 
 /** A secao atual, se ela for uma das tres; `null` fora delas (e o atalho nao aparece). */
 export function secaoDoAtalho(s: V2Section): SecaoAtalhoProducao | null {
@@ -35,5 +44,6 @@ export function secaoDoAtalho(s: V2Section): SecaoAtalhoProducao | null {
  * la' — esse caminho nao passa por aqui, e limpar ali apagaria o que acabou de ser pedido.
  */
 export function saiDoLancarComOC(de: V2Section, para: V2Section, searchAtual: string): boolean {
-  return de === 'lancamentos-zoot' && para !== 'lancamentos-zoot' && temParamsOC(searchAtual);
+  /* ACESSOS-OC-02 — o modal da OC mora tambem na tela PROPRIA da operacao (`operacao-comercial`): a regra e' a mesma la'. */
+  return TELAS_QUE_HOSPEDAM_A_OC.includes(de) && para !== de && temParamsOC(searchAtual);
 }

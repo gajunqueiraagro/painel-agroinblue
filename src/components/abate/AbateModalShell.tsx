@@ -29,6 +29,7 @@ import { useStatusPilares } from '@/hooks/useStatusPilares';
 import { BlocoTopoAba } from '@/components/ui/bloco-topo-aba';
 import { LinhaResumo, AsideResumo, FaixaTituloResumo, SecaoResumo } from '@/components/ui/linha-resumo';
 import { ReabrirP1Dialog } from '@/components/ReabrirP1Dialog';
+import { ReabrirMesNaOC } from '@/components/operacao-comercial/ReabrirMesNaOC';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -1072,10 +1073,7 @@ export function AbateModalShell({
                     {/* ⚠ O MESMO DIALOGO DO ZOOT, nao um botao solto: ele pede motivo, diz o
                         que a reabertura faz e mostra o que foi reaberto. Uma peca para as
                         quatro superficies. */}
-                    <Button type="button" variant="outline" size="sm"
-                      className="h-6 shrink-0 text-[10px]" onClick={() => setReabrirP1Aberto(true)}>
-                      Reabrir mês…
-                    </Button>
+                    <ReabrirMesNaOC forma="botao" onAbrir={() => setReabrirP1Aberto(true)} />
                   </div>
                 )}
                 <div className="min-w-0 lg:col-span-3">

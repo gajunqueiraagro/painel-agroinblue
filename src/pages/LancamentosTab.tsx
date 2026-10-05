@@ -161,6 +161,13 @@ interface Props {
    * Ex.: ['meta'] → bloqueia Realizado/Programado para a rota Lançamentos META Zoo.
    */
   cenariosPermitidos?: Array<'realizado' | 'programado' | 'meta'>;
+  /**
+   * MODO "SOMENTE OPERAÇÃO" — ACESSOS-OC-02. Montado pela tela própria da Operação Comercial (`operacao-comercial`): só existem os
+   * modais da OC. Os cards de lançamento, o aviso de fazenda sem pecuária, o banner do master lock e os atalhos da tela do rebanho
+   * NÃO são desenhados; sem OC a abrir, o parent devolve o usuário à lista. ⚠ É MONTAR E ESCONDER: o estado, os três modais e a
+   * hidratação são os de sempre — nada saiu deste arquivo. Ausente = a tela de lançamentos do rebanho, como sempre foi.
+   */
+  somenteOperacao?: boolean;
 }
 
 type Aba = 'entrada' | 'saida' | 'reclassificacao';
@@ -389,7 +396,7 @@ function matchFornecedor(options: FornecedorOption[], params: { id?: string | nu
   });
 }
 
-export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar, compraParaEditar, transferenciaParaEditar, reclassParaEditar, morteParaEditar, consumoParaEditar, onReturnFromEdit, initialAnoFiltro, initialMesFiltro, initialReclassCenario, onNavegarChuvas, onFecharOperacaoOC, onNovaCompraOC, onNovaVendaOC, onNovoAbateOC, cenarioInicial, cenariosPermitidos, onRealizadoAplicado, onOperacaoFechada }: Props) {
+export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar, compraParaEditar, transferenciaParaEditar, reclassParaEditar, morteParaEditar, consumoParaEditar, onReturnFromEdit, initialAnoFiltro, initialMesFiltro, initialReclassCenario, onNavegarChuvas, onFecharOperacaoOC, onNovaCompraOC, onNovaVendaOC, onNovoAbateOC, cenarioInicial, cenariosPermitidos, onRealizadoAplicado, onOperacaoFechada, somenteOperacao = false }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const { clienteAtual } = useCliente();
   const nomeFazenda = fazendaAtual?.nome || '';
@@ -422,6 +429,14 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      ⚠ E LIBERA O REF-GUARD: a tentativa falhou, entao "ja hidratou" e' falso. Nao ha
      laco — sem os parametros, os dois effects saem na primeira linha. */
   const limparParamsOC = useCallback(() => {
+    /* ACESSOS-OC-02 — na tela própria da operação, uma OC que não abriu (id malformado, não encontrada, tipo divergente) não
+       pode deixar a tela vazia: o fecho do parent limpa os MESMOS parâmetros e devolve o usuário à origem (ou à lista). */
+    if (somenteOperacao && onFecharOperacaoOC) {
+      ocHidratadoRef.current = null;
+      ocHidratandoRef.current = false;
+      onFecharOperacaoOC();
+      return;
+    }
     const p = new URLSearchParams(window.location.search);
     /* ⚠ `oc_abate` ENTROU AQUI JUNTO COM A REABERTURA (ABATE-T3a): sem ele, uma recusa de
        hidratacao deixaria o parametro presa na URL e a proxima linha da Central
@@ -431,7 +446,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setOcSearchParams(p, { replace: true });
     ocHidratadoRef.current = null;
     ocHidratandoRef.current = false;
-  }, [setOcSearchParams]);
+  }, [setOcSearchParams, somenteOperacao, onFecharOperacaoOC]);
   const modoOCCompra = ocSearchParams.get('oc_compra') === '1';
   /* ⚠ SO O PARAMETRO, aqui em cima. O `modoOCVenda` completo mora la' embaixo porque
      depende de `isCenarioMeta`, que nasce depois — e o hook de lotes precisa saber
@@ -2757,6 +2772,31 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     }
   }, [modoOCCompra, modoOCVenda, modoOCAbate, onFecharOperacaoOC, onOperacaoFechada]);
 
+  /* ═══ ABRIR UMA OC NOVA — ACESSOS-OC-02 ═════════════════════════════════════════════════════════════════════════════════
+     A MESMA sequência dos três cards (Compra, Venda em pé, Abate): contexto limpo, o tipo e o modal aberto. Saiu dos três
+     ramos do `handleClick` para cá porque a tela própria da operação abre a OC nova SEM card: quem pede é a lista de Operações
+     Comerciais, pela URL (`oc_compra|oc_venda|oc_abate=1` sem `oc_id`). Uma função, dois chamadores — nada duplicado. */
+  const abrirOCNova = useCallback((tipoDaOC: 'compra' | 'venda' | 'abate') => {
+    resetContextoOC();
+    setTipo(tipoDaOC);
+    setLancModalOpen(true);
+  }, [resetContextoOC]);
+
+  /* Na tela própria da operação: (1) sem OC na URL ao montar, nada há a abrir — o parent devolve à lista (a tela nunca fica
+     vazia); (2) com o tipo e sem `oc_id`, é OC NOVA: abre UMA vez por montagem (o ref impede reabrir no instante entre o
+     fechar e a troca de seção). OC existente (`oc_id`) segue pela hidratação de sempre, que abre o modal sozinha. */
+  const ocNovaAbertaRef = useRef(false);
+  const tipoDaOCNaUrl: 'compra' | 'venda' | 'abate' | null = modoOCCompra ? 'compra' : ocVendaParam ? 'venda' : ocAbateParam ? 'abate' : null;
+  const semOCNaMontagemRef = useRef(somenteOperacao && !tipoDaOCNaUrl);
+  useEffect(() => {
+    if (semOCNaMontagemRef.current) { semOCNaMontagemRef.current = false; onFecharOperacaoOC?.(); }
+  }, [onFecharOperacaoOC]);
+  useEffect(() => {
+    if (!somenteOperacao || !tipoDaOCNaUrl || ocIdParam || ocNovaAbertaRef.current) return;
+    ocNovaAbertaRef.current = true;
+    abrirOCNova(tipoDaOCNaUrl);
+  }, [somenteOperacao, tipoDaOCNaUrl, ocIdParam, abrirOCNova]);
+
 
   // Modo OC: cria/atualiza a operação comercial (só identificação) e guarda operacao_id/versao.
   //   Sem lotes (COM-3), sem físico (onAdicionar) e sem financeiro (gerarFinanceiroCompra).
@@ -4567,9 +4607,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
          o formulario antigo. */
       if (it.value === 'venda' && onNovaVendaOC) {
         onNovaVendaOC();
-        resetContextoOC();
-        setTipo('venda');
-        setLancModalOpen(true);
+        abrirOCNova('venda');
         return;
       }
       /* OC-ABATE-01 T1 — espelho do card de Venda, com a MESMA guarda: enquanto
@@ -4578,16 +4616,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
          prop nao ve diferenca nenhuma. */
       if (it.value === 'abate' && onNovoAbateOC) {
         onNovoAbateOC();
-        resetContextoOC();
-        setTipo('abate');
-        setLancModalOpen(true);
+        abrirOCNova('abate');
         return;
       }
       if (it.value === 'compra' && onNovaCompraOC) {
         onNovaCompraOC();
-        resetContextoOC();
-        setTipo('compra');
-        setLancModalOpen(true);
+        abrirOCNova('compra');
         return;
       }
       setAba(it.aba);
@@ -4722,7 +4756,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   //   (Santa Rita) teve pecuária de 2022 a 2023, virou eucalipto, e a tela a acusava de ser
   //   administrativa — mandando o operador procurar no lugar errado. A mensagem passa a dizer o
   //   que de fato acontece e ONDE se resolve. O critério em si muda no 01b (atividade por período).
+  /* ACESSOS-OC-02 — na tela própria da operação este aviso (e os cards que ele traz) não é desenhado: a OC escolhe a própria
+     fazenda no modal, como já faz em contexto Global. */
   if (
+    !somenteOperacao &&
     isAdministrativo &&
     (aba === 'entrada' || aba === 'saida' || aba === 'reclassificacao')
   ) {
@@ -6041,15 +6078,25 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               };
 
   return (
-    <div className="p-4 animate-fade-in pb-20 max-w-7xl mx-auto">
-      {onBackToConciliacao && aba !== 'reclassificacao' && (
+    <div className="p-4 animate-fade-in pb-20 max-w-7xl mx-auto" data-somente-operacao={somenteOperacao ? 'sim' : undefined}>
+      {/* ACESSOS-OC-02 — a tela própria da operação: só os modais da OC. Enquanto o modal não abre (hidratando a OC pedida), uma
+          linha neutra e a saída para a lista — nunca os cards, a lista ou os formulários de rebanho. */}
+      {somenteOperacao && !lancModalOpen && (
+        <div className="flex items-center gap-3 py-6 text-[12px] text-muted-foreground" data-testid="operacao-abrindo">
+          <span>Abrindo a operação…</span>
+          <button type="button" className="text-primary underline underline-offset-2" onClick={() => onFecharOperacaoOC?.()}>
+            voltar às operações
+          </button>
+        </div>
+      )}
+      {!somenteOperacao && onBackToConciliacao && aba !== 'reclassificacao' && (
         <button onClick={onBackToConciliacao} className="w-full flex items-center justify-center gap-1 text-sm font-bold text-primary bg-primary/10 rounded-md py-2 transition-colors hover:bg-primary/20 mb-3">
           <ArrowLeft className="h-4 w-4" /> {backLabel || 'Retornar à Conciliação de Categoria'}
         </button>
       )}
 
       {/* Master lock banner — derivado da data atual do form */}
-      {data && <MasterLockBanner anoMes={data.slice(0, 7)} className="mb-2" />}
+      {!somenteOperacao && data && <MasterLockBanner anoMes={data.slice(0, 7)} className="mb-2" />}
 
       {/* FAZ-ATIVIDADE-01c — O AVISO DE "MÊS FECHADO (P1)" SAIU DAQUI, e a razão é de lugar, não
           de conteúdo: ele morava na TELA DE TIPOS, antes de `renderTipoCards()` e fora do
@@ -6073,7 +6120,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       )}
 
       {/* ── Cards superiores de tipo (substitui sidebar e strip mobile) ── */}
-      {renderTipoCards()}
+      {!somenteOperacao && renderTipoCards()}
 
       {/*
         ── Modal de lançamento (Etapa 1) ──

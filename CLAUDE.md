@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 05/10/2026 (CONC-TOTAL-SEM-SALDO-01b, +8: `src/pages/conciliacaoDono.test.tsx` 4, `src/lib/conciliacao/resumoDoDono.test.ts` 4; antes o FIN-PGTO-FANTASMA-01, +13 em `src/components/financeiro-v2/finPgtoFantasma01.test.tsx`; antes o CONC-SEM-F5-01, +19: `src/hooks/concSemF5.test.tsx` 18, `src/components/financeiro-v2/conferenciaModal.test.tsx` 1; antes o ACESSOS-02c, +17 em `src/v2/lib/acessoGestos.test.tsx`; antes o ACESSOS-02b, +29: `src/acessoRotas.test.tsx` 15, `src/v2/lib/acessoSaidas.test.tsx` 14; antes o ACESSOS-02a, +26 em `src/v2/lib/acessoTelas.test.tsx`; antes o OC-CC-ACOES-LINHA-02, +20: `src/components/venda/abaContaCorrente.test.tsx` 11,
+  Baseline em 05/10/2026 (ACESSOS-OC-02, +22 em `src/v2/lib/acessoOperacao.test.tsx`; antes o ACESSOS-OC-01, +8: `src/v2/lib/acessoTelas.test.tsx` 6,
+  `src/v2/lib/acessoSaidas.test.tsx` 1, `src/v2/lib/acessoGestos.test.tsx` 1 — 3421 depois dele; antes o CONC-TOTAL-SEM-SALDO-01b, +8: `src/pages/conciliacaoDono.test.tsx` 4, `src/lib/conciliacao/resumoDoDono.test.ts` 4; antes o FIN-PGTO-FANTASMA-01, +13 em `src/components/financeiro-v2/finPgtoFantasma01.test.tsx`; antes o CONC-SEM-F5-01, +19: `src/hooks/concSemF5.test.tsx` 18, `src/components/financeiro-v2/conferenciaModal.test.tsx` 1; antes o ACESSOS-02c, +17 em `src/v2/lib/acessoGestos.test.tsx`; antes o ACESSOS-02b, +29: `src/acessoRotas.test.tsx` 15, `src/v2/lib/acessoSaidas.test.tsx` 14; antes o ACESSOS-02a, +26 em `src/v2/lib/acessoTelas.test.tsx`; antes o OC-CC-ACOES-LINHA-02, +20: `src/components/venda/abaContaCorrente.test.tsx` 11,
   `src/lib/oc/abrirLancamentoDaOC.test.ts` 7, `src/components/compra/despesasContaCorrente.test.tsx` 2; antes o UI-LINHA-UNICA-01, +2: `src/components/venda/abaContaCorrente.test.tsx` 1,
   `src/components/financeiro-v2/documentosLayout.test.tsx` 1; antes o OC-BOITEL-REVALORAR-SALVAR-01, +16 em `src/lib/oc/revalorarAoSalvar.test.tsx`; antes o
   FIN-DOCUMENTO-FORM-01, +27 em `src/components/financeiro-v2/documentoFormPorTipo.test.tsx`, e
@@ -180,7 +181,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3413
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3443
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -254,7 +255,7 @@ CONSULTAM: a lateral (`V2Sidebar`, por `gruposVisiveis`), o drawer (`V2ContextDr
   perfil; tela fora do menu (rota interna, legado, drill) nao tem marca. (2) liberada, vale a matriz. Admin: 'editar' em tudo, como
   sempre. Perfil desconhecido ou nulo: 'nao' em tudo.
 - PILOTO (comecar com o minimo e liberar aos poucos): TRES telas liberadas — `financeiro-lanc`, `conciliacao`,
-  `contas-a-pagar-receber`. A Visão Geral ('home') NAO (`HOME_LIBERADA_CLIENTES`, em navGrupos).
+  `contas-a-pagar-receber`. [ACESSOS-OC-01: mais `operacoes-comerciais` e a tela da operacao, SO' para o gestor — ver "EXCECAO POR TELA".] A Visão Geral ('home') NAO (`HOME_LIBERADA_CLIENTES`, em navGrupos).
 - MATRIZ (aprovada em 16/09; "leitura" e' decisao do arquiteto: 'ver' onde o gestor tem acesso):
       grupo         gestor_cliente  financeiro  campo   leitura
       home          ver             ver         ver     ver
@@ -332,6 +333,43 @@ CONSULTAM: a lateral (`V2Sidebar`, por `gruposVisiveis`), o drawer (`V2ContextDr
 - ⚠ O PERFIL NAO ADMIN NAO SE PROVA NO NAVEGADOR COM O LOGIN DO ADMIN: provado por teste (`src/v2/lib/acessoTelas.test.tsx`; a rota
   e' lida da FONTE, o `V2Index` nao se monta em teste); o Gabriel homologa com usuario de teste. Nao criar usuario, nao trocar
   perfil, nao mexer em `cliente_membros`.
+- ⚠ EXCECAO POR TELA, NO DONO (ACESSOS-OC-01, Gabriel 05/10/2026, so' tela): `NIVEL_POR_TELA` (`src/v2/lib/acessoTelas.ts`) e' um mapa
+  tela × perfil consultado ANTES da matriz por grupo, DEPOIS da marca `liberadaClientes` e do admin — a matriz por grupo NAO mudou.
+  Hoje tem duas telas, as duas "so' o gestor" (`gestor_cliente` 'editar'; `financeiro`, `campo` e `leitura` 'nao'):
+  `operacoes-comerciais` (a lista, agora com `liberadaClientes`) e `operacao-comercial` (a tela da operacao, fora do menu, liberada
+  por `OPERACAO_COMERCIAL_LIBERADA_CLIENTES`, ao lado de `HOME_LIBERADA_CLIENTES`). Excecao nova entra NESTE mapa, nunca em `if` de
+  perfil na tela. `TELA_DA_OPERACAO` (`usePodeAbrir.ts`) passou de 'lancamentos-zoot' a `TELA_OPERACAO_COMERCIAL`: os atalhos do 02b
+  e os gestos do 02c voltam para o gestor e seguem escondidos / apagados para o financeiro; `FinanceiroV2Tab` le' a constante.
+  ⚠ O QUE O GESTOR RECEBE: a lista e a OC inteira (abrir, criar, alterar), e SO' isso da Producao — "Lançar movimentação"
+    ('lancamentos-zoot') e as demais telas do rebanho seguem sem a marca. No menu dele aparecem os grupos Producao (um item) e
+    Financeiro.
+  ⚠ A TELA DE ENTRADA TEM PREFERIDA (decisao do Gabriel, 05/10): `primeiraTelaPermitida` devolve a 'home' para quem a tem;
+    senao `TELA_DE_ENTRADA_PREFERIDA` (`financeiro-lanc`, `acessoTelas.ts`) quando o nivel dela nao e' 'nao'; so' na falta dela, a
+    primeira permitida na ordem do menu. Liberar uma tela que vem antes no menu (a lista de OCs) NAO muda onde a pessoa entra: o
+    gestor segue entrando em Lançamentos Financeiros. Sem `if` de perfil.
+- ⚠ A OPERACAO COMERCIAL TEM TELA PROPRIA, E ELA E' O `LancamentosTab` EM MODO "SOMENTE OPERACAO" (ACESSOS-OC-02, so' tela). A secao
+  `operacao-comercial` (`TELA_OPERACAO_COMERCIAL`, `navGrupos.ts`; barra "Produção / Operação Comercial") monta o MESMO
+  `V2LancamentosWrapper` com `somenteOperacao`: sem o titulo "Lançar movimentação", sem os atalhos de foto, sem os cards, sem a
+  lista, sem o banner da trava mestre — so' o modal da OC que a URL pede (`oc_compra|oc_venda|oc_abate` + `oc_id`; sem `oc_id` = OC
+  nova, aberta por `abrirOCNova`, a MESMA funcao dos tres cards). O estado da OC NAO saiu do `LancamentosTab`: o modo so' monta e
+  esconde. Fechar chama `onFecharOperacaoOC` (o `fecharOperacaoOC` do `V2Index`, que volta a' origem por `oc_return`); a secao
+  aberta sem OC na URL volta a' lista. `lancamentos-zoot` NAO mudou para o admin: os cards abrem a OC la' mesmo
+  (`telaDaOCNova('lancamentos-zoot')`) e fecham no hub.
+  · PORTAS: `abrirOperacaoOC` (lista, Financeiro, modal do lancamento), `?oc_compra=1` e `?oc_id` caem na secao nova; as telas
+    que hospedam a OC sao `TELAS_QUE_HOSPEDAM_A_OC` (`atalhosProducao.ts`), lidas por `saiDoLancarComOC`.
+  · A LISTA CRIA: "Nova compra", "Nova venda" e "Novo abate" (`CentralOperacoesComerciais`, classes do "Nova recorrência") chamam os
+    `abrirNova*` do `V2Index`. Medido a 1.135: os tres em 430px, sem rolagem horizontal.
+  · A FAIXA DE ATALHOS da Producao so' mostra telas com acesso (`opcoesDoAtalho(podeAbrir)`) e some com menos de duas.
+  · "EXCLUIR DEFINITIVAMENTE" so' para o admin; para os outros, apagado com "só o administrador exclui definitivamente"
+    (`MOTIVO_EXCLUIR_SO_ADMIN`). "REABRIR MÊS…" dentro da OC e' uma peca so', `ReabrirMesNaOC`
+    (`src/components/operacao-comercial/ReabrirMesNaOC.tsx`, `usePodeAbrir('fechamento')`): sem a tela de fechamento, apagado com
+    "só quem fecha o mês pode reabrir" — o gestor NAO tem 'fechamento' (sem a marca), entao para ele fica apagado.
+  ⚠ NO MODO "SOMENTE OPERACAO" A VISTA "FAZENDA SEM PECUARIA" NAO BLOQUEIA: bloqueada, o modal da OC nao teria onde desenhar.
+  ⚠ PRE-EXISTENTE, igual pelo card: OC nova em Global nasce com a Fazenda vazia em vermelho e o fechar pede "Fechar e descartar".
+  ⚠ O QUE FICA PARA O ACESSOS-OC-03: o `financeiro` entra na OC com DUAS restricoes (Gabriel, 05/10) — nao registra
+    entrega/saida/entrada do gado (Entrega e Recebimento so' leitura) e, na Negociacao, edita preco e condicoes, nunca quantidade e
+    peso; ele cria OC nova e ve^ a lista inteira. Pede "capacidades na operacao" no dono (alem de 'nao'|'ver'|'editar'). O perfil
+    `leitura` fica fora. A trava de gravacao continua sendo o 01F.
 - ⚠ O QUE FALTA: (a) o EFEITO de 'ver' nas telas (modo somente leitura por perfil) — hoje a funcao devolve o nivel e nenhuma tela o
   usa; no piloto as tres sao 'editar' para gestor e financeiro, e 'ver' para `leitura`, que hoje EDITARIA; (b) a trava no banco, 01F;
   (c) a grade por pessoa, ACESSOS-03; (d) [feito no ACESSOS-02b: o endereco e' "/"].

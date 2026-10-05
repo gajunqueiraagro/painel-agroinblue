@@ -23,7 +23,8 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
 import { DatePicker } from '@/components/ui/date-picker';
-import { MoreVertical, Search, Eye, Filter, Ban, ArrowUp, ArrowDown, Lock, Trash2, FileText } from 'lucide-react';
+import { MoreVertical, Search, Eye, Filter, Ban, ArrowUp, ArrowDown, Lock, Trash2, FileText, Plus } from 'lucide-react';
+import { ItemDeMenuOC } from '@/components/venda/AbaContaCorrenteOC';
 import { normalizarErroRpc } from '@/hooks/useOcCompromissos';
 import { useFiltroUrl } from '@/v2/hooks/useFiltroUrl';
 import { FILTRO_DESPESAS_PENDENTES, passaFiltroPagamento, temDespesaPendente, pctPagoPeloLado } from '@/lib/oc/estadoPeloLado';
@@ -375,10 +376,22 @@ interface CentralOperacoesComerciaisProps {
      estruturalmente compativeis e o TSC nao reclamava. Exigi-lo faz o desencontro virar
      erro de compilacao. */
   onAbrirOperacao?: (ocId: string, tipo: string) => void;
+  /** ACESSOS-OC-02 — criar OC pela lista. As tres funcoes sao as MESMAS dos cards de "Lançar movimentação" (`abrirNova*OC` do
+   *  V2Index): a lista so' as chama. Ausentes, os botoes nao sao desenhados (quem monta a lista sem elas nao cria OC por aqui). */
+  onNovaCompra?: () => void;
+  onNovaVenda?: () => void;
+  onNovoAbate?: () => void;
 }
 
-export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: CentralOperacoesComerciaisProps = {}) {
-  const { clienteAtual } = useCliente();
+/** ACESSOS-OC-02 (M8) — "Excluir definitivamente" e' so' do administrador do AGROinBLUE; para os demais o item fica apagado com
+ *  este motivo (gesto fica apagado com motivo, nunca some). */
+export const MOTIVO_EXCLUIR_SO_ADMIN = 'só o administrador exclui definitivamente';
+
+/* O botao de acao do topo das listas do V2 — as mesmas classes do "Nova recorrência" (`V2Recorrencias.tsx`), sem estilo novo. */
+const BOTAO_NOVA_OC = 'h-7 gap-1 bg-cta px-2.5 text-xs font-semibold text-cta-foreground hover:bg-cta-hover';
+
+export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao, onNovaCompra, onNovaVenda, onNovoAbate }: CentralOperacoesComerciaisProps = {}) {
+  const { clienteAtual, isAdmin } = useCliente();
   const clienteId = clienteAtual?.id ?? '';
   /* OC-FAZENDA-GLOBAL-01 — A CENTRAL SEGUE O SELETOR LATERAL, como o Lancar movimentacao e a
      Lista (`useLancamentos`): fazenda escolhida -> so' as OCs dela; Global -> todas. O filtro
@@ -728,7 +741,25 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
       {/* Cabeçalho compacto (sem banner, sem botão do fluxo legado) */}
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-[15px] font-semibold leading-none">Operações Comerciais</h2>
-        <span className="text-[10px] text-muted-foreground">{filtradas.length} operação(ões)</span>
+        {/* ACESSOS-OC-02 — criar OC pela lista (antes so' pelos cards de "Lançar movimentação"). */}
+        <div className="flex items-center gap-1.5">
+          {onNovaCompra && (
+            <Button size="sm" className={BOTAO_NOVA_OC} onClick={onNovaCompra} data-testid="nova-compra">
+              <Plus className="size-3.5" /> Nova compra
+            </Button>
+          )}
+          {onNovaVenda && (
+            <Button size="sm" className={BOTAO_NOVA_OC} onClick={onNovaVenda} data-testid="nova-venda">
+              <Plus className="size-3.5" /> Nova venda
+            </Button>
+          )}
+          {onNovoAbate && (
+            <Button size="sm" className={BOTAO_NOVA_OC} onClick={onNovoAbate} data-testid="novo-abate">
+              <Plus className="size-3.5" /> Novo abate
+            </Button>
+          )}
+          <span className="text-[10px] text-muted-foreground">{filtradas.length} operação(ões)</span>
+        </div>
       </div>
 
       {/* Barra de filtros — DUAS LINHAS FIXAS, nao `flex-wrap`: a quebra e' decidida
@@ -1041,12 +1072,15 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
                         )}
                         {/* SO para cancelada — o mesmo predicado que a RPC exige. Oferecer
                             em outro estado seria prometer o que o banco nega. */}
-                        {r.status_comercial === 'cancelada' && (
-                          <DropdownMenuItem className="text-destructive focus:text-destructive"
+                        {/* ACESSOS-OC-02 (M8) — so' o admin exclui; para os demais o gesto fica apagado com o motivo. */}
+                        {r.status_comercial === 'cancelada' && (isAdmin ? (
+                          <DropdownMenuItem className="text-destructive focus:text-destructive" data-testid="excluir-definitivamente"
                             onSelect={() => { setExcluirMotivo(''); setExcluirEtapa(1); setExcluirAlvo(r); }}>
                             <Trash2 className="h-3.5 w-3.5 mr-2" /> Excluir definitivamente
                           </DropdownMenuItem>
-                        )}
+                        ) : (
+                          <ItemDeMenuOC testid="excluir-definitivamente" texto="Excluir definitivamente" motivo={MOTIVO_EXCLUIR_SO_ADMIN} />
+                        ))}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>

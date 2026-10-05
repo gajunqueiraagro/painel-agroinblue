@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { LancamentosTab } from '@/pages/LancamentosTab';
 import { CentralOperacoesComerciais } from '@/components/operacao-comercial/central/CentralOperacoesComerciais';
 import { paramsAberturaOC, semParamsOC, origemDaVolta } from '@/lib/oc/paramsAberturaOC';
-import { OPCOES_ATALHO_PRODUCAO, secaoDoAtalho, saiDoLancarComOC, type SecaoAtalhoProducao } from '@/v2/lib/atalhosProducao';
+import { opcoesDoAtalho, secaoDoAtalho, saiDoLancarComOC, type SecaoAtalhoProducao } from '@/v2/lib/atalhosProducao';
 import { Segmentado } from '@/components/ui/segmentado';
 import { useLancamentos } from '@/hooks/useLancamentos';
 import { useLancamento } from '@/hooks/useLancamento';
@@ -21,7 +21,7 @@ import { nivelDaTela, primeiraTelaPermitida } from '@/v2/lib/acessoTelas';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { V2Sidebar, type V2Section } from './components/V2Sidebar';
-import { SECTION_TO_GROUP, rotuloDaSecao } from './lib/navGrupos';
+import { SECTION_TO_GROUP, TELA_OPERACAO_COMERCIAL, rotuloDaSecao } from './lib/navGrupos';
 
 import { BarraSecao } from './components/BarraSecao';
 import { V2MobileNav } from './components/V2MobileNav';
@@ -169,8 +169,11 @@ interface V2LancamentosWrapperProps {
   onNovaCompraOC?: () => void;
   onNovaVendaOC?: () => void;
   onNovoAbateOC?: () => void;
+  /** ACESSOS-OC-02 — a tela propria da Operacao Comercial: sem o cabecalho "Lançar movimentação", sem os atalhos de importacao
+   *  por foto e com o `LancamentosTab` em modo "somente operação" (so' os modais da OC). */
+  somenteOperacao?: boolean;
 }
-function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEdit, onNavegarChuvas, onNavegarMapaRebanho, cenarioInicial, cenariosPermitidos, onFecharOperacaoOC, onNovaCompraOC, onNovaVendaOC, onNovoAbateOC }: V2LancamentosWrapperProps = {}) {
+function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEdit, onNavegarChuvas, onNavegarMapaRebanho, cenarioInicial, cenariosPermitidos, onFecharOperacaoOC, onNovaCompraOC, onNovaVendaOC, onNovoAbateOC, somenteOperacao = false }: V2LancamentosWrapperProps = {}) {
   const navigate = useNavigate();
   const { isGlobal } = useFazenda();
   const { canEdit, canEditMeta } = usePermissions();
@@ -245,6 +248,8 @@ function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEd
           lugar onde a tela pode dizer em que caminho o operador esta.
           ⚠ SO OS SINAIS SAO LARANJA. Os cartoes de grupo nao mudam: lancar meta e'
           rotina, e fundo colorido o dia todo cansa. */}
+      {/* ACESSOS-OC-02 — na tela propria da operacao o cabecalho da tela do rebanho e os atalhos de foto nao sao desenhados. */}
+      {!somenteOperacao && (
       <div className="px-4 pt-3 pb-[2px]">
         <div className="flex items-center gap-2">
           <h1 className="text-[19px] font-medium leading-tight text-foreground">
@@ -273,7 +278,8 @@ function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEd
             : 'Registre o que aconteceu com o rebanho. Escolha o tipo e preencha os dados do lançamento.'}
         </p>
       </div>
-      {mostrarCardsIA && (
+      )}
+      {mostrarCardsIA && !somenteOperacao && (
         /* ⚠ FAIXA DE UMA LINHA (PR-UI-LANCAR-CARDS-01). Eram dois cartoes altos, cada
            um com selo "Lançar com IA", titulo e subtitulo — tres niveis de texto para
            uma acao de um clique, ocupando o topo da tela de lancamento. O selo dizia o
@@ -339,6 +345,7 @@ function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEd
         onNovaCompraOC={onNovaCompraOC}
         onNovaVendaOC={onNovaVendaOC}
         onNovoAbateOC={onNovoAbateOC}
+        somenteOperacao={somenteOperacao}
       />
     </div>
   );
@@ -354,6 +361,13 @@ function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEd
    (medido: aparece no tipo e no item de menu, nunca no mapa), entao a Central cai no
    fallback — e o fallback E' a Central. Mesmo destino, como o comentario original ja
    dizia; o `Partial` do mapa e' de proposito e ausencia nele nao quebra nada. */
+/* ACESSOS-OC-02 — onde nasce uma OC NOVA. Pedida pelos cards de "Lançar movimentação", fica la' (o card abre o modal na mesma
+   tela, como sempre: nada muda para o admin); pedida de qualquer outro lugar (os botoes da lista de Operações Comerciais), abre
+   na tela propria da operacao, que a abre sozinha pelo tipo na URL. */
+function telaDaOCNova(origem: V2Section): V2Section {
+  return origem === 'lancamentos-zoot' ? 'lancamentos-zoot' : TELA_OPERACAO_COMERCIAL;
+}
+
 function ehSectionConhecida(v: string | null | undefined): v is V2Section {
   return !!v && Object.prototype.hasOwnProperty.call(SECTION_TO_GROUP, v);
 }
@@ -375,7 +389,8 @@ export default function V2Index() {
       if (typeof window !== 'undefined') {
         const qs = new URLSearchParams(window.location.search);
         // Rota legada preservada: ?oc_compra=1 (&oc_id) reabre a operação de Compra em Lançamentos.
-        if (qs.get('oc_compra') === '1') return 'lancamentos-zoot';
+        /* ACESSOS-OC-02 — a OC abre na tela PROPRIA dela, nao mais na de lancamentos do rebanho. */
+        if (qs.get('oc_compra') === '1') return TELA_OPERACAO_COMERCIAL;
         // FIN-MODAL-FECHO-01 item 2 — contrato genérico ?oc_id=<id> abre a Central de Operações
         // Comerciais, que localiza e abre a operação por tipo (compra hoje; venda/abate estáveis).
         if (qs.get('oc_id')) return 'operacoes-comerciais';
@@ -569,7 +584,9 @@ export default function V2Index() {
       ocId, aba, tipo, retorno: retorno ?? sectionRef.current ?? undefined, sub,
     });
     setSearchParams(p, { replace: true });
-    setSection('lancamentos-zoot');
+    /* ACESSOS-OC-02 — a tela PROPRIA da operacao (so' os modais da OC), nao mais 'lancamentos-zoot'. O `oc_return` continua
+       sendo a origem, e o fechar devolve o usuario a ela. */
+    setSection(TELA_OPERACAO_COMERCIAL);
   }, [setSearchParams]);
 
   /* ⚠ QUEM DECIDE E O CAMPO QUE JA VEIO — B-17, correcao do B-16. `useLancamentos` carrega
@@ -633,7 +650,7 @@ export default function V2Index() {
     if (origem === 'financeiro-lanc' || origem === 'lancamentos-zoot') p.set('oc_return', origem);
     else p.delete('oc_return');
     setSearchParams(p, { replace: true });
-    setSection('lancamentos-zoot');
+    setSection(telaDaOCNova(origem));
   }, [setSearchParams]);
   /* PR-OC-VENDA-ABA-01 — espelho de `abrirNovaCompraOC`. Dois booleanos em vez de um
      `oc_tipo` porque `modoOCCompra` tem 21 leitores no LancamentosTab, e este PR nao
@@ -650,7 +667,7 @@ export default function V2Index() {
     if (origem === 'financeiro-lanc' || origem === 'lancamentos-zoot') p.set('oc_return', origem);
     else p.delete('oc_return');
     setSearchParams(p, { replace: true });
-    setSection('lancamentos-zoot');
+    setSection(telaDaOCNova(origem));
   }, [setSearchParams]);
 
   /* OC-ABATE-01 T1 — espelho de `abrirNovaVendaOC`, terceiro booleano.
@@ -670,7 +687,7 @@ export default function V2Index() {
     if (origem === 'financeiro-lanc' || origem === 'lancamentos-zoot') p.set('oc_return', origem);
     else p.delete('oc_return');
     setSearchParams(p, { replace: true });
-    setSection('lancamentos-zoot');
+    setSection(telaDaOCNova(origem));
   }, [setSearchParams]);
 
   // ID alvo lido da URL (?edit=...&tipo=...). Quando o lançamento carrega
@@ -1140,6 +1157,19 @@ export default function V2Index() {
         /* A Central e' a origem, e ela o DIZ — OC-ABRIR-PERDE-ID-01. Antes dependia de
            `sectionRef`, que so' acertava quando nenhum `oc_return` velho estava na URL. */
         onAbrirOperacao={(ocId, tipo) => abrirOperacaoOC(ocId, undefined, tipo, 'operacoes-comerciais')}
+        /* ACESSOS-OC-02 — criar OC pela lista: as MESMAS tres funcoes dos cards de "Lançar movimentação". */
+        onNovaCompra={abrirNovaCompraOC}
+        onNovaVenda={abrirNovaVendaOC}
+        onNovoAbate={abrirNovoAbateOC}
+      />
+    );
+    /* ACESSOS-OC-02 — A TELA PROPRIA DA OPERACAO COMERCIAL: o MESMO hospedeiro (`LancamentosTab`, onde vivem o estado e os tres
+       modais), em modo "somente operação". Sem OC a abrir, ele chama o fecho e o usuario volta a' lista. */
+    if (section === TELA_OPERACAO_COMERCIAL) return (
+      <V2LancamentosWrapper
+        somenteOperacao
+        cenariosPermitidos={['realizado']}
+        onFecharOperacaoOC={fecharOperacaoOC}
       />
     );
     if (section === 'lancamentos-zoot') return (
@@ -1525,9 +1555,12 @@ export default function V2Index() {
             /* ACESSOS-02a — sem acesso a' tela, nenhum atalho para as vizinhas. */
             if (semAcesso) return undefined;
             const ativa = secaoDoAtalho(section);
-            return ativa ? (
+            /* ACESSOS-OC-02 (M7) — atalho para tela sem acesso nao e' oferecido: so' as opcoes que a pessoa abre; sobrando so' a
+               propria tela, a faixa some. Para o admin, as tres de sempre. */
+            const opcoes = opcoesDoAtalho((s) => nivelDaTela(perfilAcesso, isAdmin, s) !== 'nao');
+            return ativa && opcoes.length > 1 ? (
               <Segmentado altura={22} valor={ativa} onEscolher={irPeloAtalho}
-                opcoes={OPCOES_ATALHO_PRODUCAO} className="hidden bg-card md:inline-flex" />
+                opcoes={opcoes} className="hidden bg-card md:inline-flex" />
             ) : undefined;
           })()} />
 

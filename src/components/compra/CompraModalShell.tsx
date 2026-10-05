@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo, type ChangeEvent } from 'react';
 import { useStatusPilares } from '@/hooks/useStatusPilares';
 import { ReabrirP1Dialog } from '@/components/ReabrirP1Dialog';
+import { ReabrirMesNaOC } from '@/components/operacao-comercial/ReabrirMesNaOC';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -634,8 +635,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
                 {mesFechadoMotivo && (
                   <div className="mt-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-[10px] leading-snug text-amber-800">
                     <b className="font-semibold">{mesFechadoMotivo}.</b>{' '}
-                    <button type="button" className="underline underline-offset-2"
-                      onClick={() => setReabrirP1Aberto(true)}>Reabrir mês…</button>
+                    <ReabrirMesNaOC forma="link" onAbrir={() => setReabrirP1Aberto(true)} />
                   </div>
                 )}
               </div>

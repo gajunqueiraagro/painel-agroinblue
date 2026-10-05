@@ -14,6 +14,8 @@ import { caminhoDoSalvarOC, soCadastrais, CAMPOS_CADASTRAIS_OC } from '@/lib/oc/
 
 /* O mes da data: oficial (fechado no P1) ou nao — cada caso decide. */
 const p1 = vi.hoisted(() => ({ status: 'aberto' }));
+/* ACESSOS-OC-02 — o "Reabrir mês…" dos modais consulta o dono do acesso (`usePodeAbrir`): aqui, o admin de sempre. */
+vi.mock('@/contexts/ClienteContext', () => ({ useCliente: () => ({ isAdmin: true, clienteAtual: { id: 'c1', perfil: 'admin_agroinblue' } }) }));
 vi.mock('@/hooks/useStatusPilares', () => ({
   useStatusPilares: () => ({ status: { p1_mapa_pastos: { status: p1.status } }, loading: false, error: null, refetch: async () => {} }),
 }));
