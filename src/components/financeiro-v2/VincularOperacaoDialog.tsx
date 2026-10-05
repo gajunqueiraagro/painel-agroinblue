@@ -23,7 +23,7 @@ import { TOM_SELO, Selo, Secao, Par } from '@/components/financeiro-v2/modalVinc
 import {
   buscarCandidatasVinculo, vincularLancamentoOC, situacaoDaCandidata, candidataInicial,
   compromissoDoItem, compromissoExato, linhaDaCandidata, rotuloComponente, resumoDoVinculo, textoDoAviso, rotuloOC, dataBr, mensagemDeErro, ehRecusa, ehVinculo,
-  fraseDaParcela,
+  fraseDaParcela, fraseDoParcial,
   type RespostaCandidatas, type RespostaVinculo, type OperacaoCandidata, type VinculoRecusado,
 } from '@/lib/oc/vincularLancamento';
 
@@ -291,7 +291,11 @@ export function VincularOperacaoDialog({ open, lancamentoId, clienteId, onClose,
               )}
               {oc && !simulando && ehVinculo(sim) && (
                 <>
-                  {fraseDaParcela(sim) && (
+                  {/* OC-VINCULAR-RECEBIMENTO-PARCIAL-01: recebimento MENOR que a parcela — a frase do saldo ocupa o lugar da frase da
+                      parcela (uma manchete só; as duas diriam o mesmo com números diferentes). */}
+                  {fraseDoParcial(sim) ? (
+                    <p className="font-medium leading-snug text-foreground" data-testid="vinc-parcial">{fraseDoParcial(sim)}</p>
+                  ) : fraseDaParcela(sim) && (
                     <p className="font-medium leading-snug text-foreground" data-testid="vinc-parcela">{fraseDaParcela(sim)}</p>
                   )}
                   <dl className="space-y-1">

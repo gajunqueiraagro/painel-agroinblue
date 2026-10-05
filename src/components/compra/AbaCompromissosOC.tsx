@@ -10,7 +10,7 @@ import { ReclassificarItemDialog } from '@/components/financeiro-v2/Reclassifica
 import { titulosDesvinculaveis } from '@/lib/oc/desvincularLancamento';
 import { rotuloOC } from '@/lib/oc/vincularLancamento';
 import { DialogoGerarCompromissos, type PropostaCompromisso } from '@/components/compra/DialogoGerarCompromissos';
-import { classificarLotesPorLado, valorLoteOC, SUBCENTRO_OBRIGACAO_COMPRA, SUBCENTRO_DESPESA_VENDA, CENTRO_CUSTO_COMPRA_BOVINOS, type LoteOC } from '@/hooks/useOperacaoLiquidacao';
+import { classificarLotesPorLado, valorLoteOC, SUBCENTRO_OBRIGACAO_COMPRA, SUBCENTRO_DESPESA_VENDA, CENTRO_CUSTO_COMPRA_BOVINOS, type LoteOC, type ResumoLiquidacao } from '@/hooks/useOperacaoLiquidacao';
 import { usePlanoContasOC } from '@/hooks/usePlanoContasOC';
 import { useComponentesFinanceiros } from '@/hooks/useComponentesFinanceiros';
 import { useContasBancariasLeves } from '@/hooks/useContasBancariasLeves';
@@ -85,6 +85,9 @@ interface Props {
   seloProjecao?: ReactNode;
   /** FIN-V2-CANCEL-MOTIVO-01 (b) — sugestao para o motivo do "Atualizar compromisso"; so' venda/abate a mandam. */
   motivoReabertura?: string | null;
+  /** OC-VINCULAR-RECEBIMENTO-PARCIAL-01 — a linha de `vw_oc_operacao_liquidacao` (o lado da operação). Com ela, o topo desenha
+   *  Negociado · Recebido · A receber · Recebimentos · Situação; sem ela (boitel, só despesas), o topo de sempre. */
+  liquidacao?: ResumoLiquidacao | null;
   /** Vocabulario por tipo. Omitido = texto da compra. */
   rotulos?: RotulosCompromissos;
   fornecedores: { id: string; nome: string }[];
@@ -176,6 +179,14 @@ const badgeStatusParcela = (s: string) => (s === 'materializada' ? 'default' : s
 const PILULA_STATUS_CURTO: Record<string, string> = {
   Previsto: 'Prev.', Programado: 'Progr.', Cancelado: 'Cancel.', 'Sem título': 'S/ tít.',
 };
+
+/** "k/N": a posição da parcela entre as VIVAS do compromisso (ordem da sequência gravada) e o total delas. */
+export function posicaoEntreVivas(parcelas: ReadonlyArray<{ parcelaId: string | null; sequencia: number; status: string }>,
+  p: { parcelaId: string | null; sequencia: number }): string {
+  const vivas = parcelas.filter(x => x.status !== 'cancelada').slice().sort((a, b) => a.sequencia - b.sequencia);
+  const i = vivas.findIndex(x => (x.parcelaId != null && x.parcelaId === p.parcelaId) || (x.parcelaId == null && x.sequencia === p.sequencia));
+  return `${i < 0 ? p.sequencia : i + 1}/${vivas.length}`;
+}
 
 function statusFinanceiroParcela(p: ParcelaMaterializacao): { icon: string; label: string; title: string; alerta: boolean } {
   if (p.status === 'cancelada') return { icon: '', label: 'Cancelado', title: 'Parcela cancelada.', alerta: false };
@@ -469,7 +480,7 @@ const ROTULOS_PADRAO: RotulosCompromissos = {
   mostrarBaseDaOperacao: true, mostrarSentidoDoDinheiro: false,
 };
 
-export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, ehBoitel, fornecedores, valorAcordado, lotes, contraparteId, dataOperacao, dataChegada, darkSelectClass, recarregarDados, linhasPrevisao, bloqueioPrevisao = null, seloProjecao, propostasExtras, propostasDoMotor, abrirGerarAoMontar, rotulos = ROTULOS_PADRAO, motivoReabertura = null, soDespesas = false, hostBotoesDespesa, topoFixo }: Props) {
+export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, ehBoitel, fornecedores, valorAcordado, lotes, contraparteId, dataOperacao, dataChegada, darkSelectClass, recarregarDados, linhasPrevisao, bloqueioPrevisao = null, seloProjecao, propostasExtras, propostasDoMotor, abrirGerarAoMontar, rotulos = ROTULOS_PADRAO, motivoReabertura = null, soDespesas = false, hostBotoesDespesa, topoFixo, liquidacao = null }: Props) {
   const { resumoOperacao, compromissos, parcelas, versao, saving } = ocApi;
   const [searchParams, setSearchParams] = useSearchParams();
   /* ⚠ OS DOIS CATALOGOS SUBIRAM PARA CA — PR-OC-VENDA-FIN-PREVISAO-01D (adendo 2). Eles
@@ -937,6 +948,21 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
     setGerarAberto(true);
   }, [abrirGerarAoMontar, semCompromisso, propostas.length, soDespesas]);
 
+  /* OC-VINCULAR-RECEBIMENTO-PARCIAL-01 — a SITUAÇÃO é o estado da view, só traduzido; "confere" só com 'quitada'. */
+  const situacaoDoLado = ((): { texto: string; cor: string; title: string } => {
+    const e = liquidacao?.estadoLiquidacao ?? '';
+    if (e === 'quitada') return { texto: 'confere', cor: 'text-emerald-700 dark:text-emerald-500', title: 'O liquidado é igual ao negociado.' };
+    if (e === 'excedente') return { texto: temEntradas ? 'recebido a mais' : 'pago a mais', cor: 'text-destructive', title: 'O liquidado passou do negociado: decida na OC o que é a diferença.' };
+    if (e === 'parcial' || e === 'nao_liquidada') return { texto: temEntradas ? 'falta receber' : 'falta pagar', cor: 'text-amber-700 dark:text-amber-500', title: 'Ainda há saldo em aberto nesta operação.' };
+    return { texto: '—', cor: 'text-muted-foreground', title: 'Sem base para dizer.' };
+  })();
+  /* "1 de 2": as parcelas vivas do LADO (entradas na venda/abate; tudo na compra) e quantas a tela já chama de pagas. */
+  const parcelasDoLado = (() => {
+    const doLado = new Set(compromissos.filter(c => c.status !== 'cancelado' && (!temEntradas || entradaDoCompromisso(c))).map(c => c.compromissoId));
+    const vivas = parcelas.filter(p => p.status !== 'cancelada' && !!p.compromissoId && doLado.has(p.compromissoId));
+    return { total: vivas.length, pagas: vivas.filter(p => statusFinanceiroParcela(p).label === 'Pago').length };
+  })();
+
   const confere = !semCompromisso && !!resumoOperacao
     && resumoOperacao.obrigacaoTotal > TOL_CENTAVO
     && Math.abs(resumoOperacao.obrigacaoTotal - resumoOperacao.totalLiquidado) <= TOL_CENTAVO;
@@ -1363,6 +1389,10 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
      tabela), e uma `const` abaixo do uso cairia em TDZ — a tela branca do ABATE-FIN-TELA-BRANCA. */
   const [buscarDespesaAberto, setBuscarDespesaAberto] = useState(false);
   const [vincularDespesaId, setVincularDespesaId] = useState<string | null>(null);
+  /* OC-VINCULAR-RECEBIMENTO-PARCIAL-01 — "Vincular recebimento/pagamento" na linha do SALDO de uma parcela: a MESMA busca do
+     "+ Buscar despesa" (na direção e no subcentro do compromisso) e o MESMO vincular, com esta OC já escolhida. Quem decide a
+     parcela e o que acontece com o valor é o banco (`oc_vincular_lancamento`); aqui só se abre a porta. */
+  const [buscarSaldo, setBuscarSaldo] = useState<{ lado: 'receber' | 'pagar'; subcentros: string[] } | null>(null);
   const linhasDespesa = useMemo(
     () => (soDespesas ? linhasDeDespesa(compromissos, parcelas, titulosDasParcelas) : []),
     [soDespesas, compromissos, parcelas, titulosDasParcelas],
@@ -1584,6 +1614,41 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
                   A view ja entrega os quatro eixos separados; e' so' le-los.
                   ⚠ A COMPRA CONTINUA COM DOIS: la' tudo e' saida, e "A receber" seria uma
                   coluna de traco permanente. */}
+              {liquidacao && !semCompromisso ? (
+              /* OC-VINCULAR-RECEBIMENTO-PARCIAL-01 — O LADO DA OPERAÇÃO, LIDO DA VIEW (`vw_oc_operacao_liquidacao`, a única fonte
+                 do "confere"): Negociado = base · Recebido = liquidado · A receber = saldo · Situação = estado. A tela não
+                 subtrai nem decide. "N de M" é a contagem das parcelas que a própria aba lista. Cada cartão tem DUAS linhas
+                 sempre presentes (a de baixo vazia quando não há o que dizer): a altura não muda com o estado. */
+              <div className="flex items-start justify-between gap-x-3 rounded-md border bg-muted/20 px-3.5 py-[11px]" data-testid="cartoes-do-lado">
+                {([
+                  ['Negociado', liquidacao.base == null ? '—' : brl(liquidacao.base), '', ''],
+                  [temEntradas ? 'Recebido' : 'Pago', brl(liquidacao.totalLiquidadoValido), '', ''],
+                  [temEntradas ? 'A receber' : 'A pagar', liquidacao.saldoOperacao == null ? '—' : brl(liquidacao.saldoOperacao),
+                    liquidacao.saldoOperacao != null && liquidacao.saldoOperacao > TOL_CENTAVO ? 'text-amber-700 dark:text-amber-500' : '', ''],
+                  [temEntradas ? 'Recebimentos' : 'Pagamentos', `${parcelasDoLado.pagas} de ${parcelasDoLado.total}`, '', ''],
+                  ['Situação', situacaoDoLado.texto, situacaoDoLado.cor, situacaoDoLado.title],
+                ] as const).map(([rotulo, valor, cor, title]) => (
+                  <div key={rotulo} className="shrink-0" title={title || undefined}>
+                    <div className="text-[11px] font-normal text-muted-foreground leading-none">{rotulo}</div>
+                    <div className={`mt-0.5 whitespace-nowrap text-[14px] font-medium tabular-nums leading-none ${cor}`} data-testid={`cartao-${rotulo}`}>{valor}</div>
+                  </div>
+                ))}
+                {temEntradas && (<>
+                  <div className="shrink-0">
+                    <div className="text-[11px] font-normal text-muted-foreground leading-none">Despesas</div>
+                    <div className="mt-0.5 whitespace-nowrap text-[14px] font-medium tabular-nums leading-none text-destructive">
+                      {resumoOperacao.saidaObrigacao > TOL_CENTAVO ? brl(resumoOperacao.saidaObrigacao) : '—'}
+                    </div>
+                  </div>
+                  <div className="shrink-0">
+                    <div className="text-[11px] font-normal text-muted-foreground leading-none">Pagas</div>
+                    <div className="mt-0.5 whitespace-nowrap text-[14px] font-medium tabular-nums leading-none text-destructive">
+                      {resumoOperacao.saidaLiquidado > TOL_CENTAVO ? brl(resumoOperacao.saidaLiquidado) : '—'}
+                    </div>
+                  </div>
+                </>)}
+              </div>
+              ) : (
               <div className={`grid gap-2 rounded-md border bg-muted/20 px-3.5 py-[11px] ${
                 temEntradas ? 'grid-cols-4' : mostrarAProgramar ? 'grid-cols-3' : 'grid-cols-2'}`}>
                 <div className="min-w-0">
@@ -1632,6 +1697,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
                   </div>
                 )}
               </div>
+              )}
               <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
                 {/* ⚠ VOCABULARIO POR TIPO. Estas duas palavras eram literais e a venda
                     herdava "Compra 13/05/2026" no rodape do proprio grupo.
@@ -1922,7 +1988,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
                 <col style={{ width: 24 }} /><col style={{ width: 88 }} /><col />
                 <col style={{ width: 160 }} /><col style={{ width: 84 }} /><col style={{ width: 64 }} />
                 <col style={{ width: 104 }} /><col style={{ width: 80 }} /><col style={{ width: 62 }} />
-                <col style={{ width: 112 }} />
+                <col style={{ width: 216 }} />
               </colgroup>
               <thead>
                 <tr className="h-5 text-left text-[9.5px] leading-none text-muted-foreground border-b">
@@ -1969,7 +2035,12 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
                      alto que os outros poria a linha — e o olho — fora da regua. */
                   return (
                     <tr key={p.parcelaId ?? ''} className={`h-[26px] leading-none border-b even:bg-muted/30 ${recemMaterializada === p.parcelaId ? 'bg-green-50 dark:bg-green-950/30' : ''}`}>
-                      <td className="px-[5px]">{p.sequencia}</td>
+                      {/* OC-VINCULAR-RECEBIMENTO-PARCIAL-01: "1/2" — a POSICAO da parcela entre as VIVAS e quantas sao (contagem das
+                          linhas que a tabela ja' desenha). A sequencia GRAVADA pode ter buraco (desvinculada a 1 de 3, ficam a 2 e
+                          a 3): a tela diz "1/2, 2/2", e a gravada vai no `title`. Cancelada mostra a gravada, sem total. */}
+                      <td className="px-[5px] whitespace-nowrap" data-testid="parcela-seq" title={`sequência gravada: ${p.sequencia}`}>
+                        {p.status === 'cancelada' ? p.sequencia : posicaoEntreVivas(parcelasDoComp, p)}
+                      </td>
                       {/* ⚠ 2px DE CELULA E `pr-[18px]` NO CAMPO: o botao do calendario ocupa 24px a'
                           direita (icone 12 + 6 de cada lado), e com a regua de 5px "21/11/2023"
                           cortava — era o "21/11/2" do print. 18px encosta o texto no icone, sem
@@ -2097,6 +2168,22 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
                             desabilitado pelo gate — a parcela dizia "Sem titulo" e o Estornar,
                             que e' justamente o caminho de saida, ficava inalcancavel.
                             EDITAR continua atras do derivado: titulo morto nao se edita. */}
+                        <span className="inline-flex items-center justify-end gap-[3px]">
+                        {/* O SALDO EM ABERTO (previsto ou programado, sem pagamento) recebe o recebimento/pagamento já lançado no
+                            Financeiro — o gesto do briefing, na linha do saldo. Pago, parcial e "sem título" não oferecem. */}
+                        {!est.alerta && (est.label === 'Previsto' || est.label === 'Programado') && (() => {
+                          const lado = entradaDoCompromisso(selecionado) ? 'receber' as const : 'pagar' as const;
+                          const sub = plano.rows.find(r => r.id === selecionado.planoContaId)?.subcentro ?? null;
+                          const motivo = !podeEscrever ? 'operação somente leitura' : !sub ? 'compromisso sem conta do plano' : undefined;
+                          return (
+                            <Button size="sm" variant="outline" className="h-5 px-1 text-[9.5px]" data-testid="vincular-saldo"
+                              disabled={!!motivo}
+                              title={motivo ?? `Busca no Financeiro um ${lado === 'receber' ? 'recebimento' : 'pagamento'} já lançado e o vincula a este saldo de ${brl(p.valor)}`}
+                              onClick={() => { if (sub) setBuscarSaldo({ lado, subcentros: [sub] }); }}>
+                              {lado === 'receber' ? 'Vincular recebimento' : 'Vincular pagamento'}
+                            </Button>
+                          );
+                        })()}
                         {(p.status === 'materializada' || p.status === 'paga')
                           ? (p.parcelaId
                               ? <span className="inline-flex gap-[3px]">
@@ -2117,6 +2204,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
                                 </span>
                               : <span className="text-[10px] text-green-600">ok</span>)
                           : <Button size="sm" variant="outline" className="h-5 px-1 text-[9.5px]" disabled={!podeMaterializar} onClick={() => { setContaParaMaterializar(''); setConfirmarParcela(p); }}>Lançar</Button>}
+                        </span>
                       </td>
                     </tr>
                   );
@@ -2182,6 +2270,12 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
           nomeFavorecido={nomeFavorecido}
           onEscolher={id => { setBuscarDespesaAberto(false); setVincularDespesaId(id); }}
           onFechar={() => setBuscarDespesaAberto(false)} />
+      )}
+      {buscarSaldo && clienteId && (
+        <BuscarDespesaOCDialog clienteId={clienteId} dataOperacao={dataOperacao} subcentros={buscarSaldo.subcentros}
+          saldo={{ lado: buscarSaldo.lado }} nomeFavorecido={nomeFavorecido}
+          onEscolher={id => { setBuscarSaldo(null); setVincularDespesaId(id); }}
+          onFechar={() => setBuscarSaldo(null)} />
       )}
       {/* O vincular de sempre (VINCULAR-LANC-OC-01), com esta OC ja' escolhida — a regra e a previa seguem no banco. */}
       {vincularDespesaId && clienteId && (

@@ -101,8 +101,14 @@ export interface RespostaCandidatas {
 export interface AvisoVinculo {
   codigo: 'movimento_duplicado' | 'competencia_mudou_de_mes' | 'favorecido_diferente'
     | 'classificacao_diverge_do_compromisso' | 'principal_diverge_da_base' | 'safra_diverge_da_competencia'
-    | 'principal_excede_acordado';
+    | 'principal_excede_acordado'
+    | 'recebido_acima_do_saldo' | 'compromisso_reduzido' | 'mes_fechado';
   de?: string; para?: string; base?: number | null; soma_principal?: number;
+  /** `recebido_acima_do_saldo` / `compromisso_reduzido` (OC-VINCULAR-RECEBIMENTO-PARCIAL-01): nada some em silêncio. */
+  lado?: 'receber' | 'pagar'; recebido?: number; saldo?: number | null; diferenca?: number;
+  compromisso_de?: number | null; compromisso_para?: number;
+  /** `mes_fechado`: 'YYYY-MM'. Avisa e fica na trilha; não bloqueia. */
+  mes?: string;
   /** `principal_excede_acordado` (OC-VINCULAR-PARCELA-SEGUINTE-01). */
   acordado?: number; vinculado?: number; excedente?: number;
   compromisso?: string; lancamento?: string;
@@ -117,7 +123,7 @@ export interface VinculoFeito {
   titulos_vivos_do_compromisso: number;
   conciliado: boolean;
   compromisso: { id: string; acao: 'criado' | 'ajustado' | 'mantido'; valor_anterior: number | null; valor_total: number };
-  parcela: { id: string; acao: 'criada' | 'preenchida' | 'substituida' };
+  parcela: { id: string; acao: 'criada' | 'preenchida' | 'substituida' | 'parcial' };
   titulo_substituido: { titulo_id: string | null; valor: number | null; status_transacao: string | null; ja_estava_cancelado: boolean } | null;
   lancamento: { id: string; competencia_anterior: string | null; competencia_nova: string;
     hash_preservado: boolean; movimentacao_rebanho_id_solto: string | null };
@@ -128,6 +134,15 @@ export interface VinculoFeito {
    */
   parte?: { sequencia: number; quantidade: number; parcela_seguinte: boolean; descricao: string | null };
   principal?: { acordado: number | null; vinculado: number | null; recebido: number | null } | null;
+  /**
+   * OC-VINCULAR-RECEBIMENTO-PARCIAL-01 — o recebimento é MENOR que a parcela: o compromisso mantém o valor e o saldo segue
+   * numa parcela seguinte (com o título programado reduzido, quando havia). Nulo fora desse caso.
+   */
+  parcial?: {
+    lado: 'receber' | 'pagar'; recebido: number; de: number; saldo: number;
+    parcela_saldo: { id: string; sequencia: number; quantidade: number | null; vencimento: string | null;
+      titulo_id: string | null; titulo_valor_antes: number | null };
+  } | null;
 }
 
 export interface VinculoRecusado {
@@ -342,6 +357,18 @@ export function textoDoAviso(a: AvisoVinculo): AvisoTela {
       return { codigo: a.codigo, tom: 'ambar', texto:
         `Com este lançamento a OC passa a ter ${brl(a.vinculado)} ligados ao principal, ${brl(a.excedente)} acima dos ${brl(a.acordado)} acordados. `
         + 'O vínculo não é bloqueado nem ajustado: confira antes de confirmar.' };
+    case 'recebido_acima_do_saldo': {
+      const verbo = a.lado === 'pagar' ? 'Pago' : 'Recebido';
+      return { codigo: a.codigo, tom: 'vermelho', texto:
+        `${verbo} ${brl(a.diferenca)} a mais que o saldo (${brl(a.saldo)}). O compromisso passa de ${brl(a.compromisso_de)} para ${brl(a.compromisso_para)}. `
+        + 'A diferença não é ajustada sozinha: decida na OC o que ela é.' };
+    }
+    case 'compromisso_reduzido':
+      return { codigo: a.codigo, tom: 'vermelho', texto:
+        `O compromisso passa de ${brl(a.compromisso_de)} para ${brl(a.compromisso_para)} (diferença ${brl(a.diferenca)}). Confira antes de confirmar.` };
+    case 'mes_fechado':
+      return { codigo: a.codigo, tom: 'ambar', texto:
+        `O mês ${a.mes ? `${a.mes.slice(5, 7)}/${a.mes.slice(0, 4)}` : ''} do rebanho está fechado. O vínculo não é bloqueado: fica registrado na auditoria da OC.` };
     case 'safra_diverge_da_competencia':
       return { codigo: a.codigo, tom: 'ambar', texto: 'A safra do lançamento não é a sugerida para a nova competência; ela não muda.' };
     default:
@@ -358,9 +385,14 @@ export function resumoDoVinculo(s: VinculoFeito): LinhaResumo[] {
     : c.acao === 'ajustado' ? `${brl(c.valor_anterior)} → ${brl(c.valor_total)}`
     : `mantido · ${brl(c.valor_total)}`;
   const t = s.titulo_substituido;
+  const pc = s.parcial ?? null;
   return [
     { rotulo: 'Compromisso', valor: comp },
-    t
+    pc
+      ? (pc.parcela_saldo.titulo_id
+          ? { rotulo: 'Título da OC', valor: `fica · ${brl(pc.parcela_saldo.titulo_valor_antes)} → ${brl(pc.saldo)} · vence ${dataBr(pc.parcela_saldo.vencimento)}`, tom: 'ambar' as const }
+          : { rotulo: 'Saldo', valor: `${brl(pc.saldo)} · parcela ${pc.parcela_saldo.sequencia}, sem título`, tom: 'ambar' as const })
+    : t
       ? { rotulo: 'Título da OC', valor: `${t.ja_estava_cancelado ? 'já cancelado' : `${t.status_transacao ?? '—'} · ${brl(t.valor)} — será cancelado`}`, tom: 'ambar' }
       : { rotulo: 'Título da OC', valor: 'nenhum a cancelar' },
     { rotulo: 'Competência', valor: s.lancamento.competencia_anterior === s.lancamento.competencia_nova
@@ -392,6 +424,17 @@ export function fraseDaParcela(s: VinculoFeito): string | null {
       : `A OC passa a ter ${brl(pr.vinculado)} ligados ao principal (${brl(pr.recebido)} já recebidos) de ${brl(pr.acordado)} acordados.`);
   }
   return partes.length > 0 ? partes.join(' ') : null;
+}
+
+/**
+ * A frase do recebimento PARCIAL — OC-VINCULAR-RECEBIMENTO-PARCIAL-01. Inteira do que a simulação devolveu (`parcial`): a tela
+ * não subtrai. "Recebido R$ 200.000,00 de R$ 294.595,00. Fica saldo a receber de R$ 94.595,00 nesta OC." (compra: Pago / a pagar)
+ */
+export function fraseDoParcial(s: VinculoFeito): string | null {
+  const p = s.parcial;
+  if (!p) return null;
+  const pagar = p.lado === 'pagar';
+  return `${pagar ? 'Pago' : 'Recebido'} ${brl(p.recebido)} de ${brl(p.de)}. Fica saldo a ${pagar ? 'pagar' : 'receber'} de ${brl(p.saldo)} nesta OC.`;
 }
 
 /** "OC 123" pelo documento; sem documento, so' "OC" + data — nunca UUID na tela. */

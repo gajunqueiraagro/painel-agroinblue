@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 05/10/2026 (OC-VINCULAR-PARCELA-SEGUINTE-01, +10 em `src/components/financeiro-v2/vincularParcelaSeguinte.test.tsx` — 3920 depois dele;
+  Baseline em 05/10/2026 (OC-VINCULAR-RECEBIMENTO-PARCIAL-01, +25 em `src/components/financeiro-v2/vincularRecebimentoParcial.test.tsx` — 3945 depois dele;
+  antes o OC-VINCULAR-PARCELA-SEGUINTE-01, +10 em `src/components/financeiro-v2/vincularParcelaSeguinte.test.tsx` — 3920 depois dele;
   antes o UI-ARRASTAR-ARQUIVO-01b, +62: `src/lib/arquivo/aceitarArquivo.test.ts` 27, `src/lib/arquivo/umSoArrastar.test.ts` 3,
   `src/components/ui/area-de-arquivo.test.tsx` 3, `src/components/conciliacao/arquivoTelas01b.test.tsx` 18,
   `src/components/conciliacao/arquivoCaracterizacao01b.test.tsx` 3, `src/v2/components/mesa/enriquecimento/arquivoTelas01b.test.tsx` 6,
@@ -198,7 +199,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3910
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3945
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -2255,13 +2256,56 @@ docs/historico/frentes-ate-2026-09-29.md.)
   · Medido a 1.135 no Agnaldo (so' leitura, funcao de verdade): modal 1090 x 491, a frase em 3 linhas de 249px, sem corte.
   Teste SQL: `supabase/tests/oc_vincular_parcela_seguinte_01_test.sql` (T1–T8, OC sintetica no cliente Teste, termina em RAISE OK).
   ⚠ O VINCULO LEVA A COMPETENCIA DO LANCAMENTO PARA A DATA DA OC (regra anterior, nao mudada): o 84b11037 vai de 31/08 a 25/08.
-  ⚠ DIVIDAS: OC-DESVINCULAR-RENUMERA-01 (`oc_desvincular_lancamento` nao recalcula `quantidade_parcelas` das que ficam: desvinculada
-    a 2 de 3, a que resta segue "1/3") · OC-VINCULAR-RECEBIMENTO-PARCIAL-01 (vincular recebimento de valor diferente a compromisso
-    com titulo programado ENCOLHE o compromisso para a soma das parcelas — evento `ajustar_valor_compromisso` — e a
-    `vw_oc_operacao_liquidacao` diz "quitada" com dinheiro faltando; PR proprio, em medicao) · AS 3 OCs ENCOLHIDAS DO AGNALDO, sem
-    conserto de dado: f74f95e5 (venda 25/08, acordado 294.595, compromisso 200.000; o Gabriel vincula o 84b11037 pela tela),
-    a2df4ec1 (compra 09/09, acordado 315.000, soma ativa 50.000) e da9c27ee (compra 09/09, 17.435 x 17.400) · o "Saldo" do resumo
-    lateral da OC NAO FOI RASTREADO (de onde vem "A receber / Recebido / Saldo" quando o compromisso encolhe).
+  ⚠ [as dividas deste bloco — OC-DESVINCULAR-RENUMERA-01, OC-VINCULAR-RECEBIMENTO-PARCIAL-01, as 3 OCs do Agnaldo e o "Saldo" do
+    resumo lateral — FECHARAM no OC-VINCULAR-RECEBIMENTO-PARCIAL-01, a regra seguinte.]
+- ⚠ RECEBIMENTO MENOR MANTEM O COMPROMISSO E DEIXA O SALDO EXATO; DESVINCULAR E' A VOLTA DO VINCULO (OC-VINCULAR-RECEBIMENTO-PARCIAL-01,
+  Gabriel 05/10/2026; migration 20261027193300, ⚠ registrada como 20261005180058; ledger = arquivo, md5 94e98b43…; patch guardado
+  por md5: `oc_vincular_lancamento` 0fd703b6… -> 4bc44efe…, `oc_desvincular_lancamento` 6cbc7e2a… -> f568e7cb…). REGRAS DO GABRIEL:
+  NUNCA ARREDONDAR nem engolir diferenca de qualquer tamanho (R$ 35,00 conta); o financeiro e' soberano (recebimento pago nao muda
+  de valor, pagamento nem conciliacao); MES FECHADO AVISA E NAO BLOQUEIA ajuste de OC (aviso `mes_fechado`, gravado na trilha); o
+  sistema explica, o operador decide; todo gesto nasce com o gesto contrario; SIMULACAO = GRAVACAO.
+  · O DEFEITO (5 vezes, todas no Agnaldo em 05/10): vincular um lancamento de valor diferente do titulo programado cancelava o
+    titulo e levava o compromisso para a soma das parcelas (294.595 -> 200.000; 17.435 -> 17.400), e a `vw_oc_operacao_liquidacao`
+    dizia "quitada" com dinheiro faltando; o desvincular cancelava a parcela e o compromisso (ate' no valor exato).
+  · VINCULAR, recebimento V numa parcela de valor P: V = P como antes; V < P: o compromisso MANTEM o valor, o recebimento ocupa a
+    parcela e o saldo P − V (exato) vai para a parcela SEGUINTE com o MESMO titulo programado REDUZIDO (mesmo id, vencimento e
+    classificacao), sem evento `ajustar_valor_compromisso`; parcela sem titulo ou compromisso EM ABERTO (sem programacao): o saldo
+    nasce numa parcela 'prevista'. V > P NAO MUDOU (o compromisso sobe), mas avisa `recebido_acima_do_saldo`. Com varias parcelas
+    vivas e UMA so' em aberto, o vinculo a escolhe sem perguntar. O retorno ganha `parcial {lado, recebido, de, saldo,
+    parcela_saldo}`; a trilha guarda `parcial`, `parcela_valor_antes` e `parcela_status_antes`.
+  · DESVINCULAR le' a trilha do proprio vinculo e devolve a OC ao estado de ANTES: titulo substituido -> REATIVADO, o mesmo
+    registro (se nao pode — ja' vivo, com outra parte —, a parcela volta a 'prevista'; recriar seria um segundo escritor de titulo,
+    cujo dono e' `oc_materializar_parcela`); parcela preenchida -> volta a 'prevista'; parcela criada em compromisso aberto -> sai,
+    com a programacao que o vinculo criou, e o compromisso FICA; parcial -> o valor volta ao saldo; o compromisso so' muda de valor
+    quando o proprio vinculo o tinha ajustado e ninguem mexeu depois. Sempre recalcula `quantidade_parcelas` do grupo. Retorno:
+    `devolucao_ao_saldo {modo, valor, saldo_de, saldo_para, titulo_id}` e `compromisso.acao` 'mantido' | 'restaurado'.
+    Internas (fechadas): `_oc_titulo_em_aberto`, `_oc_renumerar_parcelas_do_grupo`.
+  · MAPA DOS TIPOS DE OC (ensaio revertido no Teste, molde real de cada tipo, hoje x depois): POR PROGRAMACAO — venda, compra, abate
+    e boitel se comportam IGUAL, celula a celula (93 OCs vivas: venda 9, compra 33, abate 33, boitel 18) e sao as que a regra
+    alcanca; despesa com compromisso programado segue a mesma regra (paga a menos deixa saldo a pagar); despesa por "criar item"
+    nao mudou. CONTA CORRENTE — venda 122 (121 criadas do legado) e compra 1: NAO passa pelo ramo (`oc_vincular_lancamento` delega
+    a `_oc_vincular_recebimento`), nao ha' compromisso para encolher, o saldo e' calculado ("parcial" / "excedente" pela view) e
+    DESVINCULAR E' RECUSADO. Realizado do boitel nao e' vinculo (`oc_revalorar_lote`, regra de negocio).
+  · TELA: o painel do Vincular escreve a frase do banco (`fraseDoParcial`: "Recebido R$ X de R$ Y. Fica saldo a receber de R$ Z
+    nesta OC.") e os avisos; o Desvincular escreve "Compromisso … — mantido" e o que volta (`linhaDaDevolucao`). Aba Financeiro da
+    OC por programacao (`AbaCompromissosOC`, com `liquidacao={api.resumo}`): cartoes Negociado · Recebido · A receber · Recebimentos
+    "1 de 2" · Situacao LIDOS DA VIEW ("confere" so' com 'quitada'); parcelas com a POSICAO entre as vivas ("1/2, 2/2"; a sequencia
+    gravada no `title`) e, na linha do saldo, "Vincular recebimento/pagamento" (a busca do "+ Buscar despesa" na direcao e no
+    subcentro do compromisso + o vincular de sempre). Resumo lateral: na venda "Saldo" virou "Líquido <nivel>" (o liquido do nivel
+    mais avancado, as palavras da lista de OCs); na compra, "A pagar"; o abate nao tem a linha. Medido a 1.135: cartoes em uma
+    linha de 51px; tabela de parcelas 992px, linhas de 26px, so' a Descricao corta (110px, inteira no `title`); modal do vincular
+    1090 x 491.
+  Testes: `supabase/tests/oc_vincular_recebimento_parcial_01_test.sql` (V1–V8, C1, D1–D5, R1, F1–F2);
+  `oc_vincular_parcela_seguinte_01_test.sql` atualizado ao contrato novo; 21 mutacoes de banco + controle, 17 de tela.
+  CONSERTO DO AGNALDO: `docs/investigacao/oc-vincular-recebimento-parcial-01-conserto-agnaldo.sql` (as 3 OCs de volta ao combinado
+  com o saldo a' vista no titulo original; o cabecalho do script diz quando foi executado).
+  ⚠ DIVIDAS: OC-CC-DESVINCULAR-RECEBIMENTO-01 (desvincular em conta corrente segue recusado — PR 3 do OC-CC-ACOES-LINHA-02) ·
+    OC-AJUSTE-DIFERENCA-01 (gestos de ajuste: recebido a mais, encerrar o saldo de despesa estimada, separar a diferenca) · a
+    SEQUENCIA COM BURACO so' se resolve na tela (a gravada nao e' renumerada) · COMPETENCIA NA VOLTA: o desvincular so' a devolve
+    quando o vinculo a trocou "pela saida"; senao fica na data da OC · `oc_criar_do_legado` nao foi executada em teste (prova por
+    leitura do corpo) · compromisso com varias parcelas TODAS pagas ainda conta como "livre" na escolha do compromisso · a OC
+    7016f2b5 do Agnaldo (recebido 368.210 num combinado de 361.130) espera os gestos de ajuste · nao provado no navegador: compra
+    e abate com saldo parcial, o aviso de recebido a mais e o de mes fechado (so' por teste).
 - ⚠ CONTA CORRENTE DA OC (ADR-2026-21 + adendos; venda e compra no modelo, abate e a migracao
   das OCs existentes na fila):
   - A OC e' UMA venda/compra. Entrega/entrada do gado = titulo sem caixa, receita/custo no DRE

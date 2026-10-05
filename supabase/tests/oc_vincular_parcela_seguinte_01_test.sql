@@ -4,18 +4,21 @@
 -- Sucesso = a excecao final comeca com "OK". Qualquer outra excecao e' falha e diz qual prova caiu.
 --
 -- Cenario sintetico no cliente Teste (43f32d07), no MOLDE do caso do Agnaldo (OC f74f95e5): venda de um lote, acordado
--- 294.595,00, com um compromisso principal de 294.595,00 e titulo PROGRAMADO; chegam dois recebimentos realizados do banco,
--- 200.000,00 e 94.595,00. As linhas da operacao sao copiadas da OC real por `jsonb_populate_record` (so' a estrutura; cliente,
+-- 294.595,00, com um compromisso principal de 200.000,00 e titulo PROGRAMADO (o estado em que a OC do Agnaldo ficou); chegam
+-- dois recebimentos realizados do banco, 200.000,00 e 94.595,00.
+-- ⚠ ATUALIZADO AO CONTRATO DO OC-VINCULAR-RECEBIMENTO-PARCIAL-01: o compromisso do cenario ja' nasce em 200.000 — desde aquele
+--   PR um recebimento MENOR que o compromisso nao o encolhe mais (vira saldo), e o "criar item" deste teste precisa de um grupo
+--   com o compromisso quitado. As linhas da operacao sao copiadas da OC real por `jsonb_populate_record` (so' a estrutura; cliente,
 -- fazenda, ids e favorecido sao os do Teste) e os lancamentos sao inseridos aqui.
 --
--- T1  vinculo do recebimento de 200.000 ao compromisso de 294.595: o titulo programado e' cancelado e o compromisso passa a
---     200.000 — o ESTADO DO AGNALDO (comportamento de antes, nao tocado: divida OC-VINCULAR-RECEBIMENTO-PARCIAL-01).
+-- T1  vinculo do recebimento de 200.000 ao compromisso de 200.000: o titulo programado e' substituido e o compromisso fica
+--     igual — o ESTADO DO AGNALDO (uma parte ativa 1/1 de 200.000 numa OC de 294.595 acordados).
 -- T2  SIMULACAO do recebimento de 94.595 em "criar item": devolve parcela 2 de 2 e principal 294.595 / 294.595, e NAO grava.
 -- T3  GRAVACAO: mesmos campos da simulacao; partes ativas = (1 de 2) e (2 de 2), soma = acordado; os dois lancamentos com
 --     valor, pagamento e status identicos (a competencia do que entra segue a regra de sempre — a data da OC).
 -- T4  passar do acordado AVISA e nao bloqueia: um terceiro recebimento vira a parcela 3 de 3 com `principal_excede_acordado`.
 -- T5  parte CANCELADA nao ocupa sequencia: desvinculada a parcela 3, o proximo "criar item" volta a ser a 3.
--- T6  o gesto contrario (`oc_desvincular_lancamento`) da parcela 2: sobra UMA parte ativa — e o que ela diz de quantidade.
+-- T6  o gesto contrario (`oc_desvincular_lancamento`) da parcela 2: sobra UMA parte ativa, que passa a dizer 1/1.
 -- T7  nada mais muda: os demais lancamentos do Teste tem a mesma assinatura antes e depois.
 -- T8  colisao de unicidade NUNCA chega crua: forcada por um gatilho temporario, a funcao devolve a frase em portugues (P0001).
 DO $teste$
@@ -42,14 +45,14 @@ BEGIN
       'id', v_lote, 'cliente_id', c_cli, 'operacao_id', v_op))).*
     FROM zoo_operacao_lotes l WHERE l.operacao_id = c_op_molde;
   INSERT INTO zoo_operacao_compromissos SELECT (jsonb_populate_record(NULL::zoo_operacao_compromissos, to_jsonb(c) || jsonb_build_object(
-      'id', v_comp, 'cliente_id', c_cli, 'operacao_id', v_op, 'lote_id', v_lote, 'favorecido_id', NULL, 'valor_total', 294595, 'status', 'programado'))).*
+      'id', v_comp, 'cliente_id', c_cli, 'operacao_id', v_op, 'lote_id', v_lote, 'favorecido_id', NULL, 'valor_total', 200000, 'status', 'programado'))).*
     FROM zoo_operacao_compromissos c WHERE c.operacao_id = c_op_molde AND c.status IS DISTINCT FROM 'cancelado' LIMIT 1;
   INSERT INTO zoo_operacao_programacoes SELECT (jsonb_populate_record(NULL::zoo_operacao_programacoes, to_jsonb(g) || jsonb_build_object(
       'id', v_prog, 'cliente_id', c_cli, 'compromisso_id', v_comp))).*
     FROM zoo_operacao_programacoes g JOIN zoo_operacao_compromissos c ON c.id = g.compromisso_id
    WHERE c.operacao_id = c_op_molde AND g.status = 'ativa' LIMIT 1;
   INSERT INTO zoo_operacao_parcelas_programacao SELECT (jsonb_populate_record(NULL::zoo_operacao_parcelas_programacao, to_jsonb(p) || jsonb_build_object(
-      'id', v_parc, 'cliente_id', c_cli, 'programacao_id', v_prog, 'valor', 294595, 'conta_bancaria_id', c_conta, 'status', 'materializada'))).*
+      'id', v_parc, 'cliente_id', c_cli, 'programacao_id', v_prog, 'valor', 200000, 'conta_bancaria_id', c_conta, 'status', 'materializada'))).*
     FROM zoo_operacao_parcelas_programacao p JOIN zoo_operacao_programacoes g ON g.id = p.programacao_id
     JOIN zoo_operacao_compromissos c ON c.id = g.compromisso_id
    WHERE c.operacao_id = c_op_molde AND g.status = 'ativa' AND p.status IS DISTINCT FROM 'cancelada' LIMIT 1;
@@ -59,11 +62,11 @@ BEGIN
   -- o titulo PROGRAMADO da OC (294.595) e a parte dele; os recebimentos do banco
   INSERT INTO financeiro_lancamentos_v2 (cliente_id, fazenda_id, conta_destino_id, data_competencia, data_vencimento, valor, sinal,
       tipo_operacao, status_transacao, descricao, subcentro, plano_conta_id, origem_lancamento, ano_mes, cenario)
-  VALUES (c_cli, c_faz, c_conta, '2026-08-25', '2026-09-01', 294595, '1', '1-Entradas', 'programado', 'ENSAIO Venda 055 B', 'Venda de Machos Adultos', c_plano, 'operacao_comercial', '2026-08', 'realizado')
+  VALUES (c_cli, c_faz, c_conta, '2026-08-25', '2026-09-01', 200000, '1', '1-Entradas', 'programado', 'ENSAIO Venda 055 B', 'Venda de Machos Adultos', c_plano, 'operacao_comercial', '2026-08', 'realizado')
   RETURNING id INTO v_tit;
   INSERT INTO zoo_operacao_partes (cliente_id, operacao_id, origem, natureza, componente, sequencia_parcela, quantidade_parcelas, valor,
       data_vencimento, descricao, incluso_no_total, plano_conta_id, subcentro, lote_id, programacao_parcela_id, financeiro_lancamento_id)
-  VALUES (c_cli, v_op, 'programacao', 'principal', 'principal', 1, 1, 294595, '2026-09-01', 'Venda 055 B', false, c_plano,
+  VALUES (c_cli, v_op, 'programacao', 'principal', 'principal', 1, 1, 200000, '2026-09-01', 'Venda 055 B', false, c_plano,
       'Venda de Machos Adultos', v_lote, v_parc, v_tit);
   INSERT INTO financeiro_lancamentos_v2 (cliente_id, fazenda_id, conta_destino_id, data_competencia, data_pagamento, data_vencimento, valor, sinal,
       tipo_operacao, status_transacao, descricao, subcentro, plano_conta_id, origem_lancamento, ano_mes, cenario)
@@ -76,13 +79,13 @@ BEGIN
 
   -- ── T1: o recebimento de 200.000 no compromisso de 294.595 (o estado do Agnaldo) ──
   v_res := oc_vincular_lancamento(v_op, 1, v_l1, NULL, 'pgto 1/2', NULL, NULL, false, false);
-  IF (v_res ->> 'ok') IS DISTINCT FROM 'true' OR (v_res -> 'compromisso' ->> 'acao') IS DISTINCT FROM 'ajustado' OR (v_res -> 'compromisso' ->> 'valor_total')::numeric IS DISTINCT FROM 200000
+  IF (v_res ->> 'ok') IS DISTINCT FROM 'true' OR (v_res -> 'compromisso' ->> 'acao') IS DISTINCT FROM 'mantido' OR (v_res -> 'compromisso' ->> 'valor_total')::numeric IS DISTINCT FROM 200000
      OR (v_res -> 'parte' ->> 'sequencia') IS DISTINCT FROM '1' OR (v_res -> 'parte' ->> 'quantidade') IS DISTINCT FROM '1' OR (v_res -> 'parte' ->> 'parcela_seguinte') IS DISTINCT FROM 'false' THEN
     RAISE EXCEPTION 'T1 o primeiro vinculo: %', v_res; END IF;
   IF NOT (SELECT cancelado FROM financeiro_lancamentos_v2 WHERE id = v_tit) THEN RAISE EXCEPTION 'T1: o titulo programado nao foi cancelado'; END IF;
   SELECT count(*), sum(valor) INTO v_n, v_soma FROM zoo_operacao_partes WHERE operacao_id = v_op AND NOT cancelada;
   IF v_n IS DISTINCT FROM 1 OR v_soma IS DISTINCT FROM 200000 THEN RAISE EXCEPTION 'T1: partes ativas % somando %', v_n, v_soma; END IF;
-  v_ok := v_ok || 'T1 ok (estado do Agnaldo: compromisso 294.595 -> 200.000, uma parte ativa 1/1 de 200.000); ';
+  v_ok := v_ok || 'T1 ok (compromisso de 200.000 quitado pelo recebimento de 200.000, uma parte ativa 1/1; o acordado da OC segue 294.595); ';
   SELECT versao INTO v_ver FROM zoo_operacoes_comerciais WHERE id = v_op;
 
   -- ── T2: a simulacao do segundo recebimento ──
@@ -160,7 +163,7 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM financeiro_lancamentos_v2 WHERE id = v_l2 AND valor = 94595 AND status_transacao = 'realizado'
                    AND data_pagamento = '2026-09-01' AND cancelado IS NOT TRUE) THEN
     RAISE EXCEPTION 'T6: o lancamento desvinculado mudou'; END IF;
-  v_ok := v_ok || 'T6 ok (desvinculada a parcela 2: UMA parte ativa, ' || v_txt || ' — o desvincular nao renumera a quantidade; o lancamento fica inteiro); ';
+  v_ok := v_ok || 'T6 ok (desvinculada a parcela 2: UMA parte ativa, ' || v_txt || ' — desde o OC-VINCULAR-RECEBIMENTO-PARCIAL-01 o desvincular recalcula a quantidade; o lancamento fica inteiro); ';
 
   -- ── T7: nada fora do ensaio ──
   SELECT md5(coalesce(string_agg(md5(l::text), '' ORDER BY l.id), '')) INTO v_fora_d FROM financeiro_lancamentos_v2 l

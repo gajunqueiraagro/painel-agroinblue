@@ -175,6 +175,6 @@ export function AbaFinanceiroOC(props: Props) {
       darkSelectClass={props.darkSelectClass} recarregarDados={api.recarregar}
       linhasPrevisao={props.linhasPrevisao} bloqueioPrevisao={props.bloqueioPrevisao} seloProjecao={props.seloProjecao}
       propostasExtras={props.propostasExtras} propostasDoMotor={props.propostasDoMotor} abrirGerarAoMontar={props.abrirGerarAoMontar}
-      rotulos={props.rotulos} motivoReabertura={props.motivoReabertura ?? null} />
+      rotulos={props.rotulos} motivoReabertura={props.motivoReabertura ?? null} liquidacao={api.resumo} />
   );
 }

@@ -404,6 +404,12 @@ export function VendaModalShell({
     : fin.totalMaterializado > 0 ? fin.entradaMaterializado - fin.saidaMaterializado
     : fin.totalProgramado > 0 ? fin.entradaProgramado - fin.saidaProgramado
     : fin.entradaObrigacao - fin.saidaObrigacao;
+  /* OC-VINCULAR-RECEBIMENTO-PARCIAL-01 — O ROTULO DIZ O QUE O NUMERO E'. A linha se chamava "Saldo", e ao lado de "A receber
+     R$ 94.595,00" lia-se "Saldo R$ 200.000,00": o numero e' o LIQUIDO (entradas − saidas) do NIVEL mais avancado da operacao,
+     o mesmo "progresso" da lista de operacoes (`finResumo`, `CentralOperacoesComerciais`), com as mesmas palavras de nivel.
+     O numero nao mudou. */
+  const finNivel = !temFin ? null
+    : fin.totalLiquidado > 0 ? 'liquidado' : fin.totalMaterializado > 0 ? 'lançado' : fin.totalProgramado > 0 ? 'programado' : 'obrigação';
   const topoNoRealizado = bolsoRealizado != null;
 
   /* ─── O RESUMO SEGUE O MELHOR CONHECIMENTO — B-11 item 1 ─────────────────────
@@ -1083,7 +1089,10 @@ export function VendaModalShell({
               <div>
                 <LinhaResumo rotulo="A receber" valor={finAReceber == null ? null : formatMoeda(finAReceber)} />
                 <LinhaResumo rotulo="Recebido" valor={finRecebido == null ? null : formatMoeda(finRecebido)} />
-                <LinhaResumo rotulo="Saldo" valor={finSaldo == null ? null : formatMoeda(finSaldo)} />
+                <div data-testid="resumo-liquido-do-nivel"
+                  title="Entradas menos saídas no nível mais avançado da operação (obrigação → programado → lançado → liquidado). Não é o que falta receber: esse é o “A receber”, acima.">
+                  <LinhaResumo rotulo={finNivel ? `Líquido ${finNivel}` : 'Líquido'} valor={finSaldo == null ? null : formatMoeda(finSaldo)} />
+                </div>
               </div>
               )}
               </>)}

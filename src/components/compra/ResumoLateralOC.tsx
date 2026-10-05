@@ -168,7 +168,8 @@ export function ResumoLateralOC({
         <div>
           <LinhaResumo rotulo="Lançado" valor={temFinanceiro ? moneyOr(finLancado) : null} />
           <LinhaResumo rotulo="Liquidado" valor={temFinanceiro ? moneyOr(finLiquidado) : null} />
-          <LinhaResumo rotulo="Saldo" valor={temFinanceiro ? moneyOr(finSaldo) : null}
+          {/* OC-VINCULAR-RECEBIMENTO-PARCIAL-01: o rotulo diz o que e' — a soma do que as obrigacoes ainda tem em aberto. */}
+          <LinhaResumo rotulo="A pagar" valor={temFinanceiro ? moneyOr(finSaldo) : null}
             cor={finSaldo > 0.005 ? 'text-amber-700 dark:text-amber-500' : undefined} />
         </div>
         )}

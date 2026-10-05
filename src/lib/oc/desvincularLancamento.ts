@@ -30,9 +30,22 @@ export interface DesvinculoFeito {
   operacao_id: string;
   operacao_versao: number;
   parte_id: string;
-  compromisso: { id: string; acao: 'cancelado' | 'reduzido'; componente: string; descricao: string | null;
+  compromisso: { id: string; acao: 'cancelado' | 'reduzido' | 'mantido' | 'restaurado'; componente: string; descricao: string | null;
     valor_anterior: number; valor_total: number };
   recebido: { de: number; para: number };
+  /**
+   * OC-VINCULAR-RECEBIMENTO-PARCIAL-01 — DESVINCULAR É A VOLTA DO VÍNCULO: o que o banco devolveu à OC. Nulo quando o item
+   * tinha sido CRIADO pelo vínculo (ele sai inteiro) e na função antiga.
+   *   · `restaurado` / `somado_ao_saldo`: vínculo parcial — o valor volta ao título do saldo;
+   *   · `titulo_restaurado`: o título programado que o vínculo tinha cancelado volta, o mesmo registro;
+   *   · `volta_a_prevista`: não há título a reativar — a parcela volta a "a receber/a pagar", sem título;
+   *   · `parcela_removida`: a parcela nasceu no vínculo (compromisso em aberto) e sai com ele; o compromisso fica.
+   * ⚠ OPCIONAIS: a função antiga não os devolve.
+   */
+  devolucao_ao_saldo?: { modo: 'restaurado' | 'somado_ao_saldo' | 'volta_a_prevista' | 'titulo_restaurado' | 'parcela_removida';
+    valor: number; saldo_de: number | null; saldo_para: number | null; titulo_id: string | null } | null;
+  parcelas_do_grupo?: number | null;
+  lado?: 'receber' | 'pagar';
   compromissos_total: { de: number; para: number };
   liquidacoes_estornadas: string[];
   lancamento: { id: string; valor: number; data_pagamento: string | null; status_transacao: string | null;
@@ -126,6 +139,22 @@ function classificacaoEmTexto(c: DesvinculoFeito['classificacao']): LinhaResumoD
   return linhas;
 }
 
+/** O valor que volta ao saldo (so' no vinculo parcial) — lido do banco, nunca somado aqui. */
+function linhaDaDevolucao(s: DesvinculoFeito): LinhaResumoDesvinculo[] {
+  const d = s.devolucao_ao_saldo;
+  if (!d) return [];
+  const pagar = s.lado === 'pagar';
+  if (d.modo === 'titulo_restaurado') {
+    return [{ rotulo: 'Título da OC', valor: `${brl(d.valor)} — volta a ficar ${pagar ? 'a pagar' : 'a receber'}`, tom: 'ambar' }];
+  }
+  if (d.modo === 'parcela_removida') {
+    return [{ rotulo: 'Parcela', valor: `${brl(d.valor)} — sai com o vínculo; o compromisso fica em aberto`, tom: 'ambar' }];
+  }
+  const rotulo = pagar ? 'Saldo a pagar' : 'Saldo a receber';
+  const como = d.modo === 'volta_a_prevista' ? ' · sem título' : '';
+  return [{ rotulo, valor: `${brl(d.saldo_de)} → ${brl(d.saldo_para)}${como}`, tom: 'ambar' }];
+}
+
 /**
  * O "o que vai acontecer", lido da simulacao, na ordem do briefing: o lancamento fica; sai da OC;
  * compromisso cancelado/reduzido; recebido X -> Y; classificacao mantida ou de A para B.
@@ -139,7 +168,12 @@ export function resumoDoDesvinculo(s: DesvinculoFeito, rotuloOc: string): LinhaR
     { rotulo: 'Sai da', valor: rotuloOc },
     c.acao === 'cancelado'
       ? { rotulo: 'Compromisso', valor: `${c.descricao ?? c.componente} · ${brl(c.valor_anterior)} — cancelado`, tom: 'ambar' }
-      : { rotulo: 'Compromisso', valor: `${c.descricao ?? c.componente} · ${brl(c.valor_anterior)} → ${brl(c.valor_total)}`, tom: 'ambar' },
+      : c.acao === 'mantido'
+        ? { rotulo: 'Compromisso', valor: `${c.descricao ?? c.componente} · ${brl(c.valor_total)} — mantido` }
+      : c.acao === 'restaurado'
+        ? { rotulo: 'Compromisso', valor: `${c.descricao ?? c.componente} · ${brl(c.valor_anterior)} → ${brl(c.valor_total)} — volta ao valor de antes`, tom: 'ambar' as const }
+        : { rotulo: 'Compromisso', valor: `${c.descricao ?? c.componente} · ${brl(c.valor_anterior)} → ${brl(c.valor_total)}`, tom: 'ambar' },
+    ...linhaDaDevolucao(s),
     { rotulo: 'Recebido da OC', valor: `${brl(s.recebido.de)} → ${brl(s.recebido.para)}` },
     ...classificacaoEmTexto(s.classificacao),
   ];

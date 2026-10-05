@@ -37,7 +37,12 @@ export function janelaDaBusca(dataOperacao: string | null, dias = JANELA_DIAS): 
   return { de: mais(-dias), ate: mais(dias) };
 }
 
-export function BuscarDespesaOCDialog({ clienteId, dataOperacao, subcentros, nomeFavorecido, onEscolher, onFechar }: {
+export function BuscarDespesaOCDialog({ clienteId, dataOperacao, subcentros, nomeFavorecido, onEscolher, onFechar, saldo }: {
+  /**
+   * OC-VINCULAR-RECEBIMENTO-PARCIAL-01 — a MESMA busca, para o saldo de uma parcela: `lado` troca a direção (receber =
+   * entradas) e os textos; `subcentros` é o do compromisso. Ausente = a busca de despesa de sempre.
+   */
+  saldo?: { lado: 'receber' | 'pagar' };
   clienteId: string;
   dataOperacao: string | null;
   subcentros: readonly string[];
@@ -59,7 +64,7 @@ export function BuscarDespesaOCDialog({ clienteId, dataOperacao, subcentros, nom
     void (async () => {
       let q = supabase.from('financeiro_lancamentos_v2')
         .select('id, descricao, valor, data_competencia, data_pagamento, subcentro, favorecido_id')
-        .eq('cliente_id', clienteId).eq('tipo_operacao', '2-Saídas').eq('cancelado', false).eq('cenario', 'realizado')
+        .eq('cliente_id', clienteId).eq('tipo_operacao', saldo?.lado === 'receber' ? '1-Entradas' : '2-Saídas').eq('cancelado', false).eq('cenario', 'realizado')
         .in('subcentro', subs);
       if (janela) q = q.gte('data_competencia', janela.de).lte('data_competencia', janela.ate);
       const { data, error } = await q.order('data_competencia', { ascending: true }).limit(LIMITE);
@@ -80,7 +85,7 @@ export function BuscarDespesaOCDialog({ clienteId, dataOperacao, subcentros, nom
       })));
     })();
     return () => { vivo = false; };
-  }, [clienteId, chaveSub, janela]);
+  }, [clienteId, chaveSub, janela, saldo?.lado]);
 
   const faltaEscolha = tentou && !escolhido;
   const seguir = () => {
@@ -92,9 +97,9 @@ export function BuscarDespesaOCDialog({ clienteId, dataOperacao, subcentros, nom
   return (
     <Dialog open onOpenChange={o => { if (!o) onFechar(); }}>
       <DialogContent className="max-w-[820px]" data-testid="buscar-despesa-oc">
-        <DialogHeader><DialogTitle className="text-[12px]">Buscar despesa no Financeiro</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle className="text-[12px]">{saldo ? (saldo.lado === 'receber' ? 'Buscar recebimento no Financeiro' : 'Buscar pagamento no Financeiro') : 'Buscar despesa no Financeiro'}</DialogTitle></DialogHeader>
         <div className="text-[10px] text-muted-foreground">
-          Saídas nas contas de despesa desta operação que ainda não pertencem a nenhuma OC
+          {saldo ? (saldo.lado === 'receber' ? 'Entradas na conta deste item' : 'Saídas na conta deste item') : 'Saídas nas contas de despesa desta operação'} que ainda não pertencem a nenhuma OC
           {janela ? `, com competência entre ${dataCurtaDespesa(janela.de)} e ${dataCurtaDespesa(janela.ate)}` : ''}. Ao seguir, abre o
           vincular com esta OC já escolhida — valor, pagamento e conciliação do lançamento não mudam.
         </div>
@@ -110,7 +115,7 @@ export function BuscarDespesaOCDialog({ clienteId, dataOperacao, subcentros, nom
             <tbody>
               {itens === null && <tr><td colSpan={6} className={`${TD} py-3 text-center text-muted-foreground`}>Carregando…</td></tr>}
               {itens?.length === 0 && !erro && (
-                <tr><td colSpan={6} className={`${TD} py-3 text-center text-muted-foreground`}>Nenhuma despesa disponível para vincular.</td></tr>
+                <tr><td colSpan={6} className={`${TD} py-3 text-center text-muted-foreground`}>{saldo ? (saldo.lado === 'receber' ? 'Nenhum recebimento disponível para vincular.' : 'Nenhum pagamento disponível para vincular.') : 'Nenhuma despesa disponível para vincular.'}</td></tr>
               )}
               {itens?.map(r => (
                 <tr key={r.id} data-lancamento={r.id} onClick={() => setEscolhido(r.id)}
@@ -126,7 +131,7 @@ export function BuscarDespesaOCDialog({ clienteId, dataOperacao, subcentros, nom
             </tbody>
           </table>
         </div>
-        {faltaEscolha && <div className="text-[10px] text-destructive">Escolha a despesa.</div>}
+        {faltaEscolha && <div className="text-[10px] text-destructive">{saldo ? (saldo.lado === 'receber' ? 'Escolha o recebimento.' : 'Escolha o pagamento.') : 'Escolha a despesa.'}</div>}
         <DialogFooter className="items-center">
           {erro && <span className="mr-auto text-[10px] text-destructive" role="alert">{erro}</span>}
           <Button type="button" variant="ghost" size="sm" className="h-[22px] px-[9px] text-[10px]" onClick={onFechar}>Cancelar</Button>
