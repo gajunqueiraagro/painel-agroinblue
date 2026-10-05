@@ -1,7 +1,21 @@
 -- OC-VINCULAR-RECEBIMENTO-PARCIAL-01 — CONSERTO DE DADO das 3 OCs do Agnaldo que o vinculo encolheu em 05/10/2026.
 --
--- ⚠ SO' ENSAIO. Este arquivo TERMINA EM RAISE (a transacao e' desfeita): NADA fica gravado. Executar de verdade exige o OK do
---   Gabriel e a troca do bloco final (marcado "FIM DO ENSAIO") por COMMIT.
+-- ✔ EXECUTADO EM 05/10/2026 18:10:49 UTC (OK do Gabriel), DEPOIS da migration 20261027193300, numa transacao so'.
+--   md5 do SQL executado (do `BEGIN;` ao `COMMIT;`, abaixo): 011d7163478dc0fda5aeb70b2cb8d479
+--   LINHAS AFETADAS (so' no Agnaldo): 3 compromissos (valor), 3 titulos programados reativados (valor = saldo), 3 parcelas de
+--   saldo (2 inseridas — f74f95e5 e da9c27ee —, 1 reativada — a2df4ec1), 6 partes (3 reativadas + 3 com a quantidade 1/2),
+--   3 eventos `conserto_de_dado`, 3 OCs com a versao + 1 (14 -> 15, 10 -> 11, 16 -> 17).
+--   CONFERIDO NA MESMA TRANSACAO: 13.835 lancamentos realizados do Agnaldo identicos antes e depois; partes, compromissos,
+--   parcelas e lancamentos dos outros 6 clientes identicos.
+--   ESTADO FINAL (pela view): f74f95e5 parcial, base 294.595, liquidado 200.000, saldo 94.595 (titulo e2c286f9, venc. 01/09/2026);
+--   da9c27ee parcial, base 17.435, liquidado 17.400, saldo 35,00 (titulo 62124ee1, venc. 09/10/2026); a2df4ec1 parcial, base
+--   316.580 (315.000 + comissao 1.580), liquidado 51.580, saldo 265.000 (titulo 683e6d0a, venc. 23/09/2026).
+--   GESTO CONTRARIO (por OC, com o que o evento `conserto_de_dado` guarda em `dados_anteriores`): compromisso.valor_total = o de
+--   `compromisso`; titulo: cancelado = true com `cancelado_em/por/motivo` e o `valor` de `titulo`; parte do titulo: cancelada =
+--   true com os campos de `parte_do_titulo` (parcela, sequencia, quantidade, valor); parte paga: `quantidade_parcelas` de
+--   `parte_paga`; parcela do saldo (`detalhes.parcela_saldo_id`): apagar quando `parcela_saldo` e' nulo (foi inserida), senao
+--   voltar a `status`/`valor` de `parcela_saldo`. Nenhum lancamento realizado entra no gesto.
+-- ⚠ NAO REEXECUTAR: as guardas abortam (versao e estado mudaram).
 --
 -- O QUE ACONTECEU (medido): `oc_vincular_lancamento`, ao receber um lancamento de valor diferente do titulo programado da
 -- parcela, cancelava o titulo e levava o compromisso para a soma das parcelas. Tres OCs ficaram com o compromisso menor que o
@@ -104,8 +118,14 @@ END $f$;
 DO $conserto$
 DECLARE
   c_cli constant uuid := 'a2d41cda-eb1e-4527-a6cf-a1b9663339e2';
-  v_real_a text; v_real_d text; v_n_a int; v_n_d int; v_out text := '';
+  v_real_a text; v_real_d text; v_n_a int; v_n_d int; v_out text := ''; v_out_a text; v_out_d text;
 BEGIN
+  v_out_a := (SELECT md5(string_agg(x.s, '' ORDER BY x.id)) FROM (SELECT cl.id, concat(
+      (SELECT md5(coalesce(string_agg(md5(pp::text), '' ORDER BY pp.id), '')) FROM public.zoo_operacao_partes pp WHERE pp.cliente_id = cl.id),
+      (SELECT md5(coalesce(string_agg(md5(kk::text), '' ORDER BY kk.id), '')) FROM public.zoo_operacao_compromissos kk WHERE kk.cliente_id = cl.id),
+      (SELECT md5(coalesce(string_agg(md5(qq::text), '' ORDER BY qq.id), '')) FROM public.zoo_operacao_parcelas_programacao qq WHERE qq.cliente_id = cl.id),
+      (SELECT md5(coalesce(string_agg(md5(ll::text), '' ORDER BY ll.id), '')) FROM public.financeiro_lancamentos_v2 ll WHERE ll.cliente_id = cl.id)) s
+    FROM public.clientes cl WHERE cl.id <> c_cli) x);
   -- assinatura de TODO lancamento realizado/conciliado do Agnaldo, antes
   SELECT md5(coalesce(string_agg(md5(l::text), '' ORDER BY l.id), '')), count(*) INTO v_real_a, v_n_a
     FROM public.financeiro_lancamentos_v2 l WHERE l.cliente_id = c_cli AND (l.status_transacao IN ('realizado', 'conciliado') OR l.data_pagamento IS NOT NULL);
@@ -140,7 +160,14 @@ BEGIN
   IF v_real_a IS DISTINCT FROM v_real_d OR v_n_a IS DISTINCT FROM v_n_d OR v_n_a = 0 THEN
     RAISE EXCEPTION 'CONSERTO: lancamento realizado mudou (% x %)', v_n_a, v_n_d; END IF;
 
-  -- ═══ FIM DO ENSAIO: este RAISE desfaz tudo. Para executar de verdade (so' com o OK do Gabriel), trocar por RAISE NOTICE e COMMIT. ═══
-  RAISE EXCEPTION 'ENSAIO (nada gravado) — % lancamentos realizados do Agnaldo identicos antes e depois.%', v_n_a, v_out;
+  v_out_d := (SELECT md5(string_agg(x.s, '' ORDER BY x.id)) FROM (SELECT cl.id, concat(
+      (SELECT md5(coalesce(string_agg(md5(pp::text), '' ORDER BY pp.id), '')) FROM public.zoo_operacao_partes pp WHERE pp.cliente_id = cl.id),
+      (SELECT md5(coalesce(string_agg(md5(kk::text), '' ORDER BY kk.id), '')) FROM public.zoo_operacao_compromissos kk WHERE kk.cliente_id = cl.id),
+      (SELECT md5(coalesce(string_agg(md5(qq::text), '' ORDER BY qq.id), '')) FROM public.zoo_operacao_parcelas_programacao qq WHERE qq.cliente_id = cl.id),
+      (SELECT md5(coalesce(string_agg(md5(ll::text), '' ORDER BY ll.id), '')) FROM public.financeiro_lancamentos_v2 ll WHERE ll.cliente_id = cl.id)) s
+    FROM public.clientes cl WHERE cl.id <> c_cli) x);
+  IF v_out_a IS DISTINCT FROM v_out_d OR v_out_a IS NULL THEN RAISE EXCEPTION 'CONSERTO: outro cliente mudou'; END IF;
+  CREATE TEMP TABLE _res ON COMMIT DROP AS SELECT v_n_a AS realizados, v_out AS saida;
 END $conserto$;
-ROLLBACK;
+SELECT realizados::text, saida, now()::text agora FROM _res;
+COMMIT;
