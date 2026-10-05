@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 05/10/2026 (PARC-OBRIGACAO-EDICAO-01a, +26: `src/components/financiamentos/obrigacaoEdicao.test.tsx` 19,
+  Baseline em 05/10/2026 (FIN-VALOR-CALC-01a, +101: `src/lib/calculos/contaNoCampo.test.ts` 75,
+  `src/components/financeiro-v2/valorComConta.test.tsx` 26; antes o PARC-OBRIGACAO-EDICAO-01a, +26: `src/components/financiamentos/obrigacaoEdicao.test.tsx` 19,
   `src/lib/financiamentos/valorDasParcelas.test.ts` 7; antes o FIN-IMPORT-EXCEL-STATUS-01a, +28: `src/lib/financeiro/statusParaImportar.test.ts` 8,
   `src/v2/lib/importLanc/semDataDePagamento.test.ts` 12, `src/v2/pages/importExcelSemDataDePagamento.test.tsx` 8; antes o
   FIN-NFE-XML-01d, +52: `src/lib/financeiro/nfe/proporLancamento.test.ts` 27,
@@ -187,7 +188,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3621
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3722
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -2216,6 +2217,33 @@ docs/historico/frentes-ate-2026-09-29.md.)
   o FIN-LISTA-VISUAL-01. A conta corrente da OC herda a mesma paleta.
   Duplicata registrada: `BADGE_STATUS_TRANSACAO` (statusOperacional.ts, Mesa/Espelho); o `ModoRapidoGrid` ainda deriva
   status da data de pagamento (frente propria).
+- ⚠ A CONTA DIRETO NO CAMPO DE VALOR TEM UM DONO, E GUARDA-SE SO' O RESULTADO (FIN-VALOR-CALC-01a, Gabriel 05/10/2026, so' tela).
+  Ele lanca rateios (o cliente manda o valor cheio, o lancamento e' uma parte): digita "16.238,00/2" no campo e fica o
+  resultado; a conta NAO vai para observacao nem para lugar nenhum.
+  · DONO: `src/lib/calculos/contaNoCampo.ts` (puro; NAO avalia codigo; analisador proprio) — `ehConta(texto)`,
+    `calcularConta(texto) -> { ok: true, valor } | { ok: false, motivo: vazia|invalida|divisao_por_zero|negativa|grande_demais,
+    incompleta }`, `contaOk`, `FRASE_DA_CONTA`, `TETO_DA_CONTA` (999.999.999,99). Operandos SO' pelo `parseMoeda` (o unico parser
+    BR); aritmetica em FRACAO exata de inteiros (bigint), arredondada a centavos so' no fim (0,1+0,2 = 0,30; 100/3 = 33,33).
+  · GRAMATICA: `["="] soma`; `soma := termo {(+|-) termo}`; `termo := fator {(*|/) fator}`; `fator := (numero | "(" soma ")") ["%"]`;
+    `*` tambem x X ×, `/` tambem ÷, `-` tambem "−"; espacos ignorados. SEM sinal unario: "-5" nao e' conta. `%` de calculadora:
+    A*50% = A×0,5; A/50% = A÷0,5; A+10% = A×1,1; A−10% = A×0,9 (termo com mais de um fator nao e' "sozinho": 100+50%*200 = 200).
+  · CAMPO: `CampoValorComConta` (`src/components/financeiro-v2/`), usado SO' pelo Valor do `LancamentoV2Dialog`. SEM OPERADOR e' o
+    campo de sempre (mascara de centavos, select no foco, tabIndex 10 — HTML do modal identico, preso por foto em
+    `valorComConta.fotos.json`). Entra em MODO CONTA ao digitar/colar operador ou "=" (operador digitado com o campo todo
+    selecionado usa o valor que estava como primeiro operando; "-5" COLADO segue a mascara). Em conta o texto e' livre e o
+    resultado aparece na LINHA DO ROTULO ("Valor · = 8.119,00"; incompleta "= …"; recusa em vermelho), `aria-live="polite"`.
+    Enter ou sair do campo APLICA (escreve o resultado mascarado); conta que nao vale no blur NAO aplica, volta o valor de antes e
+    a frase fica ate' a proxima tecla; Esc cancela a conta e o modal NAO fecha (`contaAbertaRef` + `onEscapeKeyDown` do dialogo).
+  · ⚠ O MODAL CONTINUA COM UM VALOR (`valorDisplay`/`valorNum`): enquanto a conta esta' aberta o campo NAO escreve nada nele — a
+    tela mostra o que vai gravar, nunca o texto parcial. O modal nao tem `<form>` nem tecla que salve (preso por teste de fonte).
+  Medido a 1.135 no cliente Teste (sem gravar): coluna de 118px; "= 999.999.999,99" pede 88,5 e fica inteiro — quem corta e' a
+  palavra "Valor ·", com o texto inteiro no `title`; modal 547px, topo do campo 242 e coluna 56 em todos os passos.
+  ⚠ DIVIDAS: FIN-VALOR-CALC-01b (levar a conta ao `CampoMoeda`, 21 usos: a lib e' a mesma; la' o campo ja' e' texto livre e fecha
+    no blur) · no CELULAR o teclado numerico do campo nao tem operadores (a conta entra por cola; em modo conta o `inputMode` vira
+    texto) · a origem do XML some do rotulo enquanto a conta esta' aberta (volta ao aplicar/cancelar) · Enter com conta invalida
+    deixa a conta aberta com a frase, sem outro sinal · no gate de navegador o Cancelar do modal nao fechou em 0,8 s (conferir se e'
+    a confirmacao de descarte) · nao provado no navegador: Ctrl+V de verdade, o clique real em Salvar com a conta aberta, o
+    campo em ambar e o campo travado (so' por teste).
 - ⚠ "EDITAR OBRIGACAO" MOSTRA O QUE SALVOU E NAO DESCARTA EM SILENCIO (PARC-OBRIGACAO-EDICAO-01a, Gabriel 05/10/2026, so' tela).
   Nasce do caso da Vera (contrato 4f53db54): editou, salvou, reabriu e viu o valor antigo; salvar de novo regravava o velho.
   · CACHE: o `ObrigacaoDialog` le' o contrato por `['obrigacao-edicao', id]`, as parcelas por `['obrigacao-edicao-parcelas', id]` e

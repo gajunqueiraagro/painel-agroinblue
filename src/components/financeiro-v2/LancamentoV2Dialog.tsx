@@ -66,6 +66,7 @@ import {
 } from '@/lib/financeiro/dadosPagamentoDoCadastro';
 import { FornecedorFormDialog } from '@/components/financeiro-v2/FornecedorFormDialog';
 import { cn } from '@/lib/utils';
+import { CampoValorComConta } from '@/components/financeiro-v2/CampoValorComConta';
 import { pendenteDaNota, type DoXml } from '@/lib/financeiro/nfePrefill';
 import { gravarDocumentoNoCadastro, type OcorrenciaDaNota } from '@/lib/financeiro/nfeConsultas';
 import { documentoFormatado, reais } from '@/lib/financeiro/nfe/formatos';
@@ -1390,12 +1391,9 @@ export function LancamentoV2Dialog({
     setDataPagamento(atual => pagamentoAoTrocarStatus(v, atual, pagamentoTravado));
   };
 
-  const handleValorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const digits = e.target.value.replace(/\D/g, '');
-    if (!digits) { setValorDisplay('0,00'); return; }
-    const num = parseInt(digits, 10) / 100;
-    setValorDisplay(num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
-  };
+  /* ⚠ A MÁSCARA DO VALOR MUDOU DE ARQUIVO — FIN-VALOR-CALC-01a: ela e a conta no campo moram em `CampoValorComConta`.
+     Aqui fica só a marca de "há conta aberta", que o Esc do diálogo consulta (com conta aberta, Esc cancela a conta). */
+  const contaAbertaRef = useRef(false);
 
   const handleNotaFiscalChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (tipoDocumento === 'Nota Fiscal') {
@@ -1979,7 +1977,10 @@ export function LancamentoV2Dialog({
           //   para ganhar altura; com a altura pela janela ele ja' tem os 479px do Abate, e as cinco cascas
           //   passam a ter a mesma forma.
           !excelContext && "grid grid-cols-[1fr_240px] grid-rows-[auto_minmax(0,1fr)_auto]",
-        )}>
+        )}
+          /* FIN-VALOR-CALC-01a — com conta aberta no campo Valor, Esc cancela a CONTA (o campo trata) e o modal fica. */
+          onEscapeKeyDown={(e) => { if (contaAbertaRef.current) e.preventDefault(); }}
+        >
           {/* ⚠ UM `fieldset` DESABILITADO COBRE O FORMULÁRIO INTEIRO (§1c), e é de propósito que
               seja o elemento nativo: ele desliga TODO controle que estiver dentro — inclusive os
               que ainda não existem —, sem uma lista de campos para alguém esquecer de atualizar.
@@ -2327,10 +2328,19 @@ export function LancamentoV2Dialog({
                 linha (Valor 2 · Fazenda 4 · Origem 3 · Destino 3), sem quebra. Saída/Entrada
                 usam a conta aplicável em col-span-6 (contrato de contas inalterado). */}
             <div className="grid grid-cols-12 gap-2">
-              {/* Valor — mesmo state/máscara/handleValorChange/tabIndex/disabled; só reposicionado. */}
+              {/* Valor — mesmo state/tabIndex/disabled; a máscara mora em `CampoValorComConta`. */}
               <div className="col-span-2">
-                <Label className="text-[10px]">{xmlRot('Valor (R$) *', 'valor')}</Label>
-                <Input tabIndex={10} value={valorDisplay} onChange={handleValorChange} onFocus={e => e.target.select()} className={cn("h-8 text-right font-mono", fieldBg, xmlCls('valor'))} placeholder="0,00" inputMode="numeric" disabled={lockedFields?.includes('valor') || isOCTitulo} />
+                {/* ⚠ A CONTA DIRETO NO CAMPO — FIN-VALOR-CALC-01a. Sem operador é o campo de sempre (mesma máscara, mesmo HTML);
+                    com operador ("16.238,00/2") o resultado aparece na linha do rótulo e Enter/blur o aplica. O modal segue com
+                    UM valor: `valorDisplay` só muda por tecla da máscara ou por conta APLICADA — nunca pelo texto parcial. */}
+                <CampoValorComConta
+                  rotulo={xmlRot('Valor (R$) *', 'valor')}
+                  valor={valorDisplay}
+                  onValor={setValorDisplay}
+                  className={cn("h-8 text-right font-mono", fieldBg, xmlCls('valor'))}
+                  disabled={lockedFields?.includes('valor') || isOCTitulo}
+                  contaAbertaRef={contaAbertaRef}
+                />
               </div>
               {/* Fazenda — PR-U2c-1B: <FazendaSelect /> (fonte única) */}
               <FazendaSelect
