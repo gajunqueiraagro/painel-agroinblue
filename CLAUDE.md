@@ -162,7 +162,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 05/10/2026 (REC-PROPAGAR-VALOR-DO-MES-01, +11 em `src/components/recorrencias/propagarValorDoMes.test.tsx`;
+  Baseline em 05/10/2026 (REC-VALOR-DO-MES-MODAL-01, +45: `src/lib/financeiro/valorDoMes.test.ts` 28,
+  `src/components/financeiro-v2/valorDoMesModal.test.tsx` 14, `src/hooks/useFinanceiroV2.valorDoMes.test.ts` 3; antes o
+  REC-PROPAGAR-VALOR-DO-MES-01, +11 em `src/components/recorrencias/propagarValorDoMes.test.tsx`;
   antes o FIN-VALOR-CALC-01a, +101: `src/lib/calculos/contaNoCampo.test.ts` 75,
   `src/components/financeiro-v2/valorComConta.test.tsx` 26; antes o PARC-OBRIGACAO-EDICAO-01a, +26: `src/components/financiamentos/obrigacaoEdicao.test.tsx` 19,
   `src/lib/financiamentos/valorDasParcelas.test.ts` 7; antes o FIN-IMPORT-EXCEL-STATUS-01a, +28: `src/lib/financeiro/statusParaImportar.test.ts` 8,
@@ -189,7 +191,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3733
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3778
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -2380,11 +2382,46 @@ docs/historico/frentes-ate-2026-09-29.md.)
   Teste SQL: `supabase/tests/rec_propagar_valor_do_mes_01_test.sql` (T1–T4, cenario sintetico no cliente Teste, termina em RAISE OK).
   ⚠ APLICAR MIGRATION COM `ADD COLUMN` NA TABELA DE LANCAMENTOS TRAVA A TABELA: os ensaios revertidos seguraram o lock ~3 s cada (o
     teto do `authenticated` e' 8 s) — ensaio curto, com `lock_timeout`, e a aplicacao avisada.
-  ⚠ DIVIDAS: REC-VALOR-DO-MES-MODAL-01 (editar valor/vencimento de UMA ocorrencia no modal do Financeiro ainda NAO marca — lacuna
-    ate' o PR da tela; sem gatilho, por decisao) · REC-VALOR-DO-MES-DESFAZER-01 (nao ha' como tirar a marca) · o dialogo do Propagar
+  ⚠ DIVIDAS: [REC-VALOR-DO-MES-MODAL-01 e REC-VALOR-DO-MES-DESFAZER-01 FECHADAS — ver a regra seguinte] · o dialogo do Propagar
     com a frase nunca foi aberto no navegador (so' aparece depois de salvar uma recorrencia) · a frase corta 4px no caso extremo
     ("60 futuros · 60 passados" com 31 contas) · `fn_previsoes_casar` (o PR de previsoes) e' quem vai gravar 'planilha' daqui em
     diante · os tipos do supabase nao foram regenerados (o front nao le' as colunas novas).
+- ⚠ EDITAR UMA OCORRENCIA DE RECORRENCIA NO MODAL MARCA O VALOR DO MES, E "VOLTAR AO PREVISTO" DESFAZ (REC-VALOR-DO-MES-MODAL-01 +
+  REC-VALOR-DO-MES-DESFAZER-01, Gabriel 05/10/2026, so' tela, sem migration e SEM GATILHO). Dono puro:
+  `src/lib/financeiro/valorDoMes.ts`.
+  · `marcaAoSalvar({ ehRecorrencia, aberta, antes, depois })`: lancamento comum -> 'nada' (as duas colunas NAO entram no UPDATE;
+    payload e HTML identicos aos de antes); ocorrencia ABERTA com valor OU vencimento diferente do gravado -> 'marcar_manual'
+    (inclusive a ja' marcada 'planilha': o operador assumiu); o resto -> 'manter'. ABERTA = o predicado "futuro" do Propagar
+    (`ocorrenciaAberta`: previsto/programado/agendado/meta, sem pagamento, sem conciliacao), sobre o que VAI SER GRAVADO — a conta
+    paga nao e' marcada (o Propagar nunca reescreve o valor dela, e a marca so' faria o "todos" pular a classificacao).
+  · A MARCA VAI NO MESMO UPDATE DA EDICAO: o modal poe `valor_do_mes: 'marcar_manual' | 'limpar'` no form e o `editarLancamento`
+    espalha `colunasDoValorDoMes` no `updatePayload` e na linha em memoria (como cultura/fase: o `verify` nao as tem no tipo). Sem
+    pedido, nada entra. O ramo restrito do titulo de OC nao leva a marca (0 ocorrencias com parte de OC).
+  · O MODAL SABE QUE E' OCORRENCIA pelo `recorrencia_id` da linha (todo hospedeiro entrega linha de `select('*')`) e le' da regra
+    SO' o previsto: UMA consulta por id a `financeiro_recorrencias` (valor_base, dia_vencimento, data_inicio, primeiro_vencimento),
+    so' na edicao de ocorrencia. `vencimentoPrevisto` e' ESPELHO DECLARADO de `_fn_recorrencia_vencimento`, conferido contra o
+    banco nas 435 combinacoes distintas do proto (`valorDoMes.vencimentos.fixture.json`, so' datas).
+  · ONDE APARECE: no RODAPE de 32px do modal (o modal nao falava de recorrencia em lugar nenhum; o resumo lateral nao tem
+    rolagem). Marcada: "Valor do mês ajustado · previsto R$ X" (+ "· pela planilha") e o botao "Voltar ao previsto". Nao marcada
+    com diferenca: "Ao salvar, fica como valor do mês · previsto R$ X" (a frase com "o Propagar não altera esta conta" vai no
+    `title`). Sem diferenca, e em lancamento comum: nada. O numero nunca corta (parte `shrink-0`); o texto corta com o `title`.
+  · "VOLTAR AO PREVISTO" (`GestoDeOperacao`): so' na marcada; apagado com o motivo escrito — "Conta já paga." (o GRAVADO nao esta'
+    aberto), "Há pendência no lançamento." (o Salvar nao pode gravar), "Lendo a recorrência…". Confirmacao (`AlertDialog`) com os
+    dois valores e as duas datas; confirmar roda o SALVAR DE SEMPRE (`handleSubmit(previsto)`) com valor = |valor_base|,
+    vencimento = o da regra para a competencia e `valor_do_mes: 'limpar'`.
+  Medido a 1.135 na Vera, so' leitura: modal 1024 x 547 e rodape 32 (topo 513) iguais na ocorrencia marcada (4ff3f3fe), na nao
+  marcada com a intencao (13ec156e) e num lancamento comum (bd5346fa); a intencao pede 260px e cabe inteira (scrollWidth =
+  clientWidth), a marcada 205. Prova do Propagar: `supabase/tests/rec_valor_do_mes_modal_01_test.sql` (o UPDATE como
+  `authenticated`; a simulacao pula a conta; depois do voltar, nao). Dado: a c60e7b19 da Vera (editada no build anterior, sem
+  marca) foi marcada 'manual' pelo script `docs/investigacao/rec-valor-do-mes-modal-01-marcar-c60e7b19.sql`.
+  ⚠ O `fazendaFinanceiro.test.tsx` le' a fonte e ancora no comeco de `const handleSubmit = async (` (a funcao ganhou parametro).
+  ⚠ DIVIDAS: o "agora" da marca e' o RELOGIO DO NAVEGADOR, nao o do banco · "Voltar ao previsto" SALVA O MODAL INTEIRO (o que mais
+    estiver alterado na tela vai junto; a confirmacao diz) — nao ha' gesto que volte so' valor e vencimento · MARCADA E DEPOIS
+    PAGA: a marca fica e o "todos" do Propagar pula a classificacao dela · 27 ocorrencias abertas com vencimento diferente do da
+    regra e SEM marca (editadas antes deste PR) · o importador por ID e os escritores fora do modal NAO marcam · nao provado no
+    navegador: salvar -> reabrir -> voltar, o gesto apagado em conta paga, o "· pela planilha" e a intencao com "Vincular à
+    operação" / "Criar OC" no rodape (so' por teste; pela conta, sobram ~330px para os 260 da frase) · o Cancelar do modal
+    acionado por script nao fecha em 1,5 s (ja' registrado no FIN-VALOR-CALC-01a).
 - ⚠ O GERAR GARANTE A SERIE COMPLETA DA RECORRENCIA (FIN-RECORRENCIA-GERAR-PREENCHE-VAGA-01, Gabriel 30/09): alem de
   avancar a marca, `fn_recorrencia_gerar` preenche a competencia VAGA abaixo dela; CANCELADO CONTA COMO OCUPADO; nunca
   antes do mes corrente (competencia), nem em mes fechado. As travas moram so' em `_fn_recorrencia_vagas`, e o

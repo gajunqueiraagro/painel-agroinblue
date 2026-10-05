@@ -132,7 +132,11 @@ describe('as telas que abrem o novo lancamento e o dialogo (lidas da fonte)', ()
 
   it('o campo do dialogo e\' obrigatorio, e a guarda recusa vazio no simples E no parcelado, antes do banco', () => {
     expect(dialogo).toMatch(/label=\{xmlRotTexto\('Fazenda \*', 'fazenda'\)\}[\s\S]{0,400}obrigatorio\s+id="campo-fazenda-financeiro"/);
-    const corpo = dialogo.slice(dialogo.indexOf('const handleSubmit = async () => {'));
+    /* REC-VALOR-DO-MES-MODAL-01 — o `handleSubmit` ganhou um parâmetro opcional; a âncora é o começo da declaração, e ela
+       tem de EXISTIR (sem isso o `slice(-1)` devolveria um caractere e as buscas abaixo falhariam por outro motivo). */
+    const inicio = dialogo.indexOf('const handleSubmit = async (');
+    expect(inicio).toBeGreaterThan(-1);
+    const corpo = dialogo.slice(inicio);
     const guarda = corpo.indexOf('if (!fazendaIdEfetivo) {');
     expect(guarda).toBeGreaterThan(-1);
     // antes do ramo parcelado e antes de montar o form do simples

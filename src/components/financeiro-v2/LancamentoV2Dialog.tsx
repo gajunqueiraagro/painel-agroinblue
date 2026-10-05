@@ -67,6 +67,10 @@ import {
 import { FornecedorFormDialog } from '@/components/financeiro-v2/FornecedorFormDialog';
 import { cn } from '@/lib/utils';
 import { CampoValorComConta } from '@/components/financeiro-v2/CampoValorComConta';
+import {
+  marcaAoSalvar, ocorrenciaAberta, previstoDaOcorrencia, partesDaMarcada, partesDaIntencao, tituloDasPartes,
+  MOTIVO_CONTA_PAGA, MOTIVO_SALVAR_PENDENTE, type RegraDaRecorrencia, type OrigemDoValorDoMes, type PedidoDoValorDoMes,
+} from '@/lib/financeiro/valorDoMes';
 import { pendenteDaNota, type DoXml } from '@/lib/financeiro/nfePrefill';
 import { gravarDocumentoNoCadastro, type OcorrenciaDaNota } from '@/lib/financeiro/nfeConsultas';
 import { documentoFormatado, reais } from '@/lib/financeiro/nfe/formatos';
@@ -1478,7 +1482,59 @@ export function LancamentoV2Dialog({
     if (validacao.primeiraAbaInvalida) setAbaAtiva(abaVisual(validacao.primeiraAbaInvalida));
   };
 
-  const handleSubmit = async () => {
+  /* `voltar` = o gesto "Voltar ao previsto" (REC-VALOR-DO-MES-MODAL-01): o MESMO salvar, com o valor e o vencimento da regra
+     no lugar dos da tela e a marca do valor do mês limpa. Sem ele, o salvar de sempre. */
+  /* ── REC-VALOR-DO-MES-MODAL-01 — a ocorrência de recorrência e o valor do mês ─────────────────────────────────────────
+     O modal sabe que é ocorrência pelo `recorrencia_id` da linha (todo hospedeiro entrega a linha de `select('*')`), e lê da
+     REGRA só o que precisa para dizer o "previsto": UMA consulta por id, só na edição de ocorrência. Lançamento comum não
+     consulta nada e não desenha nada. */
+  const ehOcorrencia = isEdit && !!lancamento?.recorrencia_id;
+  const marcaGravada: OrigemDoValorDoMes | null = ehOcorrencia && lancamento?.valor_do_mes_em
+    ? (lancamento.valor_do_mes_origem === 'planilha' ? 'planilha' : 'manual')
+    : null;
+  const [regraRec, setRegraRec] = useState<RegraDaRecorrencia | null>(null);
+  const [confirmandoVoltar, setConfirmandoVoltar] = useState(false);
+  const recorrenciaIdAberta = open && isEdit ? (lancamento?.recorrencia_id ?? null) : null;
+  useEffect(() => {
+    let cancelled = false;
+    setRegraRec(null);
+    setConfirmandoVoltar(false);
+    if (!recorrenciaIdAberta) return;
+    (async () => {
+      const { data } = await supabase
+        .from('financeiro_recorrencias')
+        .select('valor_base, dia_vencimento, data_inicio, primeiro_vencimento')
+        .eq('id', recorrenciaIdAberta)
+        .maybeSingle();
+      if (cancelled || !data || !data.data_inicio || !data.primeiro_vencimento) return;
+      setRegraRec({
+        valor_base: Number(data.valor_base), dia_vencimento: Number(data.dia_vencimento),
+        data_inicio: data.data_inicio, primeiro_vencimento: data.primeiro_vencimento,
+      });
+    })();
+    return () => { cancelled = true; };
+  }, [recorrenciaIdAberta]);
+  const previstoRec = regraRec && dataCompetencia ? previstoDaOcorrencia(regraRec, dataCompetencia) : null;
+  const previstoRecTexto = previstoRec ? formatMoeda(previstoRec.valor) : '…';
+  /** O GRAVADO está aberto? (o gesto de voltar olha o que o banco tem, não o que a tela está mudando) */
+  const ocorrenciaGravadaAberta = ocorrenciaAberta({ status: lancamento?.status_transacao, dataPagamento: lancamento?.data_pagamento, conciliadoEm: lancamento?.conciliado_em });
+  /** Não marcada, e o salvar de agora marcaria: a tela diz ANTES. */
+  const intencaoDeMarcar = ehOcorrencia && !marcaGravada && marcaAoSalvar({
+    ehRecorrencia: true,
+    aberta: ocorrenciaAberta({ status: statusTransacao, dataPagamento: pagamentoMostrado, conciliadoEm: lancamento?.conciliado_em }),
+    antes: { valor: lancamento?.valor, vencimento: lancamento?.data_vencimento, marca: null },
+    depois: { valor: Math.abs(valorNum), vencimento: dataVencimento || null },
+  }) === 'marcar_manual';
+  const partesValorDoMes = marcaGravada
+    ? partesDaMarcada(previstoRecTexto, marcaGravada)
+    : intencaoDeMarcar ? partesDaIntencao(previstoRecTexto) : null;
+  /** Por que o "Voltar ao previsto" está apagado; nulo = aceso. */
+  const motivoVoltarAoPrevisto = !ocorrenciaGravadaAberta ? MOTIVO_CONTA_PAGA
+    : !previstoRec ? 'Lendo a recorrência…'
+    : !canSave ? MOTIVO_SALVAR_PENDENTE
+    : null;
+
+  const handleSubmit = async (voltar?: { valor: number; vencimento: string }) => {
     if (!canSave) return;
     // PR-FIN-V2-STATUS-01 — 'Realizado' exige data de pagamento; previsto/agendado/programado podem salvar null.
     if (statusTransacao === 'realizado' && !dataPagamento) {
@@ -1737,12 +1793,12 @@ export function LancamentoV2Dialog({
       conta_bancaria_id: contaBancariaId,
       conta_destino_id: contaDestinoFinal,
       data_competencia: dataCompetencia,
-      data_vencimento: dataVencimento || null,   // PR-FIN-MODAL-VENCIMENTO-02B
+      data_vencimento: voltar ? voltar.vencimento : (dataVencimento || null),   // PR-FIN-MODAL-VENCIMENTO-02B
       /* ⚠ DEFESA NO PAYLOAD — PR-FIN-V2-STATUS-PGTO-01: fora de realizado/conciliado o pagamento vai
          NULO mesmo que o estado tenha valor (hidratação de registro antigo, prefill). A exceção é o
          pagamento travado pelo extrato, que é o do banco. */
       data_pagamento: pagamentoParaGravar(statusPersistido, dataPagamento, pagamentoTravado),
-      valor: Math.abs(valorNum),
+      valor: voltar ? voltar.valor : Math.abs(valorNum),
       tipo_operacao: tipoOperacao,
       status_transacao: statusPersistido,
       descricao,
@@ -1758,6 +1814,17 @@ export function LancamentoV2Dialog({
       cultura: culturaParaGravar(atividade, cultura),
       fase: faseParaGravar(atividade, fase),
     };
+    /* REC-VALOR-DO-MES-MODAL-01 — a marca do valor do mês vai NO MESMO UPDATE. Quem decide é `marcaAoSalvar` (dono puro);
+       lançamento comum não recebe a chave, e o payload dele é o de sempre. */
+    const pedidoValorDoMes: PedidoDoValorDoMes | undefined = voltar
+      ? 'limpar'
+      : marcaAoSalvar({
+          ehRecorrencia: ehOcorrencia,
+          aberta: ocorrenciaAberta({ status: statusPersistido, dataPagamento: form.data_pagamento, conciliadoEm: lancamento?.conciliado_em }),
+          antes: { valor: lancamento?.valor, vencimento: lancamento?.data_vencimento, marca: marcaGravada },
+          depois: { valor: form.valor, vencimento: form.data_vencimento },
+        }) === 'marcar_manual' ? 'marcar_manual' : undefined;
+    if (pedidoValorDoMes) form.valor_do_mes = pedidoValorDoMes;
 
       console.log('[FinV2] SUBMIT STATE', {
         mode: currentIsEdit ? 'UPDATE' : 'INSERT',
@@ -2841,6 +2908,23 @@ export function LancamentoV2Dialog({
                 {pendenciaMsg ?? 'Ver pendência'}
               </button>
             )}
+            {/* REC-VALOR-DO-MES-MODAL-01 — a ocorrência de recorrência fala AQUI, no rodapé de 32px (altura fixa): UMA linha,
+                o texto corta com o inteiro no `title` e o NÚMERO nunca corta. Marcada: a linha + "Voltar ao previsto" (apagado
+                com o motivo quando não vale). Não marcada: só a intenção, e só enquanto há diferença. Lançamento comum: nada. */}
+            {partesValorDoMes && (
+              <span className="flex min-w-0 items-baseline gap-1 whitespace-nowrap text-[10px] leading-tight text-amber-700 dark:text-amber-400"
+                title={tituloDasPartes(partesValorDoMes)} data-testid="valor-do-mes" data-estado={marcaGravada ? 'marcada' : 'intencao'}>
+                <span className="min-w-0 truncate">{partesValorDoMes.antes}</span>
+                <span className="shrink-0 tabular-nums">{partesValorDoMes.numero}</span>
+                {partesValorDoMes.depois && <span className="min-w-0 truncate">{partesValorDoMes.depois}</span>}
+              </span>
+            )}
+            {marcaGravada && (
+              <GestoDeOperacao podeAlterar={!motivoVoltarAoPrevisto && !saving} motivo={motivoVoltarAoPrevisto ?? 'Salvando…'}
+                onClick={() => setConfirmandoVoltar(true)} testId="acao-voltar-ao-previsto">
+                Voltar ao previsto
+              </GestoDeOperacao>
+            )}
             <div className="flex-1" />
             {/* ⚠ O BOTÃO SOME QUANDO O BANCO RECUSARIA — PR-CPR-2A.4. Lançamento de origem
                 zootécnica já realizado, agendado ou conciliado é barrado pelo trigger
@@ -2909,7 +2993,7 @@ export function LancamentoV2Dialog({
                 <Button variant="outline" onClick={onClose} className="h-[22px] px-[9px] text-[10px]">Fechar</Button>
               </>
             ) : (
-              <Button tabIndex={17} onClick={handleSubmit} disabled={saving || gravandoDocs || !canSave} className="h-[22px] px-[9px] text-[10px] font-semibold shadow-md shadow-primary/25 ring-1 ring-primary/20">
+              <Button tabIndex={17} onClick={() => handleSubmit()} disabled={saving || gravandoDocs || !canSave} className="h-[22px] px-[9px] text-[10px] font-semibold shadow-md shadow-primary/25 ring-1 ring-primary/20">
                 {gravandoDocs ? 'Gravando documentos…' : getSubmitLabel()}
               </Button>
             )}
@@ -2993,6 +3077,35 @@ export function LancamentoV2Dialog({
           onConfirmar={gravarBoletosNasIrmas}
           onFechar={() => setAnexarBoletos(null)} />
       )}
+
+      {/* REC-VALOR-DO-MES-MODAL-01 — o gesto contrário da marca. Diz os dois valores e o que acontece; quem grava é o salvar
+          de sempre (`handleSubmit`), com o previsto no lugar do valor e do vencimento e a marca limpa. */}
+      <AlertDialog open={confirmandoVoltar && !!previstoRec} onOpenChange={(o) => { if (!o) setConfirmandoVoltar(false); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Voltar ao previsto?</AlertDialogTitle>
+            <AlertDialogDescription className="text-[11px] leading-snug" data-testid="confirmar-voltar-ao-previsto">
+              {previstoRec && (
+                <>
+                  O valor volta de <strong>{formatMoeda(Math.abs(lancamento?.valor ?? 0))}</strong> para{' '}
+                  <strong>{formatMoeda(previstoRec.valor)}</strong> e o vencimento de{' '}
+                  <strong>{resumoFmtData(lancamento?.data_vencimento ?? '') ?? '—'}</strong> para{' '}
+                  <strong>{resumoFmtData(previstoRec.vencimento)}</strong>, o que a recorrência prevê. A marca de valor do mês
+                  sai, o Propagar volta a alterar esta conta, e o lançamento é salvo com o que está na tela.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Não voltar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { if (previstoRec) { setConfirmandoVoltar(false); void handleSubmit(previstoRec); } }}
+              data-testid="confirmar-voltar-ao-previsto-ok">
+              Voltar ao previsto
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ── CONFIRMAÇÃO DO CANCELAMENTO — PR-CPR-2A.4 ──
           ⚠ `AlertDialog`, E NÃO O `confirm()` NATIVO que estava aqui. O nativo abre o modal do

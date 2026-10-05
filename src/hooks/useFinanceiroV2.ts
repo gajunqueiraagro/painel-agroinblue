@@ -43,6 +43,7 @@ import {
 export type { FiltrosV2, DimensaoDataFinanceiro } from '@/lib/financeiro/filtrosBaseV2';
 import type { FiltrosV2, DimensaoDataFinanceiro } from '@/lib/financeiro/filtrosBaseV2';
 import { paginarTudo } from '@/lib/financeiro/paginarTudo';
+import { colunasDoValorDoMes, type PedidoDoValorDoMes } from '@/lib/financeiro/valorDoMes';
 
 
 export interface LancamentoV2 {
@@ -116,6 +117,12 @@ export interface LancamentoV2 {
    * que acabou de mudar tem dono.
    */
   recorrencia_id: string | null;
+  /**
+   * O valor do mês da ocorrência de recorrência — REC-VALOR-DO-MES-MODAL-01. Marcada, o Propagar a pula.
+   * ⚠ OPCIONAIS como `safra_id`: o `select('*')` as traz; `types.ts` é anterior a elas.
+   */
+  valor_do_mes_em?: string | null;
+  valor_do_mes_origem?: string | null;
   safra_id?: string | null;
   /**
    * Cultura e fase do rateio — AGRI-04A. Nulo é "compartilhado", e é o estado normal: a
@@ -206,6 +213,11 @@ export interface LancamentoV2Form {
   forma_pagamento?: string | null;
   dados_pagamento?: string | null;
   safra_id?: string | null;
+  /**
+   * REC-VALOR-DO-MES-MODAL-01 — o que fazer com a marca do valor do mês, decidido pelo modal (`marcaAoSalvar`).
+   * ⚠ AUSENTE = as duas colunas NÃO entram no UPDATE (todo chamador que não fala disso; lançamento comum).
+   */
+  valor_do_mes?: PedidoDoValorDoMes;
 }
 
 /**
@@ -894,6 +906,8 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
        so' dependem do form.
        ⚠ FALHA DO SELECT NAO E' FALHA DO SALVAR, nos dois ramos igual: o UPDATE ja passou, o
        `verify` volta nulo, a linha nao e' remendada e o save continua devolvendo `true`. */
+    /* REC-VALOR-DO-MES-MODAL-01 — calculado UMA vez: o que vai ao banco é o que a linha em memória recebe. */
+    const marcaDoValorDoMes = colunasDoValorDoMes(form.valor_do_mes, new Date());
     const remendarComOBanco = async () => {
       /* ⚠ O SELECT DE VERIFICAÇÃO PASSOU A TRAZER A LINHA INTEIRA — PR-FIN-SAVE-LENTO-01, e
          NÃO custa uma requisição nova: ele já existia aqui, lendo quatro colunas. Devolvê-lo
@@ -990,6 +1004,9 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
           ...doBanco,
           cultura: form.cultura !== undefined ? (form.cultura || null) : l.cultura,
           fase: form.fase !== undefined ? (form.fase || null) : l.fase,
+          /* REC-VALOR-DO-MES-MODAL-01 — do pedido, pelo mesmo motivo de cultura/fase (`verify` não as tem no tipo): sem
+             pedido, fica o que a linha já tinha. */
+          ...marcaDoValorDoMes,
         })));
       }
       return verify;
@@ -1142,6 +1159,8 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
          `null` por quem não conhece o campo apagaria a escolha feita no modal. */
       ...(form.cultura !== undefined ? { cultura: form.cultura || null } : {}),
       ...(form.fase !== undefined ? { fase: form.fase || null } : {}),
+      /* REC-VALOR-DO-MES-MODAL-01 — a marca vai NO MESMO UPDATE da edição (uma ida, atômico); sem pedido, nada entra. */
+      ...marcaDoValorDoMes,
     };
 
     // Antes imprimia `id` e os dois `conta_destino_id` — UUIDs. O que a
