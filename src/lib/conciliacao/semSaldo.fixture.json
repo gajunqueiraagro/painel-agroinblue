@@ -1,0 +1,1004 @@
+{
+ "_origem": "Linhas de agregado ('tipo' e 'total') lidas do dono vivo do proto em 05/10/2026 (HEAD 43016e8e, depois da migration 20261027192800): select to_jsonb(r) - 'dias' - 'linhas_sistema' from _fn_conciliacao_resumo(cliente, mes, NULL, false, true) r where r.nivel <> 'conta'. CONC-TOTAL-SEM-SALDO-01b.",
+ "santa_rita_2025_10": [
+  {
+   "avisos": [
+    {
+     "motivo": "contas_com_aviso",
+     "por_aviso": {
+      "sem_extrato": 4
+     },
+     "qtde": 4,
+     "qtde_alem_sem_extrato": 0
+    }
+   ],
+   "banco": {
+    "entradas": 0,
+    "extrato_nao_fecha": 0,
+    "saidas": 0
+   },
+   "consolida_em_conta_id": null,
+   "conta_id": null,
+   "conta_nome": "Cartão",
+   "dias_com_diferenca": null,
+   "diferenca": 0,
+   "diferenca_entradas": -20399.08,
+   "diferenca_saidas": 20399.08,
+   "entradas": 20399.08,
+   "entradas_terceiros": 0,
+   "entradas_transferencias": 20399.08,
+   "extratos_sem_par": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "internas": null,
+   "lancamentos_sem_par": {
+    "qtde": 29,
+    "valor": 0
+   },
+   "legado": null,
+   "motivos": [],
+   "nivel": "tipo",
+   "par_conta_id": null,
+   "par_status": null,
+   "posicao": null,
+   "proprio": null,
+   "retido_em_depositos": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "saidas": -20399.08,
+   "saidas_terceiros": -20399.08,
+   "saidas_transferencias": 0,
+   "saldo_extrato": 0,
+   "saldo_extrato_data": null,
+   "saldo_inicial": 0,
+   "saldo_inicial_origem": null,
+   "saldo_sistema": 0,
+   "sem_conta": null,
+   "status": "conciliado",
+   "tem_extrato": false,
+   "tipo_conta": "cartao"
+  },
+  {
+   "avisos": [
+    {
+     "motivo": "contas_com_aviso",
+     "por_aviso": {
+      "sem_extrato": 9
+     },
+     "qtde": 9,
+     "qtde_alem_sem_extrato": 0
+    }
+   ],
+   "banco": {
+    "entradas": 0,
+    "extrato_nao_fecha": -2510.84,
+    "saidas": 0
+   },
+   "consolida_em_conta_id": null,
+   "conta_id": null,
+   "conta_nome": "Conta corrente",
+   "dias_com_diferenca": null,
+   "diferenca": 0,
+   "diferenca_entradas": -3348473.28,
+   "diferenca_saidas": 3350984.12,
+   "entradas": 3348473.28,
+   "entradas_terceiros": 2206708.55,
+   "entradas_transferencias": 1141764.73,
+   "extratos_sem_par": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "internas": null,
+   "lancamentos_sem_par": {
+    "qtde": 204,
+    "valor": -2510.84
+   },
+   "legado": null,
+   "motivos": [],
+   "nivel": "tipo",
+   "par_conta_id": null,
+   "par_status": null,
+   "posicao": null,
+   "proprio": null,
+   "retido_em_depositos": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "saidas": -3350984.12,
+   "saidas_terceiros": -1259251.79,
+   "saidas_transferencias": -2091732.33,
+   "saldo_extrato": 465355.9,
+   "saldo_extrato_data": null,
+   "saldo_inicial": 467866.74,
+   "saldo_inicial_origem": null,
+   "saldo_sistema": 465355.9,
+   "sem_conta": null,
+   "status": "conciliado",
+   "tem_extrato": false,
+   "tipo_conta": "cc"
+  },
+  {
+   "avisos": [
+    {
+     "motivo": "contas_com_aviso",
+     "por_aviso": {
+      "sem_extrato": 13
+     },
+     "qtde": 13,
+     "qtde_alem_sem_extrato": 0
+    }
+   ],
+   "banco": {
+    "entradas": 0,
+    "extrato_nao_fecha": 932083.49,
+    "saidas": 0
+   },
+   "consolida_em_conta_id": null,
+   "conta_id": null,
+   "conta_nome": "Investimentos",
+   "dias_com_diferenca": null,
+   "diferenca": null,
+   "diferenca_entradas": -2065170.22,
+   "diferenca_saidas": 1133011.73,
+   "entradas": 2065170.22,
+   "entradas_terceiros": 2589.97,
+   "entradas_transferencias": 2062580.25,
+   "extratos_sem_par": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "internas": null,
+   "lancamentos_sem_par": {
+    "qtde": 44,
+    "valor": 932158.49
+   },
+   "legado": null,
+   "motivos": [
+    {
+     "motivo": "contas_pendentes",
+     "qtde": 1
+    },
+    {
+     "contas": [
+      {
+       "conta_id": "e3648e9c-2e7c-4120-8b3a-3574eb30fbfd",
+       "conta_nome": "Sicredi-PJ Cap. Social"
+      }
+     ],
+     "motivo": "contas_sem_saldo",
+     "qtde": 1
+    }
+   ],
+   "nivel": "tipo",
+   "par_conta_id": null,
+   "par_status": null,
+   "posicao": null,
+   "proprio": null,
+   "retido_em_depositos": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "saidas": -1133011.73,
+   "saidas_terceiros": 0,
+   "saidas_transferencias": -1133011.73,
+   "saldo_extrato": null,
+   "saldo_extrato_data": null,
+   "saldo_inicial": 3942955.54,
+   "saldo_inicial_origem": null,
+   "saldo_sistema": 4875039.03,
+   "sem_conta": null,
+   "status": "pendente",
+   "tem_extrato": false,
+   "tipo_conta": "inv"
+  },
+  {
+   "avisos": [
+    {
+     "motivo": "contas_com_aviso",
+     "por_aviso": {
+      "sem_extrato": 26
+     },
+     "qtde": 26,
+     "qtde_alem_sem_extrato": 0
+    }
+   ],
+   "banco": {
+    "entradas": 0,
+    "extrato_nao_fecha": 929572.65,
+    "saidas": 0
+   },
+   "consolida_em_conta_id": null,
+   "conta_id": null,
+   "conta_nome": "Total",
+   "dias_com_diferenca": null,
+   "diferenca": null,
+   "diferenca_entradas": -5434042.58,
+   "diferenca_saidas": 4504394.93,
+   "entradas": 5434042.58,
+   "entradas_terceiros": 2209298.52,
+   "entradas_transferencias": 3224744.06,
+   "extratos_sem_par": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "internas": null,
+   "lancamentos_sem_par": {
+    "qtde": 277,
+    "valor": 929647.65
+   },
+   "legado": null,
+   "motivos": [
+    {
+     "motivo": "contas_pendentes",
+     "qtde": 1
+    },
+    {
+     "contas": [
+      {
+       "conta_id": "e3648e9c-2e7c-4120-8b3a-3574eb30fbfd",
+       "conta_nome": "Sicredi-PJ Cap. Social"
+      }
+     ],
+     "motivo": "contas_sem_saldo",
+     "qtde": 1
+    }
+   ],
+   "nivel": "total",
+   "par_conta_id": null,
+   "par_status": null,
+   "posicao": null,
+   "proprio": null,
+   "retido_em_depositos": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "saidas": -4504394.93,
+   "saidas_terceiros": -1279650.87,
+   "saidas_transferencias": -3224744.06,
+   "saldo_extrato": null,
+   "saldo_extrato_data": null,
+   "saldo_inicial": 4410822.28,
+   "saldo_inicial_origem": null,
+   "saldo_sistema": 5340394.93,
+   "sem_conta": {
+    "entradas": 0,
+    "qtde": 0,
+    "saidas": 0
+   },
+   "status": "pendente",
+   "tem_extrato": false,
+   "tipo_conta": null
+  }
+ ],
+ "nj_2026_10": [
+  {
+   "avisos": [
+    {
+     "motivo": "contas_com_aviso",
+     "por_aviso": {
+      "sem_extrato": 3
+     },
+     "qtde": 3,
+     "qtde_alem_sem_extrato": 0
+    }
+   ],
+   "banco": {
+    "entradas": 0,
+    "extrato_nao_fecha": null,
+    "saidas": 0
+   },
+   "consolida_em_conta_id": null,
+   "conta_id": null,
+   "conta_nome": "Cartão",
+   "dias_com_diferenca": null,
+   "diferenca": null,
+   "diferenca_entradas": 0,
+   "diferenca_saidas": 0,
+   "entradas": 0,
+   "entradas_terceiros": 0,
+   "entradas_transferencias": 0,
+   "extratos_sem_par": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "internas": null,
+   "lancamentos_sem_par": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "legado": null,
+   "motivos": [
+    {
+     "motivo": "contas_pendentes",
+     "qtde": 3
+    }
+   ],
+   "nivel": "tipo",
+   "par_conta_id": null,
+   "par_status": null,
+   "posicao": null,
+   "proprio": null,
+   "retido_em_depositos": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "saidas": 0,
+   "saidas_terceiros": 0,
+   "saidas_transferencias": 0,
+   "saldo_extrato": null,
+   "saldo_extrato_data": null,
+   "saldo_inicial": 0,
+   "saldo_inicial_origem": null,
+   "saldo_sistema": 0,
+   "sem_conta": null,
+   "status": "pendente",
+   "tem_extrato": false,
+   "tipo_conta": "cartao"
+  },
+  {
+   "avisos": [
+    {
+     "motivo": "contas_com_aviso",
+     "por_aviso": {
+      "sem_extrato": 10
+     },
+     "qtde": 10,
+     "qtde_alem_sem_extrato": 0
+    }
+   ],
+   "banco": {
+    "entradas": 0,
+    "extrato_nao_fecha": null,
+    "saidas": 0
+   },
+   "consolida_em_conta_id": null,
+   "conta_id": null,
+   "conta_nome": "Conta corrente",
+   "dias_com_diferenca": null,
+   "diferenca": null,
+   "diferenca_entradas": 0,
+   "diferenca_saidas": 0,
+   "entradas": 0,
+   "entradas_terceiros": 0,
+   "entradas_transferencias": 0,
+   "extratos_sem_par": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "internas": null,
+   "lancamentos_sem_par": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "legado": null,
+   "motivos": [
+    {
+     "motivo": "contas_pendentes",
+     "qtde": 10
+    },
+    {
+     "contas": [
+      {
+       "conta_id": "3b9afa7a-0af6-4bce-8ec9-03b91484dfd8",
+       "conta_nome": "Banco do Brasil"
+      },
+      {
+       "conta_id": "7f39d18f-d9c9-4027-9d81-78e80b87ea88",
+       "conta_nome": "Itau BBA"
+      },
+      {
+       "conta_id": "910e04b0-4148-4e58-885a-8937c8148581",
+       "conta_nome": "Sicredi Lavoura"
+      },
+      {
+       "conta_id": "24e4e21c-019d-4f62-acca-fa757dc0486b",
+       "conta_nome": "Sicredi Pessoal"
+      },
+      {
+       "conta_id": "5a00259d-1c49-4f33-9b6c-eea83b5028b7",
+       "conta_nome": "Sicredi PJ Pecuária"
+      }
+     ],
+     "motivo": "contas_sem_saldo",
+     "qtde": 5
+    }
+   ],
+   "nivel": "tipo",
+   "par_conta_id": null,
+   "par_status": null,
+   "posicao": null,
+   "proprio": null,
+   "retido_em_depositos": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "saidas": 0,
+   "saidas_terceiros": 0,
+   "saidas_transferencias": 0,
+   "saldo_extrato": null,
+   "saldo_extrato_data": null,
+   "saldo_inicial": 1278517.74,
+   "saldo_inicial_origem": null,
+   "saldo_sistema": 1278517.74,
+   "sem_conta": null,
+   "status": "pendente",
+   "tem_extrato": false,
+   "tipo_conta": "cc"
+  },
+  {
+   "avisos": [
+    {
+     "motivo": "contas_com_aviso",
+     "por_aviso": {
+      "sem_extrato": 4
+     },
+     "qtde": 4,
+     "qtde_alem_sem_extrato": 0
+    }
+   ],
+   "banco": {
+    "entradas": 0,
+    "extrato_nao_fecha": null,
+    "saidas": 0
+   },
+   "consolida_em_conta_id": null,
+   "conta_id": null,
+   "conta_nome": "Investimentos",
+   "dias_com_diferenca": null,
+   "diferenca": null,
+   "diferenca_entradas": 0,
+   "diferenca_saidas": 0,
+   "entradas": 0,
+   "entradas_terceiros": 0,
+   "entradas_transferencias": 0,
+   "extratos_sem_par": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "internas": null,
+   "lancamentos_sem_par": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "legado": null,
+   "motivos": [
+    {
+     "motivo": "contas_pendentes",
+     "qtde": 4
+    },
+    {
+     "contas": [
+      {
+       "conta_id": "94c4ffa5-57bc-4e14-bf22-ab64390e9817",
+       "conta_nome": "Invest-Sicredi Agricultura"
+      },
+      {
+       "conta_id": "46fc1824-068b-4b9d-9875-bbae80c9ab20",
+       "conta_nome": "Invest-Sicredi Pessoal"
+      },
+      {
+       "conta_id": "e260b1e3-cdf4-4e19-ad67-0dd061ea3e4a",
+       "conta_nome": "Invest-Sicredi PJ Pecuária"
+      }
+     ],
+     "motivo": "contas_sem_saldo",
+     "qtde": 3
+    }
+   ],
+   "nivel": "tipo",
+   "par_conta_id": null,
+   "par_status": null,
+   "posicao": null,
+   "proprio": null,
+   "retido_em_depositos": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "saidas": 0,
+   "saidas_terceiros": 0,
+   "saidas_transferencias": 0,
+   "saldo_extrato": null,
+   "saldo_extrato_data": null,
+   "saldo_inicial": 2537.71,
+   "saldo_inicial_origem": null,
+   "saldo_sistema": 2537.71,
+   "sem_conta": null,
+   "status": "pendente",
+   "tem_extrato": false,
+   "tipo_conta": "inv"
+  },
+  {
+   "avisos": [
+    {
+     "motivo": "contas_com_aviso",
+     "por_aviso": {
+      "sem_extrato": 1
+     },
+     "qtde": 1,
+     "qtde_alem_sem_extrato": 0
+    }
+   ],
+   "banco": {
+    "entradas": 0,
+    "extrato_nao_fecha": null,
+    "saidas": 0
+   },
+   "consolida_em_conta_id": null,
+   "conta_id": null,
+   "conta_nome": "Permuta",
+   "dias_com_diferenca": null,
+   "diferenca": null,
+   "diferenca_entradas": 0,
+   "diferenca_saidas": 0,
+   "entradas": 0,
+   "entradas_terceiros": 0,
+   "entradas_transferencias": 0,
+   "extratos_sem_par": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "internas": null,
+   "lancamentos_sem_par": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "legado": null,
+   "motivos": [
+    {
+     "motivo": "contas_pendentes",
+     "qtde": 1
+    }
+   ],
+   "nivel": "tipo",
+   "par_conta_id": null,
+   "par_status": null,
+   "posicao": null,
+   "proprio": null,
+   "retido_em_depositos": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "saidas": 0,
+   "saidas_terceiros": 0,
+   "saidas_transferencias": 0,
+   "saldo_extrato": null,
+   "saldo_extrato_data": null,
+   "saldo_inicial": null,
+   "saldo_inicial_origem": null,
+   "saldo_sistema": null,
+   "sem_conta": null,
+   "status": "pendente",
+   "tem_extrato": false,
+   "tipo_conta": "permuta"
+  },
+  {
+   "avisos": [
+    {
+     "motivo": "contas_com_aviso",
+     "por_aviso": {
+      "sem_extrato": 18
+     },
+     "qtde": 18,
+     "qtde_alem_sem_extrato": 0
+    }
+   ],
+   "banco": {
+    "entradas": 0,
+    "extrato_nao_fecha": null,
+    "saidas": 0
+   },
+   "consolida_em_conta_id": null,
+   "conta_id": null,
+   "conta_nome": "Total",
+   "dias_com_diferenca": null,
+   "diferenca": null,
+   "diferenca_entradas": 0,
+   "diferenca_saidas": 0,
+   "entradas": 0,
+   "entradas_terceiros": 0,
+   "entradas_transferencias": 0,
+   "extratos_sem_par": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "internas": null,
+   "lancamentos_sem_par": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "legado": null,
+   "motivos": [
+    {
+     "motivo": "contas_pendentes",
+     "qtde": 18
+    },
+    {
+     "contas": [
+      {
+       "conta_id": "3b9afa7a-0af6-4bce-8ec9-03b91484dfd8",
+       "conta_nome": "Banco do Brasil"
+      },
+      {
+       "conta_id": "94c4ffa5-57bc-4e14-bf22-ab64390e9817",
+       "conta_nome": "Invest-Sicredi Agricultura"
+      },
+      {
+       "conta_id": "46fc1824-068b-4b9d-9875-bbae80c9ab20",
+       "conta_nome": "Invest-Sicredi Pessoal"
+      },
+      {
+       "conta_id": "e260b1e3-cdf4-4e19-ad67-0dd061ea3e4a",
+       "conta_nome": "Invest-Sicredi PJ Pecuária"
+      },
+      {
+       "conta_id": "7f39d18f-d9c9-4027-9d81-78e80b87ea88",
+       "conta_nome": "Itau BBA"
+      },
+      {
+       "conta_id": "910e04b0-4148-4e58-885a-8937c8148581",
+       "conta_nome": "Sicredi Lavoura"
+      },
+      {
+       "conta_id": "24e4e21c-019d-4f62-acca-fa757dc0486b",
+       "conta_nome": "Sicredi Pessoal"
+      },
+      {
+       "conta_id": "5a00259d-1c49-4f33-9b6c-eea83b5028b7",
+       "conta_nome": "Sicredi PJ Pecuária"
+      }
+     ],
+     "motivo": "contas_sem_saldo",
+     "qtde": 8
+    }
+   ],
+   "nivel": "total",
+   "par_conta_id": null,
+   "par_status": null,
+   "posicao": null,
+   "proprio": null,
+   "retido_em_depositos": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "saidas": 0,
+   "saidas_terceiros": 0,
+   "saidas_transferencias": 0,
+   "saldo_extrato": null,
+   "saldo_extrato_data": null,
+   "saldo_inicial": 1281055.45,
+   "saldo_inicial_origem": null,
+   "saldo_sistema": 1281055.45,
+   "sem_conta": {
+    "entradas": 0,
+    "qtde": 0,
+    "saidas": 0
+   },
+   "status": "pendente",
+   "tem_extrato": false,
+   "tipo_conta": null
+  }
+ ],
+ "nj_2026_09": [
+  {
+   "avisos": [
+    {
+     "motivo": "contas_com_aviso",
+     "por_aviso": {
+      "sem_extrato": 3
+     },
+     "qtde": 3,
+     "qtde_alem_sem_extrato": 0
+    }
+   ],
+   "banco": {
+    "entradas": 0,
+    "extrato_nao_fecha": 0,
+    "saidas": 0
+   },
+   "consolida_em_conta_id": null,
+   "conta_id": null,
+   "conta_nome": "Cartão",
+   "dias_com_diferenca": null,
+   "diferenca": 0,
+   "diferenca_entradas": -31773.11,
+   "diferenca_saidas": 31773.11,
+   "entradas": 31773.11,
+   "entradas_terceiros": 0,
+   "entradas_transferencias": 31773.11,
+   "extratos_sem_par": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "internas": null,
+   "lancamentos_sem_par": {
+    "qtde": 71,
+    "valor": 0
+   },
+   "legado": null,
+   "motivos": [],
+   "nivel": "tipo",
+   "par_conta_id": null,
+   "par_status": null,
+   "posicao": null,
+   "proprio": null,
+   "retido_em_depositos": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "saidas": -31773.11,
+   "saidas_terceiros": -31773.11,
+   "saidas_transferencias": 0,
+   "saldo_extrato": 0,
+   "saldo_extrato_data": null,
+   "saldo_inicial": 0,
+   "saldo_inicial_origem": null,
+   "saldo_sistema": 0,
+   "sem_conta": null,
+   "status": "conciliado",
+   "tem_extrato": false,
+   "tipo_conta": "cartao"
+  },
+  {
+   "avisos": [
+    {
+     "motivo": "contas_com_aviso",
+     "por_aviso": {
+      "sem_extrato": 6
+     },
+     "qtde": 6,
+     "qtde_alem_sem_extrato": 0
+    }
+   ],
+   "banco": {
+    "entradas": 3321960.8,
+    "extrato_nao_fecha": 0,
+    "saidas": -3874650.02
+   },
+   "consolida_em_conta_id": null,
+   "conta_id": null,
+   "conta_nome": "Conta corrente",
+   "dias_com_diferenca": null,
+   "diferenca": 0,
+   "diferenca_entradas": 0,
+   "diferenca_saidas": 0,
+   "entradas": 3321960.8,
+   "entradas_terceiros": 1696960.8,
+   "entradas_transferencias": 1625000,
+   "extratos_sem_par": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "internas": null,
+   "lancamentos_sem_par": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "legado": null,
+   "motivos": [
+    {
+     "motivo": "contas_pendentes",
+     "qtde": 5
+    }
+   ],
+   "nivel": "tipo",
+   "par_conta_id": null,
+   "par_status": null,
+   "posicao": null,
+   "proprio": null,
+   "retido_em_depositos": {
+    "qtde": 15,
+    "valor": 1217.01
+   },
+   "saidas": -3874650.02,
+   "saidas_terceiros": -2217776.91,
+   "saidas_transferencias": -1656873.11,
+   "saldo_extrato": 1278517.74,
+   "saldo_extrato_data": null,
+   "saldo_inicial": 1831206.96,
+   "saldo_inicial_origem": null,
+   "saldo_sistema": 1278517.74,
+   "sem_conta": null,
+   "status": "conciliado",
+   "tem_extrato": true,
+   "tipo_conta": "cc"
+  },
+  {
+   "avisos": [
+    {
+     "motivo": "contas_com_aviso",
+     "por_aviso": {
+      "sem_extrato": 4
+     },
+     "qtde": 4,
+     "qtde_alem_sem_extrato": 0
+    }
+   ],
+   "banco": {
+    "entradas": 0,
+    "extrato_nao_fecha": 100,
+    "saidas": 0
+   },
+   "consolida_em_conta_id": null,
+   "conta_id": null,
+   "conta_nome": "Investimentos",
+   "dias_com_diferenca": null,
+   "diferenca": 0,
+   "diferenca_entradas": -100,
+   "diferenca_saidas": 0,
+   "entradas": 100,
+   "entradas_terceiros": 0,
+   "entradas_transferencias": 100,
+   "extratos_sem_par": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "internas": null,
+   "lancamentos_sem_par": {
+    "qtde": 1,
+    "valor": 100
+   },
+   "legado": null,
+   "motivos": [
+    {
+     "motivo": "contas_pendentes",
+     "qtde": 1
+    }
+   ],
+   "nivel": "tipo",
+   "par_conta_id": null,
+   "par_status": null,
+   "posicao": null,
+   "proprio": null,
+   "retido_em_depositos": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "saidas": 0,
+   "saidas_terceiros": 0,
+   "saidas_transferencias": 0,
+   "saldo_extrato": 2537.71,
+   "saldo_extrato_data": null,
+   "saldo_inicial": 2437.71,
+   "saldo_inicial_origem": null,
+   "saldo_sistema": 2537.71,
+   "sem_conta": null,
+   "status": "conciliado",
+   "tem_extrato": false,
+   "tipo_conta": "inv"
+  },
+  {
+   "avisos": [
+    {
+     "motivo": "contas_com_aviso",
+     "por_aviso": {
+      "sem_extrato": 1
+     },
+     "qtde": 1,
+     "qtde_alem_sem_extrato": 0
+    }
+   ],
+   "banco": {
+    "entradas": 0,
+    "extrato_nao_fecha": null,
+    "saidas": 0
+   },
+   "consolida_em_conta_id": null,
+   "conta_id": null,
+   "conta_nome": "Permuta",
+   "dias_com_diferenca": null,
+   "diferenca": null,
+   "diferenca_entradas": 0,
+   "diferenca_saidas": 0,
+   "entradas": 0,
+   "entradas_terceiros": 0,
+   "entradas_transferencias": 0,
+   "extratos_sem_par": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "internas": null,
+   "lancamentos_sem_par": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "legado": null,
+   "motivos": [
+    {
+     "motivo": "contas_pendentes",
+     "qtde": 1
+    }
+   ],
+   "nivel": "tipo",
+   "par_conta_id": null,
+   "par_status": null,
+   "posicao": null,
+   "proprio": null,
+   "retido_em_depositos": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "saidas": 0,
+   "saidas_terceiros": 0,
+   "saidas_transferencias": 0,
+   "saldo_extrato": null,
+   "saldo_extrato_data": null,
+   "saldo_inicial": 0,
+   "saldo_inicial_origem": null,
+   "saldo_sistema": 0,
+   "sem_conta": null,
+   "status": "pendente",
+   "tem_extrato": false,
+   "tipo_conta": "permuta"
+  },
+  {
+   "avisos": [
+    {
+     "motivo": "contas_com_aviso",
+     "por_aviso": {
+      "sem_extrato": 14
+     },
+     "qtde": 14,
+     "qtde_alem_sem_extrato": 0
+    }
+   ],
+   "banco": {
+    "entradas": 3321960.8,
+    "extrato_nao_fecha": 100,
+    "saidas": -3874650.02
+   },
+   "consolida_em_conta_id": null,
+   "conta_id": null,
+   "conta_nome": "Total",
+   "dias_com_diferenca": null,
+   "diferenca": 0,
+   "diferenca_entradas": -31873.11,
+   "diferenca_saidas": 31773.11,
+   "entradas": 3353833.91,
+   "entradas_terceiros": 1696960.8,
+   "entradas_transferencias": 1656873.11,
+   "extratos_sem_par": {
+    "qtde": 0,
+    "valor": 0
+   },
+   "internas": null,
+   "lancamentos_sem_par": {
+    "qtde": 72,
+    "valor": 100
+   },
+   "legado": null,
+   "motivos": [
+    {
+     "motivo": "contas_pendentes",
+     "qtde": 7
+    }
+   ],
+   "nivel": "total",
+   "par_conta_id": null,
+   "par_status": null,
+   "posicao": null,
+   "proprio": null,
+   "retido_em_depositos": {
+    "qtde": 15,
+    "valor": 1217.01
+   },
+   "saidas": -3906423.13,
+   "saidas_terceiros": -2249550.02,
+   "saidas_transferencias": -1656873.11,
+   "saldo_extrato": 1281055.45,
+   "saldo_extrato_data": null,
+   "saldo_inicial": 1833644.67,
+   "saldo_inicial_origem": null,
+   "saldo_sistema": 1281055.45,
+   "sem_conta": {
+    "entradas": 0,
+    "qtde": 0,
+    "saidas": 0
+   },
+   "status": "conciliado",
+   "tem_extrato": true,
+   "tipo_conta": null
+  }
+ ]
+}

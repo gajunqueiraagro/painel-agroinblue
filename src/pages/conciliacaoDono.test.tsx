@@ -117,12 +117,18 @@ const LINHA_PARADA = linhaConta({
   saldo_inicial: 300000, saldo_inicial_origem: 'herdado', saldo_sistema: 300000, saldo_extrato: null, diferenca: null,
   motivos: [{ motivo: 'saldo_nao_informado', falta: 'final' }], avisos: [{ motivo: 'sem_extrato' }],
 });
+/* CONC-TOTAL-SEM-SALDO-01b — agregados REAIS do dono (proto, 05/10/2026): Santa Rita out/25, NJ out/26 e NJ set/26. */
+const SEM_SALDO: Record<string, unknown> = JSON.parse(readFileSync(resolve(process.cwd(), 'src/lib/conciliacao/semSaldo.fixture.json'), 'utf8'));
 const TOTAL_NJ = linhaConta({
   nivel: 'total', conta_id: null, conta_nome: 'Total', status: 'nao_conciliado',
-  saldo_inicial: 330150.7, saldo_sistema: 449501.56, saldo_extrato: 155972.29, diferenca: 0, entradas: 1172212.94, saidas: -1043829.75,
+  /* CONC-TOTAL-SEM-SALDO-01a/01b — o contrato do dono: a conta parada PESA (300.000 no sistema) sem saldo informado, então o
+     agregado vem SEM extrato e SEM diferença, com o motivo `contas_sem_saldo`. Antes este fixture tinha o padrão do defeito:
+     sistema 449.501,56 × extrato 155.972,29 com diferença 0 — duas somas de conjuntos diferentes que a tela chamava de "confere". */
+  saldo_inicial: 330150.7, saldo_sistema: 449501.56, saldo_extrato: null, diferenca: null, entradas: 1172212.94, saidas: -1043829.75,
   motivos: [
     { motivo: 'contas_nao_conciliadas', qtde: 1, contas: [{ conta_id: 'cartao', conta_nome: 'Cartão BB - Visa Infinite', status: 'nao_conciliado', motivos: LINHA_CARTAO.motivos, avisos: LINHA_CARTAO.avisos }] },
     { motivo: 'contas_pendentes', qtde: 1 },
+    { motivo: 'contas_sem_saldo', qtde: 1, contas: [{ conta_id: 'parada', conta_nome: 'Invest Parado' }] },
     { motivo: 'lancamentos_sem_conta', qtde: 3 },
   ],
   avisos: [{ motivo: 'contas_com_aviso', qtde: 2, qtde_alem_sem_extrato: 1, por_aviso: { sem_extrato: 1, dias_com_diferenca: 1 } }],
@@ -138,7 +144,8 @@ beforeEach(() => {
   B.resumo = {
     '2026-09': [LINHA_EMERSON, LINHA_PARADA, LINHA_CARTAO,
       SUB('cc', { conta_nome: 'Conta corrente', status: 'conciliado', saldo_sistema: 155972.29, saldo_extrato: 155972.29, diferenca: 0 }),
-      SUB('inv', { conta_nome: 'Investimentos', status: 'pendente', saldo_sistema: 300000, saldo_extrato: null, diferenca: null }),
+      SUB('inv', { conta_nome: 'Investimentos', status: 'pendente', saldo_sistema: 300000, saldo_extrato: null, diferenca: null,
+        motivos: [{ motivo: 'contas_pendentes', qtde: 1 }, { motivo: 'contas_sem_saldo', qtde: 1, contas: [{ conta_id: 'parada', conta_nome: 'Invest Parado' }] }] }),
       SUB('cartao', { conta_nome: 'Cartão', status: 'nao_conciliado', saldo_sistema: -6470.73, saldo_extrato: 0, diferenca: 6470.73 }),
       TOTAL_NJ],
   };
@@ -213,10 +220,10 @@ describe('T3 — os motivos e o link do dia', () => {
 });
 
 describe('T4 — "Todas as contas": total, subtotais, contas não conciliadas, pendentes e sem conta, do dono', () => {
-  it('diferença total 0 com uma conta divergente sai NÃO CONCILIADO, com o nome dela', async () => {
+  it('uma conta divergente e uma que pesa sem saldo: NÃO CONCILIADO com o nome dela, e a diferença diz "falta saldo" (nunca "confere")', async () => {
     montar();
     await waitFor(() => expect(screen.getByTestId('card-status').getAttribute('data-status')).toBe('nao_conciliado'));
-    expect(screen.getByTestId('resumo-diferenca').textContent).toBe('confere'); // o total fecha…
+    expect(screen.getByTestId('resumo-diferenca').textContent).toBe('falta saldo · 1 conta');
     const motivos = screen.getByTestId('status-motivos');
     expect(n(motivos.textContent)).toContain('1 conta não conciliada');
     expect(within(motivos).getByTestId('conta-nao-conciliada').textContent).toBe('Cartão BB - Visa Infinite');
@@ -228,6 +235,77 @@ describe('T4 — "Todas as contas": total, subtotais, contas não conciliadas, p
     expect(n(screen.getByTestId('resumo-sem-conta').textContent)).toBe('lançamentos sem conta +R$ 100,00 / −R$ 869,29 (3)');
     expect(n(screen.getByTestId('total-sistema').textContent)).toBe('R$ 449.501,56');
     expect(screen.getByText('R$ 300.000,00', { selector: 'td.sticky' })).toBeInTheDocument(); // o subtotal Investimentos do dono
+  });
+
+  /* ── CONC-TOTAL-SEM-SALDO-01b — "sistema tem 12 mil, extrato tem 101 mil. Como que a diferença confere?" (Gabriel, 04/10). O
+        dono anulou extrato e diferença do agregado com conta que pesa sem saldo; a tela diz o que falta, com UMA frase. ── */
+  it('01b: "falta saldo · 1 conta" no Total, no subtotal Investimentos, no Resumo e no card Status — a MESMA frase, com os nomes no title', async () => {
+    montar();
+    await waitFor(() => expect(screen.getByTestId('total-falta-saldo')).toBeInTheDocument());
+    const pontos = [screen.getByTestId('total-falta-saldo'), screen.getByTestId('subtotal-falta-saldo-inv'), screen.getByTestId('resumo-falta-saldo')];
+    for (const p of pontos) {
+      expect(p.textContent).toBe('falta saldo · 1 conta');
+      expect(p.getAttribute('title')).toBe('Invest Parado');
+      /* a cor do status PENDENTE da paleta da conciliação — nunca o verde do "confere" nem o vermelho da diferença */
+      expect(p.style.color).toBe('rgb(117, 117, 117)');
+      expect(p.closest('td,span.text-success,span.text-destructive')?.className ?? '').not.toMatch(/text-success|text-destructive/);
+    }
+    expect(n(screen.getByTestId('status-motivos').textContent)).toContain('falta saldo · 1 conta');
+    expect(n(screen.getByTestId('status-motivos').textContent)).not.toContain('contas sem saldo');
+    /* a coluna Extrato do agregado continua "—", e nada diz "confere" no Total nem no Resumo */
+    expect(screen.getByTestId('total-extrato').textContent).toBe('—');
+    expect(screen.getByTestId('total-diferenca').textContent).toBe('falta saldo · 1 conta');
+    expect(screen.getByTestId('resumo-saldo-extrato').textContent).toBe('—');
+  });
+
+  it('01b: diferença nula SEM o motivo continua "—" (o subtotal pendente cuja conta não pesa)', async () => {
+    /* o subtotal Investimentos (o 5º do fixture) sem o motivo `contas_sem_saldo`: pendente cuja conta não pesa */
+    const linhas = [...B.resumo['2026-09']];
+    linhas[4] = SUB('inv', { conta_nome: 'Investimentos', status: 'pendente', saldo_sistema: 0, saldo_extrato: null, diferenca: null,
+      motivos: [{ motivo: 'contas_pendentes', qtde: 1 }] });
+    B.resumo['2026-09'] = linhas;
+    montar();
+    await waitFor(() => expect(screen.getByTestId('total-falta-saldo')).toBeInTheDocument());
+    expect(screen.queryByTestId('subtotal-falta-saldo-inv')).toBeNull();
+  });
+
+  it('01b: linhas REAIS do dono — Santa Rita out/25 (1 conta) e NJ out/26 (8 contas, com os nomes no title); NJ set/26 conciliado segue "confere"', async () => {
+    const real = (chave: string) => (SEM_SALDO[chave] as Record<string, unknown>[]).map((l) => linhaConta(l));
+    B.contas = [];
+    B.resumo['2026-09'] = real('santa_rita_2025_10');
+    const sr = montar();
+    await waitFor(() => expect(screen.getByTestId('total-falta-saldo').textContent).toBe('falta saldo · 1 conta'));
+    expect(screen.getByTestId('total-falta-saldo').getAttribute('title')).toBe('Sicredi-PJ Cap. Social');
+    expect(screen.getByTestId('resumo-falta-saldo').textContent).toBe('falta saldo · 1 conta');
+    expect(screen.getByTestId('card-status').getAttribute('data-status')).toBe('pendente');
+    sr.unmount();
+
+    B.resumo['2026-09'] = real('nj_2026_10');
+    const nj = montar();
+    await waitFor(() => expect(screen.getByTestId('total-falta-saldo').textContent).toBe('falta saldo · 8 contas'));
+    const nomes = (screen.getByTestId('total-falta-saldo').getAttribute('title') ?? '').split('\n');
+    expect(nomes).toHaveLength(8);
+    expect(nomes).toContain('Banco do Brasil');
+    nj.unmount();
+
+    B.resumo['2026-09'] = real('nj_2026_09');
+    montar();
+    await waitFor(() => expect(screen.getByTestId('total-diferenca').textContent).toBe('confere'));
+    expect(screen.queryByTestId('total-falta-saldo')).toBeNull();
+    expect(screen.getByTestId('resumo-diferenca').textContent).toBe('confere');
+  });
+
+  it('01b (M4): no Total, que não tem data de saldo, o rótulo é só "Saldo extrato" e o rodapé não afirma data; com UMA conta com data, tudo como antes', async () => {
+    B.resumo['2026-09'] = (SEM_SALDO.nj_2026_09 as Record<string, unknown>[]).map((l) => linhaConta(l)).concat([LINHA_EMERSON]);
+    montar();
+    await waitFor(() => expect(screen.getByTestId('total-diferenca').textContent).toBe('confere'));
+    const rotulo = () => n(screen.getByTestId('resumo-saldo-extrato').parentElement?.textContent ?? '');
+    expect(rotulo()).toBe('Saldo extrato R$ 1.281.055,45');
+    expect(rotulo()).not.toMatch(/\(\d\d\/\d\d\)/);
+    expect(screen.queryByTestId('resumo-rodape')).toBeNull();
+    fireEvent.click(await screen.findByText('Sicredi Lavoura'));
+    await waitFor(() => expect(rotulo()).toBe('Saldo extrato (30/09)R$ 155.972,29'));
+    expect(n(screen.getByTestId('resumo-rodape').textContent)).toBe('A diferença compara o saldo do extrato de 30/09.');
   });
 
   it('o nome da conta não conciliada leva à Conferência dela no primeiro dia', async () => {

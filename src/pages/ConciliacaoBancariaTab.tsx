@@ -7,7 +7,6 @@ import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { AcoesDoMes } from '@/components/conciliacao/AcoesDoMes';
 import { SaldoRealDialog } from '@/components/conciliacao/SaldoRealDialog';
 import { EspelhoOfxSistemaModal, EspelhoConciliacaoTab, ABAS_ESPELHO, type AbaEspelho } from '@/components/financeiro-v2/EspelhoConciliacaoTab';
-import { fimDoMes } from '@/hooks/useExtratoDaConta';
 import { useConciliacaoDoMes, contarBaldes } from '@/hooks/useConciliacaoDoMes';
 import { ImportarBancoInline } from '@/components/conciliacao/ImportarBancoInline';
 import { ExtratoGerencialTab } from '@/components/financeiro-v2/ExtratoGerencialTab';
@@ -30,7 +29,7 @@ import { format, parseISO } from 'date-fns';
 import { belongsToConta, saldoConfere } from '@/lib/financeiro/conciliacaoCalc';
 import { useResumoMes, useStatusAno, invalidarDono, useReleDonoAoVoltarAVista } from '@/hooks/useResumoConciliacao';
 import {
-  ROTULO_STATUS, frasesDoStatus, fraseDoRetido, fraseSemConta, contasParaFecharSemMovimento,
+  ROTULO_STATUS, frasesDoStatus, fraseFaltaSaldo, fraseDoRetido, fraseSemConta, contasParaFecharSemMovimento,
   saldosDaLinha, marcaDoPar, diferencaNaPosicao, TITULO_DIFERENCA_NA_POSICAO_INDISPONIVEL,
   frasesDosAvisos, marcaDeAviso,
   type LinhaResumo, type StatusDono, type FraseDoStatus,
@@ -125,6 +124,15 @@ const STATUS_COR: Record<StatusDono, {bg:string;border:string;txt:string}> = {
   nao_conciliado: {bg:'#FCEBEB', border:'#E57373', txt:'#A32D2D'},
   pendente:       {bg:'#F5F5F5', border:'#BDBDBD', txt:'#757575'},
 };
+
+/**
+ * "falta saldo · N conta(s)" no lugar do "—" da DIFERENÇA de um agregado — CONC-TOTAL-SEM-SALDO-01b. A frase e o `title` (os nomes
+ * das contas, um por linha) são os do dono das frases (`fraseFaltaSaldo`); aqui só a cor, a do status PENDENTE da paleta da
+ * conciliação — nunca verde nem vermelho: não é "confere" nem diferença, é dado que falta.
+ */
+function FaltaSaldo({ frase, testId }: { frase: { texto: string; titulo?: string }; testId: string }) {
+  return <span data-testid={testId} title={frase.titulo} className="font-medium" style={{ color: STATUS_COR.pendente.txt }}>{frase.texto}</span>;
+}
 
 /** Negativo é vermelho em TODA coluna de valor de "Saldos por conta" (Sistema e Extrato; Total, grupo e conta). Só a COR do
  *  número que o dono mandou — nulo e não negativo ficam na cor do texto. PR-CONC-SALDOS-LAYOUT-01. */
@@ -625,9 +633,11 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
    */
   /* ⚠ PR-CONC-SALDO-UMA-REGUA-02 (D5): a data do saldo do extrato e a posição são do DONO — `saldo_extrato_data` e
      `posicao` (que só existe com a posição ANTES do fim do mês, com os realizados depois dela). Nada se conta aqui. */
-  const dataExtratoDoCard = linhaSel?.saldo_extrato_data
-    ?? fimDoMes(Number(anoMesSel.slice(0, 4)), Number(anoMesSel.slice(5, 7)));
-  const posicaoDoCard = dataExtratoDoCard.slice(0, 10).split('-').reverse().slice(0, 2).join('/');
+  /* ⚠ SEM DATA FANTASMA — CONC-TOTAL-SEM-SALDO-01b (M4): a data entre parênteses e a do rodapé só existem quando o DONO devolve
+     a data do saldo da linha aberta. Antes, sem ela, a tela caía no fim do mês e escrevia "Saldo extrato (31/10)" no Total — uma
+     data que ninguém informou (o agregado não tem data de saldo). */
+  const dataExtratoDoCard = linhaSel?.saldo_extrato_data ?? null;
+  const posicaoDoCard = dataExtratoDoCard ? dataExtratoDoCard.slice(0, 10).split('-').reverse().slice(0, 2).join('/') : '';
   const posicaoDono = linhaSel?.posicao ?? null;
   const avisoAposPosicao = posicaoDono?.realizados_apos.qtde ?? 0;
   /* A diferença NA POSIÇÃO: a do dono; em conta de par ele ainda não a devolve, e a tela diz "—" com o motivo. */
@@ -728,6 +738,9 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
      o mesmo cálculo que o card já fazia. */
   const difResumo: number | null = saldosSel.diferenca;
   const difResumoConfere = difResumo !== null && saldoConfere(difResumo);
+  /* CONC-TOTAL-SEM-SALDO-01b — diferença nula COM o motivo `contas_sem_saldo`: a tela diz o que falta, no lugar do "—". */
+  const faltaSaldoSel = difResumo === null ? fraseFaltaSaldo(linhaSel) : null;
+  const faltaSaldoTotal = fraseFaltaSaldo(linhaTotal);
 
   /* ⚠ D8 — O QUE SE GRAVA É O DO DONO (`contasParaFecharSemMovimento`): saldo final = `saldo_sistema`, saldo inicial = o
      do dono; conta com movimento no mês (entrada, saída ou extrato) NÃO se fecha — ela é para conferir. Antes gravava o
@@ -1307,7 +1320,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                   </span>
                 </div>
                 <div className="mx-3 my-1 h-px bg-border" />
-                {/* ⚠ A DATA DO SALDO DO EXTRATO É A DO DONO (`saldo_extrato_data`; sem ela, o fim do mês). */}
+                {/* ⚠ A DATA DO SALDO DO EXTRATO É A DO DONO (`saldo_extrato_data`); sem ela, o rótulo não afirma data nenhuma. */}
                 <div className="px-3 py-1 bg-muted/20 flex justify-between">
                   <span className="text-[10px] text-muted-foreground">
                     Saldo extrato {posicaoDoCard && <span className="opacity-60">({posicaoDoCard})</span>}
@@ -1318,9 +1331,12 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                 </div>
                 {/* Diferença — sem extrato é "—" e sem fundo: ausência nunca aparenta "confere". */}
                 <div className={`px-3 py-1 flex justify-between mb-1 ${difResumo === null ? '' : difResumoConfere ? 'bg-success/10' : 'bg-destructive/10'}`}>
-                  <span className="text-[10px] text-muted-foreground">Diferença de saldo <span className="opacity-60">(o mês fecha?)</span></span>
+                  {/* CONC-TOTAL-SEM-SALDO-01b — com "falta saldo · N contas" a dica "(o mês fecha?)" sai: medido a 1.135, rótulo + dica +
+                      frase pedem ~286px dos 251 do card e o rótulo quebrava em duas linhas. A frase já responde à pergunta. */}
+                  <span className="text-[10px] text-muted-foreground whitespace-nowrap">Diferença de saldo{!faltaSaldoSel && <> <span className="opacity-60">(o mês fecha?)</span></>}</span>
                   <span className={`text-[11px] font-bold tabular-nums whitespace-nowrap shrink-0 ${difResumo === null ? 'text-muted-foreground' : difResumoConfere ? 'text-success' : 'text-destructive'}`} data-testid="resumo-diferenca">
-                    {difResumo === null ? '—' : difResumoConfere ? 'confere' : formatMoeda(difResumo)}
+                    {faltaSaldoSel ? <FaltaSaldo frase={faltaSaldoSel} testId="resumo-falta-saldo" />
+                      : difResumo === null ? '—' : difResumoConfere ? 'confere' : formatMoeda(difResumo)}
                   </span>
                 </div>
                   {/* ⚠ A POSIÇÃO É DO DONO (D5): `posicao` só existe com o saldo declarado ANTES do fim do mês, e traz quantos
@@ -1334,7 +1350,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                     </div>
                   )}
                   {/* A frase de rodapé: qual data o saldo do extrato usou. */}
-                  {saldosSel.saldo_extrato != null && (
+                  {saldosSel.saldo_extrato != null && (posicaoDono || posicaoDoCard) && (
                     <div className="px-3 pb-1 text-[9.5px] leading-snug text-muted-foreground" data-testid="resumo-rodape"
                       title={posicaoDono && difNaPosicao.indisponivel ? TITULO_DIFERENCA_NA_POSICAO_INDISPONIVEL : undefined}>
                       {posicaoDono
@@ -1522,7 +1538,8 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                       <td className={`py-[3px] px-1 text-right font-bold text-[10.5px] tabular-nums whitespace-nowrap shadow-[inset_0_-1px_0_hsl(var(--border))] ${corDoValor(linhaTotal?.saldo_sistema)}`} data-testid="total-sistema">{linhaTotal?.saldo_sistema != null ? formatMoeda(linhaTotal.saldo_sistema) : '—'}</td>
                       <td className={`py-[3px] px-1 text-right font-bold text-[10.5px] tabular-nums whitespace-nowrap shadow-[inset_0_-1px_0_hsl(var(--border))] ${corDoValor(linhaTotal?.saldo_extrato)}`} data-testid="total-extrato">{linhaTotal?.saldo_extrato != null ? formatMoeda(linhaTotal.saldo_extrato) : '—'}</td>
                       <td className={`py-[3px] px-1 text-right font-bold text-[10.5px] tabular-nums whitespace-nowrap shadow-[inset_0_-1px_0_hsl(var(--border))] ${linhaTotal?.diferenca == null?'text-muted-foreground':saldoConfere(linhaTotal.diferenca)?'text-success':'text-destructive'}`} data-testid="total-diferenca">
-                        {linhaTotal?.diferenca == null ? '—' : saldoConfere(linhaTotal.diferenca) ? 'confere' : formatMoeda(linhaTotal.diferenca)}
+                        {faltaSaldoTotal ? <FaltaSaldo frase={faltaSaldoTotal} testId="total-falta-saldo" />
+                          : linhaTotal?.diferenca == null ? '—' : saldoConfere(linhaTotal.diferenca) ? 'confere' : formatMoeda(linhaTotal.diferenca)}
                       </td>
                       <td className="py-[3px] shadow-[inset_0_-1px_0_hsl(var(--border))]" />
                     </tr>
@@ -1549,7 +1566,11 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                         <td style={{top:`${alturaCabSaldos + alturaThead}px`}} className={`pt-[3px] pb-[2px] px-1 text-right text-[10px] font-semibold tabular-nums whitespace-nowrap sticky z-[8] bg-card bg-[linear-gradient(hsl(var(--muted-foreground)/0.15),hsl(var(--muted-foreground)/0.15))] ${SOMBRA_FAIXA_GRUPO} ${corDoValor(g.subtotal?.saldo_sistema)}`}>{g.subtotal?.saldo_sistema != null ? formatMoeda(g.subtotal.saldo_sistema) : '—'}</td>
                         <td style={{top:`${alturaCabSaldos + alturaThead}px`}} className={`pt-[3px] pb-[2px] px-1 text-right text-[10px] font-semibold tabular-nums whitespace-nowrap sticky z-[8] bg-card bg-[linear-gradient(hsl(var(--muted-foreground)/0.15),hsl(var(--muted-foreground)/0.15))] ${SOMBRA_FAIXA_GRUPO} ${corDoValor(g.subtotal?.saldo_extrato)}`} data-testid="subtotal-extrato">{g.subtotal?.saldo_extrato == null ? '—' : formatMoeda(g.subtotal.saldo_extrato)}</td>
                         <td style={{top:`${alturaCabSaldos + alturaThead}px`}} className={`pt-[3px] pb-[2px] px-1 text-right text-[10px] font-semibold tabular-nums whitespace-nowrap sticky z-[8] bg-card bg-[linear-gradient(hsl(var(--muted-foreground)/0.15),hsl(var(--muted-foreground)/0.15))] ${SOMBRA_FAIXA_GRUPO} ${g.subtotal?.diferenca == null?'text-muted-foreground':saldoConfere(g.subtotal.diferenca)?'text-success':'text-destructive'}`}>
-                          {g.subtotal?.diferenca == null ? '—' : saldoConfere(g.subtotal.diferenca) ? 'confere' : formatMoeda(g.subtotal.diferenca)}
+                          {(() => {
+                            const falta = fraseFaltaSaldo(g.subtotal);
+                            if (falta) return <FaltaSaldo frase={falta} testId={`subtotal-falta-saldo-${g.chave}`} />;
+                            return g.subtotal?.diferenca == null ? '—' : saldoConfere(g.subtotal.diferenca) ? 'confere' : formatMoeda(g.subtotal.diferenca);
+                          })()}
                         </td>
                         <td style={{top:`${alturaCabSaldos + alturaThead}px`}} className={`pt-[3px] pb-[2px] sticky z-[8] bg-card bg-[linear-gradient(hsl(var(--muted-foreground)/0.15),hsl(var(--muted-foreground)/0.15))] ${SOMBRA_FAIXA_GRUPO}`} />
                       </tr>

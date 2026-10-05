@@ -162,7 +162,7 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 04/10/2026 (FIN-PGTO-FANTASMA-01, +13 em `src/components/financeiro-v2/finPgtoFantasma01.test.tsx`; antes o CONC-SEM-F5-01, +19: `src/hooks/concSemF5.test.tsx` 18, `src/components/financeiro-v2/conferenciaModal.test.tsx` 1; antes o ACESSOS-02c, +17 em `src/v2/lib/acessoGestos.test.tsx`; antes o ACESSOS-02b, +29: `src/acessoRotas.test.tsx` 15, `src/v2/lib/acessoSaidas.test.tsx` 14; antes o ACESSOS-02a, +26 em `src/v2/lib/acessoTelas.test.tsx`; antes o OC-CC-ACOES-LINHA-02, +20: `src/components/venda/abaContaCorrente.test.tsx` 11,
+  Baseline em 05/10/2026 (CONC-TOTAL-SEM-SALDO-01b, +8: `src/pages/conciliacaoDono.test.tsx` 4, `src/lib/conciliacao/resumoDoDono.test.ts` 4; antes o FIN-PGTO-FANTASMA-01, +13 em `src/components/financeiro-v2/finPgtoFantasma01.test.tsx`; antes o CONC-SEM-F5-01, +19: `src/hooks/concSemF5.test.tsx` 18, `src/components/financeiro-v2/conferenciaModal.test.tsx` 1; antes o ACESSOS-02c, +17 em `src/v2/lib/acessoGestos.test.tsx`; antes o ACESSOS-02b, +29: `src/acessoRotas.test.tsx` 15, `src/v2/lib/acessoSaidas.test.tsx` 14; antes o ACESSOS-02a, +26 em `src/v2/lib/acessoTelas.test.tsx`; antes o OC-CC-ACOES-LINHA-02, +20: `src/components/venda/abaContaCorrente.test.tsx` 11,
   `src/lib/oc/abrirLancamentoDaOC.test.ts` 7, `src/components/compra/despesasContaCorrente.test.tsx` 2; antes o UI-LINHA-UNICA-01, +2: `src/components/venda/abaContaCorrente.test.tsx` 1,
   `src/components/financeiro-v2/documentosLayout.test.tsx` 1; antes o OC-BOITEL-REVALORAR-SALVAR-01, +16 em `src/lib/oc/revalorarAoSalvar.test.tsx`; antes o
   FIN-DOCUMENTO-FORM-01, +27 em `src/components/financeiro-v2/documentoFormPorTipo.test.tsx`, e
@@ -180,7 +180,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3405
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3413
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -1604,11 +1604,7 @@ docs/historico/frentes-ate-2026-09-29.md.)
   plan_cache_mode conferidos na migration. Teste: `supabase/tests/conc_saldo_uma_regua_01b_test.sql` (bloco SEM-SALDO: o defeito,
   a parada com saldo herdado, a parada que nao pesa, com divergente junto, e a volta quando o saldo e' informado; o D7 passou a
   cobrir a regua com conta parada). Mutacoes: so' o patch do dono -> cai no D7; corpo antigo -> cai em "SEM-SALDO defeito".
-  ⚠ FILA DO 01b (tela): a frase do motivo `contas_sem_saldo` (hoje a tela o mostra cru) em `resumoDoDono.ts` (`fraseDoMotivo`,
-    ~:412); "falta saldo · N conta(s)" no lugar do "—" na coluna Diferenca do Total e do subtotal (`ConciliacaoBancariaTab.tsx`
-    ~:1519 e ~:1546) e no Resumo (~:1314-1317); o "(31/10)" do "Saldo extrato" some quando o total nao tem data de saldo
-    (~:622-623, hoje cai no fim do mes); fixtures e testes de `conciliacaoDono.test.tsx` (`TOTAL_NJ`, ~:120, tem o padrao do
-    defeito) e de `resumoDoDono.test.ts`.
+  [A "fila do 01b" FECHOU no CONC-TOTAL-SEM-SALDO-01b — a regra seguinte.]
   ⚠ DIVIDA CONC-REGUA-DESEMPENHO-01: a regua passa de 2 s nos anos cheios, e ja' passava antes deste PR. Mediana de 5 chamadas
     como a tela chama, antes -> depois (ms): NJ 2026 1.933 -> 1.973 · NJ 2025 2.258 -> 2.307 · NJ 2024 2.147 -> 2.186 · Santa Rita
     2026 1.642 -> 1.649 · Santa Rita 2025 2.339 -> 2.314 · Santa Rita 2023 2.382 -> 2.370 · Agnaldo 2026 953 -> 1.001 · Agnaldo 2023
@@ -1670,6 +1666,29 @@ docs/historico/frentes-ate-2026-09-29.md.)
     `LancamentoLeituraDialog.tsx`; e telas fora das abas da Conciliacao — `EstacaoConciliar.tsx`, `VincularMatchDireto.tsx`,
     `DecisaoDerivadosDialog.tsx` fora do Espelho, `CasarComBancoModal.tsx` (dentro do Espelho ja' passa pelo `onMudou`),
     `useConciliacaoDoMes.ts`, `useConciliarMes.ts` (o dialogo avisa).
+- ⚠ "FALTA SALDO · N CONTA(S)" NO LUGAR DO "—", E NENHUMA DATA QUE NINGUEM INFORMOU (CONC-TOTAL-SEM-SALDO-01b, Gabriel 04/10, so'
+  tela). Ausencia de saldo nunca aparenta "confere"; a tela diz o que falta. ⚠ "falta SALDO", nao "falta extrato": a coluna Extrato
+  e' o saldo INFORMADO da conta, nao o arquivo do banco.
+  · A FRASE TEM UM DONO: `fraseDoMotivo` (`src/lib/conciliacao/resumoDoDono.ts`), caso `contas_sem_saldo` — "falta saldo · 1 conta" /
+    "falta saldo · N contas", com N = a `qtde` do motivo (nunca contado na tela) e os nomes das contas no `title`, um por linha.
+    `fraseFaltaSaldo(linha)` a devolve SO' com a diferenca NULA e o motivo presente; fora disso, nulo.
+  · ONDE APARECE, a mesma frase: card Status (pelo `frasesDoStatus`, no lugar do motivo cru); coluna Diferenca do Total e do
+    subtotal por tipo; e a linha "Diferença de saldo (o mês fecha?)" do Resumo. Um componente so', `FaltaSaldo`
+    (`ConciliacaoBancariaTab.tsx`), na cor do status PENDENTE da paleta (`STATUS_COR.pendente`) — nunca verde nem vermelho.
+    Diferenca nula SEM o motivo continua "—" (caso real: o subtotal Permuta do NJ set/26); a coluna Extrato continua "—".
+    Medido a 1.135 (Santa Rita out/25 e NJ out/26): a frase cabe em UMA linha — Total 98,8–104,5px de 104–119 uteis, subtotal
+    94,1–99,5; linhas de 21,75 e 20px como antes; 0 estouros, sem rolagem horizontal. No Resumo, com a frase a dica "(o mês
+    fecha?)" SAI do rotulo (rotulo + dica + frase pediam ~286px dos 251 do card e o rotulo quebrava em duas linhas): linha de
+    24,5px com e sem a frase. No card Status (113px) a frase quebra em duas linhas, como as outras frases dele.
+  · DECISOES ACEITAS (Gabriel, 05/10): (1) em "Todas as contas" a data do saldo e o rodape somem SEMPRE, mes conciliado
+    inclusive — o agregado nao tem data unica, e cada conta mostra a sua na propria linha; (2) a dica "(o mês fecha?)" sai do
+    rotulo quando a frase aparece.
+  · SEM DATA FANTASMA: o "(dd/mm)" do "Saldo extrato" e a frase "A diferença compara o saldo do extrato de dd/mm." so' existem
+    quando o DONO devolve `saldo_extrato_data` para a linha aberta. Antes a tela caia no fim do mes (`fimDoMes`). ⚠ O AGREGADO
+    NUNCA TEM DATA DE SALDO: em "Todas as contas" o rotulo e' so' "Saldo extrato" e o rodape some, tambem no mes conciliado.
+  · Fixture real: `src/lib/conciliacao/semSaldo.fixture.json` (agregados lidos do dono vivo em 05/10: Santa Rita out/25, NJ out/26 e
+    NJ set/26); o `TOTAL_NJ` de `conciliacaoDono.test.tsx` passou ao contrato do 01a (extrato e diferenca nulos + o motivo).
+    `statusSaldo.fixture.json` e `resumoMes.fixture.json` nao mudaram: sao linhas de CONTA, que o 01a nao alterou.
 - ⚠ A TELA ESCREVE O SALDO NO STATUS E O EXTRATO NA "2a PROVA" (PR-CONC-STATUS-SALDO-01b, so' tela). `resumoDoDono.ts` le'
   `avisos` (conta, tipo, total, status do ano e as contas citadas em `contas_nao_conciliadas`), sem cast. AVISO TRATADO COMO MOTIVO
   E' DEFEITO (mutacao derruba 11 testes).

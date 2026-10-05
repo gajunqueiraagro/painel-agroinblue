@@ -360,6 +360,9 @@ const ROTULO_AVISO: Record<string, string> = {
   realizados_apos_posicao: 'realizados após a posição',
 };
 
+/** Agregado com conta que pesa (saldo ou movimento no sistema) sem saldo informado — CONC-TOTAL-SEM-SALDO-01a. */
+const MOTIVO_CONTAS_SEM_SALDO = 'contas_sem_saldo';
+
 function fraseDoMotivo(m: Motivo): FraseDoStatus {
   switch (m.motivo) {
     case 'dias_com_diferenca': {
@@ -413,6 +416,17 @@ function fraseDoMotivo(m: Motivo): FraseDoStatus {
       const n = m.qtde ?? 0;
       return { chave: m.motivo, texto: `${n} ${n === 1 ? 'pendente' : 'pendentes'}`, titulo: `${n} ${n === 1 ? 'conta' : 'contas'} sem saldo informado` };
     }
+    case MOTIVO_CONTAS_SEM_SALDO: {
+      /* CONC-TOTAL-SEM-SALDO-01b — a frase tem UM dono, e é a mesma no card Status, no Total, no subtotal e no Resumo. A
+         quantidade é a do dono (`qtde`); os nomes vão no `title`, um por linha. ⚠ "falta SALDO", não "falta extrato": a
+         coluna Extrato é o saldo INFORMADO da conta, não o arquivo do banco. */
+      const n = m.qtde ?? m.contas?.length ?? 0;
+      const nomes = (m.contas ?? []).map((c) => c.conta_nome).filter(Boolean);
+      return {
+        chave: m.motivo, texto: `falta saldo · ${n} ${n === 1 ? 'conta' : 'contas'}`,
+        titulo: nomes.length > 0 ? nomes.join('\n') : undefined,
+      };
+    }
     case 'lancamentos_sem_conta': {
       const n = m.qtde ?? 0;
       return { chave: m.motivo, texto: `${n} ${n === 1 ? 'lançamento sem conta' : 'lançamentos sem conta'}` };
@@ -448,6 +462,19 @@ function fraseDoMotivo(m: Motivo): FraseDoStatus {
     default:
       return { chave: m.motivo, texto: m.motivo.replace(/_/g, ' ') };
   }
+}
+
+/**
+ * "falta saldo · N conta(s)" NO LUGAR DO "—" DA DIFERENÇA — CONC-TOTAL-SEM-SALDO-01b. Só quando a diferença da linha é NULA e o
+ * dono escreveu o motivo `contas_sem_saldo` (os agregados); devolve a MESMA frase do card Status. Nulo = a tela segue com o
+ * que já mostrava ("—" na diferença nula sem o motivo, "confere" ou o valor quando há diferença).
+ * ⚠ AUSÊNCIA DE SALDO NUNCA APARENTA "CONFERE" (Gabriel, 04/10): o agregado somava o sistema de todas as contas e o extrato só
+ *   das que tinham saldo, e dizia "confere". O dono anulou a diferença (01a); a tela diz o que falta.
+ */
+export function fraseFaltaSaldo(l: Pick<LinhaResumo, 'diferenca' | 'motivos'> | null | undefined): FraseDoStatus | null {
+  if (!l || l.diferenca != null) return null;
+  const m = l.motivos.find((x) => x.motivo === MOTIVO_CONTAS_SEM_SALDO);
+  return m ? fraseDoMotivo(m) : null;
 }
 
 /** O ponteiro do par: não é motivo nem 2ª prova — diz com quem a conta fecha. */

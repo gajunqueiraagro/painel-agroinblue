@@ -10,7 +10,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
-  lerResumo, lerStatusAno, frasesDoStatus, frasesDosAvisos, marcaDeAviso, fraseDoRetido, fraseSemConta, contasParaFecharSemMovimento,
+  lerResumo, lerStatusAno, frasesDoStatus, fraseFaltaSaldo, frasesDosAvisos, marcaDeAviso, fraseDoRetido, fraseSemConta, contasParaFecharSemMovimento,
   saldosDaLinha, marcaDoPar, contaEmPar, diferencaNaPosicao, sistemaNaPosicao, saldoSistemaNaData, tituloDoPar,
   TITULO_DIFERENCA_NA_POSICAO_INDISPONIVEL, TIPO_TRANSFERENCIA_INTERNA,
   type LinhaResumo,
@@ -292,5 +292,39 @@ describe('o que a tela lê do par', () => {
     const r = contasParaFecharSemMovimento(linhas);
     expect(r.fechar).toEqual([{ conta_id: 'mae-parada', saldo_inicial: 100, saldo_final: 100 }]);
     expect(r.comMovimento).toBe(1);
+  });
+});
+
+/* ── CONC-TOTAL-SEM-SALDO-01b — a frase do motivo `contas_sem_saldo`, com UM dono ── */
+describe('01b — "falta saldo · N conta(s)": a frase do agregado com conta que pesa sem saldo informado', () => {
+  const agregado = (x: Record<string, unknown>): LinhaResumo => lerResumo([{ nivel: 'total', conta_id: null, conta_nome: 'Total', ...x }])[0];
+  const SEM = (qtde: number, nomes: string[]) => ({ motivo: 'contas_sem_saldo', qtde, contas: nomes.map((n, i) => ({ conta_id: `c${i}`, conta_nome: n })) });
+
+  it('1 conta e N contas, com a quantidade DO DONO; os nomes vão no title, um por linha', () => {
+    const uma = fraseFaltaSaldo(agregado({ status: 'pendente', diferenca: null, motivos: [SEM(1, ['Sicredi-PJ Cap. Social'])] }));
+    expect(uma?.texto).toBe('falta saldo · 1 conta');
+    expect(uma?.titulo).toBe('Sicredi-PJ Cap. Social');
+    const oito = fraseFaltaSaldo(agregado({ status: 'pendente', diferenca: null, motivos: [{ motivo: 'contas_pendentes', qtde: 18 }, SEM(8, ['Banco do Brasil', 'Itau BBA', 'Sicredi Lavoura'])] }));
+    expect(oito?.texto).toBe('falta saldo · 8 contas'); // a qtde é a do motivo, não a contagem dos nomes
+    expect(oito?.titulo).toBe('Banco do Brasil\nItau BBA\nSicredi Lavoura');
+  });
+
+  it('é a MESMA frase do card Status (sai de `frasesDoStatus`), e não o motivo cru', () => {
+    const l = agregado({ status: 'pendente', diferenca: null, motivos: [{ motivo: 'contas_pendentes', qtde: 2 }, SEM(2, ['A', 'B'])] });
+    expect(frasesDoStatus(l).map((x) => x.texto)).toEqual(['2 pendentes', 'falta saldo · 2 contas']);
+    expect(frasesDoStatus(l).find((x) => x.chave === 'contas_sem_saldo')?.texto).toBe(fraseFaltaSaldo(l)?.texto);
+  });
+
+  it('só com a diferença NULA e o motivo: com diferença (zero ou valor) ou sem o motivo, nada — a tela segue com "confere", o valor ou "—"', () => {
+    expect(fraseFaltaSaldo(agregado({ status: 'pendente', diferenca: null, motivos: [{ motivo: 'contas_pendentes', qtde: 1 }] }))).toBeNull();
+    expect(fraseFaltaSaldo(agregado({ status: 'conciliado', diferenca: 0, motivos: [SEM(1, ['A'])] }))).toBeNull();
+    expect(fraseFaltaSaldo(agregado({ status: 'nao_conciliado', diferenca: 12.5, motivos: [SEM(1, ['A'])] }))).toBeNull();
+    expect(fraseFaltaSaldo(null)).toBeNull();
+  });
+
+  it('sem os nomes no motivo: a frase sai, sem title (nada se inventa)', () => {
+    const f = fraseFaltaSaldo(agregado({ status: 'pendente', diferenca: null, motivos: [{ motivo: 'contas_sem_saldo', qtde: 3 }] }));
+    expect(f?.texto).toBe('falta saldo · 3 contas');
+    expect(f?.titulo).toBeUndefined();
   });
 });
