@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 05/10/2026 (ACESSOS-OC-03a, +37: `src/v2/lib/acessoCapacidadesOC.test.tsx` 33, `src/v2/lib/acessoOperacao.test.tsx` 2,
+  Baseline em 05/10/2026 (FIN-NFE-XML-01a, +35: `src/lib/financeiro/nfe/lerNFe.test.ts` 30, `src/lib/financeiro/nfe/centavos.test.ts` 5;
+  antes o ACESSOS-OC-03a, +37: `src/v2/lib/acessoCapacidadesOC.test.tsx` 33, `src/v2/lib/acessoOperacao.test.tsx` 2,
   `src/v2/lib/acessoTelas.test.tsx` 1, `src/v2/lib/acessoGestos.test.tsx` 1; antes o ACESSOS-OC-02, +22 em `src/v2/lib/acessoOperacao.test.tsx`; antes o ACESSOS-OC-01, +8: `src/v2/lib/acessoTelas.test.tsx` 6,
   `src/v2/lib/acessoSaidas.test.tsx` 1, `src/v2/lib/acessoGestos.test.tsx` 1 — 3421 depois dele; antes o CONC-TOTAL-SEM-SALDO-01b, +8: `src/pages/conciliacaoDono.test.tsx` 4, `src/lib/conciliacao/resumoDoDono.test.ts` 4; antes o FIN-PGTO-FANTASMA-01, +13 em `src/components/financeiro-v2/finPgtoFantasma01.test.tsx`; antes o CONC-SEM-F5-01, +19: `src/hooks/concSemF5.test.tsx` 18, `src/components/financeiro-v2/conferenciaModal.test.tsx` 1; antes o ACESSOS-02c, +17 em `src/v2/lib/acessoGestos.test.tsx`; antes o ACESSOS-02b, +29: `src/acessoRotas.test.tsx` 15, `src/v2/lib/acessoSaidas.test.tsx` 14; antes o ACESSOS-02a, +26 em `src/v2/lib/acessoTelas.test.tsx`; antes o OC-CC-ACOES-LINHA-02, +20: `src/components/venda/abaContaCorrente.test.tsx` 11,
   `src/lib/oc/abrirLancamentoDaOC.test.ts` 7, `src/components/compra/despesasContaCorrente.test.tsx` 2; antes o UI-LINHA-UNICA-01, +2: `src/components/venda/abaContaCorrente.test.tsx` 1,
@@ -182,7 +183,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3480
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3515
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -2410,6 +2411,29 @@ docs/historico/frentes-ate-2026-09-29.md.)
     comprovante como campo proprio, obrigatoriedade por tipo) · DOC-REATIVAR-01 · no Comprovante o "numero" sugerido e' o Nº
     Documento do lancamento (o da NF) e cai em "Autenticacao / ID da transacao" — decidir se a sugestao de numero deve valer nesse
     tipo · arrastar e soltar sem prova na tela.
+- ⚠ O XML DA NF-e TEM UM LEITOR SO', PURO (FIN-NFE-XML-01a, 05/10/2026; sem tela, sem banco): `lerNFe(bytes: ArrayBuffer)`
+  (`src/lib/financeiro/nfe/`: `lerNFe.ts`, `centavos.ts`, `tipos.ts`). Toda tela que precisar do XML de uma nota chama ESTA
+  funcao; nenhuma le' XML por conta propria. Devolve `{ ok: true, nota, avisos }` ou `{ ok: false, motivo, frase }`.
+  · BYTES, NUNCA `File.text()`: o charset e' o do `<?xml encoding?>`, por `decodificarPeloCharsetDeclarado` — ALIAS de
+    `decodificarExtrato` (uma regra so'). Parse por `DOMParser`, lendo por `localName` (o namespace vem com ou sem prefixo) e
+    checando `parsererror` (o `DOMParser` nao lanca). Tag desconhecida e' ignorada (os grupos IBS/CBS de 2026 nao entram).
+  · DINHEIRO EM CENTAVOS INTEIROS, calculados SOBRE O TEXTO (`centavosDoTexto`), sem float; datas COMO ESCRITAS (a parte de data
+    de `dhEmi`, sem converter fuso). Teto de 2 MB checado antes de decodificar. Assinatura nao e' validada; sem rede; sem log.
+  · SO' MODELO 55. Recusas com frase unica (`FRASES_DE_RECUSA` / `fraseDaRecusa`): nao e' XML, grande demais, CT-e, evento, lote
+    (raiz `enviNFe` OU mais de um `infNFe`), NFC-e, NFS-e/desconhecido, cancelada ou denegada (`cStat` 101, 135, 110, 301, 302),
+    incompleta (diz o campo). AVISOS, que nao recusam: `sem_protocolo`, `sem_duplicatas`, `duplicatas_diferem_da_nota`
+    (tolerancia ZERO, em centavos), `complementar`, `devolucao`.
+  · O LEITOR NAO SABE QUEM E' O CLIENTE: `tipoNota` e' do ponto de vista do emitente. Recusar "nota em que o cliente e' o
+    emitente" (decisao do Gabriel: nota de venda entra pela Operacao Comercial) e o mapa `tPag` -> forma de pagamento sao da
+    tela que chama (PRs b e d).
+  ⚠ QUEM CONSOME ESTREITA COM `r.ok === false` / `=== true`: com `strict: false` o `if (!r.ok)` NAO estreita a uniao (TS2339).
+  ⚠ FIXTURES SINTETICAS (`__fixtures__/notas.ts`, montadas de um molde): nenhum dado real de cliente entra no repo.
+  ⚠ O jsdom NAO E' O NAVEGADOR: o `parsererror` so' foi exercitado na forma do jsdom (o Chrome o poe DENTRO do documento, o
+    Firefox como raiz — o leitor checa as duas, mas so' uma tem teste), e nenhum XML real de SEFAZ foi lido.
+  ⚠ DIVIDAS: NFE-CHAVE-DV-01 (o digito verificador da chave nao e' conferido, so' os 44 digitos) · NFE-LEIAUTE-310-01 (`dEmi`
+    do leiaute 3.10 nao e' lido: nota antiga cai em "Nota sem data de emissão.") · `cStat` 135 e' status de EVENTO, nao de
+    protocolo de nota (esta' na lista por decisao do briefing; inofensivo) · duplicata sem `dVenc` sai com vencimento vazio, sem
+    aviso proprio.
 - ⚠ O RESUMO DO LANCAMENTO DIZ O STATUS E O VENCIMENTO NO BLOCO PAGAMENTO (FIN-RESUMO-PAGAMENTO-01, 04/10): Status · Vencimento ·
   Pagamento · Forma · Modalidade · Nº de Parcelas; o status saiu de "Financeiro" (uma informacao, um lugar) e a cor vem de
   `STATUS_PALETA` / `STATUS_PILULA_BASE` pela prop `cor` do `LinhaResumo` — nenhuma cor escrita no modal.

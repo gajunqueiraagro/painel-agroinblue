@@ -48,3 +48,9 @@ export function decodificarExtrato(bytes: ArrayBuffer): string {
   if (declarado === CP1252) return new TextDecoder(CP1252).decode(bytes);
   return utf8Valido(bytes) ?? new TextDecoder(CP1252).decode(bytes);
 }
+
+/**
+ * O MESMO DECODIFICADOR, PELO NOME DO QUE ELE FAZ — FIN-NFE-XML-01a. O XML da NF-e declara o charset no `<?xml encoding="…"?>`,
+ * que e' exatamente o caso do OFX 2.x: quem le' XML que nao e' extrato chama por este nome. E' ALIAS, nao copia — uma regra so'.
+ */
+export const decodificarPeloCharsetDeclarado = decodificarExtrato;
