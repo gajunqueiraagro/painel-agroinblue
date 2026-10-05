@@ -2296,6 +2296,21 @@ docs/historico/frentes-ate-2026-09-29.md.)
   · CONSERTO DO NJ (05/10, script `docs/investigacao/fin-import-excel-status-01a-conserto-nj.sql`, decisoes do Gabriel): as 40
     gemeas da planilha canceladas pelo dono `fn_cancelar_lancamento_auditoria` (fica a recorrencia/contrato) e as outras 189 em
     'programado' sem data de pagamento.
+  · LIMPEZA DAS DUPLICADAS DE RECORRENCIA DO NJ (FIN-IMPORT-PREVISOES-NJ-LIMPEZA-01, executada em 05/10/2026, script
+    `docs/investigacao/fin-import-previsoes-nj-limpeza-01.sql`, md5 04c2d73c24d3439c71a507d88591f410; decisoes do Gabriel): 32
+    linhas da planilha que repetiam contas PREVISTAS de recorrencia com o valor do mes foram CASADAS em 31 contas — a conta da
+    recorrencia recebeu valor e vencimento da planilha e passou a 'programado' (fazenda, classificacao, descricao, competencia e
+    `recorrencia_id` intactos, por hash); a linha da planilha foi cancelada pelo dono, com o motivo "Duplicada na importação Excel
+    de 05/10/2026 — valor do mês levado para a conta da recorrência". Duas linhas para uma recorrencia = SOMA, vencimento o mais
+    cedo (f4766a16, Leandro Deves: 9.784,80 em 04/10). Depois: a pagar/receber com vencimento em out/26 = 262 linhas,
+    1.730.894,43; vivas da planilha = 154 (673.438,79); md5 do NJ fora das 63 identico; `audit_log` +63. FORA, sem tocar (o
+    Gabriel confirma se sao contas distintas): 1ed5ffd8 (Mapfre 1.966,57), 31e2b2e1 (Ademicon 4.341,41), 53a82f31 (Porto Seguro
+    218,81) — a recorrencia de cada uma ja' tinha casado com a gemea exata das 09:41.
+  ⚠ DIVIDA REC-PROPAGAR-SOBRESCREVE-VALOR-DO-MES-01: `fn_recorrencia_propagar` em "futuros"/"todos" regrava valor
+    (`abs(valor_base)`), descricao, fornecedor, fazenda, conta, subcentro, safra, forma e observacao em TODA linha viva da
+    recorrencia em previsto/programado/agendado sem pagamento, sem olhar `editado_manual` nem o valor atual — apaga o valor do mes
+    trazido pela planilha (nao toca o vencimento). NO NJ HA' 31 CONTAS NESSE ESTADO DESDE 05/10/2026: NAO usar o Propagar la' ate'
+    serem pagas. Conserto no PR de previsoes (o propagar pula conta ajustada pela planilha).
   ⚠ DIVIDAS: FIN-STATUS-SEM-PGTO-CHECK-01 (falta CHECK no banco "realizado exige data de pagamento"; antes, medir o escritor das
     18 parcelas de financiamento da Santa Rita realizadas sem data desde 21/05/2026) · FIN-IMPORT-EXCEL-PREVISOES-01 (importar
     previsao com status proprio, lote + desfazer, comparacao nova/igual/mudou antes de gravar; a coluna do status na previa vai
