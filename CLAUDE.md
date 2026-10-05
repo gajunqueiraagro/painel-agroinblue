@@ -162,7 +162,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 05/10/2026 (FIN-NFE-XML-01d, +52: `src/lib/financeiro/nfe/proporLancamento.test.ts` 27,
+  Baseline em 05/10/2026 (FIN-IMPORT-EXCEL-STATUS-01a, +28: `src/lib/financeiro/statusParaImportar.test.ts` 8,
+  `src/v2/lib/importLanc/semDataDePagamento.test.ts` 12, `src/v2/pages/importExcelSemDataDePagamento.test.tsx` 8; antes o
+  FIN-NFE-XML-01d, +52: `src/lib/financeiro/nfe/proporLancamento.test.ts` 27,
   `src/components/financeiro-v2/novoDeXml.test.tsx` 25; antes o FIN-NFE-XML-01a, +35: `src/lib/financeiro/nfe/lerNFe.test.ts` 30, `src/lib/financeiro/nfe/centavos.test.ts` 5;
   antes o ACESSOS-OC-03a, +37: `src/v2/lib/acessoCapacidadesOC.test.tsx` 33, `src/v2/lib/acessoOperacao.test.tsx` 2,
   `src/v2/lib/acessoTelas.test.tsx` 1, `src/v2/lib/acessoGestos.test.tsx` 1; antes o ACESSOS-OC-02, +22 em `src/v2/lib/acessoOperacao.test.tsx`; antes o ACESSOS-OC-01, +8: `src/v2/lib/acessoTelas.test.tsx` 6,
@@ -184,7 +186,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3567
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3595
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -2213,6 +2215,36 @@ docs/historico/frentes-ate-2026-09-29.md.)
   o FIN-LISTA-VISUAL-01. A conta corrente da OC herda a mesma paleta.
   Duplicata registrada: `BADGE_STATUS_TRANSACAO` (statusOperacional.ts, Mesa/Espelho); o `ModoRapidoGrid` ainda deriva
   status da data de pagamento (frente propria).
+- ⚠ O IMPORTADOR DE EXCEL NAO GRAVA LINHA SEM DATA DE PAGAMENTO (FIN-IMPORT-EXCEL-STATUS-01a, Gabriel 05/10/2026, so' tela;
+  "sem data de pagamento nao pode entrar como realizado"). O status da linha importada tem UM dono, `statusParaImportar({
+  dataPagamento, statusPlanilha })` (`src/lib/financeiro/statusFinanceiro.ts`): com data -> 'realizado'; sem data -> recusada
+  ('sem_data_pagamento'), MESMO com "pago/realizado" na coluna Status; "a pagar/previsto" COM data -> recusada
+  ('a_pagar_com_data'). A previa (`avaliarLinha`, `src/v2/lib/importLanc/importLancamentosView.ts`) consulta o dono, guarda o
+  resultado em `LinhaPrevia.statusAGravar` e deixa a recusada de FORA com o motivo; o gravador
+  (`useImportLancamentosExcel.ts`) le' esse campo e tem guarda propria (`statusAGravar === null` nao grava). NENHUM default de
+  status no gravador (preso por teste que le' a fonte). Vale nos DOIS modos (criar e atualizar por ID); no modo veste a linha
+  sem par segue "sem par no extrato". A recusa vem ANTES de fazenda nao resolvida e de mes fechado: a contagem e' a da planilha.
+  ⚠ NASCE DE DEFEITO MEDIDO: o gravador tinha "na falta, realizado", o dedup so' enxerga data de pagamento, e a planilha de
+    PREVISOES de out/26 do NJ entrou em 05/10 com 229 linhas, 226 "realizadas" sem data (858.240,65), 40 gemeas de recorrencia/
+    contrato previstos. E' CONTENCAO: previsao ainda nao entra por esta tela (fila FIN-IMPORT-EXCEL-PREVISOES-01).
+  · TELA: no bloco de totais, a frase do dono `fraseDoMotivoNaPrevia` ("N linhas sem data de pagamento nao serao importadas —
+    previsao do mes ainda nao entra por esta tela.") com a soma; a linha fica na tabela com "⚠ Sem data de pagamento" (rotulo
+    CURTO: a coluna Situacao tem 190px); o botao diz "Importar N de M: …" (N = o que o gravador faz) e, com zero, fica apagado
+    com o motivo ao lado. Medido a 1.135 no cliente Teste (planilha sintetica, sem importar): tabela 867 sem rolagem horizontal,
+    linhas de 20px, Situacao pede ate' 171 de 182, frase 491 de 721.
+  · ⚠ A COLUNA "STATUS QUE VAI GRAVAR" NAO COUBE: a 1.135 levava a Descricao de 99 para 41px. Vai com o PR de previsoes.
+  · CONSERTO DO NJ (05/10, script `docs/investigacao/fin-import-excel-status-01a-conserto-nj.sql`, decisoes do Gabriel): as 40
+    gemeas da planilha canceladas pelo dono `fn_cancelar_lancamento_auditoria` (fica a recorrencia/contrato) e as outras 189 em
+    'programado' sem data de pagamento.
+  ⚠ DIVIDAS: FIN-STATUS-SEM-PGTO-CHECK-01 (falta CHECK no banco "realizado exige data de pagamento"; antes, medir o escritor das
+    18 parcelas de financiamento da Santa Rita realizadas sem data desde 21/05/2026) · FIN-IMPORT-EXCEL-PREVISOES-01 (importar
+    previsao com status proprio, lote + desfazer, comparacao nova/igual/mudou antes de gravar; a coluna do status na previa vai
+    junto) · DATA DE PAGAMENTO FUTURA COM REALIZADO e' aceita em todo o sistema (modal manual e importador) · os rotulos ANTIGOS
+    da coluna Situacao da previa empilham em duas linhas (so' os dois novos foram medidos) · o dialogo de confirmacao diz "Serao
+    criados N" contando as elegiveis, nao as aprovadas · defaults de status realizado nao auditados em
+    `FinanceiroCaixaTab.tsx:179` e `CusteioTxtImportTab.tsx:322/522` · no modal de progresso, "sem par no extrato" segue valendo
+    para todos os OUTROS motivos de exclusao · as 9 linhas do criterio largo e as 7 de repeticao interna da planilha do NJ nao
+    foram tocadas.
 - ⚠ A TELA MOSTRA O QUE VAI GRAVAR (FIN-PGTO-FANTASMA-01, Gabriel 04/10, so' tela). A regra do pagamento nao mudou — so'
   realizado/conciliado tem data de pagamento, e o dono e' `pagamentoParaGravar` (`src/lib/financeiro/statusFinanceiro.ts`). O
   defeito era a tela: o `LancamentoV2Dialog` hidratava a data do banco de um previsto/programado/agendado, mostrava-a no campo

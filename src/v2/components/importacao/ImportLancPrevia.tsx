@@ -12,7 +12,7 @@
 import { useMemo, useState } from 'react';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import {
-  MOTIVO_LABEL, FILTRO_LABEL, DUPLICIDADE_LABEL, aplicarFiltroPrevia, resumirPorFiltro,
+  MOTIVO_LABEL, FILTRO_LABEL, DUPLICIDADE_LABEL, aplicarFiltroPrevia, resumirPorFiltro, fraseDoMotivoNaPrevia,
   type FiltroPrevia,
   type LinhaPrevia,
   type TotaisPrevia,
@@ -142,9 +142,14 @@ export function ImportLancPrevia({
         {totais.porMotivo.length > 0 && (
           <div className="border-t px-3 py-1.5 space-y-0.5">
             {totais.porMotivo.map((m) => (
-              <div key={m.motivo} className="flex items-baseline justify-between text-[10px]">
-                <span className="text-red-700">{MOTIVO_LABEL[m.motivo]}</span>
-                <span className="tabular-nums font-mono text-muted-foreground">
+              <div key={m.motivo} data-testid={`fora-${m.motivo}`}
+                className="flex items-baseline justify-between gap-2 text-[10px]">
+                {/* ⚠ A FRASE VEM DO DONO (`fraseDoMotivoNaPrevia`): os motivos da contenção dizem quantas linhas e por
+                    quê; os demais, o rótulo de sempre. O texto corta com o inteiro no `title`; contagem e soma, nunca. */}
+                <span className="min-w-0 flex-1 truncate text-red-700" title={fraseDoMotivoNaPrevia(m.motivo, m.qtd)}>
+                  {fraseDoMotivoNaPrevia(m.motivo, m.qtd)}
+                </span>
+                <span className="shrink-0 whitespace-nowrap tabular-nums font-mono text-muted-foreground">
                   {m.qtd} · {formatMoeda(m.valor)}
                 </span>
               </div>
@@ -308,6 +313,7 @@ export function ImportLancPrevia({
               <tr
                 key={l.row.linha}
                 className={`border-b ${l.entra ? '' : 'bg-red-50/70 text-red-800'}`}
+                data-testid="linha-previa"
               >
                 <td className="px-1 py-0.5 text-[10px] font-mono text-muted-foreground">{l.row.linha}</td>
                 <td className="px-1 py-0.5 text-[10px] font-mono">

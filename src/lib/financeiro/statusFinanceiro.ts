@@ -226,6 +226,33 @@ export function avisoPagamentoLegado(pagamentoGravado: string): string {
 }
 
 
+/**
+ * O STATUS COM QUE UMA LINHA DE PLANILHA ENTRA — FIN-IMPORT-EXCEL-STATUS-01a (05/10/2026).
+ *
+ * ⚠ SEM DATA DE PAGAMENTO, NUNCA REALIZADO — nem quando a coluna Status da planilha diz "pago". É a mesma regra de
+ * `statusTemPagamento`, vista do outro lado: só realizado tem data de pagamento, logo sem data não há realizado.
+ * ⚠ NASCE DE DEFEITO MEDIDO: o importador gravava `status ?? 'realizado'`, e a planilha de PREVISÕES de out/26 do NJ entrou
+ * com 226 lançamentos "realizados" sem data de pagamento (858.240,65).
+ * ⚠ CONTENÇÃO, NÃO DESTINO: enquanto a importação de previsões não existir, a linha sem data (e a que a planilha chama de
+ * "a pagar" trazendo data) é RECUSADA com o motivo — nunca gravada com um status adivinhado.
+ */
+export type MotivoRecusaDaImportacao = 'sem_data_pagamento' | 'a_pagar_com_data';
+export type StatusDaImportacao = 'realizado' | { recusada: MotivoRecusaDaImportacao };
+
+export function statusParaImportar(
+  { dataPagamento, statusPlanilha }: { dataPagamento: string | null | undefined; statusPlanilha: string | null | undefined },
+): StatusDaImportacao {
+  if (!(dataPagamento ?? '').trim()) return { recusada: 'sem_data_pagamento' };
+  if (statusPlanilha === 'previsto') return { recusada: 'a_pagar_com_data' };
+  return 'realizado';
+}
+
+/** `true` quando a linha entra; estreita sem depender de `strict` (a união com string não estreita por `in`). */
+export function importaComoRealizado(s: StatusDaImportacao): s is 'realizado' {
+  return s === 'realizado';
+}
+
+
 // ── Writers ──
 
 /**

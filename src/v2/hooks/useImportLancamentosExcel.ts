@@ -29,6 +29,7 @@ import {
   type CatalogosImport, type DeParaCompleto, type DeParaMap, type DeParaItem,
   type SubcentroAliasRef, type ChaveFechamento, type NivelDuplicidade, type AlvoAtualizacao,
   casarLinhasSemId, dataDoCasamento, type CandidatoCasamento,
+  MOTIVO_LABEL,
 } from '@/v2/lib/importLanc/importLancamentosView';
 
 /**
@@ -1024,7 +1025,11 @@ export function useImportLancamentosExcel(somenteAtualizar = false) {
       data: l.row.data_pagamento ?? l.row.data_competencia ?? '',
       valor: Math.abs(Number(l.row.valor) || 0),
       titulo: l.row.descricao ?? '(sem descrição)',
-      contexto: 'sem par no extrato — nada gravado',
+      /* ⚠ A LINHA SEM DATA DE PAGAMENTO DIZ O PRÓPRIO MOTIVO — FIN-IMPORT-EXCEL-STATUS-01a: chamá-la de "sem par no
+         extrato" mandaria o operador procurar um extrato que não é a causa. Os demais motivos seguem com o texto de antes. */
+      contexto: l.motivo === 'sem_data_pagamento' || l.motivo === 'a_pagar_com_data'
+        ? `${MOTIVO_LABEL[l.motivo].toLowerCase()} — nada gravado`
+        : 'sem par no extrato — nada gravado',
     }));
     const alvo = previa.linhas.filter(l => l.entra && l.fazendaId && l.subcentro && l.row.tipo_operacao);
     setProgresso({
@@ -1054,6 +1059,9 @@ export function useImportLancamentosExcel(somenteAtualizar = false) {
 
       for (const l of previa.linhas) {
         if (!l.entra || !l.fazendaId || !l.subcentro || !l.row.tipo_operacao) continue;
+        /* ⚠ SEM STATUS DECIDIDO, NÃO GRAVA. A prévia já deixou a linha de fora (`entra` falso); esta guarda é a do
+           gravador, para o caso de alguém mudar a prévia sem olhar para cá — é ela que estreita o tipo do status. */
+        if (l.statusAGravar === null) continue;
         /* O "Parar" termina a linha corrente e para — nunca no meio de uma escrita. */
         if (pararRef.current) break;
         const valorLinha = Math.abs(Number(l.row.valor) || 0);
@@ -1082,9 +1090,9 @@ export function useImportLancamentosExcel(somenteAtualizar = false) {
           data_vencimento: l.row.data_vencimento,
           valor: Math.abs(Number(l.row.valor) || 0),
           tipo_operacao: l.row.tipo_operacao,
-          // Ausente/vazio na planilha → 'realizado' (decisão do briefing). NÃO usar
-          // STATUS_FINANCEIRO_INICIAL nem deriveStatusFinanceiro.
-          status_transacao: l.row.status ?? 'realizado',
+          /* ⚠ O STATUS VEM DA LINHA DA PRÉVIA, decidido por `statusParaImportar` — FIN-IMPORT-EXCEL-STATUS-01a. Não há
+             default aqui: o "na falta, realizado" que morava nesta linha gravou 226 previsões do NJ como realizadas sem data. */
+          status_transacao: l.statusAGravar,
           descricao: l.row.descricao ?? undefined,
           observacao: l.row.observacao ?? undefined,
           numero_documento: l.row.numero_documento,

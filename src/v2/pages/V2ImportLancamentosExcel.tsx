@@ -173,7 +173,18 @@ export function V2ImportLancamentosExcel({
      agora confirma o que está resolvido e DIZ quantas ficam para trás. */
   const bloqueios: string[] = [];
   if (faltaFazendaCabecalho) bloqueios.push('a planilha não traz Fazenda — escolha uma no cabeçalho');
-  if (previa && previa.totais.entram.qtd === 0) bloqueios.push('nenhuma linha elegível para importar');
+  /* ⚠ O MOTIVO DO ZERO DIZ A CAUSA — FIN-IMPORT-EXCEL-STATUS-01a. Planilha só de previsões (nenhuma linha com data de
+     pagamento) não é "nada elegível": é a contenção, e o operador precisa ler isso ao lado do botão apagado. */
+  const foraPelaContencao = previa
+    ? previa.totais.porMotivo
+        .filter((m) => m.motivo === 'sem_data_pagamento' || m.motivo === 'a_pagar_com_data')
+        .reduce((acc, m) => acc + m.qtd, 0)
+    : 0;
+  if (previa && previa.totais.entram.qtd === 0) {
+    bloqueios.push(foraPelaContencao > 0 && foraPelaContencao === previa.linhas.length
+      ? 'nenhuma linha com data de pagamento — previsão do mês ainda não entra por esta tela'
+      : 'nenhuma linha elegível para importar');
+  }
   /* Placeholder — o bloqueio real por aprovação é montado abaixo, depois de
      `nVaiGravar` existir. */
 
@@ -545,7 +556,9 @@ export function V2ImportLancamentosExcel({
                 /* No modo veste o botão não fala de criação: não há o que aprovar. */
                 : (somenteAtualizar
                     ? `Confirmar: ${nAtualizam} atualizam`
-                    : `Confirmar: ${nAtualizam} atualizam · ${nCriamAprovadas} criam (aprovadas)`)
+                    /* ⚠ O BOTÃO DIZ QUANTAS VÃO SER GRAVADAS, DE QUANTAS — FIN-IMPORT-EXCEL-STATUS-01a. O total é o da
+                       planilha lida; o primeiro número é o que o gravador faz (atualizações + criações aprovadas). */
+                    : `Importar ${nVaiGravar} de ${previa.linhas.length}: ${nAtualizam} atualizam · ${nCriamAprovadas} criam (aprovadas)`)
                   + (linhasPendentes > 0 ? ` — ${linhasPendentes} pendentes ficam de fora` : '')}
             </Button>
           </div>

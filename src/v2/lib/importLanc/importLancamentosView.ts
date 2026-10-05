@@ -15,6 +15,7 @@
 // ============================================================================
 import type { ClassificacaoItem, FornecedorV2 } from '@/hooks/useFinanceiroV2';
 import type { Fazenda } from '@/contexts/FazendaContext';
+import { statusParaImportar, importaComoRealizado } from '@/lib/financeiro/statusFinanceiro';
 import {
   resolverContaPorTexto,
   type ContaResolvivel,
@@ -469,7 +470,14 @@ export type MotivoExclusao =
    * a partir de uma planilha, do lado errado da soberania. Criar é intenção de
    * outra tela, e lá é explícita.
    */
-  | 'sem_par_no_extrato';
+  | 'sem_par_no_extrato'
+  /**
+   * FIN-IMPORT-EXCEL-STATUS-01a — a linha não tem data de pagamento. SEM DATA NÃO HÁ REALIZADO, e esta tela ainda não
+   * importa previsão: a linha aparece na prévia, com o motivo, e não é gravada. Quem decide é `statusParaImportar`.
+   */
+  | 'sem_data_pagamento'
+  /** A planilha diz "a pagar/previsto" e traz data de pagamento: contradiz a regra dos dois lados; não é gravada. */
+  | 'a_pagar_com_data';
 
 export const MOTIVO_LABEL: Record<MotivoExclusao, string> = {
   transferencia: 'Transferência — não é criada por esta importação',
@@ -478,11 +486,31 @@ export const MOTIVO_LABEL: Record<MotivoExclusao, string> = {
   subcentro_nao_resolvido: 'Conta do plano ainda não mapeada',
   campo_obrigatorio_descartado: 'Fazenda ou conta do plano descartada — sem esses dois a linha não existe',
   casamento_ambiguo: 'Casou com mais de um lançamento existente — escolha qual, ou informe o ID',
+  /* ⚠ CURTOS DE PROPÓSITO: a coluna Situação tem 190px e a linha da prévia não empilha. A frase inteira, com a contagem e
+     a soma, é a de `fraseDoMotivoNaPrevia`, no bloco de totais. */
+  sem_data_pagamento: 'Sem data de pagamento',
+  a_pagar_com_data: 'A pagar, com data de pagamento',
   sem_par_no_extrato: 'Sem par no extrato — o Enriquecer só atualiza o que já existe; para criar, use a Importação',
   ja_existe: 'Já existe lançamento equivalente — inclua manualmente se for outro',
   id_desconhecido: 'A coluna ID aponta para um lançamento que não é deste cliente',
   origem_travada: 'Lançamento da Operação Comercial — a classificação se ajusta lá, não aqui',
 };
+
+/**
+ * A FRASE DO MOTIVO NO BLOCO DE TOTAIS — FIN-IMPORT-EXCEL-STATUS-01a. Os dois motivos da contenção dizem a contagem e o
+ * que fazer; os demais seguem com o rótulo de sempre. Um dono: a tela não monta a frase.
+ */
+export function fraseDoMotivoNaPrevia(motivo: MotivoExclusao, qtd: number): string {
+  const n = `${qtd} linha${qtd !== 1 ? 's' : ''}`;
+  const verbo = qtd !== 1 ? 'não serão importadas' : 'não será importada';
+  if (motivo === 'sem_data_pagamento') {
+    return `${n} sem data de pagamento ${verbo} — previsão do mês ainda não entra por esta tela.`;
+  }
+  if (motivo === 'a_pagar_com_data') {
+    return `${n} "a pagar" com data de pagamento ${verbo} — previsão do mês ainda não entra por esta tela.`;
+  }
+  return MOTIVO_LABEL[motivo];
+}
 
 /**
  * O que a linha vai FAZER — B-22b.
@@ -670,6 +698,11 @@ export interface LinhaPrevia {
   safraId: string | null;
   entra: boolean;
   motivo: MotivoExclusao | null;
+  /**
+   * FIN-IMPORT-EXCEL-STATUS-01a — O STATUS QUE VAI SER GRAVADO, decidido por `statusParaImportar` e lido pelo gravador
+   * e pela prévia (a tela mostra o que vai gravar). `null` = a linha não grava status nenhum, por qualquer motivo.
+   */
+  statusAGravar: 'realizado' | null;
   /** `atualizar` quando a coluna ID traz um lançamento vivo deste cliente, ou
    *  quando a linha sem id casou com um lançamento existente (B-41). */
   modo: ModoLinha;
@@ -754,9 +787,15 @@ export function avaliarLinha(
   const modo: ModoLinha = idPlanilha || alvoCasado ? 'atualizar' : 'criar';
   const origemModo: OrigemModo | null = idPlanilha ? 'id' : alvoCasado ? 'casamento' : null;
 
+  /* ⚠ O STATUS NASCE DO DONO, uma vez por linha: a prévia e o gravador leem o MESMO campo. */
+  const statusDaLinha = statusParaImportar({ dataPagamento: row.data_pagamento, statusPlanilha: row.status });
+  const statusAGravar = importaComoRealizado(statusDaLinha) ? statusDaLinha : null;
+  /* Toda saída que NÃO entra leva `null`: só a linha que entra grava status. */
+  const semStatus: LinhaPrevia['statusAGravar'] = null;
+
   const base = {
     indice, row, anoMes, fazendaId, fazendaNome, duplicidade, reincluida, modo,
-    origemModo,
+    origemModo, statusAGravar: semStatus,
     /* O alvo viaja RESOLVIDO na linha: o gravador não relê a planilha para
        descobrir quem atualizar, e o casamento não precisa de um segundo mapa. */
     alvoId: alvo?.id ?? null,
@@ -795,6 +834,14 @@ export function avaliarLinha(
      não mudaria o destino. */
   if (somenteAtualizar && modo !== 'atualizar') {
     return { ...base, entra: false, motivo: 'sem_par_no_extrato' };
+  }
+
+  /* ⚠ SEM DATA DE PAGAMENTO VEM ANTES DOS MOTIVOS DE DE-PARA E DE MÊS — FIN-IMPORT-EXCEL-STATUS-01a. Nenhum mapeamento
+     muda o destino desta linha: ela é previsão, e previsão ainda não entra por aqui. Dizer "fazenda não resolvida" a ela
+     mandaria o operador resolver um de-para para nada, e a contagem "N sem data" deixaria de ser a da planilha.
+     Vale nos DOIS modos: atualizar por ID um lançamento com uma linha sem data gravaria realizado sem pagamento nele. */
+  if (!importaComoRealizado(statusDaLinha)) {
+    return { ...base, entra: false, motivo: statusDaLinha.recusada };
   }
 
   // Precedência: o motivo mais estrutural primeiro, para o operador ver a causa
@@ -843,7 +890,7 @@ export function avaliarLinha(
   if (duplicidade === 'D1' && !reincluida) {
     return { ...base, entra: false, motivo: 'ja_existe' };
   }
-  return { ...base, entra: true, motivo: null };
+  return { ...base, entra: true, motivo: null, statusAGravar };
 }
 
 export interface TotaisPrevia {
