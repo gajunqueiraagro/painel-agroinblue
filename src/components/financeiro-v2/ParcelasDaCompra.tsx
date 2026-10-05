@@ -10,11 +10,14 @@
  * ⚠ BOLETO É OPCIONAL: parcela sem boleto não é pendência.
  * ⚠ A31: larguras fixas (nada muda de largura quando o dado muda), cabeçalho e rodapé fixos.
  */
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
 import { formatNFNumber } from '@/lib/financeiro/documentoHelper';
-import { motivoArquivoRecusado, type DocumentoPendente } from '@/lib/financeiro/documentosPendentes';
+import type { DocumentoPendente } from '@/lib/financeiro/documentosPendentes';
+import { REGRA_ARQUIVO_DO_BOLETO } from '@/hooks/useLancamentoDocumentos';
+import { aceitarArquivo } from '@/lib/arquivo/aceitarArquivo';
+import { useSoltarArquivo } from '@/lib/arquivo/useSoltarArquivo';
 import { NomeDoArquivo } from '@/components/financeiro-v2/NomeDoArquivo';
 
 export interface ParcelaPrevistaLinha { numero: number; dataVencimento: string; valor: number }
@@ -30,6 +33,89 @@ const dataCurta = (iso: string | null | undefined) => {
   return `${d}/${m}/${a.slice(2)}`;
 };
 const valorBR = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/**
+ * UMA LINHA DE PARCELA, que é também ALVO DE SOLTAR — UI-ARRASTAR-ARQUIVO-01b.
+ *
+ * ⚠ O ARRASTAR NÃO É DAQUI: os handlers vêm do `useSoltarArquivo` (o dono do gesto) e são espalhados no `<tr>`. A regra é a
+ *   do BOLETO (PDF, JPG ou PNG); a recusa aparece na célula Boleto, como a do "+ Boleto" sempre apareceu.
+ * ⚠ SOLTAR SOBRE PARCELA QUE JÁ TEM BOLETO PERGUNTA NA LINHA ("Substituir o boleto? Sim / Não"), sem modal: Sim tira o que
+ *   estava e guarda o novo; Não ou Esc desfaz. Parcela sem boleto não pergunta. Nada é gravado aqui — tudo fica em memória
+ *   até o Salvar do lançamento, como sempre.
+ * ⚠ A LINHA TEM 18px EM TODO ESTADO: realce, recusa e pergunta cabem na célula (uma linha por registro).
+ */
+function LinhaDaParcela({ parcela: p, impar, total, nf, boleto: b, recusaDoClique, travado, onEscolher, onLimparRecusa, onBoleto, onTirarBoleto }: {
+  parcela: ParcelaPrevistaLinha; impar: boolean; total: number; nf: string | null;
+  boleto: DocumentoPendente | undefined; recusaDoClique: string | null; travado: boolean;
+  onEscolher: () => void; onLimparRecusa: () => void;
+  onBoleto: (parcela: number, arquivo: File) => void; onTirarBoleto: (chave: string) => void;
+}) {
+  const [substituir, setSubstituir] = useState<File | null>(null);
+  const { sobre, recusa: recusaDoSoltar, limparRecusa, alvo } = useSoltarArquivo({
+    regra: REGRA_ARQUIVO_DO_BOLETO,
+    desabilitado: travado,
+    onArquivos: ([f]) => {
+      if (!f) return;
+      onLimparRecusa();
+      if (b) setSubstituir(f); else onBoleto(p.numero, f);
+    },
+  });
+  /* Esc desfaz a pergunta SEM fechar o modal: o diálogo escuta o teclado no documento, então a tecla é tomada antes, na
+     janela, e só enquanto a pergunta está na tela. */
+  useEffect(() => {
+    if (!substituir) return;
+    const aoTeclar = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault(); e.stopPropagation();
+      setSubstituir(null);
+    };
+    window.addEventListener('keydown', aoTeclar, true);
+    return () => window.removeEventListener('keydown', aoTeclar, true);
+  }, [substituir]);
+
+  const rec = recusaDoSoltar ?? recusaDoClique;
+  return (
+    <tr {...alvo} data-testid="linha-parcela" data-sobre={sobre ? 'sim' : undefined}
+      className={sobre ? 'bg-success/20 outline outline-1 -outline-offset-1 outline-success' : impar ? 'bg-[#FAFAF8]' : 'bg-white'}>
+      <td className={`${TD} text-center`}>{p.numero}/{total}</td>
+      <td className={`${TD} text-center`}>{dataCurta(p.dataVencimento)}</td>
+      <td className={`${TD} text-right`}>{valorBR(p.valor)}</td>
+      <td className={`${TD} ${DV} text-center`}>{nf ?? '—'}</td>
+      {/* PR 2b-fix2 — uma linha só: a célula de nome de arquivo do fix1 (fim fixo, começo encolhe), inteiro no `title`. */}
+      <td className={`${TD} overflow-hidden whitespace-nowrap`} data-testid="boleto-da-parcela"
+        title={substituir ? `Substituir "${b?.arquivo?.name ?? 'o boleto'}" por "${substituir.name}"?` : rec ?? b?.arquivo?.name}>
+        {substituir ? (
+          <span className="flex items-center gap-2" data-testid="substituir-boleto">
+            <span className="min-w-0 truncate font-medium text-amber-700">Substituir o boleto?</span>
+            <button type="button" className="shrink-0 font-semibold text-primary underline underline-offset-2" data-testid="substituir-sim"
+              onClick={() => { if (b) onTirarBoleto(b.chave); onBoleto(p.numero, substituir); setSubstituir(null); }}>
+              Sim
+            </button>
+            <button type="button" className="shrink-0 text-muted-foreground underline underline-offset-2" data-testid="substituir-nao"
+              onClick={() => setSubstituir(null)}>
+              Não
+            </button>
+          </span>
+        ) : rec ? <span className="text-destructive">{rec}</span>
+          : b?.arquivo ? <NomeDoArquivo nome={b.arquivo.name} />
+            : <span className="text-muted-foreground">sem boleto</span>}
+      </td>
+      <td className={`${TD} text-center whitespace-nowrap`}>
+        {travado ? null : b ? (
+          <button type="button" aria-label={`Tirar boleto da parcela ${p.numero}`} title="Tirar boleto"
+            onClick={() => onTirarBoleto(b.chave)} className="text-muted-foreground hover:text-destructive">
+            <X className="h-3 w-3" />
+          </button>
+        ) : (
+          <button type="button" onClick={() => { limparRecusa(); onEscolher(); }} data-testid={`mais-boleto-${p.numero}`}
+            className="inline-flex items-center gap-0.5 text-primary hover:underline">
+            <Plus className="h-3 w-3" /> Boleto
+          </button>
+        )}
+      </td>
+    </tr>
+  );
+}
 
 export function ParcelasDaCompra({ parcelas, notaFiscal, qtdNotas, boletos, onBoleto, onTirarBoleto, onAnexarVarios, travado, foraDoPlano }: {
   parcelas: readonly ParcelaPrevistaLinha[];
@@ -73,9 +159,10 @@ export function ParcelasDaCompra({ parcelas, notaFiscal, qtdNotas, boletos, onBo
           const f = e.target.files?.[0] ?? null;
           e.target.value = '';
           if (!f || alvo == null) return;
-          const msg = motivoArquivoRecusado(f);
-          if (msg) { setRecusa({ parcela: alvo, msg }); return; }
-          onBoleto(alvo, f);
+          /* A regra é a do BOLETO (PDF, JPG ou PNG), julgada pelo dono do aceite — a mesma do soltar na linha. */
+          const aceite = aceitarArquivo([f], REGRA_ARQUIVO_DO_BOLETO);
+          if (aceite.ok === false) { setRecusa({ parcela: alvo, msg: aceite.motivo }); return; }
+          onBoleto(alvo, aceite.arquivos[0]);
         }} />
       <div className="max-h-[260px] overflow-auto rounded border border-[#E0E2E6]">
         <table className="w-full table-fixed border-separate border-spacing-0 tabular-nums">
@@ -94,37 +181,12 @@ export function ParcelasDaCompra({ parcelas, notaFiscal, qtdNotas, boletos, onBo
             </tr>
           </thead>
           <tbody>
-            {parcelas.map((p, k) => {
-              const b = porParcela.get(p.numero);
-              const rec = recusa?.parcela === p.numero ? recusa.msg : null;
-              return (
-                <tr key={p.numero} className={k % 2 ? 'bg-[#FAFAF8]' : 'bg-white'} data-testid="linha-parcela">
-                  <td className={`${TD} text-center`}>{p.numero}/{n}</td>
-                  <td className={`${TD} text-center`}>{dataCurta(p.dataVencimento)}</td>
-                  <td className={`${TD} text-right`}>{valorBR(p.valor)}</td>
-                  <td className={`${TD} ${DV} text-center`}>{nf ?? '—'}</td>
-                  {/* PR 2b-fix2 — uma linha só: a célula de nome de arquivo do fix1 (fim fixo, começo encolhe), inteiro no `title`. */}
-                  <td className={`${TD} overflow-hidden whitespace-nowrap`} title={b?.arquivo?.name} data-testid="boleto-da-parcela">
-                    {rec ? <span className="text-destructive">{rec}</span>
-                      : b?.arquivo ? <NomeDoArquivo nome={b.arquivo.name} />
-                        : <span className="text-muted-foreground">sem boleto</span>}
-                  </td>
-                  <td className={`${TD} text-center whitespace-nowrap`}>
-                    {travado ? null : b ? (
-                      <button type="button" aria-label={`Tirar boleto da parcela ${p.numero}`} title="Tirar boleto"
-                        onClick={() => onTirarBoleto(b.chave)} className="text-muted-foreground hover:text-destructive">
-                        <X className="h-3 w-3" />
-                      </button>
-                    ) : (
-                      <button type="button" onClick={() => escolher(p.numero)} data-testid={`mais-boleto-${p.numero}`}
-                        className="inline-flex items-center gap-0.5 text-primary hover:underline">
-                        <Plus className="h-3 w-3" /> Boleto
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
+            {parcelas.map((p, k) => (
+              <LinhaDaParcela key={p.numero} parcela={p} impar={k % 2 === 1} total={n} nf={nf} boleto={porParcela.get(p.numero)}
+                recusaDoClique={recusa?.parcela === p.numero ? recusa.msg : null} travado={!!travado}
+                onEscolher={() => escolher(p.numero)} onLimparRecusa={() => setRecusa(null)}
+                onBoleto={onBoleto} onTirarBoleto={onTirarBoleto} />
+            ))}
           </tbody>
           <tfoot>
             <tr>

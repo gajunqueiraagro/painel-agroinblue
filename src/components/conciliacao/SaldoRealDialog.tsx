@@ -1,11 +1,12 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { CampoMoeda } from '@/components/ui/campo-moeda';
 import { Label } from '@/components/ui/label';
 import { DatePicker } from '@/components/ui/date-picker';
-import { Loader2, Paperclip, Trash2 } from 'lucide-react';
+import { Loader2, Trash2 } from 'lucide-react';
+import { AreaDeArquivo } from '@/components/ui/area-de-arquivo';
 import { toast } from 'sonner';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { saldoConfere } from '@/lib/financeiro/conciliacaoCalc';
@@ -14,7 +15,7 @@ import {
   useSaldoDeclaradoOfx, useSaldoDocumentos, useExtratoFimDoMes,
   anexarSaldoDocumento, cancelarSaldoDocumento, urlAssinadaSaldoDocumento,
 } from '@/hooks/useExtratoDaConta';
-import { TIPOS_ACEITOS } from '@/hooks/useLancamentoDocumentos';
+import { REGRA_ARQUIVO_DO_DOCUMENTO } from '@/hooks/useLancamentoDocumentos';
 import { useResumoMes, useReleDonoAoMudarLancamentos } from '@/hooks/useResumoConciliacao';
 import { saldoSistemaNaData } from '@/lib/conciliacao/resumoDoDono';
 
@@ -103,8 +104,9 @@ export function SaldoRealDialog({
   };
   const extratoFim = useExtratoFimDoMes(clienteId, contaId, ano, mes);
   const anexos = useSaldoDocumentos(clienteId, contaId, ano, mes);
-  const inputArquivo = useRef<HTMLInputElement>(null);
   const [anexando, setAnexando] = useState(false);
+  /* UI-ARRASTAR-ARQUIVO-01b — a recusa do anexo fica ESCRITA na área (era toast). */
+  const [erroAnexo, setErroAnexo] = useState<string | null>(null);
   const [cancelandoId, setCancelandoId] = useState<string | null>(null);
   const [motivo, setMotivo] = useState('');
 
@@ -140,14 +142,14 @@ export function SaldoRealDialog({
   const anexar = async (file: File | undefined) => {
     if (!file) return;
     setAnexando(true);
+    setErroAnexo(null);
     try {
       const r = await anexarSaldoDocumento({ clienteId, contaId, anoMes, file });
-      if (!r.ok) toast.error(r.erro ?? 'Não foi possível anexar o arquivo.');
+      if (!r.ok) setErroAnexo(r.erro ?? 'Não foi possível anexar o arquivo.');
       else toast.success('Extrato anexado.');
       await anexos.recarregar();
     } finally {
       setAnexando(false);
-      if (inputArquivo.current) inputArquivo.current.value = '';
     }
   };
 
@@ -300,16 +302,12 @@ export function SaldoRealDialog({
           {/* Anexos do extrato — prova visual. Gravam na hora, independente do Informar/
               Atualizar do saldo. A lista rola sozinha a partir do 4º arquivo; o modal não. */}
           <div className="rounded border px-2 py-1.5">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-medium text-muted-foreground">Extrato (PDF/imagem)</span>
-              <input ref={inputArquivo} type="file" accept={TIPOS_ACEITOS.join(',')} className="hidden"
-                onChange={(e) => { void anexar(e.target.files?.[0]); }} />
-              <Button type="button" variant="outline" size="sm" className="h-6 gap-1 px-2 text-[10px]"
-                disabled={anexando} onClick={() => inputArquivo.current?.click()}>
-                {anexando ? <Loader2 className="h-3 w-3 animate-spin" /> : <Paperclip className="h-3 w-3" />}
-                Anexar
-              </Button>
-            </div>
+            {/* UI-ARRASTAR-ARQUIVO-01b — a linha do "Anexar" virou a área do sistema, nos mesmos 24px: clicar ou arrastar.
+                Cada extrato ACRESCENTA um anexo (nunca substitui), e soltar GRAVA NA HORA, como o botão gravava. */}
+            <AreaDeArquivo regra={REGRA_ARQUIVO_DO_DOCUMENTO} className="h-6" testId="area-extrato-do-saldo"
+              convite="Clique ou arraste o extrato"
+              desabilitado={anexando} motivoDesabilitado="Anexando o extrato…" motivoExterno={erroAnexo}
+              onArquivos={([f]) => { void anexar(f); }} />
             {anexos.documentos.length === 0 ? (
               <div className="pt-1 text-[10px] text-muted-foreground">Nenhum arquivo anexado.</div>
             ) : (

@@ -14,15 +14,27 @@
  *   `porArquivo` na linha de cada um.
  */
 
-export type TipoDeArquivo = 'pdf' | 'jpg' | 'png' | 'xml';
+export type TipoDeArquivo = 'pdf' | 'jpg' | 'png' | 'xml' | 'ofx' | 'xlsx' | 'xls' | 'csv' | 'txt';
 
-const CATALOGO: Record<TipoDeArquivo, { extensoes: readonly string[]; mimes: readonly string[] }> = {
-  pdf: { extensoes: ['pdf'], mimes: ['application/pdf'] },
-  jpg: { extensoes: ['jpg', 'jpeg'], mimes: ['image/jpeg'] },
-  png: { extensoes: ['png'], mimes: ['image/png'] },
-  xml: { extensoes: ['xml'], mimes: ['application/xml', 'text/xml'] },
+/**
+ * O CATÁLOGO: por tipo, as extensões, os MIME PRÓPRIOS e os MIME GENÉRICOS que o navegador costuma mandar no lugar deles.
+ * ⚠ GENÉRICO SÓ VALE COM A EXTENSÃO DO TIPO (UI-ARRASTAR-ARQUIVO-01b): o OFX quase nunca chega com tipo próprio — vem vazio,
+ *   `application/octet-stream` ou `text/plain`; o CSV vem como `text/plain` ou, no Windows com Excel instalado,
+ *   `application/vnd.ms-excel` (que é o MIME próprio do .xls). Nesses casos a EXTENSÃO manda. Um `.pdf` com `text/plain`
+ *   continua NÃO sendo PDF: `text/plain` não é genérico de PDF.
+ */
+const CATALOGO: Record<TipoDeArquivo, { extensoes: readonly string[]; mimes: readonly string[]; genericos: readonly string[] }> = {
+  pdf: { extensoes: ['pdf'], mimes: ['application/pdf'], genericos: [] },
+  jpg: { extensoes: ['jpg', 'jpeg'], mimes: ['image/jpeg'], genericos: [] },
+  png: { extensoes: ['png'], mimes: ['image/png'], genericos: [] },
+  xml: { extensoes: ['xml'], mimes: ['application/xml', 'text/xml'], genericos: [] },
+  ofx: { extensoes: ['ofx'], mimes: ['application/x-ofx', 'application/ofx', 'application/vnd.intu.qfx'], genericos: ['text/plain'] },
+  xlsx: { extensoes: ['xlsx'], mimes: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'], genericos: [] },
+  xls: { extensoes: ['xls'], mimes: ['application/vnd.ms-excel'], genericos: [] },
+  csv: { extensoes: ['csv'], mimes: ['text/csv', 'application/csv', 'text/comma-separated-values'], genericos: ['text/plain', 'application/vnd.ms-excel'] },
+  txt: { extensoes: ['txt'], mimes: ['text/plain'], genericos: [] },
 };
-const TODOS: readonly TipoDeArquivo[] = ['pdf', 'jpg', 'png', 'xml'];
+const TODOS: readonly TipoDeArquivo[] = ['pdf', 'jpg', 'png', 'xml', 'ofx', 'xlsx', 'xls', 'csv', 'txt'];
 /** O que o navegador manda quando NÃO sabe o tipo. */
 const SEM_MIME: readonly string[] = ['', 'application/octet-stream'];
 
@@ -48,22 +60,34 @@ const extensaoDoNome = (nome: string): string => {
   return i < 0 ? '' : nome.slice(i + 1).toLowerCase();
 };
 
-/** O tipo do arquivo pelo catálogo: MIME quando há; sem MIME, a extensão. `null` = nenhum tipo conhecido. */
+/**
+ * O tipo do arquivo pelo catálogo. `null` = nenhum tipo conhecido.
+ *   1. sem MIME (vazio ou `application/octet-stream`): a EXTENSÃO;
+ *   2. a extensão aponta um tipo e o MIME é próprio OU genérico DAQUELE tipo: esse tipo (o `.ofx` em `text/plain`, o `.csv`
+ *      em `application/vnd.ms-excel`);
+ *   3. senão, o tipo que tem aquele MIME como próprio (arquivo sem extensão, ou com a extensão trocada).
+ */
 export function tipoDoArquivo(arquivo: Pick<File, 'name' | 'type'>): TipoDeArquivo | null {
   const mime = (arquivo.type ?? '').toLowerCase();
-  if (!SEM_MIME.includes(mime)) return TODOS.find(t => CATALOGO[t].mimes.includes(mime)) ?? null;
   const ext = extensaoDoNome(arquivo.name ?? '');
-  return ext ? (TODOS.find(t => CATALOGO[t].extensoes.includes(ext)) ?? null) : null;
+  const pelaExtensao = ext ? (TODOS.find(t => CATALOGO[t].extensoes.includes(ext)) ?? null) : null;
+  if (SEM_MIME.includes(mime)) return pelaExtensao;
+  if (pelaExtensao && (CATALOGO[pelaExtensao].mimes.includes(mime) || CATALOGO[pelaExtensao].genericos.includes(mime))) return pelaExtensao;
+  return TODOS.find(t => CATALOGO[t].mimes.includes(mime)) ?? null;
 }
 
-const NOMES: Record<TipoDeArquivo, string> = { pdf: 'PDF', jpg: 'imagem', png: 'imagem', xml: 'XML' };
+const NOMES: Record<TipoDeArquivo, string> = {
+  pdf: 'PDF', jpg: 'imagem', png: 'imagem', xml: 'XML', ofx: 'OFX', xlsx: 'Excel', xls: 'Excel', csv: 'CSV', txt: 'TXT',
+};
 /** "PDF, imagem ou XML" — os tipos da regra, em português, sem repetir "imagem". */
 export function tiposPorExtenso(tipos: readonly TipoDeArquivo[]): string {
   const nomes = [...new Set(tipos.map(t => NOMES[t]))];
   if (nomes.length <= 1) return nomes[0] ?? '';
   return `${nomes.slice(0, -1).join(', ')} ou ${nomes[nomes.length - 1]}`;
 }
-const SIGLAS: Record<TipoDeArquivo, string> = { pdf: 'PDF', jpg: 'JPG', png: 'PNG', xml: 'XML' };
+const SIGLAS: Record<TipoDeArquivo, string> = {
+  pdf: 'PDF', jpg: 'JPG', png: 'PNG', xml: 'XML', ofx: 'OFX', xlsx: 'XLSX', xls: 'XLS', csv: 'CSV', txt: 'TXT',
+};
 /** "PDF, JPG, PNG ou XML" — os tipos da regra pela sigla, para a frase de recusa e a ajuda. */
 export function tiposPorSigla(tipos: readonly TipoDeArquivo[]): string {
   const nomes = [...new Set(tipos.map(t => SIGLAS[t]))];

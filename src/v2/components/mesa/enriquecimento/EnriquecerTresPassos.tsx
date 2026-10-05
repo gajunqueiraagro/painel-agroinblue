@@ -24,7 +24,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useCliente } from '@/contexts/ClienteContext';
-import { Input } from '@/components/ui/input';
+import { AreaDeArquivo } from '@/components/ui/area-de-arquivo';
+import { fraseDeFormatoNaoAceito, type RegraDeAceite, type TipoDeArquivo } from '@/lib/arquivo/aceitarArquivo';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { useImportLancamentosExcel } from '@/v2/hooks/useImportLancamentosExcel';
@@ -52,6 +53,13 @@ export interface EnriquecerTresPassosProps {
   /** 133c — o destino do "Ver no Financeiro" no relatório final do lote. */
   onVerNoFinanceiro?: () => void;
 }
+
+/** A planilha do mês: Excel (.xlsx, .xls), sem limite de tamanho — UI-ARRASTAR-ARQUIVO-01b. */
+const TIPOS_DA_PLANILHA_DO_MES: readonly TipoDeArquivo[] = ['xlsx', 'xls'];
+const REGRA_DA_PLANILHA_DO_MES: RegraDeAceite = {
+  tipos: TIPOS_DA_PLANILHA_DO_MES,
+  frases: { tipo: fraseDeFormatoNaoAceito(TIPOS_DA_PLANILHA_DO_MES) },
+};
 
 export function EnriquecerTresPassos({ ano, mes, clienteNome, contaNome, onVerNoFinanceiro }: EnriquecerTresPassosProps) {
   const { clienteAtual } = useCliente();
@@ -290,12 +298,12 @@ export function EnriquecerTresPassos({ ano, mes, clienteNome, contaNome, onVerNo
           <div className="flex shrink-0 flex-wrap items-end gap-2 rounded-lg border bg-card px-2 py-1.5">
             <div className="min-w-[220px]">
               <Label className="text-[10px]">Planilha do mês (.xlsx, .xls)</Label>
-              <Input type="file" accept=".xlsx,.xls" className="h-7 text-[11px]"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) void escolherArquivo(f);
-                  e.target.value = '';
-                }} />
+              {/* UI-ARRASTAR-ARQUIVO-01b — o seletor do sistema virou a área, nos mesmos 28px: clicar ou arrastar. Os tipos
+                  são os de sempre (.xlsx, .xls), sem limite de tamanho; o rótulo acima já os diz. LARGURA FIXA (a do campo que havia):
+                  com a recusa escrita a área alargava de 220 para 258px — medido. */}
+              <AreaDeArquivo regra={REGRA_DA_PLANILHA_DO_MES} className="h-7 w-[264px]" testId="area-planilha-do-mes"
+                convite="Clique ou arraste a planilha" detalhe=""
+                onArquivos={([f]) => { if (f) void escolherArquivo(f); }} />
             </div>
             {arquivo && (
               <Button variant="ghost" className="h-7 text-[10px]" disabled={lendo}

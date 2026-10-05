@@ -112,6 +112,30 @@ describe('arrastar', () => {
   });
 });
 
+describe('o motivo do hospedeiro e o convite curto (01b)', () => {
+  it('`motivoExterno`: a recusa que só o hospedeiro sabe dar aparece no MESMO lugar e do mesmo jeito; em branco, nada', () => {
+    const { rerender } = render(<AreaDeArquivo regra={DOC} onArquivos={vi.fn()} testId="area" motivoExterno="O arquivo não é um extrato OFX." />);
+    const recusa = screen.getByTestId('area-de-arquivo-recusa');
+    expect(recusa.textContent).toBe('O arquivo não é um extrato OFX.');
+    expect(recusa.getAttribute('role')).toBe('alert');
+    expect(screen.getByTestId('area').getAttribute('title')).toBe('O arquivo não é um extrato OFX.');
+    for (const vazio of ['', '   ', null]) {
+      rerender(<AreaDeArquivo regra={DOC} onArquivos={vi.fn()} testId="area" motivoExterno={vazio} />);
+      expect(screen.queryByTestId('area-de-arquivo-recusa')).toBeNull();
+    }
+  });
+  it('a recusa do DONO vem antes da do hospedeiro (é a do arquivo que acabou de ser solto)', () => {
+    const { area } = montar({ motivoExterno: 'recusa antiga do hospedeiro' });
+    fireEvent.drop(area, comArquivos([txt()]));
+    expect(screen.getByTestId('area-de-arquivo-recusa').textContent).toBe('Só PDF, imagem ou XML.');
+  });
+  it('`detalhe=""`: só o convite (quem usa já diz os formatos ao lado)', () => {
+    const { area } = montar({ detalhe: '' });
+    expect(area.textContent).toBe('Clique ou arraste o arquivo');
+    expect(area.getAttribute('title')).toBe('Clique ou arraste o arquivo');
+  });
+});
+
 describe('modo lote', () => {
   it('entrega TODOS os arquivos com o veredito de cada um; nada é recusado na área', () => {
     const { area, onArquivos, input } = montar({ modo: 'lote', regra: { ...DOC, varios: true } });

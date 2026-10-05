@@ -23,12 +23,59 @@ describe('tipoDoArquivo — MIME quando há; sem MIME, a extensão', () => {
     ['nota.xml', 'text/xml', 'xml'], ['nota.xml', 'application/xml', 'xml'],
     ['nota.xml', '', 'xml'], ['NOTA.XML', '', 'xml'], ['Boleto.PDF', '', 'pdf'], ['foto.JPEG', 'application/octet-stream', 'jpg'],
     ['sem-extensao', 'application/pdf', 'pdf'],
-    ['planilha.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null],
-    ['nota.txt', 'text/plain', null], ['sem-nada', '', null],
+    ['planilha.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'xlsx'],
+    ['nota.txt', 'text/plain', 'txt'], ['sem-nada', '', null], ['video.mp4', 'video/mp4', null],
     /* MIME informado e fora da lista recusa, mesmo com a extensão boa — a regra de sempre */
     ['disfarce.pdf', 'text/html', null],
   ])('%s (%s) -> %s', (nome, mime, esperado) => {
     expect(tipoDoArquivo(arq(nome, mime))).toBe(esperado);
+  });
+});
+
+describe('o catálogo dos importadores (01b) — a extensão manda quando o MIME vem vazio ou genérico', () => {
+  const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  it.each([
+    /* OFX: quase nunca chega com tipo próprio */
+    ['set26.ofx', 'application/x-ofx', 'ofx'], ['set26.ofx', 'application/ofx', 'ofx'], ['set26.ofx', 'application/vnd.intu.qfx', 'ofx'],
+    ['set26.ofx', '', 'ofx'], ['set26.ofx', 'application/octet-stream', 'ofx'], ['set26.ofx', 'text/plain', 'ofx'], ['SET26.OFX', '', 'ofx'],
+    /* Excel */
+    ['mes.xlsx', XLSX, 'xlsx'], ['mes.xlsx', '', 'xlsx'], ['mes.xlsx', 'application/octet-stream', 'xlsx'],
+    ['mes.xls', 'application/vnd.ms-excel', 'xls'], ['mes.xls', '', 'xls'],
+    /* CSV: no Windows com Excel instalado vem como `application/vnd.ms-excel` */
+    ['extrato.csv', 'text/csv', 'csv'], ['extrato.csv', 'application/csv', 'csv'], ['extrato.csv', 'text/comma-separated-values', 'csv'],
+    ['extrato.csv', 'text/plain', 'csv'], ['extrato.csv', 'application/vnd.ms-excel', 'csv'], ['extrato.csv', '', 'csv'],
+    /* TXT */
+    ['custeio.txt', 'text/plain', 'txt'], ['custeio.txt', '', 'txt'], ['custeio.TXT', 'application/octet-stream', 'txt'],
+    /* o genérico SÓ vale com a extensão do tipo: um .pdf em text/plain é texto, não PDF */
+    ['disfarce.pdf', 'text/plain', 'txt'], ['disfarce.pdf', 'application/vnd.ms-excel', 'xls'],
+  ])('%s (%s) -> %s', (nome, mime, esperado) => {
+    expect(tipoDoArquivo(arq(nome, mime))).toBe(esperado);
+  });
+  it('regra do Importar Banco: aceita os cinco pela extensão, recusa o resto; e o `.pdf` disfarçado de texto NÃO vira documento', () => {
+    const BANCO: RegraDeAceite = { tipos: ['ofx', 'xlsx', 'xls', 'csv', 'txt'] };
+    for (const [nome, mime] of [['a.ofx', ''], ['a.ofx', 'text/plain'], ['a.xlsx', ''], ['a.xls', 'application/vnd.ms-excel'], ['a.csv', 'application/vnd.ms-excel'], ['a.txt', 'text/plain']]) {
+      expect(aceitarArquivo([arq(nome, mime)], BANCO).ok).toBe(true);
+    }
+    expect(aceitarArquivo([arq('nota.pdf', 'application/pdf')], BANCO)).toMatchObject({ ok: false, codigo: 'tipo', motivo: 'Só OFX, Excel, CSV ou TXT.' });
+    expect(aceitarArquivo([arq('disfarce.pdf', 'text/plain')], DOC).ok).toBe(false);
+  });
+  it('REGRA SEM `tamanhoMaxBytes` não recusa por tamanho, por maior que seja o arquivo (os importadores nunca tiveram limite)', () => {
+    const grande = arq('ano-inteiro.ofx', '', 64 * MB);
+    const r = aceitarArquivo([grande], { tipos: ['ofx'] });
+    expect(r.ok).toBe(true);
+    expect(r.porArquivo[0].codigo).toBeNull();
+    /* a busca sabe achar: com limite, o mesmo arquivo é recusado */
+    expect(aceitarArquivo([grande], { tipos: ['ofx'], tamanhoMaxBytes: 10 * MB }).codigo).toBe('tamanho');
+    expect(resumoDaRegra({ tipos: ['xlsx', 'xls'] })).toBe('Excel');
+    expect(fraseDeFormatoNaoAceito(['xlsx', 'xls'])).toBe('Formato não aceito. Envie XLSX ou XLS.');
+    expect(acceptDaRegra({ tipos: ['xlsx'] })).toBe('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.xlsx');
+  });
+  it('o arquivo sem tipo sai com o MIME próprio do tipo (o primeiro do catálogo)', () => {
+    expect(aceitarArquivo([arq('a.ofx', '')], { tipos: ['ofx'] }).arquivos[0].type).toBe('application/x-ofx');
+    expect(aceitarArquivo([arq('a.csv', '')], { tipos: ['csv'] }).arquivos[0].type).toBe('text/csv');
+    /* com tipo informado (mesmo genérico), o arquivo é o MESMO objeto */
+    const f = arq('a.ofx', 'text/plain');
+    expect(aceitarArquivo([f], { tipos: ['ofx'] }).arquivos[0]).toBe(f);
   });
 });
 

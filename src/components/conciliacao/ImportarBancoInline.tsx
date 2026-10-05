@@ -1,8 +1,10 @@
-import { Fragment, useRef, useState } from 'react';
+import { Fragment, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
-import { CheckCircle2, Loader2, Upload, X } from 'lucide-react';
+import { CheckCircle2, Loader2, X } from 'lucide-react';
+import { AreaDeArquivo } from '@/components/ui/area-de-arquivo';
+import { fraseDeFormatoNaoAceito, type RegraDeAceite, type TipoDeArquivo } from '@/lib/arquivo/aceitarArquivo';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { formatMoeda } from '@/lib/calculos/formatters';
@@ -53,8 +55,22 @@ interface Props {
   acoes?: React.ReactNode;
 }
 
+/**
+ * O que o "Importar Banco" aceita — UI-ARRASTAR-ARQUIVO-01b. O dono do aceite julga pela extensão (o OFX e o CSV quase nunca
+ * chegam com tipo próprio); o que o arquivo É de verdade quem diz é `detectarTipoArquivo`, lendo o conteúdo, depois.
+ * ⚠ SEM `tamanhoMaxBytes`: os importadores nunca tiveram limite, e nenhum foi inventado (Gabriel, 05/10).
+ */
+/** O que a ÁREA diz quando o detector (ou o leitor) recusa: a frase inteira vai ao lado, na linha. */
+const ARQUIVO_RECUSADO = 'Arquivo recusado';
+const TIPOS_DO_IMPORTAR_BANCO: readonly TipoDeArquivo[] = ['ofx', 'xlsx', 'xls', 'csv', 'txt'];
+const REGRA_DO_IMPORTAR_BANCO: RegraDeAceite = {
+  tipos: TIPOS_DO_IMPORTAR_BANCO,
+  frases: { tipo: fraseDeFormatoNaoAceito(TIPOS_DO_IMPORTAR_BANCO) },
+};
+
 export function ImportarBancoInline({ contas, contaId, onContaChange, onImportado, acoes }: Props) {
-  const input = useRef<HTMLInputElement>(null);
+  /* UI-ARRASTAR-ARQUIVO-01b — o que o DETECTOR (conteúdo) ou o leitor recusam aparece NA ÁREA, não em toast. */
+  const [recusaDoArquivo, setRecusaDoArquivo] = useState<string | null>(null);
   const { preview, loading, gerarPreview, confirmarImportacao, reset,
     toggleImportar, marcarTodasImportaveis } = useImportacaoExtrato();
   const [arquivo, setArquivo] = useState<File | null>(null);
@@ -77,6 +93,7 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
 
   const escolher = async (a: File) => {
     setResultado(null);
+    setRecusaDoArquivo(null);
     /* ⚠ SÓ O COMEÇO DO ARQUIVO É LIDO PARA DETECTAR: as âncoras do custeio e a
        tag do OFX vivem no topo, e ler um extrato inteiro em memória só para
        decidir o tipo seria caro à toa. O parser do fluxo escolhido lê o resto. */
@@ -94,7 +111,7 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
       /* ⚠ O AVISO NOMEIA O QUE PARECE SER. "Formato não reconhecido" manda o
          operador adivinhar; "isto parece um relatório de custeio" diz o que
          fazer a seguir. */
-      toast.error(aviso ?? 'Formato não reconhecido.');
+      setRecusaDoArquivo(aviso ?? 'Formato não reconhecido.');
       return;
     }
     setTipo(t);
@@ -102,7 +119,7 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
     /* Excel e custeio têm fluxo próprio e não passam pelo motor do extrato. */
     if (t !== 'ofx' && t !== 'csv-extrato') return;
     try { await gerarPreview({ arquivo: a, contaBancariaId: contaId }); }
-    catch (e) { toast.error(e instanceof Error ? e.message : 'Falha ao ler o arquivo.'); setArquivo(null); setTipo(null); }
+    catch (e) { setRecusaDoArquivo(e instanceof Error ? e.message : 'Falha ao ler o arquivo.'); setArquivo(null); setTipo(null); }
   };
 
   const cancelar = () => { reset(); setArquivo(null); setTipo(null); };
@@ -181,18 +198,20 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
       {!preview && tipo !== 'excel' && tipo !== 'custeio-txt' && (
         <div className="flex items-center gap-2">
           {seletor}
-          <Button type="button" size="sm" className="h-7 gap-1.5 text-xs"
-            disabled={!contaId || loading}
-            title={contaId ? undefined : 'Escolha a conta primeiro'}
-            onClick={() => input.current?.click()}>
-            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-            Escolher arquivo
-          </Button>
+          {/* UI-ARRASTAR-ARQUIVO-01b — o botão virou a área do sistema, nos mesmos 28px: clicar ou arrastar. DUAS CAMADAS: o
+              dono do aceite deixa passar pela EXTENSÃO; `detectarTipoArquivo` lê o conteúdo depois e a frase dele volta para
+              a linha. Sem limite de tamanho, como sempre. Os formatos estão nas pílulas ao lado.
+              ⚠ A FRASE DO DETECTOR É LONGA (pede ~620px) e a área tem 232: a área diz só "Arquivo recusado" e a frase INTEIRA
+              vai para a direita da linha, onde o resultado da importação já aparece (Gabriel, 05/10). */}
+          <AreaDeArquivo regra={REGRA_DO_IMPORTAR_BANCO} className="h-7 w-[232px] shrink-0" testId="area-importar-banco"
+            detalhe="" motivoExterno={recusaDoArquivo ? ARQUIVO_RECUSADO : null}
+            desabilitado={!contaId || loading} motivoDesabilitado={contaId ? 'Lendo o arquivo…' : 'Escolha a conta primeiro'}
+            onArquivos={([a]) => { if (a) void escolher(a); }} />
           {/* ⚠ QUATRO PÍLULAS NO LUGAR DO PARÁGRAFO — 133b. O texto dizia o que cada
               formato faz e ocupava três linhas da largura útil em TODA abertura da aba,
               inclusive nas dezenas em que o operador já sabe. A informação não some: cada
               pílula é o formato, e a explicação de uma linha mora no `title` dela e no "?". */}
-          <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
+          <span className={recusaDoArquivo ? 'flex shrink-0 items-center gap-1' : 'flex min-w-0 flex-1 flex-wrap items-center gap-1'}>
             {FORMATOS.map((f) => (
               <span key={f.ext} title={f.dica}
                 className="cursor-help rounded border border-border bg-muted/60 px-1.5 py-[1px] font-mono text-[10px] leading-tight text-muted-foreground">
@@ -205,6 +224,12 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
               ?
             </span>
           </span>
+          {recusaDoArquivo && (
+            <span data-testid="recusa-do-arquivo" role="alert" title={recusaDoArquivo}
+              className="min-w-0 flex-1 truncate text-[10px] leading-tight text-destructive">
+              {recusaDoArquivo}
+            </span>
+          )}
           {acoes}
           {resultado?.tipo === 'ok' && (
             <span data-testid="resultado-importacao" title={resultado.texto}
@@ -633,14 +658,6 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
         </div>
         );
       })()}
-      {/* ⚠ ÚLTIMO FILHO, e é isso que devolve os 8px — ver o comentário no topo deste bloco. */}
-      <input ref={input} type="file" accept=".ofx,.OFX,.xlsx,.xls,.txt,.csv" className="hidden"
-        onChange={e => {
-          const a = e.target.files?.[0];
-          if (a) void escolher(a);
-          // permite reescolher o MESMO arquivo depois de cancelar
-          e.target.value = '';
-        }} />
     </div>
   );
 }

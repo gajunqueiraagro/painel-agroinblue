@@ -162,7 +162,10 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 05/10/2026 (UI-ARRASTAR-ARQUIVO-01a, +70: `src/lib/arquivo/aceitarArquivo.test.ts` 32,
+  Baseline em 05/10/2026 (UI-ARRASTAR-ARQUIVO-01b, +62: `src/lib/arquivo/aceitarArquivo.test.ts` 27, `src/lib/arquivo/umSoArrastar.test.ts` 3,
+  `src/components/ui/area-de-arquivo.test.tsx` 3, `src/components/conciliacao/arquivoTelas01b.test.tsx` 18,
+  `src/components/conciliacao/arquivoCaracterizacao01b.test.tsx` 3, `src/v2/components/mesa/enriquecimento/arquivoTelas01b.test.tsx` 6,
+  `src/v2/components/mesa/enriquecimento/arquivoCaracterizacao01b.test.tsx` 2; antes o UI-ARRASTAR-ARQUIVO-01a, +70: `src/lib/arquivo/aceitarArquivo.test.ts` 32,
   `src/lib/arquivo/protegerSoltarFora.test.ts` 6, `src/components/ui/area-de-arquivo.test.tsx` 14,
   `src/components/ui/areaDeArquivoTelas.test.tsx` 13, `src/components/ui/areaDeArquivoCaracterizacao.test.tsx` 5; antes o
   REC-VALOR-DO-MES-MODAL-01, +45: `src/lib/financeiro/valorDoMes.test.ts` 28,
@@ -194,7 +197,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3848
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3910
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -512,8 +515,8 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   UTC), saiu na 20261027192100 (⚠ registrada como 20261003180742; ledger = arquivo, md5 0369cb9f…), com a guarda e o registro dos
   outros 4]; (c) "CLASSIFICADO" NO DESFAZER = `plano_conta_id` (decisao do Gabriel): o ca94d19c da 95c641a0 ("Devolucao aporte
   financeiro", 20.000) e' Dividendos POR TEXTO, a excecao do plano, e por isso o resumo diz "80 lancamentos serao cancelados (79
-  classificados, 17 editados a' mao)" — se Dividendos deve contar como classificado e' decisao; (d) a leitura do arquivo no
-  "Importar Banco" (formato nao reconhecido, falha do parser) segue em TOAST (UX-TOAST-01) — so' a gravacao saiu dele; (e) a
+  classificados, 17 editados a' mao)" — se Dividendos deve contar como classificado e' decisao; (d) [FECHADA no UI-ARRASTAR-ARQUIVO-01b: a recusa do
+  detector e a falha do leitor do "Importar Banco" sairam do toast e ficam escritas na linha, ao lado da area]; (e) a
   pre-deteccao da previa (`candRows`, a consulta dos vivos no intervalo do arquivo) NAO pagina: com mais de 1.000 extratos vivos no
   periodo do arquivo, o "ja' existe pela chave natural" da previa ficaria incompleto — o banco continua pulando certo (a RPC
   confere os dois indices), mas a previa contaria errado. ·
@@ -984,13 +987,49 @@ preview que o cabecalho nao sai da tela ao rolar.
   MEDIDO PARA O XML NA OC (A1): o bucket `oc-documentos` aceita `text/xml` e `application/xml` (10 MB), o caminho sai com `.xml`
   e a URL assinada nao filtra tipo — mas NENHUM `.xml` foi gravado ate' hoje em nenhum dos dois buckets (0 de 174 e 0 de 408):
   subir e abrir um XML de verdade nunca foi exercitado.
-  ⚠ FILA: 01b — os 7 campos so'-clique de tela liberada (`ParcelasDaCompra.tsx`, `SaldoRealDialog.tsx`, `ImportarBancoInline.tsx`,
-    `EnriquecerTresPassos.tsx`, `V2ImportLancamentosExcel.tsx`, `CusteioTxtImportTab.tsx`, `EnriquecimentoImportarDialog.tsx`) ·
-    01c — so' admin: `MapaRebanhoImportDialog` e `CadernoImportTab` (ja' arrastam; area alta com previa pede conteudo proprio),
+  · O 01b (05/10, so' tela) — OS CINCO CAMPOS SO'-CLIQUE DE TELA LIBERADA, pelo mesmo dono:
+    - O GESTO SAIU DO COMPONENTE PARA UM HOOK, `useSoltarArquivo` (`src/lib/arquivo/useSoltarArquivo.ts`: contador de entradas,
+      "so' arquivo", aceite pela regra, modos "um"/"lote"). A `AreaDeArquivo` o usa, e quem tem alvo que NAO e' uma area (uma
+      linha de tabela) espalha o `alvo` dele no elemento. ⚠ `onDrop`/`onDragOver`/`dataTransfer` SO' EXISTEM no hook e na protecao
+      global — preso por `src/lib/arquivo/umSoArrastar.test.ts`, que varre a fonte e so' admite as duas areas de foto do 01c.
+    - CATALOGO: entraram `ofx`, `xlsx`, `xls`, `csv`, `txt`. O tipo sai (1) da EXTENSAO quando nao ha' MIME (vazio ou
+      `application/octet-stream`); (2) da extensao quando o MIME e' proprio OU GENERICO DAQUELE TIPO — `text/plain` para OFX e
+      CSV, `application/vnd.ms-excel` para CSV (o Windows com Excel o manda); (3) senao, do MIME proprio. Um `.pdf` em
+      `text/plain` continua NAO sendo PDF. MIME proprios presos em teste: OFX `application/x-ofx` / `application/ofx` /
+      `application/vnd.intu.qfx`; CSV `text/csv` / `application/csv` / `text/comma-separated-values`.
+    - SEM LIMITE NOS IMPORTADORES (Gabriel: nao inventar numero): as regras do Importar Banco, da planilha do mes e do Excel de
+      classificacao NAO tem `tamanhoMaxBytes`, e o dono aceita regra sem ele (preso por teste). 10 MB so' no documento e no boleto.
+    - `motivoExterno` (prop da area): a recusa que so' o HOSPEDEIRO sabe dar depois do aceite; `detalhe=""`: so' o convite.
+    - BOLETO POR PARCELA (`ParcelasDaCompra`): a LINHA inteira e' alvo de soltar (`LinhaDaParcela` + o hook), 18px em todo
+      estado; a regra e' a do BOLETO (PDF, JPG, PNG — XML passou a ser recusado, no soltar e no "+ Boleto"); recusa na celula
+      Boleto; soltar sobre parcela que JA' tem boleto pergunta NA CELULA "Substituir o boleto? Sim / Não" (Sim tira o antigo e
+      guarda o novo; Nao ou Esc desfaz — o Esc e' tomado na janela, em captura, para o modal nao fechar). Nada grava ate' o Salvar.
+    - EXTRATO DO SALDO (`SaldoRealDialog`): a linha do "Anexar" virou a area, nos mesmos 24px. Cada extrato ACRESCENTA um anexo
+      (nunca substitui — por isso nao ha' pergunta) e soltar GRAVA NA HORA, como o botao gravava. A recusa (do tipo e do banco)
+      fica na area; durante o envio a area fica apagada com "Anexando o extrato…".
+    - IMPORTAR BANCO (`ImportarBancoInline`): a area no lugar do botao, 232 x 28 na linha de 28px; sem conta, apagada com
+      "Escolha a conta primeiro". DUAS CAMADAS: o dono deixa passar pela extensao e `detectarTipoArquivo` (INTOCADO) julga o
+      conteudo depois. Recusa do detector ou do leitor: a area diz "Arquivo recusado" e a FRASE INTEIRA vai para a direita da
+      linha (`recusa-do-arquivo`, vermelho, uma linha, inteira no `title`); as pilulas de formato deixam de esticar enquanto ela
+      esta' la'.
+    - ENRIQUECER passo 1 (`EnriquecerTresPassos`, .xlsx/.xls, 264 x 28) e o dialogo "Importar Excel de classificação" da Mesa
+      (`EnriquecimentoImportarDialog`, so' .xlsx, 300 x 23): a area no lugar do campo do sistema, na mesma altura; o tipo errado
+      e' recusado na area ANTES do leitor. ⚠ LARGURA FIXA: sem ela a area do passo 1 alargava de 220 para 258px com a recusa.
+    Medido a 1.135 (Teste; NJ so' leitura no Enriquecer e na Mesa): linha da parcela 18px vazia / com realce / com boleto / com a
+    pergunta / com recusa, tabela 750 x 102 e modal 1024 x 491 iguais; extrato do saldo 396 x 24, dialogo 448 x 353; Importar
+    Banco linha de 28px; passo 1 caixa de 66px; Mesa barra 718 x 36 e dialogo 720 x 481.
+    ⚠ A FRASE DO DETECTOR NAO CABE INTEIRA a 1.135: pede 561px e tem 189 (faltam 372) — corta com o inteiro no `title`.
+  ⚠ UI-ARQUIVO-CAMPO-SEM-ENTRADA-01: os seletores de arquivo de `V2ImportLancamentosExcel.tsx` (~:239) e
+    `CusteioTxtImportTab.tsx` (~:588) NUNCA SE DESENHAM — so' aparecem sem `arquivoInicial`, e o unico lugar que monta as duas
+    telas (`ImportarBancoInline.tsx`, `<V2ImportLancamentosExcel arquivoInicial={arquivo} />` e `<CusteioTxtImportTab
+    arquivoInicial={arquivo} … />`) sempre passa o arquivo. Nao foram trocados; apagar e' decisao.
+  ⚠ FILA: 01c — so' admin: `MapaRebanhoImportDialog` e `CadernoImportTab` (ja' arrastam; area alta com previa pede conteudo proprio),
     `MesaClassificacaoTab`, `V2MesaOperacional`, `ExcelImportDialog`, `KmlUploadDialog`, `AbateDetalhesDialog` (4 campos) ·
     legados sem rota ficam (`ImportMapaPastos`, `ImportacaoFinanceira`, `ImportZootHistoricoTab`).
-  ⚠ DIVIDAS: `ParcelasDaCompra` (boleto por linha) ainda julga pela regra do DOCUMENTO, que aceita XML — passa a' do boleto no
-    01b · o toast de recusa do `anexarArquivo` da OC continua (so' a recusa do formulario saiu do toast) · NAO PROVADO NO
+  ⚠ DIVIDAS: no passo 1 do Enriquecer e no dialogo da Mesa a FALHA DE LEITURA da planilha (xlsx corrompido) segue em toast — so' o
+    tipo errado foi para a area · a lista de MIME por navegador nao foi medida em maquina real · o soltar no extrato do saldo
+    (grava na hora), a planilha valida solta no Enriquecer / na Mesa e o Esc da pergunta da parcela dentro do modal real so' por
+    teste · o toast de recusa do `anexarArquivo` da OC continua (so' a recusa do formulario saiu do toast) · NAO PROVADO NO
     NAVEGADOR: o arrasto real do Finder (so' evento sintetico), boletos e OC dentro dos modais reais, o clique abrindo o seletor
     do sistema, e os tres `@dnd-kit` com a protecao ligada (so' por teste de fonte) · OC-DOCUMENTO-XML-REAL-01: subir e abrir um
     `.xml` real na OC e na aba Documentos (homologacao do Gabriel).

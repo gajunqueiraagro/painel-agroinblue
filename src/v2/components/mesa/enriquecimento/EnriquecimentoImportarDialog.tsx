@@ -19,6 +19,15 @@ import type { ContaResolvivel } from '@/v2/lib/mesa/resolverConta';
 import { useImportarClassificacao } from '@/v2/hooks/useImportarClassificacao';
 import { useClassificacaoStaging } from '@/v2/hooks/useClassificacaoStaging';
 import { fmtBRL, fmtData } from './fmt';
+import { AreaDeArquivo } from '@/components/ui/area-de-arquivo';
+import { fraseDeFormatoNaoAceito, type RegraDeAceite, type TipoDeArquivo } from '@/lib/arquivo/aceitarArquivo';
+
+/** O Excel de classificação: só .xlsx, sem limite de tamanho — UI-ARRASTAR-ARQUIVO-01b. */
+const TIPOS_DO_EXCEL_DE_CLASSIFICACAO: readonly TipoDeArquivo[] = ['xlsx'];
+const REGRA_DO_EXCEL_DE_CLASSIFICACAO: RegraDeAceite = {
+  tipos: TIPOS_DO_EXCEL_DE_CLASSIFICACAO,
+  frases: { tipo: fraseDeFormatoNaoAceito(TIPOS_DO_EXCEL_DE_CLASSIFICACAO) },
+};
 
 export interface EnriquecimentoImportarDialogProps {
   open: boolean;
@@ -172,8 +181,11 @@ export function EnriquecimentoImportarDialog({ open, onClose, clienteId, onImpor
         </DialogHeader>
 
         <div className="flex shrink-0 items-center gap-2 border-b bg-card px-3 py-1.5">
-          <input type="file" accept=".xlsx" className="text-[11px]"
-            onChange={(e) => handleSelect(e.target.files?.[0] ?? null)} />
+          {/* UI-ARRASTAR-ARQUIVO-01b — o seletor do sistema virou a área, nos mesmos 23px: clicar ou arrastar. Só .xlsx,
+              como sempre, sem limite de tamanho. */}
+          <AreaDeArquivo regra={REGRA_DO_EXCEL_DE_CLASSIFICACAO} className="h-[23px] w-[300px] shrink-0" testId="area-excel-de-classificacao"
+            convite="Clique ou arraste a planilha"
+            onArquivos={([f]) => { void handleSelect(f ?? null); }} />
           {imp.parsing && <span className="text-[10px] text-muted-foreground">Lendo…</span>}
         </div>
 
