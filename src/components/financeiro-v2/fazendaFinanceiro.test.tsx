@@ -131,7 +131,7 @@ describe('as telas que abrem o novo lancamento e o dialogo (lidas da fonte)', ()
   });
 
   it('o campo do dialogo e\' obrigatorio, e a guarda recusa vazio no simples E no parcelado, antes do banco', () => {
-    expect(dialogo).toMatch(/label="Fazenda \*"[\s\S]{0,400}obrigatorio\s+id="campo-fazenda-financeiro"/);
+    expect(dialogo).toMatch(/label=\{xmlRotTexto\('Fazenda \*', 'fazenda'\)\}[\s\S]{0,400}obrigatorio\s+id="campo-fazenda-financeiro"/);
     const corpo = dialogo.slice(dialogo.indexOf('const handleSubmit = async () => {'));
     const guarda = corpo.indexOf('if (!fazendaIdEfetivo) {');
     expect(guarda).toBeGreaterThan(-1);

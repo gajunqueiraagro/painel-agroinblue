@@ -66,6 +66,11 @@ import {
 } from '@/lib/financeiro/dadosPagamentoDoCadastro';
 import { FornecedorFormDialog } from '@/components/financeiro-v2/FornecedorFormDialog';
 import { cn } from '@/lib/utils';
+import { pendenteDaNota, type DoXml } from '@/lib/financeiro/nfePrefill';
+import { gravarDocumentoNoCadastro, type OcorrenciaDaNota } from '@/lib/financeiro/nfeConsultas';
+import { documentoFormatado, reais } from '@/lib/financeiro/nfe/formatos';
+import type { CampoDoXml } from '@/lib/financeiro/nfe/proporLancamento';
+import { AvisosDoXml, CAMPO_AMBAR, DuplicatasDoXml, FaixaDoFornecedor, OrigemDoXml, PilulaDoXml } from './LancamentoDoXml';
 import type { ExcelContext } from '@/v2/lib/mesa/buildExcelContext';
 import { planoDeTransferencia, ehTipoTransferencia } from '@/v2/lib/mesa/transferenciaPlano';
 import { ATIVIDADES, lembrarAtividade, ultimaAtividade, type Atividade } from '@/lib/financeiro/ultimaAtividade';
@@ -185,7 +190,14 @@ interface Props {
     observacao?: string;
     forma_pagamento?: string;
     dados_pagamento?: string;
+    /**
+     * FIN-NFE-XML-01d — o lancamento nasce de uma NF-e: a proposta, de onde cada campo veio, o fornecedor resolvido, onde a
+     * nota ja' esta' registrada e o proprio XML (que vira o documento NF pendente). Sem a chave, o modal e' o de sempre.
+     */
+    doXml?: DoXml;
   };
+  /** FIN-NFE-XML-01d — chamado quando o LANCAMENTO (ou o parcelamento) nasceu; os documentos vem depois. */
+  onLancamentoCriado?: () => void;
   /**
    * Esconde o bloco de Frequência/Modalidade/Parcelas.
    *
@@ -522,7 +534,7 @@ function getMonthLabel(dateStr: string): string {
 
 export function LancamentoV2Dialog({
   open, carregando, onClose, onSave, onDelete, lancamento, fazendas, contas, classificacoes,
-  fornecedores, safras, defaultFazendaId, onCriarFornecedor, prefill, lockedFields,
+  fornecedores, safras, defaultFazendaId, onCriarFornecedor, prefill, lockedFields, onLancamentoCriado,
   ocultarParcelamento, tiposOperacaoPermitidos,
   referenciaOperacionalInfo, excelContext, permiteEditarFavorecidoOC, onAbrirOperacaoOC,
   documentosAntesDeSalvar,
@@ -543,6 +555,12 @@ export function LancamentoV2Dialog({
      existe quando o lançamento já foi gravado e algum documento não: a partir dali o botão principal
      some (salvar de novo criaria OUTRO lançamento) e sobra o "Tentar de novo". */
   const [pendentes, setPendentes] = useState<DocumentoPendente[]>([]);
+  /* FIN-NFE-XML-01d — o que o operador decidiu sobre o que veio do XML. Tudo e' ESTADO DE TELA: nada e' gravado antes do Salvar. */
+  const [xmlFaixaFechada, setXmlFaixaFechada] = useState(false);
+  const [xmlRegistradaDispensada, setXmlRegistradaDispensada] = useState(false);
+  const [xmlGravarDocumento, setXmlGravarDocumento] = useState(false);
+  const [xmlFornecedorProposto, setXmlFornecedorProposto] = useState<string | null>(null);
+  const [xmlCriandoFornecedor, setXmlCriandoFornecedor] = useState(false);
   /* O alvo da nova tentativa: o lançamento à vista, ou as parcelas do parcelamento (PR 2b). `null` = não
      há como tentar de novo daqui (a frase diz o caminho). */
   const [posSalvar, setPosSalvar] = useState<{
@@ -1137,8 +1155,10 @@ export function LancamentoV2Dialog({
       /* O tipo do documento é uma lista fechada: valor fora dela (ou ausente) abre vazio, sem cast. */
       setTipoDocumento(TIPOS_DOCUMENTO.find((td) => td === prefill.tipo_documento) ?? '');
       setObservacao(prefill.observacao ?? '');
-      setFormaPagamentoParc('avista');
-      setNumParcelas(2); setNumParcelasTexto('2');
+      /* FIN-NFE-XML-01d — duplicatas que CABEM no parcelamento de hoje abrem como "Parcelada · Nx"; o resto, a' vista. */
+      const parcelasDoXml = prefill.doXml?.proposta.parcelamento.tipo === 'parcelado' ? prefill.doXml.proposta.parcelamento.parcelas : null;
+      setFormaPagamentoParc(parcelasDoXml ? 'parcelada' : 'avista');
+      setNumParcelas(parcelasDoXml ?? 2); setNumParcelasTexto(String(parcelasDoXml ?? 2));
       setFormaPgto(prefill.forma_pagamento ?? '');
       setDadosPagamento(prefill.dados_pagamento ?? '');
     } else {
@@ -1179,7 +1199,13 @@ export function LancamentoV2Dialog({
     }
     setFornecedorSearch('');
     setAbaAtiva('geral');
-    setPendentes([]);
+    /* FIN-NFE-XML-01d — o XML da nota ja' nasce como o documento NF pendente do lancamento novo. */
+    const doXml = !lancamento ? prefill?.doXml ?? null : null;
+    setPendentes(doXml ? [pendenteDaNota(doXml, doXml.proposta.favorecidoId)] : []);
+    setXmlFaixaFechada(false);
+    setXmlRegistradaDispensada(false);
+    setXmlGravarDocumento(!!doXml?.resolucao.cadastroSemDocumento);
+    setXmlFornecedorProposto(doXml?.proposta.favorecidoId ?? null);
     setPosSalvar(null);
     setAnexarBoletos(null);
     setErroAntesDeSalvar(null);
@@ -1672,6 +1698,7 @@ export function LancamentoV2Dialog({
           },
         );
         const financiamentoId = await gravarParcelamento(payload, clienteAtual.id, () => qc.invalidateQueries());
+        await aposCriarDoXml();
         toast.success(`Parcelamento criado: ${numParcelas} parcelas`);
         /* FIN-NFE-PARCELAS-01 PR 2b — a NF da compra vai para a parcela 1 e é LIGADA às N; cada boleto,
            para a sua parcela (pelo número). */
@@ -1748,6 +1775,7 @@ export function LancamentoV2Dialog({
     // CRITICAL: pass the stable ID for edits — ensures UPDATE, never INSERT
     const ok = await onSave(form, currentEditId || undefined);
     if (!ok) { setSaving(false); return; }
+    if (!currentIsEdit) await aposCriarDoXml();
     /* FIN-NFE-PARCELAS-01 — lançamento novo com documentos pendentes: o `onSave` devolveu o id (quem
        liga `documentosAntesDeSalvar` devolve), e a cadeia de sempre roda nele antes de fechar. */
     if (!currentIsEdit && pendentes.length > 0) {
@@ -1859,6 +1887,68 @@ export function LancamentoV2Dialog({
   //   componente compartilhado intocado.
   const dateFieldCls = cn(fieldBg, "text-[10px]");
 
+  /* ── FIN-NFE-XML-01d — O QUE VEIO DO XML FICA EM AMBAR ATE' O OPERADOR MEXER ──────────────────────────────────────────
+     ⚠ DERIVADO, NAO GUARDADO: um campo esta' em ambar enquanto o valor dele E' o que a nota propos. Editar tira o ambar
+       sem estado nenhum para esquecer de limpar; voltar ao valor proposto o devolve.
+     ⚠ SO' NO LANCAMENTO NOVO QUE NASCEU DE UMA NOTA. Sem `doXml`, `xml` e' nulo e tudo abaixo devolve o de sempre. */
+  const xml: DoXml | null = !isEdit ? prefill?.doXml ?? null : null;
+  const xmlAmbar = (campo: CampoDoXml): boolean => {
+    if (!xml || !xml.proposta.origens[campo]) return false;
+    const p = xml.proposta;
+    switch (campo) {
+      case 'tipo': return tipoOperacao === p.tipoOperacao;
+      case 'competencia': return dataCompetencia === p.competencia;
+      case 'fornecedor': return !!xmlFornecedorProposto && favorecidoId === xmlFornecedorProposto;
+      case 'valor': return Math.round(Math.abs(valorNum) * 100) === p.valorCent;
+      case 'subcentro': return !!p.classificacao && classificacao.plano_conta_id === p.classificacao.plano_conta_id;
+      case 'fazenda': return !!p.fazendaId && fazendaId === p.fazendaId;
+      case 'parcelamento': return p.parcelamento.tipo === 'parcelado' && formaPagamentoParc === 'parcelada'
+        && numParcelas === p.parcelamento.parcelas && dataVencimento === p.parcelamento.primeiroVencimento;
+      case 'forma': return !!p.formaPagamento && formaPgto === p.formaPagamento;
+      case 'documento': return notaFiscal === p.numeroDocumento;
+      case 'descricao': return descricao === p.descricao;
+      case 'vencimento': return p.parcelamento.tipo === 'unico' && dataVencimento === p.parcelamento.vencimento;
+      default: return false;
+    }
+  };
+  /** O rotulo do campo com a origem escrita ao lado (so' enquanto em ambar). */
+  const xmlRot = (rotulo: string, campo: CampoDoXml) => (xmlAmbar(campo)
+    ? <>{rotulo}<OrigemDoXml campo={campo} origem={xml?.proposta.origens[campo] ?? ''} /></>
+    : rotulo);
+  /** Idem, para os campos cujo rotulo e' texto puro (os seletores compartilhados). */
+  const xmlRotTexto = (rotulo: string, campo: CampoDoXml) => (xmlAmbar(campo) ? `${rotulo} · ${xml?.proposta.origens[campo] ?? ''}` : rotulo);
+  const xmlCls = (campo: CampoDoXml) => (xmlAmbar(campo) ? CAMPO_AMBAR : undefined);
+  /** As duplicatas do XML, enquanto o parcelamento da tela ainda e' o que elas descrevem. */
+  const duplicatasNaGrade = xml && xmlAmbar('parcelamento') ? xml.proposta.duplicatas : null;
+  const abrirOcorrenciaDaNota = (o: OcorrenciaDaNota) => {
+    /* Em OUTRA aba: o lancamento em preenchimento nao se perde. */
+    const destino = o.origem === 'lancamento' && o.lancamentoId ? `/?flancId=${encodeURIComponent(o.lancamentoId)}`
+      : o.operacaoId ? `/?oc_id=${encodeURIComponent(o.operacaoId)}` : null;
+    if (destino) window.open(destino, '_blank', 'noopener');
+  };
+  const criarFornecedorDoXml = async () => {
+    if (!xml) return;
+    setXmlCriandoFornecedor(true);
+    try {
+      const novo = await onCriarFornecedor(xml.emitenteNome, fazendaId, documentoFormatado(xml.emitenteDocumento));
+      if (novo) { setFavorecidoId(novo.id); setXmlFaixaFechada(true); }
+    } finally {
+      setXmlCriandoFornecedor(false);
+    }
+  };
+  /**
+   * Depois que o LANCAMENTO nasceu (nunca antes): grava o CNPJ do XML no cadastro, se a caixa ficou marcada e o fornecedor
+   * ainda e' o proposto, e avisa quem abriu o modal. ⚠ Falha aqui NAO desfaz o lancamento: ele ja' esta' gravado.
+   */
+  const aposCriarDoXml = async () => {
+    if (!xml) return;
+    if (xmlGravarDocumento && xml.resolucao.cadastroSemDocumento && xmlFornecedorProposto && favorecidoId === xmlFornecedorProposto && clienteAtual?.id) {
+      const erro = await gravarDocumentoNoCadastro(clienteAtual.id, xmlFornecedorProposto, xml.emitenteDocumento);
+      if (erro) toast.error(`Lançamento gravado, mas o documento não foi gravado no cadastro do fornecedor: ${erro}`);
+    }
+    onLancamentoCriado?.();
+  };
+
   return (
     <>
       <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
@@ -1916,6 +2006,7 @@ export function LancamentoV2Dialog({
               Excel o subtitulo vem na MESMA linha, depois do titulo. */}
           <DialogHeader className={cn("h-9 shrink-0 px-4 pr-10 flex-row items-center gap-2 space-y-0 border-b border-primary/20 bg-primary", !excelContext && "col-span-2 row-start-1")}>
             <DialogTitle className="shrink-0 text-[13px] font-semibold leading-none tracking-tight text-primary-foreground">{isEdit ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
+            {xml && <PilulaDoXml rotuloNota={xml.proposta.rotuloNota} />}
             {excelContext && (
               <div className="min-w-0 truncate text-[10px] font-normal leading-none text-primary-foreground/80">
                 {isEdit
@@ -1969,6 +2060,28 @@ export function LancamentoV2Dialog({
 
             {/* ═══ ABA GERAL ═══ */}
             <TabsContent value="geral" className="mt-0 space-y-2 focus-visible:outline-none">
+            {/* FIN-NFE-XML-01d — o que a nota pede que o operador decida: o fornecedor (uma faixa) e os avisos. */}
+            {xml && (
+              <div className="space-y-1" data-testid="xml-faixas">
+                <FaixaDoFornecedor xml={xml} fechada={xmlFaixaFechada} gravarDocumento={xmlGravarDocumento}
+                  onGravarDocumento={setXmlGravarDocumento}
+                  onTrocar={() => {
+                    setXmlFaixaFechada(true);
+                    setXmlGravarDocumento(false);
+                    document.getElementById('campo-fornecedor-financeiro')?.querySelector('button')?.focus();
+                  }}
+                  onEscolher={(id) => { setFavorecidoId(id); setXmlFornecedorProposto(id); setXmlFaixaFechada(true); }}
+                  onCriar={() => { void criarFornecedorDoXml(); }} criando={xmlCriandoFornecedor} />
+                <AvisosDoXml xml={xml} registradaDispensada={xmlRegistradaDispensada}
+                  onDispensarRegistrada={() => setXmlRegistradaDispensada(true)} onAbrirOcorrencia={abrirOcorrenciaDaNota} />
+                {xmlAmbar('subcentro') && (
+                  <div className="flex h-6 items-center rounded border border-amber-300 bg-amber-50 px-2 text-[10px] text-amber-900" data-testid="origem-xml-subcentro"
+                    title={`Classificação sugerida: ${xml.proposta.classificacao?.subcentro ?? ''} · ${xml.proposta.origens.subcentro ?? ''}`}>
+                    <span className="min-w-0 truncate">Classificação sugerida: {xml.proposta.classificacao?.subcentro} · {xml.proposta.origens.subcentro} deste fornecedor</span>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* PR2.2 — Box informativo da referência operacional que originou
                 esta criação. Read-only, não bloqueia nada. Operador continua
@@ -2105,9 +2218,9 @@ export function LancamentoV2Dialog({
                 nunca em data_pagamento; o contrato de Data Pagamento do lançamento manual permanece inalterado. */}
             <div className="grid grid-cols-12 gap-2">
               <div className="col-span-3">
-                <Label className="text-[10px]">Tipo Operação *</Label>
+                <Label className="text-[10px]">{xmlRot('Tipo Operação *', 'tipo')}</Label>
                 <Select value={tipoOperacao} onValueChange={aplicarTipoOperacao} disabled={lockedFields?.includes('tipo_operacao') || isOCTitulo}>
-                  <SelectTrigger ref={firstFieldRef} tabIndex={1} className={cn("h-8", fieldBg)}><SelectValue /></SelectTrigger>
+                  <SelectTrigger ref={firstFieldRef} tabIndex={1} className={cn("h-8", fieldBg, xmlCls('tipo'))}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {TIPOS_OPERACAO.filter(t => !tiposOperacaoPermitidos || tiposOperacaoPermitidos.includes(t.value))
                       .map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
@@ -2115,16 +2228,17 @@ export function LancamentoV2Dialog({
                 </Select>
               </div>
               <div className="col-span-2">
-                <Label className="text-[10px]">Data Competência *</Label>
-                <DatePicker value={dataCompetencia} onChange={setDataCompetencia} disabled={isOCTitulo} tabIndex={2} className={dateFieldCls} />
+                <Label className="text-[10px]">{/* em ambar o rotulo encurta: "Data Competência *" + a origem nao cabem na coluna (medido a 1.135) e quebravam a linha */}
+                  {xmlAmbar('competencia') ? xmlRot('Competência *', 'competencia') : 'Data Competência *'}</Label>
+                <DatePicker value={dataCompetencia} onChange={setDataCompetencia} disabled={isOCTitulo} tabIndex={2} className={cn(dateFieldCls, xmlCls('competencia'))} />
               </div>
               {/* Data Vencimento — PR-FIN-MODAL-VENCIMENTO-02B: campo funcional (mesmo DatePicker de
                   Competência/Pagamento). Editável em lançamento manual; read-only para título OC
                   (governado pela Operação Comercial). Grava SEMPRE em data_vencimento, nunca em
                   data_pagamento. Contrato de Data Pagamento do manual permanece inalterado. */}
               <div className="col-span-2">
-                <Label className="text-[10px]">Data Vencimento</Label>
-                <DatePicker value={dataVencimento} onChange={setDataVencimento} disabled={isOCTitulo} className={dateFieldCls} />
+                <Label className="text-[10px]">{xmlAmbar('vencimento') ? xmlRot('Vencimento', 'vencimento') : 'Data Vencimento'}</Label>
+                <DatePicker value={dataVencimento} onChange={setDataVencimento} disabled={isOCTitulo} className={cn(dateFieldCls, xmlCls('vencimento'))} />
               </div>
               <div className="col-span-2"
                 title={!pagamentoPermitido && !pagamentoTravado ? 'Só realizado tem data de pagamento' : undefined}>
@@ -2157,14 +2271,14 @@ export function LancamentoV2Dialog({
                 value={descricao}
                 onChange={setDescricao}
                 clienteId={clienteAtual?.id}
-                label="Produto / Descrição *"
+                label={xmlRotTexto('Produto / Descrição *', 'descricao')}
                 className="col-span-7"
-                inputClassName={fieldBg}
+                inputClassName={cn(fieldBg, xmlCls('descricao'))}
                 tabIndex={5}
                 placeholder="Descrição do produto"
               />
               {/* Fornecedor — PR-U2c-1C: <FavorecidoSelect /> (fonte única) */}
-              <div className="col-span-5">
+              <div className="col-span-5" id={xml ? 'campo-fornecedor-financeiro' : undefined}>
                 <FavorecidoSelect
                   value={favorecidoId}
                   onChange={setFavorecidoId}
@@ -2179,8 +2293,8 @@ export function LancamentoV2Dialog({
                   search={fornecedorSearch}
                   onSearchChange={setFornecedorSearch}
                   onCriarNovo={() => setFornecedorDialogOpen(true)}
-                  label="Fornecedor *"
-                  triggerClassName={fieldBg}
+                  label={xmlRotTexto('Fornecedor *', 'fornecedor')}
+                  triggerClassName={cn(fieldBg, xmlCls('fornecedor'))}
                   tabIndex={6}
                   /* ⚠ O FORNECEDOR NAO E SOBERANIA DA OC — FIN-FORNECEDOR-OC-EDIT (B-19),
                      decisao do Gabriel. A OC manda em VALOR, CLASSIFICACAO, TIPO e
@@ -2215,8 +2329,8 @@ export function LancamentoV2Dialog({
             <div className="grid grid-cols-12 gap-2">
               {/* Valor — mesmo state/máscara/handleValorChange/tabIndex/disabled; só reposicionado. */}
               <div className="col-span-2">
-                <Label className="text-[10px]">Valor (R$) *</Label>
-                <Input tabIndex={10} value={valorDisplay} onChange={handleValorChange} onFocus={e => e.target.select()} className={cn("h-8 text-right font-mono", fieldBg)} placeholder="0,00" inputMode="numeric" disabled={lockedFields?.includes('valor') || isOCTitulo} />
+                <Label className="text-[10px]">{xmlRot('Valor (R$) *', 'valor')}</Label>
+                <Input tabIndex={10} value={valorDisplay} onChange={handleValorChange} onFocus={e => e.target.select()} className={cn("h-8 text-right font-mono", fieldBg, xmlCls('valor'))} placeholder="0,00" inputMode="numeric" disabled={lockedFields?.includes('valor') || isOCTitulo} />
               </div>
               {/* Fazenda — PR-U2c-1B: <FazendaSelect /> (fonte única) */}
               <FazendaSelect
@@ -2224,13 +2338,13 @@ export function LancamentoV2Dialog({
                 onChange={setFazendaId}
                 fazendas={fazendas}
                 forcaAdministrativo={fazendaTravadaAdm}
-                label="Fazenda *"
+                label={xmlRotTexto('Fazenda *', 'fazenda')}
                 /* FIN-FAZENDA-PADRAO-01 — com o filtro Global o campo nasce VAZIO (nunca a primeira da lista), e o
                    vazio aparece aqui, em vermelho, antes de qualquer clique. */
                 obrigatorio
                 id="campo-fazenda-financeiro"
                 className="col-span-4"
-                triggerClassName={fieldBg}
+                triggerClassName={cn(fieldBg, xmlCls('fazenda'))}
                 tabIndex={7}
               />
               {/* Conta Bancária — PR-H2: ContaBancariaSelect compartilhado (agrupado por
@@ -2417,9 +2531,9 @@ export function LancamentoV2Dialog({
                   (PR-FIN-MODAL-02B). Campos e handlers idênticos; só mudou a aba. */}
               <div className="grid grid-cols-[150px_minmax(0,1fr)] gap-x-2 gap-y-1.5">
                 <div>
-                  <Label className="text-[10px]">Forma de Pagamento</Label>
+                  <Label className="text-[10px]">{xmlRot('Forma de Pagamento', 'forma')}</Label>
                   <Select value={formaPgto || FORMA_PAGAMENTO_V2_NENHUMA} onValueChange={handleFormaPgtoChange}>
-                    <SelectTrigger tabIndex={13} className={cn("h-8", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectTrigger tabIndex={13} className={cn("h-8", fieldBg, xmlCls('forma'))}><SelectValue placeholder="Selecione" /></SelectTrigger>
                     {/* ⚠ A LISTA SAIU DAQUI — PAR-01c. Os oito itens eram escritos à mão neste
                         ponto; a tela de Parcelamentos passou a gravar a MESMA coluna
                         (`financeiro_lancamentos_v2.forma_pagamento`, via a parcela que nasce
@@ -2472,9 +2586,9 @@ export function LancamentoV2Dialog({
                     </div>
                     {(
                       <div>
-                        <Label className="text-[10px]">Modalidade</Label>
+                        <Label className="text-[10px]">{xmlRot('Modalidade', 'parcelamento')}</Label>
                         <Select value={formaPagamentoParc} onValueChange={(v: 'avista' | 'parcelada') => setFormaPagamentoParc(v)}>
-                          <SelectTrigger className={cn("h-8", fieldBg)}><SelectValue /></SelectTrigger>
+                          <SelectTrigger className={cn("h-8", fieldBg, xmlCls('parcelamento'))}><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="avista">À vista</SelectItem>
                             <SelectItem value="parcelada">Parcelada</SelectItem>
@@ -2502,8 +2616,9 @@ export function LancamentoV2Dialog({
                   {/* Parcela grid */}
                   {formaPagamentoParc === 'parcelada' && parcelaRows.length > 0 && (
                     <div className="rounded-lg border border-border/30 bg-background dark:bg-muted/20 overflow-hidden">
-                      <div className="grid grid-cols-[48px_1fr_1fr] gap-1 px-3 py-1.5 bg-muted/40 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                      <div className={cn("grid gap-1 px-3 py-1.5 bg-muted/40 text-[10px] font-bold text-muted-foreground uppercase tracking-wider", duplicatasNaGrade ? "grid-cols-[48px_64px_1fr_1fr]" : "grid-cols-[48px_1fr_1fr]")}>
                         <span>Parc.</span>
+                        {duplicatasNaGrade && <span data-testid="xml-coluna-duplicata">Duplicata</span>}
                         <span>Vencimento</span>
                         <span>Valor (R$)</span>
                       </div>
@@ -2514,8 +2629,9 @@ export function LancamentoV2Dialog({
                             numa parcela 'programado'. A grade era o WRITER: o que estivesse
                             nela virava lancamento. Agora ela ESPELHA o que a RPC vai gravar. */}
                         {parcelaRows.map((row) => (
-                          <div key={row.numero} className="grid grid-cols-[48px_1fr_1fr] gap-1 px-2 py-0.5 items-center">
+                          <div key={row.numero} className={cn("grid gap-1 px-2 py-0.5 items-center", duplicatasNaGrade ? "grid-cols-[48px_64px_1fr_1fr]" : "grid-cols-[48px_1fr_1fr]")}>
                             <span className="text-[11px] font-semibold text-muted-foreground">{row.numero}/{numParcelas}</span>
+                            {duplicatasNaGrade && <span className="text-[11px] font-mono text-amber-900">{duplicatasNaGrade[row.numero - 1]?.numero ?? '—'}</span>}
                             <span className="text-[11px] tabular-nums">{resumoFmtData(row.dataVencimento) ?? '—'}</span>
                             <span className="text-[11px] text-right font-mono tabular-nums">{formatMoeda(row.valor)}</span>
                           </div>
@@ -2527,6 +2643,15 @@ export function LancamentoV2Dialog({
                           {formatMoeda(parcelasTotal)}
                         </span>
                       </div>
+                      {/* FIN-NFE-XML-01d — as parcelas contra a NOTA: "= valor da nota", ou a diferença escrita. */}
+                      {xml && (() => {
+                        const dif = Math.round(parcelasTotal * 100) - xml.proposta.documento.valorCent;
+                        return (
+                          <div className="px-3 py-1 bg-amber-50 text-amber-900 text-[10px]" data-testid="xml-parcelas-x-nota">
+                            {dif === 0 ? '= valor da nota' : `nota ${reais(xml.proposta.documento.valorCent)} · diferença ${reais(dif)}`}
+                          </div>
+                        );
+                      })()}
                       {Math.abs(parcelasTotal - Math.abs(valorNum)) >= 0.01 && (
                         <div className="px-3 py-1 bg-destructive/10 text-destructive text-[10px] flex items-center gap-1">
                           <AlertCircle className="h-3 w-3" />
@@ -2535,6 +2660,9 @@ export function LancamentoV2Dialog({
                       )}
                     </div>
                   )}
+
+                  {/* FIN-NFE-XML-01d — duplicatas que NAO cabem no parcelamento de hoje: a conferência, só leitura. */}
+                  {xml && xml.proposta.parcelamento.tipo === 'fora_do_padrao' && <DuplicatasDoXml xml={xml} />}
 
                   {/* Recurrence grid */}
                 </div>
@@ -2571,13 +2699,13 @@ export function LancamentoV2Dialog({
                   </Select>
                 </div>
                 <div>
-                  <Label className="text-[10px]">Nº Documento</Label>
+                  <Label className="text-[10px]">{xmlRot('Nº Documento', 'documento')}</Label>
                   <Input
                     tabIndex={13}
                     value={notaFiscalDisplay}
                     onChange={handleNotaFiscalChange}
                     inputMode={tipoDocumento === 'Nota Fiscal' ? 'numeric' : 'text'}
-                    className={cn("h-8 font-mono text-[11px]", fieldBg)}
+                    className={cn("h-8 font-mono text-[11px]", fieldBg, xmlCls('documento'))}
                     placeholder={tipoDocumento === 'Nota Fiscal' ? '000.000.000' : 'Número'}
                   />
                 </div>

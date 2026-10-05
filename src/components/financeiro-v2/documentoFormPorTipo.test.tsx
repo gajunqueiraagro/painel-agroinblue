@@ -233,7 +233,7 @@ describe('a área de arquivo', () => {
     for (const c of ['border-dashed', 'border-success', 'bg-success/10']) expect(area.className).toContain(c);
     const input = screen.getByTestId('doc-arquivo') as HTMLInputElement;
     expect(input.type).toBe('file');
-    expect(input.accept).toBe('application/pdf,image/jpeg,image/png');
+    expect(input.accept).toBe('application/pdf,image/jpeg,image/png,application/xml,text/xml,.xml');
     fireEvent.change(input, { target: { files: [new File(['%PDF'], 'NFe 31776 Comercial Pantanal.pdf', { type: 'application/pdf' })] } });
     expect(screen.getByTestId('arquivo-escolhido').textContent).toBe('NFe 31776 Comercial Pantanal.pdf');
     fireEvent.click(within(area).getByText('remover'));

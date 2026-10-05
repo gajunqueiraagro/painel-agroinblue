@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 05/10/2026 (FIN-NFE-XML-01a, +35: `src/lib/financeiro/nfe/lerNFe.test.ts` 30, `src/lib/financeiro/nfe/centavos.test.ts` 5;
+  Baseline em 05/10/2026 (FIN-NFE-XML-01d, +52: `src/lib/financeiro/nfe/proporLancamento.test.ts` 27,
+  `src/components/financeiro-v2/novoDeXml.test.tsx` 25; antes o FIN-NFE-XML-01a, +35: `src/lib/financeiro/nfe/lerNFe.test.ts` 30, `src/lib/financeiro/nfe/centavos.test.ts` 5;
   antes o ACESSOS-OC-03a, +37: `src/v2/lib/acessoCapacidadesOC.test.tsx` 33, `src/v2/lib/acessoOperacao.test.tsx` 2,
   `src/v2/lib/acessoTelas.test.tsx` 1, `src/v2/lib/acessoGestos.test.tsx` 1; antes o ACESSOS-OC-02, +22 em `src/v2/lib/acessoOperacao.test.tsx`; antes o ACESSOS-OC-01, +8: `src/v2/lib/acessoTelas.test.tsx` 6,
   `src/v2/lib/acessoSaidas.test.tsx` 1, `src/v2/lib/acessoGestos.test.tsx` 1 — 3421 depois dele; antes o CONC-TOTAL-SEM-SALDO-01b, +8: `src/pages/conciliacaoDono.test.tsx` 4, `src/lib/conciliacao/resumoDoDono.test.ts` 4; antes o FIN-PGTO-FANTASMA-01, +13 em `src/components/financeiro-v2/finPgtoFantasma01.test.tsx`; antes o CONC-SEM-F5-01, +19: `src/hooks/concSemF5.test.tsx` 18, `src/components/financeiro-v2/conferenciaModal.test.tsx` 1; antes o ACESSOS-02c, +17 em `src/v2/lib/acessoGestos.test.tsx`; antes o ACESSOS-02b, +29: `src/acessoRotas.test.tsx` 15, `src/v2/lib/acessoSaidas.test.tsx` 14; antes o ACESSOS-02a, +26 em `src/v2/lib/acessoTelas.test.tsx`; antes o OC-CC-ACOES-LINHA-02, +20: `src/components/venda/abaContaCorrente.test.tsx` 11,
@@ -183,7 +184,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3515
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3567
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -2439,10 +2440,58 @@ docs/historico/frentes-ate-2026-09-29.md.)
     Nenhuma tela faz essa consulta por conta propria. Medido: 0,5–0,9 ms por chamada no NJ.
   · OS BUCKETS `fin-documentos` E `oc-documentos` ACEITAM XML (`text/xml`, `application/xml`), alem de PDF, JPEG e PNG; o limite
     de 10 MB nao mudou. O XML da nota fica anexado ao documento NF (decisao do Gabriel).
+  · "NOVO A PARTIR DE XML" (FIN-NFE-XML-01d, Gabriel 05/10/2026, so' tela): em Lançamentos Financeiros, o botao "Do XML" (ao lado
+    de "Ampliar"; `title` "Novo a partir de XML") abre a LISTA DE NOTAS (`NovoDeXmlDialog`): solta-se um ou varios XML, cada um
+    vira uma linha (Nota · Emissao · Emitente · CNPJ | Fazenda pela IE · Valor · Duplicatas | Situacao | Acao), e "Abrir
+    lançamento" entrega a nota ao MESMO `LancamentoV2Dialog`, pelo `prefill` (chave `doXml`). NADA E' GRAVADO na lista; quem
+    grava e' o Salvar do lancamento, pelo caminho de sempre (a' vista por `onSave`, parcelado por `fn_parcelamento_cadastrar`).
+    DONOS, todos em `src/lib/financeiro/nfe/` (puros): `proporLancamento` (o que o lancamento propoe, as origens e os avisos),
+    `resolverEmitente` (documento por digitos -> nome pelo resolvedor do banco; dois ativos = o operador escolhe; so' inativo =
+    propoe e avisa; nenhum = oferece criar), `duplicatasCabemNoParcelamentoDeHoje` (espelho de `fn_parcelamento_cadastrar`: 2 a
+    24, round(total/N, 2) com a sobra na ultima, vencimentos primeiro + (i-1) meses), `FORMA_POR_TPAG` (mapa fechado: 01
+    Dinheiro, 03/04 Cartao, 15 Boleto, 17 PIX, 18 Transferencia; o resto vazio) e `formatos.ts`. As consultas ao banco moram em
+    `src/lib/financeiro/nfeConsultas.ts` e o pacote do modal em `nfePrefill.ts`.
+    REGRAS: competencia = emissao; valor = SOMA DAS DUPLICATAS quando ha' (a diferenca para a nota fica escrita); sem duplicata
+    = lancamento unico com vencimento VAZIO; uma duplicata = unico com o vencimento dela; duplicatas fora do padrao mensal NAO
+    parcelam sozinhas (a' vista, com a tabela de conferencia e a frase); o lado do cliente so' se decide pela INSCRICAO ESTADUAL
+    da fazenda (`fazenda_cadastros.ie`, so' digitos) — IE do emitente = fazenda do cliente recusa com "Nota de venda entra pela
+    Operação Comercial.", IE do destinatario propoe a fazenda, nenhuma casa = fazenda VAZIA com aviso (nunca a do filtro da
+    lista); classificacao = a do ultimo lancamento vivo classificado do fornecedor; o lancamento nasce PROGRAMADO, sem data de
+    pagamento, e a CONTA de pagamento fica vazia (o operador escolhe; sem ela o Salvar nao acende). Nota ja' registrada AVISA,
+    diz onde e deixa seguir.
+    AMBAR = VEIO DO XML OU E' SUGESTAO, e e' DERIVADO: o campo fica em ambar (`CAMPO_AMBAR`, o estilo da faixa da aba
+    Documentos) com a origem escrita ao lado enquanto o valor dele e' o que a nota propos; editar tira, voltar ao valor devolve
+    — nenhum estado para esquecer de limpar. O XML e' o arquivo do documento NF pendente (`pendenteDaNota`), com nome `.xml` e
+    tipo `application/xml` EXPLICITOS (`arquivoXmlDaNota`), e no parcelado e' ligado as N parcelas pelo caminho do PR 2b.
+    "Gravar o CNPJ neste cadastro ao salvar" so' roda DEPOIS de o lancamento nascer (`aposCriarDoXml`), no formato com mascara,
+    e so' em cadastro sem documento (o filtro vai no proprio UPDATE).
+    ⚠ SEM XML O MODAL E' O DE SEMPRE: o HTML das abas Geral, Pagamento e Documentos, novo e com prefill, e' identico ao do commit
+      anterior (6 comparacoes em worktree).
+    ⚠ MEDIDO A 1.135: a lista de notas tem 1.044px e nenhum numero, data, CNPJ ou valor corta (o Emitente corta com `title`); um
+      terceiro botao na PRIMEIRA linha do bloco de acoes encostava no filtro de Fazenda — por isso "Do XML" esta' na segunda. Em
+      ambar o rotulo "Data Competência *" encurta para "Competência *" (com a origem ao lado ele quebrava a linha).
   ⚠ QUEM CONSOME ESTREITA COM `r.ok === false` / `=== true`: com `strict: false` o `if (!r.ok)` NAO estreita a uniao (TS2339).
   ⚠ FIXTURES SINTETICAS (`__fixtures__/notas.ts`, montadas de um molde): nenhum dado real de cliente entra no repo.
   ⚠ O jsdom NAO E' O NAVEGADOR: o `parsererror` so' foi exercitado na forma do jsdom (o Chrome o poe DENTRO do documento, o
     Firefox como raiz — o leitor checa as duas, mas so' uma tem teste), e nenhum XML real de SEFAZ foi lido.
+  ⚠ DIVIDAS DO 01d: NFE-CLIENTE-SEM-DOCUMENTO-01 (o cliente nao tem CPF/CNPJ no banco: o lado da nota so' se decide pela IE, e
+    so' 2 fazendas tem IE cadastrada — nas outras a fazenda nasce vazia) · NFE-XML-01d-NAO-PROVADO (no navegador so' o caminho
+    "fornecedor nao encontrado / fazenda nao identificada", no cliente Teste e com XML SINTETICO, sem gravar: nenhum XML real,
+    nenhum Salvar, nenhum upload ao bucket e nenhum "ver" do XML foram exercitados na tela) · a origem do SUBCENTRO vai numa
+    faixa no topo, nao ao lado do campo (o seletor de classificacao nao aceita rotulo) · o documento NF pendente guarda o
+    emitente proposto na ABERTURA: trocar o fornecedor no lancamento nao troca o emitente do documento · o `.xml` anexado A MAO
+    na aba Documentos com tipo vazio (alguns navegadores) e' recusado pelas travas de front — so' o caminho do XML lido garante o
+    tipo · as mensagens "Envie PDF, JPG ou PNG" nao citam XML · a tabela de documentos pendentes (`DocumentosPendentes`) quebra
+    Numero e Emitente em duas linhas (pre-existente, UI-LINHA-UNICA) · `FinanceiroV2ControlesLista` (so' com a flag da lista
+    paginada, desligada) ganhou o botao como prop opcional, sem teste proprio · "abrir" de nota ja' registrada abre em OUTRA
+    aba do navegador · proximos: tela C ("Importar XML" no formulario do documento) e parcelas livres (PR c).
+  ⚠ DIVIDAS DO 01d, NOMEADAS (Gabriel, 05/10): NFE-PARCELA-SEM-NUMERO-01 (no lancamento parcelado o numero da nota nao vai para
+    as parcelas — `fn_parcelamento_cadastrar` nao leva `numero_documento`; fica so' no documento) ·
+    DOC-PENDENTES-LINHA-UNICA-01 (a tabela de documentos pendentes quebra Numero e Emitente em duas linhas, fere
+    UI-LINHA-UNICA; sera' consertada no PR do modal de documento) · NFE-HOMOLOGACAO-REAL-01 (Salvar, upload do .xml, "ver" do
+    XML, fornecedor achado pelo nome, fazenda pela IE e nota ja' registrada so' foram provados por TESTE; a homologacao com nota
+    real e' do Gabriel, na Vera) · FAZENDA-IE-CADASTRO-01 (so' as 2 fazendas da Vera — Faz. 3 Muchachas e Faz Baia Grande — tem
+    IE; sem IE o lado da nota e a fazenda nao se decidem sozinhos nos outros clientes: e' cadastro, nao codigo).
   ⚠ DIVIDAS DO 01b1: NFE-CHAVE-NORMALIZADA-01 (gravar a chave ja' so' com digitos, e indice, em vez de normalizar na leitura —
     hoje sao dezenas de linhas por cliente) · DOC-LANCAMENTO-CANCELADO-01 (cancelar o lancamento nao cancela o documento dele:
     2 casos hoje, lancamentos 0826a4ee do NJ e a97bed09 do Agnaldo) · OC-NOTA-DUAS-OCS-01 (uma nota em duas OCs nao tem vinculo

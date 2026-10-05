@@ -53,6 +53,8 @@ import { CriarOCDoLegadoDialog } from '@/components/financeiro-v2/CriarOCDoLegad
 import { podeCriarOCDoLegado } from '@/lib/oc/criarDoLegado';
 import { prefillDeDuplicar, type PrefillDuplicar } from '@/lib/financeiro/prefillDeDuplicar';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
+import { NovoDeXmlDialog } from '@/components/financeiro-v2/NovoDeXmlDialog';
+import { prefillDaNota, type DoXml } from '@/lib/financeiro/nfePrefill';
 import { ModoRapidoGrid } from '@/components/financeiro-v2/ModoRapidoGrid';
 import { FinanceiroV2ExportMenu } from '@/components/financeiro-v2/FinanceiroV2ExportMenu';
 import { CorrecaoTransferenciasBanner } from '@/components/financeiro-v2/CorrecaoTransferenciasBanner';
@@ -583,6 +585,20 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const [editingLanc, setEditingLanc] = useState<LancamentoV2 | null>(null);
   /* O prefill do "Duplicar" (PR-FIN-DUPLICAR-ABRE-MODAL-01): só existe entre o clique e o fechar do dialog. */
   const [prefillDuplicar, setPrefillDuplicar] = useState<PrefillDuplicar | null>(null);
+  /* FIN-NFE-XML-01d — "Novo a partir de XML": a lista de notas fica MONTADA enquanto o "Novo lançamento" de uma delas esta'
+     aberto por cima (so' escondida), para a linha voltar marcada "lançada". Nada daqui e' gravado: quem grava e' o Salvar do
+     lancamento, pelo caminho de sempre. */
+  const [xmlAberto, setXmlAberto] = useState(false);
+  const [prefillXml, setPrefillXml] = useState<ReturnType<typeof prefillDaNota> | null>(null);
+  const [linhaXmlAberta, setLinhaXmlAberta] = useState<string | null>(null);
+  const [linhasXmlLancadas, setLinhasXmlLancadas] = useState<ReadonlySet<string>>(new Set());
+  const abrirLancamentoDoXml = (doXml: DoXml, linhaId: string) => {
+    setEditingLanc(null);
+    setPrefillDuplicar(null);
+    setPrefillXml(prefillDaNota(doXml));
+    setLinhaXmlAberta(linhaId);
+    setDialogOpen(true);
+  };
   // PR-OC-FIN-EDIT-FIX-02 — libera favorecido do título OC só nesta abertura (fluxo "Editar" da OC).
   const [favOCEdit, setFavOCEdit] = useState(false);
 
@@ -944,7 +960,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     });
   };
 
-  const openNew = () => { setEditingLanc(null); setPrefillDuplicar(null); setDialogOpen(true); };
+  const openNew = () => { setEditingLanc(null); setPrefillDuplicar(null); setPrefillXml(null); setDialogOpen(true); };
   const openEdit = (l: LancamentoV2, permiteFavOC = false) => {
     console.log('[FinV2] reopen edit object', {
       id: l.id,
@@ -1640,6 +1656,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
       pendente={pendenteAplicar}
       onLimpar={handleLimparLista}
       onNovo={openNew}
+      onNovoDeXml={() => setXmlAberto(true)}
       exportar={(
         <FinanceiroV2ExportMenu
           carregarConjunto={carregarConjuntoExportacao}
@@ -1692,6 +1709,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
             <ChevronLeft className="h-3 w-3" /> Voltar
           </Button>
         )}
+        {/* FIN-NFE-XML-01d — na SEGUNDA linha do bloco, com o estilo do Novo. "Do XML" e nao "Novo a partir de XML": o bloco tem a
+            largura de dois botoes curtos (medido a 1.135: um terceiro na primeira linha encostava no filtro de Fazenda); o nome
+            inteiro vai no `title`. */}
+        <Button size="sm" onClick={() => setXmlAberto(true)} data-testid="btn-novo-de-xml"
+          className="h-6 text-[10px] gap-0.5 px-1.5 bg-[#E7C873] text-foreground hover:bg-[#D9B95F]" title="Novo a partir de XML" aria-label="Novo a partir de XML">
+          <Plus className="h-3 w-3" /> Do XML
+        </Button>
         <Button
           size="sm"
           variant={modoIntensivo ? "default" : "outline"}
@@ -2952,8 +2976,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
 
       <LancamentoV2Dialog
         open={dialogOpen}
-        onClose={() => { setDialogOpen(false); setEditingLanc(null); setPrefillDuplicar(null); onCloseDialog?.(); }}
+        onClose={() => { setDialogOpen(false); setEditingLanc(null); setPrefillDuplicar(null); setPrefillXml(null); setLinhaXmlAberta(null); onCloseDialog?.(); }}
         onSave={handleSave}
+        onLancamentoCriado={() => { if (linhaXmlAberta) setLinhasXmlLancadas(antes => new Set([...antes, linhaXmlAberta])); }}
         documentosAntesDeSalvar
         onDelete={handleDelete}
         lancamento={editingLanc}
@@ -2968,7 +2993,18 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         onCriarFornecedor={hook.criarFornecedor}
         permiteEditarFavorecidoOC={favOCEdit}
         onAbrirOperacaoOC={abrirOCFinanceiro}
-        prefill={prefillDuplicar ?? undefined}
+        prefill={prefillXml ?? prefillDuplicar ?? undefined}
+      />
+
+      {/* FIN-NFE-XML-01d — a lista de notas. Fica montada (e escondida) enquanto o lancamento de uma delas esta' aberto. */}
+      <NovoDeXmlDialog
+        open={xmlAberto && !dialogOpen}
+        onClose={() => { setXmlAberto(false); setLinhasXmlLancadas(new Set()); }}
+        clienteId={clienteAtual?.id ?? null}
+        fazendas={fazOperacionais}
+        fornecedores={hook.fornecedores}
+        onAbrirLancamento={abrirLancamentoDoXml}
+        lancadas={linhasXmlLancadas}
       />
 
       {criarOCDe && clienteAtual?.id && (

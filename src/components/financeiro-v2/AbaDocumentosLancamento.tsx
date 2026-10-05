@@ -640,7 +640,7 @@ export function FormDocumento({ api, documento, fornecedores, onFechar, pendente
               `accept` e regras) — só deixou de ser a cara do campo. Soltar um arquivo aqui entra pelo MESMO input. ── */}
           <div className="col-span-2">
             <Label className="text-[10px]">Arquivo</Label>
-            <input ref={arquivoRef} type="file" accept="application/pdf,image/jpeg,image/png" className="sr-only" tabIndex={-1}
+            <input ref={arquivoRef} type="file" accept="application/pdf,image/jpeg,image/png,application/xml,text/xml,.xml" className="sr-only" tabIndex={-1}
               data-testid="doc-arquivo" onChange={e => setArquivo(e.target.files?.[0] ?? null)} />
             <div role="button" tabIndex={0} data-testid="area-arquivo"
               onClick={() => arquivoRef.current?.click()}

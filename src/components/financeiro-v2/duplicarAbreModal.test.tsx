@@ -174,7 +174,7 @@ describe('um caminho só: a lista abre o dialog, e o insert direto saiu', async 
   it('o "Duplicar" relê o original e abre o dialog com o prefill; nenhum caminho grava na hora', () => {
     expect(tela).toContain('const original = (await hook.buscarLancamentoPorId(lanc.id)) ?? lanc;');
     expect(tela).toContain('setPrefillDuplicar(prefillDeDuplicar(original));');
-    expect(tela).toContain('prefill={prefillDuplicar ?? undefined}');
+    expect(tela).toContain('prefill={prefillXml ?? prefillDuplicar ?? undefined}');
     expect(tela).not.toMatch(/hook\.duplicarLancamento/);
     expect(hook).not.toMatch(/const duplicarLancamento = useCallback/);
     expect(hook).not.toContain("'(Cópia)'");

@@ -55,6 +55,8 @@ export interface PropsControlesLista {
   pendente: boolean;
   onLimpar: () => void;
   onNovo: () => void;
+  /** FIN-NFE-XML-01d — "Novo a partir de XML". Opcional: sem a prop, o bloco e' o 2x2 de sempre. */
+  onNovoDeXml?: () => void;
   /** O menu de exportação existente, passado como slot para preservar sua identidade. */
   exportar?: React.ReactNode;
   modoIntensivo: boolean;
@@ -74,7 +76,7 @@ export interface PropsControlesLista {
 }
 
 export function FinanceiroV2ControlesLista({
-  pendente, onLimpar, onNovo, exportar,
+  pendente, onLimpar, onNovo, onNovoDeXml, exportar,
   modoIntensivo, onToggleIntensivo, onVoltar,
   excluidosSemVencimento, incluirSemVencimento, onToggleSemVencimento,
   paginacao, total, onPagina, carregandoLista,
@@ -126,6 +128,13 @@ export function FinanceiroV2ControlesLista({
                 mudam juntos ou a tela e o teste discordam em silêncio. */}
             {modoIntensivo ? 'Retornar' : 'Ampliar'}
           </Button>
+          {onNovoDeXml && (
+            <Button size="sm" data-testid="btn-novo-de-xml" onClick={onNovoDeXml}
+              className="col-span-2 h-6 text-[10px] gap-0.5 px-1.5 bg-[#E7C873] text-foreground hover:bg-[#D9B95F]"
+              title="Novo a partir de XML" aria-label="Novo a partir de XML">
+              <Plus className="h-3 w-3" /> Do XML
+            </Button>
+          )}
         </div>
       </div>
 

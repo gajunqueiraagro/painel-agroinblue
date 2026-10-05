@@ -194,7 +194,8 @@ export function especieParaOC(e: EspecieLancDoc | undefined): string {
 }
 /** 10 MB — o limite é do produto; o bucket tem o seu, e a recusa aqui é a que explica. */
 export const TAMANHO_MAXIMO = 10 * 1024 * 1024;
-export const TIPOS_ACEITOS = ['application/pdf', 'image/jpeg', 'image/png'];
+/* FIN-NFE-XML-01d — o XML da NF-e entra (os buckets o aceitam desde o 01b1). */
+export const TIPOS_ACEITOS = ['application/pdf', 'image/jpeg', 'image/png', 'application/xml', 'text/xml'];
 
 /** Só as chaves presentes sobem: `editar` altera o que recebe e preserva o resto.
  *  Exportada para a cadeia dos documentos pendentes (FIN-NFE-PARCELAS-01), que registra com o MESMO payload. */

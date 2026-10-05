@@ -15,6 +15,9 @@ const EXT_POR_MIME: Record<string, string> = {
   'application/pdf': 'pdf',
   'image/jpeg': 'jpg',
   'image/png': 'png',
+  /* FIN-NFE-XML-01b1/01d — o XML da NF-e, anexado ao documento NF. Os dois rotulos que o navegador usa. */
+  'application/xml': 'xml',
+  'text/xml': 'xml',
 };
 
 /** 10 MB — o mesmo `file_size_limit` do bucket. Conferir aqui evita a viagem até o

@@ -188,7 +188,7 @@ describe('a lib e pura', () => {
   it('nenhum import de React, supabase ou tela dentro de src/lib/financeiro/nfe/', () => {
     const dir = 'src/lib/financeiro/nfe';
     const fontes = readdirSync(dir).filter((f) => /\.ts$/.test(f) && !/\.test\.ts$/.test(f));
-    expect(fontes.sort()).toEqual(['centavos.ts', 'lerNFe.ts', 'tipos.ts']);
+    expect(fontes.sort()).toEqual(['centavos.ts', 'formatos.ts', 'lerNFe.ts', 'proporLancamento.ts', 'resolverEmitente.ts', 'tipos.ts']);
     for (const f of fontes) {
       const imports = readFileSync(`${dir}/${f}`, 'utf8').split('\n').filter((l) => /^\s*import\b/.test(l) || /\bfrom\s+['"]/.test(l));
       for (const l of imports) expect(`${f}: ${l}`).not.toMatch(/react|supabase|@\/components|@\/pages|@\/hooks|@\/v2|sonner/i);
