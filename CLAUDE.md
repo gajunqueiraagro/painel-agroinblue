@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 05/10/2026 (CPR-PERIODO-VENCIDOS-01, +16 em `src/lib/financeiro/cprRecorte.test.ts` — 3985 depois dele;
+  Baseline em 05/10/2026 (OC-VINCULAR-CANDIDATAS-01b, +1 em `src/components/financeiro-v2/vincularCandidatas.test.tsx` — 3986 depois dele;
+  antes o CPR-PERIODO-VENCIDOS-01, +16 em `src/lib/financeiro/cprRecorte.test.ts` — 3985 depois dele;
   antes o OC-VINCULAR-CANDIDATAS-01, +24 em `src/components/financeiro-v2/vincularCandidatas.test.tsx` — 3969 depois dele;
   antes o OC-VINCULAR-RECEBIMENTO-PARCIAL-01, +25 em `src/components/financeiro-v2/vincularRecebimentoParcial.test.tsx` — 3945 depois dele;
   antes o OC-VINCULAR-PARCELA-SEGUINTE-01, +10 em `src/components/financeiro-v2/vincularParcelaSeguinte.test.tsx` — 3920 depois dele;
@@ -201,7 +202,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3985
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3986
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -2330,16 +2331,20 @@ docs/historico/frentes-ate-2026-09-29.md.)
   · TODAS PAGAS NAO E' "LIQUIDADO" QUANDO O COMPROMISSO ≠ A SOMA DAS PARCELAS, AO CENTAVO (Gabriel: nunca arredondar, nunca mentir;
     R$ 0,01 conta). A lista devolve, por compromisso e por OC, `diferenca_parcelas` (compromisso − soma das parcelas vivas; nulo
     sem parcela; positivo = pago a menos) e a marca `pagas_com_diferenca`; `todos_liquidados` so' com diferenca ZERO. Na tela a
-    linha fica APAGADA, nao selecionavel, com o selo "parcelas pagas · falta R$ 0,50" / "· sobra R$ X" (`seloDaDiferenca`; curto de
-    proposito — o selo longo espremia a coluna Operacao de todas as linhas), e o clique nela escreve o motivo no painel
-    (`motivoDaDiferenca`: "Todas as parcelas deste compromisso estão pagas. Sobra uma diferença de R$ 0,50 entre o combinado e o
-    pago (pago a menos); ela se resolve na OC."). O clique em QUALQUER linha nao selecionavel escreve o motivo dela no painel.
+    linha leva o selo "parcelas pagas · falta R$ 0,50" / "· sobra R$ X" (`seloDaDiferenca`; curto de proposito — o selo longo
+    espremia a coluna Operacao de todas as linhas).
+    [01b, Gabriel 05/10; migration 20261027193500, ⚠ registrada como 20261005231255; ledger = arquivo, md5 59b17450…;
+    `oc_candidatas_vinculo` 05cbc9b2… -> ec17660f…, `oc_vincular_lancamento` d72b7db7… -> 5f9f5d22…] A LINHA E' SELECIONAVEL, do
+    mesmo jeito que a OC toda paga de diferenca zero ("criar item", a regra de 26/09): o sistema explica, o operador decide. Ao
+    escolher, o vincular devolve — e grava na trilha — o aviso `parcelas_pagas_com_diferenca {diferenca}`, e o painel o escreve em
+    ambar (`fraseDaDiferenca`): "Todas as parcelas deste compromisso estão pagas e falta R$ 0,50 para o combinado. Este
+    lançamento entra como item novo; a diferença continua na OC." A diferenca tem UM dono no banco,
+    `_oc_vinculo_diferenca_parcelas(compromisso)`, lido pela lista e pelo vincular. O clique em linha NAO selecionavel
+    (rascunho) escreve o motivo dela no painel.
     ⚠ E' ENTRADA DO OC-AJUSTE-DIFERENCA-01 (sem gesto neste PR): caso real, compra 2fd157be do Agnaldo — combinado 27.062,50,
       quatro parcelas pagas somando 27.062,00, view "parcial" com saldo 0,50.
     ⚠ A COMPARACAO E' AO CENTAVO (`round(…, 2)`): ha' compromisso gravado com fracao de centavo (6cf548a1, −0,000009), que sem
       isso ganharia a marca com "R$ 0,00".
-    ⚠ E' O QUE A TELA OFERECE: a RPC `oc_vincular_lancamento` continua aceitando "criar item" numa OC com tudo pago (regra
-      VINCULAR NAO JULGA REPETICAO) — com diferenca ZERO a linha segue selecionavel com "criar item"; so' a COM diferenca apaga.
   · RECUSA EM FRASE, NUM LUGAR SO' (`src/lib/oc/vincularLancamento.ts`): `FRASE_DO_INELEGIVEL` (o motivo de `elegivel: false`) e
     `FRASES_DO_BANCO` (o texto do RAISE -> frase, lido por `mensagemDeErro`, que os tres dialogos usam). Texto que o mapa nao
     conhece passa como veio — RAISE novo nas RPCs de vinculo entra no mapa no mesmo PR.

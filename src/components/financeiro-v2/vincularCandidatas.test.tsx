@@ -172,7 +172,7 @@ describe('E4 — rascunho aparece apagada, com o motivo, e não se escolhe', () 
   });
 });
 
-describe('todas as parcelas pagas e o compromisso ≠ a soma delas — nunca "liquidado", com o valor do banco', () => {
+describe('todas as parcelas pagas e o compromisso ≠ a soma delas — nunca "liquidado"; selecionável como a de diferença zero (01b)', () => {
   const comp = (dif: number) => ({ id: 'k', componente: 'principal', descricao: 'Compra', valor_total: 27062.5, status: 'programado', lote_id: null,
     parcelas: [], diferenca: 0, valor_exato: false, acao_prevista: 'recusar' as const, diferenca_parcelas: dif, pagas_com_diferenca: dif !== 0 });
   const FALTA = oc('falta', { compromissos: [comp(0.5)], pagas_com_diferenca: true, diferenca_parcelas: 0.5, todos_liquidados: false });
@@ -185,29 +185,36 @@ describe('todas as parcelas pagas e o compromisso ≠ a soma delas — nunca "li
     expect(semDuro(seloDaDiferenca({ pagas_com_diferenca: true, diferenca_parcelas: 1234567.89 }))).toContain('R$ 1.234.567,89');
     expect(seloDaDiferenca(ZERO)).toBeNull();
     expect(motivoDaDiferenca(ZERO)).toBeNull();
-    expect(semDuro(motivoDaDiferenca(FALTA))).toBe('Todas as parcelas deste compromisso estão pagas. Sobra uma diferença de R$ 0,50 entre o combinado e o pago (pago a menos); ela se resolve na OC.');
+    expect(semDuro(motivoDaDiferenca(FALTA))).toBe('Todas as parcelas deste compromisso estão pagas e falta R$ 0,50 para o combinado. Este lançamento entra como item novo; a diferença continua na OC.');
+    expect(semDuro(motivoDaDiferenca(SOBRA))).toContain('e sobra R$ 0,50 sobre o combinado');
   });
-  it('a marca é a do BANCO: a tela não a deduz de todos_liquidados nem do compromisso', () => {
-    expect(situacaoDaCandidata(oc('x', { compromissos: [comp(0.5)], todos_liquidados: true }), 'principal', 1).selecionavel).toBe(true);
-    expect(situacaoDaCandidata(FALTA, 'principal', 1)).toMatchObject({ selecionavel: false, tom: 'ambar' });
+  it('a marca é a do BANCO, e a linha se escolhe do MESMO jeito que a de diferença zero', () => {
+    expect(situacaoDaCandidata(oc('x', { compromissos: [comp(0.5)], todos_liquidados: true }), 'principal', 1).rotulo).toBe('criar item');
+    expect(situacaoDaCandidata(FALTA, 'principal', 1)).toMatchObject({ selecionavel: true, tom: 'ambar' });
     expect(situacaoDaCandidata(ZERO, 'principal', 1)).toMatchObject({ selecionavel: true, rotulo: 'criar item' });
-    expect(candidataInicial([oc('e', { valor_exato: true, pagas_com_diferenca: true, diferenca_parcelas: 0.5 })], 'principal', 1)).toBeNull();
   });
-  it('no diálogo: linha apagada com o selo inteiro, não se escolhe, e o clique escreve o motivo no painel', async () => {
-    await montar(resposta([MESMA, FALTA]));
+  it('o aviso do vincular (do banco) vira a frase, em âmbar, com o valor e o lado', () => {
+    expect(textoDoAviso({ codigo: 'parcelas_pagas_com_diferenca', diferenca: 0.5 })).toMatchObject({ tom: 'ambar' });
+    expect(semDuro(textoDoAviso({ codigo: 'parcelas_pagas_com_diferenca', diferenca: 0.5 }).texto))
+      .toBe('Todas as parcelas deste compromisso estão pagas e falta R$ 0,50 para o combinado. Este lançamento entra como item novo; a diferença continua na OC.');
+    expect(semDuro(textoDoAviso({ codigo: 'parcelas_pagas_com_diferenca', diferenca: -12.34 }).texto)).toContain('sobra R$ 12,34 sobre o combinado');
+  });
+  it('no diálogo: a linha traz o selo, SE ESCOLHE, e o painel mostra o aviso que o banco devolveu', async () => {
+    responder(resposta([MESMA, FALTA]));
+    rpc.mockImplementation(async (nome: string) => {
+      if (nome === 'oc_candidatas_vinculo') return { data: resposta([MESMA, FALTA]), error: null };
+      if (nome === 'oc_vincular_lancamento') return { data: { ...simulacao, parcial: undefined, avisos: [{ codigo: 'parcelas_pagas_com_diferenca', diferenca: 0.5 }] }, error: null };
+      return { data: null, error: null };
+    });
+    render(<VincularOperacaoDialog open lancamentoId={LANC} clienteId="agnaldo" onClose={vi.fn()} onVinculado={vi.fn()} />);
+    await waitFor(() => expect(screen.queryByTestId('vinc-secao-candidatas')).not.toBeNull());
     const l = document.querySelector('tr[data-oc="falta"]');
     if (!(l instanceof HTMLElement)) throw new Error('linha nao achada');
-    expect(l.getAttribute('data-selecionavel')).toBe('nao');
+    expect(l.getAttribute('data-selecionavel')).toBe('sim');
     expect(semDuro(l.textContent)).toContain('parcelas pagas · falta R$ 0,50');
-    expect(screen.queryByTestId('vinc-motivo-da-linha')).toBeNull();
     fireEvent.click(l);
-    expect(l.querySelector('[role=radio]')?.getAttribute('aria-checked')).toBe('false');
-    expect(semDuro(screen.getByTestId('vinc-motivo-da-linha').textContent)).toContain('Sobra uma diferença de R$ 0,50 entre o combinado e o pago');
-    expect(rpc.mock.calls.filter(c => c[0] === 'oc_vincular_lancamento').length).toBe(0);
-    const outra = document.querySelector('tr[data-oc="mesma"]');
-    if (!(outra instanceof HTMLElement)) throw new Error('linha nao achada');
-    fireEvent.click(outra);
-    await waitFor(() => expect(screen.queryByTestId('vinc-motivo-da-linha')).toBeNull());
+    expect(l.querySelector('[role=radio]')?.getAttribute('aria-checked')).toBe('true');
+    await waitFor(() => expect(semDuro(document.body.textContent)).toContain('falta R$ 0,50 para o combinado. Este lançamento entra como item novo; a diferença continua na OC.'));
   });
 });
 

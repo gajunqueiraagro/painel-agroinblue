@@ -126,7 +126,7 @@ export interface AvisoVinculo {
   codigo: 'movimento_duplicado' | 'competencia_mudou_de_mes' | 'favorecido_diferente'
     | 'classificacao_diverge_do_compromisso' | 'principal_diverge_da_base' | 'safra_diverge_da_competencia'
     | 'principal_excede_acordado'
-    | 'recebido_acima_do_saldo' | 'compromisso_reduzido' | 'mes_fechado' | 'fazenda_diferente';
+    | 'recebido_acima_do_saldo' | 'compromisso_reduzido' | 'mes_fechado' | 'fazenda_diferente' | 'parcelas_pagas_com_diferenca';
   de?: string; para?: string; base?: number | null; soma_principal?: number;
   /** `recebido_acima_do_saldo` / `compromisso_reduzido` (OC-VINCULAR-RECEBIMENTO-PARCIAL-01): nada some em silêncio. */
   lado?: 'receber' | 'pagar'; recebido?: number; saldo?: number | null; diferenca?: number;
@@ -325,24 +325,27 @@ export const MOTIVO_RASCUNHO = 'em rascunho — conclua a negociação';
 
 /* OC-VINCULAR-CANDIDATAS-01 — TODAS AS PARCELAS PAGAS E O COMPROMISSO ≠ A SOMA DELAS (nunca "liquidado": R$ 0,01 já conta). O valor
    vem do banco, inteiro; o sinal é dito em palavras. A resolução é na OC (OC-AJUSTE-DIFERENCA-01), não por um vínculo novo. */
-const ladoDaDiferenca = (d: number) => (d > 0 ? 'pago a menos' : 'pago a mais');
 export function seloDaDiferenca(c: Pick<OperacaoCandidata, 'pagas_com_diferenca' | 'diferenca_parcelas'>): string | null {
   if (!c.pagas_com_diferenca) return null;
   const d = c.diferenca_parcelas ?? 0;
   /* curto de propósito: o selo longo (269px) espremia a coluna Operação de TODAS as linhas; a frase inteira vai no painel e no `title` */
   return `parcelas pagas · ${d > 0 ? 'falta' : 'sobra'} ${brl(Math.abs(d))}`;
 }
+/** A frase da diferença (painel e `title` do selo) — a mesma para a marca da lista e para o aviso do vincular. */
+export function fraseDaDiferenca(d: number): string {
+  const que = d > 0 ? `falta ${brl(d)} para o combinado` : `sobra ${brl(Math.abs(d))} sobre o combinado`;
+  return `Todas as parcelas deste compromisso estão pagas e ${que}. Este lançamento entra como item novo; a diferença continua na OC.`;
+}
 export function motivoDaDiferenca(c: Pick<OperacaoCandidata, 'pagas_com_diferenca' | 'diferenca_parcelas'>): string | null {
-  if (!c.pagas_com_diferenca) return null;
-  const d = c.diferenca_parcelas ?? 0;
-  return `Todas as parcelas deste compromisso estão pagas. Sobra uma diferença de ${brl(Math.abs(d))} entre o combinado e o pago (${ladoDaDiferenca(d)}); ela se resolve na OC.`;
+  return c.pagas_com_diferenca ? fraseDaDiferenca(c.diferenca_parcelas ?? 0) : null;
 }
 
 export function situacaoDaCandidata(c: OperacaoCandidata, componente: string | null, _valorLancamento: number): SituacaoCandidata {
   /* OC-VINCULAR-CANDIDATAS-01 — RASCUNHO aparece e NÃO se escolhe: o motivo vai no selo e no `title` (o banco recusaria). */
   if (c.rascunho) return { rotulo: MOTIVO_RASCUNHO, tom: 'neutro', selecionavel: false, title: 'Operação em rascunho não recebe lançamento. Conclua a negociação na operação e volte aqui.' };
   const selo = seloDaDiferenca(c);
-  if (selo) return { rotulo: selo, tom: 'ambar', selecionavel: false, title: motivoDaDiferenca(c) ?? undefined };
+  /* 01b — SELECIONÁVEL, como a OC toda paga de diferença zero ("criar item"): o selo e o aviso do painel explicam; o operador decide. */
+  if (selo) return { rotulo: selo, tom: 'ambar', selecionavel: true, title: motivoDaDiferenca(c) ?? undefined };
   const livres = c.compromissos.filter(k => k.componente === componente && k.acao_prevista !== 'recusar');
   const alvo = livres.length === 1 ? livres[0] : null;
   if (compromissoExato(c)) return { rotulo: '= valor', tom: 'verde', selecionavel: true };
@@ -417,6 +420,8 @@ export function textoDoAviso(a: AvisoVinculo): AvisoTela {
     case 'mes_fechado':
       return { codigo: a.codigo, tom: 'ambar', texto:
         `O mês ${a.mes ? `${a.mes.slice(5, 7)}/${a.mes.slice(0, 4)}` : ''} do rebanho está fechado. O vínculo não é bloqueado: fica registrado na auditoria da OC.` };
+    case 'parcelas_pagas_com_diferenca':
+      return { codigo: a.codigo, tom: 'ambar', texto: fraseDaDiferenca(Number(a.diferenca ?? 0)) };
     case 'fazenda_diferente':
       return { codigo: a.codigo, tom: 'ambar', texto:
         `A OC é da ${a.operacao_fazenda ?? 'outra fazenda'}. O lançamento continua em ${a.lancamento_fazenda ?? 'sua fazenda'}; o vínculo não muda a fazenda.` };

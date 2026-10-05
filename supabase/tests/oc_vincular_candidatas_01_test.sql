@@ -16,6 +16,8 @@
 --     "qual parcela" — cria o item; com UMA em aberto, continua escolhendo a parcela sozinho (o predicado de antes).
 -- K8  todas pagas x a diferenca exata compromisso − parcelas: 0 = `todos_liquidados`; <> 0 (0,50, −0,50, 0,01) = `pagas_com_diferenca`
 --     com o valor e o sinal, nunca `todos_liquidados`; o compromisso nao e' oferecido em nenhum.
+-- K9  (01b) a OC toda paga COM diferenca recebe o lancamento como item novo e o vincular avisa `parcelas_pagas_com_diferenca`
+--     (retorno, simulacao e trilha); com diferenca zero nao ha' aviso.
 -- monta uma OC no Teste a partir do molde, com UM compromisso principal de p_valor e o titulo PROGRAMADO dele; devolve os ids
 CREATE FUNCTION pg_temp.montar(p_molde uuid, p_valor numeric, OUT op uuid, OUT lote uuid, OUT comp uuid, OUT prog uuid, OUT parc uuid, OUT tit uuid)
 LANGUAGE plpgsql AS $f$
@@ -198,6 +200,24 @@ BEGIN
   k := pg_temp.cand(oc_candidatas_vinculo(l4), pago.op);
   IF (k ->> 'pagas_com_diferenca') IS DISTINCT FROM 'true' OR (k ->> 'diferenca_parcelas')::numeric <> 0.01 THEN RAISE EXCEPTION 'K8 um centavo: %', k - 'lotes'; END IF;
   v_ok := v_ok || '; K8 ok (todas pagas: diferenca 0 = todos_liquidados; 0,50 e -0,50 = pagas_com_diferenca com o valor e o sinal, nunca todos_liquidados; 0,01 ja'' conta; o compromisso e'' recusar nos quatro)';
+
+  -- K9 (01b): a OC toda paga COM diferenca recebe o lancamento como item novo, e o vincular AVISA (retorno, simulacao e trilha)
+  UPDATE zoo_operacao_compromissos SET valor_total = 100000 WHERE id = pago.comp;
+  v := oc_vincular_lancamento(pago.op, pg_temp.ver(pago.op), l4, NULL, 'k9', NULL, NULL, false, true);
+  IF (v ->> 'ok') IS DISTINCT FROM 'true' OR EXISTS (SELECT 1 FROM jsonb_array_elements(v -> 'avisos') a WHERE a ->> 'codigo' = 'parcelas_pagas_com_diferenca') THEN
+    RAISE EXCEPTION 'K9 diferenca zero nao avisa: %', v -> 'avisos'; END IF;
+  UPDATE zoo_operacao_compromissos SET valor_total = 100000.50 WHERE id = pago.comp;
+  s := oc_vincular_lancamento(pago.op, pg_temp.ver(pago.op), l4, NULL, 'k9', NULL, NULL, false, true);
+  v := oc_vincular_lancamento(pago.op, pg_temp.ver(pago.op), l4, NULL, 'k9', NULL, NULL, false, false);
+  IF (v ->> 'ok') IS DISTINCT FROM 'true' OR (v -> 'compromisso' ->> 'acao') IS DISTINCT FROM 'criado'
+     OR (SELECT (a ->> 'diferenca')::numeric FROM jsonb_array_elements(v -> 'avisos') a WHERE a ->> 'codigo' = 'parcelas_pagas_com_diferenca') IS DISTINCT FROM 0.50
+     OR (SELECT (a ->> 'diferenca')::numeric FROM jsonb_array_elements(s -> 'avisos') a WHERE a ->> 'codigo' = 'parcelas_pagas_com_diferenca') IS DISTINCT FROM 0.50 THEN
+    RAISE EXCEPTION 'K9 vinculo: % · simulacao: %', v -> 'avisos', s -> 'avisos'; END IF;
+  IF NOT EXISTS (SELECT 1 FROM zoo_operacao_eventos e, jsonb_array_elements(e.detalhes -> 'avisos') a
+                  WHERE e.operacao_id = pago.op AND a ->> 'codigo' = 'parcelas_pagas_com_diferenca' AND (a ->> 'diferenca')::numeric = 0.50) THEN
+    RAISE EXCEPTION 'K9: o aviso nao foi para a trilha'; END IF;
+  IF (SELECT valor_total FROM zoo_operacao_compromissos WHERE id = pago.comp) <> 100000.50 THEN RAISE EXCEPTION 'K9: o compromisso pago mudou de valor'; END IF;
+  v_ok := v_ok || '; K9 ok (toda paga com 0,50 de diferenca: entra como item novo, aviso parcelas_pagas_com_diferenca 0,50 no retorno, na simulacao e na trilha; com diferenca zero nao avisa; o compromisso pago fica como estava)';
 
   RAISE EXCEPTION 'OK %', v_ok;
 END $teste$;
