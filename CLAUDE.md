@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 05/10/2026 (OC-VINCULAR-CANDIDATAS-01, +24 em `src/components/financeiro-v2/vincularCandidatas.test.tsx` — 3969 depois dele;
+  Baseline em 05/10/2026 (CPR-PERIODO-VENCIDOS-01, +16 em `src/lib/financeiro/cprRecorte.test.ts` — 3985 depois dele;
+  antes o OC-VINCULAR-CANDIDATAS-01, +24 em `src/components/financeiro-v2/vincularCandidatas.test.tsx` — 3969 depois dele;
   antes o OC-VINCULAR-RECEBIMENTO-PARCIAL-01, +25 em `src/components/financeiro-v2/vincularRecebimentoParcial.test.tsx` — 3945 depois dele;
   antes o OC-VINCULAR-PARCELA-SEGUINTE-01, +10 em `src/components/financeiro-v2/vincularParcelaSeguinte.test.tsx` — 3920 depois dele;
   antes o UI-ARRASTAR-ARQUIVO-01b, +62: `src/lib/arquivo/aceitarArquivo.test.ts` 27, `src/lib/arquivo/umSoArrastar.test.ts` 3,
@@ -200,7 +201,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3969
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3985
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -2430,6 +2431,34 @@ docs/historico/frentes-ate-2026-09-29.md.)
   o FIN-LISTA-VISUAL-01. A conta corrente da OC herda a mesma paleta.
   Duplicata registrada: `BADGE_STATUS_TRANSACAO` (statusOperacional.ts, Mesa/Espelho); o `ModoRapidoGrid` ainda deriva
   status da data de pagamento (frente propria).
+- ⚠ CONTAS A PAGAR E RECEBER: UM PERIODO, VENCIDOS A' PARTE, E O RECORTE TEM UM DONO (CPR-PERIODO-VENCIDOS-01, Gabriel 05/10/2026, so'
+  tela). Dono puro: `src/lib/financeiro/cprRecorte.ts` — `periodoDoAtalho`, `baldeDaConta`, `recortarCpr`, `ramoDaConsultaCpr`. A
+  TELA SO' RENDERIZA: cartoes e total saem de `recortarCpr`, dos MESMOS dados em Lista e em Fluxo (a consulta e a chave de cache
+  nao tem a visao). Nasce de defeito medido: os cartoes somavam "o que a visao carregou" e trocar Lista <-> Fluxo mudava os dois
+  numeros com o mesmo rotulo (NJ, 30 dias, a pagar: 790.184,12 na Lista x 1.695.091,64 no Fluxo).
+  · PERIODO = [de, ate] por `data_vencimento`, em DATAS LOCAIS de texto (nada de `toISOString`): "Este mes" (1o ao ultimo dia), "30
+    dias" e "60 dias" (hoje a hoje+N), "Escolher datas"; os campos de/ate estao sempre a' vista e editar um vira "Escolher datas".
+  · CADA CONTA CAI EM EXATAMENTE UM BALDE: 'paga' (realizada ou com data de pagamento: aparece apagada na lista com a pilula
+    Realizado e NUNCA soma) · 'sem_vencimento' (grupo proprio no fim, fora dos cartoes) · 'vencido' = EM ABERTO com vencimento <
+    hoje, DE QUALQUER IDADE, inclusive o que esta' entre "de" e ontem · 'periodo' (hoje e' do periodo, nao vencido) · 'fora'.
+  · SOMA EM CENTAVOS INTEIROS, nunca arredondada; zero e' R$ 0,00, nunca "—". Cartoes: Vencidos (a pagar; o "a receber" ao lado,
+    em verde, so' quando > 0) · A pagar no periodo · A receber no periodo · Saldo do periodo (a receber − a pagar, sem vencidos) ·
+    Saldo em caixa (calculo intocado; corrente e investido em duas linhas a' direita). Nenhum depende do segmento nem da visao.
+  · "INCLUIR VENCIDOS" (ligada por padrao) decide a LISTA e o TOTAL; os vencidos vem SEMPRE na busca e o cartao os mostra sempre.
+    Lista: grupo "Vencidos · N contas · a mais antiga há X dias" no topo, depois os dias, e o TOTAL fixo no rodape (fora da
+    rolagem) = `recorte.total[segmento]`; a soma dos grupos da' o total ao centavo (o grupo soma so' as contas em aberto).
+  · UMA BUSCA: periodo ∪ vencidos EM ABERTO ∪ sem vencimento (o ramo dos vencidos pede "em aberto" na propria consulta — com a
+    pilula Realizado um `lt.hoje` cru traria o historico de pagos). O grafico filtra em memoria e comeca na data "de".
+  · ⚠ VALOR DE CARTAO NUNCA CORTA NEM FICA SO' EM `title`: todo valor e' `whitespace-nowrap`, sem `truncate`; so' o rotulo (texto)
+    corta. 12px, `px-1`, `gap-1` e a grade 1.72fr·1fr·1fr·1fr·1.9fr foram MEDIDOS a 1.126px com "−R$ 99.999.999,99" nos OITO
+    valores (texto 113,9 de 118px; lado 90,2), cartoes de 40px. Quem mexer mede de novo — a folga e' de 3 a 4px.
+  Medido (NJ e Agnaldo, so' leitura): os cinco numeros identicos em Lista e Fluxo nos 4 atalhos e num intervalo livre; soma dos
+  grupos = total; barra 1 em uma linha (759 de 886px). 13 mutacoes mortas.
+  ⚠ DIVIDAS: a tela nao se monta em teste (contrato lido da fonte; numeros do navegador) · programado com data de pagamento antiga
+    (6 casos) cai como 'paga' · no grupo em "Ambos" o liquido negativo aparece em vermelho sem o sinal (ja' era assim nos dias) · o
+    Fluxo segue forcando "Ambos" ao entrar · a legenda do grafico ficou com os quatro tracos que ja' tinha · a contagem dos cartoes
+    do periodo e' "· 237" (por extenso no `title`) · abaixo de 1.126px os cartoes nao foram medidos · nao provado no navegador:
+    pilula Realizado ligada, "de" depois de "ate", o grupo "Sem vencimento" (0 casos reais), digitacao real nas datas.
 - ⚠ A CONTA DIRETO NO CAMPO DE VALOR TEM UM DONO, E GUARDA-SE SO' O RESULTADO (FIN-VALOR-CALC-01a, Gabriel 05/10/2026, so' tela).
   Ele lanca rateios (o cliente manda o valor cheio, o lancamento e' uma parte): digita "16.238,00/2" no campo e fica o
   resultado; a conta NAO vai para observacao nem para lugar nenhum.

@@ -218,7 +218,7 @@ function TooltipFluxo({ active, label, payload }: TooltipProps) {
 }
 
 export function CprFluxoPrevisto({
-  linhas, saldoInicial, caveat, granularidade, hoje, passado, conciliadoAte,
+  linhas, saldoInicial, caveat, granularidade, hoje, inicio, passado, conciliadoAte,
 }: {
   linhas: readonly LinhaFluxoPrevisto[];
   /** O mesmo "Saldo em caixa (estimado)" do card. `null` quando não há âncora. */
@@ -229,6 +229,8 @@ export function CprFluxoPrevisto({
   granularidade: Granularidade;
   /** Hoje em ISO local — a série diária precisa dele para começar no dia certo. */
   hoje: string;
+  /** CPR-PERIODO-VENCIDOS-01: a data "de" do período — o desenho começa AQUI (era o dia 1º do mês anterior). */
+  inicio: string;
   /**
    * O passado, vindo de `serieDoSaldoPassado` — a MESMA cadeia que o card usa.
    * ⚠ Ele fecha no total do card por construção (há teste). Um degrau visível em "hoje" é
@@ -255,12 +257,9 @@ export function CprFluxoPrevisto({
    * gráfico não existe para fazer. O card já está no topo, a três centímetros dali. Aqui fica
    * um ponto só, com o valor da LINHA — que é a pergunta desta visão.
    */
-  const inicioDesenho = useMemo(() => {
-    const d = new Date(`${hoje}T12:00:00Z`);
-    d.setUTCDate(1);
-    d.setUTCMonth(d.getUTCMonth() - 1);
-    return d.toISOString().slice(0, 10);
-  }, [hoje]);
+  /* O desenho começa na data "de" do período; se ela for futura, começa em hoje (não há passado a mostrar). */
+  const inicioDesenho = inicio < hoje ? inicio : hoje;
+  const passadoDoPeriodo = useMemo(() => passado.filter((p) => p.data >= inicioDesenho), [passado, inicioDesenho]);
 
   const vencidoPorDia = useMemo(
     () => ajusteVencidoPorDia(linhas, inicioDesenho, hoje, conciliadoAte),
@@ -275,8 +274,8 @@ export function CprFluxoPrevisto({
     [linhas, saldoInicial, ajusteTotal, granularidade, hoje]);
   const { semVencimento, rebaixada, anteriores } = fluxo;
   const pontos = useMemo(
-    () => combinarComPassado(fluxo, passado, hoje, vencidoPorDia),
-    [fluxo, passado, hoje, vencidoPorDia]);
+    () => combinarComPassado(fluxo, passadoDoPeriodo, hoje, vencidoPorDia),
+    [fluxo, passadoDoPeriodo, hoje, vencidoPorDia]);
 
   /**
    * A largura medida do gráfico — é dela que sai o espaçamento dos rótulos.

@@ -28,6 +28,12 @@ import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialo
 import { PageHeader } from '@/components/ui/page-header';
 import { Segmentado } from '@/components/ui/segmentado';
 import { CprFluxoPrevisto } from '@/components/financeiro-v2/CprFluxoPrevisto';
+import { DatePicker } from '@/components/ui/date-picker';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  ATALHOS_CPR, periodoDoAtalho, recortarCpr, ramoDaConsultaCpr, doSegmentoCpr, liquidoEmAberto, contaEmAberto, diasEntre,
+  tituloDoGrupoVencidos, rotuloDoTotal, ehReceberCpr, type AtalhoCpr, type PeriodoCpr,
+} from '@/lib/financeiro/cprRecorte';
 import { aplicarPlanoNaView, type LinhaViewDoc } from '@/lib/financeiro/listaPaginadaV2';
 import { montarPlanoBaseV2 } from '@/lib/financeiro/filtrosBaseV2';
 import { paginarTudo } from '@/lib/financeiro/paginarTudo';
@@ -48,7 +54,6 @@ import { toast } from 'sonner';
 // Vocabulário da tela
 // ─────────────────────────────────────────────────────────────────────────────
 
-type Horizonte = 'vencidos' | '7' | '30' | '60' | '90' | 'tudo';
 type Segmento = 'pagar' | 'receber' | 'ambos';
 /** As duas visões da tela. A Lista é o default; o Fluxo é a mesma pergunta acumulada. */
 type Visao = 'lista' | 'fluxo';
@@ -62,15 +67,6 @@ type Visao = 'lista' | 'fluxo';
  */
 type Agrupamento = 'vencimento' | 'categoria';
 const agrupamento: Agrupamento = 'vencimento';
-
-const HORIZONTES: { valor: Horizonte; rotulo: string }[] = [
-  { valor: 'vencidos', rotulo: 'Vencidos' },
-  { valor: '7', rotulo: '7 dias' },
-  { valor: '30', rotulo: '30 dias' },
-  { valor: '60', rotulo: '60 dias' },
-  { valor: '90', rotulo: '90 dias' },
-  { valor: 'tudo', rotulo: 'Tudo' },
-];
 
 /** Os três status que a tela liga de saída. `realizado` existe e nasce DESLIGADO. */
 const STATUS_DISPONIVEIS = ['previsto', 'programado', 'agendado', 'realizado'] as const;
@@ -126,7 +122,7 @@ const CORTE_DESTAQUE = 100_000;
  * foi necessária: a conta fecha sem rolagem horizontal a 1168px.
  */
 const COL = {
-  vencimento: 'w-[42px]',
+  vencimento: 'w-[48px]',
   fornecedor: 'w-[144px]',
   banco: 'w-[88px]',
   origem: 'w-[100px]',
@@ -203,60 +199,11 @@ function hojeLocal(): Date {
   return new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
 }
 
-function somarDias(d: Date, n: number): Date {
-  const r = new Date(d);
-  r.setDate(r.getDate() + n);
-  return r;
-}
-
 /** Dias entre duas datas locais (positivo = no futuro). */
 function diasAte(iso: string, hoje: Date): number {
   const alvo = parseISO(iso);
   const base = new Date(alvo.getFullYear(), alvo.getMonth(), alvo.getDate());
   return Math.round((base.getTime() - hoje.getTime()) / 86_400_000);
-}
-
-/** O limite do horizonte, em ISO local. `null` = sem limite ("Tudo" e "Vencidos"). */
-function limiteDoHorizonte(h: Horizonte, hoje: Date): string | null {
-  if (h === 'tudo' || h === 'vencidos') return null;
-  return isoLocal(somarDias(hoje, Number(h)));
-}
-
-/**
- * O ramo temporal da consulta, no dialeto do PostgREST.
- *
- * ⚠ O `data_vencimento.is.null` ENTRA EM TODOS OS HORIZONTES, e não é zelo: uma obrigação
- * sem data de vencimento é justamente a que não se pode perder de vista. Sem este termo ela
- * não cairia em janela nenhuma e sumiria da tela em silêncio — o defeito que a lista
- * paginada já fecha com o seu `RAMO_SEM_VENCIMENTO`. Aqui elas vão para um grupo próprio,
- * no fim.
- */
-function ramoDoHorizonte(h: Horizonte, hoje: Date, apenasFuturo = false): string | null {
-  const hojeIso = isoLocal(hoje);
-  /**
-   * ⚠ NO FLUXO O RECORTE É SEMPRE PARA A FRENTE — PR-CPR-2B.2. O horizonte passa a dizer só
-   * ATÉ ONDE ir, nunca o quanto voltar: "Vencidos" projeta de hoje em diante (vencido é
-   * assunto da Lista) e "Tudo" deixa de começar em jul/2025.
-   * ⚠ E O BOTÃO CONTINUA ATIVO em "Vencidos": desabilitá-lo faria o operador achar que o
-   * Fluxo quebrou. Ele mostra a projeção e o subtítulo diz quantos vencidos ficaram fora.
-   */
-  if (apenasFuturo) {
-    /**
-     * ⚠ O FLUXO VOLTOU A OLHAR PARA TRÁS — mas só até o começo do desenho, PR-CPR-2B.3.2. O
-     * gráfico passou a mostrar o que VENCEU E NÃO FOI PAGO, e isso é, por definição, um
-     * vencimento anterior a hoje. Sem estender o recorte, esses lançamentos não chegavam à
-     * tela e o trecho tracejado nasceria vazio.
-     * ⚠ E O PISO É O INÍCIO DO DESENHO, não "tudo": o gráfico começa em 01 do mês anterior, e
-     * trazer vencidos de 2020 encheria a memória sem desenhar um pixel a mais.
-     */
-    const inicioDoDesenho = `${mesRelativoAoHoje(hoje, -1)}-01`;
-    if (h === 'tudo' || h === 'vencidos') return `data_vencimento.gte.${inicioDoDesenho}`;
-    return `and(data_vencimento.gte.${inicioDoDesenho},data_vencimento.lte.${limiteDoHorizonte(h, hoje)})`;
-  }
-  if (h === 'tudo') return null;
-  if (h === 'vencidos') return `data_vencimento.lt.${hojeIso},data_vencimento.is.null`;
-  const ate = limiteDoHorizonte(h, hoje);
-  return `and(data_vencimento.gte.${hojeIso},data_vencimento.lte.${ate}),data_vencimento.is.null`;
 }
 
 /**
@@ -292,6 +239,8 @@ interface Grupo {
   /** O sufixo de contagem ("em 3 dias"). Vazio no grupo "Sem vencimento", que não tem data. */
   quando: string;
   vencido: boolean;
+  /** CPR-PERIODO-VENCIDOS-01: o grupo do topo ("Vencidos · N contas · …"), os dias do período, ou "Sem vencimento". */
+  tipo: 'vencidos' | 'dia' | 'sem_vencimento';
   linhas: LinhaViewDoc[];
   total: number;
 }
@@ -305,10 +254,11 @@ export function ContasPagarReceberTab() {
   const fin = useFinanceiroV2();
 
   const [visao, setVisao] = useState<Visao>('lista');
-  /* ⚠ 30 DIAS É O DEFAULT — PR-CPR-2B.3.6. A tela responde "o que vence e quando"; um mês é o
-     alcance em que o produtor de fato decide pagamento. Noventa dias abriam a lista com o
-     trimestre inteiro e o que vence esta semana chegava misturado ao que vence em dezembro. */
-  const [horizonte, setHorizonte] = useState<Horizonte>('30');
+  /* CPR-PERIODO-VENCIDOS-01 — UM PERÍODO, igual nas duas visões. O atalho dá as datas; editar uma data vira "Escolher datas".
+     30 dias segue o default (PR-CPR-2B.3.6). Os vencidos ficam à parte, atrás da caixa "Incluir vencidos" (ligada). */
+  const [atalho, setAtalho] = useState<AtalhoCpr>('30');
+  const [datas, setDatas] = useState<PeriodoCpr | null>(null);
+  const [incluirVencidos, setIncluirVencidos] = useState(true);
   const [segmento, setSegmento] = useState<Segmento>('pagar');
   const [statusLigados, setStatusLigados] = useState<string[]>(STATUS_INICIAIS);
   const [lancEdicao, setLancEdicao] = useState<LancamentoV2 | null>(null);
@@ -346,7 +296,17 @@ export function ContasPagarReceberTab() {
   }, [visao]);
 
   const hoje = useMemo(() => hojeLocal(), []);
-  const limite = limiteDoHorizonte(horizonte, hoje);
+  const hojeIso = useMemo(() => isoLocal(hoje), [hoje]);
+  const periodo = useMemo<PeriodoCpr>(
+    () => (atalho === 'datas' && datas ? datas : periodoDoAtalho(atalho === 'datas' ? '30' : atalho, hojeIso)),
+    [atalho, datas, hojeIso]);
+  /* editar "de" ou "até" parte das datas que estão na tela e passa a "Escolher datas"; campo esvaziado não muda nada */
+  const editarData = (campo: 'de' | 'ate', v: string) => {
+    if (!v) return;
+    setDatas({ ...periodo, [campo]: v });
+    setAtalho('datas');
+  };
+  const escolherAtalho = (a: AtalhoCpr) => { if (a === 'datas') setDatas(periodo); setAtalho(a); };
 
   // ── Leitura ────────────────────────────────────────────────────────────────
   /**
@@ -356,7 +316,8 @@ export function ContasPagarReceberTab() {
    * a duas consultas para pintar a mesma barra.
    */
   const { data: linhas = [], isFetching } = useQuery({
-    queryKey: ['cpr-lancs', clienteId, fazScope, horizonte, statusLigados.join(','), limite, visao],
+    /* ⚠ SEM A VISÃO NA CHAVE: Lista e Fluxo leem a MESMA busca (período ∪ vencidos em aberto ∪ sem vencimento). */
+    queryKey: ['cpr-lancs', clienteId, fazScope, periodo.de, periodo.ate, statusLigados.join(','), hojeIso],
     enabled: !!clienteId && statusLigados.length > 0,
     queryFn: async (): Promise<LinhaViewDoc[]> => {
       if (!clienteId) return [];
@@ -365,7 +326,7 @@ export function ContasPagarReceberTab() {
         fazScope ? { fazenda_id: fazScope } : {},
         { relacao: 'view', semRecorteTemporal: true },
       );
-      const ramo = ramoDoHorizonte(horizonte, hoje, visao === 'fluxo');
+      const ramo = ramoDaConsultaCpr(periodo, hojeIso);
       return paginarTudo<LinhaViewDoc>(async (de, tamanho) => {
         let q = aplicarPlanoNaView(fin.abrirView('*'), plano)
           .in('status_transacao', statusLigados)
@@ -597,17 +558,24 @@ export function ContasPagarReceberTab() {
   }, [caixa]);
 
   // ── Recortes em memória ────────────────────────────────────────────────────
-  const ehPagar = (l: LinhaViewDoc) => (l.tipo_operacao ?? '').startsWith('2-');
-  const ehReceber = (l: LinhaViewDoc) => (l.tipo_operacao ?? '').startsWith('1-');
-
-  const totalPagar = useMemo(
-    () => linhas.filter(ehPagar).reduce((s, l) => s + Math.abs(Number(l.valor ?? 0)), 0), [linhas]);
-  const totalReceber = useMemo(
-    () => linhas.filter(ehReceber).reduce((s, l) => s + Math.abs(Number(l.valor ?? 0)), 0), [linhas]);
-
-  const doSegmento = useMemo(() => linhas.filter(
-    (l) => segmento === 'ambos' || (segmento === 'pagar' ? ehPagar(l) : ehReceber(l)),
-  ), [linhas, segmento]);
+  /* CPR-PERIODO-VENCIDOS-01 — baldes, cartões e total saem do DONO (`recortarCpr`), dos mesmos dados nas duas visões. */
+  const ehReceber = ehReceberCpr;
+  const recorte = useMemo(
+    () => recortarCpr(linhas, { periodo, hoje: hojeIso, incluirVencidos }),
+    [linhas, periodo, hojeIso, incluirVencidos]);
+  const vencidosDoSegmento = useMemo(
+    () => (incluirVencidos ? recorte.vencidos.linhas.filter((l) => doSegmentoCpr(l, segmento)) : []),
+    [recorte, incluirVencidos, segmento]);
+  /* o que a lista desenha por dia: o período em aberto + as pagas do período (pílula Realizado), que nunca somam */
+  const doPeriodoNaLista = useMemo(
+    () => [...recorte.periodoSoma.linhas, ...recorte.pagas].filter((l) => doSegmentoCpr(l, segmento)),
+    [recorte, segmento]);
+  const semVencimentoDoSegmento = useMemo(
+    () => recorte.semVencimento.linhas.filter((l) => doSegmentoCpr(l, segmento)), [recorte, segmento]);
+  /* o que o gráfico desenha: só contas em aberto — vencidos (se ligados) + período */
+  const doFluxo = useMemo(
+    () => [...vencidosDoSegmento, ...recorte.periodoSoma.linhas.filter((l) => doSegmentoCpr(l, segmento))],
+    [vencidosDoSegmento, recorte, segmento]);
 
   /**
    * Os grupos de vencimento.
@@ -659,33 +627,31 @@ export function ContasPagarReceberTab() {
 
   const grupos = useMemo((): Grupo[] => {
     const mapa = new Map<string, LinhaViewDoc[]>();
-    for (const l of doSegmento) {
-      const chave = l.data_vencimento ?? '9999-99-99';
+    for (const l of doPeriodoNaLista) {
+      const chave = (l.data_vencimento ?? '').slice(0, 10);
       const atual = mapa.get(chave);
       if (atual) atual.push(l); else mapa.set(chave, [l]);
     }
-    return Array.from(mapa.entries())
+    /* O total de cada grupo é o LÍQUIDO das contas EM ABERTO dele (a receber − a pagar): a paga aparece na linha e não soma —
+       é isso que faz a soma dos grupos ser o total do rodapé e os cartões, ao centavo. */
+    const dias: Grupo[] = Array.from(mapa.entries())
       .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
       .map(([chave, itens]) => {
-        /* No segmento "Ambos" o total do grupo é o LÍQUIDO (entradas − saídas): somar as
-           magnitudes daria um número que não é dinheiro nenhum. Nos outros dois o líquido
-           coincide com a soma, porque só há um sentido. */
-        const total = itens.reduce((s, l) => {
-          const v = Math.abs(Number(l.valor ?? 0));
-          return s + (ehReceber(l) ? v : -v);
-        }, 0);
-        const semData = chave === '9999-99-99';
-        const faixa = semData ? { dia: 'Sem vencimento', quando: '' } : faixaDaData(chave, hoje);
-        return {
-          chave,
-          dia: faixa.dia,
-          quando: faixa.quando,
-          vencido: !semData && diasAte(chave, hoje) < 0,
-          linhas: itens,
-          total,
-        };
+        const faixa = faixaDaData(chave, hoje);
+        return { chave, dia: faixa.dia, quando: faixa.quando, vencido: false, tipo: 'dia', linhas: itens, total: liquidoEmAberto(itens) };
       });
-  }, [doSegmento, hoje]);
+    const topo: Grupo[] = vencidosDoSegmento.length === 0 ? [] : [{
+      chave: 'vencidos',
+      dia: tituloDoGrupoVencidos(vencidosDoSegmento.length, diasEntre((vencidosDoSegmento[0].data_vencimento ?? hojeIso).slice(0, 10), hojeIso)),
+      quando: '', vencido: true, tipo: 'vencidos', linhas: vencidosDoSegmento, total: liquidoEmAberto(vencidosDoSegmento),
+    }];
+    const fim: Grupo[] = semVencimentoDoSegmento.length === 0 ? [] : [{
+      chave: 'sem-vencimento', dia: `Sem vencimento · ${semVencimentoDoSegmento.length} · fora dos cartões do período`,
+      quando: '', vencido: false, tipo: 'sem_vencimento', linhas: semVencimentoDoSegmento, total: liquidoEmAberto(semVencimentoDoSegmento),
+    }];
+    return [...topo, ...dias, ...fim];
+  }, [doPeriodoNaLista, vencidosDoSegmento, semVencimentoDoSegmento, hoje, hojeIso]);
+  const totalDoSegmento = recorte.total[segmento];
 
   // ── Abrir o lançamento ─────────────────────────────────────────────────────
   /**
@@ -756,10 +722,6 @@ export function ContasPagarReceberTab() {
     return c?.nome_exibicao || c?.nome_conta || '—';
   };
 
-  const rotuloJanela = horizonte === 'tudo' ? 'tudo'
-    : horizonte === 'vencidos' ? 'vencidos'
-    : `${horizonte}d`;
-
   const vazioTexto = segmento === 'receber'
     ? 'Nenhum recebimento previsto neste período'
     : segmento === 'pagar'
@@ -779,77 +741,96 @@ export function ContasPagarReceberTab() {
             titulo="Contas a Pagar e Receber"
             subtitulo="O que vence, quando, somando todas as contas — pelo vencimento, não pelo pagamento"
           />
-          <div className="flex shrink-0 items-center gap-2">
-            {isFetching && (
-              <span className="text-[10px] text-muted-foreground">carregando…</span>
-            )}
-            {/* ⚠ NO CABEÇALHO CONGELADO, ao lado do título: é a pergunta mais alta da tela
-                ("como eu quero ver isto?") e fica acima do horizonte e do segmento, que são
-                recortes de dentro de qualquer uma das duas visões. */}
-            <Segmentado
-              valor={visao}
-              onEscolher={setVisao}
-              altura={22}
-              opcoes={[
-                { valor: 'lista', rotulo: 'Lista' },
-                { valor: 'fluxo', rotulo: 'Fluxo' },
-              ]}
-            />
-          </div>
+          {isFetching && <span className="shrink-0 text-[10px] text-muted-foreground">carregando…</span>}
         </div>
 
-        {/* HORIZONTE — navy no selecionado. O verde do mock contraria a regra da casa
-            (CLAUDE.md, seção UI): seleção se marca com `bg-primary` + texto branco, e um
-            segundo idioma de seleção a dez pixels do segmento abaixo é exatamente o que a
-            regra nasceu para impedir. */}
-        <div className="flex flex-wrap items-center gap-2">
+        {/* BARRA 1 — CPR-PERIODO-VENCIDOS-01: UMA linha, sem quebra. Visão · período (atalho + as duas datas, sempre à vista e
+            editáveis) · "Incluir vencidos". O período é o MESMO nas duas visões. */}
+        <div className="flex flex-nowrap items-center gap-2 whitespace-nowrap" data-testid="cpr-barra-periodo">
           <Segmentado
-            valor={horizonte}
-            onEscolher={setHorizonte}
+            valor={visao}
+            onEscolher={setVisao}
             altura={22}
-            opcoes={HORIZONTES.map((h) => ({ valor: h.valor, rotulo: h.rotulo }))}
+            opcoes={[
+              { valor: 'lista', rotulo: 'Lista' },
+              { valor: 'fluxo', rotulo: 'Fluxo' },
+            ]}
           />
-          <span className="text-[10px] text-muted-foreground">
-            {limite ? `até ${format(parseISO(limite), "dd/MMM/yyyy", { locale: ptBR })}`
-              : horizonte === 'vencidos' ? `até ${format(somarDias(hoje, -1), "dd/MMM/yyyy", { locale: ptBR })}`
-              : 'sem limite de data'}
-          </span>
+          <span className="text-[10px] text-muted-foreground">Período</span>
+          <Segmentado
+            valor={atalho}
+            onEscolher={escolherAtalho}
+            altura={22}
+            opcoes={ATALHOS_CPR.map((a) => ({ valor: a.valor, rotulo: a.rotulo }))}
+          />
+          <span className="text-[10px] text-muted-foreground">de</span>
+          <span data-testid="cpr-de"><DatePicker size="compact" className="w-[108px]" value={periodo.de} onChange={(v) => editarData('de', v)} /></span>
+          <span className="text-[10px] text-muted-foreground">até</span>
+          <span data-testid="cpr-ate"><DatePicker size="compact" className="w-[108px]" value={periodo.ate} onChange={(v) => editarData('ate', v)} /></span>
+          <label className="flex shrink-0 cursor-pointer items-center gap-1 text-[10px] text-foreground">
+            <Checkbox data-testid="cpr-incluir-vencidos" className="h-3 w-3" checked={incluirVencidos}
+              onCheckedChange={(v) => setIncluirVencidos(v === true)} />
+            Incluir vencidos
+          </label>
         </div>
 
-        {/* RESUMO — três slots de largura FIXA (A27), agora em PROPORÇÕES diferentes.
-            ⚠ IGUAIS NÃO SERVIAM: "A pagar" e "A receber" têm um rótulo e um número; o Saldo tem
-            três linhas, e a do meio carrega "disponível R$ 9.999.999,99 · aplicado
-            R$ 9.999.999,99" mais o âmbar. Com um terço da largura ela quebrava e o "aplicado"
-            saía cortado — o defeito que este PR conserta. As proporções são FIXAS e não
-            dependem do conteúdo, então trocar de cliente ou de filtro continua não movendo
-            nada: o que muda é a divisão, não a regra. */}
-        <div className="grid grid-cols-[1fr_1fr_2fr] gap-2">
+        {/* CARTÕES — cinco, 40px, rótulo + valor; o valor NUNCA corta. Os números saem todos de `recorte` (o dono) e não
+            dependem da visão nem do segmento. ZERO É R$ 0,00, nunca "—". */}
+        <div className="grid grid-cols-[1.72fr_1fr_1fr_1fr_1.9fr] gap-1.5" data-testid="cpr-cartoes">
           <CardResumo
-            rotulo={`A pagar · ${rotuloJanela}`}
-            valor={formatMoeda(totalPagar)}
+            testId="cpr-card-vencidos"
+            rotulo={`Vencidos · ${contas(recorte.vencidos.pagar.contas)}`}
+            titulo={`Vencidos a pagar: ${formatMoeda(recorte.vencidos.pagar.valor)} em ${contas(recorte.vencidos.pagar.contas)} · vencidos a receber: ${formatMoeda(recorte.vencidos.receber.valor)} em ${contas(recorte.vencidos.receber.contas)}`}
+            valor={formatMoeda(recorte.vencidos.pagar.valor)}
+            classeValor={recorte.vencidos.pagar.valor > 0 ? 'text-destructive' : 'text-muted-foreground'}
+            borda="border-l-destructive"
+            /* os DOIS lados à vista: o valor é o vencido a pagar; à direita do rótulo, o vencido a receber (some quando é zero).
+               Não depende do segmento nem da visão. */
+            lado={recorte.vencidos.receber.valor > 0
+              ? [{ rotulo: 'a receber', valor: '', classe: 'text-success' }, { rotulo: '', valor: formatMoeda(recorte.vencidos.receber.valor), classe: 'text-success' }]
+              : undefined}
+          />
+          <CardResumo
+            testId="cpr-card-pagar"
+            rotulo={`A pagar no período · ${recorte.periodoSoma.pagar.contas}`}
+            titulo={`A pagar no período: ${contas(recorte.periodoSoma.pagar.contas)}, sem os vencidos`}
+            valor={formatMoeda(recorte.periodoSoma.pagar.valor)}
             classeValor="text-destructive"
             borda="border-l-destructive"
           />
-          {/* ⚠ ZERO É R$ 0,00, NUNCA "—". A sentinela da casa é explícita: "—" significa dado
-              ausente ou desconhecido, e zero é valor real que nunca o substitui. Aqui a tela
-              SABE que não há recebimento na janela — isso é um zero medido, não uma lacuna.
-              O "vazio" que a homologação pede é o da LISTA, e é lá que ele está. */}
           <CardResumo
-            rotulo={`A receber · ${rotuloJanela}`}
-            valor={formatMoeda(totalReceber)}
-            classeValor={totalReceber > 0 ? 'text-success' : 'text-muted-foreground'}
+            testId="cpr-card-receber"
+            rotulo={`A receber no período · ${recorte.periodoSoma.receber.contas}`}
+            titulo={`A receber no período: ${contas(recorte.periodoSoma.receber.contas)}, sem os vencidos`}
+            valor={formatMoeda(recorte.periodoSoma.receber.valor)}
+            classeValor={recorte.periodoSoma.receber.valor > 0 ? 'text-success' : 'text-muted-foreground'}
             borda="border-l-success"
           />
           <CardResumo
+            testId="cpr-card-saldo"
+            rotulo="Saldo do período"
+            titulo="A receber − a pagar do período, sem os vencidos"
+            valor={`${recorte.periodoSoma.saldo < 0 ? '−' : ''}${formatMoeda(Math.abs(recorte.periodoSoma.saldo))}`}
+            classeValor={recorte.periodoSoma.saldo < 0 ? 'text-destructive' : recorte.periodoSoma.saldo > 0 ? 'text-success' : 'text-muted-foreground'}
+            borda="border-l-muted-foreground"
+          />
+          <CardResumo
+            testId="cpr-card-caixa"
             rotulo="Saldo em caixa"
             valor={caixa && caixa.ancoradas > 0 ? formatMoeda(caixa.total) : '—'}
             classeValor="text-foreground"
             borda="border-l-primary"
-            naturezas={naturezasDoCaixa}
+            /* corrente e investido em DUAS linhas pequenas à direita do total — rótulo curto + valor, nunca cortados nem só em `title` */
+            lado={(naturezasDoCaixa ?? []).map((n) => ({
+              rotulo: n.rotulo === 'Corrente' ? 'corr.' : 'inv.',
+              valor: n.valor,
+              classe: (n.aConferir?.length ?? 0) > 0 ? 'text-amber-600 dark:text-amber-400' : undefined,
+              title: `${n.rotulo} ${n.valor} — ${n.detalhe}${n.aConferir && n.aConferir.length > 0 ? ` · conferir: ${n.aConferir.join(', ')}` : ''}`,
+            }))}
           />
         </div>
 
-        {/* SEGMENTO + STATUS + AGRUPAMENTO */}
+        {/* BARRA 2 — SEGMENTO + STATUS + AGRUPAMENTO */}
         <div className="flex flex-wrap items-center gap-2">
           <Segmentado
             valor={segmento}
@@ -907,18 +888,14 @@ export function ContasPagarReceberTab() {
       <div className="min-h-0 flex-1 px-4 pb-2">
         <div className="flex h-full min-h-0 flex-col rounded-lg border border-border bg-card shadow-[0_1px_3px_0_rgb(0_0_0/0.04)]">
           {visao === 'fluxo' ? (
-            /* ⚠ AS MESMAS `doSegmento` QUE A LISTA DESENHA, não `linhas`: o gráfico obedece ao
-               segmento (A Pagar / A Receber / Ambos) como tudo o mais na tela. E o saldo é o
-               mesmo objeto do card — uma fonte, dois desenhos. */
+            /* ⚠ AS MESMAS CONTAS EM ABERTO QUE A LISTA SOMA (vencidos, se ligados, + período), filtradas em memória pelo
+               segmento. O gráfico começa na data "de" do período — não mais em 01 do mês anterior. */
             <CprFluxoPrevisto
-              linhas={doSegmento}
+              linhas={doFluxo}
               saldoInicial={caixa && caixa.ancoradas > 0 ? caixa.total : null}
               caveat={rotuloCaixa}
-              /* ⚠ DIÁRIO NOS HORIZONTES CURTOS, MENSAL SÓ NO "TUDO" — decisão do Gabriel:
-                 agrupar por semana esconderia o dia exato do aperto, que é o que a tela
-                 existe para mostrar. Em "Vencidos" o span pode ser de anos (2.420 dias no
-                 Agnaldo Cedenho), e aí a própria lib rebaixa para mensal e avisa. */
-              granularidade={horizonte === 'tudo' ? 'mes' : 'dia'}
+              granularidade="dia"
+              inicio={periodo.de}
               hoje={isoLocal(hoje)}
               passado={caixa?.passado.pontos ?? []}
               conciliadoAte={caixa?.passado.boundary ?? null}
@@ -965,7 +942,7 @@ export function ContasPagarReceberTab() {
                 <span className={cn(COL.vencimento, 'shrink-0')}>Venc.</span>
                 <span className="min-w-0 flex-1">Descrição</span>
                 <span className={cn(COL.fornecedor, 'shrink-0')}>Fornecedor</span>
-                <span className={cn(COL.banco, 'shrink-0')}>Banco</span>
+                <span className={cn(COL.banco, 'shrink-0')}>Conta</span>
                 <span className={cn(COL.origem, 'shrink-0')}>Origem</span>
                 <span className={cn(COL.status, 'shrink-0 text-center')}>Status</span>
                 <span className={cn(COL.anexo, 'shrink-0')} aria-hidden />
@@ -974,7 +951,7 @@ export function ContasPagarReceberTab() {
               </div>
 
               {grupos.map((g) => (
-                <div key={g.chave}>
+                <div key={g.chave} data-testid={`cpr-grupo-${g.tipo}`} data-total={g.total}>
                   {/* ⚠ FUNDO OPACO E `z` ACIMA DAS LINHAS (A21): transparente é pior que não
                       fixar — o conteúdo passa por baixo do total que se está conferindo.
                       ⚠ E O TOTAL CAI NA COLUNA VALOR, pela mesma régua `COL` das linhas: é o
@@ -1008,6 +985,7 @@ export function ContasPagarReceberTab() {
                     const valor = Math.abs(Number(l.valor ?? 0));
                     const receber = ehReceber(l);
                     const grande = valor >= CORTE_DESTAQUE;
+                    const paga = !contaEmAberto(l);
                     const status = (l.status_transacao ?? '').toLowerCase();
                     const fornecedor = (l.favorecido_id && nomesFornecedores.get(l.favorecido_id)) || '—';
                     const anexo = comAnexo?.has(l.id) ?? false;
@@ -1036,7 +1014,7 @@ export function ContasPagarReceberTab() {
                         )}
                       >
                         <span className={cn(COL.vencimento, 'shrink-0 tabular-nums text-muted-foreground')}>
-                          {l.data_vencimento ? format(parseISO(l.data_vencimento), 'dd/MM') : '—'}
+                          {l.data_vencimento ? format(parseISO(l.data_vencimento), 'dd/MM/yy') : '—'}
                         </span>
                         <span className="min-w-0 flex-1 truncate text-foreground"
                           title={l.descricao ?? undefined}>
@@ -1095,7 +1073,8 @@ export function ContasPagarReceberTab() {
                         <span className={cn(
                           COL.valor, 'shrink-0 text-right tabular-nums',
                           receber ? 'text-success' : 'text-destructive',
-                        )}>
+                          paga && 'opacity-50',
+                        )} title={paga ? 'já paga — não entra nos totais' : undefined}>
                           {formatMoeda(valor)}
                         </span>
                       </button>
@@ -1103,6 +1082,21 @@ export function ContasPagarReceberTab() {
                   })}
                 </div>
               ))}
+            </div>
+          )}
+          {/* TOTAL — FIXO, fora do scrollport (só as linhas rolam). É `recorte.total[segmento]`, do dono: vencidos (se
+              ligados) + período; a soma dos totais dos grupos acima dá este número, ao centavo. */}
+          {statusLigados.length > 0 && (
+            <div data-testid="cpr-total" className="flex h-[22px] shrink-0 items-center gap-1.5 rounded-b-lg border-t-2 border-t-border bg-muted px-3 border-l-[3px] border-l-transparent">
+              <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-foreground"
+                title={rotuloDoTotal(segmento, incluirVencidos, totalDoSegmento.contas)}>
+                {rotuloDoTotal(segmento, incluirVencidos, totalDoSegmento.contas)}
+              </span>
+              <span data-testid="cpr-total-valor" className={cn('shrink-0 whitespace-nowrap text-right text-[11px] font-semibold tabular-nums',
+                segmento === 'pagar' ? 'text-destructive' : segmento === 'receber' ? 'text-success'
+                  : totalDoSegmento.valor < 0 ? 'text-destructive' : 'text-success')}>
+                {totalDoSegmento.valor < 0 ? '−' : ''}{formatMoeda(Math.abs(totalDoSegmento.valor))}
+              </span>
             </div>
           )}
           </>
@@ -1139,85 +1133,50 @@ export function ContasPagarReceberTab() {
  * fixa para que a presença ou ausência do aviso não mexa na régua (A27).
  */
 /** Uma natureza do caixa — o valor e o que explica a data dele. */
-interface LinhaNatureza {
-  rotulo: string;
-  valor: string;
-  /** O que se sabe sobre a conferência desta natureza. */
-  detalhe: string;
-  /** Acende o âmbar ao lado — hoje, só a permuta inconsistente. */
-  aConferir?: string[];
-}
+const contas = (n: number) => `${n} ${n === 1 ? 'conta' : 'contas'}`;
 
-function CardResumo({ rotulo, valor, classeValor, borda, naturezas, nota }: {
+/**
+ * O CARTÃO DO RESUMO — CPR-PERIODO-VENCIDOS-01: 40px. À esquerda o rótulo (texto: corta com o inteiro no `title`) e, embaixo,
+ * o valor; à direita, até duas linhas pequenas (o "a receber" dos vencidos; corrente e investido do caixa). NENHUM VALOR CORTA
+ * NEM FICA SÓ EM `title` (regra soberana): todo valor é `whitespace-nowrap`, sem `truncate`, e a coluna da esquerda é quem cede.
+ * ⚠ 12px, `px-1`, `gap-1` E A GRADE 1.72fr·1fr·1fr·1fr·1.9fr SÃO MEDIDOS a 1.126px com "−R$ 99.999.999,99" em TODOS os
+ * valores (os cinco totais, o "a receber" e as duas linhas do caixa). Quem mexer mede de novo. ⚠ A entrelinha é explícita (12px e 18px): com `leading-none` + `truncate` a descendente do "g" de "A pagar"
+ * era cortada pela caixa do texto.
+ */
+function CardResumo({ rotulo, titulo, valor, classeValor, borda, lado, testId }: {
   rotulo: string;
+  titulo?: string;
   valor: string;
   classeValor: string;
   borda: string;
-  /**
-   * As linhas por NATUREZA — PR-CPR-SALDO-NATUREZA-01.
-   *
-   * ⚠ UMA DATA SÓ PARA AS DUAS MENTIA NA LEITURA. O card trazia "conciliado até DD/mmm" abaixo
-   * do total, e essa data era o elo fraco das contas TODAS: a mais atrasada explicando um
-   * número de que ela é só metade. Corrente e investimento fecham por relógios diferentes — a
-   * corrente confere contra o extrato do dia, o investimento só fecha no fim do mês, quando o
-   * banco calcula o rendimento —, e cada uma passa a dizer a sua.
-   * ⚠ O TOTAL NÃO MUDOU: continua sendo corrente + investido. Mudou a explicação.
-   */
-  naturezas?: LinhaNatureza[];
-  /**
-   * A linha final do slot, para o que não é de natureza nenhuma.
-   * ⚠ ELA É MUTED, E NUNCA VERMELHA — decisão do PR-CPR-2A.1: é INFORMAÇÃO sobre até onde o
-   * número está conferido, não um defeito a corrigir. Um alarme que aparece todo mês, por
-   * construção, é um alarme que o operador aprende a não ler.
-   */
-  nota?: string;
+  /** Até DUAS linhas pequenas à direita (rótulo curto + valor). Os valores nunca cortam. */
+  lado?: { rotulo: string; valor: string; classe?: string; title?: string }[];
+  testId?: string;
 }) {
   return (
-    <div className={cn('min-w-0 h-[76px] rounded-md border border-l-[3px] px-3 py-1.5', borda)}>
-      <div className="truncate text-[11px] leading-none text-muted-foreground">{rotulo}</div>
-      {/* 20px/500 — o "número de topo" do A18, que a régua da casa não negocia. */}
-      <div className={cn('mt-1 truncate text-[20px] font-medium leading-none tabular-nums', classeValor)}>
-        {valor}
+    <div data-testid={testId} className={cn('flex min-w-0 h-[40px] items-center gap-1 rounded-md border border-l-[3px] px-1 py-[3px]', borda)}>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[10px] leading-[12px] text-muted-foreground" title={titulo ?? rotulo}
+          data-testid={testId ? `${testId}-rotulo` : undefined}>{rotulo}</div>
+        <div data-testid={testId ? `${testId}-valor` : undefined} data-valor-do-cartao
+          className={cn('whitespace-nowrap text-[12px] font-medium leading-[18px] tabular-nums', classeValor)}>
+          {valor}
+        </div>
       </div>
-      {/* ⚠ AS DUAS LINHAS EXISTEM SEMPRE (`&nbsp;` quando não há natureza), e é o que segura o
-          A27: os três slots do resumo têm a MESMA altura, com ou sem conteúdo, então trocar de
-          cliente não move o bloco vizinho.
-          ⚠ E O SLOT RESERVA DUAS: um cliente sem investimento mostra só a Corrente, e a outra
-          linha fica em branco em vez de o card encolher. */}
-      {[0, 1].map((i) => {
-        const n = naturezas?.[i];
-        return (
-          <div key={i}
-            className="mt-1 flex items-baseline gap-1.5 truncate text-[9.5px] leading-none">
-            {n ? (
-              <>
-                <span className="w-[52px] shrink-0 text-muted-foreground">{n.rotulo}</span>
-                <span className={cn('shrink-0 tabular-nums',
-                  n.valor.startsWith('-') ? 'text-destructive' : 'text-foreground')}>
-                  {n.valor}
-                </span>
-                <span className="truncate text-muted-foreground">{n.detalhe}</span>
-                {/* ⚠ ÂMBAR, NUNCA VERMELHO, E NUNCA ESCONDER O NÚMERO. Saldo de permuta
-                    negativo — ou declarado que não explica os movimentos da conta — é erro de
-                    lançamento, não estado válido. O conserto é frente da Conciliação; daqui
-                    sai só a visibilidade. */}
-                {n.aConferir && n.aConferir.length > 0 && (
-                  <span className="shrink-0 text-amber-600 dark:text-amber-400"
-                    title={`Conferir: ${n.aConferir.join(', ')}`}>
-                    ⚠ confira permuta
-                  </span>
-                )}
-              </>
-            ) : <span>&nbsp;</span>}
-          </div>
-        );
-      })}
-
+      {lado && lado.length > 0 && (
+        <div className="shrink-0 text-right text-[9.5px] leading-[15px]">
+          {lado.slice(0, 2).map((l, i) => (
+            <div key={i} title={l.title} className={cn('whitespace-nowrap', l.classe ?? 'text-muted-foreground')}>
+              {l.rotulo}{l.rotulo && l.valor ? ' ' : ''}
+              {l.valor && <span data-valor-do-cartao data-testid={testId ? `${testId}-lado-${i}` : undefined} className="tabular-nums">{l.valor}</span>}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-/** Vazio com texto, nunca área em branco. */
 function Vazio({ texto }: { texto: string }) {
   return (
     <div className="flex min-h-0 flex-1 items-center justify-center px-3 py-10">
