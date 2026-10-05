@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 05/10/2026 (UI-ARRASTAR-ARQUIVO-01b, +62: `src/lib/arquivo/aceitarArquivo.test.ts` 27, `src/lib/arquivo/umSoArrastar.test.ts` 3,
+  Baseline em 05/10/2026 (OC-VINCULAR-PARCELA-SEGUINTE-01, +10 em `src/components/financeiro-v2/vincularParcelaSeguinte.test.tsx` — 3920 depois dele;
+  antes o UI-ARRASTAR-ARQUIVO-01b, +62: `src/lib/arquivo/aceitarArquivo.test.ts` 27, `src/lib/arquivo/umSoArrastar.test.ts` 3,
   `src/components/ui/area-de-arquivo.test.tsx` 3, `src/components/conciliacao/arquivoTelas01b.test.tsx` 18,
   `src/components/conciliacao/arquivoCaracterizacao01b.test.tsx` 3, `src/v2/components/mesa/enriquecimento/arquivoTelas01b.test.tsx` 6,
   `src/v2/components/mesa/enriquecimento/arquivoCaracterizacao01b.test.tsx` 2; antes o UI-ARRASTAR-ARQUIVO-01a, +70: `src/lib/arquivo/aceitarArquivo.test.ts` 32,
@@ -1018,7 +1019,7 @@ preview que o cabecalho nao sai da tela ao rolar.
     Medido a 1.135 (Teste; NJ so' leitura no Enriquecer e na Mesa): linha da parcela 18px vazia / com realce / com boleto / com a
     pergunta / com recusa, tabela 750 x 102 e modal 1024 x 491 iguais; extrato do saldo 396 x 24, dialogo 448 x 353; Importar
     Banco linha de 28px; passo 1 caixa de 66px; Mesa barra 718 x 36 e dialogo 720 x 481.
-    ⚠ A FRASE DO DETECTOR NAO CABE INTEIRA a 1.135: pede 561px e tem 189 (faltam 372) — corta com o inteiro no `title`.
+    ⚠ DIVIDA UI-ARRASTAR-FRASE-DETECTOR-01 — A FRASE DO DETECTOR NAO CABE INTEIRA a 1.135: pede 561px e tem 189 (faltam 372) — corta com o inteiro no `title`.
   ⚠ UI-ARQUIVO-CAMPO-SEM-ENTRADA-01: os seletores de arquivo de `V2ImportLancamentosExcel.tsx` (~:239) e
     `CusteioTxtImportTab.tsx` (~:588) NUNCA SE DESENHAM — so' aparecem sem `arquivoInicial`, e o unico lugar que monta as duas
     telas (`ImportarBancoInline.tsx`, `<V2ImportLancamentosExcel arquivoInicial={arquivo} />` e `<CusteioTxtImportTab
@@ -2238,6 +2239,29 @@ docs/historico/frentes-ate-2026-09-29.md.)
   "criar item" e' acao NEUTRA. A UNICA RECUSA e' a DIRECAO do plano de um COMPROMISSO (que sai da lista e, forcado,
   e' recusado) — nunca da OC, que continua candidata com "criar item". OC cancelada/rascunho nem entra na lista.
   E' o par da regra "PECUARIA: LANCAMENTOS IGUAIS SAO NORMAIS", logo acima.
+- ⚠ ITEM CRIADO NUM GRUPO QUE JA' TEM PARTE ATIVA NASCE NA SEQUENCIA SEGUINTE (OC-VINCULAR-PARCELA-SEGUINTE-01, Gabriel 05/10/2026;
+  migration 20261027193200, ⚠ registrada como 20261005165415; ledger = arquivo, md5 f9d7c530…; `oc_vincular_lancamento` md5
+  7b866232… -> 0fd703b6…, patch guardado por md5 com 6 ancoras). No "criar item" do vincular, quando a OC ja' tem parte ativa no
+  mesmo grupo (operacao, lote, natureza, componente), a parte nova nasce como `max(sequencia_parcela ativa) + 1` e a
+  `quantidade_parcelas` das ativas do grupo sobe junto ("parcela 2 de 2"); antes nascia 1/1 e batia cru em
+  `zoo_operacao_partes_identidade_lote`. Nasce do caso do Agnaldo (f74f95e5: recebimento de 200.000 ja' ligado, o de 94.595 nao entrava).
+  · SIMULACAO = GRAVACAO: o retorno (o mesmo com `p_simular`) ganha `parte {sequencia, quantidade, parcela_seguinte, descricao}` e,
+    no principal, `principal {acordado, vinculado, recebido}`; a tela so' escreve (`fraseDaParcela`, `src/lib/oc/vincularLancamento.ts`:
+    "Entra como parcela 2 de 2 da Venda 055 B. A OC passa a ter R$ X recebidos de R$ Y acordados."), no painel "O que vai
+    acontecer" do `VincularOperacaoDialog`. Principal ligado acima do acordado AVISA (`principal_excede_acordado`), nao recusa.
+  · ERRO DE UNICIDADE NUNCA CRU: a funcao traduz `unique_violation` pela constraint (frase em portugues, P0001, "Nada foi
+    gravado."), e o front tem a rede (`mensagemDeErro` troca "duplicate key value violates unique constraint" por
+    `FRASE_COLISAO_DE_UNICIDADE`). Erro da simulacao aparece no painel ("Não foi possível calcular: …"), nunca painel vazio.
+  · Medido a 1.135 no Agnaldo (so' leitura, funcao de verdade): modal 1090 x 491, a frase em 3 linhas de 249px, sem corte.
+  Teste SQL: `supabase/tests/oc_vincular_parcela_seguinte_01_test.sql` (T1–T8, OC sintetica no cliente Teste, termina em RAISE OK).
+  ⚠ O VINCULO LEVA A COMPETENCIA DO LANCAMENTO PARA A DATA DA OC (regra anterior, nao mudada): o 84b11037 vai de 31/08 a 25/08.
+  ⚠ DIVIDAS: OC-DESVINCULAR-RENUMERA-01 (`oc_desvincular_lancamento` nao recalcula `quantidade_parcelas` das que ficam: desvinculada
+    a 2 de 3, a que resta segue "1/3") · OC-VINCULAR-RECEBIMENTO-PARCIAL-01 (vincular recebimento de valor diferente a compromisso
+    com titulo programado ENCOLHE o compromisso para a soma das parcelas — evento `ajustar_valor_compromisso` — e a
+    `vw_oc_operacao_liquidacao` diz "quitada" com dinheiro faltando; PR proprio, em medicao) · AS 3 OCs ENCOLHIDAS DO AGNALDO, sem
+    conserto de dado: f74f95e5 (venda 25/08, acordado 294.595, compromisso 200.000; o Gabriel vincula o 84b11037 pela tela),
+    a2df4ec1 (compra 09/09, acordado 315.000, soma ativa 50.000) e da9c27ee (compra 09/09, 17.435 x 17.400) · o "Saldo" do resumo
+    lateral da OC NAO FOI RASTREADO (de onde vem "A receber / Recebido / Saldo" quando o compromisso encolhe).
 - ⚠ CONTA CORRENTE DA OC (ADR-2026-21 + adendos; venda e compra no modelo, abate e a migracao
   das OCs existentes na fila):
   - A OC e' UMA venda/compra. Entrega/entrada do gado = titulo sem caixa, receita/custo no DRE

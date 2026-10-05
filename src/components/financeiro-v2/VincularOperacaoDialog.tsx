@@ -23,6 +23,7 @@ import { TOM_SELO, Selo, Secao, Par } from '@/components/financeiro-v2/modalVinc
 import {
   buscarCandidatasVinculo, vincularLancamentoOC, situacaoDaCandidata, candidataInicial,
   compromissoDoItem, compromissoExato, linhaDaCandidata, rotuloComponente, resumoDoVinculo, textoDoAviso, rotuloOC, dataBr, mensagemDeErro, ehRecusa, ehVinculo,
+  fraseDaParcela,
   type RespostaCandidatas, type RespostaVinculo, type OperacaoCandidata, type VinculoRecusado,
 } from '@/lib/oc/vincularLancamento';
 
@@ -283,8 +284,16 @@ export function VincularOperacaoDialog({ open, lancamentoId, clienteId, onClose,
                     : recusa.motivo === 'escolher_parcela' ? 'Escolha a parcela na lista à esquerda.' : 'Escolha o compromisso na lista à esquerda.'}
                 </p>
               )}
+              {/* OC-VINCULAR-PARCELA-SEGUINTE-01 — o painel NUNCA fica vazio com a operação escolhida: se a simulação falhou,
+                  a frase do banco aparece aqui também. */}
+              {oc && !simulando && !sim && erroSim && (
+                <p className="text-red-700 dark:text-red-300" data-testid="vinc-resumo-erro">Não foi possível calcular: {erroSim}</p>
+              )}
               {oc && !simulando && ehVinculo(sim) && (
                 <>
+                  {fraseDaParcela(sim) && (
+                    <p className="font-medium leading-snug text-foreground" data-testid="vinc-parcela">{fraseDaParcela(sim)}</p>
+                  )}
                   <dl className="space-y-1">
                     {resumoDoVinculo(sim).map(l => (
                       <div key={l.rotulo} className="flex justify-between gap-2">

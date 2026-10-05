@@ -100,8 +100,11 @@ export interface RespostaCandidatas {
 
 export interface AvisoVinculo {
   codigo: 'movimento_duplicado' | 'competencia_mudou_de_mes' | 'favorecido_diferente'
-    | 'classificacao_diverge_do_compromisso' | 'principal_diverge_da_base' | 'safra_diverge_da_competencia';
+    | 'classificacao_diverge_do_compromisso' | 'principal_diverge_da_base' | 'safra_diverge_da_competencia'
+    | 'principal_excede_acordado';
   de?: string; para?: string; base?: number | null; soma_principal?: number;
+  /** `principal_excede_acordado` (OC-VINCULAR-PARCELA-SEGUINTE-01). */
+  acordado?: number; vinculado?: number; excedente?: number;
   compromisso?: string; lancamento?: string;
   movimento_antigo?: string; movimentos_da_oc?: string[];
 }
@@ -119,6 +122,12 @@ export interface VinculoFeito {
   lancamento: { id: string; competencia_anterior: string | null; competencia_nova: string;
     hash_preservado: boolean; movimentacao_rebanho_id_solto: string | null };
   avisos: AvisoVinculo[];
+  /**
+   * OC-VINCULAR-PARCELA-SEGUINTE-01 — a parte como ficou (ou ficaria, na simulação) e o principal da OC depois do vínculo.
+   * ⚠ OPCIONAIS: a função antiga não os devolve, e a tela não pode quebrar com ela.
+   */
+  parte?: { sequencia: number; quantidade: number; parcela_seguinte: boolean; descricao: string | null };
+  principal?: { acordado: number | null; vinculado: number | null; recebido: number | null } | null;
 }
 
 export interface VinculoRecusado {
@@ -329,6 +338,10 @@ export function textoDoAviso(a: AvisoVinculo): AvisoTela {
     case 'classificacao_diverge_do_compromisso':
       return { codigo: a.codigo, tom: 'ambar', texto:
         `O subcentro do lançamento (${a.lancamento ?? '—'}) é diferente do compromisso (${a.compromisso ?? '—'}). Cada um mantém o seu.` };
+    case 'principal_excede_acordado':
+      return { codigo: a.codigo, tom: 'ambar', texto:
+        `Com este lançamento a OC passa a ter ${brl(a.vinculado)} ligados ao principal, ${brl(a.excedente)} acima dos ${brl(a.acordado)} acordados. `
+        + 'O vínculo não é bloqueado nem ajustado: confira antes de confirmar.' };
     case 'safra_diverge_da_competencia':
       return { codigo: a.codigo, tom: 'ambar', texto: 'A safra do lançamento não é a sugerida para a nova competência; ela não muda.' };
     default:
@@ -359,15 +372,42 @@ export function resumoDoVinculo(s: VinculoFeito): LinhaResumo[] {
   ];
 }
 
+/**
+ * A frase do "O que vai acontecer" — OC-VINCULAR-PARCELA-SEGUINTE-01. Vem INTEIRA do que a simulação devolveu (`parte` e
+ * `principal`); a tela não conta parcela nem soma recebido. Sem os campos (função antiga), nulo.
+ *   · "Entra como parcela 2 de 2 da Venda 055 B." — só quando o item novo entrou como a parcela seguinte de um grupo;
+ *   · "A OC passa a ter R$ X recebidos de R$ Y acordados." — sempre que o vínculo é do principal.
+ */
+export function fraseDaParcela(s: VinculoFeito): string | null {
+  const partes: string[] = [];
+  const p = s.parte;
+  if (p?.parcela_seguinte) {
+    partes.push(`Entra como parcela ${p.sequencia} de ${p.quantidade}${p.descricao ? ` da ${p.descricao}` : ''}.`);
+  }
+  const pr = s.principal;
+  if (pr && pr.acordado != null && pr.vinculado != null) {
+    const tudoRecebido = pr.recebido != null && Math.round(pr.recebido * 100) === Math.round(pr.vinculado * 100);
+    partes.push(tudoRecebido
+      ? `A OC passa a ter ${brl(pr.vinculado)} recebidos de ${brl(pr.acordado)} acordados.`
+      : `A OC passa a ter ${brl(pr.vinculado)} ligados ao principal (${brl(pr.recebido)} já recebidos) de ${brl(pr.acordado)} acordados.`);
+  }
+  return partes.length > 0 ? partes.join(' ') : null;
+}
+
 /** "OC 123" pelo documento; sem documento, so' "OC" + data — nunca UUID na tela. */
 export function rotuloOC(c: Pick<OperacaoCandidata, 'numero_documento' | 'data_operacao'>): string {
   return c.numero_documento ? `OC ${c.numero_documento}` : `OC de ${dataBr(c.data_operacao)}`;
 }
 
+export const FRASE_COLISAO_DE_UNICIDADE = 'O vínculo colide com um registro que já existe na operação. Nada foi gravado.';
+
 export function mensagemDeErro(e: unknown): string {
   if (e && typeof e === 'object' && 'message' in e) {
     const m = String(e.message);
     if (/Conflito de versao/i.test(m)) return 'A operação mudou enquanto você olhava. Reabra o vínculo para ver o estado novo.';
+    /* OC-VINCULAR-PARCELA-SEGUINTE-01 — violação de unicidade NUNCA chega crua: a função do banco já a traduz; esta é a rede
+       para o que vier de outro ponto (o erro do Postgres fala inglês e cita o nome do índice). */
+    if (/duplicate key value violates unique constraint/i.test(m)) return FRASE_COLISAO_DE_UNICIDADE;
     return m;
   }
   return String(e);
