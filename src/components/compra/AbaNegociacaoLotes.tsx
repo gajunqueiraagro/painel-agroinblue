@@ -98,6 +98,8 @@ interface Props {
   /* ⚠ ADITIVO — [OC-EDITAR-LOTE-FECHADA] (128b). Com ele, o modal do lote de uma OC fechada
      oferece "Reabrir e editar" em vez de dizer que nada é editável. */
   onReabrirParaEditar?: ((motivo: string) => Promise<boolean>) | null;
+  /* ACESSOS-OC-03a — os MOTIVOS de acesso, ja' resolvidos pelo shell (dono: `acessoOperacao.ts`). Sem a prop, tudo como antes. */
+  acesso?: AcessoNaNegociacao | null;
   rotulos?: {
     salveIdentificacao?: string;
     voltarParaIdentificacao?: string;
@@ -166,10 +168,25 @@ function ValorInput({ value, onChange, disabled, placeholder, className }: {
   );
 }
 
+/**
+ * O ACESSO NA NEGOCIACAO — ACESSOS-OC-03a. Tres motivos, cada um nulo quando a pessoa pode. Quem os decide e' o shell, com o
+ * dono (`motivoFisicoTravado`, `motivoReabrirTravado`); aqui so' se desenha.
+ *   · `motivoFisico`: o combinado FISICO esta' fechado para ESTA PESSOA (gado ja' movido). E' a MESMA trava do
+ *     `fisicoBloqueado` — o shell liga os dois juntos —, so' que, vindo do acesso, ela alcanca tambem a CATEGORIA, a LIXEIRA e
+ *     o INCLUIR LOTE, que ficam APAGADOS com o motivo em vez de sumir. O preco segue aberto.
+ *   · `motivoReabrir`: "Reabrir e editar" apagado com o motivo.
+ *   · `motivoSomenteLeitura`: a negociacao inteira em leitura para esta pessoa (abate e boitel, ate' o 03b) — a frase do modal.
+ */
+export interface AcessoNaNegociacao {
+  motivoFisico?: string | null;
+  motivoReabrir?: string | null;
+  motivoSomenteLeitura?: string | null;
+}
+
 export function AbaNegociacaoLotes({
   categoria, categoriasDisponiveis, quantidadeNum, pesoKgNum, darkSelectClass,
   modoOC, operacaoPronta, lotesApi, somenteLeitura, fisicoBloqueado, onVoltarCompra, rotulos, valorProjetado = null, loteUnico = null,
-  linhaMagra = false, exclusaoOC = null, onReabrirParaEditar = null,
+  linhaMagra = false, exclusaoOC = null, onReabrirParaEditar = null, acesso = null,
 }: Props) {
   /* ── MODO OC — delegado a um componente PROPRIO (PR-OC-UX-LOTE-C2-01) ──────
      O modal de lote precisa de estado (qual lote esta aberto), e hook nao pode
@@ -191,6 +208,7 @@ export function AbaNegociacaoLotes({
         valorProjetado={valorProjetado}
         exclusaoOC={exclusaoOC}
         onReabrirParaEditar={onReabrirParaEditar}
+        acesso={acesso}
       />
     );
   }
@@ -217,7 +235,7 @@ export function AbaNegociacaoLotes({
    seria mentir para o operador. */
 function NegociacaoOC({
   lotesApi, categoriasDisponiveis, darkSelectClass, operacaoPronta, somenteLeitura, fisicoBloqueado, onVoltarCompra, rotulos,
-  linhaMagra, loteUnico, valorProjetado, exclusaoOC, onReabrirParaEditar,
+  linhaMagra, loteUnico, valorProjetado, exclusaoOC, onReabrirParaEditar, acesso,
 }: {
   lotesApi: NonNullable<Props['lotesApi']>;
   categoriasDisponiveis: Props['categoriasDisponiveis'];
@@ -232,6 +250,7 @@ function NegociacaoOC({
   valorProjetado: Props['valorProjetado'];
   exclusaoOC: Props['exclusaoOC'];
   onReabrirParaEditar: Props['onReabrirParaEditar'];
+  acesso: Props['acesso'];
 }) {
   /* ⚠ OC-VENDA-ENTREGAS-01a — ESTA FUNCAO SAIU DE DENTRO DE `AbaNegociacaoLotes` e os cinco valores que ela lia pelo
      closure (`linhaMagra`, `loteUnico`, `valorProjetado`, `exclusaoOC`, `onReabrirParaEditar`) chegam agora so' por prop.
@@ -252,6 +271,8 @@ function NegociacaoOC({
      entre si numa edicao futura. Mantido do desenho anterior — e' regra de negocio
      (PR-OC-LOTE-VALOR-01), nao detalhe visual, e vale igual dentro do modal. */
   const fisicoRO = somenteLeitura || fisicoBloqueado;
+  /* ACESSOS-OC-03a — o motivo de ACESSO da trava do fisico. Com a OC em leitura (`somenteLeitura`) ele nao acrescenta nada. */
+  const motivoFisico = !somenteLeitura ? (acesso?.motivoFisico ?? null) : null;
   const pesoMedio = pesoMedioPorCabeca(totais);
   const valorKg = valorPorKgNegociado(totais);
 
@@ -311,9 +332,9 @@ function NegociacaoOC({
                 falta em texto miudo e po'e a acao em botao. */}
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-normal text-muted-foreground leading-none">Nenhum lote nesta venda</span>
-              {!fisicoRO && (
-                <BotaoAdicionarLote onClick={abrirNovo} disabled={!operacaoPronta}
-                  title={!operacaoPronta ? (rotulos?.salveOperacaoPrimeiro ?? 'Salve a operação primeiro') : 'Criar o lote desta venda'} />
+              {(!fisicoRO || !!motivoFisico) && (
+                <BotaoAdicionarLote onClick={abrirNovo} disabled={!operacaoPronta || !!motivoFisico}
+                  title={motivoFisico ?? (!operacaoPronta ? (rotulos?.salveOperacaoPrimeiro ?? 'Salve a operação primeiro') : 'Criar o lote desta venda')} />
               )}
             </div>
           </div>
@@ -329,16 +350,20 @@ function NegociacaoOC({
               {linhaMagra ? 'Nenhum lote nesta venda'
                 : lotes.length === 0 ? 'nenhum lote' : `${lotes.length} lote${lotes.length > 1 ? 's' : ''}`}
             </span>
-            {!fisicoRO && (
+            {(!fisicoRO || !!motivoFisico) && (
               <BotaoAdicionarLote onClick={abrirNovo}
-                disabled={!operacaoPronta || (!!loteUnico && lotes.length >= 1)}
-                title={!operacaoPronta ? (rotulos?.salveOperacaoPrimeiro ?? 'Salve a operação na aba Compra primeiro')
+                disabled={!operacaoPronta || (!!loteUnico && lotes.length >= 1) || !!motivoFisico}
+                title={motivoFisico ? motivoFisico : !operacaoPronta ? (rotulos?.salveOperacaoPrimeiro ?? 'Salve a operação na aba Compra primeiro')
                   : (loteUnico && lotes.length >= 1) ? loteUnico.motivo
                   : 'Adicionar lote à negociação'}
                 ariaLabel={(loteUnico && lotes.length >= 1) ? loteUnico.motivo : 'Adicionar lote'} />
             )}
           </div>
         </div>
+        )}
+
+        {motivoFisico && (
+          <p className="text-[10px] leading-tight text-amber-700 dark:text-amber-300" data-testid="motivo-fisico">{motivoFisico}</p>
         )}
 
         {/* ── QUATRO NUMEROS ────────────────────────────────────────────────────
@@ -461,14 +486,18 @@ function NegociacaoOC({
                     ⚠ COM `exclusaoOC` O BOTÃO SOBREVIVE AO RECEBIMENTO (128): o lote que já
                     existe no banco abre o diálogo que desfaz; sem ela, segue a remoção
                     local de sempre, que continua indisponível depois do físico. */}
-                {!linhaMagra && (!fisicoRO || (!!exclusaoOC && !!l.id)) && (
+                {!linhaMagra && (!fisicoRO || (!!exclusaoOC && !!l.id) || !!acesso?.motivoFisico) && (
                   <button type="button" aria-label={`Remover lote ${rotuloCategoria(l.categoria)}`}
-                    title={exclusaoOC && l.id ? 'Excluir lote (desfaz o que ele arrasta)' : 'Remover lote'}
+                    disabled={!!acesso?.motivoFisico}
+                    title={acesso?.motivoFisico ?? (exclusaoOC && l.id ? 'Excluir lote (desfaz o que ele arrasta)' : 'Remover lote')}
                     onClick={() => {
+                      if (acesso?.motivoFisico) return;
                       if (exclusaoOC && l.id) setExcluindoLote(l);
                       else removerLote(l.idLocal);
                     }}
-                    className="mr-2 shrink-0 text-muted-foreground/60 hover:text-destructive">
+                    className={acesso?.motivoFisico
+                      ? 'mr-2 shrink-0 cursor-not-allowed text-muted-foreground/60 opacity-40'
+                      : 'mr-2 shrink-0 text-muted-foreground/60 hover:text-destructive'}>
                     <Trash2 className="h-3 w-3" />
                   </button>
                 )}
@@ -492,6 +521,7 @@ function NegociacaoOC({
           fisicoRO={fisicoRO}
           somenteLeitura={somenteLeitura}
           onReabrirParaEditar={onReabrirParaEditar}
+          acesso={acesso}
           rotuloCategoria={rotuloCategoria}
           /* Aplicar CONFIRMA o nascimento: o lote deixa de ser "recem-criado" e um
              cancelamento posterior nao o alcanca mais. */
@@ -542,7 +572,7 @@ export function LoteDialog({
   rotulos,
   lote, categoriasDisponiveis, darkSelectClass, fisicoRO, somenteLeitura, rotuloCategoria,
   onAplicar, onAplicarEAdicionar, onFechar, valorProjetado = null, semValor = false,
-  comObservacao = false, onReabrirParaEditar = null,
+  comObservacao = false, onReabrirParaEditar = null, acesso = null,
 }: {
   rotulos?: AbaNegociacaoLotesRotulos;
   lote: NonNullable<Props['lotesApi']>['lotes'][number];
@@ -570,6 +600,8 @@ export function LoteDialog({
    * continua a mesma e não há botão.
    */
   onReabrirParaEditar?: ((motivo: string) => Promise<boolean>) | null;
+  /** ACESSOS-OC-03a — os motivos de acesso (ver `AcessoNaNegociacao`). Ausente = como antes. */
+  acesso?: AcessoNaNegociacao | null;
   /**
    * Esconde Critério e Valor — o cadastro do lote no ABATE.
    *
@@ -625,7 +657,10 @@ export function LoteDialog({
      ⚠ `somenteLeitura` CONTINUA TRAVANDO TUDO: ele é a operação aberta em leitura, não o
      recebimento registrado. A distinção é o que separa "não pode" de "não deve". */
   const bloqueadoPorRecebimento = fisicoRO && !somenteLeitura;
-  const TITLE_POS_RECEBIMENTO = 'não muda depois do recebimento; estorne o recebimento para alterar';
+  /* ACESSOS-OC-03a — vindo do ACESSO, a trava do fisico leva tambem a categoria e o "adicionar outro", e o texto e' o motivo
+     do dono (nao "estorne o recebimento", que a pessoa nao pode fazer). */
+  const motivoFisico = !somenteLeitura ? (acesso?.motivoFisico ?? null) : null;
+  const TITLE_POS_RECEBIMENTO = motivoFisico ?? 'não muda depois do recebimento; estorne o recebimento para alterar';
   const titleFisico = motivoBloqueio ?? (bloqueadoPorRecebimento ? TITLE_POS_RECEBIMENTO : undefined);
 
   return (
@@ -638,11 +673,11 @@ export function LoteDialog({
           <DialogTitle className="text-[12px] text-primary-foreground">{rotuloCategoria(categoria)}</DialogTitle>
           <DialogDescription className="text-[11px] text-primary-foreground/80">
             {somenteLeitura
-              ? (onReabrirParaEditar
+              ? (acesso?.motivoSomenteLeitura ?? (onReabrirParaEditar
                   ? 'Operação fechada. Editar reabre a negociação.'
-                  : 'Operação aberta em leitura: nada aqui é editável.')
+                  : 'Operação aberta em leitura: nada aqui é editável.'))
               : bloqueadoPorRecebimento
-                ? (rotulos?.fisicoBloqueado ?? 'Recebimento registrado: quantidade e peso não mudam. Categoria, observação, critério e valor seguem editáveis.')
+                ? (motivoFisico ?? rotulos?.fisicoBloqueado ?? 'Recebimento registrado: quantidade e peso não mudam. Categoria, observação, critério e valor seguem editáveis.')
                 : 'Os campos do lote negociado.'}
           </DialogDescription>
         </DialogHeader>
@@ -661,8 +696,8 @@ export function LoteDialog({
               <Input value={motivoReabrir} onChange={e => setMotivoReabrir(e.target.value)}
                 placeholder="Motivo da reabertura" className="h-6 flex-1 text-[11px]" />
               <Button type="button" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium shrink-0"
-                disabled={!motivoReabrir.trim() || reabrindo}
-                title={motivoReabrir.trim() ? 'Reabrir a negociação e editar' : 'Informe o motivo da reabertura.'}
+                disabled={!motivoReabrir.trim() || reabrindo || !!acesso?.motivoReabrir}
+                title={acesso?.motivoReabrir ?? (motivoReabrir.trim() ? 'Reabrir a negociação e editar' : 'Informe o motivo da reabertura.')}
                 onClick={async () => {
                   setReabrindo(true);
                   try { await onReabrirParaEditar(motivoReabrir.trim()); }
@@ -671,7 +706,11 @@ export function LoteDialog({
                 {reabrindo ? 'Reabrindo…' : 'Reabrir e editar'}
               </Button>
             </div>
-            {!motivoReabrir.trim() && (
+            {acesso?.motivoReabrir ? (
+              <p className="text-[10px] leading-tight text-amber-700 dark:text-amber-300" data-testid="motivo-reabrir">
+                {acesso.motivoReabrir}
+              </p>
+            ) : !motivoReabrir.trim() && (
               <p className="text-[10px] leading-tight text-amber-700 dark:text-amber-300">
                 Informe o motivo — ele vai para a auditoria da operação.
               </p>
@@ -685,7 +724,7 @@ export function LoteDialog({
           <div className="grid grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] gap-2">
             <div>
               <Label className="text-[10px]">Categoria <span className="text-destructive">*</span></Label>
-              <Select value={categoria || undefined} onValueChange={setCategoria} disabled={somenteLeitura}>
+              <Select value={categoria || undefined} onValueChange={setCategoria} disabled={somenteLeitura || !!motivoFisico}>
                 <SelectTrigger className="h-6 text-[11px] mt-0.5"><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent className={`${darkSelectClass} max-h-[60vh] overflow-y-auto`}>
                   {categoriasDisponiveis.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
@@ -793,8 +832,8 @@ export function LoteDialog({
             Gravado ao salvar a negociação.
           </span>
           <Button variant="outline" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium " onClick={onFechar}>Cancelar</Button>
-          {!fisicoRO && (
-            <Button variant="secondary" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium " disabled={!podeAplicar} title={motivoBloqueio}
+          {(!fisicoRO || !!motivoFisico) && (
+            <Button variant="secondary" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium " disabled={!podeAplicar || !!motivoFisico} title={motivoFisico ?? motivoBloqueio}
               onClick={() => onAplicarEAdicionar(patch)}>
               Aplicar e adicionar outro
             </Button>

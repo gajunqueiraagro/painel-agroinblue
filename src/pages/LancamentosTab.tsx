@@ -79,6 +79,7 @@ import { useAnosDisponiveis } from '@/hooks/useAnosDisponiveis';
 import { ConfirmacaoRegistroDialog } from '@/components/ConfirmacaoRegistroDialog';
 import { useFazenda, isFazendaPecuaria } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
+import { useAcessoOperacao } from '@/v2/hooks/usePodeAbrir';
 import { useIntegerInput, useDecimalInput, parseDecimalInput } from '@/hooks/useFormattedNumber';
 import { toast } from 'sonner';
 import { decidirHidratacao, vaiHidratar } from '@/lib/oc/hidratacaoOC';
@@ -399,6 +400,9 @@ function matchFornecedor(options: FornecedorOption[], params: { id?: string | nu
 export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar, compraParaEditar, transferenciaParaEditar, reclassParaEditar, morteParaEditar, consumoParaEditar, onReturnFromEdit, initialAnoFiltro, initialMesFiltro, initialReclassCenario, onNavegarChuvas, onFecharOperacaoOC, onNovaCompraOC, onNovaVendaOC, onNovoAbateOC, cenarioInicial, cenariosPermitidos, onRealizadoAplicado, onOperacaoFechada, somenteOperacao = false }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const { clienteAtual } = useCliente();
+  /* ACESSOS-OC-03a — o que ESTA PESSOA pode dentro da operacao comercial. Lido UMA vez, no hospedeiro, e descido por prop aos
+     tres shells: nenhum componente la' dentro pergunta pelo perfil. Dono: `src/v2/lib/acessoOperacao.ts`. */
+  const acessoOC = useAcessoOperacao();
   const nomeFazenda = fazendaAtual?.nome || '';
   const isAdministrativo = fazendaAtual?.tem_pecuaria === false;
   const bloqueado = isGlobal || isAdministrativo;
@@ -5855,6 +5859,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     : nomeFazenda;
 
   const compraFormApi = {
+    acessoOC,
     abaInicial: ocSearchParams.get('oc_aba') ?? undefined,   // PR-OC-FIN-EDIT-FIX-02 — aba inicial do modal OC
     statusOp, setStatusOp,
     statusDescription: getStatusDescription(tipo, statusOp),
@@ -6209,6 +6214,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
            tambem servem o abate (`|| ocAbateParam` no `enabled`). Construir outras cinco
            criaria a segunda fonte para o mesmo dado. */
         <AbateModalShell
+          acessoOC={acessoOC}
           abaInicial={ocSearchParams.get('oc_aba')}
           ocVersao={ocVersao} onOcVersaoChange={setOcVersao}
           data={data} setData={setData}
@@ -6263,6 +6269,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
            Primeira de seis. Este ramo ADICIONA a OC; o formulario antigo da venda
            continua no `else`, byte a byte, ate o Gabriel decidir a troca. */
         <VendaModalShell
+            acessoOC={acessoOC}
             abaInicial={ocSearchParams.get('oc_aba')}
             /* ⚠ A FONTE ÚNICA DA VERSÃO — OC-VERSAO-FONTE-UNICA-01. `lotesApi` e
                `recebimentoApi` já saíam daqui ligados a `ocVersao`; o hook de

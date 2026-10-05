@@ -4,6 +4,8 @@ import { ResumoOperacoesModal, type FiltrosResumo } from '@/components/operacao-
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useCliente } from '@/contexts/ClienteContext';
+import { useAcessoOperacao } from '@/v2/hooks/usePodeAbrir';
+import { MOTIVO_ABATE_BOITEL, MOTIVO_SEM_CAPACIDADE } from '@/v2/lib/acessoOperacao';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useOperacaoComercial } from '@/hooks/useOperacaoComercial';
 import { Button } from '@/components/ui/button';
@@ -391,7 +393,12 @@ export const MOTIVO_EXCLUIR_SO_ADMIN = 'só o administrador exclui definitivamen
 const BOTAO_NOVA_OC = 'h-7 gap-1 bg-cta px-2.5 text-xs font-semibold text-cta-foreground hover:bg-cta-hover';
 
 export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao, onNovaCompra, onNovaVenda, onNovoAbate }: CentralOperacoesComerciaisProps = {}) {
-  const { clienteAtual, isAdmin } = useCliente();
+  const { clienteAtual } = useCliente();
+  /* ACESSOS-OC-03a — criar OC e excluir definitivamente sao CAPACIDADES do dono (`acessoOperacao.ts`), nao `if` de perfil.
+     "Novo abate" fica apagado, com o motivo, para quem ainda nao negocia abate (o financeiro, ate' o 03b). */
+  const acessoOC = useAcessoOperacao();
+  const motivoCriar = acessoOC.criar ? null : MOTIVO_SEM_CAPACIDADE;
+  const motivoNovoAbate = motivoCriar ?? (acessoOC.negociar_abate_boitel ? null : MOTIVO_ABATE_BOITEL);
   const clienteId = clienteAtual?.id ?? '';
   /* OC-FAZENDA-GLOBAL-01 — A CENTRAL SEGUE O SELETOR LATERAL, como o Lancar movimentacao e a
      Lista (`useLancamentos`): fazenda escolhida -> so' as OCs dela; Global -> todas. O filtro
@@ -744,23 +751,30 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao, onNov
         {/* ACESSOS-OC-02 — criar OC pela lista (antes so' pelos cards de "Lançar movimentação"). */}
         <div className="flex items-center gap-1.5">
           {onNovaCompra && (
-            <Button size="sm" className={BOTAO_NOVA_OC} onClick={onNovaCompra} data-testid="nova-compra">
+            <Button size="sm" className={BOTAO_NOVA_OC} onClick={onNovaCompra} data-testid="nova-compra"
+              disabled={!!motivoCriar} title={motivoCriar ?? undefined}>
               <Plus className="size-3.5" /> Nova compra
             </Button>
           )}
           {onNovaVenda && (
-            <Button size="sm" className={BOTAO_NOVA_OC} onClick={onNovaVenda} data-testid="nova-venda">
+            <Button size="sm" className={BOTAO_NOVA_OC} onClick={onNovaVenda} data-testid="nova-venda"
+              disabled={!!motivoCriar} title={motivoCriar ?? undefined}>
               <Plus className="size-3.5" /> Nova venda
             </Button>
           )}
           {onNovoAbate && (
-            <Button size="sm" className={BOTAO_NOVA_OC} onClick={onNovoAbate} data-testid="novo-abate">
+            <Button size="sm" className={BOTAO_NOVA_OC} onClick={onNovoAbate} data-testid="novo-abate"
+              disabled={!!motivoNovoAbate} title={motivoNovoAbate ?? undefined}>
               <Plus className="size-3.5" /> Novo abate
             </Button>
           )}
           <span className="text-[10px] text-muted-foreground">{filtradas.length} operação(ões)</span>
         </div>
       </div>
+      {/* O motivo do botao apagado fica ESCRITO (so' para quem tem botao apagado): linha propria, para nao alargar a faixa. */}
+      {(onNovaCompra || onNovoAbate) && (motivoCriar ?? motivoNovoAbate) && (
+        <p className="text-right text-[10px] leading-tight text-muted-foreground" data-testid="motivo-nova-oc">{motivoCriar ?? motivoNovoAbate}</p>
+      )}
 
       {/* Barra de filtros — DUAS LINHAS FIXAS, nao `flex-wrap`: a quebra e' decidida
           aqui, nao pelo espaco que sobrar. Linha 1 = recorte da operacao (quando,
@@ -1073,7 +1087,7 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao, onNov
                         {/* SO para cancelada — o mesmo predicado que a RPC exige. Oferecer
                             em outro estado seria prometer o que o banco nega. */}
                         {/* ACESSOS-OC-02 (M8) — so' o admin exclui; para os demais o gesto fica apagado com o motivo. */}
-                        {r.status_comercial === 'cancelada' && (isAdmin ? (
+                        {r.status_comercial === 'cancelada' && (acessoOC.excluir_definitivo ? (
                           <DropdownMenuItem className="text-destructive focus:text-destructive" data-testid="excluir-definitivamente"
                             onSelect={() => { setExcluirMotivo(''); setExcluirEtapa(1); setExcluirAlvo(r); }}>
                             <Trash2 className="h-3.5 w-3.5 mr-2" /> Excluir definitivamente

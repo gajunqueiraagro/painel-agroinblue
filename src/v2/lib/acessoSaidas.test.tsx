@@ -19,14 +19,16 @@ beforeEach(() => como('financeiro'));
 
 describe('usePodeAbrir — so consulta o dono', () => {
   const pode = (tela: Parameters<typeof usePodeAbrir>[0]) => renderHook(() => usePodeAbrir(tela)).result.current;
-  it('financeiro: abre as tres do piloto; NAO abre a OC (nem a tela propria dela, ate o ACESSOS-OC-03) nem Financiamentos', () => {
+  it('financeiro: abre as tres do piloto e, desde o ACESSOS-OC-03a, a lista e a tela da OC; NAO abre a tela do rebanho nem Financiamentos', () => {
     expect(pode('financeiro-lanc')).toBe(true);
     expect(pode('conciliacao')).toBe(true);
     expect(pode('contas-a-pagar-receber')).toBe(true);
     expect(pode('lancamentos-zoot')).toBe(false);
-    expect(pode(TELA_DA_OPERACAO)).toBe(false);
-    expect(pode('operacoes-comerciais')).toBe(false);
+    expect(pode(TELA_DA_OPERACAO)).toBe(true);
+    expect(pode('operacoes-comerciais')).toBe(true);
     expect(pode('financiamentos')).toBe(false);
+    /* quem segue de fora da OC: leitura e campo */
+    for (const p of ['leitura', 'campo']) { como(p); expect(pode(TELA_DA_OPERACAO)).toBe(false); expect(pode('operacoes-comerciais')).toBe(false); }
   });
   it('gestor (ACESSOS-OC-01): abre a lista e a tela propria da OC — os atalhos do 02b voltam para ele; a tela do rebanho segue fechada', () => {
     como('gestor_cliente');

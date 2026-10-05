@@ -121,7 +121,7 @@ function ColunaTopo({ rotulo, valor, unidade, linhaAt, subs, evidente, extra }: 
 export function AbaLotesAbate({
   lotes, linhas, cenario, cenariosExistentes, onCenarioChange,
   lotesApi, categoriasDisponiveis, somenteLeitura, fisicoBloqueado, onLinhaChange, exclusaoOC = null,
-  onReabrirParaEditar = null,
+  onReabrirParaEditar = null, motivoSomenteLeitura = null,
 }: {
   lotes: LoteAbate[];
   linhas: Map<string, LinhaAbate>;
@@ -131,6 +131,8 @@ export function AbaLotesAbate({
   lotesApi: CompraLotesApi;
   categoriasDisponiveis: { value: string; label: string }[];
   somenteLeitura?: boolean;
+  /** ACESSOS-OC-03a — POR QUE a negociacao esta' so' leitura para esta pessoa (o shell liga `somenteLeitura` junto). Nulo = como antes. */
+  motivoSomenteLeitura?: string | null;
   /** Já há movimentação de abate ativa: quantidade e peso do lote deixam de mudar. */
   fisicoBloqueado?: boolean;
   /** O rascunho do pai — quem persiste é o rodapé do shell. */
@@ -240,6 +242,10 @@ export function AbaLotesAbate({
           title={fisicoBloqueado && !somenteLeitura
             ? 'não se adiciona lote depois do recebimento; estorne o recebimento para alterar' : undefined} />
       </div>
+
+      {motivoSomenteLeitura && (
+        <p className="text-[10px] leading-tight text-amber-700 dark:text-amber-300" data-testid="motivo-negociacao-leitura">{motivoSomenteLeitura}</p>
+      )}
 
       {/* ── BLOCO DE TOPO ─────────────────────────────────────────────────────── */}
       {/* ⚠ O MESMO CONTAINER CINZA DAS OUTRAS ABAS (ABATE-UX-01c): `bg-muted/20`, borda,
@@ -427,6 +433,7 @@ export function AbaLotesAbate({
           semValor
           comObservacao
           somenteLeitura={!!somenteLeitura}
+          acesso={motivoSomenteLeitura ? { motivoSomenteLeitura } : null}
           onReabrirParaEditar={onReabrirParaEditar}
           /* Aplicar CONFIRMA o nascimento: o lote deixa de ser "recem-criado". */
           onAplicar={(patch) => { lotesApi.editarLote(emEdicao.idLocal, patch); setNascidoAgora(null); setEditandoId(null); }}

@@ -29,6 +29,10 @@ import { CompraResumoPanel } from './CompraResumoPanel';
 import { ResumoLateralOC } from './ResumoLateralOC';
 import { CompraDetalhesDialog, EMPTY_COMPRA_DETALHES, type CompraDetalhes } from './CompraDetalhesDialog';
 import { useOcContaCorrente } from '@/hooks/useOcContaCorrente';
+import { GestoDeOperacao } from '@/components/financeiro-v2/GestoDeOperacao';
+import {
+  ACESSO_TOTAL, MOTIVO_GADO, MOTIVO_SEM_CAPACIDADE, motivoFisicoTravado, motivoReabrirTravado, ocTemGadoMovido, type AcessoOperacao,
+} from '@/v2/lib/acessoOperacao';
 import { CancelarContaCorrenteDialog } from '@/components/venda/CancelarContaCorrenteDialog';
 
 // Controlador de input mascarado (retorno de useIntegerInput/useDecimalInput no monólito).
@@ -97,6 +101,8 @@ export interface CompraModalShellProps {
   /* ⚠ ADITIVO — [OC-EDITAR-LOTE-FECHADA] (128b). O modal do lote de uma OC fechada oferece
      "Reabrir e editar"; quem sabe reabrir é o `LancamentosTab`. */
   onReabrirLoteParaEditar?: ((motivo: string) => Promise<boolean>) | null;
+  /** ACESSOS-OC-03a — o que ESTA PESSOA pode na operacao, lido pelo hospedeiro (`useAcessoOperacao`). Ausente = tudo, como antes. */
+  acessoOC?: AcessoOperacao;
   recebimentoApi?: RecebimentoApi;      // RECEB-01: recebimento por lote (só em modo OC)
   documentosApi?: DocumentosApi;        // DOC-UI-01: documentos fiscais (só em modo OC)
   eventosApi?: EventosApi;              // AUDITORIA-01: trilha da operação (só leitura)
@@ -213,6 +219,13 @@ export function CompraModalShell(api: CompraModalShellProps) {
      que o resto do modal faz. */
   const temRecebimentoAtivo = (api.recebimentoApi?.movimentacoes ?? [])
     .some(m => m.cancelado !== true);
+  /* ACESSOS-OC-03a — O COMBINADO x O QUE ACONTECEU. A capacidade vem do hospedeiro; o fato ("houve gado movido?") e' o mesmo
+     que `temRecebimentoAtivo` le', pela funcao do dono. Aqui so' se combinam os dois; nenhum `if` de perfil. */
+  const acessoOC = api.acessoOC ?? ACESSO_TOTAL;
+  const gadoMovido = ocTemGadoMovido(api.recebimentoApi?.movimentacoes);
+  const motivoFisicoAcesso = motivoFisicoTravado(acessoOC, gadoMovido);
+  const motivoReabrirAcesso = motivoReabrirTravado(acessoOC, gadoMovido);
+  const motivoGado = acessoOC.movimentar_gado ? null : MOTIVO_GADO;
   /* PR-OC-AUTOSAVE-01 (fatia 4) — FUNIL UNICO de troca de aba. Eram sete pontos
      chamando `setAbaAtiva` direto; com o autosave, cada um teria de lembrar de gravar,
      e o que ficasse de fora perderia a edicao em silencio. Agora ha um lugar so.
@@ -453,7 +466,8 @@ export function CompraModalShell(api: CompraModalShellProps) {
               operacaoPronta={!!api.ocOperacaoId}
               lotesApi={api.lotesApi}
               somenteLeitura={permissoes.negociacaoReadOnly}
-              fisicoBloqueado={temRecebimentoAtivo}
+              fisicoBloqueado={temRecebimentoAtivo || !!motivoFisicoAcesso}
+              acesso={{ motivoFisico: motivoFisicoAcesso, motivoReabrir: motivoReabrirAcesso }}
               onVoltarCompra={() => irParaAba('compra')}
             />
           ) : abaAtiva === 'recebimento' && api.recebimentoApi ? (
@@ -472,7 +486,8 @@ export function CompraModalShell(api: CompraModalShellProps) {
                  meses depois. A fonte ja existia: `ocDataOperacao`, que a aba Financeiro
                  logo abaixo ja consome. */
               dataOperacao={api.ocDataOperacao ?? null}
-              somenteLeitura={permissoes.recebimentoReadOnly}
+              somenteLeitura={permissoes.recebimentoReadOnly || !!motivoGado}
+              motivoSomenteLeitura={motivoGado ?? undefined}
               onVoltarNegociacao={() => irParaAba('negociacao')}
               /* OC-CONTA-CORRENTE-TODOS-01a — a compra adota a ENTRADA que ja' esta' no zootecnico, como a venda adota a saida. */
               adocao={{ fazendaNome: api.fazendaAtualNome || null, contraparteNome: fornecedorNome || null, lado: 'compra' }}
@@ -511,6 +526,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
               darkSelectClass={DARK_SELECT_CONTENT}
               financeiroLegadoReadOnly={permissoes.financeiroLegadoReadOnly}
               financeiroNovoReadOnly={permissoes.financeiroNovoReadOnly}
+              motivoAtualizarEntregas={acessoOC.atualizar_entregas ? null : MOTIVO_SEM_CAPACIDADE}
               onIrParaDocumentos={() => irParaAba('documentos')}
               onIrParaEntrega={() => irParaAba('recebimento')}
               operacaoId={api.ocOperacaoId ?? null}
@@ -850,13 +866,17 @@ export function CompraModalShell(api: CompraModalShellProps) {
               status ou de entrega encerrada — os gates internos mudam o QUE a aba
               mostra, nunca se da para chegar nela. */}
           {abaAtiva === 'recebimento' && api.modoOC && api.ocOperacaoId && api.ocStatusComercial !== 'cancelada'
-            && temRecebimentoAtivo && api.recebimentoApi && (
+            && temRecebimentoAtivo && api.recebimentoApi && (motivoGado ? (
+            <GestoDeOperacao podeAlterar={false} motivo={motivoGado} onClick={() => undefined} testId="estornar-recebimento">
+              Estornar recebimento
+            </GestoDeOperacao>
+          ) : (
             <Button type="button" variant="ghost" disabled={!!api.recebimentoApi.saving || estornando !== null}
               onClick={() => { setMotivoEstorno(''); setEstornoEtapa(1); }}
               className="h-[22px] px-[9px] text-[10px] gap-1 text-muted-foreground hover:text-foreground">
               Estornar recebimento
             </Button>
-          )}
+          ))}
           {api.aberturaExistente ? (
             // === PR-OC-EDIT-01B — ações de ciclo da OPERAÇÃO EXISTENTE (visíveis pelo estado real) ===
             //   Confirmar/Cancelar/Reabrir via RPCs oficiais; título materializado bloqueia tudo (só
@@ -874,12 +894,16 @@ export function CompraModalShell(api: CompraModalShellProps) {
                   ⚠ O CUSTO DE NAO CORRIGIR era maior que o risco: fechar por engano uma
                   operacao com titulo lancado nao tinha volta pela interface. A 156b793b
                   precisou de chamada direta a RPC, e isso nao escala para o cliente. */}
-              {api.ocStatusComercial === 'fechada' && (
+              {api.ocStatusComercial === 'fechada' && (motivoReabrirAcesso ? (
+                <GestoDeOperacao podeAlterar={false} motivo={motivoReabrirAcesso} onClick={() => undefined} testId="reabrir-operacao">
+                  Reabrir operação
+                </GestoDeOperacao>
+              ) : (
                 <Button type="button" variant="secondary" disabled={!!api.acaoOcLoading}
                   onClick={() => { setMotivoAcao(''); setAcaoConfirm('reabrir'); }} className="h-[22px] px-[9px] text-[10px] gap-1">
                   {api.acaoOcLoading === 'reabrir' ? 'Reabrindo...' : 'Reabrir operação'}
                 </Button>
-              )}
+              ))}
               {/* ⚠ CANCELAR FICA ATRAS DO GATE, e nao e' esquecimento: `oc_cancelar` E' a
                   unica das cinco RPCs de ciclo que VERIFICA titulo, entao o banco
                   recusaria de qualquer forma. Esconder o botao evita um erro que so

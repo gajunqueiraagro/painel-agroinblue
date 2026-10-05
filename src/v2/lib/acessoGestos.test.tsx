@@ -26,8 +26,12 @@ describe('usePodeAlterarOperacao — so consulta o dono, pela MESMA tela dos ata
   it('a tela da operacao e a PROPRIA dela (ACESSOS-OC-01), a mesma que os atalhos do 02b consultam', () => {
     expect(TELA_DA_OPERACAO).toBe('operacao-comercial');
   });
-  it('financeiro (ate o ACESSOS-OC-03), campo, leitura e perfil nulo: nao alteram — os gestos seguem apagados com o motivo', () => {
-    for (const p of ['financeiro', 'campo', 'leitura', null]) { como(p); expect(pode()).toBe(false); }
+  it('campo, leitura e perfil nulo: nao alteram — os gestos seguem apagados com o motivo', () => {
+    for (const p of ['campo', 'leitura', null]) { como(p); expect(pode()).toBe(false); }
+  });
+  it('financeiro (ACESSOS-OC-03a): abre a OC, entao vincula e desvincula — como o gestor', () => {
+    como('financeiro');
+    expect(pode()).toBe(true);
   });
   it('gestor (ACESSOS-OC-01): altera — Desvincular e Vincular voltam a habilitar para ele', () => {
     como('gestor_cliente');

@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 05/10/2026 (ACESSOS-OC-02, +22 em `src/v2/lib/acessoOperacao.test.tsx`; antes o ACESSOS-OC-01, +8: `src/v2/lib/acessoTelas.test.tsx` 6,
+  Baseline em 05/10/2026 (ACESSOS-OC-03a, +37: `src/v2/lib/acessoCapacidadesOC.test.tsx` 33, `src/v2/lib/acessoOperacao.test.tsx` 2,
+  `src/v2/lib/acessoTelas.test.tsx` 1, `src/v2/lib/acessoGestos.test.tsx` 1; antes o ACESSOS-OC-02, +22 em `src/v2/lib/acessoOperacao.test.tsx`; antes o ACESSOS-OC-01, +8: `src/v2/lib/acessoTelas.test.tsx` 6,
   `src/v2/lib/acessoSaidas.test.tsx` 1, `src/v2/lib/acessoGestos.test.tsx` 1 — 3421 depois dele; antes o CONC-TOTAL-SEM-SALDO-01b, +8: `src/pages/conciliacaoDono.test.tsx` 4, `src/lib/conciliacao/resumoDoDono.test.ts` 4; antes o FIN-PGTO-FANTASMA-01, +13 em `src/components/financeiro-v2/finPgtoFantasma01.test.tsx`; antes o CONC-SEM-F5-01, +19: `src/hooks/concSemF5.test.tsx` 18, `src/components/financeiro-v2/conferenciaModal.test.tsx` 1; antes o ACESSOS-02c, +17 em `src/v2/lib/acessoGestos.test.tsx`; antes o ACESSOS-02b, +29: `src/acessoRotas.test.tsx` 15, `src/v2/lib/acessoSaidas.test.tsx` 14; antes o ACESSOS-02a, +26 em `src/v2/lib/acessoTelas.test.tsx`; antes o OC-CC-ACOES-LINHA-02, +20: `src/components/venda/abaContaCorrente.test.tsx` 11,
   `src/lib/oc/abrirLancamentoDaOC.test.ts` 7, `src/components/compra/despesasContaCorrente.test.tsx` 2; antes o UI-LINHA-UNICA-01, +2: `src/components/venda/abaContaCorrente.test.tsx` 1,
   `src/components/financeiro-v2/documentosLayout.test.tsx` 1; antes o OC-BOITEL-REVALORAR-SALVAR-01, +16 em `src/lib/oc/revalorarAoSalvar.test.tsx`; antes o
@@ -181,7 +182,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3443
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3480
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -335,7 +336,8 @@ CONSULTAM: a lateral (`V2Sidebar`, por `gruposVisiveis`), o drawer (`V2ContextDr
   perfil, nao mexer em `cliente_membros`.
 - ⚠ EXCECAO POR TELA, NO DONO (ACESSOS-OC-01, Gabriel 05/10/2026, so' tela): `NIVEL_POR_TELA` (`src/v2/lib/acessoTelas.ts`) e' um mapa
   tela × perfil consultado ANTES da matriz por grupo, DEPOIS da marca `liberadaClientes` e do admin — a matriz por grupo NAO mudou.
-  Hoje tem duas telas, as duas "so' o gestor" (`gestor_cliente` 'editar'; `financeiro`, `campo` e `leitura` 'nao'):
+  Hoje tem duas telas [desde o ACESSOS-OC-03a, GESTOR E FINANCEIRO 'editar'; `campo` e `leitura` 'nao' — o que o financeiro nao faz
+  dentro da OC e' do dono de capacidade, regra abaixo]:
   `operacoes-comerciais` (a lista, agora com `liberadaClientes`) e `operacao-comercial` (a tela da operacao, fora do menu, liberada
   por `OPERACAO_COMERCIAL_LIBERADA_CLIENTES`, ao lado de `HOME_LIBERADA_CLIENTES`). Excecao nova entra NESTE mapa, nunca em `if` de
   perfil na tela. `TELA_DA_OPERACAO` (`usePodeAbrir.ts`) passou de 'lancamentos-zoot' a `TELA_OPERACAO_COMERCIAL`: os atalhos do 02b
@@ -370,6 +372,59 @@ CONSULTAM: a lateral (`V2Sidebar`, por `gruposVisiveis`), o drawer (`V2ContextDr
     entrega/saida/entrada do gado (Entrega e Recebimento so' leitura) e, na Negociacao, edita preco e condicoes, nunca quantidade e
     peso; ele cria OC nova e ve^ a lista inteira. Pede "capacidades na operacao" no dono (alem de 'nao'|'ver'|'editar'). O perfil
     `leitura` fica fora. A trava de gravacao continua sendo o 01F.
+- ⚠ DENTRO DA OPERACAO COMERCIAL QUEM DECIDE E' A CAPACIDADE, NUM DONO SO' (ACESSOS-OC-03a, Gabriel 05/10/2026, so' tela):
+  `podeNaOperacao(perfil, isAdmin, capacidade)` e a tabela `CAPACIDADES_OC` (`src/v2/lib/acessoOperacao.ts`, irmao do dono de tela).
+  `NIVEL_POR_TELA` passou a dar a lista e a tela da OC a GESTOR E FINANCEIRO ('editar'); campo e leitura seguem 'nao'. A capacidade
+  'abrir' anda junto com `nivelDaTela` da tela da operacao (preso por teste). Mudar o que um perfil pode = trocar UMA celula.
+      capacidade                gestor  financeiro   o que e'
+      abrir / criar             S       S            ver a lista, abrir e criar OC
+      negociar_preco            S       S            criterio e valor do lote
+      negociar_combinado        S       S            categoria, quantidade, peso, incluir/excluir lote — ANTES de mover gado
+      negociar_apos_movimento   S       N            o mesmo, DEPOIS do primeiro movimento
+      negociar_abate_boitel     S       N            a Negociacao de abate e de venda em boitel (03a: inteira; o 03b abre campo a campo)
+      movimentar_gado           S       N            Entrega / Recebimento e "Estornar recebimento"
+      concluir_negociacao       S       S            Concluir, e Reabrir enquanto nao houve movimento
+      reabrir_apos_movimento    S       N            Reabrir negociacao / operacao depois do movimento
+      lancar_realizado_boitel   S       N            "Lançar realizado do abate" (boitel)
+      atualizar_entregas        S       S            "Atualizar entregas" do conta corrente
+      excluir_definitivo        N       N            so' o admin
+  · O MODELO E' "O COMBINADO x O QUE ACONTECEU": a Negociacao e' o combinado (o financeiro o edita e por isso CRIA a OC inteira);
+    a Entrega/Recebimento e' o que aconteceu e move rebanho (so' o gestor). "HOUVE MOVIMENTO?" E' FATO, nao capacidade:
+    `ocTemGadoMovido(movimentacoes)` (movimentacao VIVA; a estornada nao conta). O ponto de uso combina os dois por
+    `motivoFisicoTravado` / `motivoReabrirTravado`, que devolvem o MOTIVO ou nulo.
+  · O HOSPEDEIRO LE UMA VEZ E DESCE POR PROP: `LancamentosTab` chama `useAcessoOperacao()` e entrega `acessoOC` aos tres shells;
+    sem a prop vale `ACESSO_TOTAL` (o DOM do gestor e' identico ao de quem nao a recebe — preso por teste). A lista
+    (`CentralOperacoesComerciais`) le' o mesmo hook. Nenhum `if` de perfil fora do dono (teste por grep).
+  · `fisicoBloqueado` (`AbaNegociacaoLotes`) E' A TRAVA "DEPOIS DO MOVIMENTO", e foi REUTILIZADA: a compra ja' a ligava com
+    recebimento ativo (quantidade e peso travados, incluir lote escondido, preco aberto); a venda passou a liga'-la SO' pelo acesso.
+    Vinda do acesso (`acesso.motivoFisico`), ela alcanca tambem CATEGORIA, LIXEIRA e INCLUIR LOTE, que ficam APAGADOS com o motivo
+    escrito em vez de sumir. Para o gestor a venda segue como era (o banco trava quantidade e peso por lote com saida ativa).
+  · ITEM QUE NAO VALE FICA APAGADO COM O MOTIVO (lista unica no dono: `MOTIVO_GADO`, `MOTIVO_APOS_MOVIMENTO`,
+    `MOTIVO_REABRIR_APOS_MOVIMENTO`, `MOTIVO_ABATE_BOITEL`, `MOTIVO_SEM_CAPACIDADE`). Botao de rodape apagado = `GestoDeOperacao`
+    (o do 02c). ⚠ EXCECAO DECLARADA: a aba Entrega/Recebimento em leitura NAO desenha os gestos apagados — ela usa o modo so'
+    leitura que ja' tinha (o da OC cancelada, que esconde os gestos) e ESCREVE o motivo no lugar da frase do titulo financeiro.
+  · ABATE E BOITEL NO 03a: Negociacao inteira em leitura para o financeiro, com o motivo escrito; Salvar e Concluir da Negociacao
+    apagados com ele; "Novo abate" apagado na lista; na venda, a opcao Boitel do "Tipo de venda" apagada (e o campo travado numa
+    venda que ja' e' boitel). Financeiro, Conta corrente, Compromissos e Documentos dessas OCs seguem liberados.
+  ⚠ E' O QUE A TELA OFERECE: `oc_salvar_lotes` manda o lote inteiro e o banco nao distingue perfil — a trava de gravacao e' o 01F.
+  ⚠ MEDIDO NO BANCO (05/10): `oc_confirmar` e `oc_reabrir` so' mudam o status e gravam o evento (nenhuma tabela de rebanho, nenhum
+    gatilho em `zoo_operacoes_comerciais`); `oc_salvar_lotes` SEM movimento so' escreve lotes; COM movimento (caminho B) trocar a
+    CATEGORIA de um lote reescreve `lancamentos.categoria` da movimentacao registrada — e' rebanho, e por isso a categoria fecha
+    para o financeiro depois do movimento. `oc_reabrir` NAO tem guarda de movimento: quem reabre depois do recebimento muda preco e
+    categoria, inclui lote e remove lote sem saida ativa; quantidade e peso do lote com saida ativa o banco recusa.
+    `oc_sincronizar_entregas` ("Atualizar entregas") grava titulos financeiros e partes, nunca movimentacao.
+  ⚠ PARA O 03b: abate e boitel campo a campo — carcaca e seletor do `ModalNegociarLote`; os ~30 campos de `BoitelBlocosModais`
+    LIDOS UM A UM (dias, mortes e data do abate = fisico); o R$/@ derivado do total usa as arrobas gravadas, e sem arrobas o campo
+    fica apagado com o motivo; 'lancar_realizado_boitel'; e ai' 'negociar_abate_boitel' sai da tabela.
+  ⚠ DIVIDAS: ACESSOS-OC-ENTREGA-GESTOS-APAGADOS-01 (a excecao acima: desenhar cada gesto da Entrega apagado com o motivo) ·
+    ACESSOS-OC-COMPRA-SHELL-TESTE-01 (o `CompraModalShell` nao se monta em teste: Estornar e Reabrir da compra provados pela
+    FONTE; venda e abate, montados) · o motivo de "Novo abate" ocupa uma linha a mais sob os botoes da lista, so' para o
+    financeiro — NAO MEDIDO a 1.135 (nao ha' usuario financeiro para o navegador) · `usePodeAlterarOperacao` (vincular e
+    desvincular no modal do Financeiro) passou a valer para o financeiro, por consequencia do nivel da tela.
+  ⚠ DIVIDA OC-REABRIR-APOS-MOVIMENTO-SEM-GUARDA-01: `oc_reabrir` nao tem guarda de movimento; reaberta, a OC aceita mudar preco e
+    categoria, incluir e remover lote sem saida ativa, e trocar a categoria de lote ja' movido reescreve `lancamentos.categoria`
+    da movimentacao. Vale hoje para gestor e admin (o financeiro ficou fechado no 03a). Decisao de produto pendente: o que o
+    gestor pode alterar depois do gado movido.
 - ⚠ O QUE FALTA: (a) o EFEITO de 'ver' nas telas (modo somente leitura por perfil) — hoje a funcao devolve o nivel e nenhuma tela o
   usa; no piloto as tres sao 'editar' para gestor e financeiro, e 'ver' para `leitura`, que hoje EDITARIA; (b) a trava no banco, 01F;
   (c) a grade por pessoa, ACESSOS-03; (d) [feito no ACESSOS-02b: o endereco e' "/"].

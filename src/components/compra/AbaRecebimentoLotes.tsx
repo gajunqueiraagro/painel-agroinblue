@@ -31,6 +31,9 @@ interface Props {
      Sem a prop, o comportamento antigo (hoje) continua. */
   dataOperacao?: string | null;
   somenteLeitura?: boolean;     // OPEN-01: abertura de operação existente — aba read-only
+  /* ACESSOS-OC-03a — POR QUE a aba esta' so' leitura, quando o motivo nao e' o de sempre (operacao cancelada). O financeiro
+     nao move gado: a aba abre igual, sem gesto, e diz isto no lugar da frase do titulo financeiro. Sem a prop, a frase de hoje. */
+  motivoSomenteLeitura?: string;
   onVoltarNegociacao?: () => void;
   /* ⚠ TEXTOS COM DEFAULT IGUAL AO DE HOJE — PR-OC-VENDA-ENTREGA-01. Mesmo idioma dos
      `rotulos` do AbaNegociacaoLotes: o `CompraModalShell` nao passa nada e continua
@@ -192,7 +195,7 @@ function ReceberLoteDialog({ lote, rotulo, pesoSugerido, hoje, isCompra, saving,
   );
 }
 
-export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada, isCompra, categoriasDisponiveis, documentosApi, dataOperacao, somenteLeitura, onVoltarNegociacao, rotulos, adocao }: Props) {
+export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada, isCompra, categoriasDisponiveis, documentosApi, dataOperacao, somenteLeitura, motivoSomenteLeitura, onVoltarNegociacao, rotulos, adocao }: Props) {
   /* ⚠ AS TRES TABELAS POR LINHA (`qtd`, `peso`, `dataReb`) SAIRAM em
      PR-OC-RECEB-REGISTRO-02. Elas so existiam para alimentar os inputs inline da
      grade de onze colunas; com os campos dentro do modal, os valores viajam por
@@ -478,8 +481,8 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
           </div>
 
           {somenteLeitura && (
-            <div className="text-[11px] text-muted-foreground">
-              Operação fechada com título financeiro. Para editar, estorne o lançamento na aba Financeiro e reabra a operação.
+            <div className="text-[11px] text-muted-foreground" data-testid={motivoSomenteLeitura ? 'entrega-somente-leitura' : undefined}>
+              {motivoSomenteLeitura ?? 'Operação fechada com título financeiro. Para editar, estorne o lançamento na aba Financeiro e reabra a operação.'}
             </div>
           )}
 

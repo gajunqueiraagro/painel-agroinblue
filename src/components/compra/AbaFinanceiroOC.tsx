@@ -29,6 +29,8 @@ interface Props {
   onIrParaDocumentos?: () => void;
   /** OC-CC-ACOES-LINHA-02 — a aba da entrega (venda) / do recebimento do gado (compra): o "Ir para a entrega" da linha do extrato. */
   onIrParaEntrega?: () => void;
+  /** ACESSOS-OC-03a — repassado ao conta corrente (ver `AbaContaCorrenteOC`). */
+  motivoAtualizarEntregas?: string | null;
   // wiring mínimo do modelo novo (vindo do CompraModalShell)
   operacaoId?: string | null;
   clienteId?: string | null;
@@ -135,6 +137,7 @@ export function AbaFinanceiroOC(props: Props) {
         qtdDespesas={despesasLidas ? linhasDeDespesa(ocApi.compromissos, ocApi.parcelas, null).length : null}
         subAba={subAba} onSubAba={escolherSubAba}
         onAbrirLancamento={abrirLancamento} onIrParaEntrega={props.onIrParaEntrega}
+        motivoAtualizarEntregas={props.motivoAtualizarEntregas ?? null}
         despesas={({ host, topo }) => (
           <AbaCompromissosOC ocApi={ocApi} soDespesas bloqueado={props.financeiroNovoReadOnly} clienteId={clienteId}
             tipoOperacao={api.tipoOperacao} fornecedores={api.fornecedores} valorAcordado={api.valorAcordado} lotes={api.lotes}

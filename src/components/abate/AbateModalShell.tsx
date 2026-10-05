@@ -30,6 +30,10 @@ import { BlocoTopoAba } from '@/components/ui/bloco-topo-aba';
 import { LinhaResumo, AsideResumo, FaixaTituloResumo, SecaoResumo } from '@/components/ui/linha-resumo';
 import { ReabrirP1Dialog } from '@/components/ReabrirP1Dialog';
 import { ReabrirMesNaOC } from '@/components/operacao-comercial/ReabrirMesNaOC';
+import { GestoDeOperacao } from '@/components/financeiro-v2/GestoDeOperacao';
+import {
+  ACESSO_TOTAL, MOTIVO_ABATE_BOITEL, MOTIVO_GADO, MOTIVO_SEM_CAPACIDADE, motivoReabrirTravado, ocTemGadoMovido, type AcessoOperacao,
+} from '@/v2/lib/acessoOperacao';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -168,6 +172,8 @@ export interface AbateModalShellProps {
   /* ⚠ ADITIVO — [OC-EDITAR-LOTE-FECHADA] (128b). O modal do lote de uma OC fechada oferece
      "Reabrir e editar"; quem sabe reabrir é o `LancamentosTab`. */
   onReabrirLoteParaEditar?: ((motivo: string) => Promise<boolean>) | null;
+  /** ACESSOS-OC-03a — o que ESTA PESSOA pode na operacao, lido pelo hospedeiro (`useAcessoOperacao`). Ausente = tudo, como antes. */
+  acessoOC?: AcessoOperacao;
   onOcVersaoChange?: (v: number) => void;
   ocStatusComercial: string | null;
   /** Lotes da negociação — o mesmo hook da compra, que opera sobre `zoo_operacao_lotes`. */
@@ -244,8 +250,13 @@ export function AbateModalShell({
   documentosApi, eventosApi, liquidacaoApi, recebimentoApi, ocEntregaEncerrada = false,
   categoria, categoriasDisponiveis,
   quantidadeNum, pesoKgNum, submitting, onSalvarOperacao, onSalvarNegociacao, semAlteracoes = false,
-  onConcluirNegociacao, onReabrirNegociacao, onFechar, erroSalvar = null, abaInicial = null,
+  onConcluirNegociacao, onReabrirNegociacao, onFechar, erroSalvar = null, abaInicial = null, acessoOC = ACESSO_TOTAL,
 }: AbateModalShellProps) {
+  /* ACESSOS-OC-03a — no ABATE a Negociacao INTEIRA fica so' leitura para quem nao tem 'negociar_abate_boitel' (ate' o 03b
+     abrir campo a campo); a Entrega, para quem nao move gado. A capacidade vem do hospedeiro; nenhum `if` de perfil aqui. */
+  const motivoAbateAcesso = acessoOC.negociar_abate_boitel ? null : MOTIVO_ABATE_BOITEL;
+  const motivoGado = acessoOC.movimentar_gado ? null : MOTIVO_GADO;
+  const motivoReabrirAcesso = motivoReabrirTravado(acessoOC, ocTemGadoMovido(recebimentoApi?.movimentacoes));
   /* A lista de fazendas no formato do combobox — FAZ-ATIVIDADE-01c. Deriva de `fazendasOC`, que já
      carrega a regra de quem pode receber lançamento; o formato da opção não redecide isso. */
   const opcoesFazenda = useMemo(() => fazendasOC.map(f => ({ value: f.id, label: f.nome })), [fazendasOC]);
@@ -546,7 +557,7 @@ export function AbateModalShell({
      campos do planejamento do boitel; o abate nao tem planejamento previo — o detalhe
      (carcaca, rendimento, preco da @) e' o proprio conteudo da negociacao, e exigi-lo
      para salvar impediria de salvar pela metade, que e' como o operador trabalha. */
-  const podeSalvar = naNegociacao ? !!ocOperacaoId && !fechada : identificacaoPronta;
+  const podeSalvar = naNegociacao ? !!ocOperacaoId && !fechada && !motivoAbateAcesso : identificacaoPronta;
   /* ⚠ NAO E' O MESMO QUE "NAO PODE": o botao pode estar apto e nao ter o que gravar. Por
      isso o motivo tem precedencia — quem NAO PODE precisa saber o que falta; quem so' nao
      tem alteracao precisa saber que ja' esta' salvo. */
@@ -557,7 +568,9 @@ export function AbateModalShell({
   /* ⚠ O MES FECHADO TRAVA OS DOIS BOTOES, e vem ANTES dos outros motivos: nao adianta
      dizer "informe a fazenda" se, informada a fazenda, o mes recusa. */
   /* OC-EDITAR-CADASTRAL-01 — o mes fechado (P1) trava o OPERACIONAL; o Salvar da OC fechada grava so' cadastral. */
-  const motivoNaoSalva = mesFechadoMotivo && !fechada
+  const motivoNaoSalva = naNegociacao && motivoAbateAcesso
+    ? motivoAbateAcesso
+    : mesFechadoMotivo && !fechada
     ? `${mesFechadoMotivo} — reabra o período para lançar`
     : naNegociacao
       ? (!ocOperacaoId ? 'Salve a operação na aba Abate primeiro' : fechada ? 'Operação fechada · reabra para editar' : undefined)
@@ -635,7 +648,8 @@ export function AbateModalShell({
    * ⚠ A ORDEM DO ABATE É: Salvar (lotes → abate) → Concluir (`oc_confirmar`) → Entrega.
    */
   const concluirTravadoPor: string | null =
-    mesFechadoMotivo ? `${mesFechadoMotivo} — reabra o período`
+    motivoAbateAcesso ? motivoAbateAcesso
+    : mesFechadoMotivo ? `${mesFechadoMotivo} — reabra o período`
     : submitting ? 'salvando…'
     : lotesSemNegociacao.length > 0
       ? `falta negociar ${lotesSemNegociacao.length} ${lotesSemNegociacao.length === 1 ? 'lote' : 'lotes'}`
@@ -805,7 +819,8 @@ export function AbateModalShell({
                 documentosApi={documentosApi}
                 /* ⚠ A DATA DA OPERACAO, e nao a de hoje: a saida pertence a' operacao. */
                 dataOperacao={data}
-                somenteLeitura={ocStatusComercial === 'cancelada'}
+                somenteLeitura={ocStatusComercial === 'cancelada' || !!motivoGado}
+                motivoSomenteLeitura={motivoGado ?? undefined}
                 onVoltarNegociacao={() => setAbaAtiva('negociacao')}
                 rotulos={{
                   /* ⚠ EIXO "SAIDA/ENVIAR", e nao "entrega/entregar" — decisao do Gabriel.
@@ -895,6 +910,7 @@ export function AbateModalShell({
                 darkSelectClass=""
                 financeiroLegadoReadOnly={ocStatusComercial === 'cancelada'}
                 financeiroNovoReadOnly={ocStatusComercial === 'cancelada'}
+                motivoAtualizarEntregas={acessoOC.atualizar_entregas ? null : MOTIVO_SEM_CAPACIDADE}
                 operacaoId={ocOperacaoId}
                 clienteId={liquidacaoApi.clienteId ?? null}
                 /* A instancia que o resumo lateral ja monta — uma leitura, dois consumidores. */
@@ -943,7 +959,8 @@ export function AbateModalShell({
                 {lotesApi && (
                   <AbaLotesAbate
                     exclusaoOC={exclusaoLoteOC}
-                    onReabrirParaEditar={onReabrirLoteParaEditar}
+                    onReabrirParaEditar={motivoAbateAcesso ? null : onReabrirLoteParaEditar}
+                    motivoSomenteLeitura={motivoAbateAcesso}
                     lotes={lotesDoAbate}
                     linhas={linhasDoAbate}
                     cenario={cenarioAbate}
@@ -951,7 +968,7 @@ export function AbateModalShell({
                     onCenarioChange={onCenarioAbateChange}
                     lotesApi={lotesApi}
                     categoriasDisponiveis={categoriasDisponiveis}
-                    somenteLeitura={ocStatusComercial === 'fechada' || ocStatusComercial === 'cancelada'}
+                    somenteLeitura={ocStatusComercial === 'fechada' || ocStatusComercial === 'cancelada' || !!motivoAbateAcesso}
                     fisicoBloqueado={temAbateAtivo}
                     onLinhaChange={onAbateLinhaChange ?? (() => {})}
                   />
@@ -1257,7 +1274,12 @@ export function AbateModalShell({
             negociacao de proposito, e `oc_salvar_lotes`/`oc_salvar_boitel` recusam
             'fechada' mandando "reabra para editar". A venda nao tinha por onde reabrir:
             instrucao certa, destino ausente — o mesmo defeito que o Concluir teve. */}
-        {naNegociacao && !!ocOperacaoId && ocStatusComercial === 'fechada' && (
+        {naNegociacao && !!ocOperacaoId && ocStatusComercial === 'fechada' && motivoReabrirAcesso && (
+          <GestoDeOperacao podeAlterar={false} motivo={motivoReabrirAcesso} onClick={() => undefined} testId="reabrir-negociacao">
+            Reabrir negociação
+          </GestoDeOperacao>
+        )}
+        {naNegociacao && !!ocOperacaoId && ocStatusComercial === 'fechada' && !motivoReabrirAcesso && (
           <Button type="button" variant="secondary" className="h-[22px] px-[9px] text-[10px] gap-1" disabled={submitting}
             title="Reabrir devolve a operação para programada e libera a edição. Fica registrado na Auditoria com o motivo."
             onClick={() => { setMotivoReabrir(''); setReabrirAberto(true); }}>

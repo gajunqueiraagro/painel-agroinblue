@@ -107,8 +107,9 @@ describe('a faixa de atalhos de Produção (M7): atalho para tela sem acesso nã
   it('admin: as três de sempre, na ordem', () => {
     expect(pode('admin_agroinblue', true)).toEqual(OPCOES_ATALHO_PRODUCAO.map((o) => o.valor));
   });
-  it('gestor: só a própria lista — e com uma opção só a faixa some (a rota exige mais de uma)', () => {
+  it('gestor e financeiro: só a própria lista — e com uma opção só a faixa some (a rota exige mais de uma)', () => {
     expect(pode('gestor_cliente', false)).toEqual(['operacoes-comerciais']);
+    expect(pode('financeiro', false)).toEqual(['operacoes-comerciais']);
     expect(fonte('src/v2/V2Index.tsx')).toContain("const opcoes = opcoesDoAtalho((s) => nivelDaTela(perfilAcesso, isAdmin, s) !== 'nao'); return ativa && opcoes.length > 1 ? (");
   });
   it('sair da tela da operação com uma OC na URL limpa os `oc_*`, como já era em "Lançar movimentação"', () => {
@@ -136,6 +137,31 @@ describe('a lista de Operações Comerciais: criar OC e excluir', () => {
     fireEvent.click(screen.getByTestId('novo-abate'));
     expect([compra.mock.calls.length, venda.mock.calls.length, abate.mock.calls.length]).toEqual([1, 1, 1]);
   });
+  it('ACESSOS-OC-03a — financeiro: cria compra e venda; "Novo abate" apagado com o motivo escrito, e o clique nao dispara', async () => {
+    como('financeiro');
+    const [compra, venda, abate] = [vi.fn(), vi.fn(), vi.fn()];
+    montar({ onNovaCompra: compra, onNovaVenda: venda, onNovoAbate: abate });
+    await waitFor(() => expect(screen.getByTestId('nova-compra')).toBeInTheDocument());
+    expect(screen.getByTestId('nova-compra').hasAttribute('disabled')).toBe(false);
+    expect(screen.getByTestId('nova-venda').hasAttribute('disabled')).toBe(false);
+    const b = screen.getByTestId('novo-abate');
+    expect(b.hasAttribute('disabled')).toBe(true);
+    expect(b.getAttribute('title')).toBe('Abate e boitel: edição pelo financeiro chega na próxima etapa.');
+    expect(screen.getByTestId('motivo-nova-oc').textContent).toBe('Abate e boitel: edição pelo financeiro chega na próxima etapa.');
+    fireEvent.click(b);
+    fireEvent.click(screen.getByTestId('nova-compra'));
+    expect([compra.mock.calls.length, venda.mock.calls.length, abate.mock.calls.length]).toEqual([1, 0, 0]);
+  });
+  it('ACESSOS-OC-03a — gestor e admin: os tres habilitados e nenhum motivo escrito', async () => {
+    for (const [p, adm] of [['gestor_cliente', false], ['admin_agroinblue', true]] as const) {
+      como(p, adm);
+      const r = montar({ onNovaCompra: vi.fn(), onNovaVenda: vi.fn(), onNovoAbate: vi.fn() });
+      await waitFor(() => expect(screen.getByTestId('novo-abate')).toBeInTheDocument());
+      for (const t of ['nova-compra', 'nova-venda', 'novo-abate']) expect(screen.getByTestId(t).hasAttribute('disabled')).toBe(false);
+      expect(screen.queryByTestId('motivo-nova-oc')).toBeNull();
+      r.unmount();
+    }
+  });
   it('sem as funções (quem monta a lista sem criar), os botões não existem', async () => {
     montar();
     await waitFor(() => expect(screen.getByText('Operações Comerciais')).toBeInTheDocument());
@@ -144,7 +170,7 @@ describe('a lista de Operações Comerciais: criar OC e excluir', () => {
   it('M8 — "Excluir definitivamente": habilitado só para o admin; para os demais, apagado com o motivo exato (fonte)', () => {
     const lista = fonte('src/components/operacao-comercial/central/CentralOperacoesComerciais.tsx');
     expect(MOTIVO_EXCLUIR_SO_ADMIN).toBe('só o administrador exclui definitivamente');
-    expect(lista).toContain("{r.status_comercial === 'cancelada' && (isAdmin ? ( <DropdownMenuItem className=\"text-destructive focus:text-destructive\" data-testid=\"excluir-definitivamente\" onSelect={() => { setExcluirMotivo(''); setExcluirEtapa(1); setExcluirAlvo(r); }}>");
+    expect(lista).toContain("{r.status_comercial === 'cancelada' && (acessoOC.excluir_definitivo ? ( <DropdownMenuItem className=\"text-destructive focus:text-destructive\" data-testid=\"excluir-definitivamente\" onSelect={() => { setExcluirMotivo(''); setExcluirEtapa(1); setExcluirAlvo(r); }}>");
     expect(lista).toContain(') : ( <ItemDeMenuOC testid="excluir-definitivamente" texto="Excluir definitivamente" motivo={MOTIVO_EXCLUIR_SO_ADMIN} /> ))}');
     /* o único caminho que arma a exclusão é o do admin */
     expect(lista.match(/setExcluirAlvo\(r\)/g)).toHaveLength(1);

@@ -26,6 +26,11 @@
  */
 import { useState, useMemo, useEffect } from 'react';
 import { useStatusPilares } from '@/hooks/useStatusPilares';
+import { GestoDeOperacao } from '@/components/financeiro-v2/GestoDeOperacao';
+import {
+  ACESSO_TOTAL, MOTIVO_ABATE_BOITEL, MOTIVO_GADO, MOTIVO_SEM_CAPACIDADE, motivoFisicoTravado, motivoReabrirTravado, ocTemGadoMovido,
+  type AcessoOperacao,
+} from '@/v2/lib/acessoOperacao';
 import { ReabrirP1Dialog } from '@/components/ReabrirP1Dialog';
 import { ReabrirMesNaOC } from '@/components/operacao-comercial/ReabrirMesNaOC';
 import { Button } from '@/components/ui/button';
@@ -143,6 +148,8 @@ export interface VendaModalShellProps {
   /* ⚠ ADITIVO — [OC-EDITAR-LOTE-FECHADA] (128b). O modal do lote de uma OC fechada oferece
      "Reabrir e editar"; quem sabe reabrir é o `LancamentosTab`. */
   onReabrirLoteParaEditar?: ((motivo: string) => Promise<boolean>) | null;
+  /** ACESSOS-OC-03a — o que ESTA PESSOA pode na operacao, lido pelo hospedeiro (`useAcessoOperacao`). Ausente = tudo, como antes. */
+  acessoOC?: AcessoOperacao;
   onOcVersaoChange?: (v: number) => void;
   ocStatusComercial: string | null;
   /** Lotes da negociação — o mesmo hook da compra, que opera sobre `zoo_operacao_lotes`. */
@@ -224,7 +231,7 @@ export function VendaModalShell({
   documentosApi, eventosApi, liquidacaoApi, recebimentoApi, ocEntregaEncerrada = false,
   categoria, categoriasDisponiveis,
   quantidadeNum, pesoKgNum, submitting, onSalvarOperacao, onSalvarNegociacao, onCancelarContaCorrente, semAlteracoes = false,
-  onConcluirNegociacao, onReabrirNegociacao, onFechar, erroSalvar = null, abaInicial = null,
+  onConcluirNegociacao, onReabrirNegociacao, onFechar, erroSalvar = null, abaInicial = null, acessoOC = ACESSO_TOTAL,
 }: VendaModalShellProps) {
   /* A lista de fazendas no formato do combobox — FAZ-ATIVIDADE-01c. Deriva de `fazendasOC`, que já
      carrega a regra de quem pode receber lançamento; o formato da opção não redecide isso. */
@@ -268,6 +275,15 @@ export function VendaModalShell({
      dois ramos com a mesma lista de props seria a mesma armadilha que fez o `brl`
      chegar a seis copias. */
   const ehBoitel = vendaTipoVenda === 'boitel';
+  /* ACESSOS-OC-03a — O COMBINADO x O QUE ACONTECEU. A capacidade vem do hospedeiro; o fato ("houve gado movido?") sai das
+     movimentacoes ja' carregadas, pela funcao do dono. Aqui so' se combinam os dois; nenhum `if` de perfil.
+     ⚠ BOITEL: ate' o 03b a Negociacao INTEIRA fica so' leitura para quem nao tem 'negociar_abate_boitel'. */
+  const gadoMovido = ocTemGadoMovido(recebimentoApi?.movimentacoes);
+  const motivoFisicoAcesso = motivoFisicoTravado(acessoOC, gadoMovido);
+  const motivoReabrirAcesso = motivoReabrirTravado(acessoOC, gadoMovido);
+  const motivoGado = acessoOC.movimentar_gado ? null : MOTIVO_GADO;
+  const motivoBoitelAcesso = ehBoitel && !acessoOC.negociar_abate_boitel ? MOTIVO_ABATE_BOITEL : null;
+  const motivoLancarRealizado = motivoBoitelAcesso ?? (acessoOC.lancar_realizado_boitel ? null : MOTIVO_GADO);
 
   /* ⚠ A REGRA NAO E DAQUI. `faltamDosCinco` espelha a lista de `oc_salvar_boitel` para o
      botao poder impedir ANTES da chamada — a licao de 45a7352b, onde o operador so'
@@ -449,7 +465,7 @@ export function VendaModalShell({
      conseguia nem CRIAR a operacao, porque os cinco campos moram na aba de Negociacao —
      que so' existe depois da operacao criada. */
   const podeSalvar = naNegociacao
-    ? !!ocOperacaoId && !fechada && faltamBoitel.length === 0 && !pendenciaRealizado
+    ? !!ocOperacaoId && !fechada && faltamBoitel.length === 0 && !pendenciaRealizado && !motivoBoitelAcesso
     : identificacaoPronta;
   /* ⚠ NAO E' O MESMO QUE "NAO PODE": o botao pode estar apto e nao ter o que gravar. Por
      isso o motivo tem precedencia — quem NAO PODE precisa saber o que falta; quem so' nao
@@ -473,14 +489,17 @@ export function VendaModalShell({
     : null;
 
   const concluirTravadoPor: string | null =
-    mesFechadoMotivo ? `${mesFechadoMotivo} — reabra o período`
+    motivoBoitelAcesso ? motivoBoitelAcesso
+    : mesFechadoMotivo ? `${mesFechadoMotivo} — reabra o período`
     : pendenciaRealizado ? pendenciaRealizado
     : submitting ? 'salvando…'
     : recebimentoApi?.saving ? 'aguarde a entrega terminar'
     : null;
   /* OC-EDITAR-CADASTRAL-01 — o mes fechado (P1) trava o que e' OPERACIONAL; o Salvar da OC fechada grava so'
      cadastral, entao ele nao trava ali. A negociacao da OC fechada diz o caminho, sem esperar o clique. */
-  const motivoNaoSalva = mesFechadoMotivo && !fechada
+  const motivoNaoSalva = naNegociacao && motivoBoitelAcesso
+    ? motivoBoitelAcesso
+    : mesFechadoMotivo && !fechada
     ? `${mesFechadoMotivo} — reabra o período para lançar`
     : naNegociacao && fechada
     ? 'Operação fechada · reabra para editar'
@@ -509,7 +528,11 @@ export function VendaModalShell({
   const abaLotes = (
     <AbaNegociacaoLotes
       exclusaoOC={exclusaoLoteOC}
-      onReabrirParaEditar={onReabrirLoteParaEditar}
+      onReabrirParaEditar={motivoBoitelAcesso ? null : onReabrirLoteParaEditar}
+      acesso={{ motivoFisico: motivoFisicoAcesso, motivoReabrir: motivoReabrirAcesso, motivoSomenteLeitura: motivoBoitelAcesso }}
+      /* A MESMA trava do fisico da compra (`fisicoBloqueado`), que a venda nao passava: aqui ela so' liga pelo ACESSO — para
+         o gestor a venda segue como era (o banco trava quantidade e peso por lote com saida ativa). */
+      fisicoBloqueado={!!motivoFisicoAcesso}
       categoria={categoria}
       categoriasDisponiveis={categoriasDisponiveis}
       quantidadeNum={quantidadeNum}
@@ -518,7 +541,7 @@ export function VendaModalShell({
       modoOC
       operacaoPronta={!!ocOperacaoId}
       lotesApi={lotesApi}
-      somenteLeitura={operacionalTravado}
+      somenteLeitura={operacionalTravado || !!motivoBoitelAcesso}
       onVoltarCompra={() => setAbaAtiva('venda')}
       /* ⚠ SO NA VENDA BOITEL. Numa venda comum e numa compra as duas props sao nulas e a
          grade e' exatamente a de antes: valor digitavel, criterio livre, quantos lotes
@@ -615,7 +638,8 @@ export function VendaModalShell({
               documentosApi={documentosApi}
               /* ⚠ A DATA DA OPERACAO, e nao a de hoje: a saida pertence a' operacao. */
               dataOperacao={data}
-              somenteLeitura={ocStatusComercial === 'cancelada'}
+              somenteLeitura={ocStatusComercial === 'cancelada' || !!motivoGado}
+              motivoSomenteLeitura={motivoGado ?? undefined}
               onVoltarNegociacao={() => setAbaAtiva('negociacao')}
               rotulos={{
                 /* ⚠ EIXO "SAIDA/ENVIAR", e nao "entrega/entregar" — decisao do Gabriel.
@@ -682,6 +706,7 @@ export function VendaModalShell({
               darkSelectClass=""
               financeiroLegadoReadOnly={ocStatusComercial === 'cancelada'}
               financeiroNovoReadOnly={ocStatusComercial === 'cancelada'}
+              motivoAtualizarEntregas={acessoOC.atualizar_entregas ? null : MOTIVO_SEM_CAPACIDADE}
               operacaoId={ocOperacaoId}
               clienteId={liquidacaoApi.clienteId ?? null}
               /* A instancia que o resumo lateral ja monta — uma leitura, dois consumidores. */
@@ -729,6 +754,9 @@ export function VendaModalShell({
                  sao de PR-OC-VENDA-BOITEL-01B — este PR nao os traz, e por isso a tela
                  diz em ambar o que falta em vez de oferecer onde preencher. */
               <div className="space-y-2 min-w-0">
+                {motivoBoitelAcesso && (
+                  <p className="text-[10px] leading-tight text-amber-700 dark:text-amber-300" data-testid="motivo-negociacao-leitura">{motivoBoitelAcesso}</p>
+                )}
                 {/* ⚠ 'projetado' FIXO, e nao derivado: e' o unico cenario que esta tela
                     edita — o shell grava 'projetado' sempre em `salvarNegociacaoVendaOC`.
                     PR-OC-VENDA-BOITEL-REALIZADO-01 e' quem passa a variar isto.
@@ -779,11 +807,12 @@ export function VendaModalShell({
                     <BoitelBlocosModais
                       valor={boitelData}
                       onChange={onBoitelChange}
-                      somenteLeitura={operacionalTravado}
+                      somenteLeitura={operacionalTravado || !!motivoBoitelAcesso}
                       /* ⚠ EXCECAO: "Lancar realizado" continua com a OC fechada — o iniciar REABRE antes de abrir o
                          dialogo (`iniciarRealizadoBoitel`), e depois disso nada mais esta' travado. */
                       podeLancarRealizado={ocStatusComercial !== 'cancelada'}
-                      motivoTravado={fechada ? 'Operação fechada · reabra para editar' : null}
+                      motivoLancarRealizado={motivoLancarRealizado}
+                      motivoTravado={motivoBoitelAcesso ?? (fechada ? 'Operação fechada · reabra para editar' : null)}
                       cenario="projetado"
                       /* ⚠ "enviada em 13/05" — desde quando a projecao corre. Sem isso a
                           pilula diz QUE e' projecao e nao diz de QUANDO, que e' o que
@@ -916,14 +945,20 @@ export function VendaModalShell({
                   Tipo de venda <span className="text-destructive">*</span>
                   {operacionalTravado && <Lock className="w-3 h-3 text-amber-700" />}
                 </Label>
-                <Select value={vendaTipoVenda} onValueChange={setVendaTipoVenda} disabled={operacionalTravado}>
+                <Select value={vendaTipoVenda} onValueChange={setVendaTipoVenda} disabled={operacionalTravado || !!motivoBoitelAcesso}>
                   <SelectTrigger className={`mt-[3px] h-8 px-2.5 text-[12px] ${operacionalTravado ? CAMPO_TRAVADO : ''}`}><SelectValue placeholder="Selecione..." /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="gado_adulto">Gado adulto</SelectItem>
                     <SelectItem value="desmama">Desmama</SelectItem>
-                    <SelectItem value="boitel">Boitel</SelectItem>
+                    <SelectItem value="boitel" disabled={!acessoOC.negociar_abate_boitel}
+                      title={acessoOC.negociar_abate_boitel ? undefined : MOTIVO_ABATE_BOITEL}>Boitel</SelectItem>
                   </SelectContent>
                 </Select>
+                {/* ACESSOS-OC-03a — a venda vira boitel por ESTE campo: quem nao negocia boitel nao o escolhe (e nao tira a
+                    venda do boitel). O motivo fica escrito, so' para quem nao tem a capacidade. */}
+                {!acessoOC.negociar_abate_boitel && (
+                  <p className="mt-0.5 text-[10px] leading-tight text-muted-foreground" data-testid="motivo-tipo-boitel">{MOTIVO_ABATE_BOITEL}</p>
+                )}
               </div>
               <div className="min-w-0 lg:col-span-2">
                 <Label className="text-[10px] text-muted-foreground">Observações / Lote</Label>
@@ -1085,7 +1120,12 @@ export function VendaModalShell({
             negociacao de proposito, e `oc_salvar_lotes`/`oc_salvar_boitel` recusam
             'fechada' mandando "reabra para editar". A venda nao tinha por onde reabrir:
             instrucao certa, destino ausente — o mesmo defeito que o Concluir teve. */}
-        {naNegociacao && !!ocOperacaoId && ocStatusComercial === 'fechada' && (
+        {naNegociacao && !!ocOperacaoId && ocStatusComercial === 'fechada' && motivoReabrirAcesso && (
+          <GestoDeOperacao podeAlterar={false} motivo={motivoReabrirAcesso} onClick={() => undefined} testId="reabrir-negociacao">
+            Reabrir negociação
+          </GestoDeOperacao>
+        )}
+        {naNegociacao && !!ocOperacaoId && ocStatusComercial === 'fechada' && !motivoReabrirAcesso && (
           <Button type="button" variant="secondary" className="h-[22px] px-[9px] text-[10px] gap-1" disabled={submitting}
             title="Reabrir devolve a operação para programada e libera a edição. Fica registrado na Auditoria com o motivo."
             onClick={() => { setMotivoReabrir(''); setReabrirAberto(true); }}>

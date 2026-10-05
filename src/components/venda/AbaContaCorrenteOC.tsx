@@ -220,13 +220,15 @@ interface Props {
   onAbrirLancamento?: (lancamentoId: string) => void;
   /** Leva a' aba da entrega (venda) / do recebimento do gado (compra) — do shell, como o `onIrParaDocumentos`. */
   onIrParaEntrega?: () => void;
+  /** ACESSOS-OC-03a — "Atualizar entregas" APAGADO com este motivo (capacidade 'atualizar_entregas'). Nulo = como antes. */
+  motivoAtualizarEntregas?: string | null;
 }
 
 /* O bloco fixo tem 34 (cards) + 5 + 26 (sub-abas) + 5 de folga; medido depois de montar (o aviso de saidas o aumenta). */
 const TOPO_PADRAO = 70;
 
 export function AbaContaCorrenteOC({ api, somenteLeitura, lado = 'venda', despesas, totaisDespesas = null, qtdDespesas = null,
-  subAba, onSubAba, onAbrirLancamento, onIrParaEntrega }: Props) {
+  subAba, onSubAba, onAbrirLancamento, onIrParaEntrega, motivoAtualizarEntregas = null }: Props) {
   const cc = api.contaCorrente;
   const t = TEXTOS[lado];
   /* sinal da coluna da entrega no total: a venda mostra o gado que saiu negativo; a compra, o que entrou positivo */
@@ -306,7 +308,10 @@ export function AbaContaCorrenteOC({ api, somenteLeitura, lado = 'venda', despes
           {cc.saidasSemEntrega > 0 && (
             <div className="flex flex-none items-center gap-2 rounded border border-amber-300 bg-amber-50 px-2 text-[10.5px] text-amber-800">
               <span>{cc.saidasSemEntrega === 1 ? t.pendente1 : t.pendenteN(cc.saidasSemEntrega)}</span>
-              <Button type="button" size="sm" className={`${BOTAO} ml-auto`} disabled={somenteLeitura || api.ocupado} onClick={atualizarEntregas}>
+              {motivoAtualizarEntregas && <span className="ml-auto text-[10px] leading-tight" data-testid="atualizar-entregas-motivo">{motivoAtualizarEntregas}</span>}
+              <Button type="button" size="sm" className={`${BOTAO} ${motivoAtualizarEntregas ? '' : 'ml-auto'}`}
+                disabled={somenteLeitura || api.ocupado || !!motivoAtualizarEntregas} title={motivoAtualizarEntregas ?? undefined}
+                onClick={atualizarEntregas}>
                 {t.atualizar}
               </Button>
             </div>

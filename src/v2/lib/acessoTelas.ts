@@ -47,15 +47,15 @@ export const MATRIZ_ACESSO: Record<GrupoAcesso, Record<PerfilCliente, NivelTela>
  * A EXCECAO POR TELA — ACESSOS-OC-01. Consultada ANTES da matriz do grupo, e so' para tela LIBERADA: da' a uma tela um nivel
  * diferente do grupo dela, sem mexer no resto do grupo. Nasce com a Operacao Comercial, que mora no grupo `rebanho` (onde o
  * financeiro so' ve^ e o campo edita) mas e' trabalho comercial e financeiro.
- * ⚠ SO' O GESTOR, POR ENQUANTO (decisao do Gabriel, 05/10/2026): o banco nao distingue perfil (`tenant_ok`; a trava e' o 01F), e
- *   o financeiro so' entra no ACESSOS-OC-03, com as restricoes dele (sem entrega/recebimento do gado; na Negociacao so' preco e
- *   condicoes). Libera'-lo antes o deixaria gravar a entrega. Campo e leitura: fora.
+ * ⚠ GESTOR E FINANCEIRO (ACESSOS-OC-03a, Gabriel 05/10/2026): os dois abrem a lista e a OC. O que o financeiro NAO faz dentro
+ *   dela (mover gado; mexer no combinado fisico depois do primeiro movimento; abate e boitel, ate' o 03b) e' do dono de
+ *   CAPACIDADE, `podeNaOperacao` (`acessoOperacao.ts`) — aqui so' se decide quem ABRE. Campo e leitura: fora.
  * ⚠ A lista (`operacoes-comerciais`) e a tela da operacao andam JUNTAS: quem ve^ a lista abre a OC.
  */
-const SO_O_GESTOR: Record<PerfilCliente, NivelTela> = { gestor_cliente: 'editar', financeiro: 'nao', campo: 'nao', leitura: 'nao' };
+const GESTOR_E_FINANCEIRO: Record<PerfilCliente, NivelTela> = { gestor_cliente: 'editar', financeiro: 'editar', campo: 'nao', leitura: 'nao' };
 export const NIVEL_POR_TELA: Partial<Record<V2Section, Record<PerfilCliente, NivelTela>>> = {
-  'operacoes-comerciais': SO_O_GESTOR,
-  [TELA_OPERACAO_COMERCIAL]: SO_O_GESTOR,
+  'operacoes-comerciais': GESTOR_E_FINANCEIRO,
+  [TELA_OPERACAO_COMERCIAL]: GESTOR_E_FINANCEIRO,
 };
 
 const PERFIS: readonly string[] = ['gestor_cliente', 'financeiro', 'campo', 'leitura'];

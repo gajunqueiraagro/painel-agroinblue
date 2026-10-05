@@ -1,4 +1,6 @@
 import { useCliente } from '@/contexts/ClienteContext';
+import { useMemo } from 'react';
+import { acessoDaPessoa, podeNaOperacao, type AcessoOperacao, type CapacidadeOC } from '@/v2/lib/acessoOperacao';
 import { nivelDaTela } from '@/v2/lib/acessoTelas';
 import { TELA_OPERACAO_COMERCIAL, type V2Section } from '@/v2/lib/navGrupos';
 
@@ -32,4 +34,20 @@ export const TELA_DA_OPERACAO: V2Section = TELA_OPERACAO_COMERCIAL;
 export function usePodeAlterarOperacao(): boolean {
   const { clienteAtual, isAdmin } = useCliente();
   return nivelDaTela(clienteAtual?.perfil ?? null, isAdmin, TELA_DA_OPERACAO) === 'editar';
+}
+
+/**
+ * A PESSOA PODE ISTO DENTRO DA OPERACAO COMERCIAL? — ACESSOS-OC-03a. So' consulta o dono (`podeNaOperacao`,
+ * `src/v2/lib/acessoOperacao.ts`): nenhum `if` de perfil no ponto de uso.
+ */
+export function usePodeNaOperacao(capacidade: CapacidadeOC): boolean {
+  const { clienteAtual, isAdmin } = useCliente();
+  return podeNaOperacao(clienteAtual?.perfil ?? null, isAdmin, capacidade);
+}
+
+/** Todas as capacidades da pessoa, de uma vez: o que o HOSPEDEIRO da OC le' e desce por prop aos shells e as abas. */
+export function useAcessoOperacao(): AcessoOperacao {
+  const { clienteAtual, isAdmin } = useCliente();
+  const perfil = clienteAtual?.perfil ?? null;
+  return useMemo(() => acessoDaPessoa(perfil, isAdmin), [perfil, isAdmin]);
 }
