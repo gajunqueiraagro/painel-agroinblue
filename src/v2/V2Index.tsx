@@ -18,7 +18,7 @@ import { PrecoMercadoTab } from '@/pages/PrecoMercadoTab';
 import V2NaoEncontrada from '@/v2/pages/V2NaoEncontrada';
 import V2SemAcesso from '@/v2/pages/V2SemAcesso';
 import { usePodeAbrirRotaSoAdmin } from '@/v2/hooks/usePodeAbrir';
-import { nivelDaTela, primeiraTelaPermitida } from '@/v2/lib/acessoTelas';
+import { MOTIVO_SEM_META, nivelDaTela, podeVerMeta, primeiraTelaPermitida } from '@/v2/lib/acessoTelas';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { V2Sidebar, type V2Section } from './components/V2Sidebar';
@@ -1104,6 +1104,8 @@ export default function V2Index() {
             } : undefined}
             onRemover={removerLancamento}
             onEditar={editarLancamento}
+            /* ACESSOS-FIN-02 — a lista recebe os lancamentos de TODOS os cenarios: quem nao ve^ meta nao a ve^ aqui. */
+            motivoSemMeta={podeVerMeta(perfilAcesso, isAdmin) ? null : MOTIVO_SEM_META}
             /* ⚠ O "i" DE UMA VENDA DE OC ABRIA O MODELO MORTO — PR-OC-EDICAO-I-01. O
                 `LancamentoZooModal` edita o LANCAMENTO; numa venda que nasceu de Operacao
                 Comercial, o lancamento e' CONSEQUENCIA — quem manda sao os lotes, o boitel

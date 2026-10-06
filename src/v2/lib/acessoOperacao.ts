@@ -37,12 +37,13 @@ export type CapacidadeOC =
   | 'reabrir_apos_movimento'
   | 'lancar_realizado_boitel'
   | 'atualizar_entregas'
+  | 'reabrir_mes'
   | 'excluir_definitivo';
 
 export const CAPACIDADES_OC_LISTA: readonly CapacidadeOC[] = [
   'abrir', 'criar', 'negociar_preco', 'negociar_combinado', 'negociar_apos_movimento', 'negociar_abate_boitel',
   'movimentar_gado', 'concluir_negociacao', 'reabrir_apos_movimento', 'lancar_realizado_boitel', 'atualizar_entregas',
-  'excluir_definitivo',
+  'reabrir_mes', 'excluir_definitivo',
 ];
 
 const S = true;
@@ -54,6 +55,10 @@ const N = false;
  * ⚠ 'negociar_abate_boitel' E' DO 03a: no abate e na venda em boitel a Negociacao INTEIRA fica so' leitura para o financeiro
  *   ate' o 03b abrir campo a campo (carcaca, dias, mortes, data do abate, "Lançar realizado do abate").
  * ⚠ 'excluir_definitivo' e' so' do admin: nenhum perfil de cliente a tem.
+ * ⚠ 'reabrir_mes' (ACESSOS-FIN-02, decisao do arquiteto de 06/10/2026) e' o "Reabrir mês…" de DENTRO da OC (`ReabrirMesNaOC`).
+ *   Era perguntado a' tela (`usePodeAbrir('fechamento')`), e o financeiro ganhou o Fechamento Área no ACESSOS-FIN-01: o gesto
+ *   acendeu para ele sem ninguem decidir. Agora e' celula: gestor S, financeiro N. So' o gesto dentro da OC — a tela do
+ *   Fechamento nao consulta esta capacidade.
  */
 export const CAPACIDADES_OC: Record<CapacidadeOC, Record<PerfilCliente, boolean>> = {
   abrir:                   { gestor_cliente: S, financeiro: S, campo: N, leitura: N },
@@ -67,6 +72,7 @@ export const CAPACIDADES_OC: Record<CapacidadeOC, Record<PerfilCliente, boolean>
   reabrir_apos_movimento:  { gestor_cliente: S, financeiro: S, campo: N, leitura: N },
   lancar_realizado_boitel: { gestor_cliente: S, financeiro: N, campo: N, leitura: N },
   atualizar_entregas:      { gestor_cliente: S, financeiro: S, campo: N, leitura: N },
+  reabrir_mes:             { gestor_cliente: S, financeiro: N, campo: N, leitura: N },
   excluir_definitivo:      { gestor_cliente: N, financeiro: N, campo: N, leitura: N },
 };
 
@@ -91,7 +97,7 @@ export function acessoDaPessoa(perfil: string | null | undefined, isAdmin: boole
     negociar_apos_movimento: p('negociar_apos_movimento'), negociar_abate_boitel: p('negociar_abate_boitel'),
     movimentar_gado: p('movimentar_gado'), concluir_negociacao: p('concluir_negociacao'),
     reabrir_apos_movimento: p('reabrir_apos_movimento'), lancar_realizado_boitel: p('lancar_realizado_boitel'),
-    atualizar_entregas: p('atualizar_entregas'), excluir_definitivo: p('excluir_definitivo'),
+    atualizar_entregas: p('atualizar_entregas'), reabrir_mes: p('reabrir_mes'), excluir_definitivo: p('excluir_definitivo'),
   };
 }
 
@@ -99,7 +105,7 @@ export function acessoDaPessoa(perfil: string | null | undefined, isAdmin: boole
 export const ACESSO_TOTAL: AcessoOperacao = {
   abrir: true, criar: true, negociar_preco: true, negociar_combinado: true, negociar_apos_movimento: true,
   negociar_abate_boitel: true, movimentar_gado: true, concluir_negociacao: true, reabrir_apos_movimento: true,
-  lancar_realizado_boitel: true, atualizar_entregas: true, excluir_definitivo: true,
+  lancar_realizado_boitel: true, atualizar_entregas: true, reabrir_mes: true, excluir_definitivo: true,
 };
 
 /**

@@ -3,11 +3,13 @@
  *
  * Reabrir o período é gesto do FECHAMENTO do rebanho. Os três modais da OC (compra, venda, abate) o oferecem ao lado do aviso de
  * mês fechado; quem não tem a tela do fechamento vê o gesto APAGADO com o motivo (gesto fica apagado com motivo, nunca some).
- * ⚠ QUEM DECIDE É O DONO DO ACESSO (`usePodeAbrir('fechamento')`, em cima de `nivelDaTela`): nenhum `if` de perfil aqui nem nos
- *   modais. Para o admin e para quem tem o fechamento, o controle de sempre, com a MESMA marcação de cada modal.
+ * ⚠ QUEM DECIDE É O DONO DAS CAPACIDADES DA OC (`usePodeNaOperacao('reabrir_mes')`, `src/v2/lib/acessoOperacao.ts`) — ACESSOS-FIN-02.
+ *   Antes a pergunta era à TELA (`usePodeAbrir('fechamento')`), e o financeiro passou a tê-la no ACESSOS-FIN-01: o gesto acendeu
+ *   sem ninguém decidir. Hoje: gestor e admin, sim; financeiro, não. Nenhum `if` de perfil aqui nem nos modais; para quem pode,
+ *   o controle de sempre, com a MESMA marcação de cada modal.
  */
 import { Button } from '@/components/ui/button';
-import { usePodeAbrir } from '@/v2/hooks/usePodeAbrir';
+import { usePodeNaOperacao } from '@/v2/hooks/usePodeAbrir';
 
 export const MOTIVO_REABRIR_SEM_FECHAMENTO = 'só quem fecha o mês pode reabrir';
 
@@ -16,7 +18,7 @@ export function ReabrirMesNaOC({ forma, onAbrir }: {
   forma: 'botao' | 'link';
   onAbrir: () => void;
 }) {
-  const podeReabrir = usePodeAbrir('fechamento');
+  const podeReabrir = usePodeNaOperacao('reabrir_mes');
   if (forma === 'botao') {
     return (
       <>

@@ -108,6 +108,24 @@ function infoDaTela(tela: V2Section): { grupo: GrupoAcesso; liberada: boolean } 
 }
 
 /**
+ * QUEM VE^ META — ACESSOS-FIN-02 (Gabriel, 06/10/2026: "poderia bloquear para ele metas"). Varias telas liberadas trazem a meta
+ * DENTRO delas (o cenario Realizado | Meta do PC-100 e do Fluxo Caixa, a referencia "Meta" do DRE, o filtro Meta de Pecuária ›
+ * Lançamentos). A pergunta "esta pessoa ve^ meta?" tem UMA resposta, aqui; a tela so' consulta (`usePodeVerMeta`).
+ * ⚠ E' LINHA PROPRIA, NAO "TEM TELA DE PLANEJAMENTO?" (decisao do Gabriel na pergunta de 06/10): nenhuma tela de Planejamento
+ *   esta' liberada a cliente, e por essa regua o GESTOR tambem perderia a meta. O gestor ve^; o financeiro, nao.
+ * ⚠ ITEM QUE NAO VALE FICA APAGADO COM O MOTIVO, nunca some: a opcao Meta continua no controle, desabilitada, com
+ *   `MOTIVO_SEM_META` no `title`; quem chega com "meta" gravado (URL) cai em Realizado.
+ * ⚠ E' O QUE A TELA OFERECE: as telas BUSCAM a meta mesmo sem mostrar (hooks de dado intocados) — a trava de leitura e' o 01F.
+ */
+export const VE_META: Record<PerfilCliente, boolean> = { gestor_cliente: true, financeiro: false, campo: false, leitura: false };
+export const MOTIVO_SEM_META = 'meta: só para quem tem o Planejamento';
+export function podeVerMeta(perfil: string | null | undefined, isAdmin: boolean): boolean {
+  if (isAdmin) return true;
+  if (!ehPerfilCliente(perfil)) return false;
+  return VE_META[perfil];
+}
+
+/**
  * O NIVEL DE ACESSO de uma pessoa a uma tela.
  * - admin do AGROinBLUE: 'editar' em tudo, como sempre (inclusive `validar` e as telas fora do menu).
  * - nao admin: tela sem a marca `liberadaClientes` -> 'nao', qualquer que seja o perfil; liberada -> a excecao da tela

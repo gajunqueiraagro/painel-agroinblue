@@ -33,6 +33,7 @@ import { CentralOperacoesComerciais, MOTIVO_EXCLUIR_SO_ADMIN } from '@/component
 import { ReabrirMesNaOC, MOTIVO_REABRIR_SEM_FECHAMENTO } from '@/components/operacao-comercial/ReabrirMesNaOC';
 import { OPCOES_ATALHO_PRODUCAO, opcoesDoAtalho, saiDoLancarComOC } from '@/v2/lib/atalhosProducao';
 import { nivelDaTela } from '@/v2/lib/acessoTelas';
+import { podeNaOperacao } from '@/v2/lib/acessoOperacao';
 import { TELA_OPERACAO_COMERCIAL, rotuloDaSecao } from '@/v2/lib/navGrupos';
 
 const fonte = (arq: string) => readFileSync(arq, 'utf8').replace(/\{\/\*[\s\S]*?\*\/\}/g, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').replace(/\s+/g, ' ');
@@ -192,12 +193,12 @@ describe('M9 — "Reabrir mês…" de dentro da OC', () => {
       fireEvent.click(b);
       expect(abrir).toHaveBeenCalledTimes(1);
     });
-    /* ACESSOS-FIN-01 — "Fechamento Área" passou a ser tela do gestor e do financeiro: a REGRA do gesto nao mudou
-       (`usePodeAbrir('fechamento')`), e por ela o "Reabrir mês…" ACENDE para os dois. */
-    for (const perfil of ['gestor_cliente', 'financeiro'] as const) {
-      it(`${forma} · ${perfil} (tem a tela do fechamento desde o ACESSOS-FIN-01): habilitado, sem motivo, e o clique abre`, () => {
+    /* ACESSOS-FIN-02 — o gesto deixou de perguntar a' TELA (`usePodeAbrir('fechamento')`, que o financeiro ganhou no
+       ACESSOS-FIN-01) e passou a ser CAPACIDADE do dono da OC, `reabrir_mes`: gestor sim, financeiro nao. */
+    for (const perfil of ['gestor_cliente'] as const) {
+      it(`${forma} · ${perfil} (tem a capacidade reabrir_mes): habilitado, sem motivo, e o clique abre`, () => {
         como(perfil);
-        expect(nivelDaTela(perfil, false, 'fechamento')).toBe('editar');
+        expect(podeNaOperacao(perfil, false, 'reabrir_mes')).toBe(true);
         const abrir = vi.fn();
         render(<ReabrirMesNaOC forma={forma} onAbrir={abrir} />);
         const b = screen.getByTestId('reabrir-mes');
@@ -208,9 +209,11 @@ describe('M9 — "Reabrir mês…" de dentro da OC', () => {
         expect(abrir).toHaveBeenCalledTimes(1);
       });
     }
-    it(`${forma} · leitura (não tem a tela do fechamento): apagado com o motivo exato, e o clique não abre`, () => {
-      como('leitura');
-      expect(nivelDaTela('leitura', false, 'fechamento')).toBe('nao');
+    it(`${forma} · financeiro (TEM a tela do Fechamento Área, NAO tem a capacidade): apagado com o motivo exato, e o clique não abre`, () => {
+      como('financeiro');
+      /* a busca sabe achar: a tela ele tem — e' a capacidade que decide, nao a tela */
+      expect(nivelDaTela('financeiro', false, 'fechamento')).toBe('editar');
+      expect(podeNaOperacao('financeiro', false, 'reabrir_mes')).toBe(false);
       const abrir = vi.fn();
       render(<ReabrirMesNaOC forma={forma} onAbrir={abrir} />);
       const b = screen.getByTestId('reabrir-mes');

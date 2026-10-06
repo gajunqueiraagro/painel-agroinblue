@@ -1408,7 +1408,7 @@ function LinhaCentro({ def, centro, colunas, bloco, unidades, base, onAbrirLista
  * ele encolheria os quatro cards a cada troca — a lei de estabilidade.
  */
 export function FaixaVisoesPec({ visao, onVisao, real, meta, carregandoMeta, anoAnterior,
-  carregandoAnoAnterior, referencia, onReferencia, controles }: {
+  carregandoAnoAnterior, referencia, onReferencia, controles, motivoSemMeta = null }: {
   visao: VisaoPec;
   onVisao: (v: VisaoPec) => void;
   real: DrePecuaria;
@@ -1421,6 +1421,9 @@ export function FaixaVisoesPec({ visao, onVisao, real, meta, carregandoMeta, ano
   onReferencia: (r: ReferenciaPec) => void;
   /** Os controles da grade — ver `Caixas.extra`. Eles entram nas colunas vazias. */
   controles?: ReactNode;
+  /** ACESSOS-FIN-02 — o motivo que APAGA a referencia "Meta" (quem nao ve^ meta); nulo = a opcao de sempre. Quem decide e' o
+      dono (`podeVerMeta`), pela pagina: aqui so' se desenha. */
+  motivoSemMeta?: string | null;
 }) {
   const nFaz = real.fazendas.length;
   const semMeta = !carregandoMeta && (!meta || semMovimento(meta));
@@ -1433,8 +1436,8 @@ export function FaixaVisoesPec({ visao, onVisao, real, meta, carregandoMeta, ano
      anterior sem fechamento continuam clicáveis — a coluna aparece em traço, que é o sentinela
      certo para "não sei", e some-la esconderia a pergunta junto com a resposta. */
   const opcoesRef = [
-    { valor: 'meta', rotulo: 'Meta',
-      title: semMeta ? 'sem meta no período' : 'Comparar com a meta do período' },
+    { valor: 'meta', rotulo: 'Meta', ...(motivoSemMeta ? { desabilitada: true } : {}),
+      title: motivoSemMeta ?? (semMeta ? 'sem meta no período' : 'Comparar com a meta do período') },
     ...['1', '2', '3', '4', '5'].map(n => ({
       valor: n,
       rotulo: n,

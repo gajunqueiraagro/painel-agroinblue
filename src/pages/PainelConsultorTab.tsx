@@ -55,6 +55,8 @@ import type { DestinoArea } from '@/hooks/useFechamentoArea';
 import { warnIndicadoresSemCatalogo } from '@/lib/painelConsultor/validarIndicadores';
 import { agregaSnapshotsGlobal } from '@/lib/painelConsultor/consolidacaoGlobal';
 import { useCliente } from '@/contexts/ClienteContext';
+import { usePodeVerMeta } from '@/v2/hooks/usePodeAbrir';
+import { MOTIVO_SEM_META } from '@/v2/lib/acessoTelas';
 import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
 import { mesUnico } from '@/v2/lib/periodo';
 
@@ -1896,6 +1898,8 @@ function SourceInfoTooltip({ indicadorId, cenario }: { indicadorId?: string; cen
 
 // ─── Component ───
 export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaConsolidacao, onPeriodoChange }: Props) {
+  /* ACESSOS-FIN-02 — a opcao Meta do cenario fica APAGADA, com o motivo, para quem nao ve^ meta (o dono decide). */
+  const veMeta = usePodeVerMeta();
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const { pastos, categorias } = usePastos();
   /* `ano` e `anoNum` subiram para ca: as duas chamadas de `useLancamentos`
@@ -2729,6 +2733,8 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
               {(['realizado', 'meta'] as Cenario[]).map(c => (
                 <button
                   key={c}
+                  disabled={c === 'meta' && !veMeta}
+                  title={c === 'meta' && !veMeta ? MOTIVO_SEM_META : undefined}
                   onClick={() => setCenario(c)}
                   className={`px-2 text-[11px] font-semibold h-full transition-colors ${
                     cenario === c
@@ -2736,7 +2742,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
                         ? 'bg-emerald-600 text-white'
                         : 'bg-orange-500 text-white'
                       : 'bg-card text-muted-foreground hover:bg-muted'
-                  }`}
+                  }${c === 'meta' && !veMeta ? ' cursor-not-allowed opacity-50 hover:bg-card' : ''}`}
                 >
                   {c === 'realizado' ? 'Realizado' : 'Meta'}
                 </button>

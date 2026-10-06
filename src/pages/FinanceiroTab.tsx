@@ -35,6 +35,9 @@ interface Props {
   /** Categoria pré-selecionada (drill da Conferência Categoria). */
   filtroCategoriaInicial?: string;
   onBack?: () => void;
+  /** ACESSOS-FIN-02 — o motivo que tira a META desta lista (quem nao ve^ meta): as linhas de meta nao entram e o filtro
+      "Meta" fica apagado com ele no `title`. Nulo = a tela de sempre. Quem decide e' o dono (`podeVerMeta`), pela rota. */
+  motivoSemMeta?: string | null;
   drillDownLabel?: string;
   onEditarAbate?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; periodo: Periodo }) => void;
   onEditarVenda?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; periodo: Periodo }) => void;
@@ -606,7 +609,7 @@ function getTopTabFromSubAba(subAba?: SubAba): TopTab {
   return 'entradas';
 }
 
-export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial, modoMovimentacao, filtroAnoInicial, filtroMesInicial, filtroStatusInicial, filtroCategoriaInicial, onBack, drillDownLabel, onEditarAbate, onEditarVenda, onEditarCompra, onEditarTransferencia, onEditarReclass, onEditarMorte, onEditarConsumo, emAppShell }: Props) {
+export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial, modoMovimentacao, filtroAnoInicial, filtroMesInicial, filtroStatusInicial, filtroCategoriaInicial, onBack, drillDownLabel, onEditarAbate, onEditarVenda, onEditarCompra, onEditarTransferencia, onEditarReclass, onEditarMorte, onEditarConsumo, emAppShell, motivoSemMeta = null }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const fazendaMap = useMemo(() => {
     const m = new Map<string, string>();
@@ -614,8 +617,10 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
     return m;
   }, [fazendas]);
   const lancamentosNormalizados = useMemo(
-    () => lancamentos.map(normalizeZooLancamento),
-    [lancamentos],
+    /* ACESSOS-FIN-02 — sem meta, a linha de meta nao entra em lista NENHUMA (o "todos" as misturava com o realizado). O filtro
+       vem DEPOIS de normalizar: e' la' que o 'previsto' legado vira cenario 'meta'. */
+    () => lancamentos.map(normalizeZooLancamento).filter(l => !motivoSemMeta || l.cenario !== 'meta'),
+    [lancamentos, motivoSemMeta],
   );
   /* ⚠ OS DOIS PADRÕES DISCORDAVAM — PR-SELETOR-PERIODO-04. `subAba` abria em `'abate'` e
      `topTab` em `'entradas'`: a tela subia mostrando a aba de ENTRADAS com uma SAÍDA
@@ -656,7 +661,9 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
   const [periodo, setPeriodo] = usePeriodoUrl(
     filtroMesInicial ? mesUnico(anoPadrao, Number(filtroMesInicial)) : anoInteiro(anoPadrao));
   const anoFiltro = String(periodo.de.ano);
-  const [statusFiltro, setStatusFiltro] = useState<StatusFiltro>(normalizeStatusFiltro(filtroStatusInicial));
+  const [statusFiltroPedido, setStatusFiltro] = useState<StatusFiltro>(normalizeStatusFiltro(filtroStatusInicial));
+  /* ACESSOS-FIN-02 — quem nao ve^ meta e chega com o filtro em Meta (drill, estado inicial) cai em Realizado. */
+  const statusFiltro: StatusFiltro = motivoSemMeta && statusFiltroPedido === 'meta' ? 'realizado' : statusFiltroPedido;
   /* ⚠ VIROU LISTA, E O VAZIO É QUE MUDOU DE NOME. Era um valor único com `'todas'` de
      sentinela — um select de uma opção só, cujo gatilho dizia "Todas" e não deixava marcar
      duas. Agora `[]` é o mesmo "todas", e o sentinela sai do vocabulário: não existe estado
@@ -828,10 +835,12 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
               ]).map(s => (
                 <button
                   key={s.value}
+                  disabled={s.value === 'meta' && !!motivoSemMeta}
+                  title={s.value === 'meta' && motivoSemMeta ? motivoSemMeta : undefined}
                   onClick={() => setStatusFiltro(s.value === statusFiltro ? 'todos' : s.value)}
                   className={`px-2 py-px rounded text-[9px] font-bold transition-colors ${
                     statusFiltro === s.value ? s.activeClass : 'text-primary-foreground/70 hover:bg-primary-foreground/10'
-                  }`}
+                  }${s.value === 'meta' && motivoSemMeta ? ' cursor-not-allowed opacity-50 hover:bg-transparent' : ''}`}
                 >
                   {s.label}
                 </button>
@@ -1061,12 +1070,14 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
             ]).map(s => (
               <button
                 key={s.value}
+                disabled={s.value === 'meta' && !!motivoSemMeta}
+                title={s.value === 'meta' && motivoSemMeta ? motivoSemMeta : undefined}
                 onClick={() => setStatusFiltro(s.value === statusFiltro ? 'todos' : s.value)}
                 className={`px-2 py-px rounded text-[9px] font-bold transition-colors ${
                   statusFiltro === s.value
                     ? s.activeClass
                     : 'text-primary-foreground/70 hover:bg-primary-foreground/10'
-                }`}
+                }${s.value === 'meta' && motivoSemMeta ? ' cursor-not-allowed opacity-50 hover:bg-transparent' : ''}`}
               >
                 {s.label}
               </button>

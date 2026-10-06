@@ -162,7 +162,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 06/10/2026 (ACESSOS-FIN-01, +20: `src/v2/lib/acessoTelas.test.tsx` 9, `src/v2/lib/acessoSaidas.test.tsx` 6,
+  Baseline em 06/10/2026 (ACESSOS-FIN-02, +17 −2: `src/v2/lib/acessoMeta.test.tsx` 16 (novo), `src/pages/pecDrePanel.test.tsx` 1; em
+  `src/v2/lib/acessoOperacao.test.tsx` o M9 passou de 8 a 6 casos (o par "gestor e financeiro acesos" virou so' gestor, e o apagado
+  passou de leitura a financeiro) — 4085 depois dele; antes o ACESSOS-FIN-01, +20: `src/v2/lib/acessoTelas.test.tsx` 9, `src/v2/lib/acessoSaidas.test.tsx` 6,
   `src/v2/lib/acessoOperacao.test.tsx` 4, `src/v2/lib/acessoCapacidadesOC.test.tsx` 1 — 4070 depois dele; antes o CPR-SALDO-DIA-02, +9: `src/components/financeiro-v2/cprFluxoPrevisto.test.ts` 5, `src/lib/financeiro/cprRecorte.test.ts` 4 — 4050 depois dele;
   antes o CPR-EXPORT-01, +18: `src/lib/pdf/cpr/exportCpr.test.tsx` 14, `src/lib/financeiro/cprRecorte.test.ts` 4 — 4041 depois dele;
   antes o CPR-SALDO-DIA-01, +22: `src/lib/financeiro/cprRecorte.test.ts` 18, `src/lib/financeiro/saldoEmCaixa.test.ts` 4 — 4023 depois dele;
@@ -208,7 +210,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4070
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4085
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -515,6 +517,40 @@ CONSULTAM: a lateral (`V2Sidebar`, por `gruposVisiveis`), o drawer (`V2ContextDr
     ACESSOS-FIN-SAIDAS-NAO-VARRIDAS-01 (varridos: os callbacks que o `V2Index` entrega e os `navigate`/`window.location` das 16
     telas; os modais e dialogos internos de cada tela NAO foram lidos um a um) · NADA DISTO FOI PROVADO NO NAVEGADOR com perfil
     nao admin (homologacao do Gabriel, usuario Financeiro no cliente Teste).
+- ⚠ A META NAO APARECE PARA QUEM NAO VE^ META, E "REABRIR MÊS…" NA OC E' CAPACIDADE (ACESSOS-FIN-02, 06/10/2026, so' tela, sem banco).
+  · QUEM VE^ META TEM UM DONO: `podeVerMeta(perfil, isAdmin)` e a linha `VE_META` (`src/v2/lib/acessoTelas.ts`) — gestor S,
+    financeiro N, campo N, leitura N; admin sempre. O ajudante e' `usePodeVerMeta()` (`usePodeAbrir.ts`) e o motivo, um so',
+    `MOTIVO_SEM_META` = "meta: só para quem tem o Planejamento". Nenhum `if` de perfil na tela.
+    ⚠ E' LINHA PROPRIA, NAO "TEM TELA DE PLANEJAMENTO?" (decisao do Gabriel na pergunta de 06/10): nenhuma tela de Planejamento
+      esta' liberada a cliente, e por essa regua o GESTOR tambem perderia a meta. O gestor ve^ (DOM identico ao de antes).
+  · A REGRA DA TELA: a opcao Meta CONTINUA no controle, DESABILITADA, com o motivo no `title` (nunca some); quem chega com "meta"
+    gravado cai em Realizado; linha de meta misturada ao realizado nao e' desenhada. ONDE VALE (as quatro das 16 telas que tem meta):
+      PC-100 (`PainelConsultorTab.tsx`, o alternador Realizado | Meta; o cenario e' estado local, nasce em Realizado);
+      Fluxo Caixa (`FinanceiroCaixaTab.tsx`, Realizado | META — ⚠ o lado META e' a grade do PLANEJAMENTO,
+        `PlanejamentoFinanceiroTab`, que EDITA a meta: antes deste PR o financeiro a alcancava por ali);
+      DRE (`AgriDreLavouraTab.tsx` + o card `FaixaVisoesPec` de `PecDrePanel.tsx`, por `motivoSemMeta`): a referencia "Meta" do card
+        "Comparação" apagada, e `f_visao=meta` na URL vira comparacao por anos (a URL nao e' reescrita);
+      Pecuária › Lançamentos (`FinanceiroTab.tsx`, por `motivoSemMeta` vindo da rota): os DOIS filtros Meta apagados, e as linhas de
+        meta saem da lista inteira (o "todos" as misturava com o realizado).
+    NAO TEM META: Evolução Patrimonial, Visão Consolidada, Financiamentos, Painel Financiamentos, Contratos, Recorrências,
+    Fornecedores, Contas Bancárias, Fechamento Área, Estoque de Grãos, Barter; "Lançar › Pecuária" ja' so' oferece Realizado
+    (`cenariosPermitidos`).
+  ⚠ AS TELAS BUSCAM A META MESMO SEM MOSTRAR (hooks de dado intocados): PC-100 (`useLancamentos({cenario:'meta'})`,
+    `useRebanhoOficial({cenario:'meta'})`), DRE (`useDrePecuaria(..., 'meta')`) e a lista de Pecuária › Lançamentos
+    (`lancamentosTodosCenarios`). Esconder e' tela; nao ler e' o 01F.
+  · "REABRIR MÊS…" DENTRO DA OC (`ReabrirMesNaOC`) deixou de perguntar a' TELA (`usePodeAbrir('fechamento')`, que o financeiro
+    ganhou no ACESSOS-FIN-01) e virou a capacidade `reabrir_mes` de `CAPACIDADES_OC`: gestor S, financeiro N, campo N, leitura N
+    (admin sempre). O motivo escrito e' o de sempre ("só quem fecha o mês pode reabrir"). ISTO SUBSTITUI a "consequencia" do
+    ACESSOS-FIN-01 (o gesto acendia para os dois). So' o gesto dentro da OC: a tela Fechamento Área nao consulta a capacidade.
+  ⚠ MEDIDO, SEM MUDAR — o que o FINANCEIRO consegue dentro do Fechamento Área (`FechamentoTab.tsx`): "Fechar mês" em lote e
+    "Reabrir Mês" em lote NAO aparecem para ele (`canEdit('zootecnico') || canEdit('pastos')` do `usePermissions` legado: so' gestor,
+    admin e campo — ~:385, ~:980, ~:1026); mas o modal do PASTO (~:1417–1439) entrega salvar itens, fechar o pasto, reabrir o pasto
+    (`reabrir_pilar_fechamento`) e copiar o mes anterior SEM passar pelo `canEdit` neste arquivo — o que o modal faz com isso nao
+    foi lido. Decisao do Gabriel pendente: o que o financeiro pode no Fechamento Área.
+  ⚠ DIVIDAS: os controles de meta so' tem `title` (o motivo nao esta' escrito ao lado: nao ha' slot nas barras) · PC-100, Fluxo
+    Caixa, DRE e Pecuária › Lançamentos NAO se montam em teste — os pontos sao provados LENDO A FONTE (o card do DRE, montado) ·
+    nada medido no navegador (perfil nao admin nao se prova com o login do admin; os controles ganharam so' atributos, nenhum
+    elemento novo) · `usePermissions` (legado, com `if` de perfil) segue decidindo dentro do Fechamento Área, fora do dono.
 - ⚠ O QUE FALTA: (a) o EFEITO de 'ver' nas telas (modo somente leitura por perfil) — hoje a funcao devolve o nivel e nenhuma tela o
   usa; no piloto as tres sao 'editar' para gestor e financeiro, e 'ver' para `leitura`, que hoje EDITARIA; (b) a trava no banco, 01F;
   (c) a grade por pessoa, ACESSOS-03; (d) [feito no ACESSOS-02b: o endereco e' "/"].

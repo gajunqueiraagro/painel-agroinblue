@@ -683,6 +683,34 @@ describe('as duas visões', () => {
     expect(meta?.getAttribute('title')).toBe('sem meta no período');
     expect(meta?.hasAttribute('disabled')).toBe(false);
   });
+  /* ACESSOS-FIN-02 — quem nao ve^ meta: a opcao Meta CONTINUA no card, apagada, com o motivo no `title`, e o clique nao escolhe.
+     Sem o motivo (o admin, o gestor), o card e' o de sempre, byte a byte. */
+  it('com `motivoSemMeta`, a opção Meta fica apagada com o motivo e não escolhe; sem ele, o HTML é o de quem não recebe a prop', () => {
+    const escolherRef = vi.fn();
+    const MOTIVO = 'meta: só para quem tem o Planejamento';
+    const sem = render(<FaixaVisoesPec visao="comparacao" onVisao={() => {}} real={DRE} meta={null}
+      carregandoMeta={false} anoAnterior={null} carregandoAnoAnterior={false}
+      referencia={1} onReferencia={escolherRef} motivoSemMeta={MOTIVO} />);
+    const botao = (t: string) => Array.from(document.querySelectorAll('button')).find(b => b.textContent === t);
+    expect(botao('Meta')?.hasAttribute('disabled')).toBe(true);
+    expect(botao('Meta')?.getAttribute('title')).toBe(MOTIVO);
+    fireEvent.click(botao('Meta')!);
+    expect(escolherRef).not.toHaveBeenCalled();
+    /* a busca sabe achar: as outras referencias seguem escolhendo */
+    fireEvent.click(botao('2')!);
+    expect(escolherRef).toHaveBeenCalledWith(2);
+    const htmlSem = sem.container.innerHTML; sem.unmount();
+    const nulo = render(<FaixaVisoesPec visao="comparacao" onVisao={() => {}} real={DRE} meta={null}
+      carregandoMeta={false} anoAnterior={null} carregandoAnoAnterior={false}
+      referencia={1} onReferencia={() => {}} motivoSemMeta={null} />);
+    const htmlNulo = nulo.container.innerHTML; nulo.unmount();
+    const padrao = render(<FaixaVisoesPec visao="comparacao" onVisao={() => {}} real={DRE} meta={null}
+      carregandoMeta={false} anoAnterior={null} carregandoAnoAnterior={false}
+      referencia={1} onReferencia={() => {}} />);
+    expect(htmlNulo).toBe(padrao.container.innerHTML);
+    expect(htmlNulo.length).toBeGreaterThan(200);
+    expect(htmlSem).not.toBe(htmlNulo);
+  });
   /**
    * ⚠ × ANOS COM CINCO: SEIS COLUNAS, TODAS RESOLVIDAS — o defeito da homologação de 22/09 (anos 2..N
    * presos em esqueleto). A causa era da RPC, não da grade: com a view recursiva cada chamada levava

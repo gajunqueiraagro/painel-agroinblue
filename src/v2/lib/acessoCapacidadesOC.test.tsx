@@ -64,6 +64,7 @@ describe('o dono das capacidades (podeNaOperacao)', () => {
       reabrir_apos_movimento:  [true,  true,  false, false],
       lancar_realizado_boitel: [true,  false, false, false],
       atualizar_entregas:      [true,  true,  false, false],
+      reabrir_mes:             [true,  false, false, false],
       excluir_definitivo:      [false, false, false, false],
     };
     expect(Object.keys(CAPACIDADES_OC).sort()).toEqual(Object.keys(esperado).sort());

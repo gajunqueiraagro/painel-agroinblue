@@ -1,7 +1,7 @@
 import { useCliente } from '@/contexts/ClienteContext';
 import { useMemo } from 'react';
 import { acessoDaPessoa, podeNaOperacao, type AcessoOperacao, type CapacidadeOC } from '@/v2/lib/acessoOperacao';
-import { nivelDaTela } from '@/v2/lib/acessoTelas';
+import { nivelDaTela, podeVerMeta } from '@/v2/lib/acessoTelas';
 import { TELA_OPERACAO_COMERCIAL, type V2Section } from '@/v2/lib/navGrupos';
 
 /**
@@ -29,6 +29,15 @@ export function usePodeAbrir(tela: V2Section): boolean {
 export function usePodeAbrirRotaSoAdmin(): boolean {
   const { isAdmin } = useCliente();
   return isAdmin;
+}
+
+/**
+ * A PESSOA VE^ META? — ACESSOS-FIN-02. O ajudante de quem desenha um controle Realizado | Meta (ou a referencia "Meta") dentro
+ * de uma tela liberada. So' consulta o dono (`podeVerMeta`, `acessoTelas.ts`): nenhum `if` de perfil no ponto de uso.
+ */
+export function usePodeVerMeta(): boolean {
+  const { clienteAtual, isAdmin } = useCliente();
+  return podeVerMeta(clienteAtual?.perfil ?? null, isAdmin);
 }
 
 /** A tela pela qual se abre e se altera uma operacao comercial — a MESMA que os atalhos do ACESSOS-02b consultam. Desde o

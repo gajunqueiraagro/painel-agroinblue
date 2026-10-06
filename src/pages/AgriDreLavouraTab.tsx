@@ -45,6 +45,8 @@ import { simboloDaUnidade, descricaoDaUnidade } from '@/lib/agri/colheita';
 import { useSafrasLavoura, useTalhoesDaSafra } from '@/hooks/useAreaPlantada';
 import { useColheita } from '@/hooks/useColheita';
 import { useCliente } from '@/contexts/ClienteContext';
+import { usePodeVerMeta } from '@/v2/hooks/usePodeAbrir';
+import { MOTIVO_SEM_META } from '@/v2/lib/acessoTelas';
 import { usePeriodoUrl } from '@/v2/hooks/usePeriodoUrl';
 import { anoMes, descreverPeriodo } from '@/v2/lib/periodo';
 import {
@@ -465,7 +467,11 @@ export function AgriDreLavouraTab({ onCorrigirPrecos }: {
      ⚠ A REFERÊNCIA É `f_anos` MAIS O VALOR 'meta' DE `f_visao` — fix4, e é o que a torna linkável
      sem inventar parâmetro: 1..5 é o n, e 'meta' na visão diz que a referência é o planejado. Os
      links antigos caem exatamente onde a pergunta deles foi parar (ver `lerVisaoPec`). */
-  const [visaoUrl, setVisaoUrl] = useFiltroUrl<VisaoUrlPec>('f_visao', 'comparacao', lerVisaoPec, escreverVisaoPec);
+  const [visaoUrlLida, setVisaoUrl] = useFiltroUrl<VisaoUrlPec>('f_visao', 'comparacao', lerVisaoPec, escreverVisaoPec);
+  /* ACESSOS-FIN-02 — quem nao ve^ meta e chega com `f_visao=meta` (link, F5) cai na comparacao por anos: a coluna da meta nao
+     e' desenhada e a referencia "Meta" do card fica apagada com o motivo. A URL nao e' reescrita (leitura, nao gesto). */
+  const veMeta = usePodeVerMeta();
+  const visaoUrl: VisaoUrlPec = !veMeta && visaoUrlLida === 'meta' ? 'comparacao' : visaoUrlLida;
   const [nAnosPec, setNAnosPec] = useFiltroUrl<number>('f_anos', N_ANOS_PADRAO, lerNAnosPec, escreverNAnosPec);
   const visaoPec = visaoDaUrl(visaoUrl);
   const referenciaPec: ReferenciaPec = visaoUrl === 'meta' ? 'meta' : nAnosPec;
@@ -1112,6 +1118,7 @@ export function AgriDreLavouraTab({ onCorrigirPrecos }: {
               meta={drePecMeta} carregandoMeta={carregandoPecMeta}
               anoAnterior={anosPec[0]?.dre ?? null} carregandoAnoAnterior={anosPec[0]?.carregando ?? true}
               referencia={referenciaPec} onReferencia={escolherReferencia}
+              motivoSemMeta={veMeta ? null : MOTIVO_SEM_META}
               controles={controlesPec} />
           ) : null)
             : culturaAberta ? <FaixaCultura c={culturaAberta} />

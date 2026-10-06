@@ -18,6 +18,8 @@ import { useFluxoCaixa, type FluxoMensal } from '@/hooks/useFluxoCaixa';
 import { useFinanceiroV2 } from '@/hooks/useFinanceiroV2';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
+import { usePodeVerMeta } from '@/v2/hooks/usePodeAbrir';
+import { MOTIVO_SEM_META } from '@/v2/lib/acessoTelas';
 import { usePastos } from '@/hooks/usePastos';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -87,7 +89,11 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
     }
   }, [initialTab]);
 
-  const [fluxoCenario, setFluxoCenario] = useState<'realizado' | 'meta'>(initialFluxoCenario);
+  const [fluxoCenarioPedido, setFluxoCenario] = useState<'realizado' | 'meta'>(initialFluxoCenario);
+  /* ACESSOS-FIN-02 — o lado META do Fluxo e' a grade do PLANEJAMENTO (`PlanejamentoFinanceiroTab`, que EDITA a meta): quem nao
+     ve^ meta fica em Realizado, mesmo que chegue com "meta" pedido, e a opcao META fica apagada com o motivo. */
+  const veMeta = usePodeVerMeta();
+  const fluxoCenario: 'realizado' | 'meta' = veMeta ? fluxoCenarioPedido : 'realizado';
   const [drillDown, setDrillDown] = useState<(DrillDownPayload & { ano: string; mes: number }) | null>(null);
   const [drillMacro, setDrillMacro] = useState<string | null>(null);
   const { fazendaAtual, fazendas } = useFazenda();
@@ -531,12 +537,14 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
                 {(['realizado', 'meta'] as const).map(c => (
                   <button
                     key={c}
+                    disabled={c === 'meta' && !veMeta}
+                    title={c === 'meta' && !veMeta ? MOTIVO_SEM_META : undefined}
                     onClick={() => setFluxoCenario(c)}
                     className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-colors ${
                       fluxoCenario === c
                         ? (c === 'meta' ? 'bg-orange-500 text-white' : 'bg-primary text-primary-foreground')
                         : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                    }`}
+                    }${c === 'meta' && !veMeta ? ' cursor-not-allowed opacity-50 hover:bg-muted' : ''}`}
                   >
                     {c === 'meta' ? 'META' : 'Realizado'}
                   </button>
