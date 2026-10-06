@@ -68,6 +68,14 @@ begin
   insert into financeiro_saldos_bancarios_v2 (cliente_id, conta_bancaria_id, ano_mes, saldo_final) values
     (c_cli, a, '2030-12', 1000), (c_cli, b, '2030-12', 500), (c_cli, a, '2031-01', 1563.70), (c_cli, b, '2031-01', 540);
 
+  -- CONC-SEM-CLASSIFICACAO-01: os sinteticos sao lancamentos CLASSIFICADOS e com fornecedor (este teste e' de saldo; sem plano ou
+  -- sem fornecedor eles acenderiam os avisos 'sem_classificacao' / 'sem_fornecedor')
+  update financeiro_lancamentos_v2 l
+     set plano_conta_id = (select p.id from financeiro_plano_contas p where p.ativo and p.cliente_id is null
+                              and p.tipo_operacao = case when l.tipo_operacao like '3-%' then '3-Transferências' else l.tipo_operacao end
+                            order by p.ordem_exibicao limit 1),
+         favorecido_id = (select f.id from financeiro_fornecedores f where f.cliente_id = c_cli order by f.created_at, f.id limit 1)
+   where l.cliente_id = c_cli and l.descricao like 'SINT %' and l.plano_conta_id is null;
   select * into r from fn_conciliacao_resumo_mes(c_cli, '2031-01', array[a]);
   v_dias := r.dias_com_diferenca;
   -- dias com diferenca: 03 (+50 extrato sem par), 04 (−70), 05 (+100: o gemeo), 07 (+20 resto), 10 (+60)
@@ -125,6 +133,14 @@ begin
     (c_cli, m4, '2030-12', 100), (c_cli, m4, '2031-01', 145),
     (c_cli, m5, '2030-12', 100), (c_cli, m5, '2031-01', 150),
     (c_cli, s, '2030-12', 100), (c_cli, s, '2031-01', 100);
+  -- CONC-SEM-CLASSIFICACAO-01: os sinteticos sao lancamentos CLASSIFICADOS e com fornecedor (este teste e' de saldo; sem plano ou
+  -- sem fornecedor eles acenderiam os avisos 'sem_classificacao' / 'sem_fornecedor')
+  update financeiro_lancamentos_v2 l
+     set plano_conta_id = (select p.id from financeiro_plano_contas p where p.ativo and p.cliente_id is null
+                              and p.tipo_operacao = case when l.tipo_operacao like '3-%' then '3-Transferências' else l.tipo_operacao end
+                            order by p.ordem_exibicao limit 1),
+         favorecido_id = (select f.id from financeiro_fornecedores f where f.cliente_id = c_cli order by f.created_at, f.id limit 1)
+   where l.cliente_id = c_cli and l.descricao like 'SINT %' and l.plano_conta_id is null;
   -- PR-CONC-STATUS-SALDO-01a: `m` = os MOTIVOS (o que decide: o saldo) e `a` = os AVISOS (a 2a prova, do extrato importado).
   -- M1 e M4 tem o saldo fechando: passam a 'conciliado', com os avisos; M2, M3 e M5 seguem 'nao_conciliado' so' por 'saldo_diverge'.
   for r in select f.conta_nome, f.status, coalesce((select string_agg(x->>'motivo', ',' order by x->>'motivo') from jsonb_array_elements(f.motivos) x), '') m,

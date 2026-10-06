@@ -23,9 +23,16 @@ create function pg_temp.ext(p_conta uuid, p_d date, p_v numeric) returns uuid la
           md5(random()::text), 'SINT', 'SINT-' || gen_random_uuid()) returning id $f$;
 create function pg_temp.lan(p_banc uuid, p_dest uuid, p_tipo text, p_sinal text, p_v numeric, p_st text, p_dp date) returns uuid language sql as $f$
   insert into financeiro_lancamentos_v2 (cliente_id, conta_bancaria_id, conta_destino_id, tipo_operacao, sinal, valor, status_transacao,
-                                         data_pagamento, data_competencia, data_vencimento, cenario, descricao)
+                                         data_pagamento, data_competencia, data_vencimento, cenario, descricao,
+                                         plano_conta_id, favorecido_id)
   values ('f2d67cd4-24d0-456f-a079-a3281dcce7fd', p_banc, p_dest, p_tipo, p_sinal, p_v, p_st, p_dp, coalesce(p_dp, date '2031-01-02'),
-          coalesce(p_dp, date '2031-01-02'), 'realizado', 'SINT ss01a') returning id $f$;
+          coalesce(p_dp, date '2031-01-02'), 'realizado', 'SINT ss01a',
+          -- CONC-SEM-CLASSIFICACAO-01: os sinteticos sao lancamentos CLASSIFICADOS e com fornecedor (este teste e' de saldo;
+          -- sem plano ou sem fornecedor eles acenderiam os avisos 'sem_classificacao' / 'sem_fornecedor')
+          (select p.id from financeiro_plano_contas p where p.ativo and p.cliente_id is null
+              and p.tipo_operacao = case when p_tipo like '3-%' then '3-Transferências' else p_tipo end order by p.ordem_exibicao limit 1),
+          (select f.id from financeiro_fornecedores f where f.cliente_id = 'f2d67cd4-24d0-456f-a079-a3281dcce7fd' order by f.created_at, f.id limit 1))
+  returning id $f$;
 create function pg_temp.vin(p_e uuid, p_l uuid, p_ap numeric) returns void language sql as $f$
   insert into conciliacao_bancaria_itens (cliente_id, extrato_id, lancamento_id, valor_aplicado)
   values ('f2d67cd4-24d0-456f-a079-a3281dcce7fd', p_e, p_l, p_ap) $f$;
