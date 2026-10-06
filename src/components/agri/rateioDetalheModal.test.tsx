@@ -296,16 +296,12 @@ describe('pecuária: a soma das linhas é a célula', () => {
     expect(v.contexto).toContain('3.900 cab médias × 12 meses');
   });
 
-  it('a aba Rateio: bruto → parte da pecuária → fazendas pelas cabeças, a da coluna em destaque', () => {
+  /* DRE-RATEIO-MODAL-01: a pecuária não tem mais ETAPAS — a aba Rateio dela é o encontro de contas do banco
+     (`rateioEncontro.test.tsx`). Sem o encontro no payload (fixture antigo), não há o que desenhar. */
+  it('a pecuária não monta etapas; sem o encontro do banco, a aba Rateio não tem conteúdo', () => {
     const v = valorDaPecuaria({ recorte: RECORTE_MO, lancamentos: LANC_MO, rateio: RATEIO_PEC, dre: DRE_PEC, periodoRotulo: 'Safra 25/26' });
-    expect(v.etapas.map(e => [e.etapa, e.valor])).toEqual([
-      ['Mão de Obra administrativo no período (bruto)', 1000],
-      ['Parte da pecuária no período', 700],
-      ['Retiro', 455],
-      ['Sta. Luzia', 245],
-    ]);
-    expect(v.etapas[2].destaque).toBe(true);
-    expect(v.etapas[2].pct).toBe(65);
+    expect(v.etapas).toHaveLength(0);
+    expect(v.encontro).toBeNull();
   });
 
   it('só rateio (Financeiro): direto "—", nenhuma lista direta, tudo do grupo', () => {
@@ -334,59 +330,6 @@ describe('pecuária: a soma das linhas é a célula', () => {
     expect(screen.getByText('4 lançamentos · 2 de rateio adm.')).toBeTruthy();
     expect(screen.getByText('R$ 3.455,00', { selector: 'b' })).toBeTruthy();
     expect(screen.getAllByText(/rateio adm\. \d/).length).toBe(2);
-  });
-});
-
-/* ── RATEIO-VIGENCIA-01: a etapa "Não alocado" ── */
-describe('a etapa "Não alocado" da aba Rateio', () => {
-  const RECORTE_RATEIO: RecortePec = {
-    fazendaId: null, fazendaNome: 'Total', bloco: 'rateio_adm', centro: null, rotulo: 'Rateio administrativo',
-    de: '2023-01', ate: '2023-12', cenario: 'realizado', soRateio: true,
-    celula: { direto: null, rateio: 770, grupo: null, cabMedia: 6000, meses: 12, comRateio: true },
-  };
-  const NA = { valor: 55, motivos: [{ motivo: 'silvicultura sem DRE', valor: 55 }] };
-
-  it('pecuária sem grupo: a linha fecha a aba, depois das fazendas, nível 0, com o motivo e o valor', () => {
-    const v = valorDaPecuaria({ recorte: RECORTE_RATEIO, lancamentos: [], rateio: { ...RATEIO_PEC, naoAlocado: NA },
-      dre: DRE_PEC, periodoRotulo: 'Ano 2023' });
-    expect(v.etapas.map(e => [e.chave, e.etapa, e.valor])).toEqual([
-      ['bruto', 'Custo administrativo no período (bruto)', 1100],
-      ['parte', 'Parte da pecuária no período', 770],
-      ['f-f1', 'Retiro', 500.5],
-      ['f-f2', 'Sta. Luzia', 269.5],
-      ['nao_alocado', 'Não alocado (silvicultura sem DRE)', 55],
-    ]);
-    expect(v.etapas[1].dica).toBe('Chave declarada do ano aplicada só aos meses em que a atividade existe; '
-      + 'a parte de atividade sem DRE fica em Não alocado.');
-    expect(v.etapas[4].pct).toBe(5);
-    expect(v.etapas[4].nivel).toBe(0);
-  });
-
-  it('pecuária num grupo: sem a linha — a RPC não abre o não alocado por grupo', () => {
-    const v = valorDaPecuaria({ recorte: RECORTE_MO, lancamentos: LANC_MO, rateio: { ...RATEIO_PEC, naoAlocado: NA },
-      dre: DRE_PEC, periodoRotulo: 'Safra 25/26' });
-    expect(v.etapas.some(e => e.chave === 'nao_alocado')).toBe(false);
-    /* a busca sabe achar: o mesmo payload no recorte sem grupo tem a linha (caso acima) */
-    expect(v.etapas.some(e => e.chave === 'parte')).toBe(true);
-  });
-
-  it('zero, ausente ou payload antigo: sem a linha (zero aqui não é dado a mostrar)', () => {
-    for (const naoAlocado of [undefined, null, { valor: 0, motivos: [] }, { valor: 0.004, motivos: [] }]) {
-      const v = valorDaPecuaria({ recorte: RECORTE_RATEIO, lancamentos: [], rateio: { ...RATEIO_PEC, naoAlocado },
-        dre: DRE_PEC, periodoRotulo: 'Ano 2023' });
-      expect(v.etapas.some(e => e.chave === 'nao_alocado')).toBe(false);
-    }
-  });
-
-  it('lavoura admin: a mesma linha, depois das culturas; e o modal a mostra', () => {
-    const d = { ...ADMIN(25), nao_alocado: { valor: 48449.34, motivos: [{ motivo: 'silvicultura sem DRE', valor: 48449.34 }] },
-      lancamentos: BASE.lancamentos.map(l => ({ ...l, parte: l.valor * 0.25 })) };
-    const v = valorDaLavoura(d, 'admin', { rotulo: 'Administrativo', cultura: 'amendoim', safra: null, area: 185, pool: false });
-    expect(v.etapas.map(e => e.chave)).toEqual(['bruto', 'parte', 'c-amendoim', 'c-mandioca', 'nao_alocado']);
-    render(<ModalValorDre aberto onFechar={vi.fn()} comRateioInicial valor={v} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Rateio' }));
-    expect(screen.getByText('Não alocado (silvicultura sem DRE)')).toBeTruthy();
-    expect(screen.getByText('48.449,34')).toBeTruthy();
   });
 });
 

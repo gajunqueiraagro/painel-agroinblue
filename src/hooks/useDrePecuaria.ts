@@ -18,6 +18,7 @@
  */
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { lerEncontroRateio, type EncontroRateio } from '@/lib/agri/encontroRateio';
 
 /** As 18 linhas da cascata, na ordem em que a RPC as nomeia. */
 export interface DrePecLinhas {
@@ -547,6 +548,8 @@ export interface RateioAdmPec {
   grupos: { grupo: string; bruto: number; parte: number }[];
   /** Opcional: fixture e payload antigo nao o trazem, e ausente e' "sem linha", nunca zero. */
   naoAlocado?: NaoAlocadoRateio | null;
+  /** DRE-RATEIO-MODAL-01 — o encontro de contas do administrativo (`resumo`, `por_mes`), lido do banco. */
+  encontro?: EncontroRateio | null;
 }
 
 /**
@@ -589,6 +592,7 @@ export function useRateioAdmPec(
           return { grupo: String(g.grupo ?? '(sem)'), bruto: num(g.bruto), parte: num(g.parte) };
         }),
         naoAlocado: lerNaoAlocado(o.nao_alocado),
+        encontro: lerEncontroRateio(r),
       };
     },
   });

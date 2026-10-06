@@ -15,6 +15,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { ModalValorDre, valorDaPecuaria, celulaAtualizada } from '@/components/agri/RateioDetalheModal';
+import { lerEncontroRateio } from '@/lib/agri/encontroRateio';
+import fixtureEncontro from '@/components/agri/rateioEncontro.fixture.json';
 import { PecDrePanel, colunasDaVisao } from '@/pages/PecDrePanel';
 import { salvarERecarregar } from '@/lib/financeiro/salvarERecarregar';
 import type {
@@ -78,6 +80,8 @@ const rateioCom = (ls: { id: string; descricao: string; valor: number; grupo: st
     grupo: g, bruto: ls.filter(l => l.grupo === g).reduce((a, l) => a + l.valor, 0),
     parte: ls.filter(l => l.grupo === g).reduce((a, l) => a + l.valor / 2, 0),
   })),
+  /* DRE-RATEIO-MODAL-01: a aba Rateio da pecuária é o encontro de contas do banco — sem ele a aba não abre. */
+  encontro: lerEncontroRateio(fixtureEncontro.nj_pec_2025),
 });
 
 /* O clique em "Administração" (filha do Custo fixo, coluna Total) com o DRE ANTIGO — a fotografia. */

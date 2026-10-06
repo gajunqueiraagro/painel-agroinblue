@@ -162,7 +162,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 06/10/2026 (REC-VALOR-CERTO-02, +17 em `src/lib/financeiro/cprEstimado.test.ts` (novo) — 4151 depois dele; antes o
+  Baseline em 06/10/2026 (DRE-RATEIO-MODAL-01 + fix1, +42 −4: `src/components/agri/rateioEncontro.test.tsx` 42 (novo); sairam os 4 da
+  etapa "Não alocado" de `src/components/agri/rateioDetalheModal.test.tsx`, com o codigo que testavam — 4189 depois dele; antes o
+  REC-VALOR-CERTO-02, +17 em `src/lib/financeiro/cprEstimado.test.ts` (novo) — 4151 depois dele; antes o
   ACESSOS-FIN-03, +13 em `src/v2/lib/acessoMeta.test.tsx` (16 -> 29) — 4134 depois dele; antes o
   REC-VALOR-CERTO-01, +36: `src/lib/financeiro/recorrenciasDoMes.test.ts` 19,
   `src/components/recorrencias/recValorCerto01.test.tsx` 17 — 4121 depois dele; antes o ACESSOS-FIN-02, +17 −2: `src/v2/lib/acessoMeta.test.tsx` 16 (novo), `src/pages/pecDrePanel.test.tsx` 1; em
@@ -213,7 +215,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4151
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4189
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -1232,17 +1234,79 @@ docs/historico/frentes-ate-2026-09-29.md.)
   diferenca, agricultura_por_safra}`, `por_mes [{ano_mes, bruto, pecuaria, agricultura, silvicultura, nao_alocado, pct_pecuaria,
   pct_agricultura, diferenca (+ agricultura_safra na lavoura com safra)}]` (um por mes do periodo, inclusive os vazios) e
   `por_mes_total`. Fora do 'admin' as tres vem nulas; nenhuma chave de antes mudou (156 saidas, 7 clientes, 117 com valor).
-  · ARREDONDAMENTO (2 casas): a parte da atividade PEDIDA (na lavoura com safra, a da SAFRA) e' PROTEGIDA — arredondamento
-    acumulado mes a mes, a coluna soma round(pool, 2), o numero do DRE; o residuo de cada mes vai para a MAIOR DAS OUTRAS partes
-    (o briefing dizia "na maior parte": com a protegida dentro, o NJ 2025 mostraria 886.574,03 contra 886.574,04 do DRE).
-    `diferenca` = bruto − soma das partes do CRU: se o cru nao fecha, aparece — nunca "fazer bater". `resumo` = soma das colunas
-    do mes a mes; `pct` sobre o bruto, 1 casa.
+  · ARREDONDAMENTO — REGRA DO fix1 (migration 20261027193800, ⚠ registrada como 20261006150404; ledger = arquivo, md5 ed3f0f4d…;
+    `fn_painel_rateio_detalhe` 83bdfd55… -> 983ac728…, patch guardado por md5, 1 ancora; SUBSTITUI a "parte protegida + residuo
+    na maior das outras" da 193700): CADA PARCELA E' O ARREDONDAMENTO DELA — round(cru, 2) no resumo, na safra e em cada mes;
+    NENHUM residuo e' redistribuido. `soma` = as parcelas JA' arredondadas; `arredondamento` (chave nova, no resumo, em cada mes
+    e no total) = round(bruto, 2) − soma; `diferenca` = bruto − soma das parcelas do CRU, arredondada (a prova: e' ela que e' 0).
+    `por_mes_total` = round do TOTAL CRU de cada coluna (NAO a soma das linhas) e `resumo` = `por_mes_total`. `pct` do cru, 1 casa,
+    inclusive em `agricultura_por_safra`.
+    ⚠ O DEFEITO DA 193700 (Gabriel: "nunca arredondar para fazer bater; o numero de uma atividade e' o MESMO em qualquer tela"):
+      NJ safra 24/25 pela porta da lavoura dava pecuaria 860.293,07 e silvicultura 61.449,53 (certo: ,09 e ,51), e 2025 pela da
+      pecuaria dava agricultura 316.633,58 (certo: ,59). Dois mecanismos somados: parcela arredondada MES A MES e depois somada,
+      e o residuo de cada mes jogado na maior das outras parcelas.
+    INVARIANTES PRESOS NO TESTE (T7, 58 periodos, 7 clientes): partes e bruto pela porta da pecuaria = pela da agricultura = pela
+    da safra; pecuaria do resumo = round(`rateio_adm.pool` de `fn_dre_pecuaria`, 2); silvicultura = `rateio_adm.nao_alocado.
+    silvicultura`; `diferenca` = 0; |arredondamento| <= 0,04. Chaves de antes da 193700 identicas em 156 saidas; tempo NJ 100 -> 99 ms.
+    `arredondamento` ≠ 0 so' no NJ: 2025 e 2026 (−0,01) e safra 23/24 (+0,01) — 8 saidas contando as tres portas e as duas safras
+    do mesmo periodo; maior 0,01. NJ 2025: 886.574,04 + 316.633,59 + 63.326,72 = 1.266.534,35 contra o bruto 1.266.534,34.
+  ⚠ DIVIDA DRE-RATEIO-TOTAL-CENTAVO-01 — PROXIMO PR DE BANCO: `total.rateio_adm` de `fn_dre_pecuaria` (o numero da GRADE) e' a
+    soma das celulas grupo × fazenda ja' arredondadas e fica 0,01 fora de round(pool) em NJ 2020 (818.377,18 × ,19), NJ 2023
+    (844.162,50 × ,49), NJ jul/25–jun/26 (1.069.947,31 × ,32) e Vera 2024 (121.578,37 × ,38). Conserto: o total da grade passa a
+    ser round(pool), com o residuo das celulas a' vista; muda o numero do DRE nesses periodos — prova antes × depois em todos os
+    cliente-anos. Ate' la' a tela AVISA (regra da tela, abaixo).
   · ⚠ `agricultura_por_safra` TEM DUAS LINHAS (a safra pedida e "outras safras"): `fn_rateio_admin_mes` abre UMA safra por chamada.
   · ⚠ O "NAO ALOCADO" DA SANTA RITA 2021 (8.082,73) E' SILVICULTURA, parte propria; `peso_nao_alocado` > 0 nao existe em nenhum
     cliente/ano de 2016 a 2027 — "mes sem atividade" nao tem caso real, so' o teste.
   Provas: resumo x `fn_dre_pecuaria.rateio_adm` iguais em 49 de 49 cliente-anos; NJ 2025 pecuaria 1.266.534,34 = 886.574,04 +
-  316.633,58 + 63.326,72 + 0,00, diferenca 0; tempo (20 chamadas, autenticado, NJ) mediana 100 -> 102 ms. Teste:
-  `supabase/tests/dre_rateio_modal_01_test.sql` (T1–T6, termina em RAISE OK).
+  316.633,59 + 63.326,72 + 0,00 (arredondamento −0,01), diferenca 0. Teste: `supabase/tests/dre_rateio_modal_01_test.sql`
+  (T1–T7, termina em RAISE OK; roda em ~25 s).
+- ⚠ A ABA RATEIO DO ADMINISTRATIVO MOSTRA O TOTAL, PARA ONDE FOI E A PROVA — E NAO FAZ CONTA (DRE-RATEIO-MODAL-01, tela, Gabriel
+  06/10/2026: "tem que ter um encontro de contas ali que prova que esta' sendo feito corretamente"). Leitor puro
+  `src/lib/agri/encontroRateio.ts` (`lerEncontroRateio`: qualquer peca torta = `null` inteiro, nunca zeros); componente
+  `src/components/agri/RateioEncontro.tsx`; o modal (`ModalValorDre`, `RateioDetalheModal.tsx`) recebe `valor.encontro`. Nenhuma
+  soma, subtracao ou `reduce` no leitor nem no componente (teste de fonte com auto-teste do detector).
+  · "Resumo | Mês a mês" (`Segmentado` 22) mora NA BARRA, por cima do segundo segmentado que fica `invisible` na aba Rateio
+    (posicao absoluta: nada se move). So' no administrativo.
+  · RESUMO: (1) "Administrativo do período" — `Donut` de 130 com o `resumo.bruto` no centro e a legenda com o % do banco; pecuaria
+    navy, agricultura verde, silvicultura e nao alocado cinza; a atividade aberta em negrito. (2) "Para onde foi o administrativo"
+    — Destino · Regra · % do total · Valor: bruto, uma linha por parte (a aberta com `bg-primary/10`, filete de 3px e o selo "este
+    DRE"), "Não alocado" SO' com valor, "Soma das partes" (`resumo.soma`), "Arredondamento" (`resumo.arredondamento`, linha
+    SEMPRE presente: "0,00" apagado, ou o valor com sinal em ambar; `title` "soma das parcelas arredondadas a centavos × total")
+    e "Diferença para o total" (`resumo.diferenca`: "0,00 ✓" verde, senao o valor com sinal em vermelho). Sob a tabela, um SLOT
+    FIXO de 14px (`rateio-aviso-grade`): quando o numero da GRADE (`dre.total.rateio_adm`, que o modal ja' recebe; na lavoura o
+    `pool`) difere da parcela destacada, escreve em ambar "grade do DRE: R$ X · resumo: R$ Y" — os dois numeros prontos, lado a
+    lado; a tela so' COMPARA, nao subtrai (a RPC nao tem o numero da grade sem chamar `fn_dre_pecuaria`, entao nao ha'
+    `grade_total` no banco). Vazio quando iguais, com grupo de custo ou sem o DRE do periodo. (3) "Dentro da pecuária · por fazenda" (o `rateio_adm` e a `cab_media` do DRE que
+    a tela ja' tem; sem ele, "sem a divisão por fazenda neste recorte") ou "Dentro da lavoura · por cultura" (as `fatias`).
+    Valor de custo com ▼ vermelho; estorno ▲ verde com "−"; zero "0,00" apagado (`ValorRateio`, cores de `COR_SINAL`).
+  · MES A MES: Mês · Administrativo · Pec. % · Pecuária · Lav. % · Lavoura · [Esta safra] · Silvicultura · Não alocado · Diferença;
+    Total = `por_mes_total` (o arredondamento dele, quando ≠ 0, vai no `title` da linha); cabecalho e total fixos; as colunas da atividade aberta realcadas; slot fixo de 14px com "a parte muda
+    quando uma atividade começa ou termina no período" so' quando o % do banco muda entre meses.
+  · ⚠ DESVIOS DO BRIEFING, DECLARADOS: (a) NA LAVOURA O SELO "este DRE" VAI NA SAFRA (o numero do DRE e' o dela), e a agricultura
+    fica so' realcada; (b) SILVICULTURA E NAO ALOCADO SAO DUAS COLUNAS no mes a mes (uma so' exigiria somar na tela); (c) [fix1: o % de cada safra,
+    "outras safras" inclusive, vem do banco]; (d) COM GRUPO DE CUSTO (Mão de Obra, Máquinas…) os blocos (1) e (2) sao o
+    administrativo INTEIRO (a RPC nao abre o resumo por grupo) e dizem isso no cabecalho, em ambar: "administrativo inteiro ·
+    todos os grupos" (`title` com o porque); o (3) mostra o rateio DAQUELE grupo por fazenda (`rateio_adm_grupos`), com o nome
+    do grupo no titulo; (e) O RATEIO COMPARTILHADO DA LAVOURA (pool por area, fora do
+    admin) SEGUE COM A TABELA DE ETAPAS — a RPC so' devolve o encontro no ramo admin.
+  · SAIU: `etapaNaoAlocado`, `DICA_PARTE`, `EtapaValorDre.dica` e as etapas do administrativo (pecuaria inteira; lavoura admin).
+  · ⚠ A CELULA DE TABELA TEM 1px DE PADDING VERTICAL DO NAVEGADOR: sem `py-0` a linha "de 18px" media 22 (medido).
+  · A TABELA DE BAIXO TEM PISO DE DUAS LINHAS (`min-h-[92px]`) e rola POR DENTRO com cabecalho e total fixos; so' em janela
+    baixa o piso estoura e o corpo do modal rola.
+  Medido em 06/10 a 1.126 x 523 (a janela do dia, com a barra do navegador de automacao; NAO a 579): modal 980 x 459 igual em
+  Lançamentos, Resumo e Mês a mês; barra 38; topo do rodape 426; bloco de cima 178px (196 na lavoura, com a linha da safra),
+  o slot do aviso 642 x 14 sem corte; 0 celulas cortadas; a 523 o corpo rola 22px (40 na lavoura) e os 12 meses rolam 19px por
+  dentro — a 579 sobram 56px e nada disso rola com ate' 3 fazendas (por conta, nao medido); com 6 fazendas a tabela rola por
+  dentro. Com grupo: a marca cabe inteira na caixa da direita (474px) e CORTA na da esquerda (pede 183, tem 149; inteira no
+  `title`), numa linha de 18px.
+  Numeros na tela = banco (NJ, so' leitura): pecuaria 2025 1.266.534,34 -> 886.574,04 · 316.633,59 · 63.326,72, soma
+  1.266.534,35, arredondamento −0,01, diferenca 0,00 ✓, fazendas 672.469,89 + 214.104,15; lavoura 24/25 1.228.990,13 ->
+  860.293,09 · 307.247,53 · 61.449,51, arredondamento 0,00, culturas 242.495,41 + 64.752,12; pecuaria 2023 com o aviso "grade
+  do DRE: R$ 844.162,50 · resumo: R$ 844.162,49"; Mão de Obra 2023 (grupo) 164.696,77 · 10.238,09 · 62.281,72 = 237.216,58.
+  Fixture real: `src/components/agri/rateioEncontro.fixture.json` (recapturado depois do fix1, com NJ 2023). 21 mutacoes mortas.
+  ⚠ NAO PROVADO NO NAVEGADOR: 579px de altura, 6 fazendas, Santa Rita 2021, "Não alocado" com valor, "outras safras", diferenca
+    aberta, arredondamento ≠ 0 na lavoura e a frase da parte que muda (so' por teste; nenhum cliente tem `peso_nao_alocado` > 0).
 - ⚠ MODAL DE LINHA DO DRE SOMA AS MESMAS CHAVES DA DEF DA GRADE: `somaComposta` (`drePecRegua.ts`) e' a fonte dos
   dois, e a composicao viaja no clique (`def.compor`) — o modal nao adivinha o modo da grade
   (DRE-MODAL-CUSTO-FIXO-RATEIO-01).

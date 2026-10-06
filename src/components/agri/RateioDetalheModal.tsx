@@ -8,8 +8,10 @@
  * ⚠ ELE NÃO BUSCA NADA: recebe um `ValorDre` pronto. Os dois adaptadores puros (`valorDaLavoura`,
  *   `valorDaPecuaria`) moram aqui embaixo e são o que se testa: a soma das linhas FECHA NA CÉLULA.
  * ⚠ SAÍRAM COM ELE o `PecLancamentosModal` e o `PecRateioAdmModal` (a lista e o rateio da pecuária
- *   em dois modais), os donuts e as três abas do rateio da lavoura. A conta que o donut desenhava
- *   virou a aba Rateio — etapa, base, %, valor —, que é a mesma nas duas atividades.
+ *   em dois modais), os donuts e as três abas do rateio da lavoura.
+ * ⚠ A ABA RATEIO TEM DUAS FORMAS (DRE-RATEIO-MODAL-01): no ADMINISTRATIVO é o encontro de contas do banco
+ *   (`RateioEncontro`: Resumo | Mês a mês — total, para onde foi, a prova); no rateio COMPARTILHADO da lavoura
+ *   (pool por área) segue a tabela de etapas, porque a RPC só devolve o encontro no ramo admin.
  * ⚠ A LINHA DE RATEIO JÁ VEM NA PARTE DA CÉLULA: a RPC devolve a parte da atividade (`parte`) e o
  *   adaptador a reparte até a coluna (fazenda ou cultura) por `ratearNoAlvo`, em centavos, com o
  *   resíduo na maior linha. Por isso a soma da lista é o número da grade, e não o bruto.
@@ -28,6 +30,10 @@ import { BLOCO_DA_LINHA } from '@/hooks/useDrePecuaria';
 import type {
   ChaveLinhaPec, DrePecLinhas, DrePecuaria, LancamentoPec, NaoAlocadoRateio, RateioAdmPec, RecortePec,
 } from '@/hooks/useDrePecuaria';
+import { lerEncontroRateio, parteDoDestino } from '@/lib/agri/encontroRateio';
+import {
+  RateioEncontro, LEGENDA_AREA, LEGENDA_CABECAS, type EncontroValorDre, type VisaoRateio,
+} from '@/components/agri/RateioEncontro';
 
 
 /** Uma cultura na repartição do pool. */
@@ -118,6 +124,13 @@ export interface RateioDetalhe {
   fatias_atividade?: FatiaAtividade[] | null;
   /** RATEIO-VIGENCIA-01 — o administrativo que não caiu em DRE nenhum (só no ramo admin). */
   nao_alocado?: NaoAlocadoRateio | null;
+  /**
+   * DRE-RATEIO-MODAL-01 — o encontro de contas do administrativo, como o banco o devolve (nulos fora do ramo
+   * admin). ⚠ NÃO SE LEEM DAQUI: quem dá forma é `lerEncontroRateio`, sobre o payload inteiro.
+   */
+  resumo?: unknown;
+  por_mes?: unknown;
+  por_mes_total?: unknown;
 }
 
 
@@ -244,10 +257,8 @@ export interface EtapaValorDre {
   valor: number | null;
   /** 0 = etapa da conta; 1 = a repartição (fazenda ou cultura), recuada. */
   nivel: 0 | 1;
-  /** A etapa que É a célula clicada (a fazenda da coluna, a cultura aberta, a parte da atividade). */
+  /** A etapa que É a célula clicada (a cultura aberta). */
   destaque?: boolean;
-  /** O tooltip da etapa, quando o rótulo não diz tudo; sem ele, o próprio rótulo. */
-  dica?: string;
 }
 
 export interface ValorDre {
@@ -278,7 +289,16 @@ export interface ValorDre {
    */
   saida: boolean;
   linhas: LinhaValorDre[];
+  /**
+   * As etapas do rateio COMPARTILHADO da lavoura (pool → culturas). ⚠ SÓ FORA DO ADMINISTRATIVO: ali a aba
+   * Rateio é o `encontro` (DRE-RATEIO-MODAL-01) e esta lista vem vazia.
+   */
   etapas: EtapaValorDre[];
+  /**
+   * O ENCONTRO DE CONTAS DO ADMINISTRATIVO — DRE-RATEIO-MODAL-01: total, para onde foi, a prova e o mês a mês,
+   * lidos do banco. `null` = a linha não tem rateio administrativo (ou o banco não o devolveu).
+   */
+  encontro: EncontroValorDre | null;
   rodapeRateio: string;
 }
 
@@ -306,26 +326,10 @@ export function ratearNoAlvo(pesos: readonly number[], alvo: number): number[] {
 
 const pctDe = (parte: number, base: number) => (base !== 0 ? (parte / base) * 100 : null);
 
-/** RATEIO-VIGENCIA-01: o % da parte é o EFETIVO do período (o peso de cada mês), não a chave crua do ano. */
-const DICA_PARTE = 'Chave declarada do ano aplicada só aos meses em que a atividade existe; '
-  + 'a parte de atividade sem DRE fica em Não alocado.';
-
-/**
- * A ETAPA "NÃO ALOCADO" DA ABA RATEIO — RATEIO-VIGENCIA-01. O administrativo do período que não caiu em
- * DRE nenhum: a parte da silvicultura (que não tem DRE) e o mês sem chave ou sem atividade.
- * ⚠ SÓ APARECE COM VALOR (> meio centavo): zero aqui é ausência de fato, e a linha só ocuparia espaço.
- * ⚠ O MOTIVO VAI NO RÓTULO, curto e da RPC ("silvicultura sem DRE", "mes sem chave"); sem ele o número
- *   pareceria perda, quando é custo que existe e espera o seu DRE.
- */
-export function etapaNaoAlocado(n: NaoAlocadoRateio | null | undefined, bruto: number): EtapaValorDre | null {
-  if (!n || !(n.valor > 0.005)) return null;
-  const motivos = n.motivos.filter(m => m.valor > 0.005).map(m => m.motivo).filter(Boolean);
-  return {
-    chave: 'nao_alocado',
-    etapa: motivos.length > 0 ? `Não alocado (${motivos.join(', ')})` : 'Não alocado',
-    base: formatNum(bruto, 2), pct: pctDe(n.valor, bruto), valor: n.valor, nivel: 0,
-  };
-}
+/** Os motivos do "não alocado" que a RPC escreveu — sem a silvicultura, que no encontro de contas é parte própria. */
+const motivosNaoAlocado = (n: NaoAlocadoRateio | null | undefined): string[] =>
+  (n?.motivos ?? []).filter(m => m.valor !== 0 && !m.motivo.toLowerCase().startsWith('silvicultura'))
+    .map(m => m.motivo).filter(Boolean);
 
 /* ══════════════════════════ LAVOURA ══════════════════════════ */
 
@@ -356,25 +360,31 @@ export function valorDaLavoura(d: RateioDetalhe, tipo: TipoRateio, o: {
     status: l.status ?? null, rateioPct,
   });
   const etapas: EtapaValorDre[] = [];
-  if (temRateio) {
-    if (admin) {
-      const bruto = (d.fatias_atividade ?? []).reduce((a, x) => a + x.valor, 0);
-      etapas.push({ chave: 'bruto', etapa: 'Custo administrativo no período (bruto)', base: '—', pct: null, valor: bruto, nivel: 0 });
-      etapas.push({ chave: 'parte', etapa: 'Parte da agricultura no período', dica: DICA_PARTE,
-        base: formatNum(bruto, 2), pct: d.pct_agricultura, valor: d.pool, nivel: 0 });
-    } else {
-      etapas.push({ chave: 'pool', etapa: 'Custo compartilhado a ratear', base: '—', pct: null, valor: d.pool, nivel: 0 });
-    }
+  /* ⚠ O ADMINISTRATIVO NÃO TEM MAIS ETAPAS: a aba Rateio dele é o encontro de contas, lido do banco. */
+  if (temRateio && !admin) {
+    etapas.push({ chave: 'pool', etapa: 'Custo compartilhado a ratear', base: '—', pct: null, valor: d.pool, nivel: 0 });
     d.fatias.forEach(x => etapas.push({
       chave: `c-${x.cultura}`, etapa: labelDaCultura(x.cultura), base: `${formatNum(x.area_ha, 2)} ha`,
       pct: x.peso, valor: x.valor, nivel: 1, destaque: x.atual,
     }));
-    /* Depois das culturas, que repartem a parte da agricultura — o mesmo lugar da pecuária. */
-    if (admin) {
-      const na = etapaNaoAlocado(d.nao_alocado, (d.fatias_atividade ?? []).reduce((a, x) => a + x.valor, 0));
-      if (na) etapas.push(na);
-    }
   }
+  const dados = admin ? lerEncontroRateio(d) : null;
+  const encontro: EncontroValorDre | null = dados ? {
+    dados, atividade: 'agricultura', grupo: null, motivosNaoAlocado: motivosNaoAlocado(d.nao_alocado),
+    /* O número que a grade mostra para a safra é o `pool` da mesma resposta. */
+    gradeTotal: d.pool,
+    dentro: {
+      titulo: 'Dentro da lavoura · por cultura', legenda: LEGENDA_AREA,
+      colNome: 'Cultura', colBase: 'Área (ha)', casasBase: 2,
+      linhas: d.fatias.map(x => ({
+        chave: x.cultura, nome: labelDaCultura(x.cultura), base: x.area_ha, pct: x.peso, valor: x.valor, destaque: x.atual,
+      })),
+      rotuloTotal: dados.porSafra ? 'Total · parte da safra' : 'Total · parte da agricultura',
+      totalBase: null,
+      /* A parte da SAFRA aberta quando a RPC a abre; senão, a da agricultura. Lida, nunca somada. */
+      totalValor: dados.porSafra?.find(x => x.safraId != null)?.valor ?? parteDoDestino(dados, 'agricultura')?.valor ?? null,
+    },
+  } : null;
   const area = o.area ?? f?.area_ha ?? null;
   const porHa = (v: number | null) => (v == null || area == null || !(area > 0) ? '—' : formatNum(v / area, 2));
   return {
@@ -395,6 +405,7 @@ export function valorDaLavoura(d: RateioDetalhe, tipo: TipoRateio, o: {
       ...doPool.map((l, i) => linha(l, i, repartidos[i] ?? 0, pctDe(repartidos[i] ?? 0, l.valor))),
     ],
     etapas,
+    encontro,
     rodapeRateio: admin ? 'Mesma conta do DRE: bruto × % da agricultura × % da área'
       : notaDoRateio(d, tipo),
   };
@@ -480,30 +491,39 @@ export function valorDaPecuaria(o: {
       rateioPct: pctDe(repartidos[i] ?? 0, l.valor),
     }))),
   ];
-  const etapas: EtapaValorDre[] = [];
-  if (cel.rateio != null && o.rateio) {
-    const gs = o.rateio.grupos.filter(g => grupo == null || g.grupo === grupo);
-    const bruto = gs.reduce((a, g) => a + g.bruto, 0);
-    const parte = gs.reduce((a, g) => a + g.parte, 0);
-    const nome = grupo == null ? 'Custo administrativo' : `${grupo} administrativo`;
-    etapas.push({ chave: 'bruto', etapa: `${nome} no período (bruto)`, base: '—', pct: null, valor: bruto, nivel: 0 });
-    etapas.push({ chave: 'parte', etapa: 'Parte da pecuária no período', dica: DICA_PARTE,
-      base: formatNum(bruto, 2), pct: pctDe(parte, bruto), valor: parte, nivel: 0, destaque: r.fazendaId === null });
-    /* ⚠ SÓ SEM GRUPO: a RPC devolve o não alocado do período inteiro, não por grupo — num grupo ele diria
-       um número que não é daquele grupo. */
-    const na = grupo == null ? etapaNaoAlocado(o.rateio.naoAlocado, bruto) : null;
-    const faz = o.dre?.fazendas ?? [];
-    const somaCab = faz.reduce((a, f) => a + f.linhas.patrimonio.cab_media, 0);
-    faz.forEach(f => etapas.push({
-      chave: `f-${f.fazenda_id}`, etapa: f.nome,
-      base: `${formatNum(f.linhas.patrimonio.cab_media, 0)} cab médias`,
-      pct: pctDe(f.linhas.patrimonio.cab_media, somaCab),
-      valor: grupo == null ? f.linhas.rateio_adm : rateioDoGrupo(f.linhas, grupo),
-      nivel: 1, destaque: f.fazenda_id === r.fazendaId,
-    }));
-    /* ⚠ DEPOIS DAS FAZENDAS: elas repartem a parte da pecuária; logo abaixo do não alocado, recuadas,
-       pareceriam filhas dele (visto na tela, NJ 2023). */
-    if (na) etapas.push(na);
+  /* ⚠ O ENCONTRO DE CONTAS — DRE-RATEIO-MODAL-01. O total, as partes e a prova são do banco (`o.rateio.encontro`);
+     a divisão por FAZENDA é a do DRE que a tela já tem para o período (`rateio_adm` e `cab_media` de cada uma) —
+     nenhuma consulta nova. Sem o DRE, a tabela de fazendas diz que não tem a divisão, e não a inventa.
+     ⚠ COM GRUPO DE CUSTO (Mão de Obra, Máquinas…): a RPC NÃO abre o resumo por grupo — os blocos de cima são o
+     administrativo INTEIRO, e a tabela por fazenda mostra o rateio DAQUELE grupo (`rateio_adm_grupos`), como antes. */
+  const dados = cel.rateio != null ? o.rateio?.encontro ?? null : null;
+  let encontro: EncontroValorDre | null = null;
+  if (dados) {
+    const doGrupoNaLinha = (l: DrePecLinhas) => (grupo == null ? l.rateio_adm : rateioDoGrupo(l, grupo));
+    const totalValor = grupo == null
+      ? parteDoDestino(dados, 'pecuaria')?.valor ?? null
+      : o.dre ? doGrupoNaLinha(o.dre.total) : null;
+    const faz = (o.dre?.fazendas ?? [])
+      .filter(f => f.linhas.patrimonio.cab_media !== 0 || doGrupoNaLinha(f.linhas) !== 0);
+    encontro = {
+      dados, atividade: 'pecuaria', grupo, motivosNaoAlocado: motivosNaoAlocado(o.rateio?.naoAlocado),
+      /* O total da pecuária NA GRADE (`total.rateio_adm` do DRE que a tela já tem). Com grupo não há par a comparar. */
+      gradeTotal: grupo == null && o.dre ? o.dre.total.rateio_adm : null,
+      dentro: {
+        titulo: grupo == null ? 'Dentro da pecuária · por fazenda' : `Dentro da pecuária · ${grupo} adm. · por fazenda`,
+        legenda: LEGENDA_CABECAS,
+        colNome: 'Fazenda', colBase: 'Cabeças médias', casasBase: 0,
+        linhas: faz.map(f => ({
+          chave: f.fazenda_id, nome: f.nome, base: f.linhas.patrimonio.cab_media,
+          pct: totalValor == null ? null : pctDe(doGrupoNaLinha(f.linhas), totalValor),
+          valor: doGrupoNaLinha(f.linhas), destaque: f.fazenda_id === r.fazendaId,
+        })),
+        rotuloTotal: grupo == null ? 'Total · parte da pecuária' : `Total · ${grupo} adm. na pecuária`,
+        totalBase: o.dre ? o.dre.total.patrimonio.cab_media : null,
+        totalValor,
+        vazio: 'sem a divisão por fazenda neste recorte',
+      },
+    };
   }
   const bloco = ROTULO_BLOCO_PEC[r.bloco] ?? r.bloco;
   return {
@@ -526,7 +546,8 @@ export function valorDaPecuaria(o: {
     seloRateio: 'rateio adm.',
     saida: !BLOCOS_DE_ENTRADA_PEC.has(r.bloco),
     linhas,
-    etapas,
+    etapas: [],
+    encontro,
     rodapeRateio: 'Mesma conta do DRE: a soma dos grupos fecha no rateio administrativo total',
   };
 }
@@ -749,6 +770,8 @@ export function ModalValorDre({
 }) {
   const [aba, setAba] = useState<'lancamentos' | 'rateio'>(abaInicial);
   const [comRateioEscolha, setComRateio] = useState(comRateioInicial);
+  /* A visão da aba Rateio no administrativo — DRE-RATEIO-MODAL-01. Nasce no Resumo. */
+  const [visaoRateio, setVisaoRateio] = useState<VisaoRateio>('resumo');
   const semDireto = valor?.direto == null;
   const semRateio = valor?.rateio == null;
   /* ⚠ SEM PARTE DIRETA, SÓ HÁ RATEIO A MOSTRAR; SEM RATEIO, SÓ O DIRETO. O segmentado fica, travado. */
@@ -776,10 +799,13 @@ export function ModalValorDre({
   const total = (valor.direto ?? 0) + (valor.rateio ?? 0);
   const mostrado = comRateio ? total : (valor.direto ?? 0);
   const pct = (v: number | null) => (v == null || total === 0 ? '' : ` · ${formatNum((v / total) * 100, 0)}%`);
-  const temEtapas = valor.etapas.length > 0;
+  const encontro = valor.encontro;
+  const temEtapas = valor.etapas.length > 0 || !!encontro;
 
   let corpo: ReactNode;
-  if (aba === 'rateio') {
+  if (aba === 'rateio' && encontro) {
+    corpo = <RateioEncontro encontro={encontro} visao={visaoRateio} />;
+  } else if (aba === 'rateio') {
     corpo = (
       <table className="w-full table-fixed border-collapse">
         <colgroup><col /><col style={{ width: 150 }} /><col style={{ width: 90 }} /><col style={{ width: 130 }} /></colgroup>
@@ -793,7 +819,7 @@ export function ModalValorDre({
           {valor.etapas.map((e, i) => (
             <tr key={e.chave} className={cn('border-t border-slate-100',
               e.nivel === 1 && i % 2 === 1 && 'bg-muted/30', e.destaque && 'font-semibold')}>
-              <td className={cn(TD, 'truncate')} style={{ paddingLeft: e.nivel === 1 ? 22 : 8 }} title={e.dica ?? e.etapa}>{e.etapa}</td>
+              <td className={cn(TD, 'truncate')} style={{ paddingLeft: e.nivel === 1 ? 22 : 8 }} title={e.etapa}>{e.etapa}</td>
               <td className={cn(TD, 'whitespace-nowrap text-right tabular-nums')}>{e.base}</td>
               <td className={cn(TD, 'whitespace-nowrap text-right tabular-nums')}>
                 {e.pct == null ? '—' : `${formatNum(e.pct, 1)}%`}
@@ -897,13 +923,25 @@ export function ModalValorDre({
             { valor: 'rateio', rotulo: 'Rateio', desabilitada: !temEtapas,
               title: temEtapas ? undefined : 'sem rateio neste recorte' },
           ]} />
-          {/* ⚠ O SEGUNDO SEGMENTADO SÓ SE ESCONDE (invisível) na aba Rateio: sumir moveria a barra. */}
-          <span className={cn(aba === 'rateio' && 'invisible')}>
-            <Segmentado altura={22} valor={comRateio ? 'com' : 'direto'} onEscolher={v => setComRateio(v === 'com')} opcoes={[
-              { valor: 'direto', rotulo: valor.rotuloDireto, desabilitada: semDireto || semRateio,
-                title: semDireto ? 'esta linha não tem parte direta' : semRateio ? 'esta linha não tem rateio' : undefined },
-              { valor: 'com', rotulo: `Com ${valor.seloRateio}`, desabilitada: semDireto || semRateio },
-            ]} />
+          {/* ⚠ O SEGUNDO SEGMENTADO SÓ SE ESCONDE (invisível) na aba Rateio: sumir moveria a barra.
+              ⚠ NO ADMINISTRATIVO, o "Resumo | Mês a mês" ocupa O MESMO LUGAR, por cima (posição absoluta): a barra
+              não muda de altura nem empurra nada — DRE-RATEIO-MODAL-01. */}
+          <span className="relative">
+            <span className={cn(aba === 'rateio' && 'invisible')}>
+              <Segmentado altura={22} valor={comRateio ? 'com' : 'direto'} onEscolher={v => setComRateio(v === 'com')} opcoes={[
+                { valor: 'direto', rotulo: valor.rotuloDireto, desabilitada: semDireto || semRateio,
+                  title: semDireto ? 'esta linha não tem parte direta' : semRateio ? 'esta linha não tem rateio' : undefined },
+                { valor: 'com', rotulo: `Com ${valor.seloRateio}`, desabilitada: semDireto || semRateio },
+              ]} />
+            </span>
+            {aba === 'rateio' && encontro && (
+              <span className="absolute left-0 top-0" data-testid="visao-rateio">
+                <Segmentado altura={22} valor={visaoRateio} onEscolher={setVisaoRateio} opcoes={[
+                  { valor: 'resumo', rotulo: 'Resumo' },
+                  { valor: 'mes', rotulo: 'Mês a mês' },
+                ]} />
+              </span>
+            )}
           </span>
           <span className={cn('ml-auto text-[10px] text-muted-foreground', aba === 'rateio' && 'invisible')}>
             clique na linha abre no Financeiro
@@ -920,7 +958,10 @@ export function ModalValorDre({
 
         {/* ⚠ O QUADRO MORA DENTRO DO MESMO SCROLLPORT DA LISTA (um só por tela): rola junto, e o cabeçalho da lista
             gruda no topo quando chega lá. */}
-        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3.5">
+        {/* No encontro de contas quem rola, se as linhas não couberem, é a tabela de dentro (cabeçalho e total fixos). A caixa
+            só rola em janela BAIXA (a tabela de dentro tem piso de duas linhas; medido: a 579 de altura não rola). */}
+        <div className={cn('min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3.5', aba === 'rateio' && encontro && 'flex flex-col pb-1.5')}
+          data-testid="corpo-do-modal">
           {aba === 'lancamentos' && !carregando && quadro.linhas.length > 0 && (
             <QuadroSubcentro quadro={quadro} valor={valor} comRateio={comRateio} baseTotal={mostrado}
               filtro={filtro} onAlternar={alternarFiltro} rotuloSub={rotuloSub} />

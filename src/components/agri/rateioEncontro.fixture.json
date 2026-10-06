@@ -1,0 +1,1268 @@
+{
+ "nj_pec_2025": {
+  "direto_cultura": 0,
+  "fatias": [],
+  "fatias_atividade": [
+   {
+    "atividade": "pecuaria",
+    "valor": 886574.04
+   },
+   {
+    "atividade": "agricultura",
+    "valor": 316633.59
+   },
+   {
+    "atividade": "silvicultura",
+    "valor": 63326.72
+   },
+   {
+    "atividade": "nao_alocado",
+    "valor": 0
+   }
+  ],
+  "grupos": [
+   {
+    "bruto": 624748.21,
+    "grupo": "Administração",
+    "parte": 437323.747
+   },
+   {
+    "bruto": 424285.42,
+    "grupo": "Mão de Obra",
+    "parte": 296999.794
+   },
+   {
+    "bruto": 205904.63,
+    "grupo": "Máquinas",
+    "parte": 144133.241
+   },
+   {
+    "bruto": 11596.08,
+    "grupo": "Financeiro",
+    "parte": 8117.256
+   }
+  ],
+  "nao_alocado": {
+   "motivos": [
+    {
+     "motivo": "silvicultura sem DRE",
+     "valor": 63326.72
+    }
+   ],
+   "outros": 0,
+   "silvicultura": 63326.72,
+   "valor": 63326.72
+  },
+  "pct_agricultura": 70,
+  "pct_atividade": 70,
+  "pool": 886574.04,
+  "por_mes": [
+   {
+    "agricultura": 36751.81,
+    "ano_mes": "2025-01",
+    "arredondamento": 0,
+    "bruto": 147007.22,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 25,
+    "pct_pecuaria": 70,
+    "pecuaria": 102905.05,
+    "silvicultura": 7350.36
+   },
+   {
+    "agricultura": 22298.58,
+    "ano_mes": "2025-02",
+    "arredondamento": -0.01,
+    "bruto": 89194.3,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 25,
+    "pct_pecuaria": 70,
+    "pecuaria": 62436.01,
+    "silvicultura": 4459.72
+   },
+   {
+    "agricultura": 26628.03,
+    "ano_mes": "2025-03",
+    "arredondamento": 0,
+    "bruto": 106512.13,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 25,
+    "pct_pecuaria": 70,
+    "pecuaria": 74558.49,
+    "silvicultura": 5325.61
+   },
+   {
+    "agricultura": 23943.28,
+    "ano_mes": "2025-04",
+    "arredondamento": 0,
+    "bruto": 95773.13,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 25,
+    "pct_pecuaria": 70,
+    "pecuaria": 67041.19,
+    "silvicultura": 4788.66
+   },
+   {
+    "agricultura": 21356.91,
+    "ano_mes": "2025-05",
+    "arredondamento": 0,
+    "bruto": 85427.63,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 25,
+    "pct_pecuaria": 70,
+    "pecuaria": 59799.34,
+    "silvicultura": 4271.38
+   },
+   {
+    "agricultura": 19449.78,
+    "ano_mes": "2025-06",
+    "arredondamento": -0.01,
+    "bruto": 77799.11,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 25,
+    "pct_pecuaria": 70,
+    "pecuaria": 54459.38,
+    "silvicultura": 3889.96
+   },
+   {
+    "agricultura": 19324.56,
+    "ano_mes": "2025-07",
+    "arredondamento": 0,
+    "bruto": 77298.24,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 25,
+    "pct_pecuaria": 70,
+    "pecuaria": 54108.77,
+    "silvicultura": 3864.91
+   },
+   {
+    "agricultura": 23077.24,
+    "ano_mes": "2025-08",
+    "arredondamento": -0.01,
+    "bruto": 92308.94,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 25,
+    "pct_pecuaria": 70,
+    "pecuaria": 64616.26,
+    "silvicultura": 4615.45
+   },
+   {
+    "agricultura": 28693.67,
+    "ano_mes": "2025-09",
+    "arredondamento": 0,
+    "bruto": 114774.68,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 25,
+    "pct_pecuaria": 70,
+    "pecuaria": 80342.28,
+    "silvicultura": 5738.73
+   },
+   {
+    "agricultura": 24753.57,
+    "ano_mes": "2025-10",
+    "arredondamento": 0,
+    "bruto": 99014.28,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 25,
+    "pct_pecuaria": 70,
+    "pecuaria": 69310,
+    "silvicultura": 4950.71
+   },
+   {
+    "agricultura": 27299.92,
+    "ano_mes": "2025-11",
+    "arredondamento": 0,
+    "bruto": 109199.68,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 25,
+    "pct_pecuaria": 70,
+    "pecuaria": 76439.78,
+    "silvicultura": 5459.98
+   },
+   {
+    "agricultura": 43056.25,
+    "ano_mes": "2025-12",
+    "arredondamento": 0,
+    "bruto": 172225,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 25,
+    "pct_pecuaria": 70,
+    "pecuaria": 120557.5,
+    "silvicultura": 8611.25
+   }
+  ],
+  "por_mes_total": {
+   "agricultura": 316633.59,
+   "arredondamento": -0.01,
+   "bruto": 1266534.34,
+   "diferenca": 0,
+   "nao_alocado": 0,
+   "pct_agricultura": 25,
+   "pct_pecuaria": 70,
+   "pecuaria": 886574.04,
+   "silvicultura": 63326.72
+  },
+  "resumo": {
+   "agricultura_por_safra": null,
+   "arredondamento": -0.01,
+   "bruto": 1266534.34,
+   "diferenca": 0,
+   "partes": [
+    {
+     "destino": "pecuaria",
+     "pct": 70,
+     "valor": 886574.04
+    },
+    {
+     "destino": "agricultura",
+     "pct": 25,
+     "valor": 316633.59
+    },
+    {
+     "destino": "silvicultura",
+     "pct": 5,
+     "valor": 63326.72
+    },
+    {
+     "destino": "nao_alocado",
+     "pct": 0,
+     "valor": 0
+    }
+   ],
+   "soma": 1266534.35
+  },
+  "lancamentos": []
+ },
+ "nj_lav_2425": {
+  "direto_cultura": 0,
+  "fatias": [
+   {
+    "area_ha": 186.5,
+    "atual": true,
+    "cultura": "amendoim",
+    "peso": 78.9,
+    "valor": 242495.41
+   },
+   {
+    "area_ha": 49.8,
+    "atual": false,
+    "cultura": "mandioca",
+    "peso": 21.1,
+    "valor": 64752.12
+   }
+  ],
+  "fatias_atividade": [
+   {
+    "atividade": "pecuaria",
+    "valor": 860293.09
+   },
+   {
+    "atividade": "agricultura",
+    "valor": 307247.53
+   },
+   {
+    "atividade": "silvicultura",
+    "valor": 61449.51
+   },
+   {
+    "atividade": "nao_alocado",
+    "valor": 0
+   }
+  ],
+  "grupos": [
+   {
+    "bruto": 624203.15,
+    "grupo": "Administração",
+    "parte": 156050.7875
+   },
+   {
+    "bruto": 382765.09,
+    "grupo": "Mão de Obra",
+    "parte": 95691.2725
+   },
+   {
+    "bruto": 214598.31,
+    "grupo": "Máquinas",
+    "parte": 53649.5775
+   },
+   {
+    "bruto": 7423.58,
+    "grupo": "Financeiro",
+    "parte": 1855.895
+   }
+  ],
+  "nao_alocado": {
+   "motivos": [
+    {
+     "motivo": "silvicultura sem DRE",
+     "valor": 61449.51
+    }
+   ],
+   "outros": 0,
+   "silvicultura": 61449.51,
+   "valor": 61449.51
+  },
+  "pct_agricultura": 25,
+  "pct_atividade": 25,
+  "pool": 307247.53,
+  "por_mes": [
+   {
+    "agricultura": 23293.54,
+    "agricultura_safra": 23293.54,
+    "ano_mes": "2024-07",
+    "arredondamento": -0.01,
+    "bruto": 93174.15,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 25,
+    "pct_pecuaria": 70,
+    "pecuaria": 65221.91,
+    "silvicultura": 4658.71
+   },
+   {
+    "agricultura": 29085.06,
+    "agricultura_safra": 29085.06,
+    "ano_mes": "2024-08",
+    "arredondamento": 0,
+    "bruto": 116340.25,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 25,
+    "pct_pecuaria": 70,
+    "pecuaria": 81438.18,
+    "silvicultura": 5817.01
+   },
+   {
+    "agricultura": 22938.43,
+    "agricultura_safra": 22938.43,
+    "ano_mes": "2024-09",
+    "arredondamento": 0,
+    "bruto": 91753.72,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 25,
+    "pct_pecuaria": 70,
+    "pecuaria": 64227.6,
+    "silvicultura": 4587.69
+   },
+   {
+    "agricultura": 24952.55,
+    "agricultura_safra": 24952.55,
+    "ano_mes": "2024-10",
+    "arredondamento": 0,
+    "bruto": 99810.2,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 25,
+    "pct_pecuaria": 70,
+    "pecuaria": 69867.14,
+    "silvicultura": 4990.51
+   },
+   {
+    "agricultura": 23924.09,
+    "agricultura_safra": 23924.09,
+    "ano_mes": "2024-11",
+    "arredondamento": 0,
+    "bruto": 95696.36,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 25,
+    "pct_pecuaria": 70,
+    "pecuaria": 66987.45,
+    "silvicultura": 4784.82
+   },
+   {
+    "agricultura": 32625.48,
+    "agricultura_safra": 32625.48,
+    "ano_mes": "2024-12",
+    "arredondamento": 0,
+    "bruto": 130501.93,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 25,
+    "pct_pecuaria": 70,
+    "pecuaria": 91351.35,
+    "silvicultura": 6525.1
+   },
+   {
+    "agricultura": 36751.81,
+    "agricultura_safra": 36751.81,
+    "ano_mes": "2025-01",
+    "arredondamento": 0,
+    "bruto": 147007.22,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 25,
+    "pct_pecuaria": 70,
+    "pecuaria": 102905.05,
+    "silvicultura": 7350.36
+   },
+   {
+    "agricultura": 22298.58,
+    "agricultura_safra": 22298.58,
+    "ano_mes": "2025-02",
+    "arredondamento": -0.01,
+    "bruto": 89194.3,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 25,
+    "pct_pecuaria": 70,
+    "pecuaria": 62436.01,
+    "silvicultura": 4459.72
+   },
+   {
+    "agricultura": 26628.03,
+    "agricultura_safra": 26628.03,
+    "ano_mes": "2025-03",
+    "arredondamento": 0,
+    "bruto": 106512.13,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 25,
+    "pct_pecuaria": 70,
+    "pecuaria": 74558.49,
+    "silvicultura": 5325.61
+   },
+   {
+    "agricultura": 23943.28,
+    "agricultura_safra": 23943.28,
+    "ano_mes": "2025-04",
+    "arredondamento": 0,
+    "bruto": 95773.13,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 25,
+    "pct_pecuaria": 70,
+    "pecuaria": 67041.19,
+    "silvicultura": 4788.66
+   },
+   {
+    "agricultura": 21356.91,
+    "agricultura_safra": 21356.91,
+    "ano_mes": "2025-05",
+    "arredondamento": 0,
+    "bruto": 85427.63,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 25,
+    "pct_pecuaria": 70,
+    "pecuaria": 59799.34,
+    "silvicultura": 4271.38
+   },
+   {
+    "agricultura": 19449.78,
+    "agricultura_safra": 19449.78,
+    "ano_mes": "2025-06",
+    "arredondamento": -0.01,
+    "bruto": 77799.11,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 25,
+    "pct_pecuaria": 70,
+    "pecuaria": 54459.38,
+    "silvicultura": 3889.96
+   }
+  ],
+  "por_mes_total": {
+   "agricultura": 307247.53,
+   "agricultura_safra": 307247.53,
+   "arredondamento": 0,
+   "bruto": 1228990.13,
+   "diferenca": 0,
+   "nao_alocado": 0,
+   "pct_agricultura": 25,
+   "pct_pecuaria": 70,
+   "pecuaria": 860293.09,
+   "silvicultura": 61449.51
+  },
+  "resumo": {
+   "agricultura_por_safra": [
+    {
+     "pct": 25,
+     "safra": "Safra 24/25 Lavoura",
+     "safra_id": "5df2fb02-d2df-4f82-90d7-1e47cd48ecd7",
+     "valor": 307247.53
+    }
+   ],
+   "arredondamento": 0,
+   "bruto": 1228990.13,
+   "diferenca": 0,
+   "partes": [
+    {
+     "destino": "pecuaria",
+     "pct": 70,
+     "valor": 860293.09
+    },
+    {
+     "destino": "agricultura",
+     "pct": 25,
+     "valor": 307247.53
+    },
+    {
+     "destino": "silvicultura",
+     "pct": 5,
+     "valor": 61449.51
+    },
+    {
+     "destino": "nao_alocado",
+     "pct": 0,
+     "valor": 0
+    }
+   ],
+   "soma": 1228990.13
+  },
+  "_cultura": "amendoim",
+  "_safra": "24/25-Lav",
+  "lancamentos": []
+ },
+ "sr_pec_2021": {
+  "direto_cultura": 0,
+  "fatias": [],
+  "fatias_atividade": [
+   {
+    "atividade": "pecuaria",
+    "valor": 153571.94
+   },
+   {
+    "atividade": "silvicultura",
+    "valor": 8082.73
+   },
+   {
+    "atividade": "agricultura",
+    "valor": 0
+   },
+   {
+    "atividade": "nao_alocado",
+    "valor": 0
+   }
+  ],
+  "grupos": [
+   {
+    "bruto": 161654.39,
+    "grupo": "Administração",
+    "parte": 153571.6705
+   },
+   {
+    "bruto": 0.28,
+    "grupo": "Financeiro",
+    "parte": 0.266
+   }
+  ],
+  "nao_alocado": {
+   "motivos": [
+    {
+     "motivo": "silvicultura sem DRE",
+     "valor": 8082.73
+    }
+   ],
+   "outros": 0,
+   "silvicultura": 8082.73,
+   "valor": 8082.73
+  },
+  "pct_agricultura": 95,
+  "pct_atividade": 95,
+  "pool": 153571.94,
+  "por_mes": [
+   {
+    "agricultura": 0,
+    "ano_mes": "2021-01",
+    "arredondamento": -0.01,
+    "bruto": 9134.9,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 0,
+    "pct_pecuaria": 95,
+    "pecuaria": 8678.16,
+    "silvicultura": 456.75
+   },
+   {
+    "agricultura": 0,
+    "ano_mes": "2021-02",
+    "arredondamento": -0.01,
+    "bruto": 10151.7,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 0,
+    "pct_pecuaria": 95,
+    "pecuaria": 9644.12,
+    "silvicultura": 507.59
+   },
+   {
+    "agricultura": 0,
+    "ano_mes": "2021-03",
+    "arredondamento": -0.01,
+    "bruto": 10093.1,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 0,
+    "pct_pecuaria": 95,
+    "pecuaria": 9588.45,
+    "silvicultura": 504.66
+   },
+   {
+    "agricultura": 0,
+    "ano_mes": "2021-04",
+    "arredondamento": 0,
+    "bruto": 8207.64,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 0,
+    "pct_pecuaria": 95,
+    "pecuaria": 7797.26,
+    "silvicultura": 410.38
+   },
+   {
+    "agricultura": 0,
+    "ano_mes": "2021-05",
+    "arredondamento": 0,
+    "bruto": 4946.4,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 0,
+    "pct_pecuaria": 95,
+    "pecuaria": 4699.08,
+    "silvicultura": 247.32
+   },
+   {
+    "agricultura": 0,
+    "ano_mes": "2021-06",
+    "arredondamento": 0,
+    "bruto": 50397.88,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 0,
+    "pct_pecuaria": 95,
+    "pecuaria": 47877.99,
+    "silvicultura": 2519.89
+   },
+   {
+    "agricultura": 0,
+    "ano_mes": "2021-07",
+    "arredondamento": -0.01,
+    "bruto": 2914.3,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 0,
+    "pct_pecuaria": 95,
+    "pecuaria": 2768.59,
+    "silvicultura": 145.72
+   },
+   {
+    "agricultura": 0,
+    "ano_mes": "2021-08",
+    "arredondamento": 0,
+    "bruto": 5585.8,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 0,
+    "pct_pecuaria": 95,
+    "pecuaria": 5306.51,
+    "silvicultura": 279.29
+   },
+   {
+    "agricultura": 0,
+    "ano_mes": "2021-09",
+    "arredondamento": 0,
+    "bruto": 1641.2,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 0,
+    "pct_pecuaria": 95,
+    "pecuaria": 1559.14,
+    "silvicultura": 82.06
+   },
+   {
+    "agricultura": 0,
+    "ano_mes": "2021-10",
+    "arredondamento": 0,
+    "bruto": 3183.06,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 0,
+    "pct_pecuaria": 95,
+    "pecuaria": 3023.91,
+    "silvicultura": 159.15
+   },
+   {
+    "agricultura": 0,
+    "ano_mes": "2021-11",
+    "arredondamento": -0.01,
+    "bruto": 4154.5,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 0,
+    "pct_pecuaria": 95,
+    "pecuaria": 3946.78,
+    "silvicultura": 207.73
+   },
+   {
+    "agricultura": 0,
+    "ano_mes": "2021-12",
+    "arredondamento": 0,
+    "bruto": 51244.19,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 0,
+    "pct_pecuaria": 95,
+    "pecuaria": 48681.98,
+    "silvicultura": 2562.21
+   }
+  ],
+  "por_mes_total": {
+   "agricultura": 0,
+   "arredondamento": 0,
+   "bruto": 161654.67,
+   "diferenca": 0,
+   "nao_alocado": 0,
+   "pct_agricultura": 0,
+   "pct_pecuaria": 95,
+   "pecuaria": 153571.94,
+   "silvicultura": 8082.73
+  },
+  "resumo": {
+   "agricultura_por_safra": null,
+   "arredondamento": 0,
+   "bruto": 161654.67,
+   "diferenca": 0,
+   "partes": [
+    {
+     "destino": "pecuaria",
+     "pct": 95,
+     "valor": 153571.94
+    },
+    {
+     "destino": "agricultura",
+     "pct": 0,
+     "valor": 0
+    },
+    {
+     "destino": "silvicultura",
+     "pct": 5,
+     "valor": 8082.73
+    },
+    {
+     "destino": "nao_alocado",
+     "pct": 0,
+     "valor": 0
+    }
+   ],
+   "soma": 161654.67
+  },
+  "lancamentos": []
+ },
+ "nj_pec_2023": {
+  "direto_cultura": 0,
+  "fatias": [],
+  "fatias_atividade": [
+   {
+    "atividade": "pecuaria",
+    "valor": 844162.49
+   },
+   {
+    "atividade": "agricultura",
+    "valor": 78442.7
+   },
+   {
+    "atividade": "silvicultura",
+    "valor": 47573.04
+   },
+   {
+    "atividade": "nao_alocado",
+    "valor": 0
+   }
+  ],
+  "grupos": [
+   {
+    "bruto": 537881.37,
+    "grupo": "Administração",
+    "parte": 467737.1317647059
+   },
+   {
+    "bruto": 272960.16,
+    "grupo": "Mão de Obra",
+    "parte": 237216.5814117647
+   },
+   {
+    "bruto": 131243.83,
+    "grupo": "Máquinas",
+    "parte": 116289.9614117647
+   },
+   {
+    "bruto": 28092.87,
+    "grupo": "Financeiro",
+    "parte": 22918.816
+   }
+  ],
+  "nao_alocado": {
+   "motivos": [
+    {
+     "motivo": "silvicultura sem DRE",
+     "valor": 47573.04
+    }
+   ],
+   "outros": 0,
+   "silvicultura": 47573.04,
+   "valor": 47573.04
+  },
+  "pct_agricultura": 87,
+  "pct_atividade": 87,
+  "pool": 844162.49,
+  "por_mes": [
+   {
+    "agricultura": 0,
+    "ano_mes": "2023-01",
+    "arredondamento": 0,
+    "bruto": 82993.78,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 0,
+    "pct_pecuaria": 100,
+    "pecuaria": 82993.78,
+    "silvicultura": 0
+   },
+   {
+    "agricultura": 0,
+    "ano_mes": "2023-02",
+    "arredondamento": 0,
+    "bruto": 70941.08,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 0,
+    "pct_pecuaria": 94.1,
+    "pecuaria": 66768.08,
+    "silvicultura": 4173
+   },
+   {
+    "agricultura": 0,
+    "ano_mes": "2023-03",
+    "arredondamento": 0,
+    "bruto": 84971.86,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 0,
+    "pct_pecuaria": 94.1,
+    "pecuaria": 79973.52,
+    "silvicultura": 4998.34
+   },
+   {
+    "agricultura": 0,
+    "ano_mes": "2023-04",
+    "arredondamento": 0,
+    "bruto": 76434.13,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 0,
+    "pct_pecuaria": 94.1,
+    "pecuaria": 71938,
+    "silvicultura": 4496.13
+   },
+   {
+    "agricultura": 0,
+    "ano_mes": "2023-05",
+    "arredondamento": 0,
+    "bruto": 70729.93,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 0,
+    "pct_pecuaria": 94.1,
+    "pecuaria": 66569.35,
+    "silvicultura": 4160.58
+   },
+   {
+    "agricultura": 0,
+    "ano_mes": "2023-06",
+    "arredondamento": 0,
+    "bruto": 61156.15,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 0,
+    "pct_pecuaria": 94.1,
+    "pecuaria": 57558.73,
+    "silvicultura": 3597.42
+   },
+   {
+    "agricultura": 9370.83,
+    "ano_mes": "2023-07",
+    "arredondamento": -0.01,
+    "bruto": 62472.17,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 15,
+    "pct_pecuaria": 80,
+    "pecuaria": 49977.74,
+    "silvicultura": 3123.61
+   },
+   {
+    "agricultura": 9339.07,
+    "ano_mes": "2023-08",
+    "arredondamento": 0,
+    "bruto": 62260.44,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 15,
+    "pct_pecuaria": 80,
+    "pecuaria": 49808.35,
+    "silvicultura": 3113.02
+   },
+   {
+    "agricultura": 12561.76,
+    "ano_mes": "2023-09",
+    "arredondamento": 0,
+    "bruto": 83745.04,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 15,
+    "pct_pecuaria": 80,
+    "pecuaria": 66996.03,
+    "silvicultura": 4187.25
+   },
+   {
+    "agricultura": 12702.17,
+    "ano_mes": "2023-10",
+    "arredondamento": -0.01,
+    "bruto": 84681.1,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 15,
+    "pct_pecuaria": 80,
+    "pecuaria": 67744.88,
+    "silvicultura": 4234.06
+   },
+   {
+    "agricultura": 11847.43,
+    "ano_mes": "2023-11",
+    "arredondamento": 0.01,
+    "bruto": 78982.88,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 15,
+    "pct_pecuaria": 80,
+    "pecuaria": 63186.3,
+    "silvicultura": 3949.14
+   },
+   {
+    "agricultura": 22621.45,
+    "ano_mes": "2023-12",
+    "arredondamento": 0,
+    "bruto": 150809.67,
+    "diferenca": 0,
+    "nao_alocado": 0,
+    "pct_agricultura": 15,
+    "pct_pecuaria": 80,
+    "pecuaria": 120647.74,
+    "silvicultura": 7540.48
+   }
+  ],
+  "por_mes_total": {
+   "agricultura": 78442.7,
+   "arredondamento": 0,
+   "bruto": 970178.23,
+   "diferenca": 0,
+   "nao_alocado": 0,
+   "pct_agricultura": 8.1,
+   "pct_pecuaria": 87,
+   "pecuaria": 844162.49,
+   "silvicultura": 47573.04
+  },
+  "resumo": {
+   "agricultura_por_safra": null,
+   "arredondamento": 0,
+   "bruto": 970178.23,
+   "diferenca": 0,
+   "partes": [
+    {
+     "destino": "pecuaria",
+     "pct": 87,
+     "valor": 844162.49
+    },
+    {
+     "destino": "agricultura",
+     "pct": 8.1,
+     "valor": 78442.7
+    },
+    {
+     "destino": "silvicultura",
+     "pct": 4.9,
+     "valor": 47573.04
+    },
+    {
+     "destino": "nao_alocado",
+     "pct": 0,
+     "valor": 0
+    }
+   ],
+   "soma": 970178.23
+  },
+  "lancamentos": []
+ },
+ "nj_dre_2023": {
+  "total": {
+   "rateio_adm": 844162.5,
+   "cab_media": 6951,
+   "rateio_adm_grupos": [
+    {
+     "grupo": "Administração",
+     "valor": 467737.15
+    },
+    {
+     "grupo": "Financeiro",
+     "valor": 22918.81
+    },
+    {
+     "grupo": "Mão de Obra",
+     "valor": 237216.58
+    },
+    {
+     "grupo": "Máquinas",
+     "valor": 116289.96
+    }
+   ]
+  },
+  "fazendas": [
+   {
+    "nome": "Faz. Pureza",
+    "rateio_adm": 586092.39,
+    "cab_media": 4826,
+    "rateio_adm_grupos": [
+     {
+      "grupo": "Administração",
+      "valor": 324744.56
+     },
+     {
+      "grupo": "Financeiro",
+      "valor": 15912.27
+     },
+     {
+      "grupo": "Mão de Obra",
+      "valor": 164696.77
+     },
+     {
+      "grupo": "Máquinas",
+      "valor": 80738.79
+     }
+    ]
+   },
+   {
+    "nome": "Faz. Sta. Luzia",
+    "rateio_adm": 36433.43,
+    "cab_media": 300,
+    "rateio_adm_grupos": [
+     {
+      "grupo": "Administração",
+      "valor": 20187.19
+     },
+     {
+      "grupo": "Financeiro",
+      "valor": 989.16
+     },
+     {
+      "grupo": "Mão de Obra",
+      "valor": 10238.09
+     },
+     {
+      "grupo": "Máquinas",
+      "valor": 5018.99
+     }
+    ]
+   },
+   {
+    "nome": "Faz. Sto. Expedito",
+    "rateio_adm": 221636.68,
+    "cab_media": 1825,
+    "rateio_adm_grupos": [
+     {
+      "grupo": "Administração",
+      "valor": 122805.4
+     },
+     {
+      "grupo": "Financeiro",
+      "valor": 6017.38
+     },
+     {
+      "grupo": "Mão de Obra",
+      "valor": 62281.72
+     },
+     {
+      "grupo": "Máquinas",
+      "valor": 30532.18
+     }
+    ]
+   }
+  ],
+  "rateio_adm": {
+   "bruto": 970178.23,
+   "criterio": "cabecas medias no periodo",
+   "grupos": [
+    {
+     "grupo": "Administração",
+     "pool": 467737.1317647059
+    },
+    {
+     "grupo": "Financeiro",
+     "pool": 22918.816
+    },
+    {
+     "grupo": "Mão de Obra",
+     "pool": 237216.5814117647
+    },
+    {
+     "grupo": "Máquinas",
+     "pool": 116289.9614117647
+    }
+   ],
+   "nao_alocado": {
+    "motivos": [
+     {
+      "motivo": "silvicultura sem DRE",
+      "valor": 47573.04
+     }
+    ],
+    "outros": 0,
+    "silvicultura": 47573.04,
+    "valor": 47573.04
+   },
+   "pool": 844162.4905882353
+  }
+ },
+ "nj_dre_2025": {
+  "total": {
+   "rateio_adm": 886574.04,
+   "cab_media": 6497,
+   "rateio_adm_grupos": [
+    {
+     "grupo": "Administração",
+     "valor": 437323.75
+    },
+    {
+     "grupo": "Financeiro",
+     "valor": 8117.26
+    },
+    {
+     "grupo": "Mão de Obra",
+     "valor": 296999.79
+    },
+    {
+     "grupo": "Máquinas",
+     "valor": 144133.24
+    }
+   ]
+  },
+  "fazendas": [
+   {
+    "nome": "Administrativo",
+    "rateio_adm": 0,
+    "cab_media": 0,
+    "rateio_adm_grupos": [
+     {
+      "grupo": "Administração",
+      "valor": 0
+     },
+     {
+      "grupo": "Financeiro",
+      "valor": 0
+     },
+     {
+      "grupo": "Mão de Obra",
+      "valor": 0
+     },
+     {
+      "grupo": "Máquinas",
+      "valor": 0
+     }
+    ]
+   },
+   {
+    "nome": "Faz. Pureza",
+    "rateio_adm": 672469.89,
+    "cab_media": 4928,
+    "rateio_adm_grupos": [
+     {
+      "grupo": "Administração",
+      "valor": 331711.78
+     },
+     {
+      "grupo": "Financeiro",
+      "valor": 6156.97
+     },
+     {
+      "grupo": "Mão de Obra",
+      "valor": 225275.51
+     },
+     {
+      "grupo": "Máquinas",
+      "valor": 109325.63
+     }
+    ]
+   },
+   {
+    "nome": "Faz. Sto. Expedito",
+    "rateio_adm": 214104.15,
+    "cab_media": 1569,
+    "rateio_adm_grupos": [
+     {
+      "grupo": "Administração",
+      "valor": 105611.97
+     },
+     {
+      "grupo": "Financeiro",
+      "valor": 1960.29
+     },
+     {
+      "grupo": "Mão de Obra",
+      "valor": 71724.28
+     },
+     {
+      "grupo": "Máquinas",
+      "valor": 34807.61
+     }
+    ]
+   }
+  ],
+  "rateio_adm": {
+   "bruto": 1266534.34,
+   "criterio": "cabecas medias no periodo",
+   "grupos": [
+    {
+     "grupo": "Administração",
+     "pool": 437323.747
+    },
+    {
+     "grupo": "Financeiro",
+     "pool": 8117.256
+    },
+    {
+     "grupo": "Mão de Obra",
+     "pool": 296999.794
+    },
+    {
+     "grupo": "Máquinas",
+     "pool": 144133.241
+    }
+   ],
+   "nao_alocado": {
+    "motivos": [
+     {
+      "motivo": "silvicultura sem DRE",
+      "valor": 63326.72
+     }
+    ],
+    "outros": 0,
+    "silvicultura": 63326.72,
+    "valor": 63326.72
+   },
+   "pool": 886574.038
+  }
+ },
+ "_origem": "Lido do proto em 06/10/2026, depois da migration 20261027193800 (fix1): fn_painel_rateio_detalhe (ramo admin) e fn_dre_pecuaria. Sem os lancamentos (so os agregados)."
+}
