@@ -84,6 +84,7 @@ import { VisaoConsolidadaTab } from '@/components/financeiro-v2/VisaoConsolidada
 // PR-CLEANUP-MESA-CLASSIFICACAO-01 — import de V2MesaClassificacao removido: a tela legada
 // saiu do menu e da rota. O arquivo continua no repo (quarentena), fora do bundle.
 import { V2Configuracoes } from './pages/V2Configuracoes';
+import { AcessosTab } from '@/pages/AcessosTab';
 import { V2Fazendas } from './pages/V2Fazendas';
 import { ClientesTab } from '@/pages/ClientesTab';
 import { AuditoriaTab } from '@/pages/AuditoriaTab';
@@ -1401,6 +1402,8 @@ export default function V2Index() {
     if (section === 'config-clientes') return <ClientesTab />;
     if (section === 'config-bancario') return <FinV2ContasTab />;
     if (section === 'config-auditoria') return <AuditoriaTab />;
+    /* ACESSOS-TELA-01 — so' admin: a secao nao tem a marca `liberadaClientes`, e a guarda unica da rota barra o resto. */
+    if (section === 'config-acessos') return <AcessosTab />;
     if (section === 'config-fazendas') return <V2Fazendas />;
     if (section === 'rebanho-home') return (
       /* ⚠ AS DUAS PROPS QUE FALTAVAM — PR-SELETOR-PERIODO-02. Esta montagem passava `ano` e
@@ -1523,7 +1526,7 @@ export default function V2Index() {
      tem referência, a página inteira cresce, e quem rola é o `<section>` — então o cabeçalho
      "fixo" de qualquer lista interna sobe junto. Foi o caso da colheita
      (`lancamentos-agricultura`), que nasceu escrita para app-shell e estava fora da lista. */
-  const SECOES_APP_SHELL = new Set(['conciliacao', 'mapa-pastos', 'conferencia-lancamentos', 'financiamentos', 'recorrencias', 'lancamentos-agricultura', 'barter-contratos', 'contas-a-pagar-receber']);
+  const SECOES_APP_SHELL = new Set(['conciliacao', 'mapa-pastos', 'conferencia-lancamentos', 'financiamentos', 'recorrencias', 'lancamentos-agricultura', 'barter-contratos', 'contas-a-pagar-receber', 'config-acessos']);
   const appShell = SECOES_APP_SHELL.has(section);
 
   return (

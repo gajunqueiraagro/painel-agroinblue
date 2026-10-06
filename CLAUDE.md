@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 06/10/2026 (DRE-RATEIO-MODAL-01 + fix1, +42 −4: `src/components/agri/rateioEncontro.test.tsx` 42 (novo); sairam os 4 da
+  Baseline em 06/10/2026 (ACESSOS-TELA-01, +39: `src/lib/acessos/regrasDeAcesso.test.ts` 15, `src/pages/acessosTab.test.tsx` 19,
+  `src/v2/lib/acessoTelaDeAcessos.test.tsx` 5 — 4228 depois dele; antes o DRE-RATEIO-MODAL-01 + fix1, +42 −4: `src/components/agri/rateioEncontro.test.tsx` 42 (novo); sairam os 4 da
   etapa "Não alocado" de `src/components/agri/rateioDetalheModal.test.tsx`, com o codigo que testavam — 4189 depois dele; antes o
   REC-VALOR-CERTO-02, +17 em `src/lib/financeiro/cprEstimado.test.ts` (novo) — 4151 depois dele; antes o
   ACESSOS-FIN-03, +13 em `src/v2/lib/acessoMeta.test.tsx` (16 -> 29) — 4134 depois dele; antes o
@@ -215,7 +216,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4189
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4228
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -573,6 +574,53 @@ CONSULTAM: a lateral (`V2Sidebar`, por `gruposVisiveis`), o drawer (`V2ContextDr
     modal zootecnico (`LancamentoZooModal`) aberto por outro caminho que nao o detalhe nao foi auditado para linha de meta ·
     `usePermissions` (legado, com `if` de perfil; `canEditMeta = isAdmin`) segue decidindo o cenario Meta do "Lançar › Pecuária" e
     os gestos do Fechamento Área, fora do dono.
+- ⚠ A TELA DE ACESSOS TEM CAMINHO, E SO' O ADMIN GERENCIA ACESSOS (ACESSOS-TELA-01, Gabriel 06/10/2026; tela + tres edge functions; SEM
+  banco). Configurações › cartao "Acessos" -> secao `config-acessos` (fora do menu, SEM a marca `liberadaClientes`: gestor,
+  financeiro, campo e leitura nao a abrem nem por endereco — `src/v2/lib/acessoTelaDeAcessos.test.tsx`) -> `src/pages/AcessosTab.tsx`.
+  ⚠ NASCE DE UM FURO: a tela so' era montada por `CadastrosTab` e `Index`, que nao sao rota do V2, e as tres edge functions
+    (`criar-usuario`, `redefinir-senha`, `remover-membro`) NAO ESTAVAM IMPLANTADAS no proto — foram implantadas em 06/10 (v1,
+    `verify_jwt = true`, `supabase functions deploy <nome> --project-ref binbcdfbisgscrifztia --use-api`).
+  · A TELA NAO ESCREVE EM TABELA: criar, redefinir e remover sao das edge functions; ela so' LE a lista (`cliente_membros` ativo +
+    `profiles` nome/e-mail + `fazenda_membros`) e escreve o que a funcao devolveu (`lerRespostaDaFuncao`,
+    `src/lib/acessos/acessosDaTela.ts`: em resposta nao-2xx o corpo vem em `error.context`, e a tela antiga mostrava so' a frase
+    generica). O cliente e' o do seletor do topo ("Acessos de {cliente}"); sem cliente, formulario parado com o motivo.
+  · REGRAS DAS FUNCOES, num dono puro (`supabase/functions/_shared/regrasDeAcesso.ts`, testado pelo vitest em
+    `src/lib/acessos/regrasDeAcesso.test.ts`): (1) SO' ADMIN NO PILOTO — 403 "Só o administrador do AGROinBLUE gerencia acessos
+    por enquanto."; o ramo do gestor continua no corpo, atras de `GESTOR_GERENCIA_ACESSOS = false` (uma constante por funcao);
+    (2) ALVO PROTEGIDO — admin do AGROinBLUE nunca e' alvo de redefinir/remover, QUEM QUER QUE CHAME, e ninguem e' alvo de si
+    mesmo; RELIGAR O GESTOR EXIGE ESTA REGRA (antes um gestor redefinia a senha de um admin com linha no cliente dele); (3) O
+    E-MAIL EXISTENTE SE ACHA PERCORRENDO TODAS AS PAGINAS de `auth.admin.listUsers({ page, perPage: 1000 })` (a API admin do
+    supabase-js v2 nao busca por e-mail; sem argumento ela devolve so' a primeira pagina), comparado em minusculas e sem espacos;
+    (4) LOGIN REAPROVEITADO: a resposta leva `login_existente: true` e a tela escreve "Este e-mail já tinha login: o acesso ao
+    cliente foi criado e a senha dele NÃO mudou."; (5) o erro leva `etapa` (validacao · permissao · alvo · login ·
+    vinculo_cliente · inesperado) e a tela a escreve.
+  · PERFIS NO PILOTO (`PERFIS_DA_TELA`): so' "Gestor do Cliente" e "Financeiro" se criam; o seletor nasce em Financeiro; "Campo" e
+    "Leitura" ficam na lista APAGADOS com "aguarda a trava de gravação no banco" (o 01F: um login de leitura hoje GRAVARIA).
+    Admin do AGROinBLUE nao e' criavel por aqui (a funcao recusa o perfil).
+  · A SENHA so' vive no campo (`type="password"` com "mostrar", na criacao e na redefinicao) e no corpo da chamada: nao e'
+    exibida de novo, o campo e' limpo no sucesso, e nao vai a log (as funcoes logam so' `err.message`), console, toast nem URL.
+    Depois de criar: a linha aparece sem F5 e a tela escreve "Usuário criado. Passe o e-mail e a senha provisória à pessoa por
+    canais separados."
+  · LAYOUT: casca do V2 (titulo 20px; a secao esta' em `SECOES_APP_SHELL`); lista `table-fixed` (E-mail · Nome 150 · Perfil 104 ·
+    Situação 52 · ações 60), cabecalho navy preso, 10px, linha de 18,5px, uma linha por pessoa (fazendas no `title` do nome); a
+    linha do admin do AGROinBLUE nao tem acoes e diz "administrador · gerenciado fora desta tela" (as tres ultimas colunas
+    juntas: a frase pede ~200px); a propria linha tambem nao tem acoes. Formulario de 292px com um slot de 12px de mensagem por
+    campo (sempre presente) e o recado ESCRITO ao lado do botao (nunca toast); redefinir senha num dialogo fixo de 380 x 176;
+    remover por `AlertDialog` dizendo quem e de qual cliente. Medido a 1.126 x 523 no cliente Teste (so' leitura): titulo 20px,
+    lista 582 x 410 sem rolagem, cabecalho 9,5px sticky, 0 celulas cortadas, formulario 292 x 426 sem rolagem, pagina sem rolagem.
+  ⚠ DIVIDA ACESSOS-CRIAR-USUARIO-ATOMICO-01: `criar-usuario` nao e' atomica — login criado e `cliente_membros` falhando deixa
+    LOGIN SEM VINCULO (a resposta diz "o login foi criado e ficou SEM acesso a este cliente" e `login_criado_sem_vinculo`); os
+    erros de `fazenda_membros` e de `profiles` nao sao lidos (a funcao responde sucesso); a ordem das gravacoes nao foi mexida.
+  ⚠ DIVIDA EDGE-FUNCTIONS-NAO-IMPLANTADAS-01: tem codigo no repositorio e NAO estao no proto — `gerar-texto-fechamento`,
+    `reset-boitel-teste`, `export-painel-consultor-excel` (as chamadas do front a elas falham). Implantadas: `export-xlsx` e
+    `extract-caderno` (`verify_jwt` false) e as tres de acesso (true).
+  ⚠ NAO PROVADO (a criacao real e' do Gabriel): criar, redefinir e remover de verdade; o e-mail existente achado em pagina alem
+    da primeira no Auth real; o menu de perfil ABERTO no navegador (os itens apagados so' por teste da lista e da fonte); os dois
+    dialogos abertos no navegador; a tela com varias linhas. Depois do deploy so' se provou, sem criar ninguem: sem token -> 401
+    nas tres; token do admin + corpo vazio -> 400 com a frase de validacao; preflight do navegador passa com `verify_jwt` true.
+  ⚠ As edge functions nao tem teste rodando (o repositorio nao tem estrutura Deno): testa-se a regra pura e a FONTE das tres.
+  ⚠ TSC: o TS2367 de `V2Index.tsx` ("…and '"evolucao"' have no overlap") trocou "40 more" por "41 more" na mensagem — a uniao
+    `V2Section` ganhou `config-acessos`; e' o MESMO erro da baseline.
 - ⚠ O QUE FALTA: (a) o EFEITO de 'ver' nas telas (modo somente leitura por perfil) — hoje a funcao devolve o nivel e nenhuma tela o
   usa; no piloto as tres sao 'editar' para gestor e financeiro, e 'ver' para `leitura`, que hoje EDITARIA; (b) a trava no banco, 01F;
   (c) a grade por pessoa, ACESSOS-03; (d) [feito no ACESSOS-02b: o endereco e' "/"].

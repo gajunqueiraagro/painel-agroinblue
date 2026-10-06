@@ -1,4 +1,4 @@
-import { Building2, Landmark, ShieldCheck, MapPin } from 'lucide-react';
+import { Building2, Landmark, ShieldCheck, MapPin, Users } from 'lucide-react';
 import type { V2Section } from '@/v2/lib/navGrupos';
 
 interface Props {
@@ -36,6 +36,13 @@ const CARDS: ConfigCard[] = [
     icon: ShieldCheck,
     label: 'Auditoria',
     desc: 'Log de ações no sistema',
+  },
+  {
+    /* ACESSOS-TELA-01 — a tela de Acessos volta a ter caminho. So' o admin chega a Configurações. */
+    section: 'config-acessos',
+    icon: Users,
+    label: 'Acessos',
+    desc: 'Quem entra em cada cliente e com qual perfil',
   },
 ];
 

@@ -45,6 +45,7 @@ export type V2Section =
   | 'config-fazendas'
   | 'config-bancario'
   | 'config-auditoria'
+  | 'config-acessos'         // ACESSOS-TELA-01 — quem entra em cada cliente; SO' ADMIN (sem a marca `liberadaClientes`)
   // ── PR Reorganização — sections novas (placeholders / sem regression) ──
   | 'lancamentos-meta-zoo'   // (em construção) — futura variante de lancamentos-zoot filtrada por META
   | 'lancamentos-meta-fin'   // (em construção) — futura variante de financeiro-lanc filtrada por META
@@ -448,6 +449,7 @@ export const SECTION_TO_GROUP: Partial<Record<V2Section, string>> = {
   'config-clientes':  'configuracoes',
   'config-bancario':  'configuracoes',
   'config-auditoria': 'configuracoes',
+  'config-acessos':   'configuracoes',
 };
 
 /**
@@ -483,6 +485,7 @@ const ROTULOS_FORA_DO_MENU: Partial<Record<V2Section, { area: string; secao: str
   'config-clientes':        { area: 'Configurações', secao: 'Clientes' },
   'config-bancario':        { area: 'Configurações', secao: 'Bancário' },
   'config-auditoria':       { area: 'Configurações', secao: 'Auditoria' },
+  'config-acessos':         { area: 'Configurações', secao: 'Acessos' },
 };
 
 let mapaRotulos: Partial<Record<V2Section, { area: string; secao: string }>> | null = null;
