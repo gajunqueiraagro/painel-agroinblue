@@ -47,6 +47,9 @@ export interface ContaCpr {
   status_transacao: string | null;
   tipo_operacao: string | null;
   valor: number | string | null;
+  /** CPR-CONTA-01: os dois campos de conta do lançamento; quem vale é o da DIREÇÃO (`contaDaConta`). */
+  conta_bancaria_id?: string | null;
+  conta_destino_id?: string | null;
 }
 
 /**
@@ -71,6 +74,21 @@ export function baldeDaConta(c: ContaCpr, periodo: PeriodoCpr, hoje: string): Ba
   if (v < hoje) return 'vencido';
   if (v >= periodo.de && v <= periodo.ate) return 'periodo';
   return 'fora';
+}
+
+/* ─── CPR-CONTA-01 — a conta de cada lançamento ─────────────────────────────────────────────────────────────────────────
+   UMA regra, a da direção (a mesma do sistema inteiro): entrada → `conta_destino_id`; o resto → `conta_bancaria_id`.
+   Medido em 05/10/2026 nos em aberto de todos os clientes: nunca os dois preenchidos, e a regra = `conta_efetiva_id` em 100%. */
+export const SEM_CONTA = 'sem_conta';
+/** `null` = todas as contas; um id = aquela conta; `SEM_CONTA` = os lançamentos sem conta definida. */
+export type FiltroContaCpr = string | null;
+export function contaDaConta(c: Pick<ContaCpr, 'tipo_operacao' | 'conta_bancaria_id' | 'conta_destino_id'>): string | null {
+  return ((c.tipo_operacao ?? '').startsWith('1-') ? c.conta_destino_id : c.conta_bancaria_id) ?? null;
+}
+export function daContaCpr(c: Pick<ContaCpr, 'tipo_operacao' | 'conta_bancaria_id' | 'conta_destino_id'>, filtro: FiltroContaCpr): boolean {
+  if (filtro == null) return true;
+  const conta = contaDaConta(c);
+  return filtro === SEM_CONTA ? conta == null : conta === filtro;
 }
 
 export const ehPagarCpr = (c: Pick<ContaCpr, 'tipo_operacao'>) => (c.tipo_operacao ?? '').startsWith('2-');
@@ -112,11 +130,12 @@ function somar<T extends ContaCpr>(linhas: readonly T[]): SomaCpr & { cPagar: nu
 }
 
 export function recortarCpr<T extends ContaCpr>(
-  linhas: readonly T[], opcoes: { periodo: PeriodoCpr; hoje: string; incluirVencidos: boolean },
+  linhas: readonly T[], opcoes: { periodo: PeriodoCpr; hoje: string; incluirVencidos: boolean; conta?: FiltroContaCpr },
 ): RecorteCpr<T> {
   const { periodo, hoje, incluirVencidos } = opcoes;
   const porBalde: Record<BaldeCpr, T[]> = { paga: [], sem_vencimento: [], vencido: [], periodo: [], fora: [] };
-  for (const l of linhas) porBalde[baldeDaConta(l, periodo, hoje)].push(l);
+  /* CPR-CONTA-01 — o filtro de conta entra AQUI, antes de tudo: cartões, grupos, total e gráfico leem o mesmo recorte. */
+  for (const l of linhas) if (daContaCpr(l, opcoes.conta ?? null)) porBalde[baldeDaConta(l, periodo, hoje)].push(l);
   const porData = (a: T, b: T) => {
     const x = a.data_vencimento ?? '', y = b.data_vencimento ?? '';
     return x < y ? -1 : x > y ? 1 : (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
@@ -179,4 +198,30 @@ export function tituloDoGrupoVencidos(contas: number, diasDaMaisAntiga: number |
 export function rotuloDoTotal(segmento: SegmentoCpr, incluirVencidos: boolean, contas: number): string {
   const que = segmento === 'pagar' ? 'Total a pagar' : segmento === 'receber' ? 'Total a receber' : 'Total líquido (a receber − a pagar)';
   return `${que} · ${incluirVencidos ? 'vencidos + período' : 'período, sem vencidos'} · ${contas} ${contas === 1 ? 'conta' : 'contas'}`;
+}
+
+/* ─── CPR-CONTA-01 — o resumo por conta (as opções do seletor e a faixa abaixo dos cartões) ───────────────────────────────
+   O total A PAGAR de cada conta no recorte atual — vencidos (se a caixa está ligada) + período —, com a contagem; "sem conta"
+   entra como uma conta (nunca escondida). Maior valor primeiro. A soma das contas é o `total.pagar` de "Todas", ao centavo:
+   cada linha cai em exatamente uma conta. O `receber` de cada conta vai junto (conferência e conta só de recebimento). */
+export interface ContaNoResumoCpr { conta: string; pagar: LadoCpr; receber: LadoCpr; vencidoPagar: LadoCpr }
+export function resumoPorContaCpr<T extends ContaCpr>(
+  linhas: readonly T[], opcoes: { periodo: PeriodoCpr; hoje: string; incluirVencidos: boolean },
+): ContaNoResumoCpr[] {
+  const chaves = new Set<string>();
+  for (const l of linhas) {
+    const b = baldeDaConta(l, opcoes.periodo, opcoes.hoje);
+    if (b === 'periodo' || (b === 'vencido' && opcoes.incluirVencidos)) chaves.add(contaDaConta(l) ?? SEM_CONTA);
+  }
+  const lista = Array.from(chaves).map((conta) => {
+    const r = recortarCpr(linhas, { ...opcoes, conta });
+    return { conta, pagar: r.total.pagar, receber: r.total.receber, vencidoPagar: opcoes.incluirVencidos ? r.vencidos.pagar : { valor: 0, contas: 0 } };
+  });
+  return lista.sort((a, b) => (b.pagar.valor - a.pagar.valor) || (b.receber.valor - a.receber.valor) || (a.conta < b.conta ? -1 : 1));
+}
+
+/** A FAIXA "A pagar por conta" só desenha conta com total a pagar MAIOR QUE ZERO (o seletor continua com todas: ele filtra a
+ *  pagar e a receber). O "+N" conta só as que a faixa desenharia. */
+export function contasDaFaixaCpr(resumo: readonly ContaNoResumoCpr[]): ContaNoResumoCpr[] {
+  return resumo.filter((c) => c.pagar.valor > 0);
 }

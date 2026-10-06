@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 05/10/2026 (OC-VINCULAR-CANDIDATAS-01b, +1 em `src/components/financeiro-v2/vincularCandidatas.test.tsx` — 3986 depois dele;
+  Baseline em 06/10/2026 (CPR-CONTA-01, +7 em `src/lib/financeiro/cprRecorte.test.ts` — 3993 depois dele;
+  antes o OC-VINCULAR-CANDIDATAS-01b, +1 em `src/components/financeiro-v2/vincularCandidatas.test.tsx` — 3986 depois dele;
   antes o CPR-PERIODO-VENCIDOS-01, +16 em `src/lib/financeiro/cprRecorte.test.ts` — 3985 depois dele;
   antes o OC-VINCULAR-CANDIDATAS-01, +24 em `src/components/financeiro-v2/vincularCandidatas.test.tsx` — 3969 depois dele;
   antes o OC-VINCULAR-RECEBIMENTO-PARCIAL-01, +25 em `src/components/financeiro-v2/vincularRecebimentoParcial.test.tsx` — 3945 depois dele;
@@ -202,7 +203,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3986
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3993
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -210,6 +211,9 @@ no mesmo arquivo.
   regressao, conferir se ela e' uma destas tres.
   ⚠ WORKTREE SEM `node_modules` PROPRIO COLHE MENOS ARQUIVOS: o symlink nao resolve o alias `@/`
     (1563 ali nao era baseline, era erro de coleta). Quem mede em worktree instala as dependencias nela.
+  ⚠ DIVIDA SUITE-TESTE-OSCILA-01: em 06/10/2026 UMA execucao da suite inteira deu 4 falhas em vez de 3 (logo depois de uma rodada
+    de mutacoes); as cinco execucoes seguintes deram as 3 de sempre. O quarto teste NAO foi identificado (a saida daquela rodada
+    nao foi guardada). Quem vir 4 falhas guarda a lista dos `FAIL` antes de repetir.
   ⚠ CASO EXISTENTE QUE FALHA POR MUDANCA DE CONTRATO e' atualizado ao contrato novo, nunca afrouxado
     para passar; teste que sai junto com o codigo que testava nao e' perda de cobertura.
   ⚠ ASSERCAO DE "NENHUM" LEVA A PROVA DE QUE A BUSCA SABE ACHAR (a lei do auto-teste do `check:tdz`),
@@ -2464,6 +2468,35 @@ docs/historico/frentes-ate-2026-09-29.md.)
     Fluxo segue forcando "Ambos" ao entrar · a legenda do grafico ficou com os quatro tracos que ja' tinha · a contagem dos cartoes
     do periodo e' "· 237" (por extenso no `title`) · abaixo de 1.126px os cartoes nao foram medidos · nao provado no navegador:
     pilula Realizado ligada, "de" depois de "ate", o grupo "Sem vencimento" (0 casos reais), digitacao real nas datas.
+- ⚠ CONTAS A PAGAR E RECEBER POR CONTA BANCARIA: O FILTRO E O RESUMO SAO DO MESMO DONO (CPR-CONTA-01, Gabriel 05–06/10/2026, so' tela,
+  sem consulta nova). Em `src/lib/financeiro/cprRecorte.ts`: `contaDaConta`, o parametro `conta` de `recortarCpr` (`null` = todas ·
+  um id · `SEM_CONTA`), `resumoPorContaCpr` e `contasDaFaixaCpr`.
+  · A CONTA DA LINHA E' A DA DIRECAO: entrada -> `conta_destino_id`; saida -> `conta_bancaria_id` (a regra do sistema). Medido nos
+    em aberto de todos os clientes: nunca os dois preenchidos, e a regra = `conta_efetiva_id` em 100%; 0 em aberto sem conta. A
+    coluna "Conta" da lista lia sempre a bancaria e mostrava "—" em toda entrada: passou a ler o dono.
+  · O FILTRO ENTRA NO RECORTE, ANTES DE TUDO: cartoes Vencidos / A pagar / A receber / Saldo, grupos, total e grafico leem o mesmo
+    `recorte`. O nome da conta fica escrito no cabecalho ("Conta: X") enquanto o filtro esta' ligado.
+  · O RESUMO POR CONTA (opcoes do seletor e a faixa "A pagar por conta" abaixo dos cartoes) e' o total A PAGAR de cada conta no
+    recorte atual (vencidos, se a caixa esta' ligada, + periodo) com a contagem, maior valor primeiro; "Sem conta definida" e' uma
+    conta como as outras, nunca escondida. A SOMA DAS CONTAS E' O TOTAL DE "TODAS", AO CENTAVO (cada linha em exatamente uma conta).
+    A FAIXA (18px, existe mesmo vazia; 4 contas e "+N"; clicar filtra, clicar de novo volta) NAO desenha conta com a pagar ZERO nem
+    a conta no "+N"; o SELETOR continua com ela (filtra a pagar e a receber), com R$ 0,00 e a contagem real.
+  · O SELETOR e' o `Select` de `@/components/ui/select` (o mesmo do Financeiro V2 e da Mesa do Enriquecer).
+  · SALDO EM CAIXA DE UMA CONTA = O MESMO CALCULO com a lista de contas reduzida a'quela (`estimarSaldoEmCaixa` e
+    `serieDoSaldoPassado` ja' recebem as contas; a entrada viaja no retorno da `cpr-caixa`). O rotulo diz de quem e' o numero:
+    "Caixa · <conta>", ou "Caixa · todas as contas" em "Sem conta definida". CARTAO DE CREDITO NAO ENTRA NO CAIXA: mostra "—" com o
+    motivo no `title`. Conferido contra a Conciliacao: NJ Banco do Brasil 604.088,31; Agnaldo Bradesco 1,00 e Invest. Facil 26.205,10.
+  · ROTULOS DOS CARTOES CURTOS, que nao cortam: "Vencidos · N contas", "A pagar · N", "A receber · N", "Saldo", "Caixa" — o
+    periodo fica so' na barra 1 e o nome completo no `title`; a contagem e' numero (nao corta). Grade 1.75fr·1fr·1fr·1fr·1.94fr.
+  · ⚠ LARGURA MINIMA DA TELA: JANELA DE 1.126px (area util 886px; decisao do Gabriel, 06/10). Medido com "−R$ 99.999.999,99" nos
+    oito valores: a 1.126 todo valor tem folga (2,9px nos tres do meio, 5,4 no Vencidos, 6,3 no Caixa) e a barra 1 fecha em 886 de
+    886; a 1.280 sobra (18,8 a 37,1px); a 1.024 (area util 784) os valores CORTAM (−12,3 a −23,2px) e a barra 1 pede 880.
+  Provas: Lista x Fluxo com conta escolhida iguais (NJ Banco do Brasil e Agnaldo Bradesco); clique real no seletor (abrir,
+  escolher, voltar a Todas); 12 mutacoes da conta e 13 do periodo mortas.
+  ⚠ DIVIDAS: CPR-LARGURA-MENOR-01 (abaixo de ~1.110px: cartoes em duas linhas, 3 + 2, e barra 1 em duas linhas — PR proprio, so' se
+    houver uso real) · a barra 1 esta' SEM FOLGA a 1.126 (886 de 886): item novo quebra a linha · CONTA INATIVA aparece como "Conta
+    inativa", sem o nome (o catalogo da tela so' carrega ativas) · "Sem conta definida" e conta inativa nao tem caso real (so' por
+    teste) · as medidas a 1.024 e 1.280 foram feitas num iframe da propria aplicacao, nao numa janela real.
 - ⚠ A CONTA DIRETO NO CAMPO DE VALOR TEM UM DONO, E GUARDA-SE SO' O RESULTADO (FIN-VALOR-CALC-01a, Gabriel 05/10/2026, so' tela).
   Ele lanca rateios (o cliente manda o valor cheio, o lancamento e' uma parte): digita "16.238,00/2" no campo e fica o
   resultado; a conta NAO vai para observacao nem para lugar nenhum.

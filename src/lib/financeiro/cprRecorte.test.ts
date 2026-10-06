@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
   periodoDoAtalho, baldeDaConta, recortarCpr, ramoDaConsultaCpr, somarDiasIso, diasEntre, liquidoEmAberto, doSegmentoCpr,
-  tituloDoGrupoVencidos, rotuloDoTotal, centavosDaConta, type ContaCpr,
+  tituloDoGrupoVencidos, rotuloDoTotal, centavosDaConta, contaDaConta, daContaCpr, resumoPorContaCpr, contasDaFaixaCpr, SEM_CONTA, type ContaCpr,
 } from '@/lib/financeiro/cprRecorte';
 
 const HOJE = '2026-10-05';
@@ -142,6 +142,81 @@ describe('a consulta e as frases', () => {
   });
 });
 
+describe('CPR-CONTA-01 — filtro e resumo por conta, no mesmo dono', () => {
+  const tela2 = readFileSync(resolve(__dirname, '../../components/financeiro-v2/ContasPagarReceberTab.tsx'), 'utf8');
+  const sai = (venc: string | null, valor: number, ct: string | null, o: Partial<ContaCpr> = {}) => conta(venc, valor, { conta_bancaria_id: ct, conta_destino_id: null, ...o });
+  const entra = (venc: string | null, valor: number, ct: string | null, o: Partial<ContaCpr> = {}) => conta(venc, valor, { tipo_operacao: '1-Entradas', conta_destino_id: ct, conta_bancaria_id: null, ...o });
+  const linhas = [
+    sai('2025-08-31', 1000.10, 'A'), sai('2026-10-04', 0.1, 'B'), sai('2026-10-03', 0.2, null),     // vencidos a pagar: A, B e sem conta
+    entra('2026-10-01', 200.20, 'A'),                                                              // vencido a receber, conta A (pelo destino)
+    sai(HOJE, 300.30, 'A'), sai('2026-10-20', 50, 'B'), sai('2026-10-21', 12000, null),             // período a pagar
+    entra('2026-11-01', 5000, 'B'), entra('2026-10-30', 70, null),                                  // período a receber
+    sai('2026-10-10', 999, 'A', { status_transacao: 'realizado', data_pagamento: '2026-10-09' }),   // paga
+    sai('2026-12-25', 4000, 'C'),                                                                   // fora do período: a conta C não entra no resumo
+  ];
+  const op = { periodo: D30, hoje: HOJE, incluirVencidos: true };
+  const todas = recortarCpr(linhas, op);
+  const c = (v: number) => Math.round(v * 100);
+  it('a conta de cada lançamento é a da DIREÇÃO: entrada pelo destino, saída pela bancária', () => {
+    expect(contaDaConta(entra(HOJE, 1, 'X'))).toBe('X');
+    expect(contaDaConta(sai(HOJE, 1, 'Y'))).toBe('Y');
+    expect(contaDaConta(conta(HOJE, 1, { tipo_operacao: '1-Entradas', conta_bancaria_id: 'Y', conta_destino_id: null }))).toBeNull();
+    expect(daContaCpr(sai(HOJE, 1, null), SEM_CONTA)).toBe(true);
+    expect(daContaCpr(sai(HOJE, 1, 'Y'), SEM_CONTA)).toBe(false);
+    expect(daContaCpr(sai(HOJE, 1, 'Y'), null)).toBe(true);
+  });
+  it('a soma das contas (com "sem conta") = o total de Todas, ao centavo — vencidos, a pagar e a receber', () => {
+    const chaves = ['A', 'B', 'C', SEM_CONTA];
+    const por = chaves.map(k => recortarCpr(linhas, { ...op, conta: k }));
+    const soma = (f: (r: typeof todas) => number) => por.reduce((t, r) => t + c(f(r)), 0);
+    expect(soma(r => r.vencidos.pagar.valor)).toBe(c(todas.vencidos.pagar.valor));
+    expect(soma(r => r.vencidos.receber.valor)).toBe(c(todas.vencidos.receber.valor));
+    expect(soma(r => r.periodoSoma.pagar.valor)).toBe(c(todas.periodoSoma.pagar.valor));
+    expect(soma(r => r.periodoSoma.receber.valor)).toBe(c(todas.periodoSoma.receber.valor));
+    expect(soma(r => r.total.pagar.valor)).toBe(c(todas.total.pagar.valor));
+    expect(por.reduce((t, r) => t + r.total.pagar.contas + r.total.receber.contas, 0)).toBe(todas.total.ambos.contas);
+    /* cada linha em exatamente uma conta */
+    for (const l of linhas) expect(chaves.filter(k => daContaCpr(l, k)).length).toBe(1);
+  });
+  it('conta filtrada devolve só as dela', () => {
+    const a = recortarCpr(linhas, { ...op, conta: 'A' });
+    expect(a.vencidos.pagar).toEqual({ valor: 1000.10, contas: 1 });
+    expect(a.vencidos.receber).toEqual({ valor: 200.20, contas: 1 });
+    expect(a.periodoSoma.pagar).toEqual({ valor: 300.30, contas: 1 });
+    expect(a.pagas.length).toBe(1);
+    expect([...a.vencidos.linhas, ...a.periodoSoma.linhas, ...a.pagas].every(l => contaDaConta(l) === 'A')).toBe(true);
+    const sem = recortarCpr(linhas, { ...op, conta: SEM_CONTA });
+    expect(sem.total.pagar).toEqual({ valor: 12000.20, contas: 2 });
+    expect(sem.periodoSoma.receber).toEqual({ valor: 70, contas: 1 });
+  });
+  it('o resumo: maior valor a pagar primeiro, "sem conta" NUNCA escondida, e a soma é o total de Todas', () => {
+    const r = resumoPorContaCpr(linhas, op);
+    expect(r.map(x => x.conta)).toEqual([SEM_CONTA, 'A', 'B']);
+    expect(r.map(x => x.pagar)).toEqual([{ valor: 12000.20, contas: 2 }, { valor: 1300.40, contas: 2 }, { valor: 50.10, contas: 2 }]);
+    expect(r.reduce((t, x) => t + c(x.pagar.valor), 0)).toBe(c(todas.total.pagar.valor));
+    expect(r.reduce((t, x) => t + x.pagar.contas, 0)).toBe(todas.total.pagar.contas);
+    expect(r.reduce((t, x) => t + c(x.receber.valor), 0)).toBe(c(todas.total.receber.valor));
+  });
+  it('a FAIXA não desenha conta com a pagar zero (nem a conta no "+N"); o seletor continua com ela, com R$ 0,00 e a contagem real', () => {
+    const soReceber = [...linhas, entra('2026-10-15', 900, 'R')];
+    const r = resumoPorContaCpr(soReceber, op);
+    expect(r.find(x => x.conta === 'R')).toMatchObject({ pagar: { valor: 0, contas: 0 }, receber: { valor: 900, contas: 1 } });
+    expect(contasDaFaixaCpr(r).map(x => x.conta)).toEqual([SEM_CONTA, 'A', 'B']);
+    expect(contasDaFaixaCpr(r).every(x => x.pagar.valor > 0)).toBe(true);
+    expect(tela2).toContain('{contasNaFaixa.slice(0, MAX_CONTAS_NA_FAIXA).map((c) => (');
+    expect(tela2).toContain('+{contasNaFaixa.length - MAX_CONTAS_NA_FAIXA}');
+    expect(tela2).toContain('{resumoContas.map((c) => (\n                <SelectItem key={c.conta}');
+  });
+  it('o resumo segue a caixa "Incluir vencidos": desligada, só o período', () => {
+    const r = resumoPorContaCpr(linhas, { ...op, incluirVencidos: false });
+    expect(r.map(x => [x.conta, x.pagar.valor])).toEqual([[SEM_CONTA, 12000], ['A', 300.30], ['B', 50]]);
+    expect(r.reduce((t, x) => t + c(x.pagar.valor), 0)).toBe(c(recortarCpr(linhas, { ...op, incluirVencidos: false }).total.pagar.valor));    /* conta que só tem VENCIDO: entra no resumo com a caixa ligada (com o valor dela), e sai com a caixa desligada */
+    const comD = [...linhas, sai('2026-09-01', 7, 'D')];
+    expect(resumoPorContaCpr(comD, op).find(x => x.conta === 'D')?.pagar).toEqual({ valor: 7, contas: 1 });
+    expect(resumoPorContaCpr(comD, { ...op, incluirVencidos: false }).some(x => x.conta === 'D')).toBe(false);
+  });
+});
+
 describe('a tela só renderiza o dono (lido da fonte)', () => {
   const tela = readFileSync(resolve(__dirname, '../../components/financeiro-v2/ContasPagarReceberTab.tsx'), 'utf8');
   const fluxo = readFileSync(resolve(__dirname, '../../components/financeiro-v2/CprFluxoPrevisto.tsx'), 'utf8');
@@ -167,17 +242,42 @@ describe('a tela só renderiza o dono (lido da fonte)', () => {
     expect(tela.indexOf('data-testid="cpr-total"')).toBeGreaterThan(tela.indexOf('overflow-y-auto overflow-x-hidden rolagem-fina'));
     expect(tela).toMatch(/data-testid="cpr-total" className="flex h-\[22px\] shrink-0/);
   });
+  it('CPR-CONTA-01: o filtro entra no dono e chega a tudo — cartões, lista, total, gráfico, caixa e cabeçalho', () => {
+    expect(tela).toContain('recortarCpr(linhas, { periodo, hoje: hojeIso, incluirVencidos, conta: contaSel })');
+    expect(tela).toContain('resumoPorContaCpr(linhas, { periodo, hoje: hojeIso, incluirVencidos })');
+    /* o gráfico desenha o que sai do MESMO recorte filtrado, e parte do saldo da MESMA conta */
+    expect(tela).toMatch(/const doFluxo = useMemo\(\s*\(\) => \[\.\.\.vencidosDoSegmento, \.\.\.recorte\.periodoSoma\.linhas/);
+    expect(tela).toContain('linhas={doFluxo}');
+    expect(tela).toContain("contas: caixaTodas.argumentos.contas.filter((c) => c.id === contaSel)");
+    /* o cartão do caixa DIZ de quem é o número: a conta, ou "todas as contas" quando o filtro não é uma conta */
+    expect(tela).toContain("rotulo={caixaDeUmaConta ? `Caixa · ${nomeConta(contaSel)}` : contaSel === SEM_CONTA ? 'Caixa · todas as contas' : 'Caixa'}");
+    /* o nome da conta no cabeçalho enquanto o filtro está ligado */
+    expect(tela).toMatch(/\{contaSel != null && \(\s*<span data-testid="cpr-conta-no-cabecalho"/);
+    /* clicar no resumo filtra; clicar de novo volta a Todas */
+    expect(tela).toContain('const alternarConta = (conta: string) => setContaSel((atual) => (atual === conta ? null : conta));');
+    expect(tela).toContain('onClick={() => alternarConta(c.conta)}');
+    /* a faixa existe mesmo vazia, com altura fixa; a coluna Conta lê a conta pela direção */
+    expect(tela).toMatch(/data-testid="cpr-resumo-contas" className="flex h-\[18px\] flex-nowrap/);
+    expect(tela).toContain('{nomeConta(contaDaConta(l))}');
+    expect(tela).not.toContain('nomeConta(l.conta_bancaria_id)');
+    /* nenhuma consulta nova: a tela continua com as mesmas três chaves de cache */
+    expect(Array.from(new Set(Array.from(tela.matchAll(/queryKey: \['(cpr-[a-z]+)'/g)).map(m => m[1]))).sort()).toEqual(['cpr-anexos', 'cpr-caixa', 'cpr-lancs']);
+  });
   it('o cartão tem 40px e o valor não corta; o gráfico começa em "de"', () => {
     expect(tela).toContain("'flex min-w-0 h-[40px] items-center gap-1 rounded-md border border-l-[3px] px-1 py-[3px]'");
     /* NENHUM VALOR CORTA NEM FICA SÓ EM `title`: todo valor é `whitespace-nowrap`, sem `truncate`; 12px e a grade são os medidos a
        1.126px com "−R$ 99.999.999,99" nos OITO valores (cinco totais, o "a receber" dos vencidos e as duas linhas do caixa) */
     expect(tela).toMatch(/data-valor-do-cartao\n\s+className=\{cn\('whitespace-nowrap text-\[12px\] font-medium leading-\[18px\] tabular-nums', classeValor\)\}/);
-    expect(tela).toContain('grid grid-cols-[1.72fr_1fr_1fr_1fr_1.9fr] gap-1.5');
+    expect(tela).toContain('grid grid-cols-[1.75fr_1fr_1fr_1fr_1.94fr] gap-1.5');
+    /* rótulos curtos, que não cortam; o período fica só na barra 1 e o nome completo no `title` */
+    for (const r of ['rotulo="Vencidos"', 'rotulo="A pagar"', 'rotulo="A receber"', 'rotulo="Saldo"']) expect(tela, r).toContain(r);
+    expect(tela).not.toMatch(/rotulo="(A pagar no período|A receber no período|Saldo do período|Saldo em caixa)"/);
     const cartao = tela.slice(tela.indexOf('function CardResumo('), tela.indexOf('function Vazio('));
     expect(cartao.match(/data-valor-do-cartao/g)?.length).toBe(2);
     expect(cartao).toContain("<div key={i} title={l.title} className={cn('whitespace-nowrap', l.classe ?? 'text-muted-foreground')}>");
-    expect(cartao.match(/truncate/g)?.length).toBe(1);                       // só o RÓTULO (texto) corta
-    expect(cartao).toMatch(/className="truncate text-\[10px\] leading-\[12px\] text-muted-foreground" title=\{titulo \?\? rotulo\}/);
+    expect(cartao.match(/truncate/g)?.length).toBe(1);                       // só o TEXTO do rótulo corta
+    expect(cartao).toContain('<span className="truncate">{rotulo}</span>');
+    expect(cartao).toMatch(/\{contagem && <span className="shrink-0 whitespace-pre tabular-nums"/);   // a contagem é número: não corta
     /* o cartão Vencidos mostra os dois lados À VISTA (a receber em verde, só quando > 0); o do caixa, corrente e investido em duas linhas */
     expect(tela).toContain("lado={recorte.vencidos.receber.valor > 0");
     expect(tela).toContain("rotulo: n.rotulo === 'Corrente' ? 'corr.' : 'inv.',");

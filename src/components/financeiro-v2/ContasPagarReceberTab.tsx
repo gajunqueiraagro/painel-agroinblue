@@ -32,8 +32,10 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   ATALHOS_CPR, periodoDoAtalho, recortarCpr, ramoDaConsultaCpr, doSegmentoCpr, liquidoEmAberto, contaEmAberto, diasEntre,
-  tituloDoGrupoVencidos, rotuloDoTotal, ehReceberCpr, type AtalhoCpr, type PeriodoCpr,
+  tituloDoGrupoVencidos, rotuloDoTotal, ehReceberCpr, contaDaConta, resumoPorContaCpr, contasDaFaixaCpr, SEM_CONTA,
+  type AtalhoCpr, type PeriodoCpr, type FiltroContaCpr,
 } from '@/lib/financeiro/cprRecorte';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { aplicarPlanoNaView, type LinhaViewDoc } from '@/lib/financeiro/listaPaginadaV2';
 import { montarPlanoBaseV2 } from '@/lib/financeiro/filtrosBaseV2';
 import { paginarTudo } from '@/lib/financeiro/paginarTudo';
@@ -151,6 +153,8 @@ const COL = {
  * ⚠ NENHUMA OUTRA CÉLULA DESCE. Se algo novo não couber em 10px, a saída é a largura da
  * coluna, nunca a fonte — e se a largura não houver, reporta-se.
  */
+/** CPR-CONTA-01: quantas contas a faixa do resumo desenha antes do "+N" — MEDIDO a 1.126px (ver CLAUDE.md). */
+const MAX_CONTAS_NA_FAIXA = 4;
 const FONTE_DOC = 'text-[8px]';
 const FONTE_STATUS = 'text-[9px]';
 const FONTE_QUANDO = 'text-[9px]';
@@ -259,6 +263,9 @@ export function ContasPagarReceberTab() {
   const [atalho, setAtalho] = useState<AtalhoCpr>('30');
   const [datas, setDatas] = useState<PeriodoCpr | null>(null);
   const [incluirVencidos, setIncluirVencidos] = useState(true);
+  /* CPR-CONTA-01 — o filtro de conta: `null` = todas; um id; ou `SEM_CONTA`. Trocar de cliente volta a "Todas". */
+  const [contaSel, setContaSel] = useState<FiltroContaCpr>(null);
+  useEffect(() => { setContaSel(null); }, [clienteId]);
   const [segmento, setSegmento] = useState<Segmento>('pagar');
   const [statusLigados, setStatusLigados] = useState<string[]>(STATUS_INICIAIS);
   const [lancEdicao, setLancEdicao] = useState<LancamentoV2 | null>(null);
@@ -364,10 +371,10 @@ export function ContasPagarReceberTab() {
    * último mês que CONCILIA e soma os realizados desde aquela posição: R$ 198.299,74, o mesmo
    * que a Conciliação mostra. Quem decide é `estimarSaldoEmCaixa`, que é puro e testado.
    */
-  const { data: caixa } = useQuery({
+  const { data: caixaTodas } = useQuery({
     queryKey: ['cpr-caixa', clienteId, isoLocal(hoje)],
     enabled: !!clienteId,
-    queryFn: async (): Promise<(SaldoEmCaixa & { passado: SeriePassado }) | null> => {
+    queryFn: async (): Promise<(SaldoEmCaixa & { passado: SeriePassado; argumentos: Parameters<typeof estimarSaldoEmCaixa>[0] }) | null> => {
       if (!clienteId) return null;
       const { data: contasRaw } = await supabase
         .from('financeiro_contas_bancarias')
@@ -478,12 +485,27 @@ export function ContasPagarReceberTab() {
       const card = estimarSaldoEmCaixa(argumentos);
       return {
         ...card,
+        /* CPR-CONTA-01: a ENTRADA do cálculo viaja junto — o saldo de UMA conta é a mesma função sobre a mesma entrada. */
+        argumentos,
         /* A fronteira do verde é o MESMO "conciliado até" que o rótulo do card mostra — uma
            regra, dois lugares. */
         passado: serieDoSaldoPassado({ ...argumentos, conciliadoAte: card.ancoraMaisAtrasada }),
       };
     },
   });
+
+  /**
+   * CPR-CONTA-01 — O SALDO EM CAIXA DE UMA CONTA É O MESMO CÁLCULO, com a lista de contas reduzida àquela: `estimarSaldoEmCaixa`
+   * e `serieDoSaldoPassado` já recebem as contas por parâmetro (âncora + movimentos, conta a conta). Nenhuma regra nova, nenhuma
+   * consulta nova. Em "Todas" e em "Sem conta definida" vale o total — e o rótulo do cartão DIZ "todas as contas".
+   */
+  const caixaDeUmaConta = contaSel != null && contaSel !== SEM_CONTA;
+  const caixa = useMemo(() => {
+    if (!caixaTodas || !caixaDeUmaConta) return caixaTodas;
+    const args = { ...caixaTodas.argumentos, contas: caixaTodas.argumentos.contas.filter((c) => c.id === contaSel) };
+    const card = estimarSaldoEmCaixa(args);
+    return { ...card, argumentos: caixaTodas.argumentos, passado: serieDoSaldoPassado({ ...args, conciliadoAte: card.ancoraMaisAtrasada }) };
+  }, [caixaTodas, caixaDeUmaConta, contaSel]);
 
   /**
    * O rótulo do caixa — calmo. Divergência é informação, não alarme.
@@ -561,8 +583,17 @@ export function ContasPagarReceberTab() {
   /* CPR-PERIODO-VENCIDOS-01 — baldes, cartões e total saem do DONO (`recortarCpr`), dos mesmos dados nas duas visões. */
   const ehReceber = ehReceberCpr;
   const recorte = useMemo(
-    () => recortarCpr(linhas, { periodo, hoje: hojeIso, incluirVencidos }),
+    () => recortarCpr(linhas, { periodo, hoje: hojeIso, incluirVencidos, conta: contaSel }),
+    [linhas, periodo, hojeIso, incluirVencidos, contaSel]);
+  /* o resumo por conta (opções do seletor e a faixa): do MESMO dono, sobre os MESMOS dados, sempre de TODAS as contas */
+  const recorteDeTodas = useMemo(
+    () => (contaSel == null ? recorte : recortarCpr(linhas, { periodo, hoje: hojeIso, incluirVencidos })),
+    [recorte, contaSel, linhas, periodo, hojeIso, incluirVencidos]);
+  const resumoContas = useMemo(
+    () => resumoPorContaCpr(linhas, { periodo, hoje: hojeIso, incluirVencidos }),
     [linhas, periodo, hojeIso, incluirVencidos]);
+  /* a faixa só desenha conta com a pagar > 0 (do dono); o seletor segue com todas */
+  const contasNaFaixa = useMemo(() => contasDaFaixaCpr(resumoContas), [resumoContas]);
   const vencidosDoSegmento = useMemo(
     () => (incluirVencidos ? recorte.vencidos.linhas.filter((l) => doSegmentoCpr(l, segmento)) : []),
     [recorte, incluirVencidos, segmento]);
@@ -718,9 +749,12 @@ export function ContasPagarReceberTab() {
 
   const nomeConta = (id: string | null): string => {
     if (!id) return '—';
+    if (id === SEM_CONTA) return 'Sem conta definida';
     const c = fin.contasBancarias.find((x) => x.id === id);
-    return c?.nome_exibicao || c?.nome_conta || '—';
+    /* o catálogo da tela só traz contas ATIVAS: id que não resolve é conta inativa (0 casos em aberto no proto em 05/10/2026) */
+    return c ? (c.nome_exibicao || c.nome_conta || '—') : 'Conta inativa';
   };
+  const alternarConta = (conta: string) => setContaSel((atual) => (atual === conta ? null : conta));
 
   const vazioTexto = segmento === 'receber'
     ? 'Nenhum recebimento previsto neste período'
@@ -741,7 +775,16 @@ export function ContasPagarReceberTab() {
             titulo="Contas a Pagar e Receber"
             subtitulo="O que vence, quando, somando todas as contas — pelo vencimento, não pelo pagamento"
           />
-          {isFetching && <span className="shrink-0 text-[10px] text-muted-foreground">carregando…</span>}
+          <div className="flex shrink-0 items-center gap-2">
+            {isFetching && <span className="text-[10px] text-muted-foreground">carregando…</span>}
+            {/* a conta escolhida fica escrita no cabeçalho enquanto o filtro estiver ligado ("se escolher banco, tem que aparecer ali") */}
+            {contaSel != null && (
+              <span data-testid="cpr-conta-no-cabecalho" title={nomeConta(contaSel)}
+                className="max-w-[260px] truncate rounded-md bg-primary px-2 py-[2px] text-[11px] font-medium text-primary-foreground">
+                Conta: {nomeConta(contaSel)}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* BARRA 1 — CPR-PERIODO-VENCIDOS-01: UMA linha, sem quebra. Visão · período (atalho + as duas datas, sempre à vista e
@@ -756,7 +799,6 @@ export function ContasPagarReceberTab() {
               { valor: 'fluxo', rotulo: 'Fluxo' },
             ]}
           />
-          <span className="text-[10px] text-muted-foreground">Período</span>
           <Segmentado
             valor={atalho}
             onEscolher={escolherAtalho}
@@ -772,14 +814,34 @@ export function ContasPagarReceberTab() {
               onCheckedChange={(v) => setIncluirVencidos(v === true)} />
             Incluir vencidos
           </label>
+          <div className="min-w-0 flex-1" />
+          {/* CPR-CONTA-01 — o seletor de conta: cada opção diz o total A PAGAR e a contagem daquela conta no recorte atual */}
+          <span className="text-[10px] text-muted-foreground">Conta</span>
+          <Select value={contaSel ?? '__todas__'} onValueChange={(v) => setContaSel(v === '__todas__' ? null : v)}>
+            <SelectTrigger data-testid="cpr-conta" className="h-[22px] w-[114px] shrink-0 px-2 text-[10px]">
+              <SelectValue>{contaSel == null ? 'Todas as contas' : nomeConta(contaSel)}</SelectValue>
+            </SelectTrigger>
+            <SelectContent align="end">
+              <SelectItem value="__todas__">Todas as contas · {formatMoeda(recorteDeTodas.total.pagar.valor)} · {recorteDeTodas.total.pagar.contas}</SelectItem>
+              {resumoContas.map((c) => (
+                <SelectItem key={c.conta} value={c.conta} data-testid={`cpr-conta-opcao-${c.conta}`}>
+                  {nomeConta(c.conta)} · {formatMoeda(c.pagar.valor)} · {c.pagar.contas}
+                </SelectItem>
+              ))}
+              {contaSel != null && !resumoContas.some((c) => c.conta === contaSel) && (
+                <SelectItem value={contaSel}>{nomeConta(contaSel)} · {formatMoeda(0)} · 0</SelectItem>
+              )}
+            </SelectContent>
+          </Select>
         </div>
 
         {/* CARTÕES — cinco, 40px, rótulo + valor; o valor NUNCA corta. Os números saem todos de `recorte` (o dono) e não
             dependem da visão nem do segmento. ZERO É R$ 0,00, nunca "—". */}
-        <div className="grid grid-cols-[1.72fr_1fr_1fr_1fr_1.9fr] gap-1.5" data-testid="cpr-cartoes">
+        <div className="grid grid-cols-[1.75fr_1fr_1fr_1fr_1.94fr] gap-1.5" data-testid="cpr-cartoes">
           <CardResumo
             testId="cpr-card-vencidos"
-            rotulo={`Vencidos · ${contas(recorte.vencidos.pagar.contas)}`}
+            rotulo="Vencidos"
+            contagem={`· ${contas(recorte.vencidos.pagar.contas)}`}
             titulo={`Vencidos a pagar: ${formatMoeda(recorte.vencidos.pagar.valor)} em ${contas(recorte.vencidos.pagar.contas)} · vencidos a receber: ${formatMoeda(recorte.vencidos.receber.valor)} em ${contas(recorte.vencidos.receber.contas)}`}
             valor={formatMoeda(recorte.vencidos.pagar.valor)}
             classeValor={recorte.vencidos.pagar.valor > 0 ? 'text-destructive' : 'text-muted-foreground'}
@@ -792,7 +854,8 @@ export function ContasPagarReceberTab() {
           />
           <CardResumo
             testId="cpr-card-pagar"
-            rotulo={`A pagar no período · ${recorte.periodoSoma.pagar.contas}`}
+            rotulo="A pagar"
+            contagem={`· ${recorte.periodoSoma.pagar.contas}`}
             titulo={`A pagar no período: ${contas(recorte.periodoSoma.pagar.contas)}, sem os vencidos`}
             valor={formatMoeda(recorte.periodoSoma.pagar.valor)}
             classeValor="text-destructive"
@@ -800,7 +863,8 @@ export function ContasPagarReceberTab() {
           />
           <CardResumo
             testId="cpr-card-receber"
-            rotulo={`A receber no período · ${recorte.periodoSoma.receber.contas}`}
+            rotulo="A receber"
+            contagem={`· ${recorte.periodoSoma.receber.contas}`}
             titulo={`A receber no período: ${contas(recorte.periodoSoma.receber.contas)}, sem os vencidos`}
             valor={formatMoeda(recorte.periodoSoma.receber.valor)}
             classeValor={recorte.periodoSoma.receber.valor > 0 ? 'text-success' : 'text-muted-foreground'}
@@ -808,15 +872,18 @@ export function ContasPagarReceberTab() {
           />
           <CardResumo
             testId="cpr-card-saldo"
-            rotulo="Saldo do período"
-            titulo="A receber − a pagar do período, sem os vencidos"
+            rotulo="Saldo"
+            titulo="Saldo do período: a receber − a pagar do período, sem os vencidos"
             valor={`${recorte.periodoSoma.saldo < 0 ? '−' : ''}${formatMoeda(Math.abs(recorte.periodoSoma.saldo))}`}
             classeValor={recorte.periodoSoma.saldo < 0 ? 'text-destructive' : recorte.periodoSoma.saldo > 0 ? 'text-success' : 'text-muted-foreground'}
             borda="border-l-muted-foreground"
           />
           <CardResumo
             testId="cpr-card-caixa"
-            rotulo="Saldo em caixa"
+            rotulo={caixaDeUmaConta ? `Caixa · ${nomeConta(contaSel)}` : contaSel === SEM_CONTA ? 'Caixa · todas as contas' : 'Caixa'}
+            titulo={caixaDeUmaConta
+              ? (caixa && caixa.ancoradas > 0 ? `Saldo em caixa só de ${nomeConta(contaSel)} (âncora conferida + movimentos)` : `${nomeConta(contaSel)} não entra no saldo em caixa (cartão ou conta sem saldo conferido)`)
+              : 'Saldo em caixa de todas as contas'}
             valor={caixa && caixa.ancoradas > 0 ? formatMoeda(caixa.total) : '—'}
             classeValor="text-foreground"
             borda="border-l-primary"
@@ -828,6 +895,27 @@ export function ContasPagarReceberTab() {
               title: `${n.rotulo} ${n.valor} — ${n.detalhe}${n.aConferir && n.aConferir.length > 0 ? ` · conferir: ${n.aConferir.join(', ')}` : ''}`,
             }))}
           />
+        </div>
+
+        {/* RESUMO POR CONTA — CPR-CONTA-01: UMA linha de altura fixa, que existe mesmo vazia. As contas em ordem de valor a pagar
+            (do dono); clicar filtra, clicar de novo volta a "Todas". O valor nunca corta; o que não cabe vira "+N". */}
+        <div data-testid="cpr-resumo-contas" className="flex h-[18px] flex-nowrap items-center gap-1 overflow-hidden whitespace-nowrap text-[10px]">
+          <span className="shrink-0 text-muted-foreground">A pagar por conta</span>
+          {contasNaFaixa.slice(0, MAX_CONTAS_NA_FAIXA).map((c) => (
+            <button key={c.conta} type="button" data-testid={`cpr-resumo-conta-${c.conta}`} aria-pressed={contaSel === c.conta}
+              onClick={() => alternarConta(c.conta)} title={`${nomeConta(c.conta)} · ${formatMoeda(c.pagar.valor)} · ${contas(c.pagar.contas)}`}
+              className={cn('flex h-[16px] shrink-0 items-center gap-1 rounded px-1.5 transition-colors',
+                contaSel === c.conta ? 'bg-primary text-primary-foreground' : 'text-foreground hover:bg-muted')}>
+              <span className="max-w-[96px] truncate">{nomeConta(c.conta)}</span>
+              <span className="tabular-nums" data-valor-da-faixa>{formatMoeda(c.pagar.valor)}</span>
+            </button>
+          ))}
+          {contasNaFaixa.length > MAX_CONTAS_NA_FAIXA && (
+            <span className="shrink-0 text-muted-foreground" data-testid="cpr-resumo-mais"
+              title={contasNaFaixa.slice(MAX_CONTAS_NA_FAIXA).map((c) => `${nomeConta(c.conta)} · ${formatMoeda(c.pagar.valor)} · ${contas(c.pagar.contas)}`).join('\n')}>
+              +{contasNaFaixa.length - MAX_CONTAS_NA_FAIXA}
+            </span>
+          )}
         </div>
 
         {/* BARRA 2 — SEGMENTO + STATUS + AGRUPAMENTO */}
@@ -1025,8 +1113,8 @@ export function ContasPagarReceberTab() {
                           {fornecedor}
                         </span>
                         <span className={cn(COL.banco, 'shrink-0 truncate text-muted-foreground')}
-                          title={nomeConta(l.conta_bancaria_id)}>
-                          {nomeConta(l.conta_bancaria_id)}
+                          title={nomeConta(contaDaConta(l))}>
+                          {nomeConta(contaDaConta(l))}
                         </span>
                         {/* ⚠ COM `title`: os rótulos de origem são longos de propósito
                             ("Parcela de financiamento", a 2ª mais comum, tem 24 caracteres) e
@@ -1139,12 +1227,14 @@ const contas = (n: number) => `${n} ${n === 1 ? 'conta' : 'contas'}`;
  * O CARTÃO DO RESUMO — CPR-PERIODO-VENCIDOS-01: 40px. À esquerda o rótulo (texto: corta com o inteiro no `title`) e, embaixo,
  * o valor; à direita, até duas linhas pequenas (o "a receber" dos vencidos; corrente e investido do caixa). NENHUM VALOR CORTA
  * NEM FICA SÓ EM `title` (regra soberana): todo valor é `whitespace-nowrap`, sem `truncate`, e a coluna da esquerda é quem cede.
- * ⚠ 12px, `px-1`, `gap-1` E A GRADE 1.72fr·1fr·1fr·1fr·1.9fr SÃO MEDIDOS a 1.126px com "−R$ 99.999.999,99" em TODOS os
+ * ⚠ 12px, `px-1`, `gap-1` E A GRADE 1.75fr·1fr·1fr·1fr·1.94fr SÃO MEDIDOS a 1.126px com "−R$ 99.999.999,99" em TODOS os
  * valores (os cinco totais, o "a receber" e as duas linhas do caixa). Quem mexer mede de novo. ⚠ A entrelinha é explícita (12px e 18px): com `leading-none` + `truncate` a descendente do "g" de "A pagar"
  * era cortada pela caixa do texto.
  */
-function CardResumo({ rotulo, titulo, valor, classeValor, borda, lado, testId }: {
+function CardResumo({ rotulo, contagem, titulo, valor, classeValor, borda, lado, testId }: {
   rotulo: string;
+  /** A contagem ("· 237") — NÚMERO: não corta; quem cede é o texto do rótulo. */
+  contagem?: string;
   titulo?: string;
   valor: string;
   classeValor: string;
@@ -1156,8 +1246,11 @@ function CardResumo({ rotulo, titulo, valor, classeValor, borda, lado, testId }:
   return (
     <div data-testid={testId} className={cn('flex min-w-0 h-[40px] items-center gap-1 rounded-md border border-l-[3px] px-1 py-[3px]', borda)}>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[10px] leading-[12px] text-muted-foreground" title={titulo ?? rotulo}
-          data-testid={testId ? `${testId}-rotulo` : undefined}>{rotulo}</div>
+        <div className="flex text-[10px] leading-[12px] text-muted-foreground" title={titulo ?? rotulo}
+          data-testid={testId ? `${testId}-rotulo` : undefined}>
+          <span className="truncate">{rotulo}</span>
+          {contagem && <span className="shrink-0 whitespace-pre tabular-nums" data-testid={testId ? `${testId}-contagem` : undefined}>{' '}{contagem}</span>}
+        </div>
         <div data-testid={testId ? `${testId}-valor` : undefined} data-valor-do-cartao
           className={cn('whitespace-nowrap text-[12px] font-medium leading-[18px] tabular-nums', classeValor)}>
           {valor}
