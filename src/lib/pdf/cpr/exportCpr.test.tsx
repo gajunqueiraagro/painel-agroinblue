@@ -171,6 +171,26 @@ describe('gerar o PDF — valor inválido não derruba, e o erro volta em frase'
     expect(motivoDaFalhaDoPdf(new Error('unsupported number: NaN'))).toContain('valor inválido');
     expect(motivoDaFalhaDoPdf(new Error('qualquer'))).toBe('Falha ao gerar PDF: qualquer');
   });
+
+  it('PARC-LIVRES-01 passo 0 — o pedaço do PDF que não chega (página aberta desde antes de uma publicação) vira frase que diz o que fazer, e a tela a escreve', async () => {
+    /* as três grafias do mesmo erro: Chrome, Safari e Firefox */
+    for (const msg of ['Failed to fetch dynamically imported module: https://app/assets/gerarPdfCpr-abc123.js',
+      'Importing a module script failed.', 'error loading dynamically imported module: https://app/assets/x.js']) {
+      const f = motivoDaFalhaDoPdf(new TypeError(msg));
+      expect(f).toBe('O aplicativo foi atualizado depois que esta página abriu. Recarregue a página (Ctrl+R) e gere o PDF de novo.');
+      expect(f).not.toMatch(/https?:|\.js/);
+    }
+    const { readFileSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    const tela = readFileSync(resolve(process.cwd(), 'src/components/financeiro-v2/ContasPagarReceberTab.tsx'), 'utf8');
+    const dono = readFileSync(resolve(process.cwd(), 'src/lib/pdf/cpr/falhaDoPdf.ts'), 'utf8');
+    /* a frase é importada ESTATICAMENTE (se viesse do pedaço dinâmico, falharia junto com ele) e o catch da tela a usa */
+    expect(tela).toMatch(/^import \{ motivoDaFalhaDoPdf \} from '@\/lib\/pdf\/cpr\/falhaDoPdf';$/m);
+    expect(tela).toContain('setRecadoExport({ erro: true, texto: motivoDaFalhaDoPdf(e) })');
+    expect(tela).not.toContain('`Falha ao gerar PDF: ${e instanceof Error');
+    /* o dono da frase não puxa o motor nem o documento */
+    expect(dono).not.toMatch(/^\s*import\s/m);
+  });
 });
 
 describe('PdfHeader — sem as props novas é o do PDF executivo', () => {

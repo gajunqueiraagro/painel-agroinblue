@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 06/10/2026 (CONC-SEM-CLASSIFICACAO-01 tela, +32: `src/lib/conciliacao/semClassificacao.test.ts` 12,
+  Baseline em 06/10/2026 (PARC-LIVRES-01 passo 0, +1 em `src/lib/pdf/cpr/exportCpr.test.tsx` — 4264 depois dele; antes o
+  CONC-SEM-CLASSIFICACAO-01 tela, +32: `src/lib/conciliacao/semClassificacao.test.ts` 12,
   `src/components/conciliacao/semClassificacaoModal.test.tsx` 14, `src/pages/conciliacaoDono.test.tsx` 5,
   `src/v2/components/SeletorPeriodo.test.tsx` 1 — 4263 depois dele; antes o CONC-SEM-CLASSIFICACAO-01 leitor, +3 em
   `src/lib/conciliacao/resumoDoDono.test.ts` — 4231 depois dele; antes o
@@ -220,7 +221,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4263
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4264
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3038,6 +3039,16 @@ docs/historico/frentes-ate-2026-09-29.md.)
     numeros deles foram conferidos antes delas); o BLOCO DE MAIS DE 30 CONTAS em pagina propria com o cabecalho fixo (caso Agnaldo ·
     Todas, 31 anteriores); e o detalhe do "Saldo de partida" numa linha (preso por teste da arvore do documento, sem PDF gerado).
     A janela do Chrome ficou em segundo plano em 06/10 e a geracao em aba oculta nao termina (o navegador segura os temporizadores).
+  ⚠ O PDF QUE "DEU ERRO" EM REUNIAO (Gabriel, 06/10 a' tarde; PARC-LIVRES-01 passo 0): NAO REPRODUZIDO no NJ em localhost — 9
+    variacoes geraram o arquivo (30 e 60 dias, este mes; todas e Itau BBA; a pagar, a receber, ambos; com a pilula Realizado), 0
+    erro no console. CAUSA PROVAVEL, nao provada: a pagina estava aberta desde a manha e houve publicacoes no meio do dia — o
+    pedaco do PDF se carrega por `import()` e o arquivo antigo deixa de existir no servidor. Essa falha caia no `catch` da TELA
+    (fora do `gerarPdfCpr`) e saia a mensagem crua do navegador, em ingles, com o endereco do arquivo. CONSERTO: a frase mora em
+    `src/lib/pdf/cpr/falhaDoPdf.ts` (`motivoDaFalhaDoPdf`, movida verbatim; importada ESTATICAMENTE) e o `catch` da tela a usa:
+    "O aplicativo foi atualizado depois que esta página abriu. Recarregue a página (Ctrl+R) e gere o PDF de novo." — escrita ao
+    lado do botao. ⚠ FRASE DE FALHA DE `import()` NUNCA MORA NO MODULO IMPORTADO. O Excel nao tem pedaco dinamico.
+    ⚠ NAO MEDIDO: a mensagem real que o Gabriel viu (nao ha' registro), "Escolher datas" 01/10–30/11 e a caixa de vencidos
+      desligada no navegador; com a aba em segundo plano a geracao leva ate' ~1 min (temporizadores do navegador), sem erro.
   ⚠ DIVIDA CPR-EXPORT-LOGO-DO-CLIENTE-01: NAO EXISTE LOGO POR CLIENTE — todo PDF sai com a do AGROinBLUE (decisao do Gabriel pendente).
   ⚠ DIVIDAS: o PDF pesa 0,5 a 2,9 MB (a logo vai como PNG de 291 KB e o motor a repete por pagina — igual ao executivo) · o
     regra de seta/tom existe na tela (`CelValor`) e no modelo (`celulaDeValor`): quem mexer numa confere a outra · NAO PROVADO NO

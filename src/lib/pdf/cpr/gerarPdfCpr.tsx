@@ -9,17 +9,10 @@ import type { ModeloCpr } from '@/lib/pdf/cpr/modeloCpr';
 
 export type ResultadoDoPdfCpr = { ok: true; aviso: string | null } | { ok: false; frase: string };
 
-/** Traduz a exceção para uma frase que diz o que houve E o que fazer — as mesmas três causas do PDF executivo. */
-export function motivoDaFalhaDoPdf(e: unknown): string {
-  const msg = e instanceof Error ? e.message : String(e);
-  if (/dynamically imported module|Importing a module script failed|error loading dynamically/i.test(msg)) {
-    return 'O aplicativo foi atualizado depois que esta página abriu. Recarregue a página (Ctrl+R) e gere o PDF de novo.';
-  }
-  if (/unsupported number/i.test(msg)) {
-    return `Um valor inválido entre as contas deste período impediu o desenho do PDF. Confira os lançamentos. (${msg})`;
-  }
-  return `Falha ao gerar PDF: ${msg}`;
-}
+import { motivoDaFalhaDoPdf } from '@/lib/pdf/cpr/falhaDoPdf';
+
+/* a frase mora fora deste módulo (que se carrega por `import()`); o nome antigo continua exportado daqui */
+export { motivoDaFalhaDoPdf };
 
 /** Monta o PDF e devolve o arquivo em memória — a tela baixa; a prova confere. */
 export async function montarBlobPdfCpr(modelo: ModeloCpr): Promise<Blob> {

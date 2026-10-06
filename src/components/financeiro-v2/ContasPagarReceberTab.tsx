@@ -16,6 +16,7 @@
  *
  * Frontend puro: sem RPC, sem migration, sem tabela nova.
  */
+import { motivoDaFalhaDoPdf } from '@/lib/pdf/cpr/falhaDoPdf';
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, parseISO } from 'date-fns';
@@ -965,7 +966,10 @@ export function ContasPagarReceberTab({ onIntensiveToggle }: {
       if (r.ok === false) setRecadoExport({ erro: true, texto: r.frase });
       else if (r.aviso) setRecadoExport({ erro: false, texto: r.aviso });
     } catch (e) {
-      setRecadoExport({ erro: true, texto: `Falha ao gerar PDF: ${e instanceof Error ? e.message : String(e)}` });
+      /* ⚠ A FRASE É A DO DONO, importado ESTATICAMENTE: o que cai aqui é sobretudo o `import()` do pedaço do PDF que não chegou
+         (página aberta desde antes de uma publicação) — e a mensagem crua do navegador não diz o que fazer. */
+      console.error('[PDF Contas a Pagar e Receber] falha antes de gerar:', e);
+      setRecadoExport({ erro: true, texto: motivoDaFalhaDoPdf(e) });
     } finally {
       setExportando(null);
     }
