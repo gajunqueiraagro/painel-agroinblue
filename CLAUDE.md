@@ -1225,6 +1225,24 @@ docs/historico/frentes-ate-2026-09-29.md.)
 - ⚠ O RATEIO ADMINISTRATIVO E' POR MES, numa funcao so': `fn_rateio_admin_mes` (a chave do ano vale so' nos meses em
   que a atividade existe; silvicultura e mes sem atividade vao para "nao alocado"). A LISTA DE EXCLUSAO DE MACROS
   mora so' nela (RATEIO-VIGENCIA-01).
+- ⚠ O ENCONTRO DE CONTAS DO RATEIO ADMINISTRATIVO E' DO BANCO (DRE-RATEIO-MODAL-01, Gabriel 06/10/2026; migration
+  20261027193700, ⚠ registrada como 20261006142707; ledger = arquivo, md5 5379cda3…; patch guardado por md5:
+  `fn_painel_rateio_detalhe` 7472a393… -> 83bdfd55…, 3 ancoras). No ramo 'admin' o retorno ganha NO FIM, da MESMA leitura de
+  `fn_rateio_admin_mes`: `resumo {bruto, partes [{destino pecuaria|agricultura|silvicultura|nao_alocado, valor, pct}], soma,
+  diferenca, agricultura_por_safra}`, `por_mes [{ano_mes, bruto, pecuaria, agricultura, silvicultura, nao_alocado, pct_pecuaria,
+  pct_agricultura, diferenca (+ agricultura_safra na lavoura com safra)}]` (um por mes do periodo, inclusive os vazios) e
+  `por_mes_total`. Fora do 'admin' as tres vem nulas; nenhuma chave de antes mudou (156 saidas, 7 clientes, 117 com valor).
+  · ARREDONDAMENTO (2 casas): a parte da atividade PEDIDA (na lavoura com safra, a da SAFRA) e' PROTEGIDA — arredondamento
+    acumulado mes a mes, a coluna soma round(pool, 2), o numero do DRE; o residuo de cada mes vai para a MAIOR DAS OUTRAS partes
+    (o briefing dizia "na maior parte": com a protegida dentro, o NJ 2025 mostraria 886.574,03 contra 886.574,04 do DRE).
+    `diferenca` = bruto − soma das partes do CRU: se o cru nao fecha, aparece — nunca "fazer bater". `resumo` = soma das colunas
+    do mes a mes; `pct` sobre o bruto, 1 casa.
+  · ⚠ `agricultura_por_safra` TEM DUAS LINHAS (a safra pedida e "outras safras"): `fn_rateio_admin_mes` abre UMA safra por chamada.
+  · ⚠ O "NAO ALOCADO" DA SANTA RITA 2021 (8.082,73) E' SILVICULTURA, parte propria; `peso_nao_alocado` > 0 nao existe em nenhum
+    cliente/ano de 2016 a 2027 — "mes sem atividade" nao tem caso real, so' o teste.
+  Provas: resumo x `fn_dre_pecuaria.rateio_adm` iguais em 49 de 49 cliente-anos; NJ 2025 pecuaria 1.266.534,34 = 886.574,04 +
+  316.633,58 + 63.326,72 + 0,00, diferenca 0; tempo (20 chamadas, autenticado, NJ) mediana 100 -> 102 ms. Teste:
+  `supabase/tests/dre_rateio_modal_01_test.sql` (T1–T6, termina em RAISE OK).
 - ⚠ MODAL DE LINHA DO DRE SOMA AS MESMAS CHAVES DA DEF DA GRADE: `somaComposta` (`drePecRegua.ts`) e' a fonte dos
   dois, e a composicao viaja no clique (`def.compor`) — o modal nao adivinha o modo da grade
   (DRE-MODAL-CUSTO-FIXO-RATEIO-01).
