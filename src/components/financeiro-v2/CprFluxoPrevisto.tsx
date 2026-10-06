@@ -153,20 +153,44 @@ function TickEixoX({ x, y, payload, index, pontos, passoRotulo, faixaCabe }: {
  * `(props) => ReactElement<SVGElement>` e entrega o `viewBox` do ponto ancorado. Nenhuma camada
  * SVG por cima do gráfico: o traço e o texto são filhos do próprio `ReferenceDot`.
  */
-function RotuloDoTopo({ viewBox, texto, cor, tamanho, peso, faixa }: {
+/**
+ * CPR-SALDO-DIA-02 — A ETIQUETA DE "HOJE" QUANDO O PERÍODO COMEÇA HOJE. O ponto de hoje é o PRIMEIRO do gráfico e fica colado ao
+ * eixo Y: centrada nele, a etiqueta invadia os rótulos do eixo (CPR-FLUXO-TAG-HOJE-EIXO-01). Nesse caso ela ancora pelo começo e
+ * cresce para a DIREITA, a `RECUO_DA_TAG_DE_HOJE` px do ponto — acima dele, dentro do gráfico. Fora desse caso, nada muda.
+ */
+export const RECUO_DA_TAG_DE_HOJE = 4;
+export function ancoraDaTagDeHoje(indiceDeHoje: number): 'start' | 'middle' {
+  return indiceDeHoje === 0 ? 'start' : 'middle';
+}
+
+/**
+ * CPR-SALDO-DIA-02 — O PONTO "EM CONTA HOJE": o saldo do cartão Caixa, ANTES dos vencidos que contam. Só existe em separado
+ * quando difere do ponto de partida da linha (há vencido que conta); iguais, é o próprio ponto de hoje e não se desenha outro.
+ */
+export function pontoEmContaHoje(saldoInicial: number | null, partidaDaLinha: number | null | undefined): { emConta: number; partida: number; titulo: string } | null {
+  if (saldoInicial == null || partidaDaLinha == null || !Number.isFinite(saldoInicial) || !Number.isFinite(partidaDaLinha)) return null;
+  if (Math.round(saldoInicial * 100) === Math.round(partidaDaLinha * 100)) return null;
+  const m = (v: number) => `${v < 0 ? '−' : ''}${formatMoeda(Math.abs(v))}`;
+  return { emConta: saldoInicial, partida: partidaDaLinha, titulo: `em conta hoje: ${m(saldoInicial)} · a linha parte de ${m(partidaDaLinha)} após os vencidos` };
+}
+
+function RotuloDoTopo({ viewBox, texto, cor, tamanho, peso, faixa, ancora = 'middle' }: {
   viewBox?: { x?: number; y?: number };
   texto: string; cor: string; tamanho: number; peso?: number; faixa: number;
+  /** 'start' = o texto começa a `RECUO_DA_TAG_DE_HOJE` px à direita do ponto (o traço continua no ponto) */
+  ancora?: 'start' | 'middle';
 }) {
-  const x = viewBox?.x ?? 0;
+  const xPonto = viewBox?.x ?? 0;
+  const x = ancora === 'start' ? xPonto + RECUO_DA_TAG_DE_HOJE : xPonto;
   const y = viewBox?.y ?? 0;
   const yTexto = y - OFFSET_ROTULO - faixa * ALTURA_FAIXA;
   return (
     <g>
       {faixa > 0 && (
-        <line x1={x} y1={y - 5} x2={x} y2={yTexto + 4}
+        <line x1={xPonto} y1={y - 5} x2={xPonto} y2={yTexto + 4}
           stroke={cor} strokeWidth={1} opacity={0.5} />
       )}
-      <text x={x} y={yTexto} textAnchor="middle" fill={cor}
+      <text x={x} y={yTexto} textAnchor={ancora} fill={cor}
         fontSize={tamanho} fontWeight={peso}>
         {texto}
       </text>
@@ -175,12 +199,14 @@ function RotuloDoTopo({ viewBox, texto, cor, tamanho, peso, faixa }: {
 }
 
 interface TooltipProps {
+  /** CPR-SALDO-DIA-02: em "Hoje", com vencido que conta, o tooltip diz os dois números (em conta e a partida da linha). */
+  emConta?: ReturnType<typeof pontoEmContaHoje>;
   active?: boolean;
   label?: string | number;
   payload?: { dataKey?: string | number; value?: number | string }[];
 }
 
-function TooltipFluxo({ active, label, payload }: TooltipProps) {
+function TooltipFluxo({ active, label, payload, emConta }: TooltipProps) {
   if (!active || !payload || payload.length === 0) return null;
   const achar = (k: string) => {
     const p = payload.find((x) => x.dataKey === k);
@@ -194,7 +220,8 @@ function TooltipFluxo({ active, label, payload }: TooltipProps) {
    * tooltip afirmava zero sobre uma linha que estava a um milhão. Agora ele pega a primeira
    * série que tem valor naquele ponto.
    */
-  const saldo = ['saldoConciliado', 'saldoRealizado', 'saldoVencido', 'saldoPrevisto', 'saldo']
+  const emHoje = label === 'Hoje' && emConta ? emConta : null;
+  const saldo = emHoje ? emHoje.partida : ['saldoConciliado', 'saldoRealizado', 'saldoVencido', 'saldoPrevisto', 'saldo']
     .map((k) => payload.find((x) => x.dataKey === k)?.value)
     .find((v) => typeof v === 'number') ?? 0;
   return (
@@ -210,8 +237,13 @@ function TooltipFluxo({ active, label, payload }: TooltipProps) {
           sai {formatMoeda(Math.abs(saidas))}
         </div>
       )}
+      {emHoje && (
+        <div className="text-[10px] tabular-nums" style={{ color: COR_REALIZADO }} data-testid="tooltip-em-conta-hoje">
+          em conta hoje {formatMoeda(emHoje.emConta)}
+        </div>
+      )}
       <div className="mt-0.5 text-[11px] font-medium tabular-nums" style={{ color: COR_SALDO }}>
-        saldo {formatMoeda(Number(saldo))}
+        saldo {formatMoeda(Number(saldo))}{emHoje ? ' após os vencidos' : ''}
       </div>
     </div>
   );
@@ -365,6 +397,9 @@ export function CprFluxoPrevisto({
   const emHoje = pontos.find((p) => p.rotulo === 'Hoje') ?? pontos[0];
   /* O fim do conciliado ganha o próprio valor escrito: é o número que bate com a Conciliação. */
   const fimConciliado = [...pontos].reverse().find((p) => p.zona === 'conciliado') ?? null;
+  /* CPR-SALDO-DIA-02: a etiqueta de hoje vai para a direita quando hoje é o primeiro ponto; e o ponto "em conta hoje" */
+  const ancoraHoje = ancoraDaTagDeHoje(pontos.findIndex((p) => p.chave === emHoje.chave));
+  const emConta = pontoEmContaHoje(saldoInicial, emHoje.saldo);
 
   const MARGEM_ESQ = 8;
   const MARGEM_DIR = 96;
@@ -424,10 +459,13 @@ export function CprFluxoPrevisto({
     }
     if (emHojeLocal) {
       const t = `${fmtTag(emHojeLocal.saldo)} *`;
-      const meia = larguraEstimada(t, 12) / 2;
+      const inteira = larguraEstimada(t, 12);
+      const meia = inteira / 2;
+      /* ancorada pelo começo (hoje é o primeiro ponto) ela ocupa a largura toda À DIREITA do ponto */
+      const aDireita = ancoraDaTagDeHoje(indiceDe(emHojeLocal.chave)) === 'start';
       lista.push({
         id: 'hoje', x: indiceDe(emHojeLocal.chave) * larguraPorPonto,
-        paraEsquerda: meia, paraDireita: meia, prioridade: 0,
+        paraEsquerda: aDireita ? 0 : meia, paraDireita: aDireita ? inteira + RECUO_DA_TAG_DE_HOJE : meia, prioridade: 0,
       });
     }
     if (fimConcLocal && emHojeLocal && fimConcLocal.chave !== emHojeLocal.chave) {
@@ -477,6 +515,12 @@ export function CprFluxoPrevisto({
             {z.rotulo}
           </span>
         ))}
+        {emConta && (
+          <span className="flex items-center gap-1.5 text-[11px]" style={{ color: COR_TEXTO }} title={emConta.titulo} data-testid="legenda-em-conta-hoje">
+            <svg width="8" height="8" aria-hidden><circle cx="4" cy="4" r="3" fill={COR_REALIZADO} /></svg>
+            Em conta hoje
+          </span>
+        )}
       </div>
 
       <div ref={refPlot} className="min-h-0 flex-1 px-1 pb-1 pt-2">
@@ -496,7 +540,7 @@ export function CprFluxoPrevisto({
             <YAxis domain={escala.dominio} ticks={escala.ticks} width={LARGURA_EIXO_Y}
               tickLine={{ stroke: COR_TEXTO, opacity: 0.4 }} axisLine={false}
               tick={{ fontSize: 10, fill: COR_TEXTO }} tickFormatter={fmtCurto} />
-            <Tooltip content={<TooltipFluxo />} cursor={{ fill: '#00000008' }} />
+            <Tooltip content={<TooltipFluxo emConta={emConta} />} cursor={{ fill: '#00000008' }} />
             <ReferenceLine y={0} stroke={COR_TEXTO} strokeWidth={1.2} />
 
             {/* ⚠ SEM `stackId`: entradas e saídas são barras INDEPENDENTES, uma para cima e
@@ -543,6 +587,17 @@ export function CprFluxoPrevisto({
               stroke={COR_SALDO} strokeWidth={2} strokeLinecap="round" strokeDasharray="5 4"
               strokeLinejoin="round" dot={false} connectNulls={false} isAnimationActive={false} />
 
+            {/* O PONTO "EM CONTA HOJE" — o saldo do cartão Caixa, antes dos vencidos que contam. Só quando difere da partida da
+                linha; `ifOverflow="visible"` porque ele pode ficar acima do último tick (a escala é a da linha). */}
+            {emConta && (
+              <ReferenceDot x={emHoje.rotulo} y={emConta.emConta} r={3.6} isFront ifOverflow="visible"
+                shape={(p: { cx?: number; cy?: number }) => (
+                  <g data-testid="ponto-em-conta-hoje">
+                    <title>{emConta.titulo}</title>
+                    <circle cx={p.cx} cy={p.cy} r={3.6} fill={COR_REALIZADO} stroke="#fff" strokeWidth={1.3} />
+                  </g>
+                )} />
+            )}
             {marcos.map((m) => (
               <ReferenceDot key={`marco-${m.chave}`} x={m.rotulo} y={m.saldo} r={3.4} isFront
                 fill={m.saldo < 0 ? COR_SAIDA : corDaZona(m.zona)}
@@ -577,13 +632,13 @@ export function CprFluxoPrevisto({
                     dele. Por isso as duas leem a MESMA faixa. */}
                 <ReferenceDot x={emHoje.rotulo} y={emHoje.saldo} r={0} isFront
                   label={(props) => (
-                    <RotuloDoTopo {...props} texto="hoje" cor={COR_SALDO} tamanho={10}
+                    <RotuloDoTopo {...props} texto="hoje" cor={COR_SALDO} tamanho={10} ancora={ancoraHoje}
                       faixa={(faixasDosRotulos.get('hoje') ?? 0) + 0.85} />
                   )} />
                 <ReferenceDot x={emHoje.rotulo} y={emHoje.saldo} r={0} isFront
                   label={(props) => (
                     <RotuloDoTopo {...props} texto={`${fmtTag(emHoje.saldo)} *`} cor={COR_SALDO}
-                      tamanho={12} peso={600} faixa={faixasDosRotulos.get('hoje') ?? 0} />
+                      tamanho={12} peso={600} ancora={ancoraHoje} faixa={faixasDosRotulos.get('hoje') ?? 0} />
                   )} />
               </>
             )}

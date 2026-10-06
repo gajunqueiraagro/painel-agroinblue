@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 06/10/2026 (CPR-EXPORT-01, +18: `src/lib/pdf/cpr/exportCpr.test.tsx` 14, `src/lib/financeiro/cprRecorte.test.ts` 4 — 4041 depois dele;
+  Baseline em 06/10/2026 (CPR-SALDO-DIA-02, +9: `src/components/financeiro-v2/cprFluxoPrevisto.test.ts` 5, `src/lib/financeiro/cprRecorte.test.ts` 4 — 4050 depois dele;
+  antes o CPR-EXPORT-01, +18: `src/lib/pdf/cpr/exportCpr.test.tsx` 14, `src/lib/financeiro/cprRecorte.test.ts` 4 — 4041 depois dele;
   antes o CPR-SALDO-DIA-01, +22: `src/lib/financeiro/cprRecorte.test.ts` 18, `src/lib/financeiro/saldoEmCaixa.test.ts` 4 — 4023 depois dele;
   antes o FIN-V2-COLUNAS-OC-01, +8 em `src/components/financeiro-v2/finV2ColunasOC01.test.ts` — 4001 depois dele;
   antes o CPR-CONTA-01, +7 em `src/lib/financeiro/cprRecorte.test.ts` — 3993 depois dele;
@@ -206,7 +207,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4041
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4050
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -2577,18 +2578,31 @@ docs/historico/frentes-ate-2026-09-29.md.)
     da tela desliga). Cada controle e' UM no' (`ctlVisao`, `ctlAtalho`, `ctlDatas`, `ctlConta`, `ctlSegmento`, `ctlIncluir`) que a
     tela normal e o Ampliado so' POSICIONAM — nenhum controle nem estado duplicado (preso por teste). Cabecalho do Ampliado em DUAS
     linhas fixas: (1) barra de filtros de 26px — Lista|Fluxo · atalhos · de/ate' · Conta · A pagar|A receber|Ambos · Incluir
-    vencidos · Recolher; (2) faixa dos cartoes de 24px (Vencidos · A pagar · A receber · Minimo · Caixa) com, a' direita, "status:
-    Previsto · Programado · Agendado" (as PILULAS DE STATUS, 277px, NAO CABEM na barra: ficam so' na tela normal). O rotulo
+    vencidos · Recolher; (2) faixa dos cartoes de 24px (Vencidos · A pagar · A receber · Minimo · Caixa) com o "Exportar ▾" a' direita;
+    (3) [CPR-SALDO-DIA-02, Gabriel 06/10: "no ampliado eu preciso sim clicar"] AS PILULAS DE STATUS, CLICAVEIS, numa TERCEIRA LINHA
+    fixa de 20px (sempre presente; a frase do exportar a' direita): o MESMO no' (`ctlStatus`) e o MESMO estado da tela normal, com
+    a classe do botao encolhendo no Ampliado (16px / 9,5px). ⚠ NA FAIXA DOS CARTOES NAO CABEM, MEDIDO: as quatro pedem 251,4px
+    (50,8 · 69,7 · 60,7 · 58,2 + vaos) e sobram 245,1 ao lado do Exportar. Linhas em 36/26 · 66/24 · 94/20; cabecalho 119, "Saldo
+    hoje" 141, rodape 544; ligar/desligar pilula (todas desligadas inclusive, com a mensagem de sempre) nao muda altura nem liga
+    rolagem — iguais no NJ e no Agnaldo. O rotulo
     "Conta" sai no Ampliado (o seletor diz o nome). Medido a 1.126: barra 1.094 de 1.094, uma linha, 10,9px de folga; nenhuma data
     cortada. Trocar atalho, segmento ou a caixa no Ampliado nao move cabecalho (95), "Saldo hoje" (117) nem rodape (544) e nao
     liga rolagem na pagina. O botao Ampliar fica na barra 2 da tela normal. Excel/PDF: a tela nao tem.
   · FLUXO AMPLIADO: o grafico ocupa toda a area abaixo do cabecalho — 876 x 250 na tela normal, 1.084 x 375 no Ampliado (o
     `ResponsiveContainer` mede em pixels reais; nenhuma fonte escala: 9,5 / 10 / 11 / 12 / 13px nos dois). Trocar Lista <-> Fluxo
     mantem periodo, conta, segmento e o Ampliado. Nenhuma tag fora do grafico.
-    ⚠ DIVIDA CPR-FLUXO-TAG-HOJE-EIXO-01: quando o periodo comeca HOJE, a tag do saldo de hoje vai para a esquerda do ponto e a
-      CAIXA dela encosta na do rotulo do eixo Y vizinho (17 x 14,5px; NJ BB "500 mil" x "R$ 394 mil *", Agnaldo Bradesco "−10 mil"
-      x "R$ −19 mil *") — IGUAL na tela normal e no Ampliado; em "Este mes" e "60 dias" (NJ BB) nao acontece.
-    ⚠ Com o periodo comecando hoje, um PONTO SOLTO marca em "Hoje" o saldo em conta (o do cartao Caixa) acima da partida da linha.
+    · A ETIQUETA DE HOJE NAO ENCOSTA NO EIXO Y [CPR-SALDO-DIA-02; fecha a CPR-FLUXO-TAG-HOJE-EIXO-01]: quando hoje e' o PRIMEIRO
+      ponto (o periodo comeca hoje) a etiqueta ancora pelo comeco e cresce para a DIREITA, a 4px do ponto (`ancoraDaTagDeHoje`,
+      `RECUO_DA_TAG_DE_HOJE`); o traco continua no ponto e a anti-colisao sabe da largura de um lado so'. Fora disso, centrada como
+      sempre. Medido na tela normal (876 x 250), menor distancia da etiqueta a qualquer rotulo do eixo: NJ · Banco do Brasil 30
+      dias 23,5px, 60 dias 17,9px, Este mes 102,6px; Agnaldo · Bradesco 30 dias 23,5px; 0 sobreposicoes e 0 etiquetas fora nos quatro.
+    · O PONTO "EM CONTA HOJE" [CPR-SALDO-DIA-02]: o saldo do cartao Caixa, antes dos vencidos que contam (`pontoEmContaHoje`). So'
+      existe em separado quando difere da partida da linha (ao centavo); tem `title` "em conta hoje: R$ X · a linha parte de R$ Y
+      apos os vencidos", entra na legenda como "Em conta hoje" e o tooltip de "Hoje" diz os dois numeros (antes dizia so' o do
+      caixa, pela coalescencia das series). `ifOverflow="visible"`: ele pode ficar acima do ultimo tick (a escala e' a da linha).
+    ⚠ NAO MEDIDO: o grafico no TAMANHO do Ampliado depois deste PR — em 06/10 a janela do Chrome estava em segundo plano e, com a
+      aba oculta, o grafico nao se redimensiona (o `ResizeObserver` nao dispara): as medidas acima sao da tela normal. As pilulas e
+      as alturas do Ampliado foram medidas por script (layout de aba oculta), sem ver a tela.
   ANTES x DEPOIS DO GRAFICO (06/10, "Ambos", ponto de hoje -> ponto final):
       NJ · Banco do Brasil (Caixa 604.088,31; contam 209.924,07 em 46; anteriores 3.636,50 a pagar e 7.173,39 a receber; ancora 30/09)
         Este mes   394.164,24 -> −116.182,20   |  igual (o piso antigo "de" = 01/10 coincidia com a ancora)
@@ -2602,6 +2616,14 @@ docs/historico/frentes-ate-2026-09-29.md.)
         16/10–15/11 1,00 -> −39.636,83         |  −19.492,32 -> −68.170,08
     Lista x grafico: partida, saldo no fim e tres dias intermediarios iguais ao centavo nos 4 atalhos, nas duas contas e em Todas (NJ).
   ⚠ O PONTO "HOJE" DO GRAFICO E' A PARTIDA; o que vence HOJE entra no dia seguinte do grafico e na faixa de hoje da lista.
+  ⚠ PILULA "REALIZADO" DERRUBAVA A TELA (achado e consertado no CPR-SALDO-DIA-02): conta PAGA SEM VENCIMENTO chega pela busca (ramo
+    "sem vencimento") e abria um grupo de dia com chave vazia — "Invalid time value", tela branca. O defeito vinha do
+    CPR-PERIODO-VENCIDOS-01 (estava em "nao provado: pilula Realizado ligada"). Agora a chave vazia e' pulada: a paga sem
+    vencimento nao e' listada por dia (e nunca somou).
+  ⚠ DIVIDA CPR-PAGA-SEM-VENCIMENTO-SOME-01: depois da correcao da chave vazia, a conta PAGA SEM DATA DE VENCIMENTO nao e' listada em
+    grupo nenhum; deve voltar APAGADA no grupo "Sem vencimento" (regra: nada some sem motivo). PR proprio.
+  ⚠ NAO PROVADO NO CPR-SALDO-DIA-02 (homologacao do Gabriel): o grafico no TAMANHO do Ampliado (distancias da etiqueta), o tooltip de
+    "Hoje" aberto, o clique real nas pilulas (foram cliques por script) e nenhum screenshot do passo.
   ⚠ DECISAO PENDENTE CPR-CARTAO-NO-SALDO-TODAS-01: em "Todas as contas", conta a pagar em cartao de credito ou sem conta desconta
     do saldo no VENCIMENTO DELA (herdado do grafico); o dinheiro so' sai na fatura. So' os VENCIDOS delas ficam fora.
   PROVA DO GESTO (cliente Teste, 06/10, desfeita): o 5a9f8ea4 ("Pensão Crianças", 6.484,00, vencimento 10/08) estava em "Vencidos
@@ -2610,7 +2632,7 @@ docs/historico/frentes-ate-2026-09-29.md.)
     ⚠ PARCIAL: o cliente Teste NAO TEM CONTA COM ANCORA (Caixa "—"), entao Saldo no fim, Minimo e grafico mudando pelo valor NAO
     foram vistos na tela — so' por teste do dono.
   ⚠ DIVIDAS: CPR-CONTA-NO-AMPLIADO-01 (a coluna Conta nao coube no Ampliado; o nome fica no `title` da Descricao) · o N do titulo dos
-    subgrupos conta os dois lados e a listagem so' o segmento · no Ampliado as pilulas de status so' se trocam recolhendo · NAO PROVADO NO NAVEGADOR: o saldo mudando pelo valor depois de
+    subgrupos conta os dois lados e a listagem so' o segmento · a conta PAGA SEM VENCIMENTO nao aparece em grupo nenhum · NAO PROVADO NO NAVEGADOR: o saldo mudando pelo valor depois de
     salvar (o Teste nao tem ancora), a faixa "Entre hoje e DD/MM" (so' por teste e pelo calculo do dono sobre os dados reais), o
     contraste dos dois tons do rodape navy medido na tela (calculado: ~6,4:1 e ~8,8:1), sair da tela com o Ampliado ligado (so'
     por teste de fonte), e, no Ampliado, DIGITAR nas datas e ABRIR o seletor de conta (sao os mesmos nos da tela normal; no

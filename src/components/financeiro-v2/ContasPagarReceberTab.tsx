@@ -685,6 +685,10 @@ export function ContasPagarReceberTab({ onIntensiveToggle }: {
     const mapa = new Map<string, LinhaViewDoc[]>();
     for (const l of doPeriodoNaLista) {
       const chave = (l.data_vencimento ?? '').slice(0, 10);
+      /* ⚠ CONTA PAGA SEM VENCIMENTO (pílula Realizado ligada) NÃO TEM DIA: sem esta guarda ela abria um grupo de chave vazia e a
+         faixa tentava formatar uma data que não existe — "Invalid time value", tela branca (CPR-SALDO-DIA-02). Ela não soma em
+         lugar nenhum (é paga) e não é listada por dia. */
+      if (!chave) continue;
       const atual = mapa.get(chave);
       if (atual) atual.push(l); else mapa.set(chave, [l]);
     }
@@ -987,8 +991,35 @@ export function ContasPagarReceberTab({ onIntensiveToggle }: {
     </span>
   ) : null;
 
-  /* as pílulas de status NÃO cabem na barra do Ampliado (277px): lá a faixa dos cartões escreve quais estão ligadas */
-  const statusLigadosTexto = STATUS_DISPONIVEIS.filter((x) => statusLigados.includes(x)).map((x) => STATUS_FILTRO_LABEL[x] ?? x);
+  /* AS PÍLULAS DE STATUS — UM nó, um estado (`statusLigados`), nos dois modos. No Ampliado elas moram numa TERCEIRA linha fixa de
+     20px, menores (16px / 9,5px): na faixa dos cartões sobram ~245px ao lado do "Exportar ▾" e as quatro pedem quase isso —
+     sem medida de tela que garanta folga, não se arrisca cortar número. */
+  const ctlStatus = (
+    <div className="flex shrink-0 items-center gap-1" data-testid="cpr-status">
+      {STATUS_DISPONIVEIS.map((s) => {
+        const ligado = statusLigados.includes(s);
+        return (
+          <button
+            key={s}
+            type="button"
+            aria-pressed={ligado}
+            onClick={() => setStatusLigados((atual) =>
+              atual.includes(s) ? atual.filter((x) => x !== s) : [...atual, s])}
+            className={cn(
+              'rounded-md border font-medium transition-colors',
+              ampliado ? 'h-[16px] px-1.5 text-[9.5px] leading-none' : 'h-[22px] px-2 text-[10px]',
+              ligado
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'bg-transparent text-muted-foreground hover:bg-muted',
+            )}
+          >
+            {STATUS_FILTRO_LABEL[s] ?? s}
+          </button>
+        );
+      })}
+    </div>
+  );
+
 
   return (
     /* ⚠ `h-full`, E NÃO `flex-1` — a mesma lição de `V2Recorrencias`: a altura vem do pai, e
@@ -996,9 +1027,9 @@ export function ContasPagarReceberTab({ onIntensiveToggle }: {
        dos grupos não gruda em nada. `max-w-5xl` para a tela não encostar na margem. */
     <div className={cn('w-full min-w-0 h-full min-h-0 flex flex-col bg-background', !ampliado && 'max-w-5xl mx-auto')}>
 
-      {/* AMPLIADO — o modo principal: DUAS linhas fixas. (1) a barra de filtros, 26px, com os MESMOS controles e o MESMO estado da
-          tela normal; (2) a faixa dos cartões, 24px. Vale para Lista e para Fluxo. As pílulas de status não cabem (a faixa
-          escreve quais estão ligadas); o rótulo "Conta" sai — o seletor diz o nome. Medido a 1.126 (1.094 úteis). */}
+      {/* AMPLIADO — o modo principal: TRÊS linhas fixas. (1) a barra de filtros, 26px, com os MESMOS controles e o MESMO estado da
+          tela normal; (2) a faixa dos cartões, 24px; (3) as pílulas de status, 20px (CPR-SALDO-DIA-02). Vale para Lista e Fluxo.
+          O rótulo "Conta" sai — o seletor diz o nome. Barra e faixa medidas a 1.126 (1.094 úteis); a 3ª linha, NÃO medida. */}
       {ampliado && (
         <div className="shrink-0 space-y-1 px-4 pb-1 pt-1">
           <div data-testid="cpr-barra-ampliada" className="flex h-[26px] flex-nowrap items-center gap-1.5 whitespace-nowrap">
@@ -1022,13 +1053,14 @@ export function ContasPagarReceberTab({ onIntensiveToggle }: {
             <CelRecolhida rotulo="Mínimo" titulo={tituloMenorSaldo}
               valor={serie.menor ? moedaComSinal(serie.menor.valor) : '—'} classe={serie.menor ? (serie.menor.valor < 0 ? COR_SINAL.neg : COR_SINAL.pos) : undefined} />
             <CelRecolhida rotulo="Caixa" valor={serie.hoje != null ? moedaComSinal(serie.hoje) : '—'} titulo={serie.hoje == null ? motivoSemSaldo : undefined} />
-            {ctlRecadoExport ?? (
-              <span data-testid="cpr-status-ligados" className="min-w-0 truncate text-right text-muted-foreground"
-                title={`Status ligados: ${statusLigadosTexto.join(', ') || 'nenhum'} — para trocar, Recolher`}>
-                {isFetching ? 'carregando… · ' : ''}status: {statusLigadosTexto.join(' · ') || 'nenhum'}
-              </span>
-            )}
+            <span className="min-w-0 truncate text-right text-muted-foreground">{isFetching ? 'carregando…' : ''}</span>
             {ctlExportar}
+          </div>
+          {/* (3) as pílulas de status, clicáveis — linha FIXA de 20px, sempre presente, com a frase do exportar à direita */}
+          <div data-testid="cpr-linha-status" className="flex h-[20px] flex-nowrap items-center gap-2 whitespace-nowrap">
+            <span className="shrink-0 text-[9.5px] text-muted-foreground">Status</span>
+            {ctlStatus}
+            <div className="flex min-w-0 flex-1 basis-0 justify-end">{ctlRecadoExport}</div>
           </div>
         </div>
       )}
@@ -1155,28 +1187,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle }: {
         <div className="flex flex-wrap items-center gap-2">
           {ctlSegmento}
 
-          <div className="flex items-center gap-1">
-            {STATUS_DISPONIVEIS.map((s) => {
-              const ligado = statusLigados.includes(s);
-              return (
-                <button
-                  key={s}
-                  type="button"
-                  aria-pressed={ligado}
-                  onClick={() => setStatusLigados((atual) =>
-                    atual.includes(s) ? atual.filter((x) => x !== s) : [...atual, s])}
-                  className={cn(
-                    'h-[22px] rounded-md border px-2 text-[10px] font-medium transition-colors',
-                    ligado
-                      ? 'bg-primary text-primary-foreground border-primary'
-                      : 'bg-transparent text-muted-foreground hover:bg-muted',
-                  )}
-                >
-                  {STATUS_FILTRO_LABEL[s] ?? s}
-                </button>
-              );
-            })}
-          </div>
+          {ctlStatus}
 
           {/* o espaço entre os filtros e os botões carrega a frase do exportar (erro ou aviso), numa linha */}
           <div className="flex min-w-0 flex-1 basis-0 justify-end">{ctlRecadoExport}</div>

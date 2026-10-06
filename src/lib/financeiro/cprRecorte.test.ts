@@ -577,3 +577,45 @@ describe('CPR-EXPORT-01 — agregados da folha exportada, no dono e em centavos'
     for (const x of por) if (x.caixa != null) expect(c(x.caixa) - c(x.pagar.valor) + c(x.receber.valor)).toBe(c(x.fim));
   });
 });
+
+describe('CPR-SALDO-DIA-02 — pílulas de status no Ampliado: o mesmo nó, o mesmo estado (lido da fonte)', () => {
+  const tela = readFileSync(resolve(__dirname, '../../components/financeiro-v2/ContasPagarReceberTab.tsx'), 'utf8');
+  it('as pílulas são UM nó (`ctlStatus`), posicionado na tela normal e na 3ª linha do Ampliado', () => {
+    expect(Array.from(tela.matchAll(/const ctlStatus = \(/g)).length).toBe(1);
+    expect(Array.from(tela.matchAll(/\{ctlStatus\}/g)).length).toBe(2);
+    expect(Array.from(tela.matchAll(/STATUS_DISPONIVEIS\.map\(/g)).length).toBe(1);     // a lista de pílulas é desenhada num lugar só
+    /* um estado só: uma declaração, um escritor (o clique da pílula) */
+    expect(Array.from(tela.matchAll(/useState<string\[\]>\(/g)).length).toBe(1);
+    expect(Array.from(tela.matchAll(/setStatusLigados\(/g)).length).toBe(1);
+    expect(tela).toContain('const [statusLigados, setStatusLigados] = useState<string[]>(STATUS_INICIAIS);');
+  });
+  it('no Ampliado a 3ª linha é fixa, de 20px, sempre presente; o texto "status: …" saiu', () => {
+    const ampliado = tela.slice(tela.indexOf('{ampliado && ('), tela.indexOf('{!ampliado && ('));
+    expect(ampliado).toContain('<div data-testid="cpr-linha-status" className="flex h-[20px] flex-nowrap items-center gap-2 whitespace-nowrap">');
+    expect(ampliado.indexOf('data-testid="cpr-linha-status"')).toBeGreaterThan(ampliado.indexOf('data-testid="cpr-faixa-recolhida"'));
+    expect(ampliado).toContain('{ctlStatus}');
+    expect(ampliado).not.toMatch(/\{[^}]*&&\s*<div data-testid="cpr-linha-status"/);   // nenhuma condição: a linha existe sempre
+    expect(tela).not.toMatch(/cpr-status-ligados|statusLigadosTexto|status: \{/);
+    /* no Ampliado a pílula encolhe (16px / 9,5px, o piso) — pela classe do MESMO botão */
+    expect(tela).toContain("ampliado ? 'h-[16px] px-1.5 text-[9.5px] leading-none' : 'h-[22px] px-2 text-[10px]',");
+    /* todas desligadas: a MESMA mensagem, num lugar só */
+    expect(Array.from(tela.matchAll(/Nenhum status selecionado — ligue ao menos um acima/g)).length).toBe(1);
+  });
+});
+
+describe('CPR-SALDO-DIA-02 — pílula Realizado ligada não derruba a tela', () => {
+  const tela = readFileSync(resolve(__dirname, '../../components/financeiro-v2/ContasPagarReceberTab.tsx'), 'utf8');
+  it('o dono põe a paga SEM vencimento no balde das pagas (a busca a traz pelo ramo "sem vencimento")', () => {
+    const paga = conta(null, 50, { status_transacao: 'realizado', data_pagamento: '2026-10-01' });
+    const r = recortarCpr([paga, conta('2026-10-10', 10)], { periodo: D30, hoje: HOJE, incluirVencidos: true });
+    expect(r.pagas).toHaveLength(1);
+    expect(r.pagas[0].data_vencimento).toBeNull();
+    expect(serieDoSaldoCpr(r, 100).fim).toBe(90);           // e ela não soma
+  });
+  it('a tela não abre grupo de dia sem data: a chave vazia é pulada ANTES de formatar', () => {
+    const grupos = tela.slice(tela.indexOf('const grupos = useMemo((): Grupo[] => {'), tela.indexOf('// ── Abrir o lançamento'));
+    expect(grupos).toMatch(/const chave = \(l\.data_vencimento \?\? ''\)\.slice\(0, 10\);[\s\S]{0,420}if \(!chave\) continue;\s+const atual = mapa\.get\(chave\);/);
+    /* toda chave que chega a `faixaDaData` vem do mapa (já sem a vazia) ou dos dias da série (que têm data) */
+    expect(grupos).toContain('const chaves = Array.from(new Set([...mapa.keys(), ...passos.keys()])).sort();');
+  });
+});
