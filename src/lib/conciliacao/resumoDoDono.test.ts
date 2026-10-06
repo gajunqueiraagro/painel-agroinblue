@@ -11,6 +11,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
   lerResumo, lerStatusAno, frasesDoStatus, fraseFaltaSaldo, frasesDosAvisos, marcaDeAviso, fraseDoRetido, fraseSemConta, contasParaFecharSemMovimento,
+  semClassificacaoDaLinha, semFornecedorDaLinha,
   saldosDaLinha, marcaDoPar, contaEmPar, diferencaNaPosicao, sistemaNaPosicao, saldoSistemaNaData, tituloDoPar,
   TITULO_DIFERENCA_NA_POSICAO_INDISPONIVEL, TIPO_TRANSFERENCIA_INTERNA,
   type LinhaResumo,
@@ -326,5 +327,37 @@ describe('01b — "falta saldo · N conta(s)": a frase do agregado com conta que
     const f = fraseFaltaSaldo(agregado({ status: 'pendente', diferenca: null, motivos: [{ motivo: 'contas_sem_saldo', qtde: 3 }] }));
     expect(f?.texto).toBe('falta saldo · 3 contas');
     expect(f?.titulo).toBeUndefined();
+  });
+});
+
+describe('CONC-SEM-CLASSIFICACAO-01 — os dois avisos da classificação têm leitor próprio e ficam FORA da 2ª prova', () => {
+  // a forma que o dono devolve (lida do proto em 06/10/2026, NJ set/26, total do mês)
+  const SC = { motivo: 'sem_classificacao', qtde: 59, valor_entradas: 761379.7, valor_saidas: 26512.18 };
+  const SF = { motivo: 'sem_fornecedor', qtde: 2 };
+  const c = (avisos: unknown[]) => base({ status: 'conciliado', motivos: [], tem_extrato: true, avisos });
+
+  it('lê quantidade e valores do banco, por lado; sem o aviso é nulo / zero (a busca sabe achar)', () => {
+    expect(semClassificacaoDaLinha(c([SC, SF]))).toEqual({ qtde: 59, valorEntradas: 761379.7, valorSaidas: 26512.18 });
+    expect(semFornecedorDaLinha(c([SC, SF]))).toBe(2);
+    expect(semClassificacaoDaLinha(c([{ motivo: 'sem_extrato' }, SF]))).toBeNull();
+    expect(semFornecedorDaLinha(c([{ motivo: 'sem_extrato' }, SC]))).toBe(0);
+    expect(semClassificacaoDaLinha(c([{ motivo: 'sem_classificacao', qtde: 0 }]))).toBeNull();
+    expect(semClassificacaoDaLinha(null)).toBeNull();
+    expect(semFornecedorDaLinha(undefined)).toBe(0);
+  });
+
+  it('vale também na linha da régua do ano (o contador do mês)', () => {
+    const [mes] = lerStatusAno([{ ano_mes: '2026-09', nivel: 'total', status: 'conciliado', motivos: [], avisos: [SC, SF] }]);
+    expect(semClassificacaoDaLinha(mes)?.qtde).toBe(59);
+    expect(semFornecedorDaLinha(mes)).toBe(2);
+  });
+
+  it('D6 — o contador NUNCA acende a marca âmbar nem entra na 2ª prova do extrato', () => {
+    expect(frasesDosAvisos(c([SC, SF]))).toEqual([]);
+    expect(marcaDeAviso(c([SC, SF]))).toBeNull();
+    expect(marcaDeAviso(c([{ motivo: 'sem_extrato' }, SC, SF]))).toBeNull();
+    // com um aviso do extrato de verdade a marca continua sendo SÓ a dele
+    expect(marcaDeAviso(c([{ motivo: 'dias_com_diferenca', qtde: 1, dias: ['2026-09-03'] }, SC, SF]))).toBe('2ª prova · extrato: 1 dia com diferença');
+    expect(frasesDoStatus(c([SC, SF])).map((f) => f.chave)).toEqual(['confere_dias']);
   });
 });

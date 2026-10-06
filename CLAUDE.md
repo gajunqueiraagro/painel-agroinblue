@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 06/10/2026 (ACESSOS-TELA-01, +39: `src/lib/acessos/regrasDeAcesso.test.ts` 15, `src/pages/acessosTab.test.tsx` 19,
+  Baseline em 06/10/2026 (CONC-SEM-CLASSIFICACAO-01, +3 em `src/lib/conciliacao/resumoDoDono.test.ts` — 4231 depois dele; antes o
+  ACESSOS-TELA-01, +39: `src/lib/acessos/regrasDeAcesso.test.ts` 15, `src/pages/acessosTab.test.tsx` 19,
   `src/v2/lib/acessoTelaDeAcessos.test.tsx` 5 — 4228 depois dele; antes o DRE-RATEIO-MODAL-01 + fix1, +42 −4: `src/components/agri/rateioEncontro.test.tsx` 42 (novo); sairam os 4 da
   etapa "Não alocado" de `src/components/agri/rateioDetalheModal.test.tsx`, com o codigo que testavam — 4189 depois dele; antes o
   REC-VALOR-CERTO-02, +17 em `src/lib/financeiro/cprEstimado.test.ts` (novo) — 4151 depois dele; antes o
@@ -216,7 +217,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4228
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4231
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -2122,6 +2123,42 @@ docs/historico/frentes-ate-2026-09-29.md.)
     `LancamentoLeituraDialog.tsx`; e telas fora das abas da Conciliacao — `EstacaoConciliar.tsx`, `VincularMatchDireto.tsx`,
     `DecisaoDerivadosDialog.tsx` fora do Espelho, `CasarComBancoModal.tsx` (dentro do Espelho ja' passa pelo `onMudou`),
     `useConciliacaoDoMes.ts`, `useConciliarMes.ts` (o dialogo avisa).
+- ⚠ "SEM CLASSIFICACAO" TEM UMA REGRA, NO BANCO: LANCAMENTO ATIVO COM `plano_conta_id` NULO (CONC-SEM-CLASSIFICACAO-01, Gabriel
+  06/10/2026; migration 20261027193900, ⚠ registrada como 20261006180307; ledger = arquivo, md5 daccbbd7…). 100% dos lancamentos tem
+  de ter plano de contas, DIVIDENDOS INCLUSIVE: para esta regra a excecao "texto fora do plano, exceto Dividendos" NAO vale (o
+  gatilho `resolve_classificacao_from_plano` continua aceitando o texto — a migracao dos Dividendos e' o CONC-DIVIDENDOS-PLANO-01).
+  · O PREDICADO MORA EM `_fn_lancamento_sem_plano(cancelado, plano_conta_id, tipo_operacao)` (transferencia, tipo '3-', fica fora) e
+    `_fn_lancamento_sem_fornecedor(cancelado, plano, favorecido, tipo)` = COM plano e SEM fornecedor (aviso SEPARADO, ambar; o sem
+    plano nao conta nele). Internas, fechadas. Quem precisar da pergunta chama estas funcoes; nenhuma regra nova por texto.
+  · A CONCILIACAO: `fn_conciliacao_resumo_mes` e `fn_conciliacao_status_ano` devolvem, NO FIM da coluna `avisos` e so' com qtde > 0,
+    `{motivo:'sem_classificacao', qtde, valor_entradas, valor_saidas}` e `{motivo:'sem_fornecedor', qtde}`, na linha de conta, no
+    subtotal do tipo e no total. So' os REALIZADOS do mes e da conta (vivo, com caixa, status e cenario 'realizado', pago no mes; a
+    conta e' a da direcao, `_fn_conta_do_lancamento`); contagem numa leitura por chamada (`_fn_conciliacao_sem_classificacao_mes`),
+    somas do CRU e arredondamento so' na saida. ⚠ NUNCA MUDAM STATUS, MOTIVOS NEM `contas_com_aviso` (provado antes x depois nos 7
+    clientes, 2020–2027: 2.584 linhas da regua e os resumos de 2026 identicos; aviso do total = contagem direta em todos os meses).
+    Patch guardado por md5: `_fn_conciliacao_resumo` 04aa7a4d… -> eb5f162e…, `fn_conciliacao_status_ano` ab397ac3… -> a7c3ee43…
+    (`fn_conciliacao_resumo_mes` 25aa2ac4…, nao tocada). Regua do NJ 2026: 2.073 -> 2.042 ms (mediana de 5).
+  · ⚠ NA TELA OS DOIS AVISOS NAO SAO "2a PROVA DO EXTRATO": `frasesDosAvisos` (e por isso `marcaDeAviso`) os PULA, e eles tem
+    leitores proprios, `semClassificacaoDaLinha` e `semFornecedorDaLinha` (`src/lib/conciliacao/resumoDoDono.ts`). Sem isso a marca
+    ambar da regua acenderia em todo mes com lancamento sem fornecedor. O contador nunca muda cor de mes nem a regua.
+  · O DRE: `fn_dre_sem_classificacao(cliente, de, ate, safra, fazenda, cenario)` -> `{qtde, valor_entradas, valor_saidas}` — quanto o
+    recorte NAO ve^ por falta de plano (o join com o plano descarta em silencio). Pecuaria: competencia `de`/`ate`; lavoura: a safra
+    gravada no lancamento. ⚠ LANCAMENTO SEM PLANO NAO TEM ATIVIDADE (ela vem do plano): o recorte e' o do periodo, nao o da atividade.
+  · A LISTA: `fn_conciliacao_sem_classificacao_lista(cliente, mes, conta)` -> `{resumo {qtde, valor_entradas, valor_saidas,
+    com_sugestao, sem_sugestao, aguarda_conta}, linhas [...]}`, o MESMO recorte do aviso. SUGESTAO = `fn_classificacao_resolver_contexto`
+    (regra, apelido, plano), so' com conta ATIVA e do MESMO tipo do lancamento; nenhum segundo motor. ⚠ O RESOLVEDOR NAO COBRE TEXTO
+    DE EXTRATO: os apelidos sao do texto do SUBCENTRO da planilha e nao ha' regra por descricao (3 regras, nenhuma por texto) — no NJ
+    set/26, 0 de 59 com sugestao. As duas leituras recusam com 42501 (sem usuario inclusive).
+  Teste: `supabase/tests/conc_sem_classificacao_01_test.sql` (T0–T9, sintetico no cliente Teste; 10 mutacoes do banco mortas). Os
+  sinteticos de `conc_saldo_uma_regua_01`, `_01b`, `conc_status_saldo_01a` e `conc_interna_separada_01a` passaram a nascer COM plano
+  e fornecedor (sao testes de saldo; sem isso acendiam os avisos novos).
+  ⚠ MEDIDO (06/10): os 567 "Dividendos por texto" (5 clientes, 11 textos) vem de `financeiro_dividendos` — o seletor oferece
+    "Dividendos <nome>" com id sintetico `dividendo-<uuid>`, que nao e' conta do plano; nome que coincide com conta global resolve
+    pelo gatilho, os 11 que nao coincidem ficam sem chave. Santa Rita ja' tem conta POR CLIENTE para cada nome (17160–17230).
+  ⚠ DIVIDAS: SEM-CLASSIFICACAO-REGRA-UNICA-02 (as outras cinco regras do front que ainda decidem por texto: `isSemClassificacao`,
+    `lancamentoCru`, `ehCru`, `distribuicaoEconomica`, `derivarPendenciasGerenciais`) · CONC-DIVIDENDOS-PLANO-01 (criar as contas e
+    migrar) · o ramo sem `contas_com_aviso` de `fn_conciliacao_status_ano` (`|| r.avisos`) nao tem teste sintetico ·
+    `conc_import_banco_agnaldo_01a_test.sql` falha em P2 (0 de 81 iguais a `dados_anteriores`) — deriva de dado, sem relacao.
 - ⚠ "FALTA SALDO · N CONTA(S)" NO LUGAR DO "—", E NENHUMA DATA QUE NINGUEM INFORMOU (CONC-TOTAL-SEM-SALDO-01b, Gabriel 04/10, so'
   tela). Ausencia de saldo nunca aparenta "confere"; a tela diz o que falta. ⚠ "falta SALDO", nao "falta extrato": a coluna Extrato
   e' o saldo INFORMADO da conta, nao o arquivo do banco.

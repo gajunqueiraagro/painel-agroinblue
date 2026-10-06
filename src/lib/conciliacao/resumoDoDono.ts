@@ -37,6 +37,9 @@ export interface Motivo {
   /** 'contas_com_aviso' (agregados): quantas contas têm cada aviso, e quantas têm algum além de 'sem_extrato'. */
   por_aviso?: Record<string, number>;
   qtde_alem_sem_extrato?: number;
+  /** 'sem_classificacao' (CONC-SEM-CLASSIFICACAO-01): o valor dos realizados sem plano de contas, por lado, do banco. */
+  valor_entradas?: number;
+  valor_saidas?: number;
 }
 
 export interface PosicaoDono {
@@ -172,6 +175,8 @@ function lerMotivos(v: unknown): Motivo[] {
     const dt = texto(m.data); if (dt !== null) x.data = dt;
     const ps = texto(m.posicao); if (ps !== null) x.posicao = ps;
     const qa = numeroOuNulo(m.qtde_alem_sem_extrato); if (qa !== null) x.qtde_alem_sem_extrato = qa;
+    const ve = numeroOuNulo(m.valor_entradas); if (ve !== null) x.valor_entradas = ve;
+    const vs = numeroOuNulo(m.valor_saidas); if (vs !== null) x.valor_saidas = vs;
     if (ehObjeto(m.por_aviso)) {
       const pa: Record<string, number> = {};
       for (const [k, n] of Object.entries(m.por_aviso)) { const q2 = numeroOuNulo(n); if (q2 !== null) pa[k] = q2; }
@@ -481,6 +486,30 @@ export function fraseFaltaSaldo(l: Pick<LinhaResumo, 'diferenca' | 'motivos'> | 
 const AVISO_DO_PAR = 'conferida_com';
 /** Conta sem arquivo importado é o caso comum: informa, não pede olho. */
 const AVISO_NEUTRO = 'sem_extrato';
+/**
+ * OS DOIS AVISOS DA CLASSIFICAÇÃO — CONC-SEM-CLASSIFICACAO-01 (Gabriel, 06/10/2026). Vêm na MESMA coluna `avisos` do dono, mas
+ * NÃO são 2ª prova do extrato: têm lugar próprio na tela (o contador vermelho e o aviso âmbar "sem fornecedor") e leitores
+ * próprios, abaixo. ⚠ FICAM FORA de `frasesDosAvisos` e, por isso, de `marcaDeAviso`: o contador NUNCA muda status, cor do mês
+ *   nem a marca âmbar da régua (D6). Tratá-los como 2ª prova acenderia a marca em todo mês com lançamento sem fornecedor.
+ */
+const AVISO_SEM_CLASSIFICACAO = 'sem_classificacao';
+const AVISO_SEM_FORNECEDOR = 'sem_fornecedor';
+const AVISOS_DA_CLASSIFICACAO: readonly string[] = [AVISO_SEM_CLASSIFICACAO, AVISO_SEM_FORNECEDOR];
+
+/** SEM CLASSIFICAÇÃO = realizado do mês e da conta com `plano_conta_id` nulo. Quantidade e valores SÃO DO BANCO. */
+export interface SemClassificacao { qtde: number; valorEntradas: number; valorSaidas: number }
+
+/** O aviso 'sem_classificacao' da linha (conta, tipo ou total), ou nulo quando o dono não o escreveu (zero casos). */
+export function semClassificacaoDaLinha(l: Pick<LinhaResumo, 'avisos'> | Pick<StatusAnoDono, 'avisos'> | null | undefined): SemClassificacao | null {
+  const m = l?.avisos.find((x) => x.motivo === AVISO_SEM_CLASSIFICACAO);
+  if (!m || (m.qtde ?? 0) <= 0) return null;
+  return { qtde: m.qtde ?? 0, valorEntradas: m.valor_entradas ?? 0, valorSaidas: m.valor_saidas ?? 0 };
+}
+
+/** O aviso 'sem_fornecedor' da linha: quantos realizados COM plano e sem fornecedor. Zero quando o dono não o escreveu. */
+export function semFornecedorDaLinha(l: Pick<LinhaResumo, 'avisos'> | Pick<StatusAnoDono, 'avisos'> | null | undefined): number {
+  return l?.avisos.find((x) => x.motivo === AVISO_SEM_FORNECEDOR)?.qtde ?? 0;
+}
 
 /** O nome da outra conta do par: na mãe, as `internas`; na interna, o aviso 'conferida_com' do dono. Vazio sem par. */
 function nomeDoPar(l: Pick<LinhaResumo, 'par_conta_id' | 'internas' | 'avisos'>): string {
@@ -518,6 +547,7 @@ export function frasesDosAvisos(l: Pick<LinhaResumo, 'avisos'>): FraseDoStatus[]
   const out: FraseDoStatus[] = [];
   for (const m of l.avisos) {
     if (m.motivo === AVISO_DO_PAR) continue;
+    if (AVISOS_DA_CLASSIFICACAO.includes(m.motivo)) continue;
     if (m.motivo === 'contas_com_aviso' && (m.qtde_alem_sem_extrato ?? 0) <= 0) continue;
     out.push({ ...fraseDoMotivo(m), marca: m.motivo !== AVISO_NEUTRO });
   }
